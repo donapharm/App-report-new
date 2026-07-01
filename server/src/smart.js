@@ -104,7 +104,9 @@ function forecastTargets({ scope }) {
   const nextKy = `${nextMonth}.${nextYear}`;
   const season = SEASON[nextMonth] || 1;
 
-  const emps = store.listUsers().filter((u) => u.role === 'sale' && (!scope.empCode || u.emp_code === scope.empCode));
+  // Chỉ NV THỰC SỰ có doanh thu (đúng danh sách App Report), không lấy cả danh bạ công ty
+  const emps = store.empCodesWithData({ scope })
+    .map((ec) => ({ emp_code: ec, name: store.findUserByCode(ec)?.name || ec }));
   const out = emps.map((emp) => {
     const s = { empCode: emp.emp_code };
     const revByKy = periods.map((ky) => A.sum(store.getRows({ ky, scope: s }), (r) => r.revenue) / A.VAT_DIVISOR);

@@ -118,19 +118,22 @@ router.get('/cst', auth.requireAuth, (req, res) => {
 router.get('/targets', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const ky = req.query.ky || store.latestKy();
+  // Danh sách NV = NV thực sự có doanh thu (đúng App Report); target lấy từ nguồn target thật (0 nếu chưa import)
   const targets = store.getTargets({ ky, scope });
-  const items = targets.map((t) => {
-    const rev = A.sum(store.getRows({ ky, scope: { empCode: t.emp_code } }), (r) => r.revenue);
+  const targetByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, t.target]));
+  const items = store.empCodesWithData({ scope }).map((ec) => {
+    const rev = A.sum(store.getRows({ ky, scope: { empCode: ec } }), (r) => r.revenue);
     const beforeVat = rev / A.VAT_DIVISOR;
+    const target = targetByEmp[ec] || 0;
     return {
-      emp_code: t.emp_code,
-      emp_name: store.findUserByCode(t.emp_code)?.name,
-      target: t.target,
+      emp_code: ec,
+      emp_name: store.findUserByCode(ec)?.name || ec,
+      target,
       revenue_before_vat: Math.round(beforeVat),
-      pct: t.target > 0 ? +(beforeVat / t.target * 100).toFixed(1) : null,
-      gap: Math.round(beforeVat - t.target),
+      pct: target > 0 ? +(beforeVat / target * 100).toFixed(1) : null,
+      gap: Math.round(beforeVat - target),
     };
-  }).sort((a, b) => (b.pct || 0) - (a.pct || 0));
+  }).sort((a, b) => b.revenue_before_vat - a.revenue_before_vat);
   res.json({ ky, items });
 });
 

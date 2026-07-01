@@ -87,6 +87,13 @@ const listUsers = () => base().users;
 const findUserByPhone = (phone) => base().users.find((u) => u.phone === phone);
 const findUserByCode = (code) => base().empByCode[code];
 
+/** Danh sách mã NV THỰC SỰ có doanh thu (đúng danh sách App Report), trong phạm vi quyền. */
+function empCodesWithData({ scope } = {}) {
+  const set = new Set();
+  for (const p of listPeriods()) for (const r of getRows({ ky: p.ky, scope })) if (r.emp_code) set.add(r.emp_code);
+  return [...set];
+}
+
 /**
  * Lọc dòng doanh thu theo kỳ + phạm vi quyền.
  * scope.empCode !== null => chỉ dòng của nhân viên đó (NV thường).
@@ -109,9 +116,12 @@ function getCst({ scope }) {
   return rows;
 }
 
-// TODO(LIVE): fallback ORDS V_TEM_TARGET_BONUS khi kỳ chưa nhập target
+// TODO(LIVE): fallback ORDS V_TEM_TARGET_BONUS khi kỳ chưa nhập target.
+// Khi ĐÃ có dữ liệu THẬT (slot upload active): KHÔNG dùng target mẫu — chỉ dùng
+// target thật đã import (data/targets_real.json). Chưa import -> rỗng (target cũ = 0, trung thực).
 function getTargets({ ky, scope }) {
-  let t = base().targets;
+  const real = activeSlots().length > 0;
+  let t = real ? readJson('targets_real.json', []) : base().targets;
   if (ky) t = t.filter((x) => x.ky === ky);
   if (scope && scope.empCode) t = t.filter((x) => x.emp_code === scope.empCode);
   return t;
@@ -122,7 +132,7 @@ function clearCache() { _base = null; }
 
 module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
-  getRows, getCst, getTargets, clearCache,
+  getRows, getCst, getTargets, clearCache, empCodesWithData,
   // giữ tên cũ để nơi khác không vỡ
   db: base,
 };
