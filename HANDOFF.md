@@ -12,9 +12,16 @@ Cập nhật: 2026-07-01. Người build: Claude (phiên với CEO). Người ti
 - **Phân quyền backend:** đã kiểm — NV Sale chỉ thấy dữ liệu của mình, không có tab Nhân viên/Upload, bị 403 khi gọi API admin.
 - **LLM (AI diễn giải) grounded:** điểm cắm sẵn ở `llm.js`; chưa có key thì tự fallback code-first (đã test).
 
+### Đã nối dữ liệu thật (một phần) ✅
+- **Upload → Báo cáo (dây chính, đã test):** `store.js` đọc slot upload `active` làm nguồn doanh thu; upload 1 kỳ mới là báo cáo hiện kỳ đó ngay (không cần restart). Ưu tiên: slot upload → ORDS → mẫu.
+- **ORDS fallback:** `ords.js` — code sẵn, TẮT mặc định, bật bằng env `ORDS_SQL_API` (chạy trên server nội bộ). Chưa test live.
+- **OTP/SSO:** `auth.js` (`requestOtp/verifyOtp/verifySso`) + routes `/auth/otp/*`, `/auth/sso`, `/auth/mode` — code sẵn, TẮT mặc định, bật bằng env. Chưa test live.
+
 ### Chưa làm / việc tiếp theo (ưu tiên từ trên xuống)
-1. **Nối dữ liệu thật** (3 dây `// TODO(LIVE)` trong CLAUDE.md): OTP/SSO, nguồn doanh thu ORDS + slot upload active, targets DB.
-   - Cụ thể: cho `store.getRows()` đọc slot `active` trong `upload_slots.json` thay vì `report_rows.json` mẫu.
+1. **Bật + kiểm 2 dây còn lại TRÊN SERVER nội bộ** (máy ngoài mạng không test được):
+   - ORDS: điền `ORDS_SQL_API`/`ORDS_AUTH`, xác nhận tên bảng/cột + format response (`ords.js` có ghi chú).
+   - OTP/SSO: điền `OTP_BACKEND_URL`/`SSO_VERIFY_URL`, khớp path/response thật; **làm UI nhập SĐT→OTP ở frontend** (hiện demo dùng nút chọn tài khoản mẫu; gọi `GET /auth/mode` để biết chế độ).
+   - Targets: fallback `V_TEM_TARGET_BONUS` khi kỳ chưa nhập target (`store.getTargets` có TODO).
 2. **Logo Donapharm thật** thay placeholder trong `web/src/logo.jsx` (`// TODO(BRAND)`).
 3. **Siết CORS** trong `server/src/index.js` về đúng domain (hiện mở cho demo).
 4. **Session bền** (hiện lưu RAM `auth.js`) → chuyển sang store bền (Redis/KV) khi nhiều instance.

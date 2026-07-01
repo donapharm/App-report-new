@@ -1,87 +1,128 @@
 /**
  * store.js — LỚP NGUỒN DỮ LIỆU.
  *
- * Bản demo đọc từ file JSON mẫu (server/data/*).
- * TODO(LIVE): khi lên server, thay các hàm load* bằng:
- *   - đọc file upload doanh thu thật (report_upload_data_*.json)
- *   - fallback ORDS/Lumos (SALES_REPORT, V_TEM_TARGET_BONUS)
- * Giữ nguyên chữ ký hàm để phần trên (services/routes) không phải sửa.
+ * Thứ tự ưu tiên nguồn doanh thu (giống quy tắc App Report cũ):
+ *   1) Slot UPLOAD đang active (dữ liệu CEO tải lên)  ← nguồn chính, THẬT
+ *   2) ORDS/Lumos (nếu bật env, dùng khi kỳ chưa có upload)  ← fallback, bật trên server
+ *   3) Dữ liệu MẪU ẩn danh (server/data/*.json)  ← để demo khi chưa có gì
+ *
+ * Slot đọc MỚI mỗi lần gọi (file nhỏ) nên upload xong báo cáo cập nhật ngay,
+ * không cần restart server.
  */
 const fs = require('fs');
 const path = require('path');
+const ords = require('./ords');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
-const readJson = (name) => JSON.parse(fs.readFileSync(path.join(DATA_DIR, name), 'utf8'));
+const UP_DIR = path.join(DATA_DIR, 'uploads');
+const readJson = (name, def) => {
+  const p = path.join(DATA_DIR, name);
+  return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : def;
+};
 
-// Cache đơn giản trong RAM (demo). Production: thay bằng query có cache theo kỳ.
-let _cache = null;
-function db() {
-  if (_cache) return _cache;
-  const catalog = readJson('catalog.json');
-  const reportRows = readJson('report_rows.json');
-  const users = readJson('users.json');
+// ----- Cache phần dữ liệu MẪU + danh mục (nặng, ít đổi) -----
+let _base = null;
+function base() {
+  if (_base) return _base;
+  const catalog = readJson('catalog.json', { units: [], products: [], periods: [], latest_ky: null });
+  const users = readJson('users.json', []);
   const unitByCode = Object.fromEntries(catalog.units.map((u) => [u.unit_code, u]));
   const prodByCode = Object.fromEntries(catalog.products.map((p) => [p.iit_code, p]));
   const empByCode = Object.fromEntries(users.map((u) => [u.emp_code, u]));
-  // gắn tên đơn vị/sản phẩm/nhân viên vào từng dòng để tra cứu nhanh
-  const rows = reportRows.map((r) => ({
+  const enrich = (r) => ({
     ...r,
-    unit_name: unitByCode[r.unit_code]?.unit_name,
-    product_name: prodByCode[r.iit_code]?.product_name,
+    unit_name: r.unit_name || unitByCode[r.unit_code]?.unit_name,
+    product_name: r.product_name || prodByCode[r.iit_code]?.product_name,
     emp_name: empByCode[r.emp_code]?.name,
-  }));
-  _cache = {
+  });
+  _base = {
     catalog,
-    rows,
+    sampleRows: readJson('report_rows.json', []).map(enrich),
     users,
-    cst: readJson('cst_rows.json'),
-    targets: readJson('targets.json'),
-    unitByCode,
-    prodByCode,
-    empByCode,
+    cst: readJson('cst_rows.json', []),
+    targets: readJson('targets.json', []),
+    unitByCode, prodByCode, empByCode, enrich,
   };
-  return _cache;
+  return _base;
 }
 
-const listPeriods = () => db().catalog.periods;
-const latestKy = () => db().catalog.latest_ky;
-const listUsers = () => db().users;
-const findUserByPhone = (phone) => db().users.find((u) => u.phone === phone);
-const findUserByCode = (code) => db().empByCode[code];
+// ----- Đọc các slot upload đang active (đọc mới mỗi lần) -----
+function activeSlots() {
+  return readJson('upload_slots.json', []).filter((s) => s.active);
+}
+function slotRows(slot) {
+  const p = path.join(UP_DIR, slot.id + '.json');
+  if (!fs.existsSync(p)) return [];
+  const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
+  const { enrich } = base();
+  return raw.map((r) => enrich({ ...r, ky: slot.ky, date: slot.dateFrom || slot.ky }));
+}
+
+/** Toàn bộ dòng doanh thu: slot active ghi đè kỳ tương ứng; kỳ còn lại dùng mẫu. */
+function allRows() {
+  const b = base();
+  const slots = activeSlots();
+  if (!slots.length) return b.sampleRows;
+  const slotKys = new Set(slots.map((s) => s.ky));
+  const fromSlots = slots.flatMap(slotRows);
+  const fromSample = b.sampleRows.filter((r) => !slotKys.has(r.ky));
+  return fromSample.concat(fromSlots);
+}
+
+/** Danh sách kỳ = kỳ mẫu + kỳ từ slot upload (slot ưu tiên), sắp theo thời gian. */
+function listPeriods() {
+  const b = base();
+  const map = new Map(b.catalog.periods.map((p) => [p.ky, p]));
+  for (const s of activeSlots()) {
+    map.set(s.ky, { ky: s.ky, dateFrom: s.dateFrom, dateTo: s.dateTo, source: 'upload' });
+  }
+  return [...map.values()].sort((a, b2) => ((a.dateFrom || a.ky) < (b2.dateFrom || b2.ky) ? -1 : 1));
+}
+function latestKy() {
+  const ps = listPeriods();
+  return ps.length ? ps[ps.length - 1].ky : base().catalog.latest_ky;
+}
+
+const listUsers = () => base().users;
+const findUserByPhone = (phone) => base().users.find((u) => u.phone === phone);
+const findUserByCode = (code) => base().empByCode[code];
 
 /**
  * Lọc dòng doanh thu theo kỳ + phạm vi quyền.
- * scope.empCode !== null  => chỉ dòng của nhân viên đó (NV thường).
+ * scope.empCode !== null => chỉ dòng của nhân viên đó (NV thường).
+ * Nếu kỳ không có upload/mẫu và bật ORDS -> thử ORDS (đồng bộ, đã cache).
  */
 function getRows({ ky, scope }) {
-  let rows = db().rows;
+  let rows = allRows();
   if (ky) rows = rows.filter((r) => r.ky === ky);
+  // Fallback ORDS khi kỳ trống và có cấu hình (chạy trên server)
+  if (ky && rows.length === 0 && ords.isEnabled()) {
+    rows = base().sampleRows.length ? rows : ords.getRowsSyncCached(ky);
+  }
   if (scope && scope.empCode) rows = rows.filter((r) => r.emp_code === scope.empCode);
   return rows;
 }
 
 function getCst({ scope }) {
-  let rows = db().cst;
+  let rows = base().cst;
   if (scope && scope.empCode) rows = rows.filter((r) => r.emp_code === scope.empCode);
   return rows;
 }
 
-// TODO(LIVE): nối /api/targets thật + fallback V_TEM_TARGET_BONUS
+// TODO(LIVE): fallback ORDS V_TEM_TARGET_BONUS khi kỳ chưa nhập target
 function getTargets({ ky, scope }) {
-  let t = db().targets;
+  let t = base().targets;
   if (ky) t = t.filter((x) => x.ky === ky);
   if (scope && scope.empCode) t = t.filter((x) => x.emp_code === scope.empCode);
   return t;
 }
 
+// Cho phép xoá cache khi cần (VD sau khi nạp danh mục mới)
+function clearCache() { _base = null; }
+
 module.exports = {
-  db,
-  listPeriods,
-  latestKy,
-  listUsers,
-  findUserByPhone,
-  findUserByCode,
-  getRows,
-  getCst,
-  getTargets,
+  base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
+  getRows, getCst, getTargets, clearCache,
+  // giữ tên cũ để nơi khác không vỡ
+  db: base,
 };

@@ -30,6 +30,53 @@ function mockLogin(empCode) {
   return { token: issueToken(user), user };
 }
 
+/* ===================== ĐĂNG NHẬP THẬT (OTP + SSO) =====================
+ * MẶC ĐỊNH TẮT. Bật bằng env:
+ *   OTP_BACKEND_URL=http://localhost:3848
+ *   SSO_VERIFY_URL=http://localhost:3862/api/sso/verify
+ * KHÔNG test được từ máy ngoài mạng công ty — code sẵn để bật + kiểm trên server.
+ * TODO(LIVE): khớp đúng path/response thật của backend OTP/SSO nội bộ.
+ */
+const OTP_URL = process.env.OTP_BACKEND_URL || '';
+const SSO_URL = process.env.SSO_VERIFY_URL || '';
+const liveAuthEnabled = () => !!OTP_URL;
+
+async function requestOtp(phone) {
+  if (!OTP_URL) throw new Error('Chưa cấu hình OTP_BACKEND_URL');
+  const r = await fetch(`${OTP_URL}/api/otp/request`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  });
+  return r.ok;
+}
+
+// Xác thực OTP -> trả danh sách tài khoản gắn với SĐT (1 SĐT có thể nhiều mã NV).
+async function verifyOtp(phone, code) {
+  if (!OTP_URL) throw new Error('Chưa cấu hình OTP_BACKEND_URL');
+  const r = await fetch(`${OTP_URL}/api/otp/verify`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ phone, code }),
+  });
+  if (!r.ok) return null;
+  // Danh tính do master data quyết định (đưa về backend, không hardcode ở frontend)
+  const accounts = store.listUsers().filter((u) => u.phone === phone);
+  if (accounts.length === 1) return { token: issueToken(accounts[0]), user: accounts[0] };
+  return { accounts: accounts.map((u) => ({ emp_code: u.emp_code, name: u.name, role: u.role })) };
+}
+
+// Xác thực SSO token từ portal chung -> tạo session.
+async function verifySso(ssoToken) {
+  if (!SSO_URL) throw new Error('Chưa cấu hình SSO_VERIFY_URL');
+  const r = await fetch(SSO_URL, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ token: ssoToken }),
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  const user = store.findUserByCode((data.emp_code || '').toUpperCase());
+  return user ? { token: issueToken(user), user } : null;
+}
+
 function getSession(token) {
   return token ? sessions.get(token) || null : null;
 }
@@ -62,4 +109,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { mockLogin, requireAuth, requireAdmin, isAdmin, scopeOf, getSession };
+module.exports = {
+  mockLogin, requireAuth, requireAdmin, isAdmin, scopeOf, getSession,
+  issueToken, liveAuthEnabled, requestOtp, verifyOtp, verifySso,
+};

@@ -30,6 +30,31 @@ router.get('/auth/demo-users', (req, res) => {
   res.json(store.listUsers().map((u) => ({ emp_code: u.emp_code, name: u.name, role: u.role })));
 });
 
+// Cho frontend biết đang ở chế độ đăng nhập THẬT (OTP/SSO) hay DEMO.
+router.get('/auth/mode', (req, res) => res.json({ live: auth.liveAuthEnabled() }));
+
+// --- Đăng nhập THẬT (chỉ chạy khi cấu hình env OTP/SSO) ---
+router.post('/auth/otp/request', async (req, res) => {
+  try {
+    const ok = await auth.requestOtp((req.body.phone || '').trim());
+    res.json({ ok });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/auth/otp/verify', async (req, res) => {
+  try {
+    const r = await auth.verifyOtp((req.body.phone || '').trim(), (req.body.code || '').trim());
+    if (!r) return res.status(401).json({ error: 'OTP không đúng' });
+    res.json(r); // { token, user } hoặc { accounts:[...] } nếu SĐT có nhiều mã NV
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/auth/sso', async (req, res) => {
+  try {
+    const r = await auth.verifySso((req.body.sso_token || '').trim());
+    if (!r) return res.status(401).json({ error: 'SSO không hợp lệ' });
+    res.json(r);
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
 router.get('/me', auth.requireAuth, (req, res) => {
   res.json({ ...req.session, isAdmin: auth.isAdmin(req.session.role) });
 });
