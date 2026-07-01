@@ -30,6 +30,7 @@ export const api = {
   otpSelect: (phone, emp_code) => req('POST', '/auth/otp/select', { phone, emp_code }),
   me: () => req('GET', '/me'),
   periods: () => req('GET', '/periods'),
+  filters: (ky) => req('GET', '/filters' + (ky ? `?ky=${ky}` : '')),
   overview: (ky) => req('GET', '/overview' + (ky ? `?ky=${ky}` : '')),
   alerts: () => req('GET', '/alerts'),
   revenue: (dimension, ky, extra = {}) => {

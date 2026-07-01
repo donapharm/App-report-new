@@ -73,6 +73,36 @@ router.get('/periods', auth.requireAuth, (req, res) => {
   res.json({ periods: store.listPeriods(), latest: store.latestKy() });
 });
 
+router.get('/filters', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  const ky = req.query.ky || store.latestKy();
+  const uniq = (arr, key, label = key) => {
+    const m = new Map();
+    for (const r of arr) {
+      const k = r[key];
+      if (k != null && k !== '' && !m.has(k)) m.set(k, { key: k, label: r[label] || k });
+    }
+    return [...m.values()].sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi'));
+  };
+  const rows = store.getRows({ ky, scope });
+  const cst = store.getCst({ scope });
+  const empMap = new Map();
+  for (const r of rows) if (r.emp_code) empMap.set(r.emp_code, { key: r.emp_code, label: r.emp_name || r.emp_code });
+  for (const r of cst) for (const ec of String(r.emp_code || '').split(',').map((x) => x.trim()).filter(Boolean)) {
+    if (!empMap.has(ec)) empMap.set(ec, { key: ec, label: store.findUserByCode(ec)?.name || ec });
+  }
+  res.json({
+    ky,
+    employees: [...empMap.values()].sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi')),
+    units: uniq(rows.concat(cst), 'unit_code', 'unit_name'),
+    products: uniq(rows.concat(cst), 'iit_code', 'product_name'),
+    routes: uniq(rows, 'route'),
+    priorities: uniq(rows.concat(cst), 'priority'),
+    contractors: uniq(rows, 'contractor_code'),
+    bidPackages: uniq(rows.concat(cst), 'bid_package'),
+  });
+});
+
 /* ---------- Overview + Alerts ---------- */
 router.get('/overview', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
@@ -89,13 +119,23 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const ky = req.query.ky || store.latestKy();
   const dimension = ['emp', 'unit', 'product'].includes(req.query.dimension) ? req.query.dimension : 'emp';
+  const filters = {
+    emp: req.query.emp || null,
+    unit: req.query.unit || null,
+    product: req.query.product || null,
+    route: req.query.route || null,
+    priority: req.query.priority || null,
+    contractor: req.query.contractor || null,
+    bid: req.query.bid || null,
+    q: req.query.q || null,
+  };
   res.json({
     ky,
     dimension,
     rows: A.revenueBreakdown({
-      ky, scope, dimension,
-      filterEmp: req.query.emp || null,
-      filterUnit: req.query.unit || null,
+      ky, scope, dimension, filters,
+      filterEmp: null,
+      filterUnit: null,
     }),
   });
 });
@@ -110,6 +150,13 @@ router.get('/cst', auth.requireAuth, (req, res) => {
       remainPctMax: num(req.query.remainMax),
       remainPctMin: num(req.query.remainMin),
       bidPackage: req.query.bid || null,
+      filters: {
+        emp: req.query.emp || null,
+        unit: req.query.unit || null,
+        product: req.query.product || null,
+        priority: req.query.priority || null,
+        q: req.query.q || null,
+      },
     }),
   });
 });
@@ -163,7 +210,16 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
 
   if (kind === 'revenue') {
     const dim = ['emp', 'unit', 'product'].includes(req.query.dimension) ? req.query.dimension : 'emp';
-    const rows = A.revenueBreakdown({ ky, scope, dimension: dim });
+    const rows = A.revenueBreakdown({ ky, scope, dimension: dim, filters: {
+      emp: req.query.emp || null,
+      unit: req.query.unit || null,
+      product: req.query.product || null,
+      route: req.query.route || null,
+      priority: req.query.priority || null,
+      contractor: req.query.contractor || null,
+      bid: req.query.bid || null,
+      q: req.query.q || null,
+    } });
     ws.columns = [
       { header: 'Mã', key: 'key', width: 16 },
       { header: 'Tên', key: 'label', width: 40 },
@@ -172,7 +228,14 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
     ];
     rows.forEach((r) => ws.addRow(r));
   } else if (kind === 'cst') {
-    const rows = A.cstTable({ scope });
+    const num = (v) => (v === undefined || v === '' ? null : Number(v));
+    const rows = A.cstTable({ scope, remainPctMax: num(req.query.remainMax), remainPctMin: num(req.query.remainMin), bidPackage: req.query.bid || null, filters: {
+      emp: req.query.emp || null,
+      unit: req.query.unit || null,
+      product: req.query.product || null,
+      priority: req.query.priority || null,
+      q: req.query.q || null,
+    } });
     ws.columns = [
       { header: 'Đơn vị', key: 'unit_name', width: 30 },
       { header: 'Sản phẩm', key: 'product_name', width: 26 },
@@ -181,6 +244,10 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'Đã bán', key: 'sold_qty', width: 12 },
       { header: 'Còn lại', key: 'remain_qty', width: 12 },
       { header: '% còn lại', key: 'remain_pct', width: 12 },
+      { header: 'NV', key: 'emp_code', width: 12 },
+      { header: 'Giá thầu', key: 'bid_price', width: 14 },
+      { header: 'TT đã bán', key: 'sold_amount', width: 18 },
+      { header: 'TT còn lại', key: 'remain_amount', width: 18 },
     ];
     rows.forEach((r) => ws.addRow(r));
   } else {

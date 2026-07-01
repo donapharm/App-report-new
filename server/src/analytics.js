@@ -22,6 +22,25 @@ function groupSum(rows, keyField, labelField) {
   return [...map.values()].sort((a, b) => b.revenue - a.revenue);
 }
 
+const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+function applyFilters(rows, f = {}) {
+  const q = norm(f.q || '');
+  return rows.filter((r) => {
+    if (f.emp && r.emp_code !== f.emp) return false;
+    if (f.unit && r.unit_code !== f.unit) return false;
+    if (f.product && r.iit_code !== f.product) return false;
+    if (f.route && r.route !== f.route) return false;
+    if (f.priority && r.priority !== f.priority) return false;
+    if (f.contractor && r.contractor_code !== f.contractor) return false;
+    if (f.bid && !String(r.bid_package || '').includes(f.bid)) return false;
+    if (q) {
+      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.contractor_code, r.bid_package].join(' '));
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
 /** KPI tổng quan cho 1 kỳ trong phạm vi quyền. */
 function overviewKpis({ ky, scope }) {
   const rows = store.getRows({ ky, scope });
@@ -54,22 +73,31 @@ function overviewKpis({ ky, scope }) {
 }
 
 /** Doanh thu drill-down: 'emp' | 'unit' | 'product'. */
-function revenueBreakdown({ ky, scope, dimension, filterEmp, filterUnit }) {
+function revenueBreakdown({ ky, scope, dimension, filterEmp, filterUnit, filters }) {
   let rows = store.getRows({ ky, scope });
   if (filterEmp) rows = rows.filter((r) => r.emp_code === filterEmp);
   if (filterUnit) rows = rows.filter((r) => r.unit_code === filterUnit);
+  rows = applyFilters(rows, filters);
   if (dimension === 'unit') return groupSum(rows, 'unit_code', 'unit_name');
   if (dimension === 'product') return groupSum(rows, 'iit_code', 'product_name');
   return groupSum(rows, 'emp_code', 'emp_name'); // mặc định theo NV
 }
 
 /** Bảng cơ số thầu + cảnh báo ngưỡng. */
-function cstTable({ scope, remainPctMax, remainPctMin, bidPackage }) {
+function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
   let rows = store.getCst({ scope });
-  if (bidPackage) rows = rows.filter((r) => r.bid_package === bidPackage);
+  if (bidPackage) rows = rows.filter((r) => String(r.bid_package || '').includes(bidPackage));
+  if (filters?.emp) rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim()).includes(filters.emp));
+  if (filters?.unit) rows = rows.filter((r) => r.unit_code === filters.unit || r.unit_name === filters.unit);
+  if (filters?.product) rows = rows.filter((r) => r.iit_code === filters.product);
+  if (filters?.priority) rows = rows.filter((r) => r.priority === filters.priority);
+  if (filters?.q) {
+    const q = norm(filters.q);
+    rows = rows.filter((r) => norm([r.emp_code, r.unit_name, r.iit_code, r.product_name, r.active_ingredient, r.bid_package, r.priority].join(' ')).includes(q));
+  }
   if (remainPctMax != null) rows = rows.filter((r) => r.remain_pct <= remainPctMax);
   if (remainPctMin != null) rows = rows.filter((r) => r.remain_pct >= remainPctMin);
   return rows.sort((a, b) => a.remain_pct - b.remain_pct);
 }
 
-module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum };
+module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum, applyFilters };
