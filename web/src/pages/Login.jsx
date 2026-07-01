@@ -31,9 +31,10 @@ export default function Login({ onLogin }) {
   const [err, setErr] = useState('');
 
   // OTP flow state
-  const [step, setStep] = useState('phone');     // phone | code
+  const [step, setStep] = useState('phone');     // phone | code | choose
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
+  const [accounts, setAccounts] = useState([]);
 
   useEffect(() => {
     api.mode().then((m) => {
@@ -68,9 +69,15 @@ export default function Login({ onLogin }) {
     try {
       const r = await api.otpVerify(phone.trim(), code.trim());
       if (r.token) { await finish(r.token); return; }
-      setErr('Số điện thoại này có nhiều tài khoản — vui lòng liên hệ quản trị để cấu hình.');
-      setBusy(false);
+      if (r.accounts && r.accounts.length) { setAccounts(r.accounts); setStep('choose'); setBusy(false); return; }
+      setErr('Không xác định được tài khoản.'); setBusy(false);
     } catch (e) { setErr(e.message); setBusy(false); }
+  }
+
+  async function pickAccount(emp_code) {
+    setBusy(true); setErr('');
+    try { const r = await api.otpSelect(phone.trim(), emp_code); await finish(r.token); }
+    catch (e) { setErr(e.message); setBusy(false); }
   }
 
   const ceo = demoUsers.filter((u) => u.role !== 'sale');
@@ -87,7 +94,7 @@ export default function Login({ onLogin }) {
           {/* ĐĂNG NHẬP THẬT: SĐT → OTP */}
           {mode.live && (
             <div className="card" style={{ background: 'rgba(255,255,255,.12)', border: 'none', color: '#fff' }}>
-              {step === 'phone' ? (
+              {step === 'phone' && (
                 <>
                   <div style={{ fontSize: 13, opacity: .9, marginBottom: 8 }}>Đăng nhập bằng số điện thoại</div>
                   <input type="tel" inputMode="numeric" placeholder="Số điện thoại"
@@ -97,7 +104,8 @@ export default function Login({ onLogin }) {
                     {busy ? 'Đang gửi…' : 'Gửi mã OTP'}
                   </button>
                 </>
-              ) : (
+              )}
+              {step === 'code' && (
                 <>
                   <div style={{ fontSize: 13, opacity: .9, marginBottom: 8 }}>Nhập mã OTP gửi tới {phone}</div>
                   <input inputMode="numeric" placeholder="Mã OTP" value={code}
@@ -108,6 +116,19 @@ export default function Login({ onLogin }) {
                   </button>
                   <button className="btn ghost" style={{ width: '100%', marginTop: 8 }}
                           onClick={() => { setStep('phone'); setCode(''); setErr(''); }}>‹ Đổi số khác</button>
+                </>
+              )}
+              {step === 'choose' && (
+                <>
+                  <div style={{ fontSize: 13, opacity: .9, marginBottom: 8 }}>Số này có nhiều tài khoản — chọn để tiếp tục:</div>
+                  <div className="demo-list">
+                    {accounts.map((a) => (
+                      <div key={a.emp_code} className="demo-item" onClick={() => !busy && pickAccount(a.emp_code)}>
+                        <div><b>{a.name || a.emp_code}</b><div style={{ fontSize: 12, opacity: .8 }}>{a.emp_code}</div></div>
+                        <span className="role-tag">{roleLabel(a.role)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </>
               )}
               {err && <div style={{ color: '#ffd7d7', fontSize: 13, marginTop: 10 }}>{err}</div>}

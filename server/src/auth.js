@@ -62,19 +62,59 @@ async function requestOtp(phone) {
   return r.ok;
 }
 
-// Xác thực OTP -> trả danh sách tài khoản gắn với SĐT (1 SĐT có thể nhiều mã NV).
+// Chuẩn hoá vai trò backend -> ceo/admin/sale
+function normRole(v) {
+  const r = String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase();
+  if (/(ceo|giam doc|tong giam|chu tich|bod)/.test(r)) return 'ceo';
+  if (/(admin|quan tri)/.test(r)) return 'admin';
+  return 'sale';
+}
+// 1 phần tử tài khoản (từ backend) -> user chuẩn của app
+function mapAcc(o) {
+  return { emp_code: String(o.code || o.emp_code || '').trim().toUpperCase(), name: o.name || '', role: normRole(o.role) };
+}
+const pub = (u) => ({ emp_code: u.emp_code, name: u.name, role: u.role });
+
+// Lưu tạm SĐT đã xác thực OTP (để chọn tài khoản khi 1 SĐT có nhiều mã NV)
+const verifiedPhones = new Map(); // normPhone -> { accounts, at }
+
+/**
+ * Xác thực OTP với backend nội bộ. Backend trả: { ok, token, code, name, role, accounts, requireAccountChoice }.
+ * - Sai mã / hết hạn -> null.
+ * - 1 tài khoản -> tạo SESSION của app (không dùng token backend).
+ * - Nhiều tài khoản -> trả accounts để frontend chọn (rồi gọi selectAccount).
+ */
 async function verifyOtp(phone, code) {
   if (!OTP_URL) throw new Error('Chưa cấu hình OTP_BACKEND_URL');
   const r = await fetch(`${OTP_URL}/api/otp/verify`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ phone, code }),
   });
-  if (!r.ok) return null;
-  // Danh tính do master data quyết định (đưa về backend, không hardcode ở frontend)
-  const np = normPhone(phone);
-  const accounts = store.listUsers().filter((u) => normPhone(u.phone) === np);
-  if (accounts.length === 1) return { token: issueToken(accounts[0]), user: accounts[0] };
-  return { accounts: accounts.map((u) => ({ emp_code: u.emp_code, name: u.name, role: u.role })) };
+  let data = {};
+  try { data = await r.json(); } catch { /* ignore */ }
+  if (!r.ok || !data.ok) return null; // BẮT BUỘC kiểm data.ok (mã sai vẫn HTTP 200)
+
+  const accounts = (Array.isArray(data.accounts) ? data.accounts : []).map(mapAcc).filter((a) => a.emp_code);
+  if (data.requireAccountChoice && accounts.length > 1) {
+    verifiedPhones.set(normPhone(phone), { accounts, at: Date.now() });
+    return { accounts };
+  }
+  const acc = accounts[0] || mapAcc(data); // 1 tài khoản: ưu tiên accounts[0], fallback field top-level
+  if (!acc.emp_code) return null;
+  // Bổ sung tên từ danh bạ nếu backend không trả tên
+  if (!acc.name) acc.name = store.findUserByCode(acc.emp_code)?.name || acc.emp_code;
+  return { token: issueToken(acc), user: pub(acc) };
+}
+
+// Chọn 1 tài khoản sau khi OTP đã xác thực (SĐT có nhiều mã NV)
+function selectAccount(phone, empCode) {
+  const v = verifiedPhones.get(normPhone(phone));
+  if (!v || Date.now() - v.at > 5 * 60000) throw new Error('Phiên chọn tài khoản đã hết hạn, đăng nhập lại.');
+  const acc = v.accounts.find((a) => a.emp_code === String(empCode).trim().toUpperCase());
+  if (!acc) throw new Error('Tài khoản không hợp lệ.');
+  verifiedPhones.delete(normPhone(phone));
+  if (!acc.name) acc.name = store.findUserByCode(acc.emp_code)?.name || acc.emp_code;
+  return { token: issueToken(acc), user: pub(acc) };
 }
 
 // Xác thực SSO token từ portal chung -> tạo session.
@@ -124,5 +164,5 @@ function requireAdmin(req, res, next) {
 
 module.exports = {
   mockLogin, requireAuth, requireAdmin, isAdmin, scopeOf, getSession,
-  issueToken, liveAuthEnabled, requestOtp, verifyOtp, verifySso, demoAllowed,
+  issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, verifySso, demoAllowed,
 };

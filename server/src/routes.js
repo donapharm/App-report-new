@@ -44,8 +44,16 @@ router.post('/auth/otp/request', async (req, res) => {
 router.post('/auth/otp/verify', async (req, res) => {
   try {
     const r = await auth.verifyOtp((req.body.phone || '').trim(), (req.body.code || '').trim());
-    if (!r) return res.status(401).json({ error: 'OTP không đúng' });
+    if (!r) return res.status(401).json({ error: 'Mã OTP không đúng hoặc đã hết hạn' });
     res.json(r); // { token, user } hoặc { accounts:[...] } nếu SĐT có nhiều mã NV
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+// Chọn tài khoản khi 1 SĐT có nhiều mã NV (sau khi OTP đã xác thực)
+router.post('/auth/otp/select', (req, res) => {
+  try {
+    const r = auth.selectAccount((req.body.phone || '').trim(), (req.body.emp_code || '').trim());
+    res.json(r);
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.post('/auth/sso', async (req, res) => {

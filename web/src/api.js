@@ -27,6 +27,7 @@ export const api = {
   mode: () => req('GET', '/auth/mode'),
   otpRequest: (phone) => req('POST', '/auth/otp/request', { phone }),
   otpVerify: (phone, code) => req('POST', '/auth/otp/verify', { phone, code }),
+  otpSelect: (phone, emp_code) => req('POST', '/auth/otp/select', { phone, emp_code }),
   me: () => req('GET', '/me'),
   periods: () => req('GET', '/periods'),
   overview: (ky) => req('GET', '/overview' + (ky ? `?ky=${ky}` : '')),
