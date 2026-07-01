@@ -11,9 +11,9 @@ Cập nhật: 2026-07-01
 ## Hiện trạng đã chuyển
 - Public `https://reportnew.donapharm.asia` chạy bằng OTP thật, demo login đã tắt.
 - Danh bạ NV thật đã nạp.
-- Doanh thu thật đã nạp 04/05/06.2026.
-- Target thật đã xác định nguồn và import 04/05/06 theo logic fallback app cũ.
-- Nguồn CST app cũ đã xác định: `V_TEMP_PHARMA` + `SALES_REPORT`, đã dump mẫu cho dev.
+- **Đợt 1 nền dữ liệu đã hoàn tất trên server runtime:** doanh thu thật 01→06.2026; target thật 01→06.2026; CST thật từ `V_TEMP_PHARMA` + `SALES_REPORT`.
+- Doanh thu 04/05/06 giữ theo file upload CEO đã chốt; 01/02/03 lấy từ ORDS `SALES_REPORT`.
+- CST thật đã import 2.740 dòng, 60 đơn vị, 301 sản phẩm; CEO thấy toàn bộ, NV sale chỉ thấy phạm vi của mình.
 - Target kỳ 06 đã lọc đúng NV có doanh thu trong kỳ.
 
 ## Những phần còn thiếu lớn so với app cũ

@@ -116,8 +116,12 @@ function getRows({ ky, scope }) {
 }
 
 function getCst({ scope }) {
-  let rows = base().cst;
-  if (scope && scope.empCode) rows = rows.filter((r) => r.emp_code === scope.empCode);
+  // Khi đã có dữ liệu thật (runtime import), ưu tiên cst_real.json thay dữ liệu mẫu.
+  let rows = readJson('cst_real.json', null) || base().cst;
+  if (scope && scope.empCode) {
+    const emp = String(scope.empCode).trim().toUpperCase();
+    rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim().toUpperCase()).includes(emp));
+  }
   return rows;
 }
 
