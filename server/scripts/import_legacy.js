@@ -72,22 +72,28 @@ function mapRow(r) {
   return out;
 }
 
-// ---- Đọc tham số ----
+// ---- Đọc tham số + file ----
 const [, , file, kyArg, fromArg, toArg] = process.argv;
 if (!file) { console.error('Thiếu đường dẫn file cũ. Xem hướng dẫn ở đầu script.'); process.exit(1); }
 if (!fs.existsSync(file)) { console.error('Không thấy file:', file); process.exit(1); }
 
-// Suy ky/date từ tên file *_YYYY-MM-DD_YYYY-MM-DD.json
-let dateFrom = fromArg, dateTo = toArg, ky = kyArg;
-const m = path.basename(file).match(/(\d{4}-\d{2}-\d{2})[_-](\d{4}-\d{2}-\d{2})/);
-if (m) { dateFrom = dateFrom || m[1]; dateTo = dateTo || m[2]; }
-if (!ky && dateFrom) { const [y, mo] = dateFrom.split('-'); ky = `${mo}.${y}`; }
-if (!ky) { console.error('Không suy được kỳ (ky). Truyền tay: node ... <file> MM.YYYY YYYY-MM-DD YYYY-MM-DD'); process.exit(1); }
-
-// ---- Đọc + map ----
 const raw = readJson(file, null);
-const arr = Array.isArray(raw) ? raw : (raw.rows || raw.data || raw.items || []);
+const arr = Array.isArray(raw) ? raw : (raw && (raw.rows || raw.data || raw.items)) || [];
 if (!Array.isArray(arr) || !arr.length) { console.error('File không phải mảng dòng hoặc rỗng.'); process.exit(1); }
+
+// ---- Suy kỳ/ngày: ưu tiên tham số > tên file (YYYY-MM-DD HOẶC YYYYMMDD) > nội dung dòng (KY/FROM_DATE) ----
+let ky = kyArg, dateFrom = fromArg, dateTo = toArg;
+const fm = path.basename(file).match(/(\d{4})-?(\d{2})-?(\d{2})[_-](\d{4})-?(\d{2})-?(\d{2})/);
+if (fm) {
+  dateFrom = dateFrom || `${fm[1]}-${fm[2]}-${fm[3]}`;
+  dateTo = dateTo || `${fm[4]}-${fm[5]}-${fm[6]}`;
+}
+const first = arr[0] || {};
+ky = ky || first.KY || first.ky;
+dateFrom = dateFrom || first.FROM_DATE || first.from_date || first.DATE || first.date;
+dateTo = dateTo || first.TO_DATE || first.to_date;
+if (!ky && dateFrom) { const dm = String(dateFrom).match(/(\d{4})-?(\d{2})/); if (dm) ky = `${dm[2]}.${dm[1]}`; }
+if (!ky) { console.error('Không suy được kỳ (ky). Truyền tay: node ... <file> MM.YYYY YYYY-MM-DD YYYY-MM-DD'); process.exit(1); }
 
 const rows = arr.map(mapRow).filter((r) => r.emp_code);
 const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
