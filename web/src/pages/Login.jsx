@@ -48,7 +48,7 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="login">
-      <div style={{ marginBottom: 18 }}><Logo size={44} light wordmark /></div>
+      <div style={{ marginBottom: 18 }}><Logo full /></div>
       <h1>App Report</h1>
       <p>Báo cáo doanh thu thông minh · DNPHARMA</p>
 

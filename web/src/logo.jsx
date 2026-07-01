@@ -1,44 +1,57 @@
 import React, { useState } from 'react';
 
 /**
- * Logo DNPHARMA.
- * - Mặc định: mark SVG (2 vòng capsule lồng nhau xanh–cam) — hiển thị ngay, không cần file.
- * - Nếu bỏ file thật vào web/public/logo-dnpharma.png thì tự dùng ảnh đó (đẹp/chuẩn hơn).
- * TODO(BRAND): thay logo-dnpharma.png bằng file logo chính thức (nền trong suốt, dạng icon/mark vuông).
+ * Logo DNPHARMA (dùng ảnh thật trong web/public/):
+ *   - full=true  : logo lockup đầy đủ (logo-dnpharma.png) — dùng ở màn login.
+ *   - mặc định   : biểu tượng DP (logo-mark.png) + chữ — dùng ở header/sidebar.
+ * Nếu thiếu ảnh sẽ tự vẽ SVG capsule thay thế (không lỗi).
  */
-function Mark({ size, light }) {
-  const blue = light ? '#ffffff' : 'var(--brand)';
-  const orange = 'var(--accent)';
-  const w = size * 1.35;
+function MarkSVG({ size, light }) {
+  const blue = light ? '#ffffff' : '#1568b8';
+  const orange = '#f5a11e';
+  const s = size * 1.42;
   return (
-    <svg width={w} height={size} viewBox="0 0 68 50" fill="none" aria-hidden style={{ flex: 'none' }}>
-      <rect x="4" y="7" width="38" height="36" rx="18" fill="none" stroke={orange} strokeWidth="7.5" />
-      <rect x="26" y="7" width="38" height="36" rx="18" fill="none" stroke={blue} strokeWidth="7.5" />
+    <svg width={s} height={size} viewBox="0 0 71 50" fill="none" aria-hidden style={{ flex: 'none' }}>
+      <rect x="4.5" y="6.5" width="40" height="37" rx="18.5" fill="none" stroke={orange} strokeWidth="8" />
+      <rect x="26.5" y="6.5" width="40" height="37" rx="18.5" fill="none" stroke={blue} strokeWidth="8" />
     </svg>
   );
 }
 
-export default function Logo({ size = 30, light = false, wordmark = true }) {
-  const [imgOk, setImgOk] = useState(true);
+export default function Logo({ size = 30, light = false, full = false }) {
+  const [markOk, setMarkOk] = useState(true);
+  const [fullOk, setFullOk] = useState(true);
+
+  // Màn login: logo lockup đầy đủ, đặt trên thẻ trắng cho nổi trên nền xanh.
+  if (full) {
+    return fullOk ? (
+      <span style={{ display: 'inline-block', background: '#fff', padding: '12px 18px', borderRadius: 16, boxShadow: '0 4px 16px rgba(0,0,0,.15)' }}>
+        <img src="/logo-dnpharma.png" alt="DNPHARMA" style={{ display: 'block', width: 200, maxWidth: '60vw', height: 'auto' }} onError={() => setFullOk(false)} />
+      </span>
+    ) : (
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+        <MarkSVG size={size} light={light} />
+        <b style={{ fontSize: size * 0.6, color: '#fff' }}>DNPHARMA</b>
+      </span>
+    );
+  }
+
+  // Header/sidebar: biểu tượng DP + chữ.
+  const markImg = markOk ? (
+    <span style={{ display: 'inline-flex', background: light ? '#fff' : 'transparent', padding: light ? 4 : 0, borderRadius: 8 }}>
+      <img src="/logo-mark.png" alt="DP" height={size} style={{ height: size, width: 'auto', display: 'block' }} onError={() => setMarkOk(false)} />
+    </span>
+  ) : (
+    <MarkSVG size={size} light={light} />
+  );
+
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
-      {imgOk ? (
-        <img
-          src="/logo-dnpharma.png"
-          alt="DNPHARMA"
-          height={size + 6}
-          style={{ maxHeight: size + 8, width: 'auto', objectFit: 'contain' }}
-          onError={() => setImgOk(false)}
-        />
-      ) : (
-        <Mark size={size} light={light} />
-      )}
-      {wordmark && !imgOk && (
-        <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
-          <b style={{ fontSize: size * 0.52, letterSpacing: '.01em', color: light ? '#fff' : 'var(--brand)' }}>DNPHARMA</b>
-          <span style={{ fontSize: size * 0.3, color: light ? 'rgba(255,255,255,.85)' : 'var(--accent-2)', fontWeight: 700 }}>App Report</span>
-        </span>
-      )}
+      {markImg}
+      <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.06 }}>
+        <b style={{ fontSize: size * 0.58, letterSpacing: '.02em', color: light ? '#fff' : '#1568b8' }}>DNPHARMA</b>
+        <span style={{ fontSize: size * 0.3, color: light ? 'rgba(255,255,255,.85)' : '#f5a11e', fontWeight: 700 }}>App Report</span>
+      </span>
     </span>
   );
 }
