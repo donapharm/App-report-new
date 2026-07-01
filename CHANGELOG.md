@@ -8,18 +8,23 @@
 ---
 
 ## 📍 TRẠNG THÁI HIỆN TẠI — 2026-07-01
-- **Giai đoạn:** Đã có **bản demo hoàn chỉnh, chạy được** (dữ liệu mẫu ẩn danh). Đang chuẩn bị **deploy `reportnew.donapharm.asia`**.
-- **GitHub:** `donapharm/App-report-new` — nhánh `main`, đồng bộ tới commit mới nhất.
-- **Đã xong:** 6 lõi báo cáo (Tổng quan+cảnh báo, Doanh thu drill-down, Cơ số thầu, Target+dự báo, Export Excel, AI hỏi nhanh) · Responsive mobile+PC · Upload (validate/audit/rollback) · Phân quyền backend · Nhận diện DNPHARMA (logo+QR thật) · Nối Upload→Báo cáo (thật) · Adapter ORDS/OTP/SSO (code sẵn, env-gated, TẮT mặc định).
-- **✅ ĐÃ LIVE (demo):** `https://reportnew.donapharm.asia` (HTTP 200). Bot server chạy App Report New ở **cổng 3873** (PM2 `reportnew`) + tunnel riêng (PM2 `cloudflared-reportnew`); **app cũ `dona-report` cổng 3860 giữ nguyên**. Dữ liệu còn là MẪU (`USE_SAMPLE_DATA=1`).
-- **Đang chờ / kế tiếp:**
-  1. **Lấy dữ liệu thật từ app cũ** sang (đang là dữ liệu mẫu) — dev viết importer, bot chạy trên server.
-  2. Bật **Cloudflare Access** (hiện chưa bật — ai có link đều vào được).
-  3. Nối OTP/SSO/ORDS thật + UI đăng nhập SĐT→OTP; CORS theo env.
+- **Giai đoạn:** ĐÃ LIVE tại `https://reportnew.donapharm.asia` (cổng 3873, PM2 `reportnew` + `cloudflared-reportnew`); app cũ `dona-report` cổng 3860 giữ nguyên.
+- **Dữ liệu DOANH THU đã THẬT:** import 04/05/06.2026 từ app cũ (T04 34.79 tỷ · T05 30.40 tỷ · T06 28.40 tỷ), đủ đơn vị/SP/nhà thầu/gói thầu. **Cơ số thầu + Target VẪN là dữ liệu mẫu** (nguồn riêng, chưa nối).
+- **GitHub:** `donapharm/App-report-new` — nhánh `main`, đồng bộ.
+- **🔴 RỦI RO ĐANG MỞ (ưu tiên xử lý #1):**
+  - **Chưa bật Cloudflare Access** → ai có link cũng vào được.
+  - **Đăng nhập vẫn là nút DEMO** (bấm CEO là vào) → kết hợp với dữ liệu thật = **lộ toàn bộ doanh thu**. Phải bật Access NGAY và/hoặc tắt demo-login khi có OTP.
+- **Kế tiếp:**
+  1. 🔴 Bot bật **Cloudflare Access** (chỉ email công ty).
+  2. Dev + bot: nối **OTP/SSO** thật + tắt demo-login (mỗi NV chỉ thấy phạm vi của mình).
+  3. Nối nguồn thật cho **Cơ số thầu** (ORDS) + **Target** (DB) qua `.env`.
 
 ---
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
+
+### 2026-07-01 — Dev (Claude Code)
+- **⚠ Cảnh báo bảo mật + công tắc tắt demo-login.** Dữ liệu đã THẬT nhưng site chưa bật Cloudflare Access và đăng nhập còn là nút demo → nguy cơ lộ. Thêm env `ALLOW_DEMO_LOGIN` (mặc định 1): đặt `=0` để KHOÁ demo-login (`mockLogin` trả null, `/auth/demo-users` rỗng, `/auth/mode` trả `demo:false`). _Khuyến nghị: bot bật Cloudflare Access NGAY; khi có OTP thì đặt ALLOW_DEMO_LOGIN=0._
 
 ### 2026-07-01 — Bot hạ tầng (Report Bot)
 - **Cập nhật importer và import lại dữ liệu thật 04/05/06 cho `reportnew`.** Đã `git pull` lên commit `f49f91d`, `npm run build`, import đúng các file chuẩn theo `report_uploadSlots.json` app cũ: `report_upload_data_20260401_20260430.json`, `report_upload_data_20260501_20260529.json`, `report_upload_data_20260601_20260630.json`. Sau import đã restart PM2 `reportnew`; health local và HTTPS đều OK. App cũ `dona-report` cổng `3860` chỉ đọc file, không sửa/xoá.

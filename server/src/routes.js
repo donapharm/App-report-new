@@ -25,13 +25,14 @@ router.post('/auth/login', (req, res) => {
   });
 });
 
-// Danh sách tài khoản demo để bấm nhanh trên màn login (chỉ dùng cho bản mẫu).
+// Danh sách tài khoản demo để bấm nhanh trên màn login (chỉ khi còn bật demo-login).
 router.get('/auth/demo-users', (req, res) => {
+  if (!auth.demoAllowed()) return res.json([]);
   res.json(store.listUsers().map((u) => ({ emp_code: u.emp_code, name: u.name, role: u.role })));
 });
 
-// Cho frontend biết đang ở chế độ đăng nhập THẬT (OTP/SSO) hay DEMO.
-router.get('/auth/mode', (req, res) => res.json({ live: auth.liveAuthEnabled() }));
+// Cho frontend biết chế độ đăng nhập: có OTP/SSO thật không, còn cho demo không.
+router.get('/auth/mode', (req, res) => res.json({ live: auth.liveAuthEnabled(), demo: auth.demoAllowed() }));
 
 // --- Đăng nhập THẬT (chỉ chạy khi cấu hình env OTP/SSO) ---
 router.post('/auth/otp/request', async (req, res) => {

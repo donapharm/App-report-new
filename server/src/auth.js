@@ -23,8 +23,13 @@ function issueToken(user) {
   return token;
 }
 
+// Cho phép đăng nhập DEMO (bấm chọn tài khoản, không mật khẩu)?
+// Mặc định BẬT. Khi có OTP/SSO thật -> đặt ALLOW_DEMO_LOGIN=0 để KHOÁ demo (bảo mật).
+const demoAllowed = () => process.env.ALLOW_DEMO_LOGIN !== '0';
+
 // Demo login: nhận mã NV mẫu, trả token. (Không mật khẩu — chỉ để xem app.)
 function mockLogin(empCode) {
+  if (!demoAllowed()) return null;
   const user = store.findUserByCode(empCode);
   if (!user) return null;
   return { token: issueToken(user), user };
@@ -111,5 +116,5 @@ function requireAdmin(req, res, next) {
 
 module.exports = {
   mockLogin, requireAuth, requireAdmin, isAdmin, scopeOf, getSession,
-  issueToken, liveAuthEnabled, requestOtp, verifyOtp, verifySso,
+  issueToken, liveAuthEnabled, requestOtp, verifyOtp, verifySso, demoAllowed,
 };
