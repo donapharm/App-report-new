@@ -87,10 +87,15 @@ const listUsers = () => base().users;
 const findUserByPhone = (phone) => base().users.find((u) => u.phone === phone);
 const findUserByCode = (code) => base().empByCode[code];
 
-/** Danh sách mã NV THỰC SỰ có doanh thu (đúng danh sách App Report), trong phạm vi quyền. */
-function empCodesWithData({ scope } = {}) {
+/**
+ * Danh sách mã NV THỰC SỰ có doanh thu (đúng danh sách App Report), trong phạm vi quyền.
+ * - Có `ky`: chỉ NV có bán trong KỲ ĐÓ (tránh hiện NV không bán kỳ này).
+ * - Không `ky`: NV có bán ở bất kỳ kỳ nào.
+ */
+function empCodesWithData({ ky, scope } = {}) {
   const set = new Set();
-  for (const p of listPeriods()) for (const r of getRows({ ky: p.ky, scope })) if (r.emp_code) set.add(r.emp_code);
+  const periods = ky ? [{ ky }] : listPeriods();
+  for (const p of periods) for (const r of getRows({ ky: p.ky, scope })) if (r.emp_code) set.add(r.emp_code);
   return [...set];
 }
 

@@ -104,8 +104,8 @@ function forecastTargets({ scope }) {
   const nextKy = `${nextMonth}.${nextYear}`;
   const season = SEASON[nextMonth] || 1;
 
-  // Chỉ NV THỰC SỰ có doanh thu (đúng danh sách App Report), không lấy cả danh bạ công ty
-  const emps = store.empCodesWithData({ scope })
+  // Chỉ NV còn ĐANG hoạt động (có bán ở kỳ gần nhất), không lấy cả danh bạ công ty
+  const emps = store.empCodesWithData({ ky: lastKy, scope })
     .map((ec) => ({ emp_code: ec, name: store.findUserByCode(ec)?.name || ec }));
   const out = emps.map((emp) => {
     const s = { empCode: emp.emp_code };

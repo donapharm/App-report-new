@@ -121,7 +121,7 @@ router.get('/targets', auth.requireAuth, (req, res) => {
   // Danh sách NV = NV thực sự có doanh thu (đúng App Report); target lấy từ nguồn target thật (0 nếu chưa import)
   const targets = store.getTargets({ ky, scope });
   const targetByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, t.target]));
-  const items = store.empCodesWithData({ scope }).map((ec) => {
+  const items = store.empCodesWithData({ ky, scope }).map((ec) => {
     const rev = A.sum(store.getRows({ ky, scope: { empCode: ec } }), (r) => r.revenue);
     const beforeVat = rev / A.VAT_DIVISOR;
     const target = targetByEmp[ec] || 0;
