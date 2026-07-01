@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Dữ liệu sinh/runtime (chạy `npm run seed` để tạo lại)
+server/data/*.json
+server/data/uploads/
+# Giữ lại file Excel mẫu để test tính năng Upload
+!server/data/sample_upload.xlsx

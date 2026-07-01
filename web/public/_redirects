@@ -1,0 +1,3 @@
+# Cloudflare Pages: chuyển gọi /api về backend (qua Cloudflare Tunnel).
+# SỬA domain bên dưới thành domain API thật của công ty trước khi deploy.
+/api/*  https://api.report.donapharm.one/api/:splat  200
