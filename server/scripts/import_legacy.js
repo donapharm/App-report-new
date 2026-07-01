@@ -28,12 +28,15 @@ const ALIAS = {
   emp_code: ['emp_code', 'emp_number', 'ma_nv', 'manv', 'ma_nhan_vien', 'nhanvien'],
   unit_code: ['unit_code', 'donvi', 'ma_dv', 'madv', 'ma_don_vi'],
   unit_name: ['unit_name', 'ten_dv', 'ten_vt', 'ten_don_vi', 'tendv'],
+  route: ['route', 'tuyen'],
   iit_code: ['iit_code', 'qlnb', 'ma_qlnb', 'ma_sp', 'masp'],
-  product_name: ['product_name', 'ten_thuoc', 'ten_sp', 'ten_san_pham', 'tensp'],
+  product_name: ['product_name', 'ten_thuoc', 'ten_sp', 'ten_san_pham', 'tensp',
+    'item_name', 'iit_name', 'name', 'ten_item', 'ten'],
   quantity: ['quantity', 'so_luong', 'sl', 'soluong'],
   revenue: ['revenue', 'tong_tien', 'doanh_thu', 'thanh_tien', 'tongtien', 'thanhtien'],
   bid_package: ['bid_package', 'goi_thau', 'goithau', 'qd'],
-  contractor_code: ['contractor_code', 'ncc', 'nha_cung_cap', 'nhacungcap'],
+  contractor_code: ['contractor_code', 'ncc', 'nha_cung_cap', 'nhacungcap',
+    'nha_thau', 'nhathau', 'ven_name', 'venname', 'ten_nha_thau'],
 };
 // Tạo map nhanh: alias(chuẩn hoá) -> field
 const LOOKUP = {};
@@ -58,6 +61,14 @@ function mapRow(r) {
   out.emp_code = String(out.emp_code || '').trim().toUpperCase();
   out.revenue = toNum(out.revenue);
   out.quantity = toNum(out.quantity);
+  // Fallback: app cũ gộp mã+tên trong DONVI, và tên SP có thể rỗng
+  if (!out.unit_name) out.unit_name = out.unit_code;
+  if (!out.product_name) out.product_name = out.iit_code;
+  // Trích gói thầu (QĐ139/QĐ141…) từ mã IIT nếu chưa có cột gói thầu
+  if (!out.bid_package && out.iit_code) {
+    const m = String(out.iit_code).match(/Q[ĐD]\s?\d+/i);
+    if (m) out.bid_package = m[0].replace(/\s/g, '');
+  }
   return out;
 }
 

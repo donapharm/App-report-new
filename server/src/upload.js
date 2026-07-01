@@ -26,12 +26,13 @@ const HEADER_MAP = {
   emp_code: ['emp_code', 'emp_number', 'ma_nv', 'manv', 'ma nhan vien'],
   unit_code: ['unit_code', 'donvi', 'ma_dv', 'madv', 'ma don vi'],
   unit_name: ['unit_name', 'ten_dv', 'ten_vt', 'ten don vi'],
+  route: ['route', 'tuyen'],
   iit_code: ['iit_code', 'qlnb', 'ma_qlnb', 'ma sp'],
-  product_name: ['product_name', 'ten_thuoc', 'ten_sp', 'ten san pham'],
+  product_name: ['product_name', 'ten_thuoc', 'ten_sp', 'ten san pham', 'item_name', 'iit_name', 'name', 'ten_item'],
   quantity: ['quantity', 'so_luong', 'sl', 'soluong'],
   revenue: ['revenue', 'tong_tien', 'doanh_thu', 'thanh_tien', 'tongtien'],
   bid_package: ['bid_package', 'goi_thau', 'goithau'],
-  contractor_code: ['contractor_code', 'ncc', 'nha_cung_cap'],
+  contractor_code: ['contractor_code', 'ncc', 'nha_cung_cap', 'nha_thau', 'nhathau', 'ven_name', 'venname'],
 };
 const noAccent = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
 // Đọc số chịu được định dạng VN: "22.500.000" (chấm ngăn nghìn), "1.234,5" (phẩy thập phân)
@@ -87,6 +88,13 @@ async function parseWorkbook(buffer) {
     row.emp_code = String(row.emp_code || '').trim().toUpperCase();
     row.revenue = toNum(row.revenue);
     row.quantity = toNum(row.quantity);
+    // Fallback giống import app cũ (ERP): tên đơn vị/SP + trích gói thầu từ mã IIT
+    if (!row.unit_name) row.unit_name = row.unit_code;
+    if (!row.product_name) row.product_name = row.iit_code;
+    if (!row.bid_package && row.iit_code) {
+      const bm = String(row.iit_code).match(/Q[ĐD]\s?\d+/i);
+      if (bm) row.bid_package = bm[0].replace(/\s/g, '');
+    }
     if (!row.emp_code) { warnings.push(`Dòng ${r}: thiếu mã NV → bỏ qua.`); continue; }
     if (row.revenue <= 0) warnings.push(`Dòng ${r}: doanh thu = 0 hoặc âm.`);
     const dupKey = [row.emp_code, row.unit_code, row.iit_code, row.revenue].join('|');
