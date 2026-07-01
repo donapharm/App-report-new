@@ -11,12 +11,11 @@
 - **Giai đoạn:** ĐÃ LIVE tại `https://reportnew.donapharm.asia` (cổng 3873, PM2 `reportnew` + `cloudflared-reportnew`); app cũ `dona-report` cổng 3860 giữ nguyên.
 - **Dữ liệu DOANH THU đã THẬT:** import 04/05/06.2026 từ app cũ (T04 34.79 tỷ · T05 30.40 tỷ · T06 28.40 tỷ), đủ đơn vị/SP/nhà thầu/gói thầu. **Cơ số thầu + Target VẪN là dữ liệu mẫu** (nguồn riêng, chưa nối).
 - **GitHub:** `donapharm/App-report-new` — nhánh `main`, đồng bộ.
-- **🔒 Truy cập công khai ĐANG KHOÁ TẠM (403):** bot đổi ingress tunnel sang `http_status:403` để chặn người ngoài trong lúc chưa cấu hình được Cloudflare Access (dashboard Zero Trust vướng xác minh trên trình duyệt headless). Dữ liệu thật an toàn; local 3873 vẫn chạy.
+- **✅ ĐĂNG NHẬP OTP THẬT ĐÃ CHẠY + PUBLIC MỞ:** đăng nhập bằng SĐT→OTP (backend nội bộ 3848), demo đã tắt. CEO (role backend `full`→admin) thấy toàn bộ; NV sale chỉ thấy phần mình. Site mở tại `https://reportnew.donapharm.asia` (bảo vệ bằng OTP; Cloudflare Access là tùy chọn phụ, chưa bật).
 - **Kế tiếp:**
-  1. 🔴 Cấu hình **Cloudflare Access** đúng chuẩn (có thể cần CEO thao tác trên dashboard Zero Trust hoặc cấp API token), rồi bot đổi ingress về `http://localhost:3873`.
-  2. Lấy **đủ dữ liệu từ 01/2026** bằng importer chế độ thư mục (đã sẵn sàng).
-  3. Dev + bot: nối **OTP/SSO** thật + tắt demo-login (mỗi NV chỉ thấy phạm vi của mình).
-  4. Nối nguồn thật cho **Cơ số thầu** (ORDS) + **Target** (DB) qua `.env`.
+  1. **Đúng danh sách NV** (vừa fix: Target/Dự báo chỉ lấy NV có doanh thu thật) — bot pull + restart để áp.
+  2. **Đồng bộ nốt số liệu từ app cũ:** target thật (`import_targets.js` — cần bot dump nguồn target) + **cơ số thầu** thật (hiện còn mẫu, cần nguồn ORDS/file).
+  3. Lấy **đủ dữ liệu từ 01/2026** (importer thư mục đã sẵn).
 
 ---
 
