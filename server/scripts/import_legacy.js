@@ -3,9 +3,12 @@
  * thành SLOT của App Report New (data/upload_slots.json + data/uploads/<id>.json + audit).
  *
  * Chạy trên server (nơi có file cũ):
- *   node server/scripts/import_legacy.js <đường-dẫn-file-cũ.json> [ky] [dateFrom] [dateTo]
+ *   node server/scripts/import_legacy.js <FILE.json> [ky] [dateFrom] [dateTo]   # nạp 1 file
+ *   node server/scripts/import_legacy.js <THƯ_MỤC>                              # nạp CẢ thư mục
  * Ví dụ:
- *   node server/scripts/import_legacy.js /home/osboxes/.openclaw/workspace-main/webapp_donapharm/data/report_upload_data_2026-06-01_2026-06-30.json
+ *   # Nạp đủ mọi kỳ (01..hiện tại) trong thư mục data của app cũ, 1 lệnh:
+ *   node server/scripts/import_legacy.js /home/osboxes/.openclaw/workspace-main/webapp_donapharm/data
+ *   # Hoặc 1 file:
  *   node server/scripts/import_legacy.js ./old.json 06.2026 2026-06-01 2026-06-30
  *
  * - Nếu không truyền ky/date, script TỰ SUY từ tên file dạng *_YYYY-MM-DD_YYYY-MM-DD.json
@@ -72,53 +75,72 @@ function mapRow(r) {
   return out;
 }
 
-// ---- Đọc tham số + file ----
-const [, , file, kyArg, fromArg, toArg] = process.argv;
-if (!file) { console.error('Thiếu đường dẫn file cũ. Xem hướng dẫn ở đầu script.'); process.exit(1); }
-if (!fs.existsSync(file)) { console.error('Không thấy file:', file); process.exit(1); }
+// ---- Import 1 file -> ghi slot. Trả kết quả tóm tắt. ----
+function importFile(file, { ky, dateFrom, dateTo } = {}) {
+  const raw = readJson(file, null);
+  const arr = Array.isArray(raw) ? raw : (raw && (raw.rows || raw.data || raw.items)) || [];
+  if (!Array.isArray(arr) || !arr.length) return { file: path.basename(file), error: 'rỗng/không phải mảng' };
 
-const raw = readJson(file, null);
-const arr = Array.isArray(raw) ? raw : (raw && (raw.rows || raw.data || raw.items)) || [];
-if (!Array.isArray(arr) || !arr.length) { console.error('File không phải mảng dòng hoặc rỗng.'); process.exit(1); }
+  // Suy kỳ/ngày: tham số > tên file (YYYY-MM-DD HOẶC YYYYMMDD) > nội dung dòng (KY/FROM_DATE)
+  const fm = path.basename(file).match(/(\d{4})-?(\d{2})-?(\d{2})[_-](\d{4})-?(\d{2})-?(\d{2})/);
+  if (fm) { dateFrom = dateFrom || `${fm[1]}-${fm[2]}-${fm[3]}`; dateTo = dateTo || `${fm[4]}-${fm[5]}-${fm[6]}`; }
+  const first = arr[0] || {};
+  ky = ky || first.KY || first.ky;
+  dateFrom = dateFrom || first.FROM_DATE || first.from_date || first.DATE || first.date;
+  dateTo = dateTo || first.TO_DATE || first.to_date;
+  if (!ky && dateFrom) { const dm = String(dateFrom).match(/(\d{4})-?(\d{2})/); if (dm) ky = `${dm[2]}.${dm[1]}`; }
+  if (!ky) return { file: path.basename(file), error: 'không suy được kỳ (truyền tay MM.YYYY)' };
 
-// ---- Suy kỳ/ngày: ưu tiên tham số > tên file (YYYY-MM-DD HOẶC YYYYMMDD) > nội dung dòng (KY/FROM_DATE) ----
-let ky = kyArg, dateFrom = fromArg, dateTo = toArg;
-const fm = path.basename(file).match(/(\d{4})-?(\d{2})-?(\d{2})[_-](\d{4})-?(\d{2})-?(\d{2})/);
-if (fm) {
-  dateFrom = dateFrom || `${fm[1]}-${fm[2]}-${fm[3]}`;
-  dateTo = dateTo || `${fm[4]}-${fm[5]}-${fm[6]}`;
+  const rows = arr.map(mapRow).filter((r) => r.emp_code);
+  const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+  const empCount = new Set(rows.map((r) => r.emp_code)).size;
+
+  const id = 'legacy_' + ky.replace('.', '') + '_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
+  writeJson(path.join(UP_DIR, id + '.json'), rows);
+  const slots = readJson(path.join(DATA, 'upload_slots.json'), []).map((s) => (s.ky === ky ? { ...s, active: false } : s));
+  slots.push({
+    id, ky, dateFrom: dateFrom || ky, dateTo: dateTo || ky,
+    totalRows: rows.length, totalRevenue, empCount,
+    filename: path.basename(file), uploadedBy: 'IMPORT', uploadedByName: 'Import app cũ',
+    uploadedAt: new Date().toISOString(), active: true,
+  });
+  writeJson(path.join(DATA, 'upload_slots.json'), slots);
+  const audit = readJson(path.join(DATA, 'audit.json'), []);
+  audit.push({ at: new Date().toISOString(), by: 'IMPORT', action: 'import_legacy', ky, slotId: id, rows: rows.length, revenue: totalRevenue, source: path.basename(file) });
+  writeJson(path.join(DATA, 'audit.json'), audit);
+  return { file: path.basename(file), ky, dateFrom, dateTo, rows: rows.length, total: arr.length, empCount, totalRevenue, sample: rows.slice(0, 1) };
 }
-const first = arr[0] || {};
-ky = ky || first.KY || first.ky;
-dateFrom = dateFrom || first.FROM_DATE || first.from_date || first.DATE || first.date;
-dateTo = dateTo || first.TO_DATE || first.to_date;
-if (!ky && dateFrom) { const dm = String(dateFrom).match(/(\d{4})-?(\d{2})/); if (dm) ky = `${dm[2]}.${dm[1]}`; }
-if (!ky) { console.error('Không suy được kỳ (ky). Truyền tay: node ... <file> MM.YYYY YYYY-MM-DD YYYY-MM-DD'); process.exit(1); }
 
-const rows = arr.map(mapRow).filter((r) => r.emp_code);
-const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
-const empCount = new Set(rows.map((r) => r.emp_code)).size;
+// ---- Main: nhận FILE hoặc THƯ MỤC ----
+const [, , target, kyArg, fromArg, toArg] = process.argv;
+if (!target) { console.error('Thiếu đường dẫn file HOẶC thư mục. Xem hướng dẫn ở đầu script.'); process.exit(1); }
+if (!fs.existsSync(target)) { console.error('Không thấy:', target); process.exit(1); }
 
-// ---- Ghi slot ----
-const id = 'legacy_' + ky.replace('.', '') + '_' + Date.now().toString(36);
-writeJson(path.join(UP_DIR, id + '.json'), rows);
-const slots = readJson(path.join(DATA, 'upload_slots.json'), []).map((s) => (s.ky === ky ? { ...s, active: false } : s));
-slots.push({
-  id, ky, dateFrom: dateFrom || ky, dateTo: dateTo || ky,
-  totalRows: rows.length, totalRevenue, empCount,
-  filename: path.basename(file), uploadedBy: 'IMPORT', uploadedByName: 'Import app cũ',
-  uploadedAt: new Date().toISOString(), active: true,
-});
-writeJson(path.join(DATA, 'upload_slots.json'), slots);
-const audit = readJson(path.join(DATA, 'audit.json'), []);
-audit.push({ at: new Date().toISOString(), by: 'IMPORT', action: 'import_legacy', ky, slotId: id, rows: rows.length, revenue: totalRevenue, source: path.basename(file) });
-writeJson(path.join(DATA, 'audit.json'), audit);
+let files = [];
+if (fs.statSync(target).isDirectory()) {
+  // Nạp mọi file report_upload_data_*<có ngày>.json trong thư mục (bỏ lastUpload/slots)
+  files = fs.readdirSync(target)
+    .filter((f) => /report_upload_data_.*\d{6,8}.*\.json$/i.test(f))
+    .sort()
+    .map((f) => path.join(target, f));
+  if (!files.length) { console.error('Thư mục không có file report_upload_data_*.json nào.'); process.exit(1); }
+  console.log(`Tìm thấy ${files.length} file trong thư mục, bắt đầu import...\n`);
+} else {
+  files = [target];
+}
 
-// ---- Tóm tắt để kiểm tra ----
-console.log('✔ Import xong (KIỂM TRA giúp trước khi tin):');
-console.log(`  Kỳ: ${ky} (${dateFrom} → ${dateTo})`);
-console.log(`  Dòng hợp lệ: ${rows.length} / ${arr.length} · NV: ${empCount}`);
-console.log(`  Tổng doanh thu: ${totalRevenue.toLocaleString('vi-VN')} đ`);
-console.log(`  Slot: ${id} (active)`);
-console.log('  Mẫu 2 dòng đầu:', JSON.stringify(rows.slice(0, 2)));
+const results = files.map((f) => importFile(f, f === target ? { ky: kyArg, dateFrom: fromArg, dateTo: toArg } : {}));
+
+// ---- Bảng tổng kết để KIỂM TRA ----
+console.log('KỲ      | DÒNG  | NV | TỔNG DOANH THU        | FILE');
+console.log('--------|-------|----|-----------------------|-----');
+const byKy = {};
+for (const r of results.filter((x) => !x.error).sort((a, b) => (a.ky < b.ky ? -1 : 1))) {
+  console.log(`${(r.ky || '?').padEnd(7)} | ${String(r.rows).padStart(5)} | ${String(r.empCount).padStart(2)} | ${r.totalRevenue.toLocaleString('vi-VN').padStart(21)} | ${r.file}`);
+  byKy[r.ky] = (byKy[r.ky] || 0) + 1;
+}
+const errs = results.filter((x) => x.error);
+if (errs.length) { console.log('\n⚠ File lỗi/bỏ qua:'); errs.forEach((e) => console.log(`  - ${e.file}: ${e.error}`)); }
+const dups = Object.entries(byKy).filter(([, n]) => n > 1);
+if (dups.length) console.log('\n⚠ Có kỳ nhiều file (file cuối theo thứ tự tên = active):', dups.map(([k]) => k).join(', '), '- kiểm tra lại nếu tổng lệch.');
 console.log('\n⚠ Nếu doanh thu = 0 hoặc thiếu cột: app cũ dùng tên cột khác — gửi 1 dòng mẫu để dev bổ sung ALIAS.');
