@@ -25,8 +25,8 @@ export default function Logo({ size = 30, light = false, full = false }) {
   // Màn login: logo lockup đầy đủ, đặt trên thẻ trắng cho nổi trên nền xanh.
   if (full) {
     return fullOk ? (
-      <span style={{ display: 'inline-block', background: '#fff', padding: '12px 18px', borderRadius: 16, boxShadow: '0 4px 16px rgba(0,0,0,.15)' }}>
-        <img src="/logo-dnpharma.png" alt="DNPHARMA" style={{ display: 'block', width: 200, maxWidth: '60vw', height: 'auto' }} onError={() => setFullOk(false)} />
+      <span style={{ display: 'inline-block', background: '#fff', padding: '9px 14px', borderRadius: 13, boxShadow: '0 3px 12px rgba(0,0,0,.14)' }}>
+        <img src="/logo-dnpharma.png" alt="DNPHARMA" style={{ display: 'block', width: 132, maxWidth: '42vw', height: 'auto' }} onError={() => setFullOk(false)} />
       </span>
     ) : (
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>

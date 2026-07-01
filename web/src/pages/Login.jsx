@@ -9,12 +9,12 @@ function ZaloOA() {
   return (
     <div style={{ textAlign: 'center', marginTop: 22 }}>
       <div style={{ fontSize: 12.5, opacity: .85, marginBottom: 8 }}>Theo dõi Zalo OA DNPHARMA</div>
-      <div style={{ display: 'inline-block', background: '#fff', padding: 8, borderRadius: 14 }}>
+      <div style={{ display: 'inline-block', background: '#fff', padding: 7, borderRadius: 12 }}>
         {ok ? (
-          <img src="/zalo-oa-qr.png" alt="Zalo OA DNPHARMA" width={132} height={132}
+          <img src="/zalo-oa-qr.png" alt="Zalo OA DNPHARMA" width={100} height={100}
                style={{ display: 'block', borderRadius: 8 }} onError={() => setOk(false)} />
         ) : (
-          <div style={{ width: 132, height: 132, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          <div style={{ width: 100, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: 'var(--muted)', fontSize: 11, textAlign: 'center', padding: 10 }}>
             Đặt file<br /><b>zalo-oa-qr.png</b><br />vào web/public/
           </div>
