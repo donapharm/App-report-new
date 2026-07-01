@@ -62,11 +62,12 @@ async function requestOtp(phone) {
   return r.ok;
 }
 
-// Chuẩn hoá vai trò backend -> ceo/admin/sale
+// Chuẩn hoá vai trò backend -> ceo/admin/sale.
+// LƯU Ý: OTP backend nội bộ trả 'full' cho tài khoản toàn quyền (CEO/admin).
 function normRole(v) {
-  const r = String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase();
+  const r = String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
   if (/(ceo|giam doc|tong giam|chu tich|bod)/.test(r)) return 'ceo';
-  if (/(admin|quan tri)/.test(r)) return 'admin';
+  if (/(full|admin|quan tri|manager|all)/.test(r)) return 'admin';
   return 'sale';
 }
 // 1 phần tử tài khoản (từ backend) -> user chuẩn của app
