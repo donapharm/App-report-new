@@ -37,6 +37,9 @@ export const api = {
     const p = new URLSearchParams({ dimension, ...(ky ? { ky } : {}), ...extra });
     return req('GET', '/revenue?' + p.toString());
   },
+  revenueFull: (params = {}) => req('GET', '/revenue/full?' + new URLSearchParams(params).toString()),
+  products: (params = {}) => req('GET', '/products?' + new URLSearchParams(params).toString()),
+  analysis: (params = {}) => req('GET', '/analysis?' + new URLSearchParams(params).toString()),
   cst: (params = {}) => req('GET', '/cst?' + new URLSearchParams(params).toString()),
   targets: (ky) => req('GET', '/targets' + (ky ? `?ky=${ky}` : '')),
   forecast: () => req('GET', '/targets/forecast'),

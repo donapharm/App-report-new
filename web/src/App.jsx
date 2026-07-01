@@ -7,6 +7,9 @@ import Logo from './logo.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
 import Revenue from './pages/Revenue.jsx';
+import RevenueFull from './pages/RevenueFull.jsx';
+import Products from './pages/Products.jsx';
+import Analysis from './pages/Analysis.jsx';
 import TenderQuota from './pages/TenderQuota.jsx';
 import Target from './pages/Target.jsx';
 import AiChat from './pages/AiChat.jsx';
@@ -15,6 +18,9 @@ import Upload from './pages/Upload.jsx';
 const TABS = [
   { key: 'overview', label: 'Tổng quan', ic: '📊', C: Overview },
   { key: 'revenue', label: 'Doanh thu', ic: '💰', C: Revenue },
+  { key: 'revenueFull', label: 'DT đầy đủ', ic: '📋', C: RevenueFull },
+  { key: 'products', label: 'Sản phẩm', ic: '💊', C: Products },
+  { key: 'analysis', label: 'Phân tích', ic: '📈', C: Analysis },
   { key: 'cst', label: 'Cơ số thầu', ic: '📦', C: TenderQuota },
   { key: 'target', label: 'Target', ic: '🎯', C: Target },
   { key: 'ai', label: 'Hỏi nhanh', ic: '🤖', C: AiChat },

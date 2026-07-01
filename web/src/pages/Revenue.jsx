@@ -1,31 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, short } from '../util.js';
 import { Spinner, RankRow } from '../components.jsx';
+import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 
 const DIMS = { emp: 'Nhân viên', unit: 'Đơn vị', product: 'Sản phẩm' };
-const emptyFilters = { emp: '', unit: '', product: '', route: '', priority: '', contractor: '', bid: '', q: '' };
-
-function Select({ value, onChange, options, all }) {
-  return (
-    <select value={value || ''} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{all}</option>
-      {(options || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-    </select>
-  );
-}
 
 export default function Revenue({ me }) {
-  const [periods, setPeriods] = useState([]);
-  const [ky, setKy] = useState('');
   const [dim, setDim] = useState(me.isAdmin ? 'emp' : 'unit');
-  const [filters, setFilters] = useState(emptyFilters);
-  const [options, setOptions] = useState(null);
+  const { periods, ky, setKy, filters, setFilters, options } = usePeriodsAndFilters(api);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { api.periods().then((p) => { setPeriods(p.periods || []); setKy(p.latest); }); }, []);
-  useEffect(() => { if (ky) api.filters(ky).then(setOptions); }, [ky]);
   useEffect(() => {
     if (!ky) return;
     setData(null);
@@ -34,11 +20,9 @@ export default function Revenue({ me }) {
 
   const total = data ? data.rows.reduce((s, r) => s + r.revenue, 0) : 0;
   const max = data && data.rows.length ? data.rows[0].revenue : 0;
-  const activeFilterCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
 
   function pickDim(d) { setDim(d); }
   function setF(k, v) { setFilters((f) => ({ ...f, [k]: v })); }
-  function resetFilters() { setFilters(emptyFilters); }
   function drill(row) {
     if (dim === 'emp') { setF('emp', row.key); setDim('unit'); }
     else if (dim === 'unit') { setF('unit', row.key); setDim('product'); }
@@ -59,22 +43,7 @@ export default function Revenue({ me }) {
         })}
       </div>
 
-      <div className="card filter-card">
-        <div className="filter-grid">
-          <Select value={ky} onChange={setKy} options={periods.map((p) => ({ key: p.ky, label: p.ky }))} all="Chọn kỳ" />
-          {me.isAdmin && <Select value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
-          <Select value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" />
-          <Select value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" />
-          <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
-          <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
-          <Select value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" />
-          <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
-        </div>
-        <div className="filter-search">
-          <input value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
-          <button className="btn ghost" onClick={resetFilters}>Xoá lọc ({activeFilterCount})</button>
-        </div>
-      </div>
+      <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} />
 
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>

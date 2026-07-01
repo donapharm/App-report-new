@@ -140,6 +140,140 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
   });
 });
 
+function revenueFiltersFromQuery(q) {
+  return {
+    emp: q.emp || null,
+    unit: q.unit || null,
+    product: q.product || null,
+    route: q.route || null,
+    priority: q.priority || null,
+    contractor: q.contractor || null,
+    bid: q.bid || null,
+    q: q.q || null,
+  };
+}
+
+function paginate(rows, req, def = 50, max = 500) {
+  const page = Math.max(1, Number(req.query.page || 1));
+  const pageSize = Math.min(max, Math.max(10, Number(req.query.pageSize || def)));
+  const start = (page - 1) * pageSize;
+  return { page, pageSize, total: rows.length, rows: rows.slice(start, start + pageSize) };
+}
+
+/* ---------- Doanh thu đầy đủ: bảng chi tiết từng dòng bán hàng ---------- */
+router.get('/revenue/full', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  const ky = req.query.ky || store.latestKy();
+  let rows = store.getRows({ ky, scope });
+  rows = A.applyFilters(rows, revenueFiltersFromQuery(req.query))
+    .sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+  const totalRevenue = A.sum(rows, (r) => r.revenue);
+  const totalQuantity = A.sum(rows, (r) => r.quantity);
+  const pg = paginate(rows, req, 50, 500);
+  res.json({
+    ky,
+    page: pg.page,
+    pageSize: pg.pageSize,
+    total: pg.total,
+    totalRevenue,
+    totalQuantity,
+    rows: pg.rows,
+  });
+});
+
+/* ---------- Sản phẩm: tổng hợp theo mã QLNB/sản phẩm, kèm độ phủ ---------- */
+router.get('/products', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  const ky = req.query.ky || store.latestKy();
+  const rows = A.applyFilters(store.getRows({ ky, scope }), revenueFiltersFromQuery(req.query));
+  const map = new Map();
+  for (const r of rows) {
+    const key = r.iit_code || r.product_name || 'UNKNOWN';
+    const cur = map.get(key) || {
+      key,
+      iit_code: r.iit_code || key,
+      product_name: r.product_name || key,
+      revenue: 0,
+      quantity: 0,
+      rows: 0,
+      units: new Set(),
+      emps: new Set(),
+      contractors: new Set(),
+      bidPackages: new Set(),
+    };
+    cur.revenue += r.revenue || 0;
+    cur.quantity += r.quantity || 0;
+    cur.rows += 1;
+    if (r.unit_code || r.unit_name) cur.units.add(r.unit_code || r.unit_name);
+    if (r.emp_code) cur.emps.add(r.emp_code);
+    if (r.contractor_code) cur.contractors.add(r.contractor_code);
+    if (r.bid_package) cur.bidPackages.add(r.bid_package);
+    map.set(key, cur);
+  }
+  const out = [...map.values()].map((x) => ({
+    key: x.key,
+    iit_code: x.iit_code,
+    product_name: x.product_name,
+    revenue: x.revenue,
+    quantity: x.quantity,
+    rows: x.rows,
+    unitCount: x.units.size,
+    empCount: x.emps.size,
+    contractorCount: x.contractors.size,
+    bidPackages: [...x.bidPackages].slice(0, 5).join(', '),
+    avgPrice: x.quantity ? Math.round(x.revenue / x.quantity) : null,
+  })).sort((a, b) => b.revenue - a.revenue);
+  const pg = paginate(out, req, 50, 500);
+  res.json({ ky, page: pg.page, pageSize: pg.pageSize, total: pg.total, rows: pg.rows, totalRevenue: A.sum(out, (r) => r.revenue) });
+});
+
+/* ---------- Phân tích: so kỳ trước theo đơn vị/sản phẩm/tuyến/NV ---------- */
+router.get('/analysis', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  const ky = req.query.ky || store.latestKy();
+  const filters = revenueFiltersFromQuery(req.query);
+  const periods = store.listPeriods().map((p) => p.ky);
+  const idx = periods.indexOf(ky);
+  const prevKy = idx > 0 ? periods[idx - 1] : null;
+  const currentRows = A.applyFilters(store.getRows({ ky, scope }), filters);
+  const prevRows = prevKy ? A.applyFilters(store.getRows({ ky: prevKy, scope }), filters) : [];
+  const currentRevenue = A.sum(currentRows, (r) => r.revenue);
+  const prevRevenue = A.sum(prevRows, (r) => r.revenue);
+  const delta = currentRevenue - prevRevenue;
+  const deltaPct = prevRevenue > 0 ? +(delta / prevRevenue * 100).toFixed(1) : null;
+  const compare = (dimension) => {
+    const cur = A.revenueBreakdown({ ky, scope, dimension, filters });
+    const prev = prevKy ? A.revenueBreakdown({ ky: prevKy, scope, dimension, filters }) : [];
+    const prevMap = Object.fromEntries(prev.map((x) => [x.key, x.revenue]));
+    return cur.map((x) => {
+      const before = prevMap[x.key] || 0;
+      const d = x.revenue - before;
+      return { ...x, prevRevenue: before, delta: d, deltaPct: before > 0 ? +(d / before * 100).toFixed(1) : null };
+    });
+  };
+  const byRoute = A.groupSum(currentRows, 'route', 'route').slice(0, 10);
+  const byContractor = A.groupSum(currentRows, 'contractor_code', 'contractor_code').slice(0, 10);
+  const byPriority = A.groupSum(currentRows, 'priority', 'priority').slice(0, 10);
+  const unitCompare = compare('unit');
+  const productCompare = compare('product');
+  res.json({
+    ky,
+    prevKy,
+    currentRevenue,
+    prevRevenue,
+    delta,
+    deltaPct,
+    rowCount: currentRows.length,
+    byRoute,
+    byContractor,
+    byPriority,
+    topGrowthUnits: unitCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
+    topDeclineUnits: unitCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
+    topGrowthProducts: productCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
+    topDeclineProducts: productCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
+  });
+});
+
 /* ---------- Cơ số thầu ---------- */
 router.get('/cst', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
@@ -225,6 +359,34 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'Tên', key: 'label', width: 40 },
       { header: 'Doanh thu', key: 'revenue', width: 20 },
       { header: 'Số lượng', key: 'quantity', width: 14 },
+    ];
+    rows.forEach((r) => ws.addRow(r));
+  } else if (kind === 'revenue_full') {
+    const rows = A.applyFilters(store.getRows({ ky, scope }), revenueFiltersFromQuery(req.query))
+      .sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+    ws.columns = [
+      { header: 'Kỳ', key: 'ky', width: 12 },
+      { header: 'Mã NV', key: 'emp_code', width: 12 },
+      { header: 'Tên NV', key: 'emp_name', width: 24 },
+      { header: 'Tuyến', key: 'route', width: 10 },
+      { header: 'Mã đơn vị', key: 'unit_code', width: 28 },
+      { header: 'Tên đơn vị', key: 'unit_name', width: 34 },
+      { header: 'Mã QLNB', key: 'iit_code', width: 24 },
+      { header: 'Sản phẩm', key: 'product_name', width: 30 },
+      { header: 'Nhà thầu', key: 'contractor_code', width: 30 },
+      { header: 'Gói thầu', key: 'bid_package', width: 12 },
+      { header: 'Số lượng', key: 'quantity', width: 12 },
+      { header: 'Doanh thu', key: 'revenue', width: 18 },
+    ];
+    rows.forEach((r) => ws.addRow(r));
+  } else if (kind === 'products') {
+    const rows = A.revenueBreakdown({ ky, scope, dimension: 'product', filters: revenueFiltersFromQuery(req.query) });
+    ws.columns = [
+      { header: 'Mã QLNB', key: 'key', width: 24 },
+      { header: 'Sản phẩm', key: 'label', width: 34 },
+      { header: 'Doanh thu', key: 'revenue', width: 18 },
+      { header: 'Số lượng', key: 'quantity', width: 12 },
+      { header: 'Số dòng', key: 'rows', width: 10 },
     ];
     rows.forEach((r) => ws.addRow(r));
   } else if (kind === 'cst') {
