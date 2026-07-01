@@ -1,6 +1,6 @@
 # HANDOFF — App Report New
 
-Cập nhật: 2026-07-01. Người build: Claude (phiên với CEO). Người tiếp nhận: bot tender / phiên Claude kế tiếp.
+Cập nhật: 2026-07-01. Người build: Claude (phiên với CEO). Người tiếp nhận: bot report / phiên Claude kế tiếp.
 
 ## Trạng thái: CHẠY ĐƯỢC, đã verify bằng preview trên cả mobile + PC.
 
@@ -26,5 +26,5 @@ Cập nhật: 2026-07-01. Người build: Claude (phiên với CEO). Người ti
 - Data contract chuẩn: xem `ReportRow` / `TenderQuotaRow` trong audit gốc mục 10.3; hiện thực trong `store.js`/`upload.js`.
 - Không có secret thật trong repo. `.env` theo `.env.example`.
 
-### Cách bàn giao cho bot tender
+### Cách bàn giao cho bot report
 Repo này tự chứa đủ ngữ cảnh: mở ra, đọc `CLAUDE.md` → `HANDOFF.md`, chạy `npm run setup && npm run dev`, rồi làm tiếp mục "việc tiếp theo".

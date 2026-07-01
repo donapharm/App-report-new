@@ -1,16 +1,20 @@
 :root {
-  --brand: #0b5e4f;
-  --brand-2: #12876f;
-  --bg: #f4f6f7;
+  /* Nhận diện DNPHARMA: xanh dương chủ đạo + cam nhấn */
+  --brand: #1568b8;
+  --brand-2: #0f5aa8;
+  --brand-ink: #0b3d70;
+  --accent: #f5a11e;
+  --accent-2: #ee8f00;
+  --bg: #f4f7fb;
   --card: #ffffff;
-  --ink: #16241f;
-  --muted: #6b7c76;
-  --line: #e5eae8;
+  --ink: #172333;
+  --muted: #6b7787;
+  --line: #e3e9f1;
   --hi: #d64545;
   --mid: #e08a1e;
   --lo: #2f80ed;
   --ok: #1f9d6b;
-  --shadow: 0 2px 10px rgba(11, 94, 79, 0.08);
+  --shadow: 0 2px 10px rgba(21, 104, 184, 0.09);
   --maxw: 640px;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -65,16 +69,16 @@ body {
 .row .name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 62vw; }
 .row .meta { font-size: 12px; color: var(--muted); }
 .row .amt { font-weight: 800; color: var(--brand); font-size: 14px; text-align: right; }
-.rank { display: inline-flex; width: 22px; height: 22px; border-radius: 7px; background: #eef4f2; color: var(--brand); font-size: 12px; font-weight: 800; align-items: center; justify-content: center; margin-right: 8px; }
+.rank { display: inline-flex; width: 22px; height: 22px; border-radius: 7px; background: #e9f1fb; color: var(--brand); font-size: 12px; font-weight: 800; align-items: center; justify-content: center; margin-right: 8px; }
 
 /* Bar (mini chart) */
-.bar-wrap { height: 8px; background: #eef2f0; border-radius: 6px; overflow: hidden; margin-top: 6px; }
+.bar-wrap { height: 8px; background: #e7eef7; border-radius: 6px; overflow: hidden; margin-top: 6px; }
 .bar-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--brand-2), var(--brand)); }
 .bar-fill.warn { background: linear-gradient(90deg, #f0a94a, var(--mid)); }
 .bar-fill.danger { background: linear-gradient(90deg, #e57373, var(--hi)); }
 
 /* Tabs / segmented */
-.seg { display: flex; background: #e9efed; border-radius: 12px; padding: 4px; gap: 4px; margin-bottom: 12px; }
+.seg { display: flex; background: #e7eef8; border-radius: 12px; padding: 4px; gap: 4px; margin-bottom: 12px; }
 .seg button { flex: 1; border: none; background: transparent; padding: 9px 0; border-radius: 9px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .seg button.active { background: #fff; color: var(--brand); box-shadow: var(--shadow); }
 
@@ -90,11 +94,11 @@ body {
 .chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
 select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; background: #fff; width: 100%; }
 .btn { background: var(--brand); color: #fff; border: none; border-radius: 10px; padding: 10px 14px; font-weight: 700; font-size: 14px; }
-.btn.ghost { background: #eef4f2; color: var(--brand); }
+.btn.ghost { background: #e9f1fb; color: var(--brand); }
 .btn:disabled { opacity: .5; }
 
 /* Login */
-.login { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 24px; background: linear-gradient(160deg, var(--brand), #073d33); color: #fff; }
+.login { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 24px; background: linear-gradient(160deg, var(--brand), #0b3d70); color: #fff; }
 .login h1 { font-size: 26px; margin: 0 0 4px; }
 .login p { opacity: .85; margin: 0 0 22px; }
 .login .demo-list { background: rgba(255,255,255,.1); border-radius: 14px; padding: 8px; margin-top: 16px; }
@@ -138,13 +142,13 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   text-align: left; cursor: pointer; transition: background .12s;
 }
 .side-nav button .ic { font-size: 18px; }
-.side-nav button:hover { background: #f2f6f4; }
+.side-nav button:hover { background: #eef4fb; }
 .side-nav button.active { background: var(--brand); color: #fff; box-shadow: var(--shadow); }
 .side-user { display: flex; align-items: center; gap: 10px; padding: 12px 8px 4px; border-top: 1px solid var(--line); margin-top: 12px; }
 .side-user .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; flex: none; }
 .side-user .nm { font-weight: 700; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .side-user .rl { font-size: 12px; color: var(--muted); }
-.side-user .logout { margin-left: auto; background: #eef4f2; color: var(--brand); border: none; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.side-user .logout { margin-left: auto; background: #e9f1fb; color: var(--brand); border: none; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
 
 .main-desktop { flex: 1; min-width: 0; }
 .topbar { position: sticky; top: 0; z-index: 10; background: rgba(244,246,247,.9); backdrop-filter: blur(6px); padding: 20px 32px 14px; border-bottom: 1px solid var(--line); }
@@ -173,6 +177,6 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 
 /* Hover nhẹ cho hàng bấm được */
 @media (min-width: 900px) {
-  .row[style*="cursor"]:hover { background: #f2f6f4; border-radius: 8px; }
+  .row[style*="cursor"]:hover { background: #eef4fb; border-radius: 8px; }
   .chip, .seg button, .btn { cursor: pointer; }
 }

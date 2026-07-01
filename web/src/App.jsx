@@ -65,7 +65,7 @@ export default function App() {
           <header className="topbar">
             <div>
               <h1>{tabs.find((t) => t.key === tab)?.label}</h1>
-              <div className="sub">Donapharm · Báo cáo doanh thu thông minh</div>
+              <div className="sub">DNPHARMA · Báo cáo doanh thu thông minh</div>
             </div>
           </header>
           <main className="page-desktop">

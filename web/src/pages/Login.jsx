@@ -1,6 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { api, setToken } from '../api.js';
 import { roleLabel } from '../util.js';
+import Logo from '../logo.jsx';
+
+// QR Zalo OA DNPHARMA. Bỏ file thật vào web/public/zalo-oa-qr.png là tự hiện.
+function ZaloOA() {
+  const [ok, setOk] = useState(true);
+  return (
+    <div style={{ textAlign: 'center', marginTop: 22 }}>
+      <div style={{ fontSize: 12.5, opacity: .85, marginBottom: 8 }}>Theo dõi Zalo OA DNPHARMA</div>
+      <div style={{ display: 'inline-block', background: '#fff', padding: 8, borderRadius: 14 }}>
+        {ok ? (
+          <img src="/zalo-oa-qr.png" alt="Zalo OA DNPHARMA" width={132} height={132}
+               style={{ display: 'block', borderRadius: 8 }} onError={() => setOk(false)} />
+        ) : (
+          <div style={{ width: 132, height: 132, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--muted)', fontSize: 11, textAlign: 'center', padding: 10 }}>
+            Đặt file<br /><b>zalo-oa-qr.png</b><br />vào web/public/
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // Màn đăng nhập DEMO: chọn nhanh tài khoản mẫu.
 // TODO(LIVE): thay bằng nhập SĐT → OTP → chọn mã NV (SSO/OTP nội bộ).
@@ -26,8 +48,9 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="login">
+      <div style={{ marginBottom: 18 }}><Logo size={44} light wordmark /></div>
       <h1>App Report</h1>
-      <p>Báo cáo doanh thu thông minh · Donapharm</p>
+      <p>Báo cáo doanh thu thông minh · DNPHARMA</p>
 
       <div className="card" style={{ background: 'rgba(255,255,255,.12)', border: 'none', color: '#fff' }}>
         <div style={{ fontSize: 13, opacity: .9, marginBottom: 4 }}>Bản demo — chọn tài khoản để xem:</div>
@@ -53,7 +76,9 @@ export default function Login({ onLogin }) {
         </div>
       </div>
 
-      <p style={{ fontSize: 12, marginTop: 18, opacity: .7 }}>
+      <ZaloOA />
+
+      <p style={{ fontSize: 12, marginTop: 18, opacity: .7, textAlign: 'center' }}>
         Dữ liệu mẫu đã ẩn danh — không có PII/số liệu thật.
       </p>
     </div>
