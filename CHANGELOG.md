@@ -11,8 +11,11 @@
 - **Giai đoạn:** Đã có **bản demo hoàn chỉnh, chạy được** (dữ liệu mẫu ẩn danh). Đang chuẩn bị **deploy `reportnew.donapharm.asia`**.
 - **GitHub:** `donapharm/App-report-new` — nhánh `main`, đồng bộ tới commit mới nhất.
 - **Đã xong:** 6 lõi báo cáo (Tổng quan+cảnh báo, Doanh thu drill-down, Cơ số thầu, Target+dự báo, Export Excel, AI hỏi nhanh) · Responsive mobile+PC · Upload (validate/audit/rollback) · Phân quyền backend · Nhận diện DNPHARMA (logo+QR thật) · Nối Upload→Báo cáo (thật) · Adapter ORDS/OTP/SSO (code sẵn, env-gated, TẮT mặc định).
-- **Đang chờ:** Bot server **deploy** lên `reportnew.donapharm.asia` (1 server Node :3860 + Cloudflare Tunnel). Sau đó **nối dữ liệu thật** (OTP/SSO cổng 3848/3862, ORDS) qua `.env`.
-- **Việc dev kế tiếp (không đụng hệ đang chạy):** UI đăng nhập SĐT→OTP ở frontend; CORS theo env.
+- **✅ ĐÃ LIVE (demo):** `https://reportnew.donapharm.asia` (HTTP 200). Bot server chạy App Report New ở **cổng 3873** (PM2 `reportnew`) + tunnel riêng (PM2 `cloudflared-reportnew`); **app cũ `dona-report` cổng 3860 giữ nguyên**. Dữ liệu còn là MẪU (`USE_SAMPLE_DATA=1`).
+- **Đang chờ / kế tiếp:**
+  1. **Lấy dữ liệu thật từ app cũ** sang (đang là dữ liệu mẫu) — dev viết importer, bot chạy trên server.
+  2. Bật **Cloudflare Access** (hiện chưa bật — ai có link đều vào được).
+  3. Nối OTP/SSO/ORDS thật + UI đăng nhập SĐT→OTP; CORS theo env.
 
 ---
 
