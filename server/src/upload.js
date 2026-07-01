@@ -34,6 +34,15 @@ const HEADER_MAP = {
   contractor_code: ['contractor_code', 'ncc', 'nha_cung_cap'],
 };
 const noAccent = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
+// Đọc số chịu được định dạng VN: "22.500.000" (chấm ngăn nghìn), "1.234,5" (phẩy thập phân)
+function toNum(v) {
+  if (typeof v === 'number') return v;
+  if (v == null) return 0;
+  let s = String(v).trim().replace(/[^\d.,-]/g, '');
+  if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+  return Number(s) || 0;
+}
 
 function resolveHeaders(headerRow) {
   const map = {}; // colIndex -> field
@@ -76,8 +85,8 @@ async function parseWorkbook(buffer) {
       row[field] = v;
     }
     row.emp_code = String(row.emp_code || '').trim().toUpperCase();
-    row.revenue = Number(String(row.revenue).replace(/[^\d.-]/g, '')) || 0;
-    row.quantity = Number(row.quantity) || 0;
+    row.revenue = toNum(row.revenue);
+    row.quantity = toNum(row.quantity);
     if (!row.emp_code) { warnings.push(`Dòng ${r}: thiếu mã NV → bỏ qua.`); continue; }
     if (row.revenue <= 0) warnings.push(`Dòng ${r}: doanh thu = 0 hoặc âm.`);
     const dupKey = [row.emp_code, row.unit_code, row.iit_code, row.revenue].join('|');
