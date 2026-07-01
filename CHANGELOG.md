@@ -11,13 +11,12 @@
 - **Giai đoạn:** ĐÃ LIVE tại `https://reportnew.donapharm.asia` (cổng 3873, PM2 `reportnew` + `cloudflared-reportnew`); app cũ `dona-report` cổng 3860 giữ nguyên.
 - **Dữ liệu DOANH THU đã THẬT:** import 04/05/06.2026 từ app cũ (T04 34.79 tỷ · T05 30.40 tỷ · T06 28.40 tỷ), đủ đơn vị/SP/nhà thầu/gói thầu. **Cơ số thầu + Target VẪN là dữ liệu mẫu** (nguồn riêng, chưa nối).
 - **GitHub:** `donapharm/App-report-new` — nhánh `main`, đồng bộ.
-- **🔴 RỦI RO ĐANG MỞ (ưu tiên xử lý #1):**
-  - **Chưa bật Cloudflare Access** → ai có link cũng vào được.
-  - **Đăng nhập vẫn là nút DEMO** (bấm CEO là vào) → kết hợp với dữ liệu thật = **lộ toàn bộ doanh thu**. Phải bật Access NGAY và/hoặc tắt demo-login khi có OTP.
+- **🔒 Truy cập công khai ĐANG KHOÁ TẠM (403):** bot đổi ingress tunnel sang `http_status:403` để chặn người ngoài trong lúc chưa cấu hình được Cloudflare Access (dashboard Zero Trust vướng xác minh trên trình duyệt headless). Dữ liệu thật an toàn; local 3873 vẫn chạy.
 - **Kế tiếp:**
-  1. 🔴 Bot bật **Cloudflare Access** (chỉ email công ty).
-  2. Dev + bot: nối **OTP/SSO** thật + tắt demo-login (mỗi NV chỉ thấy phạm vi của mình).
-  3. Nối nguồn thật cho **Cơ số thầu** (ORDS) + **Target** (DB) qua `.env`.
+  1. 🔴 Cấu hình **Cloudflare Access** đúng chuẩn (có thể cần CEO thao tác trên dashboard Zero Trust hoặc cấp API token), rồi bot đổi ingress về `http://localhost:3873`.
+  2. Lấy **đủ dữ liệu từ 01/2026** bằng importer chế độ thư mục (đã sẵn sàng).
+  3. Dev + bot: nối **OTP/SSO** thật + tắt demo-login (mỗi NV chỉ thấy phạm vi của mình).
+  4. Nối nguồn thật cho **Cơ số thầu** (ORDS) + **Target** (DB) qua `.env`.
 
 ---
 
