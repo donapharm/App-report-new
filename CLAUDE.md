@@ -42,7 +42,12 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
 2. `store.js` → đọc slot upload active + fallback ORDS (`SALES_REPORT`), targets (`V_TEM_TARGET_BONUS`).
 3. `.env` → `ANTHROPIC_API_KEY` để bật AI diễn giải.
 
+## Quy trình ghi log (BẮT BUỘC)
+- **Mọi thay đổi app phải ghi 1 mục vào `CHANGELOG.md`** (mới nhất trên cùng): ngày, việc đã làm, lý do, trạng thái test.
+- Đọc repo lần đầu: mở `CHANGELOG.md` trước để nắm toàn cảnh + tiến trình hiện tại.
+
 ## Tài liệu liên quan
+- `CHANGELOG.md` — **đọc đầu tiên**: nhật ký thay đổi + trạng thái hiện tại.
 - `README.md` — chạy + tổng quan.
 - `HANDOFF.md` — trạng thái hiện tại + việc còn lại (đọc trước khi code tiếp).
 - `DEPLOY_CLOUDFLARE.md` — deploy Pages + Tunnel + Access.
