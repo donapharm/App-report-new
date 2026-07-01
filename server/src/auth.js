@@ -45,6 +45,13 @@ function mockLogin(empCode) {
 const OTP_URL = process.env.OTP_BACKEND_URL || '';
 const SSO_URL = process.env.SSO_VERIFY_URL || '';
 const liveAuthEnabled = () => !!OTP_URL;
+// Chuẩn hoá SĐT VN để khớp khi tra cứu (bỏ ký tự thừa, +84/84 -> 0)
+function normPhone(v) {
+  let s = String(v || '').replace(/[^\d]/g, '');
+  if (s.startsWith('84')) s = '0' + s.slice(2);
+  if (s && !s.startsWith('0')) s = '0' + s;
+  return s;
+}
 
 async function requestOtp(phone) {
   if (!OTP_URL) throw new Error('Chưa cấu hình OTP_BACKEND_URL');
@@ -64,7 +71,8 @@ async function verifyOtp(phone, code) {
   });
   if (!r.ok) return null;
   // Danh tính do master data quyết định (đưa về backend, không hardcode ở frontend)
-  const accounts = store.listUsers().filter((u) => u.phone === phone);
+  const np = normPhone(phone);
+  const accounts = store.listUsers().filter((u) => normPhone(u.phone) === np);
   if (accounts.length === 1) return { token: issueToken(accounts[0]), user: accounts[0] };
   return { accounts: accounts.map((u) => ({ emp_code: u.emp_code, name: u.name, role: u.role })) };
 }
