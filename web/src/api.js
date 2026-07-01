@@ -24,6 +24,9 @@ async function req(method, path, body) {
 export const api = {
   login: (emp_code) => req('POST', '/auth/login', { emp_code }),
   demoUsers: () => req('GET', '/auth/demo-users'),
+  mode: () => req('GET', '/auth/mode'),
+  otpRequest: (phone) => req('POST', '/auth/otp/request', { phone }),
+  otpVerify: (phone, code) => req('POST', '/auth/otp/verify', { phone, code }),
   me: () => req('GET', '/me'),
   periods: () => req('GET', '/periods'),
   overview: (ky) => req('GET', '/overview' + (ky ? `?ky=${ky}` : '')),
