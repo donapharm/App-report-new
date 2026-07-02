@@ -16,6 +16,11 @@
 - **Thưởng 3P + gửi Zalo/Email khen thưởng tự động** → workflow riêng. Report chỉ *xem* target/% đạt.
 - **Kho master data — SỬA/GỘP/UPLOAD** NV+đơn vị → DataHub/Admin module. Report chỉ đọc danh mục.
 
+## 🧭 Danh mục phân công + Điều chuyển bán hàng (CEO chốt 2026-07-02)
+- **Vị trí:** khi làm → đặt **TRONG App Report** (khu "Quản trị / Phân công" riêng, chỉ admin) — tận dụng master NV/đơn vị/SP + nối scope/target/CST, không nhân đôi dữ liệu.
+- **Thời điểm:** **CHƯA làm — ghi để SAU** (sau hàng đợi: Login V2, biểu đồ, Target admin, tab NV/Đối chiếu).
+- **Nguyên tắc bắt buộc khi làm:** điều chuyển chỉ áp cho **tương lai** (từ ngày/kỳ hiệu lực); **KHÔNG hồi tố doanh thu lịch sử**; lưu **lịch sử điều chuyển + hiệu lực** đầy đủ (audit). Model gợi ý: bảng phân công `{emp_code, unit_code, iit_code|"all", hiệu lực_từ/đến, trạng thái}`; điều chuyển theo lô (nhiều hàng × nhiều đơn vị) từ A→B. Tận dụng logic "điều chuyển theo cơ số thầu còn lại" (QĐ139/141) của app cũ.
+
 ## ⏳ SAU (khi thật cần)
 - Export "page/all theo đúng mẫu cũ", chọn page-size kiểu cũ (Excel-theo-lọc hiện đủ dùng).
 - Upload thêm loại "Đặt hàng/Khác" (hiện chỉ doanh thu là đủ).
