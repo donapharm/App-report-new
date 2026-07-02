@@ -246,6 +246,7 @@ async function verifySso(ssoToken, opts = {}) {
 /* ===================== ĐĂNG NHẬP TELEGRAM (chính) ===================== */
 const TG_SECRET = process.env.TELEGRAM_BOT_SECRET || '';
 const TG_BOT = process.env.TELEGRAM_BOT_USERNAME || '';
+const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 // Bản ghi mã (ephemeral, không cần lưu bền vì TTL 120s): login_code -> {...}
 const loginCodes = new Map();
 // Rate-limit
@@ -358,7 +359,7 @@ module.exports = {
   mockLogin, requireAuth, requireAdmin, isAdmin, scopeOf, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, verifySso, demoAllowed,
   // Telegram
-  telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!TG_SECRET,
+  telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),
   // Mapping + thiết bị + hủy phiên
   listTelegramMap, addTelegramMap, removeTelegramMap, resolveTelegram,
   listDevices, removeDevice, purgeUser, invalidateUserSessions, invalidateUserDevices,
