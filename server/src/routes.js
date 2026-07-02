@@ -181,6 +181,20 @@ router.get('/overview', auth.requireAuth, (req, res) => {
   res.json(A.overviewKpis({ ...pc, scope }));
 });
 
+router.get('/trend', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  res.json(store.listPeriods().map((p) => {
+    const k = A.overviewKpis({ ky: p.ky, kys: [p.ky], scope });
+    return {
+      ky: p.ky,
+      revenue: k.revenue,
+      revenueBeforeVat: k.revenueBeforeVat,
+      targetTotal: k.targetTotal,
+      pctTarget: k.pctTarget,
+    };
+  }));
+});
+
 router.get('/alerts', auth.requireAuth, (req, res) => {
   res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session) }));
 });
@@ -327,6 +341,7 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
   const byRoute = A.groupSum(currentRows, 'route', 'route').slice(0, 10);
   const byContractor = A.groupSum(currentRows, 'contractor_code', 'contractor_code').slice(0, 10);
   const byPriority = A.groupSum(currentRows, 'priority', 'priority').slice(0, 10);
+  const byBidPackage = A.groupSum(currentRows, 'bid_package', 'bid_package').slice(0, 10);
   const unitCompare = compare('unit');
   const productCompare = compare('product');
   res.json({
@@ -341,6 +356,7 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     byRoute,
     byContractor,
     byPriority,
+    byBidPackage,
     topGrowthUnits: unitCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
     topDeclineUnits: unitCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
     topGrowthProducts: productCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),

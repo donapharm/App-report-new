@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { money, short, pct } from '../util.js';
 import { Spinner, Kpi } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
+import { RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
 
 function AlertLine({ group, item }) {
   if (group.key === 'target') {
@@ -34,6 +35,9 @@ export default function Overview({ me, onNavigate }) {
   const [periodSel, setPeriodSel] = useState(null);
   const [kpi, setKpi] = useState(null);
   const [alerts, setAlerts] = useState(null);
+  const [trend, setTrend] = useState(null);
+  const [topDim, setTopDim] = useState('unit');
+  const [topRows, setTopRows] = useState(null);
 
   useEffect(() => {
     api.periods().then((p) => { setPeriods(p.periods); setPeriodSel(defaultPeriodSelection(p.periods, p.latest)); });
@@ -43,9 +47,17 @@ export default function Overview({ me, onNavigate }) {
     if (!periodSel) return;
     setKpi(null);
     api.overview(periodParams(periodSel)).then(setKpi);
+    setTrend(null);
+    api.trend().then(setTrend);
     setAlerts(null);
     api.alerts(periodParams(periodSel)).then(setAlerts);
   }, [periodSel]);
+
+  useEffect(() => {
+    if (!periodSel) return;
+    setTopRows(null);
+    api.revenue(topDim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, 10)));
+  }, [periodSel, topDim]);
 
   function viewAll(group) {
     if (!onNavigate) return;
@@ -72,6 +84,27 @@ export default function Overview({ me, onNavigate }) {
             <Kpi label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} />
             <Kpi label="Cơ số thầu sắp cạn" value={`${kpi.cstLowCount || 0} dòng <10%`} sub="Hiện tại · bấm để xem" tone="danger" onClick={() => onNavigate?.('cst', { cstFilter: 'low' })} />
             <Kpi label="Quy mô kỳ" value={`${kpi.unitCount} ĐV · ${kpi.productCount} SP · ${kpi.empCount} NV`} sub={`${kpi.rowCount} dòng`} />
+          </div>
+          <div className="chart-grid overview-charts">
+            <div className="card chart-card wide">
+              <div className="section-head">📈 Doanh thu theo kỳ · overlay target</div>
+              {!trend ? <Spinner /> : <RevenueTrendChart rows={trend} selectedKys={kpi.kys} />}
+            </div>
+            <div className="card chart-card target-card">
+              <div className="section-head">🎯 Tiến độ target {periodLabel(periodSel)}</div>
+              <TargetGauge pct={kpi.pctTarget} />
+              <div className="center compact-center">{short(kpi.revenueBeforeVat)} / {short(kpi.targetTotal)} trước VAT</div>
+            </div>
+            <div className="card chart-card wide">
+              <div className="chart-head">
+                <div className="section-head">🏆 Top 10 doanh thu</div>
+                <div className="seg compact">
+                  <button className={topDim === 'unit' ? 'active' : ''} onClick={() => setTopDim('unit')}>Đơn vị</button>
+                  <button className={topDim === 'product' ? 'active' : ''} onClick={() => setTopDim('product')}>Sản phẩm</button>
+                </div>
+              </div>
+              {!topRows ? <Spinner /> : <TopBarChart rows={topRows} />}
+            </div>
           </div>
         </>
       )}

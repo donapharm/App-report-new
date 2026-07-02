@@ -53,6 +53,7 @@ export const api = {
   periods: () => req('GET', '/periods'),
   filters: (params) => req('GET', '/filters' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   overview: (params) => req('GET', '/overview' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
+  trend: () => req('GET', '/trend'),
   alerts: (params) => req('GET', '/alerts' + (params ? `?${new URLSearchParams(params)}` : '')),
   revenue: (dimension, ky, extra = {}) => {
     const p = new URLSearchParams({ dimension, ...(ky ? { ky } : {}), ...extra });
@@ -62,7 +63,7 @@ export const api = {
   products: (params = {}) => req('GET', '/products?' + new URLSearchParams(params).toString()),
   analysis: (params = {}) => req('GET', '/analysis?' + new URLSearchParams(params).toString()),
   cst: (params = {}) => req('GET', '/cst?' + new URLSearchParams(params).toString()),
-  targets: (ky) => req('GET', '/targets' + (ky ? `?ky=${ky}` : '')),
+  targets: (params) => req('GET', '/targets' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   forecast: () => req('GET', '/targets/forecast'),
   ask: (text) => req('POST', '/ai/ask', { text }),
   // Upload
