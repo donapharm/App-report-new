@@ -21,7 +21,8 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — ĐÍNH CHÍNH số VN: headline = ĐẦY ĐỦ, bỏ "tỷ"
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive bố cục lại thẻ chi tiết (dạng bảng)
+- CEO phản ánh thẻ mobile thiếu/thừa. → [`DIRECTIVE_CARD_LAYOUT.md`](DIRECTIVE_CARD_LAYOUT.md): thêm **Giá thầu**; **tên thuốc IN ĐẬM** + nhãn "SP" ở tên thuốc, **mã QLNB nhạt** (không đậm); **bỏ tên đơn vị lặp** (giữ `002.BVĐK…`); **nhà thầu mã + tên đầy đủ**; **trùng tên → thêm hàm lượng** (trừ QĐ141); bố cục **dạng bảng, mobile 2 cột field ngắn**. Áp thẻ Doanh thu/DT đầy đủ + đồng bộ CST.
 - CEO: Tổng quan vẫn hiện "2,67 tỷ" làm số lớn → SAI ý. **Số headline/KPI/thẻ phải ĐẦY ĐỦ `2.668.987.096đ`** (đổi `short()`→`money()`); chỉ trục biểu đồ mới được viết tắt `2,67 tỷ`. Cập nhật `DIRECTIVE_NUMBER_FORMAT_VN.md`. Bot sửa + build + restart reportnew.
 - **Resolver target (`targetAdmin.resolveTargets`)**: ĐÚNG — chọn theo `PRIORITY manual(4)>upload(3)>appsale(2)>ai(1)>legacy(0)`, hòa thì lấy `at` mới nhất; giới hạn theo `targetRosterCodes` (allowed set) → **VP018/telesale không có target dù có entry**. Roster = `isActiveSalesUser` (role sale, không Nghỉ việc, type sale/ctv), neo toàn đội active → hết sót NV.
 - **Idempotency auto-refresh (`materialize_july_revenue.js`)**: ĐÚNG — trước khi push slot mới, `s.active=false` cho MỌI slot cùng `ky` → **chỉ 1 slot active/kỳ, không double-count, không drift**. PA-A loại `DT-260630-0115` (WEB=550.673.600); kỳ đã đóng giữ nguyên.
