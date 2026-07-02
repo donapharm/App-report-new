@@ -18,13 +18,17 @@
 - **CẦN CEO cấp thông tin nếu chưa có trong danh bạ:** `DN022`, `DN023` (tên + SĐT + email); xác nhận `DN002`, `DN004` đã có tên đúng.
 
 ## 1) THÊM/ĐỐI CHIẾU NV trong danh bạ (user master + auth để đăng nhập OTP)
-| emp_code | Họ tên | SĐT | Email |
-|---|---|---|---|
-| `DN021` | Lê Anh Đức | 0906107109 | ducluatsu98@yahoo.com.vn |
-| `DN022` | *(chờ CEO/lấy từ data)* | 0908858073 | toandv202@gmail.com |
-| `DN023` | *(chờ CEO/lấy từ data)* | 0977790789 | ctyhiepphat1819@gmail.com |
-| `VP004` | Trần Hoàng Trung | 0378970463 | *(chưa có)* |
-> `DN022`/`DN023`: SĐT+email đã có; **tên chưa có** — bot thử lấy từ danh bạ/dữ liệu gốc (raw_nv), nếu không có thì để tạm mã, chờ CEO cấp tên. Vẫn thêm để đăng nhập OTP theo SĐT được.
+| emp_code | Họ tên | SĐT | Email | Ghi chú |
+|---|---|---|---|---|
+| `DN002` | Nguyễn Thị Hằng Nga | 0933739452 | nga.dn002@donapharm.vn | đã có trong data; cập nhật SĐT/email + status Cộng tác |
+| `DN004` | Bùi Hoàng Ngọc Quyên | 0906516094 | quyen.dn004@donapharm.vn | đã có; **SĐT gốc CEO ghi `906516094` (9 số) → dùng `0906516094`**; status Cộng tác |
+| `DN021` | Lê Anh Đức | 0906107109 | ducluatsu98@yahoo.com.vn | thêm mới; ⛔ no_auto_notify |
+| `DN022` | *(chờ CEO/lấy từ data)* | 0908858073 | toandv202@gmail.com | thêm mới; ⛔ no_auto_notify |
+| `DN023` | *(chờ CEO/lấy từ data)* | 0977790789 | ctyhiepphat1819@gmail.com | thêm mới; ⛔ no_auto_notify |
+| `VP004` | Trần Hoàng Trung | 0378970463 | *(chưa có)* | thêm mới; ⛔ no_auto_notify |
+> - `DN002`/`DN004`: email nội bộ `@donapharm.vn` → **KHÔNG dính khóa gửi tự động** (guardrail chỉ áp 4 CTV ngoài DN021/022/023/VP004). Nhận bản tin/thông báo bình thường.
+> - `DN004`: SĐT CEO ghi thiếu số 0 đầu → chuẩn hóa `0906516094` (kiểm lại trước khi bật OTP).
+> - `DN022`/`DN023`: SĐT+email đã có; **tên chưa có** — bot thử lấy từ danh bạ/dữ liệu gốc (raw_nv), không có thì để tạm mã, chờ CEO cấp tên. Vẫn thêm để đăng nhập OTP theo SĐT.
 - Cập nhật cả **danh bạ runtime trên server** (để card hiện tên thay vì mã trần, và cho phép đăng nhập OTP theo SĐT) và seed/`users.json` nếu phù hợp.
 - **Role/scope:**
   - `DN021` = NV sale đang làm (CEO xác nhận) → role `sale`, status **Đang làm**, scope = emp_code của mình.
