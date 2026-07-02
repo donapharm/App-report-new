@@ -1,0 +1,589 @@
+{
+  "at": "2026-07-02T09:41:13.090Z",
+  "latestKy": "06.2026",
+  "cases": [
+    {
+      "case": {
+        "key": "reliporex_4000_002",
+        "iit": "G1.GE.QĐ139.3106.N5.484",
+        "product": "RELIPOREX 4000 IU",
+        "unit": "002.BVĐK Thống Nhất ĐN"
+      },
+      "app_new_current_row": {
+        "ky": "CURRENT",
+        "emp_code": "DN009",
+        "unit_code": "002.BVĐK Thống Nhất ĐN",
+        "unit_name": "002.BVĐK Thống Nhất ĐN",
+        "iit_code": "G1.GE.QĐ139.3106.N5.484",
+        "product_name": "RELIPOREX 4000 IU",
+        "ham_luong": "4000 IU",
+        "active_ingredient": "Recombinant Human Erythropoietin",
+        "uom": "Bút tiêm",
+        "bid_package": "G1.L1.QĐ139/27.02.25",
+        "bid_qty_initial": 70000,
+        "sold_qty": 31600,
+        "remain_qty": 38400,
+        "remain_pct": 54.9,
+        "bid_price": 191860,
+        "sale_price": 191860,
+        "bid_amount": 13430200000,
+        "sold_amount": 6062776000,
+        "remain_amount": 7367424000,
+        "priority": "H.A",
+        "source_from_date": "01-MAY-26",
+        "raw_nv": "75",
+        "sales_emps": "DN009"
+      },
+      "trace": {
+        "old_app_formula": "V_TEMP_PHARMA GIVEN_QUANTITY - SALES_REPORT sold from 2025-03-01, then merge current upload by IIT_CODE+normalized DONVI",
+        "db_sales_rows": [
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "01.2026",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2500",
+            "479650000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "02.2026",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "1300",
+            "249418000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "03.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2000",
+            "383720000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "03.2026",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "1200",
+            "230232000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "04.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2700",
+            "518022000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "04.2026",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2800",
+            "537208000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "05.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "1000",
+            "191860000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "05.2026",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2000",
+            "383720000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "06.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2000",
+            "383720000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "07.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2800",
+            "537208000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "08.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2000",
+            "383720000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "09.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2500",
+            "479650000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "10.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2000",
+            "383720000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "11.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2000",
+            "383720000"
+          ],
+          [
+            "G1.GE.QĐ139.3106.N5.484",
+            "002.BVĐK Thống Nhất ĐN",
+            "002.BVĐK Thống Nhất ĐN",
+            "12.2025",
+            "Bút tiêm",
+            "G1.L1.QĐ139/27.02.25",
+            "2800",
+            "537208000"
+          ]
+        ],
+        "uploadByKy": [
+          {
+            "ky": "04.2026",
+            "slotId": "legacy_042026_mr26j8be",
+            "qty": 2800,
+            "rev": 537208000,
+            "rawUnits": [
+              "002.BVĐK Thống Nhất ĐN"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "emp_code": "DN009",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "route": "CL",
+                "quantity": 2000,
+                "revenue": 383720000,
+                "contractor_code": "01.DONAPHARM",
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "04.2026",
+                "slotId": "legacy_042026_mr26j8be"
+              },
+              {
+                "emp_code": "DN009",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "route": "CL",
+                "quantity": 800,
+                "revenue": 153488000,
+                "contractor_code": "01.DONAPHARM",
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "04.2026",
+                "slotId": "legacy_042026_mr26j8be"
+              }
+            ]
+          },
+          {
+            "ky": "05.2026",
+            "slotId": "legacy_052026_mr26j8h9",
+            "qty": 2000,
+            "rev": 383720000,
+            "rawUnits": [
+              "002.BVĐK Thống Nhất ĐN"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "route": "CL",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "emp_code": "DN009",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "contractor_code": "Công Ty Tnhh Dược Phẩm Donapharm",
+                "quantity": 2000,
+                "revenue": 383720000,
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "05.2026",
+                "slotId": "legacy_052026_mr26j8h9"
+              }
+            ]
+          },
+          {
+            "ky": "06.2026",
+            "slotId": "legacy_062026_mr26j8nb",
+            "qty": 1800,
+            "rev": 345348000,
+            "rawUnits": [
+              "002.BVĐK Thống Nhất ĐN"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "route": "CL",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "emp_code": "DN009",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "contractor_code": "Công Ty Tnhh Dược Phẩm Donapharm",
+                "quantity": 1800,
+                "revenue": 345348000,
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "06.2026",
+                "slotId": "legacy_062026_mr26j8nb"
+              }
+            ]
+          },
+          {
+            "ky": "01.2026",
+            "slotId": "legacy_012026_mr2br3ep13u",
+            "qty": 2500,
+            "rev": 479650000,
+            "rawUnits": [
+              "002.BVĐK Thống Nhất ĐN"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "emp_code": "DN009",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "route": "CL",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "quantity": 1000,
+                "revenue": 191860000,
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "01.2026",
+                "slotId": "legacy_012026_mr2br3ep13u"
+              },
+              {
+                "emp_code": "DN009",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "route": "CL",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "quantity": 1500,
+                "revenue": 287790000,
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "01.2026",
+                "slotId": "legacy_012026_mr2br3ep13u"
+              }
+            ]
+          },
+          {
+            "ky": "02.2026",
+            "slotId": "legacy_022026_mr2br3ga7k3",
+            "qty": 1300,
+            "rev": 249418000,
+            "rawUnits": [
+              "002.BVĐK Thống Nhất ĐN"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "emp_code": "DN009",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "route": "CL",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "quantity": 500,
+                "revenue": 95930000,
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "02.2026",
+                "slotId": "legacy_022026_mr2br3ga7k3"
+              },
+              {
+                "emp_code": "DN009",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "route": "CL",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "quantity": 800,
+                "revenue": 153488000,
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "02.2026",
+                "slotId": "legacy_022026_mr2br3ga7k3"
+              }
+            ]
+          },
+          {
+            "ky": "03.2026",
+            "slotId": "legacy_032026_mr2br3if19m",
+            "qty": 1200,
+            "rev": 230232000,
+            "rawUnits": [
+              "002.BVĐK Thống Nhất ĐN"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "emp_code": "DN009",
+                "unit_code": "002.BVĐK Thống Nhất ĐN",
+                "route": "CL",
+                "iit_code": "G1.GE.QĐ139.3106.N5.484",
+                "product_name": "RELIPOREX 4000 IU",
+                "quantity": 1200,
+                "revenue": 230232000,
+                "unit_name": "002.BVĐK Thống Nhất ĐN",
+                "bid_package": "QĐ139",
+                "ky": "03.2026",
+                "slotId": "legacy_032026_mr2br3if19m"
+              }
+            ]
+          }
+        ],
+        "oldFormula": {
+          "bid_qty_initial": 70000,
+          "baseline_sold": 31600,
+          "latest_upload_ky": "06.2026",
+          "latest_upload_qty": 1800,
+          "sold_after_merge": 33400,
+          "remain_after_merge": 36600,
+          "remain_pct_after_merge": 52.3
+        }
+      }
+    },
+    {
+      "case": {
+        "key": "amebismo_001",
+        "iit": "G1.GE.QĐ139.1765.N4.673",
+        "product": "Amebismo",
+        "unit": "001.BVĐK Đồng Nai"
+      },
+      "app_new_current_row": {
+        "ky": "CURRENT",
+        "emp_code": "DN009",
+        "unit_code": "001.BVĐK Đồng Nai",
+        "unit_name": "001.BVĐK Đồng Nai",
+        "iit_code": "G1.GE.QĐ139.1765.N4.673",
+        "product_name": "Amebismo",
+        "ham_luong": "262mg",
+        "active_ingredient": "Bismuth subsalicylat",
+        "uom": "Viên",
+        "bid_package": "G1.L1.QĐ139/27.02.25",
+        "bid_qty_initial": 3204,
+        "sold_qty": 1560,
+        "remain_qty": 1644,
+        "remain_pct": 51.3,
+        "bid_price": 3590,
+        "sale_price": 3590,
+        "bid_amount": 11502360,
+        "sold_amount": 5600400,
+        "remain_amount": 5901960,
+        "priority": "H.A",
+        "source_from_date": "01-MAY-26",
+        "raw_nv": "75",
+        "sales_emps": "DN009,DN016"
+      },
+      "trace": {
+        "old_app_formula": "V_TEMP_PHARMA GIVEN_QUANTITY - SALES_REPORT sold from 2025-03-01, then merge current upload by IIT_CODE+normalized DONVI",
+        "db_sales_rows": [
+          [
+            "G1.GE.QĐ139.1765.N4.673",
+            "001.BVĐK Đồng Nai-KHU C",
+            "001.BVĐK Đồng Nai",
+            "01.2026",
+            "Viên",
+            "G1.L1.QĐ139/27.02.25",
+            "600",
+            "2154000"
+          ],
+          [
+            "G1.GE.QĐ139.1765.N4.673",
+            "001.BVĐK Đồng Nai",
+            "001.BVĐK Đồng Nai",
+            "05.2026",
+            "Viên",
+            "G1.L1.QĐ139/27.02.25",
+            "960",
+            "3446400"
+          ]
+        ],
+        "uploadByKy": [
+          {
+            "ky": "05.2026",
+            "slotId": "legacy_052026_mr26j8h9",
+            "qty": 960,
+            "rev": 3446400,
+            "rawUnits": [
+              "001.BVĐK Đồng Nai"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "route": "CL",
+                "unit_code": "001.BVĐK Đồng Nai",
+                "emp_code": "DN009",
+                "iit_code": "G1.GE.QĐ139.1765.N4.673",
+                "product_name": "Amebismo",
+                "contractor_code": "Công Ty Tnhh Afp Pharma",
+                "quantity": 960,
+                "revenue": 3446400,
+                "unit_name": "001.BVĐK Đồng Nai",
+                "bid_package": "QĐ139",
+                "ky": "05.2026",
+                "slotId": "legacy_052026_mr26j8h9"
+              }
+            ]
+          },
+          {
+            "ky": "06.2026",
+            "slotId": "legacy_062026_mr26j8nb",
+            "qty": 1620,
+            "rev": 5815800,
+            "rawUnits": [
+              "001.BVĐK Đồng Nai"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "route": "CL",
+                "unit_code": "001.BVĐK Đồng Nai",
+                "emp_code": "DN009",
+                "iit_code": "G1.GE.QĐ139.1765.N4.673",
+                "product_name": "Amebismo",
+                "contractor_code": "Công Ty Tnhh Afp Pharma",
+                "quantity": 1620,
+                "revenue": 5815800,
+                "unit_name": "001.BVĐK Đồng Nai",
+                "bid_package": "QĐ139",
+                "ky": "06.2026",
+                "slotId": "legacy_062026_mr26j8nb"
+              }
+            ]
+          },
+          {
+            "ky": "01.2026",
+            "slotId": "legacy_012026_mr2br3ep13u",
+            "qty": 600,
+            "rev": 2154000,
+            "rawUnits": [
+              "001.BVĐK Đồng Nai-KHU C"
+            ],
+            "uoms": [
+              ""
+            ],
+            "bids": [
+              "QĐ139"
+            ],
+            "samples": [
+              {
+                "emp_code": "DN016",
+                "unit_code": "001.BVĐK Đồng Nai-KHU C",
+                "route": "CL",
+                "iit_code": "G1.GE.QĐ139.1765.N4.673",
+                "product_name": "Amebismo",
+                "quantity": 600,
+                "revenue": 2154000,
+                "unit_name": "001.BVĐK Đồng Nai-KHU C",
+                "bid_package": "QĐ139",
+                "ky": "01.2026",
+                "slotId": "legacy_012026_mr2br3ep13u"
+              }
+            ]
+          }
+        ],
+        "oldFormula": {
+          "bid_qty_initial": 3204,
+          "baseline_sold": 1560,
+          "latest_upload_ky": "06.2026",
+          "latest_upload_qty": 1620,
+          "sold_after_merge": 3180,
+          "remain_after_merge": 24,
+          "remain_pct_after_merge": 0.7
+        }
+      }
+    }
+  ]
+}

@@ -58,6 +58,66 @@ function slotRows(slot) {
   return raw.map((r) => enrich({ ...r, ky: slot.ky, date: slot.dateFrom || slot.ky }));
 }
 
+function kySortValue(ky) {
+  const [mm, yyyy] = String(ky || '').split('.').map(Number);
+  return (yyyy || 0) * 100 + (mm || 0);
+}
+function latestActiveSlot() {
+  return activeSlots().sort((a, b) => kySortValue(a.ky) - kySortValue(b.ky) || String(a.dateTo || '').localeCompare(String(b.dateTo || ''))).at(-1) || null;
+}
+function normCstUnit(v) {
+  const s = String(v || '').trim();
+  const merged = s === '001.BVĐK Đồng Nai-KHU C' ? '001.BVĐK Đồng Nai' : s;
+  // Dùng mã 3 số đầu để chống lệch format "002" vs "002.BVĐK...".
+  const m = merged.match(/^(\d{3})\b|^(\d{3})\./);
+  return (m && (m[1] || m[2])) || merged.toUpperCase();
+}
+function normCstIit(v) { return String(v || '').trim().toUpperCase().replace(/\s+/g, ''); }
+function cstKey(iit, unit) { return `${normCstIit(iit)}|${normCstUnit(unit)}`; }
+
+// App cũ tính CST = V_TEMP_PHARMA/GIVEN_QUANTITY - SALES_REPORT DB, rồi cộng thêm
+// dữ liệu upload kỳ hiện tại chưa có trong DB. Vì cst_real.json là baseline đã dump,
+// cần merge slot upload active mới nhất theo đúng khóa app cũ: IIT_CODE + DONVI chuẩn hóa.
+function mergeLatestUploadIntoCst(rows) {
+  const slot = latestActiveSlot();
+  if (!slot) return rows;
+  const upRows = slotRows(slot).filter((r) => String(r.route || r.TUYEN || '').toUpperCase() === 'CL');
+  if (!upRows.length) return rows;
+  const upMap = new Map();
+  for (const r of upRows) {
+    const key = cstKey(r.iit_code || r.IIT_CODE, r.unit_code || r.DONVI || r.unit_name);
+    if (!key.startsWith('|')) {
+      const cur = upMap.get(key) || { qty: 0, revenue: 0 };
+      cur.qty += Number(r.quantity || r.QUANTITY || 0);
+      cur.revenue += Number(r.revenue || r.REVENUE || 0);
+      upMap.set(key, cur);
+    }
+  }
+  if (!upMap.size) return rows;
+  return rows.map((r) => {
+    const up = upMap.get(cstKey(r.iit_code, r.unit_code || r.unit_name));
+    if (!up || !up.qty) return r;
+    const baseSold = Number(r.sold_qty || 0);
+    const sold = baseSold + up.qty;
+    const bidQty = Number(r.bid_qty_initial || 0);
+    const remain = Math.max(0, bidQty - sold);
+    const soldAmount = Number(r.sold_amount || 0) + Number(up.revenue || 0);
+    const bidPrice = Number(r.bid_price || 0);
+    return {
+      ...r,
+      sold_qty: sold,
+      remain_qty: remain,
+      remain_pct: bidQty > 0 ? +(remain / bidQty * 100).toFixed(1) : 0,
+      sold_amount: soldAmount || sold * bidPrice,
+      remain_amount: remain * bidPrice,
+      sale_price: sold ? +((soldAmount || sold * bidPrice) / sold).toFixed(2) : Number(r.sale_price || 0),
+      cst_baseline_sold_qty: baseSold,
+      cst_upload_ky: slot.ky,
+      cst_upload_qty: up.qty,
+    };
+  });
+}
+
 /** Toàn bộ dòng doanh thu: slot active ghi đè kỳ tương ứng; kỳ còn lại dùng mẫu. */
 function allRows() {
   const b = base();
@@ -143,6 +203,7 @@ function getRowsRange({ kys, scope }) {
 function getCst({ scope }) {
   // Khi đã có dữ liệu thật (runtime import), ưu tiên cst_real.json thay dữ liệu mẫu.
   let rows = readJson('cst_real.json', null) || base().cst;
+  rows = mergeLatestUploadIntoCst(rows);
   if (scope && scope.empCode) {
     const emp = String(scope.empCode).trim().toUpperCase();
     rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim().toUpperCase()).includes(emp));

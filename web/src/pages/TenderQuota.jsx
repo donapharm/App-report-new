@@ -31,7 +31,8 @@ function decision(c) {
   const p = Number(c.remain_pct || 0);
   const remain = Number(c.remain_qty || 0);
   const sold = Number(c.sold_qty || 0);
-  if (remain <= 0) return { cls: 'muted-pill', text: 'Hết CST' };
+  // App cũ coi <=1% là đã thực hiện hết cơ số thầu (còn lẻ do quy cách/đóng gói).
+  if (remain <= 0 || p <= 1) return { cls: 'muted-pill', text: 'Hết CST' };
   if (sold <= 0 && remain > 0) return { cls: 'bad', text: '⚠️ Chưa bán' };
   if (p > 80) return { cls: 'warn', text: '🔴 Chưa khai thác' };
   if (p > 50) return { cls: 'warn', text: '🟡 Còn nhiều' };

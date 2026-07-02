@@ -1,0 +1,228 @@
+{
+  "at": "2026-07-02T09:42:41.287Z",
+  "latestUploadSlot": {
+    "id": "legacy_062026_mr26j8nb",
+    "ky": "06.2026"
+  },
+  "rule": "baseline cst_real + latest active upload slot by IIT_CODE + normalized unit code",
+  "results": [
+    {
+      "label": "RELIPOREX 4000 IU @ 002",
+      "iit": "G1.GE.QĐ139.3106.N5.484",
+      "unit": "002.BVĐK Thống Nhất ĐN",
+      "baseline": {
+        "sold": 31600,
+        "remain": 38400,
+        "pct": 54.9
+      },
+      "latestUpload": {
+        "ky": "06.2026",
+        "qty": 1800,
+        "rev": 345348000
+      },
+      "expected": {
+        "sold": 33400,
+        "remain": 36600,
+        "pct": 52.3
+      },
+      "actual": {
+        "sold": 33400,
+        "remain": 36600,
+        "pct": 52.3
+      },
+      "diff": {
+        "sold": 0,
+        "remain": 0,
+        "pct": 0
+      }
+    },
+    {
+      "label": "AMEBISMO @ 001",
+      "iit": "G1.GE.QĐ139.1765.N4.673",
+      "unit": "001.BVĐK Đồng Nai",
+      "baseline": {
+        "sold": 1560,
+        "remain": 1644,
+        "pct": 51.3
+      },
+      "latestUpload": {
+        "ky": "06.2026",
+        "qty": 1620,
+        "rev": 5815800
+      },
+      "expected": {
+        "sold": 3180,
+        "remain": 24,
+        "pct": 0.7
+      },
+      "actual": {
+        "sold": 3180,
+        "remain": 24,
+        "pct": 0.7
+      },
+      "diff": {
+        "sold": 0,
+        "remain": 0,
+        "pct": 0
+      }
+    },
+    {
+      "label": "sample 1: Vixcar @ 001.BVĐK Đồng Nai",
+      "iit": "G1.GE.QĐ139.1483.N3.563",
+      "unit": "001.BVĐK Đồng Nai",
+      "baseline": {
+        "sold": 1519500,
+        "remain": 1110146,
+        "pct": 42.2
+      },
+      "latestUpload": {
+        "ky": "06.2026",
+        "qty": 63000,
+        "rev": 54810000
+      },
+      "expected": {
+        "sold": 1582500,
+        "remain": 1047146,
+        "pct": 39.8
+      },
+      "actual": {
+        "sold": 1582500,
+        "remain": 1047146,
+        "pct": 39.8
+      },
+      "diff": {
+        "sold": 0,
+        "remain": 0,
+        "pct": 0
+      }
+    },
+    {
+      "label": "sample 2: Hoạt huyết CM3 @ 001.BVĐK Đồng Nai",
+      "iit": "G3.ĐY.QĐ141.134.N3.181",
+      "unit": "001.BVĐK Đồng Nai",
+      "baseline": {
+        "sold": 747500,
+        "remain": 1131700,
+        "pct": 60.2
+      },
+      "latestUpload": {
+        "ky": "06.2026",
+        "qty": 30000,
+        "rev": 97500000
+      },
+      "expected": {
+        "sold": 777500,
+        "remain": 1101700,
+        "pct": 58.6
+      },
+      "actual": {
+        "sold": 777500,
+        "remain": 1101700,
+        "pct": 58.6
+      },
+      "diff": {
+        "sold": 0,
+        "remain": 0,
+        "pct": 0
+      }
+    },
+    {
+      "label": "sample 3: SaViDimin @ 001.BVĐK Đồng Nai",
+      "iit": "G1.GE.QĐ139.981.N2.732",
+      "unit": "001.BVĐK Đồng Nai",
+      "baseline": {
+        "sold": 699960,
+        "remain": 1000040,
+        "pct": 58.8
+      },
+      "latestUpload": {
+        "ky": "06.2026",
+        "qty": 50000,
+        "rev": 80000000
+      },
+      "expected": {
+        "sold": 749960,
+        "remain": 950040,
+        "pct": 55.9
+      },
+      "actual": {
+        "sold": 749960,
+        "remain": 950040,
+        "pct": 55.9
+      },
+      "diff": {
+        "sold": 0,
+        "remain": 0,
+        "pct": 0
+      }
+    },
+    {
+      "label": "sample 4: Guarente-16 @ 001.BVĐK Đồng Nai",
+      "iit": "G1.GE.QĐ139.873.N2.513",
+      "unit": "001.BVĐK Đồng Nai",
+      "baseline": {
+        "sold": 669990,
+        "remain": 700010,
+        "pct": 51.1
+      },
+      "latestUpload": {
+        "ky": "06.2026",
+        "qty": 34980,
+        "rev": 157060200
+      },
+      "expected": {
+        "sold": 704970,
+        "remain": 665030,
+        "pct": 48.5
+      },
+      "actual": {
+        "sold": 704970,
+        "remain": 665030,
+        "pct": 48.5
+      },
+      "diff": {
+        "sold": 0,
+        "remain": 0,
+        "pct": 0
+      }
+    },
+    {
+      "label": "sample 5: Bividia 50 @ 001.BVĐK Đồng Nai",
+      "iit": "G1.GE.QĐ139.1573.N3.799",
+      "unit": "001.BVĐK Đồng Nai",
+      "baseline": {
+        "sold": 684850,
+        "remain": 615150,
+        "pct": 47.3
+      },
+      "latestUpload": {
+        "ky": "06.2026",
+        "qty": 30000,
+        "rev": 224940000
+      },
+      "expected": {
+        "sold": 714850,
+        "remain": 585150,
+        "pct": 45
+      },
+      "actual": {
+        "sold": 714850,
+        "remain": 585150,
+        "pct": 45
+      },
+      "diff": {
+        "sold": 0,
+        "remain": 0,
+        "pct": 0
+      }
+    }
+  ],
+  "totals": {
+    "rows": 2741,
+    "bid": 182837992,
+    "sold": 67311919,
+    "remain": 115850462,
+    "remainAmount": 385797655411
+  },
+  "allDiffZero": true
+}

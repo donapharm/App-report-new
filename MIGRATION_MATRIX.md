@@ -100,18 +100,21 @@ Nguồn đối chiếu:
 | 05.2026 | App cũ `report_upload_data_20260501_20260529.json` | 1.600 | 30.398.950.820 | 1.600 | 30.398.950.820 | 0 | 0 | 21 | DN001 · 171.PKĐK NAM VIỆT · Cerecaps · SL 4.980 · 13.246.800 |
 | 06.2026 | App cũ `report_upload_data_20260601_20260630.json` | 2.001 | 28.403.136.096 | 2.001 | 28.403.136.096 | 0 | 0 | 22 | DN003 · 019.TTYT H. Vĩnh Cửu · Nadecin 10mg · SL 1.000 · 2.600.000 |
 
-### 4.2 CST — đóng mục 2.741 dòng
+### 4.2 CST — đóng mục 2.741 dòng, cập nhật merge upload kỳ mới nhất
 
 Artifacts kiểm tra:
 - Mismatch ban đầu: `artifacts/reconcile_tabs_until_cst_mismatch_20260702.json`.
-- Sau xử lý/đóng mục CST: `artifacts/reconcile_cst_resolved_20260702.json`.
+- Sau xử lý/đóng mục thiếu mã QLNB: `artifacts/reconcile_cst_resolved_20260702.json`.
+- Trace lỗi trừ thiếu upload hiện tại: `artifacts/cst_trace_cases_20260702.json`.
+- Verify sau sửa merge upload: `artifacts/cst_verify_after_upload_merge_20260702.json`.
 
-Kết luận: CST app mới đã khớp chuẩn app cũ **2.741 dòng**, diff tổng = 0; dòng thiếu mã QLNB `Bividia 25 · 108. BVĐK LONG AN · DN001` được giữ và UI hiển thị mã QLNB là `—`.
+Kết luận: CST app mới giữ **2.741 dòng**; dòng thiếu mã QLNB `Bividia 25 · 108. BVĐK LONG AN · DN001` được giữ và UI hiển thị mã QLNB là `—`. Công thức runtime hiện khớp app cũ: baseline `cst_real.json` + slot upload active mới nhất theo khóa `IIT_CODE + DONVI chuẩn hóa`; không ép số vào file nguồn.
 
 | Nguồn | Dòng | Tổng CST ban đầu | Tổng SL đã bán | Tổng SL còn | Tổng TT còn lại | Chênh |
 |---|---:|---:|---:|---:|---:|---:|
-| App cũ `artifacts/cst_full_from_old.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | — |
-| App mới `server/data/cst_real.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | 0 |
+| Baseline app cũ `artifacts/cst_full_from_old.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | — |
+| Baseline app mới `server/data/cst_real.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | 0 |
+| Runtime app mới sau merge upload `06.2026` | 2.741 | 182.837.992 | 67.311.919 | 115.850.462 | 385.797.655.411 | xem artifact verify |
 
 Dòng thiếu mã QLNB đã được giữ:
 
