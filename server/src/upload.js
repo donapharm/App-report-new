@@ -74,6 +74,7 @@ async function parseWorkbook(buffer) {
   const rows = [];
   const warnings = [];
   const seen = new Set();
+  let duplicateCount = 0;
   let totalRevenue = 0;
   for (let r = 2; r <= ws.rowCount; r++) {
     const cells = (ws.getRow(r).values || []).slice(1);
@@ -98,7 +99,7 @@ async function parseWorkbook(buffer) {
     if (!row.emp_code) { warnings.push(`Dòng ${r}: thiếu mã NV → bỏ qua.`); continue; }
     if (row.revenue <= 0) warnings.push(`Dòng ${r}: doanh thu = 0 hoặc âm.`);
     const dupKey = [row.emp_code, row.unit_code, row.iit_code, row.revenue].join('|');
-    if (seen.has(dupKey)) warnings.push(`Dòng ${r}: nghi trùng (${row.emp_code}/${row.unit_code}/${row.iit_code}).`);
+    if (seen.has(dupKey)) { duplicateCount += 1; warnings.push(`Dòng ${r}: nghi trùng (${row.emp_code}/${row.unit_code}/${row.iit_code}).`); }
     seen.add(dupKey);
     totalRevenue += row.revenue;
     rows.push(row);
@@ -112,6 +113,7 @@ async function parseWorkbook(buffer) {
       totalRows: rows.length,
       totalRevenue,
       empCount: new Set(rows.map((r) => r.emp_code)).size,
+      duplicateCount,
       headerDetected: headerRow,
       fieldsMapped: colMap,
     },
@@ -129,6 +131,9 @@ function stashPreview(id, payload) {
 function listSlots() {
   return readJson(SLOTS, []).sort((a, b) => (a.uploadedAt < b.uploadedAt ? 1 : -1));
 }
+function activeSlotForKy(ky) {
+  return readJson(SLOTS, []).find((s) => s.ky === ky && s.active) || null;
+}
 function listAudit() {
   return readJson(AUDIT, []).slice(-100).reverse();
 }
@@ -138,9 +143,16 @@ function appendAudit(entry) {
   writeJson(AUDIT, a);
 }
 
-function commitSlot({ previewId, ky, dateFrom, dateTo, user }) {
+function commitSlot({ previewId, ky, dateFrom, dateTo, mode = 'new', user }) {
   const pv = previewCache.get(previewId);
   if (!pv) throw new Error('Preview đã hết hạn, vui lòng chọn lại file.');
+  const existing = activeSlotForKy(ky);
+  if (mode === 'new' && existing) {
+    throw new Error(`Kỳ ${ky} đã tồn tại (${existing.totalRows} dòng / ${existing.totalRevenue}). Vui lòng chuyển sang Import cập nhật.`);
+  }
+  if (mode === 'update' && !existing) {
+    throw new Error(`Kỳ ${ky} chưa có dữ liệu đang dùng. Vui lòng chuyển sang Import mới.`);
+  }
   const id = 'slot_' + ky.replace('.', '') + '_' + Math.floor(pv.ts).toString(36);
   writeJson(path.join(UP_DIR, id + '.json'), pv.rows);
   const slots = readJson(SLOTS, []).map((s) => (s.ky === ky ? { ...s, active: false } : s));
@@ -154,12 +166,25 @@ function commitSlot({ previewId, ky, dateFrom, dateTo, user }) {
     uploadedByName: user.name,
     uploadedAt: new Date(pv.ts).toISOString(),
     active: true,
+    mode,
+    replacedSlotId: existing?.id || null,
   };
   slots.push(slot);
   writeJson(SLOTS, slots);
-  appendAudit({ at: slot.uploadedAt, by: user.emp_code, action: 'commit', ky, slotId: id, rows: slot.totalRows, revenue: slot.totalRevenue });
+  appendAudit({
+    at: slot.uploadedAt,
+    by: user.emp_code,
+    action: mode === 'update' ? 'commit_update' : 'commit_new',
+    ky,
+    slotId: id,
+    replacedSlotId: existing?.id || null,
+    rows: slot.totalRows,
+    revenue: slot.totalRevenue,
+    previousRows: existing?.totalRows || 0,
+    previousRevenue: existing?.totalRevenue || 0,
+  });
   previewCache.delete(previewId);
-  return slot;
+  return { ...slot, previous: existing };
 }
 
 // Rollback / kích hoạt lại một slot cũ của cùng kỳ
@@ -173,4 +198,4 @@ function activateSlot({ id, user }) {
   return target;
 }
 
-module.exports = { parseWorkbook, stashPreview, previewCache, listSlots, listAudit, commitSlot, activateSlot };
+module.exports = { parseWorkbook, stashPreview, previewCache, listSlots, listAudit, activeSlotForKy, commitSlot, activateSlot };
