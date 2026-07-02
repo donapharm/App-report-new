@@ -39,7 +39,7 @@ body {
 .hdr .logout { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 12px; margin-top: 4px; }
 
 /* Content */
-.page { padding: 14px 14px 90px; }
+.page { padding: 14px 14px calc(90px + env(safe-area-inset-bottom)); }
 .section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 4px 8px; font-weight: 700; }
 
 /* Cards */
