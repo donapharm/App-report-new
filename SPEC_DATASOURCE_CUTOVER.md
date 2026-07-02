@@ -82,7 +82,8 @@ Bot ghi "Model B" nhưng mô tả ("chưa thay được Lumos lịch sử; khôn
 
 ### Điểm chặn (blocker) phải xử lý trước
 1. **Mã CHƯA khớp — bắt buộc crosswalk.** SP 371(AppSale)/318(Lumos), ĐV 195/108, gói thầu lẫn format (`QĐ139`,`139`,`03`,`QĐ799`). → **Chỉ dựng crosswalk trong PHẠM VI KÊNH CL** (App Sale gồm cả NCL/NT nên nhiều hơn); lọc route=CL rồi kiểm bộ CL có ánh xạ 1:1 về 108 ĐV / 318 SP Lumos. Chuẩn hóa mã gói (`QĐ139`≡`139`).
-2. **Định nghĩa "net" bằng TRẠNG THÁI** (chưa có return âm rõ). Chốt: chỉ tính đơn/dòng ở trạng thái **đã duyệt/đã giao/đã xuất hóa đơn** (approved/delivered/invoiced); loại `CANCELLED` + `approval_status=rejected`. Hàng trả sau giao: xác nhận nghiệp vụ có phát sinh & App Sale có ghi không (nếu không → rủi ro CST không hoàn khi trả, ghi nhận để sau).
+2. **Định nghĩa "net" bằng TRẠNG THÁI** (chưa có return âm rõ). Chốt: chỉ tính đơn/dòng ở trạng thái **đã duyệt/đã giao/đã xuất hóa đơn** (approved/delivered/invoiced); loại `CANCELLED` + `approval_status=rejected`.
+   - **Trả hàng sau giao (CEO xác nhận 2026-07-02: CÓ nhưng ~0,01%):** KHÔNG xây cơ chế hoàn cơ số phức tạp bây giờ. Xử 3 lớp: (a) net theo trạng thái như trên; (b) **RE-ANCHOR mỗi kỳ đóng sổ** — CST lấy lại theo snapshot chuẩn (`cst_con_lai_import` App Sale hoặc Lumos) thay vì trừ dồn vô hạn → sai số 0,01% tự triệt tiêu, không tích lũy; (c) để sẵn **hook**: nếu App Sale sau này ghi dòng trả hàng → map thành hoàn cơ số dương, không phải sửa kiến trúc. Đây là lý do Model A (baseline + re-anchor) an toàn hơn trừ-dồn thuần.
 3. **Chưa có API incremental chính thức.** Cần App Sale bổ sung endpoint read-only **`/api/report-sync/changes?updated_since=<ts|id>`** (idempotent, phân trang) + **service token server-to-server riêng**. Hiện `/orders/manage` max 50, `/products` max 100 → kéo lịch sử theo page, không ồ ạt.
 
 ### Điểm THUẬN LỢI phát hiện thêm
