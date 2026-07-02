@@ -21,6 +21,12 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — CEO DUYỆT restart `reportnew` nạp scheduler auto-refresh
+- CEO gửi `approve_restart_reportnew_scheduler`; đã chạy `pm2 restart reportnew && pm2 save` chỉ với app mới `reportnew`.
+- Verify sau restart: `reportnew` online, health `http://localhost:3873/api/health` OK; log có `[revenue-refresh] scheduler armed` với `enabled=true`, timezone `Asia/Bangkok`, 60 phút, T2–T6 `07:30-18:30`, T7 `07:30-13:00`, CN `off`.
+- Kiểm số code-first sau restart: T06 `28.403.136.096đ`, T07 `2.668.987.096đ` — không drift.
+- Old app `dona-report` port 3860 vẫn online, không restart/không đụng.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — CEO chốt: telesale KHÔNG giao target
 - **VP018 (telesale) KHÔNG giao target.** Loại telesale khỏi danh sách Target/Dự báo, %đạt, cảnh báo "chưa đạt", ranking theo target. Vẫn giữ danh bạ (loại `telesale`, active); doanh thu vẫn tính tổng công ty. Cập nhật `DIRECTIVE_TARGET_ADMIN.md`. Chờ CEO: danh sách telesale khác + xác nhận đội NV sale.
 - CEO nhấn: **2.668.987.096đ mới đúng** (khớp app cũ). Rủi ro: scheduler chạy lại materialize mỗi giờ, nếu không áp PA-A → cộng lại 1,96tr → nhảy về 2.670.947.096 sai.
