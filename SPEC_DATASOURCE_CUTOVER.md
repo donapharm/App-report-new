@@ -17,6 +17,13 @@
 ---
 
 ## A) DOANH THU — mô hình "đóng băng lịch sử + live tương lai"
+> **CEO DUYỆT TRIỂN KHAI 2026-07-02:** bot làm **đồng bộ doanh thu từ 01/07/2026** từ App Sale (không chỉ shadow). 4 điều BẮT BUỘC đúng:
+> 1. **Crosswalk `emp_code` là SỐNG CÒN** — phân quyền NV sale lọc theo `emp_code`; App Sale mã NV khác → NV thấy sai/trống dữ liệu mình. Map người bán App Sale ↔ `emp_code` App Report trước.
+> 2. **Liên tục xuyên kỳ cắt** — cùng BV/SP ở T06 (Lumos) và T07 (App Sale) phải về cùng thực thể (dùng chung crosswalk CST), nếu không biểu đồ/drill-down tách đôi.
+> 3. **VAT** — App Report tính `revenueBeforeVat = revenue / VAT_DIVISOR`. Xác nhận field doanh thu App Sale **trước hay sau VAT** (sai → lệch cả loạt 8–10%).
+> 4. **Kênh + net** — doanh thu báo cáo = tổng kênh (CL+NCL+NT) hay chỉ CL? tính theo **net trạng thái** (đã duyệt/giao/xuất HĐ, loại hủy) như rule CST.
+> Kỳ 07/2026+ materialize như slot (per-ky) trong `store.js`; 01–06 Lumos vẫn đóng băng.
+
 1. **01–06/2026:** số Lumos đã chốt → import ra JSON tĩnh, **ĐÓNG BĂNG**, backup. Không cho nguồn live ghi đè các kỳ này.
    - **Điều kiện chốt T06:** chỉ đóng băng **SAU KHI** Lumos lên số T06 **chính thức** (thay bản Excel tạm) rồi mới backup. Không đóng băng lúc T06 còn tạm.
 2. **Từ 07/2026:** kéo từ **App Sale API `:3970`** theo từng kỳ. Materialize mỗi tháng đã đóng thành JSON (như slot) để nhẹ + ổn định; tháng hiện tại query/refresh định kỳ.
