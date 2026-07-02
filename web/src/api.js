@@ -71,7 +71,7 @@ export const api = {
     fd.append('file', file);
     return fetch('/api/upload/preview', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + getToken() },
+      headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() },
       body: fd,
     }).then(async (r) => {
       const d = await r.json().catch(() => ({}));

@@ -2,7 +2,7 @@
  * auth.js — ĐĂNG NHẬP + PHÂN QUYỀN (quyết định ở BACKEND).
  *
  * V2 (SPEC_LOGIN_V2): Telegram login (chính) + Zalo OTP (dự phòng)
- *   - Phiên 60' LƯU BỀN (persist.js, restart PM2 không văng phiên).
+ *   - Phiên rolling LƯU BỀN (persist.js, restart PM2 không văng phiên).
  *   - Tối đa 3 thiết bị tin cậy / tài khoản (thiết bị thứ 4 đá cũ nhất + audit).
  *   - Chống device-code phishing: bot hỏi ✅, mã TTL 120s dùng 1 lần, poll bằng poll_secret, rate-limit.
  *   - Tự hủy phiên + thiết bị khi đổi SĐT / mã NV / quyền / xoá khỏi danh bạ.
@@ -12,7 +12,8 @@ const crypto = require('crypto');
 const store = require('./store');
 const persist = require('./persist');
 
-const SESSION_TTL_MS = 60 * 60 * 1000;      // 60 phút (tuyệt đối)
+const SESSION_IDLE_DAYS = Math.max(1, Number(process.env.SESSION_IDLE_DAYS || 7) || 7);
+const SESSION_IDLE_MS = SESSION_IDLE_DAYS * 24 * 60 * 60 * 1000; // rolling idle TTL
 const MAX_DEVICES = 3;                        // tối đa 3 thiết bị tin cậy / tài khoản
 const TG_CODE_TTL_MS = 120 * 1000;            // mã Telegram 120s
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
@@ -124,7 +125,7 @@ function issueToken(user, opts = {}) {
     deviceId: opts.deviceId || null,
     method: opts.method || 'otp',
     issued_at: t,
-    expires_at: t + SESSION_TTL_MS,
+    expires_at: t + SESSION_IDLE_MS,
   };
   sessions.push(rec);
   saveSessions();
@@ -133,12 +134,23 @@ function issueToken(user, opts = {}) {
   return token;
 }
 
-function getSession(token) {
+function getSession(token, opts = {}) {
   if (!token) return null;
   const th = sha(token);
   const s = sessions.find((x) => x.th === th);
   if (!s) return null;
   if (s.expires_at <= now()) { pruneSessions(); return null; }
+  const t = now();
+  let changed = false;
+  const reqDeviceId = opts.deviceId ? String(opts.deviceId).trim() : '';
+  // Phiên cũ trước Login V2 có thể chưa gắn deviceId: bind 1 lần theo header ổn định.
+  // Nếu phiên đã có deviceId thì không đổi sang device khác, tránh máy lạ dùng token bị tính là thiết bị tin cậy.
+  if (!s.deviceId && reqDeviceId) { s.deviceId = reqDeviceId; changed = true; }
+  if (s.deviceId && reqDeviceId && s.deviceId === reqDeviceId) touchDevice(s.emp_code, reqDeviceId, opts.ua);
+  // Rolling session: mọi request token hợp lệ gia hạn theo idle TTL.
+  s.expires_at = t + SESSION_IDLE_MS;
+  changed = true;
+  if (changed) saveSessions();
   return s;
 }
 
@@ -333,7 +345,10 @@ function telegramConfirm({ login_code, telegram_id, secret_bot }) {
 /* ===================== MIDDLEWARE + SCOPE ===================== */
 function requireAuth(req, res, next) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  const sess = getSession(token);
+  const sess = getSession(token, {
+    deviceId: (req.headers['x-device-id'] || '').toString().trim() || null,
+    ua: (req.headers['user-agent'] || '').toString().slice(0, 200),
+  });
   if (!sess) return res.status(401).json({ error: 'Chưa đăng nhập' });
   // Tự hủy phiên khi NV đổi mã NV/quyền/SĐT hoặc bị xoá khỏi danh bạ.
   const u = store.findUserByCode(sess.emp_code);

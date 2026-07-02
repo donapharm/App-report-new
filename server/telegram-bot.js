@@ -15,6 +15,8 @@
  * ENV tùy chọn:
  *   APP_BASE_URL         mặc định http://localhost:${PORT||3860}
  *   PORT                 cổng backend app (nếu không đặt APP_BASE_URL)
+ *   DIGEST_CRON          lịch bản tin sáng theo giờ VN, mặc định "30 7 * * *"
+ *   APP_PUBLIC_URL       link mở app trong bản tin, mặc định https://reportnew.donapharm.asia
  */
 const fs = require('fs');
 const path = require('path');
@@ -31,9 +33,17 @@ const path = require('path');
   } catch { /* ignore */ }
 })();
 
+const persist = require('./src/persist');
+const store = require('./src/store');
+const auth = require('./src/auth');
+const A = require('./src/analytics');
+const smart = require('./src/smart');
+
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SECRET = process.env.TELEGRAM_BOT_SECRET || '';
 const BASE = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3860}`;
+const PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.PUBLIC_BASE_URL || 'https://reportnew.donapharm.asia';
+const DIGEST_CRON = process.env.DIGEST_CRON || '30 7 * * *';
 const API = `https://api.telegram.org/bot${TOKEN}`;
 const CODE_RE = /\bRP-[A-Z0-9]{6}\b/i;
 
@@ -49,6 +59,113 @@ async function tg(method, body) {
   return r.json().catch(() => ({}));
 }
 const hhmm = () => new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+/* ===================== DIGEST TELEGRAM CHỦ ĐỘNG ===================== */
+let digestPrefs = persist.load('telegram_digest_prefs', []); // { telegram_id, enabled, updated_at }
+let digestLog = persist.load('telegram_digest_log', []);     // { key, telegram_id, emp_code, kind, day, sent_at }
+const saveDigestPrefs = () => persist.save('telegram_digest_prefs', digestPrefs);
+const saveDigestLog = () => persist.save('telegram_digest_log', digestLog);
+const roleOf = (u) => String(u?.role || '').toLowerCase();
+const isAdminUser = (u) => ['ceo', 'admin', 'full'].includes(roleOf(u));
+const isSaleUser = (u) => roleOf(u) === 'sale';
+const vnDate = (d = new Date()) => new Date(d.getTime() + 7 * 60 * 60 * 1000);
+const vnDayKey = () => vnDate().toISOString().slice(0, 10);
+const moneyShort = (n) => {
+  const v = Number(n || 0);
+  if (Math.abs(v) >= 1e9) return `${(v / 1e9).toFixed(2)} tỷ`;
+  if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(1)} triệu`;
+  return `${Math.round(v).toLocaleString('vi-VN')}đ`;
+};
+const pctText = (v) => (v == null || Number.isNaN(Number(v)) ? '—' : `${Number(v).toFixed(1).replace('.0', '')}%`);
+function prefEnabled(telegramId) {
+  const p = digestPrefs.find((x) => String(x.telegram_id) === String(telegramId));
+  return p ? p.enabled !== false : true;
+}
+function setDigestPref(telegramId, enabled) {
+  const tid = String(telegramId);
+  let p = digestPrefs.find((x) => String(x.telegram_id) === tid);
+  if (!p) { p = { telegram_id: tid }; digestPrefs.push(p); }
+  p.enabled = !!enabled;
+  p.updated_at = new Date().toISOString();
+  saveDigestPrefs();
+}
+function alreadySent(telegramId, kind, day = vnDayKey()) {
+  const key = `${day}:${kind}:${telegramId}`;
+  return digestLog.some((x) => x.key === key);
+}
+function markSent(telegramId, empCode, kind, day = vnDayKey()) {
+  const key = `${day}:${kind}:${telegramId}`;
+  if (!digestLog.some((x) => x.key === key)) digestLog.push({ key, telegram_id: String(telegramId), emp_code: empCode, kind, day, sent_at: new Date().toISOString() });
+  if (digestLog.length > 5000) digestLog = digestLog.slice(-5000);
+  saveDigestLog();
+}
+function userIsActiveForDigest(user, latestKy) {
+  if (!user) return false;
+  const st = String(user.status || user.trang_thai || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (st && /(nghi|da nghi|inactive|disabled|khoa)/.test(st)) return false;
+  if (isAdminUser(user)) return true;
+  const hasRows = store.getRows({ ky: latestKy, scope: { empCode: user.emp_code } }).length > 0;
+  const markedActive = st && /(chinh thuc|cong tac|thu viec|active|dang lam)/.test(st);
+  return hasRows || markedActive;
+}
+function digestTextFor(user) {
+  const latestKy = store.latestKy();
+  const scope = isAdminUser(user) ? { empCode: null } : { empCode: user.emp_code };
+  const k = A.overviewKpis({ ky: latestKy, scope, label: latestKy });
+  const alerts = smart.buildAlerts({ ky: latestKy, scope });
+  if (isAdminUser(user)) {
+    const dir = k.momPct == null ? '' : (k.momPct >= 0 ? `▲ ${pctText(k.momPct)}` : `▼ ${pctText(Math.abs(k.momPct))}`);
+    return `📊 DNPHARMA — Kỳ ${latestKy}: DT ${moneyShort(k.revenue)}${dir ? ` (${dir} so kỳ trước)` : ''}.\n`
+      + `⚠ ${alerts.summary.emp_below_target || 0} NV chưa đạt · ${alerts.summary.cst_low || 0} cơ số sắp cạn · ${alerts.summary.units_down || 0} đơn vị giảm mạnh.\n`
+      + `Mở app: ${PUBLIC_URL}`;
+  }
+  const name = (user.name || user.emp_code).split(/\s+/).slice(-1)[0];
+  const note = k.pctTarget != null && k.pctTarget < 80 ? '\n⚠ Anh/Chị đang dưới 80% target, cần chú ý đẩy doanh thu trong kỳ.' : '';
+  return `Chào ${name}. Kỳ ${latestKy}: DT của bạn ${moneyShort(k.revenue)} · đạt ${pctText(k.pctTarget)} target.${note}\nMở app: ${PUBLIC_URL}`;
+}
+async function sendDigestToMap(m, { force = false, kind = 'morning' } = {}) {
+  const tid = String(m.telegram_id);
+  const user = store.findUserByCode(String(m.emp_code || '').toUpperCase());
+  const latestKy = store.latestKy();
+  if (!user || !userIsActiveForDigest(user, latestKy)) return { skipped: 'inactive_or_missing' };
+  if (!isAdminUser(user) && !isSaleUser(user)) return { skipped: 'unsupported_role' };
+  if (!force && !prefEnabled(tid)) return { skipped: 'opted_out' };
+  const sendKind = isAdminUser(user) ? `${kind}:admin` : `${kind}:sale`;
+  if (!force && alreadySent(tid, sendKind)) return { skipped: 'duplicate' };
+  const r = await tg('sendMessage', { chat_id: tid, text: digestTextFor(user) });
+  if (r.ok === false) return { error: r.description || 'telegram_send_failed' };
+  if (!force) markSent(tid, user.emp_code, sendKind);
+  return { ok: true, emp_code: user.emp_code };
+}
+async function runMorningDigest() {
+  const maps = auth.listTelegramMap();
+  let sent = 0, skipped = 0, failed = 0;
+  for (const m of maps) {
+    try {
+      const r = await sendDigestToMap(m);
+      if (r.ok) sent += 1; else skipped += 1;
+    } catch (e) { failed += 1; console.error('digest send error:', m.emp_code, e.message); }
+  }
+  console.log(`✔ Digest morning done: sent=${sent}, skipped=${skipped}, failed=${failed}`);
+}
+function parseDailyCron(expr) {
+  const m = String(expr || '').trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
+  if (!m) return { minute: 30, hour: 7 };
+  return { minute: Math.min(59, Math.max(0, Number(m[1]))), hour: Math.min(23, Math.max(0, Number(m[2]))) };
+}
+function startDigestScheduler() {
+  const cron = parseDailyCron(DIGEST_CRON);
+  let lastRunKey = '';
+  console.log(`✔ Telegram digest scheduler: ${String(DIGEST_CRON)} Asia/Bangkok (${cron.hour}:${String(cron.minute).padStart(2, '0')})`);
+  setInterval(() => {
+    const d = vnDate();
+    const key = `${d.toISOString().slice(0, 10)} ${cron.hour}:${cron.minute}`;
+    if (d.getUTCHours() === cron.hour && d.getUTCMinutes() === cron.minute && lastRunKey !== key) {
+      lastRunKey = key;
+      runMorningDigest().catch((e) => console.error('digest scheduler error:', e.message));
+    }
+  }, 30 * 1000);
+}
 
 // Gửi thẻ xác nhận có nút ✅ / ❌ (KHÔNG tự confirm — chờ NV bấm).
 async function askConfirm(chatId, code) {
@@ -91,6 +208,21 @@ async function handleUpdate(u) {
   try {
     if (u.message && u.message.text) {
       const txt = u.message.text.trim();
+      if (/^\/tat(?:\s|$)/i.test(txt)) {
+        setDigestPref(u.message.from.id, false);
+        return tg('sendMessage', { chat_id: u.message.chat.id, text: 'Đã tắt bản tin App Report hằng ngày. Gõ /bat để bật lại.' });
+      }
+      if (/^\/bat(?:\s|$)/i.test(txt)) {
+        setDigestPref(u.message.from.id, true);
+        return tg('sendMessage', { chat_id: u.message.chat.id, text: 'Đã bật lại bản tin App Report hằng ngày.' });
+      }
+      if (/^\/digest_test(?:\s|$)/i.test(txt)) {
+        const mAdmin = auth.resolveTelegram(u.message.from.id);
+        const user = mAdmin && store.findUserByCode(mAdmin.emp_code);
+        if (!user || !isAdminUser(user)) return tg('sendMessage', { chat_id: u.message.chat.id, text: 'Lệnh này chỉ dành cho CEO/admin.' });
+        const r = await sendDigestToMap(mAdmin, { force: true, kind: 'test' });
+        return tg('sendMessage', { chat_id: u.message.chat.id, text: r.ok ? 'Đã gửi bản tin test cho chính admin.' : `Không gửi được bản tin test: ${r.skipped || r.error || 'unknown'}` });
+      }
       // Deep link /start RP-XXXXXX hoặc gõ/tán mã trực tiếp.
       const m = txt.match(CODE_RE);
       if (m) return askConfirm(u.message.chat.id, m[0].toUpperCase());
@@ -116,6 +248,7 @@ async function handleUpdate(u) {
 async function main() {
   const me = await tg('getMe', {});
   console.log(`✔ Telegram login bot: @${me.result?.username || '?'} → backend ${BASE}`);
+  startDigestScheduler();
   let offset = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
