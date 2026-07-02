@@ -155,12 +155,15 @@ function parseDailyCron(expr) {
 }
 function startDigestScheduler() {
   const cron = parseDailyCron(DIGEST_CRON);
+  // DIGEST_CRON được khai báo theo giờ Việt Nam (UTC+7). Date#getUTCHours()
+  // phải so với giờ UTC tương ứng, nếu không "30 7 * * *" sẽ bắn 14:30 VN.
+  const targetUtcHour = (cron.hour - 7 + 24) % 24;
   let lastRunKey = '';
-  console.log(`✔ Telegram digest scheduler: ${String(DIGEST_CRON)} Asia/Bangkok (${cron.hour}:${String(cron.minute).padStart(2, '0')})`);
+  console.log(`✔ Telegram digest scheduler: ${String(DIGEST_CRON)} Asia/Bangkok (${String(cron.hour).padStart(2, '0')}:${String(cron.minute).padStart(2, '0')} VN = ${String(targetUtcHour).padStart(2, '0')}:${String(cron.minute).padStart(2, '0')} UTC)`);
   setInterval(() => {
     const d = vnDate();
     const key = `${d.toISOString().slice(0, 10)} ${cron.hour}:${cron.minute}`;
-    if (d.getUTCHours() === cron.hour && d.getUTCMinutes() === cron.minute && lastRunKey !== key) {
+    if (d.getUTCHours() === targetUtcHour && d.getUTCMinutes() === cron.minute && lastRunKey !== key) {
       lastRunKey = key;
       runMorningDigest().catch((e) => console.error('digest scheduler error:', e.message));
     }
