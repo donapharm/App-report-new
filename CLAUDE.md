@@ -47,6 +47,11 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
 2. `store.js` → đọc slot upload active + fallback ORDS (`SALES_REPORT`), targets (`V_TEM_TARGET_BONUS`).
 3. `.env` → `ANTHROPIC_API_KEY` để bật AI diễn giải.
 
+## Chuẩn UI desktop (CEO chốt 2026-07-02)
+- **Trang "Phân tích" là CHUẨN MẪU bố cục PC:** hàng thẻ KPI ngang trên cùng → các panel nhiều cột (2–3 cột) tận dụng chiều ngang, trong khung `.page-desktop` 1600px căn giữa.
+- KHÔNG dùng lưới tự chia trên `.page-desktop` (đã bỏ). Trang tự quản lý layout nội bộ bằng class tường minh (vd `.mini-columns`, `.kpi-grid`, `.alerts-grid`).
+- Trang mới/duyệt lại trang cũ trên PC: theo mẫu Phân tích; mobile giữ 1 cột dọc.
+
 ## Quy trình ghi log (BẮT BUỘC)
 - **Mọi thay đổi app phải ghi 1 mục vào `CHANGELOG.md`** (mới nhất trên cùng): ngày, việc đã làm, lý do, trạng thái test.
 - Đọc repo lần đầu: mở `CHANGELOG.md` trước để nắm toàn cảnh + tiến trình hiện tại.
