@@ -1,0 +1,121 @@
+{
+  "generatedAt": "2026-07-02T14:57:00.602Z",
+  "policy": {
+    "from": "2026-07-01T00:00:00+07:00",
+    "scope": "AppSale orders.route=CL",
+    "approvedLikeQty": "exclude CANCELLED/REJECTED/DRAFT/HOLD; use invoiced_qty>delivered_qty>approved_qty; AUTO_PASS/APPROVED fallback qty; approval_status rejected=0",
+    "orderedEligibleQty": "same status exclusions but use ordered qty for visibility. Shadow only, not source of truth."
+  },
+  "counts": {
+    "timelineRows": 2,
+    "groupedKeys": 2,
+    "keysMatchedBaseline": 2,
+    "keysNoBaseline": 0,
+    "approvedLikeQtyTotal": 0,
+    "orderedEligibleQtyTotal": 3000,
+    "approvedLikeAmountTotal": 0,
+    "orderedEligibleAmountTotal": 2940000
+  },
+  "statusCounts": {
+    "PARTNER_RESPONDED_FULL|pending": 1,
+    "HOLD_GOLIVE|pending": 1
+  },
+  "deltas": [
+    {
+      "key": "G1.GE.QĐ139.1961.N4.77|020|QĐ139",
+      "matchedBaseline": true,
+      "qlnb_code": "G1.GE.QĐ139.1961.N4.77",
+      "product_name": "Goutcolcin",
+      "unit_code": "020.TTYT TP. Biên Hòa",
+      "unit_name": "TTYT TP. Biên Hòa",
+      "target_unit": {
+        "target_unit_code3": "020",
+        "target_unit_label": "020.TTYT TP. Biên Hòa",
+        "rule": "EXPLICIT_FROM_SOURCE_CODE"
+      },
+      "bid": "QĐ139",
+      "order_line_count": 1,
+      "emp_codes": [
+        "DN001"
+      ],
+      "approvedLikeQty": 0,
+      "orderedEligibleQty": 3000,
+      "approvedLikeAmount": 0,
+      "orderedEligibleAmount": 2940000,
+      "sampleItems": [
+        {
+          "order_item_id": "2261",
+          "order_code": "DT-260701-0038",
+          "order_status": "PARTNER_RESPONDED_FULL",
+          "approval_status": "pending",
+          "qty": "3000.00",
+          "approved_qty": "",
+          "delivered_qty": "0.00",
+          "invoiced_qty": "0.00",
+          "approvedLikeQty": 0,
+          "orderedEligibleQty": 3000,
+          "emp_code": "DN001",
+          "created_at": "2026-07-01T08:26:57.231Z"
+        }
+      ],
+      "baseline": {
+        "remain_qty": 6000,
+        "sold_qty": 6000,
+        "bid_qty_initial": 12000,
+        "remain_pct": 50
+      },
+      "shadowApprovedRemainQty": 6000,
+      "shadowOrderedRemainQty": 3000,
+      "deltaApprovedVsBaseline": 0,
+      "deltaOrderedVsBaseline": -3000
+    },
+    {
+      "key": "G1.GE.QĐ139.2980.N4.1022|007|QĐ139",
+      "matchedBaseline": true,
+      "qlnb_code": "G1.GE.QĐ139.2980.N4.1022",
+      "product_name": "Vitamin AD",
+      "unit_code": "007.BVĐK KV Định Quán",
+      "unit_name": "BVĐK KV Định Quán",
+      "target_unit": {
+        "target_unit_code3": "007",
+        "target_unit_label": "007.BVĐK KV Định Quán",
+        "rule": "EXPLICIT_FROM_SOURCE_CODE"
+      },
+      "bid": "QĐ139",
+      "order_line_count": 1,
+      "emp_codes": [
+        "DN010"
+      ],
+      "approvedLikeQty": 0,
+      "orderedEligibleQty": 0,
+      "approvedLikeAmount": 0,
+      "orderedEligibleAmount": 0,
+      "sampleItems": [
+        {
+          "order_item_id": "2284",
+          "order_code": "DT-260702-0051",
+          "order_status": "HOLD_GOLIVE",
+          "approval_status": "pending",
+          "qty": "5000.00",
+          "approved_qty": "",
+          "delivered_qty": "0.00",
+          "invoiced_qty": "0.00",
+          "approvedLikeQty": 0,
+          "orderedEligibleQty": 0,
+          "emp_code": "DN010",
+          "created_at": "2026-07-02T05:52:26.528Z"
+        }
+      ],
+      "baseline": {
+        "remain_qty": 21800,
+        "sold_qty": 18200,
+        "bid_qty_initial": 40000,
+        "remain_pct": 54.5
+      },
+      "shadowApprovedRemainQty": 21800,
+      "shadowOrderedRemainQty": 21800,
+      "deltaApprovedVsBaseline": 0,
+      "deltaOrderedVsBaseline": 0
+    }
+  ]
+}

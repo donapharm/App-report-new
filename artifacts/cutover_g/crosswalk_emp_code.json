@@ -1,0 +1,461 @@
+{
+  "generatedAt": "2026-07-02T14:57:00.434Z",
+  "rule": "Exact emp_code match AppSale employees.code ↔ AppReport users.emp_code. Required for revenue sync and scope.",
+  "counts": {
+    "appEmployees": 31,
+    "reportUsers": 35,
+    "matched": 28,
+    "appMissing": 3,
+    "reportOnly": 7
+  },
+  "items": [
+    {
+      "app_employee_id": "5",
+      "app_emp_code": "DN001",
+      "app_name": "Đặng Xuân Trung",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN001",
+      "report_name": "Đặng Xuân Trung",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "6",
+      "app_emp_code": "DN002",
+      "app_name": "Nguyễn Thị Hằng Nga",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN002",
+      "report_name": "Nguyễn Thị Hằng Nga",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "12",
+      "app_emp_code": "DN003",
+      "app_name": "Nguyễn Trần Hoàng Anh",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN003",
+      "report_name": "Nguyễn Trần Hoàng Anh",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "16",
+      "app_emp_code": "DN004",
+      "app_name": "Bùi Hoàng Ngọc Quyên",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN004",
+      "report_name": "Bùi Hoàng Ngọc Quyên",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "10",
+      "app_emp_code": "DN005",
+      "app_name": "Nguyễn Thị Dung",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN005",
+      "report_name": "Nguyễn Thị Dung",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "8",
+      "app_emp_code": "DN006",
+      "app_name": "Nguyễn Trọng Hiếu",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN006",
+      "report_name": "Nguyễn Trọng Hiếu",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "20",
+      "app_emp_code": "DN007",
+      "app_name": "Trần Thị Kiều Linh",
+      "app_status": "active",
+      "app_roles": [
+        "admin",
+        "sale"
+      ],
+      "report_emp_code": "DN007",
+      "report_name": "Trần Thị Kiều Linh",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "14",
+      "app_emp_code": "DN008",
+      "app_name": "Đoàn Văn Triệu",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN008",
+      "report_name": "Đoàn Văn Triệu",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "2",
+      "app_emp_code": "DN009",
+      "app_name": "Trần Thị Thanh Huyền",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN009",
+      "report_name": "Trần Thị Thanh Huyền",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "11",
+      "app_emp_code": "DN010",
+      "app_name": "Trần Quốc Cường",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN010",
+      "report_name": "Trần Quốc Cường",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "13",
+      "app_emp_code": "DN011",
+      "app_name": "Phan Tuấn",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN011",
+      "report_name": "Phan Tuấn",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "9",
+      "app_emp_code": "DN012",
+      "app_name": "Đặng Thị Hồng Hạnh",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN012",
+      "report_name": "Đặng Thị Hồng Hạnh",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "4",
+      "app_emp_code": "DN016",
+      "app_name": "Trần Thị Ngọc Ánh",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN016",
+      "report_name": "Trần Thị Ngọc Ánh",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "7",
+      "app_emp_code": "DN017",
+      "app_name": "Trần Trịnh Kiều Oanh",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN017",
+      "report_name": "Trần Trịnh Kiều Oanh",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "15",
+      "app_emp_code": "DN018",
+      "app_name": "Nguyễn Huỳnh Phương Mai",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN018",
+      "report_name": "Nguyễn Huỳnh Phương Mai",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "3",
+      "app_emp_code": "DN019",
+      "app_name": "Dương Thị Mến",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN019",
+      "report_name": "Dương Thị Mến",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "19",
+      "app_emp_code": "DN021",
+      "app_name": "Lê Anh Đức",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": null,
+      "report_name": null,
+      "report_role": null,
+      "status": "MISSING_IN_APP_REPORT"
+    },
+    {
+      "app_employee_id": "18",
+      "app_emp_code": "DN022",
+      "app_name": "Đồng Văn Toản",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN022",
+      "report_name": "Đồng Văn Toản",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "17",
+      "app_emp_code": "DN023",
+      "app_name": "Nguyễn Đức Tuấn",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN023",
+      "report_name": "Nguyễn Đức Tuấn",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "1",
+      "app_emp_code": "DN024",
+      "app_name": "Hoàng Văn Hà",
+      "app_status": "active",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": "DN024",
+      "report_name": "Hoàng Văn Hà",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "22",
+      "app_emp_code": "VP002",
+      "app_name": "Nguyễn Văn Thao",
+      "app_status": "active",
+      "app_roles": [
+        "giao_hang"
+      ],
+      "report_emp_code": "VP002",
+      "report_name": "Nguyễn Văn Thao",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "21",
+      "app_emp_code": "VP004",
+      "app_name": "Trần Hoàng Trung",
+      "app_status": "inactive",
+      "app_roles": [
+        "sale"
+      ],
+      "report_emp_code": null,
+      "report_name": null,
+      "report_role": null,
+      "status": "MISSING_IN_APP_REPORT"
+    },
+    {
+      "app_employee_id": "23",
+      "app_emp_code": "VP006",
+      "app_name": "Nguyễn Chí Nghĩa",
+      "app_status": "active",
+      "app_roles": [
+        "giao_hang"
+      ],
+      "report_emp_code": "VP006",
+      "report_name": "Nguyễn Chí Nghĩa",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "29",
+      "app_emp_code": "VP007",
+      "app_name": "Lê Thị Huyền",
+      "app_status": "active",
+      "app_roles": [
+        "kho"
+      ],
+      "report_emp_code": "VP007",
+      "report_name": "Lê Thị Huyền",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "24",
+      "app_emp_code": "VP008",
+      "app_name": "Võ Công Sáng",
+      "app_status": "active",
+      "app_roles": [
+        "giao_hang"
+      ],
+      "report_emp_code": "VP008",
+      "report_name": "Võ Công Sáng",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "27",
+      "app_emp_code": "VP009",
+      "app_name": "Lê Thị Kim Dung",
+      "app_status": "active",
+      "app_roles": [
+        "ke_toan"
+      ],
+      "report_emp_code": "VP009",
+      "report_name": "Lê Thị Kim Dung",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "25",
+      "app_emp_code": "VP011",
+      "app_name": "Phạm Thị Duyên",
+      "app_status": "active",
+      "app_roles": [
+        "ke_toan"
+      ],
+      "report_emp_code": "VP011",
+      "report_name": "Phạm Thị Duyên",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "30",
+      "app_emp_code": "VP012",
+      "app_name": "Đặng Xuân Thanh",
+      "app_status": "active",
+      "app_roles": [
+        "kho"
+      ],
+      "report_emp_code": "VP012",
+      "report_name": "Đặng Xuân Thanh",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "28",
+      "app_emp_code": "VP014",
+      "app_name": "Đinh Thị Nữ",
+      "app_status": "active",
+      "app_roles": [
+        "kho"
+      ],
+      "report_emp_code": "VP014",
+      "report_name": "Đinh Thị Nữ",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "31",
+      "app_emp_code": "VP018",
+      "app_name": "Nguyễn Thị Kim Ngọc",
+      "app_status": "active",
+      "app_roles": [
+        "admin"
+      ],
+      "report_emp_code": "VP018",
+      "report_name": "Nguyễn Thị Kim Ngọc",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
+    },
+    {
+      "app_employee_id": "26",
+      "app_emp_code": "VP019",
+      "app_name": "Trần Thị Mỹ Phượng",
+      "app_status": "active",
+      "app_roles": [
+        "ke_toan"
+      ],
+      "report_emp_code": null,
+      "report_name": null,
+      "report_role": null,
+      "status": "MISSING_IN_APP_REPORT"
+    }
+  ],
+  "reportOnly": [
+    {
+      "report_emp_code": "CEO",
+      "report_name": "Đặng Xuân Trung",
+      "report_role": "admin",
+      "status": "MISSING_IN_APPSALE"
+    },
+    {
+      "report_emp_code": "VP017",
+      "report_name": "Lê Thị Hằng",
+      "report_role": "sale",
+      "status": "MISSING_IN_APPSALE"
+    },
+    {
+      "report_emp_code": "VP003",
+      "report_name": "Vũ Quốc Huy",
+      "report_role": "sale",
+      "status": "MISSING_IN_APPSALE"
+    },
+    {
+      "report_emp_code": "VP010",
+      "report_name": "Nguyễn Thị Tuyết Thơ",
+      "report_role": "sale",
+      "status": "MISSING_IN_APPSALE"
+    },
+    {
+      "report_emp_code": "VP013",
+      "report_name": "Lộc Thị Thanh",
+      "report_role": "sale",
+      "status": "MISSING_IN_APPSALE"
+    },
+    {
+      "report_emp_code": "VP015",
+      "report_name": "Lương Xuân Hưng",
+      "report_role": "sale",
+      "status": "MISSING_IN_APPSALE"
+    },
+    {
+      "report_emp_code": "VP016",
+      "report_name": "Lê Sỹ Thống",
+      "report_role": "sale",
+      "status": "MISSING_IN_APPSALE"
+    }
+  ]
+}
