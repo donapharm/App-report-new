@@ -1,0 +1,37 @@
+{
+  "at": "2026-07-02T11:40:00.000Z",
+  "purpose": "Verify CST upload merge boundary risks: baseline watermark and duplicate normalized keys.",
+  "baseline": {
+    "source_from_date_distinct": ["01-MAY-26"],
+    "baselineCoveredKyDerived": "05.2026",
+    "rule": "Only merge active upload slots with ky > baselineCoveredKy; current baseline 05.2026 therefore merges 06.2026. If future baseline is re-dumped with later source_from_date, slots <= that ky are skipped to avoid double-count."
+  },
+  "duplicateKeyCheck": {
+    "normalizedKey": "normIit(iit_code) + '|' + normUnit(unit_code/unit_name), where normUnit uses 3-digit prefix and maps 001.BVĐK Đồng Nai-KHU C to 001.BVĐK Đồng Nai",
+    "baselineRows": 2741,
+    "duplicateNormalizedCstKeys": 0,
+    "duplicateUploadReceivers": 0,
+    "conclusion": "No current CST baseline key would receive the same upload qty more than once. Guard added: if a future baseline key has >1 CST row, upload merge is skipped for that key pending explicit allocation."
+  },
+  "caseRecheckAfterGuard": [
+    {
+      "label": "RELIPOREX 4000 IU @ 002.BVĐK Thống Nhất ĐN",
+      "baselineCoveredKy": "05.2026",
+      "mergedUploadKy": "06.2026",
+      "mergedUploadQty": 1800,
+      "sold": 33400,
+      "remain": 36600,
+      "remainPct": 52.3
+    },
+    {
+      "label": "AMEBISMO @ 001.BVĐK Đồng Nai",
+      "baselineCoveredKy": "05.2026",
+      "mergedUploadKy": "06.2026",
+      "mergedUploadQty": 1620,
+      "sold": 3180,
+      "remain": 24,
+      "remainPct": 0.7
+    }
+  ],
+  "build": "npm run build OK"
+}

@@ -65,6 +65,23 @@ function kySortValue(ky) {
 function latestActiveSlot() {
   return activeSlots().sort((a, b) => kySortValue(a.ky) - kySortValue(b.ky) || String(a.dateTo || '').localeCompare(String(b.dateTo || ''))).at(-1) || null;
 }
+function kyFromSourceDate(v) {
+  const s = String(v || '').trim().toUpperCase();
+  const m = s.match(/(\d{1,2})-([A-Z]{3})-(\d{2,4})/);
+  if (!m) return null;
+  const mon = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06', JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' }[m[2]];
+  if (!mon) return null;
+  const y = Number(m[3]);
+  return `${mon}.${y < 100 ? 2000 + y : y}`;
+}
+function cstBaselineCoveredKy(rows) {
+  // Hiện baseline CST dump từ app cũ có `source_from_date=01-MAY-26`; theo trace app cũ,
+  // baseline sold đã bao gồm các kỳ <= tháng snapshot này, và app cũ merge thêm upload kỳ sau đó.
+  // Guard này tránh double-count nếu sau này re-dump baseline mới hơn: chỉ merge slot có ky > baselineCoveredKy.
+  const vals = [...new Set((rows || []).map((r) => kyFromSourceDate(r.source_from_date)).filter(Boolean))]
+    .sort((a, b) => kySortValue(a) - kySortValue(b));
+  return vals.at(-1) || null;
+}
 function normCstUnit(v) {
   const s = String(v || '').trim();
   const merged = s === '001.BVĐK Đồng Nai-KHU C' ? '001.BVĐK Đồng Nai' : s;
@@ -76,21 +93,34 @@ function normCstIit(v) { return String(v || '').trim().toUpperCase().replace(/\s
 function cstKey(iit, unit) { return `${normCstIit(iit)}|${normCstUnit(unit)}`; }
 
 // App cũ tính CST = V_TEMP_PHARMA/GIVEN_QUANTITY - SALES_REPORT DB, rồi cộng thêm
-// dữ liệu upload kỳ hiện tại chưa có trong DB. Vì cst_real.json là baseline đã dump,
-// cần merge slot upload active mới nhất theo đúng khóa app cũ: IIT_CODE + DONVI chuẩn hóa.
+// dữ liệu upload chưa có trong baseline DB. Vì cst_real.json là baseline đã dump,
+// cần merge các slot upload active có ky > baselineCoveredKy theo đúng khóa app cũ:
+// IIT_CODE + DONVI chuẩn hóa. Nếu một key CST baseline bị trùng nhiều dòng thì KHÔNG merge key đó
+// để tránh trừ dư; phải điều tra/phân bổ riêng thay vì cộng cùng upload vào nhiều dòng.
 function mergeLatestUploadIntoCst(rows) {
-  const slot = latestActiveSlot();
-  if (!slot) return rows;
-  const upRows = slotRows(slot).filter((r) => String(r.route || r.TUYEN || '').toUpperCase() === 'CL');
-  if (!upRows.length) return rows;
+  const baselineKy = cstBaselineCoveredKy(rows);
+  const slots = activeSlots()
+    .filter((s) => !baselineKy || kySortValue(s.ky) > kySortValue(baselineKy))
+    .sort((a, b) => kySortValue(a.ky) - kySortValue(b.ky) || String(a.dateTo || '').localeCompare(String(b.dateTo || '')));
+  if (!slots.length) return rows;
+
+  const cstKeyCount = new Map();
+  for (const r of rows) {
+    const k = cstKey(r.iit_code, r.unit_code || r.unit_name);
+    cstKeyCount.set(k, (cstKeyCount.get(k) || 0) + 1);
+  }
   const upMap = new Map();
-  for (const r of upRows) {
-    const key = cstKey(r.iit_code || r.IIT_CODE, r.unit_code || r.DONVI || r.unit_name);
-    if (!key.startsWith('|')) {
-      const cur = upMap.get(key) || { qty: 0, revenue: 0 };
-      cur.qty += Number(r.quantity || r.QUANTITY || 0);
-      cur.revenue += Number(r.revenue || r.REVENUE || 0);
-      upMap.set(key, cur);
+  for (const slot of slots) {
+    const upRows = slotRows(slot).filter((r) => String(r.route || r.TUYEN || '').toUpperCase() === 'CL');
+    for (const r of upRows) {
+      const key = cstKey(r.iit_code || r.IIT_CODE, r.unit_code || r.DONVI || r.unit_name);
+      if (!key.startsWith('|') && (cstKeyCount.get(key) || 0) <= 1) {
+        const cur = upMap.get(key) || { qty: 0, revenue: 0, kys: new Set() };
+        cur.qty += Number(r.quantity || r.QUANTITY || 0);
+        cur.revenue += Number(r.revenue || r.REVENUE || 0);
+        cur.kys.add(slot.ky);
+        upMap.set(key, cur);
+      }
     }
   }
   if (!upMap.size) return rows;
@@ -112,7 +142,8 @@ function mergeLatestUploadIntoCst(rows) {
       remain_amount: remain * bidPrice,
       sale_price: sold ? +((soldAmount || sold * bidPrice) / sold).toFixed(2) : Number(r.sale_price || 0),
       cst_baseline_sold_qty: baseSold,
-      cst_upload_ky: slot.ky,
+      cst_baseline_covered_ky: baselineKy,
+      cst_upload_ky: [...up.kys].join(','),
       cst_upload_qty: up.qty,
     };
   });

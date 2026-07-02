@@ -107,8 +107,9 @@ Artifacts kiểm tra:
 - Sau xử lý/đóng mục thiếu mã QLNB: `artifacts/reconcile_cst_resolved_20260702.json`.
 - Trace lỗi trừ thiếu upload hiện tại: `artifacts/cst_trace_cases_20260702.json`.
 - Verify sau sửa merge upload: `artifacts/cst_verify_after_upload_merge_20260702.json`.
+- Guard rủi ro biên baseline/duplicate key: `artifacts/cst_merge_guard_check_20260702.json`.
 
-Kết luận: CST app mới giữ **2.741 dòng**; dòng thiếu mã QLNB `Bividia 25 · 108. BVĐK LONG AN · DN001` được giữ và UI hiển thị mã QLNB là `—`. Công thức runtime hiện khớp app cũ: baseline `cst_real.json` + slot upload active mới nhất theo khóa `IIT_CODE + DONVI chuẩn hóa`; không ép số vào file nguồn.
+Kết luận: CST app mới giữ **2.741 dòng**; dòng thiếu mã QLNB `Bividia 25 · 108. BVĐK LONG AN · DN001` được giữ và UI hiển thị mã QLNB là `—`. Công thức runtime hiện khớp app cũ: baseline `cst_real.json` + các slot upload active có kỳ **sau mốc baseline** theo khóa `IIT_CODE + DONVI chuẩn hóa`; không ép số vào file nguồn. Baseline hiện `source_from_date=01-MAY-26` → `baselineCoveredKy=05.2026`, nên chỉ merge `06.2026`; nếu re-dump baseline mới hơn, slot cũ hơn/bằng mốc sẽ không double-count.
 
 | Nguồn | Dòng | Tổng CST ban đầu | Tổng SL đã bán | Tổng SL còn | Tổng TT còn lại | Chênh |
 |---|---:|---:|---:|---:|---:|---:|
