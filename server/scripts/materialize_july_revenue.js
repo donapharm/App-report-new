@@ -131,6 +131,10 @@ async function fetchPartner() {
        AND COALESCE(o.entity_group, oi.entity_group, '')='PARTNER'
        AND o.status <> 'HOLD_GOLIVE'
        AND (COALESCE(o.is_test,false) IS NOT TRUE OR partner.responded_at IS NOT NULL)
+       -- PA-A / app cũ: kỳ WEB partner theo kỳ đơn đặt; đơn T06 giao sang T07
+       -- vẫn thuộc nhóm theo dõi/còn nợ kỳ trước, không cộng vào doanh thu T07.
+       AND o.created_at >= TIMESTAMPTZ '2026-07-01 00:00:00+07'
+       AND o.created_at < TIMESTAMPTZ '2026-08-01 00:00:00+07'
        AND COALESCE(partner.effective_date, o.created_at::date) >= DATE '2026-07-01'
        AND COALESCE(partner.effective_date, o.created_at::date) < DATE '2026-08-01'
        AND COALESCE(partner.delivered_qty,0) > 0
@@ -185,7 +189,7 @@ async function main() {
   writeJson(path.join(artDir, 'july_revenue_2source_materialize_20260702.json'), artifact);
   const md = [`# July 2026 revenue — CRM MISA + APP WEB`, '', `Generated: ${artifact.generatedAt}`, '', `MISA run: #${run.id}, finished_at=${run.finished_at}`, '', '| Source | Rows | Orders | Revenue |', '|---|---:|---:|---:|'];
   for (const [k, v] of Object.entries(summaryBySource)) md.push(`| ${k} | ${v.rows} | ${v.orders} | ${v.revenue} |`);
-  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, July `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner: latest `partner_order_line_responses` per order_item, July effective date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- 01–06 frozen; this script only creates/replaces active slot for `07.2026`.', '');
+  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, July `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, July effective date, July order creation date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- 01–06 frozen; this script only creates/replaces active slot for `07.2026`.', '');
   fs.writeFileSync(path.join(artDir, 'july_revenue_2source_materialize_20260702.md'), md.join('\n'));
   console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length }, null, 2));
   await pool.end();

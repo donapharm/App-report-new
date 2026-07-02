@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-07-02T16:36:47.003Z",
-  "slotId": "july_2src_072026_20260702163646",
-  "file": "/home/osboxes/.openclaw/workspace-report/App-report-new/server/data/uploads/july_2src_072026_20260702163646.json",
+  "generatedAt": "2026-07-02T17:22:35.653Z",
+  "slotId": "july_2src_072026_20260702172235",
+  "file": "/home/osboxes/.openclaw/workspace-report/App-report-new/server/data/uploads/july_2src_072026_20260702172235.json",
   "ky": "07.2026",
   "latestMisaRun": {
-    "id": "26",
-    "finished_at": "2026-07-02T13:29:48.033Z",
+    "id": "27",
+    "finished_at": "2026-07-02T16:42:23.186Z",
     "raw_summary": {
       "dedupe": {
         "inputRows": 252,
@@ -22,7 +22,7 @@
         "missingCount": 0,
         "pagesFetched": 334,
         "totalRecords": 16683,
-        "fetchedAtGmt7": "2026-07-02T20:29:47+07:00",
+        "fetchedAtGmt7": "2026-07-02T23:42:23+07:00",
         "lastPageSample": {
           "page": 334,
           "rows": 33,
@@ -114,8 +114,8 @@
     }
   },
   "summary": {
-    "rows": 294,
-    "totalRevenue": 2670947096,
+    "rows": 293,
+    "totalRevenue": 2668987096,
     "bySource": {
       "CRM_MISA": {
         "rows": 226,
@@ -123,9 +123,9 @@
         "revenue": 2118313496
       },
       "APP_WEB_PARTNER": {
-        "rows": 68,
-        "orders": 33,
-        "revenue": 552633600
+        "rows": 67,
+        "orders": 32,
+        "revenue": 550673600
       }
     },
     "empCount": 14
@@ -388,29 +388,6 @@
         "ky": "07.2026",
         "date": "2026-06-30",
         "source": "APP_WEB_PARTNER",
-        "source_order": "DT-260630-0115",
-        "source_line_id": "WEB:2188",
-        "route": "NCL",
-        "contractor_code": "03.TUE.N",
-        "contractor_name": "Công Ty Trách Nhiệm Hữu Hạn Dược Tuệ Nam",
-        "emp_code": "DN008",
-        "emp_name": "Đoàn Văn Triệu",
-        "raw_emp_code": "DN008",
-        "unit_code": "164.PKĐK QUỐC TẾ HẠNH PHÚC",
-        "unit_name": "PKĐK QUỐC TẾ HẠNH PHÚC",
-        "iit_code": "G1.GE.QĐ139.1961.N4.77",
-        "product_name": "Goutcolcin",
-        "uom": "Viên",
-        "bid_package": "139",
-        "quantity": 2000,
-        "revenue": 1960000,
-        "unit_price": 980,
-        "revenue_basis": "PARTNER_DELIVERED"
-      },
-      {
-        "ky": "07.2026",
-        "date": "2026-06-30",
-        "source": "APP_WEB_PARTNER",
         "source_order": "DT-260701-0001",
         "source_line_id": "WEB:2192",
         "route": "NCL",
@@ -612,6 +589,29 @@
         "quantity": 6000,
         "revenue": 24000000,
         "unit_price": 4000,
+        "revenue_basis": "PARTNER_DELIVERED"
+      },
+      {
+        "ky": "07.2026",
+        "date": "2026-06-30",
+        "source": "APP_WEB_PARTNER",
+        "source_order": "DT-260701-0008",
+        "source_line_id": "WEB:2208",
+        "route": "NCL",
+        "contractor_code": "10.ĐAI.TS",
+        "contractor_name": "Công Ty Tnhh Dược Phẩm Và Trang Thiết Bị Y Tế Đại Trường Sơn",
+        "emp_code": "DN001",
+        "emp_name": "Đặng Xuân Trung",
+        "raw_emp_code": "DN001",
+        "unit_code": "061.PKĐK Y DƯỢC MIỀN ĐÔNG SÀI GÒN",
+        "unit_name": "PKĐK Y DƯỢC MIỀN ĐÔNG SÀI GÒN",
+        "iit_code": "G1.GE.QĐ139.981.N2.732",
+        "product_name": "SaViDimin",
+        "uom": "Viên",
+        "bid_package": "139",
+        "quantity": 7200,
+        "revenue": 11520000,
+        "unit_price": 1600,
         "revenue_basis": "PARTNER_DELIVERED"
       }
     ]

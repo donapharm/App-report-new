@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-07-02T17:22:16.315Z",
+  "rule": "PA-A: APP WEB Partner revenue for a period only counts completed/delivered Partner orders created in the same period; order DT-260630-0115 delivered/responded in July remains excluded from T07 to match old app WEB done count/revenue.",
+  "before": {
+    "partnerOrders": 33,
+    "partnerRevenue": 552633600,
+    "totalRevenue": 2670947096
+  },
+  "after": {
+    "partnerOrders": 32,
+    "partnerRevenue": 550673600,
+    "totalRevenue": 2668987096
+  },
+  "excludedRevenue": 1960000,
+  "excludedRows": [
+    {
+      "order_item_id": "2188",
+      "order_id": "1045",
+      "order_no": "DT-260630-0115",
+      "status": "PARTNER_RESPONDED_FULL",
+      "created_at": "2026-06-30T08:33:00.858Z",
+      "response_status": "full",
+      "response_row_status": "du",
+      "invoice_deferred": true,
+      "invoice_deferred_at": "2026-07-01T08:02:07.120Z",
+      "ordered_qty": "2000.00",
+      "delivered_qty": "2000",
+      "backorder_qty": "0",
+      "price": "980.00",
+      "delivered_value": "1960000.00",
+      "emp_code": "DN008",
+      "unit_code": "164.PKĐK QUỐC TẾ HẠNH PHÚC",
+      "unit_name": "PKĐK QUỐC TẾ HẠNH PHÚC",
+      "qlnb_code": "G1.GE.QĐ139.1961.N4.77",
+      "product_name": "Goutcolcin",
+      "responded_at": "2026-07-01T08:02:07.120Z"
+    }
+  ]
+}

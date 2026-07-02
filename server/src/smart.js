@@ -200,7 +200,7 @@ function buildReason(attain, trend, last, season) {
  */
 async function answerQuestion({ text, scope, session }) {
   const q = noAccent((text || '').toLowerCase()); // chấp nhận cả gõ KHÔNG DẤU
-  const ky = store.latestKy();
+  const ky = resolveKyFromQuestion(q) || store.latestKy();
   const mine = !!scope.empCode;
 
   if (/(top|cao nhat|ban chay).*(san pham|thuoc)|(san pham|thuoc).*(top|cao|ban chay)/.test(q)) {
@@ -267,6 +267,25 @@ function buildFacts({ ky, scope, mine }) {
 }
 
 /* ---------------- helpers ---------------- */
+function resolveKyFromQuestion(q) {
+  const periods = store.listPeriods().map((p) => p.ky).filter(Boolean);
+  if (!periods.length) return null;
+  const latest = periods[periods.length - 1];
+  const pickByMonthYear = (mm, yy) => {
+    const m = String(mm).padStart(2, '0');
+    let y = yy ? String(yy) : '';
+    if (y.length === 2) y = `20${y}`;
+    if (y) return periods.includes(`${m}.${y}`) ? `${m}.${y}` : null;
+    const latestYear = latest.slice(3);
+    if (periods.includes(`${m}.${latestYear}`)) return `${m}.${latestYear}`;
+    return periods.filter((p) => p.startsWith(`${m}.`)).slice(-1)[0] || null;
+  };
+  let m = q.match(/\b(?:t|thang|ky)\s*0?(\d{1,2})(?:\s*[./-]?\s*(20\d{2}|\d{2}))?\b/);
+  if (m) return pickByMonthYear(m[1], m[2]);
+  m = q.match(/\b(0?[1-9]|1[0-2])[./-](20\d{2}|\d{2})\b/);
+  if (m) return pickByMonthYear(m[1], m[2]);
+  return null;
+}
 function noAccent(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd'); }
 function fmt(n) { return Math.round(n).toLocaleString('vi-VN') + ' đ'; }
 function say(text, lines) { return { text, lines: lines || [], source: 'code' }; }

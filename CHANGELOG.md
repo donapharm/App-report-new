@@ -21,6 +21,13 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Bot triển khai (Report Bot) — Telegram NLQ + fix PA-A T07 đã chạy
+- Đọc `DIRECTIVE_TELEGRAM_NLQ.md` và nối fallback Telegram vào `smart.answerQuestion` code-first: mã RP/lệnh `/start`, `/digest_test`, `/tat`, `/bat` giữ nguyên; user chưa map chỉ nhận hướng dẫn đăng nhập; user đã map được hỏi tự nhiên theo đúng scope Telegram → `emp_code` → `auth.scopeOf`.
+- Bổ sung nhận diện kỳ trong câu hỏi nhanh (`tháng 6`, `T06`, `06.2026`...) để nghiệm thu CEO hỏi “doanh thu tháng 6” trả đúng kỳ thay vì mặc định latest.
+- Chạy fix PA-A T07: re-materialize slot `07.2026`; WEB Partner còn `550.673.600đ` (67 rows/32 orders), CRM MISA `2.118.313.496đ` → Overview T07 `2.668.987.096đ` đúng chỉ đạo; T06 giữ nguyên `28.403.136.096đ`.
+- Trace chênh `1.960.000đ`: loại khỏi T07 dòng `DT-260630-0115` / `WEB:2188` / Goutcolcin / DN008 / `164.PKĐK QUỐC TẾ HẠNH PHÚC` vì đơn tạo 30/06, phản hồi/giao 01/07; artifact `artifacts/july_revenue_paa_trace_20260702.json`.
+- Nghiệm thu local: `node --check` OK; `smart.answerQuestion("doanh thu tháng 6")` CEO → `28.403.136.096đ`; DN008 hỏi T07 chỉ thấy scope DN008; `npm run build` OK.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Spec: ô lọc typeahead + phân biệt thuốc trùng tên
 - CEO: 2 ô "Tất cả đơn vị"/"Tất cả sản phẩm" cho gõ tìm tiên đoán; thuốc trùng tên (VD "Alusi") cần phân biệt. → `SPEC_ANALYSIS_CST_UX.md` mục C2.
 - **Gốc:** định danh sản phẩm = `iit_code` (mã QLNB), không phải tên; 1 tên ↔ nhiều mã QLNB (khác gói/QĐ, nhà thầu, ĐVT ml-gam/gói, giá).

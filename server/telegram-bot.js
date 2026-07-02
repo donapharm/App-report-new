@@ -157,6 +157,33 @@ function parseDailyCron(expr) {
   if (!m) return { minute: 30, hour: 7 };
   return { minute: Math.min(59, Math.max(0, Number(m[1]))), hour: Math.min(23, Math.max(0, Number(m[2]))) };
 }
+function formatAnswerForTelegram(answer) {
+  const head = String(answer?.text || '').trim();
+  const lines = Array.isArray(answer?.lines) ? answer.lines.filter(Boolean) : [];
+  const out = [head, ...lines].filter(Boolean).join('\n');
+  return out.length > 3900 ? `${out.slice(0, 3890)}…` : out;
+}
+async function answerNaturalQuestion(msg, txt) {
+  const map = auth.resolveTelegram(msg.from.id);
+  if (!map) {
+    return tg('sendMessage', { chat_id: msg.chat.id,
+      text: 'Gửi mã đăng nhập dạng RP-XXXXXX để xác nhận đăng nhập App Report.' });
+  }
+  const user = store.findUserByCode(String(map.emp_code || '').toUpperCase());
+  const session = auth.sessionForUser(user);
+  if (!session) {
+    return tg('sendMessage', { chat_id: msg.chat.id,
+      text: 'Tài khoản Telegram của bạn chưa được cấp quyền App Report. Vui lòng liên hệ quản trị.' });
+  }
+  try {
+    const answer = await smart.answerQuestion({ text: txt, scope: auth.scopeOf(session), session });
+    return tg('sendMessage', { chat_id: msg.chat.id, text: formatAnswerForTelegram(answer) });
+  } catch (e) {
+    console.error('telegram nlq error:', session.emp_code, e.message);
+    return tg('sendMessage', { chat_id: msg.chat.id,
+      text: 'Em chưa trả lời được câu này. Anh/Chị thử hỏi: “Doanh thu tháng 6?”, “Top sản phẩm”, “Tôi đạt bao nhiêu % target?”' });
+  }
+}
 function startDigestScheduler() {
   const cron = parseDailyCron(DIGEST_CRON);
   // DIGEST_CRON được khai báo theo giờ Việt Nam (UTC+7). Date#getUTCHours()
@@ -235,10 +262,9 @@ async function handleUpdate(u) {
       if (m) return askConfirm(u.message.chat.id, m[0].toUpperCase());
       if (/^\/start\b/.test(txt)) {
         return tg('sendMessage', { chat_id: u.message.chat.id,
-          text: 'Chào bạn 👋 Để đăng nhập App Report, hãy bấm “Đăng nhập bằng Telegram” trên web rồi gửi mã RP-XXXXXX vào đây.' });
+          text: 'Chào bạn 👋 Để đăng nhập App Report, hãy bấm “Đăng nhập bằng Telegram” trên web rồi gửi mã RP-XXXXXX vào đây. Nếu tài khoản đã được cấp quyền, Anh/Chị có thể hỏi nhanh như: “Doanh thu tháng 6?”, “Top sản phẩm”, “Tôi đạt bao nhiêu % target?”' });
       }
-      return tg('sendMessage', { chat_id: u.message.chat.id,
-        text: 'Gửi mã đăng nhập dạng RP-XXXXXX để xác nhận đăng nhập App Report.' });
+      return answerNaturalQuestion(u.message, txt);
     }
     if (u.callback_query) {
       const data = u.callback_query.data || '';

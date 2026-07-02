@@ -365,13 +365,17 @@ const isAdmin = (role) => role === 'ceo' || role === 'admin';
 function scopeOf(session) {
   return { empCode: isAdmin(session.role) ? null : session.emp_code };
 }
+function sessionForUser(user) {
+  if (!user) return null;
+  return { emp_code: user.emp_code, name: user.name, role: normRole(user.role), phone: user.phone || null };
+}
 function requireAdmin(req, res, next) {
   if (!isAdmin(req.session.role)) return res.status(403).json({ error: 'Không đủ quyền' });
   next();
 }
 
 module.exports = {
-  mockLogin, requireAuth, requireAdmin, isAdmin, scopeOf, getSession,
+  mockLogin, requireAuth, requireAdmin, isAdmin, scopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, verifySso, demoAllowed,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),
