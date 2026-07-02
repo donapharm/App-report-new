@@ -114,6 +114,20 @@ Bot ghi "Model B" nhưng mô tả ("chưa thay được Lumos lịch sử; khôn
 
 **Sau 4 bước:** mục tiêu match ≈ 100% (2741 Lumos + 44 gói mới App Sale) → mới viết **adapter SHADOW** (đối chiếu, chưa cắt Lumos). Bot báo lại tỉ lệ sau khi dọn + danh sách còn lệch (nếu có) để Claude review.
 
+## G) SAU MỤC F — Claude review 2026-07-02: BẬT ĐÈN XANH ADAPTER SHADOW
+> Bot xong F: crosswalk tường minh (`artifacts/cutover_f/crosswalk_units|products|bidpkg.json`), match **99,64%** (2731/2741), tách `107` → `107_DUC_HUE`/`107_TAN_THANH`, KHU C gộp `001`. **Duyệt.**
+
+**Quyết định 55 dòng lệch (KHÔNG chặn shadow):**
+1. **9 Lumos-only chưa rõ hiệu lực** (cst_real.json thiếu `hd_den_ngay`): **giữ STATIC**. An toàn tuyệt đối vì các dòng này KHÔNG có trong App Sale → không có giao dịch trừ vào → đứng yên. → đưa vào **worklist tổ thầu** xác nhận còn hiệu lực (rảnh làm). 1 dòng thiếu IIT: giữ static.
+2. **45 App-only thiếu allocation**: **HOLD** (không tạo CST rỗng). Doanh thu các SP này VẪN tính khi bán; CST chỉ hiện sau khi tổ thầu nhập allocation vào App Sale. → **worklist tổ thầu** nhập cơ số.
+3. Gộp lại: 2 nhóm trên = **1 việc của tổ thầu — rà master gói thầu/allocation App Sale cho đủ** (song song, không cản shadow). Cutover ĐẦY ĐỦ chỉ sau khi worklist sạch + shadow delta đạt.
+
+**Việc tiếp — bot làm (vẫn read-only, chưa cắt Lumos):**
+1. **Adapter SHADOW CST:** đọc App Sale CL timeline (net theo trạng thái) → áp crosswalk tường minh → cộng chung KHU C về `001` → tính remain → **đối chiếu vs baseline hiện tại**, báo bảng delta (kỳ 06 phải ≈ khớp; mô phỏng 07 nếu có dữ liệu). CHƯA thay nguồn.
+2. **Crosswalk `emp_code`** (chưa làm, cần cho DOANH THU + phân quyền): map người bán App Sale ↔ `emp_code` App Report. Đây là chốt chặn cho sync doanh thu 07 (mục A điểm 1).
+3. Xuất **2 worklist** cho tổ thầu (9 Lumos-only + 45 App-only) kèm tên SP/đơn vị/gói để CEO chuyển tổ thầu rà.
+4. Đề xuất **contract `/api/report-sync/changes?updated_since=`** + service token → Claude review trước khi App Sale code.
+
 ## D) Thứ tự triển khai an toàn
 1. Bot xác nhận 4 câu mục C (không code, chỉ khảo sát API).
 2. Chốt hợp đồng API + bảng ánh xạ mã (nếu cần) → Claude review.
