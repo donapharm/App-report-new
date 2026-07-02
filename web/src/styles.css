@@ -50,6 +50,10 @@ body {
 .kpi .value { font-size: 20px; font-weight: 800; margin-top: 3px; color: var(--brand); letter-spacing: -.01em; }
 .kpi .value.small { font-size: 16px; }
 .kpi .delta { font-size: 12px; margin-top: 3px; font-weight: 600; }
+.kpi.danger { border-color: #f3b7b7; background: #fff7f7; }
+.kpi.danger .value { color: var(--hi); }
+.kpi.clickable { cursor: pointer; transition: transform .12s, border-color .12s; }
+.kpi.clickable:hover { transform: translateY(-1px); border-color: var(--brand); }
 .delta.up { color: var(--ok); } .delta.down { color: var(--hi); }
 
 /* Alerts */

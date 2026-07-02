@@ -71,10 +71,12 @@ export default function Overview({ me, onNavigate }) {
         <>
           <div className="kpi-grid">
             <Kpi label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={short(kpi.revenue)} delta={kpi.momPct} />
-            <Kpi label="Đạt target (trước VAT)" value={pct(kpi.pctTarget)}
-                 sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} />
             <Kpi label="Trước VAT" value={short(kpi.revenueBeforeVat)} sub={money(kpi.revenue) + ' sau VAT'} />
-            <Kpi label="Quy mô kỳ" value={`${kpi.unitCount} ĐV · ${kpi.productCount} SP`} sub={`${kpi.empCount} NV · ${kpi.rowCount} dòng`} />
+            <Kpi label="Đạt target (%)" value={pct(kpi.pctTarget)}
+                 sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} />
+            <Kpi label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} />
+            <Kpi label="Cơ số thầu sắp cạn" value={`${kpi.cstLowCount || 0} dòng <10%`} sub="Bấm để xem CST cạn" tone="danger" onClick={() => onNavigate?.('cst', { cstFilter: 'low' })} />
+            <Kpi label="Quy mô kỳ" value={`${kpi.unitCount} ĐV · ${kpi.productCount} SP · ${kpi.empCount} NV`} sub={`${kpi.rowCount} dòng`} />
           </div>
         </>
       )}

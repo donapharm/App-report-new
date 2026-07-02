@@ -5,9 +5,9 @@ import { money, short } from './util.js';
 export const Spinner = () => <div className="spin" />;
 export const Empty = ({ children }) => <div className="center">{children}</div>;
 
-export function Kpi({ label, value, sub, delta }) {
+export function Kpi({ label, value, sub, delta, tone, onClick }) {
   return (
-    <div className="kpi">
+    <div className={'kpi ' + (tone || '') + (onClick ? ' clickable' : '')} onClick={onClick}>
       <div className="label">{label}</div>
       <div className={'value' + (String(value).length > 12 ? ' small' : '')}>{value}</div>
       {delta != null && (

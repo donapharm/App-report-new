@@ -49,6 +49,16 @@ function overviewKpis({ ky, scope }) {
   const targetTotal = sum(targets, (t) => t.target);
   const revenueBeforeVat = revenue / VAT_DIVISOR;
   const pctTarget = targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null;
+  const targetByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, Number(t.target || 0)]));
+  const empTarget = { achieved: 0, total: 0 };
+  for (const empCode of store.empCodesWithData({ ky, scope })) {
+    const target = targetByEmp[empCode] || 0;
+    if (target <= 0) continue;
+    const empRevBeforeVat = sum(store.getRows({ ky, scope: { empCode } }), (r) => r.revenue) / VAT_DIVISOR;
+    empTarget.total += 1;
+    if (empRevBeforeVat >= target) empTarget.achieved += 1;
+  }
+  const cstLowCount = store.getCst({ scope }).filter((r) => Number(r.remain_pct || 0) < 10).length;
 
   // so với kỳ liền trước (MoM)
   const periods = store.listPeriods().map((p) => p.ky);
@@ -64,6 +74,8 @@ function overviewKpis({ ky, scope }) {
     revenueBeforeVat: Math.round(revenueBeforeVat),
     targetTotal,
     pctTarget,
+    empTarget,
+    cstLowCount,
     momPct,
     empCount: new Set(rows.map((r) => r.emp_code)).size,
     unitCount: new Set(rows.map((r) => r.unit_code)).size,
