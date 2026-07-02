@@ -45,6 +45,18 @@ Xuất hiện ở dropdown lọc NV + card Target (`#N/A`: Đạt 2tr/target 0; 
 4. **Chặn tái diễn:** bộ lọc NV chỉ liệt kê `emp_code` hợp lệ (mẫu `DN###`/`VP###`); mã không hợp lệ (`#N/A`, số trần như `83`) đưa vào "Chưa phân bổ" để CEO thấy, không lẫn vào danh sách NV thật.
 5. Xuất `artifacts/emp_junk_trace_<date>.md` (nguồn + dòng + đề xuất remap) → Claude review trước khi remap chính thức.
 
+## 3) REVIEW REMAP mã rác (Claude chốt 2026-07-02 sau khi đọc `emp_junk_trace_20260702.md`)
+- **`83` → remap `DN021`** (10 dòng CST): đều Valesto, cùng gói **QĐ48/2026 SYT Cà Mau**, vùng Cà Mau-Bạc Liêu (ĐV 188–197); 1 dòng đã `sales_emps=DN021`. Kết luận: cả gói vùng này của DN021. **Chờ CEO xác nhận DN021 phụ trách Cà Mau-Bạc Liêu** rồi remap toàn bộ 10 dòng. Giữ nguyên bid_qty/sold/amount, chỉ đổi chủ.
+- **`#N/A` → tìm chủ ĐV `033.NT-PKĐK AN LONG KHÁNH`**: bot dò NV nào có doanh thu KHÁC tại ĐV 033 → remap dòng 1.575.000đ về NV đó. Nếu 033 không NV nào phụ trách rõ → giữ "Chưa phân bổ", CEO gán tay. (Chỉ 1 dòng nhỏ, không gấp.)
+- Sau remap: **tổng T06 vẫn 28.403.136.096**; nhóm "Chưa phân bổ" chỉ còn dòng thật sự vô chủ (lý tưởng = rỗng).
+
+## 4) VIỆC CÒN LẠI — bot làm PASS 2 (directive đã cập nhật sau commit b701dec)
+Commit `b701dec` mới thêm DN021/VP004 theo bản directive CŨ. Cần làm nốt theo bản MỚI:
+- ⚠ **Sửa status `DN021` → "Cộng tác"** (không phải "Đang làm") — DN021 nằm trong danh sách 6 CTV (mục 0).
+- **Thêm/đổi status 4 mã còn lại:** `DN002`, `DN004` (đổi status Cộng tác + cập nhật SĐT/email mục 1), `DN022`, `DN023` (thêm mới, SĐT/email mục 1, tên chờ).
+- **Áp cờ `no_auto_notify=true`** cho **DN021/DN022/DN023/VP004** (guardrail đầu file). DN002/DN004 KHÔNG áp (email nội bộ).
+- Xác nhận cả 6 CTV: role `sale`, active, **có target → tính đầy đủ** (target/%đạt/cảnh báo/ranking).
+
 ## Nghiệm thu
 - Card Target hiện **tên** DN021 (Lê Anh Đức) + VP004 (Trần Hoàng Trung), không còn mã trần.
 - 2 NV đăng nhập OTP được theo SĐT; scope đúng phần mình.
