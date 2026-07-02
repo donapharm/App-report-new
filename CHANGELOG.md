@@ -21,7 +21,10 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive bố cục lại thẻ chi tiết (dạng bảng)
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive ĐA CỘT toàn app (CEO phản ánh lần 2)
+- CEO: khối danh sách PC vẫn 1 cột full-width (phí chỗ), yêu cầu **2–3 cột, áp mọi tab, làm triệt để**. → [`DIRECTIVE_MULTICOLUMN_LAYOUT.md`](DIRECTIVE_MULTICOLUMN_LAYOUT.md).
+- PC ≥1024px = 2–3 cột; tablet 2; mobile 1. Liệt kê rõ khối phải sửa: Phân tích (tăng/giảm ĐV+SP, SP cần đẩy/sắp hết CST), Tổng quan (top+cảnh báo), Doanh thu/DT đầy đủ (ranking+chi tiết), Sản phẩm/CST/Target. Dùng `.list-grid` chung. Bot rà từng tab báo lại.
+- Ghi chú soi thêm: "Đơn vị tăng mạnh" hiện toàn số ÂM do so T07(2 ngày) với T06(cả tháng) → xử cùng đợt kỳ-đang-chạy (so cùng số ngày).
 - CEO phản ánh thẻ mobile thiếu/thừa. → [`DIRECTIVE_CARD_LAYOUT.md`](DIRECTIVE_CARD_LAYOUT.md): thêm **Giá thầu**; **tên thuốc IN ĐẬM** + nhãn "SP" ở tên thuốc, **mã QLNB nhạt** (không đậm); **bỏ tên đơn vị lặp** (giữ `002.BVĐK…`); **nhà thầu mã + tên đầy đủ**; **trùng tên → thêm hàm lượng** (trừ QĐ141); bố cục **dạng bảng, mobile 2 cột field ngắn**. Áp thẻ Doanh thu/DT đầy đủ + đồng bộ CST.
 - CEO: Tổng quan vẫn hiện "2,67 tỷ" làm số lớn → SAI ý. **Số headline/KPI/thẻ phải ĐẦY ĐỦ `2.668.987.096đ`** (đổi `short()`→`money()`); chỉ trục biểu đồ mới được viết tắt `2,67 tỷ`. Cập nhật `DIRECTIVE_NUMBER_FORMAT_VN.md`. Bot sửa + build + restart reportnew.
 - **Resolver target (`targetAdmin.resolveTargets`)**: ĐÚNG — chọn theo `PRIORITY manual(4)>upload(3)>appsale(2)>ai(1)>legacy(0)`, hòa thì lấy `at` mới nhất; giới hạn theo `targetRosterCodes` (allowed set) → **VP018/telesale không có target dù có entry**. Roster = `isActiveSalesUser` (role sale, không Nghỉ việc, type sale/ctv), neo toàn đội active → hết sót NV.
