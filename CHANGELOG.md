@@ -21,6 +21,10 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-02 — Dev/Kiến trúc (Claude Code) — CEO chốt PA A: pro-rate target kỳ đang chạy
+- Kỳ đang chạy (VD T07 mới 2 ngày) so lũy kế với target cả tháng → đỏ oan. **Chốt chia target theo ngày:** `target_prorated = target_full × daysElapsed/daysInMonth`; `% đạt(nhịp) = DT trước VAT / target_prorated`. Kỳ đã đóng giữ target đủ.
+- Áp: Overview %/vòng target, Target card NV, `buildAlerts` nhóm target, digest. Gắn nhãn "Kỳ đang chạy · đến ngày X (d/D)"; hiện rõ đang so mốc-nhịp + target cả tháng. Không pro-rate doanh thu. Ghi `SPEC_TARGET_MULTISOURCE.md`.
+
 ### 2026-07-02 — Dev/Kiến trúc (Claude Code) — CEO chốt CHÍNH SÁCH: đơn giao dở KHÔNG tính (khớp app cũ)
 - **CEO chốt PHƯƠNG ÁN A:** đơn giao dở dang → xếp trọn vào "còn nợ chưa giao", KHÔNG tính phần đã giao; chỉ đơn giao ĐỦ mới vào "đã thực hiện". Áp mọi kỳ.
 - Bot sửa: loại phần đã-giao của đơn dở khỏi partner → T07 = **2.668.987.096đ** khớp app cũ 100% tại cùng snapshot (đơn 1,96tr được đưa về "còn nợ"). Ghi `DIRECTIVE_ENABLE_JULY_REVENUE.md`. Nghiệm thu đối chiếu số app cũ, không ép số.

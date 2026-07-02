@@ -50,6 +50,30 @@ Khảo sát 2026-07-02 thấy đơn hàng + CST, **chưa thấy bảng target/KP
 - **Bot xác nhận:** App Sale có quản lý **target giao cho NV theo kỳ** không? field gì, lấy qua API nào?
 - **Có** → làm đủ 3 nguồn. **Chưa** → làm trước **AI + Upload + sửa tay** (2–3 nguồn), chừa sẵn adapter cắm App Sale sau (env-gated, không sửa kiến trúc).
 
+## KỲ ĐANG CHẠY — pro-rate target theo ngày (CEO chốt PA A 2026-07-02)
+**Vấn đề:** `latestKy` là tháng hiện tại (VD 07.2026) mới vài ngày → so doanh thu lũy kế với target CẢ THÁNG → % rất thấp, cảnh báo "chưa đạt" đỏ oan.
+**Giải: chia target theo số ngày đã qua** cho tháng ĐANG CHẠY (tháng đã đóng giữ target đủ như cũ).
+
+### Công thức
+- Xác định "kỳ đang chạy" = kỳ trùng tháng dương lịch hiện tại (giờ VN UTC+7) và chưa hết tháng.
+- `daysElapsed` = ngày trong tháng tính đến hôm nay (VD 02/07 → 2); `daysInMonth` = số ngày của tháng (VD 31).
+- **`target_prorated = target_full × daysElapsed / daysInMonth`**.
+- **`% đạt (nhịp) = revenue_before_vat / target_prorated × 100`** → so lũy kế với mốc-đến-hôm-nay (apples-to-apples, vì doanh thu cũng mới lũy kế tới nay).
+- Cảnh báo "NV chưa đạt" cho kỳ đang chạy dùng NGƯỠNG cũ (<80%) nhưng so với `target_prorated`.
+
+### Chỗ áp dụng (nhất quán)
+- Overview KPI "% đạt target" + vòng tiến độ; Target (kỳ này) từng card NV; `smart.buildAlerts` nhóm target; digest khi báo tháng đang chạy.
+- **Kỳ đã đóng (T06 trở về trước): GIỮ target đủ, KHÔNG pro-rate.**
+- Forecast target kỳ tới KHÔNG đổi (vẫn dùng target đủ).
+
+### Hiển thị (bắt buộc, cho rõ)
+- Gắn nhãn **"Kỳ đang chạy · đến ngày 02/07 (2/31)"** ở T07 mọi nơi.
+- Ghi rõ đang so **mốc nhịp**: VD "đạt 95% nhịp tháng · mốc đến ngày 2 · target cả tháng {short}". Không để NV tưởng đã đạt/thiếu so cả tháng.
+- Doanh thu vẫn hiện lũy kế thật (không pro-rate doanh thu; chỉ pro-rate MỐC target để so).
+
+### Lưu ý
+- Giả định bán đều theo ngày (tuyến tính). Chấp nhận cho chỉ báo "nhịp"; có thể tinh chỉnh theo mùa vụ-trong-tháng sau nếu cần.
+
 ## Nghiệm thu
 - 1 ô có cả 4 nguồn → resolver chọn đúng theo ưu tiên; CEO override 1 NV → khóa, sync sau không đè.
 - AI chỉ ra ứng viên, không tự thành active tới khi CEO bấm áp dụng.
