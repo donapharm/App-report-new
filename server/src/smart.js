@@ -134,6 +134,7 @@ function forecastTargets({ scope }) {
 
   // Chỉ NV còn ĐANG hoạt động (có bán ở kỳ gần nhất), không lấy cả danh bạ công ty
   const emps = store.empCodesWithData({ ky: lastKy, scope })
+    .filter((ec) => store.isValidEmpCode(ec))
     .map((ec) => ({ emp_code: ec, name: store.findUserByCode(ec)?.name || ec }));
   const out = emps.map((emp) => {
     const s = { empCode: emp.emp_code };

@@ -19,6 +19,22 @@ const readJson = (name, def) => {
   const p = path.join(DATA_DIR, name);
   return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : def;
 };
+const UNALLOCATED_EMP = 'UNALLOCATED';
+const UNALLOCATED_LABEL = 'Chưa phân bổ';
+function isValidEmpCode(v) {
+  return /^(DN|VP)\d{3}$/.test(String(v || '').trim().toUpperCase());
+}
+function normalizeEmpForReport(r = {}) {
+  const code = String(r.emp_code || '').trim().toUpperCase();
+  if (!code || isValidEmpCode(code)) return r;
+  return {
+    ...r,
+    raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code,
+    emp_code: UNALLOCATED_EMP,
+    emp_name: UNALLOCATED_LABEL,
+    emp_code_invalid: code,
+  };
+}
 
 // ----- Cache phần dữ liệu MẪU + danh mục (nặng, ít đổi) -----
 let _base = null;
@@ -29,12 +45,15 @@ function base() {
   const unitByCode = Object.fromEntries(catalog.units.map((u) => [u.unit_code, u]));
   const prodByCode = Object.fromEntries(catalog.products.map((p) => [p.iit_code, p]));
   const empByCode = Object.fromEntries(users.map((u) => [u.emp_code, u]));
-  const enrich = (r) => ({
-    ...r,
-    unit_name: r.unit_name || unitByCode[r.unit_code]?.unit_name,
-    product_name: r.product_name || prodByCode[r.iit_code]?.product_name,
-    emp_name: empByCode[r.emp_code]?.name,
-  });
+  const enrich = (r) => {
+    const rr = normalizeEmpForReport(r);
+    return {
+      ...rr,
+      unit_name: rr.unit_name || unitByCode[rr.unit_code]?.unit_name,
+      product_name: rr.product_name || prodByCode[rr.iit_code]?.product_name,
+      emp_name: rr.emp_name || empByCode[rr.emp_code]?.name,
+    };
+  };
   _base = {
     catalog,
     sampleRows: readJson('report_rows.json', []).map(enrich),
@@ -235,6 +254,11 @@ function getCst({ scope }) {
   // Khi đã có dữ liệu thật (runtime import), ưu tiên cst_real.json thay dữ liệu mẫu.
   let rows = readJson('cst_real.json', null) || base().cst;
   rows = mergeLatestUploadIntoCst(rows);
+  rows = rows.map((r) => {
+    const code = String(r.emp_code || '').trim().toUpperCase();
+    if (!code || isValidEmpCode(code)) return r;
+    return { ...r, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };
+  });
   if (scope && scope.empCode) {
     const emp = String(scope.empCode).trim().toUpperCase();
     rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim().toUpperCase()).includes(emp));
@@ -264,6 +288,7 @@ module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
   periodKys, periodRange, previousKys,
   getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache, empCodesWithData, empCodesWithRows,
+  isValidEmpCode, UNALLOCATED_EMP, UNALLOCATED_LABEL,
   // giữ tên cũ để nơi khác không vỡ
   db: base,
 };

@@ -48,7 +48,7 @@ router.post('/auth/login', (req, res) => {
 // Danh sách tài khoản demo để bấm nhanh trên màn login (chỉ khi còn bật demo-login).
 router.get('/auth/demo-users', (req, res) => {
   if (!auth.demoAllowed()) return res.json([]);
-  res.json(store.listUsers().map((u) => ({ emp_code: u.emp_code, name: u.name, role: u.role })));
+  res.json(store.listUsers().map((u) => ({ emp_code: u.emp_code, name: u.name, role: u.role, status: u.status || null })));
 });
 
 // Cho frontend biết chế độ đăng nhập: có OTP/SSO thật không, còn cho demo không.
@@ -157,9 +157,9 @@ router.get('/filters', auth.requireAuth, (req, res) => {
   const rows = store.getRowsRange({ kys: pc.kys, scope });
   const cst = store.getCst({ scope });
   const empMap = new Map();
-  for (const r of rows) if (r.emp_code) empMap.set(r.emp_code, { key: r.emp_code, label: r.emp_name || r.emp_code });
+  for (const r of rows) if (r.emp_code) empMap.set(r.emp_code, { key: r.emp_code, label: r.emp_code === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (r.emp_name || r.emp_code) });
   for (const r of cst) for (const ec of String(r.emp_code || '').split(',').map((x) => x.trim()).filter(Boolean)) {
-    if (!empMap.has(ec)) empMap.set(ec, { key: ec, label: store.findUserByCode(ec)?.name || ec });
+    if (!empMap.has(ec)) empMap.set(ec, { key: ec, label: ec === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (store.findUserByCode(ec)?.name || ec) });
   }
   res.json({
     ky: pc.ky,
@@ -401,7 +401,7 @@ router.get('/targets', auth.requireAuth, (req, res) => {
     const target = targetByEmp[ec] || 0;
     return {
       emp_code: ec,
-      emp_name: store.findUserByCode(ec)?.name || ec,
+      emp_name: ec === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (store.findUserByCode(ec)?.name || ec),
       target,
       revenue_before_vat: Math.round(beforeVat),
       pct: target > 0 ? +(beforeVat / target * 100).toFixed(1) : null,

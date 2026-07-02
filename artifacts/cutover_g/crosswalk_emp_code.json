@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-07-02T14:57:00.434Z",
+  "generatedAt": "2026-07-02T15:34:23.096Z",
   "rule": "Exact emp_code match AppSale employees.code ↔ AppReport users.emp_code. Required for revenue sync and scope.",
   "counts": {
     "appEmployees": 31,
-    "reportUsers": 35,
-    "matched": 28,
-    "appMissing": 3,
+    "reportUsers": 37,
+    "matched": 30,
+    "appMissing": 1,
     "reportOnly": 7
   },
   "items": [
@@ -226,10 +226,10 @@
       "app_roles": [
         "sale"
       ],
-      "report_emp_code": null,
-      "report_name": null,
-      "report_role": null,
-      "status": "MISSING_IN_APP_REPORT"
+      "report_emp_code": "DN021",
+      "report_name": "Lê Anh Đức",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
     },
     {
       "app_employee_id": "18",
@@ -291,10 +291,10 @@
       "app_roles": [
         "sale"
       ],
-      "report_emp_code": null,
-      "report_name": null,
-      "report_role": null,
-      "status": "MISSING_IN_APP_REPORT"
+      "report_emp_code": "VP004",
+      "report_name": "Trần Hoàng Trung",
+      "report_role": "sale",
+      "status": "MATCH_BY_CODE"
     },
     {
       "app_employee_id": "23",
@@ -422,12 +422,6 @@
       "status": "MISSING_IN_APPSALE"
     },
     {
-      "report_emp_code": "VP017",
-      "report_name": "Lê Thị Hằng",
-      "report_role": "sale",
-      "status": "MISSING_IN_APPSALE"
-    },
-    {
       "report_emp_code": "VP003",
       "report_name": "Vũ Quốc Huy",
       "report_role": "sale",
@@ -454,6 +448,12 @@
     {
       "report_emp_code": "VP016",
       "report_name": "Lê Sỹ Thống",
+      "report_role": "sale",
+      "status": "MISSING_IN_APPSALE"
+    },
+    {
+      "report_emp_code": "VP017",
+      "report_name": "Lê Thị Hằng",
       "report_role": "sale",
       "status": "MISSING_IN_APPSALE"
     }

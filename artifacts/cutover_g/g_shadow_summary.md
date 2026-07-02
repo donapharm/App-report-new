@@ -1,12 +1,12 @@
 # Cutover G — Adapter SHADOW CST + emp_code crosswalk
 
-Generated: 2026-07-02T14:57:00.602Z. Read-only. No source cutover.
+Generated: 2026-07-02T15:34:23.269Z. Read-only. No source cutover.
 
 ## emp_code crosswalk
 - App Sale employees: 31
-- App Report users: 35
-- Matched by exact code: 28
-- App Sale missing in App Report: 3
+- App Report users: 37
+- Matched by exact code: 30
+- App Sale missing in App Report: 1
 - App Report only: 7
 
 Artifact: `crosswalk_emp_code.json`.
