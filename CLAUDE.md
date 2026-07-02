@@ -2,6 +2,11 @@
 
 Đọc file này đầu tiên khi tiếp nhận dự án. Đây là bản **build lại gọn** của App Report cũ (mega `server.js` gom 10 nghiệp vụ) thành **smart app** chỉ giữ 6 nội dung cốt lõi.
 
+## Mô hình phối hợp (CEO chốt 2026-07-02)
+- **Bot server = người TRIỂN KHAI chính**: viết code app trên server (test được dữ liệu/OTP/CST/ORDS thật), build, commit/push. Là người "cầm code chính" để tránh 2 bên đụng repo.
+- **Claude Code = KIẾN TRÚC + REVIEW**: soát lỗi/bảo mật, định hướng, không sửa+push code app song song (tránh xung đột) — chỉ sửa khi thống nhất việc cụ thể hoặc sửa tài liệu.
+- Quy trình: bot đẩy 1 đợt → Claude pull review → báo duyệt/điểm cần sửa. Mọi thay đổi vẫn ghi `CHANGELOG.md`.
+
 ## Chạy nhanh
 ```bash
 npm run setup   # cài server+web, sinh dữ liệu mẫu ẩn danh
