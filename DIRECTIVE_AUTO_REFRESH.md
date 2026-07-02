@@ -28,6 +28,11 @@ Mỗi lần chạy, theo thứ tự:
 - Refresh cập nhật **dữ liệu chung**; mỗi user đọc theo **scope của mình** như thường (NV chỉ thấy phần mình). NV **không thao tác gì** — mở app là thấy số mới nhất trong vòng 1 giờ.
 - Không đổi mô hình quyền; không ảnh hưởng đăng nhập.
 
+## ‼ BẮT BUỘC: mỗi lần refresh phải RA ĐÚNG SỐ CHUẨN (không drift)
+- Script materialize mà scheduler gọi **PHẢI áp đầy đủ**: quy tắc gán kỳ (MISA theo ngày xuất HĐ; WEB theo kỳ đơn đặt) + **PA-A (loại đơn giao dở)** + loại đơn khe cắt Lumos. → Mỗi lần chạy T07 **luôn = 2.668.987.096đ** (KHÔNG được nhảy về 2.670.947.096đ vì cộng lại 1,96tr).
+- **Idempotent tuyệt đối:** chạy 1 lần hay 100 lần cùng snapshot → cùng kết quả. Không cộng dồn/không double-count.
+- **Verify (CEO nhấn 2026-07-03):** sau khi scheduler chạy ≥1 chu kỳ, kiểm T07 VẪN = 2.668.987.096đ (tại cùng snapshot MISA), T06 vẫn 28.403.136.096đ. Nếu lệch → dừng, báo Claude.
+
 ## Nghiệm thu
 - Sau khi bật: số kỳ đang chạy đổi theo mỗi giờ; nhãn "Cập nhật đến…" đúng giờ VN.
 - Nút Làm mới kéo được số mới ngay.

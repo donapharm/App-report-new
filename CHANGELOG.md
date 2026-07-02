@@ -21,7 +21,9 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive chuẩn số kế toán VN (toàn app)
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Chặn auto-refresh drift số T07 (CEO nhấn số chuẩn)
+- CEO nhấn: **2.668.987.096đ mới đúng** (khớp app cũ). Rủi ro: scheduler chạy lại materialize mỗi giờ, nếu không áp PA-A → cộng lại 1,96tr → nhảy về 2.670.947.096 sai.
+- **Chốt:** script materialize của scheduler PHẢI áp đủ (gán kỳ + PA-A + loại đơn khe), **idempotent tuyệt đối** → mỗi lần refresh T07 luôn = 2.668.987.096đ. Bot verify sau ≥1 chu kỳ auto-refresh; lệch thì dừng báo Claude. Ghi `DIRECTIVE_AUTO_REFRESH.md`.
 - CEO: hiển thị số theo chuẩn kế toán VN (`1.000đ` / `1.000.000đ` / `2.670.947.096đ`, dấu chấm hàng nghìn). → [`DIRECTIVE_NUMBER_FORMAT_VN.md`](DIRECTIVE_NUMBER_FORMAT_VN.md).
 - Bỏ kiểu US `2.67 tỷ` (chấm thập phân); nếu rút gọn dùng `2,67 tỷ` (phẩy). %: `90,6%`. Áp KPI/thẻ/bảng/CST/Target/Excel/bản tin/tooltip; trục chart rút gọn chuẩn VN. Chuẩn hóa ở helper chung; phối MOBILE để số không cắt mép. Chỉ đổi hiển thị.
 - CEO phản ánh Target Dự báo **sai/thiếu**; VP018 là telesale lẫn vào NV sale; nhắc Target admin (file+tự động) chưa làm. → [`DIRECTIVE_TARGET_ADMIN.md`](DIRECTIVE_TARGET_ADMIN.md) (ưu tiên).
