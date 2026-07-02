@@ -21,6 +21,11 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Spec: ô lọc typeahead + phân biệt thuốc trùng tên
+- CEO: 2 ô "Tất cả đơn vị"/"Tất cả sản phẩm" cho gõ tìm tiên đoán; thuốc trùng tên (VD "Alusi") cần phân biệt. → `SPEC_ANALYSIS_CST_UX.md` mục C2.
+- **Gốc:** định danh sản phẩm = `iit_code` (mã QLNB), không phải tên; 1 tên ↔ nhiều mã QLNB (khác gói/QĐ, nhà thầu, ĐVT ml-gam/gói, giá).
+- **Giải:** (A) combobox typeahead tìm theo tên+mã QLNB+hoạt chất; (B) mỗi option/thẻ hiện `tên · hoạt chất/hàm lượng · ĐVT · nhà thầu · QĐ · mã QLNB`, value = iit_code duy nhất; toggle "Gộp theo tên" ↔ "Tách theo mã QLNB".
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Telegram NLQ + nhắc fix T07 chưa chạy
 - **Login bot mới LIVE** (`@DonaLoginReport_bot`, bot riêng tách agent) — `/digest_test` ra số OK, hết xung đột "gửi mã".
 - **‼ Fix PA-A CHƯA CHẠY:** Overview T07 vẫn `2.670.947.096đ` (chưa loại 1,96tr đơn giao dở). Bot cần **re-materialize T07** (loại phần đã-giao đơn dở) → về `2.668.987.096đ`. Đang chờ bot chạy.
