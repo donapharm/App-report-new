@@ -1,6 +1,6 @@
 // Thành phần dùng chung: loading, KPI, thanh bar, hàng danh sách.
 import React from 'react';
-import { money, short } from './util.js';
+import { short, pct } from './util.js';
 
 export const Spinner = () => <div className="spin" />;
 export const Empty = ({ children }) => <div className="center">{children}</div>;
@@ -12,7 +12,7 @@ export function Kpi({ label, value, sub, delta, tone, onClick }) {
       <div className={'value' + (String(value).length > 12 ? ' small' : '')}>{value}</div>
       {delta != null && (
         <div className={'delta ' + (delta >= 0 ? 'up' : 'down')}>
-          {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% so kỳ trước
+          {delta >= 0 ? '▲' : '▼'} {pct(Math.abs(delta))} so kỳ trước
         </div>
       )}
       {sub && <div className="delta muted">{sub}</div>}

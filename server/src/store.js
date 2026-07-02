@@ -12,6 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const ords = require('./ords');
+const targetAdmin = require('./targetAdmin');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
@@ -201,6 +202,21 @@ function periodRange(from, to) {
   const lo = Math.min(a, b), hi = Math.max(a, b);
   return ps.slice(lo, hi + 1);
 }
+function currentKyByDate(d = new Date()) {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${mm}.${d.getFullYear()}`;
+}
+function lastCompleteKy() {
+  const cur = currentKyByDate();
+  const ps = periodKys().filter((ky) => kySortValue(ky) < kySortValue(cur));
+  return ps.at(-1) || periodKys().at(-1) || base().catalog.latest_ky;
+}
+function nextKy(ky) {
+  const [m0, y0] = String(ky || latestKy()).split('.').map(Number);
+  const m = (m0 % 12) + 1;
+  const y = m === 1 ? y0 + 1 : y0;
+  return `${String(m).padStart(2, '0')}.${y}`;
+}
 function previousKys(kys = []) {
   const ps = periodKys();
   if (!kys.length) return [];
@@ -212,6 +228,22 @@ function previousKys(kys = []) {
 const listUsers = () => base().users;
 const findUserByPhone = (phone) => base().users.find((u) => u.phone === phone);
 const findUserByCode = (code) => base().empByCode[code];
+function employeeType(u = {}) {
+  if (u.employee_type) return String(u.employee_type).toLowerCase();
+  if (String(u.emp_code || '').toUpperCase() === 'VP018') return 'telesale';
+  if (u.status === 'Cộng tác') return 'ctv';
+  return u.role === 'sale' ? 'sale' : 'other';
+}
+function isActiveSalesUser(u = {}) {
+  const type = employeeType(u);
+  return u.role === 'sale' && u.status !== 'Nghỉ việc' && ['sale', 'ctv'].includes(type);
+}
+function targetRoster({ scope } = {}) {
+  let users = listUsers().filter(isActiveSalesUser);
+  if (scope?.empCode) users = users.filter((u) => u.emp_code === scope.empCode);
+  return users.sort((a, b) => String(a.emp_code).localeCompare(String(b.emp_code), 'vi'));
+}
+function targetRosterCodes({ scope } = {}) { return targetRoster({ scope }).map((u) => u.emp_code); }
 
 /**
  * Danh sách mã NV THỰC SỰ có doanh thu (đúng danh sách App Report), trong phạm vi quyền.
@@ -270,10 +302,22 @@ function getCst({ scope }) {
 // Khi ĐÃ có dữ liệu THẬT (slot upload active): KHÔNG dùng target mẫu — chỉ dùng
 // target thật đã import (data/targets_real.json). Chưa import -> rỗng (target cũ = 0, trung thực).
 function getTargets({ ky, scope }) {
-  const real = activeSlots().length > 0;
-  let t = real ? readJson('targets_real.json', []) : base().targets;
-  if (ky) t = t.filter((x) => x.ky === ky);
-  if (scope && scope.empCode) t = t.filter((x) => x.emp_code === scope.empCode);
+  const codes = targetRosterCodes({ scope });
+  let t = targetAdmin.resolveTargets({ ky, empCodes: codes }).map((x) => ({
+    emp_code: x.emp_code,
+    ky: x.ky,
+    target: Number(x.target || 0),
+    source: x.source,
+    target_source: x.source,
+    target_entry_id: x.id,
+    updated_at: x.at,
+  }));
+  // Khi chưa có dữ liệu thật/admin, giữ fallback mẫu cho môi trường demo cũ.
+  if (!activeSlots().length && !t.length) {
+    t = base().targets;
+    if (ky) t = t.filter((x) => x.ky === ky);
+    if (scope && scope.empCode) t = t.filter((x) => x.emp_code === scope.empCode);
+  }
   return t;
 }
 function getTargetsRange({ kys, scope }) {
@@ -287,7 +331,9 @@ function clearCache() { _base = null; }
 module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
   periodKys, periodRange, previousKys,
+  currentKyByDate, lastCompleteKy, nextKy,
   getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache, empCodesWithData, empCodesWithRows,
+  employeeType, isActiveSalesUser, targetRoster, targetRosterCodes,
   isValidEmpCode, UNALLOCATED_EMP, UNALLOCATED_LABEL,
   // giữ tên cũ để nơi khác không vỡ
   db: base,

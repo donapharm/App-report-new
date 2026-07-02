@@ -3,7 +3,7 @@ import {
   ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend,
   BarChart, Bar, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis,
 } from 'recharts';
-import { short } from './util.js';
+import { money, short, pct } from './util.js';
 
 const COLORS = ['#1568b8', '#f5a11e', '#1f9d6b', '#2f80ed', '#e08a1e', '#7c3aed', '#94a3b8'];
 const targetColor = (pct) => (pct == null ? '#94a3b8' : pct >= 100 ? '#1f9d6b' : pct >= 80 ? '#e08a1e' : '#d64545');
@@ -15,8 +15,8 @@ function MoneyTooltip({ active, payload, label }) {
   return (
     <div className="chart-tip">
       <b>{label}</b>
-      {payload.map((p) => <div key={p.dataKey || p.name} style={{ color: p.color }}>{p.name}: {short(p.value)}</div>)}
-      {payload[0]?.payload?.pctTarget != null && <div>% target: {payload[0].payload.pctTarget}%</div>}
+      {payload.map((p) => <div key={p.dataKey || p.name} style={{ color: p.color }}>{p.name}: {money(p.value)}</div>)}
+      {payload[0]?.payload?.pctTarget != null && <div>% target: {pct(payload[0].payload.pctTarget)}</div>}
     </div>
   );
 }
@@ -73,7 +73,7 @@ export function TargetGauge({ pct, size = 'large' }) {
           <RadialBar background dataKey="value" cornerRadius={12} />
         </RadialBarChart>
       </ResponsiveContainer>
-      <div className="gauge-label" style={{ color }}>{pct == null ? '—' : `${pct}%`}</div>
+      <div className="gauge-label" style={{ color }}>{pct == null ? '—' : Number(pct).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%'}</div>
     </div>
   );
 }
@@ -88,7 +88,7 @@ function PieTooltip({ active, payload }) {
   if (!active || !payload?.length) return null;
   const p = payload[0];
   const total = p.payload?.total || 0;
-  return <div className="chart-tip"><b>{p.name}</b><div>{short(p.value)} · {total ? ((p.value / total) * 100).toFixed(1) : 0}%</div></div>;
+  return <div className="chart-tip"><b>{p.name}</b><div>{money(p.value)} · {pct(total ? ((p.value / total) * 100) : 0)}</div></div>;
 }
 export function DonutChart({ rows = [] }) {
   const data = topWithOther(rows);

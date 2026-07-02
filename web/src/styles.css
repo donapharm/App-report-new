@@ -139,6 +139,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .filter-search { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
 .filter-search input { flex: 1; }
 .filter-search .btn { white-space: nowrap; }
+.target-admin-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.target-admin-actions input[type="file"] { flex: 1 1 220px; min-width: 0; }
 .summary-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .table-card { padding: 0; overflow: hidden; }
 .table-scroll { overflow-x: auto; width: 100%; }
@@ -276,6 +278,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 @media (max-width: 520px) {
   .filter-grid { grid-template-columns: 1fr; }
   .filter-search { flex-direction: column; align-items: stretch; }
+  .target-admin-actions { display: grid; grid-template-columns: 1fr; }
+  .target-admin-actions input[type="file"] { width: 100%; }
   .summary-card { align-items: stretch; flex-direction: column; }
   .mini-columns { grid-template-columns: 1fr; }
   .chart-grid, .donut-grid { grid-template-columns: 1fr; }

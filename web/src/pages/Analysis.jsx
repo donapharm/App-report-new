@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { money, short } from '../util.js';
+import { money, short, pct } from '../util.js';
 import { Spinner, Kpi } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
@@ -12,7 +12,7 @@ function DeltaRow({ i, r }) {
     <div className="row">
       <div className="main">
         <div className="name"><span className="rank">{i}</span>{r.label}</div>
-        <div className="meta">Kỳ trước {short(r.prevRevenue)} → kỳ này {short(r.revenue)} · {r.deltaPct == null ? '—' : r.deltaPct + '%'}</div>
+        <div className="meta">Kỳ trước {short(r.prevRevenue)} → kỳ này {short(r.revenue)} · {pct(r.deltaPct)}</div>
       </div>
       <div className="amt" style={{ color: up ? 'var(--ok)' : 'var(--hi)' }}>{up ? '+' : ''}{short(r.delta)}</div>
     </div>
@@ -100,7 +100,7 @@ export default function Analysis({ me }) {
         <>
           <div className="kpi-grid">
             <Kpi label={`Doanh thu ${data.ky}`} value={short(data.currentRevenue)} sub={money(data.currentRevenue)} />
-            <Kpi label={`So với ${data.prevKy || 'kỳ trước'}`} value={(data.delta >= 0 ? '+' : '') + short(data.delta)} sub={data.deltaPct == null ? 'Chưa có kỳ trước' : `${data.deltaPct}%`} />
+            <Kpi label={`So với ${data.prevKy || 'kỳ trước'}`} value={(data.delta >= 0 ? '+' : '') + short(data.delta)} sub={data.deltaPct == null ? 'Chưa có kỳ trước' : pct(data.deltaPct)} />
             <Kpi label="Số dòng dữ liệu" value={(data.rowCount || 0).toLocaleString('vi-VN')} />
           </div>
           <div className="card">

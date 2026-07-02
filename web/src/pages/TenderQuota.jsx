@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadExport } from '../api.js';
-import { money } from '../util.js';
+import { money, pct as fmtPct } from '../util.js';
 import { Spinner, Bar } from '../components.jsx';
 import { ComboSelect, Select } from './revenueFilters.jsx';
 
@@ -59,7 +59,7 @@ function CstCard({ c, i }) {
         <span className={'pill ' + pctTone(pct)}>Còn {c.remain_pct}%</span>
       </div>
       <Bar value={Math.max(0, Math.min(100, pct))} max={100} tone={pct < 10 ? 'danger' : (pct < 30 || pct > 80 ? 'warn' : 'ok')} />
-      <div className="progress-caption">Đã bán {Math.max(0, +(100 - pct).toFixed(1))}% · còn {pct}%</div>
+      <div className="progress-caption">Đã bán {fmtPct(Math.max(0, +(100 - pct).toFixed(1)))} · còn {fmtPct(pct)}</div>
       <div className="meta muted" style={{ marginTop: 6 }}>{c.unit_name || c.unit_code || '—'} · NV {c.emp_code || c.sales_emps || '—'}</div>
       <div className="list-card-meta">
         <span className="pill muted-pill">Nhóm {groupOf(c.iit_code) || '—'}</span>

@@ -21,6 +21,16 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Bot triển khai — Mobile/format VN/Target admin/PA-A/tgbot theo directive CEO
+- Đọc lại `CHANGELOG.md` + 5 directive theo thứ tự. Không đụng app cũ `dona-report` port 3860.
+- `DIRECTIVE_MOBILE_UX.md`: giữ bản mobile đã dựng; test lại Chrome headless CEO + DN001 tại 375/390/414px, 8 tab chính → `48/48` pass, không overflow/header overlap; cập nhật screenshots trong `artifacts/mobile_ux_20260703/`.
+- `DIRECTIVE_NUMBER_FORMAT_VN.md`: chuẩn helper `web/src/util.js`: tiền `1.000.000đ`, rút gọn dùng phẩy VN (`2,67 tỷ`), `%` dùng `90,6%`; tooltip chart dùng tiền đầy đủ; Telegram/smart bỏ khoảng trắng trước `đ` và đổi `%` sang dấu phẩy.
+- `DIRECTIVE_TARGET_ADMIN.md`: thêm service `server/src/targetAdmin.js` với resolver `manual > upload > appsale > ai > legacy`; `/targets` và forecast lấy toàn bộ đội sale/CTV active, neo forecast theo T06, loại VP018/telesale khỏi Target/Dự báo/cảnh báo; có pro-rate target kỳ đang chạy; thêm admin APIs upload preview/commit/rollback, sửa tay, AI propose/apply, history; UI Target thêm tab “Quản target”. Runtime `users.json` đã tag `employee_type`, code có fallback `VP018=telesale`.
+- `DIRECTIVE_AUTO_REFRESH.md`: chạy lại materializer idempotent, T07 vẫn `2.668.987.096đ` (MISA `2.118.313.496đ` + WEB `550.673.600đ`), T06 giữ `28.403.136.096đ`; không drift về `2.670.947.096đ`.
+- `reportnew-tgbot`: CEO đã duyệt, đã `pm2 restart reportnew-tgbot && pm2 save`; process online, unstable restarts 0; NLQ local trả T06/T07 đúng và format `-6,6%`, `-90,6%`.
+- Nghiệm thu: `node --check` các file server touched OK, `npm run build` OK; API local `/targets`, `/targets/forecast`, `/admin/targets` đều 35 NV/CTV, không có VP018, forecast `next_ky=07.2026` neo `06.2026`.
+- Chưa restart live `reportnew` cho phần code frontend/backend mới trong commit này; cần CEO duyệt riêng nếu muốn nạp lên production ngay.
+
 ### 2026-07-03 — CEO DUYỆT restart `reportnew` nạp scheduler auto-refresh
 - CEO gửi `approve_restart_reportnew_scheduler`; đã chạy `pm2 restart reportnew && pm2 save` chỉ với app mới `reportnew`.
 - Verify sau restart: `reportnew` online, health `http://localhost:3873/api/health` OK; log có `[revenue-refresh] scheduler armed` với `enabled=true`, timezone `Asia/Bangkok`, 60 phút, T2–T6 `07:30-18:30`, T7 `07:30-13:00`, CN `off`.

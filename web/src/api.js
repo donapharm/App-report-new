@@ -53,6 +53,13 @@ export const api = {
   periods: () => req('GET', '/periods'),
   revenueRefreshStatus: () => req('GET', '/admin/revenue-refresh/status'),
   revenueRefreshRun: (ky) => req('POST', '/admin/revenue-refresh/run', ky ? { ky } : {}),
+  adminTargets: (ky) => req('GET', '/admin/targets' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
+  adminTargetManual: (payload) => req('POST', '/admin/targets/manual', payload),
+  adminTargetAiPropose: () => req('POST', '/admin/targets/ai/propose', {}),
+  adminTargetAiApply: (payload) => req('POST', '/admin/targets/ai/apply', payload),
+  adminTargetUploadCommit: (previewId) => req('POST', '/admin/targets/upload/commit', { previewId }),
+  adminTargetUploadRollback: (batchId) => req('POST', '/admin/targets/upload/rollback', { batchId }),
+  adminTargetHistory: () => req('GET', '/admin/targets/history'),
   filters: (params) => req('GET', '/filters' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   overview: (params) => req('GET', '/overview' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   trend: () => req('GET', '/trend'),
@@ -79,6 +86,19 @@ export const api = {
     }).then(async (r) => {
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw Object.assign(new Error(d.error || 'Lỗi upload'), { errors: d.errors, headerDetected: d.headerDetected });
+      return d;
+    });
+  },
+  targetUploadPreview: (file) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch('/api/admin/targets/upload/preview', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() },
+      body: fd,
+    }).then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(d.error || 'Lỗi upload target'), { errors: d.errors });
       return d;
     });
   },

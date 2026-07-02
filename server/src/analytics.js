@@ -7,6 +7,25 @@ const store = require('./store');
 const VAT_DIVISOR = 1.05; // doanh thu trước VAT = sau VAT / 1.05
 
 const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
+function kyParts(ky) {
+  const [mm, yyyy] = String(ky || '').split('.').map(Number);
+  return { mm, yyyy };
+}
+function isCurrentKy(ky, d = new Date()) {
+  const { mm, yyyy } = kyParts(ky);
+  return mm === d.getMonth() + 1 && yyyy === d.getFullYear();
+}
+function targetPacingMeta(ky, d = new Date()) {
+  const { mm, yyyy } = kyParts(ky);
+  const daysInMonth = mm && yyyy ? new Date(yyyy, mm, 0).getDate() : 30;
+  const current = isCurrentKy(ky, d);
+  const daysElapsed = current ? Math.min(d.getDate(), daysInMonth) : daysInMonth;
+  return { isCurrent: current, daysElapsed, daysInMonth, factor: daysInMonth ? daysElapsed / daysInMonth : 1 };
+}
+function targetCompareValue(targetFull, ky, d = new Date()) {
+  const meta = targetPacingMeta(ky, d);
+  return Math.round(Number(targetFull || 0) * (meta.isCurrent ? meta.factor : 1));
+}
 
 function groupSum(rows, keyField, labelField) {
   const map = new Map();
@@ -50,13 +69,15 @@ function overviewKpis({ ky, kys, scope, label }) {
   const revenue = sum(rows, (r) => r.revenue);
   const targets = store.getTargetsRange({ kys: list, scope });
   const targetTotal = sum(targets, (t) => t.target);
+  const targetCompareTotal = sum(targets, (t) => targetCompareValue(t.target, t.ky || list[list.length - 1]));
   const revenueBeforeVat = revenue / VAT_DIVISOR;
-  const pctTarget = targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null;
+  const pctTarget = targetCompareTotal > 0 ? +(revenueBeforeVat / targetCompareTotal * 100).toFixed(1) : null;
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
   const empTarget = { achieved: 0, total: 0 };
-  for (const empCode of store.empCodesWithRows({ kys: list, scope })) {
-    const target = targetByEmp[empCode] || 0;
+  for (const u of store.targetRoster({ scope })) {
+    const empCode = u.emp_code;
+    const target = targetCompareValue(targetByEmp[empCode] || 0, list[list.length - 1]);
     if (target <= 0) continue;
     const empRevBeforeVat = sum(store.getRowsRange({ kys: list, scope: { empCode } }), (r) => r.revenue) / VAT_DIVISOR;
     empTarget.total += 1;
@@ -78,6 +99,7 @@ function overviewKpis({ ky, kys, scope, label }) {
     revenue,
     revenueBeforeVat: Math.round(revenueBeforeVat),
     targetTotal,
+    targetCompareTotal,
     pctTarget,
     empTarget,
     cstLowCount,
@@ -121,4 +143,4 @@ function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
   return rows.sort((a, b) => a.remain_pct - b.remain_pct);
 }
 
-module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum, applyFilters };
+module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum, applyFilters, isCurrentKy, targetPacingMeta, targetCompareValue };

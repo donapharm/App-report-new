@@ -11,6 +11,7 @@ const A = require('./analytics');
 const smart = require('./smart');
 const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
+const targetAdmin = require('./targetAdmin');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -496,30 +497,92 @@ router.get('/targets', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const { ky, kys } = pc;
-  // Danh sách NV = NV thực sự có doanh thu (đúng App Report); target lấy từ nguồn target thật (0 nếu chưa import)
+  // Danh sách target = toàn bộ đội sale/CTV active, neo đủ đội; loại telesale (VP018).
   const targets = store.getTargetsRange({ kys, scope });
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
-  const items = store.empCodesWithRows({ kys, scope }).map((ec) => {
+  const targetSourceByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, t.target_source || t.source || 'legacy']));
+  const pacing = A.targetPacingMeta(ky);
+  const items = store.targetRoster({ scope }).map((u) => {
+    const ec = u.emp_code;
     const rev = A.sum(store.getRowsRange({ kys, scope: { empCode: ec } }), (r) => r.revenue);
     const beforeVat = rev / A.VAT_DIVISOR;
-    const target = targetByEmp[ec] || 0;
+    const targetFull = targetByEmp[ec] || 0;
+    const target = A.targetCompareValue(targetFull, ky);
     return {
       emp_code: ec,
-      emp_name: ec === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (store.findUserByCode(ec)?.name || ec),
+      emp_name: u.name || ec,
+      employee_type: store.employeeType(u),
+      target_full: targetFull,
+      target_compare: target,
       target,
+      target_source: targetSourceByEmp[ec] || null,
       revenue_before_vat: Math.round(beforeVat),
       pct: target > 0 ? +(beforeVat / target * 100).toFixed(1) : null,
       gap: Math.round(beforeVat - target),
     };
   }).sort((a, b) => b.revenue_before_vat - a.revenue_before_vat);
-  res.json({ ky, kys, items });
+  res.json({ ky, kys, pacing, items });
 });
 
 // Dự báo target kỳ tới theo xu hướng
 router.get('/targets/forecast', auth.requireAuth, (req, res) => {
   res.json(smart.forecastTargets({ scope: auth.scopeOf(req.session) }));
 });
+
+/* ---------- Target admin: manual > upload > appsale > ai > legacy ---------- */
+function targetMatrix(ky) {
+  const roster = store.targetRoster({ scope: {} });
+  const resolved = new Map(targetAdmin.resolveTargets({ ky, empCodes: roster.map((u) => u.emp_code) }).map((e) => [e.emp_code, e]));
+  return roster.map((u) => {
+    const r = resolved.get(u.emp_code) || null;
+    return { emp_code: u.emp_code, emp_name: u.name, employee_type: store.employeeType(u), target: r?.target || 0, source: r?.source || null, updated_at: r?.at || null };
+  });
+}
+router.get('/admin/targets', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const ky = req.query.ky || store.latestKy();
+  res.json({ ky, rows: targetMatrix(ky), history: targetAdmin.listAudit().slice(0, 30) });
+});
+router.post('/admin/targets/upload/preview', auth.requireAuth, auth.requireAdmin, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Chưa chọn file .xlsx' });
+  const valid = new Set(store.targetRoster({ scope: {} }).map((u) => u.emp_code));
+  try {
+    const parsed = await targetAdmin.parseTargetWorkbook(req.file.buffer, (code) => valid.has(String(code || '').toUpperCase()));
+    if (parsed.errors.length) return res.status(422).json({ errors: parsed.errors, meta: parsed.meta, sample: parsed.rows.slice(0, 10) });
+    const previewId = targetAdmin.stashPreview({ ...parsed, filename: req.file.originalname });
+    res.json({ previewId, filename: req.file.originalname, meta: parsed.meta, sample: parsed.rows.slice(0, 10) });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/targets/upload/commit', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { res.json({ ok: true, result: targetAdmin.commitPreview({ previewId: req.body?.previewId, user: req.session }) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/targets/upload/rollback', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { res.json({ ok: true, result: targetAdmin.rollbackBatch({ batchId: req.body?.batchId, user: req.session }) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/targets/manual', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const valid = new Set(store.targetRoster({ scope: {} }).map((u) => u.emp_code));
+  const emp = String(req.body?.emp_code || '').toUpperCase();
+  if (!valid.has(emp)) return res.status(400).json({ error: 'Mã NV không thuộc đội target hoặc là telesale' });
+  try { res.json({ ok: true, entry: targetAdmin.upsertEntry({ emp_code: emp, ky: req.body?.ky, target: req.body?.target, source: 'manual', user: req.session, note: req.body?.note || 'manual_edit' }) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/targets/ai/propose', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const fc = smart.forecastTargets({ scope: { empCode: null } });
+  res.json({ ok: true, ...fc });
+});
+router.post('/admin/targets/ai/apply', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const ky = req.body?.ky || smart.forecastTargets({ scope: { empCode: null } }).next_ky;
+  const items = Array.isArray(req.body?.items) ? req.body.items : smart.forecastTargets({ scope: { empCode: null } }).items;
+  const valid = new Set(store.targetRoster({ scope: {} }).map((u) => u.emp_code));
+  const batchId = `ai_${Date.now().toString(36)}`;
+  try {
+    const out = items.filter((x) => valid.has(String(x.emp_code || '').toUpperCase())).map((x) => targetAdmin.upsertEntry({ emp_code: x.emp_code, ky, target: x.target ?? x.suggested_target, source: 'ai', user: req.session, note: 'ai_apply', batchId }));
+    res.json({ ok: true, batchId, rows: out.length });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.get('/admin/targets/history', auth.requireAuth, auth.requireAdmin, (req, res) => res.json({ history: targetAdmin.listAudit() }));
 
 /* ---------- AI hỏi nhanh (code-first) ---------- */
 router.post('/ai/ask', auth.requireAuth, async (req, res) => {
@@ -661,10 +724,10 @@ router.post('/upload/preview', auth.requireAuth, auth.requireAdmin, upload.singl
 
 // 2) Commit: ghi slot + audit.
 router.post('/upload/commit', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  const { previewId, ky, dateFrom, dateTo } = req.body || {};
+  const { previewId, ky, dateFrom, dateTo, mode } = req.body || {};
   if (!previewId || !ky) return res.status(400).json({ error: 'Thiếu previewId hoặc kỳ.' });
   try {
-    const slot = uploadSvc.commitSlot({ previewId, ky, dateFrom, dateTo, user: req.session });
+    const slot = uploadSvc.commitSlot({ previewId, ky, dateFrom, dateTo, mode: mode === 'update' ? 'update' : 'new', user: req.session });
     res.json({ ok: true, slot });
   } catch (e) {
     res.status(400).json({ error: e.message });

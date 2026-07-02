@@ -10,7 +10,7 @@ function AlertLine({ group, item }) {
     return (
       <div className="alert-line">
         <b>{item.name}</b>
-        <span>{item.pct}% target · {short(item.revenue_before_vat)} / {short(item.target)}</span>
+        <span>{pct(item.pct)} target · {short(item.revenue_before_vat)} / {short(item.target)}</span>
       </div>
     );
   }
@@ -18,14 +18,14 @@ function AlertLine({ group, item }) {
     return (
       <div className="alert-line">
         <b>{item.unit_name}</b>
-        <span>Giảm {Math.abs(item.mom).toFixed(0)}% · {short(item.prev)} → {short(item.cur)}</span>
+        <span>Giảm {pct(Math.abs(item.mom), 0)} · {short(item.prev)} → {short(item.cur)}</span>
       </div>
     );
   }
   return (
     <div className="alert-line">
       <b>{item.product_name || '—'}</b>
-      <span>{item.unit_name} · còn {item.remain_pct}% ({Number(item.remain_qty || 0).toLocaleString('vi-VN')} / {Number(item.bid_qty_initial || 0).toLocaleString('vi-VN')})</span>
+      <span>{item.unit_name} · còn {pct(item.remain_pct)} ({Number(item.remain_qty || 0).toLocaleString('vi-VN')} / {Number(item.bid_qty_initial || 0).toLocaleString('vi-VN')})</span>
     </div>
   );
 }
@@ -122,7 +122,7 @@ export default function Overview({ me, onNavigate }) {
             <div className="card chart-card target-card">
               <div className="section-head">🎯 Tiến độ target {periodLabel(periodSel)}</div>
               <TargetGauge pct={kpi.pctTarget} />
-              <div className="center compact-center">{short(kpi.revenueBeforeVat)} / {short(kpi.targetTotal)} trước VAT</div>
+              <div className="center compact-center">{short(kpi.revenueBeforeVat)} / {short(kpi.targetCompareTotal || kpi.targetTotal)} trước VAT</div>
             </div>
             <div className="card chart-card wide">
               <div className="chart-head">

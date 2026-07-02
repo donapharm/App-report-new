@@ -21,10 +21,11 @@ function buildAlerts({ scope, ky, kys }) {
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
   const targetItems = [];
-  for (const empCode of store.empCodesWithRows({ kys: list, scope })) {
+  for (const u of store.targetRoster({ scope })) {
+    const empCode = u.emp_code;
     const user = store.findUserByCode(empCode);
     if (!user?.name) continue; // không resolve được tên => loại khỏi cảnh báo
-    const target = targetByEmp[empCode] || 0;
+    const target = A.targetCompareValue(targetByEmp[empCode] || 0, lastKy);
     if (target <= 0) continue; // chưa có target thật => không tính %
     const rev = A.sum(store.getRowsRange({ kys: list, scope: { empCode } }), (r) => r.revenue);
     const revBeforeVat = rev / A.VAT_DIVISOR;
@@ -126,19 +127,17 @@ const SEASON = { '01': 0.9, '02': 0.88, '03': 1.05, '04': 1.02, '05': 1.05, '06'
  */
 function forecastTargets({ scope }) {
   const periods = store.listPeriods().map((p) => p.ky);
-  const lastKy = periods[periods.length - 1];
-  const nextMonth = String((parseInt(lastKy.slice(0, 2), 10) % 12) + 1).padStart(2, '0');
-  const nextYear = nextMonth === '01' ? +lastKy.slice(3) + 1 : +lastKy.slice(3);
-  const nextKy = `${nextMonth}.${nextYear}`;
+  const lastKy = store.lastCompleteKy();
+  const nextKy = store.nextKy(lastKy);
+  const usablePeriods = periods.filter((ky) => store.periodKys().includes(ky) && ky <= lastKy);
+  const nextMonth = nextKy.slice(0, 2);
   const season = SEASON[nextMonth] || 1;
 
-  // Chỉ NV còn ĐANG hoạt động (có bán ở kỳ gần nhất), không lấy cả danh bạ công ty
-  const emps = store.empCodesWithData({ ky: lastKy, scope })
-    .filter((ec) => store.isValidEmpCode(ec))
-    .map((ec) => ({ emp_code: ec, name: store.findUserByCode(ec)?.name || ec }));
+  // Toàn bộ đội sale/CTV active, neo tháng đủ gần nhất; loại telesale.
+  const emps = store.targetRoster({ scope }).map((u) => ({ emp_code: u.emp_code, name: u.name || u.emp_code }));
   const out = emps.map((emp) => {
     const s = { empCode: emp.emp_code };
-    const revByKy = periods.map((ky) => A.sum(store.getRows({ ky, scope: s }), (r) => r.revenue) / A.VAT_DIVISOR);
+    const revByKy = usablePeriods.map((ky) => A.sum(store.getRows({ ky, scope: s }), (r) => r.revenue) / A.VAT_DIVISOR);
     const trendRev = linearNext(revByKy); // dự báo doanh thu kỳ tới theo trend
     const lastTarget = (store.getTargets({ ky: lastKy, scope: s })[0] || {}).target || 0;
     const lastRev = revByKy[revByKy.length - 1] || 0;
@@ -224,12 +223,12 @@ async function answerQuestion({ text, scope, session }) {
   if (/target|chi tieu|% ?dat|dat bao nhieu|hoan thanh/.test(q)) {
     const k = A.overviewKpis({ ky, scope });
     if (k.pctTarget == null) return say('Chưa có target cho kỳ ' + ky + '.');
-    return say(`Kỳ ${ky}: doanh thu trước VAT ${fmt(k.revenueBeforeVat)} / target ${fmt(k.targetTotal)} → đạt ${k.pctTarget}%.`);
+    return say(`Kỳ ${ky}: doanh thu trước VAT ${fmt(k.revenueBeforeVat)} / target ${fmt(k.targetCompareTotal || k.targetTotal)} → đạt ${fmtPct(k.pctTarget)}.`);
   }
   if (/doanh thu|doanh so|tong tien|bao nhieu tien/.test(q)) {
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
-    const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${k.momPct}% so kỳ trước)`;
+    const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
     return say(`Doanh thu ${who} kỳ ${ky}: ${fmt(k.revenue)}${mom}.`);
   }
 
@@ -287,7 +286,8 @@ function resolveKyFromQuestion(q) {
   return null;
 }
 function noAccent(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd'); }
-function fmt(n) { return Math.round(n).toLocaleString('vi-VN') + ' đ'; }
+function fmt(n) { return Math.round(n).toLocaleString('vi-VN') + 'đ'; }
+function fmtPct(n) { return n == null ? '—' : Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%'; }
 function say(text, lines) { return { text, lines: lines || [], source: 'code' }; }
 
 module.exports = { buildAlerts, forecastTargets, answerQuestion, SEASON };

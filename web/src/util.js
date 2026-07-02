@@ -1,17 +1,25 @@
-// Định dạng tiền tệ VN, rút gọn cho mobile.
+// Chuẩn hiển thị kế toán Việt Nam: dấu chấm hàng nghìn, tiền nguyên đồng + đ.
+export function num(n) {
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  return Math.round(Number(n)).toLocaleString('vi-VN');
+}
 export function money(n) {
-  if (n == null) return '—';
-  return Math.round(n).toLocaleString('vi-VN') + ' đ';
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  return num(n) + 'đ';
 }
+// Rút gọn chỉ dùng cho trục chart/không gian rất hẹp; thập phân dùng dấu phẩy VN.
 export function short(n) {
-  if (n == null) return '—';
-  const a = Math.abs(n);
-  if (a >= 1e9) return (n / 1e9).toFixed(2).replace(/\.00$/, '') + ' tỷ';
-  if (a >= 1e6) return (n / 1e6).toFixed(0) + ' tr';
-  if (a >= 1e3) return (n / 1e3).toFixed(0) + 'k';
-  return String(Math.round(n));
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  const v = Number(n);
+  const a = Math.abs(v);
+  const fmt = (x, d = 1) => x.toLocaleString('vi-VN', { maximumFractionDigits: d });
+  if (a >= 1e9) return fmt(v / 1e9, 2) + ' tỷ';
+  if (a >= 1e6) return fmt(v / 1e6, 0) + ' tr';
+  if (a >= 1e3) return fmt(v / 1e3, 0) + ' nghìn';
+  return num(v);
 }
-export function pct(n) {
-  return n == null ? '—' : n + '%';
+export function pct(n, digits = 1) {
+  if (n == null || Number.isNaN(Number(n))) return '—';
+  return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: digits }) + '%';
 }
 export const roleLabel = (r) => ({ ceo: 'CEO', admin: 'Quản trị', sale: 'Sale' }[r] || r);
