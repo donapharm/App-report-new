@@ -21,6 +21,12 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-02 — Dev/Kiến trúc (Claude Code) — ĐÍNH CHÍNH: doanh thu có 2 nguồn (CRM MISA + APP WEB)
+- CEO gửi ảnh "CRM MISA — Đối chiếu doanh thu đa chiều" (app Đặt hàng cũ): T07 tính đến 20:29 02/07 = **tổng đặt 3.175.523.336đ, đã thực hiện 2.668.987.096đ, 125 đơn**.
+- **Đính chính khảo sát trước:** bot báo "T07 chỉ 2 đơn" vì **chỉ soi APP WEB (:3970), SÓT nguồn CRM MISA** (phần lớn ~80%). Doanh thu App Report = **CRM MISA (xuất HĐ) + APP WEB (đã giao)**.
+- **Định nghĩa "doanh thu thực" đã rõ:** `đã thực hiện = MISA xuất HĐ + WEB đã xuất/giao` (loại chưa xuất HĐ/chưa phản hồi/còn nợ/HOLD/hủy) → đáp án cho câu "trạng thái nào = đã bán".
+- Cập nhật `DIRECTIVE_ENABLE_JULY_REVENUE.md` (gộp 2 nguồn, điều tra lại MISA snapshot) + `SPEC_DATASOURCE_CUTOVER.md` mục A. Bot điều tra lại 2 nguồn → adapter kỳ 07 gộp cả hai → đối chiếu khớp báo cáo cũ.
+
 ### 2026-07-02 — Dev/Kiến trúc (Claude Code) — Directive polish UI (CEO feedback qua ảnh)
 - [`DIRECTIVE_UI_POLISH_20260702.md`](DIRECTIVE_UI_POLISH_20260702.md): **H1** Tổng quan CHẬM → đo API, cache tổng hợp theo kỳ, lazy-load chart (ưu tiên). **H2** DT/SP: thêm số QĐ; QĐ139 thêm hoạt chất+hàm lượng (QĐ141 không). **H3** CST: bỏ "Giá bán" (trùng Giá thầu), thêm số QĐ, QĐ139 thêm hoạt chất+hàm lượng. **Nguồn**: đang hiển thị `01-MAY-26` gây hiểu nhầm → đổi thành kỳ dữ liệu thực (VD "đến 06.2026").
 - Live PASS 2 (bot, commit e869bb0): remap `#N/A`→DN019, `83`(10 dòng)→DN021; 6 CTV status Cộng tác; 4 CTV ngoài `no_auto_notify`; tổng T06 = 28.403.136.096 giữ nguyên. **Duyệt.**

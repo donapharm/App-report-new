@@ -1,30 +1,44 @@
-# DIRECTIVE — Bật đồng bộ DOANH THU tháng 07/2026 từ App Sale (LIVE, additive)
+# DIRECTIVE — Bật đồng bộ DOANH THU tháng 07/2026 (2 NGUỒN: CRM MISA + APP WEB)
 
-> Claude Code giao (CEO hỏi vì sao chưa thấy T07 2026-07-02). Bot triển khai; Claude review.
-> Nguyên tắc: 01–06/2026 Lumos ĐÓNG BĂNG bất biến; chỉ THÊM kỳ 07.2026 từ App Sale. Không cắt Lumos, không sửa số cũ. Đọc kèm `SPEC_DATASOURCE_CUTOVER.md` mục A.
+> Claude Code giao (CEO đính chính 2026-07-02 kèm ảnh "Đối chiếu doanh thu đa chiều"). Bot triển khai; Claude review.
+> Nguyên tắc: 01–06/2026 Lumos ĐÓNG BĂNG; chỉ THÊM kỳ 07.2026. Không cắt Lumos, không sửa số cũ.
 
-## Vì sao T07 chưa hiện (hiện trạng, không phải lỗi)
-- Cầu nối App Sale→App Report mới ở mức **SHADOW** (đối chiếu), chưa bật LIVE.
-- App Sale T07 gần trống (đầu tháng 02/07, ~2 đơn pending).
+## ‼ ĐÍNH CHÍNH QUAN TRỌNG — doanh thu có 2 NGUỒN, khảo sát trước SÓT 1
+Bot báo "T07 chỉ 2 đơn" vì **chỉ soi APP WEB (:3970)** và đếm đơn đã duyệt (~0). **SAI — thiếu nguồn CRM MISA.**
+Ảnh CEO (báo cáo "CRM MISA — Đối chiếu doanh thu" trong app Đặt hàng cũ, snapshot 20:29 02/07/2026):
 
-## Bước 1 — XÁC NHẬN 3 điểm từ App Sale API (:3970, read-only) → báo Claude
-1. **VAT:** field doanh thu App Sale là **trước hay sau VAT**? (App Report: `revenue` sau VAT, `revenueBeforeVat = revenue / VAT_DIVISOR`). Nếu App Sale để trước VAT → phải quy đổi cho khớp định nghĩa.
-2. **Kênh:** doanh thu báo cáo tính **CL+NCL+NT (tổng bán)** hay chỉ CL? (Mặc định đề xuất: **tổng bán như app cũ**; CST mới chỉ CL.) Xác nhận cách app cũ tính để khớp.
-3. **Trạng thái = đã bán:** liệt kê trạng thái App Sale → chốt trạng thái nào tính doanh thu (đã duyệt/giao/xuất HĐ), loại `pending`/`CANCELLED`/`rejected` (net).
+| Nguồn | Tổng đặt | Đã thực hiện |
+|---|---:|---:|
+| **CRM MISA** (xuất HĐ) | 2.600.259.136 | **2.118.313.496** |
+| **Đối tác/APP WEB nội bộ** (đã xuất/giao) | 575.264.200 | **550.673.600** |
+| **TỔNG** | **3.175.523.336** | **2.668.987.096** |
 
-## Bước 2 — Adapter doanh thu LIVE (kỳ 07.2026)
-- Kéo đơn App Sale từ `2026-07-01`, áp **crosswalk** (emp_code + đơn vị + SP đã dựng) → tổng hợp thành kỳ `07.2026`, **materialize như slot** trong `store.js` (giống cơ chế slot upload: kỳ 07 = nguồn App Sale, các kỳ khác giữ nguyên).
-- **emp_code**: dùng crosswalk đã cập nhật (đã thêm DN021/VP004; còn VP019 kế toán bỏ qua). Đơn của mã lạ → gom "Chưa phân bổ", không bịa.
-- Thêm `07.2026` vào `listPeriods` để bộ lọc kỳ + biểu đồ xu hướng có mốc T07.
-- **Incremental**: dùng contract `/api/report-sync/changes?updated_since=` đã đề xuất; nếu chưa có endpoint thì tạm poll theo `updated_at` + cursor, idempotent (không cộng trùng).
+- **Doanh thu App Report = TỔNG 2 nguồn: CRM MISA + APP WEB.** Không được chỉ lấy WEB.
+- 125 đơn CRM+WEB (không phải 2). MISA là phần lớn (~80%).
 
-## Bước 3 — Nghiệm thu trước khi bật cho CEO
-- **01–06 KHÔNG đổi** (T06 vẫn 28.403.136.096). Chỉ thêm kỳ 07.
-- Số kỳ 07 khớp App Sale (đối chiếu vài đơn: đúng NV/đơn vị/SP/tiền, đúng VAT, đúng net trạng thái).
-- Đầu tháng T07 nhỏ/gần 0 là ĐÚNG (chưa phát sinh) — không coi là lỗi; số lớn dần theo ngày.
-- Scope: NV sale chỉ thấy T07 của mình; CEO thấy toàn công ty.
-- Chạy SHADOW đối chiếu 1–2 ngày nếu cần, rồi mới hiển thị chính thức. Ghi CHANGELOG + báo Claude review.
+## ĐỊNH NGHĨA "doanh thu thực" (net) — ĐÃ RÕ từ báo cáo cũ
+**Đã thực hiện = CRM MISA đã XUẤT HÓA ĐƠN + APP WEB đã XUẤT/GIAO HÀNG.**
+- KHÔNG tính: CRM chưa xuất HĐ, đối tác chưa phản hồi, còn nợ chưa giao, đơn HOLD/hủy/pending.
+- Đây là con số doanh thu App Report nên phản ánh cho kỳ 07 (≈ 2.668.987.096đ tính đến 20:29 02/07 — dùng để đối chiếu khi bật).
+
+## Bước 1 — ĐIỀU TRA LẠI 2 NGUỒN (read-only) → báo Claude
+1. **CRM MISA:** cơ chế "Chụp snapshot MISA → DB" trong app Đặt hàng cũ lấy dữ liệu ở đâu, bảng/endpoint nào, field doanh thu (đã xuất HĐ), mã NV/đơn vị/SP, kỳ. Đọc code báo cáo "CRM MISA — Đối chiếu doanh thu đa chiều" của app cũ để nắm ĐÚNG công thức (tổng đặt vs đã thực hiện vs chưa thực hiện).
+2. **APP WEB (:3970):** phần "Đối tác — đã xuất/giao hàng" (không chỉ đơn approved-like như lần trước).
+3. **VAT:** cả 2 nguồn — số trước hay sau VAT? Khớp định nghĩa App Report (`revenueBeforeVat = revenue / VAT_DIVISOR`).
+4. **Nhất quán 01–06:** xác nhận định nghĩa "doanh thu" của kỳ 07 (đã thực hiện = MISA xuất HĐ + WEB giao) **trùng khớp cách 01–06 đã tính** (Lumos) để đường xu hướng liền mạch, không gãy định nghĩa giữa T06 và T07.
+
+## Bước 2 — Adapter doanh thu LIVE kỳ 07.2026 (gộp 2 nguồn)
+- Kéo **CRM MISA (đã xuất HĐ) + APP WEB (đã xuất/giao)** từ `2026-07-01`, áp crosswalk (emp_code/đơn vị/SP) → tổng hợp kỳ `07.2026`, materialize như slot trong `store.js`.
+- Thêm `07.2026` vào `listPeriods` (bộ lọc + biểu đồ xu hướng có mốc T07).
+- Dedup/idempotent: đơn có thể có ở cả CRM và WEB → theo logic báo cáo cũ để KHÔNG cộng trùng.
+- Mã lạ → "Chưa phân bổ", không bịa.
+
+## Bước 3 — Nghiệm thu trước khi bật
+- **01–06 KHÔNG đổi** (T06 = 28.403.136.096).
+- Kỳ 07 "đã thực hiện" **khớp báo cáo đối chiếu cũ** (≈ 2.668.987.096đ tại mốc 02/07 20:29; số tăng theo ngày). Đối chiếu vài đơn từng nguồn.
+- Scope đúng; đầu tháng số lớn dần là bình thường.
+- Chạy SHADOW đối chiếu rồi mới hiển thị chính thức. CHANGELOG + báo Claude.
 
 ## Lưu ý
-- Đây là DOANH THU. CST tháng 07 theo nhánh riêng (baseline + timeline, `SPEC_DATASOURCE_CUTOVER` mục B/E/F/G).
-- Không đụng app cũ 3860; App Sale chỉ ĐỌC.
+- **Đây là bài học:** nguồn doanh thu App Report GỒM CRM MISA (chính) + APP WEB (đối tác). Mọi thiết kế cutover phải tính CẢ HAI (cập nhật lại `SPEC_DATASOURCE_CUTOVER` nếu cần).
+- CST tháng 07 theo nhánh riêng. Không đụng app cũ 3860; chỉ ĐỌC.

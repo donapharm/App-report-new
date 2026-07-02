@@ -17,7 +17,8 @@
 ---
 
 ## A) DOANH THU — mô hình "đóng băng lịch sử + live tương lai"
-> **CEO DUYỆT TRIỂN KHAI 2026-07-02:** bot làm **đồng bộ doanh thu từ 01/07/2026** từ App Sale (không chỉ shadow). 4 điều BẮT BUỘC đúng:
+> **‼ ĐÍNH CHÍNH 2026-07-02 (CEO kèm ảnh):** doanh thu App Report có **2 NGUỒN = CRM MISA (chính, đã xuất HĐ) + APP WEB nội bộ (đối tác, đã xuất/giao)**, KHÔNG chỉ App Sale WEB (:3970). Khảo sát trước sót MISA nên tưởng "T07 chỉ 2 đơn"; thực tế 125 đơn, ~2,67 tỷ đã thực hiện tính đến 02/07. **"Doanh thu thực (đã thực hiện) = MISA xuất HĐ + WEB đã giao"** (loại chưa xuất HĐ/chưa phản hồi/còn nợ/HOLD/hủy). Chi tiết + việc điều tra lại: `DIRECTIVE_ENABLE_JULY_REVENUE.md`.
+> **CEO DUYỆT TRIỂN KHAI 2026-07-02:** bot làm **đồng bộ doanh thu từ 01/07/2026** (GỘP 2 nguồn, không chỉ shadow). 4 điều BẮT BUỘC đúng:
 > 1. **Crosswalk `emp_code` là SỐNG CÒN** — phân quyền NV sale lọc theo `emp_code`; App Sale mã NV khác → NV thấy sai/trống dữ liệu mình. Map người bán App Sale ↔ `emp_code` App Report trước.
 > 2. **Liên tục xuyên kỳ cắt** — cùng BV/SP ở T06 (Lumos) và T07 (App Sale) phải về cùng thực thể (dùng chung crosswalk CST), nếu không biểu đồ/drill-down tách đôi.
 > 3. **VAT** — App Report tính `revenueBeforeVat = revenue / VAT_DIVISOR`. Xác nhận field doanh thu App Sale **trước hay sau VAT** (sai → lệch cả loạt 8–10%).
