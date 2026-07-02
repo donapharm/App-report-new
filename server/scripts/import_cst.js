@@ -53,9 +53,9 @@ const rows = arr.map((o) => {
     raw_nv: String(pick(o, ['raw_nv', 'RAW_NV']) || '').trim(),
     sales_emps: String(pick(o, ['sales_emps', 'SALES_EMPS']) || '').trim(),
   };
-}).filter((r) => r.iit_code && r.unit_code && r.bid_qty_initial > 0);
+}).filter((r) => r.unit_code && r.bid_qty_initial > 0);
 writeJson(path.join(DATA, 'cst_real.json'), rows);
 const empSet = new Set(rows.flatMap((r) => String(r.emp_code || '').split(',').map((x) => x.trim()).filter(Boolean)));
 console.log('✔ Nạp CST thật xong (KIỂM TRA):');
-console.log(`  Dòng: ${rows.length} · NV: ${empSet.size} · Đơn vị: ${new Set(rows.map((r) => r.unit_code)).size} · SP: ${new Set(rows.map((r) => r.iit_code)).size}`);
+console.log(`  Dòng: ${rows.length} · NV: ${empSet.size} · Đơn vị: ${new Set(rows.map((r) => r.unit_code)).size} · SP có mã: ${new Set(rows.map((r) => r.iit_code).filter(Boolean)).size} · SP thiếu mã: ${rows.filter((r) => !r.iit_code).length}`);
 console.log('  Mẫu 2:', JSON.stringify(rows.slice(0, 2)));

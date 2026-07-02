@@ -11,7 +11,7 @@ Trạng thái: `done` = đã có dữ liệu + UI/API cơ bản + test quyền; 
 | Doanh thu | Revenue | partial | Đã thêm bộ lọc backend: kỳ/NV/ĐV/SP/tuyến/UT/nhà thầu/gói/tìm kiếm; cần đối chiếu UI 1:1 app cũ |
 | Doanh thu đầy đủ | DT đầy đủ | done | Đã có bảng chi tiết từng dòng, pagination, export Excel, test scope CEO/DN009; còn PDF/mẫu cũ nếu CEO cần |
 | Sản phẩm | Sản phẩm | partial | Đã có tab top SP/mã QLNB + độ phủ đơn vị/NV/gói thầu; cần bổ sung hoạt chất/nhóm thuốc nếu app cũ còn dùng |
-| CST / Cơ số thầu | TenderQuota | done (P0) | Bảng đủ cột + cảnh báo/trạng thái giống app cũ đã xong; còn đối chiếu tổng/mẫu CST trong Bước 3 mở rộng |
+| CST / Cơ số thầu | TenderQuota | done | Bảng đủ cột + cảnh báo/trạng thái giống app cũ; đối chiếu CST đã khớp app cũ **2.741 dòng** |
 | Phân tích | Phân tích | partial | Đã có so kỳ trước, tăng/giảm đơn vị & sản phẩm, cơ cấu tuyến/nhà thầu/UT; cần bổ sung biểu đồ/mẫu cũ nếu CEO cần |
 | Nhân viên | Chưa có tab riêng | todo | Chuyển bảng NV/quyền/phạm vi nếu CEO còn dùng |
 | Target | Target | partial | Dữ liệu thật 01→06; cần UI đối chiếu giống app cũ hơn nếu cần |
@@ -32,7 +32,7 @@ Trạng thái: `done` = đã có dữ liệu + UI/API cơ bản + test quyền; 
 
 - UI CST đã chuyển sang bảng ngang đầy đủ cột nghiệp vụ giống app cũ: mã QL nội bộ, tên thuốc, hoạt chất, hàm lượng, ĐVT, nhóm, UT, gói thầu, đơn vị, NV phụ trách, giá thầu/giá bán, tổng TT, CST còn lại, % còn lại, tổng/SL đã bán, SL còn, TT đã bán, TT còn lại, ngày nguồn, trạng thái.
 - Cảnh báo/trạng thái theo logic app cũ: Hết CST, ⚠️ Chưa bán, 🔴 Chưa khai thác, 🟡 Còn nhiều, ✅ Đang bán; có chip lọc “Chưa bán” và thống kê cảnh báo trên trang.
-- Kiểm quyền/số: CEO 2.740 dòng; DN009 85 dòng và không có dòng ngoài DN009; `<10%` 291 dòng; “Chưa bán” 1.228 dòng. Build OK.
+- Kiểm quyền/số sau chốt giữ dòng thiếu mã QLNB: CEO 2.741 dòng; DN009 85 dòng và không có dòng ngoài DN009; `<10%` 291 dòng; “Chưa bán” 1.229 dòng. Build OK.
 
 ## Bước 3 — Đối chiếu doanh thu app cũ ↔ app mới đủ 01→06/2026
 
@@ -54,36 +54,39 @@ Nguồn đối chiếu:
 
 Ghi chú kiểm soát: nếu lần đối chiếu sau phát hiện kỳ nào lệch, phải **dừng**, ghi rõ chênh lệch + nguồn, chờ xử lý; không tự ý làm tròn/làm khớp.
 
-## Bước 3 mở rộng theo từng tab — TẠM DỪNG tại CST mismatch (2026-07-02)
+## Bước 3 mở rộng theo từng tab — CST đã KHỚP sau chốt giữ dòng thiếu mã QLNB (2026-07-02)
 
-Artifact kiểm tra: `artifacts/reconcile_tabs_until_cst_mismatch_20260702.json`.
+Artifacts kiểm tra:
+- Mismatch ban đầu: `artifacts/reconcile_tabs_until_cst_mismatch_20260702.json`.
+- Sau xử lý: `artifacts/reconcile_cst_resolved_20260702.json`.
 
-Các tab đã chạy trước khi dừng:
-- **Overview/Doanh thu/DT đầy đủ/Sản phẩm/Target/Phân tích:** tổng kỳ 01→06/2026 khớp ở phần đã kiểm (diff doanh thu/target = 0). Chi tiết đầy đủ nằm trong artifact.
-- **CST:** phát hiện lệch nên **dừng**, không tự sửa số.
+Chốt nghiệp vụ của Claude/CEO: **giữ dòng dữ liệu thật thiếu mã QLNB** (`Bividia 25` · `108. BVĐK LONG AN` · `DN001` · còn `44.000` · TT còn `79.200.000`). Nguyên tắc importer: không loại dòng thật chỉ vì thiếu field phụ (`iit_code`...); với CST, filter chỉ còn `unit_code` và `bid_qty_initial > 0`.
 
-Chi tiết lệch CST:
+Kết quả đối chiếu CST sau re-import:
 
-| Nguồn | Dòng | Tổng CST ban đầu | Tổng SL đã bán | Tổng SL còn | Tổng TT còn lại |
-|---|---:|---:|---:|---:|---:|
-| App cũ `artifacts/cst_full_from_old.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 |
-| App mới `server/data/cst_real.json` | 2.740 | 182.793.992 | 62.993.027 | 120.024.002 | 399.762.552.609 |
-| **Chênh** | **-1** | **-44.000** | **0** | **-44.000** | **-79.200.000** |
+| Nguồn | Dòng | Tổng CST ban đầu | Tổng SL đã bán | Tổng SL còn | Tổng TT còn lại | Chênh |
+|---|---:|---:|---:|---:|---:|---:|
+| App cũ `artifacts/cst_full_from_old.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | — |
+| App mới `server/data/cst_real.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | 0 |
 
-Dòng thiếu trong app mới:
+Dòng thiếu mã QLNB đã được giữ trong app mới:
 
 | Trường | Giá trị |
 |---|---|
 | `source_from_date` | `01-MAY-26` |
 | `unit_code_name` | `108. BVĐK LONG AN` |
 | `product_name` | `Bividia 25` |
-| `iit_code` | *(rỗng)* |
+| `iit_code` | *(rỗng; UI hiển thị `—`)* |
 | `emp_code` | `DN001` |
 | `cst_ban_dau` / `sl_con_lai` | `44.000` / `44.000` |
 | `gia_thau` / `tt_con_lai` | `1.800` / `79.200.000` |
 | `raw_nv` | `284` |
 
-Nguyên nhân kỹ thuật hiện tại: `server/scripts/import_cst.js` đang lọc `.filter((r) => r.iit_code && r.unit_code && r.bid_qty_initial > 0)`, nên dòng app cũ có `iit_code` rỗng bị loại. **Chưa xử lý tiếp** cho đến khi CEO/Claude chốt nên giữ dòng thiếu mã QLNB hay loại có chủ đích khỏi cả hai bên.
+Kiểm downstream sau sửa:
+- `store.getCst({scope:null})`: 2.741 dòng; `blankIit=1`.
+- `store.getCst({scope:{empCode:'DN009'}})`: 85 dòng, `badScope=0`.
+- Cảnh báo vẫn tính đúng từ số lượng: `<10%` = 291 dòng; “Chưa bán” = 1.229 dòng.
+- UI mã QLNB rỗng hiển thị `—`; định danh dòng fallback bằng `product_name + unit + emp` để không gộp/đè dòng thiếu mã.
 
 ## P1 sau P0
 1. Đối chiếu giao diện/logic từng tab với app cũ bằng 04/05/06.2026.

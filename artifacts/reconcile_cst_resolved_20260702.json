@@ -1,0 +1,62 @@
+{
+  "at": "2026-07-02T04:55:52.247Z",
+  "status": "matched",
+  "rule": "Keep real CST rows with missing iit_code; importer filters only unit_code + bid_qty_initial > 0. Display missing iit_code as em dash and use product/unit/emp fallback identity in UI.",
+  "old": {
+    "source": "artifacts/cst_full_from_old.json",
+    "rows": 2741,
+    "bidQty": 182837992,
+    "soldQty": 62993027,
+    "remainQty": 120068002,
+    "remainAmount": 399841752609
+  },
+  "new": {
+    "source": "server/data/cst_real.json",
+    "rows": 2741,
+    "bidQty": 182837992,
+    "soldQty": 62993027,
+    "remainQty": 120068002,
+    "remainAmount": 399841752609,
+    "blankIit": 1
+  },
+  "scope": {
+    "dn009Rows": 85,
+    "dn009Bad": 0
+  },
+  "alerts": {
+    "lowRows": 291,
+    "emptyRows": 1229
+  },
+  "sampleBlankIit": {
+    "ky": "CURRENT",
+    "emp_code": "DN001",
+    "unit_code": "108. BVĐK LONG AN",
+    "unit_name": "108. BVĐK LONG AN",
+    "iit_code": "",
+    "product_name": "Bividia 25",
+    "ham_luong": "",
+    "active_ingredient": "",
+    "uom": "",
+    "bid_package": "",
+    "bid_qty_initial": 44000,
+    "sold_qty": 0,
+    "remain_qty": 44000,
+    "remain_pct": 100,
+    "bid_price": 1800,
+    "sale_price": 0,
+    "bid_amount": 79200000,
+    "sold_amount": 0,
+    "remain_amount": 79200000,
+    "priority": "",
+    "source_from_date": "01-MAY-26",
+    "raw_nv": "284",
+    "sales_emps": ""
+  },
+  "diff": {
+    "rows": 0,
+    "bidQty": 0,
+    "soldQty": 0,
+    "remainQty": 0,
+    "remainAmount": 0
+  }
+}

@@ -129,8 +129,8 @@ export default function TenderQuota({ me }) {
                 {data.slice(0, 600).map((c, i) => {
                   const st = decision(c);
                   return (
-                    <tr key={`${c.unit_code}-${c.iit_code}-${i}`} className={Number(c.remain_pct || 0) > 70 ? 'highlight-need' : ''}>
-                      <td className="mono">{c.iit_code}</td>
+                    <tr key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={Number(c.remain_pct || 0) > 70 ? 'highlight-need' : ''}>
+                      <td className="mono">{c.iit_code || '—'}</td>
                       <td><b>{c.product_name || '—'}</b></td>
                       <td>{c.active_ingredient || '—'}</td>
                       <td>{c.ham_luong || '—'}</td>
