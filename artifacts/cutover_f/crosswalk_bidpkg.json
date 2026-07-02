@@ -1,0 +1,223 @@
+{
+  "generatedAt": "2026-07-02T14:45:23.560Z",
+  "note": "Explicit bid mapping: prefer QĐ parsed from QLNB; fallback goi_code.",
+  "items": [
+    {
+      "source_goi_code": "QĐ139",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.2977.N4.1022",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ141",
+      "source_product_goi_thau": "141",
+      "source_qlnb_code": "G3.ĐY.QĐ141.82.N3.128",
+      "target_bid": "QĐ141",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ802",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.2157.N4.667",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ37",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.2863.N4.245",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ37",
+      "source_product_goi_thau": "141",
+      "source_qlnb_code": "G3.ĐY.QĐ141.25.N3.8",
+      "target_bid": "QĐ141",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ236",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.2014.N4.37.G",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ789",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.3034.N5.599.G",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ3231",
+      "source_product_goi_thau": null,
+      "source_qlnb_code": "QD284.49.N4.549",
+      "target_bid": "QĐ3231",
+      "rule": "FALLBACK_GOI_CODE"
+    },
+    {
+      "source_goi_code": "QĐ2047",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ2047.21.N4",
+      "target_bid": "QĐ2047",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ273",
+      "source_product_goi_thau": "141",
+      "source_qlnb_code": "G3.ĐY.QĐ273.N3.81",
+      "target_bid": "QĐ273",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ268",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.953.N2.519",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ651",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.981.N2.732",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ593",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.918.N2.191",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ42",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.3089.N5.37",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": null,
+      "source_product_goi_thau": null,
+      "source_qlnb_code": "QĐ1572.1184.N3.755",
+      "target_bid": "QĐ1572",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ33",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.901.N2.183",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ159",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.2977.N4.1022",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ384",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.901.N2.183",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ535",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.901.N2.183",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ521",
+      "source_product_goi_thau": "141",
+      "source_qlnb_code": "G3.ĐY.QĐ141.42.N3.205",
+      "target_bid": "QĐ141",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ575",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.981.N2.732",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ342",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.981.N2.732",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ799",
+      "source_product_goi_thau": "141",
+      "source_qlnb_code": "G3.ĐY.QĐ141.60.N3.173",
+      "target_bid": "QĐ141",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ224",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.981.N2.732",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ325",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.981.N2.732",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ180",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.901.N2.183",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ129",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.981.N2.732",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ365",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ139.843.N2.747",
+      "target_bid": "QĐ139",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": "QĐ48",
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ48.549.N4.549",
+      "target_bid": "QĐ48",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": null,
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ25000387599.2014.N4",
+      "target_bid": "QĐ25000387599",
+      "rule": "FROM_QLNB"
+    },
+    {
+      "source_goi_code": null,
+      "source_product_goi_thau": "139",
+      "source_qlnb_code": "G1.GE.QĐ1246.131.N4",
+      "target_bid": "QĐ1246",
+      "rule": "FROM_QLNB"
+    }
+  ]
+}

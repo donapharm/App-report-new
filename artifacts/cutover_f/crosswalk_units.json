@@ -1,0 +1,542 @@
+{
+  "generatedAt": "2026-07-02T14:45:23.558Z",
+  "note": "Explicit AppSale CL unit mapping. Runtime must use this table, not prefix heuristics.",
+  "items": [
+    {
+      "source_unit_id": "1",
+      "source_unit_code": "001.BVĐK Đồng Nai",
+      "source_unit_name": "BVĐK Đồng Nai",
+      "target_unit_code3": "001",
+      "target_unit_label": "001.BVĐK Đồng Nai",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "2",
+      "source_unit_code": "001.BVĐK Đồng Nai-KHU C",
+      "source_unit_name": "BVĐK Đồng Nai-KHU C",
+      "target_unit_code3": "001",
+      "target_unit_label": "001.BVĐK Đồng Nai",
+      "rule": "CEO_CHOT_GOP_001_KHU_C"
+    },
+    {
+      "source_unit_id": "3",
+      "source_unit_code": "002.BVĐK Thống Nhất ĐN",
+      "source_unit_name": "BVĐK Thống Nhất ĐN",
+      "target_unit_code3": "002",
+      "target_unit_label": "002.BVĐK Thống Nhất ĐN",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "4",
+      "source_unit_code": "003.BV Da liễu",
+      "source_unit_name": "BV Da liễu",
+      "target_unit_code3": "003",
+      "target_unit_label": "003.BV Da liễu",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "5",
+      "source_unit_code": "004.BV Nhi",
+      "source_unit_name": "BV Nhi",
+      "target_unit_code3": "004",
+      "target_unit_label": "004.BV Nhi",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "6",
+      "source_unit_code": "005.BV Phổi",
+      "source_unit_name": "BV Phổi",
+      "target_unit_code3": "005",
+      "target_unit_label": "005.BV Phổi",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "7",
+      "source_unit_code": "006.BV YDCT",
+      "source_unit_name": "BV YDCT",
+      "target_unit_code3": "006",
+      "target_unit_label": "006.BV YDCT",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "8",
+      "source_unit_code": "007.BVĐK KV Định Quán",
+      "source_unit_name": "BVĐK KV Định Quán",
+      "target_unit_code3": "007",
+      "target_unit_label": "007.BVĐK KV Định Quán",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "9",
+      "source_unit_code": "008.BVĐK KV Long Khánh",
+      "source_unit_name": "BVĐK KV Long Khánh",
+      "target_unit_code3": "008",
+      "target_unit_label": "008.BVĐK KV Long Khánh",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "10",
+      "source_unit_code": "009.BVĐK KV Long Thành",
+      "source_unit_name": "BVĐK KV Long Thành",
+      "target_unit_code3": "009",
+      "target_unit_label": "009.BVĐK KV Long Thành",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "11",
+      "source_unit_code": "010.BV Quân Y 7B",
+      "source_unit_name": "BV Quân Y 7B",
+      "target_unit_code3": "010",
+      "target_unit_label": "010.BV Quân Y 7B",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "12",
+      "source_unit_code": "011.BV Cao Su ĐN",
+      "source_unit_name": "BV Cao Su ĐN",
+      "target_unit_code3": "011",
+      "target_unit_label": "011.BV Cao Su ĐN",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "13",
+      "source_unit_code": "012.BV Tâm Thần TW2",
+      "source_unit_name": "BV Tâm Thần TW2",
+      "target_unit_code3": "012",
+      "target_unit_label": "012.BV Tâm Thần TW2",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "14",
+      "source_unit_code": "013.TTYT H. Long Thành",
+      "source_unit_name": "TTYT H. Long Thành",
+      "target_unit_code3": "013",
+      "target_unit_label": "013.TTYT H. Long Thành",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "15",
+      "source_unit_code": "014.TTYT H. Nhơn Trạch",
+      "source_unit_name": "TTYT H. Nhơn Trạch",
+      "target_unit_code3": "014",
+      "target_unit_label": "014.TTYT H. Nhơn Trạch",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "16",
+      "source_unit_code": "015.TTYT H. Cẩm Mỹ",
+      "source_unit_name": "TTYT H. Cẩm Mỹ",
+      "target_unit_code3": "015",
+      "target_unit_label": "015.TTYT H. Cẩm Mỹ",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "17",
+      "source_unit_code": "016.TTYT H. Tân Phú",
+      "source_unit_name": "TTYT H. Tân Phú",
+      "target_unit_code3": "016",
+      "target_unit_label": "016.TTYT H. Tân Phú",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "18",
+      "source_unit_code": "017.TTYT H. Thống Nhất",
+      "source_unit_name": "TTYT H. Thống Nhất",
+      "target_unit_code3": "017",
+      "target_unit_label": "017.TTYT H. Thống Nhất",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "19",
+      "source_unit_code": "018.TTYT H. Trảng Bom",
+      "source_unit_name": "TTYT H. Trảng Bom",
+      "target_unit_code3": "018",
+      "target_unit_label": "018.TTYT H. Trảng Bom",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "20",
+      "source_unit_code": "019.TTYT H. Vĩnh Cửu",
+      "source_unit_name": "TTYT H. Vĩnh Cửu",
+      "target_unit_code3": "019",
+      "target_unit_label": "019.TTYT H. Vĩnh Cửu",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "21",
+      "source_unit_code": "020.TTYT TP. Biên Hòa",
+      "source_unit_name": "TTYT TP. Biên Hòa",
+      "target_unit_code3": "020",
+      "target_unit_label": "020.TTYT TP. Biên Hòa",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "22",
+      "source_unit_code": "021.TTYT H. Xuân Lộc",
+      "source_unit_name": "TTYT H. Xuân Lộc",
+      "target_unit_code3": "021",
+      "target_unit_label": "021.TTYT H. Xuân Lộc",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "23",
+      "source_unit_code": "023.VIỆN PHÁP Y TÂM THẦN",
+      "source_unit_name": "VIỆN PHÁP Y TÂM THẦN",
+      "target_unit_code3": "023",
+      "target_unit_label": "023.VIỆN PHÁP Y TÂM THẦN",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "24",
+      "source_unit_code": "024.TRƯỜNG SỸ QUAN LỤC QUÂN 2",
+      "source_unit_name": "TRƯỜNG SỸ QUAN LỤC QUÂN 2",
+      "target_unit_code3": "024",
+      "target_unit_label": "024.TRƯỜNG SỸ QUAN LỤC QUÂN 2",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "25",
+      "source_unit_code": "068.TRUNG TÂM KIỂM SOÁT BỆNH TẬT (CDC)",
+      "source_unit_name": "TRUNG TÂM KIỂM SOÁT BỆNH TẬT (CDC)",
+      "target_unit_code3": "068",
+      "target_unit_label": "068.TRUNG TÂM KIỂM SOÁT BỆNH TẬT (CDC)",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "26",
+      "source_unit_code": "071.BỆNH XÁ CÔNG AN TỈNH",
+      "source_unit_name": "BỆNH XÁ CÔNG AN TỈNH",
+      "target_unit_code3": "071",
+      "target_unit_label": "071.BỆNH XÁ CÔNG AN TỈNH",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "27",
+      "source_unit_code": "071.TRUNG TÂM NGHIỆN",
+      "source_unit_name": "TRUNG TÂM NGHIỆN",
+      "target_unit_code3": "071",
+      "target_unit_label": "071.TRUNG TÂM NGHIỆN",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "28",
+      "source_unit_code": "077.BV ÂU CƠ",
+      "source_unit_name": "BV ÂU CƠ",
+      "target_unit_code3": "077",
+      "target_unit_label": "077.BV ÂU CƠ",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "29",
+      "source_unit_code": "078.PKĐK CAO ĐẲNG Y TẾ ĐỒNG NAI",
+      "source_unit_name": "PKĐK CAO ĐẲNG Y TẾ ĐỒNG NAI",
+      "target_unit_code3": "078",
+      "target_unit_label": "078.PKĐK CAO ĐẲNG Y TẾ ĐỒNG NAI",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "30",
+      "source_unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "source_unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "target_unit_code3": "083",
+      "target_unit_label": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "31",
+      "source_unit_code": "101.BVĐK QUÂN Y 4",
+      "source_unit_name": "BVĐK QUÂN Y 4",
+      "target_unit_code3": "101",
+      "target_unit_label": "101.BVĐK QUÂN Y 4",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "32",
+      "source_unit_code": "106.TTYT H. TÂN HƯNG",
+      "source_unit_name": "TTYT H. TÂN HƯNG",
+      "target_unit_code3": "106",
+      "target_unit_label": "106.TTYT H. TÂN HƯNG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "34",
+      "source_unit_code": "107.TTYT H. TÂN THẠNH",
+      "source_unit_name": "TTYT H. TÂN THẠNH",
+      "target_unit_code3": "107_TAN_THANH",
+      "target_unit_label": "107.TTYT H. TÂN THẠNH",
+      "rule": "MANUAL_107_PREFIX_COLLISION_GAP_NO_LUMOS_KEY_CONFIRMED"
+    },
+    {
+      "source_unit_id": "33",
+      "source_unit_code": "107.TTYT H. ĐỨC HUỆ",
+      "source_unit_name": "TTYT H. ĐỨC HUỆ",
+      "target_unit_code3": "107_DUC_HUE",
+      "target_unit_label": "107.TTYT H. ĐỨC HUỆ",
+      "rule": "MANUAL_107_PREFIX_COLLISION_GAP_NO_LUMOS_KEY_CONFIRMED"
+    },
+    {
+      "source_unit_id": "35",
+      "source_unit_code": "108. BVĐK LONG AN",
+      "source_unit_name": " BVĐK LONG AN",
+      "target_unit_code3": "108",
+      "target_unit_label": "108. BVĐK LONG AN",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "36",
+      "source_unit_code": "118.TTYT TUY PHONG",
+      "source_unit_name": "TTYT TUY PHONG",
+      "target_unit_code3": "118",
+      "target_unit_label": "118.TTYT TUY PHONG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "37",
+      "source_unit_code": "119.TTYT TP ĐÀ LẠT",
+      "source_unit_name": "TTYT TP ĐÀ LẠT",
+      "target_unit_code3": "119",
+      "target_unit_label": "119.TTYT TP ĐÀ LẠT",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "38",
+      "source_unit_code": "121.BV LAGI",
+      "source_unit_name": "BV LAGI",
+      "target_unit_code3": "121",
+      "target_unit_label": "121.BV LAGI",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "39",
+      "source_unit_code": "122.TTYT HÀM TÂN",
+      "source_unit_name": "TTYT HÀM TÂN",
+      "target_unit_code3": "122",
+      "target_unit_label": "122.TTYT HÀM TÂN",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "40",
+      "source_unit_code": "123.BVĐK TW CẦN THƠ",
+      "source_unit_name": "BVĐK TW CẦN THƠ",
+      "target_unit_code3": "123",
+      "target_unit_label": "123.BVĐK TW CẦN THƠ",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "41",
+      "source_unit_code": "124.BV QUÂN DÂN Y SÓC TRĂNG",
+      "source_unit_name": "BV QUÂN DÂN Y SÓC TRĂNG",
+      "target_unit_code3": "124",
+      "target_unit_label": "124.BV QUÂN DÂN Y SÓC TRĂNG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "42",
+      "source_unit_code": "140.BVĐK BÌNH PHƯỚC",
+      "source_unit_name": "BVĐK BÌNH PHƯỚC",
+      "target_unit_code3": "140",
+      "target_unit_label": "140.BVĐK BÌNH PHƯỚC",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "43",
+      "source_unit_code": "141.BV Y HỌC CỔ TRUYỀN TỈNH",
+      "source_unit_name": "BV Y HỌC CỔ TRUYỀN TỈNH",
+      "target_unit_code3": "141",
+      "target_unit_label": "141.BV Y HỌC CỔ TRUYỀN TỈNH",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "44",
+      "source_unit_code": "142.BV QUÂN DÂN Y 16",
+      "source_unit_name": "BV QUÂN DÂN Y 16",
+      "target_unit_code3": "142",
+      "target_unit_label": "142.BV QUÂN DÂN Y 16",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "45",
+      "source_unit_code": "144.BV CAO SU PHÚ RIỀNG",
+      "source_unit_name": "BV CAO SU PHÚ RIỀNG",
+      "target_unit_code3": "144",
+      "target_unit_label": "144.BV CAO SU PHÚ RIỀNG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "46",
+      "source_unit_code": "145.BV CAO SU BÌNH LONG",
+      "source_unit_name": "BV CAO SU BÌNH LONG",
+      "target_unit_code3": "145",
+      "target_unit_label": "145.BV CAO SU BÌNH LONG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "47",
+      "source_unit_code": "146.TTYT PHƯỚC LONG",
+      "source_unit_name": "TTYT PHƯỚC LONG",
+      "target_unit_code3": "146",
+      "target_unit_label": "146.TTYT PHƯỚC LONG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "48",
+      "source_unit_code": "147.TTYT BÌNH LONG",
+      "source_unit_name": "TTYT BÌNH LONG",
+      "target_unit_code3": "147",
+      "target_unit_label": "147.TTYT BÌNH LONG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "49",
+      "source_unit_code": "148.TTYT ĐỒNG XOÀI",
+      "source_unit_name": "TTYT ĐỒNG XOÀI",
+      "target_unit_code3": "148",
+      "target_unit_label": "148.TTYT ĐỒNG XOÀI",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "50",
+      "source_unit_code": "149.TTYT LỘC NINH",
+      "source_unit_name": "TTYT LỘC NINH",
+      "target_unit_code3": "149",
+      "target_unit_label": "149.TTYT LỘC NINH",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "51",
+      "source_unit_code": "150.TTYT ĐỒNG PHÚ",
+      "source_unit_name": "TTYT ĐỒNG PHÚ",
+      "target_unit_code3": "150",
+      "target_unit_label": "150.TTYT ĐỒNG PHÚ",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "52",
+      "source_unit_code": "151.TTYT CHƠN THÀNH",
+      "source_unit_name": "TTYT CHƠN THÀNH",
+      "target_unit_code3": "151",
+      "target_unit_label": "151.TTYT CHƠN THÀNH",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "53",
+      "source_unit_code": "152.TTYT BÙ GIA MẬP",
+      "source_unit_name": "TTYT BÙ GIA MẬP",
+      "target_unit_code3": "152",
+      "target_unit_label": "152.TTYT BÙ GIA MẬP",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "54",
+      "source_unit_code": "153.TTYT BÙ ĐĂNG",
+      "source_unit_name": "TTYT BÙ ĐĂNG",
+      "target_unit_code3": "153",
+      "target_unit_label": "153.TTYT BÙ ĐĂNG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "55",
+      "source_unit_code": "154.TTYT BÙ ĐỐP",
+      "source_unit_name": "TTYT BÙ ĐỐP",
+      "target_unit_code3": "154",
+      "target_unit_label": "154.TTYT BÙ ĐỐP",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "56",
+      "source_unit_code": "155.TTYT HỚN QUẢN",
+      "source_unit_name": "TTYT HỚN QUẢN",
+      "target_unit_code3": "155",
+      "target_unit_label": "155.TTYT HỚN QUẢN",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "57",
+      "source_unit_code": "188.BV ĐKKV CÀ MAU",
+      "source_unit_name": "BV ĐKKV CÀ MAU",
+      "target_unit_code3": "188",
+      "target_unit_label": "188.BV ĐKKV CÀ MAU",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "58",
+      "source_unit_code": "189.BVĐK CÁI NƯỚC",
+      "source_unit_name": "BVĐK CÁI NƯỚC",
+      "target_unit_code3": "189",
+      "target_unit_label": "189.BVĐK CÁI NƯỚC",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "59",
+      "source_unit_code": "190.BVĐK NĂM CĂN",
+      "source_unit_name": "BVĐK NĂM CĂN",
+      "target_unit_code3": "190",
+      "target_unit_label": "190.BVĐK NĂM CĂN",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "61",
+      "source_unit_code": "192.BVĐK ĐẦM DƠI",
+      "source_unit_name": "BVĐK ĐẦM DƠI",
+      "target_unit_code3": "192",
+      "target_unit_label": "192.BVĐK ĐẦM DƠI",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "63",
+      "source_unit_code": "193.BVĐK TRẦN VĂN THỜI",
+      "source_unit_name": "BVĐK TRẦN VĂN THỜI",
+      "target_unit_code3": "193",
+      "target_unit_label": "193.BVĐK TRẦN VĂN THỜI",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "64",
+      "source_unit_code": "194.BV PHỤ SẢN TIỀN GIANG",
+      "source_unit_name": "BV PHỤ SẢN TIỀN GIANG",
+      "target_unit_code3": "194",
+      "target_unit_label": "194.BV PHỤ SẢN TIỀN GIANG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "65",
+      "source_unit_code": "194.BVĐK VĨNH LỢI",
+      "source_unit_name": "BVĐK VĨNH LỢI",
+      "target_unit_code3": "194",
+      "target_unit_label": "194.BVĐK VĨNH LỢI",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "66",
+      "source_unit_code": "195.BVĐK CAI LẬY",
+      "source_unit_name": "BVĐK CAI LẬY",
+      "target_unit_code3": "195",
+      "target_unit_label": "195.BVĐK CAI LẬY",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "67",
+      "source_unit_code": "195.BVĐK PHƯỚC LONG",
+      "source_unit_name": "BVĐK PHƯỚC LONG",
+      "target_unit_code3": "195",
+      "target_unit_label": "195.BVĐK PHƯỚC LONG",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "68",
+      "source_unit_code": "196.BVĐK ĐÔNG HẢI",
+      "source_unit_name": "BVĐK ĐÔNG HẢI",
+      "target_unit_code3": "196",
+      "target_unit_label": "196.BVĐK ĐÔNG HẢI",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    },
+    {
+      "source_unit_id": "69",
+      "source_unit_code": "197.BV QUÂN DÂN Y BẠC LIÊU",
+      "source_unit_name": "BV QUÂN DÂN Y BẠC LIÊU",
+      "target_unit_code3": "197",
+      "target_unit_label": "197.BV QUÂN DÂN Y BẠC LIÊU",
+      "rule": "EXPLICIT_FROM_SOURCE_CODE"
+    }
+  ]
+}
