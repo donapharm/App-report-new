@@ -44,6 +44,13 @@ Lưu ý dữ liệu: sau cutover CST lấy App Sale (mục khác), nhưng **UX n
 - **Tùy chọn:** toggle **"Gộp theo tên"** (tổng mọi biến thể cùng tên) ↔ **"Tách theo mã QLNB"** (mặc định, chi tiết). Khi gộp → gộp doanh thu/SL các mã cùng tên; khi tách → mỗi mã 1 dòng.
 - Backend: filter sản phẩm nhận `iit_code` (đã có) thay vì tên; `/api/filters` trả option sản phẩm kèm thuộc tính phân biệt (name, iit_code, hoat_chat, ham_luong, uom, contractor, qd). Không đổi mô hình quyền.
 
+### ‼ PHẠM VI: ÁP DỤNG TOÀN APP (CEO nhấn 2026-07-03)
+Typeahead + phân biệt-theo-mã-QLNB + lọc-theo-mã-đơn-vị phải **nhất quán ở MỌI nơi có bộ lọc/danh sách đơn vị-sản phẩm**, không chỉ trang Sản phẩm:
+- **Doanh thu** (NV/ĐV/SP + drill-down), **DT đầy đủ**, **Sản phẩm**, **Phân tích**, **Cơ số thầu**, **Tổng quan** (Top 10 ĐV/SP), **Hỏi nhanh** (khi tham chiếu SP), **Target** (ô ĐV nếu có).
+- **Ô lọc dùng chung 1 component** (combobox typeahead + option có thuộc tính phân biệt, value=iit_code / mã ĐV) để đồng bộ; sửa 1 nơi, mọi trang được.
+- **Export Excel** cũng mang **mã QLNB + thuộc tính phân biệt** (không chỉ tên) để file xuất không nhầm biến thể.
+- Nguyên tắc chung toàn app: **định danh sản phẩm = iit_code, định danh đơn vị = mã ĐV** — tên chỉ là nhãn hiển thị.
+
 ## Nghiệm thu
 - Lọc typeahead: gõ vài ký tự (tên/mã QLNB/hoạt chất) ra đúng gợi ý; chọn được cả khi danh sách dài.
 - Trùng tên: 2 dòng "Alusi" hiện rõ khác nhau (mã QLNB/ĐVT/nhà thầu/QĐ/giá); lọc theo mã QLNB không nhầm; toggle gộp/tách chạy đúng, số khớp tổng.
