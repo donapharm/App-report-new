@@ -65,9 +65,11 @@ export default function Revenue({ me }) {
       {!data ? <Spinner /> : data.rows.length === 0 ? (
         <div className="center">Không có dữ liệu.</div>
       ) : (
-        <div className="card">
+        <div className="list-grid">
           {data.rows.map((r, i) => (
-            <RankRow key={r.key} i={i + 1} name={r.label} meta={`${short(r.revenue)} · ${r.quantity.toLocaleString('vi-VN')} SL`} amount={r.revenue} max={max} onClick={dim !== 'product' ? () => drill(r) : undefined} />
+            <div className="rank-card" key={r.key}>
+              <RankRow i={i + 1} name={r.label} meta={`${short(r.revenue)} · ${r.quantity.toLocaleString('vi-VN')} SL`} amount={r.revenue} max={max} onClick={dim !== 'product' ? () => drill(r) : undefined} />
+            </div>
           ))}
         </div>
       )}

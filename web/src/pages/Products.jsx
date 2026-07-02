@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, short } from '../util.js';
-import { Spinner, RankRow } from '../components.jsx';
+import { Spinner, Bar } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 
 export default function Products({ me }) {
@@ -34,16 +34,24 @@ export default function Products({ me }) {
         <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel sản phẩm</button>
       </div>
       {!data ? <Spinner /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
-        <div className="card">
+        <div className="list-grid">
           {data.rows.map((r, i) => (
-            <RankRow
-              key={r.key}
-              i={i + 1}
-              name={r.product_name}
-              meta={`${r.iit_code} · ${short(r.revenue)} · SL ${r.quantity.toLocaleString('vi-VN')} · ${r.unitCount} đơn vị · ${r.empCount} NV${r.bidPackages ? ' · ' + r.bidPackages : ''}`}
-              amount={r.revenue}
-              max={max}
-            />
+            <div className="card" key={r.key}>
+              <div className="list-card-title">
+                <div>
+                  <div className="name"><span className="rank">{i + 1}</span>{r.product_name}</div>
+                  <div className="meta mono">{r.iit_code || '—'}</div>
+                </div>
+                <div className="amt">{short(r.revenue)}</div>
+              </div>
+              <Bar value={r.revenue} max={max} />
+              <div className="list-card-meta">
+                <span className="pill muted-pill">SL {r.quantity.toLocaleString('vi-VN')}</span>
+                <span className="pill muted-pill">{r.unitCount} ĐV</span>
+                <span className="pill muted-pill">{r.empCount} NV</span>
+                {r.bidPackages && <span className="pill muted-pill">{r.bidPackages}</span>}
+              </div>
+            </div>
           ))}
         </div>
       )}

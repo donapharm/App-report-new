@@ -56,6 +56,25 @@ body {
 .kpi.clickable:hover { transform: translateY(-1px); border-color: var(--brand); }
 .delta.up { color: var(--ok); } .delta.down { color: var(--hi); }
 
+/* Compact list cards — keep page-desktop untouched, only lists opt in. */
+.list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 10px; align-items: stretch; }
+.list-grid .card, .list-grid .rank-card { margin-bottom: 0; }
+.rank-card { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 10px 12px; border: 1px solid var(--line); }
+.rank-card .row { margin: 0; padding: 0; box-shadow: none; border: none; background: transparent; }
+.list-card-title { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 7px; }
+.list-card-title .name { font-weight: 800; color: var(--text); line-height: 1.25; }
+.list-card-title .amt { font-weight: 800; color: var(--brand); white-space: nowrap; }
+.list-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.list-card-meta .pill { font-size: 11px; }
+.cst-list-card.highlight-need { background: #fffaf0; }
+.cst-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 10px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.cst-metrics b { color: var(--text); font-weight: 700; }
+
+@media (max-width: 560px) {
+  .list-grid { grid-template-columns: 1fr; }
+  .cst-metrics { grid-template-columns: 1fr; }
+}
+
 /* Alerts */
 .alert { display: flex; gap: 10px; padding: 11px 12px; border-radius: 12px; background: var(--card); box-shadow: var(--shadow); margin-bottom: 9px; border-left: 4px solid var(--line); }
 .alert.high { border-left-color: var(--hi); }

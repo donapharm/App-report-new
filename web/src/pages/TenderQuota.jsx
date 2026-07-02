@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money } from '../util.js';
-import { Spinner } from '../components.jsx';
+import { Spinner, Bar } from '../components.jsx';
 
 const FILTERS = [
   { key: 'all', label: 'Tất cả', params: {} },
@@ -122,51 +122,40 @@ export default function TenderQuota({ me }) {
       {!data ? <Spinner /> : data.length === 0 ? (
         <div className="center">Không có dòng nào khớp bộ lọc.</div>
       ) : (
-        <div className="card table-card cst-table-card">
-          <div className="table-scroll">
-            <table className="data-table cst-table">
-              <thead>
-                <tr>
-                  <th>Mã QL nội bộ</th><th>Tên thuốc</th><th>Hoạt chất</th><th>Hàm lượng</th><th>ĐVT</th><th>Nhóm</th><th>UT</th>
-                  <th>Gói thầu</th><th>Đơn vị</th><th>NV phụ trách</th>
-                  <th className="num">Giá thầu</th><th className="num">Giá bán</th><th className="num">Tổng TT</th><th className="num">CST còn lại</th><th className="num">% còn lại</th>
-                  <th className="num">Tổng đã bán</th><th className="num">SL đã bán</th><th className="num">SL còn</th><th className="num">TT đã bán</th><th className="num">TT còn lại</th>
-                  <th>Ngày nguồn</th><th>Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.slice(0, 600).map((c, i) => {
-                  const st = decision(c);
-                  return (
-                    <tr key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={Number(c.remain_pct || 0) > 70 ? 'highlight-need' : ''}>
-                      <td className="mono">{c.iit_code || '—'}</td>
-                      <td><b>{c.product_name || '—'}</b></td>
-                      <td>{c.active_ingredient || '—'}</td>
-                      <td>{c.ham_luong || '—'}</td>
-                      <td>{c.uom || '—'}</td>
-                      <td><span className="pill muted-pill">{groupOf(c.iit_code) || '—'}</span></td>
-                      <td><span className="pill muted-pill">{c.priority || '—'}</span></td>
-                      <td>{compact(c.bid_package)}</td>
-                      <td>{c.unit_name || c.unit_code || '—'}</td>
-                      <td>{c.emp_code || c.sales_emps || '—'}</td>
-                      <td className="num">{n(c.bid_price)}</td>
-                      <td className="num">{n(c.sale_price)}</td>
-                      <td className="num strong">{n(c.bid_qty_initial)}</td>
-                      <td className="num strong">{n(c.remain_qty)}</td>
-                      <td className="num"><span className={'pill ' + pctTone(Number(c.remain_pct || 0))}>{c.remain_pct}%</span></td>
-                      <td className="num strong">{n(c.sold_qty)}</td>
-                      <td className="num">{n(c.sold_qty)}</td>
-                      <td className="num">{n(c.remain_qty)}</td>
-                      <td className="num">{money(c.sold_amount)}</td>
-                      <td className="num">{money(c.remain_amount)}</td>
-                      <td>{c.source_from_date || '—'}</td>
-                      <td><span className={'pill ' + st.cls}>{st.text}</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+        <div className="list-grid">
+          {data.slice(0, 600).map((c, i) => {
+            const st = decision(c);
+            const pct = Number(c.remain_pct || 0);
+            return (
+              <div key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={'card cst-list-card ' + (pct > 70 ? 'highlight-need' : '')}>
+                <div className="list-card-title">
+                  <div>
+                    <div className="name">{c.product_name || '—'}</div>
+                    <div className="meta mono">{c.iit_code || '—'} · {c.active_ingredient || '—'} · {c.ham_luong || '—'} · {c.uom || '—'}</div>
+                  </div>
+                  <span className={'pill ' + pctTone(pct)}>{c.remain_pct}%</span>
+                </div>
+                <Bar value={Math.max(0, Math.min(100, pct))} max={100} tone={pct < 10 || pct > 80 ? 'warn' : ''} />
+                <div className="meta muted" style={{ marginTop: 6 }}>{c.unit_name || c.unit_code || '—'} · NV {c.emp_code || c.sales_emps || '—'}</div>
+                <div className="list-card-meta">
+                  <span className="pill muted-pill">Nhóm {groupOf(c.iit_code) || '—'}</span>
+                  <span className="pill muted-pill">UT {c.priority || '—'}</span>
+                  <span className="pill muted-pill">{compact(c.bid_package)}</span>
+                  <span className={'pill ' + st.cls}>{st.text}</span>
+                </div>
+                <div className="cst-metrics">
+                  <span>Giá thầu <b>{n(c.bid_price)}</b></span>
+                  <span>Giá bán <b>{n(c.sale_price)}</b></span>
+                  <span>Tổng TT <b>{n(c.bid_qty_initial)}</b></span>
+                  <span>CST còn <b>{n(c.remain_qty)}</b></span>
+                  <span>SL bán <b>{n(c.sold_qty)}</b></span>
+                  <span>TT bán <b>{money(c.sold_amount)}</b></span>
+                  <span>TT còn <b>{money(c.remain_amount)}</b></span>
+                  <span>Nguồn <b>{c.source_from_date || '—'}</b></span>
+                </div>
+              </div>
+            );
+          })}
           {data.length > 600 && <p className="muted" style={{ textAlign: 'center', fontSize: 12, paddingBottom: 12 }}>Đang hiển thị 600 dòng đầu, dùng bộ lọc hoặc xuất Excel để xem toàn bộ {data.length.toLocaleString('vi-VN')} dòng.</p>}
         </div>
       )}
