@@ -2,6 +2,13 @@
 
 > Claude Code giao (CEO yêu cầu 2026-07-03). Bot triển khai; Claude review. Không đụng app cũ 3860. Chỉ đổi HIỂN THỊ, không đổi số/logic.
 
+## ‼ ĐÍNH CHÍNH (CEO 2026-07-03): SỐ CHÍNH = ĐẦY ĐỦ, KHÔNG viết tắt "tỷ"
+CEO phản ánh Tổng quan vẫn hiện **"2,67 tỷ"** làm số lớn. **SAI ý.** Yêu cầu:
+- **Số headline/KPI/thẻ = ĐẦY ĐỦ theo kế toán VN:** `2.668.987.096đ` (KHÔNG phải "2,67 tỷ").
+- Bot đang dùng `short()` ("2,67 tỷ") cho số lớn → **đổi sang `money()` đầy đủ**. Bỏ dòng phụ trùng lặp "…đ sau VAT" hoặc đổi thành nhãn khác (VD "trước VAT: …đ").
+- **CHỈ được viết tắt (`2,67 tỷ`) ở TRỤC BIỂU ĐỒ** (chỗ quá chật). Mọi số đọc chính khác = đầy đủ.
+- Cỡ chữ số lớn có thể giảm nhẹ để `2.668.987.096đ` vừa thẻ; phối `DIRECTIVE_MOBILE_UX.md` để không cắt trên điện thoại (xuống dòng nếu cần, không cụt).
+
 ## Chuẩn số tiền
 - **Ngăn cách hàng nghìn = dấu CHẤM `.`**, số nguyên đồng (không lẻ), đuôi **`đ`**.
   - `1.000đ` · `1.000.000đ` · `10.000.000đ` · `2.670.947.096đ`.
