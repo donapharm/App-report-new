@@ -58,6 +58,20 @@ Bot fix T07 khớp app cũ (2.668.987.096) bằng cách **loại đơn `DT-26063
 3. Ghi **quy tắc gán kỳ** thành spec rõ (order-date vs delivery-date) để tháng 8+ không lệch.
 → Bot trả lời + đối chiếu 2–3 đơn giáp ranh cuối/đầu tháng. Không ép số.
 
+## ✅ BOT TRẢ LỜI 2026-07-03 — quy tắc gán kỳ đã chốt để App Report New replicate app cũ
+1. **Quy tắc gán kỳ chính xác:**
+   - **CRM MISA:** gán kỳ theo `revenue_date`/ngày xuất hóa đơn trong snapshot MISA; chỉ tính bucket đã xuất/đã thực hiện (`official`, `pending` theo read-model đã xác nhận).
+   - **APP WEB Partner:** replicate app cũ theo **kỳ đơn đặt (`orders.created_at`, giờ VN)**, sau đó mới xét trạng thái thực hiện: chỉ dòng/đơn đã phản hồi giao đủ trong cùng phạm vi báo cáo mới vào “đã thực hiện”; đơn còn nợ/chưa giao/HOLD/hủy không cộng vào doanh thu đã thực hiện.
+   - Vì vậy, đơn đặt cuối tháng trước nhưng phản hồi/giao sang tháng sau **không được kéo sang kỳ sau** chỉ vì `responded_at` nằm tháng sau.
+2. **Đơn `DT-260630-0115/WEB:2188` có bị mất không?**
+   - Trong App Sale DB: **không mất**; trace còn nguyên (`created_at=2026-06-30`, `responded_at=2026-07-01`, `delivered_value=1.960.000đ`).
+   - Trong **App Report New T07**: cố ý **không tính**, để khớp app cũ WEB T07 `550.673.600đ` / 32 đơn.
+   - Với doanh thu lịch sử **T06 App Report New đang đóng băng từ Lumos** theo directive “01–06 không sửa”, dòng chuyển kỳ này không được tự ý cộng ngược vào T06. Nếu CEO muốn báo cáo “full App Sale WEB từ trước 07”, phải mở một **transition/carryover adjustment** riêng và được duyệt, không cộng lặng vào T07.
+3. **Spec cho tháng 08+ / sau này:**
+   - Từ T07 trở đi, materializer Partner dùng **month(order.created_at Asia/Bangkok) = kỳ báo cáo** + trạng thái giao đủ/đã thực hiện; không dùng riêng `responded_at` để kéo doanh thu sang kỳ sau.
+   - Các dòng phản hồi sau kỳ nhưng đơn thuộc kỳ cũ phải nằm trong audit/carryover hoặc refresh kỳ đặt hàng nếu kỳ đó còn mở; kỳ đã khóa thì chỉ điều chỉnh bằng adjustment có duyệt.
+   - Không ép số: nếu app cũ có ngoại lệ khác, phải trace order/dòng + nguồn trước khi đổi rule.
+
 ## Lưu ý
 - **Đây là bài học:** nguồn doanh thu App Report GỒM CRM MISA (chính) + APP WEB (đối tác). Mọi thiết kế cutover phải tính CẢ HAI (cập nhật lại `SPEC_DATASOURCE_CUTOVER` nếu cần).
 - **Độ tươi 2 nguồn khác nhau:** MISA = snapshot (cần chụp lại), WEB = live → App Report nên hiện "cập nhật đến HH:MM" và cân nhắc tự chụp MISA định kỳ. Nhưng ĐỊNH NGHĨA phải khớp app cũ trước đã.

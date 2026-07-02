@@ -29,6 +29,12 @@
 - Scheduler 60' (env `REVENUE_REFRESH_MINUTES`, khung giờ tuỳ chọn): chụp snapshot MISA → materialize kỳ đang chạy (MISA xuất HĐ + WEB đã giao đủ) → ghi `data_as_of`. Chỉ kỳ đang chạy; kỳ đã đóng giữ nguyên. Idempotent, lỗi thì giữ số cũ.
 - Frontend: nhãn "Cập nhật đến HH:MM" + nút "↻ Làm mới" (admin). **NV không thao tác gì — mở app thấy số mới nhất trong 1 giờ, theo scope của mình.** MISA chỉ gọi ~1 lần/giờ.
 
+### 2026-07-03 — Bot triển khai (Report Bot) — Restart tgbot + chốt rule gán kỳ doanh thu
+- CEO duyệt restart Telegram worker: đã chạy `pm2 restart reportnew-tgbot` + `pm2 save`; process `reportnew-tgbot` online, backend `http://localhost:3873`, log mới không có error sau restart.
+- Trả lời 3 câu rule gán kỳ trong `DIRECTIVE_ENABLE_JULY_REVENUE.md`: CRM MISA theo `revenue_date`/ngày xuất HĐ; APP WEB Partner replicate app cũ theo kỳ đơn đặt `orders.created_at` (Asia/Bangkok), sau đó xét giao đủ/đã thực hiện; không kéo đơn cuối tháng trước sang kỳ sau chỉ vì `responded_at` nằm tháng sau.
+- Làm rõ `DT-260630-0115/WEB:2188`: không tính T07 để khớp app cũ; không tự cộng ngược T06 vì 01–06 đang đóng băng Lumos. Nếu cần full carryover thì phải mở adjustment riêng có duyệt.
+- Cập nhật `SPEC_DATASOURCE_CUTOVER.md` + `DIRECTIVE_ENABLE_JULY_REVENUE.md`; không đổi runtime revenue, T07 vẫn `2.668.987.096đ`.
+
 ### 2026-07-03 — Bot triển khai (Report Bot) — UI polish + Analysis/CST UX + typeahead toàn app
 - Đọc `SPEC_ANALYSIS_CST_UX.md`, `DIRECTIVE_UI_POLISH_20260702.md`, `DIRECTIVE_TELEGRAM_NLQ.md`; T07 PA-A và Telegram NLQ đã kiểm lại vẫn đúng.
 - Thêm combobox typeahead dùng chung cho bộ lọc Đơn vị/Sản phẩm/NV: tìm theo mã ĐV/tên ĐV, tên SP/mã QLNB/hoạt chất; option sản phẩm hiển thị chuỗi phân biệt QĐ/hoạt chất/hàm lượng/ĐVT/nhà thầu/giá thầu, value vẫn là `iit_code`.
