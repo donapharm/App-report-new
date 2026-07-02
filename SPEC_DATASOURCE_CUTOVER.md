@@ -103,6 +103,17 @@ Bot ghi "Model B" nhưng mô tả ("chưa thay được Lumos lịch sử; khôn
 3. Đề xuất **contract `/api/report-sync/changes`** (field trả về, phân trang, filter route=CL, updated_since) + service token → Claude review trước khi App Sale code.
 4. Viết **adapter read-only chạy SHADOW** (song song, chỉ đối chiếu, chưa thay nguồn).
 
+## F) QUYẾT ĐỊNH CROSSWALK CL (Claude chốt 2026-07-02) — bot làm theo
+> Sau bước 1 (bot): khớp **99,6%** (2731/2741) với rule "gói từ QĐ trong mã QLNB trước, fallback goi_code". **Duyệt rule này** (goi_code mù chỉ 82,1% → KHÔNG dùng trực tiếp).
+> Nguyên tắc chung: **crosswalk là BẢNG ÁNH XẠ TƯỜNG MINH** (`crosswalk_units.json`, `crosswalk_products.json`, `crosswalk_bidpkg.json`: AppSale key ↔ Lumos key), KHÔNG dựa chuẩn hóa chuỗi 3-số lúc chạy (chính thứ gây bug T06 + đụng `107`). Chuẩn hóa chuỗi chỉ dùng để DỰNG bảng, không dùng làm khóa runtime.
+
+1. **`001.BVĐK Đồng Nai` + `...KHU C` → CHỐT GỘP CHUNG vào `001`** (cùng 1 bệnh viện, khác khu; đúng app cũ). Xử lý 226 "trùng": **CỘNG** `bid_qty_initial` + `sold_qty` của 2 dòng thành 1 baseline key (KHÔNG "bỏ qua vì trùng"). Kiểm 3–5 mẫu số gộp khớp app cũ. *(CEO xác nhận nghiệp vụ; veto nếu KHU C là cơ sở riêng.)*
+2. **Prefix `107` đụng 2 đơn vị KHÁC nhau → KHÔNG map bằng 3 số.** Trong bảng ánh xạ đơn vị tường minh, tách 2 đơn vị này về đúng 2 Lumos key riêng (xử tay, ghi rõ trong `crosswalk_units.json`). Rà thêm mọi prefix khác có nguy cơ đụng tương tự.
+3. **10 key Lumos-only:** bot **phân loại theo hiệu lực** (`hd_den_ngay`/nguồn): (a) **hết hạn** → giữ baseline tĩnh, không cần App Sale trừ, OK; (b) **còn hiệu lực** → phải map hoặc đánh dấu GAP + liệt kê cho CEO (nếu không map, các gói này sẽ "đóng băng" không trừ được). Không bỏ lặng.
+4. **44 key App-only:** đây là **gói mới App Sale quản lý** (đúng mô hình App Sale sở hữu allocation). Đưa vào làm **dòng CST mới** NẾU có `cst_ban_dau_import`/allocation hợp lệ; thiếu allocation → giữ lại, không tạo dòng rỗng.
+
+**Sau 4 bước:** mục tiêu match ≈ 100% (2741 Lumos + 44 gói mới App Sale) → mới viết **adapter SHADOW** (đối chiếu, chưa cắt Lumos). Bot báo lại tỉ lệ sau khi dọn + danh sách còn lệch (nếu có) để Claude review.
+
 ## D) Thứ tự triển khai an toàn
 1. Bot xác nhận 4 câu mục C (không code, chỉ khảo sát API).
 2. Chốt hợp đồng API + bảng ánh xạ mã (nếu cần) → Claude review.
