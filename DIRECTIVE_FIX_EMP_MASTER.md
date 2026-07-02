@@ -2,7 +2,15 @@
 
 > Claude Code giao (CEO phát hiện qua ảnh 2026-07-02). Bot triển khai TRÊN SERVER (danh bạ thật + data). Không đụng app cũ 3860. Giữ tổng doanh thu đã khớp (T06 = 28.403.136.096) — không làm lệch số.
 
-## 1) THÊM 2 NV vào danh bạ (user master + auth để đăng nhập OTP)
+## 0) DANH SÁCH CỘNG TÁC VIÊN (CTV) SALE — CEO chốt 2026-07-02
+6 mã sau = **CTV sale**: `DN002`, `DN004`, `DN021`, `DN022`, `DN023`, `VP004`.
+- Status = **Cộng tác** (active, VẪN tính doanh thu như sale), role `sale`, scope = phần của mình.
+- Bot **kiểm mã nào đã có trong danh bạ** → chỉ đổi status sang "Cộng tác"; **mã nào thiếu** → thêm mới (cần tên + SĐT để đăng nhập OTP).
+- Đã có thông tin: `DN021` (Lê Anh Đức), `VP004` (Trần Hoàng Trung) — mục 1.
+- **CẦN CEO cấp thông tin nếu chưa có trong danh bạ:** `DN022`, `DN023` (tên + SĐT + email); xác nhận `DN002`, `DN004` đã có tên đúng.
+- **Target CTV:** chỉ tính % đạt / cảnh báo "chưa đạt" khi CEO CÓ giao target; không giao → bỏ khỏi cảnh báo target (CTV không hiện đỏ oan).
+
+## 1) THÊM/ĐỐI CHIẾU NV trong danh bạ (user master + auth để đăng nhập OTP)
 | emp_code | Họ tên | SĐT | Email |
 |---|---|---|---|
 | `DN021` | Lê Anh Đức | 0906107109 | ducluatsu98@yahoo.com.vn |
