@@ -4,11 +4,11 @@
 
 ## 0) DANH SÁCH CỘNG TÁC VIÊN (CTV) SALE — CEO chốt 2026-07-02
 6 mã sau = **CTV sale**: `DN002`, `DN004`, `DN021`, `DN022`, `DN023`, `VP004`.
-- Status = **Cộng tác** (active, VẪN tính doanh thu như sale), role `sale`, scope = phần của mình.
+- Status = **Cộng tác** (active), role `sale`, scope = phần của mình.
+- **CTV tính ĐẦY ĐỦ như sale chính thức** (CEO chốt 2026-07-02: CTV CÓ giao target): VẪN tính doanh thu, **target, % đạt, cảnh báo "chưa đạt", ranking** — giống "Đang làm". Khác duy nhất là **nhãn trạng thái "Cộng tác"** (phân loại nhân sự). KHÔNG loại CTV khỏi bất kỳ báo cáo/cảnh báo nào.
 - Bot **kiểm mã nào đã có trong danh bạ** → chỉ đổi status sang "Cộng tác"; **mã nào thiếu** → thêm mới (cần tên + SĐT để đăng nhập OTP).
 - Đã có thông tin: `DN021` (Lê Anh Đức), `VP004` (Trần Hoàng Trung) — mục 1.
 - **CẦN CEO cấp thông tin nếu chưa có trong danh bạ:** `DN022`, `DN023` (tên + SĐT + email); xác nhận `DN002`, `DN004` đã có tên đúng.
-- **Target CTV:** chỉ tính % đạt / cảnh báo "chưa đạt" khi CEO CÓ giao target; không giao → bỏ khỏi cảnh báo target (CTV không hiện đỏ oan).
 
 ## 1) THÊM/ĐỐI CHIẾU NV trong danh bạ (user master + auth để đăng nhập OTP)
 | emp_code | Họ tên | SĐT | Email |
@@ -18,9 +18,8 @@
 - Cập nhật cả **danh bạ runtime trên server** (để card hiện tên thay vì mã trần, và cho phép đăng nhập OTP theo SĐT) và seed/`users.json` nếu phù hợp.
 - **Role/scope:**
   - `DN021` = NV sale đang làm (CEO xác nhận) → role `sale`, status **Đang làm**, scope = emp_code của mình.
-  - `VP004` = **CỘNG TÁC VIÊN** (CEO chốt 2026-07-02: chuyển qua làm cộng tác) → status **Cộng tác** (vẫn active, VẪN tính doanh thu như thường), scope = phần của mình (như sale). "Cộng tác" là active nên vẫn vào báo cáo/digest (regex active đã nhận `cong tac`).
-  - **Target cho CTV:** chỉ tính % đạt / cảnh báo "chưa đạt target" khi CEO CÓ giao target cho VP004; nếu coi CTV không áp target cứng thì bỏ khỏi cảnh báo target (đừng để CTV hiện đỏ oan). Xác nhận với CEO nếu cần.
-- 3 trạng thái NV chuẩn hóa: **Đang làm** (chính thức) · **Cộng tác** (CTV, active) · **Nghỉ việc** (loại khỏi target/forecast/cảnh báo/ranking). Dùng nhất quán ở tab Nhân viên + digest + smart.
+  - `VP004` = **CỘNG TÁC VIÊN** (CEO chốt: chuyển qua làm cộng tác) → status **Cộng tác**, tính đầy đủ như sale (doanh thu + target + cảnh báo), scope phần mình.
+- 3 trạng thái NV chuẩn hóa: **Đang làm** (chính thức) · **Cộng tác** (CTV — active, tính ĐẦY ĐỦ như sale gồm target/cảnh báo/ranking) · **Nghỉ việc** (loại khỏi target/forecast/cảnh báo/ranking). Cộng tác chỉ khác Đang làm ở NHÃN; Nghỉ việc mới bị loại. Dùng nhất quán ở tab Nhân viên + digest + smart.
 - `DN021`/`VP004` trước đó là "App Sale-only / inactive" trong crosswalk emp_code — cập nhật lại crosswalk cho khớp (hết blocker phân quyền 07 cho 2 mã này).
 
 ## 2) TRUY mã rác "#N/A" và "83" trong bộ lọc/dữ liệu NV
