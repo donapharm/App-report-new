@@ -1,15 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money } from '../util.js';
-import { Spinner, Bar } from '../components.jsx';
+import { Spinner } from '../components.jsx';
 
 const FILTERS = [
   { key: 'all', label: 'Tất cả', params: {} },
+  { key: 'empty', label: 'Chưa bán', params: { status: 'empty' } },
   { key: 'low', label: 'Sắp cạn <10%', params: { remainMax: 10 } },
   { key: 'mid', label: 'Dưới 30%', params: { remainMax: 30 } },
   { key: 'high', label: 'Tồn nhiều >70%', params: { remainMin: 70 } },
 ];
 const empty = { emp: '', unit: '', product: '', priority: '', q: '' };
+
 function Select({ value, onChange, options, all }) {
   return (
     <select value={value || ''} onChange={(e) => onChange(e.target.value)}>
@@ -17,6 +19,28 @@ function Select({ value, onChange, options, all }) {
       {(options || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
     </select>
   );
+}
+
+const n = (v) => Number(v || 0).toLocaleString('vi-VN');
+const compact = (v) => String(v || '—').replace('Công Ty ', '').replace('Tnhh ', '');
+function groupOf(code) {
+  const m = String(code || '').match(/\.(N\d)\./i);
+  return m ? m[1].toUpperCase() : '';
+}
+function decision(c) {
+  const p = Number(c.remain_pct || 0);
+  const remain = Number(c.remain_qty || 0);
+  const sold = Number(c.sold_qty || 0);
+  if (remain <= 0) return { cls: 'muted-pill', text: 'Hết CST' };
+  if (sold <= 0 && remain > 0) return { cls: 'bad', text: '⚠️ Chưa bán' };
+  if (p > 80) return { cls: 'warn', text: '🔴 Chưa khai thác' };
+  if (p > 50) return { cls: 'warn', text: '🟡 Còn nhiều' };
+  return { cls: 'ok', text: '✅ Đang bán' };
+}
+function pctTone(p) {
+  if (p < 10) return 'bad';
+  if (p < 30 || p > 80) return 'warn';
+  return 'ok';
 }
 
 export default function TenderQuota({ me }) {
@@ -30,7 +54,8 @@ export default function TenderQuota({ me }) {
   useEffect(() => { api.filters().then(setOptions); }, []);
   useEffect(() => {
     setData(null);
-    const params = { ...FILTERS.find((x) => x.key === f).params, ...(bid ? { bid } : {}), ...filters };
+    const selected = FILTERS.find((x) => x.key === f) || FILTERS[0];
+    const params = { ...selected.params, ...(bid ? { bid } : {}), ...filters };
     api.cst(params).then((d) => setData(d.rows));
   }, [f, bid, filters]);
 
@@ -41,9 +66,13 @@ export default function TenderQuota({ me }) {
     try { await downloadExport('cst', { bid, ...filters }); } catch (e) { alert(e.message); }
     setBusy(false);
   }
-  const tone = (p) => (p < 10 ? 'danger' : p < 30 ? 'warn' : '');
+
   const totalRemain = data ? data.reduce((s, r) => s + (Number(r.remain_amount) || 0), 0) : 0;
   const totalSold = data ? data.reduce((s, r) => s + (Number(r.sold_amount) || 0), 0) : 0;
+  const totalBid = data ? data.reduce((s, r) => s + (Number(r.bid_amount) || 0), 0) : 0;
+  const lowCount = data ? data.filter((r) => Number(r.remain_pct || 0) < 10).length : 0;
+  const emptyCount = data ? data.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0).length : 0;
+  const highCount = data ? data.filter((r) => Number(r.remain_pct || 0) > 80).length : 0;
 
   return (
     <>
@@ -59,7 +88,7 @@ export default function TenderQuota({ me }) {
           <Select value={filters.priority} onChange={(v) => setFilter('priority', v)} options={options?.priorities} all="Tất cả UT" />
         </div>
         <div className="filter-search">
-          <input value={filters.q} onChange={(e) => setFilter('q', e.target.value)} placeholder="Tìm đơn vị, sản phẩm, mã QLNB, hoạt chất…" />
+          <input value={filters.q} onChange={(e) => setFilter('q', e.target.value)} placeholder="Tìm đơn vị, sản phẩm, mã QLNB, hoạt chất, gói thầu…" />
           <button className="btn ghost" onClick={reset}>Xoá lọc</button>
           <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>
         </div>
@@ -67,33 +96,71 @@ export default function TenderQuota({ me }) {
 
       <div className="kpi-grid">
         <div className="kpi"><div className="label">Dòng CST</div><div className="value">{data ? data.length.toLocaleString('vi-VN') : '—'}</div></div>
+        <div className="kpi"><div className="label">Tổng cơ số thầu</div><div className="value small">{data ? money(totalBid) : '—'}</div></div>
         <div className="kpi"><div className="label">TT đã bán</div><div className="value small">{data ? money(totalSold) : '—'}</div></div>
         <div className="kpi"><div className="label">TT còn lại</div><div className="value small">{data ? money(totalRemain) : '—'}</div></div>
       </div>
 
+      {data && (
+        <div className="card cst-alert-card">
+          <b>Cảnh báo CST giống app cũ:</b>
+          <span className="pill bad">Sắp cạn/Hết CST: {lowCount.toLocaleString('vi-VN')}</span>
+          <span className="pill bad">Chưa bán: {emptyCount.toLocaleString('vi-VN')}</span>
+          <span className="pill warn">Chưa khai thác/tồn nhiều: {highCount.toLocaleString('vi-VN')}</span>
+        </div>
+      )}
+
       {!data ? <Spinner /> : data.length === 0 ? (
         <div className="center">Không có dòng nào khớp bộ lọc.</div>
       ) : (
-        data.slice(0, 300).map((c, i) => (
-          <div key={i} className="card" style={{ padding: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{c.product_name} <span className="muted" style={{ fontWeight: 400 }}>· {c.ham_luong}</span></div>
-                <div className="meta muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.unit_name} · {c.bid_package} · NV {c.emp_code || '—'}</div>
-              </div>
-              <span className={'pill ' + (c.remain_pct < 10 ? 'bad' : c.remain_pct < 30 ? 'warn' : 'ok')}>{c.remain_pct}%</span>
-            </div>
-            <Bar value={c.remain_qty} max={c.bid_qty_initial} tone={tone(c.remain_pct)} />
-            <div className="meta muted" style={{ marginTop: 5 }}>
-              Còn {Number(c.remain_qty).toLocaleString('vi-VN')} / {Number(c.bid_qty_initial).toLocaleString('vi-VN')} · đã bán {Number(c.sold_qty).toLocaleString('vi-VN')}
-            </div>
-            <div className="meta muted" style={{ marginTop: 3 }}>
-              Giá thầu {money(c.bid_price)} · Đã bán {money(c.sold_amount)} · Còn lại {money(c.remain_amount)} · UT {c.priority || '—'}
-            </div>
+        <div className="card table-card cst-table-card">
+          <div className="table-scroll">
+            <table className="data-table cst-table">
+              <thead>
+                <tr>
+                  <th>Mã QL nội bộ</th><th>Tên thuốc</th><th>Hoạt chất</th><th>Hàm lượng</th><th>ĐVT</th><th>Nhóm</th><th>UT</th>
+                  <th>Gói thầu</th><th>Đơn vị</th><th>NV phụ trách</th>
+                  <th className="num">Giá thầu</th><th className="num">Giá bán</th><th className="num">Tổng TT</th><th className="num">CST còn lại</th><th className="num">% còn lại</th>
+                  <th className="num">Tổng đã bán</th><th className="num">SL đã bán</th><th className="num">SL còn</th><th className="num">TT đã bán</th><th className="num">TT còn lại</th>
+                  <th>Ngày nguồn</th><th>Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.slice(0, 600).map((c, i) => {
+                  const st = decision(c);
+                  return (
+                    <tr key={`${c.unit_code}-${c.iit_code}-${i}`} className={Number(c.remain_pct || 0) > 70 ? 'highlight-need' : ''}>
+                      <td className="mono">{c.iit_code}</td>
+                      <td><b>{c.product_name || '—'}</b></td>
+                      <td>{c.active_ingredient || '—'}</td>
+                      <td>{c.ham_luong || '—'}</td>
+                      <td>{c.uom || '—'}</td>
+                      <td><span className="pill muted-pill">{groupOf(c.iit_code) || '—'}</span></td>
+                      <td><span className="pill muted-pill">{c.priority || '—'}</span></td>
+                      <td>{compact(c.bid_package)}</td>
+                      <td>{c.unit_name || c.unit_code || '—'}</td>
+                      <td>{c.emp_code || c.sales_emps || '—'}</td>
+                      <td className="num">{n(c.bid_price)}</td>
+                      <td className="num">{n(c.sale_price)}</td>
+                      <td className="num strong">{n(c.bid_qty_initial)}</td>
+                      <td className="num strong">{n(c.remain_qty)}</td>
+                      <td className="num"><span className={'pill ' + pctTone(Number(c.remain_pct || 0))}>{c.remain_pct}%</span></td>
+                      <td className="num strong">{n(c.sold_qty)}</td>
+                      <td className="num">{n(c.sold_qty)}</td>
+                      <td className="num">{n(c.remain_qty)}</td>
+                      <td className="num">{money(c.sold_amount)}</td>
+                      <td className="num">{money(c.remain_amount)}</td>
+                      <td>{c.source_from_date || '—'}</td>
+                      <td><span className={'pill ' + st.cls}>{st.text}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        ))
+          {data.length > 600 && <p className="muted" style={{ textAlign: 'center', fontSize: 12, paddingBottom: 12 }}>Đang hiển thị 600 dòng đầu, dùng bộ lọc hoặc xuất Excel để xem toàn bộ {data.length.toLocaleString('vi-VN')} dòng.</p>}
+        </div>
       )}
-      {data && data.length > 300 && <p className="muted" style={{ textAlign: 'center', fontSize: 12 }}>Đang hiển thị 300 dòng đầu, dùng bộ lọc để thu hẹp thêm.</p>}
     </>
   );
 }

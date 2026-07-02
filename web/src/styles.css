@@ -133,6 +133,13 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .pill.ok { background: #e3f5ec; color: var(--ok); }
 .pill.warn { background: #fdf0dd; color: var(--mid); }
 .pill.bad { background: #fbe4e4; color: var(--hi); }
+.pill.muted-pill { background: #eef2f7; color: var(--muted); }
+.cst-alert-card { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px; margin-bottom: 12px; }
+.cst-table { min-width: 2320px; font-size: 12px; }
+.cst-table th, .cst-table td { padding: 8px 9px; }
+.cst-table tbody tr.highlight-need { background: #fff8e8; }
+.cst-table tbody tr:hover { background: #eef4fb; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
 
 /* AI chat */
 .chat { display: flex; flex-direction: column; gap: 10px; }

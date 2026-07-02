@@ -11,7 +11,7 @@ Trạng thái: `done` = đã có dữ liệu + UI/API cơ bản + test quyền; 
 | Doanh thu | Revenue | partial | Đã thêm bộ lọc backend: kỳ/NV/ĐV/SP/tuyến/UT/nhà thầu/gói/tìm kiếm; cần đối chiếu UI 1:1 app cũ |
 | Doanh thu đầy đủ | DT đầy đủ | done | Đã có bảng chi tiết từng dòng, pagination, export Excel, test scope CEO/DN009; còn PDF/mẫu cũ nếu CEO cần |
 | Sản phẩm | Sản phẩm | partial | Đã có tab top SP/mã QLNB + độ phủ đơn vị/NV/gói thầu; cần bổ sung hoạt chất/nhóm thuốc nếu app cũ còn dùng |
-| CST / Cơ số thầu | TenderQuota | partial (P0 dữ liệu/lọc done) | Dữ liệu thật đã import; lọc backend theo quyền đã fix chuẩn hoa/thường (`9c77f02`, Claude duyệt); còn cần giao diện/bảng giống app cũ và cảnh báo đầy đủ |
+| CST / Cơ số thầu | TenderQuota | done (P0) | Bảng đủ cột + cảnh báo/trạng thái giống app cũ đã xong; còn đối chiếu tổng/mẫu CST trong Bước 3 mở rộng |
 | Phân tích | Phân tích | partial | Đã có so kỳ trước, tăng/giảm đơn vị & sản phẩm, cơ cấu tuyến/nhà thầu/UT; cần bổ sung biểu đồ/mẫu cũ nếu CEO cần |
 | Nhân viên | Chưa có tab riêng | todo | Chuyển bảng NV/quyền/phạm vi nếu CEO còn dùng |
 | Target | Target | partial | Dữ liệu thật 01→06; cần UI đối chiếu giống app cũ hơn nếu cần |
@@ -27,6 +27,12 @@ Trạng thái: `done` = đã có dữ liệu + UI/API cơ bản + test quyền; 
 3. Export Excel tôn trọng bộ lọc đang chọn.
 4. Doanh thu đầy đủ đã có bảng dòng chi tiết + export Excel.
 5. Sản phẩm/Phân tích đã có tab cơ bản để CEO/NV xem theo quyền.
+
+## P0 CST — hoàn tất 2026-07-02
+
+- UI CST đã chuyển sang bảng ngang đầy đủ cột nghiệp vụ giống app cũ: mã QL nội bộ, tên thuốc, hoạt chất, hàm lượng, ĐVT, nhóm, UT, gói thầu, đơn vị, NV phụ trách, giá thầu/giá bán, tổng TT, CST còn lại, % còn lại, tổng/SL đã bán, SL còn, TT đã bán, TT còn lại, ngày nguồn, trạng thái.
+- Cảnh báo/trạng thái theo logic app cũ: Hết CST, ⚠️ Chưa bán, 🔴 Chưa khai thác, 🟡 Còn nhiều, ✅ Đang bán; có chip lọc “Chưa bán” và thống kê cảnh báo trên trang.
+- Kiểm quyền/số: CEO 2.740 dòng; DN009 85 dòng và không có dòng ngoài DN009; `<10%` 291 dòng; “Chưa bán” 1.228 dòng. Build OK.
 
 ## Bước 3 — Đối chiếu doanh thu app cũ ↔ app mới đủ 01→06/2026
 

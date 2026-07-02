@@ -94,9 +94,10 @@ function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
   if (filters?.unit) rows = rows.filter((r) => r.unit_code === filters.unit || r.unit_name === filters.unit);
   if (filters?.product) rows = rows.filter((r) => r.iit_code === filters.product);
   if (filters?.priority) rows = rows.filter((r) => r.priority === filters.priority);
+  if (filters?.status === 'empty') rows = rows.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0);
   if (filters?.q) {
     const q = norm(filters.q);
-    rows = rows.filter((r) => norm([r.emp_code, r.unit_name, r.iit_code, r.product_name, r.active_ingredient, r.bid_package, r.priority].join(' ')).includes(q));
+    rows = rows.filter((r) => norm([r.emp_code, r.sales_emps, r.unit_name, r.iit_code, r.product_name, r.active_ingredient, r.bid_package, r.priority].join(' ')).includes(q));
   }
   if (remainPctMax != null) rows = rows.filter((r) => r.remain_pct <= remainPctMax);
   if (remainPctMin != null) rows = rows.filter((r) => r.remain_pct >= remainPctMin);

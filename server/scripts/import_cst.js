@@ -50,6 +50,8 @@ const rows = arr.map((o) => {
     remain_amount: toNum(pick(o, ['tt_con_lai', 'TT_CONLAI'])),
     priority: String(pick(o, ['ut', 'UT']) || '').trim(),
     source_from_date: String(pick(o, ['source_from_date', 'FROM_DATE']) || '').trim(),
+    raw_nv: String(pick(o, ['raw_nv', 'RAW_NV']) || '').trim(),
+    sales_emps: String(pick(o, ['sales_emps', 'SALES_EMPS']) || '').trim(),
   };
 }).filter((r) => r.iit_code && r.unit_code && r.bid_qty_initial > 0);
 writeJson(path.join(DATA, 'cst_real.json'), rows);
