@@ -1,0 +1,1139 @@
+{
+  "counts": {
+    "appRows": 3002,
+    "appKeys": 2775,
+    "lumosKeys": 2741,
+    "matched": 2731,
+    "appOnly": 44,
+    "lumosOnly": 10,
+    "duplicateAppKeys": 227,
+    "duplicateDueKhuC": 226,
+    "duplicateOther": 1
+  },
+  "lumosOnly": [
+    {
+      "key": "G1.GE.QĐ139.2622.N4.943|001|QĐ139",
+      "iit_code": "G1.GE.QĐ139.2622.N4.943",
+      "product_name": "Asakoya",
+      "unit_code": "001.BVĐK Đồng Nai",
+      "unit_name": "001.BVĐK Đồng Nai",
+      "bid_package": "G1.L1.QĐ139/27.02.25"
+    },
+    {
+      "key": "G1.GE.QĐ139.2622.N4.943|002|QĐ139",
+      "iit_code": "G1.GE.QĐ139.2622.N4.943",
+      "product_name": "Asakoya",
+      "unit_code": "002.BVĐK Thống Nhất ĐN",
+      "unit_name": "002.BVĐK Thống Nhất ĐN",
+      "bid_package": "G1.L1.QĐ139/27.02.25"
+    },
+    {
+      "key": "|108|",
+      "iit_code": "",
+      "product_name": "Bividia 25",
+      "unit_code": "108. BVĐK LONG AN",
+      "unit_name": "108. BVĐK LONG AN",
+      "bid_package": ""
+    },
+    {
+      "key": "G1.GE.QĐ139.2622.N4.943|146|QĐ139",
+      "iit_code": "G1.GE.QĐ139.2622.N4.943",
+      "product_name": "Asakoya",
+      "unit_code": "146.TTYT PHƯỚC LONG",
+      "unit_name": "146.TTYT PHƯỚC LONG",
+      "bid_package": "G1.L1.QĐ139/27.02.25"
+    },
+    {
+      "key": "G1.GE.QĐ139.2622.N4.943|148|QĐ139",
+      "iit_code": "G1.GE.QĐ139.2622.N4.943",
+      "product_name": "Asakoya",
+      "unit_code": "148.TTYT ĐỒNG XOÀI",
+      "unit_name": "148.TTYT ĐỒNG XOÀI",
+      "bid_package": "G1.L1.QĐ139/27.02.25"
+    },
+    {
+      "key": "G1.GE.QĐ1074.2120.N4|173|QĐ1074",
+      "iit_code": "G1.GE.QĐ1074.2120.N4",
+      "product_name": "Trifilip",
+      "unit_code": "173. BV ĐÀ NẴNG",
+      "unit_name": "173. BV ĐÀ NẴNG",
+      "bid_package": "G1.L1.QĐ1074/06.10.25"
+    },
+    {
+      "key": "G1.GE.QĐ1074.2120.N4|174|QĐ1074",
+      "iit_code": "G1.GE.QĐ1074.2120.N4",
+      "product_name": "Trifilip",
+      "unit_code": "174. TTYT KV HOÀ VANG",
+      "unit_name": "174. TTYT KV HOÀ VANG",
+      "bid_package": "G1.L1.QĐ1074/06.10.25"
+    },
+    {
+      "key": "G1.GE.QĐ1074.2120.N4|191|QĐ1074",
+      "iit_code": "G1.GE.QĐ1074.2120.N4",
+      "product_name": "Trifilip",
+      "unit_code": "191.BV ĐÀ NẴNG",
+      "unit_name": "191.BV ĐÀ NẴNG",
+      "bid_package": "G1.L1.QĐ1074/06.10.25"
+    },
+    {
+      "key": "G1.GE.QĐ48.549.N4.549|191|QĐ48",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "product_name": "Valesto",
+      "unit_code": "191.BVĐK TRẦN VĂN THỜI",
+      "unit_name": "191.BVĐK TRẦN VĂN THỜI",
+      "bid_package": "G1.L1.QĐ48/2026/SYT-CM"
+    },
+    {
+      "key": "G1.GE.QĐ1074.2120.N4|192|QĐ1074",
+      "iit_code": "G1.GE.QĐ1074.2120.N4",
+      "product_name": "Trifilip",
+      "unit_code": "192.TTYT KV HOÀ VANG",
+      "unit_name": "192.TTYT KV HOÀ VANG",
+      "bid_package": "G1.L1.QĐ1074/06.10.25"
+    }
+  ],
+  "appOnly": [
+    {
+      "key": "G1.GE.QĐ139.2162.N4.624|002|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2162.N4.624",
+      "product_name": "Befucid",
+      "unit_code": "002.BVĐK Thống Nhất ĐN",
+      "unit_name": "BVĐK Thống Nhất ĐN",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "02.AFP"
+    },
+    {
+      "key": "G1.GE.QĐ139.1571.N3.799|021|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1571.N3.799",
+      "product_name": "Sitaglo 100",
+      "unit_code": "021.TTYT H. Xuân Lộc",
+      "unit_name": "TTYT H. Xuân Lộc",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.1072.N2.80|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1072.N2.80",
+      "product_name": "Cisse",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.1416.N3.500|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1416.N3.500",
+      "product_name": "Kavasdin 10",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "14.ĐAI.P"
+    },
+    {
+      "key": "G1.GE.QĐ139.1487.N3.691|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1487.N3.691",
+      "product_name": "Agimoti",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.1652.N4.696|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1652.N4.696",
+      "product_name": "Ocevesin DT",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "04.NGUYEN.P"
+    },
+    {
+      "key": "G1.GE.QĐ139.1692.N4.169|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1692.N4.169",
+      "product_name": "Iba-Mentin 1000mg/62,5mg",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.1753.N4.872|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1753.N4.872",
+      "product_name": "Agihistine 24",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "03.TUE.N"
+    },
+    {
+      "key": "G1.GE.QĐ139.1922.N4.97|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1922.N4.97",
+      "product_name": "Rizintug 75",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "03.TUE.N"
+    },
+    {
+      "key": "G1.GE.QĐ139.1943.N4.563|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.1943.N4.563",
+      "product_name": "Ediwel",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "04.NGUYEN.P"
+    },
+    {
+      "key": "G1.GE.QĐ139.2053.N4.699|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2053.N4.699",
+      "product_name": "Ocedurin",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "14.ĐAI.P"
+    },
+    {
+      "key": "G1.GE.QĐ139.2114.N4.578|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2114.N4.578",
+      "product_name": "Trifilip",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "02.AFP"
+    },
+    {
+      "key": "G1.GE.QĐ139.2116.N4.578|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2116.N4.578",
+      "product_name": "Flezinox 150",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "03.TUE.N"
+    },
+    {
+      "key": "G1.GE.QĐ139.2184.N4.946|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2184.N4.946",
+      "product_name": "Acetakan 120",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "03.TUE.N"
+    },
+    {
+      "key": "G1.GE.QĐ139.2204.N4.80|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2204.N4.80",
+      "product_name": "Mongor 750",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "12.MINH.P"
+    },
+    {
+      "key": "G1.GE.QĐ139.2409.N4.678|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2409.N4.678",
+      "product_name": "Biviantac",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.2434.N4.48|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2434.N4.48",
+      "product_name": "Meloxicam SPM",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "02.AFP"
+    },
+    {
+      "key": "G1.GE.QĐ139.2522.N4.997|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2522.N4.997",
+      "product_name": "Natri Clorid 0,9%",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.2694.N4.949|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2694.N4.949",
+      "product_name": "Lifecita 800 DT.",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "02.AFP"
+    },
+    {
+      "key": "G1.GE.QĐ139.2980.N4.1022|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2980.N4.1022",
+      "product_name": "Vitamin AD",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "04.NGUYEN.P"
+    },
+    {
+      "key": "G1.GE.QĐ139.2986.N4.1024|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2986.N4.1024",
+      "product_name": "Vitamin 3B-PV",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "12.MINH.P"
+    },
+    {
+      "key": "G1.GE.QĐ139.3004.N4.1029|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.3004.N4.1029",
+      "product_name": "Pimagie",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.58.N1.501|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.58.N1.501",
+      "product_name": "Amlodipine/Atorvastatin Normon 5mg/10mg film coated tablets",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "14.ĐAI.P"
+    },
+    {
+      "key": "G1.GE.QĐ139.862.N2.1005|083|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.862.N2.1005",
+      "product_name": "Calcicar 500 Tablet",
+      "unit_code": "083.BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "unit_name": "BỘ CHỈ HUY QUÂN SỰ TỈNH ĐỒNG NAI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "03.TUE.N"
+    },
+    {
+      "key": "G1.GE.QĐ139.2014.N4.37.G|101|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2014.N4.37.G",
+      "product_name": "Diclofenac",
+      "unit_code": "101.BVĐK QUÂN Y 4",
+      "unit_name": "BVĐK QUÂN Y 4",
+      "goi_code": "QĐ236",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.3034.N5.599.G|101|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.3034.N5.599.G",
+      "product_name": "Akneyash",
+      "unit_code": "101.BVĐK QUÂN Y 4",
+      "unit_name": "BVĐK QUÂN Y 4",
+      "goi_code": "QĐ789",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "QD3231.19.N4.48|106|QĐ3231",
+      "qlnb_code": "QD3231.19.N4.48",
+      "product_name": "Loxecam",
+      "unit_code": "106.TTYT H. TÂN HƯNG",
+      "unit_name": "TTYT H. TÂN HƯNG",
+      "goi_code": "QĐ3231",
+      "inferred_bid": "QĐ3231",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "QD789.4.N4.701|106|QĐ139",
+      "qlnb_code": "QD789.4.N4.701",
+      "product_name": "Opeverin",
+      "unit_code": "106.TTYT H. TÂN HƯNG",
+      "unit_name": "TTYT H. TÂN HƯNG",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ2047.21.N4|108|QĐ2047",
+      "qlnb_code": "G1.GE.QĐ2047.21.N4",
+      "product_name": "Loxecam",
+      "unit_code": "108. BVĐK LONG AN",
+      "unit_name": " BVĐK LONG AN",
+      "goi_code": "QĐ2047",
+      "inferred_bid": "QĐ2047",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "GE.QĐ3231.N4.1653|108|QĐ3231",
+      "qlnb_code": "GE.QĐ3231.N4.1653",
+      "product_name": "Bividia 25",
+      "unit_code": "108. BVĐK LONG AN",
+      "unit_name": " BVĐK LONG AN",
+      "goi_code": "QĐ3231",
+      "inferred_bid": "QĐ3231",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G3.ĐY.QĐ273.N3.81|119|QĐ273",
+      "qlnb_code": "G3.ĐY.QĐ273.N3.81",
+      "product_name": "Đại tràng nang Bà Giằng",
+      "unit_code": "119.TTYT TP ĐÀ LẠT",
+      "unit_name": "TTYT TP ĐÀ LẠT",
+      "goi_code": "QĐ273",
+      "inferred_bid": "QĐ273",
+      "contractor_code": "02.AFP"
+    },
+    {
+      "key": "G3.ĐY.QĐ141.145.N3.133|121|QĐ141",
+      "qlnb_code": "G3.ĐY.QĐ141.145.N3.133",
+      "product_name": "Cerecaps",
+      "unit_code": "121.BV LAGI",
+      "unit_name": "BV LAGI",
+      "goi_code": "QĐ141",
+      "inferred_bid": "QĐ141",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G3.ĐY.QĐ141.108.N3.57|122|QĐ141",
+      "qlnb_code": "G3.ĐY.QĐ141.108.N3.57",
+      "product_name": "Phong tê thấp",
+      "unit_code": "122.TTYT HÀM TÂN",
+      "unit_name": "TTYT HÀM TÂN",
+      "goi_code": "QĐ141",
+      "inferred_bid": "QĐ141",
+      "contractor_code": "02.AFP"
+    },
+    {
+      "key": "G3.ĐY.QĐ141.145.N3.133|122|QĐ141",
+      "qlnb_code": "G3.ĐY.QĐ141.145.N3.133",
+      "product_name": "Cerecaps",
+      "unit_code": "122.TTYT HÀM TÂN",
+      "unit_name": "TTYT HÀM TÂN",
+      "goi_code": "QĐ141",
+      "inferred_bid": "QĐ141",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G3.ĐY.QĐ141.18.N2.127|122|QĐ141",
+      "qlnb_code": "G3.ĐY.QĐ141.18.N2.127",
+      "product_name": "Hoạt huyết dưỡng não HL",
+      "unit_code": "122.TTYT HÀM TÂN",
+      "unit_name": "TTYT HÀM TÂN",
+      "goi_code": "QĐ141",
+      "inferred_bid": "QĐ141",
+      "contractor_code": "02.AFP"
+    },
+    {
+      "key": "G3.ĐY.QĐ141.277.N3.119|122|QĐ141",
+      "qlnb_code": "G3.ĐY.QĐ141.277.N3.119",
+      "product_name": "Hoàn xích hương",
+      "unit_code": "122.TTYT HÀM TÂN",
+      "unit_name": "TTYT HÀM TÂN",
+      "goi_code": "QĐ141",
+      "inferred_bid": "QĐ141",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.2963.N4.549|124|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2963.N4.549",
+      "product_name": "Valesto",
+      "unit_code": "124.BV QUÂN DÂN Y SÓC TRĂNG",
+      "unit_name": "BV QUÂN DÂN Y SÓC TRĂNG",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "02.AFP"
+    },
+    {
+      "key": "QD284.49.N4.549|124|QĐ3231",
+      "qlnb_code": "QD284.49.N4.549",
+      "product_name": "Valesto",
+      "unit_code": "124.BV QUÂN DÂN Y SÓC TRĂNG",
+      "unit_name": "BV QUÂN DÂN Y SÓC TRĂNG",
+      "goi_code": "QĐ3231",
+      "inferred_bid": "QĐ3231",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "QĐ1572.1184.N3.755|144|QĐ1572",
+      "qlnb_code": "QĐ1572.1184.N3.755",
+      "product_name": "Medsolu 4mg",
+      "unit_code": "144.BV CAO SU PHÚ RIỀNG",
+      "unit_name": "BV CAO SU PHÚ RIỀNG",
+      "goi_code": null,
+      "inferred_bid": "QĐ1572",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.2816.N4.1018|148|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2816.N4.1018",
+      "product_name": "Vigahom",
+      "unit_code": "148.TTYT ĐỒNG XOÀI",
+      "unit_name": "TTYT ĐỒNG XOÀI",
+      "goi_code": "QĐ139",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ139.2295.N4.723|151|QĐ139",
+      "qlnb_code": "G1.GE.QĐ139.2295.N4.723",
+      "product_name": "Atisyrup zinc",
+      "unit_code": "151.TTYT CHƠN THÀNH",
+      "unit_name": "TTYT CHƠN THÀNH",
+      "goi_code": "QĐ325",
+      "inferred_bid": "QĐ139",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "QĐ1572.1184.N3.755|155|QĐ1572",
+      "qlnb_code": "QĐ1572.1184.N3.755",
+      "product_name": "Medsolu 4mg",
+      "unit_code": "155.TTYT HỚN QUẢN",
+      "unit_name": "TTYT HỚN QUẢN",
+      "goi_code": null,
+      "inferred_bid": "QĐ1572",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ25000387599.2014.N4|194|QĐ25000387599",
+      "qlnb_code": "G1.GE.QĐ25000387599.2014.N4",
+      "product_name": "Diclofenac",
+      "unit_code": "194.BV PHỤ SẢN TIỀN GIANG",
+      "unit_name": "BV PHỤ SẢN TIỀN GIANG",
+      "goi_code": null,
+      "inferred_bid": "QĐ25000387599",
+      "contractor_code": "01.DONA"
+    },
+    {
+      "key": "G1.GE.QĐ1246.131.N4|195|QĐ1246",
+      "qlnb_code": "G1.GE.QĐ1246.131.N4",
+      "product_name": "Diclofenac",
+      "unit_code": "195.BVĐK CAI LẬY",
+      "unit_name": "BVĐK CAI LẬY",
+      "goi_code": null,
+      "inferred_bid": "QĐ1246",
+      "contractor_code": "01.DONA"
+    }
+  ],
+  "duplicateSamples": [
+    {
+      "key": "G1.GE.QĐ139.1.N1.777|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Bluecose"
+    },
+    {
+      "key": "G1.GE.QĐ139.1037.N2.429|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "Flavoxate Savi 100"
+    },
+    {
+      "key": "G1.GE.QĐ139.1047.N2.932|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Fitrofu 100"
+    },
+    {
+      "key": "G1.GE.QĐ139.105.N1.512|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "12.MINH.P"
+      ],
+      "product_name": "Bisoplus HCT 5/12.5"
+    },
+    {
+      "key": "G1.GE.QĐ139.1054.N2.945|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Leminerg 4"
+    },
+    {
+      "key": "G1.GE.QĐ139.1055.N2.945|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "SaVi Galantamin 8"
+    },
+    {
+      "key": "G1.GE.QĐ139.1060.N2.946|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "15.THAI.N"
+      ],
+      "product_name": "Gikorcen"
+    },
+    {
+      "key": "G1.GE.QĐ139.1072.N2.80|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Cisse"
+    },
+    {
+      "key": "G1.GE.QĐ139.1080.N2.526|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "10.ĐAI.TS"
+      ],
+      "product_name": "Wright-F"
+    },
+    {
+      "key": "G1.GE.QĐ139.1096.N2.490|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Isoday 20"
+    },
+    {
+      "key": "G1.GE.QĐ139.1097.N2.490|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Vasotrate-30 OD"
+    },
+    {
+      "key": "G1.GE.QĐ139.1104.N2.162|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Pizar-3"
+    },
+    {
+      "key": "G1.GE.QĐ139.1115.N2.922|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Lamostad 25"
+    },
+    {
+      "key": "G1.GE.QĐ139.1122.N2.151|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "Levetral"
+    },
+    {
+      "key": "G1.GE.QĐ139.1123.N2.151|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Levetral-750"
+    },
+    {
+      "key": "G1.GE.QĐ139.1129.N2.234|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Levofloxacin 750mg/150ml"
+    },
+    {
+      "key": "G1.GE.QĐ139.1130.N2.234|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Levofloxacin 250mg/50ml"
+    },
+    {
+      "key": "G1.GE.QĐ139.1134.N2.918|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Evaldez-50"
+    },
+    {
+      "key": "G1.GE.QĐ139.1193.N2.52|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "10.ĐAI.TS"
+      ],
+      "product_name": "SavNopain 500"
+    },
+    {
+      "key": "G1.GE.QĐ139.1222.N2.920|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Olanzap 10"
+    },
+    {
+      "key": "G1.GE.QĐ139.1225.N2.920|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Olanzap 5"
+    },
+    {
+      "key": "G1.GE.QĐ139.1267.N2.543|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "SaViPerindo Plus 10mg/2.5mg"
+    },
+    {
+      "key": "G1.GE.QĐ139.1302.N2.545|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Ramistell 1.25"
+    },
+    {
+      "key": "G1.GE.QĐ139.1304.N2.545|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "14.ĐAI.P"
+      ],
+      "product_name": "Ramifix 5"
+    },
+    {
+      "key": "G1.GE.QĐ139.1307.N2.796|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "Dasguto 2"
+    },
+    {
+      "key": "G1.GE.QĐ139.1311.N2.922|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "RisperSaVi 4"
+    },
+    {
+      "key": "G1.GE.QĐ139.1322.N2.637|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "04.NGUYEN.K"
+      ],
+      "product_name": "Asosalic"
+    },
+    {
+      "key": "G1.GE.QĐ139.1374.N2.868|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "15.THAI.N"
+      ],
+      "product_name": "Travoprost/Pharmathen"
+    },
+    {
+      "key": "G1.GE.QĐ139.1376.N2.743|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "Newbutin SR"
+    },
+    {
+      "key": "G1.GE.QĐ139.1380.N2.744|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "05.A&B"
+      ],
+      "product_name": "Uruso"
+    },
+    {
+      "key": "G1.GE.QĐ139.1393.N2.938|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Ventizam 75"
+    },
+    {
+      "key": "G1.GE.QĐ139.1400.N2.1024|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Solmelon"
+    },
+    {
+      "key": "G1.GE.QĐ139.1411.N2.906|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "08.BIN.B"
+      ],
+      "product_name": "Drexler"
+    },
+    {
+      "key": "G1.GE.QĐ139.1416.N3.500|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "14.ĐAI.P"
+      ],
+      "product_name": "Kavasdin 10"
+    },
+    {
+      "key": "G1.GE.QĐ139.1419.N3.501|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "Toduet 5mg/20mg"
+    },
+    {
+      "key": "G1.GE.QĐ139.147.N1.183|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "13.NHAT.H"
+      ],
+      "product_name": "Cefimed"
+    },
+    {
+      "key": "G1.GE.QĐ139.1483.N3.563|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "Vixcar"
+    },
+    {
+      "key": "G1.GE.QĐ139.1487.N3.691|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Agimoti"
+    },
+    {
+      "key": "G1.GE.QĐ139.150.N1.189|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "11.TU.Đ"
+      ],
+      "product_name": "Cefoxitine Gerda 1g"
+    },
+    {
+      "key": "G1.GE.QĐ139.1502.N3.780|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "06.SONG.V"
+      ],
+      "product_name": "Glimet 500mg/2.5 tablets"
+    },
+    {
+      "key": "G1.GE.QĐ139.1516.N3.528|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "12.MINH.P"
+      ],
+      "product_name": "Bivitero 300"
+    },
+    {
+      "key": "G1.GE.QĐ139.1519.N3.490|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Vasotrate-30 OD"
+    },
+    {
+      "key": "G1.GE.QĐ139.1521.N3.735|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Ettaby"
+    },
+    {
+      "key": "G1.GE.QĐ139.1528.N3.534|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "11.TU.Đ"
+      ],
+      "product_name": "SaVi Losartan 100"
+    },
+    {
+      "key": "G1.GE.QĐ139.1533.N3.701|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Mebever MR 200mg Capsules"
+    },
+    {
+      "key": "G1.GE.QĐ139.1568.N3.583|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Crexor 10"
+    },
+    {
+      "key": "G1.GE.QĐ139.1571.N3.799|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Sitaglo 100"
+    },
+    {
+      "key": "G1.GE.QĐ139.1572.N3.799|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "02.AFP"
+      ],
+      "product_name": "Bividia 25"
+    },
+    {
+      "key": "G1.GE.QĐ139.1573.N3.799|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Bividia 50"
+    },
+    {
+      "key": "G1.GE.QĐ139.1579.N3.433|001|QĐ139",
+      "count": 2,
+      "unit_codes": [
+        "001.BVĐK Đồng Nai",
+        "001.BVĐK Đồng Nai-KHU C"
+      ],
+      "contractor_codes": [
+        "01.DONA"
+      ],
+      "product_name": "Xalgetz 0.4mg"
+    }
+  ]
+}
