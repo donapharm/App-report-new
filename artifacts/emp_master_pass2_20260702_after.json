@@ -1,0 +1,222 @@
+{
+  "generatedAt": "2026-07-02T15:48:11.896Z",
+  "total06": 28403136096,
+  "expectedTotal06": 28403136096,
+  "total06Ok": true,
+  "users": {
+    "DN002": {
+      "emp_code": "DN002",
+      "name": "Nguyễn Thị Hằng Nga",
+      "phone": "0933739452",
+      "email": "nga.dn002@donapharm.vn",
+      "role": "sale",
+      "status": "Cộng tác"
+    },
+    "DN004": {
+      "emp_code": "DN004",
+      "name": "Bùi Hoàng Ngọc Quyên",
+      "phone": "0906516094",
+      "email": "quyen.dn004@donapharm.vn",
+      "role": "sale",
+      "status": "Cộng tác"
+    },
+    "DN021": {
+      "emp_code": "DN021",
+      "name": "Lê Anh Đức",
+      "phone": "0906107109",
+      "email": "ducluatsu98@yahoo.com.vn",
+      "role": "sale",
+      "status": "Cộng tác",
+      "no_auto_notify": true
+    },
+    "DN022": {
+      "emp_code": "DN022",
+      "name": "Đồng Văn Toản",
+      "phone": "0908858073",
+      "email": "toandv202@gmail.com",
+      "role": "sale",
+      "status": "Cộng tác",
+      "no_auto_notify": true
+    },
+    "DN023": {
+      "emp_code": "DN023",
+      "name": "Nguyễn Đức Tuấn",
+      "phone": "0977790789",
+      "email": "ctyhiepphat1819@gmail.com",
+      "role": "sale",
+      "status": "Cộng tác",
+      "no_auto_notify": true
+    },
+    "VP004": {
+      "emp_code": "VP004",
+      "name": "Trần Hoàng Trung",
+      "phone": "0378970463",
+      "email": "",
+      "role": "sale",
+      "status": "Cộng tác",
+      "no_auto_notify": true
+    },
+    "DN019": {
+      "emp_code": "DN019",
+      "name": "Dương Thị Mến",
+      "phone": "0968080616",
+      "email": "men.dn019@donapharm.vn",
+      "role": "sale",
+      "status": "Đang làm"
+    }
+  },
+  "badUploads": [],
+  "badCst": [],
+  "uploadRemaps": [
+    {
+      "file": "server/data/uploads/legacy_062026_mr266eqe.json",
+      "row": 1908,
+      "emp_code": "DN019",
+      "emp_name": "Dương Thị Mến",
+      "unit_code": "033.NT-PKĐK AN LONG KHÁNH",
+      "iit_code": "G1.GE.QĐ139.3054.N5.954",
+      "quantity": 10,
+      "revenue": 1575000,
+      "raw_emp_code": "#N/A",
+      "remap_note": "CEO_CHOT_2026-07-02_NA_TO_DN019_DV033"
+    },
+    {
+      "file": "server/data/uploads/legacy_062026_mr26j8nb.json",
+      "row": 1908,
+      "emp_code": "DN019",
+      "emp_name": "Dương Thị Mến",
+      "unit_code": "033.NT-PKĐK AN LONG KHÁNH",
+      "iit_code": "G1.GE.QĐ139.3054.N5.954",
+      "quantity": 10,
+      "revenue": 1575000,
+      "raw_emp_code": "#N/A",
+      "remap_note": "CEO_CHOT_2026-07-02_NA_TO_DN019_DV033"
+    }
+  ],
+  "cstRemaps": [
+    {
+      "row": 2730,
+      "emp_code": "DN021",
+      "unit_code": "188.BV ĐKKV CÀ MAU",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 1000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2731,
+      "emp_code": "DN021",
+      "unit_code": "189.BVĐK CÁI NƯỚC",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 120000,
+      "sold_qty": 12000,
+      "sold_amount": 21600000,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2732,
+      "emp_code": "DN021",
+      "unit_code": "190.BVĐK NĂM CĂN",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 121000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2734,
+      "emp_code": "DN021",
+      "unit_code": "191.BVĐK TRẦN VĂN THỜI",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 30000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2735,
+      "emp_code": "DN021",
+      "unit_code": "192.BVĐK ĐẦM DƠI",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 8000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2737,
+      "emp_code": "DN021",
+      "unit_code": "193.BVĐK TRẦN VĂN THỜI",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 42000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2738,
+      "emp_code": "DN021",
+      "unit_code": "194.BVĐK VĨNH LỢI",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 20000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2739,
+      "emp_code": "DN021",
+      "unit_code": "195.BVĐK PHƯỚC LONG",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 38000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2740,
+      "emp_code": "DN021",
+      "unit_code": "196.BVĐK ĐÔNG HẢI",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 20000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    },
+    {
+      "row": 2741,
+      "emp_code": "DN021",
+      "unit_code": "197.BV QUÂN DÂN Y BẠC LIÊU",
+      "iit_code": "G1.GE.QĐ48.549.N4.549",
+      "bid_qty_initial": 60000,
+      "sold_qty": 0,
+      "sold_amount": 0,
+      "raw_emp_code": "83",
+      "remap_note": "CEO_CHOT_2026-07-02_83_QD48_CA_MAU_TO_DN021"
+    }
+  ],
+  "active06Slot": {
+    "id": "legacy_062026_mr26j8nb",
+    "ky": "06.2026",
+    "dateFrom": "2026-06-01",
+    "dateTo": "2026-06-30",
+    "totalRows": 2001,
+    "totalRevenue": 28403136096,
+    "empCount": 21,
+    "filename": "report_upload_data_20260601_20260630.json",
+    "uploadedBy": "IMPORT",
+    "uploadedByName": "Import app cũ",
+    "uploadedAt": "2026-07-01T14:37:20.918Z",
+    "active": true
+  }
+}

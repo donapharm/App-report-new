@@ -101,6 +101,10 @@ function markSent(telegramId, empCode, kind, day = vnDayKey()) {
 }
 function userIsActiveForDigest(user, latestKy) {
   if (!user) return false;
+  // Guardrail CEO chốt 2026-07-02: CTV ngoài vẫn đăng nhập/xem dữ liệu (pull),
+  // nhưng tuyệt đối không được nhận bản tin/nhắc target chủ động (push) nếu CEO
+  // chưa yêu cầu cụ thể + duyệt riêng. Áp cho DN021/DN022/DN023/VP004 qua master.
+  if (user.no_auto_notify) return false;
   const st = String(user.status || user.trang_thai || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (st && /(nghi|da nghi|inactive|disabled|khoa)/.test(st)) return false;
   if (isAdminUser(user)) return true;

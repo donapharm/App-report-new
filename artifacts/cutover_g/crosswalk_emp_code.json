@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-02T15:34:23.096Z",
+  "generatedAt": "2026-07-02T15:48:28.825Z",
   "rule": "Exact emp_code match AppSale employees.code ↔ AppReport users.emp_code. Required for revenue sync and scope.",
   "counts": {
     "appEmployees": 31,

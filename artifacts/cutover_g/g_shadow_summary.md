@@ -1,6 +1,6 @@
 # Cutover G — Adapter SHADOW CST + emp_code crosswalk
 
-Generated: 2026-07-02T15:34:23.269Z. Read-only. No source cutover.
+Generated: 2026-07-02T15:48:29.001Z. Read-only. No source cutover.
 
 ## emp_code crosswalk
 - App Sale employees: 31
