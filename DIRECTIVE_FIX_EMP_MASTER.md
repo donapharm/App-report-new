@@ -14,7 +14,10 @@
 | emp_code | Họ tên | SĐT | Email |
 |---|---|---|---|
 | `DN021` | Lê Anh Đức | 0906107109 | ducluatsu98@yahoo.com.vn |
+| `DN022` | *(chờ CEO/lấy từ data)* | 0908858073 | toandv202@gmail.com |
+| `DN023` | *(chờ CEO/lấy từ data)* | 0977790789 | ctyhiepphat1819@gmail.com |
 | `VP004` | Trần Hoàng Trung | 0378970463 | *(chưa có)* |
+> `DN022`/`DN023`: SĐT+email đã có; **tên chưa có** — bot thử lấy từ danh bạ/dữ liệu gốc (raw_nv), nếu không có thì để tạm mã, chờ CEO cấp tên. Vẫn thêm để đăng nhập OTP theo SĐT được.
 - Cập nhật cả **danh bạ runtime trên server** (để card hiện tên thay vì mã trần, và cho phép đăng nhập OTP theo SĐT) và seed/`users.json` nếu phù hợp.
 - **Role/scope:**
   - `DN021` = NV sale đang làm (CEO xác nhận) → role `sale`, status **Đang làm**, scope = emp_code của mình.
