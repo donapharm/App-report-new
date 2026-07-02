@@ -2,6 +2,13 @@
 
 > Claude Code giao (CEO phát hiện qua ảnh 2026-07-02). Bot triển khai TRÊN SERVER (danh bạ thật + data). Không đụng app cũ 3860. Giữ tổng doanh thu đã khớp (T06 = 28.403.136.096) — không làm lệch số.
 
+## ⛔ QUY TẮC BẢO MẬT — KHÓA GỬI RA cho 4 CTV ngoài (CEO chốt 2026-07-02, BẮT BUỘC)
+**Tuyệt đối KHÔNG tự động gửi RA** (email / Zalo / Telegram digest / bất kỳ thông báo chủ động nào) về **đạt/thiếu target** hay **nhắc thông tin liên quan** cho 4 CTV: **`DN021`, `DN022`, `DN023`, `VP004`**.
+- Mặc định các mã này có cờ **`no_auto_notify = true`** → **scheduler digest BỎ QUA**, mọi luồng gửi khen thưởng/nhắc target **BỎ QUA**.
+- **Chỉ gửi khi CEO YÊU CẦU cụ thể + có DUYỆT trước** (không có lệnh CEO thì không gửi, kể cả bản tin sáng).
+- Họ **VẪN đăng nhập xem dữ liệu của mình** (pull) bình thường — chỉ chặn **đẩy ra chủ động** (push). Phân biệt: kéo/xem = OK; tự gửi ra = KHÓA.
+- Áp dụng ở: `telegram-bot.js` (digest), mọi tính năng gửi Zalo/Email tương lai. Đây là guardrail cứng, không được nới nếu không có lệnh CEO.
+
 ## 0) DANH SÁCH CỘNG TÁC VIÊN (CTV) SALE — CEO chốt 2026-07-02
 6 mã sau = **CTV sale**: `DN002`, `DN004`, `DN021`, `DN022`, `DN023`, `VP004`.
 - Status = **Cộng tác** (active), role `sale`, scope = phần của mình.
