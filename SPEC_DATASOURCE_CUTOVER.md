@@ -74,6 +74,27 @@ Mỗi dòng lưu tối thiểu: `iit_code`, `unit_code` (chuẩn hóa), `bid_pac
 
 Bot trả kết quả (kèm mẫu JSON vài bản ghi mỗi loại) → Claude review, chốt **hợp đồng API** + Model A/B + thiết kế adapter.
 
+## E) KẾT QUẢ KHẢO SÁT API (bot 2026-07-02) + QUYẾT ĐỊNH KIẾN TRÚC
+> Nguồn: `artifacts/appsale_api_cutover_survey_20260702.md`. Khảo sát read-only, không ghi, không cắt Lumos.
+
+### Chốt Model = **A** (neo baseline Lumos) — *đính chính tên gọi*
+Bot ghi "Model B" nhưng mô tả ("chưa thay được Lumos lịch sử; không thấy lũy kế bán đầy đủ trước 07/2026") = đúng **Model A** theo định nghĩa spec này. **Kết luận: App Sale CHƯA thay được Lumos cho lịch sử → GIỮ baseline Lumos, App Sale chỉ trừ dần từ 01/07.** (Không phải đọc thẳng bỏ Lumos.)
+
+### Điểm chặn (blocker) phải xử lý trước
+1. **Mã CHƯA khớp — bắt buộc crosswalk.** SP 371(AppSale)/318(Lumos), ĐV 195/108, gói thầu lẫn format (`QĐ139`,`139`,`03`,`QĐ799`). → **Chỉ dựng crosswalk trong PHẠM VI KÊNH CL** (App Sale gồm cả NCL/NT nên nhiều hơn); lọc route=CL rồi kiểm bộ CL có ánh xạ 1:1 về 108 ĐV / 318 SP Lumos. Chuẩn hóa mã gói (`QĐ139`≡`139`).
+2. **Định nghĩa "net" bằng TRẠNG THÁI** (chưa có return âm rõ). Chốt: chỉ tính đơn/dòng ở trạng thái **đã duyệt/đã giao/đã xuất hóa đơn** (approved/delivered/invoiced); loại `CANCELLED` + `approval_status=rejected`. Hàng trả sau giao: xác nhận nghiệp vụ có phát sinh & App Sale có ghi không (nếu không → rủi ro CST không hoàn khi trả, ghi nhận để sau).
+3. **Chưa có API incremental chính thức.** Cần App Sale bổ sung endpoint read-only **`/api/report-sync/changes?updated_since=<ts|id>`** (idempotent, phân trang) + **service token server-to-server riêng**. Hiện `/orders/manage` max 50, `/products` max 100 → kéo lịch sử theo page, không ồ ạt.
+
+### Điểm THUẬN LỢI phát hiện thêm
+- App Sale đã có sẵn cột CST: `cst_chinh, cst_30, cst_ban_dau_import, cst_con_lai_import, da_giao, dang_cho_giao`. **`cst_ban_dau_import`/`cst_con_lai_import` nghi là baseline import từ Lumos.** → **Việc cần làm:** đối chiếu `cst_con_lai_import` (App Sale) ↔ CST còn lại (Lumos/App Report). Nếu KHỚP → App Sale có thể **tự host baseline**, App Report đọc baseline + timeline từ một nguồn App Sale (gọn hơn, vẫn là Model A về bản chất).
+- Bán/timeline đủ chất: ID duy nhất (`orders.id/code`, `order_items.id`), timestamp (`created_at/updated_at`, `order_status_events`), trạng thái, **cờ kênh `route=CL/NCL/NT`**, nối gói qua `unit_offerings.goi_code`. → Đủ dựng adapter incremental theo `updated_at`.
+
+### Việc tiếp cho bot (không cắt Lumos)
+1. Dựng **crosswalk CL-scope** (SP/ĐV/gói) + báo tỉ lệ khớp; liệt kê phần lệch để xử tay.
+2. Đối chiếu **`cst_con_lai_import` App Sale ↔ CST Lumos** vài chục dòng → xác định có host baseline ở App Sale được không.
+3. Đề xuất **contract `/api/report-sync/changes`** (field trả về, phân trang, filter route=CL, updated_since) + service token → Claude review trước khi App Sale code.
+4. Viết **adapter read-only chạy SHADOW** (song song, chỉ đối chiếu, chưa thay nguồn).
+
 ## D) Thứ tự triển khai an toàn
 1. Bot xác nhận 4 câu mục C (không code, chỉ khảo sát API).
 2. Chốt hợp đồng API + bảng ánh xạ mã (nếu cần) → Claude review.
