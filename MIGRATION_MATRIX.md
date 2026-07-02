@@ -54,6 +54,37 @@ Nguồn đối chiếu:
 
 Ghi chú kiểm soát: nếu lần đối chiếu sau phát hiện kỳ nào lệch, phải **dừng**, ghi rõ chênh lệch + nguồn, chờ xử lý; không tự ý làm tròn/làm khớp.
 
+## Bước 3 mở rộng theo từng tab — TẠM DỪNG tại CST mismatch (2026-07-02)
+
+Artifact kiểm tra: `artifacts/reconcile_tabs_until_cst_mismatch_20260702.json`.
+
+Các tab đã chạy trước khi dừng:
+- **Overview/Doanh thu/DT đầy đủ/Sản phẩm/Target/Phân tích:** tổng kỳ 01→06/2026 khớp ở phần đã kiểm (diff doanh thu/target = 0). Chi tiết đầy đủ nằm trong artifact.
+- **CST:** phát hiện lệch nên **dừng**, không tự sửa số.
+
+Chi tiết lệch CST:
+
+| Nguồn | Dòng | Tổng CST ban đầu | Tổng SL đã bán | Tổng SL còn | Tổng TT còn lại |
+|---|---:|---:|---:|---:|---:|
+| App cũ `artifacts/cst_full_from_old.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 |
+| App mới `server/data/cst_real.json` | 2.740 | 182.793.992 | 62.993.027 | 120.024.002 | 399.762.552.609 |
+| **Chênh** | **-1** | **-44.000** | **0** | **-44.000** | **-79.200.000** |
+
+Dòng thiếu trong app mới:
+
+| Trường | Giá trị |
+|---|---|
+| `source_from_date` | `01-MAY-26` |
+| `unit_code_name` | `108. BVĐK LONG AN` |
+| `product_name` | `Bividia 25` |
+| `iit_code` | *(rỗng)* |
+| `emp_code` | `DN001` |
+| `cst_ban_dau` / `sl_con_lai` | `44.000` / `44.000` |
+| `gia_thau` / `tt_con_lai` | `1.800` / `79.200.000` |
+| `raw_nv` | `284` |
+
+Nguyên nhân kỹ thuật hiện tại: `server/scripts/import_cst.js` đang lọc `.filter((r) => r.iit_code && r.unit_code && r.bid_qty_initial > 0)`, nên dòng app cũ có `iit_code` rỗng bị loại. **Chưa xử lý tiếp** cho đến khi CEO/Claude chốt nên giữ dòng thiếu mã QLNB hay loại có chủ đích khỏi cả hai bên.
+
 ## P1 sau P0
 1. Đối chiếu giao diện/logic từng tab với app cũ bằng 04/05/06.2026.
 2. Bổ sung PDF/print và mẫu export cũ.

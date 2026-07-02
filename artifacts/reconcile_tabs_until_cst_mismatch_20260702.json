@@ -1,0 +1,954 @@
+{
+  "mismatch": [
+    {
+      "tab": "cst",
+      "k": "rows",
+      "old": 2741,
+      "new": 2740
+    },
+    {
+      "tab": "cst",
+      "k": "remainAmount",
+      "old": 399841752609,
+      "new": 399762552609
+    }
+  ],
+  "out": {
+    "overview": [
+      {
+        "ky": "01.2026",
+        "oldRows": 2094,
+        "newRows": 2094,
+        "oldTotal": 32509346732,
+        "newTotal": 32509346732,
+        "diff": 0,
+        "oldEmp": 0,
+        "newEmp": 21,
+        "targetOld": 29562862426,
+        "targetNew": 29562862426
+      },
+      {
+        "ky": "02.2026",
+        "oldRows": 1308,
+        "newRows": 1308,
+        "oldTotal": 17507218993,
+        "newTotal": 17507218993,
+        "diff": 0,
+        "oldEmp": 0,
+        "newEmp": 21,
+        "targetOld": 29562862426,
+        "targetNew": 29562862426
+      },
+      {
+        "ky": "03.2026",
+        "oldRows": 2175,
+        "newRows": 2175,
+        "oldTotal": 33773738542,
+        "newTotal": 33773738542,
+        "diff": 0,
+        "oldEmp": 0,
+        "newEmp": 21,
+        "targetOld": 29562862426,
+        "targetNew": 29562862426
+      },
+      {
+        "ky": "04.2026",
+        "oldRows": 2282,
+        "newRows": 2282,
+        "oldTotal": 34794142431,
+        "newTotal": 34794142431,
+        "diff": 0,
+        "oldEmp": 0,
+        "newEmp": 21,
+        "targetOld": 30062862426,
+        "targetNew": 30062862426
+      },
+      {
+        "ky": "05.2026",
+        "oldRows": 1600,
+        "newRows": 1600,
+        "oldTotal": 30398950820,
+        "newTotal": 30398950820,
+        "diff": 0,
+        "oldEmp": 0,
+        "newEmp": 21,
+        "targetOld": 30062862426,
+        "targetNew": 30062862426
+      },
+      {
+        "ky": "06.2026",
+        "oldRows": 2001,
+        "newRows": 2001,
+        "oldTotal": 28403136096,
+        "newTotal": 28403136096,
+        "diff": 0,
+        "oldEmp": 0,
+        "newEmp": 22,
+        "targetOld": 30062862426,
+        "targetNew": 30062862426
+      }
+    ],
+    "revenueEmp": [
+      {
+        "ky": "01.2026",
+        "oldGroups": 1,
+        "newGroups": 21,
+        "oldTotal": 32509346732,
+        "newTotal": 32509346732,
+        "sampleOld": {
+          "key": "—",
+          "revenue": 32509346732,
+          "quantity": 9958941,
+          "rows": 2094
+        },
+        "sampleNew": {
+          "key": "DN005",
+          "label": "Nguyễn Thị Dung",
+          "revenue": 3387394200,
+          "quantity": 617818,
+          "rows": 124
+        }
+      },
+      {
+        "ky": "02.2026",
+        "oldGroups": 1,
+        "newGroups": 21,
+        "oldTotal": 17507218993,
+        "newTotal": 17507218993,
+        "sampleOld": {
+          "key": "—",
+          "revenue": 17507218993,
+          "quantity": 5420003,
+          "rows": 1308
+        },
+        "sampleNew": {
+          "key": "DN012",
+          "label": "Đặng Thị Hồng Hạnh",
+          "revenue": 2943319818,
+          "quantity": 671172,
+          "rows": 35
+        }
+      },
+      {
+        "ky": "03.2026",
+        "oldGroups": 1,
+        "newGroups": 21,
+        "oldTotal": 33773738542,
+        "newTotal": 33773738542,
+        "sampleOld": {
+          "key": "—",
+          "revenue": 33773738542,
+          "quantity": 9683900,
+          "rows": 2175
+        },
+        "sampleNew": {
+          "key": "DN016",
+          "label": "Trần Thị Ngọc Ánh",
+          "revenue": 3227151890,
+          "quantity": 1181359,
+          "rows": 166
+        }
+      },
+      {
+        "ky": "04.2026",
+        "oldGroups": 1,
+        "newGroups": 21,
+        "oldTotal": 34794142431,
+        "newTotal": 34794142431,
+        "sampleOld": {
+          "key": "—",
+          "revenue": 34794142431,
+          "quantity": 10440501,
+          "rows": 2282
+        },
+        "sampleNew": {
+          "key": "DN016",
+          "label": "Trần Thị Ngọc Ánh",
+          "revenue": 3863191145,
+          "quantity": 1299852,
+          "rows": 187
+        }
+      },
+      {
+        "ky": "05.2026",
+        "oldGroups": 1,
+        "newGroups": 21,
+        "oldTotal": 30398950820,
+        "newTotal": 30398950820,
+        "sampleOld": {
+          "key": "—",
+          "revenue": 30398950820,
+          "quantity": 9095648,
+          "rows": 1600
+        },
+        "sampleNew": {
+          "key": "DN012",
+          "label": "Đặng Thị Hồng Hạnh",
+          "revenue": 6032357462,
+          "quantity": 1227344,
+          "rows": 34
+        }
+      },
+      {
+        "ky": "06.2026",
+        "oldGroups": 1,
+        "newGroups": 22,
+        "oldTotal": 28403136096,
+        "newTotal": 28403136096,
+        "sampleOld": {
+          "key": "—",
+          "revenue": 28403136096,
+          "quantity": 8945788,
+          "rows": 2001
+        },
+        "sampleNew": {
+          "key": "DN009",
+          "label": "Trần Thị Thanh Huyền",
+          "revenue": 3058543979,
+          "quantity": 576795,
+          "rows": 130
+        }
+      }
+    ],
+    "revenueUnit": [
+      {
+        "ky": "01.2026",
+        "oldGroups": 117,
+        "newGroups": 117,
+        "oldTotal": 32509346732,
+        "newTotal": 32509346732,
+        "sampleOld": {
+          "key": "002.BVĐK Thống Nhất ĐN",
+          "revenue": 6439503830,
+          "quantity": 1529023,
+          "rows": 202
+        },
+        "sampleNew": {
+          "key": "002.BVĐK Thống Nhất ĐN",
+          "label": "002.BVĐK Thống Nhất ĐN",
+          "revenue": 6439503830,
+          "quantity": 1529023,
+          "rows": 202
+        }
+      },
+      {
+        "ky": "02.2026",
+        "oldGroups": 112,
+        "newGroups": 112,
+        "oldTotal": 17507218993,
+        "newTotal": 17507218993,
+        "sampleOld": {
+          "key": "012.NT-BV Tâm Thần TW2",
+          "revenue": 2504745788,
+          "quantity": 519852,
+          "rows": 16
+        },
+        "sampleNew": {
+          "key": "012.NT-BV Tâm Thần TW2",
+          "label": "012.NT-BV Tâm Thần TW2",
+          "revenue": 2504745788,
+          "quantity": 519852,
+          "rows": 16
+        }
+      },
+      {
+        "ky": "03.2026",
+        "oldGroups": 126,
+        "newGroups": 126,
+        "oldTotal": 33773738542,
+        "newTotal": 33773738542,
+        "sampleOld": {
+          "key": "001.BVĐK Đồng Nai",
+          "revenue": 6361769144,
+          "quantity": 1615002,
+          "rows": 164
+        },
+        "sampleNew": {
+          "key": "001.BVĐK Đồng Nai",
+          "label": "001.BVĐK Đồng Nai",
+          "revenue": 6361769144,
+          "quantity": 1615002,
+          "rows": 164
+        }
+      },
+      {
+        "ky": "04.2026",
+        "oldGroups": 126,
+        "newGroups": 126,
+        "oldTotal": 34794142431,
+        "newTotal": 34794142431,
+        "sampleOld": {
+          "key": "002.BVĐK Thống Nhất ĐN",
+          "revenue": 5900260905,
+          "quantity": 1603278,
+          "rows": 189
+        },
+        "sampleNew": {
+          "key": "002.BVĐK Thống Nhất ĐN",
+          "label": "002.BVĐK Thống Nhất ĐN",
+          "revenue": 5900260905,
+          "quantity": 1603278,
+          "rows": 189
+        }
+      },
+      {
+        "ky": "05.2026",
+        "oldGroups": 114,
+        "newGroups": 114,
+        "oldTotal": 30398950820,
+        "newTotal": 30398950820,
+        "sampleOld": {
+          "key": "012.NT-BV Tâm Thần TW2",
+          "revenue": 5432312492,
+          "quantity": 976914,
+          "rows": 10
+        },
+        "sampleNew": {
+          "key": "012.NT-BV Tâm Thần TW2",
+          "label": "012.NT-BV Tâm Thần TW2",
+          "revenue": 5432312492,
+          "quantity": 976914,
+          "rows": 10
+        }
+      },
+      {
+        "ky": "06.2026",
+        "oldGroups": 126,
+        "newGroups": 126,
+        "oldTotal": 28403136096,
+        "newTotal": 28403136096,
+        "sampleOld": {
+          "key": "002.BVĐK Thống Nhất ĐN",
+          "revenue": 4516386180,
+          "quantity": 1249916,
+          "rows": 164
+        },
+        "sampleNew": {
+          "key": "002.BVĐK Thống Nhất ĐN",
+          "label": "002.BVĐK Thống Nhất ĐN",
+          "revenue": 4516386180,
+          "quantity": 1249916,
+          "rows": 164
+        }
+      }
+    ],
+    "revenueProduct": [
+      {
+        "ky": "01.2026",
+        "oldGroups": 240,
+        "newGroups": 240,
+        "oldTotal": 32509346732,
+        "newTotal": 32509346732,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "revenue": 2120820440,
+          "quantity": 11054,
+          "rows": 22
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "label": "RELIPOREX 4000 IU",
+          "revenue": 2120820440,
+          "quantity": 11054,
+          "rows": 22
+        }
+      },
+      {
+        "ky": "02.2026",
+        "oldGroups": 198,
+        "newGroups": 198,
+        "oldTotal": 17507218993,
+        "newTotal": 17507218993,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3137.N5.787",
+          "revenue": 1116319400,
+          "quantity": 5033,
+          "rows": 55
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3137.N5.787",
+          "label": "Glaritus",
+          "revenue": 1116319400,
+          "quantity": 5033,
+          "rows": 55
+        }
+      },
+      {
+        "ky": "03.2026",
+        "oldGroups": 234,
+        "newGroups": 234,
+        "oldTotal": 33773738542,
+        "newTotal": 33773738542,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3137.N5.787",
+          "revenue": 2426492000,
+          "quantity": 10940,
+          "rows": 87
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3137.N5.787",
+          "label": "Glaritus",
+          "revenue": 2426492000,
+          "quantity": 10940,
+          "rows": 87
+        }
+      },
+      {
+        "ky": "04.2026",
+        "oldGroups": 227,
+        "newGroups": 227,
+        "oldTotal": 34794142431,
+        "newTotal": 34794142431,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "revenue": 2555191480,
+          "quantity": 13318,
+          "rows": 24
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "label": "RELIPOREX 4000 IU",
+          "revenue": 2555191480,
+          "quantity": 13318,
+          "rows": 24
+        }
+      },
+      {
+        "ky": "05.2026",
+        "oldGroups": 227,
+        "newGroups": 227,
+        "oldTotal": 30398950820,
+        "newTotal": 30398950820,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.1060.N2.946",
+          "revenue": 1796875000,
+          "quantity": 287500,
+          "rows": 4
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.1060.N2.946",
+          "label": "Gikorcen",
+          "revenue": 1796875000,
+          "quantity": 287500,
+          "rows": 4
+        }
+      },
+      {
+        "ky": "06.2026",
+        "oldGroups": 241,
+        "newGroups": 241,
+        "oldTotal": 28403136096,
+        "newTotal": 28403136096,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "revenue": 2091274000,
+          "quantity": 10900,
+          "rows": 17
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "label": "RELIPOREX 4000 IU",
+          "revenue": 2091274000,
+          "quantity": 10900,
+          "rows": 17
+        }
+      }
+    ],
+    "revenueFull": [
+      {
+        "ky": "01.2026",
+        "oldRows": 2094,
+        "newRows": 2094,
+        "oldTotal": 32509346732,
+        "newTotal": 32509346732,
+        "sampleOld": {
+          "emp": "",
+          "unit": "001.BVĐK Đồng Nai",
+          "product": "Crexor 10",
+          "qty": 220000,
+          "revenue": 187000000
+        },
+        "sampleNew": {
+          "emp": "DN001",
+          "unit": "001.BVĐK Đồng Nai",
+          "product": "Crexor 10",
+          "qty": 220000,
+          "revenue": 187000000
+        }
+      },
+      {
+        "ky": "02.2026",
+        "oldRows": 1308,
+        "newRows": 1308,
+        "oldTotal": 17507218993,
+        "newTotal": 17507218993,
+        "sampleOld": {
+          "emp": "",
+          "unit": "001.BVĐK Đồng Nai",
+          "product": "Vixcar",
+          "qty": 19980,
+          "revenue": 17382600
+        },
+        "sampleNew": {
+          "emp": "DN001",
+          "unit": "001.BVĐK Đồng Nai",
+          "product": "Vixcar",
+          "qty": 19980,
+          "revenue": 17382600
+        }
+      },
+      {
+        "ky": "03.2026",
+        "oldRows": 2175,
+        "newRows": 2175,
+        "oldTotal": 33773738542,
+        "newTotal": 33773738542,
+        "sampleOld": {
+          "emp": "",
+          "unit": "001.BVĐK Đồng Nai",
+          "product": "Vixcar",
+          "qty": 49980,
+          "revenue": 43482600
+        },
+        "sampleNew": {
+          "emp": "DN001",
+          "unit": "001.BVĐK Đồng Nai",
+          "product": "Vixcar",
+          "qty": 49980,
+          "revenue": 43482600
+        }
+      },
+      {
+        "ky": "04.2026",
+        "oldRows": 2282,
+        "newRows": 2282,
+        "oldTotal": 34794142431,
+        "newTotal": 34794142431,
+        "sampleOld": {
+          "emp": "",
+          "unit": "001.BVĐK Đồng Nai",
+          "product": "Vixcar",
+          "qty": 79980,
+          "revenue": 69582600
+        },
+        "sampleNew": {
+          "emp": "DN001",
+          "unit": "001.BVĐK Đồng Nai",
+          "product": "Vixcar",
+          "qty": 79980,
+          "revenue": 69582600
+        }
+      },
+      {
+        "ky": "05.2026",
+        "oldRows": 1600,
+        "newRows": 1600,
+        "oldTotal": 30398950820,
+        "newTotal": 30398950820,
+        "sampleOld": {
+          "emp": "",
+          "unit": "171.PKĐK NAM VIỆT",
+          "product": "Cerecaps",
+          "qty": 4980,
+          "revenue": 13246800
+        },
+        "sampleNew": {
+          "emp": "DN001",
+          "unit": "171.PKĐK NAM VIỆT",
+          "product": "Cerecaps",
+          "qty": 4980,
+          "revenue": 13246800
+        }
+      },
+      {
+        "ky": "06.2026",
+        "oldRows": 2001,
+        "newRows": 2001,
+        "oldTotal": 28403136096,
+        "newTotal": 28403136096,
+        "sampleOld": {
+          "emp": "",
+          "unit": "019.TTYT H. Vĩnh Cửu",
+          "product": "Nadecin 10mg",
+          "qty": 1000,
+          "revenue": 2600000
+        },
+        "sampleNew": {
+          "emp": "DN003",
+          "unit": "019.TTYT H. Vĩnh Cửu",
+          "product": "Nadecin 10mg",
+          "qty": 1000,
+          "revenue": 2600000
+        }
+      }
+    ],
+    "products": [
+      {
+        "ky": "01.2026",
+        "oldProducts": 240,
+        "newProducts": 240,
+        "oldUnits": 117,
+        "newUnits": 117,
+        "oldTotal": 32509346732,
+        "newTotal": 32509346732,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "revenue": 2120820440,
+          "quantity": 11054,
+          "rows": 22
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "label": "RELIPOREX 4000 IU",
+          "revenue": 2120820440,
+          "quantity": 11054,
+          "rows": 22
+        }
+      },
+      {
+        "ky": "02.2026",
+        "oldProducts": 198,
+        "newProducts": 198,
+        "oldUnits": 112,
+        "newUnits": 112,
+        "oldTotal": 17507218993,
+        "newTotal": 17507218993,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3137.N5.787",
+          "revenue": 1116319400,
+          "quantity": 5033,
+          "rows": 55
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3137.N5.787",
+          "label": "Glaritus",
+          "revenue": 1116319400,
+          "quantity": 5033,
+          "rows": 55
+        }
+      },
+      {
+        "ky": "03.2026",
+        "oldProducts": 234,
+        "newProducts": 234,
+        "oldUnits": 126,
+        "newUnits": 126,
+        "oldTotal": 33773738542,
+        "newTotal": 33773738542,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3137.N5.787",
+          "revenue": 2426492000,
+          "quantity": 10940,
+          "rows": 87
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3137.N5.787",
+          "label": "Glaritus",
+          "revenue": 2426492000,
+          "quantity": 10940,
+          "rows": 87
+        }
+      },
+      {
+        "ky": "04.2026",
+        "oldProducts": 227,
+        "newProducts": 227,
+        "oldUnits": 126,
+        "newUnits": 126,
+        "oldTotal": 34794142431,
+        "newTotal": 34794142431,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "revenue": 2555191480,
+          "quantity": 13318,
+          "rows": 24
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "label": "RELIPOREX 4000 IU",
+          "revenue": 2555191480,
+          "quantity": 13318,
+          "rows": 24
+        }
+      },
+      {
+        "ky": "05.2026",
+        "oldProducts": 227,
+        "newProducts": 227,
+        "oldUnits": 114,
+        "newUnits": 114,
+        "oldTotal": 30398950820,
+        "newTotal": 30398950820,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.1060.N2.946",
+          "revenue": 1796875000,
+          "quantity": 287500,
+          "rows": 4
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.1060.N2.946",
+          "label": "Gikorcen",
+          "revenue": 1796875000,
+          "quantity": 287500,
+          "rows": 4
+        }
+      },
+      {
+        "ky": "06.2026",
+        "oldProducts": 241,
+        "newProducts": 241,
+        "oldUnits": 126,
+        "newUnits": 126,
+        "oldTotal": 28403136096,
+        "newTotal": 28403136096,
+        "sampleOld": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "revenue": 2091274000,
+          "quantity": 10900,
+          "rows": 17
+        },
+        "sampleNew": {
+          "key": "G1.GE.QĐ139.3106.N5.484",
+          "label": "RELIPOREX 4000 IU",
+          "revenue": 2091274000,
+          "quantity": 10900,
+          "rows": 17
+        }
+      }
+    ],
+    "target": [
+      {
+        "ky": "01.2026",
+        "oldRows": 19,
+        "newRows": 19,
+        "oldTotal": 29562862426,
+        "newTotal": 29562862426,
+        "sampleOld": {
+          "ky": "01.2026",
+          "emp_code": "DN001",
+          "target": 2000000000,
+          "bonus_pct": 0.2,
+          "note": "DB Lumos P3=0.2",
+          "source": "erp-support-widget/server/nv-targets.json"
+        },
+        "sampleNew": {
+          "emp_code": "DN001",
+          "ky": "01.2026",
+          "target": 2000000000
+        }
+      },
+      {
+        "ky": "02.2026",
+        "oldRows": 19,
+        "newRows": 19,
+        "oldTotal": 29562862426,
+        "newTotal": 29562862426,
+        "sampleOld": {
+          "ky": "02.2026",
+          "emp_code": "DN001",
+          "target": 2000000000,
+          "bonus_pct": 0.2,
+          "note": "DB Lumos P3=0.2",
+          "source": "erp-support-widget/server/nv-targets.json"
+        },
+        "sampleNew": {
+          "emp_code": "DN001",
+          "ky": "02.2026",
+          "target": 2000000000
+        }
+      },
+      {
+        "ky": "03.2026",
+        "oldRows": 19,
+        "newRows": 19,
+        "oldTotal": 29562862426,
+        "newTotal": 29562862426,
+        "sampleOld": {
+          "ky": "03.2026",
+          "emp_code": "DN001",
+          "target": 2000000000,
+          "bonus_pct": 0.2,
+          "note": "DB Lumos P3=0.2",
+          "source": "erp-support-widget/server/nv-targets.json"
+        },
+        "sampleNew": {
+          "emp_code": "DN001",
+          "ky": "03.2026",
+          "target": 2000000000
+        }
+      },
+      {
+        "ky": "04.2026",
+        "oldRows": 21,
+        "newRows": 21,
+        "oldTotal": 30062862426,
+        "newTotal": 30062862426,
+        "sampleOld": {
+          "ky": "04.2026",
+          "emp_code": "DN001",
+          "target": 2000000000,
+          "bonus_pct": 0.2,
+          "source_ky": "04.2026",
+          "source": "PHARMA_NEW.V_TEM_TARGET_BONUS fallback latest<=requested"
+        },
+        "sampleNew": {
+          "emp_code": "DN001",
+          "ky": "04.2026",
+          "target": 2000000000
+        }
+      },
+      {
+        "ky": "05.2026",
+        "oldRows": 21,
+        "newRows": 21,
+        "oldTotal": 30062862426,
+        "newTotal": 30062862426,
+        "sampleOld": {
+          "ky": "05.2026",
+          "emp_code": "DN001",
+          "target": 2000000000,
+          "bonus_pct": 0.2,
+          "source_ky": "04.2026",
+          "source": "PHARMA_NEW.V_TEM_TARGET_BONUS fallback latest<=requested"
+        },
+        "sampleNew": {
+          "emp_code": "DN001",
+          "ky": "05.2026",
+          "target": 2000000000
+        }
+      },
+      {
+        "ky": "06.2026",
+        "oldRows": 21,
+        "newRows": 21,
+        "oldTotal": 30062862426,
+        "newTotal": 30062862426,
+        "sampleOld": {
+          "ky": "06.2026",
+          "emp_code": "DN001",
+          "target": 2000000000,
+          "bonus_pct": 0.2,
+          "source_ky": "04.2026",
+          "source": "PHARMA_NEW.V_TEM_TARGET_BONUS fallback latest<=requested"
+        },
+        "sampleNew": {
+          "emp_code": "DN001",
+          "ky": "06.2026",
+          "target": 2000000000
+        }
+      }
+    ],
+    "analysis": [
+      {
+        "ky": "02.2026",
+        "prev": "01.2026",
+        "oldCurrent": 17507218993,
+        "newCurrent": 17507218993,
+        "oldPrev": 32509346732,
+        "newPrev": 32509346732,
+        "diffCurrent": 0,
+        "diffPrev": 0
+      },
+      {
+        "ky": "03.2026",
+        "prev": "02.2026",
+        "oldCurrent": 33773738542,
+        "newCurrent": 33773738542,
+        "oldPrev": 17507218993,
+        "newPrev": 17507218993,
+        "diffCurrent": 0,
+        "diffPrev": 0
+      },
+      {
+        "ky": "04.2026",
+        "prev": "03.2026",
+        "oldCurrent": 34794142431,
+        "newCurrent": 34794142431,
+        "oldPrev": 33773738542,
+        "newPrev": 33773738542,
+        "diffCurrent": 0,
+        "diffPrev": 0
+      },
+      {
+        "ky": "05.2026",
+        "prev": "04.2026",
+        "oldCurrent": 30398950820,
+        "newCurrent": 30398950820,
+        "oldPrev": 34794142431,
+        "newPrev": 34794142431,
+        "diffCurrent": 0,
+        "diffPrev": 0
+      },
+      {
+        "ky": "06.2026",
+        "prev": "05.2026",
+        "oldCurrent": 28403136096,
+        "newCurrent": 28403136096,
+        "oldPrev": 30398950820,
+        "newPrev": 30398950820,
+        "diffCurrent": 0,
+        "diffPrev": 0
+      }
+    ],
+    "cst": {
+      "oldRows": 2741,
+      "newRows": 2740,
+      "oldBidQty": 182837992,
+      "newBidQty": 182793992,
+      "oldSoldQty": 62993027,
+      "newSoldQty": 62993027,
+      "oldRemainQty": 120068002,
+      "newRemainQty": 120024002,
+      "oldRemainAmount": 399841752609,
+      "newRemainAmount": 399762552609,
+      "sampleOld": {
+        "source_from_date": "01-MAY-26",
+        "iit_code": "G1.GE.QĐ139.1943.N4.563",
+        "product_name": "Ediwel",
+        "active_ingredient": "Clopidogrel",
+        "strength": "75mg",
+        "unit_code_name": "001.BVĐK Đồng Nai",
+        "uom": "Viên",
+        "emp_code": "DN009",
+        "cst_ban_dau": 2800000,
+        "sl_ban": 1154400,
+        "sl_con_lai": 1645600,
+        "pct_con_lai": 58.8,
+        "gia_thau": 1950,
+        "gia_ban": 1950,
+        "tt_thau": 5460000000,
+        "tt_da_ban": 2251080000,
+        "tt_con_lai": 3208920000,
+        "ut": "H.A",
+        "bid_package": "G1.L1.QĐ139/27.02.25",
+        "raw_nv": "75",
+        "sales_emps": "DN007,DN009,DN016"
+      },
+      "sampleNew": {
+        "ky": "CURRENT",
+        "emp_code": "DN009",
+        "unit_code": "001.BVĐK Đồng Nai",
+        "unit_name": "001.BVĐK Đồng Nai",
+        "iit_code": "G1.GE.QĐ139.1943.N4.563",
+        "product_name": "Ediwel",
+        "ham_luong": "75mg",
+        "active_ingredient": "Clopidogrel",
+        "uom": "Viên",
+        "bid_package": "G1.L1.QĐ139/27.02.25",
+        "bid_qty_initial": 2800000,
+        "sold_qty": 1154400,
+        "remain_qty": 1645600,
+        "remain_pct": 58.8,
+        "bid_price": 1950,
+        "sale_price": 1950,
+        "bid_amount": 5460000000,
+        "sold_amount": 2251080000,
+        "remain_amount": 3208920000,
+        "priority": "H.A",
+        "source_from_date": "01-MAY-26",
+        "raw_nv": "75",
+        "sales_emps": "DN007,DN009,DN016"
+      }
+    }
+  }
+}
