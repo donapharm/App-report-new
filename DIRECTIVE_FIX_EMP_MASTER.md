@@ -8,7 +8,11 @@
 | `DN021` | Lê Anh Đức | 0906107109 | ducluatsu98@yahoo.com.vn |
 | `VP004` | Trần Hoàng Trung | 0378970463 | *(chưa có)* |
 - Cập nhật cả **danh bạ runtime trên server** (để card hiện tên thay vì mã trần, và cho phép đăng nhập OTP theo SĐT) và seed/`users.json` nếu phù hợp.
-- **Xác nhận role/scope:** `DN021` là NV sale đang làm (CEO xác nhận) → role `sale`, scope = emp_code của mình. `VP004` (văn phòng) hiện có doanh thu 34tr + target 200tr trong T06 → xác nhận role/scope đúng (sale hay văn phòng có chỉ tiêu?), không mở quyền rộng hơn cần thiết.
+- **Role/scope:**
+  - `DN021` = NV sale đang làm (CEO xác nhận) → role `sale`, status **Đang làm**, scope = emp_code của mình.
+  - `VP004` = **CỘNG TÁC VIÊN** (CEO chốt 2026-07-02: chuyển qua làm cộng tác) → status **Cộng tác** (vẫn active, VẪN tính doanh thu như thường), scope = phần của mình (như sale). "Cộng tác" là active nên vẫn vào báo cáo/digest (regex active đã nhận `cong tac`).
+  - **Target cho CTV:** chỉ tính % đạt / cảnh báo "chưa đạt target" khi CEO CÓ giao target cho VP004; nếu coi CTV không áp target cứng thì bỏ khỏi cảnh báo target (đừng để CTV hiện đỏ oan). Xác nhận với CEO nếu cần.
+- 3 trạng thái NV chuẩn hóa: **Đang làm** (chính thức) · **Cộng tác** (CTV, active) · **Nghỉ việc** (loại khỏi target/forecast/cảnh báo/ranking). Dùng nhất quán ở tab Nhân viên + digest + smart.
 - `DN021`/`VP004` trước đó là "App Sale-only / inactive" trong crosswalk emp_code — cập nhật lại crosswalk cho khớp (hết blocker phân quyền 07 cho 2 mã này).
 
 ## 2) TRUY mã rác "#N/A" và "83" trong bộ lọc/dữ liệu NV
