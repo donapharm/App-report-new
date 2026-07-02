@@ -2,6 +2,19 @@
 
 > Claude Code giao (CEO phản ánh Target sai/thiếu 2026-07-03). **Ưu tiên cao** — CEO đã yêu cầu từ trước nhưng chưa triển khai. Bot làm; Claude review. Theo `SPEC_TARGET_MULTISOURCE.md`. Không đụng app cũ 3860.
 
+## 0-BIS) ‼ DANH SÁCH NV CÓ TARGET — CEO CHỐT CHÍNH THỨC 2026-07-03 (dùng làm CHUẨN)
+Ô Target đang **lọt cả NV văn phòng** (heuristic role/status sai). **Bỏ đoán — dùng ĐÚNG allowlist 21 mã dưới đây** làm roster target (cờ `has_target`/danh sách cấu hình, KHÔNG suy từ role):
+
+**21 mã có target:** `DN001, DN002, DN003, DN004, DN005, DN006, DN007, DN008, DN009, DN010, DN011, DN012, DN016, DN017, DN018, DN019, DN021, DN022, DN023, DN024, VP004`.
+
+- **KHÔNG có target:** mọi mã ngoài danh sách (văn phòng, telesale VP018, đã nghỉ DN013/014/015, DN020…). Không hiện trong tab Target/Dự báo/cảnh báo.
+- **Phân nhóm trong 21 mã (để gắn nhãn "chú ý", tất cả VẪN có target):**
+  - **CTV đặc biệt cần chú ý:** `DN021, DN022, DN023, VP004` (đúng nhóm `no_auto_notify` — khóa gửi tự động).
+  - **CTV gần mức NV fulltime:** `DN002, DN004`.
+  - **NV fulltime:** các mã còn lại.
+- Lưu allowlist thành **cấu hình/field trong danh bạ** (dễ CEO thêm/bớt sau), không hardcode rải rác. Resolver + forecast + %đạt + cảnh báo đều dựa allowlist này.
+- **Nghiệm thu:** tab Target/Dự báo hiện **ĐÚNG 21 mã này, không dư không thiếu**; không còn NV văn phòng.
+
 ## 1) SỬA "SAI/THIẾU" NGAY (không chờ Target admin)
 - **Thiếu NV:** danh sách Target/Dự báo hiện lấy NV có bán trong kỳ mới nhất (T07 đang chạy dở → sót). **Sửa: lấy TOÀN BỘ đội sale đang hoạt động** (NV sale + CTV sale, status active), và **neo "target cũ"/xu hướng theo THÁNG ĐỦ GẦN NHẤT (T06)**, không dựa tháng đang chạy dở.
 - **Tách TELESALE khỏi NV sale thị trường:** `VP018` (và telesale khác) là **telesale**, không phải NV sale thị trường. Thêm **loại NV** trong danh bạ: `sale` (thị trường) · `telesale` · `ctv` · `văn phòng`/khác. Danh sách target NV sale **chỉ gồm sale + ctv sale**; telesale tách nhóm riêng (xem câu hỏi CEO bên dưới).
