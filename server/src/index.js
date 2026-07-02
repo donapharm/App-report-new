@@ -1,7 +1,23 @@
 /**
  * index.js — điểm khởi động backend App Report New.
  */
+const fs = require('fs');
 const path = require('path');
+
+// Nạp .env cạnh repo (không thêm dependency dotenv). KHÔNG ghi đè biến đã có sẵn
+// trong môi trường (PM2/shell) — chỉ điền biến còn thiếu. Cần để TELEGRAM_BOT_SECRET
+// và các config đăng nhập luôn có mặt sau khi restart PM2 (cùng cách telegram-bot.js đọc .env).
+(function loadEnv() {
+  try {
+    const p = path.join(__dirname, '..', '..', '.env');
+    if (!fs.existsSync(p)) return;
+    for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
+      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+    }
+  } catch { /* ignore */ }
+})();
+
 const express = require('express');
 const cors = require('cors');
 const routes = require('./routes');

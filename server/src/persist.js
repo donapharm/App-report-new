@@ -7,7 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const DIR = path.join(__dirname, '..', 'data', 'auth');
+// Mặc định server/data/auth; cho phép override qua AUTH_DATA_DIR (dùng khi chạy
+// instance tạm để nghiệm thu, tránh đụng dữ liệu auth của app đang chạy).
+const DIR = process.env.AUTH_DATA_DIR || path.join(__dirname, '..', 'data', 'auth');
 try { fs.mkdirSync(DIR, { recursive: true }); } catch { /* ignore */ }
 
 const file = (name) => path.join(DIR, name + '.json');

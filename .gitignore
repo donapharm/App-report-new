@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+.env.bak*
+.env.local
 *.log
 
 # Dữ liệu sinh/runtime (chạy `npm run seed` để tạo lại)

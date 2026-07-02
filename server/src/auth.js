@@ -97,8 +97,8 @@ function touchDevice(empCode, deviceId, ua) {
   if (d) { d.last_seen = t; if (ua) d.ua = ua; }
   else {
     devices.push({ id: deviceId, emp_code: code, first_seen: t, last_seen: t, ua: ua || '' });
-    // Vượt quá 3 thiết bị -> đá thiết bị ÍT DÙNG NHẤT (last_seen cũ nhất) + audit + hủy phiên của nó.
-    const mine = devices.filter((x) => x.emp_code === code).sort((a, b) => a.last_seen - b.last_seen);
+    // Vượt quá 3 thiết bị -> đá thiết bị CŨ NHẤT (first_seen cũ nhất) + audit + hủy phiên của nó.
+    const mine = devices.filter((x) => x.emp_code === code).sort((a, b) => a.first_seen - b.first_seen);
     while (mine.length > MAX_DEVICES) {
       const victim = mine.shift();
       devices = devices.filter((x) => !(x.emp_code === code && x.id === victim.id));
@@ -290,7 +290,7 @@ function telegramStatus(poll_secret) {
   if (!poll_secret) return { status: 'expired' };
   // Rate-limit poll: ≥2s/lần
   const last = pollLast.get(poll_secret) || 0;
-  if (now() - last < 1800) { const e = new Error('Poll quá nhanh'); e.status = 429; throw e; }
+  if (now() - last < 2000) { const e = new Error('Poll quá nhanh'); e.status = 429; throw e; }
   pollLast.set(poll_secret, now());
 
   let entry = null;
