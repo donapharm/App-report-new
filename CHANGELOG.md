@@ -21,10 +21,20 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Bot triển khai (Report Bot) — UI polish + Analysis/CST UX + typeahead toàn app
+- Đọc `SPEC_ANALYSIS_CST_UX.md`, `DIRECTIVE_UI_POLISH_20260702.md`, `DIRECTIVE_TELEGRAM_NLQ.md`; T07 PA-A và Telegram NLQ đã kiểm lại vẫn đúng.
+- Thêm combobox typeahead dùng chung cho bộ lọc Đơn vị/Sản phẩm/NV: tìm theo mã ĐV/tên ĐV, tên SP/mã QLNB/hoạt chất; option sản phẩm hiển thị chuỗi phân biệt QĐ/hoạt chất/hàm lượng/ĐVT/nhà thầu/giá thầu, value vẫn là `iit_code`.
+- Backend `/api/filters` trả product option giàu metadata từ CST+revenue, lọc theo scope; `/products`, `/revenue?dimension=product`, export products/CST có thêm QĐ/thuộc tính phân biệt. CST export bỏ cột Giá bán.
+- Tab CST: bỏ “Giá bán” trên card, thêm QĐ + hoạt chất/hàm lượng cho QĐ139, sửa “Nguồn” thành “Cập nhật đến kỳ/baseline + bán đến…”, thêm gợi ý hành động từng dòng, tiến độ đã bán/còn lại, ưu tiên dòng cần làm, chế độ gom theo Đơn vị + header tóm tắt.
+- Tab Phân tích: thêm block `SP cần đẩy mạnh` và `SP sắp hết CST`; xuất artifact parity `artifacts/analysis_parity_20260703.md`.
+- Tổng quan: đo hiệu năng artifact `artifacts/overview_perf_20260703.json`; tối ưu `/trend` từ ~10.064ms xuống ~545ms local bằng lightweight trend + memo 60s, KPI/số không đổi.
+- Nghiệm thu: T06 `28.403.136.096đ`, T07 `2.668.987.096đ`, `node --check` OK, `npm run build` OK.
+
 ### 2026-07-03 — CEO DUYỆT restart Telegram worker (bật NLQ)
 - **CEO đã DUYỆT** thao tác live: bot server `pm2 restart reportnew-tgbot` để nạp code NLQ + `pm2 save`. An toàn (login bot đang chạy, chỉ nạp code mới).
 - Verify sau restart: `/start`, đăng nhập RP, `/digest_test` vẫn OK; hỏi tự nhiên "doanh thu tháng 6?" → trả lời đúng scope; user chưa map → chỉ hướng dẫn đăng nhập.
 - Nhắc bot trả lời 3 câu **quy tắc gán kỳ** (ngày đặt vs ngày giao) trong `DIRECTIVE_ENABLE_JULY_REVENUE.md`.
+
 
 ### 2026-07-03 — Bot triển khai (Report Bot) — Telegram NLQ + fix PA-A T07 đã chạy
 - Đọc `DIRECTIVE_TELEGRAM_NLQ.md` và nối fallback Telegram vào `smart.answerQuestion` code-first: mã RP/lệnh `/start`, `/digest_test`, `/tat`, `/bat` giữ nguyên; user chưa map chỉ nhận hướng dẫn đăng nhập; user đã map được hỏi tự nhiên theo đúng scope Telegram → `emp_code` → `auth.scopeOf`.

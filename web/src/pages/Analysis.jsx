@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { money, short } from '../util.js';
 import { Spinner, Kpi } from '../components.jsx';
-import { emptyRevenueFilters, Select } from './revenueFilters.jsx';
+import { ComboSelect, emptyRevenueFilters, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
 import { DonutChart, TopBarChart } from '../charts.jsx';
 
@@ -24,6 +24,23 @@ function Block({ title, rows, negative }) {
     <div className="card">
       <div className="section-head">{title}</div>
       {!rows?.length ? <div className="center">Chưa có dữ liệu so sánh.</div> : rows.map((r, i) => <DeltaRow key={r.key} i={i + 1} r={r} negative={negative} />)}
+    </div>
+  );
+}
+
+function CstLowBlock({ rows }) {
+  return (
+    <div className="card">
+      <div className="section-head">📦 SP sắp hết CST</div>
+      {!rows?.length ? <div className="center">Không có sản phẩm sắp hết CST trong phạm vi lọc.</div> : rows.map((r, i) => (
+        <div className="row" key={r.key || i}>
+          <div className="main">
+            <div className="name"><span className="rank">{i + 1}</span>{r.label}</div>
+            <div className="meta">{r.iit_code || '—'} · {r.qd || '—'} · {r.unit_name || '—'} {r.qd === 'QĐ139' ? `· ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''}</div>
+          </div>
+          <div className="amt" style={{ color: 'var(--hi)' }}>còn {r.remain_pct}%</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -66,9 +83,9 @@ export default function Analysis({ me }) {
       {periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
       <div className="card filter-card">
         <div className="filter-grid">
-          {me.isAdmin && <Select value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
-          <Select value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" />
-          <Select value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" />
+          {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
+          <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
+          <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
           <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
           <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
           <Select value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" />
@@ -108,6 +125,8 @@ export default function Analysis({ me }) {
           <Block title="Đơn vị giảm mạnh" rows={data.topDeclineUnits} negative />
           <Block title="Sản phẩm tăng mạnh" rows={data.topGrowthProducts} />
           <Block title="Sản phẩm giảm mạnh" rows={data.topDeclineProducts} negative />
+          <Block title="SP cần đẩy mạnh" rows={data.pushProducts} negative />
+          <CstLowBlock rows={data.cstLowProducts} />
         </>
       )}
     </>

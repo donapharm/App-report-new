@@ -13,6 +13,15 @@ const uploadSvc = require('./upload');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const memo = new Map();
+function memoGet(key, ttlMs, build) {
+  const hit = memo.get(key);
+  const t = Date.now();
+  if (hit && t - hit.t < ttlMs) return hit.v;
+  const v = build();
+  memo.set(key, { t, v });
+  return v;
+}
 
 // Ngữ cảnh phiên/thiết bị: deviceId (từ body/header), IP thật (qua Cloudflare), user-agent.
 function loginCtx(req) {
@@ -32,6 +41,36 @@ function periodCtx(q) {
   if (!kys.length) kys = [latest];
   const ky = kys[kys.length - 1];
   return { ky, kys, from: kys[0], to: ky };
+}
+
+function qdOf(v) {
+  const m = String(v || '').match(/QĐ\s*(\d+)|QD\s*(\d+)/i);
+  return m ? `QĐ${m[1] || m[2]}` : '';
+}
+function productMetaFromRows(rows = []) {
+  const map = new Map();
+  for (const r of rows) {
+    const key = r.iit_code || r.product_name;
+    if (!key || map.has(key)) continue;
+    map.set(key, {
+      iit_code: r.iit_code || key,
+      product_name: r.product_name || key,
+      active_ingredient: r.active_ingredient || '',
+      ham_luong: r.ham_luong || '',
+      uom: r.uom || '',
+      contractor: r.contractor_name || r.contractor_code || '',
+      bid_price: r.bid_price || null,
+      qd: qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`),
+    });
+  }
+  return map;
+}
+function cstSourceLabel(r = {}) {
+  const base = r.cst_baseline_covered_ky || (/MAY/i.test(String(r.source_from_date || '')) ? '05.2026' : '');
+  const up = r.cst_upload_ky || '';
+  if (base && up) return `Baseline ${base} + bán đến ${String(up).split(',').at(-1)}`;
+  if (base) return `Cập nhật đến kỳ ${base}`;
+  return r.source_from_date || '';
 }
 
 /* ---------- Auth ---------- */
@@ -154,8 +193,12 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     }
     return [...m.values()].sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi'));
   };
-  const rows = store.getRowsRange({ kys: pc.kys, scope });
+  let rows = store.getRowsRange({ kys: pc.kys, scope });
   const cst = store.getCst({ scope });
+  if (req.query.emp) {
+    const emp = String(req.query.emp).trim().toUpperCase();
+    rows = rows.filter((r) => r.emp_code === emp);
+  }
   const empMap = new Map();
   for (const r of rows) if (r.emp_code) empMap.set(r.emp_code, { key: r.emp_code, label: r.emp_code === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (r.emp_name || r.emp_code) });
   for (const r of cst) for (const ec of String(r.emp_code || '').split(',').map((x) => x.trim()).filter(Boolean)) {
@@ -165,8 +208,16 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     ky: pc.ky,
     kys: pc.kys,
     employees: [...empMap.values()].sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi')),
-    units: uniq(rows.concat(cst), 'unit_code', 'unit_name'),
-    products: uniq(rows.concat(cst), 'iit_code', 'product_name'),
+    units: uniq(rows.concat(cst), 'unit_code', 'unit_name').map((u) => ({ ...u, kind: 'unit' })),
+    products: (() => {
+      const pmap = productMetaFromRows(cst.concat(rows));
+      return [...pmap.values()].map((p) => ({
+        key: p.iit_code,
+        label: p.product_name,
+        kind: 'product',
+        ...p,
+      })).sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi') || String(a.key).localeCompare(String(b.key), 'vi'));
+    })(),
     routes: uniq(rows, 'route'),
     priorities: uniq(rows.concat(cst), 'priority'),
     contractors: uniq(rows, 'contractor_code'),
@@ -183,16 +234,21 @@ router.get('/overview', auth.requireAuth, (req, res) => {
 
 router.get('/trend', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  res.json(store.listPeriods().map((p) => {
-    const k = A.overviewKpis({ ky: p.ky, kys: [p.ky], scope });
+  const cacheKey = `trend:${scope.empCode || 'ALL'}`;
+  res.json(memoGet(cacheKey, 60 * 1000, () => store.listPeriods().map((p) => {
+    // Lightweight trend: không gọi overviewKpis vì hàm đó còn tính CST/target từng NV.
+    const rows = store.getRows({ ky: p.ky, scope });
+    const revenue = A.sum(rows, (r) => r.revenue);
+    const targetTotal = A.sum(store.getTargets({ ky: p.ky, scope }), (t) => t.target);
+    const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
     return {
       ky: p.ky,
-      revenue: k.revenue,
-      revenueBeforeVat: k.revenueBeforeVat,
-      targetTotal: k.targetTotal,
-      pctTarget: k.pctTarget,
+      revenue,
+      revenueBeforeVat,
+      targetTotal,
+      pctTarget: targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
     };
-  }));
+  })));
 });
 
 router.get('/alerts', auth.requireAuth, (req, res) => {
@@ -214,15 +270,20 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
     bid: req.query.bid || null,
     q: req.query.q || null,
   };
+  let outRows = A.revenueBreakdown({
+    ...pc, scope, dimension, filters,
+    filterEmp: null,
+    filterUnit: null,
+  });
+  if (dimension === 'product') {
+    const metaMap = productMetaFromRows(store.getCst({ scope }).concat(store.getRowsRange({ kys: pc.kys, scope })));
+    outRows = outRows.map((r) => ({ ...r, ...(metaMap.get(r.key) || {}), label: r.label }));
+  }
   res.json({
     ky: pc.ky,
     kys: pc.kys,
     dimension,
-    rows: A.revenueBreakdown({
-      ...pc, scope, dimension, filters,
-      filterEmp: null,
-      filterUnit: null,
-    }),
+    rows: outRows,
   });
 });
 
@@ -273,6 +334,7 @@ router.get('/products', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const rows = A.applyFilters(store.getRowsRange({ kys: pc.kys, scope }), revenueFiltersFromQuery(req.query));
+  const metaMap = productMetaFromRows(store.getCst({ scope }).concat(rows));
   const map = new Map();
   for (const r of rows) {
     const key = r.iit_code || r.product_name || 'UNKNOWN';
@@ -297,10 +359,18 @@ router.get('/products', auth.requireAuth, (req, res) => {
     if (r.bid_package) cur.bidPackages.add(r.bid_package);
     map.set(key, cur);
   }
-  const out = [...map.values()].map((x) => ({
+  const out = [...map.values()].map((x) => {
+    const meta = metaMap.get(x.iit_code) || {};
+    return ({
     key: x.key,
     iit_code: x.iit_code,
     product_name: x.product_name,
+    qd: meta.qd || qdOf(x.iit_code),
+    active_ingredient: meta.qd === 'QĐ139' ? (meta.active_ingredient || '') : '',
+    ham_luong: meta.qd === 'QĐ139' ? (meta.ham_luong || '') : '',
+    uom: meta.uom || '',
+    contractor: meta.contractor || [...x.contractors][0] || '',
+    bid_price: meta.bid_price || null,
     revenue: x.revenue,
     quantity: x.quantity,
     rows: x.rows,
@@ -309,7 +379,8 @@ router.get('/products', auth.requireAuth, (req, res) => {
     contractorCount: x.contractors.size,
     bidPackages: [...x.bidPackages].slice(0, 5).join(', '),
     avgPrice: x.quantity ? Math.round(x.revenue / x.quantity) : null,
-  })).sort((a, b) => b.revenue - a.revenue);
+    });
+  }).sort((a, b) => b.revenue - a.revenue);
   const pg = paginate(out, req, 50, 500);
   res.json({ ky: pc.ky, kys: pc.kys, page: pg.page, pageSize: pg.pageSize, total: pg.total, rows: pg.rows, totalRevenue: A.sum(out, (r) => r.revenue) });
 });
@@ -344,6 +415,24 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
   const byBidPackage = A.groupSum(currentRows, 'bid_package', 'bid_package').slice(0, 10);
   const unitCompare = compare('unit');
   const productCompare = compare('product');
+  const pushProducts = productCompare
+    .filter((x) => (x.prevRevenue || 0) > 0 && x.delta < 0)
+    .sort((a, b) => a.deltaPct - b.deltaPct)
+    .slice(0, 10);
+  const cstLowProducts = A.cstTable({ scope, remainPctMax: 10, filters })
+    .slice(0, 10)
+    .map((c) => ({
+      key: `${c.iit_code || c.product_name}-${c.unit_code || c.unit_name}`,
+      label: c.product_name,
+      iit_code: c.iit_code,
+      unit_name: c.unit_name || c.unit_code,
+      remain_pct: c.remain_pct,
+      remain_qty: c.remain_qty,
+      bid_qty_initial: c.bid_qty_initial,
+      qd: qdOf(`${c.iit_code || ''} ${c.bid_package || ''}`),
+      active_ingredient: c.active_ingredient || '',
+      ham_luong: c.ham_luong || '',
+    }));
   res.json({
     ky,
     kys,
@@ -361,6 +450,8 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     topDeclineUnits: unitCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
     topGrowthProducts: productCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
     topDeclineProducts: productCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
+    pushProducts,
+    cstLowProducts,
   });
 });
 
@@ -473,10 +564,18 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
     ];
     rows.forEach((r) => ws.addRow(r));
   } else if (kind === 'products') {
-    const rows = A.revenueBreakdown({ ky, scope, dimension: 'product', filters: revenueFiltersFromQuery(req.query) });
+    const rows0 = A.revenueBreakdown({ ky, scope, dimension: 'product', filters: revenueFiltersFromQuery(req.query) });
+    const metaMap = productMetaFromRows(store.getCst({ scope }).concat(store.getRows({ ky, scope })));
+    const rows = rows0.map((r) => ({ ...r, ...(metaMap.get(r.key) || {}), label: r.label }));
     ws.columns = [
       { header: 'Mã QLNB', key: 'key', width: 24 },
       { header: 'Sản phẩm', key: 'label', width: 34 },
+      { header: 'QĐ', key: 'qd', width: 10 },
+      { header: 'Hoạt chất', key: 'active_ingredient', width: 24 },
+      { header: 'Hàm lượng', key: 'ham_luong', width: 14 },
+      { header: 'ĐVT', key: 'uom', width: 10 },
+      { header: 'Nhà thầu', key: 'contractor', width: 30 },
+      { header: 'Giá thầu', key: 'bid_price', width: 14 },
       { header: 'Doanh thu', key: 'revenue', width: 18 },
       { header: 'Số lượng', key: 'quantity', width: 12 },
       { header: 'Số dòng', key: 'rows', width: 10 },
@@ -504,7 +603,6 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'NV phụ trách', key: 'emp_code', width: 14 },
       { header: 'NV bán liên quan', key: 'sales_emps', width: 18 },
       { header: 'Giá thầu', key: 'bid_price', width: 14 },
-      { header: 'Giá bán', key: 'sale_price', width: 14 },
       { header: 'Tổng TT', key: 'bid_qty_initial', width: 16 },
       { header: 'CST còn lại', key: 'remain_qty', width: 14 },
       { header: '% còn lại', key: 'remain_pct', width: 12 },
@@ -512,9 +610,9 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'TT thầu', key: 'bid_amount', width: 18 },
       { header: 'TT đã bán', key: 'sold_amount', width: 18 },
       { header: 'TT còn lại', key: 'remain_amount', width: 18 },
-      { header: 'Ngày nguồn', key: 'source_from_date', width: 14 },
+      { header: 'Nguồn/cập nhật', key: 'source_label', width: 28 },
     ];
-    rows.forEach((r) => ws.addRow(r));
+    rows.forEach((r) => ws.addRow({ ...r, qd: qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`), source_label: cstSourceLabel(r) }));
   } else {
     return res.status(400).json({ error: 'Loại export không hợp lệ' });
   }

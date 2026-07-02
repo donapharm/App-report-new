@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money } from '../util.js';
 import { Spinner, Bar } from '../components.jsx';
+import { ComboSelect, Select } from './revenueFilters.jsx';
 
 const FILTERS = [
   { key: 'all', label: 'Tất cả', params: {} },
@@ -11,37 +12,73 @@ const FILTERS = [
   { key: 'high', label: 'Tồn nhiều >70%', params: { remainMin: 70 } },
 ];
 const empty = { emp: '', unit: '', product: '', priority: '', q: '' };
-
-function Select({ value, onChange, options, all }) {
-  return (
-    <select value={value || ''} onChange={(e) => onChange(e.target.value)}>
-      <option value="">{all}</option>
-      {(options || []).map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-    </select>
-  );
-}
-
 const n = (v) => Number(v || 0).toLocaleString('vi-VN');
 const compact = (v) => String(v || '—').replace('Công Ty ', '').replace('Tnhh ', '');
-function groupOf(code) {
-  const m = String(code || '').match(/\.(N\d)\./i);
-  return m ? m[1].toUpperCase() : '';
-}
+function groupOf(code) { const m = String(code || '').match(/\.(N\d)\./i); return m ? m[1].toUpperCase() : ''; }
+function qdOf(c) { const m = String(`${c.iit_code || ''} ${c.bid_package || ''}`).match(/QĐ\s*(\d+)|QD\s*(\d+)/i); return m ? `QĐ${m[1] || m[2]}` : ''; }
 function decision(c) {
-  const p = Number(c.remain_pct || 0);
-  const remain = Number(c.remain_qty || 0);
-  const sold = Number(c.sold_qty || 0);
-  // App cũ coi <=1% là đã thực hiện hết cơ số thầu (còn lẻ do quy cách/đóng gói).
-  if (remain <= 0 || p <= 1) return { cls: 'muted-pill', text: 'Hết CST' };
-  if (sold <= 0 && remain > 0) return { cls: 'bad', text: '⚠️ Chưa bán' };
-  if (p > 80) return { cls: 'warn', text: '🔴 Chưa khai thác' };
-  if (p > 50) return { cls: 'warn', text: '🟡 Còn nhiều' };
-  return { cls: 'ok', text: '✅ Đang bán' };
+  const p = Number(c.remain_pct || 0), remain = Number(c.remain_qty || 0), sold = Number(c.sold_qty || 0);
+  if (remain <= 0 || p <= 1) return { cls: 'muted-pill', text: 'Hết CST', action: 'Đã khai thác hết cơ số.' };
+  if (sold <= 0 && remain > 0) return { cls: 'bad', text: '⚠️ Chưa bán', action: 'Cần tiếp cận đơn vị này.' };
+  if (p < 10) return { cls: 'bad', text: '🔴 Sắp hết', action: 'Sắp hết, đẩy đơn bổ sung cơ số.' };
+  if (p > 80) return { cls: 'warn', text: '🟡 Tồn nhiều', action: 'Còn dư địa, đẩy mạnh bán hàng.' };
+  if (p > 50) return { cls: 'warn', text: '🟡 Còn nhiều', action: 'Theo dõi và tiếp tục khai thác.' };
+  return { cls: 'ok', text: '✅ Đang bán', action: 'Tiếp tục giữ nhịp bán.' };
 }
-function pctTone(p) {
-  if (p < 10) return 'bad';
-  if (p < 30 || p > 80) return 'warn';
-  return 'ok';
+function pctTone(p) { if (p < 10) return 'bad'; if (p < 30 || p > 80) return 'warn'; return 'ok'; }
+function sourceLabel(c) {
+  const base = c.cst_baseline_covered_ky || (String(c.source_from_date || '').includes('MAY') ? '05.2026' : '');
+  const up = c.cst_upload_ky || '';
+  if (base && up) return `Baseline ${base} + bán đến ${up.split(',').at(-1)}`;
+  if (base) return `Cập nhật đến kỳ ${base}`;
+  return c.source_from_date || '—';
+}
+function unitRollup(rows) {
+  const m = new Map();
+  for (const r of rows || []) {
+    const key = r.unit_code || r.unit_name || '—';
+    const cur = m.get(key) || { key, unit_name: r.unit_name || key, rows: [], remainAmount: 0, low: 0, empty: 0, remainQty: 0 };
+    cur.rows.push(r); cur.remainAmount += Number(r.remain_amount || 0); cur.remainQty += Number(r.remain_qty || 0);
+    if (Number(r.remain_pct || 0) < 10) cur.low += 1;
+    if (Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0) cur.empty += 1;
+    m.set(key, cur);
+  }
+  return [...m.values()].sort((a, b) => (b.low + b.empty) - (a.low + a.empty) || b.remainAmount - a.remainAmount);
+}
+
+function CstCard({ c, i }) {
+  const st = decision(c); const pct = Number(c.remain_pct || 0); const qd = qdOf(c);
+  return (
+    <div key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={'card cst-list-card ' + (pct > 70 || pct < 10 ? 'highlight-need' : '')}>
+      <div className="list-card-title">
+        <div>
+          <div className="name">{c.product_name || '—'}</div>
+          <div className="meta mono">{c.iit_code || '—'} · {qd || '—'} · {c.uom || '—'}</div>
+          {qd === 'QĐ139' && <div className="meta">{c.active_ingredient || '—'} · {c.ham_luong || '—'}</div>}
+        </div>
+        <span className={'pill ' + pctTone(pct)}>Còn {c.remain_pct}%</span>
+      </div>
+      <Bar value={Math.max(0, Math.min(100, pct))} max={100} tone={pct < 10 ? 'danger' : (pct < 30 || pct > 80 ? 'warn' : 'ok')} />
+      <div className="progress-caption">Đã bán {Math.max(0, +(100 - pct).toFixed(1))}% · còn {pct}%</div>
+      <div className="meta muted" style={{ marginTop: 6 }}>{c.unit_name || c.unit_code || '—'} · NV {c.emp_code || c.sales_emps || '—'}</div>
+      <div className="list-card-meta">
+        <span className="pill muted-pill">Nhóm {groupOf(c.iit_code) || '—'}</span>
+        <span className="pill muted-pill">UT {c.priority || '—'}</span>
+        <span className="pill muted-pill">{compact(c.bid_package)}</span>
+        <span className={'pill ' + st.cls}>{st.text}</span>
+      </div>
+      <div className="action-hint">👉 {st.action}</div>
+      <div className="cst-metrics">
+        <span>Giá thầu <b>{n(c.bid_price)}</b></span>
+        <span>Tổng TT <b>{n(c.bid_qty_initial)}</b></span>
+        <span>CST còn <b>{n(c.remain_qty)}</b></span>
+        <span>SL bán <b>{n(c.sold_qty)}</b></span>
+        <span>TT bán <b>{money(c.sold_amount)}</b></span>
+        <span>TT còn <b>{money(c.remain_amount)}</b></span>
+        <span className="wide-metric">Nguồn <b>{sourceLabel(c)}</b></span>
+      </div>
+    </div>
+  );
 }
 
 export default function TenderQuota({ me }) {
@@ -51,16 +88,13 @@ export default function TenderQuota({ me }) {
   const [options, setOptions] = useState(null);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState('unit');
+  const [actionFirst, setActionFirst] = useState(true);
+  const [openUnits, setOpenUnits] = useState({});
 
   useEffect(() => { api.filters().then(setOptions); }, []);
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem('app_nav_payload');
-      if (!raw) return;
-      const p = JSON.parse(raw);
-      if (p.tab === 'cst' && p.cstFilter === 'low') setF('low');
-      if (p.tab === 'cst' && p.cstFilter === 'high') setF('high');
-    } catch { /* ignore */ }
+    try { const p = JSON.parse(sessionStorage.getItem('app_nav_payload') || '{}'); if (p.tab === 'cst' && p.cstFilter === 'low') setF('low'); if (p.tab === 'cst' && p.cstFilter === 'high') setF('high'); } catch { /* ignore */ }
   }, []);
   useEffect(() => {
     setData(null);
@@ -71,12 +105,18 @@ export default function TenderQuota({ me }) {
 
   function setFilter(k, v) { setFilters((x) => ({ ...x, [k]: v })); }
   function reset() { setFilters(empty); setBid(''); setF('all'); }
-  async function doExport() {
-    setBusy(true);
-    try { await downloadExport('cst', { bid, ...filters }); } catch (e) { alert(e.message); }
-    setBusy(false);
-  }
+  async function doExport() { setBusy(true); try { await downloadExport('cst', { bid, ...filters }); } catch (e) { alert(e.message); } setBusy(false); }
 
+  const sortedData = useMemo(() => {
+    const rows = [...(data || [])];
+    if (!actionFirst) return rows;
+    return rows.sort((a, b) => {
+      const score = (r) => (Number(r.remain_pct || 0) < 10 ? 3 : 0) + (Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0 ? 2 : 0) + (Number(r.remain_pct || 0) > 80 ? 1 : 0);
+      return score(b) - score(a) || Number(a.remain_pct || 0) - Number(b.remain_pct || 0);
+    });
+  }, [data, actionFirst]);
+  const groups = useMemo(() => unitRollup(sortedData), [sortedData]);
+  const selectedUnit = filters.unit ? groups.find((g) => g.key === filters.unit || g.unit_name === filters.unit) : null;
   const totalRemain = data ? data.reduce((s, r) => s + (Number(r.remain_amount) || 0), 0) : 0;
   const totalSold = data ? data.reduce((s, r) => s + (Number(r.sold_amount) || 0), 0) : 0;
   const totalBid = data ? data.reduce((s, r) => s + (Number(r.bid_amount) || 0), 0) : 0;
@@ -86,15 +126,13 @@ export default function TenderQuota({ me }) {
 
   return (
     <>
-      <div className="chips">
-        {FILTERS.map((x) => <button key={x.key} className={'chip' + (f === x.key ? ' active' : '')} onClick={() => setF(x.key)}>{x.label}</button>)}
-      </div>
+      <div className="chips">{FILTERS.map((x) => <button key={x.key} className={'chip' + (f === x.key ? ' active' : '')} onClick={() => setF(x.key)}>{x.label}</button>)}</div>
       <div className="card filter-card">
         <div className="filter-grid">
           <Select value={bid} onChange={setBid} options={options?.bidPackages} all="Mọi gói thầu" />
-          {me.isAdmin && <Select value={filters.emp} onChange={(v) => setFilter('emp', v)} options={options?.employees} all="Tất cả NV" />}
-          <Select value={filters.unit} onChange={(v) => setFilter('unit', v)} options={options?.units} all="Tất cả đơn vị" />
-          <Select value={filters.product} onChange={(v) => setFilter('product', v)} options={options?.products} all="Tất cả sản phẩm" />
+          {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setFilter('emp', v)} options={options?.employees} all="Tất cả NV" />}
+          <ComboSelect value={filters.unit} onChange={(v) => setFilter('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
+          <ComboSelect value={filters.product} onChange={(v) => setFilter('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
           <Select value={filters.priority} onChange={(v) => setFilter('priority', v)} options={options?.priorities} all="Tất cả UT" />
         </div>
         <div className="filter-search">
@@ -104,6 +142,12 @@ export default function TenderQuota({ me }) {
         </div>
       </div>
 
+      <div className="seg compact view-toggle">
+        <button className={view === 'unit' ? 'active' : ''} onClick={() => setView('unit')}>Gom theo ĐV</button>
+        <button className={view === 'flat' ? 'active' : ''} onClick={() => setView('flat')}>Danh sách dòng</button>
+        <button className={actionFirst ? 'active' : ''} onClick={() => setActionFirst((x) => !x)}>Ưu tiên cần làm</button>
+      </div>
+
       <div className="kpi-grid">
         <div className="kpi"><div className="label">Dòng CST</div><div className="value">{data ? data.length.toLocaleString('vi-VN') : '—'}</div></div>
         <div className="kpi"><div className="label">Tổng cơ số thầu</div><div className="value small">{data ? money(totalBid) : '—'}</div></div>
@@ -111,54 +155,24 @@ export default function TenderQuota({ me }) {
         <div className="kpi"><div className="label">TT còn lại</div><div className="value small">{data ? money(totalRemain) : '—'}</div></div>
       </div>
 
-      {data && (
-        <div className="card cst-alert-card">
-          <b>Cảnh báo CST giống app cũ:</b>
-          <span className="pill bad">Sắp cạn/Hết CST: {lowCount.toLocaleString('vi-VN')}</span>
-          <span className="pill bad">Chưa bán: {emptyCount.toLocaleString('vi-VN')}</span>
-          <span className="pill warn">Chưa khai thác/tồn nhiều: {highCount.toLocaleString('vi-VN')}</span>
-        </div>
-      )}
+      {selectedUnit && <div className="card unit-focus"><b>{selectedUnit.unit_name}</b><span>{selectedUnit.rows.length} mã QLNB · {selectedUnit.low} sắp hết · {selectedUnit.empty} chưa bán · còn {money(selectedUnit.remainAmount)}</span></div>}
+      {data && <div className="card cst-alert-card"><b>Cảnh báo CST giống app cũ:</b><span className="pill bad">Sắp cạn/Hết CST: {lowCount.toLocaleString('vi-VN')}</span><span className="pill bad">Chưa bán: {emptyCount.toLocaleString('vi-VN')}</span><span className="pill warn">Chưa khai thác/tồn nhiều: {highCount.toLocaleString('vi-VN')}</span></div>}
 
-      {!data ? <Spinner /> : data.length === 0 ? (
-        <div className="center">Không có dòng nào khớp bộ lọc.</div>
-      ) : (
-        <div className="list-grid">
-          {data.slice(0, 600).map((c, i) => {
-            const st = decision(c);
-            const pct = Number(c.remain_pct || 0);
-            return (
-              <div key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={'card cst-list-card ' + (pct > 70 ? 'highlight-need' : '')}>
-                <div className="list-card-title">
-                  <div>
-                    <div className="name">{c.product_name || '—'}</div>
-                    <div className="meta mono">{c.iit_code || '—'} · {c.active_ingredient || '—'} · {c.ham_luong || '—'} · {c.uom || '—'}</div>
-                  </div>
-                  <span className={'pill ' + pctTone(pct)}>{c.remain_pct}%</span>
-                </div>
-                <Bar value={Math.max(0, Math.min(100, pct))} max={100} tone={pct < 10 || pct > 80 ? 'warn' : ''} />
-                <div className="meta muted" style={{ marginTop: 6 }}>{c.unit_name || c.unit_code || '—'} · NV {c.emp_code || c.sales_emps || '—'}</div>
-                <div className="list-card-meta">
-                  <span className="pill muted-pill">Nhóm {groupOf(c.iit_code) || '—'}</span>
-                  <span className="pill muted-pill">UT {c.priority || '—'}</span>
-                  <span className="pill muted-pill">{compact(c.bid_package)}</span>
-                  <span className={'pill ' + st.cls}>{st.text}</span>
-                </div>
-                <div className="cst-metrics">
-                  <span>Giá thầu <b>{n(c.bid_price)}</b></span>
-                  <span>Giá bán <b>{n(c.sale_price)}</b></span>
-                  <span>Tổng TT <b>{n(c.bid_qty_initial)}</b></span>
-                  <span>CST còn <b>{n(c.remain_qty)}</b></span>
-                  <span>SL bán <b>{n(c.sold_qty)}</b></span>
-                  <span>TT bán <b>{money(c.sold_amount)}</b></span>
-                  <span>TT còn <b>{money(c.remain_amount)}</b></span>
-                  <span>Nguồn <b>{c.source_from_date || '—'}</b></span>
-                </div>
+      {!data ? <Spinner /> : data.length === 0 ? <div className="center">Không có dòng nào khớp bộ lọc.</div> : view === 'unit' ? (
+        <div className="unit-rollup-grid">
+          {groups.slice(0, 120).map((g) => {
+            const open = openUnits[g.key] || filters.unit;
+            return <div className="card unit-rollup" key={g.key}>
+              <div className="unit-rollup-head" onClick={() => setOpenUnits((x) => ({ ...x, [g.key]: !x[g.key] }))}>
+                <div><b>{g.unit_name}</b><div className="meta">{g.rows.length} mã QLNB · còn {money(g.remainAmount)}</div></div>
+                <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span><span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
               </div>
-            );
+              {open && <div className="list-grid nested-grid">{g.rows.slice(0, 80).map((c, i) => <CstCard key={`${g.key}-${i}`} c={c} i={i} />)}</div>}
+            </div>;
           })}
-          {data.length > 600 && <p className="muted" style={{ textAlign: 'center', fontSize: 12, paddingBottom: 12 }}>Đang hiển thị 600 dòng đầu, dùng bộ lọc hoặc xuất Excel để xem toàn bộ {data.length.toLocaleString('vi-VN')} dòng.</p>}
         </div>
+      ) : (
+        <div className="list-grid">{sortedData.slice(0, 600).map((c, i) => <CstCard key={i} c={c} i={i} />)}{sortedData.length > 600 && <p className="muted" style={{ textAlign: 'center', fontSize: 12, paddingBottom: 12 }}>Đang hiển thị 600 dòng đầu, dùng bộ lọc hoặc xuất Excel để xem toàn bộ {sortedData.length.toLocaleString('vi-VN')} dòng.</p>}</div>
       )}
     </>
   );

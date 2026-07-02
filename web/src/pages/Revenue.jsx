@@ -29,6 +29,9 @@ export default function Revenue({ me }) {
 
   const total = data ? data.rows.reduce((s, r) => s + r.revenue, 0) : 0;
   const max = data && data.rows.length ? data.rows[0].revenue : 0;
+  const rowMeta = (r) => dim === 'product'
+    ? `${r.iit_code || r.key || '—'} · ${r.qd || '—'}${r.qd === 'QĐ139' ? ` · ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''} · ${short(r.revenue)} · ${r.quantity.toLocaleString('vi-VN')} SL`
+    : `${short(r.revenue)} · ${r.quantity.toLocaleString('vi-VN')} SL`;
 
   function pickDim(d) { setDim(d); }
   function setF(k, v) { setFilters((f) => ({ ...f, [k]: v })); }
@@ -68,7 +71,7 @@ export default function Revenue({ me }) {
         <div className="list-grid">
           {data.rows.map((r, i) => (
             <div className="rank-card" key={r.key}>
-              <RankRow i={i + 1} name={r.label} meta={`${short(r.revenue)} · ${r.quantity.toLocaleString('vi-VN')} SL`} amount={r.revenue} max={max} onClick={dim !== 'product' ? () => drill(r) : undefined} />
+              <RankRow i={i + 1} name={r.label} meta={rowMeta(r)} amount={r.revenue} max={max} onClick={dim !== 'product' ? () => drill(r) : undefined} />
             </div>
           ))}
         </div>

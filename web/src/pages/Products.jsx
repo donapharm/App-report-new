@@ -40,7 +40,8 @@ export default function Products({ me }) {
               <div className="list-card-title">
                 <div>
                   <div className="name"><span className="rank">{i + 1}</span>{r.product_name}</div>
-                  <div className="meta mono">{r.iit_code || '—'}</div>
+                  <div className="meta mono">{r.iit_code || '—'} · {r.qd || '—'} · {r.uom || '—'}</div>
+                  {r.qd === 'QĐ139' && <div className="meta">{r.active_ingredient || '—'} · {r.ham_luong || '—'}</div>}
                 </div>
                 <div className="amt">{short(r.revenue)}</div>
               </div>
@@ -49,6 +50,8 @@ export default function Products({ me }) {
                 <span className="pill muted-pill">SL {r.quantity.toLocaleString('vi-VN')}</span>
                 <span className="pill muted-pill">{r.unitCount} ĐV</span>
                 <span className="pill muted-pill">{r.empCount} NV</span>
+                {r.contractor && <span className="pill muted-pill">{r.contractor}</span>}
+                {r.bid_price && <span className="pill muted-pill">Giá thầu {Number(r.bid_price).toLocaleString('vi-VN')}</span>}
                 {r.bidPackages && <span className="pill muted-pill">{r.bidPackages}</span>}
               </div>
             </div>

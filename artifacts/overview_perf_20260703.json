@@ -1,0 +1,46 @@
+{
+  "generatedAt": "2026-07-02T17:34:25.853Z",
+  "results": [
+    {
+      "name": "overview latest",
+      "ms": 438.94,
+      "sample": [
+        "ky",
+        "kys",
+        "label",
+        "revenue",
+        "revenueBeforeVat",
+        "targetTotal",
+        "pctTarget",
+        "empTarget"
+      ]
+    },
+    {
+      "name": "trend all periods lightweight",
+      "ms": 544.72,
+      "sample": 7
+    },
+    {
+      "name": "revenue top unit T07",
+      "ms": 78.06,
+      "sample": 10
+    },
+    {
+      "name": "alerts latest",
+      "ms": 302.41,
+      "sample": [
+        "ky",
+        "kys",
+        "cstLabel",
+        "summary",
+        "groups",
+        "count"
+      ]
+    },
+    {
+      "name": "cst all",
+      "ms": 67.5,
+      "sample": 2741
+    }
+  ]
+}

@@ -294,3 +294,27 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .row[style*="cursor"]:hover { background: #eef4fb; border-radius: 8px; }
   .chip, .seg button, .btn { cursor: pointer; }
 }
+
+/* Typeahead combobox dùng chung */
+.combo { position: relative; min-width: 0; }
+.combo input { padding-right: 34px; }
+.combo-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border: none; border-radius: 50%; background: #eef2f7; color: var(--muted); font-weight: 900; }
+.combo-menu { position: absolute; z-index: 45; left: 0; right: 0; top: calc(100% + 4px); background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px rgba(15, 38, 70, .16); max-height: 320px; overflow: auto; padding: 6px; }
+.combo-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; border: none; background: transparent; text-align: left; border-radius: 9px; padding: 8px 9px; color: var(--ink); }
+.combo-item:hover { background: #eef4fb; }
+.combo-item b { font-size: 13px; line-height: 1.25; }
+.combo-item span { font-size: 11.5px; color: var(--muted); line-height: 1.25; }
+.combo-item.muted-choice { color: var(--brand); font-weight: 800; }
+.combo-empty { padding: 10px; color: var(--muted); font-size: 12px; }
+.progress-caption { font-size: 12px; color: var(--muted); margin-top: 5px; }
+.action-hint { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: #eef7ff; color: var(--brand-ink); font-size: 12.5px; font-weight: 700; }
+.cst-metrics .wide-metric { grid-column: 1 / -1; }
+.view-toggle { max-width: 520px; }
+.unit-focus { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; background: #f7fbff; }
+.unit-focus span { color: var(--muted); font-size: 13px; }
+.unit-rollup-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 10px; }
+.unit-rollup { margin-bottom: 0; }
+.unit-rollup-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; cursor: pointer; }
+.nested-grid { margin-top: 10px; grid-template-columns: 1fr; }
+.nested-grid .card { box-shadow: none; background: #fbfdff; }
+@media (max-width: 560px) { .unit-rollup-grid { grid-template-columns: 1fr; } .unit-rollup-head { flex-direction: column; } }
