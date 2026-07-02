@@ -14,10 +14,19 @@ const uploadSvc = require('./upload');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
+// Ngữ cảnh phiên/thiết bị: deviceId (từ body/header), IP thật (qua Cloudflare), user-agent.
+function loginCtx(req) {
+  return {
+    deviceId: (req.body?.deviceId || req.headers['x-device-id'] || '').toString().trim() || null,
+    ip: (req.headers['cf-connecting-ip'] || req.ip || '').toString(),
+    ua: (req.headers['user-agent'] || '').toString().slice(0, 200),
+  };
+}
+
 /* ---------- Auth ---------- */
 // Demo login (TODO(LIVE): thay bằng OTP/SSO). Body: { emp_code }
 router.post('/auth/login', (req, res) => {
-  const r = auth.mockLogin((req.body.emp_code || '').trim().toUpperCase());
+  const r = auth.mockLogin((req.body.emp_code || '').trim().toUpperCase(), loginCtx(req));
   if (!r) return res.status(401).json({ error: 'Mã NV không tồn tại' });
   res.json({
     token: r.token,
@@ -32,7 +41,7 @@ router.get('/auth/demo-users', (req, res) => {
 });
 
 // Cho frontend biết chế độ đăng nhập: có OTP/SSO thật không, còn cho demo không.
-router.get('/auth/mode', (req, res) => res.json({ live: auth.liveAuthEnabled(), demo: auth.demoAllowed() }));
+router.get('/auth/mode', (req, res) => res.json({ live: auth.liveAuthEnabled(), demo: auth.demoAllowed(), telegram: auth.telegramConfigured() }));
 
 // --- Đăng nhập THẬT (chỉ chạy khi cấu hình env OTP/SSO) ---
 router.post('/auth/otp/request', async (req, res) => {
@@ -43,7 +52,7 @@ router.post('/auth/otp/request', async (req, res) => {
 });
 router.post('/auth/otp/verify', async (req, res) => {
   try {
-    const r = await auth.verifyOtp((req.body.phone || '').trim(), (req.body.code || '').trim());
+    const r = await auth.verifyOtp((req.body.phone || '').trim(), (req.body.code || '').trim(), loginCtx(req));
     if (!r) return res.status(401).json({ error: 'Mã OTP không đúng hoặc đã hết hạn' });
     res.json(r); // { token, user } hoặc { accounts:[...] } nếu SĐT có nhiều mã NV
   } catch (e) { res.status(400).json({ error: e.message }); }
@@ -52,16 +61,66 @@ router.post('/auth/otp/verify', async (req, res) => {
 // Chọn tài khoản khi 1 SĐT có nhiều mã NV (sau khi OTP đã xác thực)
 router.post('/auth/otp/select', (req, res) => {
   try {
-    const r = auth.selectAccount((req.body.phone || '').trim(), (req.body.emp_code || '').trim());
+    const r = auth.selectAccount((req.body.phone || '').trim(), (req.body.emp_code || '').trim(), loginCtx(req));
     res.json(r);
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.post('/auth/sso', async (req, res) => {
   try {
-    const r = await auth.verifySso((req.body.sso_token || '').trim());
+    const r = await auth.verifySso((req.body.sso_token || '').trim(), loginCtx(req));
     if (!r) return res.status(401).json({ error: 'SSO không hợp lệ' });
     res.json(r);
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+/* ---------- Đăng nhập TELEGRAM (chính) ---------- */
+// Bắt đầu: trả mã RP-XXXXXX + poll_secret + link bot. Trình duyệt poll bằng poll_secret.
+router.post('/auth/telegram/start', (req, res) => {
+  try {
+    res.json(auth.telegramStart(loginCtx(req)));
+  } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+});
+// Trình duyệt hỏi trạng thái bằng poll_secret (không phải mã hiển thị).
+router.post('/auth/telegram/status', (req, res) => {
+  try {
+    res.json(auth.telegramStatus((req.body.poll_secret || '').toString()));
+  } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+});
+// CHỈ bot Telegram nội bộ gọi (kèm secret_bot = TELEGRAM_BOT_SECRET). Không dùng ở frontend.
+router.post('/auth/telegram/confirm', (req, res) => {
+  try {
+    const r = auth.telegramConfirm({
+      login_code: req.body.login_code,
+      telegram_id: req.body.telegram_id,
+      secret_bot: req.body.secret_bot,
+    });
+    res.json(r);
+  } catch (e) {
+    if (e.code === 'UNMAPPED') return res.status(404).json({ error: 'unmapped', message: 'Tài khoản Telegram chưa được cấp quyền App Report.' });
+    res.status(e.status || 400).json({ error: e.message });
+  }
+});
+
+/* ---------- Admin: mapping Telegram ---------- */
+router.get('/admin/telegram-map', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  res.json(auth.listTelegramMap());
+});
+router.post('/admin/telegram-map', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try {
+    res.json(auth.addTelegramMap(req.body.telegram_id, req.body.emp_code, req.session.emp_code));
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.delete('/admin/telegram-map', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const removed = auth.removeTelegramMap(req.body.telegram_id || req.query.telegram_id);
+  res.json({ ok: removed });
+});
+
+/* ---------- Admin: thiết bị tin cậy ---------- */
+router.get('/admin/devices', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  res.json(auth.listDevices(req.query.emp || null));
+});
+router.delete('/admin/devices/:id', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  res.json({ ok: auth.removeDevice(req.params.id) });
 });
 
 router.get('/me', auth.requireAuth, (req, res) => {

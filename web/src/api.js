@@ -3,11 +3,23 @@ const TOKEN_KEY = 'rpt_token';
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
 
+// deviceId bền cho "thiết bị tin cậy" — sinh ngẫu nhiên 1 lần, lưu localStorage.
+const DEVICE_KEY = 'rpt_device';
+export function getDeviceId() {
+  let d = localStorage.getItem(DEVICE_KEY);
+  if (!d) {
+    d = (crypto.randomUUID ? crypto.randomUUID() : 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+    localStorage.setItem(DEVICE_KEY, d);
+  }
+  return d;
+}
+
 async function req(method, path, body) {
   const res = await fetch('/api' + path, {
     method,
     headers: {
       'Content-Type': 'application/json',
+      'X-Device-Id': getDeviceId(),
       ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -28,6 +40,15 @@ export const api = {
   otpRequest: (phone) => req('POST', '/auth/otp/request', { phone }),
   otpVerify: (phone, code) => req('POST', '/auth/otp/verify', { phone, code }),
   otpSelect: (phone, emp_code) => req('POST', '/auth/otp/select', { phone, emp_code }),
+  // Telegram login (chính)
+  telegramStart: () => req('POST', '/auth/telegram/start', {}),
+  telegramStatus: (poll_secret) => req('POST', '/auth/telegram/status', { poll_secret }),
+  // Admin: mapping Telegram + thiết bị tin cậy
+  adminTelegramMap: () => req('GET', '/admin/telegram-map'),
+  adminTelegramMapAdd: (telegram_id, emp_code) => req('POST', '/admin/telegram-map', { telegram_id, emp_code }),
+  adminTelegramMapDel: (telegram_id) => req('DELETE', '/admin/telegram-map', { telegram_id }),
+  adminDevices: (emp) => req('GET', '/admin/devices' + (emp ? `?emp=${encodeURIComponent(emp)}` : '')),
+  adminDeviceDel: (id) => req('DELETE', '/admin/devices/' + encodeURIComponent(id)),
   me: () => req('GET', '/me'),
   periods: () => req('GET', '/periods'),
   filters: (ky) => req('GET', '/filters' + (ky ? `?ky=${ky}` : '')),

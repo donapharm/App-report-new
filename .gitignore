@@ -6,5 +6,7 @@ dist/
 # Dữ liệu sinh/runtime (chạy `npm run seed` để tạo lại)
 server/data/*.json
 server/data/uploads/
+# Dữ liệu auth runtime (phiên/thiết bị/mapping/audit) — TUYỆT ĐỐI không commit
+server/data/auth/
 # Giữ lại file Excel mẫu để test tính năng Upload
 !server/data/sample_upload.xlsx
