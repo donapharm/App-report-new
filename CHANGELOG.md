@@ -21,7 +21,11 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — DUYỆT quy tắc gán kỳ + lưu ý khe cắt Lumos
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive Target admin + sửa danh sách NV + tách telesale
+- CEO phản ánh Target Dự báo **sai/thiếu**; VP018 là telesale lẫn vào NV sale; nhắc Target admin (file+tự động) chưa làm. → [`DIRECTIVE_TARGET_ADMIN.md`](DIRECTIVE_TARGET_ADMIN.md) (ưu tiên).
+- **Sửa ngay:** danh sách Target/Dự báo lấy TOÀN BỘ đội sale active (neo theo T06 đủ, không dựa T07 dở → hết sót NV); thêm **loại NV** (sale/telesale/ctv/khác), tách telesale (VP018) khỏi NV sale.
+- **Xây Target admin** (SPEC_TARGET_MULTISOURCE): nhập file (preview/commit/rollback) + tự động App Sale (nếu có) + AI đề xuất→CEO áp dụng + sửa tay; resolver manual>upload>appsale>ai; pro-rate kỳ đang chạy.
+- **Chờ CEO:** telesale có target riêng hay không tính; danh sách telesale; đội NV sale đúng gồm mã nào.
 - **Duyệt** rule bot: MISA theo ngày xuất HĐ (`revenue_date`); WEB Partner theo **kỳ đơn đặt `orders.created_at` (giờ VN)** rồi xét giao đủ — replicate app cũ. Đơn đặt cuối tháng trước, giao tháng sau KHÔNG kéo sang kỳ sau.
 - **Lưu ý 1 (một lần, tại ranh giới):** đơn WEB đặt 30/6 giao 1/7 (`DT-260630-0115`, 1,96tr) rơi vào khe — T06 đóng băng Lumos không có, T07 loại theo ngày đặt. Negligible; nếu CEO muốn đủ tuyệt đối → carryover adjustment có duyệt (chưa làm).
 - **Lưu ý 2 (lâu dài):** cần định nghĩa "khi nào 1 tháng CHỐT CỨNG" — nên để tháng vừa qua còn refresh vài ngày để bắt đơn giao trễ (đơn đặt cuối tháng, giao đầu tháng sau) rồi mới đóng. Bot đã có hướng carryover/kỳ-còn-mở; chốt mốc đóng kỳ khi làm scheduler.
