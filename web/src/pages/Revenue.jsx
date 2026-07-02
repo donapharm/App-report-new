@@ -13,6 +13,15 @@ export default function Revenue({ me }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('app_nav_payload');
+      if (!raw) return;
+      const p = JSON.parse(raw);
+      if (p.tab === 'revenue' && p.dimension) setDim(p.dimension);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
     if (!ky) return;
     setData(null);
     api.revenue(dim, ky, filters).then(setData);

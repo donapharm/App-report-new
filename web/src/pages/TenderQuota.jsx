@@ -53,6 +53,15 @@ export default function TenderQuota({ me }) {
 
   useEffect(() => { api.filters().then(setOptions); }, []);
   useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('app_nav_payload');
+      if (!raw) return;
+      const p = JSON.parse(raw);
+      if (p.tab === 'cst' && p.cstFilter === 'low') setF('low');
+      if (p.tab === 'cst' && p.cstFilter === 'high') setF('high');
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
     setData(null);
     const selected = FILTERS.find((x) => x.key === f) || FILTERS[0];
     const params = { ...selected.params, ...(bid ? { bid } : {}), ...filters };

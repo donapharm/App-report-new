@@ -14,28 +14,36 @@ function buildAlerts({ scope }) {
   const periods = store.listPeriods().map((p) => p.ky);
   const idx = periods.indexOf(ky);
   const prevKy = idx > 0 ? periods[idx - 1] : null;
-  const alerts = [];
+  const top = (arr, n = 8) => arr.slice(0, n);
 
-  // a) NV tụt target (đạt < 80% target trước VAT)
+  // a) NV đang bán nhưng tụt target (đạt < 80% target trước VAT).
+  // Duyệt NV có doanh thu trong kỳ, không duyệt toàn bộ target/danh bạ để tránh NV nghỉ.
   const targets = store.getTargets({ ky, scope });
-  for (const t of targets) {
-    const rev = A.sum(store.getRows({ ky, scope: { empCode: t.emp_code } }), (r) => r.revenue);
+  const targetByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, Number(t.target || 0)]));
+  const targetItems = [];
+  for (const empCode of store.empCodesWithData({ ky, scope })) {
+    const user = store.findUserByCode(empCode);
+    if (!user?.name) continue; // không resolve được tên => loại khỏi cảnh báo
+    const target = targetByEmp[empCode] || 0;
+    if (target <= 0) continue; // chưa có target thật => không tính %
+    const rev = A.sum(store.getRows({ ky, scope: { empCode } }), (r) => r.revenue);
     const revBeforeVat = rev / A.VAT_DIVISOR;
-    const pct = t.target > 0 ? (revBeforeVat / t.target) * 100 : null;
-    if (pct != null && pct < 80) {
-      alerts.push({
-        type: 'target_low',
+    const pct = (revBeforeVat / target) * 100;
+    if (pct < 80) {
+      targetItems.push({
+        emp_code: empCode,
+        name: user.name,
+        pct: +pct.toFixed(1),
+        revenue_before_vat: Math.round(revBeforeVat),
+        target,
         severity: pct < 50 ? 'high' : 'medium',
-        emp_code: t.emp_code,
-        emp_name: store.findUserByCode(t.emp_code)?.name,
-        title: `${store.findUserByCode(t.emp_code)?.name || t.emp_code} mới đạt ${pct.toFixed(0)}% target`,
-        detail: `Doanh thu trước VAT ${fmt(revBeforeVat)} / target ${fmt(t.target)}.`,
-        metric: +pct.toFixed(1),
       });
     }
   }
+  targetItems.sort((a, b) => a.pct - b.pct);
 
   // b) Đơn vị giảm doanh thu so kỳ trước (MoM < -15%)
+  const unitItems = [];
   if (prevKy) {
     const cur = A.revenueBreakdown({ ky, scope, dimension: 'unit' });
     const prev = A.revenueBreakdown({ ky: prevKy, scope, dimension: 'unit' });
@@ -45,43 +53,63 @@ function buildAlerts({ scope }) {
       if (before > 0) {
         const mom = ((u.revenue - before) / before) * 100;
         if (mom <= -15) {
-          alerts.push({
-            type: 'unit_drop',
+          unitItems.push({
+            unit_code: u.key,
+            unit_name: u.label,
+            prev: before,
+            cur: u.revenue,
+            mom: +mom.toFixed(1),
             severity: mom <= -30 ? 'high' : 'medium',
-            title: `${u.label} giảm ${Math.abs(mom).toFixed(0)}% so kỳ trước`,
-            detail: `Kỳ trước ${fmt(before)} → kỳ này ${fmt(u.revenue)}.`,
-            metric: +mom.toFixed(1),
           });
         }
       }
     }
   }
+  unitItems.sort((a, b) => a.mom - b.mom);
 
   // c) Cơ số thầu bất thường: sắp cạn (<10%) hoặc tồn nhiều (>85%)
   const cst = store.getCst({ scope });
+  const cstLow = [];
+  const cstHigh = [];
   for (const c of cst) {
     if (c.remain_pct < 10) {
-      alerts.push({
-        type: 'cst_low',
+      cstLow.push({
+        product_name: c.product_name,
+        unit_name: c.unit_name,
+        remain_qty: c.remain_qty,
+        bid_qty_initial: c.bid_qty_initial,
+        remain_pct: c.remain_pct,
+        bid_package: c.bid_package,
         severity: 'high',
-        title: `${c.product_name} tại ${c.unit_name} sắp cạn cơ số (${c.remain_pct}%)`,
-        detail: `Còn ${c.remain_qty.toLocaleString('vi-VN')} / ${c.bid_qty_initial.toLocaleString('vi-VN')} (${c.bid_package}).`,
-        metric: c.remain_pct,
       });
     } else if (c.remain_pct > 85) {
-      alerts.push({
-        type: 'cst_high',
+      cstHigh.push({
+        product_name: c.product_name,
+        unit_name: c.unit_name,
+        remain_qty: c.remain_qty,
+        bid_qty_initial: c.bid_qty_initial,
+        remain_pct: c.remain_pct,
+        bid_package: c.bid_package,
         severity: 'low',
-        title: `${c.product_name} tại ${c.unit_name} tồn nhiều cơ số (${c.remain_pct}%)`,
-        detail: `Mới bán ${(100 - c.remain_pct).toFixed(0)}% cơ số ${c.bid_package}. Cân nhắc đẩy bán/điều chuyển.`,
-        metric: c.remain_pct,
       });
     }
   }
+  cstLow.sort((a, b) => a.remain_pct - b.remain_pct);
+  cstHigh.sort((a, b) => b.remain_pct - a.remain_pct);
 
-  const rank = { high: 0, medium: 1, low: 2 };
-  alerts.sort((a, b) => rank[a.severity] - rank[b.severity]);
-  return { ky, count: alerts.length, alerts };
+  const groups = [
+    { key: 'target', icon: '🎯', tone: 'danger', title: 'NV chưa đạt target', total: targetItems.length, items: top(targetItems) },
+    { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm mạnh (so kỳ trước)', total: unitItems.length, items: top(unitItems) },
+    { key: 'cst_low', icon: '📦', tone: 'danger', title: 'Cơ số thầu sắp cạn (<10%)', total: cstLow.length, items: top(cstLow) },
+    { key: 'cst_high', icon: '🟡', tone: 'neutral', title: 'Cơ số thầu tồn nhiều (>85%)', total: cstHigh.length, items: top(cstHigh) },
+  ];
+  const summary = {
+    emp_below_target: targetItems.length,
+    units_down: unitItems.length,
+    cst_low: cstLow.length,
+    cst_high: cstHigh.length,
+  };
+  return { ky, summary, groups, count: groups.reduce((s, g) => s + g.total, 0) };
 }
 
 /* ---------------- 2) DỰ BÁO TARGET THEO XU HƯỚNG ---------------- */

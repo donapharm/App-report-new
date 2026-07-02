@@ -44,6 +44,10 @@ export default function App() {
   const logout = () => { setToken(null); setMe(null); setTab('overview'); };
   const tabs = TABS.filter((t) => !t.adminOnly || me.isAdmin);
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).C;
+  const navigate = (targetTab, payload = {}) => {
+    try { sessionStorage.setItem('app_nav_payload', JSON.stringify({ tab: targetTab, ...payload, ts: Date.now() })); } catch { /* ignore */ }
+    setTab(targetTab);
+  };
 
   // ---------- Desktop: sidebar dashboard ----------
   if (desktop) {
@@ -75,7 +79,7 @@ export default function App() {
             </div>
           </header>
           <main className="page-desktop">
-            <Active me={me} desktop />
+            <Active me={me} desktop onNavigate={navigate} />
           </main>
         </div>
       </div>
@@ -94,7 +98,7 @@ export default function App() {
         </div>
       </header>
       <main className="page">
-        <Active me={me} />
+        <Active me={me} onNavigate={navigate} />
       </main>
       <nav className="nav">
         {tabs.map((t) => (
