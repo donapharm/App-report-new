@@ -21,6 +21,11 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — DUYỆT quy tắc gán kỳ + lưu ý khe cắt Lumos
+- **Duyệt** rule bot: MISA theo ngày xuất HĐ (`revenue_date`); WEB Partner theo **kỳ đơn đặt `orders.created_at` (giờ VN)** rồi xét giao đủ — replicate app cũ. Đơn đặt cuối tháng trước, giao tháng sau KHÔNG kéo sang kỳ sau.
+- **Lưu ý 1 (một lần, tại ranh giới):** đơn WEB đặt 30/6 giao 1/7 (`DT-260630-0115`, 1,96tr) rơi vào khe — T06 đóng băng Lumos không có, T07 loại theo ngày đặt. Negligible; nếu CEO muốn đủ tuyệt đối → carryover adjustment có duyệt (chưa làm).
+- **Lưu ý 2 (lâu dài):** cần định nghĩa "khi nào 1 tháng CHỐT CỨNG" — nên để tháng vừa qua còn refresh vài ngày để bắt đơn giao trễ (đơn đặt cuối tháng, giao đầu tháng sau) rồi mới đóng. Bot đã có hướng carryover/kỳ-còn-mở; chốt mốc đóng kỳ khi làm scheduler.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive dựng lại bản MOBILE (CEO phản ánh)
 - CEO gửi ảnh mobile (tài khoản NV): **giá trị bên phải bị cắt, header đè nội dung, cơ cấu tràn ngang, cuộn ngang**. → [`DIRECTIVE_MOBILE_UX.md`](DIRECTIVE_MOBILE_UX.md), ưu tiên cao (NV dùng điện thoại).
 - Yêu cầu: ≤414px không tràn ngang; dòng "tên—giá trị" giá trị luôn hiện + tên ellipsis/wrap; header không đè; KPI 1 cột; combobox/chart/bottom-nav vừa màn hình. Sửa ở khung/CSS dùng chung cho MỌI trang; không đổi số/quyền. Test 375/390/414px cả CEO + NV.
