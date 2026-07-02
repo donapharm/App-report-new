@@ -49,15 +49,17 @@ export default function Overview({ me }) {
       {!alerts ? <Spinner /> : alerts.count === 0 ? (
         <div className="center">Không có cảnh báo nào. Mọi thứ ổn ✅</div>
       ) : (
-        alerts.alerts.slice(0, 20).map((a, i) => (
-          <div key={i} className={'alert ' + a.severity}>
-            <div className="dot" />
-            <div>
-              <div className="t">{a.title}</div>
-              <div className="d">{a.detail}</div>
+        <div className="alerts-grid">
+          {alerts.alerts.slice(0, 20).map((a, i) => (
+            <div key={i} className={'alert ' + a.severity}>
+              <div className="dot" />
+              <div>
+                <div className="t">{a.title}</div>
+                <div className="d">{a.detail}</div>
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+        </div>
       )}
     </>
   );
