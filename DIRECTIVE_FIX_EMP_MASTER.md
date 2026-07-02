@@ -46,7 +46,7 @@ Xuất hiện ở dropdown lọc NV + card Target (`#N/A`: Đạt 2tr/target 0; 
 5. Xuất `artifacts/emp_junk_trace_<date>.md` (nguồn + dòng + đề xuất remap) → Claude review trước khi remap chính thức.
 
 ## 3) REVIEW REMAP mã rác (Claude chốt 2026-07-02 sau khi đọc `emp_junk_trace_20260702.md`)
-- **`83` → remap `DN021`** (10 dòng CST): đều Valesto, cùng gói **QĐ48/2026 SYT Cà Mau**, vùng Cà Mau-Bạc Liêu (ĐV 188–197); 1 dòng đã `sales_emps=DN021`. Kết luận: cả gói vùng này của DN021. **Chờ CEO xác nhận DN021 phụ trách Cà Mau-Bạc Liêu** rồi remap toàn bộ 10 dòng. Giữ nguyên bid_qty/sold/amount, chỉ đổi chủ.
+- **`83` → remap `DN021`** (CEO CHỐT 2026-07-02: 10 dòng gói QĐ48 tỉnh Cà Mau do DN021 phụ trách). Remap toàn bộ 10 dòng CST (ĐV 188–197, Valesto/QĐ48 SYT Cà Mau) → DN021, **giữ nguyên** bid_qty/sold/sold_amount, chỉ đổi chủ.
 - **`#N/A` → remap `DN019`** (CEO chốt 2026-07-02: DN019 phụ trách `033.NT-PKĐK AN LONG KHÁNH`). Remap dòng 1.575.000đ Fortraget về DN019, giữ nguyên số. Xác nhận DN019 có trong danh bạ (nếu thiếu tên/SĐT thì báo CEO).
 - Sau remap: **tổng T06 vẫn 28.403.136.096**; nhóm "Chưa phân bổ" chỉ còn dòng thật sự vô chủ (lý tưởng = rỗng).
 
