@@ -23,6 +23,17 @@ function loginCtx(req) {
   };
 }
 
+function periodCtx(q) {
+  const periods = store.periodKys();
+  const latest = store.latestKy();
+  let kys = [];
+  if (q.from && q.to) kys = store.periodRange(String(q.from), String(q.to));
+  else if (q.ky) kys = periods.includes(String(q.ky)) ? [String(q.ky)] : [];
+  if (!kys.length) kys = [latest];
+  const ky = kys[kys.length - 1];
+  return { ky, kys, from: kys[0], to: ky };
+}
+
 /* ---------- Auth ---------- */
 // Demo login (TODO(LIVE): thay bằng OTP/SSO). Body: { emp_code }
 router.post('/auth/login', (req, res) => {
@@ -134,7 +145,7 @@ router.get('/periods', auth.requireAuth, (req, res) => {
 
 router.get('/filters', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const ky = req.query.ky || store.latestKy();
+  const pc = periodCtx(req.query);
   const uniq = (arr, key, label = key) => {
     const m = new Map();
     for (const r of arr) {
@@ -143,7 +154,7 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     }
     return [...m.values()].sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi'));
   };
-  const rows = store.getRows({ ky, scope });
+  const rows = store.getRowsRange({ kys: pc.kys, scope });
   const cst = store.getCst({ scope });
   const empMap = new Map();
   for (const r of rows) if (r.emp_code) empMap.set(r.emp_code, { key: r.emp_code, label: r.emp_name || r.emp_code });
@@ -151,7 +162,8 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     if (!empMap.has(ec)) empMap.set(ec, { key: ec, label: store.findUserByCode(ec)?.name || ec });
   }
   res.json({
-    ky,
+    ky: pc.ky,
+    kys: pc.kys,
     employees: [...empMap.values()].sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi')),
     units: uniq(rows.concat(cst), 'unit_code', 'unit_name'),
     products: uniq(rows.concat(cst), 'iit_code', 'product_name'),
@@ -165,18 +177,18 @@ router.get('/filters', auth.requireAuth, (req, res) => {
 /* ---------- Overview + Alerts ---------- */
 router.get('/overview', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const ky = req.query.ky || store.latestKy();
-  res.json(A.overviewKpis({ ky, scope }));
+  const pc = periodCtx(req.query);
+  res.json(A.overviewKpis({ ...pc, scope }));
 });
 
 router.get('/alerts', auth.requireAuth, (req, res) => {
-  res.json(smart.buildAlerts({ scope: auth.scopeOf(req.session) }));
+  res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session) }));
 });
 
 /* ---------- Revenue drill-down ---------- */
 router.get('/revenue', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const ky = req.query.ky || store.latestKy();
+  const pc = periodCtx(req.query);
   const dimension = ['emp', 'unit', 'product'].includes(req.query.dimension) ? req.query.dimension : 'emp';
   const filters = {
     emp: req.query.emp || null,
@@ -189,10 +201,11 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
     q: req.query.q || null,
   };
   res.json({
-    ky,
+    ky: pc.ky,
+    kys: pc.kys,
     dimension,
     rows: A.revenueBreakdown({
-      ky, scope, dimension, filters,
+      ...pc, scope, dimension, filters,
       filterEmp: null,
       filterUnit: null,
     }),
@@ -222,15 +235,16 @@ function paginate(rows, req, def = 50, max = 500) {
 /* ---------- Doanh thu đầy đủ: bảng chi tiết từng dòng bán hàng ---------- */
 router.get('/revenue/full', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const ky = req.query.ky || store.latestKy();
-  let rows = store.getRows({ ky, scope });
+  const pc = periodCtx(req.query);
+  let rows = store.getRowsRange({ kys: pc.kys, scope });
   rows = A.applyFilters(rows, revenueFiltersFromQuery(req.query))
     .sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
   const totalRevenue = A.sum(rows, (r) => r.revenue);
   const totalQuantity = A.sum(rows, (r) => r.quantity);
   const pg = paginate(rows, req, 50, 500);
   res.json({
-    ky,
+    ky: pc.ky,
+    kys: pc.kys,
     page: pg.page,
     pageSize: pg.pageSize,
     total: pg.total,
@@ -243,8 +257,8 @@ router.get('/revenue/full', auth.requireAuth, (req, res) => {
 /* ---------- Sản phẩm: tổng hợp theo mã QLNB/sản phẩm, kèm độ phủ ---------- */
 router.get('/products', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const ky = req.query.ky || store.latestKy();
-  const rows = A.applyFilters(store.getRows({ ky, scope }), revenueFiltersFromQuery(req.query));
+  const pc = periodCtx(req.query);
+  const rows = A.applyFilters(store.getRowsRange({ kys: pc.kys, scope }), revenueFiltersFromQuery(req.query));
   const map = new Map();
   for (const r of rows) {
     const key = r.iit_code || r.product_name || 'UNKNOWN';
@@ -283,26 +297,26 @@ router.get('/products', auth.requireAuth, (req, res) => {
     avgPrice: x.quantity ? Math.round(x.revenue / x.quantity) : null,
   })).sort((a, b) => b.revenue - a.revenue);
   const pg = paginate(out, req, 50, 500);
-  res.json({ ky, page: pg.page, pageSize: pg.pageSize, total: pg.total, rows: pg.rows, totalRevenue: A.sum(out, (r) => r.revenue) });
+  res.json({ ky: pc.ky, kys: pc.kys, page: pg.page, pageSize: pg.pageSize, total: pg.total, rows: pg.rows, totalRevenue: A.sum(out, (r) => r.revenue) });
 });
 
 /* ---------- Phân tích: so kỳ trước theo đơn vị/sản phẩm/tuyến/NV ---------- */
 router.get('/analysis', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const ky = req.query.ky || store.latestKy();
+  const pc = periodCtx(req.query);
+  const { ky, kys } = pc;
   const filters = revenueFiltersFromQuery(req.query);
-  const periods = store.listPeriods().map((p) => p.ky);
-  const idx = periods.indexOf(ky);
-  const prevKy = idx > 0 ? periods[idx - 1] : null;
-  const currentRows = A.applyFilters(store.getRows({ ky, scope }), filters);
-  const prevRows = prevKy ? A.applyFilters(store.getRows({ ky: prevKy, scope }), filters) : [];
+  const prevKys = store.previousKys(kys);
+  const prevKy = prevKys.length ? prevKys[prevKys.length - 1] : null;
+  const currentRows = A.applyFilters(store.getRowsRange({ kys, scope }), filters);
+  const prevRows = prevKys.length === kys.length ? A.applyFilters(store.getRowsRange({ kys: prevKys, scope }), filters) : [];
   const currentRevenue = A.sum(currentRows, (r) => r.revenue);
   const prevRevenue = A.sum(prevRows, (r) => r.revenue);
   const delta = currentRevenue - prevRevenue;
   const deltaPct = prevRevenue > 0 ? +(delta / prevRevenue * 100).toFixed(1) : null;
   const compare = (dimension) => {
-    const cur = A.revenueBreakdown({ ky, scope, dimension, filters });
-    const prev = prevKy ? A.revenueBreakdown({ ky: prevKy, scope, dimension, filters }) : [];
+    const cur = A.revenueBreakdown({ kys, scope, dimension, filters });
+    const prev = prevRows.length ? A.revenueBreakdown({ kys: prevKys, scope, dimension, filters }) : [];
     const prevMap = Object.fromEntries(prev.map((x) => [x.key, x.revenue]));
     return cur.map((x) => {
       const before = prevMap[x.key] || 0;
@@ -317,6 +331,7 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
   const productCompare = compare('product');
   res.json({
     ky,
+    kys,
     prevKy,
     currentRevenue,
     prevRevenue,
@@ -358,12 +373,14 @@ router.get('/cst', auth.requireAuth, (req, res) => {
 /* ---------- Target: xem + dự báo ---------- */
 router.get('/targets', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const ky = req.query.ky || store.latestKy();
+  const pc = periodCtx(req.query);
+  const { ky, kys } = pc;
   // Danh sách NV = NV thực sự có doanh thu (đúng App Report); target lấy từ nguồn target thật (0 nếu chưa import)
-  const targets = store.getTargets({ ky, scope });
-  const targetByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, t.target]));
-  const items = store.empCodesWithData({ ky, scope }).map((ec) => {
-    const rev = A.sum(store.getRows({ ky, scope: { empCode: ec } }), (r) => r.revenue);
+  const targets = store.getTargetsRange({ kys, scope });
+  const targetByEmp = {};
+  for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
+  const items = store.empCodesWithRows({ kys, scope }).map((ec) => {
+    const rev = A.sum(store.getRowsRange({ kys, scope: { empCode: ec } }), (r) => r.revenue);
     const beforeVat = rev / A.VAT_DIVISOR;
     const target = targetByEmp[ec] || 0;
     return {
@@ -375,7 +392,7 @@ router.get('/targets', auth.requireAuth, (req, res) => {
       gap: Math.round(beforeVat - target),
     };
   }).sort((a, b) => b.revenue_before_vat - a.revenue_before_vat);
-  res.json({ ky, items });
+  res.json({ ky, kys, items });
 });
 
 // Dự báo target kỳ tới theo xu hướng

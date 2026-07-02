@@ -9,24 +9,24 @@ const A = require('./analytics');
 const llm = require('./llm');
 
 /* ---------------- 1) CẢNH BÁO CHỦ ĐỘNG ---------------- */
-function buildAlerts({ scope }) {
-  const ky = store.latestKy();
-  const periods = store.listPeriods().map((p) => p.ky);
-  const idx = periods.indexOf(ky);
-  const prevKy = idx > 0 ? periods[idx - 1] : null;
+function buildAlerts({ scope, ky, kys }) {
+  const list = Array.isArray(kys) && kys.length ? kys : [ky || store.latestKy()];
+  const lastKy = list[list.length - 1];
+  const prevKys = store.previousKys(list);
   const top = (arr, n = 8) => arr.slice(0, n);
 
   // a) NV đang bán nhưng tụt target (đạt < 80% target trước VAT).
   // Duyệt NV có doanh thu trong kỳ, không duyệt toàn bộ target/danh bạ để tránh NV nghỉ.
-  const targets = store.getTargets({ ky, scope });
-  const targetByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, Number(t.target || 0)]));
+  const targets = store.getTargetsRange({ kys: list, scope });
+  const targetByEmp = {};
+  for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
   const targetItems = [];
-  for (const empCode of store.empCodesWithData({ ky, scope })) {
+  for (const empCode of store.empCodesWithRows({ kys: list, scope })) {
     const user = store.findUserByCode(empCode);
     if (!user?.name) continue; // không resolve được tên => loại khỏi cảnh báo
     const target = targetByEmp[empCode] || 0;
     if (target <= 0) continue; // chưa có target thật => không tính %
-    const rev = A.sum(store.getRows({ ky, scope: { empCode } }), (r) => r.revenue);
+    const rev = A.sum(store.getRowsRange({ kys: list, scope: { empCode } }), (r) => r.revenue);
     const revBeforeVat = rev / A.VAT_DIVISOR;
     const pct = (revBeforeVat / target) * 100;
     if (pct < 80) {
@@ -44,9 +44,9 @@ function buildAlerts({ scope }) {
 
   // b) Đơn vị giảm doanh thu so kỳ trước (MoM < -15%)
   const unitItems = [];
-  if (prevKy) {
-    const cur = A.revenueBreakdown({ ky, scope, dimension: 'unit' });
-    const prev = A.revenueBreakdown({ ky: prevKy, scope, dimension: 'unit' });
+  if (prevKys.length === list.length) {
+    const cur = A.revenueBreakdown({ kys: list, scope, dimension: 'unit' });
+    const prev = A.revenueBreakdown({ kys: prevKys, scope, dimension: 'unit' });
     const prevMap = Object.fromEntries(prev.map((u) => [u.key, u.revenue]));
     for (const u of cur) {
       const before = prevMap[u.key] || 0;
@@ -109,7 +109,7 @@ function buildAlerts({ scope }) {
     cst_low: cstLow.length,
     cst_high: cstHigh.length,
   };
-  return { ky, summary, groups, count: groups.reduce((s, g) => s + g.total, 0) };
+  return { ky: lastKy, kys: list, cstLabel: 'Cơ số thầu hiện tại', summary, groups, count: groups.reduce((s, g) => s + g.total, 0) };
 }
 
 /* ---------------- 2) DỰ BÁO TARGET THEO XU HƯỚNG ---------------- */

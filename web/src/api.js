@@ -51,9 +51,9 @@ export const api = {
   adminDeviceDel: (id) => req('DELETE', '/admin/devices/' + encodeURIComponent(id)),
   me: () => req('GET', '/me'),
   periods: () => req('GET', '/periods'),
-  filters: (ky) => req('GET', '/filters' + (ky ? `?ky=${ky}` : '')),
-  overview: (ky) => req('GET', '/overview' + (ky ? `?ky=${ky}` : '')),
-  alerts: () => req('GET', '/alerts'),
+  filters: (params) => req('GET', '/filters' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
+  overview: (params) => req('GET', '/overview' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
+  alerts: (params) => req('GET', '/alerts' + (params ? `?${new URLSearchParams(params)}` : '')),
   revenue: (dimension, ky, extra = {}) => {
     const p = new URLSearchParams({ dimension, ...(ky ? { ky } : {}), ...extra });
     return req('GET', '/revenue?' + p.toString());

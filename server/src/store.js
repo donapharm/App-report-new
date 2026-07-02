@@ -82,6 +82,22 @@ function latestKy() {
   const ps = listPeriods();
   return ps.length ? ps[ps.length - 1].ky : base().catalog.latest_ky;
 }
+function periodKys() { return listPeriods().map((p) => p.ky); }
+function periodRange(from, to) {
+  const ps = periodKys();
+  const a = ps.indexOf(from);
+  const b = ps.indexOf(to);
+  if (a < 0 || b < 0) return [];
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  return ps.slice(lo, hi + 1);
+}
+function previousKys(kys = []) {
+  const ps = periodKys();
+  if (!kys.length) return [];
+  const start = ps.indexOf(kys[0]);
+  if (start < 0 || start < kys.length) return [];
+  return ps.slice(start - kys.length, start);
+}
 
 const listUsers = () => base().users;
 const findUserByPhone = (phone) => base().users.find((u) => u.phone === phone);
@@ -96,6 +112,11 @@ function empCodesWithData({ ky, scope } = {}) {
   const set = new Set();
   const periods = ky ? [{ ky }] : listPeriods();
   for (const p of periods) for (const r of getRows({ ky: p.ky, scope })) if (r.emp_code) set.add(r.emp_code);
+  return [...set];
+}
+function empCodesWithRows({ kys, scope } = {}) {
+  const set = new Set();
+  for (const r of getRowsRange({ kys, scope })) if (r.emp_code) set.add(r.emp_code);
   return [...set];
 }
 
@@ -113,6 +134,10 @@ function getRows({ ky, scope }) {
   }
   if (scope && scope.empCode) rows = rows.filter((r) => r.emp_code === scope.empCode);
   return rows;
+}
+function getRowsRange({ kys, scope }) {
+  const list = Array.isArray(kys) && kys.length ? kys : [latestKy()];
+  return list.flatMap((ky) => getRows({ ky, scope }));
 }
 
 function getCst({ scope }) {
@@ -135,13 +160,18 @@ function getTargets({ ky, scope }) {
   if (scope && scope.empCode) t = t.filter((x) => x.emp_code === scope.empCode);
   return t;
 }
+function getTargetsRange({ kys, scope }) {
+  const list = Array.isArray(kys) && kys.length ? kys : [latestKy()];
+  return list.flatMap((ky) => getTargets({ ky, scope }));
+}
 
 // Cho phép xoá cache khi cần (VD sau khi nạp danh mục mới)
 function clearCache() { _base = null; }
 
 module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
-  getRows, getCst, getTargets, clearCache, empCodesWithData,
+  periodKys, periodRange, previousKys,
+  getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache, empCodesWithData, empCodesWithRows,
   // giữ tên cũ để nơi khác không vỡ
   db: base,
 };

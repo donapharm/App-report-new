@@ -41,35 +41,40 @@ function applyFilters(rows, f = {}) {
   });
 }
 
-/** KPI tổng quan cho 1 kỳ trong phạm vi quyền. */
-function overviewKpis({ ky, scope }) {
-  const rows = store.getRows({ ky, scope });
+const normKys = ({ ky, kys }) => (Array.isArray(kys) && kys.length ? kys : [ky || store.latestKy()]);
+
+/** KPI tổng quan cho 1 kỳ hoặc nhiều kỳ trong phạm vi quyền. */
+function overviewKpis({ ky, kys, scope, label }) {
+  const list = normKys({ ky, kys });
+  const rows = store.getRowsRange({ kys: list, scope });
   const revenue = sum(rows, (r) => r.revenue);
-  const targets = store.getTargets({ ky, scope });
+  const targets = store.getTargetsRange({ kys: list, scope });
   const targetTotal = sum(targets, (t) => t.target);
   const revenueBeforeVat = revenue / VAT_DIVISOR;
   const pctTarget = targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null;
-  const targetByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, Number(t.target || 0)]));
+  const targetByEmp = {};
+  for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
   const empTarget = { achieved: 0, total: 0 };
-  for (const empCode of store.empCodesWithData({ ky, scope })) {
+  for (const empCode of store.empCodesWithRows({ kys: list, scope })) {
     const target = targetByEmp[empCode] || 0;
     if (target <= 0) continue;
-    const empRevBeforeVat = sum(store.getRows({ ky, scope: { empCode } }), (r) => r.revenue) / VAT_DIVISOR;
+    const empRevBeforeVat = sum(store.getRowsRange({ kys: list, scope: { empCode } }), (r) => r.revenue) / VAT_DIVISOR;
     empTarget.total += 1;
     if (empRevBeforeVat >= target) empTarget.achieved += 1;
   }
   const cstLowCount = store.getCst({ scope }).filter((r) => Number(r.remain_pct || 0) < 10).length;
 
-  // so với kỳ liền trước (MoM)
-  const periods = store.listPeriods().map((p) => p.ky);
-  const idx = periods.indexOf(ky);
+  // so với kỳ liền trước cùng độ dài (MoM/range-over-range)
   let momPct = null;
-  if (idx > 0) {
-    const prevRev = sum(store.getRows({ ky: periods[idx - 1], scope }), (r) => r.revenue);
+  const prevKys = store.previousKys(list);
+  if (prevKys.length === list.length) {
+    const prevRev = sum(store.getRowsRange({ kys: prevKys, scope }), (r) => r.revenue);
     if (prevRev > 0) momPct = +(((revenue - prevRev) / prevRev) * 100).toFixed(1);
   }
   return {
-    ky,
+    ky: list[list.length - 1],
+    kys: list,
+    label,
     revenue,
     revenueBeforeVat: Math.round(revenueBeforeVat),
     targetTotal,
@@ -85,8 +90,8 @@ function overviewKpis({ ky, scope }) {
 }
 
 /** Doanh thu drill-down: 'emp' | 'unit' | 'product'. */
-function revenueBreakdown({ ky, scope, dimension, filterEmp, filterUnit, filters }) {
-  let rows = store.getRows({ ky, scope });
+function revenueBreakdown({ ky, kys, scope, dimension, filterEmp, filterUnit, filters }) {
+  let rows = store.getRowsRange({ kys: normKys({ ky, kys }), scope });
   if (filterEmp) rows = rows.filter((r) => r.emp_code === filterEmp);
   if (filterUnit) rows = rows.filter((r) => r.unit_code === filterUnit);
   rows = applyFilters(rows, filters);

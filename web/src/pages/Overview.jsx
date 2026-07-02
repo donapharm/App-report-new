@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { money, short, pct } from '../util.js';
 import { Spinner, Kpi } from '../components.jsx';
+import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 
 function AlertLine({ group, item }) {
   if (group.key === 'target') {
@@ -30,21 +31,21 @@ function AlertLine({ group, item }) {
 
 export default function Overview({ me, onNavigate }) {
   const [periods, setPeriods] = useState([]);
-  const [ky, setKy] = useState('');
+  const [periodSel, setPeriodSel] = useState(null);
   const [kpi, setKpi] = useState(null);
   const [alerts, setAlerts] = useState(null);
 
   useEffect(() => {
-    api.periods().then((p) => { setPeriods(p.periods); setKy(p.latest); });
+    api.periods().then((p) => { setPeriods(p.periods); setPeriodSel(defaultPeriodSelection(p.periods, p.latest)); });
   }, []);
 
   useEffect(() => {
-    if (!ky) return;
+    if (!periodSel) return;
     setKpi(null);
-    api.overview(ky).then(setKpi);
-  }, [ky]);
-
-  useEffect(() => { api.alerts().then(setAlerts); }, []);
+    api.overview(periodParams(periodSel)).then(setKpi);
+    setAlerts(null);
+    api.alerts(periodParams(periodSel)).then(setAlerts);
+  }, [periodSel]);
 
   function viewAll(group) {
     if (!onNavigate) return;
@@ -59,29 +60,23 @@ export default function Overview({ me, onNavigate }) {
 
   return (
     <>
-      <div className="chips">
-        {periods.map((p) => (
-          <button key={p.ky} className={'chip' + (p.ky === ky ? ' active' : '')} onClick={() => setKy(p.ky)}>
-            Kỳ {p.ky}
-          </button>
-        ))}
-      </div>
+      {periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
 
       {!kpi ? <Spinner /> : (
         <>
           <div className="kpi-grid">
-            <Kpi label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={short(kpi.revenue)} delta={kpi.momPct} />
+            <Kpi label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={short(kpi.revenue)} delta={kpi.momPct} sub={periodLabel(periodSel)} />
             <Kpi label="Trước VAT" value={short(kpi.revenueBeforeVat)} sub={money(kpi.revenue) + ' sau VAT'} />
             <Kpi label="Đạt target (%)" value={pct(kpi.pctTarget)}
                  sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} />
             <Kpi label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} />
-            <Kpi label="Cơ số thầu sắp cạn" value={`${kpi.cstLowCount || 0} dòng <10%`} sub="Bấm để xem CST cạn" tone="danger" onClick={() => onNavigate?.('cst', { cstFilter: 'low' })} />
+            <Kpi label="Cơ số thầu sắp cạn" value={`${kpi.cstLowCount || 0} dòng <10%`} sub="Hiện tại · bấm để xem" tone="danger" onClick={() => onNavigate?.('cst', { cstFilter: 'low' })} />
             <Kpi label="Quy mô kỳ" value={`${kpi.unitCount} ĐV · ${kpi.productCount} SP · ${kpi.empCount} NV`} sub={`${kpi.rowCount} dòng`} />
           </div>
         </>
       )}
 
-      <div className="section-title">🔔 Cần chú ý {alerts ? `(${alerts.count})` : ''}</div>
+      <div className="section-title">🔔 Cần chú ý {alerts ? `(${alerts.count})` : ''} · CST hiện tại</div>
       {!alerts ? <Spinner /> : alerts.count === 0 ? (
         <div className="center">Không có cảnh báo nào. Mọi thứ ổn ✅</div>
       ) : (
@@ -93,7 +88,7 @@ export default function Overview({ me, onNavigate }) {
             <span><b>{summary.cst_high}</b> CST tồn nhiều</span>
           </div>
           <div className="alerts-grid grouped-alerts">
-            {groups.filter((g) => g.total > 0).map((g) => (
+            {groups.map((g) => (
               <div key={g.key} className={'card alert-group ' + (g.tone || '')}>
                 <div className="alert-group-head">
                   <div>
@@ -103,9 +98,9 @@ export default function Overview({ me, onNavigate }) {
                   <span className="pill muted-pill">{g.total}</span>
                 </div>
                 <div className="alert-lines">
-                  {g.items.slice(0, 8).map((item, i) => <AlertLine key={i} group={g} item={item} />)}
+                  {g.items.length === 0 ? <div className="alert-line"><span>Không có cảnh báo trong kỳ này.</span></div> : g.items.slice(0, 8).map((item, i) => <AlertLine key={i} group={g} item={item} />)}
                 </div>
-                <button className="btn ghost alert-more" onClick={() => viewAll(g)}>Xem tất cả ({g.total}) ›</button>
+                {g.total > 0 && <button className="btn ghost alert-more" onClick={() => viewAll(g)}>Xem tất cả ({g.total}) ›</button>}
               </div>
             ))}
           </div>

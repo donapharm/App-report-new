@@ -119,6 +119,14 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .btn { background: var(--brand); color: #fff; border: none; border-radius: 10px; padding: 10px 14px; font-weight: 700; font-size: 14px; }
 .btn.ghost { background: #e9f1fb; color: var(--brand); }
 .btn:disabled { opacity: .5; }
+.period-filter { padding: 12px; }
+.period-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.period-head b { color: var(--brand-ink); white-space: nowrap; }
+.seg.compact { margin-bottom: 0; max-width: 340px; flex: 1; }
+.seg.compact button { padding: 7px 10px; }
+.period-row { display: flex; align-items: center; gap: 8px; }
+.period-row select { max-width: 220px; }
+.period-row .btn { width: 42px; padding: 9px 0; }
 .filter-card { padding: 12px; }
 .filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .filter-search { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
@@ -222,16 +230,27 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
    Mọi trang chảy dọc full-width trong khung 1600px; phần nào cần nhiều cột thì
    khai báo TƯỜNG MINH bằng class: .kpi-grid (KPI), .alerts-grid (cảnh báo). */
 .page-desktop { padding: 22px 32px 40px; max-width: 1600px; width: 100%; margin: 0 auto; }
-.page-desktop .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
-.page-desktop .alerts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); gap: 10px; }
+.page-desktop .kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.page-desktop .alerts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .page-desktop .alerts-grid .alert { margin-bottom: 0; }
 .page-desktop .filter-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+
+@media (min-width: 1700px) {
+  .page-desktop .alerts-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (min-width: 900px) and (max-width: 1399px) {
+  .page-desktop .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 
 @media (max-width: 520px) {
   .filter-grid { grid-template-columns: 1fr; }
   .filter-search { flex-direction: column; align-items: stretch; }
   .summary-card { align-items: stretch; flex-direction: column; }
   .mini-columns { grid-template-columns: 1fr; }
+  .period-head { flex-direction: column; align-items: stretch; }
+  .period-head b { white-space: normal; }
+  .period-row select { max-width: none; }
 }
 
 /* AI chat trên PC gọn giữa */
