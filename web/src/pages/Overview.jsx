@@ -38,6 +38,7 @@ export default function Overview({ me, onNavigate }) {
   const [trend, setTrend] = useState(null);
   const [topDim, setTopDim] = useState('unit');
   const [topRows, setTopRows] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     api.periods().then((p) => { setPeriods(p.periods); setPeriodSel(defaultPeriodSelection(p.periods, p.latest)); });
@@ -69,10 +70,38 @@ export default function Overview({ me, onNavigate }) {
 
   const summary = alerts?.summary;
   const groups = alerts?.groups || [];
+  const selectedKy = periodSel?.mode === 'range' ? periodSel.to : periodSel?.ky;
+  const selectedPeriod = periods.find((p) => p.ky === selectedKy) || null;
+  const dataAsOf = selectedPeriod?.data_as_of;
+  const dataAsOfText = dataAsOf ? new Date(dataAsOf).toLocaleString('vi-VN', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : null;
+
+  async function refreshNow() {
+    if (!selectedKy) return;
+    setRefreshing(true);
+    try {
+      await api.revenueRefreshRun(selectedKy);
+      const p = await api.periods();
+      setPeriods(p.periods);
+      setKpi(null);
+      api.overview(periodParams(periodSel)).then(setKpi);
+      setTrend(null);
+      api.trend().then(setTrend);
+      setTopRows(null);
+      api.revenue(topDim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, 10)));
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   return (
     <>
       {periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
+      {periodSel && (
+        <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', margin: '-6px 0 10px' }}>
+          <span>{dataAsOfText ? `Cập nhật đến ${dataAsOfText}` : 'Chưa có mốc cập nhật tự động'}</span>
+          {me.isAdmin && <button className="btn ghost" onClick={refreshNow} disabled={refreshing}>{refreshing ? 'Đang làm mới…' : '↻ Làm mới'}</button>}
+        </div>
+      )}
 
       {!kpi ? <Spinner /> : (
         <>

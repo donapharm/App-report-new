@@ -10,6 +10,7 @@ const auth = require('./auth');
 const A = require('./analytics');
 const smart = require('./smart');
 const uploadSvc = require('./upload');
+const revenueRefresh = require('./revenueRefresh');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -180,6 +181,19 @@ router.get('/me', auth.requireAuth, (req, res) => {
 /* ---------- Metadata ---------- */
 router.get('/periods', auth.requireAuth, (req, res) => {
   res.json({ periods: store.listPeriods(), latest: store.latestKy() });
+});
+
+router.get('/admin/revenue-refresh/status', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  res.json(revenueRefresh.status());
+});
+
+router.post('/admin/revenue-refresh/run', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    const r = await revenueRefresh.runOnce({ force: true, reason: 'admin_button', ky: req.body?.ky || req.query?.ky });
+    res.json(r);
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
 });
 
 router.get('/filters', auth.requireAuth, (req, res) => {

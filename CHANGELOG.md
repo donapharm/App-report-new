@@ -29,6 +29,16 @@
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive dựng lại bản MOBILE (CEO phản ánh)
 - CEO gửi ảnh mobile (tài khoản NV): **giá trị bên phải bị cắt, header đè nội dung, cơ cấu tràn ngang, cuộn ngang**. → [`DIRECTIVE_MOBILE_UX.md`](DIRECTIVE_MOBILE_UX.md), ưu tiên cao (NV dùng điện thoại).
 - Yêu cầu: ≤414px không tràn ngang; dòng "tên—giá trị" giá trị luôn hiện + tên ellipsis/wrap; header không đè; KPI 1 cột; combobox/chart/bottom-nav vừa màn hình. Sửa ở khung/CSS dùng chung cho MỌI trang; không đổi số/quyền. Test 375/390/414px cả CEO + NV.
+
+### 2026-07-03 — Bot triển khai (Report Bot) — Scheduler auto-refresh doanh thu theo khung giờ CEO chốt
+- Đọc `DIRECTIVE_AUTO_REFRESH.md` và dựng backend scheduler `server/src/revenueRefresh.js`: mặc định mỗi 60 phút, timezone `Asia/Bangkok`, T2–T6 `07:30-18:30`, T7 `07:30-13:00`, CN `off`; cấu hình env `REVENUE_REFRESH_MINUTES`, `REVENUE_REFRESH_WEEKDAY`, `REVENUE_REFRESH_SAT`, `REVENUE_REFRESH_SUN`, `REVENUE_REFRESH_ENABLED`.
+- Scheduler chạy đúng kỳ đang chạy, có single-flight/in-flight guard, chống chạy trùng slot, ngoài khung thì skip không gọi MISA; lỗi thì giữ số cũ.
+- Bổ sung hook snapshot MISA tùy cấu hình: `APPSALE_MISA_SYNC_COMMAND` hoặc `APPSALE_MISA_SYNC_URL` + `APPSALE_MISA_SYNC_TOKEN`; nếu chưa cấu hình thì dùng snapshot MISA success mới nhất trong DB, không để trắng số.
+- Refactor `server/scripts/materialize_july_revenue.js` thành materializer theo `REVENUE_REFRESH_KY`/kỳ hiện tại, vẫn giữ rule 2 nguồn và rule WEB Partner theo kỳ đơn đặt; ghi `data_as_of` vào active slot.
+- Thêm API admin `/api/admin/revenue-refresh/status` và `/api/admin/revenue-refresh/run`; Overview hiển thị “Cập nhật đến HH:MM ngày dd/mm” và nút admin “↻ Làm mới”.
+- Nghiệm thu local: `node --check` OK, `npm run build` OK; chạy materializer T07 giữ đúng `2.668.987.096đ` (MISA `2.118.313.496đ`, WEB `550.673.600đ`), T06 không đụng.
+
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Chốt khung giờ auto-refresh (tiết kiệm token)
 - CEO chốt khung giờ chạy (giờ VN): **T2–T6 07:30–18:30**, **T7 07:30–13:00**, **CN nghỉ**. Vẫn mỗi 60'. Ngoài khung không gọi MISA (giảm ~60% lần gọi). Cấu hình env. Cập nhật `DIRECTIVE_AUTO_REFRESH.md`.
 
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive tự cập nhật doanh thu mỗi 1 giờ (CEO chốt B)

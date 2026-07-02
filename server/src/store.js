@@ -184,7 +184,7 @@ function listPeriods() {
   const b = base();
   const map = new Map(b.catalog.periods.map((p) => [p.ky, p]));
   for (const s of activeSlots()) {
-    map.set(s.ky, { ky: s.ky, dateFrom: s.dateFrom, dateTo: s.dateTo, source: 'upload' });
+    map.set(s.ky, { ky: s.ky, dateFrom: s.dateFrom, dateTo: s.dateTo, source: 'upload', data_as_of: s.data_as_of || s.dataAsOf || s.uploadedAt, sourceSummary: s.sourceSummary || null });
   }
   return [...map.values()].sort((a, b2) => ((a.dateFrom || a.ky) < (b2.dateFrom || b2.ky) ? -1 : 1));
 }

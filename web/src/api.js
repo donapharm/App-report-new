@@ -51,6 +51,8 @@ export const api = {
   adminDeviceDel: (id) => req('DELETE', '/admin/devices/' + encodeURIComponent(id)),
   me: () => req('GET', '/me'),
   periods: () => req('GET', '/periods'),
+  revenueRefreshStatus: () => req('GET', '/admin/revenue-refresh/status'),
+  revenueRefreshRun: (ky) => req('POST', '/admin/revenue-refresh/run', ky ? { ky } : {}),
   filters: (params) => req('GET', '/filters' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   overview: (params) => req('GET', '/overview' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   trend: () => req('GET', '/trend'),

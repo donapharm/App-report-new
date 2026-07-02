@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Materialize July 2026 revenue for App Report New from 2 App Sale sources:
+ * Materialize current-period revenue for App Report New from 2 App Sale sources:
  *  - CRM MISA snapshot read-model: invoice_export_amount, buckets official+pending
  *  - APP WEB partner delivered: latest partner response delivered_qty * order item price
  * Read-only against App Sale DB; writes only App Report New server/data upload slot.
@@ -37,10 +37,24 @@ const validEmp = (v) => /^(DN|VP)\d{3}$/.test(String(v || '').trim().toUpperCase
 function cleanCode(v, fallback = '') { return String(v || fallback || '').trim(); }
 function empCode(v) { const s = String(v || '').trim().toUpperCase(); return validEmp(s) ? s : 'UNALLOCATED'; }
 function dateOnly(v) { return v ? new Date(v).toISOString().slice(0, 10) : null; }
+function pad(n) { return String(n).padStart(2, '0'); }
+function kyToRange(ky) {
+  const [mm, yyyy] = String(ky || '').split('.').map(Number);
+  if (!mm || !yyyy) throw new Error(`INVALID_KY:${ky}`);
+  const from = `${yyyy}-${pad(mm)}-01`;
+  const last = new Date(Date.UTC(yyyy, mm, 0)).getUTCDate();
+  return { ky: `${pad(mm)}.${yyyy}`, from, to: `${yyyy}-${pad(mm)}-${pad(last)}` };
+}
+function defaultKy() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' }).formatToParts(now).reduce((m, p) => (m[p.type] = p.value, m), {});
+  return `${parts.month}.${parts.year}`;
+}
+const PERIOD = kyToRange(process.env.REVENUE_REFRESH_KY || process.env.MATERIALIZE_KY || defaultKy());
 function buildSlotId() {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
-  return `july_2src_072026_${stamp}`;
+  return `rev_2src_${PERIOD.ky.replace('.', '')}_${stamp}`;
 }
 
 async function latestRun() {
@@ -65,12 +79,12 @@ async function fetchMisa(runId) {
      WHERE l.run_id=$1
        AND l.revenue_bucket = ANY(ARRAY['official','pending']::text[])
        AND COALESCE(l.is_test_suspected,false) IS NOT TRUE
-       AND l.revenue_date >= DATE '2026-07-01'
-       AND l.revenue_date < DATE '2026-08-01'
+       AND l.revenue_date >= $2::date
+       AND l.revenue_date <= $3::date
        AND COALESCE(l.invoice_export_amount,l.official_amount,0) <> 0
-     ORDER BY l.revenue_date, l.sale_order_no, l.id`, [runId]);
+     ORDER BY l.revenue_date, l.sale_order_no, l.id`, [runId, PERIOD.from, PERIOD.to]);
   return q.rows.map((r) => ({
-    ky: '07.2026', date: dateOnly(r.revenue_date) || '2026-07-01',
+    ky: PERIOD.ky, date: dateOnly(r.revenue_date) || PERIOD.from,
     source: 'CRM_MISA', source_order: r.sale_order_no, source_line_id: `MISA:${r.id}`,
     route: cleanCode(r.route, 'CL'), contractor_code: r.legal_entity_bucket || r.legal_entity_code || 'MISA',
     emp_code: empCode(r.employee_code), emp_name: r.employee_name || '', raw_emp_code: r.employee_code || '',
@@ -133,14 +147,14 @@ async function fetchPartner() {
        AND (COALESCE(o.is_test,false) IS NOT TRUE OR partner.responded_at IS NOT NULL)
        -- PA-A / app cũ: kỳ WEB partner theo kỳ đơn đặt; đơn T06 giao sang T07
        -- vẫn thuộc nhóm theo dõi/còn nợ kỳ trước, không cộng vào doanh thu T07.
-       AND o.created_at >= TIMESTAMPTZ '2026-07-01 00:00:00+07'
-       AND o.created_at < TIMESTAMPTZ '2026-08-01 00:00:00+07'
-       AND COALESCE(partner.effective_date, o.created_at::date) >= DATE '2026-07-01'
-       AND COALESCE(partner.effective_date, o.created_at::date) < DATE '2026-08-01'
+       AND o.created_at >= ($1::date::text || ' 00:00:00+07')::timestamptz
+       AND o.created_at < (($2::date + INTERVAL '1 day')::date::text || ' 00:00:00+07')::timestamptz
+       AND COALESCE(partner.effective_date, o.created_at::date) >= $1::date
+       AND COALESCE(partner.effective_date, o.created_at::date) <= $2::date
        AND COALESCE(partner.delivered_qty,0) > 0
-     ORDER BY COALESCE(partner.effective_date, o.created_at::date), o.id, oi.id`);
+     ORDER BY COALESCE(partner.effective_date, o.created_at::date), o.id, oi.id`, [PERIOD.from, PERIOD.to]);
   return q.rows.map((r) => ({
-    ky: '07.2026', date: dateOnly(r.revenue_date) || '2026-07-01',
+    ky: PERIOD.ky, date: dateOnly(r.revenue_date) || PERIOD.from,
     source: 'APP_WEB_PARTNER', source_order: r.order_no, source_line_id: `WEB:${r.order_item_id}`,
     route: cleanCode(r.route, 'CL'), contractor_code: r.contractor_code || 'PARTNER', contractor_name: r.contractor_name || '',
     emp_code: empCode(r.employee_code), emp_name: r.employee_name || '', raw_emp_code: r.employee_code || '',
@@ -166,31 +180,31 @@ async function main() {
   writeJson(file, rows);
   const slotsPath = path.join(DATA_DIR, 'upload_slots.json');
   const slots = readJson(slotsPath, []);
-  for (const s of slots) if (s.ky === '07.2026') s.active = false;
+  for (const s of slots) if (s.ky === PERIOD.ky) s.active = false;
   slots.push({
     id: slotId,
-    ky: '07.2026',
-    dateFrom: '2026-07-01', dateTo: '2026-07-31',
+    ky: PERIOD.ky,
+    dateFrom: PERIOD.from, dateTo: PERIOD.to,
     totalRows: rows.length, totalRevenue: total,
     empCount: new Set(rows.map((r) => r.emp_code).filter(Boolean)).size,
     filename: `${slotId}.json`, uploadedBy: 'SYSTEM', uploadedByName: 'CRM MISA + APP WEB materializer',
     uploadedAt: new Date().toISOString(), active: true,
     source: 'CRM_MISA_PLUS_APP_WEB',
     sourceRunId: String(run.id), sourceSnapshotFinishedAt: run.finished_at,
-    sourceSummary: summaryBySource,
+    sourceSummary: summaryBySource, data_as_of: process.env.REVENUE_DATA_AS_OF || new Date().toISOString(),
   });
   writeJson(slotsPath, slots);
   const artifact = {
-    generatedAt: new Date().toISOString(), slotId, file, ky: '07.2026', latestMisaRun: { id: String(run.id), finished_at: run.finished_at, raw_summary: run.raw_summary },
+    generatedAt: new Date().toISOString(), dataAsOf: process.env.REVENUE_DATA_AS_OF || new Date().toISOString(), slotId, file, ky: PERIOD.ky, latestMisaRun: { id: String(run.id), finished_at: run.finished_at, raw_summary: run.raw_summary },
     summary: { rows: rows.length, totalRevenue: total, bySource: summaryBySource, empCount: new Set(rows.map((r) => r.emp_code).filter(Boolean)).size },
     samples: { misa: misa.slice(0, 10), partner: partner.slice(0, 10) },
   };
   const artDir = path.join(REPORT_ROOT, 'artifacts'); fs.mkdirSync(artDir, { recursive: true });
-  writeJson(path.join(artDir, 'july_revenue_2source_materialize_20260702.json'), artifact);
-  const md = [`# July 2026 revenue — CRM MISA + APP WEB`, '', `Generated: ${artifact.generatedAt}`, '', `MISA run: #${run.id}, finished_at=${run.finished_at}`, '', '| Source | Rows | Orders | Revenue |', '|---|---:|---:|---:|'];
+  writeJson(path.join(artDir, `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}.json`), artifact);
+  const md = [`# Revenue — CRM MISA + APP WEB`, '', `Generated: ${artifact.generatedAt}`, '', `MISA run: #${run.id}, finished_at=${run.finished_at}`, '', '| Source | Rows | Orders | Revenue |', '|---|---:|---:|---:|'];
   for (const [k, v] of Object.entries(summaryBySource)) md.push(`| ${k} | ${v.rows} | ${v.orders} | ${v.revenue} |`);
-  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, July `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, July effective date, July order creation date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- 01–06 frozen; this script only creates/replaces active slot for `07.2026`.', '');
-  fs.writeFileSync(path.join(artDir, 'july_revenue_2source_materialize_20260702.md'), md.join('\n'));
+  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, period `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, period effective date, period order creation date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- Closed periods stay frozen; this script only creates/replaces active slot for the requested/current period.', '');
+  fs.writeFileSync(path.join(artDir, `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}.md`), md.join('\n'));
   console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length }, null, 2));
   await pool.end();
 }

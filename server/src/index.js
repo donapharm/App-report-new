@@ -21,6 +21,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const routes = require('./routes');
+const revenueRefresh = require('./revenueRefresh');
 
 const PORT = process.env.PORT || 3860;
 const app = express();
@@ -41,4 +42,5 @@ app.get(/^(?!\/api).*/, (req, res, next) => {
 app.listen(PORT, () => {
   console.log(`✔ App Report New API chạy tại http://localhost:${PORT}`);
   console.log(`  Health: http://localhost:${PORT}/api/health`);
+  revenueRefresh.start();
 });
