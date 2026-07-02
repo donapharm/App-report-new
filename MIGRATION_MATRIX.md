@@ -54,11 +54,13 @@ Nguồn đối chiếu:
 
 Ghi chú kiểm soát: nếu lần đối chiếu sau phát hiện kỳ nào lệch, phải **dừng**, ghi rõ chênh lệch + nguồn, chờ xử lý; không tự ý làm tròn/làm khớp.
 
-## Bước 3 mở rộng theo từng tab — CST đã KHỚP sau chốt giữ dòng thiếu mã QLNB (2026-07-02)
+## Bước 3 mở rộng theo từng tab — ĐÓNG mục CST 2.741 (2026-07-02)
 
 Artifacts kiểm tra:
 - Mismatch ban đầu: `artifacts/reconcile_tabs_until_cst_mismatch_20260702.json`.
-- Sau xử lý: `artifacts/reconcile_cst_resolved_20260702.json`.
+- Sau xử lý/đóng mục CST: `artifacts/reconcile_cst_resolved_20260702.json`.
+
+**Kết luận đóng mục 1:** CST app mới đã khớp chuẩn app cũ **2.741 dòng**, diff tổng = 0; dòng thiếu mã QLNB `Bividia 25 · 108. BVĐK LONG AN · DN001` được giữ và UI hiển thị mã QLNB là `—`.
 
 Chốt nghiệp vụ của Claude/CEO: **giữ dòng dữ liệu thật thiếu mã QLNB** (`Bividia 25` · `108. BVĐK LONG AN` · `DN001` · còn `44.000` · TT còn `79.200.000`). Nguyên tắc importer: không loại dòng thật chỉ vì thiếu field phụ (`iit_code`...); với CST, filter chỉ còn `unit_code` và `bid_qty_initial > 0`.
 
