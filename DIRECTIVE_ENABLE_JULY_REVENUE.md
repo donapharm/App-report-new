@@ -51,6 +51,13 @@ CEO đồng bộ lại app cũ lúc **23:42** (snapshot #27, official) → WEB *
 4. **Nghiệm thu:** tại CÙNG snapshot, App Report T07 phải = **2.668.987.096đ** (WEB = 550.673.600, MISA = 2.118.313.496). Nếu vẫn lệch → báo rõ đơn nào + lý do, KHÔNG ép số.
 5. Ghi artifact trace + CHANGELOG → Claude review.
 
+## ❓ CẦN BOT LÀM RÕ (Claude review 2026-07-03) — quy tắc gán KỲ
+Bot fix T07 khớp app cũ (2.668.987.096) bằng cách **loại đơn `DT-260630-0115/WEB:2188` vì "tạo 30/06, giao 01/07"**. Nhưng lý do này giống **quy tắc theo NGÀY ĐẶT** (đơn đặt 30/6 → thuộc T06), KHÁC với PA-A (đơn giao dở). Số khớp nhưng **quy tắc phải rõ vì áp mọi kỳ**:
+1. **Quy tắc gán kỳ CHÍNH XÁC là gì?** Doanh thu 1 đơn thuộc kỳ theo **ngày ĐẶT** hay **ngày GIAO/xuất HĐ**? App cũ dùng cái nào? (Phải replicate ĐÚNG app cũ.)
+2. **Đơn `DT-260630-0115` có bị MẤT không?** Nếu gán theo ngày đặt → nó thuộc T06; nhưng T06 = Lumos đóng băng (không có đơn WEB này) → đơn có bị rơi vào khe không tính cả T06 lẫn T07 không? Nếu có → phải xử (ghi nhận đúng kỳ).
+3. Ghi **quy tắc gán kỳ** thành spec rõ (order-date vs delivery-date) để tháng 8+ không lệch.
+→ Bot trả lời + đối chiếu 2–3 đơn giáp ranh cuối/đầu tháng. Không ép số.
+
 ## Lưu ý
 - **Đây là bài học:** nguồn doanh thu App Report GỒM CRM MISA (chính) + APP WEB (đối tác). Mọi thiết kế cutover phải tính CẢ HAI (cập nhật lại `SPEC_DATASOURCE_CUTOVER` nếu cần).
 - **Độ tươi 2 nguồn khác nhau:** MISA = snapshot (cần chụp lại), WEB = live → App Report nên hiện "cập nhật đến HH:MM" và cân nhắc tự chụp MISA định kỳ. Nhưng ĐỊNH NGHĨA phải khớp app cũ trước đã.
