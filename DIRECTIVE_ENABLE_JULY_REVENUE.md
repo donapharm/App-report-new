@@ -39,6 +39,18 @@ Bot báo "T07 chỉ 2 đơn" vì **chỉ soi APP WEB (:3970)** và đếm đơn 
 - Scope đúng; đầu tháng số lớn dần là bình thường.
 - Chạy SHADOW đối chiếu rồi mới hiển thị chính thức. CHANGELOG + báo Claude.
 
+## ‼ MISMATCH cần TRUY NGAY — WEB dư 1.960.000đ (CEO test 2026-07-02 23:42)
+CEO đồng bộ lại app cũ lúc **23:42** (snapshot #27, official) → WEB **vẫn 550.673.600đ** (không đổi so 20:29). **Bác bỏ** giả thuyết "phát sinh sau snapshot". Vậy chênh là THẬT:
+- App cũ WEB "đã xuất giao" = **550.673.600đ** (32 đơn, **SL giao THỰC × đơn giá**); loại "còn nợ chưa giao" = 24.590.600đ (1 đơn, còn thiếu sau phản hồi) sang "chưa thực hiện".
+- App Report WEB = **552.633.600đ** → **DƯ 1.960.000đ**.
+**Bot làm (đúng nguyên tắc mismatch — dừng, truy, không ép số):**
+1. **Truy đúng đơn/dòng** tạo ra 1.960.000đ chênh trong phần WEB (đối chiếu từng đơn App Report ↔ app cũ).
+2. **Kiểm định nghĩa:** App Report có đang tính theo **SL ĐẶT** thay vì **SL GIAO THỰC** cho đơn giao một phần không? Có gộp nhầm phần "còn nợ chưa giao" (24,59tr, 1 đơn) vào "đã giao" không?
+3. **Sửa cho khớp định nghĩa app cũ:** "đối tác đã thực hiện = SL giao thực × đơn giá", loại hủy/cancel + loại còn-nợ-chưa-giao.
+4. **Nghiệm thu:** tại CÙNG snapshot, App Report T07 phải = **2.668.987.096đ** (WEB = 550.673.600, MISA = 2.118.313.496). Nếu vẫn lệch → báo rõ đơn nào + lý do, KHÔNG ép số.
+5. Ghi artifact trace + CHANGELOG → Claude review.
+
 ## Lưu ý
 - **Đây là bài học:** nguồn doanh thu App Report GỒM CRM MISA (chính) + APP WEB (đối tác). Mọi thiết kế cutover phải tính CẢ HAI (cập nhật lại `SPEC_DATASOURCE_CUTOVER` nếu cần).
+- **Độ tươi 2 nguồn khác nhau:** MISA = snapshot (cần chụp lại), WEB = live → App Report nên hiện "cập nhật đến HH:MM" và cân nhắc tự chụp MISA định kỳ. Nhưng ĐỊNH NGHĨA phải khớp app cũ trước đã.
 - CST tháng 07 theo nhánh riêng. Không đụng app cũ 3860; chỉ ĐỌC.

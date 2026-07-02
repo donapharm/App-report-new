@@ -21,11 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-02 — Dev/Kiến trúc (Claude Code) — MISMATCH T07: WEB dư 1.960.000đ (phải truy)
+- CEO đồng bộ lại app cũ 23:42 (snapshot #27 official) → WEB **vẫn 550.673.600đ** → **bác bỏ** giả thuyết "phát sinh sau snapshot" của bot. Chênh 1,96tr là THẬT.
+- **App Report WEB = 552.633.600 dư 1.960.000đ** so app cũ (550.673.600). MISA khớp tuyệt đối.
+- **Nghi:** App Report tính SL ĐẶT thay vì **SL GIAO THỰC** cho đơn giao một phần, hoặc gộp nhầm "còn nợ chưa giao" (24,59tr, 1 đơn) vào "đã giao". Định nghĩa cũ: "đối tác đã thực hiện = SL giao thực × đơn giá", loại hủy + loại còn-nợ.
+- **Áp nguyên tắc mismatch:** bot DỪNG, truy đúng đơn, sửa khớp định nghĩa → T07 phải = **2.668.987.096đ** tại cùng snapshot. KHÔNG ép số. Ghi `DIRECTIVE_ENABLE_JULY_REVENUE.md`.
+
 ### 2026-07-02 — Bot triển khai (Report Bot) — Bật doanh thu 07.2026 từ 2 nguồn MISA + APP WEB
 - Đọc `DIRECTIVE_ENABLE_JULY_REVENUE.md` và điều tra lại code App Sale API: doanh thu App Report T07 phải dùng **CRM MISA đã xuất HĐ + APP WEB đối tác đã giao thực**, không dùng WEB ordered và không chỉ soi App Web :3970.
 - Xác nhận công thức nguồn cũ: MISA đọc `misa_revenue_snapshot_lines` latest success run, `revenue_bucket in (official,pending)`, amount `invoice_export_amount`; Partner đọc latest `partner_order_line_responses`, amount `delivered_qty * order_items.price`, loại HOLD_GOLIVE/test/chưa giao.
 - Thêm script idempotent `server/scripts/materialize_july_revenue.js` để materialize kỳ `07.2026` thành upload slot runtime, chỉ đọc DB App Sale/MISA snapshot và chỉ ghi data App Report New; 01–06 không đổi.
-- Kết quả materialize hiện tại: CRM_MISA `2.118.313.496đ` (226 rows/66 orders) + APP_WEB_PARTNER `552.633.600đ` (68 rows/33 orders) = T07 `2.670.947.096đ`. Số MISA khớp ảnh CEO; partner cao hơn ảnh `1.960.000đ` do dữ liệu DB đã tăng sau snapshot 20:29, không ép số.
+- Kết quả materialize hiện tại: CRM_MISA `2.118.313.496đ` (226 rows/66 orders) + APP_WEB_PARTNER `552.633.600đ` (68 rows/33 orders) = T07 `2.670.947.096đ`. Số MISA khớp ảnh CEO; **partner cao hơn ảnh `1.960.000đ` — Claude review: giả thuyết "tăng sau snapshot" đã bị CEO bác bỏ (re-sync 23:42 vẫn 550.673.600), cần truy đơn (mục MISMATCH trên).**
 - Nghiệm thu: `store.listPeriods()` có `07.2026`, `latestKy=07.2026`, T06 vẫn `28.403.136.096đ`, T07 `2.670.947.096đ`, không có mã NV rác; `node --check` OK; `npm run build` OK. Artifacts: `artifacts/july_revenue_2source_investigation_20260702.md`, `artifacts/july_revenue_2source_materialize_20260702.md/json`.
 
 ### 2026-07-02 — Dev/Kiến trúc (Claude Code) — ĐÍNH CHÍNH: doanh thu có 2 nguồn (CRM MISA + APP WEB)
