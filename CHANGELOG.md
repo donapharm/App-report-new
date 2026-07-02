@@ -21,6 +21,9 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Chốt khung giờ auto-refresh (tiết kiệm token)
+- CEO chốt khung giờ chạy (giờ VN): **T2–T6 07:30–18:30**, **T7 07:30–13:00**, **CN nghỉ**. Vẫn mỗi 60'. Ngoài khung không gọi MISA (giảm ~60% lần gọi). Cấu hình env. Cập nhật `DIRECTIVE_AUTO_REFRESH.md`.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive tự cập nhật doanh thu mỗi 1 giờ (CEO chốt B)
 - CEO chốt nhịp **B = mỗi 1 giờ** cho auto-refresh doanh thu kỳ đang chạy. → [`DIRECTIVE_AUTO_REFRESH.md`](DIRECTIVE_AUTO_REFRESH.md).
 - Scheduler 60' (env `REVENUE_REFRESH_MINUTES`, khung giờ tuỳ chọn): chụp snapshot MISA → materialize kỳ đang chạy (MISA xuất HĐ + WEB đã giao đủ) → ghi `data_as_of`. Chỉ kỳ đang chạy; kỳ đã đóng giữ nguyên. Idempotent, lỗi thì giữ số cũ.
