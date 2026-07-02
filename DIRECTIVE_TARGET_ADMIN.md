@@ -16,10 +16,10 @@ Cho CEO/admin quản target theo kỳ, **3 đường nhập**:
 - Resolver chọn target active theo ưu tiên `manual > upload > appsale > ai` (SPEC_TARGET_MULTISOURCE). `store.getTargets` trả target active đã resolve → %đạt/cảnh báo/dự báo dùng đúng.
 - Pro-rate target kỳ đang chạy theo ngày (đã chốt PA A) áp luôn.
 
-## 3) CÂU HỎI CEO (để làm đúng)
-- **Telesale (VP018…) CÓ giao target không?** (a) có target riêng, nhóm "Telesale" tách; hay (b) không tính target, chỉ theo dõi doanh thu. → chốt cách hiển thị.
-- **Danh sách telesale gồm ai** (ngoài VP018)? để tag đúng loại trong danh bạ.
-- **Đội NV sale thị trường ĐÚNG gồm những mã nào?** (để đối chiếu "thiếu" — hoặc bot suy từ status active + loại sale, CEO xác nhận lại).
+## 3) TELESALE — CEO CHỐT 2026-07-03: KHÔNG giao target
+- **Telesale (VP018…) KHÔNG có target.** → **Loại telesale khỏi:** danh sách Target/Dự báo, chấm % đạt, cảnh báo "chưa đạt", xếp hạng theo target. Không hiện đỏ, không tính vào "NV chưa đạt".
+- Telesale vẫn **giữ trong danh bạ** (loại `telesale`, active); doanh thu của họ (nếu có) **vẫn tính vào tổng công ty** như thường — chỉ **không đánh giá target**.
+- Tag `VP018 = telesale` ngay. **Còn chờ CEO:** danh sách telesale khác (ngoài VP018) để tag đủ; và xác nhận đội NV sale thị trường (hoặc bot suy từ status active + loại `sale`, CEO liếc lại).
 
 ## Nghiệm thu
 - Dự báo/Target hiện **đủ đội sale thật**, không lẫn telesale; số NV khớp danh sách CEO xác nhận.
