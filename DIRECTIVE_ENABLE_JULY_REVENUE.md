@@ -45,7 +45,8 @@ CEO đồng bộ lại app cũ lúc **23:42** (snapshot #27, official) → WEB *
 - App Report WEB = **552.633.600đ** → **DƯ 1.960.000đ**.
 **Bot làm (đúng nguyên tắc mismatch — dừng, truy, không ép số):**
 1. **Truy đúng đơn/dòng** tạo ra 1.960.000đ chênh trong phần WEB (đối chiếu từng đơn App Report ↔ app cũ).
-2. **Kiểm định nghĩa:** App Report có đang tính theo **SL ĐẶT** thay vì **SL GIAO THỰC** cho đơn giao một phần không? Có gộp nhầm phần "còn nợ chưa giao" (24,59tr, 1 đơn) vào "đã giao" không?
+2. **Kiểm định nghĩa:** Bot đã dùng `delivered_qty × price` (SL giao thực) — đúng. NHƯNG bot có **33 đơn** partner còn app cũ "đã giao" chỉ **32 đơn** → chênh đúng **1 đơn = 1,96tr**, khả năng cao là **đơn giao MỘT PHẦN** mà app cũ xếp trọn vào **"còn nợ chưa giao" (24,59tr)**. Truy đúng đơn đó (mã đơn, delivered_qty, còn nợ).
+   - **CHÍNH SÁCH ghi nhận (chờ CEO):** đơn giao dở dang → có tính phần ĐÃ GIAO là doanh thu ngay không, hay đợi giao ĐỦ mới tính (như app cũ đang làm — xếp cả đơn vào "còn nợ")? **Mặc định: KHỚP app cũ** (đợi giao đủ) để đối chiếu trùng khớp, trừ khi CEO chọn khác.
 3. **Sửa cho khớp định nghĩa app cũ:** "đối tác đã thực hiện = SL giao thực × đơn giá", loại hủy/cancel + loại còn-nợ-chưa-giao.
 4. **Nghiệm thu:** tại CÙNG snapshot, App Report T07 phải = **2.668.987.096đ** (WEB = 550.673.600, MISA = 2.118.313.496). Nếu vẫn lệch → báo rõ đơn nào + lý do, KHÔNG ép số.
 5. Ghi artifact trace + CHANGELOG → Claude review.
