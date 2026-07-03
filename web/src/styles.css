@@ -173,11 +173,20 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .filter-body { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
 .filter-body .filter-asof { margin-bottom: 8px; }
 /* Phân trang */
-/* Phân trang gọn kiểu "viên thuốc" căn giữa (đỡ chiếm 1 hàng rộng, nhìn gọn) */
-.pager { display: flex; align-items: center; justify-content: center; gap: 2px; margin: 8px auto; padding: 3px; width: fit-content; max-width: 100%; background: var(--card); border: 1px solid var(--line); border-radius: 11px; box-shadow: var(--shadow); }
-.pager .btn { min-width: auto; min-height: auto; padding: 6px 11px; border: none; box-shadow: none; background: transparent; color: var(--brand); font-weight: 700; }
-.pager .btn:disabled { color: var(--muted); opacity: .45; }
-.pager-info { font-size: 12.5px; color: var(--muted); padding: 0 6px; white-space: nowrap; }
+/* Phân trang = VIÊN NANG MỀM 2 màu logo Donapharm: đầu Trước xanh, đầu Sau cam,
+   giữa (Trang X/Y) nền kem; bo tròn hai đầu như viên nang, có ánh bóng gel. */
+.pager { position: relative; display: inline-flex; align-items: stretch; margin: 10px auto; width: fit-content; max-width: 100%;
+  border-radius: 999px; overflow: hidden; background: #fff; box-shadow: 0 3px 12px rgba(21,104,184,.24), inset 0 0 0 1px rgba(255,255,255,.4); }
+.pager::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 48%; pointer-events: none;
+  background: linear-gradient(rgba(255,255,255,.35), rgba(255,255,255,0)); }
+.pager .btn { min-width: auto; min-height: auto; border: none; border-radius: 0; box-shadow: none;
+  padding: 9px 18px; font-weight: 800; color: #fff; letter-spacing: .01em; }
+.pager .btn:first-child { background: linear-gradient(135deg, #2f8ad6, var(--brand-2)); }      /* Trước = xanh */
+.pager .btn:last-child  { background: linear-gradient(135deg, var(--accent), var(--accent-2)); } /* Sau = cam */
+.pager .btn:active:not(:disabled) { filter: brightness(.94); }
+.pager .btn:disabled { opacity: .5; }
+.pager-info { display: flex; align-items: center; padding: 0 16px; font-size: 12.5px; font-weight: 700;
+  color: var(--brand-ink); background: #fffdf7; white-space: nowrap; }
 .pager-info b { color: var(--brand-ink); }
 .target-admin-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 .target-admin-actions input[type="file"] { flex: 1 1 220px; min-width: 0; }
