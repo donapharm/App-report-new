@@ -337,6 +337,7 @@ function salesCatalogRows(scope, { allPeriods = false } = {}) {
       revenue: 0,
       quantity: 0,
       unitCount: new Set(),
+      unitCodes: new Set(),
       empCount: new Set(),
       qd: meta.qd || qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`),
     };
@@ -355,6 +356,7 @@ function salesCatalogRows(scope, { allPeriods = false } = {}) {
     cur.revenue += Number(r.revenue || r.sold_amount || 0);
     cur.quantity += Number(r.quantity || 0);
     if (r.unit_code || r.unit_name) cur.unitCount.add(r.unit_code || r.unit_name);
+    if (r.unit_code) cur.unitCodes.add(r.unit_code);
     if (r.emp_code || r.sales_emps) String(r.emp_code || r.sales_emps).split(',').map((x) => x.trim()).filter(Boolean).forEach((x) => cur.empCount.add(x));
     map.set(key, cur);
   }
@@ -364,9 +366,26 @@ function salesCatalogRows(scope, { allPeriods = false } = {}) {
     bidPackages: [...x.bidPackages].slice(0, 6).join(', '),
     contractors: [...x.contractors].slice(0, 6).join(' / '),
     unitCount: x.unitCount.size,
+    unitCodes: [...x.unitCodes],
     empCount: x.empCount.size,
   })).sort((a, b) => (b.revenue + b.cst_remain_amount) - (a.revenue + a.cst_remain_amount));
 }
+
+function filterCatalogByAssignments(rows, session, ky) {
+  if (auth.isAdmin(session.role)) return rows;
+  const assigns = assignmentAdmin.mine(session.emp_code, ky || store.latestKy());
+  if (!assigns.length) return [];
+  if (assigns.some((a) => a.type === 'all')) return rows;
+  return rows.filter((r) => assigns.some((a) => {
+    if (a.type === 'iit') return r.iit_code === a.value;
+    if (a.type === 'group') return r.priority === a.value;
+    if (a.type === 'route') return String(r.routes || '').split(',').map((x) => x.trim()).includes(a.value);
+    if (a.type === 'unit') return (r.unitCodes || []).includes(a.value);
+    if (a.type === 'special') return true;
+    return false;
+  }));
+}
+
 function specialCandidates(scope) {
   const cst = store.getCst({ scope });
   const revenue = store.getRowsRange({ kys: ['04.2026', '05.2026', '06.2026'], scope });
@@ -469,7 +488,8 @@ router.get('/filters', auth.requireAuth, (req, res) => {
 /* ---------- Target Assignment GĐ1: catalog + phân công ---------- */
 router.get('/catalog/sales', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const rows = salesCatalogRows(scope, { allPeriods: req.query.all === '1' || req.query.all === 'true' });
+  let rows = salesCatalogRows(scope, { allPeriods: req.query.all === '1' || req.query.all === 'true' });
+  rows = filterCatalogByAssignments(rows, req.session, req.query.ky || store.latestKy());
   const q = String(req.query.q || '').trim().toLowerCase();
   const filtered = q ? rows.filter((r) => JSON.stringify(r).toLowerCase().includes(q)) : rows;
   const pg = paginate(filtered, req, 100, 1000);

@@ -210,6 +210,7 @@ function AssignmentAdminPanel({ ky }) {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [form, setForm] = useState({ emp_code: 'DN001', type: 'unit', value: '', from_ky: ky || '07.2026', to_ky: '', active: true, note: '' });
+  const assignFileRef = useRef(null);
   async function load() {
     setErr('');
     const [a, c, m, h] = await Promise.all([
@@ -241,6 +242,17 @@ function AssignmentAdminPanel({ ky }) {
     catch (e) { setErr(e.message); }
     setBusy(false);
   }
+  function editRow(a) {
+    setForm({ id: a.id, emp_code: a.emp_code, type: a.type, value: a.value || '', from_ky: a.from_ky || ky || '07.2026', to_ky: a.to_ky || '', active: a.active !== false, note: a.note || '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  async function uploadAssignments(e) {
+    const f = e.target.files?.[0]; if (!f) return;
+    setBusy(true); setErr(''); setMsg('');
+    try { const r = await api.adminAssignmentUpload(f); setMsg(`Đã upload ${r.result.rows} dòng phân công + audit.`); if (assignFileRef.current) assignFileRef.current.value = ''; await load(); }
+    catch (err2) { setErr(err2.message); }
+    setBusy(false);
+  }
   const typeLabel = (t) => ({ unit: 'Đơn vị', group: 'Nhóm UT', route: 'Tuyến', iit: 'Mã QLNB', special: 'Hàng cần đẩy', all: 'Toàn bộ' }[t] || t);
   return (
     <>
@@ -250,6 +262,7 @@ function AssignmentAdminPanel({ ky }) {
           <button className="btn" disabled={busy} onClick={() => seed(false)}>🌱 Gieo mầm 04-06</button>
           <button className="btn ghost" disabled={busy} onClick={() => seed(true)}>Gieo lại auto</button>
           <button className="btn ghost" disabled={busy} onClick={load}>↻ Tải lại</button>
+          <label className="btn ghost" style={{ cursor: 'pointer' }}>⬆ Upload Excel<input ref={assignFileRef} type="file" accept=".xlsx" onChange={uploadAssignments} style={{ display: 'none' }} /></label>
         </div>
       </div>
       {busy && <Spinner />}
@@ -265,7 +278,8 @@ function AssignmentAdminPanel({ ky }) {
           <label><span>Đến kỳ</span><input value={form.to_ky} onChange={(e) => setF('to_ky', e.target.value)} placeholder="trống = còn hiệu lực" /></label>
           <label><span>Ghi chú</span><input value={form.note} onChange={(e) => setF('note', e.target.value)} /></label>
         </div>
-        <button className="btn" disabled={busy} onClick={save}>Lưu phân công manual</button>
+        <button className="btn" disabled={busy} onClick={save}>{form.id ? 'Cập nhật phân công' : 'Lưu phân công manual'}</button>
+        {form.id && <button className="btn ghost" onClick={() => setForm({ emp_code: 'DN001', type: 'unit', value: '', from_ky: ky || '07.2026', to_ky: '', active: true, note: '' })}>Tạo mới</button>}
       </div>
       <div className="section-title">Danh mục bán hàng tổng ({catalog?.total || 0} mã)</div>
       {!catalog ? <Spinner /> : <div className="list-grid">
@@ -280,7 +294,7 @@ function AssignmentAdminPanel({ ky }) {
       {!rows ? <Spinner /> : <div className="list-grid target-admin-grid">
         {rows.slice(0, 80).map((a) => <div className="card detail-card" key={a.id}>
           <div className="detail-head detail-head-two"><div><div className="detail-title">{a.emp_name || a.emp_code}</div><div className="detail-sub mono">{a.emp_code} · {typeLabel(a.type)} · {a.value}</div></div><span className={'pill ' + (a.active ? 'ok' : 'muted-pill')}>{a.source || 'manual'}</span></div>
-          <div className="detail-facts two"><span><b>{a.from_ky || '—'} → {a.to_ky || 'hiện tại'}</b><em>Hiệu lực</em></span><span><b>{a.by || '—'}</b><em>Người sửa</em></span><span><b>{a.note || '—'}</b><em>Ghi chú</em></span><span><button className="btn ghost" onClick={() => del(a.id)}>Ngưng</button><em>Thao tác</em></span></div>
+          <div className="detail-facts two"><span><b>{a.from_ky || '—'} → {a.to_ky || 'hiện tại'}</b><em>Hiệu lực</em></span><span><b>{a.by || '—'}</b><em>Người sửa</em></span><span><b>{a.note || '—'}</b><em>Ghi chú</em></span><span><button className="btn ghost" onClick={() => editRow(a)}>Sửa</button> <button className="btn ghost" onClick={() => del(a.id)}>Ngưng</button><em>Thao tác</em></span></div>
         </div>)}
       </div>}
       <AssignmentMinePanel data={mine} title="Tôi phụ trách (preview theo quyền hiện tại)" />
@@ -316,6 +330,7 @@ function AssignmentMinePanel({ data, title = 'Tôi phụ trách' }) {
       <div className="section-title">Hàng cần đẩy gợi ý</div>
       <div className="list-grid">
         {(specials.ton_nhieu || []).slice(0, 6).map((x) => <div className="card detail-card" key={'tn'+x.iit_code}><div className="detail-title">{x.product_name}</div><div className="detail-sub mono">{x.iit_code} · tồn nhiều · {x.priority || '—'}</div><div className="detail-facts"><span><b>{x.remain_pct}%</b><em>CST còn</em></span><span><b>{money(x.remain_amount)}</b><em>TT còn</em></span></div></div>)}
+        {(specials.hang_ngach || []).slice(0, 6).map((x) => <div className="card detail-card" key={'hn'+x.iit_code}><div className="detail-title">{x.product_name}</div><div className="detail-sub mono">{x.iit_code} · hàng ngách · {x.priority || '—'}</div><div className="meta muted">{x.reason || 'Doanh số thấp / độ phủ hẹp'}</div></div>)}
         <div className="card"><b>Cận date</b><div className="meta muted">{specials.can_date?.message || 'Thiếu nguồn hạn dùng; CEO chọn thủ công.'}</div></div>
         <div className="card"><b>Sắp hết thầu-CST lớn</b><div className="meta muted">{specials.sap_het_thau_cst_lon?.message || 'Thiếu nguồn hạn gói thầu.'}</div></div>
       </div>

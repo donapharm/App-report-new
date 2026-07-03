@@ -82,6 +82,10 @@ export const api = {
   adminAssignmentDelete: (id) => req('DELETE', '/admin/assignments/' + encodeURIComponent(id)),
   adminAssignmentSeed: (replaceAuto = false) => req('POST', '/admin/assignments/seed', { replaceAuto }),
   adminAssignmentHistory: () => req('GET', '/admin/assignments/history'),
+  adminAssignmentUpload: (file) => {
+    const fd = new FormData(); fd.append('file', file);
+    return fetch('/api/admin/assignments/upload', { method: 'POST', headers: { 'X-Device-Id': getDeviceId(), ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}) }, body: fd }).then(async (res) => { const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || 'Lỗi upload phân công'); return data; });
+  },
   targets: (params) => req('GET', '/targets' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   forecast: () => req('GET', '/targets/forecast'),
   ask: (text) => req('POST', '/ai/ask', { text }),

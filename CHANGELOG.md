@@ -33,7 +33,8 @@
 - Thêm model phân công `assignment{id, emp_code, type, value, from_ky, to_ky, active, note, by, at}` + `source`/`special_kind`, lưu `server/data/assignments.json`, audit `assignment_audit.json`; gieo mầm 1.687 phân công auto từ lịch sử 04-06/2026 hiệu lực từ 07.2026.
 - Thêm API admin/mine/special: CEO xem-sửa-thêm-ngưng hiệu lực + audit; NV chỉ thấy `/assignments/mine` theo session; upload Excel backend cho phân công.
 - Thêm UI Target: tab `Phân công` cho admin và `Tôi phụ trách` cho NV/admin; special `tồn nhiều`/`hàng ngách` auto, `cận date` và `sắp hết thầu-CST lớn` ghi rõ thiếu nguồn hạn dùng/hạn gói thầu để CEO chọn thủ công.
-- Nghiệm thu: `node -c` routes/assignmentAdmin OK, `npm run build` OK, restart `reportnew` OK, health local/public OK; API catalog/admin/mine/special/history OK; UI Phân công render catalog 342 mã + 1.687 phân công.
+- Review độc lập sau GĐ1 yêu cầu bổ sung: đã thêm UI/client upload Excel phân công, nút Sửa nạp dòng hiện có vào form, hiển thị `hang_ngach` trong “Tôi phụ trách”, seed lại auto có thêm `all`/`group` (tổng 1.808 dòng: all 22, group 99, iit 1328, route 45, unit 314), và `/catalog/sales` lọc theo assignment cho NV thường.
+- Nghiệm thu: `node -c` routes/assignmentAdmin OK, `npm run build` OK, restart `reportnew` OK, health local/public OK; API catalog/admin/mine/special/history OK; UI Phân công render catalog 342 mã + phân công auto.
 
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Spec điều chỉnh target theo lý do (đứt hàng/công nợ)
 - CEO: cần ghi lý do không đạt (đứt hàng/công nợ) để hạ tỷ lệ target tháng đó + phân tích. → [`DIRECTIVE_TARGET_ADJUSTMENT.md`](DIRECTIVE_TARGET_ADJUSTMENT.md) (thuộc Target GĐ2).

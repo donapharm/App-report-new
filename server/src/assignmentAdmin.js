@@ -93,16 +93,24 @@ function seedFromHistory({ user, replaceAuto = false } = {}) {
   const seen = new Set(keep.map(makeKey));
   const suggestions = [];
   const rows = store.getRowsRange({ kys: SEED_KYS, scope: {} });
+  const priorityByIit = new Map();
+  for (const c of store.getCst({ scope: {} })) {
+    if (c.iit_code && c.priority && !priorityByIit.has(c.iit_code)) priorityByIit.set(c.iit_code, c.priority);
+  }
+  const empSeen = new Set();
   for (const r of rows) {
     const emp = String(r.emp_code || '').trim().toUpperCase();
     if (!emp || emp === store.UNALLOCATED_EMP) continue;
     const base = { emp_code: emp, from_ky: '07.2026', active: true, source: 'auto', note: 'Gieo mầm từ lịch sử bán 04-06/2026' };
+    const priority = r.priority || priorityByIit.get(r.iit_code) || '';
     const candidates = [
+      { ...base, type: 'all', value: 'all', note: 'Mặc định phụ trách toàn bộ phần của NV; gieo mầm từ lịch sử bán 04-06/2026' },
       { ...base, type: 'unit', value: r.unit_code || r.unit_name || '' },
       { ...base, type: 'iit', value: r.iit_code || '' },
       { ...base, type: 'route', value: r.route || '' },
-      { ...base, type: 'group', value: r.priority || '' },
+      { ...base, type: 'group', value: priority },
     ];
+    empSeen.add(emp);
     for (const c of candidates) {
       if (!c.value) continue;
       const rec = normalize(c, user);
