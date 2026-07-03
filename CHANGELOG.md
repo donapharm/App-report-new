@@ -21,6 +21,13 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Bot triển khai (Report Bot) — Layout Smart: Quản target content-first
+- Đã `git pull origin main`, đọc `DIRECTIVE_LAYOUT_SMART.md`; không đụng app cũ `dona-report` port 3860.
+- Quản target đổi sang bố cục content-first: bỏ period card/form dài riêng, kỳ target nằm compact trong toolbar; danh sách 21 NV/CTV lên ngay dưới thanh công cụ.
+- Gom công cụ phụ thành 1 toolbar: `Template`, `Upload`, `Nhập theo Quý`, `AI đề xuất`, `Rollback`; các form nặng mở modal/drawer và giữ đủ chức năng cũ.
+- Đoạn resolver dài chuyển thành icon `ⓘ` tooltip. Thêm CSS modal/drawer và toolbar tái dùng được cho các màn khác khi áp nguyên tắc content-first tiếp.
+- Nghiệm thu: `npm run build` OK, restart `reportnew` OK, health local/public OK. Screenshot trước/sau: `verification-screenshots/layout-smart/`.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive bố cục "smart app" (nội dung chính nổi bật)
 - CEO: Quản target công cụ phụ chiếm >1/2 màn hình, đẩy danh sách chính xuống đáy. → [`DIRECTIVE_LAYOUT_SMART.md`](DIRECTIVE_LAYOUT_SMART.md).
 - **Nguyên tắc toàn app:** nội dung chính ~70–80% màn hình + hiện ngay; công cụ phụ gom **1 thanh nút gọn**; form nặng mở **modal/drawer** khi bấm; chữ dài → **icon ⓘ tooltip**.
