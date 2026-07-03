@@ -114,7 +114,17 @@ export default function Revenue({ me }) {
                     <span><b>{r.bid_price != null ? money(r.bid_price) : 'Thiếu nguồn giá'}</b><em>Giá trúng thầu</em></span>
                     <span><b>{r.priority || 'Thiếu nguồn UT'}</b><em>Ưu tiên</em></span>
                   </>
-                ) : <span><b>{DIMS[dim]}</b><em>Nhóm xem</em></span>}
+                ) : dim === 'emp' ? (
+                  <>
+                    <span><b>{(r.unitCount || 0).toLocaleString('vi-VN')}</b><em>Số đơn vị</em></span>
+                    <span><b>{(r.productCount || 0).toLocaleString('vi-VN')}</b><em>Số sản phẩm</em></span>
+                  </>
+                ) : (
+                  <>
+                    <span><b>{(r.productCount || 0).toLocaleString('vi-VN')}</b><em>Số sản phẩm</em></span>
+                    <span><b>{(r.empCount || 0).toLocaleString('vi-VN')}</b><em>Số nhân viên</em></span>
+                  </>
+                )}
               </div>
             </div>
           ))}

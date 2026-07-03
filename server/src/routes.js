@@ -739,7 +739,7 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
     for (const r of A.applyFilters(rawRows, filters)) {
       const key = r.iit_code || r.product_name || 'UNKNOWN';
       const cur = unitMap.get(key) || { units: new Set(), emps: new Set(), routes: new Set(), contractors: new Set(), priorities: new Set() };
-      if (r.unit_code || r.unit_name) cur.units.add(r.unit_code || r.unit_name);
+      if (r.unit_code || r.unit_name) cur.units.add(A.baseUnitKey(r.unit_code || r.unit_name));
       if (r.emp_code || r.emp_name) cur.emps.add([r.emp_code, r.emp_name].filter(Boolean).join(' · '));
       if (r.route) cur.routes.add(r.route);
       if (r.contractor_code) cur.contractors.add(r.contractor_code);
@@ -759,6 +759,25 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
           priority: r.priority || [...(agg.priorities || [])][0] || '',
         };
       });
+  } else if (dimension === 'emp' || dimension === 'unit') {
+    // Bổ sung: số ĐƠN VỊ (gộp mã theo baseUnitKey — tránh đếm nhầm NT-... thành 2),
+    // số sản phẩm, số NV cho từng ô NV/đơn vị.
+    const rawRows = A.applyFilters(store.getRowsRange({ kys: pc.kys, scope }), filters);
+    const keyField = dimension === 'emp' ? 'emp_code' : 'unit_code';
+    const aggMap = new Map();
+    for (const r of rawRows) {
+      const key = r[keyField];
+      if (key == null) continue;
+      const cur = aggMap.get(key) || { units: new Set(), products: new Set(), emps: new Set() };
+      if (r.unit_code || r.unit_name) cur.units.add(A.baseUnitKey(r.unit_code || r.unit_name));
+      if (r.iit_code || r.product_name) cur.products.add(r.iit_code || r.product_name);
+      if (r.emp_code) cur.emps.add(r.emp_code);
+      aggMap.set(key, cur);
+    }
+    outRows = outRows.map((r) => {
+      const a = aggMap.get(r.key) || {};
+      return { ...r, unitCount: a.units?.size || 0, productCount: a.products?.size || 0, empCount: a.emps?.size || 0 };
+    });
   }
   res.json({
     ky: pc.ky,
