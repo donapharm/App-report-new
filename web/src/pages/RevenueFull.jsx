@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pairText, unitText } from '../util.js';
-import { Spinner } from '../components.jsx';
+import { Spinner, Pager } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -48,6 +48,7 @@ export default function RevenueFull({ me }) {
       </div>
       {!data ? <Spinner /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
         <div className="detail-list-wrap">
+          <Pager page={page} totalPages={pages} total={data.total} onPage={setPage} unit="dòng" />
           <div className="list-grid">
             {data.rows.map((r, i) => (
               <div className={`card detail-card table-detail-card full-revenue-card ${qdClass(qdOf(r))}`} key={`${r.emp_code}-${r.unit_code}-${r.iit_code}-${i}`}>
@@ -74,11 +75,7 @@ export default function RevenueFull({ me }) {
               </div>
             ))}
           </div>
-          <div className="pager">
-            <button className="btn ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>‹ Trước</button>
-            <span>Trang {page}/{pages}</span>
-            <button className="btn ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Sau ›</button>
-          </div>
+          <Pager page={page} totalPages={pages} total={data.total} onPage={setPage} unit="dòng" />
         </div>
       )}
       <p className="muted" style={{ fontSize: 12, textAlign: 'center' }}>Bảng chi tiết lấy dữ liệu backend theo quyền; NV thường chỉ thấy dòng của chính mình.</p>

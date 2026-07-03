@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pct as fmtPct, pairText, unitText } from '../util.js';
-import { Spinner, Bar } from '../components.jsx';
+import { Spinner, Bar, Pager, usePager, useCollapse } from '../components.jsx';
 import { ComboSelect, Select } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -134,24 +134,32 @@ export default function TenderQuota({ me }) {
   const lowCount = data ? data.filter((r) => Number(r.remain_pct || 0) < 10).length : 0;
   const emptyCount = data ? data.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0).length : 0;
   const highCount = data ? data.filter((r) => Number(r.remain_pct || 0) > 80).length : 0;
+  const { open, toggle } = useCollapse();
+  const activeCount = [filters.emp, filters.unit, filters.product, filters.priority, filters.q, bid].filter(Boolean).length;
+  const flatPager = usePager(sortedData, 30, `${f}|${bid}|${JSON.stringify(filters)}`);
 
   return (
     <>
       <DrillNav crumbs={[{ label: 'Cơ số thầu' }, ...(selectedUnit ? [{ label: unitText(selectedUnit.unit_code || selectedUnit.key, selectedUnit.unit_name) }] : [])]} onBack={selectedUnit ? () => setFilter('unit', '') : undefined} onCrumb={(i) => { if (i === 0) setFilter('unit', ''); }} onReload={reload} busy={!data} />
       <div className="chips">{FILTERS.map((x) => <button key={x.key} className={'chip' + (f === x.key ? ' active' : '')} onClick={() => setF(x.key)}>{x.label}</button>)}</div>
-      <div className="card filter-card">
-        <div className="filter-grid">
-          <Select value={bid} onChange={setBid} options={options?.bidPackages} all="Mọi gói thầu" />
-          {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setFilter('emp', v)} options={options?.employees} all="Tất cả NV" />}
-          <ComboSelect value={filters.unit} onChange={(v) => setFilter('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
-          <ComboSelect value={filters.product} onChange={(v) => setFilter('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
-          <Select value={filters.priority} onChange={(v) => setFilter('priority', v)} options={options?.priorities} all="Tất cả UT" />
-        </div>
-        <div className="filter-search">
-          <input value={filters.q} onChange={(e) => setFilter('q', e.target.value)} placeholder="Tìm đơn vị, sản phẩm, mã QLNB, hoạt chất, gói thầu…" />
-          <button className="btn ghost" onClick={reset}>Xoá lọc</button>
+      <div className={'card filter-card' + (open ? ' open' : ' collapsed')}>
+        <div className="filter-bar">
+          <input className="filter-quick" value={filters.q} onChange={(e) => setFilter('q', e.target.value)} placeholder="Tìm đơn vị, sản phẩm, mã QLNB, hoạt chất, gói thầu…" />
+          <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn lọc' : '▾ Bộ lọc'}{activeCount ? ` (${activeCount})` : ''}</button>
+          {activeCount > 0 && <button className="btn ghost" onClick={reset}>Xoá lọc</button>}
           <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>
         </div>
+        {open && (
+          <div className="filter-body">
+            <div className="filter-grid">
+              <Select value={bid} onChange={setBid} options={options?.bidPackages} all="Mọi gói thầu" />
+              {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setFilter('emp', v)} options={options?.employees} all="Tất cả NV" />}
+              <ComboSelect value={filters.unit} onChange={(v) => setFilter('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
+              <ComboSelect value={filters.product} onChange={(v) => setFilter('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
+              <Select value={filters.priority} onChange={(v) => setFilter('priority', v)} options={options?.priorities} all="Tất cả UT" />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="seg compact view-toggle">
@@ -184,7 +192,11 @@ export default function TenderQuota({ me }) {
           })}
         </div>
       ) : (
-        <div className="list-grid">{sortedData.slice(0, 600).map((c, i) => <CstCard key={i} c={c} i={i} duplicateName={duplicateProducts.has(c.product_name)} />)}{sortedData.length > 600 && <p className="muted" style={{ textAlign: 'center', fontSize: 12, paddingBottom: 12 }}>Đang hiển thị 600 dòng đầu, dùng bộ lọc hoặc xuất Excel để xem toàn bộ {sortedData.length.toLocaleString('vi-VN')} dòng.</p>}</div>
+        <>
+          <Pager page={flatPager.page} totalPages={flatPager.totalPages} total={flatPager.total} onPage={flatPager.setPage} unit="dòng" />
+          <div className="list-grid">{flatPager.pageItems.map((c, i) => <CstCard key={flatPager.startIndex + i} c={c} i={flatPager.startIndex + i} duplicateName={duplicateProducts.has(c.product_name)} />)}</div>
+          <Pager page={flatPager.page} totalPages={flatPager.totalPages} total={flatPager.total} onPage={flatPager.setPage} unit="dòng" />
+        </>
       )}
     </>
   );
