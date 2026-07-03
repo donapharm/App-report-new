@@ -78,34 +78,43 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
     setFilters((f) => ({ ...f, dateFrom: clamp(a), dateTo: clamp(b) }));
   };
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  // Đóng/mở phần lọc chi tiết để đỡ chiếm chỗ; nhớ lựa chọn của người dùng.
+  const [open, setOpen] = React.useState(() => { try { return localStorage.getItem('rpt_filters_collapsed') !== '1'; } catch { return true; } });
+  const toggle = () => setOpen((v) => { const nv = !v; try { localStorage.setItem('rpt_filters_collapsed', nv ? '0' : '1'); } catch { /* ignore */ } return nv; });
   return (
-    <div className="card filter-card">
-      <div className="filter-asof">
-        <b>{asOf ? `Cập nhật đến ${new Date(asOf).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} GMT+7` : 'Chưa có giờ cập nhật'}</b>
-        <span>{period.canFilterByDay ? 'Nguồn có ngày chi tiết: lọc ngày/tuần/tháng/quý dùng đúng ngày dòng.' : 'Kỳ này chỉ có tổng theo tháng: lọc ngày không phân bổ giả.'}</span>
+    <div className={'card filter-card' + (open ? ' open' : ' collapsed')}>
+      {/* Thanh gọn luôn hiện: kỳ + tìm nhanh + nút đóng/mở + xoá lọc */}
+      <div className="filter-bar">
+        <div className="filter-ky"><Select value={ky} onChange={setKy} options={(periods || []).map((p) => ({ key: p.ky, label: p.ky }))} all="Chọn kỳ" /></div>
+        <input className="filter-quick" value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
+        <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn lọc' : '▾ Bộ lọc'}{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>
+        {activeFilterCount > 0 && <button className="btn ghost" onClick={() => setFilters({ ...emptyRevenueFilters })}>Xoá lọc</button>}
       </div>
-      <div className="filter-grid">
-        <Select value={ky} onChange={setKy} options={(periods || []).map((p) => ({ key: p.ky, label: p.ky }))} all="Chọn kỳ" />
-        {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
-        <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
-        <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
-        <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
-        <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
-        <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
-        <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
-        <input type="date" value={filters.dateFrom || ''} onChange={(e) => setF('dateFrom', e.target.value)} />
-        <input type="date" value={filters.dateTo || ''} onChange={(e) => setF('dateTo', e.target.value)} />
-      </div>
-      <div className="date-chips">
-        <button type="button" className="chip" onClick={() => setRange('day')}>Ngày</button>
-        <button type="button" className="chip" onClick={() => setRange('week')}>Tuần</button>
-        <button type="button" className="chip" onClick={() => setRange('month')}>Tháng</button>
-        <button type="button" className="chip" onClick={() => setRange('quarter')}>Quý</button>
-      </div>
-      <div className="filter-search">
-        <input value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
-        <button className="btn ghost" onClick={() => setFilters({ ...emptyRevenueFilters })}>Xoá lọc ({activeFilterCount})</button>
-      </div>
+      {open && (
+        <div className="filter-body">
+          <div className="filter-asof">
+            <b>{asOf ? `Cập nhật đến ${new Date(asOf).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} GMT+7` : 'Chưa có giờ cập nhật'}</b>
+            <span>{period.canFilterByDay ? 'Nguồn có ngày chi tiết: lọc ngày/tuần/tháng/quý dùng đúng ngày dòng.' : 'Kỳ này chỉ có tổng theo tháng: lọc ngày không phân bổ giả.'}</span>
+          </div>
+          <div className="filter-grid">
+            {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
+            <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
+            <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
+            <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
+            <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
+            <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
+            <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
+            <input type="date" value={filters.dateFrom || ''} onChange={(e) => setF('dateFrom', e.target.value)} />
+            <input type="date" value={filters.dateTo || ''} onChange={(e) => setF('dateTo', e.target.value)} />
+          </div>
+          <div className="date-chips">
+            <button type="button" className="chip" onClick={() => setRange('day')}>Ngày</button>
+            <button type="button" className="chip" onClick={() => setRange('week')}>Tuần</button>
+            <button type="button" className="chip" onClick={() => setRange('month')}>Tháng</button>
+            <button type="button" className="chip" onClick={() => setRange('quarter')}>Quý</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
