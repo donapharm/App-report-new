@@ -62,13 +62,15 @@ export default function Revenue({ me }) {
 
   return (
     <>
-      <DrillNav crumbs={drillNav.crumbs} onBack={drillNav.back} onCrumb={drillNav.jump} onReload={reload} busy={!data} />
-      <div className="seg">
-        {Object.entries(DIMS).map(([k, v]) => {
-          if (k === 'emp' && !me.isAdmin) return null;
-          return <button key={k} className={dim === k ? 'active' : ''} onClick={() => pickDim(k)}>{v}</button>;
-        })}
-      </div>
+      <DrillNav crumbs={drillNav.crumbs} onBack={drillNav.back} onCrumb={drillNav.jump} onReload={reload} busy={!data}
+        right={(
+          <div className="seg compact seg-inline">
+            {Object.entries(DIMS).map(([k, v]) => {
+              if (k === 'emp' && !me.isAdmin) return null;
+              return <button key={k} className={dim === k ? 'active' : ''} onClick={() => pickDim(k)}>{v}</button>;
+            })}
+          </div>
+        )} />
 
       <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} />
 

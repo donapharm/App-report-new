@@ -518,4 +518,9 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .drill-crumbs button.active{color:var(--text);background:#f1f5f4;padding-left:8px;padding-right:8px}
 .drill-crumbs .sep{color:var(--muted);font-weight:700}
 .drill-nav .reload{margin-left:auto;flex:none}
-@media(max-width:640px){.drill-nav{top:64px;margin:0 -10px 10px;border-radius:0;border-left:0;border-right:0}.drill-nav .btn{padding:8px 9px;font-size:12px}.drill-crumbs button{max-width:160px;font-size:12px}.drill-nav .reload{min-width:74px}}
+/* Đuôi drill-nav gộp tab chiều + tải lại về cùng 1 hàng (đỡ 1 dãy riêng) */
+.drill-tail{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.drill-tail .reload{margin-left:0}
+.drill-nav .seg-inline{margin-bottom:0;width:auto;max-width:none;flex:0 0 auto;padding:3px}
+.drill-nav .seg-inline button{flex:0 0 auto;padding:6px 12px;font-size:12.5px}
+@media(max-width:640px){.drill-nav{top:64px;margin:0 -10px 10px;border-radius:0;border-left:0;border-right:0}.drill-nav .btn{padding:8px 9px;font-size:12px}.drill-crumbs button{max-width:160px;font-size:12px}.drill-nav .reload{min-width:74px}.drill-tail{width:100%;justify-content:space-between}.drill-nav .seg-inline{flex:1 1 auto}}
