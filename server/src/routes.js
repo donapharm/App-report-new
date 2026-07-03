@@ -72,7 +72,8 @@ function productMetaFromRows(rows = [], contractorLookup) {
       qd: '',
     };
     const qd = qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`);
-    const code = r.contractor_code || r.contractor || cur.contractor_code || cur.contractor || '';
+    const rawCode = r.contractor_code || r.contractor || cur.contractor_code || cur.contractor || '';
+    const code = contractorCodeFor(rawCode, contractorLookup, r.iit_code || key);
     map.set(key, {
       ...cur,
       iit_code: cur.iit_code || r.iit_code || key,
@@ -94,8 +95,9 @@ function enrichProductMeta(rows = [], metaMap, contractorLookup) {
   return rows.map((r) => {
     const meta = metaMap.get(r.iit_code || r.product_name) || {};
     const qd = meta.qd || qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`);
-    const code = r.contractor_code || meta.contractor_code || meta.contractor || r.contractor || '';
+    const rawCode = r.contractor_code || meta.contractor_code || meta.contractor || r.contractor || '';
     const iit = r.iit_code || meta.iit_code || r.product_name || '';
+    const code = contractorCodeFor(rawCode, contractorLookup, iit);
     return {
       ...r,
       qd,
@@ -115,6 +117,7 @@ function pairLabel(code, name) {
   const n = String(name || '').trim();
   if (!c && !n) return '—';
   if (!c) return n;
+  if (n && looksLikeContractorName(c)) return n;
   if (!n || n === c || c.includes(n)) return c;
   if (n.includes(c)) return `${c} - ${n.replace(c, '').trim().replace(/^[-–—·\s]+/, '')}`;
   return `${c} - ${n}`;
@@ -141,9 +144,20 @@ function addContractorCandidate(bucket, name) {
   cur.count += 1;
   bucket.set(n, cur);
 }
+function addContractorCodeCandidate(bucket, code) {
+  const c = String(code || '').trim();
+  if (!c || looksLikeContractorName(c)) return;
+  const cur = bucket.get(c) || { code: c, count: 0 };
+  cur.count += 1;
+  bucket.set(c, cur);
+}
 function pickContractorName(bucket) {
   if (!bucket || !bucket.size) return '';
   return [...bucket.values()].sort((a, b) => (b.count - a.count) || (b.name.length - a.name.length) || a.name.localeCompare(b.name, 'vi'))[0].name;
+}
+function pickContractorCode(bucket) {
+  if (!bucket || !bucket.size) return '';
+  return [...bucket.values()].sort((a, b) => (b.count - a.count) || (a.code.length - b.code.length) || a.code.localeCompare(b.code, 'vi'))[0].code;
 }
 function pairKey(iitCode, contractorToken) {
   const iit = String(iitCode || '').trim().toUpperCase();
@@ -153,6 +167,8 @@ function pairKey(iitCode, contractorToken) {
 function buildContractorNameLookup(rows = []) {
   const byCodeBuckets = new Map();
   const byPairBuckets = new Map();
+  const byCanonicalCodeBuckets = new Map();
+  const byPairCanonicalCodeBuckets = new Map();
   const nameCandidates = new Set();
   function addByCode(token, name) {
     if (!token || !name) return;
@@ -165,6 +181,17 @@ function buildContractorNameLookup(rows = []) {
     if (!byPairBuckets.has(key)) byPairBuckets.set(key, new Map());
     addContractorCandidate(byPairBuckets.get(key), name);
   }
+  function addCanonicalCode(token, code) {
+    if (!token || !code || looksLikeContractorName(code)) return;
+    if (!byCanonicalCodeBuckets.has(token)) byCanonicalCodeBuckets.set(token, new Map());
+    addContractorCodeCandidate(byCanonicalCodeBuckets.get(token), code);
+  }
+  function addPairCanonicalCode(iit, token, code) {
+    const key = pairKey(iit, token);
+    if (!key || !code || looksLikeContractorName(code)) return;
+    if (!byPairCanonicalCodeBuckets.has(key)) byPairCanonicalCodeBuckets.set(key, new Map());
+    addContractorCodeCandidate(byPairCanonicalCodeBuckets.get(key), code);
+  }
   for (const r of rows) {
     const rawCode = String(r.contractor_code || r.contractor || '').trim();
     const rawName = contractorNamePart(r.contractor_name);
@@ -173,6 +200,8 @@ function buildContractorNameLookup(rows = []) {
       for (const token of contractorAliasTokens(rawCode || rawName)) {
         addByCode(token, rawName);
         addByPair(iit, token, rawName);
+        addCanonicalCode(token, rawCode);
+        addPairCanonicalCode(iit, token, rawCode);
       }
       continue;
     }
@@ -195,7 +224,26 @@ function buildContractorNameLookup(rows = []) {
   }
   const byCode = new Map([...byCodeBuckets.entries()].map(([k, bucket]) => [k, pickContractorName(bucket)]));
   byCode.byPair = new Map([...byPairBuckets.entries()].map(([k, bucket]) => [k, pickContractorName(bucket)]));
+  byCode.canonicalCode = new Map([...byCanonicalCodeBuckets.entries()].map(([k, bucket]) => [k, pickContractorCode(bucket)]));
+  byCode.pairCanonicalCode = new Map([...byPairCanonicalCodeBuckets.entries()].map(([k, bucket]) => [k, pickContractorCode(bucket)]));
   return byCode;
+}
+function contractorCodeFor(code, lookup, iitCode = '') {
+  const c = String(code || '').trim();
+  if (!c) return '';
+  if (!looksLikeContractorName(c)) return c;
+  const tokens = contractorAliasTokens(c);
+  if (iitCode && lookup?.pairCanonicalCode) {
+    for (const token of tokens) {
+      const hit = lookup.pairCanonicalCode.get(pairKey(iitCode, token));
+      if (hit) return hit;
+    }
+  }
+  for (const token of tokens) {
+    const hit = lookup?.canonicalCode?.get(token);
+    if (hit) return hit;
+  }
+  return c;
 }
 function contractorNameFor(code, name, lookup, iitCode = '') {
   const n = contractorNamePart(name);
@@ -215,8 +263,13 @@ function contractorNameFor(code, name, lookup, iitCode = '') {
 }
 function enrichContractorNames(rows = [], lookup) {
   return rows.map((r) => {
-    const name = contractorNameFor(r.contractor_code || r.contractor, r.contractor_name, lookup, r.iit_code || r.product_name);
-    return name && name !== r.contractor_name ? { ...r, contractor_name: name } : r;
+    const rawCode = r.contractor_code || r.contractor;
+    const code = contractorCodeFor(rawCode, lookup, r.iit_code || r.product_name);
+    const name = contractorNameFor(rawCode || code, r.contractor_name, lookup, r.iit_code || r.product_name);
+    const next = { ...r };
+    if (code && code !== r.contractor_code) next.contractor_code = code;
+    if (name && name !== r.contractor_name) next.contractor_name = name;
+    return next;
   });
 }
 function contractorLookupFor(scope, extraRows = []) {
@@ -226,8 +279,9 @@ function contractorLookupFor(scope, extraRows = []) {
 function contractorOptions(rows = [], lookup = buildContractorNameLookup(rows)) {
   const m = new Map();
   for (const r of rows) {
-    const code = String(r.contractor_code || r.contractor || '').trim();
-    const name = contractorNameFor(code, r.contractor_name, lookup, r.iit_code || r.product_name);
+    const rawCode = String(r.contractor_code || r.contractor || '').trim();
+    const code = contractorCodeFor(rawCode, lookup, r.iit_code || r.product_name);
+    const name = contractorNameFor(rawCode || code, r.contractor_name, lookup, r.iit_code || r.product_name);
     if (!code && !name) continue;
     const key = code || name;
     const cur = m.get(key) || { key, code, name: '' };

@@ -22,11 +22,15 @@ export function pct(n, digits = 1) {
   if (n == null || Number.isNaN(Number(n))) return '—';
   return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: digits }) + '%';
 }
+function looksLikeContractorName(v) {
+  return /\b(c[oô]ng\s*ty|tnhh|tr[aá]ch\s*nhi[eệ]m|d[uư][oợ]c|pharma)\b/i.test(String(v || ''));
+}
 export function labelPair(code, name) {
   const c = String(code || '').trim();
   const nm = String(name || '').trim();
   if (!c && !nm) return { code: '—', name: '' };
   if (!c) return { code: nm, name: '' };
+  if (nm && looksLikeContractorName(c)) return { code: nm, name: '' };
   if (!nm || c === nm || c.includes(nm)) return { code: c, name: '' };
   if (nm.includes(c)) return { code: c, name: nm.replace(c, '').trim().replace(/^[-–—·\s]+/, '') };
   return { code: c, name: nm };
