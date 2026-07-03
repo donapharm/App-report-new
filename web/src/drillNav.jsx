@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-export function DrillNav({ crumbs = [], onBack, onCrumb, onReload, busy = false }) {
+export function DrillNav({ crumbs = [], onBack, onCrumb, onReload, busy = false, right = null }) {
   const items = crumbs.filter(Boolean);
   const canBack = !!onBack && items.length > 1;
   return (
@@ -14,7 +14,10 @@ export function DrillNav({ crumbs = [], onBack, onCrumb, onReload, busy = false 
           </React.Fragment>
         ))}
       </div>
-      <button className="btn ghost reload" disabled={busy || !onReload} onClick={onReload}>{busy ? 'Đang tải…' : '↻ Tải lại'}</button>
+      <div className="drill-tail">
+        {right}
+        <button className="btn ghost reload" disabled={busy || !onReload} onClick={onReload}>{busy ? 'Đang tải…' : '↻ Tải lại'}</button>
+      </div>
     </div>
   );
 }

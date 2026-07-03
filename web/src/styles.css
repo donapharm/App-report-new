@@ -159,6 +159,20 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .filter-search { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
 .filter-search input { flex: 1; }
 .filter-search .btn { white-space: nowrap; }
+/* Bộ lọc gọn: thanh luôn hiện (kỳ + tìm nhanh + đóng/mở) + phần chi tiết đóng/mở */
+.filter-card.collapsed { padding: 8px 12px; }
+.filter-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.filter-bar .filter-ky { flex: 0 0 auto; min-width: 120px; }
+.filter-bar .filter-ky select { width: 100%; }
+.filter-bar .filter-quick { flex: 1 1 200px; min-width: 140px; }
+.filter-bar .filter-toggle { white-space: nowrap; font-weight: 600; }
+.filter-body { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.filter-body .filter-asof { margin-bottom: 8px; }
+/* Phân trang */
+.pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 10px 0; flex-wrap: wrap; }
+.pager .btn { min-width: 84px; }
+.pager-info { font-size: 13px; color: var(--muted); }
+.pager-info b { color: var(--brand-ink); }
 .target-admin-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
 .target-admin-actions input[type="file"] { flex: 1 1 220px; min-width: 0; }
 .field-inline { display: flex; align-items: center; gap: 6px; flex: 1 1 180px; min-width: 160px; color: var(--muted); font-size: 12px; }
@@ -303,10 +317,15 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .side-user .rl { font-size: 12px; color: var(--muted); }
 .side-user .logout { margin-left: auto; background: #e9f1fb; color: var(--brand); border: none; border-radius: 8px; padding: 6px 10px; font-size: 12px; font-weight: 700; cursor: pointer; }
 
-.main-desktop { flex: 1; min-width: 0; }
-.topbar { position: sticky; top: 0; z-index: 10; background: rgba(244,246,247,.9); backdrop-filter: blur(6px); padding: 20px 32px 14px; border-bottom: 1px solid var(--line); }
-.topbar h1 { margin: 0; font-size: 22px; color: var(--ink); }
-.topbar .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+/* Vùng nội dung tự cuộn (sidebar cố định) → sticky topbar/breadcrumb ăn đúng,
+   không bị #root{overflow-x:clip} vô hiệu hoá. */
+.main-desktop { flex: 1; min-width: 0; height: 100vh; overflow-y: auto; }
+/* Thanh tiêu đề dính, gọn hơn, nằm TRÊN breadcrumb khi cuộn. */
+.topbar { position: sticky; top: 0; z-index: 30; background: rgba(244,246,247,.94); backdrop-filter: blur(6px); padding: 10px 32px 8px; border-bottom: 1px solid var(--line); }
+.topbar h1 { margin: 0; font-size: 19px; color: var(--ink); }
+.topbar .sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+/* Breadcrumb dính DƯỚI topbar (không đè lên tiêu đề). */
+.main-desktop .drill-nav { top: 58px; z-index: 12; }
 
 /* ===== Desktop: layout ĐỒNG BỘ mọi trang =====
    Quy tắc: KHÔNG dùng lưới tự chia trên .page-desktop (dễ bể khi thêm trang mới).
@@ -499,4 +518,9 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .drill-crumbs button.active{color:var(--text);background:#f1f5f4;padding-left:8px;padding-right:8px}
 .drill-crumbs .sep{color:var(--muted);font-weight:700}
 .drill-nav .reload{margin-left:auto;flex:none}
-@media(max-width:640px){.drill-nav{top:64px;margin:0 -10px 10px;border-radius:0;border-left:0;border-right:0}.drill-nav .btn{padding:8px 9px;font-size:12px}.drill-crumbs button{max-width:160px;font-size:12px}.drill-nav .reload{min-width:74px}}
+/* Đuôi drill-nav gộp tab chiều + tải lại về cùng 1 hàng (đỡ 1 dãy riêng) */
+.drill-tail{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.drill-tail .reload{margin-left:0}
+.drill-nav .seg-inline{margin-bottom:0;width:auto;max-width:none;flex:0 0 auto;padding:3px}
+.drill-nav .seg-inline button{flex:0 0 auto;padding:6px 12px;font-size:12.5px}
+@media(max-width:640px){.drill-nav{top:64px;margin:0 -10px 10px;border-radius:0;border-left:0;border-right:0}.drill-nav .btn{padding:8px 9px;font-size:12px}.drill-crumbs button{max-width:160px;font-size:12px}.drill-nav .reload{min-width:74px}.drill-tail{width:100%;justify-content:space-between}.drill-nav .seg-inline{flex:1 1 auto}}

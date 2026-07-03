@@ -29,6 +29,29 @@ export function Bar({ value, max, tone }) {
   );
 }
 
+// Phân trang phía client cho danh sách dài. resetKey đổi -> tự về trang 1.
+export function usePager(items, pageSize = 20, resetKey = '') {
+  const [page, setPage] = React.useState(1);
+  React.useEffect(() => { setPage(1); }, [resetKey]);
+  const total = items?.length || 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const cur = Math.min(Math.max(1, page), totalPages);
+  const pageItems = (items || []).slice((cur - 1) * pageSize, cur * pageSize);
+  return { page: cur, setPage, totalPages, total, pageItems, startIndex: (cur - 1) * pageSize };
+}
+
+// Thanh phân trang: ‹ Trước · Trang X/Y · N mục · Sau ›
+export function Pager({ page, totalPages, total, onPage, unit = 'mục' }) {
+  if (!totalPages || totalPages <= 1) return null;
+  return (
+    <div className="pager">
+      <button className="btn ghost" disabled={page <= 1} onClick={() => onPage(page - 1)}>‹ Trước</button>
+      <span className="pager-info">Trang <b>{page}</b>/{totalPages}{total != null ? ` · ${Number(total).toLocaleString('vi-VN')} ${unit}` : ''}</span>
+      <button className="btn ghost" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>Sau ›</button>
+    </div>
+  );
+}
+
 // Hàng xếp hạng doanh thu, có mini-bar và có thể bấm để drill-down.
 export function RankRow({ i, name, meta, amount, max, onClick }) {
   return (

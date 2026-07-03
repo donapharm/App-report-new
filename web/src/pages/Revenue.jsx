@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pairText, unitText } from '../util.js';
-import { Spinner, Bar } from '../components.jsx';
+import { Spinner, Bar, Pager, usePager } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useDrillStack, useReloadTick } from '../drillNav.jsx';
 
@@ -34,6 +34,7 @@ export default function Revenue({ me }) {
 
   const total = data ? data.rows.reduce((s, r) => s + r.revenue, 0) : 0;
   const max = data && data.rows.length ? data.rows[0].revenue : 0;
+  const pager = usePager(data?.rows, 20, `${ky}|${dim}|${JSON.stringify(filters)}`);
   const rowSub = (r) => dim === 'product'
     ? `${r.iit_code || r.key || '—'} · ${r.uom || '—'}`
     : (dim === 'emp' ? (r.key || '—') : (r.key || '—'));
@@ -61,13 +62,15 @@ export default function Revenue({ me }) {
 
   return (
     <>
-      <DrillNav crumbs={drillNav.crumbs} onBack={drillNav.back} onCrumb={drillNav.jump} onReload={reload} busy={!data} />
-      <div className="seg">
-        {Object.entries(DIMS).map(([k, v]) => {
-          if (k === 'emp' && !me.isAdmin) return null;
-          return <button key={k} className={dim === k ? 'active' : ''} onClick={() => pickDim(k)}>{v}</button>;
-        })}
-      </div>
+      <DrillNav crumbs={drillNav.crumbs} onBack={drillNav.back} onCrumb={drillNav.jump} onReload={reload} busy={!data}
+        right={(
+          <div className="seg compact seg-inline">
+            {Object.entries(DIMS).map(([k, v]) => {
+              if (k === 'emp' && !me.isAdmin) return null;
+              return <button key={k} className={dim === k ? 'active' : ''} onClick={() => pickDim(k)}>{v}</button>;
+            })}
+          </div>
+        )} />
 
       <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} />
 
@@ -82,12 +85,14 @@ export default function Revenue({ me }) {
       {!data ? <Spinner /> : data.rows.length === 0 ? (
         <div className="center">Không có dữ liệu.</div>
       ) : (
+        <>
+        <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="dòng" />
         <div className="list-grid">
-          {data.rows.map((r, i) => (
+          {pager.pageItems.map((r, i) => (
             <div className={`card detail-card revenue-detail-card ${dim === 'product' ? qdClass(r.qd) : ''}`} key={r.key} onClick={dim !== 'product' ? () => drill(r) : undefined} style={dim !== 'product' ? { cursor: 'pointer' } : null}>
               <div className="detail-head">
                 <div className="detail-title-wrap">
-                  <span className="rank">{i + 1}</span>
+                  <span className="rank">{pager.startIndex + i + 1}</span>
                   <div>
                     <div className="detail-title">{dim === 'unit' ? unitText(r.key, r.label) : (r.label || '—')}</div>
                     <div className="detail-sub mono">{dim === 'product' && <span className={`qd-badge ${qdClass(r.qd)}`}>{r.qd || '—'}</span>} {rowSub(r)}</div>
@@ -114,6 +119,8 @@ export default function Revenue({ me }) {
             </div>
           ))}
         </div>
+        <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="dòng" />
+        </>
       )}
       <p className="muted" style={{ fontSize: 12, textAlign: 'center' }}>
         {dim !== 'product' ? 'Chạm một dòng để drill-down; bộ lọc luôn chạy ở backend theo quyền.' : 'Đã ở mức sản phẩm'}

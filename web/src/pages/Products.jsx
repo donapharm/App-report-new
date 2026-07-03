@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pairText } from '../util.js';
-import { Spinner, Bar } from '../components.jsx';
+import { Spinner, Bar, Pager, usePager } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -23,6 +23,7 @@ export default function Products({ me }) {
   }, [ky, filters, reloadTick]);
 
   const max = data?.rows?.[0]?.revenue || 0;
+  const pager = usePager(data?.rows, 20, `${ky}|${JSON.stringify(filters)}`);
   const duplicateProducts = new Set(Object.entries((data?.rows || []).reduce((m, r) => { const k = r.product_name || ''; if (k) m[k] = (m[k] || 0) + 1; return m; }, {})).filter(([, c]) => c > 1).map(([k]) => k));
   async function doExport() {
     setBusy(true);
@@ -43,12 +44,14 @@ export default function Products({ me }) {
         <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel sản phẩm</button>
       </div>
       {!data ? <Spinner /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
+        <>
+        <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="mã" />
         <div className="list-grid">
-          {data.rows.map((r, i) => (
+          {pager.pageItems.map((r, i) => (
             <div className={`card detail-card table-detail-card product-detail-card ${qdClass(r.qd)}`} key={r.key}>
               <div className="detail-head detail-head-two">
                 <div className="detail-title-wrap">
-                  <span className="rank">{i + 1}</span>
+                  <span className="rank">{pager.startIndex + i + 1}</span>
                   <div>
                     <div className="detail-title">{r.product_name}</div>
                     <div className="detail-sub mono"><span className={`qd-badge ${qdClass(r.qd)}`}>{r.qd || '—'}</span> {r.iit_code || '—'} · {r.uom || '—'}</div>
@@ -70,6 +73,8 @@ export default function Products({ me }) {
             </div>
           ))}
         </div>
+        <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="mã" />
+        </>
       )}
     </>
   );
