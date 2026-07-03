@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pairText, unitText } from '../util.js';
-import { Spinner, Bar, Pager, usePager, SkeletonCards } from '../components.jsx';
+import { Spinner, Bar, Pager, usePager, SkeletonCards, MoneyBig } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useDrillStack, useReloadTick } from '../drillNav.jsx';
 
@@ -77,7 +77,7 @@ export default function Revenue({ me }) {
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div className="meta muted">Tổng {DIMS[dim].toLowerCase()} · kỳ {ky} · {data?.rows?.length || 0} dòng nhóm</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}>{money(total)}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}><MoneyBig value={total} /></div>
         </div>
         <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>
       </div>
