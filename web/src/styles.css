@@ -44,7 +44,13 @@ body {
 .hdr .logout { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 12px; margin-top: 4px; }
 
 /* Content — chừa chỗ cho banner cố định phía trên */
-.page { padding: calc(var(--hdr-h) + env(safe-area-inset-top) + 8px) 14px calc(90px + env(safe-area-inset-bottom)); }
+.page { padding: calc(var(--hdr-h) + env(safe-area-inset-top) + 8px) 14px calc(90px + env(safe-area-inset-bottom)); transition: padding-top .18s ease; }
+.hdr { transition: padding .18s ease, box-shadow .18s ease; }
+/* #6 Mini-header: cuộn xuống -> banner co lại + ẩn dòng chức danh; --hdr-h giảm nên .page cũng co theo (không hở) */
+:root.hdr-mini { --hdr-h: 48px; }
+:root.hdr-mini .hdr { min-height: 0; padding-top: calc(4px + env(safe-area-inset-top)); padding-bottom: 4px; box-shadow: 0 2px 10px rgba(11,61,112,.3); }
+:root.hdr-mini .hdr .who > div:not(:first-child) { display: none; }
+:root.hdr-mini .hdr .logout { margin-top: 0; padding: 3px 8px; font-size: 10.5px; }
 .section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 4px 8px; font-weight: 700; }
 
 /* Cards */

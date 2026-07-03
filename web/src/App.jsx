@@ -30,7 +30,7 @@ const TABS = [
 export default function App() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('overview');
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem('rpt_tab') || 'overview'; } catch { return 'overview'; } });
   const desktop = useIsDesktop();
 
   useEffect(() => {
@@ -46,14 +46,24 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // #6 Mini-header: cuộn xuống thì thu nhỏ banner (mobile). Desktop cuộn ở .main-desktop nên window.scrollY=0 -> không ảnh hưởng.
+  useEffect(() => {
+    if (!me) return;
+    const onScroll = () => { document.documentElement.classList.toggle('hdr-mini', (window.scrollY || 0) > 48); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => { window.removeEventListener('scroll', onScroll); document.documentElement.classList.remove('hdr-mini'); };
+  }, [me]);
+
   if (loading) return <Spinner />;
   if (!me) return <Login onLogin={setMe} />;
 
-  const logout = () => { setToken(null); setMe(null); setTab('overview'); };
+  const logout = () => { setToken(null); setMe(null); setTab('overview'); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
   const tabs = TABS.filter((t) => !t.adminOnly || me.isAdmin);
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).C;
   const switchTab = (targetTab, payload = {}, mode = 'push') => {
     try { sessionStorage.setItem('app_nav_payload', JSON.stringify({ tab: targetTab, ...payload, ts: Date.now() })); } catch { /* ignore */ }
+    try { localStorage.setItem('rpt_tab', targetTab); } catch { /* ignore */ }
     setTab(targetTab);
     if (mode === 'push') window.history.pushState({ appTab: targetTab, appPayload: payload }, '', window.location.href);
     else window.history.replaceState({ ...(window.history.state || {}), appTab: targetTab, appPayload: payload }, '', window.location.href);
