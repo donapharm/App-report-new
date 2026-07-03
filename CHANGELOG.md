@@ -21,7 +21,12 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Bot triển khai (Report Bot) — Card V2 FIX đủ 8 field trên 3 tab
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Spec Target chi tiết đa chiều + Danh mục NV phụ trách
+- CEO: làm luôn kế hoạch target chi tiết + danh mục NV phụ trách. → [`SPEC_TARGET_ASSIGNMENT.md`](SPEC_TARGET_ASSIGNMENT.md) (3 giai đoạn).
+- **GĐ1 (làm trước):** Danh mục bán hàng tổng + bảng PHÂN CÔNG (`assignment{emp_code,type,value,hiệu lực}`) — **gieo mầm tự động từ lịch sử bán** (NV↔đơn vị/SP), CEO sửa tay; màn "Tôi phụ trách" cho NV. Không hồi tố + audit.
+- **GĐ2:** Target theo CHIỀU (nhóm H.A*/tuyến/đơn vị/QLNB/đặc biệt) dùng field `scope` đã có; %đạt tính theo đúng chiều; kỳ đang chạy pro-rate.
+- **GĐ3 (sau):** Thưởng bậc thang (duyệt mới gửi).
+- **Chờ CEO chốt:** chiều phân công chính (đề xuất Đơn vị + Nhóm UT + Tuyến); gieo mầm từ lịch sử (04–06/2026)?
 - Đã `git pull origin main`, đọc mục FIX trong `DIRECTIVE_CARD_V2.md`.
 - Enrich metadata theo `iit_code` từ CST/filter vào thẻ: hoạt chất+hàm lượng cho QĐ139, giá trúng thầu, ưu tiên, nhà thầu mã-tên, tuyến/đơn vị/NV cho Sản phẩm · DT đầy đủ · Doanh thu.
 - Frontend không ẩn field bắt buộc: nếu thật sự thiếu nguồn sẽ hiện `Thiếu nguồn ...`; kỳ T07 mẫu đã đủ giá/UT/hoạt chất.

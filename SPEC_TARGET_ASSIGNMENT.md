@@ -1,0 +1,60 @@
+# SPEC — Target chi tiết đa chiều + Danh mục NV phụ trách (phân công)
+
+> Claude Code chốt thiết kế (CEO 2026-07-03: làm luôn). Bot triển khai theo GIAI ĐOẠN; Claude review từng GĐ. Xây trên `SPEC_TARGET_BONUS_ROADMAP` (field `scope` đã có). Backend quyết quyền; NV chỉ thấy phần mình. Không đụng app cũ 3860.
+
+## Nguyên tắc chung
+- **Định danh theo MÃ** (đơn vị/nhóm/QLNB/tuyến). Tên chỉ là nhãn.
+- **Không hồi tố:** phân công/điều chuyển chỉ áp từ kỳ hiệu lực; lịch sử giữ nguyên. Lưu **audit** đầy đủ.
+- **Target ≠ Thưởng** (2 lớp). GĐ này làm target + phân công; thưởng để GĐ3.
+- Gieo mầm từ dữ liệu thật (giảm nhập tay).
+
+---
+
+## GIAI ĐOẠN 1 — DANH MỤC + PHÂN CÔNG (làm trước)
+
+### 1A) Danh mục bán hàng tổng (master catalog)
+- Hợp nhất từ dữ liệu đã có: `iit_code · tên · hoạt chất · hàm lượng · nhóm UT (H.A*/H.A/H.B…) · tuyến (CL/NCL/NT) · gói thầu · nhà thầu(mã-tên) · giá thầu · (CST còn nếu có)`.
+- Xem/tìm được (tái dùng typeahead + bộ lọc). Có thể dùng chính tab Sản phẩm làm "Danh mục", thêm chế độ xem toàn danh mục (không chỉ theo kỳ bán).
+
+### 1B) Bảng PHÂN CÔNG (assignment)
+- **Model:** `assignment = { id, emp_code, type:'unit'|'group'|'route'|'iit'|'special'|'all', value, from_ky, to_ky|null, active, note, by, at }`.
+  - `type='all'` = NV phụ trách toàn bộ phần của mình (mặc định hiện tại).
+  - VD: `{emp_code:'DN006', type:'unit', value:'027'}` = DN006 phụ trách BV Hoàn Mỹ; `{type:'group', value:'H.A*'}` = phụ trách nhóm H.A*.
+- **GIEO MẦM tự động:** suy từ lịch sử bán (các kỳ gần nhất): NV ↔ đơn vị/SP/nhóm đã bán → tạo **bản phân công gợi ý** (nguồn `auto`). CEO xem, **chỉnh tay** (thêm/bớt), chốt (nguồn `manual` khóa).
+- **Màn Phân công (admin):** chọn NV → xem danh mục phụ trách (đơn vị/nhóm/SP) → thêm/bớt + đặt hiệu lực (từ kỳ). Hỗ trợ **upload file** phân công (như target). Audit + lịch sử điều chuyển.
+- **Màn "Tôi phụ trách" (NV):** NV đăng nhập thấy **danh mục mình phụ trách** (đơn vị/nhóm/SP) — chỉ phần mình.
+- Nghiệm thu GĐ1: gợi ý phân công đúng theo lịch sử; CEO sửa + lưu có audit; NV thấy đúng phần mình; không hồi tố.
+
+---
+
+## GIAI ĐOẠN 2 — TARGET CHI TIẾT (đa chiều)
+
+### 2A) Nhập target theo CHIỀU
+- Dùng `target_entry.scope = {type, value}` đã có. `type ∈ all|group|route|unit|iit|special`.
+- 1 NV có thể có: **1 target tổng** (`scope=all`) + **nhiều target chi tiết** (theo nhóm/tuyến/đơn vị/SP/hàng đặc biệt).
+- Nhập: mở rộng Quản target — chọn NV → chọn chiều (nhóm H.A*/tuyến CL/đơn vị/…) → nhập target. Upload file có cột `scope_type, scope_value`.
+- Resolver theo (emp, ky, scope): manual>upload>ai (kỳ ≥07 không Lumos, đã chốt).
+
+### 2B) %ĐẠT theo CHIỀU
+- Với target `scope={type,value}`: **doanh thu lọc đúng chiều đó** (dữ liệu đã có `route/unit/iit_code/priority`) / target → %đạt theo chiều.
+- Thẻ NV: target tổng (số chính) + **bung ra chi tiết theo chiều** (nhóm/tuyến/đơn vị) với %đạt từng chiều.
+- Đối chiếu: cảnh báo nếu **Σ target chi tiết ≠ target tổng** (để CEO biết, không tự ép).
+
+### 2C) Kỳ đang chạy
+- Pro-rate theo ngày như đã chốt; áp cho cả target chi tiết.
+- Nghiệm thu GĐ2: nhập target nhóm H.A* cho DN006 → %đạt nhóm H.A* tính đúng (doanh thu H.A* của DN006 / target); NV chỉ thấy chiều của mình.
+
+---
+
+## GIAI ĐOẠN 3 — THƯỞNG (sau, khi CEO yêu cầu)
+- Policy bậc thang `{ngưỡng %đạt → mức thưởng}`, có thể theo chiều. Tính thưởng = f(%đạt, policy). Audit + **duyệt mới gửi** (Zalo/Email giữ guardrail). Chưa làm ở đợt này.
+
+## CẦN CEO CHỐT (để làm GĐ1 đúng)
+1. **Chiều phân công CHÍNH** là gì? (đề xuất: **Đơn vị (bệnh viện)** là chính — NV phụ trách BV nào; kèm **Nhóm UT** (H.A*/H.A/H.B) và **Tuyến**. Xác nhận hoặc bổ sung.)
+2. **Gieo mầm từ lịch sử bán** (NV↔đơn vị/SP đã bán) làm gợi ý phân công — OK không? (đề xuất: CÓ, đỡ nhập tay.)
+3. Lịch sử bán dùng mấy kỳ để suy phân công? (đề xuất: **04–06/2026** — 3 kỳ gần nhất có dữ liệu đủ.)
+
+## Nghiệm thu tổng
+- GĐ1: danh mục tổng + phân công (gợi ý + sửa tay + NV xem phần mình) chạy, có audit, không hồi tố.
+- GĐ2: target theo chiều + %đạt theo chiều đúng số; scope/quyền chuẩn.
+- Build OK; số liệu không đổi phần đã chốt.
