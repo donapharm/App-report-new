@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, getToken, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { useIsDesktop } from './hooks.js';
-import { Spinner } from './components.jsx';
+import { Spinner, ScrollTopButton } from './components.jsx';
 import Logo from './logo.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
@@ -92,6 +92,7 @@ export default function App() {
           <main className="page-desktop">
             <Active me={me} desktop onNavigate={navigate} />
           </main>
+          <ScrollTopButton />
         </div>
       </div>
     );
@@ -111,6 +112,7 @@ export default function App() {
       <main className="page">
         <Active me={me} onNavigate={navigate} />
       </main>
+      <ScrollTopButton />
       <nav className="nav">
         {tabs.map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>

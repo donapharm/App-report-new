@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pct as fmtPct, pairText, unitText } from '../util.js';
-import { Spinner, Bar, Pager, usePager, useCollapse } from '../components.jsx';
+import { Spinner, Bar, Pager, usePager, useCollapse, SkeletonCards } from '../components.jsx';
 import { ComboSelect, Select } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -178,7 +178,7 @@ export default function TenderQuota({ me }) {
       {selectedUnit && <div className="card unit-focus"><b>{unitText(selectedUnit.unit_code || selectedUnit.key, selectedUnit.unit_name)}</b><span>{selectedUnit.rows.length} mã QLNB · {selectedUnit.low} sắp hết · {selectedUnit.empty} chưa bán · còn {money(selectedUnit.remainAmount)}</span></div>}
       {data && <div className="card cst-alert-card"><b>Cảnh báo CST giống app cũ:</b><span className="pill bad">Sắp cạn/Hết CST: {lowCount.toLocaleString('vi-VN')}</span><span className="pill bad">Chưa bán: {emptyCount.toLocaleString('vi-VN')}</span><span className="pill warn">Chưa khai thác/tồn nhiều: {highCount.toLocaleString('vi-VN')}</span></div>}
 
-      {!data ? <Spinner /> : data.length === 0 ? <div className="center">Không có dòng nào khớp bộ lọc.</div> : view === 'unit' ? (
+      {!data ? <SkeletonCards count={6} /> : data.length === 0 ? <div className="center">Không có dòng nào khớp bộ lọc.</div> : view === 'unit' ? (
         <div className="unit-rollup-grid">
           {groups.slice(0, 120).map((g) => {
             const open = openUnits[g.key] || filters.unit;
