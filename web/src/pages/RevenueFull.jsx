@@ -9,6 +9,7 @@ const pageSize = 50;
 function qdOf(r) { const m = String(`${r.iit_code || ''} ${r.bid_package || ''}`).match(/QĐ\s*(\d+)|QD\s*(\d+)/i); return m ? `QĐ${m[1] || m[2]}` : ''; }
 function contractorText(r) { return pairText(r.contractor_code, r.contractor_name); }
 function qd139Ingredient(r, qd) { return qd === 'QĐ139' && (r.active_ingredient || r.ham_luong); }
+function qdClass(qd) { return qd === 'QĐ139' ? 'qd139-card' : (qd === 'QĐ141' ? 'qd141-card' : ''); }
 
 export default function RevenueFull({ me }) {
   const { periods, ky, setKy, filters, setFilters, options } = usePeriodsAndFilters(api);
@@ -49,13 +50,13 @@ export default function RevenueFull({ me }) {
         <div className="detail-list-wrap">
           <div className="list-grid">
             {data.rows.map((r, i) => (
-              <div className="card detail-card full-revenue-card" key={`${r.emp_code}-${r.unit_code}-${r.iit_code}-${i}`}>
+              <div className={`card detail-card table-detail-card full-revenue-card ${qdClass(qdOf(r))}`} key={`${r.emp_code}-${r.unit_code}-${r.iit_code}-${i}`}>
                 <div className="detail-head detail-head-two">
                   <div className="detail-title-wrap">
                     <span className="rank">{(page - 1) * pageSize + i + 1}</span>
                     <div>
                       <div className="detail-title">{r.product_name || '—'}</div>
-                      <div className="detail-sub mono">{r.iit_code || '—'} · {qdOf(r) || r.bid_package || '—'}</div>
+                      <div className="detail-sub mono"><span className={`qd-badge ${qdClass(qdOf(r))}`}>{qdOf(r) || r.bid_package || '—'}</span> {r.iit_code || '—'}</div>
                       {(qd139Ingredient(r, qdOf(r)) || (duplicateProducts.has(r.product_name) && qdOf(r) !== 'QĐ141' && (r.ham_luong || r.active_ingredient))) && <div className="detail-sub">{r.active_ingredient || '—'} · {r.ham_luong || '—'}</div>}
                     </div>
                   </div>
@@ -67,8 +68,8 @@ export default function RevenueFull({ me }) {
                   <span><b>{r.route || '—'}</b><em>Tuyến</em></span>
                   <span><b>{(r.quantity || 0).toLocaleString('vi-VN')}</b><em>Số lượng</em></span>
                   <span><b>{contractorText(r)}</b><em>Nhà thầu</em></span>
-                  <span><b>{r.bid_package || '—'}</b><em>Gói thầu</em></span>
-                  {r.bid_price != null && <span><b>{money(r.bid_price)}</b><em>Giá thầu</em></span>}
+                  {r.bid_price != null && <span><b>{money(r.bid_price)}</b><em>Giá trúng thầu</em></span>}
+                  <span><b>{r.priority || '—'}</b><em>Ưu tiên</em></span>
                 </div>
               </div>
             ))}

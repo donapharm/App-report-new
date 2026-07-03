@@ -75,12 +75,32 @@ function base() {
 function activeSlots() {
   return readJson('upload_slots.json', []).filter((s) => s.active);
 }
+function slotDateMeta(slot) {
+  const p = path.join(UP_DIR, slot.id + '.json');
+  let detailed = false;
+  if (fs.existsSync(p)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
+      detailed = (raw || []).some((r) => r && (r.date || r.ngay || r.order_date || r.invoice_date || r.created_at));
+    } catch { detailed = false; }
+  }
+  return { dateGranularity: detailed ? 'day' : 'period', canFilterByDay: detailed };
+}
 function slotRows(slot) {
   const p = path.join(UP_DIR, slot.id + '.json');
   if (!fs.existsSync(p)) return [];
   const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
   const { enrich } = base();
-  return raw.map((r) => enrich({ ...r, ky: slot.ky, date: slot.dateFrom || slot.ky }));
+  const dm = slotDateMeta(slot);
+  return raw.map((r) => enrich({
+    ...r,
+    ky: slot.ky,
+    date: r.date || r.ngay || r.order_date || r.invoice_date || r.created_at || slot.dateFrom || slot.ky,
+    source_date_from: slot.dateFrom || r.date || null,
+    source_date_to: slot.dateTo || r.date || null,
+    date_granularity: dm.dateGranularity,
+    data_as_of: slot.data_as_of || slot.dataAsOf || slot.uploadedAt || null,
+  }));
 }
 
 function kySortValue(ky) {
@@ -196,7 +216,8 @@ function listPeriods() {
   const b = base();
   const map = new Map(b.catalog.periods.map((p) => [p.ky, p]));
   for (const s of activeSlots()) {
-    map.set(s.ky, { ky: s.ky, dateFrom: s.dateFrom, dateTo: s.dateTo, source: 'upload', data_as_of: s.data_as_of || s.dataAsOf || s.uploadedAt, sourceSummary: s.sourceSummary || null });
+    const dm = slotDateMeta(s);
+    map.set(s.ky, { ky: s.ky, dateFrom: s.dateFrom, dateTo: s.dateTo, source: 'upload', data_as_of: s.data_as_of || s.dataAsOf || s.uploadedAt, sourceSummary: s.sourceSummary || null, ...dm });
   }
   return [...map.values()].sort((a, b2) => ((a.dateFrom || a.ky) < (b2.dateFrom || b2.ky) ? -1 : 1));
 }

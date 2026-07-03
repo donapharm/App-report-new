@@ -44,6 +44,8 @@ function groupSum(rows, keyField, labelField) {
 const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
 function applyFilters(rows, f = {}) {
   const q = norm(f.q || '');
+  const from = f.dateFrom ? String(f.dateFrom).slice(0, 10) : '';
+  const to = f.dateTo ? String(f.dateTo).slice(0, 10) : '';
   return rows.filter((r) => {
     if (f.emp && r.emp_code !== f.emp) return false;
     if (f.unit && r.unit_code !== f.unit) return false;
@@ -52,8 +54,23 @@ function applyFilters(rows, f = {}) {
     if (f.priority && r.priority !== f.priority) return false;
     if (f.contractor && r.contractor_code !== f.contractor) return false;
     if (f.bid && !String(r.bid_package || '').includes(f.bid)) return false;
+    if (from || to) {
+      const granular = r.date_granularity === 'day';
+      if (granular) {
+        const d = String(r.date || '').slice(0, 10);
+        if (!d) return false;
+        if (from && d < from) return false;
+        if (to && d > to) return false;
+      } else {
+        // Legacy 01–06 imports only have period-level totals. Do not fake day allocation:
+        // include them only when the requested date range covers the whole source period.
+        const a = String(r.source_date_from || r.date || '').slice(0, 10);
+        const b = String(r.source_date_to || r.date || '').slice(0, 10);
+        if ((from && a && from > a) || (to && b && to < b)) return false;
+      }
+    }
     if (q) {
-      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.contractor_code, r.contractor_name, r.bid_package].join(' '));
+      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' '));
       if (!hay.includes(q)) return false;
     }
     return true;

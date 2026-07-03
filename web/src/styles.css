@@ -152,7 +152,10 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .period-row select { max-width: 220px; }
 .period-row .btn { width: 42px; padding: 9px 0; }
 .filter-card { padding: 12px; }
+.filter-asof { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 9px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.filter-asof b { color: var(--brand-ink); }
 .filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.date-chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
 .filter-search { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
 .filter-search input { flex: 1; }
 .filter-search .btn { white-space: nowrap; }
@@ -217,6 +220,14 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .pill.warn { background: #fdf0dd; color: var(--mid); }
 .pill.bad { background: #fbe4e4; color: var(--hi); }
 .pill.muted-pill { background: #eef2f7; color: var(--muted); }
+.pill.priority-pill { background: #fff3cd; color: #9a5b00; border: 1px solid #f3d37a; }
+.table-detail-card { border-left-width: 5px; }
+.table-detail-card.qd139-card { background: #fff9eb; border-color: #f4c971; }
+.table-detail-card.qd141-card { background: #eef8ff; border-color: #9bd0f5; }
+.table-detail-card .detail-facts span, .table-detail-card .cst-metrics span { background: rgba(255,255,255,.72); }
+.qd-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; font-size: 10.5px; font-weight: 900; margin-right: 5px; border: 1px solid var(--line); background: #eef2f7; color: var(--muted); }
+.qd-badge.qd139-card { background: #ffe4a8; color: #9a5b00; border-color: #f1bf5a; }
+.qd-badge.qd141-card { background: #d8f0ff; color: #0f5aa8; border-color: #9bd0f5; }
 .alert-summary-strip { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px; }
 .alert-summary-strip span { background: #eef4fb; color: var(--brand-ink); border-radius: 999px; padding: 6px 10px; font-size: 13px; }
 .grouped-alerts { align-items: start; }

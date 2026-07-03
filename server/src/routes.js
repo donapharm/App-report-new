@@ -67,6 +67,7 @@ function productMetaFromRows(rows = []) {
       contractor_code: r.contractor_code || '',
       contractor_name: r.contractor_name || '',
       bid_price: r.bid_price || null,
+      priority: r.priority || '',
       qd: qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`),
     });
   }
@@ -78,8 +79,8 @@ function pairLabel(code, name) {
   if (!c && !n) return '—';
   if (!c) return n;
   if (!n || n === c || c.includes(n)) return c;
-  if (n.includes(c)) return `${c} · ${n.replace(c, '').trim().replace(/^[-–—·\s]+/, '')}`;
-  return `${c} · ${n}`;
+  if (n.includes(c)) return `${c} - ${n.replace(c, '').trim().replace(/^[-–—·\s]+/, '')}`;
+  return `${c} - ${n}`;
 }
 function contractorOptions(rows = []) {
   const m = new Map();
@@ -341,6 +342,8 @@ function revenueFiltersFromQuery(q) {
     priority: q.priority || null,
     contractor: q.contractor || null,
     bid: q.bid || null,
+    dateFrom: q.dateFrom || null,
+    dateTo: q.dateTo || null,
     q: q.q || null,
   };
 }
@@ -394,6 +397,7 @@ router.get('/products', auth.requireAuth, (req, res) => {
       emps: new Set(),
       contractors: new Set(),
       bidPackages: new Set(),
+      priorities: new Set(),
     };
     cur.revenue += r.revenue || 0;
     cur.quantity += r.quantity || 0;
@@ -402,6 +406,7 @@ router.get('/products', auth.requireAuth, (req, res) => {
     if (r.emp_code) cur.emps.add(r.emp_code);
     if (r.contractor_code) cur.contractors.add(r.contractor_code);
     if (r.bid_package) cur.bidPackages.add(r.bid_package);
+    if (r.priority) cur.priorities.add(r.priority);
     map.set(key, cur);
   }
   const out = [...map.values()].map((x) => {
@@ -418,6 +423,7 @@ router.get('/products', auth.requireAuth, (req, res) => {
     contractor_code: meta.contractor_code || meta.contractor || [...x.contractors][0] || '',
     contractor_name: meta.contractor_name || '',
     bid_price: meta.bid_price || null,
+    priority: meta.priority || [...x.priorities][0] || '',
     revenue: x.revenue,
     quantity: x.quantity,
     rows: x.rows,

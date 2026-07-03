@@ -33,7 +33,7 @@ export function labelPair(code, name) {
 }
 export function pairText(code, name) {
   const p = labelPair(code, name);
-  return p.name ? `${p.code} · ${p.name}` : p.code;
+  return p.name ? `${p.code} - ${p.name}` : p.code;
 }
 export function unitText(code, name) {
   const c = String(code || '').trim();

@@ -18,6 +18,7 @@ const compact = (v) => String(v || '—').replace('Công Ty ', '').replace('Tnhh
 function groupOf(code) { const m = String(code || '').match(/\.(N\d)\./i); return m ? m[1].toUpperCase() : ''; }
 function qdOf(c) { const m = String(`${c.iit_code || ''} ${c.bid_package || ''}`).match(/QĐ\s*(\d+)|QD\s*(\d+)/i); return m ? `QĐ${m[1] || m[2]}` : ''; }
 function qd139Ingredient(c, qd) { return qd === 'QĐ139' && (c.active_ingredient || c.ham_luong); }
+function qdClass(qd) { return qd === 'QĐ139' ? 'qd139-card' : (qd === 'QĐ141' ? 'qd141-card' : ''); }
 function decision(c) {
   const p = Number(c.remain_pct || 0), remain = Number(c.remain_qty || 0), sold = Number(c.sold_qty || 0);
   if (remain <= 0 || p <= 1) return { cls: 'muted-pill', text: 'Hết CST', action: 'Đã khai thác hết cơ số.' };
@@ -52,13 +53,13 @@ function unitRollup(rows) {
 function CstCard({ c, i, duplicateName }) {
   const st = decision(c); const pct = Number(c.remain_pct || 0); const qd = qdOf(c);
   return (
-    <div key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={'card detail-card cst-list-card ' + (pct > 70 || pct < 10 ? 'highlight-need' : '')}>
+    <div key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={`card detail-card table-detail-card cst-list-card ${qdClass(qd)} ${pct > 70 || pct < 10 ? 'highlight-need' : ''}`}>
       <div className="detail-head">
         <div className="detail-title-wrap">
           <span className="rank">{i + 1}</span>
           <div>
             <div className="detail-title">{c.product_name || '—'}</div>
-            <div className="detail-sub mono">{c.iit_code || '—'} · {qd || '—'} · {c.uom || '—'}</div>
+            <div className="detail-sub mono"><span className={`qd-badge ${qdClass(qd)}`}>{qd || '—'}</span> {c.iit_code || '—'} · {c.uom || '—'}</div>
             {(qd139Ingredient(c, qd) || (duplicateName && qd !== 'QĐ141' && (c.active_ingredient || c.ham_luong))) && <div className="detail-sub">{c.active_ingredient || '—'} · {c.ham_luong || '—'}</div>}
           </div>
         </div>
@@ -70,16 +71,17 @@ function CstCard({ c, i, duplicateName }) {
       <div className="list-card-meta">
         <span className={'pill ' + pctTone(pct)}>Còn {c.remain_pct}%</span>
         <span className="pill muted-pill">Nhóm {groupOf(c.iit_code) || '—'}</span>
-        <span className="pill muted-pill">UT {c.priority || '—'}</span>
+        <span className="pill priority-pill">Ưu tiên {c.priority || '—'}</span>
         <span className="pill muted-pill">NT {contractorText(c)}</span>
         <span className="pill muted-pill">{compact(c.bid_package)}</span>
         <span className={'pill ' + st.cls}>{st.text}</span>
       </div>
       <div className="action-hint">👉 {st.action}</div>
       <div className="cst-metrics">
-        <span>Giá thầu <b>{money(c.bid_price)}</b></span>
-        <span>SL thầu <b>{n(c.bid_qty_initial)}</b></span>
-        <span>CST còn <b>{n(c.remain_qty)}</b></span>
+        <span>Giá trúng thầu <b>{money(c.bid_price)}</b></span>
+        <span>CST <b>{n(c.bid_qty_initial)}</b></span>
+        <span>SL còn <b>{n(c.remain_qty)}</b></span>
+        <span>% còn <b>{fmtPct(c.remain_pct)}</b></span>
         <span>SL bán <b>{n(c.sold_qty)}</b></span>
         <span>TT bán <b>{money(c.sold_amount)}</b></span>
         <span className="wide-metric">Nguồn <b>{sourceLabel(c)}</b></span>

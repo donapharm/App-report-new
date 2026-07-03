@@ -8,6 +8,7 @@ import { DrillNav, useReloadTick } from '../drillNav.jsx';
 function qd139Ingredient(r) {
   return r.qd === 'QĐ139' && (r.active_ingredient || r.ham_luong);
 }
+function qdClass(qd) { return qd === 'QĐ139' ? 'qd139-card' : (qd === 'QĐ141' ? 'qd141-card' : ''); }
 
 export default function Products({ me }) {
   const { periods, ky, setKy, filters, setFilters, options } = usePeriodsAndFilters(api);
@@ -44,13 +45,13 @@ export default function Products({ me }) {
       {!data ? <Spinner /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
         <div className="list-grid">
           {data.rows.map((r, i) => (
-            <div className="card detail-card product-detail-card" key={r.key}>
+            <div className={`card detail-card table-detail-card product-detail-card ${qdClass(r.qd)}`} key={r.key}>
               <div className="detail-head detail-head-two">
                 <div className="detail-title-wrap">
                   <span className="rank">{i + 1}</span>
                   <div>
                     <div className="detail-title">{r.product_name}</div>
-                    <div className="detail-sub mono">{r.iit_code || '—'} · {r.qd || '—'} · {r.uom || '—'}</div>
+                    <div className="detail-sub mono"><span className={`qd-badge ${qdClass(r.qd)}`}>{r.qd || '—'}</span> {r.iit_code || '—'} · {r.uom || '—'}</div>
                     {(qd139Ingredient(r) || (duplicateProducts.has(r.product_name) && r.qd !== 'QĐ141' && (r.active_ingredient || r.ham_luong))) && <div className="detail-sub">{r.active_ingredient || '—'} · {r.ham_luong || '—'}</div>}
                   </div>
                 </div>
@@ -62,8 +63,8 @@ export default function Products({ me }) {
                 <span><b>{r.unitCount}</b><em>Đơn vị</em></span>
                 <span><b>{r.empCount}</b><em>Nhân viên</em></span>
                 {(r.contractor_code || r.contractor || r.contractor_name) && <span><b>{pairText(r.contractor_code || r.contractor, r.contractor_name)}</b><em>Nhà thầu</em></span>}
-                {r.bid_price && <span><b>{money(r.bid_price)}</b><em>Giá thầu</em></span>}
-                {r.bidPackages && <span><b>{r.bidPackages}</b><em>Gói thầu</em></span>}
+                {r.bid_price && <span><b>{money(r.bid_price)}</b><em>Giá trúng thầu</em></span>}
+                <span><b>{r.priority || '—'}</b><em>Ưu tiên</em></span>
               </div>
             </div>
           ))}

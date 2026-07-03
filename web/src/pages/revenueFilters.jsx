@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const emptyRevenueFilters = { emp: '', unit: '', product: '', route: '', priority: '', contractor: '', bid: '', q: '' };
+export const emptyRevenueFilters = { emp: '', unit: '', product: '', route: '', priority: '', contractor: '', bid: '', dateFrom: '', dateTo: '', q: '' };
 
 const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
 const productMeta = (o) => [o.qd, o.active_ingredient, o.ham_luong, o.uom, o.contractor, o.bid_price ? `Giá ${Number(o.bid_price).toLocaleString('vi-VN')}` : '', o.iit_code || o.key]
@@ -59,9 +59,31 @@ export function ComboSelect({ value, onChange, options, all, placeholder, classN
 
 export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFilters }) {
   const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
+  const period = (periods || []).find((p) => p.ky === ky) || {};
+  const asOf = period.data_as_of || period.dataAsOf || period.dateTo || period.dateFrom;
+  const baseDate = asOf ? new Date(asOf) : new Date();
+  const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const clamp = (d) => {
+    const s = iso(d);
+    if (period.dateFrom && s < period.dateFrom) return period.dateFrom;
+    if (period.dateTo && s > period.dateTo) return period.dateTo;
+    return s;
+  };
+  const setRange = (kind) => {
+    const d = new Date(baseDate);
+    let a = new Date(d), b = new Date(d);
+    if (kind === 'week') { const day = (d.getDay() + 6) % 7; a.setDate(d.getDate() - day); b = new Date(a); b.setDate(a.getDate() + 6); }
+    if (kind === 'month') { a = new Date(d.getFullYear(), d.getMonth(), 1); b = new Date(d.getFullYear(), d.getMonth() + 1, 0); }
+    if (kind === 'quarter') { const q = Math.floor(d.getMonth() / 3) * 3; a = new Date(d.getFullYear(), q, 1); b = new Date(d.getFullYear(), q + 3, 0); }
+    setFilters((f) => ({ ...f, dateFrom: clamp(a), dateTo: clamp(b) }));
+  };
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   return (
     <div className="card filter-card">
+      <div className="filter-asof">
+        <b>{asOf ? `Cập nhật đến ${new Date(asOf).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} GMT+7` : 'Chưa có giờ cập nhật'}</b>
+        <span>{period.canFilterByDay ? 'Nguồn có ngày chi tiết: lọc ngày/tuần/tháng/quý dùng đúng ngày dòng.' : 'Kỳ này chỉ có tổng theo tháng: lọc ngày không phân bổ giả.'}</span>
+      </div>
       <div className="filter-grid">
         <Select value={ky} onChange={setKy} options={(periods || []).map((p) => ({ key: p.ky, label: p.ky }))} all="Chọn kỳ" />
         {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
@@ -71,10 +93,18 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
         <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
         <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
         <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
+        <input type="date" value={filters.dateFrom || ''} onChange={(e) => setF('dateFrom', e.target.value)} />
+        <input type="date" value={filters.dateTo || ''} onChange={(e) => setF('dateTo', e.target.value)} />
+      </div>
+      <div className="date-chips">
+        <button type="button" className="chip" onClick={() => setRange('day')}>Ngày</button>
+        <button type="button" className="chip" onClick={() => setRange('week')}>Tuần</button>
+        <button type="button" className="chip" onClick={() => setRange('month')}>Tháng</button>
+        <button type="button" className="chip" onClick={() => setRange('quarter')}>Quý</button>
       </div>
       <div className="filter-search">
         <input value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
-        <button className="btn ghost" onClick={() => setFilters(emptyRevenueFilters)}>Xoá lọc ({activeFilterCount})</button>
+        <button className="btn ghost" onClick={() => setFilters({ ...emptyRevenueFilters })}>Xoá lọc ({activeFilterCount})</button>
       </div>
     </div>
   );

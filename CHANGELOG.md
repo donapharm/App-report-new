@@ -25,6 +25,17 @@
 - CEO: Quản target công cụ phụ chiếm >1/2 màn hình, đẩy danh sách chính xuống đáy. → [`DIRECTIVE_LAYOUT_SMART.md`](DIRECTIVE_LAYOUT_SMART.md).
 - **Nguyên tắc toàn app:** nội dung chính ~70–80% màn hình + hiện ngay; công cụ phụ gom **1 thanh nút gọn**; form nặng mở **modal/drawer** khi bấm; chữ dài → **icon ⓘ tooltip**.
 - **Áp ngay Quản target:** thanh nút [Template][Upload][Nhập Quý][AI][Rollback] → form bung modal; resolver-info thành ⓘ; danh sách 21 NV lên trên, chiếm phần lớn. Giữ đủ chức năng. Áp dần Upload/bộ lọc các trang.
+
+### 2026-07-03 — Bot triển khai (Report Bot) — Directive Card V2: lọc ngày + thẻ QĐ màu + giá trúng thầu
+- Đã pull `main`, đọc `DIRECTIVE_CARD_V2.md` và xác nhận độ chi tiết ngày trước khi lọc:
+  - T01–T06 legacy/Lumos: dòng upload không có ngày chi tiết, chỉ có `dateFrom/dateTo` cấp kỳ → không phân bổ giả theo ngày.
+  - T07 `CRM_MISA_PLUS_APP_WEB`: dòng active có `date` + `source_order`, `data_as_of=2026-07-03T10:30:21+07:00` → lọc ngày/tuần/tháng/quý theo ngày dòng.
+- Backend: `slotRows()` giữ ngày dòng thật nếu có, gắn `date_granularity`, `source_date_from/to`, API `/periods` trả `canFilterByDay`; `applyFilters()` thêm `dateFrom/dateTo` và chỉ nhận kỳ không có ngày khi range phủ trọn kỳ.
+- UI bộ lọc doanh thu/Sản phẩm/DT đầy đủ: hiển thị “Cập nhật đến HH:mm GMT+7”, thêm date range + quick `Ngày/Tuần/Tháng/Quý`, ghi chú rõ kỳ nào chỉ có số theo tháng.
+- Card V2: QĐ139 nền vàng/cam + badge cam, QĐ141 nền xanh + badge xanh; thay ô “Gói thầu” bằng **Giá trúng thầu**; thêm ô **Ưu tiên**; QĐ139 hiện hoạt chất+hàm lượng, QĐ141 không hiện hoạt chất; nhà thầu dùng mã-tên khi nguồn có tên. Áp Sản phẩm, DT đầy đủ, CST flat card.
+- Nghiệm thu: `node -c` server OK, `npm run build` OK, `pm2 restart reportnew && pm2 save` OK, health OK. Screenshot: `verification-screenshots/card-v2/`. Old app `dona-report` port 3860 không đụng.
+
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive Thẻ V2: mã màu QĐ + giá trúng thầu + ưu tiên + lọc ngày
 - CEO 2 ảnh (H1 chỉnh thẻ/lọc, H2 mẫu bảng + mã màu). → [`DIRECTIVE_CARD_V2.md`](DIRECTIVE_CARD_V2.md).
 - **H1:** giờ đồng bộ "…GMT+7"; lọc Từ ngày→Đến ngày + Ngày/Tuần/Tháng/Quý; bỏ ô "Gói thầu 139" → **Giá trúng thầu**; tên+hoạt chất/hàm lượng (QĐ141 không); nhà thầu **`01.AFP - CÔNG TY TNHH AFP PHARMA`** (1 mã nhiều tên); thêm ô **Ưu tiên** (H.A*/H.A/H.B).
 - **H2:** nền thẻ theo QĐ — **QĐ139 vàng/cam, QĐ141 xanh** + badge góc; bố cục bảng gọn theo ảnh mẫu.
