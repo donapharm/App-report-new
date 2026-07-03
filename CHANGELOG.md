@@ -21,6 +21,10 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Template target (nút tải + file mẫu 21 NV)
+- CEO muốn template có sẵn mã NV/tên/tháng để điền target rồi upload. → [`DIRECTIVE_TARGET_TEMPLATE.md`](DIRECTIVE_TARGET_TEMPLATE.md) + file mẫu `templates/TARGET_TEMPLATE_MAU.csv` (21 NV allowlist).
+- Bot làm nút **"⬇ Tải template target"** trong Quản target: xuất .xlsx điền sẵn 21 mã + **tên chính xác từ DB** + kỳ đang chọn, cột Target trống. Upload lại → preview/commit/rollback (import theo MÃ NV, loại mã ngoài 21). Sửa tay từng NV vẫn ăn.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Target chốt tại App Report (bỏ Lumos từ 07) + KPI dễ hiểu + ô Tổng
 - CEO: ô KPI target khó hiểu (272% do chia nhịp 3/31; mượn target Lumos T06 cho T07). → [`DIRECTIVE_TARGET_KPI.md`](DIRECTIVE_TARGET_KPI.md).
 - **A) Từ 07/2026 target CHỐT TẠI APP REPORT**, KHÔNG đồng bộ Lumos/app khác: resolver kỳ ≥07 chỉ `manual>upload>ai` (bỏ legacy Lumos + appsale); kỳ ≤06 giữ Lumos lịch sử. Chưa giao → "Chưa giao target", không mượn số.
