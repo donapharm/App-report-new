@@ -21,7 +21,9 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Spec Target chi tiết đa chiều + Danh mục NV phụ trách
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Spec điều chỉnh target theo lý do (đứt hàng/công nợ)
+- CEO: cần ghi lý do không đạt (đứt hàng/công nợ) để hạ tỷ lệ target tháng đó + phân tích. → [`DIRECTIVE_TARGET_ADJUSTMENT.md`](DIRECTIVE_TARGET_ADJUSTMENT.md) (thuộc Target GĐ2).
+- Model `target_adjustment{emp_code,ky,reason_type,impact_amount,status,...}`; **CEO DUYỆT mới áp**. Target điều chỉnh = target gốc − Σ impact duyệt; thẻ hiện %đạt gốc + %đạt sau điều chỉnh + "đã trừ đứt hàng X/công nợ Y". Gợi ý tự động từ Hết CST (đứt hàng) + "còn nợ chưa giao" (công nợ), CEO duyệt. Phân tích tổng hợp mất theo lý do.
 - CEO: làm luôn kế hoạch target chi tiết + danh mục NV phụ trách. → [`SPEC_TARGET_ASSIGNMENT.md`](SPEC_TARGET_ASSIGNMENT.md) (3 giai đoạn).
 - **GĐ1 (làm trước):** Danh mục bán hàng tổng + bảng PHÂN CÔNG (`assignment{emp_code,type,value,hiệu lực}`) — **gieo mầm tự động từ lịch sử bán** (NV↔đơn vị/SP), CEO sửa tay; màn "Tôi phụ trách" cho NV. Không hồi tố + audit.
 - **GĐ2:** Target theo CHIỀU (nhóm H.A*/tuyến/đơn vị/QLNB/đặc biệt) dùng field `scope` đã có; %đạt tính theo đúng chiều; kỳ đang chạy pro-rate.
