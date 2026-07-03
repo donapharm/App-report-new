@@ -21,6 +21,9 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — FIX thẻ V2 thiếu sót + đồng bộ 3 tab (CEO bực)
+- Ảnh DT đầy đủ: thẻ thiếu **hoạt chất/hàm lượng, Giá trúng thầu, tên nhà thầu; Ưu tiên trống "—"**. Bot mới áp tab Sản phẩm, chưa đồng bộ DT đầy đủ/Doanh thu. → `DIRECTIVE_CARD_V2.md` mục FIX: checklist 8 field, mỗi thẻ CẢ 3 tab phải đủ; Ưu tiên/giá thầu/hoạt chất là dữ liệu ĐÃ CÓ → phải hiện; bot chụp từng tab đối chiếu trước khi báo xong.
+
 ### 2026-07-03 — Bot triển khai (Report Bot) — Card V2 bổ sung nhà thầu MÃ-TÊN
 - Bổ sung lookup dùng chung mã nhà thầu → tên đầy đủ từ dữ liệu filter/phân tích hiện có; hỗ trợ nguồn legacy có tên công ty nằm trong `contractor_code` và nguồn App Sale chỉ có mã ngắn như `AFP`/`DONA`.
 - API `/filters`, `/revenue/full`, `/products`, `/cst` enrich `contractor_name`; thẻ tiếp tục dùng `pairText()` nên chỉ hiện mã trần khi thật sự không tìm được tên.
@@ -34,6 +37,8 @@
 - Nghiệm thu: `npm run build` OK, restart `reportnew` OK, health local/public OK. Screenshot trước/sau: `verification-screenshots/layout-smart/`.
 
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive bố cục "smart app" (nội dung chính nổi bật)
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — FIX thẻ V2 thiếu sót + đồng bộ 3 tab (CEO bực)
+- Ảnh DT đầy đủ: thẻ thiếu **hoạt chất/hàm lượng, Giá trúng thầu, tên nhà thầu; Ưu tiên trống "—"**. Bot mới áp tab Sản phẩm, chưa đồng bộ DT đầy đủ/Doanh thu. → `DIRECTIVE_CARD_V2.md` mục FIX: checklist 8 field, mỗi thẻ CẢ 3 tab phải đủ; Ưu tiên/giá thầu/hoạt chất là dữ liệu ĐÃ CÓ → phải hiện; bot chụp từng tab đối chiếu trước khi báo xong.
 - CEO: Quản target công cụ phụ chiếm >1/2 màn hình, đẩy danh sách chính xuống đáy. → [`DIRECTIVE_LAYOUT_SMART.md`](DIRECTIVE_LAYOUT_SMART.md).
 - **Nguyên tắc toàn app:** nội dung chính ~70–80% màn hình + hiện ngay; công cụ phụ gom **1 thanh nút gọn**; form nặng mở **modal/drawer** khi bấm; chữ dài → **icon ⓘ tooltip**.
 - **Áp ngay Quản target:** thanh nút [Template][Upload][Nhập Quý][AI][Rollback] → form bung modal; resolver-info thành ⓘ; danh sách 21 NV lên trên, chiếm phần lớn. Giữ đủ chức năng. Áp dần Upload/bộ lọc các trang.

@@ -29,6 +29,19 @@ Bot báo AFP/DONA "chỉ có mã" → nhưng **tên đầy đủ ĐÃ có trong 
 - **1 mã nhiều tên** (VD `07.TRIEU.G`): hiện tên đại diện đầy đủ nhất (+ "…" nếu còn tên khác).
 - **Chỉ khi mã KHÔNG có tên ở BẤT KỲ nguồn nào** → mới hiện mã trần (đúng "không bịa"). Đối chiếu: tên đã hiện ở Phân tích thì thẻ cũng phải có.
 
+## ‼‼ FIX — LÀM ĐỦ & ĐỒNG BỘ 3 TAB (CEO bực 2026-07-03: vẫn thiếu sót)
+Ảnh DT đầy đủ cho thấy thẻ **thiếu**: hoạt chất/hàm lượng, **Giá trúng thầu**, tên nhà thầu, Ưu tiên đang trống "—". Bot mới áp tab Sản phẩm, **chưa đồng bộ DT đầy đủ/Doanh thu**.
+**BẮT BUỘC: MỖI thẻ ở CẢ 3 tab (Sản phẩm · DT đầy đủ · Doanh thu) phải có ĐỦ các field sau — kiểm từng cái:**
+1. **Tên thuốc (đậm)** + (QĐ139) **hoạt chất · hàm lượng** ngay dưới tên. QĐ141: chỉ tên (không hoạt chất).
+2. Badge **QĐ139/QĐ141** + **nền màu** (139 vàng/cam, 141 xanh).
+3. Mã QLNB (nhạt).
+4. Đơn vị (mã.tên) · NV (mã · tên) · Tuyến.
+5. Số lượng · Doanh thu.
+6. **Giá trúng thầu** (bid_price) — PHẢI có, không được thiếu.
+7. **Nhà thầu = mã - TÊN ĐẦY ĐỦ** (dùng map mã→tên; `AFP` → `AFP - Công Ty TNHH AFP Pharma`).
+8. **Ưu tiên = H.A*/H.A/H.B…** — **PHẢI có giá trị**, không để trống "—" (dữ liệu UT đã có ở bộ lọc "Tất cả UT" + thẻ CST; kéo vào thẻ này).
+**Trước khi báo XONG:** bot mở TỪNG tab (Sản phẩm, DT đầy đủ, Doanh thu), chụp 1 thẻ mỗi tab, **đối chiếu ĐỦ 8 mục trên**; field nào thiếu dữ liệu nguồn thì ghi rõ field + lý do (không lặng lẽ bỏ). Ưu tiên/giá thầu/hoạt chất là dữ liệu ĐÃ CÓ → phải hiện.
+
 ## Nghiệm thu
 - Thẻ QĐ139 nền vàng/cam, QĐ141 nền xanh; badge góc đúng.
 - Bỏ ô gói-139, có "Giá trúng thầu"; có ô "Ưu tiên"; nhà thầu `mã - tên đầy đủ`.
