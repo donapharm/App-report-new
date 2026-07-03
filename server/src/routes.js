@@ -56,22 +56,56 @@ function productMetaFromRows(rows = []) {
   const map = new Map();
   for (const r of rows) {
     const key = r.iit_code || r.product_name;
-    if (!key || map.has(key)) continue;
-    map.set(key, {
+    if (!key) continue;
+    const cur = map.get(key) || {
       iit_code: r.iit_code || key,
       product_name: r.product_name || key,
-      active_ingredient: r.active_ingredient || '',
-      ham_luong: r.ham_luong || '',
-      uom: r.uom || '',
-      contractor: r.contractor_code || r.contractor_name || '',
-      contractor_code: r.contractor_code || '',
-      contractor_name: r.contractor_name || '',
-      bid_price: r.bid_price || null,
-      priority: r.priority || '',
-      qd: qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`),
+      active_ingredient: '',
+      ham_luong: '',
+      uom: '',
+      contractor: '',
+      contractor_code: '',
+      contractor_name: '',
+      bid_price: null,
+      priority: '',
+      qd: '',
+    };
+    const qd = qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`);
+    map.set(key, {
+      ...cur,
+      iit_code: cur.iit_code || r.iit_code || key,
+      product_name: cur.product_name || r.product_name || key,
+      active_ingredient: cur.active_ingredient || r.active_ingredient || '',
+      ham_luong: cur.ham_luong || r.ham_luong || '',
+      uom: cur.uom || r.uom || '',
+      contractor: cur.contractor || r.contractor_code || r.contractor_name || '',
+      contractor_code: cur.contractor_code || r.contractor_code || '',
+      contractor_name: cur.contractor_name || r.contractor_name || '',
+      bid_price: cur.bid_price ?? r.bid_price ?? null,
+      priority: cur.priority || r.priority || '',
+      qd: cur.qd || qd,
     });
   }
   return map;
+}
+function enrichProductMeta(rows = [], metaMap, contractorLookup) {
+  return rows.map((r) => {
+    const meta = metaMap.get(r.iit_code || r.product_name) || {};
+    const qd = meta.qd || qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`);
+    const code = r.contractor_code || meta.contractor_code || meta.contractor || r.contractor || '';
+    return {
+      ...r,
+      qd,
+      active_ingredient: qd === 'QĐ139' ? (r.active_ingredient || meta.active_ingredient || '') : '',
+      ham_luong: qd === 'QĐ139' ? (r.ham_luong || meta.ham_luong || '') : '',
+      uom: r.uom || meta.uom || '',
+      contractor: r.contractor || meta.contractor || code,
+      contractor_code: code,
+      contractor_name: contractorNameFor(code, r.contractor_name || meta.contractor_name, contractorLookup),
+      bid_price: r.bid_price ?? meta.bid_price ?? null,
+      priority: r.priority || meta.priority || '',
+    };
+  });
 }
 function pairLabel(code, name) {
   const c = String(code || '').trim();
@@ -381,8 +415,33 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
     filterUnit: null,
   });
   if (dimension === 'product') {
-    const metaMap = productMetaFromRows(store.getCst({ scope }).concat(store.getRowsRange({ kys: pc.kys, scope })));
-    outRows = outRows.map((r) => ({ ...r, ...(metaMap.get(r.key) || {}), label: r.label }));
+    const contractorLookup = contractorLookupFor(scope);
+    const rawRows = enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup);
+    const metaMap = productMetaFromRows(enrichContractorNames(store.getCst({ scope }).concat(rawRows), contractorLookup));
+    const unitMap = new Map();
+    for (const r of A.applyFilters(rawRows, filters)) {
+      const key = r.iit_code || r.product_name || 'UNKNOWN';
+      const cur = unitMap.get(key) || { units: new Set(), emps: new Set(), routes: new Set(), contractors: new Set(), priorities: new Set() };
+      if (r.unit_code || r.unit_name) cur.units.add(r.unit_code || r.unit_name);
+      if (r.emp_code || r.emp_name) cur.emps.add([r.emp_code, r.emp_name].filter(Boolean).join(' · '));
+      if (r.route) cur.routes.add(r.route);
+      if (r.contractor_code) cur.contractors.add(r.contractor_code);
+      if (r.priority) cur.priorities.add(r.priority);
+      unitMap.set(key, cur);
+    }
+    outRows = enrichProductMeta(outRows.map((r) => ({ ...r, ...(metaMap.get(r.key) || {}), label: r.label })), metaMap, contractorLookup)
+      .map((r) => {
+        const agg = unitMap.get(r.key) || {};
+        return {
+          ...r,
+          unitCount: agg.units?.size || 0,
+          empCount: agg.emps?.size || 0,
+          routes: [...(agg.routes || [])].slice(0, 3).join(', '),
+          contractor_code: r.contractor_code || [...(agg.contractors || [])][0] || '',
+          contractor_name: contractorNameFor(r.contractor_code || [...(agg.contractors || [])][0], r.contractor_name, contractorLookup),
+          priority: r.priority || [...(agg.priorities || [])][0] || '',
+        };
+      });
   }
   res.json({
     ky: pc.ky,
@@ -419,7 +478,8 @@ router.get('/revenue/full', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const contractorLookup = contractorLookupFor(scope);
-  let rows = enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup);
+  const metaMap = productMetaFromRows(enrichContractorNames(store.getCst({ scope }).concat(store.getRowsRange({ kys: pc.kys, scope })), contractorLookup));
+  let rows = enrichProductMeta(enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup), metaMap, contractorLookup);
   rows = A.applyFilters(rows, revenueFiltersFromQuery(req.query))
     .sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
   const totalRevenue = A.sum(rows, (r) => r.revenue);
@@ -459,6 +519,7 @@ router.get('/products', auth.requireAuth, (req, res) => {
       contractors: new Set(),
       bidPackages: new Set(),
       priorities: new Set(),
+      routes: new Set(),
     };
     cur.revenue += r.revenue || 0;
     cur.quantity += r.quantity || 0;
@@ -468,6 +529,7 @@ router.get('/products', auth.requireAuth, (req, res) => {
     if (r.contractor_code) cur.contractors.add(r.contractor_code);
     if (r.bid_package) cur.bidPackages.add(r.bid_package);
     if (r.priority) cur.priorities.add(r.priority);
+    if (r.route) cur.routes.add(r.route);
     map.set(key, cur);
   }
   const out = [...map.values()].map((x) => {
@@ -492,6 +554,7 @@ router.get('/products', auth.requireAuth, (req, res) => {
     empCount: x.emps.size,
     contractorCount: x.contractors.size,
     bidPackages: [...x.bidPackages].slice(0, 5).join(', '),
+    routes: [...x.routes].slice(0, 5).join(', '),
     avgPrice: x.quantity ? Math.round(x.revenue / x.quantity) : null,
     });
   }).sort((a, b) => b.revenue - a.revenue);

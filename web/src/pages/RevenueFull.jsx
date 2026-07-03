@@ -68,8 +68,8 @@ export default function RevenueFull({ me }) {
                   <span><b>{r.route || '—'}</b><em>Tuyến</em></span>
                   <span><b>{(r.quantity || 0).toLocaleString('vi-VN')}</b><em>Số lượng</em></span>
                   <span><b>{contractorText(r)}</b><em>Nhà thầu</em></span>
-                  {r.bid_price != null && <span><b>{money(r.bid_price)}</b><em>Giá trúng thầu</em></span>}
-                  <span><b>{r.priority || '—'}</b><em>Ưu tiên</em></span>
+                  <span><b>{r.bid_price != null ? money(r.bid_price) : 'Thiếu nguồn giá'}</b><em>Giá trúng thầu</em></span>
+                  <span><b>{r.priority || 'Thiếu nguồn UT'}</b><em>Ưu tiên</em></span>
                 </div>
               </div>
             ))}

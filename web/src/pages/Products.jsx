@@ -62,9 +62,10 @@ export default function Products({ me }) {
                 <span><b>{r.quantity.toLocaleString('vi-VN')}</b><em>Số lượng</em></span>
                 <span><b>{r.unitCount}</b><em>Đơn vị</em></span>
                 <span><b>{r.empCount}</b><em>Nhân viên</em></span>
-                {(r.contractor_code || r.contractor || r.contractor_name) && <span><b>{pairText(r.contractor_code || r.contractor, r.contractor_name)}</b><em>Nhà thầu</em></span>}
-                {r.bid_price && <span><b>{money(r.bid_price)}</b><em>Giá trúng thầu</em></span>}
-                <span><b>{r.priority || '—'}</b><em>Ưu tiên</em></span>
+                <span><b>{r.routes || 'Thiếu nguồn tuyến'}</b><em>Tuyến</em></span>
+                <span><b>{pairText(r.contractor_code || r.contractor, r.contractor_name)}</b><em>Nhà thầu</em></span>
+                <span><b>{r.bid_price != null ? money(r.bid_price) : 'Thiếu nguồn giá'}</b><em>Giá trúng thầu</em></span>
+                <span><b>{r.priority || 'Thiếu nguồn UT'}</b><em>Ưu tiên</em></span>
               </div>
             </div>
           ))}

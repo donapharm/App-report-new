@@ -6,6 +6,7 @@ import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useDrillStack, useReloadTick } from '../drillNav.jsx';
 
 const DIMS = { emp: 'Nhân viên', unit: 'Đơn vị', product: 'Sản phẩm' };
+function qdClass(qd) { return qd === 'QĐ139' ? 'qd139-card' : (qd === 'QĐ141' ? 'qd141-card' : ''); }
 
 export default function Revenue({ me }) {
   const [dim, setDim] = useState(me.isAdmin ? 'emp' : 'unit');
@@ -34,7 +35,7 @@ export default function Revenue({ me }) {
   const total = data ? data.rows.reduce((s, r) => s + r.revenue, 0) : 0;
   const max = data && data.rows.length ? data.rows[0].revenue : 0;
   const rowSub = (r) => dim === 'product'
-    ? `${r.iit_code || r.key || '—'} · ${r.qd || '—'}${r.qd === 'QĐ139' ? ` · ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''}`
+    ? `${r.iit_code || r.key || '—'} · ${r.uom || '—'}`
     : (dim === 'emp' ? (r.key || '—') : (r.key || '—'));
 
   function pickDim(d) {
@@ -83,13 +84,14 @@ export default function Revenue({ me }) {
       ) : (
         <div className="list-grid">
           {data.rows.map((r, i) => (
-            <div className="card detail-card revenue-detail-card" key={r.key} onClick={dim !== 'product' ? () => drill(r) : undefined} style={dim !== 'product' ? { cursor: 'pointer' } : null}>
+            <div className={`card detail-card revenue-detail-card ${dim === 'product' ? qdClass(r.qd) : ''}`} key={r.key} onClick={dim !== 'product' ? () => drill(r) : undefined} style={dim !== 'product' ? { cursor: 'pointer' } : null}>
               <div className="detail-head">
                 <div className="detail-title-wrap">
                   <span className="rank">{i + 1}</span>
                   <div>
                     <div className="detail-title">{dim === 'unit' ? unitText(r.key, r.label) : (r.label || '—')}</div>
-                    <div className="detail-sub mono">{rowSub(r)}</div>
+                    <div className="detail-sub mono">{dim === 'product' && <span className={`qd-badge ${qdClass(r.qd)}`}>{r.qd || '—'}</span>} {rowSub(r)}</div>
+                    {dim === 'product' && r.qd === 'QĐ139' && <div className="detail-sub">{r.active_ingredient || 'Thiếu nguồn hoạt chất'} · {r.ham_luong || 'Thiếu nguồn hàm lượng'}</div>}
                   </div>
                 </div>
                 <div className="detail-money">{money(r.revenue)}{dim !== 'product' ? ' ›' : ''}</div>
@@ -97,8 +99,17 @@ export default function Revenue({ me }) {
               <Bar value={r.revenue} max={max} />
               <div className="detail-facts two">
                 <span><b>{(r.quantity || 0).toLocaleString('vi-VN')}</b><em>Số lượng</em></span>
-                <span><b>{DIMS[dim]}</b><em>Nhóm xem</em></span>
-                {dim === 'product' && (r.contractor_code || r.contractor || r.contractor_name) && <span><b>{pairText(r.contractor_code || r.contractor, r.contractor_name)}</b><em>Nhà thầu</em></span>}
+                <span><b>{money(r.revenue)}</b><em>Doanh thu</em></span>
+                {dim === 'product' ? (
+                  <>
+                    <span><b>{r.unitCount || 0}</b><em>Đơn vị</em></span>
+                    <span><b>{r.empCount || 0}</b><em>Nhân viên</em></span>
+                    <span><b>{r.routes || 'Thiếu nguồn tuyến'}</b><em>Tuyến</em></span>
+                    <span><b>{pairText(r.contractor_code || r.contractor, r.contractor_name)}</b><em>Nhà thầu</em></span>
+                    <span><b>{r.bid_price != null ? money(r.bid_price) : 'Thiếu nguồn giá'}</b><em>Giá trúng thầu</em></span>
+                    <span><b>{r.priority || 'Thiếu nguồn UT'}</b><em>Ưu tiên</em></span>
+                  </>
+                ) : <span><b>{DIMS[dim]}</b><em>Nhóm xem</em></span>}
               </div>
             </div>
           ))}
