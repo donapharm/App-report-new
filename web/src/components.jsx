@@ -4,14 +4,13 @@ import { money, pct, short } from './util.js';
 
 export const Spinner = () => <div className="spin" />;
 
-// Số tiền lớn: hiện gọn (4,76 tỷ), chạm để xem số đầy đủ. Dừng lan để không kích hoạt bấm thẻ.
+// Số tiền lớn: hiện GỌN to (4,76 tỷ) + số ĐẦY ĐỦ nhỏ ngay bên dưới (luôn thấy cả hai).
 export function MoneyBig({ value, className }) {
-  const [full, setFull] = React.useState(false);
   if (value == null || Number.isNaN(Number(value))) return <span>—</span>;
-  const toggle = (e) => { e.stopPropagation(); setFull((f) => !f); };
   return (
-    <span className={'money-big' + (className ? ' ' + className : '')} onClick={toggle} title={money(value)}>
-      {full ? money(value) : short(value)}
+    <span className={'money-big' + (className ? ' ' + className : '')}>
+      <b className="mb-s">{short(value)}</b>
+      <span className="mb-f">{money(value)}</span>
     </span>
   );
 }
