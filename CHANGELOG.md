@@ -21,7 +21,8 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Siết Target (đúng 21 mã + lấy target tự động) + mã ĐV đầy đủ
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Bộ lọc nhà thầu (mã+tên, 1 mã↔nhiều tên) + áp chung
+- CEO: ô "Tất cả nhà thầu" cho hiện **mã + tên đầy đủ**; **1 mã nhà thầu có nhiều tên** (VD `07.trieu.g`). → khóa lọc theo **MÃ**, chọn mã gom hết mọi tên. Áp chung mọi bộ lọc mã↔tên (nhà thầu/ĐV/SP/NV/gói/tuyến): luôn hiện mã+tên, khóa theo mã (tên chỉ là nhãn). Ghi `SPEC_ANALYSIS_CST_UX.md` mục C2.
 - CEO bực: Target admin VẪN hiện 35 NV/CTV (còn VP002/003/006 văn phòng) → PHẢI đúng 21 mã allowlist (mục 0-BIS), bỏ heuristic. Bot chưa áp allowlist vừa push.
 - **Lấy target TỰ ĐỘNG:** cột Nguồn trống/0đ → CEO chưa thấy target tham khảo. Bot xác định nguồn (target cũ Lumos `V_TEM_TARGET_BONUS` 01–06 và/hoặc App Sale) → kéo về nguồn `appsale`/`legacy` hiện số thật + nhãn nguồn; AI đề xuất ở nguồn `ai`. Ghi `DIRECTIVE_TARGET_ADMIN.md`.
 - **H1:** khối Đơn vị tăng/giảm (Phân tích) + mọi nơi hiện tên ĐV phải kèm **mã số đầy đủ** `001.BVĐK Đồng Nai`. Ghi `DIRECTIVE_MULTICOLUMN_LAYOUT.md`.

@@ -44,6 +44,14 @@ Lưu ý dữ liệu: sau cutover CST lấy App Sale (mục khác), nhưng **UX n
 - **Tùy chọn:** toggle **"Gộp theo tên"** (tổng mọi biến thể cùng tên) ↔ **"Tách theo mã QLNB"** (mặc định, chi tiết). Khi gộp → gộp doanh thu/SL các mã cùng tên; khi tách → mỗi mã 1 dòng.
 - Backend: filter sản phẩm nhận `iit_code` (đã có) thay vì tên; `/api/filters` trả option sản phẩm kèm thuộc tính phân biệt (name, iit_code, hoat_chat, ham_luong, uom, contractor, qd). Không đổi mô hình quyền.
 
+### NHÀ THẦU + mọi bộ lọc: hiện MÃ + TÊN; 1 mã ↔ nhiều tên (CEO 2026-07-03)
+- **Nhà thầu:** 1 **mã** nhà thầu có thể có **nhiều TÊN** (VD `07.trieu.g` → mấy tên). Ô lọc "Tất cả nhà thầu" phải hiện **`mã · tên đầy đủ`**; **khóa lọc = MÃ nhà thầu** → chọn 1 mã là **gom HẾT mọi tên biến thể** của mã đó. Nếu 1 mã nhiều tên → gộp về mã, nhãn hiện tên đại diện (+ "…" hoặc "(nhiều tên)").
+- **Áp CHUNG cho mọi bộ lọc/hiển thị có mã↔tên:** nhà thầu, đơn vị, sản phẩm, NV, gói thầu, tuyến. Luôn hiện **mã + tên**, khóa lọc theo **mã** (định danh ổn định), không theo tên.
+  - Thuốc: 1 **tên** → nhiều **mã QLNB** (đã xử ở trên) — phân biệt bằng mã.
+  - Nhà thầu: 1 **mã** → nhiều **tên** — gom theo mã.
+  - Nguyên tắc gốc: **tên chỉ là nhãn, MÃ là định danh** — lọc/gộp luôn theo mã.
+- Typeahead nhà thầu: tìm được theo **mã + tên**.
+
 ### ‼ PHẠM VI: ÁP DỤNG TOÀN APP (CEO nhấn 2026-07-03)
 Typeahead + phân biệt-theo-mã-QLNB + lọc-theo-mã-đơn-vị phải **nhất quán ở MỌI nơi có bộ lọc/danh sách đơn vị-sản phẩm**, không chỉ trang Sản phẩm:
 - **Doanh thu** (NV/ĐV/SP + drill-down), **DT đầy đủ**, **Sản phẩm**, **Phân tích**, **Cơ số thầu**, **Tổng quan** (Top 10 ĐV/SP), **Hỏi nhanh** (khi tham chiếu SP), **Target** (ô ĐV nếu có).
