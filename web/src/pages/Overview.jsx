@@ -110,7 +110,7 @@ export default function Overview({ me, onNavigate }) {
         <>
           <div className="kpi-grid">
             <Kpi label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={<MoneyBig value={kpi.revenue} />} delta={kpi.momPct} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenue')} />
-            <Kpi label="Trước VAT" value={<MoneyBig value={kpi.revenueBeforeVat} />} sub="chạm số để xem đầy đủ" onClick={() => onNavigate?.('revenue')} />
+            <Kpi label="Trước VAT" value={<MoneyBig value={kpi.revenueBeforeVat} />} sub="đã ÷ 1,05" onClick={() => onNavigate?.('revenue')} />
             <Kpi label="Đạt target (%)" value={pct(kpi.pctTarget)}
                  sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} onClick={() => onNavigate?.('target')} />
             <Kpi label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} onClick={() => onNavigate?.('target')} />

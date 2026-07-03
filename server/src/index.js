@@ -33,9 +33,20 @@ app.get('/api/health', (req, res) => res.json({ ok: true, service: 'app-report-n
 app.use('/api', routes);
 
 // Phục vụ frontend đã build (web/dist) nếu có — cho phép chạy 1 cổng ở production.
+// index.html + manifest: no-cache (PWA/trình duyệt LUÔN lấy shell mới -> hết kẹt bản cũ).
+// Asset có hash tên (/assets/*): cache lâu, immutable (an toàn vì đổi bản là đổi tên file).
 const webDist = path.join(__dirname, '..', '..', 'web', 'dist');
-app.use(express.static(webDist));
+app.use(express.static(webDist, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html') || filePath.endsWith('.webmanifest')) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    } else if (/[\\/]assets[\\/]/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
 app.get(/^(?!\/api).*/, (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(webDist, 'index.html'), (err) => (err ? next() : null));
 });
 
