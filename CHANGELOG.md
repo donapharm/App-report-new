@@ -21,7 +21,10 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — CEO chốt allowlist 21 NV có target (bỏ heuristic)
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Siết Target (đúng 21 mã + lấy target tự động) + mã ĐV đầy đủ
+- CEO bực: Target admin VẪN hiện 35 NV/CTV (còn VP002/003/006 văn phòng) → PHẢI đúng 21 mã allowlist (mục 0-BIS), bỏ heuristic. Bot chưa áp allowlist vừa push.
+- **Lấy target TỰ ĐỘNG:** cột Nguồn trống/0đ → CEO chưa thấy target tham khảo. Bot xác định nguồn (target cũ Lumos `V_TEM_TARGET_BONUS` 01–06 và/hoặc App Sale) → kéo về nguồn `appsale`/`legacy` hiện số thật + nhãn nguồn; AI đề xuất ở nguồn `ai`. Ghi `DIRECTIVE_TARGET_ADMIN.md`.
+- **H1:** khối Đơn vị tăng/giảm (Phân tích) + mọi nơi hiện tên ĐV phải kèm **mã số đầy đủ** `001.BVĐK Đồng Nai`. Ghi `DIRECTIVE_MULTICOLUMN_LAYOUT.md`.
 - Tab Target lọt cả NV văn phòng (heuristic role sai). **Chốt allowlist CHÍNH THỨC 21 mã:** DN001–012, DN016–019, DN021–024, VP004. Ngoài danh sách = KHÔNG target (văn phòng/telesale VP018/nghỉ DN013-015/DN020). Dùng cờ `has_target`/config, không suy role. Ghi `DIRECTIVE_TARGET_ADMIN.md` mục 0-BIS.
 - Phân nhóm (đều có target): CTV đặc biệt DN021/022/023/VP004 (no_auto_notify); CTV gần fulltime DN002/DN004; còn lại fulltime. Nghiệm thu: Target hiện đúng 21 mã, không dư/thiếu.
 - CEO: khối danh sách PC vẫn 1 cột full-width (phí chỗ), yêu cầu **2–3 cột, áp mọi tab, làm triệt để**. → [`DIRECTIVE_MULTICOLUMN_LAYOUT.md`](DIRECTIVE_MULTICOLUMN_LAYOUT.md).

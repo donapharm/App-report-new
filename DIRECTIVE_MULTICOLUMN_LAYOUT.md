@@ -18,6 +18,9 @@ Trên PC, các khối danh sách/ranking đang render **1 cột full-width** →
 - **Sản phẩm, Cơ số thầu, Target:** danh sách card → 2–3 cột (nhiều trang đã có `.list-grid`, rà cho đủ; chỗ nào còn 1 cột thì sửa).
 - Bất kỳ danh sách nào khác còn 1 cột trên PC → chuyển đa cột.
 
+## H1 (CEO 2026-07-03): TÊN ĐƠN VỊ phải kèm MÃ SỐ đầy đủ
+- Khối "Đơn vị tăng/giảm mạnh" (và mọi nơi hiện tên đơn vị) phải hiện **`mã.tên`** đầy đủ: VD **`001.BVĐK Đồng Nai`**, không phải "BVĐK Đồng Nai" trần. Nhất quán nguyên tắc *định danh đơn vị = mã ĐV*.
+
 ## Nghiệm thu (đối chiếu từng tab)
 - Mở PC 1440/1920px: **không còn khối danh sách 1 cột full-width**; tất cả 2–3 cột, lấp đầy chiều ngang gọn đẹp.
 - Tablet 2 cột, mobile 1 cột, không tràn/cắt.

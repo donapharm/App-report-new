@@ -15,6 +15,14 @@
 - Lưu allowlist thành **cấu hình/field trong danh bạ** (dễ CEO thêm/bớt sau), không hardcode rải rác. Resolver + forecast + %đạt + cảnh báo đều dựa allowlist này.
 - **Nghiệm thu:** tab Target/Dự báo hiện **ĐÚNG 21 mã này, không dư không thiếu**; không còn NV văn phòng.
 
+## ‼‼ NHẮC LẠI (CEO bực 2026-07-03) — VẪN CHƯA ĐÚNG
+- Màn Target admin vẫn hiện **"35 NV/CTV"** gồm cả VP002/VP003/VP006 (văn phòng). **SAI.** PHẢI hiện **ĐÚNG 21 mã allowlist** ở mục 0-BIS, **không dư 1 mã văn phòng nào**. Bot rà lại `isActiveSalesUser`/roster → thay bằng allowlist cứng.
+- **LẤY TARGET TỰ ĐỘNG (CEO muốn có số để tham khảo):** hiện cột "Nguồn" trống, "Target đang dùng 0đ" toàn bộ → CEO CHƯA thấy target tự động. Bot phải:
+  1. **Xác định nguồn target thật** để kéo về làm số tham khảo: (a) target cũ app Report/Lumos `V_TEM_TARGET_BONUS` (01–06 từng có target thật); và/hoặc (b) App Sale nếu có bảng target/KPI theo NV/kỳ. Xác nhận nguồn.
+  2. **Kéo về thành nguồn `appsale`/`legacy`** → thẻ hiện số thật (không phải 0đ), nhãn "Nguồn" ghi rõ lấy từ đâu.
+  3. **AI đề xuất** hiện ở nguồn `ai` để CEO đối chiếu.
+  → Mục tiêu: CEO mở tab Quản target thấy **21 mã, mỗi mã có số target tham khảo (từ nguồn tự động) + đề xuất AI**, rồi chọn/sửa.
+
 ## 1) SỬA "SAI/THIẾU" NGAY (không chờ Target admin)
 - **Thiếu NV:** danh sách Target/Dự báo hiện lấy NV có bán trong kỳ mới nhất (T07 đang chạy dở → sót). **Sửa: lấy TOÀN BỘ đội sale đang hoạt động** (NV sale + CTV sale, status active), và **neo "target cũ"/xu hướng theo THÁNG ĐỦ GẦN NHẤT (T06)**, không dựa tháng đang chạy dở.
 - **Tách TELESALE khỏi NV sale thị trường:** `VP018` (và telesale khác) là **telesale**, không phải NV sale thị trường. Thêm **loại NV** trong danh bạ: `sale` (thị trường) · `telesale` · `ctv` · `văn phòng`/khác. Danh sách target NV sale **chỉ gồm sale + ctv sale**; telesale tách nhóm riêng (xem câu hỏi CEO bên dưới).
