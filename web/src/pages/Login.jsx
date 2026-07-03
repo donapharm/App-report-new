@@ -264,6 +264,12 @@ export default function Login({ onLogin }) {
         {mode && (mode.live || showTelegram) ? 'Đăng nhập theo tài khoản nhân viên · dữ liệu bảo mật theo phân quyền.'
           : 'Dữ liệu mẫu đã ẩn danh — không có PII/số liệu thật.'}
       </p>
+      <p style={{ fontSize: 11, marginTop: 6, opacity: .5, textAlign: 'center' }}>
+        Bản {typeof __BUILD_VER__ !== 'undefined' ? __BUILD_VER__ : 'dev'}
+        {typeof __BUILD_AT__ !== 'undefined' ? ` · build ${__BUILD_AT__}` : ''}
+      </p>
     </div>
   );
 }
+
+/* globals __BUILD_VER__, __BUILD_AT__ */

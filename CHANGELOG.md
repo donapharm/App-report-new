@@ -21,6 +21,12 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Claude Code — Dấu mốc bản build ở màn login (PR mới)
+- **Vấn đề:** Sau deploy, khó biết bản web đang chạy là bản nào (bot `git pull` nhưng dist là artifact — không rebuild thì UI vẫn cũ; cộng cache PWA → "hình như vẫn bản cũ").
+- **Sửa:** `vite.config.js` inject `__BUILD_VER__` (SHA commit, hoặc `BUILD_VER` env) + `__BUILD_AT__` (giờ build) lúc build; màn Login hiện dòng mờ `Bản <sha> · build <giờ>`. Mở site (kể cả chế độ Riêng tư) là biết ngay bản nào đang live, hết mơ hồ.
+- Nghiệm thu: `npm run build` OK, kiểm headless thấy `Bản efc50d7 · build 22:39 03-07`.
+- **‼ Nhắc bot:** `git pull` KHÔNG đủ để đổi UI — PHẢI `npm --prefix web run build` rồi `pm2 restart reportnew`. dist bị .gitignore nên không tự cập nhật theo git.
+
 ### 2026-07-03 — Claude Code — Mobile/PWA polish (PR #14)
 - **Số lớn luôn hiện đủ:** bỏ cơ chế "chạm để đổi" (không đáng tin trên PWA khi kẹt cache) → `MoneyBig` luôn hiện số gọn (`4,76 tỷ`) kèm số đầy đủ (`4.758.211.000đ`) ngay bên dưới. File: `web/src/components.jsx`, `web/src/styles.css`.
 - **Nút bottom-nav cao hơn đáy:** tăng padding đáy nav + cộng `safe-area-inset-bottom`, `.page` chừa thêm chỗ → icon dễ chạm hơn trên máy có gesture bar. File: `web/src/styles.css`.
