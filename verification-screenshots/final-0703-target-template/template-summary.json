@@ -1,0 +1,18 @@
+{
+  "rowCount": 21,
+  "first": {
+    "emp": "DN001",
+    "name": "Đặng Xuân Trung",
+    "ky": "07.2026",
+    "target": 2000000000
+  },
+  "last": {
+    "emp": "VP004",
+    "name": "Trần Hoàng Trung",
+    "ky": "07.2026",
+    "target": 200000000
+  },
+  "blankTargets": 0,
+  "badCodes": [],
+  "missing": []
+}

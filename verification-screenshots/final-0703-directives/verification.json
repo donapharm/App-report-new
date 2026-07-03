@@ -1,0 +1,102 @@
+{
+  "apiCheck": {
+    "url": "https://reportnew.donapharm.asia/?v=cdp-final",
+    "logged": true,
+    "overview": {
+      "revenue": 2668987096,
+      "revenueBeforeVat": 2541892472,
+      "empTarget": {
+        "achieved": 5,
+        "total": 21
+      },
+      "targetTotal": 30062862426
+    },
+    "targets": {
+      "count": 21,
+      "bad": [],
+      "zero": [],
+      "sources": [
+        "Lumos V_TEM_TARGET_BONUS/App Sale"
+      ],
+      "sourceKys": [
+        "06.2026"
+      ]
+    },
+    "admin": {
+      "count": 21,
+      "bad": [],
+      "sources": [
+        "Lumos V_TEM_TARGET_BONUS/App Sale"
+      ]
+    },
+    "forecast": {
+      "count": 21,
+      "bad": []
+    },
+    "refresh": {
+      "enabled": true,
+      "minutes": 60,
+      "weekday": "07:30-18:30",
+      "sat": "07:30-13:00",
+      "sun": "off",
+      "misaSyncConfigured": false
+    }
+  },
+  "ui": {
+    "targetPc": {
+      "count": 0,
+      "codes": [],
+      "bad": [],
+      "hasSource": false,
+      "hasDN021": false,
+      "hasVP004": false,
+      "fullMoney": false,
+      "usShort": false,
+      "overflow": false
+    },
+    "targetPcShot": "verification-screenshots/final-0703-directives/pc-target.png",
+    "adminPc": {
+      "count": 0,
+      "codes": [],
+      "bad": [],
+      "hasSource": false,
+      "hasRef": false,
+      "hasAI": true,
+      "overflow": false
+    },
+    "adminPcShot": "verification-screenshots/final-0703-directives/pc-target-admin.png",
+    "revenueUnit": {
+      "labels": [],
+      "has001": false,
+      "fullMoney": false,
+      "overflow": false
+    },
+    "revenueUnitShot": "verification-screenshots/final-0703-directives/pc-revenue-unit.png",
+    "product": {
+      "hasQD": true,
+      "hasFullMoney": true,
+      "hasUSShort": false,
+      "overflow": false
+    },
+    "productShot": "verification-screenshots/final-0703-directives/pc-products.png",
+    "cst": {
+      "hasGiaBan": false,
+      "hasGiaThau": false,
+      "hasQD": true,
+      "hasOldSource": false,
+      "overflow": false
+    },
+    "cstShot": "verification-screenshots/final-0703-directives/pc-cst.png",
+    "targetMobile": {
+      "overflow": false,
+      "text": "DNPHARMA\nApp Report\nĐặng Xuân Trung\nQuản trị\nĐăng xuất\nKỳ này\nDự báo\nQuản target\nTháng\nQuý\nKhoảng\nTháng 07.2026\n‹\n01.2026\n02.2026\n03.2026\n04.2026\n05.2026\n06.2026\n07.2026\n›\n📊\nTổng quan\n💰\nDoanh thu\n📋\nDT đầy đủ\n💊\nSản phẩm\n📈\nPhân tích\n📦\nCơ số thầu\n🎯\nTarget\n🤖\nHỏi nhanh\n⬆️\nUpload\nPKĐK VIỆT HƯƠNG TÂN PHÚ",
+      "hasSource": false
+    },
+    "targetMobileShot": "verification-screenshots/final-0703-directives/mobile-target.png",
+    "revenueMobile": {
+      "overflow": false,
+      "text": "DNPHARMA\nApp Report\nĐặng Xuân Trung\nQuản trị\nĐăng xuất\nNhân viên\nĐơn vị\nSản phẩm\nChọn kỳ\nTất cả tuyến\nTất cả UT\nTất cả nhà thầu\nTất cả gói thầu\nXoá lọc (0)\nTổng nhân viên · kỳ · 0 dòng nhóm\n0đ\n⬇ Excel\n\nChạm một dòng để drill-down; bộ lọc luôn chạy ở backend theo quyền.\n\n📊\nTổng quan\n💰\nDoanh thu\n📋\nDT đầy đủ\n💊\nSản phẩm\n📈\nPhân tích\n📦\nCơ số thầu\n🎯\nTarget\n🤖\nHỏi nhanh\n⬆️\nUpload\nPKĐK VIỆT HƯƠNG TÂN PHÚ"
+    },
+    "revenueMobileShot": "verification-screenshots/final-0703-directives/mobile-revenue.png"
+  }
+}

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { money, short } from '../util.js';
+import { money } from '../util.js';
 import { Spinner } from '../components.jsx';
 
 const emptyMeta = { ky: '', dateFrom: '', dateTo: '' };
@@ -86,7 +86,7 @@ export default function Upload() {
       <>
         <div className="kpi-grid">
           <div className="kpi"><div className="label">Số dòng hợp lệ</div><div className="value">{fmtRows(preview.meta.totalRows)}</div></div>
-          <div className="kpi"><div className="label">Tổng doanh thu</div><div className="value small">{short(preview.meta.totalRevenue)}</div></div>
+          <div className="kpi"><div className="label">Tổng doanh thu</div><div className="value small">{money(preview.meta.totalRevenue)}</div></div>
           <div className="kpi"><div className="label">Số nhân viên</div><div className="value">{preview.meta.empCount}</div></div>
           <div className="kpi"><div className="label">Dòng nghi trùng</div><div className="value" style={{ color: duplicateCount ? 'var(--mid)' : 'var(--ok)' }}>{duplicateCount}</div></div>
         </div>
@@ -103,7 +103,7 @@ export default function Upload() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
               <select value={meta.ky} onChange={(e) => setMeta({ ...meta, ky: e.target.value })}>
                 <option value="">Chọn kỳ đang có</option>
-                {activeSlots.map((s) => <option key={s.id} value={s.ky}>{s.ky} · {fmtRows(s.totalRows)} dòng · {short(s.totalRevenue)}</option>)}
+                {activeSlots.map((s) => <option key={s.id} value={s.ky}>{s.ky} · {fmtRows(s.totalRows)} dòng · {money(s.totalRevenue)}</option>)}
               </select>
               <input placeholder="Từ ngày" type="date" value={meta.dateFrom} onChange={(e) => setMeta({ ...meta, dateFrom: e.target.value })} />
               <input placeholder="Đến ngày" type="date" value={meta.dateTo} onChange={(e) => setMeta({ ...meta, dateTo: e.target.value })} />
@@ -132,7 +132,7 @@ export default function Upload() {
           {preview.sample.map((r, i) => (
             <div key={i} className="row">
               <div className="main"><div className="name">{r.emp_code} · {r.unit_code || '—'}</div><div className="meta">{r.product_name || r.iit_code || ''}</div></div>
-              <div className="amt">{short(r.revenue)}</div>
+              <div className="amt">{money(r.revenue)}</div>
             </div>
           ))}
         </div>
@@ -159,7 +159,7 @@ export default function Upload() {
             {tab === 'update' && (
               <select value={meta.ky} onChange={(e) => setMeta({ ...meta, ky: e.target.value })} style={{ marginBottom: 8 }}>
                 <option value="">Chọn kỳ đang có để cập nhật</option>
-                {activeSlots.map((s) => <option key={s.id} value={s.ky}>{s.ky} · {fmtRows(s.totalRows)} dòng · {short(s.totalRevenue)}</option>)}
+                {activeSlots.map((s) => <option key={s.id} value={s.ky}>{s.ky} · {fmtRows(s.totalRows)} dòng · {money(s.totalRevenue)}</option>)}
               </select>
             )}
             <input ref={fileRef} type="file" accept=".xlsx" onChange={onFile} />
@@ -174,18 +174,18 @@ export default function Upload() {
         !slots ? <Spinner /> : (
           <>
             <div className="section-title">Các slot đã lưu</div>
-            {slots.slots.length === 0 ? <div className="center">Chưa có slot nào.</div> : slots.slots.map((s) => (
-              <div key={s.id} className="card" style={{ padding: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+            {slots.slots.length === 0 ? <div className="center">Chưa có slot nào.</div> : <div className="list-grid upload-slot-grid">{slots.slots.map((s) => (
+              <div key={s.id} className="card detail-card" style={{ padding: 12 }}>
+                <div className="detail-head detail-head-two">
                   <div>
-                    <div style={{ fontWeight: 700 }}>Kỳ {s.ky} {s.active && <span className="pill ok">đang dùng</span>} {s.mode === 'update' && <span className="pill warn">cập nhật</span>}</div>
-                    <div className="meta muted">{fmtRows(s.totalRows)} dòng · {short(s.totalRevenue)} · {s.uploadedByName || s.uploadedBy}</div>
+                    <div className="detail-title">Kỳ {s.ky} {s.active && <span className="pill ok">đang dùng</span>} {s.mode === 'update' && <span className="pill warn">cập nhật</span>}</div>
+                    <div className="meta muted">{fmtRows(s.totalRows)} dòng · {money(s.totalRevenue)} · {s.uploadedByName || s.uploadedBy}</div>
                     <div className="meta muted">{new Date(s.uploadedAt).toLocaleString('vi-VN')}{s.replacedSlotId ? ` · thay slot ${s.replacedSlotId}` : ''}</div>
                   </div>
                   {!s.active && <button className="btn ghost" onClick={() => rollback(s.id)}>↩ Khôi phục</button>}
                 </div>
               </div>
-            ))}
+            ))}</div>}
             <div className="section-title">Nhật ký thao tác</div>
             {slots.audit.length === 0 ? <div className="center muted">Chưa có.</div> : slots.audit.slice(0, 20).map((a, i) => (
               <div key={i} className="meta muted" style={{ padding: '4px 6px' }}>

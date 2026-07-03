@@ -1,0 +1,82 @@
+{
+  "timings": [
+    {
+      "url": "/overview?ky=07.2026",
+      "ms": 12,
+      "ok": true
+    },
+    {
+      "url": "/trend",
+      "ms": 541,
+      "ok": true
+    },
+    {
+      "url": "/analysis?ky=07.2026",
+      "ms": 443,
+      "ok": true
+    },
+    {
+      "url": "/revenue?dimension=product&ky=06.2026",
+      "ms": 195,
+      "ok": true
+    },
+    {
+      "url": "/products?ky=06.2026&pageSize=100",
+      "ms": 126,
+      "ok": true
+    },
+    {
+      "url": "/cst",
+      "ms": 168,
+      "ok": true
+    }
+  ],
+  "checks": {
+    "overviewFast": true,
+    "productQd139HasIngredient": true,
+    "revenueProductQd139HasIngredient": true,
+    "cstQd139HasIngredient": true,
+    "cstNoRawMaySource": true,
+    "cstNoSalePriceFieldInUi": true
+  },
+  "samples": {
+    "product": {
+      "key": "G1.GE.QĐ139.3106.N5.484",
+      "iit_code": "G1.GE.QĐ139.3106.N5.484",
+      "product_name": "RELIPOREX 4000 IU",
+      "qd": "QĐ139",
+      "active_ingredient": "Recombinant Human Erythropoietin",
+      "ham_luong": "4000 IU",
+      "uom": "Bút tiêm",
+      "contractor": "Công Ty Tnhh Dược Phẩm Donapharm",
+      "bid_price": 191860,
+      "revenue": 2091274000,
+      "quantity": 10900,
+      "rows": 17,
+      "unitCount": 12,
+      "empCount": 8,
+      "contractorCount": 1,
+      "bidPackages": "QĐ139",
+      "avgPrice": 191860
+    },
+    "revenue": {
+      "key": "G1.GE.QĐ139.3106.N5.484",
+      "label": "RELIPOREX 4000 IU",
+      "revenue": 2091274000,
+      "quantity": 10900,
+      "rows": 17,
+      "iit_code": "G1.GE.QĐ139.3106.N5.484",
+      "product_name": "RELIPOREX 4000 IU",
+      "active_ingredient": "Recombinant Human Erythropoietin",
+      "ham_luong": "4000 IU",
+      "uom": "Bút tiêm",
+      "contractor": "",
+      "bid_price": 191860,
+      "qd": "QĐ139"
+    },
+    "cstSourceLabels": [
+      "Baseline 05.2026 + bán đến 07.2026",
+      "Baseline 05.2026 + bán đến 06.2026"
+    ]
+  }
+}

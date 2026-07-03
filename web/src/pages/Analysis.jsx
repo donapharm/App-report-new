@@ -1,42 +1,43 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { money, short, pct } from '../util.js';
+import { money, pct, unitText } from '../util.js';
 import { Spinner, Kpi } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
 import { DonutChart, TopBarChart } from '../charts.jsx';
 
-function DeltaRow({ i, r }) {
+function DeltaRow({ i, r, kind }) {
   const up = (r.delta || 0) >= 0;
+  const title = kind === 'unit' ? unitText(r.key, r.label) : r.label;
   return (
     <div className="row">
       <div className="main">
-        <div className="name"><span className="rank">{i}</span>{r.label}</div>
-        <div className="meta">Kỳ trước {short(r.prevRevenue)} → kỳ này {short(r.revenue)} · {pct(r.deltaPct)}</div>
+        <div className="name"><span className="rank">{i}</span>{title}</div>
+        <div className="meta">Kỳ trước {money(r.prevRevenue)} → kỳ này {money(r.revenue)} · {pct(r.deltaPct)}</div>
       </div>
-      <div className="amt" style={{ color: up ? 'var(--ok)' : 'var(--hi)' }}>{up ? '+' : ''}{short(r.delta)}</div>
+      <div className="amt" style={{ color: up ? 'var(--ok)' : 'var(--hi)' }}>{up ? '+' : ''}{money(r.delta)}</div>
     </div>
   );
 }
 
-function Block({ title, rows, negative }) {
+function Block({ title, rows, negative, kind }) {
   return (
-    <div className="card">
+    <div className="card analysis-list-block">
       <div className="section-head">{title}</div>
-      {!rows?.length ? <div className="center">Chưa có dữ liệu so sánh.</div> : rows.map((r, i) => <DeltaRow key={r.key} i={i + 1} r={r} negative={negative} />)}
+      {!rows?.length ? <div className="center">Chưa có dữ liệu so sánh.</div> : rows.map((r, i) => <DeltaRow key={r.key} i={i + 1} r={r} negative={negative} kind={kind} />)}
     </div>
   );
 }
 
 function CstLowBlock({ rows }) {
   return (
-    <div className="card">
+    <div className="card analysis-list-block">
       <div className="section-head">📦 SP sắp hết CST</div>
       {!rows?.length ? <div className="center">Không có sản phẩm sắp hết CST trong phạm vi lọc.</div> : rows.map((r, i) => (
         <div className="row" key={r.key || i}>
           <div className="main">
             <div className="name"><span className="rank">{i + 1}</span>{r.label}</div>
-            <div className="meta">{r.iit_code || '—'} · {r.qd || '—'} · {r.unit_name || '—'} {r.qd === 'QĐ139' ? `· ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''}</div>
+            <div className="meta">{r.iit_code || '—'} · {r.qd || '—'} · {unitText(r.unit_code, r.unit_name)} {r.qd === 'QĐ139' ? `· ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''}</div>
           </div>
           <div className="amt" style={{ color: 'var(--hi)' }}>còn {r.remain_pct}%</div>
         </div>
@@ -88,7 +89,7 @@ export default function Analysis({ me }) {
           <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
           <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
           <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
-          <Select value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" />
+          <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
           <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
         </div>
         <div className="filter-search">
@@ -99,8 +100,8 @@ export default function Analysis({ me }) {
       {!data ? <Spinner /> : (
         <>
           <div className="kpi-grid">
-            <Kpi label={`Doanh thu ${data.ky}`} value={short(data.currentRevenue)} sub={money(data.currentRevenue)} />
-            <Kpi label={`So với ${data.prevKy || 'kỳ trước'}`} value={(data.delta >= 0 ? '+' : '') + short(data.delta)} sub={data.deltaPct == null ? 'Chưa có kỳ trước' : pct(data.deltaPct)} />
+            <Kpi label={`Doanh thu ${data.ky}`} value={money(data.currentRevenue)} />
+            <Kpi label={`So với ${data.prevKy || 'kỳ trước'}`} value={(data.delta >= 0 ? '+' : '') + money(data.delta)} sub={data.deltaPct == null ? 'Chưa có kỳ trước' : pct(data.deltaPct)} />
             <Kpi label="Số dòng dữ liệu" value={(data.rowCount || 0).toLocaleString('vi-VN')} />
           </div>
           <div className="card">
@@ -121,12 +122,14 @@ export default function Analysis({ me }) {
             </div>
             {!topRows ? <Spinner /> : <TopBarChart rows={topRows} />}
           </div>
-          <Block title="Đơn vị tăng mạnh" rows={data.topGrowthUnits} />
-          <Block title="Đơn vị giảm mạnh" rows={data.topDeclineUnits} negative />
-          <Block title="Sản phẩm tăng mạnh" rows={data.topGrowthProducts} />
-          <Block title="Sản phẩm giảm mạnh" rows={data.topDeclineProducts} negative />
-          <Block title="SP cần đẩy mạnh" rows={data.pushProducts} negative />
-          <CstLowBlock rows={data.cstLowProducts} />
+          <div className="list-grid analysis-block-grid">
+            <Block title="Đơn vị tăng mạnh" rows={data.topGrowthUnits} kind="unit" />
+            <Block title="Đơn vị giảm mạnh" rows={data.topDeclineUnits} kind="unit" negative />
+            <Block title="Sản phẩm tăng mạnh" rows={data.topGrowthProducts} />
+            <Block title="Sản phẩm giảm mạnh" rows={data.topDeclineProducts} negative />
+            <Block title="SP cần đẩy mạnh" rows={data.pushProducts} negative />
+            <CstLowBlock rows={data.cstLowProducts} />
+          </div>
         </>
       )}
     </>

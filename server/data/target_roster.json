@@ -1,0 +1,48 @@
+{
+  "version": "2026-07-03-ceo-approved-0-bis",
+  "source": "DIRECTIVE_TARGET_ADMIN.md mục 0-BIS / CEO-approved target roster",
+  "description": "Roster Target chỉ gồm 21 mã NV sale thị trường/CTV được CEO chốt. Không suy luận theo role/status; không đưa văn phòng/telesale vào Target/Dự báo.",
+  "allowed_codes": [
+    "DN001",
+    "DN002",
+    "DN003",
+    "DN004",
+    "DN005",
+    "DN006",
+    "DN007",
+    "DN008",
+    "DN009",
+    "DN010",
+    "DN011",
+    "DN012",
+    "DN016",
+    "DN017",
+    "DN018",
+    "DN019",
+    "DN021",
+    "DN022",
+    "DN023",
+    "DN024",
+    "VP004"
+  ],
+  "source_aliases": {
+    "DN014": "DN021"
+  },
+  "excluded_notes": {
+    "VP018": "telesale - không giao target",
+    "VP002": "văn phòng/không thuộc roster target CEO chốt",
+    "VP003": "văn phòng/không thuộc roster target CEO chốt",
+    "VP006": "văn phòng/không thuộc roster target CEO chốt",
+    "VP007": "văn phòng/không thuộc roster target CEO chốt",
+    "VP008": "văn phòng/không thuộc roster target CEO chốt",
+    "VP009": "văn phòng/không thuộc roster target CEO chốt",
+    "VP010": "văn phòng/không thuộc roster target CEO chốt",
+    "VP011": "văn phòng/không thuộc roster target CEO chốt",
+    "VP012": "văn phòng/không thuộc roster target CEO chốt",
+    "VP013": "văn phòng/không thuộc roster target CEO chốt",
+    "VP014": "văn phòng/không thuộc roster target CEO chốt",
+    "VP015": "văn phòng/không thuộc roster target CEO chốt",
+    "VP016": "văn phòng/không thuộc roster target CEO chốt",
+    "VP017": "văn phòng/không thuộc roster target CEO chốt"
+  }
+}

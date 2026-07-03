@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { money, short, pct } from '../util.js';
+import { money, pct, unitText } from '../util.js';
 import { Spinner, Kpi } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
@@ -10,22 +10,22 @@ function AlertLine({ group, item }) {
     return (
       <div className="alert-line">
         <b>{item.name}</b>
-        <span>{pct(item.pct)} target · {short(item.revenue_before_vat)} / {short(item.target)}</span>
+        <span>{pct(item.pct)} target · {money(item.revenue_before_vat)} / {money(item.target)}</span>
       </div>
     );
   }
   if (group.key === 'unit_down') {
     return (
       <div className="alert-line">
-        <b>{item.unit_name}</b>
-        <span>Giảm {pct(Math.abs(item.mom), 0)} · {short(item.prev)} → {short(item.cur)}</span>
+        <b>{unitText(item.unit_code, item.unit_name)}</b>
+        <span>Giảm {pct(Math.abs(item.mom), 0)} · {money(item.prev)} → {money(item.cur)}</span>
       </div>
     );
   }
   return (
     <div className="alert-line">
       <b>{item.product_name || '—'}</b>
-      <span>{item.unit_name} · còn {pct(item.remain_pct)} ({Number(item.remain_qty || 0).toLocaleString('vi-VN')} / {Number(item.bid_qty_initial || 0).toLocaleString('vi-VN')})</span>
+      <span>{unitText(item.unit_code, item.unit_name)} · còn {pct(item.remain_pct)} ({Number(item.remain_qty || 0).toLocaleString('vi-VN')} / {Number(item.bid_qty_initial || 0).toLocaleString('vi-VN')})</span>
     </div>
   );
 }
@@ -106,8 +106,8 @@ export default function Overview({ me, onNavigate }) {
       {!kpi ? <Spinner /> : (
         <>
           <div className="kpi-grid">
-            <Kpi label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={short(kpi.revenue)} delta={kpi.momPct} sub={periodLabel(periodSel)} />
-            <Kpi label="Trước VAT" value={short(kpi.revenueBeforeVat)} sub={money(kpi.revenue) + ' sau VAT'} />
+            <Kpi label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={money(kpi.revenue)} delta={kpi.momPct} sub={periodLabel(periodSel)} />
+            <Kpi label="Trước VAT" value={money(kpi.revenueBeforeVat)} sub={money(kpi.revenue) + ' sau VAT'} />
             <Kpi label="Đạt target (%)" value={pct(kpi.pctTarget)}
                  sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} />
             <Kpi label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} />
@@ -122,7 +122,7 @@ export default function Overview({ me, onNavigate }) {
             <div className="card chart-card target-card">
               <div className="section-head">🎯 Tiến độ target {periodLabel(periodSel)}</div>
               <TargetGauge pct={kpi.pctTarget} />
-              <div className="center compact-center">{short(kpi.revenueBeforeVat)} / {short(kpi.targetCompareTotal || kpi.targetTotal)} trước VAT</div>
+              <div className="center compact-center">{Number(kpi.targetTotal || 0) > 0 ? `${money(kpi.revenueBeforeVat)} / target tháng ${money(kpi.targetTotal)} trước VAT` : `${money(kpi.revenueBeforeVat)} · Chưa giao target`}</div>
             </div>
             <div className="card chart-card wide">
               <div className="chart-head">

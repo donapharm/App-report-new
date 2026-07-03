@@ -1,16 +1,16 @@
 {
-  "generatedAt": "2026-07-02T18:21:38.789Z",
-  "dataAsOf": "2026-07-02T18:21:38.789Z",
-  "slotId": "rev_2src_072026_20260702182138",
-  "file": "/home/osboxes/.openclaw/workspace-report/App-report-new/server/data/uploads/rev_2src_072026_20260702182138.json",
+  "generatedAt": "2026-07-03T02:30:35.530Z",
+  "dataAsOf": "2026-07-03T09:30:35+07:00",
+  "slotId": "rev_2src_072026_20260703023035",
+  "file": "/home/osboxes/.openclaw/workspace-report/App-report-new/server/data/uploads/rev_2src_072026_20260703023035.json",
   "ky": "07.2026",
   "latestMisaRun": {
-    "id": "27",
-    "finished_at": "2026-07-02T16:42:23.186Z",
+    "id": "28",
+    "finished_at": "2026-07-03T01:44:41.348Z",
     "raw_summary": {
       "dedupe": {
-        "inputRows": 252,
-        "outputRows": 252,
+        "inputRows": 253,
+        "outputRows": 253,
         "duplicateRowsRemoved": 0
       },
       "paging": {
@@ -22,13 +22,13 @@
         "totalPages": 334,
         "missingCount": 0,
         "pagesFetched": 334,
-        "totalRecords": 16683,
-        "fetchedAtGmt7": "2026-07-02T23:42:23+07:00",
+        "totalRecords": 16684,
+        "fetchedAtGmt7": "2026-07-03T08:44:41+07:00",
         "lastPageSample": {
           "page": 334,
-          "rows": 33,
-          "lastOrder": "DH479815585",
-          "firstOrder": "01.DONA/031.PKĐK LONG BÌNH-TRẢNG BOM"
+          "rows": 34,
+          "lastOrder": "DH479815183",
+          "firstOrder": "DH479815577"
         },
         "firstPageSample": {
           "page": 1,
@@ -36,20 +36,20 @@
           "lastOrder": "DH479800960",
           "firstOrder": "DH479800716"
         },
-        "rawFetchedCount": 16683,
+        "rawFetchedCount": 16684,
         "matchesTotalRecords": true,
         "duplicateSaleOrderNoCount": 84
       },
       "summary": {
-        "rows": 252,
-        "orders": 76,
+        "rows": 253,
+        "orders": 77,
         "byBucket": [
           {
             "key": "pending",
-            "rows": 249,
-            "amount": 2600259136,
-            "orders": 74,
-            "invoiceExportAmount": 2118313496
+            "rows": 250,
+            "amount": 2611349136,
+            "orders": 75,
+            "invoiceExportAmount": 2214559796
           },
           {
             "key": "excluded",
@@ -65,14 +65,14 @@
             "rows": 146,
             "amount": 1355793396,
             "orders": 37,
-            "invoiceExportAmount": 958846356
+            "invoiceExportAmount": 982471356
           },
           {
             "key": "02.AFP|pending",
-            "rows": 103,
-            "amount": 1244465740,
-            "orders": 37,
-            "invoiceExportAmount": 1159467140
+            "rows": 104,
+            "amount": 1255555740,
+            "orders": 38,
+            "invoiceExportAmount": 1232088440
           },
           {
             "key": "01.DONA|excluded",
@@ -85,10 +85,10 @@
         "byMappingStatus": [
           {
             "key": "mapped",
-            "rows": 251,
-            "amount": 2619479136,
-            "orders": 75,
-            "invoiceExportAmount": 2118313496
+            "rows": 252,
+            "amount": 2630569136,
+            "orders": 76,
+            "invoiceExportAmount": 2214559796
           },
           {
             "key": "unmapped",
@@ -107,21 +107,21 @@
         "warning": false,
         "mismatchAbs": 0,
         "missingCount": 0,
-        "totalRecords": 16683,
-        "rawFetchedCount": 16683,
+        "totalRecords": 16684,
+        "rawFetchedCount": 16684,
         "allowedMismatchCount": 84
       },
-      "insertedOrUpdatedRows": 252
+      "insertedOrUpdatedRows": 253
     }
   },
   "summary": {
-    "rows": 293,
-    "totalRevenue": 2668987096,
+    "rows": 296,
+    "totalRevenue": 2765233396,
     "bySource": {
       "CRM_MISA": {
-        "rows": 226,
-        "orders": 66,
-        "revenue": 2118313496
+        "rows": 229,
+        "orders": 68,
+        "revenue": 2214559796
       },
       "APP_WEB_PARTNER": {
         "rows": 67,

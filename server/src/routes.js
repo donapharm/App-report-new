@@ -16,6 +16,9 @@ const targetAdmin = require('./targetAdmin');
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
+function clearTargetDependentCache() {
+  if (typeof A.clearOverviewCache === 'function') A.clearOverviewCache();
+}
 function memoGet(key, ttlMs, build) {
   const hit = memo.get(key);
   const t = Date.now();
@@ -60,12 +63,39 @@ function productMetaFromRows(rows = []) {
       active_ingredient: r.active_ingredient || '',
       ham_luong: r.ham_luong || '',
       uom: r.uom || '',
-      contractor: r.contractor_name || r.contractor_code || '',
+      contractor: r.contractor_code || r.contractor_name || '',
+      contractor_code: r.contractor_code || '',
+      contractor_name: r.contractor_name || '',
       bid_price: r.bid_price || null,
       qd: qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`),
     });
   }
   return map;
+}
+function pairLabel(code, name) {
+  const c = String(code || '').trim();
+  const n = String(name || '').trim();
+  if (!c && !n) return '—';
+  if (!c) return n;
+  if (!n || n === c || c.includes(n)) return c;
+  if (n.includes(c)) return `${c} · ${n.replace(c, '').trim().replace(/^[-–—·\s]+/, '')}`;
+  return `${c} · ${n}`;
+}
+function contractorOptions(rows = []) {
+  const m = new Map();
+  for (const r of rows) {
+    const code = String(r.contractor_code || r.contractor || '').trim();
+    const name = String(r.contractor_name || '').trim();
+    if (!code && !name) continue;
+    const key = code || name;
+    const cur = m.get(key) || { key, code, names: new Set() };
+    if (name && name !== code) cur.names.add(name);
+    m.set(key, cur);
+  }
+  return [...m.values()].map((x) => {
+    const names = [...x.names].sort((a, b) => a.localeCompare(b, 'vi'));
+    return { key: x.key, label: pairLabel(x.code || x.key, names.join(' / ')), kind: 'contractor', code: x.code || x.key, names };
+  }).sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi'));
 }
 function cstSourceLabel(r = {}) {
   const base = r.cst_baseline_covered_ky || (/MAY/i.test(String(r.source_from_date || '')) ? '05.2026' : '');
@@ -235,7 +265,7 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     })(),
     routes: uniq(rows, 'route'),
     priorities: uniq(rows.concat(cst), 'priority'),
-    contractors: uniq(rows, 'contractor_code'),
+    contractors: contractorOptions(rows.concat(cst)),
     bidPackages: uniq(rows.concat(cst), 'bid_package'),
   });
 });
@@ -385,6 +415,8 @@ router.get('/products', auth.requireAuth, (req, res) => {
     ham_luong: meta.qd === 'QĐ139' ? (meta.ham_luong || '') : '',
     uom: meta.uom || '',
     contractor: meta.contractor || [...x.contractors][0] || '',
+    contractor_code: meta.contractor_code || meta.contractor || [...x.contractors][0] || '',
+    contractor_name: meta.contractor_name || '',
     bid_price: meta.bid_price || null,
     revenue: x.revenue,
     quantity: x.quantity,
@@ -425,7 +457,10 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     });
   };
   const byRoute = A.groupSum(currentRows, 'route', 'route').slice(0, 10);
-  const byContractor = A.groupSum(currentRows, 'contractor_code', 'contractor_code').slice(0, 10);
+  const contractorLabelByCode = Object.fromEntries(contractorOptions(currentRows).map((x) => [x.key, x.label]));
+  const byContractor = A.groupSum(currentRows, 'contractor_code', 'contractor_code')
+    .map((x) => ({ ...x, label: contractorLabelByCode[x.key] || x.label || x.key }))
+    .slice(0, 10);
   const byPriority = A.groupSum(currentRows, 'priority', 'priority').slice(0, 10);
   const byBidPackage = A.groupSum(currentRows, 'bid_package', 'bid_package').slice(0, 10);
   const unitCompare = compare('unit');
@@ -440,6 +475,7 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
       key: `${c.iit_code || c.product_name}-${c.unit_code || c.unit_name}`,
       label: c.product_name,
       iit_code: c.iit_code,
+      unit_code: c.unit_code,
       unit_name: c.unit_name || c.unit_code,
       remain_pct: c.remain_pct,
       remain_qty: c.remain_qty,
@@ -497,18 +533,27 @@ router.get('/targets', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const { ky, kys } = pc;
-  // Danh sách target = toàn bộ đội sale/CTV active, neo đủ đội; loại telesale (VP018).
+  // Danh sách target = allowlist/has_target CEO chốt (0-BIS), không suy luận role/status.
   const targets = store.getTargetsRange({ kys, scope });
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
-  const targetSourceByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, t.target_source || t.source || 'legacy']));
+  const targetMetaByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, {
+    source: t.target_source || t.source || '—',
+    label: t.target_source_label || t.target_source || t.source || '—',
+    source_ky: t.target_source_ky || null,
+    reference: !!t.target_reference,
+  }]));
   const pacing = A.targetPacingMeta(ky);
   const items = store.targetRoster({ scope }).map((u) => {
     const ec = u.emp_code;
     const rev = A.sum(store.getRowsRange({ kys, scope: { empCode: ec } }), (r) => r.revenue);
     const beforeVat = rev / A.VAT_DIVISOR;
     const targetFull = targetByEmp[ec] || 0;
-    const target = A.targetCompareValue(targetFull, ky);
+    // DIRECTIVE_TARGET_KPI: KPI so với target CẢ THÁNG để CEO/NV đọc dễ hiểu.
+    // Pacing chỉ là metadata tham khảo, không dùng làm mẫu số chính.
+    const target = targetFull;
+    const tm = targetMetaByEmp[ec] || {};
+    const assigned = targetFull > 0;
     return {
       emp_code: ec,
       emp_name: u.name || ec,
@@ -516,13 +561,21 @@ router.get('/targets', auth.requireAuth, (req, res) => {
       target_full: targetFull,
       target_compare: target,
       target,
-      target_source: targetSourceByEmp[ec] || null,
+      target_assigned: assigned,
+      target_source: tm.source || null,
+      target_source_label: tm.label || null,
+      target_source_ky: tm.source_ky || null,
+      target_reference: !!tm.reference,
       revenue_before_vat: Math.round(beforeVat),
-      pct: target > 0 ? +(beforeVat / target * 100).toFixed(1) : null,
-      gap: Math.round(beforeVat - target),
+      pct: assigned ? +(beforeVat / targetFull * 100).toFixed(1) : null,
+      gap: assigned ? Math.round(beforeVat - targetFull) : null,
     };
   }).sort((a, b) => b.revenue_before_vat - a.revenue_before_vat);
-  res.json({ ky, kys, pacing, items });
+  const totalRevenueBeforeVat = Math.round(A.sum(items, (x) => x.revenue_before_vat));
+  const totalTarget = Math.round(A.sum(items, (x) => x.target_full));
+  const assignedCount = items.filter((x) => x.target_assigned).length;
+  const achievedCount = items.filter((x) => x.target_assigned && x.revenue_before_vat >= x.target_full).length;
+  res.json({ ky, kys, pacing, summary: { totalRevenueBeforeVat, totalTarget, pct: totalTarget > 0 ? +(totalRevenueBeforeVat / totalTarget * 100).toFixed(1) : null, gap: totalTarget > 0 ? totalRevenueBeforeVat - totalTarget : null, assignedCount, unassignedCount: items.length - assignedCount, achievedCount, totalEmployees: items.length }, items });
 });
 
 // Dự báo target kỳ tới theo xu hướng
@@ -536,12 +589,79 @@ function targetMatrix(ky) {
   const resolved = new Map(targetAdmin.resolveTargets({ ky, empCodes: roster.map((u) => u.emp_code) }).map((e) => [e.emp_code, e]));
   return roster.map((u) => {
     const r = resolved.get(u.emp_code) || null;
-    return { emp_code: u.emp_code, emp_name: u.name, employee_type: store.employeeType(u), target: r?.target || 0, source: r?.source || null, updated_at: r?.at || null };
+    return { emp_code: u.emp_code, emp_name: u.name, employee_type: store.employeeType(u), target: r?.target || 0, source: r?.source || null, scope: r?.scope || 'all', source_label: r?.source_label || r?.source || null, source_ky: r?.source_ky || null, reference: !!r?.reference, updated_at: r?.at || null };
   });
 }
 router.get('/admin/targets', auth.requireAuth, auth.requireAdmin, (req, res) => {
   const ky = req.query.ky || store.latestKy();
-  res.json({ ky, rows: targetMatrix(ky), history: targetAdmin.listAudit().slice(0, 30) });
+  const baseline = targetAdmin.baseline202606();
+  res.json({ ky, rows: targetMatrix(ky), baseline: { ky: baseline.ky, total: baseline.total, count: baseline.rows.length, label: 'T06/2026 Lumos' }, history: targetAdmin.listAudit().slice(0, 30) });
+});
+router.get('/admin/targets/template.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  const ky = String(req.query.ky || store.latestKy()).trim();
+  const basis = String(req.query.basis || 't06').trim().toLowerCase();
+  const rows = targetMatrix(ky);
+  const baseline = targetAdmin.baseline202606();
+  const baselineByEmp = new Map((baseline.rows || []).map((r) => [r.emp_code, Number(r.target || 0)]));
+  const latestByEmp = basis === 'latest' ? targetAdmin.latestAssignedTargets({ beforeKy: ky, empCodes: rows.map((r) => r.emp_code) }) : new Map();
+  function fillTarget(row) {
+    if (Number(row.target || 0) > 0) return { value: Number(row.target || 0), source: row.source_label || row.source || 'Target hiện tại' };
+    if (basis === 'blank') return { value: null, source: 'Trống — chưa giao target' };
+    if (basis === 'latest') {
+      const latest = latestByEmp.get(row.emp_code);
+      if (latest) return { value: Number(latest.target || 0), source: `Căn cứ: kỳ gần nhất đã giao ${latest.ky}` };
+      const b = baselineByEmp.get(row.emp_code);
+      if (b) return { value: b, source: 'Căn cứ fallback: target T06/2026 Lumos' };
+      return { value: null, source: 'Không có căn cứ' };
+    }
+    const b = baselineByEmp.get(row.emp_code);
+    if (b) return { value: b, source: 'Căn cứ: target T06/2026 Lumos' };
+    return { value: null, source: 'Không có căn cứ T06' };
+  }
+  const basisLabel = basis === 'blank' ? 'Trống' : basis === 'latest' ? 'Kỳ gần nhất đã giao' : 'Target T06/2026 Lumos';
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'App Report New';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('Target template');
+  ws.columns = [
+    { header: 'emp_code', key: 'emp_code', width: 12 },
+    { header: 'emp_name', key: 'emp_name', width: 28 },
+    { header: 'ky', key: 'ky', width: 12 },
+    { header: 'target', key: 'target', width: 18 },
+    { header: 'source', key: 'source', width: 38 },
+    { header: 'note', key: 'note', width: 38 },
+  ];
+  rows.forEach((r) => {
+    const fill = fillTarget(r);
+    ws.addRow({
+      emp_code: r.emp_code,
+      emp_name: r.emp_name,
+      ky,
+      target: fill.value,
+      source: fill.source,
+      note: Number(r.target || 0) > 0 ? 'Target hiện tại của kỳ này; sửa nếu cần.' : `Chưa giao target kỳ ${ky}; điền sẵn theo ${basisLabel} để CEO sửa rồi upload.`,
+    });
+  });
+  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F4C81' } };
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  ws.getColumn('target').numFmt = '#,##0';
+  ws.autoFilter = 'A1:F22';
+  const guide = wb.addWorksheet('Huong dan');
+  guide.addRows([
+    ['Template target kỳ', ky],
+    ['Căn cứ xuất file', basisLabel],
+    ['Baseline T06 Lumos', `${baseline.rows.length} NV · tổng ${Number(baseline.total || 0).toLocaleString('vi-VN')}đ`],
+    ['Roster', `${rows.length} NV theo allowlist CEO chốt, tên lấy từ DB`],
+    ['Cách nhập', 'Chỉ sửa cột target. Ô trống sẽ giữ nguyên target hiện tại. Nhập 0 nếu thật sự muốn giao target bằng 0.'],
+    ['Ưu tiên điền sẵn', 'Nếu kỳ này đã có target thì dùng target hiện tại; nếu chưa giao thì dùng căn cứ đã chọn. Căn cứ không tự thành target live cho đến khi CEO upload/commit.'],
+    ['Upload', 'Upload lại file này để preview → commit. Rollback theo batch/mã upload nếu cần.'],
+  ]);
+  guide.getColumn(1).width = 18; guide.getColumn(2).width = 80;
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="target_template_${ky}_${basis || 't06'}.xlsx"`);
+  await wb.xlsx.write(res);
+  res.end();
 });
 router.post('/admin/targets/upload/preview', auth.requireAuth, auth.requireAdmin, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Chưa chọn file .xlsx' });
@@ -550,22 +670,38 @@ router.post('/admin/targets/upload/preview', auth.requireAuth, auth.requireAdmin
     const parsed = await targetAdmin.parseTargetWorkbook(req.file.buffer, (code) => valid.has(String(code || '').toUpperCase()));
     if (parsed.errors.length) return res.status(422).json({ errors: parsed.errors, meta: parsed.meta, sample: parsed.rows.slice(0, 10) });
     const previewId = targetAdmin.stashPreview({ ...parsed, filename: req.file.originalname });
-    res.json({ previewId, filename: req.file.originalname, meta: parsed.meta, sample: parsed.rows.slice(0, 10) });
+    res.json({ previewId, filename: req.file.originalname, meta: parsed.meta, skipped: parsed.skipped?.slice(0, 10) || [], sample: parsed.rows.slice(0, 10) });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.post('/admin/targets/upload/commit', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  try { res.json({ ok: true, result: targetAdmin.commitPreview({ previewId: req.body?.previewId, user: req.session }) }); }
+  try { const result = targetAdmin.commitPreview({ previewId: req.body?.previewId, user: req.session }); clearTargetDependentCache(); res.json({ ok: true, result }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.post('/admin/targets/upload/rollback', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  try { res.json({ ok: true, result: targetAdmin.rollbackBatch({ batchId: req.body?.batchId, user: req.session }) }); }
+  try { const result = targetAdmin.rollbackBatch({ batchId: req.body?.batchId, user: req.session }); clearTargetDependentCache(); res.json({ ok: true, result }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.post('/admin/targets/manual', auth.requireAuth, auth.requireAdmin, (req, res) => {
   const valid = new Set(store.targetRoster({ scope: {} }).map((u) => u.emp_code));
   const emp = String(req.body?.emp_code || '').toUpperCase();
   if (!valid.has(emp)) return res.status(400).json({ error: 'Mã NV không thuộc đội target hoặc là telesale' });
-  try { res.json({ ok: true, entry: targetAdmin.upsertEntry({ emp_code: emp, ky: req.body?.ky, target: req.body?.target, source: 'manual', user: req.session, note: req.body?.note || 'manual_edit' }) }); }
+  try { const entry = targetAdmin.upsertEntry({ emp_code: emp, ky: req.body?.ky, target: req.body?.target, source: 'manual', user: req.session, note: req.body?.note || 'manual_edit' }); clearTargetDependentCache(); res.json({ ok: true, entry }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/targets/bulk', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const valid = new Set(store.targetRoster({ scope: {} }).map((u) => u.emp_code));
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  const bad = rows.map((r) => String(r.emp_code || '').toUpperCase()).filter((c) => !valid.has(c));
+  if (bad.length) return res.status(400).json({ error: `Mã NV không thuộc đội target: ${[...new Set(bad)].join(', ')}` });
+  try { const result = targetAdmin.bulkUpsert({ rows, source: 'manual', user: req.session, note: req.body?.note || 'bulk_manual', batchId: req.body?.batchId }); clearTargetDependentCache(); res.json({ ok: true, result }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/targets/quarter', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const valid = new Set(store.targetRoster({ scope: {} }).map((u) => u.emp_code));
+  const items = Array.isArray(req.body?.items) ? req.body.items : [];
+  const bad = items.map((r) => String(r.emp_code || '').toUpperCase()).filter((c) => !valid.has(c));
+  if (bad.length) return res.status(400).json({ error: `Mã NV không thuộc đội target: ${[...new Set(bad)].join(', ')}` });
+  try { const result = targetAdmin.upsertQuarter({ quarter: req.body?.quarter, year: req.body?.year, items, source: 'manual', user: req.session, note: req.body?.note || 'quarter_split3' }); clearTargetDependentCache(); res.json({ ok: true, result }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.post('/admin/targets/ai/propose', auth.requireAuth, auth.requireAdmin, (req, res) => {
@@ -579,7 +715,7 @@ router.post('/admin/targets/ai/apply', auth.requireAuth, auth.requireAdmin, (req
   const batchId = `ai_${Date.now().toString(36)}`;
   try {
     const out = items.filter((x) => valid.has(String(x.emp_code || '').toUpperCase())).map((x) => targetAdmin.upsertEntry({ emp_code: x.emp_code, ky, target: x.target ?? x.suggested_target, source: 'ai', user: req.session, note: 'ai_apply', batchId }));
-    res.json({ ok: true, batchId, rows: out.length });
+    clearTargetDependentCache(); res.json({ ok: true, batchId, rows: out.length });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.get('/admin/targets/history', auth.requireAuth, auth.requireAdmin, (req, res) => res.json({ history: targetAdmin.listAudit() }));

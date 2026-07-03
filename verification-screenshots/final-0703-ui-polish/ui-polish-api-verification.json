@@ -1,0 +1,40 @@
+{
+  "timings": {
+    "/overview?ky=07.2026": 2302,
+    "/trend": 2730,
+    "/analysis?ky=07.2026": 3193,
+    "/revenue?dimension=product&ky=06.2026": 3386,
+    "/products?ky=06.2026&pageSize=100": 3515,
+    "/cst": 3671
+  },
+  "samples": {
+    "product": {
+      "name": "RELIPOREX 4000 IU",
+      "code": "G1.GE.QĐ139.3106.N5.484",
+      "qd": "QĐ139",
+      "active": "Recombinant Human Erythropoietin",
+      "ham": "4000 IU"
+    },
+    "revenue": {
+      "name": "RELIPOREX 4000 IU",
+      "code": "G1.GE.QĐ139.3106.N5.484",
+      "qd": "QĐ139",
+      "active": "Recombinant Human Erythropoietin",
+      "ham": "4000 IU"
+    },
+    "cst": {
+      "name": "Eexatovas 10",
+      "code": "G1.GE.QĐ139.2777.N4.583",
+      "bid": "G1.L1.QĐ139/27.02.25",
+      "active": "Rosuvastatin (dưới dạng Rosuvastatin calci)",
+      "ham": "10mg",
+      "sourceLabel": "Baseline 05.2026 + bán đến 07.2026"
+    }
+  },
+  "cstLabelsSample": [
+    "Baseline 05.2026 + bán đến 07.2026",
+    "Baseline 05.2026 + bán đến 06.2026"
+  ],
+  "hasRawMayLabel": false,
+  "cstRows": 2741
+}

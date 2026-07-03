@@ -53,7 +53,7 @@ function applyFilters(rows, f = {}) {
     if (f.contractor && r.contractor_code !== f.contractor) return false;
     if (f.bid && !String(r.bid_package || '').includes(f.bid)) return false;
     if (q) {
-      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.contractor_code, r.bid_package].join(' '));
+      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.contractor_code, r.contractor_name, r.bid_package].join(' '));
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -61,25 +61,33 @@ function applyFilters(rows, f = {}) {
 }
 
 const normKys = ({ ky, kys }) => (Array.isArray(kys) && kys.length ? kys : [ky || store.latestKy()]);
+const overviewCache = new Map();
+const OVERVIEW_CACHE_MS = 60 * 1000;
+function clearOverviewCache() { overviewCache.clear(); }
 
 /** KPI tổng quan cho 1 kỳ hoặc nhiều kỳ trong phạm vi quyền. */
 function overviewKpis({ ky, kys, scope, label }) {
   const list = normKys({ ky, kys });
+  const cacheKey = JSON.stringify({ list, empCode: scope?.empCode || null, label: label || '' });
+  const cached = overviewCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < OVERVIEW_CACHE_MS) return cached.value;
   const rows = store.getRowsRange({ kys: list, scope });
   const revenue = sum(rows, (r) => r.revenue);
   const targets = store.getTargetsRange({ kys: list, scope });
   const targetTotal = sum(targets, (t) => t.target);
-  const targetCompareTotal = sum(targets, (t) => targetCompareValue(t.target, t.ky || list[list.length - 1]));
   const revenueBeforeVat = revenue / VAT_DIVISOR;
-  const pctTarget = targetCompareTotal > 0 ? +(revenueBeforeVat / targetCompareTotal * 100).toFixed(1) : null;
+  // DIRECTIVE_TARGET_KPI: KPI chính so với target CẢ THÁNG, không dùng pacing làm mẫu số.
+  const pctTarget = targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null;
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
+  const revenueBeforeVatByEmp = {};
+  for (const r of rows) revenueBeforeVatByEmp[r.emp_code] = (revenueBeforeVatByEmp[r.emp_code] || 0) + Number(r.revenue || 0) / VAT_DIVISOR;
   const empTarget = { achieved: 0, total: 0 };
   for (const u of store.targetRoster({ scope })) {
     const empCode = u.emp_code;
-    const target = targetCompareValue(targetByEmp[empCode] || 0, list[list.length - 1]);
+    const target = Number(targetByEmp[empCode] || 0);
     if (target <= 0) continue;
-    const empRevBeforeVat = sum(store.getRowsRange({ kys: list, scope: { empCode } }), (r) => r.revenue) / VAT_DIVISOR;
+    const empRevBeforeVat = revenueBeforeVatByEmp[empCode] || 0;
     empTarget.total += 1;
     if (empRevBeforeVat >= target) empTarget.achieved += 1;
   }
@@ -92,14 +100,14 @@ function overviewKpis({ ky, kys, scope, label }) {
     const prevRev = sum(store.getRowsRange({ kys: prevKys, scope }), (r) => r.revenue);
     if (prevRev > 0) momPct = +(((revenue - prevRev) / prevRev) * 100).toFixed(1);
   }
-  return {
+  const value = {
     ky: list[list.length - 1],
     kys: list,
     label,
     revenue,
     revenueBeforeVat: Math.round(revenueBeforeVat),
     targetTotal,
-    targetCompareTotal,
+    targetCompareTotal: targetTotal,
     pctTarget,
     empTarget,
     cstLowCount,
@@ -109,6 +117,9 @@ function overviewKpis({ ky, kys, scope, label }) {
     productCount: new Set(rows.map((r) => r.iit_code)).size,
     rowCount: rows.length,
   };
+  overviewCache.set(cacheKey, { at: Date.now(), value });
+  if (overviewCache.size > 200) overviewCache.clear();
+  return value;
 }
 
 /** Doanh thu drill-down: 'emp' | 'unit' | 'product'. */
@@ -136,11 +147,11 @@ function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
   if (filters?.status === 'empty') rows = rows.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0);
   if (filters?.q) {
     const q = norm(filters.q);
-    rows = rows.filter((r) => norm([r.emp_code, r.sales_emps, r.unit_name, r.iit_code, r.product_name, r.active_ingredient, r.bid_package, r.priority].join(' ')).includes(q));
+    rows = rows.filter((r) => norm([r.emp_code, r.sales_emps, r.unit_name, r.iit_code, r.product_name, r.active_ingredient, r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' ')).includes(q));
   }
   if (remainPctMax != null) rows = rows.filter((r) => r.remain_pct <= remainPctMax);
   if (remainPctMin != null) rows = rows.filter((r) => r.remain_pct >= remainPctMin);
   return rows.sort((a, b) => a.remain_pct - b.remain_pct);
 }
 
-module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum, applyFilters, isCurrentKy, targetPacingMeta, targetCompareValue };
+module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum, applyFilters, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };

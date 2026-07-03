@@ -1,0 +1,18 @@
+{
+  "targetCount": 21,
+  "targetBad": [],
+  "targetZero": [],
+  "targetScopes": [
+    "all"
+  ],
+  "adminCount": 21,
+  "adminScopes": [
+    "all"
+  ],
+  "entriesRows": 7,
+  "entriesMissingScope": 0,
+  "entriesActive": 0,
+  "entriesScopes": [
+    "all"
+  ]
+}

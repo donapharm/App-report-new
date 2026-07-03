@@ -22,9 +22,14 @@ const readJson = (name, def) => {
 };
 const UNALLOCATED_EMP = 'UNALLOCATED';
 const UNALLOCATED_LABEL = 'Chưa phân bổ';
+const DEFAULT_TARGET_ROSTER_CODES = [
+  'DN001', 'DN002', 'DN003', 'DN004', 'DN005', 'DN006', 'DN007', 'DN008', 'DN009', 'DN010', 'DN011', 'DN012',
+  'DN016', 'DN017', 'DN018', 'DN019', 'DN021', 'DN022', 'DN023', 'DN024', 'VP004',
+];
 function isValidEmpCode(v) {
   return /^(DN|VP)\d{3}$/.test(String(v || '').trim().toUpperCase());
 }
+function normEmpCode(v) { return String(v || '').trim().toUpperCase(); }
 function normalizeEmpForReport(r = {}) {
   const code = String(r.emp_code || '').trim().toUpperCase();
   if (!code || isValidEmpCode(code)) return r;
@@ -122,7 +127,13 @@ function mergeLatestUploadIntoCst(rows) {
   const slots = activeSlots()
     .filter((s) => !baselineKy || kySortValue(s.ky) > kySortValue(baselineKy))
     .sort((a, b) => kySortValue(a.ky) - kySortValue(b.ky) || String(a.dateTo || '').localeCompare(String(b.dateTo || '')));
-  if (!slots.length) return rows;
+  const uploadKyLabel = slots.map((s) => s.ky).join(',');
+  const withCstSourceMeta = (r) => ({
+    ...r,
+    cst_baseline_covered_ky: r.cst_baseline_covered_ky || baselineKy || undefined,
+    cst_upload_ky: r.cst_upload_ky || uploadKyLabel || undefined,
+  });
+  if (!slots.length) return rows.map(withCstSourceMeta);
 
   const cstKeyCount = new Map();
   for (const r of rows) {
@@ -143,10 +154,10 @@ function mergeLatestUploadIntoCst(rows) {
       }
     }
   }
-  if (!upMap.size) return rows;
+  if (!upMap.size) return rows.map(withCstSourceMeta);
   return rows.map((r) => {
     const up = upMap.get(cstKey(r.iit_code, r.unit_code || r.unit_name));
-    if (!up || !up.qty) return r;
+    if (!up || !up.qty) return withCstSourceMeta(r);
     const baseSold = Number(r.sold_qty || 0);
     const sold = baseSold + up.qty;
     const bidQty = Number(r.bid_qty_initial || 0);
@@ -163,7 +174,7 @@ function mergeLatestUploadIntoCst(rows) {
       sale_price: sold ? +((soldAmount || sold * bidPrice) / sold).toFixed(2) : Number(r.sale_price || 0),
       cst_baseline_sold_qty: baseSold,
       cst_baseline_covered_ky: baselineKy,
-      cst_upload_ky: [...up.kys].join(','),
+      cst_upload_ky: [...up.kys].join(',') || uploadKyLabel,
       cst_upload_qty: up.qty,
     };
   });
@@ -228,19 +239,34 @@ function previousKys(kys = []) {
 const listUsers = () => base().users;
 const findUserByPhone = (phone) => base().users.find((u) => u.phone === phone);
 const findUserByCode = (code) => base().empByCode[code];
+function targetRosterConfig() {
+  const cfg = readJson('target_roster.json', null) || {};
+  const rawCodes = Array.isArray(cfg.allowed_codes) ? cfg.allowed_codes : DEFAULT_TARGET_ROSTER_CODES;
+  const allowedCodes = [...new Set(rawCodes.map(normEmpCode).filter(Boolean))];
+  return { ...cfg, allowedCodes, allowedSet: new Set(allowedCodes) };
+}
 function employeeType(u = {}) {
   if (u.employee_type) return String(u.employee_type).toLowerCase();
   if (String(u.emp_code || '').toUpperCase() === 'VP018') return 'telesale';
   if (u.status === 'Cộng tác') return 'ctv';
   return u.role === 'sale' ? 'sale' : 'other';
 }
+function hasTarget(u = {}) {
+  const code = normEmpCode(u.emp_code);
+  if (!code) return false;
+  // 0-BIS: Target roster là allowlist CEO chốt (hoặc flag has_target=true),
+  // tuyệt đối không suy luận theo role/status để tránh lẫn văn phòng/telesale.
+  if (typeof u.has_target === 'boolean') return u.has_target;
+  return targetRosterConfig().allowedSet.has(code);
+}
 function isActiveSalesUser(u = {}) {
-  const type = employeeType(u);
-  return u.role === 'sale' && u.status !== 'Nghỉ việc' && ['sale', 'ctv'].includes(type);
+  return hasTarget(u);
 }
 function targetRoster({ scope } = {}) {
-  let users = listUsers().filter(isActiveSalesUser);
-  if (scope?.empCode) users = users.filter((u) => u.emp_code === scope.empCode);
+  const { allowedCodes } = targetRosterConfig();
+  const byCode = base().empByCode;
+  let users = allowedCodes.map((code) => byCode[code]).filter((u) => u && hasTarget(u));
+  if (scope?.empCode) users = users.filter((u) => normEmpCode(u.emp_code) === normEmpCode(scope.empCode));
   return users.sort((a, b) => String(a.emp_code).localeCompare(String(b.emp_code), 'vi'));
 }
 function targetRosterCodes({ scope } = {}) { return targetRoster({ scope }).map((u) => u.emp_code); }
@@ -308,7 +334,11 @@ function getTargets({ ky, scope }) {
     ky: x.ky,
     target: Number(x.target || 0),
     source: x.source,
+    scope: x.scope || 'all',
     target_source: x.source,
+    target_source_label: x.source_label || x.source,
+    target_source_ky: x.source_ky || null,
+    target_reference: !!x.reference,
     target_entry_id: x.id,
     updated_at: x.at,
   }));
@@ -333,7 +363,7 @@ module.exports = {
   periodKys, periodRange, previousKys,
   currentKyByDate, lastCompleteKy, nextKy,
   getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache, empCodesWithData, empCodesWithRows,
-  employeeType, isActiveSalesUser, targetRoster, targetRosterCodes,
+  employeeType, hasTarget, isActiveSalesUser, targetRoster, targetRosterCodes, targetRosterConfig,
   isValidEmpCode, UNALLOCATED_EMP, UNALLOCATED_LABEL,
   // giữ tên cũ để nơi khác không vỡ
   db: base,

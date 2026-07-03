@@ -12,7 +12,7 @@ export function optionLabel(o) {
   return o.label || o.key || '';
 }
 function optionSearchText(o) {
-  return norm([o.key, o.label, o.iit_code, o.product_name, o.unit_code, o.unit_name, o.active_ingredient, o.ham_luong, o.uom, o.contractor, o.qd, o.bid_price].join(' '));
+  return norm([o.key, o.label, o.iit_code, o.product_name, o.unit_code, o.unit_name, o.active_ingredient, o.ham_luong, o.uom, o.contractor, o.contractor_code, ...(o.names || []), o.qd, o.bid_price].join(' '));
 }
 
 export function Select({ value, onChange, options, all }) {
@@ -69,7 +69,7 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
         <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
         <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
         <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
-        <Select value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" />
+        <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
         <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
       </div>
       <div className="filter-search">

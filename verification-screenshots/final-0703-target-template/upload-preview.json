@@ -1,0 +1,1 @@
+{"previewId":"a6544cc060b90cf2","filename":"upload_blank_keep_test.xlsx","meta":{"totalRows":1,"skippedRows":1,"totalTarget":123456789,"empCount":1,"kyCount":1,"kys":["12.2099"]},"skipped":[{"row":3,"emp_code":"DN002","ky":"12.2099","reason":"blank_target_keep_current"}],"sample":[{"emp_code":"DN001","ky":"12.2099","target":123456789}]}

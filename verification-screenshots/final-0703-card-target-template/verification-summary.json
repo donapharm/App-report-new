@@ -1,0 +1,84 @@
+{
+  "contractorCount": 5,
+  "contractorSamples": [
+    {
+      "key": "03.TUE.N",
+      "label": "03.TUE.N · Công Ty Trách Nhiệm Hữu Hạn Dược Tuệ Nam",
+      "kind": "contractor",
+      "code": "03.TUE.N",
+      "names": [
+        "Công Ty Trách Nhiệm Hữu Hạn Dược Tuệ Nam"
+      ]
+    },
+    {
+      "key": "10.ĐAI.TS",
+      "label": "10.ĐAI.TS · Công Ty Tnhh Dược Phẩm Và Trang Thiết Bị Y Tế Đại Trường Sơn",
+      "kind": "contractor",
+      "code": "10.ĐAI.TS",
+      "names": [
+        "Công Ty Tnhh Dược Phẩm Và Trang Thiết Bị Y Tế Đại Trường Sơn"
+      ]
+    },
+    {
+      "key": "11.TU.Đ",
+      "label": "11.TU.Đ · Công Ty Tnhh Dược Phẩm Tự Đức",
+      "kind": "contractor",
+      "code": "11.TU.Đ",
+      "names": [
+        "Công Ty Tnhh Dược Phẩm Tự Đức"
+      ]
+    },
+    {
+      "key": "AFP",
+      "label": "AFP",
+      "kind": "contractor",
+      "code": "AFP",
+      "names": []
+    },
+    {
+      "key": "DONA",
+      "label": "DONA",
+      "kind": "contractor",
+      "code": "DONA",
+      "names": []
+    }
+  ],
+  "contractorHasCodeAndName": true,
+  "targetSummary": {
+    "totalRevenueBeforeVat": 2621448949,
+    "totalTarget": 0,
+    "pct": null,
+    "gap": null,
+    "assignedCount": 0,
+    "unassignedCount": 21,
+    "achievedCount": 0,
+    "totalEmployees": 21
+  },
+  "targetSources": [],
+  "unassigned": 21,
+  "adminTargetSources": [],
+  "adminUnassigned": 21,
+  "productContractorSample": {
+    "key": "G1.GE.QĐ139.2629.N4.56",
+    "iit_code": "G1.GE.QĐ139.2629.N4.56",
+    "product_name": "Parazacol 750",
+    "qd": "QĐ139",
+    "active_ingredient": "Paracetamol",
+    "ham_luong": "10mg/ml, 75ml",
+    "uom": "Lọ",
+    "contractor": "AFP",
+    "contractor_code": "AFP",
+    "contractor_name": "",
+    "bid_price": 28900,
+    "revenue": 352002000,
+    "quantity": 12180,
+    "rows": 8,
+    "unitCount": 7,
+    "empCount": 5,
+    "contractorCount": 1,
+    "bidPackages": "139",
+    "avgPrice": 28900
+  },
+  "templateRows": 21,
+  "templateBlankTargets": 21
+}

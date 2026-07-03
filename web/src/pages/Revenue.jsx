@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
-import { money, short } from '../util.js';
-import { Spinner, RankRow } from '../components.jsx';
+import { money, pairText, unitText } from '../util.js';
+import { Spinner, Bar } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 
 const DIMS = { emp: 'Nhân viên', unit: 'Đơn vị', product: 'Sản phẩm' };
@@ -29,9 +29,9 @@ export default function Revenue({ me }) {
 
   const total = data ? data.rows.reduce((s, r) => s + r.revenue, 0) : 0;
   const max = data && data.rows.length ? data.rows[0].revenue : 0;
-  const rowMeta = (r) => dim === 'product'
-    ? `${r.iit_code || r.key || '—'} · ${r.qd || '—'}${r.qd === 'QĐ139' ? ` · ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''} · ${short(r.revenue)} · ${r.quantity.toLocaleString('vi-VN')} SL`
-    : `${short(r.revenue)} · ${r.quantity.toLocaleString('vi-VN')} SL`;
+  const rowSub = (r) => dim === 'product'
+    ? `${r.iit_code || r.key || '—'} · ${r.qd || '—'}${r.qd === 'QĐ139' ? ` · ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''}`
+    : (dim === 'emp' ? (r.key || '—') : (r.key || '—'));
 
   function pickDim(d) { setDim(d); }
   function setF(k, v) { setFilters((f) => ({ ...f, [k]: v })); }
@@ -70,8 +70,23 @@ export default function Revenue({ me }) {
       ) : (
         <div className="list-grid">
           {data.rows.map((r, i) => (
-            <div className="rank-card" key={r.key}>
-              <RankRow i={i + 1} name={r.label} meta={rowMeta(r)} amount={r.revenue} max={max} onClick={dim !== 'product' ? () => drill(r) : undefined} />
+            <div className="card detail-card revenue-detail-card" key={r.key} onClick={dim !== 'product' ? () => drill(r) : undefined} style={dim !== 'product' ? { cursor: 'pointer' } : null}>
+              <div className="detail-head">
+                <div className="detail-title-wrap">
+                  <span className="rank">{i + 1}</span>
+                  <div>
+                    <div className="detail-title">{dim === 'unit' ? unitText(r.key, r.label) : (r.label || '—')}</div>
+                    <div className="detail-sub mono">{rowSub(r)}</div>
+                  </div>
+                </div>
+                <div className="detail-money">{money(r.revenue)}{dim !== 'product' ? ' ›' : ''}</div>
+              </div>
+              <Bar value={r.revenue} max={max} />
+              <div className="detail-facts two">
+                <span><b>{(r.quantity || 0).toLocaleString('vi-VN')}</b><em>Số lượng</em></span>
+                <span><b>{DIMS[dim]}</b><em>Nhóm xem</em></span>
+                {dim === 'product' && (r.contractor_code || r.contractor || r.contractor_name) && <span><b>{pairText(r.contractor_code || r.contractor, r.contractor_name)}</b><em>Nhà thầu</em></span>}
+              </div>
             </div>
           ))}
         </div>

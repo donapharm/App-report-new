@@ -1,0 +1,26 @@
+{
+  "target": {
+    "count": 21,
+    "bad": [],
+    "hasSource": true,
+    "hasMoney": true,
+    "overflow": false
+  },
+  "targetShot": "verification-screenshots/final-0703-directives/pc-target-loaded.png",
+  "admin": {
+    "count": 21,
+    "bad": [],
+    "hasSource": true,
+    "hasAI": true,
+    "hasMoney": true,
+    "overflow": false
+  },
+  "adminShot": "verification-screenshots/final-0703-directives/pc-target-admin-loaded.png",
+  "mobile": {
+    "overflow": false,
+    "hasMoney": true,
+    "hasSource": true,
+    "text": "DNPHARMA\nApp Report\nĐặng Xuân Trung\nQuản trị\nĐăng xuất\nKỳ này\nDự báo\nQuản target\nTháng\nQuý\nKhoảng\nTháng 07.2026\n‹\n01.2026\n02.2026\n03.2026\n04.2026\n05.2026\n06.2026\n07.2026\n›\nKỲ TARGET: THÁNG 07.2026 · SO THEO NHỊP 3/31 NGÀY\n272,2%\nNguyễn Trọng Hiếu\n272,2%\nDN006 · sale\nĐạt 609.385.322đ / target 223.892.821đ (tháng 2.313.559.151đ) · vượt 385.492.501đ\nNguồn: Lumos V_TEM_TARGET_BONUS/App Sale · kỳ 06.2026 · tham khảo tự động\n215%\nĐoàn Văn Triệu\n215%\nDN008 · sale\nĐạt 310.119.638đ / target 144.219.523đ (tháng 1.490.268.404đ) · vượt 165.900.115đ\nNguồn: Lumos V_TEM_TARGET_BONUS/App Sale · kỳ 06.2026 · tham khảo tự động\n154,8%\nDương Thị Mến\n154,8%\nDN019 · sale\nĐạt 307.786.998đ / target 198.868.644đ (tháng 2.054.975.985đ) · vượt 108.918.354đ\nNguồn: Lumos V_TEM_TARGET_BONUS/App Sale · kỳ 06.2026 · tham"
+  },
+  "mobileShot": "verification-screenshots/final-0703-directives/mobile-target-loaded.png"
+}

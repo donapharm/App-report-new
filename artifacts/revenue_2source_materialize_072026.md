@@ -1,14 +1,14 @@
 # Revenue — CRM MISA + APP WEB
 
-Generated: 2026-07-02T18:21:38.789Z
+Generated: 2026-07-03T02:30:35.530Z
 
-MISA run: #27, finished_at=Thu Jul 02 2026 23:42:23 GMT+0700 (Indochina Time)
+MISA run: #28, finished_at=Fri Jul 03 2026 08:44:41 GMT+0700 (Indochina Time)
 
 | Source | Rows | Orders | Revenue |
 |---|---:|---:|---:|
-| CRM_MISA | 226 | 66 | 2118313496 |
+| CRM_MISA | 229 | 68 | 2214559796 |
 | APP_WEB_PARTNER | 67 | 32 | 550673600 |
-| TOTAL | 293 | — | 2668987096 |
+| TOTAL | 296 | — | 2765233396 |
 
 Rules:
 - CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, period `revenue_date`, amount `invoice_export_amount`.

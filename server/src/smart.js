@@ -133,7 +133,7 @@ function forecastTargets({ scope }) {
   const nextMonth = nextKy.slice(0, 2);
   const season = SEASON[nextMonth] || 1;
 
-  // Toàn bộ đội sale/CTV active, neo tháng đủ gần nhất; loại telesale.
+  // Roster target CEO chốt (0-BIS): allowlist/has_target, không suy luận role/status.
   const emps = store.targetRoster({ scope }).map((u) => ({ emp_code: u.emp_code, name: u.name || u.emp_code }));
   const out = emps.map((emp) => {
     const s = { empCode: emp.emp_code };
@@ -208,7 +208,7 @@ async function answerQuestion({ text, scope, session }) {
   }
   if (/(top|cao nhat).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|khach).*(top|cao)/.test(q)) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5);
-    return say(`Top đơn vị kỳ ${ky}:`, top.map((t, i) => `${i + 1}. ${t.label}: ${fmt(t.revenue)}`));
+    return say(`Top đơn vị kỳ ${ky}:`, top.map((t, i) => `${i + 1}. ${unitText(t.key, t.label)}: ${fmt(t.revenue)}`));
   }
   if (!mine && /(xep hang|ranking|top).*(nhan vien|nv|sale)|(nhan vien|sale).*(top|cao|xep hang)/.test(q)) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'emp' }).slice(0, 5);
@@ -218,7 +218,7 @@ async function answerQuestion({ text, scope, session }) {
     const low = A.cstTable({ scope, remainPctMax: 10 });
     if (!low.length) return say('Không có cơ số thầu nào dưới 10% trong phạm vi của bạn.');
     return say(`Có ${low.length} dòng cơ số thầu sắp cạn (<10%):`,
-      low.slice(0, 5).map((c) => `• ${c.product_name} @ ${c.unit_name}: còn ${c.remain_pct}%`));
+      low.slice(0, 5).map((c) => `• ${c.product_name} @ ${unitText(c.unit_code, c.unit_name)}: còn ${fmtPct(c.remain_pct)}`));
   }
   if (/target|chi tieu|% ?dat|dat bao nhieu|hoan thanh/.test(q)) {
     const k = A.overviewKpis({ ky, scope });
@@ -259,9 +259,9 @@ function buildFacts({ ky, scope, mine }) {
     phan_tram_dat: k.pctTarget,
     tang_giam_so_ky_truoc_pct: k.momPct,
     top_san_pham: A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 5).map((x) => ({ ten: x.label, doanh_thu: x.revenue })),
-    top_don_vi: A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5).map((x) => ({ ten: x.label, doanh_thu: x.revenue })),
+    top_don_vi: A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5).map((x) => ({ ten: unitText(x.key, x.label), doanh_thu: x.revenue })),
     ...(mine ? {} : { top_nhan_vien: A.revenueBreakdown({ ky, scope, dimension: 'emp' }).slice(0, 5).map((x) => ({ ten: x.label, doanh_thu: x.revenue })) }),
-    co_so_thau_sap_can: A.cstTable({ scope, remainPctMax: 10 }).slice(0, 8).map((c) => ({ sp: c.product_name, dv: c.unit_name, con_lai_pct: c.remain_pct })),
+    co_so_thau_sap_can: A.cstTable({ scope, remainPctMax: 10 }).slice(0, 8).map((c) => ({ sp: c.product_name, dv: unitText(c.unit_code, c.unit_name), con_lai_pct: c.remain_pct })),
   };
 }
 
@@ -288,6 +288,15 @@ function resolveKyFromQuestion(q) {
 function noAccent(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd'); }
 function fmt(n) { return Math.round(n).toLocaleString('vi-VN') + 'đ'; }
 function fmtPct(n) { return n == null ? '—' : Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%'; }
+function unitText(code, name) {
+  const c = String(code || '').trim();
+  const nm = String(name || '').trim();
+  if (!c && !nm) return '—';
+  if (!c) return nm;
+  if (!nm || nm === c) return c;
+  if (nm.startsWith(`${c}.`) || nm.startsWith(`${c} `) || nm.includes(c)) return nm;
+  return `${c}.${nm}`;
+}
 function say(text, lines) { return { text, lines: lines || [], source: 'code' }; }
 
 module.exports = { buildAlerts, forecastTargets, answerQuestion, SEASON };

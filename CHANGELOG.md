@@ -21,6 +21,13 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Bot triển khai (Report Bot) — Target template căn cứ T06 Lumos
+- Đã `git pull origin main`, đọc `DIRECTIVE_TARGET_TEMPLATE.md` phần **CĂN CỨ**.
+- Dump/chốt baseline target T06/2026 từ nguồn legacy `V_TEM_TARGET_BONUS` đã import trong `server/data/targets_real.json` cho đúng 21 mã allowlist CEO; lưu `server/data/target_baseline_202606.json` và backup trong `backups/target_baseline/`. Tổng baseline: **30.062.862.426đ**.
+- Template target thêm dropdown căn cứ: `Theo T06/2026 (Lumos)` mặc định, `Trống`, `Theo kỳ gần nhất đã giao`. Khi kỳ tương lai chưa giao target, file `.xlsx` điền sẵn target T06 làm căn cứ; nếu kỳ đã có target thì ưu tiên target hiện tại; căn cứ không tự thành target live cho đến khi CEO upload/commit.
+- API `/api/admin/targets` trả metadata baseline; `/api/admin/targets/template.xlsx?ky=08.2026&basis=t06` xuất 21 dòng, nhãn `Căn cứ: target T06/2026 Lumos`.
+- Nghiệm thu: `node -c server/src/targetAdmin.js`, `node -c server/src/routes.js`, `npm run build` OK; `pm2 restart reportnew && pm2 save` OK; health OK. Verify live đọc ngược XLSX 08.2026: 21 dòng, tổng **30.062.862.426đ**, mismatch `[]`. Artifact: `verification-screenshots/final-0703-target-template-basis/`.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Target: căn cứ T06 Lumos điền sẵn template (dump trước khi cắt)
 - CEO muốn dùng target **T06/2026 Lumos** (số cuối trước khi cắt) làm căn cứ điền sẵn template → sửa → upload. → `DIRECTIVE_TARGET_TEMPLATE.md`.
 - **Bước A:** bot **dump `V_TEM_TARGET_BONUS` kỳ 06.2026** (21 NV) NGAY, lưu `data/target_baseline_202606.json` + backup (trước khi ngắt Lumos).

@@ -55,6 +55,8 @@ export const api = {
   revenueRefreshRun: (ky) => req('POST', '/admin/revenue-refresh/run', ky ? { ky } : {}),
   adminTargets: (ky) => req('GET', '/admin/targets' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
   adminTargetManual: (payload) => req('POST', '/admin/targets/manual', payload),
+  adminTargetBulk: (payload) => req('POST', '/admin/targets/bulk', payload),
+  adminTargetQuarter: (payload) => req('POST', '/admin/targets/quarter', payload),
   adminTargetAiPropose: () => req('POST', '/admin/targets/ai/propose', {}),
   adminTargetAiApply: (payload) => req('POST', '/admin/targets/ai/apply', payload),
   adminTargetUploadCommit: (previewId) => req('POST', '/admin/targets/upload/commit', { previewId }),
@@ -116,6 +118,20 @@ export async function downloadExport(kind, params = {}) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `report_${kind}_${params.ky || ''}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+export async function downloadTargetTemplate(ky, basis = 't06') {
+  const url = `/api/admin/targets/template.xlsx?` + new URLSearchParams({ ky: ky || '', basis: basis || 't06' }).toString();
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  if (!res.ok) throw new Error('Không tải được template target');
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `target_template_${ky || ''}_${basis || 't06'}.xlsx`;
   document.body.appendChild(a);
   a.click();
   a.remove();

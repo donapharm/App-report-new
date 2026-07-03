@@ -1,6 +1,6 @@
 // Thành phần dùng chung: loading, KPI, thanh bar, hàng danh sách.
 import React from 'react';
-import { short, pct } from './util.js';
+import { money, pct } from './util.js';
 
 export const Spinner = () => <div className="spin" />;
 export const Empty = ({ children }) => <div className="center">{children}</div>;
@@ -38,7 +38,7 @@ export function RankRow({ i, name, meta, amount, max, onClick }) {
         {meta && <div className="meta">{meta}</div>}
         {max != null && <Bar value={amount} max={max} />}
       </div>
-      <div className="amt">{short(amount)}{onClick ? ' ›' : ''}</div>
+      <div className="amt">{money(amount)}{onClick ? ' ›' : ''}</div>
     </div>
   );
 }

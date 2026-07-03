@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
-import { money, short } from '../util.js';
+import { money, pairText } from '../util.js';
 import { Spinner, Bar } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
+
+function qd139Ingredient(r) {
+  return r.qd === 'QĐ139' && (r.active_ingredient || r.ham_luong);
+}
 
 export default function Products({ me }) {
   const { periods, ky, setKy, filters, setFilters, options } = usePeriodsAndFilters(api);
@@ -16,6 +20,7 @@ export default function Products({ me }) {
   }, [ky, filters]);
 
   const max = data?.rows?.[0]?.revenue || 0;
+  const duplicateProducts = new Set(Object.entries((data?.rows || []).reduce((m, r) => { const k = r.product_name || ''; if (k) m[k] = (m[k] || 0) + 1; return m; }, {})).filter(([, c]) => c > 1).map(([k]) => k));
   async function doExport() {
     setBusy(true);
     try { await downloadExport('products', { ky, ...filters }); }
@@ -36,23 +41,26 @@ export default function Products({ me }) {
       {!data ? <Spinner /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
         <div className="list-grid">
           {data.rows.map((r, i) => (
-            <div className="card" key={r.key}>
-              <div className="list-card-title">
-                <div>
-                  <div className="name"><span className="rank">{i + 1}</span>{r.product_name}</div>
-                  <div className="meta mono">{r.iit_code || '—'} · {r.qd || '—'} · {r.uom || '—'}</div>
-                  {r.qd === 'QĐ139' && <div className="meta">{r.active_ingredient || '—'} · {r.ham_luong || '—'}</div>}
+            <div className="card detail-card product-detail-card" key={r.key}>
+              <div className="detail-head detail-head-two">
+                <div className="detail-title-wrap">
+                  <span className="rank">{i + 1}</span>
+                  <div>
+                    <div className="detail-title">{r.product_name}</div>
+                    <div className="detail-sub mono">{r.iit_code || '—'} · {r.qd || '—'} · {r.uom || '—'}</div>
+                    {(qd139Ingredient(r) || (duplicateProducts.has(r.product_name) && r.qd !== 'QĐ141' && (r.active_ingredient || r.ham_luong))) && <div className="detail-sub">{r.active_ingredient || '—'} · {r.ham_luong || '—'}</div>}
+                  </div>
                 </div>
-                <div className="amt">{short(r.revenue)}</div>
+                <div className="detail-money">{money(r.revenue)}<em>Doanh thu</em></div>
               </div>
               <Bar value={r.revenue} max={max} />
-              <div className="list-card-meta">
-                <span className="pill muted-pill">SL {r.quantity.toLocaleString('vi-VN')}</span>
-                <span className="pill muted-pill">{r.unitCount} ĐV</span>
-                <span className="pill muted-pill">{r.empCount} NV</span>
-                {r.contractor && <span className="pill muted-pill">{r.contractor}</span>}
-                {r.bid_price && <span className="pill muted-pill">Giá thầu {Number(r.bid_price).toLocaleString('vi-VN')}</span>}
-                {r.bidPackages && <span className="pill muted-pill">{r.bidPackages}</span>}
+              <div className="detail-facts">
+                <span><b>{r.quantity.toLocaleString('vi-VN')}</b><em>Số lượng</em></span>
+                <span><b>{r.unitCount}</b><em>Đơn vị</em></span>
+                <span><b>{r.empCount}</b><em>Nhân viên</em></span>
+                {(r.contractor_code || r.contractor || r.contractor_name) && <span><b>{pairText(r.contractor_code || r.contractor, r.contractor_name)}</b><em>Nhà thầu</em></span>}
+                {r.bid_price && <span><b>{money(r.bid_price)}</b><em>Giá thầu</em></span>}
+                {r.bidPackages && <span><b>{r.bidPackages}</b><em>Gói thầu</em></span>}
               </div>
             </div>
           ))}

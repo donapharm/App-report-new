@@ -70,13 +70,8 @@ const isAdminUser = (u) => ['ceo', 'admin', 'full'].includes(roleOf(u));
 const isSaleUser = (u) => roleOf(u) === 'sale';
 const vnDate = (d = new Date()) => new Date(d.getTime() + 7 * 60 * 60 * 1000);
 const vnDayKey = () => vnDate().toISOString().slice(0, 10);
-const moneyShort = (n) => {
-  const v = Number(n || 0);
-  if (Math.abs(v) >= 1e9) return `${(v / 1e9).toFixed(2)} tỷ`;
-  if (Math.abs(v) >= 1e6) return `${(v / 1e6).toFixed(1)} triệu`;
-  return `${Math.round(v).toLocaleString('vi-VN')}đ`;
-};
-const pctText = (v) => (v == null || Number.isNaN(Number(v)) ? '—' : `${Number(v).toFixed(1).replace('.0', '')}%`);
+const moneyShort = (n) => `${Math.round(Number(n || 0)).toLocaleString('vi-VN')}đ`;
+const pctText = (v) => (v == null || Number.isNaN(Number(v)) ? '—' : `${Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`);
 function prefEnabled(telegramId) {
   const p = digestPrefs.find((x) => String(x.telegram_id) === String(telegramId));
   return p ? p.enabled !== false : true;

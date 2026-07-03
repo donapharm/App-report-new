@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadExport } from '../api.js';
-import { money, pct as fmtPct } from '../util.js';
+import { money, pct as fmtPct, pairText, unitText } from '../util.js';
 import { Spinner, Bar } from '../components.jsx';
 import { ComboSelect, Select } from './revenueFilters.jsx';
 
@@ -16,6 +16,7 @@ const n = (v) => Number(v || 0).toLocaleString('vi-VN');
 const compact = (v) => String(v || '—').replace('Công Ty ', '').replace('Tnhh ', '');
 function groupOf(code) { const m = String(code || '').match(/\.(N\d)\./i); return m ? m[1].toUpperCase() : ''; }
 function qdOf(c) { const m = String(`${c.iit_code || ''} ${c.bid_package || ''}`).match(/QĐ\s*(\d+)|QD\s*(\d+)/i); return m ? `QĐ${m[1] || m[2]}` : ''; }
+function qd139Ingredient(c, qd) { return qd === 'QĐ139' && (c.active_ingredient || c.ham_luong); }
 function decision(c) {
   const p = Number(c.remain_pct || 0), remain = Number(c.remain_qty || 0), sold = Number(c.sold_qty || 0);
   if (remain <= 0 || p <= 1) return { cls: 'muted-pill', text: 'Hết CST', action: 'Đã khai thác hết cơ số.' };
@@ -33,11 +34,12 @@ function sourceLabel(c) {
   if (base) return `Cập nhật đến kỳ ${base}`;
   return c.source_from_date || '—';
 }
+function contractorText(c) { return pairText(c.contractor_code, c.contractor_name); }
 function unitRollup(rows) {
   const m = new Map();
   for (const r of rows || []) {
     const key = r.unit_code || r.unit_name || '—';
-    const cur = m.get(key) || { key, unit_name: r.unit_name || key, rows: [], remainAmount: 0, low: 0, empty: 0, remainQty: 0 };
+    const cur = m.get(key) || { key, unit_code: r.unit_code || '', unit_name: r.unit_name || key, rows: [], remainAmount: 0, low: 0, empty: 0, remainQty: 0 };
     cur.rows.push(r); cur.remainAmount += Number(r.remain_amount || 0); cur.remainQty += Number(r.remain_qty || 0);
     if (Number(r.remain_pct || 0) < 10) cur.low += 1;
     if (Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0) cur.empty += 1;
@@ -46,35 +48,39 @@ function unitRollup(rows) {
   return [...m.values()].sort((a, b) => (b.low + b.empty) - (a.low + a.empty) || b.remainAmount - a.remainAmount);
 }
 
-function CstCard({ c, i }) {
+function CstCard({ c, i, duplicateName }) {
   const st = decision(c); const pct = Number(c.remain_pct || 0); const qd = qdOf(c);
   return (
-    <div key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={'card cst-list-card ' + (pct > 70 || pct < 10 ? 'highlight-need' : '')}>
-      <div className="list-card-title">
-        <div>
-          <div className="name">{c.product_name || '—'}</div>
-          <div className="meta mono">{c.iit_code || '—'} · {qd || '—'} · {c.uom || '—'}</div>
-          {qd === 'QĐ139' && <div className="meta">{c.active_ingredient || '—'} · {c.ham_luong || '—'}</div>}
+    <div key={`${c.unit_code}-${c.iit_code || c.product_name}-${c.emp_code}-${i}`} className={'card detail-card cst-list-card ' + (pct > 70 || pct < 10 ? 'highlight-need' : '')}>
+      <div className="detail-head">
+        <div className="detail-title-wrap">
+          <span className="rank">{i + 1}</span>
+          <div>
+            <div className="detail-title">{c.product_name || '—'}</div>
+            <div className="detail-sub mono">{c.iit_code || '—'} · {qd || '—'} · {c.uom || '—'}</div>
+            {(qd139Ingredient(c, qd) || (duplicateName && qd !== 'QĐ141' && (c.active_ingredient || c.ham_luong))) && <div className="detail-sub">{c.active_ingredient || '—'} · {c.ham_luong || '—'}</div>}
+          </div>
         </div>
-        <span className={'pill ' + pctTone(pct)}>Còn {c.remain_pct}%</span>
+        <div className="detail-money cst-money">{money(c.remain_amount)}<em>TT còn</em></div>
       </div>
       <Bar value={Math.max(0, Math.min(100, pct))} max={100} tone={pct < 10 ? 'danger' : (pct < 30 || pct > 80 ? 'warn' : 'ok')} />
       <div className="progress-caption">Đã bán {fmtPct(Math.max(0, +(100 - pct).toFixed(1)))} · còn {fmtPct(pct)}</div>
-      <div className="meta muted" style={{ marginTop: 6 }}>{c.unit_name || c.unit_code || '—'} · NV {c.emp_code || c.sales_emps || '—'}</div>
+      <div className="detail-entity"><b>{unitText(c.unit_code, c.unit_name)}</b><span>NV {c.emp_code || c.sales_emps || '—'}</span></div>
       <div className="list-card-meta">
+        <span className={'pill ' + pctTone(pct)}>Còn {c.remain_pct}%</span>
         <span className="pill muted-pill">Nhóm {groupOf(c.iit_code) || '—'}</span>
         <span className="pill muted-pill">UT {c.priority || '—'}</span>
+        <span className="pill muted-pill">NT {contractorText(c)}</span>
         <span className="pill muted-pill">{compact(c.bid_package)}</span>
         <span className={'pill ' + st.cls}>{st.text}</span>
       </div>
       <div className="action-hint">👉 {st.action}</div>
       <div className="cst-metrics">
-        <span>Giá thầu <b>{n(c.bid_price)}</b></span>
-        <span>Tổng TT <b>{n(c.bid_qty_initial)}</b></span>
+        <span>Giá thầu <b>{money(c.bid_price)}</b></span>
+        <span>SL thầu <b>{n(c.bid_qty_initial)}</b></span>
         <span>CST còn <b>{n(c.remain_qty)}</b></span>
         <span>SL bán <b>{n(c.sold_qty)}</b></span>
         <span>TT bán <b>{money(c.sold_amount)}</b></span>
-        <span>TT còn <b>{money(c.remain_amount)}</b></span>
         <span className="wide-metric">Nguồn <b>{sourceLabel(c)}</b></span>
       </div>
     </div>
@@ -116,6 +122,7 @@ export default function TenderQuota({ me }) {
     });
   }, [data, actionFirst]);
   const groups = useMemo(() => unitRollup(sortedData), [sortedData]);
+  const duplicateProducts = useMemo(() => new Set(Object.entries((sortedData || []).reduce((m, r) => { const k = r.product_name || ''; if (k) m[k] = (m[k] || 0) + 1; return m; }, {})).filter(([, c]) => c > 1).map(([k]) => k)), [sortedData]);
   const selectedUnit = filters.unit ? groups.find((g) => g.key === filters.unit || g.unit_name === filters.unit) : null;
   const totalRemain = data ? data.reduce((s, r) => s + (Number(r.remain_amount) || 0), 0) : 0;
   const totalSold = data ? data.reduce((s, r) => s + (Number(r.sold_amount) || 0), 0) : 0;
@@ -155,7 +162,7 @@ export default function TenderQuota({ me }) {
         <div className="kpi"><div className="label">TT còn lại</div><div className="value small">{data ? money(totalRemain) : '—'}</div></div>
       </div>
 
-      {selectedUnit && <div className="card unit-focus"><b>{selectedUnit.unit_name}</b><span>{selectedUnit.rows.length} mã QLNB · {selectedUnit.low} sắp hết · {selectedUnit.empty} chưa bán · còn {money(selectedUnit.remainAmount)}</span></div>}
+      {selectedUnit && <div className="card unit-focus"><b>{unitText(selectedUnit.unit_code || selectedUnit.key, selectedUnit.unit_name)}</b><span>{selectedUnit.rows.length} mã QLNB · {selectedUnit.low} sắp hết · {selectedUnit.empty} chưa bán · còn {money(selectedUnit.remainAmount)}</span></div>}
       {data && <div className="card cst-alert-card"><b>Cảnh báo CST giống app cũ:</b><span className="pill bad">Sắp cạn/Hết CST: {lowCount.toLocaleString('vi-VN')}</span><span className="pill bad">Chưa bán: {emptyCount.toLocaleString('vi-VN')}</span><span className="pill warn">Chưa khai thác/tồn nhiều: {highCount.toLocaleString('vi-VN')}</span></div>}
 
       {!data ? <Spinner /> : data.length === 0 ? <div className="center">Không có dòng nào khớp bộ lọc.</div> : view === 'unit' ? (
@@ -164,15 +171,15 @@ export default function TenderQuota({ me }) {
             const open = openUnits[g.key] || filters.unit;
             return <div className="card unit-rollup" key={g.key}>
               <div className="unit-rollup-head" onClick={() => setOpenUnits((x) => ({ ...x, [g.key]: !x[g.key] }))}>
-                <div><b>{g.unit_name}</b><div className="meta">{g.rows.length} mã QLNB · còn {money(g.remainAmount)}</div></div>
+                <div><b>{unitText(g.unit_code || g.key, g.unit_name)}</b><div className="meta">{g.rows.length} mã QLNB · còn {money(g.remainAmount)}</div></div>
                 <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span><span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
               </div>
-              {open && <div className="list-grid nested-grid">{g.rows.slice(0, 80).map((c, i) => <CstCard key={`${g.key}-${i}`} c={c} i={i} />)}</div>}
+              {open && <div className="list-grid nested-grid">{g.rows.slice(0, 80).map((c, i) => <CstCard key={`${g.key}-${i}`} c={c} i={i} duplicateName={duplicateProducts.has(c.product_name)} />)}</div>}
             </div>;
           })}
         </div>
       ) : (
-        <div className="list-grid">{sortedData.slice(0, 600).map((c, i) => <CstCard key={i} c={c} i={i} />)}{sortedData.length > 600 && <p className="muted" style={{ textAlign: 'center', fontSize: 12, paddingBottom: 12 }}>Đang hiển thị 600 dòng đầu, dùng bộ lọc hoặc xuất Excel để xem toàn bộ {sortedData.length.toLocaleString('vi-VN')} dòng.</p>}</div>
+        <div className="list-grid">{sortedData.slice(0, 600).map((c, i) => <CstCard key={i} c={c} i={i} duplicateName={duplicateProducts.has(c.product_name)} />)}{sortedData.length > 600 && <p className="muted" style={{ textAlign: 'center', fontSize: 12, paddingBottom: 12 }}>Đang hiển thị 600 dòng đầu, dùng bộ lọc hoặc xuất Excel để xem toàn bộ {sortedData.length.toLocaleString('vi-VN')} dòng.</p>}</div>
       )}
     </>
   );

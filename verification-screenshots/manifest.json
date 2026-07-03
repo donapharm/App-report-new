@@ -1,0 +1,202 @@
+[
+  {
+    "mode": "pc",
+    "label": "Tổng quan",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-overview.png",
+    "overflow": false,
+    "hasFull": true,
+    "badMain": true,
+    "cols": [
+      2
+    ],
+    "tab": "📊\nTổng quan|Tháng|Đơn vị"
+  },
+  {
+    "mode": "pc",
+    "label": "Doanh thu",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-revenue.png",
+    "overflow": false,
+    "hasFull": true,
+    "badMain": false,
+    "cols": [
+      3
+    ],
+    "tab": "💰\nDoanh thu|Nhân viên"
+  },
+  {
+    "mode": "pc",
+    "label": "DT đầy đủ",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-revenue-full.png",
+    "overflow": false,
+    "hasFull": true,
+    "badMain": false,
+    "cols": [
+      3
+    ],
+    "tab": "📋\nDT đầy đủ"
+  },
+  {
+    "mode": "pc",
+    "label": "Sản phẩm",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-products.png",
+    "overflow": false,
+    "hasFull": true,
+    "badMain": false,
+    "cols": [
+      3
+    ],
+    "tab": "💊\nSản phẩm"
+  },
+  {
+    "mode": "pc",
+    "label": "Phân tích",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-analysis.png",
+    "overflow": false,
+    "hasFull": true,
+    "badMain": false,
+    "cols": [
+      3
+    ],
+    "tab": "📈\nPhân tích|Tháng|Đơn vị"
+  },
+  {
+    "mode": "pc",
+    "label": "Cơ số thầu",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-cst.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [
+      3,
+      1
+    ],
+    "tab": "📦\nCơ số thầu|Tất cả|Gom theo ĐV|Ưu tiên cần làm"
+  },
+  {
+    "mode": "pc",
+    "label": "Target",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-target.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "🎯\nTarget|Kỳ này|Tháng"
+  },
+  {
+    "mode": "pc",
+    "label": "Hỏi nhanh",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-ai.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "🤖\nHỏi nhanh"
+  },
+  {
+    "mode": "pc",
+    "label": "Upload",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/pc-upload.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "⬆️\nUpload|Import mới (kỳ mới)"
+  },
+  {
+    "mode": "mobile",
+    "label": "Tổng quan",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-overview.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "📊\nTổng quan"
+  },
+  {
+    "mode": "mobile",
+    "label": "Doanh thu",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-revenue.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "Nhân viên|💰\nDoanh thu"
+  },
+  {
+    "mode": "mobile",
+    "label": "DT đầy đủ",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-revenue-full.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "📋\nDT đầy đủ"
+  },
+  {
+    "mode": "mobile",
+    "label": "Sản phẩm",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-products.png",
+    "overflow": false,
+    "hasFull": true,
+    "badMain": false,
+    "cols": [
+      1
+    ],
+    "tab": "💊\nSản phẩm"
+  },
+  {
+    "mode": "mobile",
+    "label": "Phân tích",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-analysis.png",
+    "overflow": false,
+    "hasFull": true,
+    "badMain": false,
+    "cols": [
+      1
+    ],
+    "tab": "Tháng|Đơn vị|📈\nPhân tích"
+  },
+  {
+    "mode": "mobile",
+    "label": "Cơ số thầu",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-cst.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [
+      1,
+      1
+    ],
+    "tab": "Tất cả|Gom theo ĐV|Ưu tiên cần làm|📦\nCơ số thầu"
+  },
+  {
+    "mode": "mobile",
+    "label": "Target",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-target.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "Kỳ này|Tháng|🎯\nTarget"
+  },
+  {
+    "mode": "mobile",
+    "label": "Hỏi nhanh",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-ai.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "🤖\nHỏi nhanh"
+  },
+  {
+    "mode": "mobile",
+    "label": "Upload",
+    "path": "/home/osboxes/.openclaw/workspace-report/App-report-new/verification-screenshots/mobile-upload.png",
+    "overflow": false,
+    "hasFull": false,
+    "badMain": false,
+    "cols": [],
+    "tab": "Import mới (kỳ mới)|⬆️\nUpload"
+  }
+]

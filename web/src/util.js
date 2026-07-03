@@ -22,4 +22,27 @@ export function pct(n, digits = 1) {
   if (n == null || Number.isNaN(Number(n))) return '—';
   return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: digits }) + '%';
 }
+export function labelPair(code, name) {
+  const c = String(code || '').trim();
+  const nm = String(name || '').trim();
+  if (!c && !nm) return { code: '—', name: '' };
+  if (!c) return { code: nm, name: '' };
+  if (!nm || c === nm || c.includes(nm)) return { code: c, name: '' };
+  if (nm.includes(c)) return { code: c, name: nm.replace(c, '').trim().replace(/^[-–—·\s]+/, '') };
+  return { code: c, name: nm };
+}
+export function pairText(code, name) {
+  const p = labelPair(code, name);
+  return p.name ? `${p.code} · ${p.name}` : p.code;
+}
+export function unitText(code, name) {
+  const c = String(code || '').trim();
+  const nm = String(name || '').trim();
+  if (!c && !nm) return '—';
+  if (!c) return nm;
+  if (!nm || nm === c) return c;
+  if (/^\d{3}\./.test(c) && c.includes(nm)) return c;
+  if (nm.startsWith(`${c}.`) || nm.startsWith(`${c} `) || nm.includes(c)) return nm;
+  return `${c}.${nm}`;
+}
 export const roleLabel = (r) => ({ ceo: 'CEO', admin: 'Quản trị', sale: 'Sale' }[r] || r);
