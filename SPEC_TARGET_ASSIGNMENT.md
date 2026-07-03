@@ -16,6 +16,20 @@
 - Hợp nhất từ dữ liệu đã có: `iit_code · tên · hoạt chất · hàm lượng · nhóm UT (H.A*/H.A/H.B…) · tuyến (CL/NCL/NT) · gói thầu · nhà thầu(mã-tên) · giá thầu · (CST còn nếu có)`.
 - Xem/tìm được (tái dùng typeahead + bộ lọc). Có thể dùng chính tab Sản phẩm làm "Danh mục", thêm chế độ xem toàn danh mục (không chỉ theo kỳ bán).
 
+### CHIỀU PHÂN CÔNG (CEO chốt 2026-07-03: đủ 5 chiều + nhóm "hàng cần đẩy")
+`type ∈`:
+- `unit` — đơn vị/bệnh viện (chiều chính).
+- `group` — nhóm ưu tiên hàng (H.A*/H.A/H.B…).
+- `route` — tuyến (CL/NCL/NT).
+- `iit` — mã QLNB cụ thể.
+- `all` — toàn bộ phần của NV (mặc định).
+- **`special` — HÀNG CẦN ĐẨY (CEO nhấn mạnh)**, gồm sub-loại (`special_kind`):
+  - `can_date` — **cận date** (cần dữ liệu hạn dùng; nếu nguồn chưa có → dùng danh sách CEO chọn, ghi rõ "thiếu nguồn hạn dùng").
+  - `ton_nhieu` — **tồn nhiều**: suy TỰ ĐỘNG từ CST còn cao (tái dùng `cst_high` >85% đã có ở smart.js).
+  - `sap_het_thau_cst_lon` — **sắp hết hạn thầu NHƯNG CST còn lớn**: gói thầu gần `hd_den_ngay` + `remain_pct` cao → nguy cơ mất cơ số. (Cần hạn gói thầu; thiếu thì ghi rõ.)
+  - `hang_ngach` — **hàng ngách**: doanh số thấp / độ phủ hẹp, hoặc danh sách CEO tự chọn.
+  → Nhóm `special` phần lớn **auto-tính từ CST/doanh số** (đỡ nhập tay), CEO chỉnh/duyệt; giao NV phụ trách đẩy + đặt target riêng cho nhóm này ở GĐ2.
+
 ### 1B) Bảng PHÂN CÔNG (assignment)
 - **Model:** `assignment = { id, emp_code, type:'unit'|'group'|'route'|'iit'|'special'|'all', value, from_ky, to_ky|null, active, note, by, at }`.
   - `type='all'` = NV phụ trách toàn bộ phần của mình (mặc định hiện tại).
@@ -49,10 +63,10 @@
 ## GIAI ĐOẠN 3 — THƯỞNG (sau, khi CEO yêu cầu)
 - Policy bậc thang `{ngưỡng %đạt → mức thưởng}`, có thể theo chiều. Tính thưởng = f(%đạt, policy). Audit + **duyệt mới gửi** (Zalo/Email giữ guardrail). Chưa làm ở đợt này.
 
-## CẦN CEO CHỐT (để làm GĐ1 đúng)
-1. **Chiều phân công CHÍNH** là gì? (đề xuất: **Đơn vị (bệnh viện)** là chính — NV phụ trách BV nào; kèm **Nhóm UT** (H.A*/H.A/H.B) và **Tuyến**. Xác nhận hoặc bổ sung.)
-2. **Gieo mầm từ lịch sử bán** (NV↔đơn vị/SP đã bán) làm gợi ý phân công — OK không? (đề xuất: CÓ, đỡ nhập tay.)
-3. Lịch sử bán dùng mấy kỳ để suy phân công? (đề xuất: **04–06/2026** — 3 kỳ gần nhất có dữ liệu đủ.)
+## ĐÃ CHỐT (CEO 2026-07-03)
+1. **Chiều phân công:** ĐỦ 5 chiều `unit · group(UT) · route · iit · special(hàng cần đẩy)` + `all`.
+2. **Gieo mầm phân công tự động: CÓ**, từ lịch sử bán **04–06/2026** (3 kỳ) → NV↔đơn vị/SP/nhóm đã bán → bản gợi ý, CEO chỉnh.
+3. Nhóm `special` (hàng cần đẩy) auto-tính từ CST/doanh số (tồn nhiều, sắp hết thầu-CST lớn, hàng ngách) + CEO chỉnh; cận date cần nguồn hạn dùng (thiếu thì dùng danh sách CEO).
 
 ## Nghiệm thu tổng
 - GĐ1: danh mục tổng + phân công (gợi ý + sửa tay + NV xem phần mình) chạy, có audit, không hồi tố.
