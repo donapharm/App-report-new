@@ -21,7 +21,10 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Target: gộp 1 luồng Xuất↔Sửa↔Upload
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Target: căn cứ T06 Lumos điền sẵn template (dump trước khi cắt)
+- CEO muốn dùng target **T06/2026 Lumos** (số cuối trước khi cắt) làm căn cứ điền sẵn template → sửa → upload. → `DIRECTIVE_TARGET_TEMPLATE.md`.
+- **Bước A:** bot **dump `V_TEM_TARGET_BONUS` kỳ 06.2026** (21 NV) NGAY, lưu `data/target_baseline_202606.json` + backup (trước khi ngắt Lumos).
+- **Bước B:** template kỳ tương lai chưa giao → điền sẵn số T06 làm mốc (nhãn "Căn cứ: T06/2026"); có dropdown chọn căn cứ (Trống / T06 Lumos / kỳ gần nhất). CEO sửa rồi upload (nguồn `upload`). **Không auto-áp** — chỉ là mốc để sửa; không phá "target chốt tại App Report".
 - CEO gộp 2 yêu cầu (template điền mới + xuất để sửa) thành **1 nút xuất file**. → [`DIRECTIVE_TARGET_TEMPLATE.md`](DIRECTIVE_TARGET_TEMPLATE.md) (đã gộp) + file mẫu `templates/TARGET_TEMPLATE_MAU.csv`.
 - Nút **"⬇ Xuất/Tải template target"**: xuất .xlsx kỳ đang chọn, 21 NV (tên từ DB), **Target điền sẵn giá trị hiện tại — chưa giao thì trống** (vừa là template vừa là bản sửa). Upload lại → preview/commit/rollback theo MÃ NV; ô trống = giữ nguyên. Sửa tay lẻ vẫn ăn.
 
