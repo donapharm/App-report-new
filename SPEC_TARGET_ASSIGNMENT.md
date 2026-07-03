@@ -2,6 +2,13 @@
 
 > Claude Code chốt thiết kế (CEO 2026-07-03: làm luôn). Bot triển khai theo GIAI ĐOẠN; Claude review từng GĐ. Xây trên `SPEC_TARGET_BONUS_ROADMAP` (field `scope` đã có). Backend quyết quyền; NV chỉ thấy phần mình. Không đụng app cũ 3860.
 
+## THỨ TỰ TRIỂN KHAI (Claude chốt, CEO "theo ý em" 2026-07-03)
+1. **GĐ1** — Danh mục bán hàng tổng + Bảng PHÂN CÔNG (gieo mầm 04–06) + màn "Tôi phụ trách". *(nền tảng, đang làm)*
+2. **GĐ2a** — **Điều chỉnh target theo lý do** (đứt hàng/công nợ) — `DIRECTIVE_TARGET_ADJUSTMENT.md`. Làm SỚM vì độc lập + giá trị quản lý ngay, chạy được trên target hiện tại.
+3. **GĐ2b** — Target chi tiết theo CHIỀU (nhóm/tuyến/đơn vị/QLNB/special) + %đạt theo chiều.
+4. **GĐ3** — Thưởng bậc thang.
+Mỗi GĐ: bot làm → push → Claude review → CEO xem → mới sang GĐ sau.
+
 ## Nguyên tắc chung
 - **Định danh theo MÃ** (đơn vị/nhóm/QLNB/tuyến). Tên chỉ là nhãn.
 - **Không hồi tố:** phân công/điều chuyển chỉ áp từ kỳ hiệu lực; lịch sử giữ nguyên. Lưu **audit** đầy đủ.
