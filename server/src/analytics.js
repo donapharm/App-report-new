@@ -42,6 +42,14 @@ function groupSum(rows, keyField, labelField) {
 }
 
 const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+// Gộp mã đơn vị để đếm ĐÚNG số đơn vị: bỏ tiền tố "NT-" (nhà thuốc của cùng bệnh viện)
+// → "001.BVĐK Thống Nhất" và "001.NT-BVĐK Thống Nhất" tính LÀ 1 đơn vị.
+// KHÔNG gộp theo số đầu: "033.PKĐK An Long Khánh" vs "033.PKĐK An Long Thành" là 2 PK khác nhau.
+function baseUnitKey(u) {
+  const s = String(u || '').trim();
+  const stripped = s.replace(/^(\s*\d+[.\-]?\s*)NT[\s.\-]+/i, '$1');
+  return norm(stripped).replace(/\s+/g, ' ').trim() || norm(s);
+}
 function applyFilters(rows, f = {}) {
   const q = norm(f.q || '');
   const from = f.dateFrom ? String(f.dateFrom).slice(0, 10) : '';
@@ -130,7 +138,7 @@ function overviewKpis({ ky, kys, scope, label }) {
     cstLowCount,
     momPct,
     empCount: new Set(rows.map((r) => r.emp_code)).size,
-    unitCount: new Set(rows.map((r) => r.unit_code)).size,
+    unitCount: new Set(rows.map((r) => baseUnitKey(r.unit_code || r.unit_name))).size,
     productCount: new Set(rows.map((r) => r.iit_code)).size,
     rowCount: rows.length,
   };
@@ -171,4 +179,4 @@ function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
   return rows.sort((a, b) => a.remain_pct - b.remain_pct);
 }
 
-module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum, applyFilters, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };
+module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum, applyFilters, baseUnitKey, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };
