@@ -1,8 +1,20 @@
 // Thành phần dùng chung: loading, KPI, thanh bar, hàng danh sách.
 import React from 'react';
-import { money, pct } from './util.js';
+import { money, pct, short } from './util.js';
 
 export const Spinner = () => <div className="spin" />;
+
+// Số tiền lớn: hiện gọn (4,76 tỷ), chạm để xem số đầy đủ. Dừng lan để không kích hoạt bấm thẻ.
+export function MoneyBig({ value, className }) {
+  const [full, setFull] = React.useState(false);
+  if (value == null || Number.isNaN(Number(value))) return <span>—</span>;
+  const toggle = (e) => { e.stopPropagation(); setFull((f) => !f); };
+  return (
+    <span className={'money-big' + (className ? ' ' + className : '')} onClick={toggle} title={money(value)}>
+      {full ? money(value) : short(value)}
+    </span>
+  );
+}
 export const Empty = ({ children }) => <div className="center">{children}</div>;
 
 // Ô xương (skeleton) khi đang tải — cảm giác nhanh hơn, không nhảy layout.
@@ -46,7 +58,7 @@ export function Kpi({ label, value, sub, delta, tone, onClick }) {
   return (
     <div className={'kpi ' + (tone || '') + (onClick ? ' clickable' : '')} onClick={onClick}>
       <div className="label">{label}</div>
-      <div className={'value' + (String(value).length > 12 ? ' small' : '')}>{value}</div>
+      <div className={'value' + (typeof value === 'string' && value.length > 12 ? ' small' : '')}>{value}</div>
       {delta != null && (
         <div className={'delta ' + (delta >= 0 ? 'up' : 'down')}>
           {delta >= 0 ? '▲' : '▼'} {pct(Math.abs(delta))} so kỳ trước

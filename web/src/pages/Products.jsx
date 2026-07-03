@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pairText } from '../util.js';
-import { Spinner, Bar, Pager, usePager, SkeletonCards } from '../components.jsx';
+import { Spinner, Bar, Pager, usePager, SkeletonCards, MoneyBig } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -39,7 +39,7 @@ export default function Products({ me }) {
       <div className="card summary-card">
         <div>
           <div className="meta muted">Sản phẩm / mã QLNB · kỳ {ky} · {data?.total || 0} mã</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}>{money(data?.totalRevenue || 0)}</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}><MoneyBig value={data?.totalRevenue || 0} /></div>
         </div>
         <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel sản phẩm</button>
       </div>

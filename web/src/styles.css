@@ -575,3 +575,6 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 @keyframes skloop { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 .skeleton-card { display: flex; flex-direction: column; }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* Số tiền lớn: chạm để xem đầy đủ */
+.money-big { cursor: pointer; -webkit-user-select: none; user-select: none; border-bottom: 1px dotted currentColor; }
