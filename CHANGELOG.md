@@ -21,6 +21,15 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Bot triển khai (Report Bot) — TARGET_ADJUSTMENT GĐ2a
+- Đã implement `DIRECTIVE_TARGET_ADJUSTMENT.md` GĐ2a, chưa làm GĐ2b multidimensional.
+- Thêm module `server/src/targetAdjustment.js`, lưu `server/data/target_adjustments.json` + audit `target_adjustment_audit.json`: lý do `dut_hang`/`cong_no`/`khac`, số tiền ảnh hưởng, trạng thái `pending/approved/rejected`, người đề xuất/duyệt.
+- API: `/target-adjustments`, `/admin/target-adjustments/:id/approve|reject`, `/admin/target-adjustments/suggestions`; chỉ adjustment `approved` mới hạ target chính thức.
+- `/targets` trả thêm target gốc, target sau điều chỉnh, `% đạt gốc`, `% đạt sau điều chỉnh`, gap sau điều chỉnh, tổng giảm theo lý do.
+- UI Target thêm tab `Điều chỉnh`: NV/admin ghi lý do, admin xem gợi ý Hết CST/còn nợ, duyệt/từ chối; thẻ target hiển thị 2 dòng % đạt và số đã trừ theo lý do.
+- Gợi ý tự động: đứt hàng lấy draft từ CST hết/cạn; công nợ ghi rõ thiếu nguồn WEB partner nên tạo draft 0 để CEO nhập/duyệt, không tự áp.
+- Nghiệm thu: `node -c` routes/targetAdjustment OK, `npm run build` OK.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — SỬA nhà thầu: chỉ 1 tên theo (mã QLNB + mã nhà thầu)
 - CEO: thẻ đang nối HẾT tên biến thể của 1 mã nhà thầu (dài/rối/sai, VD Ediwel). → sửa: **thẻ chỉ hiện 1 TÊN**, khóa tra `(iit_code + contractor_code) → 1 tên` (ưu tiên contractor_name của dòng; else tên đại diện cặp); **không nối "/"**. Ô lọc giữ gom theo mã nhưng nhãn 1 tên đại diện. Áp mọi thẻ + Danh mục tổng (GĐ1). Ghi `DIRECTIVE_CARD_V2.md`.
 - Soạn trước trong khi chờ GĐ1. → [`DIRECTIVE_TARGET_MULTIDIM.md`](DIRECTIVE_TARGET_MULTIDIM.md).

@@ -13,6 +13,7 @@ const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
 const targetAdmin = require('./targetAdmin');
 const assignmentAdmin = require('./assignmentAdmin');
+const targetAdjustment = require('./targetAdjustment');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -943,7 +944,9 @@ router.get('/targets', auth.requireAuth, (req, res) => {
     reference: !!t.target_reference,
   }]));
   const pacing = A.targetPacingMeta(ky);
-  const items = store.targetRoster({ scope }).map((u) => {
+  const roster = store.targetRoster({ scope });
+  const adjByEmp = targetAdjustment.totalsByEmp({ ky, empCodes: roster.map((u) => u.emp_code) });
+  const items = roster.map((u) => {
     const ec = u.emp_code;
     const rev = A.sum(store.getRowsRange({ kys, scope: { empCode: ec } }), (r) => r.revenue);
     const beforeVat = rev / A.VAT_DIVISOR;
@@ -953,12 +956,16 @@ router.get('/targets', auth.requireAuth, (req, res) => {
     const target = targetFull;
     const tm = targetMetaByEmp[ec] || {};
     const assigned = targetFull > 0;
+    const adj = adjByEmp.get(ec) || { total: 0, by_reason: { dut_hang: 0, cong_no: 0, khac: 0 }, rows: [] };
+    const targetAdjusted = assigned ? Math.max(0, Math.round(targetFull - Number(adj.total || 0))) : 0;
     return {
       emp_code: ec,
       emp_name: u.name || ec,
       employee_type: store.employeeType(u),
       target_full: targetFull,
-      target_compare: target,
+      target_original: targetFull,
+      target_adjusted: targetAdjusted,
+      target_compare: targetAdjusted || target,
       target,
       target_assigned: assigned,
       target_source: tm.source || null,
@@ -966,15 +973,53 @@ router.get('/targets', auth.requireAuth, (req, res) => {
       target_source_ky: tm.source_ky || null,
       target_reference: !!tm.reference,
       revenue_before_vat: Math.round(beforeVat),
+      pct_original: assigned ? +(beforeVat / targetFull * 100).toFixed(1) : null,
+      pct_adjusted: assigned && targetAdjusted > 0 ? +(beforeVat / targetAdjusted * 100).toFixed(1) : (assigned && targetAdjusted === 0 ? 100 : null),
       pct: assigned ? +(beforeVat / targetFull * 100).toFixed(1) : null,
       gap: assigned ? Math.round(beforeVat - targetFull) : null,
+      gap_adjusted: assigned ? Math.round(beforeVat - targetAdjusted) : null,
+      target_adjustment: { approved_total: Math.round(adj.total || 0), by_reason: adj.by_reason, rows: adj.rows },
     };
   }).sort((a, b) => b.revenue_before_vat - a.revenue_before_vat);
   const totalRevenueBeforeVat = Math.round(A.sum(items, (x) => x.revenue_before_vat));
   const totalTarget = Math.round(A.sum(items, (x) => x.target_full));
+  const totalTargetAdjusted = Math.round(A.sum(items, (x) => x.target_adjusted || x.target_full));
+  const totalAdjustment = Math.round(A.sum(items, (x) => x.target_adjustment?.approved_total || 0));
+  const adjustmentByReason = items.reduce((acc, x) => {
+    for (const [k, v] of Object.entries(x.target_adjustment?.by_reason || {})) acc[k] = (acc[k] || 0) + Number(v || 0);
+    return acc;
+  }, { dut_hang: 0, cong_no: 0, khac: 0 });
   const assignedCount = items.filter((x) => x.target_assigned).length;
   const achievedCount = items.filter((x) => x.target_assigned && x.revenue_before_vat >= x.target_full).length;
-  res.json({ ky, kys, pacing, summary: { totalRevenueBeforeVat, totalTarget, pct: totalTarget > 0 ? +(totalRevenueBeforeVat / totalTarget * 100).toFixed(1) : null, gap: totalTarget > 0 ? totalRevenueBeforeVat - totalTarget : null, assignedCount, unassignedCount: items.length - assignedCount, achievedCount, totalEmployees: items.length }, items });
+  const achievedAdjustedCount = items.filter((x) => x.target_assigned && x.revenue_before_vat >= (x.target_adjusted || x.target_full)).length;
+  res.json({ ky, kys, pacing, summary: { totalRevenueBeforeVat, totalTarget, totalTargetAdjusted, totalAdjustment, adjustmentByReason, pct: totalTarget > 0 ? +(totalRevenueBeforeVat / totalTarget * 100).toFixed(1) : null, pctAdjusted: totalTargetAdjusted > 0 ? +(totalRevenueBeforeVat / totalTargetAdjusted * 100).toFixed(1) : null, gap: totalTarget > 0 ? totalRevenueBeforeVat - totalTarget : null, gapAdjusted: totalTargetAdjusted > 0 ? totalRevenueBeforeVat - totalTargetAdjusted : null, assignedCount, unassignedCount: items.length - assignedCount, achievedCount, achievedAdjustedCount, totalEmployees: items.length }, items });
+});
+
+
+/* ---------- Target Adjustment GĐ2a: lý do bất khả kháng + CEO duyệt ---------- */
+router.get('/target-adjustments', auth.requireAuth, (req, res) => {
+  const isAdmin = auth.isAdmin(req.session.role);
+  res.json({ rows: targetAdjustment.list({ ky: req.query.ky, emp_code: req.query.emp_code, status: req.query.status, session: req.session, isAdmin }), audit: isAdmin ? targetAdjustment.listAudit().slice(0, 50) : [] });
+});
+router.post('/target-adjustments', auth.requireAuth, (req, res) => {
+  try {
+    const isAdmin = auth.isAdmin(req.session.role);
+    const payload = { ...req.body };
+    if (!isAdmin) payload.emp_code = req.session.emp_code;
+    const row = targetAdjustment.create(payload, req.session);
+    res.json({ ok: true, row });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/target-adjustments/:id/approve', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { const row = targetAdjustment.setStatus(req.params.id, 'approved', req.session); clearTargetDependentCache(); res.json({ ok: true, row }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/target-adjustments/:id/reject', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { const row = targetAdjustment.setStatus(req.params.id, 'rejected', req.session); clearTargetDependentCache(); res.json({ ok: true, row }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.get('/admin/target-adjustments/suggestions', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  res.json(targetAdjustment.suggestions({ ky: req.query.ky || store.latestKy(), scope: auth.scopeOf(req.session), emp_code: req.query.emp_code }));
 });
 
 // Dự báo target kỳ tới theo xu hướng

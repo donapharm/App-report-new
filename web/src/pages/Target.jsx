@@ -16,6 +16,90 @@ function targetSourceText(t = {}) {
   return `Nguồn: ${src}${ky ? ` · kỳ ${ky}` : ''}${ref ? ' · tham khảo tự động' : ''}`;
 }
 
+
+const reasonLabel = (r) => ({ dut_hang: 'Đứt hàng / Hết CST', cong_no: 'Công nợ', khac: 'Khác' }[r] || r || 'Khác');
+const statusLabel = (s) => ({ pending: 'Chờ CEO duyệt', approved: 'Đã duyệt', rejected: 'Không duyệt' }[s] || s || '—');
+
+function TargetAdjustmentPanel({ ky, isAdmin, onChanged }) {
+  const [data, setData] = useState(null);
+  const [suggest, setSuggest] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+  const [form, setForm] = useState({ emp_code: '', reason_type: 'dut_hang', impact_amount: '', note: '' });
+  async function load() {
+    if (!ky) return;
+    setErr('');
+    const params = { ky };
+    setData(await api.targetAdjustments(params));
+    if (isAdmin) setSuggest(await api.adminTargetAdjustmentSuggestions(params));
+  }
+  useEffect(() => { setData(null); load().catch((e) => setErr(e.message)); }, [ky, isAdmin]);
+  const setF = (k, v) => setForm((x) => ({ ...x, [k]: v }));
+  async function create(payload = form) {
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      await api.targetAdjustmentCreate({ ky, ...payload });
+      setMsg('Đã ghi lý do điều chỉnh. Chỉ khi CEO/admin duyệt thì target đánh giá mới hạ xuống.');
+      setForm({ emp_code: isAdmin ? payload.emp_code || '' : '', reason_type: 'dut_hang', impact_amount: '', note: '' });
+      await load(); await onChanged?.();
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+  async function approve(id, ok) {
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      if (ok) await api.adminTargetAdjustmentApprove(id); else await api.adminTargetAdjustmentReject(id);
+      setMsg(ok ? 'Đã duyệt điều chỉnh target.' : 'Đã từ chối điều chỉnh target.');
+      await load(); await onChanged?.();
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+  const rows = data?.rows || [];
+  const audit = data?.audit || [];
+  return (
+    <>
+      <div className="card smart-admin-head">
+        <div className="smart-title-row"><div className="section-head">🧾 Điều chỉnh target — GĐ2a</div><span className="info-tip" tabIndex="0" data-tip="Ghi lý do đứt hàng/công nợ/khác. Chỉ dòng đã CEO/admin duyệt mới hạ target chính thức. Gợi ý tự động chỉ là draft, không tự áp.">ⓘ</span></div>
+        <div className="meta muted">Kỳ {ky || '—'} · target đánh giá = target gốc trừ tổng tiền ảnh hưởng đã duyệt, không âm.</div>
+      </div>
+      {busy && <Spinner />}
+      {err && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>}
+      {msg && <div className="card" style={{ borderColor: 'var(--ok)', color: 'var(--ok)' }}>✔ {msg}</div>}
+      <div className="card">
+        <div className="section-title">Ghi lý do đề xuất hạ target</div>
+        <div className="filter-grid">
+          {isAdmin && <label><span>NV</span><input value={form.emp_code} onChange={(e) => setF('emp_code', e.target.value.toUpperCase())} placeholder="DN001" /></label>}
+          <label><span>Lý do</span><select value={form.reason_type} onChange={(e) => setF('reason_type', e.target.value)}><option value="dut_hang">Đứt hàng / Hết CST</option><option value="cong_no">Công nợ</option><option value="khac">Khác</option></select></label>
+          <label><span>Số tiền ảnh hưởng</span><input value={form.impact_amount} onChange={(e) => setF('impact_amount', e.target.value)} placeholder="VD 120000000" /></label>
+          <label><span>Ghi chú</span><input value={form.note} onChange={(e) => setF('note', e.target.value)} placeholder="Mặt hàng/đơn vị/lý do cụ thể" /></label>
+        </div>
+        <button className="btn" disabled={busy} onClick={() => create()}>Ghi lý do, chờ duyệt</button>
+      </div>
+      {isAdmin && <>
+        <div className="section-title">Gợi ý tự động từ Hết CST / còn nợ</div>
+        {!suggest ? <Spinner /> : <div className="list-grid">
+          {(suggest.suggestions || []).length === 0 ? <div className="card">Chưa có gợi ý tự động.</div> : suggest.suggestions.slice(0, 30).map((x, i) => <div className="card detail-card" key={`${x.source}-${x.emp_code}-${i}`}>
+            <div className="detail-head detail-head-two"><div><div className="detail-title">{x.emp_code}</div><div className="detail-sub">{reasonLabel(x.reason_type)} · {x.source}</div></div><div className="detail-money">{money(x.impact_amount || 0)}<em>Draft</em></div></div>
+            <div className="meta muted">{x.note || '—'}{x.lines ? ` · ${x.lines} dòng nguồn` : ''}</div>
+            <button className="btn ghost" disabled={busy} onClick={() => create({ emp_code: x.emp_code, reason_type: x.reason_type, impact_amount: x.impact_amount || 0, note: x.note || '', source: x.source })}>Tạo đề xuất</button>
+          </div>)}
+          <div className="card"><b>Nguồn</b><div className="meta muted">Đứt hàng: {suggest.source_notes?.dut_hang || 'draft từ CST'}<br />Công nợ: {suggest.source_notes?.cong_no || 'chờ nguồn WEB partner'}</div></div>
+        </div>}
+      </>}
+      <div className="section-title">Danh sách điều chỉnh ({rows.length})</div>
+      {!data ? <Spinner /> : <div className="list-grid target-admin-grid">
+        {rows.length === 0 ? <div className="card">Chưa có điều chỉnh target kỳ này.</div> : rows.map((r) => <div className="card detail-card" key={r.id}>
+          <div className="detail-head detail-head-two"><div><div className="detail-title">{r.emp_code}</div><div className="detail-sub mono">{r.ky} · {reasonLabel(r.reason_type)} · {r.by || '—'}</div></div><div className="detail-money">{money(r.impact_amount)}<em>{statusLabel(r.status)}</em></div></div>
+          <div className="detail-facts two"><span><b>{r.note || '—'}</b><em>Ghi chú</em></span><span><b>{r.approved_by || '—'}</b><em>Duyệt bởi</em></span></div>
+          {isAdmin && r.status === 'pending' && <div className="target-admin-actions compact-actions"><button className="btn" disabled={busy} onClick={() => approve(r.id, true)}>✅ Duyệt hạ target</button><button className="btn ghost" disabled={busy} onClick={() => approve(r.id, false)}>❌ Không duyệt</button></div>}
+        </div>)}
+      </div>}
+      {isAdmin && <><div className="section-title">Audit điều chỉnh</div><div className="card">{audit.slice(0, 10).map((h, i) => <div className="row" key={i}><div className="main"><div className="name">{h.action} · {h.by}</div><div className="meta muted">{h.at} · {h.emp_code || ''} · {money(h.impact_amount || 0)}</div></div></div>)}</div></>}
+    </>
+  );
+}
+
 function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -339,7 +423,7 @@ function AssignmentMinePanel({ data, title = 'Tôi phụ trách' }) {
 }
 
 export default function Target({ me }) {
-  const [view, setView] = useState('now'); // now | forecast | admin | assignment | mine
+  const [view, setView] = useState('now'); // now | forecast | admin | assignment | adjustment | mine
   const [periods, setPeriods] = useState([]);
   const [periodSel, setPeriodSel] = useState(null);
   const [adminKy, setAdminKy] = useState('');
@@ -365,12 +449,13 @@ export default function Target({ me }) {
 
   return (
     <>
-      <DrillNav crumbs={[{ label: 'Target' }, ...(view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : view === 'assignment' ? 'Phân công' : view === 'mine' ? 'Tôi phụ trách' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
+      <DrillNav crumbs={[{ label: 'Target' }, ...(view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : view === 'assignment' ? 'Phân công' : view === 'adjustment' ? 'Điều chỉnh' : view === 'mine' ? 'Tôi phụ trách' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
       <div className="seg">
         <button className={view === 'now' ? 'active' : ''} onClick={() => setView('now')}>Kỳ này</button>
         <button className={view === 'forecast' ? 'active' : ''} onClick={() => setView('forecast')}>Dự báo{fc ? ` (${fc.next_ky})` : ''}</button>
         {me.isAdmin && <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}>Quản target</button>}
         {me.isAdmin && <button className={view === 'assignment' ? 'active' : ''} onClick={() => setView('assignment')}>Phân công</button>}
+        <button className={view === 'adjustment' ? 'active' : ''} onClick={() => setView('adjustment')}>Điều chỉnh</button>
         <button className={view === 'mine' ? 'active' : ''} onClick={() => setView('mine')}>Tôi phụ trách</button>
       </div>
       {view === 'now' && periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
@@ -383,12 +468,14 @@ export default function Target({ me }) {
           <div className="kpi-grid">
             <Kpi label="Tổng đạt trước VAT" value={money(now.summary?.totalRevenueBeforeVat || 0)} sub={now.summary?.totalTarget > 0 ? `Target tháng ${money(now.summary.totalTarget)}` : 'Chưa giao target tổng'} />
             <Kpi label="% đạt target tháng" value={pct(now.summary?.pct)} sub={now.summary?.gap == null ? 'Chưa giao target' : (now.summary.gap >= 0 ? `Vượt ${money(now.summary.gap)}` : `Thiếu ${money(Math.abs(now.summary.gap))}`)} />
+            <Kpi label="% đạt sau điều chỉnh" value={pct(now.summary?.pctAdjusted)} sub={(now.summary?.totalAdjustment || 0) > 0 ? `Đã duyệt giảm ${money(now.summary.totalAdjustment)}` : 'Chưa có điều chỉnh đã duyệt'} />
             <Kpi label="NV có target" value={`${now.summary?.assignedCount || 0}/${now.summary?.totalEmployees || now.items.length}`} sub={(now.summary?.unassignedCount || 0) ? `${now.summary.unassignedCount} NV chưa giao target` : 'Đã giao đủ'} />
-            <Kpi label="NV đạt target" value={`${now.summary?.achievedCount || 0}/${now.summary?.assignedCount || 0}`} sub="So với target cả tháng" />
+            <Kpi label="NV đạt target" value={`${now.summary?.achievedCount || 0}/${now.summary?.assignedCount || 0}`} sub={`Sau điều chỉnh: ${now.summary?.achievedAdjustedCount || 0}/${now.summary?.assignedCount || 0}`} />
           </div>
           <div className="list-grid">
             {now.items.map((t) => {
-              const p = t.pct;
+              const p = t.pct_original ?? t.pct;
+              const pa = t.pct_adjusted;
               const cls = p == null ? 'ok' : p >= 100 ? 'ok' : p >= 80 ? 'warn' : 'bad';
               const assigned = t.target_assigned !== false && Number(t.target_full || t.target || 0) > 0;
               return (
@@ -398,10 +485,12 @@ export default function Target({ me }) {
                     <div className="target-card-body">
                       <div className="list-card-title"><div className="name">{t.emp_name || t.emp_code}</div><span className={'pill ' + (assigned ? cls : 'muted-pill')}>{assigned ? pct(p) : 'Chưa giao target'}</span></div>
                       <div className="meta muted mono">{t.emp_code} · {t.employee_type || '—'}</div>
-                      {assigned && <Bar value={t.revenue_before_vat} max={t.target_full || t.target} tone={p != null && p < 80 ? 'warn' : ''} />}
+                      {assigned && <Bar value={t.revenue_before_vat} max={t.target_adjusted || t.target_full || t.target} tone={pa != null && pa < 80 ? 'warn' : ''} />}
                       <div className="meta muted" style={{ marginTop: 5 }}>
-                        Đạt {money(t.revenue_before_vat)} / target cả tháng {assigned ? money(t.target_full || t.target) : 'Chưa giao'}{assigned && <> · <span style={{ color: t.gap >= 0 ? 'var(--ok)' : 'var(--hi)' }}>{t.gap >= 0 ? 'vượt ' : 'thiếu '}{money(Math.abs(t.gap))}</span></>}
+                        Đạt {money(t.revenue_before_vat)} / target gốc {assigned ? money(t.target_full || t.target) : 'Chưa giao'}{assigned && <> · <span style={{ color: t.gap >= 0 ? 'var(--ok)' : 'var(--hi)' }}>{t.gap >= 0 ? 'vượt ' : 'thiếu '}{money(Math.abs(t.gap))}</span></>}
                       </div>
+                      {assigned && <div className="meta muted" style={{ marginTop: 3 }}> % đạt gốc: <b>{pct(t.pct_original ?? t.pct)}</b> · % sau điều chỉnh: <b>{pct(t.pct_adjusted)}</b></div>}
+                      {assigned && (t.target_adjustment?.approved_total || 0) > 0 && <div className="meta muted" style={{ marginTop: 3 }}>Target sau điều chỉnh {money(t.target_adjusted)} · giảm {money(t.target_adjustment.approved_total)} (đứt hàng {money(t.target_adjustment.by_reason?.dut_hang || 0)}, công nợ {money(t.target_adjustment.by_reason?.cong_no || 0)}, khác {money(t.target_adjustment.by_reason?.khac || 0)})</div>}
                       <div className="meta muted" style={{ marginTop: 3 }}>{targetSourceText(t)}</div>
                     </div>
                   </div>
@@ -425,6 +514,8 @@ export default function Target({ me }) {
         )
       ) : view === 'assignment' ? (
         <AssignmentAdminPanel ky={adminSelectedKy} />
+      ) : view === 'adjustment' ? (
+        <TargetAdjustmentPanel ky={selectedKy} isAdmin={me.isAdmin} onChanged={refreshTargetKpis} />
       ) : view === 'mine' ? (
         <MyAssignmentsView ky={selectedKy} />
       ) : <TargetAdminPanel ky={adminSelectedKy} onKyChange={setAdminKy} onTargetsChanged={refreshTargetKpis} />}
