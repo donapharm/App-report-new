@@ -10,5 +10,9 @@ server/data/*.json
 server/data/uploads/
 # Dữ liệu auth runtime (phiên/thiết bị/mapping/audit) — TUYỆT ĐỐI không commit
 server/data/auth/
+# Backup runtime (PM2/dữ liệu) — TUYỆT ĐỐI không commit (có thể chứa secret/key)
+backups/
+*.backup
+verification-screenshots/
 # Giữ lại file Excel mẫu để test tính năng Upload
 !server/data/sample_upload.xlsx
