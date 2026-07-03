@@ -109,13 +109,13 @@ export default function Overview({ me, onNavigate }) {
       {!kpi ? <Spinner /> : (
         <>
           <div className="kpi-grid">
-            <Kpi label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={money(kpi.revenue)} delta={kpi.momPct} sub={periodLabel(periodSel)} />
-            <Kpi label="Trước VAT" value={money(kpi.revenueBeforeVat)} sub={money(kpi.revenue) + ' sau VAT'} />
+            <Kpi label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={money(kpi.revenue)} delta={kpi.momPct} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenue')} />
+            <Kpi label="Trước VAT" value={money(kpi.revenueBeforeVat)} sub={money(kpi.revenue) + ' sau VAT'} onClick={() => onNavigate?.('revenue')} />
             <Kpi label="Đạt target (%)" value={pct(kpi.pctTarget)}
-                 sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} />
-            <Kpi label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} />
+                 sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} onClick={() => onNavigate?.('target')} />
+            <Kpi label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} onClick={() => onNavigate?.('target')} />
             <Kpi label="Cơ số thầu sắp cạn" value={`${kpi.cstLowCount || 0} dòng <10%`} sub="Hiện tại · bấm để xem" tone="danger" onClick={() => onNavigate?.('cst', { cstFilter: 'low' })} />
-            <Kpi label="Quy mô kỳ" value={`${kpi.unitCount} ĐV · ${kpi.productCount} SP · ${kpi.empCount} NV`} sub={`${kpi.rowCount} dòng`} />
+            <Kpi label="Quy mô kỳ" value={`${kpi.unitCount} ĐV · ${kpi.productCount} SP · ${kpi.empCount} NV`} sub={`${kpi.rowCount} dòng · xem ›`} onClick={() => onNavigate?.('revenue')} />
           </div>
           <div className="chart-grid overview-charts">
             <div className="card chart-card wide">
