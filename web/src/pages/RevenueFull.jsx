@@ -3,6 +3,7 @@ import { api, downloadExport } from '../api.js';
 import { money, pairText, unitText } from '../util.js';
 import { Spinner } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
+import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 const pageSize = 50;
 function qdOf(r) { const m = String(`${r.iit_code || ''} ${r.bid_package || ''}`).match(/QĐ\s*(\d+)|QD\s*(\d+)/i); return m ? `QĐ${m[1] || m[2]}` : ''; }
@@ -14,13 +15,14 @@ export default function RevenueFull({ me }) {
   const [page, setPage] = useState(1);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => { setPage(1); }, [ky, filters]);
   useEffect(() => {
     if (!ky) return;
     setData(null);
     api.revenueFull({ ky, page, pageSize, ...filters }).then(setData);
-  }, [ky, page, filters]);
+  }, [ky, page, filters, reloadTick]);
 
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   const duplicateProducts = new Set(Object.entries((data?.rows || []).reduce((m, r) => { const k = r.product_name || ''; if (k) m[k] = (m[k] || 0) + 1; return m; }, {})).filter(([, c]) => c > 1).map(([k]) => k));
@@ -33,6 +35,7 @@ export default function RevenueFull({ me }) {
 
   return (
     <>
+      <DrillNav crumbs={[{ label: 'DT đầy đủ' }]} onReload={reload} busy={!data} />
       <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} />
       <div className="card summary-card">
         <div>

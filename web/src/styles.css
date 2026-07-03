@@ -459,3 +459,13 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .nested-grid { margin-top: 10px; grid-template-columns: 1fr; }
 .nested-grid .card { box-shadow: none; background: #fbfdff; }
 @media (max-width: 560px) { .unit-rollup-grid { grid-template-columns: 1fr; } .unit-rollup-head { flex-direction: column; } }
+
+/* Shared drill navigation: back + breadcrumb + reload */
+.drill-nav{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:10px;position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(8px)}
+.drill-crumbs{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow-x:auto;white-space:nowrap;padding:2px 0}
+.drill-crumbs button{border:0;background:transparent;color:var(--brand);font-weight:700;padding:6px 4px;border-radius:8px;cursor:pointer;max-width:240px;overflow:hidden;text-overflow:ellipsis}
+.drill-crumbs button:disabled{cursor:default;color:var(--text)}
+.drill-crumbs button.active{color:var(--text);background:#f1f5f4;padding-left:8px;padding-right:8px}
+.drill-crumbs .sep{color:var(--muted);font-weight:700}
+.drill-nav .reload{margin-left:auto;flex:none}
+@media(max-width:640px){.drill-nav{top:64px;margin:0 -10px 10px;border-radius:0;border-left:0;border-right:0}.drill-nav .btn{padding:8px 9px;font-size:12px}.drill-crumbs button{max-width:160px;font-size:12px}.drill-nav .reload{min-width:74px}}

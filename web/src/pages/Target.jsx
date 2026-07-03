@@ -4,6 +4,7 @@ import { money, pct } from '../util.js';
 import { Spinner, Bar, Kpi } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { TargetGauge } from '../charts.jsx';
+import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 const rowsFmt = (n) => Number(n || 0).toLocaleString('vi-VN');
 function targetSourceText(t = {}) {
@@ -179,6 +180,7 @@ export default function Target({ me }) {
   const [adminKy, setAdminKy] = useState('');
   const [now, setNow] = useState(null);
   const [fc, setFc] = useState(null);
+  const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => {
     api.periods().then((p) => { setPeriods(p.periods || []); setPeriodSel(defaultPeriodSelection(p.periods || [], p.latest)); setAdminKy(p.latest || p.periods?.at(-1)?.ky || ''); });
@@ -187,8 +189,8 @@ export default function Target({ me }) {
     // Không để tab Target kẹt spinner nếu PeriodFilter hydrate chậm: backend tự dùng kỳ mới nhất.
     setNow(null);
     api.targets(periodSel ? periodParams(periodSel) : undefined).then(setNow);
-  }, [periodSel]);
-  useEffect(() => { api.forecast().then(setFc); }, []);
+  }, [periodSel, reloadTick]);
+  useEffect(() => { api.forecast().then(setFc); }, [reloadTick]);
   const selectedKy = (periodSel?.mode === 'range' ? periodSel.to : periodSel?.ky) || periods.at(-1)?.ky || now?.ky;
   const adminSelectedKy = adminKy || selectedKy;
   async function refreshTargetKpis() {
@@ -198,6 +200,7 @@ export default function Target({ me }) {
 
   return (
     <>
+      <DrillNav crumbs={[{ label: 'Target' }, ...(view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
       <div className="seg">
         <button className={view === 'now' ? 'active' : ''} onClick={() => setView('now')}>Kỳ này</button>
         <button className={view === 'forecast' ? 'active' : ''} onClick={() => setView('forecast')}>Dự báo{fc ? ` (${fc.next_ky})` : ''}</button>

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { money } from '../util.js';
 import { Spinner } from '../components.jsx';
+import { DrillNav } from '../drillNav.jsx';
 
 const emptyMeta = { ky: '', dateFrom: '', dateTo: '' };
 const fmtRows = (n) => Number(n || 0).toLocaleString('vi-VN');
@@ -142,6 +143,7 @@ export default function Upload() {
 
   return (
     <>
+      <DrillNav crumbs={[{ label: 'Upload' }, ...(tab !== 'new' ? [{ label: tab === 'update' ? 'Cập nhật' : 'Lịch sử' }] : [])]} onBack={tab !== 'new' ? () => setTab('new') : undefined} onCrumb={(i) => { if (i === 0) setTab('new'); }} onReload={loadSlots} busy={busy} />
       <div className="seg">
         <button className={tab === 'new' ? 'active' : ''} onClick={() => setTab('new')}>Import mới (kỳ mới)</button>
         <button className={tab === 'update' ? 'active' : ''} onClick={() => setTab('update')}>Import cập nhật (kỳ hiện có)</button>

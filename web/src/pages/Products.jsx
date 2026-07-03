@@ -3,6 +3,7 @@ import { api, downloadExport } from '../api.js';
 import { money, pairText } from '../util.js';
 import { Spinner, Bar } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
+import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 function qd139Ingredient(r) {
   return r.qd === 'QĐ139' && (r.active_ingredient || r.ham_luong);
@@ -12,12 +13,13 @@ export default function Products({ me }) {
   const { periods, ky, setKy, filters, setFilters, options } = usePeriodsAndFilters(api);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => {
     if (!ky) return;
     setData(null);
     api.products({ ky, pageSize: 100, ...filters }).then(setData);
-  }, [ky, filters]);
+  }, [ky, filters, reloadTick]);
 
   const max = data?.rows?.[0]?.revenue || 0;
   const duplicateProducts = new Set(Object.entries((data?.rows || []).reduce((m, r) => { const k = r.product_name || ''; if (k) m[k] = (m[k] || 0) + 1; return m; }, {})).filter(([, c]) => c > 1).map(([k]) => k));
@@ -30,6 +32,7 @@ export default function Products({ me }) {
 
   return (
     <>
+      <DrillNav crumbs={[{ label: 'Sản phẩm' }]} onReload={reload} busy={!data} />
       <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} />
       <div className="card summary-card">
         <div>

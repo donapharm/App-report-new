@@ -5,6 +5,7 @@ import { Spinner, Kpi } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
 import { DonutChart, TopBarChart } from '../charts.jsx';
+import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 function DeltaRow({ i, r, kind }) {
   const up = (r.delta || 0) >= 0;
@@ -54,6 +55,7 @@ export default function Analysis({ me }) {
   const [data, setData] = useState(null);
   const [topDim, setTopDim] = useState('unit');
   const [topRows, setTopRows] = useState(null);
+  const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => {
     api.periods().then((p) => { setPeriods(p.periods || []); setPeriodSel(defaultPeriodSelection(p.periods || [], p.latest)); });
@@ -68,19 +70,20 @@ export default function Analysis({ me }) {
     if (!periodSel) return;
     setData(null);
     api.analysis({ ...periodParams(periodSel), ...filters }).then(setData);
-  }, [periodSel, filters]);
+  }, [periodSel, filters, reloadTick]);
 
   useEffect(() => {
     if (!periodSel) return;
     setTopRows(null);
     api.revenue(topDim, null, { ...periodParams(periodSel), ...filters }).then((d) => setTopRows((d.rows || []).slice(0, 10)));
-  }, [periodSel, filters, topDim]);
+  }, [periodSel, filters, topDim, reloadTick]);
 
   const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   return (
     <>
+      <DrillNav crumbs={[{ label: 'Phân tích' }]} onReload={reload} busy={!data} />
       {periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
       <div className="card filter-card">
         <div className="filter-grid">

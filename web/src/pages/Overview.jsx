@@ -4,6 +4,7 @@ import { money, pct, unitText } from '../util.js';
 import { Spinner, Kpi } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
+import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 function AlertLine({ group, item }) {
   if (group.key === 'target') {
@@ -39,6 +40,7 @@ export default function Overview({ me, onNavigate }) {
   const [topDim, setTopDim] = useState('unit');
   const [topRows, setTopRows] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => {
     api.periods().then((p) => { setPeriods(p.periods); setPeriodSel(defaultPeriodSelection(p.periods, p.latest)); });
@@ -52,13 +54,13 @@ export default function Overview({ me, onNavigate }) {
     api.trend().then(setTrend);
     setAlerts(null);
     api.alerts(periodParams(periodSel)).then(setAlerts);
-  }, [periodSel]);
+  }, [periodSel, reloadTick]);
 
   useEffect(() => {
     if (!periodSel) return;
     setTopRows(null);
     api.revenue(topDim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, 10)));
-  }, [periodSel, topDim]);
+  }, [periodSel, topDim, reloadTick]);
 
   function viewAll(group) {
     if (!onNavigate) return;
@@ -95,6 +97,7 @@ export default function Overview({ me, onNavigate }) {
 
   return (
     <>
+      <DrillNav crumbs={[{ label: 'Tổng quan' }]} onReload={reload} busy={!kpi} />
       {periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
       {periodSel && (
         <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', margin: '-6px 0 10px' }}>

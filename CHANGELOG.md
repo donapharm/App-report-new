@@ -21,6 +21,13 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Bot triển khai (Report Bot) — Nav chung Quay lại/Breadcrumb/Tải lại
+- Đã `git pull origin main`, đọc `DIRECTIVE_NAV_BACK_RELOAD.md` trước khi làm.
+- Thêm component/hook chung `web/src/drillNav.jsx`: thanh `← Quay lại` + breadcrumb bấm nhảy cấp + `↻ Tải lại`; reload refetch dữ liệu nhưng giữ filter/cấp drill.
+- App-level navigation đẩy `history.pushState` cho chuyển tab; luồng drill Doanh thu dùng stack chung + browser/phone Back lùi đúng 1 cấp.
+- Áp thanh chung cho các tab chính: Tổng quan, Doanh thu, DT đầy đủ, Sản phẩm, Phân tích, Cơ số thầu, Target, Hỏi nhanh, Upload. Cơ số thầu/Target/Upload có breadcrumb theo subview/filter; Doanh thu có drill NV→ĐV→SP.
+- Nghiệm thu live: Doanh thu → Nguyễn Trọng Hiếu (DN006) → 027.BV QUỐC TẾ HOÀN MỸ ĐN → browser Back quay về danh sách đơn vị; `↻ Tải lại` giữ breadcrumb/filter `Doanh thu › Nguyễn Trọng Hiếu (DN006)`. Build OK, `pm2 restart reportnew && pm2 save` OK, health OK. Artifact: `verification-screenshots/final-0703-nav-back-reload/`.
+
 ### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive điều hướng: Quay lại + Breadcrumb + Tải lại (toàn app)
 - CEO: drill sâu (DN006 → ĐV/SP) không có nút lùi, không có nút tải lại. → [`DIRECTIVE_NAV_BACK_RELOAD.md`](DIRECTIVE_NAV_BACK_RELOAD.md).
 - 1 thanh điều hướng chung: **← Quay lại** (lùi 1 cấp drill) + **breadcrumb** (bấm cấp nhảy về) + **↻ Tải lại** (re-fetch giữ bộ lọc) + hỗ trợ **nút Back trình duyệt/điện thoại** (đẩy history). Component/hook dùng chung, áp mọi tab drill (Doanh thu/DT đầy đủ/Sản phẩm/CST/Phân tích/Target/Tổng quan).

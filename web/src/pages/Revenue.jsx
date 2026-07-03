@@ -3,6 +3,7 @@ import { api, downloadExport } from '../api.js';
 import { money, pairText, unitText } from '../util.js';
 import { Spinner, Bar } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
+import { DrillNav, useDrillStack, useReloadTick } from '../drillNav.jsx';
 
 const DIMS = { emp: 'Nhân viên', unit: 'Đơn vị', product: 'Sản phẩm' };
 
@@ -11,6 +12,9 @@ export default function Revenue({ me }) {
   const { periods, ky, setKy, filters, setFilters, options } = usePeriodsAndFilters(api);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const { reloadTick, reload } = useReloadTick();
+  const applyDrill = React.useCallback((s) => { if (!s) return; setDim(s.dim); setFilters(s.filters || {}); }, [setFilters]);
+  const drillNav = useDrillStack({ key: 'revenue', root: { label: 'Doanh thu', dim: me.isAdmin ? 'emp' : 'unit', filters: {} }, apply: applyDrill });
 
   useEffect(() => {
     try {
@@ -25,7 +29,7 @@ export default function Revenue({ me }) {
     if (!ky) return;
     setData(null);
     api.revenue(dim, ky, filters).then(setData);
-  }, [ky, dim, filters]);
+  }, [ky, dim, filters, reloadTick]);
 
   const total = data ? data.rows.reduce((s, r) => s + r.revenue, 0) : 0;
   const max = data && data.rows.length ? data.rows[0].revenue : 0;
@@ -33,11 +37,19 @@ export default function Revenue({ me }) {
     ? `${r.iit_code || r.key || '—'} · ${r.qd || '—'}${r.qd === 'QĐ139' ? ` · ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''}`
     : (dim === 'emp' ? (r.key || '—') : (r.key || '—'));
 
-  function pickDim(d) { setDim(d); }
+  function pickDim(d) {
+    const next = { label: `Doanh thu · ${DIMS[d]}`, dim: d, filters };
+    drillNav.setRoot(next);
+  }
   function setF(k, v) { setFilters((f) => ({ ...f, [k]: v })); }
   function drill(row) {
-    if (dim === 'emp') { setF('emp', row.key); setDim('unit'); }
-    else if (dim === 'unit') { setF('unit', row.key); setDim('product'); }
+    if (dim === 'emp') {
+      const nextFilters = { ...filters, emp: row.key };
+      drillNav.push({ label: `${row.label || row.key} (${row.key})`, dim: 'unit', filters: nextFilters });
+    } else if (dim === 'unit') {
+      const nextFilters = { ...filters, unit: row.key };
+      drillNav.push({ label: unitText(row.key, row.label), dim: 'product', filters: nextFilters });
+    }
   }
   async function doExport() {
     setBusy(true);
@@ -48,6 +60,7 @@ export default function Revenue({ me }) {
 
   return (
     <>
+      <DrillNav crumbs={drillNav.crumbs} onBack={drillNav.back} onCrumb={drillNav.jump} onReload={reload} busy={!data} />
       <div className="seg">
         {Object.entries(DIMS).map(([k, v]) => {
           if (k === 'emp' && !me.isAdmin) return null;

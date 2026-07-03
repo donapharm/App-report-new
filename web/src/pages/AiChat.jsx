@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '../api.js';
+import { DrillNav } from '../drillNav.jsx';
 
 const SUGGEST = ['Doanh thu kỳ này bao nhiêu?', 'Top sản phẩm', 'Top đơn vị', 'Tôi đạt bao nhiêu % target?', 'Cơ số thầu sắp cạn?'];
 
@@ -29,6 +30,7 @@ export default function AiChat({ me }) {
 
   return (
     <>
+      <DrillNav crumbs={[{ label: 'Hỏi nhanh' }]} onReload={() => setMsgs([{ who: 'bot', text: `Chào ${me.name}. Hỏi nhanh về doanh thu, đơn vị, sản phẩm, cơ số thầu, target. Số liệu do hệ thống tính, không phải AI đoán.`, lines: [] }])} busy={busy} />
       <div className="chat">
         {msgs.map((m, i) => (
           <div key={i} className={'msg ' + (m.who === 'me' ? 'me' : 'bot')}>

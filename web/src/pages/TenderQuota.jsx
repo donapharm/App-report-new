@@ -3,6 +3,7 @@ import { api, downloadExport } from '../api.js';
 import { money, pct as fmtPct, pairText, unitText } from '../util.js';
 import { Spinner, Bar } from '../components.jsx';
 import { ComboSelect, Select } from './revenueFilters.jsx';
+import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 const FILTERS = [
   { key: 'all', label: 'Tất cả', params: {} },
@@ -97,6 +98,7 @@ export default function TenderQuota({ me }) {
   const [view, setView] = useState('unit');
   const [actionFirst, setActionFirst] = useState(true);
   const [openUnits, setOpenUnits] = useState({});
+  const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => { api.filters().then(setOptions); }, []);
   useEffect(() => {
@@ -107,7 +109,7 @@ export default function TenderQuota({ me }) {
     const selected = FILTERS.find((x) => x.key === f) || FILTERS[0];
     const params = { ...selected.params, ...(bid ? { bid } : {}), ...filters };
     api.cst(params).then((d) => setData(d.rows));
-  }, [f, bid, filters]);
+  }, [f, bid, filters, reloadTick]);
 
   function setFilter(k, v) { setFilters((x) => ({ ...x, [k]: v })); }
   function reset() { setFilters(empty); setBid(''); setF('all'); }
@@ -133,6 +135,7 @@ export default function TenderQuota({ me }) {
 
   return (
     <>
+      <DrillNav crumbs={[{ label: 'Cơ số thầu' }, ...(selectedUnit ? [{ label: unitText(selectedUnit.unit_code || selectedUnit.key, selectedUnit.unit_name) }] : [])]} onBack={selectedUnit ? () => setFilter('unit', '') : undefined} onCrumb={(i) => { if (i === 0) setFilter('unit', ''); }} onReload={reload} busy={!data} />
       <div className="chips">{FILTERS.map((x) => <button key={x.key} className={'chip' + (f === x.key ? ' active' : '')} onClick={() => setF(x.key)}>{x.label}</button>)}</div>
       <div className="card filter-card">
         <div className="filter-grid">
