@@ -29,6 +29,13 @@ export function Bar({ value, max, tone }) {
   );
 }
 
+// Đóng/mở khối lọc, nhớ lựa chọn (dùng chung 1 key -> đồng bộ mọi trang).
+export function useCollapse(storageKey = 'rpt_filters_collapsed') {
+  const [open, setOpen] = React.useState(() => { try { return localStorage.getItem(storageKey) !== '1'; } catch { return true; } });
+  const toggle = () => setOpen((v) => { const nv = !v; try { localStorage.setItem(storageKey, nv ? '0' : '1'); } catch { /* ignore */ } return nv; });
+  return { open, toggle };
+}
+
 // Phân trang phía client cho danh sách dài. resetKey đổi -> tự về trang 1.
 export function usePager(items, pageSize = 20, resetKey = '') {
   const [page, setPage] = React.useState(1);

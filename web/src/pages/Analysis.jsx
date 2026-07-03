@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pct, unitText } from '../util.js';
-import { Spinner, Kpi } from '../components.jsx';
+import { Spinner, Kpi, useCollapse } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
 import { DonutChart, TopBarChart } from '../charts.jsx';
@@ -81,26 +81,32 @@ export default function Analysis({ me }) {
 
   const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const { open, toggle } = useCollapse();
 
   return (
     <>
       <DrillNav crumbs={[{ label: 'Phân tích' }]} onReload={reload} busy={!data} />
       {periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
-      <div className="card filter-card">
-        <div className="filter-grid">
-          {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
-          <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
-          <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
-          <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
-          <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
-          <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
-          <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
-        </div>
-        <div className="filter-search">
-          <input value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
-          <button className="btn ghost" onClick={() => setFilters(emptyRevenueFilters)}>Xoá lọc ({activeFilterCount})</button>
+      <div className={'card filter-card' + (open ? ' open' : ' collapsed')}>
+        <div className="filter-bar">
+          <input className="filter-quick" value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
+          <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn lọc' : '▾ Bộ lọc'}{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>
+          {activeFilterCount > 0 && <button className="btn ghost" onClick={() => setFilters(emptyRevenueFilters)}>Xoá lọc</button>}
           <button className="btn ghost" disabled={!data || exporting} onClick={async () => { setExporting(true); try { await downloadExport('analysis', { ...periodParams(periodSel), ...filters }); } catch (e) { alert(e.message); } setExporting(false); }}>⬇ Excel</button>
         </div>
+        {open && (
+          <div className="filter-body">
+            <div className="filter-grid">
+              {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
+              <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
+              <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
+              <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
+              <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
+              <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
+              <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
+            </div>
+          </div>
+        )}
       </div>
       {!data ? <Spinner /> : (
         <>
