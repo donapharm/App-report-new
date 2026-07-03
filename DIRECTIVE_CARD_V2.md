@@ -23,6 +23,14 @@ Lọc theo ngày **chỉ chính xác khi dữ liệu có ngày chi tiết**:
 - **01–06/2026 (Lumos đóng băng):** là **số tổng theo THÁNG**, có thể **không có chi tiết từng ngày** → lọc theo ngày ở các kỳ này có thể không tách được.
 - **Xử:** bot xác nhận độ chi tiết ngày của từng nguồn; kỳ nào có ngày → cho lọc ngày/tuần; kỳ chỉ có tháng → nút Ngày/Tuần báo "kỳ này chỉ có số theo tháng". Không bịa phân bổ ngày.
 
+## ‼ SỬA (CEO 2026-07-03): nhà thầu chỉ HIỆN 1 TÊN, khóa theo (mã QLNB + mã nhà thầu)
+Hiện đang gom **HẾT** tên biến thể của 1 mã nhà thầu nối bằng "/" → dài, rối, SAI (VD Ediwel/RELIPOREX ra cả đoạn). **Sửa:**
+- **Thẻ chỉ hiện ĐÚNG 1 TÊN nhà thầu**, định dạng `mã - Tên` (VD `01.DONAPHARM - Công Ty TNHH Dược Phẩm Donapharm`).
+- **Khóa tra tên = (`iit_code` + `contractor_code`)** → mỗi (sản phẩm + mã nhà thầu) có **1 tên xác định**. Ưu tiên: dùng ngay `contractor_name` của chính DÒNG đó nếu có; nếu dòng chỉ có mã → tra map **(iit_code, contractor_code) → 1 tên** (tên phổ biến nhất/đầu tiên cho cặp đó); vẫn không có → tra theo `contractor_code` lấy **1 tên đại diện**.
+- **TUYỆT ĐỐI không nối nhiều tên** bằng "/". 1 ô = 1 tên.
+- Ô LỌC nhà thầu: giữ gom theo MÃ (1 mã = 1 option), nhãn hiện **mã + 1 tên đại diện** (không liệt kê hết).
+- Áp cho MỌI thẻ (Sản phẩm/DT đầy đủ/Doanh thu/CST) + **Danh mục bán hàng tổng** (GĐ1).
+
 ## BỔ SUNG (Claude review 2026-07-03): nhà thầu — DÙNG LẠI map mã→tên đã có
 Bot báo AFP/DONA "chỉ có mã" → nhưng **tên đầy đủ ĐÃ có trong app**: trang Phân tích + ô lọc nhà thầu (`/api/filters` label `MÃ · TÊN`) đang hiện tên đầy đủ. Vậy **thẻ phải DÙNG LẠI đúng map mã→tên đó** (không phải bịa):
 - Xây/tái dùng **1 lookup `mã nhà thầu → tên đầy đủ`** từ nguồn đã có (dòng doanh thu/CST có `contractor_name`, hoặc bảng map filter) → gắn vào thẻ dạng `01.AFP - CÔNG TY TNHH AFP PHARMA`.

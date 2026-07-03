@@ -21,7 +21,8 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Spec GĐ2b: Target theo CHIỀU + %đạt theo chiều (soạn trước)
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — SỬA nhà thầu: chỉ 1 tên theo (mã QLNB + mã nhà thầu)
+- CEO: thẻ đang nối HẾT tên biến thể của 1 mã nhà thầu (dài/rối/sai, VD Ediwel). → sửa: **thẻ chỉ hiện 1 TÊN**, khóa tra `(iit_code + contractor_code) → 1 tên` (ưu tiên contractor_name của dòng; else tên đại diện cặp); **không nối "/"**. Ô lọc giữ gom theo mã nhưng nhãn 1 tên đại diện. Áp mọi thẻ + Danh mục tổng (GĐ1). Ghi `DIRECTIVE_CARD_V2.md`.
 - Soạn trước trong khi chờ GĐ1. → [`DIRECTIVE_TARGET_MULTIDIM.md`](DIRECTIVE_TARGET_MULTIDIM.md).
 - **Cốt lõi:** các chiều là **kính lọc CHỒNG NHAU** (1 giao dịch tính vào nhiều target: tổng+nhóm+đơn vị+tuyến) → **KHÔNG cộng dồn %đạt**; target chi tiết là **tùy chọn** (đặt ở chiều muốn nhấn, còn lại roll-up tổng).
 - Dùng `scope{type,value}`; nhập target chọn chiều + template thêm cột scope; %đạt lọc doanh thu theo chiều (`route/unit/iit/priority` đã có); special "hàng cần đẩy" resolve thành tập mã (CST/doanh số). Thẻ NV bung theo chiều đã đặt; cảnh báo lệch trong CÙNG chiều (không chéo).
