@@ -3,6 +3,7 @@ import { api, getToken, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { useIsDesktop } from './hooks.js';
 import { Spinner, ScrollTopButton } from './components.jsx';
+import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
@@ -31,6 +32,7 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState(() => { try { return localStorage.getItem('rpt_tab') || 'overview'; } catch { return 'overview'; } });
+  const [tabStack, setTabStack] = useState([]); // các tab đã đi qua, để nút "Quay lại" lùi về
   const desktop = useIsDesktop();
 
   useEffect(() => {
@@ -41,7 +43,7 @@ export default function App() {
   useEffect(() => {
     if (!me) return;
     window.history.replaceState({ ...(window.history.state || {}), appTab: tab }, '', window.location.href);
-    const onPop = (e) => { if (e.state?.appTab) setTab(e.state.appTab); };
+    const onPop = (e) => { if (e.state?.appTab) { setTab(e.state.appTab); setTabStack((s) => s.slice(0, -1)); } };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -58,17 +60,19 @@ export default function App() {
   if (loading) return <Spinner />;
   if (!me) return <Login onLogin={setMe} />;
 
-  const logout = () => { setToken(null); setMe(null); setTab('overview'); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
+  const logout = () => { setToken(null); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
   const tabs = TABS.filter((t) => !t.adminOnly || me.isAdmin);
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).C;
   const switchTab = (targetTab, payload = {}, mode = 'push') => {
     try { sessionStorage.setItem('app_nav_payload', JSON.stringify({ tab: targetTab, ...payload, ts: Date.now() })); } catch { /* ignore */ }
     try { localStorage.setItem('rpt_tab', targetTab); } catch { /* ignore */ }
+    if (mode === 'push' && targetTab !== tab) setTabStack((s) => [...s, tab]);
     setTab(targetTab);
     if (mode === 'push') window.history.pushState({ appTab: targetTab, appPayload: payload }, '', window.location.href);
     else window.history.replaceState({ ...(window.history.state || {}), appTab: targetTab, appPayload: payload }, '', window.location.href);
   };
   const navigate = (targetTab, payload = {}) => switchTab(targetTab, payload, 'push');
+  const navBack = { back: () => window.history.back(), canBack: tabStack.length > 0 };
 
   // ---------- Desktop: sidebar dashboard ----------
   if (desktop) {
@@ -100,7 +104,7 @@ export default function App() {
             </div>
           </header>
           <main className="page-desktop">
-            <Active me={me} desktop onNavigate={navigate} />
+            <NavCtx.Provider value={navBack}><Active me={me} desktop onNavigate={navigate} /></NavCtx.Provider>
           </main>
           <ScrollTopButton />
         </div>
@@ -120,7 +124,7 @@ export default function App() {
         </div>
       </header>
       <main className="page">
-        <Active me={me} onNavigate={navigate} />
+        <NavCtx.Provider value={navBack}><Active me={me} onNavigate={navigate} /></NavCtx.Provider>
       </main>
       <ScrollTopButton />
       <nav className="nav">
