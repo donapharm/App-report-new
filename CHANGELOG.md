@@ -21,6 +21,13 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Claude Code — Mobile/PWA polish (PR #14)
+- **Số lớn luôn hiện đủ:** bỏ cơ chế "chạm để đổi" (không đáng tin trên PWA khi kẹt cache) → `MoneyBig` luôn hiện số gọn (`4,76 tỷ`) kèm số đầy đủ (`4.758.211.000đ`) ngay bên dưới. File: `web/src/components.jsx`, `web/src/styles.css`.
+- **Nút bottom-nav cao hơn đáy:** tăng padding đáy nav + cộng `safe-area-inset-bottom`, `.page` chừa thêm chỗ → icon dễ chạm hơn trên máy có gesture bar. File: `web/src/styles.css`.
+- **Hết kẹt bản cũ (PWA cache):** `index.html` + `.webmanifest` trả `Cache-Control: no-cache, must-revalidate`; asset có hash tên (`/assets/*`) cache dài `immutable`. Sau deploy, PWA luôn lấy shell mới. File: `server/src/index.js`.
+- Nhãn KPI "Trước VAT" ghi rõ `đã ÷ 1,05`. File: `web/src/pages/Overview.jsx`.
+- Nghiệm thu: `node --check` index.js OK, `npm run build` OK, kiểm tra headless mobile 390px (số hiện đủ 2 dòng, header no-cache xác nhận). **Bot cần `git pull` + `npm --prefix web run build` + `pm2 restart reportnew` để áp.**
+
 ### 2026-07-03 — Bot triển khai (Report Bot) — TARGET_ADJUSTMENT GĐ2a
 - Đã implement `DIRECTIVE_TARGET_ADJUSTMENT.md` GĐ2a, chưa làm GĐ2b multidimensional.
 - Thêm module `server/src/targetAdjustment.js`, lưu `server/data/target_adjustments.json` + audit `target_adjustment_audit.json`: lý do `dut_hang`/`cong_no`/`khac`, số tiền ảnh hưởng, trạng thái `pending/approved/rejected`, người đề xuất/duyệt.
