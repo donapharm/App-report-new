@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, downloadTargetTemplate } from '../api.js';
+import { api, downloadTargetTemplate, downloadAssignmentTemplate, downloadExport } from '../api.js';
 import { money, pct } from '../util.js';
 import { Spinner, Bar, Kpi } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
@@ -62,6 +62,7 @@ function TargetAdjustmentPanel({ ky, isAdmin, onChanged }) {
       <div className="card smart-admin-head">
         <div className="smart-title-row"><div className="section-head">🧾 Điều chỉnh target — GĐ2a</div><span className="info-tip" tabIndex="0" data-tip="Ghi lý do đứt hàng/công nợ/khác. Chỉ dòng đã CEO/admin duyệt mới hạ target chính thức. Gợi ý tự động chỉ là draft, không tự áp.">ⓘ</span></div>
         <div className="meta muted">Kỳ {ky || '—'} · target đánh giá = target gốc trừ tổng tiền ảnh hưởng đã duyệt, không âm.</div>
+        <div className="smart-toolbar"><button className="btn ghost" disabled={busy || !rows.length} onClick={async () => { setErr(''); setMsg(''); try { await downloadExport('adjustments', { ky }); } catch (e) { setErr(e.message); } }}>⬇ Xuất Excel điều chỉnh</button></div>
       </div>
       {busy && <Spinner />}
       {err && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>}
@@ -346,6 +347,8 @@ function AssignmentAdminPanel({ ky }) {
           <button className="btn" disabled={busy} onClick={() => seed(false)}>🌱 Gieo mầm 04-06</button>
           <button className="btn ghost" disabled={busy} onClick={() => seed(true)}>Gieo lại auto</button>
           <button className="btn ghost" disabled={busy} onClick={load}>↻ Tải lại</button>
+          <button className="btn ghost" disabled={busy} onClick={async () => { setErr(''); setMsg(''); try { await downloadAssignmentTemplate(ky); } catch (e) { setErr(e.message); } }}>⬇ Mẫu phân công</button>
+          <button className="btn ghost" disabled={busy || !rows?.length} onClick={async () => { setErr(''); setMsg(''); try { await downloadExport('assignments', { ky }); } catch (e) { setErr(e.message); } }}>⬇ Xuất Excel</button>
           <label className="btn ghost" style={{ cursor: 'pointer' }}>⬆ Upload Excel<input ref={assignFileRef} type="file" accept=".xlsx" onChange={uploadAssignments} style={{ display: 'none' }} /></label>
         </div>
       </div>

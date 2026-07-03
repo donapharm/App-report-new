@@ -141,6 +141,20 @@ export async function downloadExport(kind, params = {}) {
   URL.revokeObjectURL(a.href);
 }
 
+export async function downloadAssignmentTemplate(ky) {
+  const url = `/api/admin/assignments/template.xlsx?` + new URLSearchParams({ ky: ky || '' }).toString();
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  if (!res.ok) throw new Error('Không tải được mẫu phân công');
+  const blob = await res.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `assignment_template_${ky || ''}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
 export async function downloadTargetTemplate(ky, basis = 't06') {
   const url = `/api/admin/targets/template.xlsx?` + new URLSearchParams({ ky: ky || '', basis: basis || 't06' }).toString();
   const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });

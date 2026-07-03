@@ -633,6 +633,53 @@ router.post('/admin/assignments/upload', auth.requireAuth, auth.requireAdmin, up
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.get('/admin/assignments/history', auth.requireAuth, auth.requireAdmin, (req, res) => res.json({ history: assignmentAdmin.listAudit().slice(0, 300) }));
+// Mẫu template NHẬP phân công: cột khớp parseWorkbook; nếu đã có phân công thì điền sẵn (dùng lại để nhập), chưa có thì cho ví dụ.
+router.get('/admin/assignments/template.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  const ky = String(req.query.ky || store.latestKy()).trim();
+  const existing = assignmentAdmin.listAssignments({});
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'App Report New'; wb.created = new Date();
+  const ws = wb.addWorksheet('Phan cong');
+  ws.columns = [
+    { header: 'emp_code', key: 'emp_code', width: 12 },
+    { header: 'type', key: 'type', width: 12 },
+    { header: 'value', key: 'value', width: 34 },
+    { header: 'from_ky', key: 'from_ky', width: 12 },
+    { header: 'to_ky', key: 'to_ky', width: 12 },
+    { header: 'active', key: 'active', width: 10 },
+    { header: 'note', key: 'note', width: 34 },
+  ];
+  const sample = existing.length
+    ? existing.map((a) => ({ emp_code: a.emp_code, type: a.type, value: a.value, from_ky: a.from_ky, to_ky: a.to_ky || '', active: a.active === false ? 'false' : 'true', note: a.note || '' }))
+    : [
+      { emp_code: 'DN001', type: 'unit', value: '001.BVĐK Đồng Nai', from_ky: ky, to_ky: '', active: 'true', note: 'Ví dụ — phụ trách 1 đơn vị' },
+      { emp_code: 'DN001', type: 'iit', value: 'G1.GE.QĐ139.3106.N5.484', from_ky: ky, to_ky: '', active: 'true', note: 'Ví dụ — phụ trách 1 mã QLNB' },
+      { emp_code: 'DN002', type: 'all', value: 'all', from_ky: ky, to_ky: '', active: 'true', note: 'Ví dụ — phụ trách toàn bộ' },
+    ];
+  sample.forEach((r) => ws.addRow(r));
+  ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F4C81' } };
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  const guide = wb.addWorksheet('Huong dan');
+  guide.addRows([
+    ['Cột', 'Ý nghĩa'],
+    ['emp_code', 'Mã NV phụ trách (VD DN001). Bắt buộc.'],
+    ['type', 'unit=Đơn vị · group=Nhóm UT · route=Tuyến · iit=Mã QLNB · special=Hàng cần đẩy · all=Toàn bộ. Bắt buộc.'],
+    ['value', 'Giá trị theo loại (mã/tên đơn vị, nhóm UT, tuyến, mã QLNB...). Với type=all ghi "all".'],
+    ['from_ky', 'Kỳ bắt đầu hiệu lực MM.YYYY. Trống = kỳ hiện tại. KHÔNG hồi tố.'],
+    ['to_ky', 'Kỳ kết thúc (trống = còn hiệu lực).'],
+    ['active', 'true/false. Trống = true.'],
+    ['note', 'Ghi chú (tuỳ chọn).'],
+    ['Header tiếng Việt', 'File nhập cũng nhận: mã nv · loại · giá trị · từ kỳ · đến kỳ · hiệu lực · ghi chú.'],
+    ['Cách dùng', 'Sửa/điền dòng rồi bấm "⬆ Upload Excel" ở tab Phân công. Upload có audit, hiệu lực từ kỳ, không hồi tố.'],
+  ]);
+  guide.getColumn(1).width = 18; guide.getColumn(2).width = 92;
+  guide.getRow(1).font = { bold: true };
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="assignment_template_${ky}.xlsx"`);
+  await wb.xlsx.write(res);
+  res.end();
+});
 
 /* ---------- Overview + Alerts ---------- */
 router.get('/overview', auth.requireAuth, (req, res) => {
@@ -1271,6 +1318,114 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'Nguồn/cập nhật', key: 'source_label', width: 28 },
     ];
     rows.forEach((r) => ws.addRow({ ...r, qd: qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`), source_label: cstSourceLabel(r) }));
+  } else if (kind === 'assignments') {
+    // Xuất phân công hiện có; cột khớp template để nhập lại được. Chỉ CEO/admin.
+    if (!auth.isAdmin(req.session.role)) return res.status(403).json({ error: 'Chỉ CEO/admin được xuất phân công' });
+    const rows = assignmentAdmin.listAssignments({ emp_code: req.query.emp, activeOnly: req.query.active === '1', ky: req.query.ky })
+      .map((a) => ({ emp_code: a.emp_code, emp_name: store.findUserByCode(a.emp_code)?.name || a.emp_code, type: a.type, type_label: assignmentAdmin.typeLabel(a.type, a.value), value: a.value, from_ky: a.from_ky, to_ky: a.to_ky || '', active: a.active === false ? 'false' : 'true', source: a.source || 'manual', note: a.note || '' }));
+    ws.columns = [
+      { header: 'emp_code', key: 'emp_code', width: 12 },
+      { header: 'emp_name', key: 'emp_name', width: 26 },
+      { header: 'type', key: 'type', width: 12 },
+      { header: 'Loại', key: 'type_label', width: 16 },
+      { header: 'value', key: 'value', width: 34 },
+      { header: 'from_ky', key: 'from_ky', width: 12 },
+      { header: 'to_ky', key: 'to_ky', width: 12 },
+      { header: 'active', key: 'active', width: 10 },
+      { header: 'source', key: 'source', width: 12 },
+      { header: 'note', key: 'note', width: 34 },
+    ];
+    rows.forEach((r) => ws.addRow(r));
+  } else if (kind === 'adjustments') {
+    // Xuất điều chỉnh target (GĐ2a) kèm trạng thái duyệt + lý do; NV chỉ thấy phần mình.
+    const isAdmin = auth.isAdmin(req.session.role);
+    const reasonLabel = { dut_hang: 'Đứt hàng', cong_no: 'Công nợ', khac: 'Khác' };
+    const statusLabel = { pending: 'Chờ duyệt', approved: 'Đã duyệt', rejected: 'Từ chối' };
+    const rows = targetAdjustment.list({ ky: req.query.ky, emp_code: req.query.emp_code, status: req.query.status, session: req.session, isAdmin });
+    ws.columns = [
+      { header: 'Mã NV', key: 'emp_code', width: 12 },
+      { header: 'Kỳ', key: 'ky', width: 10 },
+      { header: 'Lý do', key: 'reason_label', width: 14 },
+      { header: 'Số tiền ảnh hưởng', key: 'impact_amount', width: 20 },
+      { header: 'Trạng thái', key: 'status_label', width: 12 },
+      { header: 'Ghi chú', key: 'note', width: 40 },
+      { header: 'Người đề xuất', key: 'by', width: 16 },
+      { header: 'Thời điểm', key: 'at', width: 22 },
+      { header: 'Người duyệt', key: 'approved_by', width: 16 },
+      { header: 'Duyệt lúc', key: 'approved_at', width: 22 },
+    ];
+    rows.forEach((r) => ws.addRow({ ...r, reason_label: reasonLabel[r.reason_type] || r.reason_type, status_label: statusLabel[r.status] || r.status }));
+    ws.getColumn('impact_amount').numFmt = '#,##0';
+  } else if (kind === 'analysis') {
+    // Xuất phân tích: KPI + tăng/giảm ĐV & SP + cơ cấu + SP sắp hết CST (nhiều sheet).
+    wb.removeWorksheet(ws.id);
+    const pc = periodCtx(req.query);
+    const { ky: aky, kys } = pc;
+    const filters = revenueFiltersFromQuery(req.query);
+    const prevKys = store.previousKys(kys);
+    const curRows = A.applyFilters(store.getRowsRange({ kys, scope }), filters);
+    const prevRows = prevKys.length === kys.length ? A.applyFilters(store.getRowsRange({ kys: prevKys, scope }), filters) : [];
+    const curRev = A.sum(curRows, (r) => r.revenue);
+    const prevRev = A.sum(prevRows, (r) => r.revenue);
+    const compare = (dimension) => {
+      const cur = A.revenueBreakdown({ kys, scope, dimension, filters });
+      const prevMap = Object.fromEntries((prevRows.length ? A.revenueBreakdown({ kys: prevKys, scope, dimension, filters }) : []).map((x) => [x.key, x.revenue]));
+      return cur.map((x) => { const before = prevMap[x.key] || 0; const d = x.revenue - before; return { ...x, prevRevenue: before, delta: d, deltaPct: before > 0 ? +(d / before * 100).toFixed(1) : null }; });
+    };
+    const s1 = wb.addWorksheet('Tong quan');
+    s1.columns = [{ header: 'Chỉ số', key: 'k', width: 30 }, { header: 'Giá trị', key: 'v', width: 26 }];
+    s1.addRows([
+      { k: 'Kỳ', v: kys.join(', ') || aky },
+      { k: 'Kỳ so sánh', v: prevKys.join(', ') || '—' },
+      { k: 'Doanh thu kỳ này', v: curRev },
+      { k: 'Doanh thu kỳ trước', v: prevRev },
+      { k: 'Chênh lệch', v: curRev - prevRev },
+      { k: '% thay đổi', v: prevRev > 0 ? +((curRev - prevRev) / prevRev * 100).toFixed(1) : null },
+      { k: 'Số dòng', v: curRows.length },
+    ]);
+    s1.getColumn('v').numFmt = '#,##0';
+    const compareSheet = (title, dimension) => {
+      const data = compare(dimension).filter((x) => x.prevRevenue > 0);
+      const growth = [...data].sort((a, b) => b.delta - a.delta).slice(0, 10);
+      const decline = [...data].sort((a, b) => a.delta - b.delta).slice(0, 10);
+      const s = wb.addWorksheet(title);
+      s.columns = [
+        { header: 'Chiều', key: 'grp', width: 10 },
+        { header: 'Mã', key: 'key', width: 24 },
+        { header: 'Tên', key: 'label', width: 36 },
+        { header: 'Kỳ này', key: 'revenue', width: 18 },
+        { header: 'Kỳ trước', key: 'prevRevenue', width: 18 },
+        { header: 'Chênh lệch', key: 'delta', width: 18 },
+        { header: '%', key: 'deltaPct', width: 10 },
+      ];
+      growth.forEach((x) => s.addRow({ ...x, grp: 'Tăng' }));
+      decline.forEach((x) => s.addRow({ ...x, grp: 'Giảm' }));
+      ['revenue', 'prevRevenue', 'delta'].forEach((c) => (s.getColumn(c).numFmt = '#,##0'));
+      s.getRow(1).font = { bold: true };
+    };
+    compareSheet('Tang giam DV', 'unit');
+    compareSheet('Tang giam SP', 'product');
+    const s4 = wb.addWorksheet('Co cau');
+    s4.columns = [{ header: 'Nhóm', key: 'grp', width: 14 }, { header: 'Khoá', key: 'key', width: 24 }, { header: 'Tên', key: 'label', width: 30 }, { header: 'Doanh thu', key: 'revenue', width: 18 }];
+    const addGroup = (label, dimField) => A.groupSum(curRows, dimField, dimField).slice(0, 10).forEach((x) => s4.addRow({ grp: label, key: x.key, label: x.label || x.key, revenue: x.revenue }));
+    addGroup('Tuyến', 'route'); addGroup('Nhà thầu', 'contractor_code'); addGroup('UT', 'priority'); addGroup('Gói thầu', 'bid_package');
+    s4.getColumn('revenue').numFmt = '#,##0'; s4.getRow(1).font = { bold: true };
+    const s5 = wb.addWorksheet('SP sap het CST');
+    s5.columns = [
+      { header: 'Mã QLNB', key: 'iit_code', width: 24 },
+      { header: 'Sản phẩm', key: 'product_name', width: 30 },
+      { header: 'Đơn vị', key: 'unit_name', width: 30 },
+      { header: '% còn lại', key: 'remain_pct', width: 12 },
+      { header: 'CST còn', key: 'remain_qty', width: 14 },
+      { header: 'Tổng TT', key: 'bid_qty_initial', width: 14 },
+    ];
+    A.cstTable({ scope, remainPctMax: 10, filters }).slice(0, 50).forEach((c) => s5.addRow({ iit_code: c.iit_code, product_name: c.product_name, unit_name: c.unit_name || c.unit_code, remain_pct: c.remain_pct, remain_qty: c.remain_qty, bid_qty_initial: c.bid_qty_initial }));
+    s5.getRow(1).font = { bold: true };
+    [s1].forEach((s) => (s.getRow(1).font = { bold: true }));
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="report_analysis_${aky}.xlsx"`);
+    await wb.xlsx.write(res);
+    return res.end();
   } else {
     return res.status(400).json({ error: 'Loại export không hợp lệ' });
   }

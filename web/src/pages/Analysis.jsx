@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api, downloadExport } from '../api.js';
 import { money, pct, unitText } from '../util.js';
 import { Spinner, Kpi } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, Select } from './revenueFilters.jsx';
@@ -55,6 +55,7 @@ export default function Analysis({ me }) {
   const [data, setData] = useState(null);
   const [topDim, setTopDim] = useState('unit');
   const [topRows, setTopRows] = useState(null);
+  const [exporting, setExporting] = useState(false);
   const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => {
@@ -98,6 +99,7 @@ export default function Analysis({ me }) {
         <div className="filter-search">
           <input value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
           <button className="btn ghost" onClick={() => setFilters(emptyRevenueFilters)}>Xoá lọc ({activeFilterCount})</button>
+          <button className="btn ghost" disabled={!data || exporting} onClick={async () => { setExporting(true); try { await downloadExport('analysis', { ...periodParams(periodSel), ...filters }); } catch (e) { alert(e.message); } setExporting(false); }}>⬇ Excel</button>
         </div>
       </div>
       {!data ? <Spinner /> : (
