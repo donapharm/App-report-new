@@ -8,6 +8,12 @@
 - **Bỏ nhãn "tham khảo tự động Lumos kỳ 06.2026"** trên thẻ kỳ 07+. KHÔNG mượn target tháng 6 cho tháng 7.
 - Kỳ ≥ 07 **chưa giao target** → thẻ hiện **"Chưa giao target"** (không hiện số mượn, không tính %đạt sai). CEO nhập tay/file/AI thì mới có.
 
+## A-BIS) GIA CỐ (Claude review 2026-07-03): chốt CỨNG bỏ Lumos/appsale từ 07
+Hiện "07 không dùng Lumos" chỉ đúng vì dữ liệu legacy tình cờ không có kỳ 07 — resolver CHƯA gate theo kỳ. Rủi ro: import nhầm target Lumos kỳ ≥07 → lọt lại.
+- **Sửa `resolveTargets`:** với **kỳ ≥ 07.2026**, **BỎ QUA entry `source in (legacy, appsale)`** (bất kể có dữ liệu). Chỉ nhận `manual/upload/ai`.
+- Kỳ ≤ 06.2026: giữ `legacy` (Lumos lịch sử) như cũ.
+- So sánh kỳ theo `yyyy*100+mm` (VD `07.2026`→202607 ≥ 202607). Test: tạo giả 1 legacy entry kỳ 07 → resolver KHÔNG chọn nó; kỳ 06 vẫn chọn.
+
 ## B) Ô KPI TỪNG NV — bố cục DỄ HIỂU (bỏ % nhịp trần gây rối)
 Thay "272,2% / target đã chia nhịp" bằng:
 ```
