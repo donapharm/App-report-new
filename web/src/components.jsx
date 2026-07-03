@@ -5,6 +5,43 @@ import { money, pct } from './util.js';
 export const Spinner = () => <div className="spin" />;
 export const Empty = ({ children }) => <div className="center">{children}</div>;
 
+// Ô xương (skeleton) khi đang tải — cảm giác nhanh hơn, không nhảy layout.
+export function Skeleton({ w = '100%', h = 14, r = 6, style }) {
+  return <span className="skeleton" style={{ width: w, height: h, borderRadius: r, ...style }} />;
+}
+export function SkeletonCards({ count = 6, kpi = false }) {
+  return (
+    <div className={kpi ? 'kpi-grid' : 'list-grid'} aria-busy="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <div className="card skeleton-card" key={i}>
+          <Skeleton w="55%" h={12} />
+          <Skeleton w="80%" h={20} style={{ marginTop: 8 }} />
+          {!kpi && <Skeleton w="100%" h={7} style={{ marginTop: 10 }} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Nút "Lên đầu trang" nổi khi cuộn xuống — hoạt động cả mobile (window) lẫn desktop (.main-desktop).
+export function ScrollTopButton() {
+  const [show, setShow] = React.useState(false);
+  React.useEffect(() => {
+    const scroller = document.querySelector('.main-desktop') || window;
+    const readTop = () => (scroller === window ? window.scrollY : scroller.scrollTop);
+    const onScroll = () => setShow(readTop() > 400);
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => scroller.removeEventListener('scroll', onScroll);
+  }, []);
+  if (!show) return null;
+  const toTop = () => {
+    const scroller = document.querySelector('.main-desktop') || window;
+    scroller.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  return <button className="scroll-top-btn" onClick={toTop} aria-label="Lên đầu trang" title="Lên đầu trang">⬆</button>;
+}
+
 export function Kpi({ label, value, sub, delta, tone, onClick }) {
   return (
     <div className={'kpi ' + (tone || '') + (onClick ? ' clickable' : '')} onClick={onClick}>

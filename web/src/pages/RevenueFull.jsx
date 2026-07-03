@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pairText, unitText } from '../util.js';
-import { Spinner, Pager } from '../components.jsx';
+import { Spinner, Pager, SkeletonCards } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -46,7 +46,7 @@ export default function RevenueFull({ me }) {
         </div>
         <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel đầy đủ</button>
       </div>
-      {!data ? <Spinner /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
+      {!data ? <SkeletonCards count={6} /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
         <div className="detail-list-wrap">
           <Pager page={page} totalPages={pages} total={data.total} onPage={setPage} unit="dòng" />
           <div className="list-grid">

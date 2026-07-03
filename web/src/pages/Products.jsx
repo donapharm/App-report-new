@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pairText } from '../util.js';
-import { Spinner, Bar, Pager, usePager } from '../components.jsx';
+import { Spinner, Bar, Pager, usePager, SkeletonCards } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -43,7 +43,7 @@ export default function Products({ me }) {
         </div>
         <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel sản phẩm</button>
       </div>
-      {!data ? <Spinner /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
+      {!data ? <SkeletonCards count={6} /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
         <>
         <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="mã" />
         <div className="list-grid">
