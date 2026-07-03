@@ -45,12 +45,12 @@ function create(input = {}, user = {}) {
     reason_type: normReason(input.reason_type),
     impact_amount: base.impact_amount,
     note: String(input.note || '').trim(),
-    status: input.status === 'approved' ? 'approved' : 'pending',
+    // GĐ2a: mọi đề xuất phải đi qua luồng CEO/admin duyệt riêng; không cho tạo thẳng approved qua API.
+    status: 'pending',
     by: byUser(user),
     at: nowIso(),
     source: input.source || 'manual',
   };
-  if (row.status === 'approved') { row.approved_by = byUser(user); row.approved_at = nowIso(); }
   const rows = readAll(); rows.push(row); writeAll(rows);
   appendAudit({ action: 'target_adjustment_create', id: row.id, emp_code: row.emp_code, ky: row.ky, reason_type: row.reason_type, impact_amount: row.impact_amount, status: row.status, by: row.by });
   return row;
@@ -74,13 +74,14 @@ function list({ ky, emp_code, status, session, isAdmin = false } = {}) {
   if (!isAdmin && session?.emp_code) rows = rows.filter((x) => x.emp_code === normEmp(session.emp_code));
   return rows.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
 }
-function approvedFor({ ky, empCodes } = {}) {
+function approvedFor({ ky, kys, empCodes } = {}) {
   const set = empCodes ? new Set(empCodes.map(normEmp)) : null;
-  return readAll().filter((x) => x.status === 'approved' && (!ky || x.ky === normKy(ky)) && (!set || set.has(x.emp_code)));
+  const kySet = kys ? new Set(kys.map(normKy)) : null;
+  return readAll().filter((x) => x.status === 'approved' && (!ky || x.ky === normKy(ky)) && (!kySet || kySet.has(x.ky)) && (!set || set.has(x.emp_code)));
 }
-function totalsByEmp({ ky, empCodes } = {}) {
+function totalsByEmp({ ky, kys, empCodes } = {}) {
   const m = new Map();
-  for (const r of approvedFor({ ky, empCodes })) {
+  for (const r of approvedFor({ ky, kys, empCodes })) {
     const cur = m.get(r.emp_code) || { total: 0, by_reason: { dut_hang: 0, cong_no: 0, khac: 0 }, rows: [] };
     cur.total += Number(r.impact_amount || 0);
     cur.by_reason[r.reason_type] = (cur.by_reason[r.reason_type] || 0) + Number(r.impact_amount || 0);

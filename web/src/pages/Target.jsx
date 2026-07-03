@@ -468,7 +468,7 @@ export default function Target({ me }) {
           <div className="kpi-grid">
             <Kpi label="Tổng đạt trước VAT" value={money(now.summary?.totalRevenueBeforeVat || 0)} sub={now.summary?.totalTarget > 0 ? `Target tháng ${money(now.summary.totalTarget)}` : 'Chưa giao target tổng'} />
             <Kpi label="% đạt target tháng" value={pct(now.summary?.pct)} sub={now.summary?.gap == null ? 'Chưa giao target' : (now.summary.gap >= 0 ? `Vượt ${money(now.summary.gap)}` : `Thiếu ${money(Math.abs(now.summary.gap))}`)} />
-            <Kpi label="% đạt sau điều chỉnh" value={pct(now.summary?.pctAdjusted)} sub={(now.summary?.totalAdjustment || 0) > 0 ? `Đã duyệt giảm ${money(now.summary.totalAdjustment)}` : 'Chưa có điều chỉnh đã duyệt'} />
+            <Kpi label="% đạt sau điều chỉnh" value={pct(now.summary?.pctAdjusted)} sub={(now.summary?.totalAdjustment || 0) > 0 ? `Giảm ${money(now.summary.totalAdjustment)} · ĐH ${money(now.summary.adjustmentByReason?.dut_hang || 0)} · CN ${money(now.summary.adjustmentByReason?.cong_no || 0)} · Khác ${money(now.summary.adjustmentByReason?.khac || 0)}` : 'Chưa có điều chỉnh đã duyệt'} />
             <Kpi label="NV có target" value={`${now.summary?.assignedCount || 0}/${now.summary?.totalEmployees || now.items.length}`} sub={(now.summary?.unassignedCount || 0) ? `${now.summary.unassignedCount} NV chưa giao target` : 'Đã giao đủ'} />
             <Kpi label="NV đạt target" value={`${now.summary?.achievedCount || 0}/${now.summary?.assignedCount || 0}`} sub={`Sau điều chỉnh: ${now.summary?.achievedAdjustedCount || 0}/${now.summary?.assignedCount || 0}`} />
           </div>

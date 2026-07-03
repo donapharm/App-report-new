@@ -945,7 +945,7 @@ router.get('/targets', auth.requireAuth, (req, res) => {
   }]));
   const pacing = A.targetPacingMeta(ky);
   const roster = store.targetRoster({ scope });
-  const adjByEmp = targetAdjustment.totalsByEmp({ ky, empCodes: roster.map((u) => u.emp_code) });
+  const adjByEmp = targetAdjustment.totalsByEmp({ kys, empCodes: roster.map((u) => u.emp_code) });
   const items = roster.map((u) => {
     const ec = u.emp_code;
     const rev = A.sum(store.getRowsRange({ kys, scope: { empCode: ec } }), (r) => r.revenue);
