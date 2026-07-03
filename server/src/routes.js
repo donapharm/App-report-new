@@ -82,11 +82,69 @@ function pairLabel(code, name) {
   if (n.includes(c)) return `${c} - ${n.replace(c, '').trim().replace(/^[-–—·\s]+/, '')}`;
   return `${c} - ${n}`;
 }
-function contractorOptions(rows = []) {
+function normContractor(v) {
+  return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '');
+}
+function looksLikeContractorName(v) {
+  return /\b(c[oô]ng\s*ty|tnhh|tr[aá]ch\s*nhi[eệ]m|d[uư][oợ]c|pharma)\b/i.test(String(v || ''));
+}
+function contractorAliasTokens(code) {
+  const raw = String(code || '').trim();
+  const noPrefix = raw.replace(/^\d+[.\-_\s]*/, '');
+  const vals = [raw, noPrefix, ...noPrefix.split(/[.\-_\s]+/)];
+  return [...new Set(vals.map(normContractor).filter((x) => x.length >= 3))];
+}
+function buildContractorNameLookup(rows = []) {
+  const byCode = new Map();
+  const nameCandidates = new Set();
+  for (const r of rows) {
+    const rawCode = String(r.contractor_code || r.contractor || '').trim();
+    const rawName = String(r.contractor_name || '').trim();
+    if (rawName && rawName !== rawCode) {
+      for (const token of contractorAliasTokens(rawCode || rawName)) {
+        if (!byCode.has(token)) byCode.set(token, rawName);
+      }
+      continue;
+    }
+    if (looksLikeContractorName(rawCode)) nameCandidates.add(rawCode);
+  }
+  // Một số nguồn legacy chỉ có tên công ty trong contractor_code, còn nguồn App Sale
+  // chỉ có mã ngắn (AFP/DONA). Ghép theo token mã xuất hiện trong tên đã có sẵn.
+  const names = [...nameCandidates].sort((a, b) => b.length - a.length);
+  for (const r of rows) {
+    const rawCode = String(r.contractor_code || r.contractor || '').trim();
+    if (!rawCode || looksLikeContractorName(rawCode)) continue;
+    if (String(r.contractor_name || '').trim()) continue;
+    const tokens = contractorAliasTokens(rawCode);
+    const found = names.find((name) => tokens.some((t) => normContractor(name).includes(t)));
+    if (found) for (const t of tokens) if (!byCode.has(t)) byCode.set(t, found);
+  }
+  return byCode;
+}
+function contractorNameFor(code, name, lookup) {
+  const n = String(name || '').trim();
+  if (n) return n;
+  for (const token of contractorAliasTokens(code)) {
+    const hit = lookup?.get(token);
+    if (hit) return hit;
+  }
+  return '';
+}
+function enrichContractorNames(rows = [], lookup) {
+  return rows.map((r) => {
+    const name = contractorNameFor(r.contractor_code || r.contractor, r.contractor_name, lookup);
+    return name && name !== r.contractor_name ? { ...r, contractor_name: name } : r;
+  });
+}
+function contractorLookupFor(scope, extraRows = []) {
+  const all = store.getRowsRange({ kys: store.periodKys(), scope }).concat(store.getCst({ scope }), extraRows);
+  return buildContractorNameLookup(all);
+}
+function contractorOptions(rows = [], lookup = buildContractorNameLookup(rows)) {
   const m = new Map();
   for (const r of rows) {
     const code = String(r.contractor_code || r.contractor || '').trim();
-    const name = String(r.contractor_name || '').trim();
+    const name = contractorNameFor(code, r.contractor_name, lookup);
     if (!code && !name) continue;
     const key = code || name;
     const cur = m.get(key) || { key, code, names: new Set() };
@@ -241,6 +299,7 @@ router.get('/filters', auth.requireAuth, (req, res) => {
   };
   let rows = store.getRowsRange({ kys: pc.kys, scope });
   const cst = store.getCst({ scope });
+  const contractorLookup = contractorLookupFor(scope, rows.concat(cst));
   if (req.query.emp) {
     const emp = String(req.query.emp).trim().toUpperCase();
     rows = rows.filter((r) => r.emp_code === emp);
@@ -266,7 +325,7 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     })(),
     routes: uniq(rows, 'route'),
     priorities: uniq(rows.concat(cst), 'priority'),
-    contractors: contractorOptions(rows.concat(cst)),
+    contractors: contractorOptions(rows.concat(cst), contractorLookup),
     bidPackages: uniq(rows.concat(cst), 'bid_package'),
   });
 });
@@ -359,7 +418,8 @@ function paginate(rows, req, def = 50, max = 500) {
 router.get('/revenue/full', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
-  let rows = store.getRowsRange({ kys: pc.kys, scope });
+  const contractorLookup = contractorLookupFor(scope);
+  let rows = enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup);
   rows = A.applyFilters(rows, revenueFiltersFromQuery(req.query))
     .sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
   const totalRevenue = A.sum(rows, (r) => r.revenue);
@@ -381,8 +441,9 @@ router.get('/revenue/full', auth.requireAuth, (req, res) => {
 router.get('/products', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
-  const rows = A.applyFilters(store.getRowsRange({ kys: pc.kys, scope }), revenueFiltersFromQuery(req.query));
-  const metaMap = productMetaFromRows(store.getCst({ scope }).concat(rows));
+  const contractorLookup = contractorLookupFor(scope);
+  const rows = A.applyFilters(enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup), revenueFiltersFromQuery(req.query));
+  const metaMap = productMetaFromRows(enrichContractorNames(store.getCst({ scope }).concat(rows), contractorLookup));
   const map = new Map();
   for (const r of rows) {
     const key = r.iit_code || r.product_name || 'UNKNOWN';
@@ -421,7 +482,7 @@ router.get('/products', auth.requireAuth, (req, res) => {
     uom: meta.uom || '',
     contractor: meta.contractor || [...x.contractors][0] || '',
     contractor_code: meta.contractor_code || meta.contractor || [...x.contractors][0] || '',
-    contractor_name: meta.contractor_name || '',
+    contractor_name: contractorNameFor(meta.contractor_code || meta.contractor || [...x.contractors][0], meta.contractor_name, contractorLookup),
     bid_price: meta.bid_price || null,
     priority: meta.priority || [...x.priorities][0] || '',
     revenue: x.revenue,
@@ -516,22 +577,22 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
 router.get('/cst', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const num = (v) => (v === undefined || v === '' ? null : Number(v));
-  res.json({
-    rows: A.cstTable({
-      scope,
-      remainPctMax: num(req.query.remainMax),
-      remainPctMin: num(req.query.remainMin),
-      bidPackage: req.query.bid || null,
-      filters: {
-        emp: req.query.emp || null,
-        unit: req.query.unit || null,
-        product: req.query.product || null,
-        priority: req.query.priority || null,
-        status: req.query.status || null,
-        q: req.query.q || null,
-      },
-    }),
+  const contractorLookup = contractorLookupFor(scope);
+  const rows = A.cstTable({
+    scope,
+    remainPctMax: num(req.query.remainMax),
+    remainPctMin: num(req.query.remainMin),
+    bidPackage: req.query.bid || null,
+    filters: {
+      emp: req.query.emp || null,
+      unit: req.query.unit || null,
+      product: req.query.product || null,
+      priority: req.query.priority || null,
+      status: req.query.status || null,
+      q: req.query.q || null,
+    },
   });
+  res.json({ rows: enrichContractorNames(rows, contractorLookup) });
 });
 
 /* ---------- Target: xem + dự báo ---------- */
