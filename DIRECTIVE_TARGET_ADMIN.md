@@ -23,6 +23,16 @@
   3. **AI đề xuất** hiện ở nguồn `ai` để CEO đối chiếu.
   → Mục tiêu: CEO mở tab Quản target thấy **21 mã, mỗi mã có số target tham khảo (từ nguồn tự động) + đề xuất AI**, rồi chọn/sửa.
 
+## 0-TER) NHẬP TARGET cho KỲ TƯƠNG LAI + theo QUÝ (CEO yêu cầu 2026-07-03)
+Hiện Quản target chỉ nhập được kỳ hiện tại (07.2026). CEO muốn **đặt target trước** cho các kỳ tới và **theo quý**.
+- **Chọn kỳ bất kỳ để nhập, gồm TƯƠNG LAI:** period picker ở tab Quản target sinh **các tháng tới** (VD 08.2026, 09.2026, … tối thiểu +12 tháng) để CEO nhập target trước.
+- **Nhập theo QUÝ:** chọn chế độ "Quý" → nhập 1 số cho cả quý (VD Q3.2026) → hệ **tách xuống 3 tháng** để đồng bộ với mô hình target THÁNG (resolver/%đạt/forecast dùng chung).
+  - **Cách tách mặc định: CHIA ĐỀU /3** (dễ hiểu, đoán được); CEO **chỉnh tay từng tháng** được sau khi tách. (Tùy chọn nâng cao: tách theo hệ số mùa vụ `smart.SEASON` — làm sau nếu CEO muốn.)
+  - Lưu ở **tầng tháng** (không tạo loại target quý riêng) → mọi nơi tính theo tháng như cũ; xem theo Quý thì **cộng 3 tháng**.
+- **Upload file** cũng cho **nhiều kỳ** trong 1 file (cột `ky` = `08.2026`, `09.2026`…); Quý thì có thể nhập cột `ky=Q3.2026` → tách 3 tháng khi commit.
+- Giữ audit + rollback theo kỳ/nguồn như hiện có.
+- **Nghiệm thu:** chọn 08.2026/09.2026 nhập target lưu được; nhập 1 quý → ra 3 target tháng (chia đều), chỉnh tay được; %đạt/forecast dùng đúng; kỳ tương lai không ảnh hưởng số kỳ đang chạy.
+
 ## 1) SỬA "SAI/THIẾU" NGAY (không chờ Target admin)
 - **Thiếu NV:** danh sách Target/Dự báo hiện lấy NV có bán trong kỳ mới nhất (T07 đang chạy dở → sót). **Sửa: lấy TOÀN BỘ đội sale đang hoạt động** (NV sale + CTV sale, status active), và **neo "target cũ"/xu hướng theo THÁNG ĐỦ GẦN NHẤT (T06)**, không dựa tháng đang chạy dở.
 - **Tách TELESALE khỏi NV sale thị trường:** `VP018` (và telesale khác) là **telesale**, không phải NV sale thị trường. Thêm **loại NV** trong danh bạ: `sale` (thị trường) · `telesale` · `ctv` · `văn phòng`/khác. Danh sách target NV sale **chỉ gồm sale + ctv sale**; telesale tách nhóm riêng (xem câu hỏi CEO bên dưới).
