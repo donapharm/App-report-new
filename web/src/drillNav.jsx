@@ -1,11 +1,17 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+
+// Context back cấp APP: cho nút "Quay lại" về tab/trang trước khi trong trang không có cấp con.
+export const NavCtx = React.createContext(null);
 
 export function DrillNav({ crumbs = [], onBack, onCrumb, onReload, busy = false, right = null }) {
+  const nav = useContext(NavCtx);
   const items = crumbs.filter(Boolean);
-  const canBack = !!onBack && items.length > 1;
+  const inPageBack = !!onBack && items.length > 1;         // có cấp con trong trang (drill/sub-view)
+  const canBack = inPageBack || !!nav?.canBack;             // hoặc còn tab trước để lùi
+  const handleBack = () => { if (inPageBack) onBack(); else if (nav?.back) nav.back(); };
   return (
     <div className="drill-nav card">
-      <button className="btn ghost" disabled={!canBack} onClick={onBack}>← Quay lại</button>
+      <button className="btn ghost" disabled={!canBack} onClick={handleBack}>← Quay lại</button>
       <div className="drill-crumbs" aria-label="Breadcrumb">
         {items.map((c, i) => (
           <React.Fragment key={`${c.label}-${i}`}>
