@@ -6,6 +6,7 @@
 - **Bot server = người TRIỂN KHAI chính**: viết code app trên server (test được dữ liệu/OTP/CST/ORDS thật), build, commit/push. Là người "cầm code chính" để tránh 2 bên đụng repo.
 - **Claude Code = KIẾN TRÚC + REVIEW**: soát lỗi/bảo mật, định hướng, không sửa+push code app song song (tránh xung đột) — chỉ sửa khi thống nhất việc cụ thể hoặc sửa tài liệu.
 - Quy trình: bot đẩy 1 đợt → Claude pull review → báo duyệt/điểm cần sửa. Mọi thay đổi vẫn ghi `CHANGELOG.md`.
+- **‼ BOT PHẢI `git pull origin main` (hoặc `git fetch && git reset --hard origin/main`) TRƯỚC MỖI ĐỢT LÀM** để có directive/spec mới nhất Claude push. Đã có vụ bot "không thấy file DIRECTIVE_*" vì làm trên bản cũ. Đọc CHANGELOG.md + các `DIRECTIVE_*.md`/`SPEC_*.md` mới nhất trước khi code.
 
 ## Chạy nhanh
 ```bash
