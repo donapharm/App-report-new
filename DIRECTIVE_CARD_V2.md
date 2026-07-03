@@ -23,6 +23,12 @@ Lọc theo ngày **chỉ chính xác khi dữ liệu có ngày chi tiết**:
 - **01–06/2026 (Lumos đóng băng):** là **số tổng theo THÁNG**, có thể **không có chi tiết từng ngày** → lọc theo ngày ở các kỳ này có thể không tách được.
 - **Xử:** bot xác nhận độ chi tiết ngày của từng nguồn; kỳ nào có ngày → cho lọc ngày/tuần; kỳ chỉ có tháng → nút Ngày/Tuần báo "kỳ này chỉ có số theo tháng". Không bịa phân bổ ngày.
 
+## BỔ SUNG (Claude review 2026-07-03): nhà thầu — DÙNG LẠI map mã→tên đã có
+Bot báo AFP/DONA "chỉ có mã" → nhưng **tên đầy đủ ĐÃ có trong app**: trang Phân tích + ô lọc nhà thầu (`/api/filters` label `MÃ · TÊN`) đang hiện tên đầy đủ. Vậy **thẻ phải DÙNG LẠI đúng map mã→tên đó** (không phải bịa):
+- Xây/tái dùng **1 lookup `mã nhà thầu → tên đầy đủ`** từ nguồn đã có (dòng doanh thu/CST có `contractor_name`, hoặc bảng map filter) → gắn vào thẻ dạng `01.AFP - CÔNG TY TNHH AFP PHARMA`.
+- **1 mã nhiều tên** (VD `07.TRIEU.G`): hiện tên đại diện đầy đủ nhất (+ "…" nếu còn tên khác).
+- **Chỉ khi mã KHÔNG có tên ở BẤT KỲ nguồn nào** → mới hiện mã trần (đúng "không bịa"). Đối chiếu: tên đã hiện ở Phân tích thì thẻ cũng phải có.
+
 ## Nghiệm thu
 - Thẻ QĐ139 nền vàng/cam, QĐ141 nền xanh; badge góc đúng.
 - Bỏ ô gói-139, có "Giá trúng thầu"; có ô "Ưu tiên"; nhà thầu `mã - tên đầy đủ`.
