@@ -21,7 +21,10 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
-### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Target: nhập kỳ TƯƠNG LAI + theo QUÝ (+ xác nhận 21 mã ĐẠT)
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Lộ trình Target+Thưởng đa chiều (chừa chỗ)
+- CEO nêu tầm nhìn: target/thưởng theo nhiều chiều (nhóm H.A*/H.A/H.B, hàng đặc biệt, tuyến CL/NCL/NT, mã ĐV, mã QLNB) + danh mục bán hàng tổng + phân công NV. → [`SPEC_TARGET_BONUS_ROADMAP.md`](SPEC_TARGET_BONUS_ROADMAP.md).
+- **Làm NGAY (chừa chỗ):** thêm field `scope` (mặc định `all`) vào `target_entry` → tương lai thêm target theo chiều không phải đập mô hình; hành vi hiện tại không đổi.
+- **Làm SAU:** target đa chiều + %đạt theo chiều (dữ liệu route/unit/iit/UT đã có) + lớp Thưởng tách riêng (bậc thang, duyệt mới gửi) + danh mục+phân công (chính là module Phân công/Điều chuyển đã hoãn). Cập nhật scope: "thưởng" từ CẮT → SAU.
 - **Xác nhận:** roster Target giờ ĐÚNG 21 mã (allowlist config, bỏ heuristic). ĐẠT.
 - **CEO yêu cầu:** Quản target cho **nhập target kỳ tương lai** (T08/T09.2026…) + **theo QUÝ**. → `DIRECTIVE_TARGET_ADMIN.md` mục 0-TER: period picker sinh tháng tới (+12); chế độ Quý nhập 1 số → **tách 3 tháng (chia đều mặc định, chỉnh tay được)**, lưu tầng tháng để resolver/%đạt/forecast dùng chung; upload file nhiều kỳ. Audit/rollback giữ nguyên.
 - CEO: ô "Tất cả nhà thầu" cho hiện **mã + tên đầy đủ**; **1 mã nhà thầu có nhiều tên** (VD `07.trieu.g`). → khóa lọc theo **MÃ**, chọn mã gom hết mọi tên. Áp chung mọi bộ lọc mã↔tên (nhà thầu/ĐV/SP/NV/gói/tuyến): luôn hiện mã+tên, khóa theo mã (tên chỉ là nhãn). Ghi `SPEC_ANALYSIS_CST_UX.md` mục C2.
