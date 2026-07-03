@@ -21,6 +21,12 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Directive Thẻ V2: mã màu QĐ + giá trúng thầu + ưu tiên + lọc ngày
+- CEO 2 ảnh (H1 chỉnh thẻ/lọc, H2 mẫu bảng + mã màu). → [`DIRECTIVE_CARD_V2.md`](DIRECTIVE_CARD_V2.md).
+- **H1:** giờ đồng bộ "…GMT+7"; lọc Từ ngày→Đến ngày + Ngày/Tuần/Tháng/Quý; bỏ ô "Gói thầu 139" → **Giá trúng thầu**; tên+hoạt chất/hàm lượng (QĐ141 không); nhà thầu **`01.AFP - CÔNG TY TNHH AFP PHARMA`** (1 mã nhiều tên); thêm ô **Ưu tiên** (H.A*/H.A/H.B).
+- **H2:** nền thẻ theo QĐ — **QĐ139 vàng/cam, QĐ141 xanh** + badge góc; bố cục bảng gọn theo ảnh mẫu.
+- **Lưu ý:** lọc theo ngày chỉ đúng khi kỳ có ngày chi tiết (T07+ App Sale có; 01–06 Lumos theo tháng — bot xác nhận, không bịa phân bổ ngày).
+
 ### 2026-07-03 — Bot triển khai (Report Bot) — Nav chung Quay lại/Breadcrumb/Tải lại
 - Đã `git pull origin main`, đọc `DIRECTIVE_NAV_BACK_RELOAD.md` trước khi làm.
 - Thêm component/hook chung `web/src/drillNav.jsx`: thanh `← Quay lại` + breadcrumb bấm nhảy cấp + `↻ Tải lại`; reload refetch dữ liệu nhưng giữ filter/cấp drill.
