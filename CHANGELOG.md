@@ -25,6 +25,16 @@
 - Soạn trước trong khi chờ GĐ1. → [`DIRECTIVE_TARGET_MULTIDIM.md`](DIRECTIVE_TARGET_MULTIDIM.md).
 - **Cốt lõi:** các chiều là **kính lọc CHỒNG NHAU** (1 giao dịch tính vào nhiều target: tổng+nhóm+đơn vị+tuyến) → **KHÔNG cộng dồn %đạt**; target chi tiết là **tùy chọn** (đặt ở chiều muốn nhấn, còn lại roll-up tổng).
 - Dùng `scope{type,value}`; nhập target chọn chiều + template thêm cột scope; %đạt lọc doanh thu theo chiều (`route/unit/iit/priority` đã có); special "hàng cần đẩy" resolve thành tập mã (CST/doanh số). Thẻ NV bung theo chiều đã đặt; cảnh báo lệch trong CÙNG chiều (không chéo).
+
+### 2026-07-03 — Bot triển khai (Report Bot) — SPEC_TARGET_ASSIGNMENT GĐ1
+- Đã `git pull origin main`, đọc `SPEC_TARGET_ASSIGNMENT.md`; chỉ làm GĐ1, chưa làm target chi tiết GĐ2/thưởng GĐ3.
+- Thêm danh mục bán hàng tổng `/api/catalog/sales`: hợp nhất SP, hoạt chất/hàm lượng, nhóm UT, tuyến, gói, nhà thầu mã-tên, giá thầu, CST còn.
+- Thêm model phân công `assignment{id, emp_code, type, value, from_ky, to_ky, active, note, by, at}` + `source`/`special_kind`, lưu `server/data/assignments.json`, audit `assignment_audit.json`; gieo mầm 1.687 phân công auto từ lịch sử 04-06/2026 hiệu lực từ 07.2026.
+- Thêm API admin/mine/special: CEO xem-sửa-thêm-ngưng hiệu lực + audit; NV chỉ thấy `/assignments/mine` theo session; upload Excel backend cho phân công.
+- Thêm UI Target: tab `Phân công` cho admin và `Tôi phụ trách` cho NV/admin; special `tồn nhiều`/`hàng ngách` auto, `cận date` và `sắp hết thầu-CST lớn` ghi rõ thiếu nguồn hạn dùng/hạn gói thầu để CEO chọn thủ công.
+- Nghiệm thu: `node -c` routes/assignmentAdmin OK, `npm run build` OK, restart `reportnew` OK, health local/public OK; API catalog/admin/mine/special/history OK; UI Phân công render catalog 342 mã + 1.687 phân công.
+
+### 2026-07-03 — Dev/Kiến trúc (Claude Code) — Spec điều chỉnh target theo lý do (đứt hàng/công nợ)
 - CEO: cần ghi lý do không đạt (đứt hàng/công nợ) để hạ tỷ lệ target tháng đó + phân tích. → [`DIRECTIVE_TARGET_ADJUSTMENT.md`](DIRECTIVE_TARGET_ADJUSTMENT.md) (thuộc Target GĐ2).
 - Model `target_adjustment{emp_code,ky,reason_type,impact_amount,status,...}`; **CEO DUYỆT mới áp**. Target điều chỉnh = target gốc − Σ impact duyệt; thẻ hiện %đạt gốc + %đạt sau điều chỉnh + "đã trừ đứt hàng X/công nợ Y". Gợi ý tự động từ Hết CST (đứt hàng) + "còn nợ chưa giao" (công nợ), CEO duyệt. Phân tích tổng hợp mất theo lý do.
 - CEO: làm luôn kế hoạch target chi tiết + danh mục NV phụ trách. → [`SPEC_TARGET_ASSIGNMENT.md`](SPEC_TARGET_ASSIGNMENT.md) (3 giai đoạn).

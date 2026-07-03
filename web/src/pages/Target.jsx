@@ -200,8 +200,131 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
   );
 }
 
+
+function AssignmentAdminPanel({ ky }) {
+  const [rows, setRows] = useState(null);
+  const [catalog, setCatalog] = useState(null);
+  const [mine, setMine] = useState(null);
+  const [history, setHistory] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  const [form, setForm] = useState({ emp_code: 'DN001', type: 'unit', value: '', from_ky: ky || '07.2026', to_ky: '', active: true, note: '' });
+  async function load() {
+    setErr('');
+    const [a, c, m, h] = await Promise.all([
+      api.adminAssignments({ ky }),
+      api.salesCatalog({ all: 1, pageSize: 30 }),
+      api.myAssignments({ ky }),
+      api.adminAssignmentHistory(),
+    ]);
+    setRows(a.rows || []); setCatalog(c); setMine(m); setHistory(h.history || []);
+  }
+  useEffect(() => { load().catch((e) => setErr(e.message)); }, [ky]);
+  function setF(k, v) { setForm((x) => ({ ...x, [k]: v })); }
+  async function seed(replaceAuto = false) {
+    setBusy(true); setErr(''); setMsg('');
+    try { const r = await api.adminAssignmentSeed(replaceAuto); setMsg(`Đã gieo mầm ${r.result.rows} phân công tự động từ 04-06/2026.`); await load(); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+  async function save() {
+    setBusy(true); setErr(''); setMsg('');
+    try { await api.adminAssignmentSave(form); setMsg('Đã lưu phân công manual + audit.'); await load(); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+  async function del(id) {
+    if (!confirm('Ngưng hiệu lực phân công này?')) return;
+    setBusy(true); setErr(''); setMsg('');
+    try { await api.adminAssignmentDelete(id); setMsg('Đã ngưng hiệu lực phân công + audit.'); await load(); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+  const typeLabel = (t) => ({ unit: 'Đơn vị', group: 'Nhóm UT', route: 'Tuyến', iit: 'Mã QLNB', special: 'Hàng cần đẩy', all: 'Toàn bộ' }[t] || t);
+  return (
+    <>
+      <div className="card smart-admin-head">
+        <div className="smart-title-row"><div className="section-head">🧭 Phân công phụ trách — GĐ1</div><span className="info-tip" tabIndex="0" data-tip="Backend quyết quyền. Gieo mầm từ lịch sử bán 04-06/2026; manual có audit và hiệu lực từ kỳ, không hồi tố.">ⓘ</span></div>
+        <div className="smart-toolbar">
+          <button className="btn" disabled={busy} onClick={() => seed(false)}>🌱 Gieo mầm 04-06</button>
+          <button className="btn ghost" disabled={busy} onClick={() => seed(true)}>Gieo lại auto</button>
+          <button className="btn ghost" disabled={busy} onClick={load}>↻ Tải lại</button>
+        </div>
+      </div>
+      {busy && <Spinner />}
+      {err && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>}
+      {msg && <div className="card" style={{ borderColor: 'var(--ok)', color: 'var(--ok)' }}>✔ {msg}</div>}
+      <div className="card">
+        <div className="section-title">Thêm/sửa phân công</div>
+        <div className="filter-grid">
+          <label><span>NV</span><input value={form.emp_code} onChange={(e) => setF('emp_code', e.target.value.toUpperCase())} /></label>
+          <label><span>Loại</span><select value={form.type} onChange={(e) => setF('type', e.target.value)}><option value="unit">Đơn vị</option><option value="group">Nhóm UT</option><option value="route">Tuyến</option><option value="iit">Mã QLNB</option><option value="special">Hàng cần đẩy</option><option value="all">Toàn bộ</option></select></label>
+          <label><span>Giá trị</span><input value={form.value} onChange={(e) => setF('value', e.target.value)} placeholder="001.BV... / H.A / CL / mã QLNB" /></label>
+          <label><span>Từ kỳ</span><input value={form.from_ky} onChange={(e) => setF('from_ky', e.target.value)} /></label>
+          <label><span>Đến kỳ</span><input value={form.to_ky} onChange={(e) => setF('to_ky', e.target.value)} placeholder="trống = còn hiệu lực" /></label>
+          <label><span>Ghi chú</span><input value={form.note} onChange={(e) => setF('note', e.target.value)} /></label>
+        </div>
+        <button className="btn" disabled={busy} onClick={save}>Lưu phân công manual</button>
+      </div>
+      <div className="section-title">Danh mục bán hàng tổng ({catalog?.total || 0} mã)</div>
+      {!catalog ? <Spinner /> : <div className="list-grid">
+        {(catalog.rows || []).slice(0, 12).map((r) => <div className="card detail-card" key={r.iit_code}>
+          <div className="detail-title">{r.product_name}</div>
+          <div className="detail-sub mono">{r.iit_code} · {r.uom || '—'} · {r.priority || '—'} · {r.routes || '—'}</div>
+          {r.qd === 'QĐ139' && <div className="detail-sub">{r.active_ingredient || '—'} · {r.ham_luong || '—'}</div>}
+          <div className="detail-facts"><span><b>{money(r.bid_price)}</b><em>Giá thầu</em></span><span><b>{money(r.cst_remain_amount)}</b><em>CST còn</em></span><span><b>{r.contractors || '—'}</b><em>Nhà thầu</em></span><span><b>{r.bidPackages || '—'}</b><em>Gói</em></span></div>
+        </div>)}
+      </div>}
+      <div className="section-title">Phân công hiện có ({rows?.length || 0})</div>
+      {!rows ? <Spinner /> : <div className="list-grid target-admin-grid">
+        {rows.slice(0, 80).map((a) => <div className="card detail-card" key={a.id}>
+          <div className="detail-head detail-head-two"><div><div className="detail-title">{a.emp_name || a.emp_code}</div><div className="detail-sub mono">{a.emp_code} · {typeLabel(a.type)} · {a.value}</div></div><span className={'pill ' + (a.active ? 'ok' : 'muted-pill')}>{a.source || 'manual'}</span></div>
+          <div className="detail-facts two"><span><b>{a.from_ky || '—'} → {a.to_ky || 'hiện tại'}</b><em>Hiệu lực</em></span><span><b>{a.by || '—'}</b><em>Người sửa</em></span><span><b>{a.note || '—'}</b><em>Ghi chú</em></span><span><button className="btn ghost" onClick={() => del(a.id)}>Ngưng</button><em>Thao tác</em></span></div>
+        </div>)}
+      </div>}
+      <AssignmentMinePanel data={mine} title="Tôi phụ trách (preview theo quyền hiện tại)" />
+      <div className="section-title">Audit gần nhất</div>
+      <div className="card">
+        {(history || []).slice(0, 8).map((h) => <div className="row" key={h.id}><div className="main"><div className="name">{h.action} · {h.by}</div><div className="meta muted">{h.at} · {h.assignment_id || ''}</div></div></div>)}
+      </div>
+    </>
+  );
+}
+
+function MyAssignmentsView({ ky }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState('');
+  useEffect(() => { setData(null); api.myAssignments({ ky }).then(setData).catch((e) => setErr(e.message)); }, [ky]);
+  if (err) return <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>;
+  return <AssignmentMinePanel data={data} />;
+}
+
+function AssignmentMinePanel({ data, title = 'Tôi phụ trách' }) {
+  if (!data) return <Spinner />;
+  const specials = data.specials || {};
+  return (
+    <>
+      <div className="section-title">{title}: {data.emp_name || data.emp_code}</div>
+      <div className="list-grid">
+        {(data.assignments || []).length === 0 ? <div className="card">Chưa có phân công đang hiệu lực.</div> : data.assignments.map((a) => <div className="card detail-card" key={a.id}>
+          <div className="detail-title">{a.label}</div>
+          <div className="detail-sub mono">{a.emp_code} · {a.from_ky || '—'} → {a.to_ky || 'hiện tại'} · {a.source || 'manual'}</div>
+          <div className="meta muted">{a.note || '—'}</div>
+        </div>)}
+      </div>
+      <div className="section-title">Hàng cần đẩy gợi ý</div>
+      <div className="list-grid">
+        {(specials.ton_nhieu || []).slice(0, 6).map((x) => <div className="card detail-card" key={'tn'+x.iit_code}><div className="detail-title">{x.product_name}</div><div className="detail-sub mono">{x.iit_code} · tồn nhiều · {x.priority || '—'}</div><div className="detail-facts"><span><b>{x.remain_pct}%</b><em>CST còn</em></span><span><b>{money(x.remain_amount)}</b><em>TT còn</em></span></div></div>)}
+        <div className="card"><b>Cận date</b><div className="meta muted">{specials.can_date?.message || 'Thiếu nguồn hạn dùng; CEO chọn thủ công.'}</div></div>
+        <div className="card"><b>Sắp hết thầu-CST lớn</b><div className="meta muted">{specials.sap_het_thau_cst_lon?.message || 'Thiếu nguồn hạn gói thầu.'}</div></div>
+      </div>
+    </>
+  );
+}
+
 export default function Target({ me }) {
-  const [view, setView] = useState('now'); // now | forecast | admin
+  const [view, setView] = useState('now'); // now | forecast | admin | assignment | mine
   const [periods, setPeriods] = useState([]);
   const [periodSel, setPeriodSel] = useState(null);
   const [adminKy, setAdminKy] = useState('');
@@ -227,11 +350,13 @@ export default function Target({ me }) {
 
   return (
     <>
-      <DrillNav crumbs={[{ label: 'Target' }, ...(view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
+      <DrillNav crumbs={[{ label: 'Target' }, ...(view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : view === 'assignment' ? 'Phân công' : view === 'mine' ? 'Tôi phụ trách' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
       <div className="seg">
         <button className={view === 'now' ? 'active' : ''} onClick={() => setView('now')}>Kỳ này</button>
         <button className={view === 'forecast' ? 'active' : ''} onClick={() => setView('forecast')}>Dự báo{fc ? ` (${fc.next_ky})` : ''}</button>
         {me.isAdmin && <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}>Quản target</button>}
+        {me.isAdmin && <button className={view === 'assignment' ? 'active' : ''} onClick={() => setView('assignment')}>Phân công</button>}
+        <button className={view === 'mine' ? 'active' : ''} onClick={() => setView('mine')}>Tôi phụ trách</button>
       </div>
       {view === 'now' && periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
       {/* DIRECTIVE_LAYOUT_SMART: Quản target dùng kỳ compact trong toolbar, không phơi period card riêng để danh sách 21 NV lên ngay. */}
@@ -283,6 +408,10 @@ export default function Target({ me }) {
             </div>
           </>
         )
+      ) : view === 'assignment' ? (
+        <AssignmentAdminPanel ky={adminSelectedKy} />
+      ) : view === 'mine' ? (
+        <MyAssignmentsView ky={selectedKy} />
       ) : <TargetAdminPanel ky={adminSelectedKy} onKyChange={setAdminKy} onTargetsChanged={refreshTargetKpis} />}
     </>
   );

@@ -12,6 +12,7 @@ const smart = require('./smart');
 const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
 const targetAdmin = require('./targetAdmin');
+const assignmentAdmin = require('./assignmentAdmin');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -302,6 +303,105 @@ router.get('/me', auth.requireAuth, (req, res) => {
   res.json({ ...req.session, isAdmin: auth.isAdmin(req.session.role) });
 });
 
+
+
+function empLabel(code) {
+  const u = store.findUserByCode(String(code || '').trim().toUpperCase());
+  return u ? `${u.emp_code} · ${u.name}` : String(code || '—');
+}
+function salesCatalogRows(scope, { allPeriods = false } = {}) {
+  const kys = allPeriods ? store.periodKys() : [store.latestKy()];
+  const contractorLookup = contractorLookupFor(scope);
+  const revenueRows = enrichContractorNames(store.getRowsRange({ kys, scope }), contractorLookup);
+  const cstRows = enrichContractorNames(store.getCst({ scope }), contractorLookup);
+  const metaMap = productMetaFromRows(cstRows.concat(revenueRows));
+  const map = new Map();
+  for (const r of cstRows.concat(revenueRows)) {
+    const key = r.iit_code || r.product_name;
+    if (!key) continue;
+    const meta = metaMap.get(key) || {};
+    const cur = map.get(key) || {
+      iit_code: r.iit_code || key,
+      product_name: r.product_name || key,
+      active_ingredient: meta.active_ingredient || '',
+      ham_luong: meta.ham_luong || '',
+      uom: meta.uom || '',
+      priority: meta.priority || '',
+      routes: new Set(),
+      bidPackages: new Set(),
+      contractors: new Set(),
+      bid_price: meta.bid_price || null,
+      cst_remain_qty: 0,
+      cst_remain_amount: 0,
+      cst_max_remain_pct: null,
+      revenue: 0,
+      quantity: 0,
+      unitCount: new Set(),
+      empCount: new Set(),
+      qd: meta.qd || qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`),
+    };
+    if (r.active_ingredient && !cur.active_ingredient) cur.active_ingredient = r.active_ingredient;
+    if (r.ham_luong && !cur.ham_luong) cur.ham_luong = r.ham_luong;
+    if (r.uom && !cur.uom) cur.uom = r.uom;
+    if (r.priority && !cur.priority) cur.priority = r.priority;
+    if (r.route) cur.routes.add(r.route);
+    if (r.bid_package) cur.bidPackages.add(r.bid_package);
+    const cname = contractorNameFor(r.contractor_code || r.contractor, r.contractor_name, contractorLookup);
+    if (r.contractor_code || cname) cur.contractors.add(pairLabel(r.contractor_code || r.contractor, cname));
+    if (r.bid_price != null && cur.bid_price == null) cur.bid_price = r.bid_price;
+    cur.cst_remain_qty += Number(r.remain_qty || 0);
+    cur.cst_remain_amount += Number(r.remain_amount || 0);
+    if (r.remain_pct != null) cur.cst_max_remain_pct = Math.max(cur.cst_max_remain_pct || 0, Number(r.remain_pct || 0));
+    cur.revenue += Number(r.revenue || r.sold_amount || 0);
+    cur.quantity += Number(r.quantity || 0);
+    if (r.unit_code || r.unit_name) cur.unitCount.add(r.unit_code || r.unit_name);
+    if (r.emp_code || r.sales_emps) String(r.emp_code || r.sales_emps).split(',').map((x) => x.trim()).filter(Boolean).forEach((x) => cur.empCount.add(x));
+    map.set(key, cur);
+  }
+  return [...map.values()].map((x) => ({
+    ...x,
+    routes: [...x.routes].sort().join(', '),
+    bidPackages: [...x.bidPackages].slice(0, 6).join(', '),
+    contractors: [...x.contractors].slice(0, 6).join(' / '),
+    unitCount: x.unitCount.size,
+    empCount: x.empCount.size,
+  })).sort((a, b) => (b.revenue + b.cst_remain_amount) - (a.revenue + a.cst_remain_amount));
+}
+function specialCandidates(scope) {
+  const cst = store.getCst({ scope });
+  const revenue = store.getRowsRange({ kys: ['04.2026', '05.2026', '06.2026'], scope });
+  const revByIit = new Map();
+  const unitByIit = new Map();
+  for (const r of revenue) {
+    const k = r.iit_code || r.product_name;
+    if (!k) continue;
+    revByIit.set(k, (revByIit.get(k) || 0) + Number(r.revenue || 0));
+    const s = unitByIit.get(k) || new Set();
+    if (r.unit_code || r.unit_name) s.add(r.unit_code || r.unit_name);
+    unitByIit.set(k, s);
+  }
+  const byIit = new Map();
+  for (const r of cst) {
+    const k = r.iit_code || r.product_name;
+    if (!k) continue;
+    const cur = byIit.get(k) || { iit_code: r.iit_code || k, product_name: r.product_name || k, remain_pct: 0, remain_qty: 0, remain_amount: 0, priority: r.priority || '', bid_package: r.bid_package || '' };
+    cur.remain_pct = Math.max(cur.remain_pct || 0, Number(r.remain_pct || 0));
+    cur.remain_qty += Number(r.remain_qty || 0);
+    cur.remain_amount += Number(r.remain_amount || 0);
+    if (!cur.priority && r.priority) cur.priority = r.priority;
+    byIit.set(k, cur);
+  }
+  const items = [...byIit.values()];
+  const tonNhieu = items.filter((x) => x.remain_pct >= 85 && x.remain_amount > 0).sort((a, b) => b.remain_amount - a.remain_amount).slice(0, 100).map((x) => ({ ...x, special_kind: 'ton_nhieu', reason: `CST còn ${x.remain_pct}%` }));
+  const hangNgach = items.filter((x) => (revByIit.get(x.iit_code) || 0) < 50000000 || (unitByIit.get(x.iit_code)?.size || 0) <= 2).sort((a, b) => (revByIit.get(a.iit_code) || 0) - (revByIit.get(b.iit_code) || 0)).slice(0, 100).map((x) => ({ ...x, special_kind: 'hang_ngach', reason: `Doanh số/độ phủ thấp 04-06: ${revByIit.get(x.iit_code) || 0}đ · ${unitByIit.get(x.iit_code)?.size || 0} đơn vị` }));
+  return {
+    ton_nhieu: tonNhieu,
+    hang_ngach: hangNgach,
+    can_date: { source_missing: true, message: 'Thiếu nguồn hạn dùng/lô date trong App Report; GĐ1 để danh sách CEO chọn thủ công.' },
+    sap_het_thau_cst_lon: { source_missing: true, message: 'Thiếu nguồn hạn gói thầu hd_den_ngay; chưa auto xác định sắp hết thầu-CST lớn.' },
+  };
+}
+
 /* ---------- Metadata ---------- */
 router.get('/periods', auth.requireAuth, (req, res) => {
   res.json({ periods: store.listPeriods(), latest: store.latestKy() });
@@ -363,6 +463,50 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     bidPackages: uniq(rows.concat(cst), 'bid_package'),
   });
 });
+
+
+
+/* ---------- Target Assignment GĐ1: catalog + phân công ---------- */
+router.get('/catalog/sales', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  const rows = salesCatalogRows(scope, { allPeriods: req.query.all === '1' || req.query.all === 'true' });
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const filtered = q ? rows.filter((r) => JSON.stringify(r).toLowerCase().includes(q)) : rows;
+  const pg = paginate(filtered, req, 100, 1000);
+  res.json({ total: pg.total, page: pg.page, pageSize: pg.pageSize, rows: pg.rows });
+});
+router.get('/assignments/mine', auth.requireAuth, (req, res) => {
+  const emp = req.session.emp_code;
+  const ky = req.query.ky || store.latestKy();
+  const assignments = assignmentAdmin.mine(emp, ky).map((a) => ({ ...a, label: assignmentAdmin.typeLabel(a.type, a.value) }));
+  res.json({ emp_code: emp, emp_name: store.findUserByCode(emp)?.name || emp, ky, assignments, specials: specialCandidates({ empCode: emp }) });
+});
+router.get('/specials', auth.requireAuth, (req, res) => res.json(specialCandidates(auth.scopeOf(req.session))));
+router.get('/admin/assignments', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const rows = assignmentAdmin.listAssignments({ emp_code: req.query.emp, activeOnly: req.query.active === '1', ky: req.query.ky }).map((a) => ({ ...a, emp_name: store.findUserByCode(a.emp_code)?.name || a.emp_code, label: assignmentAdmin.typeLabel(a.type, a.value) }));
+  res.json({ rows, types: assignmentAdmin.TYPES });
+});
+router.post('/admin/assignments', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { res.json({ ok: true, row: assignmentAdmin.upsert(req.body || {}, req.session) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.delete('/admin/assignments/:id', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { res.json({ ok: true, row: assignmentAdmin.deactivate(req.params.id, req.session) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/assignments/seed', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { res.json({ ok: true, result: assignmentAdmin.seedFromHistory({ user: req.session, replaceAuto: !!req.body?.replaceAuto }) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/admin/assignments/upload', auth.requireAuth, auth.requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Thiếu file upload' });
+    const rows = await assignmentAdmin.parseWorkbook(req.file.buffer, req.session);
+    const result = assignmentAdmin.commitRows(rows, req.session);
+    res.json({ ok: true, result });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.get('/admin/assignments/history', auth.requireAuth, auth.requireAdmin, (req, res) => res.json({ history: assignmentAdmin.listAudit().slice(0, 300) }));
 
 /* ---------- Overview + Alerts ---------- */
 router.get('/overview', auth.requireAuth, (req, res) => {
