@@ -442,7 +442,10 @@ export default function Target({ me }) {
     setNow(null);
     api.targets(periodSel ? periodParams(periodSel) : undefined).then(setNow);
   }, [periodSel, reloadTick]);
-  useEffect(() => { api.forecast().then(setFc); }, [reloadTick]);
+  useEffect(() => {
+    // Perf/mobile: dự báo target khá nặng; chỉ tải khi người dùng mở tab Dự báo.
+    if (view === 'forecast' && !fc) api.forecast().then(setFc);
+  }, [view, reloadTick]);
   const selectedKy = (periodSel?.mode === 'range' ? periodSel.to : periodSel?.ky) || periods.at(-1)?.ky || now?.ky;
   const adminSelectedKy = adminKy || selectedKy;
   async function refreshTargetKpis() {

@@ -1011,10 +1011,18 @@ router.get('/targets', auth.requireAuth, (req, res) => {
   }]));
   const pacing = A.targetPacingMeta(ky);
   const roster = store.targetRoster({ scope });
+  // Perf: đọc doanh thu range 1 lần rồi group theo NV. Trước đây mỗi NV gọi getRowsRange()
+  // riêng, làm trang Target chậm rõ trên mobile.
+  const revenueByEmp = {};
+  for (const r of store.getRowsRange({ kys, scope })) {
+    const ec = r.emp_code;
+    if (!ec) continue;
+    revenueByEmp[ec] = (revenueByEmp[ec] || 0) + Number(r.revenue || 0);
+  }
   const adjByEmp = targetAdjustment.totalsByEmp({ kys, empCodes: roster.map((u) => u.emp_code) });
   const items = roster.map((u) => {
     const ec = u.emp_code;
-    const rev = A.sum(store.getRowsRange({ kys, scope: { empCode: ec } }), (r) => r.revenue);
+    const rev = revenueByEmp[ec] || 0;
     const beforeVat = rev / A.VAT_DIVISOR;
     const targetFull = targetByEmp[ec] || 0;
     // DIRECTIVE_TARGET_KPI: KPI so với target CẢ THÁNG để CEO/NV đọc dễ hiểu.
