@@ -549,7 +549,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   /* Tên trang (breadcrumb) LUÔN hiện + nổi rõ để biết đang ở trang nào */
   .drill-crumbs{flex:1 1 auto;min-width:96px}
   .drill-crumbs button{max-width:none;font-size:13px}
-  .drill-crumbs button.active{font-size:15px;font-weight:800;color:var(--brand-ink)}
+  /* Tên trang = tiêu đề sạch, không nền chip, đậm rõ */
+  .drill-crumbs button.active{font-size:16px;font-weight:800;color:var(--brand-ink);letter-spacing:-.01em;background:transparent;padding-left:2px;padding-right:2px}
   .drill-nav .reload{min-width:74px}
   .drill-tail{width:auto;flex:0 0 auto}   /* KHÔNG ép 100% -> không co mất tên trang */
   .drill-nav .seg-inline{flex:1 1 auto}
