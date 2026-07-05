@@ -53,15 +53,21 @@ export function ScrollTopButton() {
   return <button className="scroll-top-btn" onClick={toTop} aria-label="Lên đầu trang" title="Lên đầu trang">⬆</button>;
 }
 
-// Đồng hồ chạy giây (giờ VN) — hiện ở header như bản chuẩn CEO.
+// Đồng hồ chạy giây (giờ VN) + NGÀY hiện tại — hiện ở header như bản chuẩn CEO.
 export function Clock() {
   const [now, setNow] = React.useState(() => new Date());
   React.useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
-  const t = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Asia/Bangkok' });
-  return <span className="clock-pill" aria-label="Giờ hiện tại">🕐 {t}</span>;
+  const tz = { timeZone: 'Asia/Bangkok' };
+  const time = now.toLocaleTimeString('vi-VN', { ...tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const date = now.toLocaleDateString('vi-VN', { ...tz, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+  return (
+    <span className="clock-pill" aria-label="Ngày giờ hiện tại">
+      🕐 <span className="clock-dt"><b>{time}</b><i>{date}</i></span>
+    </span>
+  );
 }
 
 export function Kpi({ label, value, sub, delta, tone, variant, icon, onClick }) {
