@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, getToken, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { useIsDesktop } from './hooks.js';
-import { Spinner, ScrollTopButton } from './components.jsx';
+import { Spinner, ScrollTopButton, Clock } from './components.jsx';
 import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
 import Login from './pages/Login.jsx';
@@ -102,6 +102,7 @@ export default function App() {
               <h1>{tabs.find((t) => t.key === tab)?.label}</h1>
               <div className="sub">DNPHARMA · Báo cáo doanh thu thông minh</div>
             </div>
+            <Clock />
           </header>
           <main className="page-desktop">
             <NavCtx.Provider value={navBack}><Active me={me} desktop onNavigate={navigate} /></NavCtx.Provider>
@@ -117,6 +118,7 @@ export default function App() {
     <>
       <header className="hdr">
         <Logo size={26} light />
+        <Clock />
         <div className="who">
           <div>{me.name}</div>
           <div style={{ opacity: .8 }}>{roleLabel(me.role)}</div>
