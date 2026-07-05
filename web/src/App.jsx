@@ -117,13 +117,15 @@ export default function App() {
   return (
     <>
       <header className="hdr">
-        <Logo size={26} light />
-        <Clock />
-        <div className="who">
-          <div>{me.name}</div>
-          <div style={{ opacity: .8 }}>{roleLabel(me.role)}</div>
-          <button className="logout" onClick={logout}>Đăng xuất</button>
+        <div className="hdr-top">
+          <Logo size={26} light />
+          <div className="who">
+            <div>{me.name}</div>
+            <div style={{ opacity: .8 }}>{roleLabel(me.role)}</div>
+            <button className="logout" onClick={logout}>Đăng xuất</button>
+          </div>
         </div>
+        <Clock />
       </header>
       <main className="page">
         <NavCtx.Provider value={navBack}><Active me={me} onNavigate={navigate} /></NavCtx.Provider>

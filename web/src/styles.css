@@ -16,7 +16,7 @@
   --ok: #1f9d6b;
   --shadow: 0 2px 10px rgba(21, 104, 184, 0.09);
   --maxw: 640px;
-  --hdr-h: 72px; /* chiều cao banner mobile (cố định) */
+  --hdr-h: 108px; /* chiều cao banner mobile (2 dòng: logo/tên + đồng hồ) */
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; width: 100%; max-width: 100%; overflow-x: hidden; }
@@ -34,15 +34,16 @@ body {
   position: fixed; top: 0; left: 50%; transform: translateX(-50%);
   width: 100%; max-width: var(--maxw); z-index: 40;
   background: linear-gradient(135deg, var(--brand), var(--brand-2));
-  color: #fff; padding: 10px 16px calc(10px + env(safe-area-inset-top));
-  display: flex; align-items: center; justify-content: space-between;
+  color: #fff; padding: 10px 16px calc(8px + env(safe-area-inset-top));
+  display: flex; flex-direction: column; align-items: stretch; gap: 4px;
 }
+.hdr-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hdr > .clock-pill { align-self: center; }
 .hdr h1 { font-size: 17px; margin: 0; font-weight: 700; }
 .hdr .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
 .hdr .who { font-size: 12px; text-align: right; opacity: .95; min-width: 0; max-width: 52vw; }
 .hdr .who > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hdr .logout { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 12px; margin-top: 4px; white-space: nowrap; }
-.hdr .who { flex: 0 0 auto; }
 /* Đồng hồ (giờ chạy giây + ngày) ở header (bản chuẩn CEO) */
 .clock-pill { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; background: rgba(255,255,255,.2); color: #fff; border-radius: 14px; padding: 3px 11px; white-space: nowrap; }
 .clock-pill .clock-dt { display: inline-flex; flex-direction: column; line-height: 1.05; }
@@ -59,6 +60,8 @@ body {
 :root.hdr-mini .hdr { min-height: 0; padding-top: calc(4px + env(safe-area-inset-top)); padding-bottom: 4px; box-shadow: 0 2px 10px rgba(11,61,112,.3); }
 :root.hdr-mini .hdr .who > div:not(:first-child) { display: none; }
 :root.hdr-mini .hdr .logout { margin-top: 0; padding: 3px 8px; font-size: 10.5px; }
+/* Cuộn xuống: ẩn dòng đồng hồ để header gọn 1 dòng */
+:root.hdr-mini .hdr > .clock-pill { display: none; }
 .section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 4px 8px; font-weight: 700; }
 
 /* Cards */
@@ -318,6 +321,10 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .alert-line { border-top: 1px solid var(--line); padding-top: 7px; display: flex; flex-direction: column; gap: 2px; }
 .alert-line b { font-size: 13px; color: var(--ink); }
 .alert-line span { font-size: 12px; color: var(--muted); }
+/* Chip màu cho mức giảm/tăng từng dòng cảnh báo */
+.chg-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; margin-right: 4px; }
+.chg-chip.down { background: #fdecec; color: #d84a4a; }
+.chg-chip.up { background: #e7f6ee; color: #17915a; }
 .alert-more { width: 100%; margin-top: 10px; }
 .cst-alert-card { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px; margin-bottom: 12px; }
 .cst-table { min-width: 2320px; font-size: 12px; }
