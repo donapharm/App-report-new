@@ -21,6 +21,22 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Claude Code — ‼ AN TOÀN DỮ LIỆU: gỡ 4 file runtime khỏi git
+- **Vấn đề:** 4 file dữ liệu người dùng GHI lúc chạy vẫn bị track trong repo:
+  `assignments.json`, `assignment_audit.json`, `target_adjustments.json`,
+  `target_adjustment_audit.json`. Deploy dùng `git reset --hard origin/main`
+  → mỗi lần deploy **ghi đè** chúng bằng bản cũ trong repo ⇒ nguy cơ **mất**
+  phân công / điều chỉnh target người dùng vừa nhập.
+- **Sửa:** `git rm --cached` 4 file (file vẫn nằm trên đĩa server). `.gitignore`
+  đã có sẵn pattern `server/data/*.json` nên từ nay git không đụng chúng nữa;
+  dữ liệu người dùng nằm yên trên server qua mọi lần deploy.
+- **GIỮ track (chỉ đọc, cấu hình versioned):** `target_baseline_202606.json`,
+  `target_roster.json`, `sample_upload.xlsx`.
+- **‼ DEPLOY LẦN NÀY PHẢI THEO QUY TRÌNH AN TOÀN** (sao lưu → cập nhật → phục hồi
+  → build → restart) vì cú `git reset --hard` kế tiếp sẽ xoá 4 file khỏi working
+  tree (do commit này bỏ chúng khỏi index). Xem prompt deploy an toàn kèm theo.
+  Từ deploy sau trở đi thì bình thường, không cần bước sao lưu nữa.
+
 ### 2026-07-03 — Claude Code — Dấu mốc bản build ở màn login (PR mới)
 - **Vấn đề:** Sau deploy, khó biết bản web đang chạy là bản nào (bot `git pull` nhưng dist là artifact — không rebuild thì UI vẫn cũ; cộng cache PWA → "hình như vẫn bản cũ").
 - **Sửa:** `vite.config.js` inject `__BUILD_VER__` (SHA commit, hoặc `BUILD_VER` env) + `__BUILD_AT__` (giờ build) lúc build; màn Login hiện dòng mờ `Bản <sha> · build <giờ>`. Mở site (kể cả chế độ Riêng tư) là biết ngay bản nào đang live, hết mơ hồ.
