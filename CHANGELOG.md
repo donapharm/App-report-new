@@ -21,6 +21,20 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-03 — Claude Code — Auto-deploy (server tự cập nhật khi main đổi)
+- Thêm `scripts/auto-deploy.sh` + hướng dẫn cron (mỗi 1 phút). Merge lên `main`
+  là server tự: fetch → (fast-forward mới đi tiếp) → reset --hard → build → restart
+  PM2. Hết cảnh copy-paste lệnh deploy.
+- **An toàn:** flock chống chạy chồng; chỉ deploy khi HEAD là tổ tiên origin/main
+  (không đè commit local chưa push của bot); bỏ qua nếu tree có thay đổi tracked
+  chưa commit; **build ra thư mục tạm rồi mới tráo** — build lỗi thì giữ nguyên
+  bản đang chạy, không restart. Cài lại deps nếu package(-lock).json đổi.
+- `.gitignore`: thêm `web/dist.new/`, `web/dist.old/`, `.auto-deploy.lock`.
+- Đường repo trên server: `~/.openclaw/workspace-report/App-report-new` (đặt qua
+  biến REPO_DIR nếu khác). Log ghi ở `auto-deploy.log`.
+- Nghiệm thu: `bash -n` OK; thử `build -- --outDir dist.new` tạo đủ dist (index +
+  assets + manifest + icon). **Cần cài cron 1 lần trên server để kích hoạt.**
+
 ### 2026-07-03 — Claude Code — ‼ AN TOÀN DỮ LIỆU: gỡ 4 file runtime khỏi git
 - **Vấn đề:** 4 file dữ liệu người dùng GHI lúc chạy vẫn bị track trong repo:
   `assignments.json`, `assignment_audit.json`, `target_adjustments.json`,
