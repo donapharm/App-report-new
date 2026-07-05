@@ -62,7 +62,7 @@ export function Clock() {
   }, []);
   const tz = { timeZone: 'Asia/Bangkok' };
   const time = now.toLocaleTimeString('vi-VN', { ...tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  const date = now.toLocaleDateString('vi-VN', { ...tz, weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const date = now.toLocaleDateString('vi-VN', { ...tz, day: '2-digit', month: '2-digit', year: 'numeric' });
   return (
     <span className="clock-pill" aria-label="Ngày giờ hiện tại">
       🕐 <span className="clock-dt"><b>{time}</b><i>{date}</i></span>
