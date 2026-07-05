@@ -1,5 +1,9 @@
 node_modules/
 dist/
+# Thư mục build tạm khi auto-deploy tráo bản (swap) + khoá chống chạy chồng
+web/dist.new/
+web/dist.old/
+.auto-deploy.lock
 .env
 .env.bak*
 .env.local
