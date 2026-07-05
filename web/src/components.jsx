@@ -53,9 +53,21 @@ export function ScrollTopButton() {
   return <button className="scroll-top-btn" onClick={toTop} aria-label="Lên đầu trang" title="Lên đầu trang">⬆</button>;
 }
 
-export function Kpi({ label, value, sub, delta, tone, onClick }) {
+// Đồng hồ chạy giây (giờ VN) — hiện ở header như bản chuẩn CEO.
+export function Clock() {
+  const [now, setNow] = React.useState(() => new Date());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const t = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: 'Asia/Bangkok' });
+  return <span className="clock-pill" aria-label="Giờ hiện tại">🕐 {t}</span>;
+}
+
+export function Kpi({ label, value, sub, delta, tone, variant, icon, onClick }) {
   return (
-    <div className={'kpi ' + (tone || '') + (onClick ? ' clickable' : '')} onClick={onClick}>
+    <div className={'kpi' + (variant ? ' k-' + variant : '') + (tone ? ' ' + tone : '') + (onClick ? ' clickable' : '')} onClick={onClick}>
+      {icon && <span className="kpi-ic" aria-hidden="true">{icon}</span>}
       <div className="label">{label}</div>
       <div className={'value' + (typeof value === 'string' && value.length > 12 ? ' small' : '')}>{value}</div>
       {delta != null && (

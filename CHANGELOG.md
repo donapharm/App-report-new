@@ -21,6 +21,22 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-05 — Claude Code — Dựng lại bản Tổng quan "màu chuẩn CEO" (đưa vào git)
+- **Bối cảnh:** Bản Tổng quan nhiều màu + đồng hồ (bot làm trên server) **chưa từng
+  push lên GitHub**. Các lệnh deploy `git reset --hard origin/main` (untrack-data +
+  auto-deploy) ép giống main nên **xoá mất bản local đó** → về bản trắng. CEO gửi ảnh
+  yêu cầu khôi phục.
+- **Sửa (commit thẳng vào repo để KHÔNG mất lần nữa):**
+  - `Kpi` thêm prop `variant` (blue/purple/green/red/amber) + `icon` (góc phải).
+  - `Clock` mới: đồng hồ chạy giây (giờ VN) trên header mobile + topbar desktop.
+  - Overview: 6 ô KPI tô màu đúng ảnh chuẩn (Doanh thu xanh dương ⚠️/📊 theo tăng-giảm,
+    Trước VAT tím 🧾, Đạt target + NV đạt target xanh lá 🎯, Cơ số thầu đỏ ⚠️, Quy mô
+    kỳ vàng 🗺️); số Doanh thu/Trước VAT hiện 2 dòng (gọn + đầy đủ) qua `MoneyBig`.
+  - CSS: `.kpi.k-*` (viền trái đậm + nền tô nhạt + số theo màu), `.kpi-ic`, `.clock-pill`.
+- Nghiệm thu: build OK; kiểm headless mobile 390px khớp 1:1 ảnh CEO (đồng hồ + 6 ô màu).
+- **‼ Bài học:** mọi thay đổi giao diện của bot PHẢI push lên `main`, nếu không lần
+  deploy kế tiếp (`reset --hard`/auto-deploy) sẽ xoá. Nay bản màu đã nằm trong git.
+
 ### 2026-07-03 — Claude Code — Auto-deploy (server tự cập nhật khi main đổi)
 - Thêm `scripts/auto-deploy.sh` + hướng dẫn cron (mỗi 1 phút). Merge lên `main`
   là server tự: fetch → (fast-forward mới đi tiếp) → reset --hard → build → restart
