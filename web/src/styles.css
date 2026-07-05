@@ -41,9 +41,13 @@ body {
 .hdr .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
 .hdr .who { font-size: 12px; text-align: right; opacity: .95; min-width: 0; max-width: 52vw; }
 .hdr .who > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hdr .logout { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 12px; margin-top: 4px; }
-/* Đồng hồ chạy giây ở header (bản chuẩn CEO) */
-.clock-pill { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; background: rgba(255,255,255,.2); color: #fff; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .3px; white-space: nowrap; }
+.hdr .logout { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 8px; padding: 5px 10px; font-size: 12px; margin-top: 4px; white-space: nowrap; }
+.hdr .who { flex: 0 0 auto; }
+/* Đồng hồ (giờ chạy giây + ngày) ở header (bản chuẩn CEO) */
+.clock-pill { display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto; background: rgba(255,255,255,.2); color: #fff; border-radius: 14px; padding: 3px 11px; white-space: nowrap; }
+.clock-pill .clock-dt { display: inline-flex; flex-direction: column; line-height: 1.05; }
+.clock-pill .clock-dt b { font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .3px; }
+.clock-pill .clock-dt i { font-size: 9.5px; font-style: normal; font-weight: 600; opacity: .92; text-transform: capitalize; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .topbar .clock-pill { background: #e9eef5; color: var(--ink); }
 
