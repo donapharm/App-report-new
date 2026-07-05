@@ -16,7 +16,7 @@
   --ok: #1f9d6b;
   --shadow: 0 2px 10px rgba(21, 104, 184, 0.09);
   --maxw: 640px;
-  --hdr-h: 74px; /* chiều cao banner mobile (1 hàng gọn: logo · đồng hồ · tên) */
+  --hdr-h: 66px; /* chiều cao banner mobile (2 hàng bám trái-phải: logo|tên / đồng hồ|Đăng xuất) */
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; width: 100%; max-width: 100%; overflow-x: hidden; }
@@ -37,16 +37,17 @@ body {
   color: #fff; padding: 7px 14px calc(7px + env(safe-area-inset-top));
   display: flex; flex-direction: column; align-items: stretch; gap: 2px;
 }
-/* Header 3 hàng SÁT/GỌN (CEO chọn): 1) logo + Đăng xuất  2) tên·chức danh  3) đồng hồ */
-.hdr-r1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.hdr-name { font-size: 13px; line-height: 1.12; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hdr-name .who-name { font-weight: 800; }
-.hdr-name .who-role { opacity: .82; }
+/* Header 2 hàng bám TRÁI–PHẢI (CEO chọn): hàng 1 logo | tên · hàng 2 đồng hồ | Đăng xuất */
+.hdr-r1, .hdr-r2 { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.hdr .who { text-align: right; min-width: 0; }
+.hdr .who > div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hdr .who-name { font-weight: 800; font-size: 13px; line-height: 1.15; }
+.hdr .who-role { opacity: .82; font-size: 11.5px; line-height: 1.15; }
 .hdr h1 { font-size: 17px; margin: 0; font-weight: 700; }
 .hdr .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
 .hdr .logout { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 8px; padding: 4px 11px; font-size: 11.5px; white-space: nowrap; flex: 0 0 auto; }
 /* Đồng hồ (giờ chạy giây + ngày) — 1 dòng, sát, căn trái */
-.clock-pill { display: inline-flex; align-items: baseline; gap: 6px; align-self: flex-start; background: rgba(255,255,255,.18); color: #fff; border-radius: 8px; padding: 1px 9px; white-space: nowrap; line-height: 1.25; }
+.clock-pill { display: inline-flex; align-items: baseline; gap: 6px; background: rgba(255,255,255,.18); color: #fff; border-radius: 8px; padding: 1px 9px; white-space: nowrap; line-height: 1.25; }
 .clock-pill .clock-dt { display: inline-flex; align-items: baseline; gap: 6px; }
 .clock-pill .clock-dt b { font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .3px; }
 .clock-pill .clock-dt i { font-size: 11px; font-style: normal; font-weight: 600; opacity: .9; }
@@ -60,8 +61,8 @@ body {
 :root.hdr-mini { --hdr-h: 46px; }
 :root.hdr-mini .hdr { min-height: 0; padding-top: calc(4px + env(safe-area-inset-top)); padding-bottom: 4px; box-shadow: 0 2px 10px rgba(11,61,112,.3); }
 :root.hdr-mini .hdr .logout { padding: 3px 9px; font-size: 10.5px; }
-/* Cuộn xuống: ẩn dòng tên + đồng hồ, chỉ còn logo + Đăng xuất cho gọn */
-:root.hdr-mini .hdr .hdr-name, :root.hdr-mini .hdr .clock-pill { display: none; }
+/* Cuộn xuống: ẩn chức danh + đồng hồ cho gọn (còn logo | tên và Đăng xuất) */
+:root.hdr-mini .hdr .who-role, :root.hdr-mini .hdr .clock-pill { display: none; }
 .section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 4px 8px; font-weight: 700; }
 
 /* Cards */
@@ -415,8 +416,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   body { font-size: 14px; }
   body, #root, .page, .card, .kpi, .chart-card, .filter-card, .period-filter { max-width: 100%; }
   .hdr {
-    padding: calc(7px + env(safe-area-inset-top)) 12px 7px;
-    gap: 2px;
+    padding: calc(7px + env(safe-area-inset-top)) 10px 7px;
+    gap: 4px;
     align-items: stretch;
   }
   .hdr .logo, .hdr .logo-wrap { min-width: 0; }
