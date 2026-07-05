@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pairText, unitText } from '../util.js';
-import { Spinner, Pager, SkeletonCards, MoneyBig } from '../components.jsx';
+import { Spinner, Pager, SkeletonCards } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -41,7 +41,7 @@ export default function RevenueFull({ me }) {
       <div className="card summary-card">
         <div>
           <div className="meta muted">Doanh thu đầy đủ · kỳ {ky} · {data?.total?.toLocaleString('vi-VN') || 0} dòng</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}><MoneyBig value={data?.totalRevenue || 0} /></div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}>{money(data?.totalRevenue || 0)}</div>
           <div className="meta muted">Số lượng: {(data?.totalQuantity || 0).toLocaleString('vi-VN')}</div>
         </div>
         <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel đầy đủ</button>

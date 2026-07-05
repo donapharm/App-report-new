@@ -64,7 +64,10 @@ body {
 .kpi.danger { border-color: #f3b7b7; background: #fff7f7; }
 .kpi.danger .value { color: var(--hi); }
 .kpi.clickable { cursor: pointer; transition: transform .12s, border-color .12s; }
-.kpi.clickable:hover { transform: translateY(-1px); border-color: var(--brand); }
+/* Chỉ nhấc/đổi viền trên máy có chuột (hover thật) — tránh dính viền xanh sau khi chạm trên điện thoại */
+@media (hover: hover) {
+  .kpi.clickable:hover { transform: translateY(-1px); border-color: var(--brand); }
+}
 .delta.up { color: var(--ok); } .delta.down { color: var(--hi); }
 
 /* Compact list cards — keep page-desktop untouched, only lists opt in. */
