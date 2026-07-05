@@ -19,7 +19,7 @@ function AlertLine({ group, item }) {
     return (
       <div className="alert-line">
         <b>{unitText(item.unit_code, item.unit_name)}</b>
-        <span>Giảm {pct(Math.abs(item.mom), 0)} · {money(item.prev)} → {money(item.cur)}</span>
+        <span><span className="chg-chip down">▼ Giảm {pct(Math.abs(item.mom), 0)}</span>{money(item.prev)} → {money(item.cur)}</span>
       </div>
     );
   }
