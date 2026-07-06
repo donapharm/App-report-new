@@ -4,6 +4,7 @@ dist/
 web/dist.new/
 web/dist.old/
 .auto-deploy.lock
+.auto-deploy.last
 .env
 .env.bak*
 .env.local
