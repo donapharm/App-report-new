@@ -171,6 +171,7 @@ export default function Overview({ me, onNavigate }) {
                   </div>
                   <span className="pill muted-pill">{g.total}</span>
                 </div>
+                {g.note && <div className={'alert-group-note' + (g.note.startsWith('⚠') ? ' warn' : '')}>{g.note}</div>}
                 <div className="alert-lines">
                   {g.items.length === 0 ? <div className="alert-line"><span>Không có cảnh báo trong kỳ này.</span></div> : g.items.slice(0, 8).map((item, i) => <AlertLine key={i} group={g} item={item} />)}
                 </div>

@@ -257,6 +257,29 @@ function previousKys(kys = []) {
   return ps.slice(start - kys.length, start);
 }
 
+/**
+ * Cặp kỳ để SO SÁNH tăng/giảm cho công bằng.
+ * Nếu kỳ đang xem chạm THÁNG HIỆN TẠI (chưa đủ ngày) thì tự lùi về kỳ đã HOÀN TẤT
+ * gần nhất để so với kỳ trước nó (vd đang xem T07 dở → so T06 với T05).
+ * Trả về { curKys, prevKys, curKy, prevKy, adjusted }.
+ */
+function comparePeriods(kys = []) {
+  const list = kys && kys.length ? kys : [latestKy()];
+  const ps = periodKys();
+  const lastComplete = lastCompleteKy();
+  const lastIdx = ps.indexOf(list[list.length - 1]);
+  const completeIdx = ps.indexOf(lastComplete);
+  const reachesCurrent = lastIdx < 0 || (completeIdx >= 0 && lastIdx > completeIdx);
+  const curKys = reachesCurrent ? [lastComplete] : list;
+  const prevKys = previousKys(curKys);
+  return {
+    curKys, prevKys,
+    curKy: curKys[curKys.length - 1] || null,
+    prevKy: prevKys.length ? prevKys[prevKys.length - 1] : null,
+    adjusted: reachesCurrent,
+  };
+}
+
 const listUsers = () => base().users;
 const findUserByPhone = (phone) => base().users.find((u) => u.phone === phone);
 const findUserByCode = (code) => base().empByCode[code];
@@ -381,7 +404,7 @@ function clearCache() { _base = null; }
 
 module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
-  periodKys, periodRange, previousKys,
+  periodKys, periodRange, previousKys, comparePeriods,
   currentKyByDate, lastCompleteKy, nextKy,
   getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache, empCodesWithData, empCodesWithRows,
   employeeType, hasTarget, isActiveSalesUser, targetRoster, targetRosterCodes, targetRosterConfig,

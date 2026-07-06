@@ -912,9 +912,17 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
   const prevRevenue = A.sum(prevRows, (r) => r.revenue);
   const delta = currentRevenue - prevRevenue;
   const deltaPct = prevRevenue > 0 ? +(delta / prevRevenue * 100).toFixed(1) : null;
+  // Bảng tăng/giảm: so cặp kỳ CÔNG BẰNG (tự lùi 2 tháng đã đủ nếu kỳ đang xem còn dở).
+  const cmpP = store.comparePeriods(kys);
+  const fmtKy = (k) => { const [m, y] = String(k || '').split('.'); return m && y ? `T${m}/${y}` : String(k || ''); };
+  const growthNote = cmpP.prevKy
+    ? (cmpP.adjusted
+      ? `⚠ Kỳ đang xem chưa đủ ngày — bảng tăng/giảm đang so 2 tháng đã hoàn tất: ${fmtKy(cmpP.curKy)} với ${fmtKy(cmpP.prevKy)}.`
+      : `Bảng tăng/giảm so ${fmtKy(cmpP.curKy)} với ${fmtKy(cmpP.prevKy)}.`)
+    : 'Chưa đủ dữ liệu kỳ trước để so tăng/giảm.';
   const compare = (dimension) => {
-    const cur = A.revenueBreakdown({ kys, scope, dimension, filters });
-    const prev = prevRows.length ? A.revenueBreakdown({ kys: prevKys, scope, dimension, filters }) : [];
+    const cur = A.revenueBreakdown({ kys: cmpP.curKys, scope, dimension, filters });
+    const prev = (cmpP.prevKys.length === cmpP.curKys.length) ? A.revenueBreakdown({ kys: cmpP.prevKys, scope, dimension, filters }) : [];
     const prevMap = Object.fromEntries(prev.map((x) => [x.key, x.revenue]));
     return cur.map((x) => {
       const before = prevMap[x.key] || 0;
@@ -958,6 +966,8 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     prevRevenue,
     delta,
     deltaPct,
+    growthNote,
+    growthCompare: { curKy: cmpP.curKy, prevKy: cmpP.prevKy, adjusted: cmpP.adjusted },
     rowCount: currentRows.length,
     byRoute,
     byContractor,

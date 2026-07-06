@@ -21,6 +21,22 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — So sánh tăng/giảm CÔNG BẰNG + ghi rõ mốc (①+②)
+- **Vấn đề (CEO nêu):** "so kỳ trước" đang lấy CẢ kỳ này (tháng dở, mới vài
+  ngày theo mốc "Cập nhật đến") so với CẢ tháng trước (đủ) → hầu hết đơn vị hiện
+  "giảm 90–100%" ảo. (Bằng chứng: cập nhật thêm ngày thì % giảm nhỏ lại 82,6%→76,2%.)
+- **② So công bằng:** thêm `store.comparePeriods(kys)` — nếu kỳ đang xem chạm
+  THÁNG HIỆN TẠI (chưa đủ) thì tự lùi về **2 tháng đã HOÀN TẤT** gần nhất (vd
+  T07 dở → so T06 với T05). Áp cho: nhóm tăng/giảm ở Tổng quan (`smart.js`) và
+  bảng tăng/giảm ở Phân tích (`routes.js /analysis`).
+- **① Ghi rõ mốc:** mỗi mục tăng/giảm hiện dòng chú thích "So sánh T06/2026 với
+  T05/2026"; nếu phải lùi kỳ thì hiện cảnh báo vàng "⚠ Tháng đang xem chưa đủ
+  ngày — đang so 2 tháng đã hoàn tất…". CSS `.alert-group-note(.warn)`.
+- KPI "Doanh thu {kỳ}"/"So với {kỳ trước}" ở Phân tích GIỮ theo kỳ Sếp chọn
+  (số thô trung thực); chỉ bảng tăng/giảm tự lùi kỳ cho đúng bản chất.
+- Nghiệm thu: `node --check` store/smart/routes OK, build OK, kiểm headless thấy
+  note trên cả Tổng quan lẫn Phân tích.
+
 ### 2026-07-07 — Claude Code — Thêm "Đơn vị tăng trưởng mạnh" + chip mũi tên
 - **Tổng quan:** thêm nhóm cảnh báo `unit_up` "Đơn vị tăng trưởng mạnh (so kỳ
   trước)" (MoM ≥ +15%), đặt NGAY TRÊN nhóm "giảm mạnh"; viền xanh (tone `ok`),
