@@ -38,7 +38,7 @@ app.use('/api', routes);
 const webDist = path.join(__dirname, '..', '..', 'web', 'dist');
 app.use(express.static(webDist, {
   setHeaders: (res, filePath) => {
-    if (filePath.endsWith('index.html') || filePath.endsWith('.webmanifest')) {
+    if (filePath.endsWith('index.html') || filePath.endsWith('.webmanifest') || filePath.endsWith('version.json')) {
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     } else if (/[\\/]assets[\\/]/.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');

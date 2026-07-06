@@ -601,6 +601,20 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .scroll-top-btn:active { transform: scale(.92); }
 @media (min-width: 900px) { .scroll-top-btn { right: 24px; bottom: 24px; width: 46px; height: 46px; } }
 
+/* Nút "Có bản mới — bấm để cập nhật" (tự hiện khi server đã deploy bản khác) */
+.update-banner {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 60;
+  background: linear-gradient(135deg, #1aa05f, #12864d); color: #fff;
+  border: none; border-radius: 999px; padding: 10px 18px;
+  font-size: 13.5px; font-weight: 800; letter-spacing: .2px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.28); cursor: pointer;
+  animation: updPulse 1.7s ease-in-out infinite; max-width: 92vw; white-space: nowrap;
+}
+.update-banner:active { transform: translateX(-50%) scale(.96); }
+@keyframes updPulse { 0%,100% { box-shadow: 0 8px 22px rgba(0,0,0,.28); } 50% { box-shadow: 0 8px 30px rgba(26,160,95,.6); } }
+@media (min-width: 900px) { .update-banner { bottom: 24px; } }
+
 /* ── Skeleton loading ─────────────────────────────── */
 .skeleton {
   display: block; background: linear-gradient(90deg, #eaeff5 25%, #f4f8fc 37%, #eaeff5 63%);
