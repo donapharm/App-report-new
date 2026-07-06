@@ -21,6 +21,18 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Nút gạt "Tháng liền trước ↔ Cùng kỳ năm ngoái" (làm sẵn)
+- CEO muốn làm sẵn: sang 2027 thì so tăng/giảm với 2026 (cùng kỳ năm ngoái).
+- `store.comparePeriods(kys, mode)`: thêm `mode='yoy'` — lấy cùng tháng năm trước
+  (T06/2027→T06/2026). Nếu chưa có dữ liệu năm trước → `yoyMissing=true`.
+- `/alerts` + `/analysis`: nhận `compareMode` (prev|yoy); note đổi theo mode
+  ("So tháng liền trước…" / "So cùng kỳ năm ngoái…" / "Chưa có dữ liệu cùng kỳ…").
+- Overview + Analysis: thêm nút gạt **[Tháng liền trước] [Cùng kỳ năm ngoái]**
+  (nhớ lựa chọn qua localStorage `rpt_cmp_mode`). Mặc định "Tháng liền trước".
+- Hiện data mới có 2026 → chọn "Cùng kỳ năm ngoái" báo rõ "chưa có dữ liệu 2025";
+  khi bot nạp dữ liệu năm trước là tự chạy, không cần sửa code.
+- Nghiệm thu: node --check backend OK, build OK, kiểm headless nút gạt + note YoY.
+
 ### 2026-07-07 — Claude Code — Nút "Có bản mới — bấm để cập nhật" (hết kẹt cache iOS)
 - **Vấn đề:** iOS giữ cache PWA rất lì → sau deploy, NV cứ hỏi "sao dữ liệu chưa đổi",
   phải xoá–thêm lại app thủ công.

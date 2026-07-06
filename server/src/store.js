@@ -257,13 +257,21 @@ function previousKys(kys = []) {
   return ps.slice(start - kys.length, start);
 }
 
+function shiftYear(ky, delta) {
+  const [m, y] = String(ky || '').split('.');
+  if (!m || !y) return null;
+  return `${m}.${Number(y) + delta}`;
+}
+
 /**
- * Cặp kỳ để SO SÁNH tăng/giảm cho công bằng.
- * Nếu kỳ đang xem chạm THÁNG HIỆN TẠI (chưa đủ ngày) thì tự lùi về kỳ đã HOÀN TẤT
- * gần nhất để so với kỳ trước nó (vd đang xem T07 dở → so T06 với T05).
- * Trả về { curKys, prevKys, curKy, prevKy, adjusted }.
+ * Cặp kỳ để SO SÁNH tăng/giảm.
+ * - mode 'prev' (mặc định): so với THÁNG LIỀN TRƯỚC. Nếu kỳ đang xem chạm tháng
+ *   hiện tại (chưa đủ ngày) thì tự lùi về 2 tháng đã HOÀN TẤT (T07 dở → T06 vs T05).
+ * - mode 'yoy': so CÙNG KỲ NĂM NGOÁI (T06/2027 → T06/2026). Nếu chưa có dữ liệu
+ *   năm trước thì yoyMissing=true (frontend báo "chưa có dữ liệu").
+ * Trả về { mode, curKys, prevKys, curKy, prevKy, adjusted, yoyMissing, hasPrev }.
  */
-function comparePeriods(kys = []) {
+function comparePeriods(kys = [], mode = 'prev') {
   const list = kys && kys.length ? kys : [latestKy()];
   const ps = periodKys();
   const lastComplete = lastCompleteKy();
@@ -271,11 +279,20 @@ function comparePeriods(kys = []) {
   const completeIdx = ps.indexOf(lastComplete);
   const reachesCurrent = lastIdx < 0 || (completeIdx >= 0 && lastIdx > completeIdx);
   const curKys = reachesCurrent ? [lastComplete] : list;
-  const prevKys = previousKys(curKys);
+  let prevKys, prevKyWanted = null, yoyMissing = false;
+  if (mode === 'yoy') {
+    const cand = curKys.map((k) => shiftYear(k, -1));
+    prevKyWanted = cand[cand.length - 1];
+    if (cand.every((k) => k && ps.includes(k))) prevKys = cand;
+    else { prevKys = []; yoyMissing = true; }
+  } else {
+    prevKys = previousKys(curKys);
+  }
+  const hasPrev = prevKys.length > 0 && prevKys.length === curKys.length;
   return {
-    curKys, prevKys,
+    mode, curKys, prevKys, hasPrev, yoyMissing,
     curKy: curKys[curKys.length - 1] || null,
-    prevKy: prevKys.length ? prevKys[prevKys.length - 1] : null,
+    prevKy: prevKys.length ? prevKys[prevKys.length - 1] : prevKyWanted,
     adjusted: reachesCurrent,
   };
 }

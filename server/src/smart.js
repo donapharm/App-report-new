@@ -9,16 +9,21 @@ const A = require('./analytics');
 const llm = require('./llm');
 
 /* ---------------- 1) CẢNH BÁO CHỦ ĐỘNG ---------------- */
-function buildAlerts({ scope, ky, kys }) {
+function buildAlerts({ scope, ky, kys, compareMode }) {
   const list = Array.isArray(kys) && kys.length ? kys : [ky || store.latestKy()];
   const lastKy = list[list.length - 1];
-  const cmp = store.comparePeriods(list); // cặp kỳ SO SÁNH công bằng (tự lùi tháng đủ nếu kỳ dở)
+  const mode = compareMode === 'yoy' ? 'yoy' : 'prev';
+  const cmp = store.comparePeriods(list, mode); // cặp kỳ SO SÁNH (tháng liền trước / cùng kỳ năm ngoái)
   const fmtKy = (k) => { const [m, y] = String(k || '').split('.'); return m && y ? `T${m}/${y}` : String(k || ''); };
-  const cmpNote = cmp.prevKy
-    ? (cmp.adjusted
-      ? `⚠ Tháng đang xem chưa đủ ngày — đang so 2 tháng đã hoàn tất: ${fmtKy(cmp.curKy)} với ${fmtKy(cmp.prevKy)}.`
-      : `So sánh ${fmtKy(cmp.curKy)} với ${fmtKy(cmp.prevKy)}.`)
-    : 'Chưa đủ dữ liệu kỳ trước để so sánh.';
+  const cmpNote = cmp.yoyMissing
+    ? `Chưa có dữ liệu cùng kỳ năm ngoái (${fmtKy(cmp.prevKy)}) để so — cần nạp số ${String(cmp.prevKy || '').split('.')[1] || 'năm trước'}.`
+    : (!cmp.hasPrev
+      ? 'Chưa đủ dữ liệu kỳ trước để so sánh.'
+      : (cmp.mode === 'yoy'
+        ? `So cùng kỳ năm ngoái: ${fmtKy(cmp.curKy)} với ${fmtKy(cmp.prevKy)}.`
+        : (cmp.adjusted
+          ? `⚠ Tháng đang xem chưa đủ ngày — đang so 2 tháng đã hoàn tất: ${fmtKy(cmp.curKy)} với ${fmtKy(cmp.prevKy)}.`
+          : `So tháng liền trước: ${fmtKy(cmp.curKy)} với ${fmtKy(cmp.prevKy)}.`)));
   const top = (arr, n = 8) => arr.slice(0, n);
 
   // a) NV đang bán nhưng tụt target (đạt < 80% target trước VAT).
@@ -52,7 +57,7 @@ function buildAlerts({ scope, ky, kys }) {
   // b) Đơn vị biến động doanh thu so kỳ trước: giảm mạnh (MoM ≤ -15%) & tăng mạnh (MoM ≥ +15%)
   const unitItems = [];    // giảm mạnh
   const unitUpItems = [];  // tăng trưởng mạnh
-  if (cmp.prevKys.length && cmp.prevKys.length === cmp.curKys.length) {
+  if (cmp.hasPrev) {
     const cur = A.revenueBreakdown({ kys: cmp.curKys, scope, dimension: 'unit' });
     const prev = A.revenueBreakdown({ kys: cmp.prevKys, scope, dimension: 'unit' });
     const prevMap = Object.fromEntries(prev.map((u) => [u.key, u.revenue]));
@@ -115,7 +120,7 @@ function buildAlerts({ scope, ky, kys }) {
   };
   // "Cần chú ý" = các mục CẢNH BÁO (không tính đơn vị tăng trưởng — đó là tin vui).
   const count = groups.filter((g) => g.key !== 'unit_up').reduce((s, g) => s + g.total, 0);
-  return { ky: lastKy, kys: list, cstLabel: 'Cơ số thầu hiện tại', summary, groups, count };
+  return { ky: lastKy, kys: list, cstLabel: 'Cơ số thầu hiện tại', summary, groups, count, compareMode: cmp.mode, compareNote: cmpNote };
 }
 
 /* ---------------- 2) DỰ BÁO TARGET THEO XU HƯỚNG ---------------- */
