@@ -15,6 +15,14 @@ function AlertLine({ group, item }) {
       </div>
     );
   }
+  if (group.key === 'unit_up') {
+    return (
+      <div className="alert-line">
+        <b>{unitText(item.unit_code, item.unit_name)}</b>
+        <span><span className="chg-chip up">▲ Tăng {pct(Math.abs(item.mom), 0)}</span>{money(item.prev)} → {money(item.cur)}</span>
+      </div>
+    );
+  }
   if (group.key === 'unit_down') {
     return (
       <div className="alert-line">
@@ -65,7 +73,7 @@ export default function Overview({ me, onNavigate }) {
   function viewAll(group) {
     if (!onNavigate) return;
     if (group.key === 'target') onNavigate('target', { fromAlert: group.key });
-    else if (group.key === 'unit_down') onNavigate('revenue', { fromAlert: group.key, dimension: 'unit' });
+    else if (group.key === 'unit_up' || group.key === 'unit_down') onNavigate('revenue', { fromAlert: group.key, dimension: 'unit' });
     else if (group.key === 'cst_low') onNavigate('cst', { fromAlert: group.key, cstFilter: 'low' });
     else if (group.key === 'cst_high') onNavigate('cst', { fromAlert: group.key, cstFilter: 'high' });
   }
@@ -142,12 +150,13 @@ export default function Overview({ me, onNavigate }) {
       )}
 
       <div className="section-title">🔔 Cần chú ý {alerts ? `(${alerts.count})` : ''} · CST hiện tại</div>
-      {!alerts ? <Spinner /> : alerts.count === 0 ? (
+      {!alerts ? <Spinner /> : !groups.some((g) => g.total > 0) ? (
         <div className="center">Không có cảnh báo nào. Mọi thứ ổn ✅</div>
       ) : (
         <>
           <div className="card alert-summary-strip">
             <span><b>{summary.emp_below_target}</b> NV chưa đạt</span>
+            <span className="up"><b>{summary.units_up}</b> đơn vị tăng</span>
             <span><b>{summary.units_down}</b> đơn vị giảm</span>
             <span><b>{summary.cst_low}</b> CST sắp cạn</span>
             <span><b>{summary.cst_high}</b> CST tồn nhiều</span>

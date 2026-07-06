@@ -43,8 +43,9 @@ function buildAlerts({ scope, ky, kys }) {
   }
   targetItems.sort((a, b) => a.pct - b.pct);
 
-  // b) Đơn vị giảm doanh thu so kỳ trước (MoM < -15%)
-  const unitItems = [];
+  // b) Đơn vị biến động doanh thu so kỳ trước: giảm mạnh (MoM ≤ -15%) & tăng mạnh (MoM ≥ +15%)
+  const unitItems = [];    // giảm mạnh
+  const unitUpItems = [];  // tăng trưởng mạnh
   if (prevKys.length === list.length) {
     const cur = A.revenueBreakdown({ kys: list, scope, dimension: 'unit' });
     const prev = A.revenueBreakdown({ kys: prevKys, scope, dimension: 'unit' });
@@ -53,20 +54,14 @@ function buildAlerts({ scope, ky, kys }) {
       const before = prevMap[u.key] || 0;
       if (before > 0) {
         const mom = ((u.revenue - before) / before) * 100;
-        if (mom <= -15) {
-          unitItems.push({
-            unit_code: u.key,
-            unit_name: u.label,
-            prev: before,
-            cur: u.revenue,
-            mom: +mom.toFixed(1),
-            severity: mom <= -30 ? 'high' : 'medium',
-          });
-        }
+        const rec = { unit_code: u.key, unit_name: u.label, prev: before, cur: u.revenue, mom: +mom.toFixed(1) };
+        if (mom <= -15) unitItems.push({ ...rec, severity: mom <= -30 ? 'high' : 'medium' });
+        else if (mom >= 15) unitUpItems.push({ ...rec, severity: mom >= 30 ? 'high' : 'medium' });
       }
     }
   }
   unitItems.sort((a, b) => a.mom - b.mom);
+  unitUpItems.sort((a, b) => b.mom - a.mom);
 
   // c) Cơ số thầu bất thường: sắp cạn (<10%) hoặc tồn nhiều (>85%)
   const cst = store.getCst({ scope });
@@ -100,17 +95,21 @@ function buildAlerts({ scope, ky, kys }) {
 
   const groups = [
     { key: 'target', icon: '🎯', tone: 'danger', title: 'NV chưa đạt target', total: targetItems.length, items: top(targetItems) },
+    { key: 'unit_up', icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh (so kỳ trước)', total: unitUpItems.length, items: top(unitUpItems) },
     { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm mạnh (so kỳ trước)', total: unitItems.length, items: top(unitItems) },
     { key: 'cst_low', icon: '📦', tone: 'danger', title: 'Cơ số thầu sắp cạn (<10%)', total: cstLow.length, items: top(cstLow) },
     { key: 'cst_high', icon: '🟡', tone: 'neutral', title: 'Cơ số thầu tồn nhiều (>85%)', total: cstHigh.length, items: top(cstHigh) },
   ];
   const summary = {
     emp_below_target: targetItems.length,
+    units_up: unitUpItems.length,
     units_down: unitItems.length,
     cst_low: cstLow.length,
     cst_high: cstHigh.length,
   };
-  return { ky: lastKy, kys: list, cstLabel: 'Cơ số thầu hiện tại', summary, groups, count: groups.reduce((s, g) => s + g.total, 0) };
+  // "Cần chú ý" = các mục CẢNH BÁO (không tính đơn vị tăng trưởng — đó là tin vui).
+  const count = groups.filter((g) => g.key !== 'unit_up').reduce((s, g) => s + g.total, 0);
+  return { ky: lastKy, kys: list, cstLabel: 'Cơ số thầu hiện tại', summary, groups, count };
 }
 
 /* ---------------- 2) DỰ BÁO TARGET THEO XU HƯỚNG ---------------- */

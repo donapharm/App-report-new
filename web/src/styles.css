@@ -311,11 +311,13 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .qd-badge.qd141-card { background: #d8f0ff; color: #0f5aa8; border-color: #9bd0f5; }
 .alert-summary-strip { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 12px; }
 .alert-summary-strip span { background: #eef4fb; color: var(--brand-ink); border-radius: 999px; padding: 6px 10px; font-size: 13px; }
+.alert-summary-strip span.up { background: #e7f6ee; color: #17915a; }
 .grouped-alerts { align-items: start; }
 .alert-group { padding: 12px; border-left: 4px solid var(--line); }
 .alert-group.danger { border-left-color: var(--hi); }
 .alert-group.warning { border-left-color: var(--mid); }
 .alert-group.neutral { border-left-color: #94a3b8; }
+.alert-group.ok { border-left-color: var(--ok); }
 .alert-group-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; margin-bottom: 8px; }
 .alert-ic { margin-right: 6px; }
 .alert-lines { display: flex; flex-direction: column; gap: 7px; }

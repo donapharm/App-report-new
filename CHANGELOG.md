@@ -21,6 +21,18 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Thêm "Đơn vị tăng trưởng mạnh" + chip mũi tên
+- **Tổng quan:** thêm nhóm cảnh báo `unit_up` "Đơn vị tăng trưởng mạnh (so kỳ
+  trước)" (MoM ≥ +15%), đặt NGAY TRÊN nhóm "giảm mạnh"; viền xanh (tone `ok`),
+  📈, mỗi dòng có chip xanh **▲ Tăng x%**. Thanh tóm tắt thêm "x đơn vị tăng".
+  `count` (Cần chú ý) KHÔNG tính unit_up (tin vui, không phải cảnh báo); mục
+  cảnh báo hiện khi có bất kỳ nhóm nào có dữ liệu.
+- **Phân tích:** `DeltaRow` thêm chip **▲ Tăng %** (xanh) / **▼ Giảm %** (đỏ)
+  cho từng dòng ở các block tăng/giảm (đơn vị + sản phẩm).
+- `smart.js`: gom cả tăng & giảm trong 1 vòng; sort unit tăng giảm dần theo %.
+- Nghiệm thu: `node --check` smart.js OK, build OK, kiểm headless thấy mục tăng
+  trưởng + chip xanh trên cả Tổng quan lẫn Phân tích.
+
 ### 2026-07-05 — Claude Code — Dựng lại bản Tổng quan "màu chuẩn CEO" (đưa vào git)
 - **Bối cảnh:** Bản Tổng quan nhiều màu + đồng hồ (bot làm trên server) **chưa từng
   push lên GitHub**. Các lệnh deploy `git reset --hard origin/main` (untrack-data +

@@ -14,7 +14,10 @@ function DeltaRow({ i, r, kind }) {
     <div className="row">
       <div className="main">
         <div className="name"><span className="rank">{i}</span>{title}</div>
-        <div className="meta">Kỳ trước {money(r.prevRevenue)} → kỳ này {money(r.revenue)} · {pct(r.deltaPct)}</div>
+        <div className="meta">
+          <span className={'chg-chip ' + (up ? 'up' : 'down')}>{up ? '▲ Tăng' : '▼ Giảm'} {pct(Math.abs(r.deltaPct), 0)}</span>
+          Kỳ trước {money(r.prevRevenue)} → kỳ này {money(r.revenue)}
+        </div>
       </div>
       <div className="amt" style={{ color: up ? 'var(--ok)' : 'var(--hi)' }}>{up ? '+' : ''}{money(r.delta)}</div>
     </div>
