@@ -21,6 +21,19 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Nút "Có bản mới — bấm để cập nhật" (hết kẹt cache iOS)
+- **Vấn đề:** iOS giữ cache PWA rất lì → sau deploy, NV cứ hỏi "sao dữ liệu chưa đổi",
+  phải xoá–thêm lại app thủ công.
+- **Giải pháp:** app tự phát hiện bản mới và mời cập nhật:
+  - `vite.config.js`: plugin `emit-version-json` xuất `/version.json` (SHA + giờ build).
+  - `index.js`: phục vụ `version.json` với `no-cache`.
+  - `UpdateBanner` (components): định kỳ 60s + mỗi khi quay lại app, fetch
+    `/version.json?_=ts` (no-store); nếu version khác `__BUILD_VER__` đang chạy →
+    hiện nút xanh nổi **"🔄 Có bản mới — bấm để cập nhật"**. Bấm → `location.replace('?v=<ver>')`
+    (đổi URL để phá cache iOS) → tải bản mới.
+- Nghiệm thu: build ra `version.json` đúng SHA, header no-cache OK; test giả lập
+  version khác → nút hiện; version trùng → không hiện.
+
 ### 2026-07-07 — Claude Code — So sánh tăng/giảm CÔNG BẰNG + ghi rõ mốc (①+②)
 - **Vấn đề (CEO nêu):** "so kỳ trước" đang lấy CẢ kỳ này (tháng dở, mới vài
   ngày theo mốc "Cập nhật đến") so với CẢ tháng trước (đủ) → hầu hết đơn vị hiện

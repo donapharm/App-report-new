@@ -16,6 +16,36 @@ export function MoneyBig({ value, className }) {
 }
 export const Empty = ({ children }) => <div className="center">{children}</div>;
 
+// Tự phát hiện "có bản mới" (server đã deploy bản khác bản đang mở) -> hiện nút cập nhật.
+// Hỏi /version.json (no-cache) định kỳ + mỗi khi quay lại app. Bấm -> tải lại kèm chống cache iOS.
+export function UpdateBanner() {
+  const current = typeof __BUILD_VER__ !== 'undefined' ? __BUILD_VER__ : 'dev';
+  const [newVer, setNewVer] = React.useState(null);
+  React.useEffect(() => {
+    let stop = false;
+    const check = async () => {
+      try {
+        const r = await fetch('/version.json?_=' + Date.now(), { cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        if (!stop && j && j.version && current !== 'dev' && j.version !== current) setNewVer(j.version);
+      } catch { /* mất mạng: bỏ qua */ }
+    };
+    check();
+    const id = setInterval(check, 60000);
+    const onVis = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+    return () => { stop = true; clearInterval(id); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', onVis); };
+  }, [current]);
+  if (!newVer) return null;
+  const doUpdate = () => { try { window.location.replace(window.location.pathname + '?v=' + newVer); } catch { window.location.reload(); } };
+  return (
+    <button className="update-banner" onClick={doUpdate}>🔄 Có bản mới — bấm để cập nhật</button>
+  );
+}
+/* globals __BUILD_VER__ */
+
 // Ô xương (skeleton) khi đang tải — cảm giác nhanh hơn, không nhảy layout.
 export function Skeleton({ w = '100%', h = 14, r = 6, style }) {
   return <span className="skeleton" style={{ width: w, height: h, borderRadius: r, ...style }} />;

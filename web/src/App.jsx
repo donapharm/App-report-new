@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, getToken, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { useIsDesktop } from './hooks.js';
-import { Spinner, ScrollTopButton, Clock } from './components.jsx';
+import { Spinner, ScrollTopButton, Clock, UpdateBanner } from './components.jsx';
 import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
 import Login from './pages/Login.jsx';
@@ -108,6 +108,7 @@ export default function App() {
             <NavCtx.Provider value={navBack}><Active me={me} desktop onNavigate={navigate} /></NavCtx.Provider>
           </main>
           <ScrollTopButton />
+          <UpdateBanner />
         </div>
       </div>
     );
@@ -133,6 +134,7 @@ export default function App() {
         <NavCtx.Provider value={navBack}><Active me={me} onNavigate={navigate} /></NavCtx.Provider>
       </main>
       <ScrollTopButton />
+      <UpdateBanner />
       <nav className="nav">
         {tabs.map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>
