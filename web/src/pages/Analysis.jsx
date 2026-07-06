@@ -59,6 +59,8 @@ export default function Analysis({ me }) {
   const [topDim, setTopDim] = useState('unit');
   const [topRows, setTopRows] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [cmpMode, setCmpModeState] = useState(() => { try { return localStorage.getItem('rpt_cmp_mode') || 'prev'; } catch { return 'prev'; } });
+  const setCmpMode = (m) => { setCmpModeState(m); try { localStorage.setItem('rpt_cmp_mode', m); } catch { /* ignore */ } };
   const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => {
@@ -73,8 +75,8 @@ export default function Analysis({ me }) {
   useEffect(() => {
     if (!periodSel) return;
     setData(null);
-    api.analysis({ ...periodParams(periodSel), ...filters }).then(setData);
-  }, [periodSel, filters, reloadTick]);
+    api.analysis({ ...periodParams(periodSel), ...filters, compareMode: cmpMode }).then(setData);
+  }, [periodSel, filters, reloadTick, cmpMode]);
 
   useEffect(() => {
     if (!periodSel) return;
@@ -135,6 +137,13 @@ export default function Analysis({ me }) {
               </div>
             </div>
             {!topRows ? <Spinner /> : <TopBarChart rows={topRows} />}
+          </div>
+          <div className="cmp-toggle-row">
+            <span className="cmp-toggle-label">So tăng/giảm:</span>
+            <div className="seg compact">
+              <button className={cmpMode === 'prev' ? 'active' : ''} onClick={() => setCmpMode('prev')}>Tháng liền trước</button>
+              <button className={cmpMode === 'yoy' ? 'active' : ''} onClick={() => setCmpMode('yoy')}>Cùng kỳ năm ngoái</button>
+            </div>
           </div>
           {data.growthNote && <div className={'alert-group-note' + (data.growthNote.startsWith('⚠') ? ' warn' : '')} style={{ margin: '4px 2px 8px' }}>{data.growthNote}</div>}
           <div className="list-grid analysis-block-grid">

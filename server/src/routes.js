@@ -708,7 +708,7 @@ router.get('/trend', auth.requireAuth, (req, res) => {
 });
 
 router.get('/alerts', auth.requireAuth, (req, res) => {
-  res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session) }));
+  res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session), compareMode: req.query.compareMode }));
 });
 
 /* ---------- Revenue drill-down ---------- */
@@ -912,17 +912,22 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
   const prevRevenue = A.sum(prevRows, (r) => r.revenue);
   const delta = currentRevenue - prevRevenue;
   const deltaPct = prevRevenue > 0 ? +(delta / prevRevenue * 100).toFixed(1) : null;
-  // Bảng tăng/giảm: so cặp kỳ CÔNG BẰNG (tự lùi 2 tháng đã đủ nếu kỳ đang xem còn dở).
-  const cmpP = store.comparePeriods(kys);
+  // Bảng tăng/giảm: so tháng liền trước / cùng kỳ năm ngoái (tự lùi 2 tháng đủ nếu kỳ dở).
+  const cmpMode = req.query.compareMode === 'yoy' ? 'yoy' : 'prev';
+  const cmpP = store.comparePeriods(kys, cmpMode);
   const fmtKy = (k) => { const [m, y] = String(k || '').split('.'); return m && y ? `T${m}/${y}` : String(k || ''); };
-  const growthNote = cmpP.prevKy
-    ? (cmpP.adjusted
-      ? `⚠ Kỳ đang xem chưa đủ ngày — bảng tăng/giảm đang so 2 tháng đã hoàn tất: ${fmtKy(cmpP.curKy)} với ${fmtKy(cmpP.prevKy)}.`
-      : `Bảng tăng/giảm so ${fmtKy(cmpP.curKy)} với ${fmtKy(cmpP.prevKy)}.`)
-    : 'Chưa đủ dữ liệu kỳ trước để so tăng/giảm.';
+  const growthNote = cmpP.yoyMissing
+    ? `Chưa có dữ liệu cùng kỳ năm ngoái (${fmtKy(cmpP.prevKy)}) để so — cần nạp số ${String(cmpP.prevKy || '').split('.')[1] || 'năm trước'}.`
+    : (!cmpP.hasPrev
+      ? 'Chưa đủ dữ liệu kỳ trước để so tăng/giảm.'
+      : (cmpP.mode === 'yoy'
+        ? `Bảng tăng/giảm so cùng kỳ năm ngoái: ${fmtKy(cmpP.curKy)} với ${fmtKy(cmpP.prevKy)}.`
+        : (cmpP.adjusted
+          ? `⚠ Kỳ đang xem chưa đủ ngày — bảng tăng/giảm đang so 2 tháng đã hoàn tất: ${fmtKy(cmpP.curKy)} với ${fmtKy(cmpP.prevKy)}.`
+          : `Bảng tăng/giảm so tháng liền trước: ${fmtKy(cmpP.curKy)} với ${fmtKy(cmpP.prevKy)}.`)));
   const compare = (dimension) => {
     const cur = A.revenueBreakdown({ kys: cmpP.curKys, scope, dimension, filters });
-    const prev = (cmpP.prevKys.length === cmpP.curKys.length) ? A.revenueBreakdown({ kys: cmpP.prevKys, scope, dimension, filters }) : [];
+    const prev = cmpP.hasPrev ? A.revenueBreakdown({ kys: cmpP.prevKys, scope, dimension, filters }) : [];
     const prevMap = Object.fromEntries(prev.map((x) => [x.key, x.revenue]));
     return cur.map((x) => {
       const before = prevMap[x.key] || 0;
@@ -967,7 +972,7 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     delta,
     deltaPct,
     growthNote,
-    growthCompare: { curKy: cmpP.curKy, prevKy: cmpP.prevKy, adjusted: cmpP.adjusted },
+    growthCompare: { curKy: cmpP.curKy, prevKy: cmpP.prevKy, adjusted: cmpP.adjusted, mode: cmpP.mode, yoyMissing: cmpP.yoyMissing },
     rowCount: currentRows.length,
     byRoute,
     byContractor,

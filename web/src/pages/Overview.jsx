@@ -48,6 +48,8 @@ export default function Overview({ me, onNavigate }) {
   const [topDim, setTopDim] = useState('unit');
   const [topRows, setTopRows] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [cmpMode, setCmpModeState] = useState(() => { try { return localStorage.getItem('rpt_cmp_mode') || 'prev'; } catch { return 'prev'; } });
+  const setCmpMode = (m) => { setCmpModeState(m); try { localStorage.setItem('rpt_cmp_mode', m); } catch { /* ignore */ } };
   const { reloadTick, reload } = useReloadTick();
 
   useEffect(() => {
@@ -61,8 +63,8 @@ export default function Overview({ me, onNavigate }) {
     setTrend(null);
     api.trend().then(setTrend);
     setAlerts(null);
-    api.alerts(periodParams(periodSel)).then(setAlerts);
-  }, [periodSel, reloadTick]);
+    api.alerts({ ...periodParams(periodSel), compareMode: cmpMode }).then(setAlerts);
+  }, [periodSel, reloadTick, cmpMode]);
 
   useEffect(() => {
     if (!periodSel) return;
@@ -150,6 +152,13 @@ export default function Overview({ me, onNavigate }) {
       )}
 
       <div className="section-title">🔔 Cần chú ý {alerts ? `(${alerts.count})` : ''} · CST hiện tại</div>
+      <div className="cmp-toggle-row">
+        <span className="cmp-toggle-label">So tăng/giảm đơn vị:</span>
+        <div className="seg compact">
+          <button className={cmpMode === 'prev' ? 'active' : ''} onClick={() => setCmpMode('prev')}>Tháng liền trước</button>
+          <button className={cmpMode === 'yoy' ? 'active' : ''} onClick={() => setCmpMode('yoy')}>Cùng kỳ năm ngoái</button>
+        </div>
+      </div>
       {!alerts ? <Spinner /> : !groups.some((g) => g.total > 0) ? (
         <div className="center">Không có cảnh báo nào. Mọi thứ ổn ✅</div>
       ) : (
