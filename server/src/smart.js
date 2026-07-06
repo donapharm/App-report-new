@@ -12,7 +12,13 @@ const llm = require('./llm');
 function buildAlerts({ scope, ky, kys }) {
   const list = Array.isArray(kys) && kys.length ? kys : [ky || store.latestKy()];
   const lastKy = list[list.length - 1];
-  const prevKys = store.previousKys(list);
+  const cmp = store.comparePeriods(list); // cặp kỳ SO SÁNH công bằng (tự lùi tháng đủ nếu kỳ dở)
+  const fmtKy = (k) => { const [m, y] = String(k || '').split('.'); return m && y ? `T${m}/${y}` : String(k || ''); };
+  const cmpNote = cmp.prevKy
+    ? (cmp.adjusted
+      ? `⚠ Tháng đang xem chưa đủ ngày — đang so 2 tháng đã hoàn tất: ${fmtKy(cmp.curKy)} với ${fmtKy(cmp.prevKy)}.`
+      : `So sánh ${fmtKy(cmp.curKy)} với ${fmtKy(cmp.prevKy)}.`)
+    : 'Chưa đủ dữ liệu kỳ trước để so sánh.';
   const top = (arr, n = 8) => arr.slice(0, n);
 
   // a) NV đang bán nhưng tụt target (đạt < 80% target trước VAT).
@@ -46,9 +52,9 @@ function buildAlerts({ scope, ky, kys }) {
   // b) Đơn vị biến động doanh thu so kỳ trước: giảm mạnh (MoM ≤ -15%) & tăng mạnh (MoM ≥ +15%)
   const unitItems = [];    // giảm mạnh
   const unitUpItems = [];  // tăng trưởng mạnh
-  if (prevKys.length === list.length) {
-    const cur = A.revenueBreakdown({ kys: list, scope, dimension: 'unit' });
-    const prev = A.revenueBreakdown({ kys: prevKys, scope, dimension: 'unit' });
+  if (cmp.prevKys.length && cmp.prevKys.length === cmp.curKys.length) {
+    const cur = A.revenueBreakdown({ kys: cmp.curKys, scope, dimension: 'unit' });
+    const prev = A.revenueBreakdown({ kys: cmp.prevKys, scope, dimension: 'unit' });
     const prevMap = Object.fromEntries(prev.map((u) => [u.key, u.revenue]));
     for (const u of cur) {
       const before = prevMap[u.key] || 0;
@@ -95,8 +101,8 @@ function buildAlerts({ scope, ky, kys }) {
 
   const groups = [
     { key: 'target', icon: '🎯', tone: 'danger', title: 'NV chưa đạt target', total: targetItems.length, items: top(targetItems) },
-    { key: 'unit_up', icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh (so kỳ trước)', total: unitUpItems.length, items: top(unitUpItems) },
-    { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm mạnh (so kỳ trước)', total: unitItems.length, items: top(unitItems) },
+    { key: 'unit_up', icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh (so kỳ trước)', total: unitUpItems.length, items: top(unitUpItems), note: cmpNote },
+    { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm mạnh (so kỳ trước)', total: unitItems.length, items: top(unitItems), note: cmpNote },
     { key: 'cst_low', icon: '📦', tone: 'danger', title: 'Cơ số thầu sắp cạn (<10%)', total: cstLow.length, items: top(cstLow) },
     { key: 'cst_high', icon: '🟡', tone: 'neutral', title: 'Cơ số thầu tồn nhiều (>85%)', total: cstHigh.length, items: top(cstHigh) },
   ];

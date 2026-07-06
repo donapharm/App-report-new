@@ -136,6 +136,7 @@ export default function Analysis({ me }) {
             </div>
             {!topRows ? <Spinner /> : <TopBarChart rows={topRows} />}
           </div>
+          {data.growthNote && <div className={'alert-group-note' + (data.growthNote.startsWith('⚠') ? ' warn' : '')} style={{ margin: '4px 2px 8px' }}>{data.growthNote}</div>}
           <div className="list-grid analysis-block-grid">
             <Block title="Đơn vị tăng mạnh" rows={data.topGrowthUnits} kind="unit" />
             <Block title="Đơn vị giảm mạnh" rows={data.topDeclineUnits} kind="unit" negative />
