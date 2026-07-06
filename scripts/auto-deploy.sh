@@ -24,8 +24,17 @@ cd "$REPO_DIR" 2>/dev/null || { echo "REPO_DIR không tồn tại: $REPO_DIR" >&
 exec 9>"$REPO_DIR/.auto-deploy.lock"
 flock -n 9 || exit 0
 
-# --- Có bản mới không? ---
-git fetch origin "$BRANCH" --quiet || { log "git fetch lỗi"; exit 1; }
+# Mốc "đã chạy" (ghi đè mỗi lượt, không phình) -> biết cron còn sống.
+date '+%F %T' > "$REPO_DIR/.auto-deploy.last" 2>/dev/null || true
+
+# --- Có bản mới không? (thử lại 3 lần khi mạng chập chờn; GHI LẠI lỗi thật) ---
+fetch_ok=0
+for i in 1 2 3; do
+  if err=$(git fetch origin "$BRANCH" 2>&1); then fetch_ok=1; break; fi
+  log "git fetch lần $i lỗi: ${err//$'\n'/ | }"
+  sleep 5
+done
+if [ "$fetch_ok" != 1 ]; then log "git fetch thất bại sau 3 lần — bỏ qua lượt này (sẽ thử lại phút sau)."; exit 0; fi
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse "origin/$BRANCH")
 [ "$LOCAL" = "$REMOTE" ] && exit 0   # không có gì mới -> im lặng thoát
