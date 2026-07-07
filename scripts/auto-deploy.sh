@@ -4,7 +4,9 @@
 #   - flock: chống chạy chồng (lần chạy sau bỏ qua nếu lần trước chưa xong).
 #   - Chỉ deploy khi HEAD là TỔ TIÊN của origin/main (fast-forward). Nếu server
 #     có commit local chưa push -> BỎ QUA, không đè việc bot đang làm.
-#   - Bỏ qua nếu working tree có thay đổi TRACKED chưa commit (bảo vệ việc dở).
+#   - Working tree có thay đổi TRACKED chưa commit -> CHỜ (bảo vệ việc dở) NHƯNG
+#     luôn ghi rõ file nào dirty vào log; dirty quá lâu (STALE_SECS, mặc định 15')
+#     coi là KẸT -> git stash (khôi phục được) rồi deploy, KHÔNG kẹt mãi.
 #     (File dữ liệu runtime đã untracked nên không tính, không chặn deploy.)
 #   - Build ra thư mục TẠM rồi mới tráo (swap). Build LỖI -> giữ nguyên bản đang
 #     chạy, KHÔNG restart, thoát với mã lỗi.
@@ -46,9 +48,33 @@ if ! git merge-base --is-ancestor "$LOCAL" "$REMOTE"; then
 fi
 
 # --- An toàn: không đè thay đổi tracked chưa commit ---
+# KHÁC bản cũ (chỉ "BỎ QUA" im lặng, kẹt mãi mãi nếu tree dirty):
+#   1) LUÔN ghi RÕ file nào đang dirty -> soi được thủ phạm.
+#   2) Có CỬA THOÁT: dirty quá lâu (mặc định 15') = kẹt, KHÔNG phải việc đang làm
+#      -> git stash (KHÔI PHỤC được bằng `git stash list`) rồi deploy tiếp.
+DIRTY_MARK="$REPO_DIR/.auto-deploy.dirty-since"
+STALE_SECS="${STALE_SECS:-900}"
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  log "BỎ QUA: working tree có thay đổi tracked chưa commit — không đè việc dở."
-  exit 0
+  DIRTY_LIST=$(git status --short 2>/dev/null | tr '\n' ';')
+  now=$(date +%s)
+  since=$now
+  if [ -f "$DIRTY_MARK" ]; then since=$(cat "$DIRTY_MARK" 2>/dev/null || echo "$now"); fi
+  case "$since" in ''|*[!0-9]*) since=$now ;; esac
+  [ -f "$DIRTY_MARK" ] || echo "$now" > "$DIRTY_MARK"
+  age=$(( now - since ))
+  if [ "$age" -lt "$STALE_SECS" ]; then
+    log "BỎ QUA (${age}s/${STALE_SECS}s): working tree dirty — chờ, không đè việc dở. Files: ${DIRTY_LIST}"
+    exit 0
+  fi
+  log "KẸT ${age}s vẫn dirty -> git stash (khôi phục: 'git stash list') rồi deploy. Files: ${DIRTY_LIST}"
+  if git stash push -u -m "auto-deploy-stash $(date '+%F %T')" >> "$LOG" 2>&1; then
+    rm -f "$DIRTY_MARK"
+  else
+    log "git stash LỖI -> bỏ qua lượt này để an toàn."
+    exit 0
+  fi
+else
+  rm -f "$DIRTY_MARK"   # sạch rồi -> xoá mốc dirty
 fi
 
 log "Bản mới ${LOCAL:0:7} -> ${REMOTE:0:7}: bắt đầu cập nhật."
