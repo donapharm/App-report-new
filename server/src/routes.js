@@ -582,6 +582,7 @@ router.get('/filters', auth.requireAuth, (req, res) => {
         ...p,
       })).sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi') || String(a.key).localeCompare(String(b.key), 'vi'));
     })(),
+    provinces: uniq(rows, 'province'),
     routes: uniq(rows, 'route'),
     priorities: uniq(rows.concat(cst), 'priority'),
     contractors: contractorOptions(rows.concat(cst), contractorLookup),
@@ -790,6 +791,7 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
 function revenueFiltersFromQuery(q) {
   return {
     emp: q.emp || null,
+    province: q.province || null,
     unit: q.unit || null,
     product: q.product || null,
     route: q.route || null,

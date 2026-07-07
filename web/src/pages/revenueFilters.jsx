@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const emptyRevenueFilters = { emp: '', unit: '', product: '', route: '', priority: '', contractor: '', bid: '', dateFrom: '', dateTo: '', q: '' };
+export const emptyRevenueFilters = { emp: '', province: '', unit: '', product: '', route: '', priority: '', contractor: '', bid: '', dateFrom: '', dateTo: '', q: '' };
 
 const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
 const productMeta = (o) => [o.qd, o.active_ingredient, o.ham_luong, o.uom, o.contractor, o.bid_price ? `Giá ${Number(o.bid_price).toLocaleString('vi-VN')}` : '', o.iit_code || o.key]
@@ -98,6 +98,7 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
           </div>
           <div className="filter-grid">
             {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
+            <Select value={filters.province} onChange={(v) => setF('province', v)} options={options?.provinces} all="Tất cả tỉnh/thành" />
             <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
             <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
             <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />

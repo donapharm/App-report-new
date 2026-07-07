@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const ords = require('./ords');
 const targetAdmin = require('./targetAdmin');
+const { provinceOf } = require('./province');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
@@ -53,11 +54,13 @@ function base() {
   const empByCode = Object.fromEntries(users.map((u) => [u.emp_code, u]));
   const enrich = (r) => {
     const rr = normalizeEmpForReport(r);
+    const unit_name = rr.unit_name || unitByCode[rr.unit_code]?.unit_name;
     return {
       ...rr,
-      unit_name: rr.unit_name || unitByCode[rr.unit_code]?.unit_name,
+      unit_name,
       product_name: rr.product_name || prodByCode[rr.iit_code]?.product_name,
       emp_name: rr.emp_name || empByCode[rr.emp_code]?.name,
+      province: rr.province || unitByCode[rr.unit_code]?.province || provinceOf(rr.unit_code, unit_name, rr.province),
     };
   };
   _base = {

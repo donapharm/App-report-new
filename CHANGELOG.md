@@ -21,6 +21,23 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Bộ lọc TỈNH/THÀNH (Đồng Nai, Bình Phước, …)
+- CEO cần lọc theo tỉnh. Dữ liệu chưa có trường tỉnh → thêm nguồn tỉnh:
+  1) `row.province` nếu upload có cột "Tỉnh" (thêm alias trong upload.js);
+  2) map chính thức `server/config/unit_province.json` (unit_code→tỉnh, bot điền);
+  3) đoán theo tên đơn vị (`server/src/province.js` — Đồng Nai/Bình Phước + huyện).
+- `store.enrich`: gắn `province` vào mỗi dòng. `analytics.applyFilters`: lọc theo
+  `province`. `/filters`: trả `provinces`. `revenueFiltersFromQuery`: thêm province.
+- Frontend: dropdown gọn "Tất cả tỉnh/thành" ở thanh lọc (Doanh thu, DT đầy đủ,
+  Sản phẩm qua RevenueFilters; và Phân tích). `emptyRevenueFilters` thêm province.
+- `scripts/list_unmapped_provinces.js`: liệt kê đơn vị chưa có tỉnh để bot điền nhanh.
+- Demo: `server/config/unit_province.json` gán sẵn 20 đơn vị mẫu (Đồng Nai/Bình
+  Phước/Bà Rịa-Vũng Tàu) để lọc chạy ngay.
+- **‼ Trên dữ liệu THẬT:** nhiều đơn vị tự nhận tỉnh theo tên; đơn vị còn lại bot
+  chạy `node scripts/list_unmapped_provinces.js` rồi điền vào `unit_province.json`
+  (hoặc thêm cột "Tỉnh" vào file upload hàng tháng).
+- Nghiệm thu: node --check backend OK, build OK, dropdown hiện 3 tỉnh + lọc chạy.
+
 ### 2026-07-07 — Claude Code — Nút gạt "Tháng liền trước ↔ Cùng kỳ năm ngoái" (làm sẵn)
 - CEO muốn làm sẵn: sang 2027 thì so tăng/giảm với 2026 (cùng kỳ năm ngoái).
 - `store.comparePeriods(kys, mode)`: thêm `mode='yoy'` — lấy cùng tháng năm trước
