@@ -1,6 +1,8 @@
 /**
  * index.js — điểm khởi động backend App Report New.
  */
+// Múi giờ GMT+7 (Việt Nam) cho mọi mốc thời gian/log/lịch. Cho phép env override.
+process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
 const fs = require('fs');
 const path = require('path');
 

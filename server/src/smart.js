@@ -212,17 +212,75 @@ async function answerQuestion({ text, scope, session }) {
   const ky = resolveKyFromQuestion(q) || store.latestKy();
   const mine = !!scope.empCode;
 
-  if (/(top|cao nhat|ban chay).*(san pham|thuoc)|(san pham|thuoc).*(top|cao|ban chay)/.test(q)) {
+  const rowsFor = () => store.getRows({ ky, scope });
+  const topList = (title, arr, fmtItem) => say(title, arr.map((t, i) => `${i + 1}. ${fmtItem(t)}`));
+
+  // Trợ giúp / bot làm được gì
+  if (/\b(help|menu|giup)\b|huong dan|lam duoc gi|hoi gi|ban lam gi|chuc nang|tro giup/.test(q)) {
+    return say('Mình trả lời được các nhóm câu hỏi sau (gõ có/không dấu đều được):', [
+      '💰 Doanh thu: "Doanh thu kỳ này?", "So với tháng trước?"',
+      `🏆 Xếp hạng: "Top sản phẩm / đơn vị${mine ? '' : ' / nhân viên'} / nhà thầu / gói thầu / tỉnh"`,
+      '🎯 Target: "Tôi đạt bao nhiêu % target?", "Còn thiếu bao nhiêu để đạt target?"',
+      '📦 Cơ số thầu: "Cơ số nào sắp cạn?", "Đơn vị nào chưa bán?"',
+      `📈 Biến động: "Đơn vị nào giảm mạnh / tăng mạnh?"${mine ? '' : ', "NV nào chưa đạt?"'}`,
+      '🗓️ Có thể ghi rõ tháng: "Doanh thu tháng 6?"',
+    ]);
+  }
+  // Chào hỏi
+  if (/^(chao|hi|hello|alo|xin chao|hey)\b/.test(q)) {
+    return say('Chào Anh/Chị 👋 Mình là trợ lý App Report. Hỏi mình về doanh thu, target, cơ số thầu, top sản phẩm/đơn vị/tỉnh… Gõ "giúp" để xem menu.');
+  }
+
+  if (/(top|cao nhat|ban chay|nhieu nhat).*(san pham|thuoc)|(san pham|thuoc).*(top|cao|ban chay|nhieu)/.test(q)) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 5);
-    return say(`Top sản phẩm kỳ ${ky}:`, top.map((t, i) => `${i + 1}. ${t.label}: ${fmt(t.revenue)}`));
+    return topList(`Top sản phẩm kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
-  if (/(top|cao nhat).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|khach).*(top|cao)/.test(q)) {
+  if (/(top|cao nhat|nhieu nhat).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|khach).*(top|cao|nhieu)/.test(q)) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5);
-    return say(`Top đơn vị kỳ ${ky}:`, top.map((t, i) => `${i + 1}. ${unitText(t.key, t.label)}: ${fmt(t.revenue)}`));
+    return topList(`Top đơn vị kỳ ${ky}:`, top, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
   }
-  if (!mine && /(xep hang|ranking|top).*(nhan vien|nv|sale)|(nhan vien|sale).*(top|cao|xep hang)/.test(q)) {
+  if (!mine && /(xep hang|ranking|top).*(nhan vien|nv|sale)|(nhan vien|sale).*(top|cao|xep hang|nhieu)/.test(q)) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'emp' }).slice(0, 5);
-    return say(`Top nhân viên kỳ ${ky}:`, top.map((t, i) => `${i + 1}. ${t.label}: ${fmt(t.revenue)}`));
+    return topList(`Top nhân viên kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  }
+  if (/nha thau/.test(q)) {
+    const g = A.groupSum(rowsFor(), 'contractor_code', 'contractor_name').slice(0, 5);
+    if (!g.length) return say(`Chưa có dữ liệu nhà thầu trong kỳ ${ky}.`);
+    return topList(`Top nhà thầu kỳ ${ky}:`, g, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  }
+  if (/goi thau/.test(q)) {
+    const g = A.groupSum(rowsFor().filter((r) => r.bid_package), 'bid_package', 'bid_package').slice(0, 5);
+    if (!g.length) return say(`Chưa có dữ liệu gói thầu trong kỳ ${ky}.`);
+    return topList(`Top gói thầu kỳ ${ky}:`, g, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  }
+  if (/\btinh\b|thanh pho|khu vuc|dong nai|binh phuoc|vung tau/.test(q)) {
+    const g = A.groupSum(rowsFor().filter((r) => r.province), 'province', 'province').slice(0, 8);
+    if (!g.length) return say(`Chưa gán được tỉnh cho dữ liệu kỳ ${ky}.`);
+    return topList(`Doanh thu theo tỉnh kỳ ${ky}:`, g, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  }
+  // Biến động đơn vị (giảm/tăng mạnh)
+  if (/giam manh|sut giam|tut manh|giam nhieu|tang manh|tang truong/.test(q)) {
+    const al = buildAlerts({ ky, scope });
+    const down = al.groups.find((g) => g.key === 'unit_down');
+    const up = al.groups.find((g) => g.key === 'unit_up');
+    const lines = [];
+    if (down?.items?.length) { lines.push(`📉 Giảm mạnh (${down.total}):`); down.items.slice(0, 5).forEach((u) => lines.push(`• ${unitText(u.unit_code, u.unit_name)}: ${fmtPct(u.mom)}`)); }
+    if (up?.items?.length) { lines.push(`📈 Tăng mạnh (${up.total}):`); up.items.slice(0, 5).forEach((u) => lines.push(`• ${unitText(u.unit_code, u.unit_name)}: +${fmtPct(u.mom)}`)); }
+    if (!lines.length) return say(`Kỳ ${ky}: chưa thấy đơn vị tăng/giảm bất thường (hoặc thiếu dữ liệu kỳ trước để so).`);
+    return say(`Biến động đơn vị kỳ ${ky} (so kỳ trước):`, lines);
+  }
+  // NV chưa đạt (chỉ admin)
+  if (!mine && /(nv|nhan vien|ai)\b.*(chua dat|chua hoan thanh|kem|thap|cham nhip|yeu)|chua dat target/.test(q)) {
+    const g = buildAlerts({ ky, scope }).groups.find((x) => x.key === 'target');
+    if (!g?.items?.length) return say(`Kỳ ${ky}: không có NV nào dưới 80% target (hoặc chưa giao target).`);
+    return say(`NV chưa đạt target kỳ ${ky} (${g.total}):`, g.items.slice(0, 8).map((t) => `• ${t.name || t.emp_code}: ${fmtPct(t.pct)}`));
+  }
+  // Đơn vị chưa bán (cơ số còn nhưng chưa khai thác)
+  if (/chua ban|chua khai thac|can cham|chua co don|chua ban gi/.test(q)) {
+    const empty = A.cstTable({ scope, filters: { status: 'empty' } });
+    if (!empty.length) return say('Không có cơ số thầu nào "chưa bán" trong phạm vi của bạn. 👍');
+    return say(`Có ${empty.length} dòng cơ số thầu CHƯA bán (cần tiếp cận):`,
+      empty.slice(0, 6).map((c) => `• ${c.product_name} @ ${unitText(c.unit_code, c.unit_name)}`));
   }
   if (/co so|con lai|sap can|ton kho|con nhieu/.test(q)) {
     const low = A.cstTable({ scope, remainPctMax: 10 });
@@ -230,12 +288,30 @@ async function answerQuestion({ text, scope, session }) {
     return say(`Có ${low.length} dòng cơ số thầu sắp cạn (<10%):`,
       low.slice(0, 5).map((c) => `• ${c.product_name} @ ${unitText(c.unit_code, c.unit_name)}: còn ${fmtPct(c.remain_pct)}`));
   }
+  // Còn thiếu / cần bán bao nhiêu để đạt target
+  if (/con thieu|con bao nhieu|can ban bao nhieu|can them|bao nhieu nua|de dat target|cach target|cham target|con cach/.test(q)) {
+    const k = A.overviewKpis({ ky, scope });
+    if (k.pctTarget == null) return say(`Kỳ ${ky} chưa giao target nên chưa tính được phần còn thiếu.`);
+    const target = k.targetCompareTotal || k.targetTotal || 0;
+    const gap = Math.max(0, Math.round(target - k.revenueBeforeVat));
+    if (gap <= 0) return say(`Kỳ ${ky}: đã ĐẠT/VƯỢT target (đạt ${fmtPct(k.pctTarget)}). 🎉`);
+    const pac = A.targetPacingMeta(ky);
+    const daysLeft = Math.max(0, pac.daysInMonth - pac.daysElapsed);
+    const perDay = pac.isCurrent && daysLeft > 0 ? Math.round(gap / daysLeft) : 0;
+    return say(`Kỳ ${ky}: còn thiếu ${fmt(gap)} để đủ target (đang đạt ${fmtPct(k.pctTarget)}).`, perDay ? [`Còn ${daysLeft} ngày → cần bán ~${fmt(perDay)}/ngày.`] : []);
+  }
   if (/target|chi tieu|% ?dat|dat bao nhieu|hoan thanh/.test(q)) {
     const k = A.overviewKpis({ ky, scope });
     if (k.pctTarget == null) return say('Chưa có target cho kỳ ' + ky + '.');
     return say(`Kỳ ${ky}: doanh thu trước VAT ${fmt(k.revenueBeforeVat)} / target ${fmt(k.targetCompareTotal || k.targetTotal)} → đạt ${fmtPct(k.pctTarget)}.`);
   }
-  if (/doanh thu|doanh so|tong tien|bao nhieu tien/.test(q)) {
+  // So với kỳ trước / tăng hay giảm
+  if (/so voi|so ky truoc|so thang truoc|tang hay giam|tang giam|bien dong|so sanh/.test(q)) {
+    const k = A.overviewKpis({ ky, scope });
+    if (k.momPct == null) return say('Chưa đủ dữ liệu kỳ trước để so sánh.');
+    return say(`Kỳ ${ky}: doanh thu ${fmt(k.revenue)}, ${k.momPct >= 0 ? 'TĂNG 📈' : 'GIẢM 📉'} ${fmtPct(Math.abs(k.momPct))} so kỳ trước.`);
+  }
+  if (/doanh thu|doanh so|tong tien|bao nhieu tien|ban duoc/.test(q)) {
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
     const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
@@ -249,11 +325,13 @@ async function answerQuestion({ text, scope, session }) {
     if (ans) return { text: ans.text, lines: [], source: 'llm' };
   }
 
-  return say('Mình chưa chắc ý câu hỏi. Bạn thử hỏi theo mẫu:', [
-    'Doanh thu kỳ này bao nhiêu?',
-    'Top sản phẩm / Top đơn vị',
-    mine ? 'Cơ số thầu của tôi sắp cạn?' : 'Top nhân viên',
-    'Tôi đạt bao nhiêu % target?',
+  return say('Mình chưa rõ ý câu hỏi 🤔. Bạn thử hỏi một trong các nhóm sau:', [
+    '💰 "Doanh thu kỳ này?" · "So với tháng trước?"',
+    `🏆 "Top sản phẩm / đơn vị${mine ? '' : ' / nhân viên'} / nhà thầu / gói thầu / tỉnh"`,
+    '🎯 "Tôi đạt bao nhiêu % target?" · "Còn thiếu bao nhiêu để đạt target?"',
+    `📦 "Cơ số nào sắp cạn?" · "Đơn vị nào chưa bán?"${mine ? '' : ' · "NV nào chưa đạt?"'}`,
+    '📈 "Đơn vị nào giảm mạnh / tăng mạnh?"',
+    '— Gõ "giúp" để xem đầy đủ menu.',
   ]);
 }
 
