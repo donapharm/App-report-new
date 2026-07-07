@@ -21,6 +21,14 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Dải KPI target ở "Kỳ này" + "Phân tích" + card NV giàu hơn
+- Tách component chung `TargetKpiStrip` (tháng+quý+tiến độ thời gian), dùng ở **Quản target,
+  Kỳ này, Phân tích** (đồng bộ 1 kiểu).
+- Backend: `/targets` trả thêm `kpi`; thêm route `GET /targets/kpi` (theo scope) cho trang Phân tích.
+- Card từng NV ở "Kỳ này": thêm dòng **"còn thiếu … · N ngày → cần ~X/ngày để kịp"** (theo pacing),
+  hoặc **"✅ đã đạt/vượt"**.
+- **Test:** build web PASS; HTTP `/targets/kpi` + `/targets` trả đúng kpi (quý Q2=04+05+06).
+
 ### 2026-07-07 — Claude Code — Dải KPI ở trang Quản target (target & đã đạt: tháng + quý)
 - Đầu trang **Quản target** thêm 4 ô KPI: **Target giao tháng**, **Đã đạt trong tháng**
   (kèm % target + tiến độ thời gian ngày/tháng), **Target giao quý** (gộp 3 tháng của quý),

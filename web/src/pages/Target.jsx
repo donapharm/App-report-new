@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, downloadTargetTemplate, downloadAssignmentTemplate, downloadExport } from '../api.js';
 import { money, pct } from '../util.js';
-import { Spinner, Bar, Kpi } from '../components.jsx';
+import { Spinner, Bar, Kpi, TargetKpiStrip } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { TargetGauge } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
@@ -255,18 +255,7 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
           <button className="btn ghost" disabled={busy} onClick={() => { setRollbackId(lastBatch?.batchId || ''); setTool('rollback'); }}>↩ Rollback</button>
         </div>
       </div>
-      {data?.kpi && (() => {
-        const k = data.kpi; const p = k.pacing || {};
-        const onTrackTone = (pctv) => (pctv == null ? '' : (pctv >= (p.time_pct || 0) ? 'ok' : 'warn'));
-        return (
-          <div className="kpi-grid target-kpi-row">
-            <Kpi variant="blue" icon="🎯" label={`Target giao tháng ${k.ky}`} value={money(k.month.target)} sub={`${k.assigned_count}/${k.total_nv} NV đã giao`} />
-            <Kpi variant="green" icon="✅" tone={onTrackTone(k.month.pct)} label="Đã đạt trong tháng" value={money(k.month.achieved)} sub={`${k.month.pct != null ? k.month.pct + '% target' : '—'} · thời gian ${p.time_pct ?? '—'}% (${p.days_elapsed}/${p.days_in_month} ngày)`} />
-            <Kpi variant="purple" icon="📅" label={`Target giao quý ${k.quarter_label || ''}`} value={money(k.quarter.target)} sub={`Gồm ${(k.quarter_kys || []).join(', ')}`} />
-            <Kpi variant="amber" icon="📈" tone={onTrackTone(k.quarter.pct)} label="Đã đạt trong quý" value={money(k.quarter.achieved)} sub={k.quarter.pct != null ? `${k.quarter.pct}% target quý` : '—'} />
-          </div>
-        );
-      })()}
+      <TargetKpiStrip kpi={data?.kpi} />
       {busy && <Spinner />}
       {err && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>}
       {msg && <div className="card" style={{ borderColor: 'var(--ok)', color: 'var(--ok)' }}>✔ {msg}</div>}
@@ -492,7 +481,7 @@ function AssignmentMinePanel({ data, title = 'Tôi phụ trách' }) {
   );
 }
 
-export default function Target({ me }) {
+export default function Target({ me, onNavigate }) {
   const [view, setView] = useState('now'); // now | forecast | admin | assignment | adjustment | mine
   const [periods, setPeriods] = useState([]);
   const [periodSel, setPeriodSel] = useState(null);
@@ -538,6 +527,7 @@ export default function Target({ me }) {
         !now ? <Spinner /> : now.items.length === 0 ? <div className="center">Chưa có target.</div> : (
           <>
           <div className="section-title">Kỳ target: {periodLabel(periodSel)} · KPI so với target cả tháng</div>
+          <TargetKpiStrip kpi={now.kpi} />
           <div className="kpi-grid">
             <Kpi label="Tổng đạt trước VAT" value={money(now.summary?.totalRevenueBeforeVat || 0)} sub={now.summary?.totalTarget > 0 ? `Target tháng ${money(now.summary.totalTarget)}` : 'Chưa giao target tổng'} />
             <Kpi label="% đạt target tháng" value={pct(now.summary?.pct)} sub={now.summary?.gap == null ? 'Chưa giao target' : (now.summary.gap >= 0 ? `Vượt ${money(now.summary.gap)}` : `Thiếu ${money(Math.abs(now.summary.gap))}`)} />
@@ -551,6 +541,11 @@ export default function Target({ me }) {
               const pa = t.pct_adjusted;
               const cls = p == null ? 'ok' : p >= 100 ? 'ok' : p >= 80 ? 'warn' : 'bad';
               const assigned = t.target_assigned !== false && Number(t.target_full || t.target || 0) > 0;
+              const pac = now.pacing || {};
+              const daysLeft = Math.max(0, (pac.daysInMonth || 0) - (pac.daysElapsed || 0));
+              const targetCmp = t.target_adjusted || t.target_full || t.target || 0;
+              const short = assigned ? Math.max(0, targetCmp - (t.revenue_before_vat || 0)) : 0;
+              const perDay = pac.isCurrent && daysLeft > 0 && short > 0 ? Math.round(short / daysLeft) : null;
               return (
                 <div key={t.emp_code} className="card" style={{ padding: 12 }}>
                   <div className="target-card-row">
@@ -563,6 +558,8 @@ export default function Target({ me }) {
                         Đạt {money(t.revenue_before_vat)} / target gốc {assigned ? money(t.target_full || t.target) : 'Chưa giao'}{assigned && <> · <span style={{ color: t.gap >= 0 ? 'var(--ok)' : 'var(--hi)' }}>{t.gap >= 0 ? 'vượt ' : 'thiếu '}{money(Math.abs(t.gap))}</span></>}
                       </div>
                       {assigned && <div className="meta muted" style={{ marginTop: 3 }}> % đạt gốc: <b>{pct(t.pct_original ?? t.pct)}</b> · % sau điều chỉnh: <b>{pct(t.pct_adjusted)}</b></div>}
+                      {assigned && perDay != null && <div className="meta" style={{ marginTop: 3, color: 'var(--hi)' }}>⏱️ Còn thiếu {money(short)} · {daysLeft} ngày → cần ~<b>{money(perDay)}/ngày</b> để kịp</div>}
+                      {assigned && perDay == null && short === 0 && pac.isCurrent && <div className="meta" style={{ marginTop: 3, color: 'var(--ok)' }}>✅ Đã đạt/vượt target</div>}
                       {assigned && (t.target_adjustment?.approved_total || 0) > 0 && <div className="meta muted" style={{ marginTop: 3 }}>Target sau điều chỉnh {money(t.target_adjusted)} · giảm {money(t.target_adjustment.approved_total)} (đứt hàng {money(t.target_adjustment.by_reason?.dut_hang || 0)}, công nợ {money(t.target_adjustment.by_reason?.cong_no || 0)}, khác {money(t.target_adjustment.by_reason?.khac || 0)})</div>}
                       <div className="meta muted" style={{ marginTop: 3 }}>{targetSourceText(t)}</div>
                     </div>

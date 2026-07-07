@@ -1084,7 +1084,13 @@ router.get('/targets', auth.requireAuth, (req, res) => {
   const assignedCount = items.filter((x) => x.target_assigned).length;
   const achievedCount = items.filter((x) => x.target_assigned && x.revenue_before_vat >= x.target_full).length;
   const achievedAdjustedCount = items.filter((x) => x.target_assigned && x.revenue_before_vat >= (x.target_adjusted || x.target_full)).length;
-  res.json({ ky, kys, pacing, summary: { totalRevenueBeforeVat, totalTarget, totalTargetAdjusted, totalAdjustment, adjustmentByReason, pct: totalTarget > 0 ? +(totalRevenueBeforeVat / totalTarget * 100).toFixed(1) : null, pctAdjusted: totalTargetAdjusted > 0 ? +(totalRevenueBeforeVat / totalTargetAdjusted * 100).toFixed(1) : null, gap: totalTarget > 0 ? totalRevenueBeforeVat - totalTarget : null, gapAdjusted: totalTargetAdjusted > 0 ? totalRevenueBeforeVat - totalTargetAdjusted : null, assignedCount, unassignedCount: items.length - assignedCount, achievedCount, achievedAdjustedCount, totalEmployees: items.length }, items });
+  res.json({ ky, kys, pacing, kpi: targetKpiSummary(ky, scope), summary: { totalRevenueBeforeVat, totalTarget, totalTargetAdjusted, totalAdjustment, adjustmentByReason, pct: totalTarget > 0 ? +(totalRevenueBeforeVat / totalTarget * 100).toFixed(1) : null, pctAdjusted: totalTargetAdjusted > 0 ? +(totalRevenueBeforeVat / totalTargetAdjusted * 100).toFixed(1) : null, gap: totalTarget > 0 ? totalRevenueBeforeVat - totalTarget : null, gapAdjusted: totalTargetAdjusted > 0 ? totalRevenueBeforeVat - totalTargetAdjusted : null, assignedCount, unassignedCount: items.length - assignedCount, achievedCount, achievedAdjustedCount, totalEmployees: items.length }, items });
+});
+// KPI target gọn (tháng+quý+pacing) — cho trang Phân tích (và nơi khác cần), theo scope.
+router.get('/targets/kpi', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  const ky = req.query.ky || store.lastCompleteKy() || store.latestKy();
+  res.json({ kpi: targetKpiSummary(ky, scope) });
 });
 
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pct, unitText } from '../util.js';
-import { Spinner, Kpi, useCollapse } from '../components.jsx';
+import { Spinner, Kpi, useCollapse, TargetKpiStrip } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
 import { DonutChart, TopBarChart } from '../charts.jsx';
@@ -59,6 +59,7 @@ export default function Analysis({ me }) {
   const [topDim, setTopDim] = useState('unit');
   const [topRows, setTopRows] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [targetKpi, setTargetKpi] = useState(null);
   const [cmpMode, setCmpModeState] = useState(() => { try { return localStorage.getItem('rpt_cmp_mode') || 'prev'; } catch { return 'prev'; } });
   const setCmpMode = (m) => { setCmpModeState(m); try { localStorage.setItem('rpt_cmp_mode', m); } catch { /* ignore */ } };
   const { reloadTick, reload } = useReloadTick();
@@ -83,6 +84,11 @@ export default function Analysis({ me }) {
     setTopRows(null);
     api.revenue(topDim, null, { ...periodParams(periodSel), ...filters }).then((d) => setTopRows((d.rows || []).slice(0, 10)));
   }, [periodSel, filters, topDim, reloadTick]);
+
+  useEffect(() => {
+    if (!periodSel) { setTargetKpi(null); return; }
+    api.targetKpi(periodParams(periodSel).ky).then((d) => setTargetKpi(d.kpi)).catch(() => setTargetKpi(null));
+  }, [periodSel, reloadTick]);
 
   const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
@@ -121,6 +127,7 @@ export default function Analysis({ me }) {
             <Kpi label={`So với ${data.prevKy || 'kỳ trước'}`} value={(data.delta >= 0 ? '+' : '') + money(data.delta)} sub={data.deltaPct == null ? 'Chưa có kỳ trước' : pct(data.deltaPct)} />
             <Kpi label="Số dòng dữ liệu" value={(data.rowCount || 0).toLocaleString('vi-VN')} />
           </div>
+          {targetKpi && <><div className="section-title">🎯 Target vs Đã đạt (tháng &amp; quý)</div><TargetKpiStrip kpi={targetKpi} /></>}
           <div className="card">
             <div className="section-head">🥯 Cơ cấu Tuyến / Nhà thầu / Gói thầu</div>
             <div className="donut-grid">
