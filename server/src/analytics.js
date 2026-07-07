@@ -56,6 +56,7 @@ function applyFilters(rows, f = {}) {
   const to = f.dateTo ? String(f.dateTo).slice(0, 10) : '';
   return rows.filter((r) => {
     if (f.emp && r.emp_code !== f.emp) return false;
+    if (f.province && r.province !== f.province) return false;
     if (f.unit && r.unit_code !== f.unit) return false;
     if (f.product && r.iit_code !== f.product) return false;
     if (f.route && r.route !== f.route) return false;

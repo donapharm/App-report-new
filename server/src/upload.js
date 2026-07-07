@@ -26,6 +26,7 @@ const HEADER_MAP = {
   emp_code: ['emp_code', 'emp_number', 'ma_nv', 'manv', 'ma nhan vien'],
   unit_code: ['unit_code', 'donvi', 'ma_dv', 'madv', 'ma don vi'],
   unit_name: ['unit_name', 'ten_dv', 'ten_vt', 'ten don vi'],
+  province: ['province', 'tinh', 'tinh_thanh', 'tinh thanh', 'tinh/thanh', 'tinhthanh'],
   route: ['route', 'tuyen'],
   iit_code: ['iit_code', 'qlnb', 'ma_qlnb', 'ma sp'],
   product_name: ['product_name', 'ten_thuoc', 'ten_sp', 'ten san pham', 'item_name', 'iit_name', 'name', 'ten_item'],

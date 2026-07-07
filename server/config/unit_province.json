@@ -1,0 +1,25 @@
+{
+  "note": "Bản đồ mã đơn vị -> tỉnh/thành. Bot ĐIỀN MÃ THẬT ở đây; đơn vị không có trong map sẽ được đoán theo tên. Dữ liệu demo bên dưới.",
+  "map": {
+    "BV001": "Đồng Nai",
+    "PK002": "Bình Phước",
+    "NT003": "Bà Rịa - Vũng Tàu",
+    "BV004": "Đồng Nai",
+    "PK005": "Bình Phước",
+    "NT006": "Bà Rịa - Vũng Tàu",
+    "BV007": "Đồng Nai",
+    "PK008": "Bình Phước",
+    "NT009": "Bà Rịa - Vũng Tàu",
+    "BV010": "Đồng Nai",
+    "PK011": "Bình Phước",
+    "NT012": "Bà Rịa - Vũng Tàu",
+    "BV013": "Đồng Nai",
+    "PK014": "Bình Phước",
+    "NT015": "Bà Rịa - Vũng Tàu",
+    "BV016": "Đồng Nai",
+    "PK017": "Bình Phước",
+    "NT018": "Bà Rịa - Vũng Tàu",
+    "BV019": "Đồng Nai",
+    "PK020": "Bình Phước"
+  }
+}
