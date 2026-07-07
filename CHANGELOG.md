@@ -21,6 +21,18 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Auto-deploy TỰ GỠ KẸT khi working tree dirty (#37)
+- **Vấn đề:** `scripts/auto-deploy.sh` có guard "tree dirty → BỎ QUA im lặng",
+  kẹt **vô thời hạn** → Sếp thấy "không có thay đổi" trên iPhone dù đã merge code.
+- **Đã xác minh:** KHÔNG có code app ghi vào file tracked lúc chạy (`targetAdmin.js`
+  chỉ ghi `target_entries/target_audit.json` — gitignored; `target_baseline_202606`
+  & `target_roster` chỉ ĐỌC). ⇒ tree dirty đến từ sửa tay/việc dở chưa commit.
+- **Sửa:** (1) LUÔN ghi rõ file nào dirty vào log (`git status --short`); (2) cửa
+  thoát: dirty > `STALE_SECS` (mặc định 15') coi là KẸT → `git stash` (khôi phục
+  được) rồi deploy tiếp; (3) tree sạch → xoá mốc `.auto-deploy.dirty-since`.
+- **Test:** `bash -n` pass. Bot tự áp bản mới ở lượt cron kế (tree đã sạch sau
+  reset của Sếp). Trạng thái: đã merge `main` (ee62dd8).
+
 ### 2026-07-07 — Claude Code — Tiêu đề nổi bật + KPI thấp gọn + lọc mặc định ẩn
 - **Tiêu đề trang** (crumb active): chip xanh gradient chữ trắng cho nổi bật (cả
   base lẫn media mobile). `styles.css .drill-crumbs button.active`.
