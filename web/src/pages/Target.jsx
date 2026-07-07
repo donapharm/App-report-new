@@ -486,6 +486,15 @@ function NotifyPreview({ data, ky }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [oneEmp, setOneEmp] = useState('DN001');
+  async function sendOne() {
+    const emp = (oneEmp || '').trim().toUpperCase();
+    if (!emp) { setErr('Nhập mã NV, ví dụ DN007'); return; }
+    setBusy(true); setErr(''); setMsg('');
+    try { await api.notificationsSendOne(emp, ky); setMsg(`Đã gửi tin trạng thái cho ${emp} qua Telegram. Nhờ NV kiểm tra Telegram nhé.`); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
   async function sendTest() {
     setBusy(true); setErr(''); setMsg('');
     try { await api.notificationsSend({ ky, testOnly: true }); setMsg('Đã gửi thử bản tổng qua Telegram cho chính bạn. Kiểm tra Telegram nhé.'); }
@@ -508,6 +517,10 @@ function NotifyPreview({ data, ky }) {
         <div className="notify-actions">
           <button className="btn ghost" disabled={busy} onClick={sendTest}>🧪 Gửi thử cho tôi</button>
           <button className="btn" disabled={busy || evs.length === 0} onClick={sendNow}>📤 Gửi ngay ({evs.length})</button>
+        </div>
+        <div className="notify-actions notify-one">
+          <input className="notify-emp-input" value={oneEmp} onChange={(e) => setOneEmp(e.target.value)} placeholder="Mã NV (vd DN007)" />
+          <button className="btn ghost" disabled={busy} onClick={sendOne}>👤 Gửi cho 1 NV này</button>
         </div>
         {err && <div className="meta" style={{ color: 'var(--hi)' }}>⚠ {err}</div>}
         {msg && <div className="meta" style={{ color: 'var(--ok)' }}>✔ {msg}</div>}

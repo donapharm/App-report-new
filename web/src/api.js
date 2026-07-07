@@ -98,6 +98,7 @@ export const api = {
   employeeDetail: (emp, ky) => req('GET', '/employee/detail?' + new URLSearchParams({ ...(emp ? { emp } : {}), ...(ky ? { ky } : {}) }).toString()),
   notificationsPreview: (ky) => req('GET', '/admin/notifications/preview' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
   notificationsSend: (payload) => req('POST', '/admin/notifications/send', payload || {}),
+  notificationsSendOne: (emp_code, ky) => req('POST', '/admin/notifications/send-one', { emp_code, ...(ky ? { ky } : {}) }),
   forecast: () => req('GET', '/targets/forecast'),
   ask: (text) => req('POST', '/ai/ask', { text }),
   // Upload

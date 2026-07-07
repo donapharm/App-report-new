@@ -81,6 +81,21 @@ function messageFor(e) {
   return `⏱️ [Tháng ${monthNo}] ${e.name}: đang CHẬM NHỊP — mới đạt ${pctText(e.pct)} target trong khi thời gian đã trôi ${pctText(e.timePct)}.${needLine}`;
 }
 
+// Tin TRẠNG THÁI cho 1 NV bất kỳ (không cần vừa vượt mốc) — dùng để gửi đích danh/test.
+function statusMessage(r, ev) {
+  const monthNo = String(ev.ky).split('.')[0];
+  const perDay = r.daysLeft > 0 && r.gap > 0 ? Math.round(r.gap / r.daysLeft) : 0;
+  const need = r.gap > 0 ? `\nCòn thiếu ${moneyShort(r.gap)}${r.daysLeft ? ` · còn ${r.daysLeft} ngày → cần ~${moneyShort(perDay)}/ngày` : ''}.` : '\n✅ Bạn đã đạt/vượt target.';
+  const pace = !ev.isCurrent ? '' : (r.pct >= ev.timePct ? ' — đang ĐÚNG/VƯỢT nhịp 👍' : ' — đang CHẬM nhịp ⏱️');
+  return `📊 [Tháng ${monthNo}] ${r.name}: đạt ${pctText(r.pct)} target (${moneyShort(r.achieved)}/${moneyShort(r.target)}) · thời gian đã trôi ${pctText(ev.timePct)}${pace}.${need}`;
+}
+function statusFor(emp, ky) {
+  const ev = evaluate({ ky });
+  const r = ev.rows.find((x) => x.emp_code === String(emp || '').trim().toUpperCase());
+  if (!r) return null; // NV chưa giao target / không thuộc roster
+  return { emp_code: r.emp_code, ky: ev.ky, pct: r.pct, message: statusMessage(r, ev) };
+}
+
 // Bản tổng hợp theo TỪNG NV cho CEO (1 tin gọn).
 function ceoDigest({ ky } = {}) {
   const ev = evaluate({ ky });
@@ -98,4 +113,4 @@ function ceoDigest({ ky } = {}) {
     + lines.join('\n');
 }
 
-module.exports = { evaluate, pendingEvents, markSent, messageFor, ceoDigest, MILESTONES, BEHIND_MARGIN, STATE_FILE };
+module.exports = { evaluate, pendingEvents, markSent, messageFor, statusFor, ceoDigest, MILESTONES, BEHIND_MARGIN, STATE_FILE };
