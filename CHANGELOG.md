@@ -21,6 +21,19 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Nhân bản target sang kỳ sau + chặn Sửa tay ghi 0 nhầm
+- **Nút "📤 Nhân bản target sang kỳ sau":** copy toàn bộ target đang dùng của kỳ nguồn
+  sang kỳ đích (KHÔNG cần file), rồi Sửa tay vài NV là xong. Nguồn mới `carryover`
+  (ngang upload, dưới manual — Sửa tay không bị đè). Backend `targetAdmin.carryOverTargets`
+  + route `POST /admin/targets/carryover`; mặc định **chỉ điền NV kỳ đích chưa giao**
+  (tick để ghi đè). Sau khi nhân bản tự chuyển sang kỳ đích để sửa tay. Test: nhân bản
+  07→09 đúng số + nguồn carryover; chạy lại (không đè) skip đúng; rollback theo batch OK.
+- **Chặn "Sửa tay" ghi target = 0 do bỏ trống (vụ DN001):** ô Sửa tay bỏ trống nay =
+  HUỶ (không ghi đè về 0); nhập 0 phải xác nhận; số không hợp lệ báo lỗi. Trước đây xoá
+  trắng rồi OK là ghi 0 → đè cả upload → NV thành "Chưa giao".
+- **Nhãn nguồn dễ đọc:** `carryover→"Nhân bản kỳ trước"`, `upload→"Upload"`, `manual→"Sửa tay"`.
+- **Test:** build web PASS; smoke test carryover + rollback. Chờ merge `main`.
+
 ### 2026-07-07 — Claude Code — 3 fix từ ảnh Sếp: đoán tỉnh viết tắt, chọn nhiều gói thầu, mã ĐV lặp
 - **Fix 1 — "Không tìm thấy CST còn lại" (lọc tỉnh + đơn vị ra 0 dòng):** đơn vị thật
   hay viết tắt tỉnh ở đuôi tên (vd `011.BV Cao Su ĐN`) nên đoán tỉnh CŨ trả rỗng →
