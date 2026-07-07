@@ -21,6 +21,14 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Danh sách CHẶN thông báo (DN021/DN023/VP004) ở tầng engine
+- **`config/notify_optout.json`** (CEO chốt, committed): `codes: [DN021, DN023, VP004]` — tuyệt đối
+  không nhận thông báo (Telegram + email + mọi kênh sau này).
+- `targetNotify.isMuted(emp)`: chặn nếu mã trong config **HOẶC** user có cờ `no_auto_notify`.
+- `pendingEvents` bỏ qua NV bị chặn → mọi nút/lịch (Gửi ngay, tự động, email GĐ2) đều loại tự nhiên.
+  Endpoint `send-one` chặn thẳng với thông báo rõ. (Vẫn có thể hiện trong bản tổng gửi CEO để CEO nắm.)
+- **Test:** isMuted đúng cho DN021/DN023/VP004; dù vượt 100% vẫn KHÔNG có sự kiện gửi; DN001 vẫn có.
+
 ### 2026-07-07 — Claude Code — Gửi ĐÍCH DANH 1 NV (test DN001/DN007)
 - `targetNotify.statusFor(emp, ky)`: dựng tin trạng thái hiện tại của 1 NV bất kỳ (đạt %/còn thiếu/cần
   ngày + đúng/chậm nhịp) — không cần vừa vượt mốc.

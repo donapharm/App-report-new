@@ -1147,6 +1147,7 @@ router.post('/admin/notifications/send-one', auth.requireAuth, auth.requireAdmin
     if (!notifyChannels.telegramReady()) return res.status(400).json({ error: 'App chưa có TELEGRAM_BOT_TOKEN — nhờ bot bổ sung env cho tiến trình app.' });
     const emp = String(req.body?.emp_code || '').trim().toUpperCase();
     if (!emp) return res.status(400).json({ error: 'Thiếu mã NV' });
+    if (targetNotify.isMuted(emp)) return res.status(400).json({ error: `NV ${emp} nằm trong danh sách KHÔNG nhận thông báo (CEO chốt) — đã chặn.` });
     const st = targetNotify.statusFor(emp, req.body?.ky || undefined);
     if (!st) return res.status(400).json({ error: `NV ${emp} chưa được giao target kỳ này (không có gì để gửi).` });
     const map = auth.listTelegramMap().find((m) => String(m.emp_code || '').toUpperCase() === emp);

@@ -1,0 +1,4 @@
+{
+  "note": "Các mã NV TUYỆT ĐỐI không nhận thông báo target (Telegram + email). CEO chốt. Áp ở tầng engine targetNotify -> mọi nút/kênh/lịch tự động đều loại. Vẫn có thể xuất hiện trong bản tổng gửi CEO (chỉ để CEO nắm), nhưng KHÔNG bao giờ được nhắn tới.",
+  "codes": ["DN021", "DN023", "VP004"]
+}
