@@ -97,6 +97,7 @@ export const api = {
   targetKpi: (ky) => req('GET', '/targets/kpi' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
   employeeDetail: (emp, ky) => req('GET', '/employee/detail?' + new URLSearchParams({ ...(emp ? { emp } : {}), ...(ky ? { ky } : {}) }).toString()),
   notificationsPreview: (ky) => req('GET', '/admin/notifications/preview' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
+  notificationsSend: (payload) => req('POST', '/admin/notifications/send', payload || {}),
   forecast: () => req('GET', '/targets/forecast'),
   ask: (text) => req('POST', '/ai/ask', { text }),
   // Upload

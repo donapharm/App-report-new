@@ -21,6 +21,15 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Nút "Gửi ngay" + "Gửi thử cho tôi" (gửi chủ động) trên màn Thông báo
+- Làm rõ 2 cách gửi: **Tự động** (bot theo giờ, `TARGET_NOTIFY=1`) và **Chủ động** (CEO bấm).
+- `src/notifyChannels.js`: `sendTelegram()` dùng `TELEGRAM_BOT_TOKEN` của app (fetch api.telegram.org).
+- Route `POST /admin/notifications/send`: `testOnly=true` → gửi thử bản tổng cho chính CEO; ngược lại
+  gửi tin từng NV (mốc/chậm nhịp) + bản tổng cho admin, **đánh dấu đã gửi** (chống trùng với lịch tự động).
+  Thiếu token → báo lỗi gọn (không crash).
+- Màn "🔔 Thông báo": thêm nút **🧪 Gửi thử cho tôi** + **📤 Gửi ngay (N)** + giải thích 2 cơ chế.
+- **Test:** build web PASS; endpoint báo lỗi gọn khi app chưa có token.
+
 ### 2026-07-07 — Claude Code — Màn "🔔 Thông báo" (xem trước) trong app cho CEO
 - Thêm tab **🔔 Thông báo** ở trang Target (admin): gọi `/admin/notifications/preview` (DRY-RUN)
   → hiện **bản tổng gửi CEO** + **danh sách tin sẽ gửi cho từng NV** (mốc 50/90/100 hoặc chậm nhịp),

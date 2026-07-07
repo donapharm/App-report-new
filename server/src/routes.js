@@ -15,6 +15,7 @@ const targetAdmin = require('./targetAdmin');
 const assignmentAdmin = require('./assignmentAdmin');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
+const notifyChannels = require('./notifyChannels');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -1103,6 +1104,42 @@ router.get('/admin/notifications/preview', auth.requireAuth, auth.requireAdmin, 
     events: p.events.map((e) => ({ emp_code: e.emp_code, name: e.name, type: e.type, milestone: e.milestone || null, pct: e.pct, message: targetNotify.messageFor(e) })),
     ceoDigest: targetNotify.ceoDigest({ ky }),
   });
+});
+// Gửi CHỦ ĐỘNG (CEO bấm). testOnly=true: chỉ gửi bản tổng cho chính CEO (gửi thử).
+// Ngược lại: gửi tin cho từng NV (mốc/chậm nhịp) + bản tổng cho admin, và ĐÁNH DẤU đã gửi
+// (chống trùng với lịch tự động). Cần app có TELEGRAM_BOT_TOKEN.
+router.post('/admin/notifications/send', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    if (!notifyChannels.telegramReady()) return res.status(400).json({ error: 'App chưa có TELEGRAM_BOT_TOKEN — chưa gửi Telegram trực tiếp được. Nhờ bot bổ sung env cho tiến trình app.' });
+    const ky = req.body?.ky || undefined;
+    const testOnly = req.body?.testOnly === true;
+    const maps = auth.listTelegramMap();
+    const tidByEmp = {};
+    for (const m of maps) tidByEmp[String(m.emp_code || '').toUpperCase()] = String(m.telegram_id);
+    if (testOnly) {
+      const meTid = tidByEmp[String(req.session.emp_code || '').toUpperCase()];
+      if (!meTid) return res.status(400).json({ error: 'Tài khoản của bạn chưa liên kết Telegram nên chưa gửi thử được. Hãy đăng nhập app bằng Telegram trước.' });
+      const r = await notifyChannels.sendTelegram(meTid, '🧪 [GỬI THỬ]\n' + targetNotify.ceoDigest({ ky }));
+      return r.ok ? res.json({ ok: true, test: true }) : res.status(400).json({ error: r.description });
+    }
+    const { events } = targetNotify.pendingEvents({ ky });
+    const sent = []; let skipped = 0;
+    for (const e of events) {
+      const user = store.findUserByCode(e.emp_code);
+      if (!user || user.no_auto_notify) { skipped += 1; continue; }
+      const tid = tidByEmp[e.emp_code];
+      if (!tid) { skipped += 1; continue; } // chưa map Telegram -> để dành (email GĐ2)
+      const r = await notifyChannels.sendTelegram(tid, targetNotify.messageFor(e));
+      if (r.ok) sent.push(e); else skipped += 1;
+    }
+    targetNotify.markSent(sent);
+    let ceoSent = 0;
+    for (const m of maps) {
+      const u = store.findUserByCode(m.emp_code);
+      if (u && auth.isAdmin(u.role)) { const r = await notifyChannels.sendTelegram(String(m.telegram_id), targetNotify.ceoDigest({ ky })); if (r.ok) ceoSent += 1; }
+    }
+    res.json({ ok: true, sentNv: sent.length, skipped, ceoSent, pending: events.length });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 // Chi tiết 1 NV: KPI + xu hướng target/đạt theo tháng + top sản phẩm/đơn vị.
 // NV thường chỉ xem chính mình (scope.empCode); admin xem NV bất kỳ qua ?emp=.
