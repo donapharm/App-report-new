@@ -137,6 +137,21 @@ export function ZaloCard() {
   );
 }
 
+// Dải KPI target dùng chung (Quản target · Kỳ này · Phân tích): tháng+quý+tiến độ thời gian.
+export function TargetKpiStrip({ kpi }) {
+  if (!kpi) return null;
+  const p = kpi.pacing || {};
+  const tone = (v) => (v == null ? '' : (v >= (p.time_pct || 0) ? 'ok' : 'warn'));
+  return (
+    <div className="kpi-grid target-kpi-row">
+      <Kpi variant="blue" icon="🎯" label={`Target giao tháng ${kpi.ky}`} value={money(kpi.month.target)} sub={`${kpi.assigned_count}/${kpi.total_nv} NV đã giao`} />
+      <Kpi variant="green" icon="✅" tone={tone(kpi.month.pct)} label="Đã đạt trong tháng" value={money(kpi.month.achieved)} sub={`${kpi.month.pct != null ? kpi.month.pct + '% target' : '—'} · thời gian ${p.time_pct ?? '—'}% (${p.days_elapsed}/${p.days_in_month} ngày)`} />
+      <Kpi variant="purple" icon="📅" label={`Target giao quý ${kpi.quarter_label || ''}`} value={money(kpi.quarter.target)} sub={`Gồm ${(kpi.quarter_kys || []).join(', ')}`} />
+      <Kpi variant="amber" icon="📈" tone={tone(kpi.quarter.pct)} label="Đã đạt trong quý" value={money(kpi.quarter.achieved)} sub={kpi.quarter.pct != null ? `${kpi.quarter.pct}% target quý` : '—'} />
+    </div>
+  );
+}
+
 export function Bar({ value, max, tone }) {
   const w = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
