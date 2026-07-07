@@ -60,6 +60,7 @@ export const api = {
   adminTargetAiPropose: () => req('POST', '/admin/targets/ai/propose', {}),
   adminTargetAiApply: (payload) => req('POST', '/admin/targets/ai/apply', payload),
   adminTargetUploadCommit: (previewId) => req('POST', '/admin/targets/upload/commit', { previewId }),
+  adminTargetCarryover: (payload) => req('POST', '/admin/targets/carryover', payload),
   adminTargetUploadRollback: (batchId) => req('POST', '/admin/targets/upload/rollback', { batchId }),
   adminTargetHistory: () => req('GET', '/admin/targets/history'),
   targetAdjustments: (params = {}) => req('GET', '/target-adjustments?' + new URLSearchParams(params).toString()),

@@ -7,9 +7,17 @@ import { TargetGauge } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 const rowsFmt = (n) => Number(n || 0).toLocaleString('vi-VN');
+const SOURCE_LABELS = { carryover: 'Nhân bản kỳ trước', upload: 'Upload', manual: 'Sửa tay', ai: 'AI đề xuất' };
+// kỳ kế tiếp dạng MM.YYYY (client) để điền sẵn ô "sang kỳ".
+function nextMonthKy(ky) {
+  const [m, y] = String(ky || '').split('.').map(Number);
+  if (!m || !y) return '';
+  return `${String(m === 12 ? 1 : m + 1).padStart(2, '0')}.${m === 12 ? y + 1 : y}`;
+}
 function targetSourceText(t = {}) {
   if (t.target_assigned === false || (!Number(t.target || t.target_full || 0) && !(t.target_source_label || t.source_label || t.target_source || t.source))) return 'Chưa giao target';
-  const src = t.target_source_label || t.source_label || t.target_source || t.source || '—';
+  const raw = t.target_source_label || t.source_label || t.target_source || t.source || '—';
+  const src = SOURCE_LABELS[raw] || raw;
   const ky = t.target_source_ky || t.source_ky;
   const ref = t.target_reference || t.reference;
   if (!src || src === '—') return 'Nguồn: —';
@@ -115,14 +123,22 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
   const [qLines, setQLines] = useState('DN001\t6000000000');
   const [tool, setTool] = useState(null);
   const [rollbackId, setRollbackId] = useState('');
+  const [coTo, setCoTo] = useState('');
+  const [coOverwrite, setCoOverwrite] = useState(false);
   const fileRef = useRef(null);
   async function load() { if (!ky) return; setData(null); setData(await api.adminTargets(ky)); }
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [ky]);
   async function manual(row) {
-    const raw = prompt(`Nhập target cho ${row.emp_code} - ${row.emp_name} kỳ ${ky}`, row.target || 0);
+    const raw = prompt(`Nhập target cho ${row.emp_code} - ${row.emp_name} kỳ ${ky} (để trống = huỷ, không đổi)`, row.target || 0);
     if (raw == null) return;
+    const s = String(raw).trim();
+    // Bỏ trống = HUỶ (tránh vô tình ghi đè target về 0 như vụ DN001).
+    if (s === '') return;
+    const num = Number(s.replace(/[^\d.-]/g, ''));
+    if (!Number.isFinite(num) || num < 0) { setErr('Target không hợp lệ — nhập số ≥ 0 (vd 2000000000).'); return; }
+    if (num === 0 && !window.confirm(`Đặt target ${row.emp_code} = 0 (Chưa giao)? Việc này sẽ ghi đè target đang có.`)) return;
     setBusy(true); setErr(''); setMsg('');
-    try { await api.adminTargetManual({ ky, emp_code: row.emp_code, target: raw }); setMsg('Đã lưu target sửa tay. KPI Tổng đã cập nhật.'); await load(); await onTargetsChanged?.(); }
+    try { await api.adminTargetManual({ ky, emp_code: row.emp_code, target: num }); setMsg('Đã lưu target sửa tay. KPI Tổng đã cập nhật.'); await load(); await onTargetsChanged?.(); }
     catch (e) { setErr(e.message); }
     setBusy(false);
   }
@@ -144,6 +160,21 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
     setBusy(true); setErr(''); setMsg('');
     try { const r = await api.adminTargetUploadCommit(preview.previewId); setLastBatch(r.result); setMsg(`Đã import ${r.result.rows} dòng target. Mã rollback: ${r.result.batchId}. KPI Tổng đã cập nhật.`); setPreview(null); setTool(null); if (fileRef.current) fileRef.current.value = ''; await load(); await onTargetsChanged?.(); }
     catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+  async function applyCarryover() {
+    const toKy = (coTo || '').trim();
+    if (!/^\d{2}\.\d{4}$/.test(toKy)) { setErr('Kỳ đích phải dạng MM.YYYY, ví dụ 08.2026'); return; }
+    if (toKy === ky) { setErr('Kỳ đích trùng kỳ nguồn.'); return; }
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      const r = await api.adminTargetCarryover({ fromKy: ky, toKy, overwrite: coOverwrite });
+      setLastBatch(r.result);
+      setMsg(`Đã nhân bản ${rowsFmt(r.result.rows)} NV từ kỳ ${r.result.fromKy} sang ${r.result.toKy}${r.result.skipped ? `, bỏ qua ${r.result.skipped} NV đã có target` : ''}. Mã rollback: ${r.result.batchId}. Giờ Sếp Sửa tay các NV cần đổi.`);
+      setTool(null);
+      onKyChange?.(toKy); // chuyển sang kỳ đích để sửa tay ngay
+      await onTargetsChanged?.();
+    } catch (e) { setErr(e.message); }
     setBusy(false);
   }
   async function rollbackBatch(batchId) {
@@ -201,11 +232,12 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
       <div className="card smart-admin-head">
         <div className="smart-title-row">
           <div className="section-head">🛠️ Quản target kỳ {ky}</div>
-          <span className="info-tip" tabIndex="0" data-tip="Resolver đang dùng: sửa tay > upload > AI. Từ kỳ 07.2026 trở đi không lấy Lumos/App Sale làm target đang dùng. Roster Target lấy theo allowlist CEO chốt 21 mã.">ⓘ</span>
+          <span className="info-tip" tabIndex="0" data-tip="Resolver đang dùng: sửa tay > upload/nhân bản > AI. Từ kỳ 07.2026 trở đi không lấy Lumos/App Sale làm target đang dùng. Roster Target lấy theo allowlist CEO chốt 21 mã.">ⓘ</span>
         </div>
         <div className="smart-toolbar">
           <label className="field-inline smart-period"><span>Kỳ</span><input value={ky || ''} onChange={(e) => onKyChange?.(e.target.value)} placeholder="08.2026" /></label>
           <button className="btn ghost" onClick={() => onKyChange?.('08.2026')}>Mở 08.2026</button>
+          <button className="btn" disabled={busy} onClick={() => { setCoTo(nextMonthKy(ky)); setTool('carryover'); }}>📤 Nhân bản sang kỳ sau</button>
           <button className="btn" disabled={busy} onClick={() => setTool('template')}>⬇ Template</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('upload')}>⬆ Upload</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('quarter')}>📅 Nhập theo Quý</button>
@@ -266,6 +298,15 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
         </div>
         <textarea className="target-quarter-textarea" value={qLines} onChange={(e) => setQLines(e.target.value)} placeholder="DN001 6000000000&#10;DN002 4500000000" />
         <button className="btn" disabled={busy} onClick={applyQuarter}>Chia target quý thành 3 tháng</button>
+      </Modal>
+      <Modal id="carryover" title="📤 Nhân bản target sang kỳ khác">
+        <div className="meta muted">Copy toàn bộ target đang dùng của kỳ <b>{ky}</b> sang kỳ đích — KHÔNG cần file. Sau đó chỉ cần <b>Sửa tay</b> vài NV muốn đổi (Sửa tay luôn ưu tiên hơn nên không bị đè).</div>
+        <div className="target-admin-actions compact-actions">
+          <label className="field-inline"><span>Từ kỳ</span><input value={ky || ''} readOnly /></label>
+          <label className="field-inline"><span>Sang kỳ</span><input value={coTo} onChange={(e) => setCoTo(e.target.value)} placeholder="08.2026" /></label>
+        </div>
+        <label className="field-check"><input type="checkbox" checked={coOverwrite} onChange={(e) => setCoOverwrite(e.target.checked)} /> Ghi đè cả NV đã có target ở kỳ đích <span className="muted">(mặc định chỉ điền NV chưa giao)</span></label>
+        <button className="btn" disabled={busy} onClick={applyCarryover}>📤 Nhân bản {ky} → {coTo || '…'}</button>
       </Modal>
       <Modal id="ai" title="🤖 AI đề xuất target">
         <div className="meta muted">AI chỉ đề xuất song song. CEO bấm áp dụng thì mới ghi thành target thật.</div>

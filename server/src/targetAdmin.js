@@ -13,7 +13,9 @@ const AUDIT = path.join(DATA, 'target_audit.json');
 const LEGACY = path.join(DATA, 'targets_real.json');
 const BASELINE_202606 = path.join(DATA, 'target_baseline_202606.json');
 const previewCache = new Map();
-const PRIORITY = { manual: 4, upload: 3, appsale: 2, ai: 1, legacy: 0 };
+// carryover = nhân bản target từ kỳ trước; ngang hàng upload (cái làm SAU thắng theo `at`),
+// vẫn dưới manual (Sửa tay) nên chỉnh tay vài NV sau khi nhân bản là được.
+const PRIORITY = { manual: 4, upload: 3, carryover: 3, appsale: 2, ai: 1, legacy: 0 };
 
 const readJson = (p, def) => (fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : def);
 const writeJson = (p, o) => fs.writeFileSync(p, JSON.stringify(o, null, 2), 'utf8');
@@ -221,6 +223,26 @@ function commitPreview({ previewId, user }) {
   appendAudit({ action: 'target_upload_commit', by: user?.emp_code || 'admin', batchId, rows: out.length, filename: pv.filename, totalTarget: pv.meta.totalTarget });
   return { batchId, rows: out.length, totalTarget: pv.meta.totalTarget };
 }
+// Nhân bản (carry-over) target từ kỳ nguồn -> kỳ đích, KHÔNG cần file.
+// Lấy target "đang dùng" thật của kỳ nguồn, ghi thành entries source='carryover' ở kỳ đích.
+// overwrite=false (mặc định): chỉ điền NV kỳ đích CHƯA có target thật (không đụng manual/upload đã có).
+function carryOverTargets({ fromKy, toKy, empCodes, overwrite = false, user, note } = {}) {
+  const src = normKy(fromKy); const dst = normKy(toKy);
+  if (!/^\d{2}\.\d{4}$/.test(src) || !/^\d{2}\.\d{4}$/.test(dst)) throw new Error('Kỳ phải dạng MM.YYYY');
+  if (src === dst) throw new Error('Kỳ nguồn và kỳ đích không được trùng');
+  const source = resolveTargets({ ky: src, empCodes }).filter((r) => Number(r.target || 0) > 0 && r.source !== 'appsale');
+  if (!source.length) throw new Error(`Kỳ ${src} chưa có target thật để nhân bản`);
+  let use = source; let skipped = 0;
+  if (!overwrite) {
+    const has = new Set(resolveTargets({ ky: dst, empCodes }).filter((r) => Number(r.target || 0) > 0 && r.source !== 'appsale').map((r) => r.emp_code));
+    use = source.filter((r) => { if (has.has(r.emp_code)) { skipped += 1; return false; } return true; });
+  }
+  if (!use.length) throw new Error(`Kỳ ${dst} đã có target cho tất cả NV — bỏ tick "chỉ điền NV chưa giao" nếu muốn ghi đè.`);
+  const batchId = `carryover_${Date.now().toString(36)}`;
+  const out = use.map((r) => upsertEntry({ emp_code: r.emp_code, ky: dst, target: Number(r.target), source: 'carryover', user, note: note || `Nhân bản từ kỳ ${src}`, batchId }));
+  appendAudit({ action: 'target_carryover', by: user?.emp_code || 'admin', batchId, fromKy: src, toKy: dst, rows: out.length, skipped, totalTarget: out.reduce((s, x) => s + Number(x.target || 0), 0) });
+  return { batchId, fromKy: src, toKy: dst, rows: out.length, skipped, totalTarget: out.reduce((s, x) => s + Number(x.target || 0), 0) };
+}
 function rollbackBatch({ batchId, user }) {
   const rows = entriesRaw();
   let n = 0;
@@ -233,4 +255,4 @@ function rollbackBatch({ batchId, user }) {
   appendAudit({ action: 'target_rollback_batch', by: user?.emp_code || 'admin', batchId, rows: n });
   return { batchId, rows: n };
 }
-module.exports = { PRIORITY, resolveTargets, upsertEntry, bulkUpsert, upsertQuarter, quarterMonths, splitQuarterTarget, parseTargetWorkbook, stashPreview, commitPreview, rollbackBatch, listAudit, baseline202606, latestAssignedTargets, toNum, normScope };
+module.exports = { PRIORITY, resolveTargets, upsertEntry, bulkUpsert, upsertQuarter, quarterMonths, splitQuarterTarget, parseTargetWorkbook, stashPreview, commitPreview, carryOverTargets, rollbackBatch, listAudit, baseline202606, latestAssignedTargets, toNum, normScope };

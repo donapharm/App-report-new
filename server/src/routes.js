@@ -1240,6 +1240,16 @@ router.post('/admin/targets/quarter', auth.requireAuth, auth.requireAdmin, (req,
   try { const result = targetAdmin.upsertQuarter({ quarter: req.body?.quarter, year: req.body?.year, items, source: 'manual', user: req.session, note: req.body?.note || 'quarter_split3' }); clearTargetDependentCache(); res.json({ ok: true, result }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
+// Nhân bản target từ kỳ nguồn sang kỳ đích (không cần file). Sửa tay vẫn ưu tiên hơn.
+router.post('/admin/targets/carryover', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try {
+    const scope = auth.scopeOf(req.session);
+    const empCodes = store.targetRosterCodes({ scope });
+    const result = targetAdmin.carryOverTargets({ fromKy: req.body?.fromKy, toKy: req.body?.toKy, overwrite: req.body?.overwrite === true, empCodes, user: req.session, note: req.body?.note });
+    clearTargetDependentCache();
+    res.json({ ok: true, result });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
 router.post('/admin/targets/ai/propose', auth.requireAuth, auth.requireAdmin, (req, res) => {
   const fc = smart.forecastTargets({ scope: { empCode: null } });
   res.json({ ok: true, ...fc });
