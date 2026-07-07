@@ -646,3 +646,18 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .zalo-qr img { display: block; border-radius: 6px; width: 104px; height: 104px; }
 .zalo-qr-missing { width: 104px; height: 104px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 11px; padding: 8px; }
 @media (max-width: 560px) { .zalo-qr img, .zalo-qr-missing { width: 88px; height: 88px; } }
+
+/* ── Chọn nhiều (MultiSelect) — gói thầu… ─────────── */
+.combo.multi { width: 100%; }
+.multi-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; font-size: 14px; padding: 9px 11px; border: 1px solid var(--line);
+  border-radius: 10px; background: #fff; color: var(--muted); text-align: left; min-height: 38px;
+}
+.multi-toggle.has { color: var(--ink); font-weight: 600; }
+.multi-sum { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multi-caret { flex: none; color: var(--muted); font-size: 11px; }
+.combo.multi .combo-menu .multi-item { flex-direction: row; align-items: center; gap: 8px; }
+.combo.multi .multi-item.checked { background: rgba(21, 104, 184, .09); }
+.combo.multi .multi-box { flex: none; font-size: 15px; line-height: 1; color: var(--brand); }
+.combo.multi .multi-item b { font-weight: 600; }

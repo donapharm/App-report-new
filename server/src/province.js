@@ -45,10 +45,19 @@ const KEYWORDS = [
   ['Đắk Lắk', ['dak lak', 'dac lac', 'buon ma thuot', 'buon me thuot', 'ea kar', 'krong pak', 'cu mgar', 'ea hleo']],
   ['Tiền Giang', ['tien giang', 'my tho', 'cai lay', 'cai be', 'go cong', 'cho gao', 'chau thanh tien giang']],
 ];
+// Viết tắt tỉnh ở dạng TOKEN (biên từ) — chỉ tỉnh LÕI, ít nhầm.
+// VD tên đơn vị thật "BV Cao Su ĐN" -> token "dn" -> Đồng Nai; "... BP" -> Bình Phước.
+const ABBR = [
+  ['Đồng Nai', ['dn']],
+  ['Bình Phước', ['bp']],
+];
 function fromName(name) {
   const n = noAccent(name);
   if (!n) return '';
   for (const [prov, kws] of KEYWORDS) for (const k of kws) if (n.includes(k)) return prov;
+  // Khớp viết tắt chỉ khi là 1 TOKEN đứng riêng (tránh dính giữa chữ).
+  const tokens = n.split(/[^a-z0-9]+/).filter(Boolean);
+  for (const [prov, abbrs] of ABBR) for (const a of abbrs) if (tokens.includes(a)) return prov;
   return '';
 }
 
@@ -56,7 +65,8 @@ function provinceOf(unitCode, unitName, rowProvince) {
   if (rowProvince) return String(rowProvince).trim();
   const m = loadMap();
   if (unitCode && m[unitCode]) return String(m[unitCode]).trim();
-  return fromName(unitName);
+  // Đoán theo tên; nếu tên trống thì thử ngay trên MÃ đơn vị (mã thật thường kèm tên+tỉnh).
+  return fromName(unitName) || fromName(unitCode);
 }
 
 module.exports = { provinceOf };

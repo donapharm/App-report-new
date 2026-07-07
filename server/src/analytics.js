@@ -50,6 +50,13 @@ function baseUnitKey(u) {
   const stripped = s.replace(/^(\s*\d+[.\-]?\s*)NT[\s.\-]+/i, '$1');
   return norm(stripped).replace(/\s+/g, ' ').trim() || norm(s);
 }
+// Lọc gói thầu chọn NHIỀU: tham số 'bid' có thể là chuỗi nối bằng '|'. Rỗng = mọi gói.
+function bidMatch(rowBid, bidParam) {
+  const list = String(bidParam || '').split('|').map((s) => s.trim()).filter(Boolean);
+  if (!list.length) return true;
+  const rb = String(rowBid || '');
+  return list.some((b) => rb.includes(b));
+}
 function applyFilters(rows, f = {}) {
   const q = norm(f.q || '');
   const from = f.dateFrom ? String(f.dateFrom).slice(0, 10) : '';
@@ -62,7 +69,7 @@ function applyFilters(rows, f = {}) {
     if (f.route && r.route !== f.route) return false;
     if (f.priority && r.priority !== f.priority) return false;
     if (f.contractor && r.contractor_code !== f.contractor) return false;
-    if (f.bid && !String(r.bid_package || '').includes(f.bid)) return false;
+    if (f.bid && !bidMatch(r.bid_package, f.bid)) return false;
     if (from || to) {
       const granular = r.date_granularity === 'day';
       if (granular) {
@@ -162,7 +169,7 @@ function revenueBreakdown({ ky, kys, scope, dimension, filterEmp, filterUnit, fi
 /** Bảng cơ số thầu + cảnh báo ngưỡng. */
 function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
   let rows = store.getCst({ scope });
-  if (bidPackage) rows = rows.filter((r) => String(r.bid_package || '').includes(bidPackage));
+  if (bidPackage) rows = rows.filter((r) => bidMatch(r.bid_package, bidPackage));
   if (filters?.emp) {
     const emp = String(filters.emp).trim().toUpperCase();
     rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim().toUpperCase()).includes(emp));
