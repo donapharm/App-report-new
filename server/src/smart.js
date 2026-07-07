@@ -258,6 +258,27 @@ async function answerQuestion({ text, scope, session }) {
     if (!g.length) return say(`Chưa gán được tỉnh cho dữ liệu kỳ ${ky}.`);
     return topList(`Doanh thu theo tỉnh kỳ ${ky}:`, g, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
+  // Báo cáo theo TỪNG đơn vị (không chỉ "top") — vd "báo cáo bán hàng theo từng mã đơn vị"
+  if (/(bao cao|theo|tung|moi|liet ke|thong ke|chi tiet).*(don vi|benh vien|phong kham|khach hang|ma dv)/.test(q)) {
+    const rows = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 15);
+    if (!rows.length) return say(`Chưa có doanh thu theo đơn vị kỳ ${ky}.`);
+    return topList(`Doanh thu theo đơn vị kỳ ${ky} (${rows.length} đơn vị đầu):`, rows, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
+  }
+  // Báo cáo theo TỪNG sản phẩm
+  if (/(bao cao|theo|tung|moi|liet ke|thong ke|chi tiet).*(san pham|thuoc|ma hang|ma qlnb)/.test(q)) {
+    const rows = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 15);
+    if (!rows.length) return say(`Chưa có doanh thu theo sản phẩm kỳ ${ky}.`);
+    return topList(`Doanh thu theo sản phẩm kỳ ${ky} (${rows.length} SP đầu):`, rows, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  }
+  // Báo cáo tổng hợp / tổng quan
+  if (/bao cao tong hop|tong hop|tong quan|bao cao chung|tinh hinh chung|so lieu chung/.test(q)) {
+    const k = A.overviewKpis({ ky, scope });
+    return say(`📊 Tổng hợp kỳ ${ky} (${mine ? 'của bạn' : 'toàn công ty'}):`, [
+      `• Doanh thu: ${fmt(k.revenue)}${k.momPct != null ? ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)` : ''}`,
+      k.pctTarget != null ? `• Đạt target: ${fmtPct(k.pctTarget)} (${fmt(k.revenueBeforeVat)}/${fmt(k.targetCompareTotal || k.targetTotal)})` : '• Chưa giao target',
+      '• Gõ "top đơn vị", "top sản phẩm", "đơn vị giảm mạnh"… để xem chi tiết.',
+    ]);
+  }
   // Biến động đơn vị (giảm/tăng mạnh)
   if (/giam manh|sut giam|tut manh|giam nhieu|tang manh|tang truong/.test(q)) {
     const al = buildAlerts({ ky, scope });
