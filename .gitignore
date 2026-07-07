@@ -5,6 +5,7 @@ web/dist.new/
 web/dist.old/
 .auto-deploy.lock
 .auto-deploy.last
+.auto-deploy.dirty-since
 .env
 .env.bak*
 .env.local
