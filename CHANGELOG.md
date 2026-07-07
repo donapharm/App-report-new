@@ -21,6 +21,21 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — 3 fix từ ảnh Sếp: đoán tỉnh viết tắt, chọn nhiều gói thầu, mã ĐV lặp
+- **Fix 1 — "Không tìm thấy CST còn lại" (lọc tỉnh + đơn vị ra 0 dòng):** đơn vị thật
+  hay viết tắt tỉnh ở đuôi tên (vd `011.BV Cao Su ĐN`) nên đoán tỉnh CŨ trả rỗng →
+  lọc tỉnh Đồng Nai loại luôn đơn vị đó. `province.js`: nhận diện **viết tắt dạng
+  token** (`ĐN`→Đồng Nai, `BP`→Bình Phước) + fallback đoán trên **mã đơn vị** khi tên
+  trống. Test: `BV Cao Su ĐN`→Đồng Nai, `TTYT Bù Đăng BP`→Bình Phước; `DNA` KHÔNG dính.
+- **Fix 2 — Chọn NHIỀU gói thầu:** thêm component `MultiSelect` (lưu chuỗi nối `|`,
+  serialize params không đổi); thay ô chọn gói thầu 1-giá-trị ở **Cơ số thầu** và
+  **Doanh thu/DT đầy đủ/Sản phẩm**. Backend `analytics.bidMatch` tách `|`, khớp nếu
+  thuộc BẤT KỲ gói nào chọn (dùng ở `applyFilters` + `cstTable`). Test: 1 gói 45 dòng,
+  2 gói 90 dòng, đều đúng.
+- **Fix 3 — Mã đơn vị lặp 2 lần** (`011.BV Cao Su ĐN · 011.BV Cao Su ĐN`): `optionLabel`
+  bỏ lặp khi mã đã chứa/bằng tên → chỉ hiện 1 lần.
+- **Test:** build web PASS; smoke test analytics (province + multi-bid). Chờ merge `main`.
+
 ### 2026-07-07 — Claude Code — Lọc tỉnh cho CST + mở rộng đoán tỉnh + QR Zalo trong app
 - **Mục 1 — Lọc tỉnh/thành cho Cơ số thầu (CST):** dòng CST nay được gắn `province`
   (giống dòng doanh thu) trong `store.getCst`; thêm lọc tỉnh ở `cstTable`, truyền

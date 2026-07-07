@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pct as fmtPct, pairText, unitText } from '../util.js';
 import { Spinner, Bar, Pager, usePager, useCollapse, SkeletonCards } from '../components.jsx';
-import { ComboSelect, Select } from './revenueFilters.jsx';
+import { ComboSelect, Select, MultiSelect } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 const FILTERS = [
@@ -152,7 +152,7 @@ export default function TenderQuota({ me }) {
         {open && (
           <div className="filter-body">
             <div className="filter-grid">
-              <Select value={bid} onChange={setBid} options={options?.bidPackages} all="Mọi gói thầu" />
+              <MultiSelect value={bid} onChange={setBid} options={options?.bidPackages} all="Mọi gói thầu" unit="gói thầu" />
               {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setFilter('emp', v)} options={options?.employees} all="Tất cả NV" />}
               <Select value={filters.province} onChange={(v) => setFilter('province', v)} options={options?.provinces} all="Tất cả tỉnh/thành" />
               <ComboSelect value={filters.unit} onChange={(v) => setFilter('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />

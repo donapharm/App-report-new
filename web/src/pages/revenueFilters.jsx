@@ -8,7 +8,11 @@ const productMeta = (o) => [o.qd, o.active_ingredient, o.ham_luong, o.uom, o.con
 export function optionLabel(o) {
   if (!o) return '';
   if (o.kind === 'product' || o.iit_code) return `${o.label || o.product_name || o.key}${productMeta(o) ? ` · ${productMeta(o)}` : ''}`;
-  if (o.kind === 'unit' || /^\d{3}\./.test(String(o.key || ''))) return `${o.key} · ${o.label || o.key}`;
+  if (o.kind === 'unit' || /^\d{3}\./.test(String(o.key || ''))) {
+    const key = String(o.key || ''); const label = String(o.label || o.key || '');
+    // Tránh lặp: mã đã chứa tên (hoặc bằng tên) thì chỉ hiện 1 lần.
+    return (!label || label === key || key.includes(label) || label.includes(key)) ? (label || key) : `${key} · ${label}`;
+  }
   return o.label || o.key || '';
 }
 function optionSearchText(o) {
@@ -21,6 +25,41 @@ export function Select({ value, onChange, options, all }) {
       <option value="">{all}</option>
       {(options || []).map((o) => <option key={o.key} value={o.key}>{optionLabel(o)}</option>)}
     </select>
+  );
+}
+
+// Chọn NHIỀU (vd nhiều gói thầu). Lưu dạng chuỗi nối bằng '|' để serialize params
+// không đổi (backend tách '|'). value='' = tất cả.
+export function MultiSelect({ value, onChange, options, all, unit = 'mục' }) {
+  const arr = String(value || '').split('|').map((s) => s.trim()).filter(Boolean);
+  const list = options || [];
+  const [open, setOpen] = React.useState(false);
+  const has = (k) => arr.includes(String(k));
+  const toggle = (k) => {
+    const key = String(k);
+    onChange((has(key) ? arr.filter((x) => x !== key) : [...arr, key]).join('|'));
+  };
+  const summary = arr.length === 0 ? all
+    : arr.length === 1 ? (list.find((o) => String(o.key) === arr[0])?.label || arr[0])
+      : `${arr.length} ${unit}`;
+  return (
+    <div className={'combo multi' + (open ? ' open' : '')} onBlur={() => setTimeout(() => setOpen(false), 150)}>
+      <button type="button" className={'multi-toggle' + (arr.length ? ' has' : '')} onClick={() => setOpen((o) => !o)}>
+        <span className="multi-sum">{summary}</span><span className="multi-caret" aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div className="combo-menu">
+          <button type="button" className="combo-item muted-choice" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(''); setOpen(false); }}>{all}</button>
+          {list.map((o) => (
+            <button type="button" className={'combo-item multi-item' + (has(o.key) ? ' checked' : '')} key={o.key} onMouseDown={(e) => e.preventDefault()} onClick={() => toggle(o.key)}>
+              <span className="multi-box" aria-hidden>{has(o.key) ? '☑' : '☐'}</span>
+              <b>{o.label || o.key}</b>
+            </button>
+          ))}
+          {!list.length && <div className="combo-empty">Không có lựa chọn.</div>}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -104,7 +143,7 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
             <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
             <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
             <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
-            <Select value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" />
+            <MultiSelect value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" unit="gói thầu" />
             <input type="date" value={filters.dateFrom || ''} onChange={(e) => setF('dateFrom', e.target.value)} />
             <input type="date" value={filters.dateTo || ''} onChange={(e) => setF('dateTo', e.target.value)} />
           </div>
