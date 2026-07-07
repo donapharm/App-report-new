@@ -116,6 +116,27 @@ export function Kpi({ label, value, sub, delta, tone, variant, icon, onClick }) 
   );
 }
 
+// Thẻ QR Zalo OA DNPHARMA — dùng trong app (Tổng quan) để NV/khách theo dõi OA.
+// Ảnh thật ở web/public/zalo-oa-qr.png; thiếu ảnh -> hiện hướng dẫn, không vỡ.
+export function ZaloCard() {
+  const [ok, setOk] = React.useState(true);
+  return (
+    <div className="card zalo-card">
+      <div className="zalo-info">
+        <b>Zalo OA DNPHARMA</b>
+        <span>Quét mã để theo dõi Official Account — nhận thông báo &amp; hỗ trợ nhanh.</span>
+      </div>
+      <div className="zalo-qr">
+        {ok ? (
+          <img src="/zalo-oa-qr.png" alt="Zalo OA DNPHARMA" width={104} height={104} onError={() => setOk(false)} />
+        ) : (
+          <div className="zalo-qr-missing">Đặt file<br /><b>zalo-oa-qr.png</b><br />vào web/public/</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function Bar({ value, max, tone }) {
   const w = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (

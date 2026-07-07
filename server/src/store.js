@@ -376,10 +376,13 @@ function getCst({ scope }) {
   // Khi đã có dữ liệu thật (runtime import), ưu tiên cst_real.json thay dữ liệu mẫu.
   let rows = readJson('cst_real.json', null) || base().cst;
   rows = mergeLatestUploadIntoCst(rows);
+  const { unitByCode } = base();
   rows = rows.map((r) => {
     const code = String(r.emp_code || '').trim().toUpperCase();
-    if (!code || isValidEmpCode(code)) return r;
-    return { ...r, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };
+    // Gắn tỉnh/thành (giống dòng doanh thu) để lọc theo tỉnh dùng chung được.
+    const province = r.province || unitByCode[r.unit_code]?.province || provinceOf(r.unit_code, r.unit_name, r.province);
+    if (!code || isValidEmpCode(code)) return province === r.province ? r : { ...r, province };
+    return { ...r, province, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };
   });
   if (scope && scope.empCode) {
     const emp = String(scope.empCode).trim().toUpperCase();
