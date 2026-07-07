@@ -36,7 +36,7 @@ export default function RevenueFull({ me }) {
 
   return (
     <>
-      <DrillNav crumbs={[{ label: 'DT đầy đủ' }]} onReload={reload} busy={!data} />
+      <DrillNav crumbs={[{ label: 'Doanh thu đầy đủ' }]} onReload={reload} busy={!data} />
       <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} />
       <div className="card summary-card">
         <div>
