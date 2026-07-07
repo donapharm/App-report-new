@@ -19,7 +19,7 @@ import Upload from './pages/Upload.jsx';
 const TABS = [
   { key: 'overview', label: 'Tổng quan', ic: '📊', C: Overview },
   { key: 'revenue', label: 'Doanh thu', ic: '💰', C: Revenue },
-  { key: 'revenueFull', label: 'DT đầy đủ', ic: '📋', C: RevenueFull },
+  { key: 'revenueFull', label: 'DT đầy đủ', full: 'Doanh thu đầy đủ', ic: '📋', C: RevenueFull },
   { key: 'products', label: 'Sản phẩm', ic: '💊', C: Products },
   { key: 'analysis', label: 'Phân tích', ic: '📈', C: Analysis },
   { key: 'cst', label: 'Cơ số thầu', ic: '📦', C: TenderQuota },
@@ -99,7 +99,7 @@ export default function App() {
         <div className="main-desktop">
           <header className="topbar">
             <div>
-              <h1>{tabs.find((t) => t.key === tab)?.label}</h1>
+              <h1>{(() => { const t = tabs.find((x) => x.key === tab); return t?.full || t?.label; })()}</h1>
               <div className="sub">DNPHARMA · Báo cáo doanh thu thông minh</div>
             </div>
             <Clock />
