@@ -78,9 +78,9 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
     setFilters((f) => ({ ...f, dateFrom: clamp(a), dateTo: clamp(b) }));
   };
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
-  // Đóng/mở phần lọc chi tiết để đỡ chiếm chỗ; nhớ lựa chọn của người dùng.
-  const [open, setOpen] = React.useState(() => { try { return localStorage.getItem('rpt_filters_collapsed') !== '1'; } catch { return true; } });
-  const toggle = () => setOpen((v) => { const nv = !v; try { localStorage.setItem('rpt_filters_collapsed', nv ? '0' : '1'); } catch { /* ignore */ } return nv; });
+  // Mặc định ẨN bộ lọc (CEO chốt) — nhấn để mở, nhấn lại thu gọn.
+  const [open, setOpen] = React.useState(false);
+  const toggle = () => setOpen((v) => !v);
   return (
     <div className={'card filter-card' + (open ? ' open' : ' collapsed')}>
       {/* Thanh gọn luôn hiện: kỳ + tìm nhanh + nút đóng/mở + xoá lọc */}

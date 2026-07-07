@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Tiêu đề nổi bật + KPI thấp gọn + lọc mặc định ẩn
+- **Tiêu đề trang** (crumb active): chip xanh gradient chữ trắng cho nổi bật (cả
+  base lẫn media mobile). `styles.css .drill-crumbs button.active`.
+- **Chiều cao ô KPI**: hạ padding (9→6px), thắt line-height label/value/delta +
+  money-big, giảm value 19→18px → bớt dư chiều cao.
+- **Bộ lọc mặc định ẨN** ở mọi màn có lọc: `useCollapse` (Phân tích, Cơ số thầu)
+  + collapse nội bộ của `RevenueFilters` (Doanh thu, DT đầy đủ, Sản phẩm) đổi
+  mặc định về đóng; nhấn "▾ Bộ lọc" mở, nhấn "▴ Thu gọn lọc" thu lại.
+- Nghiệm thu: build OK; kiểm headless: tiêu đề chip xanh, KPI gọn hơn, filter-toggle
+  hiện "▾ Bộ lọc" (đang ẩn) khi vào trang.
+
 ### 2026-07-07 — Claude Code — Bộ lọc TỈNH/THÀNH (Đồng Nai, Bình Phước, …)
 - CEO cần lọc theo tỉnh. Dữ liệu chưa có trường tỉnh → thêm nguồn tỉnh:
   1) `row.province` nếu upload có cột "Tỉnh" (thêm alias trong upload.js);
