@@ -95,6 +95,7 @@ export const api = {
   },
   targets: (params) => req('GET', '/targets' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   targetKpi: (ky) => req('GET', '/targets/kpi' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
+  employeeDetail: (emp, ky) => req('GET', '/employee/detail?' + new URLSearchParams({ ...(emp ? { emp } : {}), ...(ky ? { ky } : {}) }).toString()),
   forecast: () => req('GET', '/targets/forecast'),
   ask: (text) => req('POST', '/ai/ask', { text }),
   // Upload
