@@ -16,6 +16,8 @@ set -uo pipefail
 REPO_DIR="${REPO_DIR:-$HOME/.openclaw/workspace-report/App-report-new}"
 BRANCH="${BRANCH:-main}"
 PM2_APP="${PM2_APP:-reportnew}"
+# Worker Telegram (bot) — cũng phải restart để bot chạy code mới (câu hỏi/LLM/thông báo).
+PM2_WORKER="${PM2_WORKER:-reportnew-tgbot}"
 LOG="${LOG:-$REPO_DIR/auto-deploy.log}"
 
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
@@ -98,6 +100,10 @@ if npm --prefix web run build -- --outDir dist.new --emptyOutDir >> "$LOG" 2>&1;
   mv web/dist.new web/dist
   rm -rf web/dist.old
   pm2 restart "$PM2_APP" >> "$LOG" 2>&1 || { log "pm2 restart LỖI"; exit 1; }
+  # Restart luôn worker Telegram nếu đang có (không fail deploy nếu chưa chạy worker).
+  if pm2 describe "$PM2_WORKER" > /dev/null 2>&1; then
+    pm2 restart "$PM2_WORKER" >> "$LOG" 2>&1 && log "Đã restart worker $PM2_WORKER." || log "restart worker $PM2_WORKER LỖI (bỏ qua)."
+  fi
   pm2 save >> "$LOG" 2>&1 || true
   log "XONG: đã lên bản ${REMOTE:0:7}."
 else

@@ -21,6 +21,16 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — FIX gốc: auto-deploy restart bot worker + sửa giờ digest
+- **🐛 GỐC "bot không đổi":** `auto-deploy.sh` **chỉ restart `reportnew`**, KHÔNG restart
+  `reportnew-tgbot` → bot Telegram chạy CODE CŨ mãi (mọi thay đổi câu hỏi/LLM/thông báo không tới).
+  Fix: auto-deploy nay **restart luôn `reportnew-tgbot`** (biến `PM2_WORKER`, bỏ qua nếu chưa chạy).
+- **🐛 Báo cáo lúc 1h30 (lệch múi giờ):** `startDigestScheduler` trừ dư 7 tiếng → bắn sớm 7h.
+  Fix: so THẲNG giờ VN. Mặc định `DIGEST_CRON` đổi sang **`0 0 * * *` (nửa đêm giờ VN)**.
+- **Test:** `bash -n` + `node -c` pass; kiểm 17:00 UTC = 00:00 VN → khớp cron `0 0` (bắn đúng nửa đêm).
+- **Cần thủ công 1 lần:** thêm `ANTHROPIC_API_KEY` thật vào `.env` + `pm2 restart reportnew reportnew-tgbot`
+  (từ lần deploy sau, worker tự restart).
+
 ### 2026-07-07 — Claude Code — Bot múi giờ GMT+7 + mở rộng nhiều nhóm câu hỏi
 - **Múi giờ:** đặt `process.env.TZ = 'Asia/Ho_Chi_Minh'` ở đầu `index.js` + `telegram-bot.js`
   (cho env override) → mọi mốc thời gian/log/lịch theo GMT+7.
