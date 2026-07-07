@@ -695,3 +695,5 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .notify-banner { border-color: var(--warn); background: #fff9ec; display: flex; flex-direction: column; gap: 2px; }
 .notify-digest { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px; line-height: 1.5; margin: 0; color: var(--ink); }
 .notify-msg { margin-top: 6px; padding: 8px 10px; background: #f4f7fb; border-radius: 8px; font-size: 13px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; }
+
+.notify-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }

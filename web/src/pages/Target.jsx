@@ -481,13 +481,36 @@ function AssignmentMinePanel({ data, title = 'Tôi phụ trách' }) {
   );
 }
 
-function NotifyPreview({ data }) {
+function NotifyPreview({ data, ky }) {
   const evs = data.events || [];
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  async function sendTest() {
+    setBusy(true); setErr(''); setMsg('');
+    try { await api.notificationsSend({ ky, testOnly: true }); setMsg('Đã gửi thử bản tổng qua Telegram cho chính bạn. Kiểm tra Telegram nhé.'); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
+  async function sendNow() {
+    if (!window.confirm(`Gửi NGAY ${evs.length} tin cho NV (mốc/chậm nhịp) + bản tổng cho CEO qua Telegram? Sau khi gửi sẽ không gửi lại các mốc này trong kỳ.`)) return;
+    setBusy(true); setErr(''); setMsg('');
+    try { const r = await api.notificationsSend({ ky, testOnly: false }); setMsg(`Đã gửi ${r.sentNv || 0} tin NV${r.skipped ? ` (bỏ qua ${r.skipped})` : ''} + ${r.ceoSent || 0} bản tổng CEO.`); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
   return (
     <>
       <div className="card notify-banner">
-        <b>🔔 Xem trước — CHƯA gửi gì cả.</b>
-        <span className="meta muted">Kỳ {data.ky} · thời gian đã trôi {pct(data.timePct)}. Bật gửi thật bằng cách đặt <span className="mono">TARGET_NOTIFY=1</span> trên bot rồi restart.</span>
+        <b>🔔 Xem trước — mặc định CHƯA gửi gì cả.</b>
+        <span className="meta muted">Kỳ {data.ky} · thời gian đã trôi {pct(data.timePct)}.</span>
+        <span className="meta muted">Có <b>2 cách gửi</b>: (1) <b>Tự động</b> — bot chạy theo giờ (đặt <span className="mono">TARGET_NOTIFY=1</span>); (2) <b>Chủ động</b> — bấm <b>“Gửi ngay”</b> bên dưới.</span>
+        <div className="notify-actions">
+          <button className="btn ghost" disabled={busy} onClick={sendTest}>🧪 Gửi thử cho tôi</button>
+          <button className="btn" disabled={busy || evs.length === 0} onClick={sendNow}>📤 Gửi ngay ({evs.length})</button>
+        </div>
+        {err && <div className="meta" style={{ color: 'var(--hi)' }}>⚠ {err}</div>}
+        {msg && <div className="meta" style={{ color: 'var(--ok)' }}>✔ {msg}</div>}
       </div>
       <div className="section-title">📊 Bản tổng gửi CEO</div>
       <div className="card"><pre className="notify-digest">{data.ceoDigest}</pre></div>
@@ -605,7 +628,7 @@ export default function Target({ me, onNavigate }) {
       {view === 'employee' ? (
         !empData ? <Spinner /> : <EmployeeDetail data={empData} />
       ) : view === 'notify' ? (
-        !notif ? <Spinner /> : <NotifyPreview data={notif} />
+        !notif ? <Spinner /> : <NotifyPreview data={notif} ky={adminSelectedKy} />
       ) : view === 'now' ? (
         !now ? <Spinner /> : now.items.length === 0 ? <div className="center">Chưa có target.</div> : (
           <>
