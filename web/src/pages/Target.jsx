@@ -255,6 +255,18 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
           <button className="btn ghost" disabled={busy} onClick={() => { setRollbackId(lastBatch?.batchId || ''); setTool('rollback'); }}>↩ Rollback</button>
         </div>
       </div>
+      {data?.kpi && (() => {
+        const k = data.kpi; const p = k.pacing || {};
+        const onTrackTone = (pctv) => (pctv == null ? '' : (pctv >= (p.time_pct || 0) ? 'ok' : 'warn'));
+        return (
+          <div className="kpi-grid target-kpi-row">
+            <Kpi variant="blue" icon="🎯" label={`Target giao tháng ${k.ky}`} value={money(k.month.target)} sub={`${k.assigned_count}/${k.total_nv} NV đã giao`} />
+            <Kpi variant="green" icon="✅" tone={onTrackTone(k.month.pct)} label="Đã đạt trong tháng" value={money(k.month.achieved)} sub={`${k.month.pct != null ? k.month.pct + '% target' : '—'} · thời gian ${p.time_pct ?? '—'}% (${p.days_elapsed}/${p.days_in_month} ngày)`} />
+            <Kpi variant="purple" icon="📅" label={`Target giao quý ${k.quarter_label || ''}`} value={money(k.quarter.target)} sub={`Gồm ${(k.quarter_kys || []).join(', ')}`} />
+            <Kpi variant="amber" icon="📈" tone={onTrackTone(k.quarter.pct)} label="Đã đạt trong quý" value={money(k.quarter.achieved)} sub={k.quarter.pct != null ? `${k.quarter.pct}% target quý` : '—'} />
+          </div>
+        );
+      })()}
       {busy && <Spinner />}
       {err && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>}
       {msg && <div className="card" style={{ borderColor: 'var(--ok)', color: 'var(--ok)' }}>✔ {msg}</div>}

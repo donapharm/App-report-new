@@ -670,3 +670,6 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 /* Nút gỡ sửa tay trên card target */
 .btn.danger-btn { color: #c0392b; }
 .btn.danger-btn:hover { background: rgba(192, 57, 43, .08); }
+
+/* Dải KPI đầu trang Quản target */
+.target-kpi-row { margin: 4px 0 10px; }

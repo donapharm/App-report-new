@@ -1131,10 +1131,41 @@ function targetMatrix(ky) {
     return { emp_code: u.emp_code, emp_name: u.name, employee_type: store.employeeType(u), target: r?.target || 0, source: r?.source || null, scope: r?.scope || 'all', source_label: r?.source_label || r?.source || null, source_ky: r?.source_ky || null, reference: !!r?.reference, updated_at: r?.at || null, manual_override: !!ov?.manual_override, fallback_source: ov?.fallback_source || null, fallback_target: ov?.fallback_target || 0, fallback_label: ov?.fallback_label || null };
   });
 }
+// KPI Quản target: target giao (tháng/quý) + đã đạt thực (tháng/quý) + tiến độ thời gian.
+function quarterMetaOf(ky) {
+  const [m, y] = String(ky || '').split('.').map(Number);
+  if (!m || !y) return { q: 0, year: y || 0, kys: [] };
+  const q = Math.floor((m - 1) / 3) + 1;
+  const start = (q - 1) * 3 + 1;
+  return { q, year: y, kys: [start, start + 1, start + 2].map((mm) => `${String(mm).padStart(2, '0')}.${y}`) };
+}
+function targetKpiSummary(ky, scope) {
+  const codes = store.targetRosterCodes({ scope });
+  const codeSet = new Set(codes);
+  const qm = quarterMetaOf(ky);
+  const sumTargets = (kys) => Math.round(kys.reduce((s, k) => s + targetAdmin.resolveTargets({ ky: k, empCodes: codes }).reduce((a, e) => a + (Number(e.target) > 0 ? Number(e.target) : 0), 0), 0));
+  const revBeforeVat = (kys) => {
+    let rev = 0;
+    for (const r of store.getRowsRange({ kys, scope })) if (codeSet.has(r.emp_code)) rev += Number(r.revenue || 0);
+    return Math.round(rev / A.VAT_DIVISOR);
+  };
+  const pacing = A.targetPacingMeta(ky);
+  const pct = (a, t) => (t > 0 ? +(a / t * 100).toFixed(1) : null);
+  const monthTarget = sumTargets([ky]); const monthAchieved = revBeforeVat([ky]);
+  const qTarget = sumTargets(qm.kys); const qAchieved = revBeforeVat(qm.kys);
+  return {
+    ky, quarter_label: qm.q ? `Q${qm.q}/${qm.year}` : null, quarter_kys: qm.kys,
+    assigned_count: targetAdmin.resolveTargets({ ky, empCodes: codes }).filter((e) => Number(e.target) > 0).length, total_nv: codes.length,
+    month: { target: monthTarget, achieved: monthAchieved, pct: pct(monthAchieved, monthTarget), gap: monthAchieved - monthTarget },
+    quarter: { target: qTarget, achieved: qAchieved, pct: pct(qAchieved, qTarget), gap: qAchieved - qTarget },
+    pacing: { days_elapsed: pacing.daysElapsed, days_in_month: pacing.daysInMonth, time_pct: +(pacing.factor * 100).toFixed(1), is_current: pacing.isCurrent },
+  };
+}
 router.get('/admin/targets', auth.requireAuth, auth.requireAdmin, (req, res) => {
   const ky = req.query.ky || store.latestKy();
+  const scope = auth.scopeOf(req.session);
   const baseline = targetAdmin.baseline202606();
-  res.json({ ky, rows: targetMatrix(ky), baseline: { ky: baseline.ky, total: baseline.total, count: baseline.rows.length, label: 'T06/2026 Lumos' }, history: targetAdmin.listAudit().slice(0, 30) });
+  res.json({ ky, rows: targetMatrix(ky), kpi: targetKpiSummary(ky, scope), baseline: { ky: baseline.ky, total: baseline.total, count: baseline.rows.length, label: 'T06/2026 Lumos' }, history: targetAdmin.listAudit().slice(0, 30) });
 });
 router.get('/admin/targets/template.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   const ky = String(req.query.ky || store.latestKy()).trim();

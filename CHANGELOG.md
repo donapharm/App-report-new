@@ -21,6 +21,16 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Dải KPI ở trang Quản target (target & đã đạt: tháng + quý)
+- Đầu trang **Quản target** thêm 4 ô KPI: **Target giao tháng**, **Đã đạt trong tháng**
+  (kèm % target + tiến độ thời gian ngày/tháng), **Target giao quý** (gộp 3 tháng của quý),
+  **Đã đạt trong quý** (% target quý). Ô "đã đạt" đổi màu ok/warn theo việc %đạt có bắt
+  kịp %thời gian đã trôi hay không.
+- Backend: `/admin/targets` trả thêm `kpi` (targetKpiSummary: target tháng/quý từ resolver,
+  doanh thu thực before-VAT của roster theo tháng/quý, pacing thời gian).
+- **Test:** build web PASS; HTTP `/admin/targets` trả đúng `kpi`; đối chiếu quý Q2 = 04+05+06,
+  đã đạt quý > tháng khớp số.
+
 ### 2026-07-07 — Claude Code — Nút "🗑️ Gỡ sửa tay" trên card target
 - Mỗi NV nếu target đang dùng là **Sửa tay đè lên nguồn khác** (upload/nhân bản/AI) thì
   hiện nút **"🗑️ Gỡ sửa tay"** cạnh "Sửa tay". Bấm 1 phát → bỏ override → tự quay về
