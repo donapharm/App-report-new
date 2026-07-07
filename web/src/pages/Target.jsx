@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, downloadTargetTemplate, downloadAssignmentTemplate, downloadExport } from '../api.js';
-import { money, pct } from '../util.js';
-import { Spinner, Bar, Kpi, TargetKpiStrip } from '../components.jsx';
+import { money, pct, unitText } from '../util.js';
+import { Spinner, Bar, Kpi, TargetKpiStrip, RankRow } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { TargetGauge } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
@@ -481,6 +481,48 @@ function AssignmentMinePanel({ data, title = 'Tôi phụ trách' }) {
   );
 }
 
+function EmployeeDetail({ data }) {
+  const maxMonthly = Math.max(1, ...(data.monthly || []).flatMap((m) => [m.target || 0, m.achieved || 0]));
+  const maxProd = Math.max(1, ...(data.topProducts || []).map((p) => p.revenue || 0));
+  const maxUnit = Math.max(1, ...(data.topUnits || []).map((u) => u.revenue || 0));
+  return (
+    <>
+      <div className="section-title">👤 {data.emp.name} · <span className="mono">{data.emp.code}</span> · {data.emp.type || '—'}</div>
+      <TargetKpiStrip kpi={data.kpi} />
+      <div className="card">
+        <div className="section-head">📈 Target vs Đã đạt theo tháng</div>
+        <div className="emp-monthly">
+          {(data.monthly || []).map((m) => (
+            <div key={m.ky} className="emp-month-row">
+              <span className="emp-month-ky mono">{m.ky}</span>
+              <div className="emp-month-bars">
+                <div className="emp-bar target" style={{ width: Math.min(100, (m.target || 0) / maxMonthly * 100) + '%' }} title={'Target ' + money(m.target)} />
+                <div className={'emp-bar achieved ' + (m.pct == null ? '' : m.pct >= 100 ? 'ok' : m.pct >= 80 ? 'warn' : 'bad')} style={{ width: Math.min(100, (m.achieved || 0) / maxMonthly * 100) + '%' }} title={'Đạt ' + money(m.achieved)} />
+              </div>
+              <span className="emp-month-val">{money(m.achieved)} / {m.target > 0 ? money(m.target) : '—'}{m.pct != null ? ` · ${pct(m.pct)}` : ''}</span>
+            </div>
+          ))}
+        </div>
+        <div className="meta muted" style={{ marginTop: 6 }}>Thanh xám = target · thanh màu = đã đạt (xanh ≥100%, vàng ≥80%, đỏ &lt;80%).</div>
+      </div>
+      <div className="mini-columns">
+        <div className="card">
+          <div className="section-head">💊 Top sản phẩm · kỳ {data.ky}</div>
+          {(data.topProducts || []).length ? data.topProducts.map((p, i) => (
+            <RankRow key={p.iit_code || i} i={i + 1} name={p.product_name} meta={p.iit_code} amount={p.revenue} max={maxProd} />
+          )) : <div className="center">Chưa có doanh thu kỳ này.</div>}
+        </div>
+        <div className="card">
+          <div className="section-head">🏥 Top đơn vị · kỳ {data.ky}</div>
+          {(data.topUnits || []).length ? data.topUnits.map((u, i) => (
+            <RankRow key={u.unit_code || i} i={i + 1} name={unitText(u.unit_code, u.unit_name)} amount={u.revenue} max={maxUnit} />
+          )) : <div className="center">Chưa có doanh thu kỳ này.</div>}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function Target({ me, onNavigate }) {
   const [view, setView] = useState('now'); // now | forecast | admin | assignment | adjustment | mine
   const [periods, setPeriods] = useState([]);
@@ -488,7 +530,10 @@ export default function Target({ me, onNavigate }) {
   const [adminKy, setAdminKy] = useState('');
   const [now, setNow] = useState(null);
   const [fc, setFc] = useState(null);
+  const [empSel, setEmpSel] = useState(null);
+  const [empData, setEmpData] = useState(null);
   const { reloadTick, reload } = useReloadTick();
+  const openEmp = (emp) => { setEmpSel(emp); setEmpData(null); setView('employee'); };
 
   useEffect(() => {
     api.periods().then((p) => { setPeriods(p.periods || []); setPeriodSel(defaultPeriodSelection(p.periods || [], p.latest)); setAdminKy(p.latest || p.periods?.at(-1)?.ky || ''); });
@@ -508,10 +553,13 @@ export default function Target({ me, onNavigate }) {
     if (!periodSel) return;
     setNow(await api.targets(periodParams(periodSel)));
   }
+  useEffect(() => {
+    if (view === 'employee' && empSel) api.employeeDetail(empSel, selectedKy).then(setEmpData).catch(() => setEmpData(null));
+  }, [view, empSel, selectedKy, reloadTick]);
 
   return (
     <>
-      <DrillNav crumbs={[{ label: 'Target' }, ...(view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : view === 'assignment' ? 'Phân công' : view === 'adjustment' ? 'Điều chỉnh' : view === 'mine' ? 'Tôi phụ trách' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
+      <DrillNav crumbs={[{ label: 'Target' }, ...(view === 'employee' ? [{ label: 'Kỳ này' }, { label: empData?.emp?.name || empSel || 'NV' }] : view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : view === 'assignment' ? 'Phân công' : view === 'adjustment' ? 'Điều chỉnh' : view === 'mine' ? 'Tôi phụ trách' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); if (i === 1 && view === 'employee') setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
       <div className="seg">
         <button className={view === 'now' ? 'active' : ''} onClick={() => setView('now')}>Kỳ này</button>
         <button className={view === 'forecast' ? 'active' : ''} onClick={() => setView('forecast')}>Dự báo{fc ? ` (${fc.next_ky})` : ''}</button>
@@ -523,7 +571,9 @@ export default function Target({ me, onNavigate }) {
       {view === 'now' && periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
       {/* DIRECTIVE_LAYOUT_SMART: Quản target dùng kỳ compact trong toolbar, không phơi period card riêng để danh sách 21 NV lên ngay. */}
 
-      {view === 'now' ? (
+      {view === 'employee' ? (
+        !empData ? <Spinner /> : <EmployeeDetail data={empData} />
+      ) : view === 'now' ? (
         !now ? <Spinner /> : now.items.length === 0 ? <div className="center">Chưa có target.</div> : (
           <>
           <div className="section-title">Kỳ target: {periodLabel(periodSel)} · KPI so với target cả tháng</div>
@@ -547,7 +597,7 @@ export default function Target({ me, onNavigate }) {
               const short = assigned ? Math.max(0, targetCmp - (t.revenue_before_vat || 0)) : 0;
               const perDay = pac.isCurrent && daysLeft > 0 && short > 0 ? Math.round(short / daysLeft) : null;
               return (
-                <div key={t.emp_code} className="card" style={{ padding: 12 }}>
+                <div key={t.emp_code} className="card target-nv-card" style={{ padding: 12, cursor: 'pointer' }} onClick={() => openEmp(t.emp_code)} title="Bấm xem phân tích chi tiết NV này">
                   <div className="target-card-row">
                     <TargetGauge pct={p} size="small" />
                     <div className="target-card-body">
@@ -562,6 +612,7 @@ export default function Target({ me, onNavigate }) {
                       {assigned && perDay == null && short === 0 && pac.isCurrent && <div className="meta" style={{ marginTop: 3, color: 'var(--ok)' }}>✅ Đã đạt/vượt target</div>}
                       {assigned && (t.target_adjustment?.approved_total || 0) > 0 && <div className="meta muted" style={{ marginTop: 3 }}>Target sau điều chỉnh {money(t.target_adjusted)} · giảm {money(t.target_adjustment.approved_total)} (đứt hàng {money(t.target_adjustment.by_reason?.dut_hang || 0)}, công nợ {money(t.target_adjustment.by_reason?.cong_no || 0)}, khác {money(t.target_adjustment.by_reason?.khac || 0)})</div>}
                       <div className="meta muted" style={{ marginTop: 3 }}>{targetSourceText(t)}</div>
+                      <div className="meta" style={{ marginTop: 4, color: 'var(--brand)', fontWeight: 600 }}>Xem phân tích chi tiết ›</div>
                     </div>
                   </div>
                 </div>

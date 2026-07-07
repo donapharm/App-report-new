@@ -1092,6 +1092,30 @@ router.get('/targets/kpi', auth.requireAuth, (req, res) => {
   const ky = req.query.ky || store.lastCompleteKy() || store.latestKy();
   res.json({ kpi: targetKpiSummary(ky, scope) });
 });
+// Chi tiết 1 NV: KPI + xu hướng target/đạt theo tháng + top sản phẩm/đơn vị.
+// NV thường chỉ xem chính mình (scope.empCode); admin xem NV bất kỳ qua ?emp=.
+router.get('/employee/detail', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  const emp = String(scope.empCode || req.query.emp || '').trim().toUpperCase();
+  if (!emp) return res.status(400).json({ error: 'Thiếu mã NV' });
+  const ky = req.query.ky || store.lastCompleteKy() || store.latestKy();
+  const user = store.findUserByCode(emp);
+  const empScope = { empCode: emp };
+  const monthly = store.periodKys().map((k) => {
+    const rev = store.getRows({ ky: k, scope: empScope }).reduce((s, r) => s + Number(r.revenue || 0), 0);
+    const target = targetAdmin.resolveTargets({ ky: k, empCodes: [emp] }).reduce((a, e) => a + (Number(e.target) > 0 ? Number(e.target) : 0), 0);
+    const achieved = Math.round(rev / A.VAT_DIVISOR);
+    return { ky: k, target: Math.round(target), achieved, pct: target > 0 ? +(achieved / target * 100).toFixed(1) : null };
+  });
+  const topProducts = A.revenueBreakdown({ ky, scope: empScope, dimension: 'product' }).slice(0, 12)
+    .map((x) => ({ iit_code: x.key, product_name: x.label, revenue: Math.round(x.revenue), quantity: x.quantity }));
+  const topUnits = A.revenueBreakdown({ ky, scope: empScope, dimension: 'unit' }).slice(0, 12)
+    .map((x) => ({ unit_code: x.key, unit_name: x.label, revenue: Math.round(x.revenue) }));
+  res.json({
+    emp: { code: emp, name: user?.name || emp, type: store.employeeType(user || {}) },
+    ky, kpi: targetKpiSummary(ky, empScope, [emp]), monthly, topProducts, topUnits,
+  });
+});
 
 
 /* ---------- Target Adjustment GĐ2a: lý do bất khả kháng + CEO duyệt ---------- */
@@ -1145,8 +1169,8 @@ function quarterMetaOf(ky) {
   const start = (q - 1) * 3 + 1;
   return { q, year: y, kys: [start, start + 1, start + 2].map((mm) => `${String(mm).padStart(2, '0')}.${y}`) };
 }
-function targetKpiSummary(ky, scope) {
-  const codes = store.targetRosterCodes({ scope });
+function targetKpiSummary(ky, scope, codesOverride) {
+  const codes = codesOverride || store.targetRosterCodes({ scope });
   const codeSet = new Set(codes);
   const qm = quarterMetaOf(ky);
   const sumTargets = (kys) => Math.round(kys.reduce((s, k) => s + targetAdmin.resolveTargets({ ky: k, empCodes: codes }).reduce((a, e) => a + (Number(e.target) > 0 ? Number(e.target) : 0), 0), 0));

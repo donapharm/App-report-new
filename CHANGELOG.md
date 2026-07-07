@@ -21,6 +21,16 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Đợt 2: bấm NV → trang phân tích chi tiết từng NV
+- Ở "Kỳ này", **bấm card 1 NV** → mở trang chi tiết NV đó (breadcrumb Target › Kỳ này › Tên NV):
+  dải KPI (tháng+quý+pacing) theo NV, **xu hướng Target vs Đã đạt theo từng tháng** (thanh
+  xám target / thanh màu đạt), **Top sản phẩm** + **Top đơn vị** của NV trong kỳ.
+- Backend: route `GET /employee/detail?emp=&ky=` (NV thường khoá theo chính mình qua scope;
+  admin xem NV bất kỳ). Tái dùng `revenueBreakdown` (top SP/ĐV) + `targetKpiSummary` (thêm
+  tham số danh sách mã để tính theo 1 NV) + resolver target theo từng tháng.
+- **Test:** build web PASS; HTTP `/employee/detail?emp=DN001` trả đúng emp/kpi/monthly(04→06)/
+  top SP(8)/top ĐV(2).
+
 ### 2026-07-07 — Claude Code — TỐI ƯU tốc độ: cache dòng doanh thu + CST (Phân công/catalog chậm)
 - **Nguyên nhân chậm:** `store.allRows()` ĐỌC LẠI file slot upload + `enrich` (có `provinceOf`)
   MỖI LẦN gọi; `getRowsRange` gọi nó **1 lần/kỳ** → `catalog/sales?all=1` (mọi kỳ) đọc+enrich
