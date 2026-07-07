@@ -204,14 +204,28 @@ function mergeLatestUploadIntoCst(rows) {
 }
 
 /** Toàn bộ dòng doanh thu: slot active ghi đè kỳ tương ứng; kỳ còn lại dùng mẫu. */
+// Chữ ký của các slot đang active (id + kỳ + mtime file) -> phát hiện đổi để xoá cache.
+function slotsSig(slots) {
+  return slots.map((s) => {
+    let mt = 0; try { mt = fs.statSync(path.join(UP_DIR, s.id + '.json')).mtimeMs; } catch { mt = 0; }
+    return `${s.id}:${s.ky}:${mt}`;
+  }).sort().join('|');
+}
+// CACHE dòng doanh thu đã enrich. Trước đây allRows() ĐỌC LẠI file slot + enrich (có
+// provinceOf) MỖI LẦN GỌI, và getRowsRange gọi nó 1 lần/kỳ -> chậm rõ khi nhiều kỳ.
+let _allRows = null, _allRowsSig = '';
 function allRows() {
   const b = base();
   const slots = activeSlots();
   if (!slots.length) return b.sampleRows;
+  const sig = slotsSig(slots);
+  if (_allRows && _allRowsSig === sig) return _allRows;
   const slotKys = new Set(slots.map((s) => s.ky));
   const fromSlots = slots.flatMap(slotRows);
   const fromSample = b.sampleRows.filter((r) => !slotKys.has(r.ky));
-  return fromSample.concat(fromSlots);
+  _allRows = fromSample.concat(fromSlots);
+  _allRowsSig = sig;
+  return _allRows;
 }
 
 /** Danh sách kỳ = kỳ mẫu + kỳ từ slot upload (slot ưu tiên), sắp theo thời gian. */
@@ -372,8 +386,13 @@ function getRowsRange({ kys, scope }) {
   return list.flatMap((ky) => getRows({ ky, scope }));
 }
 
-function getCst({ scope }) {
-  // Khi đã có dữ liệu thật (runtime import), ưu tiên cst_real.json thay dữ liệu mẫu.
+// CST đã enrich (chưa lọc scope) — CACHE theo mtime cst_real.json + chữ ký slot upload.
+// Trước đây MỖI LẦN gọi đều đọc lại file + merge + enrich (provinceOf) -> chậm.
+let _cstAll = null, _cstSig = '';
+function getCstAll() {
+  let cstMt = 0; try { cstMt = fs.statSync(path.join(DATA_DIR, 'cst_real.json')).mtimeMs; } catch { cstMt = 0; }
+  const sig = `${cstMt}#${_base ? 1 : 0}|` + slotsSig(activeSlots());
+  if (_cstAll && _cstSig === sig) return _cstAll;
   let rows = readJson('cst_real.json', null) || base().cst;
   rows = mergeLatestUploadIntoCst(rows);
   const { unitByCode } = base();
@@ -384,6 +403,11 @@ function getCst({ scope }) {
     if (!code || isValidEmpCode(code)) return province === r.province ? r : { ...r, province };
     return { ...r, province, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };
   });
+  _cstAll = rows; _cstSig = sig;
+  return rows;
+}
+function getCst({ scope }) {
+  let rows = getCstAll();
   if (scope && scope.empCode) {
     const emp = String(scope.empCode).trim().toUpperCase();
     rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim().toUpperCase()).includes(emp));
@@ -423,7 +447,7 @@ function getTargetsRange({ kys, scope }) {
 }
 
 // Cho phép xoá cache khi cần (VD sau khi nạp danh mục mới)
-function clearCache() { _base = null; }
+function clearCache() { _base = null; _allRows = null; _allRowsSig = ''; _cstAll = null; _cstSig = ''; }
 
 module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
