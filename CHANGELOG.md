@@ -21,6 +21,16 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Bot múi giờ GMT+7 + mở rộng nhiều nhóm câu hỏi
+- **Múi giờ:** đặt `process.env.TZ = 'Asia/Ho_Chi_Minh'` ở đầu `index.js` + `telegram-bot.js`
+  (cho env override) → mọi mốc thời gian/log/lịch theo GMT+7.
+- **Mở rộng hỏi–đáp (`smart.answerQuestion`)** — trước chỉ loanh quanh doanh thu; nay thêm:
+  top **nhà thầu / gói thầu / tỉnh**, **đơn vị giảm mạnh/tăng mạnh**, **NV chưa đạt** (admin),
+  **đơn vị chưa bán**, **còn thiếu bao nhiêu để đạt target (+ cần ~X/ngày)**, **so kỳ trước**,
+  **chào hỏi**, **menu "giúp"**. Fallback đổi thành **gợi ý đầy đủ** thay vì "đơ".
+- **Test:** ~13 kiểu câu hỏi trả đúng số (code-first); giúp/help/menu ra menu; câu vô nghĩa ra gợi ý;
+  TZ in GMT+0700. Áp cho cả bot Telegram lẫn "Hỏi nhanh" trong app (chung 1 engine).
+
 ### 2026-07-07 — Claude Code — GĐ2 Email: kênh Gmail/Workspace + gửi 2 kênh (Telegram + email)
 - Thêm dep **nodemailer**. `notifyChannels`: `sendEmail()` qua SMTP (Gmail/Workspace) gated bằng env
   `SMTP_HOST/PORT/USER/PASS/FROM`; `emailFor(emp)` đọc **`server/data/nv_emails.json`** (bot điền,

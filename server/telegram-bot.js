@@ -18,6 +18,8 @@
  *   DIGEST_CRON          lịch bản tin sáng theo giờ VN, mặc định "30 7 * * *"
  *   APP_PUBLIC_URL       link mở app trong bản tin, mặc định https://reportnew.donapharm.asia
  */
+// Múi giờ GMT+7 (Việt Nam) cho mọi mốc thời gian/lịch của bot. Cho phép env override.
+process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
 const fs = require('fs');
 const path = require('path');
 
