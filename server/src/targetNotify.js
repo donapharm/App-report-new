@@ -13,8 +13,29 @@ const A = require('./analytics');
 const targetAdmin = require('./targetAdmin');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'notif_state.json');
+const OPTOUT_FILE = path.join(__dirname, '..', 'config', 'notify_optout.json');
 const MILESTONES = [50, 90, 100];       // % đạt cần chúc/nhắc
 const BEHIND_MARGIN = 15;               // %đạt thấp hơn %thời-gian quá mức này = chậm nhịp
+
+// Danh sách mã NV TUYỆT ĐỐI không nhận thông báo (CEO chốt) — đọc từ config, cache theo mtime.
+let _muteSet = null, _muteMtime = -1;
+function muteSet() {
+  try {
+    const st = fs.statSync(OPTOUT_FILE);
+    if (!_muteSet || st.mtimeMs !== _muteMtime) {
+      const j = JSON.parse(fs.readFileSync(OPTOUT_FILE, 'utf8')) || {};
+      _muteSet = new Set((j.codes || []).map((c) => String(c).trim().toUpperCase()));
+      _muteMtime = st.mtimeMs;
+    }
+  } catch { if (!_muteSet) _muteSet = new Set(); }
+  return _muteSet;
+}
+// Chặn nếu: nằm trong danh sách config HOẶC user có cờ no_auto_notify.
+function isMuted(emp) {
+  const code = String(emp || '').trim().toUpperCase();
+  if (muteSet().has(code)) return true;
+  try { return !!store.findUserByCode(code)?.no_auto_notify; } catch { return false; }
+}
 
 const readState = () => { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) || {}; } catch { return {}; } };
 const writeState = (o) => { try { fs.writeFileSync(STATE_FILE, JSON.stringify(o, null, 2), 'utf8'); } catch { /* ignore */ } };
@@ -50,6 +71,7 @@ function pendingEvents({ ky } = {}) {
   const st = readState();
   const events = [];
   for (const r of ev.rows) {
+    if (isMuted(r.emp_code)) continue; // NV trong danh sách chặn -> không tạo sự kiện gửi
     const done = st[`${ev.ky}|${r.emp_code}`] || {};
     for (const m of MILESTONES) if (r.pct >= m && !done[`m${m}`]) events.push({ ...r, ky: ev.ky, timePct: ev.timePct, type: 'milestone', milestone: m });
     // Chậm nhịp: tối đa 1 lần/tuần/kỳ, và chỉ khi chưa đạt mốc 50 (tránh nhắc kép).
@@ -113,4 +135,4 @@ function ceoDigest({ ky } = {}) {
     + lines.join('\n');
 }
 
-module.exports = { evaluate, pendingEvents, markSent, messageFor, statusFor, ceoDigest, MILESTONES, BEHIND_MARGIN, STATE_FILE };
+module.exports = { evaluate, pendingEvents, markSent, messageFor, statusFor, ceoDigest, isMuted, MILESTONES, BEHIND_MARGIN, STATE_FILE };
