@@ -13,6 +13,7 @@ const path = require('path');
 
 const MAP_FILE = path.join(__dirname, '..', 'config', 'unit_province.json');
 let _map = null, _mtime = -1;
+const _cache = new Map(); // memo kết quả theo (mã|tên) — enrich gọi provinceOf mỗi dòng.
 function loadMap() {
   try {
     const st = fs.statSync(MAP_FILE);
@@ -20,6 +21,7 @@ function loadMap() {
       const j = JSON.parse(fs.readFileSync(MAP_FILE, 'utf8')) || {};
       _map = j.map && typeof j.map === 'object' ? j.map : j; // chấp nhận {map:{...}} hoặc {...}
       _mtime = st.mtimeMs;
+      _cache.clear(); // map đổi -> bỏ memo cũ
     }
   } catch { if (!_map) _map = {}; }
   return _map;
@@ -63,10 +65,15 @@ function fromName(name) {
 
 function provinceOf(unitCode, unitName, rowProvince) {
   if (rowProvince) return String(rowProvince).trim();
-  const m = loadMap();
-  if (unitCode && m[unitCode]) return String(m[unitCode]).trim();
+  const m = loadMap(); // cũng lo việc xoá memo khi map đổi
+  const key = `${unitCode || ''}|${unitName || ''}`;
+  if (_cache.has(key)) return _cache.get(key);
+  let v;
+  if (unitCode && m[unitCode]) v = String(m[unitCode]).trim();
   // Đoán theo tên; nếu tên trống thì thử ngay trên MÃ đơn vị (mã thật thường kèm tên+tỉnh).
-  return fromName(unitName) || fromName(unitCode);
+  else v = fromName(unitName) || fromName(unitCode);
+  _cache.set(key, v);
+  return v;
 }
 
 module.exports = { provinceOf };

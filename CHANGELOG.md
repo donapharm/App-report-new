@@ -21,6 +21,16 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — TỐI ƯU tốc độ: cache dòng doanh thu + CST (Phân công/catalog chậm)
+- **Nguyên nhân chậm:** `store.allRows()` ĐỌC LẠI file slot upload + `enrich` (có `provinceOf`)
+  MỖI LẦN gọi; `getRowsRange` gọi nó **1 lần/kỳ** → `catalog/sales?all=1` (mọi kỳ) đọc+enrich
+  toàn bộ dòng **N lần/1 request**. `getCst` cũng đọc lại + merge + enrich mỗi lần.
+- **Sửa:** cache `allRows()` theo chữ ký slot (id+kỳ+mtime); cache `getCstAll()` theo mtime
+  `cst_real.json` + chữ ký slot; memo `provinceOf` theo (mã|tên). Cache tự hết hạn khi
+  upload/kỳ đổi (mtime) hoặc `clearCache()`. KHÔNG đổi kết quả.
+- **Test:** getCst/getRowsRange trả y hệt; province 4/4 đúng; đường dẫn cache 0,09ms/lần (demo).
+  Lợi ích lớn trên server thật (nhiều dòng upload).
+
 ### 2026-07-07 — Claude Code — Dải KPI target ở "Kỳ này" + "Phân tích" + card NV giàu hơn
 - Tách component chung `TargetKpiStrip` (tháng+quý+tiến độ thời gian), dùng ở **Quản target,
   Kỳ này, Phân tích** (đồng bộ 1 kiểu).
