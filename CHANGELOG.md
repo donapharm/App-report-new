@@ -21,6 +21,13 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Thêm mẫu câu "báo cáo theo từng đơn vị/sản phẩm/tổng hợp"
+- `smart.answerQuestion` thêm 3 mẫu: **báo cáo theo từng đơn vị** (vd "báo cáo bán hàng theo từng
+  mã đơn vị"), **theo từng sản phẩm**, **báo cáo tổng hợp/tổng quan** → bớt "đơ" cho câu kiểu báo cáo.
+- **Lưu ý (thẳng):** vẫn là khớp-mẫu; muốn hiểu **ngôn ngữ tự nhiên bất kỳ** thì BẮT BUỘC bật LLM
+  (`.env` đang thiếu `ANTHROPIC_API_KEY`). Đây là giới hạn bản chất của bot khớp-mẫu.
+- **Test:** 4 câu báo cáo kiểu tự nhiên trả đúng breakdown; `node -c` pass.
+
 ### 2026-07-07 — Claude Code — FIX gốc: auto-deploy restart bot worker + sửa giờ digest
 - **🐛 GỐC "bot không đổi":** `auto-deploy.sh` **chỉ restart `reportnew`**, KHÔNG restart
   `reportnew-tgbot` → bot Telegram chạy CODE CŨ mãi (mọi thay đổi câu hỏi/LLM/thông báo không tới).
