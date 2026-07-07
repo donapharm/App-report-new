@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Nút "🗑️ Gỡ sửa tay" trên card target
+- Mỗi NV nếu target đang dùng là **Sửa tay đè lên nguồn khác** (upload/nhân bản/AI) thì
+  hiện nút **"🗑️ Gỡ sửa tay"** cạnh "Sửa tay". Bấm 1 phát → bỏ override → tự quay về
+  nguồn kế, KHỎI phải nhờ bot rollback (như vụ DN001).
+- Backend: `resolveTargets` thêm tuỳ chọn `excludeSources` để tính "nguồn thay thế";
+  `overrideInfo` gắn cờ `manual_override` + nguồn/số sẽ quay về; `clearManualOverride`
+  gỡ mọi entry manual active của NV/kỳ (audit `target_manual_clear`); route
+  `POST /admin/targets/manual/clear`. `targetMatrix` trả kèm cờ cho UI.
+- Xác nhận trước khi gỡ, nói rõ "sẽ quay về: Upload 2,3 tỷ".
+- **Test:** build web PASS; smoke test: manual 0 đè upload 2,3 tỷ → gỡ → về upload 2,3 tỷ.
+
 ### 2026-07-07 — Claude Code — Nhân bản target sang kỳ sau + chặn Sửa tay ghi 0 nhầm
 - **Nút "📤 Nhân bản target sang kỳ sau":** copy toàn bộ target đang dùng của kỳ nguồn
   sang kỳ đích (KHÔNG cần file), rồi Sửa tay vài NV là xong. Nguồn mới `carryover`

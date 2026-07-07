@@ -1122,10 +1122,13 @@ router.get('/targets/forecast', auth.requireAuth, (req, res) => {
 /* ---------- Target admin: manual > upload > appsale > ai > legacy ---------- */
 function targetMatrix(ky) {
   const roster = store.targetRoster({ scope: {} });
-  const resolved = new Map(targetAdmin.resolveTargets({ ky, empCodes: roster.map((u) => u.emp_code) }).map((e) => [e.emp_code, e]));
+  const codes = roster.map((u) => u.emp_code);
+  const resolved = new Map(targetAdmin.resolveTargets({ ky, empCodes: codes }).map((e) => [e.emp_code, e]));
+  const overrides = targetAdmin.overrideInfo({ ky, empCodes: codes });
   return roster.map((u) => {
     const r = resolved.get(u.emp_code) || null;
-    return { emp_code: u.emp_code, emp_name: u.name, employee_type: store.employeeType(u), target: r?.target || 0, source: r?.source || null, scope: r?.scope || 'all', source_label: r?.source_label || r?.source || null, source_ky: r?.source_ky || null, reference: !!r?.reference, updated_at: r?.at || null };
+    const ov = overrides[u.emp_code] || null;
+    return { emp_code: u.emp_code, emp_name: u.name, employee_type: store.employeeType(u), target: r?.target || 0, source: r?.source || null, scope: r?.scope || 'all', source_label: r?.source_label || r?.source || null, source_ky: r?.source_ky || null, reference: !!r?.reference, updated_at: r?.at || null, manual_override: !!ov?.manual_override, fallback_source: ov?.fallback_source || null, fallback_target: ov?.fallback_target || 0, fallback_label: ov?.fallback_label || null };
   });
 }
 router.get('/admin/targets', auth.requireAuth, auth.requireAdmin, (req, res) => {
@@ -1238,6 +1241,11 @@ router.post('/admin/targets/quarter', auth.requireAuth, auth.requireAdmin, (req,
   const bad = items.map((r) => String(r.emp_code || '').toUpperCase()).filter((c) => !valid.has(c));
   if (bad.length) return res.status(400).json({ error: `Mã NV không thuộc đội target: ${[...new Set(bad)].join(', ')}` });
   try { const result = targetAdmin.upsertQuarter({ quarter: req.body?.quarter, year: req.body?.year, items, source: 'manual', user: req.session, note: req.body?.note || 'quarter_split3' }); clearTargetDependentCache(); res.json({ ok: true, result }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+// Gỡ target sửa tay (manual) của 1 NV ở 1 kỳ -> quay về nguồn kế (upload/nhân bản…).
+router.post('/admin/targets/manual/clear', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { const result = targetAdmin.clearManualOverride({ emp_code: req.body?.emp_code, ky: req.body?.ky, user: req.session }); clearTargetDependentCache(); res.json({ ok: true, result }); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 // Nhân bản target từ kỳ nguồn sang kỳ đích (không cần file). Sửa tay vẫn ưu tiên hơn.

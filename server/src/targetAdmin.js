@@ -92,8 +92,9 @@ function latestAssignedTargets({ beforeKy, empCodes } = {}) {
   }
   return map;
 }
-function resolveTargets({ ky, empCodes } = {}) {
+function resolveTargets({ ky, empCodes, excludeSources } = {}) {
   const allowed = empCodes ? new Set(empCodes.map(normEmp)) : null;
+  const ex = excludeSources ? new Set(excludeSources) : null;
   const map = new Map();
   const entries = allEntries();
   for (const e of entries) {
@@ -101,6 +102,7 @@ function resolveTargets({ ky, empCodes } = {}) {
     // CEO chốt Target KPI: từ kỳ 07.2026 trở đi không lấy Lumos/App Sale làm target đang dùng.
     // Chưa giao manual/upload/AI thì để trạng thái "Chưa giao target".
     if (ignoreAppSaleForKy(ky) && e.source === 'appsale') continue;
+    if (ex && ex.has(e.source)) continue; // để tính "nguồn thay thế" khi gỡ manual
     if (allowed && !allowed.has(e.emp_code)) continue;
     const k = `${e.ky}|${e.emp_code}`;
     const cur = map.get(k);
@@ -110,7 +112,7 @@ function resolveTargets({ ky, empCodes } = {}) {
   }
   // Nếu kỳ hiện tại chưa có target thật, tự kéo Lumos/App Sale kỳ gần nhất <= kỳ đang xem
   // làm nguồn tham khảo để không hiện 0đ trống. Không đè manual/upload/AI cùng kỳ.
-  if (ky && !ignoreAppSaleForKy(ky)) {
+  if (ky && !ignoreAppSaleForKy(ky) && !(ex && ex.has('appsale'))) {
     const codes = empCodes ? empCodes.map(normEmp) : [...new Set(entries.map((e) => e.emp_code))];
     const kVal = kyValue(ky);
     for (const code of codes) {
@@ -243,6 +245,35 @@ function carryOverTargets({ fromKy, toKy, empCodes, overwrite = false, user, not
   appendAudit({ action: 'target_carryover', by: user?.emp_code || 'admin', batchId, fromKy: src, toKy: dst, rows: out.length, skipped, totalTarget: out.reduce((s, x) => s + Number(x.target || 0), 0) });
   return { batchId, fromKy: src, toKy: dst, rows: out.length, skipped, totalTarget: out.reduce((s, x) => s + Number(x.target || 0), 0) };
 }
+// Với mỗi NV: nếu target đang dùng là 'manual' và CÓ nguồn khác bên dưới (upload/carryover/ai),
+// trả cờ để UI hiện nút "Gỡ sửa tay" + cho biết gỡ xong sẽ về nguồn nào.
+function overrideInfo({ ky, empCodes } = {}) {
+  const cur = new Map(resolveTargets({ ky, empCodes }).map((e) => [e.emp_code, e]));
+  const wo = new Map(resolveTargets({ ky, empCodes, excludeSources: ['manual'] }).map((e) => [e.emp_code, e]));
+  const out = {};
+  for (const [code, e] of cur) {
+    if (e.source !== 'manual') continue;
+    const fb = wo.get(code);
+    out[code] = { manual_override: !!fb, fallback_source: fb?.source || null, fallback_target: Number(fb?.target || 0), fallback_label: fb?.source_label || fb?.source || null, fallback_ky: fb?.source_ky || fb?.ky || null };
+  }
+  return out;
+}
+// Gỡ mọi entry manual (sửa tay) đang active của 1 NV ở 1 kỳ -> quay về nguồn kế (upload/carryover/…).
+function clearManualOverride({ emp_code, ky, user } = {}) {
+  const code = normEmp(emp_code); const k = normKy(ky);
+  if (!code || !/^\d{2}\.\d{4}$/.test(k)) throw new Error('Thiếu mã NV hoặc kỳ hợp lệ');
+  const rows = entriesRaw();
+  let n = 0;
+  const updated = rows.map((e) => {
+    const row = withDefaultScope(e);
+    if (row.emp_code === code && row.ky === k && row.source === 'manual' && row.active !== false) { n += 1; return { ...row, active: false, clearedAt: new Date().toISOString(), clearedBy: user?.emp_code || 'admin' }; }
+    return row;
+  });
+  if (!n) throw new Error('Không có target sửa tay đang áp cho NV/kỳ này');
+  writeJson(ENTRIES, updated);
+  appendAudit({ action: 'target_manual_clear', by: user?.emp_code || 'admin', emp_code: code, ky: k, rows: n });
+  return { emp_code: code, ky: k, cleared: n };
+}
 function rollbackBatch({ batchId, user }) {
   const rows = entriesRaw();
   let n = 0;
@@ -255,4 +286,4 @@ function rollbackBatch({ batchId, user }) {
   appendAudit({ action: 'target_rollback_batch', by: user?.emp_code || 'admin', batchId, rows: n });
   return { batchId, rows: n };
 }
-module.exports = { PRIORITY, resolveTargets, upsertEntry, bulkUpsert, upsertQuarter, quarterMonths, splitQuarterTarget, parseTargetWorkbook, stashPreview, commitPreview, carryOverTargets, rollbackBatch, listAudit, baseline202606, latestAssignedTargets, toNum, normScope };
+module.exports = { PRIORITY, resolveTargets, upsertEntry, bulkUpsert, upsertQuarter, quarterMonths, splitQuarterTarget, parseTargetWorkbook, stashPreview, commitPreview, carryOverTargets, overrideInfo, clearManualOverride, rollbackBatch, listAudit, baseline202606, latestAssignedTargets, toNum, normScope };

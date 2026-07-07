@@ -142,6 +142,16 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
     catch (e) { setErr(e.message); }
     setBusy(false);
   }
+  async function clearManual(row) {
+    const back = Number(row.fallback_target || 0) > 0
+      ? `${SOURCE_LABELS[row.fallback_source] || row.fallback_source} ${money(row.fallback_target)}`
+      : (row.fallback_label || row.fallback_source || 'nguồn kế');
+    if (!window.confirm(`Gỡ target Sửa tay của ${row.emp_code} kỳ ${ky}? Sẽ quay về: ${back}.`)) return;
+    setBusy(true); setErr(''); setMsg('');
+    try { await api.adminTargetManualClear({ ky, emp_code: row.emp_code }); setMsg(`Đã gỡ Sửa tay của ${row.emp_code}, quay về ${back}.`); await load(); await onTargetsChanged?.(); }
+    catch (e) { setErr(e.message); }
+    setBusy(false);
+  }
   async function onFile(e) {
     const f = e.target.files?.[0]; if (!f) return;
     setBusy(true); setErr(''); setMsg(''); setPreview(null);
@@ -268,7 +278,11 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
               </div>
               <div className="detail-facts two">
                 <span><b>{Number(r.target || 0) > 0 ? targetSourceText(r).replace(/^Nguồn: /, '') : 'Chưa giao target'}</b><em>Nguồn</em></span>
-                <span><button className="btn ghost" onClick={() => manual(r)}>Sửa tay</button><em>Thao tác</em></span>
+                <span>
+                  <button className="btn ghost" onClick={() => manual(r)}>Sửa tay</button>
+                  {r.manual_override && <button className="btn ghost danger-btn" disabled={busy} onClick={() => clearManual(r)}>🗑️ Gỡ sửa tay</button>}
+                  <em>Thao tác</em>
+                </span>
               </div>
             </div>
           ))}
