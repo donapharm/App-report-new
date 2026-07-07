@@ -39,6 +39,7 @@ const auth = require('./src/auth');
 const A = require('./src/analytics');
 const smart = require('./src/smart');
 const targetNotify = require('./src/targetNotify');
+const notifyChannels = require('./src/notifyChannels');
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SECRET = process.env.TELEGRAM_BOT_SECRET || '';
@@ -193,10 +194,13 @@ async function runTargetMilestones() {
     const user = store.findUserByCode(e.emp_code);
     if (!user || user.no_auto_notify) continue;
     const tid = tidByEmp[e.emp_code];
-    if (!tid || !prefEnabled(tid)) continue; // chưa map Telegram / opt-out -> để dành (email GĐ2)
+    const email = notifyChannels.emailFor(e.emp_code, user?.email);
+    // Telegram cần đã map + không opt-out; email gửi nếu có địa chỉ.
+    const telegramId = (tid && prefEnabled(tid)) ? tid : null;
+    if (!telegramId && !email) continue; // chưa có kênh nào -> để dành
     try {
-      const r = await tg('sendMessage', { chat_id: tid, text: targetNotify.messageFor(e) });
-      if (r.ok !== false) sent.push(e);
+      const r = await notifyChannels.deliver({ telegramId, email, subject: 'DNPHARMA — Nhắc target', text: targetNotify.messageFor(e) });
+      if (r.ok) sent.push(e);
     } catch (err) { console.error('milestone send error:', e.emp_code, err.message); }
   }
   targetNotify.markSent(sent);
@@ -204,7 +208,7 @@ async function runTargetMilestones() {
   for (const m of maps) {
     const u = store.findUserByCode(m.emp_code);
     if (u && isAdminUser(u) && prefEnabled(String(m.telegram_id))) {
-      try { await tg('sendMessage', { chat_id: String(m.telegram_id), text: digest }); } catch (err) { console.error('ceo digest error:', err.message); }
+      try { await notifyChannels.deliver({ telegramId: String(m.telegram_id), email: notifyChannels.emailFor(u.emp_code, u.email), subject: 'DNPHARMA — Tổng hợp target', text: digest }); } catch (err) { console.error('ceo digest error:', err.message); }
     }
   }
   console.log(`✔ Target milestones: gửi ${sent.length} tin NV + CEO digest.`);

@@ -1110,52 +1110,53 @@ router.get('/admin/notifications/preview', auth.requireAuth, auth.requireAdmin, 
 // (chống trùng với lịch tự động). Cần app có TELEGRAM_BOT_TOKEN.
 router.post('/admin/notifications/send', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {
-    if (!notifyChannels.telegramReady()) return res.status(400).json({ error: 'App chưa có TELEGRAM_BOT_TOKEN — chưa gửi Telegram trực tiếp được. Nhờ bot bổ sung env cho tiến trình app.' });
+    if (!notifyChannels.anyReady()) return res.status(400).json({ error: 'Chưa cấu hình kênh nào (Telegram token / SMTP email). Nhờ bot bổ sung env.' });
     const ky = req.body?.ky || undefined;
     const testOnly = req.body?.testOnly === true;
     const maps = auth.listTelegramMap();
     const tidByEmp = {};
     for (const m of maps) tidByEmp[String(m.emp_code || '').toUpperCase()] = String(m.telegram_id);
     if (testOnly) {
-      const meTid = tidByEmp[String(req.session.emp_code || '').toUpperCase()];
-      if (!meTid) return res.status(400).json({ error: 'Tài khoản của bạn chưa liên kết Telegram nên chưa gửi thử được. Hãy đăng nhập app bằng Telegram trước.' });
-      const r = await notifyChannels.sendTelegram(meTid, '🧪 [GỬI THỬ]\n' + targetNotify.ceoDigest({ ky }));
-      return r.ok ? res.json({ ok: true, test: true }) : res.status(400).json({ error: r.description });
+      const meEmp = String(req.session.emp_code || '').toUpperCase();
+      const meUser = store.findUserByCode(meEmp);
+      const r = await notifyChannels.deliver({ telegramId: tidByEmp[meEmp], email: notifyChannels.emailFor(meEmp, meUser?.email), subject: '[GỬI THỬ] DNPHARMA Target', text: '🧪 [GỬI THỬ]\n' + targetNotify.ceoDigest({ ky }) });
+      return r.ok ? res.json({ ok: true, test: true, channels: r.channels }) : res.status(400).json({ error: 'Tài khoản của bạn chưa có Telegram lẫn email để gửi thử.' });
     }
     const { events } = targetNotify.pendingEvents({ ky });
-    const sent = []; let skipped = 0;
+    const sent = []; let skipped = 0; const chan = { telegram: 0, email: 0 };
     for (const e of events) {
       const user = store.findUserByCode(e.emp_code);
       if (!user || user.no_auto_notify) { skipped += 1; continue; }
+      const email = notifyChannels.emailFor(e.emp_code, user?.email);
       const tid = tidByEmp[e.emp_code];
-      if (!tid) { skipped += 1; continue; } // chưa map Telegram -> để dành (email GĐ2)
-      const r = await notifyChannels.sendTelegram(tid, targetNotify.messageFor(e));
-      if (r.ok) sent.push(e); else skipped += 1;
+      if (!tid && !email) { skipped += 1; continue; } // chưa có kênh nào -> để dành
+      const r = await notifyChannels.deliver({ telegramId: tid, email, subject: 'DNPHARMA — Nhắc target', text: targetNotify.messageFor(e) });
+      if (r.ok) { sent.push(e); r.channels.forEach((c) => { chan[c] = (chan[c] || 0) + 1; }); } else skipped += 1;
     }
     targetNotify.markSent(sent);
     let ceoSent = 0;
     for (const m of maps) {
       const u = store.findUserByCode(m.emp_code);
-      if (u && auth.isAdmin(u.role)) { const r = await notifyChannels.sendTelegram(String(m.telegram_id), targetNotify.ceoDigest({ ky })); if (r.ok) ceoSent += 1; }
+      if (u && auth.isAdmin(u.role)) { const r = await notifyChannels.deliver({ telegramId: String(m.telegram_id), email: notifyChannels.emailFor(u.emp_code, u.email), subject: 'DNPHARMA — Tổng hợp target', text: targetNotify.ceoDigest({ ky }) }); if (r.ok) ceoSent += 1; }
     }
-    res.json({ ok: true, sentNv: sent.length, skipped, ceoSent, pending: events.length });
+    res.json({ ok: true, sentNv: sent.length, skipped, ceoSent, pending: events.length, byChannel: chan });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 // Gửi ĐÍCH DANH 1 NV (test/nudge) — tin trạng thái hiện tại, không cần vừa vượt mốc.
 router.post('/admin/notifications/send-one', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {
-    if (!notifyChannels.telegramReady()) return res.status(400).json({ error: 'App chưa có TELEGRAM_BOT_TOKEN — nhờ bot bổ sung env cho tiến trình app.' });
+    if (!notifyChannels.anyReady()) return res.status(400).json({ error: 'Chưa cấu hình kênh nào (Telegram token / SMTP email). Nhờ bot bổ sung env.' });
     const emp = String(req.body?.emp_code || '').trim().toUpperCase();
     if (!emp) return res.status(400).json({ error: 'Thiếu mã NV' });
     if (targetNotify.isMuted(emp)) return res.status(400).json({ error: `NV ${emp} nằm trong danh sách KHÔNG nhận thông báo (CEO chốt) — đã chặn.` });
     const st = targetNotify.statusFor(emp, req.body?.ky || undefined);
     if (!st) return res.status(400).json({ error: `NV ${emp} chưa được giao target kỳ này (không có gì để gửi).` });
-    const map = auth.listTelegramMap().find((m) => String(m.emp_code || '').toUpperCase() === emp);
-    if (!map) return res.status(400).json({ error: `NV ${emp} chưa liên kết Telegram (chưa đăng nhập app bằng Telegram) nên chưa nhận được.` });
     const user = store.findUserByCode(emp);
-    if (user?.no_auto_notify) return res.status(400).json({ error: `NV ${emp} đang tắt nhận thông báo (no_auto_notify).` });
-    const r = await notifyChannels.sendTelegram(String(map.telegram_id), st.message);
-    return r.ok ? res.json({ ok: true, emp_code: emp, message: st.message }) : res.status(400).json({ error: r.description });
+    const map = auth.listTelegramMap().find((m) => String(m.emp_code || '').toUpperCase() === emp);
+    const email = notifyChannels.emailFor(emp, user?.email);
+    if (!map && !email) return res.status(400).json({ error: `NV ${emp} chưa có Telegram lẫn email — chưa gửi được. Cần bạn ấy đăng nhập Telegram hoặc bổ sung email.` });
+    const r = await notifyChannels.deliver({ telegramId: map ? String(map.telegram_id) : null, email, subject: 'DNPHARMA — Nhắc target', text: st.message });
+    return r.ok ? res.json({ ok: true, emp_code: emp, channels: r.channels, message: st.message }) : res.status(400).json({ error: (r.telegram?.description || r.email?.description || 'Gửi thất bại') });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 // Chi tiết 1 NV: KPI + xu hướng target/đạt theo tháng + top sản phẩm/đơn vị.

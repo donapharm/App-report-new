@@ -491,13 +491,13 @@ function NotifyPreview({ data, ky }) {
     const emp = (oneEmp || '').trim().toUpperCase();
     if (!emp) { setErr('Nhập mã NV, ví dụ DN007'); return; }
     setBusy(true); setErr(''); setMsg('');
-    try { await api.notificationsSendOne(emp, ky); setMsg(`Đã gửi tin trạng thái cho ${emp} qua Telegram. Nhờ NV kiểm tra Telegram nhé.`); }
+    try { const r = await api.notificationsSendOne(emp, ky); setMsg(`Đã gửi cho ${emp} qua ${(r.channels || []).join(' + ') || 'kênh có sẵn'}. Nhờ NV kiểm tra.`); }
     catch (e) { setErr(e.message); }
     setBusy(false);
   }
   async function sendTest() {
     setBusy(true); setErr(''); setMsg('');
-    try { await api.notificationsSend({ ky, testOnly: true }); setMsg('Đã gửi thử bản tổng qua Telegram cho chính bạn. Kiểm tra Telegram nhé.'); }
+    try { const r = await api.notificationsSend({ ky, testOnly: true }); setMsg(`Đã gửi thử bản tổng cho chính bạn qua ${(r.channels || []).join(' + ') || 'kênh có sẵn'}. Kiểm tra nhé.`); }
     catch (e) { setErr(e.message); }
     setBusy(false);
   }

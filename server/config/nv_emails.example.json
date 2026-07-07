@@ -1,0 +1,8 @@
+{
+  "note": "MẪU định dạng file email NV. BOT tạo file THẬT ở server/data/nv_emails.json (gitignored, không commit vì là email cá nhân). Khoá = mã NV (HOA), giá trị = email. Có thể để phẳng {..} hoặc bọc trong { emails: {..} }. App tự đọc, ưu tiên file này rồi mới tới user.email.",
+  "emails": {
+    "DN001": "nhanvien01@gmail.com",
+    "DN002": "nhanvien02@donapharm.com.vn",
+    "DN007": "nhanvien07@gmail.com"
+  }
+}

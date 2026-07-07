@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — GĐ2 Email: kênh Gmail/Workspace + gửi 2 kênh (Telegram + email)
+- Thêm dep **nodemailer**. `notifyChannels`: `sendEmail()` qua SMTP (Gmail/Workspace) gated bằng env
+  `SMTP_HOST/PORT/USER/PASS/FROM`; `emailFor(emp)` đọc **`server/data/nv_emails.json`** (bot điền,
+  gitignored) → fallback `user.email`; `deliver()` gửi **cả Telegram + email**, ok nếu ≥1 kênh thành công.
+- Các nút/worker gửi qua `deliver` (2 kênh): `/admin/notifications/send`, `/send-one`, `runTargetMilestones`.
+  Guard đổi sang `anyReady()` (có Telegram HOẶC email là gửi được). Vẫn tôn trọng danh sách CHẶN + no_auto_notify.
+- `config/nv_emails.example.json` (committed): mẫu định dạng cho bot.
+- **Test:** emailReady=false khi thiếu SMTP; emailFor đọc file + fallback + loại email sai định dạng;
+  deliver không kênh → ok=false; build web PASS.
+- **Cần bot cấp:** SMTP env (Gmail app password) + tạo `server/data/nv_emails.json` (trích lục email phòng KD).
+
 ### 2026-07-07 — Claude Code — Danh sách CHẶN thông báo (DN021/DN023/VP004) ở tầng engine
 - **`config/notify_optout.json`** (CEO chốt, committed): `codes: [DN021, DN023, VP004]` — tuyệt đối
   không nhận thông báo (Telegram + email + mọi kênh sau này).
