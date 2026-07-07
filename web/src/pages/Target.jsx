@@ -481,6 +481,32 @@ function AssignmentMinePanel({ data, title = 'Tôi phụ trách' }) {
   );
 }
 
+function NotifyPreview({ data }) {
+  const evs = data.events || [];
+  return (
+    <>
+      <div className="card notify-banner">
+        <b>🔔 Xem trước — CHƯA gửi gì cả.</b>
+        <span className="meta muted">Kỳ {data.ky} · thời gian đã trôi {pct(data.timePct)}. Bật gửi thật bằng cách đặt <span className="mono">TARGET_NOTIFY=1</span> trên bot rồi restart.</span>
+      </div>
+      <div className="section-title">📊 Bản tổng gửi CEO</div>
+      <div className="card"><pre className="notify-digest">{data.ceoDigest}</pre></div>
+      <div className="section-title">✉️ Tin sẽ gửi cho NV ({evs.length})</div>
+      {evs.length === 0 ? <div className="center">Chưa có tin nào cần gửi (chưa ai vừa vượt mốc / chậm nhịp trong kỳ này).</div> : (
+        <div className="list-grid">
+          {evs.map((e, i) => (
+            <div key={`${e.emp_code}-${e.type}-${e.milestone || i}`} className="card" style={{ padding: 12 }}>
+              <div className="list-card-title"><div className="name">{e.name}</div><span className={'pill ' + (e.type === 'behind' ? 'bad' : e.milestone === 100 ? 'ok' : 'warn')}>{e.type === 'behind' ? '⏱️ Chậm nhịp' : `🎯 Mốc ${e.milestone}%`}</span></div>
+              <div className="meta muted mono">{e.emp_code} · đạt {pct(e.pct)}</div>
+              <div className="notify-msg">{e.message}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 function EmployeeDetail({ data }) {
   const maxMonthly = Math.max(1, ...(data.monthly || []).flatMap((m) => [m.target || 0, m.achieved || 0]));
   const maxProd = Math.max(1, ...(data.topProducts || []).map((p) => p.revenue || 0));
@@ -532,6 +558,7 @@ export default function Target({ me, onNavigate }) {
   const [fc, setFc] = useState(null);
   const [empSel, setEmpSel] = useState(null);
   const [empData, setEmpData] = useState(null);
+  const [notif, setNotif] = useState(null);
   const { reloadTick, reload } = useReloadTick();
   const openEmp = (emp) => { setEmpSel(emp); setEmpData(null); setView('employee'); };
 
@@ -556,15 +583,19 @@ export default function Target({ me, onNavigate }) {
   useEffect(() => {
     if (view === 'employee' && empSel) api.employeeDetail(empSel, selectedKy).then(setEmpData).catch(() => setEmpData(null));
   }, [view, empSel, selectedKy, reloadTick]);
+  useEffect(() => {
+    if (view === 'notify') { setNotif(null); api.notificationsPreview(adminSelectedKy).then(setNotif).catch(() => setNotif({ events: [], ceoDigest: 'Không tải được bản xem trước.' })); }
+  }, [view, adminSelectedKy, reloadTick]);
 
   return (
     <>
-      <DrillNav crumbs={[{ label: 'Target' }, ...(view === 'employee' ? [{ label: 'Kỳ này' }, { label: empData?.emp?.name || empSel || 'NV' }] : view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : view === 'assignment' ? 'Phân công' : view === 'adjustment' ? 'Điều chỉnh' : view === 'mine' ? 'Tôi phụ trách' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); if (i === 1 && view === 'employee') setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
+      <DrillNav crumbs={[{ label: 'Target' }, ...(view === 'employee' ? [{ label: 'Kỳ này' }, { label: empData?.emp?.name || empSel || 'NV' }] : view !== 'now' ? [{ label: view === 'forecast' ? 'Dự báo' : view === 'assignment' ? 'Phân công' : view === 'notify' ? 'Thông báo' : view === 'adjustment' ? 'Điều chỉnh' : view === 'mine' ? 'Tôi phụ trách' : 'Quản target' }] : [])]} onBack={view !== 'now' ? () => setView('now') : undefined} onCrumb={(i) => { if (i === 0) setView('now'); if (i === 1 && view === 'employee') setView('now'); }} onReload={reload} busy={!now && view === 'now'} />
       <div className="seg">
         <button className={view === 'now' ? 'active' : ''} onClick={() => setView('now')}>Kỳ này</button>
         <button className={view === 'forecast' ? 'active' : ''} onClick={() => setView('forecast')}>Dự báo{fc ? ` (${fc.next_ky})` : ''}</button>
         {me.isAdmin && <button className={view === 'admin' ? 'active' : ''} onClick={() => setView('admin')}>Quản target</button>}
         {me.isAdmin && <button className={view === 'assignment' ? 'active' : ''} onClick={() => setView('assignment')}>Phân công</button>}
+        {me.isAdmin && <button className={view === 'notify' ? 'active' : ''} onClick={() => setView('notify')}>🔔 Thông báo</button>}
         <button className={view === 'adjustment' ? 'active' : ''} onClick={() => setView('adjustment')}>Điều chỉnh</button>
         <button className={view === 'mine' ? 'active' : ''} onClick={() => setView('mine')}>Tôi phụ trách</button>
       </div>
@@ -573,6 +604,8 @@ export default function Target({ me, onNavigate }) {
 
       {view === 'employee' ? (
         !empData ? <Spinner /> : <EmployeeDetail data={empData} />
+      ) : view === 'notify' ? (
+        !notif ? <Spinner /> : <NotifyPreview data={notif} />
       ) : view === 'now' ? (
         !now ? <Spinner /> : now.items.length === 0 ? <div className="center">Chưa có target.</div> : (
           <>

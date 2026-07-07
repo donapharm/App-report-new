@@ -21,6 +21,13 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Màn "🔔 Thông báo" (xem trước) trong app cho CEO
+- Thêm tab **🔔 Thông báo** ở trang Target (admin): gọi `/admin/notifications/preview` (DRY-RUN)
+  → hiện **bản tổng gửi CEO** + **danh sách tin sẽ gửi cho từng NV** (mốc 50/90/100 hoặc chậm nhịp),
+  kèm banner nhắc "chưa gửi gì; bật thật bằng TARGET_NOTIFY=1".
+- Không gửi, không đổi trạng thái — chỉ để CEO duyệt trực quan trước khi bật.
+- **Test:** build web PASS (preview API đã test 200 ở PR trước).
+
 ### 2026-07-07 — Claude Code — GĐ1 Thông báo target chủ động (engine + preview + worker gated)
 - **`src/targetNotify.js` (engine):** tính %đạt từng NV theo kỳ + nhịp thời gian; phát hiện sự kiện
   **vượt mốc 50/90/100%** (1 lần/mốc/kỳ) + **"đang chậm nhịp"** (%đạt < %thời gian − 15%, tối đa
