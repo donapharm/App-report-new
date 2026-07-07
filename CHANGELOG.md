@@ -21,6 +21,14 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Gửi ĐÍCH DANH 1 NV (test DN001/DN007)
+- `targetNotify.statusFor(emp, ky)`: dựng tin trạng thái hiện tại của 1 NV bất kỳ (đạt %/còn thiếu/cần
+  ngày + đúng/chậm nhịp) — không cần vừa vượt mốc.
+- Route `POST /admin/notifications/send-one` (admin): gửi tin đó qua Telegram; báo lỗi rõ nếu NV chưa
+  giao target / chưa liên kết Telegram / tắt nhận / app thiếu token.
+- Màn "🔔 Thông báo": thêm ô nhập **mã NV** + nút **👤 Gửi cho 1 NV này** (mặc định DN001).
+- **Test:** statusFor render đúng cho DN001, mã lạ → null; build web PASS.
+
 ### 2026-07-07 — Claude Code — Nút "Gửi ngay" + "Gửi thử cho tôi" (gửi chủ động) trên màn Thông báo
 - Làm rõ 2 cách gửi: **Tự động** (bot theo giờ, `TARGET_NOTIFY=1`) và **Chủ động** (CEO bấm).
 - `src/notifyChannels.js`: `sendTelegram()` dùng `TELEGRAM_BOT_TOKEN` của app (fetch api.telegram.org).

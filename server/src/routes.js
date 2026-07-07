@@ -1141,6 +1141,22 @@ router.post('/admin/notifications/send', auth.requireAuth, auth.requireAdmin, as
     res.json({ ok: true, sentNv: sent.length, skipped, ceoSent, pending: events.length });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
+// Gửi ĐÍCH DANH 1 NV (test/nudge) — tin trạng thái hiện tại, không cần vừa vượt mốc.
+router.post('/admin/notifications/send-one', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    if (!notifyChannels.telegramReady()) return res.status(400).json({ error: 'App chưa có TELEGRAM_BOT_TOKEN — nhờ bot bổ sung env cho tiến trình app.' });
+    const emp = String(req.body?.emp_code || '').trim().toUpperCase();
+    if (!emp) return res.status(400).json({ error: 'Thiếu mã NV' });
+    const st = targetNotify.statusFor(emp, req.body?.ky || undefined);
+    if (!st) return res.status(400).json({ error: `NV ${emp} chưa được giao target kỳ này (không có gì để gửi).` });
+    const map = auth.listTelegramMap().find((m) => String(m.emp_code || '').toUpperCase() === emp);
+    if (!map) return res.status(400).json({ error: `NV ${emp} chưa liên kết Telegram (chưa đăng nhập app bằng Telegram) nên chưa nhận được.` });
+    const user = store.findUserByCode(emp);
+    if (user?.no_auto_notify) return res.status(400).json({ error: `NV ${emp} đang tắt nhận thông báo (no_auto_notify).` });
+    const r = await notifyChannels.sendTelegram(String(map.telegram_id), st.message);
+    return r.ok ? res.json({ ok: true, emp_code: emp, message: st.message }) : res.status(400).json({ error: r.description });
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
 // Chi tiết 1 NV: KPI + xu hướng target/đạt theo tháng + top sản phẩm/đơn vị.
 // NV thường chỉ xem chính mình (scope.empCode); admin xem NV bất kỳ qua ?emp=.
 router.get('/employee/detail', auth.requireAuth, (req, res) => {
