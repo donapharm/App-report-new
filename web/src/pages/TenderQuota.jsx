@@ -12,7 +12,7 @@ const FILTERS = [
   { key: 'mid', label: 'Dưới 30%', params: { remainMax: 30 } },
   { key: 'high', label: 'Tồn nhiều >70%', params: { remainMin: 70 } },
 ];
-const empty = { emp: '', unit: '', product: '', priority: '', q: '' };
+const empty = { emp: '', province: '', unit: '', product: '', priority: '', q: '' };
 const n = (v) => Number(v || 0).toLocaleString('vi-VN');
 const compact = (v) => String(v || '—').replace('Công Ty ', '').replace('Tnhh ', '');
 function groupOf(code) { const m = String(code || '').match(/\.(N\d)\./i); return m ? m[1].toUpperCase() : ''; }
@@ -135,7 +135,7 @@ export default function TenderQuota({ me }) {
   const emptyCount = data ? data.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0).length : 0;
   const highCount = data ? data.filter((r) => Number(r.remain_pct || 0) > 80).length : 0;
   const { open, toggle } = useCollapse();
-  const activeCount = [filters.emp, filters.unit, filters.product, filters.priority, filters.q, bid].filter(Boolean).length;
+  const activeCount = [filters.emp, filters.province, filters.unit, filters.product, filters.priority, filters.q, bid].filter(Boolean).length;
   const flatPager = usePager(sortedData, 30, `${f}|${bid}|${JSON.stringify(filters)}`);
 
   return (
@@ -154,6 +154,7 @@ export default function TenderQuota({ me }) {
             <div className="filter-grid">
               <Select value={bid} onChange={setBid} options={options?.bidPackages} all="Mọi gói thầu" />
               {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setFilter('emp', v)} options={options?.employees} all="Tất cả NV" />}
+              <Select value={filters.province} onChange={(v) => setFilter('province', v)} options={options?.provinces} all="Tất cả tỉnh/thành" />
               <ComboSelect value={filters.unit} onChange={(v) => setFilter('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
               <ComboSelect value={filters.product} onChange={(v) => setFilter('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
               <Select value={filters.priority} onChange={(v) => setFilter('priority', v)} options={options?.priorities} all="Tất cả UT" />

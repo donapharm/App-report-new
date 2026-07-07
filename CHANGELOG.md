@@ -21,6 +21,26 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Lọc tỉnh cho CST + mở rộng đoán tỉnh + QR Zalo trong app
+- **Mục 1 — Lọc tỉnh/thành cho Cơ số thầu (CST):** dòng CST nay được gắn `province`
+  (giống dòng doanh thu) trong `store.getCst`; thêm lọc tỉnh ở `cstTable`, truyền
+  param `province` ở route `/cst` và export CST; `/filters` gộp cả CST vào danh sách
+  tỉnh. Frontend `TenderQuota.jsx` thêm ô chọn tỉnh + đếm lọc. **Test HTTP thật:**
+  `/cst?province=Đồng Nai` → 34/34 dòng đúng tỉnh; `/filters` liệt kê Đồng Nai/Bình
+  Phước/Bà Rịa-Vũng Tàu.
+- **Mục 2 — Mở rộng đoán tỉnh theo tên đơn vị:** `province.js` thêm nhiều tỉnh miền
+  Nam/lân cận (BR-VT, Bình Dương, TP.HCM, Long An, Tây Ninh, Lâm Đồng, Bình Thuận,
+  Ninh Thuận, Đắk Nông, Đắk Lắk, Tiền Giang) — chỉ dùng TÊN TỈNH + TP/huyện KHÔNG
+  trùng tên (tránh 'châu thành', 'tân châu'…). 14/14 case đúng, không hồi quy. ⇒ ít
+  đơn vị rơi vào "Chưa gán tỉnh"; phần còn lại bot chạy `scripts/list_unmapped_provinces.js`
+  trên server rồi điền `unit_province.json`.
+- **Mục 3 — QR Zalo OA trong app + icon:** thêm `ZaloCard` (QR `zalo-oa-qr.png`) ở
+  cuối trang Tổng quan (trước chỉ có ở màn Login). **Icon home-screen** đã là logo DP
+  đúng (`app-icon-180/512.png`) — hình "chữ A" Sếp thấy trước đó là icon mặc định CŨ
+  bị cache; nút "Có bản mới"/gỡ-thêm lại app 1 lần là hết.
+- **Test:** `npm run build` web PASS; smoke test API trên cổng tạm 3899 (KHÔNG đụng
+  3873/3860). Trạng thái: chờ merge `main`.
+
 ### 2026-07-07 — Claude Code — Auto-deploy TỰ GỠ KẸT khi working tree dirty (#37)
 - **Vấn đề:** `scripts/auto-deploy.sh` có guard "tree dirty → BỎ QUA im lặng",
   kẹt **vô thời hạn** → Sếp thấy "không có thay đổi" trên iPhone dù đã merge code.

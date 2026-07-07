@@ -582,7 +582,7 @@ router.get('/filters', auth.requireAuth, (req, res) => {
         ...p,
       })).sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi') || String(a.key).localeCompare(String(b.key), 'vi'));
     })(),
-    provinces: uniq(rows, 'province'),
+    provinces: uniq(rows.concat(cst), 'province'),
     routes: uniq(rows, 'route'),
     priorities: uniq(rows.concat(cst), 'priority'),
     contractors: contractorOptions(rows.concat(cst), contractorLookup),
@@ -1001,6 +1001,7 @@ router.get('/cst', auth.requireAuth, (req, res) => {
     bidPackage: req.query.bid || null,
     filters: {
       emp: req.query.emp || null,
+      province: req.query.province || null,
       unit: req.query.unit || null,
       product: req.query.product || null,
       priority: req.query.priority || null,
@@ -1334,6 +1335,7 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
     const num = (v) => (v === undefined || v === '' ? null : Number(v));
     const rows = A.cstTable({ scope, remainPctMax: num(req.query.remainMax), remainPctMin: num(req.query.remainMin), bidPackage: req.query.bid || null, filters: {
       emp: req.query.emp || null,
+      province: req.query.province || null,
       unit: req.query.unit || null,
       product: req.query.product || null,
       priority: req.query.priority || null,

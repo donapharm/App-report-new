@@ -632,3 +632,17 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .money-big { display: block; }
 .money-big .mb-s { display: block; line-height: 1.02; }
 .money-big .mb-f { display: block; font-size: 11.5px; color: var(--muted); font-weight: 600; margin-top: 0; letter-spacing: 0; line-height: 1.15; }
+
+/* ── Thẻ QR Zalo OA (trong app) ───────────────────── */
+.zalo-card {
+  display: flex; align-items: center; gap: 14px; justify-content: space-between;
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(21,104,184,.06), rgba(245,161,30,.06));
+}
+.zalo-info { min-width: 0; }
+.zalo-info b { display: block; color: var(--brand); font-size: 15px; }
+.zalo-info span { display: block; color: var(--muted); font-size: 12.5px; margin-top: 3px; line-height: 1.35; }
+.zalo-qr { flex: none; background: #fff; padding: 6px; border-radius: 10px; box-shadow: 0 1px 6px rgba(0,0,0,.08); }
+.zalo-qr img { display: block; border-radius: 6px; width: 104px; height: 104px; }
+.zalo-qr-missing { width: 104px; height: 104px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--muted); font-size: 11px; padding: 8px; }
+@media (max-width: 560px) { .zalo-qr img, .zalo-qr-missing { width: 88px; height: 88px; } }

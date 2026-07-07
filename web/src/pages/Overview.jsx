@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { money, pct, unitText } from '../util.js';
-import { Spinner, Kpi, MoneyBig } from '../components.jsx';
+import { Spinner, Kpi, MoneyBig, ZaloCard } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
@@ -190,6 +190,7 @@ export default function Overview({ me, onNavigate }) {
           </div>
         </>
       )}
+      <ZaloCard />
     </>
   );
 }

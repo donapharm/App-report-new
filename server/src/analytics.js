@@ -167,6 +167,7 @@ function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
     const emp = String(filters.emp).trim().toUpperCase();
     rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim().toUpperCase()).includes(emp));
   }
+  if (filters?.province) rows = rows.filter((r) => r.province === filters.province);
   if (filters?.unit) rows = rows.filter((r) => r.unit_code === filters.unit || r.unit_name === filters.unit);
   if (filters?.product) rows = rows.filter((r) => r.iit_code === filters.product);
   if (filters?.priority) rows = rows.filter((r) => r.priority === filters.priority);
