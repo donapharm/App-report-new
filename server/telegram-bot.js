@@ -15,7 +15,7 @@
  * ENV tùy chọn:
  *   APP_BASE_URL         mặc định http://localhost:${PORT||3860}
  *   PORT                 cổng backend app (nếu không đặt APP_BASE_URL)
- *   DIGEST_CRON          lịch bản tin sáng theo giờ VN, mặc định "30 7 * * *"
+ *   DIGEST_CRON          lịch bản tin theo giờ VN (GMT+7), mặc định "0 0 * * *" (nửa đêm)
  *   APP_PUBLIC_URL       link mở app trong bản tin, mặc định https://reportnew.donapharm.asia
  */
 // Múi giờ GMT+7 (Việt Nam) cho mọi mốc thời gian/lịch của bot. Cho phép env override.
@@ -47,7 +47,7 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SECRET = process.env.TELEGRAM_BOT_SECRET || '';
 const BASE = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3860}`;
 const PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.PUBLIC_BASE_URL || 'https://reportnew.donapharm.asia';
-const DIGEST_CRON = process.env.DIGEST_CRON || '30 7 * * *';
+const DIGEST_CRON = process.env.DIGEST_CRON || '0 0 * * *'; // mặc định NỬA ĐÊM giờ VN (CEO chốt)
 const API = `https://api.telegram.org/bot${TOKEN}`;
 const CODE_RE = /\bRP-[A-Z0-9]{6}\b/i;
 
@@ -230,15 +230,14 @@ function startMilestoneScheduler() {
 }
 function startDigestScheduler() {
   const cron = parseDailyCron(DIGEST_CRON);
-  // DIGEST_CRON được khai báo theo giờ Việt Nam (UTC+7). Date#getUTCHours()
-  // phải so với giờ UTC tương ứng, nếu không "30 7 * * *" sẽ bắn 14:30 VN.
-  const targetUtcHour = (cron.hour - 7 + 24) % 24;
+  // DIGEST_CRON theo giờ VN. vnDate().getUTCHours()/getUTCMinutes() CHÍNH LÀ giờ:phút VN,
+  // nên so THẲNG với cron.hour/minute (bản cũ trừ thêm 7 -> bắn sớm 7 tiếng = lỗi 1h30).
   let lastRunKey = '';
-  console.log(`✔ Telegram digest scheduler: ${String(DIGEST_CRON)} Asia/Bangkok (${String(cron.hour).padStart(2, '0')}:${String(cron.minute).padStart(2, '0')} VN = ${String(targetUtcHour).padStart(2, '0')}:${String(cron.minute).padStart(2, '0')} UTC)`);
+  console.log(`✔ Telegram digest scheduler: ${String(cron.hour).padStart(2, '0')}:${String(cron.minute).padStart(2, '0')} giờ VN (GMT+7)`);
   setInterval(() => {
     const d = vnDate();
     const key = `${d.toISOString().slice(0, 10)} ${cron.hour}:${cron.minute}`;
-    if (d.getUTCHours() === targetUtcHour && d.getUTCMinutes() === cron.minute && lastRunKey !== key) {
+    if (d.getUTCHours() === cron.hour && d.getUTCMinutes() === cron.minute && lastRunKey !== key) {
       lastRunKey = key;
       runMorningDigest().catch((e) => console.error('digest scheduler error:', e.message));
     }
