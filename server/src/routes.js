@@ -14,6 +14,7 @@ const revenueRefresh = require('./revenueRefresh');
 const targetAdmin = require('./targetAdmin');
 const assignmentAdmin = require('./assignmentAdmin');
 const targetAdjustment = require('./targetAdjustment');
+const targetNotify = require('./targetNotify');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -1091,6 +1092,17 @@ router.get('/targets/kpi', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const ky = req.query.ky || store.lastCompleteKy() || store.latestKy();
   res.json({ kpi: targetKpiSummary(ky, scope) });
+});
+// Xem trước (DRY-RUN) thông báo target sẽ gửi — CEO duyệt trước khi bật gửi thật.
+// KHÔNG gửi, KHÔNG đổi trạng thái. Worker (telegram-bot) mới là nơi gửi + đánh dấu.
+router.get('/admin/notifications/preview', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const ky = req.query.ky || undefined;
+  const p = targetNotify.pendingEvents({ ky });
+  res.json({
+    ky: p.ky, timePct: p.timePct,
+    events: p.events.map((e) => ({ emp_code: e.emp_code, name: e.name, type: e.type, milestone: e.milestone || null, pct: e.pct, message: targetNotify.messageFor(e) })),
+    ceoDigest: targetNotify.ceoDigest({ ky }),
+  });
 });
 // Chi tiết 1 NV: KPI + xu hướng target/đạt theo tháng + top sản phẩm/đơn vị.
 // NV thường chỉ xem chính mình (scope.empCode); admin xem NV bất kỳ qua ?emp=.

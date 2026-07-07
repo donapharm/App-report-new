@@ -38,6 +38,7 @@ const store = require('./src/store');
 const auth = require('./src/auth');
 const A = require('./src/analytics');
 const smart = require('./src/smart');
+const targetNotify = require('./src/targetNotify');
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SECRET = process.env.TELEGRAM_BOT_SECRET || '';
@@ -179,6 +180,48 @@ async function answerNaturalQuestion(msg, txt) {
       text: 'Em chưa trả lời được câu này. Anh/Chị thử hỏi: “Doanh thu tháng 6?”, “Top sản phẩm”, “Tôi đạt bao nhiêu % target?”' });
   }
 }
+// Thông báo target chủ động (mốc 50/90/100 + chậm nhịp) + bản tổng cho CEO.
+// TẮT mặc định; bật bằng env TARGET_NOTIFY=1 (để CEO xem preview rồi mới bật gửi thật).
+async function runTargetMilestones() {
+  if (process.env.TARGET_NOTIFY !== '1') return;
+  const { events } = targetNotify.pendingEvents({});
+  const maps = auth.listTelegramMap();
+  const tidByEmp = {};
+  for (const m of maps) tidByEmp[String(m.emp_code || '').toUpperCase()] = String(m.telegram_id);
+  const sent = [];
+  for (const e of events) {
+    const user = store.findUserByCode(e.emp_code);
+    if (!user || user.no_auto_notify) continue;
+    const tid = tidByEmp[e.emp_code];
+    if (!tid || !prefEnabled(tid)) continue; // chưa map Telegram / opt-out -> để dành (email GĐ2)
+    try {
+      const r = await tg('sendMessage', { chat_id: tid, text: targetNotify.messageFor(e) });
+      if (r.ok !== false) sent.push(e);
+    } catch (err) { console.error('milestone send error:', e.emp_code, err.message); }
+  }
+  targetNotify.markSent(sent);
+  const digest = targetNotify.ceoDigest({});
+  for (const m of maps) {
+    const u = store.findUserByCode(m.emp_code);
+    if (u && isAdminUser(u) && prefEnabled(String(m.telegram_id))) {
+      try { await tg('sendMessage', { chat_id: String(m.telegram_id), text: digest }); } catch (err) { console.error('ceo digest error:', err.message); }
+    }
+  }
+  console.log(`✔ Target milestones: gửi ${sent.length} tin NV + CEO digest.`);
+}
+function startMilestoneScheduler() {
+  if (process.env.TARGET_NOTIFY !== '1') { console.log('ℹ Target milestone notify: TẮT (đặt TARGET_NOTIFY=1 để bật).'); return; }
+  const hoursVN = String(process.env.TARGET_NOTIFY_HOURS || '8,20').split(',').map((h) => Number(String(h).trim())).filter((h) => h >= 0 && h <= 23);
+  let lastKey = '';
+  console.log(`✔ Target milestone scheduler: giờ VN ${hoursVN.join(', ')}`);
+  setInterval(() => {
+    const d = vnDate(); // getUTCHours() của vnDate = giờ VN
+    if (hoursVN.includes(d.getUTCHours()) && d.getUTCMinutes() === 0) {
+      const key = `${d.toISOString().slice(0, 13)}`;
+      if (lastKey !== key) { lastKey = key; runTargetMilestones().catch((e) => console.error('milestone scheduler error:', e.message)); }
+    }
+  }, 30 * 1000);
+}
 function startDigestScheduler() {
   const cron = parseDailyCron(DIGEST_CRON);
   // DIGEST_CRON được khai báo theo giờ Việt Nam (UTC+7). Date#getUTCHours()
@@ -277,6 +320,7 @@ async function main() {
   const me = await tg('getMe', {});
   console.log(`✔ Telegram login bot: @${me.result?.username || '?'} → backend ${BASE}`);
   startDigestScheduler();
+  startMilestoneScheduler();
   let offset = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {

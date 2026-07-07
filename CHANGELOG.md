@@ -21,6 +21,19 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — GĐ1 Thông báo target chủ động (engine + preview + worker gated)
+- **`src/targetNotify.js` (engine):** tính %đạt từng NV theo kỳ + nhịp thời gian; phát hiện sự kiện
+  **vượt mốc 50/90/100%** (1 lần/mốc/kỳ) + **"đang chậm nhịp"** (%đạt < %thời gian − 15%, tối đa
+  1 lần/tuần). Chống spam bằng `data/notif_state.json` (gitignored). Soạn nội dung tin (dùng chung
+  Telegram/email) + **bản tổng theo từng NV cho CEO** (`ceoDigest`).
+- **API (CEO duyệt trước):** `GET /admin/notifications/preview?ky=` — DRY-RUN xem chính xác tin sẽ
+  gửi, KHÔNG gửi/không đổi trạng thái.
+- **Worker `telegram-bot.js`:** `runTargetMilestones()` + scheduler (giờ VN `TARGET_NOTIFY_HOURS`,
+  mặc định 8,20) — **TẮT mặc định**, chỉ chạy khi `TARGET_NOTIFY=1`. Gửi Telegram cho NV có map
+  + tôn trọng `no_auto_notify`/opt-out; đẩy CEO digest cho admin.
+- **Email:** để GĐ2 (chờ thu thập email NV sale + cấu hình SMTP). Engine đã soạn nội dung sẵn dùng lại.
+- **Test:** engine phát hiện mốc 50 đúng, chống spam OK (lần 2 = 0), CEO digest render; preview API 200.
+
 ### 2026-07-07 — Claude Code — Đợt 2: bấm NV → trang phân tích chi tiết từng NV
 - Ở "Kỳ này", **bấm card 1 NV** → mở trang chi tiết NV đó (breadcrumb Target › Kỳ này › Tên NV):
   dải KPI (tháng+quý+pacing) theo NV, **xu hướng Target vs Đã đạt theo từng tháng** (thanh
