@@ -7,6 +7,7 @@
 const store = require('./store');
 const A = require('./analytics');
 const llm = require('./llm');
+const NLQ = require('./nlqIntent');
 
 /* ---------------- 1) CẢNH BÁO CHỦ ĐỘNG ---------------- */
 function buildAlerts({ scope, ky, kys, compareMode }) {
@@ -214,6 +215,7 @@ async function answerQuestion({ text, scope, session }) {
 
   const rowsFor = () => store.getRows({ ky, scope });
   const topList = (title, arr, fmtItem) => say(title, arr.map((t, i) => `${i + 1}. ${fmtItem(t)}`));
+  const intent = NLQ.classify(text || '');
   const limitFromQuestion = (def = 5, max = 20) => Math.min(max, Math.max(1, Number((q.match(/top\s*(\d{1,2})|^(?:.*?)(\d{1,2})\s*(?:dong|muc|don vi|san pham|nv|nhan vien)/) || [])[1] || (q.match(/top\s*(\d{1,2})|^(?:.*?)(\d{1,2})\s*(?:dong|muc|don vi|san pham|nv|nhan vien)/) || [])[2] || def)));
   const employeeRevenueLocked = mine && ky === '07.2026';
   const lockedMsg = `Dữ liệu doanh thu kỳ ${ky} đang được đối chiếu lại nguồn gán nhân viên nên em tạm khóa trả số để tránh sai.`;
@@ -221,6 +223,101 @@ async function answerQuestion({ text, scope, session }) {
   const prodHits = () => { if (_ph === null) _ph = lookupProducts({ q, ky, scope }); return _ph; };
   let _uh = null; // memo tra cứu đích danh ĐƠN VỊ
   const unitHits = () => { if (_uh === null) _uh = lookupUnits({ q, ky, scope }); return _uh; };
+  const revenueLocked = () => employeeRevenueLocked ? say(lockedMsg) : null;
+  const dimRows = (dimension, limit) => {
+    if (dimension === 'contractor') return A.groupSum(rowsFor(), 'contractor_code', 'contractor_name').filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
+    if (dimension === 'bid_package') return A.groupSum(rowsFor().filter((r) => r.bid_package), 'bid_package', 'bid_package').filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
+    if (dimension === 'province') return A.groupSum(rowsFor().filter((r) => r.province), 'province', 'province').filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
+    return A.revenueBreakdown({ ky, scope, dimension }).filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
+  };
+  const dimLabel = (dimension) => ({ emp: 'nhân viên', unit: 'đơn vị', product: 'sản phẩm', contractor: 'nhà thầu', bid_package: 'gói thầu', province: 'tỉnh' }[dimension] || dimension);
+  const fmtDimItem = (dimension, t) => `${dimension === 'unit' ? unitText(t.key, t.label) : t.label}: ${fmt(t.revenue)}`;
+
+  // Router NLQ có cấu trúc: intent rõ ràng xử lý trước fuzzy lookup.
+  if (intent.intent === 'sensitive') {
+    return say('Đây là nội dung nhạy cảm về chi phí/lợi nhuận/CP Total. Anh/Chị vui lòng liên hệ CEO trước khi hỏi tiếp nội dung này.');
+  }
+  if (intent.intent === 'revenue_employee') {
+    const emp = String(intent.empCode || '').toUpperCase();
+    if (mine && emp !== String(scope.empCode || '').toUpperCase()) return say('Anh/Chị chỉ được xem doanh thu trong phạm vi của mình; không được xem doanh thu nhân viên khác.');
+    if (employeeRevenueLocked && mine) return revenueLocked();
+    const u = store.findUserByCode(emp);
+    if (!u) return say(`Chưa tìm thấy mã nhân viên ${emp}.`);
+    const k = A.overviewKpis({ ky, scope: { empCode: emp } });
+    const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
+    return say(`Doanh thu ${u.name || emp} (${emp}) kỳ ${ky}: ${fmt(k.revenue)}${mom}.`);
+  }
+  if (intent.intent === 'unit_movement') {
+    if (employeeRevenueLocked) return revenueLocked();
+    const al = buildAlerts({ ky, scope });
+    const down = al.groups.find((g) => g.key === 'unit_down');
+    const up = al.groups.find((g) => g.key === 'unit_up');
+    const wantsUp = /tang|tang truong/.test(q);
+    const wantsDown = /giam|sut|tut/.test(q);
+    const groups = wantsUp && !wantsDown ? [up] : wantsDown && !wantsUp ? [down] : [down, up];
+    const lines = [];
+    for (const g of groups) {
+      if (!g?.items?.length) continue;
+      lines.push(`${g.key === 'unit_up' ? '📈 Tăng mạnh' : '📉 Giảm mạnh'} (${g.total}):`);
+      g.items.slice(0, 6).forEach((u) => lines.push(`• ${unitText(u.unit_code, u.unit_name)}: ${g.key === 'unit_up' ? '+' : ''}${fmtPct(u.mom)}`));
+    }
+    return lines.length ? say(`Biến động đơn vị kỳ ${ky} (so kỳ trước):`, lines) : say(`Kỳ ${ky}: chưa thấy đơn vị tăng/giảm bất thường hoặc thiếu dữ liệu kỳ trước để so.`);
+  }
+  if (intent.intent === 'ranking') {
+    if (intent.dimension === 'emp' && mine) return say('Anh/Chị chỉ được xem dữ liệu trong phạm vi của mình; xếp hạng nhân viên thuộc quyền CEO/admin.');
+    if (employeeRevenueLocked) return revenueLocked();
+    const rows = dimRows(intent.dimension, intent.limit || 5);
+    if (!rows.length) return say(`Chưa có dữ liệu ${dimLabel(intent.dimension)} có doanh thu kỳ ${ky}.`);
+    return topList(`Top ${intent.limit || rows.length} ${dimLabel(intent.dimension)} có doanh thu kỳ ${ky}:`, rows, (t) => fmtDimItem(intent.dimension, t));
+  }
+  if (intent.intent === 'breakdown') {
+    if (intent.dimension === 'emp' && mine) return say('Anh/Chị chỉ được xem dữ liệu trong phạm vi của mình; doanh thu theo nhân viên thuộc quyền CEO/admin.');
+    if (employeeRevenueLocked) return revenueLocked();
+    const rows = dimRows(intent.dimension, intent.limit || 10);
+    if (!rows.length) return say(`Chưa có dữ liệu ${dimLabel(intent.dimension)} kỳ ${ky}.`);
+    return topList(`Doanh thu theo ${dimLabel(intent.dimension)} kỳ ${ky} (${rows.length} mục đầu):`, rows, (t) => fmtDimItem(intent.dimension, t));
+  }
+  if (intent.intent === 'overview') {
+    if (employeeRevenueLocked) return revenueLocked();
+    const k = A.overviewKpis({ ky, scope });
+    return say(`📊 Tổng hợp kỳ ${ky} (${mine ? 'của bạn' : 'toàn công ty'}):`, [
+      `• Doanh thu: ${fmt(k.revenue)}${k.momPct != null ? ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)` : ''}`,
+      k.pctTarget != null ? `• Đạt target: ${fmtPct(k.pctTarget)} (${fmt(k.revenueBeforeVat)}/${fmt(k.targetCompareTotal || k.targetTotal)})` : '• Chưa giao target',
+      `• Số NV/đơn vị/sản phẩm có doanh thu: ${k.empCount}/${k.unitCount}/${k.productCount}`,
+    ]);
+  }
+  if (intent.intent === 'target_gap') {
+    if (employeeRevenueLocked) return revenueLocked();
+    const k = A.overviewKpis({ ky, scope });
+    if (k.pctTarget == null) return say(`Kỳ ${ky} chưa giao target nên chưa tính được phần còn thiếu.`);
+    const target = k.targetCompareTotal || k.targetTotal || 0;
+    const gap = Math.max(0, Math.round(target - k.revenueBeforeVat));
+    if (gap <= 0) return say(`Kỳ ${ky}: đã ĐẠT/VƯỢT target (đạt ${fmtPct(k.pctTarget)}). 🎉`);
+    const pac = A.targetPacingMeta(ky);
+    const daysLeft = Math.max(0, pac.daysInMonth - pac.daysElapsed);
+    const perDay = pac.isCurrent && daysLeft > 0 ? Math.round(gap / daysLeft) : 0;
+    return say(`Kỳ ${ky}: còn thiếu ${fmt(gap)} để đủ target (đang đạt ${fmtPct(k.pctTarget)}).`, perDay ? [`Còn ${daysLeft} ngày → cần bán ~${fmt(perDay)}/ngày.`] : []);
+  }
+  if (intent.intent === 'target_pct') {
+    if (employeeRevenueLocked) return revenueLocked();
+    const k = A.overviewKpis({ ky, scope });
+    if (k.pctTarget == null) return say('Chưa có target cho kỳ ' + ky + '.');
+    return say(`Kỳ ${ky}: doanh thu trước VAT ${fmt(k.revenueBeforeVat)} / target ${fmt(k.targetCompareTotal || k.targetTotal)} → đạt ${fmtPct(k.pctTarget)}.`);
+  }
+  if (intent.intent === 'comparison') {
+    if (employeeRevenueLocked) return revenueLocked();
+    const k = A.overviewKpis({ ky, scope });
+    if (k.momPct == null) return say('Chưa đủ dữ liệu kỳ trước để so sánh.');
+    return say(`Kỳ ${ky}: doanh thu ${fmt(k.revenue)}, ${k.momPct >= 0 ? 'TĂNG 📈' : 'GIẢM 📉'} ${fmtPct(Math.abs(k.momPct))} so kỳ trước.`);
+  }
+  if (intent.intent === 'revenue_total') {
+    if (employeeRevenueLocked) return revenueLocked();
+    const k = A.overviewKpis({ ky, scope });
+    const who = mine ? 'của bạn' : 'toàn công ty';
+    const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
+    return say(`Doanh thu ${who} kỳ ${ky}: ${fmt(k.revenue)}${mom}.`);
+  }
+  // entity_lookup/help/greeting/unknown tiếp tục xuống các block hiện hữu.
 
   // Trợ giúp / bot làm được gì
   if (/\b(help|menu|giup)\b|huong dan|lam duoc gi|hoi gi|ban lam gi|chuc nang|tro giup/.test(q)) {
