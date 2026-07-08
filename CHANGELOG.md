@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (x) — Claude Code — Tên pháp nhân đầy đủ cho nhà thầu WEB/đối tác (đưa fix của bot vào git)
+- **Bối cảnh:** MISA đã có tên pháp nhân đầy đủ (`legal_entity_name`), nhưng nhánh WEB/partner chỉ lấy
+  `contractors.name` (tên ngắn). Bot đã tìm đúng schema và sửa **trực tiếp trên server** rồi chạy lại T07
+  (slot `rev_2src_072026_20260708234245`, tổng 13.528.199.293đ, **đối soát Sale-New ✅ KHỚP**).
+- **Vì sao Claude commit vào git:** bot sửa ở BẢN LÀM VIỆC trên server; `main` chưa có → auto-deploy
+  (`git reset --hard origin/main`) sẽ **xóa mất** đoạn sửa ở lần deploy kế. Đưa vào repo để giữ vĩnh viễn.
+- **Fix (đúng schema bot xác nhận — DB KHÔNG có `c.legal_name`, `contractors` có `legal_entity_id`):**
+  - `contractor_name`: `COALESCE(NULLIF(le.name,''), c.name, '')` — ưu tiên tên pháp nhân, fallback tên contractor.
+  - Thêm `LEFT JOIN legal_entities le ON le.id=c.legal_entity_id`.
+- **Trạng thái test:** `node --check` OK (không chạy DB ở đây). Bot đã xác nhận chạy thật T07 khớp.
+
 ### 2026-07-08 (w) — Claude Code — Export doanh thu: chốt bộ cột theo CEO
 - Theo CEO chốt: **bỏ cột Đơn giá** (chỉ giữ "Giá trúng thầu"); **ĐVT → "Đơn vị tính"** (ghi rõ);
   giữ **STT** ở cột đầu; **thêm cột "Ghi chú" ở cuối** (để trống cho kế toán ghi tay).

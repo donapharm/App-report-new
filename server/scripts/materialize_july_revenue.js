@@ -141,7 +141,7 @@ async function fetchPartner() {
     SELECT oi.id order_item_id, o.id order_id, o.code order_no, o.created_at,
            COALESCE(partner.effective_date, (o.created_at AT TIME ZONE 'Asia/Bangkok')::date) revenue_date,
            COALESCE(u.route,o.route,'') route,
-           COALESCE(c.code,'') contractor_code, COALESCE(c.name,'') contractor_name,
+           COALESCE(c.code,'') contractor_code, COALESCE(NULLIF(le.name,''), c.name, '') contractor_name,
            COALESCE(e.code,'') employee_code, COALESCE(e.name,'') employee_name,
            COALESCE(u.code,'') unit_code, COALESCE(u.name,'') unit_name,
            COALESCE(p.qlnb_code,'') qlnb_code, COALESCE(p.name,'') product_name, COALESCE(p.uom,'') uom,
@@ -154,6 +154,7 @@ async function fetchPartner() {
       LEFT JOIN partner ON partner.order_item_id=oi.id
       LEFT JOIN units u ON u.id=o.unit_id
       LEFT JOIN contractors c ON c.id=COALESCE(oi.contractor_id,o.contractor_id)
+      LEFT JOIN legal_entities le ON le.id=c.legal_entity_id
       LEFT JOIN employees e ON e.id=COALESCE(oi.employee_id,o.employee_id)
       LEFT JOIN products p ON p.id=oi.product_id
      WHERE o.source_system='APP_SALE'
