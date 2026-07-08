@@ -21,6 +21,24 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 — Claude Code — Bot TRA CỨU ĐÍCH DANH thuốc/mã QLNB (giá thầu + cơ số còn lại)
+- **Việc:** Thêm khả năng hỏi bot theo MỘT thuốc cụ thể (theo TÊN hoặc MÃ QLNB), trả lời gọn:
+  doanh thu, số lượng, **giá thầu**, **cơ số còn lại** (SL/tổng + %), và **đơn vị nào đang bán**.
+  - Nhận diện thuốc bằng "từ điển sản phẩm" trong phạm vi quyền (khớp mã QLNB, tên thuốc, hoạt chất,
+    và mã ngắn kiểu B02/E05) — không cần cú pháp cứng.
+  - Ưu tiên đúng: "giá thầu / doanh thu thuốc X" trả lời theo SẢN PHẨM, không rơi vào doanh thu tổng;
+    các mẫu tổng hợp cũ ("top sản phẩm", "báo cáo theo từng sản phẩm") giữ nguyên.
+  - Cắm cả vào FACTS đưa LLM (`tra_cuu_san_pham`) để LLM diễn giải sâu hơn khi hỏi lắt léo.
+- **Lý do:** Sếp kiểm tra "giá thầu / mã QLNB / tên thuốc… bot trả lời rành rọt chưa" — trước đây 2 loại
+  này (giá thầu + tra cứu đích danh 1 thuốc) chưa được surface, trả lời yếu.
+- **Quyền:** dùng `store.getRows/getCst` theo `scope` — NV sale CHỈ thấy phần của mình (đã test: DN001
+  chỉ thấy số + đơn vị của mình, không lộ NV khác). Không thêm PII vào bundle FE.
+- **File:** `server/src/smart.js` (thêm `lookupProducts`, `sayProductLookup`, 2 intent tra cứu + cắm vào
+  facts LLM + cập nhật menu/gợi ý).
+- **Test:** node harness với dữ liệu mẫu — tra cứu theo tên (E05/B02) + mã (QLNB105) ra đúng số; câu
+  chung ("doanh thu kỳ này") KHÔNG bị bắt nhầm; "top/ báo cáo theo sản phẩm" giữ nguyên; NV scope kín.
+  (Giá thầu chỉ hiện khi dữ liệu CST có `bid_price` — server thật có; bản mẫu local chưa có nên bỏ dòng đó.)
+
 ### 2026-07-07 — Claude Code — Mở rộng "bộ số" đưa LLM → bot trả lời sâu/nhiều ngữ cảnh hơn
 - `buildFacts` (dữ liệu app đưa cho LLM) nay giàu hơn nhiều, VẪN theo quyền (NV chỉ thấy mình):
   thêm **con_thieu_target + cần bán/ngày + tiến độ thời gian**, **xu hướng doanh thu 6 kỳ**,
