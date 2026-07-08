@@ -1138,8 +1138,32 @@ router.get('/targets/kpi', auth.requireAuth, (req, res) => {
 router.get('/admin/notifications/preview', auth.requireAuth, auth.requireAdmin, (req, res) => {
   const ky = req.query.ky || undefined;
   const p = targetNotify.pendingEvents({ ky });
+  // Trạng thái SẴN SÀNG để CEO biết còn thiếu gì trước khi bật gửi tự động.
+  const roster = store.targetRoster({ scope: {} });
+  const mapped = new Set(auth.listTelegramMap().map((m) => String(m.emp_code || '').toUpperCase()));
+  let nMapped = 0; let nEmail = 0; let nReach = 0; let nMuted = 0;
+  for (const u of roster) {
+    const ec = String(u.emp_code || '').toUpperCase();
+    if (targetNotify.isMuted(ec)) { nMuted += 1; continue; }
+    const hasTg = mapped.has(ec);
+    const hasEmail = !!notifyChannels.emailFor(ec, u.email);
+    if (hasTg) nMapped += 1;
+    if (hasEmail) nEmail += 1;
+    if (hasTg || hasEmail) nReach += 1;
+  }
+  const readiness = {
+    auto_enabled: process.env.TARGET_NOTIFY === '1',
+    telegram_ready: notifyChannels.telegramReady(),
+    email_ready: notifyChannels.emailReady(),
+    roster: roster.length,
+    reachable: nReach,
+    mapped_telegram: nMapped,
+    has_email: nEmail,
+    muted: nMuted,
+  };
   res.json({
     ky: p.ky, timePct: p.timePct,
+    readiness,
     events: p.events.map((e) => ({ emp_code: e.emp_code, name: e.name, type: e.type, milestone: e.milestone || null, pct: e.pct, message: targetNotify.messageFor(e) })),
     ceoDigest: targetNotify.ceoDigest({ ky }),
   });
