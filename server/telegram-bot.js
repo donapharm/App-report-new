@@ -156,9 +156,19 @@ function parseDailyCron(expr) {
   if (!m) return { minute: 30, hour: 7 };
   return { minute: Math.min(59, Math.max(0, Number(m[1]))), hour: Math.min(23, Math.max(0, Number(m[2]))) };
 }
+// Telegram gửi text thô -> bỏ ký hiệu markdown (**đậm**, *nghiêng*, # tiêu đề, `code`)
+// để không hiện ra dấu sao/thăng thô như "**Tên NV**".
+function stripMd(s) {
+  return String(s || '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/(^|\s)\*(?!\s)(.*?)\*/g, '$1$2')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*]\s+/gm, '• ');
+}
 function formatAnswerForTelegram(answer) {
-  const head = String(answer?.text || '').trim();
-  const lines = Array.isArray(answer?.lines) ? answer.lines.filter(Boolean) : [];
+  const head = stripMd(String(answer?.text || '').trim());
+  const lines = (Array.isArray(answer?.lines) ? answer.lines.filter(Boolean) : []).map(stripMd);
   const out = [head, ...lines].filter(Boolean).join('\n');
   return out.length > 3900 ? `${out.slice(0, 3890)}…` : out;
 }
