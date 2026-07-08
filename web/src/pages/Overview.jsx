@@ -46,6 +46,7 @@ export default function Overview({ me, onNavigate }) {
   const [alerts, setAlerts] = useState(null);
   const [trend, setTrend] = useState(null);
   const [topDim, setTopDim] = useState('unit');
+  const topLimit = 20;
   const [topRows, setTopRows] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [cmpMode, setCmpModeState] = useState(() => { try { return localStorage.getItem('rpt_cmp_mode') || 'prev'; } catch { return 'prev'; } });
@@ -68,9 +69,11 @@ export default function Overview({ me, onNavigate }) {
 
   useEffect(() => {
     if (!periodSel) return;
+    const dim = topDim === 'emp' && !me.isAdmin ? 'unit' : topDim;
+    if (dim !== topDim) { setTopDim(dim); return; }
     setTopRows(null);
-    api.revenue(topDim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, 10)));
-  }, [periodSel, topDim, reloadTick]);
+    api.revenue(dim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, topLimit)));
+  }, [periodSel, topDim, reloadTick, me.isAdmin]);
 
   function viewAll(group) {
     if (!onNavigate) return;
@@ -99,7 +102,8 @@ export default function Overview({ me, onNavigate }) {
       setTrend(null);
       api.trend().then(setTrend);
       setTopRows(null);
-      api.revenue(topDim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, 10)));
+      const dim = topDim === 'emp' && !me.isAdmin ? 'unit' : topDim;
+      api.revenue(dim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, topLimit)));
     } finally {
       setRefreshing(false);
     }
@@ -149,10 +153,11 @@ export default function Overview({ me, onNavigate }) {
             </div>
             <div className="card chart-card wide">
               <div className="chart-head">
-                <div className="section-head">🏆 Top 10 doanh thu</div>
+                <div className="section-head">🏆 Top {topLimit} doanh thu</div>
                 <div className="seg compact">
                   <button className={topDim === 'unit' ? 'active' : ''} onClick={() => setTopDim('unit')}>Đơn vị</button>
                   <button className={topDim === 'product' ? 'active' : ''} onClick={() => setTopDim('product')}>Sản phẩm</button>
+                  {me.isAdmin && <button className={topDim === 'emp' ? 'active' : ''} onClick={() => setTopDim('emp')}>Nhân viên</button>}
                 </div>
               </div>
               {!topRows ? <Spinner /> : <TopBarChart rows={topRows} />}
