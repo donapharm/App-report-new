@@ -21,6 +21,15 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — Mở rộng "bộ số" đưa LLM → bot trả lời sâu/nhiều ngữ cảnh hơn
+- `buildFacts` (dữ liệu app đưa cho LLM) nay giàu hơn nhiều, VẪN theo quyền (NV chỉ thấy mình):
+  thêm **con_thieu_target + cần bán/ngày + tiến độ thời gian**, **xu hướng doanh thu 6 kỳ**,
+  **top nhà thầu / gói thầu / tỉnh**, **đơn vị tăng/giảm mạnh**, **cơ số chưa bán**, và (chỉ admin)
+  **danh sách TỪNG NV** (mã/tên/doanh thu/target/%đạt) + **NV chưa đạt**.
+- LLM vẫn KHÔNG bịa số — chỉ diễn giải trên bộ số này → trả lời được nhiều tình huống (phân tích
+  từng NV, so xu hướng, hỏi nhà thầu/tỉnh…).
+- **Test:** các mảnh dữ liệu chạy đúng cho cả admin lẫn NV; NV KHÔNG lộ danh sách người khác.
+
 ### 2026-07-07 — Claude Code — LLM ĐÃ BẬT (hỏi tự nhiên) + dọn markdown tin Telegram
 - ✅ **ANTHROPIC_API_KEY đã vào `.env`, `llm.isEnabled()=true`** — bot hiểu ngôn ngữ tự nhiên,
   số vẫn do code tính (không bịa). Verified: hỏi "NV nào đang dẫn đầu t07" → trả lời đúng NV + doanh thu.

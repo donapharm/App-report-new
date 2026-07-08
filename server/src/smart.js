@@ -359,18 +359,63 @@ async function answerQuestion({ text, scope, session }) {
 // Gom SỐ đã tính (trong phạm vi quyền) để đưa LLM — không có dữ liệu thô/PII.
 function buildFacts({ ky, scope, mine }) {
   const k = A.overviewKpis({ ky, scope });
+  const rows = store.getRows({ ky, scope });
+  const pac = A.targetPacingMeta(ky);
+  const target = k.targetCompareTotal || k.targetTotal || 0;
+  const truocVat = k.revenueBeforeVat || 0;
+  const conThieu = k.pctTarget != null && target > 0 ? Math.max(0, Math.round(target - truocVat)) : null;
+  const daysLeft = Math.max(0, (pac.daysInMonth || 0) - (pac.daysElapsed || 0));
+  const topRev = (dim, n = 8) => A.revenueBreakdown({ ky, scope, dimension: dim }).slice(0, n);
+  const groupTop = (field, labelField, filter) => A.groupSum(filter ? rows.filter(filter) : rows, field, labelField).slice(0, 8);
+  // Xu hướng doanh thu 6 kỳ gần nhất (dữ liệu đã cache nên nhẹ).
+  const xuHuong = store.periodKys().slice(-6).map((kk) => ({ ky: kk, doanh_thu: Math.round(store.getRows({ ky: kk, scope }).reduce((s, r) => s + Number(r.revenue || 0), 0)) }));
+  // Biến động đơn vị + NV chưa đạt (từ buildAlerts).
+  let tangManh = [], giamManh = [], nvChuaDat = [];
+  try {
+    const al = buildAlerts({ ky, scope });
+    giamManh = (al.groups.find((g) => g.key === 'unit_down')?.items || []).slice(0, 6).map((u) => ({ ten: unitText(u.unit_code, u.unit_name), giam_pct: u.mom }));
+    tangManh = (al.groups.find((g) => g.key === 'unit_up')?.items || []).slice(0, 6).map((u) => ({ ten: unitText(u.unit_code, u.unit_name), tang_pct: u.mom }));
+    if (!mine) nvChuaDat = (al.groups.find((g) => g.key === 'target')?.items || []).slice(0, 10).map((t) => ({ ten: t.name || t.emp_code, dat_pct: t.pct }));
+  } catch { /* thiếu dữ liệu kỳ trước -> bỏ qua */ }
+  // Danh sách TỪNG NV (CHỈ admin — NV thường không thấy người khác).
+  let danhSachNV;
+  if (!mine) {
+    const empRev = Object.fromEntries(A.revenueBreakdown({ ky, scope, dimension: 'emp' }).map((e) => [e.key, e.revenue]));
+    const tByEmp = {};
+    for (const t of store.getTargetsRange({ kys: [ky], scope })) tByEmp[t.emp_code] = (tByEmp[t.emp_code] || 0) + Number(t.target || 0);
+    danhSachNV = store.targetRoster({ scope }).map((u) => {
+      const bvat = Math.round((empRev[u.emp_code] || 0) / A.VAT_DIVISOR);
+      const tg = tByEmp[u.emp_code] || 0;
+      return { ma: u.emp_code, ten: u.name || u.emp_code, doanh_thu_truoc_vat: bvat, target: tg, dat_pct: tg > 0 ? +(bvat / tg * 100).toFixed(1) : null };
+    }).sort((a, b) => b.doanh_thu_truoc_vat - a.doanh_thu_truoc_vat);
+  }
   return {
     ky,
     phamvi: mine ? 'chỉ nhân viên đang đăng nhập' : 'toàn công ty',
     doanh_thu: k.revenue,
-    doanh_thu_truoc_vat: k.revenueBeforeVat,
-    target_tong: k.targetTotal,
+    doanh_thu_truoc_vat: truocVat,
+    target_tong: target,
     phan_tram_dat: k.pctTarget,
+    con_thieu_target: conThieu,
+    tien_do_thoi_gian_pct: +((pac.factor || 0) * 100).toFixed(1),
+    so_ngay_con_lai: daysLeft,
+    can_ban_moi_ngay: conThieu && daysLeft > 0 ? Math.round(conThieu / daysLeft) : null,
     tang_giam_so_ky_truoc_pct: k.momPct,
-    top_san_pham: A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 5).map((x) => ({ ten: x.label, doanh_thu: x.revenue })),
-    top_don_vi: A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5).map((x) => ({ ten: unitText(x.key, x.label), doanh_thu: x.revenue })),
-    ...(mine ? {} : { top_nhan_vien: A.revenueBreakdown({ ky, scope, dimension: 'emp' }).slice(0, 5).map((x) => ({ ten: x.label, doanh_thu: x.revenue })) }),
+    xu_huong_doanh_thu_cac_ky: xuHuong,
+    top_san_pham: topRev('product').map((x) => ({ ten: x.label, doanh_thu: x.revenue })),
+    top_don_vi: topRev('unit').map((x) => ({ ten: unitText(x.key, x.label), doanh_thu: x.revenue })),
+    top_nha_thau: groupTop('contractor_code', 'contractor_name').map((x) => ({ ten: x.label, doanh_thu: x.revenue })),
+    top_goi_thau: groupTop('bid_package', 'bid_package', (r) => r.bid_package).map((x) => ({ ten: x.label, doanh_thu: x.revenue })),
+    top_tinh: groupTop('province', 'province', (r) => r.province).map((x) => ({ ten: x.label, doanh_thu: x.revenue })),
+    don_vi_tang_manh: tangManh,
+    don_vi_giam_manh: giamManh,
+    ...(mine ? {} : {
+      top_nhan_vien: topRev('emp', 5).map((x) => ({ ten: x.label, doanh_thu: x.revenue })),
+      danh_sach_nhan_vien: danhSachNV,
+      nv_chua_dat_target: nvChuaDat,
+    }),
     co_so_thau_sap_can: A.cstTable({ scope, remainPctMax: 10 }).slice(0, 8).map((c) => ({ sp: c.product_name, dv: unitText(c.unit_code, c.unit_name), con_lai_pct: c.remain_pct })),
+    so_don_vi_chua_ban: A.cstTable({ scope, filters: { status: 'empty' } }).length,
   };
 }
 
