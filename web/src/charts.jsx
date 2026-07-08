@@ -45,26 +45,33 @@ export function RevenueTrendChart({ rows = [], selectedKys = [] }) {
   );
 }
 
-function TopEmpLabel({ x, y, width, height, value, payload }) {
+function TopValueLabel({ x, y, width, height, value, payload }) {
   if (value == null || !payload) return null;
-  const text = `${short(value)}${payload.pctTarget != null ? ` · ${pct(payload.pctTarget)}` : ''}`;
+  const percentText = payload.dimension === 'emp' && payload.pctTarget != null
+    ? pct(payload.pctTarget)
+    : (payload.totalRevenue > 0 ? pct((Number(value || 0) / payload.totalRevenue) * 100) : null);
+  const text = `${short(value)}${percentText ? ` · ${percentText}` : ''}`;
   return <text x={x + width + 7} y={y + height / 2} fill="#0f172a" fontSize={11} fontWeight={800} dominantBaseline="central">{text}</text>;
 }
 
-export function TopBarChart({ rows = [], limit = 20, dimension = '' }) {
-  const data = (rows || []).slice(0, limit).map((r) => ({ ...r, name: nameShort(r.label || r.product_name || r.unit_name || r.key, 32) })).reverse();
-  const showEmpTarget = dimension === 'emp';
+export function TopBarChart({ rows = [], limit = 20, dimension = '', totalRevenue = 0 }) {
+  const data = (rows || []).slice(0, limit).map((r) => ({
+    ...r,
+    dimension,
+    totalRevenue,
+    name: nameShort(r.label || r.product_name || r.unit_name || r.key, 32),
+  })).reverse();
   if (!data.length) return <EmptyChart />;
   return (
     <div className="chart-box bar-chart">
       <ResponsiveContainer width="100%" height={Math.max(260, data.length * 32)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: showEmpTarget ? 116 : 18, left: 6, bottom: 4 }}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 122, left: 6, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e3e9f1" />
           <XAxis type="number" tickFormatter={short} tick={{ fontSize: 12 }} />
           <YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 12 }} />
           <Tooltip content={<MoneyTooltip />} />
           <Bar dataKey="revenue" name="Doanh thu" fill="#1568b8" radius={[0, 8, 8, 0]}>
-            {showEmpTarget && <LabelList dataKey="revenue" content={<TopEmpLabel />} />}
+            <LabelList dataKey="revenue" content={<TopValueLabel />} />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
