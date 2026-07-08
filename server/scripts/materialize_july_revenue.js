@@ -36,7 +36,21 @@ const num = (v) => Number(v || 0);
 const validEmp = (v) => /^(DN|VP)\d{3}$/.test(String(v || '').trim().toUpperCase());
 function cleanCode(v, fallback = '') { return String(v || fallback || '').trim(); }
 function empCode(v) { const s = String(v || '').trim().toUpperCase(); return validEmp(s) ? s : 'UNALLOCATED'; }
-function dateOnly(v) { return v ? new Date(v).toISOString().slice(0, 10) : null; }
+// Lấy NGÀY BÁN theo giờ VN (Asia/Bangkok, +07). TUYỆT ĐỐI KHÔNG dùng toISOString()
+// (quy đổi UTC): đơn/doanh thu mốc 00:00 ngày 01/07 (+07) = 30/06 17:00Z → toISOString().slice
+// sẽ trả 30/06, kéo TOÀN BỘ đơn đầu ngày lùi 1 ngày (đây là gốc lỗi "01/07 rớt xuống 30/06").
+function dateOnly(v) {
+  if (!v) return null;
+  if (typeof v === 'string') {
+    const m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  }
+  const d = v instanceof Date ? v : new Date(v);
+  if (isNaN(d.getTime())) return null;
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(d).reduce((acc, x) => (acc[x.type] = x.value, acc), {});
+  return `${p.year}-${p.month}-${p.day}`;
+}
 function pad(n) { return String(n).padStart(2, '0'); }
 function kyToRange(ky) {
   const [mm, yyyy] = String(ky || '').split('.').map(Number);
@@ -114,8 +128,8 @@ async function fetchPartner() {
              resp.responded_at, resp.updated_at response_updated_at,
              COALESCE(resp.delivered_qty, resp.qty_delivered, monthly.delivered_qty, 0)::numeric delivered_qty,
              CASE
-               WHEN NULLIF(resp.invoice_no,'') IS NOT NULL THEN COALESCE(monthly.invoice_date, resp.responded_at::date, resp.updated_at::date)
-               WHEN resp.order_item_id IS NOT NULL THEN COALESCE(resp.responded_at::date, resp.updated_at::date)
+               WHEN NULLIF(resp.invoice_no,'') IS NOT NULL THEN COALESCE(monthly.invoice_date, (resp.responded_at AT TIME ZONE 'Asia/Bangkok')::date, (resp.updated_at AT TIME ZONE 'Asia/Bangkok')::date)
+               WHEN resp.order_item_id IS NOT NULL THEN COALESCE((resp.responded_at AT TIME ZONE 'Asia/Bangkok')::date, (resp.updated_at AT TIME ZONE 'Asia/Bangkok')::date)
                WHEN COALESCE(monthly.delivered_qty, 0) > 0 THEN monthly.invoice_date
                ELSE NULL
              END effective_date
@@ -124,7 +138,7 @@ async function fetchPartner() {
         LEFT JOIN monthly_recon monthly ON monthly.order_item_id=oi.id
     )
     SELECT oi.id order_item_id, o.id order_id, o.code order_no, o.created_at,
-           COALESCE(partner.effective_date, o.created_at::date) revenue_date,
+           COALESCE(partner.effective_date, (o.created_at AT TIME ZONE 'Asia/Bangkok')::date) revenue_date,
            COALESCE(u.route,o.route,'') route,
            COALESCE(c.code,'') contractor_code, COALESCE(c.name,'') contractor_name,
            COALESCE(e.code,'') employee_code, COALESCE(e.name,'') employee_name,
@@ -149,10 +163,10 @@ async function fetchPartner() {
        -- vẫn thuộc nhóm theo dõi/còn nợ kỳ trước, không cộng vào doanh thu T07.
        AND o.created_at >= ($1::date::text || ' 00:00:00+07')::timestamptz
        AND o.created_at < (($2::date + INTERVAL '1 day')::date::text || ' 00:00:00+07')::timestamptz
-       AND COALESCE(partner.effective_date, o.created_at::date) >= $1::date
-       AND COALESCE(partner.effective_date, o.created_at::date) <= $2::date
+       AND COALESCE(partner.effective_date, (o.created_at AT TIME ZONE 'Asia/Bangkok')::date) >= $1::date
+       AND COALESCE(partner.effective_date, (o.created_at AT TIME ZONE 'Asia/Bangkok')::date) <= $2::date
        AND COALESCE(partner.delivered_qty,0) > 0
-     ORDER BY COALESCE(partner.effective_date, o.created_at::date), o.id, oi.id`, [PERIOD.from, PERIOD.to]);
+     ORDER BY COALESCE(partner.effective_date, (o.created_at AT TIME ZONE 'Asia/Bangkok')::date), o.id, oi.id`, [PERIOD.from, PERIOD.to]);
   return q.rows.map((r) => ({
     ky: PERIOD.ky, date: dateOnly(r.revenue_date) || PERIOD.from,
     source: 'APP_WEB_PARTNER', source_order: r.order_no, source_line_id: `WEB:${r.order_item_id}`,
@@ -208,4 +222,10 @@ async function main() {
   console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length }, null, 2));
   await pool.end();
 }
-main().catch(async (e) => { console.error(e); try { await pool.end(); } catch {} process.exit(1); });
+
+// Cho phép require lại (tool đối soát) mà KHÔNG chạy materialize; chỉ chạy khi gọi trực tiếp.
+module.exports = { main, fetchMisa, fetchPartner, latestRun, kyToRange, dateOnly, pool, PERIOD };
+
+if (require.main === module) {
+  main().catch(async (e) => { console.error(e); try { await pool.end(); } catch {} process.exit(1); });
+}

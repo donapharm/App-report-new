@@ -11,6 +11,7 @@ const A = require('./analytics');
 const smart = require('./smart');
 const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
+const reconcile = require('./reconcile');
 const targetAdmin = require('./targetAdmin');
 const assignmentAdmin = require('./assignmentAdmin');
 const targetAdjustment = require('./targetAdjustment');
@@ -543,6 +544,15 @@ router.post('/admin/revenue-refresh/run', auth.requireAuth, auth.requireAdmin, a
   try {
     const r = await revenueRefresh.runOnce({ force: true, reason: 'admin_button', ky: req.body?.ky || req.query?.ky });
     res.json(r);
+  } catch (e) {
+    res.status(500).json({ error: String(e?.message || e) });
+  }
+});
+
+// Đối soát toàn vẹn dữ liệu doanh thu 1 kỳ (bắt lỗi ngày ngoài biên, đếm trùng, đơn vị NV biến mất).
+router.get('/admin/reconcile', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try {
+    res.json(reconcile.reconcileKy(req.query?.ky || undefined));
   } catch (e) {
     res.status(500).json({ error: String(e?.message || e) });
   }

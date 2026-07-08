@@ -21,6 +21,49 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (t) — Claude Code — CÔNG CỤ ĐỐI SOÁT Report-New ↔ Sale-New (tự phát hiện lệch)
+- **Lý do (CEO yêu cầu sau vụ DN009):** không đợi NV báo mới biết mất dữ liệu — phải TỰ phát hiện lệch
+  theo từng NV/kỳ.
+- **`server/src/reconcile.js` (mới):** đối soát toàn vẹn 1 kỳ trên dữ liệu Report-New (KHÔNG cần DB), đọc
+  file slot GỐC (trước khi kéo biên) để bắt đúng dấu vân tay lỗi:
+  1) `dateOutOfBand` — dòng có ngày ngoài [dateFrom,dateTo] (đúng ca 01/07→30/06);
+  2) `metaMismatch` — số dòng/doanh thu metadata ≠ thực tế file;
+  3) `duplicateLines` — trùng `source_line_id`;
+  4) `unitDrop` — theo từng NV, đơn vị có doanh thu kỳ trước nhưng biến mất kỳ này (cảnh báo sớm kiểu DN009).
+- **API `GET /admin/reconcile?ky=` (admin):** trả JSON đối soát để hiển thị/đẩy cảnh báo.
+- **Web:** thêm tab **“Đối soát dữ liệu”** trong trang Upload (admin) — chọn kỳ → xem lệch ngay.
+- **`server/scripts/reconcile_revenue.js` (mới, chạy trên server bot):** Lớp 1 (như trên) + **Lớp 2** DỰNG
+  LẠI doanh thu từ **nguồn Sale-New** bằng chính truy vấn của materialize (require lại, KHÔNG chạy
+  materialize) rồi đối chiếu per (NV, đơn vị): thiếu ở Report-New / lệch doanh thu / dư ở Report-New.
+  `materialize_july_revenue.js` được bọc `require.main===module` + export hàm để tái sử dụng an toàn.
+- **Trạng thái test:** `node --check` toàn bộ OK; web build OK; test tái hiện DN009 (2 dòng 30/06 +
+  meta lệch + dòng trùng) → tool bắt đủ. Lớp 2 cần chạy trên server bot có DB Sale-New.
+
+### 2026-07-08 (s) — Claude Code — TÌM ĐÚNG GỐC LỖI NGÀY 01/07→30/06 (fix tại nguồn materialize)
+- **Bối cảnh:** Sếp bác bỏ cách "kéo về biên kỳ" (mục r) vì đó chỉ là **vá triệu chứng**, yêu cầu tìm
+  **đúng chỗ sinh ra ngày sai**. Dữ liệu Sếp cung cấp: 11 dòng 034 Y ĐỨC HEALTHCARE đều `source: CRM_MISA`,
+  `date: "2026-06-30"`, nằm trong file `ky: 07.2026` (order DH479815515, MISA:16889…).
+- **GỐC LỖI (đã chứng minh):** `server/scripts/materialize_july_revenue.js` dòng 39:
+  `dateOnly(v) = new Date(v).toISOString().slice(0,10)`.
+  - `misa_revenue_snapshot_lines.revenue_date` là kiểu **DATE = 01/07** (nên vẫn LỌT qua bộ lọc SQL
+    `revenue_date >= '2026-07-01'::date` → có mặt trong file T07).
+  - node-postgres đọc DATE thành **nửa đêm giờ máy** → trên server VN (GMT+7) là
+    `2026-07-01T00:00:00+07` = `2026-06-30T17:00:00Z`.
+  - `.toISOString()` quy về **UTC** rồi cắt 10 ký tự → ra **`2026-06-30`**. Vì DATE luôn là nửa đêm nên
+    **TẤT CẢ** dòng bị lùi đúng 1 ngày (giải thích vì sao cả 11 dòng đều 30/06, không phải vài dòng).
+  - Sau đó `store.js` lọc theo `dateFrom=01/07` → rớt sạch khỏi Report-New T07.
+- **Đã sửa (tại nguồn):**
+  1. `dateOnly()` lấy ngày theo **giờ VN** bằng `Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Bangkok'})`,
+     KHÔNG dùng `toISOString()`. Kiểm chứng: `pg DATE 01/07 → CŨ=2026-06-30, MỚI=2026-07-01` (đúng).
+  2. Nhánh WEB partner: các cast `timestamptz::date` (`o.created_at`, `resp.responded_at`,
+     `resp.updated_at`) đổi sang `(x AT TIME ZONE 'Asia/Bangkok')::date` để không lệch ngày với đơn
+     đầu giờ sáng khi session DB chạy UTC.
+- **Cách áp:** bot `git reset --hard origin/main` + chạy lại materialize (hoặc chờ scheduler) → dữ liệu
+  MISA T07 sẽ mang đúng ngày 01/07. "Kéo về biên kỳ" (mục r) giữ lại làm **lưới an toàn có log**, gần như
+  không còn phải kích hoạt sau fix này.
+- **Trạng thái test:** `node --check` OK; unit-test tái hiện lỗi cũ + xác nhận fix trên máy TZ=Asia/Ho_Chi_Minh.
+  Cần bot chạy lại materialize thật để xác nhận DN009 = 12 đơn vị.
+
 ### 2026-07-08 (r) — Claude Code — FIX MẤT DOANH THU: không bỏ dòng "ngày gán sai", kéo về biên kỳ
 - **Triệu chứng (NV DN009 phát hiện):** DN009 tháng 7 chỉ ra 9 đơn vị thay vì 12; thiếu 034 Y ĐỨC
   HEALTHCARE + TRỊ AN. Sale-New CÓ, Report-New KHÔNG.
