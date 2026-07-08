@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (l) — Claude Code — Bot: "báo cáo chi tiết" ra nhiều phần + "tất cả mặt hàng" + từ "mặt hàng"
+- **Báo cáo chi tiết:** câu "báo cáo doanh thu **chi tiết**" (không nêu chiều) trước chỉ ra **1 dòng tổng**
+  → nay ra **nhiều phần**: doanh thu + %target + **top 5 sản phẩm** + **top 5 đơn vị** + gợi ý xem đầy đủ.
+- **"Tất cả mặt hàng":** khi có "tất cả/toàn bộ/đầy đủ/chi tiết" thì liệt kê tới **50 mục** (thay 15),
+  LUÔN kèm **tổng số** + gợi ý xuất Excel (tin Telegram giới hạn độ dài).
+- **Fix từ khóa:** nhận diện **"mặt hàng"** (trước chỉ "sản phẩm/mã hàng").
+- **File:** `server/src/smart.js`.
+- **⚠ GHI CHÚ:** phát hiện bot server chạy **code KHÁC `main`** (bot ghi "15 **mục đầu**" + nhận "mặt hàng"
+  — cả 2 KHÔNG có trong repo) → server có **sửa tay chưa commit** → cây git dirty → **auto-deploy bị chặn**
+  → #64–#68 (kể cả fix "top 10") CHƯA lên. Cần đội bot **commit bản sửa tay vào main**.
+
 ### 2026-07-08 (k) — Claude Code — FIX bot: "top 10" bị hiểu nhầm thành tra cứu đơn vị "010"
 - **Triệu chứng:** Hỏi "những đơn vị nào nằm trong top 10" → bot trả tra cứu đơn vị **010.BV Quân Y 7B**
   (0đ) thay vì danh sách top đơn vị.

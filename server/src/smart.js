@@ -296,26 +296,39 @@ async function answerQuestion({ text, scope, session }) {
     if (!g.length) return say(`Chưa gán được tỉnh cho dữ liệu kỳ ${ky}.`);
     return topList(`Doanh thu theo tỉnh kỳ ${ky}:`, g, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
+  // "tất cả / toàn bộ / đầy đủ / chi tiết" -> hiện NHIỀU hơn (tối đa 50, giới hạn độ dài tin Telegram);
+  // luôn kèm TỔNG số + gợi ý xuất Excel để xem đủ 100%.
+  const wantAll = /tat ca|toan bo|day du|\bhet\b|tat tan tat|\bfull\b|chi tiet/.test(q);
+  const reportNote = (shown, total) => (total > shown ? `${shown}/${total} — xem đủ trên web/Excel` : `${total} mục`);
   // Báo cáo theo TỪNG đơn vị (không chỉ "top") — vd "báo cáo bán hàng theo từng mã đơn vị"
   if (/(bao cao|theo|tung|moi|liet ke|thong ke|chi tiet).*(don vi|benh vien|phong kham|khach hang|ma dv)/.test(q)) {
-    const rows = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 15);
-    if (!rows.length) return say(`Chưa có doanh thu theo đơn vị kỳ ${ky}.`);
-    return topList(`Doanh thu theo đơn vị kỳ ${ky} (${rows.length} đơn vị đầu):`, rows, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
+    const all = A.revenueBreakdown({ ky, scope, dimension: 'unit' });
+    if (!all.length) return say(`Chưa có doanh thu theo đơn vị kỳ ${ky}.`);
+    const rows = all.slice(0, wantAll ? 50 : 15);
+    return topList(`Doanh thu theo đơn vị kỳ ${ky} (${reportNote(rows.length, all.length)}):`, rows, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
   }
-  // Báo cáo theo TỪNG sản phẩm
-  if (/(bao cao|theo|tung|moi|liet ke|thong ke|chi tiet).*(san pham|thuoc|ma hang|ma qlnb)/.test(q)) {
-    const rows = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 15);
-    if (!rows.length) return say(`Chưa có doanh thu theo sản phẩm kỳ ${ky}.`);
-    return topList(`Doanh thu theo sản phẩm kỳ ${ky} (${rows.length} SP đầu):`, rows, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  // Báo cáo theo TỪNG sản phẩm (nhận cả "mặt hàng")
+  if (/(bao cao|theo|tung|moi|liet ke|thong ke|chi tiet).*(san pham|thuoc|mat hang|ma hang|ma qlnb)/.test(q)) {
+    const all = A.revenueBreakdown({ ky, scope, dimension: 'product' });
+    if (!all.length) return say(`Chưa có doanh thu theo sản phẩm kỳ ${ky}.`);
+    const rows = all.slice(0, wantAll ? 50 : 15);
+    return topList(`Doanh thu theo sản phẩm kỳ ${ky} (${reportNote(rows.length, all.length)}):`, rows, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
   // Báo cáo tổng hợp / tổng quan
-  if (/bao cao tong hop|tong hop|tong quan|bao cao chung|tinh hinh chung|so lieu chung/.test(q)) {
+  // Báo cáo TỔNG HỢP / CHI TIẾT (không nêu rõ chiều) -> trả NHIỀU phần: tổng + target + top SP + top ĐV.
+  // (Trước đây "doanh thu chi tiết" chỉ ra 1 dòng tổng khiến Sếp thấy cụt.)
+  if (/bao cao tong hop|tong hop|tong quan|bao cao chung|tinh hinh chung|so lieu chung|(chi tiet|day du|toan bo|tat ca|day du).*(doanh thu|doanh so)|(doanh thu|doanh so).*(chi tiet|day du|toan bo|tat ca)/.test(q)) {
     const k = A.overviewKpis({ ky, scope });
-    return say(`📊 Tổng hợp kỳ ${ky} (${mine ? 'của bạn' : 'toàn công ty'}):`, [
+    const topSP = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 5);
+    const topDV = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5);
+    const lines = [
       `• Doanh thu: ${fmt(k.revenue)}${k.momPct != null ? ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)` : ''}`,
       k.pctTarget != null ? `• Đạt target: ${fmtPct(k.pctTarget)} (${fmt(k.revenueBeforeVat)}/${fmt(k.targetCompareTotal || k.targetTotal)})` : '• Chưa giao target',
-      '• Gõ "top đơn vị", "top sản phẩm", "đơn vị giảm mạnh"… để xem chi tiết.',
-    ]);
+    ];
+    if (topSP.length) { lines.push('— Top sản phẩm:'); topSP.forEach((t, i) => lines.push(`  ${i + 1}. ${t.label}: ${fmt(t.revenue)}`)); }
+    if (topDV.length) { lines.push('— Top đơn vị:'); topDV.forEach((t, i) => lines.push(`  ${i + 1}. ${unitText(t.key, t.label)}: ${fmt(t.revenue)}`)); }
+    lines.push('• Gõ "báo cáo theo sản phẩm" / "theo đơn vị" để xem đầy đủ danh sách.');
+    return say(`📊 Báo cáo chi tiết kỳ ${ky} (${mine ? 'của bạn' : 'toàn công ty'}):`, lines);
   }
   // Biến động đơn vị (giảm/tăng mạnh)
   if (/giam manh|sut giam|tut manh|giam nhieu|tang manh|tang truong/.test(q)) {
