@@ -736,6 +736,8 @@ function unitText(code, name) {
   if (!c && !nm) return '—';
   if (!c) return nm;
   if (!nm || nm === c) return c;
+  // unit_code đã chứa cả tên (vd "034.PKĐK Y ĐỨC") + unit_name chỉ là tên -> tránh ghép lặp đôi.
+  if (/^\d{3}\./.test(c) && c.includes(nm)) return c;
   if (nm.startsWith(`${c}.`) || nm.startsWith(`${c} `) || nm.includes(c)) return nm;
   return `${c}.${nm}`;
 }
