@@ -214,6 +214,7 @@ async function answerQuestion({ text, scope, session }) {
 
   const rowsFor = () => store.getRows({ ky, scope });
   const topList = (title, arr, fmtItem) => say(title, arr.map((t, i) => `${i + 1}. ${fmtItem(t)}`));
+  const employeeRevenueLocked = mine && ky === '07.2026';
   let _ph = null; // memo tra cứu đích danh SẢN PHẨM (tránh tính 2 lần)
   const prodHits = () => { if (_ph === null) _ph = lookupProducts({ q, ky, scope }); return _ph; };
   let _uh = null; // memo tra cứu đích danh ĐƠN VỊ
@@ -240,6 +241,13 @@ async function answerQuestion({ text, scope, session }) {
   // Câu tự giới thiệu/kiểm tra liên kết kiểu "Tôi là NV DN001, bạn trả lời tôi nào".
   // Trả bằng code cố định để tránh LLM tự diễn giải sai đơn vị tiền (triệu/tỷ).
   if (/(toi|minh|em)\s+la\b.*\b(nv|nhan vien|dn\d{3}|vp\d{3})\b|\bban tra loi\b|\btra loi toi\b/.test(q)) {
+    if (employeeRevenueLocked) {
+      const emp = scope.empCode ? store.findUserByCode(scope.empCode) : null;
+      return say(`Chào ${emp?.name || scope.empCode} — tài khoản đang liên kết ${scope.empCode}.`, [
+        `Dữ liệu doanh thu kỳ ${ky} đang được đối chiếu lại nguồn gán nhân viên nên em tạm khóa trả số để tránh sai.`,
+        'Sau khi quản trị xác nhận nguồn, Anh/Chị hỏi lại em sẽ trả lời ngay.',
+      ]);
+    }
     const k = A.overviewKpis({ ky, scope });
     const emp = scope.empCode ? store.findUserByCode(scope.empCode) : null;
     const target = k.targetCompareTotal || k.targetTotal || 0;
@@ -393,6 +401,7 @@ async function answerQuestion({ text, scope, session }) {
   const hasProductCue = /thuoc|san pham|ma hang|ma thuoc|qlnb|hoat chat|gia thau/.test(q);
   const hasUnitCue = /don vi|benh vien|phong kham|nha thuoc|khach hang|ma dv|ai ban|ai phu trach/.test(q);
   if (asksRevenue && !hasProductCue && !hasUnitCue) {
+    if (employeeRevenueLocked) return say(`Dữ liệu doanh thu kỳ ${ky} đang được đối chiếu lại nguồn gán nhân viên nên em tạm khóa trả số để tránh sai.`);
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
     const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
@@ -410,6 +419,7 @@ async function answerQuestion({ text, scope, session }) {
     if (hits.length) { const ans = sayUnitLookup(hits, ky, mine); if (ans) return ans; }
   }
   if (asksRevenue) {
+    if (employeeRevenueLocked) return say(`Dữ liệu doanh thu kỳ ${ky} đang được đối chiếu lại nguồn gán nhân viên nên em tạm khóa trả số để tránh sai.`);
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
     const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
