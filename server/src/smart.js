@@ -277,10 +277,11 @@ async function answerQuestion({ text, scope, session }) {
       '• "doanh thu thuốc Amlodipin"',
     ]);
   }
+  const isTopUnitQuery = /(top|xep hang|cao nhat|nhieu nhat).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|khach).*(top|xep hang|cao|nhieu)/.test(q);
   // Tra cứu ĐÍCH DANH 1 ĐƠN VỊ: "BV007 bán được bao nhiêu, ai bán?" (KHÔNG lẫn với "top đơn vị").
-  if (/\bai ban\b|ai phu trach|nhan vien nao ban|nv nao ban/.test(q)
+  if (!isTopUnitQuery && (/\bai ban\b|ai phu trach|nhan vien nao ban|nv nao ban/.test(q)
       || /(don vi|benh vien|phong kham|nha thuoc|khach hang|ma dv)\b.*(ban duoc|bao nhieu|doanh thu|doanh so|ai ban)/.test(q)
-      || /(ban duoc|doanh thu|doanh so).*(don vi|benh vien|phong kham|nha thuoc|ma dv)\b/.test(q)) {
+      || /(ban duoc|doanh thu|doanh so).*(don vi|benh vien|phong kham|nha thuoc|ma dv)\b/.test(q))) {
     const ans = sayUnitLookup(unitHits(), ky, mine);
     if (ans) return ans;
     if (/\bai ban\b|ai phu trach/.test(q)) {
@@ -297,10 +298,11 @@ async function answerQuestion({ text, scope, session }) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 5);
     return topList(`Top sản phẩm kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
-  if (/(top|cao nhat|nhieu nhat).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|khach).*(top|cao|nhieu)/.test(q)) {
+  if (isTopUnitQuery) {
     if (mine) return say(`Em đang khóa tạm Top đơn vị kỳ ${ky} cho tài khoản nhân viên để kiểm tra lại nguồn gán doanh số/số lượng, tránh trả sai.`);
-    const top = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5);
-    return topList(`Top đơn vị kỳ ${ky}:`, top, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
+    const limit = /top\s*10|10\s*(don vi|benh vien|phong kham|khach)/.test(q) ? 10 : 5;
+    const top = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
+    return topList(`Top ${limit} đơn vị có doanh thu kỳ ${ky}:`, top, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
   }
   if (!mine && /(xep hang|ranking|top).*(nhan vien|nv|sale)|(nhan vien|sale).*(top|cao|xep hang|nhieu)/.test(q)) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'emp' }).slice(0, 5);
