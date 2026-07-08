@@ -97,23 +97,31 @@ function slotRows(slot) {
   const dm = slotDateMeta(slot);
   const from = slot.dateFrom ? String(slot.dateFrom).slice(0, 10) : '';
   const to = slot.dateTo ? String(slot.dateTo).slice(0, 10) : '';
-  return raw.filter((r) => {
-    // Slot có dữ liệu ngày chi tiết thì tuyệt đối không lấy dòng ngoài khoảng ngày của slot.
-    // Tránh lỗi materialize kỳ 07 kéo nhầm invoice 30/06 vào tháng 7.
-    if (dm.canFilterByDay) {
-      const d = String(r.date || r.ngay || r.order_date || r.invoice_date || r.created_at || '').slice(0, 10);
-      if (d && ((from && d < from) || (to && d > to))) return false;
+  // File materialize LÀ "kỳ" chính thức của slot. Trước đây lọc BỎ dòng ngày ngoài [from,to] để
+  // chặn "invoice 30/06 lọt vào T07" — NHƯNG thực tế (go-live 01/07, NV xác nhận không có đơn 30/06)
+  // các ngày < from là NGÀY GÁN SAI ở nguồn (lệch múi giờ), KHÔNG phải doanh thu tháng trước.
+  // => TUYỆT ĐỐI KHÔNG bỏ dòng (mất doanh thu âm thầm). KÉO ngày sai về đúng BIÊN kỳ + GHI LOG.
+  let clampedBefore = 0, clampedAfter = 0;
+  const rows = raw.map((r) => {
+    let d = String(r.date || r.ngay || r.order_date || r.invoice_date || r.created_at || slot.dateFrom || slot.ky).slice(0, 10);
+    if (dm.canFilterByDay && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+      if (from && d < from) { d = from; clampedBefore += 1; }
+      else if (to && d > to) { d = to; clampedAfter += 1; }
     }
-    return true;
-  }).map((r) => enrich({
-    ...r,
-    ky: slot.ky,
-    date: r.date || r.ngay || r.order_date || r.invoice_date || r.created_at || slot.dateFrom || slot.ky,
-    source_date_from: slot.dateFrom || r.date || null,
-    source_date_to: slot.dateTo || r.date || null,
-    date_granularity: dm.dateGranularity,
-    data_as_of: slot.data_as_of || slot.dataAsOf || slot.uploadedAt || null,
-  }));
+    return enrich({
+      ...r,
+      ky: slot.ky,
+      date: d,
+      source_date_from: slot.dateFrom || r.date || null,
+      source_date_to: slot.dateTo || r.date || null,
+      date_granularity: dm.dateGranularity,
+      data_as_of: slot.data_as_of || slot.dataAsOf || slot.uploadedAt || null,
+    });
+  });
+  if (clampedBefore || clampedAfter) {
+    console.warn(`[slotRows ${slot.ky}] KÉO VỀ biên kỳ (KHÔNG bỏ dòng): ${clampedBefore} dòng ngày < ${from}, ${clampedAfter} dòng ngày > ${to}. Ngày gán sai ở nguồn — cần sửa materialize (chuẩn hoá về giờ VN/ngày bán).`);
+  }
+  return rows;
 }
 
 function kySortValue(ky) {

@@ -21,6 +21,20 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (r) — Claude Code — FIX MẤT DOANH THU: không bỏ dòng "ngày gán sai", kéo về biên kỳ
+- **Triệu chứng (NV DN009 phát hiện):** DN009 tháng 7 chỉ ra 9 đơn vị thay vì 12; thiếu 034 Y ĐỨC
+  HEALTHCARE + TRỊ AN. Sale-New CÓ, Report-New KHÔNG.
+- **Điều tra:** file materialize T07 CÓ đủ các dòng đó (Healthcare 11, Trị An 6) nhưng **ghi ngày
+  2026-06-30**. `store.js slotRows` (fix #70) lọc BỎ mọi dòng ngày < dateFrom(01/07) → rớt sạch.
+  Mà **go-live 01/07 + NV xác nhận + Sale-New đều 01/07** → ngày 30/06 là **GÁN SAI ở nguồn** (lệch
+  múi giờ), KHÔNG phải doanh thu tháng 6. Không có file materialize T06 → không lo tính trùng.
+- **Sửa:** `slotRows` **KHÔNG bỏ dòng nữa** (mất doanh thu âm thầm là cực nguy hiểm) — thay bằng **KÉO
+  ngày sai về đúng biên kỳ** (30/06 → 01/07) + **GHI LOG** số dòng đã kéo (minh bạch, không im lặng).
+- **Còn lại (bot):** sửa GỐC ở **materialize** — chuẩn hoá ngày về **giờ VN (GMT+7)/ngày bán Sale-New**
+  để nguồn không còn ngày lệch.
+- **File:** `server/src/store.js`. Test: store nạp OK, số mẫu không đổi, regression PASS.
+
+
 ### 2026-07-08 (q) — Claude Code — TÍCH HỢP ROUTER NLQ (hết "bơi ngáo") + gỡ khóa cứng T07
 - **Việc lớn:** thay mớ ~30 regex intent xếp chồng (dễ lạc ý, vá chỗ này lòi chỗ kia) bằng **router
   phân loại ý định** `nlqIntent.js` (bot server xây, đã review). Router quyết intent RÕ RÀNG trước
