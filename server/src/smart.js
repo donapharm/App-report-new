@@ -218,6 +218,9 @@ async function answerQuestion({ text, scope, session }) {
   const prodHits = () => { if (_ph === null) _ph = lookupProducts({ q, ky, scope }); return _ph; };
   let _uh = null; // memo tra cứu đích danh ĐƠN VỊ
   const unitHits = () => { if (_uh === null) _uh = lookupUnits({ q, ky, scope }); return _uh; };
+  // Câu hỏi dạng XẾP HẠNG/LIỆT KÊ ("top", "nào", "cao nhất"…) KHÔNG phải tra cứu 1 đơn vị/thuốc cụ thể.
+  // Chặn để "những đơn vị nào nằm trong top 10" không bị hiểu nhầm là tra đơn vị mã "010".
+  const rankingLike = /\btop\b|xep hang|ranking|cao nhat|nhieu nhat|thap nhat|it nhat|dan dau|liet ke|danh sach|\bnao\b/.test(q);
 
   // Trợ giúp / bot làm được gì
   if (/\b(help|menu|giup)\b|huong dan|lam duoc gi|hoi gi|ban lam gi|chuc nang|tro giup/.test(q)) {
@@ -239,7 +242,8 @@ async function answerQuestion({ text, scope, session }) {
 
   // Tra cứu ĐÍCH DANH: giá thầu / mã QLNB / hoạt chất / cơ số còn lại của MỘT thuốc cụ thể.
   // ĐẶT TRƯỚC các mẫu "top…" (vì "top …" bắt cả "bao nhiêu"→"nhiều") để câu hỏi đích danh thắng.
-  if (/gia thau|don gia|qlnb|ma hang|ma thuoc|hoat chat|tra cuu|tim thuoc|thong tin (san pham|thuoc)/.test(q)) {
+  // Bỏ qua nếu là câu xếp hạng/liệt kê ("thuốc nào giá thầu cao nhất" -> để LLM/top xử lý).
+  if (!rankingLike && /gia thau|don gia|qlnb|ma hang|ma thuoc|hoat chat|tra cuu|tim thuoc|thong tin (san pham|thuoc)/.test(q)) {
     const ans = sayProductLookup(prodHits(), ky);
     if (ans) return ans;
     return say('Chưa tìm thấy thuốc/mã QLNB khớp trong phạm vi dữ liệu của bạn 🤔.', [
@@ -250,9 +254,10 @@ async function answerQuestion({ text, scope, session }) {
     ]);
   }
   // Tra cứu ĐÍCH DANH 1 ĐƠN VỊ: "BV007 bán được bao nhiêu, ai bán?" (KHÔNG lẫn với "top đơn vị").
-  if (/\bai ban\b|ai phu trach|nhan vien nao ban|nv nao ban/.test(q)
+  // Bỏ qua nếu câu là dạng xếp hạng/liệt kê (để "top đơn vị"/"báo cáo theo đơn vị" xử lý).
+  if (!rankingLike && (/\bai ban\b|ai phu trach|nhan vien nao ban|nv nao ban/.test(q)
       || /(don vi|benh vien|phong kham|nha thuoc|khach hang|ma dv)\b.*(ban duoc|bao nhieu|doanh thu|doanh so|ai ban)/.test(q)
-      || /(ban duoc|doanh thu|doanh so).*(don vi|benh vien|phong kham|nha thuoc|ma dv)\b/.test(q)) {
+      || /(ban duoc|doanh thu|doanh so).*(don vi|benh vien|phong kham|nha thuoc|ma dv)\b/.test(q))) {
     const ans = sayUnitLookup(unitHits(), ky, mine);
     if (ans) return ans;
     if (/\bai ban\b|ai phu trach/.test(q)) {
@@ -268,7 +273,7 @@ async function answerQuestion({ text, scope, session }) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 5);
     return topList(`Top sản phẩm kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
-  if (/(top|cao nhat|nhieu nhat).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|khach).*(top|cao|nhieu)/.test(q)) {
+  if (/(top|cao nhat|ban chay|nhieu nhat).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|khach).*(top|cao|nhieu|ban chay)/.test(q)) {
     const top = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5);
     return topList(`Top đơn vị kỳ ${ky}:`, top, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
   }
@@ -367,12 +372,12 @@ async function answerQuestion({ text, scope, session }) {
   }
   // Câu hỏi NHẮC ĐÍCH DANH một thuốc (kể cả không có từ khoá "giá thầu/qlnb") -> trả lời theo sản phẩm
   // trước khi rơi vào doanh thu tổng. Chỉ kích hoạt khi thật sự khớp tên/mã (prodHits có kết quả).
-  {
+  if (!rankingLike) {
     const hits = prodHits();
     if (hits.length) { const ans = sayProductLookup(hits, ky); if (ans) return ans; }
   }
   // ... rồi tới ĐƠN VỊ đích danh (nếu câu hỏi có nhắc mã/tên đơn vị).
-  {
+  if (!rankingLike) {
     const hits = unitHits();
     if (hits.length) { const ans = sayUnitLookup(hits, ky, mine); if (ans) return ans; }
   }

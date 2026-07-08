@@ -21,6 +21,18 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (k) — Claude Code — FIX bot: "top 10" bị hiểu nhầm thành tra cứu đơn vị "010"
+- **Triệu chứng:** Hỏi "những đơn vị nào nằm trong top 10" → bot trả tra cứu đơn vị **010.BV Quân Y 7B**
+  (0đ) thay vì danh sách top đơn vị.
+- **Nguyên nhân:** intent tra-cứu-đích-danh (khớp "doanh thu…đơn vị") chạy trước "top đơn vị", rồi khớp
+  nhầm đơn vị mã "010" vì câu có " 10 " (từ "top 10").
+- **Sửa:** thêm cờ `rankingLike` — câu dạng xếp hạng/liệt kê (`top`, `nào`, `cao nhất`, `nhiều nhất`,
+  `bán chạy`…) KHÔNG kích hoạt tra cứu đích danh (thuốc + đơn vị), nhường cho intent "top…". Bổ sung
+  "bán chạy" vào mẫu "top đơn vị".
+- **Giữ nguyên:** "BV007 ai bán", "đơn vị BV001 bán được bao nhiêu", "giá thầu B02", "doanh thu thuốc E05"
+  vẫn ra tra cứu đích danh đúng (đã test).
+- **File:** `server/src/smart.js`.
+
 ### 2026-07-08 (j) — Claude Code — Thông báo target: bảng "Trạng thái sẵn sàng" (biết còn thiếu gì để bật)
 - **Việc:** Màn Quản target → Thông báo (xem trước) thêm card **⚙️ Trạng thái sẵn sàng gửi tự động**:
   - Tự động BẬT/TẮT (`TARGET_NOTIFY`), kênh **Telegram** sẵn sàng chưa, kênh **Email (SMTP)** sẵn sàng chưa.
