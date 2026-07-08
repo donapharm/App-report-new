@@ -21,6 +21,15 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (d) — Claude Code — FIX Phân tích: "tăng mạnh/giảm mạnh" bị lẫn lộn tăng với giảm
+- **Triệu chứng:** Màn Phân tích, mục "Đơn vị giảm mạnh" lại có dòng TĂNG (+37%, +117%…) và mục
+  "Đơn vị tăng mạnh" lại lòi ra dòng GIẢM (−28%).
+- **Nguyên nhân:** `/analysis` chỉ lọc `prevRevenue>0` rồi sort theo `delta` và lấy top 10. Khi số đơn
+  vị giảm < 10, danh sách "giảm" lấy bù bằng đơn vị TĂNG (và ngược lại) → lẫn lộn.
+- **Sửa:** lọc đúng chiều — "tăng mạnh" chỉ `delta > 0`, "giảm mạnh" chỉ `delta < 0` (áp cho cả đơn vị
+  và sản phẩm). Đã test dữ liệu mẫu: 0 dòng lẫn ở cả 2 danh sách.
+- **File:** `server/src/routes.js` (route `/analysis`).
+
 ### 2026-07-08 (c) — Claude Code — FIX bot đòi mã RP hoài (map Telegram lệch giữa 2 tiến trình)
 - **Triệu chứng:** CEO nhắn hỏi bot nhưng bot chỉ trả "Gửi mã đăng nhập dạng RP-XXXXXX…", không
   trả lời — dù trước đó đã nhận được digest (tức đã từng có trong map).
