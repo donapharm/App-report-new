@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend,
-  BarChart, Bar, LabelList, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis,
+  BarChart, Bar, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis,
 } from 'recharts';
 import { money, short, pct } from './util.js';
 
@@ -51,27 +51,6 @@ function topPercentText(row) {
   return row.totalRevenue > 0 ? pct((Number(row.revenue || 0) / row.totalRevenue) * 100) : null;
 }
 
-function TopValueLabel({ x, y, width, height, value, payload }) {
-  if (value == null || !payload) return null;
-  const percentText = topPercentText(payload);
-  const text = `${short(value)}${percentText ? ` · ${percentText}` : ''}`;
-  const inside = Number(width || 0) >= 92;
-  return (
-    <text
-      x={inside ? x + width - 7 : x + width + 7}
-      y={y + height / 2}
-      fill={inside ? '#ffffff' : '#0f172a'}
-      fontSize={10.5}
-      fontWeight={900}
-      textAnchor={inside ? 'end' : 'start'}
-      dominantBaseline="central"
-      paintOrder="stroke"
-      stroke={inside ? 'rgba(21,104,184,.35)' : 'rgba(255,255,255,.9)'}
-      strokeWidth={2.5}
-    >{text}</text>
-  );
-}
-
 export function TopBarChart({ rows = [], limit = 20, dimension = '', totalRevenue = 0 }) {
   const list = (rows || []).slice(0, limit).map((r) => ({
     ...r,
@@ -82,25 +61,38 @@ export function TopBarChart({ rows = [], limit = 20, dimension = '', totalRevenu
   const data = [...list].reverse();
   if (!data.length) return <EmptyChart />;
   return (
-    <div className="chart-box bar-chart">
-      <ResponsiveContainer width="100%" height={Math.max(260, data.length * 32)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 36, left: 6, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e3e9f1" />
-          <XAxis type="number" tickFormatter={short} tick={{ fontSize: 12 }} />
-          <YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 12 }} />
-          <Tooltip content={<MoneyTooltip />} />
-          <Bar dataKey="revenue" name="Doanh thu" fill="#1568b8" radius={[0, 8, 8, 0]}>
-            <LabelList dataKey="revenue" content={<TopValueLabel />} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-      <div className="top-chart-values" aria-label="Số tiền và phần trăm của biểu đồ">
-        {list.map((r, i) => <div className="top-chart-value" key={r.key || r.name || i}>
-          <span className="rank">#{i + 1}</span>
-          <span className="name">{r.name}</span>
-          <b>{money(r.revenue)}</b>
-          {topPercentText(r) && <em>{topPercentText(r)}</em>}
-        </div>)}
+    <div className="chart-box bar-chart top-chart-layout">
+      <div className="top-chart-plot">
+        <ResponsiveContainer width="100%" height={Math.max(300, data.length * 28)}>
+          <BarChart data={data} layout="vertical" margin={{ top: 4, right: 12, left: 4, bottom: 4 }}>
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e3e9f1" />
+            <XAxis type="number" tickFormatter={short} tick={{ fontSize: 12 }} />
+            <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11 }} />
+            <Tooltip content={<MoneyTooltip />} />
+            <Bar dataKey="revenue" name="Doanh thu" fill="#1568b8" radius={[0, 8, 8, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="top-chart-side" aria-label="Bảng xếp hạng số tiền và phần trăm">
+        <div className="top-chart-side-head">
+          <b>Bảng xếp hạng</b>
+          <span>{dimension === 'emp' ? '% target' : '% doanh thu'}</span>
+        </div>
+        <div className="top-chart-values">
+          {list.map((r, i) => {
+            const pText = topPercentText(r);
+            const pVal = dimension === 'emp' && r.pctTarget != null
+              ? Math.min(100, Math.max(0, Number(r.pctTarget || 0)))
+              : (r.totalRevenue > 0 ? Math.min(100, Math.max(0, Number(r.revenue || 0) / r.totalRevenue * 100)) : 0);
+            return <div className="top-chart-value" key={r.key || r.name || i}>
+              <span className="rank">#{i + 1}</span>
+              <span className="name" title={r.label || r.name}>{r.name}</span>
+              <b>{short(r.revenue)}</b>
+              {pText && <em>{pText}</em>}
+              <i className="mini-bar"><i style={{ width: `${pVal}%` }} /></i>
+            </div>;
+          })}
+        </div>
       </div>
     </div>
   );
