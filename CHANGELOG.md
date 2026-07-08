@@ -21,6 +21,19 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (e) — Claude Code — Phân tích: thêm 2 ô cho cân hàng dưới (chưa khai thác + biến động tuyến)
+- **Việc:** Hàng panel dưới của màn Phân tích trước chỉ có 2 ô (SP cần đẩy mạnh, SP sắp hết CST) → trống
+  2 ô. Bổ sung đúng 2 ô (theo gợi ý CEO):
+  - **🆕 SP chưa khai thác (còn 100% CST):** mặt hàng đã trúng thầu nhưng kỳ này CHƯA bán viên nào
+    (sold_qty=0, còn nguyên cơ số) — cơ hội để trống, sắp theo số lượng còn lại giảm dần.
+  - **🛣️ Biến động theo tuyến (so kỳ trước):** mỗi tuyến tăng/giảm bao nhiêu so kỳ trước, sắp theo
+    mức chênh lệch tuyệt đối lớn nhất.
+- **Backend `/analysis`:** thêm `cstUntouched` (cstTable status=empty) + `routeDelta` (compareGroup theo
+  route trên 2 kỳ so sánh). Cùng chịu bộ lọc + phạm vi quyền như phần còn lại.
+- **File:** `server/src/routes.js`, `web/src/pages/Analysis.jsx`.
+- **Test:** node harness — routeDelta ra đúng (Tuyến A +25.8%…); cstUntouched=0 trên dữ liệu MẪU vì seed
+  không có mặt hàng chưa bán (đúng — server thật sẽ có). Build web OK.
+
 ### 2026-07-08 (d) — Claude Code — FIX Phân tích: "tăng mạnh/giảm mạnh" bị lẫn lộn tăng với giảm
 - **Triệu chứng:** Màn Phân tích, mục "Đơn vị giảm mạnh" lại có dòng TĂNG (+37%, +117%…) và mục
   "Đơn vị tăng mạnh" lại lòi ra dòng GIẢM (−28%).

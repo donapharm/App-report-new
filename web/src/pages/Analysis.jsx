@@ -50,6 +50,23 @@ function CstLowBlock({ rows }) {
   );
 }
 
+function CstUntouchedBlock({ rows }) {
+  return (
+    <div className="card analysis-list-block">
+      <div className="section-head">🆕 SP chưa khai thác (còn 100% CST)</div>
+      {!rows?.length ? <div className="center">Không có mặt hàng nào còn nguyên cơ số trong phạm vi lọc.</div> : rows.map((r, i) => (
+        <div className="row" key={r.key || i}>
+          <div className="main">
+            <div className="name"><span className="rank">{i + 1}</span>{r.label}</div>
+            <div className="meta">{r.iit_code || '—'} · {unitText(r.unit_code, r.unit_name)}{r.qd === 'QĐ139' && r.active_ingredient ? ` · ${r.active_ingredient} ${r.ham_luong || ''}` : ''}</div>
+          </div>
+          <div className="amt" style={{ color: 'var(--hi)' }}>còn {(Number(r.remain_qty) || 0).toLocaleString('vi-VN')}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function Analysis({ me }) {
   const [periods, setPeriods] = useState([]);
   const [periodSel, setPeriodSel] = useState(null);
@@ -161,6 +178,8 @@ export default function Analysis({ me }) {
             <Block title="Sản phẩm giảm mạnh" rows={data.topDeclineProducts} negative />
             <Block title="SP cần đẩy mạnh" rows={data.pushProducts} negative />
             <CstLowBlock rows={data.cstLowProducts} />
+            <CstUntouchedBlock rows={data.cstUntouched} />
+            <Block title="🛣️ Biến động theo tuyến (so kỳ trước)" rows={data.routeDelta} />
           </div>
         </>
       )}

@@ -946,8 +946,42 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     .slice(0, 10);
   const byPriority = A.groupSum(currentRows, 'priority', 'priority').slice(0, 10);
   const byBidPackage = A.groupSum(currentRows, 'bid_package', 'bid_package').slice(0, 10);
+  // So sánh theo nhóm khác (route/tuyến…) — revenueBreakdown chỉ hỗ trợ unit/product/emp,
+  // nên gom bằng groupSum trên đúng 2 kỳ so sánh (cmpP) để nhất quán bảng tăng/giảm.
+  const compareGroup = (keyField, labelField) => {
+    const cur = A.groupSum(A.applyFilters(store.getRowsRange({ kys: cmpP.curKys, scope }), filters), keyField, labelField);
+    const prev = cmpP.hasPrev ? A.groupSum(A.applyFilters(store.getRowsRange({ kys: cmpP.prevKys, scope }), filters), keyField, labelField) : [];
+    const prevMap = Object.fromEntries(prev.map((x) => [x.key, x.revenue]));
+    return cur.map((x) => {
+      const before = prevMap[x.key] || 0;
+      const d = x.revenue - before;
+      return { ...x, prevRevenue: before, delta: d, deltaPct: before > 0 ? +(d / before * 100).toFixed(1) : null };
+    });
+  };
   const unitCompare = compare('unit');
   const productCompare = compare('product');
+  // Biến động theo TUYẾN: sắp theo mức chênh lệch tuyệt đối (tuyến chuyển động mạnh nhất trước).
+  const routeDelta = compareGroup('route', 'route')
+    .filter((x) => (x.revenue || 0) > 0 || (x.prevRevenue || 0) > 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 10);
+  // SP CHƯA KHAI THÁC: cơ số trúng thầu còn NGUYÊN (kỳ này chưa bán viên nào) — cơ hội để trống.
+  const cstUntouched = A.cstTable({ scope, filters: { ...filters, status: 'empty' } })
+    .sort((a, b) => Number(b.remain_qty || 0) - Number(a.remain_qty || 0))
+    .slice(0, 10)
+    .map((c) => ({
+      key: `${c.iit_code || c.product_name}-${c.unit_code || c.unit_name}`,
+      label: c.product_name,
+      iit_code: c.iit_code,
+      unit_code: c.unit_code,
+      unit_name: c.unit_name || c.unit_code,
+      remain_qty: c.remain_qty,
+      bid_qty_initial: c.bid_qty_initial,
+      remain_pct: c.remain_pct,
+      qd: qdOf(`${c.iit_code || ''} ${c.bid_package || ''}`),
+      active_ingredient: c.active_ingredient || '',
+      ham_luong: c.ham_luong || '',
+    }));
   const pushProducts = productCompare
     .filter((x) => (x.prevRevenue || 0) > 0 && x.delta < 0)
     .sort((a, b) => a.deltaPct - b.deltaPct)
@@ -991,6 +1025,8 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     topDeclineProducts: productCompare.filter((x) => x.prevRevenue > 0 && x.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
     pushProducts,
     cstLowProducts,
+    cstUntouched,
+    routeDelta,
   });
 });
 
