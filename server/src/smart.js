@@ -209,7 +209,19 @@ function buildReason(attain, trend, last, season) {
  */
 async function answerQuestion({ text, scope, session }) {
   const q = noAccent((text || '').toLowerCase()); // chấp nhận cả gõ KHÔNG DẤU
-  const ky = resolveKyFromQuestion(q) || store.latestKy();
+  const askedKy = resolveKyFromQuestion(q);
+  const askedMonth = monthMention(q);
+  // User nêu RÕ 1 tháng nhưng kỳ đó CHƯA có dữ liệu -> nói thẳng, KHÔNG lặng lẽ lấy kỳ mới nhất
+  // rồi trả số (khiến người hỏi tưởng là tháng họ hỏi). VD hỏi "tháng 8" khi chưa có số T8.
+  if (!askedKy && askedMonth) {
+    const have = store.periodKys();
+    const label = askedMonth.y ? `${askedMonth.m}.${askedMonth.y}` : `tháng ${Number(askedMonth.m)}`;
+    return say(`Kỳ ${label} chưa có dữ liệu trong App Report.`, [
+      have.length ? `Các kỳ đang có số: ${have.join(', ')}.` : 'Hiện chưa có kỳ nào có dữ liệu.',
+      'Anh/Chị thử hỏi một trong các kỳ trên nhé.',
+    ]);
+  }
+  const ky = askedKy || store.latestKy();
   const mine = !!scope.empCode;
 
   const rowsFor = () => store.getRows({ ky, scope });
@@ -725,6 +737,16 @@ function resolveKyFromQuestion(q) {
   if (m) return pickByMonthYear(m[1], m[2]);
   m = q.match(/\b(0?[1-9]|1[0-2])[./-](20\d{2}|\d{2})\b/);
   if (m) return pickByMonthYear(m[1], m[2]);
+  return null;
+}
+// Người dùng có nêu RÕ 1 tháng (bất kể có dữ liệu hay không)? -> {m:'08', y:'2026'|''}.
+// Dùng để phân biệt "không nêu tháng" với "nêu tháng nhưng chưa có dữ liệu".
+function monthMention(q) {
+  const yr = (yy) => (!yy ? '' : (String(yy).length === 2 ? `20${yy}` : String(yy)));
+  let m = q.match(/\b(?:t|thang|ky)\s*0?([1-9]|1[0-2])(?:\s*[./-]?\s*(20\d{2}|\d{2}))?\b/);
+  if (m) return { m: String(m[1]).padStart(2, '0'), y: yr(m[2]) };
+  m = q.match(/\b(0?[1-9]|1[0-2])[./-](20\d{2}|\d{2})\b/);
+  if (m) return { m: String(m[1]).padStart(2, '0'), y: yr(m[2]) };
   return null;
 }
 function noAccent(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd'); }

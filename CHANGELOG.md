@@ -21,6 +21,18 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (o) — Claude Code — FIX bot lặng lẽ trả kỳ khác khi hỏi tháng CHƯA có dữ liệu
+- **Triệu chứng:** NV hỏi "doanh số từ đầu tháng 8 đến hôm nay" (T8 chưa có số) → bot **lặng lẽ lấy kỳ
+  mới nhất (T7)** rồi trả danh sách → NV tưởng là số tháng 8, thấy "thiếu đơn vị" (thực ra là số T7).
+- **Nguyên nhân:** `answerQuestion` dùng `resolveKyFromQuestion(q) || store.latestKy()` — khi tháng
+  người hỏi không có dữ liệu thì rơi về kỳ mới nhất, không báo gì.
+- **Sửa:** thêm `monthMention(q)` — nếu người hỏi **nêu rõ 1 tháng** mà kỳ đó **chưa có dữ liệu** →
+  trả thẳng "Kỳ MM.YYYY chưa có dữ liệu" + liệt kê các kỳ đang có số. Câu không nêu tháng vẫn dùng kỳ
+  mới nhất như cũ.
+- **Test:** "tháng 8.2026"/"tháng 12" → báo chưa có dữ liệu; "tháng 6"/"kỳ này"/"top 10 đơn vị" → bình thường.
+- **File:** `server/src/smart.js`.
+
+
 ### 2026-07-08 (n) — Claude Code — Fix nhãn đơn vị bị LẶP ĐÔI trên Telegram (data T07)
 - **Triệu chứng:** bot ghi "002.BVĐK Thống Nhất ĐN**.BVĐK Thống Nhất ĐN**" (lặp 2 lần).
 - **Nguyên nhân:** data T07 có `unit_code` chứa cả tên ("034.PKĐK Y ĐỨC") còn `unit_name` chỉ là tên
