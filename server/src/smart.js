@@ -224,8 +224,16 @@ async function answerQuestion({ text, scope, session }) {
   const ky = askedKy || store.latestKy();
   const mine = !!scope.empCode;
 
+  // "Độ tươi" dữ liệu: nếu kỳ đang xem CHƯA đủ ngày (tháng đang chạy) -> ghi chú "dữ liệu tới DD/MM"
+  // để người hỏi không nhầm là "thiếu đơn vị/số".
+  const _fresh = store.periodFreshness(ky);
+  const freshNote = (!_fresh.complete && _fresh.throughDate)
+    ? `📅 Dữ liệu tới ${_fresh.throughDate.slice(8, 10)}/${_fresh.throughDate.slice(5, 7)} (${_fresh.dayCovered}/${_fresh.daysInMonth} ngày) — kỳ đang cập nhật.`
+    : '';
+  const withFresh = (lines) => (freshNote ? [...lines, freshNote] : lines);
+
   const rowsFor = () => store.getRows({ ky, scope });
-  const topList = (title, arr, fmtItem) => say(title, arr.map((t, i) => `${i + 1}. ${fmtItem(t)}`));
+  const topList = (title, arr, fmtItem) => say(title, withFresh(arr.map((t, i) => `${i + 1}. ${fmtItem(t)}`)));
   let _ph = null; // memo tra cứu đích danh SẢN PHẨM (tránh tính 2 lần)
   const prodHits = () => { if (_ph === null) _ph = lookupProducts({ q, ky, scope }); return _ph; };
   let _uh = null; // memo tra cứu đích danh ĐƠN VỊ
@@ -340,7 +348,7 @@ async function answerQuestion({ text, scope, session }) {
     if (topSP.length) { lines.push('— Top sản phẩm:'); topSP.forEach((t, i) => lines.push(`  ${i + 1}. ${t.label}: ${fmt(t.revenue)}`)); }
     if (topDV.length) { lines.push('— Top đơn vị:'); topDV.forEach((t, i) => lines.push(`  ${i + 1}. ${unitText(t.key, t.label)}: ${fmt(t.revenue)}`)); }
     lines.push('• Gõ "báo cáo theo sản phẩm" / "theo đơn vị" để xem đầy đủ danh sách.');
-    return say(`📊 Báo cáo chi tiết kỳ ${ky} (${mine ? 'của bạn' : 'toàn công ty'}):`, lines);
+    return say(`📊 Báo cáo chi tiết kỳ ${ky} (${mine ? 'của bạn' : 'toàn công ty'}):`, withFresh(lines));
   }
   // Biến động đơn vị (giảm/tăng mạnh)
   if (/giam manh|sut giam|tut manh|giam nhieu|tang manh|tang truong/.test(q)) {
@@ -410,7 +418,7 @@ async function answerQuestion({ text, scope, session }) {
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
     const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
-    return say(`Doanh thu ${who} kỳ ${ky}: ${fmt(k.revenue)}${mom}.`);
+    return say(`Doanh thu ${who} kỳ ${ky}: ${fmt(k.revenue)}${mom}.`, withFresh([]));
   }
 
   // Không khớp mẫu code → nếu có LLM (grounded) thì nhờ diễn giải trên FACTS đã tính.

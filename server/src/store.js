@@ -253,6 +253,28 @@ function latestKy() {
   return ps.length ? ps[ps.length - 1].ky : base().catalog.latest_ky;
 }
 function periodKys() { return listPeriods().map((p) => p.ky); }
+// "Độ tươi" dữ liệu của 1 kỳ: dữ liệu đã có TỚI NGÀY nào + phủ bao nhiêu ngày trong tháng.
+// Giúp người dùng biết kỳ đang xem đã ĐỦ hay còn ĐANG NẠP (tránh hiểu nhầm "thiếu đơn vị").
+function daysInMonthOf(ky) {
+  const m = Number(String(ky || '').slice(0, 2)), y = Number(String(ky || '').slice(3));
+  if (!m || !y) return 31;
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+function periodFreshness(ky) {
+  const rows = getRows({ ky, scope: {} });
+  const daysInMonth = daysInMonthOf(ky);
+  // Chỉ tính "tới ngày" khi kỳ có dữ liệu CHI TIẾT THEO NGÀY. Dữ liệu tổng tháng (không tách
+  // ngày) coi như đã đủ cả tháng (không cảnh báo).
+  let through = '';
+  for (const r of rows) {
+    if (r.date_granularity !== 'day') continue;
+    const d = String(r.date || '').slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d > through) through = d;
+  }
+  if (!through) return { ky, throughDate: null, dayCovered: daysInMonth, daysInMonth, complete: true, granular: false };
+  const dayCovered = Number(through.slice(8, 10));
+  return { ky, throughDate: through, dayCovered, daysInMonth, complete: dayCovered >= daysInMonth, granular: true };
+}
 function periodRange(from, to) {
   const ps = periodKys();
   const a = ps.indexOf(from);
@@ -461,7 +483,7 @@ function clearCache() { _base = null; _allRows = null; _allRowsSig = ''; _cstAll
 
 module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
-  periodKys, periodRange, previousKys, comparePeriods,
+  periodKys, periodFreshness, periodRange, previousKys, comparePeriods,
   currentKyByDate, lastCompleteKy, nextKy,
   getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache, empCodesWithData, empCodesWithRows,
   employeeType, hasTarget, isActiveSalesUser, targetRoster, targetRosterCodes, targetRosterConfig,
