@@ -160,7 +160,7 @@ export default function Overview({ me, onNavigate }) {
                   {me.isAdmin && <button className={topDim === 'emp' ? 'active' : ''} onClick={() => setTopDim('emp')}>Nhân viên</button>}
                 </div>
               </div>
-              {!topRows ? <Spinner /> : <TopBarChart rows={topRows} />}
+              {!topRows ? <Spinner /> : <TopBarChart rows={topRows} limit={topLimit} dimension={topDim} />}
             </div>
           </div>
         </>

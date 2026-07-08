@@ -777,10 +777,30 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
       if (r.emp_code) cur.emps.add(r.emp_code);
       aggMap.set(key, cur);
     }
-    outRows = outRows.map((r) => {
-      const a = aggMap.get(r.key) || {};
-      return { ...r, unitCount: a.units?.size || 0, productCount: a.products?.size || 0, empCount: a.emps?.size || 0 };
-    });
+    if (dimension === 'emp') {
+      const targets = store.getTargetsRange({ kys: pc.kys, scope });
+      const targetByEmp = {};
+      for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
+      outRows = outRows.map((r) => {
+        const a = aggMap.get(r.key) || {};
+        const target = Math.round(targetByEmp[r.key] || 0);
+        const revenueBeforeVat = Math.round(Number(r.revenue || 0) / A.VAT_DIVISOR);
+        return {
+          ...r,
+          revenueBeforeVat,
+          target,
+          pctTarget: target > 0 ? +(revenueBeforeVat / target * 100).toFixed(1) : null,
+          unitCount: a.units?.size || 0,
+          productCount: a.products?.size || 0,
+          empCount: a.emps?.size || 0,
+        };
+      });
+    } else {
+      outRows = outRows.map((r) => {
+        const a = aggMap.get(r.key) || {};
+        return { ...r, unitCount: a.units?.size || 0, productCount: a.products?.size || 0, empCount: a.emps?.size || 0 };
+      });
+    }
   }
   res.json({
     ky: pc.ky,

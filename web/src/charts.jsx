@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend,
-  BarChart, Bar, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis,
+  BarChart, Bar, LabelList, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis,
 } from 'recharts';
 import { money, short, pct } from './util.js';
 
@@ -16,6 +16,8 @@ function MoneyTooltip({ active, payload, label }) {
     <div className="chart-tip">
       <b>{label}</b>
       {payload.map((p) => <div key={p.dataKey || p.name} style={{ color: p.color }}>{p.name}: {money(p.value)}</div>)}
+      {payload[0]?.payload?.target > 0 && <div>Target: {money(payload[0].payload.target)}</div>}
+      {payload[0]?.payload?.revenueBeforeVat != null && <div>Trước VAT: {money(payload[0].payload.revenueBeforeVat)}</div>}
       {payload[0]?.payload?.pctTarget != null && <div>% target: {pct(payload[0].payload.pctTarget)}</div>}
     </div>
   );
@@ -43,18 +45,27 @@ export function RevenueTrendChart({ rows = [], selectedKys = [] }) {
   );
 }
 
-export function TopBarChart({ rows = [], limit = 20 }) {
+function TopEmpLabel({ x, y, width, height, value, payload }) {
+  if (value == null || !payload) return null;
+  const text = `${short(value)}${payload.pctTarget != null ? ` · ${pct(payload.pctTarget)}` : ''}`;
+  return <text x={x + width + 7} y={y + height / 2} fill="#0f172a" fontSize={11} fontWeight={800} dominantBaseline="central">{text}</text>;
+}
+
+export function TopBarChart({ rows = [], limit = 20, dimension = '' }) {
   const data = (rows || []).slice(0, limit).map((r) => ({ ...r, name: nameShort(r.label || r.product_name || r.unit_name || r.key, 32) })).reverse();
+  const showEmpTarget = dimension === 'emp';
   if (!data.length) return <EmptyChart />;
   return (
     <div className="chart-box bar-chart">
       <ResponsiveContainer width="100%" height={Math.max(260, data.length * 32)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 18, left: 6, bottom: 4 }}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: showEmpTarget ? 116 : 18, left: 6, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e3e9f1" />
           <XAxis type="number" tickFormatter={short} tick={{ fontSize: 12 }} />
           <YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 12 }} />
           <Tooltip content={<MoneyTooltip />} />
-          <Bar dataKey="revenue" name="Doanh thu" fill="#1568b8" radius={[0, 8, 8, 0]} />
+          <Bar dataKey="revenue" name="Doanh thu" fill="#1568b8" radius={[0, 8, 8, 0]}>
+            {showEmpTarget && <LabelList dataKey="revenue" content={<TopEmpLabel />} />}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>
