@@ -531,7 +531,8 @@ function specialCandidates(scope) {
 
 /* ---------- Metadata ---------- */
 router.get('/periods', auth.requireAuth, (req, res) => {
-  res.json({ periods: store.listPeriods(), latest: store.latestKy() });
+  const periods = store.listPeriods().map((p) => ({ ...p, ...store.periodFreshness(p.ky) }));
+  res.json({ periods, latest: store.latestKy() });
 });
 
 router.get('/admin/revenue-refresh/status', auth.requireAuth, auth.requireAdmin, (req, res) => {

@@ -21,6 +21,18 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (p) — Claude Code — Nhãn "dữ liệu tới ngày DD/MM" cho kỳ đang cập nhật (web + bot)
+- **Mục đích:** chặn hiểu nhầm "thiếu đơn vị/số" khi kỳ đang xem là THÁNG ĐANG CHẠY (chưa đủ ngày).
+  Nhìn phát biết kỳ đã đủ hay đang nạp tiếp.
+- **Backend:** `store.periodFreshness(ky)` — tính dữ liệu tới ngày nào (chỉ với kỳ có dữ liệu THEO NGÀY;
+  kỳ tổng-tháng coi như đủ). `/periods` trả kèm `throughDate/dayCovered/daysInMonth/complete`.
+- **Web:** `PeriodFilter` hiện dòng "📅 Dữ liệu tới DD/MM · X/Y ngày — kỳ đang cập nhật" khi tháng chưa đủ.
+- **Bot:** câu trả lời có số (top/báo cáo/doanh thu/chi tiết) tự thêm dòng "📅 Dữ liệu tới DD/MM (X/Y ngày)"
+  khi kỳ chưa đủ. Kỳ đã đủ (tổng tháng) thì KHÔNG thêm (tránh nhiễu).
+- **File:** `server/src/store.js`, `server/src/routes.js`, `server/src/smart.js`,
+  `web/src/pages/PeriodFilter.jsx`, `web/src/styles.css`.
+
+
 ### 2026-07-08 (o) — Claude Code — FIX bot lặng lẽ trả kỳ khác khi hỏi tháng CHƯA có dữ liệu
 - **Triệu chứng:** NV hỏi "doanh số từ đầu tháng 8 đến hôm nay" (T8 chưa có số) → bot **lặng lẽ lấy kỳ
   mới nhất (T7)** rồi trả danh sách → NV tưởng là số tháng 8, thấy "thiếu đơn vị" (thực ra là số T7).

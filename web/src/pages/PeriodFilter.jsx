@@ -89,6 +89,12 @@ export default function PeriodFilter({ periods = [], value, onChange }) {
           <select value={sel.to || kys.at(-1)} onChange={(e) => setRange('to', e.target.value)}>{kys.map((ky) => <option key={ky} value={ky}>{ky}</option>)}</select>
         </div>
       )}
+      {sel.mode === 'month' && (() => {
+        const p = periods.find((x) => x.ky === sel.ky);
+        if (!p || p.complete || !p.throughDate) return null;
+        const [, m, d] = p.throughDate.split('-');
+        return <div className="period-fresh">📅 Dữ liệu tới <b>{d}/{m}</b> · {p.dayCovered}/{p.daysInMonth} ngày — <i>kỳ đang cập nhật, số có thể tăng tiếp</i></div>;
+      })()}
     </div>
   );
 }
