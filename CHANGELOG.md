@@ -21,6 +21,13 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-07 — Claude Code — LLM ĐÃ BẬT (hỏi tự nhiên) + dọn markdown tin Telegram
+- ✅ **ANTHROPIC_API_KEY đã vào `.env`, `llm.isEnabled()=true`** — bot hiểu ngôn ngữ tự nhiên,
+  số vẫn do code tính (không bịa). Verified: hỏi "NV nào đang dẫn đầu t07" → trả lời đúng NV + doanh thu.
+- `formatAnswerForTelegram`: **bỏ ký hiệu markdown** (`**đậm**`, `*`, `` `code` ``, `#`, `- ` → `• `)
+  vì Telegram gửi text thô → hết cảnh hiện dấu sao thô quanh tên.
+- **Test:** `node -c` pass; stripMd bỏ đúng `**...**` và đổi gạch đầu dòng thành `•`.
+
 ### 2026-07-07 — Claude Code — Thêm mẫu câu "báo cáo theo từng đơn vị/sản phẩm/tổng hợp"
 - `smart.answerQuestion` thêm 3 mẫu: **báo cáo theo từng đơn vị** (vd "báo cáo bán hàng theo từng
   mã đơn vị"), **theo từng sản phẩm**, **báo cáo tổng hợp/tổng quan** → bớt "đơ" cho câu kiểu báo cáo.
