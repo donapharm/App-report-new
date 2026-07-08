@@ -51,7 +51,21 @@ function TopValueLabel({ x, y, width, height, value, payload }) {
     ? pct(payload.pctTarget)
     : (payload.totalRevenue > 0 ? pct((Number(value || 0) / payload.totalRevenue) * 100) : null);
   const text = `${short(value)}${percentText ? ` · ${percentText}` : ''}`;
-  return <text x={x + width + 7} y={y + height / 2} fill="#0f172a" fontSize={11} fontWeight={800} dominantBaseline="central">{text}</text>;
+  const inside = Number(width || 0) >= 92;
+  return (
+    <text
+      x={inside ? x + width - 7 : x + width + 7}
+      y={y + height / 2}
+      fill={inside ? '#ffffff' : '#0f172a'}
+      fontSize={10.5}
+      fontWeight={900}
+      textAnchor={inside ? 'end' : 'start'}
+      dominantBaseline="central"
+      paintOrder="stroke"
+      stroke={inside ? 'rgba(21,104,184,.35)' : 'rgba(255,255,255,.9)'}
+      strokeWidth={2.5}
+    >{text}</text>
+  );
 }
 
 export function TopBarChart({ rows = [], limit = 20, dimension = '', totalRevenue = 0 }) {
@@ -65,7 +79,7 @@ export function TopBarChart({ rows = [], limit = 20, dimension = '', totalRevenu
   return (
     <div className="chart-box bar-chart">
       <ResponsiveContainer width="100%" height={Math.max(260, data.length * 32)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 122, left: 6, bottom: 4 }}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 36, left: 6, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e3e9f1" />
           <XAxis type="number" tickFormatter={short} tick={{ fontSize: 12 }} />
           <YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 12 }} />
