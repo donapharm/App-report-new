@@ -21,6 +21,23 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (c) — Claude Code — FIX bot đòi mã RP hoài (map Telegram lệch giữa 2 tiến trình)
+- **Triệu chứng:** CEO nhắn hỏi bot nhưng bot chỉ trả "Gửi mã đăng nhập dạng RP-XXXXXX…", không
+  trả lời — dù trước đó đã nhận được digest (tức đã từng có trong map).
+- **Nguyên nhân gốc:** `auth.js` giữ map Telegram trong RAM (`let tgMap` nạp 1 lần lúc khởi động).
+  Backend `reportnew` và worker `reportnew-tgbot` là **2 TIẾN TRÌNH riêng** → thêm map ở tiến trình
+  này thì tiến trình kia KHÔNG thấy (worker cứ đòi mã RP; digest sót), và 2 bên có thể **ghi đè** map
+  của nhau bằng bản RAM cũ (mất map).
+- **Sửa:** map Telegram nay lấy **FILE `data/auth/telegram_map.json` làm nguồn sự thật** — đọc thẳng
+  file mỗi lần `resolveTelegram/listTelegramMap`, và `add/removeTelegramMap` dùng read-modify-write.
+  Không còn RAM lệch, không còn ghi đè. (Đã test: tiến trình A ghi → tiến trình B thấy ngay + không mất.)
+- **UX:** khi tài khoản CHƯA liên kết, bot trả về **mã Telegram (id)** của người hỏi để CEO/admin
+  liên kết nhanh (thay vì câu cụt "gửi mã RP").
+- **File:** `server/src/auth.js`, `server/telegram-bot.js`.
+- **Việc còn lại (ops):** nếu file map trên server đang trống, cần thêm lại 1 dòng cho CEO
+  (`auth.addTelegramMap('<telegram_id>','<mã CEO>','ceo')` hoặc route `POST /api/admin/telegram-map`).
+  Sau fix này worker **không cần restart** vẫn nhận map mới.
+
 ### 2026-07-08 (b) — Claude Code — Bot TRA CỨU ĐÍCH DANH ĐƠN VỊ (bán bao nhiêu + AI bán)
 - **Việc:** Hỏi theo MỘT đơn vị cụ thể (mã hoặc tên): **bán được bao nhiêu**, **AI bán** (NV nào),
   **top sản phẩm tại đơn vị**, số dòng cơ số + số sắp cạn. Nhận diện đơn vị theo mã (BV007), theo

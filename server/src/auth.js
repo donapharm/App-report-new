@@ -46,28 +46,32 @@ function logAudit(event, data) {
 
 /* ===================== MAPPING TELEGRAM (lưu bền) ===================== */
 // Bản ghi: { telegram_id, emp_code, name, added_at, added_by }
-let tgMap = persist.load('telegram_map', []);
-const saveTgMap = () => persist.save('telegram_map', tgMap);
-const resolveTelegram = (tid) => tgMap.find((m) => String(m.telegram_id) === String(tid)) || null;
-function listTelegramMap() { return tgMap.map((m) => ({ ...m })); }
+// NGUỒN SỰ THẬT = FILE telegram_map.json. LÝ DO: backend (reportnew) và worker Telegram
+// (reportnew-tgbot) là 2 TIẾN TRÌNH riêng. Nếu giữ bản in-memory `let tgMap` thì khi admin
+// thêm map ở tiến trình này, tiến trình kia KHÔNG thấy (worker cứ đòi mã RP, không trả lời;
+// digest cũng sót) và các tiến trình có thể GHI ĐÈ map của nhau bằng bản RAM cũ.
+// => Luôn đọc/ghi THẲNG file (quy mô nhỏ, rất rẻ) + read-modify-write để không xoá nhầm.
+const loadTgMap = () => { const v = persist.load('telegram_map', []); return Array.isArray(v) ? v : []; };
+const resolveTelegram = (tid) => loadTgMap().find((m) => String(m.telegram_id) === String(tid)) || null;
+function listTelegramMap() { return loadTgMap().map((m) => ({ ...m })); }
 function addTelegramMap(telegram_id, emp_code, addedBy) {
   const tid = String(telegram_id).trim();
   const code = String(emp_code).trim().toUpperCase();
   if (!tid || !code) throw new Error('Thiếu telegram_id hoặc emp_code');
   const user = store.findUserByCode(code);
   if (!user) throw new Error('Mã NV không có trong danh bạ');
-  tgMap = tgMap.filter((m) => String(m.telegram_id) !== tid); // 1 telegram_id chỉ map 1 NV
-  tgMap.push({ telegram_id: tid, emp_code: code, name: user.name, added_at: new Date().toISOString(), added_by: addedBy || 'admin' });
-  saveTgMap();
+  const list = loadTgMap().filter((m) => String(m.telegram_id) !== tid); // đọc mới nhất từ disk; 1 tid ↔ 1 NV
+  list.push({ telegram_id: tid, emp_code: code, name: user.name, added_at: new Date().toISOString(), added_by: addedBy || 'admin' });
+  persist.save('telegram_map', list);
   logAudit('telegram_map_add', { telegram_id: tid, emp_code: code, by: addedBy });
   return { telegram_id: tid, emp_code: code, name: user.name };
 }
 function removeTelegramMap(telegram_id) {
   const tid = String(telegram_id).trim();
-  const before = tgMap.length;
-  tgMap = tgMap.filter((m) => String(m.telegram_id) !== tid);
-  if (tgMap.length !== before) { saveTgMap(); logAudit('telegram_map_remove', { telegram_id: tid }); }
-  return before !== tgMap.length;
+  const list = loadTgMap();
+  const next = list.filter((m) => String(m.telegram_id) !== tid);
+  if (next.length !== list.length) { persist.save('telegram_map', next); logAudit('telegram_map_remove', { telegram_id: tid }); }
+  return next.length !== list.length;
 }
 
 /* ===================== HỦY PHIÊN / THIẾT BỊ ===================== */
