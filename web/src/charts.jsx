@@ -45,11 +45,15 @@ export function RevenueTrendChart({ rows = [], selectedKys = [] }) {
   );
 }
 
+function topPercentText(row) {
+  if (!row) return null;
+  if (row.dimension === 'emp' && row.pctTarget != null) return pct(row.pctTarget);
+  return row.totalRevenue > 0 ? pct((Number(row.revenue || 0) / row.totalRevenue) * 100) : null;
+}
+
 function TopValueLabel({ x, y, width, height, value, payload }) {
   if (value == null || !payload) return null;
-  const percentText = payload.dimension === 'emp' && payload.pctTarget != null
-    ? pct(payload.pctTarget)
-    : (payload.totalRevenue > 0 ? pct((Number(value || 0) / payload.totalRevenue) * 100) : null);
+  const percentText = topPercentText(payload);
   const text = `${short(value)}${percentText ? ` · ${percentText}` : ''}`;
   const inside = Number(width || 0) >= 92;
   return (
@@ -69,12 +73,13 @@ function TopValueLabel({ x, y, width, height, value, payload }) {
 }
 
 export function TopBarChart({ rows = [], limit = 20, dimension = '', totalRevenue = 0 }) {
-  const data = (rows || []).slice(0, limit).map((r) => ({
+  const list = (rows || []).slice(0, limit).map((r) => ({
     ...r,
     dimension,
     totalRevenue,
     name: nameShort(r.label || r.product_name || r.unit_name || r.key, 32),
-  })).reverse();
+  }));
+  const data = [...list].reverse();
   if (!data.length) return <EmptyChart />;
   return (
     <div className="chart-box bar-chart">
@@ -89,6 +94,14 @@ export function TopBarChart({ rows = [], limit = 20, dimension = '', totalRevenu
           </Bar>
         </BarChart>
       </ResponsiveContainer>
+      <div className="top-chart-values" aria-label="Số tiền và phần trăm của biểu đồ">
+        {list.map((r, i) => <div className="top-chart-value" key={r.key || r.name || i}>
+          <span className="rank">#{i + 1}</span>
+          <span className="name">{r.name}</span>
+          <b>{money(r.revenue)}</b>
+          {topPercentText(r) && <em>{topPercentText(r)}</em>}
+        </div>)}
+      </div>
     </div>
   );
 }
