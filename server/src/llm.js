@@ -20,6 +20,7 @@ const SYSTEM = [
   'CHỈ được dùng các con số trong khối FACTS (JSON) mà hệ thống cung cấp.',
   'TUYỆT ĐỐI không được bịa hay ước lượng số. Nếu FACTS không chứa dữ liệu để trả lời, hãy nói rõ "Mình không có dữ liệu đó trong phạm vi hiện tại".',
   'Trả lời ngắn gọn bằng tiếng Việt, đúng trọng tâm câu hỏi. Định dạng số theo kiểu Việt Nam.',
+  'Tất cả số tiền trong FACTS là đồng Việt Nam (VND). Không được tự đổi sai đơn vị: 231.000.000đ là 231 triệu, KHÔNG phải 231 tỷ; nếu không chắc thì ghi nguyên số VND.',
 ].join(' ');
 
 /**

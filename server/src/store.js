@@ -95,7 +95,17 @@ function slotRows(slot) {
   const raw = JSON.parse(fs.readFileSync(p, 'utf8'));
   const { enrich } = base();
   const dm = slotDateMeta(slot);
-  return raw.map((r) => enrich({
+  const from = slot.dateFrom ? String(slot.dateFrom).slice(0, 10) : '';
+  const to = slot.dateTo ? String(slot.dateTo).slice(0, 10) : '';
+  return raw.filter((r) => {
+    // Slot có dữ liệu ngày chi tiết thì tuyệt đối không lấy dòng ngoài khoảng ngày của slot.
+    // Tránh lỗi materialize kỳ 07 kéo nhầm invoice 30/06 vào tháng 7.
+    if (dm.canFilterByDay) {
+      const d = String(r.date || r.ngay || r.order_date || r.invoice_date || r.created_at || '').slice(0, 10);
+      if (d && ((from && d < from) || (to && d > to))) return false;
+    }
+    return true;
+  }).map((r) => enrich({
     ...r,
     ky: slot.ky,
     date: r.date || r.ngay || r.order_date || r.invoice_date || r.created_at || slot.dateFrom || slot.ky,

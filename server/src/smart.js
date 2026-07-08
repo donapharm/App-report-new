@@ -237,6 +237,26 @@ async function answerQuestion({ text, scope, session }) {
     return say('Chào Anh/Chị 👋 Mình là trợ lý App Report. Hỏi mình về doanh thu, target, cơ số thầu, top sản phẩm/đơn vị/tỉnh… Gõ "giúp" để xem menu.');
   }
 
+  // Câu tự giới thiệu/kiểm tra liên kết kiểu "Tôi là NV DN001, bạn trả lời tôi nào".
+  // Trả bằng code cố định để tránh LLM tự diễn giải sai đơn vị tiền (triệu/tỷ).
+  if (/(toi|minh|em)\s+la\b.*\b(nv|nhan vien|dn\d{3}|vp\d{3})\b|\bban tra loi\b|\btra loi toi\b/.test(q)) {
+    const k = A.overviewKpis({ ky, scope });
+    const emp = scope.empCode ? store.findUserByCode(scope.empCode) : null;
+    const target = k.targetCompareTotal || k.targetTotal || 0;
+    const gap = k.pctTarget != null && target > 0 ? Math.max(0, Math.round(target - k.revenueBeforeVat)) : null;
+    const pac = A.targetPacingMeta(ky);
+    const daysLeft = Math.max(0, (pac.daysInMonth || 0) - (pac.daysElapsed || 0));
+    const lines = [
+      `• Doanh thu: ${fmt(k.revenue)}`,
+      `• Doanh thu trước VAT: ${fmt(k.revenueBeforeVat)}`,
+      target > 0 ? `• Target: ${fmt(target)} · đạt ${fmtPct(k.pctTarget)}` : '• Chưa có target kỳ này',
+    ];
+    if (gap != null) lines.push(gap > 0 ? `• Còn thiếu: ${fmt(gap)}${daysLeft ? ` · cần ~${fmt(Math.round(gap / daysLeft))}/ngày` : ''}` : '• Đã đạt/vượt target 🎉');
+    if (k.momPct != null) lines.push(`• So kỳ trước: ${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)}`);
+    lines.push('• Chi tiết sản phẩm/đơn vị/số lượng: đang khóa tạm để kiểm tra lại nguồn gán doanh số, tránh trả sai.');
+    return say(`Chào ${emp?.name || (scope.empCode ? scope.empCode : 'Anh/Chị')} — tài khoản đang liên kết ${scope.empCode || 'quyền admin'}. Báo cáo kỳ ${ky}:`, lines);
+  }
+
   // Tra cứu ĐÍCH DANH: giá thầu / mã QLNB / hoạt chất / cơ số còn lại của MỘT thuốc cụ thể.
   // ĐẶT TRƯỚC các mẫu "top…" (vì "top …" bắt cả "bao nhiêu"→"nhiều") để câu hỏi đích danh thắng.
   if (/gia thau|don gia|qlnb|ma hang|ma thuoc|hoat chat|tra cuu|tim thuoc|thong tin (san pham|thuoc)/.test(q)) {
@@ -265,10 +285,12 @@ async function answerQuestion({ text, scope, session }) {
   }
 
   if (/(top|cao nhat|ban chay|nhieu nhat).*(san pham|thuoc)|(san pham|thuoc).*(top|cao|ban chay|nhieu)/.test(q)) {
+    if (mine) return say(`Em đang khóa tạm Top sản phẩm kỳ ${ky} cho tài khoản nhân viên để kiểm tra lại nguồn gán doanh số/số lượng, tránh trả sai.`);
     const top = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 5);
     return topList(`Top sản phẩm kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
   if (/(top|cao nhat|nhieu nhat).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|khach).*(top|cao|nhieu)/.test(q)) {
+    if (mine) return say(`Em đang khóa tạm Top đơn vị kỳ ${ky} cho tài khoản nhân viên để kiểm tra lại nguồn gán doanh số/số lượng, tránh trả sai.`);
     const top = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 5);
     return topList(`Top đơn vị kỳ ${ky}:`, top, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
   }
@@ -365,8 +387,19 @@ async function answerQuestion({ text, scope, session }) {
     if (k.momPct == null) return say('Chưa đủ dữ liệu kỳ trước để so sánh.');
     return say(`Kỳ ${ky}: doanh thu ${fmt(k.revenue)}, ${k.momPct >= 0 ? 'TĂNG 📈' : 'GIẢM 📉'} ${fmtPct(Math.abs(k.momPct))} so kỳ trước.`);
   }
-  // Câu hỏi NHẮC ĐÍCH DANH một thuốc (kể cả không có từ khoá "giá thầu/qlnb") -> trả lời theo sản phẩm
-  // trước khi rơi vào doanh thu tổng. Chỉ kích hoạt khi thật sự khớp tên/mã (prodHits có kết quả).
+  // Doanh thu/doanh số chung: ưu tiên trước fuzzy lookup để không bắt nhầm "tôi/tổng" thành đơn vị/thuốc.
+  // Nếu câu hỏi nêu rõ thuốc/sản phẩm/mã QLNB hoặc đơn vị thì mới cho tra cứu đích danh.
+  const asksRevenue = /doanh thu|doanh so|tong tien|bao nhieu tien|ban duoc/.test(q);
+  const hasProductCue = /thuoc|san pham|ma hang|ma thuoc|qlnb|hoat chat|gia thau/.test(q);
+  const hasUnitCue = /don vi|benh vien|phong kham|nha thuoc|khach hang|ma dv|ai ban|ai phu trach/.test(q);
+  if (asksRevenue && !hasProductCue && !hasUnitCue) {
+    const k = A.overviewKpis({ ky, scope });
+    const who = mine ? 'của bạn' : 'toàn công ty';
+    const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
+    return say(`Doanh thu ${who} kỳ ${ky}: ${fmt(k.revenue)}${mom}.`);
+  }
+
+  // Câu hỏi NHẮC ĐÍCH DANH một thuốc (kể cả không có từ khoá "giá thầu/qlnb") -> trả lời theo sản phẩm.
   {
     const hits = prodHits();
     if (hits.length) { const ans = sayProductLookup(hits, ky); if (ans) return ans; }
@@ -376,7 +409,7 @@ async function answerQuestion({ text, scope, session }) {
     const hits = unitHits();
     if (hits.length) { const ans = sayUnitLookup(hits, ky, mine); if (ans) return ans; }
   }
-  if (/doanh thu|doanh so|tong tien|bao nhieu tien|ban duoc/.test(q)) {
+  if (asksRevenue) {
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
     const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
