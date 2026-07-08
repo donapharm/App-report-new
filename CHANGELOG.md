@@ -21,6 +21,31 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (s) — Claude Code — TÌM ĐÚNG GỐC LỖI NGÀY 01/07→30/06 (fix tại nguồn materialize)
+- **Bối cảnh:** Sếp bác bỏ cách "kéo về biên kỳ" (mục r) vì đó chỉ là **vá triệu chứng**, yêu cầu tìm
+  **đúng chỗ sinh ra ngày sai**. Dữ liệu Sếp cung cấp: 11 dòng 034 Y ĐỨC HEALTHCARE đều `source: CRM_MISA`,
+  `date: "2026-06-30"`, nằm trong file `ky: 07.2026` (order DH479815515, MISA:16889…).
+- **GỐC LỖI (đã chứng minh):** `server/scripts/materialize_july_revenue.js` dòng 39:
+  `dateOnly(v) = new Date(v).toISOString().slice(0,10)`.
+  - `misa_revenue_snapshot_lines.revenue_date` là kiểu **DATE = 01/07** (nên vẫn LỌT qua bộ lọc SQL
+    `revenue_date >= '2026-07-01'::date` → có mặt trong file T07).
+  - node-postgres đọc DATE thành **nửa đêm giờ máy** → trên server VN (GMT+7) là
+    `2026-07-01T00:00:00+07` = `2026-06-30T17:00:00Z`.
+  - `.toISOString()` quy về **UTC** rồi cắt 10 ký tự → ra **`2026-06-30`**. Vì DATE luôn là nửa đêm nên
+    **TẤT CẢ** dòng bị lùi đúng 1 ngày (giải thích vì sao cả 11 dòng đều 30/06, không phải vài dòng).
+  - Sau đó `store.js` lọc theo `dateFrom=01/07` → rớt sạch khỏi Report-New T07.
+- **Đã sửa (tại nguồn):**
+  1. `dateOnly()` lấy ngày theo **giờ VN** bằng `Intl.DateTimeFormat('en-CA', {timeZone:'Asia/Bangkok'})`,
+     KHÔNG dùng `toISOString()`. Kiểm chứng: `pg DATE 01/07 → CŨ=2026-06-30, MỚI=2026-07-01` (đúng).
+  2. Nhánh WEB partner: các cast `timestamptz::date` (`o.created_at`, `resp.responded_at`,
+     `resp.updated_at`) đổi sang `(x AT TIME ZONE 'Asia/Bangkok')::date` để không lệch ngày với đơn
+     đầu giờ sáng khi session DB chạy UTC.
+- **Cách áp:** bot `git reset --hard origin/main` + chạy lại materialize (hoặc chờ scheduler) → dữ liệu
+  MISA T07 sẽ mang đúng ngày 01/07. "Kéo về biên kỳ" (mục r) giữ lại làm **lưới an toàn có log**, gần như
+  không còn phải kích hoạt sau fix này.
+- **Trạng thái test:** `node --check` OK; unit-test tái hiện lỗi cũ + xác nhận fix trên máy TZ=Asia/Ho_Chi_Minh.
+  Cần bot chạy lại materialize thật để xác nhận DN009 = 12 đơn vị.
+
 ### 2026-07-08 (r) — Claude Code — FIX MẤT DOANH THU: không bỏ dòng "ngày gán sai", kéo về biên kỳ
 - **Triệu chứng (NV DN009 phát hiện):** DN009 tháng 7 chỉ ra 9 đơn vị thay vì 12; thiếu 034 Y ĐỨC
   HEALTHCARE + TRỊ AN. Sale-New CÓ, Report-New KHÔNG.
