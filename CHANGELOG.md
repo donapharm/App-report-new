@@ -21,6 +21,18 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (m) — Claude Code — Cherry-pick 2 fix DỮ LIỆU từ bot-server-local
+- **Bối cảnh:** bot server làm song song 1 nhánh (`bot-server-local`, 5 commit). Sau khi soi + thống nhất
+  với bot: **8b09419** trùng fix #68 (bỏ), **b1d29f6** khóa cứng T07 (KHÔNG merge — dễ chặn nhầm),
+  router NLQ (50740f1/7da6b7c) để review sau. Chỉ lấy 2 fix dữ liệu thật sự còn thiếu:
+  - **store.js `slotRows`:** lọc theo ngày của slot — chặn invoice 30/06 lọt nhầm vào materialize T07
+    (đây là GỐC khiến số T07 sai; fix đúng chỗ này thì không cần khóa cứng tháng 7).
+  - **llm.js:** thêm ràng buộc đơn vị tiền cho LLM (231.000.000đ = 231 triệu, KHÔNG phải 231 tỷ).
+- **Kỹ thuật:** đã xác minh 2 file chỉ khác đúng phần fix (store.js 1 hunk `slotRows`, llm.js 1 dòng),
+  không đụng memo-hoá/logic khác của main. `bot-server-local` giữ làm backup cho router NLQ.
+- **File:** `server/src/store.js`, `server/src/llm.js`.
+
+
 ### 2026-07-08 (l) — Claude Code — Bot: "báo cáo chi tiết" ra nhiều phần + "tất cả mặt hàng" + từ "mặt hàng"
 - **Báo cáo chi tiết:** câu "báo cáo doanh thu **chi tiết**" (không nêu chiều) trước chỉ ra **1 dòng tổng**
   → nay ra **nhiều phần**: doanh thu + %target + **top 5 sản phẩm** + **top 5 đơn vị** + gợi ý xem đầy đủ.
