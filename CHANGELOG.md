@@ -21,6 +21,14 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (w) — Claude Code — Export doanh thu: chốt bộ cột theo CEO
+- Theo CEO chốt: **bỏ cột Đơn giá** (chỉ giữ "Giá trúng thầu"); **ĐVT → "Đơn vị tính"** (ghi rõ);
+  giữ **STT** ở cột đầu; **thêm cột "Ghi chú" ở cuối** (để trống cho kế toán ghi tay).
+- 21 cột: STT · Kỳ · Ngày · Mã NV · Tên NV · Tuyến · Mã đơn vị · Tên đơn vị · Mã QLNB · Sản phẩm ·
+  Hoạt chất · Hàm lượng · Đơn vị tính · Mã nhà thầu · Tên nhà thầu · Gói thầu · Ưu tiên · Giá trúng thầu ·
+  Số lượng · Doanh thu · Ghi chú. Vẫn giữ định dạng kế toán VN + in A4 ngang lề ~1.5cm.
+- **Test:** xuất file thật, đọc lại: đúng 21 cột, STT đầu, không còn Đơn giá, có Đơn vị tính, Ghi chú cuối.
+
 ### 2026-07-08 (v) — Claude Code — Export doanh thu: thêm Đơn giá, tên nhà thầu đầy đủ, in A4 ngang lề sát
 - **CEO bổ sung:** (a) tên nhà thầu phải **đầy đủ** (vd "Công ty TNHH Dược phẩm DONAPHARM"); (b) **thiếu cột
   Đơn giá**; (c) in ra **A4 ngang vừa đủ, lề ~1.5cm cho sát**.

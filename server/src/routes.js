@@ -1596,18 +1596,18 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'Sản phẩm', key: 'product_name', width: 30 },
       { header: 'Hoạt chất', key: 'active_ingredient', width: 22 },
       { header: 'Hàm lượng', key: 'ham_luong', width: 12 },
-      { header: 'ĐVT', key: 'uom', width: 8 },
+      { header: 'Đơn vị tính', key: 'uom', width: 12 },
       { header: 'Mã nhà thầu', key: 'contractor_code', width: 16 },
       { header: 'Tên nhà thầu', key: 'contractor_name', width: 34 },
       { header: 'Gói thầu', key: 'bid_package', width: 12 },
       { header: 'Ưu tiên', key: 'priority', width: 10 },
       { header: 'Giá trúng thầu', key: 'bid_price', width: 16 },
-      { header: 'Đơn giá', key: 'unit_price', width: 14 },
       { header: 'Số lượng', key: 'quantity', width: 12 },
       { header: 'Doanh thu', key: 'revenue', width: 18 },
+      { header: 'Ghi chú', key: 'note', width: 24 },
     ];
     rows.forEach((r) => ws.addRow(r));
-    styleAccountingSheet(ws, { moneyKeys: ['bid_price', 'unit_price', 'revenue'], intKeys: ['quantity'], totalLabelKey: 'product_name' });
+    styleAccountingSheet(ws, { moneyKeys: ['bid_price', 'revenue'], intKeys: ['quantity'], totalLabelKey: 'product_name' });
   } else if (kind === 'products') {
     const rows0 = A.revenueBreakdown({ ky, scope, dimension: 'product', filters: revenueFiltersFromQuery(req.query) });
     const contractorLookup = contractorLookupFor(scope);
