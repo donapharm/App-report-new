@@ -101,6 +101,7 @@ export const api = {
   notificationsSendOne: (emp_code, ky) => req('POST', '/admin/notifications/send-one', { emp_code, ...(ky ? { ky } : {}) }),
   forecast: () => req('GET', '/targets/forecast'),
   ask: (text) => req('POST', '/ai/ask', { text }),
+  lookup: (q, ky) => req('GET', '/lookup?' + new URLSearchParams({ q, ...(ky ? { ky } : {}) }).toString()),
   // Upload
   uploadPreview: (file) => {
     const fd = new FormData();

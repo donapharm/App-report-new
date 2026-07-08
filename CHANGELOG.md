@@ -21,6 +21,16 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (h) — Claude Code — Tra cứu nhanh TRÊN WEB (thuốc/mã QLNB/đơn vị) có thẻ kết quả
+- **Việc:** Trang "Hỏi nhanh" thêm ô **🔎 Tra cứu nhanh** — gõ tên thuốc / mã QLNB / mã-tên đơn vị →
+  hiện **thẻ kết quả có cấu trúc**: thuốc (doanh thu, giá thầu, cơ số còn lại, đơn vị đang bán),
+  đơn vị (doanh thu, AI bán, top sản phẩm). Không phải đọc chat như trước.
+- **Backend:** route `GET /lookup?q=&ky=` (scoped) tái dùng `smart.lookupProducts/lookupUnits` (đã export).
+- **Quyền:** cùng `scope` — NV chỉ thấy phần của mình ("Bạn bán"); admin thấy tất cả.
+- **File:** `server/src/smart.js` (export), `server/src/routes.js` (route `/lookup`), `web/src/api.js`,
+  `web/src/pages/AiChat.jsx` (LookupPanel + thẻ), `web/src/styles.css`.
+- **Test:** node harness lookup ra đúng + kín quyền; build web OK.
+
 ### 2026-07-08 (g) — Claude Code — DỨT ĐIỂM deploy kẹt: bỏ track output materialize
 - **Việc:** `.gitignore` thêm `artifacts/*materialize*` + `git rm --cached` 4 file materialize doanh thu
   (bot tự sinh lại mỗi kỳ). Từ nay bot sinh file thoải mái, working tree KHÔNG dirty → auto-deploy

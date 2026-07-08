@@ -723,4 +723,4 @@ function unitText(code, name) {
 }
 function say(text, lines) { return { text, lines: lines || [], source: 'code' }; }
 
-module.exports = { buildAlerts, forecastTargets, answerQuestion, SEASON };
+module.exports = { buildAlerts, forecastTargets, answerQuestion, lookupProducts, lookupUnits, SEASON };
