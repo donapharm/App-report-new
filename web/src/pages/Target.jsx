@@ -525,6 +525,24 @@ function NotifyPreview({ data, ky }) {
         {err && <div className="meta" style={{ color: 'var(--hi)' }}>⚠ {err}</div>}
         {msg && <div className="meta" style={{ color: 'var(--ok)' }}>✔ {msg}</div>}
       </div>
+      {data.readiness && (
+        <div className="card notify-readiness">
+          <b>⚙️ Trạng thái sẵn sàng gửi tự động</b>
+          <div className="list-card-meta" style={{ marginTop: 6 }}>
+            <span className={'pill ' + (data.readiness.auto_enabled ? 'ok' : 'muted-pill')}>Tự động: {data.readiness.auto_enabled ? 'ĐANG BẬT' : 'TẮT (cần TARGET_NOTIFY=1)'}</span>
+            <span className={'pill ' + (data.readiness.telegram_ready ? 'ok' : 'bad')}>Telegram: {data.readiness.telegram_ready ? 'sẵn sàng' : 'thiếu token'}</span>
+            <span className={'pill ' + (data.readiness.email_ready ? 'ok' : 'warn')}>Email: {data.readiness.email_ready ? 'sẵn sàng' : 'chưa cấu hình SMTP'}</span>
+          </div>
+          <div className="list-card-meta" style={{ marginTop: 6 }}>
+            <span className="pill muted-pill">NV trong danh sách: {data.readiness.roster}</span>
+            <span className={'pill ' + (data.readiness.reachable > 0 ? 'ok' : 'bad')}>Liên hệ được: {data.readiness.reachable}/{data.readiness.roster}</span>
+            <span className="pill muted-pill">Đã map Telegram: {data.readiness.mapped_telegram}</span>
+            <span className="pill muted-pill">Có email: {data.readiness.has_email}</span>
+            <span className="pill muted-pill">Bị chặn (opt-out): {data.readiness.muted}</span>
+          </div>
+          {data.readiness.reachable === 0 && <div className="meta muted" style={{ marginTop: 6 }}>Chưa NV nào liên hệ được — cần NV nhắn bot Telegram để map, hoặc cấu hình SMTP để gửi email.</div>}
+        </div>
+      )}
       <div className="section-title">📊 Bản tổng gửi CEO</div>
       <div className="card"><pre className="notify-digest">{data.ceoDigest}</pre></div>
       <div className="section-title">✉️ Tin sẽ gửi cho NV ({evs.length})</div>

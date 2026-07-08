@@ -21,6 +21,19 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (j) — Claude Code — Thông báo target: bảng "Trạng thái sẵn sàng" (biết còn thiếu gì để bật)
+- **Việc:** Màn Quản target → Thông báo (xem trước) thêm card **⚙️ Trạng thái sẵn sàng gửi tự động**:
+  - Tự động BẬT/TẮT (`TARGET_NOTIFY`), kênh **Telegram** sẵn sàng chưa, kênh **Email (SMTP)** sẵn sàng chưa.
+  - Bao nhiêu NV **liên hệ được** (đã map Telegram / có email) trên tổng danh sách, bao nhiêu **bị chặn** (opt-out).
+  - Nếu chưa NV nào liên hệ được → gợi ý cụ thể (NV nhắn bot để map / cấu hình SMTP).
+- **Lý do:** Bật gửi tự động phụ thuộc 3 thứ cấu hình NGOÀI (env `TARGET_NOTIFY=1`, NV map Telegram, SMTP).
+  Card này cho CEO thấy NGAY còn thiếu gì thay vì "bật rồi không ai nhận".
+- **Backend:** `/admin/notifications/preview` trả thêm `readiness`.
+- **File:** `server/src/routes.js`, `web/src/pages/Target.jsx`.
+- **Còn lại (ops, ngoài code):** để gửi tự động chạy thật cần bot đặt `TARGET_NOTIFY=1`, NV nhắn bot để map
+  Telegram, và (nếu gửi email) cấu hình SMTP. Gửi TAY ("Gửi ngay/Gửi thử/Gửi 1 NV") đã dùng được ngay
+  cho ai đã có kênh.
+
 ### 2026-07-08 (i) — Claude Code — Cơ số thầu: sắp theo "cơ hội" + KPI tiền đang để trống
 - **Việc:** Màn Cơ số thầu thêm:
   - Nút sắp xếp **💰 Cơ hội (TT còn)** — xếp theo TT còn (SL còn × giá thầu) lớn nhất, để CEO thấy ngay
