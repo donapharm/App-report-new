@@ -209,7 +209,8 @@ function buildReason(attain, trend, last, season) {
  */
 async function answerQuestion({ text, scope, session }) {
   const q = noAccent((text || '').toLowerCase()); // chấp nhận cả gõ KHÔNG DẤU
-  const ky = resolveKyFromQuestion(q) || store.latestKy();
+  const requestedKy = resolveKyFromQuestion(q);
+  const ky = requestedKy || store.latestKy();
   const mine = !!scope.empCode;
 
   const rowsFor = () => store.getRows({ ky, scope });
@@ -238,6 +239,28 @@ async function answerQuestion({ text, scope, session }) {
   // Chào hỏi
   if (/^(chao|hi|hello|alo|xin chao|hey)\b/.test(q)) {
     return say('Chào Anh/Chị 👋 Mình là trợ lý App Report. Hỏi mình về doanh thu, target, cơ số thầu, top sản phẩm/đơn vị/tỉnh… Gõ "giúp" để xem menu.');
+  }
+
+  // Nếu hỏi rõ một kỳ chưa có trong dữ liệu (vd 08.2026 khi hiện mới có đến 07.2026),
+  // không được suy diễn/phân tích từ kỳ khác.
+  if (requestedKy && !store.periodKys().includes(requestedKy)) {
+    const latest = store.latestKy();
+    return say(`Chưa có dữ liệu doanh số kỳ ${requestedKy} trong App Report.`, [
+      latest ? `Kỳ mới nhất đang có dữ liệu là ${latest}.` : 'Hiện chưa có kỳ dữ liệu nào.',
+      'Khi có dữ liệu/upload kỳ này, Anh/Chị hỏi lại em sẽ tính theo đúng kỳ đó.',
+    ]);
+  }
+
+  // Doanh thu/doanh số chung phải được xử lý trước fuzzy lookup thuốc/đơn vị.
+  // Nếu không có cue rõ về thuốc/sản phẩm/đơn vị thì trả KPI tổng, không đoán theo token mơ hồ.
+  const asksRevenueEarly = /doanh thu|doanh so|tong tien|bao nhieu tien|ban duoc/.test(q);
+  const hasProductCueEarly = /thuoc|san pham|mat hang|ma hang|ma thuoc|qlnb|hoat chat|gia thau/.test(q);
+  const hasUnitCueEarly = /don vi|benh vien|phong kham|nha thuoc|khach hang|ma dv|ai ban|ai phu trach/.test(q);
+  if (asksRevenueEarly && !hasProductCueEarly && !hasUnitCueEarly) {
+    const k = A.overviewKpis({ ky, scope });
+    const who = mine ? 'của bạn' : 'toàn công ty';
+    const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
+    return say(`Doanh thu ${who} kỳ ${ky}: ${fmt(k.revenue)}${mom}.`);
   }
 
   // Tra cứu ĐÍCH DANH: giá thầu / mã QLNB / hoạt chất / cơ số còn lại của MỘT thuốc cụ thể.
@@ -713,13 +736,16 @@ function resolveKyFromQuestion(q) {
   if (!periods.length) return null;
   const latest = periods[periods.length - 1];
   const pickByMonthYear = (mm, yy) => {
-    const m = String(mm).padStart(2, '0');
+    const n = Number(mm);
+    if (!n || n < 1 || n > 12) return null;
+    const m = String(n).padStart(2, '0');
     let y = yy ? String(yy) : '';
     if (y.length === 2) y = `20${y}`;
-    if (y) return periods.includes(`${m}.${y}`) ? `${m}.${y}` : null;
+    // Trả về cả kỳ chưa có dữ liệu để guard phía trên báo đúng "chưa có dữ liệu",
+    // thay vì rơi về latestKy và trả sai kỳ.
+    if (y) return `${m}.${y}`;
     const latestYear = latest.slice(3);
-    if (periods.includes(`${m}.${latestYear}`)) return `${m}.${latestYear}`;
-    return periods.filter((p) => p.startsWith(`${m}.`)).slice(-1)[0] || null;
+    return `${m}.${latestYear}`;
   };
   let m = q.match(/\b(?:t|thang|ky)\s*0?(\d{1,2})(?:\s*[./-]?\s*(20\d{2}|\d{2}))?\b/);
   if (m) return pickByMonthYear(m[1], m[2]);
