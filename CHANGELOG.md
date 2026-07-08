@@ -21,6 +21,26 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (q) — Claude Code — TÍCH HỢP ROUTER NLQ (hết "bơi ngáo") + gỡ khóa cứng T07
+- **Việc lớn:** thay mớ ~30 regex intent xếp chồng (dễ lạc ý, vá chỗ này lòi chỗ kia) bằng **router
+  phân loại ý định** `nlqIntent.js` (bot server xây, đã review). Router quyết intent RÕ RÀNG trước
+  (sensitive/ranking/breakdown/overview/target/comparison/revenue…) rồi mới tới tra cứu/help.
+- **Sửa lỗi trong ảnh CEO:** "báo cáo chi tiết các **mã hàng** có doanh thu cao" nay ra **báo cáo sản
+  phẩm** (trước bị nhầm thành "tra cứu 1 thuốc" → "không tìm thấy"). "lấy **tất cả** mã qlnb" cũng ra
+  báo cáo (thêm "tất cả/toàn bộ" vào tín hiệu liệt kê của router).
+- **GỠ khóa cứng T07:** `employeeRevenueLocked=false` — T07 đã đúng (gom nhóm chuẩn + fix lọc ngày slot)
+  và đã có nhãn "dữ liệu tới ngày DD/MM". NV giờ xem được số T07 của mình.
+- **GIỮ trọn** tính năng của Claude: tra cứu đích danh thuốc/đơn vị (web `/lookup` dùng), buildFacts giàu
+  cho LLM, và 3 fix mới nhất được ghép lại: **#71** chống lặp nhãn đơn vị, **#72** báo "tháng chưa có số",
+  **#73** nhãn "dữ liệu tới ngày".
+- **Test:** `scripts/test_smart_nlq_regression.js` (viết lại, chạy được cả mẫu lẫn server) — PASS:
+  top đơn vị/NV, báo cáo sản phẩm, chặn nội dung nhạy cảm, NV không xem NV khác, tháng chưa có số, NV
+  xem số của mình. Các ca của Claude (tra cứu, cơ số, exports web) đều OK.
+- **File:** `server/src/smart.js`, `server/src/nlqIntent.js` (mới), `server/scripts/test_smart_nlq_regression.js`.
+- **Phân công từ nay:** bot server phát triển tiếp NLQ trên `nlqIntent.js`; Claude review + tích hợp.
+  `bot-server-local` giữ làm mốc.
+
+
 ### 2026-07-08 (p) — Claude Code — Nhãn "dữ liệu tới ngày DD/MM" cho kỳ đang cập nhật (web + bot)
 - **Mục đích:** chặn hiểu nhầm "thiếu đơn vị/số" khi kỳ đang xem là THÁNG ĐANG CHẠY (chưa đủ ngày).
   Nhìn phát biết kỳ đã đủ hay đang nạp tiếp.
