@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (n) — Claude Code — Fix nhãn đơn vị bị LẶP ĐÔI trên Telegram (data T07)
+- **Triệu chứng:** bot ghi "002.BVĐK Thống Nhất ĐN**.BVĐK Thống Nhất ĐN**" (lặp 2 lần).
+- **Nguyên nhân:** data T07 có `unit_code` chứa cả tên ("034.PKĐK Y ĐỨC") còn `unit_name` chỉ là tên
+  ("PKĐK Y ĐỨC") → `unitText` backend ghép thành `code.name` bị lặp. (Frontend `util.js` ĐÃ có chống
+  lặp; backend `smart.js` thiếu.)
+- **Sửa:** thêm vào `unitText` (smart.js) đúng guard như frontend: `if (/^\d{3}\./.test(c) && c.includes(nm)) return c;`
+- **LƯU Ý (không phải lỗi):** việc "thiếu đơn vị 034 ở T07" KHÔNG do lệch mã — `unit_code` T06=T07 giống
+  nhau, gom nhóm ĐÚNG. Các ĐV đó **chưa bán ở T07** (đầu kỳ); màn web so là **T06 đã hoàn tất**.
+- **File:** `server/src/smart.js`.
+
+
 ### 2026-07-08 (m) — Claude Code — Cherry-pick 2 fix DỮ LIỆU từ bot-server-local
 - **Bối cảnh:** bot server làm song song 1 nhánh (`bot-server-local`, 5 commit). Sau khi soi + thống nhất
   với bot: **8b09419** trùng fix #68 (bỏ), **b1d29f6** khóa cứng T07 (KHÔNG merge — dễ chặn nhầm),
