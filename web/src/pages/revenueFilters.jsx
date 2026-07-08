@@ -136,7 +136,7 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
             <span>{period.canFilterByDay ? 'Nguồn có ngày chi tiết: lọc ngày/tuần/tháng/quý dùng đúng ngày dòng.' : 'Kỳ này chỉ có tổng theo tháng: lọc ngày không phân bổ giả.'}</span>
           </div>
           <div className="filter-grid">
-            {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
+            {me.isAdmin && <MultiSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" unit="NV" />}
             <Select value={filters.province} onChange={(v) => setF('province', v)} options={options?.provinces} all="Tất cả tỉnh/thành" />
             <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
             <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />

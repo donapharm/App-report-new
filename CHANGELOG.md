@@ -21,6 +21,45 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (w) — Claude Code — Export doanh thu: chốt bộ cột theo CEO
+- Theo CEO chốt: **bỏ cột Đơn giá** (chỉ giữ "Giá trúng thầu"); **ĐVT → "Đơn vị tính"** (ghi rõ);
+  giữ **STT** ở cột đầu; **thêm cột "Ghi chú" ở cuối** (để trống cho kế toán ghi tay).
+- 21 cột: STT · Kỳ · Ngày · Mã NV · Tên NV · Tuyến · Mã đơn vị · Tên đơn vị · Mã QLNB · Sản phẩm ·
+  Hoạt chất · Hàm lượng · Đơn vị tính · Mã nhà thầu · Tên nhà thầu · Gói thầu · Ưu tiên · Giá trúng thầu ·
+  Số lượng · Doanh thu · Ghi chú. Vẫn giữ định dạng kế toán VN + in A4 ngang lề ~1.5cm.
+- **Test:** xuất file thật, đọc lại: đúng 21 cột, STT đầu, không còn Đơn giá, có Đơn vị tính, Ghi chú cuối.
+
+### 2026-07-08 (v) — Claude Code — Export doanh thu: thêm Đơn giá, tên nhà thầu đầy đủ, in A4 ngang lề sát
+- **CEO bổ sung:** (a) tên nhà thầu phải **đầy đủ** (vd "Công ty TNHH Dược phẩm DONAPHARM"); (b) **thiếu cột
+  Đơn giá**; (c) in ra **A4 ngang vừa đủ, lề ~1.5cm cho sát**.
+- **(a)** Materialize MISA nay ghi `contractor_name = legal_entity_name` (tên pháp nhân đầy đủ) vào từng dòng;
+  `contractorNameFor` ưu tiên tên có sẵn nên tên đầy đủ được giữ nguyên qua enrich. (Cần bot chạy lại
+  materialize để dòng MISA có tên; dòng partner đã có tên từ bảng contractors.)
+- **(b)** Thêm cột **"Đơn giá" (unit_price)** cạnh "Giá trúng thầu" — đơn giá bán thực tế mỗi dòng.
+- **(c)** `styleAccountingSheet` set `pageSetup`: khổ **A4**, **ngang (landscape)**, co vừa **1 trang chiều
+  ngang** (fitToWidth=1), **lề 0.59in (~1.5cm)** cả 4 phía, **lặp dòng tiêu đề** mọi trang, canh giữa ngang,
+  đánh số trang ở footer.
+- **Chờ CEO:** gửi thứ tự cột mong muốn → em sắp lại + tinh chỉnh độ rộng để in A4 ngang đọc rõ (bớt cột thừa
+  thì chữ in càng to).
+- **Test:** xuất file thật, đọc lại: có cột Đơn giá, `pageSetup` A4/landscape/fitToWidth/margin 0.59/printTitles OK.
+
+### 2026-07-08 (u) — Claude Code — XUẤT EXCEL "Doanh thu đầy đủ": tên nhà thầu + nhiều NV + chuẩn kế toán VN
+- **CEO phản ánh 3 điểm ở tab "Doanh thu đầy đủ":** (1) file Excel thiếu **tên nhà thầu**; (2) chỉ lọc/xuất
+  được **1 NV**, muốn chọn **nhiều NV**; (3) muốn **định dạng chuẩn kế toán VN**.
+- **(1) Tên nhà thầu:** export cũ dùng `store.getRows` thô + cột "Nhà thầu" chỉ ghi *mã*. Nay export
+  **enrich giống hệt trang** (`contractorLookup` + `enrichContractorNames` + `enrichProductMeta`) → thêm cột
+  **"Tên nhà thầu"** (kèm "Mã nhà thầu"), và bổ sung đủ trường: Ngày, Hoạt chất, Hàm lượng, ĐVT, Ưu tiên,
+  **Giá trúng thầu**, STT. File xuất giờ khớp 100% dữ liệu đang xem trên trang.
+- **(2) Nhiều NV:** ô lọc NV đổi từ chọn-đơn → **chọn-nhiều** (MultiSelect, chung `revenueFilters`); backend
+  `applyFilters` nhận `emp` là danh sách nối `|` (1 hay nhiều mã đều được, để trống = tất cả NV). Đã test:
+  `emp=DN001|DN002` → chỉ 2 NV; không lọc → đủ 12 NV.
+- **(3) Chuẩn kế toán VN:** helper `styleAccountingSheet` — số nhóm nghìn `#,##0`, **âm trong ngoặc đỏ**,
+  canh phải; tiêu đề đậm nền xanh + **freeze dòng tiêu đề** + **AutoFilter**; thêm dòng **TỔNG CỘNG** (in đậm)
+  cộng Số lượng/Doanh thu.
+- **Trạng thái test:** dựng server thật + xuất file, đọc lại bằng ExcelJS: đủ 20 cột, đúng numFmt, freeze,
+  autofilter, tổng cộng, lọc nhiều NV đúng. Web build OK. (Tên nhà thầu trống trên dữ liệu MẪU vì mẫu chưa
+  map tên NCC — trên production trang & file đều hiện tên như nhau.)
+
 ### 2026-07-08 (t) — Claude Code — CÔNG CỤ ĐỐI SOÁT Report-New ↔ Sale-New (tự phát hiện lệch)
 - **Lý do (CEO yêu cầu sau vụ DN009):** không đợi NV báo mới biết mất dữ liệu — phải TỰ phát hiện lệch
   theo từng NV/kỳ.

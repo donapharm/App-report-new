@@ -44,7 +44,10 @@ export default function RevenueFull({ me }) {
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}>{money(data?.totalRevenue || 0)}</div>
           <div className="meta muted">Số lượng: {(data?.totalQuantity || 0).toLocaleString('vi-VN')}</div>
         </div>
-        <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel đầy đủ</button>
+        <div style={{ textAlign: 'right' }}>
+          <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Xuất Excel đầy đủ</button>
+          {me.isAdmin && <div className="meta muted" style={{ maxWidth: 260, marginTop: 4 }}>Chọn <b>1 hoặc nhiều NV</b> ở bộ lọc (để trống = tất cả NV). File có đủ cột: tên nhà thầu, giá thầu, ưu tiên… định dạng kế toán VN.</div>}
+        </div>
       </div>
       {!data ? <SkeletonCards count={6} /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
         <div className="detail-list-wrap">
