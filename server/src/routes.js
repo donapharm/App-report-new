@@ -982,10 +982,13 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     byContractor,
     byPriority,
     byBidPackage,
-    topGrowthUnits: unitCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
-    topDeclineUnits: unitCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
-    topGrowthProducts: productCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
-    topDeclineProducts: productCompare.filter((x) => x.prevRevenue > 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
+    // CHỈ lấy đúng chiều: "tăng mạnh" = delta > 0, "giảm mạnh" = delta < 0.
+    // (Trước đây chỉ lọc prevRevenue>0 rồi sort theo delta -> khi số đơn vị giảm < 10 thì
+    //  danh sách "giảm" lấy bù bằng đơn vị TĂNG, gây lẫn lộn tăng/giảm.)
+    topGrowthUnits: unitCompare.filter((x) => x.prevRevenue > 0 && x.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
+    topDeclineUnits: unitCompare.filter((x) => x.prevRevenue > 0 && x.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
+    topGrowthProducts: productCompare.filter((x) => x.prevRevenue > 0 && x.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
+    topDeclineProducts: productCompare.filter((x) => x.prevRevenue > 0 && x.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
     pushProducts,
     cstLowProducts,
   });
