@@ -101,6 +101,7 @@ async function fetchMisa(runId) {
     ky: PERIOD.ky, date: dateOnly(r.revenue_date) || PERIOD.from,
     source: 'CRM_MISA', source_order: r.sale_order_no, source_line_id: `MISA:${r.id}`,
     route: cleanCode(r.route, 'CL'), contractor_code: r.legal_entity_bucket || r.legal_entity_code || 'MISA',
+    contractor_name: cleanCode(r.legal_entity_name, ''),
     emp_code: empCode(r.employee_code), emp_name: r.employee_name || '', raw_emp_code: r.employee_code || '',
     unit_code: cleanCode(r.unit_code, 'UNKNOWN_UNIT'), unit_name: cleanCode(r.unit_name, r.unit_code),
     iit_code: cleanCode(r.qlnb_code, 'UNKNOWN_PRODUCT'), product_name: cleanCode(r.product_name, r.qlnb_code),

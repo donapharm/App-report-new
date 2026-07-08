@@ -21,6 +21,20 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (v) — Claude Code — Export doanh thu: thêm Đơn giá, tên nhà thầu đầy đủ, in A4 ngang lề sát
+- **CEO bổ sung:** (a) tên nhà thầu phải **đầy đủ** (vd "Công ty TNHH Dược phẩm DONAPHARM"); (b) **thiếu cột
+  Đơn giá**; (c) in ra **A4 ngang vừa đủ, lề ~1.5cm cho sát**.
+- **(a)** Materialize MISA nay ghi `contractor_name = legal_entity_name` (tên pháp nhân đầy đủ) vào từng dòng;
+  `contractorNameFor` ưu tiên tên có sẵn nên tên đầy đủ được giữ nguyên qua enrich. (Cần bot chạy lại
+  materialize để dòng MISA có tên; dòng partner đã có tên từ bảng contractors.)
+- **(b)** Thêm cột **"Đơn giá" (unit_price)** cạnh "Giá trúng thầu" — đơn giá bán thực tế mỗi dòng.
+- **(c)** `styleAccountingSheet` set `pageSetup`: khổ **A4**, **ngang (landscape)**, co vừa **1 trang chiều
+  ngang** (fitToWidth=1), **lề 0.59in (~1.5cm)** cả 4 phía, **lặp dòng tiêu đề** mọi trang, canh giữa ngang,
+  đánh số trang ở footer.
+- **Chờ CEO:** gửi thứ tự cột mong muốn → em sắp lại + tinh chỉnh độ rộng để in A4 ngang đọc rõ (bớt cột thừa
+  thì chữ in càng to).
+- **Test:** xuất file thật, đọc lại: có cột Đơn giá, `pageSetup` A4/landscape/fitToWidth/margin 0.59/printTitles OK.
+
 ### 2026-07-08 (u) — Claude Code — XUẤT EXCEL "Doanh thu đầy đủ": tên nhà thầu + nhiều NV + chuẩn kế toán VN
 - **CEO phản ánh 3 điểm ở tab "Doanh thu đầy đủ":** (1) file Excel thiếu **tên nhà thầu**; (2) chỉ lọc/xuất
   được **1 NV**, muốn chọn **nhiều NV**; (3) muốn **định dạng chuẩn kế toán VN**.

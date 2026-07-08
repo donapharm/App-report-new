@@ -1533,6 +1533,17 @@ function styleAccountingSheet(ws, { moneyKeys = [], intKeys = [], totalLabelKey 
   });
   ws.views = [{ state: 'frozen', ySplit: 1 }];
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columnCount } };
+  // IN CHUẨN A4 NGANG: co vừa 1 trang chiều ngang, lề ~1.5cm (0.59in) cho sát, lặp
+  // dòng tiêu đề ở mọi trang khi in nhiều trang.
+  ws.pageSetup = {
+    paperSize: 9, // A4
+    orientation: 'landscape',
+    fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+    horizontalCentered: true,
+    printTitlesRow: '1:1',
+    margins: { left: 0.59, right: 0.59, top: 0.59, bottom: 0.59, header: 0.3, footer: 0.3 },
+  };
+  ws.headerFooter = { oddFooter: '&R&"Arial"&8 Trang &P/&N', differentFirst: false };
 }
 
 router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
@@ -1591,11 +1602,12 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'Gói thầu', key: 'bid_package', width: 12 },
       { header: 'Ưu tiên', key: 'priority', width: 10 },
       { header: 'Giá trúng thầu', key: 'bid_price', width: 16 },
+      { header: 'Đơn giá', key: 'unit_price', width: 14 },
       { header: 'Số lượng', key: 'quantity', width: 12 },
       { header: 'Doanh thu', key: 'revenue', width: 18 },
     ];
     rows.forEach((r) => ws.addRow(r));
-    styleAccountingSheet(ws, { moneyKeys: ['bid_price', 'revenue'], intKeys: ['quantity'], totalLabelKey: 'product_name' });
+    styleAccountingSheet(ws, { moneyKeys: ['bid_price', 'unit_price', 'revenue'], intKeys: ['quantity'], totalLabelKey: 'product_name' });
   } else if (kind === 'products') {
     const rows0 = A.revenueBreakdown({ ky, scope, dimension: 'product', filters: revenueFiltersFromQuery(req.query) });
     const contractorLookup = contractorLookupFor(scope);
