@@ -269,6 +269,20 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .chart-empty { height: 160px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; }
 .target-card { display: flex; flex-direction: column; }
 .compact-center { padding: 0 4px 4px; font-size: 12px; }
+.target-progress-text { line-height: 1.55; color: var(--muted); }
+.target-progress-text .target-actual,
+.target-progress-text .target-goal {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 7px;
+  font-weight: 900;
+  font-size: 13px;
+  letter-spacing: -.15px;
+}
+.target-progress-text .target-actual { color: #dc2626; background: #fff1f2; }
+.target-progress-text .target-goal { color: #0f766e; background: #ecfdf5; }
+.target-progress-text .target-sep,
+.target-progress-text .target-vat { color: var(--muted); font-weight: 700; }
 .gauge { position: relative; width: 100%; min-width: 0; }
 .gauge.small { width: 76px; flex: none; }
 .gauge-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 26px; pointer-events: none; }

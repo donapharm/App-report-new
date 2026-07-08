@@ -135,7 +135,17 @@ export default function Overview({ me, onNavigate }) {
             <div className="card chart-card target-card">
               <div className="section-head">🎯 Tiến độ target {periodLabel(periodSel)}</div>
               <TargetGauge pct={kpi.pctTarget} />
-              <div className="center compact-center">{Number(kpi.targetTotal || 0) > 0 ? `${money(kpi.revenueBeforeVat)} / target tháng ${money(kpi.targetTotal)} trước VAT` : `${money(kpi.revenueBeforeVat)} · Chưa giao target`}</div>
+              <div className="center compact-center target-progress-text">
+                {Number(kpi.targetTotal || 0) > 0 ? <>
+                  <span className="target-actual">{money(kpi.revenueBeforeVat)}</span>
+                  <span className="target-sep"> / target tháng </span>
+                  <span className="target-goal">{money(kpi.targetTotal)}</span>
+                  <span className="target-vat"> trước VAT</span>
+                </> : <>
+                  <span className="target-actual">{money(kpi.revenueBeforeVat)}</span>
+                  <span className="target-vat"> · Chưa giao target</span>
+                </>}
+              </div>
             </div>
             <div className="card chart-card wide">
               <div className="chart-head">
