@@ -99,7 +99,7 @@ export default function Analysis({ me }) {
   useEffect(() => {
     if (!periodSel) return;
     setTopRows(null);
-    api.revenue(topDim, null, { ...periodParams(periodSel), ...filters }).then((d) => setTopRows((d.rows || []).slice(0, 10)));
+    api.revenue(topDim, null, { ...periodParams(periodSel), ...filters }).then((d) => setTopRows((d.rows || []).slice(0, 20)));
   }, [periodSel, filters, topDim, reloadTick]);
 
   useEffect(() => {
@@ -155,7 +155,7 @@ export default function Analysis({ me }) {
           </div>
           <div className="card chart-card">
             <div className="chart-head">
-              <div className="section-head">🏆 Top 10 doanh thu</div>
+              <div className="section-head">🏆 Top 20 doanh thu</div>
               <div className="seg compact">
                 <button className={topDim === 'unit' ? 'active' : ''} onClick={() => setTopDim('unit')}>Đơn vị</button>
                 <button className={topDim === 'product' ? 'active' : ''} onClick={() => setTopDim('product')}>Sản phẩm</button>

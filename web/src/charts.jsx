@@ -43,8 +43,8 @@ export function RevenueTrendChart({ rows = [], selectedKys = [] }) {
   );
 }
 
-export function TopBarChart({ rows = [] }) {
-  const data = (rows || []).slice(0, 10).map((r) => ({ ...r, name: nameShort(r.label || r.product_name || r.unit_name || r.key, 32) })).reverse();
+export function TopBarChart({ rows = [], limit = 20 }) {
+  const data = (rows || []).slice(0, limit).map((r) => ({ ...r, name: nameShort(r.label || r.product_name || r.unit_name || r.key, 32) })).reverse();
   if (!data.length) return <EmptyChart />;
   return (
     <div className="chart-box bar-chart">
@@ -90,6 +90,15 @@ function PieTooltip({ active, payload }) {
   const total = p.payload?.total || 0;
   return <div className="chart-tip"><b>{p.name}</b><div>{money(p.value)} · {pct(total ? ((p.value / total) * 100) : 0)}</div></div>;
 }
+// Nhãn % ngay trên lát bánh (chỉ hiện với lát đủ lớn để không rối).
+const RAD = Math.PI / 180;
+function sliceLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }) {
+  if (percent < 0.07) return null;
+  const r = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + r * Math.cos(-midAngle * RAD);
+  const y = cy + r * Math.sin(-midAngle * RAD);
+  return <text x={x} y={y} fill="#fff" fontSize={11} fontWeight={700} textAnchor="middle" dominantBaseline="central">{Math.round(percent * 100)}%</text>;
+}
 export function DonutChart({ rows = [] }) {
   const data = topWithOther(rows);
   const total = data.reduce((s, r) => s + r.value, 0);
@@ -98,13 +107,16 @@ export function DonutChart({ rows = [] }) {
     <div className="donut-wrap">
       <ResponsiveContainer width="100%" height={210}>
         <PieChart>
-          <Pie data={data.map((d) => ({ ...d, total }))} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={2}>
+          <Pie data={data.map((d) => ({ ...d, total }))} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={2} label={sliceLabel} labelLine={false}>
             {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
           </Pie>
           <Tooltip content={<PieTooltip />} />
         </PieChart>
       </ResponsiveContainer>
-      <div className="donut-legend">{data.map((d, i) => <span key={d.name}><i style={{ background: COLORS[i % COLORS.length] }} />{d.name}</span>)}</div>
+      {/* Chú thích: tên · số tiền rút gọn · % để đọc nhanh không cần rê chuột */}
+      <div className="donut-legend">{data.map((d, i) => (
+        <span key={d.name}><i style={{ background: COLORS[i % COLORS.length] }} />{d.name} <b>{short(d.value)} · {pct(total ? (d.value / total) * 100 : 0, 0)}</b></span>
+      ))}</div>
     </div>
   );
 }

@@ -21,6 +21,15 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (f) — Claude Code — Phân tích: Top 20 + biểu đồ tròn hiện số tiền rút gọn & %
+- **Top doanh thu:** màn Phân tích nâng từ Top 10 → **Top 20** (Overview giữ Top 10). `TopBarChart`
+  thêm prop `limit` (mặc định 20) để nâng trần mà không ảnh hưởng chỗ gọi khác.
+- **3 biểu đồ tròn (Tuyến / Nhà thầu / Gói thầu):** hiện **% ngay trên lát bánh** (lát ≥7% cho đỡ rối)
+  và **chú thích kèm số tiền rút gọn + %** (vd "NCL  1,23 tỷ · 62%") — đọc nhanh không cần rê chuột.
+- **File:** `web/src/charts.jsx` (TopBarChart limit, DonutChart nhãn % + legend tiền/%) ,
+  `web/src/pages/Analysis.jsx` (slice 20 + tiêu đề "Top 20").
+- **Test:** build web OK.
+
 ### 2026-07-08 (e) — Claude Code — Phân tích: thêm 2 ô cho cân hàng dưới (chưa khai thác + biến động tuyến)
 - **Việc:** Hàng panel dưới của màn Phân tích trước chỉ có 2 ô (SP cần đẩy mạnh, SP sắp hết CST) → trống
   2 ô. Bổ sung đúng 2 ô (theo gợi ý CEO):
