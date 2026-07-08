@@ -16,6 +16,9 @@ server/data/*.json
 server/data/uploads/
 # Dữ liệu auth runtime (phiên/thiết bị/mapping/audit) — TUYỆT ĐỐI không commit
 server/data/auth/
+# Output materialize doanh thu (bot server tự SINH LẠI mỗi kỳ) — KHÔNG commit để tránh
+# working tree dirty làm KẸT auto-deploy. App không đọc artifacts/, chỉ là output phân tích.
+artifacts/*materialize*
 # Backup runtime (PM2/dữ liệu) — TUYỆT ĐỐI không commit (có thể chứa secret/key)
 backups/
 *.backup
