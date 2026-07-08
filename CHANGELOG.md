@@ -21,6 +21,14 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (g) — Claude Code — DỨT ĐIỂM deploy kẹt: bỏ track output materialize
+- **Việc:** `.gitignore` thêm `artifacts/*materialize*` + `git rm --cached` 4 file materialize doanh thu
+  (bot tự sinh lại mỗi kỳ). Từ nay bot sinh file thoải mái, working tree KHÔNG dirty → auto-deploy
+  không còn bị kẹt (đã 2 lần hôm nay phải `git stash` tay).
+- **An toàn:** app KHÔNG đọc `artifacts/` (đã kiểm tra grep server/) — chỉ là output phân tích; file
+  vẫn còn trên đĩa server, chỉ thôi track trong git.
+- **File:** `.gitignore` (+ untrack 4 file materialize).
+
 ### 2026-07-08 (f) — Claude Code — Phân tích: Top 20 + biểu đồ tròn hiện số tiền rút gọn & %
 - **Top doanh thu:** màn Phân tích nâng từ Top 10 → **Top 20** (Overview giữ Top 10). `TopBarChart`
   thêm prop `limit` (mặc định 20) để nâng trần mà không ảnh hưởng chỗ gọi khác.
