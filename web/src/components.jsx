@@ -28,7 +28,17 @@ export function UpdateBanner() {
         const r = await fetch('/version.json?_=' + Date.now(), { cache: 'no-store' });
         if (!r.ok) return;
         const j = await r.json();
-        if (!stop && j && j.version && current !== 'dev' && j.version !== current) setNewVer(j.version);
+        if (!stop && j && j.version && current !== 'dev' && j.version !== current) {
+          const key = 'rpt_auto_reloaded_' + j.version;
+          try {
+            if (sessionStorage.getItem(key) !== '1') {
+              sessionStorage.setItem(key, '1');
+              window.location.replace(window.location.pathname + '?v=' + encodeURIComponent(j.version));
+              return;
+            }
+          } catch { /* ignore */ }
+          setNewVer(j.version);
+        }
       } catch { /* mất mạng: bỏ qua */ }
     };
     check();
