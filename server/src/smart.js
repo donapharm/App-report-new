@@ -214,7 +214,9 @@ async function answerQuestion({ text, scope, session }) {
 
   const rowsFor = () => store.getRows({ ky, scope });
   const topList = (title, arr, fmtItem) => say(title, arr.map((t, i) => `${i + 1}. ${fmtItem(t)}`));
+  const limitFromQuestion = (def = 5, max = 20) => Math.min(max, Math.max(1, Number((q.match(/top\s*(\d{1,2})|^(?:.*?)(\d{1,2})\s*(?:dong|muc|don vi|san pham|nv|nhan vien)/) || [])[1] || (q.match(/top\s*(\d{1,2})|^(?:.*?)(\d{1,2})\s*(?:dong|muc|don vi|san pham|nv|nhan vien)/) || [])[2] || def)));
   const employeeRevenueLocked = mine && ky === '07.2026';
+  const lockedMsg = `Dữ liệu doanh thu kỳ ${ky} đang được đối chiếu lại nguồn gán nhân viên nên em tạm khóa trả số để tránh sai.`;
   let _ph = null; // memo tra cứu đích danh SẢN PHẨM (tránh tính 2 lần)
   const prodHits = () => { if (_ph === null) _ph = lookupProducts({ q, ky, scope }); return _ph; };
   let _uh = null; // memo tra cứu đích danh ĐƠN VỊ
@@ -244,7 +246,7 @@ async function answerQuestion({ text, scope, session }) {
     if (employeeRevenueLocked) {
       const emp = scope.empCode ? store.findUserByCode(scope.empCode) : null;
       return say(`Chào ${emp?.name || scope.empCode} — tài khoản đang liên kết ${scope.empCode}.`, [
-        `Dữ liệu doanh thu kỳ ${ky} đang được đối chiếu lại nguồn gán nhân viên nên em tạm khóa trả số để tránh sai.`,
+        lockedMsg,
         'Sau khi quản trị xác nhận nguồn, Anh/Chị hỏi lại em sẽ trả lời ngay.',
       ]);
     }
@@ -293,20 +295,28 @@ async function answerQuestion({ text, scope, session }) {
     }
   }
 
-  if (/(top|cao nhat|ban chay|nhieu nhat).*(san pham|thuoc)|(san pham|thuoc).*(top|cao|ban chay|nhieu)/.test(q)) {
-    if (mine) return say(`Em đang khóa tạm Top sản phẩm kỳ ${ky} cho tài khoản nhân viên để kiểm tra lại nguồn gán doanh số/số lượng, tránh trả sai.`);
-    const top = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 5);
-    return topList(`Top sản phẩm kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  if (/(top|cao nhat|ban chay|nhieu nhat|xep hang).*(san pham|thuoc|mat hang)|(san pham|thuoc|mat hang).*(top|cao|ban chay|nhieu|xep hang)/.test(q)) {
+    if (employeeRevenueLocked) return say(lockedMsg);
+    const limit = limitFromQuestion(5, 20);
+    const top = A.revenueBreakdown({ ky, scope, dimension: 'product' }).filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
+    return topList(`Top ${limit} sản phẩm có doanh thu kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
-  if (isTopUnitQuery) {
-    if (mine) return say(`Em đang khóa tạm Top đơn vị kỳ ${ky} cho tài khoản nhân viên để kiểm tra lại nguồn gán doanh số/số lượng, tránh trả sai.`);
-    const limit = /top\s*10|10\s*(don vi|benh vien|phong kham|khach)/.test(q) ? 10 : 5;
+  if (isTopUnitQuery || /(co doanh thu|phat sinh doanh thu).*(don vi|benh vien|phong kham|khach)|(don vi|benh vien|phong kham|khach).*(co doanh thu|phat sinh doanh thu)/.test(q)) {
+    if (employeeRevenueLocked) return say(lockedMsg);
+    const limit = limitFromQuestion(/top\s*10|10\s*(don vi|benh vien|phong kham|khach)/.test(q) ? 10 : 10, 20);
     const top = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
     return topList(`Top ${limit} đơn vị có doanh thu kỳ ${ky}:`, top, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
   }
-  if (!mine && /(xep hang|ranking|top).*(nhan vien|nv|sale)|(nhan vien|sale).*(top|cao|xep hang|nhieu)/.test(q)) {
-    const top = A.revenueBreakdown({ ky, scope, dimension: 'emp' }).slice(0, 5);
-    return topList(`Top nhân viên kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  if (/(xep hang|ranking|top|dan dau|dung dau|cao nhat|nhieu nhat).*(nhan vien|nv|sale)|(nhan vien|nv|sale).*(top|cao|xep hang|nhieu|dan dau|dung dau)|\b(ai|nguoi nao)\b.*(dan dau|dung dau|cao nhat|nhieu nhat)/.test(q)) {
+    if (mine) return say('Anh/Chị chỉ được xem dữ liệu trong phạm vi của mình; xếp hạng nhân viên thuộc quyền CEO/admin.');
+    const limit = limitFromQuestion(5, 20);
+    const top = A.revenueBreakdown({ ky, scope, dimension: 'emp' }).filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
+    return topList(`Top ${limit} nhân viên kỳ ${ky}:`, top, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  }
+  if (!mine && (/(doanh thu|doanh so).*(theo|tung|moi|liet ke|thong ke).*(nhan vien|nv|sale)|(nhan vien|nv|sale).*(co doanh thu|phat sinh doanh thu|doanh thu|doanh so)/.test(q))) {
+    const limit = limitFromQuestion(10, 30);
+    const rows = A.revenueBreakdown({ ky, scope, dimension: 'emp' }).filter((t) => Number(t.revenue || 0) > 0).slice(0, limit);
+    return topList(`Doanh thu theo nhân viên kỳ ${ky} (${rows.length} NV đầu):`, rows, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
   if (/nha thau/.test(q)) {
     const g = A.groupSum(rowsFor(), 'contractor_code', 'contractor_name').slice(0, 5);
@@ -325,18 +335,21 @@ async function answerQuestion({ text, scope, session }) {
   }
   // Báo cáo theo TỪNG đơn vị (không chỉ "top") — vd "báo cáo bán hàng theo từng mã đơn vị"
   if (/(bao cao|theo|tung|moi|liet ke|thong ke|chi tiet).*(don vi|benh vien|phong kham|khach hang|ma dv)/.test(q)) {
+    if (employeeRevenueLocked) return say(lockedMsg);
     const rows = A.revenueBreakdown({ ky, scope, dimension: 'unit' }).slice(0, 15);
     if (!rows.length) return say(`Chưa có doanh thu theo đơn vị kỳ ${ky}.`);
     return topList(`Doanh thu theo đơn vị kỳ ${ky} (${rows.length} đơn vị đầu):`, rows, (t) => `${unitText(t.key, t.label)}: ${fmt(t.revenue)}`);
   }
   // Báo cáo theo TỪNG sản phẩm
   if (/(bao cao|theo|tung|moi|liet ke|thong ke|chi tiet).*(san pham|thuoc|ma hang|ma qlnb)/.test(q)) {
+    if (employeeRevenueLocked) return say(lockedMsg);
     const rows = A.revenueBreakdown({ ky, scope, dimension: 'product' }).slice(0, 15);
     if (!rows.length) return say(`Chưa có doanh thu theo sản phẩm kỳ ${ky}.`);
     return topList(`Doanh thu theo sản phẩm kỳ ${ky} (${rows.length} SP đầu):`, rows, (t) => `${t.label}: ${fmt(t.revenue)}`);
   }
   // Báo cáo tổng hợp / tổng quan
   if (/bao cao tong hop|tong hop|tong quan|bao cao chung|tinh hinh chung|so lieu chung/.test(q)) {
+    if (employeeRevenueLocked) return say(lockedMsg);
     const k = A.overviewKpis({ ky, scope });
     return say(`📊 Tổng hợp kỳ ${ky} (${mine ? 'của bạn' : 'toàn công ty'}):`, [
       `• Doanh thu: ${fmt(k.revenue)}${k.momPct != null ? ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)` : ''}`,
@@ -376,6 +389,7 @@ async function answerQuestion({ text, scope, session }) {
   }
   // Còn thiếu / cần bán bao nhiêu để đạt target
   if (/con thieu|con bao nhieu|can ban bao nhieu|can them|bao nhieu nua|de dat target|cach target|cham target|con cach/.test(q)) {
+    if (employeeRevenueLocked) return say(lockedMsg);
     const k = A.overviewKpis({ ky, scope });
     if (k.pctTarget == null) return say(`Kỳ ${ky} chưa giao target nên chưa tính được phần còn thiếu.`);
     const target = k.targetCompareTotal || k.targetTotal || 0;
@@ -387,12 +401,14 @@ async function answerQuestion({ text, scope, session }) {
     return say(`Kỳ ${ky}: còn thiếu ${fmt(gap)} để đủ target (đang đạt ${fmtPct(k.pctTarget)}).`, perDay ? [`Còn ${daysLeft} ngày → cần bán ~${fmt(perDay)}/ngày.`] : []);
   }
   if (/target|chi tieu|% ?dat|dat bao nhieu|hoan thanh/.test(q)) {
+    if (employeeRevenueLocked) return say(lockedMsg);
     const k = A.overviewKpis({ ky, scope });
     if (k.pctTarget == null) return say('Chưa có target cho kỳ ' + ky + '.');
     return say(`Kỳ ${ky}: doanh thu trước VAT ${fmt(k.revenueBeforeVat)} / target ${fmt(k.targetCompareTotal || k.targetTotal)} → đạt ${fmtPct(k.pctTarget)}.`);
   }
   // So với kỳ trước / tăng hay giảm
   if (/so voi|so ky truoc|so thang truoc|tang hay giam|tang giam|bien dong|so sanh/.test(q)) {
+    if (employeeRevenueLocked) return say(lockedMsg);
     const k = A.overviewKpis({ ky, scope });
     if (k.momPct == null) return say('Chưa đủ dữ liệu kỳ trước để so sánh.');
     return say(`Kỳ ${ky}: doanh thu ${fmt(k.revenue)}, ${k.momPct >= 0 ? 'TĂNG 📈' : 'GIẢM 📉'} ${fmtPct(Math.abs(k.momPct))} so kỳ trước.`);
@@ -403,7 +419,7 @@ async function answerQuestion({ text, scope, session }) {
   const hasProductCue = /thuoc|san pham|ma hang|ma thuoc|qlnb|hoat chat|gia thau/.test(q);
   const hasUnitCue = /don vi|benh vien|phong kham|nha thuoc|khach hang|ma dv|ai ban|ai phu trach/.test(q);
   if (asksRevenue && !hasProductCue && !hasUnitCue) {
-    if (employeeRevenueLocked) return say(`Dữ liệu doanh thu kỳ ${ky} đang được đối chiếu lại nguồn gán nhân viên nên em tạm khóa trả số để tránh sai.`);
+    if (employeeRevenueLocked) return say(lockedMsg);
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
     const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
@@ -421,7 +437,7 @@ async function answerQuestion({ text, scope, session }) {
     if (hits.length) { const ans = sayUnitLookup(hits, ky, mine); if (ans) return ans; }
   }
   if (asksRevenue) {
-    if (employeeRevenueLocked) return say(`Dữ liệu doanh thu kỳ ${ky} đang được đối chiếu lại nguồn gán nhân viên nên em tạm khóa trả số để tránh sai.`);
+    if (employeeRevenueLocked) return say(lockedMsg);
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
     const mom = k.momPct == null ? '' : ` (${k.momPct >= 0 ? '+' : ''}${fmtPct(k.momPct)} so kỳ trước)`;
