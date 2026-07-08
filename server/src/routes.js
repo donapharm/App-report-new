@@ -1451,6 +1451,18 @@ router.post('/ai/ask', auth.requireAuth, async (req, res) => {
   res.json(answer);
 });
 
+// Tra cứu ĐÍCH DANH có cấu trúc (cho ô "Tra cứu nhanh" trên web): thuốc/mã QLNB + đơn vị.
+// Cùng phạm vi quyền như mọi query — NV chỉ thấy phần của mình.
+router.get('/lookup', auth.requireAuth, (req, res) => {
+  const scope = auth.scopeOf(req.session);
+  const q = String(req.query.q || '').trim();
+  const ky = req.query.ky || store.latestKy();
+  if (q.length < 2) return res.json({ q, ky, products: [], units: [] });
+  const products = smart.lookupProducts({ q, ky, scope, max: 6 });
+  const units = smart.lookupUnits({ q, ky, scope, max: 6 });
+  res.json({ q, ky, products, units });
+});
+
 /* ---------- Export Excel (qua backend + kiểm quyền) ---------- */
 router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
   const scope = auth.scopeOf(req.session);
