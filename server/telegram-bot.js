@@ -176,7 +176,12 @@ async function answerNaturalQuestion(msg, txt) {
   const map = auth.resolveTelegram(msg.from.id);
   if (!map) {
     return tg('sendMessage', { chat_id: msg.chat.id,
-      text: 'Gửi mã đăng nhập dạng RP-XXXXXX để xác nhận đăng nhập App Report.' });
+      text: [
+        'Tài khoản Telegram của bạn CHƯA được liên kết với App Report nên mình chưa trả lời câu hỏi được.',
+        `• Mã Telegram của bạn: ${msg.from.id}`,
+        '• Gửi mã này cho quản trị (CEO) để liên kết, hoặc vào web App Report bấm “Đăng nhập bằng Telegram”.',
+        'Sau khi liên kết xong, bạn hỏi lại là mình trả lời ngay (VD: “Doanh thu tháng 6?”, “Top sản phẩm”).',
+      ].join('\n') });
   }
   const user = store.findUserByCode(String(map.emp_code || '').toUpperCase());
   const session = auth.sessionForUser(user);
