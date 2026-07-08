@@ -214,6 +214,8 @@ async function answerQuestion({ text, scope, session }) {
 
   const rowsFor = () => store.getRows({ ky, scope });
   const topList = (title, arr, fmtItem) => say(title, arr.map((t, i) => `${i + 1}. ${fmtItem(t)}`));
+  let _ph = null; // memo tra cứu đích danh (tránh tính 2 lần)
+  const prodHits = () => { if (_ph === null) _ph = lookupProducts({ q, ky, scope }); return _ph; };
 
   // Trợ giúp / bot làm được gì
   if (/\b(help|menu|giup)\b|huong dan|lam duoc gi|hoi gi|ban lam gi|chuc nang|tro giup/.test(q)) {
@@ -222,6 +224,7 @@ async function answerQuestion({ text, scope, session }) {
       `🏆 Xếp hạng: "Top sản phẩm / đơn vị${mine ? '' : ' / nhân viên'} / nhà thầu / gói thầu / tỉnh"`,
       '🎯 Target: "Tôi đạt bao nhiêu % target?", "Còn thiếu bao nhiêu để đạt target?"',
       '📦 Cơ số thầu: "Cơ số nào sắp cạn?", "Đơn vị nào chưa bán?"',
+      '🔎 Tra cứu thuốc: "Giá thầu Paracetamol?", "Doanh thu thuốc X?", "Cơ số còn lại mã QLNB?"',
       `📈 Biến động: "Đơn vị nào giảm mạnh / tăng mạnh?"${mine ? '' : ', "NV nào chưa đạt?"'}`,
       '🗓️ Có thể ghi rõ tháng: "Doanh thu tháng 6?"',
     ]);
@@ -247,6 +250,18 @@ async function answerQuestion({ text, scope, session }) {
     const g = A.groupSum(rowsFor(), 'contractor_code', 'contractor_name').slice(0, 5);
     if (!g.length) return say(`Chưa có dữ liệu nhà thầu trong kỳ ${ky}.`);
     return topList(`Top nhà thầu kỳ ${ky}:`, g, (t) => `${t.label}: ${fmt(t.revenue)}`);
+  }
+  // Tra cứu ĐÍCH DANH: giá thầu / mã QLNB / hoạt chất / cơ số còn lại của MỘT thuốc cụ thể.
+  // (Đặt SỚM để "giá thầu thuốc X" không bị rơi vào câu trả lời doanh thu tổng.)
+  if (/gia thau|don gia|qlnb|ma hang|ma thuoc|hoat chat|tra cuu|tim thuoc|thong tin (san pham|thuoc)/.test(q)) {
+    const ans = sayProductLookup(prodHits(), ky);
+    if (ans) return ans;
+    return say('Chưa tìm thấy thuốc/mã QLNB khớp trong phạm vi dữ liệu của bạn 🤔.', [
+      'Thử gõ đúng TÊN thuốc hoặc MÃ QLNB, ví dụ:',
+      '• "giá thầu Paracetamol"',
+      '• "cơ số còn lại mã 12345"',
+      '• "doanh thu thuốc Amlodipin"',
+    ]);
   }
   if (/goi thau/.test(q)) {
     const g = A.groupSum(rowsFor().filter((r) => r.bid_package), 'bid_package', 'bid_package').slice(0, 5);
@@ -332,6 +347,12 @@ async function answerQuestion({ text, scope, session }) {
     if (k.momPct == null) return say('Chưa đủ dữ liệu kỳ trước để so sánh.');
     return say(`Kỳ ${ky}: doanh thu ${fmt(k.revenue)}, ${k.momPct >= 0 ? 'TĂNG 📈' : 'GIẢM 📉'} ${fmtPct(Math.abs(k.momPct))} so kỳ trước.`);
   }
+  // Câu hỏi NHẮC ĐÍCH DANH một thuốc (kể cả không có từ khoá "giá thầu/qlnb") -> trả lời theo sản phẩm
+  // trước khi rơi vào doanh thu tổng. Chỉ kích hoạt khi thật sự khớp tên/mã (prodHits có kết quả).
+  {
+    const hits = prodHits();
+    if (hits.length) { const ans = sayProductLookup(hits, ky); if (ans) return ans; }
+  }
   if (/doanh thu|doanh so|tong tien|bao nhieu tien|ban duoc/.test(q)) {
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
@@ -342,6 +363,8 @@ async function answerQuestion({ text, scope, session }) {
   // Không khớp mẫu code → nếu có LLM (grounded) thì nhờ diễn giải trên FACTS đã tính.
   if (llm.isEnabled()) {
     const facts = buildFacts({ ky, scope, mine });
+    const hits = prodHits();
+    if (hits.length) facts.tra_cuu_san_pham = hits; // thuốc/mã QLNB/giá thầu câu hỏi nhắc tới
     const ans = await llm.callLlm({ question: text, facts });
     if (ans) return { text: ans.text, lines: [], source: 'llm' };
   }
@@ -351,6 +374,7 @@ async function answerQuestion({ text, scope, session }) {
     `🏆 "Top sản phẩm / đơn vị${mine ? '' : ' / nhân viên'} / nhà thầu / gói thầu / tỉnh"`,
     '🎯 "Tôi đạt bao nhiêu % target?" · "Còn thiếu bao nhiêu để đạt target?"',
     `📦 "Cơ số nào sắp cạn?" · "Đơn vị nào chưa bán?"${mine ? '' : ' · "NV nào chưa đạt?"'}`,
+    '🔎 "Giá thầu / doanh thu / cơ số còn lại của thuốc (tên hoặc mã QLNB)"',
     '📈 "Đơn vị nào giảm mạnh / tăng mạnh?"',
     '— Gõ "giúp" để xem đầy đủ menu.',
   ]);
@@ -417,6 +441,129 @@ function buildFacts({ ky, scope, mine }) {
     co_so_thau_sap_can: A.cstTable({ scope, remainPctMax: 10 }).slice(0, 8).map((c) => ({ sp: c.product_name, dv: unitText(c.unit_code, c.unit_name), con_lai_pct: c.remain_pct })),
     so_don_vi_chua_ban: A.cstTable({ scope, filters: { status: 'empty' } }).length,
   };
+}
+
+/* ---------------- TRA CỨU ĐÍCH DANH (thuốc / mã QLNB / giá thầu / cơ số) ---------------- */
+// Từ "chung chung" trong câu hỏi + đơn vị bào chế — KHÔNG dùng để nhận diện tên thuốc.
+const PROD_STOP = new Set([
+  'thuoc', 'san', 'pham', 'vien', 'nang', 'ong', 'chai', 'tuyp', 'hop', 'goi', 'lo',
+  'dung', 'dich', 'tiem', 'uong', 'nho', 'mat', 'bot', 'kem', 'siro', 'sui',
+  'gam', 'gram', 'mcg', 'iu', 'ui', 'cua', 'gia', 'thau', 'doanh', 'thu', 'con',
+  'bao', 'nhieu', 'cho', 'ban', 'duoc', 'thang', 'nay', 'hoi', 'xem', 'qlnb',
+  'hoat', 'chat', 'lai', 'vao', 'hay', 'the', 'nao', 'cao', 'hien', 'tai',
+  'tra', 'cuu', 'tim', 'thong', 'tin', 'hang', 'con', 'thieu', 'bang', 'tong',
+]);
+// Tách "từ đặc trưng" của tên thuốc/hoạt chất để nhận diện thuốc trong câu hỏi:
+//   - từ chữ >=4 ký tự (VD "paracetamol", "amlodipin"), HOẶC
+//   - mã ngắn có CẢ chữ lẫn số >=3 ký tự (VD "e05", "b02", "n14") — rất đặc trưng.
+// Bỏ số thuần, đơn vị đo, và từ chung chung (PROD_STOP).
+function prodTokens(s) {
+  return noAccent(String(s || '').toLowerCase())
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => {
+      if (/^\d+$/.test(w) || /^\d+(mg|ml|g|mcg)$/.test(w) || PROD_STOP.has(w)) return false;
+      if (w.length >= 4) return true;
+      return w.length >= 3 && /[a-z]/.test(w) && /[0-9]/.test(w); // mã ngắn kiểu B02/E05
+    });
+}
+/**
+ * lookupProducts — tra cứu ĐÍCH DANH 1..N thuốc mà câu hỏi nhắc tới (theo tên/mã QLNB/hoạt chất),
+ * TRẢ VỀ trong phạm vi quyền (NV chỉ thấy phần của mình). Không bịa: số từ getRows/getCst.
+ * Kết quả mỗi thuốc: doanh thu, số lượng, GIÁ THẦU, cơ số còn lại, đơn vị đang bán, cơ số theo đơn vị.
+ */
+function lookupProducts({ q, ky, scope, max = 3 }) {
+  const qn = ' ' + noAccent(String(q || '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  if (qn.trim().length < 2) return [];
+  const rows = store.getRows({ ky, scope });
+  const cstAll = store.getCst({ scope });
+
+  const prod = new Map();
+  const getP = (code, name) => {
+    const c = String(code || '').trim();
+    if (!c) return null;
+    let p = prod.get(c);
+    if (!p) { p = { code: c, name: name || c, revenue: 0, quantity: 0, units: new Map(), cst: [] }; prod.set(c, p); }
+    if ((!p.name || p.name === c) && name) p.name = name;
+    return p;
+  };
+  for (const r of rows) {
+    const p = getP(r.iit_code, r.product_name); if (!p) continue;
+    p.revenue += Number(r.revenue || 0); p.quantity += Number(r.quantity || 0);
+    const uk = r.unit_code || r.unit_name;
+    if (uk) {
+      const u = p.units.get(uk) || { code: r.unit_code, name: r.unit_name || r.unit_code, revenue: 0, quantity: 0 };
+      u.revenue += Number(r.revenue || 0); u.quantity += Number(r.quantity || 0); p.units.set(uk, u);
+    }
+  }
+  // Gắn CST (cơ số/giá thầu) cho mọi sản phẩm — kể cả thuốc đã trúng thầu nhưng kỳ này chưa bán.
+  for (const c of cstAll) { const p = getP(c.iit_code, c.product_name); if (p) p.cst.push(c); }
+
+  const hits = [];
+  for (const p of prod.values()) {
+    const codeN = noAccent(String(p.code).toLowerCase());
+    let matched = codeN.length >= 3 && qn.includes(codeN);
+    if (!matched) {
+      const toks = new Set([
+        ...prodTokens(p.name),
+        ...p.cst.flatMap((c) => prodTokens(c.ham_luong || c.active_ingredient || '')),
+      ]);
+      for (const t of toks) { if (qn.includes(t)) { matched = true; break; } }
+    }
+    if (matched) hits.push(p);
+  }
+  hits.sort((a, b) => b.revenue - a.revenue);
+  return hits.slice(0, max).map((p) => {
+    const cst = p.cst;
+    const bidQty = cst.reduce((s, c) => s + Number(c.bid_qty_initial || 0), 0);
+    const soldQty = cst.reduce((s, c) => s + Number(c.sold_qty || 0), 0);
+    const remainQty = cst.reduce((s, c) => s + Number(c.remain_qty || 0), 0);
+    const remainPct = bidQty > 0 ? +(remainQty / bidQty * 100).toFixed(1) : (cst[0]?.remain_pct ?? null);
+    const prices = [...new Set(cst.map((c) => Number(c.bid_price || 0)).filter((v) => v > 0))];
+    const units = [...p.units.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 6);
+    return {
+      ma: p.code,
+      ten: p.name,
+      ham_luong: cst.find((c) => c.ham_luong)?.ham_luong || '',
+      doanh_thu: Math.round(p.revenue),
+      so_luong: p.quantity,
+      gia_thau: prices.length ? (prices.length === 1 ? prices[0] : prices) : null,
+      co_so_ban_dau: bidQty || null,
+      da_ban: soldQty || null,
+      con_lai: cst.length ? remainQty : null,
+      con_lai_pct: remainPct,
+      don_vi_dang_ban: units.map((u) => ({ ten: unitText(u.code, u.name), doanh_thu: Math.round(u.revenue), so_luong: u.quantity })),
+      co_so_theo_don_vi: cst.slice(0, 6).map((c) => ({
+        dv: unitText(c.unit_code, c.unit_name), goi: c.bid_package || '',
+        gia_thau: Number(c.bid_price || 0) || null,
+        con_lai: Number(c.remain_qty || 0), tong: Number(c.bid_qty_initial || 0), con_lai_pct: c.remain_pct,
+      })),
+    };
+  });
+}
+// Định dạng câu trả lời tra cứu đích danh (dùng cho intent code-first).
+function sayProductLookup(hits, ky) {
+  if (!hits.length) return null;
+  const nf = (n) => Number(n || 0).toLocaleString('vi-VN');
+  const lines = [];
+  for (const p of hits) {
+    lines.push(`📌 ${p.ten} (${p.ma})${p.ham_luong ? ` · ${p.ham_luong}` : ''}`);
+    lines.push(`• Doanh thu: ${fmt(p.doanh_thu)}${p.so_luong ? ` · SL ${nf(p.so_luong)}` : ''}`);
+    if (p.gia_thau != null) {
+      lines.push(`• Giá thầu: ${Array.isArray(p.gia_thau) ? p.gia_thau.map((v) => fmt(v)).join(' / ') : fmt(p.gia_thau)}`);
+    }
+    if (p.con_lai != null) {
+      lines.push(`• Cơ số còn lại: ${nf(p.con_lai)}${p.co_so_ban_dau ? `/${nf(p.co_so_ban_dau)}` : ''}${p.con_lai_pct != null ? ` (${fmtPct(p.con_lai_pct)})` : ''}`);
+    }
+    if (p.don_vi_dang_ban.length) {
+      lines.push(`• Đơn vị đang bán: ${p.don_vi_dang_ban.map((u) => `${u.ten}: ${fmt(u.doanh_thu)}`).join(' · ')}`);
+    } else if (p.co_so_ban_dau) {
+      lines.push('• Kỳ này chưa phát sinh doanh thu (còn cơ số để khai thác).');
+    }
+    lines.push('');
+  }
+  if (lines[lines.length - 1] === '') lines.pop();
+  return say(`🔎 Tra cứu kỳ ${ky}:`, lines);
 }
 
 /* ---------------- helpers ---------------- */
