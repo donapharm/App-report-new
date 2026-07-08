@@ -21,6 +21,20 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (b) — Claude Code — Bot TRA CỨU ĐÍCH DANH ĐƠN VỊ (bán bao nhiêu + AI bán)
+- **Việc:** Hỏi theo MỘT đơn vị cụ thể (mã hoặc tên): **bán được bao nhiêu**, **AI bán** (NV nào),
+  **top sản phẩm tại đơn vị**, số dòng cơ số + số sắp cạn. Nhận diện đơn vị theo mã (BV007), theo
+  số (kể cả bỏ số 0: "17"→"017") và theo từ đặc trưng của tên.
+- **Sửa xung đột:** câu "đơn vị X bán được **bao nhiêu**" trước đây bị mẫu "top đơn vị" bắt nhầm
+  (vì "bao **nhiêu**" khớp "nhiều") → đã đưa các intent TRA CỨU ĐÍCH DANH (thuốc + đơn vị) lên TRƯỚC
+  các mẫu "top…".
+- **Quyền:** "ai bán" chỉ liệt kê trong `scope` — NV thường chỉ thấy CHÍNH MÌNH ("Bạn bán"); admin
+  thấy tất cả NV bán ở đơn vị đó. Cắm vào facts LLM (`tra_cuu_don_vi`).
+- **File:** `server/src/smart.js` (`lookupUnits`, `sayUnitLookup`, intent + reorder + menu).
+- **Test:** node harness — "đơn vị BV007 bán bao nhiêu ai bán", "phòng khám mẫu 17…", "đơn vị 19…"
+  ra đúng; "top đơn vị / báo cáo theo đơn vị / đơn vị nào chưa bán / giảm mạnh / nhà thầu / doanh thu
+  kỳ này" GIỮ NGUYÊN; NV DN001 chỉ thấy phần mình.
+
 ### 2026-07-08 — Claude Code — Bot TRA CỨU ĐÍCH DANH thuốc/mã QLNB (giá thầu + cơ số còn lại)
 - **Việc:** Thêm khả năng hỏi bot theo MỘT thuốc cụ thể (theo TÊN hoặc MÃ QLNB), trả lời gọn:
   doanh thu, số lượng, **giá thầu**, **cơ số còn lại** (SL/tổng + %), và **đơn vị nào đang bán**.
