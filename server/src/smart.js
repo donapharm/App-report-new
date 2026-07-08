@@ -214,8 +214,10 @@ async function answerQuestion({ text, scope, session }) {
 
   const rowsFor = () => store.getRows({ ky, scope });
   const topList = (title, arr, fmtItem) => say(title, arr.map((t, i) => `${i + 1}. ${fmtItem(t)}`));
-  let _ph = null; // memo tra cứu đích danh (tránh tính 2 lần)
+  let _ph = null; // memo tra cứu đích danh SẢN PHẨM (tránh tính 2 lần)
   const prodHits = () => { if (_ph === null) _ph = lookupProducts({ q, ky, scope }); return _ph; };
+  let _uh = null; // memo tra cứu đích danh ĐƠN VỊ
+  const unitHits = () => { if (_uh === null) _uh = lookupUnits({ q, ky, scope }); return _uh; };
 
   // Trợ giúp / bot làm được gì
   if (/\b(help|menu|giup)\b|huong dan|lam duoc gi|hoi gi|ban lam gi|chuc nang|tro giup/.test(q)) {
@@ -225,6 +227,7 @@ async function answerQuestion({ text, scope, session }) {
       '🎯 Target: "Tôi đạt bao nhiêu % target?", "Còn thiếu bao nhiêu để đạt target?"',
       '📦 Cơ số thầu: "Cơ số nào sắp cạn?", "Đơn vị nào chưa bán?"',
       '🔎 Tra cứu thuốc: "Giá thầu Paracetamol?", "Doanh thu thuốc X?", "Cơ số còn lại mã QLNB?"',
+      '🏥 Tra cứu đơn vị: "Đơn vị BV007 bán bao nhiêu, ai bán?", "011 Cao Su ĐN doanh thu?"',
       `📈 Biến động: "Đơn vị nào giảm mạnh / tăng mạnh?"${mine ? '' : ', "NV nào chưa đạt?"'}`,
       '🗓️ Có thể ghi rõ tháng: "Doanh thu tháng 6?"',
     ]);
@@ -232,6 +235,33 @@ async function answerQuestion({ text, scope, session }) {
   // Chào hỏi
   if (/^(chao|hi|hello|alo|xin chao|hey)\b/.test(q)) {
     return say('Chào Anh/Chị 👋 Mình là trợ lý App Report. Hỏi mình về doanh thu, target, cơ số thầu, top sản phẩm/đơn vị/tỉnh… Gõ "giúp" để xem menu.');
+  }
+
+  // Tra cứu ĐÍCH DANH: giá thầu / mã QLNB / hoạt chất / cơ số còn lại của MỘT thuốc cụ thể.
+  // ĐẶT TRƯỚC các mẫu "top…" (vì "top …" bắt cả "bao nhiêu"→"nhiều") để câu hỏi đích danh thắng.
+  if (/gia thau|don gia|qlnb|ma hang|ma thuoc|hoat chat|tra cuu|tim thuoc|thong tin (san pham|thuoc)/.test(q)) {
+    const ans = sayProductLookup(prodHits(), ky);
+    if (ans) return ans;
+    return say('Chưa tìm thấy thuốc/mã QLNB khớp trong phạm vi dữ liệu của bạn 🤔.', [
+      'Thử gõ đúng TÊN thuốc hoặc MÃ QLNB, ví dụ:',
+      '• "giá thầu Paracetamol"',
+      '• "cơ số còn lại mã 12345"',
+      '• "doanh thu thuốc Amlodipin"',
+    ]);
+  }
+  // Tra cứu ĐÍCH DANH 1 ĐƠN VỊ: "BV007 bán được bao nhiêu, ai bán?" (KHÔNG lẫn với "top đơn vị").
+  if (/\bai ban\b|ai phu trach|nhan vien nao ban|nv nao ban/.test(q)
+      || /(don vi|benh vien|phong kham|nha thuoc|khach hang|ma dv)\b.*(ban duoc|bao nhieu|doanh thu|doanh so|ai ban)/.test(q)
+      || /(ban duoc|doanh thu|doanh so).*(don vi|benh vien|phong kham|nha thuoc|ma dv)\b/.test(q)) {
+    const ans = sayUnitLookup(unitHits(), ky, mine);
+    if (ans) return ans;
+    if (/\bai ban\b|ai phu trach/.test(q)) {
+      return say('Chưa xác định được đơn vị nào trong câu hỏi 🤔.', [
+        'Thử gõ kèm MÃ hoặc TÊN đơn vị, ví dụ:',
+        '• "đơn vị BV007 bán được bao nhiêu, ai bán?"',
+        '• "011 Cao Su Đồng Nai doanh thu bao nhiêu?"',
+      ]);
+    }
   }
 
   if (/(top|cao nhat|ban chay|nhieu nhat).*(san pham|thuoc)|(san pham|thuoc).*(top|cao|ban chay|nhieu)/.test(q)) {
@@ -250,18 +280,6 @@ async function answerQuestion({ text, scope, session }) {
     const g = A.groupSum(rowsFor(), 'contractor_code', 'contractor_name').slice(0, 5);
     if (!g.length) return say(`Chưa có dữ liệu nhà thầu trong kỳ ${ky}.`);
     return topList(`Top nhà thầu kỳ ${ky}:`, g, (t) => `${t.label}: ${fmt(t.revenue)}`);
-  }
-  // Tra cứu ĐÍCH DANH: giá thầu / mã QLNB / hoạt chất / cơ số còn lại của MỘT thuốc cụ thể.
-  // (Đặt SỚM để "giá thầu thuốc X" không bị rơi vào câu trả lời doanh thu tổng.)
-  if (/gia thau|don gia|qlnb|ma hang|ma thuoc|hoat chat|tra cuu|tim thuoc|thong tin (san pham|thuoc)/.test(q)) {
-    const ans = sayProductLookup(prodHits(), ky);
-    if (ans) return ans;
-    return say('Chưa tìm thấy thuốc/mã QLNB khớp trong phạm vi dữ liệu của bạn 🤔.', [
-      'Thử gõ đúng TÊN thuốc hoặc MÃ QLNB, ví dụ:',
-      '• "giá thầu Paracetamol"',
-      '• "cơ số còn lại mã 12345"',
-      '• "doanh thu thuốc Amlodipin"',
-    ]);
   }
   if (/goi thau/.test(q)) {
     const g = A.groupSum(rowsFor().filter((r) => r.bid_package), 'bid_package', 'bid_package').slice(0, 5);
@@ -353,6 +371,11 @@ async function answerQuestion({ text, scope, session }) {
     const hits = prodHits();
     if (hits.length) { const ans = sayProductLookup(hits, ky); if (ans) return ans; }
   }
+  // ... rồi tới ĐƠN VỊ đích danh (nếu câu hỏi có nhắc mã/tên đơn vị).
+  {
+    const hits = unitHits();
+    if (hits.length) { const ans = sayUnitLookup(hits, ky, mine); if (ans) return ans; }
+  }
   if (/doanh thu|doanh so|tong tien|bao nhieu tien|ban duoc/.test(q)) {
     const k = A.overviewKpis({ ky, scope });
     const who = mine ? 'của bạn' : 'toàn công ty';
@@ -363,8 +386,10 @@ async function answerQuestion({ text, scope, session }) {
   // Không khớp mẫu code → nếu có LLM (grounded) thì nhờ diễn giải trên FACTS đã tính.
   if (llm.isEnabled()) {
     const facts = buildFacts({ ky, scope, mine });
-    const hits = prodHits();
-    if (hits.length) facts.tra_cuu_san_pham = hits; // thuốc/mã QLNB/giá thầu câu hỏi nhắc tới
+    const ph = prodHits();
+    if (ph.length) facts.tra_cuu_san_pham = ph; // thuốc/mã QLNB/giá thầu câu hỏi nhắc tới
+    const uh = unitHits();
+    if (uh.length) facts.tra_cuu_don_vi = uh; // đơn vị + ai bán + top SP tại đơn vị
     const ans = await llm.callLlm({ question: text, facts });
     if (ans) return { text: ans.text, lines: [], source: 'llm' };
   }
@@ -375,6 +400,7 @@ async function answerQuestion({ text, scope, session }) {
     '🎯 "Tôi đạt bao nhiêu % target?" · "Còn thiếu bao nhiêu để đạt target?"',
     `📦 "Cơ số nào sắp cạn?" · "Đơn vị nào chưa bán?"${mine ? '' : ' · "NV nào chưa đạt?"'}`,
     '🔎 "Giá thầu / doanh thu / cơ số còn lại của thuốc (tên hoặc mã QLNB)"',
+    '🏥 "Đơn vị (mã/tên) bán được bao nhiêu, ai bán?"',
     '📈 "Đơn vị nào giảm mạnh / tăng mạnh?"',
     '— Gõ "giúp" để xem đầy đủ menu.',
   ]);
@@ -564,6 +590,103 @@ function sayProductLookup(hits, ky) {
   }
   if (lines[lines.length - 1] === '') lines.pop();
   return say(`🔎 Tra cứu kỳ ${ky}:`, lines);
+}
+
+// Từ chung chung của TÊN ĐƠN VỊ (bệnh viện/phòng khám…) — bỏ khi nhận diện đơn vị.
+const UNIT_STOP = new Set([
+  'benh', 'vien', 'phong', 'kham', 'nha', 'thuoc', 'mau', 'trung', 'tam', 'khoa',
+  'don', 'vi', 'khach', 'hang', 'cong', 'ty', 'tnhh', 'cty', 'trach', 'nhiem',
+  'huu', 'han', 'the', 'ban', 'duoc', 'doanh', 'thu', 'bao', 'nhieu', 'gia', 'thau',
+  'tai', 'hien', 'nay', 'thang', 'con', 'lai', 'nao', 'cua', 'quan', 'huyen',
+]);
+function unitTokens(s) {
+  return noAccent(String(s || '').toLowerCase())
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => {
+      if (/^\d+$/.test(w) || UNIT_STOP.has(w)) return false;
+      if (w.length >= 4) return true;
+      return w.length >= 3 && /[a-z]/.test(w) && /[0-9]/.test(w);
+    });
+}
+/**
+ * lookupUnits — tra cứu ĐÍCH DANH 1..N ĐƠN VỊ (theo mã hoặc tên): bán được bao nhiêu,
+ * AI bán (NV nào — CHỈ trong phạm vi quyền: NV thường chỉ thấy chính mình), top sản phẩm
+ * tại đơn vị, số dòng cơ số + số sắp cạn. Không bịa: số từ getRows/getCst.
+ */
+function lookupUnits({ q, ky, scope, max = 3 }) {
+  const qn = ' ' + noAccent(String(q || '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  if (qn.trim().length < 2) return [];
+  const rows = store.getRows({ ky, scope });
+  const cstAll = store.getCst({ scope });
+
+  const um = new Map();
+  const getU = (code, name) => {
+    const key = String(code || name || '').trim();
+    if (!key) return null;
+    let u = um.get(key);
+    if (!u) { u = { code: String(code || '').trim(), name: name || code || key, revenue: 0, quantity: 0, emps: new Map(), prods: new Map(), cst: [] }; um.set(key, u); }
+    if ((!u.name || u.name === u.code) && name) u.name = name;
+    return u;
+  };
+  for (const r of rows) {
+    const u = getU(r.unit_code, r.unit_name); if (!u) continue;
+    u.revenue += Number(r.revenue || 0); u.quantity += Number(r.quantity || 0);
+    const ek = r.emp_code;
+    if (ek) { const e = u.emps.get(ek) || { code: ek, name: r.emp_name || ek, revenue: 0 }; e.revenue += Number(r.revenue || 0); u.emps.set(ek, e); }
+    const pk = r.iit_code;
+    if (pk) { const p = u.prods.get(pk) || { code: pk, name: r.product_name || pk, revenue: 0 }; p.revenue += Number(r.revenue || 0); u.prods.set(pk, p); }
+  }
+  for (const c of cstAll) { const u = getU(c.unit_code, c.unit_name); if (u) u.cst.push(c); }
+
+  const hits = [];
+  for (const u of um.values()) {
+    const codeN = noAccent(String(u.code).toLowerCase()).replace(/[^a-z0-9]/g, '');
+    const digits = (String(u.code).match(/\d{2,}/) || [])[0] || '';
+    const digitsNoZero = digits.replace(/^0+/, ''); // "017" -> "17" (người hỏi hay bỏ số 0)
+    let matched = false;
+    if (codeN.length >= 4 && qn.includes(codeN)) matched = true;       // vd "bv007"
+    if (!matched && digits && (qn.includes(` ${digits} `) || (digitsNoZero.length >= 2 && qn.includes(` ${digitsNoZero} `)))) matched = true; // vd "011" / "17"
+    if (!matched) { for (const t of unitTokens(u.name)) { if (qn.includes(t)) { matched = true; break; } } }
+    if (matched) hits.push(u);
+  }
+  hits.sort((a, b) => b.revenue - a.revenue);
+  return hits.slice(0, max).map((u) => {
+    const emps = [...u.emps.values()].sort((a, b) => b.revenue - a.revenue);
+    const prods = [...u.prods.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+    const cstLow = u.cst.filter((c) => Number(c.remain_pct || 0) < 10).length;
+    return {
+      ma: u.code,
+      ten: unitText(u.code, u.name),
+      doanh_thu: Math.round(u.revenue),
+      so_luong: u.quantity,
+      ai_ban: emps.map((e) => ({ ma: e.code, ten: e.name, doanh_thu: Math.round(e.revenue) })),
+      top_san_pham: prods.map((p) => ({ ten: p.name, doanh_thu: Math.round(p.revenue) })),
+      so_dong_co_so: u.cst.length,
+      co_so_sap_can: cstLow,
+    };
+  });
+}
+function sayUnitLookup(hits, ky, mine) {
+  if (!hits.length) return null;
+  const nf = (n) => Number(n || 0).toLocaleString('vi-VN');
+  const lines = [];
+  for (const u of hits) {
+    lines.push(`🏥 ${u.ten}`);
+    lines.push(`• Doanh thu: ${fmt(u.doanh_thu)}${u.so_luong ? ` · SL ${nf(u.so_luong)}` : ''}`);
+    if (u.ai_ban.length) {
+      lines.push(`• ${mine ? 'Bạn bán' : 'Ai bán'}: ${u.ai_ban.map((e) => `${e.ten}: ${fmt(e.doanh_thu)}`).join(' · ')}`);
+    }
+    if (u.top_san_pham.length) {
+      lines.push(`• Top sản phẩm: ${u.top_san_pham.map((p) => `${p.ten}: ${fmt(p.doanh_thu)}`).join(' · ')}`);
+    }
+    if (u.so_dong_co_so) {
+      lines.push(`• Cơ số thầu: ${u.so_dong_co_so} dòng${u.co_so_sap_can ? `, ${u.co_so_sap_can} sắp cạn (<10%)` : ''}`);
+    }
+    lines.push('');
+  }
+  if (lines[lines.length - 1] === '') lines.pop();
+  return say(`🔎 Tra cứu đơn vị kỳ ${ky}:`, lines);
 }
 
 /* ---------------- helpers ---------------- */
