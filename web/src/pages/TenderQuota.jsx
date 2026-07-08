@@ -98,7 +98,7 @@ export default function TenderQuota({ me }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [view, setView] = useState('unit');
-  const [actionFirst, setActionFirst] = useState(true);
+  const [sortBy, setSortBy] = useState('action'); // 'action' | 'opportunity' | 'none'
   const [openUnits, setOpenUnits] = useState({});
   const { reloadTick, reload } = useReloadTick();
 
@@ -119,13 +119,23 @@ export default function TenderQuota({ me }) {
 
   const sortedData = useMemo(() => {
     const rows = [...(data || [])];
-    if (!actionFirst) return rows;
-    return rows.sort((a, b) => {
-      const score = (r) => (Number(r.remain_pct || 0) < 10 ? 3 : 0) + (Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0 ? 2 : 0) + (Number(r.remain_pct || 0) > 80 ? 1 : 0);
-      return score(b) - score(a) || Number(a.remain_pct || 0) - Number(b.remain_pct || 0);
-    });
-  }, [data, actionFirst]);
-  const groups = useMemo(() => unitRollup(sortedData), [sortedData]);
+    if (sortBy === 'opportunity') {
+      // Cơ hội = tiền đang để trống (TT còn = SL còn × giá thầu). Lớn nhất lên đầu.
+      return rows.sort((a, b) => Number(b.remain_amount || 0) - Number(a.remain_amount || 0) || Number(b.remain_qty || 0) - Number(a.remain_qty || 0));
+    }
+    if (sortBy === 'action') {
+      return rows.sort((a, b) => {
+        const score = (r) => (Number(r.remain_pct || 0) < 10 ? 3 : 0) + (Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0 ? 2 : 0) + (Number(r.remain_pct || 0) > 80 ? 1 : 0);
+        return score(b) - score(a) || Number(a.remain_pct || 0) - Number(b.remain_pct || 0);
+      });
+    }
+    return rows;
+  }, [data, sortBy]);
+  const groups = useMemo(() => {
+    const g = unitRollup(sortedData);
+    // Khi sắp theo cơ hội: đơn vị có TT còn lớn nhất lên đầu (thay vì ưu tiên cảnh báo).
+    return sortBy === 'opportunity' ? [...g].sort((a, b) => b.remainAmount - a.remainAmount) : g;
+  }, [sortedData, sortBy]);
   const duplicateProducts = useMemo(() => new Set(Object.entries((sortedData || []).reduce((m, r) => { const k = r.product_name || ''; if (k) m[k] = (m[k] || 0) + 1; return m; }, {})).filter(([, c]) => c > 1).map(([k]) => k)), [sortedData]);
   const selectedUnit = filters.unit ? groups.find((g) => g.key === filters.unit || g.unit_name === filters.unit) : null;
   const totalRemain = data ? data.reduce((s, r) => s + (Number(r.remain_amount) || 0), 0) : 0;
@@ -133,6 +143,8 @@ export default function TenderQuota({ me }) {
   const totalBid = data ? data.reduce((s, r) => s + (Number(r.bid_amount) || 0), 0) : 0;
   const lowCount = data ? data.filter((r) => Number(r.remain_pct || 0) < 10).length : 0;
   const emptyCount = data ? data.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0).length : 0;
+  // "Tiền đang để trống" = tổng TT còn của các dòng CHƯA bán (sold=0) — cơ hội chưa động tới.
+  const untappedRemain = data ? data.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0).reduce((s, r) => s + (Number(r.remain_amount) || 0), 0) : 0;
   const highCount = data ? data.filter((r) => Number(r.remain_pct || 0) > 80).length : 0;
   const { open, toggle } = useCollapse();
   const activeCount = [filters.emp, filters.province, filters.unit, filters.product, filters.priority, filters.q, bid].filter(Boolean).length;
@@ -166,7 +178,8 @@ export default function TenderQuota({ me }) {
       <div className="seg compact view-toggle">
         <button className={view === 'unit' ? 'active' : ''} onClick={() => setView('unit')}>Gom theo ĐV</button>
         <button className={view === 'flat' ? 'active' : ''} onClick={() => setView('flat')}>Danh sách dòng</button>
-        <button className={actionFirst ? 'active' : ''} onClick={() => setActionFirst((x) => !x)}>Ưu tiên cần làm</button>
+        <button className={sortBy === 'action' ? 'active' : ''} onClick={() => setSortBy((x) => (x === 'action' ? 'none' : 'action'))}>Ưu tiên cần làm</button>
+        <button className={sortBy === 'opportunity' ? 'active' : ''} onClick={() => setSortBy((x) => (x === 'opportunity' ? 'none' : 'opportunity'))}>💰 Cơ hội (TT còn)</button>
       </div>
 
       <div className="kpi-grid">
@@ -174,6 +187,7 @@ export default function TenderQuota({ me }) {
         <div className="kpi"><div className="label">Tổng cơ số thầu</div><div className="value small">{data ? money(totalBid) : '—'}</div></div>
         <div className="kpi"><div className="label">TT đã bán</div><div className="value small">{data ? money(totalSold) : '—'}</div></div>
         <div className="kpi"><div className="label">TT còn lại</div><div className="value small">{data ? money(totalRemain) : '—'}</div></div>
+        <div className="kpi"><div className="label">💰 TT chưa khai thác</div><div className="value small" style={{ color: 'var(--hi)' }}>{data ? money(untappedRemain) : '—'}</div><div className="sub">{emptyCount.toLocaleString('vi-VN')} dòng chưa bán</div></div>
       </div>
 
       {selectedUnit && <div className="card unit-focus"><b>{unitText(selectedUnit.unit_code || selectedUnit.key, selectedUnit.unit_name)}</b><span>{selectedUnit.rows.length} mã QLNB · {selectedUnit.low} sắp hết · {selectedUnit.empty} chưa bán · còn {money(selectedUnit.remainAmount)}</span></div>}

@@ -21,6 +21,15 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (i) — Claude Code — Cơ số thầu: sắp theo "cơ hội" + KPI tiền đang để trống
+- **Việc:** Màn Cơ số thầu thêm:
+  - Nút sắp xếp **💰 Cơ hội (TT còn)** — xếp theo TT còn (SL còn × giá thầu) lớn nhất, để CEO thấy ngay
+    tiền đang để trống; ở chế độ gom-đơn-vị thì đơn vị có TT còn lớn nhất lên đầu.
+  - KPI **💰 TT chưa khai thác** = tổng TT còn của các dòng CHƯA bán (sold=0) + số dòng chưa bán.
+  - (Cột **Giá trúng thầu** và filter **Chưa bán** = còn 100% chưa khai thác đã có sẵn từ trước.)
+- **File:** `web/src/pages/TenderQuota.jsx` (sortBy 'action'|'opportunity'|'none' + KPI untapped).
+- **Test:** build web OK.
+
 ### 2026-07-08 (h) — Claude Code — Tra cứu nhanh TRÊN WEB (thuốc/mã QLNB/đơn vị) có thẻ kết quả
 - **Việc:** Trang "Hỏi nhanh" thêm ô **🔎 Tra cứu nhanh** — gõ tên thuốc / mã QLNB / mã-tên đơn vị →
   hiện **thẻ kết quả có cấu trúc**: thuốc (doanh thu, giá thầu, cơ số còn lại, đơn vị đang bán),
