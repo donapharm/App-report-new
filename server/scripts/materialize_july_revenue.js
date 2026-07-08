@@ -222,4 +222,10 @@ async function main() {
   console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length }, null, 2));
   await pool.end();
 }
-main().catch(async (e) => { console.error(e); try { await pool.end(); } catch {} process.exit(1); });
+
+// Cho phép require lại (tool đối soát) mà KHÔNG chạy materialize; chỉ chạy khi gọi trực tiếp.
+module.exports = { main, fetchMisa, fetchPartner, latestRun, kyToRange, dateOnly, pool, PERIOD };
+
+if (require.main === module) {
+  main().catch(async (e) => { console.error(e); try { await pool.end(); } catch {} process.exit(1); });
+}

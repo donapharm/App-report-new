@@ -7,6 +7,70 @@ import { DrillNav } from '../drillNav.jsx';
 const emptyMeta = { ky: '', dateFrom: '', dateTo: '' };
 const fmtRows = (n) => Number(n || 0).toLocaleString('vi-VN');
 
+// Đối soát tính toàn vẹn dữ liệu 1 kỳ (chỉ admin). Gọi /admin/reconcile.
+function ReconcilePanel({ recon, reconKy, setReconKy, activeSlots, run, busy }) {
+  const s = recon?.summary;
+  return (
+    <>
+      <div className="card">
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>🔎 Đối soát dữ liệu doanh thu</div>
+        <div className="meta muted" style={{ marginBottom: 10 }}>
+          Kiểm tra tự động: ngày ngoài biên kỳ (dấu hiệu lỗi múi giờ 01/07→30/06), lệch số dòng/doanh thu so metadata,
+          đếm trùng, và đơn vị của từng NV biến mất so kỳ trước. Đối soát sâu với nguồn Sale-New: chạy
+          <code> node server/scripts/reconcile_revenue.js</code> trên server.
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <select value={reconKy} onChange={(e) => setReconKy(e.target.value)}>
+            <option value="">Kỳ mới nhất</option>
+            {activeSlots.map((x) => <option key={x.id} value={x.ky}>{x.ky}</option>)}
+          </select>
+          <button className="btn" disabled={busy} onClick={() => run(reconKy)}>Đối soát</button>
+        </div>
+      </div>
+
+      {busy && <Spinner />}
+      {recon && !recon.hasSlot && <div className="card" style={{ borderColor: 'var(--mid)' }}>⚠ {recon.note}</div>}
+      {recon && recon.hasSlot && (
+        <>
+          <div className="card" style={{ borderColor: recon.ok ? 'var(--ok)' : 'var(--hi)' }}>
+            <b>Kỳ {recon.ky}</b> {recon.ok
+              ? <span style={{ color: 'var(--ok)' }}>✔ Dữ liệu sạch — không phát hiện lệch.</span>
+              : <span style={{ color: 'var(--hi)' }}>⚠ Phát hiện {s.issues} vấn đề (ngoài biên {s.dateOutOfBand} · lệch meta {s.metaMismatch} · trùng {s.duplicateLines} · đơn vị mất {s.unitDrop}).</span>}
+          </div>
+          {recon.dateOutOfBand.length > 0 && (
+            <div className="card">
+              <div style={{ fontWeight: 700, color: 'var(--hi)', marginBottom: 6 }}>⛔ Ngày ngoài biên kỳ (lỗi gán ngày ở nguồn)</div>
+              {recon.dateOutOfBand.map((u, i) => (
+                <div key={i} className="meta">• <b>{u.unit_code}</b> {u.unit_name} — {u.rows} dòng · ngày {u.dates.join(', ')} ({u.side === 'before' ? 'trước kỳ' : 'sau kỳ'}) · {money(u.revenue)} · NV {u.emps.join(', ')}</div>
+              ))}
+            </div>
+          )}
+          {recon.unitDrop.length > 0 && (
+            <div className="card">
+              <div style={{ fontWeight: 700, color: 'var(--mid)', marginBottom: 6 }}>⚠ Đơn vị biến mất so kỳ trước ({recon.prevKy})</div>
+              {recon.unitDrop.map((nv, i) => (
+                <div key={i} className="meta">• <b>{nv.emp_code}</b> {nv.emp_name}: mất {nv.units.length} đơn vị — {nv.units.map((u) => u.unit_code).join(', ')}</div>
+              ))}
+            </div>
+          )}
+          {recon.metaMismatch.length > 0 && (
+            <div className="card">
+              <div style={{ fontWeight: 700, color: 'var(--mid)', marginBottom: 6 }}>⚠ Lệch metadata slot</div>
+              {recon.metaMismatch.map((m, i) => <div key={i} className="meta">• {m.field}: metadata={fmtRows(m.meta)} · thực tế={fmtRows(m.actual)}</div>)}
+            </div>
+          )}
+          {recon.duplicateLines.length > 0 && (
+            <div className="card">
+              <div style={{ fontWeight: 700, color: 'var(--mid)', marginBottom: 6 }}>⚠ Dòng trùng ({recon.duplicateLines.length})</div>
+              {recon.duplicateLines.slice(0, 20).map((d, i) => <div key={i} className="meta">• {d.source_line_id} · {d.unit_code} · {money(d.revenue)}</div>)}
+            </div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 // Upload doanh thu (chỉ admin). Parse + validate ở BACKEND, preview trước khi ghi.
 export default function Upload() {
   const [tab, setTab] = useState('new'); // new | update | history
@@ -16,7 +80,16 @@ export default function Upload() {
   const [meta, setMeta] = useState(emptyMeta);
   const [slots, setSlots] = useState(null);
   const [done, setDone] = useState('');
+  const [recon, setRecon] = useState(null);
+  const [reconKy, setReconKy] = useState('');
   const fileRef = useRef(null);
+
+  async function runReconcile(ky) {
+    setBusy(true); setErr(''); setRecon(null);
+    try { setRecon(await api.adminReconcile(ky || '')); }
+    catch (e) { setErr(String(e?.message || e)); }
+    finally { setBusy(false); }
+  }
 
   function loadSlots() { api.uploadSlots().then(setSlots).catch(() => {}); }
   useEffect(() => { loadSlots(); }, []);
@@ -148,9 +221,10 @@ export default function Upload() {
         <button className={tab === 'new' ? 'active' : ''} onClick={() => setTab('new')}>Import mới (kỳ mới)</button>
         <button className={tab === 'update' ? 'active' : ''} onClick={() => setTab('update')}>Import cập nhật (kỳ hiện có)</button>
         <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>Lịch sử & khôi phục</button>
+        <button className={tab === 'reconcile' ? 'active' : ''} onClick={() => setTab('reconcile')}>Đối soát dữ liệu</button>
       </div>
 
-      {tab !== 'history' ? (
+      {(tab === 'new' || tab === 'update') ? (
         <>
           <div className="card">
             <div style={{ fontWeight: 700, marginBottom: 4 }}>⬆️ {tab === 'new' ? 'Import mới (kỳ mới)' : 'Import cập nhật (kỳ hiện có)'}</div>
@@ -172,6 +246,8 @@ export default function Upload() {
           {done && <div className="card" style={{ borderColor: 'var(--ok)', color: 'var(--ok)' }}>✔ {done}</div>}
           <PreviewPanel />
         </>
+      ) : tab === 'reconcile' ? (
+        <ReconcilePanel recon={recon} reconKy={reconKy} setReconKy={setReconKy} activeSlots={activeSlots} run={runReconcile} busy={busy} />
       ) : (
         !slots ? <Spinner /> : (
           <>

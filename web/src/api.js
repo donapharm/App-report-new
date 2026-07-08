@@ -53,6 +53,7 @@ export const api = {
   periods: () => req('GET', '/periods'),
   revenueRefreshStatus: () => req('GET', '/admin/revenue-refresh/status'),
   revenueRefreshRun: (ky) => req('POST', '/admin/revenue-refresh/run', ky ? { ky } : {}),
+  adminReconcile: (ky) => req('GET', '/admin/reconcile' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
   adminTargets: (ky) => req('GET', '/admin/targets' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
   adminTargetManual: (payload) => req('POST', '/admin/targets/manual', payload),
   adminTargetBulk: (payload) => req('POST', '/admin/targets/bulk', payload),
