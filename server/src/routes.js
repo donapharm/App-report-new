@@ -1499,6 +1499,42 @@ router.get('/lookup', auth.requireAuth, (req, res) => {
 });
 
 /* ---------- Export Excel (qua backend + kiểm quyền) ---------- */
+// Định dạng CHUẨN KẾ TOÁN VN cho 1 sheet: tiêu đề đậm nền xanh, freeze dòng tiêu đề,
+// autofilter, số nhóm nghìn (1.234.567) canh phải, âm trong ngoặc đỏ, và 1 dòng TỔNG CỘNG.
+function styleAccountingSheet(ws, { moneyKeys = [], intKeys = [], totalLabelKey } = {}) {
+  const numFmt = '#,##0;[Red](#,##0)';
+  const numKeys = new Set([...moneyKeys, ...intKeys]);
+  const dataEnd = ws.rowCount; // trước khi thêm dòng tổng
+  ws.columns.forEach((col) => {
+    if (numKeys.has(col.key)) { col.numFmt = numFmt; col.alignment = { horizontal: 'right' }; }
+  });
+  // Dòng TỔNG CỘNG (chỉ cộng cột số)
+  const totals = {};
+  for (const k of numKeys) {
+    let s = 0;
+    const colNo = ws.getColumn(k).number;
+    for (let i = 2; i <= dataEnd; i++) s += Number(ws.getCell(i, colNo).value || 0);
+    totals[k] = s;
+  }
+  if (totalLabelKey) totals[totalLabelKey] = 'TỔNG CỘNG';
+  if (dataEnd >= 2) {
+    const tr = ws.addRow(totals);
+    tr.font = { bold: true };
+    tr.eachCell((cell) => { cell.border = { top: { style: 'double' } }; });
+  }
+  // Tiêu đề (row 1) — style SAU cùng để đè định dạng cột.
+  const header = ws.getRow(1);
+  header.height = 28;
+  header.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F6F54' } };
+    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+  });
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columnCount } };
+}
+
 router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
   const scope = auth.scopeOf(req.session);
   const ky = req.query.ky || store.latestKy();
@@ -1527,23 +1563,39 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
     ];
     rows.forEach((r) => ws.addRow(r));
   } else if (kind === 'revenue_full') {
-    const rows = A.applyFilters(store.getRows({ ky, scope }), revenueFiltersFromQuery(req.query))
-      .sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
+    // Đầy đủ trường cột: giống trang "Doanh thu đầy đủ" — có TÊN nhà thầu, giá thầu, UT,
+    // hoạt chất/hàm lượng/ĐVT. Dữ liệu được enrich đúng như route /revenue/full.
+    const pc = periodCtx(req.query);
+    const contractorLookup = contractorLookupFor(scope);
+    const baseRows = enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup);
+    const metaMap = productMetaFromRows(enrichContractorNames(store.getCst({ scope }), contractorLookup).concat(baseRows), contractorLookup);
+    const rows = A.applyFilters(enrichProductMeta(baseRows, metaMap, contractorLookup), revenueFiltersFromQuery(req.query))
+      .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
+      .map((r, i) => ({ ...r, stt: i + 1 }));
     ws.columns = [
-      { header: 'Kỳ', key: 'ky', width: 12 },
+      { header: 'STT', key: 'stt', width: 6 },
+      { header: 'Kỳ', key: 'ky', width: 10 },
+      { header: 'Ngày', key: 'date', width: 12 },
       { header: 'Mã NV', key: 'emp_code', width: 12 },
       { header: 'Tên NV', key: 'emp_name', width: 24 },
       { header: 'Tuyến', key: 'route', width: 10 },
       { header: 'Mã đơn vị', key: 'unit_code', width: 28 },
       { header: 'Tên đơn vị', key: 'unit_name', width: 34 },
-      { header: 'Mã QLNB', key: 'iit_code', width: 24 },
+      { header: 'Mã QLNB', key: 'iit_code', width: 20 },
       { header: 'Sản phẩm', key: 'product_name', width: 30 },
-      { header: 'Nhà thầu', key: 'contractor_code', width: 30 },
+      { header: 'Hoạt chất', key: 'active_ingredient', width: 22 },
+      { header: 'Hàm lượng', key: 'ham_luong', width: 12 },
+      { header: 'ĐVT', key: 'uom', width: 8 },
+      { header: 'Mã nhà thầu', key: 'contractor_code', width: 16 },
+      { header: 'Tên nhà thầu', key: 'contractor_name', width: 34 },
       { header: 'Gói thầu', key: 'bid_package', width: 12 },
+      { header: 'Ưu tiên', key: 'priority', width: 10 },
+      { header: 'Giá trúng thầu', key: 'bid_price', width: 16 },
       { header: 'Số lượng', key: 'quantity', width: 12 },
       { header: 'Doanh thu', key: 'revenue', width: 18 },
     ];
     rows.forEach((r) => ws.addRow(r));
+    styleAccountingSheet(ws, { moneyKeys: ['bid_price', 'revenue'], intKeys: ['quantity'], totalLabelKey: 'product_name' });
   } else if (kind === 'products') {
     const rows0 = A.revenueBreakdown({ ky, scope, dimension: 'product', filters: revenueFiltersFromQuery(req.query) });
     const contractorLookup = contractorLookupFor(scope);

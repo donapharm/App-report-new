@@ -21,6 +21,23 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (u) — Claude Code — XUẤT EXCEL "Doanh thu đầy đủ": tên nhà thầu + nhiều NV + chuẩn kế toán VN
+- **CEO phản ánh 3 điểm ở tab "Doanh thu đầy đủ":** (1) file Excel thiếu **tên nhà thầu**; (2) chỉ lọc/xuất
+  được **1 NV**, muốn chọn **nhiều NV**; (3) muốn **định dạng chuẩn kế toán VN**.
+- **(1) Tên nhà thầu:** export cũ dùng `store.getRows` thô + cột "Nhà thầu" chỉ ghi *mã*. Nay export
+  **enrich giống hệt trang** (`contractorLookup` + `enrichContractorNames` + `enrichProductMeta`) → thêm cột
+  **"Tên nhà thầu"** (kèm "Mã nhà thầu"), và bổ sung đủ trường: Ngày, Hoạt chất, Hàm lượng, ĐVT, Ưu tiên,
+  **Giá trúng thầu**, STT. File xuất giờ khớp 100% dữ liệu đang xem trên trang.
+- **(2) Nhiều NV:** ô lọc NV đổi từ chọn-đơn → **chọn-nhiều** (MultiSelect, chung `revenueFilters`); backend
+  `applyFilters` nhận `emp` là danh sách nối `|` (1 hay nhiều mã đều được, để trống = tất cả NV). Đã test:
+  `emp=DN001|DN002` → chỉ 2 NV; không lọc → đủ 12 NV.
+- **(3) Chuẩn kế toán VN:** helper `styleAccountingSheet` — số nhóm nghìn `#,##0`, **âm trong ngoặc đỏ**,
+  canh phải; tiêu đề đậm nền xanh + **freeze dòng tiêu đề** + **AutoFilter**; thêm dòng **TỔNG CỘNG** (in đậm)
+  cộng Số lượng/Doanh thu.
+- **Trạng thái test:** dựng server thật + xuất file, đọc lại bằng ExcelJS: đủ 20 cột, đúng numFmt, freeze,
+  autofilter, tổng cộng, lọc nhiều NV đúng. Web build OK. (Tên nhà thầu trống trên dữ liệu MẪU vì mẫu chưa
+  map tên NCC — trên production trang & file đều hiện tên như nhau.)
+
 ### 2026-07-08 (t) — Claude Code — CÔNG CỤ ĐỐI SOÁT Report-New ↔ Sale-New (tự phát hiện lệch)
 - **Lý do (CEO yêu cầu sau vụ DN009):** không đợi NV báo mới biết mất dữ liệu — phải TỰ phát hiện lệch
   theo từng NV/kỳ.

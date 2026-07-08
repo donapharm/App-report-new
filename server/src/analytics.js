@@ -61,8 +61,10 @@ function applyFilters(rows, f = {}) {
   const q = norm(f.q || '');
   const from = f.dateFrom ? String(f.dateFrom).slice(0, 10) : '';
   const to = f.dateTo ? String(f.dateTo).slice(0, 10) : '';
+  // emp có thể là 1 mã hoặc NHIỀU mã nối bằng '|' (xuất/lọc nhiều NV cùng lúc).
+  const empList = f.emp ? String(f.emp).split('|').map((s) => s.trim()).filter(Boolean) : [];
   return rows.filter((r) => {
-    if (f.emp && r.emp_code !== f.emp) return false;
+    if (empList.length && !empList.includes(r.emp_code)) return false;
     if (f.province && r.province !== f.province) return false;
     if (f.unit && r.unit_code !== f.unit) return false;
     if (f.product && r.iit_code !== f.product) return false;
