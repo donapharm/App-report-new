@@ -69,3 +69,15 @@ chi tiết từng NV cho CEO — chỉ bản tổng hợp.
   + template mới nhất Claude push.
 - Không bịa số trong mục phân tích: số nào chưa có nguồn (cross-sell đội, cơ số CST theo NV) thì để câu
   "đang nối nguồn/đang tính" như template, KHÔNG chế số.
+
+## 9) VẬN HÀNH ENV/EMAIL (ghi nhớ 2026-07-09)
+- **Project KHÔNG cài `dotenv`.** App tự nạp `.env` (gốc repo) qua hàm `loadEnv` trong `server/src/index.js`,
+  **chỉ chạy lúc process boot** + **không ghi đè biến sẵn có**. → Sửa `.env` xong PHẢI `pm2 restart` mới có hiệu lực.
+  Chạy tay: đừng `require('dotenv')` (lỗi thiếu package) — load bằng shell (`set -a; . ./.env; set +a`) rồi mới `node`.
+- Email: cần đủ (1) SMTP env (`SMTP_HOST/USER/PASS`, App Password Gmail) → **restart** để process nạp;
+  (2) `server/data/nv_emails.json` map mã tài khoản → email (gitignored, tạo trên server) — email CEO gắn
+  **mã tài khoản quản trị**, không phải DN001; (3) `TARGET_NOTIFY=1` để app **tự** gửi mốc target.
+- **ĐÃ THÔNG SMTP (2026-07-09):** gửi thử `{ok:true}`. Còn lại: nv_emails.json đầy đủ + restart process reportnew
+  (để "Gửi thử" trong app & lịch salesReport dùng được SMTP, không chỉ chạy shell) + bật TARGET_NOTIFY nếu muốn tự gửi.
+- **Digest CEO** hiện chỉ gửi cho admin **đã link Telegram** (`listTelegramMap`). Nếu CEO chỉ muốn email:
+  salesReport phải gửi digest CEO theo email tài khoản quản trị (qua `nv_emails.json`), đừng phụ thuộc telegram map.
