@@ -66,6 +66,15 @@ function latestDataDate() {
     const d = String(r.date || '').slice(0, 10);
     if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d > latest) latest = d;
   }
+  // Slot kỳ mới có thể vừa active nhưng chưa có dòng (đầu tháng chưa phát sinh doanh thu).
+  // Vẫn phải cuộn báo cáo sang kỳ mới; dùng data_as_of nếu nằm trong kỳ, fallback dateFrom.
+  for (const p of store.listPeriods()) {
+    const from = String(p.dateFrom || '').slice(0, 10);
+    const to = String(p.dateTo || '').slice(0, 10);
+    let d = String(p.data_as_of || p.dataAsOf || p.uploadedAt || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || (from && d < from) || (to && d > to)) d = from;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d > latest) latest = d;
+  }
   return latest || ymd(new Date());
 }
 function defaultRanges(today = latestDataDate()) {

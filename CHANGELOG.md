@@ -1,4 +1,8 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **Revenue rollover:** `salesReport.defaultRanges()` nay nhận diện slot doanh thu active mới nhất ngay cả khi kỳ mới chưa có dòng, dùng `data_as_of/dateFrom` để cuộn báo cáo sang tháng mới.
+- **Revenue refresh:** tick scheduler ngày 01 tháng mới chốt sổ kỳ vừa đóng đúng 1 lần (`final_close:<ky>`) trước khi materialize kỳ hiện tại; trạng thái lưu `server/data/revenue_refresh_state.json` để restart không chạy lặp.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **NLQ fast-path cho câu chắc chắn.** Các intent rõ như `top`, `theo ...`, `overview`, target/comparison/revenue tổng chạy code-first ngay; chỉ gọi `llm.interpretQuery()` cho `unknown`/`entity_drilldown`/`entity_lookup` hoặc câu tự nhiên regex không chắc, giảm trễ cho câu đơn giản.
 - **Bỏ hardcode kỳ trong interpretQuery.** `llm.interpretQuery(question, { currentPeriod })` nhận kỳ hiện tại từ App Report; tháng tiếng Anh/không năm suy ra theo năm của `currentPeriod`, không cố định `07.2026`.
 

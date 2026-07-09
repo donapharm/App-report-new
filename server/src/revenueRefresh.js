@@ -6,12 +6,15 @@
  */
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 const TZ = 'Asia/Bangkok';
 const DEFAULT_INTERVAL_MIN = 60;
 const DEFAULT_WEEKDAY = '07:30-18:30';
 const DEFAULT_SAT = '07:30-13:00';
 const DEFAULT_SUN = 'off';
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const STATE_FILE = path.join(DATA_DIR, 'revenue_refresh_state.json');
 const state = {
   started: false,
   timer: null,
@@ -50,6 +53,29 @@ function vnIsoNow() {
 function currentKy(now = new Date()) {
   const p = vnParts(now);
   return `${pad(p.mo)}.${p.y}`;
+}
+function kyFromParts(p) { return `${pad(p.mo)}.${p.y}`; }
+function previousKyFromParts(p) {
+  const mo = p.mo === 1 ? 12 : p.mo - 1;
+  const y = p.mo === 1 ? p.y - 1 : p.y;
+  return `${pad(mo)}.${y}`;
+}
+function readState() {
+  try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) || {}; } catch { return {}; }
+}
+function writeState(o) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(STATE_FILE, JSON.stringify(o, null, 2) + '\n', 'utf8');
+}
+function wasFinalClosed(ky) {
+  const st = readState();
+  return !!(st.finalClosed && st.finalClosed[ky]);
+}
+function markFinalClosed(ky, meta = {}) {
+  const st = readState();
+  st.finalClosed = st.finalClosed || {};
+  st.finalClosed[ky] = { at: new Date().toISOString(), ...meta };
+  writeState(st);
 }
 function kyToRange(ky) {
   const [mm, yyyy] = String(ky || '').split('.').map(Number);
@@ -157,12 +183,25 @@ async function runOnce({ force = false, reason = 'manual', ky } = {}) {
     state.inFlight = false;
   }
 }
+async function runScheduled(due) {
+  // Ngày 01 tháng mới: chốt sổ kỳ vừa đóng đúng 1 lần để bắt hóa đơn về trễ,
+  // rồi mới materialize kỳ hiện tại. State lưu file để restart trong ngày 01 không chốt lặp.
+  if (due?.parts?.d === 1) {
+    const prevKy = previousKyFromParts(due.parts);
+    if (!wasFinalClosed(prevKy)) {
+      const r = await runOnce({ force: true, reason: `final_close:${prevKy}`, ky: prevKy });
+      markFinalClosed(prevKy, { slot: due.slot, ok: !!r?.ok, materialize: r?.materialize || null });
+    }
+  }
+  return runOnce({ force: true, reason: `schedule:${due.slot}`, ky: due?.parts ? kyFromParts(due.parts) : undefined });
+}
 function tick() {
   const due = isDue();
   if (!due.due) { state.lastSkip = { at: new Date().toISOString(), ...due }; return; }
   if (due.slot === state.lastSlot) return;
+  // Slot có YYYY-MM-DD-HHmm nên qua ngày 01/tháng mới không thể bị lastSlot tháng cũ chặn.
   state.lastSlot = due.slot;
-  runOnce({ force: true, reason: `schedule:${due.slot}` }).catch(() => undefined);
+  runScheduled(due).catch((e) => console.error('[revenue-refresh] scheduled run failed', String(e?.message || e)));
 }
 function start() {
   if (state.started) return;
@@ -187,4 +226,4 @@ function config() {
 }
 function status() { return { ...config(), inFlight: state.inFlight, lastSlot: state.lastSlot, lastRun: state.lastRun, lastSkip: state.lastSkip, nowVn: vnIsoNow(), dueNow: isDue() }; }
 
-module.exports = { start, runOnce, status, isDue, currentKy, kyToRange, vnIsoNow };
+module.exports = { start, runOnce, status, isDue, currentKy, kyToRange, vnIsoNow, kyFromParts, previousKyFromParts, runScheduled };
