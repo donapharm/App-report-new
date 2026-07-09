@@ -90,13 +90,17 @@ async function fetchMisa(runId) {
            COALESCE(p.active_ingredient,'') active_ingredient, COALESCE(p.strength,'') strength,
            p.price bid_price, COALESCE(p.tech_rank,'') tech_rank,
            COALESCE(u.province,'') province,
-           -- Tên pháp nhân ĐẦY ĐỦ từ legal_entities (join theo code); fallback tên ngắn của snapshot.
-           COALESCE(NULLIF(le.name,''), l.legal_entity_name, '') legal_full_name,
+           -- Tên pháp nhân ĐẦY ĐỦ: MISA dùng mã 01.DONA/02.AFP, còn legal_entities.code là DONAPHARM/AFP.
+           -- Không có 1 khoá duy nhất -> dò le.code theo cả name/bucket/code (subquery LIMIT 1, tránh nhân đôi).
+           COALESCE(NULLIF((
+             SELECT le.name FROM legal_entities le
+              WHERE le.code IN (l.legal_entity_name, l.legal_entity_bucket, l.legal_entity_code)
+              ORDER BY (le.code = l.legal_entity_name) DESC, (le.code = l.legal_entity_bucket) DESC LIMIT 1
+           ),''), l.legal_entity_name, '') legal_full_name,
            l.revenue_bucket, l.revenue_status, l.mapping_status
       FROM misa_revenue_snapshot_lines l
       LEFT JOIN products p ON p.id=l.product_id
       LEFT JOIN units u ON u.code = l.unit_code
-      LEFT JOIN legal_entities le ON le.code = l.legal_entity_code
      WHERE l.run_id=$1
        AND l.revenue_bucket = ANY(ARRAY['official','pending']::text[])
        AND COALESCE(l.is_test_suspected,false) IS NOT TRUE
