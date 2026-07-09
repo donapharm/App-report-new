@@ -53,6 +53,19 @@ export default function Overview({ me, onNavigate }) {
   const setCmpMode = (m) => { setCmpModeState(m); try { localStorage.setItem('rpt_cmp_mode', m); } catch { /* ignore */ } };
   const { reloadTick, reload } = useReloadTick();
 
+  // Tab Nhân viên: ghép % đạt target vào từng NV để tô màu bar theo target.
+  function loadTopRows(p) {
+    setTopRows(null);
+    if (topDim === 'emp' && me.isAdmin) {
+      Promise.all([api.revenue('emp', null, p), api.targets(p)]).then(([d, t]) => {
+        const pctByEmp = Object.fromEntries((t.items || []).map((x) => [x.emp_code, x.pct]));
+        setTopRows((d.rows || []).slice(0, topLimit).map((r) => ({ ...r, pctTarget: pctByEmp[r.key] ?? null })));
+      });
+    } else {
+      api.revenue(topDim, null, p).then((d) => setTopRows((d.rows || []).slice(0, topLimit)));
+    }
+  }
+
   useEffect(() => {
     api.periods().then((p) => { setPeriods(p.periods); setPeriodSel(defaultPeriodSelection(p.periods, p.latest)); });
   }, []);
@@ -69,8 +82,7 @@ export default function Overview({ me, onNavigate }) {
 
   useEffect(() => {
     if (!periodSel) return;
-    setTopRows(null);
-    api.revenue(topDim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, topLimit)));
+    loadTopRows(periodParams(periodSel));
   }, [periodSel, topDim, reloadTick]);
 
   function viewAll(group) {
@@ -99,8 +111,7 @@ export default function Overview({ me, onNavigate }) {
       api.overview(periodParams(periodSel)).then(setKpi);
       setTrend(null);
       api.trend().then(setTrend);
-      setTopRows(null);
-      api.revenue(topDim, null, periodParams(periodSel)).then((d) => setTopRows((d.rows || []).slice(0, topLimit)));
+      loadTopRows(periodParams(periodSel));
     } finally {
       setRefreshing(false);
     }
@@ -147,7 +158,7 @@ export default function Overview({ me, onNavigate }) {
                   {me.isAdmin && <button className={topDim === 'emp' ? 'active' : ''} onClick={() => setTopDim('emp')}>Nhân viên</button>}
                 </div>
               </div>
-              {!topRows ? <Spinner /> : <TopBarChart rows={topRows} limit={topLimit} />}
+              {!topRows ? <Spinner /> : <TopBarChart rows={topRows} limit={topLimit} totalRevenue={kpi.revenue} dimension={topDim} />}
             </div>
           </div>
         </>

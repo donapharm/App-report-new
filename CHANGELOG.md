@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (af) — Claude Code — Biểu đồ Top doanh thu đẹp hơn + bar NV tô màu theo % target
+- **CEO giao thiết kế:** làm biểu đồ top đẹp mắt, và tab Nhân viên tô màu theo mức đạt target.
+- **TopBarChart nâng cấp:** số **hạng** trước tên, **#1 nổi bật cam**, top 2–3 xanh đậm, còn lại gradient;
+  **nhãn tiền + % ngay cuối mỗi thanh**; trục/ lưới nhẹ nhàng hơn; tooltip tiền đầy đủ.
+- **Tab Nhân viên — màu theo % đạt target** (CEO gợi ý): `<50%` đỏ · `50–89%` cam · `90–99%` xanh nhạt ·
+  `100–119%` xanh · **`≥120%` tím (xuất sắc)**; nhãn hiện **% TG** thay cho % tổng; có **chú thích màu**.
+  % lấy từ `/targets` (per-NV) ghép theo `emp_code`. NV thường không mở tab này (chỉ admin).
+- Overview + Analysis: truyền `dimension` + `totalRevenue`; gộp `pctTarget` khi tab NV.
+- **Test:** `npm run build` OK. Chỉ FE → bot restart (không cần materialize).
+
+
 ### 2026-07-09 (ae) — Claude Code — KHÔI PHỤC Top 20 (Tổng quan) + tab "Nhân viên" trong biểu đồ (bị git reset xoá)
 - **CEO phát hiện:** hôm qua đã có Top 20 ở Tổng quan + tab Nhân viên trong biểu đồ top, nay MẤT.
 - **Điều tra:** Phân tích còn Top 20 (đã trên `main`), nhưng **Tổng quan tụt về Top 10** và **cả 2 trang mất
