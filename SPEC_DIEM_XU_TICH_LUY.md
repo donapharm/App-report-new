@@ -104,6 +104,21 @@ analysis lũy kế quý), Nhận xét nhanh & hành động tháng sau.
   2. **Loại trừ VP004:** danh sách cũ của bot (V10) có VP004 trong nhóm gửi; nhưng CEO chốt loại VP004.
      → Theo lệnh CEO: **loại**. (Ghi để CEO xác nhận nếu khác ý.)
 
+## 4g. PHÂN TÍCH THÔNG MINH & ĐỊNH HƯỚNG (CEO yêu cầu 2026-07-09) — mục mới trong báo cáo NV
+Mục tiêu: giúp NV "định hướng bán hàng thông minh nhất để tăng doanh số". Mỗi báo cáo NV có block
+**"Phân tích thông minh & Định hướng"** tự sinh từ dữ liệu:
+- **A. Xu hướng bản thân:** tháng này vs **tháng liền trước** (%); vs **trung bình tháng của QUÝ TRƯỚC**
+  (%) → kết luận "đang tăng tốc / chững lại / dưới mặt bằng quý trước".
+- **B. Vị thế trong đội:** thứ hạng doanh thu + %target (không lộ số của NV khác).
+- **C. Cơ cấu tuyến & cơ hội điểm:** tỷ trọng CL/NCL/NT; nếu lệch NCL thường → gợi ý đẩy **CL/NT (điểm ×2)**
+  để vừa tăng doanh thu vừa tăng điểm.
+- **D. Khách hàng (đơn vị):** đơn vị "ngủ" (mua quý trước, tháng này = 0 → đánh thức); đơn vị tụt mạnh;
+  rủi ro tập trung (1 ĐV > 30% doanh thu).
+- **E. Sản phẩm:** SP chủ lực đang giảm; **cơ hội cross-sell** = SP đội bán mạnh nhưng NV này chưa/ít.
+- **F. Điểm/xu:** tỷ lệ quý, cần thêm bao nhiêu xu, nhắc nộp hóa đơn.
+- **G. Định hướng hành động (3–5 gạch đầu dòng CỤ THỂ):** tổng hợp A–F thành việc ưu tiên tuần/tháng tới.
+Các số so sánh: **tháng liền trước** + **trung bình quý trước** (mốc do CEO chốt).
+
 ## 5. Việc còn chờ
 - [ ] Bot điều tra `vat.db`: tên bảng hóa đơn xu, cột (emp_code/ngày/số tiền tính xu/xu), cách lọc hợp lệ.
 - [ ] CEO chốt lịch gửi cuối tuần (Chủ nhật/Thứ 7, giờ).
