@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (ad) — Claude Code — FIX thông báo target sai tháng (T06 → phải là THÁNG HIỆN TẠI T07)
+- **CEO phát hiện:** bot + email nhắc target/doanh số **tháng 06** trong khi đang là **T07** → sai.
+- **Gốc:** `targetNotify.evaluate` mặc định `store.lastCompleteKy()` = tháng hoàn thành gần nhất (T06).
+  Scheduler (telegram-bot) gọi không truyền ky → gửi T06.
+- **Sửa:** mặc định đổi sang **`store.currentKyByDate()`** (tháng hiện tại theo ngày) cho `evaluate`
+  (áp cho mọi thông báo: scheduler, preview, gửi, gửi đích danh, digest CEO) + route `/targets/kpi`.
+  Kiểm chứng: `evaluate().ky` = **07.2026** (trước 06.2026). Anti-spam theo key `ky|emp` nên mốc T07 là mới,
+  gửi lại đúng.
+- **Áp:** chỉ là logic app → **bot RESTART PM2** (reportnew + reportnew-tgbot), KHÔNG cần materialize.
+
+
 ### 2026-07-09 (ac) — Claude Code — Tên nhà thầu MISA ra ĐẦY ĐỦ (khoá join lệch code)
 - **Gốc:** MISA dùng `legal_entity_code` dạng `01.DONA`/`02.AFP`, còn `legal_entities.code` là `DONAPHARM`/`AFP`
   → join `le.code = l.legal_entity_code` KHÔNG khớp → rớt về tên ngắn "DONAPHARM"/"AFP PHARMA".
