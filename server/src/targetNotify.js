@@ -14,7 +14,7 @@ const targetAdmin = require('./targetAdmin');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'notif_state.json');
 const OPTOUT_FILE = path.join(__dirname, '..', 'config', 'notify_optout.json');
-const MILESTONES = [50, 90, 100];       // % đạt cần chúc/nhắc
+const MILESTONES = [50, 90, 100, 120];  // % đạt cần chúc/nhắc (120 = XUẤT SẮC, khớp màu tím biểu đồ)
 const BEHIND_MARGIN = 15;               // %đạt thấp hơn %thời-gian quá mức này = chậm nhịp
 
 // Danh sách mã NV TUYỆT ĐỐI không nhận thông báo (CEO chốt) — đọc từ config, cache theo mtime.
@@ -154,25 +154,29 @@ function emailShell({ accent = BRAND, preheader = '', bodyHtml = '', srcLogo = `
 function emailHtmlFor(e, assets = {}) {
   const monthNo = String(e.ky).split('.')[0];
   const perDay = e.daysLeft > 0 && e.gap > 0 ? Math.round(e.gap / e.daysLeft) : 0;
+  const isExcellent = e.type === 'milestone' && e.milestone >= 120;
   const isDone = e.type === 'milestone' && e.milestone === 100;
   const isBehind = e.type === 'behind';
-  const accent = isBehind ? '#b45309' : BRAND;
-  const barColor = isDone ? '#16a34a' : isBehind ? '#f59e0b' : BRAND;
-  const heroEmoji = isDone ? '🎉' : isBehind ? '⏱️' : '🎯';
-  const heroTitle = isDone ? `Chúc mừng ${esc(e.name)}!`
-    : isBehind ? `${esc(e.name)} ơi, đang chậm nhịp` : `${esc(e.name)} đã đạt ${e.milestone}% target`;
-  const heroSub = isDone ? `Tháng ${monthNo} bạn đã <b style="color:#16a34a;">ĐẠT 100% target</b>. Giữ nhịp bứt phá nhé!`
-    : isBehind ? `Tháng ${monthNo}: mới đạt <b>${pctText(e.pct)}</b> trong khi thời gian đã trôi <b>${pctText(e.timePct)}</b>.`
-      : `Tháng ${monthNo}: bạn đã đạt <b>${pctText(e.pct)}</b> target — cố thêm chút nữa nhé!`;
+  const accent = isExcellent ? '#7c3aed' : isBehind ? '#b45309' : BRAND;
+  const barColor = isExcellent ? '#7c3aed' : isDone ? '#16a34a' : isBehind ? '#f59e0b' : BRAND;
+  const heroEmoji = isExcellent ? '🌟' : isDone ? '🎉' : isBehind ? '⏱️' : '🎯';
+  const heroTitle = isExcellent ? `Xuất sắc, ${esc(e.name)}!`
+    : isDone ? `Chúc mừng ${esc(e.name)}!`
+      : isBehind ? `${esc(e.name)} ơi, đang chậm nhịp` : `${esc(e.name)} đã đạt ${e.milestone}% target`;
+  const heroSub = isExcellent ? `Tháng ${monthNo} bạn đã <b style="color:#7c3aed;">VƯỢT 120% target</b> — quá đỉnh, giữ phong độ nhé! 🔥`
+    : isDone ? `Tháng ${monthNo} bạn đã <b style="color:#16a34a;">ĐẠT 100% target</b>. Giữ nhịp bứt phá nhé!`
+      : isBehind ? `Tháng ${monthNo}: mới đạt <b>${pctText(e.pct)}</b> trong khi thời gian đã trôi <b>${pctText(e.timePct)}</b>.`
+        : `Tháng ${monthNo}: bạn đã đạt <b>${pctText(e.pct)}</b> target — cố thêm chút nữa nhé!`;
   const stats = [
     ['Doanh thu đạt', moneyShort(e.achieved), '#0e7a5f'],
     ['Target tháng', moneyShort(e.target)],
-    ['Tỷ lệ đạt', pctText(e.pct), isDone ? '#16a34a' : isBehind ? '#b45309' : '#0e7a5f'],
+    ['Tỷ lệ đạt', pctText(e.pct), isExcellent ? '#7c3aed' : isDone ? '#16a34a' : isBehind ? '#b45309' : '#0e7a5f'],
   ];
   if (e.gap > 0) stats.push(['Còn thiếu', moneyShort(e.gap), '#b45309']);
   if (e.gap > 0 && e.daysLeft) stats.push([`Còn ${e.daysLeft} ngày · cần ~/ngày`, moneyShort(perDay)]);
-  const chip = isDone ? badge('✓ Đã đạt 100% target', '#16a34a')
-    : isBehind ? badge('⚡ Cần tăng tốc', '#ef8a1f') : badge(`Đã đạt ${e.milestone}% target`, BRAND);
+  const chip = isExcellent ? badge('🌟 Vượt 120% target — Xuất sắc', '#7c3aed')
+    : isDone ? badge('✓ Đã đạt 100% target', '#16a34a')
+      : isBehind ? badge('⚡ Cần tăng tốc', '#ef8a1f') : badge(`Đã đạt ${e.milestone}% target`, BRAND);
   const body = `<div style="font-size:36px;line-height:1;margin-bottom:12px;">${heroEmoji}</div>`
     + `<div style="font-size:22px;font-weight:bold;color:#1f2a37;margin-bottom:12px;">${heroTitle}</div>`
     + `<div style="margin-bottom:16px;">${chip}</div>`
@@ -223,8 +227,8 @@ function ceoDigestHtml({ ky, ...assets } = {}) {
   const totalAchieved = ev.rows.reduce((s, r) => s + r.achieved, 0);
   const totalPct = totalTarget > 0 ? +(totalAchieved / totalTarget * 100).toFixed(1) : null;
   const rowsHtml = sorted.map((r) => {
-    const icon = r.pct >= 100 ? '✅' : r.behind ? '🔴' : '•';
-    const c = r.pct >= 100 ? '#16a34a' : r.behind ? '#dc2626' : '#1f2a37';
+    const icon = r.pct >= 120 ? '🌟' : r.pct >= 100 ? '✅' : r.behind ? '🔴' : '•';
+    const c = r.pct >= 120 ? '#7c3aed' : r.pct >= 100 ? '#16a34a' : r.behind ? '#dc2626' : '#1f2a37';
     return `<tr><td style="padding:9px 0;border-bottom:1px solid #eef2f6;font-size:14px;color:#1f2a37;">${icon}&nbsp; ${esc(r.name)}</td>`
       + `<td align="right" style="padding:9px 0;border-bottom:1px solid #eef2f6;font-size:14px;font-weight:bold;color:${c};">${pctText(r.pct)}</td>`
       + `<td align="right" style="padding:9px 0 9px 12px;border-bottom:1px solid #eef2f6;font-size:12px;color:#8794a3;white-space:nowrap;">${moneyShort(r.achieved)} / ${moneyShort(r.target)}</td></tr>`;
@@ -243,6 +247,7 @@ function messageFor(e) {
   const monthNo = String(e.ky).split('.')[0];
   const perDay = e.daysLeft > 0 && e.gap > 0 ? Math.round(e.gap / e.daysLeft) : 0;
   const needLine = e.gap > 0 ? `\nCòn thiếu ${moneyShort(e.gap)}${e.daysLeft ? ` · còn ${e.daysLeft} ngày → cần ~${moneyShort(perDay)}/ngày` : ''}.` : '';
+  if (e.type === 'milestone' && e.milestone >= 120) return `🌟 XUẤT SẮC! ${e.name} tháng ${monthNo} đã VƯỢT 120% target (${moneyShort(e.achieved)}/${moneyShort(e.target)} · ${pctText(e.pct)}). Quá đỉnh, giữ phong độ nhé! 🔥`;
   if (e.type === 'milestone' && e.milestone === 100) return `🎉 Chúc mừng ${e.name}! Tháng ${monthNo} bạn đã ĐẠT 100% target (${moneyShort(e.achieved)}/${moneyShort(e.target)}). Giữ nhịp bứt phá nhé!`;
   if (e.type === 'milestone') return `🎯 [Tháng ${monthNo}] ${e.name}: bạn đã đạt ${e.milestone}% target (${moneyShort(e.achieved)} / ${moneyShort(e.target)} · ${pctText(e.pct)}).${needLine}`;
   return `⏱️ [Tháng ${monthNo}] ${e.name}: đang CHẬM NHỊP — mới đạt ${pctText(e.pct)} target trong khi thời gian đã trôi ${pctText(e.timePct)}.${needLine}`;
