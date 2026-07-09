@@ -1,4 +1,9 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **Sửa mẫu email điểm/xu DN001 theo review CEO/Claude.** Email NV đã giấu tên hệ thống/API/bảng/file kỹ thuật; khung nguồn dữ liệu chuyển sang ngôn ngữ nghiệp vụ nội bộ DONAPHARM, bỏ cột “Xu tuần” bị trùng, thêm D/E/G trong mục 9 và chú thích dự báo tháng là sơ bộ/còn biến động.
+- **Sửa so sánh kỳ trước không còn 0 giả.** Chẩn đoán `getRows(06.2026, DN001)` có 262 dòng / `2.444.530.837đ`; nguyên nhân do dữ liệu T06 là tổng kỳ, không lọc được ngày lẻ. `salesReport.js` nay dùng trọn tháng trước cho `prevRange` để so sánh không bị rỗng giả.
+- **Gửi lại mẫu thật DN001 tuần + tháng cho CEO duyệt.** Đã xuất HTML mới và gửi email test CEO; chưa bật lịch, chưa gửi 17 NV.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **Dựng `server/src/salesReport.js` theo directive điểm/xu.** Sinh báo cáo tuần/tháng từng NV KD + CEO digest, lọc người nhận bằng `targetRosterCodes()` và loại `DN021/DN022/DN023/VP004/VP018`; dùng `diemXu.js` cho điểm/xu, số live App Report, text thương hiệu `DONAPHARM`.
 - **Nối mục I với nguồn CST App Sale đã duyệt.** Thêm `server/src/appSaleCst.js`: ưu tiên `GET /api/reports/tender-quota` có Bearer token; nếu API 401/chưa cấp token thì dùng cache materialized `server/data/cst_appsale_tender_quota.json` (runtime, không commit). Mục I dùng thẳng `slConLai`, lọc theo đơn vị NV, loại `la_ap_thau`, NCL hiển thị riêng là “dư địa vô hạn”.
 - **Gửi mẫu thật DN001 cho CEO duyệt.** Đã xuất HTML tuần + tháng vào `artifacts/sales-report/` và gửi 2 email `[CEO DUYỆT]` tới `trungdangxuan@gmail.com`, SMTP trả OK. `node --check` và `npm --prefix web run build` OK. Chưa bật lịch, chưa gửi 17 NV.
