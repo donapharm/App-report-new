@@ -27,6 +27,10 @@
 - Bảng: nhân viên, đơn vị, khách hàng, nhà thầu, danh mục bán hàng, QLNB/QĐTT, CST (bd/còn lại), quy đổi, mapping.
 - Phát **API chính thức** cho Report/Sale/VAT tiêu thụ (thay việc đọc-ké-file). Read-only + phân quyền theo app-key.
 - **KHÔNG chứa cột cost** ở tầng này.
+- **‼ Kiểm soát theo CỘT (column-level):** một số bảng tầng A vẫn có cột nhạy cảm — vd `master_danhmuc_banhang`
+  chứa **đơn giá / thành tiền / dữ liệu thầu**; `master_nhanvien`/`master_khachhang` chứa **PII** (cccd/sđt/
+  email/địa chỉ/mst). Public API **whitelist cột** theo từng app-key: mặc định **KHÔNG phát giá/thành tiền/PII**;
+  chỉ trả mã + trường an toàn. Ai cần cột nhạy cảm phải có quyền riêng + audit. (Không phải cả tầng A đều public.)
 
 **Tầng B — 🔒 CEO VAULT + COST ENGINE (CEO-only, khóa):**
 - **CEO Vault**: CP Total/chi phí/điểm/rule chi phí/margin. Auth: password + **OTP thiết bị** + lock/unlock + audit.
