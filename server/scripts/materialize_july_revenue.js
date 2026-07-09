@@ -94,9 +94,12 @@ async function fetchMisa(runId) {
            -- Không có 1 khoá duy nhất -> dò le.code theo cả name/bucket/code (subquery LIMIT 1, tránh nhân đôi).
            COALESCE(NULLIF((
              SELECT le.name FROM legal_entities le
-              WHERE le.code IN (l.legal_entity_name, l.legal_entity_bucket, l.legal_entity_code)
-              ORDER BY (le.code = l.legal_entity_name) DESC, (le.code = l.legal_entity_bucket) DESC LIMIT 1
-           ),''), l.legal_entity_name, '') legal_full_name,
+              WHERE le.code IN (l.legal_entity_name, split_part(l.legal_entity_name,'/',1),
+                                l.legal_entity_bucket, l.legal_entity_code)
+              ORDER BY (le.code = l.legal_entity_name) DESC,
+                       (le.code = split_part(l.legal_entity_name,'/',1)) DESC,
+                       (le.code = l.legal_entity_bucket) DESC LIMIT 1
+           ),''), split_part(l.legal_entity_name,'/',1), l.legal_entity_name, '') legal_full_name,
            l.revenue_bucket, l.revenue_status, l.mapping_status
       FROM misa_revenue_snapshot_lines l
       LEFT JOIN products p ON p.id=l.product_id
