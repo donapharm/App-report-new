@@ -137,9 +137,16 @@ Email gửi NV **KHÔNG được lộ tên hệ thống/kỹ thuật nội bộ*
 CEO **đã duyệt** bản mẫu DN001 tuần+tháng (bản `+64,7%` — đã fix so sánh theo nhịp, giấu tên hệ thống,
 mục 9 D–I). Review Claude ĐẠT. → Bot dựng phần **lịch + vòng gửi**:
 
-**A. Vòng gửi (per NV + CEO):**
-- Người nhận = `salesRecipients()` (= 17 NV KD, đã loại 5 NV). Mỗi NV: `renderEmployeeReport` → `notify.deliver({telegramId, email, subject, text, html})` (email + Telegram nếu có link).
-- CEO: `renderCeoDigest` → gửi tài khoản quản trị (`CEO` → email + Telegram nếu link).
+**A. Vòng gửi (per NV + CEO) — ‼ GỬI CẢ 2 KÊNH:**
+- **BẮT BUỘC dùng `notify.deliver({telegramId, email, ...})` — KHÔNG dùng `sendEmail` đơn lẻ.** `deliver` gửi
+  **email + Telegram**. Lấy `telegramId` per NV từ `auth.listTelegramMap()` (build map `tidByEmp[emp]=telegram_id`
+  như `routes.js`). `sendCeoApprovalSample` hiện chỉ `sendEmail` — vòng gửi lịch phải chuyển sang `deliver`.
+- Người nhận = `salesRecipients()` (= 17 NV KD, đã loại 5 NV). CEO: `renderCeoDigest` → `deliver` tới tài khoản
+  quản trị `CEO` (email + Telegram).
+- **‼ Telegram chỉ tới người ĐÃ LIÊN KẾT** (luật Telegram — không nhắn được người chưa Start bot). Hiện mới ~3
+  người map. Ai chưa link → nhận **email** (đủ 17/17 có email nên không ai mất báo cáo); Telegram phủ dần khi NV link.
+- **ĐỢT LIÊN KẾT TELEGRAM (rollout):** gửi từng NV + CEO link `https://t.me/<bot>?start=<mã_NV>` → bấm Start →
+  bot map `telegram_id↔emp_code`. Mục tiêu: đủ 17 NV + CEO link để nhận Telegram. Bot xác nhận ai đã/chưa link.
 - **Idempotent:** đánh dấu đã gửi theo (kỳ + kind + emp) để restart worker KHÔNG gửi trùng (giống `targetNotify.markSent`/STATE_FILE).
 
 **B. Lịch (giờ VN Asia/Ho_Chi_Minh):**
