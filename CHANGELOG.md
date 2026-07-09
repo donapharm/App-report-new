@@ -1,3 +1,8 @@
+### 2026-07-09 — Bot triển khai (Report Bot)
+- **Dựng `server/src/salesReport.js` theo directive điểm/xu.** Sinh báo cáo tuần/tháng từng NV KD + CEO digest, lọc người nhận bằng `targetRosterCodes()` và loại `DN021/DN022/DN023/VP004/VP018`; dùng `diemXu.js` cho điểm/xu, số live App Report, text thương hiệu `DONAPHARM`.
+- **Nối mục I với nguồn CST App Sale đã duyệt.** Thêm `server/src/appSaleCst.js`: ưu tiên `GET /api/reports/tender-quota` có Bearer token; nếu API 401/chưa cấp token thì dùng cache materialized `server/data/cst_appsale_tender_quota.json` (runtime, không commit). Mục I dùng thẳng `slConLai`, lọc theo đơn vị NV, loại `la_ap_thau`, NCL hiển thị riêng là “dư địa vô hạn”.
+- **Gửi mẫu thật DN001 cho CEO duyệt.** Đã xuất HTML tuần + tháng vào `artifacts/sales-report/` và gửi 2 email `[CEO DUYỆT]` tới `trungdangxuan@gmail.com`, SMTP trả OK. `node --check` và `npm --prefix web run build` OK. Chưa bật lịch, chưa gửi 17 NV.
+
 # CHANGELOG & TIẾN TRÌNH — App Report New
 
 > **QUY TRÌNH (đọc trước):** Đây là nhật ký DUY NHẤT ghi lại **mọi thay đổi của app** và **tiến trình hiện tại**.

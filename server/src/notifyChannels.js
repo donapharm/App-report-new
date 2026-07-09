@@ -17,7 +17,9 @@ const EMAILS_FILE = path.join(__dirname, '..', 'data', 'nv_emails.json');
 const ASSET_DIR = path.join(__dirname, '..', '..', 'web', 'public');
 const INLINE_IMAGES = [
   { filename: 'logo-dnpharma.png', path: path.join(ASSET_DIR, 'logo-dnpharma.png'), cid: 'dnpharma-logo' },
+  { filename: 'logo-dnpharma.png', path: path.join(ASSET_DIR, 'logo-dnpharma.png'), cid: 'logo_dona' },
   { filename: 'zalo-oa-qr.png', path: path.join(ASSET_DIR, 'zalo-oa-qr.png'), cid: 'dnpharma-zalo' },
+  { filename: 'zalo-oa-qr.png', path: path.join(ASSET_DIR, 'zalo-oa-qr.png'), cid: 'qr_zalo' },
 ];
 function inlineAttachments() {
   return INLINE_IMAGES.filter((x) => { try { return fs.existsSync(x.path); } catch { return false; } });
