@@ -40,6 +40,9 @@ Riêng báo cáo điểm/xu này loại đủ 5 mã trên.)
 - **NV:** gửi bản riêng của từng NV (tuần + tháng).
 - **CEO:** gửi bản tập trung tổng hợp, có **phân tích gọn theo từng NV**.
 - (Kỹ thuật: monthly chạy daily 18h30, nếu là ngày cuối tháng thì gửi.)
+- **Mốc tính (CEO chốt 2026-07-09):** TUẦN = tính vào **Thứ 7 hàng tuần** (lũy kế đến hết Thứ 7 đó);
+  THÁNG = tính vào **ngày cuối cùng của tháng** (lũy kế đến hết ngày đó). Điểm/xu là LŨY KẾ theo
+  tháng/quý — báo cáo tuần là ảnh chụp tiến độ tính đến Thứ 7.
 
 ## 4c. Bố cục báo cáo (dự kiến — chờ bản mẫu cũ của CEO để bám format)
 - **NV (email HTML + Telegram):** điểm DT (tuần/tháng/quý) · xu (tuần/tháng/quý) · thiếu/dư · tỷ lệ%
