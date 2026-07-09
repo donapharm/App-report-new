@@ -129,6 +129,12 @@ Mục tiêu: giúp NV "định hướng bán hàng thông minh nhất để tăn
     tăng doanh số tự do (đơn vị/SP NCL tiềm năng, đơn vị NCL đang bỏ trống).
 Các số so sánh: **tháng liền trước** + **trung bình quý trước** (mốc do CEO chốt).
 
+## 4a-bis. ‼ VAI TRÒ NGƯỜI NHẬN (CEO nhắc 2026-07-09 — GHI NHỚ)
+- **CEO = tài khoản QUẢN TRỊ** (role `ceo`/`admin` — xem `auth.normRole`). Nhận **bản CEO tổng hợp toàn đội**.
+  Email CEO `trungdangxuan@gmail.com` map vào **tài khoản quản trị**, **KHÔNG phải DN001**.
+- **DN001…DN0xx / VP0xx = NV THƯỜNG.** Mỗi NV nhận **bản riêng của mình**. (DN001 chỉ được dùng làm **mẫu test**.)
+- Suy ra: `nv_emails.json` cần map email theo từng NV; email CEO gắn với mã tài khoản quản trị (không nhét vào DN001).
+
 ## 4h. ✅ CEO ĐÃ DUYỆT 2 BẢN MẪU (2026-07-09) — CHỐT LAYOUT
 CEO duyệt **cả bản TUẦN và bản THÁNG** của DN001 (bản "thông minh" có mục 9). Hai điểm sửa cuối
 đã áp dụng và **khoá lại**:

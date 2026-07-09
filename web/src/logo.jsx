@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 /**
- * Logo DNPHARMA (dùng ảnh thật trong web/public/):
+ * Logo DONAPHARM (dùng ảnh thật trong web/public/):
  *   - full=true  : logo lockup đầy đủ (logo-dnpharma.png) — dùng ở màn login.
  *   - mặc định   : biểu tượng DP (logo-mark.png) + chữ — dùng ở header/sidebar.
  * Nếu thiếu ảnh sẽ tự vẽ SVG capsule thay thế (không lỗi).
@@ -26,12 +26,12 @@ export default function Logo({ size = 30, light = false, full = false }) {
   if (full) {
     return fullOk ? (
       <span style={{ display: 'inline-block', background: '#fff', padding: '7px 11px', borderRadius: 11, boxShadow: '0 2px 9px rgba(0,0,0,.13)' }}>
-        <img src="/logo-dnpharma.png" alt="DNPHARMA" style={{ display: 'block', width: 96, maxWidth: '32vw', height: 'auto' }} onError={() => setFullOk(false)} />
+        <img src="/logo-dnpharma.png" alt="DONAPHARM" style={{ display: 'block', width: 96, maxWidth: '32vw', height: 'auto' }} onError={() => setFullOk(false)} />
       </span>
     ) : (
       <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
         <MarkSVG size={size} light={light} />
-        <b style={{ fontSize: size * 0.6, color: '#fff' }}>DNPHARMA</b>
+        <b style={{ fontSize: size * 0.6, color: '#fff' }}>DONAPHARM</b>
       </span>
     );
   }
@@ -49,7 +49,7 @@ export default function Logo({ size = 30, light = false, full = false }) {
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 9 }}>
       {markImg}
       <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.06 }}>
-        <b style={{ fontSize: size * 0.58, letterSpacing: '.02em', color: light ? '#fff' : '#1568b8' }}>DNPHARMA</b>
+        <b style={{ fontSize: size * 0.58, letterSpacing: '.02em', color: light ? '#fff' : '#1568b8' }}>DONAPHARM</b>
         <span style={{ fontSize: size * 0.3, color: light ? 'rgba(255,255,255,.85)' : '#f5a11e', fontWeight: 700 }}>App Report</span>
       </span>
     </span>
