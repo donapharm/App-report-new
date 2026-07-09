@@ -41,6 +41,16 @@ const INTERPRET_SYSTEM = [
   'Nếu chỉ liệt kê/top/theo toàn bộ thì listAll=true; nếu hỏi một thực thể cụ thể thì listAll=false.',
 ].join(' ');
 
+const PLAN_SYSTEM = [
+  'Bạn là PLANNER cho App Report. Nhiệm vụ: đổi câu hỏi tự nhiên Việt/Anh/có dấu/không dấu thành JSON DSL thuần. KHÔNG tính số, KHÔNG bịa dữ liệu, KHÔNG markdown.',
+  'Schema bắt buộc: {"answerType":"aggregate|breakdown|ranking|orders|comparison|advisory","metric":"revenue|quantity|count|points|xu","groupBy":"unit|product|emp|contractor|bid_package|province|route|source|day|order|null","filters":{"unitHint":"string|null","productHint":"string|null","empHint":"string|null","contractorHint":"string|null","route":"CL|NCL|NT|null","provinceHint":"string|null","source":"CRM_MISA|APP_WEB_PARTNER|null"},"period":"MM.YYYY|current|null","day":"today|yesterday|YYYY-MM-DD|null","topN":number|null,"splitBySource":true|false,"sort":"desc|asc","selfScoped":true|false,"compare":"prev|none","needClarify":"string|null"}',
+  'CURRENT_PERIOD và LATEST_DATA_DATE được cung cấp trong user message; nếu người hỏi nói tháng không có năm thì dùng năm của CURRENT_PERIOD.',
+  'hôm nay/today => day="today"; hôm qua/yesterday => day="yesterday".',
+  'đơn hàng/order => answerType="orders", groupBy="order". 5 Misa 5 web hoặc Misa và web => splitBySource=true. Misa/source CRM => filters.source="CRM_MISA"; web/app web/partner => filters.source="APP_WEB_PARTNER".',
+  'top/cao nhất/nhiều nhất => ranking. theo/từng/liệt kê => breakdown. so với/tháng trước/hôm qua/gảm mạnh/tăng giảm => comparison và compare="prev".',
+  'của tôi/tôi/I/my/me => selfScoped=true. Chỉ điền *Hint khi người dùng nêu thực thể rõ; câu tổng/top/liệt kê toàn bộ thì Hint=null.',
+].join(' ');
+
 function cleanJsonText(s) {
   let t = String(s || '').trim();
   t = t.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
@@ -71,34 +81,35 @@ function normIntent(x) {
   };
 }
 
-async function interpretQuery(question, { currentPeriod } = {}) {
+async function anthropicJson({ system, content, maxTokens = 500, timeoutMs }) {
   if (!isEnabled()) return null;
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), Number(process.env.LLM_INTERPRET_TIMEOUT_MS || 8000));
+    const timer = setTimeout(() => ctrl.abort(), Number(timeoutMs || process.env.LLM_INTERPRET_TIMEOUT_MS || 8000));
     const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 300,
-        temperature: 0,
-        system: INTERPRET_SYSTEM,
-        messages: [{ role: 'user', content: `CURRENT_PERIOD: ${currentPeriod || 'current'}\nQUESTION: ${String(question || '').slice(0, 500)}` }],
-      }),
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, temperature: 0, system, messages: [{ role: 'user', content }] }),
     }).finally(() => clearTimeout(timer));
     if (!res.ok) return null;
     const data = await res.json();
     const text = (data.content || []).map((c) => c.text).join('').trim();
-    return normIntent(JSON.parse(cleanJsonText(text)));
-  } catch {
-    return null;
-  }
+    return JSON.parse(cleanJsonText(text));
+  } catch { return null; }
+}
+
+async function interpretQuery(question, { currentPeriod } = {}) {
+  const raw = await anthropicJson({ system: INTERPRET_SYSTEM, maxTokens: 300, content: `CURRENT_PERIOD: ${currentPeriod || 'current'}\nQUESTION: ${String(question || '').slice(0, 500)}` });
+  return normIntent(raw);
+}
+
+async function planQuery(question, { currentPeriod, latestDataDate } = {}) {
+  const raw = await anthropicJson({
+    system: PLAN_SYSTEM,
+    maxTokens: 500,
+    content: `CURRENT_PERIOD: ${currentPeriod || 'current'}\nLATEST_DATA_DATE: ${latestDataDate || ''}\nQUESTION: ${String(question || '').slice(0, 700)}`,
+  });
+  return raw && typeof raw === 'object' ? raw : null;
 }
 
 
@@ -134,4 +145,4 @@ async function callLlm({ question, facts }) {
   }
 }
 
-module.exports = { callLlm, interpretQuery, isEnabled, MODEL };
+module.exports = { callLlm, interpretQuery, planQuery, isEnabled, MODEL };

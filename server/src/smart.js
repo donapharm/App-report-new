@@ -8,6 +8,7 @@ const store = require('./store');
 const A = require('./analytics');
 const llm = require('./llm');
 const NLQ = require('./nlqIntent');
+const nlqEngine = require('./nlqEngine');
 
 /* ---------------- 1) CẢNH BÁO CHỦ ĐỘNG ---------------- */
 function buildAlerts({ scope, ky, kys, compareMode }) {
@@ -252,6 +253,13 @@ async function answerQuestion({ text, scope, session }) {
   };
   const dimLabel = (dimension) => ({ emp: 'nhân viên', unit: 'đơn vị', product: 'sản phẩm', contractor: 'nhà thầu', bid_package: 'gói thầu', province: 'tỉnh' }[dimension] || dimension);
   const fmtDimItem = (dimension, t) => `${dimension === 'unit' ? unitText(t.key, t.label) : t.label}: ${fmt(t.revenue)}`;
+
+  // NLQ Mức 3: Planner → Executor → Narrator cho truy vấn doanh thu tổng quát.
+  // Bỏ qua các nhóm ngoài doanh thu/đã có handler nghiệp vụ riêng để fallback cũ vẫn an toàn.
+  if (!['sensitive', 'help', 'greeting', 'identity_check', 'target_gap', 'target_pct', 'cst_empty', 'cst_low'].includes(intent.intent)) {
+    const engineAns = await nlqEngine.answerQuestion({ text, scope, session });
+    if (engineAns?.text) return engineAns;
+  }
 
   if (shouldInterpretQuery(intent, q)) {
     const interpreted = await answerFromInterpretedIntent({ text, q, baseKy: ky, scope, mine });

@@ -1,4 +1,9 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **NLQ Mức 3:** thêm kiến trúc 3 tầng `nlqEngine` gồm PLANNER (Claude → JSON DSL), EXECUTOR tham số hóa chạy trên dòng doanh thu đã scope quyền, và NARRATOR tiếng Việt không tự tính số.
+- Executor hỗ trợ lọc kỳ/ngày/nguồn/tuyến/thực thể, groupBy/topN theo đơn hàng/nguồn/đơn vị/sản phẩm/NV/nhà thầu/tỉnh/tuyến/ngày, split 5 MISA + 5 WEB, so sánh theo nhịp tháng trước, so hôm nay với hôm qua, và chặn NV hỏi ngoài phạm vi.
+- Advisory dùng LLM chỉ trên FACTS đã tính: tổng, top sản phẩm/đơn vị/nguồn, đơn vị tăng/giảm theo nhịp; không gửi dòng thô và không để LLM bịa số.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **Revenue rollover:** `salesReport.defaultRanges()` nay nhận diện slot doanh thu active mới nhất ngay cả khi kỳ mới chưa có dòng, dùng `data_as_of/dateFrom` để cuộn báo cáo sang tháng mới.
 - **Revenue refresh:** tick scheduler ngày 01 tháng mới chốt sổ kỳ vừa đóng đúng 1 lần (`final_close:<ky>`) trước khi materialize kỳ hiện tại; trạng thái lưu `server/data/revenue_refresh_state.json` để restart không chạy lặp.
 
