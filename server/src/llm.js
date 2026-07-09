@@ -37,7 +37,7 @@ const INTERPRET_SYSTEM = [
   'Nếu hỏi at/in/tại/ở/bên/của một bệnh viện/đơn vị thì dimension="unit" và unitHint là tên/mã đơn vị.',
   'Nếu hỏi product/sản phẩm/thuốc ở một đơn vị thì metric="revenue", dimension="product", unitHint là đơn vị.',
   'Nếu hỏi how much did I sell/doanh thu tôi bán được thì metric="revenue", selfScoped=true.',
-  'Nếu nói July/tháng 7/T7 mà không có năm thì period="07.2026".',
+  'Nếu người dùng nói tháng/JULY mà không có năm thì dùng năm từ CURRENT_PERIOD trong user message để trả period="MM.YYYY". Ví dụ CURRENT_PERIOD=08.2026 và hỏi July/tháng 7 thì period="07.2026".',
   'Nếu chỉ liệt kê/top/theo toàn bộ thì listAll=true; nếu hỏi một thực thể cụ thể thì listAll=false.',
 ].join(' ');
 
@@ -71,7 +71,7 @@ function normIntent(x) {
   };
 }
 
-async function interpretQuery(question) {
+async function interpretQuery(question, { currentPeriod } = {}) {
   if (!isEnabled()) return null;
   try {
     const ctrl = new AbortController();
@@ -89,7 +89,7 @@ async function interpretQuery(question) {
         max_tokens: 300,
         temperature: 0,
         system: INTERPRET_SYSTEM,
-        messages: [{ role: 'user', content: String(question || '').slice(0, 500) }],
+        messages: [{ role: 'user', content: `CURRENT_PERIOD: ${currentPeriod || 'current'}\nQUESTION: ${String(question || '').slice(0, 500)}` }],
       }),
     }).finally(() => clearTimeout(timer));
     if (!res.ok) return null;

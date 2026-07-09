@@ -1,4 +1,8 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **NLQ fast-path cho câu chắc chắn.** Các intent rõ như `top`, `theo ...`, `overview`, target/comparison/revenue tổng chạy code-first ngay; chỉ gọi `llm.interpretQuery()` cho `unknown`/`entity_drilldown`/`entity_lookup` hoặc câu tự nhiên regex không chắc, giảm trễ cho câu đơn giản.
+- **Bỏ hardcode kỳ trong interpretQuery.** `llm.interpretQuery(question, { currentPeriod })` nhận kỳ hiện tại từ App Report; tháng tiếng Anh/không năm suy ra theo năm của `currentPeriod`, không cố định `07.2026`.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **NLQ LLM interpretQuery theo directive.** Thêm `llm.interpretQuery(question)` để Claude chỉ trả JSON ý định (`metric/dimension/unitHint/productHint/selfScoped/period/listAll`), không gửi số liệu/PII; App Report tự resolve thực thể, giữ scope và tính số bằng code Mức 1.
 - **Fix ca NV hỏi tự nhiên/không dấu/tiếng Anh.** Các câu như “doanh thu tại mã đơn vị 001… tôi bán được bao nhiêu”, `001.bvdk dong nai`, và `how much did I sell at Dong Nai hospital in July` trả doanh thu của chính NV tại đơn vị 001; câu mơ hồ “benh vien dong nai” hỏi lại 001/025.
 

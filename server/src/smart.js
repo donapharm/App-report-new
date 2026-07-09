@@ -253,8 +253,10 @@ async function answerQuestion({ text, scope, session }) {
   const dimLabel = (dimension) => ({ emp: 'nhân viên', unit: 'đơn vị', product: 'sản phẩm', contractor: 'nhà thầu', bid_package: 'gói thầu', province: 'tỉnh' }[dimension] || dimension);
   const fmtDimItem = (dimension, t) => `${dimension === 'unit' ? unitText(t.key, t.label) : t.label}: ${fmt(t.revenue)}`;
 
-  const interpreted = await answerFromInterpretedIntent({ text, q, baseKy: ky, scope, mine });
-  if (interpreted) return interpreted;
+  if (shouldInterpretQuery(intent, q)) {
+    const interpreted = await answerFromInterpretedIntent({ text, q, baseKy: ky, scope, mine });
+    if (interpreted) return interpreted;
+  }
 
   if (isLlmAnalysisQuestion(q)) {
     const ans = await answerWithLlm({ text, ky, scope, mine });
@@ -1078,9 +1080,18 @@ function unitRevenueAnswer(u, ky, mine) {
   if (u.ai_ban.length) lines.push(`• ${mine ? 'Bạn bán' : 'Ai bán'}: ${u.ai_ban.map((e) => `${e.ten}: ${fmt(e.doanh_thu)}`).join(' · ')}`);
   return say(`Doanh thu${mine ? ' của Anh/Chị' : ''} tại ${u.ten} kỳ ${ky}:`, lines);
 }
+function shouldInterpretQuery(intent, q) {
+  if (!llm.isEnabled()) return false;
+  const clearCodeFirst = new Set(['sensitive', 'help', 'greeting', 'identity_check', 'revenue_employee', 'ranking', 'breakdown', 'overview', 'unit_movement', 'target_gap', 'target_pct', 'comparison', 'revenue_total', 'cst_empty', 'cst_low']);
+  if (clearCodeFirst.has(intent?.intent)) return false;
+  // entity_drilldown/entity_lookup/unknown are the cases where regex may know the broad topic but not the exact natural-language entity/self scope.
+  if (['entity_drilldown', 'entity_lookup', 'unknown'].includes(intent?.intent)) return true;
+  // Natural bilingual questions that regex often misses.
+  return /\b(how much|did i sell|my sales|at .*hospital|who sells|product.*hospital)\b/.test(q);
+}
 async function answerFromInterpretedIntent({ text, q, baseKy, scope, mine }) {
   if (!llm.isEnabled()) return null;
-  const it = await llm.interpretQuery(text);
+  const it = await llm.interpretQuery(text, { currentPeriod: baseKy });
   if (!it || it.metric === 'unknown' || it.needClarify || it.listAll) return null;
   const ky2 = intentPeriodKy(it.period, baseKy);
   const unitHint = it.unitHint || '';
