@@ -87,8 +87,9 @@ chi tiết từng NV cho CEO — chỉ bản tổng hợp.
   `SMTP_FROM`** trong `.env` → `SMTP_FROM="DONAPHARM App Report <...>"` rồi `pm2 restart reportnew --update-env`
   (tên người gửi hiện đang là "DNPHARMA App Report" do env cũ). Tên file ảnh/cid (`logo-dnpharma.png`, cid
   `dnpharma-logo`) giữ nguyên — không ảnh hưởng hiển thị.
-- **Ảnh logo**: file logo hiện VẼ chữ "DNPHARMA". Nếu CEO muốn logo cũng ghi DONAPHARM thì cần thay file ảnh
-  (dùng `logo_dona.png` bên webapp_donapharm nếu ảnh đó ghi DONAPHARM) — chờ CEO xác nhận ảnh nào.
+- **Ảnh logo — GIỮ NGUYÊN "DNPHARMA" (CEO chốt 2026-07-09):** cụm chữ trong logo là "DNPHARMA" — đó là
+  **cấu trúc logo đúng/biểu tượng thương hiệu**, KHÔNG thay. Chỉ **chữ text** trong email/web ghi "DONAPHARM".
+  → Bot **không** đổi file logo, không thay `logo-dnpharma.png`.
 
 ## 8-TER) MỤC I — CƠ SỐ THẦU (CST): NỐI API APP SALE (CEO chốt 2026-07-09, KHÔNG để placeholder)
 - CEO xác nhận **cơ số thầu ĐÃ CÓ bên App Sale** → **bot nối API/nguồn App Sale**, không để "đang nối nguồn".
