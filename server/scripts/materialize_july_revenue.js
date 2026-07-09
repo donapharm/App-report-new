@@ -88,10 +88,13 @@ async function fetchMisa(runId) {
            COALESCE(l.unit_price,0)::numeric unit_price,
            COALESCE(NULLIF(p.goi_thau,''),'') bid_package,
            COALESCE(u.province,'') province,
+           -- Tên pháp nhân ĐẦY ĐỦ từ legal_entities (join theo code); fallback tên ngắn của snapshot.
+           COALESCE(NULLIF(le.name,''), l.legal_entity_name, '') legal_full_name,
            l.revenue_bucket, l.revenue_status, l.mapping_status
       FROM misa_revenue_snapshot_lines l
       LEFT JOIN products p ON p.id=l.product_id
       LEFT JOIN units u ON u.code = l.unit_code
+      LEFT JOIN legal_entities le ON le.code = l.legal_entity_code
      WHERE l.run_id=$1
        AND l.revenue_bucket = ANY(ARRAY['official','pending']::text[])
        AND COALESCE(l.is_test_suspected,false) IS NOT TRUE
@@ -103,7 +106,7 @@ async function fetchMisa(runId) {
     ky: PERIOD.ky, date: dateOnly(r.revenue_date) || PERIOD.from,
     source: 'CRM_MISA', source_order: r.sale_order_no, source_line_id: `MISA:${r.id}`,
     route: cleanCode(r.route, 'CL'), contractor_code: r.legal_entity_bucket || r.legal_entity_code || 'MISA',
-    contractor_name: cleanCode(r.legal_entity_name, ''),
+    contractor_name: cleanCode(r.legal_full_name, r.legal_entity_name),
     emp_code: empCode(r.employee_code), emp_name: r.employee_name || '', raw_emp_code: r.employee_code || '',
     unit_code: cleanCode(r.unit_code, 'UNKNOWN_UNIT'), unit_name: cleanCode(r.unit_name, r.unit_code),
     iit_code: cleanCode(r.qlnb_code, 'UNKNOWN_PRODUCT'), product_name: cleanCode(r.product_name, r.qlnb_code),

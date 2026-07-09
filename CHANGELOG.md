@@ -29,10 +29,11 @@
 - **Tên đối tác (partner):** `legal_entities.name` của partner thường là nhóm rác **"Đối tác khác"** →
   ưu tiên **`contractors.name`** (tên đối tác thật): `COALESCE(NULLIF(NULLIF(le.name,''),'Đối tác khác'),
   NULLIF(c.name,''), '')`. (Đảo lại logic #78 vốn ưu tiên le.name.)
-- **CÒN LẠI (chờ schema):** tên MISA vẫn ra ngắn "DONAPHARM" thay vì "Công ty TNHH Dược phẩm Donapharm"
-  (tên đầy đủ nằm ở `legal_entities.name`) — cần biết cột khoá để join `misa.legal_entity_code` → cần
-  bot gửi danh sách cột `legal_entities` + 1 dòng contractor Tự Đức.
-- **Test:** `node --check` OK. Cần bot chạy lại materialize để áp province + tên partner.
+- **Tên MISA đầy đủ (đã xong):** `legal_entities` có cột `code` → join `le.code = l.legal_entity_code`,
+  `contractor_name = COALESCE(NULLIF(le.name,''), l.legal_entity_name)` → ra "Công ty TNHH Dược phẩm
+  Donapharm" thay vì "DONAPHARM". (Xác nhận: partner như Tự Đức/Tuệ Nam có `contractors.name` là tên đầy
+  đủ, `legal_entity_id=4`="Đối tác khác" nên fix partner ưu tiên c.name là đúng.)
+- **Test:** `node --check` OK. Cần bot chạy lại materialize để áp province + tên nhà thầu (MISA + partner).
 
 
 ### 2026-07-08 (x) — Claude Code — Tên pháp nhân đầy đủ cho nhà thầu WEB/đối tác (đưa fix của bot vào git)
