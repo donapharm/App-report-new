@@ -21,6 +21,15 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (ac) — Claude Code — Tên nhà thầu MISA ra ĐẦY ĐỦ (khoá join lệch code)
+- **Gốc:** MISA dùng `legal_entity_code` dạng `01.DONA`/`02.AFP`, còn `legal_entities.code` là `DONAPHARM`/`AFP`
+  → join `le.code = l.legal_entity_code` KHÔNG khớp → rớt về tên ngắn "DONAPHARM"/"AFP PHARMA".
+- **Khoá khớp thực tế:** DONA → `legal_entity_name`="DONAPHARM"=`le.code`; AFP → `legal_entity_bucket`="AFP"=`le.code`.
+- **Sửa:** thay join bằng **subquery dò `le.code` theo cả `legal_entity_name`/`bucket`/`code`** (LIMIT 1, ưu tiên
+  name→bucket→code) → tránh nhân đôi dòng. Ra "Công ty TNHH Dược phẩm Donapharm" / "Công ty TNHH AFP Pharma".
+- **Áp:** materialize đổi → **bot chạy lại materialize**. `node --check` OK.
+
+
 ### 2026-07-09 (ab) — Claude Code — Fill Hoạt chất/Hàm lượng/Giá thầu/Ưu tiên từ bảng `products` nguồn
 - **Gốc:** 4 cột này trước lấy từ CST (mẫu/chưa đủ) → trống 27–37%. Bot gửi schema `products` có sẵn:
   `active_ingredient`, `strength`, `price`, `tech_rank`.
