@@ -21,6 +21,21 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-08 (y) — Claude Code — Lọc tỉnh theo cột `units.province` + sửa tên đối tác partner
+- **Lọc tỉnh/vùng (gốc lỗi):** `province.js` đoán tỉnh theo TÊN đơn vị → sai (vd "033.PKĐK AN NGÃ TƯ
+  VŨNG TÀU" tên có "Vũng Tàu" nhưng `units.province` thật = **ĐỒNG NAI**). Sửa: materialize lấy
+  `units.province` gắn vào từng dòng (MISA join `units ON u.code=l.unit_code`; partner đã có join units).
+  Store ưu tiên `row.province` → lọc tỉnh giờ theo ĐÚNG mã tỉnh, không đoán tên nữa.
+- **Tên đối tác (partner):** `legal_entities.name` của partner thường là nhóm rác **"Đối tác khác"** →
+  ưu tiên **`contractors.name`** (tên đối tác thật): `COALESCE(NULLIF(NULLIF(le.name,''),'Đối tác khác'),
+  NULLIF(c.name,''), '')`. (Đảo lại logic #78 vốn ưu tiên le.name.)
+- **Tên MISA đầy đủ (đã xong):** `legal_entities` có cột `code` → join `le.code = l.legal_entity_code`,
+  `contractor_name = COALESCE(NULLIF(le.name,''), l.legal_entity_name)` → ra "Công ty TNHH Dược phẩm
+  Donapharm" thay vì "DONAPHARM". (Xác nhận: partner như Tự Đức/Tuệ Nam có `contractors.name` là tên đầy
+  đủ, `legal_entity_id=4`="Đối tác khác" nên fix partner ưu tiên c.name là đúng.)
+- **Test:** `node --check` OK. Cần bot chạy lại materialize để áp province + tên nhà thầu (MISA + partner).
+
+
 ### 2026-07-08 (x) — Claude Code — Tên pháp nhân đầy đủ cho nhà thầu WEB/đối tác (đưa fix của bot vào git)
 - **Bối cảnh:** MISA đã có tên pháp nhân đầy đủ (`legal_entity_name`), nhưng nhánh WEB/partner chỉ lấy
   `contractors.name` (tên ngắn). Bot đã tìm đúng schema và sửa **trực tiếp trên server** rồi chạy lại T07
