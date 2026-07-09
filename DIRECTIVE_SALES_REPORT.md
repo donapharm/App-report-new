@@ -122,6 +122,17 @@ từ cst_quota vì NCL không phụ thuộc cơ số thầu).
 (b) cách chọn kỳ active + `la_ap_thau` lọc gì? (c) `unitCode` khớp `unit_code` App Report? (d) API gọi được từ
 server App Report (cùng mạng + auth), real-time hay cần cache?
 
+## 8-QUINQUIES) ‼ NGÔN NGỮ EMAIL NV: TIẾNG VIỆT NGHIỆP VỤ, GIẤU TÊN HỆ THỐNG (CEO chốt 2026-07-09)
+Email gửi NV **KHÔNG được lộ tên hệ thống/kỹ thuật nội bộ**. NV đọc không hiểu + thiếu chuyên nghiệp.
+- **BỎ khỏi email NV:** "App Report-New", "App VAT (vat.db)", "App Sale tender-quota", "slConLai", "la_ap_thau",
+  "cstFormula", đường dẫn file (vd `cst_appsale_tender_quota.json`), `data.cstSource`, mọi tên API/bảng/cột.
+- **Khung "Nguồn dữ liệu" viết lại** (mẫu): *"Số liệu doanh thu, điểm thưởng, xu tích lũy và cơ số thầu được
+  tổng hợp tự động từ hệ thống nội bộ DONAPHARM. Báo cáo không chứa chi phí, giá vốn, lợi nhuận. **Xu chỉ tính
+  theo QUÝ** — sang quý mới tự động về 0, không chuyển tiếp."*
+- **Cuối mục 9 / cột "Vì sao":** bỏ dòng "Nguồn CST: …/…json", "loại la_ap_thau…", "dùng thẳng slConLai App Sale".
+  Thay bằng câu nghiệp vụ: vd "Đã có cơ số thầu — bán chắc, ưu tiên khai thác."
+- Nguyên tắc: chỉ hiển thị **con số + ý nghĩa nghiệp vụ**; mọi chi tiết kỹ thuật để trong log/CHANGELOG, không lên email.
+
 ## 9) VẬN HÀNH ENV/EMAIL (ghi nhớ 2026-07-09)
 - **Project KHÔNG cài `dotenv`.** App tự nạp `.env` (gốc repo) qua hàm `loadEnv` trong `server/src/index.js`,
   **chỉ chạy lúc process boot** + **không ghi đè biến sẵn có**. → Sửa `.env` xong PHẢI `pm2 restart` mới có hiệu lực.
