@@ -99,7 +99,15 @@ export default function Analysis({ me }) {
   useEffect(() => {
     if (!periodSel) return;
     setTopRows(null);
-    api.revenue(topDim, null, { ...periodParams(periodSel), ...filters }).then((d) => setTopRows((d.rows || []).slice(0, 20)));
+    const p = { ...periodParams(periodSel), ...filters };
+    if (topDim === 'emp' && me.isAdmin) {
+      Promise.all([api.revenue('emp', null, p), api.targets(periodParams(periodSel))]).then(([d, t]) => {
+        const pctByEmp = Object.fromEntries((t.items || []).map((x) => [x.emp_code, x.pct]));
+        setTopRows((d.rows || []).slice(0, 20).map((r) => ({ ...r, pctTarget: pctByEmp[r.key] ?? null })));
+      });
+    } else {
+      api.revenue(topDim, null, p).then((d) => setTopRows((d.rows || []).slice(0, 20)));
+    }
   }, [periodSel, filters, topDim, reloadTick]);
 
   useEffect(() => {
@@ -162,7 +170,7 @@ export default function Analysis({ me }) {
                 {me.isAdmin && <button className={topDim === 'emp' ? 'active' : ''} onClick={() => setTopDim('emp')}>Nhân viên</button>}
               </div>
             </div>
-            {!topRows ? <Spinner /> : <TopBarChart rows={topRows} limit={20} />}
+            {!topRows ? <Spinner /> : <TopBarChart rows={topRows} limit={20} totalRevenue={data.currentRevenue} dimension={topDim} />}
           </div>
           <div className="cmp-toggle-row">
             <span className="cmp-toggle-label">So tăng/giảm:</span>

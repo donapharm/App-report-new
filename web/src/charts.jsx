@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend,
-  BarChart, Bar, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis,
+  BarChart, Bar, LabelList, PieChart, Pie, Cell, RadialBarChart, RadialBar, PolarAngleAxis,
 } from 'recharts';
 import { money, short, pct } from './util.js';
 
@@ -43,20 +43,65 @@ export function RevenueTrendChart({ rows = [], selectedKys = [] }) {
   );
 }
 
-export function TopBarChart({ rows = [], limit = 20 }) {
-  const data = (rows || []).slice(0, limit).map((r) => ({ ...r, name: nameShort(r.label || r.product_name || r.unit_name || r.key, 32) })).reverse();
-  if (!data.length) return <EmptyChart />;
+// Màu theo % ĐẠT TARGET (dùng cho tab Nhân viên): <50 đỏ · 50–89 cam · 90–119 xanh · ≥120 tím (xuất sắc).
+const TARGET_TIERS = [
+  { min: 120, color: '#7c3aed', label: '≥120% xuất sắc' },
+  { min: 100, color: '#1f9d6b', label: '100–119% đạt' },
+  { min: 90, color: '#3aa564', label: '90–99% gần đạt' },
+  { min: 50, color: '#f5a11e', label: '50–89% đang tiến' },
+  { min: 0, color: '#d64545', label: '<50% chậm' },
+];
+const targetTierColor = (p) => (p == null ? '#94a3b8' : (TARGET_TIERS.find((t) => p >= t.min) || TARGET_TIERS.at(-1)).color);
+
+// Top doanh thu: hạng + #1 nổi bật (cam), top 2–3 xanh đậm, còn lại gradient; nhãn tiền + % cuối thanh.
+// dimension='emp' -> tô màu theo % ĐẠT TARGET + nhãn hiện % target (kèm chú thích màu).
+export function TopBarChart({ rows = [], limit = 20, totalRevenue = 0, dimension = '' }) {
+  const all = (rows || []).slice(0, limit);
+  if (!all.length) return <EmptyChart />;
+  const isEmp = dimension === 'emp';
+  const total = Number(totalRevenue) || all.reduce((s, r) => s + Number(r.revenue || 0), 0);
+  const data = all.map((r, i) => ({
+    ...r,
+    rank: i + 1,
+    name: `${i + 1}. ${nameShort(r.label || r.product_name || r.unit_name || r.key, 24)}`,
+    pctOfTotal: total > 0 ? (Number(r.revenue || 0) / total * 100) : null,
+  })).reverse();
+  const hasTarget = isEmp && data.some((d) => d.pctTarget != null);
+  const barColor = (d) => (hasTarget ? targetTierColor(d.pctTarget) : (d.rank === 1 ? '#f5a11e' : d.rank <= 3 ? '#2f80ed' : 'url(#topBarGrad)'));
+  const EndLabel = ({ x, y, width, height, index }) => {
+    const d = data[index]; if (!d) return null;
+    const extra = hasTarget ? (d.pctTarget != null ? `${d.pctTarget.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}% TG` : 'chưa target')
+      : (d.pctOfTotal != null ? `${d.pctOfTotal.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` : '');
+    return (
+      <text x={x + width + 8} y={y + height / 2} dominantBaseline="middle" fontSize={11.5} fontWeight="700" fill="#334155">
+        {short(d.revenue)}{extra && <tspan fill="#9aa7b4" fontWeight="500"> · {extra}</tspan>}
+      </text>
+    );
+  };
   return (
     <div className="chart-box bar-chart">
-      <ResponsiveContainer width="100%" height={Math.max(260, data.length * 32)}>
-        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 18, left: 6, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e3e9f1" />
-          <XAxis type="number" tickFormatter={short} tick={{ fontSize: 12 }} />
-          <YAxis type="category" dataKey="name" width={145} tick={{ fontSize: 12 }} />
-          <Tooltip content={<MoneyTooltip />} />
-          <Bar dataKey="revenue" name="Doanh thu" fill="#1568b8" radius={[0, 8, 8, 0]} />
+      <ResponsiveContainer width="100%" height={Math.max(280, data.length * 34)}>
+        <BarChart data={data} layout="vertical" margin={{ top: 4, right: 104, left: 6, bottom: 4 }}>
+          <defs>
+            <linearGradient id="topBarGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#4c9be8" /><stop offset="100%" stopColor="#1568b8" />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#eef2f7" />
+          <XAxis type="number" tickFormatter={short} tick={{ fontSize: 11, fill: '#9aa7b4' }} axisLine={false} tickLine={false} />
+          <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 11.5, fill: '#334155' }} axisLine={false} tickLine={false} />
+          <Tooltip content={<MoneyTooltip />} cursor={{ fill: 'rgba(21,104,184,.06)' }} />
+          <Bar dataKey="revenue" name="Doanh thu" radius={[0, 7, 7, 0]} maxBarSize={22}>
+            {data.map((d, i) => <Cell key={i} fill={barColor(d)} />)}
+            <LabelList content={EndLabel} />
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
+      {hasTarget && (
+        <div className="chart-legend target-legend">
+          {TARGET_TIERS.map((t) => <span key={t.min}><i style={{ background: t.color }} />{t.label}</span>)}
+        </div>
+      )}
     </div>
   );
 }
