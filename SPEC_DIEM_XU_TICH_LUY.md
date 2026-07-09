@@ -47,6 +47,21 @@ Riêng báo cáo điểm/xu này loại đủ 5 mã trên.)
 - **CEO:** tổng công ty (điểm/xu/thiếu-dư/tỷ lệ) + bảng per-NV (sắp theo tỷ lệ tăng dần, người thiếu
   lên đầu) + phân tích gọn: số NV cảnh báo, tổng truy thu ước tính, ai cần nhắc.
 
+## 4d. Nguồn XU — `vat.db` (bot xác nhận 2026-07-09)
+- Máy KHÔNG có `sqlite3` CLI → đọc bằng Python/thư viện SQLite (app Node cần lib đọc SQLite).
+- Bảng: **`vat_bills`**. Cột: `emp_code, emp_name, ngay, so_tien, tong_tien, trang_thai_hd, bill_kind, hidden_at`.
+- **Query xu chuẩn:**
+  ```sql
+  SELECT emp_code, emp_name, COUNT(*) so_hd,
+         SUM(COALESCE(NULLIF(tong_tien,0), so_tien)) tien_tinh_xu,
+         SUM(COALESCE(NULLIF(tong_tien,0), so_tien))/500000.0*1.3 xu
+  FROM vat_bills
+  WHERE ngay BETWEEN :from AND :to
+    AND trang_thai_hd='co_hd_vat' AND IFNULL(hidden_at,'')=''
+  GROUP BY emp_code, emp_name;
+  ```
+- Nhớ LOẠI 5 NV ở mục 4 khỏi kết quả.
+
 ## 5. Việc còn chờ
 - [ ] Bot điều tra `vat.db`: tên bảng hóa đơn xu, cột (emp_code/ngày/số tiền tính xu/xu), cách lọc hợp lệ.
 - [ ] CEO chốt lịch gửi cuối tuần (Chủ nhật/Thứ 7, giờ).
