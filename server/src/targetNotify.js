@@ -99,6 +99,15 @@ function markSent(events) {
 const BRAND = '#1560ac';
 const CID_LOGO = 'dnpharma-logo';
 const CID_ZALO = 'dnpharma-zalo';
+const APP_URL = process.env.APP_PUBLIC_URL || 'https://reportnew.donapharm.asia';
+function badge(text, bg, fg = '#ffffff') {
+  return `<span style="display:inline-block;background:${bg};color:${fg};font-size:14px;font-weight:bold;padding:7px 16px;border-radius:999px;line-height:1;">${text}</span>`;
+}
+function ctaButton(url, label, color = BRAND) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 4px;border-collapse:collapse;"><tr>`
+    + `<td style="border-radius:8px;background:${color};"><a href="${esc(url)}" target="_blank" style="display:inline-block;padding:12px 26px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;border-radius:8px;">${label}</a></td>`
+    + `</tr></table>`;
+}
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 function progressBar(pct, color) {
   const w = Math.max(2, Math.min(100, Number(pct) || 0));
@@ -161,12 +170,16 @@ function emailHtmlFor(e, assets = {}) {
   ];
   if (e.gap > 0) stats.push(['Còn thiếu', moneyShort(e.gap), '#b45309']);
   if (e.gap > 0 && e.daysLeft) stats.push([`Còn ${e.daysLeft} ngày · cần ~/ngày`, moneyShort(perDay)]);
+  const chip = isDone ? badge('✓ Đã đạt 100% target', '#16a34a')
+    : isBehind ? badge('⚡ Cần tăng tốc', '#ef8a1f') : badge(`Đã đạt ${e.milestone}% target`, BRAND);
   const body = `<div style="font-size:36px;line-height:1;margin-bottom:12px;">${heroEmoji}</div>`
-    + `<div style="font-size:22px;font-weight:bold;color:#1f2a37;margin-bottom:6px;">${heroTitle}</div>`
+    + `<div style="font-size:22px;font-weight:bold;color:#1f2a37;margin-bottom:12px;">${heroTitle}</div>`
+    + `<div style="margin-bottom:16px;">${chip}</div>`
     + `<div style="font-size:15px;color:#55606c;line-height:1.55;margin-bottom:22px;">${heroSub}</div>`
     + progressBar(e.pct, barColor)
     + `<div style="text-align:right;font-size:12px;color:#93a0ad;margin-top:6px;">${pctText(e.pct)} / 100%</div>`
-    + statTable(stats);
+    + statTable(stats)
+    + ctaButton(APP_URL, 'Xem báo cáo chi tiết →', isBehind ? '#b45309' : BRAND);
   const preheader = isDone ? `Tháng ${monthNo}: đạt 100% target (${moneyShort(e.achieved)})` : `Tháng ${monthNo}: ${pctText(e.pct)} target`;
   return emailShell({ accent, preheader, bodyHtml: body, ...assets });
 }
@@ -193,7 +206,8 @@ function emailHtmlForStatus(r, ev, assets = {}) {
     + `<div style="font-size:14px;color:#55606c;margin-bottom:20px;">${sub}</div>`
     + progressBar(r.pct, barColor)
     + `<div style="text-align:right;font-size:12px;color:#93a0ad;margin-top:6px;">${pctText(r.pct)} / 100%</div>`
-    + statTable(stats);
+    + statTable(stats)
+    + ctaButton(APP_URL, 'Xem báo cáo chi tiết →', behind ? '#b45309' : BRAND);
   return emailShell({ accent, preheader: `${r.name}: ${pctText(r.pct)} target tháng ${monthNo}`, bodyHtml: body, ...assets });
 }
 // Email HTML tổng hợp cho CEO.
@@ -218,7 +232,8 @@ function ceoDigestHtml({ ky, ...assets } = {}) {
     + `<div style="font-size:14px;color:#55606c;margin-bottom:16px;">Tổng đạt <b style="color:#0e7a5f;">${pctText(totalPct)}</b> (${moneyShort(totalAchieved)} / ${moneyShort(totalTarget)}) · thời gian đã trôi ${pctText(ev.timePct)}</div>`
     + progressBar(totalPct, '#0e7a5f')
     + `<div style="margin:16px 0 6px;font-size:14px;color:#55606c;"><b style="color:#16a34a;">✅ ${achieved} đạt</b> &nbsp;·&nbsp; <b style="color:#dc2626;">🔴 ${behind} chậm nhịp</b> &nbsp;/&nbsp; ${ev.rows.length} NV</div>`
-    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rowsHtml}</table>`;
+    + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">${rowsHtml}</table>`
+    + ctaButton(APP_URL, 'Xem toàn bộ báo cáo →', BRAND);
   return emailShell({ preheader: `Tổng đạt ${pctText(totalPct)} tháng ${monthNo}`, bodyHtml: body, ...assets });
 }
 

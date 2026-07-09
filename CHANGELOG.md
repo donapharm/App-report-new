@@ -31,8 +31,10 @@
 - **3 mẫu:** sự kiện milestone/behind (`emailHtmlFor`), trạng thái đích danh (`emailHtmlForStatus` qua
   `statusFor`), tổng hợp CEO (`ceoDigestHtml`). Telegram vẫn giữ TEXT (`messageFor` không đổi).
 - `notifyChannels.sendEmail/deliver` thêm tham số `html`; routes + telegram-bot truyền html qua.
-- **Trạng thái:** `node --check` toàn bộ OK; đã render 3 bản preview gửi CEO xem trước. **CHỜ CEO duyệt
-  thiết kế rồi mới merge/deploy.**
+- **Cho dễ hiểu (CEO giao tự quyết):** thêm **huy hiệu kết quả** to rõ ("✓ Đã đạt 100%" / "Đã đạt 90%
+  target" / "⚡ Cần tăng tốc") + **nút "Xem báo cáo chi tiết →"** mở thẳng app (`APP_PUBLIC_URL`, mặc định
+  reportnew.donapharm.asia). Digest CEO có nút "Xem toàn bộ báo cáo".
+- **Trạng thái:** `node --check` toàn bộ OK; đã render preview. CEO giao tự quyết → chốt bản này, merge deploy.
 
 
 ### 2026-07-08 (y) — Claude Code — Lọc tỉnh theo cột `units.province` + sửa tên đối tác partner
