@@ -21,6 +21,15 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (ag) — Claude Code — Đồng bộ MỨC email target với màu biểu đồ (thêm mốc XUẤT SẮC ≥120%)
+- **CEO:** biểu đồ NV có mức "xuất sắc ≥120%" nhưng email chỉ có 50/90/100 → thêm mốc email cho khớp.
+- **`MILESTONES = [50, 90, 100, 120]`** — thêm **120% = XUẤT SẮC** (mỗi mốc gửi 1 lần/kỳ/NV, chống spam).
+- **Email + Telegram cho mốc 120:** màu **tím `#7c3aed`** (khớp biểu đồ), emoji 🌟, huy hiệu "Vượt 120%
+  target — Xuất sắc", tiêu đề "Xuất sắc, {tên}!". Telegram: "🌟 XUẤT SẮC! … VƯỢT 120% target".
+- **Digest CEO:** NV ≥120% hiện icon 🌟 + màu tím (đồng bộ).
+- **Test:** `node --check` OK; render preview email xuất sắc. Chỉ logic app → bot restart (không materialize).
+
+
 ### 2026-07-09 (af) — Claude Code — Biểu đồ Top doanh thu đẹp hơn + bar NV tô màu theo % target
 - **CEO giao thiết kế:** làm biểu đồ top đẹp mắt, và tab Nhân viên tô màu theo mức đạt target.
 - **TopBarChart nâng cấp:** số **hạng** trước tên, **#1 nổi bật cam**, top 2–3 xanh đậm, còn lại gradient;
