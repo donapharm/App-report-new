@@ -117,6 +117,14 @@ Mục tiêu: giúp NV "định hướng bán hàng thông minh nhất để tăn
 - **E. Sản phẩm:** SP chủ lực đang giảm; **cơ hội cross-sell** = SP đội bán mạnh nhưng NV này chưa/ít.
 - **F. Điểm/xu:** tỷ lệ quý, cần thêm bao nhiêu xu, nhắc nộp hóa đơn.
 - **G. Định hướng hành động (3–5 gạch đầu dòng CỤ THỂ):** tổng hợp A–F thành việc ưu tiên tuần/tháng tới.
+- **H. DỰ BÁO cuối tháng theo nhịp hiện tại (CEO 2026-07-09):** `dự báo = doanh thu tới nay / (ngày đã trôi /
+  ngày trong tháng)` (dùng `A.targetPacingMeta`). So target → "theo nhịp này cuối tháng đạt ~X, đủ/thiếu Y".
+- **I. KHUYẾN NGHỊ KHAI THÁC để đạt target (CEO 2026-07-09):**
+  - **Mã QLNB còn dư cơ số thầu** (từ CST) tại đơn vị NV phụ trách → liệt kê mã còn khai thác được (ưu tiên
+    còn nhiều).
+  - **Đơn vị khối CL** (điểm ×2, có cơ số thầu) còn quota → đẩy để vừa doanh thu vừa điểm cao.
+  - **⭐ Khối NCL — DƯ ĐỊA KHÔNG GIỚI HẠN** vì **không phụ thuộc cơ số thầu** → nhấn mạnh mở rộng NCL để
+    tăng doanh số tự do (đơn vị/SP NCL tiềm năng, đơn vị NCL đang bỏ trống).
 Các số so sánh: **tháng liền trước** + **trung bình quý trước** (mốc do CEO chốt).
 
 ## 5. Việc còn chờ
