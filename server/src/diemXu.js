@@ -22,11 +22,32 @@ function pointMultiplier(row) {
 }
 function revenuePoints(row) { return Number(row.revenue || 0) / 1e8 * pointMultiplier(row); }
 
-// Tổng ĐIỂM theo NV cho 1 khoảng kỳ (kys) — dùng slot App Report-New. Trả map empCode -> điểm.
+// Danh sách ky "MM.YYYY" phủ khoảng [from,to] (YYYY-MM-DD).
+function kysSpanning(from, to) {
+  const [fy, fm] = from.split('-').map(Number); const [ty, tm] = to.split('-').map(Number);
+  const out = []; let y = fy, m = fm;
+  while (y < ty || (y === ty && m <= tm)) { out.push(`${String(m).padStart(2, '0')}.${y}`); m++; if (m > 12) { m = 1; y++; } }
+  return out;
+}
+// Tổng ĐIỂM theo NV cho 1 khoảng kỳ (kys). Trả map empCode -> điểm.
 function pointsByEmp({ kys, empCode } = {}) {
   const rows = store.getRowsRange({ kys, scope: {} });
   const out = {};
   for (const r of rows) {
+    const ec = String(r.emp_code || '').trim().toUpperCase();
+    if (!ec || isExcluded(ec)) continue;
+    if (empCode && ec !== String(empCode).toUpperCase()) continue;
+    out[ec] = (out[ec] || 0) + revenuePoints(r);
+  }
+  return out;
+}
+// ĐIỂM theo NV, lũy kế theo KHOẢNG NGÀY [from,to] (lọc từng dòng theo ngày). Trả map empCode -> điểm.
+function pointsByEmpRange({ from, to, empCode } = {}) {
+  const rows = store.getRowsRange({ kys: kysSpanning(from, to), scope: {} });
+  const out = {};
+  for (const r of rows) {
+    const d = String(r.date || '').slice(0, 10);
+    if (!d || d < from || d > to) continue;
     const ec = String(r.emp_code || '').trim().toUpperCase();
     if (!ec || isExcluded(ec)) continue;
     if (empCode && ec !== String(empCode).toUpperCase()) continue;
@@ -63,25 +84,26 @@ function readVatXu({ from, to, empCode } = {}) {
   finally { try { db.close(); } catch { /* ignore */ } }
 }
 
-// Bảng điểm+xu 1 NV: tháng + quý (+ tuần nếu truyền weekKys). carry = xu dư quý trước (chưa có nguồn -> 0).
-function scoreForEmp({ empCode, monthKys, quarterKys, weekRange, monthRange, quarterRange, carryXu = 0 }) {
+// Bảng điểm+xu 1 NV, lũy kế theo KHOẢNG NGÀY. XU tính theo QUÝ (sang quý mới tự reset -> KHÔNG carry).
+// monthRange/quarterRange/weekRange = {from,to} YYYY-MM-DD.
+function scoreForEmp({ empCode, weekRange, monthRange, quarterRange }) {
   const emp = String(empCode).toUpperCase();
-  const diemThang = (pointsByEmp({ kys: monthKys, empCode: emp })[emp] || 0);
-  const diemQuy = (pointsByEmp({ kys: quarterKys, empCode: emp })[emp] || 0);
-  const xuThang = (readVatXu({ ...monthRange, empCode: emp })[emp]?.xu || 0);
-  const xuQuyPS = (readVatXu({ ...quarterRange, empCode: emp })[emp]?.xu || 0);
+  const diemThang = pointsByEmpRange({ ...monthRange, empCode: emp })[emp] || 0;
+  const diemQuy = pointsByEmpRange({ ...quarterRange, empCode: emp })[emp] || 0;
+  const xuThang = readVatXu({ ...monthRange, empCode: emp })[emp]?.xu || 0;
+  const xuQuy = readVatXu({ ...quarterRange, empCode: emp })[emp]?.xu || 0; // = xu tổng quý (không carry)
   const xuTuan = weekRange ? (readVatXu({ ...weekRange, empCode: emp })[emp]?.xu || 0) : null;
-  const xuTongQuy = xuQuyPS + Number(carryXu || 0);
-  const thieuDu = xuTongQuy - diemQuy;
+  const thieuDu = xuQuy - diemQuy;
+  const tyLeQuy = diemQuy > 0 ? +(xuQuy / diemQuy * 100).toFixed(1) : null;
   return {
     emp_code: emp,
     diem_thang: +diemThang.toFixed(4), diem_quy: +diemQuy.toFixed(4),
     xu_tuan: xuTuan == null ? null : +xuTuan.toFixed(4),
-    xu_thang: +xuThang.toFixed(4), xu_quy_phat_sinh: +xuQuyPS.toFixed(4),
-    xu_du_quy_truoc: +Number(carryXu || 0).toFixed(4), xu_tong_quy: +xuTongQuy.toFixed(4),
+    xu_thang: +xuThang.toFixed(4), xu_quy: +xuQuy.toFixed(4), xu_du_quy_truoc: 0,
     thieu_xu: +Math.max(0, -thieuDu).toFixed(4), du_xu: +Math.max(0, thieuDu).toFixed(4),
-    ty_le_quy: diemQuy > 0 ? +(xuTongQuy / diemQuy * 100).toFixed(1) : null,
+    ty_le_quy: tyLeQuy,
+    canh_bao: tyLeQuy != null && tyLeQuy < 90,
   };
 }
 
-module.exports = { revenuePoints, pointMultiplier, pointsByEmp, readVatXu, scoreForEmp, isExcluded, EXCLUDE, VAT_DB, XU_BASE, XU_PER };
+module.exports = { revenuePoints, pointMultiplier, pointsByEmp, pointsByEmpRange, kysSpanning, readVatXu, scoreForEmp, isExcluded, EXCLUDE, VAT_DB, XU_BASE, XU_PER };
