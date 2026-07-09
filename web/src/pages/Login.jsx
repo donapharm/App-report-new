@@ -3,15 +3,15 @@ import { api, setToken } from '../api.js';
 import { roleLabel } from '../util.js';
 import Logo from '../logo.jsx';
 
-// QR Zalo OA DNPHARMA. Bỏ file thật vào web/public/zalo-oa-qr.png là tự hiện.
+// QR Zalo OA DONAPHARM. Bỏ file thật vào web/public/zalo-oa-qr.png là tự hiện.
 function ZaloOA() {
   const [ok, setOk] = useState(true);
   return (
     <div style={{ textAlign: 'center', marginTop: 22 }}>
-      <div style={{ fontSize: 12.5, opacity: .85, marginBottom: 8 }}>Theo dõi Zalo OA DNPHARMA</div>
+      <div style={{ fontSize: 12.5, opacity: .85, marginBottom: 8 }}>Theo dõi Zalo OA DONAPHARM</div>
       <div style={{ display: 'inline-block', background: '#fff', padding: 6, borderRadius: 10 }}>
         {ok ? (
-          <img src="/zalo-oa-qr.png" alt="Zalo OA DNPHARMA" width={76} height={76}
+          <img src="/zalo-oa-qr.png" alt="Zalo OA DONAPHARM" width={76} height={76}
                style={{ display: 'block', borderRadius: 6 }} onError={() => setOk(false)} />
         ) : (
           <div style={{ width: 76, height: 76, display: 'flex', alignItems: 'center', justifyContent: 'center',

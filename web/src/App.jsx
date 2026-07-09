@@ -100,7 +100,7 @@ export default function App() {
           <header className="topbar">
             <div>
               <h1>{(() => { const t = tabs.find((x) => x.key === tab); return t?.full || t?.label; })()}</h1>
-              <div className="sub">DNPHARMA · Báo cáo doanh thu thông minh</div>
+              <div className="sub">DONAPHARM · Báo cáo doanh thu thông minh</div>
             </div>
             <Clock />
           </header>

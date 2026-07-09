@@ -81,6 +81,24 @@ chi tiết từng NV cho CEO — chỉ bản tổng hợp.
 - Không bịa số trong mục phân tích: số nào chưa có nguồn (cross-sell đội, cơ số CST theo NV) thì để câu
   "đang nối nguồn/đang tính" như template, KHÔNG chế số.
 
+## 8-BIS) ‼ THƯƠNG HIỆU: viết "DONAPHARM" — KHÔNG "DNPHARMA" (CEO chốt 2026-07-09)
+- Mọi chữ hiển thị (email + web + Telegram) ghi **"DONAPHARM"**, không phải "DNPHARMA".
+- **Claude đã sửa text code** (targetNotify.js, notifyChannels.js, routes.js, web/src). **Bot còn phải đổi ENV
+  `SMTP_FROM`** trong `.env` → `SMTP_FROM="DONAPHARM App Report <...>"` rồi `pm2 restart reportnew --update-env`
+  (tên người gửi hiện đang là "DNPHARMA App Report" do env cũ). Tên file ảnh/cid (`logo-dnpharma.png`, cid
+  `dnpharma-logo`) giữ nguyên — không ảnh hưởng hiển thị.
+- **Ảnh logo**: file logo hiện VẼ chữ "DNPHARMA". Nếu CEO muốn logo cũng ghi DONAPHARM thì cần thay file ảnh
+  (dùng `logo_dona.png` bên webapp_donapharm nếu ảnh đó ghi DONAPHARM) — chờ CEO xác nhận ảnh nào.
+
+## 8-TER) MỤC I — CƠ SỐ THẦU (CST): NỐI API APP SALE (CEO chốt 2026-07-09, KHÔNG để placeholder)
+- CEO xác nhận **cơ số thầu ĐÃ CÓ bên App Sale** → **bot nối API/nguồn App Sale**, không để "đang nối nguồn".
+- App Report đã có khung CST (`store.getCst`, `analytics.cstTable`, `cst_rows.json` — hiện là **dữ liệu mẫu**).
+  → Bot: (1) điều tra App Sale expose cơ số thầu qua **API endpoint hay bảng DB** nào (mã QLNB · đơn vị · cơ số
+  được duyệt · đã dùng · **còn lại**); (2) nối vào App Report (materialize/API) thay dữ liệu mẫu; (3) mục I của
+  báo cáo liệt kê **mã QLNB còn dư cơ số tại đơn vị NV phụ trách** (mã + đơn vị + số còn lại, ưu tiên còn nhiều).
+- Trước khi code mục I: bot báo lại **App Sale lấy CST ở đâu, cột gì** để Claude review mapping (giống cách đã
+  làm với `vat.db`). Nếu vì lý do kỹ thuật chưa nối kịp thì mới tạm placeholder — nhưng **ưu tiên nối thật**.
+
 ## 9) VẬN HÀNH ENV/EMAIL (ghi nhớ 2026-07-09)
 - **Project KHÔNG cài `dotenv`.** App tự nạp `.env` (gốc repo) qua hàm `loadEnv` trong `server/src/index.js`,
   **chỉ chạy lúc process boot** + **không ghi đè biến sẵn có**. → Sửa `.env` xong PHẢI `pm2 restart` mới có hiệu lực.

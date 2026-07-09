@@ -136,17 +136,17 @@ function emailShell({ accent = BRAND, preheader = '', bodyHtml = '', srcLogo = `
     + `<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;border-collapse:collapse;box-shadow:0 1px 4px rgba(16,24,40,.10);">`
     + `<tr><td style="height:5px;line-height:5px;font-size:0;background:${accent};">&nbsp;</td></tr>`
     + `<tr><td align="center" style="padding:24px 28px 10px;background:#ffffff;">`
-    + `<img src="${srcLogo}" alt="DNPHARMA" width="200" style="display:block;width:200px;max-width:62%;height:auto;border:0;">`
+    + `<img src="${srcLogo}" alt="DONAPHARM" width="200" style="display:block;width:200px;max-width:62%;height:auto;border:0;">`
     + `</td></tr>`
     + `<tr><td style="padding:14px 28px 24px;">${bodyHtml}</td></tr>`
     + `<tr><td style="background:#f7f9fb;border-top:1px solid #edf1f5;padding:20px 28px 14px;">`
     + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>`
-    + `<td width="92" valign="middle" style="width:92px;"><img src="${srcZalo}" alt="Zalo OA DNPHARMA" width="86" style="display:block;width:86px;height:auto;border:0;border-radius:8px;"></td>`
+    + `<td width="92" valign="middle" style="width:92px;"><img src="${srcZalo}" alt="Zalo OA DONAPHARM" width="86" style="display:block;width:86px;height:auto;border:0;border-radius:8px;"></td>`
     + `<td valign="middle" style="padding-left:16px;color:#55606c;font-size:13px;line-height:1.55;">`
-    + `<b style="color:${BRAND};font-size:14px;">Kết nối Zalo OA DNPHARMA</b><br>Quét mã QR để nhận thông báo &amp; tra cứu nhanh.`
+    + `<b style="color:${BRAND};font-size:14px;">Kết nối Zalo OA DONAPHARM</b><br>Quét mã QR để nhận thông báo &amp; tra cứu nhanh.`
     + `</td></tr></table></td></tr>`
     + `<tr><td style="background:#f7f9fb;padding:0 28px 16px;color:#93a0ad;font-size:11px;line-height:1.5;">`
-    + `Email tự động từ <b style="color:#8794a3;">DNPHARMA App Report</b> · vui lòng không trả lời email này.`
+    + `Email tự động từ <b style="color:#8794a3;">DONAPHARM App Report</b> · vui lòng không trả lời email này.`
     + `</td></tr>`
     + `</table></td></tr></table></body></html>`;
 }

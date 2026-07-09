@@ -4,7 +4,7 @@
  *
  * ENV Email (nhờ bot cấp — Gmail/Workspace):
  *   SMTP_HOST=smtp.gmail.com  SMTP_PORT=587  SMTP_USER=<gmail gửi>  SMTP_PASS=<app password 16 ký tự>
- *   SMTP_FROM="DNPHARMA App Report <no-reply@donapharm...>" (tùy chọn, mặc định = SMTP_USER)
+ *   SMTP_FROM="DONAPHARM App Report <no-reply@donapharm...>" (tùy chọn, mặc định = SMTP_USER)
  * Danh sách email NV: server/data/nv_emails.json  { "DN001": "a@gmail.com", ... }  (bot điền, gitignored).
  */
 const fs = require('fs');
@@ -62,7 +62,7 @@ async function sendEmail(to, subject, text, html) {
   if (!t) return { ok: false, description: 'Email chưa cấu hình (thiếu SMTP_HOST/USER/PASS).' };
   if (!to) return { ok: false, description: 'NV chưa có email.' };
   try {
-    const msg = { from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject: subject || 'DNPHARMA App Report', text: String(text || '') };
+    const msg = { from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject: subject || 'DONAPHARM App Report', text: String(text || '') };
     if (html) { msg.html = String(html); msg.attachments = inlineAttachments(); } // ảnh inline chỉ khi gửi HTML
     await t.sendMail(msg);
     return { ok: true };
