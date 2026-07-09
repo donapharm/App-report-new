@@ -99,6 +99,28 @@ chi tiết từng NV cho CEO — chỉ bản tổng hợp.
 - Trước khi code mục I: bot báo lại **App Sale lấy CST ở đâu, cột gì** để Claude review mapping (giống cách đã
   làm với `vat.db`). Nếu vì lý do kỹ thuật chưa nối kịp thì mới tạm placeholder — nhưng **ưu tiên nối thật**.
 
+## 8-QUATER) MAPPING CST ĐÃ DUYỆT (Claude review 2026-07-09) — nguồn App Sale
+**Nguồn:** `GET /api/reports/tender-quota` (bảng `cst_quota`, key `ma_qlnb × ma_dv × ky_thau`).
+**KHÔNG dùng** `/api/reports/contract-tracking` (FIFO/MISA phức tạp, thừa nhu cầu).
+
+**Quy tắc bắt buộc khi nối:**
+1. **Còn lại = dùng thẳng `slConLai` API trả — KHÔNG tự tính lại** (để App Report ↔ App Sale cùng một số,
+   tránh đá nhau như vụ đối soát). Các field `cstFormula` (cstChinh/cst30/trangThai30/dieuChuyen/daGiao/
+   dangChoGiao) chỉ để **diễn giải hiển thị**, không dùng để tính lại còn lại.
+2. **Chỉ lấy kỳ thầu đang hiệu lực** (hôm nay trong `hd_tu_ngay..hd_den_ngay` / kỳ active) — KHÔNG cộng gộp
+   kỳ hết hạn.
+3. **Khớp mã đơn vị:** xác nhận `unitCode`(`ma_dv`) App Sale **cùng định dạng** `unit_code` App Report
+   (tiền tố 3 số, vd "025"). Chỗ dễ lệch nhất — bot xác nhận trước khi nối.
+
+**Logic mục I (báo cáo NV):** `cst_quota` không có `emp_code` → lọc theo **đơn vị NV phụ trách**
+(đơn vị NV có doanh thu/được phân công). Liệt kê mã QLNB `slConLai>0` tại các đơn vị đó, sắp giảm dần theo
+còn lại; **ưu tiên/tô đậm đơn vị khối CL (điểm ×2)**. **NCL** giữ thông điệp "dư địa vô hạn" RIÊNG (không lấy
+từ cst_quota vì NCL không phụ thuộc cơ số thầu).
+
+**Bot xác nhận trước khi code mục I:** (a) `slConLai` API = còn lại chuẩn (khớp con số App Sale hiển thị)?
+(b) cách chọn kỳ active + `la_ap_thau` lọc gì? (c) `unitCode` khớp `unit_code` App Report? (d) API gọi được từ
+server App Report (cùng mạng + auth), real-time hay cần cache?
+
 ## 9) VẬN HÀNH ENV/EMAIL (ghi nhớ 2026-07-09)
 - **Project KHÔNG cài `dotenv`.** App tự nạp `.env` (gốc repo) qua hàm `loadEnv` trong `server/src/index.js`,
   **chỉ chạy lúc process boot** + **không ghi đè biến sẵn có**. → Sửa `.env` xong PHẢI `pm2 restart` mới có hiệu lực.
