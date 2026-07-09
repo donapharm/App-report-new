@@ -1,4 +1,8 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **Gộp kênh gửi Sales Report Email + Telegram.** Lệnh `send-all` và scheduler dùng `notify.deliver()` để gửi email và Telegram khi NV/CEO đã liên kết Telegram.
+- **Dry-run recipients có trạng thái Telegram.** `node server/src/salesReport.js recipients` in đủ 17 NV + CEO, ai đã/chưa liên kết Telegram theo `listTelegramMap()`, kèm link `t.me/<bot>?start=<mã>` cho người chưa link.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **Wire lịch gửi Sales Report vào Telegram worker.** Scheduler dùng cùng cách so giờ VN như digest hiện tại (`process.env.TZ=Asia/Ho_Chi_Minh`, `vnDate().getUTC*()`), log rõ mốc armed: tuần Thứ 7 13:00 và tháng 18:30 nếu là ngày cuối tháng; có thể tắt bằng `SALES_REPORT_NOTIFY=0`.
 - **Thêm idempotent sales report.** Lưu dấu gửi theo `kind + kỳ + range`, restart worker không gửi trùng; CLI/scheduler dùng chung log.
 - **Thêm lệnh tay gửi thật:** `node server/src/salesReport.js send-all [week|month]` gửi 17 NV KD + CEO digest, có `--force` nếu cần chạy lại có chủ đích.

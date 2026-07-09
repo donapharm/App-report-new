@@ -23,6 +23,7 @@ const diemXu = require('./diemXu');
 const notify = require('./notifyChannels');
 const appSaleCst = require('./appSaleCst');
 const persist = require('./persist');
+const auth = require('./auth');
 
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report');
 const SENT_LOG_NAME = 'sales_report_sent_log';
@@ -115,8 +116,53 @@ function diffTop(curRows, prevRows, key, label, limit = 5, prevScale = 1) {
   return { up: arr.filter((x) => x.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, limit), down: arr.filter((x) => x.diff < 0 || x.cur === 0).sort((a, b) => a.diff - b.diff).slice(0, limit) };
 }
 function userByCode(code) { return store.findUserByCode(code) || { emp_code: code, name: code }; }
+function botStartLink(code) {
+  const bot = String(process.env.TELEGRAM_BOT_USERNAME || process.env.BOT_USERNAME || '').replace(/^@/, '').trim();
+  return bot ? `https://t.me/${bot}?start=${encodeURIComponent(String(code || '').toUpperCase())}` : '';
+}
+function telegramByEmp() {
+  const out = {};
+  for (const m of auth.listTelegramMap()) {
+    const code = String(m.emp_code || '').toUpperCase();
+    if (code && !out[code]) out[code] = String(m.telegram_id || '');
+  }
+  return out;
+}
+function enrichRecipient(code, tgByEmp = telegramByEmp()) {
+  const user = userByCode(code);
+  const email = notify.emailFor(code, user?.email);
+  const telegramId = tgByEmp[String(code).toUpperCase()] || '';
+  return {
+    code,
+    user,
+    email,
+    telegramId,
+    telegramLinked: !!telegramId,
+    telegramStartLink: telegramId ? '' : botStartLink(code),
+    channels: [telegramId ? 'telegram' : '', email ? 'email' : ''].filter(Boolean),
+  };
+}
 function salesRecipients() {
-  return store.targetRosterCodes({ scope: {} }).filter((c) => !EXCLUDED.has(String(c).toUpperCase())).map((code) => ({ code, user: userByCode(code), email: notify.emailFor(code, userByCode(code)?.email), channels: notify.emailFor(code, userByCode(code)?.email) ? ['email'] : [] }));
+  const tgByEmp = telegramByEmp();
+  return store.targetRosterCodes({ scope: {} }).filter((c) => !EXCLUDED.has(String(c).toUpperCase())).map((code) => enrichRecipient(code, tgByEmp));
+}
+function ceoRecipient() {
+  return enrichRecipient(CEO_CODE, telegramByEmp());
+}
+function recipientsReport() {
+  const employees = salesRecipients();
+  const ceo = ceoRecipient();
+  return {
+    bot: process.env.TELEGRAM_BOT_USERNAME || process.env.BOT_USERNAME || '',
+    employees,
+    ceo,
+    summary: {
+      employeeCount: employees.length,
+      employeeTelegramLinked: employees.filter((x) => x.telegramLinked).length,
+      employeeTelegramMissing: employees.filter((x) => !x.telegramLinked).length,
+      ceoTelegramLinked: ceo.telegramLinked,
+    },
+  };
 }
 function salesReportPeriodKey(kind, ranges = defaultRanges()) {
   return `${kind}:${ranges.monthKy}:${ranges.monthRange.from}:${ranges.monthRange.to}`;
@@ -238,29 +284,30 @@ async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false 
   for (const r of recipients) {
     try {
       const rep = await renderEmployeeReport({ empCode: r.code, kind, ranges });
-      const res = await notify.sendEmail(r.email, rep.subject, rep.text, rep.html);
-      if (res.ok) sent.push({ code: r.code, email: r.email, channels: ['email'] });
-      else failed.push({ code: r.code, email: r.email, error: res.description || 'send_failed' });
+      const res = await notify.deliver({ telegramId: r.telegramId, email: r.email, subject: rep.subject, text: rep.text, html: rep.html });
+      if (res.ok) sent.push({ code: r.code, email: r.email, telegramId: r.telegramId, channels: res.channels });
+      else failed.push({ code: r.code, email: r.email, telegramId: r.telegramId, error: res.email?.description || res.telegram?.description || 'send_failed' });
     } catch (e) {
       failed.push({ code: r.code, email: r.email, error: e.message });
     }
   }
   const ceo = await renderCeoDigest({ kind, ranges });
-  const ceoEmail = notify.emailFor(CEO_CODE) || process.env.CEO_EMAIL || '';
-  let ceoResult = { ok: false, description: 'CEO email missing' };
-  try { ceoResult = await notify.sendEmail(ceoEmail, ceo.subject, ceo.text, ceo.html); } catch (e) { ceoResult = { ok: false, description: e.message }; }
+  const ceoTo = ceoRecipient();
+  const ceoEmail = notify.emailFor(CEO_CODE, ceoTo.user?.email) || process.env.CEO_EMAIL || '';
+  let ceoResult = { ok: false, description: 'CEO email/Telegram missing' };
+  try { ceoResult = await notify.deliver({ telegramId: ceoTo.telegramId, email: ceoEmail, subject: ceo.subject, text: ceo.text, html: ceo.html }); } catch (e) { ceoResult = { ok: false, description: e.message }; }
   const ok = failed.length === 0 && ceoResult.ok;
-  if (ok) markSent(kind, ranges, { recipients: sent.length, ceoEmail });
-  return { ok, key, kind, ranges, sent, failed, ceoEmail, ceoResult };
+  if (ok) markSent(kind, ranges, { recipients: sent.length, ceoEmail, ceoTelegramId: ceoTo.telegramId });
+  return { ok, key, kind, ranges, sent, failed, ceo: { code: CEO_CODE, email: ceoEmail, telegramId: ceoTo.telegramId, channels: ceoResult.channels || [] }, ceoEmail, ceoResult };
 }
 async function main() {
   const [cmd = 'sample', emp = 'DN001', flag] = process.argv.slice(2);
-  if (cmd === 'recipients') { console.log(JSON.stringify(salesRecipients(), null, 2)); return; }
+  if (cmd === 'recipients') { console.log(JSON.stringify(recipientsReport(), null, 2)); return; }
   if (cmd === 'send-all') {
     const kind = ['week', 'month'].includes(emp) ? emp : 'week';
     const force = process.argv.includes('--force');
     const r = await sendAll({ kind, force });
-    console.log(JSON.stringify({ ok: r.ok, skipped: r.skipped, key: r.key, kind: r.kind, ranges: r.ranges, sent: r.sent, failed: r.failed, ceoEmail: r.ceoEmail, ceoResult: r.ceoResult }, null, 2));
+    console.log(JSON.stringify({ ok: r.ok, skipped: r.skipped, key: r.key, kind: r.kind, ranges: r.ranges, sent: r.sent, failed: r.failed, ceo: r.ceo, ceoEmail: r.ceoEmail, ceoResult: r.ceoResult }, null, 2));
     if (!r.ok) process.exitCode = 1;
     return;
   }
@@ -274,4 +321,4 @@ async function main() {
 }
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { defaultRanges, isMonthEnd, salesRecipients, salesReportPeriodKey, alreadySent, markSent, sendAll, computeReport, renderEmployeeReport, renderCeoDigest, writeSample, sendCeoApprovalSample };
+module.exports = { defaultRanges, isMonthEnd, salesRecipients, ceoRecipient, recipientsReport, salesReportPeriodKey, alreadySent, markSent, sendAll, computeReport, renderEmployeeReport, renderCeoDigest, writeSample, sendCeoApprovalSample };
