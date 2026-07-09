@@ -1,4 +1,7 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **Tăng an toàn idempotent cho Sales Report.** Ngoài dấu batch theo kỳ/kind, ghi thêm dấu từng người theo `key#emp_code` ngay sau khi gửi thành công; nếu chạy lại sau lỗi giữa chừng sẽ bỏ qua người đã nhận, không gửi trùng hàng loạt.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **Gộp kênh gửi Sales Report Email + Telegram.** Lệnh `send-all` và scheduler dùng `notify.deliver()` để gửi email và Telegram khi NV/CEO đã liên kết Telegram.
 - **Dry-run recipients có trạng thái Telegram.** `node server/src/salesReport.js recipients` in đủ 17 NV + CEO, ai đã/chưa liên kết Telegram theo `listTelegramMap()`, kèm link `t.me/<bot>?start=<mã>` cho người chưa link.
 

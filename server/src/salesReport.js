@@ -167,6 +167,9 @@ function recipientsReport() {
 function salesReportPeriodKey(kind, ranges = defaultRanges()) {
   return `${kind}:${ranges.monthKy}:${ranges.monthRange.from}:${ranges.monthRange.to}`;
 }
+function salesReportRecipientKey(kind, ranges = defaultRanges(), code = '') {
+  return `${salesReportPeriodKey(kind, ranges)}#${String(code || '').toUpperCase()}`;
+}
 function loadSentLog() { return persist.load(SENT_LOG_NAME, []); }
 function saveSentLog(log) { persist.save(SENT_LOG_NAME, log.slice(-1000)); }
 function alreadySent(kind, ranges = defaultRanges()) {
@@ -177,6 +180,17 @@ function markSent(kind, ranges = defaultRanges(), meta = {}) {
   const key = salesReportPeriodKey(kind, ranges);
   const log = loadSentLog();
   if (!log.some((x) => x.key === key)) log.push({ key, kind, ky: ranges.monthKy, from: ranges.monthRange.from, to: ranges.monthRange.to, sent_at: new Date().toISOString(), ...meta });
+  saveSentLog(log);
+  return key;
+}
+function alreadySentTo(kind, ranges = defaultRanges(), code = '') {
+  const key = salesReportRecipientKey(kind, ranges, code);
+  return loadSentLog().some((x) => x.key === key);
+}
+function markSentTo(kind, ranges = defaultRanges(), code = '', meta = {}) {
+  const key = salesReportRecipientKey(kind, ranges, code);
+  const log = loadSentLog();
+  if (!log.some((x) => x.key === key)) log.push({ key, kind, ky: ranges.monthKy, from: ranges.monthRange.from, to: ranges.monthRange.to, emp_code: String(code || '').toUpperCase(), sent_at: new Date().toISOString(), ...meta });
   saveSentLog(log);
   return key;
 }
@@ -280,13 +294,17 @@ async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false 
   if (!force && alreadySent(kind, ranges)) return { ok: true, skipped: 'duplicate', key, kind, ranges, sent: [], failed: [] };
   const recipients = salesRecipients();
   const sent = [];
+  const skipped = [];
   const failed = [];
   for (const r of recipients) {
+    if (!force && alreadySentTo(kind, ranges, r.code)) { skipped.push({ code: r.code, reason: 'duplicate' }); continue; }
     try {
       const rep = await renderEmployeeReport({ empCode: r.code, kind, ranges });
       const res = await notify.deliver({ telegramId: r.telegramId, email: r.email, subject: rep.subject, text: rep.text, html: rep.html });
-      if (res.ok) sent.push({ code: r.code, email: r.email, telegramId: r.telegramId, channels: res.channels });
-      else failed.push({ code: r.code, email: r.email, telegramId: r.telegramId, error: res.email?.description || res.telegram?.description || 'send_failed' });
+      if (res.ok) {
+        sent.push({ code: r.code, email: r.email, telegramId: r.telegramId, channels: res.channels });
+        markSentTo(kind, ranges, r.code, { email: r.email, telegramId: r.telegramId, channels: res.channels });
+      } else failed.push({ code: r.code, email: r.email, telegramId: r.telegramId, error: res.email?.description || res.telegram?.description || 'send_failed' });
     } catch (e) {
       failed.push({ code: r.code, email: r.email, error: e.message });
     }
@@ -297,8 +315,9 @@ async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false 
   let ceoResult = { ok: false, description: 'CEO email/Telegram missing' };
   try { ceoResult = await notify.deliver({ telegramId: ceoTo.telegramId, email: ceoEmail, subject: ceo.subject, text: ceo.text, html: ceo.html }); } catch (e) { ceoResult = { ok: false, description: e.message }; }
   const ok = failed.length === 0 && ceoResult.ok;
-  if (ok) markSent(kind, ranges, { recipients: sent.length, ceoEmail, ceoTelegramId: ceoTo.telegramId });
-  return { ok, key, kind, ranges, sent, failed, ceo: { code: CEO_CODE, email: ceoEmail, telegramId: ceoTo.telegramId, channels: ceoResult.channels || [] }, ceoEmail, ceoResult };
+  if (ceoResult.ok) markSentTo(kind, ranges, CEO_CODE, { email: ceoEmail, telegramId: ceoTo.telegramId, channels: ceoResult.channels || [] });
+  if (ok) markSent(kind, ranges, { recipients: sent.length + skipped.length, ceoEmail, ceoTelegramId: ceoTo.telegramId });
+  return { ok, key, kind, ranges, sent, skipped, failed, ceo: { code: CEO_CODE, email: ceoEmail, telegramId: ceoTo.telegramId, channels: ceoResult.channels || [] }, ceoEmail, ceoResult };
 }
 async function main() {
   const [cmd = 'sample', emp = 'DN001', flag] = process.argv.slice(2);
@@ -307,7 +326,7 @@ async function main() {
     const kind = ['week', 'month'].includes(emp) ? emp : 'week';
     const force = process.argv.includes('--force');
     const r = await sendAll({ kind, force });
-    console.log(JSON.stringify({ ok: r.ok, skipped: r.skipped, key: r.key, kind: r.kind, ranges: r.ranges, sent: r.sent, failed: r.failed, ceo: r.ceo, ceoEmail: r.ceoEmail, ceoResult: r.ceoResult }, null, 2));
+    console.log(JSON.stringify({ ok: r.ok, skipped: r.skipped, key: r.key, kind: r.kind, ranges: r.ranges, sent: r.sent, skipped: r.skipped, failed: r.failed, ceo: r.ceo, ceoEmail: r.ceoEmail, ceoResult: r.ceoResult }, null, 2));
     if (!r.ok) process.exitCode = 1;
     return;
   }
@@ -321,4 +340,4 @@ async function main() {
 }
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { defaultRanges, isMonthEnd, salesRecipients, ceoRecipient, recipientsReport, salesReportPeriodKey, alreadySent, markSent, sendAll, computeReport, renderEmployeeReport, renderCeoDigest, writeSample, sendCeoApprovalSample };
+module.exports = { defaultRanges, isMonthEnd, salesRecipients, ceoRecipient, recipientsReport, salesReportPeriodKey, salesReportRecipientKey, alreadySent, alreadySentTo, markSent, markSentTo, sendAll, computeReport, renderEmployeeReport, renderCeoDigest, writeSample, sendCeoApprovalSample };
