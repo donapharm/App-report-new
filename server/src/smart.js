@@ -253,6 +253,11 @@ async function answerQuestion({ text, scope, session }) {
   const dimLabel = (dimension) => ({ emp: 'nhân viên', unit: 'đơn vị', product: 'sản phẩm', contractor: 'nhà thầu', bid_package: 'gói thầu', province: 'tỉnh' }[dimension] || dimension);
   const fmtDimItem = (dimension, t) => `${dimension === 'unit' ? unitText(t.key, t.label) : t.label}: ${fmt(t.revenue)}`;
 
+  if (isLlmAnalysisQuestion(q)) {
+    const ans = await answerWithLlm({ text, ky, scope, mine });
+    if (ans) return ans;
+  }
+
   const drilldown = drilldownAnswer({ q, ky, mine, unitHits, productHits: prodHits });
   if (drilldown) return drilldown;
 
@@ -628,6 +633,8 @@ function buildFacts({ ky, scope, mine }) {
     target_tong: target,
     phan_tram_dat: k.pctTarget,
     con_thieu_target: conThieu,
+    con_thieu_target_hien_thi: conThieu == null ? null : fmtHumanMoney(conThieu),
+    can_ban_moi_ngay_hien_thi: conThieu && daysLeft > 0 ? `${fmtHumanMoney(Math.round(conThieu / daysLeft))}/ngày` : null,
     tien_do_thoi_gian_pct: +((pac.factor || 0) * 100).toFixed(1),
     so_ngay_con_lai: daysLeft,
     can_ban_moi_ngay: conThieu && daysLeft > 0 ? Math.round(conThieu / daysLeft) : null,
@@ -1002,6 +1009,12 @@ function monthMention(q) {
 function noAccent(s) { return s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd'); }
 function fmt(n) { return Math.round(n).toLocaleString('vi-VN') + 'đ'; }
 function fmtPct(n) { return n == null ? '—' : Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%'; }
+function fmtHumanMoney(n) {
+  const v = Number(n || 0);
+  if (Math.abs(v) >= 1e9) return `${(v / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} tỷ đồng`;
+  if (Math.abs(v) >= 1e6) return `${(v / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu đồng`;
+  return fmt(v);
+}
 function unitText(code, name) {
   const c = String(code || '').trim();
   const nm = String(name || '').trim();
@@ -1012,6 +1025,18 @@ function unitText(code, name) {
   if (/^\d{3}\./.test(c) && c.includes(nm)) return c;
   if (nm.startsWith(`${c}.`) || nm.startsWith(`${c} `) || nm.includes(c)) return nm;
   return `${c}.${nm}`;
+}
+function isLlmAnalysisQuestion(q) {
+  if (!llm.isEnabled()) return false;
+  // Câu phân tích/tư vấn ngôn ngữ tự nhiên: để LLM diễn giải trên FACTS tổng hợp.
+  // Không bắt các câu số liệu rõ ràng/top/drilldown để giữ code-first chính xác.
+  if (/(top|xep hang|theo san pham|theo don vi|theo nhan vien|doanh thu o|tai\s+\d{3}|\d{3}|gia thau|ma hang|ma thuoc|qlnb)/.test(q)) return false;
+  return /(on khong|co on|uu tien|giai thich|de hieu|tinh hinh|dang chu y|nen chu y|tu van|quan tri|cham soc|tom tat|hom nay nen lam gi|rui ro|nhan xet|danh gia|khuyen nghi|can lam gi)/.test(q);
+}
+async function answerWithLlm({ text, ky, scope, mine }) {
+  const ans = await llm.callLlm({ question: text, facts: buildFacts({ ky, scope, mine }) });
+  if (!ans) return null;
+  return { text: ans.text, lines: [], source: 'llm' };
 }
 function say(text, lines) { return { text, lines: lines || [], source: 'code' }; }
 
