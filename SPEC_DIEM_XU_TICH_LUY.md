@@ -91,6 +91,19 @@ analysis lũy kế quý), Nhận xét nhanh & hành động tháng sau.
 
 **Báo cáo CEO:** bản tổng hợp toàn đội + phân tích gọn theo từng NV (KHÔNG phải bản chi tiết từng NV).
 
+## 4f. Bàn giao code từ bot (nhánh `bot/diemxu-report-code`, commit 1f4dcfd)
+- `handoff/diemxu-report-code/` — 3 script Python sinh email (tuần/tháng/CEO) + 2 template HTML DN001 +
+  `docs/DATA_MAPPING_AND_FORMULAS.md` + `scripts/vat_xu_reader_better_sqlite3.js` (Node reader).
+- Node server **v22.22.0** → App Report-New dùng **`node:sqlite` built-in** (khỏi cài native).
+- Ảnh: `webapp_donapharm/public/logo_dona.png` + `qr_zalo_oa_dona.png` (hoặc dùng logo/QR sẵn của app mình).
+- **ĐÃ BUILD:** `server/src/diemXu.js` — tính điểm (từ slot) + xu (vat.db), loại 5 NV. Công thức điểm ĐÃ
+  kiểm chứng khớp file CEO (CL 109.242.000→2.1848; NCL→0.0230; ngoại lệ 025→×2).
+- **2 điểm chờ CEO chốt:**
+  1. **Carry xu quý trước:** KHÔNG có trong vat.db (trước lấy từ Excel). Tạm để **0**. Cần nguồn/bảng chốt
+     số dư cuối quý nếu muốn cộng carry.
+  2. **Loại trừ VP004:** danh sách cũ của bot (V10) có VP004 trong nhóm gửi; nhưng CEO chốt loại VP004.
+     → Theo lệnh CEO: **loại**. (Ghi để CEO xác nhận nếu khác ý.)
+
 ## 5. Việc còn chờ
 - [ ] Bot điều tra `vat.db`: tên bảng hóa đơn xu, cột (emp_code/ngày/số tiền tính xu/xu), cách lọc hợp lệ.
 - [ ] CEO chốt lịch gửi cuối tuần (Chủ nhật/Thứ 7, giờ).
