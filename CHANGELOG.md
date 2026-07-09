@@ -21,6 +21,20 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (z) — Claude Code — Thiết kế lại EMAIL thông báo target (HTML + logo + QR Zalo OA)
+- **CEO chê email cũ "cùi bắp"** (text trơn). Làm lại thành **email HTML** chỉn chu, an toàn client email
+  (bảng + inline style): logo DONAPHARM đầu trang (nền trắng), **thanh tiến độ**, bảng số liệu (doanh thu
+  đạt / target / % / còn thiếu / cần/ngày), màu brand **xanh dương** + cam nhấn, **QR Zalo OA** ở chân trang,
+  footer "email tự động".
+- **Ảnh nhúng kiểu CID** (Gmail chặn data-URI): `notifyChannels` đính kèm `web/public/logo-dnpharma.png` +
+  `zalo-oa-qr.png` với cid `dnpharma-logo`/`dnpharma-zalo`; html tham chiếu `src="cid:..."`.
+- **3 mẫu:** sự kiện milestone/behind (`emailHtmlFor`), trạng thái đích danh (`emailHtmlForStatus` qua
+  `statusFor`), tổng hợp CEO (`ceoDigestHtml`). Telegram vẫn giữ TEXT (`messageFor` không đổi).
+- `notifyChannels.sendEmail/deliver` thêm tham số `html`; routes + telegram-bot truyền html qua.
+- **Trạng thái:** `node --check` toàn bộ OK; đã render 3 bản preview gửi CEO xem trước. **CHỜ CEO duyệt
+  thiết kế rồi mới merge/deploy.**
+
+
 ### 2026-07-08 (y) — Claude Code — Lọc tỉnh theo cột `units.province` + sửa tên đối tác partner
 - **Lọc tỉnh/vùng (gốc lỗi):** `province.js` đoán tỉnh theo TÊN đơn vị → sai (vd "033.PKĐK AN NGÃ TƯ
   VŨNG TÀU" tên có "Vũng Tàu" nhưng `units.province` thật = **ĐỒNG NAI**). Sửa: materialize lấy

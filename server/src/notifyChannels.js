@@ -12,6 +12,17 @@ const path = require('path');
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const EMAILS_FILE = path.join(__dirname, '..', 'data', 'nv_emails.json');
 
+// Ảnh nhúng INLINE cho email HTML (logo + QR Zalo OA). Gmail chặn ảnh data-URI nên
+// phải đính kèm kiểu CID; html tham chiếu src="cid:dnpharma-logo"/"cid:dnpharma-zalo".
+const ASSET_DIR = path.join(__dirname, '..', '..', 'web', 'public');
+const INLINE_IMAGES = [
+  { filename: 'logo-dnpharma.png', path: path.join(ASSET_DIR, 'logo-dnpharma.png'), cid: 'dnpharma-logo' },
+  { filename: 'zalo-oa-qr.png', path: path.join(ASSET_DIR, 'zalo-oa-qr.png'), cid: 'dnpharma-zalo' },
+];
+function inlineAttachments() {
+  return INLINE_IMAGES.filter((x) => { try { return fs.existsSync(x.path); } catch { return false; } });
+}
+
 let _transport = null, _transportTried = false;
 function emailReady() { return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS); }
 function transport() {
@@ -46,12 +57,14 @@ function emailFor(emp, userEmail) {
   const ok = (e) => (/.+@.+\..+/.test(String(e || '').trim()) ? String(e).trim() : '');
   return ok(emailMap()[String(emp || '').trim().toUpperCase()]) || ok(userEmail);
 }
-async function sendEmail(to, subject, text) {
+async function sendEmail(to, subject, text, html) {
   const t = transport();
   if (!t) return { ok: false, description: 'Email chưa cấu hình (thiếu SMTP_HOST/USER/PASS).' };
   if (!to) return { ok: false, description: 'NV chưa có email.' };
   try {
-    await t.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject: subject || 'DNPHARMA App Report', text: String(text || '') });
+    const msg = { from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject: subject || 'DNPHARMA App Report', text: String(text || '') };
+    if (html) { msg.html = String(html); msg.attachments = inlineAttachments(); } // ảnh inline chỉ khi gửi HTML
+    await t.sendMail(msg);
     return { ok: true };
   } catch (e) { return { ok: false, description: e.message }; }
 }
@@ -74,10 +87,10 @@ function telegramReady() { return !!TG_TOKEN; }
 function anyReady() { return telegramReady() || emailReady(); }
 
 // Gửi 1 tin tới NV qua MỌI kênh có sẵn (Telegram + Email). ok = có ít nhất 1 kênh gửi được.
-async function deliver({ telegramId, email, subject, text }) {
+async function deliver({ telegramId, email, subject, text, html }) {
   const out = { channels: [] };
   if (telegramId) { out.telegram = await sendTelegram(telegramId, text); if (out.telegram.ok) out.channels.push('telegram'); }
-  if (email) { out.email = await sendEmail(email, subject, text); if (out.email.ok) out.channels.push('email'); }
+  if (email) { out.email = await sendEmail(email, subject, text, html); if (out.email.ok) out.channels.push('email'); }
   out.ok = out.channels.length > 0;
   return out;
 }
