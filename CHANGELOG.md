@@ -1,4 +1,8 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **Sửa so sánh kỳ trước theo nhịp cho báo cáo điểm/xu.** `prevRange` vẫn lấy trọn tháng trước để đọc được dữ liệu tổng kỳ T01–T06, nhưng các chỉ tiêu so sánh giữa tháng/tuần quy đổi theo `ngày đã trôi / ngày trong tháng`; nhãn email đổi thành “So với nhịp cùng kỳ T06/2026”. Bản cuối tháng giữ full-vs-full.
+- **Chạy lại mẫu DN001 sau sửa nhịp.** DN001 T07 đến 09/07: doanh thu `1.169.154.080đ`; T06 full `2.444.530.837đ`; nhịp T06 quy đổi `709.702.501đ`; chênh `+64,7%`.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **Sửa mẫu email điểm/xu DN001 theo review CEO/Claude.** Email NV đã giấu tên hệ thống/API/bảng/file kỹ thuật; khung nguồn dữ liệu chuyển sang ngôn ngữ nghiệp vụ nội bộ DONAPHARM, bỏ cột “Xu tuần” bị trùng, thêm D/E/G trong mục 9 và chú thích dự báo tháng là sơ bộ/còn biến động.
 - **Sửa so sánh kỳ trước không còn 0 giả.** Chẩn đoán `getRows(06.2026, DN001)` có 262 dòng / `2.444.530.837đ`; nguyên nhân do dữ liệu T06 là tổng kỳ, không lọc được ngày lẻ. `salesReport.js` nay dùng trọn tháng trước cho `prevRange` để so sánh không bị rỗng giả.
 - **Gửi lại mẫu thật DN001 tuần + tháng cho CEO duyệt.** Đã xuất HTML mới và gửi email test CEO; chưa bật lịch, chưa gửi 17 NV.
