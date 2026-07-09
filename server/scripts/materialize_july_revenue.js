@@ -87,9 +87,11 @@ async function fetchMisa(runId) {
            COALESCE(l.invoice_export_amount,l.official_amount,0)::numeric revenue,
            COALESCE(l.unit_price,0)::numeric unit_price,
            COALESCE(NULLIF(p.goi_thau,''),'') bid_package,
+           COALESCE(u.province,'') province,
            l.revenue_bucket, l.revenue_status, l.mapping_status
       FROM misa_revenue_snapshot_lines l
       LEFT JOIN products p ON p.id=l.product_id
+      LEFT JOIN units u ON u.code = l.unit_code
      WHERE l.run_id=$1
        AND l.revenue_bucket = ANY(ARRAY['official','pending']::text[])
        AND COALESCE(l.is_test_suspected,false) IS NOT TRUE
@@ -105,7 +107,7 @@ async function fetchMisa(runId) {
     emp_code: empCode(r.employee_code), emp_name: r.employee_name || '', raw_emp_code: r.employee_code || '',
     unit_code: cleanCode(r.unit_code, 'UNKNOWN_UNIT'), unit_name: cleanCode(r.unit_name, r.unit_code),
     iit_code: cleanCode(r.qlnb_code, 'UNKNOWN_PRODUCT'), product_name: cleanCode(r.product_name, r.qlnb_code),
-    uom: r.uom || '', bid_package: r.bid_package || '',
+    uom: r.uom || '', bid_package: r.bid_package || '', province: cleanCode(r.province, ''),
     quantity: num(r.quantity), revenue: Math.round(num(r.revenue)), unit_price: num(r.unit_price),
     revenue_basis: 'MISA_INVOICE_EXPORTED', revenue_bucket: r.revenue_bucket, revenue_status: r.revenue_status,
     mapping_status: r.mapping_status || '',
@@ -140,8 +142,11 @@ async function fetchPartner() {
     )
     SELECT oi.id order_item_id, o.id order_id, o.code order_no, o.created_at,
            COALESCE(partner.effective_date, (o.created_at AT TIME ZONE 'Asia/Bangkok')::date) revenue_date,
-           COALESCE(u.route,o.route,'') route,
-           COALESCE(c.code,'') contractor_code, COALESCE(NULLIF(le.name,''), c.name, '') contractor_name,
+           COALESCE(u.route,o.route,'') route, COALESCE(u.province,'') province,
+           COALESCE(c.code,'') contractor_code,
+           -- Partner: le.name thường là nhóm rác "Đối tác khác" -> ưu tiên TÊN ĐỐI TÁC thật (c.name);
+           -- chỉ dùng le.name khi nó là pháp nhân thật (không phải bucket "Đối tác khác").
+           COALESCE(NULLIF(NULLIF(le.name,''),'Đối tác khác'), NULLIF(c.name,''), '') contractor_name,
            COALESCE(e.code,'') employee_code, COALESCE(e.name,'') employee_name,
            COALESCE(u.code,'') unit_code, COALESCE(u.name,'') unit_name,
            COALESCE(p.qlnb_code,'') qlnb_code, COALESCE(p.name,'') product_name, COALESCE(p.uom,'') uom,
@@ -176,7 +181,7 @@ async function fetchPartner() {
     emp_code: empCode(r.employee_code), emp_name: r.employee_name || '', raw_emp_code: r.employee_code || '',
     unit_code: cleanCode(r.unit_code, 'UNKNOWN_UNIT'), unit_name: cleanCode(r.unit_name, r.unit_code),
     iit_code: cleanCode(r.qlnb_code, 'UNKNOWN_PRODUCT'), product_name: cleanCode(r.product_name, r.qlnb_code),
-    uom: r.uom || '', bid_package: r.bid_package || '',
+    uom: r.uom || '', bid_package: r.bid_package || '', province: cleanCode(r.province, ''),
     quantity: num(r.delivered_qty), revenue: Math.round(num(r.revenue)), unit_price: num(r.unit_price),
     revenue_basis: 'PARTNER_DELIVERED',
   }));
