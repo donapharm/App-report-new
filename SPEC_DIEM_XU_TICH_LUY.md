@@ -34,6 +34,19 @@ Các NV sau **KHÔNG** đưa vào tính điểm, **KHÔNG** tính xu, **KHÔNG**
 (Lưu ý phân biệt: danh sách "không nhận thông báo target" trước đây là DN021/DN023/VP004 — khác mục đích.
 Riêng báo cáo điểm/xu này loại đủ 5 mã trên.)
 
+## 4b. Lịch gửi (CEO chốt 2026-07-09) — giờ VN
+- **Báo cáo TUẦN:** **Thứ 7, 13h00** (Telegram + email).
+- **Báo cáo THÁNG:** **ngày cuối cùng của tháng, 18h30** (Telegram + email).
+- **NV:** gửi bản riêng của từng NV (tuần + tháng).
+- **CEO:** gửi bản tập trung tổng hợp, có **phân tích gọn theo từng NV**.
+- (Kỹ thuật: monthly chạy daily 18h30, nếu là ngày cuối tháng thì gửi.)
+
+## 4c. Bố cục báo cáo (dự kiến — chờ bản mẫu cũ của CEO để bám format)
+- **NV (email HTML + Telegram):** điểm DT (tuần/tháng/quý) · xu (tuần/tháng/quý) · thiếu/dư · tỷ lệ%
+  · cảnh báo nếu tỷ lệ quý <90% (kèm ước tính truy thu) · gợi ý "cần thêm ~X xu để cân điểm".
+- **CEO:** tổng công ty (điểm/xu/thiếu-dư/tỷ lệ) + bảng per-NV (sắp theo tỷ lệ tăng dần, người thiếu
+  lên đầu) + phân tích gọn: số NV cảnh báo, tổng truy thu ước tính, ai cần nhắc.
+
 ## 5. Việc còn chờ
 - [ ] Bot điều tra `vat.db`: tên bảng hóa đơn xu, cột (emp_code/ngày/số tiền tính xu/xu), cách lọc hợp lệ.
 - [ ] CEO chốt lịch gửi cuối tuần (Chủ nhật/Thứ 7, giờ).
