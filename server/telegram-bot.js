@@ -44,6 +44,33 @@ const targetNotify = require('./src/targetNotify');
 const notifyChannels = require('./src/notifyChannels');
 const salesReport = require('./src/salesReport');
 
+const PENDING_TG_GRANTS_FILE = path.join(__dirname, 'data', 'auth', 'telegram_pending_grants.json');
+function loadPendingTelegramGrants() {
+  try {
+    const v = JSON.parse(fs.readFileSync(PENDING_TG_GRANTS_FILE, 'utf8'));
+    return Array.isArray(v) ? v : [];
+  } catch { return []; }
+}
+function savePendingTelegramGrants(list) {
+  try {
+    fs.mkdirSync(path.dirname(PENDING_TG_GRANTS_FILE), { recursive: true });
+    fs.writeFileSync(PENDING_TG_GRANTS_FILE, JSON.stringify(list.slice(-100), null, 2));
+  } catch (e) { console.error('pending telegram grants save error:', e.message); }
+}
+function claimPendingTelegramGrant(telegramId, from) {
+  const now = Date.now();
+  const grants = loadPendingTelegramGrants();
+  const idx = grants.findIndex((g) => g && g.status !== 'claimed' && (!g.expires_at || Date.parse(g.expires_at) > now));
+  if (idx < 0) return null;
+  const g = grants[idx];
+  const code = String(g.emp_code || '').toUpperCase();
+  if (!store.findUserByCode(code)) return null;
+  auth.addTelegramMap(String(telegramId), code, g.added_by || 'CEO-pending-grant');
+  grants[idx] = { ...g, status: 'claimed', telegram_id: String(telegramId), telegram_name: [from?.first_name, from?.last_name].filter(Boolean).join(' ') || from?.username || '', claimed_at: new Date().toISOString() };
+  savePendingTelegramGrants(grants);
+  return { emp_code: code, name: store.findUserByCode(code)?.name || code };
+}
+
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SECRET = process.env.TELEGRAM_BOT_SECRET || '';
 const BASE = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3860}`;
@@ -313,16 +340,30 @@ async function doConfirm(cbq, code) {
   const telegram_id = cbq.from.id;
   let text;
   try {
-    const r = await fetch(`${BASE}/api/auth/telegram/confirm`, {
+    let r = await fetch(`${BASE}/api/auth/telegram/confirm`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ login_code: code, telegram_id, secret_bot: SECRET }),
     });
-    const d = await r.json().catch(() => ({}));
-    if (r.ok && d.ok) text = `✅ Đã xác nhận. Quay lại trình duyệt — bạn sẽ được đăng nhập tự động.`;
-    else if (r.status === 404) text = d.message || 'Tài khoản Telegram của bạn chưa được cấp quyền App Report. Vui lòng liên hệ quản trị.';
-    else if (r.status === 410) text = '⌛ Mã đã hết hạn. Hãy tạo mã mới trên trình duyệt.';
-    else if (r.status === 409) text = 'Mã này đã được xác nhận rồi.';
-    else text = d.error || 'Không xác nhận được, thử lại.';
+    let d = await r.json().catch(() => ({}));
+    if (r.status === 404) {
+      const grant = claimPendingTelegramGrant(telegram_id, cbq.from);
+      if (grant) {
+        r = await fetch(`${BASE}/api/auth/telegram/confirm`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ login_code: code, telegram_id, secret_bot: SECRET }),
+        });
+        d = await r.json().catch(() => ({}));
+        if (r.ok && d.ok) text = `✅ Đã cấp quyền ${grant.emp_code} — ${grant.name} và xác nhận đăng nhập. Quay lại trình duyệt — bạn sẽ được đăng nhập tự động.`;
+      }
+    }
+    if (!text) {
+      if (r.ok && d.ok) text = `✅ Đã xác nhận. Quay lại trình duyệt — bạn sẽ được đăng nhập tự động.`;
+      else if (r.status === 404) text = (d.message || 'Tài khoản Telegram của bạn chưa được cấp quyền App Report. Vui lòng liên hệ quản trị.') + `
+Mã Telegram của bạn: ${telegram_id}`;
+      else if (r.status === 410) text = '⌛ Mã đã hết hạn. Hãy tạo mã mới trên trình duyệt.';
+      else if (r.status === 409) text = 'Mã này đã được xác nhận rồi.';
+      else text = d.error || 'Không xác nhận được, thử lại.';
+    }
   } catch {
     text = 'Lỗi kết nối máy chủ App Report, thử lại sau.';
   }
