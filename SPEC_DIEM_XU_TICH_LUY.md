@@ -65,6 +65,32 @@ Riêng báo cáo điểm/xu này loại đủ 5 mã trên.)
   ```
 - Nhớ LOẠI 5 NV ở mục 4 khỏi kết quả.
 
+## 4e. KHUNG BÁO CÁO EMAIL (theo 2 mẫu CEO gửi — DN001 Tuần 26 & Tháng 06 V10)
+Thiết kế: **theme DONAPHARM xanh lá** (#00493f header, #087565 nhấn), **logo cid:logo_dona** trái,
+**QR cid:qr_zalo** phải, responsive; footer chữ ký CEO + hotline 0886.396.668. Lọc riêng theo emp_code.
+
+**Báo cáo TUẦN (per NV) — các mục:**
+1. Tổng quan kết quả (KPI card: Doanh thu +%, chênh lệch, số dòng, đơn vị, mặt hàng, nhà thầu — kèm so kỳ trước).
+2. Điểm doanh thu & xu (bảng: Kỳ · DT · Điểm DT · Xu kỳ · Xu quý · Xu dư quý trước · Xu tổng quý · Thiếu · Dư · Hoàn thành quý %).
+3. Phân tích tuyến CL/NCL/NT (bar % + bảng so cùng kỳ).
+4. Biểu đồ doanh thu **theo ngày**.
+5. Top đơn vị & Top mặt hàng (top ~8, kèm % tỷ trọng).
+6. So sánh tăng/giảm so cùng kỳ (đơn vị tăng mạnh / đơn vị giảm; mặt hàng).
+7. Tồn tại cần xử lý (bullet).
+8. Kiến nghị hành động tuần tới (bảng: nhóm việc · khuyến nghị · thời hạn).
+
+**Báo cáo THÁNG (per NV) — tương tự, nhấn:** Dashboard KPI (tỷ + đồng), cơ cấu tuyến, Top ĐV, ĐV giảm mạnh,
+Mặt hàng giảm sâu, Top mặt hàng, **Điểm & xu** (Điểm tháng/quý, trạng thái DƯ/THIẾU pill, truy thu cá nhân,
+analysis lũy kế quý), Nhận xét nhanh & hành động tháng sau.
+
+**So sánh:** Tuần/Tháng đều so **CÙNG KỲ THÁNG TRƯỚC** (như mẫu: tuần T06 so T05, tháng T06 so T05).
+
+**Nguồn dữ liệu (đã có trong App Report-New — chỉ scope theo emp_code):**
+- Doanh thu/tuyến/top/so-sánh/theo-ngày: `analytics.js` (revenueBreakdown, comparePeriods, daily) + slot.
+- Điểm: tự tính từ slot (hệ số 1/2). Xu: `vat.db` (mục 4d). → chỉ điểm/xu là mới, phần còn lại tái dùng.
+
+**Báo cáo CEO:** bản tổng hợp toàn đội + phân tích gọn theo từng NV (KHÔNG phải bản chi tiết từng NV).
+
 ## 5. Việc còn chờ
 - [ ] Bot điều tra `vat.db`: tên bảng hóa đơn xu, cột (emp_code/ngày/số tiền tính xu/xu), cách lọc hợp lệ.
 - [ ] CEO chốt lịch gửi cuối tuần (Chủ nhật/Thứ 7, giờ).
