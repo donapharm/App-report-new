@@ -27,6 +27,81 @@ const SYSTEM = [
   'tien_do_thoi_gian_pct là phần trăm ngày đã trôi trong tháng; không được diễn thành đã qua 1 tháng nếu chưa đủ tháng.',
 ].join(' ');
 
+const INTERPRET_SYSTEM = [
+  'Bạn chỉ trích xuất ý định câu hỏi App Report thành JSON thuần, không giải thích.',
+  'Không tính số, không bịa dữ liệu, không dùng markdown.',
+  'Trả đúng một JSON object có schema:',
+  '{"metric":"revenue|points|xu|target|cst|movement|overview|unknown","dimension":"unit|product|emp|contractor|bid_package|province|null","unitHint":"string|null","productHint":"string|null","empHint":"string|null","selfScoped":true,"period":"MM.YYYY|current|null","listAll":false,"needClarify":"string|null"}',
+  'Hiểu cả tiếng Việt có dấu/không dấu và tiếng Anh.',
+  'Nếu người hỏi nói tôi/của tôi/I/my/me thì selfScoped=true.',
+  'Nếu hỏi at/in/tại/ở/bên/của một bệnh viện/đơn vị thì dimension="unit" và unitHint là tên/mã đơn vị.',
+  'Nếu hỏi product/sản phẩm/thuốc ở một đơn vị thì metric="revenue", dimension="product", unitHint là đơn vị.',
+  'Nếu hỏi how much did I sell/doanh thu tôi bán được thì metric="revenue", selfScoped=true.',
+  'Nếu nói July/tháng 7/T7 mà không có năm thì period="07.2026".',
+  'Nếu chỉ liệt kê/top/theo toàn bộ thì listAll=true; nếu hỏi một thực thể cụ thể thì listAll=false.',
+].join(' ');
+
+function cleanJsonText(s) {
+  let t = String(s || '').trim();
+  t = t.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim();
+  const a = t.indexOf('{');
+  const b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) t = t.slice(a, b + 1);
+  return t;
+}
+function normIntent(x) {
+  if (!x || typeof x !== 'object') return null;
+  const metricOk = new Set(['revenue', 'points', 'xu', 'target', 'cst', 'movement', 'overview', 'unknown']);
+  const dimOk = new Set(['unit', 'product', 'emp', 'contractor', 'bid_package', 'province', null]);
+  const metric = metricOk.has(x.metric) ? x.metric : 'unknown';
+  const dimension = dimOk.has(x.dimension) ? x.dimension : null;
+  const str = (v) => (v == null || v === '' || v === 'null' ? null : String(v).trim());
+  let period = str(x.period);
+  if (period && period !== 'current' && !/^\d{2}\.\d{4}$/.test(period)) period = null;
+  return {
+    metric,
+    dimension,
+    unitHint: str(x.unitHint),
+    productHint: str(x.productHint),
+    empHint: str(x.empHint),
+    selfScoped: !!x.selfScoped,
+    period,
+    listAll: !!x.listAll,
+    needClarify: str(x.needClarify),
+  };
+}
+
+async function interpretQuery(question) {
+  if (!isEnabled()) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), Number(process.env.LLM_INTERPRET_TIMEOUT_MS || 8000));
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 300,
+        temperature: 0,
+        system: INTERPRET_SYSTEM,
+        messages: [{ role: 'user', content: String(question || '').slice(0, 500) }],
+      }),
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) return null;
+    const data = await res.json();
+    const text = (data.content || []).map((c) => c.text).join('').trim();
+    return normIntent(JSON.parse(cleanJsonText(text)));
+  } catch {
+    return null;
+  }
+}
+
+
 /**
  * @returns {Promise<{text:string, source:'llm'}|null>}
  */
@@ -59,4 +134,4 @@ async function callLlm({ question, facts }) {
   }
 }
 
-module.exports = { callLlm, isEnabled, MODEL };
+module.exports = { callLlm, interpretQuery, isEnabled, MODEL };

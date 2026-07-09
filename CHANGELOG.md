@@ -1,4 +1,8 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **NLQ LLM interpretQuery theo directive.** Thêm `llm.interpretQuery(question)` để Claude chỉ trả JSON ý định (`metric/dimension/unitHint/productHint/selfScoped/period/listAll`), không gửi số liệu/PII; App Report tự resolve thực thể, giữ scope và tính số bằng code Mức 1.
+- **Fix ca NV hỏi tự nhiên/không dấu/tiếng Anh.** Các câu như “doanh thu tại mã đơn vị 001… tôi bán được bao nhiêu”, `001.bvdk dong nai`, và `how much did I sell at Dong Nai hospital in July` trả doanh thu của chính NV tại đơn vị 001; câu mơ hồ “benh vien dong nai” hỏi lại 001/025.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **NLQ drill-down mức 1 theo thực thể.** Ưu tiên câu có “ở/tại/của/trong/bên …” hoặc “ai/đơn vị nào bán …” để đào sâu đúng đơn vị/sản phẩm trước khi rơi vào breakdown/ranking chung.
 - **Xử lý tên trùng/mơ hồ.** Câu “Đồng Nai/BVĐK Đồng Nai” hỏi lại mã 001/025 thay vì tự đoán; nếu có mã rõ như 001 thì trả chi tiết đúng đơn vị.
 - **Giữ quyền & câu cũ.** NV thường chỉ thấy phần mình; “top 5 đơn vị”, “doanh thu theo sản phẩm” vẫn liệt kê toàn bộ như trước.

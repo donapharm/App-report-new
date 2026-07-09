@@ -253,6 +253,9 @@ async function answerQuestion({ text, scope, session }) {
   const dimLabel = (dimension) => ({ emp: 'nhân viên', unit: 'đơn vị', product: 'sản phẩm', contractor: 'nhà thầu', bid_package: 'gói thầu', province: 'tỉnh' }[dimension] || dimension);
   const fmtDimItem = (dimension, t) => `${dimension === 'unit' ? unitText(t.key, t.label) : t.label}: ${fmt(t.revenue)}`;
 
+  const interpreted = await answerFromInterpretedIntent({ text, q, baseKy: ky, scope, mine });
+  if (interpreted) return interpreted;
+
   if (isLlmAnalysisQuestion(q)) {
     const ans = await answerWithLlm({ text, ky, scope, mine });
     if (ans) return ans;
@@ -895,8 +898,15 @@ function isSpecificEntityQuestion(q) {
 function filterExplicitUnitCode(q, hits) {
   const codes = [...String(q || '').matchAll(/\b(\d{3})\b/g)].map((m) => m[1]);
   if (!codes.length) return hits;
-  const picked = hits.filter((u) => codes.some((c) => String(u.ma || '').startsWith(`${c}.`) || String(u.ma || '') === c));
-  return picked.length ? picked : hits;
+  let picked = hits.filter((u) => codes.some((c) => String(u.ma || '').startsWith(`${c}.`) || String(u.ma || '') === c));
+  if (!picked.length) return hits;
+  const qn = noAccent(String(q || '').toLowerCase());
+  // Nếu người dùng chỉ nói mã đơn vị 001, ưu tiên đơn vị chính, tránh biến thể NT/nhà thuốc cùng mã.
+  if (!/\bnt\b|nha\s+thuoc/.test(qn) && picked.length > 1) {
+    const primary = picked.filter((u) => !/\bNT\b|NHA\s*THUOC|NHÀ\s*THUỐC/i.test(String(u.ma || '') + ' ' + String(u.ten || '')));
+    if (primary.length) picked = primary;
+  }
+  return picked;
 }
 function filterDongNaiAmbiguity(q, hits) {
   if (!/dong\s+nai/.test(q) || hits.length <= 1) return hits;
@@ -1026,11 +1036,90 @@ function unitText(code, name) {
   if (nm.startsWith(`${c}.`) || nm.startsWith(`${c} `) || nm.includes(c)) return nm;
   return `${c}.${nm}`;
 }
+
+function intentPeriodKy(period, fallbackKy) {
+  if (!period || period === 'current') return fallbackKy;
+  return store.periodKys().includes(period) ? period : fallbackKy;
+}
+function hintForLookup(hint, originalQ, kind) {
+  let h = String(hint || '').trim();
+  const qn = noAccent(String(originalQ || '').toLowerCase());
+  const hn = noAccent(h.toLowerCase());
+  // Ca tiếng Anh: "Dong Nai hospital" thường người dùng chỉ BVĐK Đồng Nai mã 001.
+  // Ca tiếng Việt "benh vien dong nai" vẫn để mơ hồ 001/025 theo directive.
+  if (kind === 'unit' && /dong\s+nai\s+hospital|hospital\s+.*dong\s+nai/.test(hn || qn) && /\bhow\b|\bsell\b|\bjuly\b|\bhospital\b/.test(qn)) {
+    h = `001 ${h}`;
+  }
+  return h || originalQ;
+}
+function shortEntityName(s) {
+  return String(s || '').replace(/^[0-9]{3}\./, '').split(/[.·]/)[0].trim() || String(s || '').trim();
+}
+function disambiguateShort(kind, hits, rawName) {
+  if (!hits.length) return null;
+  if (hits.length === 1) return null;
+  if (hits.length <= 5) {
+    const label = kind === 'unit' ? 'đơn vị' : 'sản phẩm';
+    const choices = hits.map((h) => `• ${h.ma} — ${shortEntityName(h.ten)}`);
+    return say(`Em thấy nhiều ${label} khớp${rawName ? ` "${rawName}"` : ''}. Anh/Chị muốn hỏi mã nào?`, [...choices, 'Anh/Chị nhắn kèm mã giúp em nhé.']);
+  }
+  return say('Có hơn 5 kết quả khớp. Anh/Chị gõ cụ thể hơn hoặc kèm mã giúp em nhé.');
+}
+function productListAtUnitAnswer(u, ky) {
+  const lines = [`🏥 ${u.ten}`, `• Doanh thu: ${fmt(u.doanh_thu)}${u.so_luong ? ` · SL ${Number(u.so_luong || 0).toLocaleString('vi-VN')}` : ''}`];
+  lines.push(u.top_san_pham.length ? '• Sản phẩm tại đơn vị:' : '• Chưa có sản phẩm phát sinh tại đơn vị trong kỳ.');
+  u.top_san_pham.slice(0, 8).forEach((p, i) => lines.push(`${i + 1}. ${p.ten}: ${fmt(p.doanh_thu)}`));
+  return say(`Sản phẩm tại ${u.ten} kỳ ${ky}:`, lines);
+}
+function unitRevenueAnswer(u, ky, mine) {
+  const lines = [`🏥 ${u.ten}`, `• Doanh thu: ${fmt(u.doanh_thu)}${u.so_luong ? ` · SL ${Number(u.so_luong || 0).toLocaleString('vi-VN')}` : ''}`];
+  if (mine) lines.push('• Đã lọc theo phạm vi của chính Anh/Chị.');
+  if (u.top_san_pham.length) lines.push(`• Top sản phẩm: ${u.top_san_pham.map((p) => `${p.ten}: ${fmt(p.doanh_thu)}`).join(' · ')}`);
+  if (u.ai_ban.length) lines.push(`• ${mine ? 'Bạn bán' : 'Ai bán'}: ${u.ai_ban.map((e) => `${e.ten}: ${fmt(e.doanh_thu)}`).join(' · ')}`);
+  return say(`Doanh thu${mine ? ' của Anh/Chị' : ''} tại ${u.ten} kỳ ${ky}:`, lines);
+}
+async function answerFromInterpretedIntent({ text, q, baseKy, scope, mine }) {
+  if (!llm.isEnabled()) return null;
+  const it = await llm.interpretQuery(text);
+  if (!it || it.metric === 'unknown' || it.needClarify || it.listAll) return null;
+  const ky2 = intentPeriodKy(it.period, baseKy);
+  const unitHint = it.unitHint || '';
+  const productHint = it.productHint || '';
+
+  if (unitHint) {
+    let units = lookupUnits({ q: hintForLookup(unitHint, text, 'unit'), ky: ky2, scope });
+    units = filterExplicitUnitCode(hintForLookup(unitHint, text, 'unit'), units);
+    units = filterDongNaiAmbiguity(noAccent(String(unitHint || text).toLowerCase()), units);
+    const dis = disambiguateShort('unit', units, unitHint);
+    if (dis) return dis;
+    if (!units.length) return say(`Chưa tìm thấy đơn vị "${unitHint}" có doanh thu kỳ ${ky2} trong phạm vi hiện tại.`);
+    const u = units[0];
+    if (it.dimension === 'product' || /san pham|product|thuoc|mat hang/.test(q)) return productListAtUnitAnswer(u, ky2);
+    return unitRevenueAnswer(u, ky2, mine || it.selfScoped);
+  }
+
+  if (productHint) {
+    const products = lookupProducts({ q: hintForLookup(productHint, text, 'product'), ky: ky2, scope });
+    const dis = disambiguateShort('product', products, productHint);
+    if (dis) return dis;
+    if (!products.length) return say(`Chưa tìm thấy sản phẩm "${productHint}" có doanh thu kỳ ${ky2} trong phạm vi hiện tại.`);
+    const p = products[0];
+    if (it.dimension === 'emp' || /ai ban|who sells|seller|nhan vien|nv/.test(q)) {
+      const lines = [`📌 ${p.ten} (${p.ma})`, `• Doanh thu: ${fmt(p.doanh_thu)}${p.so_luong ? ` · SL ${Number(p.so_luong || 0).toLocaleString('vi-VN')}` : ''}`];
+      if (mine) lines.push('• Anh/Chị chỉ xem được phần của mình.');
+      lines.push(p.ai_ban?.length ? `• ${mine ? 'Bạn bán' : 'NV bán sản phẩm'}:` : '• Chưa có NV phát sinh doanh thu sản phẩm này trong phạm vi này.');
+      (p.ai_ban || []).forEach((e, i) => lines.push(`${i + 1}. ${e.ten} (${e.ma}): ${fmt(e.doanh_thu)}`));
+      return say(`NV bán ${p.ten} kỳ ${ky2}:`, lines);
+    }
+    return sayProductLookup([p], ky2);
+  }
+  return null;
+}
 function isLlmAnalysisQuestion(q) {
   if (!llm.isEnabled()) return false;
   // Câu phân tích/tư vấn ngôn ngữ tự nhiên: để LLM diễn giải trên FACTS tổng hợp.
   // Không bắt các câu số liệu rõ ràng/top/drilldown để giữ code-first chính xác.
-  if (/(top|xep hang|theo san pham|theo don vi|theo nhan vien|doanh thu o|tai\s+\d{3}|\d{3}|gia thau|ma hang|ma thuoc|qlnb)/.test(q)) return false;
+  if (/\b(top|xep hang|theo san pham|theo don vi|theo nhan vien|doanh thu o|tai\s+\d{3}|\d{3}|gia thau|ma hang|ma thuoc|qlnb)\b/.test(q)) return false;
   return /(on khong|co on|uu tien|giai thich|de hieu|tinh hinh|dang chu y|nen chu y|tu van|quan tri|cham soc|tom tat|hom nay nen lam gi|rui ro|nhan xet|danh gia|khuyen nghi|can lam gi)/.test(q);
 }
 async function answerWithLlm({ text, ky, scope, mine }) {
