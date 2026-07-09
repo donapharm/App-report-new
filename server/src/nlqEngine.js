@@ -6,6 +6,7 @@
 const store = require('./store');
 const A = require('./analytics');
 const llm = require('./llm');
+const auth = require('./auth');
 const { noAccent } = require('./nlqIntent');
 
 const GROUP = {
@@ -228,8 +229,10 @@ function comparePrev({ rows, ky, scope, metric, dateRange, compareDayPrev = fals
 }
 async function execute(question, planObj, { scope = {}, session = {} } = {}) {
   if (planObj.needClarify) return { clarify: planObj.needClarify, plan: planObj };
-  const isEmployee = !!scope.empCode || !!session?.emp_code || session?.role === 'sale';
+  const isAdmin = auth.isAdmin(session?.role);
+  const isEmployee = !isAdmin && (!!scope.empCode || session?.role === 'sale');
   const scoped = { ...(scope || {}) };
+  if (isAdmin) delete scoped.empCode;
   if (isEmployee) scoped.empCode = scoped.empCode || session.emp_code;
   const qn = norm(question);
   const mentionedEmp = (qn.match(/\b(dn\d{3}|vp\d{3})\b/) || [])[1]?.toUpperCase();
