@@ -87,6 +87,8 @@ async function fetchMisa(runId) {
            COALESCE(l.invoice_export_amount,l.official_amount,0)::numeric revenue,
            COALESCE(l.unit_price,0)::numeric unit_price,
            COALESCE(NULLIF(p.goi_thau,''),'') bid_package,
+           COALESCE(p.active_ingredient,'') active_ingredient, COALESCE(p.strength,'') strength,
+           p.price bid_price, COALESCE(p.tech_rank,'') tech_rank,
            COALESCE(u.province,'') province,
            -- Tên pháp nhân ĐẦY ĐỦ từ legal_entities (join theo code); fallback tên ngắn của snapshot.
            COALESCE(NULLIF(le.name,''), l.legal_entity_name, '') legal_full_name,
@@ -111,6 +113,8 @@ async function fetchMisa(runId) {
     unit_code: cleanCode(r.unit_code, 'UNKNOWN_UNIT'), unit_name: cleanCode(r.unit_name, r.unit_code),
     iit_code: cleanCode(r.qlnb_code, 'UNKNOWN_PRODUCT'), product_name: cleanCode(r.product_name, r.qlnb_code),
     uom: r.uom || '', bid_package: r.bid_package || '', province: cleanCode(r.province, ''),
+    active_ingredient: cleanCode(r.active_ingredient, ''), ham_luong: cleanCode(r.strength, ''),
+    bid_price: (r.bid_price != null ? num(r.bid_price) : null), priority: cleanCode(r.tech_rank, ''),
     quantity: num(r.quantity), revenue: Math.round(num(r.revenue)), unit_price: num(r.unit_price),
     revenue_basis: 'MISA_INVOICE_EXPORTED', revenue_bucket: r.revenue_bucket, revenue_status: r.revenue_status,
     mapping_status: r.mapping_status || '',
@@ -154,6 +158,8 @@ async function fetchPartner() {
            COALESCE(u.code,'') unit_code, COALESCE(u.name,'') unit_name,
            COALESCE(p.qlnb_code,'') qlnb_code, COALESCE(p.name,'') product_name, COALESCE(p.uom,'') uom,
            COALESCE(p.goi_thau,'') bid_package,
+           COALESCE(p.active_ingredient,'') active_ingredient, COALESCE(p.strength,'') strength,
+           p.price bid_price, COALESCE(p.tech_rank,'') tech_rank,
            COALESCE(oi.price,0)::numeric unit_price,
            COALESCE(partner.delivered_qty,0)::numeric delivered_qty,
            COALESCE(partner.delivered_qty,0)*COALESCE(oi.price,0)::numeric revenue
@@ -185,6 +191,8 @@ async function fetchPartner() {
     unit_code: cleanCode(r.unit_code, 'UNKNOWN_UNIT'), unit_name: cleanCode(r.unit_name, r.unit_code),
     iit_code: cleanCode(r.qlnb_code, 'UNKNOWN_PRODUCT'), product_name: cleanCode(r.product_name, r.qlnb_code),
     uom: r.uom || '', bid_package: r.bid_package || '', province: cleanCode(r.province, ''),
+    active_ingredient: cleanCode(r.active_ingredient, ''), ham_luong: cleanCode(r.strength, ''),
+    bid_price: (r.bid_price != null ? num(r.bid_price) : null), priority: cleanCode(r.tech_rank, ''),
     quantity: num(r.delivered_qty), revenue: Math.round(num(r.revenue)), unit_price: num(r.unit_price),
     revenue_basis: 'PARTNER_DELIVERED',
   }));
