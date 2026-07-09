@@ -80,6 +80,23 @@ Tương lai App Report New lấy **vài cột chi phí** để tính chi phí/do
   API dần (lộ trình P0–P5 đã khảo sát). **Không big-bang.**
 - Repo khảo sát/handoff: **schema-only** (không số thật/PII/secret) — đã áp cho `data-hub-schema-only`.
 
+## 8-BIS. 💰 ENGINE HOA HỒNG — 4 LOẠI NGƯỜI NHẬN (CEO chốt 2026-07-09, mở rộng cost engine)
+Sau khi app xong, Data Hub sẽ tính **hoa hồng** cho: **nhân viên · đơn vị · cộng tác viên (CTV) · đối tác.**
+Thiết kế cost engine (P4–P5) phải **chừa sẵn** để gắn vào là chạy, không đập lại.
+- **Mô hình "recipient" tổng quát** có `type ∈ {nv, donvi, ctv, doitac}` — 1 engine tham số hóa, KHÔNG 4 engine rời.
+- **Rule hoa hồng cấu hình được** theo từng type: rate %, **bậc thang** (theo target/doanh thu), theo **tuyến/sản
+  phẩm/kỳ**, min/max, **điều chỉnh/clawback**. Rule lưu **CEO-only**, versioned, **preview → CEO duyệt → commit**.
+- **Nguồn doanh thu:** NV & đơn vị (App Report), **đối tác** (đã có sẵn `source=APP_WEB_PARTNER` trong doanh thu),
+  **CTV** (cần mapping CTV→doanh thu — bot xác nhận có sẵn không; 4 CTV đã có trong master_nhanvien `status='Cộng tác'`).
+- **Luồng:** `revenue_snapshot(per recipient)` × `commission_rules(type,version)` → `commission_results(recipient,
+  kỳ, revenue_basis, rule_version, amount)` → **CEO-only view + export whitelist + audit**. Settle theo kỳ, đóng
+  băng khi chốt + cơ chế điều chỉnh có audit.
+- **‼ Bảo mật cao nhất:** hoa hồng = **tiền chi trả** → **nhạy hơn cả % chi phí**. CEO-only tuyệt đối, KHÔNG bao
+  giờ tới bề mặt NV/app khác; audit mọi tính/xem/tải/export; không đưa vào LLM facts của App Report.
+- **Schema chừa sẵn:** `recipients(type,code,name)` · `commission_rules(type,version,def_json,active)` ·
+  `commission_results(recipient,period,revenue_basis,rule_version,amount)` · `commission_runs(kỳ,nguồn,checksum,actor)`.
+- P0–P2 (master data) **không hardcode** giả định chặn 4 type này (recipient model phải phủ được cả CTV/đối tác).
+
 ## 9. LỘ TRÌNH (giao bot)
 - **P0** Chốt SSOT = Data Hub mới; dựng khung app + auth CEO (password/OTP) + tầng A master data.
 - **P1** Import + Smart validate + preview/commit + audit cho master data; phát **public API** (bắt đầu customers/units).
