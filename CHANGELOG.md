@@ -21,6 +21,23 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (ah) — Claude Code — CEO DUYỆT 2 bản mẫu Điểm/Xu (tuần+tháng) → chốt template + directive bot
+- **CEO duyệt cả bản TUẦN và THÁNG** của DN001 (bản "thông minh", có mục 9 A–I). Chốt 2 sửa cuối:
+  1. **BỎ câu "toàn công ty đang dư xu"** (câu cũ dư 944,87 xu) — tránh NV ỷ lại tưởng công ty không cần
+     chi tiêu xu. Bản NV chỉ nói trạng thái xu **riêng NV**.
+  2. **Bản TUẦN cũng có mục 9 "Phân tích thông minh"** (trước chỉ bản tháng có).
+  3. Thêm dòng nhắc **"Xu chỉ tính theo QUÝ — sang quý mới reset về 0, không chuyển tiếp"** ở Nguồn dữ liệu.
+- **Thêm template chuẩn đã duyệt:** `reference/diemxu_templates/APPROVED_tuan_DN001.html` +
+  `APPROVED_thang_DN001.html` (giữ `cid:logo_dona`/`cid:qr_zalo` để bot render dữ liệu live vào).
+- **Thêm `DIRECTIVE_SALES_REPORT.md`** giao bot dựng `server/src/salesReport.js` (email tuần/tháng per NV +
+  bản CEO tổng hợp, tái dùng `analytics.js` + `diemXu.js`, mục 9 A–I, dự báo `targetPacingMeta`, khai thác
+  `cstTable`) + gắn lịch (Thứ 7 13h00 tuần · ngày cuối tháng 18h30 tháng) gửi Telegram + email; loại 5 NV.
+- **Cập nhật `SPEC_DIEM_XU_TICH_LUY.md`:** mục 4h (CEO duyệt + khoá layout), mục 5 (checklist triển khai bot),
+  chỉnh query `vat.db` mục 4d (chỉ lọc `hidden_at`, **chưa khoá `trang_thai_hd`** tới khi Finance xác nhận).
+- **Test:** render 2 bản mẫu (`node --check` generator OK); template giữ cid refs. Chỉ tài liệu +
+  template — **không đụng code app đang chạy**. Bước sau: bot dựng `salesReport.js` → chạy mẫu THẬT DN001 →
+  CEO duyệt lần cuối → bật gửi cả đội.
+
 ### 2026-07-09 (ag) — Claude Code — Đồng bộ MỨC email target với màu biểu đồ (thêm mốc XUẤT SẮC ≥120%)
 - **CEO:** biểu đồ NV có mức "xuất sắc ≥120%" nhưng email chỉ có 50/90/100 → thêm mốc email cho khớp.
 - **`MILESTONES = [50, 90, 100, 120]`** — thêm **120% = XUẤT SẮC** (mỗi mốc gửi 1 lần/kỳ/NV, chống spam).

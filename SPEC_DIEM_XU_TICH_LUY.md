@@ -56,14 +56,16 @@ Riêng báo cáo điểm/xu này loại đủ 5 mã trên.)
 - **Query xu chuẩn:**
   ```sql
   SELECT emp_code, emp_name, COUNT(*) so_hd,
-         SUM(COALESCE(NULLIF(tong_tien,0), so_tien)) tien_tinh_xu,
-         SUM(COALESCE(NULLIF(tong_tien,0), so_tien))/500000.0*1.3 xu
+         SUM(COALESCE(NULLIF(tong_tien,0), so_tien, 0)) tien_tinh_xu,
+         SUM(COALESCE(NULLIF(tong_tien,0), so_tien, 0))/500000.0*1.3 xu
   FROM vat_bills
-  WHERE ngay BETWEEN :from AND :to
-    AND trang_thai_hd='co_hd_vat' AND IFNULL(hidden_at,'')=''
+  WHERE date(ngay) BETWEEN date(:from) AND date(:to)
+    AND IFNULL(hidden_at,'')=''
   GROUP BY emp_code, emp_name;
   ```
-- Nhớ LOẠI 5 NV ở mục 4 khỏi kết quả.
+- **‼ CHƯA khoá `trang_thai_hd`** cho tới khi Finance xác nhận — hiện chỉ lọc `hidden_at` rỗng (đã áp
+  trong `diemXu.js`). Khi Finance chốt trạng thái hợp lệ thì thêm điều kiện `trang_thai_hd=...`.
+- Nhớ LOẠI 5 NV ở mục 4 khỏi kết quả. → Đã hiện thực trong `server/src/diemXu.js#readVatXu`.
 
 ## 4e. KHUNG BÁO CÁO EMAIL (theo 2 mẫu CEO gửi — DN001 Tuần 26 & Tháng 06 V10)
 Thiết kế: **theme DONAPHARM xanh lá** (#00493f header, #087565 nhấn), **logo cid:logo_dona** trái,
@@ -127,8 +129,30 @@ Mục tiêu: giúp NV "định hướng bán hàng thông minh nhất để tăn
     tăng doanh số tự do (đơn vị/SP NCL tiềm năng, đơn vị NCL đang bỏ trống).
 Các số so sánh: **tháng liền trước** + **trung bình quý trước** (mốc do CEO chốt).
 
-## 5. Việc còn chờ
-- [ ] Bot điều tra `vat.db`: tên bảng hóa đơn xu, cột (emp_code/ngày/số tiền tính xu/xu), cách lọc hợp lệ.
-- [ ] CEO chốt lịch gửi cuối tuần (Chủ nhật/Thứ 7, giờ).
-- [ ] Dựng BẢN MẪU (email HTML + Telegram) cho 1 NV + bản CEO → CEO duyệt.
-- [ ] Lịch tự động cuối tuần sau khi duyệt.
+## 4h. ✅ CEO ĐÃ DUYỆT 2 BẢN MẪU (2026-07-09) — CHỐT LAYOUT
+CEO duyệt **cả bản TUẦN và bản THÁNG** của DN001 (bản "thông minh" có mục 9). Hai điểm sửa cuối
+đã áp dụng và **khoá lại**:
+1. **BỎ câu "toàn công ty đang dư xu"** (câu cũ: *"Toàn công ty Q2 đang dư 944,87 xu, không kết luận
+   phạt theo tổng từ thiếu/dư cá nhân."*). Lý do CEO: tránh NV ỷ lại, tưởng công ty không cần chi tiêu xu.
+   → Báo cáo CHỈ nói trạng thái xu của **riêng từng NV**, không đưa số dư/thiếu toàn công ty vào bản NV.
+2. **Bản TUẦN cũng có mục 9 "Phân tích thông minh"** (giống bản tháng, chỉnh cho nhịp tuần: A xu hướng
+   tuần, H dự báo cuối tháng, C cơ cấu tuyến, I khai thác NCL/CL/QLNB, D–E khách hàng & mặt hàng, G việc tuần tới).
+3. Thêm dòng nhắc **"Xu chỉ tính theo QUÝ — sang quý mới tự reset về 0, không chuyển tiếp"** ở phần Nguồn dữ liệu.
+
+**Template chuẩn đã duyệt (bot render dữ liệu live vào):**
+- `reference/diemxu_templates/APPROVED_tuan_DN001.html` — layout TUẦN (giữ `cid:logo_dona`/`cid:qr_zalo`).
+- `reference/diemxu_templates/APPROVED_thang_DN001.html` — layout THÁNG (đã bỏ câu dư xu).
+→ Đây là **bố cục CHUẨN**; bot chỉ thay số/bảng bằng dữ liệu thật per emp_code, giữ nguyên cấu trúc & theme.
+
+## 5. Việc còn chờ / TRIỂN KHAI (bot) — sau khi CEO duyệt 2026-07-09
+- [x] Bot điều tra `vat.db` (bảng `vat_bills`, cột — xong, xem 4d).
+- [x] CEO chốt lịch gửi (Thứ 7 13h00 tuần · ngày cuối tháng 18h30 tháng — xem 4b).
+- [x] Dựng BẢN MẪU (tuần + tháng) DN001 → **CEO ĐÃ DUYỆT** (xem 4h).
+- [ ] **BOT DỰNG `server/src/salesReport.js`**: sinh email HTML tuần/tháng per NV theo 2 template ở 4h,
+      render dữ liệu live từ `analytics.js` (doanh thu/tuyến/top/so-cùng-kỳ/theo-ngày) + `diemXu.js`
+      (điểm/xu) + mục 9 phân tích thông minh (A–I, mục 4g). Lọc riêng theo emp_code, **loại 5 NV** (mục 4).
+- [ ] **Bản CEO tổng hợp**: toàn đội + phân tích gọn per-NV (mục 4c). Có thể tái dùng `ceoDigestHtml`.
+- [ ] **Lịch tự động**: worker gắn cron — Thứ 7 13h00 (tuần), daily 18h30 chỉ gửi nếu là ngày cuối tháng.
+      Gửi qua **Telegram + email** (dùng `notifyChannels.deliver`), CID logo/QR như email target.
+- [ ] Chạy **bản mẫu thật DN001 trên server** (số live) → CEO duyệt lần cuối trước khi bật gửi cả đội.
+- Xem `DIRECTIVE_SALES_REPORT.md` để biết chi tiết đầu việc bot.
