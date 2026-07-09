@@ -159,9 +159,10 @@ export default function Analysis({ me }) {
               <div className="seg compact">
                 <button className={topDim === 'unit' ? 'active' : ''} onClick={() => setTopDim('unit')}>Đơn vị</button>
                 <button className={topDim === 'product' ? 'active' : ''} onClick={() => setTopDim('product')}>Sản phẩm</button>
+                {me.isAdmin && <button className={topDim === 'emp' ? 'active' : ''} onClick={() => setTopDim('emp')}>Nhân viên</button>}
               </div>
             </div>
-            {!topRows ? <Spinner /> : <TopBarChart rows={topRows} />}
+            {!topRows ? <Spinner /> : <TopBarChart rows={topRows} limit={20} />}
           </div>
           <div className="cmp-toggle-row">
             <span className="cmp-toggle-label">So tăng/giảm:</span>

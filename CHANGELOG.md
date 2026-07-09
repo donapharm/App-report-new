@@ -21,6 +21,19 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (ae) — Claude Code — KHÔI PHỤC Top 20 (Tổng quan) + tab "Nhân viên" trong biểu đồ (bị git reset xoá)
+- **CEO phát hiện:** hôm qua đã có Top 20 ở Tổng quan + tab Nhân viên trong biểu đồ top, nay MẤT.
+- **Điều tra:** Phân tích còn Top 20 (đã trên `main`), nhưng **Tổng quan tụt về Top 10** và **cả 2 trang mất
+  tab Nhân viên**. Nguyên nhân: phần này bot làm **local trên server, CHƯA merge `main`** → mỗi lần
+  `git reset --hard origin/main` (deploy đợt fix của Claude) **xoá sạch**. Code còn trong nhánh backup
+  `origin/bot-server-local-2`.
+- **Khôi phục (port sạch sang `main` hiện tại):** Overview lên **Top 20** (`topLimit`) + thêm tab **Nhân viên**
+  (admin); Analysis thêm tab **Nhân viên**. `TopBarChart` đã sẵn `limit`/`label` nên render đủ.
+- **‼ PHÒNG NGỪA:** bot PHẢI **commit + push (PR lên `main`)** mọi thay đổi app — KHÔNG để local, vì
+  auto-deploy `git reset --hard` sẽ xoá. Đây là lần lặp lại của lỗi mất code local.
+- **Test:** `npm run build` OK. Chỉ FE → bot restart (không cần materialize).
+
+
 ### 2026-07-09 (ad) — Claude Code — FIX thông báo target sai tháng (T06 → phải là THÁNG HIỆN TẠI T07)
 - **CEO phát hiện:** bot + email nhắc target/doanh số **tháng 06** trong khi đang là **T07** → sai.
 - **Gốc:** `targetNotify.evaluate` mặc định `store.lastCompleteKy()` = tháng hoàn thành gần nhất (T06).
