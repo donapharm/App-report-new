@@ -44,7 +44,8 @@ const pctText = (v) => (v == null ? '—' : `${Number(v).toLocaleString('vi-VN',
 
 // Trạng thái từng NV roster ở 1 kỳ: target, đạt (before VAT), %đạt, %thời gian, chậm nhịp.
 function evaluate({ ky } = {}) {
-  const k = ky || store.lastCompleteKy() || store.latestKy();
+  // Thông báo target LUÔN theo THÁNG HIỆN TẠI (CEO chốt) — không lấy tháng đã hoàn thành gần nhất.
+  const k = ky || store.currentKyByDate() || store.latestKy();
   const pacing = A.targetPacingMeta(k);
   const timePct = +(pacing.factor * 100).toFixed(1);
   const weekOfMonth = Math.max(1, Math.ceil((pacing.daysElapsed || 1) / 7));

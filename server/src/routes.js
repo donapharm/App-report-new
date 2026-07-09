@@ -1141,7 +1141,7 @@ router.get('/targets', auth.requireAuth, (req, res) => {
 // KPI target gọn (tháng+quý+pacing) — cho trang Phân tích (và nơi khác cần), theo scope.
 router.get('/targets/kpi', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const ky = req.query.ky || store.lastCompleteKy() || store.latestKy();
+  const ky = req.query.ky || store.currentKyByDate() || store.latestKy();
   res.json({ kpi: targetKpiSummary(ky, scope) });
 });
 // Xem trước (DRY-RUN) thông báo target sẽ gửi — CEO duyệt trước khi bật gửi thật.
