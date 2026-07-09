@@ -216,7 +216,7 @@ async function runTargetMilestones() {
     const telegramId = (tid && prefEnabled(tid)) ? tid : null;
     if (!telegramId && !email) continue; // chưa có kênh nào -> để dành
     try {
-      const r = await notifyChannels.deliver({ telegramId, email, subject: 'DNPHARMA — Nhắc target', text: targetNotify.messageFor(e) });
+      const r = await notifyChannels.deliver({ telegramId, email, subject: 'DNPHARMA — Nhắc target', text: targetNotify.messageFor(e), html: targetNotify.emailHtmlFor(e) });
       if (r.ok) sent.push(e);
     } catch (err) { console.error('milestone send error:', e.emp_code, err.message); }
   }
@@ -225,7 +225,7 @@ async function runTargetMilestones() {
   for (const m of maps) {
     const u = store.findUserByCode(m.emp_code);
     if (u && isAdminUser(u) && prefEnabled(String(m.telegram_id))) {
-      try { await notifyChannels.deliver({ telegramId: String(m.telegram_id), email: notifyChannels.emailFor(u.emp_code, u.email), subject: 'DNPHARMA — Tổng hợp target', text: digest }); } catch (err) { console.error('ceo digest error:', err.message); }
+      try { await notifyChannels.deliver({ telegramId: String(m.telegram_id), email: notifyChannels.emailFor(u.emp_code, u.email), subject: 'DNPHARMA — Tổng hợp target', text: digest, html: targetNotify.ceoDigestHtml({}) }); } catch (err) { console.error('ceo digest error:', err.message); }
     }
   }
   console.log(`✔ Target milestones: gửi ${sent.length} tin NV + CEO digest.`);

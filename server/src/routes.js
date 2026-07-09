@@ -1193,7 +1193,7 @@ router.post('/admin/notifications/send', auth.requireAuth, auth.requireAdmin, as
     if (testOnly) {
       const meEmp = String(req.session.emp_code || '').toUpperCase();
       const meUser = store.findUserByCode(meEmp);
-      const r = await notifyChannels.deliver({ telegramId: tidByEmp[meEmp], email: notifyChannels.emailFor(meEmp, meUser?.email), subject: '[GỬI THỬ] DNPHARMA Target', text: '🧪 [GỬI THỬ]\n' + targetNotify.ceoDigest({ ky }) });
+      const r = await notifyChannels.deliver({ telegramId: tidByEmp[meEmp], email: notifyChannels.emailFor(meEmp, meUser?.email), subject: '[GỬI THỬ] DNPHARMA Target', text: '🧪 [GỬI THỬ]\n' + targetNotify.ceoDigest({ ky }), html: targetNotify.ceoDigestHtml({ ky }) });
       return r.ok ? res.json({ ok: true, test: true, channels: r.channels }) : res.status(400).json({ error: 'Tài khoản của bạn chưa có Telegram lẫn email để gửi thử.' });
     }
     const { events } = targetNotify.pendingEvents({ ky });
@@ -1204,14 +1204,14 @@ router.post('/admin/notifications/send', auth.requireAuth, auth.requireAdmin, as
       const email = notifyChannels.emailFor(e.emp_code, user?.email);
       const tid = tidByEmp[e.emp_code];
       if (!tid && !email) { skipped += 1; continue; } // chưa có kênh nào -> để dành
-      const r = await notifyChannels.deliver({ telegramId: tid, email, subject: 'DNPHARMA — Nhắc target', text: targetNotify.messageFor(e) });
+      const r = await notifyChannels.deliver({ telegramId: tid, email, subject: 'DNPHARMA — Nhắc target', text: targetNotify.messageFor(e), html: targetNotify.emailHtmlFor(e) });
       if (r.ok) { sent.push(e); r.channels.forEach((c) => { chan[c] = (chan[c] || 0) + 1; }); } else skipped += 1;
     }
     targetNotify.markSent(sent);
     let ceoSent = 0;
     for (const m of maps) {
       const u = store.findUserByCode(m.emp_code);
-      if (u && auth.isAdmin(u.role)) { const r = await notifyChannels.deliver({ telegramId: String(m.telegram_id), email: notifyChannels.emailFor(u.emp_code, u.email), subject: 'DNPHARMA — Tổng hợp target', text: targetNotify.ceoDigest({ ky }) }); if (r.ok) ceoSent += 1; }
+      if (u && auth.isAdmin(u.role)) { const r = await notifyChannels.deliver({ telegramId: String(m.telegram_id), email: notifyChannels.emailFor(u.emp_code, u.email), subject: 'DNPHARMA — Tổng hợp target', text: targetNotify.ceoDigest({ ky }), html: targetNotify.ceoDigestHtml({ ky }) }); if (r.ok) ceoSent += 1; }
     }
     res.json({ ok: true, sentNv: sent.length, skipped, ceoSent, pending: events.length, byChannel: chan });
   } catch (e) { res.status(400).json({ error: e.message }); }
@@ -1229,7 +1229,7 @@ router.post('/admin/notifications/send-one', auth.requireAuth, auth.requireAdmin
     const map = auth.listTelegramMap().find((m) => String(m.emp_code || '').toUpperCase() === emp);
     const email = notifyChannels.emailFor(emp, user?.email);
     if (!map && !email) return res.status(400).json({ error: `NV ${emp} chưa có Telegram lẫn email — chưa gửi được. Cần bạn ấy đăng nhập Telegram hoặc bổ sung email.` });
-    const r = await notifyChannels.deliver({ telegramId: map ? String(map.telegram_id) : null, email, subject: 'DNPHARMA — Nhắc target', text: st.message });
+    const r = await notifyChannels.deliver({ telegramId: map ? String(map.telegram_id) : null, email, subject: 'DNPHARMA — Nhắc target', text: st.message, html: st.html });
     return r.ok ? res.json({ ok: true, emp_code: emp, channels: r.channels, message: st.message }) : res.status(400).json({ error: (r.telegram?.description || r.email?.description || 'Gửi thất bại') });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
