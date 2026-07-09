@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (ab) — Claude Code — Fill Hoạt chất/Hàm lượng/Giá thầu/Ưu tiên từ bảng `products` nguồn
+- **Gốc:** 4 cột này trước lấy từ CST (mẫu/chưa đủ) → trống 27–37%. Bot gửi schema `products` có sẵn:
+  `active_ingredient`, `strength`, `price`, `tech_rank`.
+- **Sửa:** materialize (MISA + partner) lấy thẳng từ `products`: Hoạt chất←`active_ingredient`,
+  Hàm lượng←`strength`, Giá trúng thầu←`price`, **Ưu tiên←`tech_rank`** (giả định — mã dạng "H.x" hợp với
+  hạng kỹ thuật; **cần bot/CEO xác nhận** sau khi chạy lại: cột Ưu tiên có ra đúng "H.D/H.B" không, nếu sai
+  đổi sang `tech_group`/`nhom_dieu_tri`).
+- Các cột này gắn vào MỌI dòng doanh thu → không còn phụ thuộc CST mẫu; export điền đủ như Số QĐ.
+- **Áp:** materialize đổi → **bot phải CHẠY LẠI materialize** (không chỉ restart). `node --check` OK.
+
+
 ### 2026-07-09 (aa) — Claude Code — Export Doanh thu đầy đủ: thêm cột "Số QĐ" + bỏ chặn Hoạt chất/Hàm lượng
 - **CEO phản ánh** file xuất thiếu cột **Số QĐ**, và Hoạt chất/Hàm lượng/Ưu tiên/Giá trúng thầu trống nhiều.
 - **Số QĐ:** thêm cột (key `qd`, đã có sẵn từ enrichProductMeta) — QĐ139/QĐ141… suy từ mã QLNB + gói thầu.
