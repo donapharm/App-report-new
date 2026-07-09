@@ -1582,7 +1582,13 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
     const metaMap = productMetaFromRows(enrichContractorNames(store.getCst({ scope }), contractorLookup).concat(baseRows), contractorLookup);
     const rows = A.applyFilters(enrichProductMeta(baseRows, metaMap, contractorLookup), revenueFiltersFromQuery(req.query))
       .sort((a, b) => (b.revenue || 0) - (a.revenue || 0))
-      .map((r, i) => ({ ...r, stt: i + 1 }));
+      .map((r, i) => {
+        // File xuất: hiện Hoạt chất/Hàm lượng nếu CÓ trong metaMap (không chặn theo QĐ139 như web).
+        const meta = metaMap.get(r.iit_code || r.product_name) || {};
+        return { ...r, stt: i + 1,
+          active_ingredient: r.active_ingredient || meta.active_ingredient || '',
+          ham_luong: r.ham_luong || meta.ham_luong || '' };
+      });
     ws.columns = [
       { header: 'STT', key: 'stt', width: 6 },
       { header: 'Kỳ', key: 'ky', width: 10 },
@@ -1594,6 +1600,7 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'Tên đơn vị', key: 'unit_name', width: 34 },
       { header: 'Mã QLNB', key: 'iit_code', width: 20 },
       { header: 'Sản phẩm', key: 'product_name', width: 30 },
+      { header: 'Số QĐ', key: 'qd', width: 10 },
       { header: 'Hoạt chất', key: 'active_ingredient', width: 22 },
       { header: 'Hàm lượng', key: 'ham_luong', width: 12 },
       { header: 'Đơn vị tính', key: 'uom', width: 12 },

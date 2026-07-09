@@ -21,6 +21,17 @@
 
 ## 🗒️ LỊCH SỬ THAY ĐỔI (mới nhất trên cùng)
 
+### 2026-07-09 (aa) — Claude Code — Export Doanh thu đầy đủ: thêm cột "Số QĐ" + bỏ chặn Hoạt chất/Hàm lượng
+- **CEO phản ánh** file xuất thiếu cột **Số QĐ**, và Hoạt chất/Hàm lượng/Ưu tiên/Giá trúng thầu trống nhiều.
+- **Số QĐ:** thêm cột (key `qd`, đã có sẵn từ enrichProductMeta) — QĐ139/QĐ141… suy từ mã QLNB + gói thầu.
+- **Hoạt chất/Hàm lượng (trống 37%):** trước bị **chặn chỉ hiện cho QĐ139**; nay ở FILE XUẤT bỏ chặn —
+  có trong metaMap là hiện (trang web vẫn giữ như cũ để gọn).
+- **CÒN LẠI — Ưu tiên + Giá trúng thầu (trống 27%):** lấy từ nguồn **Cơ số thầu (CST) — vẫn là dữ liệu
+  mẫu/chưa nối đủ**; SP bán ra chưa có trong CST → trống. Sửa triệt để: cho materialize lấy từ bảng
+  `products`/nguồn thầu (đang chờ schema `products` để wire đúng cột).
+- **Test:** xuất file thật, đủ 22 cột, có "Số QĐ". `node --check` OK.
+
+
 ### 2026-07-09 (z) — Claude Code — Thiết kế lại EMAIL thông báo target (HTML + logo + QR Zalo OA)
 - **CEO chê email cũ "cùi bắp"** (text trơn). Làm lại thành **email HTML** chỉn chu, an toàn client email
   (bảng + inline style): logo DONAPHARM đầu trang (nền trắng), **thanh tiến độ**, bảng số liệu (doanh thu
