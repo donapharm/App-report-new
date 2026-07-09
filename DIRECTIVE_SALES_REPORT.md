@@ -35,6 +35,17 @@ Tất cả scope theo **1 emp_code** (bản NV) → truyền `scope={emp:[code]}
   đơn vị NV; đơn vị khối **CL** còn quota (điểm ×2); nhấn **NCL dư địa vô hạn** (không phụ thuộc cơ số thầu).
   Nếu chưa nối được CST theo NV, để câu "đang nối nguồn Cơ số thầu" như template (đừng bịa số).
 
+## 2-BIS) ‼ AI ĐƯỢC NHẬN BÁO CÁO DOANH SỐ (CEO chốt 2026-07-09) — CHỐT CỨNG
+- **CHỈ gửi báo cáo doanh số tuần/tháng cho NV PHÒNG KINH DOANH.** Nhân viên **VĂN PHÒNG / telesale KHÔNG nhận.**
+- **Danh sách người nhận = `store.targetRosterCodes()`** (allowlist phòng KD CEO chốt trong
+  `server/data/target_roster.json` / cờ `has_target`). Hàm này **cố tình không suy luận theo role** để tránh
+  lẫn văn phòng/telesale — dùng ĐÚNG hàm này, **KHÔNG** tự quét theo `nv_emails.json` hay `users.json`.
+- **`nv_emails.json` CHỈ là SỔ ĐỊA CHỈ** (mã → email), **KHÔNG phải danh sách người nhận.** Có email văn phòng
+  trong sổ ≠ họ nhận báo cáo. Người nhận do `targetRoster` quyết, email chỉ để tra địa chỉ khi đã là người nhận.
+- Trình tự chọn người nhận trong `salesReport.js`:
+  `targetRosterCodes()` → **bỏ 5 NV loại trừ** (mục 3) → ai có email/telegram thì gửi, ai thiếu kênh thì **skip**
+  (log lại, không lỗi). Bản CEO tổng hợp gửi riêng cho tài khoản quản trị (`CEO`).
+
 ## 3) ‼ LOẠI TRỪ — TUYỆT ĐỐI (CEO chốt)
 `diemXu.EXCLUDE = {DN021, DN022, DN023, VP004, VP018}` — **không tính điểm/xu, không gửi báo cáo** cho 5 NV này.
 Đã hiện thực trong `diemXu.js`; salesReport phải lọc danh sách NV gửi theo cùng tập này.
