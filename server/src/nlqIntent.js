@@ -32,6 +32,14 @@ function classify(text) {
   const empCodeMention = (q.match(/\b(dn\d{3}|vp\d{3}|ceo)\b/) || [])[1];
   if (empCodeMention && asksRevenue) return { intent: 'revenue_employee', empCode: empCodeMention.toUpperCase() };
 
+  // Drill-down theo thực thể cụ thể: câu có "ở/tại/của/trong/bên ..." hoặc hỏi ai/đơn vị nào bán.
+  // smart.js xác nhận thực thể bằng lookupUnits/lookupProducts và xử lý mơ hồ; intent này phải đứng
+  // trước breakdown/ranking generic để câu "doanh thu chi tiết ở BV X" không thành "liệt kê mọi đơn vị".
+  if (has(/\b(o|tai|cua|trong|ben)\b/) && (asksRevenue || productCue || unitCue || empCue || has(/co so|con lai|ma thau|thau/))) {
+    return { intent: 'entity_drilldown' };
+  }
+  if (has(/\b(ai ban|nv nao ban|nhan vien nao ban|don vi nao ban|ban o dau)\b/)) return { intent: 'entity_drilldown' };
+
   if (topCue || has(/\b(ai|nguoi nao)\b.*(dan dau|dung dau|cao nhat|nhieu nhat)/)) {
     if (empCue || has(/\b(ai|nguoi nao)\b.*(dan dau|dung dau|cao nhat|nhieu nhat)/)) return { intent: 'ranking', dimension: 'emp', limit: limitFrom(q, 5) };
     if (unitCue || has(/co doanh thu|phat sinh doanh thu/)) return { intent: 'ranking', dimension: 'unit', limit: limitFrom(q, has(/top\s*10|10\s*(don vi|benh vien|phong kham|khach)/) ? 10 : 5) };

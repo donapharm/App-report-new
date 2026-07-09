@@ -253,6 +253,9 @@ async function answerQuestion({ text, scope, session }) {
   const dimLabel = (dimension) => ({ emp: 'nhân viên', unit: 'đơn vị', product: 'sản phẩm', contractor: 'nhà thầu', bid_package: 'gói thầu', province: 'tỉnh' }[dimension] || dimension);
   const fmtDimItem = (dimension, t) => `${dimension === 'unit' ? unitText(t.key, t.label) : t.label}: ${fmt(t.revenue)}`;
 
+  const drilldown = drilldownAnswer({ q, ky, mine, unitHits, productHits: prodHits });
+  if (drilldown) return drilldown;
+
   // Router NLQ có cấu trúc: intent rõ ràng xử lý trước fuzzy lookup.
   if (intent.intent === 'sensitive') {
     return say('Đây là nội dung nhạy cảm về chi phí/lợi nhuận/CP Total. Anh/Chị vui lòng liên hệ CEO trước khi hỏi tiếp nội dung này.');
@@ -687,7 +690,7 @@ function lookupProducts({ q, ky, scope, max = 3 }) {
     const c = String(code || '').trim();
     if (!c) return null;
     let p = prod.get(c);
-    if (!p) { p = { code: c, name: name || c, revenue: 0, quantity: 0, units: new Map(), cst: [] }; prod.set(c, p); }
+    if (!p) { p = { code: c, name: name || c, revenue: 0, quantity: 0, units: new Map(), emps: new Map(), cst: [] }; prod.set(c, p); }
     if ((!p.name || p.name === c) && name) p.name = name;
     return p;
   };
@@ -698,6 +701,12 @@ function lookupProducts({ q, ky, scope, max = 3 }) {
     if (uk) {
       const u = p.units.get(uk) || { code: r.unit_code, name: r.unit_name || r.unit_code, revenue: 0, quantity: 0 };
       u.revenue += Number(r.revenue || 0); u.quantity += Number(r.quantity || 0); p.units.set(uk, u);
+    }
+    const ek = r.emp_code;
+    if (ek) {
+      if (!p.emps) p.emps = new Map();
+      const e = p.emps.get(ek) || { code: ek, name: r.emp_name || ek, revenue: 0, quantity: 0 };
+      e.revenue += Number(r.revenue || 0); e.quantity += Number(r.quantity || 0); p.emps.set(ek, e);
     }
   }
   // Gắn CST (cơ số/giá thầu) cho mọi sản phẩm — kể cả thuốc đã trúng thầu nhưng kỳ này chưa bán.
@@ -725,6 +734,7 @@ function lookupProducts({ q, ky, scope, max = 3 }) {
     const remainPct = bidQty > 0 ? +(remainQty / bidQty * 100).toFixed(1) : (cst[0]?.remain_pct ?? null);
     const prices = [...new Set(cst.map((c) => Number(c.bid_price || 0)).filter((v) => v > 0))];
     const units = [...p.units.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 6);
+    const emps = [...(p.emps || new Map()).values()].sort((a, b) => b.revenue - a.revenue).slice(0, 6);
     return {
       ma: p.code,
       ten: p.name,
@@ -737,6 +747,7 @@ function lookupProducts({ q, ky, scope, max = 3 }) {
       con_lai: cst.length ? remainQty : null,
       con_lai_pct: remainPct,
       don_vi_dang_ban: units.map((u) => ({ ten: unitText(u.code, u.name), doanh_thu: Math.round(u.revenue), so_luong: u.quantity })),
+      ai_ban: emps.map((e) => ({ ma: e.code, ten: e.name, doanh_thu: Math.round(e.revenue), so_luong: e.quantity })),
       co_so_theo_don_vi: cst.slice(0, 6).map((c) => ({
         dv: unitText(c.unit_code, c.unit_name), goi: c.bid_package || '',
         gia_thau: Number(c.bid_price || 0) || null,
@@ -842,6 +853,7 @@ function lookupUnits({ q, ky, scope, max = 3 }) {
       top_san_pham: prods.map((p) => ({ ten: p.name, doanh_thu: Math.round(p.revenue) })),
       so_dong_co_so: u.cst.length,
       co_so_sap_can: cstLow,
+      co_so: u.cst.slice(0, 6).map((c) => ({ sp: c.product_name, ma_sp: c.iit_code, con_lai: Number(c.remain_qty || 0), tong: Number(c.bid_qty_initial || 0), con_lai_pct: c.remain_pct, goi: c.bid_package || '' })),
     };
   });
 }
@@ -865,6 +877,97 @@ function sayUnitLookup(hits, ky, mine) {
   }
   if (lines[lines.length - 1] === '') lines.pop();
   return say(`🔎 Tra cứu đơn vị kỳ ${ky}:`, lines);
+}
+
+function isSpecificEntityQuestion(q) {
+  return /\b(o|tai|cua|trong|ben)\b/.test(q)
+    || /\b(ai ban|nv nao ban|nhan vien nao ban|don vi nao ban|ban o dau)\b/.test(q)
+    || /dong\s+nai/.test(q)
+    || /\b\d{3}\b/.test(q);
+}
+function filterExplicitUnitCode(q, hits) {
+  const codes = [...String(q || '').matchAll(/\b(\d{3})\b/g)].map((m) => m[1]);
+  if (!codes.length) return hits;
+  const picked = hits.filter((u) => codes.some((c) => String(u.ma || '').startsWith(`${c}.`) || String(u.ma || '') === c));
+  return picked.length ? picked : hits;
+}
+function filterDongNaiAmbiguity(q, hits) {
+  if (!/dong\s+nai/.test(q) || hits.length <= 1) return hits;
+  const codeNameHits = hits.filter((u) => noAccent(String(u.ma || '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').includes('dong nai'));
+  return codeNameHits.length >= 2 ? codeNameHits : hits;
+}
+function disambiguateEntity(kind, hits, rawName) {
+  if (!hits.length) return null;
+  if (hits.length === 1) return null;
+  if (hits.length <= 5) {
+    const label = kind === 'unit' ? 'đơn vị' : 'sản phẩm';
+    const choices = hits.map((h) => kind === 'unit' ? `• ${h.ma}: ${h.ten}` : `• ${h.ma}: ${h.ten}`);
+    return say(`Em thấy nhiều ${label} khớp${rawName ? ` "${rawName}"` : ''}. Anh/Chị muốn hỏi mã nào?`, [...choices, 'Anh/Chị nhắn kèm mã giúp em nhé.']);
+  }
+  return say(`Có hơn 5 kết quả khớp. Anh/Chị gõ cụ thể hơn hoặc kèm mã giúp em nhé.`);
+}
+function drilldownAnswer({ q, ky, mine, unitHits, productHits }) {
+  if (!isSpecificEntityQuestion(q)) return null;
+  const wantsProductList = /san pham|thuoc|mat hang|ma hang|ma qlnb/.test(q) && /\b(o|tai|trong|ben)\b/.test(q);
+  const wantsSeller = /\b(ai ban|nv nao ban|nhan vien nao ban|ai phu trach)\b/.test(q);
+  const wantsCst = /co so|con lai|ma thau|thau/.test(q);
+  const wantsProductUnits = /don vi nao ban|ban o dau/.test(q);
+
+  let units = unitHits();
+  units = filterExplicitUnitCode(q, units);
+  units = filterDongNaiAmbiguity(q, units);
+  const products = productHits();
+
+  const explicitUnit = units.length && (/\b(o|tai|trong|ben)\b/.test(q) || /benh vien|bvdk|phong kham|nha thuoc|don vi|\b\d{3}\b/.test(q));
+  const explicitProduct = products.length && (/vixcar|san pham|thuoc|mat hang|qlnb|ma hang|don vi nao ban|ban o dau|ai ban/.test(q));
+
+  if (explicitUnit) {
+    const dis = disambiguateEntity('unit', units, '');
+    if (dis) return dis;
+    const u = units[0];
+    const lines = [`🏥 ${u.ten}`, `• Doanh thu: ${fmt(u.doanh_thu)}${u.so_luong ? ` · SL ${Number(u.so_luong || 0).toLocaleString('vi-VN')}` : ''}`];
+    if (wantsProductList) {
+      lines.push(u.top_san_pham.length ? '• Sản phẩm tại đơn vị:' : '• Chưa có sản phẩm phát sinh tại đơn vị trong kỳ.');
+      u.top_san_pham.slice(0, 8).forEach((p, i) => lines.push(`${i + 1}. ${p.ten}: ${fmt(p.doanh_thu)}`));
+      return say(`Sản phẩm tại ${u.ten} kỳ ${ky}:`, lines);
+    }
+    if (wantsSeller) {
+      if (mine) lines.push('• Anh/Chị chỉ xem được phần của mình trong đơn vị này.');
+      lines.push(u.ai_ban.length ? `• ${mine ? 'Bạn bán' : 'NV bán tại đơn vị'}:` : '• Chưa có NV phát sinh doanh thu tại đơn vị trong phạm vi này.');
+      u.ai_ban.forEach((e, i) => lines.push(`${i + 1}. ${e.ten} (${e.ma}): ${fmt(e.doanh_thu)}`));
+      return say(`NV bán tại ${u.ten} kỳ ${ky}:`, lines);
+    }
+    if (wantsCst) {
+      lines.push(u.co_so?.length ? '• Cơ số/mã thầu tại đơn vị:' : '• Chưa có cơ số thầu khớp đơn vị trong phạm vi này.');
+      (u.co_so || []).forEach((c, i) => lines.push(`${i + 1}. ${c.sp}${c.ma_sp ? ` (${c.ma_sp})` : ''}: còn ${Number(c.con_lai || 0).toLocaleString('vi-VN')}${c.tong ? `/${Number(c.tong || 0).toLocaleString('vi-VN')}` : ''}${c.con_lai_pct != null ? ` (${fmtPct(c.con_lai_pct)})` : ''}`));
+      return say(`Cơ số tại ${u.ten} kỳ ${ky}:`, lines);
+    }
+    if (u.top_san_pham.length) lines.push(`• Top sản phẩm: ${u.top_san_pham.map((p) => `${p.ten}: ${fmt(p.doanh_thu)}`).join(' · ')}`);
+    if (u.ai_ban.length) lines.push(`• ${mine ? 'Bạn bán' : 'Ai bán'}: ${u.ai_ban.map((e) => `${e.ten}: ${fmt(e.doanh_thu)}`).join(' · ')}`);
+    if (u.so_dong_co_so) lines.push(`• Cơ số thầu: ${u.so_dong_co_so} dòng${u.co_so_sap_can ? `, ${u.co_so_sap_can} sắp cạn (<10%)` : ''}`);
+    return say(`Doanh thu chi tiết tại ${u.ten} kỳ ${ky}:`, lines);
+  }
+
+  if (explicitProduct) {
+    const dis = disambiguateEntity('product', products, '');
+    if (dis) return dis;
+    const p = products[0];
+    const lines = [`📌 ${p.ten} (${p.ma})`, `• Doanh thu: ${fmt(p.doanh_thu)}${p.so_luong ? ` · SL ${Number(p.so_luong || 0).toLocaleString('vi-VN')}` : ''}`];
+    if (wantsSeller) {
+      lines.push(p.ai_ban?.length ? `• ${mine ? 'Bạn bán' : 'NV bán sản phẩm'}:` : '• Chưa có NV phát sinh doanh thu sản phẩm này trong phạm vi này.');
+      (p.ai_ban || []).forEach((e, i) => lines.push(`${i + 1}. ${e.ten} (${e.ma}): ${fmt(e.doanh_thu)}`));
+      return say(`NV bán ${p.ten} kỳ ${ky}:`, lines);
+    }
+    if (wantsProductUnits || /don vi|benh vien|phong kham|nha thuoc|khach hang/.test(q)) {
+      lines.push(p.don_vi_dang_ban.length ? '• Đơn vị bán sản phẩm:' : '• Kỳ này chưa thấy đơn vị phát sinh doanh thu sản phẩm này trong phạm vi này.');
+      p.don_vi_dang_ban.forEach((u, i) => lines.push(`${i + 1}. ${u.ten}: ${fmt(u.doanh_thu)}`));
+      return say(`Đơn vị bán ${p.ten} kỳ ${ky}:`, lines);
+    }
+    return sayProductLookup([p], ky);
+  }
+
+  if (/dong\s+nai/.test(q)) return disambiguateEntity('unit', units, 'Đồng Nai') || null;
+  return null;
 }
 
 /* ---------------- helpers ---------------- */

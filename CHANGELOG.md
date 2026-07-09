@@ -1,4 +1,9 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **NLQ drill-down mức 1 theo thực thể.** Ưu tiên câu có “ở/tại/của/trong/bên …” hoặc “ai/đơn vị nào bán …” để đào sâu đúng đơn vị/sản phẩm trước khi rơi vào breakdown/ranking chung.
+- **Xử lý tên trùng/mơ hồ.** Câu “Đồng Nai/BVĐK Đồng Nai” hỏi lại mã 001/025 thay vì tự đoán; nếu có mã rõ như 001 thì trả chi tiết đúng đơn vị.
+- **Giữ quyền & câu cũ.** NV thường chỉ thấy phần mình; “top 5 đơn vị”, “doanh thu theo sản phẩm” vẫn liệt kê toàn bộ như trước.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **Tăng an toàn idempotent cho Sales Report.** Ngoài dấu batch theo kỳ/kind, ghi thêm dấu từng người theo `key#emp_code` ngay sau khi gửi thành công; nếu chạy lại sau lỗi giữa chừng sẽ bỏ qua người đã nhận, không gửi trùng hàng loạt.
 
 ### 2026-07-09 — Bot triển khai (Report Bot)
