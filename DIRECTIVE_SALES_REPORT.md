@@ -133,6 +133,27 @@ Email gửi NV **KHÔNG được lộ tên hệ thống/kỹ thuật nội bộ*
   Thay bằng câu nghiệp vụ: vd "Đã có cơ số thầu — bán chắc, ưu tiên khai thác."
 - Nguyên tắc: chỉ hiển thị **con số + ý nghĩa nghiệp vụ**; mọi chi tiết kỹ thuật để trong log/CHANGELOG, không lên email.
 
+## 10) ✅ CEO DUYỆT BẢN MẪU + GẮN LỊCH (CEO chốt 2026-07-09)
+CEO **đã duyệt** bản mẫu DN001 tuần+tháng (bản `+64,7%` — đã fix so sánh theo nhịp, giấu tên hệ thống,
+mục 9 D–I). Review Claude ĐẠT. → Bot dựng phần **lịch + vòng gửi**:
+
+**A. Vòng gửi (per NV + CEO):**
+- Người nhận = `salesRecipients()` (= 17 NV KD, đã loại 5 NV). Mỗi NV: `renderEmployeeReport` → `notify.deliver({telegramId, email, subject, text, html})` (email + Telegram nếu có link).
+- CEO: `renderCeoDigest` → gửi tài khoản quản trị (`CEO` → email + Telegram nếu link).
+- **Idempotent:** đánh dấu đã gửi theo (kỳ + kind + emp) để restart worker KHÔNG gửi trùng (giống `targetNotify.markSent`/STATE_FILE).
+
+**B. Lịch (giờ VN Asia/Ho_Chi_Minh):**
+- **TUẦN:** Thứ 7 **13ह00** — gửi bản tuần cho 17 NV + digest CEO.
+- **THÁNG:** chạy daily **18h30**, CHỈ gửi nếu hôm nay là **ngày cuối tháng** — bản tháng + digest.
+- Gắn vào tiến trình worker (`reportnew-tgbot`) hoặc cron riêng; log mỗi lần gửi (số gửi/skip/lỗi).
+
+**C. TRƯỚC KHI BẬT LỊCH — chạy thử 1 lượt thật:**
+- Lệnh tay gửi **cả 17 NV** (hoặc chế độ `--dry-run` in danh sách sẽ gửi + kênh) để CEO/Claude soi lần cuối:
+  đúng 17 người, không lọt văn phòng, email/telegram đúng, không double-send. Rồi mới bật cron.
+- (Tùy chọn) cấp `APP_SALE_AUTH_TOKEN` để CST real-time thay cache.
+
+**D. Nghiệm thu:** `node --check` + build OK; chạy thử 1 lượt khớp; ghi CHANGELOG; commit + push; báo Claude review lịch.
+
 ## 9) VẬN HÀNH ENV/EMAIL (ghi nhớ 2026-07-09)
 - **Project KHÔNG cài `dotenv`.** App tự nạp `.env` (gốc repo) qua hàm `loadEnv` trong `server/src/index.js`,
   **chỉ chạy lúc process boot** + **không ghi đè biến sẵn có**. → Sửa `.env` xong PHẢI `pm2 restart` mới có hiệu lực.
