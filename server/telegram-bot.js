@@ -42,6 +42,7 @@ const A = require('./src/analytics');
 const smart = require('./src/smart');
 const targetNotify = require('./src/targetNotify');
 const notifyChannels = require('./src/notifyChannels');
+const salesReport = require('./src/salesReport');
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SECRET = process.env.TELEGRAM_BOT_SECRET || '';
@@ -243,6 +244,39 @@ function startMilestoneScheduler() {
     }
   }, 30 * 1000);
 }
+
+function startSalesReportScheduler() {
+  if (process.env.SALES_REPORT_NOTIFY === '0') { console.log('ℹ SalesReport scheduler: TẮT (SALES_REPORT_NOTIFY=0).'); return; }
+  let lastWeeklyKey = '';
+  let lastMonthlyKey = '';
+  console.log('✔ SalesReport scheduler armed: tuần Thứ 7 13:00 giờ VN; tháng 18:30 giờ VN nếu là ngày cuối tháng. TZ=' + process.env.TZ);
+  setInterval(() => {
+    const d = vnDate(); // giống digest scheduler: getUTC* của vnDate chính là giờ/phút/ngày VN; KHÔNG trừ thêm 7.
+    const day = d.toISOString().slice(0, 10);
+    const hh = d.getUTCHours();
+    const mm = d.getUTCMinutes();
+    if (d.getUTCDay() === 6 && hh === 13 && mm === 0) {
+      const ranges = salesReport.defaultRanges(day);
+      const key = salesReport.salesReportPeriodKey('week', ranges);
+      if (lastWeeklyKey !== key) {
+        lastWeeklyKey = key;
+        if (salesReport.alreadySent('week', ranges)) console.log(`ℹ SalesReport week skip duplicate: ${key}`);
+        else salesReport.sendAll({ kind: 'week', ranges }).then((r) => console.log(`✔ SalesReport week done: sent=${r.sent?.length || 0}, failed=${r.failed?.length || 0}, ceo=${r.ceoResult?.ok ? 'ok' : 'fail'}, key=${key}`)).catch((e) => console.error('salesReport week scheduler error:', e.message));
+      }
+    }
+    if (hh === 18 && mm === 30) {
+      const ranges = salesReport.defaultRanges(day);
+      if (!salesReport.isMonthEnd(ranges.asOf)) return;
+      const key = salesReport.salesReportPeriodKey('month', ranges);
+      if (lastMonthlyKey !== key) {
+        lastMonthlyKey = key;
+        if (salesReport.alreadySent('month', ranges)) console.log(`ℹ SalesReport month skip duplicate: ${key}`);
+        else salesReport.sendAll({ kind: 'month', ranges }).then((r) => console.log(`✔ SalesReport month done: sent=${r.sent?.length || 0}, failed=${r.failed?.length || 0}, ceo=${r.ceoResult?.ok ? 'ok' : 'fail'}, key=${key}`)).catch((e) => console.error('salesReport month scheduler error:', e.message));
+      }
+    }
+  }, 30 * 1000);
+}
+
 function startDigestScheduler() {
   const cron = parseDailyCron(DIGEST_CRON);
   // DIGEST_CRON theo giờ VN. vnDate().getUTCHours()/getUTCMinutes() CHÍNH LÀ giờ:phút VN,
@@ -341,6 +375,7 @@ async function main() {
   console.log(`✔ Telegram login bot: @${me.result?.username || '?'} → backend ${BASE}`);
   startDigestScheduler();
   startMilestoneScheduler();
+  startSalesReportScheduler();
   let offset = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {

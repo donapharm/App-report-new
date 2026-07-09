@@ -22,8 +22,10 @@ const analytics = require('./analytics');
 const diemXu = require('./diemXu');
 const notify = require('./notifyChannels');
 const appSaleCst = require('./appSaleCst');
+const persist = require('./persist');
 
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report');
+const SENT_LOG_NAME = 'sales_report_sent_log';
 const CEO_CODE = 'CEO';
 const CEO_NAME = 'Đặng Xuân Trung';
 const EXCLUDED = diemXu.EXCLUDE;
@@ -114,7 +116,23 @@ function diffTop(curRows, prevRows, key, label, limit = 5, prevScale = 1) {
 }
 function userByCode(code) { return store.findUserByCode(code) || { emp_code: code, name: code }; }
 function salesRecipients() {
-  return store.targetRosterCodes({ scope: {} }).filter((c) => !EXCLUDED.has(String(c).toUpperCase())).map((code) => ({ code, user: userByCode(code), email: notify.emailFor(code, userByCode(code)?.email) }));
+  return store.targetRosterCodes({ scope: {} }).filter((c) => !EXCLUDED.has(String(c).toUpperCase())).map((code) => ({ code, user: userByCode(code), email: notify.emailFor(code, userByCode(code)?.email), channels: notify.emailFor(code, userByCode(code)?.email) ? ['email'] : [] }));
+}
+function salesReportPeriodKey(kind, ranges = defaultRanges()) {
+  return `${kind}:${ranges.monthKy}:${ranges.monthRange.from}:${ranges.monthRange.to}`;
+}
+function loadSentLog() { return persist.load(SENT_LOG_NAME, []); }
+function saveSentLog(log) { persist.save(SENT_LOG_NAME, log.slice(-1000)); }
+function alreadySent(kind, ranges = defaultRanges()) {
+  const key = salesReportPeriodKey(kind, ranges);
+  return loadSentLog().some((x) => x.key === key);
+}
+function markSent(kind, ranges = defaultRanges(), meta = {}) {
+  const key = salesReportPeriodKey(kind, ranges);
+  const log = loadSentLog();
+  if (!log.some((x) => x.key === key)) log.push({ key, kind, ky: ranges.monthKy, from: ranges.monthRange.from, to: ranges.monthRange.to, sent_at: new Date().toISOString(), ...meta });
+  saveSentLog(log);
+  return key;
 }
 function unitCodesForRows(rows) { return [...new Set(rows.map((r) => r.unit_code).filter(Boolean))]; }
 function isClPriority(unitCode, route) { return String(route || '').toUpperCase() === 'CL' || ['025', '026', '027', '028'].includes(appSaleCst.normUnitPrefix(unitCode)); }
@@ -210,9 +228,42 @@ async function sendCeoApprovalSample(empCode = 'DN001') {
   out.push(await notify.sendEmail(ceoEmail, `[CEO DUYỆT] ${sample.month.subject}`, sample.month.text, sample.month.html));
   return { ...sample, ceoEmail, sendResults: out };
 }
+async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false } = {}) {
+  if (!['week', 'month'].includes(kind)) throw new Error(`Unsupported sales report kind: ${kind}`);
+  const key = salesReportPeriodKey(kind, ranges);
+  if (!force && alreadySent(kind, ranges)) return { ok: true, skipped: 'duplicate', key, kind, ranges, sent: [], failed: [] };
+  const recipients = salesRecipients();
+  const sent = [];
+  const failed = [];
+  for (const r of recipients) {
+    try {
+      const rep = await renderEmployeeReport({ empCode: r.code, kind, ranges });
+      const res = await notify.sendEmail(r.email, rep.subject, rep.text, rep.html);
+      if (res.ok) sent.push({ code: r.code, email: r.email, channels: ['email'] });
+      else failed.push({ code: r.code, email: r.email, error: res.description || 'send_failed' });
+    } catch (e) {
+      failed.push({ code: r.code, email: r.email, error: e.message });
+    }
+  }
+  const ceo = await renderCeoDigest({ kind, ranges });
+  const ceoEmail = notify.emailFor(CEO_CODE) || process.env.CEO_EMAIL || '';
+  let ceoResult = { ok: false, description: 'CEO email missing' };
+  try { ceoResult = await notify.sendEmail(ceoEmail, ceo.subject, ceo.text, ceo.html); } catch (e) { ceoResult = { ok: false, description: e.message }; }
+  const ok = failed.length === 0 && ceoResult.ok;
+  if (ok) markSent(kind, ranges, { recipients: sent.length, ceoEmail });
+  return { ok, key, kind, ranges, sent, failed, ceoEmail, ceoResult };
+}
 async function main() {
   const [cmd = 'sample', emp = 'DN001', flag] = process.argv.slice(2);
   if (cmd === 'recipients') { console.log(JSON.stringify(salesRecipients(), null, 2)); return; }
+  if (cmd === 'send-all') {
+    const kind = ['week', 'month'].includes(emp) ? emp : 'week';
+    const force = process.argv.includes('--force');
+    const r = await sendAll({ kind, force });
+    console.log(JSON.stringify({ ok: r.ok, skipped: r.skipped, key: r.key, kind: r.kind, ranges: r.ranges, sent: r.sent, failed: r.failed, ceoEmail: r.ceoEmail, ceoResult: r.ceoResult }, null, 2));
+    if (!r.ok) process.exitCode = 1;
+    return;
+  }
   if (cmd === 'ceo-digest') { const d = await renderCeoDigest({ kind: emp || 'week' }); console.log(d.text); return; }
   if (cmd === 'sample') {
     const r = flag === '--send-ceo' ? await sendCeoApprovalSample(emp) : await writeSample(emp);
@@ -223,4 +274,4 @@ async function main() {
 }
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { defaultRanges, salesRecipients, computeReport, renderEmployeeReport, renderCeoDigest, writeSample, sendCeoApprovalSample };
+module.exports = { defaultRanges, isMonthEnd, salesRecipients, salesReportPeriodKey, alreadySent, markSent, sendAll, computeReport, renderEmployeeReport, renderCeoDigest, writeSample, sendCeoApprovalSample };

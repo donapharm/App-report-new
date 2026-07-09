@@ -1,4 +1,9 @@
 ### 2026-07-09 — Bot triển khai (Report Bot)
+- **Wire lịch gửi Sales Report vào Telegram worker.** Scheduler dùng cùng cách so giờ VN như digest hiện tại (`process.env.TZ=Asia/Ho_Chi_Minh`, `vnDate().getUTC*()`), log rõ mốc armed: tuần Thứ 7 13:00 và tháng 18:30 nếu là ngày cuối tháng; có thể tắt bằng `SALES_REPORT_NOTIFY=0`.
+- **Thêm idempotent sales report.** Lưu dấu gửi theo `kind + kỳ + range`, restart worker không gửi trùng; CLI/scheduler dùng chung log.
+- **Thêm lệnh tay gửi thật:** `node server/src/salesReport.js send-all [week|month]` gửi 17 NV KD + CEO digest, có `--force` nếu cần chạy lại có chủ đích.
+
+### 2026-07-09 — Bot triển khai (Report Bot)
 - **Sửa so sánh kỳ trước theo nhịp cho báo cáo điểm/xu.** `prevRange` vẫn lấy trọn tháng trước để đọc được dữ liệu tổng kỳ T01–T06, nhưng các chỉ tiêu so sánh giữa tháng/tuần quy đổi theo `ngày đã trôi / ngày trong tháng`; nhãn email đổi thành “So với nhịp cùng kỳ T06/2026”. Bản cuối tháng giữ full-vs-full.
 - **Chạy lại mẫu DN001 sau sửa nhịp.** DN001 T07 đến 09/07: doanh thu `1.169.154.080đ`; T06 full `2.444.530.837đ`; nhịp T06 quy đổi `709.702.501đ`; chênh `+64,7%`.
 
