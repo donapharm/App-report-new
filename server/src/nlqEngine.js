@@ -17,7 +17,7 @@ const GROUP = {
 const DIM_LABEL = { unit: 'đơn vị', product: 'sản phẩm', emp: 'nhân viên', contractor: 'nhà thầu', bid_package: 'gói thầu', province: 'tỉnh', route: 'tuyến', source: 'nguồn', day: 'ngày', order: 'đơn hàng' };
 const SOURCE_ALIASES = { misa: 'CRM_MISA', crm: 'CRM_MISA', web: 'APP_WEB_PARTNER', app: 'APP_WEB_PARTNER', partner: 'APP_WEB_PARTNER' };
 
-function norm(s) { return noAccent(String(s || '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').trim(); }
+function norm(s) { return noAccent(String(s || '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').replace(/\bpkdk\b/g, 'phong kham da khoa').trim(); }
 function fmt(n) { return `${Math.round(Number(n || 0)).toLocaleString('vi-VN')}đ`; }
 function fmtNum(n) { return Number(n || 0).toLocaleString('vi-VN'); }
 function pct(n) { return `${Number(n || 0) >= 0 ? '+' : ''}${Number(n || 0).toFixed(1).replace('.', ',')}%`; }
@@ -84,12 +84,10 @@ function fallbackPlan(question, ctx = {}) {
   if (/so voi|so sanh|thang truoc|hom qua|giam manh|giam nhieu|tang giam/.test(q)) answerType = 'comparison';
   const day = /\btu\b|tu ngay|den hom nay|toi hom nay/.test(q) ? null : (/hom nay|today/.test(q) ? 'today' : (/hom qua|yesterday/.test(q) ? 'yesterday' : null));
   const filters = { unitHint: null, productHint: null, empHint: null, contractorHint: null, route: null, provinceHint: null, source };
-  const mUnitCode = q.match(/\b\d{3}\b/); if (mUnitCode) filters.unitHint = mUnitCode[0];
-  if (!filters.unitHint) {
-    const mUnitHint = q.match(/\b(?:o|tai|cua|trong|ben)\s+(.+?)(?:\s+(?:tu ngay|tu\s+ngay|tu|den|toi|thang|hom nay|ky|co doanh thu|dat)\b|$)/);
-    const uh = mUnitHint?.[1]?.trim();
-    if (uh && !/^(toi|minh|em|anh|chi|nhung|cac|top|ngay|dau|nhan vien|nv|san pham|mat hang|ma hang)\b/.test(uh)) filters.unitHint = uh;
-  }
+  const mUnitHint = q.match(/\b(?:o|tai|cua|trong|ben)\s+(.+?)(?:\s+(?:tu ngay|tu\s+ngay|tu|den|toi|thang|hom nay|ky|co doanh thu|dat)\b|$)/);
+  const uh = mUnitHint?.[1]?.trim();
+  if (uh && !/^(toi|minh|em|anh|chi|nhung|cac|top|ngay|dau|nhan vien|nv|san pham|mat hang|ma hang)\b/.test(uh)) filters.unitHint = uh;
+  const mUnitCode = q.match(/\b\d{3}\b/); if (!filters.unitHint && mUnitCode) filters.unitHint = mUnitCode[0];
   if (/dong nai|bvdk/.test(q) && /o|tai|hospital|benh vien|bvdk/.test(q)) filters.unitHint ||= question.match(/BVĐK Đồng Nai|bvdk dong nai|Dong Nai hospital|benh vien dong nai/i)?.[0] || 'dong nai';
   if (/benh vien dong nai/.test(q) && !/thong nhat/.test(q)) filters.unitHint = 'benh vien da khoa dong nai';
   if (filters.unitHint) filters.unitHint = String(filters.unitHint)
@@ -168,6 +166,17 @@ function applyHint(rows, hint, fields, label) {
   if (!hint) return { rows };
   const hits = uniqueHints(rows, fields, hint);
   if (!hits.length) return { rows: [], note: `Không tìm thấy ${label} khớp “${hint}”.` };
+  const nq = norm(hint);
+  // Khớp CỤ THỂ nhất trước khi hỏi lại: (1) trùng khít mã / mã+tên; (2) câu CHỨA nguyên mã
+  // đơn vị -> chọn mã DÀI (cụ thể) nhất. Bắt buộc vì mã cha "034.PKĐK Y ĐỨC" là TIỀN TỐ của
+  // mọi mã con "034.PKĐK Y ĐỨC <chi nhánh>": nếu không ưu tiên mã dài sẽ hỏi lại vô tận (cha
+  // luôn khớp chuỗi con). Chỉ auto-chọn khi mã dài nhất DÀI HƠN hẳn mã kế (không hoà -> mới hỏi).
+  let pick = hits.find((h) => norm(h.key) === nq) || hits.find((h) => norm(`${h.key} ${h.label}`) === nq);
+  if (!pick) {
+    const contained = hits.filter((h) => nq.includes(norm(h.key))).sort((a, b) => norm(b.key).length - norm(a.key).length);
+    if (contained.length && (contained.length === 1 || norm(contained[0].key).length !== norm(contained[1].key).length)) pick = contained[0];
+  }
+  if (pick) return { rows: rows.filter((r) => String(r[fields[0]] || '') === pick.key), chosen: pick };
   if (hits.length > 1 && !/^\d{3}$/.test(String(hint).trim())) {
     const sameLabel = new Set(hits.map((h) => norm(h.label))).size === 1;
     if (sameLabel) {

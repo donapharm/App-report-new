@@ -1,3 +1,9 @@
+### 2026-07-10 — Bot triển khai (Report Bot) — Fix NLQ hỏi lại vô tận đơn vị cùng tiền tố 034.PKĐK Y ĐỨC
+- **Sửa `applyHint` trong `server/src/nlqEngine.js`:** ưu tiên khớp cụ thể nhất trước khi hỏi lại; nếu câu chứa nguyên mã đơn vị thì chọn mã dài/cụ thể nhất, tránh mã cha `034.PKĐK Y ĐỨC` chen vào mọi chi nhánh `TRẢNG BOM/TRẢNG DÀI/TRỊ AN/HEALTHCARE` và gây vòng lặp hỏi lại.
+- **Giữ câu mơ hồ thật:** chỉ gõ “Y ĐỨC” vẫn hỏi lại danh sách chi nhánh để NV chọn, không tự đoán.
+- **Bổ sung pending-clarify trong `server/telegram-bot.js`:** nhớ câu hỏi/options 2 phút theo user; nếu NV trả lời bằng mã/tên ngắn ở lượt kế, bot map thẳng về option đã chọn rồi hỏi lại engine, không re-plan mất ngữ cảnh.
+- **Test:** `node --check server/src/nlqEngine.js` OK; `node --check server/telegram-bot.js` OK; `ANTHROPIC_API_KEY= *** server/scripts/test_smart_nlq_regression.js` OK; test bot thật 6/6 PASS cho `TRẢNG BOM/TRẢNG DÀI/TRỊ AN/HEALTHCARE`, mã cha `034.PKĐK Y ĐỨC`, và câu mơ hồ “Y ĐỨC”.
+
 ### 2026-07-10 — Bot triển khai (Report Bot) — Fix NLQ chặn oan tên đơn vị có “Công ty”
 - **Sửa guard phạm vi NV trong `server/src/nlqEngine.js`:** tách `empScopeAsk` và `companyScopeAsk`; chỉ chặn khi hỏi thật sự “toàn/cả/toàn bộ công ty”, “doanh thu công ty”, “công ty mình/tôi/chúng ta” hoặc “tất cả/nv khác”. Không còn bắt nhầm chữ “CÔNG TY” trong tên pháp nhân đơn vị như “CÔNG TY TNHH/CỔ PHẦN …”.
 - **Bổ sung nhận diện alias đơn vị:** bỏ tiền tố “đơn vị” trong hint và map `PKĐK` → “phòng khám đa khoa” để câu hỏi theo tên đầy đủ/viết tắt đơn vị resolve đúng.

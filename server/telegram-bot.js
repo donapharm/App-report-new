@@ -200,6 +200,35 @@ function formatAnswerForTelegram(answer) {
   const out = [head, ...lines].filter(Boolean).join('\n');
   return out.length > 3900 ? `${out.slice(0, 3890)}…` : out;
 }
+const pendingClarify = new Map();
+const CLARIFY_TTL_MS = 2 * 60 * 1000;
+function normClarify(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function clarifyKey(msg) { return `${msg.chat.id}:${msg.from?.id || ''}`; }
+function rememberClarify(msg, originalText, answerText) {
+  if (!/Anh\/Chị muốn hỏi mã nào\?|Em thấy nhiều .* khớp/.test(answerText)) return;
+  const options = [];
+  for (const line of answerText.split(/\n/)) {
+    const m = line.match(/^\s*•\s*([^:]+):\s*(.+?)\s*$/);
+    if (m) options.push({ key: m[1].trim(), label: m[2].trim() });
+  }
+  if (options.length) pendingClarify.set(clarifyKey(msg), { originalText, options, expires: Date.now() + CLARIFY_TTL_MS });
+}
+function applyPendingClarify(msg, txt) {
+  const k = clarifyKey(msg);
+  const p = pendingClarify.get(k);
+  if (!p) return txt;
+  if (Date.now() > p.expires) { pendingClarify.delete(k); return txt; }
+  const nq = normClarify(txt);
+  const pick = p.options.find((o) => {
+    const ko = normClarify(o.key), lo = normClarify(o.label), both = normClarify(`${o.key} ${o.label}`);
+    return nq === ko || nq === lo || both.includes(nq) || nq.includes(ko);
+  });
+  if (!pick) return txt;
+  pendingClarify.delete(k);
+  return String(p.originalText || txt).replace(/(đơn vị|don vi|ở|o|tại|tai|của|cua|trong|bên|ben)\s+.+$/i, `$1 ${pick.key}`);
+}
 async function answerNaturalQuestion(msg, txt) {
   const map = auth.resolveTelegram(msg.from.id);
   if (!map) {
@@ -218,8 +247,12 @@ async function answerNaturalQuestion(msg, txt) {
       text: 'Tài khoản Telegram của bạn chưa được cấp quyền App Report. Vui lòng liên hệ quản trị.' });
   }
   try {
+    const originalTxt = txt;
+    txt = applyPendingClarify(msg, txt);
     const answer = await smart.answerQuestion({ text: txt, scope: auth.scopeOf(session), session });
-    return tg('sendMessage', { chat_id: msg.chat.id, text: formatAnswerForTelegram(answer) });
+    const out = formatAnswerForTelegram(answer);
+    rememberClarify(msg, originalTxt, out);
+    return tg('sendMessage', { chat_id: msg.chat.id, text: out });
   } catch (e) {
     console.error('telegram nlq error:', session.emp_code, e.message);
     return tg('sendMessage', { chat_id: msg.chat.id,
