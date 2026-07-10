@@ -93,6 +93,8 @@ function fallbackPlan(question, ctx = {}) {
   if (/dong nai|bvdk/.test(q) && /o|tai|hospital|benh vien|bvdk/.test(q)) filters.unitHint ||= question.match(/BVĐK Đồng Nai|bvdk dong nai|Dong Nai hospital|benh vien dong nai/i)?.[0] || 'dong nai';
   if (/benh vien dong nai/.test(q) && !/thong nhat/.test(q)) filters.unitHint = 'benh vien da khoa dong nai';
   if (filters.unitHint) filters.unitHint = String(filters.unitHint)
+    .replace(/^don vi\s+/, '')
+    .replace(/\bpkdk\b/g, 'phong kham da khoa')
     .replace(/\bbvdk\b/g, 'benh vien da khoa')
     .replace(/\bbv\b/g, 'benh vien')
     .trim();
@@ -281,7 +283,12 @@ async function execute(question, planObj, { scope = {}, session = {} } = {}) {
   if (isEmployee && planObj.groupBy === 'emp' && (planObj.answerType === 'ranking' || planObj.answerType === 'breakdown')) {
     return { blocked: 'Anh/Chị chỉ được xem dữ liệu trong phạm vi của mình; xếp hạng/doanh thu theo nhân viên thuộc quyền CEO/admin.' };
   }
-  if (isEmployee && !planObj.selfScoped && /(cong ty|toan cong ty|tat ca|nv khac|nhan vien khac|doanh thu cong ty)/.test(qn)) {
+  // Chặn phạm vi: CHỈ khi thật sự hỏi TỔNG công ty / TẤT CẢ nhân viên.
+  // KHÔNG bắt nhầm chữ "công ty" nằm trong TÊN pháp nhân của đơn vị (rất nhiều đơn vị
+  // tên "CÔNG TY TNHH …/CỔ PHẦN …") — NV vẫn được xem PHẦN CỦA MÌNH ở đơn vị bất kỳ.
+  const empScopeAsk = /\btat ca (nhan vien|nv)\b|\bnv khac\b|\bnhan vien khac\b|\bmoi nguoi\b|\btoan doi\b|\bca (team|doi)\b/.test(qn);
+  const companyScopeAsk = /\b(toan|ca|toan bo) cong ty\b/.test(qn) || /\bdoanh thu cong ty\b/.test(qn) || /\bcong ty (minh|ban|em|toi|chung ta)\b/.test(qn);
+  if (isEmployee && !planObj.selfScoped && (empScopeAsk || companyScopeAsk)) {
     return { blocked: 'Anh/Chị chỉ được hỏi dữ liệu trong phạm vi của chính mình trên App Report.' };
   }
   const ky = periodFor(planObj);
@@ -344,9 +351,10 @@ async function narrate(result) {
     const top = result.plan.topN ? `Top ${result.plan.topN}${result.plan.splitBySource ? ' mỗi nguồn ' : ' '}` : '';
     const count = result.items.length;
     const metric = metricLabel(result.metric).toLowerCase();
+    const scopeLabel = result.isEmployee ? ' của Anh/Chị' : '';
     const title = top
-      ? `${top}${DIM_LABEL[result.groupBy]} có ${metric} ${period}`
-      : `${metricLabel(result.metric)} theo ${DIM_LABEL[result.groupBy]} ${period} — tổng cộng ${count} ${DIM_LABEL[result.groupBy]}`;
+      ? `${top}${DIM_LABEL[result.groupBy]} có ${metric} ${period}${scopeLabel}`
+      : `${metricLabel(result.metric)} theo ${DIM_LABEL[result.groupBy]} ${period}${scopeLabel} — tổng cộng ${count} ${DIM_LABEL[result.groupBy]}`;
     lines.push(`${title}:`);
     result.items.forEach((x, i) => lines.push(itemLine(x, result.metric, result.groupBy, i)));
   } else {

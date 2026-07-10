@@ -1,3 +1,9 @@
+### 2026-07-10 — Bot triển khai (Report Bot) — Fix NLQ chặn oan tên đơn vị có “Công ty”
+- **Sửa guard phạm vi NV trong `server/src/nlqEngine.js`:** tách `empScopeAsk` và `companyScopeAsk`; chỉ chặn khi hỏi thật sự “toàn/cả/toàn bộ công ty”, “doanh thu công ty”, “công ty mình/tôi/chúng ta” hoặc “tất cả/nv khác”. Không còn bắt nhầm chữ “CÔNG TY” trong tên pháp nhân đơn vị như “CÔNG TY TNHH/CỔ PHẦN …”.
+- **Bổ sung nhận diện alias đơn vị:** bỏ tiền tố “đơn vị” trong hint và map `PKĐK` → “phòng khám đa khoa” để câu hỏi theo tên đầy đủ/viết tắt đơn vị resolve đúng.
+- **Nhãn quyền rõ ràng:** các breakdown/ranking khi NV hỏi trong scope sẽ ghi “của Anh/Chị” trên tiêu đề để tránh hiểu nhầm là tổng đơn vị/toàn công ty.
+- **Test:** `node --check server/src/nlqEngine.js` OK; `ANTHROPIC_API_KEY= node server/scripts/test_smart_nlq_regression.js` OK; test bot thật theo directive 10/10 PASS (2 câu qua, 5 câu vẫn chặn, 3 câu cũ không vỡ).
+
 ### 2026-07-09 — Bot triển khai (Report Bot)
 - **NLQ Mức 3:** thêm kiến trúc 3 tầng `nlqEngine` gồm PLANNER (Claude → JSON DSL), EXECUTOR tham số hóa chạy trên dòng doanh thu đã scope quyền, và NARRATOR tiếng Việt không tự tính số.
 - Executor hỗ trợ lọc kỳ/ngày/nguồn/tuyến/thực thể, groupBy/topN theo đơn hàng/nguồn/đơn vị/sản phẩm/NV/nhà thầu/tỉnh/tuyến/ngày, split 5 MISA + 5 WEB, so sánh theo nhịp tháng trước, so hôm nay với hôm qua, và chặn NV hỏi ngoài phạm vi.
