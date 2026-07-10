@@ -47,7 +47,9 @@ const PLAN_SYSTEM = [
   'CURRENT_PERIOD và LATEST_DATA_DATE được cung cấp trong user message; nếu người hỏi nói tháng không có năm thì dùng năm của CURRENT_PERIOD.',
   'hôm nay/today => day="today"; hôm qua/yesterday => day="yesterday".',
   'đơn hàng/order => answerType="orders", groupBy="order". 5 Misa 5 web hoặc Misa và web => splitBySource=true. Misa/source CRM => filters.source="CRM_MISA"; web/app web/partner => filters.source="APP_WEB_PARTNER".',
-  'top/cao nhất/nhiều nhất => ranking. theo/từng/liệt kê => breakdown. so với/tháng trước/hôm qua/gảm mạnh/tăng giảm => comparison và compare="prev".',
+  'top/cao nhất/nhiều nhất => ranking. theo/từng/liệt kê/chi tiết/tất cả/toàn bộ/đầy đủ => breakdown.',
+  'Với breakdown/chi tiết/tất cả/liệt kê đầy đủ: topN=null, không tự giới hạn Top 5/Top 10. Chỉ đặt topN khi người dùng nêu rõ top N/lấy N/dòng N hoặc hỏi ranking rõ ràng.',
+  'so với/tháng trước/hôm qua/gảm mạnh/tăng giảm => comparison và compare="prev".',
   'của tôi/tôi/I/my/me => selfScoped=true. Chỉ điền *Hint khi người dùng nêu thực thể rõ; câu tổng/top/liệt kê toàn bộ thì Hint=null.',
 ].join(' ');
 

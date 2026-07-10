@@ -43,39 +43,62 @@ function latestDataDate(ky = store.latestKy(), scope = {}) {
   return latest || ymd(new Date());
 }
 function monthMention(q, currentKy) {
-  const m = q.match(/(?:thang|t|month|january|february|march|april|may|june|july|august|september|october|november|december)\s*0?([1-9]|1[0-2])?(?:[ ./-]*(20\d{2}|\d{2}))?/i);
-  const names = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12' };
   const nq = norm(q);
-  let mm = m?.[1] ? String(m[1]).padStart(2, '0') : null;
-  for (const [k, v] of Object.entries(names)) if (nq.includes(k)) mm = v;
+  const names = { january: '01', february: '02', march: '03', april: '04', may: '05', june: '06', july: '07', august: '08', september: '09', october: '10', november: '11', december: '12' };
+  const m = nq.match(/\b(?:thang|t|month)\s*0?([1-9]|1[0-2])\b(?:[ ./-]*(20\d{2}|\d{2}))?/i);
+  const dm = nq.match(/\b\d{1,2}\s*[/-]\s*([1-9]|1[0-2])\b(?:\s*[/-]\s*(20\d{2}|\d{2}))?/);
+  let mm = m?.[1] ? String(m[1]).padStart(2, '0') : (dm?.[1] ? String(dm[1]).padStart(2, '0') : null);
+  for (const [k, v] of Object.entries(names)) if (new RegExp(`\\b${k}\\b`).test(nq)) mm = v;
   if (!mm) return null;
-  let y = m?.[2] || String(currentKy || store.latestKy()).slice(3);
+  let y = m?.[2] || dm?.[2] || String(currentKy || store.latestKy()).slice(3);
   if (String(y).length === 2) y = `20${y}`;
   return `${mm}.${y}`;
+}
+function explicitLimit(q) {
+  const m = q.match(/top\s*(\d{1,2})|\b(?:lay|xem|liet ke|hien)\s*(\d{1,2})\b|\b(\d{1,2})\s*(?:don hang|dong|muc|san pham|mat hang|ma hang|don vi|benh vien|nv|nhan vien)\b/);
+  const n = Number(m?.[1] || m?.[2] || m?.[3] || 0);
+  return n > 0 ? Math.min(50, Math.max(1, n)) : null;
+}
+function wantsFullList(q) {
+  return /chi tiet|tat ca|toan bo|day du|liet ke day du|danh sach|lay het|het cac|cac mat hang|cac san pham|cac ma hang/.test(q);
+}
+function explicitRanking(q) {
+  return /\btop\b|cao nhat|lon nhat|nhieu nhat|ban chay|dan dau|dung dau|xep hang|ranking/.test(q);
 }
 function fallbackPlan(question, ctx = {}) {
   const q = norm(question);
   const period = monthMention(q, ctx.currentPeriod) || (/(thang nay|month this|this month)/.test(q) ? 'current' : null);
-  const topN = Number((q.match(/top\s*(\d{1,2})|\b(\d{1,2})\s*(?:don hang|dong|muc)/) || [])[1] || (q.match(/top\s*(\d{1,2})|\b(\d{1,2})\s*(?:don hang|dong|muc)/) || [])[2] || 0) || null;
+  const topN = explicitLimit(q);
   const source = /\bmisa\b|crm/.test(q) ? 'CRM_MISA' : (/\bweb\b|partner|app web/.test(q) ? 'APP_WEB_PARTNER' : null);
   let groupBy = null;
   if (/don hang|order/.test(q)) groupBy = 'order';
-  else if (/san pham|thuoc|product|vixcar/.test(q)) groupBy = /ai ban|nhan vien nao|who/.test(q) ? 'emp' : 'product';
+  else if (/san pham|thuoc|mat hang|ma hang|ma thuoc|qlnb|product|vixcar/.test(q)) groupBy = /ai ban|nhan vien nao|who/.test(q) ? 'emp' : 'product';
+  else if (/nhan vien|\bnv\b|sale/.test(q)) groupBy = 'emp';
   else if (/tuyen|route/.test(q)) groupBy = 'route';
   else if (/nha thau|contractor/.test(q)) groupBy = 'contractor';
   else if (/tinh|province/.test(q)) groupBy = 'province';
   else if (/nguon|source|misa|web/.test(q)) groupBy = source ? null : 'source';
   else if (/don vi|benh vien|bv|hospital|khach hang/.test(q)) groupBy = 'unit';
-  let answerType = groupBy ? (topN || /top|cao nhat|nhieu nhat/.test(q) ? 'ranking' : 'breakdown') : 'aggregate';
+  let answerType = groupBy ? (topN || explicitRanking(q) ? 'ranking' : 'breakdown') : 'aggregate';
   if (/on khong|nen|uu tien|tu van|phan tich|ổn không/.test(question)) answerType = 'advisory';
   if (/so voi|so sanh|thang truoc|hom qua|giam manh|giam nhieu|tang giam/.test(q)) answerType = 'comparison';
-  const day = /hom nay|today/.test(q) ? 'today' : (/hom qua|yesterday/.test(q) ? 'yesterday' : null);
+  const day = /\btu\b|tu ngay|den hom nay|toi hom nay/.test(q) ? null : (/hom nay|today/.test(q) ? 'today' : (/hom qua|yesterday/.test(q) ? 'yesterday' : null));
   const filters = { unitHint: null, productHint: null, empHint: null, contractorHint: null, route: null, provinceHint: null, source };
   const mUnitCode = q.match(/\b\d{3}\b/); if (mUnitCode) filters.unitHint = mUnitCode[0];
+  if (!filters.unitHint) {
+    const mUnitHint = q.match(/\b(?:o|tai|cua|trong|ben)\s+(.+?)(?:\s+(?:tu ngay|tu\s+ngay|tu|den|toi|thang|hom nay|ky|co doanh thu|dat)\b|$)/);
+    const uh = mUnitHint?.[1]?.trim();
+    if (uh && !/^(toi|minh|em|anh|chi|nhung|cac|top|ngay|dau|nhan vien|nv|san pham|mat hang|ma hang)\b/.test(uh)) filters.unitHint = uh;
+  }
   if (/dong nai|bvdk/.test(q) && /o|tai|hospital|benh vien|bvdk/.test(q)) filters.unitHint ||= question.match(/BVĐK Đồng Nai|bvdk dong nai|Dong Nai hospital|benh vien dong nai/i)?.[0] || 'dong nai';
+  if (/benh vien dong nai/.test(q) && !/thong nhat/.test(q)) filters.unitHint = 'benh vien da khoa dong nai';
+  if (filters.unitHint) filters.unitHint = String(filters.unitHint)
+    .replace(/\bbvdk\b/g, 'benh vien da khoa')
+    .replace(/\bbv\b/g, 'benh vien')
+    .trim();
   if (/vixcar/.test(q)) filters.productHint = 'Vixcar';
   if (/\bcl\b/.test(q)) filters.route = 'CL'; else if (/\bncl\b/.test(q)) filters.route = 'NCL'; else if (/\bnt\b/.test(q)) filters.route = 'NT';
-  return { answerType, metric: 'revenue', groupBy, filters, period: period || 'current', day, topN: topN || (groupBy ? 10 : null), splitBySource: /5\s*misa\s*5\s*web|misa.*web|web.*misa/.test(q), sort: 'desc', selfScoped: /\btoi\b|cua toi|i |my |me\b/.test(q), compare: answerType === 'comparison' ? 'prev' : 'none', needClarify: null };
+  return { answerType, metric: 'revenue', groupBy, filters, period: period || 'current', day, topN, splitBySource: /5\s*misa\s*5\s*web|misa.*web|web.*misa/.test(q), sort: 'desc', selfScoped: /cua toi|toi\s+(ban|da|co|can|muon|xem|hoi)|my\b|me\b/.test(q), compare: answerType === 'comparison' ? 'prev' : 'none', needClarify: null };
 }
 function normalizePlan(p, question, ctx) {
   const base = fallbackPlan(question, ctx);
@@ -87,7 +110,18 @@ function normalizePlan(p, question, ctx) {
   if (!GROUP[out.groupBy]) out.groupBy = null;
   if (out.answerType === 'orders') out.groupBy = 'order';
   if (out.groupBy === 'order') out.answerType = 'orders';
-  out.topN = out.topN == null ? (out.groupBy ? 10 : null) : Math.min(50, Math.max(1, Number(out.topN) || 10));
+  const qLimit = explicitLimit(qn);
+  const qWantsFull = wantsFullList(qn);
+  const qExplicitRanking = explicitRanking(qn);
+  if (qWantsFull && !qLimit && !qExplicitRanking) {
+    out.answerType = out.groupBy ? 'breakdown' : out.answerType;
+    out.topN = null;
+  } else if (out.topN == null) {
+    out.topN = out.answerType === 'ranking' && out.groupBy ? 10 : null;
+  } else {
+    out.topN = Math.min(50, Math.max(1, Number(out.topN) || 10));
+  }
+  if (out.answerType === 'breakdown' && !qLimit && !qExplicitRanking) out.topN = null;
   out.sort = out.sort === 'asc' ? 'asc' : 'desc';
   out.compare = out.compare === 'prev' ? 'prev' : 'none';
   out.splitBySource = !!out.splitBySource || /misa.*web|web.*misa|5\s*misa\s*5\s*web/.test(qn);
@@ -133,6 +167,11 @@ function applyHint(rows, hint, fields, label) {
   const hits = uniqueHints(rows, fields, hint);
   if (!hits.length) return { rows: [], note: `Không tìm thấy ${label} khớp “${hint}”.` };
   if (hits.length > 1 && !/^\d{3}$/.test(String(hint).trim())) {
+    const sameLabel = new Set(hits.map((h) => norm(h.label))).size === 1;
+    if (sameLabel) {
+      const keys = new Set(hits.map((h) => h.key));
+      return { rows: rows.filter((r) => keys.has(String(r[fields[0]] || ''))), chosen: { ...hits[0], key: [...keys].join(',') } };
+    }
     return { clarify: `Em thấy nhiều ${label} khớp “${hint}”. Anh/Chị muốn hỏi mã nào?`, options: hits.map((h) => `${h.key}: ${h.label}`) };
   }
   const key = hits[0].key;
@@ -237,7 +276,10 @@ async function execute(question, planObj, { scope = {}, session = {} } = {}) {
   const qn = norm(question);
   const mentionedEmp = (qn.match(/\b(dn\d{3}|vp\d{3})\b/) || [])[1]?.toUpperCase();
   if (isEmployee && mentionedEmp && mentionedEmp !== String(scoped.empCode || '').toUpperCase()) {
-    return { blocked: 'Anh/Chị chỉ được hỏi dữ liệu của chính mình; không được hỏi doanh thu của nhân viên khác.' };
+    return { blocked: 'Anh/Chị chỉ được hỏi dữ liệu của chính mình; không được xem doanh thu nhân viên khác.' };
+  }
+  if (isEmployee && planObj.groupBy === 'emp' && (planObj.answerType === 'ranking' || planObj.answerType === 'breakdown')) {
+    return { blocked: 'Anh/Chị chỉ được xem dữ liệu trong phạm vi của mình; xếp hạng/doanh thu theo nhân viên thuộc quyền CEO/admin.' };
   }
   if (isEmployee && !planObj.selfScoped && /(cong ty|toan cong ty|tat ca|nv khac|nhan vien khac|doanh thu cong ty)/.test(qn)) {
     return { blocked: 'Anh/Chị chỉ được hỏi dữ liệu trong phạm vi của chính mình trên App Report.' };
@@ -300,7 +342,12 @@ async function narrate(result) {
     lines.push(`${metricLabel(result.metric)} ${period}: ${formatMetric(c.curVal, result.metric)}; ${c.label}: ${formatMetric(c.prevPaced, result.metric)}; chênh ${formatMetric(c.delta, result.metric)}${c.pct == null ? '' : ` (${pct(c.pct)})`}.`);
   } else if (result.groupBy && result.items.length) {
     const top = result.plan.topN ? `Top ${result.plan.topN}${result.plan.splitBySource ? ' mỗi nguồn ' : ' '}` : '';
-    lines.push(`${top}${DIM_LABEL[result.groupBy]} theo ${metricLabel(result.metric).toLowerCase()} ${period}:`);
+    const count = result.items.length;
+    const metric = metricLabel(result.metric).toLowerCase();
+    const title = top
+      ? `${top}${DIM_LABEL[result.groupBy]} có ${metric} ${period}`
+      : `${metricLabel(result.metric)} theo ${DIM_LABEL[result.groupBy]} ${period} — tổng cộng ${count} ${DIM_LABEL[result.groupBy]}`;
+    lines.push(`${title}:`);
     result.items.forEach((x, i) => lines.push(itemLine(x, result.metric, result.groupBy, i)));
   } else {
     lines.push(`${metricLabel(result.metric)} ${period}${result.isEmployee ? ' của Anh/Chị' : ' toàn công ty'}: ${formatMetric(result.total, result.metric)}.`);
