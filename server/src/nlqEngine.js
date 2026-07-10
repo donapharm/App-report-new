@@ -177,7 +177,15 @@ function applyHint(rows, hint, fields, label) {
     if (contained.length && (contained.length === 1 || norm(contained[0].key).length !== norm(contained[1].key).length)) pick = contained[0];
   }
   if (pick) return { rows: rows.filter((r) => String(r[fields[0]] || '') === pick.key), chosen: pick };
-  if (hits.length > 1 && !/^\d{3}$/.test(String(hint).trim())) {
+  // MÃ TRẦN (vd "034"/"034*") là "HỌ MÃ" dùng chung cho nhiều chi nhánh (034.PKĐK Y ĐỨC + …TRẢNG
+  // BOM/…TRỊ AN…). Hỏi rộng "tất cả đơn vị mã 034" phải trả CẢ HỌ để liệt kê — KHÔNG thu về 1 đơn vị,
+  // KHÔNG hỏi lại. (Khác với hint có tên -> đã resolve cụ thể ở khối `pick` phía trên.)
+  const bareCode = /^0*\d{3}\s*\*?$/.test(String(hint).trim());
+  if (hits.length > 1 && bareCode && new Set(hits.map((h) => norm(h.label))).size > 1) {
+    const keys = new Set(hits.map((h) => h.key));
+    return { rows: rows.filter((r) => keys.has(String(r[fields[0]] || ''))), chosen: { key: [...keys].join(','), label: `mã ${String(hint).trim().replace(/[^\d]/g, '')}` } };
+  }
+  if (hits.length > 1 && !/^\d{3}\*?$/.test(String(hint).trim())) {
     const sameLabel = new Set(hits.map((h) => norm(h.label))).size === 1;
     if (sameLabel) {
       const keys = new Set(hits.map((h) => h.key));

@@ -1,3 +1,8 @@
+### 2026-07-10 — Bot triển khai (Report Bot) — Fix NLQ họ mã đơn vị 034 trả hẹp
+- **Sửa `applyHint` trong `server/src/nlqEngine.js`:** hint mã trần như `034`/`034*` khi khớp nhiều đơn vị khác nhãn sẽ trả cả họ mã để liệt kê, không thu về một đơn vị doanh thu cao nhất và không hỏi lại oan.
+- **Giữ phân biệt cụ thể/mơ hồ:** `034.PKĐK Y ĐỨC TRẢNG BOM` vẫn ra đúng một chi nhánh; `034.PKĐK Y ĐỨC` vẫn ra riêng mã cha; `Y ĐỨC` chung chung vẫn hỏi lại; mã đơn nhất/cùng nhãn như `001` vẫn ra một đơn vị.
+- **Test:** `node --check server/src/nlqEngine.js` OK; `ANTHROPIC_API_KEY= *** server/scripts/test_smart_nlq_regression.js` OK; test live T07 6/6 PASS cho họ mã 034, mã cụ thể, mã cha, mã 001 và câu mơ hồ.
+
 ### 2026-07-10 — Bot triển khai (Report Bot) — Fix NLQ hỏi lại vô tận đơn vị cùng tiền tố 034.PKĐK Y ĐỨC
 - **Sửa `applyHint` trong `server/src/nlqEngine.js`:** ưu tiên khớp cụ thể nhất trước khi hỏi lại; nếu câu chứa nguyên mã đơn vị thì chọn mã dài/cụ thể nhất, tránh mã cha `034.PKĐK Y ĐỨC` chen vào mọi chi nhánh `TRẢNG BOM/TRẢNG DÀI/TRỊ AN/HEALTHCARE` và gây vòng lặp hỏi lại.
 - **Giữ câu mơ hồ thật:** chỉ gõ “Y ĐỨC” vẫn hỏi lại danh sách chi nhánh để NV chọn, không tự đoán.
