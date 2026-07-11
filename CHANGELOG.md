@@ -1,3 +1,9 @@
+### 2026-07-11 — Bot triển khai (Report Bot) — Vá UI thẻ Target trên Tổng quan
+- **Deploy bản vá review `4207800` cho 3 file UI:** `web/src/charts.jsx`, `web/src/pages/Overview.jsx`, `web/src/styles.css`. Gauge target nay dùng thang 0–100 nên 44,x% lấp đúng khoảng 44% vòng, không còn góc nhỏ do thang cũ.
+- **Khôi phục caption dưới vòng:** tách 2 cụm “Đã đạt” và “Mục tiêu tháng”, mỗi cụm có nhãn, số in đậm; “Đã đạt” đổi màu theo mức target (<80% đỏ đậm), “Mục tiêu tháng” xám đậm.
+- **Build/deploy:** `npm --prefix web run build` OK; reload PM2 `reportnew` OK; domain public đang phục vụ asset hash mới `index-Pk5r85JG.js` / `index-Bp3OXr0t.css`.
+- **Xác minh live:** trang Tổng quan T07.2026 hiển thị 44,7% (dữ liệu cập nhật 12:30 11-07), vòng lấp gần nửa; caption “Đã đạt 14.158.741.270đ” màu đỏ đậm và “Mục tiêu tháng 31.710.318.669đ” màu xám đậm, đều in đậm.
+
 ### 2026-07-10 — Bot triển khai (Report Bot) — Fix NLQ họ mã đơn vị 034 trả hẹp
 - **Sửa `applyHint` trong `server/src/nlqEngine.js`:** hint mã trần như `034`/`034*` khi khớp nhiều đơn vị khác nhãn sẽ trả cả họ mã để liệt kê, không thu về một đơn vị doanh thu cao nhất và không hỏi lại oan.
 - **Giữ phân biệt cụ thể/mơ hồ:** `034.PKĐK Y ĐỨC TRẢNG BOM` vẫn ra đúng một chi nhánh; `034.PKĐK Y ĐỨC` vẫn ra riêng mã cha; `Y ĐỨC` chung chung vẫn hỏi lại; mã đơn nhất/cùng nhãn như `001` vẫn ra một đơn vị.

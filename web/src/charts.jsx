@@ -107,18 +107,24 @@ export function TopBarChart({ rows = [], limit = 20, totalRevenue = 0, dimension
 }
 
 export function TargetGauge({ pct, size = 'large' }) {
-  const val = Math.max(0, Math.min(140, Number(pct || 0)));
+  // VÒNG ĐẦY = ĐẠT 100% mục tiêu: 43,3% lấp đúng 43,3% vòng (trực quan "tiến độ").
+  // Vượt 100% -> vòng đầy kín, nhãn % vẫn hiện số thật (vd 112%) và đổi màu xanh.
+  const raw = Number(pct || 0);
+  const val = Math.max(0, Math.min(100, raw));
   const color = targetColor(pct);
   const h = size === 'small' ? 72 : 190;
   return (
     <div className={'gauge ' + size}>
       <ResponsiveContainer width="100%" height={h}>
         <RadialBarChart innerRadius="72%" outerRadius="100%" data={[{ name: 'target', value: val, fill: color }]} startAngle={90} endAngle={-270}>
-          <PolarAngleAxis type="number" domain={[0, 140]} tick={false} />
+          <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
           <RadialBar background dataKey="value" cornerRadius={12} />
         </RadialBarChart>
       </ResponsiveContainer>
-      <div className="gauge-label" style={{ color }}>{pct == null ? '—' : Number(pct).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%'}</div>
+      <div className="gauge-label" style={{ color }}>
+        <b>{pct == null ? '—' : Number(pct).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%'}</b>
+        <i>của mục tiêu</i>
+      </div>
     </div>
   );
 }

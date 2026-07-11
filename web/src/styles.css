@@ -274,8 +274,19 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .compact-center { padding: 0 4px 4px; font-size: 12px; }
 .gauge { position: relative; width: 100%; min-width: 0; }
 .gauge.small { width: 76px; flex: none; }
-.gauge-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 26px; pointer-events: none; }
-.gauge.small .gauge-label { font-size: 15px; }
+.gauge-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; pointer-events: none; }
+.gauge-label b { font-weight: 900; font-size: 26px; line-height: 1; }
+.gauge-label i { font-style: normal; font-weight: 600; font-size: 11px; color: var(--muted); }
+.gauge.small .gauge-label b { font-size: 15px; }
+.gauge.small .gauge-label i { display: none; }
+/* Caption target: 2 CỤM SỐ KHÁC NHAU tô màu + đậm, có nhãn (Đã đạt vs Mục tiêu) */
+.gauge-caption { display: flex; align-items: flex-end; justify-content: center; gap: 8px; flex-wrap: wrap; padding: 2px 4px 6px; }
+.gauge-caption .gc-item { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.12; }
+.gauge-caption .gc-item i { font-style: normal; font-size: 10.5px; color: var(--muted); }
+.gauge-caption .gc-item b { font-size: 15px; font-weight: 800; }
+.gauge-caption .gc-item b.gc-target { color: #334155; }
+.gauge-caption .gc-sep { color: var(--muted); font-weight: 700; font-size: 15px; align-self: center; }
+.gauge-caption .gc-note { color: var(--muted); font-size: 10.5px; align-self: center; }
 .donut-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .donut-grid > div { min-width: 0; }
 .donut-wrap { min-width: 0; }
