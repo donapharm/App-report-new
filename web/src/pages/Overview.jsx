@@ -154,19 +154,40 @@ export default function Overview({ me, onNavigate }) {
   const summary = alerts?.summary;
   const groups = alerts?.groups || [];
   const cstHighGroup = groups.find((g) => g.key === 'cst_high') || { key: 'cst_high', icon: '🟡', tone: 'neutral', title: 'Cơ số thầu tồn nhiều (>85%)', total: 0, items: [] };
+  const cstLowGroup = groups.find((g) => g.key === 'cst_low') || { key: 'cst_low', icon: '📦', tone: 'danger', title: 'Cơ số thầu sắp cạn (<10%)', total: 0, items: [] };
+  const targetSlowGroup = groups.find((g) => g.key === 'target') || { key: 'target', icon: '🎯', tone: 'danger', title: 'Nhân viên chậm tiến độ target', total: 0, items: [] };
+  const unitDownGroup = groups.find((g) => g.key === 'unit_down') || { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm doanh thu mạnh', total: 0, items: [] };
+  const unitUpGroup = groups.find((g) => g.key === 'unit_up') || { key: 'unit_up', icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh', total: 0, items: [] };
   const analysisInsights = richInsights?.analysis;
+  const targetPacing = richInsights?.targets?.pacing;
+  const targetItems = richInsights?.targets?.items || [];
   const cstUntouched = analysisInsights?.cstUntouched || [];
-  const nearTarget = (richInsights?.targets?.items || [])
+  const nearTarget = targetItems
     .filter((item) => item.target_assigned && Number(item.pct) >= 80 && Number(item.pct) < 100)
     .sort((a, b) => Number(b.pct) - Number(a.pct));
   const growthProducts = (analysisInsights?.topGrowthProducts || [])
     .filter((item) => Number(item.prevRevenue) > 0 && Number(item.delta) > 0)
     .sort((a, b) => Number(b.delta) - Number(a.delta));
+  const targetSlowUsesPacing = periodSel?.mode === 'month';
+  const targetSlowItems = targetSlowUsesPacing
+    ? (targetSlowGroup.items || [])
+    : targetItems
+      .filter((item) => item.target_assigned && Number(item.pct) < 80)
+      .sort((a, b) => Number(a.pct) - Number(b.pct))
+      .map((item) => ({ ...item, name: item.emp_name || item.emp_code, target: item.target_full || item.target }));
+  const targetSlowTotal = targetSlowUsesPacing ? Number(targetSlowGroup.total || 0) : targetSlowItems.length;
+  const targetSlowNote = targetSlowUsesPacing && targetPacing?.isCurrent
+    ? `Tiến độ thời gian ${pct(Number(targetPacing.factor || 0) * 100)} · dưới 80% mức cần đạt đến hôm nay`
+    : `${periodSel ? periodLabel(periodSel) : 'Kỳ đang chọn'} · dưới 80% target toàn phạm vi`;
   const decisionGroups = [
     { ...cstHighGroup, note: 'CST hiện tại · ưu tiên đẩy bán', empty: 'Không có CST tồn trên 85%.' },
     { key: 'cst_untouched', icon: '🌱', tone: 'warning', title: 'Có CST nhưng chưa phát sinh bán', total: Number(analysisInsights?.cstUntouchedTotal || cstUntouched.length), items: cstUntouched, note: 'CST hiện tại · cơ hội chưa khai thác', empty: 'Không có CST còn nguyên cần khai thác.' },
     { key: 'target_near', icon: '🚀', tone: 'ok', title: 'Nhân viên gần đạt target (80–99%)', total: nearTarget.length, items: nearTarget, note: periodSel ? periodLabel(periodSel) : '', empty: 'Chưa có nhân viên trong vùng 80–99%.' },
     { key: 'product_growth', icon: '✨', tone: 'ok', title: 'Sản phẩm tăng trưởng nổi bật', total: growthProducts.length, items: growthProducts, note: analysisInsights?.growthNote || 'So với kỳ đối chiếu gần nhất', empty: 'Chưa đủ dữ liệu để xác định sản phẩm tăng trưởng.' },
+    { ...cstLowGroup, note: 'CST hiện tại · cần theo dõi bổ sung', empty: 'Không có CST sắp cạn dưới 10%.' },
+    { ...targetSlowGroup, title: 'Nhân viên chậm tiến độ target', total: targetSlowTotal, items: targetSlowItems, note: targetSlowNote, empty: 'Không có nhân viên chậm tiến độ target.' },
+    { ...unitDownGroup, title: 'Đơn vị giảm doanh thu mạnh', empty: 'Không có đơn vị giảm từ 15% trở lên.' },
+    { ...unitUpGroup, title: 'Đơn vị tăng trưởng mạnh', empty: 'Không có đơn vị tăng từ 15% trở lên.' },
   ];
   const revenueUnits = (unitRevenueRows || []).filter((r) => Number(r.revenue || 0) > 0);
   const unitRevenueTotal = revenueUnits.reduce((sum, r) => sum + Number(r.revenue || 0), 0);
@@ -301,7 +322,7 @@ export default function Overview({ me, onNavigate }) {
             <span><b>{summary?.cst_low || 0}</b> CST sắp cạn</span>
             <span><b>{summary?.cst_high || 0}</b> CST tồn nhiều</span>
           </div>
-          <div className="section-title overview-opportunity-title">💡 Cơ hội điều hành · thông tin nổi bật</div>
+          <div className="section-title overview-opportunity-title">🧭 8 báo cáo điều hành · theo từng ngữ cảnh</div>
           {!richInsights ? <Spinner /> : <div className="alerts-grid grouped-alerts overview-decision-grid overview-opportunity-grid">
             {decisionGroups.map((g) => (
               <div key={g.key} className={'card alert-group ' + (g.tone || '')}>
@@ -316,7 +337,7 @@ export default function Overview({ me, onNavigate }) {
                 <div className="alert-lines">
                   {g.items.length === 0 ? <div className="alert-line overview-alert-empty"><span>{g.empty || 'Không có dữ liệu trong kỳ này.'}</span></div> : g.items.slice(0, 5).map((item, i) => <AlertLine key={i} group={g} item={item} />)}
                 </div>
-                {g.total > 0 && <button type="button" className="btn ghost alert-more" aria-label={`Xem tất cả ${g.title}`} onClick={() => viewAll(g)}>Xem tất cả ({g.total}) ›</button>}
+                <button type="button" className="btn ghost alert-more" aria-label={`Xem báo cáo ${g.title}`} onClick={() => viewAll(g)}>Xem báo cáo{g.total > 0 ? ` (${g.total})` : ''} ›</button>
               </div>
             ))}
           </div>}
