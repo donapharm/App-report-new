@@ -1,3 +1,13 @@
+### 2026-07-13 — Claude Code (kiến trúc/review) — Giao bot: báo cáo CHUYÊN SÂU (deck 32 trang)
+- **Bối cảnh:** CEO gửi mẫu chuẩn (HTML slide-deck + PPTX Tuần 26), yêu cầu báo cáo doanh số chi tiết tuần/tháng gửi email+Telegram cả PowerPoint + HTML. CEO đồng ý để **bot cầm code app**.
+- **File giao bot (nhánh `claude/new-session-eifd44`):**
+  - `docs/report-samples/BAO_CAO_TUAN_26_CHUYENSAU_SAMPLE.html` — mẫu chuẩn (32 slide 16:9, navy #071F47 + vàng #F5C242) làm nguồn sự thật hình ảnh.
+  - `SPEC_REPORT_DECK_CHUYENSAU.md` — ánh xạ 32 slide → nguồn số grounded (`analytics`/`diemXu`/helper `salesReport.js`), 4 bảng tra bổ sung (tuyến CL/NCL/NT, nguồn Group-Dona/đối tác, loại KH, nhóm điều trị), PPTX qua Playwright→`pptxgenjs`, `notifyChannels.sendDocument` (Telegram) + email attachments, nghiệm thu 6 bước.
+  - `DIRECTIVE_REPORT_DECK_KICKOFF.md` — thứ tự 5 pha + lệnh test từng pha.
+- **Lịch gửi CEO chốt:** TUẦN gửi **13h00 Thứ 7 hằng tuần**, THÁNG gửi **18h00 ngày cuối tháng** (giờ VN).
+- **Yêu cầu CEO:** báo cáo **CHỈ gửi CEO** (không gửi NV) — CEO trình chiếu **màn hình LED** cho toàn thể NV ⇒ chuẩn cao cấp: chính xác tuyệt đối, tinh xảo/thẩm mỹ, narrative thông minh. Bắt buộc dựng bản **DRAFT `[DRAFT — CHỜ CEO DUYỆT]`** gửi CEO duyệt trước khi lịch chạy chính thức.
+- Ranh giới: KHÔNG đụng render per-NV trong `salesReport.js`; giữ nguyên tắc #2/#3/#4. Trạng thái: chờ bot triển khai.
+
 ### 2026-07-11 — Bot triển khai (Report Bot) — Vá UI thẻ Target trên Tổng quan
 - **Deploy bản vá review `4207800` cho 3 file UI:** `web/src/charts.jsx`, `web/src/pages/Overview.jsx`, `web/src/styles.css`. Gauge target nay dùng thang 0–100 nên 44,x% lấp đúng khoảng 44% vòng, không còn góc nhỏ do thang cũ.
 - **Khôi phục caption dưới vòng:** tách 2 cụm “Đã đạt” và “Mục tiêu tháng”, mỗi cụm có nhãn, số in đậm; “Đã đạt” đổi màu theo mức target (<80% đỏ đậm), “Mục tiêu tháng” xám đậm.
