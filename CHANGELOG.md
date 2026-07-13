@@ -1,4 +1,5 @@
 ### 2026-07-13 — Claude Code (kiến trúc/review) — Giao bot: báo cáo CHUYÊN SÂU (deck 32 trang)
+- **Bản yêu cầu gốc đầy đủ cho bot** (`YEUCAU_BAOCAO_CHUYENSAU_CEO.md`): tự chứa, để bot đọc 1 lần hiểu trọn yêu cầu CEO — mục đích (CEO-only, trình chiếu LED, chuẩn cao cấp), lịch (T7 13h tuần / 18h ngày cuối tháng), 2 định dạng HTML+PPTX, 2 kênh email+Telegram (gửi tệp), quy trình DRAFT duyệt trước, 12 khối nội dung, nguyên tắc số liệu grounded, ranh giới, Definition of Done.
 - **Bối cảnh:** CEO gửi mẫu chuẩn (HTML slide-deck + PPTX Tuần 26), yêu cầu báo cáo doanh số chi tiết tuần/tháng gửi email+Telegram cả PowerPoint + HTML. CEO đồng ý để **bot cầm code app**.
 - **File giao bot (nhánh `claude/new-session-eifd44`):**
   - `docs/report-samples/BAO_CAO_TUAN_26_CHUYENSAU_SAMPLE.html` — mẫu chuẩn (32 slide 16:9, navy #071F47 + vàng #F5C242) làm nguồn sự thật hình ảnh.
