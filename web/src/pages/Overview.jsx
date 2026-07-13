@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { money, pct, unitText } from '../util.js';
 import { Spinner, Kpi, MoneyBig, ZaloCard } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
-import { RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
+import { DonutChart, RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 function AlertLine({ group, item }) {
@@ -48,6 +48,7 @@ export default function Overview({ me, onNavigate }) {
   const [topDim, setTopDim] = useState('unit');
   const topLimit = 20;
   const [topRows, setTopRows] = useState(null);
+  const [unitRevenueRows, setUnitRevenueRows] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [cmpMode, setCmpModeState] = useState(() => { try { return localStorage.getItem('rpt_cmp_mode') || 'prev'; } catch { return 'prev'; } });
   const setCmpMode = (m) => { setCmpModeState(m); try { localStorage.setItem('rpt_cmp_mode', m); } catch { /* ignore */ } };
@@ -85,6 +86,17 @@ export default function Overview({ me, onNavigate }) {
     loadTopRows(periodParams(periodSel));
   }, [periodSel, topDim, reloadTick]);
 
+  // Luôn tải cơ cấu theo đơn vị, độc lập với lựa chọn Đơn vị/Sản phẩm/Nhân viên của Top 20.
+  useEffect(() => {
+    if (!periodSel) return;
+    let active = true;
+    setUnitRevenueRows(null);
+    api.revenue('unit', null, periodParams(periodSel)).then((d) => {
+      if (active) setUnitRevenueRows(d.rows || []);
+    });
+    return () => { active = false; };
+  }, [periodSel, reloadTick]);
+
   function viewAll(group) {
     if (!onNavigate) return;
     if (group.key === 'target') onNavigate('target', { fromAlert: group.key });
@@ -95,6 +107,21 @@ export default function Overview({ me, onNavigate }) {
 
   const summary = alerts?.summary;
   const groups = alerts?.groups || [];
+  const decisionGroupOrder = ['cst_high', 'cst_low', 'unit_down', 'unit_up'];
+  const decisionGroupFallback = {
+    cst_high: { icon: '🟡', tone: 'neutral', title: 'Cơ số thầu tồn nhiều (>85%)' },
+    cst_low: { icon: '📦', tone: 'danger', title: 'Cơ số thầu sắp cạn (<10%)' },
+    unit_down: { icon: '📉', tone: 'warning', title: 'Đơn vị giảm mạnh (so kỳ trước)' },
+    unit_up: { icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh (so kỳ trước)' },
+  };
+  const decisionGroups = decisionGroupOrder.map((key) => groups.find((g) => g.key === key) || ({ key, ...decisionGroupFallback[key], total: 0, items: [] }));
+  const revenueUnits = (unitRevenueRows || []).filter((r) => Number(r.revenue || 0) > 0);
+  const unitRevenueTotal = revenueUnits.reduce((sum, r) => sum + Number(r.revenue || 0), 0);
+  const topFiveRevenue = [...revenueUnits]
+    .sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0))
+    .slice(0, 5)
+    .reduce((sum, r) => sum + Number(r.revenue || 0), 0);
+  const topFiveShare = unitRevenueTotal > 0 ? topFiveRevenue / unitRevenueTotal * 100 : null;
   const selectedKy = periodSel?.mode === 'range' ? periodSel.to : periodSel?.ky;
   const selectedPeriod = periods.find((p) => p.ky === selectedKy) || null;
   const dataAsOf = selectedPeriod?.data_as_of;
@@ -112,6 +139,8 @@ export default function Overview({ me, onNavigate }) {
       setTrend(null);
       api.trend().then(setTrend);
       loadTopRows(periodParams(periodSel));
+      setUnitRevenueRows(null);
+      api.revenue('unit', null, periodParams(periodSel)).then((d) => setUnitRevenueRows(d.rows || []));
     } finally {
       setRefreshing(false);
     }
@@ -175,6 +204,21 @@ export default function Overview({ me, onNavigate }) {
               </div>
               {!topRows ? <Spinner /> : <TopBarChart rows={topRows} limit={topLimit} totalRevenue={kpi.revenue} dimension={topDim} />}
             </div>
+            <div className="card chart-card overview-revenue-mix-card">
+              <div className="section-head">🍩 Cơ cấu doanh thu Top 5</div>
+              <div className="overview-revenue-mix-sub">Theo đơn vị · {periodLabel(periodSel)}</div>
+              {!unitRevenueRows ? <Spinner /> : revenueUnits.length === 0 ? (
+                <div className="chart-empty overview-mix-empty">Chưa có doanh thu đơn vị trong kỳ này</div>
+              ) : (
+                <>
+                  <div className="overview-mix-stats" aria-label="Tóm tắt cơ cấu doanh thu đơn vị">
+                    <span><i>Tỷ trọng Top 5</i><b>{pct(topFiveShare)}</b></span>
+                    <span><i>Đơn vị có doanh thu</i><b>{revenueUnits.length.toLocaleString('vi-VN')}</b></span>
+                  </div>
+                  <DonutChart rows={unitRevenueRows} topCount={5} compact />
+                </>
+              )}
+            </div>
           </div>
         </>
       )}
@@ -187,19 +231,17 @@ export default function Overview({ me, onNavigate }) {
           <button className={cmpMode === 'yoy' ? 'active' : ''} onClick={() => setCmpMode('yoy')}>Cùng kỳ năm ngoái</button>
         </div>
       </div>
-      {!alerts ? <Spinner /> : !groups.some((g) => g.total > 0) ? (
-        <div className="center">Không có cảnh báo nào. Mọi thứ ổn ✅</div>
-      ) : (
+      {!alerts ? <Spinner /> : (
         <>
           <div className="card alert-summary-strip">
-            <span><b>{summary.emp_below_target}</b> NV chưa đạt</span>
-            <span className="up"><b>{summary.units_up}</b> đơn vị tăng</span>
-            <span><b>{summary.units_down}</b> đơn vị giảm</span>
-            <span><b>{summary.cst_low}</b> CST sắp cạn</span>
-            <span><b>{summary.cst_high}</b> CST tồn nhiều</span>
+            <span><b>{summary?.emp_below_target || 0}</b> NV chưa đạt</span>
+            <span className="up"><b>{summary?.units_up || 0}</b> đơn vị tăng</span>
+            <span><b>{summary?.units_down || 0}</b> đơn vị giảm</span>
+            <span><b>{summary?.cst_low || 0}</b> CST sắp cạn</span>
+            <span><b>{summary?.cst_high || 0}</b> CST tồn nhiều</span>
           </div>
-          <div className="alerts-grid grouped-alerts">
-            {groups.map((g) => (
+          <div className="alerts-grid grouped-alerts overview-decision-grid">
+            {decisionGroups.map((g) => (
               <div key={g.key} className={'card alert-group ' + (g.tone || '')}>
                 <div className="alert-group-head">
                   <div>
@@ -210,9 +252,9 @@ export default function Overview({ me, onNavigate }) {
                 </div>
                 {g.note && <div className={'alert-group-note' + (g.note.startsWith('⚠') ? ' warn' : '')}>{g.note}</div>}
                 <div className="alert-lines">
-                  {g.items.length === 0 ? <div className="alert-line"><span>Không có cảnh báo trong kỳ này.</span></div> : g.items.slice(0, 8).map((item, i) => <AlertLine key={i} group={g} item={item} />)}
+                  {g.items.length === 0 ? <div className="alert-line overview-alert-empty"><span>Không có dữ liệu cần chú ý trong kỳ này.</span></div> : g.items.slice(0, 5).map((item, i) => <AlertLine key={i} group={g} item={item} />)}
                 </div>
-                {g.total > 0 && <button className="btn ghost alert-more" onClick={() => viewAll(g)}>Xem tất cả ({g.total}) ›</button>}
+                {g.total > 0 && <button type="button" className="btn ghost alert-more" aria-label={`Xem tất cả ${g.title}`} onClick={() => viewAll(g)}>Xem tất cả ({g.total}) ›</button>}
               </div>
             ))}
           </div>

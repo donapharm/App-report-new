@@ -293,6 +293,16 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .donut-legend { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 11.5px; color: var(--muted); }
 .donut-legend span { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; }
 .donut-legend i { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.overview-revenue-mix-card { display: flex; flex-direction: column; }
+.overview-revenue-mix-sub { margin: -4px 0 10px; color: var(--muted); font-size: 11.5px; }
+.overview-mix-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 4px; }
+.overview-mix-stats span { min-width: 0; padding: 9px 8px; border: 1px solid #dce8f5; border-radius: 10px; background: #f6f9fd; text-align: center; }
+.overview-mix-stats i { display: block; color: var(--muted); font-size: 10.5px; font-style: normal; line-height: 1.25; }
+.overview-mix-stats b { display: block; margin-top: 3px; color: var(--brand-ink); font-size: 18px; }
+.overview-revenue-mix-card .compact-donut { width: 100%; }
+.overview-revenue-mix-card .donut-legend { gap: 5px 8px; line-height: 1.25; }
+.overview-revenue-mix-card .donut-legend span { flex: 1 1 130px; min-width: 0; }
+.overview-mix-empty { flex: 1; min-height: 240px; }
 .target-card-row { display: flex; gap: 12px; align-items: center; }
 .target-card-body { flex: 1; min-width: 0; }
 
@@ -350,6 +360,23 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .chg-chip.down { background: #fdecec; color: #d84a4a; }
 .chg-chip.up { background: #e7f6ee; color: #17915a; }
 .alert-more { width: 100%; margin-top: 10px; }
+.overview-decision-grid { grid-template-columns: 1fr; align-items: stretch; }
+.overview-decision-grid .alert-group { display: flex; min-width: 0; height: 100%; flex-direction: column; }
+.overview-decision-grid .alert-lines { flex: 1; }
+.overview-decision-grid .alert-more { margin-top: auto; padding-top: 8px; }
+.overview-decision-grid .overview-alert-empty { min-height: 92px; justify-content: center; }
+.overview-decision-grid .alert-group-head > div { min-width: 0; }
+.overview-decision-grid .pill { flex: 0 0 auto; min-width: 24px; overflow: visible; text-align: center; }
+
+@media (max-width: 699px) {
+  .overview-revenue-mix-card .donut-legend span { flex-basis: 100%; white-space: normal; overflow: visible; }
+}
+@media (min-width: 700px) {
+  .page-desktop .alerts-grid.overview-decision-grid, .overview-decision-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1400px) {
+  .page-desktop .alerts-grid.overview-decision-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .cst-alert-card { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px; margin-bottom: 12px; }
 .cst-table { min-width: 2320px; font-size: 12px; }
 .cst-table th, .cst-table td { padding: 8px 9px; }

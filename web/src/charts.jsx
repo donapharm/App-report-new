@@ -129,10 +129,10 @@ export function TargetGauge({ pct, size = 'large' }) {
   );
 }
 
-function topWithOther(rows = []) {
+function topWithOther(rows = [], topCount = 6) {
   const sorted = [...rows].filter((r) => Number(r.revenue || 0) > 0).sort((a, b) => b.revenue - a.revenue);
-  const top = sorted.slice(0, 6).map((r) => ({ name: nameShort(r.label || r.key, 22), value: r.revenue }));
-  const other = sorted.slice(6).reduce((s, r) => s + Number(r.revenue || 0), 0);
+  const top = sorted.slice(0, topCount).map((r) => ({ name: nameShort(r.label || r.key, 22), value: Number(r.revenue || 0) }));
+  const other = sorted.slice(topCount).reduce((s, r) => s + Number(r.revenue || 0), 0);
   return other > 0 ? top.concat({ name: 'Khác', value: other }) : top;
 }
 function PieTooltip({ active, payload }) {
@@ -150,15 +150,15 @@ function sliceLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }) {
   const y = cy + r * Math.sin(-midAngle * RAD);
   return <text x={x} y={y} fill="#fff" fontSize={11} fontWeight={700} textAnchor="middle" dominantBaseline="central">{Math.round(percent * 100)}%</text>;
 }
-export function DonutChart({ rows = [] }) {
-  const data = topWithOther(rows);
+export function DonutChart({ rows = [], topCount = 6, compact = false }) {
+  const data = topWithOther(rows, topCount);
   const total = data.reduce((s, r) => s + r.value, 0);
   if (!data.length) return <EmptyChart />;
   return (
-    <div className="donut-wrap">
-      <ResponsiveContainer width="100%" height={210}>
+    <div className={'donut-wrap' + (compact ? ' compact-donut' : '')}>
+      <ResponsiveContainer width="100%" height={compact ? 224 : 210}>
         <PieChart>
-          <Pie data={data.map((d) => ({ ...d, total }))} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={2} label={sliceLabel} labelLine={false}>
+          <Pie data={data.map((d) => ({ ...d, total }))} dataKey="value" nameKey="name" innerRadius={52} outerRadius={82} paddingAngle={2} label={sliceLabel} labelLine={false} isAnimationActive={!compact}>
             {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
           </Pie>
           <Tooltip content={<PieTooltip />} />
