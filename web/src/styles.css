@@ -1077,3 +1077,240 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .analysis-quick-filter-grid.mobile-open { display: grid; }
   .analysis-advanced-body .filter-grid { grid-template-columns: 1fr; }
 }
+
+/* Danh mục quản lý — màn hình độc lập, responsive. */
+.catalog-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.catalog-heading label { display:grid; gap:3px; min-width:130px; }
+.catalog-heading label span, .catalog-transfer label span, .catalog-filters label span { color:var(--muted); font-size:12px; font-weight:700; }
+.catalog-heading select { min-height:36px; }
+.catalog-route-tabs { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.catalog-route-tabs button { display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:12px; padding:12px 14px; cursor:pointer; }
+.catalog-route-tabs button b { color:var(--brand); font-size:16px; }
+.catalog-route-tabs button.active { border-color:var(--brand); background:#eaf4ff; box-shadow:0 0 0 2px rgba(0,93,170,.12); }
+.catalog-pager { display:flex; align-items:center; justify-content:center; gap:14px; padding:12px; border-top:1px solid var(--line); }
+.catalog-source { margin-bottom:10px; padding:11px 12px; border:1px solid #b9ddce; border-radius:13px; background:#f3fbf7; }
+.catalog-source.is-stale { border-color:#efd39f; background:#fff9ed; }
+.catalog-source > div:first-child { display:flex; align-items:center; gap:8px; }
+.catalog-source > div:first-child span { border-radius:999px; padding:2px 7px; background:rgba(255,255,255,.8); color:var(--muted); font-size:11px; font-weight:700; }
+.catalog-source-meta { display:flex; flex-wrap:wrap; gap:5px 14px; margin-top:5px; color:var(--muted); font-size:11.5px; }
+.catalog-source p { margin:6px 0 0; font-size:12px; }
+.catalog-section-grid, .catalog-admin-bottom { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.catalog-admin-bottom { grid-template-columns:2fr 1fr; }
+.catalog-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.catalog-card-head h3 { margin:0; font-size:15px; }
+.catalog-item-list { display:grid; gap:7px; }
+.catalog-item { display:grid; grid-template-columns:1fr auto; gap:2px 8px; padding:8px; border:1px solid var(--line); border-radius:9px; background:#fbfdff; }
+.catalog-item b { min-width:0; overflow-wrap:anywhere; }
+.catalog-item span { color:var(--brand); font-size:11px; font-weight:700; }
+.catalog-item small { grid-column:1/-1; color:var(--muted); }
+.catalog-empty { padding:12px 2px; }
+.catalog-filters .filter-grid, .catalog-transfer .filter-grid { margin-bottom:8px; }
+.catalog-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.catalog-table th, .catalog-table td { padding:8px 9px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+.catalog-table th { position:sticky; top:0; background:#f4f7fb; color:var(--brand-ink); }
+.catalog-table td small { display:block; color:var(--muted); }
+.catalog-actions { display:flex; gap:7px; }
+.catalog-picker { margin:10px 0; padding:10px; border:1px solid var(--line); border-radius:11px; background:#fbfdff; }
+.catalog-picker-head { display:flex; justify-content:space-between; align-items:end; gap:10px; margin-bottom:8px; }
+.catalog-picker-head label { flex:1; }
+.catalog-picker-head > div { display:flex; gap:6px; flex-wrap:wrap; }
+.catalog-pick-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; max-height:280px; overflow:auto; padding:3px; }
+.catalog-pick-list label { display:flex; align-items:flex-start; gap:7px; padding:7px 8px; border:1px solid var(--line); border-radius:8px; cursor:pointer; }
+.catalog-pick-list label.selected { border-color:var(--brand); background:#eef6ff; }
+.catalog-pick-list input { width:auto; margin-top:2px; }
+.catalog-approval-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+.catalog-preview { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; margin-top:10px; padding:10px; border:1px solid #efd39f; border-radius:11px; background:#fff9ed; }
+.catalog-preview > div:not(.catalog-preview-arrow):not(.catalog-approval-actions) { display:grid; gap:2px; }
+.catalog-preview small, .catalog-preview span { color:var(--muted); }
+.catalog-preview-arrow { font-size:24px; color:var(--brand); }
+.catalog-preview p, .catalog-preview > button, .catalog-preview > .meta, .catalog-preview > .catalog-approval-actions { grid-column:1/-1; margin:0; }
+.catalog-alert { margin-top:8px; padding:9px 10px; border-radius:9px; }
+.catalog-alert.error { color:var(--hi); background:#fff2f2; border:1px solid #f1c0c0; }
+.catalog-alert.success { color:var(--ok); background:#effaf5; border:1px solid #b9ddce; }
+.catalog-history { display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); }
+.catalog-history span { color:var(--muted); font-size:12px; text-align:right; }
+.catalog-diag { display:grid; grid-template-columns:1fr auto; gap:7px 12px; margin:0; }
+.catalog-diag dt { color:var(--muted); }.catalog-diag dd { margin:0; font-weight:700; text-align:right; }
+@media (max-width:899px) {
+  .catalog-heading { align-items:flex-end; }
+  .catalog-section-grid, .catalog-admin-bottom { grid-template-columns:1fr; }
+  .catalog-picker-head { align-items:stretch; flex-direction:column; }
+  .catalog-picker-head label { width:100%; }
+  .catalog-pick-list { grid-template-columns:1fr; }
+  .catalog-table, .catalog-table tbody { display:block; }
+  .catalog-table thead { display:none; }
+  .catalog-table tr { display:grid; gap:3px; padding:9px; margin:7px; border:1px solid var(--line); border-radius:10px; }
+  .catalog-table td { display:block; padding:0; border:0; overflow-wrap:anywhere; }
+  .catalog-table td:nth-child(1)::before { content:'NV: '; color:var(--muted); font-weight:700; }
+  .catalog-table td:nth-child(2)::before { content:'Tuyến: '; color:var(--muted); font-weight:700; }
+  .catalog-table td:nth-child(3)::before { content:'Loại: '; color:var(--muted); font-weight:700; }
+  .catalog-table td:nth-child(4)::before { content:'Danh mục: '; color:var(--muted); font-weight:700; }
+  .catalog-table td:nth-child(5)::before { content:'Từ kỳ: '; color:var(--muted); font-weight:700; }
+  .catalog-table td:nth-child(6)::before { content:'Đến kỳ: '; color:var(--muted); font-weight:700; }
+  .catalog-table td:nth-child(7)::before { content:'Nguồn: '; color:var(--muted); font-weight:700; }
+}
+@media (max-width:520px) {
+  .catalog-heading { align-items:stretch; flex-direction:column; }
+  .catalog-route-tabs { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .catalog-route-tabs button { padding:10px 12px; }
+  .catalog-heading label { width:100%; }
+  .catalog-preview { grid-template-columns:1fr; }
+  .catalog-preview-arrow { transform:rotate(90deg); justify-self:center; }
+}
+
+/* Danh mục quản lý — UX tách tra cứu và điều chuyển (CEO duyệt 15/07/2026). */
+.catalog-help { display:flex; align-items:center; justify-content:space-between; gap:18px; border-left:4px solid var(--brand); background:linear-gradient(135deg,#f4f9ff,#fff); }
+.catalog-help p { margin:4px 0 0; color:var(--muted); }
+.catalog-help ol { display:flex; gap:22px; margin:0; padding-left:22px; color:var(--brand-ink); font-weight:700; white-space:nowrap; }
+.catalog-mode-tabs { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:5px; border:1px solid var(--line); border-radius:14px; background:#f3f6fa; }
+.catalog-mode-tabs button { min-height:44px; border:0; border-radius:10px; background:transparent; color:var(--muted); font-weight:800; cursor:pointer; }
+.catalog-mode-tabs button.active { background:#fff; color:var(--brand); box-shadow:0 2px 9px rgba(15,43,70,.12); }
+.catalog-source-main { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.catalog-source-main > div { display:flex; align-items:center; gap:8px; }
+.catalog-source-main span { border-radius:999px; padding:2px 7px; background:rgba(255,255,255,.85); color:var(--muted); font-size:11px; font-weight:700; }
+.catalog-source-main small { color:var(--muted); }
+.catalog-source details { margin-top:6px; font-size:12px; }
+.catalog-source summary, .catalog-advanced > summary { color:var(--brand); font-weight:700; cursor:pointer; }
+.catalog-table-card { scroll-margin-top:12px; overflow:hidden; }
+.catalog-pager.is-top { border-top:0; border-bottom:1px solid var(--line); background:#f8fbff; }
+.catalog-pager.is-bottom { border-top:1px solid var(--line); }
+.catalog-pager > span { display:grid; gap:1px; min-width:130px; text-align:center; }
+.catalog-pager > span small { color:var(--muted); font-size:11px; }
+.catalog-transfer-flow { display:grid; gap:12px; }
+.catalog-step { border-left:4px solid #c8d9e8; }
+.catalog-step-title { display:flex; align-items:flex-start; gap:10px; margin-bottom:12px; }
+.catalog-step-title > span { display:grid; place-items:center; flex:0 0 30px; width:30px; height:30px; border-radius:50%; background:var(--brand); color:#fff; font-weight:900; }
+.catalog-step-title h3 { margin:1px 0 3px; color:var(--brand-ink); font-size:16px; }
+.catalog-step-title p { margin:0; color:var(--muted); font-size:12.5px; }
+.catalog-transfer-filters { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.catalog-callout { padding:14px; border:1px dashed #b9cee1; border-radius:10px; background:#f7fbff; color:var(--muted); text-align:center; }
+.catalog-selected-count { margin-top:8px; padding:8px 10px; border-radius:8px; background:#eaf4ff; color:var(--brand-ink); }
+.catalog-advanced { padding:12px 14px; }
+.catalog-advanced[open] > summary { margin-bottom:14px; }
+.catalog-advanced .catalog-admin-bottom > section { min-width:0; }
+@media (max-width:899px) {
+  .catalog-help { align-items:flex-start; flex-direction:column; }
+  .catalog-help ol { flex-wrap:wrap; gap:7px 22px; white-space:normal; }
+  .catalog-transfer-filters { grid-template-columns:1fr; }
+  .catalog-source-main { align-items:flex-start; flex-direction:column; }
+}
+@media (max-width:520px) {
+  .catalog-mode-tabs { grid-template-columns:1fr; }
+  .catalog-pager { gap:7px; padding:10px 7px; }
+  .catalog-pager .btn { padding:7px 9px; }
+  .catalog-pager > span { min-width:105px; font-size:12px; }
+}
+
+/* Danh mục quản lý — compact layout (CEO duyệt 15/07/2026 16:47). */
+.catalog-management { display:grid; gap:8px; }
+.catalog-heading-compact { min-height:0; padding:9px 12px; }
+.catalog-heading-compact .section-head { font-size:17px; line-height:1.2; }
+.catalog-heading-compact .meta { margin-top:2px; font-size:11.5px; }
+.catalog-heading-actions { display:flex; align-items:center; justify-content:flex-end; gap:12px; }
+.catalog-heading-actions > label { display:flex; align-items:center; gap:7px; min-width:0; }
+.catalog-heading-actions > label span { white-space:nowrap; }
+.catalog-heading-actions select { min-width:112px; }
+.catalog-source-inline { display:flex; align-items:center; gap:7px; min-width:125px; padding:5px 9px; border:1px solid #b9ddce; border-radius:10px; background:#f3fbf7; }
+.catalog-source-inline.is-stale { border-color:#efd39f; background:#fff9ed; }
+.catalog-source-inline i { width:8px; height:8px; border-radius:50%; background:#16a36a; box-shadow:0 0 0 3px rgba(22,163,106,.12); }
+.catalog-source-inline.is-stale i { background:#d48a00; box-shadow:0 0 0 3px rgba(212,138,0,.12); }
+.catalog-source-inline > div { display:grid; line-height:1.15; }
+.catalog-source-inline b { font-size:12px; }.catalog-source-inline small { color:var(--muted); font-size:10.5px; }
+.catalog-help-compact { padding:7px 11px; }
+.catalog-help-compact summary { color:var(--brand); font-size:12.5px; font-weight:800; cursor:pointer; }
+.catalog-help-compact > div { display:flex; align-items:center; justify-content:space-between; gap:14px; padding-top:7px; }
+.catalog-help-compact p { margin:0; color:var(--muted); }
+.catalog-help-compact ol { display:flex; gap:20px; margin:0; padding-left:20px; white-space:nowrap; }
+.catalog-mode-tabs { min-height:38px; padding:3px; }
+.catalog-mode-tabs button { min-height:34px; }
+.catalog-controls-compact { display:grid; gap:8px; padding:8px 10px; }
+.catalog-route-tabs-compact { display:flex; flex-wrap:wrap; gap:6px; }
+.catalog-route-tabs-compact button { min-height:30px; padding:4px 10px; border:1px solid var(--line); border-radius:999px; background:#fff; color:var(--muted); font-weight:750; cursor:pointer; }
+.catalog-route-tabs-compact button b { margin-left:3px; color:var(--brand); }
+.catalog-route-tabs-compact button.active { border-color:var(--brand); background:#eaf4ff; color:var(--brand-ink); box-shadow:0 0 0 1px rgba(0,93,170,.08); }
+.catalog-filter-row { display:grid; grid-template-columns:minmax(260px,1fr) minmax(170px,230px) auto; align-items:end; gap:8px; }
+.catalog-filter-row label { display:grid; gap:3px; }
+.catalog-filter-row label span, .catalog-result-count span { color:var(--muted); font-size:11px; font-weight:700; }
+.catalog-filter-row input, .catalog-filter-row select { min-height:34px; }
+.catalog-result-count { display:grid; align-content:center; min-width:110px; min-height:34px; padding:3px 9px; border-left:1px solid var(--line); }
+.catalog-result-count b { color:var(--brand-ink); font-size:14px; }
+.catalog-table-simple th, .catalog-table-simple td { padding:7px 9px; }
+.catalog-table-products { min-width:1180px; }
+.catalog-table-products .catalog-drug-name { min-width:210px; max-width:320px; white-space:normal; line-height:1.25; }
+.catalog-table-products .catalog-money { text-align:right; white-space:nowrap; }
+.catalog-active-label { display:inline-flex; padding:2px 7px; border-radius:999px; background:#eaf8f1; color:#087a4a; font-size:11px; font-weight:800; white-space:nowrap; }
+@media (max-width:899px) {
+  .catalog-heading-compact { align-items:center; flex-direction:row; }
+  .catalog-heading-actions { gap:7px; }
+  .catalog-source-inline { min-width:0; }
+  .catalog-source-inline b { display:none; }
+  .catalog-filter-row { grid-template-columns:1fr 180px; }
+  .catalog-result-count { grid-column:1/-1; border-left:0; border-top:1px solid var(--line); padding-top:6px; }
+  .catalog-help-compact > div { align-items:flex-start; flex-direction:column; }
+  .catalog-help-compact ol { flex-wrap:wrap; gap:5px 20px; white-space:normal; }
+  .catalog-table td:nth-child(3)::before { content:'Mã đơn vị: '; }
+  .catalog-table td:nth-child(4)::before { content:'Mã QLNB: '; }
+  .catalog-table td:nth-child(5)::before { content:'Tên thuốc: '; }
+  .catalog-table td:nth-child(6)::before { content:'ĐVT: '; }
+  .catalog-table td:nth-child(7)::before { content:'Đơn giá: '; }
+  .catalog-table td:nth-child(8)::before { content:'Từ kỳ: '; }
+  .catalog-table td:nth-child(9)::before { content:'Đến kỳ: '; }
+  .catalog-table-products { min-width:0; }
+  .catalog-table-products .catalog-drug-name { max-width:none; }
+  .catalog-table-products .catalog-money { text-align:left; }
+}
+@media (max-width:520px) {
+  .catalog-heading-compact { align-items:stretch; flex-direction:column; }
+  .catalog-heading-actions { justify-content:space-between; }
+  .catalog-source-inline b { display:block; }
+  .catalog-filter-row { grid-template-columns:1fr; }
+  .catalog-result-count { grid-column:auto; }
+}
+
+/* Danh mục quản lý — bộ lọc phụ thuộc, CST và vùng bảng rộng (CEO duyệt 15/07/2026 19:05). */
+.page-desktop.page-desktop-wide { max-width:none; padding:12px 14px 40px; }
+.catalog-filter-row { grid-template-columns:minmax(230px,1fr) minmax(125px,155px) minmax(95px,115px) minmax(190px,270px) auto; }
+.catalog-filter-row select { width:100%; min-width:0; }
+.catalog-table-products { min-width:1275px; table-layout:fixed; }
+.catalog-table-products th:nth-child(1) { width:92px; }
+.catalog-table-products th:nth-child(2) { width:55px; }
+.catalog-table-products th:nth-child(3) { width:145px; }
+.catalog-table-products th:nth-child(4) { width:145px; }
+.catalog-table-products th:nth-child(5) { width:140px; }
+.catalog-table-products th:nth-child(6) { width:185px; }
+.catalog-table-products th:nth-child(7) { width:50px; }
+.catalog-table-products th:nth-child(8) { width:105px; }
+.catalog-table-products th:nth-child(9), .catalog-table-products th:nth-child(10) { width:88px; }
+.catalog-table-products th:nth-child(11) { width:65px; }
+.catalog-table-products th:nth-child(12) { width:115px; }
+.catalog-table-products th { white-space:normal; line-height:1.15; }
+.catalog-table-products td { overflow:hidden; }
+.catalog-two-lines { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; max-height:2.55em; white-space:normal; overflow-wrap:anywhere; line-height:1.25; }
+.catalog-cst small { display:block; margin-top:2px; font-size:10px; font-weight:800; }
+.catalog-cst.is-ok small { color:#087a4a; }
+.catalog-cst.is-warning small { color:#a76700; }
+.catalog-cst.is-low small { color:#bd2c2c; }
+@media (min-width:900px) and (max-width:1250px) {
+  .catalog-filter-row { grid-template-columns:minmax(220px,1fr) repeat(2,minmax(105px,140px)) minmax(190px,1fr); }
+  .catalog-result-count { grid-column:1/-1; border-left:0; border-top:1px solid var(--line); padding-top:6px; }
+}
+@media (max-width:899px) {
+  .catalog-filter-row { grid-template-columns:1fr 1fr; }
+  .catalog-filter-row > label:first-child { grid-column:1/-1; }
+  .catalog-table td:nth-child(5)::before { content:'Tên thuốc: '; }
+  .catalog-table td:nth-child(6)::before { content:'Hoạt chất + Hàm lượng: '; }
+  .catalog-table td:nth-child(7)::before { content:'ĐVT: '; }
+  .catalog-table td:nth-child(8)::before { content:'Đơn giá: '; }
+  .catalog-table td:nth-child(9)::before { content:'CST ban đầu: '; }
+  .catalog-table td:nth-child(10)::before { content:'CST còn lại: '; }
+  .catalog-table td:nth-child(11)::before { content:'Từ kỳ: '; }
+  .catalog-table td:nth-child(12)::before { content:'Đến kỳ: '; }
+  .catalog-two-lines { display:block; max-height:none; overflow:visible; }
+  .catalog-table-products tr { grid-template-columns:1fr 1fr; }
+  .catalog-table-products td:nth-child(3), .catalog-table-products td:nth-child(4),
+  .catalog-table-products td:nth-child(5), .catalog-table-products td:nth-child(6) { grid-column:1/-1; }
+}
+@media (max-width:520px) {
+  .catalog-filter-row { grid-template-columns:1fr; }
+  .catalog-filter-row > label:first-child { grid-column:auto; }
+}

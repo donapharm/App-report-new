@@ -13,6 +13,7 @@ import Products from './pages/Products.jsx';
 import Analysis from './pages/Analysis.jsx';
 import TenderQuota from './pages/TenderQuota.jsx';
 import Target from './pages/Target.jsx';
+import CatalogManagement from './pages/CatalogManagement.jsx';
 import AiChat from './pages/AiChat.jsx';
 import Upload from './pages/Upload.jsx';
 
@@ -24,6 +25,7 @@ const TABS = [
   { key: 'analysis', label: 'Phân tích', ic: '📈', C: Analysis },
   { key: 'cst', label: 'Cơ số thầu', ic: '📦', C: TenderQuota },
   { key: 'target', label: 'Target', ic: '🎯', C: Target },
+  { key: 'catalogManagement', label: 'Danh mục QL', full: 'Danh mục quản lý', ic: '🗂️', C: CatalogManagement },
   { key: 'ai', label: 'Hỏi nhanh', ic: '🤖', C: AiChat },
   { key: 'upload', label: 'Upload', ic: '⬆️', C: Upload, adminOnly: true },
 ];
@@ -105,7 +107,7 @@ export default function App() {
             </div>
             <Clock />
           </header>
-          <main className="page-desktop">
+          <main className={`page-desktop ${tab === 'catalogManagement' ? 'page-desktop-wide' : ''}`}>
             <NavCtx.Provider value={navBack}><Active me={me} desktop onNavigate={navigate} /></NavCtx.Provider>
           </main>
           <ScrollTopButton />

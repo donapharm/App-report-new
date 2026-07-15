@@ -17,6 +17,8 @@ const revenueRefresh = require('./revenueRefresh');
 const reconcile = require('./reconcile');
 const targetAdmin = require('./targetAdmin');
 const assignmentAdmin = require('./assignmentAdmin');
+const catalogManagement = require('./catalogManagement');
+const appSaleCst = require('./appSaleCst');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -703,6 +705,39 @@ router.get('/filters', auth.requireAuth, (req, res) => {
 
 
 /* ---------- Target Assignment GĐ1: catalog + phân công ---------- */
+// Danh mục quản lý Đợt 1: luồng đọc riêng, chưa cutover các API catalog/quyền hiện hữu.
+// UI dùng MM.YYYY; boundary này đổi tường minh sang contract Data Hub YYYY-MM.
+router.get('/catalog-management', auth.requireAuth, async (req, res) => {
+  try {
+    const period = catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy());
+    const snapshot = await catalogManagement.getSnapshot(period);
+    // CST dùng khóa chính xác đơn vị + QLNB. Baseline hiện hành trong App Report
+    // được phủ bởi tender-quota App Sale khi API/cache có cùng đúng cặp khóa.
+    const tenderQuota = await appSaleCst.fetchTenderQuota().catch(() => ({ rows: [] }));
+    const liveRows = (tenderQuota.rows || []).map((row) => ({ ...row, cst_source: 'app-sale-tender-quota' }));
+    const rows = catalogManagement.enrichRowsWithCst(snapshot.rows, [...store.getCst({ scope: null }), ...liveRows]);
+    const viewSnapshot = { ...snapshot, rows };
+    if (auth.isAdmin(req.session.role)) return res.json(catalogManagement.adminView(viewSnapshot));
+    return res.json(catalogManagement.employeeView(viewSnapshot, req.session.emp_code, period));
+  } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
+});
+router.get('/admin/catalog-management/history', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    const period = catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy());
+    const result = await catalogManagement.getHistory();
+    return res.json({ period, history: result.history || [], source: result.source });
+  } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
+});
+router.get('/admin/catalog-management/diagnostics', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  res.json(catalogManagement.diagnostics());
+});
+router.post('/admin/catalog-management/transfers', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    const result = await catalogManagement.transfer(req.body || {}, req.session);
+    return res.json({ ok: true, result });
+  } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
+});
+
 router.get('/catalog/sales', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   let rows = salesCatalogRows(scope, { allPeriods: req.query.all === '1' || req.query.all === 'true' });
