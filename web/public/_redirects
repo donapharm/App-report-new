@@ -1,3 +1,3 @@
 # CHỈ dùng khi tách Frontend lên Cloudflare Pages (cách 2 trong DEPLOY_CLOUDFLARE.md).
 # Cách khuyến nghị (1 server + Tunnel) KHÔNG cần file này.
-/api/*  https://api.reportnew.donapharm.asia/api/:splat  200
+/api/*  https://api.report.donapharm.asia/api/:splat  200

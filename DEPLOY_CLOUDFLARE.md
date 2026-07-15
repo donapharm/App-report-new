@@ -1,16 +1,16 @@
-# Đưa App Report New lên tên miền reportnew.donapharm.asia
+# Đưa App Report New lên tên miền report.donapharm.asia
 
 App Report cần lấy dữ liệu + đăng nhập từ **mạng nội bộ công ty** (ORDS, SSO/OTP).
 Cách gọn nhất và an toàn nhất: **chạy 1 server Node duy nhất** (nó phục vụ CẢ giao diện lẫn API)
-rồi đưa ra internet bằng **Cloudflare Tunnel** trỏ vào tên miền `reportnew.donapharm.asia`.
+rồi đưa ra internet bằng **Cloudflare Tunnel** trỏ vào tên miền `report.donapharm.asia`.
 Không mở port, không phơi server ra ngoài.
 
 ```
-[Người dùng] → https://reportnew.donapharm.asia → Cloudflare (Tunnel) → [Server công ty: node :3860] → ORDS/SSO nội bộ
+[Người dùng] → https://report.donapharm.asia → Cloudflare (Tunnel) → [Server công ty: node :3873] → ORDS/SSO nội bộ
                                               └── Cloudflare Access: chỉ nhân viên đăng nhập mới vào
 ```
 
-> App đã cấu hình sẵn phục vụ cả frontend (`web/dist`) lẫn API trên cùng cổng 3860
+> App đã cấu hình sẵn phục vụ cả frontend (`web/dist`) lẫn API trên cùng cổng 3873
 > (`server/src/index.js`), nên **không cần tách Pages, không cần \_redirects, không lo CORS**.
 
 ---
@@ -29,7 +29,7 @@ cd App-report-new
 npm run setup          # cài + tạo dữ liệu mẫu
 npm run build          # build giao diện vào web/dist
 cp .env.example .env   # rồi sửa .env (xem phần "nối dữ liệu thật")
-npm start              # chạy http://localhost:3860
+npm start              # chạy http://localhost:3873
 # Nên chạy nền bằng pm2 để tự bật lại:
 #   npm i -g pm2 && pm2 start server/src/index.js --name reportnew && pm2 save
 ```
@@ -42,15 +42,15 @@ chmod +x cloudflared && sudo mv cloudflared /usr/local/bin/
 
 cloudflared tunnel login
 cloudflared tunnel create reportnew
-cloudflared tunnel route dns reportnew reportnew.donapharm.asia
+cloudflared tunnel route dns reportnew report.donapharm.asia
 ```
 File `~/.cloudflared/config.yml`:
 ```yaml
 tunnel: reportnew
 credentials-file: /root/.cloudflared/<id>.json
 ingress:
-  - hostname: reportnew.donapharm.asia
-    service: http://localhost:3860
+  - hostname: report.donapharm.asia
+    service: http://localhost:3873
   - service: http_status:404
 ```
 Chạy nền:
@@ -58,11 +58,11 @@ Chạy nền:
 cloudflared tunnel run reportnew      # chạy thử
 sudo cloudflared service install      # cài chạy nền tự động
 ```
-→ Mở **https://reportnew.donapharm.asia** là thấy app.
+→ Mở **https://report.donapharm.asia** là thấy app.
 
 ## Bước 3 — Bảo vệ bằng Cloudflare Access (khuyến nghị)
 Cloudflare **Zero Trust → Access → Applications → Add application** (Self-hosted):
-- Domain: `reportnew.donapharm.asia`
+- Domain: `report.donapharm.asia`
 - Policy: chỉ cho email công ty (`@donapharm...`) hoặc danh sách cụ thể.
 → Người ngoài biết link cũng không mở được.
 
@@ -74,15 +74,15 @@ Cloudflare **Zero Trust → Access → Applications → Add application** (Self-
 | Doanh thu | (không cần) | Đã chạy: CEO **Upload Excel** trong app là báo cáo cập nhật ngay |
 | Doanh thu fallback | `ORDS_SQL_API`, `ORDS_AUTH` | Bật ORDS khi kỳ chưa upload (xem `server/src/ords.js`) |
 | Đăng nhập | `OTP_BACKEND_URL`, `SSO_VERIFY_URL` | Bật OTP/SSO thật (xem `server/src/auth.js`); nhớ làm UI nhập SĐT→OTP ở frontend |
-| Bảo mật | `SESSION_SECRET` | Đặt chuỗi ngẫu nhiên; siết CORS trong `server/src/index.js` về `reportnew.donapharm.asia` |
+| Bảo mật | `SESSION_SECRET` | Đặt chuỗi ngẫu nhiên; siết CORS trong `server/src/index.js` về `report.donapharm.asia` |
 
 ---
 
 ## Cách khác: tách Frontend lên Cloudflare Pages
 Nếu sau này muốn giao diện chạy trên CDN Cloudflare (nhanh hơn) và backend riêng:
 - Pages build từ repo: Root `web`, build `npm install && npm run build`, output `dist`.
-- Backend vẫn qua Tunnel ở `api.reportnew.donapharm.asia`.
-- Sửa `web/public/_redirects`: `/api/*  https://api.reportnew.donapharm.asia/api/:splat  200`.
+- Backend vẫn qua Tunnel ở `api.report.donapharm.asia`.
+- Sửa `web/public/_redirects`: `/api/*  https://api.report.donapharm.asia/api/:splat  200`.
 Cách này nhiều bước hơn; chỉ nên dùng khi cần tối ưu tốc độ tải giao diện.
 
 ---

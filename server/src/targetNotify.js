@@ -100,7 +100,7 @@ function markSent(events) {
 const BRAND = '#1560ac';
 const CID_LOGO = 'dnpharma-logo';
 const CID_ZALO = 'dnpharma-zalo';
-const APP_URL = process.env.APP_PUBLIC_URL || 'https://reportnew.donapharm.asia';
+const APP_URL = process.env.APP_PUBLIC_URL || 'https://report.donapharm.asia';
 function badge(text, bg, fg = '#ffffff') {
   return `<span style="display:inline-block;background:${bg};color:${fg};font-size:14px;font-weight:bold;padding:7px 16px;border-radius:999px;line-height:1;">${text}</span>`;
 }

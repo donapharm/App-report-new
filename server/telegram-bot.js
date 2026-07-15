@@ -13,11 +13,11 @@
  *   TELEGRAM_BOT_TOKEN   token bot (từ BotFather)
  *   TELEGRAM_BOT_SECRET  chuỗi bí mật dùng chung với backend (giống .env app)
  * ENV tùy chọn:
- *   APP_BASE_URL         mặc định http://localhost:${PORT||3860}
+ *   APP_BASE_URL         mặc định http://localhost:${PORT||3873}
  *   PORT                 cổng backend app (nếu không đặt APP_BASE_URL)
  *   DIGEST_TIMES         lịch bản tin theo giờ VN (GMT+7), mặc định "07:30,18:00"
  *   DIGEST_CRON          tương thích cũ: 1 mốc dạng "30 7 * * *" nếu DIGEST_TIMES chưa đặt
- *   APP_PUBLIC_URL       link mở app trong bản tin, mặc định https://reportnew.donapharm.asia
+ *   APP_PUBLIC_URL       link mở app trong bản tin, mặc định https://report.donapharm.asia
  */
 // Múi giờ GMT+7 (Việt Nam) cho mọi mốc thời gian/lịch của bot. Cho phép env override.
 process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
@@ -74,8 +74,8 @@ function claimPendingTelegramGrant(telegramId, from) {
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SECRET = process.env.TELEGRAM_BOT_SECRET || '';
-const BASE = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3860}`;
-const PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.PUBLIC_BASE_URL || 'https://reportnew.donapharm.asia';
+const BASE = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3873}`;
+const PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.PUBLIC_BASE_URL || 'https://report.donapharm.asia';
 // CEO chốt: bản tin/báo cáo bán hàng chỉ gửi 07:30 và 18:00 GMT+7.
 const DIGEST_CRON = process.env.DIGEST_CRON || '';
 const DIGEST_TIMES = process.env.DIGEST_TIMES || '';

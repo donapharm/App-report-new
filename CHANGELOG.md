@@ -1,3 +1,9 @@
+### PRODUCTION — 2026-07-15 — App Report New chính thức tại report.donapharm.asia
+- Chốt release `5df20e0`, build production và chạy PM2 `reportnew` trên `127.0.0.1:3873`; giữ `dona-report` cổng `3860` nguyên trạng để rollback nội bộ.
+- Home SSO dùng `GET /api/sso/verify`, Report phát session riêng; CORS chỉ cho các origin DONAPHARM được duyệt và asset thiếu trả HTTP 404 thay vì SPA HTML.
+- Tunnel chính chuyển `report.donapharm.asia` sang `3873`; gỡ public alias `tuan13`/`slides` tới app cũ. HTTPS health/version, Home SSO, API có quyền, desktop/mobile và console đều PASS.
+- Cấu hình và source đã sao lưu trước cutover; không commit `.env`, secret hay artifact private.
+
 ### DRAFT — 2026-07-14 — CEO Deck V5D dùng ảnh CEO cung cấp + chuẩn hóa pháp nhân (38 slide/deck)
 - Tạo bản độc lập `deckHtmlV5D.js`, `deckPptxV5D.js`, `deckReportV5D.js`; không ghi đè V5/V5C. Xuất tuần W28 và tháng 06/2026 tại `artifacts/sales-report/deck-v5d-ceo-photos/`, tên tệp kết thúc `_DRAFT_V5D_CEO_PHOTOS`.
 - Chỉ dùng đúng 20 JPG CEO cung cấp `ceo-photo-74.jpg` → `ceo-photo-93.jpg`, xác minh SHA-256 theo `SOURCE_MANIFEST.json`; dùng đủ 20 ảnh trên đúng 18/38 slide mỗi deck, nhúng data URI tự chứa. Ảnh du lịch 74–79 chỉ nằm trong một collage văn hóa/kết thúc, không làm bằng chứng vùng/sản phẩm/QLNB. Không có URL ảnh từ xa hay tham chiếu asset AI V5C.

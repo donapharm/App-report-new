@@ -5,7 +5,7 @@
       "name": "report-new",
       "runtimeExecutable": "node",
       "runtimeArgs": ["server/src/index.js"],
-      "port": 3860
+      "port": 3873
     }
   ]
 }

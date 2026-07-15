@@ -11,7 +11,7 @@
 ## Chạy nhanh
 ```bash
 npm run setup   # cài server+web, sinh dữ liệu mẫu ẩn danh
-npm run dev     # API :3860 + web :5173  → mở http://localhost:5173
+npm run dev     # API :3873 + web :5173  → mở http://localhost:5173
 ```
 Đăng nhập demo: bấm tài khoản mẫu ở màn login (CEO / ADMIN / DN001..DN012).
 
