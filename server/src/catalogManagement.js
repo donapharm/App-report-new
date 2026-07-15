@@ -11,12 +11,17 @@ const EMPLOYEE_FORBIDDEN_KEYS = /(^|_)(old|new|from|to)[_-]?emp|counterpart|acto
 const EMPLOYEE_FORBIDDEN_PHRASES = /bàn giao cho|nhận từ/i;
 const PERMANENTLY_BLOCKED_CATALOG_FIELDS = Object.freeze(['c32', 'c47']);
 const PERMANENTLY_BLOCKED_CATALOG_SET = new Set(PERMANENTLY_BLOCKED_CATALOG_FIELDS);
+const APPROVED_OPTIONAL_CATALOG_FIELDS = Object.freeze([]);
+const APPROVED_OPTIONAL_CATALOG_SET = new Set(APPROVED_OPTIONAL_CATALOG_FIELDS);
 
 function normalizedFieldName(value) {
   return String(value || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
 }
 function isPermanentlyBlockedCatalogField(value) {
   return PERMANENTLY_BLOCKED_CATALOG_SET.has(normalizedFieldName(value));
+}
+function isCatalogCostField(value) {
+  return /^c(?:3[2-9]|4[0-7])$/.test(normalizedFieldName(value));
 }
 function assertNoPermanentCatalogFields(value, pathName = 'catalogPayload') {
   if (Array.isArray(value)) {
@@ -32,6 +37,30 @@ function assertNoPermanentCatalogFields(value, pathName = 'catalogPayload') {
       });
     }
     assertNoPermanentCatalogFields(child, `${pathName}.${key}`);
+  }
+  return true;
+}
+function assertCatalogFieldPolicy(value, pathName = 'catalogPayload') {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertCatalogFieldPolicy(item, `${pathName}[${index}]`));
+    return true;
+  }
+  if (!value || typeof value !== 'object') return true;
+  for (const [key, child] of Object.entries(value)) {
+    const field = normalizedFieldName(key);
+    if (isPermanentlyBlockedCatalogField(field)) {
+      throw Object.assign(new Error(`Permanent catalog field blocked at ${pathName}.${key}`), {
+        status: 502,
+        code: 'CATALOG_PERMANENT_FIELD_BLOCKED',
+      });
+    }
+    if (isCatalogCostField(field) && !APPROVED_OPTIONAL_CATALOG_SET.has(field)) {
+      throw Object.assign(new Error(`Catalog field is not approved at ${pathName}.${key}`), {
+        status: 502,
+        code: 'CATALOG_FIELD_NOT_APPROVED',
+      });
+    }
+    assertCatalogFieldPolicy(child, `${pathName}.${key}`);
   }
   return true;
 }
@@ -58,24 +87,35 @@ function checksum(value) {
 function readCache(period) {
   try {
     const value = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-    assertNoPermanentCatalogFields(value, 'catalogLkg');
+    assertCatalogFieldPolicy(value, 'catalogLkg');
     if (value?.snapshots && period) return value.snapshots[period] || null;
     return value && Array.isArray(value.rows) && (!period || value.period === period) ? value : null;
   } catch { return null; }
 }
+function safeRestoredSnapshots(restoredSnapshots = {}) {
+  const safe = {};
+  for (const [period, restored] of Object.entries(restoredSnapshots || {})) {
+    try { assertCatalogFieldPolicy(restored, `restoredCatalogLkg.${period}`); safe[period] = restored; }
+    catch { /* permanently omit contaminated snapshots during the next rewrite */ }
+  }
+  return safe;
+}
 function writeCacheAtomic(snapshot) {
-  assertNoPermanentCatalogFields(snapshot, 'catalogSnapshot');
+  assertCatalogFieldPolicy(snapshot, 'catalogSnapshot');
   fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
   let current = {};
   try { current = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) || {}; } catch { current = {}; }
-  const snapshots = current.snapshots || (Array.isArray(current.rows) && current.period ? { [current.period]: current } : {});
+  const restoredSnapshots = current.snapshots || (Array.isArray(current.rows) && current.period ? { [current.period]: current } : {});
+  // A reset/restore may bring back an old poisoned snapshot. Never carry it
+  // into the next LKG: retain only snapshots that pass the current policy.
+  const snapshots = safeRestoredSnapshots(restoredSnapshots);
   snapshots[snapshot.period] = snapshot;
   const periods = Object.keys(snapshots).sort().slice(-18);
   const value = {
     source: 'data-hub-lkg', version: snapshot.meta.version, checksum: snapshot.meta.checksum,
     updatedAt: snapshot.meta.updatedAt, snapshots: Object.fromEntries(periods.map((p) => [p, snapshots[p]])),
   };
-  assertNoPermanentCatalogFields(value, 'catalogLkg');
+  assertCatalogFieldPolicy(value, 'catalogLkg');
   const tmp = `${CACHE_FILE}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, CACHE_FILE);
@@ -120,7 +160,7 @@ function normalizeRow(row = {}) {
   };
 }
 function enrichRowsFromCatalog(rows, catalog) {
-  assertNoPermanentCatalogFields(catalog, 'catalogProjection');
+  assertCatalogFieldPolicy(catalog, 'catalogProjection');
   const byPair = new Map();
   for (const row of catalog || []) {
     const key = `${String(row.c7 || '').trim()}\u001f${String(row.c5 || '').trim()}`;
@@ -158,7 +198,7 @@ function localSnapshot(period, reason = 'Data Hub chưa được cấu hình') {
   // Audit local chỉ đi qua adminView; employeeView luôn dựng response từ whitelist riêng.
   const history = typeof assignmentAdmin.listAudit === 'function' ? assignmentAdmin.listAudit() : [];
   const body = { rows, catalog, history, period, readOnly: true };
-  assertNoPermanentCatalogFields(body, 'localCatalogSnapshot');
+  assertCatalogFieldPolicy(body, 'localCatalogSnapshot');
   return {
     ...body,
     meta: {
@@ -191,7 +231,7 @@ async function remoteSnapshot(period) {
   const root = `${baseUrl()}/api/integrations/app-report`;
   // Một snapshot kết hợp bảo đảm catalog + timeline cùng version/checksum, tránh ghép hai lần đọc lệch thời điểm.
   const payload = await fetchJson(`${root}/assignments/catalog-management?ky=${encodeURIComponent(period)}`);
-  assertNoPermanentCatalogFields(payload, 'dataHubCatalogPayload');
+  assertCatalogFieldPolicy(payload, 'dataHubCatalogPayload');
   const catalog = Array.isArray(payload.catalog) ? payload.catalog : [];
   const rows = enrichRowsFromCatalog(arrayOf(payload, ['rows', 'assignments', 'items']).map(normalizeRow), catalog);
   const history = arrayOf(payload, ['history', 'audit', 'events']);
@@ -240,7 +280,7 @@ function assertEmployeeSafe(value, pathName = 'response') {
   }
 }
 function employeeView(snapshot, empCode, periodInput) {
-  assertNoPermanentCatalogFields(snapshot, 'employeeCatalogSnapshot');
+  assertCatalogFieldPolicy(snapshot, 'employeeCatalogSnapshot');
   const period = toHubPeriod(periodInput);
   const emp = String(empCode || '').trim().toUpperCase();
   const own = snapshot.rows.filter((row) => row.emp_code === emp);
@@ -256,7 +296,7 @@ function employeeView(snapshot, empCode, periodInput) {
   return response;
 }
 function adminView(snapshot) {
-  assertNoPermanentCatalogFields(snapshot, 'adminCatalogSnapshot');
+  assertCatalogFieldPolicy(snapshot, 'adminCatalogSnapshot');
   // The browser only needs the resolved unit+QLNB timeline. Keep the full
   // restricted catalog server-side in the versioned LKG snapshot to avoid
   // sending a duplicate ~6 MB payload on every CEO page load.
@@ -285,9 +325,9 @@ async function transfer(payload, session) {
 }
 function diagnostics() {
   let cacheRoot = null;
-  try { cacheRoot = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); assertNoPermanentCatalogFields(cacheRoot, 'catalogLkg'); } catch { cacheRoot = null; }
+  try { cacheRoot = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); assertCatalogFieldPolicy(cacheRoot, 'catalogLkg'); } catch { cacheRoot = null; }
   const count = cacheRoot?.snapshots ? Object.keys(cacheRoot.snapshots).length : (cacheRoot?.rows ? 1 : 0);
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };
+module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };

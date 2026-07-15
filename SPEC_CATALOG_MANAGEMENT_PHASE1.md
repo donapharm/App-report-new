@@ -71,7 +71,9 @@ Giao diện CEO có bộ lọc bắt buộc `Tất cả | CL | NCL | NT`, hiển
 
 ## Privacy defense-in-depth
 
-Response NV được dựng bằng whitelist, chỉ gồm `id`, `type`, `value`, `label`, `effective_from`, `effective_to`, `status`. Không serialize nguyên row Data Hub.
+Response NV được dựng bằng whitelist, chỉ gồm các trường nhận diện danh mục/phạm vi đã duyệt (`id`, `type`, `value`, `label`, `route`, `unit_code`, `qlnb_code`, tên thuốc/hoạt chất/hàm lượng/ĐVT, C31, CST, kỳ hiệu lực và trạng thái). Không serialize nguyên row Data Hub.
+
+`C32` và `C47` là denylist vĩnh viễn ở cả Data Hub response, App Report inbound, LKG cache và employee serializer. Hai cột này không thể mở bằng cấu hình thông thường. `C33–C46` mặc định deny; chỉ thêm từng cột vào allowlist sau phê duyệt CEO rõ ràng. Khi payload hoặc LKG restore chứa C32/C47 hay cột C33–C46 chưa duyệt, App Report fail closed; lần ghi LKG tốt tiếp theo loại bỏ snapshot nhiễm thay vì mang sang file cache mới.
 
 Trước khi trả response, `assertEmployeeSafe` duyệt đệ quy và chặn:
 
@@ -97,4 +99,4 @@ node --check src/routes.js
 cd ../web && npm run build
 ```
 
-Test bao phủ conversion kỳ, whitelist response NV, chặn field/cụm từ cấm và giữ audit cho CEO.
+Test bao phủ conversion kỳ, whitelist response NV, chặn field/cụm từ cấm, khóa vĩnh viễn C32/C47, default-deny C33–C46, phục hồi cache sau reset/restore và giữ audit cho CEO.

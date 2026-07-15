@@ -67,7 +67,18 @@ test('C32 và C47 bị khóa cứng kể cả payload reset/restore, còn c41 c�
     );
     assert.throws(() => catalogManagement.assertEmployeeSafe({ [field]: 'SECRET' }), /privacy field/i);
   }
+  assert.deepEqual(catalogManagement.APPROVED_OPTIONAL_CATALOG_FIELDS, []);
   assert.doesNotThrow(() => catalogManagement.assertNoPermanentCatalogFields({ catalog: [{ c41: 'FUTURE_OPTIONAL' }] }));
+  assert.throws(
+    () => catalogManagement.assertCatalogFieldPolicy({ catalog: [{ c41: 'NOT_APPROVED_YET' }] }),
+    (error) => error.code === 'CATALOG_FIELD_NOT_APPROVED' && error.status === 502,
+  );
+  const recovered = catalogManagement.safeRestoredSnapshots({
+    '2026-06': { rows: [{ product_name: 'SAFE' }], catalog: [{ c31: 1 }] },
+    '2026-07': { rows: [], catalog: [{ c32: 'POISONED' }] },
+    '2026-08': { rows: [], catalog: [{ c41: 'NOT_APPROVED_YET' }] },
+  });
+  assert.deepEqual(Object.keys(recovered), ['2026-06']);
 });
 
 test('normalize giữ audit cần thiết cho CEO view', () => {
