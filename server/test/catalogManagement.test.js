@@ -57,6 +57,19 @@ test('privacy assertion chặn field/phrase cấm nếu serializer bị sửa sa
   assert.throws(() => catalogManagement.assertEmployeeSafe({ message: 'Nhận từ một nhân viên khác' }), /privacy phrase/i);
 });
 
+test('C32 và C47 bị khóa cứng kể cả payload reset/restore, còn c41 có thể được duyệt sau', () => {
+  assert.deepEqual(catalogManagement.PERMANENTLY_BLOCKED_CATALOG_FIELDS, ['c32', 'c47']);
+  for (const field of ['c32', 'C32', 'c_32', 'c47', 'C47', 'c_47']) {
+    assert.equal(catalogManagement.isPermanentlyBlockedCatalogField(field), true, field);
+    assert.throws(
+      () => catalogManagement.assertNoPermanentCatalogFields({ snapshots: { '2026-07': { catalog: [{ [field]: 'SECRET' }] } } }, 'restoredLkg'),
+      (error) => error.code === 'CATALOG_PERMANENT_FIELD_BLOCKED' && error.status === 502,
+    );
+    assert.throws(() => catalogManagement.assertEmployeeSafe({ [field]: 'SECRET' }), /privacy field/i);
+  }
+  assert.doesNotThrow(() => catalogManagement.assertNoPermanentCatalogFields({ catalog: [{ c41: 'FUTURE_OPTIONAL' }] }));
+});
+
 test('normalize giữ audit cần thiết cho CEO view', () => {
   const row = catalogManagement.normalizeRow({ assignment_id: 'x', employee_code: 'dn001', assignment_type: 'iit', assignment_value: 'QL01', from_period: '2026-07', actor: 'CEO', batch_id: 'b1', note: 'audit note' });
   assert.equal(row.emp_code, 'DN001');
