@@ -1,8 +1,84 @@
 // Thành phần dùng chung: loading, KPI, thanh bar, hàng danh sách.
 import React from 'react';
-import { money, pct, short } from './util.js';
+import { formatDate, money, parseDisplayDate, pct, short, unitParts } from './util.js';
 
 export const Spinner = () => <div className="spin" />;
+
+// Mã/tên ngắn nổi bật; tên pháp lý đầy đủ sau dấu /, in nghiêng và không đậm.
+export function UnitLabel({ code, name, className = '' }) {
+  const p = unitParts(code, name);
+  return (
+    <span className={`unit-label${className ? ` ${className}` : ''}`}>
+      <span className="unit-label-code">{p.code}</span>
+      {p.name && <><span className="unit-label-sep"> / </span><span className="unit-label-full">{p.name}</span></>}
+    </span>
+  );
+}
+
+// Ô nhập ngày: mobile chỉ cần gõ liền 13072026, UI tự chèn thành 13/07/2026;
+// dữ liệu gửi API vẫn luôn là ISO yyyy-mm-dd.
+function dateInputText(value) {
+  const iso = parseDisplayDate(value);
+  if (!iso) return value ? formatDate(value) : '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+function autoSlashDate(raw) {
+  const source = String(raw || '').trim();
+  const iso = source.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+  const separated = source.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/);
+  if (separated) {
+    const [, d, m, y] = separated;
+    return `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${y}`;
+  }
+  const digits = source.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
+export function DateInput({ value, onChange, ariaLabel = 'Ngày', disabled = false, className = '', min = '', max = '' }) {
+  const [text, setText] = React.useState(() => dateInputText(value));
+  const [invalid, setInvalid] = React.useState(false);
+  const pickerRef = React.useRef(null);
+  const shortCommitRef = React.useRef(null);
+  React.useEffect(() => { setText(dateInputText(value)); setInvalid(false); }, [value]);
+  React.useEffect(() => () => clearTimeout(shortCommitRef.current), []);
+  const read = (raw, commit = false) => {
+    clearTimeout(shortCommitRef.current);
+    const display = autoSlashDate(raw);
+    setText(display);
+    if (!display.trim()) { setInvalid(false); onChange(''); return; }
+    const iso = parseDisplayDate(display);
+    const shortYear = /^\d{2}\/\d{2}\/\d{2}$/.test(display);
+    const outOfRange = !!iso && ((min && iso < min) || (max && iso > max));
+    // Khi mới đủ 6 số (ddmmyy), chờ blur/Enter để người dùng vẫn có thể gõ tiếp năm 4 số.
+    if (iso && !outOfRange && (!shortYear || commit)) { setInvalid(false); onChange(iso); }
+    else if (iso && !outOfRange && shortYear) {
+      setInvalid(false);
+      // Bàn phím mobile thường chỉ nhập 6 số ddmmyy. Tự commit sau một nhịp ngắn;
+      // nếu người dùng tiếp tục gõ năm 4 số thì lần gõ kế tiếp sẽ hủy timer này.
+      shortCommitRef.current = setTimeout(() => onChange(iso), 900);
+    }
+    else if (outOfRange && (!shortYear || commit)) setInvalid(true);
+    else if (commit) setInvalid(true);
+  };
+  const openPicker = () => {
+    if (disabled) return;
+    try { pickerRef.current?.showPicker?.(); } catch { pickerRef.current?.click?.(); }
+  };
+  return (
+    <div className={`date-input-smart${invalid ? ' invalid' : ''}${className ? ` ${className}` : ''}`}>
+      <input type="text" inputMode="numeric" value={text} disabled={disabled} aria-label={ariaLabel}
+        placeholder="dd/mm/yyyy" pattern="[0-9/.-]*" maxLength={10} onChange={(e) => read(e.target.value)}
+        onBlur={() => read(text, true)} onKeyDown={(e) => { if (e.key === 'Enter') { read(text, true); e.currentTarget.blur(); } }} />
+      <button type="button" onClick={openPicker} disabled={disabled} aria-label={`Mở lịch ${ariaLabel}`} title="Chọn ngày">▣</button>
+      <input ref={pickerRef} className="date-input-native" type="date" tabIndex={-1} aria-label={`Lịch ${ariaLabel}`}
+        min={min || undefined} max={max || undefined} disabled={disabled}
+        value={value || ''} onChange={(e) => { setInvalid(false); onChange(e.target.value); }} />
+    </div>
+  );
+}
 
 // Số tiền lớn: hiện GỌN to (4,76 tỷ) + số ĐẦY ĐỦ nhỏ ngay bên dưới (luôn thấy cả hai).
 export function MoneyBig({ value, className }) {
@@ -92,7 +168,7 @@ export function Clock() {
   }, []);
   const tz = { timeZone: 'Asia/Bangkok' };
   const time = now.toLocaleTimeString('vi-VN', { ...tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  const date = now.toLocaleDateString('vi-VN', { ...tz, day: '2-digit', month: '2-digit', year: 'numeric' });
+  const date = formatDate(now);
   return (
     <span className="clock-pill" aria-label="Ngày giờ hiện tại">
       🕐 <span className="clock-dt"><b>{time}</b><i>{date}</i></span>
@@ -116,24 +192,82 @@ export function Kpi({ label, value, sub, delta, tone, variant, icon, onClick }) 
   );
 }
 
-// Thẻ QR Zalo OA DONAPHARM — dùng trong app (Tổng quan) để NV/khách theo dõi OA.
-// Ảnh thật ở web/public/zalo-oa-qr.png; thiếu ảnh -> hiện hướng dẫn, không vỡ.
-export function ZaloCard() {
+const OFFICIAL_ZALO_QR = '/zalo-oa-qr.png';
+
+// Nguồn QR duy nhất đã được CEO duyệt. Không sinh QR, không thay bằng mã khác.
+export function OfficialZaloQr({ size = 104, className = '' }) {
   const [ok, setOk] = React.useState(true);
-  return (
-    <div className="card zalo-card">
-      <div className="zalo-info">
-        <b>Zalo OA DONAPHARM</b>
-        <span>Quét mã để theo dõi Official Account — nhận thông báo &amp; hỗ trợ nhanh.</span>
-      </div>
-      <div className="zalo-qr">
-        {ok ? (
-          <img src="/zalo-oa-qr.png" alt="Zalo OA DONAPHARM" width={104} height={104} onError={() => setOk(false)} />
-        ) : (
-          <div className="zalo-qr-missing">Đặt file<br /><b>zalo-oa-qr.png</b><br />vào web/public/</div>
-        )}
-      </div>
+  const height = Math.round(size * 418 / 420);
+  return ok ? (
+    <img className={className} src={OFFICIAL_ZALO_QR} alt="QR chính thức Zalo OA DNPHARMA" width={size} height={height}
+      style={{ width: size, height: 'auto' }} onError={() => setOk(false)} />
+  ) : (
+    <div className={`zalo-qr-missing${className ? ` ${className}` : ''}`} role="alert" style={{ width: size, height: size }}>
+      Không tải được QR Zalo OA chính thức
     </div>
+  );
+}
+
+function ZaloQrModal({ open, onClose }) {
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div className="zalo-modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <section className="zalo-modal" role="dialog" aria-modal="true" aria-label="QR Zalo OA DONAPHARM">
+        <button type="button" className="zalo-modal-close" onClick={onClose} aria-label="Đóng">×</button>
+        <b>Zalo OA DONAPHARM</b>
+        <span>Quét mã chính thức để theo dõi và nhận hỗ trợ.</span>
+        <div className="zalo-qr"><OfficialZaloQr size={220} /></div>
+      </section>
+    </div>
+  );
+}
+
+// Thẻ QR dùng trong nội dung trang Tổng quan.
+export function ZaloCard() {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <div className="card zalo-card">
+        <div className="zalo-info">
+          <b>Zalo OA DONAPHARM</b>
+          <span>Quét mã để theo dõi Official Account — nhận thông báo &amp; hỗ trợ nhanh.</span>
+        </div>
+        <button type="button" className="zalo-qr zalo-card-qr" onClick={() => setOpen(true)} aria-label="Mở QR Zalo OA kích thước lớn" title="Bấm để mở QR lớn">
+          <OfficialZaloQr size={64} />
+        </button>
+      </div>
+      <ZaloQrModal open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+// Desktop: QR thật luôn hiện trong sidebar, nên tab nào cũng có.
+export function ZaloSidebar() {
+  return (
+    <div className="side-zalo" aria-label="Zalo OA DONAPHARM">
+      <b>Zalo OA DONAPHARM</b>
+      <span>Quét để theo dõi</span>
+      <div className="zalo-qr"><OfficialZaloQr size={74} /></div>
+    </div>
+  );
+}
+
+// Mobile: nút cố định dùng ảnh QR thật; mở ra mã đủ lớn để quét.
+export function ZaloMobileAccess() {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <button type="button" className="zalo-mobile-button" onClick={() => setOpen(true)} aria-label="Mở QR Zalo OA DONAPHARM">
+        <OfficialZaloQr size={32} /><span>Zalo OA</span>
+      </button>
+      <ZaloQrModal open={open} onClose={() => setOpen(false)} />
+    </>
   );
 }
 

@@ -84,6 +84,7 @@ function defaultRanges(today = latestDataDate()) {
   const prevTo = sameDayPrevMonth(to);
   return {
     asOf: to,
+    dayRange: { from: to, to },
     weekRange: { from: monthFrom, to }, // CEO chốt: báo cáo tuần là lũy kế từ đầu tháng đến mốc chạy.
     monthRange: { from: monthFrom, to },
     quarterRange: { from: quarterFrom, to },
@@ -174,7 +175,8 @@ function recipientsReport() {
   };
 }
 function salesReportPeriodKey(kind, ranges = defaultRanges()) {
-  return `${kind}:${ranges.monthKy}:${ranges.monthRange.from}:${ranges.monthRange.to}`;
+  const range = kind === 'day' ? ranges.dayRange : kind === 'month' ? ranges.monthRange : ranges.weekRange;
+  return `${kind}:${ranges.monthKy}:${range.from}:${range.to}`;
 }
 function salesReportRecipientKey(kind, ranges = defaultRanges(), code = '') {
   return `${salesReportPeriodKey(kind, ranges)}#${String(code || '').toUpperCase()}`;
@@ -208,7 +210,7 @@ function isClPriority(unitCode, route) { return String(route || '').toUpperCase(
 
 async function computeReport({ empCode = 'DN001', kind = 'week', ranges = defaultRanges() } = {}) {
   const user = userByCode(empCode);
-  const range = kind === 'month' ? ranges.monthRange : ranges.weekRange;
+  const range = kind === 'day' ? ranges.dayRange : kind === 'month' ? ranges.monthRange : ranges.weekRange;
   const rows = rowsInRange({ empCode, ...range });
   const prevRows = rowsInRange({ empCode, ...ranges.prevRange });
   const revenue = rows.reduce((s, r) => s + Number(r.revenue || 0), 0);
@@ -235,7 +237,7 @@ function htmlRows(arr, cols) {
   return arr.map((x, i) => `<tr>${cols.map((c) => `<td class='${c.cls || ''}'>${c.html ? c.html(x, i) : esc(x[c.key])}</td>`).join('')}</tr>`).join('');
 }
 function renderHtml(data) {
-  const titleKind = data.kind === 'month' ? 'Tháng' : 'Tuần';
+  const titleKind = data.kind === 'day' ? 'Ngày' : data.kind === 'month' ? 'Tháng' : 'Tuần';
   const delta = data.prevRevenue ? (data.revenue - data.prevRevenue) / data.prevRevenue * 100 : null;
   const unitCount = new Set(data.rows.map((r) => analytics.baseUnitKey(r.unit_code || r.unit_name))).size;
   const productCount = new Set(data.rows.map((r) => r.iit_code)).size;
@@ -254,13 +256,14 @@ function renderHtml(data) {
 <div class='section'><h3>9. 🧠 Phân tích thông minh &amp; Định hướng bán hàng</h3><p class='highlight'>Phân tích tự động theo số liệu nội bộ: xu hướng so kỳ trước, dự báo cả tháng theo nhịp hiện tại, và hướng khai thác để cán target.</p><div class='grid2'><div class='kpi-card primary'><div class='label'>A. Xu hướng kỳ</div><div class='value ${delta == null || delta >= 0 ? 'pos' : 'neg'}'>${delta == null ? '—' : pct(delta)}</div><div class='delta'>${esc(data.comparison.label)}.</div></div><div class='kpi-card' style='background:linear-gradient(180deg,#fff8eb,#fffdf7);border-color:#f0d9a0'><div class='label'>H. Dự báo cuối tháng theo nhịp</div><div class='value'>${fmtMoney(data.forecast)}</div><div class='delta'>Theo ${data.ranges.monthRange.from}–${data.ranges.monthRange.to}; target tháng: ${data.target ? fmtMoney(data.target) : 'chưa nhập'}. Dự báo sơ bộ, còn biến động.</div></div></div><div class='section' style='margin-top:14px'><h4>C. Cơ cấu tuyến &amp; cơ hội điểm</h4><p>NCL là dư địa mở rộng riêng, không phụ thuộc cơ số thầu. CL/NT và các đơn vị 025–028 giúp tăng điểm nhanh hơn do hệ số điểm ×2.</p></div><div class='section' style='margin-top:10px'><h4>D. Đánh thức đơn vị “ngủ”</h4><p>${data.diffsUnit.down.filter((x) => x.cur === 0 && x.prev > 0).slice(0, 5).map((x) => `${esc(x.label)} (${fmtMoney(x.prev)} ${data.comparison.shortLabel})`).join('; ') || 'Chưa phát hiện đơn vị có doanh thu kỳ trước nhưng kỳ này 0đ.'}</p></div><div class='section' style='margin-top:10px'><h4>E. Sản phẩm giảm &amp; gợi ý bán chéo</h4><p>Sản phẩm cần kéo lại: ${data.diffsProduct.down.slice(0, 5).map((x) => `${esc(x.label)} (${fmtMoney(x.diff)})`).join('; ') || 'chưa có mã giảm rõ'}. Gợi ý bán chéo tại các đơn vị đang tăng: ${data.diffsUnit.up.slice(0, 3).map((x) => esc(x.label)).join(', ') || 'ưu tiên đơn vị có doanh thu tốt'}.</p></div><div class='section' style='margin-top:10px'><h4>G. 3–5 việc ưu tiên cụ thể</h4><ol><li>Gọi lại các đơn vị giảm/chưa phát sinh trong bảng mục 6.</li><li>Đẩy 3 mặt hàng doanh thu cao nhất vào nhóm đơn vị đang tăng.</li><li>Ưu tiên mã còn cơ số tại đơn vị CL để giữ điểm tốt.</li><li>Mở thêm đơn vị NCL vì dư địa không bị giới hạn bởi cơ số thầu.</li><li>Kiểm tra hóa đơn/xu tích lũy nếu tỷ lệ quý dưới 90%.</li></ol></div><div class='section' style='margin-top:10px'><h4>I. Khuyến nghị khai thác để cán target</h4><table><tr><th>Hướng</th><th>Khuyến nghị cụ thể</th><th>Vì sao</th></tr><tr><td><b>⭐ NCL — dư địa vô hạn</b></td><td>Mở rộng đơn vị/nhà thuốc khối NCL — <b>không bị cơ số thầu chặn</b>.</td><td>Tăng doanh thu tự do để cán target</td></tr><tr><td>Khối CL (điểm ×2)</td><td>Ưu tiên đơn vị CL/025–028 đang có phát sinh và còn mã thầu dư.</td><td>Vừa doanh thu vừa điểm cao</td></tr><tr><td>Mã QLNB còn cơ số</td><td>${esc(cstText)}</td><td>Đã có cơ số thầu — bán chắc, ưu tiên khai thác.</td></tr></table></div></div><p style='margin-top:28px'>Trân trọng,<br><b>ĐẶNG XUÂN TRUNG</b><br>CEO — Công ty TNHH Dược phẩm DONAPHARM<br>Hotline: 0886.396.668</p><p class='small'><em>E-mail này được gửi từ văn phòng CEO DONAPHARM với sự hỗ trợ AI agent Donapharm. Đây là bản test để CEO duyệt trước khi gửi chính thức cho nhân viên.</em></p></div></div></div></body></html>`;
 }
 function renderText(data) {
-  const titleKind = data.kind === 'month' ? 'THÁNG' : 'TUẦN';
+  const titleKind = data.kind === 'day' ? 'NGÀY' : data.kind === 'month' ? 'THÁNG' : 'TUẦN';
   const cst = data.cstRows.slice(0, 3).map((x) => `${x.productCode}@${x.unitCode}: ${fmtQty(x.slConLai)}`).join('; ') || 'chưa có mã CST khớp';
   return `DONAPHARM — ${titleKind} ${data.empCode}\nKỳ ${data.range.from}–${data.range.to}\nDoanh thu: ${fmtMoney(data.revenue)} | Điểm tháng: ${fmtNum(data.score.diem_thang)} | Xu quý: ${fmtNum(data.score.xu_quy)} | Tỷ lệ: ${pct(data.score.ty_le_quy)}\nƯu tiên: giữ ${data.topUnits.slice(0, 2).map((x) => x.label).join(', ') || 'đơn vị chính'}; kéo lại ${data.diffsUnit.down.slice(0, 2).map((x) => x.label).join(', ') || 'đơn vị giảm'}; CST: ${cst}.`;
 }
 async function renderEmployeeReport(opts) {
   const data = await computeReport(opts);
-  return { data, html: renderHtml(data), text: renderText(data), subject: `DONAPHARM — Báo cáo ${data.kind === 'month' ? 'tháng' : 'tuần'} ${data.empCode} (${data.range.from}–${data.range.to})` };
+  const kindText = data.kind === 'day' ? 'ngày' : data.kind === 'month' ? 'tháng' : 'tuần';
+  return { data, html: renderHtml(data), text: renderText(data), subject: `DONAPHARM — Báo cáo ${kindText} ${data.empCode} (${data.range.from}–${data.range.to})` };
 }
 async function renderCeoDigest({ kind = 'week', ranges = defaultRanges() } = {}) {
   const rows = [];
@@ -270,9 +273,11 @@ async function renderCeoDigest({ kind = 'week', ranges = defaultRanges() } = {})
   }
   rows.sort((a, b) => (a.score.ty_le_quy ?? -1) - (b.score.ty_le_quy ?? -1));
   const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
-  const html = `<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Arial;background:#f6fbfb;color:#163235}.wrap{max-width:980px;margin:auto;background:white;border:1px solid #d8eeee;border-radius:16px;padding:24px}h2{color:#087565}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border:1px solid #d8eeee;padding:8px}th{background:#e7f7f4;color:#005f52}.r{text-align:right}.neg{color:#b42318;font-weight:bold}.pos{color:#087565;font-weight:bold}</style></head><body><div class='wrap'><h2>DONAPHARM — CEO Digest báo cáo ${kind === 'month' ? 'tháng' : 'tuần'}</h2><p>Kỳ ${ranges.monthRange.from}–${ranges.monthRange.to}. Người nhận chính thức: ${rows.length} NV KD (đã loại DN021, DN022, DN023, VP004, VP018).</p><p><b>Tổng doanh thu:</b> ${fmtMoney(totalRevenue)} · <b>NV cảnh báo xu &lt;90%:</b> ${rows.filter((r) => r.warn).length}</p><table><tr><th>NV</th><th>Tên</th><th class='r'>Doanh thu</th><th class='r'>Điểm tháng</th><th class='r'>Xu quý</th><th class='r'>Thiếu xu</th><th class='r'>Tỷ lệ quý</th></tr>${rows.map((r) => `<tr><td>${esc(r.code)}</td><td>${esc(r.name)}</td><td class='r'>${fmtMoney(r.revenue)}</td><td class='r'>${fmtNum(r.score.diem_thang)}</td><td class='r'>${fmtNum(r.score.xu_quy)}</td><td class='r ${r.score.thieu_xu ? 'neg' : ''}'>${fmtNum(r.score.thieu_xu)}</td><td class='r ${r.warn ? 'neg' : 'pos'}'>${pct(r.score.ty_le_quy)}</td></tr>`).join('')}</table><p style='font-size:12px;color:#667'>Nguồn: Số liệu được tổng hợp tự động từ hệ thống nội bộ DONAPHARM. Không chứa chi phí/giá vốn/lợi nhuận.</p></div></body></html>`;
+  const kindText = kind === 'day' ? 'ngày' : kind === 'month' ? 'tháng' : 'tuần';
+  const range = kind === 'day' ? ranges.dayRange : kind === 'month' ? ranges.monthRange : ranges.weekRange;
+  const html = `<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Arial;background:#f6fbfb;color:#163235}.wrap{max-width:980px;margin:auto;background:white;border:1px solid #d8eeee;border-radius:16px;padding:24px}h2{color:#087565}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border:1px solid #d8eeee;padding:8px}th{background:#e7f7f4;color:#005f52}.r{text-align:right}.neg{color:#b42318;font-weight:bold}.pos{color:#087565;font-weight:bold}</style></head><body><div class='wrap'><h2>DONAPHARM — CEO Digest báo cáo ${kindText}</h2><p>Kỳ ${range.from}–${range.to}. Người nhận chính thức: ${rows.length} NV KD (đã loại DN021, DN022, DN023, VP004, VP018).</p><p><b>Tổng doanh thu:</b> ${fmtMoney(totalRevenue)} · <b>NV cảnh báo xu &lt;90%:</b> ${rows.filter((r) => r.warn).length}</p><table><tr><th>NV</th><th>Tên</th><th class='r'>Doanh thu</th><th class='r'>Điểm tháng</th><th class='r'>Xu quý</th><th class='r'>Thiếu xu</th><th class='r'>Tỷ lệ quý</th></tr>${rows.map((r) => `<tr><td>${esc(r.code)}</td><td>${esc(r.name)}</td><td class='r'>${fmtMoney(r.revenue)}</td><td class='r'>${fmtNum(r.score.diem_thang)}</td><td class='r'>${fmtNum(r.score.xu_quy)}</td><td class='r ${r.score.thieu_xu ? 'neg' : ''}'>${fmtNum(r.score.thieu_xu)}</td><td class='r ${r.warn ? 'neg' : 'pos'}'>${pct(r.score.ty_le_quy)}</td></tr>`).join('')}</table><p style='font-size:12px;color:#667'>Nguồn: Số liệu được tổng hợp tự động từ hệ thống nội bộ DONAPHARM. Không chứa chi phí/giá vốn/lợi nhuận.</p></div></body></html>`;
   const text = `DONAPHARM CEO Digest ${kind}: ${rows.length} NV KD, tổng DT ${fmtMoney(totalRevenue)}, cảnh báo xu <90%: ${rows.filter((r) => r.warn).length}.`;
-  return { html, text, subject: `DONAPHARM — CEO Digest ${kind === 'month' ? 'tháng' : 'tuần'} (${ranges.monthRange.from}–${ranges.monthRange.to})`, rows };
+  return { html, text, subject: `DONAPHARM — CEO Digest ${kindText} (${range.from}–${range.to})`, rows };
 }
 function ensureOut() { fs.mkdirSync(OUT_DIR, { recursive: true }); }
 async function writeSample(empCode = 'DN001') {
@@ -298,7 +303,7 @@ async function sendCeoApprovalSample(empCode = 'DN001') {
   return { ...sample, ceoEmail, sendResults: out };
 }
 async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false } = {}) {
-  if (!['week', 'month'].includes(kind)) throw new Error(`Unsupported sales report kind: ${kind}`);
+  if (!['day', 'week', 'month'].includes(kind)) throw new Error(`Unsupported sales report kind: ${kind}`);
   const key = salesReportPeriodKey(kind, ranges);
   if (!force && alreadySent(kind, ranges)) return { ok: true, skipped: 'duplicate', key, kind, ranges, sent: [], failed: [] };
   const recipients = salesRecipients();
@@ -332,7 +337,7 @@ async function main() {
   const [cmd = 'sample', emp = 'DN001', flag] = process.argv.slice(2);
   if (cmd === 'recipients') { console.log(JSON.stringify(recipientsReport(), null, 2)); return; }
   if (cmd === 'send-all') {
-    const kind = ['week', 'month'].includes(emp) ? emp : 'week';
+    const kind = ['day', 'week', 'month'].includes(emp) ? emp : 'week';
     const force = process.argv.includes('--force');
     const r = await sendAll({ kind, force });
     console.log(JSON.stringify({ ok: r.ok, skipped: r.skipped, key: r.key, kind: r.kind, ranges: r.ranges, sent: r.sent, skipped: r.skipped, failed: r.failed, ceo: r.ceo, ceoEmail: r.ceoEmail, ceoResult: r.ceoResult }, null, 2));

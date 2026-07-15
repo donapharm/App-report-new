@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { api, getToken, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { useIsDesktop } from './hooks.js';
-import { Spinner, ScrollTopButton, Clock, UpdateBanner } from './components.jsx';
+import { Spinner, ScrollTopButton, Clock, UpdateBanner, ZaloSidebar, ZaloMobileAccess } from './components.jsx';
 import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
 import Login from './pages/Login.jsx';
@@ -79,7 +79,7 @@ export default function App() {
     return (
       <div className="shell-desktop">
         <aside className="sidebar">
-          <div className="side-logo"><Logo size={30} /></div>
+          <div className="side-logo"><Logo size={42} /></div>
           <nav className="side-nav">
             {tabs.map((t) => (
               <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>
@@ -87,6 +87,7 @@ export default function App() {
               </button>
             ))}
           </nav>
+          <ZaloSidebar />
           <div className="side-user">
             <div className="avatar">{me.name?.[0] || '?'}</div>
             <div style={{ minWidth: 0 }}>
@@ -119,7 +120,7 @@ export default function App() {
     <>
       <header className="hdr">
         <div className="hdr-r1">
-          <Logo size={22} light />
+          <Logo size={24} />
           <div className="who">
             <div className="who-name">{me.name}</div>
             <div className="who-role">{roleLabel(me.role)}</div>
@@ -135,6 +136,7 @@ export default function App() {
       </main>
       <ScrollTopButton />
       <UpdateBanner />
+      <ZaloMobileAccess />
       <nav className="nav">
         {tabs.map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>

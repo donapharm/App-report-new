@@ -6,6 +6,7 @@
  */
 const store = require('./store');
 const A = require('./analytics');
+const cstSequence = require('./cstSequence');
 const llm = require('./llm');
 const NLQ = require('./nlqIntent');
 const nlqEngine = require('./nlqEngine');
@@ -77,10 +78,36 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
   unitUpItems.sort((a, b) => b.mom - a.mom);
 
   // c) Cơ số thầu bất thường: sắp cạn (<10%) hoặc tồn nhiều (>85%)
-  const cst = store.getCst({ scope });
+  const cst = A.cstTable({ scope, filters: {} });
   const cstLow = [];
   const cstHigh = [];
+  const cstQueued = [];
+  // Gắn NV phụ trách trực tiếp từ dữ liệu CST. Phiên CEO/admin thấy đủ các mã
+  // cùng phụ trách; phiên NV chỉ được thấy chính mã của mình trong scope.
+  const cstEmployees = (row) => {
+    let codes = [...new Set(
+      [row.emp_code, row.sales_emps]
+        .flatMap((v) => String(v || '').split(','))
+        .map((v) => v.trim().toUpperCase())
+        .filter(Boolean)
+    )];
+    if (scope?.empCode) codes = codes.filter((code) => code === String(scope.empCode).trim().toUpperCase());
+    return codes.sort().map((code) => ({
+      code,
+      name: code === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (store.findUserByCode(code)?.name || code),
+    }));
+  };
   for (const c of cst) {
+    if (c.cst_sequence?.state === cstSequence.STATES.QUEUED) {
+      cstQueued.push({
+        product_name: c.product_name, unit_code: c.unit_code, unit_name: c.unit_name,
+        iit_code: c.iit_code, remain_qty: c.remain_qty, remain_pct: c.remain_pct,
+        remain_amount: c.remain_amount, employees: cstEmployees(c), cst_sequence: c.cst_sequence,
+        severity: 'neutral',
+      });
+      continue;
+    }
+    if (c.cst_sequence?.state === cstSequence.STATES.NEEDS_CONFIRMATION) continue;
     if (c.remain_pct < 10) {
       cstLow.push({
         product_name: c.product_name,
@@ -89,6 +116,7 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
         bid_qty_initial: c.bid_qty_initial,
         remain_pct: c.remain_pct,
         bid_package: c.bid_package,
+        employees: cstEmployees(c),
         severity: 'high',
       });
     } else if (c.remain_pct > 85) {
@@ -99,6 +127,7 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
         bid_qty_initial: c.bid_qty_initial,
         remain_pct: c.remain_pct,
         bid_package: c.bid_package,
+        employees: cstEmployees(c),
         severity: 'low',
       });
     }
@@ -112,6 +141,7 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
     { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm mạnh (so kỳ trước)', total: unitItems.length, items: top(unitItems), note: cmpNote },
     { key: 'cst_low', icon: '📦', tone: 'danger', title: 'Cơ số thầu sắp cạn (<10%)', total: cstLow.length, items: top(cstLow) },
     { key: 'cst_high', icon: '🟡', tone: 'neutral', title: 'Cơ số thầu tồn nhiều (>85%)', total: cstHigh.length, items: top(cstHigh) },
+    { key: 'cst_queued', icon: '⏳', tone: 'neutral', title: 'QLNB kế tiếp đang chờ mã hiện hành', total: cstQueued.length, items: top(cstQueued), note: cstSequence.MANDATORY_NOTE },
   ];
   const summary = {
     emp_below_target: targetItems.length,
@@ -119,9 +149,10 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
     units_down: unitItems.length,
     cst_low: cstLow.length,
     cst_high: cstHigh.length,
+    cst_queued: cstQueued.length,
   };
   // "Cần chú ý" = các mục CẢNH BÁO (không tính đơn vị tăng trưởng — đó là tin vui).
-  const count = groups.filter((g) => g.key !== 'unit_up').reduce((s, g) => s + g.total, 0);
+  const count = groups.filter((g) => g.key !== 'unit_up' && g.key !== 'cst_queued').reduce((s, g) => s + g.total, 0);
   return { ky: lastKy, kys: list, cstLabel: 'Cơ số thầu hiện tại', summary, groups, count, compareMode: cmp.mode, compareNote: cmpNote };
 }
 
@@ -209,7 +240,7 @@ function buildReason(attain, trend, last, season) {
  * Nhận diện ý định theo từ khóa; luôn giới hạn trong phạm vi quyền (scope).
  * Nếu không chắc, trả gợi ý thay vì bịa số. (Điểm cắm LLM để diễn giải: TODO(LIVE).)
  */
-async function answerQuestion({ text, scope, session }) {
+async function answerQuestion({ text, scope, session, context = null }) {
   const q = noAccent((text || '').toLowerCase()); // chấp nhận cả gõ KHÔNG DẤU
   const askedKy = resolveKyFromQuestion(q);
   const askedMonth = monthMention(q);
@@ -257,7 +288,7 @@ async function answerQuestion({ text, scope, session }) {
   // NLQ Mức 3: Planner → Executor → Narrator cho truy vấn doanh thu tổng quát.
   // Bỏ qua các nhóm ngoài doanh thu/đã có handler nghiệp vụ riêng để fallback cũ vẫn an toàn.
   if (!['sensitive', 'help', 'greeting', 'identity_check', 'target_gap', 'target_pct', 'cst_empty', 'cst_low'].includes(intent.intent)) {
-    const engineAns = await nlqEngine.answerQuestion({ text, scope, session });
+    const engineAns = await nlqEngine.answerQuestion({ text, scope, session, context });
     if (engineAns?.text) return engineAns;
   }
 
@@ -515,9 +546,12 @@ async function answerQuestion({ text, scope, session }) {
   // Đơn vị chưa bán (cơ số còn nhưng chưa khai thác)
   if (/chua ban|chua khai thac|can cham|chua co don|chua ban gi/.test(q)) {
     const empty = A.cstTable({ scope, filters: { status: 'empty' } });
-    if (!empty.length) return say('Không có cơ số thầu nào "chưa bán" trong phạm vi của bạn. 👍');
-    return say(`Có ${empty.length} dòng cơ số thầu CHƯA bán (cần tiếp cận):`,
-      empty.slice(0, 6).map((c) => `• ${c.product_name} @ ${unitText(c.unit_code, c.unit_name)}`));
+    const queued = A.cstTable({ scope, filters: { status: 'queued' } });
+    if (!empty.length) return say('Không có mã CST full nào cần khai thác ngay trong phạm vi của bạn. 👍', queued.length ? [`Có ${queued.length} mã kế tiếp đang chờ mã hiện hành sử dụng hết.`, cstSequence.MANDATORY_NOTE] : []);
+    return say(`Có ${empty.length} dòng cơ số thầu full có thể xem xét khai thác:`, [
+      ...empty.slice(0, 6).map((c) => `• ${c.product_name} @ ${unitText(c.unit_code, c.unit_name)} · ${c.iit_code}`),
+      ...(queued.length ? [`⏳ ${queued.length} mã khác đang chờ mã hiện hành, không tính là chưa khai thác.`, cstSequence.MANDATORY_NOTE] : []),
+    ]);
   }
   if (/co so|con lai|sap can|ton kho|con nhieu/.test(q)) {
     const low = A.cstTable({ scope, remainPctMax: 10 });
@@ -667,6 +701,8 @@ function buildFacts({ ky, scope, mine }) {
     }),
     co_so_thau_sap_can: A.cstTable({ scope, remainPctMax: 10 }).slice(0, 8).map((c) => ({ sp: c.product_name, dv: unitText(c.unit_code, c.unit_name), con_lai_pct: c.remain_pct })),
     so_don_vi_chua_ban: A.cstTable({ scope, filters: { status: 'empty' } }).length,
+    so_ma_qlnb_dang_cho: A.cstTable({ scope, filters: { status: 'queued' } }).length,
+    ghi_chu_trinh_tu_cst: cstSequence.MANDATORY_NOTE,
   };
 }
 

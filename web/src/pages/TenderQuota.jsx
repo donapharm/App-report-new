@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadExport } from '../api.js';
-import { money, pct as fmtPct, pairText, unitText } from '../util.js';
-import { Spinner, Bar, Pager, usePager, useCollapse, SkeletonCards } from '../components.jsx';
+import { formatDate, money, pct as fmtPct, pairText, unitText } from '../util.js';
+import { Spinner, Bar, Pager, usePager, useCollapse, SkeletonCards, UnitLabel } from '../components.jsx';
 import { ComboSelect, Select, MultiSelect } from './revenueFilters.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
@@ -21,6 +21,8 @@ function qd139Ingredient(c, qd) { return qd === 'QĐ139' && (c.active_ingredient
 function qdClass(qd) { return qd === 'QĐ139' ? 'qd139-card' : (qd === 'QĐ141' ? 'qd141-card' : ''); }
 function decision(c) {
   const p = Number(c.remain_pct || 0), remain = Number(c.remain_qty || 0), sold = Number(c.sold_qty || 0);
+  if (c.cst_sequence?.state === 'QUEUED_WAITING') return { cls: 'muted-pill', text: '⏳ Đang chờ', action: `Chờ mã hiện hành ${c.cst_sequence.current?.code || ''} sử dụng hết; không tính là chưa khai thác.` };
+  if (c.cst_sequence?.state === 'NEEDS_CONFIRMATION') return { cls: 'muted-pill', text: '❔ Cần xác nhận', action: 'Chưa đủ bằng chứng xác định thứ tự QLNB; không quy trách nhiệm nhân viên.' };
   if (remain <= 0 || p <= 1) return { cls: 'muted-pill', text: 'Hết CST', action: 'Đã khai thác hết cơ số.' };
   if (sold <= 0 && remain > 0) return { cls: 'bad', text: '⚠️ Chưa bán', action: 'Cần tiếp cận đơn vị này.' };
   if (p < 10) return { cls: 'bad', text: '🔴 Sắp hết', action: 'Sắp hết, đẩy đơn bổ sung cơ số.' };
@@ -34,7 +36,7 @@ function sourceLabel(c) {
   const up = c.cst_upload_ky || '';
   if (base && up) return `Baseline ${base} + bán đến ${up.split(',').at(-1)}`;
   if (base) return `Cập nhật đến kỳ ${base}`;
-  return c.source_from_date || '—';
+  return c.source_from_date ? formatDate(c.source_from_date, c.source_from_date) : '—';
 }
 function contractorText(c) { return pairText(c.contractor_code, c.contractor_name); }
 function unitRollup(rows) {
@@ -44,7 +46,7 @@ function unitRollup(rows) {
     const cur = m.get(key) || { key, unit_code: r.unit_code || '', unit_name: r.unit_name || key, rows: [], remainAmount: 0, low: 0, empty: 0, remainQty: 0 };
     cur.rows.push(r); cur.remainAmount += Number(r.remain_amount || 0); cur.remainQty += Number(r.remain_qty || 0);
     if (Number(r.remain_pct || 0) < 10) cur.low += 1;
-    if (Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0) cur.empty += 1;
+    if (r.cst_sequence?.state === 'ACTIONABLE_FULL') cur.empty += 1;
     m.set(key, cur);
   }
   return [...m.values()].sort((a, b) => (b.low + b.empty) - (a.low + a.empty) || b.remainAmount - a.remainAmount);
@@ -67,7 +69,7 @@ function CstCard({ c, i, duplicateName }) {
       </div>
       <Bar value={Math.max(0, Math.min(100, pct))} max={100} tone={pct < 10 ? 'danger' : (pct < 30 || pct > 80 ? 'warn' : 'ok')} />
       <div className="progress-caption">Đã bán {fmtPct(Math.max(0, +(100 - pct).toFixed(1)))} · còn {fmtPct(pct)}</div>
-      <div className="detail-entity"><b>{unitText(c.unit_code, c.unit_name)}</b><span>NV {c.emp_code || c.sales_emps || '—'}</span></div>
+      <div className="detail-entity"><UnitLabel code={c.unit_code} name={c.unit_name} /><span>NV {c.emp_code || c.sales_emps || '—'}</span></div>
       <div className="list-card-meta">
         <span className={'pill ' + pctTone(pct)}>Còn {c.remain_pct}%</span>
         <span className="pill muted-pill">Nhóm {groupOf(c.iit_code) || '—'}</span>
@@ -125,7 +127,7 @@ export default function TenderQuota({ me }) {
     }
     if (sortBy === 'action') {
       return rows.sort((a, b) => {
-        const score = (r) => (Number(r.remain_pct || 0) < 10 ? 3 : 0) + (Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0 ? 2 : 0) + (Number(r.remain_pct || 0) > 80 ? 1 : 0);
+        const score = (r) => (Number(r.remain_pct || 0) < 10 ? 3 : 0) + (r.cst_sequence?.state === 'ACTIONABLE_FULL' ? 2 : 0) + (Number(r.remain_pct || 0) > 80 && r.cst_sequence?.state !== 'QUEUED_WAITING' ? 1 : 0);
         return score(b) - score(a) || Number(a.remain_pct || 0) - Number(b.remain_pct || 0);
       });
     }
@@ -142,9 +144,9 @@ export default function TenderQuota({ me }) {
   const totalSold = data ? data.reduce((s, r) => s + (Number(r.sold_amount) || 0), 0) : 0;
   const totalBid = data ? data.reduce((s, r) => s + (Number(r.bid_amount) || 0), 0) : 0;
   const lowCount = data ? data.filter((r) => Number(r.remain_pct || 0) < 10).length : 0;
-  const emptyCount = data ? data.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0).length : 0;
+  const emptyCount = data ? data.filter((r) => r.cst_sequence?.state === 'ACTIONABLE_FULL').length : 0;
   // "Tiền đang để trống" = tổng TT còn của các dòng CHƯA bán (sold=0) — cơ hội chưa động tới.
-  const untappedRemain = data ? data.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0).reduce((s, r) => s + (Number(r.remain_amount) || 0), 0) : 0;
+  const untappedRemain = data ? data.filter((r) => r.cst_sequence?.state === 'ACTIONABLE_FULL').reduce((s, r) => s + (Number(r.remain_amount) || 0), 0) : 0;
   const highCount = data ? data.filter((r) => Number(r.remain_pct || 0) > 80).length : 0;
   const { open, toggle } = useCollapse();
   const activeCount = [filters.emp, filters.province, filters.unit, filters.product, filters.priority, filters.q, bid].filter(Boolean).length;
@@ -190,7 +192,7 @@ export default function TenderQuota({ me }) {
         <div className="kpi"><div className="label">💰 TT chưa khai thác</div><div className="value small" style={{ color: 'var(--hi)' }}>{data ? money(untappedRemain) : '—'}</div><div className="sub">{emptyCount.toLocaleString('vi-VN')} dòng chưa bán</div></div>
       </div>
 
-      {selectedUnit && <div className="card unit-focus"><b>{unitText(selectedUnit.unit_code || selectedUnit.key, selectedUnit.unit_name)}</b><span>{selectedUnit.rows.length} mã QLNB · {selectedUnit.low} sắp hết · {selectedUnit.empty} chưa bán · còn {money(selectedUnit.remainAmount)}</span></div>}
+      {selectedUnit && <div className="card unit-focus"><UnitLabel code={selectedUnit.unit_code || selectedUnit.key} name={selectedUnit.unit_name} /><span>{selectedUnit.rows.length} mã QLNB · {selectedUnit.low} sắp hết · {selectedUnit.empty} chưa bán · còn {money(selectedUnit.remainAmount)}</span></div>}
       {data && <div className="card cst-alert-card"><b>Cảnh báo CST giống app cũ:</b><span className="pill bad">Sắp cạn/Hết CST: {lowCount.toLocaleString('vi-VN')}</span><span className="pill bad">Chưa bán: {emptyCount.toLocaleString('vi-VN')}</span><span className="pill warn">Chưa khai thác/tồn nhiều: {highCount.toLocaleString('vi-VN')}</span></div>}
 
       {!data ? <SkeletonCards count={6} /> : data.length === 0 ? <div className="center">Không có dòng nào khớp bộ lọc.</div> : view === 'unit' ? (
@@ -199,7 +201,7 @@ export default function TenderQuota({ me }) {
             const open = openUnits[g.key] || filters.unit;
             return <div className="card unit-rollup" key={g.key}>
               <div className="unit-rollup-head" onClick={() => setOpenUnits((x) => ({ ...x, [g.key]: !x[g.key] }))}>
-                <div><b>{unitText(g.unit_code || g.key, g.unit_name)}</b><div className="meta">{g.rows.length} mã QLNB · còn {money(g.remainAmount)}</div></div>
+                <div><UnitLabel code={g.unit_code || g.key} name={g.unit_name} /><div className="meta">{g.rows.length} mã QLNB · còn {money(g.remainAmount)}</div></div>
                 <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span><span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
               </div>
               {open && <div className="list-grid nested-grid">{g.rows.slice(0, 80).map((c, i) => <CstCard key={`${g.key}-${i}`} c={c} i={i} duplicateName={duplicateProducts.has(c.product_name)} />)}</div>}

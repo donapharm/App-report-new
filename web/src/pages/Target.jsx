@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, downloadTargetTemplate, downloadAssignmentTemplate, downloadExport } from '../api.js';
-import { money, pct, unitText } from '../util.js';
-import { Spinner, Bar, Kpi, TargetKpiStrip, RankRow } from '../components.jsx';
+import { formatDateTime, money, pct } from '../util.js';
+import { Spinner, Bar, Kpi, TargetKpiStrip, RankRow, UnitLabel } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { TargetGauge } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
@@ -104,7 +104,7 @@ function TargetAdjustmentPanel({ ky, isAdmin, onChanged }) {
           {isAdmin && r.status === 'pending' && <div className="target-admin-actions compact-actions"><button className="btn" disabled={busy} onClick={() => approve(r.id, true)}>✅ Duyệt hạ target</button><button className="btn ghost" disabled={busy} onClick={() => approve(r.id, false)}>❌ Không duyệt</button></div>}
         </div>)}
       </div>}
-      {isAdmin && <><div className="section-title">Audit điều chỉnh</div><div className="card">{audit.slice(0, 10).map((h, i) => <div className="row" key={i}><div className="main"><div className="name">{h.action} · {h.by}</div><div className="meta muted">{h.at} · {h.emp_code || ''} · {money(h.impact_amount || 0)}</div></div></div>)}</div></>}
+      {isAdmin && <><div className="section-title">Audit điều chỉnh</div><div className="card">{audit.slice(0, 10).map((h, i) => <div className="row" key={i}><div className="main"><div className="name">{h.action} · {h.by}</div><div className="meta muted">{formatDateTime(h.at, h.at)} · {h.emp_code || ''} · {money(h.impact_amount || 0)}</div></div></div>)}</div></>}
     </>
   );
 }
@@ -443,7 +443,7 @@ function AssignmentAdminPanel({ ky }) {
       <AssignmentMinePanel data={mine} title="Tôi phụ trách (preview theo quyền hiện tại)" />
       <div className="section-title">Audit gần nhất</div>
       <div className="card">
-        {(history || []).slice(0, 8).map((h) => <div className="row" key={h.id}><div className="main"><div className="name">{h.action} · {h.by}</div><div className="meta muted">{h.at} · {h.assignment_id || ''}</div></div></div>)}
+        {(history || []).slice(0, 8).map((h) => <div className="row" key={h.id}><div className="main"><div className="name">{h.action} · {h.by}</div><div className="meta muted">{formatDateTime(h.at, h.at)} · {h.assignment_id || ''}</div></div></div>)}
       </div>
     </>
   );
@@ -595,7 +595,7 @@ function EmployeeDetail({ data }) {
         <div className="card">
           <div className="section-head">🏥 Top đơn vị · kỳ {data.ky}</div>
           {(data.topUnits || []).length ? data.topUnits.map((u, i) => (
-            <RankRow key={u.unit_code || i} i={i + 1} name={unitText(u.unit_code, u.unit_name)} amount={u.revenue} max={maxUnit} />
+            <RankRow key={u.unit_code || i} i={i + 1} name={<UnitLabel code={u.unit_code} name={u.unit_name} />} amount={u.revenue} max={maxUnit} />
           )) : <div className="center">Chưa có doanh thu kỳ này.</div>}
         </div>
       </div>

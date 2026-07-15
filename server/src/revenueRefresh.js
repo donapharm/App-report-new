@@ -10,7 +10,7 @@ const fs = require('fs');
 
 const TZ = 'Asia/Bangkok';
 const DEFAULT_INTERVAL_MIN = 60;
-const DEFAULT_WEEKDAY = '07:30-18:30';
+const DEFAULT_WEEKDAY = '07:30-18:00';
 const DEFAULT_SAT = '07:30-13:00';
 const DEFAULT_SUN = 'off';
 const DATA_DIR = path.join(__dirname, '..', 'data');

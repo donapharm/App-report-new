@@ -7,13 +7,24 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "seed": "node seed.js"
+    "seed": "node seed.js",
+    "deck:v4:build": "node src/report/deckReportV4.js",
+    "deck:v4:test": "node scripts/test_ceo_deck_v4.js",
+    "deck:v4:test-build": "node scripts/test_ceo_deck_v4_build.js",
+    "deck:v5:build": "node src/report/deckReportV5.js",
+    "deck:v5:test": "node scripts/test_ceo_deck_v5.js",
+    "deck:v5:test-build": "node scripts/test_ceo_deck_v5_build.js",
+    "deck:v5d:build": "node src/report/deckReportV5D.js",
+    "deck:v5d:test": "node scripts/test_ceo_deck_v5d.js",
+    "deck:v5d:test-build": "node scripts/test_ceo_deck_v5d_build.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "multer": "^2.2.0",
-    "nodemailer": "^9.0.3"
+    "nodemailer": "^9.0.3",
+    "pdfkit": "^0.17.2",
+    "pptxgenjs": "^4.0.1"
   }
 }

@@ -87,11 +87,13 @@ export default function AiChat({ me }) {
   async function send(q) {
     const question = (q ?? text).trim();
     if (!question || busy) return;
+    const last = msgs.at(-1);
+    const context = last?.who === 'bot' ? (last.context || null) : null;
     setText(''); setBusy(true);
     setMsgs((m) => [...m, { who: 'me', text: question }]);
     try {
-      const a = await api.ask(question);
-      setMsgs((m) => [...m, { who: 'bot', text: a.text, lines: a.lines || [], src: a.source }]);
+      const a = await api.ask(question, context);
+      setMsgs((m) => [...m, { who: 'bot', text: a.text, lines: a.lines || [], src: a.source, context: a.context || null }]);
     } catch (e) {
       setMsgs((m) => [...m, { who: 'bot', text: 'Lỗi: ' + e.message, lines: [] }]);
     }

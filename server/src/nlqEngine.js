@@ -18,6 +18,12 @@ const DIM_LABEL = { unit: 'đơn vị', product: 'sản phẩm', emp: 'nhân vi�
 const SOURCE_ALIASES = { misa: 'CRM_MISA', crm: 'CRM_MISA', web: 'APP_WEB_PARTNER', app: 'APP_WEB_PARTNER', partner: 'APP_WEB_PARTNER' };
 
 function norm(s) { return noAccent(String(s || '').toLowerCase()).replace(/[^a-z0-9]+/g, ' ').replace(/\bpkdk\b/g, 'phong kham da khoa').trim(); }
+function entityNorm(v) {
+  return norm(v)
+    .replace(/\bbvdk\b/g, 'benh vien da khoa')
+    .replace(/\bpkdk\b/g, 'phong kham da khoa')
+    .replace(/\bnt\b/g, 'nha thuoc');
+}
 function fmt(n) { return `${Math.round(Number(n || 0)).toLocaleString('vi-VN')}đ`; }
 function fmtNum(n) { return Number(n || 0).toLocaleString('vi-VN'); }
 function pct(n) { return `${Number(n || 0) >= 0 ? '+' : ''}${Number(n || 0).toFixed(1).replace('.', ',')}%`; }
@@ -65,6 +71,32 @@ function wantsFullList(q) {
 function explicitRanking(q) {
   return /\btop\b|cao nhat|lon nhat|nhieu nhat|ban chay|dan dau|dung dau|xep hang|ranking/.test(q);
 }
+function isOrderAnomalyQuestion(q) {
+  const nq = norm(q);
+  return /(?:don hang|\bdon\b|order)/.test(nq)
+    && /(?:loi|sai|lech|khong dung|khong khop|bat thuong)/.test(nq)
+    && /(?:tong tien|thanh tien|don gia|gia thau|so luong|doanh thu)/.test(nq);
+}
+function unitFamilyModeFromText(q) {
+  const nq = norm(q);
+  const unitIndex = Number((nq.match(/ma thu\s*([1-9])/) || [])[1] || 0);
+  if (unitIndex) return { mode: 'specific', index: unitIndex };
+  if (/phuong an\s*3|lua chon\s*3|chon\s*3|tong hop.*(?:phan tich|tung ma)|tong chung.*(?:phan tich|tung ma)|phan tich.*tung ma/.test(nq)) return { mode: 'breakdown' };
+  if (/phuong an\s*2|lua chon\s*2|chon\s*2|gop chung|tong chung|gop het|cong chung/.test(nq)) return { mode: 'combined' };
+  if (/phuong an\s*1|lua chon\s*1|chon\s*1|xem rieng|mot ma rieng/.test(nq)) return { mode: 'choose_specific' };
+  return null;
+}
+function contextFollowup(text, context) {
+  if (!context || context.kind !== 'unit_family') return null;
+  const familyCode = String(context.familyCode || '').replace(/\D/g, '').slice(0, 3);
+  if (!/^\d{3}$/.test(familyCode)) return null;
+  const nq = norm(text);
+  const familyAction = unitFamilyModeFromText(nq);
+  const anomaly = isOrderAnomalyQuestion(nq);
+  const mentionsFamily = new RegExp(`\\b${familyCode}\\b`).test(nq);
+  if (!familyAction && !anomaly && !mentionsFamily) return null;
+  return { familyCode, familyAction, anomaly, mentionsFamily };
+}
 function fallbackPlan(question, ctx = {}) {
   const q = norm(question);
   const period = monthMention(q, ctx.currentPeriod) || (/(thang nay|month this|this month)/.test(q) ? 'current' : null);
@@ -80,6 +112,7 @@ function fallbackPlan(question, ctx = {}) {
   else if (/nguon|source|misa|web/.test(q)) groupBy = source ? null : 'source';
   else if (/don vi|benh vien|bv|hospital|khach hang/.test(q)) groupBy = 'unit';
   let answerType = groupBy ? (topN || explicitRanking(q) ? 'ranking' : 'breakdown') : 'aggregate';
+  if (isOrderAnomalyQuestion(q)) { answerType = 'order_anomaly'; groupBy = null; }
   if (/on khong|nen|uu tien|tu van|phan tich|ổn không/.test(question)) answerType = 'advisory';
   if (/so voi|so sanh|thang truoc|hom qua|giam manh|giam nhieu|tang giam/.test(q)) answerType = 'comparison';
   const day = /\btu\b|tu ngay|den hom nay|toi hom nay/.test(q) ? null : (/hom nay|today/.test(q) ? 'today' : (/hom qua|yesterday/.test(q) ? 'yesterday' : null));
@@ -87,6 +120,8 @@ function fallbackPlan(question, ctx = {}) {
   const mUnitHint = q.match(/\b(?:o|tai|cua|trong|ben)\s+(.+?)(?:\s+(?:tu ngay|tu\s+ngay|tu|den|toi|thang|hom nay|ky|co doanh thu|dat)\b|$)/);
   const uh = mUnitHint?.[1]?.trim();
   if (uh && !/^(toi|minh|em|anh|chi|nhung|cac|top|ngay|dau|nhan vien|nv|san pham|mat hang|ma hang)\b/.test(uh)) filters.unitHint = uh;
+  const namedUnit = q.match(/\b(?:ma\s+)?(?:don vi|ma dv)\s+(.+?)(?:\s+(?:tu ngay|tu\s+ngay|tu|den|toi|thang|hom nay|ky|co doanh thu|dat|bao nhieu)\b|$)/)?.[1]?.trim();
+  if (!filters.unitHint && namedUnit && !/^(nao|co doanh thu|phat sinh|top|tang|giam)\b/.test(namedUnit)) filters.unitHint = namedUnit;
   const mUnitCode = q.match(/\b\d{3}\b/); if (!filters.unitHint && mUnitCode) filters.unitHint = mUnitCode[0];
   if (/dong nai|bvdk/.test(q) && /o|tai|hospital|benh vien|bvdk/.test(q)) filters.unitHint ||= question.match(/BVĐK Đồng Nai|bvdk dong nai|Dong Nai hospital|benh vien dong nai/i)?.[0] || 'dong nai';
   if (/benh vien dong nai/.test(q) && !/thong nhat/.test(q)) filters.unitHint = 'benh vien da khoa dong nai';
@@ -105,11 +140,13 @@ function normalizePlan(p, question, ctx) {
   const out = { ...base, ...(p && typeof p === 'object' ? p : {}) };
   const qn = norm(question);
   out.filters = { ...base.filters, ...(out.filters || {}) };
-  if (!['aggregate', 'breakdown', 'ranking', 'orders', 'comparison', 'advisory'].includes(out.answerType)) out.answerType = base.answerType;
+  if (!out.filters.unitHint && base.filters.unitHint) out.filters.unitHint = base.filters.unitHint;
+  if (!['aggregate', 'breakdown', 'ranking', 'orders', 'comparison', 'advisory', 'order_anomaly'].includes(out.answerType)) out.answerType = base.answerType;
   if (!['revenue', 'quantity', 'count', 'points', 'xu'].includes(out.metric)) out.metric = 'revenue';
   if (!GROUP[out.groupBy]) out.groupBy = null;
   if (out.answerType === 'orders') out.groupBy = 'order';
   if (out.groupBy === 'order') out.answerType = 'orders';
+  if (isOrderAnomalyQuestion(qn)) { out.answerType = 'order_anomaly'; out.groupBy = null; out.topN = null; out.needClarify = null; }
   const qLimit = explicitLimit(qn);
   const qWantsFull = wantsFullList(qn);
   const qExplicitRanking = explicitRanking(qn);
@@ -149,42 +186,108 @@ function metricValue(rows, metric) {
 function metricLabel(metric) { return metric === 'quantity' ? 'SL' : (metric === 'count' ? 'Số dòng' : 'Doanh thu'); }
 function formatMetric(v, metric) { return metric === 'revenue' ? fmt(v) : fmtNum(v); }
 function uniqueHints(rows, fields, hint) {
-  const nq = norm(hint);
+  const nq = entityNorm(hint);
   const map = new Map();
   for (const r of rows) {
     const key = String(r[fields[0]] || '').trim(); if (!key) continue;
     const label = String(r[fields[1]] || key).trim();
-    const hay = norm(`${key} ${label}`);
-    if (hay.includes(nq) || nq.includes(norm(key)) || norm(key).includes(nq)) {
+    const hay = entityNorm(`${key} ${label}`);
+    const nk = entityNorm(key);
+    if (hay.includes(nq) || nq.includes(nk) || nk.includes(nq)) {
       const cur = map.get(key) || { key, label, revenue: 0, rows: 0 };
       cur.revenue += Number(r.revenue || 0); cur.rows += 1; map.set(key, cur);
     }
   }
   return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
 }
-function applyHint(rows, hint, fields, label) {
+function unitFamilyContext({ familyCode, question, planObj, mode = null, selectedUnitCode = null }) {
+  return {
+    kind: 'unit_family',
+    familyCode,
+    originalQuestion: String(question || '').slice(0, 500),
+    period: planObj?.period || 'current',
+    mode,
+    selectedUnitCode,
+  };
+}
+function applyHint(rows, hint, fields, label, options = {}) {
   if (!hint) return { rows };
-  const hits = uniqueHints(rows, fields, hint);
+  const bareCode = /^0*\d{3}\s*\*?$/.test(String(hint).trim());
+  const familyCode = bareCode ? String(hint).replace(/\D/g, '').padStart(3, '0').slice(-3) : '';
+  const rawHits = bareCode && fields[0] === 'unit_code' ? (() => {
+    const re = new RegExp(`^${familyCode}(?:\\.|-|$)`, 'i');
+    const map = new Map();
+    for (const r of rows) {
+      const key = String(r.unit_code || '').trim();
+      if (!re.test(key)) continue;
+      const cur = map.get(key) || { key, label: String(r.unit_name || key).trim(), revenue: 0, rows: 0 };
+      cur.revenue += Number(r.revenue || 0); cur.rows += 1; map.set(key, cur);
+    }
+    return [...map.values()];
+  })() : uniqueHints(rows, fields, hint);
+  // Mã họ đơn vị phải khớp ĐÚNG tiền tố 3 số. Không để fuzzy "001" bắt nhầm "1001".
+  const hits = bareCode && fields[0] === 'unit_code'
+    ? rawHits.filter((h) => new RegExp(`^${familyCode}(?:\\.|-|$)`, 'i').test(String(h.key || '').trim()))
+    : rawHits;
   if (!hits.length) return { rows: [], note: `Không tìm thấy ${label} khớp “${hint}”.` };
-  const nq = norm(hint);
+  const nq = entityNorm(hint);
+  // HỌ MÃ ĐƠN VỊ được xử lý TRƯỚC exact-pick: nếu tồn tại mã cha đúng bằng "001"
+  // cùng các mã con thì vẫn phải tuân theo scope và hỏi cách xem, không tự chọn mã cha.
+  if (bareCode && fields[0] === 'unit_code') {
+    const familyHits = [...hits].sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi'));
+    if (familyHits.length === 1) {
+      const selected = familyHits[0];
+      return {
+        rows: rows.filter((r) => String(r[fields[0]] || '') === selected.key),
+        chosen: selected,
+        unitFamily: { familyCode, mode: 'specific', units: [selected], selected },
+      };
+    }
+    const keys = new Set(familyHits.map((h) => h.key));
+    const mode = options.familyMode || null;
+    if (mode === 'specific') {
+      const index = Number(options.familyIndex || 0);
+      const selection = entityNorm(options.familySelection);
+      const selected = (index > 0 ? familyHits[index - 1] : null)
+        || familyHits.find((h) => entityNorm(h.key) === selection)
+        || (selection ? familyHits.find((h) => entityNorm(`${h.key} ${h.label}`).includes(selection)) : null);
+      if (selected) return {
+        rows: rows.filter((r) => String(r[fields[0]] || '') === selected.key),
+        chosen: selected,
+        unitFamily: { familyCode, mode: 'specific', units: familyHits, selected },
+      };
+    }
+    if (mode === 'combined' || mode === 'breakdown') return {
+      rows: rows.filter((r) => keys.has(String(r[fields[0]] || ''))),
+      chosen: { key: [...keys].join(','), label: `nhóm mã ${familyCode}` },
+      unitFamily: { familyCode, mode, units: familyHits },
+    };
+    const visible = familyHits.map((h, i) => `${i + 1}. ${h.key} — ${h.label}`);
+    const asksOrders = options.planObj?.answerType === 'orders' || options.planObj?.groupBy === 'order';
+    const option2 = asksOrders ? 'Phương án 2: Gộp danh sách đơn hàng của các mã trên.' : 'Phương án 2: Gộp doanh thu chung của các mã trên.';
+    const option3 = asksOrders ? 'Phương án 3: Tổng hợp chung và phân tích đơn hàng riêng từng mã (khuyến nghị).' : 'Phương án 3: Tổng doanh thu chung và phân tích riêng từng mã (khuyến nghị).';
+    return {
+      clarify: `Em tìm thấy ${familyHits.length} mã đơn vị thuộc nhóm ${familyCode} trong phạm vi Anh/Chị được phép xem.`,
+      options: [
+        ...visible,
+        'Anh/Chị muốn xem theo cách nào?',
+        'Phương án 1: Xem riêng một mã — trả lời bằng mã đầy đủ hoặc “mã thứ …”.',
+        option2,
+        option3,
+      ],
+      context: unitFamilyContext({ familyCode, question: options.question, planObj: options.planObj }),
+    };
+  }
   // Khớp CỤ THỂ nhất trước khi hỏi lại: (1) trùng khít mã / mã+tên; (2) câu CHỨA nguyên mã
   // đơn vị -> chọn mã DÀI (cụ thể) nhất. Bắt buộc vì mã cha "034.PKĐK Y ĐỨC" là TIỀN TỐ của
   // mọi mã con "034.PKĐK Y ĐỨC <chi nhánh>": nếu không ưu tiên mã dài sẽ hỏi lại vô tận (cha
   // luôn khớp chuỗi con). Chỉ auto-chọn khi mã dài nhất DÀI HƠN hẳn mã kế (không hoà -> mới hỏi).
-  let pick = hits.find((h) => norm(h.key) === nq) || hits.find((h) => norm(`${h.key} ${h.label}`) === nq);
+  let pick = hits.find((h) => entityNorm(h.key) === nq) || hits.find((h) => entityNorm(`${h.key} ${h.label}`) === nq);
   if (!pick) {
-    const contained = hits.filter((h) => nq.includes(norm(h.key))).sort((a, b) => norm(b.key).length - norm(a.key).length);
-    if (contained.length && (contained.length === 1 || norm(contained[0].key).length !== norm(contained[1].key).length)) pick = contained[0];
+    const contained = hits.filter((h) => nq.includes(entityNorm(h.key))).sort((a, b) => entityNorm(b.key).length - entityNorm(a.key).length);
+    if (contained.length && (contained.length === 1 || entityNorm(contained[0].key).length !== entityNorm(contained[1].key).length)) pick = contained[0];
   }
   if (pick) return { rows: rows.filter((r) => String(r[fields[0]] || '') === pick.key), chosen: pick };
-  // MÃ TRẦN (vd "034"/"034*") là "HỌ MÃ" dùng chung cho nhiều chi nhánh (034.PKĐK Y ĐỨC + …TRẢNG
-  // BOM/…TRỊ AN…). Hỏi rộng "tất cả đơn vị mã 034" phải trả CẢ HỌ để liệt kê — KHÔNG thu về 1 đơn vị,
-  // KHÔNG hỏi lại. (Khác với hint có tên -> đã resolve cụ thể ở khối `pick` phía trên.)
-  const bareCode = /^0*\d{3}\s*\*?$/.test(String(hint).trim());
-  if (hits.length > 1 && bareCode && new Set(hits.map((h) => norm(h.label))).size > 1) {
-    const keys = new Set(hits.map((h) => h.key));
-    return { rows: rows.filter((r) => keys.has(String(r[fields[0]] || ''))), chosen: { key: [...keys].join(','), label: `mã ${String(hint).trim().replace(/[^\d]/g, '')}` } };
-  }
   if (hits.length > 1 && !/^\d{3}\*?$/.test(String(hint).trim())) {
     const sameLabel = new Set(hits.map((h) => norm(h.label))).size === 1;
     if (sameLabel) {
@@ -196,17 +299,27 @@ function applyHint(rows, hint, fields, label) {
   const key = hits[0].key;
   return { rows: rows.filter((r) => String(r[fields[0]] || '') === key), chosen: hits[0] };
 }
-function applyFilters(rows, planObj) {
+function applyFilters(rows, planObj, question = '') {
   const f = planObj.filters || {};
   let out = rows;
+  let unitFamily = null;
   if (f.source) out = out.filter((r) => r.source === f.source);
   if (f.route) out = out.filter((r) => String(r.route || '').toUpperCase() === String(f.route).toUpperCase());
-  let x = applyHint(out, f.unitHint, ['unit_code', 'unit_name'], 'đơn vị'); if (x.clarify || x.note) return x; out = x.rows;
+  let x = applyHint(out, f.unitHint, ['unit_code', 'unit_name'], 'đơn vị', {
+    familyMode: planObj.unitFamilyMode,
+    familyIndex: planObj.unitFamilyIndex,
+    familySelection: planObj.unitFamilySelection,
+    question,
+    planObj,
+  });
+  if (x.clarify || x.note) return x;
+  out = x.rows;
+  unitFamily = x.unitFamily || null;
   x = applyHint(out, f.productHint, ['iit_code', 'product_name'], 'sản phẩm'); if (x.clarify || x.note) return x; out = x.rows;
   x = applyHint(out, f.empHint, ['emp_code', 'emp_name'], 'nhân viên'); if (x.clarify || x.note) return x; out = x.rows;
   x = applyHint(out, f.contractorHint, ['contractor_code', 'contractor_name'], 'nhà thầu'); if (x.clarify || x.note) return x; out = x.rows;
   x = applyHint(out, f.provinceHint, ['province', 'province'], 'tỉnh'); if (x.clarify || x.note) return x; out = x.rows;
-  return { rows: out };
+  return { rows: out, unitFamily };
 }
 function dayRange(planObj, ky, scope) {
   const latest = latestDataDate(ky, scope);
@@ -285,7 +398,34 @@ function comparePrev({ rows, ky, scope, metric, dateRange, compareDayPrev = fals
   }
   return { prevKy, curVal, prevPaced: base, delta: curVal - base, pct: base ? ((curVal - base) / base) * 100 : null, label };
 }
+function diagnoseOrderAmounts(rows) {
+  const usable = rows.filter((r) => String(r.source_order || '').trim());
+  const orderCodes = new Set(usable.map((r) => String(r.source_order).trim()));
+  const lineSeen = new Map();
+  const issues = [];
+  for (const r of usable) {
+    const order = String(r.source_order || '').trim();
+    const line = String(r.source_line_id || '').trim();
+    const quantity = Number(r.quantity);
+    const unitPrice = Number(r.unit_price);
+    const bidPrice = Number(r.bid_price);
+    const revenue = Number(r.revenue);
+    const rowIssues = [];
+    if (!Number.isFinite(quantity) || quantity <= 0) rowIssues.push('SL thiếu/không dương');
+    if (!Number.isFinite(unitPrice) || unitPrice <= 0) rowIssues.push('đơn giá bán thiếu/không dương');
+    if (!Number.isFinite(revenue) || revenue <= 0) rowIssues.push('thành tiền thiếu/không dương');
+    if (Number.isFinite(quantity) && Number.isFinite(unitPrice) && Math.abs(revenue - quantity * unitPrice) > 1) rowIssues.push(`lệch SL × đơn giá ${fmt(revenue - quantity * unitPrice)}`);
+    if (Number.isFinite(quantity) && Number.isFinite(bidPrice) && bidPrice > 0 && Math.abs(revenue - quantity * bidPrice) > 1) rowIssues.push(`lệch SL × giá thầu ${fmt(revenue - quantity * bidPrice)}`);
+    if (line) {
+      if (lineSeen.has(line)) rowIssues.push('trùng mã dòng nguồn');
+      else lineSeen.set(line, order);
+    }
+    if (rowIssues.length) issues.push({ order, line: line || '—', product: r.product_name || r.iit_code || '—', issues: rowIssues });
+  }
+  return { orderCount: orderCodes.size, lineCount: usable.length, issues };
+}
 async function execute(question, planObj, { scope = {}, session = {} } = {}) {
+  planObj = { ...planObj, filters: { ...(planObj.filters || {}) } };
   if (planObj.needClarify) return { clarify: planObj.needClarify, plan: planObj };
   const isAdmin = auth.isAdmin(session?.role);
   const isEmployee = !isAdmin && (!!scope.empCode || session?.role === 'sale');
@@ -313,17 +453,34 @@ async function execute(question, planObj, { scope = {}, session = {} } = {}) {
   let rows = store.getRows({ ky, scope: scoped });
   const dr = dayRange(planObj, ky, scoped);
   if (dr) rows = A.applyFilters(rows, { dateFrom: dr.from, dateTo: dr.to });
-  const filtered = applyFilters(rows, planObj);
-  if (filtered.clarify) return { clarify: filtered.clarify, options: filtered.options, plan: planObj };
+  const filtered = applyFilters(rows, planObj, question);
+  if (filtered.clarify) return { clarify: filtered.clarify, options: filtered.options, context: filtered.context, plan: planObj };
   if (filtered.note) return { text: filtered.note, plan: planObj };
   rows = filtered.rows;
+  const unitFamily = filtered.unitFamily || null;
+  if (planObj.answerType !== 'order_anomaly' && unitFamily?.mode === 'combined' && planObj.groupBy === 'unit') {
+    planObj.groupBy = null;
+    planObj.answerType = 'aggregate';
+    planObj.topN = null;
+  } else if (planObj.answerType !== 'order_anomaly' && unitFamily?.mode === 'breakdown') {
+    planObj.groupBy = 'unit';
+    planObj.answerType = 'breakdown';
+    planObj.topN = null;
+  }
   const total = metricValue(rows, planObj.metric);
+  if (planObj.answerType === 'order_anomaly') {
+    return {
+      question, plan: planObj, ky, scope: scoped, isEmployee, rowsCount: rows.length,
+      total, metric: planObj.metric, groupBy: null, orderDiagnostic: diagnoseOrderAmounts(rows),
+      unitFamily, freshness: store.periodFreshness(ky),
+    };
+  }
   let items = [];
   let advisoryFacts = null;
   if (planObj.groupBy) items = groupRows(rows, planObj.groupBy, planObj.metric, planObj.sort);
   if (planObj.splitBySource) {
     const sources = ['CRM_MISA', 'APP_WEB_PARTNER'];
-    items = sources.flatMap((src) => groupRows(rows.filter((r) => r.source === src), planObj.groupBy || 'order', planObj.metric, planObj.sort).slice(0, planObj.topN || 5).map((x) => ({ ...x, source: src })));
+    items = sources.flatMap((src) => groupRows(rows.filter((r) => r.source === src), planObj.groupBy || 'order', planObj.metric, planObj.sort).slice(0, planObj.topN || 5).map((x) => ({ ...x, source: src, showSource: true })));
   } else if (planObj.topN && items.length) items = items.slice(0, planObj.topN);
   const compareDayPrev = planObj.day === 'today' && /hom qua|yesterday/.test(qn);
   const cmp = planObj.answerType === 'comparison' || planObj.compare === 'prev' || planObj.answerType === 'advisory' ? comparePrev({ rows, ky, scope: scoped, metric: planObj.metric, dateRange: dr, compareDayPrev }) : null;
@@ -338,18 +495,18 @@ async function execute(question, planObj, { scope = {}, session = {} } = {}) {
     };
   }
   const freshness = store.periodFreshness(ky);
-  return { question, plan: planObj, ky, scope: scoped, isEmployee, rowsCount: rows.length, total, metric: planObj.metric, groupBy: planObj.groupBy, items, compare: cmp, compareItems, advisoryFacts, dayRange: dr, freshness };
+  return { question, plan: planObj, ky, scope: scoped, isEmployee, rowsCount: rows.length, total, metric: planObj.metric, groupBy: planObj.groupBy, items, compare: cmp, compareItems, advisoryFacts, dayRange: dr, freshness, unitFamily };
 }
 function freshnessLine(f) { return (!f?.complete && f.throughDate) ? `📅 Dữ liệu tới ${f.throughDate.slice(8, 10)}/${f.throughDate.slice(5, 7)} (${f.dayCovered}/${f.daysInMonth} ngày) — kỳ đang cập nhật.` : ''; }
 function itemLine(x, metric, groupBy, i) {
   const val = formatMetric(metricValue([x], metric), metric);
-  const prefix = x.source ? `[${x.source === 'CRM_MISA' ? 'MISA' : 'WEB'}] ` : '';
+  const prefix = x.showSource ? `[${x.source === 'CRM_MISA' ? 'MISA' : 'WEB'}] ` : '';
   return `${i + 1}. ${prefix}${x.key}${x.label && x.label !== x.key ? ` — ${x.label}` : ''}: ${val}${groupBy === 'order' ? ` · ${fmtNum(x.quantity)} SL` : ''}`;
 }
 async function narrate(result) {
   if (result.blocked) return { text: result.blocked, source: 'nlq-engine' };
   if (result.text) return { text: result.text, source: 'nlq-engine' };
-  if (result.clarify) return { text: [result.clarify, ...(result.options || []).map((o) => `• ${o}`)].join('\n'), source: 'nlq-engine' };
+  if (result.clarify) return { text: [result.clarify, ...(result.options || []).map((o) => `• ${o}`)].join('\n'), source: 'nlq-engine', context: result.context || null };
   const p = result.plan;
   if (p.answerType === 'advisory' && llm.isEnabled()) {
     const facts = { ky: result.ky, total: result.total, metric: result.metric, top: result.items.slice(0, 8), compare: result.compare, freshness: result.freshness, advisory: result.advisoryFacts };
@@ -357,8 +514,42 @@ async function narrate(result) {
     if (ans?.text) return { text: ans.text, source: 'nlq-engine-llm-narrator', facts };
   }
   const period = `${kyLabel(result.ky)}${result.dayRange ? ` — ${result.dayRange.label}` : ''}`;
+  const family = result.unitFamily || null;
+  const selected = family?.mode === 'specific' ? (family?.selected || family?.units?.[0] || null) : null;
+  const familySubject = family?.mode === 'specific' && selected
+    ? `${selected.key} — ${selected.label}`
+    : (family ? `nhóm mã ${family.familyCode} (${family.units.length} mã đơn vị)` : '');
+  const familyContext = family ? unitFamilyContext({
+    familyCode: family.familyCode,
+    question: p.contextOriginalQuestion || result.question,
+    planObj: p,
+    mode: family.mode,
+    selectedUnitCode: selected?.key || null,
+  }) : null;
+  if (result.orderDiagnostic) {
+    const d = result.orderDiagnostic;
+    const lines = [`Kiểm tra tính nhất quán tổng tiền đơn hàng${familySubject ? ` của ${familySubject}` : ''} ${period}:`];
+    lines.push(`• Đã kiểm tra ${d.orderCount.toLocaleString('vi-VN')} đơn / ${d.lineCount.toLocaleString('vi-VN')} dòng hàng trong phạm vi được phép xem.`);
+    if (!d.issues.length) lines.push('• Không phát hiện dòng lệch Số lượng × Đơn giá bán/Giá thầu, dòng trùng hoặc giá trị không dương trong dữ liệu App Report.');
+    else {
+      lines.push(`• Phát hiện ${d.issues.length.toLocaleString('vi-VN')} dòng cần kiểm tra:`);
+      d.issues.slice(0, 20).forEach((x, i) => lines.push(`${i + 1}. ${x.order} · ${x.line} · ${x.product}: ${x.issues.join('; ')}`));
+      if (d.issues.length > 20) lines.push(`• Còn ${d.issues.length - 20} dòng khác chưa hiển thị.`);
+    }
+    lines.push('• Lưu ý: App Report hiện chưa có trường “tổng tiền đầu đơn” độc lập từ App Sale/MISA, nên chưa thể đối chiếu tổng đầu đơn với tổng các dòng.');
+    return { text: lines.join('\n'), source: 'nlq-engine', context: familyContext, facts: { diagnostic: d, unitFamily: family } };
+  }
   const lines = [];
-  if (result.compareItems?.length) {
+  if (family?.mode === 'breakdown' && result.groupBy === 'unit') {
+    lines.push(`Tổng ${metricLabel(result.metric).toLowerCase()} ${familySubject} ${period}: ${formatMetric(result.total, result.metric)}.`);
+    result.items.forEach((x, i) => lines.push(itemLine(x, result.metric, 'unit', i)));
+  } else if (family?.mode === 'combined' && !result.groupBy) {
+    lines.push(`${metricLabel(result.metric)} ${familySubject} ${period}: ${formatMetric(result.total, result.metric)}.`);
+  } else if (family?.mode === 'specific' && !result.groupBy) {
+    lines.push(`${metricLabel(result.metric)} ${familySubject} ${period}: ${formatMetric(result.total, result.metric)}.`);
+  } else if (family?.mode === 'specific' && result.groupBy === 'unit' && result.items.length === 1) {
+    lines.push(`${metricLabel(result.metric)} ${familySubject} ${period}: ${formatMetric(result.total, result.metric)}.`);
+  } else if (result.compareItems?.length) {
     lines.push(`${DIM_LABEL[result.groupBy]} biến động ${period}:`);
     result.compareItems.forEach((x, i) => lines.push(`${i + 1}. ${x.key}${x.label && x.label !== x.key ? ` — ${x.label}` : ''}: ${formatMetric(x.cur, result.metric)}; ${x.compareLabel}: ${formatMetric(x.prevPaced, result.metric)}; chênh ${formatMetric(x.delta, result.metric)}${x.pct == null ? '' : ` (${pct(x.pct)})`}`));
   } else if (result.compare) {
@@ -369,22 +560,46 @@ async function narrate(result) {
     const count = result.items.length;
     const metric = metricLabel(result.metric).toLowerCase();
     const scopeLabel = result.isEmployee ? ' của Anh/Chị' : '';
+    const familySuffix = familySubject ? ` — ${familySubject}` : '';
     const title = top
       ? `${top}${DIM_LABEL[result.groupBy]} có ${metric} ${period}${scopeLabel}`
-      : `${metricLabel(result.metric)} theo ${DIM_LABEL[result.groupBy]} ${period}${scopeLabel} — tổng cộng ${count} ${DIM_LABEL[result.groupBy]}`;
+      : `${metricLabel(result.metric)} theo ${DIM_LABEL[result.groupBy]} ${period}${scopeLabel}${familySuffix} — tổng cộng ${count} ${DIM_LABEL[result.groupBy]}`;
     lines.push(`${title}:`);
     result.items.forEach((x, i) => lines.push(itemLine(x, result.metric, result.groupBy, i)));
   } else {
     lines.push(`${metricLabel(result.metric)} ${period}${result.isEmployee ? ' của Anh/Chị' : ' toàn công ty'}: ${formatMetric(result.total, result.metric)}.`);
   }
   const fl = freshnessLine(result.freshness); if (fl) lines.push(fl);
-  return { text: lines.join('\n'), source: 'nlq-engine', facts: { plan: p, total: result.total, items: result.items.slice(0, 20), compare: result.compare } };
+  return { text: lines.join('\n'), source: 'nlq-engine', context: familyContext, facts: { plan: p, total: result.total, items: result.items.slice(0, 20), compare: result.compare, unitFamily: family } };
 }
 async function answerQuestion(args = {}) {
   const currentPeriod = store.latestKy();
   const ctx = { currentPeriod, latestDataDate: latestDataDate(currentPeriod, args.scope || {}) };
-  const planObj = await plan(args.text || '', ctx);
-  const res = await execute(args.text || '', planObj, args);
+  const text = String(args.text || '');
+  const follow = contextFollowup(text, args.context);
+  const planQuestion = follow && !follow.anomaly ? String(args.context?.originalQuestion || text) : text;
+  const planObj = await plan(planQuestion, ctx);
+  const explicitFamilyAction = unitFamilyModeFromText(text);
+  const action = follow?.familyAction || explicitFamilyAction;
+  if (follow) {
+    planObj.filters = { ...(planObj.filters || {}), unitHint: follow.familyCode };
+    planObj.contextOriginalQuestion = String(args.context?.originalQuestion || planQuestion).slice(0, 500);
+    if (args.context?.period) planObj.period = args.context.period;
+    if (action?.mode === 'specific') { planObj.unitFamilyMode = 'specific'; planObj.unitFamilyIndex = action.index; }
+    else if (action?.mode === 'combined' || action?.mode === 'breakdown') planObj.unitFamilyMode = action.mode;
+    else if (follow.mentionsFamily && !follow.anomaly) { planObj.unitFamilyMode = 'specific'; planObj.unitFamilySelection = text; }
+    if (follow.anomaly) {
+      planObj.answerType = 'order_anomaly';
+      planObj.groupBy = null;
+      planObj.topN = null;
+      planObj.needClarify = null;
+      if (!planObj.unitFamilyMode && ['specific', 'combined', 'breakdown'].includes(args.context?.mode)) planObj.unitFamilyMode = args.context.mode;
+      if (planObj.unitFamilyMode === 'specific' && args.context?.selectedUnitCode) planObj.unitFamilySelection = String(args.context.selectedUnitCode);
+    }
+  } else if (action?.mode === 'combined' || action?.mode === 'breakdown') {
+    planObj.unitFamilyMode = action.mode;
+  }
+  const res = await execute(text, planObj, args);
   return narrate(res);
 }
-module.exports = { plan, execute, narrate, answerQuestion, fallbackPlan, latestDataDate, normalizePlan };
+module.exports = { plan, execute, narrate, answerQuestion, fallbackPlan, latestDataDate, normalizePlan, isOrderAnomalyQuestion, unitFamilyModeFromText };

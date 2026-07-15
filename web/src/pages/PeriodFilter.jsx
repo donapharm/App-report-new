@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { formatDate } from '../util.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const monthOf = (ky) => Number(String(ky || '').slice(0, 2));
@@ -30,7 +31,7 @@ export function defaultPeriodSelection(periods, latest) {
   return { mode: 'month', ky, from: ky, to: ky, quarter: qOf(ky), year: yearOf(ky) };
 }
 
-export default function PeriodFilter({ periods = [], value, onChange }) {
+export default function PeriodFilter({ periods = [], value, onChange, compact = false }) {
   const kys = periods.map((p) => p.ky);
   const years = useMemo(() => [...new Set(kys.map(yearOf).filter(Boolean))].sort((a, b) => a - b), [kys]);
   const sel = value || defaultPeriodSelection(periods, kys.at(-1));
@@ -60,7 +61,7 @@ export default function PeriodFilter({ periods = [], value, onChange }) {
   const qOptions = [1, 2, 3, 4].filter((q) => years.some((y) => rangeKys(periods, `${pad((q - 1) * 3 + 1)}.${y}`, `${pad(q * 3)}.${y}`).length));
 
   return (
-    <div className="card period-filter">
+    <div className={(compact ? 'period-filter period-filter-compact' : 'card period-filter')}>
       <div className="period-head">
         <div className="seg compact">
           <button className={sel.mode === 'month' ? 'active' : ''} onClick={() => setMode('month')}>Tháng</button>
@@ -92,8 +93,7 @@ export default function PeriodFilter({ periods = [], value, onChange }) {
       {sel.mode === 'month' && (() => {
         const p = periods.find((x) => x.ky === sel.ky);
         if (!p || p.complete || !p.throughDate) return null;
-        const [, m, d] = p.throughDate.split('-');
-        return <div className="period-fresh">📅 Dữ liệu tới <b>{d}/{m}</b> · {p.dayCovered}/{p.daysInMonth} ngày — <i>kỳ đang cập nhật, số có thể tăng tiếp</i></div>;
+        return <div className="period-fresh">📅 Dữ liệu tới <b>{formatDate(p.throughDate)}</b> · {p.dayCovered}/{p.daysInMonth} ngày — <i>kỳ đang cập nhật, số có thể tăng tiếp</i></div>;
       })()}
     </div>
   );

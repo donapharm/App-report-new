@@ -48,10 +48,12 @@ let _base = null;
 function base() {
   if (_base) return _base;
   const catalog = readJson('catalog.json', { units: [], products: [], periods: [], latest_ky: null });
+  const c14Catalog = readJson('product_c14_groups.json', { rows: [] });
   const users = readJson('users.json', []);
   const unitByCode = Object.fromEntries(catalog.units.map((u) => [u.unit_code, u]));
   const prodByCode = Object.fromEntries(catalog.products.map((p) => [p.iit_code, p]));
   const empByCode = Object.fromEntries(users.map((u) => [u.emp_code, u]));
+  const c14ByIit = Object.fromEntries((c14Catalog.rows || []).map((r) => [String(r.iit_code || '').trim().toUpperCase(), String(r.c14 || '').trim()]).filter(([k, v]) => k && v));
   const enrich = (r) => {
     const rr = normalizeEmpForReport(r);
     const unit_name = rr.unit_name || unitByCode[rr.unit_code]?.unit_name;
@@ -59,6 +61,7 @@ function base() {
       ...rr,
       unit_name,
       product_name: rr.product_name || prodByCode[rr.iit_code]?.product_name,
+      c14: rr.c14 || rr.C14 || rr.indication_group || c14ByIit[String(rr.iit_code || '').trim().toUpperCase()] || null,
       emp_name: rr.emp_name || empByCode[rr.emp_code]?.name,
       province: rr.province || unitByCode[rr.unit_code]?.province || provinceOf(rr.unit_code, unit_name, rr.province),
     };
@@ -69,7 +72,7 @@ function base() {
     users,
     cst: readJson('cst_rows.json', []),
     targets: readJson('targets.json', []),
-    unitByCode, prodByCode, empByCode, enrich,
+    unitByCode, prodByCode, empByCode, c14ByIit, c14Catalog, enrich,
   };
   return _base;
 }
@@ -422,7 +425,9 @@ function getRows({ ky, scope }) {
   return rows;
 }
 function getRowsRange({ kys, scope }) {
-  const list = Array.isArray(kys) && kys.length ? kys : [latestKy()];
+  // Mảng rỗng là phạm vi rỗng có chủ đích (VD khoảng ngày ngoài dữ liệu),
+  // chỉ fallback kỳ mới nhất khi caller không truyền mảng.
+  const list = Array.isArray(kys) ? kys : [latestKy()];
   return list.flatMap((ky) => getRows({ ky, scope }));
 }
 
@@ -435,13 +440,14 @@ function getCstAll() {
   if (_cstAll && _cstSig === sig) return _cstAll;
   let rows = readJson('cst_real.json', null) || base().cst;
   rows = mergeLatestUploadIntoCst(rows);
-  const { unitByCode } = base();
+  const { unitByCode, c14ByIit } = base();
   rows = rows.map((r) => {
     const code = String(r.emp_code || '').trim().toUpperCase();
-    // Gắn tỉnh/thành (giống dòng doanh thu) để lọc theo tỉnh dùng chung được.
+    // Gắn tỉnh/thành + nhóm hàng C14 (giống dòng doanh thu) để lọc dùng chung được.
     const province = r.province || unitByCode[r.unit_code]?.province || provinceOf(r.unit_code, r.unit_name, r.province);
-    if (!code || isValidEmpCode(code)) return province === r.province ? r : { ...r, province };
-    return { ...r, province, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };
+    const c14 = r.c14 || r.C14 || r.indication_group || c14ByIit[String(r.iit_code || '').trim().toUpperCase()] || null;
+    if (!code || isValidEmpCode(code)) return province === r.province && c14 === r.c14 ? r : { ...r, province, c14 };
+    return { ...r, province, c14, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };
   });
   _cstAll = rows; _cstSig = sig;
   return rows;
@@ -451,6 +457,12 @@ function getCst({ scope }) {
   if (scope && scope.empCode) {
     const emp = String(scope.empCode).trim().toUpperCase();
     rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim().toUpperCase()).includes(emp));
+    // API/UI/export của NV không được lộ danh sách NV đồng phụ trách hoặc mã nguồn
+    // thô. Dòng đã được xác nhận thuộc phạm vi emp thì chỉ trả danh tính của emp đó.
+    rows = rows.map((r) => {
+      const { sales_emps, raw_emp_code, raw_nv, remap_note, ...safe } = r;
+      return { ...safe, emp_code: emp, sales_emps: emp };
+    });
   }
   return rows;
 }
@@ -482,7 +494,7 @@ function getTargets({ ky, scope }) {
   return t;
 }
 function getTargetsRange({ kys, scope }) {
-  const list = Array.isArray(kys) && kys.length ? kys : [latestKy()];
+  const list = Array.isArray(kys) ? kys : [latestKy()];
   return list.flatMap((ky) => getTargets({ ky, scope }));
 }
 

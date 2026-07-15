@@ -1,8 +1,8 @@
-# Ảnh thương hiệu — đặt 2 file này vào thư mục `web/public/`
+# Ảnh thương hiệu chính thức — không tự vẽ hoặc thay thế
 
 | File | Dùng ở đâu | Gợi ý |
 |------|-----------|-------|
-| `logo-dnpharma.png` | Logo trên header (mobile) + sidebar (PC) + màn login | Dạng icon/lockup **ngang**, nền **trong suốt**, cao ~80–120px. |
-| `zalo-oa-qr.png`    | QR Zalo OA ở màn đăng nhập | Ảnh QR vuông, ~300×300px. |
+| `logo-dnpharma.png` | Logo chính thức dùng thống nhất tại login, header mobile và sidebar PC | 640×369; SHA-256 `c5d9986df442c45a8af1ef78550d026626435940a4fa4e8d3404c4066838134e` |
+| `zalo-oa-qr.png`    | QR Zalo OA chính thức dùng thống nhất toàn ứng dụng | 420×418; SHA-256 `6cb1d84d853263c54d996742612b220d2aee21ad547959f2af55d0778b7986af` |
 
-Nếu chưa đặt file, app tự dùng **logo SVG dựng sẵn** (2 vòng capsule xanh–cam) và ô placeholder cho QR — vẫn chạy bình thường, không lỗi.
+Lệnh build chạy `scripts/verify-brand-assets.mjs` và sẽ dừng nếu file, kích thước hoặc hash thay đổi. Khi ảnh không tải được, giao diện chỉ báo lỗi asset chính thức; **không sinh logo/QR thay thế**.

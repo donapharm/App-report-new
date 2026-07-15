@@ -1,21 +1,53 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
-import { money, pct, unitText } from '../util.js';
-import { Spinner, Kpi, useCollapse, TargetKpiStrip } from '../components.jsx';
-import { ComboSelect, emptyRevenueFilters, Select } from './revenueFilters.jsx';
+import { money, pct } from '../util.js';
+import { Spinner, Kpi, useCollapse, TargetKpiStrip, UnitLabel, Pager, usePager } from '../components.jsx';
+import { ComboSelect, emptyRevenueFilters, MultiSelect, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
 import { DonutChart, TopBarChart } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
+function formatCompareKy(ky) {
+  const [mm, yyyy] = String(ky || '').split('.');
+  return mm && yyyy ? `T${String(mm).padStart(2, '0')}/${yyyy}` : String(ky || '—');
+}
+
+function formatCompareRange(kys, fallback) {
+  const list = (Array.isArray(kys) ? kys : []).filter(Boolean);
+  if (!list.length) return formatCompareKy(fallback);
+  if (list.length === 1) return formatCompareKy(list[0]);
+  const [fromMm, fromYy] = String(list[0]).split('.');
+  const [toMm, toYy] = String(list.at(-1)).split('.');
+  if (fromYy && fromYy === toYy) return `T${String(fromMm).padStart(2, '0')}–T${String(toMm).padStart(2, '0')}/${toYy}`;
+  return `${formatCompareKy(list[0])}–${formatCompareKy(list.at(-1))}`;
+}
+
+function comparePeriodLabel(compare = {}) {
+  const current = formatCompareRange(compare.curKys, compare.curKy);
+  const previous = formatCompareRange(compare.prevKys, compare.prevKy);
+  if (compare.yoyMissing) return `${current} · chưa có dữ liệu ${previous} để so cùng kỳ năm ngoái`;
+  const relation = compare.mode === 'yoy'
+    ? 'cùng kỳ năm ngoái'
+    : (compare.adjusted
+      ? 'hai tháng hoàn tất gần nhất'
+      : ((compare.curKys || []).length > 1 ? 'giai đoạn liền trước' : 'tháng liền trước'));
+  return `${current} so với ${previous} · ${relation}`;
+}
+
 function DeltaRow({ i, r, kind }) {
   const up = (r.delta || 0) >= 0;
-  const title = kind === 'unit' ? unitText(r.key, r.label) : r.label;
+  const changeValue = Number(r.prevRevenue || 0) > 0
+    ? pct(Math.abs(r.deltaPct), 0)
+    : (Number(r.revenue || 0) > 0 ? 'mới' : pct(Math.abs(r.deltaPct), 0));
+  const title = kind === 'unit' ? <UnitLabel code={r.key} name={r.label} /> : r.label;
   return (
-    <div className="row">
+    <div className={'row' + (kind === 'contractor' ? ' contractor-delta-row' : '')}>
       <div className="main">
-        <div className="name"><span className="rank">{i}</span>{title}</div>
+        <div className={'name' + (kind === 'contractor' ? ' contractor-delta-name' : '')} title={kind === 'contractor' ? String(r.label || '') : undefined}>
+          <span className="rank">{i}</span><span className="delta-row-label">{title}</span>
+        </div>
         <div className="meta">
-          <span className={'chg-chip ' + (up ? 'up' : 'down')}>{up ? '▲ Tăng' : '▼ Giảm'} {pct(Math.abs(r.deltaPct), 0)}</span>
+          <span className={'chg-chip ' + (up ? 'up' : 'down')}>{up ? '▲ Tăng' : '▼ Giảm'} {changeValue}</span>
           Kỳ trước {money(r.prevRevenue)} → kỳ này {money(r.revenue)}
         </div>
       </div>
@@ -24,47 +56,131 @@ function DeltaRow({ i, r, kind }) {
   );
 }
 
-function Block({ title, rows, negative, kind }) {
+function Block({ title, subtitle, rows, negative, kind }) {
+  const [expanded, setExpanded] = useState(false);
+  const resetKey = `${rows?.length || 0}|${rows?.[0]?.key || ''}|${rows?.at(-1)?.key || ''}`;
+  useEffect(() => setExpanded(false), [resetKey]);
+  const visibleRows = expanded ? (rows || []) : (rows || []).slice(0, 10);
   return (
     <div className="card analysis-list-block">
       <div className="section-head">{title}</div>
-      {!rows?.length ? <div className="center">Chưa có dữ liệu so sánh.</div> : rows.map((r, i) => <DeltaRow key={r.key} i={i + 1} r={r} negative={negative} kind={kind} />)}
+      {subtitle && <div className="analysis-compare-period">{subtitle}</div>}
+      {!rows?.length ? <div className="center">Chưa có dữ liệu so sánh.</div> : <>
+        {visibleRows.map((r, i) => <DeltaRow key={r.key} i={i + 1} r={r} negative={negative} kind={kind} />)}
+        {rows.length > 10 && <button type="button" className="analysis-expand-btn" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? '▴ Thu gọn về Top 10' : `▾ Xem tất cả (${rows.length.toLocaleString('vi-VN')} dòng)`}
+        </button>}
+      </>}
     </div>
   );
 }
 
 function CstLowBlock({ rows }) {
+  const [expanded, setExpanded] = useState(false);
+  const resetKey = `${rows?.length || 0}|${rows?.[0]?.key || ''}|${rows?.at(-1)?.key || ''}`;
+  useEffect(() => setExpanded(false), [resetKey]);
+  const visibleRows = expanded ? (rows || []) : (rows || []).slice(0, 10);
   return (
     <div className="card analysis-list-block">
       <div className="section-head">📦 SP sắp hết CST</div>
-      {!rows?.length ? <div className="center">Không có sản phẩm sắp hết CST trong phạm vi lọc.</div> : rows.map((r, i) => (
-        <div className="row" key={r.key || i}>
-          <div className="main">
-            <div className="name"><span className="rank">{i + 1}</span>{r.label}</div>
-            <div className="meta">{r.iit_code || '—'} · {r.qd || '—'} · {unitText(r.unit_code, r.unit_name)} {r.qd === 'QĐ139' ? `· ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''}</div>
+      {!rows?.length ? <div className="center">Không có sản phẩm sắp hết CST trong phạm vi lọc.</div> : <>
+        {visibleRows.map((r, i) => (
+          <div className="row" key={r.key || i}>
+            <div className="main">
+              <div className="name"><span className="rank">{i + 1}</span>{r.label}</div>
+              <div className="meta">{r.iit_code || '—'} · {r.qd || '—'} · <UnitLabel code={r.unit_code} name={r.unit_name} /> {r.qd === 'QĐ139' ? `· ${r.active_ingredient || '—'} ${r.ham_luong || ''}` : ''}</div>
+            </div>
+            <div className="amt" style={{ color: 'var(--hi)' }}>còn {r.remain_pct}%</div>
           </div>
-          <div className="amt" style={{ color: 'var(--hi)' }}>còn {r.remain_pct}%</div>
-        </div>
-      ))}
+        ))}
+        {rows.length > 10 && <button type="button" className="analysis-expand-btn" onClick={() => setExpanded((v) => !v)}>
+          {expanded ? '▴ Thu gọn về Top 10' : `▾ Xem tất cả (${rows.length.toLocaleString('vi-VN')} dòng)`}
+        </button>}
+      </>}
     </div>
   );
 }
 
-function CstUntouchedBlock({ rows }) {
+function CstUntouchedBlock({ rows, productCount }) {
+  const resetKey = `${rows?.length || 0}|${rows?.[0]?.key || ''}|${rows?.at(-1)?.key || ''}`;
+  const pager = usePager(rows, 51, resetKey); // bội số của 3 để mỗi trang luôn đủ hàng 3 ô
   return (
-    <div className="card analysis-list-block">
-      <div className="section-head">🆕 SP chưa khai thác (còn 100% CST)</div>
-      {!rows?.length ? <div className="center">Không có mặt hàng nào còn nguyên cơ số trong phạm vi lọc.</div> : rows.map((r, i) => (
-        <div className="row" key={r.key || i}>
-          <div className="main">
-            <div className="name"><span className="rank">{i + 1}</span>{r.label}</div>
-            <div className="meta">{r.iit_code || '—'} · {unitText(r.unit_code, r.unit_name)}{r.qd === 'QĐ139' && r.active_ingredient ? ` · ${r.active_ingredient} ${r.ham_luong || ''}` : ''}</div>
-          </div>
-          <div className="amt" style={{ color: 'var(--hi)' }}>còn {(Number(r.remain_qty) || 0).toLocaleString('vi-VN')}</div>
+    <section className="analysis-wide-block cst-untouched-section">
+      <div className="card analysis-list-block cst-untouched-head">
+        <div className="analysis-block-title">
+          <div className="section-head">🆕 SP chưa khai thác (còn 100% CST)</div>
+          {!!rows?.length && <span>{rows.length.toLocaleString('vi-VN')} dòng · {Number(productCount || 0).toLocaleString('vi-VN')} sản phẩm</span>}
         </div>
-      ))}
-    </div>
+        {!!rows?.length && <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="dòng" />}
+      </div>
+      {!rows?.length ? <div className="card center">Không có mặt hàng nào còn nguyên cơ số trong phạm vi lọc.</div> : <>
+        <div className="cst-untouched-grid">
+          {Array.from({ length: 3 }, (_, panelIndex) => {
+            const panelSize = Math.ceil(pager.pageItems.length / 3);
+            const panelRows = pager.pageItems.slice(panelIndex * panelSize, (panelIndex + 1) * panelSize);
+            return (
+              <div className="card analysis-list-block cst-untouched-panel" key={panelIndex}>
+                {panelRows.map((r, rowIndex) => {
+                  const absoluteIndex = pager.startIndex + panelIndex * panelSize + rowIndex;
+                  const employeeText = (r.employees || []).length
+                    ? r.employees.map((e) => e.name && e.name !== e.code ? `${e.code} · ${e.name}` : e.code).join(', ')
+                    : 'Chưa có thông tin phụ trách';
+                  const bidPrice = Number(r.bid_price || 0);
+                  const bidPriceText = bidPrice > 0
+                    ? `${bidPrice.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}đ`
+                    : 'Chưa có dữ liệu';
+                  return (
+                    <div className="cst-untouched-row" key={r.key || absoluteIndex}>
+                      <div className="cst-untouched-row-head">
+                        <div className="cst-untouched-title">
+                          <span className="rank">{absoluteIndex + 1}</span>
+                          <b title={r.label || ''}>{r.label || 'Chưa có tên sản phẩm'}</b>
+                          {r.qd && <span className="qd-badge">{r.qd}</span>}
+                        </div>
+                        <div className="cst-untouched-row-qty">
+                          <strong>{(Number(r.remain_qty) || 0).toLocaleString('vi-VN')}</strong>
+                          <span>còn nguyên {Number(r.remain_pct || 100).toLocaleString('vi-VN')}%</span>
+                        </div>
+                      </div>
+                      <div className="cst-untouched-code" title={r.iit_code || ''}>{r.iit_code || 'Chưa có mã QLNB'}</div>
+                      {r.qd === 'QĐ139' && r.active_ingredient && <div className="cst-untouched-ingredient">{r.active_ingredient}{r.ham_luong ? ` · ${r.ham_luong}` : ''}</div>}
+                      <div className="cst-untouched-row-unit"><UnitLabel code={r.unit_code} name={r.unit_name} /></div>
+                      <div className="cst-untouched-row-facts">
+                        <span><em>Đơn vị tính</em><b>{r.uom || 'Chưa có dữ liệu'}</b></span>
+                        <span><em>Giá thầu</em><b>{bidPriceText}</b></span>
+                        <span><em>Nhóm TCKT</em><b>{r.technical_group || 'Chưa có dữ liệu'}</b></span>
+                        <span><em>Thứ tự ưu tiên</em><b>{r.priority || 'Chưa có dữ liệu'}</b></span>
+                      </div>
+                      <div className="cst-untouched-row-employee">👤 <b>{employeeText}</b></div>
+                      <div className="cst-untouched-row-initial">Còn lại / ban đầu: <b>{(Number(r.remain_qty) || 0).toLocaleString('vi-VN')} / {(Number(r.bid_qty_initial) || 0).toLocaleString('vi-VN')}</b></div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+        <div className="card cst-untouched-pager"><Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="dòng" /></div>
+      </>}
+    </section>
   );
+}
+
+function CstQueuedBlock({ rows, note }) {
+  if (!rows?.length) return null;
+  return <section className="analysis-wide-block">
+    <div className="card analysis-list-block">
+      <div className="section-head">⏳ QLNB kế tiếp đang chờ mã hiện hành</div>
+      <div className="muted">{note}</div>
+      {rows.map((r, i) => <div className="row" key={r.key || i}>
+        <div className="main">
+          <div className="name">{r.label}</div>
+          <div className="meta"><UnitLabel code={r.unit_code} name={r.unit_name} /> · mã hiện hành <b>{r.cst_sequence?.current?.code || 'cần xác nhận'}</b> còn {Number(r.cst_sequence?.current?.remainPct || 0).toLocaleString('vi-VN')}% / {Number(r.cst_sequence?.current?.remainQty || 0).toLocaleString('vi-VN')} {r.uom} · mã kế tiếp <b>{r.iit_code}</b></div>
+        </div>
+        <div className="amt">ĐANG CHỜ · {Number(r.remain_pct || 0).toLocaleString('vi-VN')}%</div>
+      </div>)}
+    </div>
+  </section>;
 }
 
 export default function Analysis({ me }) {
@@ -87,8 +203,8 @@ export default function Analysis({ me }) {
 
   useEffect(() => {
     if (!periodSel) return;
-    api.filters(periodParams(periodSel)).then(setOptions);
-  }, [periodSel]);
+    api.filters({ ...periodParams(periodSel), ...filters, q: '' }).then(setOptions);
+  }, [periodSel, filters.emp, filters.province, filters.unit, filters.group, filters.product, filters.route, filters.priority, filters.contractor, filters.bid]);
 
   useEffect(() => {
     if (!periodSel) return;
@@ -118,25 +234,33 @@ export default function Analysis({ me }) {
   const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const { open, toggle } = useCollapse();
+  const [mobileQuickOpen, setMobileQuickOpen] = useState(false);
+  const explicitComparePeriod = data?.growthCompare ? comparePeriodLabel(data.growthCompare) : '';
 
   return (
     <>
       <DrillNav crumbs={[{ label: 'Phân tích' }]} onReload={reload} busy={!data} />
-      {periodSel && <PeriodFilter periods={periods} value={periodSel} onChange={setPeriodSel} />}
-      <div className={'card filter-card' + (open ? ' open' : ' collapsed')}>
-        <div className="filter-bar">
-          <input className="filter-quick" value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
-          <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn lọc' : '▾ Bộ lọc'}{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>
-          {activeFilterCount > 0 && <button className="btn ghost" onClick={() => setFilters(emptyRevenueFilters)}>Xoá lọc</button>}
-          <button className="btn ghost" disabled={!data || exporting} onClick={async () => { setExporting(true); try { await downloadExport('analysis', { ...periodParams(periodSel), ...filters }); } catch (e) { alert(e.message); } setExporting(false); }}>⬇ Excel</button>
+      <div className={'card filter-card analysis-control-panel' + (open ? ' open' : ' collapsed')}>
+        <div className="analysis-control-top">
+          {periodSel && <PeriodFilter compact periods={periods} value={periodSel} onChange={setPeriodSel} />}
+          <div className="analysis-control-actions">
+            <button type="button" className="btn ghost analysis-mobile-filter-toggle" aria-expanded={mobileQuickOpen} onClick={() => setMobileQuickOpen((v) => !v)}>☰ Bộ lọc{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>
+            <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn' : '▾ Nâng cao'}</button>
+            {activeFilterCount > 0 && <button className="btn ghost" onClick={() => setFilters({ ...emptyRevenueFilters })}>✕ Xóa lọc</button>}
+            <button className="btn ghost" disabled={!data || exporting} onClick={async () => { setExporting(true); try { await downloadExport('analysis', { ...periodParams(periodSel), ...filters }); } catch (e) { alert(e.message); } setExporting(false); }}>⬇ Excel</button>
+          </div>
+        </div>
+        <div className={'analysis-quick-filter-grid' + (mobileQuickOpen ? ' mobile-open' : '')}>
+          {me.isAdmin && <label><span>Nhân viên</span><MultiSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" unit="NV" /></label>}
+          <label><span>Đơn vị</span><ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Mã/tên đơn vị…" /></label>
+          <label><span>Nhóm hàng</span><ComboSelect value={filters.group} onChange={(v) => setF('group', v)} options={options?.groups} all="Tất cả nhóm hàng C14" placeholder="Nhóm hàng C14…" /></label>
+          <label className="analysis-quick-search"><span>Thuốc</span><input className="filter-quick" value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Thuốc / mã QLNB…" /></label>
         </div>
         {open && (
-          <div className="filter-body">
+          <div className="filter-body analysis-advanced-body">
             <div className="filter-grid">
-              {me.isAdmin && <ComboSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" />}
               <Select value={filters.province} onChange={(v) => setF('province', v)} options={options?.provinces} all="Tất cả tỉnh/thành" />
-              <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
-              <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
+              <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Chọn chính xác một sản phẩm…" />
               <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
               <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
               <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
@@ -185,10 +309,12 @@ export default function Analysis({ me }) {
             <Block title="Đơn vị giảm mạnh" rows={data.topDeclineUnits} kind="unit" negative />
             <Block title="Sản phẩm tăng mạnh" rows={data.topGrowthProducts} />
             <Block title="Sản phẩm giảm mạnh" rows={data.topDeclineProducts} negative />
-            <Block title="SP cần đẩy mạnh" rows={data.pushProducts} negative />
+            <Block title="🛣️ Biến động theo tuyến" subtitle={explicitComparePeriod} rows={data.routeDelta} />
             <CstLowBlock rows={data.cstLowProducts} />
-            <CstUntouchedBlock rows={data.cstUntouched} />
-            <Block title="🛣️ Biến động theo tuyến (so kỳ trước)" rows={data.routeDelta} />
+            <Block title="SP cần đẩy mạnh" rows={data.pushProducts} negative />
+            <Block title="🏢 Biến động theo nhà thầu" subtitle={explicitComparePeriod} rows={data.contractorDelta} kind="contractor" />
+            <CstUntouchedBlock rows={data.cstUntouched} productCount={data.cstUntouchedProductCount} />
+            <CstQueuedBlock rows={data.cstQueued} note={data.cstSequenceNote} />
           </div>
         </>
       )}

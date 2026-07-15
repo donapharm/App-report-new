@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { money } from '../util.js';
-import { Spinner } from '../components.jsx';
+import { formatDate, formatDateTime, money } from '../util.js';
+import { DateInput, Spinner, UnitLabel } from '../components.jsx';
 import { DrillNav } from '../drillNav.jsx';
 
 const emptyMeta = { ky: '', dateFrom: '', dateTo: '' };
@@ -41,7 +41,7 @@ function ReconcilePanel({ recon, reconKy, setReconKy, activeSlots, run, busy }) 
             <div className="card">
               <div style={{ fontWeight: 700, color: 'var(--hi)', marginBottom: 6 }}>⛔ Ngày ngoài biên kỳ (lỗi gán ngày ở nguồn)</div>
               {recon.dateOutOfBand.map((u, i) => (
-                <div key={i} className="meta">• <b>{u.unit_code}</b> {u.unit_name} — {u.rows} dòng · ngày {u.dates.join(', ')} ({u.side === 'before' ? 'trước kỳ' : 'sau kỳ'}) · {money(u.revenue)} · NV {u.emps.join(', ')}</div>
+                <div key={i} className="meta">• <UnitLabel code={u.unit_code} name={u.unit_name} /> — {u.rows} dòng · ngày {u.dates.map((d) => formatDate(d, d)).join(', ')} ({u.side === 'before' ? 'trước kỳ' : 'sau kỳ'}) · {money(u.revenue)} · NV {u.emps.join(', ')}</div>
               ))}
             </div>
           )}
@@ -170,8 +170,8 @@ export default function Upload() {
           {tab === 'new' ? (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
               <input placeholder="Kỳ mới (06.2026)" value={meta.ky} onChange={(e) => setMeta({ ...meta, ky: e.target.value.trim() })} />
-              <input placeholder="Từ ngày" type="date" value={meta.dateFrom} onChange={(e) => setMeta({ ...meta, dateFrom: e.target.value })} />
-              <input placeholder="Đến ngày" type="date" value={meta.dateTo} onChange={(e) => setMeta({ ...meta, dateTo: e.target.value })} />
+              <DateInput ariaLabel="Từ ngày" value={meta.dateFrom} onChange={(dateFrom) => setMeta({ ...meta, dateFrom })} />
+              <DateInput ariaLabel="Đến ngày" value={meta.dateTo} onChange={(dateTo) => setMeta({ ...meta, dateTo })} />
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
@@ -179,8 +179,8 @@ export default function Upload() {
                 <option value="">Chọn kỳ đang có</option>
                 {activeSlots.map((s) => <option key={s.id} value={s.ky}>{s.ky} · {fmtRows(s.totalRows)} dòng · {money(s.totalRevenue)}</option>)}
               </select>
-              <input placeholder="Từ ngày" type="date" value={meta.dateFrom} onChange={(e) => setMeta({ ...meta, dateFrom: e.target.value })} />
-              <input placeholder="Đến ngày" type="date" value={meta.dateTo} onChange={(e) => setMeta({ ...meta, dateTo: e.target.value })} />
+              <DateInput ariaLabel="Từ ngày" value={meta.dateFrom} onChange={(dateFrom) => setMeta({ ...meta, dateFrom })} />
+              <DateInput ariaLabel="Đến ngày" value={meta.dateTo} onChange={(dateTo) => setMeta({ ...meta, dateTo })} />
             </div>
           )}
           {tab === 'new' && currentSlot && <div className="meta" style={{ color: 'var(--hi)', marginBottom: 8 }}>⚠ Kỳ {meta.ky} đã tồn tại: {fmtRows(currentSlot.totalRows)} dòng / {money(currentSlot.totalRevenue)}. Hãy chuyển sang Import cập nhật.</div>}
@@ -258,7 +258,7 @@ export default function Upload() {
                   <div>
                     <div className="detail-title">Kỳ {s.ky} {s.active && <span className="pill ok">đang dùng</span>} {s.mode === 'update' && <span className="pill warn">cập nhật</span>}</div>
                     <div className="meta muted">{fmtRows(s.totalRows)} dòng · {money(s.totalRevenue)} · {s.uploadedByName || s.uploadedBy}</div>
-                    <div className="meta muted">{new Date(s.uploadedAt).toLocaleString('vi-VN')}{s.replacedSlotId ? ` · thay slot ${s.replacedSlotId}` : ''}</div>
+                    <div className="meta muted">{formatDateTime(s.uploadedAt)}{s.replacedSlotId ? ` · thay slot ${s.replacedSlotId}` : ''}</div>
                   </div>
                   {!s.active && <button className="btn ghost" onClick={() => rollback(s.id)}>↩ Khôi phục</button>}
                 </div>
@@ -267,7 +267,7 @@ export default function Upload() {
             <div className="section-title">Nhật ký thao tác</div>
             {slots.audit.length === 0 ? <div className="center muted">Chưa có.</div> : slots.audit.slice(0, 20).map((a, i) => (
               <div key={i} className="meta muted" style={{ padding: '4px 6px' }}>
-                {new Date(a.at).toLocaleString('vi-VN')} · <b>{a.by}</b> · {a.action} kỳ {a.ky}{a.rows ? ` · ${fmtRows(a.rows)} dòng` : ''}{a.replacedSlotId ? ` · thay ${a.replacedSlotId}` : ''}
+                {formatDateTime(a.at)} · <b>{a.by}</b> · {a.action} kỳ {a.ky}{a.rows ? ` · ${fmtRows(a.rows)} dòng` : ''}{a.replacedSlotId ? ` · thay ${a.replacedSlotId}` : ''}
               </div>
             ))}
           </>

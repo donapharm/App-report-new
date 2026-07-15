@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-07-14T20:23:00+07:00",
+  "source": "CEO Telegram upload",
+  "assets": [
+    {
+      "file": "web/public/report-assets/email-branding-20260714/dnpharma-logo-tagline.jpg",
+      "name": "dnpharma-logo-tagline.jpg",
+      "width": 638,
+      "height": 360,
+      "mode": "RGB",
+      "bytes": 20846,
+      "sha256": "33d3d2583bbb971fb6ee3a4786cbd302f5696a2eb7d01e77d932080824a1008a",
+      "purpose": "Email/report branding asset"
+    },
+    {
+      "file": "web/public/report-assets/email-branding-20260714/dnpharma-qr.jpg",
+      "name": "dnpharma-qr.jpg",
+      "width": 795,
+      "height": 800,
+      "mode": "RGB",
+      "bytes": 139233,
+      "sha256": "fe8f89ff0221d9e35e4f0f00dacbee060e694ad9a089de624270b2b5730648cb",
+      "purpose": "Email/report branding asset"
+    }
+  ],
+  "usage": [
+    "Sale/App Report weekly revenue email",
+    "Sale/App Report monthly revenue email",
+    "App Report New report branding where appropriate"
+  ],
+  "notes": [
+    "Use these DNPHARMA logo/QR assets for the revenue email template policy unless CEO replaces them with higher-resolution originals."
+  ]
+}

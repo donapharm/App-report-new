@@ -1,0 +1,8 @@
+25e0a5b85bfb0543ac9146e9921b62313bf483e5aa3a98725d2fb7425348c411  web/public/report-assets/v5c/cover-pharma-intelligence.png
+193f20acb9c36232ed95b00d692694512006b2340c5b95dd86ef060f41ed26ee  web/public/report-assets/v5c/data-points-xu.png
+03da44979b3290fa150995565649bc9b9aff7e60fefd209724d942f6b9e07925  web/public/report-assets/v5c/executive-action.png
+fc2f8330975152fcbdbdb05fd12efb091078139e34adf092bb1b4821fd9fe5bc  web/public/report-assets/v5c/hospital-customer-network.png
+817a76cb955785600260bd25a46d53bbac12280e5deaead2ce8a78acae535140  web/public/report-assets/v5c/pharma-sales-team.png
+6bf8b142e3e015d8f8619ebe1493143a6606b20097c797d7ab98838b7221aaec  web/public/report-assets/v5c/product-portfolio.png
+ee5cb4957516084a774777eec8ed6506a8fe0dc8cc7d628198f6f76b1ac65a4e  web/public/report-assets/v5c/qlnb-sequence.png
+c76a9247f4587d9903ba8cb23565ba239bbc735389db407cbb4c69126442e054  web/public/report-assets/v5c/regional-healthcare-network.png

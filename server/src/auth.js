@@ -19,6 +19,38 @@ const TG_CODE_TTL_MS = 120 * 1000;            // mã Telegram 120s
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 const now = () => Date.now();
 
+// Service token riêng cho machine-to-machine (DataHub → App Report).
+// Ưu tiên lưu hash trong env để App Report không cần giữ plaintext; token thật chỉ nằm ở bên gọi (DataHub secret/env).
+// Chỉ dùng cho route allowlist riêng, KHÔNG thay thế phiên đăng nhập người dùng toàn app.
+const SERVICE_TOKEN_SHA256 = String(process.env.APP_REPORT_SERVICE_TOKEN_SHA256 || '').trim().toLowerCase();
+const SERVICE_TOKEN_PLAINTEXT = String(process.env.APP_REPORT_SERVICE_TOKEN || '').trim();
+const SERVICE_TOKEN_HASH = SERVICE_TOKEN_SHA256 || (SERVICE_TOKEN_PLAINTEXT ? sha(SERVICE_TOKEN_PLAINTEXT) : '');
+
+function safeEqualHex(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  try { return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex')); }
+  catch { return false; }
+}
+
+function serviceSessionFromRequest(req) {
+  if (!SERVICE_TOKEN_HASH) return null;
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
+    || String(req.headers['x-app-report-service-token'] || '').trim();
+  if (!token) return null;
+  if (!safeEqualHex(sha(token), SERVICE_TOKEN_HASH)) return null;
+  return {
+    emp_code: 'CEO',
+    role: 'ceo',
+    name: 'DataHub Service',
+    phone: null,
+    deviceId: 'datahub-service',
+    method: 'service-token',
+    issued_at: now(),
+    expires_at: now() + SESSION_IDLE_MS,
+    service: 'datahub',
+  };
+}
+
 /* ===================== SESSION (lưu bền) ===================== */
 // Bản ghi: { th:<hash token>, emp_code, role, name, phone, deviceId, method, issued_at, expires_at }
 let sessions = persist.load('sessions', []);
@@ -179,7 +211,12 @@ function removeDevice(id) {
 }
 
 /* ===================== DEMO / OTP / SSO (giữ luồng cũ) ===================== */
-const demoAllowed = () => process.env.ALLOW_DEMO_LOGIN !== '0';
+// Default DENY: demo chỉ bật khi chủ động đặt đúng ALLOW_DEMO_LOGIN=1.
+// Tránh tình huống mất/không nạp env khiến production tự mở đăng nhập bằng mã NV.
+const demoAllowed = () => process.env.ALLOW_DEMO_LOGIN === '1';
+if (process.env.NODE_ENV === 'production' && demoAllowed()) {
+  throw new Error('[SECURITY] Không được bật ALLOW_DEMO_LOGIN=1 trong production');
+}
 function mockLogin(empCode, opts = {}) {
   if (!demoAllowed()) return null;
   const user = store.findUserByCode(empCode);
@@ -189,7 +226,7 @@ function mockLogin(empCode, opts = {}) {
 
 const OTP_URL = process.env.OTP_BACKEND_URL || '';
 const SSO_URL = process.env.SSO_VERIFY_URL || '';
-const liveAuthEnabled = () => !!OTP_URL;
+const liveAuthEnabled = () => !!(OTP_URL || SSO_URL);
 function normPhone(v) {
   let s = String(v || '').replace(/[^\d]/g, '');
   if (s.startsWith('84')) s = '0' + s.slice(2);
@@ -249,13 +286,19 @@ function selectAccount(phone, empCode, opts = {}) {
 
 async function verifySso(ssoToken, opts = {}) {
   if (!SSO_URL) throw new Error('Chưa cấu hình SSO_VERIFY_URL');
-  const r = await fetch(SSO_URL, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ token: ssoToken }),
-  });
+  if (!ssoToken) return null;
+  // Home Portal xác thực SSO bằng GET + query token. App Report chỉ đổi token
+  // Home thành session riêng của Report; không lưu token Home trong frontend.
+  const verifyUrl = new URL(SSO_URL);
+  verifyUrl.searchParams.set('sso_token', ssoToken);
+  const headers = {};
+  if (opts.deviceId) headers['x-device-id'] = opts.deviceId;
+  const r = await fetch(verifyUrl, { method: 'GET', headers });
   if (!r.ok) return null;
   const data = await r.json();
-  const user = store.findUserByCode((data.emp_code || '').toUpperCase());
+  if (!data.ok) return null;
+  const empCode = String(data.emp_code || data.user?.code || '').trim().toUpperCase();
+  const user = store.findUserByCode(empCode);
   return user ? { token: issueToken(user, { ...opts, method: 'sso' }), user } : null;
 }
 
@@ -365,6 +408,14 @@ function requireAuth(req, res, next) {
   req.session = sess;
   next();
 }
+
+// Machine-to-machine auth allowlist cho API target DataHub cần đọc.
+// Không dùng middleware này đại trà cho các route user/admin khác.
+function requireTargetAuth(req, res, next) {
+  const svc = serviceSessionFromRequest(req);
+  if (svc) { req.session = svc; return next(); }
+  return requireAuth(req, res, next);
+}
 const isAdmin = (role) => role === 'ceo' || role === 'admin';
 function scopeOf(session) {
   return { empCode: isAdmin(session.role) ? null : session.emp_code };
@@ -379,7 +430,7 @@ function requireAdmin(req, res, next) {
 }
 
 module.exports = {
-  mockLogin, requireAuth, requireAdmin, isAdmin, scopeOf, sessionForUser, getSession,
+  mockLogin, requireAuth, requireTargetAuth, requireAdmin, isAdmin, scopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, verifySso, demoAllowed,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),

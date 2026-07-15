@@ -1,0 +1,332 @@
+{
+  "providedBy": "CEO Đặng Xuân Trung",
+  "source": "CEO OneDrive folder",
+  "sourceUrl": "https://1drv.ms/f/c/49ddfa4c09312c15/IgAn98VVxoKYT42iARsO-D4KAdwgPfBiiHKG-J3TnT-ZCAs?e=eFmCeM",
+  "originalSourceManifest": "../ceo-provided-onedrive-20260714/SOURCE_MANIFEST.json",
+  "generatedAt": "2026-07-14T06:54:39.740168+00:00",
+  "transformation": "EXIF transpose; RGB conversion; Lanczos resize to max 2560 px; JPEG quality 88 progressive; no generative or compositional edits",
+  "policy": "Derived only from CEO-provided originals; AI-generated assets prohibited",
+  "count": 20,
+  "assets": [
+    {
+      "sourceFile": "HD-0183.JPG",
+      "asset": "HD-0183.JPG",
+      "sourceBytes": 635334,
+      "sourceSha256": "f39463fb95c66020376d239ea84f7d17db456e9884a634fca16c32777e6648dd",
+      "sourceDimensions": [
+        1871,
+        1247
+      ],
+      "assetBytes": 607959,
+      "assetSha256": "1d2440c208f076c12c4e7b28c8d423fd5d5b4f1585619b5d4cafb7dbded1b33a",
+      "assetDimensions": [
+        1871,
+        1247
+      ]
+    },
+    {
+      "sourceFile": "HD-0187.JPG",
+      "asset": "HD-0187.JPG",
+      "sourceBytes": 636154,
+      "sourceSha256": "4f9d3f9fbadbf73dac1acf872f7f8dd0c7edb354d9588592e6a0ad94019e00d8",
+      "sourceDimensions": [
+        1871,
+        1247
+      ],
+      "assetBytes": 607599,
+      "assetSha256": "c010f128092de56c645bdde0326495fd30b73c5a06ef0347be2757f78870bf3f",
+      "assetDimensions": [
+        1871,
+        1247
+      ]
+    },
+    {
+      "sourceFile": "HD-0189.JPG",
+      "asset": "HD-0189.JPG",
+      "sourceBytes": 655989,
+      "sourceSha256": "c0716319cebd659fa0ad1249eb26ba24db401aec9cba94638a2af5d6a30c527f",
+      "sourceDimensions": [
+        1871,
+        1247
+      ],
+      "assetBytes": 626092,
+      "assetSha256": "750118c69e819ebb0293012e02f6a781f16fc37723804c1f268c671f9a94c787",
+      "assetDimensions": [
+        1871,
+        1247
+      ]
+    },
+    {
+      "sourceFile": "HD-0196.JPG",
+      "asset": "HD-0196.JPG",
+      "sourceBytes": 647238,
+      "sourceSha256": "1695f8f9787459800ba50210f4aac852a9a5a02a14ded788a2251f89e0e75e06",
+      "sourceDimensions": [
+        1871,
+        1247
+      ],
+      "assetBytes": 617143,
+      "assetSha256": "832367d001b19300d2ddb910c0fd739e23716f221621efe3f756cfe99c0faa9f",
+      "assetDimensions": [
+        1871,
+        1247
+      ]
+    },
+    {
+      "sourceFile": "HD-0423.JPG",
+      "asset": "HD-0423.JPG",
+      "sourceBytes": 24505115,
+      "sourceSha256": "9abd33d94499b074aebed2d5bfa7a3c294c154b6d348614735c684a0e88a578e",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 1140354,
+      "assetSha256": "20d4e79fb67a5145a5a511a6ff0c0e0903761f833600999ed24ea79be62c2b54",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HD-0461.JPG",
+      "asset": "HD-0461.JPG",
+      "sourceBytes": 25178083,
+      "sourceSha256": "20ab32f263ae10092a062fe8f7d231a15d97aad70dde70091f4dc2a3013e8389",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 1109393,
+      "assetSha256": "4870484f8d780410465b33d0b22912105edfd13f9ee73ac91d6d521dae90c19a",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HD-0469.JPG",
+      "asset": "HD-0469.JPG",
+      "sourceBytes": 27303743,
+      "sourceSha256": "11532840f23b455d405f533239cc7225794be8eb70989c099bf5344501dc4bd0",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 1139132,
+      "assetSha256": "a45a3462085d2fb5884dc8f91a9c07b22e2ac44c19cda27384b7ee31700c1b06",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HD-0901.JPG",
+      "asset": "HD-0901.JPG",
+      "sourceBytes": 25768630,
+      "sourceSha256": "4a66ce2aea3878fa8c8248c5545f5dc4dd42368c08d9fd3360bec0a2e4bce620",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 777865,
+      "assetSha256": "7df910506ff8c8a7ebe0be2af2e136dbb08a8afda9784dcd97cc395dd2f2d124",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HD-0911.JPG",
+      "asset": "HD-0911.JPG",
+      "sourceBytes": 28867492,
+      "sourceSha256": "0b0b16e75e72e14bdd44ef255cfe346f21df80f16b6be3e65d08ffbcc49f4928",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 840965,
+      "assetSha256": "fc27ab93261baa00f96bd2fc9ac5cef127eaab7f6e8590410b1f62c2d6b25cb9",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HD-0973.JPG",
+      "asset": "HD-0973.JPG",
+      "sourceBytes": 21976245,
+      "sourceSha256": "ef70f59fd3de7106e285e15621ee33b51ce5578be003fba5dd4675e0250f4730",
+      "sourceDimensions": [
+        4480,
+        6720
+      ],
+      "assetBytes": 629635,
+      "assetSha256": "59fd64ef459c784ef06f3eca0384ac2a23800219968784018b6da1799eb7365e",
+      "assetDimensions": [
+        1707,
+        2560
+      ]
+    },
+    {
+      "sourceFile": "HDPT0216.jpg",
+      "asset": "HDPT0216.jpg",
+      "sourceBytes": 22446347,
+      "sourceSha256": "5cfa5804661aae246c471d07ac6354f8f21eaff7b144eb48ed726a2e343cca06",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 745757,
+      "assetSha256": "c493de90adb383bb377884e9eeab5cf60797869e1a3bf37f5ba918f0413cf7d8",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HDPT0320.jpg",
+      "asset": "HDPT0320.jpg",
+      "sourceBytes": 20811640,
+      "sourceSha256": "08df83f0314296fd914c2479054c33891a8f8406e4670b2ad4b0aa733706d6ab",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 888496,
+      "assetSha256": "7a5aec3219eb91b8b2873e28d4a641213a4423d265f39c7d248ae6f7372aabe2",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HDPT0330.jpg",
+      "asset": "HDPT0330.jpg",
+      "sourceBytes": 21167901,
+      "sourceSha256": "9bbabacea328fa0291621e4a33a98f82f68170ddd34f1cabecea858163daa2a0",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 916471,
+      "assetSha256": "869d5e1fa565a8c37a31b3dcc881ba7ce2d5f446c7af1bb541744f96eb413b73",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HDPT0379.jpg",
+      "asset": "HDPT0379.jpg",
+      "sourceBytes": 20742602,
+      "sourceSha256": "3debaaad2adc322ad3309e6d031cd0303542a95b3e8dfdd177377141c932cee3",
+      "sourceDimensions": [
+        6720,
+        4480
+      ],
+      "assetBytes": 885006,
+      "assetSha256": "c21dc122df8d5b90b7b23fb901f7f4a1f1be2a4248b0663a9bfab8ff4fae8536",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "HDPT0516.jpg",
+      "asset": "HDPT0516.jpg",
+      "sourceBytes": 18105438,
+      "sourceSha256": "0cca5023141eb5db872c5cc999288a451f9b5f5c78188427bf5a773586ee506b",
+      "sourceDimensions": [
+        6507,
+        4114
+      ],
+      "assetBytes": 846600,
+      "assetSha256": "ef9d16c5b4131cfb70eee8ff1c5eeb61641af1bd0d893023986c98c5ef369522",
+      "assetDimensions": [
+        2560,
+        1619
+      ]
+    },
+    {
+      "sourceFile": "MC-0235.JPG",
+      "asset": "MC-0235.JPG",
+      "sourceBytes": 7494724,
+      "sourceSha256": "d87773c41f55c4df6c41366c3c31f3ba2aa1a990844c397fb514ee15903e10f4",
+      "sourceDimensions": [
+        2731,
+        4096
+      ],
+      "assetBytes": 609703,
+      "assetSha256": "3c2868fce2a48b31306644abe7ba39d8084b29c22d9d56ebf0a33622d625a198",
+      "assetDimensions": [
+        1707,
+        2560
+      ]
+    },
+    {
+      "sourceFile": "MC-0371.JPG",
+      "asset": "MC-0371.JPG",
+      "sourceBytes": 8971834,
+      "sourceSha256": "35d1be0b10536d8b7eab33236145dd816cf05debe500a4b2c4ee4073def73289",
+      "sourceDimensions": [
+        4096,
+        2731
+      ],
+      "assetBytes": 964597,
+      "assetSha256": "3d68c6ad7197c394ac2e266a40d55c0f51bfe973b050ab74eca02d37ad899bf6",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "MC-0454.JPG",
+      "asset": "MC-0454.JPG",
+      "sourceBytes": 8010554,
+      "sourceSha256": "f8959cc052fc01335e621c8a0f625c63ef4b911b353a47026d5aca5926a38621",
+      "sourceDimensions": [
+        4096,
+        2731
+      ],
+      "assetBytes": 862488,
+      "assetSha256": "bbfbf0c25e8a274075aaa58df75f17a861d55c533f017347dbeb0b42f4ccde8d",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "MC-0471.JPG",
+      "asset": "MC-0471.JPG",
+      "sourceBytes": 9140271,
+      "sourceSha256": "9d110f60c4a24cee762e561ba6de20af12b05e1b0a222fea0ce649c6fa8975a9",
+      "sourceDimensions": [
+        4096,
+        2731
+      ],
+      "assetBytes": 1019951,
+      "assetSha256": "94f55190367031998b5b7f911dbc172a56616302a209373fff79a8d4359e1399",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    },
+    {
+      "sourceFile": "MC-0606.JPG",
+      "asset": "MC-0606.JPG",
+      "sourceBytes": 9667747,
+      "sourceSha256": "cae306310d282e2d14285072d1935823a60b733fc06c1ba0bf87db7464ec2392",
+      "sourceDimensions": [
+        4096,
+        2731
+      ],
+      "assetBytes": 1127621,
+      "assetSha256": "fd579bcae5f10d2cfd1826e64ac9560e5966718319e40de443da2e42e8baceb8",
+      "assetDimensions": [
+        2560,
+        1707
+      ]
+    }
+  ]
+}

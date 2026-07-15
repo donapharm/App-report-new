@@ -1,17 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { money, pct, unitText } from '../util.js';
-import { Spinner, Kpi, MoneyBig, ZaloCard } from '../components.jsx';
+import { formatDateTime, money, pct } from '../util.js';
+import { Spinner, Kpi, MoneyBig, ZaloCard, UnitLabel } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { DonutChart, RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
+function CstOwnerLine({ item }) {
+  const codes = [...new Set((item.employees || []).map((emp) => String(emp?.code || emp || '').trim().toUpperCase()).filter(Boolean))];
+  return (
+    <span className="alert-owner-line">👤 NV phụ trách: <b>{codes.length ? codes.join(', ') : 'Chưa có thông tin phụ trách'}</b></span>
+  );
+}
+
 function AlertLine({ group, item }) {
+  if (group.key === 'cst_queued') {
+    return <div className="alert-line"><b>{item.product_name || '—'}</b><span>{item.unit_name || item.unit_code || '—'} · hiện hành {item.cst_sequence?.current?.code || 'cần xác nhận'} còn {pct(item.cst_sequence?.current?.remainPct)} · kế tiếp {item.iit_code}</span><CstOwnerLine item={item} /></div>;
+  }
   if (group.key === 'cst_untouched') {
     return (
       <div className="alert-line">
         <b>{item.label || item.product_name || '—'}</b>
         <span>{item.unit_name || item.unit_code || '—'} · còn {Number(item.remain_qty || 0).toLocaleString('vi-VN')} {item.uom || ''}</span>
+        <CstOwnerLine item={item} />
       </div>
     );
   }
@@ -33,17 +44,22 @@ function AlertLine({ group, item }) {
     );
   }
   if (group.key === 'target') {
+    const targetPct = Number(item.pct || 0);
+    const severity = targetPct < 50 ? 'critical' : 'warning';
     return (
-      <div className="alert-line">
-        <b>{item.name}</b>
-        <span>{pct(item.pct)} target · {money(item.revenue_before_vat)} / {money(item.target)}</span>
+      <div className={`alert-line slow-target-line ${severity}`}>
+        <div className="slow-target-person">
+          <b>{item.name}</b>
+          <span className={`slow-target-status ${severity}`}>{severity === 'critical' ? '🚨 Rất chậm' : '⚠ Chậm tiến độ'}</span>
+        </div>
+        <span><strong className={`slow-target-pct ${severity}`}>{pct(item.pct)}</strong> target · {money(item.revenue_before_vat)} / {money(item.target)}</span>
       </div>
     );
   }
   if (group.key === 'unit_up') {
     return (
       <div className="alert-line">
-        <b>{unitText(item.unit_code, item.unit_name)}</b>
+        <UnitLabel code={item.unit_code} name={item.unit_name} />
         <span><span className="chg-chip up">▲ Tăng {pct(Math.abs(item.mom), 0)}</span>{money(item.prev)} → {money(item.cur)}</span>
       </div>
     );
@@ -51,7 +67,7 @@ function AlertLine({ group, item }) {
   if (group.key === 'unit_down') {
     return (
       <div className="alert-line">
-        <b>{unitText(item.unit_code, item.unit_name)}</b>
+        <UnitLabel code={item.unit_code} name={item.unit_name} />
         <span><span className="chg-chip down">▼ Giảm {pct(Math.abs(item.mom), 0)}</span>{money(item.prev)} → {money(item.cur)}</span>
       </div>
     );
@@ -59,7 +75,8 @@ function AlertLine({ group, item }) {
   return (
     <div className="alert-line">
       <b>{item.product_name || '—'}</b>
-      <span>{unitText(item.unit_code, item.unit_name)} · còn {pct(item.remain_pct)} ({Number(item.remain_qty || 0).toLocaleString('vi-VN')} / {Number(item.bid_qty_initial || 0).toLocaleString('vi-VN')})</span>
+      <span><UnitLabel code={item.unit_code} name={item.unit_name} /> · còn {pct(item.remain_pct)} ({Number(item.remain_qty || 0).toLocaleString('vi-VN')} / {Number(item.bid_qty_initial || 0).toLocaleString('vi-VN')})</span>
+      {(group.key === 'cst_high' || group.key === 'cst_low') && <CstOwnerLine item={item} />}
     </div>
   );
 }
@@ -147,6 +164,7 @@ export default function Overview({ me, onNavigate }) {
     else if (group.key === 'unit_up' || group.key === 'unit_down') onNavigate('revenue', { fromAlert: group.key, dimension: 'unit' });
     else if (group.key === 'cst_low') onNavigate('cst', { fromAlert: group.key, cstFilter: 'low' });
     else if (group.key === 'cst_high') onNavigate('cst', { fromAlert: group.key, cstFilter: 'high' });
+    else if (group.key === 'cst_queued') onNavigate('analysis', { fromAlert: group.key });
     else if (group.key === 'target_near') onNavigate('target', { fromAlert: group.key });
     else if (group.key === 'cst_untouched' || group.key === 'product_growth') onNavigate('analysis', { fromAlert: group.key });
   }
@@ -155,6 +173,7 @@ export default function Overview({ me, onNavigate }) {
   const groups = alerts?.groups || [];
   const cstHighGroup = groups.find((g) => g.key === 'cst_high') || { key: 'cst_high', icon: '🟡', tone: 'neutral', title: 'Cơ số thầu tồn nhiều (>85%)', total: 0, items: [] };
   const cstLowGroup = groups.find((g) => g.key === 'cst_low') || { key: 'cst_low', icon: '📦', tone: 'danger', title: 'Cơ số thầu sắp cạn (<10%)', total: 0, items: [] };
+  const cstQueuedGroup = groups.find((g) => g.key === 'cst_queued') || { key: 'cst_queued', icon: '⏳', tone: 'neutral', title: 'QLNB kế tiếp đang chờ mã hiện hành', total: 0, items: [] };
   const targetSlowGroup = groups.find((g) => g.key === 'target') || { key: 'target', icon: '🎯', tone: 'danger', title: 'Nhân viên chậm tiến độ target', total: 0, items: [] };
   const unitDownGroup = groups.find((g) => g.key === 'unit_down') || { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm doanh thu mạnh', total: 0, items: [] };
   const unitUpGroup = groups.find((g) => g.key === 'unit_up') || { key: 'unit_up', icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh', total: 0, items: [] };
@@ -180,12 +199,13 @@ export default function Overview({ me, onNavigate }) {
     ? `Tiến độ thời gian ${pct(Number(targetPacing.factor || 0) * 100)} · dưới 80% mức cần đạt đến hôm nay`
     : `${periodSel ? periodLabel(periodSel) : 'Kỳ đang chọn'} · dưới 80% target toàn phạm vi`;
   const decisionGroups = [
-    { ...cstHighGroup, note: 'CST hiện tại · ưu tiên đẩy bán', empty: 'Không có CST tồn trên 85%.' },
+    { ...cstHighGroup, note: 'CST hiện tại · đã loại mã đang chờ và mã cần xác nhận', empty: 'Không có CST tồn trên 85% cần hành động.' },
+    { ...cstQueuedGroup, empty: 'Không có QLNB kế tiếp đang chờ.' },
     { key: 'cst_untouched', icon: '🌱', tone: 'warning', title: 'Có CST nhưng chưa phát sinh bán', total: Number(analysisInsights?.cstUntouchedTotal || cstUntouched.length), items: cstUntouched, note: 'CST hiện tại · cơ hội chưa khai thác', empty: 'Không có CST còn nguyên cần khai thác.' },
     { key: 'target_near', icon: '🚀', tone: 'ok', title: 'Nhân viên gần đạt target (80–99%)', total: nearTarget.length, items: nearTarget, note: periodSel ? periodLabel(periodSel) : '', empty: 'Chưa có nhân viên trong vùng 80–99%.' },
+    { ...targetSlowGroup, title: 'Nhân viên chậm tiến độ target', total: targetSlowTotal, items: targetSlowItems, note: targetSlowNote, empty: 'Không có nhân viên chậm tiến độ target.' },
     { key: 'product_growth', icon: '✨', tone: 'ok', title: 'Sản phẩm tăng trưởng nổi bật', total: growthProducts.length, items: growthProducts, note: analysisInsights?.growthNote || 'So với kỳ đối chiếu gần nhất', empty: 'Chưa đủ dữ liệu để xác định sản phẩm tăng trưởng.' },
     { ...cstLowGroup, note: 'CST hiện tại · cần theo dõi bổ sung', empty: 'Không có CST sắp cạn dưới 10%.' },
-    { ...targetSlowGroup, title: 'Nhân viên chậm tiến độ target', total: targetSlowTotal, items: targetSlowItems, note: targetSlowNote, empty: 'Không có nhân viên chậm tiến độ target.' },
     { ...unitDownGroup, title: 'Đơn vị giảm doanh thu mạnh', empty: 'Không có đơn vị giảm từ 15% trở lên.' },
     { ...unitUpGroup, title: 'Đơn vị tăng trưởng mạnh', empty: 'Không có đơn vị tăng từ 15% trở lên.' },
   ];
@@ -199,7 +219,7 @@ export default function Overview({ me, onNavigate }) {
   const selectedKy = periodSel?.mode === 'range' ? periodSel.to : periodSel?.ky;
   const selectedPeriod = periods.find((p) => p.ky === selectedKy) || null;
   const dataAsOf = selectedPeriod?.data_as_of;
-  const dataAsOfText = dataAsOf ? new Date(dataAsOf).toLocaleString('vi-VN', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : null;
+  const dataAsOfText = dataAsOf ? formatDateTime(dataAsOf) : null;
 
   async function refreshNow() {
     if (!selectedKy) return;
@@ -325,10 +345,12 @@ export default function Overview({ me, onNavigate }) {
           <div className="section-title overview-opportunity-title">🧭 8 báo cáo điều hành · theo từng ngữ cảnh</div>
           {!richInsights ? <Spinner /> : <div className="alerts-grid grouped-alerts overview-decision-grid overview-opportunity-grid">
             {decisionGroups.map((g) => (
-              <div key={g.key} className={'card alert-group ' + (g.tone || '')}>
+              <div key={g.key} className={'card alert-group ' + (g.tone || '') + (g.key === 'target' ? ' slow-target-alert' : '')}>
                 <div className="alert-group-head">
                   <div>
-                    <span className="alert-ic">{g.icon}</span>
+                    {g.key === 'target' ? (
+                      <span className="slow-target-icon" aria-label="Cảnh báo target chậm"><span aria-hidden="true">🎯</span><i aria-hidden="true">⚠</i></span>
+                    ) : <span className="alert-ic">{g.icon}</span>}
                     <b>{g.title}</b>
                   </div>
                   <span className="pill muted-pill">{g.total}</span>

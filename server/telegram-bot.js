@@ -15,7 +15,8 @@
  * ENV tùy chọn:
  *   APP_BASE_URL         mặc định http://localhost:${PORT||3860}
  *   PORT                 cổng backend app (nếu không đặt APP_BASE_URL)
- *   DIGEST_CRON          lịch bản tin theo giờ VN (GMT+7), mặc định "0 0 * * *" (nửa đêm)
+ *   DIGEST_TIMES         lịch bản tin theo giờ VN (GMT+7), mặc định "07:30,18:00"
+ *   DIGEST_CRON          tương thích cũ: 1 mốc dạng "30 7 * * *" nếu DIGEST_TIMES chưa đặt
  *   APP_PUBLIC_URL       link mở app trong bản tin, mặc định https://reportnew.donapharm.asia
  */
 // Múi giờ GMT+7 (Việt Nam) cho mọi mốc thời gian/lịch của bot. Cho phép env override.
@@ -75,7 +76,9 @@ const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const SECRET = process.env.TELEGRAM_BOT_SECRET || '';
 const BASE = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3860}`;
 const PUBLIC_URL = process.env.APP_PUBLIC_URL || process.env.PUBLIC_BASE_URL || 'https://reportnew.donapharm.asia';
-const DIGEST_CRON = process.env.DIGEST_CRON || '0 0 * * *'; // mặc định NỬA ĐÊM giờ VN (CEO chốt)
+// CEO chốt: bản tin/báo cáo bán hàng chỉ gửi 07:30 và 18:00 GMT+7.
+const DIGEST_CRON = process.env.DIGEST_CRON || '';
+const DIGEST_TIMES = process.env.DIGEST_TIMES || '';
 const API = `https://api.telegram.org/bot${TOKEN}`;
 const CODE_RE = /\bRP-[A-Z0-9]{6}\b/i;
 
@@ -168,21 +171,51 @@ async function sendDigestToMap(m, { force = false, kind = 'morning' } = {}) {
   if (!force) markSent(tid, user.emp_code, sendKind);
   return { ok: true, emp_code: user.emp_code };
 }
-async function runMorningDigest() {
+async function runMorningDigest({ kind = 'digest' } = {}) {
   const maps = auth.listTelegramMap();
   let sent = 0, skipped = 0, failed = 0;
   for (const m of maps) {
     try {
-      const r = await sendDigestToMap(m);
+      const r = await sendDigestToMap(m, { kind });
       if (r.ok) sent += 1; else skipped += 1;
     } catch (e) { failed += 1; console.error('digest send error:', m.emp_code, e.message); }
   }
-  console.log(`✔ Digest morning done: sent=${sent}, skipped=${skipped}, failed=${failed}`);
+  console.log(`✔ Digest done (${kind}): sent=${sent}, skipped=${skipped}, failed=${failed}`);
 }
 function parseDailyCron(expr) {
   const m = String(expr || '').trim().match(/^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/);
-  if (!m) return { minute: 30, hour: 7 };
+  if (!m) return null;
   return { minute: Math.min(59, Math.max(0, Number(m[1]))), hour: Math.min(23, Math.max(0, Number(m[2]))) };
+}
+function parseTimeList(value, fallback = '07:30,18:00') {
+  const source = String(value || fallback || '').split(',');
+  const slots = [];
+  for (const raw of source) {
+    const m = String(raw || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) continue;
+    const hour = Number(m[1]); const minute = Number(m[2]);
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) continue;
+    const key = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    if (!slots.some((s) => s.key === key)) slots.push({ hour, minute, key });
+  }
+  return slots.length ? slots : parseTimeList(fallback, '07:30,18:00');
+}
+function digestScheduleSlots() {
+  if (DIGEST_TIMES) return parseTimeList(DIGEST_TIMES, '07:30,18:00');
+  const legacy = parseDailyCron(DIGEST_CRON);
+  return legacy ? [{ ...legacy, key: `${String(legacy.hour).padStart(2, '0')}:${String(legacy.minute).padStart(2, '0')}` }] : parseTimeList('07:30,18:00');
+}
+// CEO chốt: digest/target chỉ gửi 18:00 hằng ngày + 13:00 thứ 7 (GMT+7).
+function approvedDigestTargetSlots() {
+  return [
+    { type: 'daily', hour: 18, minute: 0, key: 'daily-18:00', label: '18:00 hằng ngày' },
+    { type: 'weekly', dow: 6, hour: 13, minute: 0, key: 'sat-13:00', label: '13:00 thứ 7' },
+  ];
+}
+function slotDue(slot, d) {
+  if (d.getUTCHours() !== slot.hour || d.getUTCMinutes() !== slot.minute) return false;
+  if (slot.type === 'weekly') return d.getUTCDay() === slot.dow;
+  return true;
 }
 // Telegram gửi text thô -> bỏ ký hiệu markdown (**đậm**, *nghiêng*, # tiêu đề, `code`)
 // để không hiện ra dấu sao/thăng thô như "**Tên NV**".
@@ -293,13 +326,14 @@ async function runTargetMilestones() {
 }
 function startMilestoneScheduler() {
   if (process.env.TARGET_NOTIFY !== '1') { console.log('ℹ Target milestone notify: TẮT (đặt TARGET_NOTIFY=1 để bật).'); return; }
-  const hoursVN = String(process.env.TARGET_NOTIFY_HOURS || '8,20').split(',').map((h) => Number(String(h).trim())).filter((h) => h >= 0 && h <= 23);
+  const slots = approvedDigestTargetSlots();
   let lastKey = '';
-  console.log(`✔ Target milestone scheduler: giờ VN ${hoursVN.join(', ')}`);
+  console.log(`✔ Target milestone scheduler: ${slots.map((s) => s.label).join('; ')} GMT+7`);
   setInterval(() => {
     const d = vnDate(); // getUTCHours() của vnDate = giờ VN
-    if (hoursVN.includes(d.getUTCHours()) && d.getUTCMinutes() === 0) {
-      const key = `${d.toISOString().slice(0, 13)}`;
+    const slot = slots.find((s) => slotDue(s, d));
+    if (slot) {
+      const key = `${d.toISOString().slice(0, 10)} ${slot.key}`;
       if (lastKey !== key) { lastKey = key; runTargetMilestones().catch((e) => console.error('milestone scheduler error:', e.message)); }
     }
   }, 30 * 1000);
@@ -307,14 +341,25 @@ function startMilestoneScheduler() {
 
 function startSalesReportScheduler() {
   if (process.env.SALES_REPORT_NOTIFY === '0') { console.log('ℹ SalesReport scheduler: TẮT (SALES_REPORT_NOTIFY=0).'); return; }
+  const dailyEnabled = process.env.SALES_REPORT_DAILY_NOTIFY !== '0';
   let lastWeeklyKey = '';
   let lastMonthlyKey = '';
-  console.log('✔ SalesReport scheduler armed: tuần Thứ 7 13:00 giờ VN; tháng 18:30 giờ VN nếu là ngày cuối tháng. TZ=' + process.env.TZ);
+  let lastDailyKey = '';
+  console.log(`✔ SalesReport scheduler armed: ngày ${dailyEnabled ? '18:00' : 'TẮT'}; tuần Thứ 7 13:00; tháng 18:00 ngày cuối tháng. TZ=${process.env.TZ}`);
   setInterval(() => {
     const d = vnDate(); // giống digest scheduler: getUTC* của vnDate chính là giờ/phút/ngày VN; KHÔNG trừ thêm 7.
     const day = d.toISOString().slice(0, 10);
     const hh = d.getUTCHours();
     const mm = d.getUTCMinutes();
+    if (dailyEnabled && hh === 18 && mm === 0) {
+      const ranges = salesReport.defaultRanges(day);
+      const key = salesReport.salesReportPeriodKey('day', ranges);
+      if (lastDailyKey !== key) {
+        lastDailyKey = key;
+        if (salesReport.alreadySent('day', ranges)) console.log(`ℹ SalesReport day skip duplicate: ${key}`);
+        else salesReport.sendAll({ kind: 'day', ranges }).then((r) => console.log(`✔ SalesReport day done: sent=${r.sent?.length || 0}, failed=${r.failed?.length || 0}, ceo=${r.ceoResult?.ok ? 'ok' : 'fail'}, key=${key}`)).catch((e) => console.error('salesReport day scheduler error:', e.message));
+      }
+    }
     if (d.getUTCDay() === 6 && hh === 13 && mm === 0) {
       const ranges = salesReport.defaultRanges(day);
       const key = salesReport.salesReportPeriodKey('week', ranges);
@@ -324,7 +369,7 @@ function startSalesReportScheduler() {
         else salesReport.sendAll({ kind: 'week', ranges }).then((r) => console.log(`✔ SalesReport week done: sent=${r.sent?.length || 0}, failed=${r.failed?.length || 0}, ceo=${r.ceoResult?.ok ? 'ok' : 'fail'}, key=${key}`)).catch((e) => console.error('salesReport week scheduler error:', e.message));
       }
     }
-    if (hh === 18 && mm === 30) {
+    if (hh === 18 && mm === 0) {
       const ranges = salesReport.defaultRanges(day);
       if (!salesReport.isMonthEnd(ranges.asOf)) return;
       const key = salesReport.salesReportPeriodKey('month', ranges);
@@ -338,17 +383,20 @@ function startSalesReportScheduler() {
 }
 
 function startDigestScheduler() {
-  const cron = parseDailyCron(DIGEST_CRON);
-  // DIGEST_CRON theo giờ VN. vnDate().getUTCHours()/getUTCMinutes() CHÍNH LÀ giờ:phút VN,
+  if (process.env.DIGEST_NOTIFY === '0') { console.log('ℹ Telegram digest scheduler: TẮT (DIGEST_NOTIFY=0).'); return; }
+  const slots = approvedDigestTargetSlots();
+  // DIGEST_TIMES/DIGEST_CRON theo giờ VN. vnDate().getUTCHours()/getUTCMinutes() CHÍNH LÀ giờ:phút VN,
   // nên so THẲNG với cron.hour/minute (bản cũ trừ thêm 7 -> bắn sớm 7 tiếng = lỗi 1h30).
   let lastRunKey = '';
-  console.log(`✔ Telegram digest scheduler: ${String(cron.hour).padStart(2, '0')}:${String(cron.minute).padStart(2, '0')} giờ VN (GMT+7)`);
+  console.log(`✔ Telegram digest scheduler: ${slots.map((s) => s.label).join('; ')} GMT+7`);
   setInterval(() => {
     const d = vnDate();
-    const key = `${d.toISOString().slice(0, 10)} ${cron.hour}:${cron.minute}`;
-    if (d.getUTCHours() === cron.hour && d.getUTCMinutes() === cron.minute && lastRunKey !== key) {
+    const slot = slots.find((s) => slotDue(s, d));
+    if (!slot) return;
+    const key = `${d.toISOString().slice(0, 10)} ${slot.key}`;
+    if (lastRunKey !== key) {
       lastRunKey = key;
-      runMorningDigest().catch((e) => console.error('digest scheduler error:', e.message));
+      runMorningDigest({ kind: `digest:${slot.key}` }).catch((e) => console.error('digest scheduler error:', e.message));
     }
   }, 30 * 1000);
 }

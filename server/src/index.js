@@ -25,10 +25,24 @@ const cors = require('cors');
 const routes = require('./routes');
 const revenueRefresh = require('./revenueRefresh');
 
-const PORT = process.env.PORT || 3860;
+const PORT = process.env.PORT || 3873;
+const HOST = process.env.HOST || '127.0.0.1';
 const app = express();
 
-app.use(cors()); // demo mở CORS; production siết theo domain nội bộ
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+const allowedOrigins = new Set(
+  String(process.env.CORS_ORIGINS || 'https://report.donapharm.asia,https://reportnew.donapharm.asia,https://home.donapharm.asia')
+    .split(',').map((x) => x.trim()).filter(Boolean),
+);
+app.use(cors({
+  credentials: true,
+  origin(origin, cb) {
+    // Không có Origin = same-origin/server-to-server/curl. Origin lạ vẫn nhận
+    // response nhưng không có CORS header nên trình duyệt không đọc được.
+    cb(null, !origin || allowedOrigins.has(origin));
+  },
+}));
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'app-report-new', ts: Date.now() }));
@@ -48,12 +62,14 @@ app.use(express.static(webDist, {
   },
 }));
 app.get(/^(?!\/api).*/, (req, res, next) => {
+  // Không trả SPA shell cho asset/file bị thiếu; tránh HTTP 200 sai MIME và cache.
+  if (path.extname(req.path)) return res.status(404).type('text/plain').send('Not Found');
   res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(webDist, 'index.html'), (err) => (err ? next() : null));
 });
 
-app.listen(PORT, () => {
-  console.log(`✔ App Report New API chạy tại http://localhost:${PORT}`);
-  console.log(`  Health: http://localhost:${PORT}/api/health`);
+app.listen(PORT, HOST, () => {
+  console.log(`✔ App Report New API chạy tại http://${HOST}:${PORT}`);
+  console.log(`  Health: http://${HOST}:${PORT}/api/health`);
   revenueRefresh.start();
 });

@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-07-14T07:51:11.020552+00:00",
+  "count": 6,
+  "purpose": "V5D photo-light: 3 AI decorative images per deck",
+  "assets": [
+    {
+      "asset": "month-ai-governance-roadmap.jpg",
+      "source": "originals/month-ai-governance-roadmap.png",
+      "sourceSha256": "7402fe5844bf5ec4a1886da2c47b2b00b817c81055c7f5c32ef21cc55b7c6983",
+      "assetSha256": "96b9cc9f07c9fa1a95ba0042d8a5b4310c33d3696c296a65c111bd79c1a7855f",
+      "width": 1672,
+      "height": 941,
+      "bytes": 312287,
+      "type": "AI_DECORATIVE",
+      "model": "openai/gpt-image-2",
+      "policy": "Decorative context only; not factual evidence; no AI text/logo."
+    },
+    {
+      "asset": "month-ai-group-synergy.jpg",
+      "source": "originals/month-ai-group-synergy.png",
+      "sourceSha256": "08f66e0e81cd1bdd31087144b4129479de340a9fca06e96af07b6caa26d90ca7",
+      "assetSha256": "b7c85ace053fc99a3591c5f195ccbedcf03a9ff466d5b70bc97487b764fdba6e",
+      "width": 1672,
+      "height": 941,
+      "bytes": 234499,
+      "type": "AI_DECORATIVE",
+      "model": "openai/gpt-image-2",
+      "policy": "Decorative context only; not factual evidence; no AI text/logo."
+    },
+    {
+      "asset": "month-ai-portfolio-priority.jpg",
+      "source": "originals/month-ai-portfolio-priority.png",
+      "sourceSha256": "9ecb447444a82811f7780a54f68b90904c678a72bd23a6290c72799cfd760a6e",
+      "assetSha256": "a870f799ac40f49853a40efeab015887202ae9999a231a44e194adcf068acf74",
+      "width": 1672,
+      "height": 941,
+      "bytes": 154824,
+      "type": "AI_DECORATIVE",
+      "model": "openai/gpt-image-2",
+      "policy": "Decorative context only; not factual evidence; no AI text/logo."
+    },
+    {
+      "asset": "week-ai-portfolio-pathways.jpg",
+      "source": "originals/week-ai-portfolio-pathways.png",
+      "sourceSha256": "7c59919cc874ac02f7b732bf8a81efa8a5677eaaa05acb9350090b3a467f54c7",
+      "assetSha256": "d28484b87d8ba9bfddd1799e5bb4ae1f3d26ee6a1b0376d16bea2ab0611d72a7",
+      "width": 1672,
+      "height": 941,
+      "bytes": 234325,
+      "type": "AI_DECORATIVE",
+      "model": "openai/gpt-image-2",
+      "policy": "Decorative context only; not factual evidence; no AI text/logo."
+    },
+    {
+      "asset": "week-ai-risk-control.jpg",
+      "source": "originals/week-ai-risk-control.png",
+      "sourceSha256": "5ef82d0602fd99d600e161c7d10d2cdb0f859503223196dfdc0b43596cca9fc5",
+      "assetSha256": "e81591a4d5dddb2131e170bcabba9c8b5d90d5b51f92f8e6f86e1c26b2b315cd",
+      "width": 1672,
+      "height": 941,
+      "bytes": 201568,
+      "type": "AI_DECORATIVE",
+      "model": "openai/gpt-image-2",
+      "policy": "Decorative context only; not factual evidence; no AI text/logo."
+    },
+    {
+      "asset": "week-ai-source-ecosystem.jpg",
+      "source": "originals/week-ai-source-ecosystem.png",
+      "sourceSha256": "342527446a8a84f64fd9230123a7abac870b5cdf680910ad0ff7edf534686d1d",
+      "assetSha256": "b583c970b082e8e64cf8a4454b1131d9c37688a9c3c3f25b42ea6d207e3fad67",
+      "width": 1672,
+      "height": 941,
+      "bytes": 260328,
+      "type": "AI_DECORATIVE",
+      "model": "openai/gpt-image-2",
+      "policy": "Decorative context only; not factual evidence; no AI text/logo."
+    }
+  ]
+}

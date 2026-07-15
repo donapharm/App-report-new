@@ -5,9 +5,12 @@ const express = require('express');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const store = require('./store');
 const auth = require('./auth');
 const A = require('./analytics');
+const cstSequence = require('./cstSequence');
 const smart = require('./smart');
 const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
@@ -17,10 +20,20 @@ const assignmentAdmin = require('./assignmentAdmin');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
+const revenueReportExport = require('./revenueReportExport');
+const ceoDeckReport = require('./report/deckReport');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
+const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
+const REVENUE_SEND_FORMATS = ['xlsx', 'csv', 'pdf', 'pptx'];
+const REVENUE_SEND_MIME = {
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv; charset=utf-8',
+  pdf: 'application/pdf',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
 function clearTargetDependentCache() {
   if (typeof A.clearOverviewCache === 'function') A.clearOverviewCache();
 }
@@ -46,16 +59,37 @@ function periodCtx(q) {
   const periods = store.periodKys();
   const latest = store.latestKy();
   let kys = [];
-  if (q.from && q.to) kys = store.periodRange(String(q.from), String(q.to));
+  const dateFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(q.dateFrom || '')) ? String(q.dateFrom) : '';
+  const dateTo = /^\d{4}-\d{2}-\d{2}$/.test(String(q.dateTo || '')) ? String(q.dateTo) : '';
+  // Khoảng ngày là phạm vi GỐC: tự lấy mọi kỳ có giao nhau. Trước đây API khóa
+  // q.ky trước rồi mới lọc ngày nên 01/01→12/07 vẫn chỉ đọc T07 và trả sai 0.
+  if (dateFrom || dateTo) {
+    kys = store.listPeriods().filter((p) => {
+      const [mm, yyyy] = String(p.ky || '').split('.');
+      const a = String(p.dateFrom || `${yyyy}-${mm}-01`).slice(0, 10);
+      const b = String(p.dateTo || `${yyyy}-${mm}-31`).slice(0, 10);
+      return (!dateFrom || b >= dateFrom) && (!dateTo || a <= dateTo);
+    }).map((p) => p.ky);
+  }
+  else if (q.from && q.to) kys = store.periodRange(String(q.from), String(q.to));
   else if (q.ky) kys = periods.includes(String(q.ky)) ? [String(q.ky)] : [];
-  if (!kys.length) kys = [latest];
-  const ky = kys[kys.length - 1];
-  return { ky, kys, from: kys[0], to: ky };
+  // Chỉ fallback kỳ mới nhất khi KHÔNG có khoảng ngày rõ ràng. Khoảng ngoài dữ
+  // liệu phải trả rỗng thật, không âm thầm nhảy về kỳ mới nhất.
+  if (!kys.length && !dateFrom && !dateTo) kys = [latest];
+  const realKys = kys.filter((k) => periods.includes(k));
+  const ky = realKys.at(-1) || latest;
+  return { ky, kys, from: realKys[0] || null, to: realKys.at(-1) || null, dateFrom: dateFrom || null, dateTo: dateTo || null };
 }
 
 function qdOf(v) {
   const m = String(v || '').match(/QĐ\s*(\d+)|QD\s*(\d+)/i);
   return m ? `QĐ${m[1] || m[2]}` : '';
+}
+// Nhóm tiêu chí kỹ thuật nằm trong cấu trúc mã QLNB dạng ...N1.../N2/N3...
+// Chỉ nhận token N + số nguyên được ngăn bởi dấu chấm/gạch; không suy đoán từ tên thuốc.
+function technicalGroupOf(v) {
+  const m = String(v || '').match(/(?:^|[.\-])(N\d+)(?:[.\-]|$)/i);
+  return m ? m[1].toUpperCase() : '';
 }
 function productMetaFromRows(rows = [], contractorLookup) {
   const map = new Map();
@@ -277,8 +311,20 @@ function enrichContractorNames(rows = [], lookup) {
   });
 }
 function contractorLookupFor(scope, extraRows = []) {
-  const all = store.getRowsRange({ kys: store.periodKys(), scope }).concat(store.getCst({ scope }), extraRows);
-  return buildContractorNameLookup(all);
+  const scopeKey = scope?.empCode || 'ALL';
+  // Lookup nhà thầu là metadata toàn phạm vi, không đổi theo từng lựa chọn lọc.
+  // Cache để mỗi click bộ lọc không phải chuẩn hóa lại hàng nghìn dòng.
+  return memoGet(`contractor-lookup:${scopeKey}`, 60 * 1000, () => {
+    const all = store.getRowsRange({ kys: store.periodKys(), scope }).concat(store.getCst({ scope }), extraRows);
+    return buildContractorNameLookup(all);
+  });
+}
+function productMetaLookupFor(scope, contractorLookup) {
+  const scopeKey = scope?.empCode || 'ALL';
+  return memoGet(`product-meta:${scopeKey}`, 60 * 1000, () => {
+    const source = store.getCst({ scope }).concat(store.getRowsRange({ kys: store.periodKys(), scope }));
+    return productMetaFromRows(enrichContractorNames(source, contractorLookup), contractorLookup);
+  });
 }
 function contractorOptions(rows = [], lookup = buildContractorNameLookup(rows)) {
   const m = new Map();
@@ -532,7 +578,15 @@ function specialCandidates(scope) {
 
 /* ---------- Metadata ---------- */
 router.get('/periods', auth.requireAuth, (req, res) => {
-  const periods = store.listPeriods().map((p) => ({ ...p, ...store.periodFreshness(p.ky) }));
+  const admin = auth.isAdmin(req.session.role);
+  const periods = store.listPeriods().map((p) => {
+    const row = { ...p, ...store.periodFreshness(p.ky) };
+    if (admin) return row;
+    // sourceSummary chứa tổng số dòng/đơn/doanh thu toàn công ty theo nguồn.
+    // NV thường chỉ cần biên kỳ + độ tươi, tuyệt đối không trả tổng nguồn.
+    const { sourceSummary, ...safe } = row;
+    return safe;
+  });
   res.json({ periods, latest: store.latestKy() });
 });
 
@@ -565,41 +619,84 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     const m = new Map();
     for (const r of arr) {
       const k = r[key];
-      if (k != null && k !== '' && !m.has(k)) m.set(k, { key: k, label: r[label] || k });
+      if (k == null || k === '') continue;
+      const cur = m.get(k) || { key: k, label: r[label] || k, count: 0 };
+      cur.count += 1;
+      m.set(k, cur);
     }
     return [...m.values()].sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi'));
   };
-  let rows = store.getRowsRange({ kys: pc.kys, scope });
+  const uniqProvince = (arr) => {
+    const normProvince = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+    const m = new Map();
+    for (const r of arr) {
+      const raw = String(r.province || '').trim();
+      const k = normProvince(raw);
+      if (!k) continue;
+      const cur = m.get(k) || { key: raw, label: raw, count: 0 };
+      cur.count += 1;
+      // Ưu tiên nhãn có hoa/thường tự nhiên thay vì toàn chữ hoa.
+      if (cur.label === cur.label.toUpperCase() && raw !== raw.toUpperCase()) cur.key = cur.label = raw;
+      m.set(k, cur);
+    }
+    return [...m.values()].sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi'));
+  };
+  const allRows = store.getRowsRange({ kys: pc.kys, scope });
   const cst = store.getCst({ scope });
-  const contractorLookup = contractorLookupFor(scope, rows.concat(cst));
-  if (req.query.emp) {
-    const emp = String(req.query.emp).trim().toUpperCase();
-    rows = rows.filter((r) => r.emp_code === emp);
-  }
+  const filters = revenueFiltersFromQuery(req.query);
+  const only = (keys) => Object.fromEntries(keys.filter((k) => filters[k]).map((k) => [k, filters[k]]));
+  const facet = (keys) => A.applyFilters(allRows, only(['dateFrom', 'dateTo', ...keys]));
+
+  // Liên hoàn theo nghiệp vụ: thời gian → NV → tỉnh → đơn vị → hàng hóa → tuyến
+  // → ưu tiên → nhà thầu → gói. Chỉ dùng DÒNG BÁN HÀNG trong phạm vi, không đưa
+  // CST không phát sinh vào lựa chọn khiến người dùng chọn xong lại ra 0.
+  const employeeRows = facet([]);
+  const provinceRows = facet(['emp']);
+  const unitRows = facet(['emp', 'province']);
+  const groupRows = facet(['emp', 'province', 'unit']);
+  const productRows = facet(['emp', 'province', 'unit', 'group']);
+  const routeRows = facet(['emp', 'province', 'unit', 'group', 'product']);
+  const priorityRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route']);
+  const contractorRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route', 'priority']);
+  const bidRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route', 'priority', 'contractor']);
+  const contractorLookup = contractorLookupFor(scope, allRows.concat(cst));
   const empMap = new Map();
-  for (const r of rows) if (r.emp_code) empMap.set(r.emp_code, { key: r.emp_code, label: r.emp_code === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (r.emp_name || r.emp_code) });
-  for (const r of cst) for (const ec of String(r.emp_code || '').split(',').map((x) => x.trim()).filter(Boolean)) {
-    if (!empMap.has(ec)) empMap.set(ec, { key: ec, label: ec === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (store.findUserByCode(ec)?.name || ec) });
+  for (const r of employeeRows) if (r.emp_code) {
+    const cur = empMap.get(r.emp_code) || { key: r.emp_code, label: r.emp_code === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (r.emp_name || r.emp_code), count: 0 };
+    cur.count += 1;
+    empMap.set(r.emp_code, cur);
   }
+  const productCodes = new Set(productRows.map((r) => r.iit_code).filter(Boolean));
+  const productMetaRows = cst.filter((r) => productCodes.has(r.iit_code)).concat(productRows);
+  // Nhóm hàng phục vụ cả doanh thu lẫn các nhóm CST chưa khai thác/sắp hết,
+  // nên lựa chọn phải lấy hợp nhất dòng bán + CST trong đúng scope NV/đơn vị.
+  const cstGroupRows = A.cstTable({ scope, filters: only(['emp', 'province', 'unit']) });
   res.json({
     ky: pc.ky,
     kys: pc.kys,
+    dateFrom: pc.dateFrom,
+    dateTo: pc.dateTo,
+    matchedRows: A.applyFilters(allRows, filters).length,
     employees: [...empMap.values()].sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi')),
-    units: uniq(rows.concat(cst), 'unit_code', 'unit_name').map((u) => ({ ...u, kind: 'unit' })),
+    units: uniq(unitRows, 'unit_code', 'unit_name').map((u) => ({ ...u, kind: 'unit' })),
+    groups: uniq(groupRows.concat(cstGroupRows), 'c14'),
     products: (() => {
-      const pmap = productMetaFromRows(cst.concat(rows), contractorLookup);
+      const pmap = productMetaFromRows(productMetaRows, contractorLookup);
+      const counts = new Map();
+      for (const r of productRows) if (r.iit_code) counts.set(r.iit_code, (counts.get(r.iit_code) || 0) + 1);
       return [...pmap.values()].map((p) => ({
         key: p.iit_code,
         label: p.product_name,
         kind: 'product',
+        count: counts.get(p.iit_code) || 0,
         ...p,
       })).sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi') || String(a.key).localeCompare(String(b.key), 'vi'));
     })(),
-    provinces: uniq(rows.concat(cst), 'province'),
-    routes: uniq(rows, 'route'),
-    priorities: uniq(rows.concat(cst), 'priority'),
-    contractors: contractorOptions(rows.concat(cst), contractorLookup),
-    bidPackages: uniq(rows.concat(cst), 'bid_package'),
+    provinces: uniqProvince(provinceRows),
+    routes: uniq(routeRows, 'route'),
+    priorities: uniq(priorityRows, 'priority'),
+    contractors: contractorOptions(contractorRows, contractorLookup),
+    bidPackages: uniq(bidRows, 'bid_package'),
   });
 });
 
@@ -806,6 +903,7 @@ function revenueFiltersFromQuery(q) {
     emp: q.emp || null,
     province: q.province || null,
     unit: q.unit || null,
+    group: q.group || null,
     product: q.product || null,
     route: q.route || null,
     priority: q.priority || null,
@@ -817,6 +915,123 @@ function revenueFiltersFromQuery(q) {
   };
 }
 
+function safeFilePart(v, fallback = 'report') {
+  return String(v || fallback).replace(/[^0-9A-Za-z._-]+/g, '-').replace(/^-+|-+$/g, '') || fallback;
+}
+
+function salesRecipientGroups() {
+  const all = store.targetRoster({ scope: null });
+  const groups = [
+    { key: 'all', label: 'Toàn phòng Sale', empCodes: all.map((u) => u.emp_code) },
+    { key: 'sale', label: 'NV Sale chính thức', empCodes: all.filter((u) => store.employeeType(u) === 'sale').map((u) => u.emp_code) },
+    { key: 'ctv', label: 'CTV/nhóm cộng tác', empCodes: all.filter((u) => store.employeeType(u) === 'ctv').map((u) => u.emp_code) },
+  ];
+  return groups.filter((g) => g.empCodes.length);
+}
+
+function salesRecipientCatalog() {
+  const tgByEmp = new Map();
+  for (const m of auth.listTelegramMap()) {
+    const code = String(m.emp_code || '').trim().toUpperCase();
+    if (code && !tgByEmp.has(code)) tgByEmp.set(code, String(m.telegram_id || '').trim());
+  }
+  return store.targetRoster({ scope: null }).map((u) => {
+    const empCode = String(u.emp_code || '').trim().toUpperCase();
+    const email = notifyChannels.emailFor(empCode, u.email);
+    const telegramId = tgByEmp.get(empCode) || '';
+    return {
+      emp_code: empCode,
+      name: u.name || empCode,
+      employee_type: store.employeeType(u),
+      email,
+      telegram_id: telegramId,
+      hasEmail: !!email,
+      hasTelegram: !!telegramId,
+    };
+  });
+}
+
+function resolveSalesReportRecipients(body = {}) {
+  const catalog = salesRecipientCatalog();
+  const byCode = new Map(catalog.map((r) => [r.emp_code, r]));
+  const mode = String(body.recipientMode || body.mode || 'individual').toLowerCase();
+  let codes = [];
+  if (mode === 'all' || mode === 'all_sale') codes = salesRecipientGroups().find((g) => g.key === 'all')?.empCodes || [];
+  else if (mode === 'group') {
+    const key = String(body.group || '').toLowerCase();
+    codes = salesRecipientGroups().find((g) => g.key === key)?.empCodes || [];
+  } else {
+    codes = Array.isArray(body.empCodes) ? body.empCodes : String(body.empCodes || '').split(',');
+  }
+  const unique = [...new Set(codes.map((c) => String(c || '').trim().toUpperCase()).filter(Boolean))];
+  return unique.map((code) => byCode.get(code)).filter(Boolean).slice(0, 80);
+}
+
+function sendChannelSelection(channels = {}) {
+  const telegram = channels.telegram !== false && channels.telegram !== 'false';
+  const email = channels.email !== false && channels.email !== 'false';
+  return { telegram, email };
+}
+
+function reportSendSummary(recipients, channels) {
+  return {
+    total: recipients.length,
+    telegramReady: notifyChannels.telegramReady(),
+    emailReady: notifyChannels.emailReady(),
+    withTelegram: recipients.filter((r) => r.hasTelegram).length,
+    withEmail: recipients.filter((r) => r.hasEmail).length,
+    sendableTelegram: channels.telegram && notifyChannels.telegramReady() ? recipients.filter((r) => r.hasTelegram).length : 0,
+    sendableEmail: channels.email && notifyChannels.emailReady() ? recipients.filter((r) => r.hasEmail).length : 0,
+  };
+}
+
+async function buildRevenueReportForQuery(query, scope) {
+  const pc = periodCtx(query || {});
+  const filters = revenueFiltersFromQuery(query || {});
+  const contractorLookup = contractorLookupFor(scope);
+  const baseRows = enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup);
+  const metaMap = productMetaFromRows(enrichContractorNames(store.getCst({ scope }), contractorLookup).concat(baseRows), contractorLookup);
+  const rows = A.applyFilters(enrichProductMeta(baseRows, metaMap, contractorLookup), filters)
+    .sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))
+      || String(a.source_order || '').localeCompare(String(b.source_order || ''), 'vi')
+      || String(a.source_line_id || '').localeCompare(String(b.source_line_id || ''), 'vi')
+      || String(a.emp_code || '').localeCompare(String(b.emp_code || ''), 'vi'));
+
+  const revByEmp = {};
+  for (const r of rows) if (r.emp_code) revByEmp[r.emp_code] = (revByEmp[r.emp_code] || 0) + Number(r.revenue || 0);
+  const targetByEmp = {};
+  for (const t of store.getTargetsRange({ kys: pc.kys, scope })) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
+  const rowCodes = new Set(rows.map((r) => r.emp_code).filter(Boolean));
+  const wantedEmp = String(query?.emp || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
+  const roster = store.targetRoster({ scope }).filter((u) => !wantedEmp.length || wantedEmp.includes(u.emp_code));
+  const codes = [...new Set(roster.map((u) => u.emp_code).concat([...rowCodes]))];
+  const targetRows = codes.map((empCode) => {
+    const revenue = Number(revByEmp[empCode] || 0);
+    const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
+    const target = Number(targetByEmp[empCode] || 0);
+    return {
+      emp_code: empCode,
+      emp_name: store.findUserByCode(empCode)?.name || empCode,
+      revenue,
+      revenue_before_vat: revenueBeforeVat,
+      target,
+      pct: target > 0 ? +(revenueBeforeVat / target * 100).toFixed(1) : null,
+      gap: target > 0 ? Math.round(revenueBeforeVat - target) : null,
+    };
+  }).sort((a, b) => b.revenue - a.revenue);
+  return revenueReportExport.buildReport({ ky: pc.ky, kys: pc.kys, rows, targetRows, pacing: A.targetPacingMeta(pc.ky), filters });
+}
+
+async function revenueReportBuffer(report, format) {
+  const builders = {
+    xlsx: revenueReportExport.excelBuffer,
+    csv: revenueReportExport.csvBuffer,
+    pdf: revenueReportExport.pdfBuffer,
+    pptx: revenueReportExport.pptxBuffer,
+  };
+  return builders[format](report);
+}
+
 function paginate(rows, req, def = 50, max = 500) {
   const page = Math.max(1, Number(req.query.page || 1));
   const pageSize = Math.min(max, Math.max(10, Number(req.query.pageSize || def)));
@@ -824,17 +1039,198 @@ function paginate(rows, req, def = 50, max = 500) {
   return { page, pageSize, total: rows.length, rows: rows.slice(start, start + pageSize) };
 }
 
+// CST hiển thị tại Doanh thu đầy đủ lấy từ bản materialized của App Sale New
+// (tab Theo dõi HĐ). Ghép cứng theo mã QLNB + mã đơn vị; tuyệt đối không cộng
+// các dòng trùng khóa. Nếu tương lai có nhiều HĐ cho cùng khóa, chỉ nhận dòng
+// khớp thêm ngữ cảnh gói/nhà thầu và duy nhất; còn lại trả "chưa có dữ liệu".
+function cstMatchText(v) {
+  return String(v || '').trim().normalize('NFC').toUpperCase();
+}
+function cstRevenueKey(r) {
+  return `${cstMatchText(r.iit_code)}\u0000${cstMatchText(r.unit_code)}`;
+}
+function cstIndexForRevenue(scope) {
+  const index = new Map();
+  // Chỉ lập chỉ mục từ CST trong đúng phạm vi phiên. Không dùng CST toàn công ty
+  // để enrich một dòng doanh thu dù mã QLNB + đơn vị có trùng nhau.
+  for (const r of store.getCst({ scope })) {
+    const key = cstRevenueKey(r);
+    if (!cstMatchText(r.iit_code) || !cstMatchText(r.unit_code)) continue;
+    const list = index.get(key) || [];
+    list.push(r);
+    index.set(key, list);
+  }
+  return index;
+}
+function cstForRevenueRow(r, index) {
+  if (cstMatchText(r.route) !== 'CL') return null;
+  const candidates = index.get(cstRevenueKey(r)) || [];
+  if (candidates.length === 1) return candidates[0];
+  if (candidates.length < 2) return null;
+  const bid = cstMatchText(r.bid_package);
+  const contractor = cstMatchText(r.contractor_code || r.contractor);
+  const contextual = candidates.filter((x) => {
+    const bidOk = !bid || cstMatchText(x.bid_package) === bid;
+    const contractorOk = !contractor || cstMatchText(x.contractor_code || x.contractor) === contractor;
+    return bidOk && contractorOk;
+  });
+  return contextual.length === 1 ? contextual[0] : null;
+}
+function kyNumber(ky) {
+  const [m, y] = String(ky || '').split('.').map(Number);
+  return (y || 0) * 100 + (m || 0);
+}
+function kyOfDate(v) {
+  const m = String(v || '').match(/^(\d{4})-(\d{2})-/);
+  return m ? `${m[2]}.${m[1]}` : null;
+}
+function monthEndOfKy(ky) {
+  const [m, y] = String(ky || '').split('.').map(Number);
+  if (!m || !y) return null;
+  return `${y}-${String(m).padStart(2, '0')}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+}
+function cstAsOfContext(q, pc) {
+  const explicit = /^\d{4}-\d{2}-\d{2}$/.test(String(q.dateTo || '')) ? String(q.dateTo) : null;
+  const ky = (explicit && kyOfDate(explicit)) || pc.to || pc.ky;
+  const period = store.listPeriods().find((p) => p.ky === ky) || {};
+  const asOf = explicit || String(period.dateTo || monthEndOfKy(ky) || '').slice(0, 10);
+  const monthEnd = monthEndOfKy(ky);
+  const monthlyOnly = period.canFilterByDay === false || period.dateGranularity === 'period';
+  const partialMonthly = !!(explicit && monthlyOnly && monthEnd && explicit < monthEnd);
+  return {
+    asOf,
+    ky,
+    available: !partialMonthly,
+    reason: partialMonthly ? `Nguồn kỳ ${ky} chỉ có tổng theo tháng, không đủ dữ liệu để tính CST tại ngày ${explicit}.` : null,
+  };
+}
+function cstSalesIndex() {
+  const index = new Map();
+  for (const r of store.getRowsRange({ kys: store.periodKys(), scope: {} })) {
+    if (cstMatchText(r.route) !== 'CL') continue;
+    const key = cstRevenueKey(r);
+    const list = index.get(key) || [];
+    list.push(r);
+    index.set(key, list);
+  }
+  return index;
+}
+function cstValuesAt(cst, row, ctx, salesIndex) {
+  const initial = Number(cst.bid_qty_initial);
+  const baselineKy = cst.cst_baseline_covered_ky;
+  const uploadQty = Number(cst.cst_upload_qty || 0);
+  const baselineSoldRaw = cst.cst_baseline_sold_qty != null
+    ? Number(cst.cst_baseline_sold_qty)
+    : Number(cst.sold_qty || 0) - uploadQty;
+  if (!ctx.available || !Number.isFinite(initial) || !baselineKy || !Number.isFinite(baselineSoldRaw)) return null;
+  const endKy = ctx.ky || kyOfDate(ctx.asOf);
+  if (!endKy) return null;
+  const sales = salesIndex.get(cstRevenueKey(row)) || [];
+  let sold = baselineSoldRaw;
+  if (kyNumber(endKy) > kyNumber(baselineKy)) {
+    sold += sales.filter((r) => kyNumber(r.ky) > kyNumber(baselineKy) && (!ctx.asOf || String(r.date || '').slice(0, 10) <= ctx.asOf))
+      .reduce((s, r) => s + Number(r.quantity || 0), 0);
+  } else if (kyNumber(endKy) < kyNumber(baselineKy)) {
+    const afterSelected = sales.filter((r) => kyNumber(r.ky) > kyNumber(endKy) && kyNumber(r.ky) <= kyNumber(baselineKy))
+      .reduce((s, r) => s + Number(r.quantity || 0), 0);
+    sold -= afterSelected;
+  }
+  sold = Math.max(0, Math.min(initial, sold));
+  const remaining = Math.max(0, initial - sold);
+  return {
+    initial,
+    sold,
+    remaining,
+    pct: initial > 0 ? +(remaining / initial * 100).toFixed(1) : 0,
+  };
+}
+function enrichRevenueCst(rows, scope, ctx) {
+  const index = cstIndexForRevenue(scope);
+  const salesIndex = cstSalesIndex();
+  return rows.map((r) => {
+    if (cstMatchText(r.route) !== 'CL') return r;
+    const cst = cstForRevenueRow(r, index);
+    if (!cst) return { ...r, cst_available: false, cst_source: 'App Sale New · Theo dõi HĐ' };
+    const values = cstValuesAt(cst, r, ctx, salesIndex);
+    if (!values) return {
+      ...r,
+      cst_available: false,
+      cst_as_of: ctx.asOf || null,
+      cst_unavailable_reason: ctx.reason || 'Chưa đủ dữ liệu lịch sử để tính CST tại thời điểm đã chọn.',
+      cst_source: 'App Sale New · Theo dõi HĐ',
+    };
+    return {
+      ...r,
+      cst_available: true,
+      cst_initial: values.initial,
+      cst_sold_as_of: values.sold,
+      cst_remaining: values.remaining,
+      cst_remaining_pct: values.pct,
+      cst_as_of: ctx.asOf || null,
+      cst_bid_package: cst.bid_package || null,
+      cst_source: 'App Sale New · Theo dõi HĐ',
+    };
+  });
+}
+
+function revenueCardKey(r) {
+  const normText = (v) => String(v || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '');
+  const contractorKey = normText(r.contractor_name) || normText(r.contractor_code || r.contractor);
+  const bidKey = String(r.bid_package || '').toUpperCase().replace(/QĐ|QD/g, '').replace(/[^A-Z0-9]+/g, '');
+  return JSON.stringify([
+    r.emp_code || '', r.unit_code || '', r.iit_code || r.product_name || '',
+    cstMatchText(r.route), contractorKey,
+    bidKey, Number(r.bid_price || 0),
+  ]);
+}
+function groupRevenueCards(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const key = revenueCardKey(r);
+    const cur = map.get(key) || {
+      ...r,
+      quantity: 0,
+      revenue: 0,
+      source_rows: 0,
+      source_date_from: null,
+      source_date_to: null,
+      source_kys: new Set(),
+      source_orders: new Set(),
+    };
+    cur.quantity += Number(r.quantity || 0);
+    cur.revenue += Number(r.revenue || 0);
+    cur.source_rows += 1;
+    const d = String(r.date || '').slice(0, 10);
+    if (d) {
+      if (!cur.source_date_from || d < cur.source_date_from) cur.source_date_from = d;
+      if (!cur.source_date_to || d > cur.source_date_to) cur.source_date_to = d;
+    }
+    if (r.ky) cur.source_kys.add(r.ky);
+    if (r.source_order) cur.source_orders.add(r.source_order);
+    if ((!cur.unit_name || cur.unit_name === cur.unit_code) && r.unit_name) cur.unit_name = r.unit_name;
+    if (!cur.c14 && (r.c14 || r.C14 || r.indication_group)) cur.c14 = r.c14 || r.C14 || r.indication_group;
+    map.set(key, cur);
+  }
+  return [...map.values()].map((r) => ({
+    ...r,
+    source_kys: [...r.source_kys],
+    source_order_count: r.source_orders.size,
+    source_orders: undefined,
+  }));
+}
+
 /* ---------- Doanh thu đầy đủ: bảng chi tiết từng dòng bán hàng ---------- */
 router.get('/revenue/full', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const contractorLookup = contractorLookupFor(scope);
-  const metaMap = productMetaFromRows(enrichContractorNames(store.getCst({ scope }).concat(store.getRowsRange({ kys: pc.kys, scope })), contractorLookup), contractorLookup);
+  const metaMap = productMetaLookupFor(scope, contractorLookup);
   let rows = enrichProductMeta(enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup), metaMap, contractorLookup);
-  rows = A.applyFilters(rows, revenueFiltersFromQuery(req.query))
+  const sourceRows = A.applyFilters(rows, revenueFiltersFromQuery(req.query));
+  rows = enrichRevenueCst(groupRevenueCards(sourceRows), scope, cstAsOfContext(req.query, pc))
     .sort((a, b) => (b.revenue || 0) - (a.revenue || 0));
-  const totalRevenue = A.sum(rows, (r) => r.revenue);
-  const totalQuantity = A.sum(rows, (r) => r.quantity);
+  const totalRevenue = A.sum(sourceRows, (r) => r.revenue);
+  const totalQuantity = A.sum(sourceRows, (r) => r.quantity);
   const pg = paginate(rows, req, 50, 500);
   res.json({
     ky: pc.ky,
@@ -842,6 +1238,7 @@ router.get('/revenue/full', auth.requireAuth, (req, res) => {
     page: pg.page,
     pageSize: pg.pageSize,
     total: pg.total,
+    sourceTotal: sourceRows.length,
     totalRevenue,
     totalQuantity,
     rows: pg.rows,
@@ -957,16 +1354,30 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     .slice(0, 10);
   const byPriority = A.groupSum(currentRows, 'priority', 'priority').slice(0, 10);
   const byBidPackage = A.groupSum(currentRows, 'bid_package', 'bid_package').slice(0, 10);
-  // So sánh theo nhóm khác (route/tuyến…) — revenueBreakdown chỉ hỗ trợ unit/product/emp,
+  // So sánh theo nhóm khác (route/nhà thầu…) — revenueBreakdown chỉ hỗ trợ unit/product/emp,
   // nên gom bằng groupSum trên đúng 2 kỳ so sánh (cmpP) để nhất quán bảng tăng/giảm.
+  // Lấy hợp của cả hai kỳ để không bỏ sót nhóm đã giảm hoàn toàn về 0 trong kỳ này.
+  const compareCurrentRows = A.applyFilters(store.getRowsRange({ kys: cmpP.curKys, scope }), filters);
+  const comparePrevRows = cmpP.hasPrev ? A.applyFilters(store.getRowsRange({ kys: cmpP.prevKys, scope }), filters) : [];
   const compareGroup = (keyField, labelField) => {
-    const cur = A.groupSum(A.applyFilters(store.getRowsRange({ kys: cmpP.curKys, scope }), filters), keyField, labelField);
-    const prev = cmpP.hasPrev ? A.groupSum(A.applyFilters(store.getRowsRange({ kys: cmpP.prevKys, scope }), filters), keyField, labelField) : [];
-    const prevMap = Object.fromEntries(prev.map((x) => [x.key, x.revenue]));
-    return cur.map((x) => {
-      const before = prevMap[x.key] || 0;
-      const d = x.revenue - before;
-      return { ...x, prevRevenue: before, delta: d, deltaPct: before > 0 ? +(d / before * 100).toFixed(1) : null };
+    const cur = A.groupSum(compareCurrentRows, keyField, labelField);
+    const prev = A.groupSum(comparePrevRows, keyField, labelField);
+    const curMap = new Map(cur.map((x) => [x.key, x]));
+    const prevMap = new Map(prev.map((x) => [x.key, x]));
+    return [...new Set([...curMap.keys(), ...prevMap.keys()])].map((key) => {
+      const now = curMap.get(key);
+      const beforeRow = prevMap.get(key);
+      const revenue = now?.revenue || 0;
+      const before = beforeRow?.revenue || 0;
+      const d = revenue - before;
+      return {
+        ...(now || beforeRow),
+        key,
+        revenue,
+        prevRevenue: before,
+        delta: d,
+        deltaPct: before > 0 ? +(d / before * 100).toFixed(1) : null,
+      };
     });
   };
   const unitCompare = compare('unit');
@@ -974,14 +1385,46 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
   // Biến động theo TUYẾN: sắp theo mức chênh lệch tuyệt đối (tuyến chuyển động mạnh nhất trước).
   const routeDelta = compareGroup('route', 'route')
     .filter((x) => (x.revenue || 0) > 0 || (x.prevRevenue || 0) > 0)
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
-    .slice(0, 10);
-  // SP CHƯA KHAI THÁC: cơ số trúng thầu còn NGUYÊN (kỳ này chưa bán viên nào) — cơ hội để trống.
-  const cstUntouched = A.cstTable({ scope, filters: { ...filters, status: 'empty' } })
-    .sort((a, b) => Number(b.remain_qty || 0) - Number(a.remain_qty || 0))
-    .slice(0, 10)
-    .map((c) => ({
-      key: `${c.iit_code || c.product_name}-${c.unit_code || c.unit_name}`,
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  // BIẾN ĐỘNG NHÀ THẦU: dùng mã làm khóa ổn định, ghép mã + tên để CEO/NV nhận diện rõ.
+  const compareContractorLabels = Object.fromEntries(
+    contractorOptions(compareCurrentRows.concat(comparePrevRows)).map((x) => [x.key, x.label])
+  );
+  const contractorDelta = compareGroup('contractor_code', 'contractor_name')
+    .filter((x) => (x.revenue || 0) > 0 || (x.prevRevenue || 0) > 0)
+    .map((x) => ({ ...x, label: compareContractorLabels[x.key] || pairLabel(x.key, x.label) }))
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  // SP CHƯA KHAI THÁC: chỉ lấy mã full thực sự ACTIONABLE. Mã full đang chờ
+  // một sibling QLNB hiện hành được dùng hết được tách riêng, không quy trách nhiệm NV.
+  const cstUntouchedSource = A.cstTable({ scope, filters: { ...filters, status: 'empty' } })
+    .sort((a, b) => Number(b.remain_qty || 0) - Number(a.remain_qty || 0));
+  const cstQueuedSource = A.cstTable({ scope, filters: { ...filters, status: 'queued' } })
+    .sort((a, b) => Number(b.remain_amount || 0) - Number(a.remain_amount || 0));
+  // Một mã QLNB có thể có nhiều dòng CST/nhà thầu nhưng cùng đơn vị. Hiển thị đầy đủ
+  // NV phụ trách theo đúng cặp QLNB + đơn vị; getCst(scope) đã thu hẹp về chính NV
+  // cho phiên nhân viên nên không làm lộ danh sách đồng phụ trách ngoài phạm vi.
+  const employeeCodes = (row) => [...new Set(
+    [row.emp_code, row.sales_emps]
+      .flatMap((v) => String(v || '').split(','))
+      .map((v) => v.trim().toUpperCase())
+      .filter(Boolean)
+  )].filter((code) => !scope?.empCode || code === String(scope.empCode).trim().toUpperCase());
+  const cstEmpByProductUnit = new Map();
+  for (const row of cstUntouchedSource) {
+    const productUnitKey = [row.iit_code || row.product_name, row.unit_code || row.unit_name].join('::');
+    const set = cstEmpByProductUnit.get(productUnitKey) || new Set();
+    employeeCodes(row).forEach((code) => set.add(code));
+    cstEmpByProductUnit.set(productUnitKey, set);
+  }
+  const cstUntouchedProductCount = new Set(cstUntouchedSource.map((c) => c.iit_code || c.product_name).filter(Boolean)).size;
+  const cstUntouched = cstUntouchedSource.map((c) => {
+    const productUnitKey = [c.iit_code || c.product_name, c.unit_code || c.unit_name].join('::');
+    const employees = [...(cstEmpByProductUnit.get(productUnitKey) || [])].sort().map((code) => ({
+      code,
+      name: code === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (store.findUserByCode(code)?.name || code),
+    }));
+    return {
+      key: [c.iit_code || c.product_name, c.unit_code || c.unit_name, c.bid_package || '', c.contractor_code || c.contractor || ''].join('::'),
       label: c.product_name,
       iit_code: c.iit_code,
       unit_code: c.unit_code,
@@ -989,16 +1432,34 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
       remain_qty: c.remain_qty,
       bid_qty_initial: c.bid_qty_initial,
       remain_pct: c.remain_pct,
+      employees,
+      uom: c.uom || '',
+      bid_price: Number(c.bid_price || 0) || null,
+      technical_group: technicalGroupOf(c.iit_code),
+      priority: c.priority || '',
       qd: qdOf(`${c.iit_code || ''} ${c.bid_package || ''}`),
       active_ingredient: c.active_ingredient || '',
       ham_luong: c.ham_luong || '',
-    }));
+      cst_sequence: c.cst_sequence,
+    };
+  });
+  const cstQueued = cstQueuedSource.map((c) => ({
+    key: [c.iit_code || c.product_name, c.unit_code || c.unit_name, 'queued'].join('::'),
+    label: c.product_name,
+    iit_code: c.iit_code,
+    unit_code: c.unit_code,
+    unit_name: c.unit_name || c.unit_code,
+    remain_qty: c.remain_qty,
+    remain_pct: c.remain_pct,
+    remain_amount: c.remain_amount,
+    uom: c.uom || '',
+    employees: employeeCodes(c).map((code) => ({ code, name: code === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (store.findUserByCode(code)?.name || code) })),
+    cst_sequence: c.cst_sequence,
+  }));
   const pushProducts = productCompare
     .filter((x) => (x.prevRevenue || 0) > 0 && x.delta < 0)
-    .sort((a, b) => a.deltaPct - b.deltaPct)
-    .slice(0, 10);
+    .sort((a, b) => a.deltaPct - b.deltaPct);
   const cstLowProducts = A.cstTable({ scope, remainPctMax: 10, filters })
-    .slice(0, 10)
     .map((c) => ({
       key: `${c.iit_code || c.product_name}-${c.unit_code || c.unit_name}`,
       label: c.product_name,
@@ -1021,7 +1482,16 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     delta,
     deltaPct,
     growthNote,
-    growthCompare: { curKy: cmpP.curKy, prevKy: cmpP.prevKy, adjusted: cmpP.adjusted, mode: cmpP.mode, yoyMissing: cmpP.yoyMissing },
+    growthCompare: {
+      curKy: cmpP.curKy,
+      prevKy: cmpP.prevKy,
+      curKys: cmpP.curKys,
+      prevKys: cmpP.prevKys,
+      adjusted: cmpP.adjusted,
+      mode: cmpP.mode,
+      yoyMissing: cmpP.yoyMissing,
+      hasPrev: cmpP.hasPrev,
+    },
     rowCount: currentRows.length,
     byRoute,
     byContractor,
@@ -1030,14 +1500,20 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
     // CHỈ lấy đúng chiều: "tăng mạnh" = delta > 0, "giảm mạnh" = delta < 0.
     // (Trước đây chỉ lọc prevRevenue>0 rồi sort theo delta -> khi số đơn vị giảm < 10 thì
     //  danh sách "giảm" lấy bù bằng đơn vị TĂNG, gây lẫn lộn tăng/giảm.)
-    topGrowthUnits: unitCompare.filter((x) => x.prevRevenue > 0 && x.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
-    topDeclineUnits: unitCompare.filter((x) => x.prevRevenue > 0 && x.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
-    topGrowthProducts: productCompare.filter((x) => x.prevRevenue > 0 && x.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 10),
-    topDeclineProducts: productCompare.filter((x) => x.prevRevenue > 0 && x.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 10),
+    topGrowthUnits: unitCompare.filter((x) => x.prevRevenue > 0 && x.delta > 0).sort((a, b) => b.delta - a.delta),
+    topDeclineUnits: unitCompare.filter((x) => x.prevRevenue > 0 && x.delta < 0).sort((a, b) => a.delta - b.delta),
+    topGrowthProducts: productCompare.filter((x) => x.prevRevenue > 0 && x.delta > 0).sort((a, b) => b.delta - a.delta),
+    topDeclineProducts: productCompare.filter((x) => x.prevRevenue > 0 && x.delta < 0).sort((a, b) => a.delta - b.delta),
     pushProducts,
     cstLowProducts,
     cstUntouched,
+    cstUntouchedTotal: cstUntouched.length,
+    cstUntouchedProductCount,
+    cstQueued,
+    cstQueuedTotal: cstQueued.length,
+    cstSequenceNote: cstSequence.MANDATORY_NOTE,
     routeDelta,
+    contractorDelta,
   });
 });
 
@@ -1055,6 +1531,7 @@ router.get('/cst', auth.requireAuth, (req, res) => {
       emp: req.query.emp || null,
       province: req.query.province || null,
       unit: req.query.unit || null,
+      group: req.query.group || null,
       product: req.query.product || null,
       priority: req.query.priority || null,
       status: req.query.status || null,
@@ -1065,7 +1542,7 @@ router.get('/cst', auth.requireAuth, (req, res) => {
 });
 
 /* ---------- Target: xem + dự báo ---------- */
-router.get('/targets', auth.requireAuth, (req, res) => {
+router.get('/targets', auth.requireTargetAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const { ky, kys } = pc;
@@ -1478,10 +1955,22 @@ router.get('/admin/targets/history', auth.requireAuth, auth.requireAdmin, (req, 
 
 /* ---------- AI hỏi nhanh (code-first) ---------- */
 router.post('/ai/ask', auth.requireAuth, async (req, res) => {
+  const rawContext = req.body?.context && typeof req.body.context === 'object' ? req.body.context : null;
+  // Context do client gửi chỉ là gợi ý hội thoại. Chỉ nhận các trường vô hại;
+  // nlqEngine luôn tính lại danh sách đơn vị trên dữ liệu đã scope quyền backend.
+  const context = rawContext ? {
+    kind: rawContext.kind === 'unit_family' ? 'unit_family' : null,
+    familyCode: String(rawContext.familyCode || '').slice(0, 8),
+    originalQuestion: String(rawContext.originalQuestion || '').slice(0, 500),
+    period: String(rawContext.period || '').slice(0, 20),
+    mode: String(rawContext.mode || '').slice(0, 20),
+    selectedUnitCode: String(rawContext.selectedUnitCode || '').slice(0, 160),
+  } : null;
   const answer = await smart.answerQuestion({
     text: req.body.text || '',
     scope: auth.scopeOf(req.session),
     session: req.session,
+    context,
   });
   res.json(answer);
 });
@@ -1545,6 +2034,125 @@ function styleAccountingSheet(ws, { moneyKeys = [], intKeys = [], totalLabelKey 
   };
   ws.headerFooter = { oddFooter: '&R&"Arial"&8 Trang &P/&N', differentFirst: false };
 }
+
+// Bộ xuất báo cáo doanh thu quản trị dùng CHUNG một tập dữ liệu cho XLSX/CSV/PDF/PPTX.
+// Tổng số/KPI luôn đặt ở đầu sheet/trang/slide đầu tiên theo yêu cầu CEO.
+router.post('/report/deck/preview', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    const kind = String(req.body?.kind || req.query?.kind || 'week').toLowerCase();
+    if (!['week', 'month'].includes(kind)) return res.status(400).json({ error: 'Loại deck phải là week hoặc month.' });
+    const built = await ceoDeckReport.build({ kind, draft: true });
+    const fileUrl = (file) => `/api/report/deck/file/${encodeURIComponent(file)}`;
+    return res.json({
+      ok: true,
+      draft: true,
+      kind,
+      key: built.key,
+      slideCount: built.slideCount,
+      summary: built.summary,
+      files: {
+        html: { name: path.basename(built.htmlPath), url: fileUrl(path.basename(built.htmlPath)), bytes: built.manifest.files.html.bytes, sha256: built.manifest.files.html.sha256 },
+        pptx: { name: path.basename(built.pptxPath), url: fileUrl(path.basename(built.pptxPath)), bytes: built.manifest.files.pptx.bytes, sha256: built.manifest.files.pptx.sha256 },
+      },
+    });
+  } catch (e) {
+    console.error('[ceo-deck-preview]', e);
+    return res.status(500).json({ error: `Không dựng được DRAFT deck CEO: ${e.message}` });
+  }
+});
+
+router.get('/report/deck/file/:name', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const name = path.basename(String(req.params.name || ''));
+  if (!/^BAO_CAO_DOANH_SO_[A-Z0-9_]+_DONAPHARM_DRAFT\.(html|pptx)$/i.test(name)) return res.status(400).json({ error: 'Tên file deck không hợp lệ.' });
+  const file = path.join(ceoDeckReport.OUT_DIR, name);
+  if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return res.status(404).json({ error: 'Không tìm thấy file DRAFT.' });
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.download(file, name);
+});
+
+router.get('/export/revenue_report.:format', auth.requireAuth, async (req, res) => {
+  const format = String(req.params.format || '').toLowerCase();
+  if (!['xlsx', 'csv', 'pdf', 'pptx'].includes(format)) return res.status(400).json({ error: 'Định dạng export không hợp lệ' });
+  try {
+    const scope = auth.scopeOf(req.session);
+    const report = await buildRevenueReportForQuery(req.query, scope);
+    const buffer = await revenueReportBuffer(report, format);
+    const kySafe = safeFilePart(report.ky || 'report');
+    res.setHeader('Content-Type', REVENUE_SEND_MIME[format]);
+    res.setHeader('Content-Disposition', `attachment; filename="bao_cao_doanh_thu_${kySafe}.${format}"`);
+    res.setHeader('Content-Length', buffer.length);
+    return res.end(buffer);
+  } catch (e) {
+    console.error('[revenue-report-export]', e);
+    return res.status(500).json({ error: 'Không tạo được báo cáo: ' + e.message });
+  }
+});
+
+router.get('/report/revenue-send/recipients', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const recipients = salesRecipientCatalog();
+  return res.json({
+    ok: true,
+    recipients,
+    groups: salesRecipientGroups(),
+    channelReady: { telegram: notifyChannels.telegramReady(), email: notifyChannels.emailReady() },
+  });
+});
+
+router.post('/report/revenue-send/preview', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const format = String(req.body?.format || 'pdf').toLowerCase();
+  if (!REVENUE_SEND_FORMATS.includes(format)) return res.status(400).json({ error: 'Định dạng gửi không hợp lệ.' });
+  const channels = sendChannelSelection(req.body?.channels || {});
+  if (!channels.telegram && !channels.email) return res.status(400).json({ error: 'Chọn ít nhất 1 kênh gửi.' });
+  const recipients = resolveSalesReportRecipients(req.body || {});
+  const summary = reportSendSummary(recipients, channels);
+  return res.json({ ok: true, format, channels, summary, recipients });
+});
+
+router.post('/report/revenue-send/send', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  const format = String(req.body?.format || 'pdf').toLowerCase();
+  if (!REVENUE_SEND_FORMATS.includes(format)) return res.status(400).json({ error: 'Định dạng gửi không hợp lệ.' });
+  const channels = sendChannelSelection(req.body?.channels || {});
+  if (!channels.telegram && !channels.email) return res.status(400).json({ error: 'Chọn ít nhất 1 kênh gửi.' });
+  if (String(req.body?.confirmText || '').trim().toUpperCase() !== 'GUI_BAO_CAO') {
+    return res.status(400).json({ error: 'Thiếu xác nhận gửi thật. Nhập GUI_BAO_CAO sau khi đã xem preview người nhận.' });
+  }
+  const recipients = resolveSalesReportRecipients(req.body || {});
+  if (!recipients.length) return res.status(400).json({ error: 'Không có người nhận hợp lệ.' });
+  if (recipients.length > 80) return res.status(400).json({ error: 'Danh sách gửi quá lớn.' });
+  try { fs.mkdirSync(REVENUE_SEND_DIR, { recursive: true }); } catch { /* noop */ }
+  const params = req.body?.params && typeof req.body.params === 'object' ? req.body.params : {};
+  const results = [];
+  for (const r of recipients) {
+    const q = { ...params, emp: r.emp_code };
+    try {
+      const report = await buildRevenueReportForQuery(q, { empCode: null });
+      const buffer = await revenueReportBuffer(report, format);
+      const kySafe = safeFilePart(report.ky || params.ky || 'report');
+      const fileName = `bao_cao_doanh_thu_${kySafe}_${safeFilePart(r.emp_code)}.${format}`;
+      const filePath = path.join(REVENUE_SEND_DIR, fileName);
+      fs.writeFileSync(filePath, buffer);
+      const subject = `DONAPHARM App Report — Báo cáo doanh thu ${report.kys?.join(', ') || report.ky} — ${r.emp_code}`;
+      const text = `Anh/Chị ${r.name} (${r.emp_code}), App Report New gửi báo cáo doanh thu cá nhân theo phạm vi phân quyền. File đính kèm: ${fileName}.`;
+      const row = { emp_code: r.emp_code, name: r.name, file: fileName, channels: {} };
+      if (channels.telegram) {
+        row.channels.telegram = r.telegram_id && notifyChannels.telegramReady()
+          ? await notifyChannels.sendDocument(r.telegram_id, filePath, `Báo cáo doanh thu cá nhân ${r.emp_code} — ${report.kys?.join(', ') || report.ky}`)
+          : { ok: false, description: !notifyChannels.telegramReady() ? 'Telegram chưa cấu hình.' : 'NV chưa liên kết Telegram.' };
+      }
+      if (channels.email) {
+        row.channels.email = r.email && notifyChannels.emailReady()
+          ? await notifyChannels.sendEmail(r.email, subject, text, `<p>${text}</p><p>Đây là báo cáo tự động từ App Report New.</p>`, [{ filename: fileName, content: buffer, contentType: REVENUE_SEND_MIME[format] }])
+          : { ok: false, description: !notifyChannels.emailReady() ? 'Email chưa cấu hình SMTP.' : 'NV chưa có email.' };
+      }
+      row.ok = Object.values(row.channels).some((x) => x && x.ok);
+      results.push(row);
+    } catch (e) {
+      results.push({ emp_code: r.emp_code, name: r.name, ok: false, error: e.message, channels: {} });
+    }
+  }
+  const okCount = results.filter((x) => x.ok).length;
+  return res.json({ ok: okCount > 0, total: results.length, okCount, failCount: results.length - okCount, results });
+});
 
 router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
   const scope = auth.scopeOf(req.session);

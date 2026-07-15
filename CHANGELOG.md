@@ -1,3 +1,47 @@
+### DRAFT — 2026-07-14 — CEO Deck V5D dùng ảnh CEO cung cấp + chuẩn hóa pháp nhân (38 slide/deck)
+- Tạo bản độc lập `deckHtmlV5D.js`, `deckPptxV5D.js`, `deckReportV5D.js`; không ghi đè V5/V5C. Xuất tuần W28 và tháng 06/2026 tại `artifacts/sales-report/deck-v5d-ceo-photos/`, tên tệp kết thúc `_DRAFT_V5D_CEO_PHOTOS`.
+- Chỉ dùng đúng 20 JPG CEO cung cấp `ceo-photo-74.jpg` → `ceo-photo-93.jpg`, xác minh SHA-256 theo `SOURCE_MANIFEST.json`; dùng đủ 20 ảnh trên đúng 18/38 slide mỗi deck, nhúng data URI tự chứa. Ảnh du lịch 74–79 chỉ nằm trong một collage văn hóa/kết thúc, không làm bằng chứng vùng/sản phẩm/QLNB. Không có URL ảnh từ xa hay tham chiếu asset AI V5C.
+- Sửa chuẩn hóa nhà cung cấp không phân biệt hoa/thường/khoảng trắng, nhãn hiển thị ổn định. Tháng 06/2026: DONAPHARM **10.593.941.804đ**, AFP PHARMA **8.232.847.232đ**, Group-Dona **18.826.789.036đ**, đúng 2 pháp nhân; tổng công ty giữ **28.403.136.096đ**. Tuần: DONAPHARM **3.792.635.096đ**, AFP PHARMA **3.224.833.445đ**, Group-Dona **7.017.468.541đ**, đúng 2 pháp nhân.
+- Giữ facts V5: 38 slide/deck; QLNB **2.741 / 122 / 44 / 9.440.828.476đ / 18 sản phẩm / đủ 44 dòng**; chỉ đào sâu Đồng Nai/Bình Phước; không tạo WoW giả. Slide 12 hiển thị đúng hai pháp nhân Group-Dona.
+- Evidence tại `verification-screenshots/20260714-ceo-deck-v5d-ceo-photos/`: 76 PNG 1920×1080, contact sheets, photo-rich sheets, source-use manifest và QA ledger 76/76 slide. QA PASS: logo chính thức 38/38, PPTX ZIP 38/38, 0 geometry issue, 0 console error, 0 hash slide trùng trong từng deck; spot-audit full-resolution slide 6–8, 12, 14, 17, 35, 38 không còn lỗi cụ thể.
+- V5D/V5/V4/CST regression đều PASS. Chưa gửi ngoài, chưa deploy/restart/commit/push, chưa bật lịch.
+
+### REJECTED / NOT DELIVERED — 2026-07-14 — CEO Deck V5C Images tuần/tháng (38 slide, Premium Pharmaceutical)
+- CEO từ chối vì V5C dùng hình AI thay vì ảnh công ty CEO đã cung cấp. Bản V5C là nháp bị loại, **không giao/không gửi**, không được tái sử dụng asset AI trong V5D.
+- Tạo nhánh module/artifact/test độc lập `deckHtmlV5C.js`, `deckPptxV5C.js`, `deckReportV5C.js`, tái sử dụng `deckDataV5`; V5 Deep được giữ nguyên như bản lịch sử data-first, không ghi đè.
+- Tích hợp 8/8 asset hình ảnh Premium Pharmaceutical đã duyệt bằng data URI tự chứa vào 18/38 slide mỗi deck; không URL ảnh từ xa. Dùng panel/crop/veil khác nhau cho bìa, vùng, khách hàng, NV, danh mục, QLNB, Điểm/Xu, rủi ro/kết luận; 5 trang chi tiết 44 dòng QLNB giữ thuần dữ liệu.
+- Giữ toàn bộ facts V5: tuần **10.649.681.681đ**, tháng **28.403.136.096đ**; chỉ đào sâu Đồng Nai/Bình Phước; QLNB **2.741 / 122 / 44 / 9.440.828.476đ / 18 sản phẩm / đủ 44 dòng trong 5 trang**; không tạo WoW tuần giả.
+- Xuất HTML/PPTX `_DRAFT_V5C_IMAGES` tại `artifacts/sales-report/deck-v5c-images/`; evidence 76 PNG 1920×1080, contact sheets, focused image-rich sheets và ledger 76/76 slide tại `verification-screenshots/20260714-ceo-deck-v5c-images/`.
+- QA tự động: 38 slide/deck, logo chính thức 38/38, 18 slide ảnh/deck, đủ 8 asset, 0 geometry issue, 0 console error, 0 hash ảnh slide trùng trong từng deck, PPTX ZIP 38 slide/38 PNG, manifest/hash khớp. Đã spot-audit full resolution các slide rủi ro cao và chỉnh vùng bảng/crop; chưa gửi ngoài, chưa deploy/restart/commit/push/bật lịch.
+
+### DRAFT — 2026-07-14 — CEO Deck V5 Deep tuần/tháng (37 slide, Premium Pharmaceutical)
+- Tạo mới `deckDataV5.js`, `deckHtmlV5.js`, `deckPptxV5.js`, `deckReportV5.js`; xuất riêng 4 artifact HTML/PPTX DRAFT tuần W28 và tháng 06/2026, không sửa/ghi đè V4.
+- Mở rộng có chủ đích từ 32 lên 37 slide theo chỉ đạo CEO: 18/18 sản phẩm QLNB được tách 2 slide đọc rõ; 44/44 dòng QLNB đang chờ được tách 4 slide chi tiết. Baseline khóa: 2.741 dòng nguồn, 122 nhóm multi-QLNB, 44 dòng đang chờ, 9.440.828.476đ, 18 tên sản phẩm không trùng đại diện.
+- Đào sâu khu vực chỉ Đồng Nai và Bình Phước; mọi tỉnh khác chỉ nằm trong tổng công ty. Week: 10.649.681.681đ (Đồng Nai 8.891.523.316đ; Bình Phước 1.570.481.685đ). Month: 28.403.136.096đ (Đồng Nai 19.351.299.898đ; Bình Phước 2.062.499.760đ).
+- Phân tích đủ tuyến, Group-Dona/đối tác, khách hàng/điều trị, NV/đơn vị/sản phẩm, Điểm/Xu quý, rủi ro/cơ hội/action board. Tuần giữ `Không đủ chuẩn WoW`, không nội suy kỳ trước; tháng so hai tháng hoàn chỉnh.
+- Đã phân tích thêm toàn bộ 20 slide mẫu `PhanTich_DoanhSo_20Slide_TUAN24_2026_1...pptx` và chỉ tiếp thu hierarchy KPI-first, warning có bằng chứng, concentration/middle-tier, action owner/deadline, treatment trắng–xanh–cam; không copy số cũ hay nền so sánh giả.
+- QA: 2 deck × 37 = 74 slide render 1920×1080; ledger thủ công đủ 74/74 PASS, DOM collision/console 0, logo chuẩn 37/37 mỗi deck, PPTX ZIP hợp lệ 37 slide/37 PNG, không ảnh trùng trong từng deck. Evidence tại `verification-screenshots/20260714-ceo-deck-v5-deep/`. Chưa gửi ngoài, chưa deploy/restart, chưa bật lịch.
+
+### DRAFT — 2026-07-14 — Sửa trình tự nhiều QLNB trong CST (App Report New / CEO Deck V4B)
+- Thêm classifier CST trung tâm theo đơn vị + tên sản phẩm chuẩn hóa + ĐVT chuẩn hóa; giữ nguyên dòng nguồn và gắn metadata mã hiện hành, mã kế tiếp, trạng thái chuyển tiếp.
+- Tách QLNB `ĐANG CHỜ`/`CẦN XÁC NHẬN` khỏi danh sách chưa khai thác, cảnh báo hành động và nội dung dùng để đánh giá nhân viên; cập nhật Analysis, Overview, CST và AI/smart answers.
+- CEO Deck V4B tuần/tháng đổi slide “3 cuộc gọi đầu tiên” sang trình bày trung lập, sequence-aware và bổ sung ghi chú nghiệp vụ bắt buộc. V4A/V3 giữ nguyên artifact lịch sử.
+- Baseline hiện tại được khóa test chính xác: 2.741 dòng, 122 nhóm nhiều QLNB, 44 mã đang chờ với 9.440.828.476đ. Các nhãn ĐVT nguồn xung đột chỉ được canonicalize khi cùng hậu tố family QLNB cung cấp bằng chứng định danh; không tự ghép ĐVT tùy ý.
+
+### 2026-07-14 — Report Bot — CEO Deck V4 dual-theme DRAFT + logo chuẩn 32/32 slide
+- Tạo V4A giữ phong cách Luxury Editorial navy/ivory/gold và V4B Premium Pharmaceutical trắng–xanh DONAPHARM–cam, dùng chung nội dung/số liệu canonical V3; không đổi kỳ tuần W28 `06–11/07/2026` hay tháng `01–30/06/2026`.
+- Thay logo tách nền bằng đúng asset chính thức `web/public/logo-dnpharma.png` 640×369, SHA-256 `c5d9986df442c45a8af1ef78550d026626435940a4fa4e8d3404c4066838134e`, màu chủ đạo `#005DAA/#F7A31C/#FFFFFF`; giữ tỷ lệ gốc, nền trắng và chèn đủ 32/32 slide.
+- Thêm `deckHtmlV4.js`, `deckPptxV4.js`, `deckReportV4.js` cùng script npm `deck:v4:build`, `deck:v4:test`, `deck:v4:test-build`; xuất 8 tệp HTML/PPTX DRAFT tại `artifacts/sales-report/deck-v4/` và contact sheet/PNG tại `verification-screenshots/20260714-ceo-deck-v4/`.
+- QA PASS: tổng số liệu canonical không đổi; 4 deck × 32 slide; logo chính thức 32/32 trong HTML và pixel-proof 32/32 trên ảnh nguồn PPTX; 0 browser console error, 0 overflow/collision; PPTX ZIP hợp lệ, 32 slide; manifest SHA-256 đầy đủ. Không deploy/restart/gửi ngoài/bật lịch.
+
+### 2026-07-13 — Report Bot — DRAFT deck CEO 32 slide tuần/tháng
+- Đồng bộ `origin/main` chứa PR #104 trước khi triển khai; giữ nguyên toàn bộ thay đổi App Report New đang chạy, không reset workspace.
+- Thêm `server/src/report/deckData.js`: FACTS CEO scope cho tuần/tháng gồm tổng và kỳ đối chiếu, ngày, tuyến, nguồn hàng, loại khách hàng, nhóm điều trị, NV/đơn vị/sản phẩm, điểm & xu quý; thiếu map giữ “Chưa phân loại/Chưa phân nhóm”, không suy đoán.
+- Thêm `deckHtml.js`, `deckPptx.js`, `deckReport.js`: dựng 32 slide 16:9 theo hệ navy `#071F47` + vàng `#F5C242`, nhúng asset chính thức, chụp Chromium 1280×720 và đóng gói PPTX 32 ảnh full-slide.
+- Sinh DRAFT tuần + tháng tại `artifacts/sales-report/deck/`, mỗi loại có HTML, PPTX và manifest SHA-256; scheduler vẫn tắt và chưa gửi ra ngoài khi chưa có CEO duyệt riêng.
+- Bổ sung email attachments và Telegram `sendDocument`; route `POST /api/report/deck/preview` + tải file được bảo vệ bằng quyền CEO/admin, tài khoản NV nhận 403.
+- Nghiệm thu: tổng live `16.589.980.621đ`/1.066 dòng khớp backend; top NV/đơn vị/sản phẩm và điểm/xu đối chiếu độc lập; HTML/PPTX đủ 32 slide, không overflow 1280×720, PPTX ZIP hợp lệ.
+
 ### 2026-07-13 — Claude Code (kiến trúc/review) — Giao bot: báo cáo CHUYÊN SÂU (deck 32 trang)
 - **Bản yêu cầu gốc đầy đủ cho bot** (`YEUCAU_BAOCAO_CHUYENSAU_CEO.md`): tự chứa, để bot đọc 1 lần hiểu trọn yêu cầu CEO — mục đích (CEO-only, trình chiếu LED, chuẩn cao cấp), lịch (T7 13h tuần / 18h ngày cuối tháng), 2 định dạng HTML+PPTX, 2 kênh email+Telegram (gửi tệp), quy trình DRAFT duyệt trước, 12 khối nội dung, nguyên tắc số liệu grounded, ranh giới, Definition of Done.
 - **Bối cảnh:** CEO gửi mẫu chuẩn (HTML slide-deck + PPTX Tuần 26), yêu cầu báo cáo doanh số chi tiết tuần/tháng gửi email+Telegram cả PowerPoint + HTML. CEO đồng ý để **bot cầm code app**.

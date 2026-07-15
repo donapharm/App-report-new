@@ -40,6 +40,7 @@ export const api = {
   otpRequest: (phone) => req('POST', '/auth/otp/request', { phone }),
   otpVerify: (phone, code) => req('POST', '/auth/otp/verify', { phone, code }),
   otpSelect: (phone, emp_code) => req('POST', '/auth/otp/select', { phone, emp_code }),
+  sso: (sso_token) => req('POST', '/auth/sso', { sso_token }),
   // Telegram login (chính)
   telegramStart: () => req('POST', '/auth/telegram/start', {}),
   telegramStatus: (poll_secret) => req('POST', '/auth/telegram/status', { poll_secret }),
@@ -79,6 +80,9 @@ export const api = {
     return req('GET', '/revenue?' + p.toString());
   },
   revenueFull: (params = {}) => req('GET', '/revenue/full?' + new URLSearchParams(params).toString()),
+  revenueSendRecipients: () => req('GET', '/report/revenue-send/recipients'),
+  revenueSendPreview: (payload) => req('POST', '/report/revenue-send/preview', payload),
+  revenueSendNow: (payload) => req('POST', '/report/revenue-send/send', payload),
   products: (params = {}) => req('GET', '/products?' + new URLSearchParams(params).toString()),
   analysis: (params = {}) => req('GET', '/analysis?' + new URLSearchParams(params).toString()),
   cst: (params = {}) => req('GET', '/cst?' + new URLSearchParams(params).toString()),
@@ -101,7 +105,7 @@ export const api = {
   notificationsSend: (payload) => req('POST', '/admin/notifications/send', payload || {}),
   notificationsSendOne: (emp_code, ky) => req('POST', '/admin/notifications/send-one', { emp_code, ...(ky ? { ky } : {}) }),
   forecast: () => req('GET', '/targets/forecast'),
-  ask: (text) => req('POST', '/ai/ask', { text }),
+  ask: (text, context = null) => req('POST', '/ai/ask', { text, ...(context ? { context } : {}) }),
   lookup: (q, ky) => req('GET', '/lookup?' + new URLSearchParams({ q, ...(ky ? { ky } : {}) }).toString()),
   // Upload
   uploadPreview: (file) => {
@@ -144,6 +148,27 @@ export async function downloadExport(kind, params = {}) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `report_${kind}_${params.ky || ''}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+// Bộ báo cáo doanh thu quản trị: Excel nhiều sheet / CSV / PDF / PowerPoint.
+export async function downloadRevenueReport(format = 'xlsx', params = {}) {
+  const fmt = ['xlsx', 'csv', 'pdf', 'pptx'].includes(format) ? format : 'xlsx';
+  const url = `/api/export/revenue_report.${fmt}?` + new URLSearchParams(params).toString();
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    throw new Error(d.error || 'Không xuất được báo cáo');
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') || '';
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = match?.[1] || `bao_cao_doanh_thu_${params.ky || ''}.${fmt}`;
   document.body.appendChild(a);
   a.click();
   a.remove();

@@ -59,13 +59,15 @@ function emailFor(emp, userEmail) {
   const ok = (e) => (/.+@.+\..+/.test(String(e || '').trim()) ? String(e).trim() : '');
   return ok(emailMap()[String(emp || '').trim().toUpperCase()]) || ok(userEmail);
 }
-async function sendEmail(to, subject, text, html) {
+async function sendEmail(to, subject, text, html, attachments = []) {
   const t = transport();
   if (!t) return { ok: false, description: 'Email chưa cấu hình (thiếu SMTP_HOST/USER/PASS).' };
   if (!to) return { ok: false, description: 'NV chưa có email.' };
   try {
     const msg = { from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject: subject || 'DONAPHARM App Report', text: String(text || '') };
-    if (html) { msg.html = String(html); msg.attachments = inlineAttachments(); } // ảnh inline chỉ khi gửi HTML
+    const files = (Array.isArray(attachments) ? attachments : []).filter((x) => x && (x.path || x.content));
+    if (html) msg.html = String(html);
+    if (html || files.length) msg.attachments = [...(html ? inlineAttachments() : []), ...files];
     await t.sendMail(msg);
     return { ok: true };
   } catch (e) { return { ok: false, description: e.message }; }
@@ -85,6 +87,24 @@ async function sendTelegram(chatId, text) {
   } catch (e) { return { ok: false, description: e.message }; }
 }
 
+// Gửi file Telegram cho báo cáo CEO. Hàm chỉ thực thi khi caller truyền chatId + filePath;
+// quyền CEO/admin vẫn phải được kiểm ở route/orchestrator trước khi gọi.
+async function sendDocument(chatId, filePath, caption = '') {
+  if (!TG_TOKEN) return { ok: false, description: 'App chưa có TELEGRAM_BOT_TOKEN trong env.' };
+  if (!chatId) return { ok: false, description: 'Thiếu chat_id.' };
+  const absolute = path.resolve(String(filePath || ''));
+  if (!filePath || !fs.existsSync(absolute) || !fs.statSync(absolute).isFile()) return { ok: false, description: 'File gửi Telegram không tồn tại.' };
+  try {
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append('caption', String(caption || '').slice(0, 1000));
+    form.append('document', new Blob([fs.readFileSync(absolute)]), path.basename(absolute));
+    const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendDocument`, { method: 'POST', body: form });
+    const j = await r.json().catch(() => ({}));
+    return j && j.ok ? { ok: true } : { ok: false, description: j?.description || 'telegram_document_failed' };
+  } catch (e) { return { ok: false, description: e.message }; }
+}
+
 function telegramReady() { return !!TG_TOKEN; }
 function anyReady() { return telegramReady() || emailReady(); }
 
@@ -97,4 +117,4 @@ async function deliver({ telegramId, email, subject, text, html }) {
   return out;
 }
 
-module.exports = { sendTelegram, telegramReady, sendEmail, emailReady, emailFor, anyReady, deliver };
+module.exports = { sendTelegram, sendDocument, telegramReady, sendEmail, emailReady, emailFor, anyReady, deliver };

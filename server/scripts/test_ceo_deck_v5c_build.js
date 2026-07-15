@@ -1,0 +1,65 @@
+'use strict';
+const assert=require('assert');
+const crypto=require('crypto');
+const fs=require('fs');
+const path=require('path');
+const {execFileSync}=require('child_process');
+const html=require('../src/report/deckHtmlV5C');
+const {OUT_DIR}=require('../src/report/deckReportV5C');
+const ROOT=path.join(__dirname,'..','..');
+const sha=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+for(const kind of ['week','month']){
+  const mf=fs.readdirSync(OUT_DIR).find(f=>f.endsWith('.manifest.json')&&f.includes(kind==='week'?'TUAN':'THANG'));
+  assert(mf,`missing ${kind}`);
+  const m=JSON.parse(fs.readFileSync(path.join(OUT_DIR,mf))),count=m.slideMap.length;
+  assert.equal(m.schemaVersion,5.1);
+  assert.equal(m.kind,kind);
+  assert.equal(count,38);
+  assert.equal(m.slides,38);
+  assert.equal(m.structure.logos,38);
+  assert.equal(m.structure.protectedHeaderLogos,36);
+  assert(m.structure.officialLogo);
+  assert.equal(m.structure.qlnbProductCards,18);
+  assert.equal(m.structure.fullDetailRows,44);
+  assert.equal(m.qlnb.sourceRows,2741);
+  assert.equal(m.qlnb.multiQlnbGroups,122);
+  assert.equal(m.qlnb.queuedRows,44);
+  assert.equal(m.qlnb.queuedAmount,9440828476);
+  assert.equal(m.qlnb.distinctProductCount,18);
+  assert.equal(m.visualSystem.imageSlideCount,18);
+  assert.equal(m.visualSystem.approvedAssets.length,8);
+  assert.deepEqual(m.visualSystem.approvedAssets.map(x=>x.name).sort(),html.ASSET_FILES.slice().sort());
+  assert(m.visualSystem.approvedAssets.every(x=>x.uses>=1&&/^[a-f0-9]{64}$/.test(x.sha256)));
+  assert(m.visualSystem.selfContainedDataUris);
+  assert.deepEqual(m.visualSystem.remoteImageUrls,[]);
+  assert.equal(m.visualSystem.brokenImages,0);
+  assert.equal(m.qa.automatedResult,'PASS');
+  assert.equal(m.qa.browserCollisionIssues,0);
+  assert.equal(m.qa.consoleErrors,0);
+  assert.deepEqual(m.qa.duplicateWithinDeck,[]);
+  assert.equal(m.qa.ledger.rows,38);
+  for(const type of ['html','pptx']){
+    const f=path.join(OUT_DIR,m.files[type].name);
+    assert(fs.existsSync(f));assert.equal(fs.statSync(f).size,m.files[type].bytes);assert.equal(sha(f),m.files[type].sha256);
+  }
+  const htmlText=fs.readFileSync(path.join(OUT_DIR,m.files.html.name),'utf8');
+  assert.equal((htmlText.match(/data-v5c-asset=/g)||[]).length,18);
+  assert.equal((htmlText.match(/<img[^>]+src="https?:/g)||[]).length,0);
+  const pptx=path.join(OUT_DIR,m.files.pptx.name);
+  execFileSync('unzip',['-t',pptx],{stdio:'ignore'});
+  const names=execFileSync('unzip',['-Z1',pptx],{encoding:'utf8'}).trim().split('\n');
+  assert.equal(names.filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).length,38);
+  assert.equal(names.filter(n=>/^ppt\/media\/.*\.png$/.test(n)).length,38);
+  const imageDir=path.join(ROOT,m.files.images.directory),imgs=fs.readdirSync(imageDir).filter(x=>x.endsWith('.png'));
+  assert.equal(imgs.length,38);
+  for(const f of imgs){const sig=fs.readFileSync(path.join(imageDir,f));assert.equal(sig.readUInt32BE(16),1920);assert.equal(sig.readUInt32BE(20),1080)}
+  const focused=path.join(ROOT,m.files.imageRich.sheet.path);
+  assert(fs.existsSync(focused));assert.equal(m.files.imageRich.count,18);assert.equal(sha(focused),m.files.imageRich.sheet.sha256);
+}
+const summary=JSON.parse(fs.readFileSync(path.join(OUT_DIR,'CEO_DECK_V5C_IMAGES_DRAFT_ARTIFACT_MANIFEST.json')));
+assert.equal(summary.qa,'AUTOMATED_PASS_MANUAL_REVIEW_RECOMMENDED');
+assert.equal(summary.decks.length,2);
+assert(summary.decks.every(x=>x.slides===38&&x.imageSlideCount===18));
+assert.equal(summary.ledgerRows,76);
+assert.equal(summary.artifacts.length,4);
+console.log('OK CEO Deck V5C build: 38 slides/deck, PPTX ZIP counts, 1920x1080 renders, 18 image slides/deck, all 8 assets, self-contained HTML, no remote/broken images, hashes/manifests/ledgers/sheets and browser QA');

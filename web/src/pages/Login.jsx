@@ -2,23 +2,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { api, setToken } from '../api.js';
 import { roleLabel } from '../util.js';
 import Logo from '../logo.jsx';
+import { OfficialZaloQr } from '../components.jsx';
 
-// QR Zalo OA DONAPHARM. Bỏ file thật vào web/public/zalo-oa-qr.png là tự hiện.
+// Dùng đúng component QR chính thức dùng chung toàn ứng dụng.
 function ZaloOA() {
-  const [ok, setOk] = useState(true);
   return (
     <div style={{ textAlign: 'center', marginTop: 22 }}>
       <div style={{ fontSize: 12.5, opacity: .85, marginBottom: 8 }}>Theo dõi Zalo OA DONAPHARM</div>
       <div style={{ display: 'inline-block', background: '#fff', padding: 6, borderRadius: 10 }}>
-        {ok ? (
-          <img src="/zalo-oa-qr.png" alt="Zalo OA DONAPHARM" width={76} height={76}
-               style={{ display: 'block', borderRadius: 6 }} onError={() => setOk(false)} />
-        ) : (
-          <div style={{ width: 76, height: 76, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'var(--muted)', fontSize: 11, textAlign: 'center', padding: 10 }}>
-            Đặt file<br /><b>zalo-oa-qr.png</b><br />vào web/public/
-          </div>
-        )}
+        <OfficialZaloQr size={76} />
       </div>
     </div>
   );
@@ -47,11 +39,39 @@ export default function Login({ onLogin }) {
   const [accounts, setAccounts] = useState([]);
 
   useEffect(() => {
-    api.mode().then((m) => {
-      setMode(m);
-      if (m.demo) api.demoUsers().then(setDemoUsers).catch(() => {});
-    }).catch(() => setMode({ live: false, demo: true, telegram: false }));
-    return () => stopTelegram();
+    let cancelled = false;
+    async function initLogin() {
+      const params = new URLSearchParams(window.location.search);
+      const ssoToken = params.get('sso_token') || '';
+      if (ssoToken) {
+        // Xóa token Home khỏi thanh địa chỉ/history ngay khi đã đọc để tránh lộ
+        // qua ảnh chụp, copy URL hoặc referrer.
+        params.delete('sso_token');
+        params.delete('_v');
+        const qs = params.toString();
+        window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
+        setBusy(true);
+        try {
+          const r = await api.sso(ssoToken);
+          if (!cancelled) await finish(r.token);
+          return;
+        } catch (e) {
+          if (!cancelled) setErr(`Đăng nhập từ Home không thành công: ${e.message}`);
+        } finally {
+          if (!cancelled) setBusy(false);
+        }
+      }
+      try {
+        const m = await api.mode();
+        if (cancelled) return;
+        setMode(m);
+        if (m.demo) api.demoUsers().then((x) => !cancelled && setDemoUsers(x)).catch(() => {});
+      } catch {
+        if (!cancelled) setMode({ live: false, demo: false, telegram: true });
+      }
+    }
+    initLogin();
+    return () => { cancelled = true; stopTelegram(); };
   }, []);
 
   async function finish(token) {

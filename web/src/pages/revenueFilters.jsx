@@ -1,6 +1,8 @@
 import React from 'react';
+import { DateInput } from '../components.jsx';
+import { formatDate, formatDateTime } from '../util.js';
 
-export const emptyRevenueFilters = { emp: '', province: '', unit: '', product: '', route: '', priority: '', contractor: '', bid: '', dateFrom: '', dateTo: '', q: '' };
+export const emptyRevenueFilters = { emp: '', province: '', unit: '', group: '', product: '', route: '', priority: '', contractor: '', bid: '', dateFrom: '', dateTo: '', q: '' };
 
 const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
 const productMeta = (o) => [o.qd, o.active_ingredient, o.ham_luong, o.uom, o.contractor, o.bid_price ? `Giá ${Number(o.bid_price).toLocaleString('vi-VN')}` : '', o.iit_code || o.key]
@@ -96,16 +98,29 @@ export function ComboSelect({ value, onChange, options, all, placeholder, classN
   );
 }
 
-export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFilters }) {
-  const setF = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
-  const period = (periods || []).find((p) => p.ky === ky) || {};
+export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFilters, filterBusy, filterNotice }) {
+  const setF = (k, v) => setFilters((f) => {
+    const next = { ...f, [k]: v };
+    // Không cho khoảng ngày đảo chiều; kéo đầu còn lại theo ngày vừa chọn.
+    if (k === 'dateFrom' && v && next.dateTo && v > next.dateTo) next.dateTo = v;
+    if (k === 'dateTo' && v && next.dateFrom && v < next.dateFrom) next.dateFrom = v;
+    return next;
+  });
+  const effectiveKy = options?.kys?.at(-1) || ky;
+  const period = (periods || []).find((p) => p.ky === effectiveKy) || {};
   const asOf = period.data_as_of || period.dataAsOf || period.dateTo || period.dateFrom;
+  const firstPeriod = periods?.[0] || {};
+  const lastPeriod = periods?.at(-1) || {};
+  const availableMinDate = String(firstPeriod.dateFrom || '').slice(0, 10);
+  const availableMaxDate = String(lastPeriod.throughDate || lastPeriod.data_as_of || lastPeriod.dataAsOf || lastPeriod.dateTo || '').slice(0, 10);
   const baseDate = asOf ? new Date(asOf) : new Date();
   const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const clamp = (d) => {
     const s = iso(d);
-    if (period.dateFrom && s < period.dateFrom) return period.dateFrom;
-    if (period.dateTo && s > period.dateTo) return period.dateTo;
+    const minDate = periods?.[0]?.dateFrom;
+    const maxDate = periods?.at(-1)?.dateTo;
+    if (minDate && s < minDate) return minDate;
+    if (maxDate && s > maxDate) return maxDate;
     return s;
   };
   const setRange = (kind) => {
@@ -120,32 +135,42 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
   // Mặc định ẨN bộ lọc (CEO chốt) — nhấn để mở, nhấn lại thu gọn.
   const [open, setOpen] = React.useState(false);
   const toggle = () => setOpen((v) => !v);
+  const changeKy = (v) => {
+    setKy(v);
+    // Chọn kỳ là một preset mới; xóa khoảng tùy chỉnh cũ để không còn hai phạm vi xung đột.
+    setFilters((f) => ({ ...f, dateFrom: '', dateTo: '' }));
+  };
+  const rangeText = filters.dateFrom || filters.dateTo
+    ? `${filters.dateFrom ? formatDate(filters.dateFrom) : 'đầu dữ liệu'} → ${filters.dateTo ? formatDate(filters.dateTo) : 'hiện tại'}${options?.kys?.length ? ` · ${options.kys.length} kỳ` : ''}`
+    : '';
   return (
     <div className={'card filter-card' + (open ? ' open' : ' collapsed')}>
       {/* Thanh gọn luôn hiện: kỳ + tìm nhanh + nút đóng/mở + xoá lọc */}
       <div className="filter-bar">
-        <div className="filter-ky"><Select value={ky} onChange={setKy} options={(periods || []).map((p) => ({ key: p.ky, label: p.ky }))} all="Chọn kỳ" /></div>
+        <div className="filter-ky"><Select value={ky} onChange={changeKy} options={(periods || []).map((p) => ({ key: p.ky, label: p.ky }))} all="Chọn kỳ" /></div>
         <input className="filter-quick" value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
-        <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn lọc' : '▾ Bộ lọc'}{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>
+        <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{filterBusy ? '⟳ Đang lọc…' : (open ? '▴ Thu gọn lọc' : '▾ Bộ lọc')}{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>
         {activeFilterCount > 0 && <button className="btn ghost" onClick={() => setFilters({ ...emptyRevenueFilters })}>Xoá lọc</button>}
       </div>
+      {(rangeText || filterNotice) && <div className="filter-live-status">{rangeText && <span>📅 {rangeText}</span>}{filterNotice && <b>{filterNotice}</b>}</div>}
       {open && (
         <div className="filter-body">
           <div className="filter-asof">
-            <b>{asOf ? `Cập nhật đến ${new Date(asOf).toLocaleTimeString('vi-VN', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' })} GMT+7` : 'Chưa có giờ cập nhật'}</b>
+            <b>{asOf ? `Cập nhật ${formatDateTime(asOf)} GMT+7` : 'Chưa có giờ cập nhật'}</b>
             <span>{period.canFilterByDay ? 'Nguồn có ngày chi tiết: lọc ngày/tuần/tháng/quý dùng đúng ngày dòng.' : 'Kỳ này chỉ có tổng theo tháng: lọc ngày không phân bổ giả.'}</span>
           </div>
           <div className="filter-grid">
             {me.isAdmin && <MultiSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" unit="NV" />}
             <Select value={filters.province} onChange={(v) => setF('province', v)} options={options?.provinces} all="Tất cả tỉnh/thành" />
             <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
+            <ComboSelect value={filters.group} onChange={(v) => setF('group', v)} options={options?.groups} all="Tất cả nhóm hàng C14" placeholder="Gõ mã/tên nhóm hàng…" />
             <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />
             <Select value={filters.route} onChange={(v) => setF('route', v)} options={options?.routes} all="Tất cả tuyến" />
             <Select value={filters.priority} onChange={(v) => setF('priority', v)} options={options?.priorities} all="Tất cả UT" />
             <ComboSelect value={filters.contractor} onChange={(v) => setF('contractor', v)} options={options?.contractors} all="Tất cả nhà thầu" placeholder="Gõ mã/tên nhà thầu…" />
             <MultiSelect value={filters.bid} onChange={(v) => setF('bid', v)} options={options?.bidPackages} all="Tất cả gói thầu" unit="gói thầu" />
-            <input type="date" value={filters.dateFrom || ''} onChange={(e) => setF('dateFrom', e.target.value)} />
-            <input type="date" value={filters.dateTo || ''} onChange={(e) => setF('dateTo', e.target.value)} />
+            <DateInput value={filters.dateFrom || ''} onChange={(v) => setF('dateFrom', v)} ariaLabel="Từ ngày" min={availableMinDate} max={availableMaxDate} />
+            <DateInput value={filters.dateTo || ''} onChange={(v) => setF('dateTo', v)} ariaLabel="Đến ngày" min={availableMinDate} max={availableMaxDate} />
           </div>
           <div className="date-chips">
             <button type="button" className="chip" onClick={() => setRange('day')}>Ngày</button>
@@ -164,7 +189,49 @@ export function usePeriodsAndFilters(api) {
   const [ky, setKy] = React.useState('');
   const [filters, setFilters] = React.useState(emptyRevenueFilters);
   const [options, setOptions] = React.useState(null);
+  const [validatedFilters, setValidatedFilters] = React.useState(emptyRevenueFilters);
+  const [filterBusy, setFilterBusy] = React.useState(false);
+  const [filterNotice, setFilterNotice] = React.useState('');
+  const [filtersReady, setFiltersReady] = React.useState(false);
+  const [quickQuery, setQuickQuery] = React.useState('');
   React.useEffect(() => { api.periods().then((p) => { setPeriods(p.periods || []); setKy(p.latest); }); }, []);
-  React.useEffect(() => { if (ky) api.filters(ky).then(setOptions); }, [ky]);
-  return { periods, ky, setKy, filters, setFilters, options };
+  React.useEffect(() => {
+    const id = setTimeout(() => setQuickQuery(filters.q), 140);
+    return () => clearTimeout(id);
+  }, [filters.q]);
+  const facetFilters = React.useMemo(() => ({ ...filters, q: '' }), [filters.emp, filters.province, filters.unit, filters.group, filters.product, filters.route, filters.priority, filters.contractor, filters.bid, filters.dateFrom, filters.dateTo]);
+  const facetSignature = JSON.stringify(facetFilters);
+  React.useEffect(() => {
+    if (!ky) return;
+    let cancelled = false;
+    setFilterBusy(true);
+    api.filters({ ky, ...facetFilters }).then((nextOptions) => {
+      if (cancelled) return;
+      const next = { ...facetFilters };
+      const removed = [];
+      const specs = [
+        ['emp', 'employees', true, 'nhân viên'], ['province', 'provinces', false, 'tỉnh/thành'],
+        ['unit', 'units', false, 'đơn vị'], ['group', 'groups', false, 'nhóm hàng'], ['product', 'products', false, 'sản phẩm'],
+        ['route', 'routes', false, 'tuyến'], ['priority', 'priorities', false, 'ưu tiên'],
+        ['contractor', 'contractors', false, 'nhà thầu'], ['bid', 'bidPackages', true, 'gói thầu'],
+      ];
+      for (const [field, optionKey, multi, label] of specs) {
+        if (!next[field]) continue;
+        const allowed = new Set((nextOptions?.[optionKey] || []).map((o) => String(o.key)));
+        if (multi) {
+          const kept = String(next[field]).split('|').filter((v) => allowed.has(v));
+          if (kept.join('|') !== next[field]) { next[field] = kept.join('|'); removed.push(label); }
+        } else if (!allowed.has(String(next[field]))) { next[field] = ''; removed.push(label); }
+      }
+      setOptions(nextOptions);
+      setValidatedFilters(next);
+      setFiltersReady(true);
+      setFilterBusy(false);
+      setFilterNotice(removed.length ? `Đã bỏ lựa chọn ${[...new Set(removed)].join(', ')} không còn phát sinh trong phạm vi mới.` : '');
+      if (JSON.stringify(next) !== facetSignature) setFilters((f) => ({ ...f, ...next }));
+    }).catch(() => { if (!cancelled) { setFilterBusy(false); setFiltersReady(true); } });
+    return () => { cancelled = true; };
+  }, [ky, facetSignature]);
+  const queryFilters = React.useMemo(() => ({ ...validatedFilters, q: quickQuery }), [validatedFilters, quickQuery]);
+  return { periods, ky, setKy, filters, setFilters, options, queryFilters, filterBusy, filterNotice, filtersReady };
 }

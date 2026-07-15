@@ -3,6 +3,7 @@
  * Mọi số liệu tính ở đây (không để LLM/frontend tự tính).
  */
 const store = require('./store');
+const cstSequence = require('./cstSequence');
 
 const VAT_DIVISOR = 1.05; // doanh thu trước VAT = sau VAT / 1.05
 
@@ -65,10 +66,13 @@ function applyFilters(rows, f = {}) {
   const empList = f.emp ? String(f.emp).split('|').map((s) => s.trim()).filter(Boolean) : [];
   return rows.filter((r) => {
     if (empList.length && !empList.includes(r.emp_code)) return false;
-    if (f.province && r.province !== f.province) return false;
+    // Tỉnh/thành từ các nguồn có thể khác hoa/thường hoặc dấu ("Đồng Nai"/"ĐỒNG NAI").
+    // So theo khóa chuẩn hóa để bộ lọc không làm mất dữ liệu thực tế.
+    if (f.province && norm(r.province) !== norm(f.province)) return false;
     if (f.unit && r.unit_code !== f.unit) return false;
+    if (f.group && String(r.c14 || '') !== String(f.group)) return false;
     if (f.product && r.iit_code !== f.product) return false;
-    if (f.route && r.route !== f.route) return false;
+    if (f.route && String(r.route || '').toUpperCase() !== String(f.route).toUpperCase()) return false;
     if (f.priority && r.priority !== f.priority) return false;
     if (f.contractor && r.contractor_code !== f.contractor) return false;
     if (f.bid && !bidMatch(r.bid_package, f.bid)) return false;
@@ -88,7 +92,7 @@ function applyFilters(rows, f = {}) {
       }
     }
     if (q) {
-      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' '));
+      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.c14, r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' '));
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -170,20 +174,30 @@ function revenueBreakdown({ ky, kys, scope, dimension, filterEmp, filterUnit, fi
 
 /** Bảng cơ số thầu + cảnh báo ngưỡng. */
 function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
-  let rows = store.getCst({ scope });
+  // Scope is enforced by store before sequence classification. This is important:
+  // an employee must never receive sibling metadata from outside their scope.
+  let rows = cstSequence.classifyCstSequence(store.getCst({ scope }));
   if (bidPackage) rows = rows.filter((r) => bidMatch(r.bid_package, bidPackage));
   if (filters?.emp) {
-    const emp = String(filters.emp).trim().toUpperCase();
-    rows = rows.filter((r) => String(r.emp_code || '').split(',').map((x) => x.trim().toUpperCase()).includes(emp));
+    const emps = String(filters.emp).split('|').map((x) => x.trim().toUpperCase()).filter(Boolean);
+    rows = rows.filter((r) => {
+      const rowEmps = [r.emp_code, r.sales_emps].flatMap((v) => String(v || '').split(',')).map((x) => x.trim().toUpperCase()).filter(Boolean);
+      return emps.some((emp) => rowEmps.includes(emp));
+    });
   }
   if (filters?.province) rows = rows.filter((r) => r.province === filters.province);
   if (filters?.unit) rows = rows.filter((r) => r.unit_code === filters.unit || r.unit_name === filters.unit);
+  if (filters?.group) rows = rows.filter((r) => String(r.c14 || '') === String(filters.group));
   if (filters?.product) rows = rows.filter((r) => r.iit_code === filters.product);
   if (filters?.priority) rows = rows.filter((r) => r.priority === filters.priority);
-  if (filters?.status === 'empty') rows = rows.filter((r) => Number(r.sold_qty || 0) === 0 && Number(r.remain_qty || 0) > 0);
+  // "empty" now means a full CST code that is actually actionable. Full codes
+  // waiting behind a current sibling are deliberately not employee action items.
+  if (filters?.status === 'empty') rows = rows.filter((r) => r.cst_sequence?.state === cstSequence.STATES.ACTIONABLE);
+  if (filters?.status === 'queued') rows = rows.filter((r) => r.cst_sequence?.state === cstSequence.STATES.QUEUED);
+  if (filters?.status === 'needs_confirmation') rows = rows.filter((r) => r.cst_sequence?.state === cstSequence.STATES.NEEDS_CONFIRMATION);
   if (filters?.q) {
     const q = norm(filters.q);
-    rows = rows.filter((r) => norm([r.emp_code, r.sales_emps, r.unit_name, r.iit_code, r.product_name, r.active_ingredient, r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' ')).includes(q));
+    rows = rows.filter((r) => norm([r.emp_code, r.sales_emps, r.unit_name, r.iit_code, r.product_name, r.c14, r.active_ingredient, r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' ')).includes(q));
   }
   if (remainPctMax != null) rows = rows.filter((r) => r.remain_pct <= remainPctMax);
   if (remainPctMin != null) rows = rows.filter((r) => r.remain_pct >= remainPctMin);
