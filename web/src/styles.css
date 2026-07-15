@@ -1303,8 +1303,21 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-cst.is-ok small { color:#087a4a; }
 .catalog-cst.is-warning small { color:#a76700; }
 .catalog-cst.is-low small { color:#bd2c2c; }
+.catalog-filter-row-employee { grid-template-columns:minmax(280px,1fr) minmax(100px,125px) minmax(210px,300px) auto; }
+.catalog-table-products.catalog-table-employee { min-width:1240px; }
+.catalog-table-employee th:nth-child(1) { width:55px; }
+.catalog-table-employee th:nth-child(2) { width:155px; }
+.catalog-table-employee th:nth-child(3) { width:145px; }
+.catalog-table-employee th:nth-child(4) { width:150px; }
+.catalog-table-employee th:nth-child(5) { width:200px; }
+.catalog-table-employee th:nth-child(6) { width:50px; }
+.catalog-table-employee th:nth-child(7) { width:110px; }
+.catalog-table-employee th:nth-child(8), .catalog-table-employee th:nth-child(9) { width:95px; }
+.catalog-table-employee th:nth-child(10) { width:70px; }
+.catalog-table-employee th:nth-child(11) { width:115px; }
 @media (min-width:900px) and (max-width:1250px) {
   .catalog-filter-row { grid-template-columns:minmax(220px,1fr) repeat(2,minmax(105px,140px)) minmax(190px,1fr); }
+  .catalog-filter-row-employee { grid-template-columns:minmax(220px,1fr) minmax(105px,140px) minmax(190px,1fr); }
   .catalog-result-count { grid-column:1/-1; border-left:0; border-top:1px solid var(--line); padding-top:6px; }
 }
 @media (max-width:899px) {
@@ -1322,8 +1335,26 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-table-products tr { grid-template-columns:1fr 1fr; }
   .catalog-table-products td:nth-child(3), .catalog-table-products td:nth-child(4),
   .catalog-table-products td:nth-child(5), .catalog-table-products td:nth-child(6) { grid-column:1/-1; }
+  .catalog-table-products.catalog-table-employee { min-width:0; }
+  .catalog-table-employee td:nth-child(1)::before { content:'Tuyến: '; }
+  .catalog-table-employee td:nth-child(2)::before { content:'Mã đơn vị: '; }
+  .catalog-table-employee td:nth-child(3)::before { content:'Mã QLNB: '; }
+  .catalog-table-employee td:nth-child(4)::before { content:'Tên thuốc: '; }
+  .catalog-table-employee td:nth-child(5)::before { content:'Hoạt chất + Hàm lượng: '; }
+  .catalog-table-employee td:nth-child(6)::before { content:'ĐVT: '; }
+  .catalog-table-employee td:nth-child(7)::before { content:'Đơn giá trúng thầu: '; }
+  .catalog-table-employee td:nth-child(8)::before { content:'CST ban đầu: '; }
+  .catalog-table-employee td:nth-child(9)::before { content:'CST còn lại: '; }
+  .catalog-table-employee td:nth-child(10)::before { content:'Từ kỳ: '; }
+  .catalog-table-employee td:nth-child(11)::before { content:'Đến kỳ: '; }
+  .catalog-table-employee td:nth-child(2), .catalog-table-employee td:nth-child(3),
+  .catalog-table-employee td:nth-child(4), .catalog-table-employee td:nth-child(5) { grid-column:1/-1; }
+  .catalog-table-employee td:nth-child(6) { grid-column:auto; }
 }
 @media (max-width:520px) {
   .catalog-filter-row { grid-template-columns:1fr; }
   .catalog-filter-row > label:first-child { grid-column:auto; }
+  .catalog-table-employee tr { grid-template-columns:1fr; }
+  .catalog-table-employee td { grid-column:1/-1 !important; }
+  .catalog-management { padding-bottom:48px; }
 }

@@ -2,11 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { Spinner } from '../components.jsx';
 
-const TYPE_LABELS = { unit_qlnb: 'Đơn vị + Mã QLNB', unit: 'Đơn vị', group: 'Nhóm ưu tiên', route: 'Tuyến', iit: 'Mã QLNB', special: 'Hàng cần đẩy', all: 'Toàn bộ' };
 const uiToHub = (ky) => { const m = String(ky || '').match(/^(\d{2})\.(\d{4})$/); return m ? `${m[2]}-${m[1]}` : ky; };
 const hubToUi = (period) => { const m = String(period || '').match(/^(\d{4})-(\d{2})$/); return m ? `${m[2]}.${m[1]}` : period; };
 const currentKy = () => `${String(new Date().getMonth() + 1).padStart(2, '0')}.${new Date().getFullYear()}`;
-const typeLabel = (type) => TYPE_LABELS[type] || type || 'Danh mục';
 const sourceLabel = (source) => ({ 'data-hub': 'Data Hub', 'data-hub-lkg': 'Data Hub · bản tốt gần nhất' }[source] || source || '—');
 const dateText = (iso) => iso ? new Date(iso).toLocaleString('vi-VN') : 'Chưa đồng bộ';
 const moneyText = (value) => {
@@ -32,20 +30,38 @@ function SourceStatus({ meta }) {
 }
 
 function EmployeeSections({ data }) {
-  const sections = [
-    ['Tôi phụ trách', data?.sections?.current || [], 'current'],
-    ['Sắp kết thúc', data?.sections?.ending || [], 'ending'],
-    ['Sắp bắt đầu', data?.sections?.starting || [], 'starting'],
-  ];
+  const [query, setQuery] = useState('');
+  const [route, setRoute] = useState('');
+  const [unit, setUnit] = useState('');
+  const [page, setPage] = useState(1);
+  const currentRows = useMemo(() => data?.sections?.current || [], [data]);
+  const routeOptions = useMemo(() => [...new Set(currentRows.map(routeOf).filter(Boolean))].sort(), [currentRows]);
+  const unitOptions = useMemo(() => [...new Set(currentRows.filter((row) => !route || routeOf(row) === route).map((row) => row.unit_code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, route]);
+  const rows = useMemo(() => currentRows.filter((row) => {
+    const text = `${row.route || ''} ${row.unit_code || ''} ${row.qlnb_code || ''} ${row.product_name || ''} ${row.active_ingredient || ''} ${row.strength || ''} ${row.uom || ''}`.toLowerCase();
+    return (!query || text.includes(query.toLowerCase())) && (!route || routeOf(row) === route) && (!unit || row.unit_code === unit);
+  }), [currentRows, query, route, unit]);
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const visibleRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [query, route, unit, data?.period]);
+  const goPage = (next) => { setPage(Math.max(1, Math.min(pageCount, next))); requestAnimationFrame(() => document.getElementById('employee-catalog-table-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   return <>
-    <div className="card catalog-help"><b>Mục đích</b><p>Xem các cặp đơn vị – mã QLNB Anh/Chị đang phụ trách trong kỳ. Dữ liệu chỉ hiển thị phạm vi của chính Anh/Chị.</p></div>
-    <div className="card"><b>{data?.employee?.name || data?.employee?.code}</b><div className="meta muted">Kỳ {data?.period_ui || hubToUi(data?.period)}</div></div>
-    <div className="catalog-section-grid">{sections.map(([title, rows, kind]) => <section className="card" key={kind}>
-      <div className="catalog-card-head"><h3>{title}</h3><span className={`pill catalog-${kind}`}>{rows.length}</span></div>
-      {rows.length === 0 ? <div className="muted catalog-empty">Chưa có mục trong kỳ đã chọn.</div> : <div className="catalog-item-list">{rows.map((row) => <div className="catalog-item" key={`${kind}-${row.id}`}>
-        <b>{row.label}</b><span>{typeLabel(row.type)}</span><small>Hiệu lực {hubToUi(row.effective_from)}{row.effective_to ? ` – ${hubToUi(row.effective_to)}` : ''}</small>
-      </div>)}</div>}
-    </section>)}</div>
+    <div className="card catalog-help"><b>Danh mục của {data?.employee?.name || data?.employee?.code}</b><p>Chỉ hiển thị các cặp đơn vị – mã QLNB Anh/Chị đang phụ trách trong kỳ {data?.period_ui || hubToUi(data?.period)}.</p></div>
+    <div className="card catalog-controls-compact">
+      <div className="catalog-filter-row catalog-filter-row-employee">
+        <label><span>Tìm đơn vị, QLNB hoặc tên thuốc</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nhập tên hoặc mã cần tìm…" /></label>
+        <label><span>Tuyến</span><select value={route} onChange={(e) => { setRoute(e.target.value); setUnit(''); }}><option value="">Tất cả tuyến</option>{routeOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
+        <label><span>Đơn vị</span><select value={unit} onChange={(e) => setUnit(e.target.value)}><option value="">Tất cả đơn vị</option>{unitOptions.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
+        <div className="catalog-result-count"><span>Đang phụ trách</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
+      </div>
+    </div>
+    <div id="employee-catalog-table-top" className="card table-card catalog-table-card">
+      <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td>{routeOf(r) || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><b className="catalog-two-lines" title={r.product_name || ''}>{r.product_name || '—'}</b></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
+      {rows.length === 0 && <div className="muted catalog-empty">Chưa có danh mục trong phạm vi đang lọc.</div>}
+      <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
+    </div>
   </>;
 }
 
@@ -212,7 +228,7 @@ export default function CatalogManagement({ me }) {
   useEffect(() => { load(period); }, [period, isAdmin]);
   return <div className="catalog-management">
     <div className="card catalog-heading catalog-heading-compact">
-      <div><div className="section-head">🗂️ Phân công danh mục bán hàng</div><div className="meta muted">Theo cặp đơn vị + mã QLNB và từng kỳ</div></div>
+      <div><div className="section-head">🗂️ {isAdmin ? 'Phân công danh mục bán hàng' : 'Danh mục bán hàng của tôi'}</div><div className="meta muted">{isAdmin ? 'Theo cặp đơn vị + mã QLNB và từng kỳ' : 'Chỉ hiển thị phạm vi Anh/Chị đang phụ trách'}</div></div>
       <div className="catalog-heading-actions">{data?.meta && <SourceStatus meta={data.meta} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}

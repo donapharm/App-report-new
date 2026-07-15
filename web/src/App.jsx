@@ -63,7 +63,11 @@ export default function App() {
   if (!me) return <Login onLogin={setMe} />;
 
   const logout = () => { setToken(null); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
-  const tabs = TABS.filter((t) => !t.adminOnly || me.isAdmin);
+  const tabs = TABS.filter((t) => !t.adminOnly || me.isAdmin).map((t) => (
+    t.key === 'catalogManagement' && !me.isAdmin
+      ? { ...t, label: 'Danh mục bán hàng của tôi', full: 'Danh mục bán hàng của tôi' }
+      : t
+  ));
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).C;
   const switchTab = (targetTab, payload = {}, mode = 'push') => {
     try { sessionStorage.setItem('app_nav_payload', JSON.stringify({ tab: targetTab, ...payload, ts: Date.now() })); } catch { /* ignore */ }
@@ -138,7 +142,7 @@ export default function App() {
       </main>
       <ScrollTopButton />
       <UpdateBanner />
-      <ZaloMobileAccess />
+      {tab !== 'catalogManagement' && <ZaloMobileAccess />}
       <nav className="nav">
         {tabs.map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>

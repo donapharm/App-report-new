@@ -194,7 +194,7 @@ function activeIn(row, period) {
   return row.active !== false && row.effective_from <= period && (!row.effective_to || row.effective_to >= period);
 }
 function employeeItem(row, status) {
-  return { id: row.id, type: row.type, value: row.value, label: row.label, product_name: row.product_name, active_ingredient: row.active_ingredient, strength: row.strength, uom: row.uom, bid_price: row.bid_price, cst_initial: row.cst_initial, cst_remaining: row.cst_remaining, effective_from: row.effective_from, effective_to: row.effective_to, status };
+  return { id: row.id, type: row.type, value: row.value, label: row.label, route: row.route, unit_code: row.unit_code, qlnb_code: row.qlnb_code, product_name: row.product_name, active_ingredient: row.active_ingredient, strength: row.strength, uom: row.uom, bid_price: row.bid_price, cst_initial: row.cst_initial, cst_remaining: row.cst_remaining, effective_from: row.effective_from, effective_to: row.effective_to, status };
 }
 function assertEmployeeSafe(value, pathName = 'response') {
   if (Array.isArray(value)) return value.forEach((v, i) => assertEmployeeSafe(v, `${pathName}[${i}]`));
