@@ -1299,6 +1299,18 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-table-products thead th + th { border-left:1px solid rgba(255,255,255,.18); }
 .catalog-table-products td { overflow:hidden; }
 .catalog-two-lines { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; max-height:2.55em; white-space:normal; overflow-wrap:anywhere; line-height:1.25; }
+.catalog-drug-multi-qlnb {
+  max-height:calc(2.55em + 6px);
+  margin:-2px 0;
+  padding:3px 6px;
+  border:1px solid #efbd68;
+  border-left:4px solid #e58a00;
+  border-radius:6px;
+  background:#fff1d6;
+  color:#9b4c00;
+  box-shadow:0 1px 2px rgba(155,76,0,.1);
+  cursor:help;
+}
 .catalog-cst small { display:block; margin-top:2px; font-size:10px; font-weight:800; }
 .catalog-cst.is-ok small { color:#087a4a; }
 .catalog-cst.is-warning small { color:#a76700; }

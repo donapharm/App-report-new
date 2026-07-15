@@ -19,8 +19,28 @@ const quantityText = (value) => {
 };
 const activeInPeriod = (row, period) => row?.active !== false && row?.effective_from <= period && (!row?.effective_to || row.effective_to >= period);
 const routeOf = (row) => String(row?.route || '').trim().toUpperCase();
+const drugNameKey = (value) => String(value || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi');
+const drugQlnbCounts = (rows) => {
+  const grouped = new Map();
+  for (const row of rows || []) {
+    const key = drugNameKey(row.product_name);
+    const qlnb = String(row.qlnb_code || '').trim();
+    if (!key || !qlnb) continue;
+    if (!grouped.has(key)) grouped.set(key, new Set());
+    grouped.get(key).add(qlnb);
+  }
+  return new Map([...grouped].map(([key, codes]) => [key, codes.size]));
+};
 const ROUTES = ['CL', 'NCL', 'NT'];
 const PAGE_SIZE = 200;
+
+function DrugName({ row, counts }) {
+  const name = row.product_name || '—';
+  const count = counts.get(drugNameKey(row.product_name)) || 0;
+  const needsAttention = count > 1;
+  const title = needsAttention ? `${name} · Tên thuốc này có ${count} mã QLNB trong kỳ đang xem` : name;
+  return <b className={`catalog-two-lines${needsAttention ? ' catalog-drug-multi-qlnb' : ''}`} title={title}>{name}</b>;
+}
 
 function SourceStatus({ meta }) {
   if (!meta) return null;
@@ -35,6 +55,7 @@ function EmployeeSections({ data }) {
   const [unit, setUnit] = useState('');
   const [page, setPage] = useState(1);
   const currentRows = useMemo(() => data?.sections?.current || [], [data]);
+  const qlnbCounts = useMemo(() => drugQlnbCounts(currentRows), [currentRows]);
   const routeOptions = useMemo(() => [...new Set(currentRows.map(routeOf).filter(Boolean))].sort(), [currentRows]);
   const unitOptions = useMemo(() => [...new Set(currentRows.filter((row) => !route || routeOf(row) === route).map((row) => row.unit_code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, route]);
   const rows = useMemo(() => currentRows.filter((row) => {
@@ -58,7 +79,7 @@ function EmployeeSections({ data }) {
     </div>
     <div id="employee-catalog-table-top" className="card table-card catalog-table-card">
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td>{routeOf(r) || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><b className="catalog-two-lines" title={r.product_name || ''}>{r.product_name || '—'}</b></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td>{routeOf(r) || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><DrugName row={r} counts={qlnbCounts} /></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
       {rows.length === 0 && <div className="muted catalog-empty">Chưa có danh mục trong phạm vi đang lọc.</div>}
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
     </div>
@@ -158,6 +179,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
   const [unit, setUnit] = useState('');
   const [page, setPage] = useState(1);
   const currentRows = useMemo(() => (data?.rows || []).filter((row) => activeInPeriod(row, period)), [data, period]);
+  const qlnbCounts = useMemo(() => drugQlnbCounts(currentRows), [currentRows]);
   const routeOptions = useMemo(() => [...new Set(currentRows.filter((row) => !emp || row.emp_code === emp).map(routeOf).filter(Boolean))].sort(), [currentRows, emp]);
   const unitOptions = useMemo(() => [...new Set(currentRows.filter((row) => (!emp || row.emp_code === emp) && (!route || routeOf(row) === route)).map((row) => row.unit_code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, emp, route]);
   const rows = useMemo(() => currentRows.filter((row) => {
@@ -191,7 +213,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
       </div>
       <div id="catalog-table-top" className="card table-card catalog-table-card">
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td><b>{r.emp_code}</b><small>{r.emp_name}</small></td><td>{routeOf(r) || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><b className="catalog-two-lines" title={r.product_name || ''}>{r.product_name || '—'}</b></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td><b>{r.emp_code}</b><small>{r.emp_name}</small></td><td>{routeOf(r) || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><DrugName row={r} counts={qlnbCounts} /></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
       </div>
     </> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
