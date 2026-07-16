@@ -19,6 +19,37 @@ const quantityText = (value) => {
 };
 const activeInPeriod = (row, period) => row?.active !== false && row?.effective_from <= period && (!row?.effective_to || row.effective_to >= period);
 const routeOf = (row) => String(row?.route || '').trim().toUpperCase();
+const provinceOf = (row) => String(row?.province || '').trim();
+const normalizeSearch = (value) => String(value || '').toLowerCase().replace(/đ/g, 'd').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ');
+const editDistanceWithin = (a, b, limit) => {
+  if (a === b) return 0;
+  if (Math.abs(a.length - b.length) > limit) return limit + 1;
+  let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    const current = [i]; let rowMin = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      rowMin = Math.min(rowMin, current[j]);
+    }
+    if (rowMin > limit) return limit + 1;
+    previous = current;
+  }
+  return previous[b.length];
+};
+const smartTokenMatch = (queryToken, candidateToken) => {
+  if (queryToken === candidateToken || (queryToken.length >= 2 && candidateToken.includes(queryToken))) return true;
+  if (!/^[a-z]+$/.test(queryToken) || !/^[a-z]+$/.test(candidateToken)) return false;
+  const limit = queryToken.length >= 8 ? 2 : queryToken.length >= 4 ? 1 : 0;
+  return limit > 0 && editDistanceWithin(queryToken, candidateToken, limit) <= limit;
+};
+const catalogSearchText = (row) => [row.emp_code, row.emp_name, row.type, row.value, row.label, row.province, row.route, row.contractor_code, row.unit_code, row.qlnb_code, row.product_name, row.active_ingredient, row.strength, row.uom].filter(Boolean).join(' ');
+const matchesSmartSearch = (row, query) => {
+  const q = normalizeSearch(query); if (!q) return true;
+  const haystack = normalizeSearch(catalogSearchText(row));
+  if (haystack.includes(q)) return true;
+  const candidates = haystack.split(' ');
+  return q.split(' ').every((token) => candidates.some((candidate) => smartTokenMatch(token, candidate)));
+};
 const drugNameKey = (value) => String(value || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('vi');
 const drugQlnbCounts = (rows) => {
   const grouped = new Map();
@@ -49,29 +80,35 @@ function SourceStatus({ meta }) {
   </div>;
 }
 
+function CatalogSearch({ value, onChange, employee = false }) {
+  return <label className="catalog-search-label"><span>{employee ? 'Tìm thông minh trong danh mục của tôi' : 'Tìm thông minh toàn danh mục'}</span><div className="catalog-search-wrap"><input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Tên thuốc, QLNB, đơn vị, nhà thầu…" aria-label="Tìm kiếm thông minh danh mục" />{value && <button type="button" onClick={() => onChange('')} aria-label="Xóa nội dung tìm kiếm" title="Xóa tìm kiếm">×</button>}</div></label>;
+}
+
 function EmployeeSections({ data }) {
   const [query, setQuery] = useState('');
+  const [province, setProvince] = useState('');
   const [route, setRoute] = useState('');
   const [unit, setUnit] = useState('');
   const [page, setPage] = useState(1);
   const currentRows = useMemo(() => data?.sections?.current || [], [data]);
   const qlnbCounts = useMemo(() => drugQlnbCounts(currentRows), [currentRows]);
-  const routeOptions = useMemo(() => [...new Set(currentRows.map(routeOf).filter(Boolean))].sort(), [currentRows]);
-  const unitOptions = useMemo(() => [...new Set(currentRows.filter((row) => !route || routeOf(row) === route).map((row) => row.unit_code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, route]);
+  const provinceOptions = useMemo(() => [...new Set(currentRows.map(provinceOf).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows]);
+  const routeOptions = useMemo(() => [...new Set(currentRows.filter((row) => !province || provinceOf(row) === province).map(routeOf).filter(Boolean))].sort(), [currentRows, province]);
+  const unitOptions = useMemo(() => [...new Set(currentRows.filter((row) => (!province || provinceOf(row) === province) && (!route || routeOf(row) === route)).map((row) => row.unit_code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, province, route]);
   const rows = useMemo(() => currentRows.filter((row) => {
-    const text = `${row.route || ''} ${row.unit_code || ''} ${row.qlnb_code || ''} ${row.product_name || ''} ${row.active_ingredient || ''} ${row.strength || ''} ${row.uom || ''}`.toLowerCase();
-    return (!query || text.includes(query.toLowerCase())) && (!route || routeOf(row) === route) && (!unit || row.unit_code === unit);
-  }), [currentRows, query, route, unit]);
+    return matchesSmartSearch(row, query) && (!province || provinceOf(row) === province) && (!route || routeOf(row) === route) && (!unit || row.unit_code === unit);
+  }), [currentRows, query, province, route, unit]);
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const visibleRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [query, route, unit, data?.period]);
+  useEffect(() => { setPage(1); }, [query, province, route, unit, data?.period]);
   const goPage = (next) => { setPage(Math.max(1, Math.min(pageCount, next))); requestAnimationFrame(() => document.getElementById('employee-catalog-table-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   return <>
     <div className="card catalog-help"><b>Danh mục của {data?.employee?.name || data?.employee?.code}</b><p>Chỉ hiển thị các cặp đơn vị – mã QLNB Anh/Chị đang phụ trách trong kỳ {data?.period_ui || hubToUi(data?.period)}.</p></div>
     <div className="card catalog-controls-compact">
       <div className="catalog-filter-row catalog-filter-row-employee">
-        <label><span>Tìm đơn vị, QLNB hoặc tên thuốc</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nhập tên hoặc mã cần tìm…" /></label>
+        <CatalogSearch value={query} onChange={setQuery} employee />
+        <label><span>Vùng/Tỉnh</span><select value={province} onChange={(e) => { setProvince(e.target.value); setRoute(''); setUnit(''); }}><option value="">Tất cả vùng</option>{provinceOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
         <label><span>Tuyến</span><select value={route} onChange={(e) => { setRoute(e.target.value); setUnit(''); }}><option value="">Tất cả tuyến</option>{routeOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
         <label><span>Đơn vị</span><select value={unit} onChange={(e) => setUnit(e.target.value)}><option value="">Tất cả đơn vị</option>{unitOptions.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
         <div className="catalog-result-count"><span>Đang phụ trách</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
@@ -79,7 +116,7 @@ function EmployeeSections({ data }) {
     </div>
     <div id="employee-catalog-table-top" className="card table-card catalog-table-card">
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td>{routeOf(r) || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><DrugName row={r} counts={qlnbCounts} /></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td>{routeOf(r) || '—'}</td><td>{r.contractor_code || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><DrugName row={r} counts={qlnbCounts} /></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
       {rows.length === 0 && <div className="muted catalog-empty">Chưa có danh mục trong phạm vi đang lọc.</div>}
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
     </div>
@@ -87,11 +124,12 @@ function EmployeeSections({ data }) {
 }
 
 function Pager({ page, pageCount, total, onPage, location }) {
-  if (pageCount <= 1) return null;
   return <div className={`catalog-pager ${location === 'top' ? 'is-top' : 'is-bottom'}`}>
-    <button className="btn ghost" disabled={page <= 1} onClick={() => onPage(page - 1)}>← Trước</button>
-    <span><b>Trang {page.toLocaleString('vi-VN')} / {pageCount.toLocaleString('vi-VN')}</b><small>{total.toLocaleString('vi-VN')} kết quả</small></span>
-    <button className="btn ghost" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>Sau →</button>
+    <div className="catalog-pager-capsule" role="group" aria-label={`Chuyển trang, trang ${page} trên ${pageCount}`}>
+      <button className="catalog-pager-prev" disabled={page <= 1} onClick={() => onPage(page - 1)}>‹ Trước</button>
+      <span><svg className="catalog-capsule-mark" viewBox="0 0 42 22" aria-hidden="true"><path d="M11 1h10v20H11A10 10 0 0 1 11 1Z" fill="#1676bd"/><path d="M21 1h10a10 10 0 0 1 0 20H21Z" fill="#f29313"/><path d="M8 5c6-4 20-4 27 0" fill="none" stroke="#fff" strokeOpacity=".62" strokeWidth="2" strokeLinecap="round"/><path d="M21 1v20" stroke="#fff" strokeOpacity=".82"/></svg><b>Trang {page.toLocaleString('vi-VN')}/{pageCount.toLocaleString('vi-VN')}</b><i>· {total.toLocaleString('vi-VN')} dòng</i></span>
+      <button className="catalog-pager-next" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>Sau ›</button>
+    </div>
   </div>;
 }
 
@@ -175,21 +213,22 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
   const [mode, setMode] = useState('view');
   const [query, setQuery] = useState('');
   const [emp, setEmp] = useState('');
+  const [province, setProvince] = useState('');
   const [route, setRoute] = useState('');
   const [unit, setUnit] = useState('');
   const [page, setPage] = useState(1);
   const currentRows = useMemo(() => (data?.rows || []).filter((row) => activeInPeriod(row, period)), [data, period]);
   const qlnbCounts = useMemo(() => drugQlnbCounts(currentRows), [currentRows]);
-  const routeOptions = useMemo(() => [...new Set(currentRows.filter((row) => !emp || row.emp_code === emp).map(routeOf).filter(Boolean))].sort(), [currentRows, emp]);
-  const unitOptions = useMemo(() => [...new Set(currentRows.filter((row) => (!emp || row.emp_code === emp) && (!route || routeOf(row) === route)).map((row) => row.unit_code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, emp, route]);
+  const provinceOptions = useMemo(() => [...new Set(currentRows.filter((row) => !emp || row.emp_code === emp).map(provinceOf).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, emp]);
+  const routeOptions = useMemo(() => [...new Set(currentRows.filter((row) => (!emp || row.emp_code === emp) && (!province || provinceOf(row) === province)).map(routeOf).filter(Boolean))].sort(), [currentRows, emp, province]);
+  const unitOptions = useMemo(() => [...new Set(currentRows.filter((row) => (!emp || row.emp_code === emp) && (!province || provinceOf(row) === province) && (!route || routeOf(row) === route)).map((row) => row.unit_code).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, emp, province, route]);
   const rows = useMemo(() => currentRows.filter((row) => {
-    const text = `${row.emp_code} ${row.emp_name} ${row.type} ${row.value} ${row.label} ${row.product_name || ''} ${row.active_ingredient || ''} ${row.strength || ''} ${row.uom || ''}`.toLowerCase();
-    return (!query || text.includes(query.toLowerCase())) && (!emp || row.emp_code === emp) && (!route || routeOf(row) === route) && (!unit || row.unit_code === unit);
-  }), [currentRows, query, emp, route, unit]);
+    return matchesSmartSearch(row, query) && (!emp || row.emp_code === emp) && (!province || provinceOf(row) === province) && (!route || routeOf(row) === route) && (!unit || row.unit_code === unit);
+  }), [currentRows, query, emp, province, route, unit]);
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const visibleRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-  useEffect(() => { setPage(1); }, [period, query, emp, route, unit]);
+  useEffect(() => { setPage(1); }, [period, query, emp, province, route, unit]);
   const goPage = (next) => { setPage(Math.max(1, Math.min(pageCount, next))); requestAnimationFrame(() => document.getElementById('catalog-table-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   return <>
     <details className="card catalog-help-compact">
@@ -204,8 +243,9 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
     {mode === 'view' ? <>
       <div className="card catalog-controls-compact">
         <div className="catalog-filter-row">
-          <label><span>Tìm NV, đơn vị, QLNB hoặc tên thuốc</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Nhập tên hoặc mã cần tìm…" /></label>
-          <label><span>Nhân viên</span><select value={emp} onChange={(e) => { setEmp(e.target.value); setRoute(''); setUnit(''); }}><option value="">Tất cả nhân viên</option>{[...new Set(currentRows.map((r) => r.emp_code).filter(Boolean))].sort().map((x) => <option key={x}>{x}</option>)}</select></label>
+          <CatalogSearch value={query} onChange={setQuery} />
+          <label><span>Vùng/Tỉnh</span><select value={province} onChange={(e) => { setProvince(e.target.value); setRoute(''); setUnit(''); }}><option value="">Tất cả vùng</option>{provinceOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
+          <label><span>Nhân viên</span><select value={emp} onChange={(e) => { setEmp(e.target.value); setProvince(''); setRoute(''); setUnit(''); }}><option value="">Tất cả nhân viên</option>{[...new Set(currentRows.map((r) => r.emp_code).filter(Boolean))].sort().map((x) => <option key={x}>{x}</option>)}</select></label>
           <label><span>Tuyến</span><select value={route} onChange={(e) => { setRoute(e.target.value); setUnit(''); }}><option value="">Tất cả tuyến</option>{routeOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
           <label><span>Đơn vị</span><select value={unit} onChange={(e) => setUnit(e.target.value)}><option value="">Tất cả đơn vị</option>{unitOptions.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
           <div className="catalog-result-count"><span>Kết quả</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
@@ -213,7 +253,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
       </div>
       <div id="catalog-table-top" className="card table-card catalog-table-card">
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td><b>{r.emp_code}</b><small>{r.emp_name}</small></td><td>{routeOf(r) || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><DrugName row={r} counts={qlnbCounts} /></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td><b>{r.emp_code}</b><small>{r.emp_name}</small></td><td>{routeOf(r) || '—'}</td><td>{r.contractor_code || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><DrugName row={r} counts={qlnbCounts} /></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
       </div>
     </> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}

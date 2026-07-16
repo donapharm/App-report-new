@@ -66,6 +66,11 @@ export default function App() {
     return () => document.documentElement.classList.remove('products-mode');
   }, [me, tab]);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('catalog-mode', !!me && tab === 'catalogManagement');
+    return () => document.documentElement.classList.remove('catalog-mode');
+  }, [me, tab]);
+
   if (loading) return <Spinner />;
   if (!me) return <Login onLogin={setMe} />;
 

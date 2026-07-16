@@ -3,11 +3,12 @@ const path = require('path');
 const crypto = require('crypto');
 const assignmentAdmin = require('./assignmentAdmin');
 const store = require('./store');
+const { provinceOf } = require('./province');
 
 const CACHE_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(__dirname, '..', 'data', 'catalog_management_lkg.json');
 const DEFAULT_TIMEOUT_MS = 6500;
 const TYPE_LABELS = { unit_qlnb: 'Đơn vị + Mã QLNB', unit: 'Đơn vị', group: 'Nhóm ưu tiên', route: 'Tuyến', iit: 'Mã QLNB', special: 'Hàng cần đẩy', all: 'Toàn bộ' };
-const EMPLOYEE_FORBIDDEN_KEYS = /(^|_)(old|new|from|to)[_-]?emp|counterpart|actor|batch|transfer_batch_id|note|audit|history|by$|internal/i;
+const EMPLOYEE_FORBIDDEN_KEYS = /(^|_)(?:(?:old|new|from|to)[_-]?emp|counterpart|actor|batch|transfer_batch_id|note|audit|history|by|internal)(_|$)/i;
 const EMPLOYEE_FORBIDDEN_PHRASES = /bàn giao cho|nhận từ/i;
 const PERMANENTLY_BLOCKED_CATALOG_FIELDS = Object.freeze(['c32', 'c47']);
 const PERMANENTLY_BLOCKED_CATALOG_SET = new Set(PERMANENTLY_BLOCKED_CATALOG_FIELDS);
@@ -133,6 +134,7 @@ function normalizeRow(row = {}) {
   const type = String(row.type || row.category_type || row.assignment_type || ({ unit_qlnb: 'unit_qlnb', qlnb: 'iit', don_vi: 'unit', route: 'route', all: 'all' }[scope]) || '').trim().toLowerCase();
   const value = String(row.value ?? row.code ?? row.category_key ?? row.assignment_value ?? '').trim();
   const emp = String(row.emp_code || row.employee_code || row.owner_emp_code || '').trim().toUpperCase();
+  const unitCode = row.unit_code || null;
   return {
     id: String(row.id || row.assignment_id || `${emp}:${type}:${value}`),
     emp_code: emp,
@@ -142,9 +144,11 @@ function normalizeRow(row = {}) {
     label: String(row.label || row.category_label || (type === 'unit_qlnb'
       ? `${row.unit_code || value.split('\u001f')[0] || '—'} · ${row.qlnb_code || value.split('\u001f')[1] || '—'}`
       : `${TYPE_LABELS[type] || type}${value && value !== 'all' ? ` · ${value}` : ''}`)),
-    unit_code: row.unit_code || null,
+    unit_code: unitCode,
     qlnb_code: row.qlnb_code || null,
     route: row.route || null,
+    province: provinceOf(unitCode, row.unit_name || unitCode, row.province),
+    contractor_code: row.contractor_code || row.c4 || null,
     product_name: row.product_name || row.c16 || null,
     active_ingredient: row.active_ingredient || row.c15 || null,
     strength: row.strength || row.ham_luong || row.c17 || null,
@@ -168,7 +172,7 @@ function enrichRowsFromCatalog(rows, catalog) {
   }
   return rows.map((row) => {
     const item = byPair.get(`${String(row.unit_code || '').trim()}\u001f${String(row.qlnb_code || '').trim()}`);
-    return item ? { ...row, product_name: item.c16 || null, active_ingredient: item.c15 || null, strength: item.c17 || null, uom: item.c25 || null, bid_price: item.c31 ?? null } : row;
+    return item ? { ...row, contractor_code: item.c4 || null, product_name: item.c16 || null, active_ingredient: item.c15 || null, strength: item.c17 || null, uom: item.c25 || null, bid_price: item.c31 ?? null } : row;
   });
 }
 function enrichRowsWithCst(rows, cstRows) {
@@ -266,7 +270,7 @@ function activeIn(row, period) {
   return row.active !== false && row.effective_from <= period && (!row.effective_to || row.effective_to >= period);
 }
 function employeeItem(row, status) {
-  return { id: row.id, type: row.type, value: row.value, label: row.label, route: row.route, unit_code: row.unit_code, qlnb_code: row.qlnb_code, product_name: row.product_name, active_ingredient: row.active_ingredient, strength: row.strength, uom: row.uom, bid_price: row.bid_price, cst_initial: row.cst_initial, cst_remaining: row.cst_remaining, effective_from: row.effective_from, effective_to: row.effective_to, status };
+  return { id: row.id, type: row.type, value: row.value, label: row.label, route: row.route, province: row.province || provinceOf(row.unit_code, row.unit_code), contractor_code: row.contractor_code, unit_code: row.unit_code, qlnb_code: row.qlnb_code, product_name: row.product_name, active_ingredient: row.active_ingredient, strength: row.strength, uom: row.uom, bid_price: row.bid_price, cst_initial: row.cst_initial, cst_remaining: row.cst_remaining, effective_from: row.effective_from, effective_to: row.effective_to, status };
 }
 function assertEmployeeSafe(value, pathName = 'response') {
   if (Array.isArray(value)) return value.forEach((v, i) => assertEmployeeSafe(v, `${pathName}[${i}]`));
@@ -300,7 +304,8 @@ function adminView(snapshot) {
   // The browser only needs the resolved unit+QLNB timeline. Keep the full
   // restricted catalog server-side in the versioned LKG snapshot to avoid
   // sending a duplicate ~6 MB payload on every CEO page load.
-  return { period: snapshot.period, period_ui: toUiPeriod(snapshot.period), rows: snapshot.rows, catalog_total: Array.isArray(snapshot.catalog) ? snapshot.catalog.length : 0, history: snapshot.history || [], meta: snapshot.meta };
+  const rows = snapshot.rows.map((row) => row.province ? row : { ...row, province: provinceOf(row.unit_code, row.unit_code) });
+  return { period: snapshot.period, period_ui: toUiPeriod(snapshot.period), rows, catalog_total: Array.isArray(snapshot.catalog) ? snapshot.catalog.length : 0, history: snapshot.history || [], meta: snapshot.meta };
 }
 async function getHistory() {
   if (!configured()) return { history: [], source: 'unavailable' };

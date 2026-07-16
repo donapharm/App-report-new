@@ -16,10 +16,11 @@
   --ok: #1f9d6b;
   --shadow: 0 2px 10px rgba(21, 104, 184, 0.09);
   --maxw: 640px;
-  --hdr-h: 86px; /* đủ chỗ cho logo chính thức + hàng đồng hồ/đăng xuất */
+  --hdr-h: 96px; /* khớp chiều cao thực của banner mobile thường */
+  --desktop-topbar-h: 65px;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; padding: 0; width: 100%; max-width: 100%; overflow-x: hidden; }
+html, body { margin: 0; padding: 0; width: 100%; max-width: 100%; overflow-x: clip; }
 body {
   font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
   background: var(--bg); color: var(--ink); font-size: 15px; line-height: 1.45;
@@ -65,7 +66,7 @@ body {
 .page { padding: calc(var(--hdr-h) + env(safe-area-inset-top) + 8px) 14px calc(102px + env(safe-area-inset-bottom)); transition: padding-top .18s ease; }
 .hdr { transition: padding .18s ease, box-shadow .18s ease; }
 /* #6 Mini-header: cuộn xuống -> banner co lại + ẩn dòng chức danh; --hdr-h giảm nên .page cũng co theo (không hở) */
-:root.hdr-mini { --hdr-h: 66px; }
+:root.hdr-mini { --hdr-h: 74px; }
 :root.hdr-mini .hdr { min-height: 0; padding-top: calc(4px + env(safe-area-inset-top)); padding-bottom: 4px; box-shadow: 0 2px 10px rgba(11,61,112,.3); }
 :root.hdr-mini .hdr .official-logo img { width: 58px !important; }
 :root.hdr-mini .hdr .logout { padding: 3px 9px; font-size: 10.5px; }
@@ -705,6 +706,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
    Viền cam nằm trong box-shadow để không làm thay đổi chiều cao sticky hiện tại. */
 .topbar {
   position: sticky; top: 0; z-index: 30;
+  min-height:var(--desktop-topbar-h); box-sizing:border-box;
   background: linear-gradient(135deg, #005daa 0%, #004b8d 100%);
   padding: 10px 32px 8px; border-bottom: 1px solid rgba(255,255,255,.16);
   box-shadow: inset 0 -3px 0 #f7a31c, 0 4px 14px rgba(0,75,141,.22);
@@ -764,6 +766,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .hdr .logo, .hdr .logo-wrap { min-width: 0; }
   .hdr .logout { padding: 4px 10px; font-size: 11px; }
   .page { padding: calc(var(--hdr-h) + env(safe-area-inset-top) + 8px) 10px calc(126px + env(safe-area-inset-bottom)); overflow-x: hidden; }
+  /* Trang danh mục cần sticky pager theo viewport: dùng clip để không tạo scroll ancestor giả. */
+  .page:has(.catalog-management) { overflow-x: clip; }
   .card { padding: 10px; border-radius: 12px; margin-bottom: 8px; overflow: hidden; }
   .kpi-grid { grid-template-columns: 1fr 1fr; gap: 7px; }
   .kpi { padding: 6px 10px; min-width: 0; }
@@ -1299,22 +1303,28 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 
 /* Danh mục quản lý — bộ lọc phụ thuộc, CST và vùng bảng rộng (CEO duyệt 15/07/2026 19:05). */
 .page-desktop.page-desktop-wide { max-width:none; padding:12px 14px 40px; }
-.catalog-filter-row { grid-template-columns:minmax(230px,1fr) minmax(125px,155px) minmax(95px,115px) minmax(190px,270px) auto; }
+.catalog-filter-row { grid-template-columns:minmax(260px,1fr) minmax(125px,155px) minmax(125px,155px) minmax(95px,115px) minmax(180px,250px) auto; }
 .catalog-filter-row select { width:100%; min-width:0; }
-.catalog-table-products { min-width:1275px; table-layout:fixed; }
-.catalog-table-products th:nth-child(1) { width:92px; }
-.catalog-table-products th:nth-child(2) { width:55px; }
-.catalog-table-products th:nth-child(3) { width:145px; }
-.catalog-table-products th:nth-child(4) { width:145px; }
-.catalog-table-products th:nth-child(5) { width:140px; }
-.catalog-table-products th:nth-child(6) { width:185px; }
-.catalog-table-products th:nth-child(7) { width:50px; }
-.catalog-table-products th:nth-child(8) { width:105px; }
-.catalog-table-products th:nth-child(9), .catalog-table-products th:nth-child(10) { width:88px; }
-.catalog-table-products th:nth-child(11) { width:65px; }
-.catalog-table-products th:nth-child(12) { width:115px; }
+.catalog-search-wrap { position:relative; min-width:0; }
+.catalog-search-wrap input { width:100%; padding-right:36px; }
+.catalog-search-wrap button { position:absolute; top:50%; right:6px; display:grid; place-items:center; width:25px; height:25px; padding:0; transform:translateY(-50%); border:0; border-radius:50%; background:#e8eef5; color:#41566b; font-size:19px; line-height:1; cursor:pointer; }
+.catalog-search-wrap button:hover { background:#dce8f4; color:var(--brand); }
+.catalog-table-products { min-width:1306px; table-layout:fixed; }
+.catalog-table-products th:nth-child(1) { width:88px; }
+.catalog-table-products th:nth-child(2) { width:50px; }
+.catalog-table-products th:nth-child(3) { width:95px; }
+.catalog-table-products th:nth-child(4) { width:135px; }
+.catalog-table-products th:nth-child(5) { width:135px; }
+.catalog-table-products th:nth-child(6) { width:130px; }
+.catalog-table-products th:nth-child(7) { width:180px; }
+.catalog-table-products th:nth-child(8) { width:48px; }
+.catalog-table-products th:nth-child(9) { width:100px; }
+.catalog-table-products th:nth-child(10), .catalog-table-products th:nth-child(11) { width:85px; }
+.catalog-table-products th:nth-child(12) { width:65px; }
+.catalog-table-products th:nth-child(13) { width:110px; }
 .catalog-table-products th { white-space:normal; line-height:1.15; }
 .catalog-table-products thead th {
+  top:calc(var(--desktop-topbar-h) + 51px);
   height:46px;
   padding:10px 9px;
   vertical-align:middle;
@@ -1324,10 +1334,77 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   font-weight:800;
   text-shadow:0 1px 1px rgba(0,30,55,.2);
   box-shadow:inset 0 -1px 0 rgba(255,255,255,.12),0 2px 5px rgba(11,79,131,.18);
-  z-index:3;
+  z-index:24;
 }
 .catalog-table-products thead th + th { border-left:1px solid rgba(255,255,255,.18); }
 .catalog-table-products td { overflow:hidden; }
+.catalog-table-card { position:relative; overflow:visible; }
+/* Desktop hẹp: giao cả cuộn ngang/dọc cho .main-desktop để <th sticky> cùng scroll ancestor.
+   Pager giữ bề rộng vùng nhìn thấy và bám ngang khi người dùng xem các cột bên phải. */
+@media (min-width:900px) and (max-width:1499px) {
+  .catalog-table-card .table-scroll { overflow:visible; }
+  .catalog-pager.is-top,
+  .catalog-pager.is-bottom {
+    left:0;
+    width:calc(100vw - 274px);
+  }
+  .catalog-pager.is-bottom { position:sticky; }
+}
+@media (min-width:1500px) {
+  .catalog-table-card .table-scroll { overflow-x:clip; overflow-y:visible; }
+}
+.catalog-pager { padding:6px 8px; border:0; background:transparent; }
+.catalog-pager.is-top {
+  position:sticky;
+  top:var(--desktop-topbar-h);
+  z-index:25;
+  min-height:50px;
+  border-bottom:1px solid #d7e2ee;
+  background:rgba(248,251,255,.97);
+  box-shadow:0 3px 10px rgba(11,61,112,.1);
+  backdrop-filter:blur(8px);
+}
+.catalog-pager.is-bottom { border-top:1px solid var(--line); background:#f8fbff; }
+.catalog-pager-capsule {
+  display:grid;
+  grid-template-columns:auto minmax(176px,auto) auto;
+  align-items:stretch;
+  overflow:hidden;
+  border:1px solid #b9c9da;
+  border-radius:999px;
+  background:#fff;
+  box-shadow:0 3px 9px rgba(11,61,112,.14);
+  width:min(100%,460px);
+  margin:0 auto;
+}
+.catalog-pager-capsule button {
+  min-width:92px;
+  min-height:36px;
+  padding:7px 16px;
+  border:0;
+  color:#fff;
+  font:inherit;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+}
+.catalog-pager-prev { background:linear-gradient(135deg,#2f8ad6,#1568b8); }
+.catalog-pager-next { background:linear-gradient(135deg,#f5ad32,#ee8f00); }
+.catalog-pager-capsule button:disabled { opacity:.45; cursor:not-allowed; filter:saturate(.65); }
+.catalog-pager-capsule > span {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  min-height:36px;
+  padding:6px 14px;
+  color:var(--brand-ink);
+  text-align:center;
+  white-space:nowrap;
+}
+.catalog-pager-capsule > span b { font-size:12px; }
+.catalog-pager-capsule > span i { color:var(--muted); font-size:11px; font-style:normal; }
+.catalog-capsule-mark { flex:0 0 auto; width:34px; height:18px; filter:drop-shadow(0 1px 1px rgba(11,61,112,.18)); }
 .catalog-two-lines { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; max-height:2.55em; white-space:normal; overflow-wrap:anywhere; line-height:1.25; }
 .catalog-drug-multi-qlnb {
   max-height:calc(2.55em + 6px);
@@ -1345,53 +1422,84 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-cst.is-ok small { color:#087a4a; }
 .catalog-cst.is-warning small { color:#a76700; }
 .catalog-cst.is-low small { color:#bd2c2c; }
-.catalog-filter-row-employee { grid-template-columns:minmax(280px,1fr) minmax(100px,125px) minmax(210px,300px) auto; }
-.catalog-table-products.catalog-table-employee { min-width:1240px; }
-.catalog-table-employee th:nth-child(1) { width:55px; }
-.catalog-table-employee th:nth-child(2) { width:155px; }
+.catalog-filter-row-employee { grid-template-columns:minmax(260px,1fr) minmax(125px,155px) minmax(95px,115px) minmax(180px,250px) auto; }
+.catalog-table-products.catalog-table-employee { min-width:1270px; }
+.catalog-table-employee th:nth-child(1) { width:50px; }
+.catalog-table-employee th:nth-child(2) { width:95px; }
 .catalog-table-employee th:nth-child(3) { width:145px; }
-.catalog-table-employee th:nth-child(4) { width:150px; }
-.catalog-table-employee th:nth-child(5) { width:200px; }
-.catalog-table-employee th:nth-child(6) { width:50px; }
-.catalog-table-employee th:nth-child(7) { width:110px; }
-.catalog-table-employee th:nth-child(8), .catalog-table-employee th:nth-child(9) { width:95px; }
-.catalog-table-employee th:nth-child(10) { width:70px; }
-.catalog-table-employee th:nth-child(11) { width:115px; }
+.catalog-table-employee th:nth-child(4) { width:135px; }
+.catalog-table-employee th:nth-child(5) { width:140px; }
+.catalog-table-employee th:nth-child(6) { width:190px; }
+.catalog-table-employee th:nth-child(7) { width:50px; }
+.catalog-table-employee th:nth-child(8) { width:105px; }
+.catalog-table-employee th:nth-child(9), .catalog-table-employee th:nth-child(10) { width:90px; }
+.catalog-table-employee th:nth-child(11) { width:65px; }
+.catalog-table-employee th:nth-child(12) { width:110px; }
 @media (min-width:900px) and (max-width:1250px) {
-  .catalog-filter-row { grid-template-columns:minmax(220px,1fr) repeat(2,minmax(105px,140px)) minmax(190px,1fr); }
-  .catalog-filter-row-employee { grid-template-columns:minmax(220px,1fr) minmax(105px,140px) minmax(190px,1fr); }
+  .catalog-filter-row { grid-template-columns:minmax(220px,1fr) repeat(3,minmax(105px,140px)) minmax(180px,1fr); }
+  .catalog-filter-row-employee { grid-template-columns:minmax(220px,1fr) minmax(120px,150px) minmax(105px,140px) minmax(180px,1fr); }
   .catalog-result-count { grid-column:1/-1; border-left:0; border-top:1px solid var(--line); padding-top:6px; }
 }
+
+/* Danh mục quản lý: chrome thấp, bảng/pager cố định và không che nội dung. */
+@media (min-width:900px) {
+  :root.catalog-mode { --desktop-topbar-h:52px; --catalog-heading-h:58px; --catalog-tabs-h:46px; --catalog-sticky-top:calc(var(--desktop-topbar-h) + var(--catalog-heading-h) + var(--catalog-tabs-h)); }
+  .catalog-mode .topbar { min-height:var(--desktop-topbar-h); padding:5px 24px 4px; }
+  .catalog-mode .topbar h1 { font-size:17px; line-height:1.15; }
+  .catalog-mode .topbar .sub { font-size:10.5px; }
+  .catalog-mode .catalog-heading-compact { position:sticky; top:var(--desktop-topbar-h); z-index:29; min-height:var(--catalog-heading-h); max-height:var(--catalog-heading-h); box-sizing:border-box; box-shadow:0 3px 10px rgba(11,61,112,.1); }
+  .catalog-mode .catalog-mode-tabs { position:sticky; top:calc(var(--desktop-topbar-h) + var(--catalog-heading-h)); z-index:28; min-height:var(--catalog-tabs-h); max-height:var(--catalog-tabs-h); box-sizing:border-box; }
+  .catalog-mode .catalog-pager.is-top { top:var(--catalog-sticky-top); z-index:27; }
+  .catalog-mode .catalog-table-products thead th { top:calc(var(--catalog-sticky-top) + 50px); z-index:26; }
+}
 @media (max-width:899px) {
+  :root.catalog-mode { --hdr-h:74px; }
+  .catalog-mode .hdr { min-height:0; padding-top:calc(4px + env(safe-area-inset-top)); padding-bottom:4px; }
+  .catalog-mode .hdr .official-logo img { width:58px !important; }
+  .catalog-mode .hdr .who-role { display:none; }
   .catalog-filter-row { grid-template-columns:1fr 1fr; }
   .catalog-filter-row > label:first-child { grid-column:1/-1; }
-  .catalog-table td:nth-child(5)::before { content:'Tên thuốc: '; }
-  .catalog-table td:nth-child(6)::before { content:'Hoạt chất + Hàm lượng: '; }
-  .catalog-table td:nth-child(7)::before { content:'ĐVT: '; }
-  .catalog-table td:nth-child(8)::before { content:'Đơn giá: '; }
-  .catalog-table td:nth-child(9)::before { content:'CST ban đầu: '; }
-  .catalog-table td:nth-child(10)::before { content:'CST còn lại: '; }
-  .catalog-table td:nth-child(11)::before { content:'Từ kỳ: '; }
-  .catalog-table td:nth-child(12)::before { content:'Đến kỳ: '; }
+  .catalog-pager.is-top { top:calc(var(--hdr-h) + env(safe-area-inset-top)); z-index:35; min-height:44px; padding:4px; }
+  .catalog-pager-capsule { grid-template-columns:auto minmax(130px,1fr) auto; width:min(100%,390px); }
+  .catalog-pager-capsule button { min-width:72px; min-height:34px; padding:6px 10px; }
+  .catalog-pager-capsule > span { min-height:34px; padding:5px 8px; gap:3px; }
+  .catalog-pager-capsule > span b { font-size:11.5px; }
+  .catalog-pager-capsule > span i { font-size:10.5px; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(1)::before { content:'NV: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(2)::before { content:'Tuyến: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(3)::before { content:'Mã nhà thầu: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(4)::before { content:'Mã đơn vị: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(5)::before { content:'Mã QLNB: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(6)::before { content:'Tên thuốc: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(7)::before { content:'Hoạt chất + Hàm lượng: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(8)::before { content:'ĐVT: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(9)::before { content:'Đơn giá: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(10)::before { content:'CST ban đầu: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(11)::before { content:'CST còn lại: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(12)::before { content:'Từ kỳ: '; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(13)::before { content:'Đến kỳ: '; }
   .catalog-two-lines { display:block; max-height:none; overflow:visible; }
   .catalog-table-products tr { grid-template-columns:1fr 1fr; }
-  .catalog-table-products td:nth-child(3), .catalog-table-products td:nth-child(4),
-  .catalog-table-products td:nth-child(5), .catalog-table-products td:nth-child(6) { grid-column:1/-1; }
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(4),
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(5),
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(6),
+  .catalog-table-products:not(.catalog-table-employee) td:nth-child(7) { grid-column:1/-1; }
   .catalog-table-products.catalog-table-employee { min-width:0; }
   .catalog-table-employee td:nth-child(1)::before { content:'Tuyến: '; }
-  .catalog-table-employee td:nth-child(2)::before { content:'Mã đơn vị: '; }
-  .catalog-table-employee td:nth-child(3)::before { content:'Mã QLNB: '; }
-  .catalog-table-employee td:nth-child(4)::before { content:'Tên thuốc: '; }
-  .catalog-table-employee td:nth-child(5)::before { content:'Hoạt chất + Hàm lượng: '; }
-  .catalog-table-employee td:nth-child(6)::before { content:'ĐVT: '; }
-  .catalog-table-employee td:nth-child(7)::before { content:'Đơn giá trúng thầu: '; }
-  .catalog-table-employee td:nth-child(8)::before { content:'CST ban đầu: '; }
-  .catalog-table-employee td:nth-child(9)::before { content:'CST còn lại: '; }
-  .catalog-table-employee td:nth-child(10)::before { content:'Từ kỳ: '; }
-  .catalog-table-employee td:nth-child(11)::before { content:'Đến kỳ: '; }
-  .catalog-table-employee td:nth-child(2), .catalog-table-employee td:nth-child(3),
-  .catalog-table-employee td:nth-child(4), .catalog-table-employee td:nth-child(5) { grid-column:1/-1; }
-  .catalog-table-employee td:nth-child(6) { grid-column:auto; }
+  .catalog-table-employee td:nth-child(2)::before { content:'Mã nhà thầu: '; }
+  .catalog-table-employee td:nth-child(3)::before { content:'Mã đơn vị: '; }
+  .catalog-table-employee td:nth-child(4)::before { content:'Mã QLNB: '; }
+  .catalog-table-employee td:nth-child(5)::before { content:'Tên thuốc: '; }
+  .catalog-table-employee td:nth-child(6)::before { content:'Hoạt chất + Hàm lượng: '; }
+  .catalog-table-employee td:nth-child(7)::before { content:'ĐVT: '; }
+  .catalog-table-employee td:nth-child(8)::before { content:'Đơn giá trúng thầu: '; }
+  .catalog-table-employee td:nth-child(9)::before { content:'CST ban đầu: '; }
+  .catalog-table-employee td:nth-child(10)::before { content:'CST còn lại: '; }
+  .catalog-table-employee td:nth-child(11)::before { content:'Từ kỳ: '; }
+  .catalog-table-employee td:nth-child(12)::before { content:'Đến kỳ: '; }
+  .catalog-table-employee td:nth-child(3), .catalog-table-employee td:nth-child(4),
+  .catalog-table-employee td:nth-child(5), .catalog-table-employee td:nth-child(6) { grid-column:1/-1; }
+  .catalog-table-employee td:nth-child(7) { grid-column:auto; }
 }
 @media (max-width:520px) {
   .catalog-filter-row { grid-template-columns:1fr; }
