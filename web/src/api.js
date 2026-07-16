@@ -85,6 +85,7 @@ export const api = {
   revenueSendNow: (payload) => req('POST', '/report/revenue-send/send', payload),
   products: (params = {}) => req('GET', '/products?' + new URLSearchParams(params).toString()),
   analysis: (params = {}) => req('GET', '/analysis?' + new URLSearchParams(params).toString()),
+  dailySalesOrders: (params = {}) => req('GET', '/daily-sales/orders?' + new URLSearchParams(params).toString()),
   cst: (params = {}) => req('GET', '/cst?' + new URLSearchParams(params).toString()),
   salesCatalog: (params = {}) => req('GET', '/catalog/sales?' + new URLSearchParams(params).toString()),
   myAssignments: (params = {}) => req('GET', '/assignments/mine?' + new URLSearchParams(params).toString()),

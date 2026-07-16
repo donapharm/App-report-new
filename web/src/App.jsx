@@ -11,6 +11,7 @@ import Revenue from './pages/Revenue.jsx';
 import RevenueFull from './pages/RevenueFull.jsx';
 import Products from './pages/Products.jsx';
 import Analysis from './pages/Analysis.jsx';
+import DailySalesOrders from './pages/DailySalesOrders.jsx';
 import TenderQuota from './pages/TenderQuota.jsx';
 import Target from './pages/Target.jsx';
 import CatalogManagement from './pages/CatalogManagement.jsx';
@@ -23,6 +24,7 @@ const TABS = [
   { key: 'revenueFull', label: 'DT đầy đủ', full: 'Doanh thu đầy đủ', ic: '📋', C: RevenueFull },
   { key: 'products', label: 'Sản phẩm', ic: '💊', C: Products },
   { key: 'analysis', label: 'Phân tích', ic: '📈', C: Analysis },
+  { key: 'dailySales', label: 'Doanh số ngày', full: 'Chi tiết doanh số trong ngày', ic: '🗓️', C: DailySalesOrders, hidden: true },
   { key: 'cst', label: 'Cơ số thầu', ic: '📦', C: TenderQuota },
   { key: 'target', label: 'Target', ic: '🎯', C: Target },
   { key: 'catalogManagement', label: 'Danh mục QL', full: 'Danh mục quản lý', ic: '🗂️', C: CatalogManagement },
@@ -45,7 +47,7 @@ export default function App() {
   useEffect(() => {
     if (!me) return;
     window.history.replaceState({ ...(window.history.state || {}), appTab: tab }, '', window.location.href);
-    const onPop = (e) => { if (e.state?.appTab) { setTab(e.state.appTab); setTabStack((s) => s.slice(0, -1)); } };
+    const onPop = (e) => { if (e.state?.appTab) { setTab(e.state.appTab); setTabStack((s) => s.slice(0, -1)); try { localStorage.setItem('rpt_tab', e.state.appTab); } catch { /* ignore */ } } };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -87,7 +89,7 @@ export default function App() {
         <aside className="sidebar">
           <div className="side-logo"><Logo size={42} /></div>
           <nav className="side-nav">
-            {tabs.map((t) => (
+            {tabs.filter((t) => !t.hidden).map((t) => (
               <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>
                 <span className="ic">{t.ic}</span> {t.label}
               </button>
@@ -142,15 +144,15 @@ export default function App() {
       </main>
       <ScrollTopButton />
       <UpdateBanner />
-      {tab !== 'catalogManagement' && <ZaloMobileAccess />}
-      <nav className="nav">
-        {tabs.map((t) => (
+      {!['catalogManagement', 'dailySales'].includes(tab) && <ZaloMobileAccess />}
+      {tab !== 'dailySales' && <nav className="nav">
+        {tabs.filter((t) => !t.hidden).map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>
             <span className="ic">{t.ic}</span>
             <span>{t.label}</span>
           </button>
         ))}
-      </nav>
+      </nav>}
     </>
   );
 }

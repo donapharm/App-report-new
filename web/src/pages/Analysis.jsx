@@ -183,7 +183,7 @@ function CstQueuedBlock({ rows, note }) {
   </section>;
 }
 
-export default function Analysis({ me }) {
+export default function Analysis({ me, onNavigate }) {
   const [periods, setPeriods] = useState([]);
   const [periodSel, setPeriodSel] = useState(null);
   const [filters, setFilters] = useState(emptyRevenueFilters);
@@ -297,7 +297,7 @@ export default function Analysis({ me }) {
             <Kpi label={`Doanh thu ${data.ky}`} value={money(data.currentRevenue)} />
             <Kpi label={`So với ${data.prevKy || 'kỳ trước'}`} value={(data.delta >= 0 ? '+' : '') + money(data.delta)} sub={data.deltaPct == null ? 'Chưa có kỳ trước' : pct(data.deltaPct)} />
             <Kpi label="Số dòng dữ liệu" value={(data.rowCount || 0).toLocaleString('vi-VN')} />
-            <DailySalesKpi data={data.dailySales} />
+            <DailySalesKpi data={data.dailySales} onClick={() => onNavigate?.('dailySales', { fromTab: 'analysis', fromLabel: 'Phân tích', returnScroll: document.querySelector('.main-desktop')?.scrollTop || window.scrollY || 0, filters })} />
           </div>
           {targetKpi && <><div className="section-title">🎯 Target vs Đã đạt (tháng &amp; quý)</div><TargetKpiStrip kpi={targetKpi} /></>}
           <div className="card">

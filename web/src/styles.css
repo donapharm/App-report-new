@@ -1400,3 +1400,76 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-table-employee td { grid-column:1/-1 !important; }
   .catalog-management { padding-bottom:48px; }
 }
+
+/* Daily-sales drill-down: KPI → scoped orders → product lines. */
+.daily-sales-open { margin-top:4px; color:#753800; font-size:10px; font-weight:900; text-align:right; }
+.daily-sales-kpi.daily-day-off .daily-sales-open { color:#493594; }
+.daily-sales-kpi.daily-stale .daily-sales-open { color:#8a2f0b; }
+.daily-orders-summary { overflow:hidden; border-top:4px solid #df6d00; background:linear-gradient(145deg,#fffdf4,#fff8db); }
+.daily-orders-summary-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; }
+.daily-orders-summary-head > div { display:flex; flex-direction:column; min-width:0; }
+.daily-orders-summary-head > div > span { color:#704219; font-size:12px; font-weight:800; }
+.daily-orders-summary-head > div > b { color:#8a3000; font-size:27px; line-height:1.15; letter-spacing:-.02em; }
+.daily-orders-summary-head > div > em { color:#76512d; font-size:10.5px; font-style:normal; }
+.daily-reconcile-badge { flex:none; max-width:45%; padding:6px 9px; border:1px solid #96d7bb; border-radius:999px; background:#e9f9f0; color:#08754b; font-size:10.5px; font-weight:850; text-align:center; }
+.daily-reconcile-badge.warn { border-color:#f0bd70; background:#fff4df; color:#9a4d10; }
+.daily-orders-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:7px; margin-top:12px; }
+.daily-orders-summary-grid > span { min-width:0; padding:8px; border:1px solid #f1d799; border-radius:10px; background:#fff; text-align:center; }
+.daily-orders-summary-grid b,.daily-orders-summary-grid em { display:block; overflow:hidden; text-overflow:ellipsis; }
+.daily-orders-summary-grid b { color:#793600; font-size:14px; white-space:nowrap; }
+.daily-orders-summary-grid em { color:#765c43; font-size:9.5px; font-style:normal; }
+.daily-orders-note,.daily-orders-scope-note { margin-top:8px; padding:7px 9px; border-radius:9px; background:#fff4cf; color:#73501f; font-size:11px; font-weight:700; }
+.daily-orders-note.warn { background:#fff0df; color:#8a2f0b; }
+.daily-orders-scope-note { background:#edf6ff; color:#245d86; }
+.daily-orders-toolbar { display:grid; grid-template-columns:minmax(220px,1fr) minmax(140px,190px) minmax(150px,190px); gap:8px; align-items:end; }
+.daily-orders-toolbar label { display:flex; flex-direction:column; gap:3px; color:var(--muted); font-size:10.5px; font-weight:750; }
+.daily-orders-toolbar input,.daily-orders-toolbar select { width:100%; min-height:36px; padding:7px 9px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink); font:inherit; font-size:12.5px; }
+.daily-orders-list { display:flex; flex-direction:column; gap:8px; }
+.daily-orders-list > .card { margin-bottom:0; }
+.daily-orders-list-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.daily-orders-list-head > div > b { color:var(--brand-ink); }
+.daily-orders-list-head > div > span { color:var(--muted); font-size:11px; }
+.daily-order-card { padding:0; overflow:hidden; border-left:5px solid #ef9f18; }
+.daily-order-card.open { border-color:#d78813; box-shadow:0 5px 18px rgba(138,48,0,.13); }
+.daily-order-head { display:grid; grid-template-columns:auto minmax(0,1fr) auto auto; align-items:center; gap:9px; width:100%; padding:10px 11px 7px; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+.daily-order-head:hover { background:#fffaf0; }
+.daily-order-title,.daily-order-money { display:flex; flex-direction:column; min-width:0; }
+.daily-order-title b { overflow:hidden; color:var(--brand-ink); font-size:14px; text-overflow:ellipsis; white-space:nowrap; }
+.daily-order-title em,.daily-order-money em { color:var(--muted); font-size:11px; font-style:normal; }
+.daily-order-money { align-items:flex-end; }
+.daily-order-money b { color:#9a4500; font-size:15px; white-space:nowrap; }
+.daily-order-caret { color:#9a4500; font-size:16px; font-weight:900; }
+.daily-order-entity { padding:0 11px 7px 45px; color:#354b60; font-size:11.5px; }
+.daily-order-facts { margin:0 11px 10px 45px; }
+.daily-order-lines { border-top:1px solid #efd8b1; background:#fffdf8; padding:9px 11px 11px; }
+.daily-order-lines-title { margin-bottom:7px; color:#8a440b; font-size:11.5px; font-weight:900; text-transform:uppercase; letter-spacing:.03em; }
+.daily-order-line { padding:9px 0; border-top:1px dashed #e4d4bd; }
+.daily-order-line:first-of-type { border-top:0; }
+.daily-order-line-main { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:start; gap:8px; }
+.daily-order-line-main > div { display:flex; flex-direction:column; min-width:0; }
+.daily-order-line-main b { color:#243a4d; font-size:12.5px; }
+.daily-order-line-main em { color:#718091; font-size:11px; font-style:normal; overflow-wrap:anywhere; }
+.daily-order-line-main strong { color:#8a3000; font-size:12.5px; white-space:nowrap; }
+.daily-order-line-facts { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:5px; margin:6px 0 0 33px; }
+.daily-order-line-facts span { min-width:0; padding:5px 6px; border-radius:7px; background:#fff5df; }
+.daily-order-line-facts b,.daily-order-line-facts em { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.daily-order-line-facts b { color:#5f4126; font-size:11px; }
+.daily-order-line-facts em { color:#8a765f; font-size:10px; font-style:normal; }
+
+@media (max-width:700px) {
+  .daily-orders-summary-head { flex-direction:column; gap:8px; }
+  .daily-reconcile-badge { max-width:100%; align-self:flex-start; }
+  .daily-orders-summary-grid { grid-template-columns:1fr 1fr; }
+  .daily-orders-toolbar { grid-template-columns:1fr 1fr; }
+  .daily-orders-toolbar label:first-child { grid-column:1/-1; }
+  .daily-orders-list-head { align-items:flex-start; flex-direction:column; }
+  .daily-order-head { grid-template-columns:auto minmax(0,1fr) auto; }
+  .daily-order-head > .rank { align-self:start; }
+  .daily-order-money { grid-column:2; align-items:flex-start; }
+  .daily-order-caret { grid-column:3; grid-row:1/3; }
+  .daily-order-entity { padding-left:41px; }
+  .daily-order-facts { grid-template-columns:1fr 1fr; margin-left:41px; }
+  .daily-order-line-main { grid-template-columns:auto minmax(0,1fr); }
+  .daily-order-line-main strong { grid-column:2; }
+  .daily-order-line-facts { grid-template-columns:1fr 1fr; margin-left:30px; }
+}

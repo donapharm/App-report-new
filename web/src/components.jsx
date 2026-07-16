@@ -203,18 +203,24 @@ function dailyUpdatedLabel(value) {
 }
 
 // Dùng chung ở Phân tích và Tổng quan để hai màn hình luôn cùng số liệu/cách cảnh báo.
-export function DailySalesKpi({ data }) {
+export function DailySalesKpi({ data, onClick }) {
   if (!data) return <Kpi label="Doanh số trong ngày" value="—" sub="Đang tải dữ liệu…" />;
   const tone = data.stale ? 'daily-stale' : (data.status === 'day_off' ? 'daily-day-off' : 'daily-ready');
   const updated = dailyUpdatedLabel(data.sourceUpdatedAt);
+  const activate = (event) => {
+    if (!onClick || (event.type === 'keydown' && !['Enter', ' '].includes(event.key))) return;
+    if (event.type === 'keydown') event.preventDefault();
+    onClick();
+  };
   return (
-    <div className={`kpi daily-sales-kpi ${tone}`}>
+    <div className={`kpi daily-sales-kpi ${tone}${onClick ? ' clickable' : ''}`} onClick={onClick ? activate : undefined} onKeyDown={onClick ? activate : undefined} role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined} aria-label={onClick ? 'Mở chi tiết đơn hàng của doanh số trong ngày' : undefined}>
       <span className="kpi-ic" aria-hidden="true">🗓️</span>
       <div className="label">Doanh số trong ngày</div>
       <div className="value small">{money(data.revenue || 0)}</div>
       <div className="daily-sales-date">Ngày {String(data.date || '').split('-').reverse().join('/')}</div>
       {!!data.note && <div className="daily-sales-note">{data.note}</div>}
       {!!updated && <div className="daily-sales-updated">Cập nhật lúc {updated}</div>}
+      {onClick && <div className="daily-sales-open">Xem từng đơn hàng ›</div>}
     </div>
   );
 }

@@ -286,7 +286,7 @@ export default function Overview({ me, onNavigate }) {
             <Kpi variant="blue" icon={kpi.momPct != null && kpi.momPct < 0 ? '⚠️' : '📊'} label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={<MoneyBig value={kpi.revenue} />} delta={kpi.momPct} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenue')} />
             <Kpi variant="purple" icon="🧾" label="Trước VAT" value={<MoneyBig value={kpi.revenueBeforeVat} />} sub="đã ÷ 1,05" onClick={() => onNavigate?.('revenue')} />
             <Kpi icon="📋" label="Số dòng dữ liệu" value={(kpi.rowCount || 0).toLocaleString('vi-VN')} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenueFull')} />
-            <DailySalesKpi data={analysisInsights?.dailySales} />
+            <DailySalesKpi data={analysisInsights?.dailySales} onClick={() => onNavigate?.('dailySales', { fromTab: 'overview', fromLabel: 'Tổng quan', returnScroll: document.querySelector('.main-desktop')?.scrollTop || window.scrollY || 0 })} />
             <Kpi variant="green" icon="🎯" label="Đạt target" value={<MoneyBig value={kpi.targetTotal || 0} />}
                  sub={kpi.pctTarget != null ? `Đã đạt ${pct(kpi.pctTarget)} (chưa VAT)` : 'Chưa có target (chưa VAT)'} onClick={() => onNavigate?.('target')} />
             <Kpi variant="green" icon="🎯" label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} onClick={() => onNavigate?.('target')} />
