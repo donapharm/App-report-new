@@ -14,6 +14,7 @@ const cstSequence = require('./cstSequence');
 const smart = require('./smart');
 const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
+const dailySales = require('./dailySales');
 const reconcile = require('./reconcile');
 const targetAdmin = require('./targetAdmin');
 const assignmentAdmin = require('./assignmentAdmin');
@@ -1359,6 +1360,19 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
   const prevRevenue = A.sum(prevRows, (r) => r.revenue);
   const delta = currentRevenue - prevRevenue;
   const deltaPct = prevRevenue > 0 ? +(delta / prevRevenue * 100).toFixed(1) : null;
+  // KPI doanh số hôm nay luôn bám ngày hiện tại (không đổi theo kỳ lịch sử đang xem),
+  // nhưng vẫn giữ đúng scope nhân viên và toàn bộ bộ lọc Phân tích hiện hành.
+  const dailyKy = store.currentKyByDate() || store.latestKy();
+  const dailyRows = A.applyFilters(store.getRowsRange({ kys: dailyKy ? [dailyKy] : [], scope }), filters);
+  const dailyPeriod = store.listPeriods().find((p) => p.ky === dailyKy) || {};
+  const refreshStatus = revenueRefresh.status();
+  const daily = dailySales.buildDailySales({
+    rows: dailyRows,
+    sourceUpdatedAt: dailyPeriod.data_as_of || dailyPeriod.dataAsOf || dailyPeriod.uploadedAt || null,
+    isAdmin: auth.isAdmin(req.session.role),
+    isFiltered: Object.values(filters).some((v) => Array.isArray(v) ? v.length > 0 : !!v),
+    refresh: refreshStatus,
+  });
   // Bảng tăng/giảm: so tháng liền trước / cùng kỳ năm ngoái (tự lùi 2 tháng đủ nếu kỳ dở).
   const cmpMode = req.query.compareMode === 'yoy' ? 'yoy' : 'prev';
   const cmpP = store.comparePeriods(kys, cmpMode);
@@ -1528,6 +1542,7 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
       hasPrev: cmpP.hasPrev,
     },
     rowCount: currentRows.length,
+    dailySales: daily,
     byRoute,
     byContractor,
     byPriority,

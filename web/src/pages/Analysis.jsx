@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pct } from '../util.js';
 import { Spinner, Kpi, useCollapse, TargetKpiStrip, UnitLabel, Pager, usePager } from '../components.jsx';
@@ -32,6 +32,32 @@ function comparePeriodLabel(compare = {}) {
       ? 'hai tháng hoàn tất gần nhất'
       : ((compare.curKys || []).length > 1 ? 'giai đoạn liền trước' : 'tháng liền trước'));
   return `${current} so với ${previous} · ${relation}`;
+}
+
+function dailyUpdatedLabel(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('vi-VN', {
+    timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour12: false,
+  });
+}
+
+function DailySalesKpi({ data }) {
+  if (!data) return <Kpi label="Doanh số trong ngày" value="—" sub="Đang tải dữ liệu…" />;
+  const tone = data.stale ? 'daily-stale' : (data.status === 'day_off' ? 'daily-day-off' : 'daily-ready');
+  const updated = dailyUpdatedLabel(data.sourceUpdatedAt);
+  return (
+    <div className={`kpi daily-sales-kpi ${tone}`}>
+      <span className="kpi-ic" aria-hidden="true">🗓️</span>
+      <div className="label">Doanh số trong ngày</div>
+      <div className="value small">{money(data.revenue || 0)}</div>
+      <div className="daily-sales-date">Ngày {String(data.date || '').split('-').reverse().join('/')}</div>
+      {!!data.note && <div className="daily-sales-note">{data.note}</div>}
+      {!!updated && <div className="daily-sales-updated">Cập nhật lúc {updated}</div>}
+    </div>
+  );
 }
 
 function DeltaRow({ i, r, kind }) {
@@ -196,6 +222,28 @@ export default function Analysis({ me }) {
   const [cmpMode, setCmpModeState] = useState(() => { try { return localStorage.getItem('rpt_cmp_mode') || 'prev'; } catch { return 'prev'; } });
   const setCmpMode = (m) => { setCmpModeState(m); try { localStorage.setItem('rpt_cmp_mode', m); } catch { /* ignore */ } };
   const { reloadTick, reload } = useReloadTick();
+  const lastAutoRefresh = useRef(Date.now());
+
+  // Backend materialize theo giờ; màn hình kiểm tra nhẹ mỗi 5 phút và khi người dùng
+  // quay lại app để mọi KPI cùng nhận bản mới, tránh số cũ như ảnh 07:33.
+  useEffect(() => {
+    const run = (minGap = 0) => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastAutoRefresh.current < minGap) return;
+      lastAutoRefresh.current = now;
+      reload();
+    };
+    const id = setInterval(() => run(4 * 60 * 1000), 5 * 60 * 1000);
+    const onReturn = () => run(60 * 1000);
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     api.periods().then((p) => { setPeriods(p.periods || []); setPeriodSel(defaultPeriodSelection(p.periods || [], p.latest)); });
@@ -271,10 +319,11 @@ export default function Analysis({ me }) {
       </div>
       {!data ? <Spinner /> : (
         <>
-          <div className="kpi-grid">
+          <div className="kpi-grid analysis-kpi-grid">
             <Kpi label={`Doanh thu ${data.ky}`} value={money(data.currentRevenue)} />
             <Kpi label={`So với ${data.prevKy || 'kỳ trước'}`} value={(data.delta >= 0 ? '+' : '') + money(data.delta)} sub={data.deltaPct == null ? 'Chưa có kỳ trước' : pct(data.deltaPct)} />
             <Kpi label="Số dòng dữ liệu" value={(data.rowCount || 0).toLocaleString('vi-VN')} />
+            <DailySalesKpi data={data.dailySales} />
           </div>
           {targetKpi && <><div className="section-title">🎯 Target vs Đã đạt (tháng &amp; quý)</div><TargetKpiStrip kpi={targetKpi} /></>}
           <div className="card">

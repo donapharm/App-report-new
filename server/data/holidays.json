@@ -1,0 +1,24 @@
+{
+  "timezone": "Asia/Bangkok",
+  "note": "Lịch nghỉ có thể chỉnh theo thông báo chính thức của DONAPHARM; Chủ nhật được hệ thống tự nhận diện.",
+  "dates": [
+    { "date": "2026-01-01", "name": "Tết Dương lịch" },
+    { "date": "2026-02-14", "name": "Nghỉ Tết Nguyên đán" },
+    { "date": "2026-02-15", "name": "Nghỉ Tết Nguyên đán" },
+    { "date": "2026-02-16", "name": "Nghỉ Tết Nguyên đán" },
+    { "date": "2026-02-17", "name": "Tết Nguyên đán" },
+    { "date": "2026-02-18", "name": "Nghỉ Tết Nguyên đán" },
+    { "date": "2026-02-19", "name": "Nghỉ Tết Nguyên đán" },
+    { "date": "2026-02-20", "name": "Nghỉ Tết Nguyên đán" },
+    { "date": "2026-02-21", "name": "Nghỉ Tết Nguyên đán" },
+    { "date": "2026-02-22", "name": "Nghỉ Tết Nguyên đán" },
+    { "date": "2026-04-25", "name": "Nghỉ Giỗ Tổ Hùng Vương" },
+    { "date": "2026-04-26", "name": "Giỗ Tổ Hùng Vương" },
+    { "date": "2026-04-27", "name": "Nghỉ bù Giỗ Tổ Hùng Vương" },
+    { "date": "2026-04-30", "name": "Ngày Giải phóng miền Nam" },
+    { "date": "2026-05-01", "name": "Ngày Quốc tế Lao động" },
+    { "date": "2026-05-02", "name": "Nghỉ lễ 30/4–1/5" },
+    { "date": "2026-09-01", "name": "Nghỉ Quốc khánh" },
+    { "date": "2026-09-02", "name": "Quốc khánh" }
+  ]
+}
