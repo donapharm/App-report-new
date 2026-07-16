@@ -53,6 +53,14 @@ test('danh mục quản lý suy ra tỉnh từ đơn vị và giữ tỉnh trong
   assert.equal(response.sections.current[0].province, 'Bình Phước');
 });
 
+test('từ chối snapshot Data Hub thiếu C4 để không ghi đè cache mã nhà thầu tốt', () => {
+  assert.equal(catalogManagement.assertContractorCoverage([{ c4: '01.DONA' }, { c4: '02.AFP' }]), true);
+  assert.throws(
+    () => catalogManagement.assertContractorCoverage([{ c4: '01.DONA' }, { c5: 'QL02' }]),
+    (error) => error.code === 'CATALOG_CONTRACTOR_C4_MISSING' && /1\/2/.test(error.message),
+  );
+});
+
 test('CST chỉ ghép khi đúng chính xác đơn vị + QLNB, không dùng tiền tố gần giống', () => {
   const rows = [
     catalogManagement.normalizeRow({ scope: 'unit_qlnb', code: `001.BV A\u001fQL01`, unit_code: '001.BV A', qlnb_code: 'QL01', emp_code: 'DN016', effective_from: '2026-07' }),

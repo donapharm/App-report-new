@@ -175,6 +175,18 @@ function enrichRowsFromCatalog(rows, catalog) {
     return item ? { ...row, contractor_code: item.c4 || null, product_name: item.c16 || null, active_ingredient: item.c15 || null, strength: item.c17 || null, uom: item.c25 || null, bid_price: item.c31 ?? null } : row;
   });
 }
+function assertContractorCoverage(catalog = []) {
+  if (!Array.isArray(catalog) || !catalog.length) return true;
+  const missing = catalog.filter((row) => !String(row?.c4 || '').trim()).length;
+  if (missing) {
+    throw Object.assign(new Error(`Data Hub thiếu C4/Mã nhà thầu ở ${missing}/${catalog.length} dòng catalog; từ chối ghi đè cache tốt gần nhất.`), {
+      status: 502,
+      upstream: true,
+      code: 'CATALOG_CONTRACTOR_C4_MISSING',
+    });
+  }
+  return true;
+}
 function enrichRowsWithCst(rows, cstRows) {
   const byPair = new Map();
   for (const item of cstRows || []) {
@@ -237,6 +249,7 @@ async function remoteSnapshot(period) {
   const payload = await fetchJson(`${root}/assignments/catalog-management?ky=${encodeURIComponent(period)}`);
   assertCatalogFieldPolicy(payload, 'dataHubCatalogPayload');
   const catalog = Array.isArray(payload.catalog) ? payload.catalog : [];
+  assertContractorCoverage(catalog);
   const rows = enrichRowsFromCatalog(arrayOf(payload, ['rows', 'assignments', 'items']).map(normalizeRow), catalog);
   const history = arrayOf(payload, ['history', 'audit', 'events']);
   const version = String(payload.version || payload.meta?.version || 'unknown');
@@ -335,4 +348,4 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };
+module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };
