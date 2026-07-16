@@ -26,6 +26,7 @@ const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
 const revenueReportExport = require('./revenueReportExport');
 const ceoDeckReport = require('./report/deckReport');
+const productSearch = require('./productSearch');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
@@ -105,6 +106,7 @@ function productMetaFromRows(rows = [], contractorLookup) {
       product_name: r.product_name || key,
       active_ingredient: '',
       ham_luong: '',
+      strength: '',
       uom: '',
       contractor: '',
       contractor_code: '',
@@ -121,7 +123,8 @@ function productMetaFromRows(rows = [], contractorLookup) {
       iit_code: cur.iit_code || r.iit_code || key,
       product_name: cur.product_name || r.product_name || key,
       active_ingredient: cur.active_ingredient || r.active_ingredient || '',
-      ham_luong: cur.ham_luong || r.ham_luong || '',
+      ham_luong: cur.ham_luong || r.ham_luong || r.strength || '',
+      strength: cur.strength || r.strength || r.ham_luong || '',
       uom: cur.uom || r.uom || '',
       contractor: cur.contractor || code || r.contractor_name || '',
       contractor_code: cur.contractor_code || code || '',
@@ -1287,8 +1290,25 @@ router.get('/products', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const contractorLookup = contractorLookupFor(scope);
-  const rows = A.applyFilters(enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup), revenueFiltersFromQuery(req.query));
-  const metaMap = productMetaFromRows(enrichContractorNames(store.getCst({ scope }).concat(rows), contractorLookup), contractorLookup);
+  // Scope is enforced by the store before any filtering, enrichment or aggregation.
+  // Keep exact filters in analytics unchanged; q gets richer, token-aware matching
+  // only after scoped CST metadata is available.
+  const filters = revenueFiltersFromQuery(req.query);
+  const q = filters.q;
+  filters.q = null;
+  const exactRows = A.applyFilters(
+    enrichContractorNames(store.getRowsRange({ kys: pc.kys, scope }), contractorLookup),
+    filters,
+  );
+  const metaMap = productMetaFromRows(
+    enrichContractorNames(store.getCst({ scope }).concat(exactRows), contractorLookup),
+    contractorLookup,
+  );
+  const rows = productSearch.filterProductRows(
+    exactRows,
+    q,
+    (r) => metaMap.get(r.iit_code || r.product_name) || {},
+  );
   const map = new Map();
   for (const r of rows) {
     const key = r.iit_code || r.product_name || 'UNKNOWN';
