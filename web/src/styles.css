@@ -1236,7 +1236,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 }
 
 /* Danh mục quản lý — compact layout (CEO duyệt 15/07/2026 16:47). */
-.catalog-management { display:grid; gap:8px; }
+.catalog-management { display:grid; gap:8px; width:100%; min-width:0; }
+.catalog-management > * { min-width:0; max-width:100%; }
 .catalog-heading-compact { min-height:0; padding:9px 12px; }
 .catalog-heading-compact .section-head { font-size:17px; line-height:1.2; }
 .catalog-heading-compact .meta { margin-top:2px; font-size:11.5px; }
