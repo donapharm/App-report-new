@@ -1450,7 +1450,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-mode .catalog-heading-compact { position:sticky; top:var(--desktop-topbar-h); z-index:29; min-height:var(--catalog-heading-h); max-height:var(--catalog-heading-h); box-sizing:border-box; box-shadow:0 3px 10px rgba(11,61,112,.1); }
   .catalog-mode .catalog-mode-tabs { position:sticky; top:calc(var(--desktop-topbar-h) + var(--catalog-heading-h)); z-index:28; min-height:var(--catalog-tabs-h); max-height:var(--catalog-tabs-h); box-sizing:border-box; }
   .catalog-mode .catalog-pager.is-top { top:var(--catalog-sticky-top); z-index:27; }
-  .catalog-mode .catalog-table-products thead th { top:calc(var(--catalog-sticky-top) + 52px); z-index:26; }
+  .catalog-mode .catalog-table-products thead th { top:calc(var(--catalog-sticky-top) + 51px); z-index:26; }
 }
 @media (max-width:899px) {
   :root.catalog-mode { --hdr-h:74px; }
