@@ -705,6 +705,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .page-desktop { padding: 22px 32px 40px; max-width: 1600px; width: 100%; margin: 0 auto; }
 .page-desktop .kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .page-desktop .analysis-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.page-desktop .overview-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .page-desktop .alerts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .page-desktop .alerts-grid .alert { margin-bottom: 0; }
 .page-desktop .filter-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
@@ -716,6 +717,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 @media (min-width: 900px) and (max-width: 1399px) {
   .page-desktop .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .page-desktop .analysis-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .page-desktop .overview-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 @media (max-width: 520px) {

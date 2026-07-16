@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { formatDateTime, money, pct } from '../util.js';
-import { Spinner, Kpi, MoneyBig, ZaloCard, UnitLabel } from '../components.jsx';
+import { Spinner, Kpi, DailySalesKpi, MoneyBig, ZaloCard, UnitLabel } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { DonutChart, RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
@@ -96,6 +96,27 @@ export default function Overview({ me, onNavigate }) {
   const [cmpMode, setCmpModeState] = useState(() => { try { return localStorage.getItem('rpt_cmp_mode') || 'prev'; } catch { return 'prev'; } });
   const setCmpMode = (m) => { setCmpModeState(m); try { localStorage.setItem('rpt_cmp_mode', m); } catch { /* ignore */ } };
   const { reloadTick, reload } = useReloadTick();
+  const lastAutoRefresh = useRef(Date.now());
+
+  // Tổng quan có KPI doanh số ngày nên cũng tự nhận bản materialize mới giống Phân tích.
+  useEffect(() => {
+    const run = (minGap = 0) => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastAutoRefresh.current < minGap) return;
+      lastAutoRefresh.current = now;
+      reload();
+    };
+    const id = setInterval(() => run(4 * 60 * 1000), 5 * 60 * 1000);
+    const onReturn = () => run(60 * 1000);
+    document.addEventListener('visibilitychange', onReturn);
+    window.addEventListener('focus', onReturn);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onReturn);
+      window.removeEventListener('focus', onReturn);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tab Nhân viên: ghép % đạt target vào từng NV để tô màu bar theo target.
   function loadTopRows(p) {
@@ -261,9 +282,11 @@ export default function Overview({ me, onNavigate }) {
 
       {!kpi ? <Spinner /> : (
         <>
-          <div className="kpi-grid">
+          <div className="kpi-grid overview-kpi-grid">
             <Kpi variant="blue" icon={kpi.momPct != null && kpi.momPct < 0 ? '⚠️' : '📊'} label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={<MoneyBig value={kpi.revenue} />} delta={kpi.momPct} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenue')} />
             <Kpi variant="purple" icon="🧾" label="Trước VAT" value={<MoneyBig value={kpi.revenueBeforeVat} />} sub="đã ÷ 1,05" onClick={() => onNavigate?.('revenue')} />
+            <Kpi icon="📋" label="Số dòng dữ liệu" value={(kpi.rowCount || 0).toLocaleString('vi-VN')} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenueFull')} />
+            <DailySalesKpi data={analysisInsights?.dailySales} />
             <Kpi variant="green" icon="🎯" label="Đạt target (%)" value={pct(kpi.pctTarget)}
                  sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} onClick={() => onNavigate?.('target')} />
             <Kpi variant="green" icon="🎯" label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} onClick={() => onNavigate?.('target')} />

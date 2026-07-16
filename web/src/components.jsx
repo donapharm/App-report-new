@@ -192,6 +192,33 @@ export function Kpi({ label, value, sub, delta, tone, variant, icon, onClick }) 
   );
 }
 
+function dailyUpdatedLabel(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('vi-VN', {
+    timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour12: false,
+  });
+}
+
+// Dùng chung ở Phân tích và Tổng quan để hai màn hình luôn cùng số liệu/cách cảnh báo.
+export function DailySalesKpi({ data }) {
+  if (!data) return <Kpi label="Doanh số trong ngày" value="—" sub="Đang tải dữ liệu…" />;
+  const tone = data.stale ? 'daily-stale' : (data.status === 'day_off' ? 'daily-day-off' : 'daily-ready');
+  const updated = dailyUpdatedLabel(data.sourceUpdatedAt);
+  return (
+    <div className={`kpi daily-sales-kpi ${tone}`}>
+      <span className="kpi-ic" aria-hidden="true">🗓️</span>
+      <div className="label">Doanh số trong ngày</div>
+      <div className="value small">{money(data.revenue || 0)}</div>
+      <div className="daily-sales-date">Ngày {String(data.date || '').split('-').reverse().join('/')}</div>
+      {!!data.note && <div className="daily-sales-note">{data.note}</div>}
+      {!!updated && <div className="daily-sales-updated">Cập nhật lúc {updated}</div>}
+    </div>
+  );
+}
+
 const OFFICIAL_ZALO_QR = '/zalo-oa-qr.png';
 
 // Nguồn QR duy nhất đã được CEO duyệt. Không sinh QR, không thay bằng mã khác.

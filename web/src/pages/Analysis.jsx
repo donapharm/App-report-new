@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pct } from '../util.js';
-import { Spinner, Kpi, useCollapse, TargetKpiStrip, UnitLabel, Pager, usePager } from '../components.jsx';
+import { Spinner, Kpi, DailySalesKpi, useCollapse, TargetKpiStrip, UnitLabel, Pager, usePager } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, MultiSelect, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
 import { DonutChart, TopBarChart } from '../charts.jsx';
@@ -32,32 +32,6 @@ function comparePeriodLabel(compare = {}) {
       ? 'hai tháng hoàn tất gần nhất'
       : ((compare.curKys || []).length > 1 ? 'giai đoạn liền trước' : 'tháng liền trước'));
   return `${current} so với ${previous} · ${relation}`;
-}
-
-function dailyUpdatedLabel(value) {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString('vi-VN', {
-    timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit',
-    day: '2-digit', month: '2-digit', year: 'numeric', hour12: false,
-  });
-}
-
-function DailySalesKpi({ data }) {
-  if (!data) return <Kpi label="Doanh số trong ngày" value="—" sub="Đang tải dữ liệu…" />;
-  const tone = data.stale ? 'daily-stale' : (data.status === 'day_off' ? 'daily-day-off' : 'daily-ready');
-  const updated = dailyUpdatedLabel(data.sourceUpdatedAt);
-  return (
-    <div className={`kpi daily-sales-kpi ${tone}`}>
-      <span className="kpi-ic" aria-hidden="true">🗓️</span>
-      <div className="label">Doanh số trong ngày</div>
-      <div className="value small">{money(data.revenue || 0)}</div>
-      <div className="daily-sales-date">Ngày {String(data.date || '').split('-').reverse().join('/')}</div>
-      {!!data.note && <div className="daily-sales-note">{data.note}</div>}
-      {!!updated && <div className="daily-sales-updated">Cập nhật lúc {updated}</div>}
-    </div>
-  );
 }
 
 function DeltaRow({ i, r, kind }) {
