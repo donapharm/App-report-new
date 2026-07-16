@@ -51,6 +51,7 @@ function lineFromRow(r) {
     route: text(r.route) || null,
     contractor_code: text(r.contractor_code) || null,
     contractor_name: text(r.contractor_name) || null,
+    revenue_status: text(r.revenue_status) || null,
   };
 }
 
@@ -97,26 +98,22 @@ function groupOrders(rows = []) {
   return [...groups.values()].map((o) => {
     const units = [...o.units.values()];
     return {
-      id: o.id,
+      key: o.id,
       source: o.source,
       source_order: o.source_order,
-      employees: [...o.employees.values()],
-      unit: units[0] || null,
-      units,
-      unit_code: units[0]?.unit_code || null,
-      unit_name: units[0]?.unit_name || null,
-      unitCount: units.length,
       date: o.date,
       revenue: o.revenue,
-      lineCount: o.lines.length,
       line_count: o.lines.length,
+      unit_code: units[0]?.unit_code || null,
+      unit_name: units[0]?.unit_name || null,
+      employees: [...o.employees.values()],
       revenue_status: statusOf(o.revenueStatuses),
       lines: o.lines,
     };
   }).sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))
     || b.revenue - a.revenue
     || a.source.localeCompare(b.source, 'vi')
-    || String(a.source_order || a.id).localeCompare(String(b.source_order || b.id), 'vi'));
+    || String(a.source_order || a.key).localeCompare(String(b.source_order || b.key), 'vi'));
 }
 
 function normalizeSearch(v) {
@@ -136,12 +133,13 @@ function buildPayload({ rows = [], now = new Date(), sourceUpdatedAt = null, isA
       o.source_order,
       o.source,
       ...o.employees.flatMap((e) => [e.code, e.name]),
-      ...o.units.flatMap((u) => [u.unit_code, u.unit_name]),
+      o.unit_code,
+      o.unit_name,
     ].join(' ')).includes(needle);
   });
   if (sort === 'newest') {
     orders = orders.slice().sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))
-      || String(b.source_order || b.id).localeCompare(String(a.source_order || a.id), 'vi'));
+      || String(b.source_order || b.key).localeCompare(String(a.source_order || a.key), 'vi'));
   }
   const units = new Set(todayRows.map((r) => r.unit_code || r.unit_name).filter(Boolean).map(baseUnitKey));
   const daily = dailySales.buildDailySales({ rows: todayRows, now, sourceUpdatedAt, isAdmin, isFiltered, refresh });
@@ -151,12 +149,17 @@ function buildPayload({ rows = [], now = new Date(), sourceUpdatedAt = null, isA
   const totalPages = Math.max(1, Math.ceil(orders.length / safePageSize));
   return {
     date: parts.date,
+    ky: parts.ky,
     summary: {
-      ...daily,
-      sourceRowCount: todayRows.length,
+      revenue: daily.revenue,
+      rowCount: daily.rowCount,
       orderCount: allOrders.length,
       unitCount: units.size,
-      reconciled: Math.abs(allOrders.reduce((sum, o) => sum + o.revenue, 0) - daily.revenue) < 0.5,
+      sourceUpdatedAt: daily.sourceUpdatedAt,
+      status: daily.status,
+      note: daily.note,
+      stale: daily.stale,
+      reconciled: Math.abs(allOrders.reduce((sum, order) => sum + Number(order.revenue || 0), 0) - daily.revenue) < 0.5,
     },
     availableSources,
     page: safePage,

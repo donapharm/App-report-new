@@ -79,15 +79,15 @@ test('CEO API returns KPI-matching totals and paginated orders for Bangkok today
   const result = await api.call({ role: 'ceo', emp_code: 'CEO' }, { page: '1', pageSize: '1' });
 
   assert.deepEqual(api.scopes, [{ kys: ['07.2026'], scope: { empCode: null } }]);
-  assert.equal(result.summary.date, '2026-07-16');
-  assert.equal(result.summary.ky, '07.2026');
+  assert.equal(result.date, '2026-07-16');
+  assert.equal(result.ky, '07.2026');
   assert.equal(result.summary.revenue, 600);
   assert.equal(result.summary.rowCount, 3);
-  assert.equal(result.summary.sourceRowCount, 3);
   assert.equal(result.summary.orderCount, 2);
   assert.equal(result.summary.unitCount, 2);
   assert.equal(result.summary.sourceUpdatedAt, '2026-07-16T11:30:00+07:00');
   assert.equal(result.summary.status, 'has_sales');
+  assert.equal(result.summary.reconciled, true);
   assert.equal(result.total, 2);
   assert.equal(result.pageSize, 1);
   assert.equal(result.orders.length, 1);
@@ -103,12 +103,19 @@ test('employee scope is applied before grouping and exposes only scoped lines/su
 
   assert.deepEqual(api.scopes, [{ kys: ['07.2026'], scope: { empCode: 'DN001' } }]);
   assert.equal(result.summary.revenue, 100);
-  assert.equal(result.summary.sourceRowCount, 1);
+  assert.equal(result.summary.rowCount, 1);
   assert.equal(result.summary.orderCount, 1);
   assert.equal(result.orders[0].revenue, 100);
-  assert.equal(result.orders[0].lineCount, 1);
+  assert.equal(result.orders[0].line_count, 1);
   assert.deepEqual(result.orders[0].employees, [{ code: 'DN001', name: 'Anh Một' }]);
   assert.equal(result.orders[0].lines[0].revenue, 100);
+  assert.deepEqual(Object.keys(result.summary).sort(), [
+    'note', 'orderCount', 'reconciled', 'revenue', 'rowCount', 'sourceUpdatedAt', 'stale', 'status', 'unitCount',
+  ].sort());
+  assert.deepEqual(Object.keys(result.orders[0]).sort(), [
+    'date', 'employees', 'key', 'line_count', 'lines', 'revenue', 'revenue_status',
+    'source', 'source_order', 'unit_code', 'unit_name',
+  ].sort());
 });
 
 test('same order number from different sources never collides', () => {
@@ -145,7 +152,7 @@ test('API contract whitelists safe fields and never leaks cost/profit/margin inp
   assertNoSensitiveKeys(result);
   assert.deepEqual(Object.keys(result.orders[0].lines[0]).sort(), [
     'bid_package', 'contractor_code', 'contractor_name', 'iit_code', 'product_name',
-    'quantity', 'revenue', 'route', 'source_line_id', 'unit_price', 'uom',
+    'quantity', 'revenue', 'revenue_status', 'route', 'source_line_id', 'unit_price', 'uom',
   ].sort());
 });
 
@@ -160,9 +167,25 @@ test('existing revenue filters are supported but date query cannot move the API 
     { role: 'ceo', emp_code: 'CEO' },
     { unit: '001', dateFrom: '2026-07-15', dateTo: '2026-07-15' },
   );
-  assert.equal(result.summary.date, '2026-07-16');
+  assert.equal(result.date, '2026-07-16');
   assert.equal(result.summary.revenue, 100);
   assert.equal(result.summary.orderCount, 1);
+});
+
+test('sum of all grouped orders exactly matches summary revenue', () => {
+  const result = buildPayload({
+    rows: [
+      row({ source_order: 'DH-001', revenue: 100 }),
+      row({ source_order: 'DH-002', source_line_id: 'L-002', revenue: 200 }),
+    ],
+    now: NOW,
+    sourceUpdatedAt: '2026-07-16T11:30:00+07:00',
+    isAdmin: true,
+    refresh: REFRESH,
+    pageSize: 100,
+    baseUnitKey: analytics.baseUnitKey,
+  });
+  assert.equal(result.orders.reduce((sum, order) => sum + order.revenue, 0), result.summary.revenue);
 });
 
 test('list search/source filters and sorting do not change the KPI summary', () => {
