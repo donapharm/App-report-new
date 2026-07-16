@@ -287,8 +287,8 @@ export default function Overview({ me, onNavigate }) {
             <Kpi variant="purple" icon="🧾" label="Trước VAT" value={<MoneyBig value={kpi.revenueBeforeVat} />} sub="đã ÷ 1,05" onClick={() => onNavigate?.('revenue')} />
             <Kpi icon="📋" label="Số dòng dữ liệu" value={(kpi.rowCount || 0).toLocaleString('vi-VN')} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenueFull')} />
             <DailySalesKpi data={analysisInsights?.dailySales} />
-            <Kpi variant="green" icon="🎯" label="Đạt target (%)" value={pct(kpi.pctTarget)}
-                 sub={kpi.pctTarget != null ? (kpi.pctTarget >= 100 ? 'Đã đạt 🎉' : 'Chưa đạt') : 'Chưa có target'} onClick={() => onNavigate?.('target')} />
+            <Kpi variant="green" icon="🎯" label="Đạt target" value={<MoneyBig value={kpi.targetTotal || 0} />}
+                 sub={kpi.pctTarget != null ? `Đã đạt ${pct(kpi.pctTarget)} (chưa VAT)` : 'Chưa có target (chưa VAT)'} onClick={() => onNavigate?.('target')} />
             <Kpi variant="green" icon="🎯" label="NV đạt target" value={`${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} onClick={() => onNavigate?.('target')} />
             <Kpi variant="red" icon="⚠️" label="Cơ số thầu sắp cạn" value={`${kpi.cstLowCount || 0} dòng <10%`} sub="Hiện tại · bấm để xem" onClick={() => onNavigate?.('cst', { cstFilter: 'low' })} />
             <Kpi variant="amber" icon="🗺️" label="Quy mô kỳ" value={`${kpi.unitCount} ĐV · ${kpi.productCount} SP · ${kpi.empCount} NV`} sub={`${kpi.rowCount} dòng · xem ›`} onClick={() => onNavigate?.('revenue')} />
