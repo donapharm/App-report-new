@@ -98,7 +98,7 @@ export function ComboSelect({ value, onChange, options, all, placeholder, classN
   );
 }
 
-export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFilters, filterBusy, filterNotice }) {
+export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFilters, filterBusy, filterNotice, showQuickProvince = false, quickSearchPlaceholder = 'Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…' }) {
   const setF = (k, v) => setFilters((f) => {
     const next = { ...f, [k]: v };
     // Không cho khoảng ngày đảo chiều; kéo đầu còn lại theo ngày vừa chọn.
@@ -148,9 +148,13 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
       {/* Thanh gọn luôn hiện: kỳ + tìm nhanh + nút đóng/mở + xoá lọc */}
       <div className="filter-bar">
         <div className="filter-ky"><Select value={ky} onChange={changeKy} options={(periods || []).map((p) => ({ key: p.ky, label: p.ky }))} all="Chọn kỳ" /></div>
-        <input className="filter-quick" value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder="Tìm mã/tên NV, đơn vị, sản phẩm, mã QLNB…" />
+        {showQuickProvince && <div className="filter-province-quick"><Select value={filters.province} onChange={(v) => setF('province', v)} options={options?.provinces} all="Tất cả vùng" /></div>}
+        <div className="filter-quick-wrap">
+          <input className="filter-quick" value={filters.q} onChange={(e) => setF('q', e.target.value)} placeholder={quickSearchPlaceholder} aria-label="Tìm kiếm thông minh" />
+          {filters.q && <button type="button" className="filter-quick-clear" aria-label="Xóa nội dung tìm kiếm" title="Xóa tìm kiếm" onClick={() => setF('q', '')}>×</button>}
+        </div>
         <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{filterBusy ? '⟳ Đang lọc…' : (open ? '▴ Thu gọn lọc' : '▾ Bộ lọc')}{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>
-        {activeFilterCount > 0 && <button className="btn ghost" onClick={() => setFilters({ ...emptyRevenueFilters })}>Xoá lọc</button>}
+        {activeFilterCount > 0 && <button className="btn ghost filter-clear-all" onClick={() => setFilters({ ...emptyRevenueFilters })}>Xoá lọc</button>}
       </div>
       {(rangeText || filterNotice) && <div className="filter-live-status">{rangeText && <span>📅 {rangeText}</span>}{filterNotice && <b>{filterNotice}</b>}</div>}
       {open && (
@@ -161,7 +165,7 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
           </div>
           <div className="filter-grid">
             {me.isAdmin && <MultiSelect value={filters.emp} onChange={(v) => setF('emp', v)} options={options?.employees} all="Tất cả NV" unit="NV" />}
-            <Select value={filters.province} onChange={(v) => setF('province', v)} options={options?.provinces} all="Tất cả tỉnh/thành" />
+            {!showQuickProvince && <Select value={filters.province} onChange={(v) => setF('province', v)} options={options?.provinces} all="Tất cả tỉnh/thành" />}
             <ComboSelect value={filters.unit} onChange={(v) => setF('unit', v)} options={options?.units} all="Tất cả đơn vị" placeholder="Gõ mã/tên đơn vị…" />
             <ComboSelect value={filters.group} onChange={(v) => setF('group', v)} options={options?.groups} all="Tất cả nhóm hàng C14" placeholder="Gõ mã/tên nhóm hàng…" />
             <ComboSelect value={filters.product} onChange={(v) => setF('product', v)} options={options?.products} all="Tất cả sản phẩm" placeholder="Gõ tên/mã QLNB/hoạt chất…" />

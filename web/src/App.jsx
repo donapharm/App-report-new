@@ -61,6 +61,11 @@ export default function App() {
     return () => { window.removeEventListener('scroll', onScroll); document.documentElement.classList.remove('hdr-mini'); };
   }, [me]);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('products-mode', !!me && tab === 'products');
+    return () => document.documentElement.classList.remove('products-mode');
+  }, [me, tab]);
+
   if (loading) return <Spinner />;
   if (!me) return <Login onLogin={setMe} />;
 
@@ -144,7 +149,7 @@ export default function App() {
       </main>
       <ScrollTopButton />
       <UpdateBanner />
-      {!['catalogManagement', 'dailySales'].includes(tab) && <ZaloMobileAccess />}
+      {!['catalogManagement', 'dailySales', 'products'].includes(tab) && <ZaloMobileAccess />}
       {tab !== 'dailySales' && <nav className="nav">
         {tabs.filter((t) => !t.hidden).map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>

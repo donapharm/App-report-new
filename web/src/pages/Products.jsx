@@ -16,7 +16,7 @@ export default function Products({ me, onNavigate }) {
     if (!ky || !filtersReady) return;
     let cancelled = false;
     setData(null);
-    api.products({ ky, pageSize: 100, ...queryFilters }).then((d) => { if (!cancelled) setData(d); });
+    api.products({ ky, pageSize: 500, ...queryFilters }).then((d) => { if (!cancelled) setData(d); });
     return () => { cancelled = true; };
   }, [ky, queryFilters, filtersReady, reloadTick]);
 
@@ -31,10 +31,22 @@ export default function Products({ me, onNavigate }) {
   }
 
   return (
-    <>
+    <div className="products-page">
       <DrillNav crumbs={[{ label: 'Sản phẩm' }]} onReload={reload} busy={!data} />
-      <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} filterBusy={filterBusy} filterNotice={filterNotice} />
-      <div className="card summary-card">
+      <RevenueFilters
+        me={me}
+        ky={ky}
+        periods={periods}
+        options={options}
+        filters={filters}
+        setKy={setKy}
+        setFilters={setFilters}
+        filterBusy={filterBusy}
+        filterNotice={filterNotice}
+        showQuickProvince
+        quickSearchPlaceholder="Tìm thông minh: tên thuốc, mã QLNB, hoạt chất…"
+      />
+      <div className="card summary-card product-summary-card">
         <div>
           <div className="meta muted">Sản phẩm / mã QLNB · kỳ {ky} · {data?.total || 0} mã</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}><MoneyBig value={data?.totalRevenue || 0} /></div>
@@ -43,7 +55,7 @@ export default function Products({ me, onNavigate }) {
       </div>
       {!data ? <SkeletonCards count={6} /> : data.rows.length === 0 ? <div className="center">Không có dữ liệu.</div> : (
         <>
-        <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="mã" />
+        <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="mã" capsule className="product-capsule-pager" />
         <div className="list-grid">
           {pager.pageItems.map((r, i) => (
             <div className={`card detail-card table-detail-card product-detail-card ${productQdClass(r)}`} key={r.key}>
@@ -75,9 +87,9 @@ export default function Products({ me, onNavigate }) {
             </div>
           ))}
         </div>
-        <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="mã" />
+        <Pager page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={pager.setPage} unit="mã" capsule className="product-capsule-pager" />
         </>
       )}
-    </>
+    </div>
   );
 }
