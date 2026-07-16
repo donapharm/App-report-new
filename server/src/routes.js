@@ -15,6 +15,7 @@ const smart = require('./smart');
 const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
 const dailySales = require('./dailySales');
+const dailySalesOrders = require('./dailySalesOrders');
 const reconcile = require('./reconcile');
 const targetAdmin = require('./targetAdmin');
 const assignmentAdmin = require('./assignmentAdmin');
@@ -1345,6 +1346,14 @@ router.get('/products', auth.requireAuth, (req, res) => {
   const pg = paginate(out, req, 50, 500);
   res.json({ ky: pc.ky, kys: pc.kys, page: pg.page, pageSize: pg.pageSize, total: pg.total, rows: pg.rows, totalRevenue: A.sum(out, (r) => r.revenue) });
 });
+
+/* ---------- Chi tiết KPI doanh số hôm nay (scope bắt buộc ở backend) ---------- */
+router.get('/daily-sales/orders', auth.requireAuth, dailySalesOrders.createHandler({
+  store,
+  auth,
+  analytics: A,
+  revenueRefresh,
+}));
 
 /* ---------- Phân tích: so kỳ trước theo đơn vị/sản phẩm/tuyến/NV ---------- */
 router.get('/analysis', auth.requireAuth, (req, res) => {
