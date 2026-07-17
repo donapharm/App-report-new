@@ -2,7 +2,7 @@
 
 Canonical shared UI package approved under `OK_UICMP1_0717`. It adds line-density controls and a read-only full-cell preview to ordinary HTML or React tables.
 
-- Shows **1, 2, 3, or all** lines; default is **3**.
+- Shows **1, 2, 3, or all** lines from one compact dropdown; default is **3**.
 - Remembers the choice per `appId` + `tableId` in `localStorage`.
 - Click, **Enter**, or **Space** opens the full value.
 - **Copy** and **Close** actions; **Escape**, outside click, page/table scroll, and resize close it.

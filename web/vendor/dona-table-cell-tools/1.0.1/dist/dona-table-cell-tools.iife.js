@@ -97,29 +97,29 @@ function closestCell(target, root, selector) {
   return cell && root.contains(cell) ? cell : null;
 }
 
-function setButtonText(button, lines) {
-  button.textContent = lines === 'all' ? 'Tất cả' : String(lines);
+function lineOptionLabel(lines) {
+  return lines === 'all' ? 'Tất cả' : `${lines} dòng`;
 }
 
 function createLineControl(doc, current, onChange, labels) {
-  const group = doc.createElement('div');
+  const group = doc.createElement('label');
   group.className = 'dona-cell-tools-lines';
-  group.setAttribute('role', 'group');
-  group.setAttribute('aria-label', labels.lineChoice);
   const prefix = doc.createElement('span');
   prefix.className = 'dona-cell-tools-lines-label';
   prefix.textContent = labels.lines;
-  group.append(prefix);
+  const select = doc.createElement('select');
+  select.className = 'dona-cell-tools-line-select';
+  select.dataset.linesSelect = '';
+  select.setAttribute('aria-label', labels.lineChoice);
   for (const option of LINE_OPTIONS) {
-    const button = doc.createElement('button');
-    button.type = 'button';
-    button.className = 'dona-cell-tools-line-button';
-    button.dataset.lines = String(option);
-    setButtonText(button, option);
-    button.setAttribute('aria-pressed', String(option === current));
-    button.addEventListener('click', () => onChange(option));
-    group.append(button);
+    const item = doc.createElement('option');
+    item.value = String(option);
+    item.textContent = lineOptionLabel(option);
+    select.append(item);
   }
+  select.value = String(current);
+  select.addEventListener('change', () => onChange(select.value));
+  group.append(prefix, select);
   return group;
 }
 
@@ -135,7 +135,7 @@ function mount(rootOrSelector, options = {}) {
   const storage = safeStorage(win, options.storage);
   const cellSelector = options.cellSelector || 'td';
   const labels = {
-    lines: 'Số dòng:', lineChoice: 'Số dòng hiển thị trong ô', dialog: 'Nội dung đầy đủ của ô',
+    lines: 'Hiển thị:', lineChoice: 'Số dòng hiển thị trong ô', dialog: 'Nội dung đầy đủ của ô',
     copy: 'Sao chép', close: 'Đóng', empty: '—', ...(options.labels || {})
   };
   let lines = options.lines == null ? readStoredLines(storage, key) : normalizeLines(options.lines);
@@ -150,9 +150,8 @@ function mount(rootOrSelector, options = {}) {
     root.dataset.cellLines = String(lines);
     if (lines === 'all') root.style.removeProperty('--dona-cell-lines');
     else root.style.setProperty('--dona-cell-lines', String(lines));
-    if (control) for (const button of control.querySelectorAll('[data-lines]')) {
-      button.setAttribute('aria-pressed', String(button.dataset.lines === String(lines)));
-    }
+    const select = control?.querySelector?.('[data-lines-select]');
+    if (select) select.value = String(lines);
   };
 
   const setLines = (next, persist = true) => {
