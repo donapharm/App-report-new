@@ -32,6 +32,26 @@ const TABS = [
   { key: 'upload', label: 'Upload', ic: '⬆️', C: Upload, adminOnly: true },
 ];
 
+const HOME_URL = 'https://home.donapharm.asia';
+
+function HomeButton() {
+  return (
+    <button
+      type="button"
+      className="home-button"
+      aria-label="Trở về Home DONAPHARM"
+      title="Trở về Home DONAPHARM"
+      onClick={() => window.location.assign(HOME_URL)}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 10.8 12 3l9 7.8" />
+        <path d="M5.4 9.8V21h13.2V9.8" />
+        <path d="M9.3 21v-6.5h5.4V21" />
+      </svg>
+    </button>
+  );
+}
+
 export default function App() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -121,7 +141,10 @@ export default function App() {
               <h1>{(() => { const t = tabs.find((x) => x.key === tab); return t?.full || t?.label; })()}</h1>
               <div className="sub">DONAPHARM · Báo cáo doanh thu thông minh</div>
             </div>
-            <Clock />
+            <div className="topbar-actions">
+              <HomeButton />
+              <Clock />
+            </div>
           </header>
           <main className={`page-desktop ${tab === 'catalogManagement' ? 'page-desktop-wide' : ''}`}>
             <NavCtx.Provider value={navBack}><Active me={me} desktop onNavigate={navigate} /></NavCtx.Provider>
@@ -146,7 +169,10 @@ export default function App() {
         </div>
         <div className="hdr-r2">
           <Clock />
-          <button className="logout" onClick={logout}>Đăng xuất</button>
+          <div className="hdr-actions">
+            <HomeButton />
+            <button className="logout" onClick={logout}>Đăng xuất</button>
+          </div>
         </div>
       </header>
       <main className="page">

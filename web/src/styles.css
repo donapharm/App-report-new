@@ -54,6 +54,19 @@ body {
 .hdr h1 { font-size: 17px; margin: 0; font-weight: 700; }
 .hdr .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
 .hdr .logout { background: rgba(255,255,255,.18); border: none; color: #fff; border-radius: 8px; padding: 4px 11px; font-size: 11.5px; white-space: nowrap; flex: 0 0 auto; }
+.hdr-actions, .topbar-actions { display: flex; align-items: center; gap: 8px; }
+.home-button {
+  width: 34px; height: 34px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border: 1px solid rgba(255,255,255,.35); border-radius: 9px;
+  background: rgba(255,255,255,.18); color: #fff; cursor: pointer;
+  transition: background .14s ease, transform .14s ease, box-shadow .14s ease;
+}
+.home-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.home-button:hover { background: rgba(255,255,255,.3); box-shadow: 0 3px 10px rgba(0,31,63,.2); transform: translateY(-1px); }
+.home-button:active { transform: translateY(0); }
+.home-button:focus-visible { outline: 3px solid rgba(255,210,90,.95); outline-offset: 2px; }
+.hdr .home-button { width: 29px; height: 29px; border-radius: 8px; }
+.hdr .home-button svg { width: 17px; height: 17px; }
 /* Đồng hồ (giờ chạy giây + ngày) — 1 dòng, sát, căn trái */
 .clock-pill { display: inline-flex; align-items: baseline; gap: 6px; background: rgba(255,255,255,.18); color: #fff; border-radius: 8px; padding: 1px 9px; white-space: nowrap; line-height: 1.25; }
 .clock-pill .clock-dt { display: inline-flex; align-items: baseline; gap: 6px; }
@@ -70,6 +83,7 @@ body {
 :root.hdr-mini .hdr { min-height: 0; padding-top: calc(4px + env(safe-area-inset-top)); padding-bottom: 4px; box-shadow: 0 2px 10px rgba(11,61,112,.3); }
 :root.hdr-mini .hdr .official-logo img { width: 58px !important; }
 :root.hdr-mini .hdr .logout { padding: 3px 9px; font-size: 10.5px; }
+:root.hdr-mini .hdr .home-button { width: 27px; height: 27px; }
 /* Cuộn xuống: ẩn chức danh + đồng hồ cho gọn (còn logo | tên và Đăng xuất) */
 :root.hdr-mini .hdr .who-role, :root.hdr-mini .hdr .clock-pill { display: none; }
 .section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 18px 4px 8px; font-weight: 700; }
