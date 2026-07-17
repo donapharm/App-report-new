@@ -1,0 +1,44 @@
+{
+  "name": "@donapharm/dona-table-cell-tools",
+  "version": "1.0.0",
+  "description": "Framework-neutral table-cell line density and full-value preview tools",
+  "type": "module",
+  "sideEffects": [
+    "./dist/dona-table-cell-tools.css"
+  ],
+  "main": "./src/core.js",
+  "module": "./src/core.js",
+  "browser": "./dist/dona-table-cell-tools.iife.js",
+  "exports": {
+    ".": "./src/core.js",
+    "./browser": "./dist/dona-table-cell-tools.iife.js",
+    "./css": "./dist/dona-table-cell-tools.css",
+    "./react": "./react/index.js",
+    "./manifest": "./manifest.json"
+  },
+  "files": [
+    "src",
+    "dist",
+    "react",
+    "manifest.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build-iife.mjs",
+    "test": "node --test",
+    "check": "node --check src/core.js && node --check react/index.js && node --check dist/dona-table-cell-tools.iife.js && node --check scripts/build-iife.mjs"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}

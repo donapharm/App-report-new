@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useDonaTableCellTools } from '@donapharm/dona-table-cell-tools/react';
+import '@donapharm/dona-table-cell-tools/css';
 import { api } from '../api.js';
 import { Spinner } from '../components.jsx';
 
@@ -65,6 +67,20 @@ const drugQlnbCounts = (rows) => {
 const ROUTES = ['CL', 'NCL', 'NT'];
 const PAGE_SIZE = 200;
 
+function CatalogTableCard({ id, tableId, children }) {
+  const { rootRef } = useDonaTableCellTools({
+    appId: 'app-report',
+    tableId,
+    cellSelector: 'td[data-full-value]'
+  });
+  return <div ref={rootRef} id={id} className="card table-card catalog-table-card" data-app-id="app-report" data-table-id={tableId}>{children}</div>;
+}
+
+function PreviewCell({ value, children, className }) {
+  const visibleValue = String(value ?? '');
+  return <td className={className} data-full-value={visibleValue}><span className="dona-cell-value">{children ?? visibleValue}</span></td>;
+}
+
 function DrugName({ row, counts }) {
   const name = row.product_name || '—';
   const count = counts.get(drugNameKey(row.product_name)) || 0;
@@ -114,12 +130,31 @@ function EmployeeSections({ data }) {
         <div className="catalog-result-count"><span>Đang phụ trách</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
       </div>
     </div>
-    <div id="employee-catalog-table-top" className="card table-card catalog-table-card">
+    <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog">
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td>{routeOf(r) || '—'}</td><td>{r.contractor_code || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><DrugName row={r} counts={qlnbCounts} /></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+        const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
+        const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
+        const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
+        const effectiveToText = r.effective_to ? hubToUi(r.effective_to) : 'Đang phụ trách';
+        return <tr key={r.id}>
+          <PreviewCell value={routeOf(r) || '—'} />
+          <PreviewCell value={r.contractor_code || '—'} />
+          <PreviewCell value={r.unit_code || '—'} />
+          <PreviewCell value={r.qlnb_code || '—'} />
+          <PreviewCell value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
+          <PreviewCell value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
+          <PreviewCell value={r.uom || '—'} />
+          <td className="catalog-money" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
+          <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
+          <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
+          <PreviewCell value={hubToUi(r.effective_from)} />
+          <PreviewCell value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
+        </tr>;
+      })}</tbody></table></div>
       {rows.length === 0 && <div className="muted catalog-empty">Chưa có danh mục trong phạm vi đang lọc.</div>}
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
-    </div>
+    </CatalogTableCard>
   </>;
 }
 
@@ -251,11 +286,31 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
           <div className="catalog-result-count"><span>Kết quả</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
         </div>
       </div>
-      <div id="catalog-table-top" className="card table-card catalog-table-card">
+      <CatalogTableCard id="catalog-table-top" tableId="admin-catalog">
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => { const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null; const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok'; return <tr key={r.id}><td><b>{r.emp_code}</b><small>{r.emp_name}</small></td><td>{routeOf(r) || '—'}</td><td>{r.contractor_code || '—'}</td><td>{r.unit_code || '—'}</td><td>{r.qlnb_code || '—'}</td><td><DrugName row={r} counts={qlnbCounts} /></td><td><span className="catalog-two-lines" title={[r.active_ingredient, r.strength].filter(Boolean).join(' · ')}>{[r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—'}</span></td><td>{r.uom || '—'}</td><td className="catalog-money"><b>{moneyText(r.bid_price)}</b></td><td className="catalog-money">{quantityText(r.cst_initial)}</td><td className={`catalog-money catalog-cst${pctClass}`}><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td><td>{hubToUi(r.effective_from)}</td><td>{r.effective_to ? hubToUi(r.effective_to) : <span className="catalog-active-label">Đang phụ trách</span>}</td></tr>; })}</tbody></table></div>
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+          const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
+          const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
+          const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
+          const effectiveToText = r.effective_to ? hubToUi(r.effective_to) : 'Đang phụ trách';
+          return <tr key={r.id}>
+            <td data-sensitive=""><b>{r.emp_code}</b><small>{r.emp_name}</small></td>
+            <PreviewCell value={routeOf(r) || '—'} />
+            <PreviewCell value={r.contractor_code || '—'} />
+            <PreviewCell value={r.unit_code || '—'} />
+            <PreviewCell value={r.qlnb_code || '—'} />
+            <PreviewCell value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
+            <PreviewCell value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
+            <PreviewCell value={r.uom || '—'} />
+            <td className="catalog-money" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
+            <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
+            <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
+            <PreviewCell value={hubToUi(r.effective_from)} />
+            <PreviewCell value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
+          </tr>;
+        })}</tbody></table></div>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
-      </div>
+      </CatalogTableCard>
     </> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
 
     <details className="card catalog-advanced">

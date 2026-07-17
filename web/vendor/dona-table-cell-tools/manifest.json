@@ -1,0 +1,16 @@
+{
+  "name": "dona-table-cell-tools",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "status": "canonical",
+  "entrypoints": {
+    "esm": "src/core.js",
+    "browserIife": "dist/dona-table-cell-tools.iife.js",
+    "css": "dist/dona-table-cell-tools.css",
+    "react": "react/index.js"
+  },
+  "runtimeDependencies": [],
+  "defaultLines": 3,
+  "supportedLines": [1, 2, 3, "all"],
+  "approval": "OK_UICMP1_0717"
+}

@@ -1,0 +1,142 @@
+/* dona-table-cell-tools v1.0.0 */
+.dona-cell-tools {
+  --dona-cell-lines: 3;
+  --dona-cell-line-height: 1.35em;
+  --dona-cell-border: #d7dee8;
+  --dona-cell-surface: #fff;
+  --dona-cell-text: #172033;
+  --dona-cell-primary: #155eef;
+  min-width: 0;
+}
+
+.dona-cell-tools td:not(.col-act):not(.grid-empty):not([data-cell-action]):not([data-no-cell-preview]):not([data-sensitive]) {
+  height: calc(var(--dona-cell-line-height) * var(--dona-cell-lines) + 10px);
+  max-height: calc(var(--dona-cell-line-height) * var(--dona-cell-lines) + 10px);
+  overflow: hidden;
+  vertical-align: middle;
+  white-space: normal;
+  contain: paint;
+}
+
+.dona-cell-tools td:not(.col-act):not(.grid-empty):not([data-cell-action]):not([data-no-cell-preview]):not([data-sensitive]) > .dona-cell-value,
+.dona-cell-tools td:not(.col-act):not(.grid-empty):not([data-cell-action]):not([data-no-cell-preview]):not([data-sensitive]) > .smart-cell-value {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--dona-cell-lines);
+  line-clamp: var(--dona-cell-lines);
+}
+
+.dona-cell-tools[data-cell-lines="all"] td:not(.col-act):not(.grid-empty):not([data-cell-action]):not([data-no-cell-preview]):not([data-sensitive]) {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  contain: none;
+}
+
+.dona-cell-tools[data-cell-lines="all"] td > .dona-cell-value,
+.dona-cell-tools[data-cell-lines="all"] td > .smart-cell-value {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+.dona-cell-tools td[data-dona-owned-tabindex],
+.dona-cell-tools td[tabindex="0"] { cursor: zoom-in; }
+.dona-cell-tools td[tabindex="0"]:focus-visible {
+  outline: 2px solid var(--dona-cell-primary);
+  outline-offset: -2px;
+}
+
+.dona-cell-tools-lines {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 8px;
+  color: var(--dona-cell-text);
+  font: 500 13px/1.3 system-ui, sans-serif;
+}
+.dona-cell-tools-lines-label { margin-right: 2px; }
+.dona-cell-tools-line-button,
+.dona-cell-tools-button {
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--dona-cell-border);
+  border-radius: 7px;
+  background: var(--dona-cell-surface);
+  color: var(--dona-cell-text);
+  font: 600 13px/1.2 system-ui, sans-serif;
+  cursor: pointer;
+}
+.dona-cell-tools-line-button[aria-pressed="true"] {
+  border-color: var(--dona-cell-primary);
+  background: var(--dona-cell-primary);
+  color: #fff;
+}
+.dona-cell-tools-line-button:focus-visible,
+.dona-cell-tools-button:focus-visible {
+  outline: 2px solid var(--dona-cell-primary);
+  outline-offset: 2px;
+}
+
+.dona-cell-tools-popover {
+  position: fixed;
+  z-index: 2147483000;
+  left: clamp(8px, var(--dona-anchor-left), calc(100vw - min(440px, 94vw) - 8px));
+  top: min(var(--dona-anchor-top), calc(100dvh - 230px));
+  width: min(440px, 94vw);
+  max-height: 220px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--dona-cell-border, #d7dee8);
+  border-radius: 10px;
+  background: var(--dona-cell-surface, #fff);
+  box-shadow: 0 14px 40px rgb(15 23 42 / 26%);
+  color: var(--dona-cell-text, #172033);
+  font: 400 14px/1.45 system-ui, sans-serif;
+}
+.dona-cell-tools-popover-value {
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.dona-cell-tools-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.dona-cell-tools-button.is-secondary { background: #f6f8fb; }
+.dona-cell-tools-copy-fallback {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+@media (max-width: 639px) {
+  .dona-cell-tools-popover {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-height: min(58dvh, 520px);
+    padding: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -12px 38px rgb(15 23 42 / 28%);
+  }
+  .dona-cell-tools-popover-actions { position: sticky; bottom: 0; }
+  .dona-cell-tools-button { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dona-cell-tools-popover { scroll-behavior: auto; }
+}
