@@ -1,6 +1,6 @@
 {
   "name": "@donapharm/dona-table-cell-tools",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Framework-neutral table-cell line density and full-value preview tools",
   "type": "module",
   "sideEffects": [

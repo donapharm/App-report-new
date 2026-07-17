@@ -1,6 +1,6 @@
 {
   "name": "dona-table-cell-tools",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "apiVersion": 1,
   "status": "canonical",
   "entrypoints": {
@@ -12,5 +12,5 @@
   "runtimeDependencies": [],
   "defaultLines": 3,
   "supportedLines": [1, 2, 3, "all"],
-  "approval": "OK_UICMP1_0717"
+  "approval": "OK_UICLR_0717"
 }

@@ -1,6 +1,6 @@
 const INSTANCES = new WeakMap();
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.0.1';
 export const DEFAULT_LINES = 3;
 export const LINE_OPTIONS = Object.freeze([1, 2, 3, 'all']);
 export const DEFAULT_EXCLUDE_SELECTOR = [
@@ -247,10 +247,10 @@ export function mount(rootOrSelector, options = {}) {
     const actions = doc.createElement('div');
     actions.className = 'dona-cell-tools-popover-actions';
     const copy = doc.createElement('button');
-    copy.type = 'button'; copy.className = 'dona-cell-tools-button'; copy.textContent = labels.copy;
+    copy.type = 'button'; copy.className = 'dona-cell-tools-button is-copy'; copy.textContent = labels.copy;
     copy.addEventListener('click', () => copyText(value));
     const closeButton = doc.createElement('button');
-    closeButton.type = 'button'; closeButton.className = 'dona-cell-tools-button is-secondary'; closeButton.textContent = labels.close;
+    closeButton.type = 'button'; closeButton.className = 'dona-cell-tools-button is-close'; closeButton.textContent = labels.close;
     closeButton.addEventListener('click', () => close({ restoreFocus: true }));
     actions.append(copy, closeButton);
     popover.append(body, actions);
