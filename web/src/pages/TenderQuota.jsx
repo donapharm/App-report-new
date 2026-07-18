@@ -51,14 +51,11 @@ function unitRollup(rows) {
   const m = new Map();
   for (const r of rows || []) {
     const key = r.unit_code || r.unit_name || '—';
-    const cur = m.get(key) || { key, unit_code: r.unit_code || '', unit_name: r.unit_name || key, rows: [], remainAmount: 0, low: 0, empty: 0, c30: 0, c30Qty: 0, remainQty: 0 };
+    const cur = m.get(key) || { key, unit_code: r.unit_code || '', unit_name: r.unit_name || key, rows: [], remainAmount: 0, low: 0, empty: 0, c30: 0, remainQty: 0 };
     cur.rows.push(r); cur.remainAmount += Number(r.remain_amount || 0); cur.remainQty += Number(r.remain_qty || 0);
     if (Number(r.remain_pct || 0) < 10) cur.low += 1;
     if (r.cst_sequence?.state === 'ACTIONABLE_FULL') cur.empty += 1;
-    if (r.c30?.actionable) {
-      cur.c30 += 1;
-      cur.c30Qty += Number(r.c30.option_qty ?? r.c30.max_qty ?? 0);
-    }
+    if (r.c30?.actionable) cur.c30 += 1;
     m.set(key, cur);
   }
   return [...m.values()].sort((a, b) => (b.low + b.empty) - (a.low + a.empty) || b.remainAmount - a.remainAmount);
@@ -95,7 +92,7 @@ function CstCard({ c, i, duplicateName }) {
       {showC30 && <div className="c30-panel">
         <div className="c30-panel-head"><b>C30 · Tùy chọn mua thêm</b><span className={'pill ' + (c.c30.actionable || c.c30.status_code === 'da_ky_hieu_luc' ? 'ok' : 'warn')}>{c.c30.status_label}</span></div>
         <div className="c30-metrics">
-          <span><b>{n(c.c30.option_qty ?? c.c30.max_qty)}</b><em>Số lượng tùy chọn mua thêm</em></span>
+          <span><b>{c.c30.option_qty == null ? '—' : n(c.c30.option_qty)}</b><em>Tùy chọn mua thêm</em></span>
         </div>
         <div className="c30-action">{c30Action(c.c30)}</div>
       </div>}
@@ -184,7 +181,7 @@ export default function TenderQuota({ me }) {
   return (
     <>
       <DrillNav crumbs={[{ label: 'Cơ số thầu' }, ...(selectedUnit ? [{ label: unitText(selectedUnit.unit_code || selectedUnit.key, selectedUnit.unit_name) }] : [])]} onBack={selectedUnit ? () => setFilter('unit', '') : undefined} onCrumb={(i) => { if (i === 0) setFilter('unit', ''); }} onReload={reload} busy={!data} />
-      <div className="chips">{FILTERS.map((x) => <button key={x.key} className={'chip' + (f === x.key ? ' active' : '')} onClick={() => setF(x.key)}>{x.label}</button>)}</div>
+      <div className="chips">{FILTERS.map((x) => <button key={x.key} className={'chip' + (f === x.key ? ' active' : '')} onClick={() => { setF(x.key); if (x.key === 'c30') setView('flat'); }}>{x.label}</button>)}</div>
       <div className={'card filter-card' + (open ? ' open' : ' collapsed')}>
         <div className="filter-bar">
           <input className="filter-quick" value={filters.q} onChange={(e) => setFilter('q', e.target.value)} placeholder="Tìm đơn vị, sản phẩm, mã QLNB, hoạt chất, gói thầu…" />
@@ -235,7 +232,7 @@ export default function TenderQuota({ me }) {
             return <div className="card unit-rollup" key={g.key}>
               <div className="unit-rollup-head" onClick={() => setOpenUnits((x) => ({ ...x, [g.key]: !x[g.key] }))}>
                 <div><UnitLabel code={g.unit_code || g.key} name={g.unit_name} /><div className="meta">{g.rows.length} mã QLNB · còn {money(g.remainAmount)}</div></div>
-                <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span>{g.c30 > 0 && <><span className="pill ok">{g.c30} có C30</span><span className="pill ok">Tùy chọn mua thêm: {n(g.c30Qty)}</span></>}<span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
+                <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span>{g.c30 > 0 && <span className="pill ok">{g.c30} có C30</span>}<span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
               </div>
               {open && <div className="list-grid nested-grid">{g.rows.slice(0, 80).map((c, i) => <CstCard key={`${g.key}-${i}`} c={c} i={i} duplicateName={duplicateProducts.has(c.product_name)} />)}</div>}
             </div>;
