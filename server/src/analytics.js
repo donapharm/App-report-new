@@ -173,7 +173,7 @@ function revenueBreakdown({ ky, kys, scope, dimension, filterEmp, filterUnit, fi
 }
 
 /** Bảng cơ số thầu + cảnh báo ngưỡng. */
-function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
+function cstTable({ scope, remainPctMax, remainPctMin, remainPctLt, bidPackage, filters }) {
   // Scope is enforced by store before sequence classification. This is important:
   // an employee must never receive sibling metadata from outside their scope.
   let rows = cstSequence.classifyCstSequence(store.getCst({ scope }));
@@ -201,6 +201,7 @@ function cstTable({ scope, remainPctMax, remainPctMin, bidPackage, filters }) {
   }
   if (remainPctMax != null) rows = rows.filter((r) => r.remain_pct <= remainPctMax);
   if (remainPctMin != null) rows = rows.filter((r) => r.remain_pct >= remainPctMin);
+  if (remainPctLt != null) rows = rows.filter((r) => r.remain_pct < remainPctLt);
   return rows.sort((a, b) => a.remain_pct - b.remain_pct);
 }
 

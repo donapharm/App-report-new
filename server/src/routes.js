@@ -1597,14 +1597,15 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
 });
 
 /* ---------- Cơ số thầu ---------- */
-router.get('/cst', auth.requireAuth, (req, res) => {
+router.get('/cst', auth.requireAuth, async (req, res) => {
   const scope = auth.scopeOf(req.session);
   const num = (v) => (v === undefined || v === '' ? null : Number(v));
   const contractorLookup = contractorLookupFor(scope);
-  const rows = A.cstTable({
+  const baseRows = A.cstTable({
     scope,
     remainPctMax: num(req.query.remainMax),
     remainPctMin: num(req.query.remainMin),
+    remainPctLt: num(req.query.remainLt),
     bidPackage: req.query.bid || null,
     filters: {
       emp: req.query.emp || null,
@@ -1617,7 +1618,19 @@ router.get('/cst', auth.requireAuth, (req, res) => {
       q: req.query.q || null,
     },
   });
-  res.json({ rows: enrichContractorNames(rows, contractorLookup) });
+  const tenderQuota = await appSaleCst.fetchTenderQuota().catch((error) => ({ rows: [], error: error.message }));
+  const enriched = appSaleCst.enrichCstRowsWithC30(baseRows, tenderQuota);
+  let rows = enriched.rows;
+  if (req.query.c30 === 'actionable') rows = rows.filter((row) => row.c30?.actionable);
+  res.json({
+    rows: enrichContractorNames(rows, contractorLookup),
+    c30: {
+      ready: enriched.meta.available && enriched.meta.complete && !enriched.meta.stale,
+      asOf: enriched.meta.generatedAt,
+      matched: enriched.meta.matched,
+      actionable: rows.filter((row) => row.c30?.actionable).length,
+    },
+  });
 });
 
 /* ---------- Target: xem + dự báo ---------- */
@@ -2323,7 +2336,7 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
     rows.forEach((r) => ws.addRow(r));
   } else if (kind === 'cst') {
     const num = (v) => (v === undefined || v === '' ? null : Number(v));
-    const rows = A.cstTable({ scope, remainPctMax: num(req.query.remainMax), remainPctMin: num(req.query.remainMin), bidPackage: req.query.bid || null, filters: {
+    const baseRows = A.cstTable({ scope, remainPctMax: num(req.query.remainMax), remainPctMin: num(req.query.remainMin), remainPctLt: num(req.query.remainLt), bidPackage: req.query.bid || null, filters: {
       emp: req.query.emp || null,
       province: req.query.province || null,
       unit: req.query.unit || null,
@@ -2332,6 +2345,9 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       status: req.query.status || null,
       q: req.query.q || null,
     } });
+    const tenderQuota = await appSaleCst.fetchTenderQuota().catch((error) => ({ rows: [], error: error.message }));
+    const enriched = appSaleCst.enrichCstRowsWithC30(baseRows, tenderQuota);
+    const rows = req.query.c30 === 'actionable' ? enriched.rows.filter((row) => row.c30?.actionable) : enriched.rows;
     ws.columns = [
       { header: 'Mã QL nội bộ', key: 'iit_code', width: 24 },
       { header: 'Tên thuốc', key: 'product_name', width: 28 },
@@ -2347,13 +2363,23 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
       { header: 'Tổng TT', key: 'bid_qty_initial', width: 16 },
       { header: 'CST còn lại', key: 'remain_qty', width: 14 },
       { header: '% còn lại', key: 'remain_pct', width: 12 },
+      { header: 'Tuyến C30', key: 'c30_route', width: 11 },
+      { header: 'C30 tối đa', key: 'c30_max_qty', width: 14 },
+      { header: 'C30 đã sử dụng', key: 'c30_used_qty', width: 16 },
+      { header: 'C30 còn mua thêm', key: 'c30_remaining_qty', width: 18 },
+      { header: 'Trạng thái C30', key: 'c30_status', width: 22 },
       { header: 'Tổng đã bán', key: 'sold_qty', width: 14 },
       { header: 'TT thầu', key: 'bid_amount', width: 18 },
       { header: 'TT đã bán', key: 'sold_amount', width: 18 },
       { header: 'TT còn lại', key: 'remain_amount', width: 18 },
       { header: 'Nguồn/cập nhật', key: 'source_label', width: 28 },
     ];
-    rows.forEach((r) => ws.addRow({ ...r, qd: qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`), source_label: cstSourceLabel(r) }));
+    rows.forEach((r) => ws.addRow({
+      ...r,
+      qd: qdOf(`${r.iit_code || ''} ${r.bid_package || ''}`),
+      source_label: cstSourceLabel(r),
+      ...appSaleCst.c30ExportFields(r),
+    }));
   } else if (kind === 'assignments') {
     // Xuất phân công hiện có; cột khớp template để nhập lại được. Chỉ CEO/admin.
     if (!auth.isAdmin(req.session.role)) return res.status(403).json({ error: 'Chỉ CEO/admin được xuất phân công' });
