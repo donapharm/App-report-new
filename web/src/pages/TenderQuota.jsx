@@ -41,6 +41,7 @@ function sourceLabel(c) {
 }
 function contractorText(c) { return pairText(c.contractor_code, c.contractor_name); }
 function c30Action(c30) {
+  if (c30?.status_code === 'co_the_mua_them') return '☎ Chủ động liên hệ đơn vị làm phụ lục hợp đồng mua thêm.';
   if (c30?.status_code === 'du_dk_cho_ky') return '☎ Đủ điều kiện: chủ động liên hệ đơn vị làm phụ lục hợp đồng mua thêm.';
   if (c30?.status_code === 'da_ky_hieu_luc') return '✅ Phụ lục đã có hiệu lực; theo dõi đặt hàng trong hạn mức C30.';
   if (c30?.status_code === 'chua_du_dk') return '⏳ Chưa đủ điều kiện theo dữ liệu hiện tại; chưa thực hiện phụ lục.';
@@ -91,9 +92,7 @@ function CstCard({ c, i, duplicateName }) {
       {showC30 && <div className="c30-panel">
         <div className="c30-panel-head"><b>C30 · Tùy chọn mua thêm</b><span className={'pill ' + (c.c30.actionable || c.c30.status_code === 'da_ky_hieu_luc' ? 'ok' : 'warn')}>{c.c30.status_label}</span></div>
         <div className="c30-metrics">
-          <span><b>{n(c.c30.max_qty)}</b><em>C30 tối đa</em></span>
-          <span><b>{c.c30.used_qty == null ? 'Chưa có dữ liệu' : n(c.c30.used_qty)}</b><em>Đã sử dụng C30</em></span>
-          <span><b>{c.c30.remaining_qty == null ? 'Chưa có dữ liệu' : n(c.c30.remaining_qty)}</b><em>C30 còn mua thêm</em></span>
+          <span><b>{n(c.c30.option_qty ?? c.c30.max_qty)}</b><em>Số lượng tùy chọn mua thêm</em></span>
         </div>
         <div className="c30-action">{c30Action(c.c30)}</div>
       </div>}

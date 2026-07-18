@@ -1,6 +1,6 @@
 /**
- * appSaleCst.js — đọc Cơ số thầu từ App Sale tender-quota.
- * Nguồn chuẩn: feed S2S read-only, phân trang của App Sale. Cache chỉ là fallback
+ * appSaleCst.js — đọc C30 CP Total từ feed tender-quota nội bộ.
+ * Nguồn chuẩn: feed S2S read-only, phân trang của Data Hub/CEO Vault. Cache chỉ là fallback
  * và vẫn phải qua kiểm tra timestamp + độ phủ; không dùng phiên đăng nhập CEO/NV.
  */
 const fs = require('fs');
@@ -8,8 +8,9 @@ const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const CACHE_FILE = path.join(DATA_DIR, 'cst_appsale_tender_quota.json');
-const DEFAULT_URL = process.env.APP_SALE_TENDER_QUOTA_URL || 'http://127.0.0.1:3970/api/integrations/app-report/tender-quota';
-const AUTH_TOKEN = process.env.APP_SALE_AUTH_TOKEN || process.env.APP_SALE_BEARER_TOKEN || '';
+const DEFAULT_URL = process.env.APP_SALE_TENDER_QUOTA_URL || 'http://127.0.0.1:4310/api/integrations/app-report/tender-quota';
+const AUTH_TOKEN = process.env.APP_SALE_AUTH_TOKEN || process.env.APP_SALE_BEARER_TOKEN || process.env.DATA_HUB_ASSIGNMENT_KEY || '';
+const AUTH_HEADER = process.env.APP_SALE_CST_AUTH_HEADER || 'x-assignment-key';
 const CACHE_TTL_MS = Number(process.env.APP_SALE_CST_CACHE_TTL_MS || 15 * 60 * 1000);
 const SOURCE_MAX_AGE_MS = Number(process.env.APP_SALE_C30_MAX_AGE_MS || 24 * 60 * 60 * 1000);
 const SOURCE_MIN_ROWS = Number(process.env.APP_SALE_C30_MIN_SOURCE_ROWS || 2500);
@@ -30,6 +31,9 @@ function normUnitPrefix(v = '') {
 }
 function normUnitExact(v = '') { return String(v || '').trim().toUpperCase().replace(/\s+/g, ' '); }
 function normProductCode(v = '') { return String(v || '').trim().toUpperCase().replace(/\s+/g, ''); }
+function normDecision(v = '') {
+  return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/Đ/g, 'D').replace(/đ/g, 'd').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
 function tenderQuotaKey(unitCode, productCode) { return `${normUnitExact(unitCode)}|${normProductCode(productCode)}`; }
 function optionalNumber(...values) {
   for (const value of values) {
@@ -59,9 +63,7 @@ function statusLabel(status = '') {
 function c30ExportFields(row = {}) {
   return {
     c30_route: row.c30 ? 'CL' : '',
-    c30_max_qty: row.c30?.max_qty ?? '',
-    c30_used_qty: row.c30?.used_qty ?? '',
-    c30_remaining_qty: row.c30?.remaining_qty ?? '',
+    c30_option_qty: row.c30?.option_qty ?? '',
     c30_status: row.c30?.status_label || '',
   };
 }
@@ -73,14 +75,10 @@ function yearsOf(value = '') {
   }
   return out;
 }
-function periodCompatible(cstRow, sourceRow, now = Date.now()) {
-  const bidYears = yearsOf(cstRow.bid_package || cstRow.contract_period || '');
-  const tenderYears = yearsOf(sourceRow.kyThau || '');
-  if (!bidYears.size || !tenderYears.size) return false;
-  const fromMs = Date.parse(sourceRow.contractFrom || '');
-  const toMs = Date.parse(sourceRow.contractTo || '');
-  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || now < fromMs || now > toMs + 86_399_999) return false;
-  return [...bidYears].some((year) => tenderYears.has(year));
+function periodCompatible(cstRow, sourceRow) {
+  const reportDecision = normDecision(cstRow.bid_package || cstRow.contract_period || '');
+  const sourceDecision = normDecision(sourceRow.decisionNo || sourceRow.kyThau || '');
+  return !!reportDecision && !!sourceDecision && reportDecision === sourceDecision;
 }
 function payloadFreshness(payload, now = Date.now()) {
   const generatedMs = Date.parse(payload?.generatedAt || '');
@@ -111,6 +109,7 @@ function normalizeRow(r = {}) {
     productName: String(r.productName ?? r.product_name ?? productCode).trim(),
     uom: String(r.uom || '').trim(),
     kyThau: r.kyThau ?? r.ky_thau ?? null,
+    decisionNo: r.decisionNo ?? r.decision_no ?? null,
     contractFrom: r.contractFrom ?? r.contract_from ?? r.hdTuNgay ?? r.hd_tu_ngay ?? null,
     contractTo: r.contractTo ?? r.contract_to ?? r.hdDenNgay ?? r.hd_den_ngay ?? null,
     hasCst: r.hasCst !== false && !!productCode && !!unitCode,
@@ -154,7 +153,7 @@ function enrichCstRowsWithC30(cstRows = [], payload = {}, { now = Date.now(), al
   let ambiguous = 0;
   const rows = cstRows.map((row) => {
     const list = candidates.get(tenderQuotaKey(row.unit_code || row.unit_name, row.iit_code)) || [];
-    const periodMatches = list.filter((sourceRow) => periodCompatible(row, sourceRow, now));
+    const periodMatches = list.filter((sourceRow) => periodCompatible(row, sourceRow));
     if (periodMatches.length !== 1) {
       if (list.length > 0) ambiguous += 1;
       return { ...row };
@@ -171,12 +170,13 @@ function enrichCstRowsWithC30(cstRows = [], payload = {}, { now = Date.now(), al
     // Fail-closed: chỉ trạng thái nguồn "đủ điều kiện, chờ ký" mới là việc cần
     // chủ động làm phụ lục. "Chưa đủ điều kiện" và "đã ký hiệu lực" không được
     // gộp chung thành actionable.
-    const actionable = candidate && statusCode === 'du_dk_cho_ky' && remainingQty !== 0;
+    const actionable = candidate && statusCode === 'co_the_mua_them' && maxQty > 0;
     matched += 1;
     return {
       ...row,
       route: 'CL',
       c30: {
+        option_qty: maxQty,
         max_qty: maxQty,
         used_qty: usedQty,
         remaining_qty: remainingQty,
@@ -188,7 +188,7 @@ function enrichCstRowsWithC30(cstRows = [], payload = {}, { now = Date.now(), al
         status_label: statusLabel(statusCode),
         candidate,
         actionable,
-        tender_period: sourceRow.kyThau ?? null,
+        tender_period: sourceRow.decisionNo ?? sourceRow.kyThau ?? null,
       },
     };
   });
@@ -209,7 +209,7 @@ function normalizePayload(payload, source = 'unknown') {
 }
 async function fetchPage(url, headers) {
   const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`App Sale tender-quota HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`C30 tender-quota S2S HTTP ${res.status}`);
   return res.json();
 }
 async function fetchAllPages(headers) {
@@ -218,17 +218,17 @@ async function fetchAllPages(headers) {
   firstUrl.searchParams.set('limit', '500');
   const first = await fetchPage(firstUrl, headers);
   const total = Number(first?.total);
-  if (!Number.isFinite(total) || total < 0) throw new Error('App Sale S2S thiếu total hợp lệ');
+  if (!Number.isFinite(total) || total < 0) throw new Error('C30 S2S thiếu total hợp lệ');
   const rows = Array.isArray(first?.rows) ? [...first.rows] : [];
   for (let offset = rows.length; offset < total; offset = rows.length) {
-    if (offset === 0 || offset > 10_000) throw new Error('App Sale S2S phân trang bất thường');
+    if (offset === 0 || offset > 10_000) throw new Error('C30 S2S phân trang bất thường');
     const pageUrl = new URL(DEFAULT_URL);
     pageUrl.searchParams.set('offset', String(offset));
     pageUrl.searchParams.set('limit', '500');
     const page = await fetchPage(pageUrl, headers);
-    if (Number(page?.total) !== total) throw new Error('App Sale S2S total thay đổi giữa các trang');
+    if (Number(page?.total) !== total) throw new Error('C30 S2S total thay đổi giữa các trang');
     const pageRows = Array.isArray(page?.rows) ? page.rows : [];
-    if (!pageRows.length) throw new Error('App Sale S2S thiếu trang dữ liệu');
+    if (!pageRows.length) throw new Error('C30 S2S thiếu trang dữ liệu');
     rows.push(...pageRows);
   }
   return {
@@ -243,7 +243,7 @@ async function fetchTenderQuota({ force = false } = {}) {
   const now = Date.now();
   if (!force && mem && now - mem.at < CACHE_TTL_MS) return mem.value;
   const headers = { Accept: 'application/json' };
-  if (AUTH_TOKEN) headers.Authorization = `Bearer ${AUTH_TOKEN}`;
+  if (AUTH_TOKEN) headers[AUTH_HEADER] = AUTH_HEADER.toLowerCase() === 'authorization' ? `Bearer ${AUTH_TOKEN}` : AUTH_TOKEN;
   try {
     const payload = await fetchAllPages(headers);
     const value = normalizePayload(payload, DEFAULT_URL);
@@ -275,7 +275,7 @@ function cstForEmployeeUnits(cstRows, unitCodes = [], { includeApThau = false } 
 }
 
 module.exports = {
-  CACHE_FILE, DEFAULT_URL, SOURCE_MAX_AGE_MS, SOURCE_MIN_ROWS,
-  normUnitPrefix, normUnitExact, normProductCode, tenderQuotaKey, periodCompatible, normalizePayload, normalizeRow,
+  CACHE_FILE, DEFAULT_URL, AUTH_HEADER, SOURCE_MAX_AGE_MS, SOURCE_MIN_ROWS,
+  normUnitPrefix, normUnitExact, normProductCode, normDecision, tenderQuotaKey, periodCompatible, normalizePayload, normalizeRow,
   fetchTenderQuota, fetchAllPages, cstForEmployeeUnits, payloadFreshness, enrichCstRowsWithC30, statusLabel, c30ExportFields,
 };

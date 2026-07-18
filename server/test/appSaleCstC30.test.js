@@ -15,9 +15,7 @@ const sourceRow = (extra = {}) => appSaleCst.normalizeRow({
   unitCode: '002.BVĐK Thống Nhất ĐN',
   productCode: 'G3.ĐY.QĐ141.145.N3.133',
   route: 'CL',
-  kyThau: '2025-2026',
-  contractFrom: '2025-02-27T00:00:00.000Z',
-  contractTo: '2027-02-27T00:00:00.000Z',
+  decisionNo: 'G3.L1.QĐ141/27.02.25',
   laApThau: false,
   cstFormula: {
     cst30: 90000,
@@ -25,24 +23,24 @@ const sourceRow = (extra = {}) => appSaleCst.normalizeRow({
     daGiao: 277500,
     dangChoGiao: 0,
     dieuChuyen: 0,
-    trangThai30: 'chua_du_dk',
+    trangThai30: 'co_the_mua_them',
   },
   ...extra,
 });
 const payload = (rows, generatedAt = '2026-07-18T14:00:00.000Z') => ({ rows, generatedAt });
 
-test('C30 chỉ ghép đúng đơn vị + QLNB + kỳ thầu tuyến CL và CST dưới 10%', () => {
-  const result = appSaleCst.enrichCstRowsWithC30([baseCst()], payload([sourceRow({ cstFormula: { cst30: 90000, trangThai30: 'du_dk_cho_ky' } })]), { now: NOW, allowPartial: true });
+test('C30 chỉ ghép đúng đơn vị + QLNB + quyết định C8 tuyến CL và CST dưới 10%', () => {
+  const result = appSaleCst.enrichCstRowsWithC30([baseCst()], payload([sourceRow()]), { now: NOW, allowPartial: true });
   assert.equal(result.meta.matched, 1);
   assert.equal(result.rows[0].route, 'CL');
   assert.deepEqual(
     {
-      max: result.rows[0].c30.max_qty,
+      option: result.rows[0].c30.option_qty,
       candidate: result.rows[0].c30.candidate,
       actionable: result.rows[0].c30.actionable,
       status: result.rows[0].c30.status_label,
     },
-    { max: 90000, candidate: true, actionable: true, status: 'Đủ điều kiện · chờ ký' },
+    { option: 90000, candidate: true, actionable: true, status: 'Có thể mua thêm' },
   );
 });
 
@@ -80,40 +78,32 @@ test('không ghép hai đơn vị chỉ trùng tiền tố ba số', () => {
   assert.equal(result.rows[0].c30, undefined);
 });
 
-test('không ghép khi kỳ thầu/hợp đồng không tương thích hoặc thiếu kỳ', () => {
+test('không ghép khi quyết định C8 không trùng hoặc bị thiếu', () => {
   const wrong = appSaleCst.enrichCstRowsWithC30(
     [baseCst({ bid_package: 'QĐ3231/18.12.23' })],
-    payload([sourceRow({ kyThau: '2025-2026' })]),
+    payload([sourceRow()]),
     { now: NOW, allowPartial: true },
   );
   const missing = appSaleCst.enrichCstRowsWithC30(
     [baseCst({ bid_package: '' })],
-    payload([sourceRow({ kyThau: '2025-2026' })]),
+    payload([sourceRow()]),
     { now: NOW, allowPartial: true },
   );
   assert.equal(wrong.rows[0].c30, undefined);
   assert.equal(missing.rows[0].c30, undefined);
 });
 
-test('không ghép khi nguồn thiếu ngày hợp đồng hoặc hợp đồng đã hết hiệu lực', () => {
-  const missingDates = appSaleCst.enrichCstRowsWithC30(
-    [baseCst()],
-    payload([sourceRow({ contractFrom: null, contractTo: null })]),
-    { now: NOW, allowPartial: true },
+test('chuẩn hóa dấu chấm/gạch của quyết định nhưng không suy diễn khác quyết định', () => {
+  const matched = appSaleCst.enrichCstRowsWithC30(
+    [baseCst()], payload([sourceRow({ decisionNo: 'G3 L1 QĐ141 27-02-25' })]), { now: NOW, allowPartial: true },
   );
-  const expired = appSaleCst.enrichCstRowsWithC30(
-    [baseCst()],
-    payload([sourceRow({ contractFrom: '2025-01-01', contractTo: '2026-06-30' })]),
-    { now: NOW, allowPartial: true },
-  );
-  assert.equal(missingDates.rows[0].c30, undefined);
-  assert.equal(expired.rows[0].c30, undefined);
+  assert.equal(matched.rows[0].c30.option_qty, 90000);
 });
 
-test('khóa trùng nhiều kỳ không được tự chọn để tránh gắn nhầm hợp đồng', () => {
+test('khóa trùng cùng quyết định không được tự chọn để tránh dữ liệu C30 mơ hồ', () => {
   const result = appSaleCst.enrichCstRowsWithC30(
     [baseCst()],
-    payload([sourceRow({ kyThau: '2025-2026' }), sourceRow({ kyThau: '2025-2027' })]),
+    payload([sourceRow(), sourceRow({ cstFormula: { cst30: 60000, trangThai30: 'co_the_mua_them' } })]),
     { now: NOW, allowPartial: true },
   );
   assert.equal(result.rows[0].c30, undefined);
@@ -170,12 +160,14 @@ test('S2S tải đủ các trang và từ chối total thay đổi giữa chừn
 });
 
 test('CST từ 10% trở lên có metadata C30 nhưng không trở thành việc cần làm', () => {
-  const row = appSaleCst.enrichCstRowsWithC30([baseCst({ remain_pct: 10 })], payload([sourceRow({ cstFormula: { cst30: 90000, trangThai30: 'du_dk_cho_ky' } })]), { now: NOW, allowPartial: true }).rows[0];
+  const row = appSaleCst.enrichCstRowsWithC30([baseCst({ remain_pct: 10 })], payload([sourceRow()]), { now: NOW, allowPartial: true }).rows[0];
   assert.equal(row.c30.candidate, false);
   assert.equal(row.c30.actionable, false);
 });
 
-test('chỉ du_dk_cho_ky là việc cần làm; chưa đủ điều kiện và đã ký đều fail-closed', () => {
+test('chỉ C30 thực tế dương từ CP Total mới là việc cần làm', () => {
+  const actionable = appSaleCst.enrichCstRowsWithC30([baseCst()], payload([sourceRow()]), { now: NOW, allowPartial: true }).rows[0];
+  assert.equal(actionable.c30.actionable, true);
   for (const status of ['chua_du_dk', 'da_ky_hieu_luc', '', 'khong_ap_dung']) {
     const row = appSaleCst.enrichCstRowsWithC30(
       [baseCst()],
@@ -188,11 +180,11 @@ test('chỉ du_dk_cho_ky là việc cần làm; chưa đủ điều kiện và �
 
 test('mapping Excel CST giữ đúng C30 nguồn và để trống field chưa có dữ liệu', () => {
   assert.deepEqual(
-    appSaleCst.c30ExportFields({ c30: { max_qty: 90_000, used_qty: null, remaining_qty: 12_000, status_label: 'Đủ điều kiện · chờ ký' } }),
-    { c30_route: 'CL', c30_max_qty: 90_000, c30_used_qty: '', c30_remaining_qty: 12_000, c30_status: 'Đủ điều kiện · chờ ký' },
+    appSaleCst.c30ExportFields({ c30: { option_qty: 90_000, status_label: 'Có thể mua thêm' } }),
+    { c30_route: 'CL', c30_option_qty: 90_000, c30_status: 'Có thể mua thêm' },
   );
   assert.deepEqual(
     appSaleCst.c30ExportFields({}),
-    { c30_route: '', c30_max_qty: '', c30_used_qty: '', c30_remaining_qty: '', c30_status: '' },
+    { c30_route: '', c30_option_qty: '', c30_status: '' },
   );
 });
