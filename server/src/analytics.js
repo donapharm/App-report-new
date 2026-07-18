@@ -4,6 +4,7 @@
  */
 const store = require('./store');
 const cstSequence = require('./cstSequence');
+const productSearch = require('./productSearch');
 
 const VAT_DIVISOR = 1.05; // doanh thu trước VAT = sau VAT / 1.05
 
@@ -195,14 +196,15 @@ function cstTable({ scope, remainPctMax, remainPctMin, remainPctLt, bidPackage, 
   if (filters?.status === 'empty') rows = rows.filter((r) => r.cst_sequence?.state === cstSequence.STATES.ACTIONABLE);
   if (filters?.status === 'queued') rows = rows.filter((r) => r.cst_sequence?.state === cstSequence.STATES.QUEUED);
   if (filters?.status === 'needs_confirmation') rows = rows.filter((r) => r.cst_sequence?.state === cstSequence.STATES.NEEDS_CONFIRMATION);
-  if (filters?.q) {
-    const q = norm(filters.q);
-    rows = rows.filter((r) => norm([r.emp_code, r.sales_emps, r.unit_name, r.iit_code, r.product_name, r.c14, r.active_ingredient, r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' ')).includes(q));
-  }
+  if (filters?.q) rows = filterCstSearch(rows, filters.q);
   if (remainPctMax != null) rows = rows.filter((r) => r.remain_pct <= remainPctMax);
   if (remainPctMin != null) rows = rows.filter((r) => r.remain_pct >= remainPctMin);
   if (remainPctLt != null) rows = rows.filter((r) => r.remain_pct < remainPctLt);
   return rows.sort((a, b) => a.remain_pct - b.remain_pct);
 }
 
-module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, groupSum, applyFilters, baseUnitKey, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };
+function filterCstSearch(rows, query) {
+  return productSearch.filterProductRows(rows, query);
+}
+
+module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, filterCstSearch, groupSum, applyFilters, baseUnitKey, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };

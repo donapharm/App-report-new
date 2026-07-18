@@ -94,7 +94,19 @@ function matchesProductSearch(row, query, metadata = {}) {
   if (haystack.includes(normalizedQuery)) return true;
   const queryTokens = tokens(normalizedQuery);
   const candidateTokens = tokens(haystack);
-  return queryTokens.every((queryToken) => candidateTokens.some((candidateToken) => tokenMatches(queryToken, candidateToken)));
+  let fuzzyTokenCount = 0;
+  for (const queryToken of queryTokens) {
+    const direct = candidateTokens.some((candidateToken) => queryToken === candidateToken
+      || (queryToken.length >= 2 && candidateToken.includes(queryToken)));
+    if (direct) continue;
+    const fuzzy = candidateTokens.some((candidateToken) => tokenMatches(queryToken, candidateToken));
+    if (!fuzzy) return false;
+    // Multi-field queries may contain one typo, but two fuzzy substitutions are
+    // too ambiguous (e.g. "thong nhat" must not become "thanh nhiet").
+    fuzzyTokenCount += 1;
+    if (fuzzyTokenCount > 1) return false;
+  }
+  return true;
 }
 
 function filterProductRows(rows, query, metadataForRow = () => ({})) {

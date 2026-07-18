@@ -127,10 +127,17 @@ export default function TenderQuota({ me }) {
     try { const p = JSON.parse(sessionStorage.getItem('app_nav_payload') || '{}'); if (p.tab === 'cst' && p.cstFilter === 'low') setF('low'); if (p.tab === 'cst' && p.cstFilter === 'high') setF('high'); } catch { /* ignore */ }
   }, []);
   useEffect(() => {
-    setData(null);
-    const selected = FILTERS.find((x) => x.key === f) || FILTERS[0];
-    const params = { ...selected.params, ...(bid ? { bid } : {}), ...filters };
-    api.cst(params).then((d) => { setData(d.rows); setC30Info(d.c30 || null); });
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      setData(null);
+      const selected = FILTERS.find((x) => x.key === f) || FILTERS[0];
+      const params = { ...selected.params, ...(bid ? { bid } : {}), ...filters };
+      api.cst(params).then((d) => {
+        if (cancelled) return;
+        setData(d.rows); setC30Info(d.c30 || null);
+      });
+    }, 140);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [f, bid, filters, reloadTick]);
 
   function setFilter(k, v) { setFilters((x) => ({ ...x, [k]: v })); }
@@ -184,7 +191,7 @@ export default function TenderQuota({ me }) {
       <div className="chips">{FILTERS.map((x) => <button key={x.key} className={'chip' + (f === x.key ? ' active' : '')} onClick={() => { setF(x.key); if (x.key === 'c30') setView('flat'); }}>{x.label}</button>)}</div>
       <div className={'card filter-card' + (open ? ' open' : ' collapsed')}>
         <div className="filter-bar">
-          <input className="filter-quick" value={filters.q} onChange={(e) => setFilter('q', e.target.value)} placeholder="Tìm đơn vị, sản phẩm, mã QLNB, hoạt chất, gói thầu…" />
+          <input className="filter-quick" aria-label="Tìm kiếm thông minh đa chiều" value={filters.q} onChange={(e) => { const q = e.target.value; setFilter('q', q); if (q.trim()) setView('flat'); }} placeholder="Tìm thông minh: thuốc, QLNB, đơn vị, hoạt chất, NV, nhà thầu…" />
           <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn lọc' : '▾ Bộ lọc'}{activeCount ? ` (${activeCount})` : ''}</button>
           {activeCount > 0 && <button className="btn ghost" onClick={reset}>Xoá lọc</button>}
           <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>
@@ -232,7 +239,7 @@ export default function TenderQuota({ me }) {
             return <div className="card unit-rollup" key={g.key}>
               <div className="unit-rollup-head" onClick={() => setOpenUnits((x) => ({ ...x, [g.key]: !x[g.key] }))}>
                 <div><UnitLabel code={g.unit_code || g.key} name={g.unit_name} /><div className="meta">{g.rows.length} mã QLNB · còn {money(g.remainAmount)}</div></div>
-                <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span>{g.c30 > 0 && <span className="pill ok">{g.c30} có C30</span>}<span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
+                <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span>{g.c30 > 0 && <span className="pill ok">{g.c30} mã có tùy chọn mua thêm</span>}<span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
               </div>
               {open && <div className="list-grid nested-grid">{g.rows.slice(0, 80).map((c, i) => <CstCard key={`${g.key}-${i}`} c={c} i={i} duplicateName={duplicateProducts.has(c.product_name)} />)}</div>}
             </div>;
