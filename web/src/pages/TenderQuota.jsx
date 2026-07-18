@@ -51,11 +51,14 @@ function unitRollup(rows) {
   const m = new Map();
   for (const r of rows || []) {
     const key = r.unit_code || r.unit_name || '—';
-    const cur = m.get(key) || { key, unit_code: r.unit_code || '', unit_name: r.unit_name || key, rows: [], remainAmount: 0, low: 0, empty: 0, c30: 0, remainQty: 0 };
+    const cur = m.get(key) || { key, unit_code: r.unit_code || '', unit_name: r.unit_name || key, rows: [], remainAmount: 0, low: 0, empty: 0, c30: 0, c30Qty: 0, remainQty: 0 };
     cur.rows.push(r); cur.remainAmount += Number(r.remain_amount || 0); cur.remainQty += Number(r.remain_qty || 0);
     if (Number(r.remain_pct || 0) < 10) cur.low += 1;
     if (r.cst_sequence?.state === 'ACTIONABLE_FULL') cur.empty += 1;
-    if (r.c30?.actionable) cur.c30 += 1;
+    if (r.c30?.actionable) {
+      cur.c30 += 1;
+      cur.c30Qty += Number(r.c30.option_qty ?? r.c30.max_qty ?? 0);
+    }
     m.set(key, cur);
   }
   return [...m.values()].sort((a, b) => (b.low + b.empty) - (a.low + a.empty) || b.remainAmount - a.remainAmount);
@@ -232,7 +235,7 @@ export default function TenderQuota({ me }) {
             return <div className="card unit-rollup" key={g.key}>
               <div className="unit-rollup-head" onClick={() => setOpenUnits((x) => ({ ...x, [g.key]: !x[g.key] }))}>
                 <div><UnitLabel code={g.unit_code || g.key} name={g.unit_name} /><div className="meta">{g.rows.length} mã QLNB · còn {money(g.remainAmount)}</div></div>
-                <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span>{g.c30 > 0 && <span className="pill ok">{g.c30} có C30</span>}<span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
+                <div className="list-card-meta"><span className="pill bad">{g.low} sắp hết</span>{g.c30 > 0 && <><span className="pill ok">{g.c30} có C30</span><span className="pill ok">Tùy chọn mua thêm: {n(g.c30Qty)}</span></>}<span className="pill bad">{g.empty} chưa bán</span><span className="pill muted-pill">{n(g.remainQty)} CST còn</span></div>
               </div>
               {open && <div className="list-grid nested-grid">{g.rows.slice(0, 80).map((c, i) => <CstCard key={`${g.key}-${i}`} c={c} i={i} duplicateName={duplicateProducts.has(c.product_name)} />)}</div>}
             </div>;
