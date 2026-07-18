@@ -1,19 +1,18 @@
 /**
  * appSaleCst.js — đọc Cơ số thầu từ App Sale tender-quota.
- * Nguồn chuẩn đã duyệt: GET /api/reports/tender-quota (App Sale), field slConLai dùng thẳng.
- * Nếu API cần auth và chưa có token, dùng cache materialized server/data/cst_appsale_tender_quota.json
- * do job/server script cập nhật từ cùng nguồn App Sale.
+ * Nguồn chuẩn: feed S2S read-only, phân trang của App Sale. Cache chỉ là fallback
+ * và vẫn phải qua kiểm tra timestamp + độ phủ; không dùng phiên đăng nhập CEO/NV.
  */
 const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const CACHE_FILE = path.join(DATA_DIR, 'cst_appsale_tender_quota.json');
-const DEFAULT_URL = process.env.APP_SALE_TENDER_QUOTA_URL || 'http://127.0.0.1:3970/api/reports/tender-quota';
+const DEFAULT_URL = process.env.APP_SALE_TENDER_QUOTA_URL || 'http://127.0.0.1:3970/api/integrations/app-report/tender-quota';
 const AUTH_TOKEN = process.env.APP_SALE_AUTH_TOKEN || process.env.APP_SALE_BEARER_TOKEN || '';
 const CACHE_TTL_MS = Number(process.env.APP_SALE_CST_CACHE_TTL_MS || 15 * 60 * 1000);
 const SOURCE_MAX_AGE_MS = Number(process.env.APP_SALE_C30_MAX_AGE_MS || 24 * 60 * 60 * 1000);
-const SOURCE_MIN_ROWS = Number(process.env.APP_SALE_C30_MIN_SOURCE_ROWS || 100);
+const SOURCE_MIN_ROWS = Number(process.env.APP_SALE_C30_MIN_SOURCE_ROWS || 2500);
 
 let mem = null;
 
@@ -74,10 +73,13 @@ function yearsOf(value = '') {
   }
   return out;
 }
-function periodCompatible(cstRow, sourceRow) {
+function periodCompatible(cstRow, sourceRow, now = Date.now()) {
   const bidYears = yearsOf(cstRow.bid_package || cstRow.contract_period || '');
   const tenderYears = yearsOf(sourceRow.kyThau || '');
   if (!bidYears.size || !tenderYears.size) return false;
+  const fromMs = Date.parse(sourceRow.contractFrom || '');
+  const toMs = Date.parse(sourceRow.contractTo || '');
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || now < fromMs || now > toMs + 86_399_999) return false;
   return [...bidYears].some((year) => tenderYears.has(year));
 }
 function payloadFreshness(payload, now = Date.now()) {
@@ -90,7 +92,9 @@ function payloadFreshness(payload, now = Date.now()) {
     stale: ageMs === null || ageMs > SOURCE_MAX_AGE_MS,
     available: rowCount > 0,
     rowCount,
-    complete: rowCount >= SOURCE_MIN_ROWS,
+    transportComplete: payload?.transportComplete === true,
+    coverageReady: payload?.coverageReady === true,
+    complete: payload?.transportComplete === true && payload?.coverageReady === true && rowCount >= SOURCE_MIN_ROWS,
   };
 }
 function normalizeRow(r = {}) {
@@ -107,6 +111,8 @@ function normalizeRow(r = {}) {
     productName: String(r.productName ?? r.product_name ?? productCode).trim(),
     uom: String(r.uom || '').trim(),
     kyThau: r.kyThau ?? r.ky_thau ?? null,
+    contractFrom: r.contractFrom ?? r.contract_from ?? r.hdTuNgay ?? r.hd_tu_ngay ?? null,
+    contractTo: r.contractTo ?? r.contract_to ?? r.hdDenNgay ?? r.hd_den_ngay ?? null,
     hasCst: r.hasCst !== false && !!productCode && !!unitCode,
     laApThau: Boolean(r.laApThau ?? r.la_ap_thau ?? false),
     slTrungThau: slTrungThau == null ? null : Number(slTrungThau || 0),
@@ -148,7 +154,7 @@ function enrichCstRowsWithC30(cstRows = [], payload = {}, { now = Date.now(), al
   let ambiguous = 0;
   const rows = cstRows.map((row) => {
     const list = candidates.get(tenderQuotaKey(row.unit_code || row.unit_name, row.iit_code)) || [];
-    const periodMatches = list.filter((sourceRow) => periodCompatible(row, sourceRow));
+    const periodMatches = list.filter((sourceRow) => periodCompatible(row, sourceRow, now));
     if (periodMatches.length !== 1) {
       if (list.length > 0) ambiguous += 1;
       return { ...row };
@@ -194,7 +200,43 @@ function normalizePayload(payload, source = 'unknown') {
     source,
     generatedAt: payload?.generatedAt || payload?.generated_at || new Date().toISOString(),
     notes: payload?.notes || null,
+    total: Number.isFinite(Number(payload?.total)) ? Number(payload.total) : rows.length,
+    transportComplete: payload?.transportComplete === true,
+    coverageReady: payload?.coverageReady === true,
+    quality: payload?.quality || null,
     rows: rows.map(normalizeRow).filter((r) => r.hasCst && r.productCode && r.unitCode),
+  };
+}
+async function fetchPage(url, headers) {
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error(`App Sale tender-quota HTTP ${res.status}`);
+  return res.json();
+}
+async function fetchAllPages(headers) {
+  const firstUrl = new URL(DEFAULT_URL);
+  firstUrl.searchParams.set('offset', '0');
+  firstUrl.searchParams.set('limit', '500');
+  const first = await fetchPage(firstUrl, headers);
+  const total = Number(first?.total);
+  if (!Number.isFinite(total) || total < 0) throw new Error('App Sale S2S thiếu total hợp lệ');
+  const rows = Array.isArray(first?.rows) ? [...first.rows] : [];
+  for (let offset = rows.length; offset < total; offset = rows.length) {
+    if (offset === 0 || offset > 10_000) throw new Error('App Sale S2S phân trang bất thường');
+    const pageUrl = new URL(DEFAULT_URL);
+    pageUrl.searchParams.set('offset', String(offset));
+    pageUrl.searchParams.set('limit', '500');
+    const page = await fetchPage(pageUrl, headers);
+    if (Number(page?.total) !== total) throw new Error('App Sale S2S total thay đổi giữa các trang');
+    const pageRows = Array.isArray(page?.rows) ? page.rows : [];
+    if (!pageRows.length) throw new Error('App Sale S2S thiếu trang dữ liệu');
+    rows.push(...pageRows);
+  }
+  return {
+    ...first,
+    total,
+    rows,
+    transportComplete: rows.length === total,
+    coverageReady: first?.coverageReady === true,
   };
 }
 async function fetchTenderQuota({ force = false } = {}) {
@@ -203,9 +245,7 @@ async function fetchTenderQuota({ force = false } = {}) {
   const headers = { Accept: 'application/json' };
   if (AUTH_TOKEN) headers.Authorization = `Bearer ${AUTH_TOKEN}`;
   try {
-    const res = await fetch(DEFAULT_URL, { headers });
-    if (!res.ok) throw new Error(`App Sale tender-quota HTTP ${res.status}`);
-    const payload = await res.json();
+    const payload = await fetchAllPages(headers);
     const value = normalizePayload(payload, DEFAULT_URL);
     mem = { at: now, value };
     writeJson(CACHE_FILE, { ...value, cachedAt: new Date().toISOString() });
@@ -237,5 +277,5 @@ function cstForEmployeeUnits(cstRows, unitCodes = [], { includeApThau = false } 
 module.exports = {
   CACHE_FILE, DEFAULT_URL, SOURCE_MAX_AGE_MS, SOURCE_MIN_ROWS,
   normUnitPrefix, normUnitExact, normProductCode, tenderQuotaKey, periodCompatible, normalizePayload, normalizeRow,
-  fetchTenderQuota, cstForEmployeeUnits, payloadFreshness, enrichCstRowsWithC30, statusLabel, c30ExportFields,
+  fetchTenderQuota, fetchAllPages, cstForEmployeeUnits, payloadFreshness, enrichCstRowsWithC30, statusLabel, c30ExportFields,
 };

@@ -16,6 +16,8 @@ const sourceRow = (extra = {}) => appSaleCst.normalizeRow({
   productCode: 'G3.ĐY.QĐ141.145.N3.133',
   route: 'CL',
   kyThau: '2025-2026',
+  contractFrom: '2025-02-27T00:00:00.000Z',
+  contractTo: '2027-02-27T00:00:00.000Z',
   laApThau: false,
   cstFormula: {
     cst30: 90000,
@@ -93,6 +95,21 @@ test('không ghép khi kỳ thầu/hợp đồng không tương thích hoặc th
   assert.equal(missing.rows[0].c30, undefined);
 });
 
+test('không ghép khi nguồn thiếu ngày hợp đồng hoặc hợp đồng đã hết hiệu lực', () => {
+  const missingDates = appSaleCst.enrichCstRowsWithC30(
+    [baseCst()],
+    payload([sourceRow({ contractFrom: null, contractTo: null })]),
+    { now: NOW, allowPartial: true },
+  );
+  const expired = appSaleCst.enrichCstRowsWithC30(
+    [baseCst()],
+    payload([sourceRow({ contractFrom: '2025-01-01', contractTo: '2026-06-30' })]),
+    { now: NOW, allowPartial: true },
+  );
+  assert.equal(missingDates.rows[0].c30, undefined);
+  assert.equal(expired.rows[0].c30, undefined);
+});
+
 test('khóa trùng nhiều kỳ không được tự chọn để tránh gắn nhầm hợp đồng', () => {
   const result = appSaleCst.enrichCstRowsWithC30(
     [baseCst()],
@@ -121,6 +138,35 @@ test('nguồn ít dòng bất thường bị chặn dù timestamp còn mới', (
   );
   assert.equal(result.meta.complete, false);
   assert.equal(result.rows[0].c30, undefined);
+});
+
+test('nguồn chỉ ready khi tải đủ trang, đạt độ phủ và đủ số dòng tối thiểu', () => {
+  const rows = Array.from({ length: appSaleCst.SOURCE_MIN_ROWS }, () => ({}));
+  assert.equal(appSaleCst.payloadFreshness({ generatedAt: '2026-07-18T14:00:00.000Z', rows, transportComplete: true, coverageReady: true }, NOW).complete, true);
+  assert.equal(appSaleCst.payloadFreshness({ generatedAt: '2026-07-18T14:00:00.000Z', rows, transportComplete: false, coverageReady: true }, NOW).complete, false);
+  assert.equal(appSaleCst.payloadFreshness({ generatedAt: '2026-07-18T14:00:00.000Z', rows, transportComplete: true, coverageReady: false }, NOW).complete, false);
+});
+
+test('S2S tải đủ các trang và từ chối total thay đổi giữa chừng', async () => {
+  const oldFetch = global.fetch;
+  try {
+    global.fetch = async (url) => {
+      const offset = Number(new URL(url).searchParams.get('offset'));
+      const rows = offset === 0 ? Array.from({ length: 500 }, (_, i) => ({ id: i })) : [{ id: 500 }];
+      return { ok: true, json: async () => ({ generatedAt: '2026-07-18T14:00:00.000Z', total: 501, coverageReady: true, rows }) };
+    };
+    const payload = await appSaleCst.fetchAllPages({});
+    assert.equal(payload.rows.length, 501);
+    assert.equal(payload.transportComplete, true);
+
+    global.fetch = async (url) => {
+      const offset = Number(new URL(url).searchParams.get('offset'));
+      return { ok: true, json: async () => ({ total: offset === 0 ? 501 : 502, coverageReady: true, rows: offset === 0 ? Array(500).fill({}) : [{}] }) };
+    };
+    await assert.rejects(() => appSaleCst.fetchAllPages({}), /total thay đổi/);
+  } finally {
+    global.fetch = oldFetch;
+  }
 });
 
 test('CST từ 10% trở lên có metadata C30 nhưng không trở thành việc cần làm', () => {
