@@ -68,8 +68,8 @@ async function sendEmail(to, subject, text, html, attachments = []) {
     const files = (Array.isArray(attachments) ? attachments : []).filter((x) => x && (x.path || x.content));
     if (html) msg.html = String(html);
     if (html || files.length) msg.attachments = [...(html ? inlineAttachments() : []), ...files];
-    await t.sendMail(msg);
-    return { ok: true };
+    const info = await t.sendMail(msg);
+    return { ok: true, provider_message_id: String(info?.messageId || '') };
   } catch (e) { return { ok: false, description: e.message }; }
 }
 
@@ -83,7 +83,7 @@ async function sendTelegram(chatId, text) {
       body: JSON.stringify({ chat_id: String(chatId), text: String(text || '').slice(0, 3900) }),
     });
     const j = await r.json().catch(() => ({}));
-    return j && j.ok ? { ok: true } : { ok: false, description: j?.description || 'telegram_send_failed' };
+    return j && j.ok ? { ok: true, provider_message_id: String(j?.result?.message_id || '') } : { ok: false, description: j?.description || 'telegram_send_failed' };
   } catch (e) { return { ok: false, description: e.message }; }
 }
 
@@ -101,7 +101,7 @@ async function sendDocument(chatId, filePath, caption = '') {
     form.append('document', new Blob([fs.readFileSync(absolute)]), path.basename(absolute));
     const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendDocument`, { method: 'POST', body: form });
     const j = await r.json().catch(() => ({}));
-    return j && j.ok ? { ok: true } : { ok: false, description: j?.description || 'telegram_document_failed' };
+    return j && j.ok ? { ok: true, provider_message_id: String(j?.result?.message_id || '') } : { ok: false, description: j?.description || 'telegram_document_failed' };
   } catch (e) { return { ok: false, description: e.message }; }
 }
 
