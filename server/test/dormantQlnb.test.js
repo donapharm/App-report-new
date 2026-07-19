@@ -159,6 +159,7 @@ test('injected persistence stores action, suppresses gate until due, then gates 
   const beforeDue = engine.analyze({ salesRows: rows, dataAsOf: '2026-07-20' });
   assert.equal(beforeDue.gate.length, 0);
   assert.equal(beforeDue.items[0].action.status, 'scheduled');
+  assert.equal(beforeDue.items[0].action.cycle, 1);
   const due = engine.analyze({ salesRows: rows, dataAsOf: '2026-07-21' });
   assert.equal(due.gate.length, 1);
   assert.equal(due.gate[0].gate.reason, 'due_today');
@@ -188,6 +189,8 @@ test('action status is validated and audit records actor without touching files'
   assert.throws(() => D.updateAction({ state, key, status: 'clicked_yes', actor: 'DN001', now: '2026-07-19' }), /không hợp lệ/);
   const next = D.updateAction({ state, key, status: 'contacted', next_follow_up: '2026-07-22', note: 'Đã gọi', actor: 'DN001', now: '2026-07-19' });
   assert.equal(next.items[key].status, 'contacted');
+  assert.equal(next.items[key].action_cycle, 1);
+  assert.equal(next.items[key].audit[0].changes.action_cycle, 1);
   assert.equal(next.items[key].audit[0].actor, 'DN001');
   assert.equal(state.items[key].status, undefined, 'pure update must not mutate caller state');
 });

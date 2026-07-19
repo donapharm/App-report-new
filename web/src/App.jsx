@@ -6,6 +6,7 @@ import { Spinner, ScrollTopButton, Clock, UpdateBanner, ZaloSidebar, ZaloMobileA
 import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
 import DormantGate from './DormantGate.jsx';
+import CeoNotificationBell from './CeoNotificationBell.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
 import Revenue from './pages/Revenue.jsx';
@@ -143,6 +144,7 @@ export default function App() {
               <div className="sub">DONAPHARM · Báo cáo doanh thu thông minh</div>
             </div>
             <div className="topbar-actions">
+              <CeoNotificationBell me={me} />
               <HomeButton />
               <Clock />
             </div>
@@ -172,6 +174,7 @@ export default function App() {
         <div className="hdr-r2">
           <Clock />
           <div className="hdr-actions">
+            <CeoNotificationBell me={me} />
             <HomeButton />
             <button className="logout" onClick={logout}>Đăng xuất</button>
           </div>
