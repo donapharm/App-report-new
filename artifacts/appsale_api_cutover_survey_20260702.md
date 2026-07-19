@@ -2,7 +2,7 @@
 
 - Date: 2026-07-02 GMT+7
 - Scope: read-only survey. No App Sale writes, no Lumos cutover.
-- SPEC_DATASOURCE_CUTOVER.md was not present in App-report-new after git pull; survey follows CEO item C prompts.
+- SPEC_DATASOURCE_CUTOVER.md was not present in App-report after git pull; survey follows CEO item C prompts.
 - API process: pm2 `appsale-test-api`, port 3970, source `workspace-main/projects/appsale-donapharm-claude/source/appsale-donapharm/apps/api`.
 - Auth: catalog/order/report endpoints require Bearer session; no server-to-server/cursor endpoint found in source.
 

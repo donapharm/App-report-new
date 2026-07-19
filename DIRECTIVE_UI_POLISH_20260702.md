@@ -1,6 +1,6 @@
 # DIRECTIVE — Polish UI: Tổng quan chậm + hiển thị QĐ/hoạt chất + CST bỏ giá bán + sửa "Nguồn"
 
-> Claude Code giao (CEO feedback qua ảnh 2026-07-02). Bot triển khai; Claude review. Không đụng app cũ 3860. Số do backend tính, giữ đúng tổng.
+> Claude Code giao (CEO feedback qua ảnh 2026-07-02). Bot triển khai; Claude review. Không đụng nguồn đã cách ly 3860. Số do backend tính, giữ đúng tổng.
 
 ## H1 — TỔNG QUAN trả kết quả RẤT CHẬM (ưu tiên)
 Biểu đồ "Doanh thu theo kỳ" + "Top 10" quay spinner lâu.

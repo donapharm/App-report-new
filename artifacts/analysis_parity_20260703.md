@@ -1,8 +1,8 @@
 # Analysis parity audit — 2026-07-03
 
-Nguồn cũ đã đọc: `report-main-v23.js`, `report-extra.js` nếu có, `report.html`. Không đụng app cũ 3860.
+Nguồn cũ đã đọc: `report-main-v23.js`, `report-extra.js` nếu có, `report.html`. Không đụng nguồn đã cách ly 3860.
 
-| Mục | App cũ | App mới sau pass này | Trạng thái |
+| Mục | Nguồn đã cách ly | App Report sau pass này | Trạng thái |
 |---|---|---|---|
 | KPI doanh thu / so kỳ trước | Có block phân tích doanh thu | `Analysis.jsx` KPI current/delta/rowCount | Đã có |
 | Cơ cấu tuyến / nhà thầu / gói | Có biểu đồ/cơ cấu | 3 donut Tuyến/Nhà thầu/Gói | Đã có |
@@ -11,7 +11,7 @@ Nguồn cũ đã đọc: `report-main-v23.js`, `report-extra.js` nếu có, `rep
 | SP tăng/giảm | Có so sánh | `topGrowthProducts`, `topDeclineProducts` | Đã có |
 | SP cần đẩy mạnh | Có/CEO yêu cầu parity | Thêm block `SP cần đẩy mạnh` từ sản phẩm giảm mạnh nhất theo %/delta | Đã bù |
 | SP sắp hết CST | Có/CEO yêu cầu parity | Thêm block `SP sắp hết CST` từ `A.cstTable(remainPctMax=10)` theo scope/filter | Đã bù |
-| PDF | Có nút/xuất trong app cũ theo source/ma trận | Chưa thêm PDF trong pass này; Excel hiện có, PDF cần thiết kế xuất chuẩn riêng | Còn lại |
+| PDF | Có nút/xuất trong nguồn đã cách ly theo source/ma trận | Chưa thêm PDF trong pass này; Excel hiện có, PDF cần thiết kế xuất chuẩn riêng | Còn lại |
 | Phân tích chuyên sâu | Có ý niệm block chuyên sâu | Hiện có code-first analysis + smart Q&A; chưa dựng màn narrative PDF | Một phần |
 
 ## Excerpts tìm thấy

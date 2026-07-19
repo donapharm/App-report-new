@@ -1,6 +1,6 @@
 # DIRECTIVE — Thẻ V2: mã màu theo QĐ + giá trúng thầu + ưu tiên + lọc theo ngày + giờ đồng bộ
 
-> Claude Code giao (CEO 2 ảnh 2026-07-03). Bot triển khai; Claude review. Áp thẻ Doanh thu/DT đầy đủ/Sản phẩm + đồng bộ CST. Không đụng app cũ 3860.
+> Claude Code giao (CEO 2 ảnh 2026-07-03). Bot triển khai; Claude review. Áp thẻ Doanh thu/DT đầy đủ/Sản phẩm + đồng bộ CST. Không đụng nguồn đã cách ly 3860.
 
 ## H1 — Chỉnh trên thẻ + bộ lọc (DT đầy đủ và tương tự)
 1. **Giờ đồng bộ thực + múi giờ:** hiện rõ **"Cập nhật đến 8h30 GMT+7"** (kèm GMT+7), theo `data_as_of`.

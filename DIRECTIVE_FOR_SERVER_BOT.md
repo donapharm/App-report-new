@@ -1,4 +1,4 @@
-# CHỈ THỊ CHO BOT SERVER (hạ tầng) — App Report New
+# CHỈ THỊ CHO BOT SERVER (hạ tầng) — App Report
 
 > File này dành cho **bot quản trị server** (có toàn quyền server + GitHub). Đọc kỹ trước khi làm bất cứ việc gì trong repo này.
 
@@ -25,29 +25,29 @@ Deploy app lên **https://report.donapharm.asia** theo mô hình **1 server Node
 ### Các bước
 ```bash
 # B1) Lấy code + chạy app
-git clone https://github.com/donapharm/App-report-new.git
-cd App-report-new
+git clone <repository-url> App-report
+cd App-report
 npm run setup            # cài server+web + tạo dữ liệu mẫu
 npm run build            # build giao diện vào web/dist
 cp .env.example .env
 #   Sửa .env: PORT=3873 ; SESSION_SECRET=<chuỗi ngẫu nhiên 32+ ký tự>
 #   GIỮ USE_SAMPLE_DATA=1 ; để TRỐNG ORDS/OTP/SSO/ANTHROPIC lúc này
 npm i -g pm2
-pm2 start server/src/index.js --name reportnew && pm2 save && pm2 startup
+pm2 start server/src/index.js --name app-report && pm2 save && pm2 startup
 curl -s http://localhost:3873/api/health          # phải trả {"ok":true,...}
 
 # B2) Cloudflare Tunnel trỏ tên miền (cần quyền Cloudflare quản lý donapharm.asia)
 cloudflared tunnel login
-cloudflared tunnel create reportnew
-cloudflared tunnel route dns reportnew report.donapharm.asia
+cloudflared tunnel create app-report
+cloudflared tunnel route dns app-report report.donapharm.asia
 #   Tạo ~/.cloudflared/config.yml:
-#     tunnel: reportnew
+#     tunnel: app-report
 #     credentials-file: /root/.cloudflared/<TUNNEL_ID>.json
 #     ingress:
 #       - hostname: report.donapharm.asia
 #         service: http://localhost:3873
 #       - service: http_status:404
-cloudflared tunnel run reportnew                  # chạy thử
+cloudflared tunnel run app-report                  # chạy thử
 sudo cloudflared service install                  # ok thì cài chạy nền
 
 # B3) (khuyến nghị) Cloudflare Access chỉ cho email công ty @donapharm...
@@ -56,7 +56,7 @@ sudo cloudflared service install                  # ok thì cài chạy nền
 ## 4. Nguyên tắc phối hợp với dev (Claude Code)
 - **Ghi log:** mọi thay đổi hạ tầng/môi trường → thêm 1 mục vào `CHANGELOG.md` (ngày, ai, việc gì, kết quả) để dev + Sếp nắm.
 - **Không đụng code app.** Cần dev chỉnh (VD: CORS theo domain, thêm biến env, sửa build) → liệt kê rõ yêu cầu, báo Sếp chuyển dev.
-- **Ranh giới an toàn:** KHÔNG commit `.env`/secret/token; KHÔNG mở port 3873 ra internet (chỉ qua Tunnel); KHÔNG xoá/ghi đè dữ liệu app cũ đang chạy trên port 3860.
+- **Ranh giới an toàn:** KHÔNG commit `.env`/secret/token; KHÔNG mở port 3873 ra internet (chỉ qua Tunnel); KHÔNG xoá/ghi đè dữ liệu nguồn đã cách ly đang chạy trên port 3860.
 - **Việc lớn đụng hệ đang chạy** (đổi DNS đang dùng, restart dịch vụ chung, migration…) → **xác nhận với Sếp trước**.
 - Dev cũng sẽ hỏi ý kiến bạn trước khi làm việc ảnh hưởng môi trường/server.
 

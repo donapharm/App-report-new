@@ -1,6 +1,6 @@
 # SPEC — Target chi tiết đa chiều + Danh mục NV phụ trách (phân công)
 
-> Claude Code chốt thiết kế (CEO 2026-07-03: làm luôn). Bot triển khai theo GIAI ĐOẠN; Claude review từng GĐ. Xây trên `SPEC_TARGET_BONUS_ROADMAP` (field `scope` đã có). Backend quyết quyền; NV chỉ thấy phần mình. Không đụng app cũ 3860.
+> Claude Code chốt thiết kế (CEO 2026-07-03: làm luôn). Bot triển khai theo GIAI ĐOẠN; Claude review từng GĐ. Xây trên `SPEC_TARGET_BONUS_ROADMAP` (field `scope` đã có). Backend quyết quyền; NV chỉ thấy phần mình. Không đụng nguồn đã cách ly 3860.
 
 ## THỨ TỰ TRIỂN KHAI (Claude chốt, CEO "theo ý em" 2026-07-03)
 1. **GĐ1** — Danh mục bán hàng tổng + Bảng PHÂN CÔNG (gieo mầm 04–06) + màn "Tôi phụ trách". *(nền tảng, đang làm)*

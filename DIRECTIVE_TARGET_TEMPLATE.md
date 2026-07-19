@@ -1,6 +1,6 @@
 # DIRECTIVE — Target: XUẤT ↔ SỬA ↔ UPLOAD (1 luồng khép kín) + sửa tay
 
-> Claude Code giao (CEO 2026-07-03, gộp 2 yêu cầu làm 1). Bot triển khai; Claude review. Không đụng app cũ 3860.
+> Claude Code giao (CEO 2026-07-03, gộp 2 yêu cầu làm 1). Bot triển khai; Claude review. Không đụng nguồn đã cách ly 3860.
 
 ## 1 LUỒNG DUY NHẤT: Xuất file → Sửa → Upload lại
 CEO muốn 1 cơ chế **vừa làm template điền mới, vừa xuất để sửa lại**. → **Một nút xuất file** kéo ra **HIỆN TRẠNG target** (điền sẵn nếu đã có, để trống nếu chưa giao):

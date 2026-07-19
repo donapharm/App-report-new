@@ -1,8 +1,8 @@
-# MIGRATION_MATRIX — App Report cũ → App Report New
+# MIGRATION_MATRIX — nguồn App Report đã cách ly → App Report
 
 Cập nhật: 2026-07-02
 
-Nguồn rà soát app cũ:
+Nguồn rà soát nguồn đã cách ly:
 - `/home/osboxes/.openclaw/workspace-main/webapp_donapharm/public/report.html`
 - `/home/osboxes/.openclaw/workspace-main/webapp_donapharm/public/report-main-v23.js`
 - `/home/osboxes/.openclaw/workspace-main/webapp_donapharm/public/report-extra.js`
@@ -12,8 +12,8 @@ Nguồn rà soát app cũ:
 
 Trạng thái:
 - `done` = đã có dữ liệu + UI/API chính + test quyền/số liệu.
-- `partial` = đã có nền hoặc phiên bản mới, nhưng chưa đủ parity với app cũ.
-- `todo` = chưa chuyển sang App Report New.
+- `partial` = đã có nền hoặc phiên bản mới, nhưng chưa đủ parity với nguồn đã cách ly.
+- `todo` = chưa chuyển sang App Report.
 
 Nguyên tắc audit: nếu đối chiếu số liệu phát hiện lệch thì **dừng**, ghi rõ diff + nguồn, không làm tròn/ép số.
 
@@ -24,59 +24,59 @@ Nguyên tắc audit: nếu đối chiếu số liệu phát hiện lệch thì *
 | Nhóm | Trạng thái | Ghi chú |
 |---|---:|---|
 | Login V2 | partial | Code + acceptance test đã xong; live Telegram đang chờ token BotFather thật của `@Reportdonapharm_bot`. Telegram login đang ẩn an toàn khi token chưa cấu hình. |
-| Doanh thu 01→06/2026 | done | Đã đối chiếu app cũ ↔ app mới, tổng/dòng/sample rows khớp 100%. |
-| CST | done | Đã khớp app cũ 2.741 dòng, giữ dòng thật thiếu mã QLNB theo chốt nghiệp vụ. |
+| Doanh thu 01→06/2026 | done | Đã đối chiếu nguồn đã cách ly ↔ App Report, tổng/dòng/sample rows khớp 100%. |
+| CST | done | Đã khớp nguồn đã cách ly 2.741 dòng, giữ dòng thật thiếu mã QLNB theo chốt nghiệp vụ. |
 | Bộ lọc kỳ tháng/quý/khoảng | done | Overview + API chính đã hỗ trợ tháng/quý/khoảng; CST là snapshot hiện tại theo đúng spec. |
 | UI danh sách DT/SP/Target/CST | done/partial | Đã nâng cấp card grid responsive; chưa có PDF/print/mẫu xuất cũ. |
 | Biểu đồ | todo | Chưa code theo yêu cầu. Đề xuất nằm ở mục 8, chờ CEO/Claude duyệt. |
-| Tab Nhân viên / Kho dữ liệu master | todo/partial | App mới có danh bạ dùng cho auth/scope nhưng chưa có tab quản trị master như app cũ. |
-| Đối chiếu/Điều chuyển | todo | Chưa chuyển vào App Report New; nếu là nghiệp vụ Sale thì không nên đặt trong Report Bot/App Report trừ khi phục vụ báo cáo. |
-| PDF/print | todo/partial | App mới mới có Excel cơ bản; PDF/print/mẫu cũ chưa chuyển. |
+| Tab Nhân viên / Kho dữ liệu master | todo/partial | App Report có danh bạ dùng cho auth/scope nhưng chưa có tab quản trị master như nguồn đã cách ly. |
+| Đối chiếu/Điều chuyển | todo | Chưa chuyển vào App Report; nếu là nghiệp vụ Sale thì không nên đặt trong Report Bot/App Report trừ khi phục vụ báo cáo. |
+| PDF/print | todo/partial | App Report hiện có Excel cơ bản; PDF/print/mẫu cũ chưa chuyển. |
 
 ---
 
-## 2. Ma trận tab/menu chính app cũ
+## 2. Ma trận tab/menu chính nguồn đã cách ly
 
-| Tab/menu app cũ | Tính năng/nút app cũ đã rà | App mới tương ứng | Trạng thái | Ghi chú/việc còn lại |
+| Tab/menu nguồn đã cách ly | Tính năng/nút nguồn đã cách ly đã rà | App Report tương ứng | Trạng thái | Ghi chú/việc còn lại |
 |---|---|---|---:|---|
 | 📊 Tổng quan (`tq`) | KPI tổng quan; top NV; top đơn vị; top sản phẩm; biểu đồ nhà thầu/tuyến/doanh thu; export coach bar; nút `Excel/PDF xếp hạng NV`, `Excel/PDF Top ĐV`, `Excel/PDF Top SP` | `Overview` | partial | KPI 6 thẻ + cảnh báo smart + kỳ tháng/quý/khoảng đã xong. **Chưa chuyển biểu đồ, PDF, các export riêng Top ĐV/Top SP/xếp hạng NV theo mẫu cũ.** |
 | 💰 DT theo ĐV (`dt`) | Ranking theo NV/ĐV/SP; drill-down; phân trang; chọn page size 10/20/30/50/100; nút `Excel trang này`, `PDF trang này`, `Excel tất cả`, `PDF tất cả` | `Revenue` | partial | Đã có breakdown theo NV/ĐV/SP/tuyến/UT/nhà thầu/gói + drill-down + Excel theo lọc. **Chưa có PDF, export page/all đúng mẫu cũ, page-size UI cũ.** |
 | 🗂️ DT Chi tiết (`dtfull`) | Bảng chi tiết dòng bán hàng; phân trang; export Excel/PDF trang hiện tại hoặc tất cả | `RevenueFull` | partial | Đã có bảng chi tiết từng dòng, phân trang, Excel đầy đủ. **Chưa có PDF và mẫu page/all như cũ.** |
 | 💊 SP chi tiết (`sp`) | Top/mã sản phẩm; tìm/lọc; phân trang; xuất Excel/PDF page/all; hiển thị thông tin hoạt chất/nhóm nếu có trong dữ liệu cũ | `Products` | partial | Đã có card top SP/mã QLNB + doanh thu/SL/độ phủ ĐV/NV/gói + Excel. **Chưa hoàn thiện hoạt chất/nhóm thuốc parity, PDF, page/all mẫu cũ.** |
 | 📦 Cơ số thầu (`cst`) | Bảng ngang đầy đủ; cảnh báo & lời khuyên; trạng thái Hết CST/Chưa bán/Chưa khai thác/Còn nhiều/Đang bán; lọc tình trạng; export Excel/PDF page/all | `TenderQuota` | done/partial | **Dữ liệu + UI nghiệp vụ CST đã done** và khớp 2.741 dòng. Còn **PDF/page-all export mẫu cũ** nếu CEO cần. |
-| 🧠 Phân tích (`pt`) | KPI phân tích; đơn vị biến động; SP cần đẩy mạnh; SP sắp hết CST; phân tích chuyên sâu; biểu đồ/cơ cấu; export Excel/PDF | `Analysis` | partial | Đã có so kỳ trước, tăng/giảm ĐV/SP, cơ cấu tuyến/nhà thầu/UT. **Chưa có biểu đồ, PDF, đủ các block chuyên sâu như app cũ.** |
-| 👤 DS Nhân viên (`nv`) | Danh sách NV; thống kê; chart `chNV`; thông tin mã NV/họ tên/SĐT/email/bộ phận/chức vụ/tình trạng/CCCD/ngày sinh/thâm niên/biển số; lọc/search | Chưa có tab riêng | todo | App mới có `users.json`/auth mapping phục vụ đăng nhập và scope, nhưng **chưa có tab Nhân viên** cho CEO xem/quản trị như app cũ. |
+| 🧠 Phân tích (`pt`) | KPI phân tích; đơn vị biến động; SP cần đẩy mạnh; SP sắp hết CST; phân tích chuyên sâu; biểu đồ/cơ cấu; export Excel/PDF | `Analysis` | partial | Đã có so kỳ trước, tăng/giảm ĐV/SP, cơ cấu tuyến/nhà thầu/UT. **Chưa có biểu đồ, PDF, đủ các block chuyên sâu như nguồn đã cách ly.** |
+| 👤 DS Nhân viên (`nv`) | Danh sách NV; thống kê; chart `chNV`; thông tin mã NV/họ tên/SĐT/email/bộ phận/chức vụ/tình trạng/CCCD/ngày sinh/thâm niên/biển số; lọc/search | Chưa có tab riêng | todo | App Report có `users.json`/auth mapping phục vụ đăng nhập và scope, nhưng **chưa có tab Nhân viên** cho CEO xem/quản trị như nguồn đã cách ly. |
 | 📤 Upload (`upload`) | Upload & validate Excel; chọn loại báo cáo `Doanh thu tuần/Đặt hàng/Khác`; chọn khoảng ngày; preview lỗi/dòng mới; tải file lỗi; lịch sử upload; xóa mục lịch sử | `Upload` | partial | Đã tách `Import mới`, `Import cập nhật`, `Lịch sử & khôi phục`; validate backend; duplicate block; rollback slot. **Chưa có đủ loại báo cáo Đặt hàng/Khác, tải file lỗi theo mẫu cũ, biểu đồ preview upload cũ.** |
-| 📚 Kho dữ liệu (`kho`) / `kho-dulieu.html` | Kho master Nhân viên + Đơn vị; lọc bộ phận/tình trạng/tuyến; search; tải lại; export JSON/Excel/PDF; upload master mới; chọn/sửa dòng đơn vị; gộp theo mã | `Upload` + auth data nội bộ | partial/todo | App mới có lịch sử slot doanh thu + rollback, nhưng **chưa có Kho dữ liệu master đầy đủ**: tab Nhân viên/Đơn vị, sửa dòng, export JSON/PDF, upload master, gộp theo mã. |
-| 🎯 Target admin (`target`) | CEO nhập/sửa target theo kỳ; nút `Tải kỳ`, `Lưu tất cả`, `AI Đề xuất`; xóa target từng NV; hiển thị DT kỳ trước/% đạt/gợi ý | `Target` | partial | App mới xem target kỳ này + forecast, target thật 01→06. **Chưa có UI admin nhập/sửa/xóa target, AI đề xuất target theo kỳ như app cũ.** |
+| 📚 Kho dữ liệu (`kho`) / `kho-dulieu.html` | Kho master Nhân viên + Đơn vị; lọc bộ phận/tình trạng/tuyến; search; tải lại; export JSON/Excel/PDF; upload master mới; chọn/sửa dòng đơn vị; gộp theo mã | `Upload` + auth data nội bộ | partial/todo | App Report có lịch sử slot doanh thu + rollback, nhưng **chưa có Kho dữ liệu master đầy đủ**: tab Nhân viên/Đơn vị, sửa dòng, export JSON/PDF, upload master, gộp theo mã. |
+| 🎯 Target admin (`target`) | CEO nhập/sửa target theo kỳ; nút `Tải kỳ`, `Lưu tất cả`, `AI Đề xuất`; xóa target từng NV; hiển thị DT kỳ trước/% đạt/gợi ý | `Target` | partial | App Report xem target kỳ này + forecast, target thật 01→06. **Chưa có UI admin nhập/sửa/xóa target, AI đề xuất target theo kỳ như nguồn đã cách ly.** |
 | 📊 Target NV (`mytarget`) | NV xem target tháng/quý/thưởng 3P; target fallback kỳ gần nhất; xếp hạng quý; nút gửi Zalo/Email khen thưởng; export Excel/PDF ranking | `Target` theo scope | partial | Sale scope đã xem target của mình trong tab Target. **Chưa có màn Target NV riêng, thưởng 3P/quý, gửi Zalo/Email, export ranking.** |
 | 🔄 Điều chuyển NV (`dc`) | Bộ lọc % CST còn, đơn vị, gói; tab `Đề xuất điều chuyển`, `Lịch sử điều chuyển`; export Excel/PDF | Chưa có | todo | Đây là nghiệp vụ Sale/điều chuyển nhân viên, không nên tự chuyển trong Report Bot nếu không phục vụ App Report. Cần CEO/Claude quyết scope trước. |
 | Đối chiếu | CEO yêu cầu theo dõi mục đối chiếu old↔new/mismatch | Chưa có màn riêng | todo | Hiện đối chiếu đang là tài liệu + script audit nội bộ, **chưa có tab UI Đối chiếu**. Nếu cần, đề xuất làm màn read-only cho CEO: kỳ, tab, dòng/tổng, diff, sample rows. |
-| 🤖 Hỏi nhanh/AI | App cũ có hỏi nhanh/AI trong luồng report; dữ liệu phục vụ tổng hợp | `AiChat` | partial | App mới có API `/ai/ask` + gợi ý câu hỏi. Cần test sâu theo doanh thu/CST/Target và bảo đảm scope. |
+| 🤖 Hỏi nhanh/AI | Nguồn đã cách ly có hỏi nhanh/AI trong luồng report; dữ liệu phục vụ tổng hợp | `AiChat` | partial | App Report có API `/ai/ask` + gợi ý câu hỏi. Cần test sâu theo doanh thu/CST/Target và bảo đảm scope. |
 
 ---
 
 ## 3. Ma trận tính năng/nút xuyên suốt
 
-| Nhóm tính năng app cũ | Chi tiết app cũ | App mới | Trạng thái | Việc còn lại |
+| Nhóm tính năng nguồn đã cách ly | Chi tiết nguồn đã cách ly | App Report | Trạng thái | Việc còn lại |
 |---|---|---|---:|---|
-| Bộ chọn kỳ | App cũ chọn kỳ DB/upload, tự nhảy upload mới nhất, có logic `UPLOAD:<label>` | `PeriodFilter` + `/api/periods` | done | Overview hỗ trợ tháng/quý/khoảng; các tab list hiện vẫn chọn kỳ tháng qua filter chung. Nếu cần, mở rộng quý/khoảng cho Revenue/SP/Analysis sau. |
+| Bộ chọn kỳ | Nguồn đã cách ly chọn kỳ DB/upload, tự nhảy upload mới nhất, có logic `UPLOAD:<label>` | `PeriodFilter` + `/api/periods` | done | Overview hỗ trợ tháng/quý/khoảng; các tab list hiện vẫn chọn kỳ tháng qua filter chung. Nếu cần, mở rộng quý/khoảng cho Revenue/SP/Analysis sau. |
 | Bộ lọc dữ liệu | NV/ĐV/SP/tuyến/UT/nhà thầu/gói/search | `/api/filters`, `RevenueFilters`, CST filters | done | Tiếp tục dùng backend scope; không lọc client cho dữ liệu nhạy cảm. |
 | Phân quyền | CEO/admin/sale; sale chỉ thấy phạm vi | `issueToken` + `scopeOf` | done | Đã test CEO all, DN009 own rows. Login V2 live còn chờ token Telegram. |
-| Excel export | App cũ nhiều nút Excel theo từng bảng/page/all | `/api/export/*.xlsx` | partial | Đã có Excel cho revenue/revenue_full/products/cst theo filter. Thiếu các export chuyên biệt top NV/Top ĐV/Top SP, page/all, target ranking, kho master. |
-| PDF export | App cũ dùng jsPDF/autotable, có nút PDF ở hầu hết tab | Chưa có backend/frontend PDF chuẩn | todo | Cần thiết kế server-side PDF hoặc client PDF sau khi chốt mẫu. |
-| Print | App cũ/luồng cũ có nhu cầu in/PDF báo cáo | Chưa có | todo | Chưa chuyển. Nên làm cùng PDF để thống nhất mẫu. |
-| Biểu đồ | App cũ dùng Chart.js: line/bar/doughnut/pie ở Tổng quan, Phân tích, Upload, NV | Chưa có | todo | Xem kế hoạch mục 8; chưa code. |
-| Pagination/page-size | App cũ nhiều bảng có page-size 10/20/30/50/100 | Một số tab có pagination/card grid | partial | RevenueFull có pagination; Revenue/SP/CST đang card grid/load top/filter, chưa đủ page-size giống cũ. |
-| Drill-down | App cũ DT drill theo NV/ĐV/SP; top lists | `Revenue` | done | Đã verify drill NV → ĐV. |
-| Cảnh báo smart | App cũ có cảnh báo CST + phân tích biến động | `Overview alerts`, `TenderQuota` | done/partial | Dashboard V2 đã nhóm 4 loại; CST alerts done. Có thể bổ sung thêm cảnh báo cũ nếu CEO yêu cầu. |
-| Upload validate | App cũ validate client + preview lỗi + history | `Upload` backend validate | partial | Backend an toàn hơn; thiếu tải file lỗi và một số loại báo cáo cũ. |
-| Kho/rollback | App cũ có kho master + upload history; app mới có slot history/rollback doanh thu | `Upload history & khôi phục` | partial | Rollback doanh thu done; kho master Nhân viên/Đơn vị chưa chuyển. |
-| Hoạt chất/nhóm thuốc | App cũ CST/SP có trường hoạt chất/nhóm khi nguồn có | CST có; Products chưa đầy đủ | partial | CST hiển thị hoạt chất/nhóm; Products cần thêm hoặc xác nhận nguồn chuẩn cho hoạt chất/nhóm thuốc. |
+| Excel export | Nguồn đã cách ly nhiều nút Excel theo từng bảng/page/all | `/api/export/*.xlsx` | partial | Đã có Excel cho revenue/revenue_full/products/cst theo filter. Thiếu các export chuyên biệt top NV/Top ĐV/Top SP, page/all, target ranking, kho master. |
+| PDF export | Nguồn đã cách ly dùng jsPDF/autotable, có nút PDF ở hầu hết tab | Chưa có backend/frontend PDF chuẩn | todo | Cần thiết kế server-side PDF hoặc client PDF sau khi chốt mẫu. |
+| Print | Nguồn đã cách ly/luồng cũ có nhu cầu in/PDF báo cáo | Chưa có | todo | Chưa chuyển. Nên làm cùng PDF để thống nhất mẫu. |
+| Biểu đồ | Nguồn đã cách ly dùng Chart.js: line/bar/doughnut/pie ở Tổng quan, Phân tích, Upload, NV | Chưa có | todo | Xem kế hoạch mục 8; chưa code. |
+| Pagination/page-size | Nguồn đã cách ly nhiều bảng có page-size 10/20/30/50/100 | Một số tab có pagination/card grid | partial | RevenueFull có pagination; Revenue/SP/CST đang card grid/load top/filter, chưa đủ page-size giống cũ. |
+| Drill-down | Nguồn đã cách ly DT drill theo NV/ĐV/SP; top lists | `Revenue` | done | Đã verify drill NV → ĐV. |
+| Cảnh báo smart | Nguồn đã cách ly có cảnh báo CST + phân tích biến động | `Overview alerts`, `TenderQuota` | done/partial | Dashboard V2 đã nhóm 4 loại; CST alerts done. Có thể bổ sung thêm cảnh báo cũ nếu CEO yêu cầu. |
+| Upload validate | Nguồn đã cách ly validate client + preview lỗi + history | `Upload` backend validate | partial | Backend an toàn hơn; thiếu tải file lỗi và một số loại báo cáo cũ. |
+| Kho/rollback | Nguồn đã cách ly có kho master + upload history; App Report có slot history/rollback doanh thu | `Upload history & khôi phục` | partial | Rollback doanh thu done; kho master Nhân viên/Đơn vị chưa chuyển. |
+| Hoạt chất/nhóm thuốc | Nguồn đã cách ly CST/SP có trường hoạt chất/nhóm khi nguồn có | CST có; Products chưa đầy đủ | partial | CST hiển thị hoạt chất/nhóm; Products cần thêm hoặc xác nhận nguồn chuẩn cho hoạt chất/nhóm thuốc. |
 | Target quản trị | Nhập/sửa/xóa/gợi ý target | Target view/forecast | partial | Cần tab admin target editor nếu CEO còn dùng. |
-| Thưởng 3P/Zalo/Email target | App cũ có nút gửi Zalo/Email khen thưởng, gated khi đủ target quý | Chưa có | todo | Đây là gửi ra ngoài; chỉ làm sau khi có quy trình duyệt 3 nút. |
-| Điều chuyển NV | App cũ có đề xuất/lịch sử/export | Chưa có | todo | Nghiệp vụ nhạy cảm/Sale; cần CEO/Claude quyết có đưa vào Report New không. |
-| Thiết bị/phiên | App cũ có quản lý phiên/thiết bị ở auth | Login V2 | partial | Code đã có session 60 phút, max 3 trusted devices; live Telegram cần token thật. |
+| Thưởng 3P/Zalo/Email target | Nguồn đã cách ly có nút gửi Zalo/Email khen thưởng, gated khi đủ target quý | Chưa có | todo | Đây là gửi ra ngoài; chỉ làm sau khi có quy trình duyệt 3 nút. |
+| Điều chuyển NV | Nguồn đã cách ly có đề xuất/lịch sử/export | Chưa có | todo | Nghiệp vụ nhạy cảm/Sale; cần CEO/Claude quyết có đưa vào App Report không. |
+| Thiết bị/phiên | Nguồn đã cách ly có quản lý phiên/thiết bị ở auth | Login V2 | partial | Code đã có session 60 phút, max 3 trusted devices; live Telegram cần token thật. |
 
 ---
 
@@ -87,18 +87,18 @@ Nguyên tắc audit: nếu đối chiếu số liệu phát hiện lệch thì *
 Kết luận 2026-07-02: **KHỚP 100%**, không có kỳ lệch số. Đối chiếu tính trực tiếp từ file nguồn, không làm tròn.
 
 Nguồn đối chiếu:
-- 01→03/2026: artifact ORDS đã dump theo logic app cũ tại `artifacts/revenue_ords_202601_202603/`.
-- 04→06/2026: file upload app cũ tại `/home/osboxes/.openclaw/workspace-main/webapp_donapharm/data/report_upload_data_*.json`.
-- App mới: `store.getRows({ ky, scope:{ empCode:null } })` sau import slot active.
+- 01→03/2026: artifact ORDS đã dump theo logic nguồn đã cách ly tại `artifacts/revenue_ords_202601_202603/`.
+- 04→06/2026: file upload nguồn đã cách ly tại `/home/osboxes/.openclaw/workspace-main/webapp_donapharm/data/report_upload_data_*.json`.
+- App Report: `store.getRows({ ky, scope:{ empCode:null } })` sau import slot active.
 
-| Kỳ | Nguồn app cũ | Dòng cũ | Tổng cũ | Dòng mới | Tổng mới | Chênh dòng | Chênh tiền | NV | Dòng mẫu đã khớp |
+| Kỳ | Nguồn nguồn đã cách ly | Dòng cũ | Tổng cũ | Dòng mới | Tổng mới | Chênh dòng | Chênh tiền | NV | Dòng mẫu đã khớp |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|
 | 01.2026 | ORDS artifact `report_upload_data_20260101_20260131.json` | 2.094 | 32.509.346.732 | 2.094 | 32.509.346.732 | 0 | 0 | 21 | DN001 · 001.BVĐK Đồng Nai · Crexor 10 · SL 220.000 · 187.000.000 |
 | 02.2026 | ORDS artifact `report_upload_data_20260201_20260228.json` | 1.308 | 17.507.218.993 | 1.308 | 17.507.218.993 | 0 | 0 | 21 | DN001 · 001.BVĐK Đồng Nai · Vixcar · SL 19.980 · 17.382.600 |
 | 03.2026 | ORDS artifact `report_upload_data_20260301_20260331.json` | 2.175 | 33.773.738.542 | 2.175 | 33.773.738.542 | 0 | 0 | 21 | DN001 · 001.BVĐK Đồng Nai · Vixcar · SL 49.980 · 43.482.600 |
-| 04.2026 | App cũ `report_upload_data_20260401_20260430.json` | 2.282 | 34.794.142.431 | 2.282 | 34.794.142.431 | 0 | 0 | 21 | DN001 · 001.BVĐK Đồng Nai · Vixcar · SL 79.980 · 69.582.600 |
-| 05.2026 | App cũ `report_upload_data_20260501_20260529.json` | 1.600 | 30.398.950.820 | 1.600 | 30.398.950.820 | 0 | 0 | 21 | DN001 · 171.PKĐK NAM VIỆT · Cerecaps · SL 4.980 · 13.246.800 |
-| 06.2026 | App cũ `report_upload_data_20260601_20260630.json` | 2.001 | 28.403.136.096 | 2.001 | 28.403.136.096 | 0 | 0 | 22 | DN003 · 019.TTYT H. Vĩnh Cửu · Nadecin 10mg · SL 1.000 · 2.600.000 |
+| 04.2026 | Nguồn đã cách ly `report_upload_data_20260401_20260430.json` | 2.282 | 34.794.142.431 | 2.282 | 34.794.142.431 | 0 | 0 | 21 | DN001 · 001.BVĐK Đồng Nai · Vixcar · SL 79.980 · 69.582.600 |
+| 05.2026 | Nguồn đã cách ly `report_upload_data_20260501_20260529.json` | 1.600 | 30.398.950.820 | 1.600 | 30.398.950.820 | 0 | 0 | 21 | DN001 · 171.PKĐK NAM VIỆT · Cerecaps · SL 4.980 · 13.246.800 |
+| 06.2026 | Nguồn đã cách ly `report_upload_data_20260601_20260630.json` | 2.001 | 28.403.136.096 | 2.001 | 28.403.136.096 | 0 | 0 | 22 | DN003 · 019.TTYT H. Vĩnh Cửu · Nadecin 10mg · SL 1.000 · 2.600.000 |
 
 ### 4.2 CST — đóng mục 2.741 dòng, cập nhật merge upload kỳ mới nhất
 
@@ -109,13 +109,13 @@ Artifacts kiểm tra:
 - Verify sau sửa merge upload: `artifacts/cst_verify_after_upload_merge_20260702.json`.
 - Guard rủi ro biên baseline/duplicate key: `artifacts/cst_merge_guard_check_20260702.json`.
 
-Kết luận: CST app mới giữ **2.741 dòng**; dòng thiếu mã QLNB `Bividia 25 · 108. BVĐK LONG AN · DN001` được giữ và UI hiển thị mã QLNB là `—`. Công thức runtime hiện khớp app cũ: baseline `cst_real.json` + các slot upload active có kỳ **sau mốc baseline** theo khóa `IIT_CODE + DONVI chuẩn hóa`; không ép số vào file nguồn. Baseline hiện `source_from_date=01-MAY-26` → `baselineCoveredKy=05.2026`, nên chỉ merge `06.2026`; nếu re-dump baseline mới hơn, slot cũ hơn/bằng mốc sẽ không double-count.
+Kết luận: CST App Report giữ **2.741 dòng**; dòng thiếu mã QLNB `Bividia 25 · 108. BVĐK LONG AN · DN001` được giữ và UI hiển thị mã QLNB là `—`. Công thức runtime hiện khớp nguồn đã cách ly: baseline `cst_real.json` + các slot upload active có kỳ **sau mốc baseline** theo khóa `IIT_CODE + DONVI chuẩn hóa`; không ép số vào file nguồn. Baseline hiện `source_from_date=01-MAY-26` → `baselineCoveredKy=05.2026`, nên chỉ merge `06.2026`; nếu re-dump baseline mới hơn, slot cũ hơn/bằng mốc sẽ không double-count.
 
 | Nguồn | Dòng | Tổng CST ban đầu | Tổng SL đã bán | Tổng SL còn | Tổng TT còn lại | Chênh |
 |---|---:|---:|---:|---:|---:|---:|
-| Baseline app cũ `artifacts/cst_full_from_old.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | — |
-| Baseline app mới `server/data/cst_real.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | 0 |
-| Runtime app mới sau merge upload `06.2026` | 2.741 | 182.837.992 | 67.311.919 | 115.850.462 | 385.797.655.411 | xem artifact verify |
+| Baseline nguồn đã cách ly `artifacts/cst_full_from_old.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | — |
+| Baseline App Report `server/data/cst_real.json` | 2.741 | 182.837.992 | 62.993.027 | 120.068.002 | 399.841.752.609 | 0 |
+| Runtime App Report sau merge upload `06.2026` | 2.741 | 182.837.992 | 67.311.919 | 115.850.462 | 385.797.655.411 | xem artifact verify |
 
 Dòng thiếu mã QLNB đã được giữ:
 
@@ -136,19 +136,19 @@ Dòng thiếu mã QLNB đã được giữ:
 
 Các mục này cần được coi là backlog chính thức, không được hiểu nhầm là đã hoàn tất:
 
-1. **Biểu đồ:** chưa có chart trong App Report New.
-2. **Tab Nhân viên:** chưa có tab DS Nhân viên/master employee như app cũ.
+1. **Biểu đồ:** chưa có chart trong App Report.
+2. **Tab Nhân viên:** chưa có tab DS Nhân viên/master employee như nguồn đã cách ly.
 3. **Đối chiếu:** chưa có màn UI đối chiếu old↔new; hiện mới là tài liệu/script audit nội bộ.
-4. **PDF/print:** chưa chuyển bộ PDF/print/mẫu cũ; app mới chủ yếu mới có Excel.
-5. **Hoạt chất/nhóm thuốc:** CST đã có trường, nhưng tab Sản phẩm chưa parity đầy đủ hoạt chất/nhóm thuốc như kỳ vọng app cũ.
+4. **PDF/print:** chưa chuyển bộ PDF/print/mẫu cũ; App Report chủ yếu mới có Excel.
+5. **Hoạt chất/nhóm thuốc:** CST đã có trường, nhưng tab Sản phẩm chưa parity đầy đủ hoạt chất/nhóm thuốc như kỳ vọng nguồn đã cách ly.
 6. **Kho dữ liệu master:** chưa chuyển đầy đủ `kho-dulieu.html` gồm Nhân viên/Đơn vị, sửa dòng, gộp mã, export JSON/PDF, upload master.
-7. **Rollback:** rollback slot doanh thu đã có; rollback/master data parity app cũ chưa đủ.
-8. **Target admin editor:** chưa có nhập/sửa/xóa target + AI đề xuất như app cũ.
+7. **Rollback:** rollback slot doanh thu đã có; rollback/master data parity nguồn đã cách ly chưa đủ.
+8. **Target admin editor:** chưa có nhập/sửa/xóa target + AI đề xuất như nguồn đã cách ly.
 9. **Target NV/thưởng 3P:** chưa có màn riêng, ranking quý, gửi Zalo/Email khen thưởng.
 10. **Điều chuyển NV:** chưa chuyển; cần quyết định phạm vi vì đây là nghiệp vụ Sale, không phải lõi Report Bot.
 11. **Export chi tiết theo mẫu cũ:** thiếu page/all cho từng tab, Top NV/Top ĐV/Top SP, target ranking, kho master.
-12. **Upload file lỗi:** chưa có tải file lỗi Excel theo kiểu app cũ.
-13. **Biểu đồ preview upload:** chưa có top ĐV/tuyến/nhà thầu/month chart trong preview upload như app cũ.
+12. **Upload file lỗi:** chưa có tải file lỗi Excel theo kiểu nguồn đã cách ly.
+13. **Biểu đồ preview upload:** chưa có top ĐV/tuyến/nhà thầu/month chart trong preview upload như nguồn đã cách ly.
 
 ---
 
@@ -163,14 +163,14 @@ Các mục này cần được coi là backlog chính thức, không được hi
 | P1 | Hoàn thiện báo cáo parity | PDF/print, export mẫu cũ, tab Nhân viên/Kho, Target admin, Đối chiếu read-only. |
 | P1 | Hoạt chất/nhóm thuốc cho Products | Cần xác định nguồn master chuẩn để tránh hiển thị thiếu/sai. |
 | P2 | Biểu đồ | Chỉ làm sau khi CEO/Claude duyệt kế hoạch mục 8. |
-| P2 | Điều chuyển NV | Chỉ làm nếu CEO xác nhận vẫn thuộc App Report New; nếu là nghiệp vụ Sale thì chuyển Sale Bot. |
+| P2 | Điều chuyển NV | Chỉ làm nếu CEO xác nhận vẫn thuộc App Report; nếu là nghiệp vụ Sale thì chuyển Sale Bot. |
 
 ---
 
 ## 7. Kiểm soát bảo mật/phân quyền cần giữ
 
-- Không dùng dữ liệu app cũ `dona-report` port `3860` theo kiểu ghi/sửa; chỉ đọc để audit.
-- App mới phải luôn đi qua `issueToken` + `scopeOf`.
+- Không dùng dữ liệu nguồn đã cách ly `dona-report` port `3860` theo kiểu ghi/sửa; chỉ đọc để audit.
+- App Report phải luôn đi qua `issueToken` + `scopeOf`.
 - Telegram login phải ẩn nếu thiếu `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, hoặc `TELEGRAM_BOT_SECRET`.
 - `TELEGRAM_BOT_SECRET`/`TELEGRAM_BOT_TOKEN` chỉ ở `.env`, không commit.
 - Export/PDF/chart/API phải tôn trọng scope CEO/admin/sale.
@@ -191,10 +191,10 @@ Lý do:
 - Dễ tách chart thành component nhỏ, ít rủi ro đụng logic dữ liệu.
 
 Phương án thay thế: **Chart.js**.
-- Ưu điểm: giống app cũ, các loại line/bar/doughnut đã dùng quen.
+- Ưu điểm: giống nguồn đã cách ly, các loại line/bar/doughnut đã dùng quen.
 - Nhược điểm: trong React cần wrapper hoặc tự quản lifecycle canvas; dễ phát sinh lỗi destroy/re-render, tooltip/responsive cần xử lý thủ công hơn.
 
-Kết luận đề xuất: dùng **Recharts** cho App Report New; chỉ dùng Chart.js nếu CEO/Claude ưu tiên giống kỹ thuật app cũ hơn tính React-native.
+Kết luận đề xuất: dùng **Recharts** cho App Report; chỉ dùng Chart.js nếu CEO/Claude ưu tiên giống kỹ thuật nguồn đã cách ly hơn tính React-native.
 
 ### 8.2 Bundle size dự kiến
 

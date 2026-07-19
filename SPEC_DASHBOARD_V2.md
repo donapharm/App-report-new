@@ -1,7 +1,7 @@
 # SPEC — Dashboard "Cần chú ý" V2 (smart, phân nhóm)
 
 > Claude Code (kiến trúc) chốt từ phản hồi CEO 2026-07-02. Bot triển khai; Claude review.
-> Không đụng app cũ; mọi query qua scopeOf.
+> Không đụng nguồn đã cách ly; mọi query qua scopeOf.
 
 ## Vấn đề hiện tại (ảnh CEO)
 - 1857 cảnh báo dồn 1 danh sách phẳng, **lẫn lộn** NV / đơn vị / cơ số thầu.

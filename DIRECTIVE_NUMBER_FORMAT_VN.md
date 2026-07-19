@@ -1,6 +1,6 @@
 # DIRECTIVE — Chuẩn hiển thị SỐ theo kế toán Việt Nam (toàn app)
 
-> Claude Code giao (CEO yêu cầu 2026-07-03). Bot triển khai; Claude review. Không đụng app cũ 3860. Chỉ đổi HIỂN THỊ, không đổi số/logic.
+> Claude Code giao (CEO yêu cầu 2026-07-03). Bot triển khai; Claude review. Không đụng nguồn đã cách ly 3860. Chỉ đổi HIỂN THỊ, không đổi số/logic.
 
 ## ‼ ĐÍNH CHÍNH (CEO 2026-07-03): SỐ CHÍNH = ĐẦY ĐỦ, KHÔNG viết tắt "tỷ"
 CEO phản ánh Tổng quan vẫn hiện **"2,67 tỷ"** làm số lớn. **SAI ý.** Yêu cầu:

@@ -12,7 +12,7 @@ Cuối tuần gửi báo cáo **điểm doanh thu + xu tích lũy** (tháng + qu
 
 ## 2. Nguồn dữ liệu (đã xác định trong file — sheet Nguon_KiemTra)
 - **Doanh thu → điểm:** LẤY TỪ APP MÌNH — slot `server/data/uploads/rev_2src_*.json` (App Report-New).
-  KHÔNG đi lấy doanh thu ở app khác (App VAT trước đây lấy DT từ App Report cũ; giờ mình đã có).
+  KHÔNG đi lấy doanh thu ở app khác (App VAT trước đây lấy DT từ nguồn App Report đã cách ly; giờ mình đã có).
 - **Xu:** LẤY TỪ APP VAT — **SQLite** `/home/osboxes/.openclaw/workspace-main/webapp_donapharm/data/vat.db`
   (bảng hóa đơn VAT: mã NV, ngày, số tiền tính xu, trạng thái `co_hd_vat`, loại `vat_invoice`).
   → Chỉ vào VAT để lấy XU; điểm doanh thu tự tính từ slot app mình.

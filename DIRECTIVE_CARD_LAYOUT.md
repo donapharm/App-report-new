@@ -1,6 +1,6 @@
 # DIRECTIVE — Bố cục lại THẺ CHI TIẾT (Doanh thu/DT đầy đủ + đồng bộ CST) — dạng bảng gọn
 
-> Claude Code giao (CEO phản ánh qua ảnh mobile 2026-07-03). Bot triển khai; Claude review. Áp cả mobile + PC. Không đụng app cũ 3860; chỉ layout/hiển thị.
+> Claude Code giao (CEO phản ánh qua ảnh mobile 2026-07-03). Bot triển khai; Claude review. Áp cả mobile + PC. Không đụng nguồn đã cách ly 3860; chỉ layout/hiển thị.
 
 ## 7 điểm CEO yêu cầu (BẮT BUỘC)
 1. **Thêm "Giá thầu"** (đang thiếu) vào thẻ.

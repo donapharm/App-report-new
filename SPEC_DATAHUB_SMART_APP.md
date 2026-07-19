@@ -1,8 +1,8 @@
 # SPEC — DATA HUB SMART APP (CEO-only) — build mới sạch
 
 > Claude Code soạn (CEO duyệt 2026-07-09). Giao **bot build MỚI** app Data Hub theo phong cách **Smart App**
-> (như App Report New làm lại từ app cũ), **chỉ CEO quản lý**, thay dần `data.donapharm.asia` hiện tại.
-> File này để trong repo App Report New cho tiện version; **bot copy sang repo Data Hub mới** khi build.
+> (như App Report làm lại từ nguồn đã cách ly), **chỉ CEO quản lý**, thay dần `data.donapharm.asia` hiện tại.
+> File này để trong repo App Report cho tiện version; **bot copy sang repo Data Hub mới** khi build.
 > Đọc kèm khảo sát hiện trạng (bản đồ phụ thuộc) đã trao đổi: Report cũ đọc-ké-file `master_khachhang.json`;
 > App Sale có DB hub song song; VAT không dính; App Report NEW **hiện chưa** đọc Hub.
 
@@ -41,14 +41,14 @@
 - Cột MẬT: `cp_total, cp_*, cost_*, chi_phi_*, diem_*, point_*, margin_*, percent_*, pct_*, ty_le_chi_phi,
   doanh_thu_goc(khi dùng tính cp), ket_qua_tinh_cp, rule_cp, audit_export_cp`.
 
-## 4. ‼ BOUNDARY COST ↔ APP REPORT NEW (mấu chốt — CEO nhấn "hết sức cẩn trọng")
-Tương lai App Report New lấy **vài cột chi phí** để tính chi phí/doanh thu per NV/đơn vị. App Report New có
+## 4. ‼ BOUNDARY COST ↔ APP REPORT (mấu chốt — CEO nhấn "hết sức cẩn trọng")
+Tương lai App Report lấy **vài cột chi phí** để tính chi phí/doanh thu per NV/đơn vị. App Report có
 **bot NLQ + email tới 17 NV** → nếu raw cost lọt vào kho chung của nó là **lộ lãi/lỗ toàn đội**. Bắt buộc:
 - **Data Hub TỰ TÍNH** (có sẵn doanh thu snapshot + cost vault) → ra cost%/kết quả per NV/đơn vị.
-- App Report New **KHÔNG giữ raw cost**. Chỉ nhận **kết quả đã tính** qua **API CEO-auth của Hub**.
-- App Report New hiển thị kết quả **CHỈ trong khu CEO-only khóa riêng** (password/OTP), **store tách vật lý**
+- App Report **KHÔNG giữ raw cost**. Chỉ nhận **kết quả đã tính** qua **API CEO-auth của Hub**.
+- App Report hiển thị kết quả **CHỈ trong khu CEO-only khóa riêng** (password/OTP), **store tách vật lý**
   khỏi dữ liệu doanh thu chung.
-- **NLQ + email report của App Report New TUYỆT ĐỐI không đọc được** khu cost đó (guard + store riêng + không
+- **NLQ + email report của App Report TUYỆT ĐỐI không đọc được** khu cost đó (guard + store riêng + không
   đưa vào LLM facts). Giữ guard "câu hỏi nhạy cảm → từ chối".
 - Không đọc file chung; chỉ gọi API đã phân quyền. Mỗi lần kéo/tính: preview → CEO duyệt → commit + audit.
 
@@ -74,7 +74,7 @@ Tương lai App Report New lấy **vài cột chi phí** để tính chi phí/do
 - Không tính trên live chưa chốt — dùng **snapshot theo kỳ** để truy vết.
 
 ## 8. KỸ THUẬT & TRIỂN KHAI
-- Stack như App Report New: **Node/Express + React/Vite**, quyền ở backend, AI grounded.
+- Stack như App Report: **Node/Express + React/Vite**, quyền ở backend, AI grounded.
 - **Repo riêng + phiên riêng** (build sạch, CEO-only). Port riêng; domain `data.donapharm.asia`; PM2 riêng.
 - **Chạy song song** app Data Hub cũ; chuyển từng điểm; **SSOT = Data Hub mới**; các app khác chuyển đọc-file →
   API dần (lộ trình P0–P5 đã khảo sát). **Không big-bang.**
@@ -100,12 +100,12 @@ Thiết kế cost engine (P4–P5) phải **chừa sẵn** để gắn vào là 
 ## 9. LỘ TRÌNH (giao bot)
 - **P0** Chốt SSOT = Data Hub mới; dựng khung app + auth CEO (password/OTP) + tầng A master data.
 - **P1** Import + Smart validate + preview/commit + audit cho master data; phát **public API** (bắt đầu customers/units).
-- **P2** Chuyển Report cũ (+ Report New khi cần) từ **đọc-file → gọi API Hub**; test song song, rollback được.
+- **P2** Chuyển Report cũ (+ App Report khi cần) từ **đọc-file → gọi API Hub**; test song song, rollback được.
 - **P3** CEO Vault (cost) + OTP + audit + export whitelist (di trú cp-total hiện có).
 - **P4** Cost engine: revenue-sync ← Report/Sale → cost% per NV/đơn vị → CEO-only view.
-- **P5** Boundary API CEO-auth cho App Report New (khu cost khóa riêng) — theo mục 4.
+- **P5** Boundary API CEO-auth cho App Report (khu cost khóa riêng) — theo mục 4.
 - Mỗi P: `preview→duyệt→commit`, audit, không đụng số thật khi build/test (dùng sample giả).
 
 ## 10. NGHIỆM THU
 Mỗi phase: build chạy, test bằng **dữ liệu giả**, không số thật/PII/secret lên git; auth CEO chặn đúng; public
-API không lộ cost; NLQ/report App Report New không chạm được cost. Ghi CHANGELOG repo Data Hub. Báo Claude review.
+API không lộ cost; NLQ/report App Report không chạm được cost. Ghi CHANGELOG repo Data Hub. Báo Claude review.

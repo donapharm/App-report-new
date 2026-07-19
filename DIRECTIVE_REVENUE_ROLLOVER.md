@@ -14,9 +14,9 @@ Hạ tầng cuộn tháng ĐÃ tồn tại, KHÔNG viết mới:
 → Về lý thuyết mọi tầng đã động. Việc còn lại: **CHỨNG MINH nó thật sự cuộn qua ranh giới tháng + gia cố**.
 
 ## 1. VIỆC BOT LÀM
-**A. Xác nhận scheduler đang bật + armed (process reportnew đang chạy):**
+**A. Xác nhận scheduler đang bật + armed (process app-report đang chạy):**
 - Kiểm log có `[revenue-refresh] scheduler armed` + `enabled()`=true + in `config()`. Nếu đang tắt → bật
-  (env bật refresh) + `pm2 restart reportnew --update-env`. Báo lại config (cửa sổ giờ, tần suất).
+  (env bật refresh) + `pm2 restart app-report --update-env`. Báo lại config (cửa sổ giờ, tần suất).
 
 **B. TEST cuộn tháng (bắt buộc, dán kết quả):**
 - Giả lập kỳ mới, chạy tay:

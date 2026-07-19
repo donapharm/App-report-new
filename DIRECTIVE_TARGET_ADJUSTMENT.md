@@ -1,6 +1,6 @@
 # DIRECTIVE — Điều chỉnh target theo lý do bất khả kháng (đứt hàng / công nợ)
 
-> Claude Code giao (CEO 2026-07-03). Thuộc hệ Target (GĐ2 — lớp đánh giá công bằng). Bot triển khai; Claude review. Backend quyết quyền; NV chỉ thấy phần mình. Không đụng app cũ 3860.
+> Claude Code giao (CEO 2026-07-03). Thuộc hệ Target (GĐ2 — lớp đánh giá công bằng). Bot triển khai; Claude review. Backend quyết quyền; NV chỉ thấy phần mình. Không đụng nguồn đã cách ly 3860.
 
 ## Mục tiêu
 NV không đạt target do **yếu tố ngoài tầm** (đứt hàng, vướng công nợ) → cho **ghi nhận lý do + số tiền ảnh hưởng**, và **hạ target tháng đó tương ứng** để đánh giá công bằng.

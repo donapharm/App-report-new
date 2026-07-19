@@ -1,6 +1,6 @@
-# App Report New — Smart Report App (Donapharm)
+# App Report — Smart Report App (Donapharm)
 
-Bản build lại **gọn** của App Report cũ. Chỉ giữ 6 nội dung cốt lõi và làm chúng "thông minh":
+Bản build lại **gọn** của nguồn App Report đã cách ly. Chỉ giữ 6 nội dung cốt lõi và làm chúng "thông minh":
 
 1. **Tổng quan (Overview)** — KPI + **Cảnh báo chủ động** (việc CEO cần chú ý hôm nay).
 2. **Doanh thu (Revenue)** — drill-down: Tổng → Nhân viên → Đơn vị → Sản phẩm.
@@ -38,7 +38,7 @@ Sau đó mở trình duyệt: **http://localhost:5173**
 ## Kiến trúc (để dev của Anh nắm nhanh)
 
 ```
-report-new/
+App-report/
   server/        # Backend API (Express) — QUYẾT ĐỊNH QUYỀN Ở ĐÂY
     src/
       auth.js        # session + login (điểm CẮM SSO/OTP thật)
@@ -51,7 +51,7 @@ report-new/
     src/pages/       # Overview, Revenue, TenderQuota, Target, AiChat
 ```
 
-**Nguyên tắc bảo mật (khác app cũ):**
+**Nguyên tắc bảo mật (khác nguồn đã cách ly):**
 - KHÔNG hardcode danh sách nhân viên/PII trong bundle frontend.
 - Backend quyết định quyền; frontend chỉ hiển thị dữ liệu được trả.
 - Mọi export đi qua backend + kiểm quyền.

@@ -1,6 +1,6 @@
 # DIRECTIVE — Tự động cập nhật doanh thu mỗi 1 giờ (MISA + WEB) + nhãn giờ + nút Làm mới
 
-> Claude Code giao (CEO chốt nhịp B = mỗi 1 giờ, 2026-07-03). Bot triển khai; Claude review. Không đụng app cũ 3860; App Sale/MISA chỉ ĐỌC (trừ bước chụp snapshot MISA vốn đã có ở hệ Đặt hàng).
+> Claude Code giao (CEO chốt nhịp B = mỗi 1 giờ, 2026-07-03). Bot triển khai; Claude review. Không đụng nguồn đã cách ly 3860; App Sale/MISA chỉ ĐỌC (trừ bước chụp snapshot MISA vốn đã có ở hệ Đặt hàng).
 
 ## Mục tiêu
 Số doanh thu kỳ đang chạy (T07…) **tự cập nhật mỗi 1 giờ**, không cần chạy tay. Mọi user (CEO + NV) mở app là thấy số mới nhất theo scope của mình.

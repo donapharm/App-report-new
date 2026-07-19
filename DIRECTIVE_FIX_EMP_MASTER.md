@@ -1,6 +1,6 @@
 # DIRECTIVE — Sửa danh bạ NV + truy mã rác "#N/A" / "83"
 
-> Claude Code giao (CEO phát hiện qua ảnh 2026-07-02). Bot triển khai TRÊN SERVER (danh bạ thật + data). Không đụng app cũ 3860. Giữ tổng doanh thu đã khớp (T06 = 28.403.136.096) — không làm lệch số.
+> Claude Code giao (CEO phát hiện qua ảnh 2026-07-02). Bot triển khai TRÊN SERVER (danh bạ thật + data). Không đụng nguồn đã cách ly 3860. Giữ tổng doanh thu đã khớp (T06 = 28.403.136.096) — không làm lệch số.
 
 ## ⛔ QUY TẮC BẢO MẬT — KHÓA GỬI RA cho 4 CTV ngoài (CEO chốt 2026-07-02, BẮT BUỘC)
 **Tuyệt đối KHÔNG tự động gửi RA** (email / Zalo / Telegram digest / bất kỳ thông báo chủ động nào) về **đạt/thiếu target** hay **nhắc thông tin liên quan** cho 4 CTV: **`DN021`, `DN022`, `DN023`, `VP004`**.

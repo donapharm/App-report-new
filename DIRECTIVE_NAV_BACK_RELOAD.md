@@ -1,6 +1,6 @@
 # DIRECTIVE — Nút Quay lại + Breadcrumb + Tải lại (điều hướng, áp TOÀN APP)
 
-> Claude Code giao (CEO 2026-07-03). Bot triển khai; Claude review. Không đụng app cũ 3860.
+> Claude Code giao (CEO 2026-07-03). Bot triển khai; Claude review. Không đụng nguồn đã cách ly 3860.
 
 ## Vấn đề
 Drill sâu (Doanh thu → NV DN006 → đơn vị/SP của NV đó) **không có đường lùi lại** trang/cấp đang mở; cũng **không có nút tải lại**. Cần cơ chế điều hướng nhất quán MỌI trang.

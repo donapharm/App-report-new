@@ -32,7 +32,7 @@ Kênh: bot @Reportdonapharm_bot gửi tới `telegram_id` đã map (chỉ NV đa
 
 ### Kỹ thuật
 - Thêm vào worker `telegram-bot.js` (đang chạy) một scheduler, hoặc worker riêng `digest-worker.js`. Dùng cron nhẹ (tự tính giờ, không cần lib nặng).
-- Backend hàm dựng nội dung tin theo scope (tái dùng smart/analytics). Không đụng app cũ.
+- Backend hàm dựng nội dung tin theo scope (tái dùng smart/analytics). Không đụng nguồn đã cách ly.
 
 ## PHẦN B2 — DIGEST V2 (chi tiết có lớp) — Claude duyệt 2026-07-02
 > Nâng bản tin 1 dòng hiện tại thành **báo cáo nhanh nhưng có top 3–5 từng mục**.

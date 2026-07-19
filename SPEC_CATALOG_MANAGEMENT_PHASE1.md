@@ -2,7 +2,7 @@
 
 ## Phạm vi
 
-- Chỉ triển khai trên **App Report New** (`reportnew`), không sửa App Report cũ.
+- Chỉ triển khai trên **App Report** (`app-report`), không sửa nguồn App Report đã cách ly.
 - Tạo menu/trang độc lập **Danh mục quản lý**, không gộp vào Target.
 - Chưa cutover quyền production: `/catalog/sales`, `/assignments/mine` và cơ chế lọc báo cáo hiện tại vẫn hoạt động như trước.
 - **Data Hub là nguồn chuẩn duy nhất.** Không dùng 1.808 assignment local cũ làm danh mục hiển thị. Khi Data Hub chưa cấu hình/lỗi, chỉ được dùng last-known-good đã xác thực ở chế độ read-only; chưa có LKG thì trả `503`.
@@ -32,7 +32,7 @@ Payload S2S sau khi App Report chuyển đổi:
 
 Mã nhân viên cũ không được gửi trong payload; Data Hub tự xác định từ timeline nội bộ.
 
-Data Hub cần trả HTTP 2xx + JSON khi tiếp nhận; lỗi phải trả `{ "error": "..." }`. App Report New không tự retry POST để tránh tạo lệnh trùng.
+Data Hub cần trả HTTP 2xx + JSON khi tiếp nhận; lỗi phải trả `{ "error": "..." }`. App Report không tự retry POST để tránh tạo lệnh trùng.
 
 ## Biến môi trường
 
@@ -55,7 +55,7 @@ Chỉ coi là configured khi có cả URL và key.
 
 File cache là runtime state, giữ tối đa 18 snapshot theo `YYYY-MM`, chỉ xuất hiện sau lần sync Data Hub thành công và không dùng nhầm cache của kỳ khác; không cần tạo sẵn để deploy Đợt 1.
 
-## API App Report New
+## API App Report
 
 - `GET /api/catalog-management?period=YYYY-MM`
   - CEO/admin: timeline cặp đơn vị–QLNB, `catalog_total`, history và metadata. Full catalog chỉ giữ server-side trong combined snapshot/LKG để giảm payload trình duyệt.

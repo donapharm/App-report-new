@@ -1,6 +1,6 @@
 # DIRECTIVE — Bot Telegram hiểu câu hỏi tự nhiên (nối "Hỏi nhanh" AI)
 
-> Claude Code giao (CEO yêu cầu 2026-07-03). Bot triển khai; Claude review. Không đụng app cũ 3860.
+> Claude Code giao (CEO yêu cầu 2026-07-03). Bot triển khai; Claude review. Không đụng nguồn đã cách ly 3860.
 
 ## Mục tiêu
 Trong con bot login (`@DonaLoginReport_bot`), khi user gõ **câu tự nhiên** (VD "doanh thu tháng 6?", "top sản phẩm", "tôi đạt bao nhiêu % target?") → bot **trả lời bằng số thật** thay vì câu "gửi mã".

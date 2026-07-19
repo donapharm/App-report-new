@@ -1,6 +1,6 @@
 # DIRECTIVE — Target admin (nhập file + tự động + AI + tay) + sửa danh sách NV + tách telesale
 
-> Claude Code giao (CEO phản ánh Target sai/thiếu 2026-07-03). **Ưu tiên cao** — CEO đã yêu cầu từ trước nhưng chưa triển khai. Bot làm; Claude review. Theo `SPEC_TARGET_MULTISOURCE.md`. Không đụng app cũ 3860.
+> Claude Code giao (CEO phản ánh Target sai/thiếu 2026-07-03). **Ưu tiên cao** — CEO đã yêu cầu từ trước nhưng chưa triển khai. Bot làm; Claude review. Theo `SPEC_TARGET_MULTISOURCE.md`. Không đụng nguồn đã cách ly 3860.
 
 ## 0-BIS) ‼ DANH SÁCH NV CÓ TARGET — CEO CHỐT CHÍNH THỨC 2026-07-03 (dùng làm CHUẨN)
 Ô Target đang **lọt cả NV văn phòng** (heuristic role/status sai). **Bỏ đoán — dùng ĐÚNG allowlist 21 mã dưới đây** làm roster target (cờ `has_target`/danh sách cấu hình, KHÔNG suy từ role):

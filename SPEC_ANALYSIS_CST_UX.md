@@ -1,12 +1,12 @@
 # SPEC — Parity Phân tích + CST dễ hiểu cho NV + Lọc theo từng mã đơn vị
 
-> Claude Code chốt (CEO yêu cầu 2026-07-02). Bot triển khai; Claude review. Mọi số qua backend + scope; không bịa số; không đụng app cũ 3860.
+> Claude Code chốt (CEO yêu cầu 2026-07-02). Bot triển khai; Claude review. Mọi số qua backend + scope; không bịa số; không đụng nguồn đã cách ly 3860.
 
-## A) TAB PHÂN TÍCH — rà parity đầy đủ với app cũ
+## A) TAB PHÂN TÍCH — rà parity đầy đủ với nguồn đã cách ly
 Hiện `web/src/pages/Analysis.jsx` đã có: so kỳ trước (KPI delta), tăng/giảm ĐV + SP, 3 donut (tuyến/nhà thầu/gói), top 10 ĐV/SP, PeriodFilter, bộ lọc đầy đủ.
 **Bot làm (chỉ bot đọc được source cũ):**
-1. Trích **từng KPI / block / nút** của tab `pt` app cũ từ `report-main-v23.js` + `report-extra.js` (+ `report.html`).
-2. Lập **bảng đối chiếu**: mục app cũ ↔ app mới ↔ trạng thái (đã có / thiếu / khác).
+1. Trích **từng KPI / block / nút** của tab `pt` nguồn đã cách ly từ `report-main-v23.js` + `report-extra.js` (+ `report.html`).
+2. Lập **bảng đối chiếu**: mục nguồn đã cách ly ↔ App Report ↔ trạng thái (đã có / thiếu / khác).
 3. Bù các mục **thiếu** (theo ma trận, dự kiến): **"SP cần đẩy mạnh"**, **"SP sắp hết CST"**, **"phân tích chuyên sâu"**, **PDF**. Xác nhận danh sách đầy đủ từ source, không chỉ dựa ma trận.
 4. Mỗi block mới: số do `analytics.js`/`smart.js` tính, tôn trọng period + scope; NV sale không lộ dữ liệu người khác.
 → Xuất `artifacts/analysis_parity_<date>.md` (bảng đối chiếu) trước khi code, Claude review.

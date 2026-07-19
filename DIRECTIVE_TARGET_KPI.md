@@ -1,6 +1,6 @@
 # DIRECTIVE — Target: cắm chốt tại App Report (bỏ Lumos từ 07) + KPI dễ hiểu + ô Tổng
 
-> Claude Code giao (CEO 2026-07-03). Bot triển khai; Claude review. Không đụng app cũ 3860.
+> Claude Code giao (CEO 2026-07-03). Bot triển khai; Claude review. Không đụng nguồn đã cách ly 3860.
 
 ## A) TỪ 07/2026: TARGET CHỐT TẠI APP REPORT — KHÔNG đồng bộ Lumos/app khác (CEO chốt)
 - **Kỳ ≥ 07.2026:** target CHỈ từ nguồn tạo trong App Report: `manual > upload > ai`. **BỎ `legacy`(Lumos) và `appsale`** khỏi resolver cho kỳ ≥ 07.

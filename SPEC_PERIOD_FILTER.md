@@ -1,7 +1,7 @@
 # SPEC — Bộ lọc KỲ (tháng/quý/khoảng) + cân đối dashboard
 
 > Claude Code chốt từ phản hồi CEO 2026-07-02. Bot triển khai; Claude review.
-> Không đụng app cũ; mọi query qua scopeOf.
+> Không đụng nguồn đã cách ly; mọi query qua scopeOf.
 
 ## 1. Bộ chọn kỳ dùng chung (thay dãy chip tháng phẳng)
 Thanh chọn kỳ trên cùng, dùng cho: Tổng quan, Doanh thu, DT đầy đủ, Sản phẩm, Phân tích, Target.

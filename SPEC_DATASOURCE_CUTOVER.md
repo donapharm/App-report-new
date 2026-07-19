@@ -108,7 +108,7 @@ Bot ghi "Model B" nhưng mô tả ("chưa thay được Lumos lịch sử; khôn
 > Sau bước 1 (bot): khớp **99,6%** (2731/2741) với rule "gói từ QĐ trong mã QLNB trước, fallback goi_code". **Duyệt rule này** (goi_code mù chỉ 82,1% → KHÔNG dùng trực tiếp).
 > Nguyên tắc chung: **crosswalk là BẢNG ÁNH XẠ TƯỜNG MINH** (`crosswalk_units.json`, `crosswalk_products.json`, `crosswalk_bidpkg.json`: AppSale key ↔ Lumos key), KHÔNG dựa chuẩn hóa chuỗi 3-số lúc chạy (chính thứ gây bug T06 + đụng `107`). Chuẩn hóa chuỗi chỉ dùng để DỰNG bảng, không dùng làm khóa runtime.
 
-1. **`001.BVĐK Đồng Nai` + `...KHU C` → GỘP CHUNG vào `001` (CEO CHỐT 2026-07-02: cùng 1 bệnh viện, khác khu, CST thầu TRỪ CHUNG).** Xử lý 226 "trùng": **CỘNG** `bid_qty_initial` + `sold_qty` của 2 dòng thành 1 baseline key (KHÔNG "bỏ qua vì trùng"), tính lại `remain_qty`/`remain_pct`/`remain_amount` trên số gộp. Kiểm 3–5 mẫu số gộp khớp app cũ (nghiệm thu). Adapter App Sale cũng cộng chung offering của cả 2 khu vào key `001`.
+1. **`001.BVĐK Đồng Nai` + `...KHU C` → GỘP CHUNG vào `001` (CEO CHỐT 2026-07-02: cùng 1 bệnh viện, khác khu, CST thầu TRỪ CHUNG).** Xử lý 226 "trùng": **CỘNG** `bid_qty_initial` + `sold_qty` của 2 dòng thành 1 baseline key (KHÔNG "bỏ qua vì trùng"), tính lại `remain_qty`/`remain_pct`/`remain_amount` trên số gộp. Kiểm 3–5 mẫu số gộp khớp nguồn đã cách ly (nghiệm thu). Adapter App Sale cũng cộng chung offering của cả 2 khu vào key `001`.
 2. **Prefix `107` đụng 2 đơn vị KHÁC nhau → KHÔNG map bằng 3 số.** Trong bảng ánh xạ đơn vị tường minh, tách 2 đơn vị này về đúng 2 Lumos key riêng (xử tay, ghi rõ trong `crosswalk_units.json`). Rà thêm mọi prefix khác có nguy cơ đụng tương tự.
 3. **10 key Lumos-only:** bot **phân loại theo hiệu lực** (`hd_den_ngay`/nguồn): (a) **hết hạn** → giữ baseline tĩnh, không cần App Sale trừ, OK; (b) **còn hiệu lực** → phải map hoặc đánh dấu GAP + liệt kê cho CEO (nếu không map, các gói này sẽ "đóng băng" không trừ được). Không bỏ lặng.
 4. **44 key App-only:** đây là **gói mới App Sale quản lý** (đúng mô hình App Sale sở hữu allocation). Đưa vào làm **dòng CST mới** NẾU có `cst_ban_dau_import`/allocation hợp lệ; thiếu allocation → giữ lại, không tạo dòng rỗng.
@@ -135,4 +135,4 @@ Bot ghi "Model B" nhưng mô tả ("chưa thay được Lumos lịch sử; khôn
 3. Viết adapter App Sale (env-gated, giống adapter ORDS) — **chưa cắt Lumos**, chạy SONG SONG để đối chiếu.
 4. Chốt T06 Lumos final → đóng băng doanh thu 01–06 + snapshot CST baseline 01/07.
 5. Đối chiếu delta=0 → **cắt Lumos**, bật App Sale làm nguồn chính từ 07/2026.
-6. Giữ Tab Đối chiếu song song vài kỳ. Không đụng app cũ (dona-report 3860) & App Sale không bị ghi (chỉ đọc).
+6. Giữ Tab Đối chiếu song song vài kỳ. Không đụng nguồn đã cách ly (dona-report 3860) & App Sale không bị ghi (chỉ đọc).

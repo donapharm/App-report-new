@@ -1,6 +1,6 @@
 # DIRECTIVE — Dựng lại bản hiển thị MOBILE (responsive) cho toàn app
 
-> Claude Code giao (CEO phản ánh qua ảnh mobile 2026-07-03, tài khoản NV sale). Bot triển khai; Claude review. Ưu tiên cao — NV đi thị trường dùng điện thoại là chính. Không đụng app cũ 3860.
+> Claude Code giao (CEO phản ánh qua ảnh mobile 2026-07-03, tài khoản NV sale). Bot triển khai; Claude review. Ưu tiên cao — NV đi thị trường dùng điện thoại là chính. Không đụng nguồn đã cách ly 3860.
 
 ## Lỗi quan sát trên ảnh (≤414px)
 1. **Giá trị bên phải bị CẮT/tràn mép** (VD "11 tr", "10 tr" ở Phân tích cụt mất) — cột số không đủ chỗ, bị đẩy ra ngoài viewport.

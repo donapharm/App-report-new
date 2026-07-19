@@ -57,7 +57,7 @@ Tất cả trả ĐÚNG như hỏi bằng câu chuẩn:
 
 ## 4. Kỹ thuật
 - **ENV:** `ANTHROPIC_API_KEY=sk-ant-...` (bắt buộc bật) · `LLM_MODEL` mặc định `claude-haiku-4-5-20251001`
-  (rẻ, nhanh — đủ cho trích ý; nâng `claude-sonnet-5` nếu cần chính xác hơn). Sau khi thêm key → `pm2 restart reportnew-tgbot`.
+  (rẻ, nhanh — đủ cho trích ý; nâng `claude-sonnet-5` nếu cần chính xác hơn). Sau khi thêm key → `pm2 restart app-report-tgbot`.
 - **Chi phí:** chỉ gửi câu hỏi ngắn → token nhỏ, đội ~17 người hỏi lẻ → phí không đáng kể.
 - **An toàn:** `interpretQuery` phải **parse JSON chắc** (lỗi/format sai → fallback Mức 1, KHÔNG vỡ). Timeout ngắn.
 - **Không lộ kỹ thuật** trong câu trả lời NV (giữ như Mức 1).

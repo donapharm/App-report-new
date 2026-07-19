@@ -1,4 +1,4 @@
-# Đưa App Report New lên tên miền report.donapharm.asia
+# Đưa App Report lên tên miền report.donapharm.asia
 
 App Report cần lấy dữ liệu + đăng nhập từ **mạng nội bộ công ty** (ORDS, SSO/OTP).
 Cách gọn nhất và an toàn nhất: **chạy 1 server Node duy nhất** (nó phục vụ CẢ giao diện lẫn API)
@@ -24,14 +24,14 @@ Không mở port, không phơi server ra ngoài.
 
 ## Bước 1 — Chạy app trên server
 ```bash
-git clone https://github.com/donapharm/App-report-new.git
-cd App-report-new
+git clone <repository-url> App-report
+cd App-report
 npm run setup          # cài + tạo dữ liệu mẫu
 npm run build          # build giao diện vào web/dist
 cp .env.example .env   # rồi sửa .env (xem phần "nối dữ liệu thật")
 npm start              # chạy http://localhost:3873
 # Nên chạy nền bằng pm2 để tự bật lại:
-#   npm i -g pm2 && pm2 start server/src/index.js --name reportnew && pm2 save
+#   npm i -g pm2 && pm2 start server/src/index.js --name app-report && pm2 save
 ```
 
 ## Bước 2 — Cloudflare Tunnel trỏ tên miền
@@ -41,12 +41,12 @@ curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloud
 chmod +x cloudflared && sudo mv cloudflared /usr/local/bin/
 
 cloudflared tunnel login
-cloudflared tunnel create reportnew
-cloudflared tunnel route dns reportnew report.donapharm.asia
+cloudflared tunnel create app-report
+cloudflared tunnel route dns app-report report.donapharm.asia
 ```
 File `~/.cloudflared/config.yml`:
 ```yaml
-tunnel: reportnew
+tunnel: app-report
 credentials-file: /root/.cloudflared/<id>.json
 ingress:
   - hostname: report.donapharm.asia
@@ -55,7 +55,7 @@ ingress:
 ```
 Chạy nền:
 ```bash
-cloudflared tunnel run reportnew      # chạy thử
+cloudflared tunnel run app-report      # chạy thử
 sudo cloudflared service install      # cài chạy nền tự động
 ```
 → Mở **https://report.donapharm.asia** là thấy app.

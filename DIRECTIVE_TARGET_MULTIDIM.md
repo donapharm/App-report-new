@@ -1,6 +1,6 @@
 # DIRECTIVE — GĐ2b: Target chi tiết theo CHIỀU + %đạt theo chiều
 
-> Claude Code chốt thiết kế (CEO 2026-07-03: triển khai GĐ2). Bot làm SAU GĐ1 + GĐ2a; Claude review. Dùng field `scope` đã có. Backend quyết quyền; NV chỉ thấy phần mình. Không đụng app cũ 3860.
+> Claude Code chốt thiết kế (CEO 2026-07-03: triển khai GĐ2). Bot làm SAU GĐ1 + GĐ2a; Claude review. Dùng field `scope` đã có. Backend quyết quyền; NV chỉ thấy phần mình. Không đụng nguồn đã cách ly 3860.
 
 ## Ý tưởng cốt lõi: các chiều là "KÍNH LỌC CHỒNG NHAU", không phải chia ô
 - 1 giao dịch (VD DN006 bán H.A* ở BV 027 tuyến CL) đồng thời tính vào: target **tổng** + target **nhóm H.A*** + target **đơn vị 027** + target **tuyến CL**.

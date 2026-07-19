@@ -1,4 +1,4 @@
-# HANDOFF — App Report New
+# HANDOFF — App Report
 
 Cập nhật: 2026-07-01. Người build: Claude (phiên với CEO). Người tiếp nhận: bot report / phiên Claude kế tiếp.
 

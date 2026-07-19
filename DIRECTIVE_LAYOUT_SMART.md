@@ -1,6 +1,6 @@
 # DIRECTIVE — Bố cục "smart app": nội dung chính nổi bật, công cụ phụ gọn (toàn app)
 
-> Claude Code giao (CEO 2026-07-03: Quản target công cụ phụ chiếm >1/2 màn hình). Bot triển khai; Claude review. Không đụng app cũ 3860.
+> Claude Code giao (CEO 2026-07-03: Quản target công cụ phụ chiếm >1/2 màn hình). Bot triển khai; Claude review. Không đụng nguồn đã cách ly 3860.
 
 ## NGUYÊN TẮC (áp TOÀN APP)
 1. **Nội dung CHÍNH chiếm sân khấu** (~70–80% màn hình), hiện NGAY khi mở tab.

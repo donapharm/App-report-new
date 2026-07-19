@@ -3,7 +3,7 @@
 > Spec do Claude Code (kiến trúc/review) chốt từ đề xuất của bot, CEO duyệt 2026-07-02.
 > Bot server là người TRIỂN KHAI. Làm xong push + ghi CHANGELOG để Claude review.
 > Nguyên tắc không đổi: mọi phiên đều qua `issueToken` + `scopeOf` (NV chỉ thấy phần mình);
-> không đụng app cũ `dona-report` (3860); không commit secret.
+> không đụng nguồn đã cách ly `dona-report` (3860); không commit secret.
 
 ---
 
@@ -58,7 +58,7 @@ POST /api/auth/telegram/confirm  (chỉ bot Telegram gọi, nội bộ server)
 ## 5. Nghiệm thu (bot tự test trước khi báo)
 1. Telegram: NV đã map → đăng nhập được; bot có nút ✅; mã hết hạn sau 120s; gửi mã của người khác cho bot mà không bấm ✅ → không vào được; telegram lạ → báo "chưa được cấp quyền".
 2. Zalo OTP: vẫn chạy như trước; mã sai không vào (data.ok).
-3. Session: refresh/tắt mở lại trong 60' không hỏi OTP; sau 60' hỏi lại; **restart PM2 reportnew phiên còn sống** (session bền).
+3. Session: refresh/tắt mở lại trong 60' không hỏi OTP; sau 60' hỏi lại; **restart PM2 app-report phiên còn sống** (session bền).
 4. Thiết bị: đăng nhập thiết bị thứ 4 → thiết bị cũ nhất bị đá; admin xem/xoá được danh sách.
 5. Phân quyền: CEO thấy toàn bộ; DN009 chỉ thấy phần mình (re-test sau mọi thay đổi auth).
 

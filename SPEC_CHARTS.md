@@ -2,7 +2,7 @@
 
 > Claude Code chốt (CEO duyệt 2026-07-02). Bot triển khai; Claude review.
 > Thư viện: **Recharts** (hợp React/Vite). Mọi chart THEO bộ lọc kỳ + scope quyền.
-> Không đụng app cũ. Mobile: ResponsiveContainer, xếp 1 cột; PC theo mẫu Phân tích.
+> Không đụng nguồn đã cách ly. Mobile: ResponsiveContainer, xếp 1 cột; PC theo mẫu Phân tích.
 
 ## Nguyên tắc chung
 - Màu theo thương hiệu: xanh `--brand`, cam `--accent`, cảnh báo đỏ/vàng. Nhất quán palette.

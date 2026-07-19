@@ -1,6 +1,6 @@
-# CLAUDE.md — App Report New (Donapharm)
+# CLAUDE.md — App Report (Donapharm)
 
-Đọc file này đầu tiên khi tiếp nhận dự án. Đây là bản **build lại gọn** của App Report cũ (mega `server.js` gom 10 nghiệp vụ) thành **smart app** chỉ giữ 6 nội dung cốt lõi.
+Đọc file này đầu tiên khi tiếp nhận dự án. Đây là bản **build lại gọn** của nguồn App Report đã cách ly (mega `server.js` gom 10 nghiệp vụ) thành **smart app** chỉ giữ 6 nội dung cốt lõi.
 
 ## Mô hình phối hợp (CEO chốt 2026-07-02)
 - **Bot server = người TRIỂN KHAI chính**: viết code app trên server (test được dữ liệu/OTP/CST/ORDS thật), build, commit/push. Là người "cầm code chính" để tránh 2 bên đụng repo.
