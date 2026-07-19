@@ -56,6 +56,10 @@ test('danh mục quản lý suy ra tỉnh từ đơn vị và giữ tỉnh trong
 test('từ chối snapshot Data Hub thiếu C4 để không ghi đè cache mã nhà thầu tốt', () => {
   assert.equal(catalogManagement.assertContractorCoverage([{ c4: '01.DONA' }, { c4: '02.AFP' }]), true);
   assert.throws(
+    () => catalogManagement.assertContractorCoverage([]),
+    (error) => error.code === 'CATALOG_SOURCE_EMPTY',
+  );
+  assert.throws(
     () => catalogManagement.assertContractorCoverage([{ c4: '01.DONA' }, { c5: 'QL02' }]),
     (error) => error.code === 'CATALOG_CONTRACTOR_C4_MISSING' && /1\/2/.test(error.message),
   );
@@ -70,6 +74,89 @@ test('CST chỉ ghép khi đúng chính xác đơn vị + QLNB, không dùng ti�
   assert.deepEqual({ initial: enriched[0].cst_initial, remaining: enriched[0].cst_remaining }, { initial: 1000, remaining: 250 });
   assert.equal(enriched[1].cst_initial, null);
   assert.equal(enriched[1].cst_remaining, null);
+});
+
+test('nguồn C30 thưa field không được ghi đè CST baseline đầy đủ', () => {
+  const rows = [catalogManagement.normalizeRow({ scope: 'unit_qlnb', code: `DV01\u001fQL01`, unit_code: 'DV01', qlnb_code: 'QL01', emp_code: 'DN016', effective_from: '2026-07' })];
+  const baseline = { unit_code: 'DV01', iit_code: 'QL01', bid_qty_initial: 1000, remain_qty: 250, source: 'cst-baseline' };
+  const c30Only = { unitCode: 'DV01', productCode: 'QL01', slTrungThau: null, slConLai: null, source: 'c30-only' };
+  const enriched = catalogManagement.buildCatalogRows(rows, [baseline, c30Only]);
+  assert.deepEqual(
+    { initial: enriched[0].cst_initial, remaining: enriched[0].cst_remaining, source: enriched[0].cst_source },
+    { initial: 1000, remaining: 250, source: 'cst-baseline' },
+  );
+});
+
+test('CST còn lại bằng 0 tường minh là giá trị hợp lệ, không bị coi là thiếu', () => {
+  const rows = [catalogManagement.normalizeRow({ scope: 'unit_qlnb', code: `DV01\u001fQL01`, unit_code: 'DV01', qlnb_code: 'QL01', emp_code: 'DN016', effective_from: '2026-07' })];
+  const enriched = catalogManagement.buildCatalogRows(rows, [{ unit_code: 'DV01', iit_code: 'QL01', bid_qty_initial: 1000, remain_qty: 0 }]);
+  assert.equal(enriched[0].cst_initial, 1000);
+  assert.equal(enriched[0].cst_remaining, 0);
+});
+
+test('fail-closed nếu projection làm mất bất kỳ cột danh mục trọng yếu nào', () => {
+  const before = [{ id: 'a1', contractor_code: 'NT01', unit_code: 'DV01', qlnb_code: 'QL01', product_name: 'Thuốc A', active_ingredient: 'HC A', strength: '500mg', uom: 'Viên', bid_price: 1000 }];
+  for (const field of catalogManagement.CRITICAL_CATALOG_FIELDS) {
+    const after = [{ ...before[0], [field]: null }];
+    assert.throws(
+      () => catalogManagement.assertCriticalProjectionCoverage(before, after),
+      (error) => error.code === 'CATALOG_CRITICAL_FIELD_COVERAGE_LOSS' && error.details.field === field,
+      field,
+    );
+  }
+});
+
+test('fail-closed nếu serializer làm sai giá trị CST so với nguồn chuẩn', () => {
+  assert.throws(
+    () => catalogManagement.assertCstProjectionCoverage(
+      [{ unit_code: 'DV01', qlnb_code: 'QL01', cst_initial: null, cst_remaining: 0 }],
+      [{ unit_code: 'DV01', iit_code: 'QL01', bid_qty_initial: 1000, remain_qty: 250 }],
+    ),
+    (error) => error.code === 'CATALOG_CRITICAL_FIELD_COVERAGE_LOSS' && error.details.field === 'cst_initial',
+  );
+  assert.throws(
+    () => catalogManagement.assertCstProjectionCoverage(
+      [{ unit_code: 'DV01', qlnb_code: 'QL01', cst_initial: 1000, cst_remaining: null }],
+      [{ unit_code: 'DV01', iit_code: 'QL01', bid_qty_initial: 1000, remain_qty: 0 }],
+    ),
+    (error) => error.code === 'CATALOG_CRITICAL_FIELD_COVERAGE_LOSS' && error.details.field === 'cst_remaining',
+  );
+});
+
+test('fail-closed nếu catalog nguồn rỗng, thiếu field trọng yếu hoặc thiếu cặp phân công', () => {
+  const catalogRow = { c4: 'NT01', c5: 'QL01', c7: 'DV01', c15: 'HC A', c16: 'Thuốc A', c17: '500mg', c25: 'Viên', c31: 1000 };
+  const assignment = catalogManagement.normalizeRow({ unit_code: 'DV01', qlnb_code: 'QL01', emp_code: 'DN016', effective_from: '2026-07' });
+  assert.doesNotThrow(() => catalogManagement.assertCatalogSourceContract([catalogRow], [assignment]));
+  for (const field of catalogManagement.CRITICAL_CATALOG_SOURCE_FIELDS) {
+    assert.throws(
+      () => catalogManagement.assertCatalogSourceContract([{ ...catalogRow, [field]: null }], [assignment]),
+      (error) => error.code === (field === 'c4' ? 'CATALOG_CONTRACTOR_C4_MISSING' : 'CATALOG_CRITICAL_SOURCE_MISSING'),
+      field,
+    );
+  }
+  assert.throws(
+    () => catalogManagement.assertCatalogSourceContract([catalogRow], []),
+    (error) => error.code === 'CATALOG_ASSIGNMENTS_EMPTY',
+  );
+  for (const field of ['unit_code', 'qlnb_code']) {
+    assert.throws(
+      () => catalogManagement.assertCatalogSourceContract([catalogRow], [{ ...assignment, type: 'unit_qlnb', [field]: null }]),
+      (error) => error.code === 'CATALOG_ASSIGNMENT_KEY_MISSING',
+      field,
+    );
+  }
+  assert.throws(
+    () => catalogManagement.assertCatalogSourceContract([catalogRow], [{ ...assignment, qlnb_code: 'QL02' }]),
+    (error) => error.code === 'CATALOG_PAIR_COVERAGE_MISSING',
+  );
+});
+
+test('nguồn CST sai định dạng bị chặn thay vì âm thầm biến thành thiếu', () => {
+  const rows = [catalogManagement.normalizeRow({ unit_code: 'DV01', qlnb_code: 'QL01', emp_code: 'DN016', effective_from: '2026-07' })];
+  assert.throws(
+    () => catalogManagement.buildCatalogRows(rows, [{ unit_code: 'DV01', iit_code: 'QL01', bid_qty_initial: 'không-phải-số', remain_qty: 0 }]),
+    (error) => error.code === 'CATALOG_CST_INVALID_NUMBER',
+  );
 });
 
 test('privacy assertion chặn field/phrase cấm nếu serializer bị sửa sai', () => {
@@ -94,7 +181,10 @@ test('C32 và C47 bị khóa cứng kể cả payload reset/restore, còn c41 c�
     (error) => error.code === 'CATALOG_FIELD_NOT_APPROVED' && error.status === 502,
   );
   const recovered = catalogManagement.safeRestoredSnapshots({
-    '2026-06': { rows: [{ product_name: 'SAFE' }], catalog: [{ c31: 1 }] },
+    '2026-06': {
+      rows: [{ unit_code: 'DV01', qlnb_code: 'QL01', product_name: 'SAFE' }],
+      catalog: [{ c4: 'NT01', c5: 'QL01', c7: 'DV01', c15: 'HC', c16: 'SAFE', c17: '1mg', c25: 'Viên', c31: 1 }],
+    },
     '2026-07': { rows: [], catalog: [{ c32: 'POISONED' }] },
     '2026-08': { rows: [], catalog: [{ c41: 'NOT_APPROVED_YET' }] },
   });

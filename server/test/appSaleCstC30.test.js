@@ -29,6 +29,16 @@ const sourceRow = (extra = {}) => appSaleCst.normalizeRow({
 });
 const payload = (rows, generatedAt = '2026-07-18T14:00:00.000Z') => ({ rows, generatedAt });
 
+test('normalize phân biệt field CST còn lại bị thiếu với số 0 hợp lệ', () => {
+  assert.equal(sourceRow().slConLai, null);
+  assert.equal(sourceRow({ slConLai: '   ', slTrungThau: '' }).slConLai, null);
+  assert.equal(sourceRow({ slConLai: '   ', slTrungThau: '' }).slTrungThau, null);
+  assert.equal(sourceRow({ slConLai: 0 }).slConLai, 0);
+  assert.equal(sourceRow({ slConLai: 125 }).slConLai, 125);
+  assert.throws(() => sourceRow({ slConLai: 'sai' }), /slConLai không hợp lệ/);
+  assert.throws(() => sourceRow({ slTrungThau: 'sai' }), /slTrungThau không hợp lệ/);
+});
+
 test('C30 chỉ ghép đúng đơn vị + QLNB + quyết định C8 tuyến CL và CST dưới 10%', () => {
   const result = appSaleCst.enrichCstRowsWithC30([baseCst()], payload([sourceRow()]), { now: NOW, allowPartial: true });
   assert.equal(result.meta.matched, 1);

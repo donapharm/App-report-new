@@ -43,6 +43,12 @@ function optionalNumber(...values) {
   }
   return null;
 }
+function nullableSourceNumber(value, field) {
+  if (value == null || (typeof value === 'string' && !value.trim())) return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) throw new Error(`C30 tender-quota có ${field} không hợp lệ`);
+  return number;
+}
 function statusLabel(status = '') {
   const code = String(status || '').trim().toLowerCase();
   const labels = {
@@ -98,8 +104,9 @@ function payloadFreshness(payload, now = Date.now()) {
 function normalizeRow(r = {}) {
   const unitCode = String(r.unitCode ?? r.unit_code ?? r.ma_dv ?? '').trim();
   const productCode = String(r.productCode ?? r.iit_code ?? r.ma_qlnb ?? '').trim();
-  const slConLai = Number(r.slConLai ?? r.sl_con_lai ?? r.remain_qty ?? 0);
-  const slTrungThau = r.slTrungThau ?? r.sl_trung_thau;
+  const rawSlConLai = r.slConLai ?? r.sl_con_lai ?? r.remain_qty;
+  const slConLai = nullableSourceNumber(rawSlConLai, 'slConLai');
+  const slTrungThau = nullableSourceNumber(r.slTrungThau ?? r.sl_trung_thau, 'slTrungThau');
   return {
     unitCode,
     unitName: String(r.unitName ?? r.unit_name ?? unitCode).trim(),
@@ -114,7 +121,7 @@ function normalizeRow(r = {}) {
     contractTo: r.contractTo ?? r.contract_to ?? r.hdDenNgay ?? r.hd_den_ngay ?? null,
     hasCst: r.hasCst !== false && !!productCode && !!unitCode,
     laApThau: Boolean(r.laApThau ?? r.la_ap_thau ?? false),
-    slTrungThau: slTrungThau == null ? null : Number(slTrungThau || 0),
+    slTrungThau,
     slDat: Number(r.slDat ?? r.sl_dat ?? 0),
     slGiao: Number(r.slGiao ?? r.sl_giao ?? 0),
     // QUAN TRỌNG: dùng thẳng slConLai từ App Sale, không tự tính lại bằng cstFormula.

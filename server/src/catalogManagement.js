@@ -89,20 +89,28 @@ function readCache(period) {
   try {
     const value = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
     assertCatalogFieldPolicy(value, 'catalogLkg');
-    if (value?.snapshots && period) return value.snapshots[period] || null;
-    return value && Array.isArray(value.rows) && (!period || value.period === period) ? value : null;
+    const snapshot = value?.snapshots && period
+      ? value.snapshots[period] || null
+      : value && Array.isArray(value.rows) && (!period || value.period === period) ? value : null;
+    if (snapshot) assertCatalogSnapshotContract(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
+    return snapshot;
   } catch { return null; }
 }
 function safeRestoredSnapshots(restoredSnapshots = {}) {
   const safe = {};
   for (const [period, restored] of Object.entries(restoredSnapshots || {})) {
-    try { assertCatalogFieldPolicy(restored, `restoredCatalogLkg.${period}`); safe[period] = restored; }
+    try {
+      assertCatalogFieldPolicy(restored, `restoredCatalogLkg.${period}`);
+      assertCatalogSnapshotContract(restored, `restoredCatalogLkg.${period}`);
+      safe[period] = restored;
+    }
     catch { /* permanently omit contaminated snapshots during the next rewrite */ }
   }
   return safe;
 }
 function writeCacheAtomic(snapshot) {
   assertCatalogFieldPolicy(snapshot, 'catalogSnapshot');
+  assertCatalogSnapshotContract(snapshot, 'catalogSnapshot');
   fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
   let current = {};
   try { current = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) || {}; } catch { current = {}; }
@@ -176,7 +184,13 @@ function enrichRowsFromCatalog(rows, catalog) {
   });
 }
 function assertContractorCoverage(catalog = []) {
-  if (!Array.isArray(catalog) || !catalog.length) return true;
+  if (!Array.isArray(catalog) || !catalog.length) {
+    throw Object.assign(new Error('Data Hub trả catalog rỗng; từ chối ghi đè cache tốt gần nhất.'), {
+      status: 502,
+      upstream: true,
+      code: 'CATALOG_SOURCE_EMPTY',
+    });
+  }
   const missing = catalog.filter((row) => !String(row?.c4 || '').trim()).length;
   if (missing) {
     throw Object.assign(new Error(`Data Hub thiếu C4/Mã nhà thầu ở ${missing}/${catalog.length} dòng catalog; từ chối ghi đè cache tốt gần nhất.`), {
@@ -187,22 +201,141 @@ function assertContractorCoverage(catalog = []) {
   }
   return true;
 }
-function enrichRowsWithCst(rows, cstRows) {
+const CRITICAL_CATALOG_FIELDS = Object.freeze([
+  'contractor_code', 'unit_code', 'qlnb_code', 'product_name',
+  'active_ingredient', 'strength', 'uom', 'bid_price',
+]);
+const CRITICAL_CATALOG_SOURCE_FIELDS = Object.freeze(['c4', 'c5', 'c7', 'c15', 'c16', 'c17', 'c25', 'c31']);
+function presentValue(value) {
+  return value !== null && value !== undefined && !(typeof value === 'string' && !value.trim());
+}
+function firstPresentValue(row, fields) {
+  for (const field of fields) {
+    if (Object.prototype.hasOwnProperty.call(row || {}, field) && presentValue(row[field])) return row[field];
+  }
+  return null;
+}
+function cstValue(value) {
+  if (!presentValue(value)) return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    throw Object.assign(new Error(`Nguồn CST có giá trị số không hợp lệ: ${String(value)}`), {
+      status: 502,
+      code: 'CATALOG_CST_INVALID_NUMBER',
+    });
+  }
+  return number;
+}
+function assertCatalogSourceContract(catalog = [], rows = [], pathName = 'dataHubCatalogPayload') {
+  assertContractorCoverage(catalog);
+  if (!Array.isArray(rows) || !rows.length) {
+    throw Object.assign(new Error('Data Hub trả danh sách phân công rỗng; từ chối ghi đè cache tốt gần nhất.'), {
+      status: 502, upstream: true, code: 'CATALOG_ASSIGNMENTS_EMPTY',
+    });
+  }
+  for (const field of CRITICAL_CATALOG_SOURCE_FIELDS) {
+    const missing = catalog.filter((row) => !presentValue(row?.[field])).length;
+    if (missing) {
+      throw Object.assign(new Error(`Data Hub thiếu ${field} ở ${missing}/${catalog.length} dòng catalog; từ chối ghi đè cache tốt gần nhất.`), {
+        status: 502, upstream: true, code: 'CATALOG_CRITICAL_SOURCE_MISSING', details: { field, missing, total: catalog.length, pathName },
+      });
+    }
+  }
+  const invalidUnitQlnb = rows.filter((row) => row.type === 'unit_qlnb'
+    && (!String(row.unit_code || '').trim() || !String(row.qlnb_code || '').trim()));
+  if (invalidUnitQlnb.length) {
+    throw Object.assign(new Error(`Data Hub có ${invalidUnitQlnb.length} phân công đơn vị + QLNB thiếu khóa; từ chối ghi đè cache tốt gần nhất.`), {
+      status: 502, upstream: true, code: 'CATALOG_ASSIGNMENT_KEY_MISSING', details: { missing: invalidUnitQlnb.length, total: rows.length, pathName },
+    });
+  }
+  const catalogPairs = new Set(catalog.map((row) => `${String(row.c7 || '').trim()}\u001f${String(row.c5 || '').trim()}`));
+  const pairRows = rows.filter((row) => String(row.unit_code || '').trim() && String(row.qlnb_code || '').trim());
+  const missingPairs = pairRows.filter((row) => !catalogPairs.has(`${String(row.unit_code).trim()}\u001f${String(row.qlnb_code).trim()}`));
+  if (missingPairs.length) {
+    throw Object.assign(new Error(`Data Hub thiếu catalog cho ${missingPairs.length}/${pairRows.length} cặp đơn vị + QLNB; từ chối ghi đè cache tốt gần nhất.`), {
+      status: 502, upstream: true, code: 'CATALOG_PAIR_COVERAGE_MISSING', details: { missing: missingPairs.length, total: pairRows.length, pathName },
+    });
+  }
+  return { catalogRows: catalog.length, assignmentRows: rows.length, pairRows: pairRows.length };
+}
+function assertCatalogSnapshotContract(snapshot = {}, pathName = 'catalogSnapshot') {
+  return assertCatalogSourceContract(snapshot.catalog, snapshot.rows, pathName);
+}
+function cstRowsByPair(cstRows = []) {
   const byPair = new Map();
   for (const item of cstRows || []) {
     const unit = String(item.unit_code ?? item.unitCode ?? '').trim();
     const qlnb = String(item.iit_code ?? item.productCode ?? '').trim();
     if (!unit || !qlnb) continue;
-    byPair.set(`${unit}\u001f${qlnb}`, {
-      cst_initial: item.bid_qty_initial ?? item.slTrungThau ?? null,
-      cst_remaining: item.remain_qty ?? item.slConLai ?? null,
-      cst_source: item.cst_source || item.source || null,
-    });
+    const key = `${unit}\u001f${qlnb}`;
+    const current = byPair.get(key) || { cst_initial: null, cst_remaining: null, cst_source: null };
+    const initial = cstValue(firstPresentValue(item, ['bid_qty_initial', 'slTrungThau']));
+    const remaining = cstValue(firstPresentValue(item, ['remain_qty', 'slConLai']));
+    // Sparse overlays may enrich another dataset (for example C30) but must
+    // never erase a complete CST baseline. Explicit zero remains a valid value.
+    if (initial !== null) current.cst_initial = initial;
+    if (remaining !== null) current.cst_remaining = remaining;
+    if (initial !== null || remaining !== null) current.cst_source = item.cst_source || item.source || current.cst_source;
+    if (initial !== null || remaining !== null) byPair.set(key, current);
   }
+  return byPair;
+}
+function enrichRowsWithCst(rows, cstRows) {
+  const byPair = cstRowsByPair(cstRows);
   return rows.map((row) => {
     const cst = byPair.get(`${String(row.unit_code || '').trim()}\u001f${String(row.qlnb_code || '').trim()}`);
     return cst ? { ...row, ...cst } : { ...row, cst_initial: null, cst_remaining: null, cst_source: null };
   });
+}
+function projectionError(message, details = {}) {
+  return Object.assign(new Error(message), {
+    status: 502,
+    code: 'CATALOG_CRITICAL_FIELD_COVERAGE_LOSS',
+    details,
+  });
+}
+function assertCriticalProjectionCoverage(beforeRows = [], afterRows = []) {
+  if (beforeRows.length !== afterRows.length) {
+    throw projectionError(`Projection danh mục đổi số dòng bất thường: ${beforeRows.length} → ${afterRows.length}.`, {
+      before: beforeRows.length, after: afterRows.length,
+    });
+  }
+  for (let index = 0; index < beforeRows.length; index += 1) {
+    const before = beforeRows[index] || {};
+    const after = afterRows[index] || {};
+    for (const field of CRITICAL_CATALOG_FIELDS) {
+      if (presentValue(before[field]) && before[field] !== after[field]) {
+        throw projectionError(`Projection làm thay đổi hoặc mất cột trọng yếu ${field} tại dòng ${index + 1}.`, {
+          field, index, id: before.id || null, expected: before[field], actual: after[field] ?? null,
+        });
+      }
+    }
+  }
+  return true;
+}
+function assertCstProjectionCoverage(rows = [], cstRows = []) {
+  const expectedByPair = cstRowsByPair(cstRows);
+  let matched = 0;
+  for (const row of rows || []) {
+    const key = `${String(row.unit_code || '').trim()}\u001f${String(row.qlnb_code || '').trim()}`;
+    const expected = expectedByPair.get(key);
+    if (!expected) continue;
+    matched += 1;
+    for (const field of ['cst_initial', 'cst_remaining']) {
+      if (expected[field] !== null && (!presentValue(row[field]) || Number(row[field]) !== expected[field])) {
+        throw projectionError(`Projection CST sai ${field} tại ${row.unit_code || '—'} + ${row.qlnb_code || '—'}.`, {
+          field, key, expected: expected[field], actual: row[field] ?? null,
+        });
+      }
+    }
+  }
+  return { sourcePairs: expectedByPair.size, matchedRows: matched };
+}
+function buildCatalogRows(rows = [], cstRows = []) {
+  const enriched = enrichRowsWithCst(rows, cstRows);
+  assertCriticalProjectionCoverage(rows, enriched);
+  assertCstProjectionCoverage(enriched, cstRows);
+  return enriched;
 }
 function localSnapshot(period, reason = 'Data Hub chưa được cấu hình') {
   const ky = toUiPeriod(period);
@@ -249,8 +382,9 @@ async function remoteSnapshot(period) {
   const payload = await fetchJson(`${root}/assignments/catalog-management?ky=${encodeURIComponent(period)}`);
   assertCatalogFieldPolicy(payload, 'dataHubCatalogPayload');
   const catalog = Array.isArray(payload.catalog) ? payload.catalog : [];
-  assertContractorCoverage(catalog);
-  const rows = enrichRowsFromCatalog(arrayOf(payload, ['rows', 'assignments', 'items']).map(normalizeRow), catalog);
+  const assignmentRows = arrayOf(payload, ['rows', 'assignments', 'items']).map(normalizeRow);
+  assertCatalogSourceContract(catalog, assignmentRows);
+  const rows = enrichRowsFromCatalog(assignmentRows, catalog);
   const history = arrayOf(payload, ['history', 'audit', 'events']);
   const version = String(payload.version || payload.meta?.version || 'unknown');
   const upstreamChecksum = payload.checksum || payload.meta?.checksum;
@@ -348,4 +482,4 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };
+module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };

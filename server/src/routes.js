@@ -723,11 +723,9 @@ router.get('/catalog-management', auth.requireAuth, async (req, res) => {
   try {
     const period = catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy());
     const snapshot = await catalogManagement.getSnapshot(period);
-    // CST dùng khóa chính xác đơn vị + QLNB. Baseline hiện hành trong App Report
-    // được phủ bởi tender-quota App Sale khi API/cache có cùng đúng cặp khóa.
-    const tenderQuota = await appSaleCst.fetchTenderQuota().catch(() => ({ rows: [] }));
-    const liveRows = (tenderQuota.rows || []).map((row) => ({ ...row, cst_source: 'app-sale-tender-quota' }));
-    const rows = catalogManagement.enrichRowsWithCst(snapshot.rows, [...store.getCst({ scope: null }), ...liveRows]);
+    // CST baseline chỉ lấy từ kho CST chuẩn của App Report. Feed tender-quota
+    // hiện là C30-only và tuyệt đối không được phủ lên CST ban đầu/còn lại.
+    const rows = catalogManagement.buildCatalogRows(snapshot.rows, store.getCst({ scope: null }));
     const viewSnapshot = { ...snapshot, rows };
     if (auth.isAdmin(req.session.role)) return res.json(catalogManagement.adminView(viewSnapshot));
     return res.json(catalogManagement.employeeView(viewSnapshot, req.session.emp_code, period));
