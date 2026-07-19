@@ -112,3 +112,17 @@ test('employee acknowledgement is scoped, immutable and updates notification sta
   const history = f.feedback.listForItem(f.item.key, { empCode: 'DN016' })[0].acknowledgements;
   assert.deepEqual(history.map((ack) => ack.kind), ['read', 'updated']);
 });
+
+test('Telegram preview revalidates the persisted manifest and fails closed on tampering', () => {
+  const f = fixture();
+  const created = f.feedback.create({ item: f.item, type: 'approved', note: '', actionCycle: 1, actor: 'CEO', requestId: 'request-manifest-integrity' });
+  assert.equal(f.feedback.telegramPreview(created.id).status, 'preview_only');
+
+  const state = f.files.get('dormant_qlnb_feedback');
+  state.feedback[0].telegram_preview.message = 'Nội dung đã bị thay đổi';
+  f.files.set('dormant_qlnb_feedback', state);
+  assert.throws(
+    () => f.feedback.telegramPreview(created.id),
+    (error) => error?.code === 'TELEGRAM_MANIFEST_INTEGRITY_FAILED',
+  );
+});

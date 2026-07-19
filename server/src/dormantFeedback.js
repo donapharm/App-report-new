@@ -77,6 +77,40 @@ function feedbackLabel(type) {
   })[type] || 'Phản hồi của CEO';
 }
 
+function telegramManifest(preview = {}) {
+  return {
+    version: preview.version,
+    channel: preview.channel,
+    feedback_id: preview.feedback_id,
+    idempotency_event: preview.idempotency_event,
+    emp_code: preview.emp_code,
+    recipient_digest: preview.recipient_digest,
+    deep_link: preview.deep_link,
+    message: preview.message,
+    send_enabled: preview.send_enabled,
+    provider_called: preview.provider_called,
+    status: preview.status,
+    blocked_reason: preview.blocked_reason,
+  };
+}
+
+function telegramManifestDigest(preview) {
+  return sha256(canonical(telegramManifest(preview)));
+}
+
+function verifyTelegramManifest(preview) {
+  const actual = text(preview?.manifest_digest);
+  const expected = telegramManifestDigest(preview || {});
+  const validShape = /^[a-f0-9]{64}$/.test(actual);
+  const matches = validShape && crypto.timingSafeEqual(Buffer.from(actual, 'hex'), Buffer.from(expected, 'hex'));
+  if (!matches || preview?.send_enabled !== false || preview?.provider_called !== false) {
+    const err = new Error('Telegram preview manifest không toàn vẹn');
+    err.code = 'TELEGRAM_MANIFEST_INTEGRITY_FAILED';
+    throw err;
+  }
+  return telegramManifest(preview);
+}
+
 function createDormantFeedbackStore({ persist, notificationStore, listTelegramMap = () => [], clock = () => Date.now(), publicUrl = process.env.APP_REPORT_PUBLIC_URL || DEFAULT_PUBLIC_URL } = {}) {
   if (!persist?.load || !persist?.save) throw new Error('persist store is required');
   if (!notificationStore?.add || !notificationStore?.acknowledge) throw new Error('notification store is required');
@@ -123,7 +157,7 @@ function createDormantFeedbackStore({ persist, notificationStore, listTelegramMa
     return {
       ...manifest,
       recipient_masked: recipient.ok ? maskTelegramId(recipient.telegram_id) : null,
-      manifest_digest: sha256(canonical(manifest)),
+      manifest_digest: telegramManifestDigest(manifest),
     };
   }
 
@@ -274,6 +308,7 @@ function createDormantFeedbackStore({ persist, notificationStore, listTelegramMa
       err.code = 'NOT_FOUND';
       throw err;
     }
+    verifyTelegramManifest(feedback.telegram_preview);
     return { feedback_id: id, ...feedback.telegram_preview };
   }
 
@@ -291,5 +326,8 @@ module.exports = {
   sensitivePreviewText,
   safeShortNote,
   publicDeepLink,
+  telegramManifest,
+  telegramManifestDigest,
+  verifyTelegramManifest,
   createDormantFeedbackStore,
 };

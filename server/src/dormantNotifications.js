@@ -48,6 +48,8 @@ function normalize(input) {
       ack_at: stored.ack_at || null,
       ack_kind: ['read', 'updated'].includes(text(stored.ack_kind)) ? text(stored.ack_kind) : null,
       target: stored.target && typeof stored.target === 'object' ? stored.target : null,
+      closed_at: stored.closed_at || null,
+      closed_reason: text(stored.closed_reason) || null,
     };
     // V1 review IDs did not include audience/item scope. Canonicalize only
     // deterministic generated events so the first V2 sync refreshes them
@@ -113,6 +115,8 @@ function createDormantNotificationStore({ persist, clock = () => new Date() } = 
       read_at: input.read_at || null,
       ack_at: input.ack_at || null,
       ack_kind: ['read', 'updated'].includes(text(input.ack_kind)) ? text(input.ack_kind) : null,
+      closed_at: input.closed_at || null,
+      closed_reason: text(input.closed_reason) || null,
     };
     event.id = input.id || stableId([
       event.audience, event.type, event.emp_code, event.unit_code, event.item_keys.slice().sort(), event.qlnb_codes.slice().sort(),
@@ -138,6 +142,8 @@ function createDormantNotificationStore({ persist, clock = () => new Date() } = 
           read_at: current.read_at || null,
           ack_at: current.ack_at || null,
           ack_kind: current.ack_kind || null,
+          closed_at: current.closed_at || null,
+          closed_reason: current.closed_reason || null,
         };
         if (JSON.stringify(current) !== JSON.stringify(refreshed)) {
           state.events[index] = refreshed;
@@ -178,8 +184,26 @@ function createDormantNotificationStore({ persist, clock = () => new Date() } = 
     });
   }
 
+  function closeEmployeeEvents(itemKeys = [], reason = 'qlnb_reactivated') {
+    const wanted = new Set(itemKeys.map(text).filter(Boolean));
+    if (!wanted.size) return 0;
+    const state = load();
+    const at = new Date(clock()).toISOString();
+    let changed = 0;
+    state.events = state.events.map((event) => {
+      if (event.audience !== 'employee' || event.closed_at || !(event.item_keys || []).some((key) => wanted.has(key))) return event;
+      changed += 1;
+      return { ...event, closed_at: at, closed_reason: reason };
+    });
+    if (changed) save(state);
+    return changed;
+  }
+
   function syncReviewEvents({ items = [], reactivated = [], today } = {}) {
     const inputs = [];
+    // Keep resolved events as immutable audit history, but remove them from the
+    // actionable employee feed before any escalation or deep-link projection.
+    closeEmployeeEvents(reactivated.map((item) => item?.key));
     for (const item of items) {
       const review = reviewState(item, today);
       const base = {
@@ -225,7 +249,7 @@ function createDormantNotificationStore({ persist, clock = () => new Date() } = 
   }
 
   function escalationFor(event, nowValue) {
-    if (event.audience !== 'employee') return null;
+    if (event.audience !== 'employee' || event.closed_at) return null;
     const ageHours = Math.max(0, (new Date(nowValue).getTime() - new Date(event.at).getTime()) / 3600000);
     const workdays = businessDaysBetween(event.at, nowValue);
     const unread24h = !event.read_at && ageHours >= 24;
@@ -247,7 +271,7 @@ function createDormantNotificationStore({ persist, clock = () => new Date() } = 
     const wantedAudience = AUDIENCES.has(text(audience)) ? text(audience) : 'ceo';
     const emp = upper(empCode);
     const nowValue = new Date(clock()).toISOString();
-    const events = state.events.filter((event) => event.audience === wantedAudience && (!emp || event.emp_code === emp))
+    const events = state.events.filter((event) => !event.closed_at && event.audience === wantedAudience && (!emp || event.emp_code === emp))
       .map((event) => ({ ...event, escalation: escalationFor(event, nowValue) }))
       .sort((a, b) => String(b.at).localeCompare(String(a.at)) || String(b.id).localeCompare(String(a.id)));
     const unread = events.filter((x) => !x.read_at);
@@ -261,12 +285,12 @@ function createDormantNotificationStore({ persist, clock = () => new Date() } = 
     const at = new Date(clock()).toISOString();
     let changed = 0;
     state.events = state.events.map((event) => {
-      if (event.audience !== audience || (empCode && event.emp_code !== upper(empCode)) || event.read_at || (!all && !wanted.has(event.id))) return event;
+      if (event.closed_at || event.audience !== audience || (empCode && event.emp_code !== upper(empCode)) || event.read_at || (!all && !wanted.has(event.id))) return event;
       changed += 1;
       return { ...event, read_at: at };
     });
     if (changed) save(state);
-    return { ok: true, changed, unread_count: state.events.filter((x) => x.audience === audience && (!empCode || x.emp_code === upper(empCode)) && !x.read_at).length };
+    return { ok: true, changed, unread_count: state.events.filter((x) => !x.closed_at && x.audience === audience && (!empCode || x.emp_code === upper(empCode)) && !x.read_at).length };
   }
 
   function acknowledge({ ids = [], itemKeys = [], empCode, kind = 'read' } = {}) {
@@ -279,7 +303,7 @@ function createDormantNotificationStore({ persist, clock = () => new Date() } = 
     let changed = 0;
     state.events = state.events.map((event) => {
       const matches = wanted.has(event.id) || (event.item_keys || []).some((key) => wantedItems.has(key));
-      if (event.audience !== 'employee' || event.emp_code !== emp || !matches) return event;
+      if (event.closed_at || event.audience !== 'employee' || event.emp_code !== emp || !matches) return event;
       if (event.ack_kind === 'updated' || (event.ack_kind === ackKind && event.ack_at)) return event;
       changed += 1;
       return { ...event, read_at: event.read_at || at, ack_at: at, ack_kind: ackKind };

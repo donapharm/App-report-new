@@ -117,3 +117,34 @@ test('employee escalation is derived preview state, not a repeated notification'
   assert.equal(feed.events.length, 1);
   assert.equal(feed.events[0].escalation, null);
 });
+
+test('reactivation closes employee events, suppresses dead deep-links and permits a later dormant cycle', () => {
+  const m = memory();
+  let now = new Date('2026-07-20T02:00:00Z');
+  const store = createDormantNotificationStore({ persist: m.persist, clock: () => now });
+  const item = {
+    key: 'DN016|U1|Q1', emp_code: 'DN016', unit_code: 'U1', unit_name: 'BV A',
+    iit_code: 'Q1', product_name: 'Thuốc A', days_idle: 60,
+    last_activity_at: '2026-05-21', dormant_cycle: 1, action: {},
+  };
+  const initial = store.feed({ items: [item], today: '2026-07-20', audience: 'employee', empCode: 'DN016' });
+  assert.equal(initial.events.length, 1);
+  const firstId = initial.events[0].id;
+
+  now = new Date('2026-07-21T02:00:00Z');
+  let feed = store.feed({ items: [], reactivated: [{ ...item, order_at: '2026-07-21' }], today: '2026-07-21', audience: 'employee', empCode: 'DN016' });
+  assert.equal(feed.events.length, 0, 'resolved QLNB must leave the actionable employee feed');
+  assert.equal(feed.unread_count, 0);
+  const stored = m.files.get('dormant_qlnb_notifications').events.find((event) => event.id === firstId);
+  assert.ok(stored.closed_at, 'closed event remains available for audit');
+  assert.equal(stored.closed_reason, 'qlnb_reactivated');
+
+  now = new Date('2026-07-24T02:00:00Z');
+  feed = store.feed({ items: [], today: '2026-07-24', audience: 'employee', empCode: 'DN016' });
+  assert.equal(feed.events.length, 0, 'closed event must never escalate or expose its old deep-link');
+
+  const secondCycle = { ...item, dormant_cycle: 2, days_idle: 60, last_activity_at: '2026-07-25' };
+  feed = store.feed({ items: [secondCycle], today: '2026-09-23', audience: 'employee', empCode: 'DN016' });
+  assert.equal(feed.events.length, 1);
+  assert.notEqual(feed.events[0].id, firstId, 'a new dormant transition must receive a new event');
+});

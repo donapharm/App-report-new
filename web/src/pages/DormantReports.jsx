@@ -79,6 +79,7 @@ export default function DormantReports({ me }) {
   const [focusBusy, setFocusBusy] = useState(false);
   const reportRequest = useRef(0);
   const snapshotRequest = useRef(0);
+  const focusRequest = useRef(0);
 
   const employeeOptions = report?.filters?.employees || report?.employees || report?.top_employees || [];
   const unitOptions = report?.filters?.units || report?.units || report?.top_units || [];
@@ -96,14 +97,29 @@ export default function DormantReports({ me }) {
     return () => window.removeEventListener('app:navigate', listener);
   }, []);
   async function loadFocus(key = focusKey) {
-    if (!key) { setFocusDetail(null); return; }
+    const requestId = ++focusRequest.current;
+    if (!key) { setFocusDetail(null); setFocusBusy(false); return; }
     setFocusBusy(true);
     try {
       const result = await api.dormantItemDetail(key);
+      if (requestId !== focusRequest.current) return;
       setFocusDetail(result);
       if (result?.item) setFilters((old) => ({ ...old, unit_code: result.item.unit_code || old.unit_code, q: result.item.iit_code || old.q }));
-    } catch (e) { setError(e.message); setFocusDetail(null); }
-    finally { setFocusBusy(false); }
+    } catch (e) {
+      if (requestId === focusRequest.current) { setError(e.message); setFocusDetail(null); }
+    } finally {
+      if (requestId === focusRequest.current) setFocusBusy(false);
+    }
+  }
+  function clearFocus() {
+    focusRequest.current += 1;
+    setFocusKey(''); setFocusDetail(null); setFocusBusy(false);
+    try {
+      sessionStorage.removeItem('app_nav_payload');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('focus_key'); url.searchParams.delete('unit_code');
+      window.history.replaceState(window.history.state, '', url);
+    } catch { /* ignore */ }
   }
   useEffect(() => { loadFocus(focusKey); }, [focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -158,7 +174,7 @@ export default function DormantReports({ me }) {
       <label><span>Mẫu báo cáo</span><select value={filters.template} onChange={(e) => setFilter('template', e.target.value)}>{templates.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     </section>
     {error && <div className="dormant-error">{error}</div>}
-    <FocusedItem detail={focusDetail} busy={focusBusy} isCeo={isCeo} onReload={() => loadFocus(focusKey)} onClose={() => { setFocusKey(''); setFocusDetail(null); }} />
+    <FocusedItem detail={focusDetail} busy={focusBusy} isCeo={isCeo} onReload={() => loadFocus(focusKey)} onClose={clearFocus} />
     {busy ? <div className="dr-loading">Đang dựng báo cáo đúng phạm vi…</div> : <Preview report={report} focusKey={focusKey} />}
     <section className="dr-snapshot-tools"><div><h2>Ảnh chụp báo cáo</h2><p>Lưu trạng thái hiện tại trước khi xuất file. File xuất luôn bám theo ảnh chụp đã chọn.</p></div><button type="button" className="btn" disabled={saving || busy} onClick={saveSnapshot}>{saving ? 'Đang lưu…' : '＋ Lưu ảnh chụp'}</button></section>
     <section className="dr-history"><label><span>Lịch sử ảnh chụp</span><select value={selectedSnapshot?.id || ''} onChange={(e) => selectSnapshot(e.target.value)}><option value="">Chọn ảnh chụp để xem / xuất file</option>{history.map((snapshot) => <option key={snapshot.id} value={snapshot.id}>{dateVi(snapshot.created_at || snapshot.at, true)} · {TEMPLATE_LABEL[snapshot.template] || snapshot.template || 'Chuẩn'} · {snapshot.created_by || snapshot.emp_code || '—'}</option>)}</select></label><div className="dr-export"><button type="button" disabled={!selectedSnapshot?.id || !!downloading} onClick={() => download('xlsx')}>{downloading === 'xlsx' ? 'Đang xuất…' : '⬇ Excel'}</button><button type="button" disabled={!selectedSnapshot?.id || !!downloading} onClick={() => download('pdf')}>{downloading === 'pdf' ? 'Đang xuất…' : '⬇ PDF'}</button></div></section>
