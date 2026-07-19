@@ -130,6 +130,34 @@ test('nguồn quá hạn bị chặn, không hiển thị C30 cũ cho nhân viê
   assert.equal(result.rows[0].c30, undefined);
 });
 
+test('danh mục không đổi vẫn sẵn sàng khi S2S vừa kiểm chứng đầy đủ', () => {
+  const normalized = appSaleCst.normalizePayload({
+    ...payload([sourceRow()], '2026-07-09T09:58:28.729Z'),
+    total: 1,
+    transportComplete: true,
+    coverageReady: true,
+  }, 'test-live', { fetchedAt: '2026-07-18T14:25:00.000Z' });
+  const freshness = appSaleCst.payloadFreshness(normalized, NOW);
+  assert.equal(freshness.generatedAt, '2026-07-09T09:58:28.729Z', 'giữ ngày thay đổi dữ liệu gốc');
+  assert.equal(freshness.checkedAt, '2026-07-18T14:25:00.000Z');
+  assert.equal(freshness.stale, false, 'freshness phải theo lần S2S thành công');
+});
+
+test('cache fallback chỉ được dùng trong 24 giờ từ lần S2S thành công', () => {
+  const fresh = appSaleCst.payloadFreshness({
+    generatedAt: '2026-07-01T00:00:00.000Z',
+    cachedAt: '2026-07-18T14:25:00.000Z',
+    rows: [sourceRow()],
+  }, NOW);
+  const expired = appSaleCst.payloadFreshness({
+    generatedAt: '2026-07-01T00:00:00.000Z',
+    fetchedAt: '2026-07-17T13:00:00.000Z',
+    rows: [sourceRow()],
+  }, NOW);
+  assert.equal(fresh.stale, false);
+  assert.equal(expired.stale, true);
+});
+
 test('nguồn ít dòng bất thường bị chặn dù timestamp còn mới', () => {
   const result = appSaleCst.enrichCstRowsWithC30(
     [baseCst()],

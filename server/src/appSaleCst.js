@@ -87,11 +87,19 @@ function periodCompatible(cstRow, sourceRow) {
   return !!reportDecision && !!sourceDecision && reportDecision === sourceDecision;
 }
 function payloadFreshness(payload, now = Date.now()) {
-  const generatedMs = Date.parse(payload?.generatedAt || '');
-  const ageMs = Number.isFinite(generatedMs) ? Math.max(0, now - generatedMs) : null;
+  // `generatedAt` is the business catalog's last-change time. A catalog can
+  // remain valid without changing every day, so it must not be used as the
+  // transport freshness clock. `fetchedAt`/legacy `cachedAt` is written only
+  // after a complete, coverage-checked S2S fetch and ages naturally when the
+  // upstream becomes unavailable.
+  const checkedAt = payload?.fetchedAt || payload?.cachedAt || payload?.generatedAt || null;
+  const checkedMs = Date.parse(checkedAt || '');
+  const ageMs = Number.isFinite(checkedMs) ? Math.max(0, now - checkedMs) : null;
   const rowCount = Array.isArray(payload?.rows) ? payload.rows.length : 0;
   return {
     generatedAt: payload?.generatedAt || null,
+    fetchedAt: payload?.fetchedAt || payload?.cachedAt || null,
+    checkedAt,
     ageMs,
     stale: ageMs === null || ageMs > SOURCE_MAX_AGE_MS,
     available: rowCount > 0,
@@ -201,11 +209,13 @@ function enrichCstRowsWithC30(cstRows = [], payload = {}, { now = Date.now(), al
   });
   return { rows, meta: { ...freshness, matched, ambiguous } };
 }
-function normalizePayload(payload, source = 'unknown') {
+function normalizePayload(payload, source = 'unknown', { fetchedAt = null } = {}) {
   const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.rows) ? payload.rows : Array.isArray(payload?.items) ? payload.items : [];
   return {
     source,
+    // Preserve source provenance separately from the last successful S2S read.
     generatedAt: payload?.generatedAt || payload?.generated_at || new Date().toISOString(),
+    fetchedAt: fetchedAt || payload?.fetchedAt || payload?.cachedAt || null,
     notes: payload?.notes || null,
     total: Number.isFinite(Number(payload?.total)) ? Number(payload.total) : rows.length,
     transportComplete: payload?.transportComplete === true,
@@ -253,9 +263,10 @@ async function fetchTenderQuota({ force = false } = {}) {
   if (AUTH_TOKEN) headers[AUTH_HEADER] = AUTH_HEADER.toLowerCase() === 'authorization' ? `Bearer ${AUTH_TOKEN}` : AUTH_TOKEN;
   try {
     const payload = await fetchAllPages(headers);
-    const value = normalizePayload(payload, DEFAULT_URL);
+    const fetchedAt = new Date(now).toISOString();
+    const value = normalizePayload(payload, DEFAULT_URL, { fetchedAt });
     mem = { at: now, value };
-    writeJson(CACHE_FILE, { ...value, cachedAt: new Date().toISOString() });
+    writeJson(CACHE_FILE, { ...value, cachedAt: fetchedAt });
     return value;
   } catch (e) {
     const cached = readJson(CACHE_FILE, null);

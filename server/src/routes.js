@@ -1732,7 +1732,8 @@ router.get('/cst', auth.requireAuth, async (req, res) => {
     rows: enrichContractorNames(rows, contractorLookup),
     c30: {
       ready: enriched.meta.available && enriched.meta.complete && !enriched.meta.stale,
-      asOf: enriched.meta.generatedAt,
+      asOf: enriched.meta.checkedAt,
+      sourceUpdatedAt: enriched.meta.generatedAt,
       matched: enriched.meta.matched,
       actionable: rows.filter((row) => row.c30?.actionable).length,
     },
