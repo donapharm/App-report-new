@@ -32,10 +32,12 @@ const diemXu = require('./diemXu');
 const { createDormantService } = require('./dormantService');
 const { createDormantNotificationStore } = require('./dormantNotifications');
 const { buildDormantDigest } = require('./dormantDigest');
+const { createFilteredEmployeeReportService } = require('./filteredEmployeeReport');
 
 const router = express.Router();
 const dormantNotificationStore = createDormantNotificationStore({ persist });
 const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist, notificationStore: dormantNotificationStore });
+const filteredEmployeeReport = createFilteredEmployeeReportService({ store, catalogManagement, appSaleCst, persist });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
@@ -740,6 +742,36 @@ router.get('/admin/catalog-management/history', auth.requireAuth, auth.requireAd
 });
 router.get('/admin/catalog-management/diagnostics', auth.requireAuth, auth.requireAdmin, (req, res) => {
   res.json(catalogManagement.diagnostics());
+});
+// Báo cáo cá nhân theo bộ lọc: admin-only, preview trước và chỉ xuất từng NV.
+// Không nối luồng gửi email/Telegram trong đợt triển khai này.
+router.post('/admin/catalog-management/report/preview', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    return res.json(await filteredEmployeeReport.preview(req.body || {}, req.session.emp_code));
+  } catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
+});
+router.post('/admin/catalog-management/report/export/:empCode.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    const report = await filteredEmployeeReport.employeeReport(req.body || {}, req.params.empCode, req.session.emp_code);
+    const buffer = await filteredEmployeeReport.excelBuffer(report);
+    const safeEmp = String(report.summary.emp_code || 'NV').replace(/[^A-Z0-9_-]/gi, '');
+    const safePeriod = String(report.period || '').replace(/[^0-9-]/g, '');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="bao-cao-ca-nhan-${safeEmp}-${safePeriod}.xlsx"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(buffer);
+  } catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
+});
+router.post('/admin/catalog-management/report/export-summary.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    const report = await filteredEmployeeReport.summaryReport(req.body || {}, req.session.emp_code);
+    const buffer = await filteredEmployeeReport.summaryExcelBuffer(report);
+    const safePeriod = String(report.period || '').replace(/[^0-9-]/g, '');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="tong-hop-bao-cao-nhan-vien-${safePeriod}.xlsx"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(buffer);
+  } catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
 });
 router.post('/admin/catalog-management/transfers', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {

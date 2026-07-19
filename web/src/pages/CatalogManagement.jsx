@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useDonaTableCellTools } from '@donapharm/dona-table-cell-tools/react';
 import '@donapharm/dona-table-cell-tools/css';
-import { api } from '../api.js';
+import { api, downloadFilteredEmployeeReport, downloadFilteredEmployeeSummary } from '../api.js';
 import { Spinner } from '../components.jsx';
 
 const uiToHub = (ky) => { const m = String(ky || '').match(/^(\d{2})\.(\d{4})$/); return m ? `${m[2]}-${m[1]}` : ky; };
@@ -244,6 +244,131 @@ function TransferPanel({ period, rows, meta, onDone }) {
   </div>;
 }
 
+const REPORT_DEFAULTS = {
+  emp_codes: [], provinces: [], routes: [], units: [], contractors: [], qlnb_codes: [], query: '',
+  cst_band: 'all', dormant_status: 'all', review_status: 'all', c30_status: 'all',
+};
+const compactNumber = (value) => Number(value || 0).toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+const percentText = (value) => value == null ? '—' : `${Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
+
+function uniqueReportOptions(rows, key, label) {
+  const seen = new Map();
+  for (const row of rows || []) {
+    const value = String(row?.[key] || '').trim();
+    if (!value) continue;
+    const title = label ? label(row, value) : value;
+    if (!seen.has(value)) seen.set(value, { key: value, label: title });
+  }
+  return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+}
+
+function ReportMultiFilter({ label, values, options, onChange, searchPlaceholder }) {
+  const [query, setQuery] = useState('');
+  const selected = new Set(values || []);
+  const normalized = normalizeSearch(query);
+  const shown = (options || []).filter((item) => !normalized || normalizeSearch(`${item.key} ${item.label}`).includes(normalized));
+  const toggle = (key) => onChange(selected.has(key) ? values.filter((value) => value !== key) : [...values, key]);
+  const summary = selected.size ? `${selected.size} đã chọn` : `Tất cả (${(options || []).length})`;
+  return <details className="catalog-report-multi">
+    <summary><span>{label}</span><b>{summary}</b></summary>
+    <div className="catalog-report-multi-menu">
+      {(options || []).length > 8 && <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={searchPlaceholder || `Tìm ${label.toLowerCase()}…`} />}
+      <div className="catalog-report-multi-actions"><button type="button" onClick={() => onChange((options || []).map((item) => item.key))}>Chọn tất cả</button><button type="button" onClick={() => onChange([])}>Dùng tất cả</button></div>
+      <div className="catalog-report-checks">{shown.map((item) => <label key={item.key} className={selected.has(item.key) ? 'selected' : ''}><input type="checkbox" checked={selected.has(item.key)} onChange={() => toggle(item.key)} /><span><b>{item.key}</b>{item.label !== item.key && <small>{item.label}</small>}</span></label>)}</div>
+      {!shown.length && <div className="muted catalog-empty">Không tìm thấy lựa chọn phù hợp.</div>}
+    </div>
+  </details>;
+}
+
+function ReportPanel({ period, rows }) {
+  const [form, setForm] = useState(REPORT_DEFAULTS);
+  const [preview, setPreview] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [downloading, setDownloading] = useState('');
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const options = useMemo(() => ({
+    employees: uniqueReportOptions(rows, 'emp_code', (row, value) => `${value} · ${row.emp_name || value}`),
+    provinces: uniqueReportOptions(rows, 'province'),
+    routes: uniqueReportOptions(rows, 'route'),
+    units: uniqueReportOptions(rows, 'unit_code'),
+    contractors: uniqueReportOptions(rows, 'contractor_code'),
+    qlnb: uniqueReportOptions(rows, 'qlnb_code', (row, value) => `${value} · ${row.product_name || value}`),
+  }), [rows]);
+  useEffect(() => { setForm(REPORT_DEFAULTS); setPreview(null); setError(''); setMessage(''); }, [period]);
+  const set = (key, value) => { setForm((current) => ({ ...current, [key]: value })); setPreview(null); setError(''); setMessage(''); };
+  const payload = useMemo(() => ({ period, ...form }), [period, form]);
+  async function makePreview() {
+    setBusy(true); setError(''); setMessage(''); setPreview(null);
+    try { setPreview(await api.adminCatalogManagementReportPreview(payload)); }
+    catch (requestError) { setError(requestError.message); }
+    setBusy(false);
+  }
+  const exportPayload = preview ? { ...preview.filters, preview_id: preview.preview_id } : null;
+  async function downloadEmployee(empCode) {
+    if (!exportPayload) return;
+    setDownloading(empCode); setError(''); setMessage('');
+    try { await downloadFilteredEmployeeReport(empCode, exportPayload); setMessage(`Đã tạo file cá nhân ${empCode}. Không có email/Telegram nào được gửi.`); }
+    catch (downloadError) { setError(downloadError.message); }
+    setDownloading('');
+  }
+  async function downloadSummary() {
+    if (!exportPayload) return;
+    setDownloading('summary'); setError(''); setMessage('');
+    try { await downloadFilteredEmployeeSummary(exportPayload); setMessage('Đã tạo file tổng hợp CEO. Không có email/Telegram nào được gửi.'); }
+    catch (downloadError) { setError(downloadError.message); }
+    setDownloading('');
+  }
+  const selectedFilterCount = Object.entries(form).filter(([key, value]) => key !== 'query' ? (Array.isArray(value) ? value.length : value !== 'all') : !!value).length;
+  return <div className="catalog-report-flow">
+    <section className="card catalog-report-intro">
+      <div><span className="catalog-report-icon" aria-hidden="true">📊</span><div><h3>Lập báo cáo cá nhân theo bộ lọc</h3><p>Mỗi nhân viên được tách thành một file riêng, chỉ chứa dữ liệu trong phạm vi họ phụ trách.</p></div></div>
+      <strong>CHỈ XEM TRƯỚC / XUẤT FILE · CHƯA GỬI THẬT</strong>
+    </section>
+
+    <section className="card catalog-report-filters">
+      <div className="catalog-step-title"><span>1</span><div><h3>Chọn người và phạm vi</h3><p>Để trống danh sách chọn nghĩa là dùng tất cả giá trị trong phạm vi hiện tại.</p></div></div>
+      <div className="catalog-report-filter-grid">
+        <ReportMultiFilter label="Nhân viên" values={form.emp_codes} options={options.employees} onChange={(value) => set('emp_codes', value)} />
+        <ReportMultiFilter label="Tỉnh/Thành" values={form.provinces} options={options.provinces} onChange={(value) => set('provinces', value)} />
+        <ReportMultiFilter label="Tuyến" values={form.routes} options={options.routes} onChange={(value) => set('routes', value)} />
+        <ReportMultiFilter label="Đơn vị" values={form.units} options={options.units} onChange={(value) => set('units', value)} />
+        <ReportMultiFilter label="Nhà thầu" values={form.contractors} options={options.contractors} onChange={(value) => set('contractors', value)} />
+        <ReportMultiFilter label="Mã QLNB" values={form.qlnb_codes} options={options.qlnb} onChange={(value) => set('qlnb_codes', value)} />
+      </div>
+      <div className="catalog-report-select-grid">
+        <label><span>Tìm kiếm</span><input value={form.query} onChange={(event) => set('query', event.target.value)} placeholder="Tên thuốc, hoạt chất, đơn vị, QLNB…" /></label>
+        <label><span>Mức CST còn lại</span><select value={form.cst_band} onChange={(event) => set('cst_band', event.target.value)}><option value="all">Tất cả mức CST</option><option value="missing">Chưa có CST</option><option value="le10">≤ 10%</option><option value="10_30">Trên 10% đến 30%</option><option value="gt30">Trên 30%</option><option value="full">Còn gần nguyên ≥ 99,5%</option></select></label>
+        <label><span>Phát sinh 60 ngày</span><select value={form.dormant_status} onChange={(event) => set('dormant_status', event.target.value)}><option value="all">Tất cả trạng thái</option><option value="dormant">Ngủ đông ≥ 60 ngày</option><option value="not_activated">Chưa kích hoạt</option><option value="normal">Đang hoạt động</option></select></label>
+        <label><span>Trạng thái review</span><select value={form.review_status} onChange={(event) => set('review_status', event.target.value)}><option value="all">Tất cả review</option><option value="unplanned">Chưa lập kế hoạch</option><option value="in_progress">Đang triển khai</option><option value="upcoming">Sắp đến hạn</option><option value="due">Đến hạn</option><option value="overdue">Quá hạn</option></select></label>
+        <label><span>C30</span><select value={form.c30_status} onChange={(event) => set('c30_status', event.target.value)}><option value="all">Tất cả C30</option><option value="available">Có tùy chọn C30</option><option value="actionable">C30 cần hành động</option><option value="none">Không có C30</option></select></label>
+      </div>
+      <div className="catalog-report-filter-footer"><span>{selectedFilterCount ? `${selectedFilterCount} nhóm lọc đang áp dụng` : 'Đang dùng toàn bộ phạm vi được giao'}</span><button type="button" className="btn ghost" onClick={() => { setForm(REPORT_DEFAULTS); setPreview(null); }}>Xóa bộ lọc</button></div>
+    </section>
+
+    <section className="card catalog-report-preview-step">
+      <div className="catalog-step-title"><span>2</span><div><h3>Xem trước bắt buộc</h3><p>Hệ thống kiểm lại số báo cáo, số dòng và khóa phạm vi trước khi cho tải file.</p></div></div>
+      <button type="button" className="btn catalog-report-preview-button" disabled={busy} onClick={makePreview}>{busy ? 'Đang kiểm tra dữ liệu…' : '👁 Xem trước phạm vi báo cáo'}</button>
+      {preview && <div className="catalog-report-preview">
+        <div className="catalog-report-kpis"><div><small>NV đã chọn</small><b>{compactNumber(preview.selected_employees)}</b></div><div><small>Báo cáo có dữ liệu</small><b>{compactNumber(preview.total_employees)}</b></div><div><small>Tổng dòng sau lọc</small><b>{compactNumber(preview.total_rows)}</b></div><div><small>Không có dòng</small><b>{compactNumber(preview.empty_employees)}</b></div></div>
+        <p><b>Phạm vi:</b> {preview.filter_text}</p>
+        <div className="catalog-report-safety">🔒 Server đã tách dữ liệu theo từng mã nhân viên. File cá nhân không có CP Total, chi phí, lợi nhuận hoặc margin.</div>
+        {preview.c30_source && !preview.c30_source.ready && <div className="catalog-report-source-warning">⚠ Nguồn C30 chưa sẵn sàng nên cột C30 để trống; hệ thống không suy diễn thành “không có C30”.</div>}
+      </div>}
+      {error && <div className="catalog-alert error">⚠ {error}</div>}{message && <div className="catalog-alert success">✓ {message}</div>}
+    </section>
+
+    {preview && <section className="card catalog-report-results">
+      <div className="catalog-step-title"><span>3</span><div><h3>Xuất báo cáo</h3><p>File tổng hợp dành cho CEO; file cá nhân chỉ có dữ liệu đúng người. Không có nút gửi thật trong màn hình này.</p></div></div>
+      <div className="catalog-report-summary-download"><div><b>Tổng hợp CEO</b><span>{preview.total_employees} nhân viên · {preview.total_rows.toLocaleString('vi-VN')} dòng</span></div><button type="button" className="btn" disabled={!preview.total_employees || !!downloading} onClick={downloadSummary}>{downloading === 'summary' ? 'Đang tạo…' : '⬇ Tải tổng hợp CEO'}</button></div>
+      <div className="catalog-report-employee-list">{preview.employees.map((employee) => <article key={employee.emp_code} className={!employee.exportable ? 'is-empty' : ''}>
+        <div className="catalog-report-employee-head"><div><b>{employee.emp_code} · {employee.emp_name}</b><span>{employee.row_count.toLocaleString('vi-VN')} dòng · {employee.unit_count} đơn vị · {employee.qlnb_count} QLNB</span></div><button type="button" className="btn ghost" disabled={!employee.exportable || !!downloading} onClick={() => downloadEmployee(employee.emp_code)}>{!employee.exportable ? 'Không có dữ liệu' : downloading === employee.emp_code ? 'Đang tạo…' : '⬇ Tải file cá nhân'}</button></div>
+        {employee.exportable && <div className="catalog-report-employee-metrics"><span>CST còn <b>{percentText(employee.cst_remaining_pct)}</b></span><span>Ngủ đông <b>{employee.dormant_count}</b></span><span>Chưa kích hoạt <b>{employee.not_activated_count}</b></span><span>Review đến/quá hạn <b>{employee.review_due_count}</b></span><span>Target đạt <b>{percentText(employee.target_pct)}</b></span></div>}
+      </article>)}</div>
+    </section>}
+  </div>;
+}
+
 function AdminView({ data, period, onReload, history, diagnostics }) {
   const [mode, setMode] = useState('view');
   const [query, setQuery] = useState('');
@@ -272,6 +397,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
     </details>
     <div className="catalog-mode-tabs" role="tablist" aria-label="Chức năng danh mục quản lý">
       <button role="tab" aria-selected={mode === 'view'} className={mode === 'view' ? 'active' : ''} onClick={() => setMode('view')}>🔎 Xem phân công</button>
+      <button role="tab" aria-selected={mode === 'report'} className={mode === 'report' ? 'active' : ''} onClick={() => setMode('report')}>📊 Lập báo cáo NV</button>
       <button role="tab" aria-selected={mode === 'transfer'} className={mode === 'transfer' ? 'active' : ''} onClick={() => setMode('transfer')}>⇄ Điều chuyển nhân viên</button>
     </div>
 
@@ -311,7 +437,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
         })}</tbody></table></div>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
       </CatalogTableCard>
-    </> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
+    </> : mode === 'report' ? <ReportPanel period={period} rows={currentRows} /> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
 
     <details className="card catalog-advanced">
       <summary>Quản trị nâng cao: lịch sử và trạng thái hệ thống</summary>

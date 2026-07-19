@@ -97,6 +97,7 @@ export const api = {
   catalogManagement: (period) => req('GET', '/catalog-management?' + new URLSearchParams(period ? { period } : {}).toString()),
   adminCatalogManagementHistory: (period) => req('GET', '/admin/catalog-management/history?' + new URLSearchParams(period ? { period } : {}).toString()),
   adminCatalogManagementDiagnostics: () => req('GET', '/admin/catalog-management/diagnostics'),
+  adminCatalogManagementReportPreview: (payload) => req('POST', '/admin/catalog-management/report/preview', payload),
   adminCatalogManagementTransfer: (payload) => req('POST', '/admin/catalog-management/transfers', payload),
   specialCandidates: () => req('GET', '/specials'),
   adminAssignments: (params = {}) => req('GET', '/admin/assignments?' + new URLSearchParams(params).toString()),
@@ -183,6 +184,33 @@ export async function downloadRevenueReport(format = 'xlsx', params = {}) {
   a.click();
   a.remove();
   URL.revokeObjectURL(a.href);
+}
+
+async function downloadCatalogReport(url, payload, fallbackName) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Không xuất được báo cáo');
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') || '';
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = match?.[1] || fallbackName;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href);
+}
+
+export async function downloadFilteredEmployeeReport(empCode, payload) {
+  return downloadCatalogReport(`/api/admin/catalog-management/report/export/${encodeURIComponent(empCode)}.xlsx`, payload, `bao-cao-ca-nhan-${empCode}.xlsx`);
+}
+
+export async function downloadFilteredEmployeeSummary(payload) {
+  return downloadCatalogReport('/api/admin/catalog-management/report/export-summary.xlsx', payload, 'tong-hop-bao-cao-nhan-vien.xlsx');
 }
 
 export async function downloadAssignmentTemplate(ky) {
