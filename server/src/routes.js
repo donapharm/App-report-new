@@ -32,13 +32,15 @@ const diemXu = require('./diemXu');
 const { createDormantService } = require('./dormantService');
 const { createDormantReportService } = require('./dormantReport');
 const { createDormantNotificationStore } = require('./dormantNotifications');
+const { createDormantFeedbackStore } = require('./dormantFeedback');
 const { buildDormantDigest } = require('./dormantDigest');
 const { createFilteredEmployeeReportService } = require('./filteredEmployeeReport');
 const { createFilteredEmployeeDeliveryService } = require('./filteredEmployeeDelivery');
 
 const router = express.Router();
 const dormantNotificationStore = createDormantNotificationStore({ persist });
-const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist, notificationStore: dormantNotificationStore });
+const dormantFeedbackStore = createDormantFeedbackStore({ persist, notificationStore: dormantNotificationStore, listTelegramMap: auth.listTelegramMap });
+const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist, notificationStore: dormantNotificationStore, feedbackStore: dormantFeedbackStore });
 const dormantReport = createDormantReportService({ dormantService, persist });
 const filteredEmployeeReport = createFilteredEmployeeReportService({ store, catalogManagement, appSaleCst, persist });
 const filteredEmployeeDelivery = createFilteredEmployeeDeliveryService({ filteredEmployeeReport, store, listTelegramMap: auth.listTelegramMap, notifyChannels, persist });
@@ -1027,6 +1029,52 @@ router.get('/dormant/notifications', auth.requireAuth, requireCeoQlnb, (req, res
 router.post('/dormant/notifications/read', auth.requireAuth, requireCeoQlnb, (req, res) => {
   try { res.json(dormantService.markNotificationsRead(req.body || {})); }
   catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.get('/dormant/employee/notifications', auth.requireAuth, (req, res) => {
+  try {
+    const scope = auth.scopeOf(req.session);
+    if (!scope.empCode) return res.status(403).json({ error: 'Chuông nhân viên chỉ hiển thị dữ liệu trong phạm vi cá nhân.', code: 'DORMANT_EMPLOYEE_SCOPE_REQUIRED' });
+    noStore(res);
+    res.json(dormantService.notificationsForEmployee({ empCode: scope.empCode }));
+  } catch (e) { dormantReportError(res, e); }
+});
+router.post('/dormant/employee/notifications/read', auth.requireAuth, (req, res) => {
+  try {
+    const scope = auth.scopeOf(req.session);
+    if (!scope.empCode) return res.status(403).json({ error: 'Chuông nhân viên chỉ dành cho tài khoản nhân viên.', code: 'DORMANT_EMPLOYEE_SCOPE_REQUIRED' });
+    noStore(res);
+    res.json(dormantService.markEmployeeNotificationsRead({ empCode: scope.empCode, ids: req.body?.ids, all: req.body?.all }));
+  } catch (e) { dormantReportError(res, e); }
+});
+router.post('/dormant/feedback', auth.requireAuth, requireCeoQlnb, (req, res) => {
+  try {
+    noStore(res);
+    res.status(201).json(dormantService.createFeedbackForAdmin({
+      key: req.body?.key,
+      actionCycle: req.body?.action_cycle,
+      type: req.body?.type,
+      note: req.body?.note,
+      requestId: req.body?.request_id,
+      actor: 'CEO',
+    }));
+  } catch (e) { dormantReportError(res, e); }
+});
+router.get('/dormant/feedback/:id/telegram-preview', auth.requireAuth, requireCeoQlnb, (req, res) => {
+  try { noStore(res); res.json(dormantService.feedbackTelegramPreviewForAdmin(req.params.id)); }
+  catch (e) { dormantReportError(res, e); }
+});
+router.post('/dormant/feedback/:id/ack', auth.requireAuth, (req, res) => {
+  try {
+    const scope = auth.scopeOf(req.session);
+    if (!scope.empCode) return res.status(403).json({ error: 'Chỉ nhân viên nhận phản hồi mới được xác nhận.', code: 'DORMANT_EMPLOYEE_SCOPE_REQUIRED' });
+    noStore(res);
+    res.status(201).json(dormantService.acknowledgeFeedbackForEmployee({
+      feedbackId: req.params.id,
+      empCode: scope.empCode,
+      kind: req.body?.kind,
+      requestId: req.body?.request_id,
+    }));
+  } catch (e) { dormantReportError(res, e); }
 });
 
 /* ---------- Revenue drill-down ---------- */

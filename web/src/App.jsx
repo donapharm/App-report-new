@@ -59,7 +59,13 @@ function HomeButton() {
 export default function App() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState(() => { try { return localStorage.getItem('rpt_tab') || 'overview'; } catch { return 'overview'; } });
+  const [tab, setTab] = useState(() => {
+    try {
+      const linked = new URLSearchParams(window.location.search).get('tab');
+      if (TABS.some((item) => item.key === linked)) return linked;
+      return localStorage.getItem('rpt_tab') || 'overview';
+    } catch { return 'overview'; }
+  });
   const [tabStack, setTabStack] = useState([]); // các tab đã đi qua, để nút "Quay lại" lùi về
   const desktop = useIsDesktop();
 
@@ -75,6 +81,15 @@ export default function App() {
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!me) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') !== 'dormantReports' || !params.get('focus_key')) return;
+    const payload = { tab: 'dormantReports', focus_key: params.get('focus_key'), unit_code: params.get('unit_code') || '', ts: Date.now() };
+    try { sessionStorage.setItem('app_nav_payload', JSON.stringify(payload)); localStorage.setItem('rpt_tab', 'dormantReports'); } catch { /* ignore */ }
+    setTab('dormantReports');
+  }, [me]);
 
   // #6 Mini-header: cuộn xuống thì thu nhỏ banner (mobile). Desktop cuộn ở .main-desktop nên window.scrollY=0 -> không ảnh hưởng.
   useEffect(() => {
@@ -108,6 +123,7 @@ export default function App() {
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).C;
   const switchTab = (targetTab, payload = {}, mode = 'push') => {
     try { sessionStorage.setItem('app_nav_payload', JSON.stringify({ tab: targetTab, ...payload, ts: Date.now() })); } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('app:navigate', { detail: { tab: targetTab, ...payload } }));
     try { localStorage.setItem('rpt_tab', targetTab); } catch { /* ignore */ }
     if (mode === 'push' && targetTab !== tab) setTabStack((s) => [...s, tab]);
     setTab(targetTab);
@@ -147,7 +163,7 @@ export default function App() {
               <div className="sub">DONAPHARM · Báo cáo doanh thu thông minh</div>
             </div>
             <div className="topbar-actions">
-              <CeoNotificationBell me={me} />
+              <CeoNotificationBell me={me} onNavigate={navigate} />
               <HomeButton />
               <Clock />
             </div>
@@ -174,7 +190,7 @@ export default function App() {
               <div className="who-name">{me.name}</div>
               <div className="who-role">{roleLabel(me.role)}</div>
             </div>
-            <CeoNotificationBell me={me} />
+            <CeoNotificationBell me={me} onNavigate={navigate} />
           </div>
         </div>
         <div className="hdr-r2">

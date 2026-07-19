@@ -15,7 +15,7 @@ const optionLabel = (item, key, nameKey) => typeof item === 'string' ? item : it
 const rowsOf = (report) => report?.items || report?.rows || report?.report?.items || report?.report?.rows || [];
 const summaryOf = (report) => report?.summary || report?.kpis || report?.report?.summary || report?.report?.kpis || {};
 
-function Preview({ report, title = 'Báo cáo hiện tại' }) {
+function Preview({ report, title = 'Báo cáo hiện tại', focusKey = '' }) {
   const rows = rowsOf(report);
   const summary = summaryOf(report);
   return <section className="dr-report-card">
@@ -26,13 +26,40 @@ function Preview({ report, title = 'Báo cáo hiện tại' }) {
       <div className="warn"><small>Đến hạn</small><b>{fmt(summary.due ?? summary.due_review ?? 0, 0)}</b></div>
       <div className="danger"><small>Quá hạn</small><b>{fmt(summary.overdue ?? summary.overdue_review ?? 0, 0)}</b></div>
     </div>
-    {!rows.length ? <div className="dr-empty">Không có QLNB phù hợp bộ lọc.</div> : <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th>Nhân viên</th><th>Đơn vị</th><th>QLNB / Sản phẩm</th><th>Ngày ngủ</th><th>CST còn</th><th>Review</th><th>Review lại</th><th>Chu kỳ</th></tr></thead><tbody>{rows.map((row, index) => <tr key={row.key || row.id || index}>
+    {!rows.length ? <div className="dr-empty">Không có QLNB phù hợp bộ lọc.</div> : <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th>Nhân viên</th><th>Đơn vị</th><th>QLNB / Sản phẩm</th><th>Ngày ngủ</th><th>CST còn</th><th>Review</th><th>Review lại</th><th>Chu kỳ</th></tr></thead><tbody>{rows.map((row, index) => <tr className={focusKey && row.key === focusKey ? 'focused' : ''} key={row.key || row.id || index}>
       <td data-label="Nhân viên">{row.emp_code || '—'}{row.employee_name || row.emp_name ? <small>{row.employee_name || row.emp_name}</small> : null}</td>
       <td data-label="Đơn vị">{row.unit_code || '—'}{row.unit_name ? <small>{row.unit_name}</small> : null}</td>
       <td data-label="QLNB / Sản phẩm">{row.iit_code || '—'}{row.product_name ? <small>{row.product_name}</small> : null}</td>
       <td data-label="Số ngày ngủ">{fmt(row.days_idle, 0)}</td><td data-label="CST còn lại">{fmt(row.remain_qty)}</td><td data-label="Review"><span className={`dr-status ${row.review_status || ''}`}>{REVIEW_LABEL[row.review_status] || row.review_status || '—'}</span></td>
       <td data-label="Review lại">{dateVi(row.action?.next_follow_up || row.next_follow_up)}</td><td data-label="Chu kỳ xử lý">{fmt(row.action?.action_cycle ?? row.action?.cycle ?? row.action_cycle ?? 0, 0)}</td>
     </tr>)}</tbody></table></div>}
+  </section>;
+}
+
+function FocusedItem({ detail, busy, isCeo, onClose, onReload }) {
+  const [ackBusy, setAckBusy] = useState('');
+  const [error, setError] = useState('');
+  const item = detail?.item;
+  async function acknowledge(feedbackId, kind) {
+    if (ackBusy) return;
+    setAckBusy(`${feedbackId}:${kind}`); setError('');
+    try { await api.dormantFeedbackAck(feedbackId, { kind, request_id: `${kind}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}` }); await onReload(); }
+    catch (e) { setError(e.message); }
+    finally { setAckBusy(''); }
+  }
+  if (busy) return <section className="dr-focus-card loading">Đang mở đúng QLNB…</section>;
+  if (!item) return null;
+  return <section className="dr-focus-card" aria-label="QLNB được mở từ thông báo">
+    <div className="dr-focus-head"><div><small>MỞ TỪ THÔNG BÁO</small><h2>{item.product_name || item.iit_code}</h2><code>{item.iit_code}</code></div><button type="button" onClick={onClose}>×</button></div>
+    <div className="dr-focus-meta"><span><small>Nhân viên</small><b>{item.emp_code}</b></span><span><small>Đơn vị</small><b>{item.unit_code}</b><em>{item.unit_name}</em></span><span><small>Ngày ngủ</small><b>{fmt(item.days_idle, 0)}</b></span><span><small>Chu kỳ xử lý</small><b>{fmt(item.action?.action_cycle, 0)}</b></span></div>
+    <p><b>Kế hoạch hiện tại:</b> {item.action?.status || 'Chưa lập kế hoạch'} · review lại {dateVi(item.action?.next_follow_up)}</p>
+    {!!item.ceo_feedback?.length && <div className="dr-feedback-list"><h3>Phản hồi CEO</h3>{item.ceo_feedback.slice().reverse().map((feedback) => {
+      const read = feedback.acknowledgements?.some((ack) => ack.kind === 'read' || ack.kind === 'updated');
+      const updated = feedback.acknowledgements?.some((ack) => ack.kind === 'updated');
+      return <article key={feedback.id}><div><b>{feedback.label}</b><time>{dateVi(feedback.created_at, true)}</time></div>{feedback.note && <p>{feedback.note}</p>}<small>Chu kỳ xử lý {feedback.action_cycle} · {updated ? 'Đã xác nhận cập nhật' : read ? 'Đã xác nhận đọc' : 'Chưa xác nhận'}</small>{!isCeo && <div className="dr-feedback-actions"><button type="button" disabled={read || !!ackBusy} onClick={() => acknowledge(feedback.id, 'read')}>{ackBusy === `${feedback.id}:read` ? 'Đang lưu…' : read ? '✓ Đã đọc' : 'Xác nhận đã đọc'}</button><button type="button" className="primary" disabled={updated || !!ackBusy} onClick={() => acknowledge(feedback.id, 'updated')}>{ackBusy === `${feedback.id}:updated` ? 'Đang lưu…' : updated ? '✓ Đã cập nhật' : 'Xác nhận đã cập nhật'}</button></div>}</article>;
+    })}</div>}
+    {!item.ceo_feedback?.length && <div className="dr-empty">QLNB này chưa có phản hồi CEO.</div>}
+    {error && <div className="dormant-error">{error}</div>}
   </section>;
 }
 
@@ -47,12 +74,38 @@ export default function DormantReports({ me }) {
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState('');
   const [error, setError] = useState('');
+  const [focusKey, setFocusKey] = useState('');
+  const [focusDetail, setFocusDetail] = useState(null);
+  const [focusBusy, setFocusBusy] = useState(false);
   const reportRequest = useRef(0);
   const snapshotRequest = useRef(0);
 
   const employeeOptions = report?.filters?.employees || report?.employees || report?.top_employees || [];
   const unitOptions = report?.filters?.units || report?.units || report?.top_units || [];
   const queryParams = useMemo(() => Object.fromEntries(Object.entries(filters).filter(([key, value]) => value && (isCeo || key !== 'emp_code'))), [filters, isCeo]);
+
+  useEffect(() => {
+    const apply = (payload) => {
+      if (payload?.tab !== 'dormantReports' || !payload?.focus_key) return;
+      setFocusKey(String(payload.focus_key));
+      if (payload.unit_code) setFilters((old) => ({ ...old, unit_code: String(payload.unit_code) }));
+    };
+    try { apply(JSON.parse(sessionStorage.getItem('app_nav_payload') || 'null')); } catch { /* ignore */ }
+    const listener = (event) => apply(event.detail);
+    window.addEventListener('app:navigate', listener);
+    return () => window.removeEventListener('app:navigate', listener);
+  }, []);
+  async function loadFocus(key = focusKey) {
+    if (!key) { setFocusDetail(null); return; }
+    setFocusBusy(true);
+    try {
+      const result = await api.dormantItemDetail(key);
+      setFocusDetail(result);
+      if (result?.item) setFilters((old) => ({ ...old, unit_code: result.item.unit_code || old.unit_code, q: result.item.iit_code || old.q }));
+    } catch (e) { setError(e.message); setFocusDetail(null); }
+    finally { setFocusBusy(false); }
+  }
+  useEffect(() => { loadFocus(focusKey); }, [focusKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadHistory() {
     try { const result = await api.dormantReportSnapshots(); setHistory(result?.snapshots || result?.items || result || []); }
@@ -105,7 +158,8 @@ export default function DormantReports({ me }) {
       <label><span>Mẫu báo cáo</span><select value={filters.template} onChange={(e) => setFilter('template', e.target.value)}>{templates.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     </section>
     {error && <div className="dormant-error">{error}</div>}
-    {busy ? <div className="dr-loading">Đang dựng báo cáo đúng phạm vi…</div> : <Preview report={report} />}
+    <FocusedItem detail={focusDetail} busy={focusBusy} isCeo={isCeo} onReload={() => loadFocus(focusKey)} onClose={() => { setFocusKey(''); setFocusDetail(null); }} />
+    {busy ? <div className="dr-loading">Đang dựng báo cáo đúng phạm vi…</div> : <Preview report={report} focusKey={focusKey} />}
     <section className="dr-snapshot-tools"><div><h2>Ảnh chụp báo cáo</h2><p>Lưu trạng thái hiện tại trước khi xuất file. File xuất luôn bám theo ảnh chụp đã chọn.</p></div><button type="button" className="btn" disabled={saving || busy} onClick={saveSnapshot}>{saving ? 'Đang lưu…' : '＋ Lưu ảnh chụp'}</button></section>
     <section className="dr-history"><label><span>Lịch sử ảnh chụp</span><select value={selectedSnapshot?.id || ''} onChange={(e) => selectSnapshot(e.target.value)}><option value="">Chọn ảnh chụp để xem / xuất file</option>{history.map((snapshot) => <option key={snapshot.id} value={snapshot.id}>{dateVi(snapshot.created_at || snapshot.at, true)} · {TEMPLATE_LABEL[snapshot.template] || snapshot.template || 'Chuẩn'} · {snapshot.created_by || snapshot.emp_code || '—'}</option>)}</select></label><div className="dr-export"><button type="button" disabled={!selectedSnapshot?.id || !!downloading} onClick={() => download('xlsx')}>{downloading === 'xlsx' ? 'Đang xuất…' : '⬇ Excel'}</button><button type="button" disabled={!selectedSnapshot?.id || !!downloading} onClick={() => download('pdf')}>{downloading === 'pdf' ? 'Đang xuất…' : '⬇ PDF'}</button></div></section>
     {selectedSnapshot && <Preview report={selectedSnapshot} title={`Ảnh chụp #${selectedSnapshot.id}`} />}

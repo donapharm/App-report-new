@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createDormantService } = require('../src/dormantService');
 const { createDormantNotificationStore } = require('../src/dormantNotifications');
+const { createDormantFeedbackStore } = require('../src/dormantFeedback');
 
 function makeFixture({ unitACount = 12, unitBCount = 4 } = {}) {
   const files = new Map();
@@ -25,7 +26,8 @@ function makeFixture({ unitACount = 12, unitBCount = 4 } = {}) {
     getCst: () => [],
   };
   const notificationStore = createDormantNotificationStore({ persist, clock: () => now });
-  const service = createDormantService({ store, persist, notificationStore, clock: () => now });
+  const feedbackStore = createDormantFeedbackStore({ persist, notificationStore, listTelegramMap: () => [{ emp_code: 'DN016', telegram_id: '123456789' }], clock: () => now });
+  const service = createDormantService({ store, persist, notificationStore, feedbackStore, clock: () => now });
   return {
     service, files, rows,
     setNow: (value) => { now = new Date(value); },
@@ -186,6 +188,8 @@ test('CEO notification feed receives plan, due review and read state', () => {
   const f = makeFixture({ unitACount: 1, unitBCount: 0 });
   const gate = f.service.gateFor({ empCode: 'DN016' });
   f.service.submitActions({ empCode: 'DN016', checkpoint_key: gate.checkpoint_key, actions: actionsFor(gate) });
+  const employeeEvent = f.service.notificationsForEmployee({ empCode: 'DN016' }).events.find((event) => event.item_keys?.includes(gate.required_items[0].key));
+  assert.equal(employeeEvent.ack_kind, 'updated', 'server action submission must resolve employee escalation for the exact QLNB');
   let feed = f.service.notificationsForAdmin();
   assert.equal(feed.events[0].type, 'plan_batch');
   assert.equal(feed.unread_count, 1);
@@ -196,6 +200,35 @@ test('CEO notification feed receives plan, due review and read state', () => {
   assert.ok(feed.events.some((x) => x.type === 'review_due'));
   assert.equal(feed.unread_count, 1);
   assert.equal(f.service.markNotificationsRead({ ids: [feed.events.find((x) => x.type === 'review_due').id] }).unread_count, 0);
+});
+
+test('CEO feedback is bound to the exact employee-unit-QLNB action cycle and employee detail only exposes own feedback', () => {
+  const f = makeFixture({ unitACount: 1, unitBCount: 0 });
+  const gate = f.service.gateFor({ empCode: 'DN016' });
+  const key = gate.required_items[0].key;
+  assert.throws(() => f.service.createFeedbackForAdmin({ key, actionCycle: 1, type: 'approved', requestId: 'request-before-plan' }), /chưa gửi kế hoạch/);
+  f.service.submitActions({ empCode: 'DN016', checkpoint_key: gate.checkpoint_key, actions: actionsFor(gate) });
+  assert.throws(() => f.service.createFeedbackForAdmin({ key, actionCycle: 2, type: 'approved', requestId: 'request-wrong-cycle' }), /Chu kỳ xử lý đã thay đổi/);
+  const feedback = f.service.createFeedbackForAdmin({ key, actionCycle: 1, type: 'approved', note: 'Tiếp tục triển khai', actor: 'CEO', requestId: 'request-exact-cycle' });
+  assert.equal(feedback.emp_code, 'DN016');
+  assert.equal(feedback.action_cycle, 1);
+  const ownDetail = f.service.detailFor({ key, empCode: 'DN016' });
+  assert.equal(ownDetail.item.ceo_feedback.length, 1);
+  assert.equal(ownDetail.item.ceo_feedback[0].id, feedback.id);
+  assert.throws(() => f.service.detailFor({ key, empCode: 'DN001' }), /phạm vi/);
+  assert.throws(() => f.service.acknowledgeFeedbackForEmployee({ feedbackId: feedback.id, empCode: 'DN001', kind: 'read', requestId: 'request-wrong-employee' }), /phạm vi/);
+});
+
+test('employee notification service never accepts a frontend employee override', () => {
+  const f = makeFixture({ unitACount: 1, unitBCount: 0 });
+  const own = f.service.notificationsForEmployee({ empCode: 'DN016' });
+  assert.ok(own.events.length >= 1);
+  assert.ok(own.events.every((event) => event.emp_code === 'DN016'));
+  const foreign = f.service.notificationsForEmployee({ empCode: 'DN001' });
+  assert.equal(foreign.events.length, 0);
+  const ownId = own.events[0].id;
+  f.service.markEmployeeNotificationsRead({ empCode: 'DN001', ids: [ownId] });
+  assert.ok(f.service.notificationsForEmployee({ empCode: 'DN016' }).events.find((event) => event.id === ownId && !event.read_at));
 });
 
 test('CEO dashboard keeps overdue items in its top 100 regardless of priority score', () => {

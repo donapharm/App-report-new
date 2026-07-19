@@ -192,7 +192,7 @@ function summaryReview(items = [], today) {
   };
 }
 
-function createDormantService({ store, scoreForEmp, persist, notificationStore = null, clock = () => new Date() } = {}) {
+function createDormantService({ store, scoreForEmp, persist, notificationStore = null, feedbackStore = null, clock = () => new Date() } = {}) {
   if (!store || !persist) throw new Error('Dormant service thiếu store/persist');
   const loadState = () => persist.load(STATE_NAME, { version: 1, items: {} });
   const saveState = (value) => persist.save(STATE_NAME, value);
@@ -213,7 +213,10 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
     if (notificationStore) {
       const today = localYmd(clock());
       notificationStore.syncReviewEvents({
-        items: result.items.map((item) => publicItem(item, today)),
+        items: result.items.map((item) => ({
+          ...publicItem(item, today),
+          dormant_cycle: Math.max(0, Number(result.state?.items?.[item.key]?.cycle || 0)),
+        })),
         reactivated: result.reactivated,
         today,
       });
@@ -387,6 +390,10 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
         items: updatedItems,
         at: new Date(clock()).toISOString(),
       });
+      // A submitted action is the authoritative "updated" acknowledgement
+      // for every employee notification tied to those exact QLNB keys. This
+      // stops the three-business-day escalation without trusting the client.
+      notificationStore.acknowledge({ itemKeys: validated.map((action) => action.key), empCode: emp, kind: 'updated' });
     }
     // Response sau lô cuối phải đóng canh cửa, không tự nhảy đơn vị. Lần mở
     // màn hình sau vẫn nhắc ngay đơn vị khác đang đến/quá hạn.
@@ -436,7 +443,14 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
       throw error;
     }
     const stateRow = result.state?.items?.[requestedKey] || {};
-    return { as_of: result.as_of, generated_on: localYmd(clock()), item: safeDetailItem(item, stateRow, localYmd(clock())) };
+    return {
+      as_of: result.as_of,
+      generated_on: localYmd(clock()),
+      item: {
+        ...safeDetailItem(item, stateRow, localYmd(clock())),
+        ceo_feedback: feedbackStore ? feedbackStore.listForItem(requestedKey, { empCode: isAdmin ? null : emp }) : [],
+      },
+    };
   }
 
   function plansForAdmin({ empCode, unitCode } = {}) {
@@ -488,8 +502,14 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
       units,
       selected_unit_code: selectedUnit,
       selected_summary: metrics(selectedItems),
-      items: selectedItems.sort(gateComparator(today)).map((item) => ({ ...item, review_status: item.attention?.status || 'unplanned' })),
+      items: selectedItems.sort(gateComparator(today)).map((item) => ({
+        ...item,
+        dormant_cycle: Math.max(0, Number(result.state?.items?.[item.key]?.cycle || 0)),
+        review_status: item.attention?.status || 'unplanned',
+        ceo_feedback: feedbackStore ? feedbackStore.listForItem(item.key) : [],
+      })),
       read_only: true,
+      feedback_enabled: !!feedbackStore,
     };
   }
 
@@ -497,15 +517,93 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
     if (!notificationStore) return { generated_on: localYmd(clock()), unread_count: 0, counts: {}, events: [] };
     const today = localYmd(clock());
     const result = analyzeScope(null);
-    return notificationStore.feed({ items: result.items.map((item) => publicItem(item, today)), reactivated: result.reactivated, today });
+    return notificationStore.feed({
+      items: result.items.map((item) => ({ ...publicItem(item, today), dormant_cycle: Math.max(0, Number(result.state?.items?.[item.key]?.cycle || 0)) })),
+      reactivated: result.reactivated, today, audience: 'ceo',
+    });
   }
 
   function markNotificationsRead(payload) {
     if (!notificationStore) return { ok: true, changed: 0, unread_count: 0 };
-    return notificationStore.markRead(payload || {});
+    return notificationStore.markRead({ ...(payload || {}), audience: 'ceo' });
   }
 
-  return { gateFor, submitActions, summaryFor, detailFor, plansForAdmin, notificationsForAdmin, markNotificationsRead, analyzeScope };
+  function notificationsForEmployee({ empCode } = {}) {
+    const emp = upper(empCode);
+    if (!emp) throw new Error('Chưa xác định mã nhân viên');
+    if (!notificationStore) return { generated_on: localYmd(clock()), unread_count: 0, counts: {}, events: [] };
+    const today = localYmd(clock());
+    const result = analyzeScope(emp);
+    return notificationStore.feed({
+      items: result.items.map((item) => ({ ...publicItem(item, today), dormant_cycle: Math.max(0, Number(result.state?.items?.[item.key]?.cycle || 0)) })),
+      reactivated: result.reactivated, today, audience: 'employee', empCode: emp,
+    });
+  }
+
+  function markEmployeeNotificationsRead({ empCode, ids, all } = {}) {
+    const emp = upper(empCode);
+    if (!emp) throw new Error('Chưa xác định mã nhân viên');
+    if (!notificationStore) return { ok: true, changed: 0, unread_count: 0 };
+    return notificationStore.markRead({ ids, all, audience: 'employee', empCode: emp });
+  }
+
+  function createFeedbackForAdmin({ key, actionCycle, type, note, actor, requestId } = {}) {
+    if (!feedbackStore) throw new Error('Chức năng phản hồi chưa sẵn sàng');
+    const requestedKey = String(key || '').trim();
+    if (!requestedKey) throw new Error('Thiếu khóa QLNB');
+    const result = analyzeScope(null);
+    const item = result.items.find((row) => row.key === requestedKey);
+    if (!item) {
+      const error = new Error('QLNB không tồn tại hoặc đã hoàn tất');
+      error.status = 404;
+      throw error;
+    }
+    const stateRow = result.state?.items?.[requestedKey] || {};
+    const currentActionCycle = Math.max(0, Number(stateRow.action_cycle || item.action?.cycle || 0));
+    if (!item.action?.status || currentActionCycle <= 0) {
+      const error = new Error('Nhân viên chưa gửi kế hoạch cho QLNB này');
+      error.status = 409;
+      throw error;
+    }
+    if (Number(actionCycle) !== currentActionCycle) {
+      const error = new Error('Chu kỳ xử lý đã thay đổi, vui lòng tải lại');
+      error.status = 409;
+      throw error;
+    }
+    return feedbackStore.create({
+      item: {
+        key: item.key,
+        emp_code: item.emp_code,
+        employee_name: item.employee_name,
+        unit_code: item.unit_code,
+        unit_name: item.unit_name,
+        iit_code: item.iit_code,
+        product_name: item.product_name,
+        dormant_cycle: Math.max(0, Number(stateRow.cycle || 0)),
+      },
+      type, note, actionCycle: currentActionCycle, actor, requestId,
+    });
+  }
+
+  function acknowledgeFeedbackForEmployee({ feedbackId, empCode, kind, requestId } = {}) {
+    if (!feedbackStore) throw new Error('Chức năng phản hồi chưa sẵn sàng');
+    const emp = upper(empCode);
+    if (!emp) throw new Error('Chưa xác định mã nhân viên');
+    return feedbackStore.acknowledge({ feedbackId, empCode: emp, kind, requestId });
+  }
+
+  function feedbackTelegramPreviewForAdmin(feedbackId) {
+    if (!feedbackStore) throw new Error('Chức năng phản hồi chưa sẵn sàng');
+    return feedbackStore.telegramPreview(feedbackId);
+  }
+
+  return {
+    gateFor, submitActions, summaryFor, detailFor, plansForAdmin,
+    notificationsForAdmin, markNotificationsRead,
+    notificationsForEmployee, markEmployeeNotificationsRead,
+    createFeedbackForAdmin, acknowledgeFeedbackForEmployee, feedbackTelegramPreviewForAdmin,
+    analyzeScope,
+  };
 }
 
 module.exports = {

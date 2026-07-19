@@ -86,6 +86,11 @@ export const api = {
   dormantAdminPlans: (params = {}) => req('GET', '/dormant/admin/plans?' + new URLSearchParams(params).toString()),
   dormantNotifications: () => req('GET', '/dormant/notifications'),
   dormantNotificationsRead: (payload = {}) => req('POST', '/dormant/notifications/read', payload),
+  dormantEmployeeNotifications: () => req('GET', '/dormant/employee/notifications'),
+  dormantEmployeeNotificationsRead: (payload = {}) => req('POST', '/dormant/employee/notifications/read', payload),
+  dormantFeedbackCreate: (payload) => req('POST', '/dormant/feedback', payload),
+  dormantFeedbackTelegramPreview: (id) => req('GET', '/dormant/feedback/' + encodeURIComponent(id) + '/telegram-preview'),
+  dormantFeedbackAck: (id, payload) => req('POST', '/dormant/feedback/' + encodeURIComponent(id) + '/ack', payload),
   revenue: (dimension, ky, extra = {}) => {
     const p = new URLSearchParams({ dimension, ...(ky ? { ky } : {}), ...extra });
     return req('GET', '/revenue?' + p.toString());
