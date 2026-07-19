@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Materialize current-period revenue for App Report New from 2 App Sale sources:
+ * Materialize current-period revenue for App Report from 2 App Sale sources:
  *  - CRM MISA snapshot read-model: invoice_export_amount, buckets official+pending
  *  - APP WEB partner delivered: latest partner response delivered_qty * order item price
- * Read-only against App Sale DB; writes only App Report New server/data upload slot.
+ * Read-only against App Sale DB; writes only App Report server/data upload slot.
  */
 const fs = require('fs');
 const path = require('path');

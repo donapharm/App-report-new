@@ -789,7 +789,7 @@ router.get('/admin/assignments/template.xlsx', auth.requireAuth, auth.requireAdm
   const ky = String(req.query.ky || store.latestKy()).trim();
   const existing = assignmentAdmin.listAssignments({});
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'App Report New'; wb.created = new Date();
+  wb.creator = 'App Report'; wb.created = new Date();
   const ws = wb.addWorksheet('Phan cong');
   ws.columns = [
     { header: 'emp_code', key: 'emp_code', width: 12 },
@@ -1930,7 +1930,7 @@ router.get('/admin/targets/template.xlsx', auth.requireAuth, auth.requireAdmin, 
   }
   const basisLabel = basis === 'blank' ? 'Trống' : basis === 'latest' ? 'Kỳ gần nhất đã giao' : 'Target T06/2026 Lumos';
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'App Report New';
+  wb.creator = 'App Report';
   wb.created = new Date();
   const ws = wb.addWorksheet('Target template');
   ws.columns = [
@@ -2224,7 +2224,7 @@ router.post('/report/revenue-send/send', auth.requireAuth, auth.requireAdmin, as
       const filePath = path.join(REVENUE_SEND_DIR, fileName);
       fs.writeFileSync(filePath, buffer);
       const subject = `DONAPHARM App Report — Báo cáo doanh thu ${report.kys?.join(', ') || report.ky} — ${r.emp_code}`;
-      const text = `Anh/Chị ${r.name} (${r.emp_code}), App Report New gửi báo cáo doanh thu cá nhân theo phạm vi phân quyền. File đính kèm: ${fileName}.`;
+      const text = `Anh/Chị ${r.name} (${r.emp_code}), App Report gửi báo cáo doanh thu cá nhân theo phạm vi phân quyền. File đính kèm: ${fileName}.`;
       const row = { emp_code: r.emp_code, name: r.name, file: fileName, channels: {} };
       if (channels.telegram) {
         row.channels.telegram = r.telegram_id && notifyChannels.telegramReady()
@@ -2233,7 +2233,7 @@ router.post('/report/revenue-send/send', auth.requireAuth, auth.requireAdmin, as
       }
       if (channels.email) {
         row.channels.email = r.email && notifyChannels.emailReady()
-          ? await notifyChannels.sendEmail(r.email, subject, text, `<p>${text}</p><p>Đây là báo cáo tự động từ App Report New.</p>`, [{ filename: fileName, content: buffer, contentType: REVENUE_SEND_MIME[format] }])
+          ? await notifyChannels.sendEmail(r.email, subject, text, `<p>${text}</p><p>Đây là báo cáo tự động từ App Report.</p>`, [{ filename: fileName, content: buffer, contentType: REVENUE_SEND_MIME[format] }])
           : { ok: false, description: !notifyChannels.emailReady() ? 'Email chưa cấu hình SMTP.' : 'NV chưa có email.' };
       }
       row.ok = Object.values(row.channels).some((x) => x && x.ok);
@@ -2251,7 +2251,7 @@ router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
   const ky = req.query.ky || store.latestKy();
   const kind = req.params.kind;
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'App Report New';
+  wb.creator = 'App Report';
   const ws = wb.addWorksheet('Report');
 
   if (kind === 'revenue') {

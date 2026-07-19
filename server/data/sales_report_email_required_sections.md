@@ -38,7 +38,7 @@ Lưu ý:
 4. Có section **Top sản phẩm — doanh thu và số lượng**:
    - Ảnh mẫu hiển thị Top 15; yêu cầu policy vẫn giữ Top 30 mặt hàng chiếm tỷ trọng cao nhất khi báo cáo chi tiết/email đủ chỗ.
    - Cột gợi ý: #, Mã QLNB / sản phẩm, Số lượng, Doanh thu, %.
-5. Footer/nguồn báo cáo nên thể hiện App Report New và số trang/kỳ báo cáo khi xuất dạng deck/PDF/HTML.
+5. Footer/nguồn báo cáo nên thể hiện App Report và số trang/kỳ báo cáo khi xuất dạng deck/PDF/HTML.
 
 
 ## Branding asset bổ sung — CEO gửi 14/07/2026 20:23–20:24

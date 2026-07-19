@@ -22,7 +22,7 @@ const emitVersion = {
   },
 };
 
-// Dev: proxy /api sang backend Express App Report New (cổng 3873).
+// Dev: proxy /api sang backend Express App Report (cổng 3873).
 export default defineConfig({
   define: {
     __BUILD_VER__: JSON.stringify(buildVer),

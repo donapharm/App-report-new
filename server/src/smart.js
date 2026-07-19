@@ -1,5 +1,5 @@
 /**
- * smart.js — LÕI "THÔNG MINH" của App Report New.
+ * smart.js — LÕI "THÔNG MINH" của App Report.
  *   - buildAlerts:  cảnh báo chủ động (việc CEO cần chú ý).
  *   - forecastTargets: dự báo target kỳ tới theo xu hướng thật.
  *   - answerQuestion: AI hỏi nhanh CODE-FIRST (số do code tính, không bịa).

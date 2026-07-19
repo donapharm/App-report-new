@@ -11,7 +11,7 @@ async function buildPptxV2({ htmlPath, outputPath, title }) {
     if (rendered.files.length !== 32) throw new Error(`PPTX V2 cần 32 slide, hiện có ${rendered.files.length}`);
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE';
-    pptx.author = 'GROUP DONAPHARM — App Report New';
+    pptx.author = 'GROUP DONAPHARM — App Report';
     pptx.company = 'CÔNG TY CỔ PHẦN DONAPHARM';
     pptx.subject = 'Báo cáo doanh số chuyên sâu CEO — DRAFT V2';
     pptx.title = title || 'GROUP DONAPHARM — Báo cáo doanh số DRAFT V2';

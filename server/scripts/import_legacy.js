@@ -1,6 +1,6 @@
 /**
  * import_legacy.js — Chuyển dữ liệu doanh thu từ APP CŨ (report_upload_data_*.json)
- * thành SLOT của App Report New (data/upload_slots.json + data/uploads/<id>.json + audit).
+ * thành SLOT của App Report (data/upload_slots.json + data/uploads/<id>.json + audit).
  *
  * Chạy trên server (nơi có file cũ):
  *   node server/scripts/import_legacy.js <FILE.json> [ky] [dateFrom] [dateTo]   # nạp 1 file

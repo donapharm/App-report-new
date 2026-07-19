@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * import_cst.js — Nạp CƠ SỐ THẦU THẬT từ app cũ vào App Report New.
+ * import_cst.js — Nạp CƠ SỐ THẦU THẬT từ app cũ vào App Report.
  * Input: mảng JSON đã tính sẵn từ V_TEMP_PHARMA + SALES_REPORT theo logic app cũ.
  * Output: server/data/cst_real.json
  */

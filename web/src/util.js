@@ -23,7 +23,7 @@ export function pct(n, digits = 1) {
   return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: digits }) + '%';
 }
 
-// Chuẩn ngày toàn App Report New: giao diện dd/mm/yy, dữ liệu/API vẫn ISO yyyy-mm-dd.
+// Chuẩn ngày toàn App Report: giao diện dd/mm/yy, dữ liệu/API vẫn ISO yyyy-mm-dd.
 const pad2 = (v) => String(v).padStart(2, '0');
 export function parseDisplayDate(value) {
   const s = String(value || '').trim();

@@ -79,8 +79,8 @@ function logAudit(event, data) {
 
 /* ===================== MAPPING TELEGRAM (lưu bền) ===================== */
 // Bản ghi: { telegram_id, emp_code, name, added_at, added_by }
-// NGUỒN SỰ THẬT = FILE telegram_map.json. LÝ DO: backend (reportnew) và worker Telegram
-// (reportnew-tgbot) là 2 TIẾN TRÌNH riêng. Nếu giữ bản in-memory `let tgMap` thì khi admin
+// NGUỒN SỰ THẬT = FILE telegram_map.json. LÝ DO: backend App Report và worker Telegram
+// là 2 TIẾN TRÌNH riêng. Nếu giữ bản in-memory `let tgMap` thì khi admin
 // thêm map ở tiến trình này, tiến trình kia KHÔNG thấy (worker cứ đòi mã RP, không trả lời;
 // digest cũng sót) và các tiến trình có thể GHI ĐÈ map của nhau bằng bản RAM cũ.
 // => Luôn đọc/ghi THẲNG file (quy mô nhỏ, rất rẻ) + read-modify-write để không xoá nhầm.

@@ -1,5 +1,5 @@
 /**
- * index.js — điểm khởi động backend App Report New.
+ * index.js — điểm khởi động backend App Report.
  */
 // Múi giờ GMT+7 (Việt Nam) cho mọi mốc thời gian/log/lịch. Cho phép env override.
 process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
@@ -31,8 +31,20 @@ const app = express();
 
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+
+// Chỉ còn một địa chỉ App Report chính thức. Alias chuyển tiếp không phục vụ
+// ứng dụng trực tiếp để người dùng luôn nhìn thấy domain chuẩn.
+const CANONICAL_ORIGIN = 'https://report.donapharm.asia';
+app.use((req, res, next) => {
+  const host = String(req.hostname || '').toLowerCase();
+  if (host === 'reportnew.donapharm.asia') {
+    return res.redirect(308, `${CANONICAL_ORIGIN}${req.originalUrl || '/'}`);
+  }
+  return next();
+});
+
 const allowedOrigins = new Set(
-  String(process.env.CORS_ORIGINS || 'https://report.donapharm.asia,https://reportnew.donapharm.asia,https://home.donapharm.asia')
+  String(process.env.CORS_ORIGINS || 'https://report.donapharm.asia,https://home.donapharm.asia')
     .split(',').map((x) => x.trim()).filter(Boolean),
 );
 app.use(cors({
@@ -45,7 +57,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/api/health', (req, res) => res.json({ ok: true, service: 'app-report-new', ts: Date.now() }));
+app.get('/api/health', (req, res) => res.json({ ok: true, service: 'app-report', ts: Date.now() }));
 app.use('/api', routes);
 
 // Phục vụ frontend đã build (web/dist) nếu có — cho phép chạy 1 cổng ở production.
@@ -69,7 +81,7 @@ app.get(/^(?!\/api).*/, (req, res, next) => {
 });
 
 app.listen(PORT, HOST, () => {
-  console.log(`✔ App Report New API chạy tại http://${HOST}:${PORT}`);
+  console.log(`✔ App Report API chạy tại http://${HOST}:${PORT}`);
   console.log(`  Health: http://${HOST}:${PORT}/api/health`);
   revenueRefresh.start();
 });

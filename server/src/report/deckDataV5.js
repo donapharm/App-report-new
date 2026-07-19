@@ -1,6 +1,6 @@
 'use strict';
 
-/** CEO Deck V5 Deep — grounded FACTS only. App Report New. */
+/** CEO Deck V5 Deep — grounded FACTS only. App Report. */
 const v3 = require('./deckDataV3');
 const v2 = require('./deckDataV2');
 const store = require('../store');

@@ -5,7 +5,7 @@
  * - CEO/company scope only.
  * - Weekly and monthly periods are intentionally independent.
  * - No invented weekly history: WoW is disabled when source granularity is not daily.
- * - Revenue, target, CST and score/xu remain traceable to App Report New sources.
+ * - Revenue, target, CST and score/xu remain traceable to App Report sources.
  */
 const store = require('../store');
 const analytics = require('../analytics');
@@ -197,7 +197,7 @@ function cstOpportunity(monthRows) {
   const units = aggregate((r) => r.unitCode, (r) => r.unitName);
   const products = aggregate((r) => r.iitCode, (r) => r.productName);
   const routes = aggregate((r) => r.route, (r) => r.route);
-  return { source: 'App Report New CST snapshot (cst_real + slot upload)', rowCount: detail.length, detail, units, products, routes, hotOpportunities: detail.slice().sort((a, b) => b.remainAmount - a.remainAmount).slice(0, 20), dormantOpportunities: detail.filter((x) => x.revenue === 0).sort((a, b) => b.remainAmount - a.remainAmount).slice(0, 20), untouched: detail.filter((x) => x.remainPct >= 99.95).sort((a, b) => b.remainAmount - a.remainAmount).slice(0, 20), warnings: ['Không cộng tổng số lượng CST giữa các sản phẩm/ĐVT khác nhau.', 'Giá trị dư địa dùng remain_amount từ snapshot CST đang hiển thị trong App Report New.'] };
+  return { source: 'App Report CST snapshot (cst_real + slot upload)', rowCount: detail.length, detail, units, products, routes, hotOpportunities: detail.slice().sort((a, b) => b.remainAmount - a.remainAmount).slice(0, 20), dormantOpportunities: detail.filter((x) => x.revenue === 0).sort((a, b) => b.remainAmount - a.remainAmount).slice(0, 20), untouched: detail.filter((x) => x.remainPct >= 99.95).sort((a, b) => b.remainAmount - a.remainAmount).slice(0, 20), warnings: ['Không cộng tổng số lượng CST giữa các sản phẩm/ĐVT khác nhau.', 'Giá trị dư địa dùng remain_amount từ snapshot CST đang hiển thị trong App Report.'] };
 }
 
 function recommendations(facts) {

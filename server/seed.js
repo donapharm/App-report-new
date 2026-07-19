@@ -1,5 +1,5 @@
 /**
- * seed.js — sinh dữ liệu MẪU ĐÃ ẨN DANH cho App Report New.
+ * seed.js — sinh dữ liệu MẪU ĐÃ ẨN DANH cho App Report.
  * Không chứa PII/số liệu thật. Dữ liệu ổn định (seeded PRNG) để demo nhất quán.
  *
  * Sinh ra trong server/data/:

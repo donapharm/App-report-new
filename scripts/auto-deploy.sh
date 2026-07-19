@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# auto-deploy.sh — App Report New: TỰ cập nhật khi nhánh main có commit mới.
+# auto-deploy.sh — App Report: TỰ cập nhật khi nhánh main có commit mới.
 # Chạy định kỳ qua cron (mỗi 1 phút). Thiết kế AN TOÀN:
 #   - flock: chống chạy chồng (lần chạy sau bỏ qua nếu lần trước chưa xong).
 #   - Chỉ deploy khi HEAD là TỔ TIÊN của origin/main (fast-forward). Nếu server
@@ -13,11 +13,11 @@
 # Cấu hình qua biến môi trường nếu cần (mặc định theo server hiện tại).
 set -uo pipefail
 
-REPO_DIR="${REPO_DIR:-$HOME/.openclaw/workspace-report/App-report-new}"
+REPO_DIR="${REPO_DIR:-$HOME/.openclaw/workspace-report/App-report}"
 BRANCH="${BRANCH:-main}"
-PM2_APP="${PM2_APP:-reportnew}"
+PM2_APP="${PM2_APP:-app-report}"
 # Worker Telegram (bot) — cũng phải restart để bot chạy code mới (câu hỏi/LLM/thông báo).
-PM2_WORKER="${PM2_WORKER:-reportnew-tgbot}"
+PM2_WORKER="${PM2_WORKER:-app-report-tgbot}"
 LOG="${LOG:-$REPO_DIR/auto-deploy.log}"
 
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }

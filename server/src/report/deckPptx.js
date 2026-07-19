@@ -129,7 +129,7 @@ async function buildPptx({ htmlPath, outputPath, title = 'DONAPHARM — Báo cá
   try {
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE';
-    pptx.author = 'DONAPHARM App Report New';
+    pptx.author = 'DONAPHARM App Report';
     pptx.company = 'DONAPHARM';
     pptx.subject = 'Báo cáo doanh số chuyên sâu dành cho CEO';
     pptx.title = title;
