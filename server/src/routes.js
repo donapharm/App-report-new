@@ -30,12 +30,10 @@ const productSearch = require('./productSearch');
 const persist = require('./persist');
 const diemXu = require('./diemXu');
 const { createDormantService } = require('./dormantService');
-const { createDormantNotificationStore } = require('./dormantNotifications');
 const { buildDormantDigest } = require('./dormantDigest');
 
 const router = express.Router();
-const dormantNotificationStore = createDormantNotificationStore({ persist });
-const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist, notificationStore: dormantNotificationStore });
+const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
@@ -900,14 +898,6 @@ router.get('/dormant/summary', auth.requireAuth, (req, res) => {
 
 router.get('/dormant/digest-preview', auth.requireAuth, auth.requireAdmin, (req, res) => {
   try { res.json(buildDormantDigest(dormantService.summaryFor({ isAdmin: true }))); }
-  catch (e) { res.status(400).json({ error: e.message }); }
-});
-router.get('/dormant/notifications', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  try { res.json(dormantService.notificationsForAdmin()); }
-  catch (e) { res.status(400).json({ error: e.message }); }
-});
-router.post('/dormant/notifications/read', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  try { res.json(dormantService.markNotificationsRead(req.body || {})); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 

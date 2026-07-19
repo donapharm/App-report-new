@@ -93,15 +93,14 @@ function DormantExecutiveCard({ data }) {
     <div className="dormant-executive-kpis">
       <span><em>Đang ngủ đông</em><b>{Number(s.dormant || 0).toLocaleString('vi-VN')}</b></span>
       <span><em>Chưa kích hoạt</em><b>{Number(s.not_activated || 0).toLocaleString('vi-VN')}</b></span>
-      <span><em>Chưa có kế hoạch</em><b>{Number(s.unplanned || 0).toLocaleString('vi-VN')}</b></span>
-      <span><em>Đang triển khai ≤14 ngày</em><b>{Number(s.in_progress || 0).toLocaleString('vi-VN')}</b></span>
-      <span className="danger"><em>Đến hạn / quá hạn</em><b>{Number((s.due_review || 0) + (s.overdue_review || 0)).toLocaleString('vi-VN')}</b></span>
+      <span className="warn"><em>Quá 7 ngày xử lý</em><b>{Number(s.red_7_days || 0).toLocaleString('vi-VN')}</b></span>
+      <span className="danger"><em>Đưa quản lý/CEO</em><b>{Number(s.management_14_days || 0).toLocaleString('vi-VN')}</b></span>
       <span className="ok"><em>Đã có đơn trở lại</em><b>{Number(s.reactivated || 0).toLocaleString('vi-VN')}</b></span>
     </div>
     {!!top.length && <div className="dormant-executive-list">{top.map((item) => <div key={item.key}>
-      <strong>{item.emp_code}</strong><span><b>{item.product_name || item.iit_code}</b><small>{item.unit_name || item.unit_code} · Mã đơn vị {item.unit_code} · chu kỳ {item.action?.cycle || 0}</small></span><i className={item.attention?.level}>{item.attention?.status === 'overdue' ? 'QUÁ HẠN' : item.attention?.status === 'due' ? 'ĐẾN HẠN' : 'SẮP REVIEW'}</i>
+      <strong>{item.emp_code}</strong><span><b>{item.product_name || item.iit_code}</b><small>{item.unit_name || item.unit_code} · {item.days_idle} ngày không có đơn dương</small></span><i className={item.attention?.level}>{item.attention?.level === 'management' ? 'CEO' : 'ĐỎ'}</i>
     </div>)}</div>}
-    <p>Mỗi kế hoạch được review trong tối đa 14 ngày. Chỉ đơn dương hợp lệ mới tự đóng; đơn âm/trả hàng không được tính là tái kích hoạt.</p>
+    <p>Chỉ đơn dương hợp lệ mới tự đóng cảnh báo. Đơn âm/trả hàng không được tính là tái kích hoạt.</p>
   </div>;
 }
 
