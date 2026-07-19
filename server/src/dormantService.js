@@ -24,6 +24,87 @@ function addDays(value, days) {
 function sourceName(v) { return ['revenue', 'analysis', 'revenueFull'].includes(String(v || '')) ? String(v) : 'revenue'; }
 function checkpointKey(empCode, today) { return `${upper(empCode)}:${xuPolicy.startOfWeek(today)}`; }
 function exactKeys(items = []) { return [...new Set(items.map((x) => x.key).filter(Boolean))].sort(); }
+function safeNote(value, max = 1000) {
+  const note = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value).trim().slice(0, max) : '';
+  if (!note) return '';
+  // Action notes are unstructured user input.  Export only plain operational
+  // prose: any numeric/currency token or cost/revenue vocabulary fails closed.
+  // Dates and cycles already have dedicated structured fields in the report.
+  const sensitive = /\d|[%₫$€£¥]|\b(?:cp(?:\s*total|[\s._-]*\d+)?|remain[\s_-]*amount|bid[\s_-]*price|margin|profit|costs?|price|vnd|usd|eur)\b|giá(?:\s*(?:vốn|bán|trị))?|chi\s*phí|doanh\s*(?:thu|số)|lợi\s*nhuận|phần\s*trăm|tiền|đồng|triệu|tỷ|nghìn/iu.test(note);
+  return sensitive ? '[Nội dung nhạy cảm đã được ẩn]' : note;
+}
+
+// Deliberately whitelist the drill-down contract.  A QLNB detail must never
+// inherit newly-added CST/cost fields through an object spread.
+function safeAudit(audit = []) {
+  const allowedChanges = new Set(['status', 'next_follow_up', 'note', 'action_cycle', 'last_activity_at', 'days_idle']);
+  return (Array.isArray(audit) ? audit : []).map((entry) => ({
+    at: String(entry?.at || '').slice(0, 30) || null,
+    actor: upper(entry?.actor) || 'SYSTEM',
+    type: String(entry?.type || '').slice(0, 60),
+    changes: Object.fromEntries(Object.entries(entry?.changes || {}).filter(([key]) => allowedChanges.has(key)).map(([key, value]) => {
+      if (key === 'note') return [key, safeNote(value)];
+      if (['action_cycle', 'days_idle'].includes(key)) return [key, Number.isFinite(Number(value)) ? Number(value) : null];
+      if (['next_follow_up', 'last_activity_at'].includes(key)) return [key, dateOnly(value)];
+      return [key, String(value == null ? '' : value).slice(0, 80)];
+    })),
+  }));
+}
+function finiteOrNull(value) {
+  if (value == null || (typeof value === 'string' && !value.trim())) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+function safeDetailItem(item, stateRow, today) {
+  const attention = reviewAttention(item, today);
+  const initialQty = finiteOrNull(item.cst?.initial_qty);
+  const remainQty = finiteOrNull(item.cst?.remain_qty);
+  return {
+    key: item.key,
+    emp_code: upper(item.emp_code),
+    employee_name: String(item.employee_name || ''),
+    unit_code: String(item.unit_code || ''),
+    unit_name: String(item.unit_name || ''),
+    iit_code: String(item.iit_code || ''),
+    product_name: String(item.product_name || ''),
+    route: String(item.route || ''),
+    classification: 'dormant',
+    first_activity_at: dateOnly(item.first_activity_at),
+    last_activity_at: dateOnly(item.last_activity_at),
+    date_precision: ['day', 'month'].includes(String(item.date_precision || '')) ? String(item.date_precision) : null,
+    first_detected_at: dateOnly(item.first_detected_at),
+    days_idle: Number(item.days_idle || 0),
+    threshold_days: Number(item.threshold_days || 0),
+    historical_quantity: Number(item.historical_quantity || 0),
+    positive_order_rows: Number(item.positive_order_rows || 0),
+    average_cadence_days: item.average_cadence_days == null ? null : Number(item.average_cadence_days),
+    initial_qty: initialQty,
+    remain_qty: remainQty,
+    remain_percent: initialQty != null && initialQty > 0 && remainQty != null ? Math.round((remainQty / initialQty) * 10000) / 100 : null,
+    c30_available: !!item.cst?.c30_available,
+    c30_qty: finiteOrNull(item.cst?.c30_qty),
+    c30_remaining_qty: finiteOrNull(item.cst?.c30_remaining_qty),
+    c30_status: String(item.cst?.c30_status || ''),
+    bid_package: String(item.cst?.bid_package || ''),
+    contract_to: dateOnly(item.cst?.contract_to),
+    priority_score: Number(item.priority?.score || 0),
+    priority_reasons: (item.priority?.evidence || []).map(String),
+    action: {
+      status: item.action?.status || null,
+      next_follow_up: dateOnly(item.action?.next_follow_up),
+      note: safeNote(item.action?.note),
+      updated_at: dateOnly(item.action?.updated_at),
+      action_cycle: Number(item.action?.cycle || 0),
+      cycle: Number(item.action?.cycle || 0),
+    },
+    review_status: attention.status,
+    days_due: attention.days_left == null ? null : Math.max(0, Number(attention.days_left)),
+    days_overdue: Number(attention.overdue_days || 0),
+    dormant_cycle: Math.max(0, Number(stateRow?.cycle || 0)),
+    attention,
+    audit: safeAudit(stateRow?.audit || []),
+  };
+}
 
 function reviewAttention(item, today) {
   const review = reviewState(item, today);
@@ -335,6 +416,29 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
     };
   }
 
+  function detailFor({ key, empCode, isAdmin = false } = {}) {
+    const requestedKey = String(key || '').trim();
+    const emp = upper(empCode);
+    if (!requestedKey) throw new Error('Thiếu khóa QLNB');
+    const parsed = dormant.parseKey(requestedKey);
+    // Fail before company analysis so a forged employee key cannot become a
+    // scope oracle.  Frontend emp_code is never accepted by this method.
+    if (!isAdmin && (!emp || upper(parsed.emp_code) !== emp)) {
+      const error = new Error('QLNB không thuộc phạm vi được phép');
+      error.status = 403;
+      throw error;
+    }
+    const result = analyzeScope(isAdmin ? null : emp);
+    const item = result.items.find((row) => row.key === requestedKey);
+    if (!item) {
+      const error = new Error('QLNB không tồn tại, đã hoàn tất hoặc ngoài phạm vi');
+      error.status = 404;
+      throw error;
+    }
+    const stateRow = result.state?.items?.[requestedKey] || {};
+    return { as_of: result.as_of, generated_on: localYmd(clock()), item: safeDetailItem(item, stateRow, localYmd(clock())) };
+  }
+
   function plansForAdmin({ empCode, unitCode } = {}) {
     const today = localYmd(clock());
     const result = analyzeScope(null);
@@ -401,10 +505,10 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
     return notificationStore.markRead(payload || {});
   }
 
-  return { gateFor, submitActions, summaryFor, plansForAdmin, notificationsForAdmin, markNotificationsRead, analyzeScope };
+  return { gateFor, submitActions, summaryFor, detailFor, plansForAdmin, notificationsForAdmin, markNotificationsRead, analyzeScope };
 }
 
 module.exports = {
   STATE_NAME, CHECKPOINT_NAME, MAX_GATE_ITEMS, MAX_ACTION_DAYS,
-  localYmd, addDays, checkpointKey, reviewAttention, gateTier, selectFocusUnit, createDormantService,
+  localYmd, addDays, checkpointKey, reviewAttention, gateTier, selectFocusUnit, safeNote, safeAudit, safeDetailItem, createDormantService,
 };

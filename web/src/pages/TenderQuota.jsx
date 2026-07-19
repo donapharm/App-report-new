@@ -88,7 +88,7 @@ function CstCard({ c, i, duplicateName }) {
         <span className="pill muted-pill">{compact(c.bid_package)}</span>
         <span className={'pill ' + st.cls}>{st.text}</span>
       </div>
-      <div className="action-hint">👉 {st.action}</div>
+      <div className={`action-hint ${st.action === 'Đã khai thác hết cơ số.' ? 'action-hint-exhausted' : ''}`}>👉 {st.action}</div>
       {showC30 && <div className="c30-panel">
         <div className="c30-panel-head"><b>C30 · Tùy chọn mua thêm</b><span className={'pill ' + (c.c30.actionable || c.c30.status_code === 'da_ky_hieu_luc' ? 'ok' : 'warn')}>{c.c30.status_label}</span></div>
         <div className="c30-metrics">

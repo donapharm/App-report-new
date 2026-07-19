@@ -17,6 +17,7 @@ import DailySalesOrders from './pages/DailySalesOrders.jsx';
 import TenderQuota from './pages/TenderQuota.jsx';
 import Target from './pages/Target.jsx';
 import CatalogManagement from './pages/CatalogManagement.jsx';
+import DormantReports from './pages/DormantReports.jsx';
 import AiChat from './pages/AiChat.jsx';
 import Upload from './pages/Upload.jsx';
 
@@ -30,6 +31,7 @@ const TABS = [
   { key: 'cst', label: 'Cơ số thầu', ic: '📦', C: TenderQuota },
   { key: 'target', label: 'Target', ic: '🎯', C: Target },
   { key: 'catalogManagement', label: 'Danh mục QL', full: 'Danh mục quản lý', ic: '🗂️', C: CatalogManagement },
+  { key: 'dormantReports', label: 'B/c QLNB', full: 'Báo cáo QLNB', ic: '📑', C: DormantReports, ceoEmployeeOnly: true },
   { key: 'ai', label: 'Hỏi nhanh', ic: '🤖', C: AiChat },
   { key: 'upload', label: 'Upload', ic: '⬆️', C: Upload, adminOnly: true },
 ];
@@ -97,7 +99,8 @@ export default function App() {
   if (!me) return <Login onLogin={setMe} />;
 
   const logout = () => { setToken(null); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
-  const tabs = TABS.filter((t) => !t.adminOnly || me.isAdmin).map((t) => (
+  const canonicalCeo = String(me.role || '').toLowerCase() === 'ceo' || String(me.emp_code || '').toUpperCase() === 'CEO';
+  const tabs = TABS.filter((t) => (!t.adminOnly || me.isAdmin) && (!t.ceoEmployeeOnly || canonicalCeo || !me.isAdmin)).map((t) => (
     t.key === 'catalogManagement' && !me.isAdmin
       ? { ...t, label: 'Danh mục bán hàng của tôi', full: 'Danh mục bán hàng của tôi' }
       : t
@@ -188,7 +191,7 @@ export default function App() {
       <ScrollTopButton />
       <UpdateBanner />
       <DormantGate me={me} tab={tab} />
-      {!['catalogManagement', 'dailySales', 'products'].includes(tab) && <ZaloMobileAccess />}
+      {!['catalogManagement', 'dailySales', 'products', 'dormantReports'].includes(tab) && <ZaloMobileAccess />}
       {tab !== 'dailySales' && <nav className="nav">
         {tabs.filter((t) => !t.hidden).map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>

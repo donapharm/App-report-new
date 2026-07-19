@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from './api.js';
 import { money } from './util.js';
+import DormantPlanMetrics from './DormantPlanMetrics.jsx';
 
 const STATUS_OPTIONS = [
   ['', 'Chọn kết quả xử lý…'],
@@ -71,11 +72,7 @@ function DormantItem({ item, value, onChange, index, minFollowUp, maxFollowUp })
       <strong>{Number(item.days_idle || 0).toLocaleString('vi-VN')} ngày</strong>
     </div>
     <div className="dormant-unit">🏥 {item.unit_name || item.unit_code || '—'} <small>· Mã đơn vị: {item.unit_code || '—'} · {item.route || '—'}</small></div>
-    <div className="dormant-facts">
-      <span>Đơn gần nhất <b>{dateVi(item.last_order_date || item.last_activity_date)}</b></span>
-      <span>Cách tính <b>{item.date_precision === 'month' ? 'Theo tháng tổng hợp' : 'Theo ngày'}</b></span>
-      {item.remain_qty != null && <span>Cơ số còn <b>{Number(item.remain_qty || 0).toLocaleString('vi-VN')}</b></span>}
-    </div>
+    <DormantPlanMetrics item={item} />
     <div className="dormant-ai-reason">🎯 {item.selection_reason === 'follow_up_due' ? `Đến hạn review · Chu kỳ ${Number(item.action?.cycle || 1)}` : 'Chưa có kế hoạch xử lý hợp lệ'}</div>
     {!!reasons.length && <div className="dormant-ai-reason">🤖 {reasons.slice(0, 3).join(' · ')}</div>}
     <div className="dormant-action-grid">
