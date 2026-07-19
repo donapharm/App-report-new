@@ -33,11 +33,14 @@ const { createDormantService } = require('./dormantService');
 const { createDormantNotificationStore } = require('./dormantNotifications');
 const { buildDormantDigest } = require('./dormantDigest');
 const { createFilteredEmployeeReportService } = require('./filteredEmployeeReport');
+const { createFilteredEmployeeDeliveryService } = require('./filteredEmployeeDelivery');
 
 const router = express.Router();
 const dormantNotificationStore = createDormantNotificationStore({ persist });
 const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist, notificationStore: dormantNotificationStore });
 const filteredEmployeeReport = createFilteredEmployeeReportService({ store, catalogManagement, appSaleCst, persist });
+const filteredEmployeeDelivery = createFilteredEmployeeDeliveryService({ filteredEmployeeReport, store, listTelegramMap: auth.listTelegramMap, notifyChannels, persist });
+const requireCeoDelivery = (req, res, next) => req.session.role === 'ceo' ? next() : res.status(403).json({ error: 'Chỉ CEO được quản lý luồng gửi báo cáo cá nhân.', code: 'FILTERED_DELIVERY_CEO_REQUIRED' });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
@@ -743,8 +746,8 @@ router.get('/admin/catalog-management/history', auth.requireAuth, auth.requireAd
 router.get('/admin/catalog-management/diagnostics', auth.requireAuth, auth.requireAdmin, (req, res) => {
   res.json(catalogManagement.diagnostics());
 });
-// Báo cáo cá nhân theo bộ lọc: admin-only, preview trước và chỉ xuất từng NV.
-// Không nối luồng gửi email/Telegram trong đợt triển khai này.
+// Báo cáo cá nhân theo bộ lọc: admin-only, preview trước, tách từng NV.
+// Luồng delivery tạo file/manifest nhưng gửi thật mặc định khóa bằng env và cần CEO duyệt lần hai.
 router.post('/admin/catalog-management/report/preview', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {
     return res.json(await filteredEmployeeReport.preview(req.body || {}, req.session.th || req.session.emp_code));
@@ -772,6 +775,26 @@ router.post('/admin/catalog-management/report/export-summary.xlsx', auth.require
     res.setHeader('Cache-Control', 'no-store');
     return res.send(buffer);
   } catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
+});
+router.post('/admin/catalog-management/report/delivery/preview', auth.requireAuth, auth.requireAdmin, requireCeoDelivery, async (req, res) => {
+  try { return res.json(await filteredEmployeeDelivery.preview(req.body || {}, req.session.th || req.session.emp_code)); }
+  catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
+});
+router.get('/admin/catalog-management/report/delivery/:previewId', auth.requireAuth, auth.requireAdmin, requireCeoDelivery, (req, res) => {
+  try { return res.json(filteredEmployeeDelivery.status(req.params.previewId, req.session.th || req.session.emp_code)); }
+  catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
+});
+router.post('/admin/catalog-management/report/delivery/:previewId/approve', auth.requireAuth, auth.requireAdmin, requireCeoDelivery, (req, res) => {
+  try { return res.json(filteredEmployeeDelivery.approve(req.params.previewId, req.body || {}, req.session.th || req.session.emp_code)); }
+  catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
+});
+router.post('/admin/catalog-management/report/delivery/send', auth.requireAuth, auth.requireAdmin, requireCeoDelivery, async (req, res) => {
+  try { return res.json(await filteredEmployeeDelivery.send(req.body || {}, req.session.th || req.session.emp_code)); }
+  catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
+});
+router.post('/admin/catalog-management/report/delivery/:previewId/retry', auth.requireAuth, auth.requireAdmin, requireCeoDelivery, async (req, res) => {
+  try { return res.json(await filteredEmployeeDelivery.retry(req.params.previewId, req.body || {}, req.session.th || req.session.emp_code)); }
+  catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
 });
 router.post('/admin/catalog-management/transfers', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {

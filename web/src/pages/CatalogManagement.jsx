@@ -283,11 +283,14 @@ function ReportMultiFilter({ label, values, options, onChange, searchPlaceholder
 function ReportPanel({ period, rows }) {
   const [form, setForm] = useState(REPORT_DEFAULTS);
   const [preview, setPreview] = useState(null);
+  const [deliveryPreview, setDeliveryPreview] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [deliveryBusy, setDeliveryBusy] = useState(false);
   const [downloading, setDownloading] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const previewRequestRef = useRef(0);
+  const deliveryRequestRef = useRef(0);
   const options = useMemo(() => ({
     employees: uniqueReportOptions(rows, 'emp_code', (row, value) => `${value} · ${row.emp_name || value}`),
     provinces: uniqueReportOptions(rows, 'province'),
@@ -297,16 +300,23 @@ function ReportPanel({ period, rows }) {
     qlnb: uniqueReportOptions(rows, 'qlnb_code', (row, value) => `${value} · ${row.product_name || value}`),
   }), [rows]);
   useEffect(() => {
-    previewRequestRef.current += 1; setBusy(false); setForm(REPORT_DEFAULTS); setPreview(null); setError(''); setMessage('');
+    previewRequestRef.current += 1; deliveryRequestRef.current += 1;
+    setBusy(false); setDeliveryBusy(false); setForm(REPORT_DEFAULTS); setPreview(null); setDeliveryPreview(null); setError(''); setMessage('');
   }, [period]);
   const set = (key, value) => {
-    previewRequestRef.current += 1; setBusy(false); setForm((current) => ({ ...current, [key]: value })); setPreview(null); setError(''); setMessage('');
+    previewRequestRef.current += 1; deliveryRequestRef.current += 1;
+    setBusy(false); setDeliveryBusy(false); setForm((current) => ({ ...current, [key]: value })); setPreview(null); setDeliveryPreview(null); setError(''); setMessage('');
+  };
+  const resetFilters = () => {
+    previewRequestRef.current += 1; deliveryRequestRef.current += 1;
+    setBusy(false); setDeliveryBusy(false); setForm(REPORT_DEFAULTS); setPreview(null); setDeliveryPreview(null); setError(''); setMessage('');
   };
   const payload = useMemo(() => ({ period, ...form }), [period, form]);
   async function makePreview() {
     const requestId = ++previewRequestRef.current;
     const requestPayload = payload;
-    setBusy(true); setError(''); setMessage(''); setPreview(null);
+    deliveryRequestRef.current += 1;
+    setBusy(true); setDeliveryBusy(false); setError(''); setMessage(''); setPreview(null); setDeliveryPreview(null);
     try {
       const result = await api.adminCatalogManagementReportPreview(requestPayload);
       if (requestId === previewRequestRef.current) setPreview(result);
@@ -314,6 +324,20 @@ function ReportPanel({ period, rows }) {
       if (requestId === previewRequestRef.current) setError(requestError.message);
     } finally {
       if (requestId === previewRequestRef.current) setBusy(false);
+    }
+  }
+  async function makeDeliveryPreview() {
+    if (!preview) return;
+    const requestId = ++deliveryRequestRef.current;
+    const requestPayload = { ...payload, channels: { email: true, telegram: true } };
+    setDeliveryBusy(true); setError(''); setMessage(''); setDeliveryPreview(null);
+    try {
+      const result = await api.adminCatalogManagementDeliveryPreview(requestPayload);
+      if (requestId === deliveryRequestRef.current) setDeliveryPreview(result);
+    } catch (requestError) {
+      if (requestId === deliveryRequestRef.current) setError(requestError.message);
+    } finally {
+      if (requestId === deliveryRequestRef.current) setDeliveryBusy(false);
     }
   }
   const exportPayload = preview ? { ...preview.filters, preview_id: preview.preview_id } : null;
@@ -335,7 +359,7 @@ function ReportPanel({ period, rows }) {
   return <div className="catalog-report-flow">
     <section className="card catalog-report-intro">
       <div><span className="catalog-report-icon" aria-hidden="true">📊</span><div><h3>Lập báo cáo cá nhân theo bộ lọc</h3><p>Mỗi nhân viên được tách thành một file riêng, chỉ chứa dữ liệu trong phạm vi họ phụ trách.</p></div></div>
-      <strong>CHỈ XEM TRƯỚC / XUẤT FILE · CHƯA GỬI THẬT</strong>
+      <strong>XEM TRƯỚC / XUẤT FILE / PREVIEW GỬI · CHƯA GỬI THẬT</strong>
     </section>
 
     <section className="card catalog-report-filters">
@@ -355,7 +379,7 @@ function ReportPanel({ period, rows }) {
         <label><span>Trạng thái review</span><select value={form.review_status} onChange={(event) => set('review_status', event.target.value)}><option value="all">Tất cả review</option><option value="unplanned">Chưa lập kế hoạch</option><option value="in_progress">Đang triển khai</option><option value="upcoming">Sắp đến hạn</option><option value="due">Đến hạn</option><option value="overdue">Quá hạn</option></select></label>
         <label><span>C30</span><select value={form.c30_status} onChange={(event) => set('c30_status', event.target.value)}><option value="all">Tất cả C30</option><option value="available">Có tùy chọn C30</option><option value="actionable">C30 cần hành động</option><option value="none">Không có C30</option></select></label>
       </div>
-      <div className="catalog-report-filter-footer"><span>{selectedFilterCount ? `${selectedFilterCount} nhóm lọc đang áp dụng` : 'Đang dùng toàn bộ phạm vi được giao'}</span><button type="button" className="btn ghost" onClick={() => { setForm(REPORT_DEFAULTS); setPreview(null); }}>Xóa bộ lọc</button></div>
+      <div className="catalog-report-filter-footer"><span>{selectedFilterCount ? `${selectedFilterCount} nhóm lọc đang áp dụng` : 'Đang dùng toàn bộ phạm vi được giao'}</span><button type="button" className="btn ghost" onClick={resetFilters}>Xóa bộ lọc</button></div>
     </section>
 
     <section className="card catalog-report-preview-step">
@@ -377,6 +401,19 @@ function ReportPanel({ period, rows }) {
         <div className="catalog-report-employee-head"><div><b>{employee.emp_code} · {employee.emp_name}</b><span>{employee.row_count.toLocaleString('vi-VN')} dòng · {employee.unit_count} đơn vị · {employee.qlnb_count} QLNB</span></div><button type="button" className="btn ghost" disabled={!employee.exportable || !!downloading} onClick={() => downloadEmployee(employee.emp_code)}>{!employee.exportable ? 'Không có dữ liệu' : downloading === employee.emp_code ? 'Đang tạo…' : '⬇ Tải file cá nhân'}</button></div>
         {employee.exportable && <div className="catalog-report-employee-metrics"><span>CST còn <b>{percentText(employee.cst_remaining_pct)}</b></span><span>Ngủ đông <b>{employee.dormant_count}</b></span><span>Chưa kích hoạt <b>{employee.not_activated_count}</b></span><span>Review đến/quá hạn <b>{employee.review_due_count}</b></span><span>Target đạt <b>{percentText(employee.target_pct)}</b></span></div>}
       </article>)}</div>
+    </section>}
+
+    {preview && <section className="card catalog-delivery-preview-step">
+      <div className="catalog-step-title"><span>4</span><div><h3>Preview gửi riêng</h3><p>Hệ thống dựng đúng file sẽ gửi, khóa checksum và người nhận. Bước này tuyệt đối chưa gửi email/Telegram.</p></div></div>
+      <div className="catalog-delivery-exclusions"><b>Không bao giờ gửi:</b> DN021 · DN023 · VP004 · VP018</div>
+      <button type="button" className="btn catalog-report-preview-button" disabled={deliveryBusy || !preview.total_employees} onClick={makeDeliveryPreview}>{deliveryBusy ? 'Đang dựng file và khóa checksum…' : '🔐 Lập preview người nhận & file gửi'}</button>
+      {deliveryPreview && <div className="catalog-delivery-preview">
+        <div className="catalog-report-kpis"><div><small>Người nhận</small><b>{deliveryPreview.summary.recipients}</b></div><div><small>File cá nhân</small><b>{deliveryPreview.summary.files}</b></div><div><small>Email dự kiến</small><b>{deliveryPreview.summary.email}</b></div><div><small>Telegram dự kiến</small><b>{deliveryPreview.summary.telegram}</b></div></div>
+        <div className="catalog-report-safety">🔒 Mỗi file đã khóa SHA-256 và đúng một mã nhân viên. Gửi thật vẫn đang khóa, cần Sếp duyệt lần hai.</div>
+        {!!deliveryPreview.summary.missing_telegram?.length && <div className="catalog-report-source-warning">Telegram chưa mapping: {deliveryPreview.summary.missing_telegram.join(', ')} — các mã này chỉ nhận email.</div>}
+        <div className="catalog-delivery-list">{deliveryPreview.recipients.map((recipient) => <article key={recipient.emp_code}><div><b>{recipient.emp_code} · {recipient.name}</b><span>{recipient.file?.row_count || 0} dòng · {recipient.file?.unit_count || 0} đơn vị · SHA {String(recipient.file?.sha256 || '').slice(0, 12)}…</span></div><div className="catalog-delivery-channels"><i className={recipient.email_planned ? 'ready' : 'missing'}>✉ {recipient.email_masked || 'Thiếu email'}</i><i className={recipient.telegram_planned ? 'ready' : 'missing'}>Telegram {recipient.telegram_fingerprint || 'chưa mapping'}</i></div></article>)}</div>
+        <small className="catalog-delivery-expiry">Preview hết hạn: {dateText(deliveryPreview.expires_at)} · Trạng thái: {deliveryPreview.send_enabled ? 'Đã mở quyền gửi tạm thời' : 'Chưa mở quyền gửi thật'}</small>
+      </div>}
     </section>}
   </div>;
 }

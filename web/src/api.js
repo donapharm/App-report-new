@@ -99,6 +99,8 @@ export const api = {
   adminCatalogManagementHistory: (period) => req('GET', '/admin/catalog-management/history?' + new URLSearchParams(period ? { period } : {}).toString()),
   adminCatalogManagementDiagnostics: () => req('GET', '/admin/catalog-management/diagnostics'),
   adminCatalogManagementReportPreview: (payload) => req('POST', '/admin/catalog-management/report/preview', payload),
+  adminCatalogManagementDeliveryPreview: (payload) => req('POST', '/admin/catalog-management/report/delivery/preview', payload),
+  adminCatalogManagementDeliveryStatus: (previewId) => req('GET', '/admin/catalog-management/report/delivery/' + encodeURIComponent(previewId)),
   adminCatalogManagementTransfer: (payload) => req('POST', '/admin/catalog-management/transfers', payload),
   specialCandidates: () => req('GET', '/specials'),
   adminAssignments: (params = {}) => req('GET', '/admin/assignments?' + new URLSearchParams(params).toString()),
