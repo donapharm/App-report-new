@@ -77,6 +77,11 @@ export const api = {
   alerts: (params) => req('GET', '/alerts' + (params ? `?${new URLSearchParams(params)}` : '')),
   dormantGate: (params = {}) => req('GET', '/dormant/gate?' + new URLSearchParams(params).toString()),
   dormantActions: (payload) => req('POST', '/dormant/actions', payload),
+  dormantItemDetail: (key) => req('GET', '/dormant/items/' + encodeURIComponent(key) + '/detail'),
+  dormantReportCurrent: (params = {}) => req('GET', '/dormant/reports/current?' + new URLSearchParams(params).toString()),
+  dormantReportSnapshotCreate: (payload) => req('POST', '/dormant/reports/snapshots', payload),
+  dormantReportSnapshots: () => req('GET', '/dormant/reports/snapshots'),
+  dormantReportSnapshot: (id) => req('GET', '/dormant/reports/snapshots/' + encodeURIComponent(id)),
   dormantSummary: (params = {}) => req('GET', '/dormant/summary?' + new URLSearchParams(params).toString()),
   dormantAdminPlans: (params = {}) => req('GET', '/dormant/admin/plans?' + new URLSearchParams(params).toString()),
   dormantNotifications: () => req('GET', '/dormant/notifications'),
@@ -152,6 +157,28 @@ export const api = {
   uploadSlots: () => req('GET', '/upload/slots'),
   uploadActivate: (id) => req('POST', '/upload/activate', { id }),
 };
+
+function filenameFromDisposition(disposition, fallback) {
+  const utf8 = String(disposition || '').match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8) { try { return decodeURIComponent(utf8[1].replace(/["']/g, '')); } catch { /* use regular filename */ } }
+  return String(disposition || '').match(/filename="?([^";]+)"?/i)?.[1] || fallback;
+}
+
+export async function downloadDormantReport(format, snapshotId) {
+  const extension = format === 'pdf' ? 'pdf' : 'xlsx';
+  const url = `/api/dormant/reports/export.${extension}?` + new URLSearchParams({ snapshot_id: snapshotId }).toString();
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Không xuất được báo cáo QLNB');
+  }
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filenameFromDisposition(res.headers.get('content-disposition'), `bao-cao-qlnb-${snapshotId}.${extension}`);
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
+}
 
 // Tải file export: fetch có token rồi kích hoạt download (an toàn hơn link trần).
 export async function downloadExport(kind, params = {}) {

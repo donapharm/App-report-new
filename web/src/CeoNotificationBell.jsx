@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from './api.js';
+import DormantPlanMetrics from './DormantPlanMetrics.jsx';
 
 const TYPE_LABEL = {
   plan_batch: 'Đã lập kế hoạch', review_upcoming: 'Sắp đến hạn review', review_due: 'Đến hạn review',
@@ -33,7 +34,7 @@ export default function CeoNotificationBell({ me }) {
   const [planBusy, setPlanBusy] = useState(false);
   const [planFilter, setPlanFilter] = useState({ status: 'all', query: '' });
   const planRequestRef = useRef(0);
-  const isAdmin = !!me?.isAdmin;
+  const isAdmin = String(me?.role || '').toLowerCase() === 'ceo' || String(me?.emp_code || '').toUpperCase() === 'CEO';
 
   const refresh = async () => {
     if (!isAdmin) return;
@@ -128,7 +129,7 @@ export default function CeoNotificationBell({ me }) {
             {!visiblePlanItems.length && <div className="empty">Không có QLNB phù hợp bộ lọc.</div>}
             {visiblePlanItems.map((item) => <article key={item.key} className={item.review_status}>
               <div className="ceo-plan-item-head"><div><b>{item.product_name || item.iit_code}</b><code>{item.iit_code}</code></div><strong>{REVIEW_LABEL[item.review_status] || item.review_status}</strong></div>
-              <div className="ceo-plan-item-facts"><span>Ngủ <b>{item.days_idle || 0} ngày</b></span><span>CST còn <b>{item.remain_qty == null ? '—' : Number(item.remain_qty).toLocaleString('vi-VN')}</b></span><span>Review <b>{dateVi(item.action?.next_follow_up)}</b></span><span>Chu kỳ <b>{item.action?.cycle || 0}</b></span></div>
+              <DormantPlanMetrics item={item} />
               <p><b>Kết quả:</b> {ACTION_LABEL[item.action?.status] || 'Chưa lập kế hoạch'}</p><p><b>Ghi chú:</b> {item.action?.note || '—'}</p>
             </article>)}
           </div>}

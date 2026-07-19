@@ -30,6 +30,7 @@ const productSearch = require('./productSearch');
 const persist = require('./persist');
 const diemXu = require('./diemXu');
 const { createDormantService } = require('./dormantService');
+const { createDormantReportService } = require('./dormantReport');
 const { createDormantNotificationStore } = require('./dormantNotifications');
 const { buildDormantDigest } = require('./dormantDigest');
 const { createFilteredEmployeeReportService } = require('./filteredEmployeeReport');
@@ -38,9 +39,11 @@ const { createFilteredEmployeeDeliveryService } = require('./filteredEmployeeDel
 const router = express.Router();
 const dormantNotificationStore = createDormantNotificationStore({ persist });
 const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist, notificationStore: dormantNotificationStore });
+const dormantReport = createDormantReportService({ dormantService, persist });
 const filteredEmployeeReport = createFilteredEmployeeReportService({ store, catalogManagement, appSaleCst, persist });
 const filteredEmployeeDelivery = createFilteredEmployeeDeliveryService({ filteredEmployeeReport, store, listTelegramMap: auth.listTelegramMap, notifyChannels, persist });
 const requireCeoDelivery = (req, res, next) => (req.session.role === 'ceo' || req.session.emp_code === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được quản lý luồng gửi báo cáo cá nhân.', code: 'FILTERED_DELIVERY_CEO_REQUIRED' });
+const requireCeoQlnb = (req, res, next) => (req.session.role === 'ceo' || String(req.session.emp_code || '').toUpperCase() === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được xem dữ liệu quản trị QLNB.', code: 'DORMANT_CEO_REQUIRED' });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
@@ -935,12 +938,18 @@ router.post('/dormant/actions', auth.requireAuth, (req, res) => {
   try {
     const scope = auth.scopeOf(req.session);
     if (!scope.empCode) return res.status(403).json({ error: 'CEO xem dashboard tổng hợp, không xác nhận thay nhân viên' });
-    res.json(dormantService.submitActions({
+    const result = dormantService.submitActions({
       empCode: scope.empCode,
       source: req.body.source,
       checkpoint_key: req.body.checkpoint_key,
       actions: req.body.actions,
-    }));
+    });
+    // Snapshot is local and immutable; no message/email is sent.  Failure to
+    // archive must not turn an already-committed action into a false failure.
+    let snapshot = null;
+    try { snapshot = dormantReport.createSnapshot({ session: req.session, template: 'employee_work' }); }
+    catch (snapshotError) { console.error('[dormant snapshot]', snapshotError.message); }
+    res.json({ ...result, snapshot_id: snapshot?.id || null, snapshot_deduplicated: snapshot?.deduplicated ?? null });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
@@ -951,19 +960,71 @@ router.get('/dormant/summary', auth.requireAuth, (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
-router.get('/dormant/digest-preview', auth.requireAuth, auth.requireAdmin, (req, res) => {
+function dormantReportError(res, error) {
+  return res.status(Number(error?.status) || 400).json({ error: error?.message || 'Không thể tạo báo cáo QLNB', code: error?.code || 'DORMANT_REPORT_ERROR' });
+}
+function dormantReportFilters(query = {}) {
+  return { emp_code: query.emp_code, unit_code: query.unit_code, review_status: query.review_status, q: query.q };
+}
+function noStore(res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
+
+router.get('/dormant/items/:key/detail', auth.requireAuth, (req, res) => {
+  try {
+    const scope = auth.scopeOf(req.session);
+    const canonicalCeo = req.session.role === 'ceo' || String(req.session.emp_code || '').toUpperCase() === 'CEO';
+    if (!scope.empCode && !canonicalCeo) return dormantReportError(res, Object.assign(new Error('Chi tiết QLNB này chỉ dành cho CEO hoặc nhân viên trong phạm vi được giao'), { status: 403, code: 'DORMANT_DETAIL_ROLE_REQUIRED' }));
+    noStore(res);
+    res.json(dormantService.detailFor({ key: req.params.key, empCode: scope.empCode, isAdmin: canonicalCeo }));
+  } catch (e) { dormantReportError(res, e); }
+});
+router.get('/dormant/reports/current', auth.requireAuth, (req, res) => {
+  try { noStore(res); res.json(dormantReport.current({ session: req.session, filters: dormantReportFilters(req.query), template: req.query.template })); }
+  catch (e) { dormantReportError(res, e); }
+});
+router.post('/dormant/reports/snapshots', auth.requireAuth, (req, res) => {
+  try { noStore(res); res.status(201).json(dormantReport.createSnapshot({ session: req.session, filters: dormantReportFilters(req.body || {}), template: req.body?.template })); }
+  catch (e) { dormantReportError(res, e); }
+});
+router.get('/dormant/reports/snapshots', auth.requireAuth, (req, res) => {
+  try { noStore(res); res.json({ snapshots: dormantReport.listSnapshots({ session: req.session }) }); }
+  catch (e) { dormantReportError(res, e); }
+});
+router.get('/dormant/reports/snapshots/:id', auth.requireAuth, (req, res) => {
+  try { noStore(res); res.json(dormantReport.getSnapshot({ id: req.params.id, session: req.session })); }
+  catch (e) { dormantReportError(res, e); }
+});
+async function dormantExport(req, res, format) {
+  try {
+    if (!req.query.snapshot_id) return dormantReportError(res, Object.assign(new Error('Export bắt buộc có snapshot_id để bảo đảm tái lập'), { status: 400, code: 'SNAPSHOT_REQUIRED' }));
+    const { snapshot, buffer } = await dormantReport.exportSnapshot({ id: req.query.snapshot_id, session: req.session, format });
+    noStore(res);
+    const scope = snapshot.scope?.emp_code ? snapshot.scope.emp_code.toLowerCase().replace(/[^a-z0-9_-]/g, '') : 'toan-cong-ty';
+    const day = String(snapshot.report?.as_of || snapshot.created_at || '').slice(0, 10).replace(/-/g, '');
+    res.setHeader('Content-Type', format === 'xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="bao-cao-qlnb-${scope}-${day || 'snapshot'}.${format}"`);
+    res.send(buffer);
+  } catch (e) { dormantReportError(res, e); }
+}
+router.get('/dormant/reports/export.xlsx', auth.requireAuth, (req, res) => dormantExport(req, res, 'xlsx'));
+router.get('/dormant/reports/export.pdf', auth.requireAuth, (req, res) => dormantExport(req, res, 'pdf'));
+
+router.get('/dormant/digest-preview', auth.requireAuth, requireCeoQlnb, (req, res) => {
   try { res.json(buildDormantDigest(dormantService.summaryFor({ isAdmin: true }))); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
-router.get('/dormant/admin/plans', auth.requireAuth, auth.requireAdmin, (req, res) => {
+router.get('/dormant/admin/plans', auth.requireAuth, requireCeoQlnb, (req, res) => {
   try { res.json(dormantService.plansForAdmin({ empCode: req.query.emp_code, unitCode: req.query.unit_code })); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
-router.get('/dormant/notifications', auth.requireAuth, auth.requireAdmin, (req, res) => {
+router.get('/dormant/notifications', auth.requireAuth, requireCeoQlnb, (req, res) => {
   try { res.json(dormantService.notificationsForAdmin()); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
-router.post('/dormant/notifications/read', auth.requireAuth, auth.requireAdmin, (req, res) => {
+router.post('/dormant/notifications/read', auth.requireAuth, requireCeoQlnb, (req, res) => {
   try { res.json(dormantService.markNotificationsRead(req.body || {})); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });

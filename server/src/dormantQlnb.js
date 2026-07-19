@@ -182,6 +182,14 @@ function cstRemainingKnown(row) {
 function cstRemaining(row) {
   return number(row.remain_qty ?? row.remaining_qty ?? row.slConLai ?? row.sl_con_lai);
 }
+function optionalFiniteNumber(...values) {
+  for (const value of values) {
+    if (value == null || (typeof value === 'string' && !value.trim())) continue;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
 function matchCst(candidate, cstRows = []) {
   const matches = cstRows.filter((row) => {
     if (!cstIsActive(row) || rowUnit(row) !== candidate.unit_code || rowIit(row) !== candidate.iit_code) return false;
@@ -198,13 +206,19 @@ function safeCst(row, empCode) {
   if (!row) return null;
   const remainKnown = cstRemainingKnown(row);
   const c30 = c30Available(row);
+  const formula = row.cstFormula || row.cst_formula || {};
+  const c30Detail = row.c30 && typeof row.c30 === 'object' ? row.c30 : {};
   return {
     emp_code: empCode,
     unit_code: rowUnit(row),
     iit_code: rowIit(row),
+    initial_qty: optionalFiniteNumber(row.cst_initial, row.initial_qty, row.bid_qty_initial, row.slTrungThau, row.sl_trung_thau),
     remain_qty: remainKnown ? cstRemaining(row) : null,
     remain_amount: number(row.remain_amount ?? row.remaining_amount ?? row.remainAmount),
     c30_available: c30,
+    c30_qty: optionalFiniteNumber(c30Detail.option_qty, row.c30_option_qty, row.c30Max, row.c30_max, formula.cst30, formula.c30),
+    c30_remaining_qty: optionalFiniteNumber(c30Detail.remaining_qty, row.c30_remaining, row.c30Remaining, formula.c30ConLai, formula.c30_con_lai),
+    c30_status: text(c30Detail.status_label || c30Detail.status_code || row.c30_status || formula.trangThai30 || formula.status),
     bid_package: text(row.bid_package || row.kyThau || row.decisionNo),
     contract_to: dateOnly(row.contract_to || row.contractTo),
   };
