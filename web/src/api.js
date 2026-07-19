@@ -75,6 +75,9 @@ export const api = {
   overview: (params) => req('GET', '/overview' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   trend: () => req('GET', '/trend'),
   alerts: (params) => req('GET', '/alerts' + (params ? `?${new URLSearchParams(params)}` : '')),
+  dormantGate: (params = {}) => req('GET', '/dormant/gate?' + new URLSearchParams(params).toString()),
+  dormantActions: (payload) => req('POST', '/dormant/actions', payload),
+  dormantSummary: (params = {}) => req('GET', '/dormant/summary?' + new URLSearchParams(params).toString()),
   revenue: (dimension, ky, extra = {}) => {
     const p = new URLSearchParams({ dimension, ...(ky ? { ky } : {}), ...extra });
     return req('GET', '/revenue?' + p.toString());

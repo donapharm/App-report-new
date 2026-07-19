@@ -5,6 +5,7 @@ import { useIsDesktop } from './hooks.js';
 import { Spinner, ScrollTopButton, Clock, UpdateBanner, ZaloSidebar, ZaloMobileAccess } from './components.jsx';
 import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
+import DormantGate from './DormantGate.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
 import Revenue from './pages/Revenue.jsx';
@@ -151,6 +152,7 @@ export default function App() {
           </main>
           <ScrollTopButton />
           <UpdateBanner />
+          <DormantGate me={me} tab={tab} />
         </div>
       </div>
     );
@@ -180,6 +182,7 @@ export default function App() {
       </main>
       <ScrollTopButton />
       <UpdateBanner />
+      <DormantGate me={me} tab={tab} />
       {!['catalogManagement', 'dailySales', 'products'].includes(tab) && <ZaloMobileAccess />}
       {tab !== 'dailySales' && <nav className="nav">
         {tabs.filter((t) => !t.hidden).map((t) => (

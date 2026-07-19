@@ -27,8 +27,13 @@ const notifyChannels = require('./notifyChannels');
 const revenueReportExport = require('./revenueReportExport');
 const ceoDeckReport = require('./report/deckReport');
 const productSearch = require('./productSearch');
+const persist = require('./persist');
+const diemXu = require('./diemXu');
+const { createDormantService } = require('./dormantService');
+const { buildDormantDigest } = require('./dormantDigest');
 
 const router = express.Router();
+const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
@@ -860,6 +865,40 @@ router.get('/trend', auth.requireAuth, (req, res) => {
 
 router.get('/alerts', auth.requireAuth, (req, res) => {
   res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session), compareMode: req.query.compareMode }));
+});
+
+/* ---------- AI canh cửa QLNB ngủ đông + Điểm/Xu ---------- */
+router.get('/dormant/gate', auth.requireAuth, (req, res) => {
+  try {
+    const scope = auth.scopeOf(req.session);
+    if (!scope.empCode) return res.json({ must_answer: false, admin: true, ...dormantService.summaryFor({ isAdmin: true }) });
+    res.json(dormantService.gateFor({ empCode: scope.empCode, source: req.query.source }));
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+router.post('/dormant/actions', auth.requireAuth, (req, res) => {
+  try {
+    const scope = auth.scopeOf(req.session);
+    if (!scope.empCode) return res.status(403).json({ error: 'CEO xem dashboard tổng hợp, không xác nhận thay nhân viên' });
+    res.json(dormantService.submitActions({
+      empCode: scope.empCode,
+      source: req.body.source,
+      checkpoint_key: req.body.checkpoint_key,
+      actions: req.body.actions,
+    }));
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+router.get('/dormant/summary', auth.requireAuth, (req, res) => {
+  try {
+    const scope = auth.scopeOf(req.session);
+    res.json(dormantService.summaryFor({ empCode: scope.empCode, isAdmin: !scope.empCode }));
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
+router.get('/dormant/digest-preview', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { res.json(buildDormantDigest(dormantService.summaryFor({ isAdmin: true }))); }
+  catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 /* ---------- Revenue drill-down ---------- */

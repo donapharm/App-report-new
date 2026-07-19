@@ -81,6 +81,29 @@ function AlertLine({ group, item }) {
   );
 }
 
+function DormantExecutiveCard({ data }) {
+  if (!data) return <Spinner />;
+  const s = data.summary || {};
+  const top = (data.items || []).filter((x) => x.attention?.level !== 'normal').slice(0, 5);
+  return <div className="card dormant-executive-card">
+    <div className="dormant-executive-head">
+      <div><span>AI CANH CỬA · TOÀN CÔNG TY</span><b>QLNB đủ 60 ngày chưa có đơn trở lại</b></div>
+      <small>Dữ liệu đến {String(data.as_of || '').split('-').reverse().join('/') || '—'}</small>
+    </div>
+    <div className="dormant-executive-kpis">
+      <span><em>Đang ngủ đông</em><b>{Number(s.dormant || 0).toLocaleString('vi-VN')}</b></span>
+      <span><em>Chưa kích hoạt</em><b>{Number(s.not_activated || 0).toLocaleString('vi-VN')}</b></span>
+      <span className="warn"><em>Quá 7 ngày xử lý</em><b>{Number(s.red_7_days || 0).toLocaleString('vi-VN')}</b></span>
+      <span className="danger"><em>Đưa quản lý/CEO</em><b>{Number(s.management_14_days || 0).toLocaleString('vi-VN')}</b></span>
+      <span className="ok"><em>Đã có đơn trở lại</em><b>{Number(s.reactivated || 0).toLocaleString('vi-VN')}</b></span>
+    </div>
+    {!!top.length && <div className="dormant-executive-list">{top.map((item) => <div key={item.key}>
+      <strong>{item.emp_code}</strong><span><b>{item.product_name || item.iit_code}</b><small>{item.unit_name || item.unit_code} · {item.days_idle} ngày không có đơn dương</small></span><i className={item.attention?.level}>{item.attention?.level === 'management' ? 'CEO' : 'ĐỎ'}</i>
+    </div>)}</div>}
+    <p>Chỉ đơn dương hợp lệ mới tự đóng cảnh báo. Đơn âm/trả hàng không được tính là tái kích hoạt.</p>
+  </div>;
+}
+
 export default function Overview({ me, onNavigate }) {
   const [periods, setPeriods] = useState([]);
   const [periodSel, setPeriodSel] = useState(null);
@@ -92,6 +115,7 @@ export default function Overview({ me, onNavigate }) {
   const [topRows, setTopRows] = useState(null);
   const [unitRevenueRows, setUnitRevenueRows] = useState(null);
   const [richInsights, setRichInsights] = useState(null);
+  const [dormantExecutive, setDormantExecutive] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [cmpMode, setCmpModeState] = useState(() => { try { return localStorage.getItem('rpt_cmp_mode') || 'prev'; } catch { return 'prev'; } });
   const setCmpMode = (m) => { setCmpModeState(m); try { localStorage.setItem('rpt_cmp_mode', m); } catch { /* ignore */ } };
@@ -144,6 +168,12 @@ export default function Overview({ me, onNavigate }) {
     setAlerts(null);
     api.alerts({ ...periodParams(periodSel), compareMode: cmpMode }).then(setAlerts);
   }, [periodSel, reloadTick, cmpMode]);
+
+  useEffect(() => {
+    if (!me.isAdmin) return;
+    setDormantExecutive(null);
+    api.dormantSummary().then(setDormantExecutive).catch(() => setDormantExecutive({ summary: {}, items: [] }));
+  }, [me.isAdmin, reloadTick]);
 
   useEffect(() => {
     if (!periodSel) return;
@@ -293,6 +323,7 @@ export default function Overview({ me, onNavigate }) {
             <Kpi variant="red" icon="⚠️" label="Cơ số thầu sắp cạn" value={`${kpi.cstLowCount || 0} dòng <10%`} sub="Hiện tại · bấm để xem" onClick={() => onNavigate?.('cst', { cstFilter: 'low' })} />
             <Kpi variant="amber" icon="🗺️" label="Quy mô kỳ" value={`${kpi.unitCount} ĐV · ${kpi.productCount} SP · ${kpi.empCount} NV`} sub={`${kpi.rowCount} dòng · xem ›`} onClick={() => onNavigate?.('revenue')} />
           </div>
+          {me.isAdmin && <DormantExecutiveCard data={dormantExecutive} />}
           <div className="chart-grid overview-charts">
             <div className="card chart-card wide">
               <div className="section-head">📈 Doanh thu theo kỳ · overlay target</div>
