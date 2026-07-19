@@ -40,7 +40,7 @@ const dormantNotificationStore = createDormantNotificationStore({ persist });
 const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist, notificationStore: dormantNotificationStore });
 const filteredEmployeeReport = createFilteredEmployeeReportService({ store, catalogManagement, appSaleCst, persist });
 const filteredEmployeeDelivery = createFilteredEmployeeDeliveryService({ filteredEmployeeReport, store, listTelegramMap: auth.listTelegramMap, notifyChannels, persist });
-const requireCeoDelivery = (req, res, next) => req.session.role === 'ceo' ? next() : res.status(403).json({ error: 'Chỉ CEO được quản lý luồng gửi báo cáo cá nhân.', code: 'FILTERED_DELIVERY_CEO_REQUIRED' });
+const requireCeoDelivery = (req, res, next) => (req.session.role === 'ceo' || req.session.emp_code === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được quản lý luồng gửi báo cáo cá nhân.', code: 'FILTERED_DELIVERY_CEO_REQUIRED' });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
