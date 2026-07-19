@@ -102,6 +102,9 @@ test('active CST that never had a positive order is separated as not activated',
 
 test('structured workflow includes expected order and no-demand outcomes', () => {
   assert.ok(D.ACTION_STATUSES.includes('expected_order'));
+  assert.ok(D.ACTION_STATUSES.includes('national_tender_forecast'));
+  assert.ok(D.ACTION_STATUSES.includes('debt_blocked'));
+  assert.ok(D.ACTION_STATUSES.includes('insurance_mapping_blocked'));
   assert.ok(D.ACTION_STATUSES.includes('no_demand'));
 });
 

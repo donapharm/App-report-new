@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDonaTableCellTools } from '@donapharm/dona-table-cell-tools/react';
 import '@donapharm/dona-table-cell-tools/css';
 import { api, downloadFilteredEmployeeReport, downloadFilteredEmployeeSummary } from '../api.js';
@@ -287,6 +287,7 @@ function ReportPanel({ period, rows }) {
   const [downloading, setDownloading] = useState('');
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const previewRequestRef = useRef(0);
   const options = useMemo(() => ({
     employees: uniqueReportOptions(rows, 'emp_code', (row, value) => `${value} · ${row.emp_name || value}`),
     provinces: uniqueReportOptions(rows, 'province'),
@@ -295,14 +296,25 @@ function ReportPanel({ period, rows }) {
     contractors: uniqueReportOptions(rows, 'contractor_code'),
     qlnb: uniqueReportOptions(rows, 'qlnb_code', (row, value) => `${value} · ${row.product_name || value}`),
   }), [rows]);
-  useEffect(() => { setForm(REPORT_DEFAULTS); setPreview(null); setError(''); setMessage(''); }, [period]);
-  const set = (key, value) => { setForm((current) => ({ ...current, [key]: value })); setPreview(null); setError(''); setMessage(''); };
+  useEffect(() => {
+    previewRequestRef.current += 1; setBusy(false); setForm(REPORT_DEFAULTS); setPreview(null); setError(''); setMessage('');
+  }, [period]);
+  const set = (key, value) => {
+    previewRequestRef.current += 1; setBusy(false); setForm((current) => ({ ...current, [key]: value })); setPreview(null); setError(''); setMessage('');
+  };
   const payload = useMemo(() => ({ period, ...form }), [period, form]);
   async function makePreview() {
+    const requestId = ++previewRequestRef.current;
+    const requestPayload = payload;
     setBusy(true); setError(''); setMessage(''); setPreview(null);
-    try { setPreview(await api.adminCatalogManagementReportPreview(payload)); }
-    catch (requestError) { setError(requestError.message); }
-    setBusy(false);
+    try {
+      const result = await api.adminCatalogManagementReportPreview(requestPayload);
+      if (requestId === previewRequestRef.current) setPreview(result);
+    } catch (requestError) {
+      if (requestId === previewRequestRef.current) setError(requestError.message);
+    } finally {
+      if (requestId === previewRequestRef.current) setBusy(false);
+    }
   }
   const exportPayload = preview ? { ...preview.filters, preview_id: preview.preview_id } : null;
   async function downloadEmployee(empCode) {

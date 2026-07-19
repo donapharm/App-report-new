@@ -115,26 +115,74 @@ function filterCatalogRows(rows = [], filters = {}) {
     return true;
   });
 }
-function resolveAsOf(store, salesRows) {
-  const latest = store.listPeriods().at(-1);
-  if (latest?.ky && typeof store.periodFreshness === 'function') {
-    const through = dateOnly(store.periodFreshness(latest.ky)?.throughDate);
+function periodValue(ky) {
+  const match = text(ky).match(/^(\d{2})\.(\d{4})$/);
+  return match ? Number(`${match[2]}${match[1]}`) : 0;
+}
+function resolveAsOf(store, salesRows, selectedKy) {
+  const period = store.listPeriods().find((item) => item.ky === selectedKy);
+  if (selectedKy && typeof store.periodFreshness === 'function') {
+    const through = dateOnly(store.periodFreshness(selectedKy)?.throughDate);
     if (through) return through;
   }
-  return dateOnly(latest?.dateTo) || dormant.resolveDataAsOf({ salesRows });
+  return dateOnly(period?.dateTo) || dormant.resolveDataAsOf({ salesRows });
 }
-function analyzeEmployeeReadOnly({ store, persist, empCode }) {
+function stateAtDate(rawState, asOf) {
+  const source = rawState && typeof rawState === 'object' ? rawState : { version: 1, items: {} };
+  const items = {};
+  for (const [key, value] of Object.entries(source.items || {})) {
+    const audit = (value?.audit || []).filter((entry) => {
+      const at = dateOnly(entry?.at);
+      return !at || at <= asOf;
+    });
+    const starts = audit.filter((entry) => ['detected_dormant', 'reopened_dormant'].includes(entry?.type));
+    if (!starts.length) {
+      const firstDetected = dateOnly(value?.first_detected_at);
+      if (firstDetected && firstDetected <= asOf) items[key] = { ...value, audit };
+      continue;
+    }
+    const start = starts.at(-1);
+    const startIndex = audit.lastIndexOf(start);
+    const historical = {
+      first_detected_at: dateOnly(start.at),
+      last_activity_at: dateOnly(start?.changes?.last_activity_at),
+      status: null,
+      next_follow_up: null,
+      note: '',
+      resolved_at: null,
+      resolution: null,
+      cycle: starts.length,
+      action_cycle: 0,
+      audit,
+    };
+    for (const entry of audit.slice(startIndex + 1)) {
+      const changes = entry?.changes && typeof entry.changes === 'object' ? entry.changes : {};
+      if (entry.type === 'action_updated') {
+        Object.assign(historical, changes, { action_updated_at: dateOnly(entry.at) });
+      } else if (entry.type === 'reactivated') {
+        Object.assign(historical, changes, { resolved_at: dateOnly(entry.at), resolution: 'reactivated_by_positive_order' });
+      }
+    }
+    items[key] = historical;
+  }
+  return { ...source, items };
+}
+function analyzeEmployeeReadOnly({ store, persist, empCode, periodUi }) {
   const scope = { empCode: upper(empCode) };
-  const salesRows = store.getRowsRange({ kys: store.periodKys(), scope });
-  const cstRows = store.getCst({ scope });
-  const asOf = resolveAsOf(store, salesRows);
+  const selectedValue = periodValue(periodUi);
+  const kys = store.periodKys().filter((ky) => !selectedValue || periodValue(ky) <= selectedValue);
+  const salesRows = store.getRowsRange({ kys, scope });
+  const selectedPeriod = /^\d{2}\.\d{4}$/.test(periodUi) ? `${periodUi.slice(3)}-${periodUi.slice(0, 2)}` : '';
+  const cstRows = store.getCst({ scope }).filter((row) => !selectedPeriod || activeInPeriod(row, selectedPeriod));
+  const asOf = resolveAsOf(store, salesRows, periodUi);
   if (!asOf) return { as_of: null, items: [], not_activated: [], summary: { dormant: 0, not_activated: 0 } };
+  const state = stateAtDate(persist.load(STATE_NAME, { version: 1, items: {} }), asOf);
   return dormant.analyze({
     salesRows,
     cstRows,
     dataAsOf: asOf,
     scope,
-    state: persist.load(STATE_NAME, { version: 1, items: {} }),
+    state,
     maxPriority: 5,
   });
 }
@@ -153,11 +201,11 @@ function saleStatsByPair(rows = []) {
   }
   return map;
 }
-function attachEmployeeSignals({ rows, empCode, analysis, c30ByPair, periodSales }) {
+function attachEmployeeSignals({ rows, empCode, analysis, c30ByPair, periodSales, reviewAsOf = null }) {
   const dormantByKey = new Map((analysis.items || []).map((item) => [businessKey(item.emp_code, item.unit_code, item.iit_code), item]));
   const notActivated = new Map((analysis.not_activated || []).map((item) => [businessKey(item.emp_code, item.unit_code, item.iit_code), item]));
   const salesByPair = saleStatsByPair(periodSales);
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const today = reviewAsOf || new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
   return rows.map((row) => {
     const key = businessKey(empCode, row.unit_code, row.qlnb_code);
     const dormantItem = dormantByKey.get(key);
@@ -395,8 +443,8 @@ function createFilteredEmployeeReportService({ store, catalogManagement, appSale
     filters.period = period;
     const snapshot = await catalogManagement.getSnapshot(period);
     const cstRows = store.getCst({ scope: null });
-    const catalogRows = catalogManagement.buildCatalogRows(snapshot.rows, cstRows).filter((row) => activeInPeriod(row, period));
-    const availableEmpCodes = [...new Set(catalogRows.map((row) => upper(row.emp_code)).filter(Boolean))].sort();
+    const activeSourceRows = snapshot.rows.filter((row) => activeInPeriod(row, period));
+    const availableEmpCodes = [...new Set(activeSourceRows.map((row) => upper(row.emp_code)).filter(Boolean))].sort();
     const selected = filters.emp_codes.length ? filters.emp_codes.filter((code) => availableEmpCodes.includes(code)) : availableEmpCodes;
     if (!selected.length) throw Object.assign(new Error('Không có nhân viên hợp lệ trong phạm vi đã chọn.'), { status: 400 });
     if (selected.length > 80) throw Object.assign(new Error('Danh sách nhân viên vượt quá giới hạn báo cáo.'), { status: 400 });
@@ -407,15 +455,20 @@ function createFilteredEmployeeReportService({ store, catalogManagement, appSale
     if (filters.c30_status !== 'all' && !c30Source.ready) {
       throw Object.assign(new Error('Nguồn C30 chưa sẵn sàng; không thể lọc C30 để tránh kết luận sai.'), { code: 'FILTERED_REPORT_C30_UNAVAILABLE', status: 409 });
     }
-    const c30ByPair = new Map((c30Result.rows || []).map((row) => [pairKey(row.unit_code, row.iit_code), row]));
     const periodUi = hubToUi(period);
     const reports = [];
 
     for (const empCode of selected) {
-      const employeeCatalog = catalogRows.filter((row) => upper(row.emp_code) === empCode);
-      const analysis = analyzeEmployeeReadOnly({ store, persist, empCode });
-      const periodSales = store.getRows({ ky: periodUi, scope: { empCode } });
-      const signaled = attachEmployeeSignals({ rows: employeeCatalog, empCode, analysis, c30ByPair, periodSales });
+      const scope = { empCode };
+      const employeeSource = activeSourceRows.filter((row) => upper(row.emp_code) === empCode);
+      const employeeCst = store.getCst({ scope }).filter((row) => activeInPeriod(row, period));
+      const employeeCatalog = catalogManagement.buildCatalogRows(employeeSource, employeeCst).filter((row) => upper(row.emp_code) === empCode);
+      const employeeC30 = appSaleCst.enrichCstRowsWithC30(employeeCst, tenderQuota);
+      const employeeC30ByPair = new Map((employeeC30.rows || []).map((row) => [pairKey(row.unit_code, row.iit_code), row]));
+      const analysis = analyzeEmployeeReadOnly({ store, persist, empCode, periodUi });
+      const periodSales = store.getRows({ ky: periodUi, scope });
+      const reviewAsOf = periodUi === store.latestKy() ? null : analysis.as_of;
+      const signaled = attachEmployeeSignals({ rows: employeeCatalog, empCode, analysis, c30ByPair: employeeC30ByPair, periodSales, reviewAsOf });
       const filteredRows = filterCatalogRows(signaled, { ...filters, emp_codes: [empCode] });
       assertEmployeeIsolation(filteredRows, empCode);
       const summary = summarizeEmployee({ store, empCode, periodUi, allPeriodSales: periodSales, filteredRows, analysis });
@@ -498,6 +551,6 @@ function createFilteredEmployeeReportService({ store, catalogManagement, appSale
 module.exports = {
   FILTER_ENUMS, CRITICAL_EXPORT_FIELDS,
   normalizeFilters, filterCatalogRows, cstPct, cstBandMatch, pairKey, businessKey,
-  analyzeEmployeeReadOnly, attachEmployeeSignals, assertEmployeeIsolation, summarizeEmployee,
+  stateAtDate, analyzeEmployeeReadOnly, attachEmployeeSignals, assertEmployeeIsolation, summarizeEmployee,
   excelBuffer, summaryExcelBuffer, createFilteredEmployeeReportService,
 };

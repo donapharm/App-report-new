@@ -8,7 +8,7 @@ const STATE_NAME = 'dormant_qlnb_state';
 const CHECKPOINT_NAME = 'dormant_qlnb_checkpoints';
 const MAX_GATE_ITEMS = 5;
 const MAX_ACTION_DAYS = 14;
-const NOTE_REQUIRED = new Set(['blocked', 'no_demand', 'inactive_assignment', 'other']);
+const NOTE_REQUIRED = new Set(['blocked', 'national_tender_forecast', 'debt_blocked', 'insurance_mapping_blocked', 'no_demand', 'inactive_assignment', 'other']);
 
 function upper(v) { return String(v || '').trim().toUpperCase(); }
 function dateOnly(v) { const s = String(v || '').slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null; }
@@ -335,6 +335,60 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
     };
   }
 
+  function plansForAdmin({ empCode, unitCode } = {}) {
+    const today = localYmd(clock());
+    const result = analyzeScope(null);
+    const items = result.items.map((item) => publicItem(item, today));
+    const metrics = (rows) => ({
+      total: rows.length,
+      unplanned: rows.filter((item) => item.attention?.status === 'unplanned').length,
+      in_progress: rows.filter((item) => ['in_progress', 'upcoming'].includes(item.attention?.status)).length,
+      due: rows.filter((item) => item.attention?.status === 'due').length,
+      overdue: rows.filter((item) => item.attention?.status === 'overdue').length,
+    });
+    const employeeGroups = new Map();
+    for (const item of items) {
+      const code = upper(item.emp_code);
+      if (!code) continue;
+      if (!employeeGroups.has(code)) employeeGroups.set(code, []);
+      employeeGroups.get(code).push(item);
+    }
+    const rank = (summary) => summary.overdue * 100000 + summary.due * 10000 + summary.unplanned * 100 + summary.total;
+    const employees = [...employeeGroups.entries()].map(([emp_code, rows]) => {
+      const summary = metrics(rows);
+      return { emp_code, employee_name: rows.find((item) => item.employee_name)?.employee_name || emp_code, ...summary, rank: rank(summary) };
+    }).sort((a, b) => b.rank - a.rank || a.emp_code.localeCompare(b.emp_code, 'vi')).map(({ rank: _rank, ...safe }) => safe);
+    const requestedEmp = upper(empCode);
+    const selectedEmp = employees.some((item) => item.emp_code === requestedEmp) ? requestedEmp : employees[0]?.emp_code || null;
+    const employeeItems = selectedEmp ? (employeeGroups.get(selectedEmp) || []) : [];
+    const unitGroups = new Map();
+    for (const item of employeeItems) {
+      const code = String(item.unit_code || '').trim();
+      if (!code) continue;
+      if (!unitGroups.has(code)) unitGroups.set(code, []);
+      unitGroups.get(code).push(item);
+    }
+    const units = [...unitGroups.entries()].map(([unit_code, rows]) => {
+      const summary = metrics(rows);
+      return { unit_code, unit_name: rows.find((item) => item.unit_name)?.unit_name || unit_code, ...summary, rank: rank(summary) };
+    }).sort((a, b) => b.rank - a.rank || a.unit_code.localeCompare(b.unit_code, 'vi')).map(({ rank: _rank, ...safe }) => safe);
+    const requestedUnit = String(unitCode || '').trim();
+    const selectedUnit = units.some((item) => item.unit_code === requestedUnit) ? requestedUnit : units[0]?.unit_code || null;
+    const selectedItems = selectedUnit ? (unitGroups.get(selectedUnit) || []) : [];
+    return {
+      generated_on: today,
+      as_of: result.as_of,
+      company_summary: metrics(items),
+      employees,
+      selected_emp_code: selectedEmp,
+      units,
+      selected_unit_code: selectedUnit,
+      selected_summary: metrics(selectedItems),
+      items: selectedItems.sort(gateComparator(today)).map((item) => ({ ...item, review_status: item.attention?.status || 'unplanned' })),
+      read_only: true,
+    };
+  }
+
   function notificationsForAdmin() {
     if (!notificationStore) return { generated_on: localYmd(clock()), unread_count: 0, counts: {}, events: [] };
     const today = localYmd(clock());
@@ -347,7 +401,7 @@ function createDormantService({ store, scoreForEmp, persist, notificationStore =
     return notificationStore.markRead(payload || {});
   }
 
-  return { gateFor, submitActions, summaryFor, notificationsForAdmin, markNotificationsRead, analyzeScope };
+  return { gateFor, submitActions, summaryFor, plansForAdmin, notificationsForAdmin, markNotificationsRead, analyzeScope };
 }
 
 module.exports = {

@@ -9,12 +9,15 @@ const STATUS_OPTIONS = [
   ['waiting_forecast', '🏥 Đơn vị đang chờ dự trù'],
   ['expected_order', '📦 Đơn vị dự kiến có đơn'],
   ['blocked', '⚠️ Vướng thầu, cơ số hoặc hàng hóa'],
+  ['national_tender_forecast', '🏛️ Vướng thầu QG, nhưng sẽ xin dự trù'],
+  ['debt_blocked', '💳 Vướng công nợ, không cho giao hàng'],
+  ['insurance_mapping_blocked', '🪪 Vướng ánh xạ BHYT'],
   ['no_demand', '⏸️ Đơn vị đã ngưng nhu cầu'],
   ['inactive_assignment', '🔄 Không còn đúng người phụ trách'],
   ['other', '📝 Lý do khác'],
 ];
 const NEED_DATE = new Set(STATUS_OPTIONS.map(([value]) => value).filter(Boolean));
-const NEED_NOTE = new Set(['blocked', 'no_demand', 'inactive_assignment', 'other']);
+const NEED_NOTE = new Set(['blocked', 'national_tender_forecast', 'debt_blocked', 'insurance_mapping_blocked', 'no_demand', 'inactive_assignment', 'other']);
 const fmt = (v, digits = 2) => Number(v || 0).toLocaleString('vi-VN', { maximumFractionDigits: digits });
 const dateVi = (v) => {
   const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);

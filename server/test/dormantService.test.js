@@ -135,6 +135,32 @@ test('follow-up date is required after today and capped at fourteen days', () =>
   assert.equal(done.must_answer, false);
 });
 
+test('new CEO-approved blocking reasons are accepted and require an audit note', () => {
+  for (const status of ['national_tender_forecast', 'debt_blocked', 'insurance_mapping_blocked']) {
+    const f = makeFixture({ unitACount: 1, unitBCount: 0 });
+    const gate = f.service.gateFor({ empCode: 'DN016' });
+    const key = gate.required_items[0].key;
+    assert.throws(() => f.service.submitActions({ empCode: 'DN016', checkpoint_key: gate.checkpoint_key, actions: [{ key, status, next_follow_up: '2026-08-03', note: '' }] }), /ghi rõ lý do/);
+    const done = f.service.submitActions({ empCode: 'DN016', checkpoint_key: gate.checkpoint_key, actions: [{ key, status, next_follow_up: '2026-08-03', note: 'Đã xác minh với đơn vị' }] });
+    assert.equal(done.must_answer, false);
+  }
+});
+
+test('CEO can drill down plans by employee and unit with management metrics', () => {
+  const f = makeFixture({ unitACount: 2, unitBCount: 1 });
+  const gate = f.service.gateFor({ empCode: 'DN016' });
+  f.service.submitActions({ empCode: 'DN016', checkpoint_key: gate.checkpoint_key, actions: actionsFor(gate) });
+  const detail = f.service.plansForAdmin({ empCode: 'DN016', unitCode: '001.BV A' });
+  assert.equal(detail.read_only, true);
+  assert.equal(detail.selected_emp_code, 'DN016');
+  assert.equal(detail.selected_unit_code, '001.BV A');
+  assert.equal(detail.selected_summary.total, 2);
+  assert.equal(detail.selected_summary.in_progress, 2);
+  assert.ok(detail.employees.some((item) => item.emp_code === 'DN016'));
+  assert.ok(detail.units.some((item) => item.unit_code === '002.BV B'));
+  assert.ok(detail.items.every((item) => item.emp_code === 'DN016' && item.unit_code === '001.BV A'));
+});
+
 test('a due review creates the next action cycle instead of extending invisibly', () => {
   const f = makeFixture({ unitACount: 1, unitBCount: 0 });
   let gate = f.service.gateFor({ empCode: 'DN016' });

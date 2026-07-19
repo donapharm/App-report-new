@@ -747,12 +747,12 @@ router.get('/admin/catalog-management/diagnostics', auth.requireAuth, auth.requi
 // Không nối luồng gửi email/Telegram trong đợt triển khai này.
 router.post('/admin/catalog-management/report/preview', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {
-    return res.json(await filteredEmployeeReport.preview(req.body || {}, req.session.emp_code));
+    return res.json(await filteredEmployeeReport.preview(req.body || {}, req.session.th || req.session.emp_code));
   } catch (e) { return res.status(e.status || 502).json({ error: e.message, code: e.code || null }); }
 });
 router.post('/admin/catalog-management/report/export/:empCode.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {
-    const report = await filteredEmployeeReport.employeeReport(req.body || {}, req.params.empCode, req.session.emp_code);
+    const report = await filteredEmployeeReport.employeeReport(req.body || {}, req.params.empCode, req.session.th || req.session.emp_code);
     const buffer = await filteredEmployeeReport.excelBuffer(report);
     const safeEmp = String(report.summary.emp_code || 'NV').replace(/[^A-Z0-9_-]/gi, '');
     const safePeriod = String(report.period || '').replace(/[^0-9-]/g, '');
@@ -764,7 +764,7 @@ router.post('/admin/catalog-management/report/export/:empCode.xlsx', auth.requir
 });
 router.post('/admin/catalog-management/report/export-summary.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {
-    const report = await filteredEmployeeReport.summaryReport(req.body || {}, req.session.emp_code);
+    const report = await filteredEmployeeReport.summaryReport(req.body || {}, req.session.th || req.session.emp_code);
     const buffer = await filteredEmployeeReport.summaryExcelBuffer(report);
     const safePeriod = String(report.period || '').replace(/[^0-9-]/g, '');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -930,6 +930,10 @@ router.get('/dormant/summary', auth.requireAuth, (req, res) => {
 
 router.get('/dormant/digest-preview', auth.requireAuth, auth.requireAdmin, (req, res) => {
   try { res.json(buildDormantDigest(dormantService.summaryFor({ isAdmin: true }))); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.get('/dormant/admin/plans', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  try { res.json(dormantService.plansForAdmin({ empCode: req.query.emp_code, unitCode: req.query.unit_code })); }
   catch (e) { res.status(400).json({ error: e.message }); }
 });
 router.get('/dormant/notifications', auth.requireAuth, auth.requireAdmin, (req, res) => {
