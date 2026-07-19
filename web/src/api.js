@@ -78,6 +78,8 @@ export const api = {
   dormantGate: (params = {}) => req('GET', '/dormant/gate?' + new URLSearchParams(params).toString()),
   dormantActions: (payload) => req('POST', '/dormant/actions', payload),
   dormantSummary: (params = {}) => req('GET', '/dormant/summary?' + new URLSearchParams(params).toString()),
+  dormantNotifications: () => req('GET', '/dormant/notifications'),
+  dormantNotificationsRead: (payload = {}) => req('POST', '/dormant/notifications/read', payload),
   revenue: (dimension, ky, extra = {}) => {
     const p = new URLSearchParams({ dimension, ...(ky ? { ky } : {}), ...extra });
     return req('GET', '/revenue?' + p.toString());

@@ -335,6 +335,7 @@ function analyze({ salesRows = [], cstRows = [], dataAsOf, scope = {}, state: in
       resolved_at: null,
       resolution: null,
       cycle: number(previous?.cycle) + 1,
+      action_cycle: 0,
       audit: [...(previous?.audit || []), auditEntry({ at: asOf, actor: 'SYSTEM', type: reopening ? 'reopened_dormant' : 'detected_dormant', changes: { last_activity_at: candidate.last_activity_at, days_idle: idle } })],
     } : { ...previous, last_activity_at: candidate.last_activity_at };
     state.items[candidate.key] = persisted;
@@ -351,6 +352,7 @@ function analyze({ salesRows = [], cstRows = [], dataAsOf, scope = {}, state: in
         next_follow_up: dateOnly(persisted.next_follow_up),
         note: text(persisted.note),
         updated_at: persisted.action_updated_at || null,
+        cycle: number(persisted.action_cycle),
       },
     };
     item.priority = deterministicPriority(item);
@@ -393,7 +395,8 @@ function updateAction({ state: inputState, key, status, next_follow_up, note = '
     ...old,
     ...changes,
     action_updated_at: at,
-    audit: [...(old.audit || []), auditEntry({ at, actor, type: 'action_updated', changes })],
+    action_cycle: number(old.action_cycle) + 1,
+    audit: [...(old.audit || []), auditEntry({ at, actor, type: 'action_updated', changes: { ...changes, action_cycle: number(old.action_cycle) + 1 } })],
   };
   return state;
 }
