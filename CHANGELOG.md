@@ -1,3 +1,7 @@
+### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": bộ lọc kỳ (Từ→Đến tháng) + lấy thử T07 thật
+- Giao bot thêm **bộ lọc "Từ tháng → Đến tháng"** cho trang Chi phí của tôi (FE + backend truyền `from/to` xuống DataHub; vẫn khóa scope NV). Nhiều tháng = **tách từng tháng** (mỗi tháng có tổng riêng; c44 cuối năm tách như đã chốt). DataHub cần nhận thêm tham số kỳ (thêm tham số lọc, không phải thêm cột) — bot phối hợp phiên DataHub.
+- **Lấy dữ liệu THẬT T07/2026 tính thử** (bot chạy trên server — Claude không có quyền dữ liệu thật): dán vài dòng + tổng chi phí tháng (trừ c44) + tỉ lệ dòng khớp doanh thu để CEO/Claude soi. Directive: `DIRECTIVE_EMP_COST_MONTH_FILTER.md`.
+
 ### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": App Report tự tính Thành tiền + cột cuối năm
 - CEO chốt DataHub không mở thêm cột → **App Report tự thêm cột Thành tiền + tự tính**: `Thành tiền(dòng) = doanh thu dòng × % ÷ 100` (doanh thu dòng App Report tự lấy, ghép theo đơn vị+sản phẩm; không khớp → `—`).
 - Hiển thị cột %: bỏ ký hiệu `%`, chỉ số (8,0%→`8.0`). Mỗi cột % có cột Thành tiền; **Tổng chi phí tháng** = Σ Thành tiền **trừ cột cuối năm**.
