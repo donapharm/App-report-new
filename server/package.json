@@ -27,6 +27,7 @@
     "nodemailer": "^9.0.3",
     "pdfkit": "^0.17.2",
     "pg": "^8.22.0",
-    "pptxgenjs": "^4.0.1"
+    "pptxgenjs": "^4.0.1",
+    "playwright-core": "^1.61.1"
   }
 }

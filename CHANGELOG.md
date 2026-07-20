@@ -1,3 +1,11 @@
+### DRAFT — 2026-07-20 — deck CEO 32 slide: hoàn thiện 5 pha, lịch vẫn khóa
+- Hoàn thiện module canonical `deckData.js`/`deckHtml.js`: nguồn hàng ưu tiên map live trong catalog, luôn đối soát đủ Group-Dona/Đối tác; cảnh báo “doanh số cao–xu thấp” dùng đúng doanh số quý; DRAFT và bản chính thức tách nhãn/key, không ảnh hưởng báo cáo per-NV trong `salesReport.js`.
+- Chuyển renderer PPTX sang Playwright thật (`playwright-core`) → 32 PNG 1280×720 → `pptxgenjs` 16:9 full-bleed; thêm kiểm tra overflow từng slide và PDF fallback 32 trang nếu đóng gói PPTX lỗi.
+- Delivery giữ CEO-only, email đính kèm và Telegram `sendDocument`; lưu tiến độ từng kênh để retry chỉ gửi lại tệp/kênh lỗi, DRAFT không chặn khóa chống trùng bản chính thức.
+- Bổ sung CLI DRAFT mặc định/`--official`, route preview admin có PDF fallback, scheduler 13:00 Thứ 7 + 18:00 ngày cuối tháng theo Asia/Ho_Chi_Minh. Scheduler fail-closed bằng hai cờ `REPORT_DECK_SCHEDULER_ENABLED=false` và `REPORT_DECK_SCHEDULER_APPROVED=false`.
+- QA: đối chiếu độc lập tổng doanh thu, Top đơn vị/sản phẩm và Điểm–Xu đều khớp backend; HTML/PPTX tuần + tháng đủ 32 slide, không overflow, PPTX ZIP hợp lệ 32 slide/16:9; toàn bộ 173 test PASS.
+- Sau khi CEO duyệt, đã gửi riêng CEO bản DRAFT tuần và tháng qua email + Telegram, mỗi kỳ gồm `.html` + `.pptx`. Lịch tự động vẫn tắt; không deploy/restart.
+
 ### PRODUCTION — 2026-07-15 — App Report New chính thức tại report.donapharm.asia
 - Chốt release `5df20e0`, build production và chạy PM2 `reportnew` trên `127.0.0.1:3873`; giữ `dona-report` cổng `3860` nguyên trạng để rollback nội bộ.
 - Home SSO dùng `GET /api/sso/verify`, Report phát session riêng; CORS chỉ cho các origin DONAPHARM được duyệt và asset thiếu trả HTTP 404 thay vì SPA HTML.

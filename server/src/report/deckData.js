@@ -64,15 +64,22 @@ function rowsInRange(range) {
 
 function catalogIndexes() {
   const catalog = store.base().catalog || {};
+  const contractorRows = catalog.contractors || catalog.vendors || catalog.sources || [];
+  const routeRows = catalog.routeLines || catalog.routes || [];
+  const contractorKey = (x) => text(x.contractor_code || x.vendor_code || x.code);
+  const routeKey = (x) => text(x.route || x.route_code || x.code);
   return {
     units: new Map((catalog.units || []).map((x) => [text(x.unit_code), x])),
     products: new Map((catalog.products || []).map((x) => [text(x.iit_code), x])),
+    contractors: new Map(contractorRows.map((x) => [contractorKey(x), x]).filter(([key]) => key)),
+    routes: new Map(routeRows.map((x) => [routeKey(x), x]).filter(([key]) => key)),
   };
 }
 
 function canonicalRoute(row, indexes) {
   const unit = indexes.units.get(text(row.unit_code)) || {};
-  const explicit = upper(row.line || unit.line);
+  const routeMap = indexes.routes.get(text(row.route || unit.route)) || {};
+  const explicit = upper(row.line || unit.line || routeMap.line);
   if (CANONICAL_ROUTES.has(explicit)) return explicit;
   const rawRoute = text(row.route || unit.route);
   const route = upper(rawRoute);
@@ -81,7 +88,11 @@ function canonicalRoute(row, indexes) {
   return rawRoute; // Keep a real unmapped live label rather than inventing CL/NCL/NT.
 }
 
-function sourceGroup(row) {
+function sourceGroup(row, indexes = { contractors: new Map() }) {
+  const contractor = indexes.contractors?.get(text(row.contractor_code)) || {};
+  const explicit = norm(row.source_group || row.contractor_group || contractor.group || contractor.source_group);
+  if (['group-dona', 'group dona', 'donapharm', 'dona', 'afp pharma', 'afp'].includes(explicit)) return 'Group-Dona';
+  if (['doi tac', 'partner', 'partners'].includes(explicit)) return 'Đối tác';
   const hay = norm(`${row.contractor_code || ''} ${row.contractor_name || ''}`);
   return /(^|\s|[^a-z0-9])(dona|donapharm|afp)(\s|[^a-z0-9]|$)/.test(hay) ? 'Group-Dona' : 'Đối tác';
 }
@@ -172,15 +183,21 @@ function routeBreakdown(rows, previousRows, indexes, previousScale) {
 }
 
 function sourceBreakdown(rows, previousRows, indexes, previousScale) {
-  const groups = groupRows(rows, sourceGroup);
-  const previous = new Map(groupRows(previousRows, sourceGroup).map((x) => [x.key, x.revenue * previousScale]));
-  return groups.map((group) => ({
+  const keyFn = (row) => sourceGroup(row, indexes);
+  const current = new Map(groupRows(rows, keyFn).map((x) => [x.key, x]));
+  const previous = new Map(groupRows(previousRows, keyFn).map((x) => [x.key, x.revenue * previousScale]));
+  const total = sumRevenue(rows);
+  return ['Group-Dona', 'Đối tác'].map((key) => {
+    const group = current.get(key) || { key, label: key, revenue: 0, quantity: 0, rowCount: 0, rank: 0, pct: 0 };
+    return ({
     ...group,
+    pct: pctOf(group.revenue, total),
     previous: previous.get(group.key) || 0,
     diff: group.revenue - (previous.get(group.key) || 0),
-    contractors: groupRows(rows.filter((r) => sourceGroup(r) === group.key), (r) => r.contractor_code, (r) => r.contractor_name || r.contractor_code),
-    routes: groupRows(rows.filter((r) => sourceGroup(r) === group.key), (r) => canonicalRoute(r, indexes)),
-  }));
+    contractors: groupRows(rows.filter((r) => keyFn(r) === group.key), (r) => r.contractor_code, (r) => r.contractor_name || r.contractor_code),
+    routes: groupRows(rows.filter((r) => keyFn(r) === group.key), (r) => canonicalRoute(r, indexes)),
+  });
+  }).sort((a, b) => b.revenue - a.revenue);
 }
 
 function employeeRows(rows) {
@@ -295,6 +312,7 @@ async function build({ kind = 'week', ranges: suppliedRanges } = {}) {
   const employeePreviousRows = employeeRows(previousRows);
 
   const employees = groupRows(employeeCurrentRows, (r) => r.emp_code, (r) => r.emp_name || r.emp_code);
+  const quarterEmployees = groupRows(employeeRows(quarterRows), (r) => r.emp_code, (r) => r.emp_name || r.emp_code);
   const units = groupRows(currentRows, (r) => r.unit_code, (r) => r.unit_name || r.unit_code);
   const products = groupRows(currentRows, (r) => r.iit_code, (r) => r.product_name || r.iit_code);
   const customerTypes = groupRows(currentRows, (r) => customerType(r, indexes));
@@ -354,7 +372,7 @@ async function build({ kind = 'week', ranges: suppliedRanges } = {}) {
       unit: compareGroups(currentRows, previousRows, (r) => r.unit_code, (r) => r.unit_name || r.unit_code, comparison.factor),
       product: compareGroups(currentRows, previousRows, (r) => r.iit_code, (r) => r.product_name || r.iit_code, comparison.factor),
       route: compareGroups(currentRows, previousRows, (r) => canonicalRoute(r, indexes), (r) => canonicalRoute(r, indexes), comparison.factor),
-      source: compareGroups(currentRows, previousRows, sourceGroup, sourceGroup, comparison.factor),
+      source: compareGroups(currentRows, previousRows, (r) => sourceGroup(r, indexes), (r) => sourceGroup(r, indexes), comparison.factor),
       customerType: compareGroups(currentRows, previousRows, (r) => customerType(r, indexes), (r) => customerType(r, indexes), comparison.factor),
       therapy: compareGroups(currentRows, previousRows, (r) => therapyGroup(r, indexes), (r) => therapyGroup(r, indexes), comparison.factor),
     },
@@ -368,7 +386,7 @@ async function build({ kind = 'week', ranges: suppliedRanges } = {}) {
   };
   facts.scoreWarnings = facts.scores.filter((x) => x.canh_bao);
   facts.highRevenueLowXu = facts.scores
-    .map((score) => ({ ...score, revenue: employees.find((x) => x.key === score.empCode)?.revenue || 0 }))
+    .map((score) => ({ ...score, revenue: quarterEmployees.find((x) => upper(x.key) === score.empCode)?.revenue || 0 }))
     .filter((x) => x.revenue > 0 && x.canh_bao).sort((a, b) => b.revenue - a.revenue);
   facts.narrativeFacts = narrativeFacts(facts);
   return facts;

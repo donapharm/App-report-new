@@ -2485,10 +2485,18 @@ router.post('/report/deck/preview', auth.requireAuth, auth.requireAdmin, async (
       key: built.key,
       slideCount: built.slideCount,
       summary: built.summary,
-      files: {
-        html: { name: path.basename(built.htmlPath), url: fileUrl(path.basename(built.htmlPath)), bytes: built.manifest.files.html.bytes, sha256: built.manifest.files.html.sha256 },
-        pptx: { name: path.basename(built.pptxPath), url: fileUrl(path.basename(built.pptxPath)), bytes: built.manifest.files.pptx.bytes, sha256: built.manifest.files.pptx.sha256 },
-      },
+      renderWarning: built.manifest.renderWarning,
+      files: Object.fromEntries([
+        ['html', built.htmlPath],
+        ['pptx', built.pptxPath],
+        ['pdf', built.pdfPath],
+      ].filter(([, file]) => file).map(([key, file]) => [key, {
+        name: path.basename(file),
+        url: fileUrl(path.basename(file)),
+        bytes: built.manifest.files[key].bytes,
+        sha256: built.manifest.files[key].sha256,
+        fallback: !!built.manifest.files[key].fallback,
+      }])),
     });
   } catch (e) {
     console.error('[ceo-deck-preview]', e);
@@ -2498,7 +2506,7 @@ router.post('/report/deck/preview', auth.requireAuth, auth.requireAdmin, async (
 
 router.get('/report/deck/file/:name', auth.requireAuth, auth.requireAdmin, (req, res) => {
   const name = path.basename(String(req.params.name || ''));
-  if (!/^BAO_CAO_DOANH_SO_[A-Z0-9_]+_DONAPHARM_DRAFT\.(html|pptx)$/i.test(name)) return res.status(400).json({ error: 'Tên file deck không hợp lệ.' });
+  if (!/^BAO_CAO_DOANH_SO_[A-Z0-9_]+_DONAPHARM_DRAFT\.(html|pptx|pdf)$/i.test(name)) return res.status(400).json({ error: 'Tên file deck không hợp lệ.' });
   const file = path.join(ceoDeckReport.OUT_DIR, name);
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return res.status(404).json({ error: 'Không tìm thấy file DRAFT.' });
   res.setHeader('Cache-Control', 'private, no-store');

@@ -40,6 +40,13 @@ async function main() {
   for (const score of data.scores) assert.ok(!diemXu.EXCLUDE.has(String(score.empCode).toUpperCase()), `Excluded employee leaked into score table: ${score.empCode}`);
   assert.equal(data.scorePolicy.period, 'quarter');
   assert.equal(data.scorePolicy.carryForward, false);
+  assert.equal(deckData.sourceGroup({ source_group: 'Group-Dona', contractor_name: 'Nhà thầu bất kỳ' }), 'Group-Dona');
+  assert.equal(deckData.sourceGroup({ source_group: 'Đối tác', contractor_name: 'DONAPHARM giả lập' }), 'Đối tác');
+  assert.deepEqual(data.sourceBreakdown.map((x) => x.key).sort(), ['Group-Dona', 'Đối tác'].sort(), 'Both source groups must always exist');
+  for (const item of data.highRevenueLowXu) {
+    assert.ok(item.revenue >= 0, 'Quarter revenue must be numeric');
+    assert.ok(item.canh_bao, 'High-revenue/low-xu list must contain warnings only');
+  }
 
   await assert.rejects(() => deckData.build({ kind: 'employee' }), /Unsupported deck kind/);
 

@@ -24,6 +24,7 @@ const express = require('express');
 const cors = require('cors');
 const routes = require('./routes');
 const revenueRefresh = require('./revenueRefresh');
+const deckScheduler = require('./report/deckScheduler');
 
 const PORT = process.env.PORT || 3873;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -84,4 +85,5 @@ app.listen(PORT, HOST, () => {
   console.log(`✔ App Report API chạy tại http://${HOST}:${PORT}`);
   console.log(`  Health: http://${HOST}:${PORT}/api/health`);
   revenueRefresh.start();
+  deckScheduler.start();
 });
