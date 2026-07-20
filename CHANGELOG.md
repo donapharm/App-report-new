@@ -1,3 +1,7 @@
+### 2026-07-20 — Claude Code (tư vấn kiến trúc) — Thành tiền chi phí: chốt phương án B (DataHub tính, App Report view)
+- CEO cần cột **Thành tiền** cho module "Chi phí của tôi". Tư vấn: **DataHub tính sẵn `%×base` tại nguồn** (SSOT), đưa vào `columns[]`; App Report **chỉ view** — vì bảng render động nên **tự hiện, không sửa code**. Tránh lệch số & join mờ, giữ nguyên tắc "App Report không tính chi phí".
+- Yêu cầu nhỏ cho DataHub: mỗi cột trong `columns[]` thêm `type ∈ {percent, money}` để App Report format đúng (% không cộng dồn; money định dạng tiền, được phép tổng). Cập nhật `SPEC_REPORT_EMP_COST_SELFVIEW.md`.
+
 ### 2026-07-20 — Claude Code (review + giao bot) — Sửa kỳ TUẦN của deck + review 728c734
 - **Review deck `728c734`: ĐẠT.** Grounding (deckHtml không số cứng, số từ analytics/diemXu, narrative từ facts đã tính), CEO-only 3 tầng (build/sendCeo/route requireAdmin), delivery (sendDocument + email attachments + PDF fallback, nhãn DRAFT, chống trùng, assert 32 slide) đều đúng spec.
 - **DIRECTIVE sửa kỳ TUẦN** (`DIRECTIVE_DECK_WEEKLY_ISOWEEK.md`): CEO chốt báo cáo TUẦN = **tuần lịch ISO Thứ 2→Thứ 7** (hiện tuần 30/2026), KHÔNG lũy kế đầu tháng; so sánh vs tuần trước; nhãn "Tuần {ISO}/{năm}". Tháng giữ nguyên. Chỉ đổi cửa sổ ngày cho `kind='week'`, không đổi cách tính số.

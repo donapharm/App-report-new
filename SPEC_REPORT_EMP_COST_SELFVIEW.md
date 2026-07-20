@@ -66,10 +66,16 @@ Thêm route đọc: `GET /api/employee-cost` (cho FE App Report gọi bằng **s
 - **Bảng render ĐỘNG từ `columns[]`:** lặp `columns` dựng `<th>` theo `label`; mỗi `row` render `row[col.key]`.
   **Không** viết cứng tên cột. Giá trị % format `,` kiểu VN + hậu tố `%`.
 - Cột chiều cố định (`c5/c7/c16/c25`) đứng trước (theo map §1), cột % theo sau.
-- **Hiển thị theo ĐÚNG dữ liệu DataHub trả:** hợp đồng hiện **chỉ có tỷ lệ %** theo dòng → App Report **chỉ hiện %**.
-  **‼ App Report KHÔNG tự tính "số tiền"** (không nhân %×doanh thu — đó là tính chi phí, vi phạm SSOT/nguyên tắc #3).
-  CEO muốn thấy **số tiền** → **DataHub bổ sung cột/metadata số tiền** trong `columns[]`; vì UI render động, App
-  Report **tự hiện cột số tiền ngay khi DataHub thêm**, không phải sửa code. (Ngắn gọn: amount là việc DataHub.)
+- **CỘT "THÀNH TIỀN" — làm ở DataHub, App Report chỉ VIEW (CEO chốt 2026-07-20, phương án B).**
+  - **DataHub** tính sẵn `Thành tiền = tỷ_lệ% × base` **tại nguồn** (DataHub có cả rate + doanh thu cơ sở = SSOT),
+    rồi đưa các **cột Thành tiền vào template + `columns[]`** như mọi cột khác. App Report **KHÔNG tự tính** (giữ
+    nguyên tắc, tránh lệch số & join mờ).
+  - **App Report:** vì bảng đã **render động theo `columns[]`**, DataHub thêm cột Thành tiền là **App Report tự
+    hiện — KHÔNG cần sửa code**. (Đây là lợi thế của thiết kế cột động.)
+  - **‼ Yêu cầu nhỏ cho DataHub để App Report format đúng:** mỗi phần tử `columns[]` thêm trường **`type`/`format`**
+    ∈ `{percent, money}` (và có thể `unit`). App Report dựa vào đó: `percent` → hậu tố `%`, **không cộng dồn**;
+    `money` → định dạng tiền VN (`đ`, phân cách nghìn), **được phép** có dòng/cột tổng nếu template bật.
+  - Thiếu `type` → mặc định coi là `percent` (an toàn, không cộng dồn).
 - **KHÔNG cộng dồn %:** không dòng tổng, không cột tổng, không trung bình — mỗi ô là % của riêng dòng đó (§1-BIS).
 - **Cột chiều nằm trong `row` (không trong `columns`):** DataHub xác nhận `columns[]` chỉ liệt kê cột % động; App
   Report **tự đưa 4 cột chiều `c5/c7/c16/c25` lên trước** (map nhãn Quản lý/Đơn vị/Sản phẩm/ĐVT), tránh render trùng.
