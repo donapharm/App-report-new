@@ -1,3 +1,7 @@
+### 2026-07-20 — Claude Code (thiết kế/giao bot) — Thêm theme "MODERN" + bố cục thích ứng cho deck
+- CEO duyệt phong cách HIỆN ĐẠI (sạch/thoáng, accent gradient tím–xanh, KPI lớn). Giao bot **thêm theme chọn được** (song song bản hiện có) + **bố cục thích ứng theo mật độ nội dung** (trang nhiều chữ căn gọn vừa khung; trang ít chữ tăng cỡ chữ + chèn hình minh hoạ SVG).
+- Mốc hình ảnh: `docs/report-samples/MODERN_THEME_MOCKUP.html`; directive: `DIRECTIVE_DECK_MODERN_THEME.md` (design tokens đã kiểm CVD, giữ grounding/CEO-only/32-slide).
+
 ### 2026-07-20 — Claude Code (review) — Module “Chi phí của tôi” (`6781517`): ĐẠT
 - **Review DUYỆT.** Khóa scope NV (ép mã phiên; picker `requireAdmin`), chặn `C32/C47` cả backend+frontend, kiểm `empCode` 2 lần + strip field lạ, token chỉ ở backend/fail-closed/retry backoff/audit, FE render động không tự tính/cộng dồn chi phí, sẵn `type` %/money (phương án B). Test 177/177 server · 15/15 web · build + quét bí mật PASS. Không có điểm chặn.
 - **Còn lại (ngoài code):** điền `.env` `DATAHUB_BASE`+`APP_REPORT_COST_TOKEN` rồi deploy; cột “Thành tiền” chờ phiên DataHub bổ sung (task contract-update đã giao) — khi có dải key sẽ ra directive nới allowlist cho App Report.
