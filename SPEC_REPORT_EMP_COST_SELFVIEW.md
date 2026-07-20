@@ -64,19 +64,20 @@ Thêm route đọc: `GET /api/employee-cost` (cho FE App Report gọi bằng **s
 ## 3. FRONTEND (web/src) — trang "Chi phí của tôi"
 - Route/tab mới **"Chi phí của tôi"** trong nav (NV thấy của mình; CEO/ADMIN có thêm ô **chọn NV**).
 - **Bảng render ĐỘNG từ `columns[]`:** lặp `columns` dựng `<th>` theo `label`; mỗi `row` render `row[col.key]`.
-  **Không** viết cứng tên cột. Giá trị % format `,` kiểu VN + hậu tố `%`.
+  **Không** viết cứng tên cột.
+- **Hiển thị cột %:** ô % hiện **đúng con số, BỎ hậu tố `%`** (CEO chốt 2026-07-20): `8,0%` → **`8.0`**,
+  `0,3%` → **`0.3`**, `10,0%` → **`10.0`** (header đã cho biết là %).
 - Cột chiều cố định (`c5/c7/c16/c25`) đứng trước (theo map §1), cột % theo sau.
-- **CỘT "THÀNH TIỀN" — làm ở DataHub, App Report chỉ VIEW (CEO chốt 2026-07-20, phương án B).**
-  - **DataHub** tính sẵn `Thành tiền = tỷ_lệ% × base` **tại nguồn** (DataHub có cả rate + doanh thu cơ sở = SSOT),
-    rồi đưa các **cột Thành tiền vào template + `columns[]`** như mọi cột khác. App Report **KHÔNG tự tính** (giữ
-    nguyên tắc, tránh lệch số & join mờ).
-  - **App Report:** vì bảng đã **render động theo `columns[]`**, DataHub thêm cột Thành tiền là **App Report tự
-    hiện — KHÔNG cần sửa code**. (Đây là lợi thế của thiết kế cột động.)
-  - **‼ Yêu cầu nhỏ cho DataHub để App Report format đúng:** mỗi phần tử `columns[]` thêm trường **`type`/`format`**
-    ∈ `{percent, money}` (và có thể `unit`). App Report dựa vào đó: `percent` → hậu tố `%`, **không cộng dồn**;
-    `money` → định dạng tiền VN (`đ`, phân cách nghìn), **được phép** có dòng/cột tổng nếu template bật.
-  - Thiếu `type` → mặc định coi là `percent` (an toàn, không cộng dồn).
-- **KHÔNG cộng dồn %:** không dòng tổng, không cột tổng, không trung bình — mỗi ô là % của riêng dòng đó (§1-BIS).
+- **CỘT "THÀNH TIỀN" — App Report TỰ TÍNH (CEO chốt 2026-07-20; DataHub KHÔNG mở thêm cột).** Chi tiết đầy đủ ở
+  **`DIRECTIVE_EMP_COST_THANHTIEN.md`**. Tóm tắt:
+  - `Thành tiền(dòng, cột%) = doanh thu dòng × % ÷ 100`. "Doanh thu dòng" = doanh thu đúng dòng (đơn vị×SP×NV×kỳ),
+    App Report **tự lấy từ dữ liệu doanh thu sẵn có**, ghép theo đơn vị (`c7`) + sản phẩm (`c16`, tên→mã qua catalog).
+    Không khớp được → để `—`, **không đoán**. (Phép tính xác định trên doanh thu thật × % thật — không bịa số.)
+  - Mỗi cột % có 1 cột Thành tiền (tiền VN). **Tổng chi phí tháng** = Σ Thành tiền, **TRỪ cột "cuối năm" (§4b)**.
+- **§4b — Cột "cuối năm" (mặc định `c44`):** thanh toán CUỐI NĂM (T12), **KHÔNG tính vào chi phí tháng**. Vẫn hiện
+  Thành tiền theo dòng nhưng **làm mờ** + badge "cuối năm"; tách **1 dòng "Khoản cuối năm (tạm tính, T12)"** riêng;
+  chú thích chân bảng. Tập cột cuối năm **cấu hình được** (không hardcode 1 chỗ). Chi tiết ở directive.
+- **% KHÔNG cộng dồn; Thành tiền (tiền) ĐƯỢC tổng** (trừ cột cuối năm).
 - **Cột chiều nằm trong `row` (không trong `columns`):** DataHub xác nhận `columns[]` chỉ liệt kê cột % động; App
   Report **tự đưa 4 cột chiều `c5/c7/c16/c25` lên trước** (map nhãn Quản lý/Đơn vị/Sản phẩm/ĐVT), tránh render trùng.
 - **Chuẩn desktop** = mẫu trang "Phân tích": hàng KPI trên (vd tổng chi phí kỳ, số dòng, kỳ) → panel bảng bên dưới

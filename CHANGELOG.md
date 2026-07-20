@@ -1,3 +1,8 @@
+### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": App Report tự tính Thành tiền + cột cuối năm
+- CEO chốt DataHub không mở thêm cột → **App Report tự thêm cột Thành tiền + tự tính**: `Thành tiền(dòng) = doanh thu dòng × % ÷ 100` (doanh thu dòng App Report tự lấy, ghép theo đơn vị+sản phẩm; không khớp → `—`).
+- Hiển thị cột %: bỏ ký hiệu `%`, chỉ số (8,0%→`8.0`). Mỗi cột % có cột Thành tiền; **Tổng chi phí tháng** = Σ Thành tiền **trừ cột cuối năm**.
+- **Cột cuối năm (mặc định `c44`)** thanh toán T12, không tính vào chi phí tháng: hiển thị **mờ + badge**, tách dòng "Khoản cuối năm (T12)" riêng + chú thích (Claude tư vấn). Directive: `DIRECTIVE_EMP_COST_THANHTIEN.md`; cập nhật `SPEC_REPORT_EMP_COST_SELFVIEW.md`.
+
 ### 2026-07-20 — Claude Code (thiết kế/giao bot) — Thêm theme "MODERN" + bố cục thích ứng cho deck
 - CEO duyệt phong cách HIỆN ĐẠI (sạch/thoáng, accent gradient tím–xanh, KPI lớn). Giao bot **thêm theme chọn được** (song song bản hiện có) + **bố cục thích ứng theo mật độ nội dung** (trang nhiều chữ căn gọn vừa khung; trang ít chữ tăng cỡ chữ + chèn hình minh hoạ SVG).
 - Mốc hình ảnh: `docs/report-samples/MODERN_THEME_MOCKUP.html`; directive: `DIRECTIVE_DECK_MODERN_THEME.md` (design tokens đã kiểm CVD, giữ grounding/CEO-only/32-slide).
