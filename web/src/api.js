@@ -51,6 +51,8 @@ export const api = {
   adminDevices: (emp) => req('GET', '/admin/devices' + (emp ? `?emp=${encodeURIComponent(emp)}` : '')),
   adminDeviceDel: (id) => req('DELETE', '/admin/devices/' + encodeURIComponent(id)),
   me: () => req('GET', '/me'),
+  employeeCost: (emp) => req('GET', '/employee-cost' + (emp ? `?emp=${encodeURIComponent(emp)}` : '')),
+  employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   periods: () => req('GET', '/periods'),
   revenueRefreshStatus: () => req('GET', '/admin/revenue-refresh/status'),
   revenueRefreshRun: (ky) => req('POST', '/admin/revenue-refresh/run', ky ? { ky } : {}),

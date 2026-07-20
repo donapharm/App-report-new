@@ -8,6 +8,9 @@
  *
  * Slot đọc MỚI mỗi lần gọi (file nhỏ) nên upload xong báo cáo cập nhật ngay,
  * không cần restart server.
+ *
+ * // TODO(LIVE): module employeeCost.js đọc DATAHUB_BASE và
+ * // APP_REPORT_COST_TOKEN từ .env backend để proxy S2S; không lưu token ở data/web.
  */
 const fs = require('fs');
 const path = require('path');

@@ -1,3 +1,9 @@
+### 2026-07-20 — Report Bot — Module “Chi phí của tôi” self-scoped
+- Thêm proxy S2S `GET /api/employee-cost`: backend dùng `auth.scopeOf`, ép NV về chính mã phiên; CEO/admin được chọn NV. Token DataHub chỉ đọc từ `.env` backend; payload được allowlist lại, chặn `c32`/`c47`, field ngoài hợp đồng và response sai `empCode`.
+- Thêm timeout/retry backoff cho lỗi tạm thời, response rỗng an toàn khi nguồn lỗi/401, `Cache-Control: private, no-store` và audit mỗi lượt truy cập không ghi token/body nhạy cảm.
+- Thêm tab “Chi phí của tôi”, bảng cột động, chiều `c5/c7/c16/c25` đứng trước, format `%` kiểu Việt; cột tiền chỉ hiển thị/format khi metadata DataHub khai báo rõ. App Report không tự tính/suy ra tiền và không tổng hợp tỷ lệ.
+- Đồng bộ hợp đồng DataHub vào `docs/`, bổ sung biến `.env.example` và test scope/sanitize/retry + model bảng động.
+
 ### 2026-07-20 — Claude Code (tư vấn kiến trúc) — Thành tiền chi phí: chốt phương án B (DataHub tính, App Report view)
 - CEO cần cột **Thành tiền** cho module "Chi phí của tôi". Tư vấn: **DataHub tính sẵn `%×base` tại nguồn** (SSOT), đưa vào `columns[]`; App Report **chỉ view** — vì bảng render động nên **tự hiện, không sửa code**. Tránh lệch số & join mờ, giữ nguyên tắc "App Report không tính chi phí".
 - Yêu cầu nhỏ cho DataHub: mỗi cột trong `columns[]` thêm `type ∈ {percent, money}` để App Report format đúng (% không cộng dồn; money định dạng tiền, được phép tổng). Cập nhật `SPEC_REPORT_EMP_COST_SELFVIEW.md`.

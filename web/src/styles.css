@@ -1939,3 +1939,25 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .dr-report-pager { width:100%; }.dr-report-pager .btn { flex:1 1 0; padding:8px 10px; font-size:11.5px; }.dr-report-pager .pager-info { flex:0 1 auto; justify-content:center; padding:0 10px; font-size:11.5px; }.dr-report-pager .pager-info b { font-size:13px; }.dr-table-wrap { overflow:visible; border:0; background:transparent; }.dr-table { display:block; min-width:0; }.dr-table thead { display:none; }.dr-table tbody { display:grid; gap:9px; }.dr-table tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 10px; padding:11px; border:1px solid #d9e5ed; border-left:4px solid #2a82b2; border-radius:11px; background:#fff; box-shadow:0 2px 8px rgba(11,57,90,.05); }.dr-table td { min-width:0; padding:0; border:0; overflow-wrap:anywhere; }.dr-table td::before { content:attr(data-label); display:block; margin-bottom:3px; color:#668091; font-size:8.5px; font-weight:900; text-transform:uppercase; }.dr-table td.dr-row-index { grid-column:1/-1; width:auto; justify-self:start; padding:3px 8px; border-radius:999px; background:#eaf4fa; text-align:left; }.dr-table td.dr-row-index::before { display:none; }.dr-table td:nth-child(n+2):nth-child(-n+4) { grid-column:1/-1; }.dr-table td small { max-width:none; }
 }
 @media (max-width:360px) { .dr-filters { grid-template-columns:1fr; }.dr-filters label:last-child { grid-column:auto; }.dr-table tr { grid-template-columns:1fr; }.dr-table td { grid-column:1/-1; }.dpm-detail-row { grid-template-columns:1fr; gap:3px; }.dpm-detail-row b { text-align:left; }.dr-focus-meta { grid-template-columns:1fr; }.ceo-notif-summary { grid-template-columns:1fr; }.ceo-notif-tools { flex-direction:column; }.ceo-notif-tools > div,.ceo-notif-tools button { width:100%; }.ceo-feedback-head { align-items:flex-start; flex-direction:column; }.ceo-notif-meta { flex-direction:column; gap:2px; } }
+
+/* Chi phí của tôi — bảng động, không tổng hợp tỷ lệ. */
+.employee-cost-page { display:grid; gap:12px; min-width:0; }
+.employee-cost-heading { display:flex; align-items:end; justify-content:space-between; gap:18px; }
+.employee-cost-heading p { margin:5px 0 0; color:var(--muted); font-size:12px; }
+.employee-cost-heading label { width:min(360px, 100%); }
+.employee-cost-heading label span { display:block; margin-bottom:4px; color:var(--muted); font-size:11px; font-weight:800; }
+.page-desktop .employee-cost-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.employee-cost-panel { min-width:0; }
+.employee-cost-table-wrap { width:100%; max-width:100%; overflow-x:auto; margin-top:10px; border:1px solid var(--line); border-radius:10px; }
+.employee-cost-table { width:100%; min-width:900px; border-collapse:collapse; font-size:12px; }
+.employee-cost-table th { position:sticky; top:0; padding:10px; background:#075d9b; color:#fff; text-align:left; white-space:nowrap; }
+.employee-cost-table td { padding:9px 10px; border-top:1px solid var(--line); vertical-align:top; }
+.employee-cost-table tbody tr:nth-child(even) { background:#f7fafc; }
+.employee-cost-number { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.employee-cost-source-note { margin-top:9px; color:var(--muted); font-size:11px; }
+@media (max-width: 767px) {
+  .employee-cost-heading { display:grid; align-items:stretch; }
+  .employee-cost-heading label { width:100%; }
+  .employee-cost-kpis { grid-template-columns:1fr 1fr; }
+  .employee-cost-table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+}

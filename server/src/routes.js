@@ -22,6 +22,7 @@ const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
+const employeeCost = require('./employeeCost');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -495,6 +496,28 @@ router.delete('/admin/devices/:id', auth.requireAuth, auth.requireAdmin, (req, r
 
 router.get('/me', auth.requireAuth, (req, res) => {
   res.json({ ...req.session, isAdmin: auth.isAdmin(req.session.role) });
+});
+
+// Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
+// chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
+router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const s = auth.scopeOf(req.session);
+  const payload = await employeeCost.getForSession({
+    session: req.session,
+    scope: s,
+    requestedEmp: req.query.emp,
+  });
+  res.set('Cache-Control', 'private, no-store');
+  res.json(payload);
+}));
+
+router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const employees = store.listUsers()
+    .filter((user) => String(user.role || '').toLowerCase() === 'sale')
+    .map((user) => ({ emp_code: user.emp_code, name: user.name }))
+    .sort((a, b) => String(a.emp_code).localeCompare(String(b.emp_code), 'vi'));
+  res.set('Cache-Control', 'private, no-store');
+  res.json({ employees });
 });
 
 
