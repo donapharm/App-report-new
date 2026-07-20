@@ -348,12 +348,12 @@ export function usePager(items, pageSize = 20, resetKey = '') {
 }
 
 // Thanh phân trang: ‹ Trước · Trang X/Y · N mục · Sau ›
-export function Pager({ page, totalPages, total, onPage, unit = 'mục', capsule = false, className = '' }) {
+export function Pager({ page, totalPages, total, onPage, unit = 'mục', capsule = false, className = '', ariaLabel = 'Phân trang' }) {
   if (!totalPages || totalPages <= 1) return null;
   return (
-    <div className={`pager${capsule ? ' pager-capsule' : ''}${className ? ` ${className}` : ''}`}>
-      <button className="btn ghost" disabled={page <= 1} onClick={() => onPage(page - 1)}>‹ Trước</button>
-      <span className="pager-info">
+    <nav className={`pager${capsule ? ' pager-capsule' : ''}${className ? ` ${className}` : ''}`} aria-label={ariaLabel}>
+      <button type="button" className="btn ghost" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Trang trước">‹ Trước</button>
+      <span className="pager-info" aria-live="polite" aria-atomic="true">
         {capsule && (
           <svg className="pager-capsule-mark" viewBox="0 0 42 22" aria-hidden="true">
             <path d="M11 1h10v20H11A10 10 0 0 1 11 1Z" fill="#1676bd"/>
@@ -364,8 +364,8 @@ export function Pager({ page, totalPages, total, onPage, unit = 'mục', capsule
         )}
         <span>Trang <b>{page}</b>/{totalPages}{total != null ? ` · ${Number(total).toLocaleString('vi-VN')} ${unit}` : ''}</span>
       </span>
-      <button className="btn ghost" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>Sau ›</button>
-    </div>
+      <button type="button" className="btn ghost" disabled={page >= totalPages} onClick={() => onPage(page + 1)} aria-label="Trang sau">Sau ›</button>
+    </nav>
   );
 }
 

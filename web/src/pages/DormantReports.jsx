@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadDormantReport } from '../api.js';
+import { Pager, usePager } from '../components.jsx';
 
 const REVIEW_LABEL = { unplanned: 'Chưa lập kế hoạch', in_progress: 'Đang triển khai', upcoming: 'Sắp đến hạn', due: 'Đến hạn', overdue: 'Quá hạn', completed: 'Đã hoàn tất' };
 const TEMPLATE_LABEL = { standard: 'Chuẩn', ceo_meeting: 'Họp CEO', employee_work: 'Công việc cá nhân', personal_work: 'Công việc cá nhân' };
+const REPORT_PAGE_SIZE = 50;
 const fmt = (value, digits = 2) => value == null || value === '' ? '—' : Number(value).toLocaleString('vi-VN', { maximumFractionDigits: digits });
 const dateVi = (value, withTime = false) => {
   if (!value) return '—';
@@ -18,7 +20,22 @@ const summaryOf = (report) => report?.summary || report?.kpis || report?.report?
 function Preview({ report, title = 'Báo cáo hiện tại', focusKey = '' }) {
   const rows = rowsOf(report);
   const summary = summaryOf(report);
+  const reportCard = useRef(null);
+  const pager = usePager(rows, REPORT_PAGE_SIZE, report);
+
+  useEffect(() => {
+    if (!focusKey) return;
+    const focusIndex = rows.findIndex((row) => row.key === focusKey);
+    if (focusIndex >= 0) pager.setPage(Math.floor(focusIndex / REPORT_PAGE_SIZE) + 1);
+  }, [focusKey, rows, pager.setPage]);
+
+  function changePage(nextPage) {
+    pager.setPage(nextPage);
+    window.requestAnimationFrame(() => reportCard.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
   return <section className="dr-report-card">
+    <div ref={reportCard} className="dr-report-anchor" />
     <div className="dr-section-head"><div><small>PREVIEW AN TOÀN</small><h2>{title}</h2></div><span>Dữ liệu đến {dateVi(report?.as_of || report?.data_date || report?.report?.as_of)}</span></div>
     <div className="dr-summary">
       <div><small>Tổng QLNB</small><b>{fmt(summary.total ?? summary.dormant_total ?? report?.total ?? rows.length, 0)}</b></div>
@@ -26,13 +43,18 @@ function Preview({ report, title = 'Báo cáo hiện tại', focusKey = '' }) {
       <div className="warn"><small>Đến hạn</small><b>{fmt(summary.due ?? summary.due_review ?? 0, 0)}</b></div>
       <div className="danger"><small>Quá hạn</small><b>{fmt(summary.overdue ?? summary.overdue_review ?? 0, 0)}</b></div>
     </div>
-    {!rows.length ? <div className="dr-empty">Không có QLNB phù hợp bộ lọc.</div> : <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th>Nhân viên</th><th>Đơn vị</th><th>QLNB / Sản phẩm</th><th>Ngày ngủ</th><th>CST còn</th><th>Review</th><th>Review lại</th><th>Chu kỳ</th></tr></thead><tbody>{rows.map((row, index) => <tr className={focusKey && row.key === focusKey ? 'focused' : ''} key={row.key || row.id || index}>
+    {!rows.length ? <div className="dr-empty">Không có QLNB phù hợp bộ lọc.</div> : <div className="dr-report-list">
+      <Pager className="dr-report-pager" page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={changePage} unit="QLNB" ariaLabel="Phân trang báo cáo QLNB phía trên" />
+      <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th className="dr-row-index">STT</th><th>Nhân viên</th><th>Đơn vị</th><th>QLNB / Sản phẩm</th><th>Ngày ngủ</th><th>CST còn</th><th>Review</th><th>Review lại</th><th>Chu kỳ</th></tr></thead><tbody>{pager.pageItems.map((row, index) => <tr className={focusKey && row.key === focusKey ? 'focused' : ''} key={row.key || row.id || pager.startIndex + index}>
+      <td className="dr-row-index" data-label="Số thứ tự">{pager.startIndex + index + 1}</td>
       <td data-label="Nhân viên">{row.emp_code || '—'}{row.employee_name || row.emp_name ? <small>{row.employee_name || row.emp_name}</small> : null}</td>
       <td data-label="Đơn vị">{row.unit_code || '—'}{row.unit_name ? <small>{row.unit_name}</small> : null}</td>
       <td data-label="QLNB / Sản phẩm">{row.iit_code || '—'}{row.product_name ? <small>{row.product_name}</small> : null}</td>
       <td data-label="Số ngày ngủ">{fmt(row.days_idle, 0)}</td><td data-label="CST còn lại">{fmt(row.remain_qty)}</td><td data-label="Review"><span className={`dr-status ${row.review_status || ''}`}>{REVIEW_LABEL[row.review_status] || row.review_status || '—'}</span></td>
       <td data-label="Review lại">{dateVi(row.action?.next_follow_up || row.next_follow_up)}</td><td data-label="Chu kỳ xử lý">{fmt(row.action?.action_cycle ?? row.action?.cycle ?? row.action_cycle ?? 0, 0)}</td>
-    </tr>)}</tbody></table></div>}
+    </tr>)}</tbody></table></div>
+      <Pager className="dr-report-pager" page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={changePage} unit="QLNB" ariaLabel="Phân trang báo cáo QLNB phía dưới" />
+    </div>}
   </section>;
 }
 
