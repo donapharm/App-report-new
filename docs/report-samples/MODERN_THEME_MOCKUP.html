@@ -1,0 +1,203 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mẫu template HIỆN ĐẠI — Báo cáo doanh số DONAPHARM</title>
+<style>
+:root{
+  --page:#e9edf4; --slide:#ffffff; --panel:#f6f8fc; --panel2:#eef2f9;
+  --ink:#0f172a; --ink2:#334155; --muted:#6b7a90; --line:#e5eaf1;
+  --accent:#4f46e5; --accent2:#0ea5e9; --grad:linear-gradient(120deg,#4f46e5,#0ea5e9);
+  --green:#16a34a; --red:#e11d6a;
+  --c1:#4f46e5; --c2:#0ea5a4; --c3:#f59e0b; --c4:#e11d6a; --c5:#0ea5e9; --c6:#16a34a;
+  --sans:'Segoe UI',system-ui,'Inter',Roboto,Arial,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#dfe4ee;color:var(--ink);font-family:var(--sans);padding:28px 16px 60px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto}
+.intro{text-align:center;margin-bottom:24px}
+.intro h1{font-size:30px;font-weight:800;letter-spacing:-.5px}
+.intro h1 span{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.intro p{color:var(--muted);margin-top:8px;font-size:15px}
+.swatch{display:flex;gap:8px;justify-content:center;margin:14px 0 4px;flex-wrap:wrap}
+.swatch span{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted)}
+.swatch i{width:16px;height:16px;border-radius:5px;display:block}
+.cap{font-size:13.5px;color:var(--accent);font-weight:700;margin:26px 0 8px;letter-spacing:.2px}
+.cap small{display:block;color:var(--muted);font-weight:500;margin-top:2px}
+.slide{aspect-ratio:16/9;background:var(--slide);border-radius:16px;overflow:hidden;
+  box-shadow:0 12px 34px #1e293b22;display:flex;flex-direction:column}
+.hd{display:flex;align-items:center;gap:13px;padding:2.5% 3.4% 1.8%}
+.hd .logo{width:2.6vw;height:2.6vw;border-radius:8px;background:var(--grad);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.2vw}
+.hd .k{color:var(--accent);font-size:.95vw;font-weight:700;letter-spacing:1.5px}
+.hd .h{font-size:1.75vw;font-weight:800;letter-spacing:-.3px;margin-top:1px}
+.hd .qr{margin-left:auto;width:2.9vw;height:2.9vw;border-radius:8px;border:1.5px solid var(--line);
+  background:repeating-conic-gradient(#0f172a 0 25%,#fff 0 50%) 0/28% 28%}
+.hd.bar{border-bottom:1px solid var(--line);position:relative}
+.hd.bar:after{content:"";position:absolute;left:3.4%;bottom:-1px;width:64px;height:3px;border-radius:2px;background:var(--grad)}
+.ct{flex:1;padding:2.2% 3.4%;min-height:0;display:flex;flex-direction:column;gap:1.5vh}
+.ft{display:flex;justify-content:space-between;padding:1.1% 3.4%;color:var(--muted);font-size:.86vw;border-top:1px solid var(--line)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.4vw;flex:1;min-height:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.8vh 1.3vw;display:flex;flex-direction:column;min-height:0}
+.coh{font-size:1.15vw;font-weight:800;color:var(--ink);margin-bottom:1vh;display:flex;align-items:center;gap:.5vw}
+.coh:before{content:"";width:.5vw;height:.5vw;border-radius:3px;background:var(--accent)}
+.coh.red:before{background:var(--red)} .coh.grn:before{background:var(--green)}
+table{width:100%;border-collapse:collapse;font-size:1.02vw}
+th{color:var(--muted);text-align:left;font-weight:600;font-size:.9vw;text-transform:uppercase;letter-spacing:.5px;padding:.6vh .4vw;border-bottom:1px solid var(--line)}
+td{padding:.68vh .4vw;border-bottom:1px solid var(--line)}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.pill{font-size:.82vw;font-weight:700;padding:.15vh .5vw;border-radius:20px}
+.pill.pos{color:var(--green);background:#16a34a18}.pill.neg{color:var(--red);background:#e11d6a18}
+ul{list-style:none;display:flex;flex-direction:column;gap:.85vh;margin-top:.3vh}
+li{font-size:1.02vw;padding-left:1.2vw;position:relative;color:var(--ink2);line-height:1.4}
+li:before{content:"";position:absolute;left:0;top:.62vh;width:.55vw;height:.55vw;border-radius:50%;background:var(--accent);opacity:.85}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1vw}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1.6vh 1vw}
+.kpi .n{font-size:2.2vw;font-weight:800;letter-spacing:-.5px}
+.kpi .l{font-size:.82vw;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:.5vh}
+.kpi .d{font-size:.85vw;font-weight:700;margin-top:.5vh}
+.kpi .d.pos{color:var(--green)}.kpi .d.neg{color:var(--red)}
+.hero{flex:1;display:flex;align-items:center;gap:2.5vw}
+.hero .big{font-size:6.6vw;font-weight:800;letter-spacing:-2px;line-height:1;
+  background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .chip{display:inline-block;margin-top:1.4vh;font-size:1.15vw;font-weight:700;color:var(--green);background:#16a34a14;padding:.5vh 1vw;border-radius:30px}
+.hero .lead{font-size:1.2vw;color:var(--muted);margin-top:1.8vh;max-width:27vw;line-height:1.5}
+.hero .art{flex:0 0 38%}
+.bars{display:flex;align-items:flex-end;gap:1vw;flex:1;padding-top:1vh}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:.5vh}
+.bar b{font-size:.82vw;color:var(--ink2);font-weight:700}
+.bar i{width:64%;border-radius:6px 6px 0 0;display:block;background:var(--grad)}
+.bar span{font-size:.82vw;color:var(--muted)}
+.dot{display:inline-block;width:.7vw;height:.7vw;border-radius:50%;margin-right:.3vw;vertical-align:middle}
+.legend{display:flex;gap:1vw;flex-wrap:wrap;margin-top:auto;padding-top:.8vh;font-size:.86vw;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:5px}.legend i{width:11px;height:11px;border-radius:3px;display:block}
+</style></head>
+<body><div class="wrap">
+
+<div class="intro">
+  <h1>Mẫu template <span>HIỆN ĐẠI</span></h1>
+  <p>Sạch · thoáng · accent gradient tím–xanh · số KPI lớn · dành cho trình chiếu LED</p>
+  <div class="swatch">
+    <span><i style="background:#4f46e5"></i>Accent</span>
+    <span><i style="background:#0ea5a4"></i>C2</span>
+    <span><i style="background:#f59e0b"></i>C3</span>
+    <span><i style="background:#e11d6a"></i>C4</span>
+    <span><i style="background:#0ea5e9"></i>C5</span>
+    <span><i style="background:#16a34a"></i>C6</span>
+  </div>
+</div>
+
+<!-- SLIDE 1: cover -->
+<div class="cap">① TRANG BÌA — hiện đại, gradient
+  <small>Khối gradient tím–xanh, chữ đậm cỡ lớn, nhiều khoảng trắng.</small></div>
+<div class="slide">
+  <div class="hd"><div class="logo">D</div>
+    <div><div class="k">PHÂN TÍCH CHUYÊN SÂU · TUẦN</div></div>
+    <div class="qr"></div></div>
+  <div class="ct" style="justify-content:center">
+    <div style="font-size:1.1vw;color:var(--accent);font-weight:700;letter-spacing:2px">DONAPHARM</div>
+    <div style="font-size:4.6vw;font-weight:800;letter-spacing:-2px;line-height:1.02;margin-top:.6vh">Báo cáo Doanh số<br><span style="background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">Tuần 30 — 2026</span></div>
+    <div style="display:flex;gap:.7vw;margin-top:2vh">
+      <span style="background:var(--panel2);padding:.7vh 1.1vw;border-radius:30px;font-size:1vw;color:var(--ink2);font-weight:600">Kỳ 21–26/07/2026</span>
+      <span style="background:var(--panel2);padding:.7vh 1.1vw;border-radius:30px;font-size:1vw;color:var(--ink2);font-weight:600">So với Tuần 29</span>
+    </div>
+  </div>
+  <div class="ft"><span>DONAPHARM · BÁO CÁO NỘI BỘ DÀNH RIÊNG CEO</span><span>01 / 32</span></div>
+</div>
+
+<!-- SLIDE 2: text-heavy -->
+<div class="cap">② TRANG NHIỀU CHỮ — căn gọn cho VỪA khung
+  <small>Bảng + nhận định dày: chữ nhỏ một bậc, chia 2 cột, giãn dòng đều, không tràn.</small></div>
+<div class="slide">
+  <div class="hd bar"><div class="logo">D</div>
+    <div><div class="k">TRANG 07 · SO SÁNH</div><div class="h">Biến động chi tiết theo hạng mục</div></div>
+    <div class="qr"></div></div>
+  <div class="ct">
+    <div class="grid2">
+      <div class="card"><div class="coh">Đơn vị · tăng / giảm mạnh</div>
+        <table><tr><th>Đơn vị</th><th class="r">Tuần này</th><th class="r">Chênh</th></tr>
+        <tr><td>BVĐK Đồng Nai</td><td class="r">1,82 tỷ</td><td class="r"><span class="pill pos">+312tr</span></td></tr>
+        <tr><td>TTYT Vĩnh Cửu</td><td class="r">946 tr</td><td class="r"><span class="pill pos">+188tr</span></td></tr>
+        <tr><td>PKĐK Y Đức</td><td class="r">604 tr</td><td class="r"><span class="pill neg">−141tr</span></td></tr>
+        <tr><td>BVĐK Thống Nhất</td><td class="r">512 tr</td><td class="r"><span class="pill neg">−96tr</span></td></tr>
+        <tr><td>NT Tuệ Nam</td><td class="r">318 tr</td><td class="r"><span class="pill pos">+52tr</span></td></tr></table>
+      </div>
+      <div class="card"><div class="coh">Nhận định điều hành</div>
+        <ul><li>Nhóm dẫn dắt tăng nhờ 2 bệnh viện tuyến tỉnh — giữ nhịp giao hàng 48 giờ.</li>
+        <li>Y Đức giảm 141 tr do gián đoạn đặt hàng đầu tuần — cần rà soát ngay.</li>
+        <li>Nhà thuốc NCL tiếp tục là dư địa mở, không vướng cơ số thầu.</li>
+        <li>3 mã chủ lực chiếm 61% mức tăng — ưu tiên đẩy tại đơn vị đang lên.</li></ul>
+      </div>
+    </div>
+  </div>
+  <div class="ft"><span>DONAPHARM · BÁO CÁO NỘI BỘ DÀNH RIÊNG CEO</span><span>07 / 32</span></div>
+</div>
+
+<!-- SLIDE 3: sparse + illustration -->
+<div class="cap">③ TRANG ÍT CHỮ — TĂNG cỡ chữ + thêm HÌNH minh hoạ
+  <small>Một thông điệp lớn: số hero gradient cỡ đại + hình minh hoạ để trang sinh động, không trống.</small></div>
+<div class="slide">
+  <div class="hd bar"><div class="logo">D</div>
+    <div><div class="k">TRANG 04 · ĐIỂM NHẤN</div><div class="h">Tổng doanh số tuần</div></div>
+    <div class="qr"></div></div>
+  <div class="ct">
+    <div class="hero">
+      <div>
+        <div class="big">4,63 tỷ</div>
+        <div class="chip">▲ +12,4% so với Tuần 29</div>
+        <div class="lead">Tuần 30 tăng tốc rõ rệt — quy mô cao hơn tuần trước 512 triệu đồng, dẫn dắt bởi tuyến bệnh viện tỉnh.</div>
+      </div>
+      <div class="art">
+        <svg viewBox="0 0 260 200" width="100%">
+          <defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#4f46e5"/><stop offset="1" stop-color="#0ea5e9"/></linearGradient>
+          <linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4f46e5" stop-opacity=".28"/><stop offset="1" stop-color="#4f46e5" stop-opacity="0"/></linearGradient></defs>
+          <path d="M20 150 L70 120 L120 128 L170 78 L230 40 L230 175 L20 175 Z" fill="url(#area)"/>
+          <polyline points="20,150 70,120 120,128 170,78 230,40" fill="none" stroke="url(#g)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="230" cy="40" r="7" fill="#4f46e5"/><circle cx="230" cy="40" r="12" fill="#4f46e5" opacity=".18"/>
+          <circle cx="70" cy="120" r="4.5" fill="#fff" stroke="#4f46e5" stroke-width="3"/>
+          <circle cx="170" cy="78" r="4.5" fill="#fff" stroke="#4f46e5" stroke-width="3"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="ft"><span>DONAPHARM · BÁO CÁO NỘI BỘ DÀNH RIÊNG CEO</span><span>04 / 32</span></div>
+</div>
+
+<!-- SLIDE 4: KPI + charts -->
+<div class="cap">④ TRANG SỐ LIỆU — KPI lớn + biểu đồ, nhãn trực tiếp
+  <small>Hàng KPI có pill tăng/giảm; biểu đồ cột bo tròn + bảng tuyến có chấm màu và nhãn số.</small></div>
+<div class="slide">
+  <div class="hd bar"><div class="logo">D</div>
+    <div><div class="k">TRANG 08 · TUYẾN</div><div class="h">Doanh số theo ngày &amp; theo tuyến</div></div>
+    <div class="qr"></div></div>
+  <div class="ct">
+    <div class="kpis">
+      <div class="kpi"><div class="n">4,63 tỷ</div><div class="l">Tổng tuần</div><div class="d pos">▲ +12,4%</div></div>
+      <div class="kpi"><div class="n">772 tr</div><div class="l">BQ / ngày</div><div class="d">6 ngày</div></div>
+      <div class="kpi"><div class="n">38%</div><div class="l">Tỷ trọng Group-Dona</div><div class="d pos">▲ +3,1đ</div></div>
+      <div class="kpi"><div class="n">0</div><div class="l">Cảnh báo xu quý</div><div class="d pos">An toàn</div></div>
+    </div>
+    <div class="grid2" style="flex:1">
+      <div class="card"><div class="coh">Doanh thu theo ngày (triệu)</div>
+        <div class="bars">
+          <div class="bar"><b>612</b><i style="height:52%"></i><span>T2</span></div>
+          <div class="bar"><b>734</b><i style="height:64%"></i><span>T3</span></div>
+          <div class="bar"><b>688</b><i style="height:60%"></i><span>T4</span></div>
+          <div class="bar"><b>901</b><i style="height:80%"></i><span>T5</span></div>
+          <div class="bar"><b>845</b><i style="height:74%"></i><span>T6</span></div>
+          <div class="bar"><b>848</b><i style="height:75%"></i><span>T7</span></div>
+        </div>
+      </div>
+      <div class="card"><div class="coh">Cơ cấu theo tuyến</div>
+        <table><tr><th>Tuyến</th><th class="r">Doanh số</th><th class="r">Tỷ trọng</th></tr>
+        <tr><td><span class="dot" style="background:var(--c1)"></span>CL</td><td class="r">2,05 tỷ</td><td class="r">44,3%</td></tr>
+        <tr><td><span class="dot" style="background:var(--c2)"></span>NCL</td><td class="r">1,71 tỷ</td><td class="r">36,9%</td></tr>
+        <tr><td><span class="dot" style="background:var(--c3)"></span>NT</td><td class="r">870 tr</td><td class="r">18,8%</td></tr></table>
+        <div class="legend"><span><i style="background:var(--c1)"></i>CL</span><span><i style="background:var(--c2)"></i>NCL</span><span><i style="background:var(--c3)"></i>NT</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="ft"><span>DONAPHARM · BÁO CÁO NỘI BỘ DÀNH RIÊNG CEO</span><span>08 / 32</span></div>
+</div>
+
+<div style="text-align:center;color:#8996ab;font-size:13px;margin-top:30px">
+  Mockup do Claude Code dựng để CEO chọn hướng · chưa phải bản chạy thật · số minh hoạ.
+</div>
+</div></body></html>
