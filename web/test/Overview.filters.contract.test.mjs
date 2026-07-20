@@ -40,3 +40,11 @@ test('bộ lọc responsive trên PC, tablet và mobile', () => {
   assert.match(styles, /@media \(max-width: 1180px\)[\s\S]*\.overview-filter-grid[^}]*repeat\(3/);
   assert.match(styles, /@media \(max-width: 700px\)[\s\S]*\.overview-filter-grid[^}]*grid-template-columns: 1fr/);
 });
+
+test('nhóm đơn vị và đơn vị 0đ lấy từ membership DataHub, không đếm từ dòng doanh thu', () => {
+  assert.match(routes, /canonicalSnapshot = await dataHubUnitGroups\.getSnapshot\(\)/);
+  assert.match(routes, /group\.members\.length\.toLocaleString\('vi-VN'\)/);
+  assert.match(routes, /count: revenueUnit\?\.count \|\| 0/);
+  assert.match(routes, /memberMatchesRoutes\(member, filters\.route\)/);
+  assert.match(routes, /unitGroupSource:/);
+});

@@ -30,6 +30,9 @@ function unitGroupOf(row = {}) {
   const value = String(row.unit_code || row.unit_name || '').trim();
   return value.match(/^(\d{3})\./)?.[1] || '';
 }
+function normalizeUnitCode(value = '') {
+  return String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
+}
 function selectedEmployeeCodes(filters = {}) { return pipeList(filters.emp, { upper: true }); }
 // Target chỉ được giao theo nhân viên. Không lấy doanh thu của một lát cắt tuyến/group/đơn vị
 // chia cho target toàn nhân viên vì sẽ tạo tỷ lệ sai về mặt quản trị.
@@ -95,13 +98,16 @@ function applyFilters(rows, f = {}) {
   const routeList = pipeList(f.route, { upper: true });
   const companyGroupList = pipeList(f.companyGroup);
   const unitGroup = String(f.unitGroup || '').trim().replace(/\.$/, '');
+  // DataHub is authoritative for group membership. A selected group without a
+  // validated member list must fail closed instead of falling back to prefixes.
+  const unitGroupMembers = new Set((Array.isArray(f.unitGroupMembers) ? f.unitGroupMembers : []).map(normalizeUnitCode).filter(Boolean));
   return rows.filter((r) => {
     if (empList.length && !empList.includes(String(r.emp_code || '').trim().toUpperCase())) return false;
     // Tỉnh/thành từ các nguồn có thể khác hoa/thường hoặc dấu ("Đồng Nai"/"ĐỒNG NAI").
     // So theo khóa chuẩn hóa để bộ lọc không làm mất dữ liệu thực tế.
     if (f.province && norm(r.province) !== norm(f.province)) return false;
     if (f.unit && r.unit_code !== f.unit) return false;
-    if (unitGroup && unitGroupOf(r) !== unitGroup) return false;
+    if (unitGroup && (!unitGroupMembers.size || !unitGroupMembers.has(normalizeUnitCode(r.unit_code)))) return false;
     if (companyGroupList.length && !companyGroupList.includes(companyGroupOf(r))) return false;
     if (f.group && String(r.c14 || '') !== String(f.group)) return false;
     if (f.product && r.iit_code !== f.product) return false;
@@ -125,7 +131,7 @@ function applyFilters(rows, f = {}) {
       }
     }
     if (q) {
-      const hay = norm([r.emp_code, r.emp_name, unitGroupOf(r), r.unit_code, r.unit_name, r.iit_code, r.product_name, r.c14, companyGroupOf(r), r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' '));
+      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.c14, companyGroupOf(r), r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' '));
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -223,7 +229,10 @@ function cstTable({ scope, remainPctMax, remainPctMin, remainPctLt, bidPackage, 
   }
   if (filters?.province) rows = rows.filter((r) => r.province === filters.province);
   if (filters?.unit) rows = rows.filter((r) => r.unit_code === filters.unit || r.unit_name === filters.unit);
-  if (filters?.unitGroup) rows = rows.filter((r) => unitGroupOf(r) === String(filters.unitGroup).trim().replace(/\.$/, ''));
+  if (filters?.unitGroup) {
+    const members = new Set((Array.isArray(filters.unitGroupMembers) ? filters.unitGroupMembers : []).map(normalizeUnitCode).filter(Boolean));
+    rows = rows.filter((r) => members.size && members.has(normalizeUnitCode(r.unit_code)));
+  }
   if (filters?.companyGroup) {
     const groups = pipeList(filters.companyGroup);
     rows = rows.filter((r) => groups.includes(companyGroupOf(r)));
@@ -251,4 +260,4 @@ function filterCstSearch(rows, query) {
   return productSearch.filterProductRows(rows, query);
 }
 
-module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, filterCstSearch, groupSum, applyFilters, baseUnitKey, companyGroupOf, unitGroupOf, selectedEmployeeCodes, targetFiltersComparable, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };
+module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, filterCstSearch, groupSum, applyFilters, baseUnitKey, companyGroupOf, unitGroupOf, normalizeUnitCode, selectedEmployeeCodes, targetFiltersComparable, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };

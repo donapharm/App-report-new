@@ -27,19 +27,21 @@ test('Group-Dona là DONA + AFP; đối tác là các nhà thầu còn lại', (
   assert.equal(revenue({ companyGroup: 'partner' }), 600);
 });
 
-test('nhóm đơn vị dùng đúng tiền tố 3 số và không ăn nhầm 0331', () => {
+test('nhóm đơn vị chỉ dùng membership DataHub đã xác thực và không suy từ tiền tố', () => {
+  const members = ['033.PK A', '033.PK B', '033.PK D'];
   assert.equal(A.unitGroupOf(rows[0]), '033');
   assert.equal(A.unitGroupOf(rows[4]), '');
   assert.equal(A.unitGroupOf({ unit_code: '033-KHONG-PHAI-CON' }), '');
-  assert.equal(revenue({ unitGroup: '033' }), 700);
-  assert.equal(revenue({ unitGroup: '033.' }), 700);
-  assert.deepEqual(A.applyFilters(rows, { unitGroup: '033' }).map((row) => row.unit_code), ['033.PK A', '033.PK B', '033.PK D']);
+  assert.equal(revenue({ unitGroup: '033', unitGroupMembers: members }), 700);
+  assert.equal(revenue({ unitGroup: '033.', unitGroupMembers: members }), 700);
+  assert.equal(revenue({ unitGroup: '033' }), 0);
+  assert.deepEqual(A.applyFilters(rows, { unitGroup: '033', unitGroupMembers: members }).map((row) => row.unit_code), ['033.PK A', '033.PK B', '033.PK D']);
 });
 
 test('nhân viên và tuyến hỗ trợ chọn nhiều bằng dấu |', () => {
   assert.equal(revenue({ emp: 'DN001|DN002' }), 600);
   assert.equal(revenue({ route: 'CL|NT' }), 800);
-  assert.equal(revenue({ emp: 'DN001|DN003', route: 'NCL|NT', unitGroup: '033' }), 600);
+  assert.equal(revenue({ emp: 'DN001|DN003', route: 'NCL|NT', unitGroup: '033', unitGroupMembers: ['033.PK A', '033.PK B', '033.PK D'] }), 600);
 });
 
 test('scope nhân viên được áp trước bộ lọc, không thể dùng filter để xem NV khác', () => {
@@ -73,6 +75,9 @@ test('scope nhân viên được áp trước bộ lọc, không thể dùng fil
 test('Top 20 dùng cùng bộ lọc chuẩn với KPI, gồm companyGroup và unitGroup', () => {
   const routes = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   assert.match(routes, /router\.get\('\/revenue'[\s\S]*?const filters = revenueFiltersFromQuery\(req\.query\);[\s\S]*?A\.revenueBreakdown/);
+  assert.match(routes, /auth\.requireAuth\(req, res, async \(\) => \{[\s\S]*dataHubUnitGroups\.membersFor\(req\.query\.unitGroup\)/);
+  assert.match(routes, /unitGroupMembers: Array\.isArray\(q\.__unitGroupMembers\)/);
+  assert.match(routes, /Promise\.all\(pc\.kys\.map\(async \(period\)/);
 });
 
 test('target chỉ so sánh khi lát cắt còn đúng theo nhân viên', () => {

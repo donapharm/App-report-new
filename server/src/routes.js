@@ -20,6 +20,7 @@ const reconcile = require('./reconcile');
 const targetAdmin = require('./targetAdmin');
 const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
+const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
@@ -38,6 +39,10 @@ const { createFilteredEmployeeReportService } = require('./filteredEmployeeRepor
 const { createFilteredEmployeeDeliveryService } = require('./filteredEmployeeDelivery');
 
 const router = express.Router();
+const asyncJsonRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch((error) => {
+  if (res.headersSent) return next(error);
+  return res.status(error.status || 500).json({ error: error.message || 'Lỗi hệ thống', code: error.code });
+});
 const dormantNotificationStore = createDormantNotificationStore({ persist });
 const dormantFeedbackStore = createDormantFeedbackStore({ persist, notificationStore: dormantNotificationStore, listTelegramMap: auth.listTelegramMap });
 const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreForEmp, persist, notificationStore: dormantNotificationStore, feedbackStore: dormantFeedbackStore });
@@ -48,6 +53,16 @@ const requireCeoDelivery = (req, res, next) => (req.session.role === 'ceo' || re
 const requireCeoQlnb = (req, res, next) => (req.session.role === 'ceo' || String(req.session.emp_code || '').toUpperCase() === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được xem dữ liệu quản trị QLNB.', code: 'DORMANT_CEO_REQUIRED' });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
+const canonicalAssignmentSnapshots = new Map();
+async function canonicalAssignmentSnapshot(period) {
+  const key = catalogManagement.toHubPeriod(period);
+  const hit = canonicalAssignmentSnapshots.get(key);
+  if (hit && Date.now() - hit.at < 15 * 60 * 1000) return hit.value;
+  const value = await catalogManagement.getSnapshot(key);
+  canonicalAssignmentSnapshots.set(key, { at: Date.now(), value });
+  if (canonicalAssignmentSnapshots.size > 24) canonicalAssignmentSnapshots.delete(canonicalAssignmentSnapshots.keys().next().value);
+  return value;
+}
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
 const REVENUE_SEND_FORMATS = ['xlsx', 'csv', 'pdf', 'pptx'];
 const REVENUE_SEND_MIME = {
@@ -636,7 +651,27 @@ router.get('/admin/reconcile', auth.requireAuth, auth.requireAdmin, (req, res) =
   }
 });
 
-router.get('/filters', auth.requireAuth, (req, res) => {
+// Resolve canonical membership once per request before any KPI/drill-down uses
+// unitGroup. Unknown groups safely receive an empty member list; unavailable
+// DataHub + no LKG returns 503 rather than inferring membership from revenue.
+router.use(async (req, res, next) => {
+  // Internal-only fields must never be accepted from the public query string.
+  delete req.query.__unitGroupMembers;
+  delete req.query.__unitGroupKey;
+  if (!req.query?.unitGroup) return next();
+  return auth.requireAuth(req, res, async () => {
+    try {
+      const membership = await dataHubUnitGroups.membersFor(req.query.unitGroup);
+      req.query.__unitGroupMembers = membership.codes;
+      req.query.__unitGroupKey = membership.key;
+      return next();
+    } catch (e) {
+      return res.status(e.status || 503).json({ error: e.message, code: e.code || 'DATA_HUB_UNIT_GROUPS_UNAVAILABLE' });
+    }
+  });
+});
+
+router.get('/filters', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const uniq = (arr, key, label = key) => {
@@ -668,7 +703,12 @@ router.get('/filters', auth.requireAuth, (req, res) => {
   const allRows = store.getRowsRange({ kys: pc.kys, scope });
   const cst = store.getCst({ scope });
   const filters = revenueFiltersFromQuery(req.query);
-  const only = (keys) => Object.fromEntries(keys.filter((k) => filters[k]).map((k) => [k, filters[k]]));
+  const canonicalSnapshot = await dataHubUnitGroups.getSnapshot();
+  const only = (keys) => {
+    const value = Object.fromEntries(keys.filter((key) => filters[key]).map((key) => [key, filters[key]]));
+    if (keys.includes('unitGroup') && filters.unitGroup) value.unitGroupMembers = filters.unitGroupMembers;
+    return value;
+  };
   const facet = (keys) => A.applyFilters(allRows, only(['dateFrom', 'dateTo', ...keys]));
 
   // Liên hoàn theo nghiệp vụ: thời gian → NV → tỉnh → đơn vị → hàng hóa → tuyến
@@ -686,6 +726,47 @@ router.get('/filters', auth.requireAuth, (req, res) => {
   const contractorRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route', 'priority']);
   const bidRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route', 'priority', 'contractor']);
   const contractorLookup = contractorLookupFor(scope, allRows.concat(cst));
+  const selectedEmployees = A.selectedEmployeeCodes(filters);
+  const sessionIsAdmin = auth.isAdmin(req.session.role);
+  const ownEmployee = String(req.session.emp_code || '').trim().toUpperCase();
+  const restrictCanonicalUnits = !sessionIsAdmin || selectedEmployees.length > 0;
+  let accessibleUnitCodes = null;
+  if (restrictCanonicalUnits) {
+    accessibleUnitCodes = new Set(A.applyFilters(allRows, only(['emp']))
+      .map((row) => dataHubUnitGroups.normalizeUnitCode(row.unit_code)).filter(Boolean));
+    // Employee queries never control the identity used for zero-revenue
+    // assignment enrichment. A request that selects only another employee must
+    // stay empty instead of revealing that employee's canonical units.
+    const allowedEmployees = new Set(dataHubUnitGroups.facetEmployeeCodes({
+      isAdmin: sessionIsAdmin,
+      ownEmployee,
+      selectedEmployees,
+    }));
+    try {
+      const assignmentSnapshots = await Promise.all(pc.kys.map(async (period) => ({
+        period: catalogManagement.toHubPeriod(period),
+        snapshot: await canonicalAssignmentSnapshot(period),
+      })));
+      for (const { period, snapshot } of assignmentSnapshots) {
+        for (const row of snapshot.rows || []) {
+          if (!allowedEmployees.has(String(row.emp_code || '').trim().toUpperCase())) continue;
+          if (!catalogManagement.activeIn(row, period)) continue;
+          const code = dataHubUnitGroups.normalizeUnitCode(row.unit_code);
+          if (code) accessibleUnitCodes.add(code);
+        }
+      }
+    } catch {
+      // Fail closed for employee/employee-filter facets: scoped revenue units
+      // remain visible, but no unverified zero-revenue unit is added.
+    }
+  }
+  const canonicalGroups = canonicalSnapshot.groups.map((group) => ({
+    ...group,
+    members: group.members.filter((member) => (
+      (!accessibleUnitCodes || accessibleUnitCodes.has(dataHubUnitGroups.normalizeUnitCode(member.code)))
+      && dataHubUnitGroups.memberMatchesRoutes(member, filters.route)
+    )),
+  })).filter((group) => group.members.length > 0);
   const empMap = new Map();
   for (const r of employeeRows) if (r.emp_code) {
     const cur = empMap.get(r.emp_code) || { key: r.emp_code, label: r.emp_code === store.UNALLOCATED_EMP ? store.UNALLOCATED_LABEL : (r.emp_name || r.emp_code), count: 0 };
@@ -711,24 +792,34 @@ router.get('/filters', auth.requireAuth, (req, res) => {
       ...item,
       count: companyGroupRows.filter((r) => A.companyGroupOf(r) === item.key).length,
     })).filter((item) => item.count > 0),
-    unitGroups: (() => {
-      const map = new Map();
-      for (const r of unitGroupRows) {
-        const key = A.unitGroupOf(r);
-        if (!key) continue;
-        const cur = map.get(key) || { key, rows: 0, units: new Set() };
-        cur.rows += 1;
-        if (r.unit_code) cur.units.add(r.unit_code);
-        map.set(key, cur);
-      }
-      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key, 'vi')).map((item) => ({
-        key: item.key,
-        label: `${item.key} · ${item.units.size.toLocaleString('vi-VN')} đơn vị`,
-        count: item.rows,
-        unitCount: item.units.size,
-      }));
+    unitGroups: canonicalGroups.map((group) => {
+      const members = new Set(group.members.map((member) => dataHubUnitGroups.normalizeUnitCode(member.code)));
+      return {
+        key: group.base,
+        label: `${group.base} · ${group.members.length.toLocaleString('vi-VN')} đơn vị`,
+        count: unitGroupRows.filter((row) => members.has(dataHubUnitGroups.normalizeUnitCode(row.unit_code))).length,
+        unitCount: group.members.length,
+      };
+    }),
+    units: (() => {
+      const revenueOptions = uniq(unitRows, 'unit_code', 'unit_name');
+      const selectedGroup = dataHubUnitGroups.normalizeGroupKey(filters.unitGroup);
+      if (!selectedGroup) return revenueOptions.map((unit) => ({ ...unit, kind: 'unit' }));
+      const group = canonicalGroups.find((item) => item.base === selectedGroup);
+      if (!group) return [];
+      const byCode = new Map(revenueOptions.map((unit) => [dataHubUnitGroups.normalizeUnitCode(unit.key), unit]));
+      return group.members.map((member) => {
+        const revenueUnit = byCode.get(dataHubUnitGroups.normalizeUnitCode(member.code));
+        return {
+          key: member.code,
+          label: member.name || revenueUnit?.label || member.code,
+          count: revenueUnit?.count || 0,
+          kind: 'unit',
+          route: member.route,
+          type: member.type,
+        };
+      }).sort((a, b) => String(a.label).localeCompare(String(b.label), 'vi') || String(a.key).localeCompare(String(b.key), 'vi'));
     })(),
-    units: uniq(unitRows, 'unit_code', 'unit_name').map((u) => ({ ...u, kind: 'unit' })),
     groups: uniq(groupRows.concat(cstGroupRows), 'c14'),
     products: (() => {
       const pmap = productMetaFromRows(productMetaRows, contractorLookup);
@@ -747,8 +838,15 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     priorities: uniq(priorityRows, 'priority'),
     contractors: contractorOptions(contractorRows, contractorLookup),
     bidPackages: uniq(bidRows, 'bid_package'),
+    unitGroupSource: {
+      source: canonicalSnapshot.meta?.source || canonicalSnapshot.source,
+      version: canonicalSnapshot.version,
+      checksum: canonicalSnapshot.checksum,
+      updatedAt: canonicalSnapshot.updatedAt,
+      stale: !!canonicalSnapshot.meta?.stale,
+    },
   });
-});
+}));
 
 
 
@@ -1183,7 +1281,8 @@ function revenueFiltersFromQuery(q) {
     emp: q.emp || null,
     province: q.province || null,
     unit: q.unit || null,
-    unitGroup: q.unitGroup || null,
+    unitGroup: q.__unitGroupKey || dataHubUnitGroups.normalizeGroupKey(q.unitGroup) || null,
+    unitGroupMembers: Array.isArray(q.__unitGroupMembers) ? q.__unitGroupMembers : [],
     companyGroup: q.companyGroup || null,
     group: q.group || null,
     product: q.product || null,
