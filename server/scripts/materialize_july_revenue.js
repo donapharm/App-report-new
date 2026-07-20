@@ -11,8 +11,6 @@ const path = require('path');
 const REPORT_ROOT = path.join(__dirname, '..', '..');
 const DATA_DIR = path.join(REPORT_ROOT, 'server', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
-const APPSALE_ROOT = process.env.APPSALE_ROOT || '/home/osboxes/.openclaw/workspace-main/projects/appsale-donapharm-claude/source/appsale-donapharm';
-const Pg = require(path.join(APPSALE_ROOT, 'node_modules', 'pg'));
 
 function loadEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -22,13 +20,19 @@ function loadEnv(file) {
     process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, '');
   }
 }
-loadEnv(path.join(APPSALE_ROOT, '.env'));
-const pool = new Pg.Pool(process.env.DATABASE_URL ? { connectionString: process.env.DATABASE_URL } : {
-  host: process.env.PGHOST || 'localhost',
-  port: Number(process.env.PGPORT || 5432),
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  database: process.env.PGDATABASE,
+// App Report owns its PostgreSQL driver and production connection settings.
+// Do not depend on an App Sale source checkout/node_modules path: deployments may
+// replace or remove that tree while the App Sale database remains healthy.
+loadEnv(path.join(REPORT_ROOT, '.env'));
+const Pg = require('pg');
+const pool = new Pg.Pool(process.env.APPSALE_DATABASE_URL ? {
+  connectionString: process.env.APPSALE_DATABASE_URL,
+} : {
+  host: process.env.APPSALE_PGHOST || process.env.PGHOST || 'localhost',
+  port: Number(process.env.APPSALE_PGPORT || process.env.PGPORT || 5432),
+  user: process.env.APPSALE_PGUSER || process.env.PGUSER,
+  password: process.env.APPSALE_PGPASSWORD || process.env.PGPASSWORD,
+  database: process.env.APPSALE_PGDATABASE || process.env.PGDATABASE,
 });
 const readJson = (p, def) => fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : def;
 const writeJson = (p, o) => fs.writeFileSync(p, JSON.stringify(o, null, 2) + '\n', 'utf8');
