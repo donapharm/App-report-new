@@ -39,6 +39,12 @@ test('QLNB pager uses prominent DONAPHARM blue, orange and warm page colors', ()
   assert.match(styles, /\.dr-report-pager \.pager-info b \{ color:#003e70; font-size:15\.5px; \}/);
 });
 
+test('QLNB table menu heading uses a prominent DONAPHARM background', () => {
+  assert.match(styles, /\.dr-table th \{ padding:9px 8px; background:linear-gradient\(180deg,#0b70b5 0%,#004f8d 100%\); color:#fff;/);
+  assert.match(styles, /box-shadow:inset 0 -3px 0 #f5a11e/);
+  assert.match(styles, /\.dr-table th\.dr-row-index \{ color:#fff; \}/);
+});
+
 test('QLNB pagination resets with report data and opens a focused row on its containing page', () => {
   assert.match(source, /usePager\(rows, REPORT_PAGE_SIZE, report\)/);
   assert.match(source, /rows\.findIndex\(\(row\) => row\.key === focusKey\)/);
