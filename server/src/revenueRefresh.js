@@ -7,11 +7,12 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { holidayFor } = require('./dailySales');
 
 const TZ = 'Asia/Bangkok';
-const DEFAULT_INTERVAL_MIN = 60;
-const DEFAULT_WEEKDAY = '07:30-18:00';
-const DEFAULT_SAT = '07:30-13:00';
+const DEFAULT_INTERVAL_MIN = 30;
+const DEFAULT_WEEKDAY = '08:00-17:30';
+const DEFAULT_SAT = '08:00-13:00';
 const DEFAULT_SUN = 'off';
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const STATE_FILE = path.join(DATA_DIR, 'revenue_refresh_state.json');
@@ -103,6 +104,12 @@ function windowForDow(dow) {
 function isDue(now = new Date()) {
   if (!enabled()) return { due: false, reason: 'disabled' };
   const p = vnParts(now);
+  const date = `${p.y}-${pad(p.mo)}-${pad(p.d)}`;
+  const holiday = holidayFor(date);
+  // Ngày lễ/nghỉ bù theo lịch Việt Nam được chặn trước mọi khung giờ.
+  // holidays.json chứa các ngày âm lịch/nghỉ bù do Nhà nước công bố;
+  // dailySales.holidayFor giữ thêm các ngày lễ dương lịch cố định làm fallback.
+  if (holiday) return { due: false, reason: 'holiday', holiday: holiday.name || 'Ngày lễ', date, parts: p };
   const win = windowForDow(p.dow);
   if (!win) return { due: false, reason: 'outside_window', parts: p };
   const minute = p.hh * 60 + p.mm;
