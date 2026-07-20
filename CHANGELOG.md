@@ -1,3 +1,7 @@
+### 2026-07-20 — Claude Code (review) — Module “Chi phí của tôi” (`6781517`): ĐẠT
+- **Review DUYỆT.** Khóa scope NV (ép mã phiên; picker `requireAdmin`), chặn `C32/C47` cả backend+frontend, kiểm `empCode` 2 lần + strip field lạ, token chỉ ở backend/fail-closed/retry backoff/audit, FE render động không tự tính/cộng dồn chi phí, sẵn `type` %/money (phương án B). Test 177/177 server · 15/15 web · build + quét bí mật PASS. Không có điểm chặn.
+- **Còn lại (ngoài code):** điền `.env` `DATAHUB_BASE`+`APP_REPORT_COST_TOKEN` rồi deploy; cột “Thành tiền” chờ phiên DataHub bổ sung (task contract-update đã giao) — khi có dải key sẽ ra directive nới allowlist cho App Report.
+
 ### 2026-07-20 — Report Bot — Module “Chi phí của tôi” self-scoped
 - Thêm proxy S2S `GET /api/employee-cost`: backend dùng `auth.scopeOf`, ép NV về chính mã phiên; CEO/admin được chọn NV. Token DataHub chỉ đọc từ `.env` backend; payload được allowlist lại, chặn `c32`/`c47`, field ngoài hợp đồng và response sai `empCode`.
 - Thêm timeout/retry backoff cho lỗi tạm thời, response rỗng an toàn khi nguồn lỗi/401, `Cache-Control: private, no-store` và audit mỗi lượt truy cập không ghi token/body nhạy cảm.
