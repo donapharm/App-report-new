@@ -1,3 +1,7 @@
+### 2026-07-20 — Claude Code (review + giao bot) — Sửa kỳ TUẦN của deck + review 728c734
+- **Review deck `728c734`: ĐẠT.** Grounding (deckHtml không số cứng, số từ analytics/diemXu, narrative từ facts đã tính), CEO-only 3 tầng (build/sendCeo/route requireAdmin), delivery (sendDocument + email attachments + PDF fallback, nhãn DRAFT, chống trùng, assert 32 slide) đều đúng spec.
+- **DIRECTIVE sửa kỳ TUẦN** (`DIRECTIVE_DECK_WEEKLY_ISOWEEK.md`): CEO chốt báo cáo TUẦN = **tuần lịch ISO Thứ 2→Thứ 7** (hiện tuần 30/2026), KHÔNG lũy kế đầu tháng; so sánh vs tuần trước; nhãn "Tuần {ISO}/{năm}". Tháng giữ nguyên. Chỉ đổi cửa sổ ngày cho `kind='week'`, không đổi cách tính số.
+
 ### DRAFT — 2026-07-20 — deck CEO 32 slide: hoàn thiện 5 pha, lịch vẫn khóa
 - Hoàn thiện module canonical `deckData.js`/`deckHtml.js`: nguồn hàng ưu tiên map live trong catalog, luôn đối soát đủ Group-Dona/Đối tác; cảnh báo “doanh số cao–xu thấp” dùng đúng doanh số quý; DRAFT và bản chính thức tách nhãn/key, không ảnh hưởng báo cáo per-NV trong `salesReport.js`.
 - Chuyển renderer PPTX sang Playwright thật (`playwright-core`) → 32 PNG 1280×720 → `pptxgenjs` 16:9 full-bleed; thêm kiểm tra overflow từng slide và PDF fallback 32 trang nếu đóng gói PPTX lỗi.
