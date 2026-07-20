@@ -676,10 +676,12 @@ router.get('/filters', auth.requireAuth, (req, res) => {
   // CST không phát sinh vào lựa chọn khiến người dùng chọn xong lại ra 0.
   const employeeRows = facet([]);
   const provinceRows = facet(['emp']);
-  const unitRows = facet(['emp', 'province']);
+  const companyGroupRows = facet(['emp', 'province']);
+  const unitGroupRows = facet(['emp', 'province', 'companyGroup', 'route']);
+  const unitRows = facet(['emp', 'province', 'companyGroup', 'route', 'unitGroup']);
   const groupRows = facet(['emp', 'province', 'unit']);
   const productRows = facet(['emp', 'province', 'unit', 'group']);
-  const routeRows = facet(['emp', 'province', 'unit', 'group', 'product']);
+  const routeRows = facet(['emp', 'province', 'companyGroup', 'unitGroup', 'unit', 'group', 'product']);
   const priorityRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route']);
   const contractorRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route', 'priority']);
   const bidRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route', 'priority', 'contractor']);
@@ -702,6 +704,30 @@ router.get('/filters', auth.requireAuth, (req, res) => {
     dateTo: pc.dateTo,
     matchedRows: A.applyFilters(allRows, filters).length,
     employees: [...empMap.values()].sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi')),
+    companyGroups: [
+      { key: 'dona', label: 'Group-Dona (DONA + AFP)' },
+      { key: 'partner', label: 'Group-Đối tác' },
+    ].map((item) => ({
+      ...item,
+      count: companyGroupRows.filter((r) => A.companyGroupOf(r) === item.key).length,
+    })).filter((item) => item.count > 0),
+    unitGroups: (() => {
+      const map = new Map();
+      for (const r of unitGroupRows) {
+        const key = A.unitGroupOf(r);
+        if (!key) continue;
+        const cur = map.get(key) || { key, rows: 0, units: new Set() };
+        cur.rows += 1;
+        if (r.unit_code) cur.units.add(r.unit_code);
+        map.set(key, cur);
+      }
+      return [...map.values()].sort((a, b) => a.key.localeCompare(b.key, 'vi')).map((item) => ({
+        key: item.key,
+        label: `${item.key} · ${item.units.size.toLocaleString('vi-VN')} đơn vị`,
+        count: item.rows,
+        unitCount: item.units.size,
+      }));
+    })(),
     units: uniq(unitRows, 'unit_code', 'unit_name').map((u) => ({ ...u, kind: 'unit' })),
     groups: uniq(groupRows.concat(cstGroupRows), 'c14'),
     products: (() => {
@@ -901,30 +927,36 @@ router.get('/admin/assignments/template.xlsx', auth.requireAuth, auth.requireAdm
 router.get('/overview', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
-  res.json(A.overviewKpis({ ...pc, scope }));
+  res.json(A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }));
 });
 
 router.get('/trend', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
-  const cacheKey = `trend:${scope.empCode || 'ALL'}`;
+  const filters = revenueFiltersFromQuery(req.query);
+  const empFilter = new Set(A.selectedEmployeeCodes(filters));
+  const targetComparable = A.targetFiltersComparable(filters);
+  const cacheKey = `trend:${scope.empCode || 'ALL'}:${JSON.stringify(filters)}`;
   res.json(memoGet(cacheKey, 60 * 1000, () => store.listPeriods().map((p) => {
     // Lightweight trend: không gọi overviewKpis vì hàm đó còn tính CST/target từng NV.
-    const rows = store.getRows({ ky: p.ky, scope });
+    const rows = A.applyFilters(store.getRows({ ky: p.ky, scope }), filters);
     const revenue = A.sum(rows, (r) => r.revenue);
-    const targetTotal = A.sum(store.getTargets({ ky: p.ky, scope }), (t) => t.target);
+    const targetTotal = targetComparable
+      ? A.sum(store.getTargets({ ky: p.ky, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase())), (t) => t.target)
+      : null;
     const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
     return {
       ky: p.ky,
       revenue,
       revenueBeforeVat,
       targetTotal,
-      pctTarget: targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
+      targetComparable,
+      pctTarget: targetComparable && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
     };
   })));
 });
 
 router.get('/alerts', auth.requireAuth, (req, res) => {
-  res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session), compareMode: req.query.compareMode }));
+  res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session), compareMode: req.query.compareMode, filters: revenueFiltersFromQuery(req.query) }));
 });
 
 /* ---------- AI canh cửa QLNB ngủ đông + Điểm/Xu ---------- */
@@ -1082,16 +1114,9 @@ router.get('/revenue', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const dimension = ['emp', 'unit', 'product'].includes(req.query.dimension) ? req.query.dimension : 'emp';
-  const filters = {
-    emp: req.query.emp || null,
-    unit: req.query.unit || null,
-    product: req.query.product || null,
-    route: req.query.route || null,
-    priority: req.query.priority || null,
-    contractor: req.query.contractor || null,
-    bid: req.query.bid || null,
-    q: req.query.q || null,
-  };
+  // Dùng cùng một bộ lọc chuẩn với Tổng quan/Phân tích/Cảnh báo để Top 20 và
+  // biểu đồ cơ cấu không bị lệch KPI khi lọc Group hoặc nhóm đơn vị.
+  const filters = revenueFiltersFromQuery(req.query);
   let outRows = A.revenueBreakdown({
     ...pc, scope, dimension, filters,
     filterEmp: null,
@@ -1158,6 +1183,8 @@ function revenueFiltersFromQuery(q) {
     emp: q.emp || null,
     province: q.province || null,
     unit: q.unit || null,
+    unitGroup: q.unitGroup || null,
+    companyGroup: q.companyGroup || null,
     group: q.group || null,
     product: q.product || null,
     route: q.route || null,
@@ -1854,8 +1881,9 @@ router.get('/targets', auth.requireTargetAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const { ky, kys } = pc;
+  const empFilter = new Set(A.selectedEmployeeCodes(revenueFiltersFromQuery(req.query)));
   // Danh sách target = allowlist/has_target CEO chốt (0-BIS), không suy luận role/status.
-  const targets = store.getTargetsRange({ kys, scope });
+  const targets = store.getTargetsRange({ kys, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase()));
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
   const targetMetaByEmp = Object.fromEntries(targets.map((t) => [t.emp_code, {
@@ -1865,11 +1893,11 @@ router.get('/targets', auth.requireTargetAuth, (req, res) => {
     reference: !!t.target_reference,
   }]));
   const pacing = A.targetPacingMeta(ky);
-  const roster = store.targetRoster({ scope });
+  const roster = store.targetRoster({ scope }).filter((u) => !empFilter.size || empFilter.has(String(u.emp_code || '').toUpperCase()));
   // Perf: đọc doanh thu range 1 lần rồi group theo NV. Trước đây mỗi NV gọi getRowsRange()
   // riêng, làm trang Target chậm rõ trên mobile.
   const revenueByEmp = {};
-  for (const r of store.getRowsRange({ kys, scope })) {
+  for (const r of store.getRowsRange({ kys, scope }).filter((row) => !empFilter.size || empFilter.has(String(row.emp_code || '').toUpperCase()))) {
     const ec = r.emp_code;
     if (!ec) continue;
     revenueByEmp[ec] = (revenueByEmp[ec] || 0) + Number(r.revenue || 0);

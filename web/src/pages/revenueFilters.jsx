@@ -65,7 +65,7 @@ export function MultiSelect({ value, onChange, options, all, unit = 'mục' }) {
   );
 }
 
-export function ComboSelect({ value, onChange, options, all, placeholder, className }) {
+export function ComboSelect({ value, onChange, options, all, placeholder, className, acceptTrailingDot = false }) {
   const list = options || [];
   const selected = list.find((o) => String(o.key) === String(value));
   const [query, setQuery] = React.useState('');
@@ -73,12 +73,26 @@ export function ComboSelect({ value, onChange, options, all, placeholder, classN
   React.useEffect(() => { setQuery(selected ? optionLabel(selected) : ''); }, [value, options]);
   const q = norm(query);
   const shown = (q ? list.filter((o) => optionSearchText(o).includes(q)) : list).slice(0, 30);
+  const exactOption = (raw) => {
+    const typed = String(raw || '').trim();
+    const key = acceptTrailingDot ? typed.replace(/\.$/, '') : typed;
+    return list.find((o) => norm(o.key) === norm(key));
+  };
+  const commitExact = (raw) => {
+    const exact = exactOption(raw);
+    if (!exact) return false;
+    onChange(exact.key);
+    setQuery(optionLabel(exact));
+    setOpen(false);
+    return true;
+  };
   return (
-    <div className={'combo ' + (className || '')} onBlur={() => setTimeout(() => setOpen(false), 120)}>
+    <div className={'combo ' + (className || '')} onBlur={() => { commitExact(query); setTimeout(() => setOpen(false), 120); }}>
       <input
         value={query}
         onFocus={() => setOpen(true)}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(''); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' && commitExact(query)) e.preventDefault(); }}
         placeholder={placeholder || all}
       />
       {value && <button type="button" className="combo-clear" onMouseDown={(e) => e.preventDefault()} onClick={() => { onChange(''); setQuery(''); }}>×</button>}

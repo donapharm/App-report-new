@@ -73,7 +73,7 @@ export const api = {
   adminTargetAdjustmentSuggestions: (params = {}) => req('GET', '/admin/target-adjustments/suggestions?' + new URLSearchParams(params).toString()),
   filters: (params) => req('GET', '/filters' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   overview: (params) => req('GET', '/overview' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
-  trend: () => req('GET', '/trend'),
+  trend: (params = {}) => req('GET', '/trend?' + new URLSearchParams(params).toString()),
   alerts: (params) => req('GET', '/alerts' + (params ? `?${new URLSearchParams(params)}` : '')),
   dormantGate: (params = {}) => req('GET', '/dormant/gate?' + new URLSearchParams(params).toString()),
   dormantActions: (payload) => req('POST', '/dormant/actions', payload),

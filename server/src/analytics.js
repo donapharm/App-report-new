@@ -9,6 +9,33 @@ const productSearch = require('./productSearch');
 const VAT_DIVISOR = 1.05; // doanh thu trước VAT = sau VAT / 1.05
 
 const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
+const DONA_GROUP_CONTRACTORS = new Set(['DONA', 'AFP']);
+const pipeList = (value, { upper = false } = {}) => String(value || '').split('|')
+  .map((s) => s.trim()).filter(Boolean).map((s) => upper ? s.toUpperCase() : s);
+function companyGroupOf(row = {}) {
+  const contractor = String(row.contractor_code || row.contractor || '').trim().toUpperCase();
+  const contractorWords = contractor.toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  // Dữ liệu lịch sử dùng 01.DONAPHARM / 02.AFP PHARMA hoặc tên công ty đầy đủ,
+  // còn nguồn materialize hiện tại dùng DONA / AFP. Tất cả đều là cùng hai nhà thầu.
+  const isDonaAlias = DONA_GROUP_CONTRACTORS.has(contractor)
+    || /(^| )donapharm($| )/.test(contractorWords)
+    || /(^| )afp($| )/.test(contractorWords);
+  if (isDonaAlias) return 'dona';
+  if (contractor || String(row.source || '').trim().toUpperCase() === 'APP_WEB_PARTNER') return 'partner';
+  return '';
+}
+function unitGroupOf(row = {}) {
+  const value = String(row.unit_code || row.unit_name || '').trim();
+  return value.match(/^(\d{3})\./)?.[1] || '';
+}
+function selectedEmployeeCodes(filters = {}) { return pipeList(filters.emp, { upper: true }); }
+// Target chỉ được giao theo nhân viên. Không lấy doanh thu của một lát cắt tuyến/group/đơn vị
+// chia cho target toàn nhân viên vì sẽ tạo tỷ lệ sai về mặt quản trị.
+function targetFiltersComparable(filters = {}) {
+  return !['route', 'companyGroup', 'unitGroup', 'unit'].some((key) => !!filters[key]);
+}
 function kyParts(ky) {
   const [mm, yyyy] = String(ky || '').split('.').map(Number);
   return { mm, yyyy };
@@ -64,16 +91,21 @@ function applyFilters(rows, f = {}) {
   const from = f.dateFrom ? String(f.dateFrom).slice(0, 10) : '';
   const to = f.dateTo ? String(f.dateTo).slice(0, 10) : '';
   // emp có thể là 1 mã hoặc NHIỀU mã nối bằng '|' (xuất/lọc nhiều NV cùng lúc).
-  const empList = f.emp ? String(f.emp).split('|').map((s) => s.trim()).filter(Boolean) : [];
+  const empList = selectedEmployeeCodes(f);
+  const routeList = pipeList(f.route, { upper: true });
+  const companyGroupList = pipeList(f.companyGroup);
+  const unitGroup = String(f.unitGroup || '').trim().replace(/\.$/, '');
   return rows.filter((r) => {
-    if (empList.length && !empList.includes(r.emp_code)) return false;
+    if (empList.length && !empList.includes(String(r.emp_code || '').trim().toUpperCase())) return false;
     // Tỉnh/thành từ các nguồn có thể khác hoa/thường hoặc dấu ("Đồng Nai"/"ĐỒNG NAI").
     // So theo khóa chuẩn hóa để bộ lọc không làm mất dữ liệu thực tế.
     if (f.province && norm(r.province) !== norm(f.province)) return false;
     if (f.unit && r.unit_code !== f.unit) return false;
+    if (unitGroup && unitGroupOf(r) !== unitGroup) return false;
+    if (companyGroupList.length && !companyGroupList.includes(companyGroupOf(r))) return false;
     if (f.group && String(r.c14 || '') !== String(f.group)) return false;
     if (f.product && r.iit_code !== f.product) return false;
-    if (f.route && String(r.route || '').toUpperCase() !== String(f.route).toUpperCase()) return false;
+    if (routeList.length && !routeList.includes(String(r.route || '').toUpperCase())) return false;
     if (f.priority && r.priority !== f.priority) return false;
     if (f.contractor && r.contractor_code !== f.contractor) return false;
     if (f.bid && !bidMatch(r.bid_package, f.bid)) return false;
@@ -93,7 +125,7 @@ function applyFilters(rows, f = {}) {
       }
     }
     if (q) {
-      const hay = norm([r.emp_code, r.emp_name, r.unit_code, r.unit_name, r.iit_code, r.product_name, r.c14, r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' '));
+      const hay = norm([r.emp_code, r.emp_name, unitGroupOf(r), r.unit_code, r.unit_name, r.iit_code, r.product_name, r.c14, companyGroupOf(r), r.contractor_code, r.contractor_name, r.bid_package, r.priority].join(' '));
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -106,24 +138,26 @@ const OVERVIEW_CACHE_MS = 60 * 1000;
 function clearOverviewCache() { overviewCache.clear(); }
 
 /** KPI tổng quan cho 1 kỳ hoặc nhiều kỳ trong phạm vi quyền. */
-function overviewKpis({ ky, kys, scope, label }) {
+function overviewKpis({ ky, kys, scope, label, filters = {} }) {
   const list = normKys({ ky, kys });
-  const cacheKey = JSON.stringify({ list, empCode: scope?.empCode || null, label: label || '' });
+  const cacheKey = JSON.stringify({ list, empCode: scope?.empCode || null, label: label || '', filters });
   const cached = overviewCache.get(cacheKey);
   if (cached && Date.now() - cached.at < OVERVIEW_CACHE_MS) return cached.value;
-  const rows = store.getRowsRange({ kys: list, scope });
+  const rows = applyFilters(store.getRowsRange({ kys: list, scope }), filters);
   const revenue = sum(rows, (r) => r.revenue);
-  const targets = store.getTargetsRange({ kys: list, scope });
-  const targetTotal = sum(targets, (t) => t.target);
+  const empFilter = new Set(selectedEmployeeCodes(filters));
+  const comparableTarget = targetFiltersComparable(filters);
+  const targets = store.getTargetsRange({ kys: list, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase()));
+  const targetTotal = comparableTarget ? sum(targets, (t) => t.target) : null;
   const revenueBeforeVat = revenue / VAT_DIVISOR;
   // DIRECTIVE_TARGET_KPI: KPI chính so với target CẢ THÁNG, không dùng pacing làm mẫu số.
-  const pctTarget = targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null;
+  const pctTarget = comparableTarget && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null;
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
   const revenueBeforeVatByEmp = {};
   for (const r of rows) revenueBeforeVatByEmp[r.emp_code] = (revenueBeforeVatByEmp[r.emp_code] || 0) + Number(r.revenue || 0) / VAT_DIVISOR;
   const empTarget = { achieved: 0, total: 0 };
-  for (const u of store.targetRoster({ scope })) {
+  for (const u of store.targetRoster({ scope }).filter((x) => !empFilter.size || empFilter.has(String(x.emp_code || '').toUpperCase()))) {
     const empCode = u.emp_code;
     const target = Number(targetByEmp[empCode] || 0);
     if (target <= 0) continue;
@@ -131,13 +165,13 @@ function overviewKpis({ ky, kys, scope, label }) {
     empTarget.total += 1;
     if (empRevBeforeVat >= target) empTarget.achieved += 1;
   }
-  const cstLowCount = store.getCst({ scope }).filter((r) => Number(r.remain_pct || 0) < 10).length;
+  const cstLowCount = cstTable({ scope, filters }).filter((r) => Number(r.remain_pct || 0) < 10).length;
 
   // so với kỳ liền trước cùng độ dài (MoM/range-over-range)
   let momPct = null;
   const prevKys = store.previousKys(list);
   if (prevKys.length === list.length) {
-    const prevRev = sum(store.getRowsRange({ kys: prevKys, scope }), (r) => r.revenue);
+    const prevRev = sum(applyFilters(store.getRowsRange({ kys: prevKys, scope }), filters), (r) => r.revenue);
     if (prevRev > 0) momPct = +(((revenue - prevRev) / prevRev) * 100).toFixed(1);
   }
   const value = {
@@ -149,6 +183,7 @@ function overviewKpis({ ky, kys, scope, label }) {
     targetTotal,
     targetCompareTotal: targetTotal,
     pctTarget,
+    targetComparable: comparableTarget,
     empTarget,
     cstLowCount,
     momPct,
@@ -188,8 +223,17 @@ function cstTable({ scope, remainPctMax, remainPctMin, remainPctLt, bidPackage, 
   }
   if (filters?.province) rows = rows.filter((r) => r.province === filters.province);
   if (filters?.unit) rows = rows.filter((r) => r.unit_code === filters.unit || r.unit_name === filters.unit);
+  if (filters?.unitGroup) rows = rows.filter((r) => unitGroupOf(r) === String(filters.unitGroup).trim().replace(/\.$/, ''));
+  if (filters?.companyGroup) {
+    const groups = pipeList(filters.companyGroup);
+    rows = rows.filter((r) => groups.includes(companyGroupOf(r)));
+  }
   if (filters?.group) rows = rows.filter((r) => String(r.c14 || '') === String(filters.group));
   if (filters?.product) rows = rows.filter((r) => r.iit_code === filters.product);
+  if (filters?.route) {
+    const routes = pipeList(filters.route, { upper: true });
+    rows = rows.filter((r) => routes.includes(String(r.route || '').trim().toUpperCase()));
+  }
   if (filters?.priority) rows = rows.filter((r) => r.priority === filters.priority);
   // "empty" now means a full CST code that is actually actionable. Full codes
   // waiting behind a current sibling are deliberately not employee action items.
@@ -207,4 +251,4 @@ function filterCstSearch(rows, query) {
   return productSearch.filterProductRows(rows, query);
 }
 
-module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, filterCstSearch, groupSum, applyFilters, baseUnitKey, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };
+module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, filterCstSearch, groupSum, applyFilters, baseUnitKey, companyGroupOf, unitGroupOf, selectedEmployeeCodes, targetFiltersComparable, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };

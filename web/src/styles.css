@@ -498,6 +498,36 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .filter-live-status b { color: #9a6800; font-weight: 700; }
 .filter-body { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
 .filter-body .filter-asof { margin-bottom: 8px; }
+/* Tổng quan: bộ lọc điều hành gọn, luôn nhìn thấy trên PC và xếp 1 cột trên mobile. */
+.overview-filter-card { padding: 11px 12px; border-top: 3px solid var(--brand); }
+.overview-filter-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 9px; }
+.overview-filter-head > div:first-child { display: flex; align-items: baseline; gap: 8px 12px; flex-wrap: wrap; }
+.overview-filter-head b { color: var(--brand-ink); }
+.overview-filter-head span { color: var(--muted); font-size: 11.5px; }
+.overview-filter-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: none; }
+.overview-filter-actions .btn { padding: 7px 10px; font-size: 12px; }
+.overview-filter-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.overview-filter-grid > label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: 11px; font-weight: 700; }
+.overview-filter-grid select, .overview-filter-grid input, .overview-filter-grid .multi-toggle { min-height: 38px; font-size: 12.5px; }
+.overview-filter-grid .combo { min-width: 0; }
+.overview-filter-note { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 11.5px; color: var(--muted); }
+.overview-filter-note span { padding: 4px 8px; border-radius: 999px; background: #edf6ff; color: var(--brand-ink); }
+.overview-filter-note em { font-style: normal; color: #9a6800; font-weight: 700; }
+.overview-target-unavailable { min-height: 176px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; padding: 22px; border-radius: 14px; background: linear-gradient(145deg, #f5f8fc, #fffaf0); color: var(--muted); }
+.overview-target-unavailable b { color: var(--brand-ink); font-size: 16px; }
+.overview-target-unavailable span { max-width: 320px; font-size: 12px; line-height: 1.45; }
+@media (max-width: 1180px) {
+  .overview-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .overview-filter-card { padding: 9px; }
+  .overview-filter-head { align-items: flex-start; }
+  .overview-filter-head > div:first-child { display: grid; gap: 2px; }
+  .overview-filter-grid { grid-template-columns: 1fr; }
+  .overview-filter-grid > label > span { display: none; }
+  .overview-filter-grid select, .overview-filter-grid input, .overview-filter-grid .multi-toggle { min-height: 40px; }
+  .overview-filter-note em { width: 100%; }
+}
 /* Phân trang */
 /* Phân trang = VIÊN NANG MỀM 2 màu logo Donapharm: đầu Trước xanh, đầu Sau cam,
    giữa (Trang X/Y) nền kem; bo tròn hai đầu như viên nang, có ánh bóng gel. */

@@ -12,7 +12,7 @@ const NLQ = require('./nlqIntent');
 const nlqEngine = require('./nlqEngine');
 
 /* ---------------- 1) CẢNH BÁO CHỦ ĐỘNG ---------------- */
-function buildAlerts({ scope, ky, kys, compareMode }) {
+function buildAlerts({ scope, ky, kys, compareMode, filters = {} }) {
   const list = Array.isArray(kys) && kys.length ? kys : [ky || store.latestKy()];
   const lastKy = list[list.length - 1];
   const mode = compareMode === 'yoy' ? 'yoy' : 'prev';
@@ -31,17 +31,20 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
 
   // a) NV đang bán nhưng tụt target (đạt < 80% target trước VAT).
   // Duyệt NV có doanh thu trong kỳ, không duyệt toàn bộ target/danh bạ để tránh NV nghỉ.
-  const targets = store.getTargetsRange({ kys: list, scope });
+  const selectedEmployees = new Set(A.selectedEmployeeCodes(filters));
+  const targetComparable = A.targetFiltersComparable(filters);
+  const targets = store.getTargetsRange({ kys: list, scope }).filter((t) => !selectedEmployees.size || selectedEmployees.has(String(t.emp_code || '').toUpperCase()));
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
   const targetItems = [];
-  for (const u of store.targetRoster({ scope })) {
+  for (const u of store.targetRoster({ scope }).filter((x) => !selectedEmployees.size || selectedEmployees.has(String(x.emp_code || '').toUpperCase()))) {
+    if (!targetComparable) continue;
     const empCode = u.emp_code;
     const user = store.findUserByCode(empCode);
     if (!user?.name) continue; // không resolve được tên => loại khỏi cảnh báo
     const target = A.targetCompareValue(targetByEmp[empCode] || 0, lastKy);
     if (target <= 0) continue; // chưa có target thật => không tính %
-    const rev = A.sum(store.getRowsRange({ kys: list, scope: { empCode } }), (r) => r.revenue);
+    const rev = A.sum(A.applyFilters(store.getRowsRange({ kys: list, scope: { empCode } }), filters), (r) => r.revenue);
     const revBeforeVat = rev / A.VAT_DIVISOR;
     const pct = (revBeforeVat / target) * 100;
     if (pct < 80) {
@@ -61,8 +64,8 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
   const unitItems = [];    // giảm mạnh
   const unitUpItems = [];  // tăng trưởng mạnh
   if (cmp.hasPrev) {
-    const cur = A.revenueBreakdown({ kys: cmp.curKys, scope, dimension: 'unit' });
-    const prev = A.revenueBreakdown({ kys: cmp.prevKys, scope, dimension: 'unit' });
+    const cur = A.revenueBreakdown({ kys: cmp.curKys, scope, dimension: 'unit', filters });
+    const prev = A.revenueBreakdown({ kys: cmp.prevKys, scope, dimension: 'unit', filters });
     const prevMap = Object.fromEntries(prev.map((u) => [u.key, u.revenue]));
     for (const u of cur) {
       const before = prevMap[u.key] || 0;
@@ -78,7 +81,7 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
   unitUpItems.sort((a, b) => b.mom - a.mom);
 
   // c) Cơ số thầu bất thường: sắp cạn (<10%) hoặc tồn nhiều (>85%)
-  const cst = A.cstTable({ scope, filters: {} });
+  const cst = A.cstTable({ scope, filters });
   const cstLow = [];
   const cstHigh = [];
   const cstQueued = [];
@@ -136,7 +139,7 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
   cstHigh.sort((a, b) => b.remain_pct - a.remain_pct);
 
   const groups = [
-    { key: 'target', icon: '🎯', tone: 'danger', title: 'NV chưa đạt target', total: targetItems.length, items: top(targetItems) },
+    { key: 'target', icon: '🎯', tone: 'danger', title: 'NV chưa đạt target', total: targetItems.length, items: top(targetItems), note: targetComparable ? '' : 'Target chưa được phân bổ theo lát cắt tuyến/group/nhóm đơn vị.' },
     { key: 'unit_up', icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh (so kỳ trước)', total: unitUpItems.length, items: top(unitUpItems), note: cmpNote },
     { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm mạnh (so kỳ trước)', total: unitItems.length, items: top(unitItems), note: cmpNote },
     { key: 'cst_low', icon: '📦', tone: 'danger', title: 'Cơ số thầu sắp cạn (<10%)', total: cstLow.length, items: top(cstLow) },
@@ -153,7 +156,7 @@ function buildAlerts({ scope, ky, kys, compareMode }) {
   };
   // "Cần chú ý" = các mục CẢNH BÁO (không tính đơn vị tăng trưởng — đó là tin vui).
   const count = groups.filter((g) => g.key !== 'unit_up' && g.key !== 'cst_queued').reduce((s, g) => s + g.total, 0);
-  return { ky: lastKy, kys: list, cstLabel: 'Cơ số thầu hiện tại', summary, groups, count, compareMode: cmp.mode, compareNote: cmpNote };
+  return { ky: lastKy, kys: list, cstLabel: 'Cơ số thầu hiện tại', summary, groups, count, compareMode: cmp.mode, compareNote: cmpNote, targetComparable };
 }
 
 /* ---------------- 2) DỰ BÁO TARGET THEO XU HƯỚNG ---------------- */
