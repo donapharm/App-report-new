@@ -44,7 +44,7 @@ function Preview({ report, title = 'Báo cáo hiện tại', focusKey = '' }) {
       <div className="danger"><small>Quá hạn</small><b>{fmt(summary.overdue ?? summary.overdue_review ?? 0, 0)}</b></div>
     </div>
     {!rows.length ? <div className="dr-empty">Không có QLNB phù hợp bộ lọc.</div> : <div className="dr-report-list">
-      <Pager className="dr-report-pager" page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={changePage} unit="QLNB" ariaLabel="Phân trang báo cáo QLNB phía trên" />
+      <Pager className="dr-report-pager is-top" page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={changePage} unit="QLNB" ariaLabel="Phân trang báo cáo QLNB phía trên" />
       <div className="dr-table-wrap"><table className="dr-table"><thead><tr><th className="dr-row-index">STT</th><th>Nhân viên</th><th>Đơn vị</th><th>QLNB / Sản phẩm</th><th>Ngày ngủ</th><th>CST còn</th><th>Review</th><th>Review lại</th><th>Chu kỳ</th></tr></thead><tbody>{pager.pageItems.map((row, index) => <tr className={focusKey && row.key === focusKey ? 'focused' : ''} key={row.key || row.id || pager.startIndex + index}>
       <td className="dr-row-index" data-label="Số thứ tự">{pager.startIndex + index + 1}</td>
       <td data-label="Nhân viên">{row.emp_code || '—'}{row.employee_name || row.emp_name ? <small>{row.employee_name || row.emp_name}</small> : null}</td>
@@ -53,7 +53,7 @@ function Preview({ report, title = 'Báo cáo hiện tại', focusKey = '' }) {
       <td data-label="Số ngày ngủ">{fmt(row.days_idle, 0)}</td><td data-label="CST còn lại">{fmt(row.remain_qty)}</td><td data-label="Review"><span className={`dr-status ${row.review_status || ''}`}>{REVIEW_LABEL[row.review_status] || row.review_status || '—'}</span></td>
       <td data-label="Review lại">{dateVi(row.action?.next_follow_up || row.next_follow_up)}</td><td data-label="Chu kỳ xử lý">{fmt(row.action?.action_cycle ?? row.action?.cycle ?? row.action_cycle ?? 0, 0)}</td>
     </tr>)}</tbody></table></div>
-      <Pager className="dr-report-pager" page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={changePage} unit="QLNB" ariaLabel="Phân trang báo cáo QLNB phía dưới" />
+      <Pager className="dr-report-pager is-bottom" page={pager.page} totalPages={pager.totalPages} total={pager.total} onPage={changePage} unit="QLNB" ariaLabel="Phân trang báo cáo QLNB phía dưới" />
     </div>}
   </section>;
 }
