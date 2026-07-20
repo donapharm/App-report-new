@@ -59,6 +59,12 @@
 - **Yêu cầu CEO:** báo cáo **CHỈ gửi CEO** (không gửi NV) — CEO trình chiếu **màn hình LED** cho toàn thể NV ⇒ chuẩn cao cấp: chính xác tuyệt đối, tinh xảo/thẩm mỹ, narrative thông minh. Bắt buộc dựng bản **DRAFT `[DRAFT — CHỜ CEO DUYỆT]`** gửi CEO duyệt trước khi lịch chạy chính thức.
 - Ranh giới: KHÔNG đụng render per-NV trong `salesReport.js`; giữ nguyên tắc #2/#3/#4. Trạng thái: chờ bot triển khai.
 
+### 2026-07-20 — Claude Code (kiến trúc/review) — Giao bot: module "Chi phí của tôi" (self-scoped)
+- **Bối cảnh:** DataHub CEO-only nên NV không vào được → CEO chốt cho NV **tự xem chi phí/hoa hồng CỦA CHÍNH MÌNH** trong App Report. Điều chỉnh chính sách §8-BIS DataHub (trước cấm hoa hồng tới bề mặt NV) → nay cho NV thấy **của riêng mình** (self-scoped, read-only). Ghi ngoại lệ vào `CLAUDE.md`.
+- **Quyết định CEO:** NV thấy **số tiền + tỷ lệ**; tên UI **"Chi phí của tôi"**.
+- **Hợp đồng tích hợp (CEO cấp):** `GET /api/integrations/app-report/employee-cost?emp=<mã>`, header `x-assignment-key`; response cột **động** `{empCode, columns[], rows[]}`. Ràng buộc: `C32`(tổng)/`C47`(đầu ra) **không bao giờ gửi**; chỉ cột `C33–C46` CEO bật (allowlist động → render theo `columns`, không hardcode); giá trị **% theo dòng, KHÔNG cộng dồn**. Lỗi: 401 sai key / 400 thiếu emp / 502 retry.
+- **File giao bot:** `SPEC_REPORT_EMP_COST_SELFVIEW.md` — App Report gọi DataHub server-to-server (token chỉ ở `.env`/backend), khóa scope ở backend (NV chỉ thấy của mình; CEO/ADMIN xem bất kỳ), FE render bảng động, không hardcode PII/số/token, không đưa vào LLM/NLQ. DataHub = SSOT (App Report không dựng engine thứ 2). Trạng thái: chờ bot triển khai.
+
 ### 2026-07-11 — Bot triển khai (Report Bot) — Vá UI thẻ Target trên Tổng quan
 - **Deploy bản vá review `4207800` cho 3 file UI:** `web/src/charts.jsx`, `web/src/pages/Overview.jsx`, `web/src/styles.css`. Gauge target nay dùng thang 0–100 nên 44,x% lấp đúng khoảng 44% vòng, không còn góc nhỏ do thang cũ.
 - **Khôi phục caption dưới vòng:** tách 2 cụm “Đã đạt” và “Mục tiêu tháng”, mỗi cụm có nhãn, số in đậm; “Đã đạt” đổi màu theo mức target (<80% đỏ đậm), “Mục tiêu tháng” xám đậm.

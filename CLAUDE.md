@@ -18,6 +18,7 @@ npm run dev     # API :3873 + web :5173  → mở http://localhost:5173
 ## Phạm vi (đã chốt với CEO)
 - **GIỮ:** Tổng quan (+cảnh báo chủ động), Doanh thu (drill-down NV→ĐV→SP), Cơ số thầu, Target (xem + dự báo theo trend), Export Excel, AI hỏi nhanh, Upload (admin).
 - **ĐÃ CẮT:** VAT, Fleet/Drive, Kho master data, Điều chuyển NV, gửi thưởng tự động, face/device verify. (Thuộc app/bot khác.)
+- **NGOẠI LỆ chi phí (CEO chốt 2026-07-20):** App Report có module **"Chi phí của tôi"** — mỗi NV xem **chi phí/hoa hồng CỦA CHÍNH MÌNH** (self-scoped, backend khóa quyền). Số **do DataHub tính (SSOT)**, App Report chỉ hiển thị qua service endpoint; **KHÔNG** dựng engine chi phí riêng, **KHÔNG** để lộ số người khác/tổng payout. Đây là ngoại lệ có kiểm soát của nguyên tắc "báo cáo không chứa chi phí". Spec: `SPEC_REPORT_EMP_COST_SELFVIEW.md`.
 
 ## Bản đồ code
 ```
