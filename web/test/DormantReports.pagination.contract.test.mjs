@@ -31,6 +31,14 @@ test('top pager and desktop table heading remain visible while their list scroll
   assert.match(styles, /\.dr-table \{ min-width:0; table-layout:fixed; \}/);
 });
 
+test('QLNB pager uses prominent DONAPHARM blue, orange and warm page colors', () => {
+  assert.match(styles, /--dr-pager-shadow:0 8px 22px/);
+  assert.match(styles, /linear-gradient\(135deg,#087aca 0%,#004b8d 100%\)/);
+  assert.match(styles, /linear-gradient\(135deg,#ffb52e 0%,#e97700 100%\)/);
+  assert.match(styles, /linear-gradient\(180deg,#fff9dd 0%,#ffe3a0 100%\)/);
+  assert.match(styles, /\.dr-report-pager \.pager-info b \{ color:#003e70; font-size:15\.5px; \}/);
+});
+
 test('QLNB pagination resets with report data and opens a focused row on its containing page', () => {
   assert.match(source, /usePager\(rows, REPORT_PAGE_SIZE, report\)/);
   assert.match(source, /rows\.findIndex\(\(row\) => row\.key === focusKey\)/);
