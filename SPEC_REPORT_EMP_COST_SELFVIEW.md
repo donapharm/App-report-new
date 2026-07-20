@@ -66,9 +66,13 @@ Thêm route đọc: `GET /api/employee-cost` (cho FE App Report gọi bằng **s
 - **Bảng render ĐỘNG từ `columns[]`:** lặp `columns` dựng `<th>` theo `label`; mỗi `row` render `row[col.key]`.
   **Không** viết cứng tên cột. Giá trị % format `,` kiểu VN + hậu tố `%`.
 - Cột chiều cố định (`c5/c7/c16/c25`) đứng trước (theo map §1), cột % theo sau.
-- **NV được thấy: số tiền + tỷ lệ** (CEO đã chốt) — hiển thị cả % rate/bậc thang áp cho mình. (Vẫn không thấy của
-  người khác.)
+- **Hiển thị theo ĐÚNG dữ liệu DataHub trả:** hợp đồng hiện **chỉ có tỷ lệ %** theo dòng → App Report **chỉ hiện %**.
+  **‼ App Report KHÔNG tự tính "số tiền"** (không nhân %×doanh thu — đó là tính chi phí, vi phạm SSOT/nguyên tắc #3).
+  CEO muốn thấy **số tiền** → **DataHub bổ sung cột/metadata số tiền** trong `columns[]`; vì UI render động, App
+  Report **tự hiện cột số tiền ngay khi DataHub thêm**, không phải sửa code. (Ngắn gọn: amount là việc DataHub.)
 - **KHÔNG cộng dồn %:** không dòng tổng, không cột tổng, không trung bình — mỗi ô là % của riêng dòng đó (§1-BIS).
+- **Cột chiều nằm trong `row` (không trong `columns`):** DataHub xác nhận `columns[]` chỉ liệt kê cột % động; App
+  Report **tự đưa 4 cột chiều `c5/c7/c16/c25` lên trước** (map nhãn Quản lý/Đơn vị/Sản phẩm/ĐVT), tránh render trùng.
 - **Chuẩn desktop** = mẫu trang "Phân tích": hàng KPI trên (vd tổng chi phí kỳ, số dòng, kỳ) → panel bảng bên dưới
   trong `.page-desktop`. **Mobile 1 cột**, bảng rộng cuộn ngang trong khung `overflow-x:auto` (không tràn body).
 - **Không hardcode PII/số chi phí** trong bundle — mọi số từ `/api/employee-cost` (nguyên tắc #2).
