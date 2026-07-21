@@ -1,3 +1,8 @@
+### 2026-07-21 — Claude Code (review + giao bot) — "Chi phí của tôi": Thành tiền ĐẠT + công tắc bật/tắt
+- **Review THẬT `b1a4cd0` (Thành tiền): ĐẠT.** Ghép doanh thu resolve `c16`→mã qua catalog (không dùng tên trần), scope doanh thu đúng NV+kỳ, `round(dt×%/100)`, <90% khớp → ẩn tổng + cảnh báo, c44 tách annual (cấu hình env), % hiện `8.0` không ký hiệu %, fail-closed/audit. Bản MASTER `ad2cd64` (lọc tháng/xem ngày/tổng kỳ) chưa push — chờ review tiếp.
+- **Giao bot công tắc bật/tắt** (`DIRECTIVE_EMP_COST_VISIBILITY_TOGGLE.md`): CEO bật/tắt quyền NV tự xem chi phí ở 3 mức **toàn phòng / nhóm (vd CTV) / cá nhân**, ưu tiên cá nhân>nhóm>phòng, mặc định off, chốt quyền ở backend (OFF → `disabled`, không gọi DataHub), panel + route CEO-only + audit.
+- **Blocker:** endpoint DataHub `employee-cost` trả 404 (chưa mở) → App Report fail-closed đúng; task dựng endpoint giao phiên DataHub.
+
 ### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": DIRECTIVE TỔNG gộp cho bot đọc 1 lần
 - Gộp toàn bộ yêu cầu module "Chi phí của tôi" vào `DIRECTIVE_EMP_COST_MASTER.md` (nguyên tắc scope/C32-C47/token, cách lấy đúng cột khi khóa C32–C47, render động + hiển thị %, Thành tiền tự tính + C44 cuối năm, bộ lọc kỳ (C), xem theo ngày, lấy thử T07 thật, nghiệm thu). Để CEO copy cho bot; các directive rời vẫn giữ.
 
