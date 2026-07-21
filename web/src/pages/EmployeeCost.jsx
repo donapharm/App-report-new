@@ -4,6 +4,9 @@ import { Kpi, Spinner } from '../components.jsx';
 import {
   currentMonthValue, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
+import {
+  normalizeVisibilityPanel, updateVisibilitySetting, visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel,
+} from '../employeeCostVisibilityModel.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -95,6 +98,61 @@ function PeriodBlock({ period, expanded, onToggle }) {
   </div>;
 }
 
+function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel = 'Theo cấp trên', label }) {
+  return <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+    {allowInherit && <option value="inherit">{inheritLabel}</option>}
+    <option value="on">Bật</option>
+    <option value="off">Tắt</option>
+  </select>;
+}
+
+function VisibilityPanel({ panel, loading, saving, message, error, onChange, onSave }) {
+  return <div className="card employee-cost-visibility">
+    <div className="employee-cost-visibility-head">
+      <div>
+        <div className="section-head">Quản trị quyền tự xem chi phí</div>
+        <p>Cá nhân ưu tiên hơn nhóm; nhóm ưu tiên hơn toàn phòng. Quyền hiệu lực do backend quyết định.</p>
+      </div>
+      <button type="button" className="btn" disabled={loading || saving || !panel} onClick={onSave}>
+        {saving ? 'Đang lưu…' : 'Lưu công tắc'}
+      </button>
+    </div>
+    {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
+    {message && <div className="employee-cost-visibility-success" role="status">{message}</div>}
+    {loading || !panel ? <Spinner /> : <>
+      <div className="employee-cost-visibility-department">
+        <div><b>Toàn phòng Kinh doanh</b><small>Mặc định an toàn là Tắt.</small></div>
+        <VisibilitySelect
+          label="Công tắc toàn phòng Kinh doanh"
+          value={panel.department.setting}
+          allowInherit={false}
+          onChange={(value) => onChange('department', '', value)}
+        />
+      </div>
+      <div className="employee-cost-visibility-section">
+        <h4>Theo nhóm</h4>
+        <div className="employee-cost-visibility-grid">
+          {panel.groups.map((group) => <div className="employee-cost-visibility-item" key={group.key}>
+            <div><b>{group.label}</b><small>{group.employeeCount.toLocaleString('vi-VN')} nhân viên</small></div>
+            <VisibilitySelect label={`Công tắc nhóm ${group.label}`} inheritLabel="Theo toàn phòng" value={group.setting} onChange={(value) => onChange('groups', group.key, value)} />
+            <span className={`employee-cost-effective ${group.effective}`}>{visibilityEffectiveLabel(group.effective)} · {group.source === 'group' ? 'Chính nhóm' : 'Toàn phòng'}</span>
+          </div>)}
+        </div>
+      </div>
+      <div className="employee-cost-visibility-section">
+        <h4>Theo cá nhân</h4>
+        <div className="employee-cost-visibility-employees">
+          {panel.employees.map((employee) => <div className="employee-cost-visibility-employee" key={employee.emp_code}>
+            <div><b>{employee.emp_code} · {employee.name}</b><small>{employee.group_label}</small></div>
+            <VisibilitySelect label={`Công tắc nhân viên ${employee.emp_code}`} inheritLabel="Theo nhóm" value={employee.setting} onChange={(value) => onChange('employees', employee.emp_code, value)} />
+            <span className={`employee-cost-effective ${employee.effective}`}>{visibilityEffectiveLabel(employee.effective)} · {visibilitySourceLabel(employee)}</span>
+          </div>)}
+        </div>
+      </div>
+    </>}
+  </div>;
+}
+
 export default function EmployeeCost({ me }) {
   const admin = !!me?.isAdmin;
   const [employees, setEmployees] = useState([]);
@@ -105,15 +163,27 @@ export default function EmployeeCost({ me }) {
   const [loading, setLoading] = useState(!admin);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState({});
+  const [visibilityPanel, setVisibilityPanel] = useState(null);
+  const [visibilityLoading, setVisibilityLoading] = useState(admin);
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const [visibilityMessage, setVisibilityMessage] = useState('');
+  const [visibilityError, setVisibilityError] = useState('');
 
   useEffect(() => {
     if (!admin) return;
     let alive = true;
-    api.employeeCostEmployees().then(({ employees: list = [] }) => {
+    setVisibilityLoading(true);
+    api.employeeCostVisibility().then((data) => {
       if (!alive) return;
-      setEmployees(list);
-      setSelectedEmp((current) => current || list[0]?.emp_code || '');
-    }).catch(() => { if (alive) setEmployees([]); });
+      const panel = normalizeVisibilityPanel(data);
+      setVisibilityPanel(panel);
+      setEmployees(panel.employees);
+      setSelectedEmp((current) => current || panel.employees[0]?.emp_code || '');
+    }).catch((requestError) => {
+      if (!alive) return;
+      setEmployees([]);
+      setVisibilityError(requestError.message || 'Không thể tải cấu hình công tắc');
+    }).finally(() => { if (alive) setVisibilityLoading(false); });
     return () => { alive = false; };
   }, [admin]);
 
@@ -147,6 +217,31 @@ export default function EmployeeCost({ me }) {
     if (rangeInvalid) return;
     setRange({ ...draftRange });
   };
+  const changeVisibility = (layer, key, setting) => {
+    setVisibilityMessage('');
+    setVisibilityError('');
+    setVisibilityPanel((current) => updateVisibilitySetting(current, layer, key, setting));
+  };
+  const saveVisibility = async () => {
+    if (!visibilityPanel || visibilitySaving) return;
+    setVisibilitySaving(true);
+    setVisibilityMessage('');
+    setVisibilityError('');
+    try {
+      const saved = normalizeVisibilityPanel(await api.employeeCostVisibilitySave(visibilitySavePayload(visibilityPanel)));
+      setVisibilityPanel(saved);
+      setEmployees(saved.employees);
+      setVisibilityMessage('Đã lưu công tắc và ghi audit.');
+    } catch (requestError) {
+      setVisibilityError(requestError.message || 'Không thể lưu cấu hình công tắc');
+    } finally {
+      setVisibilitySaving(false);
+    }
+  };
+
+  if (!admin && payload.disabled) return <section className="employee-cost-page">
+    <div className="card center">{payload.note || 'Chức năng chi phí đang tắt cho bạn.'}</div>
+  </section>;
 
   return <section className="employee-cost-page">
     <div className="employee-cost-heading card">
@@ -170,6 +265,16 @@ export default function EmployeeCost({ me }) {
         {rangeInvalid && <small role="alert">Từ tháng không được sau Đến tháng.</small>}
       </form>
     </div>
+
+    {admin && <VisibilityPanel
+      panel={visibilityPanel}
+      loading={visibilityLoading}
+      saving={visibilitySaving}
+      message={visibilityMessage}
+      error={visibilityError}
+      onChange={changeVisibility}
+      onSave={saveVisibility}
+    />}
 
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} />
