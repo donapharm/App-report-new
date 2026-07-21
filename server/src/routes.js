@@ -24,6 +24,7 @@ const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
 const employeeCostRoster = require('./employeeCostRoster');
+const employeeCostVisibility = require('./employeeCostVisibility');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -495,57 +496,85 @@ router.delete('/admin/devices/:id', auth.requireAuth, auth.requireAdmin, (req, r
   res.json({ ok: auth.removeDevice(req.params.id) });
 });
 
+function employeeCostRosterRows() {
+  // Nguồn duy nhất cho picker và công tắc: roster Sale 21 người + metadata
+  // nhóm ở backend. Frontend không giữ danh sách/mapping nhóm riêng.
+  return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
+}
+
 router.get('/me', auth.requireAuth, (req, res) => {
-  res.json({ ...req.session, isAdmin: auth.isAdmin(req.session.role) });
+  const isAdmin = auth.isAdmin(req.session.role);
+  const visibility = isAdmin
+    ? { enabled: true }
+    : employeeCostVisibility.decision(req.session.emp_code, employeeCostRosterRows());
+  res.json({ ...req.session, isAdmin, employeeCostDisabled: !visibility.enabled });
 });
 
 // Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
 // chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
 router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) => {
-  const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   const s = auth.scopeOf(req.session);
+  const admin = auth.isAdmin(req.session.role);
+  const roster = employeeCostRosterRows();
   const empCode = employeeCost.resolveScopedEmployee({
     session: req.session,
     scope: s,
     requestedEmp: req.query.emp,
   });
-  const revenueRowsByPeriod = {};
-  const catalogRowsByPeriod = {};
-  // Doanh thu và catalog được lấy riêng đúng từng kỳ, luôn với scope backend.
-  // Catalog lỗi ở tháng nào thì tháng đó fail closed, không dùng snapshot tháng khác.
-  for (const period of range.months) {
-    const uiPeriod = employeeCost.toUiMonth(period);
-    revenueRowsByPeriod[period] = empCode ? store.getRows({ ky: uiPeriod, scope: { empCode } }) : [];
-    catalogRowsByPeriod[period] = [];
-    if (!empCode) continue;
-    try {
-      const catalogSnapshot = await canonicalAssignmentSnapshot(period);
-      catalogRowsByPeriod[period] = catalogSnapshot.catalog || catalogSnapshot.rows || [];
-    } catch (error) {
-      console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+  // Mọi truy cập kỳ/doanh thu/catalog/DataHub nằm trong callback này. Khi OFF,
+  // service trả payload disabled mà không chạy callback; admin được bypass.
+  const payload = await employeeCostVisibility.run({ admin, empCode, roster }, async () => {
+    const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+    const revenueRowsByPeriod = {};
+    const catalogRowsByPeriod = {};
+    // Doanh thu và catalog được lấy riêng đúng từng kỳ, luôn với scope backend.
+    // Catalog lỗi ở tháng nào thì tháng đó fail closed, không dùng snapshot tháng khác.
+    for (const period of range.months) {
+      const uiPeriod = employeeCost.toUiMonth(period);
+      revenueRowsByPeriod[period] = empCode ? store.getRows({ ky: uiPeriod, scope: { empCode } }) : [];
+      catalogRowsByPeriod[period] = [];
+      if (!empCode) continue;
+      try {
+        const catalogSnapshot = await canonicalAssignmentSnapshot(period);
+        catalogRowsByPeriod[period] = catalogSnapshot.catalog || catalogSnapshot.rows || [];
+      } catch (error) {
+        console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+      }
     }
-  }
-  const payload = await employeeCost.getForSession({
-    session: req.session,
-    scope: s,
-    requestedEmp: req.query.emp,
-  }, {
-    from: range.from,
-    to: range.to,
-    revenueRowsByPeriod,
-    catalogRowsByPeriod,
+    return employeeCost.getForSession({
+      session: req.session,
+      scope: s,
+      requestedEmp: req.query.emp,
+    }, {
+      from: range.from,
+      to: range.to,
+      revenueRowsByPeriod,
+      catalogRowsByPeriod,
+    });
   });
   res.set('Cache-Control', 'private, no-store');
-  res.json(payload);
+  return res.json(payload);
 }));
 
 router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  // Chỉ roster bán hàng CEO đã duyệt (21 người), không suy rộng từ mọi user
-  // có role=sale. Nhóm được trả từ config backend để phục vụ luồng gửi riêng.
-  const employees = employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
+  const employees = employeeCostRosterRows();
   res.set('Cache-Control', 'private, no-store');
   res.json({ employees });
 });
+
+router.get('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  res.json(employeeCostVisibility.panel(employeeCostRosterRows()));
+});
+
+router.post('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const panel = employeeCostVisibility.save(req.body, {
+    actor: req.session.emp_code,
+    roster: employeeCostRosterRows(),
+  });
+  res.set('Cache-Control', 'private, no-store');
+  res.json(panel);
+}));
 
 
 

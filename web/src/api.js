@@ -60,6 +60,8 @@ export const api = {
     return req('GET', '/employee-cost' + (query ? `?${query}` : ''));
   },
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
+  employeeCostVisibility: () => req('GET', '/employee-cost/visibility'),
+  employeeCostVisibilitySave: (payload) => req('POST', '/employee-cost/visibility', payload),
   periods: () => req('GET', '/periods'),
   revenueRefreshStatus: () => req('GET', '/admin/revenue-refresh/status'),
   revenueRefreshRun: (ky) => req('POST', '/admin/revenue-refresh/run', ky ? { ky } : {}),
