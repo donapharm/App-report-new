@@ -1,3 +1,7 @@
+### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": chốt (C) + xem theo NGÀY + cách lấy đúng cột
+- CEO chốt khoảng nhiều tháng = **(C)** tách từng tháng + dòng "Tổng cả kỳ" (không gộp c44). NV **bấm xem theo NGÀY**: `Thành tiền ngày = doanh thu ngày × %(tháng) ÷ 100` (App Report tự tách từ doanh thu ngày; Σ ngày = tháng).
+- **Tư vấn cách lấy đúng cột khi DataHub khóa C32–C47:** không phá khóa/không đọc cột khóa trực tiếp; dùng endpoint dịch vụ + `x-assignment-key` làm cửa hợp lệ duy nhất — DataHub whitelist đúng cột CEO chỉ định (C33–C46), self-scoped theo NV, khóa cứng C32/C47; bot chỉ dùng endpoint. Directive: `DIRECTIVE_EMP_COST_ACCESS_DAYVIEW.md`.
+
 ### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": bộ lọc kỳ (Từ→Đến tháng) + lấy thử T07 thật
 - Giao bot thêm **bộ lọc "Từ tháng → Đến tháng"** cho trang Chi phí của tôi (FE + backend truyền `from/to` xuống DataHub; vẫn khóa scope NV). Nhiều tháng = **tách từng tháng** (mỗi tháng có tổng riêng; c44 cuối năm tách như đã chốt). DataHub cần nhận thêm tham số kỳ (thêm tham số lọc, không phải thêm cột) — bot phối hợp phiên DataHub.
 - **Lấy dữ liệu THẬT T07/2026 tính thử** (bot chạy trên server — Claude không có quyền dữ liệu thật): dán vài dòng + tổng chi phí tháng (trừ c44) + tỉ lệ dòng khớp doanh thu để CEO/Claude soi. Directive: `DIRECTIVE_EMP_COST_MONTH_FILTER.md`.
