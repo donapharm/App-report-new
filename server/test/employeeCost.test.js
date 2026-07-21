@@ -240,6 +240,9 @@ test('catalog ambiguity fails closed and annual columns are configurable', () =>
   ]);
   assert.equal(employeeCost.resolveProductCode({ c7: 'U1', c16: 'Cùng tên' }, index), '');
   assert.equal(employeeCost.resolveProductCode({ c5: 'QL02', c7: 'U1', c16: 'Cùng tên' }, index), 'QL02');
+  const globalOnly = employeeCost.buildProductCatalogIndex([{ iit_code: 'QL03', product_name: 'Tên duy nhất' }]);
+  assert.equal(employeeCost.resolveProductCode({ c7: 'U9', c16: 'Tên duy nhất' }, globalOnly), '');
+  assert.equal(employeeCost.resolveProductCode({ c5: 'QL03', c7: 'U9', c16: 'Tên duy nhất' }, globalOnly), 'QL03');
   assert.deepEqual([...employeeCost.configuredAnnualColumnKeys('c43,c45,c32,c47')], ['c43', 'c45']);
   assert.equal(employeeCost.calculateAmount(10_000_000, null), null);
 });
@@ -345,6 +348,10 @@ test('period adapter fails closed instead of guessing legacy or ambiguous multi-
   }, 'DN001', range), null);
   assert.equal(employeeCost.adaptPeriodPayload({
     empCode: 'DN001', periods: [{ period: '2026-08', columns: source.columns, rows: source.rows }],
+  }, 'DN001', range), null);
+  assert.equal(employeeCost.adaptPeriodPayload({
+    empCode: 'DN001', columns: source.columns,
+    rows: [{ ...source.rows[0], period: '2026-06', ky: '2026-07' }],
   }, 'DN001', range), null);
 
   const oneMonth = employeeCost.parseMonthRange({ from: '2026-07', to: '2026-07' });
