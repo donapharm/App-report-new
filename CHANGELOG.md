@@ -1,3 +1,8 @@
+### 2026-07-21 — Report Bot — "Chi phí của tôi": tự tính Thành tiền + tách khoản cuối năm
+- App Report ghép dòng chi phí với doanh thu đã khóa scope theo **đơn vị + mã sản phẩm** (C16 được resolve qua catalog), tính `Thành tiền = doanh thu × tỷ lệ ÷ 100`; dòng không khớp giữ `—` và cảnh báo khi tỷ lệ khớp dưới 90%.
+- Mỗi cột tỷ lệ có cột **Thành tiền**; tỷ lệ hiển thị số không kèm `%`. Cột cấu hình cuối năm (mặc định `c44`) được làm mờ, không cộng vào tổng tháng và có tổng T12 riêng.
+- Giữ nguyên chặn C32/C47, token chỉ ở backend và audit theo scope; bổ sung test server/web cho phép tính, fail-closed, tổng tháng/cuối năm và định dạng hiển thị.
+
 ### 2026-07-21 — Claude Code (review + giao bot) — "Chi phí của tôi": Thành tiền ĐẠT + công tắc bật/tắt
 - **Review THẬT `b1a4cd0` (Thành tiền): ĐẠT.** Ghép doanh thu resolve `c16`→mã qua catalog (không dùng tên trần), scope doanh thu đúng NV+kỳ, `round(dt×%/100)`, <90% khớp → ẩn tổng + cảnh báo, c44 tách annual (cấu hình env), % hiện `8.0` không ký hiệu %, fail-closed/audit. Bản MASTER `ad2cd64` (lọc tháng/xem ngày/tổng kỳ) chưa push — chờ review tiếp.
 - **Giao bot công tắc bật/tắt** (`DIRECTIVE_EMP_COST_VISIBILITY_TOGGLE.md`): CEO bật/tắt quyền NV tự xem chi phí ở 3 mức **toàn phòng / nhóm (vd CTV) / cá nhân**, ưu tiên cá nhân>nhóm>phòng, mặc định off, chốt quyền ở backend (OFF → `disabled`, không gọi DataHub), panel + route CEO-only + audit.

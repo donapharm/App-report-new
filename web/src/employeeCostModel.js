@@ -17,18 +17,26 @@ export function isAllowedCostColumn(column) {
 
 export function buildEmployeeCostColumns(columns = []) {
   const seen = new Set(EMPLOYEE_COST_DIMENSIONS.map((column) => column.key));
-  const dynamic = [];
+  const costColumns = [];
   for (const raw of Array.isArray(columns) ? columns : []) {
     const key = String(raw?.key || '').trim().toLowerCase();
     if (!isAllowedCostColumn(raw) || seen.has(key)) continue;
     seen.add(key);
-    dynamic.push({
+    costColumns.push({
       key,
+      amountKey: `${key}_amount`,
       label: String(raw.label || key),
-      kind: raw.type === 'money' || raw.format === 'money' || raw.unit === 'VND' ? 'money' : 'percent',
+      kind: 'percent',
+      annual: !!raw.annual,
     });
   }
-  return [...EMPLOYEE_COST_DIMENSIONS, ...dynamic];
+  return [
+    ...EMPLOYEE_COST_DIMENSIONS,
+    ...costColumns.flatMap((column) => [
+      column,
+      { key: column.amountKey, sourceKey: column.key, label: 'Thành tiền', kind: 'money', annual: column.annual },
+    ]),
+  ];
 }
 
 export function formatEmployeeCostCell(value, column) {
@@ -39,25 +47,59 @@ export function formatEmployeeCostCell(value, column) {
   if (column.kind === 'money') {
     return number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ';
   }
-  return number.toLocaleString('vi-VN', { maximumFractionDigits: 4 }) + '%';
+  // CEO chốt: ô tỷ lệ chỉ hiện số với dấu chấm thập phân, không có ký hiệu %.
+  return number.toLocaleString('en-US', {
+    useGrouping: false,
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 4,
+  });
+}
+
+export function formatMatchRate(match = {}) {
+  const rate = Number(match.rate);
+  return Number.isFinite(rate) ? rate.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—';
 }
 
 export function employeeCostViewModel(payload = {}) {
   const columns = buildEmployeeCostColumns(payload.columns);
-  const allowed = new Set(columns.map((column) => column.key));
+  const dimensionColumns = columns.filter((column) => column.kind === 'dimension');
+  const costColumns = columns.filter((column) => column.kind === 'percent');
   const rows = (Array.isArray(payload.rows) ? payload.rows : []).map((source) => {
     const row = {};
-    for (const key of allowed) {
-      if (source && Object.prototype.hasOwnProperty.call(source, key)) row[key] = source[key];
+    for (const column of dimensionColumns) {
+      if (source && Object.prototype.hasOwnProperty.call(source, column.key)) row[column.key] = source[column.key];
+    }
+    for (const column of costColumns) {
+      if (source && Object.prototype.hasOwnProperty.call(source, column.key)) row[column.key] = source[column.key];
+      row[column.amountKey] = source?.amounts?.[column.key] ?? null;
     }
     return row;
   });
+  const rawMatch = payload.match || {};
+  const match = {
+    matchedRows: Number(rawMatch.matchedRows || 0),
+    totalRows: Number(rawMatch.totalRows ?? rows.length),
+    rate: rawMatch.rate == null ? null : Number(rawMatch.rate),
+    threshold: Number(rawMatch.threshold ?? 90),
+    low: !!rawMatch.low,
+  };
+  const rawSummary = payload.summary || {};
+  const summary = {
+    reliable: rawSummary.reliable !== false,
+    monthlyTotal: rawSummary.monthlyTotal == null ? null : Number(rawSummary.monthlyTotal),
+    annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
+    annualLabels: Array.isArray(rawSummary.annualLabels) ? rawSummary.annualLabels.map(String) : [],
+  };
   return {
     empCode: String(payload.empCode || ''),
+    period: String(payload.period || ''),
     columns,
+    dimensionColumns,
+    costColumns,
     rows,
+    match,
+    summary,
     note: String(payload.note || (rows.length ? '' : 'chưa có dữ liệu chi phí kỳ này')),
-    hasMoney: columns.some((column) => column.kind === 'money'),
-    dynamicCount: columns.filter((column) => column.kind !== 'dimension').length,
+    dynamicCount: costColumns.length,
   };
 }
