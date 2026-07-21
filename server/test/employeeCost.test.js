@@ -2,6 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const employeeCost = require('../src/employeeCost');
 
+const ASSIGNMENT_KEY = 'assignment-service-key';
+const EMPLOYEE_KEYS = 'DN001=employee-secret-key-dn001,DN002=employee-secret-key-dn002';
+const credentials = (employeeCostKeys = EMPLOYEE_KEYS) => ({
+  assignmentKey: ASSIGNMENT_KEY,
+  employeeCostKeys,
+});
+
 const source = {
   empCode: 'DN001',
   columns: [
@@ -25,7 +32,7 @@ test('sale request for another employee still calls DataHub with own identity', 
   const payload = await employeeCost.getForSession({
     scope: { empCode: 'DN001' }, session: { emp_code: 'DN001', role: 'sale' }, requestedEmp: 'DN999',
   }, {
-    baseUrl: 'http://hub.test', token: 'x', backoffMs: [], auditImpl: (entry) => audits.push(entry),
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [], auditImpl: (entry) => audits.push(entry),
     fetchImpl: async (url) => { calledUrl = url; return { ok: true, status: 200, json: async () => source }; },
   });
   assert.match(calledUrl, /emp=DN001$/);
@@ -33,35 +40,90 @@ test('sale request for another employee still calls DataHub with own identity', 
   assert.equal(audits[0].empCode, 'DN001');
 });
 
-test('proxy sends S2S token only upstream and sanitizes forbidden/unknown fields', async () => {
+test('proxy sends both server-selected S2S keys upstream and sanitizes forbidden/unknown fields', async () => {
   let request;
   const result = await employeeCost.fetchEmployeeCost('DN001', {
-    baseUrl: 'http://hub.test', token: 'server-only-token', backoffMs: [],
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [],
     fetchImpl: async (url, options) => { request = { url, options }; return { ok: true, status: 200, json: async () => source }; },
   });
   assert.equal(request.url, 'http://hub.test/api/integrations/app-report/employee-cost?emp=DN001');
-  assert.equal(request.options.headers['x-assignment-key'], 'server-only-token');
+  assert.equal(request.options.headers['x-assignment-key'], ASSIGNMENT_KEY);
+  assert.equal(request.options.headers['x-employee-cost-key'], 'employee-secret-key-dn001');
   assert.deepEqual(result.payload.columns.map((column) => column.key), ['c36', 'c41']);
   assert.deepEqual(result.payload.rows[0], { c5: 'QL1', c7: 'U1', c16: 'Thuốc', c25: 'Viên', c36: 8, c41: 3 });
-  assert.equal(JSON.stringify(result.payload).includes('server-only-token'), false);
+  assert.equal(JSON.stringify(result.payload).includes(ASSIGNMENT_KEY), false);
+  assert.equal(JSON.stringify(result.payload).includes('employee-secret-key-dn001'), false);
   assert.equal(JSON.stringify(result.payload).includes('c32'), false);
   assert.equal(JSON.stringify(result.payload).includes('c47'), false);
 
   const wrongEmployee = employeeCost.sanitizePayload({ ...source, empCode: 'DN999' }, 'DN001');
   assert.deepEqual(wrongEmployee, { empCode: 'DN001', columns: [], rows: [], note: employeeCost.DEFAULT_NOTE });
   const mismatch = await employeeCost.fetchEmployeeCost('DN001', {
-    baseUrl: 'http://hub.test', token: 'x', backoffMs: [],
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [],
     fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ ...source, empCode: 'DN999' }) }),
   });
   assert.equal(mismatch.outcome, 'scope_mismatch');
   assert.equal(mismatch.payload.rows.length, 0);
 });
 
+test('two authenticated employees use distinct server-selected cost keys', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    const empCode = new URL(url).searchParams.get('emp');
+    return { ok: true, status: 200, json: async () => ({ empCode, columns: [], rows: [] }) };
+  };
+  await employeeCost.getForSession({
+    scope: { empCode: 'dn001' }, session: { emp_code: 'DN001', role: 'sale' }, requestedEmp: 'DN999',
+  }, { baseUrl: 'http://hub.test', ...credentials(), backoffMs: [], auditImpl: () => {}, fetchImpl });
+  await employeeCost.getForSession({
+    scope: { empCode: 'DN002' }, session: { emp_code: 'DN002', role: 'sale' }, requestedEmp: 'DN999',
+  }, { baseUrl: 'http://hub.test', ...credentials(), backoffMs: [], auditImpl: () => {}, fetchImpl });
+
+  assert.deepEqual(requests.map((request) => request.options.headers['x-employee-cost-key']), [
+    'employee-secret-key-dn001', 'employee-secret-key-dn002',
+  ]);
+  assert.deepEqual(requests.map((request) => request.options.headers['x-assignment-key']), [ASSIGNMENT_KEY, ASSIGNMENT_KEY]);
+});
+
+test('missing, malformed, duplicated, conflicting or reused employee keys fail closed before network', async () => {
+  const badMappings = [
+    '',
+    'DN001=short',
+    'bad employee=employee-secret-key-dn001',
+    'DN001=shared-employee-key-0001,DN002=shared-employee-key-0001',
+    'DN001=employee-secret-key-dn001,DN001=employee-secret-key-other1',
+    `DN001=${ASSIGNMENT_KEY}`,
+  ];
+  for (const employeeCostKeys of badMappings) {
+    let calls = 0;
+    const result = await employeeCost.fetchEmployeeCost('DN001', {
+      baseUrl: 'http://hub.test', ...credentials(employeeCostKeys), backoffMs: [],
+      fetchImpl: async () => { calls += 1; throw new Error('must not call'); },
+    });
+    assert.equal(calls, 0, employeeCostKeys || 'missing mapping');
+    assert.equal(result.outcome, 'not_configured');
+    assert.equal(result.attempts, 0);
+  }
+});
+
+test('legacy shared APP_REPORT_COST_TOKEN cannot authorize employee cost reads', async () => {
+  let calls = 0;
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    baseUrl: 'http://hub.test', token: 'legacy-placeholder-that-used-to-work',
+    employeeCostKey: 'caller-controlled-employee-key',
+    assignmentKey: '', employeeCostKeys: '', backoffMs: [],
+    fetchImpl: async () => { calls += 1; throw new Error('must not call'); },
+  });
+  assert.equal(calls, 0);
+  assert.equal(result.outcome, 'not_configured');
+});
+
 test('502 retries with backoff then succeeds; 401 returns safe empty payload', async () => {
   let calls = 0;
   const waits = [];
   const recovered = await employeeCost.fetchEmployeeCost('DN001', {
-    baseUrl: 'http://hub.test', token: 'x', backoffMs: [2, 4], sleepImpl: async (ms) => waits.push(ms),
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [2, 4], sleepImpl: async (ms) => waits.push(ms),
     fetchImpl: async () => { calls += 1; return calls < 3 ? { ok: false, status: 502 } : { ok: true, status: 200, json: async () => source }; },
   });
   assert.equal(calls, 3);
@@ -69,7 +131,7 @@ test('502 retries with backoff then succeeds; 401 returns safe empty payload', a
   assert.equal(recovered.outcome, 'ok');
 
   const denied = await employeeCost.fetchEmployeeCost('DN001', {
-    baseUrl: 'http://hub.test', token: 'bad', backoffMs: [],
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [],
     fetchImpl: async () => ({ ok: false, status: 401 }),
   });
   assert.deepEqual(denied.payload, { empCode: 'DN001', columns: [], rows: [], note: employeeCost.DEFAULT_NOTE });
@@ -162,7 +224,7 @@ test('getForSession keeps employee scope while enriching from scoped revenue onl
   const payload = await employeeCost.getForSession({
     scope: { empCode: 'DN001' }, session: { emp_code: 'DN001', role: 'sale' }, requestedEmp: 'DN999',
   }, {
-    baseUrl: 'http://hub.test', token: 'server-only', backoffMs: [], period: '07.2026',
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [], period: '07.2026',
     catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
     revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 10_000_000 }],
     auditImpl: () => {},
@@ -190,7 +252,7 @@ test('range proxy sends validated from/to with the backend-locked employee scope
   const payload = await employeeCost.getForSession({
     scope: { empCode: 'DN001' }, session: { emp_code: 'DN001', role: 'sale' }, requestedEmp: 'DN999',
   }, {
-    baseUrl: 'http://hub.test', token: 'server-only', backoffMs: [], from: '2026-06', to: '2026-07',
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [], from: '2026-06', to: '2026-07',
     revenueRowsByPeriod: { '2026-06': [], '2026-07': [] }, catalogRowsByPeriod: { '2026-06': [], '2026-07': [] },
     auditImpl: () => {},
     fetchImpl: async (url) => {

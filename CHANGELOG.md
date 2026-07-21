@@ -1,3 +1,9 @@
+### 2026-07-21 — CEO Office — employee-bound key cho consumer chi phí
+- Thay shared cost token bằng hai lớp tách biệt: `DATA_HUB_ASSIGNMENT_KEY` xác thực service và `APP_REPORT_EMPLOYEE_COST_KEYS` bind chính xác từng mã NV sau khi backend khóa scope từ session.
+- Không fallback `APP_REPORT_COST_TOKEN`; thiếu/sai/trùng key, một NV có nhiều key xung đột, hai NV dùng chung key hoặc employee key trùng assignment key đều fail-closed trước khi gọi Data Hub.
+- Key không đi qua frontend/log/audit/error; payload vẫn self-scoped, chặn C32/C47 và `private, no-store`.
+- Cutover chỉ được phép khi mapping hai phía khớp đúng roster và hai tập key độc lập.
+
 ### 2026-07-21 — Claude Code (giao bot) — "Chi phí của tôi": grain = mỗi đơn × mỗi mặt hàng (không gộp)
 - CEO chốt: mỗi mặt hàng trong đơn = 1 dòng; nhiều đơn cùng mã QLNB = mỗi đơn 1 dòng. ⇒ **bỏ gộp `(đơn vị×mã hàng)`, hiển thị theo dòng giao dịch (order-line)**. Vd Cerecaps T06 DN001 = **2 dòng riêng** (13.246.800đ + 11.970.000đ), không gộp 1. % tra timeline theo mã hàng+tháng (mọi dòng cùng mã/tháng cùng %). Giữ tổng/c44/scope/C32-C47/công tắc. Chạy được ngay, không phụ thuộc DataHub. Directive: `DIRECTIVE_EMP_COST_LINE_GRAIN.md`.
 

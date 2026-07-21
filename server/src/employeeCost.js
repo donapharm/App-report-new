@@ -17,6 +17,39 @@ function normEmp(value) {
   return String(value || '').trim().toUpperCase();
 }
 
+function parseEmployeeCostKeys(value = process.env.APP_REPORT_EMPLOYEE_COST_KEYS) {
+  const employeeToKey = new Map();
+  const keyToEmployee = new Map();
+  const unusableEmployees = new Set();
+  const unusableKeys = new Set();
+
+  for (const raw of String(value || '').split(',')) {
+    const entry = raw.trim();
+    if (!entry) continue;
+    const separator = entry.indexOf('=');
+    const employee = entry.slice(0, separator).trim().toUpperCase();
+    const key = entry.slice(separator + 1).trim();
+    if (separator < 1 || !/^[A-Z][A-Z0-9._-]{1,31}$/.test(employee) || key.length < 16) continue;
+
+    const previousKey = employeeToKey.get(employee);
+    if (previousKey && previousKey !== key) unusableEmployees.add(employee);
+    else if (!previousKey) employeeToKey.set(employee, key);
+
+    const previousEmployee = keyToEmployee.get(key);
+    if (previousEmployee && previousEmployee !== employee) {
+      unusableKeys.add(key);
+      unusableEmployees.add(previousEmployee);
+      unusableEmployees.add(employee);
+    } else if (!previousEmployee) keyToEmployee.set(key, employee);
+  }
+
+  for (const employee of unusableEmployees) employeeToKey.delete(employee);
+  for (const [employee, key] of employeeToKey) {
+    if (unusableKeys.has(key)) employeeToKey.delete(employee);
+  }
+  return employeeToKey;
+}
+
 function normCode(value) {
   return String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
 }
@@ -500,14 +533,18 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function fetchEmployeeCost(empCode, options = {}) {
   const baseUrl = String(options.baseUrl ?? process.env.DATAHUB_BASE ?? '').trim().replace(/\/$/, '');
-  const token = String(options.token ?? process.env.APP_REPORT_COST_TOKEN ?? '').trim();
+  const assignmentKey = String(options.assignmentKey ?? process.env.DATA_HUB_ASSIGNMENT_KEY ?? '').trim();
+  const employeeCostKeys = parseEmployeeCostKeys(options.employeeCostKeys ?? process.env.APP_REPORT_EMPLOYEE_COST_KEYS);
+  const employeeCostKey = employeeCostKeys.get(normEmp(empCode)) || '';
   const fetchImpl = options.fetchImpl || global.fetch;
   const timeoutMs = Math.max(100, Number(options.timeoutMs ?? process.env.APP_REPORT_COST_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
   const backoffMs = options.backoffMs || DEFAULT_BACKOFF_MS;
   const sleepImpl = options.sleepImpl || sleep;
   const range = options.from != null || options.to != null ? parseMonthRange(options) : null;
 
-  if (!baseUrl || !token || typeof fetchImpl !== 'function') {
+  // Cost reads require both independent server-side credentials. A missing,
+  // malformed, duplicated or reused key fails before any network request.
+  if (!baseUrl || !assignmentKey || !employeeCostKey || employeeCostKey === assignmentKey || typeof fetchImpl !== 'function') {
     return { payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE), outcome: 'not_configured', attempts: 0 };
   }
 
@@ -527,7 +564,11 @@ async function fetchEmployeeCost(empCode, options = {}) {
       try {
         response = await fetchImpl(url, {
           method: 'GET',
-          headers: { 'x-assignment-key': token, accept: 'application/json' },
+          headers: {
+            'x-assignment-key': assignmentKey,
+            'x-employee-cost-key': employeeCostKey,
+            accept: 'application/json',
+          },
           signal: controller.signal,
         });
       } finally {
@@ -637,6 +678,7 @@ module.exports = {
   toUiMonth,
   monthsBetween,
   parseMonthRange,
+  parseEmployeeCostKeys,
   resolveScopedEmployee,
   isAllowedDynamicKey,
   sanitizePayload,

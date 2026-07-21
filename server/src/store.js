@@ -10,7 +10,8 @@
  * không cần restart server.
  *
  * // TODO(LIVE): module employeeCost.js đọc DATAHUB_BASE và
- * // APP_REPORT_COST_TOKEN từ .env backend để proxy S2S; không lưu token ở data/web.
+ * // DATA_HUB_ASSIGNMENT_KEY + APP_REPORT_EMPLOYEE_COST_KEYS chỉ ở .env backend;
+ * // không lưu credential S2S trong data/web.
  */
 const fs = require('fs');
 const path = require('path');
