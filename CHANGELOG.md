@@ -1,3 +1,9 @@
+### 2026-07-22 — Report Bot — “Chi phí của tôi” chuyển sang grain order-line
+- Bỏ gộp doanh thu theo đơn vị × mã hàng: mỗi dòng doanh thu nguồn (mỗi đơn × mỗi mặt hàng) được giữ thành một dòng hiển thị, có mã đơn/ngày/số lượng/doanh thu dòng khi nguồn cung cấp.
+- Timeline % được tra theo mã hàng × tháng rồi áp cho từng order-line; thiếu DataHub vẫn giữ đủ dòng doanh thu với `%`/`Thành tiền` là `—`.
+- Giữ tổng tháng/kỳ, tách C44 cuối năm, self-scope, chặn C32/C47, công tắc và nhóm xem theo ngày với Σ ngày = tháng.
+- Nghiệm thu dữ liệu thật T06 DN001: Cerecaps giữ 2 dòng riêng 13.246.800đ và 11.970.000đ; bổ sung test grain, full test và production build.
+
 ### 2026-07-21 — CEO Office — employee-bound key cho consumer chi phí
 - Thay shared cost token bằng hai lớp tách biệt: `DATA_HUB_ASSIGNMENT_KEY` xác thực service và `APP_REPORT_EMPLOYEE_COST_KEYS` bind chính xác từng mã NV sau khi backend khóa scope từ session.
 - Không fallback `APP_REPORT_COST_TOKEN`; thiếu/sai/trùng key, một NV có nhiều key xung đột, hai NV dùng chung key hoặc employee key trùng assignment key đều fail-closed trước khi gọi Data Hub.

@@ -12,24 +12,32 @@ test('dynamic columns follow payload, prepend dimensions once, and block c32/c47
     { key: 'c32', label: 'Cấm' },
     { key: 'c5', label: 'Không lặp' },
   ]);
-  assert.deepEqual(columns.map((column) => column.key), ['c5', 'c7', 'c16', 'c25', 'c36', 'c36_amount', 'c43', 'c43_amount']);
+  assert.deepEqual(columns.map((column) => column.key), [
+    'orderCode', 'date', 'c7', 'c5', 'c16', 'c25', 'quantity', 'revenue',
+    'c36', 'c36_amount', 'c43', 'c43_amount',
+  ]);
 });
 
 test('view model renders percent without percent sign and reads grounded amounts/summary', () => {
   const model = employeeCostViewModel({
     empCode: 'DN001', period: '07.2026', columns: [{ key: 'c36', label: 'CP (%)' }, { key: 'c44', label: 'Cuối năm', annual: true }],
-    rows: [{ c5: 'QL1', c7: 'U1', c16: 'A', c25: 'Viên', c36: 8, c44: 0.3, amounts: { c36: 800000, c44: 30000 } }],
+    rows: [{ orderCode: 'DH-01', sourceLineId: 'DH-01-1', date: '2026-07-02', c5: 'QL1', c7: 'U1', c16: 'A', c25: 'Viên', quantity: 10, revenue: 10_000_000, c36: 8, c44: 0.3, amounts: { c36: 800000, c44: 30000 } }],
     match: { matchedRows: 1, totalRows: 1, rate: 100, threshold: 90, low: false },
     summary: { reliable: true, monthlyTotal: 800000, annualTotal: 30000, annualLabels: ['Cuối năm'] },
   });
   assert.equal(model.rows.length, 1);
   assert.equal(model.rows[0].c36_amount, 800000);
+  assert.equal(model.rows[0].orderCode, 'DH-01');
+  assert.equal(model.rows[0].date, '2026-07-02');
+  assert.equal(model.rows[0].revenue, 10_000_000);
   assert.equal(model.costColumns[1].annual, true);
   assert.equal(model.summary.monthlyTotal, 800000);
   assert.equal(formatEmployeeCostCell(8, model.costColumns[0]), '8.0');
   assert.equal(formatEmployeeCostCell(0.3, model.costColumns[1]), '0.3');
   assert.equal(formatEmployeeCostCell(10, { kind: 'percent' }), '10.0');
   assert.equal(formatEmployeeCostCell(1200000, { kind: 'money' }), '1.200.000đ');
+  assert.equal(formatEmployeeCostCell(13246800, { kind: 'dimension', format: 'money' }), '13.246.800đ');
+  assert.equal(formatEmployeeCostCell('2026-06-13', { key: 'date', kind: 'dimension' }), '13/06/2026');
   assert.equal(formatMatchRate(model.match), '100,0%');
   assert.equal(formatMatchRate({ rate: null }), '—');
   assert.equal(formatEmployeeCostCell(null, { kind: 'money' }), '—');

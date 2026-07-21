@@ -11,21 +11,20 @@ import {
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
-const dateLabel = (value) => String(value || '').split('-').reverse().join('/');
 const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 
 function CostTable({ period, daily = false }) {
   const rows = daily ? period.daily.rows : period.rows;
+  const columnCount = period.dimensionColumns.length + period.costColumns.length * 2;
+  const totalsByDate = new Map((period.daily.totals || []).map((total) => [total.date, total]));
   return <div className="employee-cost-table-wrap">
     <table className="employee-cost-table">
       <thead>
         <tr>
-          {daily && <th rowSpan="2">Ngày</th>}
           {period.dimensionColumns.map((column) => <th key={column.key} rowSpan="2">{column.label}</th>)}
           {period.costColumns.map((column) => <th key={column.key} colSpan="2" className={column.annual ? 'employee-cost-annual' : ''}>
             {column.label} {column.annual && <span className="employee-cost-annual-badge">⏳ cuối năm</span>}
           </th>)}
-          {daily && <th rowSpan="2">Tổng ngày<br /><small>chưa gồm cuối năm</small></th>}
         </tr>
         <tr>
           {period.costColumns.flatMap((column) => [
@@ -34,19 +33,25 @@ function CostTable({ period, daily = false }) {
           ])}
         </tr>
       </thead>
-      <tbody>{rows.map((row, rowIndex) => <tr key={daily ? `${row.date}-${row.rowIndex}` : rowIndex}>
-        {daily && <td className="employee-cost-date">{dateLabel(row.date)}</td>}
-        {period.dimensionColumns.map((column) => <td key={column.key}>{formatEmployeeCostCell(row[column.key], column)}</td>)}
-        {period.costColumns.flatMap((column) => [
-          <td key={`${column.key}-percent`} className={`employee-cost-number${column.annual ? ' employee-cost-annual' : ''}`}>
-            {formatEmployeeCostCell(row[column.key], column)}
-          </td>,
-          <td key={`${column.key}-amount`} className={`employee-cost-number${column.annual ? ' employee-cost-annual' : ''}`}>
-            {formatEmployeeCostCell(row[column.amountKey], moneyColumn)}
-          </td>,
-        ])}
-        {daily && <td className="employee-cost-number"><b>{formatEmployeeCostCell(row.monthlyTotal, moneyColumn)}</b></td>}
-      </tr>)}</tbody>
+      <tbody>{rows.map((row, rowIndex) => <React.Fragment key={row.sourceLineId || rowIndex}>
+        {daily && row.date !== rows[rowIndex - 1]?.date && <tr className="employee-cost-day-group">
+          <td colSpan={columnCount}>
+            <b>Ngày {formatEmployeeCostCell(row.date, { key: 'date', kind: 'dimension' })}</b>
+            <span>Σ ngày: {formatEmployeeCostCell(totalsByDate.get(row.date)?.monthlyTotal, moneyColumn)} (chưa gồm cuối năm)</span>
+          </td>
+        </tr>}
+        <tr>
+          {period.dimensionColumns.map((column) => <td key={column.key}>{formatEmployeeCostCell(row[column.key], column)}</td>)}
+          {period.costColumns.flatMap((column) => [
+            <td key={`${column.key}-percent`} className={`employee-cost-number${column.annual ? ' employee-cost-annual' : ''}`}>
+              {formatEmployeeCostCell(row[column.key], column)}
+            </td>,
+            <td key={`${column.key}-amount`} className={`employee-cost-number${column.annual ? ' employee-cost-annual' : ''}`}>
+              {formatEmployeeCostCell(row[column.amountKey], moneyColumn)}
+            </td>,
+          ])}
+        </tr>
+      </React.Fragment>)}</tbody>
     </table>
   </div>;
 }
@@ -247,7 +252,7 @@ export default function EmployeeCost({ me }) {
     <div className="employee-cost-heading card">
       <div>
         <div className="section-head">Chi phí của tôi</div>
-        <p>App Report ghép doanh thu đúng từng kỳ, đơn vị và mã sản phẩm. Tỷ lệ từng dòng không cộng dồn.</p>
+        <p>Mỗi đơn × mỗi mặt hàng là một dòng. App Report giữ nguyên doanh thu giao dịch và tra tỷ lệ theo mã hàng × tháng.</p>
       </div>
       <form className="employee-cost-filters" onSubmit={applyRange}>
         {admin && <label>

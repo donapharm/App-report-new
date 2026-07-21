@@ -1974,6 +1974,8 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-daily { margin-top:16px; padding-top:14px; border-top:1px dashed var(--line); }
 .employee-cost-daily .employee-cost-match-warning { margin-top:9px; }
 .employee-cost-date { white-space:nowrap; font-weight:800; }
+.employee-cost-day-group td { background:#eaf4fb !important; color:#075d9b; border-top:2px solid #8dbbd8; }
+.employee-cost-day-group td { display:flex; justify-content:space-between; gap:20px; position:sticky; left:0; }
 .employee-cost-range-total { display:flex; align-items:center; justify-content:flex-end; gap:24px; border:2px solid #075d9b; background:#eef7fd; }
 .employee-cost-range-total span { font-weight:900; }
 .employee-cost-range-total b { min-width:160px; color:#075d9b; text-align:right; font-size:18px; }
