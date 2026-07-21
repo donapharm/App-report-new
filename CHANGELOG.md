@@ -1,3 +1,6 @@
+### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": DIRECTIVE TỔNG gộp cho bot đọc 1 lần
+- Gộp toàn bộ yêu cầu module "Chi phí của tôi" vào `DIRECTIVE_EMP_COST_MASTER.md` (nguyên tắc scope/C32-C47/token, cách lấy đúng cột khi khóa C32–C47, render động + hiển thị %, Thành tiền tự tính + C44 cuối năm, bộ lọc kỳ (C), xem theo ngày, lấy thử T07 thật, nghiệm thu). Để CEO copy cho bot; các directive rời vẫn giữ.
+
 ### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": chốt (C) + xem theo NGÀY + cách lấy đúng cột
 - CEO chốt khoảng nhiều tháng = **(C)** tách từng tháng + dòng "Tổng cả kỳ" (không gộp c44). NV **bấm xem theo NGÀY**: `Thành tiền ngày = doanh thu ngày × %(tháng) ÷ 100` (App Report tự tách từ doanh thu ngày; Σ ngày = tháng).
 - **Tư vấn cách lấy đúng cột khi DataHub khóa C32–C47:** không phá khóa/không đọc cột khóa trực tiếp; dùng endpoint dịch vụ + `x-assignment-key` làm cửa hợp lệ duy nhất — DataHub whitelist đúng cột CEO chỉ định (C33–C46), self-scoped theo NV, khóa cứng C32/C47; bot chỉ dùng endpoint. Directive: `DIRECTIVE_EMP_COST_ACCESS_DAYVIEW.md`.
