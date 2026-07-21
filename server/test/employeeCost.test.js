@@ -57,6 +57,36 @@ test('proxy sends S2S token only upstream and sanitizes forbidden/unknown fields
   assert.equal(mismatch.payload.rows.length, 0);
 });
 
+test('proxy reuses deployed shared DataHub env names when legacy cost aliases are absent', async () => {
+  const previous = {
+    DATAHUB_BASE: process.env.DATAHUB_BASE,
+    APP_REPORT_COST_TOKEN: process.env.APP_REPORT_COST_TOKEN,
+    DATA_HUB_BASE_URL: process.env.DATA_HUB_BASE_URL,
+    DATA_HUB_ASSIGNMENT_KEY: process.env.DATA_HUB_ASSIGNMENT_KEY,
+  };
+  delete process.env.DATAHUB_BASE;
+  delete process.env.APP_REPORT_COST_TOKEN;
+  process.env.DATA_HUB_BASE_URL = 'https://datahub.shared.test/';
+  process.env.DATA_HUB_ASSIGNMENT_KEY = 'shared-assignment-key';
+  let request;
+  try {
+    const result = await employeeCost.fetchEmployeeCost('DN001', {
+      fetchImpl: async (url, options) => {
+        request = { url, options };
+        return { ok: true, status: 200, json: async () => ({ empCode: 'DN001', columns: [], rows: [] }) };
+      },
+    });
+    assert.equal(result.outcome, 'ok');
+    assert.equal(request.url, 'https://datahub.shared.test/api/integrations/app-report/employee-cost?emp=DN001');
+    assert.equal(request.options.headers['x-assignment-key'], 'shared-assignment-key');
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value == null) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test('502 retries with backoff then succeeds; 401 returns safe empty payload', async () => {
   let calls = 0;
   const waits = [];
@@ -110,6 +140,73 @@ test('maps C16 through catalog, joins revenue by unit + product code and calcula
   assert.deepEqual(enriched.summary.annualColumnKeys, ['c44']);
   assert.equal(enriched.columns.find((column) => column.key === 'c44').annual, true);
   assert.equal(JSON.stringify(enriched).includes('c47'), false);
+});
+
+test('T07 revenue drives three Cerecaps unit-product rows and excludes cost-only rows', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001',
+    columns: [{ key: 'c36', label: 'CP tháng (%)' }, { key: 'c44', label: 'Cuối năm (%)' }],
+    rows: [
+      { c5: 'CER-01', c7: 'DV01', c16: 'Cerecaps', c25: 'Viên', c36: 8, c44: 1 },
+      { c5: 'CER-01', c7: 'DV02', c16: 'Cerecaps', c25: 'Viên', c36: 8, c44: 1 },
+      { c5: 'CER-01', c7: 'DV03', c16: 'Cerecaps', c25: 'Viên', c36: 8, c44: 1 },
+      { c5: 'NO-SALE', c7: 'DV99', c16: 'Không bán T07', c25: 'Hộp', c36: 20, c44: 2 },
+    ],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07',
+    catalogRows: [
+      { c5: 'CER-01', c7: 'DV01', c16: 'Cerecaps', c25: 'Viên' },
+      { c5: 'CER-01', c7: 'DV02', c16: 'Cerecaps' },
+      { c5: 'CER-01', c7: 'DV03', c16: 'Cerecaps', c25: 'Viên' },
+      { c5: 'NO-SALE', c7: 'DV99', c16: 'Không bán T07', c25: 'Hộp' },
+    ],
+    revenueRows: [
+      { emp_code: 'DN001', unit_code: 'DV01', iit_code: 'CER-01', product_name: 'Sai tên không được dùng làm khóa', revenue: 1_000_000 },
+      { emp_code: 'DN001', unit_code: 'DV02', iit_code: 'CER-01', product_name: 'Cerecaps', uom: 'Hộp', revenue: 2_000_000 },
+      { emp_code: 'DN001', unit_code: 'DV03', iit_code: 'CER-01', product_name: 'Cerecaps', revenue: 3_000_000 },
+    ],
+  });
+
+  assert.deepEqual(enriched.rows.map((row) => `${row.c7}|${row.c5}`), [
+    'DV01|CER-01', 'DV02|CER-01', 'DV03|CER-01',
+  ]);
+  assert.deepEqual(enriched.rows.map((row) => row.c16), ['Cerecaps', 'Cerecaps', 'Cerecaps']);
+  assert.equal(enriched.rows[1].c25, 'Hộp');
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [80_000, 160_000, 240_000]);
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c44), [10_000, 20_000, 30_000]);
+  assert.deepEqual(enriched.match, { matchedRows: 3, totalRows: 3, rate: 100, threshold: 90, low: false });
+  assert.equal(enriched.rows.some((row) => row.c5 === 'NO-SALE'), false);
+});
+
+test('every revenue key remains visible when cost is missing and counts as unmatched', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: [{ key: 'c36', label: 'CP tháng (%)' }],
+    rows: [
+      { c5: 'QL1', c7: 'U1', c16: 'Thuốc A', c36: 8 },
+      { c5: 'COST-ONLY', c7: 'U9', c16: 'Không bán', c36: 99 },
+    ],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    catalogRows: [
+      { c5: 'QL1', c7: 'U1', c16: 'Thuốc A', c25: 'Viên' },
+      { c5: 'QL2', c7: 'U2', c16: 'Thuốc B', c25: 'Hộp' },
+      { c5: 'COST-ONLY', c7: 'U9', c16: 'Không bán', c25: 'Gói' },
+    ],
+    revenueRows: [
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000 },
+      { emp_code: 'DN001', unit_code: 'U2', iit_code: 'QL2', revenue: 2_000_000 },
+    ],
+  });
+
+  assert.deepEqual(enriched.rows.map((row) => `${row.c7}|${row.c5}`), ['U1|QL1', 'U2|QL2']);
+  assert.equal(enriched.rows[0].amounts.c36, 80_000);
+  assert.equal(enriched.rows[1].c16, 'Thuốc B');
+  assert.equal(enriched.rows[1].c25, 'Hộp');
+  assert.equal(enriched.rows[1].c36, null);
+  assert.equal(enriched.rows[1].amounts.c36, null);
+  assert.equal(enriched.rows[1].revenueMatched, false);
+  assert.deepEqual(enriched.match, { matchedRows: 1, totalRows: 2, rate: 50, threshold: 90, low: true });
 });
 
 test('does not match raw names, leaves amounts null and suppresses unreliable totals below threshold', () => {
@@ -234,7 +331,7 @@ test('period adapter accepts explicit periods/months and rows with period, while
 
   const rowPeriods = employeeCost.adaptPeriodPayload({
     empCode: 'DN001', columns: source.columns,
-    rows: [{ ...source.rows[0], period: '2026-06' }, { ...source.rows[0], period: '2026-07' }],
+    rows: [{ ...source.rows[0], ky: '2026-06' }, { ...source.rows[0], period: '2026-07' }],
   }, 'DN001', range);
   assert.deepEqual(rowPeriods.periods.map((period) => period.rows.length), [1, 1]);
 });
@@ -256,26 +353,31 @@ test('period adapter fails closed instead of guessing legacy or ambiguous multi-
   assert.equal(legacy.periods[0].rows.length, 1);
 });
 
-test('multi-month enrichment separates month totals and excludes annual columns from the period total', () => {
-  const range = employeeCost.parseMonthRange({ from: '2026-06', to: '2026-07' });
+test('multi-month timeline applies T07 change and carries it forward to T08', () => {
+  const range = employeeCost.parseMonthRange({ from: '2026-06', to: '2026-08' });
   const payload = employeeCost.adaptPeriodPayload({
     empCode: 'DN001', periods: range.months.map((period) => ({
       period,
       columns: [{ key: 'c36', label: 'CP tháng' }, { key: 'c44', label: 'Cuối năm' }],
-      rows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10, c44: 5 }],
+      rows: [{
+        c5: 'QL1', c7: 'U1', c16: 'Thuốc',
+        c36: period === '2026-06' ? 8 : 12,
+        c44: period === '2026-06' ? 1 : 2,
+      }],
     })),
   }, 'DN001', range);
   const revenueRowsByPeriod = Object.fromEntries(range.months.map((period) => [period, [
-    { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: period === '2026-06' ? 1_000_000 : 2_000_000 },
+    { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: ({ '2026-06': 1, '2026-07': 2, '2026-08': 3 })[period] * 1_000_000 },
   ]]));
   const catalogRowsByPeriod = Object.fromEntries(range.months.map((period) => [period, [
     { c5: 'QL1', c7: 'U1', c16: 'Thuốc' },
   ]]));
   const enriched = employeeCost.enrichRangePayload(payload, { revenueRowsByPeriod, catalogRowsByPeriod });
-  assert.deepEqual(enriched.periods.map((period) => period.summary.monthlyTotal), [100_000, 200_000]);
-  assert.deepEqual(enriched.periods.map((period) => period.summary.annualTotal), [50_000, 100_000]);
-  assert.equal(enriched.summary.periodTotal, 300_000);
-  assert.equal(enriched.summary.annualTotal, 150_000);
+  assert.deepEqual(enriched.periods.map((period) => period.rows[0].c36), [8, 12, 12]);
+  assert.deepEqual(enriched.periods.map((period) => period.summary.monthlyTotal), [80_000, 240_000, 360_000]);
+  assert.deepEqual(enriched.periods.map((period) => period.summary.annualTotal), [10_000, 40_000, 60_000]);
+  assert.equal(enriched.summary.periodTotal, 680_000);
+  assert.equal(enriched.summary.annualTotal, 110_000);
 });
 
 test('daily amount uses monthly percentage and reconciles exactly to its month', () => {
@@ -329,7 +431,10 @@ test('duplicate cost rows for one unit-product key fail closed instead of double
     period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
     revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000 }],
   });
-  assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [null, null]);
+  assert.equal(enriched.rows.length, 1);
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [null]);
+  assert.equal(enriched.rows[0].revenueMatched, false);
+  assert.equal(enriched.match.totalRows, 1);
   assert.equal(enriched.match.rate, 0);
   assert.equal(enriched.summary.monthlyTotal, null);
 });

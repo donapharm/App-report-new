@@ -168,7 +168,11 @@ function emptyRangePayload(empCode, range, note = DEFAULT_NOTE) {
 
 function explicitPeriodOf(value) {
   if (!value || typeof value !== 'object') return '';
-  return normalizeMonth(value.period ?? value.month);
+  const supplied = [value.period, value.ky, value.month].filter((item) => item != null && String(item).trim() !== '');
+  if (!supplied.length) return '';
+  const normalized = supplied.map(normalizeMonth);
+  if (normalized.some((period) => !period) || new Set(normalized).size !== 1) return '';
+  return normalized[0];
 }
 
 function adaptPeriodPayload(raw, expectedEmp, range) {
@@ -205,7 +209,7 @@ function adaptPeriodPayload(raw, expectedEmp, range) {
       if (explicit && normalizeMonth(mapPeriod) && explicit !== normalizeMonth(mapPeriod)) return null;
       if (!put(explicit || mapPeriod, item, raw.columns)) return null;
     }
-  } else if (Array.isArray(raw?.rows) && raw.rows.some((row) => row && (row.period != null || row.month != null))) {
+  } else if (Array.isArray(raw?.rows) && raw.rows.some((row) => row && (row.period != null || row.ky != null || row.month != null))) {
     if (!Array.isArray(raw.columns)) return null;
     const grouped = new Map();
     for (const row of raw.rows) {
@@ -259,29 +263,79 @@ function addCandidate(map, key, code) {
 function buildProductCatalogIndex(catalogRows = []) {
   const byName = new Map();
   const byUnitName = new Map();
+  const byUnitCode = new Map();
+  const byCode = new Map();
   for (const row of Array.isArray(catalogRows) ? catalogRows : []) {
     const code = productCodeOf(row);
     const name = productNameOf(row);
-    if (!code || !name) continue;
-    addCandidate(byName, name, code);
     const unit = unitCodeOf(row);
+    if (!code) continue;
+    const codeRows = byCode.get(code) || [];
+    codeRows.push(row);
+    byCode.set(code, codeRows);
+    if (unit) {
+      const key = `${unit}\u001f${code}`;
+      const unitRows = byUnitCode.get(key) || [];
+      unitRows.push(row);
+      byUnitCode.set(key, unitRows);
+    }
+    if (!name) continue;
+    addCandidate(byName, name, code);
     if (unit) addCandidate(byUnitName, `${unit}\u001f${name}`, code);
   }
-  return { byName, byUnitName };
+  return { byName, byUnitName, byUnitCode, byCode };
 }
 
 function resolveProductCode(costRow, catalogIndex) {
   const name = productNameOf(costRow);
-  if (!name) return '';
   const unit = unitCodeOf(costRow);
-  const candidates = catalogIndex.byUnitName.get(`${unit}\u001f${name}`) || catalogIndex.byName.get(name);
-  if (!candidates?.size) return '';
-
-  // C5 is a useful disambiguator only after C16 has been resolved through the
-  // catalog; it is never trusted as a direct bypass around the catalog.
   const c5 = normCode(costRow?.c5);
-  if (c5 && candidates.has(c5)) return c5;
-  return candidates.size === 1 ? [...candidates][0] : '';
+
+  // C5 is accepted only after the canonical catalog confirms that exact
+  // unit+code (or a globally unique code when the source has no unit). When
+  // C16 is present it must agree with one canonical name for the code.
+  const directRows = c5
+    ? (catalogIndex.byUnitCode.get(`${unit}\u001f${c5}`) || (!unit ? catalogIndex.byCode.get(c5) : null))
+    : null;
+  if (directRows?.length) {
+    const canonicalNames = new Set(directRows.map(productNameOf).filter(Boolean));
+    if (!name || canonicalNames.has(name)) return c5;
+    return '';
+  }
+  if (!name) return '';
+  const unitCandidates = unit ? catalogIndex.byUnitName.get(`${unit}\u001f${name}`) : null;
+  const globalCandidates = catalogIndex.byName.get(name);
+  // Never infer a code for a unit from a globally unique raw name alone. A
+  // global catalog fallback is accepted only when C5 itself confirms the code;
+  // the final lookup key still includes the exact C7 unit.
+  const candidates = unitCandidates || (!unit ? globalCandidates : null);
+  if (candidates?.size) {
+    if (c5 && candidates.has(c5)) return c5;
+    return candidates.size === 1 ? [...candidates][0] : '';
+  }
+  return c5 && globalCandidates?.has(c5) ? c5 : '';
+}
+
+function displayValue(row, keys) {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value != null && String(value).trim() !== '') return value;
+  }
+  return null;
+}
+
+function canonicalDimensions(revenueRow, unit, product, catalogIndex) {
+  const exactRows = catalogIndex.byUnitCode.get(`${unit}\u001f${product}`) || [];
+  const codeRows = catalogIndex.byCode.get(product) || [];
+  const catalogRow = exactRows[0] || (codeRows.length === 1 ? codeRows[0] : null);
+  return {
+    c5: product,
+    c7: unit,
+    c16: displayValue(catalogRow, ['product_name', 'c16', 'name'])
+      ?? displayValue(revenueRow, ['product_name', 'c16', 'name']),
+    c25: displayValue(catalogRow, ['uom', 'c25'])
+      ?? displayValue(revenueRow, ['uom', 'c25']),
+  };
 }
 
 function buildRevenueIndex(revenueRows = [], expectedEmp = '') {
@@ -304,6 +358,7 @@ function buildRevenueIndex(revenueRows = [], expectedEmp = '') {
 function buildRevenueDetail(revenueRows = [], expectedEmp = '', period = '') {
   const monthly = new Map();
   const daily = new Map();
+  const dimensions = new Map();
   const invalidDailyKeys = new Set();
   const scopedEmp = normEmp(expectedEmp);
   const expectedPeriod = normalizeMonth(period);
@@ -316,6 +371,7 @@ function buildRevenueDetail(revenueRows = [], expectedEmp = '', period = '') {
     if (!unit || !product || !Number.isFinite(revenue)) continue;
     const key = `${unit}\u001f${product}`;
     monthly.set(key, (monthly.get(key) || 0) + revenue);
+    if (!dimensions.has(key)) dimensions.set(key, row);
 
     const date = String(row.date || '').slice(0, 10);
     const datePeriod = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : '';
@@ -329,7 +385,7 @@ function buildRevenueDetail(revenueRows = [], expectedEmp = '', period = '') {
     daily.set(key, byDate);
   }
   for (const key of invalidDailyKeys) daily.delete(key);
-  return { monthly, daily, invalidDailyKeys };
+  return { monthly, daily, dimensions, invalidDailyKeys };
 }
 
 function calculateAmount(revenue, percent) {
@@ -371,21 +427,34 @@ function enrichWithRevenue(payload, options = {}) {
   let dailyRowsReliable = true;
   const allDates = new Set();
 
-  const rowContexts = (payload.rows || []).map((source) => {
+  const costContexts = (payload.rows || []).map((source) => {
     const productCode = resolveProductCode(source, catalogIndex);
     return { source, productCode, revenueKey: `${unitCodeOf(source)}\u001f${productCode}` };
   });
-  const revenueKeyCounts = new Map();
-  for (const context of rowContexts) {
+  const costRowsByKey = new Map();
+  for (const context of costContexts) {
     if (!context.productCode) continue;
-    revenueKeyCounts.set(context.revenueKey, (revenueKeyCounts.get(context.revenueKey) || 0) + 1);
+    const matches = costRowsByKey.get(context.revenueKey) || [];
+    matches.push(context.source);
+    costRowsByKey.set(context.revenueKey, matches);
   }
 
-  const rows = rowContexts.map(({ source, productCode, revenueKey }) => {
-    // Multiple cost rows resolving to one unit+product key are ambiguous: using
-    // the full revenue for each would double count. Fail closed for that key.
-    const matched = !!productCode && revenueKeyCounts.get(revenueKey) === 1 && revenueIndex.has(revenueKey);
-    const revenue = matched ? revenueIndex.get(revenueKey) : null;
+  // Revenue is the row driver. DataHub rows are a percentage lookup only:
+  // extra cost rows cannot create output, while every sold unit+product stays
+  // visible even when its percentage lookup is missing or ambiguous.
+  const rows = [...revenueIndex.entries()].map(([revenueKey, revenue]) => {
+    const separator = revenueKey.indexOf('\u001f');
+    const unit = revenueKey.slice(0, separator);
+    const productCode = revenueKey.slice(separator + 1);
+    const costMatches = costRowsByKey.get(revenueKey) || [];
+    const source = costMatches.length === 1 ? costMatches[0] : null;
+    const hasAllPercentages = !!source && columns.length > 0 && columns.every((column) => {
+      const value = source[column.key];
+      return value !== '' && value != null && Number.isFinite(Number(value));
+    });
+    // Duplicate lookup rows are ambiguous even when their percentages happen
+    // to be equal. Choosing one would make future group/config drift invisible.
+    const matched = costMatches.length === 1 && hasAllPercentages;
     if (matched) matchedRows += 1;
     const amounts = {};
     const dailyAmounts = {};
@@ -411,7 +480,17 @@ function enrichWithRevenue(payload, options = {}) {
       }
     }
     if (matched && !rowDailyReliable) dailyRowsReliable = false;
-    return { ...source, amounts, revenueMatched: matched, dailyAmounts: rowDailyReliable ? dailyAmounts : null, dayRevenueMatched: rowDailyReliable };
+    const dimensions = canonicalDimensions(revenueDetail.dimensions.get(revenueKey), unit, productCode, catalogIndex);
+    const percentages = {};
+    for (const column of columns) percentages[column.key] = matched ? source[column.key] : null;
+    return {
+      ...dimensions,
+      ...percentages,
+      amounts,
+      revenueMatched: matched,
+      dailyAmounts: rowDailyReliable ? dailyAmounts : null,
+      dayRevenueMatched: rowDailyReliable,
+    };
   });
 
   const totalRows = rows.length;
@@ -437,8 +516,10 @@ function enrichWithRevenue(payload, options = {}) {
   const dayMonthlyTotal = dayTotals.reduce((sum, day) => sum + day.monthlyTotal, 0);
   const dayAnnualTotal = dayTotals.reduce((sum, day) => sum + day.annualTotal, 0);
   const reconciled = dailyReliable && dayMonthlyTotal === monthlyMatchedTotal && dayAnnualTotal === annualMatchedTotal;
+  const basePayload = { ...payload };
+  if (rows.length) delete basePayload.note;
   return {
-    ...payload,
+    ...basePayload,
     period: String(options.period || ''),
     columns,
     rows,
@@ -499,8 +580,11 @@ function isTransient(error) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function fetchEmployeeCost(empCode, options = {}) {
-  const baseUrl = String(options.baseUrl ?? process.env.DATAHUB_BASE ?? '').trim().replace(/\/$/, '');
-  const token = String(options.token ?? process.env.APP_REPORT_COST_TOKEN ?? '').trim();
+  // App Report's deployed env already uses the shared DataHub names. Keep the
+  // legacy employee-cost aliases for compatibility, but never require a
+  // second copy of the same S2S endpoint/key just for this route.
+  const baseUrl = String(options.baseUrl ?? process.env.DATAHUB_BASE ?? process.env.DATA_HUB_BASE_URL ?? '').trim().replace(/\/$/, '');
+  const token = String(options.token ?? process.env.APP_REPORT_COST_TOKEN ?? process.env.DATA_HUB_ASSIGNMENT_KEY ?? '').trim();
   const fetchImpl = options.fetchImpl || global.fetch;
   const timeoutMs = Math.max(100, Number(options.timeoutMs ?? process.env.APP_REPORT_COST_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
   const backoffMs = options.backoffMs || DEFAULT_BACKOFF_MS;
