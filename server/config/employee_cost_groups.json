@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "defaultGroup": {
+    "key": "sale",
+    "label": "NV chính thức"
+  },
+  "groups": [
+    {
+      "key": "ctv",
+      "label": "CTV",
+      "employees": ["DN002", "DN004", "DN022"]
+    },
+    {
+      "key": "ctv_special",
+      "label": "CTV đặc biệt",
+      "employees": ["DN021", "DN023", "VP004"]
+    }
+  ]
+}

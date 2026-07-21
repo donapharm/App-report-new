@@ -23,6 +23,7 @@ const catalogManagement = require('./catalogManagement');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
+const employeeCostRoster = require('./employeeCostRoster');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -539,10 +540,9 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
 }));
 
 router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  const employees = store.listUsers()
-    .filter((user) => String(user.role || '').toLowerCase() === 'sale')
-    .map((user) => ({ emp_code: user.emp_code, name: user.name }))
-    .sort((a, b) => String(a.emp_code).localeCompare(String(b.emp_code), 'vi'));
+  // Chỉ roster bán hàng CEO đã duyệt (21 người), không suy rộng từ mọi user
+  // có role=sale. Nhóm được trả từ config backend để phục vụ luồng gửi riêng.
+  const employees = employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
   res.set('Cache-Control', 'private, no-store');
   res.json({ employees });
 });

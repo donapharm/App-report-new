@@ -9,6 +9,7 @@ const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
 const dateLabel = (value) => String(value || '').split('-').reverse().join('/');
+const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 
 function CostTable({ period, daily = false }) {
   const rows = daily ? period.daily.rows : period.rows;
@@ -136,7 +137,7 @@ export default function EmployeeCost({ me }) {
   const model = useMemo(() => employeeCostViewModel(payload), [payload]);
   const selected = employees.find((employee) => employee.emp_code === selectedEmp);
   const employeeLabel = admin
-    ? (selected ? `${selected.emp_code} · ${selected.name}` : 'Chưa chọn nhân viên')
+    ? (selected ? employeeOptionLabel(selected) : 'Chưa chọn nhân viên')
     : String(me?.emp_code || model.empCode || '—');
   const rangeInvalid = !draftRange.from || !draftRange.to || draftRange.from > draftRange.to;
   const multiple = model.periods.length > 1;
@@ -159,7 +160,7 @@ export default function EmployeeCost({ me }) {
           <select value={selectedEmp} onChange={(event) => setSelectedEmp(event.target.value)}>
             {!employees.length && <option value="">Chưa có nhân viên</option>}
             {employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>
-              {employee.emp_code} · {employee.name}
+              {employeeOptionLabel(employee)}
             </option>)}
           </select>
         </label>}
