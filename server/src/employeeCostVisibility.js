@@ -181,8 +181,14 @@ function panelData(roster = [], config = {}) {
   };
 }
 
-function createService({ persistence = defaultPersist, now = () => new Date() } = {}) {
+function createService({ persistence = defaultPersist, now = () => new Date(), logger = console } = {}) {
   const load = () => normalizeRecord(persistence.load(STORE_FILE, null));
+  const appendAudit = (record, entry) => {
+    const next = normalizeRecord(record);
+    next.audit = [...next.audit, { at: now().toISOString(), ...entry }].slice(-AUDIT_LIMIT);
+    persistence.save(STORE_FILE, next);
+    return next;
+  };
 
   return {
     load,
@@ -192,9 +198,28 @@ function createService({ persistence = defaultPersist, now = () => new Date() } 
     panel(roster) {
       return panelData(roster, load());
     },
-    async run({ admin = false, empCode, roster } = {}, loadPayload) {
+    async run({ admin = false, actor, role, empCode, roster } = {}, loadPayload) {
       if (typeof loadPayload !== 'function') throw new TypeError('loadPayload phải là hàm.');
-      if (!admin && !employeeDecision(empCode, roster, load()).enabled) return disabledPayload();
+      const record = load();
+      const accessDecision = employeeDecision(empCode, roster, record);
+      if (!admin && !accessDecision.enabled) {
+        // Ghi nhận quyết định chặn nhưng audit không được phép làm hỏng ranh giới
+        // fail-closed hoặc chứa token/header/body/số liệu chi phí.
+        try {
+          appendAudit(record, {
+            event: 'access_denied',
+            actor: normEmp(actor || empCode) || 'UNKNOWN',
+            role: String(role || '').trim().toLowerCase() || null,
+            empCode: normEmp(empCode) || null,
+            outcome: 'disabled',
+            source: accessDecision.source,
+            effective: accessDecision.effective,
+          });
+        } catch (error) {
+          logger.warn('[employee-cost-visibility] audit write failed', { event: 'access_denied', empCode: normEmp(empCode), message: error.message });
+        }
+        return disabledPayload();
+      }
       return loadPayload();
     },
     save(patch, { actor, roster } = {}) {
@@ -205,14 +230,13 @@ function createService({ persistence = defaultPersist, now = () => new Date() } 
       const after = publicConfig(afterRecord);
       const changes = diffConfigs(before, after);
       if (changes.length) {
-        afterRecord.audit = [...beforeRecord.audit, {
-          at: now().toISOString(),
+        appendAudit(afterRecord, {
+          event: 'visibility_change',
           actor: normEmp(actor) || 'UNKNOWN',
           before,
           after,
           changes,
-        }].slice(-AUDIT_LIMIT);
-        persistence.save(STORE_FILE, afterRecord);
+        });
       }
       return { ...panelData(roster, afterRecord), changed: changes.length > 0 };
     },

@@ -62,17 +62,47 @@ test('employee outside the approved roster always fails closed', () => {
 });
 
 test('OFF never executes upstream loader while admin bypass still does', async () => {
-  const { service } = memoryService({ department: 'off' });
+  const { service, files } = memoryService({ department: 'off' });
   let upstreamCalls = 0;
   const loadPayload = async () => { upstreamCalls += 1; return { rows: [{ sensitive: 1 }] }; };
 
-  const disabled = await service.run({ admin: false, empCode: 'DN001', roster }, loadPayload);
+  const disabled = await service.run({ admin: false, actor: 'DN001', role: 'sale', empCode: 'DN001', roster }, loadPayload);
   assert.deepEqual(disabled, visibility.disabledPayload());
   assert.equal(upstreamCalls, 0);
+  assert.deepEqual(files[visibility.STORE_FILE].audit.at(-1), {
+    at: '2026-07-21T05:30:00.000Z',
+    event: 'access_denied',
+    actor: 'DN001',
+    role: 'sale',
+    empCode: 'DN001',
+    outcome: 'disabled',
+    source: 'department',
+    effective: 'off',
+  });
+  assert.doesNotMatch(JSON.stringify(files[visibility.STORE_FILE].audit.at(-1)), /sensitive|token|header|body/i);
 
-  const adminPayload = await service.run({ admin: true, empCode: 'DN001', roster }, loadPayload);
+  const adminPayload = await service.run({ admin: true, actor: 'CEO', role: 'ceo', empCode: 'DN001', roster }, loadPayload);
   assert.deepEqual(adminPayload, { rows: [{ sensitive: 1 }] });
   assert.equal(upstreamCalls, 1);
+});
+
+test('audit persistence failure still fails closed and never executes upstream', async () => {
+  let upstreamCalls = 0;
+  const warnings = [];
+  const service = visibility.createService({
+    persistence: {
+      load: () => ({ department: 'off' }),
+      save: () => { throw new Error('disk unavailable'); },
+    },
+    logger: { warn: (...args) => warnings.push(args) },
+  });
+  const payload = await service.run({ admin: false, actor: 'DN001', role: 'sale', empCode: 'DN001', roster }, async () => {
+    upstreamCalls += 1;
+    return { rows: [{ sensitive: 1 }] };
+  });
+  assert.deepEqual(payload, visibility.disabledPayload());
+  assert.equal(upstreamCalls, 0);
+  assert.equal(warnings.length, 1);
 });
 
 test('save persists inherit as override removal and audits before/after/actor/time', () => {
@@ -89,6 +119,7 @@ test('save persists inherit as override removal and audits before/after/actor/ti
   assert.deepEqual(files[visibility.STORE_FILE].groups, { ctv: 'on' });
   assert.deepEqual(files[visibility.STORE_FILE].employees, { DN001: 'off' });
   const audit = files[visibility.STORE_FILE].audit.at(-1);
+  assert.equal(audit.event, 'visibility_change');
   assert.equal(audit.actor, 'CEO');
   assert.equal(audit.at, '2026-07-21T05:30:00.000Z');
   assert.equal(audit.before.department, 'off');
@@ -119,7 +150,7 @@ test('visibility routes are admin guarded and all upstream work is enclosed by t
   const start = routes.indexOf("router.get('/employee-cost',");
   const end = routes.indexOf("router.get('/employee-cost/employees'", start);
   const route = routes.slice(start, end);
-  const gate = route.indexOf('employeeCostVisibility.run({ admin, empCode, roster }, async () =>');
+  const gate = route.indexOf('employeeCostVisibility.run({');
   assert.ok(gate > 0, 'route must use the tested OFF short-circuit runner');
   const runnerEnd = route.indexOf("\n  });\n  res.set('Cache-Control'", gate);
   assert.ok(runnerEnd > gate, 'runner callback must close before response');
@@ -127,5 +158,5 @@ test('visibility routes are admin guarded and all upstream work is enclosed by t
     const index = route.indexOf(guardedCall);
     assert.ok(index > gate && index < runnerEnd, `${guardedCall} must stay inside the guarded callback`);
   }
-  assert.match(route, /const admin = auth\.isAdmin[\s\S]*?employeeCostVisibility\.run\(\{ admin/);
+  assert.match(route, /const admin = auth\.isAdmin[\s\S]*?employeeCostVisibility\.run\(\{[\s\S]*?admin,/);
 });
