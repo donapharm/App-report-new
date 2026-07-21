@@ -1,3 +1,9 @@
+### 2026-07-21 — Report Bot — Công tắc tự xem “Chi phí của tôi” theo phòng/nhóm/cá nhân
+- Thêm cấu hình bền `employee_cost_visibility.json`, mặc định an toàn `department=off`; override nhóm/cá nhân dùng roster Sale 21 người và ưu tiên **cá nhân > nhóm > toàn phòng**. Mọi lần đổi được audit nguyên trạng trước/sau, actor, thời gian và từng path thay đổi.
+- Backend khóa self-view trước mọi truy cập doanh thu/catalog/DataHub: NV bị tắt chỉ nhận `{ disabled:true, columns:[], rows:[] }`; CEO/admin bypass để quản trị. `/me` trả `employeeCostDisabled` để frontend ẩn tab theo quyết định backend.
+- Thêm GET/POST `/api/employee-cost/visibility` có `requireAuth + requireAdmin`, validate `on/off/inherit`, trả panel động gồm toàn phòng/nhóm/NV cùng trạng thái hiệu lực và nguồn quyết định.
+- Trang Chi phí của tôi có panel CEO/admin để bật/tắt toàn phòng, từng nhóm và từng cá nhân; không hardcode roster/nhóm trong bundle. Bổ sung API/model/CSS và test service, audit, input lỗi, route guard/thứ tự fail-closed, model/source/ẩn tab frontend.
+
 ### 2026-07-21 — Report Bot — "Chi phí của tôi": tự tính Thành tiền + tách khoản cuối năm
 - App Report ghép dòng chi phí với doanh thu đã khóa scope theo **đơn vị + mã sản phẩm** (C16 được resolve qua catalog), tính `Thành tiền = doanh thu × tỷ lệ ÷ 100`; dòng không khớp giữ `—` và cảnh báo khi tỷ lệ khớp dưới 90%.
 - Mỗi cột tỷ lệ có cột **Thành tiền**; tỷ lệ hiển thị số không kèm `%`. Cột cấu hình cuối năm (mặc định `c44`) được làm mờ, không cộng vào tổng tháng và có tổng T12 riêng.

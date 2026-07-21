@@ -31,7 +31,7 @@ const TABS = [
   { key: 'dailySales', label: 'Doanh số ngày', full: 'Chi tiết doanh số trong ngày', ic: '🗓️', C: DailySalesOrders, hidden: true },
   { key: 'cst', label: 'Cơ số thầu', ic: '📦', C: TenderQuota },
   { key: 'target', label: 'Target', ic: '🎯', C: Target },
-  { key: 'employeeCost', label: 'Chi phí của tôi', ic: '🧾', C: EmployeeCost },
+  { key: 'employeeCost', label: 'Chi phí của tôi', ic: '🧾', C: EmployeeCost, employeeCostControlled: true },
   { key: 'catalogManagement', label: 'Danh mục QL', full: 'Danh mục quản lý', ic: '🗂️', C: CatalogManagement },
   { key: 'dormantReports', label: 'B/c QLNB', full: 'Báo cáo QLNB', ic: '📑', C: DormantReports, ceoEmployeeOnly: true },
   { key: 'ai', label: 'Hỏi nhanh', ic: '🤖', C: AiChat },
@@ -103,6 +103,12 @@ export default function App() {
   }, [me]);
 
   useEffect(() => {
+    if (!me || me.isAdmin || !me.employeeCostDisabled || tab !== 'employeeCost') return;
+    try { localStorage.setItem('rpt_tab', 'overview'); } catch { /* ignore */ }
+    setTab('overview');
+  }, [me, tab]);
+
+  useEffect(() => {
     document.documentElement.classList.toggle('products-mode', !!me && tab === 'products');
     return () => document.documentElement.classList.remove('products-mode');
   }, [me, tab]);
@@ -117,7 +123,9 @@ export default function App() {
 
   const logout = () => { setToken(null); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
   const canonicalCeo = String(me.role || '').toLowerCase() === 'ceo' || String(me.emp_code || '').toUpperCase() === 'CEO';
-  const tabs = TABS.filter((t) => (!t.adminOnly || me.isAdmin) && (!t.ceoEmployeeOnly || canonicalCeo || !me.isAdmin)).map((t) => (
+  const tabs = TABS.filter((t) => (!t.adminOnly || me.isAdmin)
+    && (!t.ceoEmployeeOnly || canonicalCeo || !me.isAdmin)
+    && (!t.employeeCostControlled || me.isAdmin || !me.employeeCostDisabled)).map((t) => (
     t.key === 'catalogManagement' && !me.isAdmin
       ? { ...t, label: 'Danh mục bán hàng của tôi', full: 'Danh mục bán hàng của tôi' }
       : t

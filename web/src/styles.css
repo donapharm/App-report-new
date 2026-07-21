@@ -1977,6 +1977,26 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-range-total { display:flex; align-items:center; justify-content:flex-end; gap:24px; border:2px solid #075d9b; background:#eef7fd; }
 .employee-cost-range-total span { font-weight:900; }
 .employee-cost-range-total b { min-width:160px; color:#075d9b; text-align:right; font-size:18px; }
+.employee-cost-visibility { display:grid; gap:14px; border-top:4px solid #075d9b; }
+.employee-cost-visibility-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+.employee-cost-visibility-head p { max-width:720px; margin:5px 0 0; color:var(--muted); font-size:12px; }
+.employee-cost-visibility-success { padding:10px 12px; border:1px solid #8bc9a4; border-radius:9px; background:#eefaf2; color:#176b37; font-size:12px; font-weight:800; }
+.employee-cost-visibility-department { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px; border:1px solid #8dbbd6; border-radius:10px; background:#eef7fd; }
+.employee-cost-visibility-department div, .employee-cost-visibility-item > div, .employee-cost-visibility-employee > div { display:grid; gap:3px; min-width:0; }
+.employee-cost-visibility small { color:var(--muted); font-size:11px; }
+.employee-cost-visibility select { min-width:145px; }
+.employee-cost-visibility-section { display:grid; gap:9px; }
+.employee-cost-visibility-section h4 { margin:0; color:#27485e; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+.employee-cost-visibility-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; }
+.employee-cost-visibility-item { display:grid; grid-template-columns:minmax(120px,1fr) auto; align-items:center; gap:8px 12px; padding:11px; border:1px solid var(--line); border-radius:9px; }
+.employee-cost-visibility-employees { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+.employee-cost-visibility-employee { display:grid; grid-template-columns:minmax(180px,1fr) 145px; align-items:center; gap:6px 12px; padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:#fbfdfe; }
+.employee-cost-effective { grid-column:1 / -1; color:var(--muted); font-size:10px; font-weight:800; }
+.employee-cost-effective.on { color:#187440; }
+.employee-cost-effective.off { color:#a33; }
+@media (max-width: 1100px) {
+  .employee-cost-visibility-grid, .employee-cost-visibility-employees { grid-template-columns:1fr; }
+}
 @media (max-width: 767px) {
   .employee-cost-heading { display:grid; align-items:stretch; }
   .employee-cost-filters { display:grid; grid-template-columns:1fr 1fr; justify-content:stretch; }
@@ -1989,4 +2009,8 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-period-head { align-items:stretch; flex-direction:column; }
   .employee-cost-period-head .btn { width:100%; }
   .employee-cost-range-total { align-items:flex-end; flex-direction:column; gap:5px; }
+  .employee-cost-visibility-head, .employee-cost-visibility-department { align-items:stretch; flex-direction:column; }
+  .employee-cost-visibility-head .btn, .employee-cost-visibility select { width:100%; }
+  .employee-cost-visibility-item, .employee-cost-visibility-employee { grid-template-columns:1fr; }
+  .employee-cost-effective { grid-column:auto; }
 }
