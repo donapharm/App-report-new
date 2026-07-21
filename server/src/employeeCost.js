@@ -267,15 +267,22 @@ function adaptPeriodPayload(raw, expectedEmp, range) {
 }
 
 function productCodeOf(row = {}) {
-  return normCode(row.iit_code ?? row.qlnb_code ?? row.product_code ?? row.c5 ?? row.code);
+  return normCode(row.iit_code ?? row.qlnb_code ?? row.product_code ?? row.c5 ?? row.code
+    ?? row.IIT_CODE ?? row.QLNB_CODE ?? row.PRODUCT_CODE);
 }
 
 function productNameOf(row = {}) {
-  return normName(row.product_name ?? row.c16 ?? row.name);
+  return normName(row.product_name ?? row.c16 ?? row.name
+    ?? row.ITEM_NAME ?? row.IIT_NAME ?? row.PRODUCT_NAME ?? row.C16 ?? row.NAME);
 }
 
 function unitCodeOf(row = {}) {
-  return normCode(row.unit_code ?? row.c7);
+  const direct = row.unit_code ?? row.c7 ?? row.UNIT_CODE ?? row.C7;
+  if (direct != null && String(direct).trim()) return normCode(direct);
+  // Raw App Report uploads expose DONVI as "mã.tên". Only the prefix is the
+  // canonical unit code; the full value is retained separately for display.
+  const raw = String(row.DONVI ?? row.donvi ?? '').trim();
+  return normCode(raw.includes('.') ? raw.split('.', 1)[0] : raw);
 }
 
 function addCandidate(map, key, code) {
@@ -292,77 +299,164 @@ function addCandidate(map, key, code) {
 function buildProductCatalogIndex(catalogRows = []) {
   const byName = new Map();
   const byUnitName = new Map();
+  const byUnitCode = new Map();
+  const byCode = new Map();
   for (const row of Array.isArray(catalogRows) ? catalogRows : []) {
     const code = productCodeOf(row);
     const name = productNameOf(row);
-    if (!code || !name) continue;
-    addCandidate(byName, name, code);
     const unit = unitCodeOf(row);
+    if (!code) continue;
+    const codeRows = byCode.get(code) || [];
+    codeRows.push(row);
+    byCode.set(code, codeRows);
+    if (unit) {
+      const unitKey = `${unit}\u001f${code}`;
+      const unitRows = byUnitCode.get(unitKey) || [];
+      unitRows.push(row);
+      byUnitCode.set(unitKey, unitRows);
+    }
+    if (!name) continue;
+    addCandidate(byName, name, code);
     if (unit) addCandidate(byUnitName, `${unit}\u001f${name}`, code);
   }
-  return { byName, byUnitName };
+  return { byName, byUnitName, byUnitCode, byCode };
 }
 
 function resolveProductCode(costRow, catalogIndex) {
   const name = productNameOf(costRow);
-  if (!name) return '';
   const unit = unitCodeOf(costRow);
+  const c5 = normCode(costRow?.c5);
+  const directRows = c5
+    ? (catalogIndex.byUnitCode.get(`${unit}\u001f${c5}`) || catalogIndex.byCode.get(c5))
+    : null;
+  if (directRows?.length) {
+    const canonicalNames = new Set(directRows.map(productNameOf).filter(Boolean));
+    if (!name || !canonicalNames.size || canonicalNames.has(name)) return c5;
+    return '';
+  }
+  if (!name) return '';
   const candidates = catalogIndex.byUnitName.get(`${unit}\u001f${name}`) || catalogIndex.byName.get(name);
   if (!candidates?.size) return '';
-
-  // C5 is a useful disambiguator only after C16 has been resolved through the
-  // catalog; it is never trusted as a direct bypass around the catalog.
-  const c5 = normCode(costRow?.c5);
   if (c5 && candidates.has(c5)) return c5;
   return candidates.size === 1 ? [...candidates][0] : '';
 }
 
+function displayValue(row, keys) {
+  for (const key of keys) {
+    const value = row?.[key];
+    if (value != null && String(value).trim() !== '') return value;
+  }
+  return null;
+}
+
+function canonicalDimensions(revenueRow, unit, product, catalogIndex) {
+  const exactRows = catalogIndex.byUnitCode.get(`${unit}\u001f${product}`) || [];
+  const codeRows = catalogIndex.byCode.get(product) || [];
+  const catalogRow = exactRows[0] || (codeRows.length === 1 ? codeRows[0] : null);
+  return {
+    c5: product,
+    c7: displayValue(revenueRow, ['unit_name', 'c7', 'DONVI', 'TEN_DV']) ?? unit,
+    c16: displayValue(catalogRow, ['product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME'])
+      ?? displayValue(revenueRow, ['product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME']) ?? product,
+    c25: displayValue(catalogRow, ['uom', 'c25', 'UOM', 'C25'])
+      ?? displayValue(revenueRow, ['uom', 'c25', 'UOM', 'C25']),
+  };
+}
+
+function revenueAmountOf(row = {}) {
+  const value = row.revenue ?? row.tong_tien ?? row.REVENUE ?? row.TONG_TIEN;
+  const revenue = Number(value);
+  return Number.isFinite(revenue) ? revenue : null;
+}
+
+function revenueDateOf(row = {}) {
+  const raw = displayValue(row, ['date', 'ngay', 'order_date', 'invoice_date', 'DATE']);
+  const value = String(raw || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
+}
+
+function revenueOrderOf(row = {}) {
+  return String(displayValue(row, [
+    'source_order', 'order_code', 'order_no', 'order_id', 'ma_don', 'so_don',
+    'SOURCE_ORDER', 'ORDER_CODE', 'ORDER_NO', 'ORDER_ID', 'MA_DON', 'SO_DON',
+  ]) || '').trim();
+}
+
+function revenueLineIdOf(row = {}, index = 0) {
+  return String(displayValue(row, ['source_line_id', 'line_id', 'SOURCE_LINE_ID', 'LINE_ID']) || `line-${index + 1}`).trim();
+}
+
+function revenueQuantityOf(row = {}) {
+  const raw = row.quantity ?? row.so_luong ?? row.QUANTITY ?? row.SO_LUONG;
+  if (raw == null || raw === '') return null;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
 function buildRevenueIndex(revenueRows = [], expectedEmp = '') {
   const index = new Map();
-  const scopedEmp = normEmp(expectedEmp);
-  for (const row of Array.isArray(revenueRows) ? revenueRows : []) {
-    const rowEmp = normEmp(row.emp_code ?? row.empCode);
-    if (scopedEmp && rowEmp && rowEmp !== scopedEmp) continue;
-    const unit = unitCodeOf(row);
-    const product = productCodeOf(row);
-    if (!unit || !product) continue;
-    const revenue = Number(row.revenue ?? row.tong_tien);
-    if (!Number.isFinite(revenue)) continue;
-    const key = `${unit}\u001f${product}`;
-    index.set(key, (index.get(key) || 0) + revenue);
+  for (const line of buildRevenueLines(revenueRows, expectedEmp)) {
+    const key = `${line.unit}\u001f${line.product}`;
+    index.set(key, (index.get(key) || 0) + line.revenue);
   }
   return index;
 }
 
-function buildRevenueDetail(revenueRows = [], expectedEmp = '', period = '') {
-  const monthly = new Map();
-  const daily = new Map();
-  const invalidDailyKeys = new Set();
+/** Keep every source transaction row. Never aggregate by unit/product. */
+function buildRevenueLines(revenueRows = [], expectedEmp = '', period = '') {
   const scopedEmp = normEmp(expectedEmp);
   const expectedPeriod = normalizeMonth(period);
-  for (const row of Array.isArray(revenueRows) ? revenueRows : []) {
-    const rowEmp = normEmp(row.emp_code ?? row.empCode);
-    if (scopedEmp && rowEmp && rowEmp !== scopedEmp) continue;
+  return (Array.isArray(revenueRows) ? revenueRows : []).map((row, sourceIndex) => {
+    const rowEmp = normEmp(row.emp_code ?? row.empCode ?? row.EMP_NUMBER ?? row.MA_NV);
+    if (scopedEmp && rowEmp && rowEmp !== scopedEmp) return null;
     const unit = unitCodeOf(row);
     const product = productCodeOf(row);
-    const revenue = Number(row.revenue ?? row.tong_tien);
-    if (!unit || !product || !Number.isFinite(revenue)) continue;
-    const key = `${unit}\u001f${product}`;
-    monthly.set(key, (monthly.get(key) || 0) + revenue);
+    const revenue = revenueAmountOf(row);
+    if (!unit || !product || revenue == null) return null;
+    const date = revenueDateOf(row);
+    const datePeriod = date ? date.slice(0, 7) : '';
+    const dateReliable = !!date && String(row.date_granularity || '').toLowerCase() !== 'period'
+      && (!expectedPeriod || datePeriod === expectedPeriod);
+    return {
+      source: row,
+      sourceIndex,
+      unit,
+      product,
+      revenue,
+      // Slot kỳ cũ có thể gán `dateFrom` làm ngày kỹ thuật dù nguồn không có
+      // ngày giao dịch. Chỉ hiển thị ngày khi grain nguồn thực sự là theo ngày.
+      date: dateReliable ? date : '',
+      dateReliable,
+      orderCode: revenueOrderOf(row),
+      sourceLineId: revenueLineIdOf(row, sourceIndex),
+      quantity: revenueQuantityOf(row),
+    };
+  }).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date)
+    || a.orderCode.localeCompare(b.orderCode, 'vi')
+    || a.sourceLineId.localeCompare(b.sourceLineId, 'vi')
+    || a.sourceIndex - b.sourceIndex);
+}
 
-    const date = String(row.date || '').slice(0, 10);
-    const datePeriod = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : '';
-    const explicitlyPeriodOnly = String(row.date_granularity || '').toLowerCase() === 'period';
-    if (!datePeriod || explicitlyPeriodOnly || (expectedPeriod && datePeriod !== expectedPeriod)) {
+function buildRevenueDetail(revenueRows = [], expectedEmp = '', period = '') {
+  const lines = buildRevenueLines(revenueRows, expectedEmp, period);
+  const monthly = new Map();
+  const daily = new Map();
+  const dimensions = new Map();
+  const invalidDailyKeys = new Set();
+  for (const line of lines) {
+    const key = `${line.unit}\u001f${line.product}`;
+    monthly.set(key, (monthly.get(key) || 0) + line.revenue);
+    if (!dimensions.has(key)) dimensions.set(key, line.source);
+    if (!line.dateReliable) {
       invalidDailyKeys.add(key);
       continue;
     }
     const byDate = daily.get(key) || new Map();
-    byDate.set(date, (byDate.get(date) || 0) + revenue);
+    byDate.set(line.date, (byDate.get(line.date) || 0) + line.revenue);
     daily.set(key, byDate);
   }
   for (const key of invalidDailyKeys) daily.delete(key);
-  return { monthly, daily, invalidDailyKeys };
+  return { lines, monthly, daily, dimensions, invalidDailyKeys };
 }
 
 function calculateAmount(revenue, percent) {
@@ -377,13 +471,39 @@ function calculateDailyAmounts(byDate, percent, monthlyAmount) {
   const entries = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
   const amounts = new Map(entries.map(([date, revenue]) => [date, calculateAmount(revenue, percent)]));
   if ([...amounts.values()].some((amount) => amount == null)) return null;
-  // VND is displayed as an integer. Independent day rounding can differ from
-  // the rounded month by a few đồng, so put the deterministic residual on the
-  // last day to guarantee the acceptance rule Σ day = month.
   const sum = [...amounts.values()].reduce((total, amount) => total + amount, 0);
   const lastDate = entries.at(-1)[0];
   amounts.set(lastDate, amounts.get(lastDate) + monthlyAmount - sum);
   return amounts;
+}
+
+function percentageSignature(row, columns) {
+  const values = [];
+  for (const column of columns) {
+    const raw = row?.[column.key];
+    if (raw == null || raw === '' || !Number.isFinite(Number(raw))) return '';
+    values.push(String(Number(raw)));
+  }
+  return values.join('\u001f');
+}
+
+function buildCostLookup(costRows, columns, catalogIndex) {
+  const candidates = new Map();
+  for (const source of Array.isArray(costRows) ? costRows : []) {
+    const product = resolveProductCode(source, catalogIndex);
+    if (!product) continue;
+    const rows = candidates.get(product) || [];
+    rows.push(source);
+    candidates.set(product, rows);
+  }
+  const lookup = new Map();
+  for (const [product, rows] of candidates) {
+    const signatures = new Set(rows.map((row) => percentageSignature(row, columns)).filter(Boolean));
+    // Repeated rows are safe only when all published percentages are identical.
+    // The lookup is product+month, never unit+product.
+    if (signatures.size === 1 && rows.every((row) => percentageSignature(row, columns))) lookup.set(product, rows[0]);
+  }
+  return lookup;
 }
 
 function enrichWithRevenue(payload, options = {}) {
@@ -396,55 +516,60 @@ function enrichWithRevenue(payload, options = {}) {
     annual: annualKeys.has(column.key),
   }));
   const catalogIndex = buildProductCatalogIndex(options.catalogRows);
-  const revenueDetail = buildRevenueDetail(options.revenueRows, payload.empCode, options.period);
-  const revenueIndex = revenueDetail.monthly;
+  const revenueLines = buildRevenueLines(options.revenueRows, payload.empCode, options.period);
+  const costLookup = buildCostLookup(payload.rows, columns, catalogIndex);
   let matchedRows = 0;
   let monthlyMatchedTotal = 0;
   let annualMatchedTotal = 0;
   let dailyRowsReliable = true;
   const allDates = new Set();
 
-  const rowContexts = (payload.rows || []).map((source) => {
-    const productCode = resolveProductCode(source, catalogIndex);
-    return { source, productCode, revenueKey: `${unitCodeOf(source)}\u001f${productCode}` };
-  });
-  const revenueKeyCounts = new Map();
-  for (const context of rowContexts) {
-    if (!context.productCode) continue;
-    revenueKeyCounts.set(context.revenueKey, (revenueKeyCounts.get(context.revenueKey) || 0) + 1);
-  }
-
-  const rows = rowContexts.map(({ source, productCode, revenueKey }) => {
-    // Multiple cost rows resolving to one unit+product key are ambiguous: using
-    // the full revenue for each would double count. Fail closed for that key.
-    const matched = !!productCode && revenueKeyCounts.get(revenueKey) === 1 && revenueIndex.has(revenueKey);
-    const revenue = matched ? revenueIndex.get(revenueKey) : null;
+  const rows = revenueLines.map((line) => {
+    const source = costLookup.get(line.product) || null;
+    const matched = !!source && columns.length > 0;
     if (matched) matchedRows += 1;
     const amounts = {};
     const dailyAmounts = {};
-    const byDate = matched ? revenueDetail.daily.get(revenueKey) : null;
-    let rowDailyReliable = matched && !!byDate?.size;
+    const percentages = {};
+    let rowMonthlyTotal = 0;
+    let rowAnnualTotal = 0;
     for (const column of columns) {
-      const amount = matched ? calculateAmount(revenue, source[column.key]) : null;
+      const percent = matched ? Number(source[column.key]) : null;
+      const amount = matched ? calculateAmount(line.revenue, percent) : null;
+      percentages[column.key] = percent;
       amounts[column.key] = amount;
       if (amount == null) continue;
-      if (column.annual) annualMatchedTotal += amount;
-      else monthlyMatchedTotal += amount;
-      if (rowDailyReliable) {
-        const allocated = calculateDailyAmounts(byDate, source[column.key], amount);
-        if (!allocated) {
-          rowDailyReliable = false;
-          continue;
-        }
-        for (const [date, dayAmount] of allocated) {
-          if (!dailyAmounts[date]) dailyAmounts[date] = {};
-          dailyAmounts[date][column.key] = dayAmount;
-          allDates.add(date);
-        }
+      if (column.annual) {
+        annualMatchedTotal += amount;
+        rowAnnualTotal += amount;
+      } else {
+        monthlyMatchedTotal += amount;
+        rowMonthlyTotal += amount;
+      }
+      if (line.dateReliable) {
+        if (!dailyAmounts[line.date]) dailyAmounts[line.date] = {};
+        dailyAmounts[line.date][column.key] = amount;
+        allDates.add(line.date);
       }
     }
+    const rowDailyReliable = matched && line.dateReliable;
     if (matched && !rowDailyReliable) dailyRowsReliable = false;
-    return { ...source, amounts, revenueMatched: matched, dailyAmounts: rowDailyReliable ? dailyAmounts : null, dayRevenueMatched: rowDailyReliable };
+    const dimensions = canonicalDimensions(line.source, line.unit, line.product, catalogIndex);
+    return {
+      ...dimensions,
+      orderCode: line.orderCode || null,
+      sourceLineId: line.sourceLineId,
+      date: line.date || null,
+      quantity: line.quantity,
+      revenue: line.revenue,
+      ...percentages,
+      amounts,
+      revenueMatched: matched,
+      dailyAmounts: rowDailyReliable ? dailyAmounts : null,
+      dayRevenueMatched: rowDailyReliable,
+      rowMonthlyTotal: matched ? rowMonthlyTotal : null,
+      rowAnnualTotal: matched ? rowAnnualTotal : null,
+    };
   });
 
   const totalRows = rows.length;
@@ -457,21 +582,19 @@ function enrichWithRevenue(payload, options = {}) {
   const dayTotals = dates.map((date) => {
     let monthlyTotal = 0;
     let annualTotal = 0;
-    for (const row of rows) {
-      for (const column of columns) {
-        const amount = row.dailyAmounts?.[date]?.[column.key];
-        if (amount == null) continue;
-        if (column.annual) annualTotal += amount;
-        else monthlyTotal += amount;
-      }
+    for (const row of rows.filter((candidate) => candidate.date === date)) {
+      monthlyTotal += row.rowMonthlyTotal || 0;
+      annualTotal += row.rowAnnualTotal || 0;
     }
     return { date, monthlyTotal, annualTotal };
   });
   const dayMonthlyTotal = dayTotals.reduce((sum, day) => sum + day.monthlyTotal, 0);
   const dayAnnualTotal = dayTotals.reduce((sum, day) => sum + day.annualTotal, 0);
   const reconciled = dailyReliable && dayMonthlyTotal === monthlyMatchedTotal && dayAnnualTotal === annualMatchedTotal;
+  const basePayload = { ...payload };
+  if (rows.length) delete basePayload.note;
   return {
-    ...payload,
+    ...basePayload,
     period: String(options.period || ''),
     columns,
     rows,
@@ -480,6 +603,7 @@ function enrichWithRevenue(payload, options = {}) {
       reliable: hasGroundedRows && !low,
       monthlyTotal: !hasGroundedRows || low ? null : monthlyMatchedTotal,
       annualTotal: !hasGroundedRows || low ? null : annualMatchedTotal,
+      revenueTotal: rows.reduce((sum, row) => sum + row.revenue, 0),
       annualColumnKeys: columns.filter((column) => column.annual).map((column) => column.key),
       annualLabels,
     },
@@ -518,6 +642,7 @@ function enrichRangePayload(payload, options = {}) {
       reliable,
       periodTotal: reliable ? periods.reduce((sum, period) => sum + period.summary.monthlyTotal, 0) : null,
       annualTotal: reliable ? periods.reduce((sum, period) => sum + period.summary.annualTotal, 0) : null,
+      revenueTotal: periods.reduce((sum, period) => sum + period.summary.revenueTotal, 0),
     },
   };
 }
@@ -641,9 +766,12 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
     return result.payload;
   }
   const result = await fetchEmployeeCost(empCode, options);
-  if (result.outcome === 'ok' && range && options.revenueRowsByPeriod && options.catalogRowsByPeriod) {
+  // Revenue belongs to App Report and must stay useful even while the DataHub
+  // cost timeline is unavailable/not configured. In that state enrichment
+  // preserves every order-line and leaves percentages/amounts as null (—).
+  if (range && options.revenueRowsByPeriod && options.catalogRowsByPeriod) {
     result.payload = enrichRangePayload(result.payload, options);
-  } else if (result.outcome === 'ok' && Array.isArray(options.revenueRows) && Array.isArray(options.catalogRows)) {
+  } else if (Array.isArray(options.revenueRows) && Array.isArray(options.catalogRows)) {
     result.payload = enrichWithRevenue(result.payload, options);
   }
   audit({
@@ -690,7 +818,9 @@ module.exports = {
   buildProductCatalogIndex,
   resolveProductCode,
   buildRevenueIndex,
+  buildRevenueLines,
   buildRevenueDetail,
+  buildCostLookup,
   calculateAmount,
   calculateDailyAmounts,
   enrichWithRevenue,

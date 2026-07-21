@@ -1,8 +1,12 @@
 export const EMPLOYEE_COST_DIMENSIONS = Object.freeze([
-  { key: 'c5', label: 'Quản lý', kind: 'dimension' },
+  { key: 'orderCode', label: 'Mã đơn hàng', kind: 'dimension' },
+  { key: 'date', label: 'Ngày', kind: 'dimension' },
   { key: 'c7', label: 'Đơn vị', kind: 'dimension' },
-  { key: 'c16', label: 'Sản phẩm', kind: 'dimension' },
+  { key: 'c5', label: 'Mã hàng / QLNB', kind: 'dimension' },
+  { key: 'c16', label: 'Tên hàng', kind: 'dimension' },
   { key: 'c25', label: 'ĐVT', kind: 'dimension' },
+  { key: 'quantity', label: 'Số lượng', kind: 'dimension', format: 'number' },
+  { key: 'revenue', label: 'Doanh thu dòng', kind: 'dimension', format: 'money' },
 ]);
 
 const BLOCKED = new Set(['c32', 'c47']);
@@ -51,10 +55,16 @@ export function buildEmployeeCostColumns(columns = []) {
 
 export function formatEmployeeCostCell(value, column) {
   if (value == null || value === '') return '—';
-  if (column.kind === 'dimension') return String(value);
+  if (column.key === 'date') return String(value).split('-').reverse().join('/');
   const number = Number(value);
+  if (column.format === 'money' || column.kind === 'money') {
+    return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ' : String(value);
+  }
+  if (column.format === 'number') {
+    return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 4 }) : String(value);
+  }
+  if (column.kind === 'dimension') return String(value);
   if (!Number.isFinite(number)) return String(value);
-  if (column.kind === 'money') return number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ';
   return number.toLocaleString('en-US', {
     useGrouping: false,
     minimumFractionDigits: 1,
@@ -83,7 +93,14 @@ function periodViewModel(payload = {}) {
   const dimensionColumns = columns.filter((column) => column.kind === 'dimension');
   const costColumns = columns.filter((column) => column.kind === 'percent');
   const rows = (Array.isArray(payload.rows) ? payload.rows : []).map((source, rowIndex) => {
-    const row = { rowIndex, dailyAmounts: source?.dailyAmounts || null, dayRevenueMatched: !!source?.dayRevenueMatched };
+    const row = {
+      rowIndex,
+      sourceLineId: String(source?.sourceLineId || `line-${rowIndex + 1}`),
+      dailyAmounts: source?.dailyAmounts || null,
+      dayRevenueMatched: !!source?.dayRevenueMatched,
+      rowMonthlyTotal: source?.rowMonthlyTotal ?? null,
+      rowAnnualTotal: source?.rowAnnualTotal ?? null,
+    };
     for (const column of dimensionColumns) {
       if (source && Object.prototype.hasOwnProperty.call(source, column.key)) row[column.key] = source[column.key];
     }

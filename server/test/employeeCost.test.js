@@ -340,6 +340,111 @@ test('multi-month enrichment separates month totals and excludes annual columns 
   assert.equal(enriched.summary.annualTotal, 150_000);
 });
 
+test('Cerecaps T06 DN001 keeps two order-lines instead of aggregating unit-product revenue', () => {
+  const product = 'G3.ĐY.QĐ141.145.N3.133';
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001',
+    columns: [{ key: 'c36', label: 'CP tháng' }, { key: 'c44', label: 'Cuối năm' }],
+    // Timeline lookup is product+month. Repeated per-unit rows may exist but
+    // must carry the same percentages for the product in that month.
+    rows: [
+      { c5: product, c7: '171', c16: 'Cerecaps', c36: 8, c44: 1 },
+      { c5: product, c7: '038', c16: 'Cerecaps', c36: 8, c44: 1 },
+    ],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-06',
+    catalogRows: [
+      { c5: product, c7: '171', c16: 'Cerecaps', c25: 'Viên' },
+      { c5: product, c7: '038', c16: 'Cerecaps', c25: 'Viên' },
+    ],
+    revenueRows: [
+      { emp_code: 'DN001', source_order: 'DH-001', source_line_id: 'DH-001-1', date: '2026-06-13', date_granularity: 'day', unit_code: '171', unit_name: 'PKĐK Nam Việt', iit_code: product, product_name: 'Cerecaps', uom: 'Viên', quantity: 4_980, revenue: 13_246_800 },
+      { emp_code: 'DN001', source_order: 'DH-002', source_line_id: 'DH-002-1', date: '2026-06-16', date_granularity: 'day', unit_code: '038', unit_name: 'PKĐK Thiện Nhân', iit_code: product, product_name: 'Cerecaps', uom: 'Viên', quantity: 4_500, revenue: 11_970_000 },
+    ],
+  });
+
+  assert.equal(enriched.rows.length, 2);
+  assert.deepEqual(enriched.rows.map((row) => row.revenue), [13_246_800, 11_970_000]);
+  assert.deepEqual(enriched.rows.map((row) => row.orderCode), ['DH-001', 'DH-002']);
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [1_059_744, 957_600]);
+  assert.equal(enriched.summary.revenueTotal, 25_216_800);
+  assert.equal(enriched.summary.monthlyTotal, 2_017_344);
+  assert.equal(enriched.summary.annualTotal, 252_168);
+  assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.monthlyTotal, 0), enriched.summary.monthlyTotal);
+});
+
+test('raw App Report upload aliases retain the two real Cerecaps T06 DN001 lines', () => {
+  const rows = employeeCost.buildRevenueLines([
+    { DATE: '2026-06-13', DONVI: '171.PKĐK NAM VIỆT', EMP_NUMBER: 'DN001', IIT_CODE: 'G3.ĐY.QĐ141.145.N3.133', ITEM_NAME: 'Cerecaps', UOM: 'Viên', QUANTITY: 4_980, REVENUE: 13_246_800 },
+    { DATE: '2026-06-16', DONVI: '038.PKĐK THIỆN NHÂN', EMP_NUMBER: 'DN001', IIT_CODE: 'G3.ĐY.QĐ141.145.N3.133', ITEM_NAME: 'Cerecaps', UOM: 'Viên', QUANTITY: 4_500, REVENUE: 11_970_000 },
+  ], 'DN001', '2026-06');
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => row.unit), ['171', '038']);
+  assert.deepEqual(rows.map((row) => row.revenue), [13_246_800, 11_970_000]);
+  assert.deepEqual(rows.map((row) => row.date), ['2026-06-13', '2026-06-16']);
+});
+
+test('one order with multiple products renders one row per source line', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: [{ key: 'c36', label: 'CP tháng' }],
+    rows: [
+      { c5: 'QL1', c16: 'Thuốc A', c36: 10 },
+      { c5: 'QL2', c16: 'Thuốc B', c36: 5 },
+    ],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07',
+    catalogRows: [
+      { c5: 'QL1', c7: 'U1', c16: 'Thuốc A' },
+      { c5: 'QL2', c7: 'U1', c16: 'Thuốc B' },
+    ],
+    revenueRows: [
+      { emp_code: 'DN001', source_order: 'ORDER-7', source_line_id: 'ORDER-7-1', date: '2026-07-05', date_granularity: 'day', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000 },
+      { emp_code: 'DN001', source_order: 'ORDER-7', source_line_id: 'ORDER-7-2', date: '2026-07-05', date_granularity: 'day', unit_code: 'U1', iit_code: 'QL2', revenue: 2_000_000 },
+    ],
+  });
+  assert.equal(enriched.rows.length, 2);
+  assert.deepEqual(enriched.rows.map((row) => row.c5), ['QL1', 'QL2']);
+  assert.deepEqual(enriched.rows.map((row) => row.orderCode), ['ORDER-7', 'ORDER-7']);
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [100_000, 100_000]);
+});
+
+test('revenue lines remain visible when DataHub timeline is unavailable', () => {
+  const enriched = employeeCost.enrichWithRevenue({ empCode: 'DN001', columns: [], rows: [], note: employeeCost.DEFAULT_NOTE }, {
+    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc A' }],
+    revenueRows: [
+      { emp_code: 'DN001', source_order: 'ORDER-1', date: '2026-07-01', date_granularity: 'day', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000 },
+      { emp_code: 'DN001', source_order: 'ORDER-2', date: '2026-07-02', date_granularity: 'day', unit_code: 'U1', iit_code: 'QL1', revenue: 2_000_000 },
+    ],
+  });
+  assert.equal(enriched.rows.length, 2);
+  assert.deepEqual(enriched.rows.map((row) => row.revenue), [1_000_000, 2_000_000]);
+  assert.equal(enriched.match.matchedRows, 0);
+  assert.equal(enriched.summary.monthlyTotal, null);
+  assert.equal(enriched.note, undefined);
+});
+
+test('getForSession returns scoped revenue order-lines when DataHub is not configured', async () => {
+  const payload = await employeeCost.getForSession({
+    session: { emp_code: 'DN001', role: 'sale' }, scope: { empCode: 'DN001' }, requestedEmp: 'DN999',
+  }, {
+    from: '2026-06', to: '2026-06', baseUrl: '', assignmentKey: '', employeeCostKeys: '',
+    revenueRowsByPeriod: {
+      '2026-06': [
+        { emp_code: 'DN001', source_order: 'DH-1', source_line_id: 'DH-1-1', date: '2026-06-13', date_granularity: 'day', unit_code: '171', iit_code: 'CERECAPS', revenue: 13_246_800 },
+        { emp_code: 'DN001', source_order: 'DH-2', source_line_id: 'DH-2-1', date: '2026-06-16', date_granularity: 'day', unit_code: '038', iit_code: 'CERECAPS', revenue: 11_970_000 },
+      ],
+    },
+    catalogRowsByPeriod: { '2026-06': [{ c5: 'CERECAPS', c7: '171', c16: 'Cerecaps' }, { c5: 'CERECAPS', c7: '038', c16: 'Cerecaps' }] },
+    auditImpl: () => {},
+  });
+  assert.equal(payload.empCode, 'DN001');
+  assert.deepEqual(payload.periods[0].rows.map((row) => row.revenue), [13_246_800, 11_970_000]);
+  assert.deepEqual(payload.periods[0].rows.map((row) => row.c36), [undefined, undefined]);
+  assert.equal(payload.periods[0].summary.monthlyTotal, null);
+});
+
 test('daily amount uses monthly percentage and reconciles exactly to its month', () => {
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001', columns: [{ key: 'c36', label: 'CP tháng' }, { key: 'c44', label: 'Cuối năm' }],
@@ -355,8 +460,9 @@ test('daily amount uses monthly percentage and reconciles exactly to its month',
   });
   assert.equal(enriched.daily.reliable, true);
   assert.deepEqual(enriched.daily.dates, ['2026-07-01', '2026-07-02']);
+  assert.equal(enriched.rows.length, 2);
   assert.deepEqual(enriched.rows[0].dailyAmounts['2026-07-01'], { c36: 100_000, c44: 50_000 });
-  assert.deepEqual(enriched.rows[0].dailyAmounts['2026-07-02'], { c36: 200_000, c44: 100_000 });
+  assert.deepEqual(enriched.rows[1].dailyAmounts['2026-07-02'], { c36: 200_000, c44: 100_000 });
   assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.monthlyTotal, 0), enriched.summary.monthlyTotal);
   assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.annualTotal, 0), enriched.summary.annualTotal);
 });
@@ -373,27 +479,35 @@ test('daily allocation reconciles VND rounding residual to the monthly amount', 
       { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1, date: '2026-07-02', date_granularity: 'day' },
     ],
   });
-  const dailySum = Object.values(enriched.rows[0].dailyAmounts).reduce((sum, amounts) => sum + amounts.c36, 0);
-  assert.equal(enriched.summary.monthlyTotal, 1);
+  const dailySum = enriched.rows.reduce((sum, row) => sum + Object.values(row.dailyAmounts)[0].c36, 0);
+  assert.equal(enriched.rows.length, 2);
+  assert.equal(enriched.summary.monthlyTotal, 0);
   assert.equal(dailySum, enriched.summary.monthlyTotal);
   assert.equal(enriched.daily.reliable, true);
 });
 
-test('duplicate cost rows for one unit-product key fail closed instead of double-counting revenue', () => {
-  const payload = employeeCost.sanitizePayload({
+test('duplicate timeline rows are deduplicated only when product-month percentages agree', () => {
+  const makePayload = (secondRate) => employeeCost.sanitizePayload({
     empCode: 'DN001', columns: [{ key: 'c36', label: 'CP tháng' }],
     rows: [
       { c5: 'QL1', c7: 'U1', c16: 'Thuốc', c25: 'Viên', c36: 10 },
-      { c5: 'QL1', c7: 'U1', c16: 'Thuốc', c25: 'Hộp', c36: 10 },
+      { c5: 'QL1', c7: 'U2', c16: 'Thuốc', c25: 'Hộp', c36: secondRate },
     ],
   }, 'DN001');
-  const enriched = employeeCost.enrichWithRevenue(payload, {
-    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+  const options = {
+    period: '2026-07', catalogRows: [
+      { c5: 'QL1', c7: 'U1', c16: 'Thuốc' }, { c5: 'QL1', c7: 'U2', c16: 'Thuốc' },
+    ],
     revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000 }],
-  });
-  assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [null, null]);
-  assert.equal(enriched.match.rate, 0);
-  assert.equal(enriched.summary.monthlyTotal, null);
+  };
+  const agreed = employeeCost.enrichWithRevenue(makePayload(10), options);
+  assert.equal(agreed.rows[0].amounts.c36, 100_000);
+  assert.equal(agreed.match.rate, 100);
+
+  const conflicting = employeeCost.enrichWithRevenue(makePayload(12), options);
+  assert.equal(conflicting.rows[0].amounts.c36, null);
+  assert.equal(conflicting.match.rate, 0);
+  assert.equal(conflicting.summary.monthlyTotal, null);
 });
 
 test('daily drill fails closed when a revenue date is absent, outside the month or only period-granular', () => {
@@ -412,6 +526,7 @@ test('daily drill fails closed when a revenue date is absent, outside the month 
     });
     assert.equal(enriched.summary.monthlyTotal, 100_000);
     assert.equal(enriched.daily.reliable, false);
+    assert.equal(enriched.rows[0].date, null);
     assert.equal(enriched.rows[0].dailyAmounts, null);
     assert.deepEqual(enriched.daily.dates, []);
   }
