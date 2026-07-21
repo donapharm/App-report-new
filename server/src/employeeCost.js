@@ -519,8 +519,6 @@ function enrichWithRevenue(payload, options = {}) {
   const revenueLines = buildRevenueLines(options.revenueRows, payload.empCode, options.period);
   const costLookup = buildCostLookup(payload.rows, columns, catalogIndex);
   let matchedRows = 0;
-  let monthlyMatchedTotal = 0;
-  let annualMatchedTotal = 0;
   let dailyRowsReliable = true;
   const allDates = new Set();
 
@@ -540,10 +538,8 @@ function enrichWithRevenue(payload, options = {}) {
       amounts[column.key] = amount;
       if (amount == null) continue;
       if (column.annual) {
-        annualMatchedTotal += amount;
         rowAnnualTotal += amount;
       } else {
-        monthlyMatchedTotal += amount;
         rowMonthlyTotal += amount;
       }
       if (line.dateReliable) {
@@ -571,6 +567,36 @@ function enrichWithRevenue(payload, options = {}) {
       rowAnnualTotal: matched ? rowAnnualTotal : null,
     };
   });
+
+  // Keep totals stable when one old unit×product aggregate becomes several
+  // order-lines. Integer VND rounding is allocated deterministically to the
+  // last line of each former aggregate so Σ displayed lines keeps the prior
+  // month total and, consequently, Σ day = month.
+  const rowsByFormerAggregate = new Map();
+  rows.forEach((row, index) => {
+    if (!row.revenueMatched) return;
+    const key = `${revenueLines[index].unit}\u001f${row.c5}`;
+    const group = rowsByFormerAggregate.get(key) || [];
+    group.push(row);
+    rowsByFormerAggregate.set(key, group);
+  });
+  for (const group of rowsByFormerAggregate.values()) {
+    for (const column of columns) {
+      const percent = group[0][column.key];
+      const target = calculateAmount(group.reduce((sum, row) => sum + row.revenue, 0), percent);
+      const current = group.reduce((sum, row) => sum + (row.amounts[column.key] || 0), 0);
+      const residual = target == null ? 0 : target - current;
+      if (!residual) continue;
+      const row = group.at(-1);
+      row.amounts[column.key] += residual;
+      if (column.annual) row.rowAnnualTotal += residual;
+      else row.rowMonthlyTotal += residual;
+      if (row.dailyAmounts?.[row.date]) row.dailyAmounts[row.date][column.key] += residual;
+    }
+  }
+
+  const monthlyMatchedTotal = rows.reduce((sum, row) => sum + (row.rowMonthlyTotal || 0), 0);
+  const annualMatchedTotal = rows.reduce((sum, row) => sum + (row.rowAnnualTotal || 0), 0);
 
   const totalRows = rows.length;
   const hasGroundedRows = totalRows > 0 && columns.length > 0;

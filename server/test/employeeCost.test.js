@@ -481,7 +481,8 @@ test('daily allocation reconciles VND rounding residual to the monthly amount', 
   });
   const dailySum = enriched.rows.reduce((sum, row) => sum + Object.values(row.dailyAmounts)[0].c36, 0);
   assert.equal(enriched.rows.length, 2);
-  assert.equal(enriched.summary.monthlyTotal, 0);
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [0, 1]);
+  assert.equal(enriched.summary.monthlyTotal, 1);
   assert.equal(dailySum, enriched.summary.monthlyTotal);
   assert.equal(enriched.daily.reliable, true);
 });
