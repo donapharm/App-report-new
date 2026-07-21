@@ -420,14 +420,14 @@ router.post('/auth/otp/request', async (req, res) => {
   try {
     const ok = await auth.requestOtp((req.body.phone || '').trim());
     res.json({ ok });
-  } catch (e) { res.status(400).json({ error: e.message }); }
+  } catch (e) { res.status(e.status || 400).json({ error: e.message, ...(e.code ? { code: e.code } : {}) }); }
 });
 router.post('/auth/otp/verify', async (req, res) => {
   try {
     const r = await auth.verifyOtp((req.body.phone || '').trim(), (req.body.code || '').trim(), loginCtx(req));
     if (!r) return res.status(401).json({ error: 'Mã OTP không đúng hoặc đã hết hạn' });
     res.json(r); // { token, user } hoặc { accounts:[...] } nếu SĐT có nhiều mã NV
-  } catch (e) { res.status(400).json({ error: e.message }); }
+  } catch (e) { res.status(e.status || 400).json({ error: e.message, ...(e.code ? { code: e.code } : {}) }); }
 });
 
 // Chọn tài khoản khi 1 SĐT có nhiều mã NV (sau khi OTP đã xác thực)

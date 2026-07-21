@@ -122,21 +122,23 @@ export default function Login({ onLogin }) {
     setBusy(true); setErr('');
     try { await api.otpRequest(p); setStep('code'); }
     catch (e) { setErr(e.message); }
-    setBusy(false);
+    finally { setBusy(false); }
   }
   async function verifyOtp() {
     setBusy(true); setErr('');
     try {
       const r = await api.otpVerify(phone.trim(), code.trim());
       if (r.token) { await finish(r.token); return; }
-      if (r.accounts && r.accounts.length) { setAccounts(r.accounts); setStep('choose'); setBusy(false); return; }
-      setErr('Không xác định được tài khoản.'); setBusy(false);
-    } catch (e) { setErr(e.message); setBusy(false); }
+      if (r.accounts && r.accounts.length) { setAccounts(r.accounts); setStep('choose'); return; }
+      setErr('Không xác định được tài khoản.');
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
   async function pickAccount(emp_code) {
     setBusy(true); setErr('');
     try { const r = await api.otpSelect(phone.trim(), emp_code); await finish(r.token); }
-    catch (e) { setErr(e.message); setBusy(false); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
   }
 
   const ceo = demoUsers.filter((u) => u.role !== 'sale');
@@ -207,7 +209,7 @@ export default function Login({ onLogin }) {
                       <div style={{ fontSize: 13, opacity: .9, marginBottom: 8 }}>Đăng nhập bằng số điện thoại</div>
                       <input type="tel" inputMode="numeric" placeholder="Số điện thoại"
                              value={phone} onChange={(e) => setPhone(e.target.value)}
-                             onKeyDown={(e) => e.key === 'Enter' && sendOtp()} style={{ marginBottom: 10 }} />
+                             onKeyDown={(e) => e.key === 'Enter' && !busy && sendOtp()} style={{ marginBottom: 10 }} />
                       <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={sendOtp}>
                         {busy ? 'Đang gửi…' : 'Gửi mã OTP'}
                       </button>
@@ -218,7 +220,7 @@ export default function Login({ onLogin }) {
                       <div style={{ fontSize: 13, opacity: .9, marginBottom: 8 }}>Nhập mã OTP gửi tới {phone}</div>
                       <input inputMode="numeric" placeholder="Mã OTP" value={code}
                              onChange={(e) => setCode(e.target.value)}
-                             onKeyDown={(e) => e.key === 'Enter' && verifyOtp()} style={{ marginBottom: 10 }} />
+                             onKeyDown={(e) => e.key === 'Enter' && !busy && verifyOtp()} style={{ marginBottom: 10 }} />
                       <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={verifyOtp}>
                         {busy ? 'Đang kiểm tra…' : 'Xác nhận'}
                       </button>

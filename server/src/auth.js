@@ -231,6 +231,10 @@ function mockLogin(empCode, opts = {}) {
 
 const OTP_URL = process.env.OTP_BACKEND_URL || '';
 const SSO_URL = process.env.SSO_VERIFY_URL || '';
+const otpBackendTimeoutEnv = Number(process.env.OTP_BACKEND_TIMEOUT_MS || 10000);
+const OTP_BACKEND_TIMEOUT_MS = Number.isFinite(otpBackendTimeoutEnv)
+  ? Math.min(60000, Math.max(250, otpBackendTimeoutEnv))
+  : 10000;
 const liveAuthEnabled = () => !!(OTP_URL || SSO_URL);
 function normPhone(v) {
   let s = String(v || '').replace(/[^\d]/g, '');
@@ -238,13 +242,40 @@ function normPhone(v) {
   if (s && !s.startsWith('0')) s = '0' + s;
   return s;
 }
+async function otpBackendRequest(path, payload) {
+  try {
+    const response = await fetch(`${OTP_URL}${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(OTP_BACKEND_TIMEOUT_MS),
+    });
+    let data = {};
+    try { data = await response.json(); } catch { /* ignore */ }
+    return { response, data };
+  } catch (e) {
+    if (e?.name === 'TimeoutError' || e?.name === 'AbortError') {
+      const timeoutError = new Error('Máy chủ OTP phản hồi quá lâu. Vui lòng thử lại.');
+      timeoutError.status = 504;
+      timeoutError.code = 'OTP_BACKEND_TIMEOUT';
+      throw timeoutError;
+    }
+    const networkError = new Error('Không kết nối được máy chủ OTP. Vui lòng thử lại.');
+    networkError.status = 502;
+    networkError.code = 'OTP_BACKEND_UNAVAILABLE';
+    throw networkError;
+  }
+}
 async function requestOtp(phone) {
   if (!OTP_URL) throw new Error('Chưa cấu hình OTP_BACKEND_URL');
-  const r = await fetch(`${OTP_URL}/api/otp/request`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ phone }),
-  });
-  return r.ok;
+  const { response, data } = await otpBackendRequest('/api/otp/request', { phone });
+  if (!response.ok || data.ok === false) {
+    const upstreamError = new Error(data.error || 'Không thể gửi mã OTP.');
+    upstreamError.status = !response.ok && response.status >= 400 && response.status < 500 ? response.status : 502;
+    upstreamError.code = response.ok || response.status >= 500 ? 'OTP_BACKEND_UNAVAILABLE' : 'OTP_BACKEND_REJECTED';
+    throw upstreamError;
+  }
+  return true;
 }
 function normRole(v) {
   const r = String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
@@ -260,13 +291,8 @@ const verifiedPhones = new Map();
 
 async function verifyOtp(phone, code, opts = {}) {
   if (!OTP_URL) throw new Error('Chưa cấu hình OTP_BACKEND_URL');
-  const r = await fetch(`${OTP_URL}/api/otp/verify`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ phone, code }),
-  });
-  let data = {};
-  try { data = await r.json(); } catch { /* ignore */ }
-  if (!r.ok || !data.ok) return null;
+  const { response, data } = await otpBackendRequest('/api/otp/verify', { phone, code });
+  if (!response.ok || !data.ok) return null;
 
   const accounts = (Array.isArray(data.accounts) ? data.accounts : []).map(mapAcc).filter((a) => a.emp_code);
   if (data.requireAccountChoice && accounts.length > 1) {

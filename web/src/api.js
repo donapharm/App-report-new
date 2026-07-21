@@ -1,5 +1,7 @@
 // api.js — gọi backend, tự đính token. Frontend KHÔNG tự quyết quyền.
 const TOKEN_KEY = 'rpt_token';
+const OTP_AUTH_TIMEOUT_MS = 12000;
+const ME_TIMEOUT_MS = 8000;
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
 
@@ -14,32 +16,57 @@ export function getDeviceId() {
   return d;
 }
 
-async function req(method, path, body) {
-  const res = await fetch('/api' + path, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Device-Id': getDeviceId(),
-      ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (res.status === 401) {
-    setToken(null);
-    throw new Error('Phiên đăng nhập hết hạn');
+async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = {}) {
+  const controller = timeoutMs > 0 ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const res = await fetch('/api' + path, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Device-Id': getDeviceId(),
+        ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      // OTP sai/hết hạn không phải là phiên đăng nhập hết hạn.
+      if (path === '/auth/otp/verify') {
+        throw new Error(data.error || 'Mã OTP không đúng hoặc đã hết hạn');
+      }
+      setToken(null);
+      throw new Error(data.error || 'Phiên đăng nhập hết hạn');
+    }
+    if (!res.ok) throw new Error(data.error || 'Lỗi máy chủ');
+    return data;
+  } catch (e) {
+    if (controller?.signal.aborted) {
+      throw new Error(timeoutMessage || 'Hệ thống phản hồi quá lâu. Vui lòng thử lại.');
+    }
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Lỗi máy chủ');
-  return data;
 }
 
 export const api = {
   login: (emp_code) => req('POST', '/auth/login', { emp_code }),
   demoUsers: () => req('GET', '/auth/demo-users'),
   mode: () => req('GET', '/auth/mode'),
-  otpRequest: (phone) => req('POST', '/auth/otp/request', { phone }),
-  otpVerify: (phone, code) => req('POST', '/auth/otp/verify', { phone, code }),
-  otpSelect: (phone, emp_code) => req('POST', '/auth/otp/select', { phone, emp_code }),
+  otpRequest: (phone) => req('POST', '/auth/otp/request', { phone }, {
+    timeoutMs: OTP_AUTH_TIMEOUT_MS,
+    timeoutMessage: 'Hệ thống OTP phản hồi quá lâu. Vui lòng thử lại.',
+  }),
+  otpVerify: (phone, code) => req('POST', '/auth/otp/verify', { phone, code }, {
+    timeoutMs: OTP_AUTH_TIMEOUT_MS,
+    timeoutMessage: 'Hệ thống OTP phản hồi quá lâu. Vui lòng thử lại.',
+  }),
+  otpSelect: (phone, emp_code) => req('POST', '/auth/otp/select', { phone, emp_code }, {
+    timeoutMs: OTP_AUTH_TIMEOUT_MS,
+    timeoutMessage: 'Hệ thống OTP phản hồi quá lâu. Vui lòng thử lại.',
+  }),
   sso: (sso_token) => req('POST', '/auth/sso', { sso_token }),
   // Telegram login (chính)
   telegramStart: () => req('POST', '/auth/telegram/start', {}),
@@ -50,7 +77,10 @@ export const api = {
   adminTelegramMapDel: (telegram_id) => req('DELETE', '/admin/telegram-map', { telegram_id }),
   adminDevices: (emp) => req('GET', '/admin/devices' + (emp ? `?emp=${encodeURIComponent(emp)}` : '')),
   adminDeviceDel: (id) => req('DELETE', '/admin/devices/' + encodeURIComponent(id)),
-  me: () => req('GET', '/me'),
+  me: () => req('GET', '/me', undefined, {
+    timeoutMs: ME_TIMEOUT_MS,
+    timeoutMessage: 'Không tải được thông tin đăng nhập. Vui lòng tải lại trang.',
+  }),
   employeeCost: (emp, range = {}) => {
     const params = new URLSearchParams();
     if (emp) params.set('emp', emp);
