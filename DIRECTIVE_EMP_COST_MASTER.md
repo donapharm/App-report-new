@@ -44,6 +44,11 @@ thức xác định (không bịa).
 - **‼ RULE mức % theo tháng:** mỗi NV/sản phẩm có **1 mức % cho mỗi THÁNG**; biến động trong tháng → áp **từ ngày
   đầu tháng** (cả tháng dùng 1 mức, KHÔNG chia lẻ giữa tháng). ⇒ Thành tiền theo ngày = `doanh thu ngày × %(tháng)`
   — App Report đã tính đúng vậy, **không đổi**.
+- **‼ % là TIMELINE, danh sách dòng do App Report dẫn dắt (CEO xác nhận 2026-07-21 — xem `DIRECTIVE_EMP_COST_TIMELINE_REDESIGN.md`):**
+  % chi phí là cấu hình **thường trực dạng timeline** theo mã hàng (hiệu lực từ ngày-đầu-tháng, carry qua tháng tới
+  khi đổi) — **KHÔNG** sinh từ `sales_facts`. **Danh sách dòng lấy từ doanh thu App Report** (mã hàng NV bán trong
+  tháng), rồi **tra % từ DataHub timeline**. ⇒ **T07 hiện được dù DataHub chưa nạp sales_facts T07.** (Sửa lại cách
+  hiểu cũ "lấy dòng theo sales_facts → T07=0".)
 - **`Thành tiền(dòng, cột%) = doanh thu dòng × % ÷ 100`.** Ví dụ doanh thu 10.000.000đ: `8.0`→800.000đ · `0.3`→
   30.000đ · `10.0`→1.000.000đ.
 - **"Doanh thu dòng"** = doanh thu đúng dòng (NV × đơn vị × sản phẩm × kỳ), App Report **tự lấy từ dữ liệu doanh thu

@@ -1,3 +1,7 @@
+### 2026-07-21 — Claude Code (giao 2 bot) — REDESIGN model chi phí: % theo TIMELINE + dòng do App Report dẫn dắt
+- **CEO xác nhận model đúng.** Sửa điểm gốc: % chi phí là **timeline thường trực** theo mã hàng (hiệu lực từ ngày-đầu-tháng, carry qua tháng), **KHÔNG** sinh từ `sales_facts`. **Danh sách dòng lấy từ doanh thu App Report** (mã hàng NV bán trong tháng), tra % từ DataHub timeline → **T07 hiện được dù DataHub chưa nạp sales_facts T07** (sửa cách hiểu cũ T07=0).
+- Giao: **DataHub Bot** trả % theo timeline (không gate sales_facts); **Report Bot** dẫn dắt dòng từ doanh thu App Report + tra % từ DataHub. Directive: `DIRECTIVE_EMP_COST_TIMELINE_REDESIGN.md`; cập nhật `DIRECTIVE_EMP_COST_MASTER.md`.
+
 ### 2026-07-21 — Claude Code (review) — "Chi phí của tôi" mục 11 (công tắc bật/tắt): ĐẠT
 - **Review `bbfc86c` (`review/emp-cost-visibility-toggle-20260721`): ĐẠT.** `employeeCostVisibility.js`: ưu tiên **cá nhân > nhóm > phòng**, mặc định **off**, **mã ngoài roster fail-closed** (kể cả phòng đang bật/override cũ). Route: toàn bộ fetch DataHub/doanh thu/catalog nằm **trong callback** — **OFF → trả `disabled`, KHÔNG chạy callback** (không đụng DataHub); **admin bypass** (CEO/admin xem NV bất kỳ). Admin routes GET/POST `requireAdmin`; validate chặt (chỉ roster, on/off/inherit); audit access_denied + đổi cấu hình (an toàn, không token/số chi phí). FE render cờ `disabled` từ backend, không tự quyết quyền. 227/227 test + build + quét bundle PASS.
 - **Chưa deploy.** Còn blocker DataHub (self-scope + trường kỳ) + `.env` trước khi bật production.
