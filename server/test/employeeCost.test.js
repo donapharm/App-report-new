@@ -172,3 +172,185 @@ test('getForSession keeps employee scope while enriching from scoped revenue onl
   assert.equal(payload.empCode, 'DN001');
   assert.equal(payload.rows[0].amounts.c36, 800_000);
 });
+
+test('month range defaults to current month and rejects incomplete, invalid or reversed input', () => {
+  assert.deepEqual(employeeCost.parseMonthRange({}, new Date(2026, 6, 21)), {
+    from: '2026-07', to: '2026-07', months: ['2026-07'],
+  });
+  assert.deepEqual(employeeCost.parseMonthRange({ from: '2026-11', to: '2027-02' }).months, [
+    '2026-11', '2026-12', '2027-01', '2027-02',
+  ]);
+  assert.throws(() => employeeCost.parseMonthRange({ from: '2026-07' }), { code: 'EMPLOYEE_COST_RANGE_REQUIRED' });
+  assert.throws(() => employeeCost.parseMonthRange({ from: '07.2026', to: '2026-08' }), { code: 'EMPLOYEE_COST_RANGE_INVALID' });
+  assert.throws(() => employeeCost.parseMonthRange({ from: '2026-08', to: '2026-07' }), { code: 'EMPLOYEE_COST_RANGE_ORDER' });
+});
+
+test('range proxy sends validated from/to with the backend-locked employee scope', async () => {
+  let calledUrl = '';
+  const payload = await employeeCost.getForSession({
+    scope: { empCode: 'DN001' }, session: { emp_code: 'DN001', role: 'sale' }, requestedEmp: 'DN999',
+  }, {
+    baseUrl: 'http://hub.test', token: 'server-only', backoffMs: [], from: '2026-06', to: '2026-07',
+    revenueRowsByPeriod: { '2026-06': [], '2026-07': [] }, catalogRowsByPeriod: { '2026-06': [], '2026-07': [] },
+    auditImpl: () => {},
+    fetchImpl: async (url) => {
+      calledUrl = url;
+      return {
+        ok: true, status: 200, json: async () => ({
+          empCode: 'DN001', periods: [
+            { period: '2026-06', columns: [], rows: [] },
+            { period: '2026-07', columns: [], rows: [] },
+          ],
+        }),
+      };
+    },
+  });
+  assert.equal(calledUrl, 'http://hub.test/api/integrations/app-report/employee-cost?emp=DN001&from=2026-06&to=2026-07');
+  assert.deepEqual(payload.periods.map((period) => period.period), ['2026-06', '2026-07']);
+  assert.equal(payload.empCode, 'DN001');
+});
+
+test('period adapter accepts explicit periods/months and rows with period, while stripping blocked fields', () => {
+  const range = employeeCost.parseMonthRange({ from: '2026-06', to: '2026-07' });
+  const periods = employeeCost.adaptPeriodPayload({
+    empCode: 'DN001',
+    periods: [
+      { period: '2026-06', columns: source.columns, rows: source.rows },
+      { month: '07.2026', columns: source.columns, rows: source.rows },
+    ],
+  }, 'DN001', range);
+  assert.deepEqual(periods.periods.map((period) => period.period), ['2026-06', '2026-07']);
+  assert.equal(JSON.stringify(periods).includes('c32'), false);
+  assert.equal(JSON.stringify(periods).includes('c47'), false);
+
+  const months = employeeCost.adaptPeriodPayload({
+    empCode: 'DN001', columns: source.columns,
+    months: {
+      '2026-06': source.rows,
+      '2026-07': { rows: source.rows },
+    },
+  }, 'DN001', range);
+  assert.deepEqual(months.periods.map((period) => period.rows.length), [1, 1]);
+
+  const rowPeriods = employeeCost.adaptPeriodPayload({
+    empCode: 'DN001', columns: source.columns,
+    rows: [{ ...source.rows[0], period: '2026-06' }, { ...source.rows[0], period: '2026-07' }],
+  }, 'DN001', range);
+  assert.deepEqual(rowPeriods.periods.map((period) => period.rows.length), [1, 1]);
+});
+
+test('period adapter fails closed instead of guessing legacy or ambiguous multi-month payloads', () => {
+  const range = employeeCost.parseMonthRange({ from: '2026-06', to: '2026-07' });
+  assert.equal(employeeCost.adaptPeriodPayload(source, 'DN001', range), null);
+  assert.equal(employeeCost.adaptPeriodPayload({
+    empCode: 'DN001', columns: source.columns,
+    rows: [{ ...source.rows[0], period: '2026-06' }, { ...source.rows[0] }],
+  }, 'DN001', range), null);
+  assert.equal(employeeCost.adaptPeriodPayload({
+    empCode: 'DN001', periods: [{ period: '2026-08', columns: source.columns, rows: source.rows }],
+  }, 'DN001', range), null);
+
+  const oneMonth = employeeCost.parseMonthRange({ from: '2026-07', to: '2026-07' });
+  const legacy = employeeCost.adaptPeriodPayload(source, 'DN001', oneMonth);
+  assert.equal(legacy.periods[0].period, '2026-07');
+  assert.equal(legacy.periods[0].rows.length, 1);
+});
+
+test('multi-month enrichment separates month totals and excludes annual columns from the period total', () => {
+  const range = employeeCost.parseMonthRange({ from: '2026-06', to: '2026-07' });
+  const payload = employeeCost.adaptPeriodPayload({
+    empCode: 'DN001', periods: range.months.map((period) => ({
+      period,
+      columns: [{ key: 'c36', label: 'CP tháng' }, { key: 'c44', label: 'Cuối năm' }],
+      rows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10, c44: 5 }],
+    })),
+  }, 'DN001', range);
+  const revenueRowsByPeriod = Object.fromEntries(range.months.map((period) => [period, [
+    { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: period === '2026-06' ? 1_000_000 : 2_000_000 },
+  ]]));
+  const catalogRowsByPeriod = Object.fromEntries(range.months.map((period) => [period, [
+    { c5: 'QL1', c7: 'U1', c16: 'Thuốc' },
+  ]]));
+  const enriched = employeeCost.enrichRangePayload(payload, { revenueRowsByPeriod, catalogRowsByPeriod });
+  assert.deepEqual(enriched.periods.map((period) => period.summary.monthlyTotal), [100_000, 200_000]);
+  assert.deepEqual(enriched.periods.map((period) => period.summary.annualTotal), [50_000, 100_000]);
+  assert.equal(enriched.summary.periodTotal, 300_000);
+  assert.equal(enriched.summary.annualTotal, 150_000);
+});
+
+test('daily amount uses monthly percentage and reconciles exactly to its month', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: [{ key: 'c36', label: 'CP tháng' }, { key: 'c44', label: 'Cuối năm' }],
+    rows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10, c44: 5 }],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07',
+    catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+    revenueRows: [
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000, date: '2026-07-01', date_granularity: 'day' },
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 2_000_000, date: '2026-07-02', date_granularity: 'day' },
+    ],
+  });
+  assert.equal(enriched.daily.reliable, true);
+  assert.deepEqual(enriched.daily.dates, ['2026-07-01', '2026-07-02']);
+  assert.deepEqual(enriched.rows[0].dailyAmounts['2026-07-01'], { c36: 100_000, c44: 50_000 });
+  assert.deepEqual(enriched.rows[0].dailyAmounts['2026-07-02'], { c36: 200_000, c44: 100_000 });
+  assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.monthlyTotal, 0), enriched.summary.monthlyTotal);
+  assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.annualTotal, 0), enriched.summary.annualTotal);
+});
+
+test('daily allocation reconciles VND rounding residual to the monthly amount', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: [{ key: 'c36', label: 'CP tháng' }],
+    rows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 33.3 }],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+    revenueRows: [
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1, date: '2026-07-01', date_granularity: 'day' },
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1, date: '2026-07-02', date_granularity: 'day' },
+    ],
+  });
+  const dailySum = Object.values(enriched.rows[0].dailyAmounts).reduce((sum, amounts) => sum + amounts.c36, 0);
+  assert.equal(enriched.summary.monthlyTotal, 1);
+  assert.equal(dailySum, enriched.summary.monthlyTotal);
+  assert.equal(enriched.daily.reliable, true);
+});
+
+test('duplicate cost rows for one unit-product key fail closed instead of double-counting revenue', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: [{ key: 'c36', label: 'CP tháng' }],
+    rows: [
+      { c5: 'QL1', c7: 'U1', c16: 'Thuốc', c25: 'Viên', c36: 10 },
+      { c5: 'QL1', c7: 'U1', c16: 'Thuốc', c25: 'Hộp', c36: 10 },
+    ],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+    revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000 }],
+  });
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [null, null]);
+  assert.equal(enriched.match.rate, 0);
+  assert.equal(enriched.summary.monthlyTotal, null);
+});
+
+test('daily drill fails closed when a revenue date is absent, outside the month or only period-granular', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: [{ key: 'c36', label: 'CP tháng' }],
+    rows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10 }],
+  }, 'DN001');
+  for (const invalidRow of [
+    { revenue: 1_000_000 },
+    { revenue: 1_000_000, date: '2026-06-30', date_granularity: 'day' },
+    { revenue: 1_000_000, date: '2026-07-01', date_granularity: 'period' },
+  ]) {
+    const enriched = employeeCost.enrichWithRevenue(payload, {
+      period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+      revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', ...invalidRow }],
+    });
+    assert.equal(enriched.summary.monthlyTotal, 100_000);
+    assert.equal(enriched.daily.reliable, false);
+    assert.equal(enriched.rows[0].dailyAmounts, null);
+    assert.deepEqual(enriched.daily.dates, []);
+  }
+});

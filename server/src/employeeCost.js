@@ -27,6 +27,54 @@ function normName(value) {
     .replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function currentMonth(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function normalizeMonth(value) {
+  const text = String(value || '').trim();
+  let match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(text);
+  if (match) return `${match[1]}-${match[2]}`;
+  match = /^(0[1-9]|1[0-2])\.(\d{4})$/.exec(text);
+  return match ? `${match[2]}-${match[1]}` : '';
+}
+
+function toUiMonth(value) {
+  const month = normalizeMonth(value);
+  return month ? `${month.slice(5, 7)}.${month.slice(0, 4)}` : '';
+}
+
+function monthsBetween(from, to) {
+  const months = [];
+  let year = Number(from.slice(0, 4));
+  let month = Number(from.slice(5, 7));
+  const end = Number(to.slice(0, 4)) * 12 + Number(to.slice(5, 7));
+  for (let cursor = year * 12 + month; cursor <= end; cursor += 1) {
+    year = Math.floor((cursor - 1) / 12);
+    month = (cursor - 1) % 12 + 1;
+    months.push(`${year}-${String(month).padStart(2, '0')}`);
+  }
+  return months;
+}
+
+function parseMonthRange({ from, to } = {}, now = new Date()) {
+  const hasFrom = from != null && String(from).trim() !== '';
+  const hasTo = to != null && String(to).trim() !== '';
+  if (hasFrom !== hasTo) {
+    throw Object.assign(new Error('Phải chọn đủ Từ tháng và Đến tháng'), { status: 400, code: 'EMPLOYEE_COST_RANGE_REQUIRED' });
+  }
+  const fallback = currentMonth(now);
+  const normalizedFrom = hasFrom && /^\d{4}-(0[1-9]|1[0-2])$/.test(String(from).trim()) ? String(from).trim() : (hasFrom ? '' : fallback);
+  const normalizedTo = hasTo && /^\d{4}-(0[1-9]|1[0-2])$/.test(String(to).trim()) ? String(to).trim() : (hasTo ? '' : fallback);
+  if (!normalizedFrom || !normalizedTo) {
+    throw Object.assign(new Error('Kỳ phải có dạng YYYY-MM'), { status: 400, code: 'EMPLOYEE_COST_RANGE_INVALID' });
+  }
+  if (normalizedFrom > normalizedTo) {
+    throw Object.assign(new Error('Từ tháng không được sau Đến tháng'), { status: 400, code: 'EMPLOYEE_COST_RANGE_ORDER' });
+  }
+  return { from: normalizedFrom, to: normalizedTo, months: monthsBetween(normalizedFrom, normalizedTo) };
+}
+
 function configuredAnnualColumnKeys(value = process.env.EMPLOYEE_COST_ANNUAL_COLUMNS) {
   if (value == null) return new Set(DEFAULT_ANNUAL_COLUMN_KEYS);
   const raw = Array.isArray(value) ? value : String(value).split(',');
@@ -108,6 +156,83 @@ function emptyPayload(empCode, note = DEFAULT_NOTE) {
   return { empCode: normEmp(empCode), columns: [], rows: [], note };
 }
 
+function emptyRangePayload(empCode, range, note = DEFAULT_NOTE) {
+  return {
+    empCode: normEmp(empCode),
+    from: range.from,
+    to: range.to,
+    periods: range.months.map((period) => ({ ...emptyPayload(empCode, note), period })),
+    note,
+  };
+}
+
+function explicitPeriodOf(value) {
+  if (!value || typeof value !== 'object') return '';
+  return normalizeMonth(value.period ?? value.month);
+}
+
+function adaptPeriodPayload(raw, expectedEmp, range) {
+  const expected = normEmp(expectedEmp);
+  if (!expected || normEmp(raw?.empCode) !== expected) return null;
+  const requested = new Set(range.months);
+  const byPeriod = new Map();
+  const put = (periodValue, source, inheritedColumns) => {
+    const period = normalizeMonth(periodValue);
+    if (!period || !requested.has(period) || byPeriod.has(period) || !source || typeof source !== 'object') return false;
+    // Some DataHub versions expose { months: { "YYYY-MM": [rows] } }.
+    // The object key is an explicit period, so accepting the array does not
+    // infer or spread rows across months; top-level columns remain mandatory.
+    const block = Array.isArray(source) ? { rows: source } : source;
+    const sourceEmp = block.empCode == null ? expected : normEmp(block.empCode);
+    if (sourceEmp !== expected) return false;
+    const columns = block.columns == null ? inheritedColumns : block.columns;
+    if (!Array.isArray(columns) || !Array.isArray(block.rows)) return false;
+    const sanitized = sanitizePayload({ empCode: expected, columns, rows: block.rows }, expected);
+    byPeriod.set(period, { ...sanitized, period });
+    return true;
+  };
+
+  const hasPeriods = raw?.periods != null;
+  const hasMonths = raw?.months != null;
+  if (hasPeriods && hasMonths) return null;
+  const collection = hasPeriods ? raw.periods : (hasMonths ? raw.months : null);
+  if (collection != null) {
+    const entries = Array.isArray(collection) ? collection.map((item) => [explicitPeriodOf(item), item])
+      : collection && typeof collection === 'object' ? Object.entries(collection) : null;
+    if (!entries) return null;
+    for (const [mapPeriod, item] of entries) {
+      const explicit = explicitPeriodOf(item);
+      if (explicit && normalizeMonth(mapPeriod) && explicit !== normalizeMonth(mapPeriod)) return null;
+      if (!put(explicit || mapPeriod, item, raw.columns)) return null;
+    }
+  } else if (Array.isArray(raw?.rows) && raw.rows.some((row) => row && (row.period != null || row.month != null))) {
+    if (!Array.isArray(raw.columns)) return null;
+    const grouped = new Map();
+    for (const row of raw.rows) {
+      const period = explicitPeriodOf(row);
+      if (!period || !requested.has(period)) return null;
+      const rows = grouped.get(period) || [];
+      rows.push(row);
+      grouped.set(period, rows);
+    }
+    for (const [period, rows] of grouped) {
+      if (!put(period, { rows }, raw.columns)) return null;
+    }
+  } else {
+    // A payload without an explicit period is safe only when the request itself
+    // identifies exactly one month. Never spread legacy rows across a range.
+    if (range.months.length !== 1 || !Array.isArray(raw?.columns) || !Array.isArray(raw?.rows)) return null;
+    if (!put(range.from, raw)) return null;
+  }
+
+  return {
+    empCode: expected,
+    from: range.from,
+    to: range.to,
+    periods: range.months.map((period) => byPeriod.get(period) || { ...emptyPayload(expected), period }),
+  };
+}
+
 function productCodeOf(row = {}) {
   return normCode(row.iit_code ?? row.qlnb_code ?? row.product_code ?? row.c5 ?? row.code);
 }
@@ -176,11 +301,56 @@ function buildRevenueIndex(revenueRows = [], expectedEmp = '') {
   return index;
 }
 
+function buildRevenueDetail(revenueRows = [], expectedEmp = '', period = '') {
+  const monthly = new Map();
+  const daily = new Map();
+  const invalidDailyKeys = new Set();
+  const scopedEmp = normEmp(expectedEmp);
+  const expectedPeriod = normalizeMonth(period);
+  for (const row of Array.isArray(revenueRows) ? revenueRows : []) {
+    const rowEmp = normEmp(row.emp_code ?? row.empCode);
+    if (scopedEmp && rowEmp && rowEmp !== scopedEmp) continue;
+    const unit = unitCodeOf(row);
+    const product = productCodeOf(row);
+    const revenue = Number(row.revenue ?? row.tong_tien);
+    if (!unit || !product || !Number.isFinite(revenue)) continue;
+    const key = `${unit}\u001f${product}`;
+    monthly.set(key, (monthly.get(key) || 0) + revenue);
+
+    const date = String(row.date || '').slice(0, 10);
+    const datePeriod = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date.slice(0, 7) : '';
+    const explicitlyPeriodOnly = String(row.date_granularity || '').toLowerCase() === 'period';
+    if (!datePeriod || explicitlyPeriodOnly || (expectedPeriod && datePeriod !== expectedPeriod)) {
+      invalidDailyKeys.add(key);
+      continue;
+    }
+    const byDate = daily.get(key) || new Map();
+    byDate.set(date, (byDate.get(date) || 0) + revenue);
+    daily.set(key, byDate);
+  }
+  for (const key of invalidDailyKeys) daily.delete(key);
+  return { monthly, daily, invalidDailyKeys };
+}
+
 function calculateAmount(revenue, percent) {
   if (percent == null || percent === '') return null;
   const rate = Number(percent);
   if (!Number.isFinite(revenue) || !Number.isFinite(rate)) return null;
   return Math.round(revenue * rate / 100);
+}
+
+function calculateDailyAmounts(byDate, percent, monthlyAmount) {
+  if (!(byDate instanceof Map) || !byDate.size || monthlyAmount == null) return null;
+  const entries = [...byDate.entries()].sort(([a], [b]) => a.localeCompare(b));
+  const amounts = new Map(entries.map(([date, revenue]) => [date, calculateAmount(revenue, percent)]));
+  if ([...amounts.values()].some((amount) => amount == null)) return null;
+  // VND is displayed as an integer. Independent day rounding can differ from
+  // the rounded month by a few đồng, so put the deterministic residual on the
+  // last day to guarantee the acceptance rule Σ day = month.
+  const sum = [...amounts.values()].reduce((total, amount) => total + amount, 0);
+  const lastDate = entries.at(-1)[0];
+  amounts.set(lastDate, amounts.get(lastDate) + monthlyAmount - sum);
+  return amounts;
 }
 
 function enrichWithRevenue(payload, options = {}) {
@@ -193,26 +363,55 @@ function enrichWithRevenue(payload, options = {}) {
     annual: annualKeys.has(column.key),
   }));
   const catalogIndex = buildProductCatalogIndex(options.catalogRows);
-  const revenueIndex = buildRevenueIndex(options.revenueRows, payload.empCode);
+  const revenueDetail = buildRevenueDetail(options.revenueRows, payload.empCode, options.period);
+  const revenueIndex = revenueDetail.monthly;
   let matchedRows = 0;
   let monthlyMatchedTotal = 0;
   let annualMatchedTotal = 0;
+  let dailyRowsReliable = true;
+  const allDates = new Set();
 
-  const rows = (payload.rows || []).map((source) => {
+  const rowContexts = (payload.rows || []).map((source) => {
     const productCode = resolveProductCode(source, catalogIndex);
-    const revenueKey = `${unitCodeOf(source)}\u001f${productCode}`;
-    const matched = !!productCode && revenueIndex.has(revenueKey);
+    return { source, productCode, revenueKey: `${unitCodeOf(source)}\u001f${productCode}` };
+  });
+  const revenueKeyCounts = new Map();
+  for (const context of rowContexts) {
+    if (!context.productCode) continue;
+    revenueKeyCounts.set(context.revenueKey, (revenueKeyCounts.get(context.revenueKey) || 0) + 1);
+  }
+
+  const rows = rowContexts.map(({ source, productCode, revenueKey }) => {
+    // Multiple cost rows resolving to one unit+product key are ambiguous: using
+    // the full revenue for each would double count. Fail closed for that key.
+    const matched = !!productCode && revenueKeyCounts.get(revenueKey) === 1 && revenueIndex.has(revenueKey);
     const revenue = matched ? revenueIndex.get(revenueKey) : null;
     if (matched) matchedRows += 1;
     const amounts = {};
+    const dailyAmounts = {};
+    const byDate = matched ? revenueDetail.daily.get(revenueKey) : null;
+    let rowDailyReliable = matched && !!byDate?.size;
     for (const column of columns) {
       const amount = matched ? calculateAmount(revenue, source[column.key]) : null;
       amounts[column.key] = amount;
       if (amount == null) continue;
       if (column.annual) annualMatchedTotal += amount;
       else monthlyMatchedTotal += amount;
+      if (rowDailyReliable) {
+        const allocated = calculateDailyAmounts(byDate, source[column.key], amount);
+        if (!allocated) {
+          rowDailyReliable = false;
+          continue;
+        }
+        for (const [date, dayAmount] of allocated) {
+          if (!dailyAmounts[date]) dailyAmounts[date] = {};
+          dailyAmounts[date][column.key] = dayAmount;
+          allDates.add(date);
+        }
+      }
     }
-    return { ...source, amounts, revenueMatched: matched };
+    if (matched && !rowDailyReliable) dailyRowsReliable = false;
+    return { ...source, amounts, revenueMatched: matched, dailyAmounts: rowDailyReliable ? dailyAmounts : null, dayRevenueMatched: rowDailyReliable };
   });
 
   const totalRows = rows.length;
@@ -220,6 +419,24 @@ function enrichWithRevenue(payload, options = {}) {
   const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
   const low = rate != null && rate < threshold;
   const annualLabels = columns.filter((column) => column.annual).map((column) => column.label);
+  const dailyReliable = hasGroundedRows && !low && dailyRowsReliable && matchedRows === totalRows;
+  const dates = dailyReliable ? [...allDates].sort() : [];
+  const dayTotals = dates.map((date) => {
+    let monthlyTotal = 0;
+    let annualTotal = 0;
+    for (const row of rows) {
+      for (const column of columns) {
+        const amount = row.dailyAmounts?.[date]?.[column.key];
+        if (amount == null) continue;
+        if (column.annual) annualTotal += amount;
+        else monthlyTotal += amount;
+      }
+    }
+    return { date, monthlyTotal, annualTotal };
+  });
+  const dayMonthlyTotal = dayTotals.reduce((sum, day) => sum + day.monthlyTotal, 0);
+  const dayAnnualTotal = dayTotals.reduce((sum, day) => sum + day.annualTotal, 0);
+  const reconciled = dailyReliable && dayMonthlyTotal === monthlyMatchedTotal && dayAnnualTotal === annualMatchedTotal;
   return {
     ...payload,
     period: String(options.period || ''),
@@ -232,6 +449,42 @@ function enrichWithRevenue(payload, options = {}) {
       annualTotal: !hasGroundedRows || low ? null : annualMatchedTotal,
       annualColumnKeys: columns.filter((column) => column.annual).map((column) => column.key),
       annualLabels,
+    },
+    daily: {
+      reliable: reconciled,
+      reason: reconciled ? '' : 'Dữ liệu doanh thu ngày thiếu hoặc không khớp tổng tháng',
+      dates: reconciled ? dates : [],
+      totals: reconciled ? dayTotals : [],
+    },
+  };
+}
+
+function enrichRangePayload(payload, options = {}) {
+  const revenueByPeriod = options.revenueRowsByPeriod || {};
+  const catalogByPeriod = options.catalogRowsByPeriod || {};
+  const periods = (payload.periods || []).map((periodPayload) => enrichWithRevenue(periodPayload, {
+    ...options,
+    period: periodPayload.period,
+    revenueRows: revenueByPeriod[periodPayload.period] || [],
+    catalogRows: catalogByPeriod[periodPayload.period] || [],
+  }));
+  const totalRows = periods.reduce((sum, period) => sum + period.match.totalRows, 0);
+  const matchedRows = periods.reduce((sum, period) => sum + period.match.matchedRows, 0);
+  const reliable = periods.length > 0 && periods.every((period) => period.summary.reliable);
+  return {
+    ...payload,
+    periods,
+    match: {
+      matchedRows,
+      totalRows,
+      rate: totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null,
+      threshold: configuredMatchWarningPercent(options.matchWarningPercent),
+      low: periods.some((period) => period.match.low),
+    },
+    summary: {
+      reliable,
+      periodTotal: reliable ? periods.reduce((sum, period) => sum + period.summary.monthlyTotal, 0) : null,
+      annualTotal: reliable ? periods.reduce((sum, period) => sum + period.summary.annualTotal, 0) : null,
     },
   };
 }
@@ -252,12 +505,18 @@ async function fetchEmployeeCost(empCode, options = {}) {
   const timeoutMs = Math.max(100, Number(options.timeoutMs ?? process.env.APP_REPORT_COST_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
   const backoffMs = options.backoffMs || DEFAULT_BACKOFF_MS;
   const sleepImpl = options.sleepImpl || sleep;
+  const range = options.from != null || options.to != null ? parseMonthRange(options) : null;
 
   if (!baseUrl || !token || typeof fetchImpl !== 'function') {
-    return { payload: emptyPayload(empCode, DEFAULT_NOTE), outcome: 'not_configured', attempts: 0 };
+    return { payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE), outcome: 'not_configured', attempts: 0 };
   }
 
-  const url = `${baseUrl}${CONTRACT_PATH}?emp=${encodeURIComponent(normEmp(empCode))}`;
+  const params = new URLSearchParams({ emp: normEmp(empCode) });
+  if (range) {
+    params.set('from', range.from);
+    params.set('to', range.to);
+  }
+  const url = `${baseUrl}${CONTRACT_PATH}?${params.toString()}`;
   let attempts = 0;
   for (;;) {
     attempts += 1;
@@ -282,7 +541,12 @@ async function fetchEmployeeCost(empCode, options = {}) {
       }
       const raw = await response.json();
       if (normEmp(raw?.empCode) !== normEmp(empCode)) {
-        return { payload: emptyPayload(empCode, DEFAULT_NOTE), outcome: 'scope_mismatch', attempts };
+        return { payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE), outcome: 'scope_mismatch', attempts };
+      }
+      if (range) {
+        const adapted = adaptPeriodPayload(raw, empCode, range);
+        if (!adapted) return { payload: emptyRangePayload(empCode, range), outcome: 'invalid_period_payload', attempts };
+        return { payload: adapted, outcome: 'ok', attempts };
       }
       return { payload: sanitizePayload(raw, empCode), outcome: 'ok', attempts };
     } catch (error) {
@@ -294,7 +558,7 @@ async function fetchEmployeeCost(empCode, options = {}) {
       const unauthorized = error?.status === 401;
       return {
         // FE luôn nhận thông báo rỗng chung; nguyên nhân 401 chỉ nằm trong audit/log admin.
-        payload: emptyPayload(empCode, DEFAULT_NOTE),
+        payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE),
         outcome: unauthorized ? 'upstream_unauthorized' : (error?.status ? `upstream_${error.status}` : 'upstream_unavailable'),
         attempts,
       };
@@ -329,13 +593,16 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
     catch { console.warn('[employee-cost] audit write failed', { actor: normEmp(session?.emp_code), empCode: entry.empCode }); }
   };
   const empCode = resolveScopedEmployee({ session, scope, requestedEmp });
+  const range = options.from != null || options.to != null ? parseMonthRange(options) : null;
   if (!empCode) {
-    const result = { payload: emptyPayload('', DEFAULT_NOTE), outcome: 'missing_emp', attempts: 0 };
+    const result = { payload: range ? emptyRangePayload('', range) : emptyPayload('', DEFAULT_NOTE), outcome: 'missing_emp', attempts: 0 };
     audit({ actor: session?.emp_code, role: session?.role, empCode, outcome: result.outcome, attempts: result.attempts });
     return result.payload;
   }
   const result = await fetchEmployeeCost(empCode, options);
-  if (result.outcome === 'ok' && Array.isArray(options.revenueRows) && Array.isArray(options.catalogRows)) {
+  if (result.outcome === 'ok' && range && options.revenueRowsByPeriod && options.catalogRowsByPeriod) {
+    result.payload = enrichRangePayload(result.payload, options);
+  } else if (result.outcome === 'ok' && Array.isArray(options.revenueRows) && Array.isArray(options.catalogRows)) {
     result.payload = enrichWithRevenue(result.payload, options);
   }
   audit({
@@ -365,17 +632,27 @@ module.exports = {
   DEFAULT_NOTE,
   DEFAULT_ANNUAL_COLUMN_KEYS,
   DEFAULT_MATCH_WARNING_PERCENT,
+  currentMonth,
+  normalizeMonth,
+  toUiMonth,
+  monthsBetween,
+  parseMonthRange,
   resolveScopedEmployee,
   isAllowedDynamicKey,
   sanitizePayload,
   emptyPayload,
+  emptyRangePayload,
+  adaptPeriodPayload,
   configuredAnnualColumnKeys,
   configuredMatchWarningPercent,
   buildProductCatalogIndex,
   resolveProductCode,
   buildRevenueIndex,
+  buildRevenueDetail,
   calculateAmount,
+  calculateDailyAmounts,
   enrichWithRevenue,
+  enrichRangePayload,
   fetchEmployeeCost,
   getForSession,
 };
