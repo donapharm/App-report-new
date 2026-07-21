@@ -1,7 +1,5 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const employeeCost = require('../src/employeeCost');
 
 const source = {
@@ -210,42 +208,6 @@ test('range proxy sends validated from/to with the backend-locked employee scope
   assert.equal(calledUrl, 'http://hub.test/api/integrations/app-report/employee-cost?emp=DN001&from=2026-06&to=2026-07');
   assert.deepEqual(payload.periods.map((period) => period.period), ['2026-06', '2026-07']);
   assert.equal(payload.empCode, 'DN001');
-});
-
-test('all-employees HTTP route is guarded by backend admin middleware', () => {
-  const routesSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
-  assert.match(routesSource, /router\.get\('\/employee-cost\/all', auth\.requireAuth, auth\.requireAdmin,/);
-});
-
-test('admin all-employees view keeps employees separate and never sends a synthetic ALL upstream', async () => {
-  const calledEmployees = [];
-  const result = await employeeCost.getAllForAdmin({
-    session: { emp_code: 'CEO', role: 'admin' },
-    employees: [
-      { emp_code: 'DN001', name: 'NV 1' },
-      { emp_code: 'DN016', name: 'NV 2' },
-      { emp_code: 'dn001', name: 'Trùng' },
-    ],
-  }, {
-    baseUrl: 'http://hub.test', token: 'server-only', backoffMs: [], from: '2026-07', to: '2026-07',
-    catalogRowsByPeriod: { '2026-07': [] },
-    revenueRowsByEmployee: { DN001: { '2026-07': [] }, DN016: { '2026-07': [] } },
-    auditImpl: () => {},
-    fetchImpl: async (url) => {
-      const empCode = new URL(url).searchParams.get('emp');
-      calledEmployees.push(empCode);
-      return {
-        ok: true, status: 200,
-        json: async () => ({ empCode, periods: [{ period: '2026-07', columns: [], rows: [] }] }),
-      };
-    },
-  });
-  assert.deepEqual(calledEmployees, ['DN001', 'DN016']);
-  assert.equal(calledEmployees.includes('ALL'), false);
-  assert.equal(result.mode, 'all');
-  assert.deepEqual(result.employees.map((employee) => employee.emp_code), ['DN001', 'DN016']);
-  assert.equal(Object.hasOwn(result, 'summary'), false);
-  assert.equal(result.employees.every((employee) => employee.payload.empCode === employee.emp_code), true);
 });
 
 test('period adapter accepts explicit periods/months and rows with period, while stripping blocked fields', () => {

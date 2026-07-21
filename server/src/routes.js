@@ -498,55 +498,6 @@ router.get('/me', auth.requireAuth, (req, res) => {
   res.json({ ...req.session, isAdmin: auth.isAdmin(req.session.role) });
 });
 
-function employeeCostEmployeeList() {
-  return store.listUsers()
-    .filter((user) => String(user.role || '').toLowerCase() === 'sale')
-    .map((user) => ({ emp_code: user.emp_code, name: user.name }))
-    .sort((a, b) => String(a.emp_code).localeCompare(String(b.emp_code), 'vi'));
-}
-
-function employeeCostRevenueRows(empCode, range) {
-  return Object.fromEntries(range.months.map((period) => [
-    period,
-    store.getRows({ ky: employeeCost.toUiMonth(period), scope: { empCode } }),
-  ]));
-}
-
-async function employeeCostCatalogRows(range) {
-  const rows = {};
-  for (const period of range.months) {
-    rows[period] = [];
-    try {
-      const snapshot = await canonicalAssignmentSnapshot(period);
-      rows[period] = snapshot.catalog || snapshot.rows || [];
-    } catch (error) {
-      // Fail closed per period: never reuse another month's catalog.
-      console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
-    }
-  }
-  return rows;
-}
-
-// CEO/admin-only batch view. Results stay separated by employee and deliberately
-// have no combined payout/summary. DataHub is still called once per real emp code.
-router.get('/employee-cost/all', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
-  const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
-  const employees = employeeCostEmployeeList();
-  const catalogRowsByPeriod = await employeeCostCatalogRows(range);
-  const revenueRowsByEmployee = Object.fromEntries(employees.map((employee) => [
-    employee.emp_code,
-    employeeCostRevenueRows(employee.emp_code, range),
-  ]));
-  const payload = await employeeCost.getAllForAdmin({ session: req.session, employees }, {
-    from: range.from,
-    to: range.to,
-    catalogRowsByPeriod,
-    revenueRowsByEmployee,
-  });
-  res.set('Cache-Control', 'private, no-store');
-  res.json(payload);
-}));
-
 // Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
 // chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
 router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) => {
@@ -557,9 +508,22 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
     scope: s,
     requestedEmp: req.query.emp,
   });
+  const revenueRowsByPeriod = {};
+  const catalogRowsByPeriod = {};
   // Doanh thu và catalog được lấy riêng đúng từng kỳ, luôn với scope backend.
-  const revenueRowsByPeriod = empCode ? employeeCostRevenueRows(empCode, range) : {};
-  const catalogRowsByPeriod = empCode ? await employeeCostCatalogRows(range) : {};
+  // Catalog lỗi ở tháng nào thì tháng đó fail closed, không dùng snapshot tháng khác.
+  for (const period of range.months) {
+    const uiPeriod = employeeCost.toUiMonth(period);
+    revenueRowsByPeriod[period] = empCode ? store.getRows({ ky: uiPeriod, scope: { empCode } }) : [];
+    catalogRowsByPeriod[period] = [];
+    if (!empCode) continue;
+    try {
+      const catalogSnapshot = await canonicalAssignmentSnapshot(period);
+      catalogRowsByPeriod[period] = catalogSnapshot.catalog || catalogSnapshot.rows || [];
+    } catch (error) {
+      console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+    }
+  }
   const payload = await employeeCost.getForSession({
     session: req.session,
     scope: s,
@@ -575,7 +539,10 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
 }));
 
 router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  const employees = employeeCostEmployeeList();
+  const employees = store.listUsers()
+    .filter((user) => String(user.role || '').toLowerCase() === 'sale')
+    .map((user) => ({ emp_code: user.emp_code, name: user.name }))
+    .sort((a, b) => String(a.emp_code).localeCompare(String(b.emp_code), 'vi'));
   res.set('Cache-Control', 'private, no-store');
   res.json({ employees });
 });

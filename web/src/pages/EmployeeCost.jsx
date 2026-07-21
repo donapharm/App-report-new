@@ -8,7 +8,6 @@ import {
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
-const ALL_EMPLOYEES = '__all__';
 const dateLabel = (value) => String(value || '').split('-').reverse().join('/');
 
 function CostTable({ period, daily = false }) {
@@ -95,26 +94,6 @@ function PeriodBlock({ period, expanded, onToggle }) {
   </div>;
 }
 
-function EmployeeCostBlocks({ model, keyPrefix = '', expanded, setExpanded }) {
-  const multiple = model.periods.length > 1;
-  if (!model.periods.length) return <div className="card center">{model.note}</div>;
-  return <>
-    {model.periods.map((period) => {
-      const expansionKey = `${keyPrefix}${period.period}`;
-      return <PeriodBlock
-        key={expansionKey}
-        period={period}
-        expanded={!!expanded[expansionKey]}
-        onToggle={() => setExpanded((current) => ({ ...current, [expansionKey]: !current[expansionKey] }))}
-      />;
-    })}
-    {multiple && <div className="card employee-cost-range-total">
-      <span>Tổng cả kỳ (chưa gồm khoản cuối năm)</span>
-      <b>{formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)}</b>
-    </div>}
-  </>;
-}
-
 export default function EmployeeCost({ me }) {
   const admin = !!me?.isAdmin;
   const [employees, setEmployees] = useState([]);
@@ -143,10 +122,7 @@ export default function EmployeeCost({ me }) {
     setLoading(true);
     setError('');
     setExpanded({});
-    const request = admin && selectedEmp === ALL_EMPLOYEES
-      ? api.employeeCostAll(range)
-      : api.employeeCost(admin ? selectedEmp : undefined, range);
-    request
+    api.employeeCost(admin ? selectedEmp : undefined, range)
       .then((data) => { if (alive) setPayload(data); })
       .catch((requestError) => {
         if (!alive) return;
@@ -157,22 +133,13 @@ export default function EmployeeCost({ me }) {
     return () => { alive = false; };
   }, [admin, selectedEmp, range]);
 
-  const allMode = admin && selectedEmp === ALL_EMPLOYEES;
-  const model = useMemo(() => employeeCostViewModel(allMode ? EMPTY : payload), [allMode, payload]);
-  const allEntries = useMemo(() => allMode && payload?.mode === 'all'
-    ? (Array.isArray(payload.employees) ? payload.employees : []).map((employee) => ({
-      empCode: String(employee.emp_code || ''),
-      name: String(employee.name || employee.emp_code || ''),
-      model: employeeCostViewModel(employee.payload || EMPTY),
-    }))
-    : [], [allMode, payload]);
+  const model = useMemo(() => employeeCostViewModel(payload), [payload]);
   const selected = employees.find((employee) => employee.emp_code === selectedEmp);
   const employeeLabel = admin
-    ? (allMode ? `Tất cả nhân viên (${allEntries.length})` : (selected ? `${selected.emp_code} · ${selected.name}` : 'Chưa chọn nhân viên'))
+    ? (selected ? `${selected.emp_code} · ${selected.name}` : 'Chưa chọn nhân viên')
     : String(me?.emp_code || model.empCode || '—');
   const rangeInvalid = !draftRange.from || !draftRange.to || draftRange.from > draftRange.to;
   const multiple = model.periods.length > 1;
-  const rowCount = allMode ? allEntries.reduce((sum, employee) => sum + employee.model.rows.length, 0) : model.rows.length;
 
   const applyRange = (event) => {
     event.preventDefault();
@@ -190,8 +157,7 @@ export default function EmployeeCost({ me }) {
         {admin && <label>
           <span>Nhân viên</span>
           <select value={selectedEmp} onChange={(event) => setSelectedEmp(event.target.value)}>
-            <option value={ALL_EMPLOYEES}>Tất cả nhân viên</option>
-            {!employees.length && <option value="" disabled>Chưa có nhân viên</option>}
+            {!employees.length && <option value="">Chưa có nhân viên</option>}
             {employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>
               {employee.emp_code} · {employee.name}
             </option>)}
@@ -206,21 +172,23 @@ export default function EmployeeCost({ me }) {
 
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} />
-      <Kpi label="Số dòng" value={rowCount.toLocaleString('vi-VN')} />
-      <Kpi label="Khớp doanh thu" value={allMode ? 'Tách riêng từng NV' : formatMatchRate(model.match)} sub={allMode ? 'Không cộng gộp tỷ lệ' : `${model.match.matchedRows}/${model.match.totalRows} dòng · ngưỡng ${model.match.threshold}%`} />
-      <Kpi label={allMode ? 'Tổng chi phí' : (multiple ? 'Tổng cả kỳ (chưa gồm khoản cuối năm)' : 'Tổng chi phí tháng (chưa gồm khoản cuối năm)')} value={allMode ? 'Không cộng gộp' : formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(allMode ? payload.from : model.from)} → ${formatMonthLabel(allMode ? payload.to : model.to)}`} />
+      <Kpi label="Số dòng" value={model.rows.length.toLocaleString('vi-VN')} />
+      <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} dòng · ngưỡng ${model.match.threshold}%`} />
+      <Kpi label={multiple ? 'Tổng cả kỳ (chưa gồm khoản cuối năm)' : 'Tổng chi phí tháng (chưa gồm khoản cuối năm)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`} />
     </div>
 
     {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
-    {loading ? <div className="card"><Spinner /></div> : allMode ? (
-      !allEntries.length ? <div className="card center">{payload.note || 'Chưa có nhân viên để hiển thị.'}</div> :
-        allEntries.map((employee) => <section className="employee-cost-employee-group" key={employee.empCode}>
-          <div className="card employee-cost-employee-head">
-            <div className="section-head">{employee.empCode} · {employee.name}</div>
-            <span>{employee.model.rows.length.toLocaleString('vi-VN')} dòng · tách riêng, không cộng vào tổng chung</span>
-          </div>
-          <EmployeeCostBlocks model={employee.model} keyPrefix={`${employee.empCode}:`} expanded={expanded} setExpanded={setExpanded} />
-        </section>)
-    ) : <EmployeeCostBlocks model={model} expanded={expanded} setExpanded={setExpanded} />}
+    {loading ? <div className="card"><Spinner /></div> : !model.periods.length ? <div className="card center">{model.note}</div> : <>
+      {model.periods.map((period) => <PeriodBlock
+        key={period.period}
+        period={period}
+        expanded={!!expanded[period.period]}
+        onToggle={() => setExpanded((current) => ({ ...current, [period.period]: !current[period.period] }))}
+      />)}
+      {multiple && <div className="card employee-cost-range-total">
+        <span>Tổng cả kỳ (chưa gồm khoản cuối năm)</span>
+        <b>{formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)}</b>
+      </div>}
+    </>}
   </section>;
 }
