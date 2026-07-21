@@ -59,6 +59,13 @@ export const api = {
     const query = params.toString();
     return req('GET', '/employee-cost' + (query ? `?${query}` : ''));
   },
+  employeeCostAll: (range = {}) => {
+    const params = new URLSearchParams();
+    if (range.from) params.set('from', range.from);
+    if (range.to) params.set('to', range.to);
+    const query = params.toString();
+    return req('GET', '/employee-cost/all' + (query ? `?${query}` : ''));
+  },
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   periods: () => req('GET', '/periods'),
   revenueRefreshStatus: () => req('GET', '/admin/revenue-refresh/status'),

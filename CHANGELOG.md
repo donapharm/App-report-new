@@ -2,6 +2,7 @@
 - App Report ghép dòng chi phí với doanh thu đã khóa scope theo **đơn vị + mã sản phẩm** (C16 được resolve qua catalog), tính `Thành tiền = doanh thu × tỷ lệ ÷ 100`; dòng không khớp giữ `—` và cảnh báo khi tỷ lệ khớp dưới 90%.
 - Mỗi cột tỷ lệ có cột **Thành tiền**; tỷ lệ hiển thị số không kèm `%`. Cột cấu hình cuối năm (mặc định `c44`) được làm mờ, không cộng vào tổng tháng và có tổng T12 riêng.
 - Giữ nguyên chặn C32/C47, token chỉ ở backend và audit theo scope; bổ sung test server/web cho phép tính, fail-closed, tổng tháng/cuối năm và định dạng hiển thị.
+- Bổ sung lựa chọn CEO/admin **“Tất cả nhân viên”**: route batch admin-only gọi DataHub tuần tự theo từng mã NV thật, trả từng payload tách biệt; giao diện không cộng gộp payout/tỷ lệ giữa nhân viên. Tài khoản NV thường vẫn chỉ xem chính mình.
 - Bổ sung bộ lọc **Từ tháng/Đến tháng** mặc định tháng hiện tại; backend kiểm `YYYY-MM`, khóa scope NV và truyền nguyên `from/to` xuống endpoint DataHub. Adapter nhận payload `periods`/`months` hoặc dòng có `period`, giữ tương thích payload cũ đúng một tháng và fail closed khi nguồn nhiều tháng mơ hồ.
 - Doanh thu/catalog được lấy riêng đúng từng kỳ; UI tách mỗi tháng thành một khối có tổng tháng riêng và thêm **Tổng cả kỳ** không gồm cột cuối năm. Drill ngày chỉ mở khi mọi dòng doanh thu có ngày đúng kỳ và tổng Thành tiền ngày khớp tuyệt đối tổng tháng; thiếu/sai ngày giữ trạng thái rỗng an toàn.
 

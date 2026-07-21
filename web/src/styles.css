@@ -1977,6 +1977,9 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-range-total { display:flex; align-items:center; justify-content:flex-end; gap:24px; border:2px solid #075d9b; background:#eef7fd; }
 .employee-cost-range-total span { font-weight:900; }
 .employee-cost-range-total b { min-width:160px; color:#075d9b; text-align:right; font-size:18px; }
+.employee-cost-employee-group { display:grid; gap:10px; padding:12px; border:2px solid #c8dce9; border-radius:14px; background:#f7fbfe; }
+.employee-cost-employee-head { display:flex; align-items:center; justify-content:space-between; gap:12px; border-left:5px solid #075d9b; }
+.employee-cost-employee-head span { color:var(--muted); font-size:11px; font-weight:700; }
 @media (max-width: 767px) {
   .employee-cost-heading { display:grid; align-items:stretch; }
   .employee-cost-filters { display:grid; grid-template-columns:1fr 1fr; justify-content:stretch; }
@@ -1989,4 +1992,5 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-period-head { align-items:stretch; flex-direction:column; }
   .employee-cost-period-head .btn { width:100%; }
   .employee-cost-range-total { align-items:flex-end; flex-direction:column; gap:5px; }
+  .employee-cost-employee-head { align-items:flex-start; flex-direction:column; }
 }

@@ -626,6 +626,43 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
   return result.payload;
 }
 
+async function getAllForAdmin({ session, employees }, options = {}) {
+  const range = parseMonthRange(options);
+  const seen = new Set();
+  const roster = [];
+  for (const raw of Array.isArray(employees) ? employees : []) {
+    const empCode = normEmp(raw?.emp_code ?? raw?.empCode);
+    if (!empCode || seen.has(empCode)) continue;
+    seen.add(empCode);
+    roster.push({ empCode, name: String(raw?.name || empCode) });
+  }
+
+  const output = [];
+  // Keep upstream writes/reads serialized: the DataHub endpoint is employee-
+  // scoped and must receive a real employee code, never a synthetic "ALL".
+  for (const employee of roster) {
+    const payload = await getForSession({
+      session,
+      scope: {},
+      requestedEmp: employee.empCode,
+    }, {
+      ...options,
+      from: range.from,
+      to: range.to,
+      revenueRowsByPeriod: options.revenueRowsByEmployee?.[employee.empCode] || {},
+    });
+    output.push({ emp_code: employee.empCode, name: employee.name, payload });
+  }
+
+  return {
+    mode: 'all',
+    from: range.from,
+    to: range.to,
+    employees: output,
+    note: output.length ? '' : DEFAULT_NOTE,
+  };
+}
+
 module.exports = {
   CONTRACT_PATH,
   DIMENSION_KEYS,
@@ -655,4 +692,5 @@ module.exports = {
   enrichRangePayload,
   fetchEmployeeCost,
   getForSession,
+  getAllForAdmin,
 };
