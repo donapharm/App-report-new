@@ -501,33 +501,38 @@ router.get('/me', auth.requireAuth, (req, res) => {
 // Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
 // chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
 router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   const s = auth.scopeOf(req.session);
   const empCode = employeeCost.resolveScopedEmployee({
     session: req.session,
     scope: s,
     requestedEmp: req.query.emp,
   });
-  const period = store.latestKy();
-  // Doanh thu luôn được lấy bằng scope backend đã chốt. Catalog chỉ dùng để
-  // resolve C16 (tên) sang IIT_CODE; tuyệt đối không ghép doanh thu bằng tên trần.
-  const revenueRows = empCode ? store.getRows({ ky: period, scope: { empCode } }) : [];
-  let catalogRows = [];
-  try {
-    const catalogSnapshot = await canonicalAssignmentSnapshot(period);
-    catalogRows = catalogSnapshot.catalog || catalogSnapshot.rows || [];
-  } catch (error) {
-    // Fail closed: vẫn trả dòng chi phí nhưng mọi Thành tiền là “—”, metric
-    // match=0 sẽ phát cảnh báo thay vì dùng catalog demo/đoán theo tên.
-    console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+  const revenueRowsByPeriod = {};
+  const catalogRowsByPeriod = {};
+  // Doanh thu và catalog được lấy riêng đúng từng kỳ, luôn với scope backend.
+  // Catalog lỗi ở tháng nào thì tháng đó fail closed, không dùng snapshot tháng khác.
+  for (const period of range.months) {
+    const uiPeriod = employeeCost.toUiMonth(period);
+    revenueRowsByPeriod[period] = empCode ? store.getRows({ ky: uiPeriod, scope: { empCode } }) : [];
+    catalogRowsByPeriod[period] = [];
+    if (!empCode) continue;
+    try {
+      const catalogSnapshot = await canonicalAssignmentSnapshot(period);
+      catalogRowsByPeriod[period] = catalogSnapshot.catalog || catalogSnapshot.rows || [];
+    } catch (error) {
+      console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+    }
   }
   const payload = await employeeCost.getForSession({
     session: req.session,
     scope: s,
     requestedEmp: req.query.emp,
   }, {
-    period,
-    revenueRows,
-    catalogRows,
+    from: range.from,
+    to: range.to,
+    revenueRowsByPeriod,
+    catalogRowsByPeriod,
   });
   res.set('Cache-Control', 'private, no-store');
   res.json(payload);

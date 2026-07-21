@@ -51,7 +51,14 @@ export const api = {
   adminDevices: (emp) => req('GET', '/admin/devices' + (emp ? `?emp=${encodeURIComponent(emp)}` : '')),
   adminDeviceDel: (id) => req('DELETE', '/admin/devices/' + encodeURIComponent(id)),
   me: () => req('GET', '/me'),
-  employeeCost: (emp) => req('GET', '/employee-cost' + (emp ? `?emp=${encodeURIComponent(emp)}` : '')),
+  employeeCost: (emp, range = {}) => {
+    const params = new URLSearchParams();
+    if (emp) params.set('emp', emp);
+    if (range.from) params.set('from', range.from);
+    if (range.to) params.set('to', range.to);
+    const query = params.toString();
+    return req('GET', '/employee-cost' + (query ? `?${query}` : ''));
+  },
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   periods: () => req('GET', '/periods'),
   revenueRefreshStatus: () => req('GET', '/admin/revenue-refresh/status'),
