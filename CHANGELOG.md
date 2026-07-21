@@ -23,6 +23,12 @@
 - **Review `ad2cd64` (period drilldown) + `504cbda` (roster/nhóm): ĐẠT.** Đã xác minh `employeeCost.js` trên main **byte-identical** với bản review. Điểm mạnh: xem theo ngày đảm bảo **Σ ngày = tổng tháng** (dồn phần lẻ vào ngày cuối); **chống cộng trùng** (nhiều dòng cùng đơn vị+SP → fail-closed); **Tổng cả kỳ** không gộp c44; **fail-closed khi DataHub trả range không có trường kỳ** (lá chắn lỗi 10.982 dòng); doanh thu lấy riêng từng kỳ + scope theo NV; nhóm CTV/CTV-đặc-biệt nằm ở **config JSON** (không hardcode); "Tất cả nhân viên" đã gỡ sạch (revert kiểm tra rỗng).
 - **Chưa deploy** (đúng chủ đích). Chờ: (1) DataHub sửa self-scope + trường kỳ, (2) mục 11 công tắc/gửi riêng, (3) `.env` `DATAHUB_BASE`/`APP_REPORT_COST_TOKEN`.
 
+### 2026-07-21 — Report Bot — Công tắc tự xem “Chi phí của tôi” theo phòng/nhóm/cá nhân
+- Thêm cấu hình bền `employee_cost_visibility.json`, mặc định an toàn `department=off`; override nhóm/cá nhân dùng roster Sale 21 người và ưu tiên **cá nhân > nhóm > toàn phòng**. Mọi lần đổi được audit nguyên trạng trước/sau, actor, thời gian và từng path thay đổi.
+- Backend khóa self-view trước mọi truy cập doanh thu/catalog/DataHub: NV bị tắt chỉ nhận `{ disabled:true, columns:[], rows:[] }`; CEO/admin bypass để quản trị. `/me` trả `employeeCostDisabled` để frontend ẩn tab theo quyết định backend.
+- Thêm GET/POST `/api/employee-cost/visibility` có `requireAuth + requireAdmin`, validate `on/off/inherit`, trả panel động gồm toàn phòng/nhóm/NV cùng trạng thái hiệu lực và nguồn quyết định.
+- Trang Chi phí của tôi có panel CEO/admin để bật/tắt toàn phòng, từng nhóm và từng cá nhân; không hardcode roster/nhóm trong bundle. Bổ sung API/model/CSS và test service, audit, input lỗi, route guard/thứ tự fail-closed, model/source/ẩn tab frontend.
+
 ### 2026-07-21 — Report Bot — "Chi phí của tôi": tự tính Thành tiền + tách khoản cuối năm
 - App Report ghép dòng chi phí với doanh thu đã khóa scope theo **đơn vị + mã sản phẩm** (C16 được resolve qua catalog), tính `Thành tiền = doanh thu × tỷ lệ ÷ 100`; dòng không khớp giữ `—` và cảnh báo khi tỷ lệ khớp dưới 90%.
 - Mỗi cột tỷ lệ có cột **Thành tiền**; tỷ lệ hiển thị số không kèm `%`. Cột cấu hình cuối năm (mặc định `c44`) được làm mờ, không cộng vào tổng tháng và có tổng T12 riêng.
