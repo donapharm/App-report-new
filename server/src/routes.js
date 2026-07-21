@@ -523,7 +523,13 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
   });
   // Mọi truy cập kỳ/doanh thu/catalog/DataHub nằm trong callback này. Khi OFF,
   // service trả payload disabled mà không chạy callback; admin được bypass.
-  const payload = await employeeCostVisibility.run({ admin, empCode, roster }, async () => {
+  const payload = await employeeCostVisibility.run({
+    admin,
+    actor: req.session.emp_code,
+    role: req.session.role,
+    empCode,
+    roster,
+  }, async () => {
     const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
     const revenueRowsByPeriod = {};
     const catalogRowsByPeriod = {};
