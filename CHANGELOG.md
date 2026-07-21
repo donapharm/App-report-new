@@ -1,3 +1,9 @@
+### 2026-07-21 — CEO Office — employee-bound key cho consumer chi phí
+- Thay shared cost token bằng hai lớp tách biệt: `DATA_HUB_ASSIGNMENT_KEY` xác thực service và `APP_REPORT_EMPLOYEE_COST_KEYS` bind chính xác từng mã NV sau khi backend khóa scope từ session.
+- Không fallback `APP_REPORT_COST_TOKEN`; thiếu/sai/trùng key, một NV có nhiều key xung đột, hai NV dùng chung key hoặc employee key trùng assignment key đều fail-closed trước khi gọi Data Hub.
+- Key không đi qua frontend/log/audit/error; payload vẫn self-scoped, chặn C32/C47 và `private, no-store`.
+- Chưa deploy/restart; cutover chỉ được phép khi mapping hai phía khớp đúng roster và hai tập key độc lập.
+
 ### 2026-07-21 — Claude Code (giao 2 bot) — REDESIGN model chi phí: % theo TIMELINE + dòng do App Report dẫn dắt
 - **CEO xác nhận model đúng.** Sửa điểm gốc: % chi phí là **timeline thường trực** theo mã hàng (hiệu lực từ ngày-đầu-tháng, carry qua tháng), **KHÔNG** sinh từ `sales_facts`. **Danh sách dòng lấy từ doanh thu App Report** (mã hàng NV bán trong tháng), tra % từ DataHub timeline → **T07 hiện được dù DataHub chưa nạp sales_facts T07** (sửa cách hiểu cũ T07=0).
 - Giao: **DataHub Bot** trả % theo timeline (không gate sales_facts); **Report Bot** dẫn dắt dòng từ doanh thu App Report + tra % từ DataHub. Directive: `DIRECTIVE_EMP_COST_TIMELINE_REDESIGN.md`; cập nhật `DIRECTIVE_EMP_COST_MASTER.md`.

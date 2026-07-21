@@ -11,11 +11,21 @@ nhân viên xem **chi phí của chính mình**, giới hạn đúng các cột 
 ```
 GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>
 ```
-- `emp` (bắt buộc): mã nhân viên (khớp cột C6 trong danh mục cha). Có thể thay bằng header `x-app-report-emp`.
+- App Report resolve `emp` bằng phiên đã xác thực và scope ở backend. Nhân viên luôn
+  bị ép về mã của chính phiên; CEO/admin chỉ được chọn NV qua nhánh scope đã phân quyền.
+  Trình duyệt không bao giờ được cung cấp/ghi đè employee-cost key.
 
-## 2. Xác thực (giống các endpoint App Report hiện có)
-- Header **`x-assignment-key: <service token>`** (token do bot cấu hình phía Data Hub qua biến môi trường `DATA_HUB_ASSIGNMENT_KEYS`).
-- Không có/sai key → **401**.
+## 2. Xác thực hai lớp S2S
+- Header **`x-assignment-key: <service key>`**, App Report đọc từ
+  `DATA_HUB_ASSIGNMENT_KEY` (phía Data Hub allowlist bằng `DATA_HUB_ASSIGNMENT_KEYS`).
+- Header **`x-employee-cost-key: <employee-bound key>`**, App Report chọn chính xác
+  từ `APP_REPORT_EMPLOYEE_COST_KEYS` dạng
+  `DN001=<opaque-key-at-least-16-chars>,DN002=<another-key>` sau khi resolve scope.
+- Mã NV được chuẩn hóa uppercase. Dòng sai định dạng/key ngắn bị bỏ; key trùng giữa
+  hai NV, nhiều key xung đột cho một NV, hoặc key trùng assignment key đều không dùng được.
+- Thiếu một trong hai key thì App Report fail closed **trước khi gọi mạng**. Không có
+  fallback sang `APP_REPORT_COST_TOKEN`; key không bao giờ đi qua frontend/log/audit/error.
+- Không có/sai key → **401** từ Data Hub.
 - Response luôn kèm `Cache-Control: private, no-store`.
 
 ## 3. Dữ liệu trả về
@@ -51,7 +61,8 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>
 - Data Hub quyết định cột nào ra — App Report **không** yêu cầu được cột ngoài allowlist.
 
 ## 6. Phía App Report cần làm
-1. Gọi endpoint trên bằng `x-assignment-key` cho từng nhân viên (hoặc theo lô nếu sau này bổ sung).
+1. Backend resolve NV từ phiên/scope, chọn đúng employee-bound key rồi gọi endpoint
+   bằng cả `x-assignment-key` và `x-employee-cost-key`.
 2. Render bảng chi phí theo mảng `columns` trả về (động).
 3. Không lưu/không hiển thị bất cứ trường nào ngoài `rows` trả về.
 4. Xử lý 401 (sai key) / 502 (thử lại) / 400 (thiếu emp).

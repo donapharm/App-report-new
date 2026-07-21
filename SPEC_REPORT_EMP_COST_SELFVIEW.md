@@ -47,8 +47,10 @@ Thêm route đọc: `GET /api/employee-cost` (cho FE App Report gọi bằng **s
    - NV sale → **ép `emp = mã của chính NV`**; **bỏ qua** mọi `?emp=` khác (không cho xem người khác).
    - CEO/ADMIN → được truyền `?emp=<mã>` để xem NV bất kỳ (và/hoặc chọn từ danh sách).
 2. **Gọi DataHub server-to-server:** backend App Report fetch
-   `GET {DATAHUB_BASE}/api/integrations/app-report/employee-cost?emp=<emp đã scope>` với header
-   `x-assignment-key: {process.env.APP_REPORT_COST_TOKEN}`. **Token chỉ ở backend/.env — TUYỆT ĐỐI không ra FE.**
+   `GET {DATAHUB_BASE}/api/integrations/app-report/employee-cost?emp=<emp đã scope>` với **hai header tách biệt**:
+   - `x-assignment-key: {process.env.DATA_HUB_ASSIGNMENT_KEY}` — xác thực service App Report.
+   - `x-employee-cost-key: <key của emp đã scope>` — backend chọn từ `APP_REPORT_EMPLOYEE_COST_KEYS` dạng `EMP=key`.
+   Mã NV/key chỉ lấy ở backend sau khi khóa scope; **TUYỆT ĐỐI không ra FE, không nhận từ caller và không tái dùng assignment key.**
 3. **Trả về FE** nguyên `{ empCode, columns, rows }` **chỉ của emp được phép**. Không kèm token, không kèm dữ liệu
    NV khác.
 4. **Xử lý lỗi theo hợp đồng:**
@@ -59,7 +61,8 @@ Thêm route đọc: `GET /api/employee-cost` (cho FE App Report gọi bằng **s
    - Mọi lỗi khác/empty → trả `{ empCode, columns:[], rows:[], note:"chưa có dữ liệu chi phí kỳ này" }`.
    - **Không bịa số** (nguyên tắc #3); không đẩy chi tiết lỗi/token ra FE.
 5. **Không** đưa số chi phí vào LLM facts / NLQ public của App Report. **Audit** mỗi lượt gọi (ai, emp nào, khi nào).
-6. **`// TODO(LIVE)`** trong `store.js`/config: `DATAHUB_BASE`, `APP_REPORT_COST_TOKEN` đọc từ `.env`.
+6. **`// TODO(LIVE)`** trong `store.js`/config: `DATAHUB_BASE`, `DATA_HUB_ASSIGNMENT_KEY` và
+   `APP_REPORT_EMPLOYEE_COST_KEYS` đọc từ `.env`; thiếu/sai/trùng key phải fail-closed trước khi gọi mạng.
 
 ## 3. FRONTEND (web/src) — trang "Chi phí của tôi"
 - Route/tab mới **"Chi phí của tôi"** trong nav (NV thấy của mình; CEO/ADMIN có thêm ô **chọn NV**).
@@ -88,14 +91,15 @@ Thêm route đọc: `GET /api/employee-cost` (cho FE App Report gọi bằng **s
 ## 4. NGUYÊN TẮC (Claude soi khi review)
 1. **Quyền quyết ở backend** — NV chỉ thấy của mình; FE không tự lọc quyền (nguyên tắc #1).
 2. Số **do DataHub tính**; App Report chỉ hiển thị, không dựng engine thứ 2, không bịa (#3).
-3. Service token chỉ ở backend; không lộ FE; không log token.
+3. Assignment key và employee-bound key chỉ ở backend, luôn tách biệt; không lộ FE, không log key.
 4. Không đưa chi phí vào LLM/NLQ public; audit truy cập.
 
 ## 5. NGHIỆM THU (trước khi push main)
 1. NV sale đăng nhập → `/api/employee-cost` chỉ trả **emp của chính họ**; thử `?emp=` mã khác → **vẫn ra của chính
    họ** (backend ép scope). CEO/ADMIN → xem được NV bất kỳ.
 2. Bảng FE **render đúng theo `columns[]`** (đổi số cột động vẫn đúng, không vỡ), cột chiều + cột % đúng nhãn.
-3. Tắt/đổi sai `APP_REPORT_COST_TOKEN` → nguồn lỗi → FE hiện "chưa có dữ liệu", **không lộ lỗi/token**, không bịa số.
+3. Thiếu/đổi sai `DATA_HUB_ASSIGNMENT_KEY` hoặc key của NV trong `APP_REPORT_EMPLOYEE_COST_KEYS` → fail-closed,
+   FE hiện "chưa có dữ liệu", **không lộ lỗi/key**, không bịa số; token chung cũ không được fallback.
 4. `grep` bundle FE: **không** có token, không có số chi phí tĩnh.
 5. Desktop bám mẫu Phân tích; mobile cuộn ngang OK.
 6. Ghi `CHANGELOG.md`; commit + push `main`; báo Claude review.
