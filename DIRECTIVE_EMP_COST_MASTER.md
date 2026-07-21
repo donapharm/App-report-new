@@ -38,6 +38,12 @@ thức xác định (không bịa).
 - **Hiển thị cột %:** hiện **đúng số, BỎ ký hiệu `%`**: `8,0%`→`8.0` · `0,3%`→`0.3` · `10,0%`→`10.0`.
 
 ## 4. THÀNH TIỀN (App Report TỰ TÍNH — DataHub không mở thêm cột)
+- **‼ PHÂN VAI (CEO làm rõ 2026-07-21):** **DataHub CHỈ cung cấp `% chi phí`, KHÔNG cung cấp doanh thu.** **Doanh
+  thu do App Report tự lấy** (dữ liệu App Report). ⇒ "lấy số T07 thật" nghĩa là App Report cần **mức % của T07 từ
+  DataHub**, còn doanh thu T07 App Report đã có sẵn. DataHub không đụng doanh thu.
+- **‼ RULE mức % theo tháng:** mỗi NV/sản phẩm có **1 mức % cho mỗi THÁNG**; biến động trong tháng → áp **từ ngày
+  đầu tháng** (cả tháng dùng 1 mức, KHÔNG chia lẻ giữa tháng). ⇒ Thành tiền theo ngày = `doanh thu ngày × %(tháng)`
+  — App Report đã tính đúng vậy, **không đổi**.
 - **`Thành tiền(dòng, cột%) = doanh thu dòng × % ÷ 100`.** Ví dụ doanh thu 10.000.000đ: `8.0`→800.000đ · `0.3`→
   30.000đ · `10.0`→1.000.000đ.
 - **"Doanh thu dòng"** = doanh thu đúng dòng (NV × đơn vị × sản phẩm × kỳ), App Report **tự lấy từ dữ liệu doanh thu
