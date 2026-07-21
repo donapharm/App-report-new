@@ -502,10 +502,32 @@ router.get('/me', auth.requireAuth, (req, res) => {
 // chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
 router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const s = auth.scopeOf(req.session);
+  const empCode = employeeCost.resolveScopedEmployee({
+    session: req.session,
+    scope: s,
+    requestedEmp: req.query.emp,
+  });
+  const period = store.latestKy();
+  // Doanh thu luôn được lấy bằng scope backend đã chốt. Catalog chỉ dùng để
+  // resolve C16 (tên) sang IIT_CODE; tuyệt đối không ghép doanh thu bằng tên trần.
+  const revenueRows = empCode ? store.getRows({ ky: period, scope: { empCode } }) : [];
+  let catalogRows = [];
+  try {
+    const catalogSnapshot = await canonicalAssignmentSnapshot(period);
+    catalogRows = catalogSnapshot.catalog || catalogSnapshot.rows || [];
+  } catch (error) {
+    // Fail closed: vẫn trả dòng chi phí nhưng mọi Thành tiền là “—”, metric
+    // match=0 sẽ phát cảnh báo thay vì dùng catalog demo/đoán theo tên.
+    console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+  }
   const payload = await employeeCost.getForSession({
     session: req.session,
     scope: s,
     requestedEmp: req.query.emp,
+  }, {
+    period,
+    revenueRows,
+    catalogRows,
   });
   res.set('Cache-Control', 'private, no-store');
   res.json(payload);

@@ -1950,14 +1950,26 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-panel { min-width:0; }
 .employee-cost-table-wrap { width:100%; max-width:100%; overflow-x:auto; margin-top:10px; border:1px solid var(--line); border-radius:10px; }
 .employee-cost-table { width:100%; min-width:900px; border-collapse:collapse; font-size:12px; }
-.employee-cost-table th { position:sticky; top:0; padding:10px; background:#075d9b; color:#fff; text-align:left; white-space:nowrap; }
+.employee-cost-table th { position:sticky; padding:10px; background:#075d9b; color:#fff; text-align:left; white-space:nowrap; }
+.employee-cost-table thead tr:first-child th { top:0; z-index:3; }
+.employee-cost-table thead tr:nth-child(2) th { top:38px; z-index:2; background:#0b6aa9; }
 .employee-cost-table td { padding:9px 10px; border-top:1px solid var(--line); vertical-align:top; }
 .employee-cost-table tbody tr:nth-child(even) { background:#f7fafc; }
 .employee-cost-number { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.employee-cost-panel-meta { margin-top:3px; color:var(--muted); font-size:11px; }
+.employee-cost-annual { color:#7890a1 !important; font-style:italic; opacity:.58; }
+th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !important; }
+.employee-cost-annual-badge { display:inline-flex; margin-left:5px; padding:2px 6px; border:1px solid rgba(255,255,255,.35); border-radius:999px; color:#fff; font-size:9px; font-style:normal; font-weight:900; opacity:1; }
+.employee-cost-match-warning { padding:11px 13px; border:1px solid #e7b24d; border-left:4px solid #d68700; border-radius:10px; background:#fff8e8; color:#744700; font-size:12px; }
+.employee-cost-summary-row { display:flex; align-items:center; justify-content:flex-end; gap:18px; padding:11px 13px; border:1px solid var(--line); border-top:0; background:#f4f9fc; font-size:12px; }
+.employee-cost-summary-row span { font-weight:800; }
+.employee-cost-summary-row b { min-width:140px; color:#075d9b; text-align:right; font-size:14px; font-variant-numeric:tabular-nums; }
+.employee-cost-annual-total { margin-top:8px; border:1px dashed #9dafbb; border-radius:9px; background:#f6f7f8; color:#6f7d86; font-style:italic; opacity:.78; }
 .employee-cost-source-note { margin-top:9px; color:var(--muted); font-size:11px; }
 @media (max-width: 767px) {
   .employee-cost-heading { display:grid; align-items:stretch; }
   .employee-cost-heading label { width:100%; }
   .employee-cost-kpis { grid-template-columns:1fr 1fr; }
   .employee-cost-table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
+  .employee-cost-summary-row { align-items:flex-end; flex-direction:column; gap:4px; }
 }

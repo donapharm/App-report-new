@@ -1,3 +1,8 @@
+### 2026-07-21 — Report Bot — "Chi phí của tôi": tự tính Thành tiền + tách khoản cuối năm
+- App Report ghép dòng chi phí với doanh thu đã khóa scope theo **đơn vị + mã sản phẩm** (C16 được resolve qua catalog), tính `Thành tiền = doanh thu × tỷ lệ ÷ 100`; dòng không khớp giữ `—` và cảnh báo khi tỷ lệ khớp dưới 90%.
+- Mỗi cột tỷ lệ có cột **Thành tiền**; tỷ lệ hiển thị số không kèm `%`. Cột cấu hình cuối năm (mặc định `c44`) được làm mờ, không cộng vào tổng tháng và có tổng T12 riêng.
+- Giữ nguyên chặn C32/C47, token chỉ ở backend và audit theo scope; bổ sung test server/web cho phép tính, fail-closed, tổng tháng/cuối năm và định dạng hiển thị.
+
 ### 2026-07-20 — Claude Code (giao bot) — "Chi phí của tôi": DIRECTIVE TỔNG gộp cho bot đọc 1 lần
 - Gộp toàn bộ yêu cầu module "Chi phí của tôi" vào `DIRECTIVE_EMP_COST_MASTER.md` (nguyên tắc scope/C32-C47/token, cách lấy đúng cột khi khóa C32–C47, render động + hiển thị %, Thành tiền tự tính + C44 cuối năm, bộ lọc kỳ (C), xem theo ngày, lấy thử T07 thật, nghiệm thu). Để CEO copy cho bot; các directive rời vẫn giữ.
 
