@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (giao bot) — Phân trang pill 20 dòng + pager lên đầu + xem theo ngày
+- Ghi nhận: "Tất cả NV" **đã chạy** (restart BE #139 — 1.550 dòng, coverage 96,5%, tổng 2,39 tỷ); lọc Nhóm mã ĐV + Tuyến đã có.
+- CEO thêm 3 UX: (1) phân trang **20 dòng/trang**, nút **bo tròn (pill)** + số trang bấm được; (2) **pager lên đầu bảng** (sticky, đồng bộ trên/dưới); (3) **chọn ngày** xem doanh thu theo ngày — **hoạt động cả chế độ Tất cả NV** (lọc rows theo ngày ở backend, kết hợp nhóm mã/tuyến/tìm kiếm/phân trang). Gợi ý: chọn cỡ trang 20/50/100. STT/đếm/export phản ánh; không đổi số; self-scope + C32/C47 giữ. Directive `DIRECTIVE_EMP_COST_PAGER_DAYVIEW.md`. Chưa deploy.
+
 ### 2026-07-22 — Claude Code (giao bot) — SỬA "Tất cả NV" trống + thêm lọc Vùng/Tỉnh · Nhóm mã ĐV · Tuyến
 - **CEO báo "Tất cả nhân viên" hiện 0/0 (trống).** Chẩn đoán: bảng hiện **"Mẫu FULL-TIME 0/0"** thay vì template **"TẤT CẢ NHÂN VIÊN"** → **BE chưa nạp nhánh `emp=ALL`** (FE #139 lên nhưng BE chưa deploy/restart — lệch phiên bản, giống vụ 404). Bot: xác minh version (`curl ?emp=ALL` phải trả `template.label:"TẤT CẢ NHÂN VIÊN"`, rows>0) → deploy/restart BE #139; nếu vẫn trống → debug `employeeCostAllPayload`/`mergeEmployeeReports` + thêm test all-NV rows>0.
 - **CEO thêm 3 ô lọc:** Vùng/Tỉnh (từ nguồn đơn vị, không suy đoán từ tên), Nhóm mã đơn vị (cấu hình được), Tuyến (cột sẵn có). Kết hợp nhau + tìm kiếm + kỳ; STT đánh lại; export phản ánh; dropdown động. Self-scope + C32/C47 giữ. Directive `DIRECTIVE_EMP_COST_ALLFIX_FILTERS.md`.
