@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
-  buildEmployeeCostColumns, currentMonthValue, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
+  buildEmployeeCostColumns, currentMonthValue, employeeCostColumnKpis, employeeCostViewModel,
+  formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../src/employeeCostModel.js';
 
 test('dynamic columns follow approved order, keep bid price before quantity, and block c32/c47', () => {
@@ -16,6 +18,14 @@ test('dynamic columns follow approved order, keep bid price before quantity, and
     'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25',
     'bidPrice', 'quantity', 'revenueBeforeVat', 'c36', 'c43', 'rowMonthlyTotal', 'note',
   ]);
+});
+
+test('KPI and period metadata distinguish order lines from unique unit-product keys', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /label="Số dòng đơn hàng"/);
+  assert.match(page, /mã \(đơn vị×mặt hàng\) · ngưỡng/);
+  assert.match(page, /mã đơn vị×mặt hàng\)/);
+  assert.doesNotMatch(page, /matchedRows}\/\$\{[^}]*totalRows} dòng/);
 });
 
 test('full-time and part-time template metadata produce exactly 19 and 15 columns', () => {
@@ -36,7 +46,10 @@ test('view model renders percent without percent sign and reads pre-VAT sale fie
     columns: [{ key: 'c36', label: 'CP (%)' }, { key: 'c44', label: 'Cuối năm', annual: true }],
     rows: [{ orderCode: 'DH-01', sourceLineId: 'DH-01-1', date: '2026-07-02', strength: '500 mg', bidPrice: 1_050, quantity: 10, revenueBeforeVat: 10_000_000, c36: 8, c44: 0.3, rowMonthlyTotal: 800000, note: 'Data Hub' }],
     match: { matchedRows: 1, totalRows: 1, rate: 100, threshold: 90, low: false },
-    summary: { reliable: true, monthlyTotal: 800000, annualTotal: 30000, annualLabels: ['Cuối năm'] },
+    summary: {
+      reliable: true, monthlyTotal: 800000, annualTotal: 30000, revenueBeforeVatTotal: 10_000_000,
+      columnTotals: { c36: 800_000, c44: 30_000 }, annualColumnKeys: ['c44'], annualLabels: ['Cuối năm'],
+    },
   });
   assert.equal(model.rows.length, 1);
   assert.equal(model.rows[0].rowMonthlyTotal, 800000);
@@ -45,6 +58,11 @@ test('view model renders percent without percent sign and reads pre-VAT sale fie
   assert.equal(model.rows[0].revenueBeforeVat, 10_000_000);
   assert.equal(model.costColumns[1].annual, true);
   assert.equal(model.summary.monthlyTotal, 800000);
+  assert.equal(model.summary.revenueBeforeVatTotal, 10_000_000);
+  assert.deepEqual(employeeCostColumnKpis(model), [
+    { key: 'c36', label: 'CP (%)', annual: false, value: 800_000 },
+    { key: 'c44', label: 'Cuối năm', annual: true, value: 30_000 },
+  ]);
   assert.equal(formatEmployeeCostCell(8, model.costColumns[0]), '8.0');
   assert.equal(formatEmployeeCostCell(0.3, model.costColumns[1]), '0.3');
   assert.equal(formatEmployeeCostCell(10, { kind: 'percent' }), '10.0');
@@ -61,11 +79,29 @@ test('low coverage state preserves null amounts and unreliable totals', () => {
     columns: [{ key: 'c36', label: 'CP (%)' }],
     rows: [{ c36: 8, rowMonthlyTotal: null }],
     match: { matchedRows: 0, totalRows: 1, rate: 0, threshold: 90, low: true },
-    summary: { reliable: false, monthlyTotal: null, annualTotal: null },
+    summary: { reliable: false, monthlyTotal: null, annualTotal: null, columnTotals: null },
   });
   assert.equal(model.rows[0].rowMonthlyTotal, null);
   assert.equal(model.match.low, true);
   assert.equal(model.summary.monthlyTotal, null);
+  assert.deepEqual(employeeCostColumnKpis(model).map((item) => item.value), [null]);
+});
+
+test('KPI column cards stay dynamic for part-time templates and never invent annual columns', () => {
+  const model = employeeCostViewModel({
+    empCode: 'DN021', period: '2026-07',
+    template: { key: 'parttime', columns: ['date', 'c36', 'rowMonthlyTotal', 'note'] },
+    columns: [{ key: 'c36', label: 'C36 CP ctv/khác (%)' }],
+    rows: [{ date: '2026-07-01', c36: 8, rowMonthlyTotal: 80_000 }],
+    match: { matchedRows: 1, totalRows: 1, rate: 100, threshold: 90, low: false },
+    summary: {
+      reliable: true, monthlyTotal: 80_000, annualTotal: 0, revenueBeforeVatTotal: 1_000_000,
+      columnTotals: { c36: 80_000 }, annualColumnKeys: [], annualLabels: [],
+    },
+  });
+  assert.deepEqual(employeeCostColumnKpis(model), [
+    { key: 'c36', label: 'C36 CP ctv/khác (%)', annual: false, value: 80_000 },
+  ]);
 });
 
 test('month input and label use stable local YYYY-MM values', () => {

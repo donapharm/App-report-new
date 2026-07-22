@@ -100,6 +100,15 @@ function normalizedMatch(rawMatch = {}, rowCount = 0) {
   };
 }
 
+function normalizedColumnTotals(rawTotals, costColumns) {
+  if (!rawTotals || typeof rawTotals !== 'object' || Array.isArray(rawTotals)) return null;
+  return Object.fromEntries(costColumns.map((column) => {
+    const raw = rawTotals[column.key];
+    const value = raw == null ? null : Number(raw);
+    return [column.key, Number.isFinite(value) ? value : null];
+  }));
+}
+
 function periodViewModel(payload = {}) {
   const template = {
     key: String(payload.template?.key || ''),
@@ -130,6 +139,9 @@ function periodViewModel(payload = {}) {
     reliable: rawSummary.reliable !== false,
     monthlyTotal: rawSummary.monthlyTotal == null ? null : Number(rawSummary.monthlyTotal),
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
+    revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
+    columnTotals: normalizedColumnTotals(rawSummary.columnTotals, costColumns),
+    annualColumnKeys: Array.isArray(rawSummary.annualColumnKeys) ? rawSummary.annualColumnKeys.map(String) : [],
     annualLabels: Array.isArray(rawSummary.annualLabels) ? rawSummary.annualLabels.map(String) : [],
   };
   const rawDaily = payload.daily || {};
@@ -177,14 +189,17 @@ export function employeeCostViewModel(payload = {}) {
   const aggregateMatch = hasPeriods ? normalizedMatch(rawMatch, rows.length) : periods[0].match;
   const rawSummary = payload.summary || {};
   const reliable = hasPeriods ? rawSummary.reliable === true : periods[0].summary.reliable;
+  const first = periods[0] || periodViewModel({});
   const summary = hasPeriods ? {
     reliable,
     periodTotal: rawSummary.periodTotal == null ? null : Number(rawSummary.periodTotal),
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
+    revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
+    columnTotals: normalizedColumnTotals(rawSummary.columnTotals, first.costColumns),
+    annualColumnKeys: Array.isArray(rawSummary.annualColumnKeys) ? rawSummary.annualColumnKeys.map(String) : [],
     monthlyTotal: periods.length === 1 ? periods[0].summary.monthlyTotal : null,
     annualLabels: [...new Set(periods.flatMap((period) => period.summary.annualLabels))],
   } : { ...periods[0].summary, periodTotal: periods[0].summary.monthlyTotal };
-  const first = periods[0] || periodViewModel({});
   return {
     empCode: String(payload.empCode || first.empCode || ''),
     from: String(payload.from || first.period || ''),
@@ -201,4 +216,15 @@ export function employeeCostViewModel(payload = {}) {
     note: String(payload.note || (rows.length ? '' : EMPTY_NOTE)),
     dynamicCount: periods.reduce((sum, period) => sum + period.dynamicCount, 0),
   };
+}
+
+export function employeeCostColumnKpis(model = {}) {
+  const annualKeys = new Set(Array.isArray(model.summary?.annualColumnKeys) ? model.summary.annualColumnKeys : []);
+  const totals = model.summary?.columnTotals;
+  return (Array.isArray(model.costColumns) ? model.costColumns : []).map((column) => ({
+    key: column.key,
+    label: column.label,
+    annual: annualKeys.has(column.key),
+    value: totals?.[column.key] ?? null,
+  }));
 }

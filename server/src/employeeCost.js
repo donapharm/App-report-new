@@ -555,7 +555,7 @@ function buildCostLookup(costRows, columns, catalogIndex) {
 function enrichWithRevenue(payload, options = {}) {
   const annualKeys = configuredAnnualColumnKeys(options.annualColumnKeys);
   const threshold = configuredMatchWarningPercent(options.matchWarningPercent);
-  const template = employeeCostTemplates.resolveTemplate(payload.empCode, options.templateConfig);
+  const template = employeeCostTemplates.resolveTemplate(payload.empCode, options.templateConfig, options.derivedBaseConfig);
   const upstreamColumns = new Map((payload.columns || []).map((column) => [column.key, column]));
   const columns = template.costColumns.map((key) => ({
     ...(upstreamColumns.get(key) || {}),
@@ -564,6 +564,7 @@ function enrichWithRevenue(payload, options = {}) {
     type: 'percent',
     amountKey: `${key}_amount`,
     annual: annualKeys.has(key),
+    derivesFrom: template.derivedBases[key] || null,
   }));
   const catalogIndex = buildProductCatalogIndex(options.catalogRows);
   const revenueLines = buildRevenueLines(options.revenueRows, payload.empCode, options.period);
@@ -576,9 +577,8 @@ function enrichWithRevenue(payload, options = {}) {
   const rows = revenueLines.map((line) => {
     const lookupKey = `${line.unit}\u001f${line.product}`;
     const source = costLookup.get(lookupKey) || null;
-    const matched = !!source && columns.length > 0
+    const percentagesMatched = !!source && columns.length > 0
       && columns.every((column) => source[column.key] != null && source[column.key] !== '' && Number.isFinite(Number(source[column.key])));
-    if (matched) matchedKeys.add(lookupKey);
     const amounts = {};
     const dailyAmounts = {};
     const percentages = {};
@@ -587,7 +587,8 @@ function enrichWithRevenue(payload, options = {}) {
     for (const column of columns) {
       const rawPercent = source?.[column.key];
       const percent = rawPercent == null || rawPercent === '' || !Number.isFinite(Number(rawPercent)) ? null : Number(rawPercent);
-      const amount = percent == null ? null : calculateAmount(line.revenueBeforeVat, percent);
+      const base = column.derivesFrom ? amounts[column.derivesFrom] : line.revenueBeforeVat;
+      const amount = percent == null || base == null ? null : calculateAmount(base, percent);
       percentages[column.key] = percent;
       amounts[column.key] = amount;
       if (amount == null) continue;
@@ -602,6 +603,11 @@ function enrichWithRevenue(payload, options = {}) {
         allDates.add(line.date);
       }
     }
+    // A configured dependency that cannot be resolved is a financial-data
+    // mismatch, even when all percentages exist. Never mark it reliable or
+    // fall back to revenue for the derived column.
+    const matched = percentagesMatched && columns.every((column) => Number.isFinite(amounts[column.key]));
+    if (matched) matchedKeys.add(lookupKey);
     const rowDailyReliable = matched && line.dateReliable;
     if (matched && !rowDailyReliable) dailyRowsReliable = false;
     const dimensions = canonicalDimensions(line.source, line.unit, line.product, catalogIndex);
@@ -639,9 +645,15 @@ function enrichWithRevenue(payload, options = {}) {
   for (const group of rowsByFormerAggregate.values()) {
     for (const column of columns) {
       const percent = group[0][column.key];
-      const target = calculateAmount(group.reduce((sum, row) => sum + row.revenueBeforeVat, 0), percent);
-      const current = group.reduce((sum, row) => sum + (row.amounts[column.key] || 0), 0);
-      const residual = target == null ? 0 : target - current;
+      const bases = column.derivesFrom
+        ? group.map((row) => row.amounts[column.derivesFrom])
+        : group.map((row) => row.revenueBeforeVat);
+      if (bases.some((base) => !Number.isFinite(base))) continue;
+      const target = calculateAmount(bases.reduce((sum, base) => sum + base, 0), percent);
+      const currentAmounts = group.map((row) => row.amounts[column.key]);
+      if (target == null || currentAmounts.some((amount) => !Number.isFinite(amount))) continue;
+      const current = currentAmounts.reduce((sum, amount) => sum + amount, 0);
+      const residual = target - current;
       if (!residual) continue;
       const row = group.at(-1);
       row.amounts[column.key] += residual;
@@ -677,6 +689,10 @@ function enrichWithRevenue(payload, options = {}) {
   const dayMonthlyTotal = dayTotals.reduce((sum, day) => sum + day.monthlyTotal, 0);
   const dayAnnualTotal = dayTotals.reduce((sum, day) => sum + day.annualTotal, 0);
   const reconciled = dailyReliable && dayMonthlyTotal === monthlyMatchedTotal && dayAnnualTotal === annualMatchedTotal;
+  const columnTotals = !hasGroundedRows || low ? null : Object.fromEntries(columns.map((column) => [
+    column.key,
+    rows.reduce((sum, row) => sum + (Number.isFinite(row.amounts[column.key]) ? row.amounts[column.key] : 0), 0),
+  ]));
   const basePayload = { ...payload };
   if (rows.length) delete basePayload.note;
   return {
@@ -697,6 +713,7 @@ function enrichWithRevenue(payload, options = {}) {
       annualTotal: !hasGroundedRows || low ? null : annualMatchedTotal,
       revenueTotal: rows.reduce((sum, row) => sum + row.revenue, 0),
       revenueBeforeVatTotal: rows.reduce((sum, row) => sum + row.revenueBeforeVat, 0),
+      columnTotals,
       annualColumnKeys: columns.filter((column) => column.annual).map((column) => column.key),
       annualLabels,
     },
@@ -721,6 +738,7 @@ function enrichRangePayload(payload, options = {}) {
   const totalRows = periods.reduce((sum, period) => sum + period.match.totalRows, 0);
   const matchedRows = periods.reduce((sum, period) => sum + period.match.matchedRows, 0);
   const reliable = periods.length > 0 && periods.every((period) => period.summary.reliable);
+  const columnKeys = [...new Set(periods.flatMap((period) => period.columns.map((column) => column.key)))];
   return {
     ...payload,
     template: periods[0]?.template || null,
@@ -738,6 +756,11 @@ function enrichRangePayload(payload, options = {}) {
       annualTotal: reliable ? periods.reduce((sum, period) => sum + period.summary.annualTotal, 0) : null,
       revenueTotal: periods.reduce((sum, period) => sum + period.summary.revenueTotal, 0),
       revenueBeforeVatTotal: periods.reduce((sum, period) => sum + period.summary.revenueBeforeVatTotal, 0),
+      columnTotals: reliable ? Object.fromEntries(columnKeys.map((key) => [
+        key,
+        periods.reduce((sum, period) => sum + (period.summary.columnTotals?.[key] || 0), 0),
+      ])) : null,
+      annualColumnKeys: [...new Set(periods.flatMap((period) => period.summary.annualColumnKeys || []))],
     },
   };
 }

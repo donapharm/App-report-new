@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  normalizeVisibilityPanel, updateVisibilitySetting, visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel,
+  normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
+  visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel, writeVisibilityCollapsed,
 } from '../src/employeeCostVisibilityModel.js';
 
 const source = {
@@ -56,4 +57,36 @@ test('EmployeeCost panel loads roster/groups from visibility API without fronten
   assert.match(page, /panel\.employees\.map/);
   assert.match(page, /api\.employeeCostVisibilitySave\(visibilitySavePayload/);
   assert.doesNotMatch(page, /DN00[1-9]|DN0[12][0-9]|VP004/);
+});
+
+test('visibility panel is collapsed by default and remembers the choice per admin', () => {
+  const values = new Map();
+  const storage = {
+    getItem: (key) => values.has(key) ? values.get(key) : null,
+    setItem: (key, value) => values.set(key, value),
+  };
+  const ceoKey = visibilityCollapseStorageKey('ceo');
+  const adminKey = visibilityCollapseStorageKey('DN001');
+  assert.notEqual(ceoKey, adminKey);
+  assert.equal(readVisibilityCollapsed(storage, ceoKey), true);
+  writeVisibilityCollapsed(storage, ceoKey, false);
+  assert.equal(readVisibilityCollapsed(storage, ceoKey), false);
+  assert.equal(readVisibilityCollapsed(storage, adminKey), true);
+});
+
+test('visibility collapse storage fails closed without breaking restricted browsers', () => {
+  const blockedStorage = {
+    getItem: () => { throw new Error('blocked'); },
+    setItem: () => { throw new Error('blocked'); },
+  };
+  assert.equal(readVisibilityCollapsed(blockedStorage, visibilityCollapseStorageKey('CEO')), true);
+  assert.doesNotThrow(() => writeVisibilityCollapsed(blockedStorage, visibilityCollapseStorageKey('CEO'), false));
+});
+
+test('collapsed admin panel keeps only its summary header and explicit open/close control', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /collapsed \? 'Mở quản trị' : 'Thu gọn'/);
+  assert.match(page, /aria-expanded={!collapsed}/);
+  assert.match(page, /!collapsed && <div className="employee-cost-visibility-body"/);
+  assert.match(page, /panel\.employees\.length[\s\S]*panel\.groups\.length[\s\S]*Toàn phòng:/);
 });

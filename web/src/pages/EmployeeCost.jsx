@@ -2,16 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
-  currentMonthValue, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
+  currentMonthValue, employeeCostColumnKpis, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
-  normalizeVisibilityPanel, updateVisibilitySetting, visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel,
+  normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
+  visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel, writeVisibilityCollapsed,
 } from '../employeeCostVisibilityModel.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
 const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
+const browserStorage = () => {
+  try { return globalThis.localStorage; } catch { return null; }
+};
 
 function CostTable({ period, daily = false }) {
   const [tooltip, setTooltip] = useState('');
@@ -64,7 +68,7 @@ function PeriodBlock({ period, expanded, onToggle }) {
       <div>
         <div className="section-head">Tháng {formatMonthLabel(period.period)}</div>
         <div className="employee-cost-panel-meta">
-          Mẫu {period.template.label || 'chi phí'} · {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} dòng)
+          Mẫu {period.template.label || 'chi phí'} · {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} mã đơn vị×mặt hàng)
         </div>
       </div>
       {!!period.rows.length && <button type="button" className="btn secondary" onClick={onToggle} aria-expanded={expanded}>
@@ -112,50 +116,78 @@ function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel =
   </select>;
 }
 
-function VisibilityPanel({ panel, loading, saving, message, error, onChange, onSave }) {
-  return <div className="card employee-cost-visibility">
+function CostColumnKpi({ item }) {
+  return <div className={`kpi employee-cost-column-kpi${item.annual ? ' employee-cost-kpi-annual' : ''}`}>
+    <div className="label">
+      <span>{item.label}</span>
+      {item.annual && <span className="employee-cost-kpi-badge">cuối năm</span>}
+    </div>
+    <div className="value small">{formatEmployeeCostCell(item.value, moneyColumn)}</div>
+    <div className="delta muted">{item.annual ? 'Khoản riêng · chi trả T12' : 'Tổng thành tiền theo cột'}</div>
+  </div>;
+}
+
+function VisibilityPanel({ adminCode, panel, loading, saving, message, error, onChange, onSave }) {
+  const storageKey = visibilityCollapseStorageKey(adminCode);
+  const [collapsed, setCollapsed] = useState(() => readVisibilityCollapsed(browserStorage(), storageKey));
+  useEffect(() => writeVisibilityCollapsed(browserStorage(), storageKey, collapsed), [collapsed, storageKey]);
+  const summary = loading
+    ? 'Đang tải cấu hình…'
+    : panel
+      ? `${panel.employees.length.toLocaleString('vi-VN')} NV · ${panel.groups.length.toLocaleString('vi-VN')} nhóm · Toàn phòng: ${panel.department.effective === 'on' ? 'Bật' : 'Tắt'}`
+      : 'Chưa tải được cấu hình';
+  const bodyId = 'employee-cost-visibility-controls';
+  return <div className={`card employee-cost-visibility${collapsed ? ' is-collapsed' : ''}`}>
     <div className="employee-cost-visibility-head">
       <div>
         <div className="section-head">Quản trị quyền tự xem chi phí</div>
-        <p>Cá nhân ưu tiên hơn nhóm; nhóm ưu tiên hơn toàn phòng. Quyền hiệu lực do backend quyết định.</p>
+        <p>{summary}</p>
       </div>
-      <button type="button" className="btn" disabled={loading || saving || !panel} onClick={onSave}>
-        {saving ? 'Đang lưu…' : 'Lưu công tắc'}
+      <button type="button" className="btn secondary employee-cost-visibility-toggle" aria-expanded={!collapsed} aria-controls={bodyId} onClick={() => setCollapsed((current) => !current)}>
+        {collapsed ? 'Mở quản trị' : 'Thu gọn'}
       </button>
     </div>
-    {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
-    {message && <div className="employee-cost-visibility-success" role="status">{message}</div>}
-    {loading || !panel ? <Spinner /> : <>
-      <div className="employee-cost-visibility-department">
-        <div><b>Toàn phòng Kinh doanh</b><small>Mặc định an toàn là Tắt.</small></div>
-        <VisibilitySelect
-          label="Công tắc toàn phòng Kinh doanh"
-          value={panel.department.setting}
-          allowInherit={false}
-          onChange={(value) => onChange('department', '', value)}
-        />
+    {!collapsed && <div className="employee-cost-visibility-body" id={bodyId}>
+      <div className="employee-cost-visibility-toolbar">
+        <p>Cá nhân ưu tiên hơn nhóm; nhóm ưu tiên hơn toàn phòng. Quyền hiệu lực do backend quyết định.</p>
+        <button type="button" className="btn" disabled={loading || saving || !panel} onClick={onSave}>
+          {saving ? 'Đang lưu…' : 'Lưu công tắc'}
+        </button>
       </div>
-      <div className="employee-cost-visibility-section">
-        <h4>Theo nhóm</h4>
-        <div className="employee-cost-visibility-grid">
-          {panel.groups.map((group) => <div className="employee-cost-visibility-item" key={group.key}>
-            <div><b>{group.label}</b><small>{group.employeeCount.toLocaleString('vi-VN')} nhân viên</small></div>
-            <VisibilitySelect label={`Công tắc nhóm ${group.label}`} inheritLabel="Theo toàn phòng" value={group.setting} onChange={(value) => onChange('groups', group.key, value)} />
-            <span className={`employee-cost-effective ${group.effective}`}>{visibilityEffectiveLabel(group.effective)} · {group.source === 'group' ? 'Chính nhóm' : 'Toàn phòng'}</span>
-          </div>)}
+      {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
+      {message && <div className="employee-cost-visibility-success" role="status">{message}</div>}
+      {loading || !panel ? <Spinner /> : <>
+        <div className="employee-cost-visibility-department">
+          <div><b>Toàn phòng Kinh doanh</b><small>Mặc định an toàn là Tắt.</small></div>
+          <VisibilitySelect
+            label="Công tắc toàn phòng Kinh doanh"
+            value={panel.department.setting}
+            allowInherit={false}
+            onChange={(value) => onChange('department', '', value)}
+          />
         </div>
-      </div>
-      <div className="employee-cost-visibility-section">
-        <h4>Theo cá nhân</h4>
-        <div className="employee-cost-visibility-employees">
-          {panel.employees.map((employee) => <div className="employee-cost-visibility-employee" key={employee.emp_code}>
-            <div><b>{employee.emp_code} · {employee.name}</b><small>{employee.group_label}</small></div>
-            <VisibilitySelect label={`Công tắc nhân viên ${employee.emp_code}`} inheritLabel="Theo nhóm" value={employee.setting} onChange={(value) => onChange('employees', employee.emp_code, value)} />
-            <span className={`employee-cost-effective ${employee.effective}`}>{visibilityEffectiveLabel(employee.effective)} · {visibilitySourceLabel(employee)}</span>
-          </div>)}
+        <div className="employee-cost-visibility-section">
+          <h4>Theo nhóm</h4>
+          <div className="employee-cost-visibility-grid">
+            {panel.groups.map((group) => <div className="employee-cost-visibility-item" key={group.key}>
+              <div><b>{group.label}</b><small>{group.employeeCount.toLocaleString('vi-VN')} nhân viên</small></div>
+              <VisibilitySelect label={`Công tắc nhóm ${group.label}`} inheritLabel="Theo toàn phòng" value={group.setting} onChange={(value) => onChange('groups', group.key, value)} />
+              <span className={`employee-cost-effective ${group.effective}`}>{visibilityEffectiveLabel(group.effective)} · {group.source === 'group' ? 'Chính nhóm' : 'Toàn phòng'}</span>
+            </div>)}
+          </div>
         </div>
-      </div>
-    </>}
+        <div className="employee-cost-visibility-section">
+          <h4>Theo cá nhân</h4>
+          <div className="employee-cost-visibility-employees">
+            {panel.employees.map((employee) => <div className="employee-cost-visibility-employee" key={employee.emp_code}>
+              <div><b>{employee.emp_code} · {employee.name}</b><small>{employee.group_label}</small></div>
+              <VisibilitySelect label={`Công tắc nhân viên ${employee.emp_code}`} inheritLabel="Theo nhóm" value={employee.setting} onChange={(value) => onChange('employees', employee.emp_code, value)} />
+              <span className={`employee-cost-effective ${employee.effective}`}>{visibilityEffectiveLabel(employee.effective)} · {visibilitySourceLabel(employee)}</span>
+            </div>)}
+          </div>
+        </div>
+      </>}
+    </div>}
   </div>;
 }
 
@@ -217,6 +249,7 @@ export default function EmployeeCost({ me }) {
     : String(me?.emp_code || model.empCode || '—');
   const rangeInvalid = !draftRange.from || !draftRange.to || draftRange.from > draftRange.to;
   const multiple = model.periods.length > 1;
+  const columnKpis = employeeCostColumnKpis(model);
 
   const applyRange = (event) => {
     event.preventDefault();
@@ -273,6 +306,7 @@ export default function EmployeeCost({ me }) {
     </div>
 
     {admin && <VisibilityPanel
+      adminCode={me?.emp_code || me?.username || 'admin'}
       panel={visibilityPanel}
       loading={visibilityLoading}
       saving={visibilitySaving}
@@ -284,9 +318,11 @@ export default function EmployeeCost({ me }) {
 
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} />
-      <Kpi label="Số dòng" value={model.rows.length.toLocaleString('vi-VN')} />
-      <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} dòng · ngưỡng ${model.match.threshold}%`} />
+      <Kpi label="Số dòng đơn hàng" value={model.rows.length.toLocaleString('vi-VN')} />
+      <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${model.match.threshold}%`} />
       <Kpi label={multiple ? 'Tổng cả kỳ (chưa gồm khoản cuối năm)' : 'Tổng chi phí tháng (chưa gồm khoản cuối năm)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`} />
+      <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
+      {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
     </div>
 
     {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}

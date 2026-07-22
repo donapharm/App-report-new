@@ -1,6 +1,9 @@
 {
   "version": 1,
   "defaultCalculationGroup": "fulltime",
+  "derivedBases": {
+    "c44": "c43"
+  },
   "calculationGroups": [
     {
       "key": "fulltime",

@@ -1951,6 +1951,10 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-filters .btn { min-height:38px; }
 .employee-cost-filters small { flex-basis:100%; color:#a33; text-align:right; }
 .page-desktop .employee-cost-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.employee-cost-column-kpi .label { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.employee-cost-kpi-annual { border:2px solid #d68700; background:linear-gradient(145deg,#fff8e6,#fffdf8); box-shadow:0 7px 18px rgba(214,135,0,.13); }
+.employee-cost-kpi-annual .value { color:#a95d00; }
+.employee-cost-kpi-badge { flex:0 0 auto; padding:2px 7px; border-radius:999px; background:#d68700; color:#fff; font-size:9px; font-weight:900; letter-spacing:.02em; text-transform:uppercase; }
 .employee-cost-panel { min-width:0; }
 .employee-cost-period-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .employee-cost-table-wrap { width:100%; max-width:100%; overflow-x:auto; margin-top:10px; border:1px solid var(--line); border-radius:10px; }
@@ -1985,8 +1989,13 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-range-total span { font-weight:900; }
 .employee-cost-range-total b { min-width:160px; color:#075d9b; text-align:right; font-size:18px; }
 .employee-cost-visibility { display:grid; gap:14px; border-top:4px solid #075d9b; }
+.employee-cost-visibility.is-collapsed { gap:0; padding-top:13px; padding-bottom:13px; }
 .employee-cost-visibility-head { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
 .employee-cost-visibility-head p { max-width:720px; margin:5px 0 0; color:var(--muted); font-size:12px; }
+.employee-cost-visibility-body { display:grid; gap:14px; }
+.employee-cost-visibility-toolbar { display:flex; align-items:center; justify-content:space-between; gap:18px; }
+.employee-cost-visibility-toolbar p { margin:0; color:var(--muted); font-size:12px; }
+.employee-cost-visibility-toggle { flex:0 0 auto; min-width:128px; }
 .employee-cost-visibility-success { padding:10px 12px; border:1px solid #8bc9a4; border-radius:9px; background:#eefaf2; color:#176b37; font-size:12px; font-weight:800; }
 .employee-cost-visibility-department { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px; border:1px solid #8dbbd6; border-radius:10px; background:#eef7fd; }
 .employee-cost-visibility-department div, .employee-cost-visibility-item > div, .employee-cost-visibility-employee > div { display:grid; gap:3px; min-width:0; }
@@ -2010,14 +2019,14 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-filters label, .employee-cost-filters label:first-child { min-width:0; }
   .employee-cost-filters label:first-child, .employee-cost-filters small { grid-column:1 / -1; }
   .employee-cost-filters .btn { grid-column:1 / -1; width:100%; }
-  .employee-cost-kpis { grid-template-columns:1fr 1fr; }
+  .employee-cost-kpis { grid-template-columns:1fr; }
   .employee-cost-table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
   .employee-cost-summary-row { align-items:flex-end; flex-direction:column; gap:4px; }
   .employee-cost-period-head { align-items:stretch; flex-direction:column; }
   .employee-cost-period-head .btn { width:100%; }
   .employee-cost-range-total { align-items:flex-end; flex-direction:column; gap:5px; }
-  .employee-cost-visibility-head, .employee-cost-visibility-department { align-items:stretch; flex-direction:column; }
-  .employee-cost-visibility-head .btn, .employee-cost-visibility select { width:100%; }
+  .employee-cost-visibility-head, .employee-cost-visibility-toolbar, .employee-cost-visibility-department { align-items:stretch; flex-direction:column; }
+  .employee-cost-visibility-head .btn, .employee-cost-visibility-toolbar .btn, .employee-cost-visibility select { width:100%; }
   .employee-cost-visibility-item, .employee-cost-visibility-employee { grid-template-columns:1fr; }
   .employee-cost-effective { grid-column:auto; }
 }

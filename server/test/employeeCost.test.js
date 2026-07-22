@@ -168,16 +168,43 @@ test('maps C16 through catalog, joins revenue by unit + product code and calcula
 
   assert.equal(enriched.period, '07.2026');
   assert.equal(enriched.rows[0].amounts.c36, 761_905);
-  assert.equal(enriched.rows[0].amounts.c44, 28_571);
+  assert.equal(enriched.rows[0].amounts.c44, 0);
   assert.equal(enriched.rows[0].amounts.c41, 0);
   assert.equal(enriched.rows[1].amounts.c36, 28_571);
-  assert.equal(enriched.rows[1].amounts.c44, 952_381);
+  assert.equal(enriched.rows[1].amounts.c44, 0);
   assert.deepEqual(enriched.match, { matchedRows: 2, totalRows: 2, rate: 100, threshold: 90, low: false });
   assert.equal(enriched.summary.monthlyTotal, 790_476);
-  assert.equal(enriched.summary.annualTotal, 980_952);
+  assert.equal(enriched.summary.annualTotal, 0);
+  assert.deepEqual(enriched.summary.columnTotals, {
+    c36: 790_476, c41: 0, c43: 0, c44: 0, c45: 0,
+  });
   assert.deepEqual(enriched.summary.annualColumnKeys, ['c44']);
   assert.equal(enriched.columns.find((column) => column.key === 'c44').annual, true);
+  assert.equal(enriched.columns.find((column) => column.key === 'c44').derivesFrom, 'c43');
   assert.equal(JSON.stringify(enriched).includes('c47'), false);
+});
+
+test('C44 derives from the allocated C43 amount instead of revenue before VAT', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: fullColumns(),
+    rows: [fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c43: 12, c44: 5 })],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+    revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 13_246_800 }],
+  });
+  const row = enriched.rows[0];
+  assert.equal(row.revenueBeforeVat, 12_616_000);
+  assert.equal(row.amounts.c43, 1_513_920);
+  assert.equal(row.amounts.c44, 75_696);
+  assert.equal(row.rowMonthlyTotal, 1_513_920);
+  assert.equal(row.rowAnnualTotal, 75_696);
+  assert.equal(enriched.summary.monthlyTotal, 1_513_920);
+  assert.equal(enriched.summary.annualTotal, 75_696);
+  assert.deepEqual(enriched.summary.columnTotals, {
+    c36: 0, c41: 0, c43: 1_513_920, c44: 75_696, c45: 0,
+  });
+  assert.equal(enriched.columns.find((column) => column.key === 'c44').derivesFrom, 'c43');
 });
 
 test('does not match raw names, leaves amounts null and suppresses unreliable totals below threshold', () => {
@@ -202,6 +229,7 @@ test('does not match raw names, leaves amounts null and suppresses unreliable to
   assert.equal(enriched.summary.reliable, false);
   assert.equal(enriched.summary.monthlyTotal, null);
   assert.equal(enriched.summary.annualTotal, null);
+  assert.equal(enriched.summary.columnTotals, null);
 });
 
 test('catalog ambiguity fails closed and annual columns are configurable', () => {
@@ -330,7 +358,7 @@ test('multi-month enrichment separates month totals and excludes annual columns 
     empCode: 'DN001', periods: range.months.map((period) => ({
       period,
       columns: fullColumns({ c36: 'CP tháng', c44: 'Cuối năm' }),
-      rows: [fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10, c44: 5 })],
+      rows: [fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10, c43: 10, c44: 5 })],
     })),
   }, 'DN001', range);
   const revenueRowsByPeriod = Object.fromEntries(range.months.map((period) => [period, [
@@ -340,10 +368,14 @@ test('multi-month enrichment separates month totals and excludes annual columns 
     { c5: 'QL1', c7: 'U1', c16: 'Thuốc' },
   ]]));
   const enriched = employeeCost.enrichRangePayload(payload, { revenueRowsByPeriod, catalogRowsByPeriod });
-  assert.deepEqual(enriched.periods.map((period) => period.summary.monthlyTotal), [95_238, 190_476]);
-  assert.deepEqual(enriched.periods.map((period) => period.summary.annualTotal), [47_619, 95_238]);
-  assert.equal(enriched.summary.periodTotal, 285_714);
-  assert.equal(enriched.summary.annualTotal, 142_857);
+  assert.deepEqual(enriched.periods.map((period) => period.summary.monthlyTotal), [190_476, 380_952]);
+  assert.deepEqual(enriched.periods.map((period) => period.summary.annualTotal), [4_762, 9_524]);
+  assert.equal(enriched.summary.periodTotal, 571_428);
+  assert.equal(enriched.summary.annualTotal, 14_286);
+  assert.deepEqual(enriched.summary.columnTotals, {
+    c36: 285_714, c41: 0, c43: 285_714, c44: 14_286, c45: 0,
+  });
+  assert.deepEqual(enriched.summary.annualColumnKeys, ['c44']);
 });
 
 test('Cerecaps T06 DN001 keeps two order-lines instead of aggregating unit-product revenue', () => {
@@ -375,7 +407,7 @@ test('Cerecaps T06 DN001 keeps two order-lines instead of aggregating unit-produ
   assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [1_009_280, 912_000]);
   assert.equal(enriched.summary.revenueTotal, 25_216_800);
   assert.equal(enriched.summary.monthlyTotal, 1_921_280);
-  assert.equal(enriched.summary.annualTotal, 240_160);
+  assert.equal(enriched.summary.annualTotal, 0);
   assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.monthlyTotal, 0), enriched.summary.monthlyTotal);
 });
 
@@ -453,7 +485,7 @@ test('getForSession returns scoped revenue order-lines when DataHub is not confi
 test('daily amount uses monthly percentage and reconciles exactly to its month', () => {
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001', columns: fullColumns({ c36: 'CP tháng', c44: 'Cuối năm' }),
-    rows: [fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10, c44: 5 })],
+    rows: [fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10, c43: 10, c44: 5 })],
   }, 'DN001');
   const enriched = employeeCost.enrichWithRevenue(payload, {
     period: '2026-07',
@@ -467,9 +499,9 @@ test('daily amount uses monthly percentage and reconciles exactly to its month',
   assert.deepEqual(enriched.daily.dates, ['2026-07-01', '2026-07-02']);
   assert.equal(enriched.rows.length, 2);
   assert.equal(enriched.rows[0].dailyAmounts['2026-07-01'].c36, 95_238);
-  assert.equal(enriched.rows[0].dailyAmounts['2026-07-01'].c44, 47_619);
+  assert.equal(enriched.rows[0].dailyAmounts['2026-07-01'].c44, 4_762);
   assert.equal(enriched.rows[1].dailyAmounts['2026-07-02'].c36, 190_476);
-  assert.equal(enriched.rows[1].dailyAmounts['2026-07-02'].c44, 95_238);
+  assert.equal(enriched.rows[1].dailyAmounts['2026-07-02'].c44, 9_524);
   assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.monthlyTotal, 0), enriched.summary.monthlyTotal);
   assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.annualTotal, 0), enriched.summary.annualTotal);
 });
@@ -491,6 +523,27 @@ test('daily allocation reconciles VND rounding residual to the monthly amount', 
   assert.deepEqual(enriched.rows.map((row) => row.amounts.c36), [0, 1]);
   assert.equal(enriched.summary.monthlyTotal, 1);
   assert.equal(dailySum, enriched.summary.monthlyTotal);
+  assert.equal(enriched.daily.reliable, true);
+});
+
+test('derived-column residual uses the reconciled source-column amount and keeps daily totals exact', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: fullColumns(),
+    rows: [fullRow({ c5: 'QL1', c7: 'U1', c43: 10, c44: 33.3 })],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+    revenueRows: [
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', source_line_id: 'L1', revenue: 1_055.25, date: '2026-07-01', date_granularity: 'day' },
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', source_line_id: 'L2', revenue: 1_055.25, date: '2026-07-02', date_granularity: 'day' },
+    ],
+  });
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c43), [101, 100]);
+  assert.deepEqual(enriched.rows.map((row) => row.amounts.c44), [34, 33]);
+  assert.equal(enriched.summary.monthlyTotal, 201);
+  assert.equal(enriched.summary.annualTotal, 67);
+  assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.monthlyTotal, 0), 201);
+  assert.equal(enriched.daily.totals.reduce((sum, day) => sum + day.annualTotal, 0), 67);
   assert.equal(enriched.daily.reliable, true);
 });
 
@@ -557,7 +610,49 @@ test('template config keeps calculation groups separate and resolves exact full-
   assert.equal(parttime.calculationGroup, 'parttime');
   assert.deepEqual(parttime.costColumns, ['c36']);
   assert.equal(parttime.columns.length, 15);
+  assert.deepEqual(fulltime.derivedBases, { c44: 'c43' });
+  assert.deepEqual(parttime.derivedBases, {});
   assert.deepEqual(['DN021', 'DN022', 'DN023'].map((emp) => employeeCostTemplates.resolveTemplate(emp, config).key), ['parttime', 'parttime', 'parttime']);
+});
+
+test('derived bases are configurable and malformed dependencies fail closed', () => {
+  const config = employeeCostTemplates.loadConfig();
+  const changed = employeeCostTemplates.resolveTemplate('DN001', config, 'c44:c41');
+  assert.deepEqual(changed.derivedBases, { c44: 'c41' });
+
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: fullColumns(),
+    rows: [fullRow({ c5: 'QL1', c7: 'U1', c41: 20, c43: 12, c44: 5 })],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    derivedBaseConfig: 'c44:c41', catalogRows: [{ c5: 'QL1', c7: 'U1' }],
+    revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_050_000 }],
+  });
+  assert.equal(enriched.rows[0].amounts.c41, 200_000);
+  assert.equal(enriched.rows[0].amounts.c44, 10_000);
+  assert.equal(enriched.columns.find((column) => column.key === 'c44').derivesFrom, 'c41');
+
+  for (const value of ['c44:c44', 'c44:c47', 'c44:c43,c44:c41', 'c44:c45,c45:c44', 'c44:c46', 'c46:c43']) {
+    assert.throws(() => employeeCostTemplates.resolveTemplate('DN001', config, value), (error) => {
+      assert.match(error.code || '', /^EMPLOYEE_COST_DERIVED_BASE_/);
+      return true;
+    }, value);
+  }
+});
+
+test('unresolved derived base stays null and cannot make coverage reliable', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: fullColumns(),
+    rows: [{ c5: 'QL1', c7: 'U1', c36: 0, c41: 0, c43: null, c44: 5, c45: 0 }],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    catalogRows: [{ c5: 'QL1', c7: 'U1' }],
+    revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_050_000 }],
+  });
+  assert.equal(enriched.rows[0].amounts.c44, null);
+  assert.equal(enriched.rows[0].revenueMatched, false);
+  assert.equal(enriched.summary.reliable, false);
+  assert.equal(enriched.summary.annualTotal, null);
 });
 
 test('missing required full-time percentage stays null and suppresses totals through coverage', () => {
