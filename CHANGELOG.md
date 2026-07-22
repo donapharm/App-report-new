@@ -1,3 +1,9 @@
+### 2026-07-22 — Claude Code (giao bot) — "Chi phí của tôi": 2 mẫu cột + VAT trước + ghi chú C48
+- CEO gửi 2 mẫu Excel (full-time / part-time). Giao Report Bot: **2 layout** — full-time đủ 5 cột % (C36/C41/C43/C44/C45); **CTV part-time = DN021/DN022/DN023 chỉ C36**. **Nhóm CTV cho TÍNH TIỀN khác nhóm hiển thị** → config riêng `employee_cost_templates.json`.
+- Cột mới: Tuyến · Nhà thầu (tên) · **Hàm lượng** (QĐ141 dài → **1 dòng + tooltip**) · **Giá trúng thầu** (CEO duyệt hiện) · **Thành tiền xuất bán (trước VAT)** thay "Doanh thu" · **Ghi chú từ DataHub C48**.
+- **‼ VAT:** đổi gốc tính → chi phí % nhân **doanh thu TRƯỚC VAT** (÷ VAT_DIVISOR) — khác production hiện tại (đang có-VAT).
+- Việc DataHub: **thêm C48 (ghi chú) vào payload** (ngoài dải %, vẫn khóa C32/C47). Directive: `DIRECTIVE_EMP_COST_TEMPLATES.md`; mẫu gốc: `docs/report-samples/CHIPHI_TEMPLATE_{FULLTIME,PARTTIME}.xlsx`.
+
 ### 2026-07-22 — Nghiệm thu PRODUCTION — "Chi phí của tôi" chạy thật (Claude xác nhận)
 - **Đã deploy + nghiệm thu production.** Pipeline hoàn chỉnh: doanh thu (App Sale) × % (DataHub, catalog V30.10) = Thành tiền, self-scoped. Khớp doanh thu **170/183 = 92,9% ≥ 90%** → tổng hiển thị. **Tổng chi phí tháng (trừ c44) = 42.834.991đ** (c36 750.400 + c41 7.995.379 + c43 26.489.506 + c45 7.599.706 — Claude cộng lại khớp); **c44 tách riêng 36.659.958đ**. 199/199 test, health OK.
 - **Theo dõi tiếp:** (1) 13/183 khóa chưa khớp % (7,1%) → dòng có doanh thu nhưng Thành tiền `—`, nên rà (mã hàng thiếu trong catalog?). (2) 4 cột mới (Tuyến/Nhà thầu/Giá trúng thầu/Ghi chú) + thứ tự cột: **đợt kế** (chờ CEO chốt thứ tự + duyệt giá trúng thầu + nguồn ghi chú). (3) Carry-forward nhiều tháng (T06→T07) tùy DataHub.
