@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (giao bot) — Trung tâm Kiểm soát Dữ liệu Chi phí (auto bắt lỗi + chuông)
+- CEO muốn tự bắt/lọc mọi mã không khớp khi lấy App Sale → tính chi phí (mã hàng/QLNB/đơn vị/tuyến/ĐVT/giá thầu), gộp mục riêng + **chuông cảnh báo** + **tự giải thích nguyên nhân** (khỏi điều tra thủ công). Directive `DIRECTIVE_EMP_COST_DQ_CENTER.md` — **mở rộng gap tool #137**.
+- **Thông minh:** 2 nhóm mức (đỏ = sai/nghi ngờ tiền: PRODUCT_MISSING/MISMATCH, UOM_MISMATCH, BID_PRICE_INVALID, REVENUE_ANOMALY, DUPLICATE; vàng = thiếu hiển thị: UNIT_UNKNOWN, ROUTE_MISSING, CONTRACTOR_UNRESOLVED, HAMLUONG_MISSING). Mỗi lỗi có **nguyên nhân tự sinh + hành động đề xuất + nguồn cần sửa**; gộp theo mã gốc, xếp theo doanh thu ảnh hưởng; trạng thái xử lý; deep-link. **Chuông badge** = số lỗi đỏ chưa xử lý (ngưỡng cấu hình). Self-scope (NV của mình, CEO toàn bộ), không lộ %/C32/C47, không tự sửa/bịa. Reuse export VN #138. Đề xuất làm 2 đợt. Chưa deploy.
+
 ### 2026-07-22 — Claude Code (review PASS + giao deploy B) — gap tool #137 + export VN #138
 - **Review nhánh `review/employee-cost-gap-tool-20260722` @ `50e0c62`:** #137 gap tool + #138 export VN = **PASS**.
   - Gap: self-scope (NV own, CEO roster/`?emp=`), **không lộ %**, gợi ý mã lệch QĐ (chỉ gợi ý, không tự map). DN001 13 cặp; roster 34 mã/96,5%.
