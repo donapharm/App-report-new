@@ -1954,12 +1954,17 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-panel { min-width:0; }
 .employee-cost-period-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .employee-cost-table-wrap { width:100%; max-width:100%; overflow-x:auto; margin-top:10px; border:1px solid var(--line); border-radius:10px; }
-.employee-cost-table { width:100%; min-width:900px; border-collapse:collapse; font-size:12px; }
+.employee-cost-table { width:100%; min-width:1850px; border-collapse:collapse; font-size:12px; }
 .employee-cost-table th { position:sticky; padding:10px; background:#075d9b; color:#fff; text-align:left; white-space:nowrap; }
 .employee-cost-table thead tr:first-child th { top:0; z-index:3; }
 .employee-cost-table thead tr:nth-child(2) th { top:38px; z-index:2; background:#0b6aa9; }
-.employee-cost-table td { padding:9px 10px; border-top:1px solid var(--line); vertical-align:top; }
+.employee-cost-table td { max-width:260px; padding:9px 10px; border-top:1px solid var(--line); vertical-align:top; }
 .employee-cost-table tbody tr:nth-child(even) { background:#f7fafc; }
+.employee-cost-ellipsis { display:block; width:230px; max-width:100%; overflow:hidden; padding:0; border:0; background:transparent; color:inherit; font:inherit; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:help; }
+.employee-cost-ellipsis:focus { outline:2px solid #67a9d1; outline-offset:2px; }
+.employee-cost-tooltip-backdrop { position:fixed; inset:0; z-index:1200; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(3, 21, 34, .44); }
+.employee-cost-tooltip { position:relative; width:min(680px, 100%); max-height:70vh; overflow:auto; padding:22px 44px 22px 22px; border:1px solid var(--line); border-radius:12px; background:#fff; color:var(--text); box-shadow:0 18px 55px rgba(3, 40, 65, .28); line-height:1.55; white-space:normal; }
+.employee-cost-tooltip-close { position:absolute; top:8px; right:10px; width:30px; height:30px; border:0; background:transparent; color:var(--muted); font-size:24px; cursor:pointer; }
 .employee-cost-number { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .employee-cost-panel-meta { margin-top:3px; color:var(--muted); font-size:11px; }
 .employee-cost-annual { color:#7890a1 !important; font-style:italic; opacity:.58; }

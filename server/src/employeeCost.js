@@ -1,6 +1,8 @@
 'use strict';
 
 const persist = require('./persist');
+const { VAT_DIVISOR } = require('./analytics');
+const employeeCostTemplates = require('./employeeCostTemplates');
 
 const CONTRACT_PATH = '/api/integrations/app-report/employee-cost';
 const DIMENSION_KEYS = Object.freeze(['c5', 'c7', 'c16', 'c25']);
@@ -12,6 +14,7 @@ const AUDIT_FILE = 'employee_cost_audit';
 const AUDIT_LIMIT = 5000;
 const DEFAULT_ANNUAL_COLUMN_KEYS = Object.freeze(['c44']);
 const DEFAULT_MATCH_WARNING_PERCENT = 90;
+const NOTE_KEY = 'c48';
 
 function normEmp(value) {
   return String(value || '').trim().toUpperCase();
@@ -58,6 +61,13 @@ function normName(value) {
   return String(value || '').trim().toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
     .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function safeText(value, maxLength = 1000) {
+  if (value == null) return null;
+  const text = String(value).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+  return text ? text.slice(0, maxLength) : null;
 }
 
 function currentMonth(now = new Date()) {
@@ -174,6 +184,8 @@ function sanitizePayload(raw, expectedEmp) {
     for (const column of columns) {
       if (source && Object.prototype.hasOwnProperty.call(source, column.key)) row[column.key] = source[column.key];
     }
+    const note = safeText(source?.[NOTE_KEY] ?? source?.C48);
+    if (note) row[NOTE_KEY] = note;
     return row;
   });
 
@@ -355,18 +367,40 @@ function canonicalDimensions(revenueRow, unit, product, catalogIndex) {
   const catalogRow = exactRows[0] || (codeRows.length === 1 ? codeRows[0] : null);
   return {
     c5: product,
-    c7: displayValue(revenueRow, ['unit_name', 'c7', 'DONVI', 'TEN_DV']) ?? unit,
-    c16: displayValue(catalogRow, ['product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME'])
-      ?? displayValue(revenueRow, ['product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME']) ?? product,
-    c25: displayValue(catalogRow, ['uom', 'c25', 'UOM', 'C25'])
-      ?? displayValue(revenueRow, ['uom', 'c25', 'UOM', 'C25']),
+    c7: safeText(displayValue(revenueRow, ['unit_name', 'c7', 'DONVI', 'TEN_DV']) ?? unit, 240),
+    c16: safeText(displayValue(catalogRow, ['product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME'])
+      ?? displayValue(revenueRow, ['product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME']) ?? product, 300),
+    c25: safeText(displayValue(catalogRow, ['uom', 'c25', 'UOM', 'C25'])
+      ?? displayValue(revenueRow, ['uom', 'c25', 'UOM', 'C25']), 80),
+    route: safeText(displayValue(revenueRow, ['route', 'tuyen', 'ROUTE', 'TUYEN'])
+      ?? displayValue(catalogRow, ['route', 'tuyen', 'ROUTE', 'TUYEN']), 120),
+    contractorName: safeText(displayValue(revenueRow, ['contractor_name', 'contractorName', 'CONTRACTOR_NAME'])
+      ?? displayValue(catalogRow, ['contractor_name', 'contractorName', 'CONTRACTOR_NAME'])
+      ?? displayValue(revenueRow, ['contractor_code', 'contractor', 'CONTRACTOR_CODE'])
+      ?? displayValue(catalogRow, ['contractor_code', 'contractor', 'c4', 'CONTRACTOR_CODE', 'C4']), 240),
+    strength: safeText(displayValue(revenueRow, ['strength', 'ham_luong', 'c17', 'STRENGTH', 'HAM_LUONG', 'C17'])
+      ?? displayValue(catalogRow, ['strength', 'ham_luong', 'c17', 'STRENGTH', 'HAM_LUONG', 'C17']), 2000),
+    bidPrice: numericValue(displayValue(revenueRow, ['bid_price', 'c31', 'BID_PRICE', 'C31'])
+      ?? displayValue(catalogRow, ['bid_price', 'c31', 'BID_PRICE', 'C31'])),
   };
+}
+
+function numericValue(value) {
+  if (value == null || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function revenueAmountOf(row = {}) {
   const value = row.revenue ?? row.tong_tien ?? row.REVENUE ?? row.TONG_TIEN;
   const revenue = Number(value);
   return Number.isFinite(revenue) ? revenue : null;
+}
+
+function revenueBeforeVatOf(revenue, vatDivisor = VAT_DIVISOR) {
+  const amount = Number(revenue);
+  const divisor = Number(vatDivisor);
+  return Number.isFinite(amount) && Number.isFinite(divisor) && divisor > 0 ? amount / divisor : null;
 }
 
 function revenueDateOf(row = {}) {
@@ -423,6 +457,7 @@ function buildRevenueLines(revenueRows = [], expectedEmp = '', period = '') {
       unit,
       product,
       revenue,
+      revenueBeforeVat: revenueBeforeVatOf(revenue),
       // Slot kỳ cũ có thể gán `dateFrom` làm ngày kỹ thuật dù nguồn không có
       // ngày giao dịch. Chỉ hiển thị ngày khi grain nguồn thực sự là theo ngày.
       date: dateReliable ? date : '',
@@ -479,12 +514,17 @@ function calculateDailyAmounts(byDate, percent, monthlyAmount) {
 
 function percentageSignature(row, columns) {
   const values = [];
+  let hasPercentage = false;
   for (const column of columns) {
     const raw = row?.[column.key];
-    if (raw == null || raw === '' || !Number.isFinite(Number(raw))) return '';
+    if (raw == null || raw === '' || !Number.isFinite(Number(raw))) {
+      values.push('—');
+      continue;
+    }
+    hasPercentage = true;
     values.push(String(Number(raw)));
   }
-  return values.join('\u001f');
+  return hasPercentage ? values.join('\u001f') : '';
 }
 
 function buildCostLookup(costRows, columns, catalogIndex) {
@@ -501,7 +541,10 @@ function buildCostLookup(costRows, columns, catalogIndex) {
     const signatures = new Set(rows.map((row) => percentageSignature(row, columns)).filter(Boolean));
     // Repeated rows are safe only when all published percentages are identical.
     // The lookup is product+month, never unit+product.
-    if (signatures.size === 1 && rows.every((row) => percentageSignature(row, columns))) lookup.set(product, rows[0]);
+    if (signatures.size === 1 && rows.every((row) => percentageSignature(row, columns))) {
+      const notes = new Set(rows.map((row) => safeText(row?.[NOTE_KEY])).filter(Boolean));
+      lookup.set(product, { ...rows[0], [NOTE_KEY]: notes.size === 1 ? [...notes][0] : null });
+    }
   }
   return lookup;
 }
@@ -509,11 +552,15 @@ function buildCostLookup(costRows, columns, catalogIndex) {
 function enrichWithRevenue(payload, options = {}) {
   const annualKeys = configuredAnnualColumnKeys(options.annualColumnKeys);
   const threshold = configuredMatchWarningPercent(options.matchWarningPercent);
-  const columns = (payload.columns || []).map((column) => ({
-    ...column,
+  const template = employeeCostTemplates.resolveTemplate(payload.empCode, options.templateConfig);
+  const upstreamColumns = new Map((payload.columns || []).map((column) => [column.key, column]));
+  const columns = template.costColumns.map((key) => ({
+    ...(upstreamColumns.get(key) || {}),
+    key,
+    label: template.costLabels[key] || upstreamColumns.get(key)?.label || key,
     type: 'percent',
-    amountKey: `${column.key}_amount`,
-    annual: annualKeys.has(column.key),
+    amountKey: `${key}_amount`,
+    annual: annualKeys.has(key),
   }));
   const catalogIndex = buildProductCatalogIndex(options.catalogRows);
   const revenueLines = buildRevenueLines(options.revenueRows, payload.empCode, options.period);
@@ -524,7 +571,8 @@ function enrichWithRevenue(payload, options = {}) {
 
   const rows = revenueLines.map((line) => {
     const source = costLookup.get(line.product) || null;
-    const matched = !!source && columns.length > 0;
+    const matched = !!source && columns.length > 0
+      && columns.every((column) => source[column.key] != null && source[column.key] !== '' && Number.isFinite(Number(source[column.key])));
     if (matched) matchedRows += 1;
     const amounts = {};
     const dailyAmounts = {};
@@ -532,8 +580,9 @@ function enrichWithRevenue(payload, options = {}) {
     let rowMonthlyTotal = 0;
     let rowAnnualTotal = 0;
     for (const column of columns) {
-      const percent = matched ? Number(source[column.key]) : null;
-      const amount = matched ? calculateAmount(line.revenue, percent) : null;
+      const rawPercent = source?.[column.key];
+      const percent = rawPercent == null || rawPercent === '' || !Number.isFinite(Number(rawPercent)) ? null : Number(rawPercent);
+      const amount = percent == null ? null : calculateAmount(line.revenueBeforeVat, percent);
       percentages[column.key] = percent;
       amounts[column.key] = amount;
       if (amount == null) continue;
@@ -558,6 +607,8 @@ function enrichWithRevenue(payload, options = {}) {
       date: line.date || null,
       quantity: line.quantity,
       revenue: line.revenue,
+      revenueBeforeVat: line.revenueBeforeVat,
+      note: safeText(source?.[NOTE_KEY]),
       ...percentages,
       amounts,
       revenueMatched: matched,
@@ -583,7 +634,7 @@ function enrichWithRevenue(payload, options = {}) {
   for (const group of rowsByFormerAggregate.values()) {
     for (const column of columns) {
       const percent = group[0][column.key];
-      const target = calculateAmount(group.reduce((sum, row) => sum + row.revenue, 0), percent);
+      const target = calculateAmount(group.reduce((sum, row) => sum + row.revenueBeforeVat, 0), percent);
       const current = group.reduce((sum, row) => sum + (row.amounts[column.key] || 0), 0);
       const residual = target == null ? 0 : target - current;
       if (!residual) continue;
@@ -622,6 +673,12 @@ function enrichWithRevenue(payload, options = {}) {
   return {
     ...basePayload,
     period: String(options.period || ''),
+    template: {
+      key: template.key,
+      label: template.label,
+      calculationGroup: template.calculationGroup,
+      columns: template.columns,
+    },
     columns,
     rows,
     match: { matchedRows, totalRows, rate, threshold, low },
@@ -630,6 +687,7 @@ function enrichWithRevenue(payload, options = {}) {
       monthlyTotal: !hasGroundedRows || low ? null : monthlyMatchedTotal,
       annualTotal: !hasGroundedRows || low ? null : annualMatchedTotal,
       revenueTotal: rows.reduce((sum, row) => sum + row.revenue, 0),
+      revenueBeforeVatTotal: rows.reduce((sum, row) => sum + row.revenueBeforeVat, 0),
       annualColumnKeys: columns.filter((column) => column.annual).map((column) => column.key),
       annualLabels,
     },
@@ -656,6 +714,7 @@ function enrichRangePayload(payload, options = {}) {
   const reliable = periods.length > 0 && periods.every((period) => period.summary.reliable);
   return {
     ...payload,
+    template: periods[0]?.template || null,
     periods,
     match: {
       matchedRows,
@@ -669,6 +728,7 @@ function enrichRangePayload(payload, options = {}) {
       periodTotal: reliable ? periods.reduce((sum, period) => sum + period.summary.monthlyTotal, 0) : null,
       annualTotal: reliable ? periods.reduce((sum, period) => sum + period.summary.annualTotal, 0) : null,
       revenueTotal: periods.reduce((sum, period) => sum + period.summary.revenueTotal, 0),
+      revenueBeforeVatTotal: periods.reduce((sum, period) => sum + period.summary.revenueBeforeVatTotal, 0),
     },
   };
 }
@@ -683,7 +743,7 @@ function isTransient(error) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function fetchEmployeeCost(empCode, options = {}) {
-  const baseUrl = String(options.baseUrl ?? process.env.DATAHUB_BASE ?? '').trim().replace(/\/$/, '');
+  const baseUrl = resolveDataHubBaseUrl(options.baseUrl);
   const assignmentKey = String(options.assignmentKey ?? process.env.DATA_HUB_ASSIGNMENT_KEY ?? '').trim();
   const employeeCostKeys = parseEmployeeCostKeys(options.employeeCostKeys ?? process.env.APP_REPORT_EMPLOYEE_COST_KEYS);
   const employeeCostKey = employeeCostKeys.get(normEmp(empCode)) || '';
@@ -758,6 +818,10 @@ async function fetchEmployeeCost(empCode, options = {}) {
   }
 }
 
+function resolveDataHubBaseUrl(value) {
+  return String(value ?? process.env.DATA_HUB_BASE_URL ?? process.env.DATAHUB_BASE ?? '').trim().replace(/\/$/, '');
+}
+
 function writeAudit({ actor, role, empCode, outcome, attempts, match }) {
   const rows = persist.load(AUDIT_FILE, []);
   rows.push({
@@ -827,6 +891,8 @@ module.exports = {
   DEFAULT_NOTE,
   DEFAULT_ANNUAL_COLUMN_KEYS,
   DEFAULT_MATCH_WARNING_PERCENT,
+  NOTE_KEY,
+  VAT_DIVISOR,
   currentMonth,
   normalizeMonth,
   toUiMonth,
@@ -841,6 +907,7 @@ module.exports = {
   adaptPeriodPayload,
   configuredAnnualColumnKeys,
   configuredMatchWarningPercent,
+  safeText,
   buildProductCatalogIndex,
   resolveProductCode,
   buildRevenueIndex,
@@ -848,9 +915,11 @@ module.exports = {
   buildRevenueDetail,
   buildCostLookup,
   calculateAmount,
+  revenueBeforeVatOf,
   calculateDailyAmounts,
   enrichWithRevenue,
   enrichRangePayload,
   fetchEmployeeCost,
+  resolveDataHubBaseUrl,
   getForSession,
 };

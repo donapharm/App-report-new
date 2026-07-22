@@ -14,23 +14,23 @@ const moneyColumn = { kind: 'money' };
 const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 
 function CostTable({ period, daily = false }) {
+  const [tooltip, setTooltip] = useState('');
   const rows = daily ? period.daily.rows : period.rows;
-  const columnCount = period.dimensionColumns.length + period.costColumns.length * 2;
+  const columnCount = period.columns.length;
   const totalsByDate = new Map((period.daily.totals || []).map((total) => [total.date, total]));
-  return <div className="employee-cost-table-wrap">
-    <table className="employee-cost-table">
+  const renderCell = (row, column) => {
+    const text = formatEmployeeCostCell(row[column.key], column);
+    if (column.tooltip && text !== '—') return <button type="button" className="employee-cost-ellipsis" title={text} onClick={() => setTooltip(text)}>{text}</button>;
+    return text;
+  };
+  return <>
+    <div className="employee-cost-table-wrap">
+      <table className="employee-cost-table">
       <thead>
         <tr>
-          {period.dimensionColumns.map((column) => <th key={column.key} rowSpan="2">{column.label}</th>)}
-          {period.costColumns.map((column) => <th key={column.key} colSpan="2" className={column.annual ? 'employee-cost-annual' : ''}>
+          {period.columns.map((column) => <th key={column.key} className={column.annual ? 'employee-cost-annual' : ''}>
             {column.label} {column.annual && <span className="employee-cost-annual-badge">⏳ cuối năm</span>}
           </th>)}
-        </tr>
-        <tr>
-          {period.costColumns.flatMap((column) => [
-            <th key={`${column.key}-percent`} className={column.annual ? 'employee-cost-annual' : ''}>Tỷ lệ (%)</th>,
-            <th key={`${column.key}-amount`} className={column.annual ? 'employee-cost-annual' : ''}>Thành tiền</th>,
-          ])}
         </tr>
       </thead>
       <tbody>{rows.map((row, rowIndex) => <React.Fragment key={row.sourceLineId || rowIndex}>
@@ -41,19 +41,20 @@ function CostTable({ period, daily = false }) {
           </td>
         </tr>}
         <tr>
-          {period.dimensionColumns.map((column) => <td key={column.key}>{formatEmployeeCostCell(row[column.key], column)}</td>)}
-          {period.costColumns.flatMap((column) => [
-            <td key={`${column.key}-percent`} className={`employee-cost-number${column.annual ? ' employee-cost-annual' : ''}`}>
-              {formatEmployeeCostCell(row[column.key], column)}
-            </td>,
-            <td key={`${column.key}-amount`} className={`employee-cost-number${column.annual ? ' employee-cost-annual' : ''}`}>
-              {formatEmployeeCostCell(row[column.amountKey], moneyColumn)}
-            </td>,
-          ])}
+          {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}`}>
+            {renderCell(row, column)}
+          </td>)}
         </tr>
       </React.Fragment>)}</tbody>
-    </table>
-  </div>;
+      </table>
+    </div>
+    {!!tooltip && <div className="employee-cost-tooltip-backdrop" role="presentation" onClick={() => setTooltip('')}>
+      <div className="employee-cost-tooltip" role="dialog" aria-modal="true" aria-label="Hàm lượng đầy đủ" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="employee-cost-tooltip-close" aria-label="Đóng" onClick={() => setTooltip('')}>×</button>
+        {tooltip}
+      </div>
+    </div>}
+  </>;
 }
 
 function PeriodBlock({ period, expanded, onToggle }) {
@@ -63,7 +64,7 @@ function PeriodBlock({ period, expanded, onToggle }) {
       <div>
         <div className="section-head">Tháng {formatMonthLabel(period.period)}</div>
         <div className="employee-cost-panel-meta">
-          {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} dòng)
+          Mẫu {period.template.label || 'chi phí'} · {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} dòng)
         </div>
       </div>
       {!!period.rows.length && <button type="button" className="btn secondary" onClick={onToggle} aria-expanded={expanded}>
@@ -97,7 +98,7 @@ function PeriodBlock({ period, expanded, onToggle }) {
     </div>}
 
     {!!period.rows.length && <div className="employee-cost-source-note">
-      Thành tiền = doanh thu dòng × tỷ lệ ÷ 100; dòng/ngày không ghép được doanh thu hiển thị “—”.
+      Thành tiền tháng = doanh thu trước VAT × tỷ lệ ÷ 100 (không gồm C44); dòng/ngày không ghép đủ tỷ lệ hiển thị “—”.
       {annualNote && <> Cột {annualNote} thanh toán cuối năm (T12), không tính vào tổng tháng hoặc tổng kỳ.</>}
     </div>}
   </div>;
@@ -252,7 +253,7 @@ export default function EmployeeCost({ me }) {
     <div className="employee-cost-heading card">
       <div>
         <div className="section-head">Chi phí của tôi</div>
-        <p>Mỗi đơn × mỗi mặt hàng là một dòng. App Report giữ nguyên doanh thu giao dịch và tra tỷ lệ theo mã hàng × tháng.</p>
+        <p>Mỗi đơn × mỗi mặt hàng là một dòng. Chi phí được tính trên thành tiền xuất bán trước VAT và tra tỷ lệ theo mã hàng × tháng.</p>
       </div>
       <form className="employee-cost-filters" onSubmit={applyRange}>
         {admin && <label>

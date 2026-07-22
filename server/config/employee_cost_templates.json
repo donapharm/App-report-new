@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "defaultCalculationGroup": "fulltime",
+  "calculationGroups": [
+    {
+      "key": "fulltime",
+      "costColumns": ["c36", "c41", "c43", "c44", "c45"],
+      "templateKey": "fulltime"
+    },
+    {
+      "key": "parttime",
+      "employees": ["DN021", "DN022", "DN023"],
+      "costColumns": ["c36"],
+      "templateKey": "parttime"
+    }
+  ],
+  "displayTemplates": [
+    {
+      "key": "fulltime",
+      "label": "FULL-TIME",
+      "columns": [
+        "date", "orderCode", "route", "c7", "contractorName", "c5", "c16", "strength", "c25",
+        "bidPrice", "quantity", "revenueBeforeVat", "c36", "c41", "c43", "c44", "c45", "rowMonthlyTotal", "note"
+      ],
+      "costLabels": {
+        "c36": "C36 CP ctv/khác (%)",
+        "c41": "C41 CP đặt hàng (%)",
+        "c43": "C43 CP bs/td (%)",
+        "c44": "C44 Lương cuối năm (%)",
+        "c45": "C45 Lương tăng thêm (%)"
+      }
+    },
+    {
+      "key": "parttime",
+      "label": "PART-TIME",
+      "columns": [
+        "date", "orderCode", "route", "c7", "contractorName", "c5", "c16", "strength", "c25",
+        "bidPrice", "quantity", "revenueBeforeVat", "c36", "rowMonthlyTotal", "note"
+      ],
+      "costLabels": {
+        "c36": "C36 CP ctv/khác (%)"
+      }
+    }
+  ]
+}

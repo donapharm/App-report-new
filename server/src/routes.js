@@ -537,7 +537,9 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
     // Catalog lỗi ở tháng nào thì tháng đó fail closed, không dùng snapshot tháng khác.
     for (const period of range.months) {
       const uiPeriod = employeeCost.toUiMonth(period);
-      revenueRowsByPeriod[period] = empCode ? store.getRows({ ky: uiPeriod, scope: { empCode } }) : [];
+      const scopedRevenue = empCode ? store.getRows({ ky: uiPeriod, scope: { empCode } }) : [];
+      const contractorLookup = empCode ? contractorLookupFor({ empCode }, scopedRevenue) : null;
+      revenueRowsByPeriod[period] = empCode ? enrichContractorNames(scopedRevenue, contractorLookup) : [];
       catalogRowsByPeriod[period] = [];
       if (!empCode) continue;
       try {
