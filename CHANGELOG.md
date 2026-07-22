@@ -1,3 +1,8 @@
+### 2026-07-22 — Claude Code (review) — hardening visibility `d236496`: PASS (nhánh review hoàn chỉnh)
+- **Review `d236496`: PASS.** `loadConfig` try/catch → fallback `{}` + `console.warn` phía server (không lộ path ra FE; loadConfig KHÔNG còn throw → chặn nguồn rò path). 2 route GET `visibility`/`employees` bọc `asyncJsonRoute` → trả `{ error, code }` đúng chuẩn chung app. Test config-thiếu + lỗi-giả 2 GET PASS; 220/220 server · 25/25 web · build PASS.
+- Lookup vẫn **92,9%** (dữ liệu mới: DN001 **171/184**, 210/223 order-line — nhích nhẹ do refresh, vẫn ≥90%).
+- **Nhánh review `d236496` = bản release hoàn chỉnh:** fix lookup + 2 mẫu cột mới + VAT-trước + visibility hardening, tất cả review PASS. **Chưa deploy** — chờ CEO chốt: (1) thời điểm deploy (⚠ đổi số sang VAT-trước); (2) DN021 lệch mã QĐ (cùng thuốc?); (3) task C48 sidecar cho DataHub Bot.
+
 ### 2026-07-22 — Report Bot — KHÔI PHỤC FE production về main (hết "Lỗi máy chủ")
 - **Giải quyết "Lỗi máy chủ" bằng cách bảo thủ:** đưa **FE public về đúng `origin/main` (c2abea1)** thay vì deploy bản mới. Bundle FE main **không còn gọi `/employee-cost/visibility`** (route chỉ có trên nhánh review), nên hết 404/"Lỗi máy chủ". **BE không restart** (PID/restart count giữ), **số chi phí không đổi**, nhánh review `6ef5e3c` giữ nguyên chưa deploy. Backup bundle review: `backups/frontend-review-dist-20260722_145601/dist`. (Tab cũ cần tải lại 1 lần.)
 - Xác nhận chẩn đoán: sự cố là **lệch phiên bản FE mới / BE cũ**, không phải lỗi code. Panel "Quản trị quyền tự xem chi phí" là **tính năng chỉ có trên nhánh review**, đúng ra chưa vào production.
