@@ -72,5 +72,18 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
 5. Tính coverage trên số khóa `(đơn vị, mã hàng)` doanh thu duy nhất trong kỳ; bảng chi tiết vẫn giữ grain order-line và ngưỡng dưới 90% vẫn ẩn tổng.
 6. Xử lý 401 (sai key) / 502 (thử lại) / 400 (thiếu emp).
 
+## 7. Worklist khoảng trống tỷ lệ trong App Report
+- `GET /api/employee-cost/gaps?from=YYYY-MM&to=YYYY-MM`: lấy các cặp doanh thu
+  `(đơn vị, mã QLNB)` chưa khớp timeline tỷ lệ. NV luôn bị ép self-scope; CEO/admin
+  được xem toàn roster hoặc chọn `?emp=` trong roster đã duyệt.
+- Response chỉ chứa mã/tên hàng, đơn vị, mã NV, doanh thu ảnh hưởng, coverage và gợi
+  ý catalog. **Không chứa tỷ lệ, thành tiền chi phí, C32 hoặc C47.** Nguồn catalog/tỷ
+  lệ không sẵn sàng thì endpoint fail closed, không biến toàn bộ doanh thu thành gap.
+- Gợi ý mã yêu cầu cùng đơn vị, cùng tên hàng chuẩn hóa và mã QĐ/QLNB gần nhau. Đây
+  chỉ là ứng viên để DataHub xác nhận; App Report không ghi mapping và không tự áp tỷ lệ.
+- `GET /api/employee-cost/gaps/export.xlsx` áp lại scope/bộ lọc ở backend và xuất hai
+  sheet `Theo mã QLNB`, `Ánh xạ lệch mã`. Cột `% cần điền` và `Xác nhận` luôn để trống.
+- Cả xem danh sách và xuất Excel đều ghi audit; response/file dùng `private, no-store`.
+
 ---
 *Phía Data Hub: C32/C47 tiếp tục khóa cứng; C48 hiện chưa có trong payload nên App Report hiển thị `—` và chờ Data Hub bổ sung theo task riêng.*

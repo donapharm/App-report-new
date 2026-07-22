@@ -89,6 +89,14 @@ export const api = {
     const query = params.toString();
     return req('GET', '/employee-cost' + (query ? `?${query}` : ''));
   },
+  employeeCostGaps: (emp, range = {}) => {
+    const params = new URLSearchParams();
+    if (emp) params.set('emp', emp);
+    if (range.from) params.set('from', range.from);
+    if (range.to) params.set('to', range.to);
+    const query = params.toString();
+    return req('GET', '/employee-cost/gaps' + (query ? `?${query}` : ''));
+  },
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   employeeCostVisibility: () => req('GET', '/employee-cost/visibility'),
   employeeCostVisibilitySave: (payload) => req('POST', '/employee-cost/visibility', payload),
@@ -208,6 +216,23 @@ function filenameFromDisposition(disposition, fallback) {
   const utf8 = String(disposition || '').match(/filename\*=UTF-8''([^;]+)/i);
   if (utf8) { try { return decodeURIComponent(utf8[1].replace(/["']/g, '')); } catch { /* use regular filename */ } }
   return String(disposition || '').match(/filename="?([^";]+)"?/i)?.[1] || fallback;
+}
+
+export async function downloadEmployeeCostGaps(params = {}) {
+  const url = '/api/employee-cost/gaps/export.xlsx?' + new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value != null)),
+  ).toString();
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Không xuất được danh sách thiếu % chi phí');
+  }
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filenameFromDisposition(res.headers.get('content-disposition'), 'employee-cost-gaps.xlsx');
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
 }
 
 export async function downloadDormantReport(format, snapshotId) {

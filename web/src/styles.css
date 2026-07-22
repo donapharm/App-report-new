@@ -2010,8 +2010,31 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-effective { grid-column:1 / -1; color:var(--muted); font-size:10px; font-weight:800; }
 .employee-cost-effective.on { color:#187440; }
 .employee-cost-effective.off { color:#a33; }
+.employee-cost-tabs { display:flex; gap:6px; padding:5px; border:1px solid var(--line); border-radius:11px; background:#f3f7fa; }
+.employee-cost-tabs button { flex:1; padding:10px 14px; border:0; border-radius:8px; background:transparent; color:var(--muted); font-weight:900; cursor:pointer; }
+.employee-cost-tabs button.active { background:#fff; color:#075d9b; box-shadow:0 2px 8px rgba(7,93,155,.14); }
+.employee-cost-gap-admin, .employee-cost-gap-employee { display:grid; gap:14px; border-top:4px solid #0b7a54; }
+.employee-cost-gap-title { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+.employee-cost-gap-title p { margin:5px 0 0; color:var(--muted); font-size:12px; }
+.employee-cost-gap-filters { display:grid; grid-template-columns:1.5fr repeat(3,minmax(150px,1fr)); gap:9px; }
+.employee-cost-gap-filters label { display:grid; gap:5px; min-width:0; }
+.employee-cost-gap-filters label span { color:var(--muted); font-size:10px; font-weight:900; text-transform:uppercase; }
+.employee-cost-gap-coverage { display:grid; gap:7px; padding:12px; border:1px solid #a8d3c4; border-radius:10px; background:#f0faf6; }
+.employee-cost-gap-coverage-head { display:flex; justify-content:space-between; gap:15px; color:#245c49; font-size:12px; }
+.employee-cost-gap-progress { height:10px; overflow:hidden; border-radius:999px; background:#d4e9e1; }
+.employee-cost-gap-progress span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#0b7a54,#23a977); transition:width .2s ease; }
+.employee-cost-gap-table { width:100%; min-width:900px; border-collapse:collapse; font-size:12px; }
+.employee-cost-gap-table th { padding:10px; background:#075d9b; color:#fff; text-align:left; white-space:nowrap; }
+.employee-cost-gap-table td { max-width:420px; padding:10px; border-top:1px solid var(--line); vertical-align:top; }
+.employee-cost-gap-table tbody tr:nth-child(even) { background:#f7fafc; }
+.employee-cost-gap-table td small { display:block; margin-top:4px; color:var(--muted); line-height:1.4; }
+.employee-cost-gap-reason { display:inline-flex; padding:3px 8px; border-radius:999px; font-size:10px; font-weight:900; }
+.employee-cost-gap-reason.missing { background:#fff0e7; color:#9a4300; }
+.employee-cost-gap-reason.qd_mismatch { background:#eeeafd; color:#5b37a8; }
+.employee-cost-gap-note { margin:0; color:var(--muted); font-size:11px; font-style:italic; }
 @media (max-width: 1100px) {
   .employee-cost-visibility-grid, .employee-cost-visibility-employees { grid-template-columns:1fr; }
+  .employee-cost-gap-filters { grid-template-columns:1fr 1fr; }
 }
 @media (max-width: 767px) {
   .employee-cost-heading { display:grid; align-items:stretch; }
@@ -2029,4 +2052,7 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-visibility-head .btn, .employee-cost-visibility-toolbar .btn, .employee-cost-visibility select { width:100%; }
   .employee-cost-visibility-item, .employee-cost-visibility-employee { grid-template-columns:1fr; }
   .employee-cost-effective { grid-column:auto; }
+  .employee-cost-tabs, .employee-cost-gap-title, .employee-cost-gap-coverage-head { align-items:stretch; flex-direction:column; }
+  .employee-cost-gap-filters { grid-template-columns:1fr; }
+  .employee-cost-gap-title .btn { width:100%; }
 }

@@ -23,6 +23,7 @@ const catalogManagement = require('./catalogManagement');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
+const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const targetAdjustment = require('./targetAdjustment');
@@ -562,6 +563,67 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
   });
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
+}));
+
+async function employeeCostGapPayload(req, event = 'gaps_view') {
+  const s = auth.scopeOf(req.session);
+  const admin = auth.isAdmin(req.session.role);
+  const roster = employeeCostRosterRows();
+  const empCode = employeeCost.resolveScopedEmployee({
+    session: req.session,
+    scope: s,
+    requestedEmp: req.query.emp,
+  });
+  return employeeCostVisibility.run({
+    admin,
+    actor: req.session.emp_code,
+    role: req.session.role,
+    empCode,
+    roster,
+  }, () => employeeCostGaps.buildForSession({
+    session: req.session,
+    scope: s,
+    requestedEmp: req.query.emp,
+    roster,
+    from: req.query.from,
+    to: req.query.to,
+    filters: {
+      q: req.query.q,
+      unit: req.query.unit,
+      employee: req.query.employee,
+      reason: req.query.reason,
+    },
+    event,
+    cacheCost: true,
+    revenueRowsFor: (targetEmp, period) => store.getRows({
+      ky: employeeCost.toUiMonth(period),
+      scope: { empCode: targetEmp },
+    }),
+    catalogRowsFor: async (period) => {
+      const snapshot = await canonicalAssignmentSnapshot(period);
+      return snapshot.catalog || snapshot.rows || [];
+    },
+  }));
+}
+
+// Worklist gap chi phí: NV luôn bị ép self-scope; CEO/admin có thể xem toàn
+// roster hoặc chọn ?emp=. Payload chỉ có mã/đơn vị/doanh thu, không chứa %.
+router.get('/employee-cost/gaps', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostGapPayload(req, 'gaps_view');
+  res.set('Cache-Control', 'private, no-store');
+  return res.json(payload);
+}));
+
+router.get('/employee-cost/gaps/export.xlsx', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostGapPayload(req, 'gaps_export');
+  if (payload.disabled) return res.status(403).json({ error: payload.note || 'Chức năng chi phí đang tắt cho bạn.' });
+  const buffer = await employeeCostGaps.createWorkbook(payload);
+  const from = String(payload.from || 'gap').replace(/[^0-9-]/g, '');
+  const to = String(payload.to || from).replace(/[^0-9-]/g, '');
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="employee-cost-gaps_${from}_${to}.xlsx"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.send(buffer);
 }));
 
 router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {

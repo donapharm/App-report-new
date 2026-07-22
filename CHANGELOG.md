@@ -1,3 +1,10 @@
+### 2026-07-22 — Report Bot (review) — Gap chi phí self-scope + worklist Excel
+- Thêm `GET /api/employee-cost/gaps` và `GET /api/employee-cost/gaps/export.xlsx`: NV bị ép self-scope; CEO/admin xem toàn roster hoặc chọn NV; nguồn catalog/tỷ lệ lỗi thì fail closed; truy cập/xuất đều audit và `private, no-store`.
+- UI: NV có panel “Mặt hàng chưa có % chi phí”; CEO/admin có tab gộp theo mã QLNB, tìm/lọc NV/đơn vị/lý do, coverage progress và sắp xếp theo doanh thu ảnh hưởng.
+- Excel có đúng 2 sheet `Theo mã QLNB` và `Ánh xạ lệch mã`; cột `% cần điền`/`Xác nhận` để trống. Gợi ý mã chỉ read-only, không tự ánh xạ/không ghi DataHub; payload không chứa tỷ lệ, tiền chi phí, C32/C47.
+- Nghiệm thu live DN001 T07: **171/184 = 92,9%**, đúng **13 cặp gap**. Ứng viên cùng đơn vị+tên hàng: `QĐ1572.1699.N4.754 → QĐ1572.1699.N4.754.A`, `G1.GE.QĐ139.3004.N4.1029 → G1.GE.QĐ139.3269.N5.1029`, `G1.GE.QĐ139.2120.N4.578 → G1.GE.QĐ139.2114.N4.578`; chỉ gợi ý để DataHub xác nhận. Toàn roster còn phát hiện ca khác số quyết định `G1.GE.QĐ139.2963.N4.549 → G1.GE.QĐ48.549.N4.549`.
+- Gate tại nhánh review: server/web test + build PASS; chưa deploy.
+
 ### 2026-07-22 — Claude Code (giao bot) — Export chuẩn VN (Excel+PDF, A4 ngang) + NV tự xuất
 - CEO chốt: **NV được tự xuất** phần mình; **chuẩn số kế toán VN** (nghìn dấu chấm, thập phân dấu phẩy, đơn vị đồng, "Bằng chữ" cho tổng); **mẫu A4 quay ngang**; **2 định dạng Excel + PDF**. Directive `DIRECTIVE_EMP_COST_EXPORT_VN.md`.
 - Áp cho **cả báo cáo chi phí lẫn danh sách thiếu %**. PDF **nhúng font Unicode đủ dấu tiếng Việt** (cấm tofu); A4 landscape fit-to-width, đầu/chân trang (Donapharm · kỳ · NV · ngày xuất · nguồn DataHub SSOT · số trang), header lặp mỗi trang. Excel số thật (SUM chạy) + number format VN. **Self-scope** (NV chỉ của mình), C32/C47 không xuất, qua backend + audit. Làm cùng nhánh review gap tool. Chưa deploy.
