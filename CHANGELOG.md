@@ -4,6 +4,10 @@
 - Frontend render đúng thứ tự mẫu **19 cột full-time / 15 cột part-time**, `Giá trúng thầu` đứng trước `Số lượng`, `Ghi chú` cuối; hàm lượng dài giữ một dòng có ellipsis + tooltip.
 - Regression employee-cost **31/31**, frontend employee-cost/visibility **12/12**, toàn bộ server/web test và production build PASS. Chỉ push review, **chưa deploy/restart production**.
 
+### 2026-07-22 — Claude Code (chẩn đoán + giao bot) — SỬA khóa lookup chi phí (match sụt 2/222)
+- **Review `d0fd7c8` (nhánh templates): layout/công thức ĐÚNG** (VAT trước: 12.616.000×13%=1.640.080 full-time, ×8%=1.009.280 CTV; c44 loại; 2 mẫu đúng nhóm). **NHƯNG match sụt 2/222** (bản main 170/183).
+- **Chẩn đoán: lỗi KHÓA LOOKUP** (không phải DataHub). `buildCostLookup` đổi sang product-only + guard "mọi dòng cùng mã phải % giống hệt" → endpoint ~10.982 dòng/NV % khác theo đơn vị → rớt gần hết. **Sửa: quay lại ghép (đơn vị + mã hàng)** như main. Directive: `DIRECTIVE_EMP_COST_LOOKUP_FIX.md`.
+
 ### 2026-07-22 — Claude Code (giao bot) — "Chi phí của tôi": 2 mẫu cột + VAT trước + ghi chú C48
 - CEO gửi 2 mẫu Excel (full-time / part-time). Giao Report Bot: **2 layout** — full-time đủ 5 cột % (C36/C41/C43/C44/C45); **CTV part-time = DN021/DN022/DN023 chỉ C36**. **Nhóm CTV cho TÍNH TIỀN khác nhóm hiển thị** → config riêng `employee_cost_templates.json`.
 - Cột mới: Tuyến · Nhà thầu (tên) · **Hàm lượng** (QĐ141 dài → **1 dòng + tooltip**) · **Giá trúng thầu** (CEO duyệt hiện) · **Thành tiền xuất bán (trước VAT)** thay "Doanh thu" · **Ghi chú từ DataHub C48**.
