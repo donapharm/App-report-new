@@ -1,3 +1,8 @@
+### 2026-07-22 — Claude Code (nghiệm thu) — bảng UX production `3e29784`: PASS (worklist #148 CHƯA kèm)
+- **Kiểm tra độc lập trên main: PASS.** Code khớp bản review `d0c6b56` (pageSize 20, filter `date`, Vùng/Tỉnh chỉ nguồn chính thức). **Số không đổi:** DN001 41.144.556đ / C44 1.210.470đ / 92,9%; ALL 2.391.033.447đ / C44 95.133.877đ. Self-scope chắc (NV emp=ALL→403; ép DN016→DN001); C32/C47 không lộ (API/PDF/XLSX). Pager pill 20 dòng trên/dưới; lọc kết hợp + tìm bỏ dấu + ngày + "Chưa gán tỉnh"=7 chạy đúng.
+- **⚠ Worklist #148 ("Đơn vị chưa gán tỉnh") CHƯA có trên production** — grep main không có endpoint xuất; test vẫn 255/39 (y hệt d0c6b56). Bot deploy bảng UX mà bỏ qua worklist. **Còn treo:** bot làm nốt worklist để CEO điền `unit_province.json`.
+- Còn tiếp: DQ center #141; DataHub %/alias → coverage 100%.
+
 ### 2026-07-22 — Report Bot (deploy + nghiệm thu production) — bảng UX chi phí `3e29784`
 - Đã merge bản Claude PASS `d0c6b56` vào `main`, đồng bộ thêm commit directive đang có trên remote và chốt release **`3e29784`**; build/deploy FE và restart BE + Telegram bot cùng lượt. Production version **`3e29784-20260722-234418-225`**, HTTPS 200; `app-report` PID **1429817** / restart **85**, `app-report-tgbot` PID **1429825** / restart **38**. Rollback: `backups/employee-cost-tableux-deploy-20260722_234324/` (baseline `dc2f54c`).
 - Gate release PASS: server **255/255**, web **39/39**, production build, syntax và `git diff --check`; chỉ còn warning chunk-size cũ.
