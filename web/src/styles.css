@@ -1951,6 +1951,10 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-filters .btn { min-height:38px; }
 .employee-cost-filters small { flex-basis:100%; color:#a33; text-align:right; }
 .page-desktop .employee-cost-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.employee-cost-column-kpi .label { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+.employee-cost-kpi-annual { border:2px solid #d68700; background:linear-gradient(145deg,#fff8e6,#fffdf8); box-shadow:0 7px 18px rgba(214,135,0,.13); }
+.employee-cost-kpi-annual .value { color:#a95d00; }
+.employee-cost-kpi-badge { flex:0 0 auto; padding:2px 7px; border-radius:999px; background:#d68700; color:#fff; font-size:9px; font-weight:900; letter-spacing:.02em; text-transform:uppercase; }
 .employee-cost-panel { min-width:0; }
 .employee-cost-period-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .employee-cost-table-wrap { width:100%; max-width:100%; overflow-x:auto; margin-top:10px; border:1px solid var(--line); border-radius:10px; }
@@ -2015,7 +2019,7 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-filters label, .employee-cost-filters label:first-child { min-width:0; }
   .employee-cost-filters label:first-child, .employee-cost-filters small { grid-column:1 / -1; }
   .employee-cost-filters .btn { grid-column:1 / -1; width:100%; }
-  .employee-cost-kpis { grid-template-columns:1fr 1fr; }
+  .employee-cost-kpis { grid-template-columns:1fr; }
   .employee-cost-table-wrap { overflow-x:auto !important; -webkit-overflow-scrolling:touch; }
   .employee-cost-summary-row { align-items:flex-end; flex-direction:column; gap:4px; }
   .employee-cost-period-head { align-items:stretch; flex-direction:column; }

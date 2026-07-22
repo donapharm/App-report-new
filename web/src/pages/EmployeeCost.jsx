@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
-  currentMonthValue, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
+  currentMonthValue, employeeCostColumnKpis, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
   normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
@@ -114,6 +114,17 @@ function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel =
     <option value="on">Bật</option>
     <option value="off">Tắt</option>
   </select>;
+}
+
+function CostColumnKpi({ item }) {
+  return <div className={`kpi employee-cost-column-kpi${item.annual ? ' employee-cost-kpi-annual' : ''}`}>
+    <div className="label">
+      <span>{item.label}</span>
+      {item.annual && <span className="employee-cost-kpi-badge">cuối năm</span>}
+    </div>
+    <div className="value small">{formatEmployeeCostCell(item.value, moneyColumn)}</div>
+    <div className="delta muted">{item.annual ? 'Khoản riêng · chi trả T12' : 'Tổng thành tiền theo cột'}</div>
+  </div>;
 }
 
 function VisibilityPanel({ adminCode, panel, loading, saving, message, error, onChange, onSave }) {
@@ -238,6 +249,7 @@ export default function EmployeeCost({ me }) {
     : String(me?.emp_code || model.empCode || '—');
   const rangeInvalid = !draftRange.from || !draftRange.to || draftRange.from > draftRange.to;
   const multiple = model.periods.length > 1;
+  const columnKpis = employeeCostColumnKpis(model);
 
   const applyRange = (event) => {
     event.preventDefault();
@@ -309,6 +321,8 @@ export default function EmployeeCost({ me }) {
       <Kpi label="Số dòng" value={model.rows.length.toLocaleString('vi-VN')} />
       <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} dòng · ngưỡng ${model.match.threshold}%`} />
       <Kpi label={multiple ? 'Tổng cả kỳ (chưa gồm khoản cuối năm)' : 'Tổng chi phí tháng (chưa gồm khoản cuối năm)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`} />
+      <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
+      {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
     </div>
 
     {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}

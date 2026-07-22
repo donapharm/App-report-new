@@ -689,6 +689,10 @@ function enrichWithRevenue(payload, options = {}) {
   const dayMonthlyTotal = dayTotals.reduce((sum, day) => sum + day.monthlyTotal, 0);
   const dayAnnualTotal = dayTotals.reduce((sum, day) => sum + day.annualTotal, 0);
   const reconciled = dailyReliable && dayMonthlyTotal === monthlyMatchedTotal && dayAnnualTotal === annualMatchedTotal;
+  const columnTotals = !hasGroundedRows || low ? null : Object.fromEntries(columns.map((column) => [
+    column.key,
+    rows.reduce((sum, row) => sum + (Number.isFinite(row.amounts[column.key]) ? row.amounts[column.key] : 0), 0),
+  ]));
   const basePayload = { ...payload };
   if (rows.length) delete basePayload.note;
   return {
@@ -709,6 +713,7 @@ function enrichWithRevenue(payload, options = {}) {
       annualTotal: !hasGroundedRows || low ? null : annualMatchedTotal,
       revenueTotal: rows.reduce((sum, row) => sum + row.revenue, 0),
       revenueBeforeVatTotal: rows.reduce((sum, row) => sum + row.revenueBeforeVat, 0),
+      columnTotals,
       annualColumnKeys: columns.filter((column) => column.annual).map((column) => column.key),
       annualLabels,
     },
@@ -733,6 +738,7 @@ function enrichRangePayload(payload, options = {}) {
   const totalRows = periods.reduce((sum, period) => sum + period.match.totalRows, 0);
   const matchedRows = periods.reduce((sum, period) => sum + period.match.matchedRows, 0);
   const reliable = periods.length > 0 && periods.every((period) => period.summary.reliable);
+  const columnKeys = [...new Set(periods.flatMap((period) => period.columns.map((column) => column.key)))];
   return {
     ...payload,
     template: periods[0]?.template || null,
@@ -750,6 +756,11 @@ function enrichRangePayload(payload, options = {}) {
       annualTotal: reliable ? periods.reduce((sum, period) => sum + period.summary.annualTotal, 0) : null,
       revenueTotal: periods.reduce((sum, period) => sum + period.summary.revenueTotal, 0),
       revenueBeforeVatTotal: periods.reduce((sum, period) => sum + period.summary.revenueBeforeVatTotal, 0),
+      columnTotals: reliable ? Object.fromEntries(columnKeys.map((key) => [
+        key,
+        periods.reduce((sum, period) => sum + (period.summary.columnTotals?.[key] || 0), 0),
+      ])) : null,
+      annualColumnKeys: [...new Set(periods.flatMap((period) => period.summary.annualColumnKeys || []))],
     },
   };
 }

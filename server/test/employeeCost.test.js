@@ -175,6 +175,9 @@ test('maps C16 through catalog, joins revenue by unit + product code and calcula
   assert.deepEqual(enriched.match, { matchedRows: 2, totalRows: 2, rate: 100, threshold: 90, low: false });
   assert.equal(enriched.summary.monthlyTotal, 790_476);
   assert.equal(enriched.summary.annualTotal, 0);
+  assert.deepEqual(enriched.summary.columnTotals, {
+    c36: 790_476, c41: 0, c43: 0, c44: 0, c45: 0,
+  });
   assert.deepEqual(enriched.summary.annualColumnKeys, ['c44']);
   assert.equal(enriched.columns.find((column) => column.key === 'c44').annual, true);
   assert.equal(enriched.columns.find((column) => column.key === 'c44').derivesFrom, 'c43');
@@ -198,6 +201,9 @@ test('C44 derives from the allocated C43 amount instead of revenue before VAT', 
   assert.equal(row.rowAnnualTotal, 75_696);
   assert.equal(enriched.summary.monthlyTotal, 1_513_920);
   assert.equal(enriched.summary.annualTotal, 75_696);
+  assert.deepEqual(enriched.summary.columnTotals, {
+    c36: 0, c41: 0, c43: 1_513_920, c44: 75_696, c45: 0,
+  });
   assert.equal(enriched.columns.find((column) => column.key === 'c44').derivesFrom, 'c43');
 });
 
@@ -223,6 +229,7 @@ test('does not match raw names, leaves amounts null and suppresses unreliable to
   assert.equal(enriched.summary.reliable, false);
   assert.equal(enriched.summary.monthlyTotal, null);
   assert.equal(enriched.summary.annualTotal, null);
+  assert.equal(enriched.summary.columnTotals, null);
 });
 
 test('catalog ambiguity fails closed and annual columns are configurable', () => {
@@ -365,6 +372,10 @@ test('multi-month enrichment separates month totals and excludes annual columns 
   assert.deepEqual(enriched.periods.map((period) => period.summary.annualTotal), [4_762, 9_524]);
   assert.equal(enriched.summary.periodTotal, 571_428);
   assert.equal(enriched.summary.annualTotal, 14_286);
+  assert.deepEqual(enriched.summary.columnTotals, {
+    c36: 285_714, c41: 0, c43: 285_714, c44: 14_286, c45: 0,
+  });
+  assert.deepEqual(enriched.summary.annualColumnKeys, ['c44']);
 });
 
 test('Cerecaps T06 DN001 keeps two order-lines instead of aggregating unit-product revenue', () => {
