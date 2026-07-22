@@ -1,3 +1,11 @@
+### 2026-07-22 — Report Bot (deploy + nghiệm thu production) — bảng UX chi phí `3e29784`
+- Đã merge bản Claude PASS `d0c6b56` vào `main`, đồng bộ thêm commit directive đang có trên remote và chốt release **`3e29784`**; build/deploy FE và restart BE + Telegram bot cùng lượt. Production version **`3e29784-20260722-234418-225`**, HTTPS 200; `app-report` PID **1429817** / restart **85**, `app-report-tgbot` PID **1429825** / restart **38**. Rollback: `backups/employee-cost-tableux-deploy-20260722_234324/` (baseline `dc2f54c`).
+- Gate release PASS: server **255/255**, web **39/39**, production build, syntax và `git diff --check`; chỉ còn warning chunk-size cũ.
+- CEO `emp=ALL` PASS: template **TẤT CẢ NHÂN VIÊN**, đủ **21 NV / 1.550 dòng**, mặc định **20 dòng / 78 trang**, STT trang đầu 1–20. Phiên DN001 gọi `emp=ALL` trả **403 `EMPLOYEE_COST_ALL_FORBIDDEN`**; ép `emp=DN016` vẫn resolve về **DN001**.
+- Lọc kết hợp production PASS: **Vùng/Tỉnh=ĐỒNG NAI · Nhóm mã=PKĐK · Tuyến=NCL · Ngày=01/07/2026** còn **159 dòng**; tìm bỏ dấu `y duc` còn **29 dòng**, trang 2 có 9 dòng STT 21–29. `Chưa gán tỉnh` trả đúng **7 dòng** từ đơn vị thiếu map. Excel/PDF xuất lại đủ 29 dòng sau lọc/tìm, không bị cắt theo trang; metadata filter, số thật/Unicode và `private, no-store` đều PASS.
+- UI production PASS: pager pill có nút số/ellipsis, mặc định 20 và chỉ cho 20/50/100; pager trên + dưới đồng bộ, pager trên sticky. Smoke trang Tổng quan không lỗi.
+- Khóa số/bảo mật không đổi: DN001 tổng tháng **41.144.556đ**, C44 cuối năm **1.210.470đ**, coverage **171/184 = 92,9%**; C36 **714.667đ**, C41 **7.687.500đ**, C43 **25.470.960đ**, C45 **7.271.429đ**. API/PDF/XLSX không lộ **C32/C47**; self-scope giữ. Toàn ALL hiện tổng tháng **2.391.033.447đ**, C44 **95.133.877đ**. Bằng chứng: `/tmp/app-report-tableux-acceptance-3e29784/acceptance.json`.
+
 ### 2026-07-22 — Claude Code (giao bot) — Worklist "Đơn vị chưa gán tỉnh" → điền unit_province.json
 - CEO chốt hướng chuẩn 100%: điền map `unit_province.json` (mã ĐV → tỉnh). Directive `DIRECTIVE_EMP_COST_PROVINCE_WORKLIST.md`: bot xuất Excel (chuẩn VN, CEO/ADMIN) danh sách **đơn vị duy nhất "Chưa gán tỉnh"** (mã · tên · tuyến · #NV · doanh thu ảnh hưởng · cột trống "Tỉnh cần điền"), xếp theo doanh thu. Điền vào config → App Report tự áp (không đoán). Tùy chọn: màn admin nhập nhanh. Self-scope, không lộ %/C32/C47. Chưa deploy.
 
