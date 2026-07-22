@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (giao bot) — DEPLOY bản chi phí cột mới + VAT-trước (CEO chốt A)
+- **CEO chốt (A): deploy ngay** nhánh review `d236496` (review PASS). Directive: `DIRECTIVE_EMP_COST_DEPLOY.md`. Gộp: fix lookup 92,9% + 2 mẫu cột mới + **VAT-trước (đổi số có chủ ý)** + visibility route/hardening.
+- **‼ Bắt buộc restart BE đồng bộ FE** (tránh lệch phiên bản 404 như sự cố trước). Nghiệm thu: hết "Lỗi máy chủ"; DN001 171/184 tổng VAT-trước mới; DN021 `—` (fail-closed, chờ đối chiếu mã QĐ); Ghi chú `—` (chờ C48); self-scope + C32/C47 giữ. Còn treo (không chặn): DN021 mã QĐ + C48 sidecar → 2 task DataHub Bot.
+
 ### 2026-07-22 — Claude Code (review) — hardening visibility `d236496`: PASS (nhánh review hoàn chỉnh)
 - **Review `d236496`: PASS.** `loadConfig` try/catch → fallback `{}` + `console.warn` phía server (không lộ path ra FE; loadConfig KHÔNG còn throw → chặn nguồn rò path). 2 route GET `visibility`/`employees` bọc `asyncJsonRoute` → trả `{ error, code }` đúng chuẩn chung app. Test config-thiếu + lỗi-giả 2 GET PASS; 220/220 server · 25/25 web · build PASS.
 - Lookup vẫn **92,9%** (dữ liệu mới: DN001 **171/184**, 210/223 order-line — nhích nhẹ do refresh, vẫn ≥90%).
