@@ -5,6 +5,18 @@
   - **#139 (bảng UX: STT/tất cả NV/cột % hẹp/tìm kiếm) CHƯA implement** (commit `1694f93` chỉ là directive doc).
 - **CEO chốt B: deploy #137+#138 ngay** (`50e0c62`), #139 làm đợt 2. Directive `DIRECTIVE_EMP_COST_GAP_EXPORT_DEPLOY.md`. DataHub: điền % thiếu hẳn + alias lệch mã QĐ (task đã gửi) → coverage 100% không cần deploy.
 
+### 2026-07-22 — Report Bot (review) — Export chi phí/gap chuẩn VN Excel + PDF
+- Bổ sung 4 endpoint backend có auth/audit: `employee-cost/export.xlsx|pdf` và `employee-cost/gaps/export.xlsx|pdf`. NV luôn bị ép self-scope kể cả truyền `?emp=` khác; CEO/admin được chọn NV hoặc toàn roster. Không xuất C32/C47.
+- Excel: số thật + công thức `SUM`, number format kế toán, ngày `dd/mm/yyyy`, tiêu đề tiếng Việt, A4 ngang, fit-to-width, lặp header, footer trang. Báo cáo chi phí có “Bằng chữ”, tổng tháng và C44 cuối năm tách riêng; gap giữ 2 sheet và cột `% cần điền`/`Xác nhận` trống.
+- PDF: A4 ngang, nhúng Noto/DejaVu/Liberation Unicode fail-closed nếu thiếu font, đầu/chân trang, `Trang x/y`, bảng lặp header, số VN dấu chấm/dấu phẩy và không mất dấu tiếng Việt.
+- UI cho cả NV/CEO có nút Excel + PDF ở báo cáo chi phí và gap. Chưa deploy; chờ Claude review trên cùng nhánh `review/employee-cost-gap-tool-20260722`.
+
+### 2026-07-22 — Report Bot (review) — Gap chi phí self-scope + worklist Excel
+- Thêm `GET /api/employee-cost/gaps` và `GET /api/employee-cost/gaps/export.xlsx`: NV bị ép self-scope; CEO/admin xem toàn roster hoặc chọn NV; nguồn catalog/tỷ lệ lỗi thì fail closed; truy cập/xuất đều audit và `private, no-store`.
+- UI: NV có panel “Mặt hàng chưa có % chi phí”; CEO/admin có tab gộp theo mã QLNB, tìm/lọc NV/đơn vị/lý do, coverage progress và sắp xếp theo doanh thu ảnh hưởng.
+- Excel có đúng 2 sheet `Theo mã QLNB` và `Ánh xạ lệch mã`; cột `% cần điền`/`Xác nhận` để trống. Gợi ý mã chỉ read-only, không tự ánh xạ/không ghi DataHub; payload không chứa tỷ lệ, tiền chi phí, C32/C47.
+- Nghiệm thu live DN001 T07: **171/184 = 92,9%**, đúng **13 cặp gap**. Ứng viên cùng đơn vị+tên hàng: `QĐ1572.1699.N4.754 → QĐ1572.1699.N4.754.A`, `G1.GE.QĐ139.3004.N4.1029 → G1.GE.QĐ139.3269.N5.1029`, `G1.GE.QĐ139.2120.N4.578 → G1.GE.QĐ139.2114.N4.578`; chỉ gợi ý để DataHub xác nhận. Toàn roster còn phát hiện ca khác số quyết định `G1.GE.QĐ139.2963.N4.549 → G1.GE.QĐ48.549.N4.549`.
+- Gate tại nhánh review: server/web test + build PASS; chưa deploy.
 ### 2026-07-22 — Claude Code (giao bot) — Bảng chi phí: STT + xem tất cả NV + cột % hẹp + tìm kiếm thông minh
 - CEO yêu cầu 4 UX bảng "Chi phí của tôi". Directive `DIRECTIVE_EMP_COST_TABLE_UX.md`:
   1. **Cột STT** đầu bảng, tự nhảy theo dòng hiển thị (lọc/tìm → đánh lại), có trong Excel/PDF.

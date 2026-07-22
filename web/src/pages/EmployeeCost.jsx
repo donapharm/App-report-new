@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { api } from '../api.js';
+import { api, downloadEmployeeCostGaps, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
   currentMonthValue, employeeCostColumnKpis, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
@@ -8,6 +8,7 @@ import {
   normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
   visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel, writeVisibilityCollapsed,
 } from '../employeeCostVisibilityModel.js';
+import { employeeCostGapView, gapReasonLabel } from '../employeeCostGapModel.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -191,8 +192,112 @@ function VisibilityPanel({ adminCode, panel, loading, saving, message, error, on
   </div>;
 }
 
+function GapCoverage({ coverage, remainingCodes }) {
+  const rate = Math.max(0, Math.min(100, Number(coverage.rate || 0)));
+  return <div className="employee-cost-gap-coverage">
+    <div className="employee-cost-gap-coverage-head">
+      <b>Coverage {rate.toLocaleString('vi-VN')}%</b>
+      <span>{Number(coverage.matchedPairs || 0).toLocaleString('vi-VN')}/{Number(coverage.totalPairs || 0).toLocaleString('vi-VN')} cặp đã khớp · còn {remainingCodes.toLocaleString('vi-VN')} mã</span>
+    </div>
+    <div className="employee-cost-gap-progress" role="progressbar" aria-label="Tỷ lệ mã đã có phần trăm chi phí" aria-valuemin="0" aria-valuemax="100" aria-valuenow={rate}>
+      <span style={{ width: `${rate}%` }} />
+    </div>
+  </div>;
+}
+
+function GapPairTable({ pairs }) {
+  return <div className="employee-cost-table-wrap">
+    <table className="employee-cost-gap-table">
+      <thead><tr><th>Đơn vị</th><th>Mã QLNB · tên hàng</th><th>Doanh thu ảnh hưởng</th><th>Tình trạng</th></tr></thead>
+      <tbody>{pairs.map((pair) => <tr key={`${pair.period}-${pair.employeeCode}-${pair.unitLabel}-${pair.productCode}`}>
+        <td><b>{pair.unitLabel}</b></td>
+        <td><b>{pair.productCode}</b><small>{pair.productName}</small></td>
+        <td className="employee-cost-number">{formatEmployeeCostCell(pair.revenueAffected, moneyColumn)}</td>
+        <td><span className={`employee-cost-gap-reason ${pair.reason}`}>{gapReasonLabel(pair.reason)}</span>
+          {pair.suggestedCatalogCode && <small>Gợi ý catalog: {pair.suggestedCatalogCode}</small>}
+        </td>
+      </tr>)}</tbody>
+    </table>
+  </div>;
+}
+
+function EmployeeGapPanel({ payload, loading, error, range }) {
+  const [expanded, setExpanded] = useState(false);
+  const [exporting, setExporting] = useState('');
+  const [exportError, setExportError] = useState('');
+  const view = useMemo(() => employeeCostGapView(payload), [payload]);
+  const exportFile = async (format) => {
+    setExporting(format); setExportError('');
+    try { await downloadEmployeeCostGaps(format, range); }
+    catch (requestError) { setExportError(requestError.message || 'Không xuất được file'); }
+    finally { setExporting(''); }
+  };
+  return <div className="card employee-cost-gap-employee">
+    <div className="employee-cost-gap-title">
+      <div><div className="section-head">{loading ? 'Mặt hàng chưa có % chi phí' : `${view.pairs.length.toLocaleString('vi-VN')} mặt hàng chưa có % chi phí`}</div>
+        <p>{loading ? 'Đang kiểm tra catalog…' : view.pairs.length ? 'Đang chờ DataHub bổ sung; đây không phải lỗi doanh thu.' : 'Các cặp doanh thu trong kỳ đã có tỷ lệ chi phí.'}</p>
+      </div>
+      <div className="employee-cost-export-actions">
+        {!!view.pairs.length && <button type="button" className="btn secondary" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{expanded ? 'Ẩn danh sách' : 'Xem danh sách'}</button>}
+        <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Excel'}</button>
+        <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'PDF'}</button>
+      </div>
+    </div>
+    {(error || exportError) && <div className="employee-cost-match-warning" role="alert">{error || exportError}</div>}
+    {loading ? <Spinner /> : expanded && <>
+      <GapPairTable pairs={view.pairs} />
+      <p className="employee-cost-gap-note">Gợi ý lệch mã chỉ để DataHub đối chiếu, App Report không tự ánh xạ hoặc tự điền tỷ lệ.</p>
+    </>}
+  </div>;
+}
+
+function AdminGapPanel({ payload, loading, error, range }) {
+  const [filters, setFilters] = useState({ q: '', employee: '', unit: '', reason: '' });
+  const [exporting, setExporting] = useState('');
+  const [exportError, setExportError] = useState('');
+  const view = useMemo(() => employeeCostGapView(payload, filters), [payload, filters]);
+  const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const exportFile = async (format) => {
+    setExporting(format); setExportError('');
+    try { await downloadEmployeeCostGaps(format, { ...range, ...filters }); }
+    catch (requestError) { setExportError(requestError.message || 'Không xuất được file'); }
+    finally { setExporting(''); }
+  };
+  return <div className="card employee-cost-gap-admin">
+    <div className="employee-cost-gap-title">
+      <div><div className="section-head">Gộp theo mã QLNB</div><p>Ưu tiên từ trên xuống theo doanh thu bị ảnh hưởng. Tỷ lệ và ánh xạ vẫn do DataHub cập nhật.</p></div>
+      <div className="employee-cost-export-actions">
+        <button type="button" className="btn" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
+        <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
+      </div>
+    </div>
+    <div className="employee-cost-gap-filters">
+      <label><span>Tìm mã/tên/đơn vị</span><input value={filters.q} onChange={(event) => setFilter('q', event.target.value)} placeholder="VD: Valgesic, Vũng Tàu…" /></label>
+      <label><span>Nhân viên</span><select value={filters.employee} onChange={(event) => setFilter('employee', event.target.value)}><option value="">Tất cả</option>{view.employeeOptions.map((employee) => <option key={employee.employeeCode} value={employee.employeeCode}>{employee.employeeCode} · {employee.employeeName}</option>)}</select></label>
+      <label><span>Đơn vị</span><select value={filters.unit} onChange={(event) => setFilter('unit', event.target.value)}><option value="">Tất cả</option>{view.unitOptions.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
+      <label><span>Lý do</span><select value={filters.reason} onChange={(event) => setFilter('reason', event.target.value)}><option value="">Tất cả</option><option value="missing">Thiếu hẳn</option><option value="qd_mismatch">Lệch mã QĐ/QLNB</option></select></label>
+    </div>
+    <GapCoverage coverage={view.coverage} remainingCodes={view.remainingCodes} />
+    {(error || exportError) && <div className="employee-cost-match-warning" role="alert">{error || exportError}</div>}
+    {loading ? <Spinner /> : !view.items.length ? <div className="center">Không có mã thiếu phù hợp bộ lọc.</div> : <div className="employee-cost-table-wrap">
+      <table className="employee-cost-gap-table admin">
+        <thead><tr><th>Mã QLNB · tên hàng</th><th>Đơn vị ảnh hưởng</th><th>NV</th><th>Doanh thu ảnh hưởng</th><th>Lý do/gợi ý</th></tr></thead>
+        <tbody>{view.items.map((item) => <tr key={item.productCode}>
+          <td><b>{item.productCode}</b><small>{item.productName}</small></td>
+          <td><b>{item.unitCount.toLocaleString('vi-VN')} đơn vị</b><small>{item.unitLabels.join('; ')}</small></td>
+          <td>{item.employeeCodes.join(', ')}</td>
+          <td className="employee-cost-number"><b>{formatEmployeeCostCell(item.revenueAffected, moneyColumn)}</b></td>
+          <td><span className={`employee-cost-gap-reason ${item.reason}`}>{gapReasonLabel(item.reason)}</span>{!!item.suggestedCatalogCodes.length && <small>Gợi ý: {item.suggestedCatalogCodes.join('; ')}</small>}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>}
+    <p className="employee-cost-gap-note">Excel để DataHub điền % hoặc xác nhận ánh xạ. App Report chỉ phát hiện/gợi ý, không tự áp mã catalog.</p>
+  </div>;
+}
+
 export default function EmployeeCost({ me }) {
   const admin = !!me?.isAdmin;
+  const [view, setView] = useState('cost');
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(admin ? '' : String(me?.emp_code || ''));
   const [draftRange, setDraftRange] = useState({ from: month, to: month });
@@ -206,6 +311,11 @@ export default function EmployeeCost({ me }) {
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [visibilityMessage, setVisibilityMessage] = useState('');
   const [visibilityError, setVisibilityError] = useState('');
+  const [gapPayload, setGapPayload] = useState({ pairs: [], coverageByEmployee: [] });
+  const [gapLoading, setGapLoading] = useState(!admin);
+  const [gapError, setGapError] = useState('');
+  const [costExporting, setCostExporting] = useState('');
+  const [costExportError, setCostExportError] = useState('');
 
   useEffect(() => {
     if (!admin) return;
@@ -226,6 +336,7 @@ export default function EmployeeCost({ me }) {
   }, [admin]);
 
   useEffect(() => {
+    if (admin && view !== 'cost') return undefined;
     if (admin && !selectedEmp) { setPayload(EMPTY); setLoading(false); return; }
     let alive = true;
     setLoading(true);
@@ -240,7 +351,23 @@ export default function EmployeeCost({ me }) {
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [admin, selectedEmp, range]);
+  }, [admin, selectedEmp, range, view]);
+
+  useEffect(() => {
+    if (admin && view !== 'gaps') return undefined;
+    let alive = true;
+    setGapLoading(true);
+    setGapError('');
+    api.employeeCostGaps(undefined, range)
+      .then((data) => { if (alive) setGapPayload(data); })
+      .catch((requestError) => {
+        if (!alive) return;
+        setGapPayload({ ...range, pairs: [], coverageByEmployee: [] });
+        setGapError(requestError.message || 'Không thể tải danh sách thiếu % chi phí');
+      })
+      .finally(() => { if (alive) setGapLoading(false); });
+    return () => { alive = false; };
+  }, [admin, range, view]);
 
   const model = useMemo(() => employeeCostViewModel(payload), [payload]);
   const selected = employees.find((employee) => employee.emp_code === selectedEmp);
@@ -277,6 +404,13 @@ export default function EmployeeCost({ me }) {
       setVisibilitySaving(false);
     }
   };
+  const exportCost = async (format) => {
+    if (admin && !selectedEmp) return;
+    setCostExporting(format); setCostExportError('');
+    try { await downloadEmployeeCostReport(format, { ...range, ...(admin ? { emp: selectedEmp } : {}) }); }
+    catch (requestError) { setCostExportError(requestError.message || 'Không xuất được báo cáo chi phí'); }
+    finally { setCostExporting(''); }
+  };
 
   if (!admin && payload.disabled) return <section className="employee-cost-page">
     <div className="card center">{payload.note || 'Chức năng chi phí đang tắt cho bạn.'}</div>
@@ -285,11 +419,11 @@ export default function EmployeeCost({ me }) {
   return <section className="employee-cost-page">
     <div className="employee-cost-heading card">
       <div>
-        <div className="section-head">Chi phí của tôi</div>
-        <p>Mỗi đơn × mỗi mặt hàng là một dòng. Chi phí được tính trên thành tiền xuất bán trước VAT và tra tỷ lệ theo mã hàng × tháng.</p>
+        <div className="section-head">{admin && view === 'gaps' ? 'Mặt hàng thiếu % chi phí' : 'Chi phí của tôi'}</div>
+        <p>{admin && view === 'gaps' ? 'Danh sách chỉ phục vụ phát hiện và lập worklist cho DataHub; không tự ánh xạ mã hay tự điền tỷ lệ.' : 'Mỗi đơn × mỗi mặt hàng là một dòng. Chi phí được tính trên thành tiền xuất bán trước VAT và tra tỷ lệ theo mã hàng × tháng.'}</p>
       </div>
       <form className="employee-cost-filters" onSubmit={applyRange}>
-        {admin && <label>
+        {admin && view === 'cost' && <label>
           <span>Nhân viên</span>
           <select value={selectedEmp} onChange={(event) => setSelectedEmp(event.target.value)}>
             {!employees.length && <option value="">Chưa có nhân viên</option>}
@@ -300,11 +434,23 @@ export default function EmployeeCost({ me }) {
         </label>}
         <label><span>Từ tháng</span><input type="month" value={draftRange.from} onChange={(event) => setDraftRange((current) => ({ ...current, from: event.target.value }))} /></label>
         <label><span>Đến tháng</span><input type="month" value={draftRange.to} onChange={(event) => setDraftRange((current) => ({ ...current, to: event.target.value }))} /></label>
-        <button type="submit" className="btn" disabled={rangeInvalid || loading}>Xem</button>
+        <button type="submit" className="btn" disabled={rangeInvalid || (admin && view === 'gaps' ? gapLoading : loading)}>Xem</button>
+        {view === 'cost' && <div className="employee-cost-export-actions">
+          <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('xlsx')}>{costExporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
+          <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('pdf')}>{costExporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
+        </div>}
         {rangeInvalid && <small role="alert">Từ tháng không được sau Đến tháng.</small>}
       </form>
     </div>
 
+    {costExportError && view === 'cost' && <div className="employee-cost-match-warning" role="alert">{costExportError}</div>}
+
+    {admin && <div className="employee-cost-tabs" role="tablist" aria-label="Chế độ xem chi phí">
+      <button type="button" role="tab" aria-selected={view === 'cost'} className={view === 'cost' ? 'active' : ''} onClick={() => setView('cost')}>Chi phí theo nhân viên</button>
+      <button type="button" role="tab" aria-selected={view === 'gaps'} className={view === 'gaps' ? 'active' : ''} onClick={() => setView('gaps')}>Mặt hàng thiếu %</button>
+    </div>}
+
+    {admin && view === 'gaps' ? <AdminGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} /> : <>
     {admin && <VisibilityPanel
       adminCode={me?.emp_code || me?.username || 'admin'}
       panel={visibilityPanel}
@@ -315,6 +461,8 @@ export default function EmployeeCost({ me }) {
       onChange={changeVisibility}
       onSave={saveVisibility}
     />}
+
+    {!admin && <EmployeeGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} />}
 
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} />
@@ -337,6 +485,7 @@ export default function EmployeeCost({ me }) {
         <span>Tổng cả kỳ (chưa gồm khoản cuối năm)</span>
         <b>{formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)}</b>
       </div>}
+    </>}
     </>}
   </section>;
 }
