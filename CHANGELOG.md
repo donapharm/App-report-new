@@ -19,6 +19,23 @@
 - **Review `6ef5e3c`: PASS.** `buildCostLookup` quay về khóa `unit␟product`; guard fail-closed **chỉ chặn đúng cặp (đơn vị+mã) nhập nhằng**. Phía tiêu thụ đổi `costLookup.get(unit␟product)`. **Điểm cộng:** coverage đo trên khóa (đơn vị+mã) duy nhất (170/183=92,9%), bảng giữ grain order-line (209/222). VAT spot-check `380.000÷1,05×0,5%=1.810đ` (trước VAT). Test 32/32 + 218/218 + 25/25 + build PASS. **DN001 nghiệm thu ĐẠT.**
 - **DN021 CTV: layout PASS nhưng 0/3 do lệch mã QĐ** — catalog chi phí `QĐ48…549` vs doanh thu `QĐ139…549`; hệ thống **fail-closed để `—`** (đúng #3, KHÔNG tự bắc cầu). **Câu hỏi dữ liệu cho CEO/DataHub:** 2 mã có cùng mặt hàng? Cùng → DataHub chuẩn hóa mã ở nguồn; khác → 0/3 đúng thực tế. Ghi chú C48 = `—` tạm. Sidecar C48: CEO đã chốt ranh giới + điều kiện cứng "C48 thiếu ≠ kỳ thiếu".
 
+### 2026-07-22 — Report Bot — Harden trang quản trị chi phí theo directive #126
+- `employeeCostRoster.loadConfig()` nay fail-soft về `{}` khi file nhóm thiếu/hỏng/path sai, chỉ ghi cảnh báo phía server; picker vẫn dựng đủ NV với nhóm mặc định thay vì làm trang sập.
+- Hai GET `/employee-cost/employees` và `/employee-cost/visibility` được bọc handler bắt lỗi, trả JSON `{error}` cụ thể khi có lỗi thật.
+- Thêm regression cho config thiếu file, roster mặc định và lỗi giả ở cả hai GET. Chỉ cập nhật nhánh review, **không deploy/restart production**.
+
+### 2026-07-22 — Report Bot — Vá regression lookup chi phí theo directive #125
+- Quay khóa timeline từ `mã hàng` về đúng `(đơn vị + mã hàng)`; xung đột tỷ lệ chỉ làm fail-closed khóa đơn vị–mã hàng đó, không loại toàn bộ mã hàng ở các đơn vị khác.
+- Độ phủ tiếp tục tính trên số khóa `(đơn vị + mã hàng)` duy nhất trong doanh thu, còn bảng chi tiết vẫn giữ grain order-line. Live-read T07 DN001 phục hồi đúng **170/183 = 92,9%** (209/222 order-line có tỷ lệ), tổng được phép hiển thị.
+- DN021 hiện **0/3** do DataHub trả mã chi phí `G1.GE.QĐ48.549.N4.549` trong khi doanh thu là `G1.GE.QĐ139.2963.N4.549`; giữ fail-closed, không tự ánh xạ/bịa mã. C48 vẫn chưa có và hiển thị `—` theo directive.
+- Thêm regression test khóa `(đơn vị + mã hàng)`, cô lập duplicate xung đột và coverage unique-key; chỉ push nhánh review, **chưa deploy/restart production**.
+
+### 2026-07-22 — Report Bot — Hoàn thiện 2 mẫu “Chi phí của tôi” trên nhánh review
+- Thêm cấu hình độc lập `server/config/employee_cost_templates.json`: nhóm **tính chi phí** part-time chỉ gồm `DN021/DN022/DN023` và dùng C36; còn lại full-time dùng C36/C41/C43/C44/C45. Cấu hình mẫu hiển thị tách khỏi cấu hình nhóm tính và không dùng `employee_cost_groups.json`.
+- Backend giữ grain order-line/self-scope/C32-C47/công tắc, bổ sung Tuyến · tên Nhà thầu · Hàm lượng · Giá trúng thầu · doanh thu trước VAT · C48; đổi phép tính sang `doanh thu / VAT_DIVISOR × %`, vẫn tách C44 và ẩn tổng khi độ phủ dưới 90%.
+- Frontend render đúng thứ tự mẫu **19 cột full-time / 15 cột part-time**, `Giá trúng thầu` đứng trước `Số lượng`, `Ghi chú` cuối; hàm lượng dài giữ một dòng có ellipsis + tooltip.
+- Regression employee-cost **31/31**, frontend employee-cost/visibility **12/12**, toàn bộ server/web test và production build PASS. Chỉ push review, **chưa deploy/restart production**.
+
 ### 2026-07-22 — Claude Code (chẩn đoán + giao bot) — SỬA khóa lookup chi phí (match sụt 2/222)
 - **Review `d0fd7c8` (nhánh templates): layout/công thức ĐÚNG** (VAT trước: 12.616.000×13%=1.640.080 full-time, ×8%=1.009.280 CTV; c44 loại; 2 mẫu đúng nhóm). **NHƯNG match sụt 2/222** (bản main 170/183).
 - **Chẩn đoán: lỗi KHÓA LOOKUP** (không phải DataHub). `buildCostLookup` đổi sang product-only + guard "mọi dòng cùng mã phải % giống hệt" → endpoint ~10.982 dòng/NV % khác theo đơn vị → rớt gần hết. **Sửa: quay lại ghép (đơn vị + mã hàng)** như main. Directive: `DIRECTIVE_EMP_COST_LOOKUP_FIX.md`.
@@ -36,6 +53,11 @@
 ### 2026-07-21 — Claude Code (review) — grain order-line `807b5744`: ĐẠT
 - **Review `review/emp-cost-line-grain-20260721` (`807b5744`): ĐẠT.** `rows = revenueLines.map(...)` — **mỗi dòng doanh thu = 1 dòng** (không gộp; `sourceLineId` giữ từng dòng thô); Cerecaps T06 DN001 = **2 dòng riêng** (13.246.800đ + 11.970.000đ); không bịa ngày/mã đơn (T06 cũ thiếu → `—`); % + Thành tiền `—` vì DataHub chưa xong (đúng); giữ tổng/kỳ, c44, self-scope, C32/C47, công tắc, Σ ngày = tháng. 236/236 test.
 - 2 commit kèm (đều tốt): `7e1f32f` employee-bound key (token gán theo NV — bảo mật ↑); `b0231d7` bound OTP timeout (hardening auth, ngoài phạm vi cost nhưng có lợi). Chưa deploy.
+### 2026-07-22 — Report Bot — “Chi phí của tôi” chuyển sang grain order-line
+- Bỏ gộp doanh thu theo đơn vị × mã hàng: mỗi dòng doanh thu nguồn (mỗi đơn × mỗi mặt hàng) được giữ thành một dòng hiển thị, có mã đơn/ngày/số lượng/doanh thu dòng khi nguồn cung cấp.
+- Timeline % được tra theo mã hàng × tháng rồi áp cho từng order-line; thiếu DataHub vẫn giữ đủ dòng doanh thu với `%`/`Thành tiền` là `—`.
+- Giữ tổng tháng/kỳ, tách C44 cuối năm, self-scope, chặn C32/C47, công tắc và nhóm xem theo ngày với Σ ngày = tháng.
+- Nghiệm thu dữ liệu thật T06 DN001: Cerecaps giữ 2 dòng riêng 13.246.800đ và 11.970.000đ; bổ sung test grain, full test và production build.
 
 ### 2026-07-21 — CEO Office — employee-bound key cho consumer chi phí
 - Thay shared cost token bằng hai lớp tách biệt: `DATA_HUB_ASSIGNMENT_KEY` xác thực service và `APP_REPORT_EMPLOYEE_COST_KEYS` bind chính xác từng mã NV sau khi backend khóa scope từ session.
@@ -61,6 +83,12 @@
 ### 2026-07-21 — Claude Code (review) — "Chi phí của tôi" MASTER + roster: ĐẠT (code trên main)
 - **Review `ad2cd64` (period drilldown) + `504cbda` (roster/nhóm): ĐẠT.** Đã xác minh `employeeCost.js` trên main **byte-identical** với bản review. Điểm mạnh: xem theo ngày đảm bảo **Σ ngày = tổng tháng** (dồn phần lẻ vào ngày cuối); **chống cộng trùng** (nhiều dòng cùng đơn vị+SP → fail-closed); **Tổng cả kỳ** không gộp c44; **fail-closed khi DataHub trả range không có trường kỳ** (lá chắn lỗi 10.982 dòng); doanh thu lấy riêng từng kỳ + scope theo NV; nhóm CTV/CTV-đặc-biệt nằm ở **config JSON** (không hardcode); "Tất cả nhân viên" đã gỡ sạch (revert kiểm tra rỗng).
 - **Chưa deploy** (đúng chủ đích). Chờ: (1) DataHub sửa self-scope + trường kỳ, (2) mục 11 công tắc/gửi riêng, (3) `.env` `DATAHUB_BASE`/`APP_REPORT_COST_TOKEN`.
+
+### 2026-07-21 — Report Bot — Công tắc tự xem “Chi phí của tôi” theo phòng/nhóm/cá nhân
+- Thêm cấu hình bền `employee_cost_visibility.json`, mặc định an toàn `department=off`; override nhóm/cá nhân dùng roster Sale 21 người và ưu tiên **cá nhân > nhóm > toàn phòng**. Mọi lần đổi được audit nguyên trạng trước/sau, actor, thời gian và từng path thay đổi.
+- Backend khóa self-view trước mọi truy cập doanh thu/catalog/DataHub: NV bị tắt chỉ nhận `{ disabled:true, columns:[], rows:[] }`; CEO/admin bypass để quản trị. `/me` trả `employeeCostDisabled` để frontend ẩn tab theo quyết định backend.
+- Thêm GET/POST `/api/employee-cost/visibility` có `requireAuth + requireAdmin`, validate `on/off/inherit`, trả panel động gồm toàn phòng/nhóm/NV cùng trạng thái hiệu lực và nguồn quyết định.
+- Trang Chi phí của tôi có panel CEO/admin để bật/tắt toàn phòng, từng nhóm và từng cá nhân; không hardcode roster/nhóm trong bundle. Bổ sung API/model/CSS và test service, audit, input lỗi, route guard/thứ tự fail-closed, model/source/ẩn tab frontend.
 
 ### 2026-07-21 — Report Bot — "Chi phí của tôi": tự tính Thành tiền + tách khoản cuối năm
 - App Report ghép dòng chi phí với doanh thu đã khóa scope theo **đơn vị + mã sản phẩm** (C16 được resolve qua catalog), tính `Thành tiền = doanh thu × tỷ lệ ÷ 100`; dòng không khớp giữ `—` và cảnh báo khi tỷ lệ khớp dưới 90%.

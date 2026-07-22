@@ -4,48 +4,57 @@ import { Kpi, Spinner } from '../components.jsx';
 import {
   currentMonthValue, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
+import {
+  normalizeVisibilityPanel, updateVisibilitySetting, visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel,
+} from '../employeeCostVisibilityModel.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
-const dateLabel = (value) => String(value || '').split('-').reverse().join('/');
 const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 
 function CostTable({ period, daily = false }) {
+  const [tooltip, setTooltip] = useState('');
   const rows = daily ? period.daily.rows : period.rows;
-  return <div className="employee-cost-table-wrap">
-    <table className="employee-cost-table">
+  const columnCount = period.columns.length;
+  const totalsByDate = new Map((period.daily.totals || []).map((total) => [total.date, total]));
+  const renderCell = (row, column) => {
+    const text = formatEmployeeCostCell(row[column.key], column);
+    if (column.tooltip && text !== '—') return <button type="button" className="employee-cost-ellipsis" title={text} onClick={() => setTooltip(text)}>{text}</button>;
+    return text;
+  };
+  return <>
+    <div className="employee-cost-table-wrap">
+      <table className="employee-cost-table">
       <thead>
         <tr>
-          {daily && <th rowSpan="2">Ngày</th>}
-          {period.dimensionColumns.map((column) => <th key={column.key} rowSpan="2">{column.label}</th>)}
-          {period.costColumns.map((column) => <th key={column.key} colSpan="2" className={column.annual ? 'employee-cost-annual' : ''}>
+          {period.columns.map((column) => <th key={column.key} className={column.annual ? 'employee-cost-annual' : ''}>
             {column.label} {column.annual && <span className="employee-cost-annual-badge">⏳ cuối năm</span>}
           </th>)}
-          {daily && <th rowSpan="2">Tổng ngày<br /><small>chưa gồm cuối năm</small></th>}
-        </tr>
-        <tr>
-          {period.costColumns.flatMap((column) => [
-            <th key={`${column.key}-percent`} className={column.annual ? 'employee-cost-annual' : ''}>Tỷ lệ (%)</th>,
-            <th key={`${column.key}-amount`} className={column.annual ? 'employee-cost-annual' : ''}>Thành tiền</th>,
-          ])}
         </tr>
       </thead>
-      <tbody>{rows.map((row, rowIndex) => <tr key={daily ? `${row.date}-${row.rowIndex}` : rowIndex}>
-        {daily && <td className="employee-cost-date">{dateLabel(row.date)}</td>}
-        {period.dimensionColumns.map((column) => <td key={column.key}>{formatEmployeeCostCell(row[column.key], column)}</td>)}
-        {period.costColumns.flatMap((column) => [
-          <td key={`${column.key}-percent`} className={`employee-cost-number${column.annual ? ' employee-cost-annual' : ''}`}>
-            {formatEmployeeCostCell(row[column.key], column)}
-          </td>,
-          <td key={`${column.key}-amount`} className={`employee-cost-number${column.annual ? ' employee-cost-annual' : ''}`}>
-            {formatEmployeeCostCell(row[column.amountKey], moneyColumn)}
-          </td>,
-        ])}
-        {daily && <td className="employee-cost-number"><b>{formatEmployeeCostCell(row.monthlyTotal, moneyColumn)}</b></td>}
-      </tr>)}</tbody>
-    </table>
-  </div>;
+      <tbody>{rows.map((row, rowIndex) => <React.Fragment key={row.sourceLineId || rowIndex}>
+        {daily && row.date !== rows[rowIndex - 1]?.date && <tr className="employee-cost-day-group">
+          <td colSpan={columnCount}>
+            <b>Ngày {formatEmployeeCostCell(row.date, { key: 'date', kind: 'dimension' })}</b>
+            <span>Σ ngày: {formatEmployeeCostCell(totalsByDate.get(row.date)?.monthlyTotal, moneyColumn)} (chưa gồm cuối năm)</span>
+          </td>
+        </tr>}
+        <tr>
+          {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}`}>
+            {renderCell(row, column)}
+          </td>)}
+        </tr>
+      </React.Fragment>)}</tbody>
+      </table>
+    </div>
+    {!!tooltip && <div className="employee-cost-tooltip-backdrop" role="presentation" onClick={() => setTooltip('')}>
+      <div className="employee-cost-tooltip" role="dialog" aria-modal="true" aria-label="Hàm lượng đầy đủ" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="employee-cost-tooltip-close" aria-label="Đóng" onClick={() => setTooltip('')}>×</button>
+        {tooltip}
+      </div>
+    </div>}
+  </>;
 }
 
 function PeriodBlock({ period, expanded, onToggle }) {
@@ -55,7 +64,7 @@ function PeriodBlock({ period, expanded, onToggle }) {
       <div>
         <div className="section-head">Tháng {formatMonthLabel(period.period)}</div>
         <div className="employee-cost-panel-meta">
-          {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} dòng)
+          Mẫu {period.template.label || 'chi phí'} · {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} dòng)
         </div>
       </div>
       {!!period.rows.length && <button type="button" className="btn secondary" onClick={onToggle} aria-expanded={expanded}>
@@ -89,9 +98,64 @@ function PeriodBlock({ period, expanded, onToggle }) {
     </div>}
 
     {!!period.rows.length && <div className="employee-cost-source-note">
-      Thành tiền = doanh thu dòng × tỷ lệ ÷ 100; dòng/ngày không ghép được doanh thu hiển thị “—”.
+      Thành tiền tháng = doanh thu trước VAT × tỷ lệ ÷ 100 (không gồm C44); dòng/ngày không ghép đủ tỷ lệ hiển thị “—”.
       {annualNote && <> Cột {annualNote} thanh toán cuối năm (T12), không tính vào tổng tháng hoặc tổng kỳ.</>}
     </div>}
+  </div>;
+}
+
+function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel = 'Theo cấp trên', label }) {
+  return <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)}>
+    {allowInherit && <option value="inherit">{inheritLabel}</option>}
+    <option value="on">Bật</option>
+    <option value="off">Tắt</option>
+  </select>;
+}
+
+function VisibilityPanel({ panel, loading, saving, message, error, onChange, onSave }) {
+  return <div className="card employee-cost-visibility">
+    <div className="employee-cost-visibility-head">
+      <div>
+        <div className="section-head">Quản trị quyền tự xem chi phí</div>
+        <p>Cá nhân ưu tiên hơn nhóm; nhóm ưu tiên hơn toàn phòng. Quyền hiệu lực do backend quyết định.</p>
+      </div>
+      <button type="button" className="btn" disabled={loading || saving || !panel} onClick={onSave}>
+        {saving ? 'Đang lưu…' : 'Lưu công tắc'}
+      </button>
+    </div>
+    {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
+    {message && <div className="employee-cost-visibility-success" role="status">{message}</div>}
+    {loading || !panel ? <Spinner /> : <>
+      <div className="employee-cost-visibility-department">
+        <div><b>Toàn phòng Kinh doanh</b><small>Mặc định an toàn là Tắt.</small></div>
+        <VisibilitySelect
+          label="Công tắc toàn phòng Kinh doanh"
+          value={panel.department.setting}
+          allowInherit={false}
+          onChange={(value) => onChange('department', '', value)}
+        />
+      </div>
+      <div className="employee-cost-visibility-section">
+        <h4>Theo nhóm</h4>
+        <div className="employee-cost-visibility-grid">
+          {panel.groups.map((group) => <div className="employee-cost-visibility-item" key={group.key}>
+            <div><b>{group.label}</b><small>{group.employeeCount.toLocaleString('vi-VN')} nhân viên</small></div>
+            <VisibilitySelect label={`Công tắc nhóm ${group.label}`} inheritLabel="Theo toàn phòng" value={group.setting} onChange={(value) => onChange('groups', group.key, value)} />
+            <span className={`employee-cost-effective ${group.effective}`}>{visibilityEffectiveLabel(group.effective)} · {group.source === 'group' ? 'Chính nhóm' : 'Toàn phòng'}</span>
+          </div>)}
+        </div>
+      </div>
+      <div className="employee-cost-visibility-section">
+        <h4>Theo cá nhân</h4>
+        <div className="employee-cost-visibility-employees">
+          {panel.employees.map((employee) => <div className="employee-cost-visibility-employee" key={employee.emp_code}>
+            <div><b>{employee.emp_code} · {employee.name}</b><small>{employee.group_label}</small></div>
+            <VisibilitySelect label={`Công tắc nhân viên ${employee.emp_code}`} inheritLabel="Theo nhóm" value={employee.setting} onChange={(value) => onChange('employees', employee.emp_code, value)} />
+            <span className={`employee-cost-effective ${employee.effective}`}>{visibilityEffectiveLabel(employee.effective)} · {visibilitySourceLabel(employee)}</span>
+          </div>)}
+        </div>
+      </div>
+    </>}
   </div>;
 }
 
@@ -105,15 +169,27 @@ export default function EmployeeCost({ me }) {
   const [loading, setLoading] = useState(!admin);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState({});
+  const [visibilityPanel, setVisibilityPanel] = useState(null);
+  const [visibilityLoading, setVisibilityLoading] = useState(admin);
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const [visibilityMessage, setVisibilityMessage] = useState('');
+  const [visibilityError, setVisibilityError] = useState('');
 
   useEffect(() => {
     if (!admin) return;
     let alive = true;
-    api.employeeCostEmployees().then(({ employees: list = [] }) => {
+    setVisibilityLoading(true);
+    api.employeeCostVisibility().then((data) => {
       if (!alive) return;
-      setEmployees(list);
-      setSelectedEmp((current) => current || list[0]?.emp_code || '');
-    }).catch(() => { if (alive) setEmployees([]); });
+      const panel = normalizeVisibilityPanel(data);
+      setVisibilityPanel(panel);
+      setEmployees(panel.employees);
+      setSelectedEmp((current) => current || panel.employees[0]?.emp_code || '');
+    }).catch((requestError) => {
+      if (!alive) return;
+      setEmployees([]);
+      setVisibilityError(requestError.message || 'Không thể tải cấu hình công tắc');
+    }).finally(() => { if (alive) setVisibilityLoading(false); });
     return () => { alive = false; };
   }, [admin]);
 
@@ -147,12 +223,37 @@ export default function EmployeeCost({ me }) {
     if (rangeInvalid) return;
     setRange({ ...draftRange });
   };
+  const changeVisibility = (layer, key, setting) => {
+    setVisibilityMessage('');
+    setVisibilityError('');
+    setVisibilityPanel((current) => updateVisibilitySetting(current, layer, key, setting));
+  };
+  const saveVisibility = async () => {
+    if (!visibilityPanel || visibilitySaving) return;
+    setVisibilitySaving(true);
+    setVisibilityMessage('');
+    setVisibilityError('');
+    try {
+      const saved = normalizeVisibilityPanel(await api.employeeCostVisibilitySave(visibilitySavePayload(visibilityPanel)));
+      setVisibilityPanel(saved);
+      setEmployees(saved.employees);
+      setVisibilityMessage('Đã lưu công tắc và ghi audit.');
+    } catch (requestError) {
+      setVisibilityError(requestError.message || 'Không thể lưu cấu hình công tắc');
+    } finally {
+      setVisibilitySaving(false);
+    }
+  };
+
+  if (!admin && payload.disabled) return <section className="employee-cost-page">
+    <div className="card center">{payload.note || 'Chức năng chi phí đang tắt cho bạn.'}</div>
+  </section>;
 
   return <section className="employee-cost-page">
     <div className="employee-cost-heading card">
       <div>
         <div className="section-head">Chi phí của tôi</div>
-        <p>App Report ghép doanh thu đúng từng kỳ, đơn vị và mã sản phẩm. Tỷ lệ từng dòng không cộng dồn.</p>
+        <p>Mỗi đơn × mỗi mặt hàng là một dòng. Chi phí được tính trên thành tiền xuất bán trước VAT và tra tỷ lệ theo mã hàng × tháng.</p>
       </div>
       <form className="employee-cost-filters" onSubmit={applyRange}>
         {admin && <label>
@@ -170,6 +271,16 @@ export default function EmployeeCost({ me }) {
         {rangeInvalid && <small role="alert">Từ tháng không được sau Đến tháng.</small>}
       </form>
     </div>
+
+    {admin && <VisibilityPanel
+      panel={visibilityPanel}
+      loading={visibilityLoading}
+      saving={visibilitySaving}
+      message={visibilityMessage}
+      error={visibilityError}
+      onChange={changeVisibility}
+      onSave={saveVisibility}
+    />}
 
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} />

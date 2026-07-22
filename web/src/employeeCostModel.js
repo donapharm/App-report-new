@@ -1,10 +1,23 @@
 export const EMPLOYEE_COST_DIMENSIONS = Object.freeze([
-  { key: 'c5', label: 'Quản lý', kind: 'dimension' },
+  { key: 'date', label: 'Ngày', kind: 'dimension' },
+  { key: 'orderCode', label: 'Mã đơn hàng', kind: 'dimension' },
+  { key: 'route', label: 'Tuyến', kind: 'dimension' },
   { key: 'c7', label: 'Đơn vị', kind: 'dimension' },
-  { key: 'c16', label: 'Sản phẩm', kind: 'dimension' },
+  { key: 'contractorName', label: 'Nhà thầu', kind: 'dimension' },
+  { key: 'c5', label: 'Mã hàng (QLNB)', kind: 'dimension' },
+  { key: 'c16', label: 'Tên hàng', kind: 'dimension' },
+  { key: 'strength', label: 'Hàm lượng', kind: 'dimension', tooltip: true },
   { key: 'c25', label: 'ĐVT', kind: 'dimension' },
+  { key: 'bidPrice', label: 'Giá trúng thầu', kind: 'money' },
+  { key: 'quantity', label: 'Số lượng', kind: 'dimension', format: 'number' },
+  { key: 'revenueBeforeVat', label: 'Thành tiền xuất bán (trước VAT)', kind: 'money' },
+  { key: 'rowMonthlyTotal', label: 'Thành tiền tháng', kind: 'money' },
+  { key: 'note', label: 'Ghi chú', kind: 'dimension' },
 ]);
 
+const FIELD_BY_KEY = new Map(EMPLOYEE_COST_DIMENSIONS.map((column) => [column.key, column]));
+const DEFAULT_PREFIX = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'revenueBeforeVat'];
+const DEFAULT_SUFFIX = ['rowMonthlyTotal', 'note'];
 const BLOCKED = new Set(['c32', 'c47']);
 const EMPTY_NOTE = 'chưa có dữ liệu chi phí kỳ này';
 
@@ -18,43 +31,52 @@ export function formatMonthLabel(value) {
 }
 
 export function isAllowedCostColumn(column) {
-  const key = String(column?.key || '').trim().toLowerCase();
+  const key = String(column?.key || column || '').trim().toLowerCase();
   const match = /^c(\d+)$/.exec(key);
   if (!match || BLOCKED.has(key)) return false;
   const pos = Number(match[1]);
   return pos >= 33 && pos <= 46;
 }
 
-export function buildEmployeeCostColumns(columns = []) {
-  const seen = new Set(EMPLOYEE_COST_DIMENSIONS.map((column) => column.key));
-  const costColumns = [];
+export function buildEmployeeCostColumns(columns = [], template = {}) {
+  const costs = new Map();
   for (const raw of Array.isArray(columns) ? columns : []) {
     const key = String(raw?.key || '').trim().toLowerCase();
-    if (!isAllowedCostColumn(raw) || seen.has(key)) continue;
-    seen.add(key);
-    costColumns.push({
+    if (!isAllowedCostColumn(key) || costs.has(key)) continue;
+    costs.set(key, {
       key,
-      amountKey: `${key}_amount`,
       label: String(raw.label || key),
       kind: 'percent',
       annual: !!raw.annual,
     });
   }
-  return [
-    ...EMPLOYEE_COST_DIMENSIONS,
-    ...costColumns.flatMap((column) => [
-      column,
-      { key: column.amountKey, sourceKey: column.key, label: 'Thành tiền', kind: 'money', annual: column.annual },
-    ]),
-  ];
+  const requestedLayout = Array.isArray(template?.columns) ? template.columns.map(String) : [];
+  const layout = requestedLayout.length ? requestedLayout : [...DEFAULT_PREFIX, ...costs.keys(), ...DEFAULT_SUFFIX];
+  const seen = new Set();
+  const result = [];
+  for (const rawKey of layout) {
+    const key = isAllowedCostColumn(rawKey) ? String(rawKey).toLowerCase() : String(rawKey);
+    if (seen.has(key)) continue;
+    const column = costs.get(key) || FIELD_BY_KEY.get(key);
+    if (!column) continue;
+    seen.add(key);
+    result.push({ ...column });
+  }
+  return result;
 }
 
-export function formatEmployeeCostCell(value, column) {
+export function formatEmployeeCostCell(value, column = {}) {
   if (value == null || value === '') return '—';
-  if (column.kind === 'dimension') return String(value);
+  if (column.key === 'date') return String(value).split('-').reverse().join('/');
   const number = Number(value);
+  if (column.format === 'money' || column.kind === 'money') {
+    return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ' : String(value);
+  }
+  if (column.format === 'number') {
+    return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 4 }) : String(value);
+  }
+  if (column.kind === 'dimension') return String(value);
   if (!Number.isFinite(number)) return String(value);
-  if (column.kind === 'money') return number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ';
   return number.toLocaleString('en-US', {
     useGrouping: false,
     minimumFractionDigits: 1,
@@ -79,17 +101,26 @@ function normalizedMatch(rawMatch = {}, rowCount = 0) {
 }
 
 function periodViewModel(payload = {}) {
-  const columns = buildEmployeeCostColumns(payload.columns);
+  const template = {
+    key: String(payload.template?.key || ''),
+    label: String(payload.template?.label || ''),
+    calculationGroup: String(payload.template?.calculationGroup || ''),
+    columns: Array.isArray(payload.template?.columns) ? payload.template.columns.map(String) : [],
+  };
+  const columns = buildEmployeeCostColumns(payload.columns, template);
   const dimensionColumns = columns.filter((column) => column.kind === 'dimension');
   const costColumns = columns.filter((column) => column.kind === 'percent');
   const rows = (Array.isArray(payload.rows) ? payload.rows : []).map((source, rowIndex) => {
-    const row = { rowIndex, dailyAmounts: source?.dailyAmounts || null, dayRevenueMatched: !!source?.dayRevenueMatched };
-    for (const column of dimensionColumns) {
+    const row = {
+      rowIndex,
+      sourceLineId: String(source?.sourceLineId || `line-${rowIndex + 1}`),
+      dailyAmounts: source?.dailyAmounts || null,
+      dayRevenueMatched: !!source?.dayRevenueMatched,
+      rowMonthlyTotal: source?.rowMonthlyTotal ?? null,
+      rowAnnualTotal: source?.rowAnnualTotal ?? null,
+    };
+    for (const column of columns) {
       if (source && Object.prototype.hasOwnProperty.call(source, column.key)) row[column.key] = source[column.key];
-    }
-    for (const column of costColumns) {
-      if (source && Object.prototype.hasOwnProperty.call(source, column.key)) row[column.key] = source[column.key];
-      row[column.amountKey] = source?.amounts?.[column.key] ?? null;
     }
     return row;
   });
@@ -111,15 +142,15 @@ function periodViewModel(payload = {}) {
       let hasMonthlyAmount = false;
       for (const column of costColumns) {
         const amount = row.dailyAmounts[date]?.[column.key] ?? null;
-        dailyRow[column.amountKey] = amount;
         if (!column.annual && amount != null) { monthlyTotal += Number(amount); hasMonthlyAmount = true; }
       }
-      dailyRow.monthlyTotal = hasMonthlyAmount ? monthlyTotal : null;
+      dailyRow.rowMonthlyTotal = hasMonthlyAmount ? monthlyTotal : null;
       return dailyRow;
     }));
   return {
     empCode: String(payload.empCode || ''),
     period: String(payload.period || ''),
+    template,
     columns,
     dimensionColumns,
     costColumns,
@@ -150,7 +181,6 @@ export function employeeCostViewModel(payload = {}) {
     reliable,
     periodTotal: rawSummary.periodTotal == null ? null : Number(rawSummary.periodTotal),
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
-    // Legacy aliases keep older single-period callers/tests compatible.
     monthlyTotal: periods.length === 1 ? periods[0].summary.monthlyTotal : null,
     annualLabels: [...new Set(periods.flatMap((period) => period.summary.annualLabels))],
   } : { ...periods[0].summary, periodTotal: periods[0].summary.monthlyTotal };
@@ -160,8 +190,8 @@ export function employeeCostViewModel(payload = {}) {
     from: String(payload.from || first.period || ''),
     to: String(payload.to || first.period || ''),
     periods,
-    // Legacy aliases for one-period rendering consumers.
     period: first.period,
+    template: first.template,
     columns: first.columns,
     dimensionColumns: first.dimensionColumns,
     costColumns: first.costColumns,

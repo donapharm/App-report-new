@@ -10,8 +10,16 @@ function normEmp(value) {
 }
 
 function loadConfig(filePath = process.env.EMPLOYEE_COST_GROUP_CONFIG || DEFAULT_CONFIG_PATH) {
-  const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-  return raw && typeof raw === 'object' ? raw : {};
+  try {
+    const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch (error) {
+    console.warn('[employee-cost] group config unavailable, dùng mặc định', {
+      filePath,
+      message: error.message,
+    });
+    return {};
+  }
 }
 
 function buildRoster(users = [], config = loadConfig()) {
