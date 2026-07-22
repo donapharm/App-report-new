@@ -1,3 +1,7 @@
+### 2026-07-21 — Claude Code (review) — grain order-line `807b5744`: ĐẠT
+- **Review `review/emp-cost-line-grain-20260721` (`807b5744`): ĐẠT.** `rows = revenueLines.map(...)` — **mỗi dòng doanh thu = 1 dòng** (không gộp; `sourceLineId` giữ từng dòng thô); Cerecaps T06 DN001 = **2 dòng riêng** (13.246.800đ + 11.970.000đ); không bịa ngày/mã đơn (T06 cũ thiếu → `—`); % + Thành tiền `—` vì DataHub chưa xong (đúng); giữ tổng/kỳ, c44, self-scope, C32/C47, công tắc, Σ ngày = tháng. 236/236 test.
+- 2 commit kèm (đều tốt): `7e1f32f` employee-bound key (token gán theo NV — bảo mật ↑); `b0231d7` bound OTP timeout (hardening auth, ngoài phạm vi cost nhưng có lợi). Chưa deploy.
+
 ### 2026-07-21 — CEO Office — employee-bound key cho consumer chi phí
 - Thay shared cost token bằng hai lớp tách biệt: `DATA_HUB_ASSIGNMENT_KEY` xác thực service và `APP_REPORT_EMPLOYEE_COST_KEYS` bind chính xác từng mã NV sau khi backend khóa scope từ session.
 - Không fallback `APP_REPORT_COST_TOKEN`; thiếu/sai/trùng key, một NV có nhiều key xung đột, hai NV dùng chung key hoặc employee key trùng assignment key đều fail-closed trước khi gọi Data Hub.
