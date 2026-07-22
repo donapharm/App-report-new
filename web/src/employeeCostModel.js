@@ -249,11 +249,13 @@ export function employeeCostViewModel(payload = {}) {
       province: String(payload.filters?.province || ''),
       unitGroup: String(payload.filters?.unitGroup || ''),
       route: String(payload.filters?.route || ''),
+      date: String(payload.filters?.date || ''),
     },
     filterOptions: {
       province: normalizedFilterFacet(payload.filterOptions?.province, false),
       unitGroup: normalizedFilterFacet(payload.filterOptions?.unitGroup),
       route: normalizedFilterFacet(payload.filterOptions?.route),
+      date: normalizedFilterFacet(payload.filterOptions?.date),
     },
     search: {
       query: String(payload.search?.query || ''),
@@ -267,6 +269,18 @@ export function normalizeEmployeeCostSearch(value) {
   return String(value ?? '').toLocaleLowerCase('vi').normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
     .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export function employeeCostPageItems(page, pageCount) {
+  const current = Math.min(Math.max(1, Number(page) || 1), Math.max(1, Number(pageCount) || 1));
+  const total = Math.max(1, Number(pageCount) || 1);
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+  const keep = new Set([1, total, current - 2, current - 1, current, current + 1, current + 2]
+    .filter((value) => value >= 1 && value <= total));
+  if (current <= 4) [2, 3, 4, 5].forEach((value) => keep.add(value));
+  if (current >= total - 3) [total - 4, total - 3, total - 2, total - 1].forEach((value) => keep.add(value));
+  const pages = [...keep].sort((a, b) => a - b);
+  return pages.flatMap((value, index) => index && value - pages[index - 1] > 1 ? ['…', value] : [value]);
 }
 
 export function employeeCostSearchTokens(value) {

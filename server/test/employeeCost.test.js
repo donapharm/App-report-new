@@ -232,9 +232,12 @@ test('filter metadata keeps official province, drops inferred province, and maps
 test('one authoritative province row safely covers other rows of the exact same unit, but conflicts fail closed', () => {
   const official = { unit_code: '001.BVĐK Đồng Nai', province: 'ĐỒNG NAI', province_source: 'source' };
   const inferred = { unit_code: '001.BVĐK Đồng Nai', province: 'Đồng Nai', province_source: 'inferred' };
-  assert.equal(employeeCost.authoritativeProvinceByUnit([official, inferred]).get('001.BVĐK ĐỒNG NAI'), 'ĐỒNG NAI');
+  const guessed = { unit_code: '001.BVĐK Đồng Nai', province: 'Đồng Nai', province_source: 'guessed_from_name' };
+  const catalog = { unit_code: '001.BVĐK Đồng Nai', province: 'Đồng Nai', province_source: 'catalog' };
+  assert.equal(employeeCost.authoritativeProvinceByUnit([official, inferred, guessed, catalog]).get('001.BVĐK ĐỒNG NAI'), 'ĐỒNG NAI');
   const conflict = { unit_code: '001.BVĐK Đồng Nai', province: 'BÌNH PHƯỚC', province_source: 'source' };
   assert.equal(employeeCost.authoritativeProvinceByUnit([official, conflict]).get('001.BVĐK ĐỒNG NAI'), null);
+  assert.equal(employeeCost.authoritativeProvinceByUnit([], [official]).has('001.BVĐK ĐỒNG NAI'), false);
 });
 
 test('does not match raw names, leaves amounts null and suppresses unreliable totals below threshold', () => {

@@ -33,10 +33,10 @@ test('Vietnamese search is accent/case insensitive and supports multi-token AND'
 });
 
 test('filter + sort happen before global STT and pagination, while blocked C32/C47 stay removed', () => {
-  const transformed = table.transformReport(report(), { q: 'cerecaps', sortKey: 'date', sortDir: 'desc', page: 2, pageSize: 1, paginate: true });
+  const transformed = table.transformReport(report(), { q: 'cerecaps', sortKey: 'date', sortDir: 'desc', page: 1, pageSize: 20, paginate: true });
   const period = transformed.periods[0];
-  assert.deepEqual(period.rows.map((row) => [row.stt, row.sourceLineId]), [[2, '2']]);
-  assert.deepEqual(period.pagination, { page: 2, pageSize: 1, pageCount: 2, filteredRows: 2, totalRows: 3 });
+  assert.deepEqual(period.rows.map((row) => [row.stt, row.sourceLineId]), [[1, '3'], [2, '2']]);
+  assert.deepEqual(period.pagination, { page: 1, pageSize: 20, pageCount: 1, filteredRows: 2, totalRows: 3 });
   assert.equal(period.summary.monthlyTotal, 50);
   assert.equal(period.summary.annualTotal, 2);
   assert.equal(period.columns.some((column) => ['c32', 'c47'].includes(column.key)), false);
@@ -49,7 +49,7 @@ test('province + configurable unit group + route combine on backend and dynamic 
   });
   const period = transformed.periods[0];
   assert.deepEqual(period.rows.map((row) => [row.stt, row.sourceLineId]), [[1, '2']]);
-  assert.deepEqual(transformed.filters, { province: 'đồng nai', unitGroup: 'BV', route: 'cl' });
+  assert.deepEqual(transformed.filters, { province: 'đồng nai', unitGroup: 'BV', route: 'cl', date: '' });
   assert.equal(period.summary.monthlyTotal, 20);
   assert.deepEqual(period.search, { query: 'cerecaps', filteredRows: 1, totalRows: 3 });
   assert.deepEqual(transformed.filterOptions.province.options.map((item) => item.value), ['ĐỒNG NAI']);
@@ -57,20 +57,46 @@ test('province + configurable unit group + route combine on backend and dynamic 
   assert.deepEqual(transformed.filterOptions.route.options.map((item) => item.value), ['CL']);
 });
 
-test('province facet hides when no authoritative province exists, while group fallback remains usable', () => {
+test('province facet groups rows without an authoritative source as unassigned instead of guessing', () => {
   const noProvince = report(rows.map(({ province, ...row }) => row));
   const transformed = table.transformReport(noProvince, { paginate: false });
-  assert.equal(transformed.filterOptions.province.available, false);
-  assert.deepEqual(transformed.filterOptions.province.options, []);
+  assert.equal(transformed.filterOptions.province.available, true);
+  assert.deepEqual(transformed.filterOptions.province.options.map((item) => [item.value, item.count]), [['Chưa gán tỉnh', 3]]);
   assert.deepEqual(transformed.filterOptions.unitGroup.options.map((item) => item.value), ['BV', 'PKĐK']);
 });
 
+test('date filter runs before STT, totals and pagination and exposes only real revenue dates', () => {
+  const transformed = table.transformReport(report(), { date: '2026-07-02', page: 9, pageSize: 20, paginate: true, allEmployees: true });
+  const period = transformed.periods[0];
+  assert.deepEqual(period.rows.map((row) => [row.stt, row.date, row.sourceLineId]), [[1, '2026-07-02', '2']]);
+  assert.equal(period.summary.monthlyTotal, 20);
+  assert.deepEqual(period.pagination, { page: 1, pageSize: 20, pageCount: 1, filteredRows: 1, totalRows: 3 });
+  assert.deepEqual(transformed.filters.date, '2026-07-02');
+  assert.deepEqual(transformed.filterOptions.date.options.map((item) => [item.value, item.label]), [
+    ['2026-07-01', '01/07/2026'], ['2026-07-02', '02/07/2026'], ['2026-07-03', '03/07/2026'],
+  ]);
+});
+
+test('view pagination defaults to 20 and accepts only 20/50/100', () => {
+  const many = Array.from({ length: 55 }, (_, index) => ({ ...rows[index % rows.length], sourceLineId: `row-${index + 1}` }));
+  const first = table.transformReport(report(many), { paginate: true });
+  const second = table.transformReport(report(many), { paginate: true, page: 2, pageSize: 20 });
+  const fifty = table.transformReport(report(many), { paginate: true, pageSize: 50 });
+  const invalid = table.transformReport(report(many), { paginate: true, pageSize: 999 });
+  assert.equal(first.periods[0].rows.length, 20);
+  assert.deepEqual(second.periods[0].rows.slice(0, 1).map((row) => row.stt), [21]);
+  assert.equal(fifty.periods[0].rows.length, 50);
+  assert.equal(invalid.periods[0].pagination.pageSize, 20);
+});
+
 test('dynamic facets never synthesize arbitrary query-string values absent from the scoped dataset', () => {
-  const transformed = table.transformReport(report(), { province: 'TỈNH KHÔNG CÓ', unitGroup: 'SECRET', route: 'SECRET', paginate: false });
+  const transformed = table.transformReport(report(), { province: 'TỈNH KHÔNG CÓ', unitGroup: 'SECRET', route: 'SECRET', date: '2026-99-99', paginate: false });
   assert.equal(transformed.periods[0].rows.length, 0);
+  assert.equal(transformed.filters.date, '');
   assert.equal(transformed.filterOptions.province.options.some((item) => item.value === 'TỈNH KHÔNG CÓ'), false);
   assert.equal(transformed.filterOptions.unitGroup.options.some((item) => item.value === 'SECRET'), false);
   assert.equal(transformed.filterOptions.route.options.some((item) => item.value === 'SECRET'), false);
+  assert.equal(transformed.filterOptions.date.options.some((item) => item.value === '2026-99-99'), false);
 });
 
 test('a scoped selected facet remains visible with zero count when another facet makes it stale', () => {
@@ -100,6 +126,11 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   assert.deepEqual(period.employeeSubtotals.map((item) => [item.employeeCode, item.rowCount, item.monthlyTotal]), [['DN001', 2, 50], ['DN002', 1, 40]]);
   assert.equal(period.summary.monthlyTotal, 90);
   assert.equal(transformed.summary.periodTotal, 90);
+
+  const byDate = table.transformReport(merged, { allEmployees: true, date: '2026-07-02', paginate: true });
+  assert.deepEqual(byDate.periods[0].rows.map((row) => [row.stt, row.employeeCode, row.date]), [[1, 'DN001', '2026-07-02']]);
+  assert.deepEqual(byDate.periods[0].employeeSubtotals.map((item) => [item.employeeCode, item.rowCount, item.monthlyTotal]), [['DN001', 1, 20]]);
+  assert.equal(byDate.summary.periodTotal, 20);
 });
 
 test('routes hard-lock ALL to CEO/admin for view and export', () => {
@@ -107,4 +138,6 @@ test('routes hard-lock ALL to CEO/admin for view and export', () => {
   assert.match(source, /wantsAll && !auth\.isAdmin\(req\.session\.role\)/);
   assert.match(source, /requested === 'ALL'[\s\S]*?if \(!admin\)/);
   assert.match(source, /employeeCostAllPayload[\s\S]*?mapWithConcurrency\(roster, 3/);
+  assert.match(source, /date: req\.query\.date/);
+  assert.match(source, /employeeCostTableOptions\(req, \{ paginate: true \}\)/);
 });

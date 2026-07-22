@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   buildEmployeeCostColumns, currentMonthValue, employeeCostColumnKpis, employeeCostViewModel,
-  employeeCostHighlightParts, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
+  employeeCostHighlightParts, employeeCostPageItems, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
   formatMonthLabel, normalizeEmployeeCostSearch,
 } from '../src/employeeCostModel.js';
 
@@ -90,20 +90,22 @@ test('low coverage state preserves null amounts and unreliable totals', () => {
 
 test('view model normalizes backend-owned combined filter state and dynamic facet counts', () => {
   const model = employeeCostViewModel({
-    empCode: 'DN001', filters: { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL' },
+    empCode: 'DN001', filters: { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL', date: '2026-07-02' },
     filterOptions: {
-      province: { available: true, source: 'official_row_catalog_or_config', options: [{ value: 'ĐỒNG NAI', label: 'ĐỒNG NAI', count: 3 }] },
+      province: { available: true, source: 'official_row_or_config_or_unassigned', options: [{ value: 'ĐỒNG NAI', label: 'ĐỒNG NAI', count: 3 }] },
       unitGroup: { options: [{ value: 'BV', label: 'BV · Bệnh viện', count: 2 }] },
       route: { options: [{ value: 'CL', label: 'CL', count: 2 }] },
+      date: { options: [{ value: '2026-07-02', label: '02/07/2026', count: 2 }] },
     },
     search: { query: 'cerecaps', filteredRows: 2, totalRows: 9 },
     periods: [],
   });
-  assert.deepEqual(model.filters, { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL' });
+  assert.deepEqual(model.filters, { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL', date: '2026-07-02' });
   assert.deepEqual(model.filterOptions.province, {
-    available: true, source: 'official_row_catalog_or_config', options: [{ value: 'ĐỒNG NAI', label: 'ĐỒNG NAI', count: 3 }],
+    available: true, source: 'official_row_or_config_or_unassigned', options: [{ value: 'ĐỒNG NAI', label: 'ĐỒNG NAI', count: 3 }],
   });
   assert.equal(model.filterOptions.unitGroup.options[0].label, 'BV · Bệnh viện');
+  assert.equal(model.filterOptions.date.options[0].label, '02/07/2026');
   assert.deepEqual(model.search, { query: 'cerecaps', filteredRows: 2, totalRows: 9 });
 });
 
@@ -208,6 +210,12 @@ test('highlight maps accent-free query back to original Vietnamese text', () => 
   assert.deepEqual(employeeCostHighlightParts('Đức Việt', 'dviet').filter((part) => part.match).map((part) => part.text), ['Đức Việt']);
 });
 
+test('numbered pager keeps the current window clickable and contracts long ranges with ellipses', () => {
+  assert.deepEqual(employeeCostPageItems(1, 5), [1, 2, 3, 4, 5]);
+  assert.deepEqual(employeeCostPageItems(9, 25), [1, '…', 7, 8, 9, 10, 11, '…', 25]);
+  assert.deepEqual(employeeCostPageItems(25, 25), [1, '…', 21, 22, 23, 24, 25]);
+});
+
 test('acceptance contract includes CEO-only ALL, STT/employee, short percent tooltip, sticky, pagination and exact export params', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
@@ -223,8 +231,17 @@ test('acceptance contract includes CEO-only ALL, STT/employee, short percent too
   assert.match(page, /<span>Vùng\/Tỉnh<\/span>/);
   assert.match(page, /<span>Nhóm mã đơn vị<\/span>/);
   assert.match(page, /<span>Tuyến<\/span>/);
+  assert.match(page, /<span>Ngày doanh thu<\/span>/);
+  assert.match(page, /Tất cả ngày/);
+  assert.match(page, /EMPLOYEE_COST_PAGE_SIZES = \[20, 50, 100\]/);
+  assert.match(page, /employeeCostPageItems/);
+  assert.match(page, /location="top"/);
+  assert.match(page, /location="bottom"/);
+  assert.match(page, /Tới trang/);
   assert.match(page, /\.\.\.tableFilters/);
-  assert.match(api, /'province', 'unitGroup', 'route'/);
+  assert.match(api, /'province', 'unitGroup', 'route', 'date'/);
   assert.match(css, /\.employee-cost-sticky-product/);
+  assert.match(css, /\.employee-cost-pagination\.is-top \{ position:sticky/);
+  assert.match(css, /\.employee-cost-page-numbers button\.active/);
   assert.match(css, /max-height:72vh/);
 });

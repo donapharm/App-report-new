@@ -1,15 +1,17 @@
 'use strict';
 
 const BLOCKED = new Set(['c32', 'c47']);
-const DEFAULT_PAGE_SIZE = 100;
-const MAX_PAGE_SIZE = 200;
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZES = Object.freeze([20, 50, 100]);
+const MAX_PAGE_SIZE = 100;
+const UNASSIGNED_PROVINCE = 'Chưa gán tỉnh';
 const SEARCHABLE_BASE_KEYS = Object.freeze([
   'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25',
   'bidPrice', 'quantity', 'revenueBeforeVat', 'rowMonthlyTotal', 'note', 'employeeCode', 'employeeName',
   'province', 'unitGroup', 'unitGroupLabel',
 ]);
 const SORTABLE_BASE_KEYS = new Set([...SEARCHABLE_BASE_KEYS, 'stt']);
-const FILTER_KEYS = Object.freeze(['province', 'unitGroup', 'route']);
+const FILTER_KEYS = Object.freeze(['province', 'unitGroup', 'route', 'date']);
 
 function normalizeVietnamese(value) {
   return String(value ?? '').toLocaleLowerCase('vi').normalize('NFD')
@@ -76,8 +78,28 @@ function exactFilterMatch(left, right) {
   return normalizeVietnamese(left) === normalizeVietnamese(right);
 }
 
+function validIsoDate(value) {
+  const raw = String(value || '').trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (!match) return '';
+  const date = new Date(`${raw}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === raw ? raw : '';
+}
+
+function filterValue(row = {}, key) {
+  if (key === 'province') return String(row.province || '').trim() || UNASSIGNED_PROVINCE;
+  if (key === 'date') return validIsoDate(row.date);
+  return row[key];
+}
+
+function requestedFilterValue(options = {}, key) {
+  const raw = String(options[key] || '').trim();
+  if (key === 'date' && raw) return validIsoDate(raw) || '__INVALID_DATE__';
+  return raw;
+}
+
 function rowMatchesFilters(row = {}, options = {}, excludeKey = '') {
-  return FILTER_KEYS.every((key) => key === excludeKey || exactFilterMatch(row[key], options[key]));
+  return FILTER_KEYS.every((key) => key === excludeKey || exactFilterMatch(filterValue(row, key), requestedFilterValue(options, key)));
 }
 
 function rowMatchesView(row, columns, options = {}, excludeKey = '') {
@@ -157,17 +179,17 @@ function parsePage(value, fallback = 1) {
 
 function parsePageSize(value, fallback = DEFAULT_PAGE_SIZE) {
   const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? Math.min(number, MAX_PAGE_SIZE) : fallback;
+  return PAGE_SIZES.includes(number) ? number : fallback;
 }
 
 function facetOptions(report = {}, options = {}, key, labelKey = key) {
   const values = new Map();
-  const selected = String(options[key] || '').trim();
+  const selected = requestedFilterValue(options, key);
   const selectedNormalized = normalizeVietnamese(selected);
   for (const period of Array.isArray(report.periods) ? report.periods : [report]) {
     const columns = Array.isArray(period.columns) ? period.columns : [];
     for (const row of Array.isArray(period.rows) ? period.rows : []) {
-      const value = String(row?.[key] || '').trim();
+      const value = String(filterValue(row, key) || '').trim();
       if (selectedNormalized && normalizeVietnamese(value) === selectedNormalized && !values.has(selectedNormalized)) {
         values.set(selectedNormalized, {
           value,
@@ -193,9 +215,17 @@ function facetOptions(report = {}, options = {}, key, labelKey = key) {
 function buildFilterOptions(report = {}, options = {}) {
   const provinces = facetOptions(report, options, 'province');
   return {
-    province: { available: provinces.length > 0, source: 'official_row_catalog_or_config', options: provinces },
+    province: { available: provinces.length > 0, source: 'official_row_or_config_or_unassigned', options: provinces },
     unitGroup: { available: true, source: 'configurable_prefix_map', options: facetOptions(report, options, 'unitGroup', 'unitGroupLabel') },
     route: { available: true, source: 'sales_row', options: facetOptions(report, options, 'route') },
+    date: {
+      available: true,
+      source: 'sales_row_date',
+      options: facetOptions(report, options, 'date').map((option) => ({
+        ...option,
+        label: option.value.split('-').reverse().join('/'),
+      })),
+    },
   };
 }
 
@@ -255,7 +285,10 @@ function transformReport(report = {}, options = {}) {
     periods,
     rows: undefined,
     allEmployees: !!options.allEmployees,
-    filters: Object.fromEntries(FILTER_KEYS.map((key) => [key, String(options[key] || '').trim()])),
+    filters: Object.fromEntries(FILTER_KEYS.map((key) => {
+      const selected = requestedFilterValue(options, key);
+      return [key, selected === '__INVALID_DATE__' ? '' : selected];
+    })),
     filterOptions,
     search: { query: String(options.q || '').slice(0, 200), filteredRows, totalRows },
     summary: {
@@ -313,7 +346,10 @@ function mergeEmployeeReports(reports = [], roster = []) {
 
 module.exports = {
   DEFAULT_PAGE_SIZE,
+  PAGE_SIZES,
   MAX_PAGE_SIZE,
+  UNASSIGNED_PROVINCE,
+  validIsoDate,
   normalizeVietnamese,
   searchTokens,
   searchForms,

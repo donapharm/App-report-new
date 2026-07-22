@@ -108,20 +108,22 @@ test('ALL employee Excel/PDF export keeps STT + employee identity and employee s
   assert.match(pdf.text, /Tổng phụ: DN001/);
 });
 
-test('cost Excel/PDF print the same province, unit-group, route and search slice resolved by backend', async () => {
+test('cost Excel/PDF print the same province, unit-group, route, date and search slice resolved by backend', async () => {
   const report = costReport();
-  report.filters = { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL' };
+  report.filters = { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL', date: '2026-07-02' };
   report.search = { query: 'Cerecaps', filteredRows: 1, totalRows: 12 };
   report.periods[0].search = { query: 'Cerecaps', filteredRows: 1, totalRows: 12 };
   const workbook = exportService.createCostWorkbook([report]);
   assert.match(workbook.worksheets[0].getCell('A5').value, /Vùng\/Tỉnh: ĐỒNG NAI/);
   assert.match(workbook.worksheets[0].getCell('A5').value, /Nhóm mã ĐV: BV/);
   assert.match(workbook.worksheets[0].getCell('A5').value, /Tuyến: CL/);
+  assert.match(workbook.worksheets[0].getCell('A5').value, /Ngày: 02\/07\/2026/);
   assert.match(workbook.worksheets[0].getCell('A5').value, /Hiện 1\/12 dòng/);
   const pdf = inspectPdf(await exportService.costPdfBuffer([report]), 'cost-filtered');
   assert.match(pdf.text, /ĐỒNG NAI/);
   assert.match(pdf.text, /Nhóm mã ĐV: BV/);
   assert.match(pdf.text, /Tuyến: CL/);
+  assert.match(pdf.text, /Ngày: 02\/07\/2026/);
   assert.match(pdf.text, /Cerecaps/);
 });
 

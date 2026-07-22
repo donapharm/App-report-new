@@ -569,6 +569,7 @@ async function employeeCostPayload(req, {
         province: req.query.province,
         unitGroup: req.query.unitGroup,
         route: req.query.route,
+        date: req.query.date,
         q: req.query.q,
         sortKey: req.query.sortKey,
         sortDir: req.query.sortDir,
@@ -587,6 +588,7 @@ function employeeCostTableOptions(req, { paginate = false, allEmployees = false 
     province: req.query.province,
     unitGroup: req.query.unitGroup,
     route: req.query.route,
+    date: req.query.date,
     paginate,
     allEmployees,
   };
@@ -627,7 +629,7 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
   }
   const payload = wantsAll
     ? await employeeCostAllPayload(req)
-    : employeeCostTable.transformReport(await employeeCostPayload(req), employeeCostTableOptions(req, { paginate: false }));
+    : employeeCostTable.transformReport(await employeeCostPayload(req), employeeCostTableOptions(req, { paginate: true }));
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
 }));

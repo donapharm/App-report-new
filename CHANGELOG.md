@@ -1,3 +1,8 @@
+### 2026-07-22 — Report Bot (review, chưa deploy) — #145 pager pill/ngày doanh thu + #146 tỉnh chính thức
+- Bảng chi phí self/ALL mặc định 20 dòng, chỉ nhận cỡ 20/50/100; pager pill có số trang/ellipsis/tới trang, đồng bộ sticky phía trên và phía dưới. Hai bảng gap dùng cùng pager, có STT theo toàn tập sau lọc.
+- Thêm dropdown `Ngày doanh thu` gồm ngày ISO có thật + `Tất cả ngày`. Backend lọc ngày cùng tỉnh/nhóm/tuyến/search trước sort, STT, tổng, tổng phụ và phân trang; Excel/PDF chạy lại đúng cùng lát cắt không cắt theo trang.
+- Bỏ toàn bộ suy tỉnh từ tên/huyện/viết tắt. Chỉ nhận tỉnh từ dòng doanh thu hoặc `server/config/unit_province.json`; thiếu nguồn được nhóm `Chưa gán tỉnh`. Công thức, self-scope, coverage lock và khóa C32/C47 giữ nguyên. Nhánh review, chưa deploy.
+
 ### 2026-07-22 — Claude Code (review #144 `0156c5d`) — filters PASS, SỬA Vùng/Tỉnh đoán-từ-tên
 - **Review #144: all-fix "Tất cả NV" + lọc Nhóm mã ĐV (config) + Tuyến = PASS.** Scope an toàn (filter trên rows đã khóa quyền; C32/C47 loại khỏi search/facet). Server 253/253, web 38/38, build PASS.
 - **⚠ Vùng/Tỉnh (`province.js`) đoán theo tên + viết tắt — trái directive, gán sai được** (`dn`→Đồng Nai nhưng ĐN cũng là Đà Nẵng; `tan phu` trùng Q.Tân Phú TP.HCM; nhãn `source:official` sai provenance). Không ảnh hưởng tiền (chỉ chiều lọc) nhưng lọc địa bàn lệch. **Sửa:** bỏ ABBR; tỉnh chỉ từ nguồn chính thức (`row.province`/`unit_province.json`), không có → "Chưa gán tỉnh"; giữ đoán-tên phải gắn cờ "tạm đoán" + source đúng. Khuyến nghị điền `unit_province.json`. Directive `DIRECTIVE_EMP_COST_PROVINCE_FIX.md`.

@@ -108,23 +108,27 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
   được tải một lần; các NV được xử lý với concurrency hữu hạn.
 - Query bảng: `q` (tối đa 200 ký tự, bỏ dấu, không phân biệt hoa/thường, nhận dạng
   viết tắt liền như `dviet` → `Đức Việt`, nhiều từ là AND), `sortKey`,
-  `sortDir=asc|desc`, `province`, `unitGroup`, `route`, `page`, `pageSize`
-  (mặc định 100, tối đa 200).
+  `sortDir=asc|desc`, `province`, `unitGroup`, `route`, `date=YYYY-MM-DD`, `page`,
+  `pageSize`. Cỡ trang chỉ nhận `20/50/100`, mặc định `20`; giá trị khác quay về
+  mặc định an toàn.
   Backend luôn lọc → sort → đánh `stt=1..N` trên toàn tập rồi mới cắt trang. Response
   có `filters`, `filterOptions`, `search`, `pagination`, `employeeSubtotals`; C32/C47
   tiếp tục bị loại cứng.
-- Cả self và ALL đều lọc/search/sort ở server. Ba facet Vùng/Tỉnh, Nhóm mã đơn vị và
-  Tuyến là exact-match, kết hợp được, và được dựng động từ tập đã backend-scope sau
+- Cả self và ALL đều lọc/search/sort ở server. Bốn facet Vùng/Tỉnh, Nhóm mã đơn vị,
+  Tuyến và Ngày doanh thu là exact-match, kết hợp được, và được dựng động từ tập đã backend-scope sau
   search + các facet còn lại. Giá trị query không hiện hữu trong tập scope không được
-  tạo thành option. Ô tỉnh tự ẩn khi không có tỉnh chính thức.
-- Tỉnh lọc chỉ nhận field chính thức từ dòng bán, catalog hoặc
-  `server/config/unit_province.json`; giá trị `provinceOf()` suy từ tên không đủ điều
-  kiện. Nếu cùng mã đơn vị có nhiều tỉnh chính thức xung đột thì bỏ tỉnh của mã đó.
+  tạo thành option. Ngày chỉ nhận ISO hợp lệ có thật trên dòng doanh thu; UI thêm lựa
+  chọn `Tất cả ngày`, đổi ngày đánh lại STT/đếm/tổng trước khi cắt trang.
+- Tỉnh lọc chỉ nhận field chính thức từ dòng bán hoặc
+  `server/config/unit_province.json`; tuyệt đối không suy từ tên, huyện hoặc viết tắt.
+  Thiếu nguồn chính thức được nhóm đúng nhãn `Chưa gán tỉnh`. Nếu cùng mã đơn vị có
+  nhiều tỉnh chính thức xung đột thì bỏ tỉnh của mã đó.
   Nhóm mã đơn vị đọc `server/config/employee_cost_unit_groups.json`; tiền tố chưa map
   chỉ tạo đúng nhóm tiền tố của chính mã, không suy đoán nhóm nghiệp vụ.
-- STT và số đếm không phụ thuộc trang hiện tại. Tiêu đề cột tỷ lệ ở UI chỉ
-  hiện mã `Cnn`, còn nhãn đầy đủ nằm trong tooltip.
-- Export nhận cùng `emp/q/sortKey/sortDir/province/unitGroup/route/from/to`, chạy lại pipeline backend với
+- STT và số đếm không phụ thuộc trang hiện tại. UI có pager pill đồng bộ trên/dưới,
+  số trang rút gọn, tùy chọn tới trang và cỡ trang `20/50/100`; pager trên sticky.
+  Tiêu đề cột tỷ lệ ở UI chỉ hiện mã `Cnn`, còn nhãn đầy đủ nằm trong tooltip.
+- Export nhận cùng `emp/q/sortKey/sortDir/province/unitGroup/route/date/from/to`, chạy lại pipeline backend với
   `paginate=false`; Excel/PDF đều có STT ở cột đầu, ALL có thêm cột Nhân viên và tổng
   phụ. File ghi rõ ngữ cảnh bộ lọc và X/Y dòng; không nhận hàng/số tính từ frontend.
 

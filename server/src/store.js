@@ -61,7 +61,10 @@ function base() {
   const enrich = (r) => {
     const rr = normalizeEmpForReport(r);
     const unit_name = rr.unit_name || unitByCode[rr.unit_code]?.unit_name;
-    const sourceProvince = rr.province || rr.PROVINCE || rr.tinh || rr.TINH || '';
+    const existingProvinceSource = String(rr.province_source || '').trim().toLowerCase();
+    const sourceProvince = ['inferred', 'guessed_from_name'].includes(existingProvinceSource)
+      ? ''
+      : (rr.province || rr.PROVINCE || rr.tinh || rr.TINH || '');
     const catalogProvince = unitByCode[rr.unit_code]?.province || '';
     const fallbackProvince = (!sourceProvince && !catalogProvince)
       ? provinceResolution(rr.unit_code, unit_name, '')
@@ -460,7 +463,9 @@ function getCstAll() {
   rows = rows.map((r) => {
     const code = String(r.emp_code || '').trim().toUpperCase();
     // Gắn tỉnh/thành + nhóm hàng C14 (giống dòng doanh thu) để lọc dùng chung được.
-    const province = r.province || unitByCode[r.unit_code]?.province || provinceOf(r.unit_code, r.unit_name, r.province);
+    const source = String(r.province_source || '').trim().toLowerCase();
+    const sourceProvince = ['inferred', 'guessed_from_name'].includes(source) ? '' : r.province;
+    const province = sourceProvince || unitByCode[r.unit_code]?.province || provinceResolution(r.unit_code, r.unit_name, '').value;
     const c14 = r.c14 || r.C14 || r.indication_group || c14ByIit[String(r.iit_code || '').trim().toUpperCase()] || null;
     if (!code || isValidEmpCode(code)) return province === r.province && c14 === r.c14 ? r : { ...r, province, c14 };
     return { ...r, province, c14, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };

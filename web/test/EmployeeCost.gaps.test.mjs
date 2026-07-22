@@ -60,6 +60,10 @@ test('Employee Cost UI uses secure gap API, admin tab, filters, progress, and au
   assert.match(page, /exportFile\('xlsx'\)/);
   assert.match(page, /exportFile\('pdf'\)/);
   assert.match(page, /role="progressbar"/);
+  assert.match(page, /useEmployeeCostPage\(view\.items/);
+  assert.match(page, /useEmployeeCostPage\(pairs/);
+  assert.match(page, /location="top" unit="mã"/);
+  assert.match(page, /location="bottom" unit="mặt hàng"/);
   assert.match(api, /Authorization: 'Bearer ' \+ getToken\(\)/);
   assert.match(api, /X-Device-Id/);
   assert.match(api, /employee-cost\/gaps/);

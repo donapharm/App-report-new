@@ -1,5 +1,5 @@
 {
-  "note": "Bản đồ mã đơn vị -> tỉnh/thành. Bot ĐIỀN MÃ THẬT ở đây; đơn vị không có trong map sẽ được đoán theo tên. Dữ liệu demo bên dưới.",
+  "note": "Bản đồ mã đơn vị -> tỉnh/thành chính thức. Đơn vị không có tỉnh trên dòng dữ liệu và không có trong map phải hiển thị Chưa gán tỉnh; tuyệt đối không đoán theo tên. Dữ liệu demo bên dưới.",
   "map": {
     "BV001": "Đồng Nai",
     "PK002": "Bình Phước",

@@ -1981,8 +1981,23 @@ th.employee-cost-sticky-employee { z-index:7; background:#075d9b !important; col
 .employee-cost-sticky-product { position:sticky !important; left:48px; z-index:3; min-width:210px; background:#fff !important; box-shadow:1px 0 #d2dde4; }
 .employee-cost-table.is-all-employees .employee-cost-sticky-product { left:238px; }
 th.employee-cost-sticky-product { z-index:6; background:#0b6aa9 !important; color:#fff; }
-.employee-cost-pagination { display:flex; align-items:center; justify-content:center; gap:12px; margin-top:10px; color:var(--muted); font-size:12px; }
-.employee-cost-pagination .btn { min-height:32px; padding:6px 10px; }
+.employee-cost-pagination { display:flex; align-items:center; justify-content:center; gap:7px; width:fit-content; max-width:100%; margin:10px auto; padding:5px; border:1px solid rgba(9,75,129,.22); border-radius:999px; background:linear-gradient(180deg,#fffefb,#fff7e8); color:var(--muted); box-shadow:0 5px 16px rgba(13,88,148,.18); font-size:12px; }
+.employee-cost-pagination.is-top { position:sticky; top:var(--desktop-topbar-h,0px); z-index:28; margin-top:10px; margin-bottom:5px; }
+.employee-cost-page-nav, .employee-cost-page-numbers button { min-width:32px; min-height:32px; padding:5px 9px; border:0; border-radius:999px; background:#eaf4fb; color:#075d9b; font-weight:900; cursor:pointer; }
+.employee-cost-page-nav.prev { background:linear-gradient(135deg,#2f8ad6,#1568b8); color:#fff; }
+.employee-cost-page-nav.next { background:linear-gradient(135deg,#f5ad32,#ee8f00); color:#fff; }
+.employee-cost-page-nav:disabled { opacity:.45; cursor:not-allowed; filter:saturate(.65); }
+.employee-cost-page-numbers { display:flex; align-items:center; gap:3px; }
+.employee-cost-page-numbers button { min-width:30px; padding-inline:7px; }
+.employee-cost-page-numbers button.active { background:#075d9b; color:#fff; box-shadow:0 0 0 2px #fff,0 0 0 4px rgba(245,161,30,.6); }
+.employee-cost-page-ellipsis { min-width:18px; text-align:center; font-weight:900; }
+.employee-cost-page-info { padding:0 4px; white-space:nowrap; }
+.employee-cost-page-info b { color:#075d9b; }
+.employee-cost-page-size { display:flex; align-items:center; gap:4px; white-space:nowrap; }
+.employee-cost-page-size span { font-size:10px; font-weight:900; text-transform:uppercase; }
+.employee-cost-page-size select, .employee-cost-page-jump input { min-height:32px; padding:4px 7px; border:1px solid #9bc3dd; border-radius:999px; background:#fff; font-size:11px; }
+.employee-cost-page-jump { margin:0; }
+.employee-cost-page-jump input { width:86px; }
 .employee-cost-table-toolbar { display:flex; align-items:end; justify-content:space-between; gap:12px; }
 .employee-cost-table-toolbar label { display:grid; flex:1 1 420px; gap:5px; max-width:680px; }
 .employee-cost-table-toolbar label span { color:var(--muted); font-size:11px; font-weight:900; text-transform:uppercase; }
@@ -2085,5 +2100,10 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-table-toolbar { align-items:stretch; flex-direction:column; }
   .employee-cost-table-toolbar label { flex-basis:auto; width:100%; max-width:none; }
   .employee-cost-filter-chip { border-radius:10px; }
+  .employee-cost-pagination { width:100%; flex-wrap:wrap; border-radius:18px; }
+  .employee-cost-pagination.is-top { top:calc(var(--hdr-h) + env(safe-area-inset-top)); }
+  .employee-cost-page-info { order:-1; flex-basis:100%; text-align:center; }
+  .employee-cost-page-numbers { max-width:100%; overflow-x:auto; }
+  .employee-cost-page-jump { display:none; }
   .employee-cost-subtotals > div { grid-template-columns:1fr; }
 }

@@ -122,6 +122,7 @@ function costFilterLabel(report = {}) {
   if (report.filters?.province) labels.push(`Vùng/Tỉnh: ${safeText(report.filters.province, 120)}`);
   if (report.filters?.unitGroup) labels.push(`Nhóm mã ĐV: ${safeText(report.filters.unitGroup, 120)}`);
   if (report.filters?.route) labels.push(`Tuyến: ${safeText(report.filters.route, 120)}`);
+  if (report.filters?.date) labels.push(`Ngày: ${formatDateVi(report.filters.date)}`);
   if (report.search?.query) labels.push(`Tìm: “${safeText(report.search.query, 200)}”`);
   return labels.join(' · ') || 'Không có bộ lọc chi tiết';
 }

@@ -362,19 +362,18 @@ function displayValue(row, keys) {
   return null;
 }
 
-function authoritativeProvinceByUnit(revenueRows = [], catalogRows = []) {
+function authoritativeProvinceByUnit(revenueRows = []) {
   const candidates = new Map();
   const add = (row) => {
     const unit = unitCodeOf(row);
     const province = safeText(displayValue(row, ['province', 'PROVINCE', 'tinh', 'TINH']), 120);
     const source = String(row?.province_source || '').trim().toLowerCase();
-    if (!unit || !province || source === 'inferred') return;
+    if (!unit || !province || ['inferred', 'guessed_from_name', 'catalog'].includes(source)) return;
     const values = candidates.get(unit) || new Map();
     values.set(normName(province), province);
     candidates.set(unit, values);
   };
   for (const row of Array.isArray(revenueRows) ? revenueRows : []) add(row);
-  for (const row of Array.isArray(catalogRows) ? catalogRows : []) add(row);
   return new Map([...candidates].map(([unit, values]) => [unit, values.size === 1 ? [...values.values()][0] : null]));
 }
 
@@ -387,7 +386,7 @@ function canonicalDimensions(revenueRow, unit, product, catalogIndex, provinceBy
   return {
     c5: product,
     // Hai field chỉ làm metadata lọc backend, không tham gia công thức chi phí.
-    // Province chỉ tồn tại khi row/catalog/config chính thức của cùng mã đơn vị
+    // Province chỉ tồn tại khi dòng doanh thu/config chính thức của cùng mã đơn vị
     // có đúng một giá trị; suy tên hoặc nguồn xung đột đều fail closed.
     province,
     unitGroup: unitGroup.key || null,
@@ -593,7 +592,7 @@ function enrichWithRevenue(payload, options = {}) {
   }));
   const catalogIndex = buildProductCatalogIndex(options.catalogRows);
   const revenueLines = buildRevenueLines(options.revenueRows, payload.empCode, options.period);
-  const provinceByUnit = authoritativeProvinceByUnit(options.revenueRows, options.catalogRows);
+  const provinceByUnit = authoritativeProvinceByUnit(options.revenueRows);
   const costLookup = buildCostLookup(payload.rows, columns, catalogIndex);
   const revenueKeys = new Set(revenueLines.map((line) => `${line.unit}\u001f${line.product}`));
   const matchedKeys = new Set();
@@ -882,7 +881,7 @@ function resolveDataHubBaseUrl(value) {
 
 function auditFilters(value = {}) {
   const output = {};
-  for (const key of ['province', 'unitGroup', 'route', 'q', 'sortKey', 'sortDir']) {
+  for (const key of ['province', 'unitGroup', 'route', 'date', 'q', 'sortKey', 'sortDir']) {
     const item = safeText(value?.[key], key === 'q' ? 200 : 120);
     if (item) output[key] = item;
   }
