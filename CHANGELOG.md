@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (giao bot) — Export chuẩn VN (Excel+PDF, A4 ngang) + NV tự xuất
+- CEO chốt: **NV được tự xuất** phần mình; **chuẩn số kế toán VN** (nghìn dấu chấm, thập phân dấu phẩy, đơn vị đồng, "Bằng chữ" cho tổng); **mẫu A4 quay ngang**; **2 định dạng Excel + PDF**. Directive `DIRECTIVE_EMP_COST_EXPORT_VN.md`.
+- Áp cho **cả báo cáo chi phí lẫn danh sách thiếu %**. PDF **nhúng font Unicode đủ dấu tiếng Việt** (cấm tofu); A4 landscape fit-to-width, đầu/chân trang (Donapharm · kỳ · NV · ngày xuất · nguồn DataHub SSOT · số trang), header lặp mỗi trang. Excel số thật (SUM chạy) + number format VN. **Self-scope** (NV chỉ của mình), C32/C47 không xuất, qua backend + audit. Làm cùng nhánh review gap tool. Chưa deploy.
+
 ### 2026-07-22 — Claude Code (giao bot) — Công cụ "Mặt hàng thiếu % chi phí" + Export Excel gap
 - CEO muốn xuất **tất cả cặp chưa lấy được %** ra Excel + **mục trong app** để CEO/NV lọc-tìm dễ. Directive `DIRECTIVE_EMP_COST_GAP_TOOL.md`.
 - **Thông minh:** gộp theo **mã QLNB** (1 mã thiếu → ảnh hưởng nhiều đơn vị/NV, điền 1 lần khớp hàng loạt); **xếp theo doanh thu ảnh hưởng**; **phân loại lý do** (lệch mã QĐ → App Report **gợi ý mã catalog gần trùng** để DataHub ánh xạ / thiếu hẳn → nhập % mới); **NV thấy** mục "N mặt hàng chưa có % — chờ bổ sung, không phải lỗi"; **CEO** tab lọc/tìm + **coverage progress**; **Excel worklist** có cột trống "% cần điền".
