@@ -2,7 +2,14 @@
 - Thêm cột STT đầu bảng và đầu Excel/PDF; STT được đánh lại sau lọc/sort trên toàn tập. CEO/admin có `Tất cả nhân viên` backend-lock, cột NV, tổng phụ theo NV/tổng chung và phân trang 100 dòng; NV thường gửi `emp=ALL` ở xem/xuất bị chặn 403 và vẫn self-scope.
 - Search live toàn bảng hỗ trợ bỏ dấu, không phân biệt hoa/thường, viết tắt liền kiểu `dviet` → `Đức Việt`, nhiều từ AND, đếm X/Y, highlight/chip xóa nhanh; click header để sort. Chế độ ALL lọc/sort trước phân trang ở backend; export chạy lại cùng filter/search/sort không cắt trang.
 - Cột % cố định hẹp, căn phải/tabular, header chỉ mã Cnn + tooltip nhãn đầy đủ; sticky header + STT + Nhân viên/Tên hàng. C32/C47 tiếp tục loại cứng, C44 vẫn tách khoản cuối năm và mọi số tiền giữ nguồn backend. Chưa deploy/không merge main.
-- Ổn định metadata thời gian của workbook snapshot QLNB để hai lần xuất cùng snapshot luôn tái lập byte-for-byte, tránh full-suite chập chờn khi vượt ranh giới timestamp ZIP.
+
+### 2026-07-22 — Claude Code (giao bot) — SỬA "Tất cả NV" trống + thêm lọc Vùng/Tỉnh · Nhóm mã ĐV · Tuyến
+- **CEO báo "Tất cả nhân viên" hiện 0/0 (trống).** Chẩn đoán: bảng hiện **"Mẫu FULL-TIME 0/0"** thay vì template **"TẤT CẢ NHÂN VIÊN"** → **BE chưa nạp nhánh `emp=ALL`** (FE #139 lên nhưng BE chưa deploy/restart — lệch phiên bản, giống vụ 404). Bot: xác minh version (`curl ?emp=ALL` phải trả `template.label:"TẤT CẢ NHÂN VIÊN"`, rows>0) → deploy/restart BE #139; nếu vẫn trống → debug `employeeCostAllPayload`/`mergeEmployeeReports` + thêm test all-NV rows>0.
+- **CEO thêm 3 ô lọc:** Vùng/Tỉnh (từ nguồn đơn vị, không suy đoán từ tên), Nhóm mã đơn vị (cấu hình được), Tuyến (cột sẵn có). Kết hợp nhau + tìm kiếm + kỳ; STT đánh lại; export phản ánh; dropdown động. Self-scope + C32/C47 giữ. Directive `DIRECTIVE_EMP_COST_ALLFIX_FILTERS.md`.
+
+### 2026-07-22 — Claude Code (review PASS + giao deploy đợt 2) — #139 bảng UX `a3b4fd6`
+- **Review `a3b4fd6`: PASS.** "Tất cả NV" **khóa 3 lớp** (view/all-payload/export đều 403 `EMPLOYEE_COST_ALL_FORBIDDEN` cho NV; NV ép own qua resolveScopedEmployee). Tìm kiếm **bỏ dấu chuẩn** (`normalizeVietnamese`: NFD + xóa dấu + đ→d, đa từ khóa, BLOCKED C32/C47 không lọt). STT + sort ổn định; cột chi phí regex c33–c46 (chặn C32/C47); phân trang; tổng phụ theo NV; sticky; cột % hẹp; export phản ánh lọc/tìm/sort/STT. Server 243/243, web 37/37, build PASS.
+- UI/UX thuần, **không đổi số/tiền**, rủi ro thấp. Directive `DIRECTIVE_EMP_COST_139_DEPLOY.md` (deploy đợt 2). Sau đó: DQ center đợt 1 (#141) + DataHub điền %/alias.
 
 ### 2026-07-22 — Claude Code (nghiệm thu) — Deploy B (#137 gap tool + #138 export VN): PASS
 - **Kiểm tra độc lập trên main: PASS.** `a539e5a` merge code đã review (`50e0c62`); `employeeCostGaps.js` + `employeeCostExport.js` + routes gaps/export có trên main. **#139 KHÔNG lẫn vào** (không cột STT / "Tất cả NV" / search bỏ dấu — chỉ có nhãn "Số dòng đơn hàng" của #134 đã live từ trước). Code khớp bản review PASS (self-scope 2 lớp export, gaps không lộ %, gợi ý mã không tự map, VN accounting + A4 landscape + font fail-closed).
