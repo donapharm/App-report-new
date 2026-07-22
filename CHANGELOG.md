@@ -1,3 +1,10 @@
+### 2026-07-22 — Claude Code (review PASS + giao deploy B) — gap tool #137 + export VN #138
+- **Review nhánh `review/employee-cost-gap-tool-20260722` @ `50e0c62`:** #137 gap tool + #138 export VN = **PASS**.
+  - Gap: self-scope (NV own, CEO roster/`?emp=`), **không lộ %**, gợi ý mã lệch QĐ (chỉ gợi ý, không tự map). DN001 13 cặp; roster 34 mã/96,5%.
+  - Export: self-scope **2 lớp**; số kế toán VN (`#,##0`, "Bằng chữ"), **A4 landscape**, font Unicode **fail-closed** nếu thiếu; Excel số thật. Server 231/231, web 34/34, build PASS.
+  - **#139 (bảng UX: STT/tất cả NV/cột % hẹp/tìm kiếm) CHƯA implement** (commit `1694f93` chỉ là directive doc).
+- **CEO chốt B: deploy #137+#138 ngay** (`50e0c62`), #139 làm đợt 2. Directive `DIRECTIVE_EMP_COST_GAP_EXPORT_DEPLOY.md`. DataHub: điền % thiếu hẳn + alias lệch mã QĐ (task đã gửi) → coverage 100% không cần deploy.
+
 ### 2026-07-22 — Claude Code (giao bot) — Bảng chi phí: STT + xem tất cả NV + cột % hẹp + tìm kiếm thông minh
 - CEO yêu cầu 4 UX bảng "Chi phí của tôi". Directive `DIRECTIVE_EMP_COST_TABLE_UX.md`:
   1. **Cột STT** đầu bảng, tự nhảy theo dòng hiển thị (lọc/tìm → đánh lại), có trong Excel/PDF.
