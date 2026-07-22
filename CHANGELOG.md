@@ -1,3 +1,6 @@
+### 2026-07-22 — Claude Code (giao bot) — Thu gọn panel công tắc chi phí (UI)
+- CEO đề nghị **nút thu gọn** panel "Quản trị quyền tự xem chi phí" (dài, đẩy bảng chính xuống). Directive `DIRECTIVE_EMP_COST_VISIBILITY_COLLAPSE.md`: panel **mặc định thu gọn**, header + nút mở/gập, nhớ trạng thái (localStorage), logic quyền/lưu KHÔNG đổi. Làm **cùng nhánh review với fix C44** (deploy 1 lượt). Chưa deploy, chờ Claude review.
+
 ### 2026-07-22 — Claude Code (giao bot) — SỬA GẤP C44: gốc = tiền cột C43, không phải doanh thu
 - **CEO phát hiện lỗi tiền nghiêm trọng (đang LIVE):** C44 tính `revenueBeforeVat × %C44` → gốc doanh thu → phình (35.157.098đ). **Đúng:** `C44 = tiền_C43 × %C44` (tiền_C43 = revenueBeforeVat × %C43). Dòng mẫu: 1.513.920 × 5% = **75.696đ** (không phải 630.800đ).
 - Directive `DIRECTIVE_EMP_COST_C44_FIX.md`: cột "cuối năm" thành **cột phái sinh cấu hình được** (`c44←c43`, không hardcode); base = tiền cột gốc; sửa cả khối residual/làm tròn; C44 vẫn loại khỏi tháng/làm mờ/tách dòng cuối năm. **Tổng THÁNG (41.144.556đ) KHÔNG đổi** (C44 vốn ngoài tháng) — chỉ "Khoản cuối năm" giảm mạnh. Chưa deploy, chờ Claude review.
