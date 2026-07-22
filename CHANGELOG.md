@@ -1,3 +1,15 @@
+### 2026-07-22 — Report Bot — KHÔI PHỤC FE production về main (hết "Lỗi máy chủ")
+- **Giải quyết "Lỗi máy chủ" bằng cách bảo thủ:** đưa **FE public về đúng `origin/main` (c2abea1)** thay vì deploy bản mới. Bundle FE main **không còn gọi `/employee-cost/visibility`** (route chỉ có trên nhánh review), nên hết 404/"Lỗi máy chủ". **BE không restart** (PID/restart count giữ), **số chi phí không đổi**, nhánh review `6ef5e3c` giữ nguyên chưa deploy. Backup bundle review: `backups/frontend-review-dist-20260722_145601/dist`. (Tab cũ cần tải lại 1 lần.)
+- Xác nhận chẩn đoán: sự cố là **lệch phiên bản FE mới / BE cũ**, không phải lỗi code. Panel "Quản trị quyền tự xem chi phí" là **tính năng chỉ có trên nhánh review**, đúng ra chưa vào production.
+
+### 2026-07-22 — Claude Code (giao bot) — "Lỗi máy chủ" trang Chi phí: nguyên nhân THẬT = process cũ (404)
+- CEO báo trang Chi phí "Lỗi máy chủ" + "Chưa có nhân viên" + bảng trống. Chẩn đoán ban đầu của Claude (loadConfig 500) **SAI cho lần này** — bot kiểm tra: config OK, `loadConfig()` OK, không stack; `curl` trả **404** không phải 500.
+- **Nguyên nhân thật:** process production khởi động trước khi route `/employee-cost/visibility` được thêm → BE chưa nạp route; FE bản mới gọi → 404 → FE map về "Lỗi máy chủ". Lệch phiên bản, không phải lỗi code. **Fix = restart/deploy** (đã xử bằng revert FE về main, xem mục trên). Directive: `DIRECTIVE_EMP_COST_VISIBILITY_500_FIX.md` (#126) — loadConfig hardening hạ xuống **phòng-vệ-tùy-chọn**; giữ bọc route GET trả `{error}`; polish FE phân biệt 404 vs 500.
+
+### 2026-07-22 — Claude Code (review) — vá lookup `6ef5e3c`: PASS + phát hiện lệch mã QĐ (DN021)
+- **Review `6ef5e3c`: PASS.** `buildCostLookup` quay về khóa `unit␟product`; guard fail-closed **chỉ chặn đúng cặp (đơn vị+mã) nhập nhằng**. Phía tiêu thụ đổi `costLookup.get(unit␟product)`. **Điểm cộng:** coverage đo trên khóa (đơn vị+mã) duy nhất (170/183=92,9%), bảng giữ grain order-line (209/222). VAT spot-check `380.000÷1,05×0,5%=1.810đ` (trước VAT). Test 32/32 + 218/218 + 25/25 + build PASS. **DN001 nghiệm thu ĐẠT.**
+- **DN021 CTV: layout PASS nhưng 0/3 do lệch mã QĐ** — catalog chi phí `QĐ48…549` vs doanh thu `QĐ139…549`; hệ thống **fail-closed để `—`** (đúng #3, KHÔNG tự bắc cầu). **Câu hỏi dữ liệu cho CEO/DataHub:** 2 mã có cùng mặt hàng? Cùng → DataHub chuẩn hóa mã ở nguồn; khác → 0/3 đúng thực tế. Ghi chú C48 = `—` tạm. Sidecar C48: CEO đã chốt ranh giới + điều kiện cứng "C48 thiếu ≠ kỳ thiếu".
+
 ### 2026-07-22 — Claude Code (chẩn đoán + giao bot) — SỬA khóa lookup chi phí (match sụt 2/222)
 - **Review `d0fd7c8` (nhánh templates): layout/công thức ĐÚNG** (VAT trước: 12.616.000×13%=1.640.080 full-time, ×8%=1.009.280 CTV; c44 loại; 2 mẫu đúng nhóm). **NHƯNG match sụt 2/222** (bản main 170/183).
 - **Chẩn đoán: lỗi KHÓA LOOKUP** (không phải DataHub). `buildCostLookup` đổi sang product-only + guard "mọi dòng cùng mã phải % giống hệt" → endpoint ~10.982 dòng/NV % khác theo đơn vị → rớt gần hết. **Sửa: quay lại ghép (đơn vị + mã hàng)** như main. Directive: `DIRECTIVE_EMP_COST_LOOKUP_FIX.md`.
