@@ -251,6 +251,23 @@ export function employeeCostSearchTokens(value) {
   return normalizeEmployeeCostSearch(value).split(/\s+/).filter(Boolean);
 }
 
+function employeeCostSearchForms(value) {
+  const normalized = normalizeEmployeeCostSearch(value);
+  if (!normalized) return [];
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const forms = new Set([normalized, words.join('')]);
+  for (let start = 0; start < words.length; start += 1) {
+    for (let end = start + 2; end <= Math.min(words.length, start + 4); end += 1) {
+      forms.add(`${words.slice(start, end - 1).map((word) => word[0]).join('')}${words[end - 1]}`);
+    }
+  }
+  return [...forms];
+}
+
+function employeeCostSearchTextIncludes(value, token) {
+  return employeeCostSearchForms(value).some((form) => form.includes(token));
+}
+
 function rowSearchText(row = {}, columns = []) {
   const values = [row.employeeCode, row.employeeName];
   for (const column of columns) {
@@ -264,8 +281,8 @@ export function filterSortEmployeeCostRows(rows = [], columns = [], query = '', 
   const tokens = employeeCostSearchTokens(query);
   const filtered = rows.filter((row) => {
     if (!tokens.length) return true;
-    const document = rowSearchText(row, columns);
-    return tokens.every((token) => document.includes(token));
+    const forms = employeeCostSearchForms(rowSearchText(row, columns));
+    return tokens.every((token) => forms.some((form) => form.includes(token)));
   });
   const key = String(sort.key || '');
   const direction = sort.dir === 'desc' ? -1 : 1;
@@ -298,11 +315,12 @@ export function employeeCostHighlightParts(value, query) {
   const haystack = normalized.join('');
   const ranges = [];
   for (const token of tokens) {
-    let cursor = 0;
+    let cursor = 0; let directlyMatched = false;
     while ((cursor = haystack.indexOf(token, cursor)) >= 0) {
       ranges.push([sourceIndex[cursor], (sourceIndex[cursor + token.length - 1] ?? sourceIndex[cursor]) + 1]);
-      cursor += token.length;
+      directlyMatched = true; cursor += token.length;
     }
+    if (!directlyMatched && employeeCostSearchTextIncludes(text, token)) ranges.push([0, text.length]);
   }
   if (!ranges.length) return [{ text, match: false }];
   ranges.sort((a, b) => a[0] - b[0]);

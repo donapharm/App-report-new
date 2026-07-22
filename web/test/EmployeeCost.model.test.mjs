@@ -180,11 +180,13 @@ test('smart table search is Vietnamese accent-insensitive, multi-token AND, stab
   assert.equal(normalizeEmployeeCostSearch('ĐỨC Việt'), 'duc viet');
   const result = filterSortEmployeeCostRows(rows, columns, 'duc CERECAPS', { key: 'revenueBeforeVat', dir: 'desc' });
   assert.deepEqual(result.map((row) => [row.stt, row.sourceLineId]), [[1, 'a']]);
+  assert.deepEqual(filterSortEmployeeCostRows(rows, columns, 'dviet').map((row) => row.sourceLineId), ['a', 'c']);
   assert.deepEqual(filterSortEmployeeCostRows(rows, columns, 'cerecaps', { key: 'revenueBeforeVat', dir: 'desc' }).map((row) => row.sourceLineId), ['b', 'a']);
 });
 
 test('highlight maps accent-free query back to original Vietnamese text', () => {
   assert.deepEqual(employeeCostHighlightParts('Bệnh viện Đức Việt', 'duc viet').filter((part) => part.match).map((part) => part.text), ['Đức', 'Việt']);
+  assert.deepEqual(employeeCostHighlightParts('Đức Việt', 'dviet').filter((part) => part.match).map((part) => part.text), ['Đức Việt']);
 });
 
 test('acceptance contract includes CEO-only ALL, STT/employee, short percent tooltip, sticky, pagination and exact export params', () => {

@@ -245,7 +245,9 @@ function addItemsSheet(workbook, report) {
   ws.headerFooter.oddFooter = 'App Report · Trang &P/&N';
 }
 async function excelBuffer(report) {
-  const wb = new ExcelJS.Workbook(); wb.creator = 'App Report'; wb.created = new Date(report.generated_at);
+  const wb = new ExcelJS.Workbook();
+  const workbookDate = new Date(report.generated_at);
+  wb.creator = 'App Report'; wb.lastModifiedBy = 'App Report'; wb.created = workbookDate; wb.modified = workbookDate; wb.lastPrinted = workbookDate;
   const summary = wb.addWorksheet(report.template === 'ceo_meeting' ? 'Tổng quan CEO' : 'Tổng quan', { pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 1 } });
   summary.addRow(['BÁO CÁO QLNB NGỦ ĐÔNG', report.scope.type === 'company' ? 'Toàn công ty' : report.scope.emp_code]); summary.mergeCells('A1:D1'); summary.getCell('A1').font = { size: 18, bold: true, color: { argb: 'FF1F4E78' } };
   summary.addRow(['Ngày dữ liệu', vnDate(report.as_of), 'Ngày tạo', vnDate(report.generated_on)]);

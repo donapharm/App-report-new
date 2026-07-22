@@ -19,6 +19,22 @@ function searchTokens(value) {
   return normalizeVietnamese(value).split(/\s+/).filter(Boolean);
 }
 
+function searchForms(value) {
+  const normalized = normalizeVietnamese(value);
+  if (!normalized) return [];
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const forms = new Set([normalized, words.join('')]);
+  // Vietnamese users often type a compact abbreviation such as "dviet" for
+  // "Đức Việt": initials of the leading word(s) + the last word in full.
+  // Keep the window bounded so this stays cheap for the ALL-roster search.
+  for (let start = 0; start < words.length; start += 1) {
+    for (let end = start + 2; end <= Math.min(words.length, start + 4); end += 1) {
+      forms.add(`${words.slice(start, end - 1).map((word) => word[0]).join('')}${words[end - 1]}`);
+    }
+  }
+  return [...forms];
+}
+
 function scalarValues(value, target = []) {
   if (value == null) return target;
   if (Array.isArray(value)) {
@@ -49,8 +65,8 @@ function rowSearchDocument(row = {}, columns = []) {
 function rowMatches(row, columns, query) {
   const tokens = searchTokens(query);
   if (!tokens.length) return true;
-  const document = rowSearchDocument(row, columns);
-  return tokens.every((token) => document.includes(token));
+  const forms = searchForms(rowSearchDocument(row, columns));
+  return tokens.every((token) => forms.some((form) => form.includes(token)));
 }
 
 function normalizeSortKey(value) {
@@ -223,6 +239,7 @@ module.exports = {
   MAX_PAGE_SIZE,
   normalizeVietnamese,
   searchTokens,
+  searchForms,
   rowSearchDocument,
   rowMatches,
   normalizeSortKey,

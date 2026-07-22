@@ -27,6 +27,7 @@ function report(sourceRows = rows) {
 test('Vietnamese search is accent/case insensitive and supports multi-token AND', () => {
   assert.equal(table.normalizeVietnamese('ĐỨC Việt / Đơn vị'), 'duc viet don vi');
   assert.equal(table.rowMatches(rows[0], columns, 'DUC viet cerecaps'), true);
+  assert.equal(table.rowMatches(rows[0], columns, 'dviet'), true);
   assert.equal(table.rowMatches(rows[0], columns, 'duc atisyrup'), false);
   assert.equal(table.rowMatches(rows[2], columns, 'don VI cerecaps'), true);
 });

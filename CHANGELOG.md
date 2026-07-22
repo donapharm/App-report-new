@@ -1,7 +1,8 @@
 ### 2026-07-22 — Report Bot (review) — Directive #139 bảng chi phí STT/ALL/search/sort
 - Thêm cột STT đầu bảng và đầu Excel/PDF; STT được đánh lại sau lọc/sort trên toàn tập. CEO/admin có `Tất cả nhân viên` backend-lock, cột NV, tổng phụ theo NV/tổng chung và phân trang 100 dòng; NV thường gửi `emp=ALL` ở xem/xuất bị chặn 403 và vẫn self-scope.
-- Search live toàn bảng hỗ trợ bỏ dấu, không phân biệt hoa/thường, nhiều từ AND, đếm X/Y, highlight/chip xóa nhanh; click header để sort. Chế độ ALL lọc/sort trước phân trang ở backend; export chạy lại cùng filter/search/sort không cắt trang.
+- Search live toàn bảng hỗ trợ bỏ dấu, không phân biệt hoa/thường, viết tắt liền kiểu `dviet` → `Đức Việt`, nhiều từ AND, đếm X/Y, highlight/chip xóa nhanh; click header để sort. Chế độ ALL lọc/sort trước phân trang ở backend; export chạy lại cùng filter/search/sort không cắt trang.
 - Cột % cố định hẹp, căn phải/tabular, header chỉ mã Cnn + tooltip nhãn đầy đủ; sticky header + STT + Nhân viên/Tên hàng. C32/C47 tiếp tục loại cứng, C44 vẫn tách khoản cuối năm và mọi số tiền giữ nguồn backend. Chưa deploy/không merge main.
+- Ổn định metadata thời gian của workbook snapshot QLNB để hai lần xuất cùng snapshot luôn tái lập byte-for-byte, tránh full-suite chập chờn khi vượt ranh giới timestamp ZIP.
 
 ### 2026-07-22 — Claude Code (nghiệm thu) — Deploy B (#137 gap tool + #138 export VN): PASS
 - **Kiểm tra độc lập trên main: PASS.** `a539e5a` merge code đã review (`50e0c62`); `employeeCostGaps.js` + `employeeCostExport.js` + routes gaps/export có trên main. **#139 KHÔNG lẫn vào** (không cột STT / "Tất cả NV" / search bỏ dấu — chỉ có nhãn "Số dòng đơn hàng" của #134 đã live từ trước). Code khớp bản review PASS (self-scope 2 lớp export, gaps không lộ %, gợi ý mã không tự map, VN accounting + A4 landscape + font fail-closed).

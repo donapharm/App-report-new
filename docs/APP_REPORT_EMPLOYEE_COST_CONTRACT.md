@@ -106,8 +106,9 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
 - Chế độ ALL hợp nhất các payload S2S employee-bound ở backend, gắn
   `employeeCode`/`employeeName`, tính tổng phụ theo NV và tổng chung. Catalog từng kỳ
   được tải một lần; các NV được xử lý với concurrency hữu hạn.
-- Query bảng: `q` (tối đa 200 ký tự, bỏ dấu, không phân biệt hoa/thường, nhiều từ là
-  AND), `sortKey`, `sortDir=asc|desc`, `page`, `pageSize` (mặc định 100, tối đa 200).
+- Query bảng: `q` (tối đa 200 ký tự, bỏ dấu, không phân biệt hoa/thường, nhận dạng
+  viết tắt liền như `dviet` → `Đức Việt`, nhiều từ là AND), `sortKey`,
+  `sortDir=asc|desc`, `page`, `pageSize` (mặc định 100, tối đa 200).
   Backend luôn lọc → sort → đánh `stt=1..N` trên toàn tập rồi mới cắt trang. Response
   có `search`, `pagination`, `employeeSubtotals`; C32/C47 tiếp tục bị loại cứng.
 - Một NV được lọc/sort trực tiếp trên payload self-scoped ở client. Chế độ ALL lọc/sort
