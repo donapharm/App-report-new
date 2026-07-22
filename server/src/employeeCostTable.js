@@ -6,8 +6,10 @@ const MAX_PAGE_SIZE = 200;
 const SEARCHABLE_BASE_KEYS = Object.freeze([
   'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25',
   'bidPrice', 'quantity', 'revenueBeforeVat', 'rowMonthlyTotal', 'note', 'employeeCode', 'employeeName',
+  'province', 'unitGroup', 'unitGroupLabel',
 ]);
 const SORTABLE_BASE_KEYS = new Set([...SEARCHABLE_BASE_KEYS, 'stt']);
+const FILTER_KEYS = Object.freeze(['province', 'unitGroup', 'route']);
 
 function normalizeVietnamese(value) {
   return String(value ?? '').toLocaleLowerCase('vi').normalize('NFD')
@@ -67,6 +69,19 @@ function rowMatches(row, columns, query) {
   if (!tokens.length) return true;
   const forms = searchForms(rowSearchDocument(row, columns));
   return tokens.every((token) => forms.some((form) => form.includes(token)));
+}
+
+function exactFilterMatch(left, right) {
+  if (right == null || String(right).trim() === '') return true;
+  return normalizeVietnamese(left) === normalizeVietnamese(right);
+}
+
+function rowMatchesFilters(row = {}, options = {}, excludeKey = '') {
+  return FILTER_KEYS.every((key) => key === excludeKey || exactFilterMatch(row[key], options[key]));
+}
+
+function rowMatchesView(row, columns, options = {}, excludeKey = '') {
+  return rowMatchesFilters(row, options, excludeKey) && rowMatches(row, columns, options.q);
 }
 
 function normalizeSortKey(value) {
@@ -145,11 +160,68 @@ function parsePageSize(value, fallback = DEFAULT_PAGE_SIZE) {
   return Number.isInteger(number) && number > 0 ? Math.min(number, MAX_PAGE_SIZE) : fallback;
 }
 
+function facetOptions(report = {}, options = {}, key, labelKey = key) {
+  const values = new Map();
+  const selected = String(options[key] || '').trim();
+  const selectedNormalized = normalizeVietnamese(selected);
+  for (const period of Array.isArray(report.periods) ? report.periods : [report]) {
+    const columns = Array.isArray(period.columns) ? period.columns : [];
+    for (const row of Array.isArray(period.rows) ? period.rows : []) {
+      const value = String(row?.[key] || '').trim();
+      if (selectedNormalized && normalizeVietnamese(value) === selectedNormalized && !values.has(selectedNormalized)) {
+        values.set(selectedNormalized, {
+          value,
+          label: String(row?.[labelKey] || value).trim() || value,
+          count: 0,
+        });
+      }
+      if (!rowMatchesView(row, columns, options, key)) continue;
+      if (!value) continue;
+      const normalized = normalizeVietnamese(value);
+      const current = values.get(normalized) || {
+        value,
+        label: String(row?.[labelKey] || value).trim() || value,
+        count: 0,
+      };
+      current.count += 1;
+      values.set(normalized, current);
+    }
+  }
+  return [...values.values()].sort((a, b) => a.label.localeCompare(b.label, 'vi', { numeric: true, sensitivity: 'base' }));
+}
+
+function buildFilterOptions(report = {}, options = {}) {
+  const provinces = facetOptions(report, options, 'province');
+  return {
+    province: { available: provinces.length > 0, source: 'official_row_catalog_or_config', options: provinces },
+    unitGroup: { available: true, source: 'configurable_prefix_map', options: facetOptions(report, options, 'unitGroup', 'unitGroupLabel') },
+    route: { available: true, source: 'sales_row', options: facetOptions(report, options, 'route') },
+  };
+}
+
+function filteredDaily(daily = {}, rows = [], columns = []) {
+  if (!daily?.reliable) return daily;
+  const costColumns = columns.filter((column) => /^c(?:3[3-9]|4[0-6])$/.test(String(column?.key || '').toLowerCase())
+    && !BLOCKED.has(String(column.key).toLowerCase()));
+  const dates = [...new Set(rows.flatMap((row) => Object.keys(row.dailyAmounts || {})))].sort();
+  const totals = dates.map((date) => {
+    let monthlyTotal = 0;
+    let annualTotal = 0;
+    for (const row of rows) for (const column of costColumns) {
+      const amount = numeric(row.dailyAmounts?.[date]?.[String(column.key).toLowerCase()]);
+      if (column.annual) annualTotal += amount;
+      else monthlyTotal += amount;
+    }
+    return { date, monthlyTotal, annualTotal };
+  });
+  return { ...daily, dates, totals };
+}
+
 function transformPeriod(period = {}, options = {}) {
   const sourceRows = Array.isArray(period.rows) ? period.rows : [];
   const columns = Array.isArray(period.columns) ? period.columns.filter((column) => !BLOCKED.has(String(column?.key || '').toLowerCase())) : [];
   const query = String(options.q || '').slice(0, 200);
-  const filtered = sourceRows.filter((row) => rowMatches(row, columns, query));
+  const filtered = sourceRows.filter((row) => rowMatchesView(row, columns, { ...options, q: query }));
   const sorted = sortRows(filtered, options.sortKey, options.sortDir);
   const numbered = sorted.map((row, index) => ({ ...row, stt: index + 1 }));
   const pageSize = parsePageSize(options.pageSize);
@@ -162,6 +234,7 @@ function transformPeriod(period = {}, options = {}) {
     columns,
     rows,
     summary,
+    daily: filteredDaily(period.daily, numbered, columns),
     search: { query, filteredRows: numbered.length, totalRows: sourceRows.length },
     pagination: { page, pageSize, pageCount, filteredRows: numbered.length, totalRows: sourceRows.length },
     employeeSubtotals: options.allEmployees ? employeeSubtotals(numbered, columns) : [],
@@ -169,6 +242,7 @@ function transformPeriod(period = {}, options = {}) {
 }
 
 function transformReport(report = {}, options = {}) {
+  const filterOptions = buildFilterOptions(report, options);
   const periods = (Array.isArray(report.periods) ? report.periods : [report]).map((period) => transformPeriod(period, options));
   const allRows = periods.flatMap((period) => period.rows);
   const filteredRows = periods.reduce((sum, period) => sum + period.search.filteredRows, 0);
@@ -181,6 +255,8 @@ function transformReport(report = {}, options = {}) {
     periods,
     rows: undefined,
     allEmployees: !!options.allEmployees,
+    filters: Object.fromEntries(FILTER_KEYS.map((key) => [key, String(options[key] || '').trim()])),
+    filterOptions,
     search: { query: String(options.q || '').slice(0, 200), filteredRows, totalRows },
     summary: {
       reliable,
@@ -228,6 +304,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
   });
   return {
     empCode: 'ALL', employeeName: 'Tất cả nhân viên', allEmployees: true,
+    template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: [] },
     from: source[0]?.from || periodKeys[0] || '', to: source[0]?.to || periodKeys.at(-1) || '',
     periods,
     employees: roster.map((employee) => ({ empCode: employee.emp_code, employeeName: employee.name })),
@@ -242,10 +319,15 @@ module.exports = {
   searchForms,
   rowSearchDocument,
   rowMatches,
+  rowMatchesFilters,
+  rowMatchesView,
   normalizeSortKey,
   sortRows,
   summarizeRows,
   employeeSubtotals,
+  facetOptions,
+  buildFilterOptions,
+  filteredDaily,
   transformPeriod,
   transformReport,
   mergeEmployeeReports,

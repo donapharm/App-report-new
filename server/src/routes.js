@@ -565,6 +565,14 @@ async function employeeCostPayload(req, {
       revenueRowsByPeriod,
       catalogRowsByPeriod,
       auditEvent,
+      auditFilters: {
+        province: req.query.province,
+        unitGroup: req.query.unitGroup,
+        route: req.query.route,
+        q: req.query.q,
+        sortKey: req.query.sortKey,
+        sortDir: req.query.sortDir,
+      },
     });
   });
 }
@@ -576,6 +584,9 @@ function employeeCostTableOptions(req, { paginate = false, allEmployees = false 
     sortDir: req.query.sortDir,
     page: req.query.page,
     pageSize: req.query.pageSize,
+    province: req.query.province,
+    unitGroup: req.query.unitGroup,
+    route: req.query.route,
     paginate,
     allEmployees,
   };

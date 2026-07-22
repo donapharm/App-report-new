@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const ords = require('./ords');
 const targetAdmin = require('./targetAdmin');
-const { provinceOf } = require('./province');
+const { provinceResolution } = require('./province');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
@@ -61,13 +61,25 @@ function base() {
   const enrich = (r) => {
     const rr = normalizeEmpForReport(r);
     const unit_name = rr.unit_name || unitByCode[rr.unit_code]?.unit_name;
+    const sourceProvince = rr.province || rr.PROVINCE || rr.tinh || rr.TINH || '';
+    const catalogProvince = unitByCode[rr.unit_code]?.province || '';
+    const fallbackProvince = (!sourceProvince && !catalogProvince)
+      ? provinceResolution(rr.unit_code, unit_name, '')
+      : { value: '', source: '' };
+    const province = sourceProvince || catalogProvince || fallbackProvince.value;
+    // Giữ provenance để các màn hình nhạy cảm có thể dùng tỉnh chính thức từ
+    // dòng bán/danh mục và loại bỏ hoàn toàn kết quả suy tên.
+    const province_source = sourceProvince
+      ? (rr.province_source || 'source')
+      : (catalogProvince ? 'catalog' : fallbackProvince.source);
     return {
       ...rr,
       unit_name,
       product_name: rr.product_name || prodByCode[rr.iit_code]?.product_name,
       c14: rr.c14 || rr.C14 || rr.indication_group || c14ByIit[String(rr.iit_code || '').trim().toUpperCase()] || null,
       emp_name: rr.emp_name || empByCode[rr.emp_code]?.name,
-      province: rr.province || unitByCode[rr.unit_code]?.province || provinceOf(rr.unit_code, unit_name, rr.province),
+      province,
+      province_source,
     };
   };
   _base = {

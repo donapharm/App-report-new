@@ -117,6 +117,15 @@ function employeeLabel(report = {}) {
   return `${safeText(report.empCode || report.employeeCode, 40) || '—'} · ${safeText(report.employeeName || report.empCode || report.employeeCode, 180) || '—'}`;
 }
 
+function costFilterLabel(report = {}) {
+  const labels = [];
+  if (report.filters?.province) labels.push(`Vùng/Tỉnh: ${safeText(report.filters.province, 120)}`);
+  if (report.filters?.unitGroup) labels.push(`Nhóm mã ĐV: ${safeText(report.filters.unitGroup, 120)}`);
+  if (report.filters?.route) labels.push(`Tuyến: ${safeText(report.filters.route, 120)}`);
+  if (report.search?.query) labels.push(`Tìm: “${safeText(report.search.query, 200)}”`);
+  return labels.join(' · ') || 'Không có bộ lọc chi tiết';
+}
+
 function gapEmployeeLabel(payload = {}) {
   const code = safeText(payload.scope?.employeeCode, 40).toUpperCase();
   if (payload.scope?.admin && !code) return 'Toàn roster';
@@ -213,14 +222,21 @@ function createCostWorkbook(reports = [], options = {}) {
       const sheetName = safeSheetName(`${report.empCode}-${period.period}`, 'Chi phí', usedNames);
       const sheet = workbook.addWorksheet(sheetName);
       const tableRow = 7;
-      excelHeader(sheet, { title: COST_TITLE, period: formatPeriod(period.period), employee: employeeLabel(report), exportedAt, columnCount: columns.length });
+      const dataRows = (Array.isArray(period.rows) ? period.rows : []).map((row, index) => ({ ...row, stt: numberOrNull(row.stt) || index + 1 }));
+      excelHeader(sheet, {
+        title: COST_TITLE,
+        period: formatPeriod(period.period),
+        employee: employeeLabel(report),
+        exportedAt,
+        columnCount: columns.length,
+        note: `Bộ lọc: ${costFilterLabel(report)} · Hiện ${Number(period.search?.filteredRows ?? dataRows?.length ?? 0).toLocaleString('vi-VN')}/${Number(period.search?.totalRows ?? dataRows?.length ?? 0).toLocaleString('vi-VN')} dòng`,
+      });
       sheet.getRow(tableRow).values = columns.map((column) => column.label);
       styleTableHeader(sheet.getRow(tableRow));
       columns.forEach((column, index) => {
         if (column.fullLabel) sheet.getRow(tableRow).getCell(index + 1).note = column.fullLabel;
       });
       const firstDataRow = tableRow + 1;
-      const dataRows = (Array.isArray(period.rows) ? period.rows : []).map((row, index) => ({ ...row, stt: numberOrNull(row.stt) || index + 1 }));
       for (const source of dataRows) {
         const values = columns.map((column) => {
           const value = column.value(source);
@@ -413,7 +429,7 @@ function costPdfBuffer(reports = [], options = {}) {
     let section = 0;
     for (const report of list) for (const period of Array.isArray(report.periods) ? report.periods : []) {
       if (section++) doc.addPage();
-      const titleContext = { title: COST_TITLE, period: formatPeriod(period.period), employee: employeeLabel(report), exportedAt };
+      const titleContext = { title: COST_TITLE, period: formatPeriod(period.period), employee: `${employeeLabel(report)} · Lọc: ${costFilterLabel(report)}`, exportedAt };
       pdfHeader(doc, titleContext);
       const columns = costColumns(period, report).map((column) => ({
         label: ['money', 'decimal'].includes(column.kind) ? `${column.label} (đ)` : column.label,

@@ -110,6 +110,18 @@ function normalizedColumnTotals(rawTotals, costColumns) {
   }));
 }
 
+function normalizedFilterFacet(raw = {}, fallbackAvailable = true) {
+  return {
+    available: raw.available == null ? fallbackAvailable : !!raw.available,
+    source: String(raw.source || ''),
+    options: (Array.isArray(raw.options) ? raw.options : []).map((option) => ({
+      value: String(option?.value || ''),
+      label: String(option?.label || option?.value || ''),
+      count: Number(option?.count || 0),
+    })).filter((option) => option.value),
+  };
+}
+
 function periodViewModel(payload = {}) {
   const template = {
     key: String(payload.template?.key || ''),
@@ -233,6 +245,16 @@ export function employeeCostViewModel(payload = {}) {
     note: String(payload.note || (rows.length ? '' : EMPTY_NOTE)),
     dynamicCount: periods.reduce((sum, period) => sum + period.dynamicCount, 0),
     allEmployees: !!payload.allEmployees,
+    filters: {
+      province: String(payload.filters?.province || ''),
+      unitGroup: String(payload.filters?.unitGroup || ''),
+      route: String(payload.filters?.route || ''),
+    },
+    filterOptions: {
+      province: normalizedFilterFacet(payload.filterOptions?.province, false),
+      unitGroup: normalizedFilterFacet(payload.filterOptions?.unitGroup),
+      route: normalizedFilterFacet(payload.filterOptions?.route),
+    },
     search: {
       query: String(payload.search?.query || ''),
       filteredRows: Number(payload.search?.filteredRows ?? rows.length),

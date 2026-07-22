@@ -88,6 +88,25 @@ test('low coverage state preserves null amounts and unreliable totals', () => {
   assert.deepEqual(employeeCostColumnKpis(model).map((item) => item.value), [null]);
 });
 
+test('view model normalizes backend-owned combined filter state and dynamic facet counts', () => {
+  const model = employeeCostViewModel({
+    empCode: 'DN001', filters: { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL' },
+    filterOptions: {
+      province: { available: true, source: 'official_row_catalog_or_config', options: [{ value: 'ĐỒNG NAI', label: 'ĐỒNG NAI', count: 3 }] },
+      unitGroup: { options: [{ value: 'BV', label: 'BV · Bệnh viện', count: 2 }] },
+      route: { options: [{ value: 'CL', label: 'CL', count: 2 }] },
+    },
+    search: { query: 'cerecaps', filteredRows: 2, totalRows: 9 },
+    periods: [],
+  });
+  assert.deepEqual(model.filters, { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL' });
+  assert.deepEqual(model.filterOptions.province, {
+    available: true, source: 'official_row_catalog_or_config', options: [{ value: 'ĐỒNG NAI', label: 'ĐỒNG NAI', count: 3 }],
+  });
+  assert.equal(model.filterOptions.unitGroup.options[0].label, 'BV · Bệnh viện');
+  assert.deepEqual(model.search, { query: 'cerecaps', filteredRows: 2, totalRows: 9 });
+});
+
 test('KPI column cards stay dynamic for part-time templates and never invent annual columns', () => {
   const model = employeeCostViewModel({
     empCode: 'DN021', period: '2026-07',
@@ -201,6 +220,11 @@ test('acceptance contract includes CEO-only ALL, STT/employee, short percent too
   assert.match(page, /Không dấu, nhiều từ khóa \(AND\)/);
   assert.match(page, /q: tableQuery, sortKey: tableSort\.key, sortDir: tableSort\.dir/);
   assert.match(api, /'q', 'sortKey', 'sortDir', 'page', 'pageSize'/);
+  assert.match(page, /<span>Vùng\/Tỉnh<\/span>/);
+  assert.match(page, /<span>Nhóm mã đơn vị<\/span>/);
+  assert.match(page, /<span>Tuyến<\/span>/);
+  assert.match(page, /\.\.\.tableFilters/);
+  assert.match(api, /'province', 'unitGroup', 'route'/);
   assert.match(css, /\.employee-cost-sticky-product/);
   assert.match(css, /max-height:72vh/);
 });

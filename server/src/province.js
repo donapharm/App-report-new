@@ -63,17 +63,24 @@ function fromName(name) {
   return '';
 }
 
-function provinceOf(unitCode, unitName, rowProvince) {
-  if (rowProvince) return String(rowProvince).trim();
+function provinceResolution(unitCode, unitName, rowProvince) {
+  if (rowProvince) return { value: String(rowProvince).trim(), source: 'source' };
   const m = loadMap(); // cũng lo việc xoá memo khi map đổi
   const key = `${unitCode || ''}|${unitName || ''}`;
   if (_cache.has(key)) return _cache.get(key);
-  let v;
-  if (unitCode && m[unitCode]) v = String(m[unitCode]).trim();
+  let result;
+  if (unitCode && m[unitCode]) result = { value: String(m[unitCode]).trim(), source: 'config' };
   // Đoán theo tên; nếu tên trống thì thử ngay trên MÃ đơn vị (mã thật thường kèm tên+tỉnh).
-  else v = fromName(unitName) || fromName(unitCode);
-  _cache.set(key, v);
-  return v;
+  else {
+    const inferred = fromName(unitName) || fromName(unitCode);
+    result = { value: inferred, source: inferred ? 'inferred' : '' };
+  }
+  _cache.set(key, result);
+  return result;
 }
 
-module.exports = { provinceOf };
+function provinceOf(unitCode, unitName, rowProvince) {
+  return provinceResolution(unitCode, unitName, rowProvince).value;
+}
+
+module.exports = { provinceOf, provinceResolution };

@@ -3,7 +3,7 @@ import { api, downloadEmployeeCostGaps, downloadEmployeeCostReport } from '../ap
 import { Kpi, Spinner } from '../components.jsx';
 import {
   currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostViewModel,
-  filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
+  formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
   normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
@@ -28,9 +28,9 @@ function Highlight({ value, query }) {
 function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEmployees = false, onPage }) {
   const [tooltip, setTooltip] = useState('');
   const sourceRows = daily ? period.daily.rows : period.rows;
-  const rows = useMemo(() => (allEmployees
-    ? sourceRows
-    : filterSortEmployeeCostRows(sourceRows, period.columns, query, sort)), [allEmployees, sourceRows, period.columns, query, sort]);
+  // Search/filter/sort/STT are resolved by the backend for both self and ALL
+  // scopes so the table and exports always use one financial slice.
+  const rows = sourceRows;
   const columnCount = period.columns.length + 1 + (allEmployees ? 1 : 0);
   const totalsByDate = new Map((period.daily.totals || []).map((total) => [total.date, total]));
   const renderCell = (row, column) => {
@@ -88,11 +88,8 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
 
 function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmployees, onPage }) {
   const annualNote = period.summary.annualLabels.join(', ');
-  const clientRows = useMemo(() => allEmployees ? period.rows : filterSortEmployeeCostRows(period.rows, period.columns, query, sort), [allEmployees, period, query, sort]);
-  const visibleMonthlyTotal = period.summary.reliable ? clientRows.reduce((sum, row) => sum + (Number(row.rowMonthlyTotal) || 0), 0) : null;
-  const visibleAnnualTotal = period.summary.reliable ? clientRows.reduce((sum, row) => sum + (Number(row.rowAnnualTotal) || 0), 0) : null;
-  const filteredCount = allEmployees ? period.search.filteredRows : clientRows.length;
-  const totalCount = allEmployees ? period.search.totalRows : period.rows.length;
+  const filteredCount = period.search.filteredRows;
+  const totalCount = period.search.totalRows;
   return <div className="card employee-cost-panel">
     <div className="employee-cost-period-head">
       <div>
@@ -119,11 +116,11 @@ function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmplo
       <CostTable period={period} query={query} sort={sort} onSort={onSort} allEmployees={allEmployees} onPage={onPage} />
       <div className="employee-cost-summary-row">
         <span>{query ? 'Tổng các dòng đang lọc' : 'Tổng chi phí tháng'} (chưa gồm khoản cuối năm)</span>
-        <b>{formatEmployeeCostCell(allEmployees ? period.summary.monthlyTotal : visibleMonthlyTotal, moneyColumn)}</b>
+        <b>{formatEmployeeCostCell(period.summary.monthlyTotal, moneyColumn)}</b>
       </div>
       {!!period.summary.annualLabels.length && <div className="employee-cost-summary-row employee-cost-annual-total">
         <span>Khoản cuối năm (tạm tính · chi trả T12)</span>
-        <b>{formatEmployeeCostCell(allEmployees ? period.summary.annualTotal : visibleAnnualTotal, moneyColumn)}</b>
+        <b>{formatEmployeeCostCell(period.summary.annualTotal, moneyColumn)}</b>
       </div>}
     </>}
 
@@ -353,6 +350,7 @@ export default function EmployeeCost({ me }) {
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [tableSort, setTableSort] = useState({ key: '', dir: 'asc' });
   const [tablePage, setTablePage] = useState(1);
+  const [tableFilters, setTableFilters] = useState({ province: '', unitGroup: '', route: '' });
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(tableQuery), 180);
@@ -387,7 +385,11 @@ export default function EmployeeCost({ me }) {
     const allEmployees = admin && selectedEmp === 'ALL';
     api.employeeCost(admin ? selectedEmp : undefined, {
       ...range,
-      ...(allEmployees ? { q: debouncedQuery, sortKey: tableSort.key, sortDir: tableSort.dir, page: tablePage, pageSize: 100 } : {}),
+      q: debouncedQuery,
+      sortKey: tableSort.key,
+      sortDir: tableSort.dir,
+      ...tableFilters,
+      ...(allEmployees ? { page: tablePage, pageSize: 100 } : {}),
     })
       .then((data) => { if (alive) setPayload(data); })
       .catch((requestError) => {
@@ -397,7 +399,7 @@ export default function EmployeeCost({ me }) {
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [admin, selectedEmp, range, view, debouncedQuery, tableSort, tablePage]);
+  }, [admin, selectedEmp, range, view, debouncedQuery, tableSort, tablePage, tableFilters]);
 
   useEffect(() => {
     if (admin && view !== 'gaps') return undefined;
@@ -424,10 +426,9 @@ export default function EmployeeCost({ me }) {
   const multiple = model.periods.length > 1;
   const columnKpis = employeeCostColumnKpis(model);
   const allEmployees = admin && selectedEmp === 'ALL';
-  const localFilteredCount = useMemo(() => model.periods.reduce((sum, period) => sum
-    + filterSortEmployeeCostRows(period.rows, period.columns, tableQuery, tableSort).length, 0), [model.periods, tableQuery, tableSort]);
-  const filteredCount = allEmployees ? model.search.filteredRows : localFilteredCount;
-  const totalTableRows = allEmployees ? model.search.totalRows : model.rows.length;
+  const filteredCount = model.search.filteredRows;
+  const totalTableRows = model.search.totalRows;
+  const activeTableFilter = tableQuery || tableFilters.province || tableFilters.unitGroup || tableFilters.route || tableSort.key;
 
   const applyRange = (event) => {
     event.preventDefault();
@@ -460,14 +461,21 @@ export default function EmployeeCost({ me }) {
     setCostExporting(format); setCostExportError('');
     try {
       await downloadEmployeeCostReport(format, {
-        ...range, ...(admin ? { emp: selectedEmp } : {}), q: tableQuery, sortKey: tableSort.key, sortDir: tableSort.dir,
+        ...range, ...(admin ? { emp: selectedEmp } : {}), q: tableQuery, sortKey: tableSort.key, sortDir: tableSort.dir, ...tableFilters,
       });
     }
     catch (requestError) { setCostExportError(requestError.message || 'Không xuất được báo cáo chi phí'); }
     finally { setCostExporting(''); }
   };
   const changeEmployee = (value) => {
-    setSelectedEmp(value); setTablePage(1); setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' });
+    setSelectedEmp(value); setTablePage(1); setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '' });
+  };
+  const changeTableFilter = (key, value) => {
+    setTablePage(1);
+    setTableFilters((current) => ({ ...current, [key]: value }));
+  };
+  const clearTableFilters = () => {
+    setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '' }); setTablePage(1);
   };
   const changeSort = (key) => {
     setTablePage(1);
@@ -493,6 +501,27 @@ export default function EmployeeCost({ me }) {
             {employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>
               {employeeOptionLabel(employee)}
             </option>)}
+          </select>
+        </label>}
+        {view === 'cost' && model.filterOptions.province.available && <label>
+          <span>Vùng/Tỉnh</span>
+          <select value={tableFilters.province} onChange={(event) => changeTableFilter('province', event.target.value)}>
+            <option value="">Tất cả Vùng/Tỉnh</option>
+            {model.filterOptions.province.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
+          </select>
+        </label>}
+        {view === 'cost' && <label>
+          <span>Nhóm mã đơn vị</span>
+          <select value={tableFilters.unitGroup} onChange={(event) => changeTableFilter('unitGroup', event.target.value)}>
+            <option value="">Tất cả nhóm mã</option>
+            {model.filterOptions.unitGroup.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
+          </select>
+        </label>}
+        {view === 'cost' && <label>
+          <span>Tuyến</span>
+          <select value={tableFilters.route} onChange={(event) => changeTableFilter('route', event.target.value)}>
+            <option value="">Tất cả tuyến</option>
+            {model.filterOptions.route.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
           </select>
         </label>}
         <label><span>Từ tháng</span><input type="month" value={draftRange.from} onChange={(event) => setDraftRange((current) => ({ ...current, from: event.target.value }))} /></label>
@@ -540,8 +569,11 @@ export default function EmployeeCost({ me }) {
       <label><span>Tìm trong toàn bảng</span><input type="search" value={tableQuery} onChange={(event) => { setTableQuery(event.target.value); setTablePage(1); }} placeholder="Không dấu, nhiều từ khóa (AND)…" /></label>
       <div className="employee-cost-filter-chip">
         Đang lọc: <b>{allEmployees ? 'Tất cả NV' : (model.empCode || me?.emp_code || '—')}</b>
+        {tableFilters.province && <> · {tableFilters.province}</>}
+        {tableFilters.unitGroup && <> · nhóm {tableFilters.unitGroup}</>}
+        {tableFilters.route && <> · tuyến {tableFilters.route}</>}
         {tableQuery && <> · từ khóa “{tableQuery}”</>} · {filteredCount.toLocaleString('vi-VN')}/{totalTableRows.toLocaleString('vi-VN')} dòng
-        {(tableQuery || tableSort.key) && <button type="button" onClick={() => { setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTablePage(1); }}>× Xóa lọc</button>}
+        {activeTableFilter && <button type="button" onClick={clearTableFilters}>× Xóa lọc</button>}
       </div>
     </div>
 

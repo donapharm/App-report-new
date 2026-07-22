@@ -84,7 +84,7 @@ export const api = {
   employeeCost: (emp, range = {}) => {
     const params = new URLSearchParams();
     if (emp) params.set('emp', emp);
-    for (const key of ['from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize']) {
+    for (const key of ['from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route']) {
       if (range[key] != null && range[key] !== '') params.set(key, range[key]);
     }
     const query = params.toString();

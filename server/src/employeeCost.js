@@ -3,6 +3,7 @@
 const persist = require('./persist');
 const { VAT_DIVISOR } = require('./analytics');
 const employeeCostTemplates = require('./employeeCostTemplates');
+const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 
 const CONTRACT_PATH = '/api/integrations/app-report/employee-cost';
 const DIMENSION_KEYS = Object.freeze(['c5', 'c7', 'c16', 'c25']);
@@ -361,12 +362,36 @@ function displayValue(row, keys) {
   return null;
 }
 
-function canonicalDimensions(revenueRow, unit, product, catalogIndex) {
+function authoritativeProvinceByUnit(revenueRows = [], catalogRows = []) {
+  const candidates = new Map();
+  const add = (row) => {
+    const unit = unitCodeOf(row);
+    const province = safeText(displayValue(row, ['province', 'PROVINCE', 'tinh', 'TINH']), 120);
+    const source = String(row?.province_source || '').trim().toLowerCase();
+    if (!unit || !province || source === 'inferred') return;
+    const values = candidates.get(unit) || new Map();
+    values.set(normName(province), province);
+    candidates.set(unit, values);
+  };
+  for (const row of Array.isArray(revenueRows) ? revenueRows : []) add(row);
+  for (const row of Array.isArray(catalogRows) ? catalogRows : []) add(row);
+  return new Map([...candidates].map(([unit, values]) => [unit, values.size === 1 ? [...values.values()][0] : null]));
+}
+
+function canonicalDimensions(revenueRow, unit, product, catalogIndex, provinceByUnit = new Map()) {
   const exactRows = catalogIndex.byUnitCode.get(`${unit}\u001f${product}`) || [];
   const codeRows = catalogIndex.byCode.get(product) || [];
   const catalogRow = exactRows[0] || (codeRows.length === 1 ? codeRows[0] : null);
+  const province = safeText(provinceByUnit.get(unit), 120);
+  const unitGroup = employeeCostUnitGroups.resolve(unit);
   return {
     c5: product,
+    // Hai field chỉ làm metadata lọc backend, không tham gia công thức chi phí.
+    // Province chỉ tồn tại khi row/catalog/config chính thức của cùng mã đơn vị
+    // có đúng một giá trị; suy tên hoặc nguồn xung đột đều fail closed.
+    province,
+    unitGroup: unitGroup.key || null,
+    unitGroupLabel: unitGroup.label || null,
     c7: safeText(displayValue(revenueRow, ['unit_name', 'c7', 'DONVI', 'TEN_DV']) ?? unit, 240),
     c16: safeText(displayValue(catalogRow, ['product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME'])
       ?? displayValue(revenueRow, ['product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME']) ?? product, 300),
@@ -568,6 +593,7 @@ function enrichWithRevenue(payload, options = {}) {
   }));
   const catalogIndex = buildProductCatalogIndex(options.catalogRows);
   const revenueLines = buildRevenueLines(options.revenueRows, payload.empCode, options.period);
+  const provinceByUnit = authoritativeProvinceByUnit(options.revenueRows, options.catalogRows);
   const costLookup = buildCostLookup(payload.rows, columns, catalogIndex);
   const revenueKeys = new Set(revenueLines.map((line) => `${line.unit}\u001f${line.product}`));
   const matchedKeys = new Set();
@@ -610,7 +636,7 @@ function enrichWithRevenue(payload, options = {}) {
     if (matched) matchedKeys.add(lookupKey);
     const rowDailyReliable = matched && line.dateReliable;
     if (matched && !rowDailyReliable) dailyRowsReliable = false;
-    const dimensions = canonicalDimensions(line.source, line.unit, line.product, catalogIndex);
+    const dimensions = canonicalDimensions(line.source, line.unit, line.product, catalogIndex, provinceByUnit);
     return {
       ...dimensions,
       orderCode: line.orderCode || null,
@@ -854,8 +880,18 @@ function resolveDataHubBaseUrl(value) {
   return String(value ?? process.env.DATA_HUB_BASE_URL ?? process.env.DATAHUB_BASE ?? '').trim().replace(/\/$/, '');
 }
 
-function writeAudit({ actor, role, empCode, outcome, attempts, match, event = 'view' }) {
+function auditFilters(value = {}) {
+  const output = {};
+  for (const key of ['province', 'unitGroup', 'route', 'q', 'sortKey', 'sortDir']) {
+    const item = safeText(value?.[key], key === 'q' ? 200 : 120);
+    if (item) output[key] = item;
+  }
+  return output;
+}
+
+function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, event = 'view' }) {
   const rows = persist.load(AUDIT_FILE, []);
+  const safeFilters = auditFilters(filters);
   rows.push({
     at: new Date().toISOString(),
     event: String(event || 'view'),
@@ -864,6 +900,7 @@ function writeAudit({ actor, role, empCode, outcome, attempts, match, event = 'v
     empCode: normEmp(empCode),
     outcome: String(outcome || 'unknown'),
     attempts: Number(attempts || 0),
+    ...(Object.keys(safeFilters).length ? { filters: safeFilters } : {}),
     ...(match ? {
       revenueMatch: {
         matchedRows: Number(match.matchedRows || 0),
@@ -885,7 +922,7 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
   const range = options.from != null || options.to != null ? parseMonthRange(options) : null;
   if (!empCode) {
     const result = { payload: range ? emptyRangePayload('', range) : emptyPayload('', DEFAULT_NOTE), outcome: 'missing_emp', attempts: 0 };
-    audit({ actor: session?.emp_code, role: session?.role, empCode, event: options.auditEvent || 'view', outcome: result.outcome, attempts: result.attempts });
+    audit({ actor: session?.emp_code, role: session?.role, empCode, event: options.auditEvent || 'view', outcome: result.outcome, attempts: result.attempts, filters: options.auditFilters });
     return result.payload;
   }
   const result = await fetchEmployeeCost(empCode, options);
@@ -905,6 +942,7 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
     outcome: result.outcome,
     attempts: result.attempts,
     match: result.payload.match,
+    filters: options.auditFilters,
   });
   if (result.outcome !== 'ok') {
     // Deliberately generic: never print response bodies, request headers or token.
@@ -942,6 +980,7 @@ module.exports = {
   configuredAnnualColumnKeys,
   configuredMatchWarningPercent,
   safeText,
+  authoritativeProvinceByUnit,
   buildProductCatalogIndex,
   resolveProductCode,
   buildRevenueIndex,

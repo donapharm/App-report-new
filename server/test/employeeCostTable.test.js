@@ -12,9 +12,9 @@ const columns = [
   { key: 'c47', label: 'Cấm' },
 ];
 const rows = [
-  { sourceLineId: '3', date: '2026-07-03', c7: '003.Đức Việt', c5: 'QL3', c16: 'Cerecaps', c36: 3, c44: 1, c32: 'SECRET32', c47: 'SECRET47', revenueBeforeVat: 300, rowMonthlyTotal: 30, rowAnnualTotal: 1, amounts: { c36: 30, c44: 1 } },
-  { sourceLineId: '1', date: '2026-07-01', c7: '001.Bệnh viện A', c5: 'QL1', c16: 'Atisyrup', c36: 1, c44: 1, revenueBeforeVat: 100, rowMonthlyTotal: 10, rowAnnualTotal: 1, amounts: { c36: 10, c44: 1 } },
-  { sourceLineId: '2', date: '2026-07-02', c7: '002.Đơn vị B', c5: 'QL2', c16: 'Cerecaps Plus', c36: 2, c44: 1, revenueBeforeVat: 200, rowMonthlyTotal: 20, rowAnnualTotal: 1, amounts: { c36: 20, c44: 1 } },
+  { sourceLineId: '3', date: '2026-07-03', province: 'HỒ CHÍ MINH', unitGroup: 'PKĐK', unitGroupLabel: 'PKĐK · Phòng khám đa khoa', route: 'NCL', c7: '003.Đức Việt', c5: 'QL3', c16: 'Cerecaps', c36: 3, c44: 1, c32: 'SECRET32', c47: 'SECRET47', revenueBeforeVat: 300, rowMonthlyTotal: 30, rowAnnualTotal: 1, amounts: { c36: 30, c44: 1 } },
+  { sourceLineId: '1', date: '2026-07-01', province: 'ĐỒNG NAI', unitGroup: 'BV', unitGroupLabel: 'BV · Bệnh viện', route: 'CL', c7: '001.Bệnh viện A', c5: 'QL1', c16: 'Atisyrup', c36: 1, c44: 1, revenueBeforeVat: 100, rowMonthlyTotal: 10, rowAnnualTotal: 1, amounts: { c36: 10, c44: 1 } },
+  { sourceLineId: '2', date: '2026-07-02', province: 'ĐỒNG NAI', unitGroup: 'BV', unitGroupLabel: 'BV · Bệnh viện', route: 'CL', c7: '002.Đơn vị B', c5: 'QL2', c16: 'Cerecaps Plus', c36: 2, c44: 1, revenueBeforeVat: 200, rowMonthlyTotal: 20, rowAnnualTotal: 1, amounts: { c36: 20, c44: 1 } },
 ];
 
 function report(sourceRows = rows) {
@@ -43,6 +43,49 @@ test('filter + sort happen before global STT and pagination, while blocked C32/C
   assert.equal(table.rowMatches(rows[0], columns, 'SECRET32'), false);
 });
 
+test('province + configurable unit group + route combine on backend and dynamic facets stay scoped', () => {
+  const transformed = table.transformReport(report(), {
+    province: 'đồng nai', unitGroup: 'BV', route: 'cl', q: 'cerecaps', sortKey: 'date', sortDir: 'desc', paginate: false,
+  });
+  const period = transformed.periods[0];
+  assert.deepEqual(period.rows.map((row) => [row.stt, row.sourceLineId]), [[1, '2']]);
+  assert.deepEqual(transformed.filters, { province: 'đồng nai', unitGroup: 'BV', route: 'cl' });
+  assert.equal(period.summary.monthlyTotal, 20);
+  assert.deepEqual(period.search, { query: 'cerecaps', filteredRows: 1, totalRows: 3 });
+  assert.deepEqual(transformed.filterOptions.province.options.map((item) => item.value), ['ĐỒNG NAI']);
+  assert.deepEqual(transformed.filterOptions.unitGroup.options.map((item) => [item.value, item.label, item.count]), [['BV', 'BV · Bệnh viện', 1]]);
+  assert.deepEqual(transformed.filterOptions.route.options.map((item) => item.value), ['CL']);
+});
+
+test('province facet hides when no authoritative province exists, while group fallback remains usable', () => {
+  const noProvince = report(rows.map(({ province, ...row }) => row));
+  const transformed = table.transformReport(noProvince, { paginate: false });
+  assert.equal(transformed.filterOptions.province.available, false);
+  assert.deepEqual(transformed.filterOptions.province.options, []);
+  assert.deepEqual(transformed.filterOptions.unitGroup.options.map((item) => item.value), ['BV', 'PKĐK']);
+});
+
+test('dynamic facets never synthesize arbitrary query-string values absent from the scoped dataset', () => {
+  const transformed = table.transformReport(report(), { province: 'TỈNH KHÔNG CÓ', unitGroup: 'SECRET', route: 'SECRET', paginate: false });
+  assert.equal(transformed.periods[0].rows.length, 0);
+  assert.equal(transformed.filterOptions.province.options.some((item) => item.value === 'TỈNH KHÔNG CÓ'), false);
+  assert.equal(transformed.filterOptions.unitGroup.options.some((item) => item.value === 'SECRET'), false);
+  assert.equal(transformed.filterOptions.route.options.some((item) => item.value === 'SECRET'), false);
+});
+
+test('a scoped selected facet remains visible with zero count when another facet makes it stale', () => {
+  const transformed = table.transformReport(report(), { province: 'ĐỒNG NAI', route: 'NCL', paginate: false });
+  assert.equal(transformed.periods[0].rows.length, 0);
+  assert.deepEqual(transformed.filterOptions.province.options.map((item) => [item.value, item.count]), [
+    ['ĐỒNG NAI', 0],
+    ['HỒ CHÍ MINH', 1],
+  ]);
+  assert.deepEqual(transformed.filterOptions.route.options.map((item) => [item.value, item.count]), [
+    ['CL', 2],
+    ['NCL', 0],
+  ]);
+});
+
 test('ALL merge adds employee identity, backend subtotals, grand total and keeps sort/search exact', () => {
   const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
   const second = report([{ ...rows[1], sourceLineId: 'dn2', c16: 'Cerecaps DN2', rowMonthlyTotal: 40, amounts: { c36: 40, c44: 2 } }]);
@@ -51,6 +94,8 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   const transformed = table.transformReport(merged, { allEmployees: true, q: 'cerecaps', sortKey: 'employeeCode', sortDir: 'asc', paginate: false });
   const period = transformed.periods[0];
   assert.equal(transformed.empCode, 'ALL');
+  assert.equal(transformed.template.label, 'TẤT CẢ NHÂN VIÊN');
+  assert.ok(period.rows.length > 0);
   assert.deepEqual(period.rows.map((row) => [row.stt, row.employeeCode]), [[1, 'DN001'], [2, 'DN001'], [3, 'DN002']]);
   assert.deepEqual(period.employeeSubtotals.map((item) => [item.employeeCode, item.rowCount, item.monthlyTotal]), [['DN001', 2, 50], ['DN002', 1, 40]]);
   assert.equal(period.summary.monthlyTotal, 90);
