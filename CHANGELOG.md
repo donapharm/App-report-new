@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (review #148 PASS + giao độ rộng cột) — worklist tỉnh `80a8c4c`
+- **Review worklist #148 `80a8c4c`: PASS.** Route `/employee-cost/province-worklist/export.xlsx` = requireAdmin (CEO/admin), không nhận emp, **không %/C32/C47**; chỉ lấy tỉnh nguồn chính thức (loại catalog/inferred/guessed), xung đột tỉnh fail-closed. T07: **2 đơn vị** cần gán tỉnh (doanh thu ảnh hưởng 103.588.300đ). Audit đủ. Server 261/261, web 39/39, build + quét C32/C47 PASS.
+- **CEO thêm: tinh chỉnh độ rộng cột** (thuần CSS): C36–C45 hiện **đủ tên** (header wrap); thu hẹp Thành tiền-trước-VAT · Hàm lượng (1 dòng+…+tooltip) · Nhân viên; **nới rộng Đơn vị · Nhà thầu**. Directive `DIRECTIVE_EMP_COST_COLUMN_WIDTHS.md`. Làm cùng nhánh → **deploy chung worklist #148 + độ rộng cột**. Không đổi số/quyền.
+
 ### 2026-07-22 — Report Bot (review, chưa deploy) — #148 worklist đơn vị chưa gán tỉnh
 - Thêm endpoint CEO/admin-only `GET /api/employee-cost/province-worklist/export.xlsx?from=YYYY-MM&to=YYYY-MM` và nút **Xuất ĐV chưa gán tỉnh**. Backend luôn gom toàn roster, không nhận `emp`, không gọi DataHub tỷ lệ; audit metadata-only riêng và response `private, no-store`.
 - Excel chỉ có 6 cột **Mã đơn vị · Tên đơn vị · Tuyến · #NV liên quan · Doanh thu ảnh hưởng · Tỉnh cần điền**; đơn vị duy nhất, tuyến/NV distinct, xếp doanh thu giảm dần, cột tỉnh để trống. Số thật/định dạng kế toán VN, A4 ngang, fit-to-width, lặp/freeze header, footer trang; không chứa %/chi phí/C32/C47.
