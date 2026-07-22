@@ -1,3 +1,11 @@
+### 2026-07-22 — Claude Code (review PASS + giao deploy) — gói UI chi phí `a5ef765`
+- **Review PASS toàn bộ 4 việc** trên nhánh `review/employee-cost-c44-derived-20260722` `a5ef765`:
+  1. **C44** = tiền_C43 × %C44 (cột phái sinh cấu hình `c44:c43`, validate vòng lặp) — C44 tháng 1.210.470đ.
+  2. **Thu gọn panel** — mặc định gập, localStorage theo admin, draft không mất, a11y.
+  3. **KPI cards** — `summary.columnTotals` (gate <90%); FE render động Doanh thu chưa VAT + C36/C41/C43/C44/C45, **C44 nổi bật**.
+  4. **Nhãn** — "Số dòng đơn hàng" + "…/… mã (đơn vị×mặt hàng)" (đổi chữ, số/coverage giữ nguyên).
+- Server 224/224, web 29/29, build PASS. CEO chốt **deploy gộp (A)**. Directive `DIRECTIVE_EMP_COST_UI_DEPLOY.md`: merge→build→**FE+restart BE đồng bộ**→nghiệm thu. Còn treo (không chặn): DN021 mã QĐ + C48 sidecar (DataHub Bot).
+
 ### 2026-07-22 — Claude Code (review + giao bot) — C44 `b37a48f` PASS + KPI cards mới
 - **Review C44 `b37a48f` (nhánh `review/employee-cost-c44-derived-20260722`): PASS.** `C44 = tiền_C43 × %C44` — bot làm đủ 3 chỗ: per-dòng (`base = amounts[derivesFrom]`), match/reliable (không cho fallback doanh thu khi derived null), residual/làm tròn (đối chiếu trên tổng tiền cột gốc). **Cột phái sinh cấu hình được** (`DEFAULT_DERIVED_BASES={c44:c43}`, env `EMPLOYEE_COST_DERIVED_BASE`, validate chặn tự-tham-chiếu/trùng/**vòng lặp**). Kèm `.env.example` + contract doc + config json + test. **Nghiệm thu:** C44 mẫu 75.696đ, **C44 tháng 1.210.470đ** (từ 35.157.098đ), tổng tháng vẫn 41.144.556đ, coverage 171/184. 224/224 + 25/25 + build PASS. *(Claude tự động trên server lỗi 401 — verdict do phiên Claude này cấp.)*
 - **CEO yêu cầu thêm KPI cards:** Doanh thu chưa VAT + tổng CP từng cột C36/C41/C43/C44/C45, **C44 nổi bật**. Directive `DIRECTIVE_EMP_COST_KPI_CARDS.md`: backend thêm `summary.columnTotals` (gate <90% như tổng tháng); FE render **động từ columns[]**, ô annual (C44) nổi bật + badge cuối năm. Làm **cùng nhánh UI với thu gọn panel**, deploy 1 lượt.
