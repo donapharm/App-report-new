@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (review PASS + giao deploy đợt 2) — #139 bảng UX `a3b4fd6`
+- **Review `a3b4fd6`: PASS.** "Tất cả NV" **khóa 3 lớp** (view/all-payload/export đều 403 `EMPLOYEE_COST_ALL_FORBIDDEN` cho NV; NV ép own qua resolveScopedEmployee). Tìm kiếm **bỏ dấu chuẩn** (`normalizeVietnamese`: NFD + xóa dấu + đ→d, đa từ khóa, BLOCKED C32/C47 không lọt). STT + sort ổn định; cột chi phí regex c33–c46 (chặn C32/C47); phân trang; tổng phụ theo NV; sticky; cột % hẹp; export phản ánh lọc/tìm/sort/STT. Server 243/243, web 37/37, build PASS.
+- UI/UX thuần, **không đổi số/tiền**, rủi ro thấp. Directive `DIRECTIVE_EMP_COST_139_DEPLOY.md` (deploy đợt 2). Sau đó: DQ center đợt 1 (#141) + DataHub điền %/alias.
+
 ### 2026-07-22 — Claude Code (nghiệm thu) — Deploy B (#137 gap tool + #138 export VN): PASS
 - **Kiểm tra độc lập trên main: PASS.** `a539e5a` merge code đã review (`50e0c62`); `employeeCostGaps.js` + `employeeCostExport.js` + routes gaps/export có trên main. **#139 KHÔNG lẫn vào** (không cột STT / "Tất cả NV" / search bỏ dấu — chỉ có nhãn "Số dòng đơn hàng" của #134 đã live từ trước). Code khớp bản review PASS (self-scope 2 lớp export, gaps không lộ %, gợi ý mã không tự map, VN accounting + A4 landscape + font fail-closed).
 - Bot nghiệm thu production PASS (không dẫn số mới trong report này). Chi phí cũ không đổi. *(Claude tự động server lỗi 401 — verdict do phiên Claude này cấp.)*
