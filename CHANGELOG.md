@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (review #148 PASS + giao độ rộng cột) — worklist tỉnh `80a8c4c`
+- **Review worklist #148 `80a8c4c`: PASS.** Route `/employee-cost/province-worklist/export.xlsx` = requireAdmin (CEO/admin), không nhận emp, **không %/C32/C47**; chỉ lấy tỉnh nguồn chính thức (loại catalog/inferred/guessed), xung đột tỉnh fail-closed. T07: **2 đơn vị** cần gán tỉnh (doanh thu ảnh hưởng 103.588.300đ). Audit đủ. Server 261/261, web 39/39, build + quét C32/C47 PASS.
+- **CEO thêm: tinh chỉnh độ rộng cột** (thuần CSS): C36–C45 hiện **đủ tên** (header wrap); thu hẹp Thành tiền-trước-VAT · Hàm lượng (1 dòng+…+tooltip) · Nhân viên; **nới rộng Đơn vị · Nhà thầu**. Directive `DIRECTIVE_EMP_COST_COLUMN_WIDTHS.md`. Làm cùng nhánh → **deploy chung worklist #148 + độ rộng cột**. Không đổi số/quyền.
+
 ### 2026-07-22 — Claude Code (nghiệm thu) — bảng UX production `3e29784`: PASS (worklist #148 CHƯA kèm)
 - **Kiểm tra độc lập trên main: PASS.** Code khớp bản review `d0c6b56` (pageSize 20, filter `date`, Vùng/Tỉnh chỉ nguồn chính thức). **Số không đổi:** DN001 41.144.556đ / C44 1.210.470đ / 92,9%; ALL 2.391.033.447đ / C44 95.133.877đ. Self-scope chắc (NV emp=ALL→403; ép DN016→DN001); C32/C47 không lộ (API/PDF/XLSX). Pager pill 20 dòng trên/dưới; lọc kết hợp + tìm bỏ dấu + ngày + "Chưa gán tỉnh"=7 chạy đúng.
 - **⚠ Worklist #148 ("Đơn vị chưa gán tỉnh") CHƯA có trên production** — grep main không có endpoint xuất; test vẫn 255/39 (y hệt d0c6b56). Bot deploy bảng UX mà bỏ qua worklist. **Còn treo:** bot làm nốt worklist để CEO điền `unit_province.json`.
