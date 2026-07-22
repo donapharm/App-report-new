@@ -1,3 +1,9 @@
+### 2026-07-22 — Claude Code (nghiệm thu) — production chi phí VAT-trước `050b9c2`: PASS
+- **Kiểm tra độc lập trên main: PASS.** Code đã deploy = đúng code đã review (`buildCostLookup` khóa `unit␟product` dòng 536 + consumer 577; `loadConfig` try/catch → `{}`). Không bị đổi giữa review và deploy.
+- **Số khớp tay:** VAT-trước `380.000÷1,05×0,5%=1.810đ` (xác nhận gốc trước-VAT); DN001 171/184=92,9% → **tổng tháng trước VAT 41.144.556đ** (thấp hơn bản có-VAT cũ 42.834.991đ, đúng hướng); **C44 tách 35.157.098đ** không cộng tháng.
+- **Bảo mật/hành vi đúng:** C32/C47 không lộ; DN021 0/3 fail-closed (không tự ánh xạ mã QĐ); visibility 3 nhóm/21 NV; hết 404; BE restart đồng bộ FE (PID 549011, restart 73); token/artifact QA thu hồi; rollback sẵn.
+- **Còn treo (đang chờ DataHub Bot):** DN021 đối chiếu mã QĐ (`QĐ48…549` vs `QĐ139…549`); C48 sidecar (điều kiện cứng "C48 thiếu ≠ kỳ thiếu"). 2 task đã gửi DataHub Bot.
+
 ### 2026-07-22 — Report Bot — DEPLOY + nghiệm thu production chi phí VAT-trước `050b9c2`
 - Đã gộp nhánh review `d236496` vào `main`, build và kích hoạt đồng bộ FE/BE; production đang chạy version **`050b9c2-20260722-154110-131`**. `/version.json`, `/api/auth/mode`, health, hai GET quản trị visibility và trang App Report đều PASS; PM2 `app-report` online, không còn lệch route 404/“Lỗi máy chủ”, browser console không có lỗi.
 - Nghiệm thu T07/2026 DN001: mẫu **FULL-TIME 19 cột** đúng thứ tự, đủ `C36/C41/C43/C44/C45`; lookup `(đơn vị + mã hàng)` đạt **171/184 = 92,9%**, tương ứng **211/224 order-line** có tỷ lệ. Tổng tháng VAT-trước (không gồm C44) **41.144.556đ**; C44 cuối năm tách riêng **35.157.098đ**. Spot-check: `380.000 ÷ 1,05 × 0,5% = 1.810đ`.
