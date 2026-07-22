@@ -1,3 +1,9 @@
+### 2026-07-22 — Claude Code (nghiệm thu) — gói UI chi phí production `c565ba6`: PASS
+- **Kiểm tra độc lập trên main: PASS.** Bundle merged (`c565ba6`); code có `columnTotals` + `derivesFrom` + nhãn mới.
+- **Số cộng tay khớp:** C36 714.667 + C41 7.687.500 + C43 25.470.960 + C45 7.271.429 = **41.144.556đ** (= tổng tháng). **C44 cuối năm 1.210.470đ tách riêng** (không cộng tháng). Mẫu C44 = 1.513.920 × 5% = **75.696đ**. Coverage 171/184=92,9%. Doanh thu chưa VAT 2.278.049.356đ.
+- **UI/bảo mật:** KPI đủ (Doanh thu chưa VAT + 5 cột, C44 nổi bật + badge); nhãn "Số dòng đơn hàng" + "mã (đơn vị×mặt hàng)"; panel gập sẵn; self-scope + C32/C47 giữ; BE restart (PID 747857, restart 76); backup sẵn.
+- **Còn treo (chờ DataHub Bot, không chặn):** DN021 lệch mã QĐ (`QĐ48…549` vs `QĐ139…549`); C48 ghi chú sidecar. 2 task đã gửi.
+
 ### 2026-07-22 — Report Bot (deploy + nghiệm thu production) — gói UI chi phí `c565ba6`
 - Đã merge release candidate `a5ef765` vào `main` theo Plan A, build và deploy đồng bộ FE/BE; App Report chạy version `c565ba6-20260722-173400-024`, PM2 `app-report` online PID `747857`, restart `76`. Backup trước deploy: `backups/employee-cost-ui-deploy-20260722_173653/`.
 - Gate release: server **224/224 PASS**, web **30/30 PASS**, production build PASS; health local và `report.donapharm.asia` đều OK.
