@@ -1,3 +1,6 @@
+### 2026-07-22 — Claude Code (giao bot) — Worklist "Đơn vị chưa gán tỉnh" → điền unit_province.json
+- CEO chốt hướng chuẩn 100%: điền map `unit_province.json` (mã ĐV → tỉnh). Directive `DIRECTIVE_EMP_COST_PROVINCE_WORKLIST.md`: bot xuất Excel (chuẩn VN, CEO/ADMIN) danh sách **đơn vị duy nhất "Chưa gán tỉnh"** (mã · tên · tuyến · #NV · doanh thu ảnh hưởng · cột trống "Tỉnh cần điền"), xếp theo doanh thu. Điền vào config → App Report tự áp (không đoán). Tùy chọn: màn admin nhập nhanh. Self-scope, không lộ %/C32/C47. Chưa deploy.
+
 ### 2026-07-22 — Claude Code (review PASS + giao deploy) — bảng UX trọn gói `d0c6b56`
 - **Review `d0c6b56`: PASS.** Vùng/Tỉnh (#146): **bỏ hẳn đoán tên/viết tắt**, chỉ `row.province`/config, thiếu → "Chưa gán tỉnh", source trung thực. #145: pager **pill 20 dòng/trang** + cỡ trang 20/50/100 + **pager trên & dưới (sticky)** + **chọn ngày** (filter `date` validate ISO, chạy cả Tất cả NV). Day + các filter áp trên rows đã khóa quyền (self-scope); C32/C47 loại. Server 255/255, web 39/39, build PASS.
 - Nhánh gom trọn #139 + search + #144 + #146 + #145, UI thuần (không đổi tiền). Directive `DIRECTIVE_EMP_COST_TABLEUX_DEPLOY.md`. Sau deploy: điền `unit_province.json`; DQ center #141; DataHub %/alias.
