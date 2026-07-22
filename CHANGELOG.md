@@ -1,3 +1,8 @@
+### 2026-07-22 — Claude Code (review) — vá lookup `6ef5e3c`: PASS + phát hiện lệch mã QĐ (DN021)
+- **Review `6ef5e3c` (nhánh templates): PASS.** `buildCostLookup` quay về khóa `unit␟product`; guard fail-closed **chỉ chặn đúng cặp (đơn vị+mã) nhập nhằng**, không rớt cả mã sang đơn vị khác. Phía tiêu thụ cũng đổi `costLookup.get(unit␟product)`. **Điểm cộng:** coverage đo trên khóa (đơn vị+mã) duy nhất (170/183=92,9%), bảng giữ grain order-line (209/222) → order-line lặp không méo ngưỡng 90%. VAT spot-check `380.000÷1,05×0,5%=1.810đ` (trước VAT). Test 32/32 + 218/218 + 25/25 + build PASS.
+- **DN001 nghiệm thu ĐẠT** (tổng hiện lại). **Mẫu DN021 CTV: layout PASS**, nhưng **0/3 do lệch mã QĐ** — catalog chi phí `QĐ48…549` vs doanh thu `QĐ139…549`; hệ thống **fail-closed để `—`** (đúng #3, KHÔNG tự bắc cầu). **Câu hỏi dữ liệu cho CEO/DataHub:** 2 mã có phải cùng mặt hàng không? Cùng → DataHub chuẩn hóa mã ở nguồn; khác → 0/3 đúng thực tế. App Report giữ nguyên fail-closed.
+- **Ghi chú C48 = `—`** tạm (chưa chặn). Sidecar C48: duyệt ranh giới, **điều kiện cứng "C48 thiếu ≠ kỳ thiếu"** (chỉ Ghi chú `—`, không chặn %/Thành tiền cả kỳ). Chưa deploy.
+
 ### 2026-07-22 — Claude Code (chẩn đoán + giao bot) — SỬA khóa lookup chi phí (match sụt 2/222)
 - **Review `d0fd7c8` (nhánh templates): layout/công thức ĐÚNG** (VAT trước: 12.616.000×13%=1.640.080 full-time, ×8%=1.009.280 CTV; c44 loại; 2 mẫu đúng nhóm). **NHƯNG match sụt 2/222** (bản main 170/183).
 - **Chẩn đoán: lỗi KHÓA LOOKUP** (không phải DataHub). `buildCostLookup` đổi sang product-only + guard "mọi dòng cùng mã phải % giống hệt" → endpoint ~10.982 dòng/NV % khác theo đơn vị → rớt gần hết. **Sửa: quay lại ghép (đơn vị + mã hàng)** như main. Directive: `DIRECTIVE_EMP_COST_LOOKUP_FIX.md`.
