@@ -1,8 +1,20 @@
-# DIRECTIVE — SỬA "Lỗi máy chủ" trang Chi phí của tôi (500 ở /employee-cost/visibility)
+# DIRECTIVE — SỬA "Lỗi máy chủ" trang Chi phí của tôi (/employee-cost/visibility)
 
 > Claude Code giao Report Bot. Cùng nhánh review `review/employee-cost-templates-20260722` (kèm đợt fix lookup `6ef5e3c`).
 > **Triệu chứng (ảnh CEO):** panel "Quản trị quyền tự xem chi phí" hiện **"Lỗi máy chủ"**, ô chọn NV **"Chưa có nhân viên"**,
 > bảng **"chưa có dữ liệu"**. Đây là **1 lỗi backend lan ra 3 chỗ**, KHÔNG phải 3 lỗi.
+
+## 0. ‼ CẬP NHẬT SAU KHI BOT KIỂM TRA — NGUYÊN NHÂN THẬT = PROCESS CŨ (404), KHÔNG PHẢI loadConfig 500
+Bot xác minh: config file OK, `loadConfig()` OK, **không có stack crash**; `curl /employee-cost/visibility` trả **404**
+(không phải 500). Vì **process production khởi động 11:59, trước khi route visibility được thêm 12:05** → process đang chạy
+**chưa nạp route mới**; frontend bản mới gọi route đó → **404** → FE quy về câu chung **"Lỗi máy chủ"** (map mọi mã ≠ 2xx).
+⇒ Đây là **lệch phiên bản FE mới / BE cũ**, KHÔNG phải lỗi code.
+- **Fix của vụ này = RESTART/DEPLOY** để BE nạp route (xem §6). Không cần đụng loadConfig để hết "Lỗi máy chủ".
+- **§3.1 (loadConfig hardening) hạ xuống PHÒNG VỆ TÙY CHỌN** (defense-in-depth): vẫn nên làm cùng nhánh vì rẻ và chống
+  500 **thật** nếu tương lai mất/hỏng config, nhưng KHÔNG phải nguyên nhân lần này.
+- **§3.2 (bọc route GET) giữ nguyên** — hữu ích để lần sau lỗi ra `{error}` cụ thể thay vì "Lỗi máy chủ" trơn.
+- **Bổ sung polish nhỏ (ưu tiên thấp):** FE nên phân biệt **404** (chưa có route / lệch deploy) với **500** (lỗi máy chủ)
+  — hiện gộp chung thành "Lỗi máy chủ" gây hiểu nhầm.
 
 ## 1. NGUYÊN NHÂN GỐC (đã khoanh vùng trong code nhánh review)
 Trang ADMIN gọi `GET /employee-cost/visibility` — endpoint này **cũng nạp danh sách NV** cho picker. Nó **crash 500**.
