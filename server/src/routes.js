@@ -27,6 +27,7 @@ const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostExport = require('./employeeCostExport');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
+const employeeCostTable = require('./employeeCostTable');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -512,7 +513,12 @@ router.get('/me', auth.requireAuth, (req, res) => {
   res.json({ ...req.session, isAdmin, employeeCostDisabled: !visibility.enabled });
 });
 
-async function employeeCostPayload(req, { requestedEmp = req.query.emp, auditEvent = 'view', roster = employeeCostRosterRows() } = {}) {
+async function employeeCostPayload(req, {
+  requestedEmp = req.query.emp,
+  auditEvent = 'view',
+  roster = employeeCostRosterRows(),
+  sharedCatalogRowsByPeriod = null,
+} = {}) {
   const s = auth.scopeOf(req.session);
   const admin = auth.isAdmin(req.session.role);
   const empCode = employeeCost.resolveScopedEmployee({
@@ -531,7 +537,7 @@ async function employeeCostPayload(req, { requestedEmp = req.query.emp, auditEve
   }, async () => {
     const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
     const revenueRowsByPeriod = {};
-    const catalogRowsByPeriod = {};
+    const catalogRowsByPeriod = sharedCatalogRowsByPeriod || {};
     // Doanh thu và catalog được lấy riêng đúng từng kỳ, luôn với scope backend.
     // Catalog lỗi ở tháng nào thì tháng đó fail closed, không dùng snapshot tháng khác.
     for (const period of range.months) {
@@ -539,8 +545,9 @@ async function employeeCostPayload(req, { requestedEmp = req.query.emp, auditEve
       const scopedRevenue = empCode ? store.getRows({ ky: uiPeriod, scope: { empCode } }) : [];
       const contractorLookup = empCode ? contractorLookupFor({ empCode }, scopedRevenue) : null;
       revenueRowsByPeriod[period] = empCode ? enrichContractorNames(scopedRevenue, contractorLookup) : [];
-      catalogRowsByPeriod[period] = [];
+      if (!sharedCatalogRowsByPeriod) catalogRowsByPeriod[period] = [];
       if (!empCode) continue;
+      if (sharedCatalogRowsByPeriod) continue;
       try {
         const catalogSnapshot = await canonicalAssignmentSnapshot(period);
         catalogRowsByPeriod[period] = catalogSnapshot.catalog || catalogSnapshot.rows || [];
@@ -562,10 +569,54 @@ async function employeeCostPayload(req, { requestedEmp = req.query.emp, auditEve
   });
 }
 
+function employeeCostTableOptions(req, { paginate = false, allEmployees = false } = {}) {
+  return {
+    q: req.query.q,
+    sortKey: req.query.sortKey,
+    sortDir: req.query.sortDir,
+    page: req.query.page,
+    pageSize: req.query.pageSize,
+    paginate,
+    allEmployees,
+  };
+}
+
+async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view_all' } = {}) {
+  if (!auth.isAdmin(req.session.role)) {
+    throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
+  }
+  const roster = employeeCostRosterRows();
+  const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  const sharedCatalogRowsByPeriod = {};
+  for (const period of range.months) {
+    try {
+      const snapshot = await canonicalAssignmentSnapshot(period);
+      sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
+    } catch (error) {
+      sharedCatalogRowsByPeriod[period] = [];
+      console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+    }
+  }
+  const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
+    requestedEmp: employee.emp_code,
+    auditEvent,
+    roster,
+    sharedCatalogRowsByPeriod,
+  }));
+  const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+  return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate, allEmployees: true }));
+}
+
 // Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
 // chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
 router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) => {
-  const payload = await employeeCostPayload(req);
+  const wantsAll = String(req.query.emp || '').trim().toUpperCase() === 'ALL';
+  if (wantsAll && !auth.isAdmin(req.session.role)) {
+    return res.status(403).json({ error: 'Chỉ CEO/admin được xem tất cả nhân viên.', code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
+  }
+  const payload = wantsAll
+    ? await employeeCostAllPayload(req)
+    : employeeCostTable.transformReport(await employeeCostPayload(req), employeeCostTableOptions(req, { paginate: false }));
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
 }));
@@ -587,6 +638,10 @@ async function employeeCostExportReports(req, format) {
   const admin = auth.isAdmin(req.session.role);
   const roster = employeeCostRosterRows();
   const requested = String(req.query.emp || '').trim().toUpperCase();
+  if (requested === 'ALL') {
+    if (!admin) throw Object.assign(new Error('Chỉ CEO/admin được xuất tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
+    return [await employeeCostAllPayload(req, { paginate: false, auditEvent: `export_${format}_all` })];
+  }
   if (admin && requested && !roster.some((employee) => employee.emp_code === requested)) {
     throw Object.assign(new Error('Nhân viên không thuộc roster chi phí được duyệt.'), { status: 400, code: 'EMPLOYEE_COST_EXPORT_EMP_INVALID' });
   }
@@ -601,10 +656,10 @@ async function employeeCostExportReports(req, format) {
     });
     if (payload.disabled) throw Object.assign(new Error(payload.note || 'Chức năng chi phí đang tắt cho bạn.'), { status: 403, code: 'EMPLOYEE_COST_DISABLED' });
     const resolvedEmp = String(payload.empCode || targetEmp).trim().toUpperCase();
-    return {
+    return employeeCostTable.transformReport({
       ...payload,
       employeeName: roster.find((employee) => employee.emp_code === resolvedEmp)?.name || resolvedEmp,
-    };
+    }, employeeCostTableOptions(req, { paginate: false }));
   });
 }
 

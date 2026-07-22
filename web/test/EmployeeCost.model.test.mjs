@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   buildEmployeeCostColumns, currentMonthValue, employeeCostColumnKpis, employeeCostViewModel,
-  formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
+  employeeCostHighlightParts, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
+  formatMonthLabel, normalizeEmployeeCostSearch,
 } from '../src/employeeCostModel.js';
 
 test('dynamic columns follow approved order, keep bid price before quantity, and block c32/c47', () => {
@@ -167,4 +168,37 @@ test('legacy one-month payload remains supported without inventing daily data', 
   assert.equal(model.summary.periodTotal, 80_000);
   assert.equal(model.periods[0].daily.reliable, false);
   assert.deepEqual(model.periods[0].daily.rows, []);
+});
+
+test('smart table search is Vietnamese accent-insensitive, multi-token AND, stable sorted and renumbers STT', () => {
+  const columns = buildEmployeeCostColumns([{ key: 'c36', label: 'CP cộng tác viên (%)' }]);
+  const rows = [
+    { sourceLineId: 'a', c7: 'Đức Việt', c16: 'Cerecaps', date: '2026-07-02', revenueBeforeVat: 100 },
+    { sourceLineId: 'b', c7: 'Đơn vị khác', c16: 'Cerecaps Plus', date: '2026-07-01', revenueBeforeVat: 300 },
+    { sourceLineId: 'c', c7: 'Đức Việt', c16: 'Atisyrup', date: '2026-07-03', revenueBeforeVat: 200 },
+  ];
+  assert.equal(normalizeEmployeeCostSearch('ĐỨC Việt'), 'duc viet');
+  const result = filterSortEmployeeCostRows(rows, columns, 'duc CERECAPS', { key: 'revenueBeforeVat', dir: 'desc' });
+  assert.deepEqual(result.map((row) => [row.stt, row.sourceLineId]), [[1, 'a']]);
+  assert.deepEqual(filterSortEmployeeCostRows(rows, columns, 'cerecaps', { key: 'revenueBeforeVat', dir: 'desc' }).map((row) => row.sourceLineId), ['b', 'a']);
+});
+
+test('highlight maps accent-free query back to original Vietnamese text', () => {
+  assert.deepEqual(employeeCostHighlightParts('Bệnh viện Đức Việt', 'duc viet').filter((part) => part.match).map((part) => part.text), ['Đức', 'Việt']);
+});
+
+test('acceptance contract includes CEO-only ALL, STT/employee, short percent tooltip, sticky, pagination and exact export params', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
+  const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  assert.match(page, /<option value="ALL">Tất cả nhân viên<\/option>/);
+  assert.match(page, /employee-cost-sticky-stt[^>]*>STT/);
+  assert.match(page, /employee-cost-sticky-employee/);
+  assert.match(page, /column\.kind === 'percent' \? column\.shortLabel/);
+  assert.match(page, /title=\{column\.kind === 'percent' \? column\.label/);
+  assert.match(page, /Không dấu, nhiều từ khóa \(AND\)/);
+  assert.match(page, /q: tableQuery, sortKey: tableSort\.key, sortDir: tableSort\.dir/);
+  assert.match(api, /'q', 'sortKey', 'sortDir', 'page', 'pageSize'/);
+  assert.match(css, /\.employee-cost-sticky-product/);
+  assert.match(css, /max-height:72vh/);
 });

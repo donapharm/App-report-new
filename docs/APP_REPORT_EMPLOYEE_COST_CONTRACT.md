@@ -99,5 +99,23 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
 - Báo cáo chi phí luôn tách tổng tháng và khoản C44 cuối năm, có `Bằng chữ: … đồng`;
   gap giữ cột `% cần điền`/`Xác nhận` trống để DataHub xử lý.
 
+## 9. Hợp đồng bảng UX và chế độ toàn nhân viên
+- `emp=ALL` là sentinel nội bộ của App Report và **chỉ CEO/admin** được dùng. Backend
+  kiểm role trước khi tải roster; nhân viên thường gửi `emp=ALL` ở GET hoặc export nhận
+  `403 EMPLOYEE_COST_ALL_FORBIDDEN`, không được fallback sang dữ liệu người khác.
+- Chế độ ALL hợp nhất các payload S2S employee-bound ở backend, gắn
+  `employeeCode`/`employeeName`, tính tổng phụ theo NV và tổng chung. Catalog từng kỳ
+  được tải một lần; các NV được xử lý với concurrency hữu hạn.
+- Query bảng: `q` (tối đa 200 ký tự, bỏ dấu, không phân biệt hoa/thường, nhiều từ là
+  AND), `sortKey`, `sortDir=asc|desc`, `page`, `pageSize` (mặc định 100, tối đa 200).
+  Backend luôn lọc → sort → đánh `stt=1..N` trên toàn tập rồi mới cắt trang. Response
+  có `search`, `pagination`, `employeeSubtotals`; C32/C47 tiếp tục bị loại cứng.
+- Một NV được lọc/sort trực tiếp trên payload self-scoped ở client. Chế độ ALL lọc/sort
+  ở server để STT và số đếm không phụ thuộc trang hiện tại. Tiêu đề cột tỷ lệ ở UI chỉ
+  hiện mã `Cnn`, còn nhãn đầy đủ nằm trong tooltip.
+- Export nhận cùng `emp/q/sortKey/sortDir/from/to`, chạy lại pipeline backend với
+  `paginate=false`; Excel/PDF đều có STT ở cột đầu, ALL có thêm cột Nhân viên và tổng
+  phụ. File không nhận hàng/số tính từ frontend.
+
 ---
 *Phía Data Hub: C32/C47 tiếp tục khóa cứng; C48 hiện chưa có trong payload nên App Report hiển thị `—` và chờ Data Hub bổ sung theo task riêng.*

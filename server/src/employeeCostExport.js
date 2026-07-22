@@ -172,17 +172,22 @@ function styleTableHeader(row) {
   });
 }
 
-function costColumns(period) {
+function costColumns(period, report = {}) {
   const base = [
+    ['stt', 'STT', 'number', 7],
+    ...(report.allEmployees ? [['employee', 'Nhân viên', 'text', 24]] : []),
     ['date', 'Ngày', 'date', 11], ['orderCode', 'Mã đơn', 'text', 15], ['route', 'Tuyến', 'text', 9], ['c7', 'Đơn vị', 'text', 26],
     ['contractorName', 'Nhà thầu', 'text', 22], ['c5', 'Mã QLNB', 'text', 22], ['c16', 'Tên hàng', 'text', 25], ['strength', 'Hàm lượng', 'text', 18],
     ['c25', 'ĐVT', 'text', 8], ['bidPrice', 'Giá trúng thầu', 'money', 15], ['quantity', 'SL', 'number', 10], ['revenueBeforeVat', 'Thành tiền trước VAT', 'decimal', 18],
-  ].map(([key, label, kind, width]) => ({ key, label, kind, width, value: (row) => row[key] }));
+  ].map(([key, label, kind, width]) => ({
+    key, label, kind, width,
+    value: key === 'employee' ? (row) => `${safeText(row.employeeCode, 40)} · ${safeText(row.employeeName, 180)}` : (row) => row[key],
+  }));
   const dynamic = [];
   for (const column of Array.isArray(period.columns) ? period.columns : []) {
     const key = safeText(column.key, 16).toLowerCase();
     if (!/^c(?:3[3-9]|4[0-6])$/.test(key) || key === 'c32' || key === 'c47') continue;
-    dynamic.push({ key, label: safeText(column.label || key, 100), kind: 'percent', width: 12, annual: !!column.annual, value: (row) => row[key] });
+    dynamic.push({ key, label: safeText(column.label || key, 100), fullLabel: safeText(column.label || key, 100), kind: 'percent', width: 8, annual: !!column.annual, value: (row) => row[key] });
     dynamic.push({ key: `${key}_amount`, label: `Thành tiền ${key.toUpperCase()}`, kind: 'money', width: 16, annual: !!column.annual, value: (row) => row.amounts?.[key] });
   }
   return [...base, ...dynamic, { key: 'rowMonthlyTotal', label: 'Tổng chi phí tháng', kind: 'money', width: 17, value: (row) => row.rowMonthlyTotal }, { key: 'note', label: 'Ghi chú', kind: 'text', width: 24, value: (row) => row.note }];
@@ -204,15 +209,18 @@ function createCostWorkbook(reports = [], options = {}) {
   const usedNames = new Set();
   for (const report of list) {
     for (const period of Array.isArray(report.periods) ? report.periods : []) {
-      const columns = costColumns(period);
+      const columns = costColumns(period, report);
       const sheetName = safeSheetName(`${report.empCode}-${period.period}`, 'Chi phí', usedNames);
       const sheet = workbook.addWorksheet(sheetName);
       const tableRow = 7;
       excelHeader(sheet, { title: COST_TITLE, period: formatPeriod(period.period), employee: employeeLabel(report), exportedAt, columnCount: columns.length });
       sheet.getRow(tableRow).values = columns.map((column) => column.label);
       styleTableHeader(sheet.getRow(tableRow));
+      columns.forEach((column, index) => {
+        if (column.fullLabel) sheet.getRow(tableRow).getCell(index + 1).note = column.fullLabel;
+      });
       const firstDataRow = tableRow + 1;
-      const dataRows = Array.isArray(period.rows) ? period.rows : [];
+      const dataRows = (Array.isArray(period.rows) ? period.rows : []).map((row, index) => ({ ...row, stt: numberOrNull(row.stt) || index + 1 }));
       for (const source of dataRows) {
         const values = columns.map((column) => {
           const value = column.value(source);
@@ -234,6 +242,20 @@ function createCostWorkbook(reports = [], options = {}) {
         });
       }
       const lastDataRow = firstDataRow + dataRows.length - 1;
+      if (report.allEmployees) {
+        for (const subtotal of period.employeeSubtotals || []) {
+          const subtotalRow = sheet.addRow(columns.map((column, index) => {
+            if (index === 0) return '';
+            if (index === 1) return `TỔNG PHỤ ${subtotal.employeeCode} · ${subtotal.employeeName} (${subtotal.rowCount} dòng)`;
+            if (column.key === 'rowMonthlyTotal') return numberOrNull(subtotal.monthlyTotal);
+            if (column.key.endsWith('_amount')) return numberOrNull(subtotal.columnTotals?.[column.key.replace(/_amount$/, '')]);
+            return '';
+          }));
+          subtotalRow.font = { bold: true, color: { argb: 'FF245C49' } };
+          subtotalRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FAF6' } };
+          subtotalRow.eachCell((cell, index) => { if (columns[index - 1]?.kind === 'money') cell.numFmt = ACCOUNTING_INTEGER; });
+        }
+      }
       const totalRow = sheet.addRow(columns.map((column, index) => {
         if (index === 0) return 'TỔNG CỘNG';
         if (column.kind !== 'money' && column.kind !== 'decimal') return '';
@@ -393,7 +415,7 @@ function costPdfBuffer(reports = [], options = {}) {
       if (section++) doc.addPage();
       const titleContext = { title: COST_TITLE, period: formatPeriod(period.period), employee: employeeLabel(report), exportedAt };
       pdfHeader(doc, titleContext);
-      const columns = costColumns(period).map((column) => ({
+      const columns = costColumns(period, report).map((column) => ({
         label: ['money', 'decimal'].includes(column.kind) ? `${column.label} (đ)` : column.label,
         weight: Math.max(4, Math.min(column.width, column.kind === 'text' ? 14 : 11)),
         align: ['money', 'decimal', 'number', 'percent'].includes(column.kind) ? 'right' : 'left',
@@ -408,8 +430,12 @@ function costPdfBuffer(reports = [], options = {}) {
         },
       }));
       const hasAnnual = (period.columns || []).some((column) => column.annual);
-      const titleNote = `Tổng chi phí tháng: ${formatMoneyVi(period.summary?.monthlyTotal)} · Bằng chữ: ${numberToVietnameseWords(period.summary?.monthlyTotal || 0)}${hasAnnual ? `\nKhoản cuối năm (C44 · chi trả T12): ${formatMoneyVi(period.summary?.annualTotal)}\nGhi chú: C44 không tính vào tổng tháng; dòng “—” = chưa có %.` : '\nGhi chú: Dòng “—” = chưa có %.'}`;
-      pdfTable(doc, columns, period.rows || [], { titleContext, noteAfter: titleNote });
+      const subtotalNote = report.allEmployees && period.employeeSubtotals?.length
+        ? `\nTổng phụ: ${period.employeeSubtotals.map((item) => `${item.employeeCode} ${formatMoneyVi(item.monthlyTotal)} (${item.rowCount} dòng)`).join(' · ')}`
+        : '';
+      const titleNote = `Tổng chi phí tháng: ${formatMoneyVi(period.summary?.monthlyTotal)} · Bằng chữ: ${numberToVietnameseWords(period.summary?.monthlyTotal || 0)}${subtotalNote}${hasAnnual ? `\nKhoản cuối năm (C44 · chi trả T12): ${formatMoneyVi(period.summary?.annualTotal)}\nGhi chú: C44 không tính vào tổng tháng; dòng “—” = chưa có %.` : '\nGhi chú: Dòng “—” = chưa có %.'}`;
+      const pdfRows = (period.rows || []).map((row, index) => ({ ...row, stt: numberOrNull(row.stt) || index + 1 }));
+      pdfTable(doc, columns, pdfRows, { titleContext, noteAfter: titleNote });
     }
     if (!section) { pdfHeader(doc, { title: COST_TITLE, period: formatPeriod('', ''), employee: '—', exportedAt }); doc.font('VN').fontSize(10).text('Chưa có dữ liệu.'); }
     return doc;
