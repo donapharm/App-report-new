@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (giao bot) — SỬA "Tất cả NV" trống + thêm lọc Vùng/Tỉnh · Nhóm mã ĐV · Tuyến
+- **CEO báo "Tất cả nhân viên" hiện 0/0 (trống).** Chẩn đoán: bảng hiện **"Mẫu FULL-TIME 0/0"** thay vì template **"TẤT CẢ NHÂN VIÊN"** → **BE chưa nạp nhánh `emp=ALL`** (FE #139 lên nhưng BE chưa deploy/restart — lệch phiên bản, giống vụ 404). Bot: xác minh version (`curl ?emp=ALL` phải trả `template.label:"TẤT CẢ NHÂN VIÊN"`, rows>0) → deploy/restart BE #139; nếu vẫn trống → debug `employeeCostAllPayload`/`mergeEmployeeReports` + thêm test all-NV rows>0.
+- **CEO thêm 3 ô lọc:** Vùng/Tỉnh (từ nguồn đơn vị, không suy đoán từ tên), Nhóm mã đơn vị (cấu hình được), Tuyến (cột sẵn có). Kết hợp nhau + tìm kiếm + kỳ; STT đánh lại; export phản ánh; dropdown động. Self-scope + C32/C47 giữ. Directive `DIRECTIVE_EMP_COST_ALLFIX_FILTERS.md`.
+
 ### 2026-07-22 — Claude Code (review PASS + giao deploy đợt 2) — #139 bảng UX `a3b4fd6`
 - **Review `a3b4fd6`: PASS.** "Tất cả NV" **khóa 3 lớp** (view/all-payload/export đều 403 `EMPLOYEE_COST_ALL_FORBIDDEN` cho NV; NV ép own qua resolveScopedEmployee). Tìm kiếm **bỏ dấu chuẩn** (`normalizeVietnamese`: NFD + xóa dấu + đ→d, đa từ khóa, BLOCKED C32/C47 không lọt). STT + sort ổn định; cột chi phí regex c33–c46 (chặn C32/C47); phân trang; tổng phụ theo NV; sticky; cột % hẹp; export phản ánh lọc/tìm/sort/STT. Server 243/243, web 37/37, build PASS.
 - UI/UX thuần, **không đổi số/tiền**, rủi ro thấp. Directive `DIRECTIVE_EMP_COST_139_DEPLOY.md` (deploy đợt 2). Sau đó: DQ center đợt 1 (#141) + DataHub điền %/alias.
