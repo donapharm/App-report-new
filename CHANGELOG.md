@@ -1,3 +1,8 @@
+### 2026-07-22 — Claude Code (review #144 `0156c5d`) — filters PASS, SỬA Vùng/Tỉnh đoán-từ-tên
+- **Review #144: all-fix "Tất cả NV" + lọc Nhóm mã ĐV (config) + Tuyến = PASS.** Scope an toàn (filter trên rows đã khóa quyền; C32/C47 loại khỏi search/facet). Server 253/253, web 38/38, build PASS.
+- **⚠ Vùng/Tỉnh (`province.js`) đoán theo tên + viết tắt — trái directive, gán sai được** (`dn`→Đồng Nai nhưng ĐN cũng là Đà Nẵng; `tan phu` trùng Q.Tân Phú TP.HCM; nhãn `source:official` sai provenance). Không ảnh hưởng tiền (chỉ chiều lọc) nhưng lọc địa bàn lệch. **Sửa:** bỏ ABBR; tỉnh chỉ từ nguồn chính thức (`row.province`/`unit_province.json`), không có → "Chưa gán tỉnh"; giữ đoán-tên phải gắn cờ "tạm đoán" + source đúng. Khuyến nghị điền `unit_province.json`. Directive `DIRECTIVE_EMP_COST_PROVINCE_FIX.md`.
+- **#145** (pager pill/dayview) CHƯA implement — làm tiếp.
+
 ### 2026-07-22 — Claude Code (giao bot) — Phân trang pill 20 dòng + pager lên đầu + xem theo ngày
 - Ghi nhận: "Tất cả NV" **đã chạy** (restart BE #139 — 1.550 dòng, coverage 96,5%, tổng 2,39 tỷ); lọc Nhóm mã ĐV + Tuyến đã có.
 - CEO thêm 3 UX: (1) phân trang **20 dòng/trang**, nút **bo tròn (pill)** + số trang bấm được; (2) **pager lên đầu bảng** (sticky, đồng bộ trên/dưới); (3) **chọn ngày** xem doanh thu theo ngày — **hoạt động cả chế độ Tất cả NV** (lọc rows theo ngày ở backend, kết hợp nhóm mã/tuyến/tìm kiếm/phân trang). Gợi ý: chọn cỡ trang 20/50/100. STT/đếm/export phản ánh; không đổi số; self-scope + C32/C47 giữ. Directive `DIRECTIVE_EMP_COST_PAGER_DAYVIEW.md`. Chưa deploy.
