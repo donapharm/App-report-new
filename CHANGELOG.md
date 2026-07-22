@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (giao bot) — Phân trang pill 20 dòng + pager lên đầu + xem theo ngày
+- Ghi nhận: "Tất cả NV" **đã chạy** (restart BE #139 — 1.550 dòng, coverage 96,5%, tổng 2,39 tỷ); lọc Nhóm mã ĐV + Tuyến đã có.
+- CEO thêm 3 UX: (1) phân trang **20 dòng/trang**, nút **bo tròn (pill)** + số trang bấm được; (2) **pager lên đầu bảng** (sticky, đồng bộ trên/dưới); (3) **chọn ngày** xem doanh thu theo ngày — **hoạt động cả chế độ Tất cả NV** (lọc rows theo ngày ở backend, kết hợp nhóm mã/tuyến/tìm kiếm/phân trang). Gợi ý: chọn cỡ trang 20/50/100. STT/đếm/export phản ánh; không đổi số; self-scope + C32/C47 giữ. Directive `DIRECTIVE_EMP_COST_PAGER_DAYVIEW.md`. Chưa deploy.
+
 ### 2026-07-22 — Report Bot (review) — Sửa ALL live + bộ lọc chi phí liên hoàn
 - Đã đồng bộ/restart backend #139 với frontend đang chạy. Nghiệm thu HTTPS bằng phiên CEO: `emp=ALL&from=2026-07&to=2026-07` trả `template.label="TẤT CẢ NHÂN VIÊN"`, đủ **21 NV / 1.550 dòng** (trang đầu 100 dòng); phiên DN001 gửi `emp=ALL` nhận `403 EMPLOYEE_COST_ALL_FORBIDDEN`.
 - Thêm lọc backend **Vùng/Tỉnh · Nhóm mã đơn vị · Tuyến** cho cả self và ALL. Ba facet kết hợp với kỳ/search/sort, dropdown động theo đúng tập đã scope và các facet còn lại; giá trị query không có trong tập scope không được phản chiếu thành option. STT, X/Y, tổng, tổng phụ, phân trang và Excel/PDF dùng cùng một pipeline backend.
