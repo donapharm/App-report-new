@@ -1,3 +1,9 @@
+### 2026-07-22 — Report Bot (deploy + nghiệm thu production) — gói UI chi phí `c565ba6`
+- Đã merge release candidate `a5ef765` vào `main` theo Plan A, build và deploy đồng bộ FE/BE; App Report chạy version `c565ba6-20260722-173400-024`, PM2 `app-report` online PID `747857`, restart `76`. Backup trước deploy: `backups/employee-cost-ui-deploy-20260722_173653/`.
+- Gate release: server **224/224 PASS**, web **30/30 PASS**, production build PASS; health local và `report.donapharm.asia` đều OK.
+- Nghiệm thu DN001 T07/2026: coverage **171/184 = 92,9%**; doanh thu chưa VAT **2.278.049.356,19đ**; C36 **714.667đ** + C41 **7.687.500đ** + C43 **25.470.960đ** + C45 **7.271.429đ** = tổng tháng **41.144.556đ**; C44 riêng cuối năm **1.210.470đ**. Mẫu khóa: C43 **1.513.920đ** × C44 **5%** = **75.696đ**.
+- UI/permission PASS: KPI động đủ Doanh thu chưa VAT + 5 cột; C44 nổi bật/badge cuối năm; nhãn `Số dòng đơn hàng` và `mã (đơn vị×mặt hàng)`; panel quyền mặc định gập; self-scope giữ nguyên; payload không lộ C32/C47. C44 tiếp tục bị loại khỏi tổng tháng.
+
 ### 2026-07-22 — Claude Code (review PASS + giao deploy) — gói UI chi phí `a5ef765`
 - **Review PASS toàn bộ 4 việc** trên nhánh `review/employee-cost-c44-derived-20260722` `a5ef765`:
   1. **C44** = tiền_C43 × %C44 (cột phái sinh cấu hình `c44:c43`, validate vòng lặp) — C44 tháng 1.210.470đ.
