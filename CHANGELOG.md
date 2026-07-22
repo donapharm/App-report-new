@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (giao bot) — SỬA GẤP C44: gốc = tiền cột C43, không phải doanh thu
+- **CEO phát hiện lỗi tiền nghiêm trọng (đang LIVE):** C44 tính `revenueBeforeVat × %C44` → gốc doanh thu → phình (35.157.098đ). **Đúng:** `C44 = tiền_C43 × %C44` (tiền_C43 = revenueBeforeVat × %C43). Dòng mẫu: 1.513.920 × 5% = **75.696đ** (không phải 630.800đ).
+- Directive `DIRECTIVE_EMP_COST_C44_FIX.md`: cột "cuối năm" thành **cột phái sinh cấu hình được** (`c44←c43`, không hardcode); base = tiền cột gốc; sửa cả khối residual/làm tròn; C44 vẫn loại khỏi tháng/làm mờ/tách dòng cuối năm. **Tổng THÁNG (41.144.556đ) KHÔNG đổi** (C44 vốn ngoài tháng) — chỉ "Khoản cuối năm" giảm mạnh. Chưa deploy, chờ Claude review.
+
 ### 2026-07-22 — Claude Code (nghiệm thu) — production chi phí VAT-trước `050b9c2`: PASS
 - **Kiểm tra độc lập trên main: PASS.** Code đã deploy = đúng code đã review (`buildCostLookup` khóa `unit␟product` dòng 536 + consumer 577; `loadConfig` try/catch → `{}`). Không bị đổi giữa review và deploy.
 - **Số khớp tay:** VAT-trước `380.000÷1,05×0,5%=1.810đ` (xác nhận gốc trước-VAT); DN001 171/184=92,9% → **tổng tháng trước VAT 41.144.556đ** (thấp hơn bản có-VAT cũ 42.834.991đ, đúng hướng); **C44 tách 35.157.098đ** không cộng tháng.
