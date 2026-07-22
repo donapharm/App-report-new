@@ -1,3 +1,7 @@
+### 2026-07-22 — Claude Code (review PASS + giao deploy) — bảng UX trọn gói `d0c6b56`
+- **Review `d0c6b56`: PASS.** Vùng/Tỉnh (#146): **bỏ hẳn đoán tên/viết tắt**, chỉ `row.province`/config, thiếu → "Chưa gán tỉnh", source trung thực. #145: pager **pill 20 dòng/trang** + cỡ trang 20/50/100 + **pager trên & dưới (sticky)** + **chọn ngày** (filter `date` validate ISO, chạy cả Tất cả NV). Day + các filter áp trên rows đã khóa quyền (self-scope); C32/C47 loại. Server 255/255, web 39/39, build PASS.
+- Nhánh gom trọn #139 + search + #144 + #146 + #145, UI thuần (không đổi tiền). Directive `DIRECTIVE_EMP_COST_TABLEUX_DEPLOY.md`. Sau deploy: điền `unit_province.json`; DQ center #141; DataHub %/alias.
+
 ### 2026-07-22 — Claude Code (review #144 `0156c5d`) — filters PASS, SỬA Vùng/Tỉnh đoán-từ-tên
 - **Review #144: all-fix "Tất cả NV" + lọc Nhóm mã ĐV (config) + Tuyến = PASS.** Scope an toàn (filter trên rows đã khóa quyền; C32/C47 loại khỏi search/facet). Server 253/253, web 38/38, build PASS.
 - **⚠ Vùng/Tỉnh (`province.js`) đoán theo tên + viết tắt — trái directive, gán sai được** (`dn`→Đồng Nai nhưng ĐN cũng là Đà Nẵng; `tan phu` trùng Q.Tân Phú TP.HCM; nhãn `source:official` sai provenance). Không ảnh hưởng tiền (chỉ chiều lọc) nhưng lọc địa bàn lệch. **Sửa:** bỏ ABBR; tỉnh chỉ từ nguồn chính thức (`row.province`/`unit_province.json`), không có → "Chưa gán tỉnh"; giữ đoán-tên phải gắn cờ "tạm đoán" + source đúng. Khuyến nghị điền `unit_province.json`. Directive `DIRECTIVE_EMP_COST_PROVINCE_FIX.md`.
