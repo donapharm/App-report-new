@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import {
   buildEmployeeCostColumns, currentMonthValue, employeeCostColumnKpis, employeeCostViewModel,
   formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
@@ -17,6 +18,14 @@ test('dynamic columns follow approved order, keep bid price before quantity, and
     'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25',
     'bidPrice', 'quantity', 'revenueBeforeVat', 'c36', 'c43', 'rowMonthlyTotal', 'note',
   ]);
+});
+
+test('KPI and period metadata distinguish order lines from unique unit-product keys', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /label="Số dòng đơn hàng"/);
+  assert.match(page, /mã \(đơn vị×mặt hàng\) · ngưỡng/);
+  assert.match(page, /mã đơn vị×mặt hàng\)/);
+  assert.doesNotMatch(page, /matchedRows}\/\$\{[^}]*totalRows} dòng/);
 });
 
 test('full-time and part-time template metadata produce exactly 19 and 15 columns', () => {
