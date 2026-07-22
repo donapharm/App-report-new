@@ -1,3 +1,8 @@
+### 2026-07-22 — Report Bot — Harden trang quản trị chi phí theo directive #126
+- `employeeCostRoster.loadConfig()` nay fail-soft về `{}` khi file nhóm thiếu/hỏng/path sai, chỉ ghi cảnh báo phía server; picker vẫn dựng đủ NV với nhóm mặc định thay vì làm trang sập.
+- Hai GET `/employee-cost/employees` và `/employee-cost/visibility` được bọc handler bắt lỗi, trả JSON `{error}` cụ thể khi có lỗi thật.
+- Thêm regression cho config thiếu file, roster mặc định và lỗi giả ở cả hai GET. Chỉ cập nhật nhánh review, **không deploy/restart production**.
+
 ### 2026-07-22 — Report Bot — Vá regression lookup chi phí theo directive #125
 - Quay khóa timeline từ `mã hàng` về đúng `(đơn vị + mã hàng)`; xung đột tỷ lệ chỉ làm fail-closed khóa đơn vị–mã hàng đó, không loại toàn bộ mã hàng ở các đơn vị khác.
 - Độ phủ tiếp tục tính trên số khóa `(đơn vị + mã hàng)` duy nhất trong doanh thu, còn bảng chi tiết vẫn giữ grain order-line. Live-read T07 DN001 phục hồi đúng **170/183 = 92,9%** (209/222 order-line có tỷ lệ), tổng được phép hiển thị.

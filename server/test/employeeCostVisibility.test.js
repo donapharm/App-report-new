@@ -160,3 +160,31 @@ test('visibility routes are admin guarded and all upstream work is enclosed by t
   }
   assert.match(route, /const admin = auth\.isAdmin[\s\S]*?employeeCostVisibility\.run\(\{[\s\S]*?admin,/);
 });
+
+test('employee-cost admin GET routes return a specific JSON error when roster building fails', async () => {
+  const router = require('../src/routes');
+  const rosterService = require('../src/employeeCostRoster');
+  const originalBuildRoster = rosterService.buildRoster;
+  rosterService.buildRoster = () => { throw new Error('forced roster failure'); };
+  try {
+    for (const path of ['/employee-cost/employees', '/employee-cost/visibility']) {
+      const layer = router.stack.find((candidate) => candidate.route?.path === path && candidate.route?.methods?.get);
+      assert.ok(layer, `missing GET ${path}`);
+      const handler = layer.route.stack.at(-1).handle;
+      const response = {
+        headersSent: false,
+        statusCode: 200,
+        set() { return this; },
+        status(code) { this.statusCode = code; return this; },
+        json(body) { this.body = body; this.headersSent = true; return this; },
+      };
+      let nextCalled = false;
+      await handler({ session: { emp_code: 'CEO', role: 'ceo' } }, response, () => { nextCalled = true; });
+      assert.equal(nextCalled, false);
+      assert.equal(response.statusCode, 500);
+      assert.deepEqual(response.body, { error: 'forced roster failure', code: undefined });
+    }
+  } finally {
+    rosterService.buildRoster = originalBuildRoster;
+  }
+});

@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
+const os = require('node:os');
 const rosterService = require('../src/employeeCostRoster');
 
 const SALES_ROSTER = [
@@ -29,4 +31,27 @@ test('group config rejects one employee assigned to multiple groups', () => {
       { key: 'ctv_special', label: 'CTV đặc biệt', employees: ['DN002'] },
     ],
   }), { code: 'EMPLOYEE_COST_GROUP_CONFLICT' });
+});
+
+test('missing group config falls back to default roster instead of throwing', () => {
+  const missingPath = path.join(os.tmpdir(), `employee-cost-groups-missing-${process.pid}-${Date.now()}.json`);
+  const warnings = [];
+  const originalWarn = console.warn;
+  console.warn = (...args) => warnings.push(args);
+  try {
+    const config = rosterService.loadConfig(missingPath);
+    assert.deepEqual(config, {});
+    const rows = rosterService.buildRoster([
+      { emp_code: 'DN001', name: 'NV 1' },
+      { emp_code: 'DN021', name: 'NV 21' },
+    ], config);
+    assert.deepEqual(rows.map((row) => ({ emp: row.emp_code, group: row.group_key })), [
+      { emp: 'DN001', group: 'sale' },
+      { emp: 'DN021', group: 'sale' },
+    ]);
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0][0], /group config unavailable/);
 });

@@ -564,16 +564,16 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
   return res.json(payload);
 }));
 
-router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, (req, res) => {
+router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   const employees = employeeCostRosterRows();
   res.set('Cache-Control', 'private, no-store');
-  res.json({ employees });
-});
+  return res.json({ employees });
+}));
 
-router.get('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, (req, res) => {
+router.get('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
-  res.json(employeeCostVisibility.panel(employeeCostRosterRows()));
-});
+  return res.json(employeeCostVisibility.panel(employeeCostRosterRows()));
+}));
 
 router.post('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   const panel = employeeCostVisibility.save(req.body, {
