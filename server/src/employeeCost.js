@@ -531,19 +531,22 @@ function buildCostLookup(costRows, columns, catalogIndex) {
   const candidates = new Map();
   for (const source of Array.isArray(costRows) ? costRows : []) {
     const product = resolveProductCode(source, catalogIndex);
-    if (!product) continue;
-    const rows = candidates.get(product) || [];
+    const unit = unitCodeOf(source);
+    if (!unit || !product) continue;
+    const key = `${unit}\u001f${product}`;
+    const rows = candidates.get(key) || [];
     rows.push(source);
-    candidates.set(product, rows);
+    candidates.set(key, rows);
   }
   const lookup = new Map();
-  for (const [product, rows] of candidates) {
+  for (const [key, rows] of candidates) {
     const signatures = new Set(rows.map((row) => percentageSignature(row, columns)).filter(Boolean));
-    // Repeated rows are safe only when all published percentages are identical.
-    // The lookup is product+month, never unit+product.
+    // Fail closed only for an ambiguous unit+product timeline. Percentages may
+    // legitimately differ between units, so one conflict must never suppress
+    // every revenue line for the same product in other units.
     if (signatures.size === 1 && rows.every((row) => percentageSignature(row, columns))) {
       const notes = new Set(rows.map((row) => safeText(row?.[NOTE_KEY])).filter(Boolean));
-      lookup.set(product, { ...rows[0], [NOTE_KEY]: notes.size === 1 ? [...notes][0] : null });
+      lookup.set(key, { ...rows[0], [NOTE_KEY]: notes.size === 1 ? [...notes][0] : null });
     }
   }
   return lookup;
@@ -565,15 +568,17 @@ function enrichWithRevenue(payload, options = {}) {
   const catalogIndex = buildProductCatalogIndex(options.catalogRows);
   const revenueLines = buildRevenueLines(options.revenueRows, payload.empCode, options.period);
   const costLookup = buildCostLookup(payload.rows, columns, catalogIndex);
-  let matchedRows = 0;
+  const revenueKeys = new Set(revenueLines.map((line) => `${line.unit}\u001f${line.product}`));
+  const matchedKeys = new Set();
   let dailyRowsReliable = true;
   const allDates = new Set();
 
   const rows = revenueLines.map((line) => {
-    const source = costLookup.get(line.product) || null;
+    const lookupKey = `${line.unit}\u001f${line.product}`;
+    const source = costLookup.get(lookupKey) || null;
     const matched = !!source && columns.length > 0
       && columns.every((column) => source[column.key] != null && source[column.key] !== '' && Number.isFinite(Number(source[column.key])));
-    if (matched) matchedRows += 1;
+    if (matched) matchedKeys.add(lookupKey);
     const amounts = {};
     const dailyAmounts = {};
     const percentages = {};
@@ -649,7 +654,11 @@ function enrichWithRevenue(payload, options = {}) {
   const monthlyMatchedTotal = rows.reduce((sum, row) => sum + (row.rowMonthlyTotal || 0), 0);
   const annualMatchedTotal = rows.reduce((sum, row) => sum + (row.rowAnnualTotal || 0), 0);
 
-  const totalRows = rows.length;
+  // Match quality is measured on unique unit+product keys, while the rendered
+  // detail remains at order-line grain. This prevents repeated order lines
+  // from distorting the fail-closed 90% coverage threshold.
+  const matchedRows = matchedKeys.size;
+  const totalRows = revenueKeys.size;
   const hasGroundedRows = totalRows > 0 && columns.length > 0;
   const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
   const low = rate != null && rate < threshold;

@@ -1,3 +1,9 @@
+### 2026-07-22 — Report Bot — Vá regression lookup chi phí theo directive #125
+- Quay khóa timeline từ `mã hàng` về đúng `(đơn vị + mã hàng)`; xung đột tỷ lệ chỉ làm fail-closed khóa đơn vị–mã hàng đó, không loại toàn bộ mã hàng ở các đơn vị khác.
+- Độ phủ tiếp tục tính trên số khóa `(đơn vị + mã hàng)` duy nhất trong doanh thu, còn bảng chi tiết vẫn giữ grain order-line. Live-read T07 DN001 phục hồi đúng **170/183 = 92,9%** (209/222 order-line có tỷ lệ), tổng được phép hiển thị.
+- DN021 hiện **0/3** do DataHub trả mã chi phí `G1.GE.QĐ48.549.N4.549` trong khi doanh thu là `G1.GE.QĐ139.2963.N4.549`; giữ fail-closed, không tự ánh xạ/bịa mã. C48 vẫn chưa có và hiển thị `—` theo directive.
+- Thêm regression test khóa `(đơn vị + mã hàng)`, cô lập duplicate xung đột và coverage unique-key; chỉ push nhánh review, **chưa deploy/restart production**.
+
 ### 2026-07-22 — Report Bot — Hoàn thiện 2 mẫu “Chi phí của tôi” trên nhánh review
 - Thêm cấu hình độc lập `server/config/employee_cost_templates.json`: nhóm **tính chi phí** part-time chỉ gồm `DN021/DN022/DN023` và dùng C36; còn lại full-time dùng C36/C41/C43/C44/C45. Cấu hình mẫu hiển thị tách khỏi cấu hình nhóm tính và không dùng `employee_cost_groups.json`.
 - Backend giữ grain order-line/self-scope/C32-C47/công tắc, bổ sung Tuyến · tên Nhà thầu · Hàm lượng · Giá trúng thầu · doanh thu trước VAT · C48; đổi phép tính sang `doanh thu / VAT_DIVISOR × %`, vẫn tách C44 và ẩn tổng khi độ phủ dưới 90%.

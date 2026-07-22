@@ -351,8 +351,7 @@ test('Cerecaps T06 DN001 keeps two order-lines instead of aggregating unit-produ
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001',
     columns: fullColumns({ c36: 'CP tháng', c44: 'Cuối năm' }),
-    // Timeline lookup is product+month. Repeated per-unit rows may exist but
-    // must carry the same percentages for the product in that month.
+    // Timeline lookup is unit+product+month while detail remains order-line.
     rows: [
       fullRow({ c5: product, c7: '171', c16: 'Cerecaps', c36: 8, c44: 1 }),
       fullRow({ c5: product, c7: '038', c16: 'Cerecaps', c36: 8, c44: 1 }),
@@ -395,8 +394,8 @@ test('one order with multiple products renders one row per source line', () => {
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001', columns: fullColumns({ c36: 'CP tháng' }),
     rows: [
-      fullRow({ c5: 'QL1', c16: 'Thuốc A', c36: 10 }),
-      fullRow({ c5: 'QL2', c16: 'Thuốc B', c36: 5 }),
+      fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc A', c36: 10 }),
+      fullRow({ c5: 'QL2', c7: 'U1', c16: 'Thuốc B', c36: 5 }),
     ],
   }, 'DN001');
   const enriched = employeeCost.enrichWithRevenue(payload, {
@@ -495,28 +494,54 @@ test('daily allocation reconciles VND rounding residual to the monthly amount', 
   assert.equal(enriched.daily.reliable, true);
 });
 
-test('duplicate timeline rows are deduplicated only when product-month percentages agree', () => {
-  const makePayload = (secondRate) => employeeCost.sanitizePayload({
+test('timeline lookup uses unit+product and isolates conflicting duplicates to that exact key', () => {
+  const makePayload = (duplicateU1Rate = null) => employeeCost.sanitizePayload({
     empCode: 'DN001', columns: fullColumns({ c36: 'CP tháng' }),
     rows: [
       fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c25: 'Viên', c36: 10 }),
-      fullRow({ c5: 'QL1', c7: 'U2', c16: 'Thuốc', c25: 'Hộp', c36: secondRate }),
+      fullRow({ c5: 'QL1', c7: 'U2', c16: 'Thuốc', c25: 'Hộp', c36: 12 }),
+      ...(duplicateU1Rate == null ? [] : [fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c25: 'Viên', c36: duplicateU1Rate })]),
     ],
   }, 'DN001');
   const options = {
     period: '2026-07', catalogRows: [
       { c5: 'QL1', c7: 'U1', c16: 'Thuốc' }, { c5: 'QL1', c7: 'U2', c16: 'Thuốc' },
     ],
-    revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000 }],
+    revenueRows: [
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_000_000 },
+      { emp_code: 'DN001', unit_code: 'U2', iit_code: 'QL1', revenue: 1_000_000 },
+    ],
   };
-  const agreed = employeeCost.enrichWithRevenue(makePayload(10), options);
-  assert.equal(agreed.rows[0].amounts.c36, 95_238);
-  assert.equal(agreed.match.rate, 100);
+  const isolated = employeeCost.enrichWithRevenue(makePayload(), options);
+  assert.deepEqual(isolated.rows.map((row) => row.amounts.c36), [95_238, 114_286]);
+  assert.deepEqual(isolated.rows.map((row) => row.c36), [10, 12]);
+  assert.equal(isolated.match.rate, 100);
 
-  const conflicting = employeeCost.enrichWithRevenue(makePayload(12), options);
-  assert.equal(conflicting.rows[0].amounts.c36, null);
-  assert.equal(conflicting.match.rate, 0);
+  const conflicting = employeeCost.enrichWithRevenue(makePayload(11), options);
+  assert.deepEqual(conflicting.rows.map((row) => row.amounts.c36), [null, 114_286]);
+  assert.equal(conflicting.match.matchedRows, 1);
+  assert.equal(conflicting.match.totalRows, 2);
+  assert.equal(conflicting.match.rate, 50);
   assert.equal(conflicting.summary.monthlyTotal, null);
+});
+
+test('coverage counts unique unit+product keys while preserving repeated order-line rows', () => {
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: fullColumns({ c36: 'CP tháng' }),
+    rows: [fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10 })],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+    revenueRows: [
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', source_order: 'DH1', source_line_id: 'L1', revenue: 1_000_000 },
+      { emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', source_order: 'DH2', source_line_id: 'L2', revenue: 2_000_000 },
+    ],
+  });
+  assert.equal(enriched.rows.length, 2);
+  assert.deepEqual(enriched.rows.map((row) => row.orderCode), ['DH1', 'DH2']);
+  assert.equal(enriched.match.matchedRows, 1);
+  assert.equal(enriched.match.totalRows, 1);
+  assert.equal(enriched.match.rate, 100);
 });
 
 test('template config keeps calculation groups separate and resolves exact full-time/part-time layouts', () => {
@@ -538,7 +563,7 @@ test('template config keeps calculation groups separate and resolves exact full-
 test('missing required full-time percentage stays null and suppresses totals through coverage', () => {
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001', columns: fullColumns(),
-    rows: [{ c5: 'QL1', c36: 10, c41: null, c43: 3, c44: 4, c45: 5 }],
+    rows: [{ c5: 'QL1', c7: 'U1', c36: 10, c41: null, c43: 3, c44: 4, c45: 5 }],
   }, 'DN001');
   const enriched = employeeCost.enrichWithRevenue(payload, {
     period: '2026-07', catalogRows: [{ c5: 'QL1', c16: 'Thuốc' }],
@@ -554,7 +579,7 @@ test('part-time employees receive only C36 even when DataHub publishes full-time
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN021',
     columns: ['c36', 'c41', 'c43', 'c44', 'c45'].map((key) => ({ key, label: key })),
-    rows: [{ c5: 'QL1', c36: 10, c41: 2, c43: 3, c44: 4, c45: 5 }],
+    rows: [{ c5: 'QL1', c7: 'U1', c36: 10, c41: 2, c43: 3, c44: 4, c45: 5 }],
   }, 'DN021');
   const enriched = employeeCost.enrichWithRevenue(payload, {
     period: '2026-07',
@@ -571,7 +596,7 @@ test('employee-cost exposes approved sale fields, calculates before VAT and safe
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001',
     columns: ['c36', 'c41', 'c43', 'c44', 'c45', 'c47'].map((key) => ({ key, label: key })),
-    rows: [{ c5: 'QL1', c36: 10, c41: 2, c43: 3, c44: 4, c45: 5, c47: 99, c48: '  Ghi\u0000 chú từ Data Hub  ', privateNote: 'drop' }],
+    rows: [{ c5: 'QL1', c7: 'U1', c36: 10, c41: 2, c43: 3, c44: 4, c45: 5, c47: 99, c48: '  Ghi\u0000 chú từ Data Hub  ', privateNote: 'drop' }],
   }, 'DN001');
   const enriched = employeeCost.enrichWithRevenue(payload, {
     period: '2026-07',

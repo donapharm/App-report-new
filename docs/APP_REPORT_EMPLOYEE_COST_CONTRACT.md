@@ -68,8 +68,9 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
    bằng cả `x-assignment-key` và `x-employee-cost-key`.
 2. Chọn mẫu bằng `employee_cost_templates.json`, tách biệt hoàn toàn với nhóm công tắc hiển thị.
 3. Dùng C48 duy nhất làm ghi chú; tiếp tục loại mọi field không thuộc hợp đồng.
-4. Ghép tỷ lệ theo mã hàng × tháng vào từng order-line doanh thu self-scoped; tính tiền trên doanh thu **trước VAT** (`revenue / VAT_DIVISOR × tỷ lệ / 100`), tách C44 khỏi tổng tháng.
-5. Xử lý 401 (sai key) / 502 (thử lại) / 400 (thiếu emp).
+4. Ghép tỷ lệ theo **đơn vị × mã hàng × tháng** vào từng order-line doanh thu self-scoped. Nếu nhiều dòng timeline cùng `(đơn vị, mã hàng, tháng)` có tỷ lệ xung đột thì chỉ khóa đó fail-closed thành `—`; không làm mất các đơn vị khác có cùng mã hàng. Tính tiền trên doanh thu **trước VAT** (`revenue / VAT_DIVISOR × tỷ lệ / 100`), tách C44 khỏi tổng tháng.
+5. Tính coverage trên số khóa `(đơn vị, mã hàng)` doanh thu duy nhất trong kỳ; bảng chi tiết vẫn giữ grain order-line và ngưỡng dưới 90% vẫn ẩn tổng.
+6. Xử lý 401 (sai key) / 502 (thử lại) / 400 (thiếu emp).
 
 ---
-*Phía Data Hub: đã hoàn tất + kiểm thử bảo mật (C32/C47 không bao giờ lọt; chỉ trả cột allowlist của đúng nhân viên).*
+*Phía Data Hub: C32/C47 tiếp tục khóa cứng; C48 hiện chưa có trong payload nên App Report hiển thị `—` và chờ Data Hub bổ sung theo task riêng.*
