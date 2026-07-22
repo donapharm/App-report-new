@@ -1,3 +1,8 @@
+### 2026-07-22 — Claude Code (nghiệm thu) — Deploy B (#137 gap tool + #138 export VN): PASS
+- **Kiểm tra độc lập trên main: PASS.** `a539e5a` merge code đã review (`50e0c62`); `employeeCostGaps.js` + `employeeCostExport.js` + routes gaps/export có trên main. **#139 KHÔNG lẫn vào** (không cột STT / "Tất cả NV" / search bỏ dấu — chỉ có nhãn "Số dòng đơn hàng" của #134 đã live từ trước). Code khớp bản review PASS (self-scope 2 lớp export, gaps không lộ %, gợi ý mã không tự map, VN accounting + A4 landscape + font fail-closed).
+- Bot nghiệm thu production PASS (không dẫn số mới trong report này). Chi phí cũ không đổi. *(Claude tự động server lỗi 401 — verdict do phiên Claude này cấp.)*
+- **#139** (bảng UX) Report Bot đang làm trên **nhánh riêng** — deploy đợt 2. DataHub: điền %/alias song song → coverage 100%.
+
 ### 2026-07-22 — Report Bot — DEPLOY B + nghiệm thu production #137 gap tool / #138 export VN
 - Đã merge đúng bản Claude PASS `50e0c62` vào `main` bằng release merge **`a539e5a`**; không đưa implementation #139 vào đợt này. Gate trước deploy: server **238/238 PASS**, web **34/34 PASS**, production build PASS, `git diff --check` sạch.
 - Đã build/deploy frontend và restart đồng bộ `app-report` + `app-report-tgbot`; health HTTPS **200**. Main sau đó nhận thêm commit docs-only `7bf76fd` (#141), không thay đổi code release #137/#138.
