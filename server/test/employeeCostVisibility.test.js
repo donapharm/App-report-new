@@ -147,18 +147,19 @@ test('visibility routes are admin guarded and all upstream work is enclosed by t
   assert.match(routes, /router\.post\('\/employee-cost\/visibility', auth\.requireAuth, auth\.requireAdmin/);
   assert.match(routes, /router\.get\('\/me'[\s\S]*?employeeCostDisabled/);
 
-  const start = routes.indexOf("router.get('/employee-cost',");
-  const end = routes.indexOf("router.get('/employee-cost/employees'", start);
+  const start = routes.indexOf('async function employeeCostPayload(');
+  const end = routes.indexOf("router.get('/employee-cost',", start);
   const route = routes.slice(start, end);
   const gate = route.indexOf('employeeCostVisibility.run({');
   assert.ok(gate > 0, 'route must use the tested OFF short-circuit runner');
-  const runnerEnd = route.indexOf("\n  });\n  res.set('Cache-Control'", gate);
+  const runnerEnd = route.indexOf('\n  });\n}', gate);
   assert.ok(runnerEnd > gate, 'runner callback must close before response');
   for (const guardedCall of ['employeeCost.parseMonthRange', 'store.getRows', 'canonicalAssignmentSnapshot', 'employeeCost.getForSession']) {
     const index = route.indexOf(guardedCall);
     assert.ok(index > gate && index < runnerEnd, `${guardedCall} must stay inside the guarded callback`);
   }
   assert.match(route, /const admin = auth\.isAdmin[\s\S]*?employeeCostVisibility\.run\(\{[\s\S]*?admin,/);
+  assert.match(routes, /router\.get\('\/employee-cost'[\s\S]*?employeeCostPayload\(req\)/);
 });
 
 test('employee-cost admin GET routes return a specific JSON error when roster building fails', async () => {

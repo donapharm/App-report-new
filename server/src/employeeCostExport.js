@@ -331,8 +331,11 @@ function pdfFooter(doc) {
   const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   for (let index = range.start; index < range.start + range.count; index += 1) {
     doc.switchToPage(index);
-    doc.font('VN').fontSize(5.8).fillColor('#758692').text(SOURCE_FOOTER, doc.page.margins.left, doc.page.height - 23, { width: width * 0.75, lineBreak: false });
-    doc.text(`Trang ${index + 1}/${range.count}`, doc.page.margins.left + width * 0.75, doc.page.height - 23, { width: width * 0.25, align: 'right', lineBreak: false });
+    // Keep the baseline inside PDFKit's printable bottom boundary. Writing even
+    // one point below it makes PDFKit silently append blank pages for footers.
+    const footerY = doc.page.height - doc.page.margins.bottom - 8;
+    doc.font('VN').fontSize(5.8).fillColor('#758692').text(SOURCE_FOOTER, doc.page.margins.left, footerY, { width: width * 0.75, lineBreak: false });
+    doc.text(`Trang ${index + 1}/${range.count}`, doc.page.margins.left + width * 0.75, footerY, { width: width * 0.25, align: 'right', lineBreak: false });
   }
 }
 
@@ -355,7 +358,7 @@ function pdfTable(doc, columns, rows, { titleContext, noteAfter } = {}) {
       doc.font(columns[index].bold ? 'VN-Bold' : 'VN').fontSize(3.9);
       return doc.heightOfString(text, { width: widths[index] - 4, lineGap: 0 }) + 7;
     })));
-    if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 6) {
+    if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 18) {
       doc.addPage(); pdfHeader(doc, titleContext); drawHeader();
     }
     const y = doc.y; if (rowIndex % 2) doc.rect(left, y, width, rowHeight).fill('#F3F7FA');
@@ -364,7 +367,7 @@ function pdfTable(doc, columns, rows, { titleContext, noteAfter } = {}) {
     doc.y = y + rowHeight;
   });
   if (noteAfter) {
-    if (doc.y + 36 > doc.page.height - doc.page.margins.bottom) { doc.addPage(); pdfHeader(doc, titleContext); }
+    if (doc.y + 36 > doc.page.height - doc.page.margins.bottom - 18) { doc.addPage(); pdfHeader(doc, titleContext); }
     doc.moveDown(0.5);
     doc.font('VN').fontSize(6).fillColor('#5B6470').text(noteAfter, left, doc.y, { width, align: 'left' });
   }

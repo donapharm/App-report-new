@@ -115,6 +115,7 @@ function inspectPdf(buffer, name) {
 test('cost PDF is A4 landscape with embedded Unicode font, Vietnamese text, totals, and page footer', async () => {
   const result = inspectPdf(await exportService.costPdfBuffer([costReport()], { now: new Date('2026-07-22T10:00:00Z') }), 'cost');
   assert.match(result.info, /Page size:\s+841\.89 x 595\.28 pts \(A4\)/);
+  assert.match(result.info, /Pages:\s+1\b/);
   assert.match(result.fonts, /NotoSans|DejaVuSans|LiberationSans/);
   assert.match(result.fonts, /yes\s+yes/);
   assert.match(result.text, /BÁO CÁO CHI PHÍ CỦA TÔI/);
@@ -130,12 +131,15 @@ test('cost PDF is A4 landscape with embedded Unicode font, Vietnamese text, tota
 test('gap PDF is A4 landscape, Unicode, and includes blank-worklist labels and mapping', async () => {
   const result = inspectPdf(await exportService.gapPdfBuffer(gapPayload(), { now: new Date('2026-07-22T10:00:00Z') }), 'gaps');
   assert.match(result.info, /Page size:\s+841\.89 x 595\.28 pts \(A4\)/);
+  assert.match(result.info, /Pages:\s+2\b/);
   assert.match(result.fonts, /NotoSans|DejaVuSans|LiberationSans/);
   assert.match(result.text, /DANH SÁCH MẶT HÀNG CHƯA CÓ % CHI PHÍ/);
   assert.match(result.text, /% cần điền/);
   assert.match(result.text, /G1\.GE\.QĐ139\.2963\.N4\.549/);
   assert.match(result.text, /G1\.GE\.QĐ48\.549\.N4\.549/);
   assert.match(result.text, /ÁNH XẠ LỆCH MÃ QĐ\/QLNB/);
+  assert.match(result.text, /Trang 1\/2/);
+  assert.match(result.text, /Trang 2\/2/);
 });
 
 test('export routes are authenticated, self-scope through employeeCostPayload, and expose both formats', () => {
