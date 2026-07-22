@@ -10,6 +10,13 @@
 - Excel có đúng 2 sheet `Theo mã QLNB` và `Ánh xạ lệch mã`; cột `% cần điền`/`Xác nhận` để trống. Gợi ý mã chỉ read-only, không tự ánh xạ/không ghi DataHub; payload không chứa tỷ lệ, tiền chi phí, C32/C47.
 - Nghiệm thu live DN001 T07: **171/184 = 92,9%**, đúng **13 cặp gap**. Ứng viên cùng đơn vị+tên hàng: `QĐ1572.1699.N4.754 → QĐ1572.1699.N4.754.A`, `G1.GE.QĐ139.3004.N4.1029 → G1.GE.QĐ139.3269.N5.1029`, `G1.GE.QĐ139.2120.N4.578 → G1.GE.QĐ139.2114.N4.578`; chỉ gợi ý để DataHub xác nhận. Toàn roster còn phát hiện ca khác số quyết định `G1.GE.QĐ139.2963.N4.549 → G1.GE.QĐ48.549.N4.549`.
 - Gate tại nhánh review: server/web test + build PASS; chưa deploy.
+### 2026-07-22 — Claude Code (giao bot) — Bảng chi phí: STT + xem tất cả NV + cột % hẹp + tìm kiếm thông minh
+- CEO yêu cầu 4 UX bảng "Chi phí của tôi". Directive `DIRECTIVE_EMP_COST_TABLE_UX.md`:
+  1. **Cột STT** đầu bảng, tự nhảy theo dòng hiển thị (lọc/tìm → đánh lại), có trong Excel/PDF.
+  2. **"Tất cả nhân viên"** (CEO/ADMIN only, backend khóa) — thêm cột NV + tổng phụ theo NV; NV thường chỉ của mình. Phân trang/virtualize.
+  3. **Thu hẹp cột %** (rộng cố định vừa số, tiêu đề mã ngắn C36 + tooltip đầy đủ).
+  4. **Ô tìm kiếm thông minh** toàn bảng — **bỏ dấu + không phân biệt hoa/thường** (tiện cho tiếng Việt), live + đếm X/Y + highlight, kết hợp lọc NV/kỳ.
+- Ý thêm: sticky header/cột, sort cột, chip trạng thái lọc, export phản ánh lọc/tìm/sort/STT. Self-scope + C32/C47 giữ. Làm cùng nhánh review gap tool + export. Chưa deploy.
 
 ### 2026-07-22 — Claude Code (giao bot) — Export chuẩn VN (Excel+PDF, A4 ngang) + NV tự xuất
 - CEO chốt: **NV được tự xuất** phần mình; **chuẩn số kế toán VN** (nghìn dấu chấm, thập phân dấu phẩy, đơn vị đồng, "Bằng chữ" cho tổng); **mẫu A4 quay ngang**; **2 định dạng Excel + PDF**. Directive `DIRECTIVE_EMP_COST_EXPORT_VN.md`.
