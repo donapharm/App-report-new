@@ -143,6 +143,37 @@ test('gap Excel has two A4 landscape sheets and blank fill/confirmation columns'
   assert.equal(mapping.getCell('C8').value, '');
 });
 
+test('province worklist Excel is Vietnamese A4 landscape, numeric, sorted input, and leaves province blank', async () => {
+  const payload = {
+    from: '2026-07', to: '2026-07', rowCount: 2, revenueAffected: 103588300,
+    rows: [
+      { unitCode: '175.BVĐK VŨNG TÀU', unitName: 'BVĐK Vũng Tàu', routes: ['ETC', 'NCL'], employeeCount: 2, revenueAffected: 91975200, provinceToFill: '' },
+      { unitCode: '135.HTNT-FPT LONG CHÂU', unitName: 'HTNT-FPT Long Châu', routes: ['NCL'], employeeCount: 1, revenueAffected: 11613100, provinceToFill: '' },
+    ],
+  };
+  const buffer = await exportService.provinceWorklistWorkbookBuffer(payload, { now: new Date('2026-07-22T10:00:00Z') });
+  const workbook = new ExcelJS.Workbook(); await workbook.xlsx.load(buffer);
+  assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), ['Đơn vị chưa gán tỉnh']);
+  const sheet = workbook.worksheets[0];
+  assert.equal(sheet.getCell('B2').value, exportService.PROVINCE_WORKLIST_TITLE);
+  assert.equal(sheet.getCell('A5').value, exportService.PROVINCE_WORKLIST_NOTE);
+  assert.deepEqual(sheet.getRow(7).values.slice(1), ['Mã đơn vị', 'Tên đơn vị', 'Tuyến', '#NV liên quan', 'Doanh thu ảnh hưởng', 'Tỉnh cần điền']);
+  assert.equal(sheet.getCell('A8').value, '175.BVĐK VŨNG TÀU');
+  assert.equal(sheet.getCell('C8').value, 'ETC; NCL');
+  assert.equal(sheet.getCell('D8').value, 2);
+  assert.equal(sheet.getCell('E8').value, 91975200);
+  assert.equal(sheet.getCell('E8').numFmt, exportService.ACCOUNTING_INTEGER);
+  assert.equal(sheet.getCell('F8').value, '');
+  assert.equal(sheet.getCell('E10').value.formula, 'SUM(E8:E9)');
+  assert.equal(sheet.getCell('E10').value.result, 103588300);
+  assert.equal(sheet.pageSetup.paperSize, 9);
+  assert.equal(sheet.pageSetup.orientation, 'landscape');
+  assert.equal(sheet.pageSetup.fitToWidth, 1);
+  assert.equal(sheet.pageSetup.printTitlesRow, '7:7');
+  assert.match(sheet.headerFooter.oddFooter, /Trang &P\/&N/);
+  assert.doesNotMatch(JSON.stringify(sheet.getRow(7).values), /C32|C47|%/i);
+});
+
 function inspectPdf(buffer, name) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'employee-cost-pdf-'));
   const file = path.join(dir, `${name}.pdf`); fs.writeFileSync(file, buffer);
@@ -193,4 +224,7 @@ test('export routes are authenticated, self-scope through employeeCostPayload, a
   assert.match(routes, /province: req\.query\.province/);
   assert.match(routes, /unitGroup: req\.query\.unitGroup/);
   assert.match(routes, /route: req\.query\.route/);
+  assert.match(routes, /router\.get\('\/employee-cost\/province-worklist\/export\.xlsx', auth\.requireAuth, auth\.requireAdmin/);
+  assert.match(routes, /province_worklist_export_xlsx/);
+  assert.match(routes, /Cache-Control', 'private, no-store'/);
 });

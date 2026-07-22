@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { api, downloadEmployeeCostGaps, downloadEmployeeCostReport } from '../api.js';
+import { api, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
   currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostViewModel,
@@ -402,6 +402,7 @@ export default function EmployeeCost({ me }) {
   const [gapError, setGapError] = useState('');
   const [costExporting, setCostExporting] = useState('');
   const [costExportError, setCostExportError] = useState('');
+  const [provinceWorklistExporting, setProvinceWorklistExporting] = useState(false);
   const [tableQuery, setTableQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [tableSort, setTableSort] = useState({ key: '', dir: 'asc' });
@@ -527,6 +528,12 @@ export default function EmployeeCost({ me }) {
     catch (requestError) { setCostExportError(requestError.message || 'Không xuất được báo cáo chi phí'); }
     finally { setCostExporting(''); }
   };
+  const exportProvinceWorklist = async () => {
+    setProvinceWorklistExporting(true); setCostExportError('');
+    try { await downloadEmployeeCostProvinceWorklist(range); }
+    catch (requestError) { setCostExportError(requestError.message || 'Không xuất được danh sách đơn vị chưa gán tỉnh'); }
+    finally { setProvinceWorklistExporting(false); }
+  };
   const changeEmployee = (value) => {
     setSelectedEmp(value); setTablePage(1); setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '', date: '' });
   };
@@ -597,6 +604,7 @@ export default function EmployeeCost({ me }) {
         {view === 'cost' && <div className="employee-cost-export-actions">
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('xlsx')}>{costExporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('pdf')}>{costExporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
+          {admin && <button type="button" className="btn secondary" disabled={loading || provinceWorklistExporting} onClick={exportProvinceWorklist}>{provinceWorklistExporting ? 'Đang xuất ĐV…' : 'Xuất ĐV chưa gán tỉnh'}</button>}
         </div>}
         {rangeInvalid && <small role="alert">Từ tháng không được sau Đến tháng.</small>}
       </form>

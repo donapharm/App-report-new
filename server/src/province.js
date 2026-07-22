@@ -11,10 +11,19 @@
 const fs = require('fs');
 const path = require('path');
 
-const MAP_FILE = path.join(__dirname, '..', 'config', 'unit_province.json');
+const MAP_FILE = process.env.UNIT_PROVINCE_MAP_FILE || path.join(__dirname, '..', 'config', 'unit_province.json');
 let _map = null;
 let _mtime = -1;
 const _cache = new Map();
+
+function provinceMapVersion() {
+  try {
+    const stat = fs.statSync(MAP_FILE);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return 'missing';
+  }
+}
 
 function loadMap() {
   try {
@@ -50,4 +59,4 @@ function provinceOf(unitCode, unitName, rowProvince) {
   return provinceResolution(unitCode, unitName, rowProvince).value;
 }
 
-module.exports = { provinceOf, provinceResolution };
+module.exports = { provinceOf, provinceResolution, provinceMapVersion };

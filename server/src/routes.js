@@ -25,6 +25,7 @@ const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
 const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostExport = require('./employeeCostExport');
+const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
@@ -691,6 +692,52 @@ async function sendEmployeeCostExport(req, res, format) {
 
 router.get('/employee-cost/export.xlsx', auth.requireAuth, asyncJsonRoute((req, res) => sendEmployeeCostExport(req, res, 'xlsx')));
 router.get('/employee-cost/export.pdf', auth.requireAuth, asyncJsonRoute((req, res) => sendEmployeeCostExport(req, res, 'pdf')));
+
+function auditProvinceWorklist(req, range, payload, outcome) {
+  try {
+    employeeCostProvinceWorklist.writeAudit({
+      event: 'province_worklist_export_xlsx',
+      actor: req.session.emp_code,
+      role: req.session.role,
+      from: range?.from,
+      to: range?.to,
+      unitCount: payload?.rowCount,
+      revenueAffected: payload?.revenueAffected,
+      outcome,
+    });
+  } catch (error) {
+    console.warn('[employee-cost] province worklist audit failed', { actor: req.session.emp_code, message: error.message });
+  }
+}
+
+// Worklist địa lý chỉ dành CEO/admin và luôn gom toàn roster ở backend. Route
+// không nhận emp, không gọi DataHub tỷ lệ, không đưa C32/C47 vào payload/file.
+router.get('/employee-cost/province-worklist/export.xlsx', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  let range;
+  let payload;
+  try {
+    range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+    const roster = employeeCostRosterRows();
+    const revenueRows = range.months.flatMap((period) => store.getRows({
+      ky: employeeCost.toUiMonth(period),
+      scope: {},
+    }));
+    payload = employeeCostProvinceWorklist.buildProvinceWorklist(revenueRows, {
+      roster,
+      from: range.from,
+      to: range.to,
+    });
+    const buffer = await employeeCostExport.provinceWorklistWorkbookBuffer(payload);
+    auditProvinceWorklist(req, range, payload, 'ok');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="employee-cost-province-worklist_${range.from}_${range.to}.xlsx"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.send(buffer);
+  } catch (error) {
+    auditProvinceWorklist(req, range, payload, error?.code || 'export_failed');
+    throw error;
+  }
+}));
 
 async function employeeCostGapPayload(req, event = 'gaps_view') {
   const s = auth.scopeOf(req.session);

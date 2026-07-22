@@ -10,6 +10,9 @@ const SOURCE_FOOTER = 'Nguồn số: DataHub (SSOT) · chỉ hiển thị chi ph
 const COST_TITLE = 'BÁO CÁO CHI PHÍ CỦA TÔI';
 const GAP_TITLE = 'DANH SÁCH MẶT HÀNG CHƯA CÓ % CHI PHÍ';
 const GAP_NOTE = "Điền cột '% cần điền' hoặc xác nhận ánh xạ, rồi gửi DataHub cập nhật catalog. Xếp theo doanh thu ảnh hưởng: làm từ trên xuống để khớp nhanh nhất.";
+const PROVINCE_WORKLIST_TITLE = 'DANH SÁCH ĐƠN VỊ CHƯA GÁN TỈNH';
+const PROVINCE_WORKLIST_NOTE = "Điền cột 'Tỉnh cần điền' → nhập vào server/config/unit_province.json (mã→tỉnh) → App Report tự áp.";
+const PROVINCE_WORKLIST_FOOTER = 'Nguồn số: App Report · worklist Vùng/Tỉnh dành riêng CEO/ADMIN';
 const LOGO_PATH = path.join(__dirname, '..', '..', 'web', 'public', 'logo-dnpharma.png');
 const FONT_REGULAR_CANDIDATES = [
   '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf',
@@ -349,6 +352,73 @@ async function gapWorkbookBuffer(payload, options = {}) {
   return Buffer.from(await createGapWorkbook(payload, options).xlsx.writeBuffer());
 }
 
+function createProvinceWorklistWorkbook(payload = {}, options = {}) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'App Report';
+  workbook.created = options.now || new Date();
+  const exportedAt = bangkokNow(options.now).display;
+  const columns = [
+    ['unitCode', 'Mã đơn vị', 'text', 18],
+    ['unitName', 'Tên đơn vị', 'text', 44],
+    ['routes', 'Tuyến', 'text', 18],
+    ['employeeCount', '#NV liên quan', 'number', 14],
+    ['revenueAffected', 'Doanh thu ảnh hưởng', 'money', 22],
+    ['provinceToFill', 'Tỉnh cần điền', 'text', 24],
+  ];
+  const sheet = workbook.addWorksheet('Đơn vị chưa gán tỉnh');
+  const tableRow = 7;
+  excelHeader(sheet, {
+    title: PROVINCE_WORKLIST_TITLE,
+    period: formatPeriod(payload.from, payload.to),
+    employee: 'CEO/ADMIN · Toàn roster',
+    exportedAt,
+    columnCount: columns.length,
+    note: PROVINCE_WORKLIST_NOTE,
+  });
+  sheet.getRow(tableRow).values = columns.map((column) => column[1]);
+  styleTableHeader(sheet.getRow(tableRow));
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  for (const source of rows) {
+    const row = sheet.addRow([
+      safeText(source.unitCode, 120),
+      safeText(source.unitName, 300),
+      (Array.isArray(source.routes) ? source.routes : []).map((route) => safeText(route, 120)).filter(Boolean).join('; '),
+      numberOrNull(source.employeeCount),
+      numberOrNull(source.revenueAffected),
+      '',
+    ]);
+    row.height = 23;
+    row.eachCell((cell, columnIndex) => {
+      const kind = columns[columnIndex - 1][2];
+      cell.alignment = { vertical: 'top', horizontal: ['number', 'money'].includes(kind) ? 'right' : 'left', wrapText: kind === 'text' };
+      cell.border = { bottom: { style: 'hair', color: { argb: 'FFD6E0E7' } } };
+      if (kind === 'money') cell.numFmt = ACCOUNTING_INTEGER;
+      else if (kind === 'number') cell.numFmt = '#,##0;(#,##0);-';
+    });
+  }
+  const firstDataRow = tableRow + 1;
+  const lastDataRow = firstDataRow + rows.length - 1;
+  const total = sheet.addRow([
+    `TỔNG CỘNG (${rows.length.toLocaleString('vi-VN')} đơn vị)`, '', '', '',
+    rows.length ? { formula: `SUM(E${firstDataRow}:E${lastDataRow})`, result: Number(payload.revenueAffected || 0) } : Number(payload.revenueAffected || 0),
+    '',
+  ]);
+  sheet.mergeCells(total.number, 1, total.number, 4);
+  total.font = { bold: true, color: { argb: 'FF075D9B' } };
+  total.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF4FB' } };
+  total.getCell(5).numFmt = ACCOUNTING_INTEGER;
+  total.getCell(5).alignment = { horizontal: 'right' };
+  columns.forEach((column, index) => { sheet.getColumn(index + 1).width = column[3]; });
+  sheet.autoFilter = { from: `A${tableRow}`, to: `F${tableRow}` };
+  configurePrint(sheet, tableRow);
+  sheet.headerFooter.oddFooter = `&L${PROVINCE_WORKLIST_FOOTER}&RTrang &P/&N`;
+  return workbook;
+}
+
+async function provinceWorklistWorkbookBuffer(payload, options = {}) {
+  return Buffer.from(await createProvinceWorklistWorkbook(payload, options).xlsx.writeBuffer());
+}
+
 function createPdfDocument(title) {
   const fonts = pickUnicodeFonts();
   const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margins: { top: 30, bottom: 35, left: 24, right: 24 }, bufferPages: true, info: { Title: title, Author: 'App Report' } });
@@ -495,6 +565,9 @@ module.exports = {
   COST_TITLE,
   GAP_TITLE,
   GAP_NOTE,
+  PROVINCE_WORKLIST_TITLE,
+  PROVINCE_WORKLIST_NOTE,
+  PROVINCE_WORKLIST_FOOTER,
   ACCOUNTING_INTEGER,
   ACCOUNTING_DECIMAL,
   bangkokNow,
@@ -510,6 +583,8 @@ module.exports = {
   costWorkbookBuffer,
   createGapWorkbook,
   gapWorkbookBuffer,
+  createProvinceWorklistWorkbook,
+  provinceWorklistWorkbookBuffer,
   costPdfBuffer,
   gapPdfBuffer,
 };

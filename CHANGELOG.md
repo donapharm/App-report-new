@@ -1,3 +1,10 @@
+### 2026-07-22 — Report Bot (review, chưa deploy) — #148 worklist đơn vị chưa gán tỉnh
+- Thêm endpoint CEO/admin-only `GET /api/employee-cost/province-worklist/export.xlsx?from=YYYY-MM&to=YYYY-MM` và nút **Xuất ĐV chưa gán tỉnh**. Backend luôn gom toàn roster, không nhận `emp`, không gọi DataHub tỷ lệ; audit metadata-only riêng và response `private, no-store`.
+- Excel chỉ có 6 cột **Mã đơn vị · Tên đơn vị · Tuyến · #NV liên quan · Doanh thu ảnh hưởng · Tỉnh cần điền**; đơn vị duy nhất, tuyến/NV distinct, xếp doanh thu giảm dần, cột tỉnh để trống. Số thật/định dạng kế toán VN, A4 ngang, fit-to-width, lặp/freeze header, footer trang; không chứa %/chi phí/C32/C47.
+- T07/2026 trên dữ liệu thật: **1.550 dòng / 21 NV → 2 đơn vị chưa gán tỉnh / 103.588.300đ**: `175.BVĐK VŨNG TÀU` **91.975.200đ** và `135.HTNT-FPT LONG CHÂU` **11.613.100đ**. File QA: `/tmp/employee-cost-province-worklist-2026-07.xlsx`.
+- Sửa cache metadata tỉnh: `unit_province.json` có version/mtime trong cache revenue/CST; config CEO duyệt ưu tiên trước catalog fallback. Điền map sẽ tự áp mà không giữ dữ liệu enrich cũ; catalog/name inference vẫn không được dùng cho Employee Cost, xung đột vẫn fail closed. Không đổi công thức/tổng tiền.
+- Gate nhánh review: server **261/261 PASS**, web **39/39 PASS**, production build/syntax/`git diff --check` PASS; chỉ warning chunk-size cũ. Chưa deploy, chờ Claude review.
+
 ### 2026-07-22 — Claude Code (nghiệm thu) — bảng UX production `3e29784`: PASS (worklist #148 CHƯA kèm)
 - **Kiểm tra độc lập trên main: PASS.** Code khớp bản review `d0c6b56` (pageSize 20, filter `date`, Vùng/Tỉnh chỉ nguồn chính thức). **Số không đổi:** DN001 41.144.556đ / C44 1.210.470đ / 92,9%; ALL 2.391.033.447đ / C44 95.133.877đ. Self-scope chắc (NV emp=ALL→403; ép DN016→DN001); C32/C47 không lộ (API/PDF/XLSX). Pager pill 20 dòng trên/dưới; lọc kết hợp + tìm bỏ dấu + ngày + "Chưa gán tỉnh"=7 chạy đúng.
 - **⚠ Worklist #148 ("Đơn vị chưa gán tỉnh") CHƯA có trên production** — grep main không có endpoint xuất; test vẫn 255/39 (y hệt d0c6b56). Bot deploy bảng UX mà bỏ qua worklist. **Còn treo:** bot làm nốt worklist để CEO điền `unit_province.json`.

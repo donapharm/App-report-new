@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const ords = require('./ords');
 const targetAdmin = require('./targetAdmin');
-const { provinceResolution } = require('./province');
+const { provinceResolution, provinceMapVersion } = require('./province');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
@@ -48,9 +48,10 @@ function normalizeEmpForReport(r = {}) {
 }
 
 // ----- Cache phần dữ liệu MẪU + danh mục (nặng, ít đổi) -----
-let _base = null;
+let _base = null, _baseProvinceVersion = '';
 function base() {
-  if (_base) return _base;
+  const currentProvinceVersion = provinceMapVersion();
+  if (_base && _baseProvinceVersion === currentProvinceVersion) return _base;
   const catalog = readJson('catalog.json', { units: [], products: [], periods: [], latest_ky: null });
   const c14Catalog = readJson('product_c14_groups.json', { rows: [] });
   const users = readJson('users.json', []);
@@ -62,19 +63,19 @@ function base() {
     const rr = normalizeEmpForReport(r);
     const unit_name = rr.unit_name || unitByCode[rr.unit_code]?.unit_name;
     const existingProvinceSource = String(rr.province_source || '').trim().toLowerCase();
-    const sourceProvince = ['inferred', 'guessed_from_name'].includes(existingProvinceSource)
+    const sourceProvince = ['inferred', 'guessed_from_name', 'catalog'].includes(existingProvinceSource)
       ? ''
       : (rr.province || rr.PROVINCE || rr.tinh || rr.TINH || '');
     const catalogProvince = unitByCode[rr.unit_code]?.province || '';
-    const fallbackProvince = (!sourceProvince && !catalogProvince)
-      ? provinceResolution(rr.unit_code, unit_name, '')
-      : { value: '', source: '' };
-    const province = sourceProvince || catalogProvince || fallbackProvince.value;
+    // Config do CEO/admin duyệt phải thắng catalog. Catalog chỉ là fallback
+    // cho các màn không nhạy cảm; Employee Cost sẽ loại provenance catalog.
+    const configuredProvince = !sourceProvince ? provinceResolution(rr.unit_code, unit_name, '') : { value: '', source: '' };
+    const province = sourceProvince || configuredProvince.value || catalogProvince;
     // Giữ provenance để các màn hình nhạy cảm có thể dùng tỉnh chính thức từ
     // dòng bán/danh mục và loại bỏ hoàn toàn kết quả suy tên.
     const province_source = sourceProvince
       ? (rr.province_source || 'source')
-      : (catalogProvince ? 'catalog' : fallbackProvince.source);
+      : (configuredProvince.value ? configuredProvince.source : (catalogProvince ? 'catalog' : ''));
     return {
       ...rr,
       unit_name,
@@ -93,6 +94,7 @@ function base() {
     targets: readJson('targets.json', []),
     unitByCode, prodByCode, empByCode, c14ByIit, c14Catalog, enrich,
   };
+  _baseProvinceVersion = currentProvinceVersion;
   return _base;
 }
 
@@ -258,7 +260,7 @@ function allRows() {
   const b = base();
   const slots = activeSlots();
   if (!slots.length) return b.sampleRows;
-  const sig = slotsSig(slots);
+  const sig = `${provinceMapVersion()}|${slotsSig(slots)}`;
   if (_allRows && _allRowsSig === sig) return _allRows;
   const slotKys = new Set(slots.map((s) => s.ky));
   const fromSlots = slots.flatMap(slotRows);
@@ -455,7 +457,7 @@ function getRowsRange({ kys, scope }) {
 let _cstAll = null, _cstSig = '';
 function getCstAll() {
   let cstMt = 0; try { cstMt = fs.statSync(path.join(DATA_DIR, 'cst_real.json')).mtimeMs; } catch { cstMt = 0; }
-  const sig = `${cstMt}#${_base ? 1 : 0}|` + slotsSig(activeSlots());
+  const sig = `${cstMt}#${_base ? 1 : 0}|${provinceMapVersion()}|` + slotsSig(activeSlots());
   if (_cstAll && _cstSig === sig) return _cstAll;
   let rows = readJson('cst_real.json', null) || base().cst;
   rows = mergeLatestUploadIntoCst(rows);
@@ -464,11 +466,14 @@ function getCstAll() {
     const code = String(r.emp_code || '').trim().toUpperCase();
     // Gắn tỉnh/thành + nhóm hàng C14 (giống dòng doanh thu) để lọc dùng chung được.
     const source = String(r.province_source || '').trim().toLowerCase();
-    const sourceProvince = ['inferred', 'guessed_from_name'].includes(source) ? '' : r.province;
-    const province = sourceProvince || unitByCode[r.unit_code]?.province || provinceResolution(r.unit_code, r.unit_name, '').value;
+    const sourceProvince = ['inferred', 'guessed_from_name', 'catalog'].includes(source) ? '' : r.province;
+    const configuredProvince = !sourceProvince ? provinceResolution(r.unit_code, r.unit_name, '') : { value: '', source: '' };
+    const catalogProvince = unitByCode[r.unit_code]?.province || '';
+    const province = sourceProvince || configuredProvince.value || catalogProvince;
+    const provinceSource = sourceProvince ? (r.province_source || 'source') : (configuredProvince.value ? configuredProvince.source : (catalogProvince ? 'catalog' : ''));
     const c14 = r.c14 || r.C14 || r.indication_group || c14ByIit[String(r.iit_code || '').trim().toUpperCase()] || null;
-    if (!code || isValidEmpCode(code)) return province === r.province && c14 === r.c14 ? r : { ...r, province, c14 };
-    return { ...r, province, c14, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };
+    if (!code || isValidEmpCode(code)) return province === r.province && provinceSource === r.province_source && c14 === r.c14 ? r : { ...r, province, province_source: provinceSource, c14 };
+    return { ...r, province, province_source: provinceSource, c14, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };
   });
   _cstAll = rows; _cstSig = sig;
   return rows;
@@ -520,7 +525,7 @@ function getTargetsRange({ kys, scope }) {
 }
 
 // Cho phép xoá cache khi cần (VD sau khi nạp danh mục mới)
-function clearCache() { _base = null; _allRows = null; _allRowsSig = ''; _cstAll = null; _cstSig = ''; }
+function clearCache() { _base = null; _baseProvinceVersion = ''; _allRows = null; _allRowsSig = ''; _cstAll = null; _cstSig = ''; }
 
 module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
