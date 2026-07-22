@@ -5,13 +5,17 @@ import {
   currentMonthValue, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
-  normalizeVisibilityPanel, updateVisibilitySetting, visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel,
+  normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
+  visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel, writeVisibilityCollapsed,
 } from '../employeeCostVisibilityModel.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
 const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
+const browserStorage = () => {
+  try { return globalThis.localStorage; } catch { return null; }
+};
 
 function CostTable({ period, daily = false }) {
   const [tooltip, setTooltip] = useState('');
@@ -112,50 +116,67 @@ function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel =
   </select>;
 }
 
-function VisibilityPanel({ panel, loading, saving, message, error, onChange, onSave }) {
-  return <div className="card employee-cost-visibility">
+function VisibilityPanel({ adminCode, panel, loading, saving, message, error, onChange, onSave }) {
+  const storageKey = visibilityCollapseStorageKey(adminCode);
+  const [collapsed, setCollapsed] = useState(() => readVisibilityCollapsed(browserStorage(), storageKey));
+  useEffect(() => writeVisibilityCollapsed(browserStorage(), storageKey, collapsed), [collapsed, storageKey]);
+  const summary = loading
+    ? 'Đang tải cấu hình…'
+    : panel
+      ? `${panel.employees.length.toLocaleString('vi-VN')} NV · ${panel.groups.length.toLocaleString('vi-VN')} nhóm · Toàn phòng: ${panel.department.effective === 'on' ? 'Bật' : 'Tắt'}`
+      : 'Chưa tải được cấu hình';
+  const bodyId = 'employee-cost-visibility-controls';
+  return <div className={`card employee-cost-visibility${collapsed ? ' is-collapsed' : ''}`}>
     <div className="employee-cost-visibility-head">
       <div>
         <div className="section-head">Quản trị quyền tự xem chi phí</div>
-        <p>Cá nhân ưu tiên hơn nhóm; nhóm ưu tiên hơn toàn phòng. Quyền hiệu lực do backend quyết định.</p>
+        <p>{summary}</p>
       </div>
-      <button type="button" className="btn" disabled={loading || saving || !panel} onClick={onSave}>
-        {saving ? 'Đang lưu…' : 'Lưu công tắc'}
+      <button type="button" className="btn secondary employee-cost-visibility-toggle" aria-expanded={!collapsed} aria-controls={bodyId} onClick={() => setCollapsed((current) => !current)}>
+        {collapsed ? 'Mở quản trị' : 'Thu gọn'}
       </button>
     </div>
-    {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
-    {message && <div className="employee-cost-visibility-success" role="status">{message}</div>}
-    {loading || !panel ? <Spinner /> : <>
-      <div className="employee-cost-visibility-department">
-        <div><b>Toàn phòng Kinh doanh</b><small>Mặc định an toàn là Tắt.</small></div>
-        <VisibilitySelect
-          label="Công tắc toàn phòng Kinh doanh"
-          value={panel.department.setting}
-          allowInherit={false}
-          onChange={(value) => onChange('department', '', value)}
-        />
+    {!collapsed && <div className="employee-cost-visibility-body" id={bodyId}>
+      <div className="employee-cost-visibility-toolbar">
+        <p>Cá nhân ưu tiên hơn nhóm; nhóm ưu tiên hơn toàn phòng. Quyền hiệu lực do backend quyết định.</p>
+        <button type="button" className="btn" disabled={loading || saving || !panel} onClick={onSave}>
+          {saving ? 'Đang lưu…' : 'Lưu công tắc'}
+        </button>
       </div>
-      <div className="employee-cost-visibility-section">
-        <h4>Theo nhóm</h4>
-        <div className="employee-cost-visibility-grid">
-          {panel.groups.map((group) => <div className="employee-cost-visibility-item" key={group.key}>
-            <div><b>{group.label}</b><small>{group.employeeCount.toLocaleString('vi-VN')} nhân viên</small></div>
-            <VisibilitySelect label={`Công tắc nhóm ${group.label}`} inheritLabel="Theo toàn phòng" value={group.setting} onChange={(value) => onChange('groups', group.key, value)} />
-            <span className={`employee-cost-effective ${group.effective}`}>{visibilityEffectiveLabel(group.effective)} · {group.source === 'group' ? 'Chính nhóm' : 'Toàn phòng'}</span>
-          </div>)}
+      {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
+      {message && <div className="employee-cost-visibility-success" role="status">{message}</div>}
+      {loading || !panel ? <Spinner /> : <>
+        <div className="employee-cost-visibility-department">
+          <div><b>Toàn phòng Kinh doanh</b><small>Mặc định an toàn là Tắt.</small></div>
+          <VisibilitySelect
+            label="Công tắc toàn phòng Kinh doanh"
+            value={panel.department.setting}
+            allowInherit={false}
+            onChange={(value) => onChange('department', '', value)}
+          />
         </div>
-      </div>
-      <div className="employee-cost-visibility-section">
-        <h4>Theo cá nhân</h4>
-        <div className="employee-cost-visibility-employees">
-          {panel.employees.map((employee) => <div className="employee-cost-visibility-employee" key={employee.emp_code}>
-            <div><b>{employee.emp_code} · {employee.name}</b><small>{employee.group_label}</small></div>
-            <VisibilitySelect label={`Công tắc nhân viên ${employee.emp_code}`} inheritLabel="Theo nhóm" value={employee.setting} onChange={(value) => onChange('employees', employee.emp_code, value)} />
-            <span className={`employee-cost-effective ${employee.effective}`}>{visibilityEffectiveLabel(employee.effective)} · {visibilitySourceLabel(employee)}</span>
-          </div>)}
+        <div className="employee-cost-visibility-section">
+          <h4>Theo nhóm</h4>
+          <div className="employee-cost-visibility-grid">
+            {panel.groups.map((group) => <div className="employee-cost-visibility-item" key={group.key}>
+              <div><b>{group.label}</b><small>{group.employeeCount.toLocaleString('vi-VN')} nhân viên</small></div>
+              <VisibilitySelect label={`Công tắc nhóm ${group.label}`} inheritLabel="Theo toàn phòng" value={group.setting} onChange={(value) => onChange('groups', group.key, value)} />
+              <span className={`employee-cost-effective ${group.effective}`}>{visibilityEffectiveLabel(group.effective)} · {group.source === 'group' ? 'Chính nhóm' : 'Toàn phòng'}</span>
+            </div>)}
+          </div>
         </div>
-      </div>
-    </>}
+        <div className="employee-cost-visibility-section">
+          <h4>Theo cá nhân</h4>
+          <div className="employee-cost-visibility-employees">
+            {panel.employees.map((employee) => <div className="employee-cost-visibility-employee" key={employee.emp_code}>
+              <div><b>{employee.emp_code} · {employee.name}</b><small>{employee.group_label}</small></div>
+              <VisibilitySelect label={`Công tắc nhân viên ${employee.emp_code}`} inheritLabel="Theo nhóm" value={employee.setting} onChange={(value) => onChange('employees', employee.emp_code, value)} />
+              <span className={`employee-cost-effective ${employee.effective}`}>{visibilityEffectiveLabel(employee.effective)} · {visibilitySourceLabel(employee)}</span>
+            </div>)}
+          </div>
+        </div>
+      </>}
+    </div>}
   </div>;
 }
 
@@ -273,6 +294,7 @@ export default function EmployeeCost({ me }) {
     </div>
 
     {admin && <VisibilityPanel
+      adminCode={me?.emp_code || me?.username || 'admin'}
       panel={visibilityPanel}
       loading={visibilityLoading}
       saving={visibilitySaving}

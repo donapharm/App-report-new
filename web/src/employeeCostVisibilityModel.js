@@ -1,5 +1,6 @@
 const SETTINGS = new Set(['on', 'off', 'inherit']);
 const BINARY = new Set(['on', 'off']);
+const COLLAPSE_STORAGE_PREFIX = 'empCostVisibilityCollapsed';
 
 const cleanSetting = (value, fallback = 'inherit') => SETTINGS.has(value) ? value : fallback;
 
@@ -80,4 +81,26 @@ export function visibilitySourceLabel(item = {}) {
 
 export function visibilityEffectiveLabel(value) {
   return value === 'on' ? 'Đang bật' : 'Đang tắt';
+}
+
+export function visibilityCollapseStorageKey(adminCode) {
+  const identity = String(adminCode || 'admin').trim().toUpperCase() || 'ADMIN';
+  return `${COLLAPSE_STORAGE_PREFIX}:${identity}`;
+}
+
+export function readVisibilityCollapsed(storage, key) {
+  try {
+    const stored = storage?.getItem(key);
+    return stored == null ? true : stored !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function writeVisibilityCollapsed(storage, key, collapsed) {
+  try {
+    storage?.setItem(key, collapsed ? 'true' : 'false');
+  } catch {
+    // localStorage can be unavailable in private/restricted browser contexts.
+  }
 }
