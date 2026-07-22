@@ -1,3 +1,8 @@
+### 2026-07-22 — Claude Code (giao bot) — Công cụ "Mặt hàng thiếu % chi phí" + Export Excel gap
+- CEO muốn xuất **tất cả cặp chưa lấy được %** ra Excel + **mục trong app** để CEO/NV lọc-tìm dễ. Directive `DIRECTIVE_EMP_COST_GAP_TOOL.md`.
+- **Thông minh:** gộp theo **mã QLNB** (1 mã thiếu → ảnh hưởng nhiều đơn vị/NV, điền 1 lần khớp hàng loạt); **xếp theo doanh thu ảnh hưởng**; **phân loại lý do** (lệch mã QĐ → App Report **gợi ý mã catalog gần trùng** để DataHub ánh xạ / thiếu hẳn → nhập % mới); **NV thấy** mục "N mặt hàng chưa có % — chờ bổ sung, không phải lỗi"; **CEO** tab lọc/tìm + **coverage progress**; **Excel worklist** có cột trống "% cần điền".
+- Endpoint `GET /employee-cost/gaps` self-scope (NV của mình / CEO toàn bộ), KHÔNG lộ %, không bịa. App Report phát hiện; **DataHub điền % / chuẩn hóa mã** (task riêng). Chưa deploy.
+
 ### 2026-07-22 — Claude Code (nghiệm thu) — gói UI chi phí production `c565ba6`: PASS
 - **Kiểm tra độc lập trên main: PASS.** Bundle merged (`c565ba6`); code có `columnTotals` + `derivesFrom` + nhãn mới.
 - **Số cộng tay khớp:** C36 714.667 + C41 7.687.500 + C43 25.470.960 + C45 7.271.429 = **41.144.556đ** (= tổng tháng). **C44 cuối năm 1.210.470đ tách riêng** (không cộng tháng). Mẫu C44 = 1.513.920 × 5% = **75.696đ**. Coverage 171/184=92,9%. Doanh thu chưa VAT 2.278.049.356đ.
