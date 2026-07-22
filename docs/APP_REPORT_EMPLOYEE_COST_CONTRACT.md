@@ -85,5 +85,19 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
   sheet `Theo mã QLNB`, `Ánh xạ lệch mã`. Cột `% cần điền` và `Xác nhận` luôn để trống.
 - Cả xem danh sách và xuất Excel đều ghi audit; response/file dùng `private, no-store`.
 
+## 8. Export chuẩn chứng từ Việt Nam
+- Báo cáo chi phí: `GET /api/employee-cost/export.xlsx|pdf`; gap:
+  `GET /api/employee-cost/gaps/export.xlsx|pdf`. NV luôn bị ép về `session.emp_code`,
+  kể cả gửi `?emp=` khác; CEO/admin mới được chọn NV hoặc để trống để xuất toàn roster.
+- Mỗi export gọi lại nguồn backend self-scoped và ghi audit riêng `export_xlsx`/`export_pdf`.
+  File không nhận dữ liệu tính từ frontend, không chứa C32/C47 hoặc service credential.
+- Excel giữ số thật và công thức `SUM`, number format kế toán, ngày `dd/mm/yyyy`; A4
+  landscape, fit-to-width, lặp dòng tiêu đề và footer `Trang &P/&N`.
+- PDF render A4 landscape bằng font Unicode nhúng (Noto/DejaVu/Liberation). Thiếu font
+  thì fail closed thay vì dùng font không đủ tiếng Việt. Số hiển thị theo `vi-VN`:
+  nghìn dấu chấm, thập phân dấu phẩy, số âm trong ngoặc.
+- Báo cáo chi phí luôn tách tổng tháng và khoản C44 cuối năm, có `Bằng chữ: … đồng`;
+  gap giữ cột `% cần điền`/`Xác nhận` trống để DataHub xử lý.
+
 ---
 *Phía Data Hub: C32/C47 tiếp tục khóa cứng; C48 hiện chưa có trong payload nên App Report hiển thị `—` và chờ Data Hub bổ sung theo task riêng.*

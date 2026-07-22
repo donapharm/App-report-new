@@ -2032,6 +2032,8 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-gap-reason.missing { background:#fff0e7; color:#9a4300; }
 .employee-cost-gap-reason.qd_mismatch { background:#eeeafd; color:#5b37a8; }
 .employee-cost-gap-note { margin:0; color:var(--muted); font-size:11px; font-style:italic; }
+.employee-cost-export-actions { display:flex; align-items:center; justify-content:flex-end; gap:7px; flex-wrap:wrap; }
+.employee-cost-filters > .employee-cost-export-actions { align-self:end; }
 @media (max-width: 1100px) {
   .employee-cost-visibility-grid, .employee-cost-visibility-employees { grid-template-columns:1fr; }
   .employee-cost-gap-filters { grid-template-columns:1fr 1fr; }
@@ -2055,4 +2057,6 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-tabs, .employee-cost-gap-title, .employee-cost-gap-coverage-head { align-items:stretch; flex-direction:column; }
   .employee-cost-gap-filters { grid-template-columns:1fr; }
   .employee-cost-gap-title .btn { width:100%; }
+  .employee-cost-export-actions { width:100%; display:grid; grid-template-columns:1fr 1fr; }
+  .employee-cost-export-actions .btn { width:100%; }
 }

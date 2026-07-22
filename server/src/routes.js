@@ -24,6 +24,7 @@ const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
 const employeeCostGaps = require('./employeeCostGaps');
+const employeeCostExport = require('./employeeCostExport');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const targetAdjustment = require('./targetAdjustment');
@@ -511,20 +512,17 @@ router.get('/me', auth.requireAuth, (req, res) => {
   res.json({ ...req.session, isAdmin, employeeCostDisabled: !visibility.enabled });
 });
 
-// Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
-// chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
-router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+async function employeeCostPayload(req, { requestedEmp = req.query.emp, auditEvent = 'view', roster = employeeCostRosterRows() } = {}) {
   const s = auth.scopeOf(req.session);
   const admin = auth.isAdmin(req.session.role);
-  const roster = employeeCostRosterRows();
   const empCode = employeeCost.resolveScopedEmployee({
     session: req.session,
     scope: s,
-    requestedEmp: req.query.emp,
+    requestedEmp,
   });
   // Mọi truy cập kỳ/doanh thu/catalog/DataHub nằm trong callback này. Khi OFF,
   // service trả payload disabled mà không chạy callback; admin được bypass.
-  const payload = await employeeCostVisibility.run({
+  return employeeCostVisibility.run({
     admin,
     actor: req.session.emp_code,
     role: req.session.role,
@@ -553,17 +551,78 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
     return employeeCost.getForSession({
       session: req.session,
       scope: s,
-      requestedEmp: req.query.emp,
+      requestedEmp,
     }, {
       from: range.from,
       to: range.to,
       revenueRowsByPeriod,
       catalogRowsByPeriod,
+      auditEvent,
     });
   });
+}
+
+// Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
+// chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
+router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostPayload(req);
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
 }));
+
+async function mapWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  async function run() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return results;
+}
+
+async function employeeCostExportReports(req, format) {
+  const admin = auth.isAdmin(req.session.role);
+  const roster = employeeCostRosterRows();
+  const requested = String(req.query.emp || '').trim().toUpperCase();
+  if (admin && requested && !roster.some((employee) => employee.emp_code === requested)) {
+    throw Object.assign(new Error('Nhân viên không thuộc roster chi phí được duyệt.'), { status: 400, code: 'EMPLOYEE_COST_EXPORT_EMP_INVALID' });
+  }
+  const targets = admin
+    ? (requested ? [requested] : roster.map((employee) => employee.emp_code))
+    : [String(req.session.emp_code || '').trim().toUpperCase()];
+  return mapWithConcurrency([...new Set(targets.filter(Boolean))], 3, async (targetEmp) => {
+    const payload = await employeeCostPayload(req, {
+      requestedEmp: targetEmp,
+      auditEvent: `export_${format}`,
+      roster,
+    });
+    if (payload.disabled) throw Object.assign(new Error(payload.note || 'Chức năng chi phí đang tắt cho bạn.'), { status: 403, code: 'EMPLOYEE_COST_DISABLED' });
+    const resolvedEmp = String(payload.empCode || targetEmp).trim().toUpperCase();
+    return {
+      ...payload,
+      employeeName: roster.find((employee) => employee.emp_code === resolvedEmp)?.name || resolvedEmp,
+    };
+  });
+}
+
+async function sendEmployeeCostExport(req, res, format) {
+  const reports = await employeeCostExportReports(req, format);
+  const buffer = format === 'pdf'
+    ? await employeeCostExport.costPdfBuffer(reports)
+    : await employeeCostExport.costWorkbookBuffer(reports);
+  const from = String(reports[0]?.from || 'chi-phi').replace(/[^0-9-]/g, '');
+  const to = String(reports[0]?.to || from).replace(/[^0-9-]/g, '');
+  res.setHeader('Content-Type', format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="employee-cost_${from}_${to}.${format === 'pdf' ? 'pdf' : 'xlsx'}"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.send(buffer);
+}
+
+router.get('/employee-cost/export.xlsx', auth.requireAuth, asyncJsonRoute((req, res) => sendEmployeeCostExport(req, res, 'xlsx')));
+router.get('/employee-cost/export.pdf', auth.requireAuth, asyncJsonRoute((req, res) => sendEmployeeCostExport(req, res, 'pdf')));
 
 async function employeeCostGapPayload(req, event = 'gaps_view') {
   const s = auth.scopeOf(req.session);
@@ -615,13 +674,25 @@ router.get('/employee-cost/gaps', auth.requireAuth, asyncJsonRoute(async (req, r
 }));
 
 router.get('/employee-cost/gaps/export.xlsx', auth.requireAuth, asyncJsonRoute(async (req, res) => {
-  const payload = await employeeCostGapPayload(req, 'gaps_export');
+  const payload = await employeeCostGapPayload(req, 'gaps_export_xlsx');
   if (payload.disabled) return res.status(403).json({ error: payload.note || 'Chức năng chi phí đang tắt cho bạn.' });
-  const buffer = await employeeCostGaps.createWorkbook(payload);
+  const buffer = await employeeCostExport.gapWorkbookBuffer(payload);
   const from = String(payload.from || 'gap').replace(/[^0-9-]/g, '');
   const to = String(payload.to || from).replace(/[^0-9-]/g, '');
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="employee-cost-gaps_${from}_${to}.xlsx"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.send(buffer);
+}));
+
+router.get('/employee-cost/gaps/export.pdf', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostGapPayload(req, 'gaps_export_pdf');
+  if (payload.disabled) return res.status(403).json({ error: payload.note || 'Chức năng chi phí đang tắt cho bạn.' });
+  const buffer = await employeeCostExport.gapPdfBuffer(payload);
+  const from = String(payload.from || 'gap').replace(/[^0-9-]/g, '');
+  const to = String(payload.to || from).replace(/[^0-9-]/g, '');
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="employee-cost-gaps_${from}_${to}.pdf"`);
   res.setHeader('Cache-Control', 'private, no-store');
   return res.send(buffer);
 }));

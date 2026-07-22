@@ -218,21 +218,30 @@ function filenameFromDisposition(disposition, fallback) {
   return String(disposition || '').match(/filename="?([^";]+)"?/i)?.[1] || fallback;
 }
 
-export async function downloadEmployeeCostGaps(params = {}) {
-  const url = '/api/employee-cost/gaps/export.xlsx?' + new URLSearchParams(
+async function downloadEmployeeCostFile(path, format, params, fallback) {
+  const extension = format === 'pdf' ? 'pdf' : 'xlsx';
+  const url = `/api/${path}/export.${extension}?` + new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value != null)),
   ).toString();
   const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || 'Không xuất được danh sách thiếu % chi phí');
+    throw new Error(data.error || 'Không xuất được báo cáo chi phí');
   }
   const blob = await res.blob();
   const href = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = href;
-  a.download = filenameFromDisposition(res.headers.get('content-disposition'), 'employee-cost-gaps.xlsx');
+  a.download = filenameFromDisposition(res.headers.get('content-disposition'), `${fallback}.${extension}`);
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
+}
+
+export async function downloadEmployeeCostReport(format = 'xlsx', params = {}) {
+  return downloadEmployeeCostFile('employee-cost', format, params, 'employee-cost');
+}
+
+export async function downloadEmployeeCostGaps(format = 'xlsx', params = {}) {
+  return downloadEmployeeCostFile('employee-cost/gaps', format, params, 'employee-cost-gaps');
 }
 
 export async function downloadDormantReport(format, snapshotId) {

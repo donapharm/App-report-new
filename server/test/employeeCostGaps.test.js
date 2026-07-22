@@ -125,13 +125,13 @@ test('Excel worklist has two sheets, blank fill/confirmation cells, and mismatch
   await workbook.xlsx.load(buffer);
   assert.deepEqual(workbook.worksheets.map((sheet) => sheet.name), ['Theo mã QLNB', 'Ánh xạ lệch mã']);
   const main = workbook.getWorksheet('Theo mã QLNB');
-  assert.equal(main.getCell('I3').value, '% cần điền');
-  assert.equal(main.getCell('I4').value, '');
-  assert.equal(main.getCell('A1').value, gaps.EXPORT_NOTE);
+  assert.equal(main.getCell('I7').value, '% cần điền');
+  assert.equal(main.getCell('I8').value, '');
+  assert.equal(main.getCell('A5').value, gaps.EXPORT_NOTE);
   const mapping = workbook.getWorksheet('Ánh xạ lệch mã');
-  assert.equal(mapping.getCell('A4').value, 'G1.GE.QĐ139.2963.N4.549');
-  assert.equal(mapping.getCell('B4').value, 'G1.GE.QĐ48.549.N4.549');
-  assert.equal(mapping.getCell('C4').value, '');
+  assert.equal(mapping.getCell('A8').value, 'G1.GE.QĐ139.2963.N4.549');
+  assert.equal(mapping.getCell('B8').value, 'G1.GE.QĐ48.549.N4.549');
+  assert.equal(mapping.getCell('C8').value, '');
 });
 
 test('gap and export routes are authenticated and reuse the employee-cost visibility gate', () => {

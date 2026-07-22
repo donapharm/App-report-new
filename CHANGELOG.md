@@ -1,3 +1,9 @@
+### 2026-07-22 — Report Bot (review) — Export chi phí/gap chuẩn VN Excel + PDF
+- Bổ sung 4 endpoint backend có auth/audit: `employee-cost/export.xlsx|pdf` và `employee-cost/gaps/export.xlsx|pdf`. NV luôn bị ép self-scope kể cả truyền `?emp=` khác; CEO/admin được chọn NV hoặc toàn roster. Không xuất C32/C47.
+- Excel: số thật + công thức `SUM`, number format kế toán, ngày `dd/mm/yyyy`, tiêu đề tiếng Việt, A4 ngang, fit-to-width, lặp header, footer trang. Báo cáo chi phí có “Bằng chữ”, tổng tháng và C44 cuối năm tách riêng; gap giữ 2 sheet và cột `% cần điền`/`Xác nhận` trống.
+- PDF: A4 ngang, nhúng Noto/DejaVu/Liberation Unicode fail-closed nếu thiếu font, đầu/chân trang, `Trang x/y`, bảng lặp header, số VN dấu chấm/dấu phẩy và không mất dấu tiếng Việt.
+- UI cho cả NV/CEO có nút Excel + PDF ở báo cáo chi phí và gap. Chưa deploy; chờ Claude review trên cùng nhánh `review/employee-cost-gap-tool-20260722`.
+
 ### 2026-07-22 — Report Bot (review) — Gap chi phí self-scope + worklist Excel
 - Thêm `GET /api/employee-cost/gaps` và `GET /api/employee-cost/gaps/export.xlsx`: NV bị ép self-scope; CEO/admin xem toàn roster hoặc chọn NV; nguồn catalog/tỷ lệ lỗi thì fail closed; truy cập/xuất đều audit và `private, no-store`.
 - UI: NV có panel “Mặt hàng chưa có % chi phí”; CEO/admin có tab gộp theo mã QLNB, tìm/lọc NV/đơn vị/lý do, coverage progress và sắp xếp theo doanh thu ảnh hưởng.

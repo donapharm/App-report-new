@@ -854,10 +854,11 @@ function resolveDataHubBaseUrl(value) {
   return String(value ?? process.env.DATA_HUB_BASE_URL ?? process.env.DATAHUB_BASE ?? '').trim().replace(/\/$/, '');
 }
 
-function writeAudit({ actor, role, empCode, outcome, attempts, match }) {
+function writeAudit({ actor, role, empCode, outcome, attempts, match, event = 'view' }) {
   const rows = persist.load(AUDIT_FILE, []);
   rows.push({
     at: new Date().toISOString(),
+    event: String(event || 'view'),
     actor: normEmp(actor) || 'UNKNOWN',
     role: String(role || '').toLowerCase() || 'unknown',
     empCode: normEmp(empCode),
@@ -884,7 +885,7 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
   const range = options.from != null || options.to != null ? parseMonthRange(options) : null;
   if (!empCode) {
     const result = { payload: range ? emptyRangePayload('', range) : emptyPayload('', DEFAULT_NOTE), outcome: 'missing_emp', attempts: 0 };
-    audit({ actor: session?.emp_code, role: session?.role, empCode, outcome: result.outcome, attempts: result.attempts });
+    audit({ actor: session?.emp_code, role: session?.role, empCode, event: options.auditEvent || 'view', outcome: result.outcome, attempts: result.attempts });
     return result.payload;
   }
   const result = await fetchEmployeeCost(empCode, options);
@@ -900,6 +901,7 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
     actor: session?.emp_code,
     role: session?.role,
     empCode,
+    event: options.auditEvent || 'view',
     outcome: result.outcome,
     attempts: result.attempts,
     match: result.payload.match,

@@ -1,6 +1,5 @@
 'use strict';
 
-const ExcelJS = require('exceljs');
 const employeeCost = require('./employeeCost');
 const persist = require('./persist');
 
@@ -8,7 +7,7 @@ const AUDIT_FILE = 'employee_cost_gap_audit';
 const AUDIT_LIMIT = 1000;
 const REASON_QD_MISMATCH = 'qd_mismatch';
 const REASON_MISSING = 'missing';
-const EXPORT_NOTE = "Điền cột '% cần điền' hoặc xác nhận ánh xạ → gửi DataHub cập nhật catalog. Xếp theo doanh thu ảnh hưởng: làm từ trên xuống để khớp nhanh nhất.";
+const EXPORT_NOTE = "Điền cột '% cần điền' hoặc xác nhận ánh xạ, rồi gửi DataHub cập nhật catalog. Xếp theo doanh thu ảnh hưởng: làm từ trên xuống để khớp nhanh nhất.";
 const COST_CACHE_TTL_MS = 5 * 60 * 1000;
 const costSourceCache = new Map();
 
@@ -339,58 +338,8 @@ async function buildForSession({
   return response;
 }
 
-function styleHeader(row) {
-  row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-  row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF075D9B' } };
-  row.alignment = { vertical: 'middle', wrapText: true };
-}
-
 async function createWorkbook(payload = {}) {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'App Report';
-  workbook.created = new Date();
-  const main = workbook.addWorksheet('Theo mã QLNB');
-  main.mergeCells('A1:I1');
-  main.getCell('A1').value = EXPORT_NOTE;
-  main.getCell('A1').font = { italic: true, color: { argb: 'FF5B6470' } };
-  main.getCell('A1').alignment = { wrapText: true, vertical: 'middle' };
-  main.getRow(1).height = 34;
-  main.addRow([]);
-  main.addRow(['Mã QLNB', 'Tên hàng', 'Đơn vị ảnh hưởng', '# NV', 'Mã NV', 'Doanh thu ảnh hưởng', 'Lý do', 'Mã catalog gợi ý', '% cần điền']);
-  styleHeader(main.getRow(3));
-  for (const item of payload.items || []) main.addRow([
-    item.productCode,
-    item.productName,
-    (item.unitLabels || []).join('; '),
-    item.employeeCount,
-    (item.employeeCodes || []).join('; '),
-    item.revenueAffected,
-    item.reason === REASON_QD_MISMATCH ? 'Lệch mã QĐ/QLNB' : 'Thiếu hẳn',
-    (item.suggestedCatalogCodes || []).join('; '),
-    '',
-  ]);
-  main.columns = [18, 30, 48, 9, 18, 20, 18, 28, 16].map((width) => ({ width }));
-  main.getColumn(6).numFmt = '#,##0';
-  main.views = [{ state: 'frozen', ySplit: 3 }];
-  main.autoFilter = { from: 'A3', to: 'I3' };
-
-  const mapping = workbook.addWorksheet('Ánh xạ lệch mã');
-  mapping.mergeCells('A1:C1');
-  mapping.getCell('A1').value = EXPORT_NOTE;
-  mapping.getCell('A1').font = { italic: true, color: { argb: 'FF5B6470' } };
-  mapping.getCell('A1').alignment = { wrapText: true, vertical: 'middle' };
-  mapping.getRow(1).height = 34;
-  mapping.addRow([]);
-  mapping.addRow(['Mã doanh thu', 'Mã catalog gợi ý', 'Xác nhận']);
-  styleHeader(mapping.getRow(3));
-  for (const item of payload.items || []) {
-    if (item.reason !== REASON_QD_MISMATCH) continue;
-    for (const suggestion of item.suggestedCatalogCodes || []) mapping.addRow([item.productCode, suggestion, '']);
-  }
-  mapping.columns = [{ width: 28 }, { width: 28 }, { width: 18 }];
-  mapping.views = [{ state: 'frozen', ySplit: 3 }];
-  mapping.autoFilter = { from: 'A3', to: 'C3' };
-  return Buffer.from(await workbook.xlsx.writeBuffer());
+  return require('./employeeCostExport').gapWorkbookBuffer(payload);
 }
 
 module.exports = {

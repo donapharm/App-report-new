@@ -54,7 +54,14 @@ test('Employee Cost UI uses secure gap API, admin tab, filters, progress, and au
   assert.match(page, /Gộp theo mã QLNB/);
   assert.match(page, /employeeCostGaps/);
   assert.match(page, /downloadEmployeeCostGaps/);
+  assert.match(page, /downloadEmployeeCostReport/);
+  assert.match(page, /exportCost\('xlsx'\)/);
+  assert.match(page, /exportCost\('pdf'\)/);
+  assert.match(page, /exportFile\('xlsx'\)/);
+  assert.match(page, /exportFile\('pdf'\)/);
   assert.match(page, /role="progressbar"/);
   assert.match(api, /Authorization: 'Bearer ' \+ getToken\(\)/);
   assert.match(api, /X-Device-Id/);
+  assert.match(api, /employee-cost\/gaps/);
+  assert.match(api, /employee-cost', format/);
 });
