@@ -68,7 +68,7 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
    bằng cả `x-assignment-key` và `x-employee-cost-key`.
 2. Chọn mẫu bằng `employee_cost_templates.json`, tách biệt hoàn toàn với nhóm công tắc hiển thị.
 3. Dùng C48 duy nhất làm ghi chú; tiếp tục loại mọi field không thuộc hợp đồng.
-4. Ghép tỷ lệ theo **đơn vị × mã hàng × tháng** vào từng order-line doanh thu self-scoped. Nếu nhiều dòng timeline cùng `(đơn vị, mã hàng, tháng)` có tỷ lệ xung đột thì chỉ khóa đó fail-closed thành `—`; không làm mất các đơn vị khác có cùng mã hàng. Tính tiền trên doanh thu **trước VAT** (`revenue / VAT_DIVISOR × tỷ lệ / 100`), tách C44 khỏi tổng tháng.
+4. Ghép tỷ lệ theo **đơn vị × mã hàng × tháng** vào từng order-line doanh thu self-scoped. Nếu nhiều dòng timeline cùng `(đơn vị, mã hàng, tháng)` có tỷ lệ xung đột thì chỉ khóa đó fail-closed thành `—`; không làm mất các đơn vị khác có cùng mã hàng. Cột thường tính trên doanh thu **trước VAT** (`revenue / VAT_DIVISOR × tỷ lệ / 100`). Cột phái sinh lấy **tiền của cột gốc** làm cơ sở theo mapping cấu hình `derivedBases`/`EMPLOYEE_COST_DERIVED_BASE`; mặc định `c44:c43`, nên `tiền_C44 = tiền_C43 × %C44 / 100`. C44 tiếp tục tách khỏi tổng tháng.
 5. Tính coverage trên số khóa `(đơn vị, mã hàng)` doanh thu duy nhất trong kỳ; bảng chi tiết vẫn giữ grain order-line và ngưỡng dưới 90% vẫn ẩn tổng.
 6. Xử lý 401 (sai key) / 502 (thử lại) / 400 (thiếu emp).
 
