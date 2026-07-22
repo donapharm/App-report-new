@@ -207,6 +207,39 @@ test('C44 derives from the allocated C43 amount instead of revenue before VAT', 
   assert.equal(enriched.columns.find((column) => column.key === 'c44').derivesFrom, 'c43');
 });
 
+test('filter metadata keeps official province, drops inferred province, and maps unit prefix without changing money', () => {
+  const unit = '002.BVĐK Thống Nhất ĐN';
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: fullColumns(), rows: [fullRow({ c5: 'QL1', c7: unit, c16: 'Thuốc', c36: 10 })],
+  }, 'DN001');
+  const official = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: unit, c16: 'Thuốc' }],
+    revenueRows: [{ emp_code: 'DN001', unit_code: unit, iit_code: 'QL1', revenue: 1_050_000, province: 'ĐỒNG NAI', province_source: 'source', route: 'CL' }],
+  }).rows[0];
+  assert.equal(official.province, 'ĐỒNG NAI');
+  assert.equal(official.unitGroup, 'BV');
+  assert.equal(official.unitGroupLabel, 'BV · Bệnh viện');
+  assert.equal(official.route, 'CL');
+  assert.equal(official.revenueBeforeVat, 1_000_000);
+
+  const inferred = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-07', catalogRows: [{ c5: 'QL1', c7: unit, c16: 'Thuốc' }],
+    revenueRows: [{ emp_code: 'DN001', unit_code: unit, iit_code: 'QL1', revenue: 1_050_000, province: 'ĐỒNG NAI', province_source: 'inferred', route: 'CL' }],
+  }).rows[0];
+  assert.equal(inferred.province, null);
+});
+
+test('one authoritative province row safely covers other rows of the exact same unit, but conflicts fail closed', () => {
+  const official = { unit_code: '001.BVĐK Đồng Nai', province: 'ĐỒNG NAI', province_source: 'source' };
+  const inferred = { unit_code: '001.BVĐK Đồng Nai', province: 'Đồng Nai', province_source: 'inferred' };
+  const guessed = { unit_code: '001.BVĐK Đồng Nai', province: 'Đồng Nai', province_source: 'guessed_from_name' };
+  const catalog = { unit_code: '001.BVĐK Đồng Nai', province: 'Đồng Nai', province_source: 'catalog' };
+  assert.equal(employeeCost.authoritativeProvinceByUnit([official, inferred, guessed, catalog]).get('001.BVĐK ĐỒNG NAI'), 'ĐỒNG NAI');
+  const conflict = { unit_code: '001.BVĐK Đồng Nai', province: 'BÌNH PHƯỚC', province_source: 'source' };
+  assert.equal(employeeCost.authoritativeProvinceByUnit([official, conflict]).get('001.BVĐK ĐỒNG NAI'), null);
+  assert.equal(employeeCost.authoritativeProvinceByUnit([], [official]).has('001.BVĐK ĐỒNG NAI'), false);
+});
+
 test('does not match raw names, leaves amounts null and suppresses unreliable totals below threshold', () => {
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001', columns: fullColumns({ c36: 'CP (%)' }),

@@ -2,6 +2,11 @@
 - **Review `d0c6b56`: PASS.** Vùng/Tỉnh (#146): **bỏ hẳn đoán tên/viết tắt**, chỉ `row.province`/config, thiếu → "Chưa gán tỉnh", source trung thực. #145: pager **pill 20 dòng/trang** + cỡ trang 20/50/100 + **pager trên & dưới (sticky)** + **chọn ngày** (filter `date` validate ISO, chạy cả Tất cả NV). Day + các filter áp trên rows đã khóa quyền (self-scope); C32/C47 loại. Server 255/255, web 39/39, build PASS.
 - Nhánh gom trọn #139 + search + #144 + #146 + #145, UI thuần (không đổi tiền). Directive `DIRECTIVE_EMP_COST_TABLEUX_DEPLOY.md`. Sau deploy: điền `unit_province.json`; DQ center #141; DataHub %/alias.
 
+### 2026-07-22 — Report Bot (review, chưa deploy) — #145 pager pill/ngày doanh thu + #146 tỉnh chính thức
+- Bảng chi phí self/ALL mặc định 20 dòng, chỉ nhận cỡ 20/50/100; pager pill có số trang/ellipsis/tới trang, đồng bộ sticky phía trên và phía dưới. Hai bảng gap dùng cùng pager, có STT theo toàn tập sau lọc.
+- Thêm dropdown `Ngày doanh thu` gồm ngày ISO có thật + `Tất cả ngày`. Backend lọc ngày cùng tỉnh/nhóm/tuyến/search trước sort, STT, tổng, tổng phụ và phân trang; Excel/PDF chạy lại đúng cùng lát cắt không cắt theo trang.
+- Bỏ toàn bộ suy tỉnh từ tên/huyện/viết tắt. Chỉ nhận tỉnh từ dòng doanh thu hoặc `server/config/unit_province.json`; thiếu nguồn được nhóm `Chưa gán tỉnh`. Công thức, self-scope, coverage lock và khóa C32/C47 giữ nguyên. Nhánh review, chưa deploy.
+
 ### 2026-07-22 — Claude Code (review #144 `0156c5d`) — filters PASS, SỬA Vùng/Tỉnh đoán-từ-tên
 - **Review #144: all-fix "Tất cả NV" + lọc Nhóm mã ĐV (config) + Tuyến = PASS.** Scope an toàn (filter trên rows đã khóa quyền; C32/C47 loại khỏi search/facet). Server 253/253, web 38/38, build PASS.
 - **⚠ Vùng/Tỉnh (`province.js`) đoán theo tên + viết tắt — trái directive, gán sai được** (`dn`→Đồng Nai nhưng ĐN cũng là Đà Nẵng; `tan phu` trùng Q.Tân Phú TP.HCM; nhãn `source:official` sai provenance). Không ảnh hưởng tiền (chỉ chiều lọc) nhưng lọc địa bàn lệch. **Sửa:** bỏ ABBR; tỉnh chỉ từ nguồn chính thức (`row.province`/`unit_province.json`), không có → "Chưa gán tỉnh"; giữ đoán-tên phải gắn cờ "tạm đoán" + source đúng. Khuyến nghị điền `unit_province.json`. Directive `DIRECTIVE_EMP_COST_PROVINCE_FIX.md`.
@@ -10,6 +15,17 @@
 ### 2026-07-22 — Claude Code (giao bot) — Phân trang pill 20 dòng + pager lên đầu + xem theo ngày
 - Ghi nhận: "Tất cả NV" **đã chạy** (restart BE #139 — 1.550 dòng, coverage 96,5%, tổng 2,39 tỷ); lọc Nhóm mã ĐV + Tuyến đã có.
 - CEO thêm 3 UX: (1) phân trang **20 dòng/trang**, nút **bo tròn (pill)** + số trang bấm được; (2) **pager lên đầu bảng** (sticky, đồng bộ trên/dưới); (3) **chọn ngày** xem doanh thu theo ngày — **hoạt động cả chế độ Tất cả NV** (lọc rows theo ngày ở backend, kết hợp nhóm mã/tuyến/tìm kiếm/phân trang). Gợi ý: chọn cỡ trang 20/50/100. STT/đếm/export phản ánh; không đổi số; self-scope + C32/C47 giữ. Directive `DIRECTIVE_EMP_COST_PAGER_DAYVIEW.md`. Chưa deploy.
+
+### 2026-07-22 — Report Bot (review) — Sửa ALL live + bộ lọc chi phí liên hoàn
+- Đã đồng bộ/restart backend #139 với frontend đang chạy. Nghiệm thu HTTPS bằng phiên CEO: `emp=ALL&from=2026-07&to=2026-07` trả `template.label="TẤT CẢ NHÂN VIÊN"`, đủ **21 NV / 1.550 dòng** (trang đầu 100 dòng); phiên DN001 gửi `emp=ALL` nhận `403 EMPLOYEE_COST_ALL_FORBIDDEN`.
+- Thêm lọc backend **Vùng/Tỉnh · Nhóm mã đơn vị · Tuyến** cho cả self và ALL. Ba facet kết hợp với kỳ/search/sort, dropdown động theo đúng tập đã scope và các facet còn lại; giá trị query không có trong tập scope không được phản chiếu thành option. STT, X/Y, tổng, tổng phụ, phân trang và Excel/PDF dùng cùng một pipeline backend.
+- Tỉnh chỉ nhận provenance chính thức từ dòng bán/catalog/config; kết quả `provinceOf()` suy từ tên bị loại, xung đột cùng mã đơn vị fail closed. Nhóm mã đơn vị đọc `server/config/employee_cost_unit_groups.json`; mã chưa map chỉ rơi về đúng tiền tố của chính nó, không đoán nhóm nghiệp vụ. Audit lưu bộ lọc đã sanitize; C32/C47 vẫn khóa cứng và công thức/tiền không đổi.
+- Gate: full server **251/251 PASS** trước guard facet cuối, targeted sau cùng **57/57 PASS**; web **38/38 PASS**; production build PASS; `git diff --check` + syntax PASS. Bộ lọc mới chỉ ở nhánh review, **chưa deploy** theo directive.
+
+### 2026-07-22 — Report Bot (review) — Directive #139 bảng chi phí STT/ALL/search/sort
+- Thêm cột STT đầu bảng và đầu Excel/PDF; STT được đánh lại sau lọc/sort trên toàn tập. CEO/admin có `Tất cả nhân viên` backend-lock, cột NV, tổng phụ theo NV/tổng chung và phân trang 100 dòng; NV thường gửi `emp=ALL` ở xem/xuất bị chặn 403 và vẫn self-scope.
+- Search live toàn bảng hỗ trợ bỏ dấu, không phân biệt hoa/thường, viết tắt liền kiểu `dviet` → `Đức Việt`, nhiều từ AND, đếm X/Y, highlight/chip xóa nhanh; click header để sort. Chế độ ALL lọc/sort trước phân trang ở backend; export chạy lại cùng filter/search/sort không cắt trang.
+- Cột % cố định hẹp, căn phải/tabular, header chỉ mã Cnn + tooltip nhãn đầy đủ; sticky header + STT + Nhân viên/Tên hàng. C32/C47 tiếp tục loại cứng, C44 vẫn tách khoản cuối năm và mọi số tiền giữ nguồn backend. #139 đã được đồng bộ/restart để sửa lỗi ALL live; thay đổi bộ lọc nối tiếp vẫn chưa deploy/merge main.
 
 ### 2026-07-22 — Claude Code (giao bot) — SỬA "Tất cả NV" trống + thêm lọc Vùng/Tỉnh · Nhóm mã ĐV · Tuyến
 - **CEO báo "Tất cả nhân viên" hiện 0/0 (trống).** Chẩn đoán: bảng hiện **"Mẫu FULL-TIME 0/0"** thay vì template **"TẤT CẢ NHÂN VIÊN"** → **BE chưa nạp nhánh `emp=ALL`** (FE #139 lên nhưng BE chưa deploy/restart — lệch phiên bản, giống vụ 404). Bot: xác minh version (`curl ?emp=ALL` phải trả `template.label:"TẤT CẢ NHÂN VIÊN"`, rows>0) → deploy/restart BE #139; nếu vẫn trống → debug `employeeCostAllPayload`/`mergeEmployeeReports` + thêm test all-NV rows>0.

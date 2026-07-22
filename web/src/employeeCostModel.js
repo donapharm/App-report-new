@@ -46,6 +46,7 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
     costs.set(key, {
       key,
       label: String(raw.label || key),
+      shortLabel: key.toUpperCase(),
       kind: 'percent',
       annual: !!raw.annual,
     });
@@ -109,6 +110,18 @@ function normalizedColumnTotals(rawTotals, costColumns) {
   }));
 }
 
+function normalizedFilterFacet(raw = {}, fallbackAvailable = true) {
+  return {
+    available: raw.available == null ? fallbackAvailable : !!raw.available,
+    source: String(raw.source || ''),
+    options: (Array.isArray(raw.options) ? raw.options : []).map((option) => ({
+      value: String(option?.value || ''),
+      label: String(option?.label || option?.value || ''),
+      count: Number(option?.count || 0),
+    })).filter((option) => option.value),
+  };
+}
+
 function periodViewModel(payload = {}) {
   const template = {
     key: String(payload.template?.key || ''),
@@ -122,7 +135,10 @@ function periodViewModel(payload = {}) {
   const rows = (Array.isArray(payload.rows) ? payload.rows : []).map((source, rowIndex) => {
     const row = {
       rowIndex,
+      stt: Number(source?.stt) || null,
       sourceLineId: String(source?.sourceLineId || `line-${rowIndex + 1}`),
+      employeeCode: String(source?.employeeCode || ''),
+      employeeName: String(source?.employeeName || ''),
       dailyAmounts: source?.dailyAmounts || null,
       dayRevenueMatched: !!source?.dayRevenueMatched,
       rowMonthlyTotal: source?.rowMonthlyTotal ?? null,
@@ -178,6 +194,19 @@ function periodViewModel(payload = {}) {
     },
     note: String(payload.note || (rows.length ? '' : EMPTY_NOTE)),
     dynamicCount: costColumns.length,
+    search: {
+      query: String(payload.search?.query || ''),
+      filteredRows: Number(payload.search?.filteredRows ?? rows.length),
+      totalRows: Number(payload.search?.totalRows ?? rows.length),
+    },
+    pagination: {
+      page: Number(payload.pagination?.page || 1),
+      pageSize: Number(payload.pagination?.pageSize || Math.max(rows.length, 1)),
+      pageCount: Number(payload.pagination?.pageCount || 1),
+      filteredRows: Number(payload.pagination?.filteredRows ?? rows.length),
+      totalRows: Number(payload.pagination?.totalRows ?? rows.length),
+    },
+    employeeSubtotals: Array.isArray(payload.employeeSubtotals) ? payload.employeeSubtotals : [],
   };
 }
 
@@ -215,7 +244,135 @@ export function employeeCostViewModel(payload = {}) {
     summary,
     note: String(payload.note || (rows.length ? '' : EMPTY_NOTE)),
     dynamicCount: periods.reduce((sum, period) => sum + period.dynamicCount, 0),
+    allEmployees: !!payload.allEmployees,
+    filters: {
+      province: String(payload.filters?.province || ''),
+      unitGroup: String(payload.filters?.unitGroup || ''),
+      route: String(payload.filters?.route || ''),
+      date: String(payload.filters?.date || ''),
+    },
+    filterOptions: {
+      province: normalizedFilterFacet(payload.filterOptions?.province, false),
+      unitGroup: normalizedFilterFacet(payload.filterOptions?.unitGroup),
+      route: normalizedFilterFacet(payload.filterOptions?.route),
+      date: normalizedFilterFacet(payload.filterOptions?.date),
+    },
+    search: {
+      query: String(payload.search?.query || ''),
+      filteredRows: Number(payload.search?.filteredRows ?? rows.length),
+      totalRows: Number(payload.search?.totalRows ?? rows.length),
+    },
   };
+}
+
+export function normalizeEmployeeCostSearch(value) {
+  return String(value ?? '').toLocaleLowerCase('vi').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+export function employeeCostPageItems(page, pageCount) {
+  const current = Math.min(Math.max(1, Number(page) || 1), Math.max(1, Number(pageCount) || 1));
+  const total = Math.max(1, Number(pageCount) || 1);
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+  const keep = new Set([1, total, current - 2, current - 1, current, current + 1, current + 2]
+    .filter((value) => value >= 1 && value <= total));
+  if (current <= 4) [2, 3, 4, 5].forEach((value) => keep.add(value));
+  if (current >= total - 3) [total - 4, total - 3, total - 2, total - 1].forEach((value) => keep.add(value));
+  const pages = [...keep].sort((a, b) => a - b);
+  return pages.flatMap((value, index) => index && value - pages[index - 1] > 1 ? ['…', value] : [value]);
+}
+
+export function employeeCostSearchTokens(value) {
+  return normalizeEmployeeCostSearch(value).split(/\s+/).filter(Boolean);
+}
+
+function employeeCostSearchForms(value) {
+  const normalized = normalizeEmployeeCostSearch(value);
+  if (!normalized) return [];
+  const words = normalized.split(/\s+/).filter(Boolean);
+  const forms = new Set([normalized, words.join('')]);
+  for (let start = 0; start < words.length; start += 1) {
+    for (let end = start + 2; end <= Math.min(words.length, start + 4); end += 1) {
+      forms.add(`${words.slice(start, end - 1).map((word) => word[0]).join('')}${words[end - 1]}`);
+    }
+  }
+  return [...forms];
+}
+
+function employeeCostSearchTextIncludes(value, token) {
+  return employeeCostSearchForms(value).some((form) => form.includes(token));
+}
+
+function rowSearchText(row = {}, columns = []) {
+  const values = [row.employeeCode, row.employeeName];
+  for (const column of columns) {
+    values.push(row[column.key]);
+    if (column.kind === 'percent') values.push(row.amounts?.[column.key]);
+  }
+  return normalizeEmployeeCostSearch(values.filter((value) => value != null).join(' '));
+}
+
+export function filterSortEmployeeCostRows(rows = [], columns = [], query = '', sort = {}) {
+  const tokens = employeeCostSearchTokens(query);
+  const filtered = rows.filter((row) => {
+    if (!tokens.length) return true;
+    const forms = employeeCostSearchForms(rowSearchText(row, columns));
+    return tokens.every((token) => forms.some((form) => form.includes(token)));
+  });
+  const key = String(sort.key || '');
+  const direction = sort.dir === 'desc' ? -1 : 1;
+  const sorted = key ? filtered.map((row, index) => ({ row, index })).sort((left, right) => {
+    const a = left.row[key]; const b = right.row[key];
+    const aEmpty = a == null || a === ''; const bEmpty = b == null || b === '';
+    if (aEmpty || bEmpty) return aEmpty === bEmpty ? left.index - right.index : (aEmpty ? 1 : -1);
+    const an = Number(a); const bn = Number(b);
+    const compared = Number.isFinite(an) && Number.isFinite(bn)
+      ? an - bn
+      : String(a).localeCompare(String(b), 'vi', { numeric: true, sensitivity: 'base' });
+    return compared ? compared * direction : left.index - right.index;
+  }).map((item) => item.row) : filtered;
+  return sorted.map((row, index) => ({ ...row, stt: index + 1 }));
+}
+
+export function employeeCostHighlightParts(value, query) {
+  const text = String(value ?? '');
+  const tokens = employeeCostSearchTokens(query);
+  if (!text || !tokens.length) return [{ text, match: false }];
+  const normalized = [];
+  const sourceIndex = [];
+  for (let index = 0; index < text.length; index += 1) {
+    const unit = text[index].toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+    for (const char of unit) {
+      if (/[a-z0-9]/.test(char)) { normalized.push(char); sourceIndex.push(index); }
+      else if (normalized.at(-1) !== ' ') { normalized.push(' '); sourceIndex.push(index); }
+    }
+  }
+  const haystack = normalized.join('');
+  const ranges = [];
+  for (const token of tokens) {
+    let cursor = 0; let directlyMatched = false;
+    while ((cursor = haystack.indexOf(token, cursor)) >= 0) {
+      ranges.push([sourceIndex[cursor], (sourceIndex[cursor + token.length - 1] ?? sourceIndex[cursor]) + 1]);
+      directlyMatched = true; cursor += token.length;
+    }
+    if (!directlyMatched && employeeCostSearchTextIncludes(text, token)) ranges.push([0, text.length]);
+  }
+  if (!ranges.length) return [{ text, match: false }];
+  ranges.sort((a, b) => a[0] - b[0]);
+  const merged = ranges.reduce((result, range) => {
+    const last = result.at(-1);
+    if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
+    else result.push([...range]);
+    return result;
+  }, []);
+  const parts = []; let cursor = 0;
+  for (const [start, end] of merged) {
+    if (start > cursor) parts.push({ text: text.slice(cursor, start), match: false });
+    parts.push({ text: text.slice(start, end), match: true }); cursor = end;
+  }
+  if (cursor < text.length) parts.push({ text: text.slice(cursor), match: false });
+  return parts;
 }
 
 export function employeeCostColumnKpis(model = {}) {

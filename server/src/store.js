@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const ords = require('./ords');
 const targetAdmin = require('./targetAdmin');
-const { provinceOf } = require('./province');
+const { provinceResolution } = require('./province');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
@@ -61,13 +61,28 @@ function base() {
   const enrich = (r) => {
     const rr = normalizeEmpForReport(r);
     const unit_name = rr.unit_name || unitByCode[rr.unit_code]?.unit_name;
+    const existingProvinceSource = String(rr.province_source || '').trim().toLowerCase();
+    const sourceProvince = ['inferred', 'guessed_from_name'].includes(existingProvinceSource)
+      ? ''
+      : (rr.province || rr.PROVINCE || rr.tinh || rr.TINH || '');
+    const catalogProvince = unitByCode[rr.unit_code]?.province || '';
+    const fallbackProvince = (!sourceProvince && !catalogProvince)
+      ? provinceResolution(rr.unit_code, unit_name, '')
+      : { value: '', source: '' };
+    const province = sourceProvince || catalogProvince || fallbackProvince.value;
+    // Giữ provenance để các màn hình nhạy cảm có thể dùng tỉnh chính thức từ
+    // dòng bán/danh mục và loại bỏ hoàn toàn kết quả suy tên.
+    const province_source = sourceProvince
+      ? (rr.province_source || 'source')
+      : (catalogProvince ? 'catalog' : fallbackProvince.source);
     return {
       ...rr,
       unit_name,
       product_name: rr.product_name || prodByCode[rr.iit_code]?.product_name,
       c14: rr.c14 || rr.C14 || rr.indication_group || c14ByIit[String(rr.iit_code || '').trim().toUpperCase()] || null,
       emp_name: rr.emp_name || empByCode[rr.emp_code]?.name,
-      province: rr.province || unitByCode[rr.unit_code]?.province || provinceOf(rr.unit_code, unit_name, rr.province),
+      province,
+      province_source,
     };
   };
   _base = {
@@ -448,7 +463,9 @@ function getCstAll() {
   rows = rows.map((r) => {
     const code = String(r.emp_code || '').trim().toUpperCase();
     // Gắn tỉnh/thành + nhóm hàng C14 (giống dòng doanh thu) để lọc dùng chung được.
-    const province = r.province || unitByCode[r.unit_code]?.province || provinceOf(r.unit_code, r.unit_name, r.province);
+    const source = String(r.province_source || '').trim().toLowerCase();
+    const sourceProvince = ['inferred', 'guessed_from_name'].includes(source) ? '' : r.province;
+    const province = sourceProvince || unitByCode[r.unit_code]?.province || provinceResolution(r.unit_code, r.unit_name, '').value;
     const c14 = r.c14 || r.C14 || r.indication_group || c14ByIit[String(r.iit_code || '').trim().toUpperCase()] || null;
     if (!code || isValidEmpCode(code)) return province === r.province && c14 === r.c14 ? r : { ...r, province, c14 };
     return { ...r, province, c14, raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code, emp_code: UNALLOCATED_EMP, emp_code_invalid: code };

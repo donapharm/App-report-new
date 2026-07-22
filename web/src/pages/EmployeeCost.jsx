@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadEmployeeCostGaps, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
-  currentMonthValue, employeeCostColumnKpis, employeeCostViewModel, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
+  currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostViewModel,
+  employeeCostPageItems, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
   normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
@@ -13,28 +14,92 @@ import { employeeCostGapView, gapReasonLabel } from '../employeeCostGapModel.js'
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
+const EMPLOYEE_COST_PAGE_SIZES = [20, 50, 100];
 const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 const browserStorage = () => {
   try { return globalThis.localStorage; } catch { return null; }
 };
 
-function CostTable({ period, daily = false }) {
+function EmployeeCostPager({ pagination, onPage, onPageSize, location = 'bottom', unit = 'dòng' }) {
+  const [jump, setJump] = useState('');
+  if (!pagination || !pagination.filteredRows || typeof onPage !== 'function') return null;
+  const page = Number(pagination.page || 1);
+  const pageCount = Number(pagination.pageCount || 1);
+  const go = (value) => onPage(Math.min(Math.max(1, Number(value) || 1), pageCount));
+  const submitJump = (event) => { event.preventDefault(); go(jump); setJump(''); };
+  return <nav className={`employee-cost-pagination pager-capsule ${location === 'top' ? 'is-top' : 'is-bottom'}`} aria-label={`Phân trang chi phí phía ${location === 'top' ? 'trên' : 'dưới'}`}>
+    <button type="button" className="employee-cost-page-nav prev" disabled={page <= 1} onClick={() => go(page - 1)}>‹ Trước</button>
+    <div className="employee-cost-page-numbers" role="group" aria-label="Chọn trang">
+      {employeeCostPageItems(page, pageCount).map((item, index) => item === '…'
+        ? <span className="employee-cost-page-ellipsis" key={`ellipsis-${index}`}>…</span>
+        : <button type="button" key={item} className={item === page ? 'active' : ''} aria-current={item === page ? 'page' : undefined} onClick={() => go(item)}>{item}</button>)}
+    </div>
+    <span className="employee-cost-page-info">Trang <b>{page}/{pageCount}</b> · {Number(pagination.filteredRows).toLocaleString('vi-VN')} {unit}</span>
+    {pageCount > 10 && <form className="employee-cost-page-jump" onSubmit={submitJump}>
+      <label><span className="sr-only">Tới trang</span><input type="number" min="1" max={pageCount} value={jump} onChange={(event) => setJump(event.target.value)} placeholder="Tới trang…" /></label>
+    </form>}
+    {typeof onPageSize === 'function' && <label className="employee-cost-page-size"><span>Số dòng</span><select value={pagination.pageSize} onChange={(event) => onPageSize(Number(event.target.value))}>{EMPLOYEE_COST_PAGE_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}</select></label>}
+    <button type="button" className="employee-cost-page-nav next" disabled={page >= pageCount} onClick={() => go(page + 1)}>Sau ›</button>
+  </nav>;
+}
+
+function useEmployeeCostPage(rows = [], resetKey = '') {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState(20);
+  const total = rows.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  useEffect(() => { setPage(1); }, [resetKey]);
+  useEffect(() => { if (page > pageCount) setPage(pageCount); }, [page, pageCount]);
+  const setPageSize = (value) => {
+    const next = EMPLOYEE_COST_PAGE_SIZES.includes(Number(value)) ? Number(value) : 20;
+    setPageSizeState(next);
+    setPage(1);
+  };
+  const start = (currentPage - 1) * pageSize;
+  return {
+    rows: rows.slice(start, start + pageSize),
+    start,
+    pagination: { page: currentPage, pageSize, pageCount, filteredRows: total, totalRows: total },
+    setPage,
+    setPageSize,
+  };
+}
+
+function Highlight({ value, query }) {
+  return employeeCostHighlightParts(value, query).map((part, index) => part.match
+    ? <mark key={`${part.text}-${index}`}>{part.text}</mark>
+    : <React.Fragment key={`${part.text}-${index}`}>{part.text}</React.Fragment>);
+}
+
+function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEmployees = false, onPage, onPageSize }) {
   const [tooltip, setTooltip] = useState('');
-  const rows = daily ? period.daily.rows : period.rows;
-  const columnCount = period.columns.length;
+  const sourceRows = daily ? period.daily.rows : period.rows;
+  // Search/filter/sort/STT are resolved by the backend for both self and ALL
+  // scopes so the table and exports always use one financial slice.
+  const rows = sourceRows;
+  const columnCount = period.columns.length + 1 + (allEmployees ? 1 : 0);
   const totalsByDate = new Map((period.daily.totals || []).map((total) => [total.date, total]));
   const renderCell = (row, column) => {
     const text = formatEmployeeCostCell(row[column.key], column);
     if (column.tooltip && text !== '—') return <button type="button" className="employee-cost-ellipsis" title={text} onClick={() => setTooltip(text)}>{text}</button>;
-    return text;
+    return <Highlight value={text} query={query} />;
+  };
+  const sortHeader = (column) => {
+    if (!onSort) return;
+    onSort(column.key);
   };
   return <>
+    {!daily && <EmployeeCostPager pagination={period.pagination} onPage={onPage} onPageSize={onPageSize} location="top" />}
     <div className="employee-cost-table-wrap">
-      <table className="employee-cost-table">
+      <table className={`employee-cost-table${allEmployees ? ' is-all-employees' : ''}`}>
       <thead>
         <tr>
-          {period.columns.map((column) => <th key={column.key} className={column.annual ? 'employee-cost-annual' : ''}>
-            {column.label} {column.annual && <span className="employee-cost-annual-badge">⏳ cuối năm</span>}
+          <th className="employee-cost-sticky-stt employee-cost-number">STT</th>
+          {allEmployees && <th className="employee-cost-sticky-employee"><button type="button" onClick={() => sortHeader({ key: 'employeeCode' })}>Nhân viên{sort.key === 'employeeCode' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>}
+          {period.columns.map((column) => <th key={column.key} title={column.kind === 'percent' ? column.label : undefined} className={`${column.annual ? 'employee-cost-annual ' : ''}${column.kind === 'percent' ? 'employee-cost-percent ' : ''}${column.key === 'c16' ? 'employee-cost-sticky-product' : ''}`}>
+            <button type="button" onClick={() => sortHeader(column)}>{column.kind === 'percent' ? column.shortLabel : column.label}{sort.key === column.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button>
+            {column.annual && <span className="employee-cost-annual-badge">⏳</span>}
           </th>)}
         </tr>
       </thead>
@@ -46,13 +111,16 @@ function CostTable({ period, daily = false }) {
           </td>
         </tr>}
         <tr>
-          {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}`}>
+          <td className="employee-cost-sticky-stt employee-cost-number">{row.stt || rowIndex + 1}</td>
+          {allEmployees && <td className="employee-cost-sticky-employee"><b><Highlight value={row.employeeCode} query={query} /></b><small><Highlight value={row.employeeName} query={query} /></small></td>}
+          {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}${column.kind === 'percent' ? ' employee-cost-percent' : ''}${column.key === 'c16' ? ' employee-cost-sticky-product' : ''}`}>
             {renderCell(row, column)}
           </td>)}
         </tr>
       </React.Fragment>)}</tbody>
       </table>
     </div>
+    {!daily && <EmployeeCostPager pagination={period.pagination} onPage={onPage} onPageSize={onPageSize} location="bottom" />}
     {!!tooltip && <div className="employee-cost-tooltip-backdrop" role="presentation" onClick={() => setTooltip('')}>
       <div className="employee-cost-tooltip" role="dialog" aria-modal="true" aria-label="Hàm lượng đầy đủ" onClick={(event) => event.stopPropagation()}>
         <button type="button" className="employee-cost-tooltip-close" aria-label="Đóng" onClick={() => setTooltip('')}>×</button>
@@ -62,14 +130,16 @@ function CostTable({ period, daily = false }) {
   </>;
 }
 
-function PeriodBlock({ period, expanded, onToggle }) {
+function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmployees, onPage, onPageSize }) {
   const annualNote = period.summary.annualLabels.join(', ');
+  const filteredCount = period.search.filteredRows;
+  const totalCount = period.search.totalRows;
   return <div className="card employee-cost-panel">
     <div className="employee-cost-period-head">
       <div>
         <div className="section-head">Tháng {formatMonthLabel(period.period)}</div>
         <div className="employee-cost-panel-meta">
-          Mẫu {period.template.label || 'chi phí'} · {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} mã đơn vị×mặt hàng)
+          Mẫu {period.template.label || 'chi phí'} · {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} mã đơn vị×mặt hàng) · hiện {filteredCount.toLocaleString('vi-VN')}/{totalCount.toLocaleString('vi-VN')} dòng
         </div>
       </div>
       {!!period.rows.length && <button type="button" className="btn secondary" onClick={onToggle} aria-expanded={expanded}>
@@ -82,10 +152,14 @@ function PeriodBlock({ period, expanded, onToggle }) {
       {' '}Chưa hiển thị tổng tháng/cuối năm để tránh số thiếu; dòng không khớp giữ “—”. Vui lòng báo CEO/Claude rà catalog.
     </div>}
 
-    {!period.rows.length ? <div className="center">{period.note}</div> : <>
-      <CostTable period={period} />
+    {!period.rows.length ? <div className="center">{period.note || 'Không có dòng phù hợp bộ lọc.'}</div> : <>
+      {allEmployees && !!period.employeeSubtotals.length && <details className="employee-cost-subtotals">
+        <summary>Tổng phụ theo nhân viên ({period.employeeSubtotals.length})</summary>
+        <div>{period.employeeSubtotals.map((item) => <span key={item.employeeCode}><b>{item.employeeCode} · {item.employeeName}</b><small>{item.rowCount.toLocaleString('vi-VN')} dòng · {formatEmployeeCostCell(item.monthlyTotal, moneyColumn)}</small></span>)}</div>
+      </details>}
+      <CostTable period={period} query={query} sort={sort} onSort={onSort} allEmployees={allEmployees} onPage={onPage} onPageSize={onPageSize} />
       <div className="employee-cost-summary-row">
-        <span>Tổng chi phí tháng (chưa gồm khoản cuối năm)</span>
+        <span>{query ? 'Tổng các dòng đang lọc' : 'Tổng chi phí tháng'} (chưa gồm khoản cuối năm)</span>
         <b>{formatEmployeeCostCell(period.summary.monthlyTotal, moneyColumn)}</b>
       </div>
       {!!period.summary.annualLabels.length && <div className="employee-cost-summary-row employee-cost-annual-total">
@@ -99,7 +173,7 @@ function PeriodBlock({ period, expanded, onToggle }) {
       {!period.daily.reliable
         ? <div className="employee-cost-match-warning" role="alert">Không thể tách theo ngày: {period.daily.reason || 'dữ liệu ngày chưa đủ để đối chiếu tổng tháng'}.</div>
         : !period.daily.rows.length ? <div className="center">Chưa có doanh thu theo ngày.</div>
-          : <CostTable period={period} daily />}
+          : <CostTable period={period} daily query={query} sort={sort} onSort={onSort} />}
     </div>}
 
     {!!period.rows.length && <div className="employee-cost-source-note">
@@ -205,11 +279,15 @@ function GapCoverage({ coverage, remainingCodes }) {
   </div>;
 }
 
-function GapPairTable({ pairs }) {
-  return <div className="employee-cost-table-wrap">
+function GapPairTable({ pairs, resetKey = '' }) {
+  const pager = useEmployeeCostPage(pairs, resetKey);
+  return <>
+    <EmployeeCostPager pagination={pager.pagination} onPage={pager.setPage} onPageSize={pager.setPageSize} location="top" unit="mặt hàng" />
+    <div className="employee-cost-table-wrap">
     <table className="employee-cost-gap-table">
-      <thead><tr><th>Đơn vị</th><th>Mã QLNB · tên hàng</th><th>Doanh thu ảnh hưởng</th><th>Tình trạng</th></tr></thead>
-      <tbody>{pairs.map((pair) => <tr key={`${pair.period}-${pair.employeeCode}-${pair.unitLabel}-${pair.productCode}`}>
+      <thead><tr><th>STT</th><th>Đơn vị</th><th>Mã QLNB · tên hàng</th><th>Doanh thu ảnh hưởng</th><th>Tình trạng</th></tr></thead>
+      <tbody>{pager.rows.map((pair, index) => <tr key={`${pair.period}-${pair.employeeCode}-${pair.unitLabel}-${pair.productCode}`}>
+        <td className="employee-cost-number">{pager.start + index + 1}</td>
         <td><b>{pair.unitLabel}</b></td>
         <td><b>{pair.productCode}</b><small>{pair.productName}</small></td>
         <td className="employee-cost-number">{formatEmployeeCostCell(pair.revenueAffected, moneyColumn)}</td>
@@ -218,7 +296,9 @@ function GapPairTable({ pairs }) {
         </td>
       </tr>)}</tbody>
     </table>
-  </div>;
+    </div>
+    <EmployeeCostPager pagination={pager.pagination} onPage={pager.setPage} onPageSize={pager.setPageSize} location="bottom" unit="mặt hàng" />
+  </>;
 }
 
 function EmployeeGapPanel({ payload, loading, error, range }) {
@@ -245,7 +325,7 @@ function EmployeeGapPanel({ payload, loading, error, range }) {
     </div>
     {(error || exportError) && <div className="employee-cost-match-warning" role="alert">{error || exportError}</div>}
     {loading ? <Spinner /> : expanded && <>
-      <GapPairTable pairs={view.pairs} />
+      <GapPairTable pairs={view.pairs} resetKey={`${payload.from || ''}|${payload.to || ''}|${view.pairs.length}`} />
       <p className="employee-cost-gap-note">Gợi ý lệch mã chỉ để DataHub đối chiếu, App Report không tự ánh xạ hoặc tự điền tỷ lệ.</p>
     </>}
   </div>;
@@ -256,6 +336,7 @@ function AdminGapPanel({ payload, loading, error, range }) {
   const [exporting, setExporting] = useState('');
   const [exportError, setExportError] = useState('');
   const view = useMemo(() => employeeCostGapView(payload, filters), [payload, filters]);
+  const pager = useEmployeeCostPage(view.items, JSON.stringify(filters));
   const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
   const exportFile = async (format) => {
     setExporting(format); setExportError('');
@@ -279,10 +360,13 @@ function AdminGapPanel({ payload, loading, error, range }) {
     </div>
     <GapCoverage coverage={view.coverage} remainingCodes={view.remainingCodes} />
     {(error || exportError) && <div className="employee-cost-match-warning" role="alert">{error || exportError}</div>}
-    {loading ? <Spinner /> : !view.items.length ? <div className="center">Không có mã thiếu phù hợp bộ lọc.</div> : <div className="employee-cost-table-wrap">
+    {loading ? <Spinner /> : !view.items.length ? <div className="center">Không có mã thiếu phù hợp bộ lọc.</div> : <>
+      <EmployeeCostPager pagination={pager.pagination} onPage={pager.setPage} onPageSize={pager.setPageSize} location="top" unit="mã" />
+      <div className="employee-cost-table-wrap">
       <table className="employee-cost-gap-table admin">
-        <thead><tr><th>Mã QLNB · tên hàng</th><th>Đơn vị ảnh hưởng</th><th>NV</th><th>Doanh thu ảnh hưởng</th><th>Lý do/gợi ý</th></tr></thead>
-        <tbody>{view.items.map((item) => <tr key={item.productCode}>
+        <thead><tr><th>STT</th><th>Mã QLNB · tên hàng</th><th>Đơn vị ảnh hưởng</th><th>NV</th><th>Doanh thu ảnh hưởng</th><th>Lý do/gợi ý</th></tr></thead>
+        <tbody>{pager.rows.map((item, index) => <tr key={item.productCode}>
+          <td className="employee-cost-number">{pager.start + index + 1}</td>
           <td><b>{item.productCode}</b><small>{item.productName}</small></td>
           <td><b>{item.unitCount.toLocaleString('vi-VN')} đơn vị</b><small>{item.unitLabels.join('; ')}</small></td>
           <td>{item.employeeCodes.join(', ')}</td>
@@ -290,7 +374,9 @@ function AdminGapPanel({ payload, loading, error, range }) {
           <td><span className={`employee-cost-gap-reason ${item.reason}`}>{gapReasonLabel(item.reason)}</span>{!!item.suggestedCatalogCodes.length && <small>Gợi ý: {item.suggestedCatalogCodes.join('; ')}</small>}</td>
         </tr>)}</tbody>
       </table>
-    </div>}
+      </div>
+      <EmployeeCostPager pagination={pager.pagination} onPage={pager.setPage} onPageSize={pager.setPageSize} location="bottom" unit="mã" />
+    </>}
     <p className="employee-cost-gap-note">Excel để DataHub điền % hoặc xác nhận ánh xạ. App Report chỉ phát hiện/gợi ý, không tự áp mã catalog.</p>
   </div>;
 }
@@ -299,7 +385,7 @@ export default function EmployeeCost({ me }) {
   const admin = !!me?.isAdmin;
   const [view, setView] = useState('cost');
   const [employees, setEmployees] = useState([]);
-  const [selectedEmp, setSelectedEmp] = useState(admin ? '' : String(me?.emp_code || ''));
+  const [selectedEmp, setSelectedEmp] = useState(admin ? 'ALL' : String(me?.emp_code || ''));
   const [draftRange, setDraftRange] = useState({ from: month, to: month });
   const [range, setRange] = useState({ from: month, to: month });
   const [payload, setPayload] = useState(EMPTY);
@@ -316,6 +402,17 @@ export default function EmployeeCost({ me }) {
   const [gapError, setGapError] = useState('');
   const [costExporting, setCostExporting] = useState('');
   const [costExportError, setCostExportError] = useState('');
+  const [tableQuery, setTableQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [tableSort, setTableSort] = useState({ key: '', dir: 'asc' });
+  const [tablePage, setTablePage] = useState(1);
+  const [tablePageSize, setTablePageSize] = useState(20);
+  const [tableFilters, setTableFilters] = useState({ province: '', unitGroup: '', route: '', date: '' });
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(tableQuery), 180);
+    return () => clearTimeout(timer);
+  }, [tableQuery]);
 
   useEffect(() => {
     if (!admin) return;
@@ -326,7 +423,7 @@ export default function EmployeeCost({ me }) {
       const panel = normalizeVisibilityPanel(data);
       setVisibilityPanel(panel);
       setEmployees(panel.employees);
-      setSelectedEmp((current) => current || panel.employees[0]?.emp_code || '');
+      setSelectedEmp((current) => current || 'ALL');
     }).catch((requestError) => {
       if (!alive) return;
       setEmployees([]);
@@ -342,7 +439,16 @@ export default function EmployeeCost({ me }) {
     setLoading(true);
     setError('');
     setExpanded({});
-    api.employeeCost(admin ? selectedEmp : undefined, range)
+    const allEmployees = admin && selectedEmp === 'ALL';
+    api.employeeCost(admin ? selectedEmp : undefined, {
+      ...range,
+      q: debouncedQuery,
+      sortKey: tableSort.key,
+      sortDir: tableSort.dir,
+      ...tableFilters,
+      page: tablePage,
+      pageSize: tablePageSize,
+    })
       .then((data) => { if (alive) setPayload(data); })
       .catch((requestError) => {
         if (!alive) return;
@@ -351,7 +457,7 @@ export default function EmployeeCost({ me }) {
       })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [admin, selectedEmp, range, view]);
+  }, [admin, selectedEmp, range, view, debouncedQuery, tableSort, tablePage, tablePageSize, tableFilters]);
 
   useEffect(() => {
     if (admin && view !== 'gaps') return undefined;
@@ -372,15 +478,21 @@ export default function EmployeeCost({ me }) {
   const model = useMemo(() => employeeCostViewModel(payload), [payload]);
   const selected = employees.find((employee) => employee.emp_code === selectedEmp);
   const employeeLabel = admin
-    ? (selected ? employeeOptionLabel(selected) : 'Chưa chọn nhân viên')
+    ? (selectedEmp === 'ALL' ? 'Tất cả nhân viên' : (selected ? employeeOptionLabel(selected) : 'Chưa chọn nhân viên'))
     : String(me?.emp_code || model.empCode || '—');
   const rangeInvalid = !draftRange.from || !draftRange.to || draftRange.from > draftRange.to;
   const multiple = model.periods.length > 1;
   const columnKpis = employeeCostColumnKpis(model);
+  const allEmployees = admin && selectedEmp === 'ALL';
+  const filteredCount = model.search.filteredRows;
+  const totalTableRows = model.search.totalRows;
+  const activeTableFilter = tableQuery || tableFilters.province || tableFilters.unitGroup || tableFilters.route || tableFilters.date || tableSort.key;
 
   const applyRange = (event) => {
     event.preventDefault();
     if (rangeInvalid) return;
+    setTablePage(1);
+    setTableFilters((current) => ({ ...current, date: '' }));
     setRange({ ...draftRange });
   };
   const changeVisibility = (layer, key, setting) => {
@@ -407,9 +519,27 @@ export default function EmployeeCost({ me }) {
   const exportCost = async (format) => {
     if (admin && !selectedEmp) return;
     setCostExporting(format); setCostExportError('');
-    try { await downloadEmployeeCostReport(format, { ...range, ...(admin ? { emp: selectedEmp } : {}) }); }
+    try {
+      await downloadEmployeeCostReport(format, {
+        ...range, ...(admin ? { emp: selectedEmp } : {}), q: tableQuery, sortKey: tableSort.key, sortDir: tableSort.dir, ...tableFilters,
+      });
+    }
     catch (requestError) { setCostExportError(requestError.message || 'Không xuất được báo cáo chi phí'); }
     finally { setCostExporting(''); }
+  };
+  const changeEmployee = (value) => {
+    setSelectedEmp(value); setTablePage(1); setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '', date: '' });
+  };
+  const changeTableFilter = (key, value) => {
+    setTablePage(1);
+    setTableFilters((current) => ({ ...current, [key]: value }));
+  };
+  const clearTableFilters = () => {
+    setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '', date: '' }); setTablePage(1);
+  };
+  const changeSort = (key) => {
+    setTablePage(1);
+    setTableSort((current) => current.key === key ? { key, dir: current.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
   };
 
   if (!admin && payload.disabled) return <section className="employee-cost-page">
@@ -425,11 +555,40 @@ export default function EmployeeCost({ me }) {
       <form className="employee-cost-filters" onSubmit={applyRange}>
         {admin && view === 'cost' && <label>
           <span>Nhân viên</span>
-          <select value={selectedEmp} onChange={(event) => setSelectedEmp(event.target.value)}>
+          <select value={selectedEmp} onChange={(event) => changeEmployee(event.target.value)}>
+            <option value="ALL">Tất cả nhân viên</option>
             {!employees.length && <option value="">Chưa có nhân viên</option>}
             {employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>
               {employeeOptionLabel(employee)}
             </option>)}
+          </select>
+        </label>}
+        {view === 'cost' && model.filterOptions.province.available && <label>
+          <span>Vùng/Tỉnh</span>
+          <select value={tableFilters.province} onChange={(event) => changeTableFilter('province', event.target.value)}>
+            <option value="">Tất cả Vùng/Tỉnh</option>
+            {model.filterOptions.province.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
+          </select>
+        </label>}
+        {view === 'cost' && <label>
+          <span>Nhóm mã đơn vị</span>
+          <select value={tableFilters.unitGroup} onChange={(event) => changeTableFilter('unitGroup', event.target.value)}>
+            <option value="">Tất cả nhóm mã</option>
+            {model.filterOptions.unitGroup.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
+          </select>
+        </label>}
+        {view === 'cost' && <label>
+          <span>Tuyến</span>
+          <select value={tableFilters.route} onChange={(event) => changeTableFilter('route', event.target.value)}>
+            <option value="">Tất cả tuyến</option>
+            {model.filterOptions.route.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
+          </select>
+        </label>}
+        {view === 'cost' && <label>
+          <span>Ngày doanh thu</span>
+          <select value={tableFilters.date} onChange={(event) => changeTableFilter('date', event.target.value)}>
+            <option value="">Tất cả ngày</option>
+            {model.filterOptions.date.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
           </select>
         </label>}
         <label><span>Từ tháng</span><input type="month" value={draftRange.from} onChange={(event) => setDraftRange((current) => ({ ...current, from: event.target.value }))} /></label>
@@ -466,11 +625,24 @@ export default function EmployeeCost({ me }) {
 
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} />
-      <Kpi label="Số dòng đơn hàng" value={model.rows.length.toLocaleString('vi-VN')} />
+      <Kpi label="Số dòng đơn hàng" value={filteredCount.toLocaleString('vi-VN')} sub={`Hiện ${filteredCount.toLocaleString('vi-VN')}/${totalTableRows.toLocaleString('vi-VN')} dòng`} />
       <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${model.match.threshold}%`} />
       <Kpi label={multiple ? 'Tổng cả kỳ (chưa gồm khoản cuối năm)' : 'Tổng chi phí tháng (chưa gồm khoản cuối năm)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`} />
       <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
+    </div>
+
+    <div className="card employee-cost-table-toolbar">
+      <label><span>Tìm trong toàn bảng</span><input type="search" value={tableQuery} onChange={(event) => { setTableQuery(event.target.value); setTablePage(1); }} placeholder="Không dấu, nhiều từ khóa (AND)…" /></label>
+      <div className="employee-cost-filter-chip">
+        Đang lọc: <b>{allEmployees ? 'Tất cả NV' : (model.empCode || me?.emp_code || '—')}</b>
+        {tableFilters.province && <> · {tableFilters.province}</>}
+        {tableFilters.unitGroup && <> · nhóm {tableFilters.unitGroup}</>}
+        {tableFilters.route && <> · tuyến {tableFilters.route}</>}
+        {tableFilters.date && <> · ngày {formatEmployeeCostCell(tableFilters.date, { key: 'date' })}</>}
+        {tableQuery && <> · từ khóa “{tableQuery}”</>} · {filteredCount.toLocaleString('vi-VN')}/{totalTableRows.toLocaleString('vi-VN')} dòng
+        {activeTableFilter && <button type="button" onClick={clearTableFilters}>× Xóa lọc</button>}
+      </div>
     </div>
 
     {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
@@ -480,6 +652,12 @@ export default function EmployeeCost({ me }) {
         period={period}
         expanded={!!expanded[period.period]}
         onToggle={() => setExpanded((current) => ({ ...current, [period.period]: !current[period.period] }))}
+        query={tableQuery}
+        sort={tableSort}
+        onSort={changeSort}
+        allEmployees={allEmployees}
+        onPage={setTablePage}
+        onPageSize={(value) => { setTablePageSize(value); setTablePage(1); }}
       />)}
       {multiple && <div className="card employee-cost-range-total">
         <span>Tổng cả kỳ (chưa gồm khoản cuối năm)</span>

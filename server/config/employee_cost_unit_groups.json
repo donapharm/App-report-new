@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "note": "Map tiền tố loại mã đơn vị sang nhóm hiển thị trong Chi phí nhân viên. Có thể đổi alias/label mà không sửa code; tiền tố chưa có map sẽ tự tạo nhóm theo chính tiền tố nguồn.",
+  "aliases": {
+    "BV": "BV",
+    "BVĐK": "BV",
+    "BVĐKKV": "BV",
+    "BVYHCT": "BV",
+    "TTYT": "TTYT",
+    "TTYTDP": "TTYT",
+    "PK": "PKĐK",
+    "PKĐK": "PKĐK",
+    "NT": "NT",
+    "NHÀTHUỐC": "NT",
+    "TYT": "TYT",
+    "TTKSBT": "TTKSBT",
+    "CDC": "TTKSBT"
+  },
+  "labels": {
+    "BV": "BV · Bệnh viện",
+    "TTYT": "TTYT · Trung tâm y tế",
+    "PKĐK": "PKĐK · Phòng khám đa khoa",
+    "NT": "NT · Nhà thuốc",
+    "TYT": "TYT · Trạm y tế",
+    "TTKSBT": "TTKSBT · Trung tâm kiểm soát bệnh tật"
+  }
+}

@@ -41,12 +41,16 @@ test('ghép đúng tên thuốc, hoạt chất, hàm lượng, ĐVT và đơn gi
   );
 });
 
-test('danh mục quản lý suy ra tỉnh từ đơn vị và giữ tỉnh trong response NV đã scope', () => {
-  const row = catalogManagement.normalizeRow({
+test('danh mục quản lý không suy tỉnh từ tên và chỉ giữ tỉnh chính thức trong response NV đã scope', () => {
+  const unassigned = catalogManagement.normalizeRow({
     id: 'bp-1', emp_code: 'DN016', scope: 'unit_qlnb', code: `BVĐK Bình Phước\u001fQL01`,
     unit_code: 'BVĐK Bình Phước', qlnb_code: 'QL01', effective_from: '2026-07',
   });
-  assert.equal(row.province, 'Bình Phước');
+  assert.equal(unassigned.province, '');
+  const row = catalogManagement.normalizeRow({
+    id: 'bp-2', emp_code: 'DN016', scope: 'unit_qlnb', code: `BVĐK Bình Phước\u001fQL01`,
+    unit_code: 'BVĐK Bình Phước', qlnb_code: 'QL01', province: 'Bình Phước', effective_from: '2026-07',
+  });
   const response = catalogManagement.employeeView({
     period: '2026-07', rows: [row], meta: { source: 'test', version: '1' },
   }, 'DN016', '2026-07');

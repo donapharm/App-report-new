@@ -57,6 +57,8 @@ test('cost Excel is A4 landscape, numeric/formula capable, Vietnamese, and block
   assert.equal(sheet.pageSetup.fitToWidth, 1);
   assert.equal(sheet.pageSetup.printTitlesRow, '7:7');
   const headers = sheet.getRow(7).values.slice(1);
+  assert.equal(headers[0], 'STT');
+  assert.equal(sheet.getRow(8).getCell(1).value, 1);
   assert.ok(headers.includes('CP cộng tác viên (%)'));
   assert.ok(headers.includes('Thành tiền C36'));
   assert.ok(headers.includes('Thành tiền C44'));
@@ -84,6 +86,45 @@ test('part-time cost export keeps only C36 and does not invent C44', async () =>
   assert.match(headers, /C36/);
   assert.doesNotMatch(headers, /C44|C41|C43|C45/);
   assert.doesNotMatch(sheet.getColumn(1).values.join(' | '), /KHOẢN CUỐI NĂM|C44/);
+});
+
+test('ALL employee Excel/PDF export keeps STT + employee identity and employee subtotals', async () => {
+  const report = costReport();
+  report.empCode = 'ALL'; report.employeeName = 'Tất cả nhân viên'; report.allEmployees = true;
+  report.periods[0].rows[0].stt = 7;
+  report.periods[0].rows[0].employeeCode = 'DN001';
+  report.periods[0].rows[0].employeeName = 'Đặng Xuân Trung';
+  report.periods[0].employeeSubtotals = [{ employeeCode: 'DN001', employeeName: 'Đặng Xuân Trung', rowCount: 1, monthlyTotal: 41144556, columnTotals: { c36: 41144556, c44: 1210470 } }];
+  const workbook = exportService.createCostWorkbook([report]);
+  const sheet = workbook.worksheets[0];
+  const headers = sheet.getRow(7).values.slice(1);
+  assert.deepEqual(headers.slice(0, 2), ['STT', 'Nhân viên']);
+  assert.equal(sheet.getRow(8).getCell(1).value, 7);
+  assert.match(sheet.getRow(8).getCell(2).value, /DN001 · Đặng Xuân Trung/);
+  assert.match(sheet.getColumn(2).values.join(' | '), /TỔNG PHỤ DN001/);
+  const pdf = inspectPdf(await exportService.costPdfBuffer([report]), 'cost-all');
+  assert.match(pdf.text, /STT/);
+  assert.match(pdf.text, /Nhân viên/);
+  assert.match(pdf.text, /Tổng phụ: DN001/);
+});
+
+test('cost Excel/PDF print the same province, unit-group, route, date and search slice resolved by backend', async () => {
+  const report = costReport();
+  report.filters = { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL', date: '2026-07-02' };
+  report.search = { query: 'Cerecaps', filteredRows: 1, totalRows: 12 };
+  report.periods[0].search = { query: 'Cerecaps', filteredRows: 1, totalRows: 12 };
+  const workbook = exportService.createCostWorkbook([report]);
+  assert.match(workbook.worksheets[0].getCell('A5').value, /Vùng\/Tỉnh: ĐỒNG NAI/);
+  assert.match(workbook.worksheets[0].getCell('A5').value, /Nhóm mã ĐV: BV/);
+  assert.match(workbook.worksheets[0].getCell('A5').value, /Tuyến: CL/);
+  assert.match(workbook.worksheets[0].getCell('A5').value, /Ngày: 02\/07\/2026/);
+  assert.match(workbook.worksheets[0].getCell('A5').value, /Hiện 1\/12 dòng/);
+  const pdf = inspectPdf(await exportService.costPdfBuffer([report]), 'cost-filtered');
+  assert.match(pdf.text, /ĐỒNG NAI/);
+  assert.match(pdf.text, /Nhóm mã ĐV: BV/);
+  assert.match(pdf.text, /Tuyến: CL/);
+  assert.match(pdf.text, /Ngày: 02\/07\/2026/);
+  assert.match(pdf.text, /Cerecaps/);
 });
 
 test('gap Excel has two A4 landscape sheets and blank fill/confirmation columns', async () => {
@@ -149,4 +190,7 @@ test('export routes are authenticated, self-scope through employeeCostPayload, a
   }
   assert.match(routes, /employeeCost\.resolveScopedEmployee/);
   assert.match(routes, /auditEvent: `export_\$\{format\}`/);
+  assert.match(routes, /province: req\.query\.province/);
+  assert.match(routes, /unitGroup: req\.query\.unitGroup/);
+  assert.match(routes, /route: req\.query\.route/);
 });
