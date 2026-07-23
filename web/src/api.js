@@ -5,15 +5,52 @@ const ME_TIMEOUT_MS = 8000;
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
 
-// deviceId bền cho "thiết bị tin cậy" — sinh ngẫu nhiên 1 lần, lưu localStorage.
+// deviceId bền cho "thiết bị tin cậy": đồng bộ localStorage + cookie 1 năm.
+// Ưu tiên cookie giống App Sale để hai bản sao không luân phiên nhau.
 const DEVICE_KEY = 'rpt_device';
+const LAST_PHONE_KEY = 'rpt_last_phone';
+
+function readCookie(name) {
+  try {
+    const prefix = `${name}=`;
+    const found = document.cookie.split(';').map((x) => x.trim()).find((x) => x.startsWith(prefix));
+    return found ? decodeURIComponent(found.slice(prefix.length)) : '';
+  } catch { return ''; }
+}
+
+function writeDeviceCookie(value) {
+  try {
+    const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `${DEVICE_KEY}=${encodeURIComponent(value)}; Max-Age=31536000; Path=/; SameSite=Lax${secure}`;
+  } catch { /* ignore */ }
+}
+
 export function getDeviceId() {
-  let d = localStorage.getItem(DEVICE_KEY);
-  if (!d) {
-    d = (crypto.randomUUID ? crypto.randomUUID() : 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
-    localStorage.setItem(DEVICE_KEY, d);
-  }
+  let local = '';
+  try { local = localStorage.getItem(DEVICE_KEY) || ''; } catch { /* ignore */ }
+  const cookie = readCookie(DEVICE_KEY);
+  const d = cookie || local
+    || (crypto.randomUUID ? crypto.randomUUID() : 'dev-' + Math.random().toString(36).slice(2) + Date.now().toString(36));
+  try { if (local !== d) localStorage.setItem(DEVICE_KEY, d); } catch { /* ignore */ }
+  if (cookie !== d) writeDeviceCookie(d);
   return d;
+}
+
+export function rememberLastPhone(phone) {
+  try { if (String(phone || '').trim()) localStorage.setItem(LAST_PHONE_KEY, String(phone).trim()); } catch { /* ignore */ }
+}
+export function getLastPhone() {
+  try { return localStorage.getItem(LAST_PHONE_KEY) || ''; } catch { return ''; }
+}
+export function forgetLastPhone() {
+  try { localStorage.removeItem(LAST_PHONE_KEY); } catch { /* ignore */ }
+}
+
+function requestError(message, res, data) {
+  const error = new Error(message);
+  error.status = res?.status || 0;
+  error.code = data?.code || '';
+  return error;
 }
 
 async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = {}) {
@@ -34,12 +71,12 @@ async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = 
     if (res.status === 401) {
       // OTP sai/hết hạn không phải là phiên đăng nhập hết hạn.
       if (path === '/auth/otp/verify') {
-        throw new Error(data.error || 'Mã OTP không đúng hoặc đã hết hạn');
+        throw requestError(data.error || 'Mã OTP không đúng hoặc đã hết hạn', res, data);
       }
       setToken(null);
-      throw new Error(data.error || 'Phiên đăng nhập hết hạn');
+      throw requestError(data.error || 'Phiên đăng nhập hết hạn', res, data);
     }
-    if (!res.ok) throw new Error(data.error || 'Lỗi máy chủ');
+    if (!res.ok) throw requestError(data.error || 'Lỗi máy chủ', res, data);
     return data;
   } catch (e) {
     if (controller?.signal.aborted) {
@@ -62,10 +99,14 @@ export const api = {
   otpVerify: (phone, code) => req('POST', '/auth/otp/verify', { phone, code }, {
     timeoutMs: OTP_AUTH_TIMEOUT_MS,
     timeoutMessage: 'Hệ thống OTP phản hồi quá lâu. Vui lòng thử lại.',
-  }),
+  }).then((r) => { if (r.token) rememberLastPhone(phone); return r; }),
   otpSelect: (phone, emp_code) => req('POST', '/auth/otp/select', { phone, emp_code }, {
     timeoutMs: OTP_AUTH_TIMEOUT_MS,
     timeoutMessage: 'Hệ thống OTP phản hồi quá lâu. Vui lòng thử lại.',
+  }).then((r) => { if (r.token) rememberLastPhone(phone); return r; }),
+  deviceLogin: (phone) => req('POST', '/auth/device-login', { phone }, {
+    timeoutMs: OTP_AUTH_TIMEOUT_MS,
+    timeoutMessage: 'Hệ thống đăng nhập nhanh phản hồi quá lâu. Vui lòng thử lại.',
   }),
   sso: (sso_token) => req('POST', '/auth/sso', { sso_token }),
   // Telegram login (chính)

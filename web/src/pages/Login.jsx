@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, setToken } from '../api.js';
+import { api, getLastPhone, setToken } from '../api.js';
 import { roleLabel } from '../util.js';
 import Logo from '../logo.jsx';
 import { OfficialZaloQr } from '../components.jsx';
@@ -34,7 +34,7 @@ export default function Login({ onLogin }) {
 
   // OTP flow
   const [step, setStep] = useState('phone');     // phone | code | choose
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(() => getLastPhone());
   const [code, setCode] = useState('');
   const [accounts, setAccounts] = useState([]);
 

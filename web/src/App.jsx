@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, getToken, setToken } from './api.js';
+import { api, forgetLastPhone, getLastPhone, getToken, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { useIsDesktop } from './hooks.js';
 import { Spinner, ScrollTopButton, Clock, UpdateBanner, ZaloSidebar, ZaloMobileAccess } from './components.jsx';
@@ -61,6 +61,7 @@ function HomeButton() {
 export default function App() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [bootError, setBootError] = useState('');
   const [tab, setTab] = useState(() => {
     try {
       const linked = new URLSearchParams(window.location.search).get('tab');
@@ -72,8 +73,50 @@ export default function App() {
   const desktop = useIsDesktop();
 
   useEffect(() => {
-    if (!getToken()) { setLoading(false); return; }
-    api.me().then(setMe).catch(() => setToken(null)).finally(() => setLoading(false));
+    let alive = true;
+    async function restoreTrustedDevice() {
+      const phone = getLastPhone();
+      if (!phone) return false;
+      try {
+        const result = await api.deviceLogin(phone);
+        setToken(result.token);
+        const current = await api.me();
+        if (alive) setMe(current);
+        return true;
+      } catch (error) {
+        // Chưa đủ 3 OTP / quá 30 ngày / fingerprint đổi: rơi về OTP bình thường.
+        // Nếu phiên mới đã cấp nhưng /me gặp lỗi mạng/5xx thì giữ token và hiện
+        // trạng thái kết nối lại, không mở màn OTP gây hiểu nhầm.
+        if (alive && getToken() && error?.status !== 401 && error?.status !== 403) {
+          setBootError('App Report đang kết nối lại máy chủ. Phiên đăng nhập vẫn được giữ.');
+        }
+        return false;
+      }
+    }
+    async function bootstrap() {
+      try {
+        if (!getToken()) {
+          await restoreTrustedDevice();
+          return;
+        }
+        try {
+          const current = await api.me();
+          if (alive) setMe(current);
+        } catch (error) {
+          if (error?.status === 401 || error?.status === 403) {
+            setToken(null);
+            await restoreTrustedDevice();
+          } else if (alive && getToken()) {
+            // Lỗi mạng/5xx không được phá phiên rolling rồi ép người dùng nhập OTP.
+            setBootError('App Report đang kết nối lại máy chủ. Phiên đăng nhập vẫn được giữ.');
+          }
+        }
+      } finally {
+        if (alive) setLoading(false);
+      }
+    }
+    bootstrap();
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {
@@ -119,9 +162,18 @@ export default function App() {
   }, [me, tab]);
 
   if (loading) return <Spinner />;
+  if (!me && bootError && getToken()) return (
+    <div className="login">
+      <div className="card" style={{ maxWidth: 460, margin: '12vh auto 0' }}>
+        <h2>Đang kết nối lại App Report</h2>
+        <p>{bootError}</p>
+        <button className="btn" onClick={() => window.location.reload()}>Thử lại</button>
+      </div>
+    </div>
+  );
   if (!me) return <Login onLogin={setMe} />;
 
-  const logout = () => { setToken(null); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
+  const logout = () => { setToken(null); forgetLastPhone(); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
   const canonicalCeo = String(me.role || '').toLowerCase() === 'ceo' || String(me.emp_code || '').toUpperCase() === 'CEO';
   const tabs = TABS.filter((t) => (!t.adminOnly || me.isAdmin)
     && (!t.ceoEmployeeOnly || canonicalCeo || !me.isAdmin)

@@ -424,7 +424,7 @@ router.get('/auth/mode', (req, res) => res.json({ live: auth.liveAuthEnabled(), 
 // --- Đăng nhập THẬT (chỉ chạy khi cấu hình env OTP/SSO) ---
 router.post('/auth/otp/request', async (req, res) => {
   try {
-    const ok = await auth.requestOtp((req.body.phone || '').trim());
+    const ok = await auth.requestOtp((req.body.phone || '').trim(), loginCtx(req));
     res.json({ ok });
   } catch (e) { res.status(e.status || 400).json({ error: e.message, ...(e.code ? { code: e.code } : {}) }); }
 });
@@ -442,6 +442,16 @@ router.post('/auth/otp/select', (req, res) => {
     const r = auth.selectAccount((req.body.phone || '').trim(), (req.body.emp_code || '').trim(), loginCtx(req));
     res.json(r);
   } catch (e) { res.status(400).json({ error: e.message }); }
+});
+router.post('/auth/device-login', (req, res) => {
+  try {
+    const r = auth.loginByTrustedDevice((req.body.phone || '').trim(), loginCtx(req));
+    if (!r) return res.status(401).json({
+      error: 'Thiết bị chưa đủ điều kiện vào nhanh, vui lòng đăng nhập OTP.',
+      code: 'DEVICE_NOT_TRUSTED',
+    });
+    res.json(r);
+  } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
 });
 router.post('/auth/sso', async (req, res) => {
   try {

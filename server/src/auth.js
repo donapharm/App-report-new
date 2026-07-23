@@ -15,6 +15,9 @@ const persist = require('./persist');
 const SESSION_IDLE_DAYS = Math.max(1, Number(process.env.SESSION_IDLE_DAYS || 7) || 7);
 const SESSION_IDLE_MS = SESSION_IDLE_DAYS * 24 * 60 * 60 * 1000; // rolling idle TTL
 const MAX_DEVICES = 3;                        // tối đa 3 thiết bị tin cậy / tài khoản
+const TRUSTED_LOGIN_THRESHOLD = Math.max(1, Number(process.env.SESSION_TRUSTED_LOGIN_THRESHOLD || 3) || 3);
+const TRUSTED_DEVICE_REVERIFY_DAYS = Math.max(1, Number(process.env.SESSION_TRUSTED_DEVICE_REVERIFY_DAYS || 30) || 30);
+const TRUSTED_DEVICE_REVERIFY_MS = TRUSTED_DEVICE_REVERIFY_DAYS * 24 * 60 * 60 * 1000;
 const TG_CODE_TTL_MS = 120 * 1000;            // mã Telegram 120s
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
 const now = () => Date.now();
@@ -44,7 +47,7 @@ function serviceSessionFromRequest(req) {
     role: 'ceo',
     name: 'DataHub Service',
     phone: null,
-    deviceId: 'datahub-service',
+    deviceId: sha('service:datahub'),
     method: 'service-token',
     issued_at: now(),
     expires_at: now() + SESSION_IDLE_MS,
@@ -65,12 +68,79 @@ function pruneSessions() {
 pruneSessions();
 
 /* ===================== THIẾT BỊ TIN CẬY (lưu bền) ===================== */
-// Bản ghi: { id:<deviceId>, emp_code, first_seen, last_seen, ua }
+// Bản ghi tương thích App Sale:
+// { id, device_id_hash, emp_code, phone, first_seen, last_seen, ua,
+//   trusted_fingerprint, trusted_login_count, is_trusted, trusted_at, last_otp_at }
 let devices = persist.load('devices', []);
 const saveDevices = () => persist.save('devices', devices);
 
+function deviceIdHash(deviceId) {
+  const raw = String(deviceId || '').trim();
+  const secret = process.env.SESSION_DEVICE_HASH_SECRET || process.env.SESSION_SECRET || 'app-report-device-id-v1';
+  return raw ? crypto.createHmac('sha256', secret).update(raw).digest('hex') : '';
+}
+const isStoredDeviceId = (value) => /^[a-f0-9]{64}$/i.test(String(value || ''));
+const migrateDeviceId = (value) => isStoredDeviceId(value) ? String(value) : deviceIdHash(value);
+
+// Migrate bản ghi Login V2 cũ: backend chỉ giữ device ID đã băm. Client vẫn gửi
+// device ID bền dạng thô qua header; mỗi request được băm trước khi so khớp.
+// Việc đổi đồng thời devices + sessions giữ nguyên các phiên rolling hiện hữu.
+{
+  const oldToHash = new Map();
+  let devicesChanged = false;
+  for (const d of devices) {
+    const oldId = String(d.id || '').trim();
+    const hash = String(d.device_id_hash || '').trim() || migrateDeviceId(oldId);
+    if (oldId) oldToHash.set(oldId, hash);
+    if (d.id !== hash || d.device_id_hash !== hash) devicesChanged = true;
+    d.id = hash;
+    d.device_id_hash = hash;
+  }
+  let sessionsChanged = false;
+  for (const s of sessions) {
+    if (!s.deviceId) continue;
+    const hash = oldToHash.get(String(s.deviceId)) || migrateDeviceId(s.deviceId);
+    if (s.deviceId !== hash) { s.deviceId = hash; sessionsChanged = true; }
+  }
+  if (devicesChanged) saveDevices();
+  if (sessionsChanged) saveSessions();
+}
+
+// Chỉ fingerprint OS + họ trình duyệt. Không so toàn bộ User-Agent vì version/build
+// Safari/PWA có thể đổi nhẹ và tạo vòng lặp OTP giả trên cùng thiết bị.
+function deviceFingerprint(userAgent) {
+  const ua = String(userAgent || '').toLowerCase();
+  if (!ua) return '';
+  const os = /iphone|ipad|ipod/.test(ua) ? 'ios'
+    : /android/.test(ua) ? 'android'
+      : /windows/.test(ua) ? 'windows'
+        : /mac os x|macintosh/.test(ua) ? 'macos'
+          : /linux|x11/.test(ua) ? 'linux' : 'other-os';
+  const browser = /edg(?:a|ios)?\//.test(ua) ? 'edge'
+    : /crios\//.test(ua) ? 'chrome-ios'
+      : /chrome\//.test(ua) || /chromium\//.test(ua) ? 'chrome'
+        : /firefox\//.test(ua) || /fxios\//.test(ua) ? 'firefox'
+          : /safari\//.test(ua) ? 'safari' : 'other-browser';
+  return `${os}:${browser}`;
+}
+
+function timeValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 /* ===================== AUDIT (lưu bền) ===================== */
 let audit = persist.load('audit_auth', []);
+{
+  let changed = false;
+  for (const item of audit) {
+    if (!item?.device || isStoredDeviceId(item.device)) continue;
+    item.device = deviceIdHash(item.device);
+    changed = true;
+  }
+  if (changed) persist.save('audit_auth', audit);
+}
 function logAudit(event, data) {
   audit.push({ at: new Date().toISOString(), event, ...data });
   if (audit.length > 2000) audit = audit.slice(-2000);
@@ -130,11 +200,27 @@ function purgeUser(empCode, reason) {
 function touchDevice(empCode, deviceId, ua) {
   if (!deviceId) return;
   const code = String(empCode).toUpperCase();
+  const storedId = deviceIdHash(deviceId);
   const t = now();
-  let d = devices.find((x) => x.emp_code === code && x.id === deviceId);
-  if (d) { d.last_seen = t; if (ua) d.ua = ua; }
+  let d = devices.find((x) => x.emp_code === code && x.id === storedId);
+  if (d) {
+    d.last_seen = t;
+    d.device_id_hash = storedId;
+    if (ua) d.ua = ua;
+  }
   else {
-    devices.push({ id: deviceId, emp_code: code, first_seen: t, last_seen: t, ua: ua || '' });
+    devices.push({
+      id: storedId,
+      device_id_hash: storedId,
+      emp_code: code,
+      first_seen: t,
+      last_seen: t,
+      ua: ua || '',
+      trusted_login_count: 0,
+      is_trusted: false,
+      trusted_at: null,
+      last_otp_at: null,
+    });
     // Vượt quá 3 thiết bị -> đá thiết bị CŨ NHẤT (first_seen cũ nhất) + audit + hủy phiên của nó.
     const mine = devices.filter((x) => x.emp_code === code).sort((a, b) => a.first_seen - b.first_seen);
     while (mine.length > MAX_DEVICES) {
@@ -149,6 +235,29 @@ function touchDevice(empCode, deviceId, ua) {
   saveDevices();
 }
 
+// Chỉ OTP thành công mới cộng đếm. Telegram/SSO/device-login không được làm mới
+// ngưỡng tin cậy hoặc cửa sổ 30 ngày.
+function markOtpTrustedDevice(user, opts = {}) {
+  const deviceId = String(opts.deviceId || '').trim();
+  if (!deviceId) return;
+  const code = String(user.emp_code || '').trim().toUpperCase();
+  touchDevice(code, deviceId, opts.ua);
+  const storedId = deviceIdHash(deviceId);
+  const d = devices.find((x) => x.emp_code === code && x.id === storedId);
+  if (!d) return;
+  const t = now();
+  const count = Math.min(TRUSTED_LOGIN_THRESHOLD, Math.max(0, Number(d.trusted_login_count || 0)) + 1);
+  d.phone = normPhone(opts.phone || user.phone || store.findUserByCode(code)?.phone || '');
+  d.device_id_hash = storedId;
+  d.trusted_login_count = count;
+  d.is_trusted = count >= TRUSTED_LOGIN_THRESHOLD;
+  if (d.is_trusted && !d.trusted_at) d.trusted_at = t;
+  d.last_otp_at = t;
+  d.trusted_fingerprint = deviceFingerprint(opts.ua);
+  saveDevices();
+  logAudit('device_otp_verified', { emp_code: code, device: storedId, count, trusted: d.is_trusted });
+}
+
 function issueToken(user, opts = {}) {
   pruneSessions();
   const token = crypto.randomBytes(24).toString('hex');
@@ -159,7 +268,7 @@ function issueToken(user, opts = {}) {
     role: user.role,
     name: user.name,
     phone: user.phone || opts.phone || store.findUserByCode(user.emp_code)?.phone || null,
-    deviceId: opts.deviceId || null,
+    deviceId: opts.deviceId ? deviceIdHash(opts.deviceId) : null,
     method: opts.method || 'otp',
     issued_at: t,
     expires_at: t + SESSION_IDLE_MS,
@@ -170,6 +279,7 @@ function issueToken(user, opts = {}) {
   // Nếu không chặn ở cả lúc phát token và lúc request bind device, Headless QA
   // có thể làm thiết bị thật của CEO bị loại khi vượt MAX_DEVICES.
   if (!isQaMethod(rec.method)) touchDevice(user.emp_code, opts.deviceId, opts.ua);
+  if (rec.method === 'otp') markOtpTrustedDevice(user, { ...opts, phone: rec.phone });
   logAudit('login', { emp_code: user.emp_code, method: rec.method, device: rec.deviceId });
   return token;
 }
@@ -182,12 +292,13 @@ function getSession(token, opts = {}) {
   if (s.expires_at <= now()) { pruneSessions(); return null; }
   const t = now();
   let changed = false;
-  const reqDeviceId = opts.deviceId ? String(opts.deviceId).trim() : '';
+  const rawDeviceId = opts.deviceId ? String(opts.deviceId).trim() : '';
+  const reqDeviceId = rawDeviceId ? deviceIdHash(rawDeviceId) : '';
   const trackTrustedDevice = !isQaMethod(s.method);
   // Phiên cũ trước Login V2 có thể chưa gắn deviceId: bind 1 lần theo header ổn định.
   // Nếu phiên đã có deviceId thì không đổi sang device khác, tránh máy lạ dùng token bị tính là thiết bị tin cậy.
   if (trackTrustedDevice && !s.deviceId && reqDeviceId) { s.deviceId = reqDeviceId; changed = true; }
-  if (trackTrustedDevice && s.deviceId && reqDeviceId && s.deviceId === reqDeviceId) touchDevice(s.emp_code, reqDeviceId, opts.ua);
+  if (trackTrustedDevice && s.deviceId && reqDeviceId && s.deviceId === reqDeviceId) touchDevice(s.emp_code, rawDeviceId, opts.ua);
   // Rolling session: mọi request token hợp lệ gia hạn theo idle TTL.
   s.expires_at = t + SESSION_IDLE_MS;
   changed = true;
@@ -200,6 +311,8 @@ function listDevices(empCode) {
   return devices
     .filter((d) => !code || d.emp_code === code)
     .map((d) => ({ id: d.id, emp_code: d.emp_code, first_seen: d.first_seen, last_seen: d.last_seen, ua: d.ua,
+      trusted_login_count: Number(d.trusted_login_count || 0), is_trusted: d.is_trusted === true,
+      trusted_at: d.trusted_at || null, last_otp_at: d.last_otp_at || null,
       active_sessions: sessions.filter((s) => s.emp_code === d.emp_code && s.deviceId === d.id && s.expires_at > now()).length }))
     .sort((a, b) => b.last_seen - a.last_seen);
 }
@@ -242,11 +355,12 @@ function normPhone(v) {
   if (s && !s.startsWith('0')) s = '0' + s;
   return s;
 }
-async function otpBackendRequest(path, payload) {
+async function otpBackendRequest(path, payload, opts = {}) {
   try {
+    const deviceId = String(opts.deviceId || '').trim();
     const response = await fetch(`${OTP_URL}${path}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(deviceId ? { 'x-device-id': deviceId } : {}) },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(OTP_BACKEND_TIMEOUT_MS),
     });
@@ -266,9 +380,14 @@ async function otpBackendRequest(path, payload) {
     throw networkError;
   }
 }
-async function requestOtp(phone) {
+async function requestOtp(phone, opts = {}) {
   if (!OTP_URL) throw new Error('Chưa cấu hình OTP_BACKEND_URL');
-  const { response, data } = await otpBackendRequest('/api/otp/request', { phone });
+  const deviceId = String(opts.deviceId || '').trim();
+  const { response, data } = await otpBackendRequest('/api/otp/request', {
+    phone,
+    ...(deviceId ? { deviceId } : {}),
+    page: 'Report',
+  }, opts);
   if (!response.ok || data.ok === false) {
     const upstreamError = new Error(data.error || 'Không thể gửi mã OTP.');
     upstreamError.status = !response.ok && response.status >= 400 && response.status < 500 ? response.status : 502;
@@ -291,7 +410,13 @@ const verifiedPhones = new Map();
 
 async function verifyOtp(phone, code, opts = {}) {
   if (!OTP_URL) throw new Error('Chưa cấu hình OTP_BACKEND_URL');
-  const { response, data } = await otpBackendRequest('/api/otp/verify', { phone, code });
+  const deviceId = String(opts.deviceId || '').trim();
+  const { response, data } = await otpBackendRequest('/api/otp/verify', {
+    phone,
+    code,
+    ...(deviceId ? { deviceId } : {}),
+    page: 'Report',
+  }, opts);
   if (!response.ok || !data.ok) return null;
 
   const accounts = (Array.isArray(data.accounts) ? data.accounts : []).map(mapAcc).filter((a) => a.emp_code);
@@ -313,6 +438,36 @@ function selectAccount(phone, empCode, opts = {}) {
   verifiedPhones.delete(normPhone(phone));
   if (!acc.name) acc.name = store.findUserByCode(acc.emp_code)?.name || acc.emp_code;
   return { token: issueToken(acc, { ...opts, ...(v.opts || {}), phone: normPhone(phone), method: 'otp' }), user: pub(acc) };
+}
+
+// Thiết bị đủ 3 lần OTP, fingerprint còn khớp và OTP gần nhất chưa quá 30 ngày
+// được cấp phiên mới. Device-login không cộng đếm và không gia hạn last_otp_at.
+function loginByTrustedDevice(phone, opts = {}) {
+  const normalizedPhone = normPhone(phone);
+  const deviceId = String(opts.deviceId || '').trim();
+  const fingerprint = deviceFingerprint(opts.ua);
+  if (!normalizedPhone || !deviceId || !fingerprint) return null;
+  const hash = deviceIdHash(deviceId);
+  const cutoff = now() - TRUSTED_DEVICE_REVERIFY_MS;
+  const candidates = devices.filter((d) => {
+    if (d.device_id_hash !== hash && d.id !== hash) return false;
+    if (normPhone(d.phone) !== normalizedPhone) return false;
+    if (d.is_trusted !== true || Number(d.trusted_login_count || 0) < TRUSTED_LOGIN_THRESHOLD) return false;
+    if (timeValue(d.last_otp_at) <= cutoff) return false;
+    return d.trusted_fingerprint === fingerprint;
+  });
+  // Một SĐT có thể có nhiều mã NV trong App Report. Nếu nhiều tài khoản cùng đủ
+  // điều kiện thì fail closed và yêu cầu OTP/chọn tài khoản, không tự đoán.
+  const valid = candidates.map((d) => ({ d, user: store.findUserByCode(d.emp_code) }))
+    .filter(({ user }) => user && normPhone(user.phone) === normalizedPhone);
+  if (valid.length !== 1) {
+    logAudit('device_login_rejected', { phone: normalizedPhone, device: hash, matches: valid.length });
+    return null;
+  }
+  const { d, user } = valid[0];
+  const token = issueToken(user, { ...opts, phone: normalizedPhone, method: 'device' });
+  logAudit('device_login', { emp_code: user.emp_code, device: d.id });
+  return { token, user: pub(user) };
 }
 
 async function verifySso(ssoToken, opts = {}) {
@@ -462,7 +617,7 @@ function requireAdmin(req, res, next) {
 
 module.exports = {
   mockLogin, requireAuth, requireTargetAuth, requireAdmin, isAdmin, scopeOf, sessionForUser, getSession,
-  issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, verifySso, demoAllowed,
+  issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),
   // Mapping + thiết bị + hủy phiên

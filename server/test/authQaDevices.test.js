@@ -16,12 +16,14 @@ test('phiên QA không bind hoặc chiếm suất thiết bị tin cậy', () =>
 
     const token = auth.issueToken(user, { method: 'qa-catalog-proof', deviceId: 'headless-at-issue', ua: 'HeadlessChrome' });
     const session = auth.getSession(token, { deviceId: 'headless-on-request', ua: 'HeadlessChrome' });
-    assert.equal(session.deviceId, 'headless-at-issue');
+    assert.match(session.deviceId, /^[a-f0-9]{64}$/);
+    assert.notEqual(session.deviceId, 'headless-at-issue');
     assert.deepEqual(auth.listDevices('CEO'), []);
 
     auth.issueToken(user, { method: 'telegram', deviceId: 'real-browser', ua: 'Chrome' });
     assert.equal(auth.listDevices('CEO').length, 1);
-    assert.equal(auth.listDevices('CEO')[0].id, 'real-browser');
+    assert.match(auth.listDevices('CEO')[0].id, /^[a-f0-9]{64}$/);
+    assert.notEqual(auth.listDevices('CEO')[0].id, 'real-browser');
   } finally {
     if (oldDir === undefined) delete process.env.AUTH_DATA_DIR;
     else process.env.AUTH_DATA_DIR = oldDir;
