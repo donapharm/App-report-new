@@ -156,9 +156,12 @@ test('DQ routes require authentication, keep backend scope, expose admin-only be
   const start = routes.indexOf('async function employeeCostDqPayload');
   const end = routes.indexOf("router.get('/employee-cost/employees'", start);
   const block = routes.slice(start, end);
-  assert.match(block, /employeeCostGapPayload\(req/);
+  assert.doesNotMatch(block, /await employeeCostGapPayload\(req/);
   assert.match(block, /requestedRaw === 'ALL' \? '' : requestedRaw/);
+  assert.match(block, /admin && !requested \? null : employeeCost\.resolveScopedEmployee/);
+  assert.match(block, /employeeCostVisibility\.run/);
   assert.match(block, /scopedEmp \? \{ empCode: scopedEmp \} : \{\}/);
+  assert.match(routes, /catalogManagement\.getCachedSnapshot\(key\) \|\| await canonicalAssignmentSnapshot\(key\)/);
   assert.match(block, /scope: \{ admin, employeeCode:/);
   assert.equal(/c32|c47/i.test(block), false);
 });

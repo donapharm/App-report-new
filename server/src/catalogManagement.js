@@ -88,13 +88,34 @@ function checksum(value) {
 function readCache(period) {
   try {
     const value = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-    assertCatalogFieldPolicy(value, 'catalogLkg');
     const snapshot = value?.snapshots && period
       ? value.snapshots[period] || null
       : value && Array.isArray(value.rows) && (!period || value.period === period) ? value : null;
-    if (snapshot) assertCatalogSnapshotContract(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
+    if (snapshot) {
+      // Validate only the requested snapshot. Scanning every retained month makes a
+      // cold DQ request synchronously walk hundreds of MB and blocks even /health.
+      assertCatalogFieldPolicy(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
+      assertCatalogSnapshotContract(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
+    }
     return snapshot;
   } catch { return null; }
+}
+function getCachedSnapshot(periodInput) {
+  const period = toHubPeriod(periodInput);
+  const cached = readCache(period);
+  if (!cached) return null;
+  return {
+    ...cached,
+    period,
+    readOnly: true,
+    meta: {
+      ...cached.meta,
+      source: 'data-hub-lkg',
+      stale: true,
+      readOnly: true,
+      message: 'Đang dùng snapshot Data Hub đã kiểm định cho kỳ yêu cầu.',
+    },
+  };
 }
 function safeRestoredSnapshots(restoredSnapshots = {}) {
   const safe = {};
@@ -482,4 +503,4 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };
+module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getCachedSnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };

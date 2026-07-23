@@ -815,6 +815,19 @@ router.get('/employee-cost/gaps/export.pdf', auth.requireAuth, asyncJsonRoute(as
 
 const EMPLOYEE_COST_DQ_CONFIG = path.join(__dirname, '..', 'config', 'employee_cost_data_quality.json');
 const EMPLOYEE_COST_DQ_AUDIT = 'employee_cost_dq_audit';
+const employeeCostDqCatalogSnapshots = new Map();
+async function employeeCostDqCatalogSnapshot(period) {
+  const key = catalogManagement.toHubPeriod(period);
+  const hit = employeeCostDqCatalogSnapshots.get(key);
+  if (hit && Date.now() - hit.at < 15 * 60 * 1000) return hit.value;
+  // DQ is read-only and must not make the request path rewrite/validate every
+  // retained catalog month. Prefer the already-validated snapshot for this
+  // exact period; only use the live canonical flow when no LKG exists.
+  const value = catalogManagement.getCachedSnapshot(key) || await canonicalAssignmentSnapshot(key);
+  employeeCostDqCatalogSnapshots.set(key, { at: Date.now(), value });
+  if (employeeCostDqCatalogSnapshots.size > 24) employeeCostDqCatalogSnapshots.delete(employeeCostDqCatalogSnapshots.keys().next().value);
+  return value;
+}
 function loadEmployeeCostDqConfig() {
   try {
     const parsed = JSON.parse(fs.readFileSync(EMPLOYEE_COST_DQ_CONFIG, 'utf8'));
@@ -926,19 +939,27 @@ async function employeeCostDqPayload(req, event = 'dq_view') {
   let payload;
   try {
     const admin = auth.isAdmin(req.session.role);
-    const gapReport = await employeeCostGapPayload(req, `${event}_gap_source`);
-    if (gapReport.disabled) return gapReport;
-    const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
     const requestedRaw = String(req.query.emp || '').trim().toUpperCase();
     const requested = requestedRaw === 'ALL' ? '' : requestedRaw;
-    const ownEmp = String(gapReport.scope?.employeeCode || req.session.emp_code || '').trim().toUpperCase();
-    const scopedEmp = admin ? requested : ownEmp;
+    const ownEmp = String(req.session.emp_code || '').trim().toUpperCase();
+    const scopedEmp = admin && !requested ? null : employeeCost.resolveScopedEmployee({
+      session: req.session,
+      scope: auth.scopeOf(req.session),
+      requestedEmp: requested,
+    });
+    if (!admin) {
+      const visibility = await employeeCostVisibility.run({
+        admin, actor: ownEmp, role: req.session.role, empCode: scopedEmp, roster: employeeCostRosterRows(),
+      }, () => null);
+      if (visibility?.disabled) return visibility;
+    }
+    const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
     const rawConfig = loadEmployeeCostDqConfig();
     const analyzedByPeriod = [];
     for (const period of range.months) {
       const periodRows = store.getRows({ ky: employeeCost.toUiMonth(period), scope: scopedEmp ? { empCode: scopedEmp } : {} })
         .map((row) => ({ ...row, period }));
-      const snapshot = await canonicalAssignmentSnapshot(period);
+      const snapshot = await employeeCostDqCatalogSnapshot(period);
       const periodCatalog = snapshot.catalog || [];
       if (!Array.isArray(periodCatalog) || periodCatalog.length === 0) {
         throw Object.assign(new Error(`Catalog ${period} chưa sẵn sàng; không chạy DQ để tránh phân loại sai.`), { status: 502, code: 'EMPLOYEE_COST_DQ_CATALOG_UNAVAILABLE' });
@@ -947,7 +968,10 @@ async function employeeCostDqPayload(req, event = 'dq_view') {
         revenueRows: periodRows,
         catalogRows: periodCatalog,
         rosterRows: Array.isArray(snapshot.rows) ? snapshot.rows : [],
-        gapPairs: (gapReport.pairs || []).filter((pair) => pair.period === period),
+        // The current cost-gap upstream is unavailable for some employees and
+        // must not hold core DQ exceptions hostage. PRODUCT_MISSING remains
+        // fail-closed (zero candidates) until a grounded gap snapshot exists.
+        gapPairs: [],
         config: rawConfig,
       }));
     }
