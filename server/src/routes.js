@@ -24,6 +24,7 @@ const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
 const employeeCostGaps = require('./employeeCostGaps');
+const employeeCostDataQuality = require('./employeeCostDataQuality');
 const employeeCostExport = require('./employeeCostExport');
 const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
 const employeeCostRoster = require('./employeeCostRoster');
@@ -808,6 +809,196 @@ router.get('/employee-cost/gaps/export.pdf', auth.requireAuth, asyncJsonRoute(as
   const to = String(payload.to || from).replace(/[^0-9-]/g, '');
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="employee-cost-gaps_${from}_${to}.pdf"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.send(buffer);
+}));
+
+const EMPLOYEE_COST_DQ_CONFIG = path.join(__dirname, '..', 'config', 'employee_cost_data_quality.json');
+const EMPLOYEE_COST_DQ_AUDIT = 'employee_cost_dq_audit';
+function loadEmployeeCostDqConfig() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(EMPLOYEE_COST_DQ_CONFIG, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || !parsed.rules) throw new Error('Thiếu rules');
+    return parsed;
+  } catch (error) {
+    throw Object.assign(new Error('Cấu hình kiểm soát dữ liệu chi phí không hợp lệ; dừng để tránh cảnh báo sai.'), {
+      status: 503, code: 'EMPLOYEE_COST_DQ_CONFIG_INVALID', cause: error,
+    });
+  }
+}
+function dqSearchText(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toUpperCase();
+}
+function publicDqItem(item, index) {
+  const keySource = [item.type, item.sourceUnitCode, item.sourceUnitLabel, item.sourceProductCode, item.errorValue].join('\u001f');
+  return {
+    key: crypto.createHash('sha256').update(keySource).digest('hex').slice(0, 24),
+    type: item.type,
+    severity: item.severity,
+    field: item.field,
+    invalidValue: item.errorValue,
+    productCode: item.sourceProductCode,
+    productName: item.sourceProductName,
+    unitCode: item.sourceUnitCode,
+    unitLabels: item.sourceUnitLabel ? [item.sourceUnitLabel] : [],
+    routes: String(item.route || '').split(',').map((value) => value.trim()).filter(Boolean),
+    employeeCodes: Array.isArray(item.employeeCodes) ? item.employeeCodes : [],
+    periods: Array.isArray(item.periods) ? item.periods : [],
+    revenueAffected: Number(item.revenueAffected || 0),
+    lineCount: Number(item.lineCount || 0),
+    cause: item.cause,
+    action: item.action,
+    repairSource: item.repairSource,
+    status: 'new',
+    rank: index + 1,
+  };
+}
+function mergeDqItems(items) {
+  const merged = new Map();
+  for (const item of Array.isArray(items) ? items : []) {
+    const mergeKey = [item.type, item.unitCode, item.unitLabels?.[0] || '', item.productCode, item.productName].join('\u001f');
+    const current = merged.get(mergeKey) || { ...item, employeeCodes: [], periods: [], routes: [], unitLabels: [], revenueAffected: 0, lineCount: 0 };
+    current.revenueAffected += Number(item.revenueAffected || 0);
+    current.lineCount += Number(item.lineCount || 0);
+    for (const field of ['employeeCodes', 'periods', 'routes', 'unitLabels']) {
+      current[field] = [...new Set([...(current[field] || []), ...(item[field] || [])])].filter(Boolean).sort((a, b) => String(a).localeCompare(String(b), 'vi'));
+    }
+    for (const field of ['invalidValue', 'cause', 'action', 'repairSource']) {
+      current[field] = [...new Set([current[field], item[field]].filter(Boolean))].join('; ');
+    }
+    merged.set(mergeKey, current);
+  }
+  return [...merged.values()].sort((left, right) => (left.severity === right.severity ? 0 : left.severity === 'red' ? -1 : 1)
+    || right.revenueAffected - left.revenueAffected || left.type.localeCompare(right.type, 'vi') || left.key.localeCompare(right.key, 'vi'))
+    .map((item, index) => ({ ...item, rank: index + 1 }));
+}
+function filterDqItems(items, query = {}, { admin, ownEmp } = {}) {
+  const filters = {
+    q: String(query.q || '').trim().slice(0, 200),
+    type: employeeCostDataQuality.RULE_ORDER.includes(String(query.type || '').toUpperCase()) ? String(query.type).toUpperCase() : '',
+    severity: ['red', 'yellow'].includes(String(query.severity || '').toLowerCase()) ? String(query.severity).toLowerCase() : '',
+    employee: admin ? String(query.employee || '').trim().toUpperCase() : String(ownEmp || '').trim().toUpperCase(),
+    unit: String(query.unit || '').trim().slice(0, 240),
+    route: String(query.route || '').trim().slice(0, 120),
+    repairSource: String(query.repairSource || '').trim().slice(0, 160),
+  };
+  const q = dqSearchText(filters.q); const unit = dqSearchText(filters.unit);
+  const route = dqSearchText(filters.route); const repairSource = dqSearchText(filters.repairSource);
+  return {
+    filters,
+    items: (Array.isArray(items) ? items : []).filter((item) => {
+      if (filters.type && item.type !== filters.type) return false;
+      if (filters.severity && item.severity !== filters.severity) return false;
+      if (filters.employee && !item.employeeCodes.includes(filters.employee)) return false;
+      if (unit && !dqSearchText(`${item.unitCode} ${(item.unitLabels || []).join(' ')}`).includes(unit)) return false;
+      if (route && !dqSearchText((item.routes || []).join(' ')).includes(route)) return false;
+      if (repairSource && !dqSearchText(item.repairSource).includes(repairSource)) return false;
+      if (q && !dqSearchText([item.type, item.productCode, item.productName, item.unitCode, ...(item.unitLabels || []), ...(item.employeeCodes || []), ...(item.routes || []), item.invalidValue, item.cause, item.action, item.repairSource].join(' ')).includes(q)) return false;
+      return true;
+    }),
+  };
+}
+function summarizeDqItems(items) {
+  return (Array.isArray(items) ? items : []).reduce((summary, item) => ({
+    exceptionCount: summary.exceptionCount + 1,
+    redCount: summary.redCount + (item.severity === 'red' ? 1 : 0),
+    yellowCount: summary.yellowCount + (item.severity === 'yellow' ? 1 : 0),
+    revenueAffected: summary.revenueAffected + Number(item.revenueAffected || 0),
+    redRevenueAffected: summary.redRevenueAffected + (item.severity === 'red' ? Number(item.revenueAffected || 0) : 0),
+    lineCount: summary.lineCount + Number(item.lineCount || 0),
+  }), { exceptionCount: 0, redCount: 0, yellowCount: 0, revenueAffected: 0, redRevenueAffected: 0, lineCount: 0 });
+}
+function auditEmployeeCostDq(req, event, payload, outcome = 'ok') {
+  try {
+    const rows = persist.load(EMPLOYEE_COST_DQ_AUDIT, []);
+    rows.push({
+      at: new Date().toISOString(), event, actor: req.session.emp_code, role: req.session.role,
+      scope: payload?.scope?.admin ? (payload.scope.employeeCode || 'ALL') : payload?.scope?.employeeCode,
+      from: payload?.from, to: payload?.to, exceptionCount: payload?.summary?.exceptionCount,
+      redCount: payload?.summary?.redCount, outcome,
+    });
+    persist.save(EMPLOYEE_COST_DQ_AUDIT, rows.slice(-1000));
+  } catch (error) {
+    console.warn('[employee-cost-dq] audit write failed', { actor: req.session.emp_code, message: error.message });
+  }
+}
+async function employeeCostDqPayload(req, event = 'dq_view') {
+  let payload;
+  try {
+    const admin = auth.isAdmin(req.session.role);
+    const gapReport = await employeeCostGapPayload(req, `${event}_gap_source`);
+    if (gapReport.disabled) return gapReport;
+    const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+    const requestedRaw = String(req.query.emp || '').trim().toUpperCase();
+    const requested = requestedRaw === 'ALL' ? '' : requestedRaw;
+    const ownEmp = String(gapReport.scope?.employeeCode || req.session.emp_code || '').trim().toUpperCase();
+    const scopedEmp = admin ? requested : ownEmp;
+    const rawConfig = loadEmployeeCostDqConfig();
+    const analyzedByPeriod = [];
+    for (const period of range.months) {
+      const periodRows = store.getRows({ ky: employeeCost.toUiMonth(period), scope: scopedEmp ? { empCode: scopedEmp } : {} })
+        .map((row) => ({ ...row, period }));
+      const snapshot = await canonicalAssignmentSnapshot(period);
+      const periodCatalog = snapshot.catalog || [];
+      if (!Array.isArray(periodCatalog) || periodCatalog.length === 0) {
+        throw Object.assign(new Error(`Catalog ${period} chưa sẵn sàng; không chạy DQ để tránh phân loại sai.`), { status: 502, code: 'EMPLOYEE_COST_DQ_CATALOG_UNAVAILABLE' });
+      }
+      analyzedByPeriod.push(employeeCostDataQuality.analyzeDataQuality({
+        revenueRows: periodRows,
+        catalogRows: periodCatalog,
+        rosterRows: Array.isArray(snapshot.rows) ? snapshot.rows : [],
+        gapPairs: (gapReport.pairs || []).filter((pair) => pair.period === period),
+        config: rawConfig,
+      }));
+    }
+    const allItems = mergeDqItems(analyzedByPeriod.flatMap((result) => result.exceptions.map(publicDqItem)));
+    const analyzedConfig = analyzedByPeriod[0]?.config || employeeCostDataQuality.normalizeConfig(rawConfig);
+    const filtered = filterDqItems(allItems, req.query, { admin, ownEmp });
+    const summary = summarizeDqItems(filtered.items);
+    const thresholds = rawConfig.alertThresholds || {};
+    payload = {
+      from: range.from, to: range.to,
+      scope: { admin, employeeCode: admin ? (requested || null) : ownEmp },
+      config: { ...analyzedConfig, alertThresholds: thresholds },
+      filters: filtered.filters,
+      summary,
+      alert: summary.redCount >= Math.max(1, Number(thresholds.redCount || 1))
+        || summary.redRevenueAffected >= Math.max(1, Number(thresholds.redRevenueAffected || 1)),
+      items: filtered.items,
+    };
+    auditEmployeeCostDq(req, event, payload);
+    return payload;
+  } catch (error) {
+    auditEmployeeCostDq(req, event, payload, error.code || 'failed');
+    throw error;
+  }
+}
+
+router.get('/employee-cost/data-quality', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostDqPayload(req, 'dq_view');
+  res.set('Cache-Control', 'private, no-store');
+  return res.json(payload);
+}));
+router.get('/employee-cost/data-quality/summary', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostDqPayload(req, 'dq_bell_view');
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ...payload.summary, alert: payload.alert, from: payload.from, to: payload.to });
+}));
+router.get('/employee-cost/data-quality/export.xlsx', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostDqPayload(req, 'dq_export_xlsx');
+  if (payload.disabled) return res.status(403).json({ error: payload.note || 'Chức năng chi phí đang tắt cho bạn.' });
+  const buffer = await employeeCostExport.dataQualityWorkbookBuffer(payload);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="employee-cost-data-quality_${payload.from}_${payload.to}.xlsx"`);
+  res.setHeader('Cache-Control', 'private, no-store');
+  return res.send(buffer);
+}));
+router.get('/employee-cost/data-quality/export.pdf', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostDqPayload(req, 'dq_export_pdf');
+  if (payload.disabled) return res.status(403).json({ error: payload.note || 'Chức năng chi phí đang tắt cho bạn.' });
+  const buffer = await employeeCostExport.dataQualityPdfBuffer(payload);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="employee-cost-data-quality_${payload.from}_${payload.to}.pdf"`);
   res.setHeader('Cache-Control', 'private, no-store');
   return res.send(buffer);
 }));

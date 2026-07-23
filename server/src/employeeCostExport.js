@@ -10,6 +10,8 @@ const SOURCE_FOOTER = 'Nguồn số: DataHub (SSOT) · chỉ hiển thị chi ph
 const COST_TITLE = 'BÁO CÁO CHI PHÍ CỦA TÔI';
 const GAP_TITLE = 'DANH SÁCH MẶT HÀNG CHƯA CÓ % CHI PHÍ';
 const GAP_NOTE = "Điền cột '% cần điền' hoặc xác nhận ánh xạ, rồi gửi DataHub cập nhật catalog. Xếp theo doanh thu ảnh hưởng: làm từ trên xuống để khớp nhanh nhất.";
+const DATA_QUALITY_TITLE = 'TRUNG TÂM KIỂM SOÁT DỮ LIỆU CHI PHÍ';
+const DATA_QUALITY_NOTE = 'App Report chỉ phát hiện, giải thích và chỉ nguồn sửa; không tự sửa dữ liệu. Xếp lỗi đỏ trước, sau đó theo doanh thu ảnh hưởng giảm dần.';
 const PROVINCE_WORKLIST_TITLE = 'DANH SÁCH ĐƠN VỊ CHƯA GÁN TỈNH';
 const PROVINCE_WORKLIST_NOTE = "Điền cột 'Tỉnh cần điền' → nhập vào server/config/unit_province.json (mã→tỉnh) → App Report tự áp.";
 const PROVINCE_WORKLIST_FOOTER = 'Nguồn số: App Report · worklist Vùng/Tỉnh dành riêng CEO/ADMIN';
@@ -352,6 +354,54 @@ async function gapWorkbookBuffer(payload, options = {}) {
   return Buffer.from(await createGapWorkbook(payload, options).xlsx.writeBuffer());
 }
 
+function dqEmployeeLabel(payload = {}) {
+  const code = safeText(payload.scope?.employeeCode, 40).toUpperCase();
+  return payload.scope?.admin && !code ? 'CEO/ADMIN · Toàn bộ' : code || '—';
+}
+
+function createDataQualityWorkbook(payload = {}, options = {}) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'App Report'; workbook.created = options.now || new Date();
+  const exportedAt = bangkokNow(options.now).display;
+  const columns = [
+    ['severity', 'Mức', 16], ['type', 'Mã lỗi', 22], ['field', 'Trường lỗi', 18], ['invalidValue', 'Giá trị lỗi', 28],
+    ['productCode', 'Mã QLNB gốc', 28], ['productName', 'Tên hàng', 28], ['unit', 'Đơn vị', 34], ['routes', 'Tuyến', 12],
+    ['employees', 'Mã NV', 16], ['periods', 'Kỳ', 16], ['revenueAffected', 'Doanh thu ảnh hưởng', 21], ['lineCount', 'Số dòng', 11],
+    ['cause', 'Nguyên nhân tự sinh', 42], ['action', 'Hành động đề xuất', 42], ['repairSource', 'Nguồn cần sửa', 25], ['status', 'Trạng thái', 14],
+  ];
+  const sheet = workbook.addWorksheet('Kiểm soát dữ liệu');
+  const tableRow = 7;
+  excelHeader(sheet, { title: DATA_QUALITY_TITLE, period: formatPeriod(payload.from, payload.to), employee: dqEmployeeLabel(payload), exportedAt, columnCount: columns.length, note: DATA_QUALITY_NOTE });
+  sheet.getRow(tableRow).values = columns.map((column) => column[1]); styleTableHeader(sheet.getRow(tableRow));
+  const items = Array.isArray(payload.items) ? payload.items : [];
+  for (const item of items) {
+    const row = sheet.addRow([
+      item.severity === 'red' ? 'ĐỎ · Sai/nghi tiền' : 'VÀNG · Thiếu hiển thị', safeText(item.type, 80), safeText(item.field, 100), safeText(item.invalidValue, 300),
+      safeText(item.productCode, 180), safeText(item.productName, 300), (item.unitLabels || []).join('; ') || safeText(item.unitCode, 120),
+      (item.routes || []).join('; '), (item.employeeCodes || []).join('; '), (item.periods || []).join('; '), numberOrNull(item.revenueAffected), numberOrNull(item.lineCount),
+      safeText(item.cause, 1000), safeText(item.action, 1000), safeText(item.repairSource, 300), item.status === 'new' ? 'Mới' : safeText(item.status, 80),
+    ]);
+    row.height = 34;
+    row.eachCell((cell, index) => {
+      cell.alignment = { vertical: 'top', horizontal: [11, 12].includes(index) ? 'right' : 'left', wrapText: true };
+      cell.border = { bottom: { style: 'hair', color: { argb: 'FFD6E0E7' } } };
+    });
+    row.getCell(11).numFmt = ACCOUNTING_INTEGER; row.getCell(12).numFmt = '#,##0';
+    row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: item.severity === 'red' ? 'FFFFF3F3' : 'FFFFFBEB' } };
+  }
+  const first = tableRow + 1; const last = first + items.length - 1;
+  const total = sheet.addRow(['TỔNG CỘNG', `${Number(payload.summary?.exceptionCount || items.length).toLocaleString('vi-VN')} exception`, '', '', '', '', '', '', '', '', items.length ? { formula: `SUM(K${first}:K${last})`, result: Number(payload.summary?.revenueAffected || 0) } : Number(payload.summary?.revenueAffected || 0), Number(payload.summary?.lineCount || 0)]);
+  total.font = { bold: true, color: { argb: 'FF075D9B' } }; total.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAF4FB' } };
+  total.getCell(11).numFmt = ACCOUNTING_INTEGER; total.getCell(12).numFmt = '#,##0';
+  columns.forEach((column, index) => { sheet.getColumn(index + 1).width = column[2]; });
+  sheet.autoFilter = { from: `A${tableRow}`, to: `P${tableRow}` }; configurePrint(sheet, tableRow);
+  return workbook;
+}
+
+async function dataQualityWorkbookBuffer(payload, options = {}) {
+  return Buffer.from(await createDataQualityWorkbook(payload, options).xlsx.writeBuffer());
+}
+
 function createProvinceWorklistWorkbook(payload = {}, options = {}) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'App Report';
@@ -529,6 +579,27 @@ function costPdfBuffer(reports = [], options = {}) {
   });
 }
 
+function dataQualityPdfBuffer(payload = {}, options = {}) {
+  const exportedAt = bangkokNow(options.now).display;
+  return buildPdfBuffer(() => {
+    const doc = createPdfDocument(DATA_QUALITY_TITLE);
+    const titleContext = { title: DATA_QUALITY_TITLE, period: formatPeriod(payload.from, payload.to), employee: dqEmployeeLabel(payload), exportedAt };
+    pdfHeader(doc, titleContext);
+    const columns = [
+      { label: 'Mức / loại', weight: 13, value: (x) => `${x.severity === 'red' ? 'ĐỎ' : 'VÀNG'}\n${x.type}` },
+      { label: 'Mã QLNB / tên', weight: 16, value: (x) => `${x.productCode || '—'}\n${x.productName || ''}` },
+      { label: 'Đơn vị / NV', weight: 16, value: (x) => `${(x.unitLabels || []).join('; ') || x.unitCode || '—'}\n${(x.employeeCodes || []).join('; ')}` },
+      { label: 'Trường / giá trị', weight: 13, value: (x) => `${x.field || '—'}\n${x.invalidValue || ''}` },
+      { label: 'DT ảnh hưởng', weight: 10, align: 'right', value: (x) => formatMoneyVi(x.revenueAffected) },
+      { label: 'Nguyên nhân', weight: 20, value: (x) => x.cause || '—' },
+      { label: 'Hành động / nguồn sửa', weight: 20, value: (x) => `${x.action || '—'}\n${x.repairSource || '—'}` },
+      { label: 'Trạng thái', weight: 8, value: (x) => x.status === 'new' ? 'Mới' : x.status || '—' },
+    ];
+    pdfTable(doc, columns, payload.items || [], { titleContext, noteAfter: `${DATA_QUALITY_NOTE}\nTổng: ${payload.summary?.exceptionCount || 0} exception · ${formatMoneyVi(payload.summary?.revenueAffected || 0)} doanh thu ảnh hưởng.` });
+    return doc;
+  });
+}
+
 function gapPdfBuffer(payload = {}, options = {}) {
   const exportedAt = bangkokNow(options.now).display;
   const employee = gapEmployeeLabel(payload);
@@ -565,6 +636,8 @@ module.exports = {
   COST_TITLE,
   GAP_TITLE,
   GAP_NOTE,
+  DATA_QUALITY_TITLE,
+  DATA_QUALITY_NOTE,
   PROVINCE_WORKLIST_TITLE,
   PROVINCE_WORKLIST_NOTE,
   PROVINCE_WORKLIST_FOOTER,
@@ -583,8 +656,11 @@ module.exports = {
   costWorkbookBuffer,
   createGapWorkbook,
   gapWorkbookBuffer,
+  createDataQualityWorkbook,
+  dataQualityWorkbookBuffer,
   createProvinceWorklistWorkbook,
   provinceWorklistWorkbookBuffer,
   costPdfBuffer,
+  dataQualityPdfBuffer,
   gapPdfBuffer,
 };
