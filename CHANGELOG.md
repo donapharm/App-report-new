@@ -1,3 +1,7 @@
+### 2026-07-24 — Claude Code review — LIVE parity Điểm/Xu/Phạt #162 PASS
+- **VERDICT: PASS · DEPLOY_DECISION: READY_FOR_DEPLOY_APPROVAL.** Claude review read-only toàn bộ directive, backend/FE, self-scope hai lớp, fail-closed, audit, token backend-only, UI display-only và artifact production parity; xác nhận không còn blocker kỹ thuật.
+- Bằng chứng production: App VAT `473de59`, health OK; T06/2026 `DN001/DN009/DN016/DN024` khớp tuyệt đối, sai số 0; DN009 phạt `13.800.000đ`; log chỉ sid băm, không full token/prefix. `.env` production đã có `VAT_BASE`/`VAT_SERVICE_TOKEN` backend-only; focused tests `13/13 + 5/5`, build PASS. Review lưu tại `artifacts/claude-review-employee-vat-khoan-162.md`. **Chưa deploy/restart App Report; chờ CEO duyệt deploy riêng.**
+
 ### 2026-07-23 — Report Bot (review branch, chưa deploy) — App Report đọc Điểm/Xu/Phạt App VAT SSOT #162
 - Thêm proxy backend read-only `GET /employee-cost/diem-xu` → App VAT `/api/khoan/dashboard`: `VAT_BASE`/`VAT_SERVICE_TOKEN` chỉ ở backend, timeout 5 giây + retry hữu hạn, response allowlist/schema chặt, lỗi trả đúng `chưa lấy được điểm/xu kỳ này`, không tính/remap điểm-xu-phạt tại App Report.
 - Self-scope hai lớp: Sale bỏ qua `?emp=` và chỉ gọi mã phiên; CEO/admin chọn từng NV. Chế độ ALL gọi từng NV với concurrency giới hạn rồi chỉ cộng projection hiển thị, không yêu cầu upstream view-all. Mỗi lượt ghi audit actor/NV/kỳ/outcome/`rule_version`, không ghi token hay body nguồn.
