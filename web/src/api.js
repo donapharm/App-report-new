@@ -98,6 +98,10 @@ export const api = {
     const query = params.toString();
     return req('GET', '/employee-cost/gaps' + (query ? `?${query}` : ''));
   },
+  employeeCostDataQuality: (params = {}) => req('GET', '/employee-cost/data-quality?' + new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value != null)),
+  ).toString()),
+  employeeCostDataQualitySummary: () => req('GET', '/employee-cost/data-quality/summary'),
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   employeeCostVisibility: () => req('GET', '/employee-cost/visibility'),
   employeeCostVisibilitySave: (payload) => req('POST', '/employee-cost/visibility', payload),
@@ -243,6 +247,10 @@ export async function downloadEmployeeCostReport(format = 'xlsx', params = {}) {
 
 export async function downloadEmployeeCostGaps(format = 'xlsx', params = {}) {
   return downloadEmployeeCostFile('employee-cost/gaps', format, params, 'employee-cost-gaps');
+}
+
+export async function downloadEmployeeCostDataQuality(format = 'xlsx', params = {}) {
+  return downloadEmployeeCostFile('employee-cost/data-quality', format, params, 'employee-cost-data-quality');
 }
 
 export async function downloadEmployeeCostProvinceWorklist(params = {}) {

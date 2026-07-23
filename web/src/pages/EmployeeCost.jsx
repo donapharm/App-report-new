@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { api, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
+import { api, downloadEmployeeCostDataQuality, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
   currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostViewModel,
@@ -10,6 +10,7 @@ import {
   visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel, writeVisibilityCollapsed,
 } from '../employeeCostVisibilityModel.js';
 import { employeeCostGapView, gapReasonLabel } from '../employeeCostGapModel.js';
+import { dataQualityTypeLabel, employeeCostDataQualityView } from '../employeeCostDataQualityModel.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -382,9 +383,81 @@ function AdminGapPanel({ payload, loading, error, range }) {
   </div>;
 }
 
+function DataQualityPanel({ payload, loading, error, range, admin, onOpenRow }) {
+  const [filters, setFilters] = useState({ q: '', type: '', severity: '', employee: '', unit: '', route: '', repairSource: '' });
+  const [exporting, setExporting] = useState('');
+  const [exportError, setExportError] = useState('');
+  const view = useMemo(() => employeeCostDataQualityView(payload, filters), [payload, filters]);
+  const pager = useEmployeeCostPage(view.items, JSON.stringify(filters));
+  const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
+  const exportFile = async (format) => {
+    setExporting(format); setExportError('');
+    try { await downloadEmployeeCostDataQuality(format, { ...range, ...filters }); }
+    catch (requestError) { setExportError(requestError.message || 'Không xuất được danh sách kiểm soát dữ liệu'); }
+    finally { setExporting(''); }
+  };
+  return <div className="card employee-cost-dq-panel">
+    <div className="employee-cost-gap-title">
+      <div><div className="section-head">Trung tâm Kiểm soát Dữ liệu</div><p>App Report chỉ phát hiện, giải thích và chỉ đúng nguồn sửa; không tự sửa hay tự đoán số.</p></div>
+      <div className="employee-cost-export-actions">
+        <button type="button" className="btn" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
+        <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
+      </div>
+    </div>
+    <div className="kpi-grid employee-cost-dq-kpis">
+      <Kpi label="Tổng exception" value={Number(view.summary.exceptionCount).toLocaleString('vi-VN')} sub="Gộp theo nguyên nhân gốc" />
+      <Kpi label="🔴 Sai/nghi tiền" value={Number(view.summary.redCount).toLocaleString('vi-VN')} sub={formatEmployeeCostCell(view.summary.redRevenueAffected, moneyColumn)} />
+      <Kpi label="🟡 Thiếu hiển thị" value={Number(view.summary.yellowCount).toLocaleString('vi-VN')} />
+      <Kpi label="Doanh thu ảnh hưởng" value={formatEmployeeCostCell(view.summary.revenueAffected, moneyColumn)} sub="Không cộng dồn thành thiệt hại" />
+    </div>
+    <div className="employee-cost-dq-filters">
+      <label><span>Tìm mã/tên/đơn vị</span><input type="search" value={filters.q} onChange={(event) => setFilter('q', event.target.value)} placeholder="Không dấu, hoa/thường…" /></label>
+      <label><span>Loại lỗi</span><select value={filters.type} onChange={(event) => setFilter('type', event.target.value)}><option value="">Tất cả</option>{view.typeOptions.map((type) => <option key={type} value={type}>{dataQualityTypeLabel(type)}</option>)}</select></label>
+      <label><span>Mức</span><select value={filters.severity} onChange={(event) => setFilter('severity', event.target.value)}><option value="">Tất cả</option><option value="red">🔴 Sai/nghi tiền</option><option value="yellow">🟡 Thiếu hiển thị</option></select></label>
+      {admin && <label><span>Nhân viên</span><select value={filters.employee} onChange={(event) => setFilter('employee', event.target.value)}><option value="">Tất cả</option>{view.employeeOptions.map((employee) => <option key={employee} value={employee}>{employee}</option>)}</select></label>}
+      <label><span>Đơn vị</span><select value={filters.unit} onChange={(event) => setFilter('unit', event.target.value)}><option value="">Tất cả</option>{view.unitOptions.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
+      <label><span>Tuyến</span><select value={filters.route} onChange={(event) => setFilter('route', event.target.value)}><option value="">Tất cả</option>{view.routeOptions.map((route) => <option key={route} value={route}>{route}</option>)}</select></label>
+      <label><span>Nguồn sửa</span><select value={filters.repairSource} onChange={(event) => setFilter('repairSource', event.target.value)}><option value="">Tất cả</option>{view.repairSourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}</select></label>
+    </div>
+    {(error || exportError) && <div className="employee-cost-match-warning" role="alert">{error || exportError}</div>}
+    {loading ? <Spinner /> : !view.items.length ? <div className="center">Không có exception phù hợp bộ lọc.</div> : <>
+      <div className="employee-cost-dq-filter-result">Hiện {view.filteredSummary.exceptionCount.toLocaleString('vi-VN')} exception · {formatEmployeeCostCell(view.filteredSummary.revenueAffected, moneyColumn)} doanh thu ảnh hưởng</div>
+      <EmployeeCostPager pagination={pager.pagination} onPage={pager.setPage} onPageSize={pager.setPageSize} location="top" unit="exception" />
+      <div className="employee-cost-table-wrap"><table className="employee-cost-dq-table">
+        <thead><tr><th>STT</th><th>Mức · loại</th><th>Mã gốc · phạm vi</th><th>Ảnh hưởng</th><th>Nguyên nhân</th><th>Hành động · nguồn sửa</th><th>Trạng thái</th></tr></thead>
+        <tbody>{pager.rows.map((item, index) => <tr key={item.key} className={`dq-${item.severity}`}>
+          <td className="employee-cost-number">{pager.start + index + 1}</td>
+          <td><span className={`employee-cost-dq-severity ${item.severity}`}>{item.severity === 'red' ? '🔴 Sai/nghi tiền' : '🟡 Thiếu hiển thị'}</span><b>{dataQualityTypeLabel(item.type)}</b><small>{item.field}{item.invalidValue ? `: ${item.invalidValue}` : ''}</small></td>
+          <td><button type="button" className="employee-cost-dq-link" onClick={() => onOpenRow?.(item)}>{item.productCode || item.unitCode}</button><small>{item.productName}</small><small>{item.unitLabels.join('; ') || item.unitCode}</small><small>{item.employeeCodes.join(', ')}{item.routes.length ? ` · tuyến ${item.routes.join(', ')}` : ''}</small></td>
+          <td className="employee-cost-number"><b>{formatEmployeeCostCell(item.revenueAffected, moneyColumn)}</b><small>{item.lineCount.toLocaleString('vi-VN')} dòng</small></td>
+          <td>{item.cause || '—'}{item.suggestedCatalogCodes.length > 0 && <small>Ứng viên: {item.suggestedCatalogCodes.join('; ')}</small>}</td>
+          <td>{item.action || '—'}<small><b>{item.repairSource || '—'}</b></small></td>
+          <td><span className="employee-cost-dq-status">{item.status === 'new' ? 'Mới' : item.status}</span></td>
+        </tr>)}</tbody>
+      </table></div>
+      <EmployeeCostPager pagination={pager.pagination} onPage={pager.setPage} onPageSize={pager.setPageSize} location="bottom" unit="exception" />
+    </>}
+    <p className="employee-cost-gap-note">Đợt 1: 5 rule lõi. Trạng thái xử lý chi tiết và so sánh kỳ triển khai ở đợt 2.</p>
+  </div>;
+}
+
 export default function EmployeeCost({ me }) {
   const admin = !!me?.isAdmin;
-  const [view, setView] = useState('cost');
+  const [view, setView] = useState(() => {
+    if (!admin) return 'cost';
+    try {
+      const nav = JSON.parse(sessionStorage.getItem('app_nav_payload') || '{}');
+      return nav.tab === 'employeeCost' && nav.view === 'dq' ? 'dq' : 'cost';
+    } catch { return 'cost'; }
+  });
+  useEffect(() => {
+    if (!admin) return undefined;
+    const onAppNavigate = (event) => {
+      if (event?.detail?.tab === 'employeeCost' && event.detail.view === 'dq') setView('dq');
+    };
+    window.addEventListener('app:navigate', onAppNavigate);
+    return () => window.removeEventListener('app:navigate', onAppNavigate);
+  }, [admin]);
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(admin ? 'ALL' : String(me?.emp_code || ''));
   const [draftRange, setDraftRange] = useState({ from: month, to: month });
@@ -401,6 +474,9 @@ export default function EmployeeCost({ me }) {
   const [gapPayload, setGapPayload] = useState({ pairs: [], coverageByEmployee: [] });
   const [gapLoading, setGapLoading] = useState(!admin);
   const [gapError, setGapError] = useState('');
+  const [dqPayload, setDqPayload] = useState({ items: [], summary: {} });
+  const [dqLoading, setDqLoading] = useState(!admin);
+  const [dqError, setDqError] = useState('');
   const [costExporting, setCostExporting] = useState('');
   const [costExportError, setCostExportError] = useState('');
   const [provinceWorklistExporting, setProvinceWorklistExporting] = useState(false);
@@ -477,6 +553,22 @@ export default function EmployeeCost({ me }) {
     return () => { alive = false; };
   }, [admin, range, view]);
 
+  useEffect(() => {
+    if (admin && view !== 'dq') return undefined;
+    let alive = true;
+    setDqLoading(true);
+    setDqError('');
+    api.employeeCostDataQuality(range)
+      .then((data) => { if (alive) setDqPayload(data); })
+      .catch((requestError) => {
+        if (!alive) return;
+        setDqPayload({ ...range, items: [], summary: {} });
+        setDqError(requestError.message || 'Không thể tải Trung tâm Kiểm soát Dữ liệu');
+      })
+      .finally(() => { if (alive) setDqLoading(false); });
+    return () => { alive = false; };
+  }, [admin, range, view]);
+
   const model = useMemo(() => employeeCostViewModel(payload), [payload]);
   const selected = employees.find((employee) => employee.emp_code === selectedEmp);
   const employeeLabel = admin
@@ -549,6 +641,14 @@ export default function EmployeeCost({ me }) {
     setTablePage(1);
     setTableSort((current) => current.key === key ? { key, dir: current.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
   };
+  const openDqRow = (item) => {
+    if (admin) {
+      const assignedEmployees = (item.employeeCodes || []).filter((code) => code && code !== 'UNALLOCATED');
+      setSelectedEmp(assignedEmployees.length === 1 ? assignedEmployees[0] : 'ALL');
+    }
+    const query = item.productCode || item.unitCode || '';
+    setTableQuery(query); setDebouncedQuery(query); setTablePage(1); setView('cost');
+  };
 
   if (!admin && payload.disabled) return <section className="employee-cost-page">
     <div className="card center">{payload.note || 'Chức năng chi phí đang tắt cho bạn.'}</div>
@@ -557,8 +657,8 @@ export default function EmployeeCost({ me }) {
   return <section className="employee-cost-page">
     <div className="employee-cost-heading card">
       <div>
-        <div className="section-head">{admin && view === 'gaps' ? 'Mặt hàng thiếu % chi phí' : 'Chi phí của tôi'}</div>
-        <p>{admin && view === 'gaps' ? 'Danh sách chỉ phục vụ phát hiện và lập worklist cho DataHub; không tự ánh xạ mã hay tự điền tỷ lệ.' : 'Mỗi đơn × mỗi mặt hàng là một dòng. Chi phí được tính trên thành tiền xuất bán trước VAT và tra tỷ lệ theo mã hàng × tháng.'}</p>
+        <div className="section-head">{admin && view === 'gaps' ? 'Mặt hàng thiếu % chi phí' : admin && view === 'dq' ? 'Kiểm soát dữ liệu' : 'Chi phí của tôi'}</div>
+        <p>{admin && view === 'gaps' ? 'Danh sách chỉ phục vụ phát hiện và lập worklist cho DataHub; không tự ánh xạ mã hay tự điền tỷ lệ.' : admin && view === 'dq' ? 'Tự bắt lỗi, giải thích nguyên nhân và xếp ưu tiên theo doanh thu ảnh hưởng.' : 'Mỗi đơn × mỗi mặt hàng là một dòng. Chi phí được tính trên thành tiền xuất bán trước VAT và tra tỷ lệ theo mã hàng × tháng.'}</p>
       </div>
       <form className="employee-cost-filters" onSubmit={applyRange}>
         {admin && view === 'cost' && <label>
@@ -601,7 +701,7 @@ export default function EmployeeCost({ me }) {
         </label>}
         <label><span>Từ tháng</span><input type="month" value={draftRange.from} onChange={(event) => setDraftRange((current) => ({ ...current, from: event.target.value }))} /></label>
         <label><span>Đến tháng</span><input type="month" value={draftRange.to} onChange={(event) => setDraftRange((current) => ({ ...current, to: event.target.value }))} /></label>
-        <button type="submit" className="btn" disabled={rangeInvalid || (admin && view === 'gaps' ? gapLoading : loading)}>Xem</button>
+        <button type="submit" className="btn" disabled={rangeInvalid || (admin && view === 'gaps' ? gapLoading : admin && view === 'dq' ? dqLoading : loading)}>Xem</button>
         {view === 'cost' && <div className="employee-cost-export-actions">
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('xlsx')}>{costExporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('pdf')}>{costExporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
@@ -616,9 +716,10 @@ export default function EmployeeCost({ me }) {
     {admin && <div className="employee-cost-tabs" role="tablist" aria-label="Chế độ xem chi phí">
       <button type="button" role="tab" aria-selected={view === 'cost'} className={view === 'cost' ? 'active' : ''} onClick={() => setView('cost')}>Chi phí theo nhân viên</button>
       <button type="button" role="tab" aria-selected={view === 'gaps'} className={view === 'gaps' ? 'active' : ''} onClick={() => setView('gaps')}>Mặt hàng thiếu %</button>
+      <button type="button" role="tab" aria-selected={view === 'dq'} className={view === 'dq' ? 'active' : ''} onClick={() => setView('dq')}>Kiểm soát dữ liệu</button>
     </div>}
 
-    {admin && view === 'gaps' ? <AdminGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} /> : <>
+    {admin && view === 'dq' ? <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin onOpenRow={openDqRow} /> : admin && view === 'gaps' ? <AdminGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} /> : <>
     {admin && <VisibilityPanel
       adminCode={me?.emp_code || me?.username || 'admin'}
       panel={visibilityPanel}
@@ -631,6 +732,7 @@ export default function EmployeeCost({ me }) {
     />}
 
     {!admin && <EmployeeGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} />}
+    {!admin && <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin={false} onOpenRow={openDqRow} />}
 
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} />

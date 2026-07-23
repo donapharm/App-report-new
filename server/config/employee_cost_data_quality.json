@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "rules": {
+    "PRODUCT_MISSING": { "enabled": true },
+    "PRODUCT_MISMATCH": { "enabled": true, "treatUnallocatedAsMismatch": true },
+    "UOM_MISMATCH": { "enabled": true },
+    "BID_PRICE_INVALID": { "enabled": true, "minPositive": 0, "outlierRatio": 3 },
+    "UNIT_UNKNOWN": { "enabled": true }
+  },
+  "alertThresholds": {
+    "redCount": 1,
+    "redRevenueAffected": 1
+  }
+}
