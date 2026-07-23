@@ -216,15 +216,18 @@ test('numbered pager keeps the current window clickable and contracts long range
   assert.deepEqual(employeeCostPageItems(25, 25), [1, '…', 21, 22, 23, 24, 25]);
 });
 
-test('acceptance contract includes CEO-only ALL, STT/employee, short percent tooltip, sticky, pagination and exact export params', () => {
+test('acceptance contract includes CEO-only ALL, compact full-label columns, sticky, pagination and exact export params', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
   const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(page, /<option value="ALL">Tất cả nhân viên<\/option>/);
   assert.match(page, /employee-cost-sticky-stt[^>]*>STT/);
-  assert.match(page, /employee-cost-sticky-employee/);
-  assert.match(page, /column\.kind === 'percent' \? column\.shortLabel/);
+  assert.match(page, /employee-cost-employee/);
+  assert.match(page, /<small title=\{row\.employeeName\}>/);
+  assert.match(page, /<button type="button" onClick=\{\(\) => sortHeader\(column\)\}>\{column\.label\}/);
+  assert.doesNotMatch(page, /column\.kind === 'percent' \? column\.shortLabel/);
   assert.match(page, /title=\{column\.kind === 'percent' \? column\.label/);
+  assert.match(page, /employee-cost-annual-badge">cuối năm/);
   assert.match(page, /Không dấu, nhiều từ khóa \(AND\)/);
   assert.match(page, /q: tableQuery, sortKey: tableSort\.key, sortDir: tableSort\.dir/);
   assert.match(api, /'q', 'sortKey', 'sortDir', 'page', 'pageSize'/);
@@ -241,6 +244,15 @@ test('acceptance contract includes CEO-only ALL, STT/employee, short percent too
   assert.match(page, /\.\.\.tableFilters/);
   assert.match(api, /'province', 'unitGroup', 'route', 'date'/);
   assert.match(css, /\.employee-cost-sticky-product/);
+  assert.match(css, /\.employee-cost-table \.employee-cost-col-revenueBeforeVat \{ width:148px; min-width:136px; max-width:158px; \}/);
+  assert.match(css, /\.employee-cost-table th\.employee-cost-col-revenueBeforeVat > button \{ line-height:1\.2; white-space:normal; \}/);
+  assert.match(css, /\.employee-cost-table \.employee-cost-col-strength \{ width:126px; min-width:112px; max-width:142px; \}/);
+  assert.match(css, /\.employee-cost-table \.employee-cost-col-c7 \{ width:250px; min-width:230px; max-width:285px; \}/);
+  assert.match(css, /\.employee-cost-table \.employee-cost-col-contractorName \{ width:235px; min-width:215px; max-width:270px; \}/);
+  assert.match(css, /\.employee-cost-table th\.employee-cost-percent > button \{ line-height:1\.2; text-align:right; white-space:normal; \}/);
+  assert.match(css, /\.employee-cost-employee \{ width:160px; min-width:160px; max-width:160px;/);
+  assert.doesNotMatch(css, /\.employee-cost-table\.is-all-employees \.employee-cost-sticky-product/);
+  assert.match(css, /\.employee-cost-sticky-product \{ position:sticky !important; left:48px;/);
   assert.match(css, /\.employee-cost-pagination\.is-top \{ position:sticky/);
   assert.match(css, /\.employee-cost-page-numbers button\.active/);
   assert.match(css, /max-height:72vh/);

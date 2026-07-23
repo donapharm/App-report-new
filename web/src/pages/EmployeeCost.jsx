@@ -83,6 +83,7 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
   const renderCell = (row, column) => {
     const text = formatEmployeeCostCell(row[column.key], column);
     if (column.tooltip && text !== '—') return <button type="button" className="employee-cost-ellipsis" title={text} onClick={() => setTooltip(text)}>{text}</button>;
+    if (column.key === 'c7' || column.key === 'contractorName') return <span className="employee-cost-clamp-2" title={text}><Highlight value={text} query={query} /></span>;
     return <Highlight value={text} query={query} />;
   };
   const sortHeader = (column) => {
@@ -96,10 +97,10 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
       <thead>
         <tr>
           <th className="employee-cost-sticky-stt employee-cost-number">STT</th>
-          {allEmployees && <th className="employee-cost-sticky-employee"><button type="button" onClick={() => sortHeader({ key: 'employeeCode' })}>Nhân viên{sort.key === 'employeeCode' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>}
-          {period.columns.map((column) => <th key={column.key} title={column.kind === 'percent' ? column.label : undefined} className={`${column.annual ? 'employee-cost-annual ' : ''}${column.kind === 'percent' ? 'employee-cost-percent ' : ''}${column.key === 'c16' ? 'employee-cost-sticky-product' : ''}`}>
-            <button type="button" onClick={() => sortHeader(column)}>{column.kind === 'percent' ? column.shortLabel : column.label}{sort.key === column.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button>
-            {column.annual && <span className="employee-cost-annual-badge">⏳</span>}
+          {allEmployees && <th className="employee-cost-employee"><button type="button" onClick={() => sortHeader({ key: 'employeeCode' })}>Nhân viên{sort.key === 'employeeCode' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>}
+          {period.columns.map((column) => <th key={column.key} title={column.kind === 'percent' ? column.label : undefined} className={`${column.annual ? 'employee-cost-annual ' : ''}${column.kind === 'percent' ? 'employee-cost-percent ' : ''}${column.key === 'c16' ? 'employee-cost-sticky-product ' : ''}employee-cost-col-${column.key}`}>
+            <button type="button" onClick={() => sortHeader(column)}>{column.label}{sort.key === column.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button>
+            {column.annual && <span className="employee-cost-annual-badge">cuối năm</span>}
           </th>)}
         </tr>
       </thead>
@@ -112,8 +113,8 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
         </tr>}
         <tr>
           <td className="employee-cost-sticky-stt employee-cost-number">{row.stt || rowIndex + 1}</td>
-          {allEmployees && <td className="employee-cost-sticky-employee"><b><Highlight value={row.employeeCode} query={query} /></b><small><Highlight value={row.employeeName} query={query} /></small></td>}
-          {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}${column.kind === 'percent' ? ' employee-cost-percent' : ''}${column.key === 'c16' ? ' employee-cost-sticky-product' : ''}`}>
+          {allEmployees && <td className="employee-cost-employee"><b><Highlight value={row.employeeCode} query={query} /></b><small title={row.employeeName}><Highlight value={row.employeeName} query={query} /></small></td>}
+          {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}${column.kind === 'percent' ? ' employee-cost-percent' : ''}${column.key === 'c16' ? ' employee-cost-sticky-product' : ''} employee-cost-col-${column.key}`}>
             {renderCell(row, column)}
           </td>)}
         </tr>
