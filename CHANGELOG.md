@@ -1,3 +1,7 @@
+### 2026-07-23 — Claude Code (review) — App Report đọc điểm/xu/phạt `0c1da00`: PASS (chờ live parity)
+- **Review `0c1da00`: PASS.** `employeeVatKhoan.getForSession`: token backend-only (`VAT_SERVICE_TOKEN`), **KHÔNG log token** (audit chỉ actor+emp); **self-scope** (NV ép own; kiểm response `emp_code===empCode` chống App VAT trả nhầm NV); fail-closed (token<16/emp sai/baseUrl thiếu→không gọi; 401/timeout→retry→note). FE: 3 KPI điểm/xu/phạt + dòng cấn trừ (display-only) + cảnh báo. Test 305/305, web 53/53.
+- **App VAT gỡ token-logging** (`473de59`: thay bằng `sid=sha256[:12]`, scrub log cũ) → **live parity chạy được**. Đề nghị nhẹ: rotate VAT_SERVICE_TOKEN. **Còn lại:** Report Bot chạy live parity (đối chiếu số App Report ↔ App VAT dashboard) → rồi deploy. Chưa merge/deploy.
+
 ### 2026-07-23 — Claude Code (review) — ô "Thưởng dự kiến" `467eb2e`: PASS
 - **Review `467eb2e`: PASS.** `amount = doanh thu (revenue_before_vat) × bonusPct ÷ 100`. **Cap 0.5% khóa 3 lớp** (`min(config,0.5)` + mỗi bậc `min(bonusPct,capPct,0.5)`). **Fail-closed:** config rỗng/sai → "Chưa cấu hình mức thưởng"; **thiếu target → không bịa** (`missing_target`); dưới bậc → 0. **Phát hiện tầng chồng lấn** (overlap → unconfigured). Self-scope (tính theo empCode đã khóa). Test 292/292, web 48/48. Trên main, chưa deploy.
 - Tầng nấc `employee_bonus_tiers.json` để trống → CEO điền sau (0.2–0.5%). Nhãn "dự kiến", không payroll.
