@@ -1,3 +1,7 @@
+### 2026-07-23 — Claude Code (nghiệm thu) — guard cách ly doanh thu sai phụ trách `9a4a432`: PASS
+- **Review `9a4a432`: PASS.** `revenueAttributionGuard.quarantineRosterConflicts`: emp_code nguồn xung đột roster phụ trách → **UNALLOCATED, KHÔNG remap** (policy `ROSTER_CONFLICT_TO_UNALLOCATED_NO_REMAP`); giữ `raw_emp_code` + audit; tổng công ty không đổi; có test khẳng định không tự gán NV mong đợi; chạy mỗi materialize → lỗi cũ không quay lại. Nguồn mới MISA run #185 (1.555 dòng / 23.778.161.153đ). DN023 còn đúng 1 dòng (140.BVĐK Bình Phước / 9.699.600đ). Test 265/265.
+- **⚠ Còn treo (gốc ở App Sale):** 26 dòng / 8 đơn vị (142,145,147,149,151,152,153,154) / **403.042.400đ** đang UNALLOCATED — **chủ mới chưa thấy** cho tới khi **Sale Bot sửa mapping phụ trách + xuất lại** → App Report tự nhận đúng, bỏ cách ly (không cần deploy). App Report **không tự remap** (giữ nguyên tắc).
+
 ### 2026-07-23 — Report Bot (khẩn cấp) — cách ly doanh thu sai phụ trách, DN023 chỉ còn đơn vị 140
 - Active T07 chuyển sang nguồn mới nhất CRM MISA run **#185** + APP WEB: **1.555 dòng / 23.778.161.153đ**. Giữ nguyên tổng doanh thu; không remap/đoán nhân viên tại App Report.
 - Đối soát roster Data Hub **2026-07 v3.7**: **26 dòng / 8 đơn vị / 403.042.400đ** có `emp_code` nguồn xung đột được fail-safe về `UNALLOCATED`, giữ `raw_emp_code` và audit đầy đủ. **DN023 hiện chỉ còn 1 dòng / 9.699.600đ tại `140.BVĐK BÌNH PHƯỚC`**, không còn thấy BV Quân Dân Y 16, TTYT Bù Đốp hay đơn vị khác.
