@@ -1,3 +1,6 @@
+### 2026-07-23 — Claude Code (giao bot) — Công thức tầng nấc thưởng: % doanh thu 0.2–0.5% (bổ sung #159)
+- CEO chốt: thưởng là **% DOANH THU** (không phải tiền cố định), **kịch trần 0.5% cho đạt XUẤT SẮC**, sàn **0.2% khi đạt target**. Directive `DIRECTIVE_EMP_COST_BONUS_TIERS.md`: `Thưởng = doanh thu trước VAT × bonusPct(% đạt target)`; config `employee_bonus_tiers.json` dùng **`bonusPct`** (100–110%→0.2 · 110–120%→0.3 · 120–130%→0.4 · ≥130%→0.5), `capPct:0.5` chặn trần; <100%→0. Tháng & quý tính riêng. tiers rỗng → "Chưa cấu hình". Nhãn "dự kiến". Cấu hình được, CEO đổi không sửa code.
+
 ### 2026-07-23 — Claude Code (giao bot) — Ô KPI "Thưởng dự kiến" theo mức đạt target (khung trước)
 - CEO muốn thêm **ô KPI thưởng**; target đã có trong App Report, **tầng nấc mức thưởng CEO điền sau**. Directive `DIRECTIVE_EMP_COST_BONUS_KPI.md`: ô **"Thưởng dự kiến (theo mức đạt target)"** = `bậc(% đạt target sẵn có)` × **bảng tầng nấc cấu hình** `employee_bonus_tiers.json` (để trống → hiện "Chưa cấu hình mức thưởng", không bịa). Nhãn **"dự kiến/tham khảo"** (không phải lệnh chi; App Report không gửi thưởng). Self-scope; số target từ analytics sẵn có (không tính lại). Điểm/xu/phạt (payout DataHub/App VAT) là việc khác. Chưa deploy.
 
