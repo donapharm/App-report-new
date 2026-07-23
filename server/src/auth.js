@@ -11,6 +11,7 @@
 const crypto = require('crypto');
 const store = require('./store');
 const persist = require('./persist');
+const { deviceIdHash, deviceFingerprint } = require('./trustedDevice');
 
 const SESSION_IDLE_DAYS = Math.max(1, Number(process.env.SESSION_IDLE_DAYS || 7) || 7);
 const SESSION_IDLE_MS = SESSION_IDLE_DAYS * 24 * 60 * 60 * 1000; // rolling idle TTL
@@ -74,11 +75,6 @@ pruneSessions();
 let devices = persist.load('devices', []);
 const saveDevices = () => persist.save('devices', devices);
 
-function deviceIdHash(deviceId) {
-  const raw = String(deviceId || '').trim();
-  const secret = process.env.SESSION_DEVICE_HASH_SECRET || process.env.SESSION_SECRET || 'app-report-device-id-v1';
-  return raw ? crypto.createHmac('sha256', secret).update(raw).digest('hex') : '';
-}
 const isStoredDeviceId = (value) => /^[a-f0-9]{64}$/i.test(String(value || ''));
 const migrateDeviceId = (value) => isStoredDeviceId(value) ? String(value) : deviceIdHash(value);
 
@@ -104,24 +100,6 @@ const migrateDeviceId = (value) => isStoredDeviceId(value) ? String(value) : dev
   }
   if (devicesChanged) saveDevices();
   if (sessionsChanged) saveSessions();
-}
-
-// Chỉ fingerprint OS + họ trình duyệt. Không so toàn bộ User-Agent vì version/build
-// Safari/PWA có thể đổi nhẹ và tạo vòng lặp OTP giả trên cùng thiết bị.
-function deviceFingerprint(userAgent) {
-  const ua = String(userAgent || '').toLowerCase();
-  if (!ua) return '';
-  const os = /iphone|ipad|ipod/.test(ua) ? 'ios'
-    : /android/.test(ua) ? 'android'
-      : /windows/.test(ua) ? 'windows'
-        : /mac os x|macintosh/.test(ua) ? 'macos'
-          : /linux|x11/.test(ua) ? 'linux' : 'other-os';
-  const browser = /edg(?:a|ios)?\//.test(ua) ? 'edge'
-    : /crios\//.test(ua) ? 'chrome-ios'
-      : /chrome\//.test(ua) || /chromium\//.test(ua) ? 'chrome'
-        : /firefox\//.test(ua) || /fxios\//.test(ua) ? 'firefox'
-          : /safari\//.test(ua) ? 'safari' : 'other-browser';
-  return `${os}:${browser}`;
 }
 
 function timeValue(value) {

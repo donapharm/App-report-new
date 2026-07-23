@@ -7,6 +7,7 @@ const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
 const login = fs.readFileSync(new URL('../src/pages/Login.jsx', import.meta.url), 'utf8');
 const routes = fs.readFileSync(new URL('../../server/src/routes.js', import.meta.url), 'utf8');
 const auth = fs.readFileSync(new URL('../../server/src/auth.js', import.meta.url), 'utf8');
+const trustedDevice = fs.readFileSync(new URL('../../server/src/trustedDevice.js', import.meta.url), 'utf8');
 
 test('device id is durable in localStorage and cookie and sent on every auth request', () => {
   assert.match(api, /localStorage\.getItem\(DEVICE_KEY\)/);
@@ -22,6 +23,8 @@ test('bootstrap tries trusted device before showing OTP and remembers phone only
   assert.match(api, /rememberLastPhone\(phone\)/);
   assert.match(app, /if \(!getToken\(\)\)[\s\S]*?restoreTrustedDevice\(\)/);
   assert.match(app, /api\.deviceLogin\(phone\)/);
+  assert.match(app, /current\?\.method === 'otp' && current\?\.phone/);
+  assert.match(app, /rememberLastPhone\(current\.phone\)/);
   assert.match(app, /error\?\.status === 401 \|\| error\?\.status === 403/);
   assert.match(app, /forgetLastPhone\(\)/);
   assert.match(login, /useState\(\(\) => getLastPhone\(\)\)/);
@@ -32,7 +35,8 @@ test('backend implements the App Sale equivalent trust contract', () => {
   assert.match(routes, /auth\.requestOtp\([\s\S]*?loginCtx\(req\)\)/);
   assert.match(auth, /SESSION_TRUSTED_LOGIN_THRESHOLD \|\| 3/);
   assert.match(auth, /SESSION_TRUSTED_DEVICE_REVERIFY_DAYS \|\| 30/);
-  assert.match(auth, /function deviceFingerprint/);
+  assert.match(auth, /deviceIdHash, deviceFingerprint/);
+  assert.match(trustedDevice, /function deviceFingerprint/);
   assert.match(auth, /rec\.method === 'otp'/);
   assert.match(auth, /method: 'device'/);
   assert.match(auth, /last_otp_at/);

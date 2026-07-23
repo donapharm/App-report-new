@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api, forgetLastPhone, getLastPhone, getToken, setToken } from './api.js';
+import { api, forgetLastPhone, getLastPhone, getToken, rememberLastPhone, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { useIsDesktop } from './hooks.js';
 import { Spinner, ScrollTopButton, Clock, UpdateBanner, ZaloSidebar, ZaloMobileAccess } from './components.jsx';
@@ -101,6 +101,9 @@ export default function App() {
         }
         try {
           const current = await api.me();
+          // Migration thiết bị cũ: phiên OTP còn hợp lệ đã chứng minh đúng số điện
+          // thoại. Ghi nhớ số để lần mở kế tiếp có thể thử device-login trước OTP.
+          if (current?.method === 'otp' && current?.phone) rememberLastPhone(current.phone);
           if (alive) setMe(current);
         } catch (error) {
           if (error?.status === 401 || error?.status === 403) {
