@@ -1,3 +1,7 @@
+### 2026-07-23 — Claude Code (giao bot) — Điều tra App VAT: điểm doanh thu + xu chi tiêu (cho KPI điểm/xu/phạt)
+- CEO muốn thêm KPI **điểm (từ doanh thu) · xu chi tiêu tích lũy tháng/quý · phạt** nếu không đủ xu → **cấn trừ vào chi phí** (kèm cảnh báo). **Ranh giới:** đây là **payout** → engine ở **DataHub (SSOT)**/App VAT, App Report **chỉ hiển thị** (không tự tính, tránh trừ sai tiền NV).
+- CEO chốt: điểm/xu **đã có ở App VAT** → giao Report Bot **điều tra App VAT** lấy đúng công thức (directive `DIRECTIVE_INVESTIGATE_APPVAT_DIEMXU.md`): (1) cách tính điểm doanh thu; (2) cách tính xu tích lũy + target quý; (3) App VAT có **API expose điểm/xu per-NV** không (để đọc lại). Read-only, chưa code. Sau báo cáo: Claude soạn task DataHub (engine phạt + contract) + task App Report (hiển thị KPI + dòng cấn trừ + cảnh báo).
+
 ### 2026-07-23 — Claude Code (review hậu kỳ) — vá blocker migration trusted-device `d8bbc53`: PASS
 - **Bot tự phát hiện + vá blocker** (backfill ghi trust trước khi validate audit → có thể để device trusted không audit). **Fix PASS:** validate cả devices+audit **trước mọi write**; ghi file tạm + **rollback** nếu lỗi → không còn trạng thái trusted-thiếu-audit; assertion đếm (EXPECT_UPDATED/TRUSTED); **idempotent** (chạy 2 lần = 0 đổi). Hardening kèm: user thiếu/trùng fail-closed, không fallback `device.phone` cũ, FE chỉ nhớ SĐT từ phiên OTP hợp lệ. Backfill 31 thiết bị (23×1 · 6×2 · 2×3-trusted); CEO [3,2,0], 1 thiết bị miễn OTP. Fingerprint sai/thiết bị lạ bị từ chối; phiên cũ giữ. Test 286/286, web 46/46. Không đụng phần chi phí.
 
