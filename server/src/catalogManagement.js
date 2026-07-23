@@ -6,6 +6,8 @@ const store = require('./store');
 const { provinceOf } = require('./province');
 
 const CACHE_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(__dirname, '..', 'data', 'catalog_management_lkg.json');
+const DQ_CACHE_FILE = process.env.EMPLOYEE_COST_DQ_CATALOG_CACHE_FILE
+  || (process.env.CATALOG_MANAGEMENT_CACHE_FILE ? `${CACHE_FILE}.dq.json` : path.join(__dirname, '..', 'data', 'employee_cost_dq_catalog_lkg.json'));
 const DEFAULT_TIMEOUT_MS = 6500;
 const TYPE_LABELS = { unit_qlnb: 'Đơn vị + Mã QLNB', unit: 'Đơn vị', group: 'Nhóm ưu tiên', route: 'Tuyến', iit: 'Mã QLNB', special: 'Hàng cần đẩy', all: 'Toàn bộ' };
 const EMPLOYEE_FORBIDDEN_KEYS = /(^|_)(?:(?:old|new|from|to)[_-]?emp|counterpart|actor|batch|transfer_batch_id|note|audit|history|by|internal)(_|$)/i;
@@ -100,23 +102,63 @@ function readCache(period) {
     return snapshot;
   } catch { return null; }
 }
+function dataQualityProjection(snapshot, periodInput) {
+  const period = toHubPeriod(periodInput || snapshot?.period);
+  return {
+    period,
+    catalog: (snapshot?.catalog || []).map((row) => ({
+      c4: row.c4, c5: row.c5, c7: row.c7, c15: row.c15,
+      c16: row.c16, c17: row.c17, c25: row.c25, c31: row.c31,
+    })),
+    rows: (snapshot?.rows || []).map((row) => ({
+      type: row.type, unit_code: row.unit_code, unit_name: row.unit_name,
+      qlnb_code: row.qlnb_code, label: row.label,
+    })),
+    meta: snapshot?.meta || {},
+  };
+}
+function readDataQualityCache(period) {
+  try {
+    const value = JSON.parse(fs.readFileSync(DQ_CACHE_FILE, 'utf8'));
+    const snapshot = value?.snapshots?.[period] || null;
+    if (snapshot) {
+      assertCatalogFieldPolicy(snapshot, `employeeCostDqCatalogLkg.${period}`);
+      assertCatalogSnapshotContract(snapshot, `employeeCostDqCatalogLkg.${period}`);
+    }
+    return snapshot;
+  } catch { return null; }
+}
+function writeDataQualityCacheAtomic(snapshot) {
+  const projected = dataQualityProjection(snapshot, snapshot.period);
+  assertCatalogFieldPolicy(projected, `employeeCostDqCatalogLkg.${projected.period}`);
+  assertCatalogSnapshotContract(projected, `employeeCostDqCatalogLkg.${projected.period}`);
+  fs.mkdirSync(path.dirname(DQ_CACHE_FILE), { recursive: true });
+  let current = {};
+  try { current = JSON.parse(fs.readFileSync(DQ_CACHE_FILE, 'utf8')) || {}; } catch { current = {}; }
+  const snapshots = current.snapshots && typeof current.snapshots === 'object' ? current.snapshots : {};
+  snapshots[projected.period] = projected;
+  const periods = Object.keys(snapshots).sort().slice(-18);
+  const value = { source: 'data-hub-dq-lkg', snapshots: Object.fromEntries(periods.map((period) => [period, snapshots[period]])) };
+  const tmp = `${DQ_CACHE_FILE}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(value), { mode: 0o600 });
+  fs.renameSync(tmp, DQ_CACHE_FILE);
+  return projected;
+}
 function getCachedDataQualitySnapshot(periodInput) {
   const period = toHubPeriod(periodInput);
-  const cached = readCache(period);
-  if (!cached) return null;
-  // Keep only fields consumed by the public DQ engine. Retaining the complete
-  // catalog snapshot would pin hundreds of MB in the API process cache.
-  const catalog = (cached.catalog || []).map((row) => ({
-    c5: row.c5, c7: row.c7, c16: row.c16, c25: row.c25, c31: row.c31,
-  }));
-  const rows = (cached.rows || []).map((row) => ({
-    unit_code: row.unit_code, unit_name: row.unit_name, label: row.label,
-  }));
+  const cachedProjection = readDataQualityCache(period);
+  const projected = cachedProjection || (() => {
+    const cached = readCache(period);
+    return cached ? writeDataQualityCacheAtomic(cached) : null;
+  })();
+  if (!projected) return null;
   return {
-    period, catalog, rows, readOnly: true,
+    ...projected,
+    period,
+    readOnly: true,
     meta: {
-      ...cached.meta,
-      source: 'data-hub-lkg',
+      ...projected.meta,
+      source: 'data-hub-dq-lkg',
       stale: true,
       readOnly: true,
       message: 'Đang dùng snapshot Data Hub đã kiểm định cho kỳ yêu cầu.',
@@ -155,6 +197,9 @@ function writeCacheAtomic(snapshot) {
   const tmp = `${CACHE_FILE}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
   fs.renameSync(tmp, CACHE_FILE);
+  // Materializers run out-of-process, so keep a small DQ-only projection ready
+  // for the API instead of forcing the web process to parse the full LKG.
+  writeDataQualityCacheAtomic(snapshot);
 }
 function unwrap(value) {
   if (value && typeof value === 'object' && value.data && typeof value.data === 'object') return value.data;
