@@ -1,3 +1,7 @@
+### 2026-07-23 — Claude Code (giao bot) — SỬA doanh thu gán SAI nhân viên phụ trách (nguồn App Sale)
+- **CEO báo:** doanh thu lấy từ App Sale gán **không đúng NV phụ trách**. Chẩn đoán từ code: `store.js` gán NV theo **field `emp_code` trong nguồn** (`getRows` chỉ lọc `r.emp_code===empCode`); **App Report KHÔNG remap phụ trách** (điều chuyển NV đã cắt). ⇒ Sai attribution = **nguồn doanh thu active bị cũ/sai emp_code**, không phải lỗi tính.
+- Directive `DIRECTIVE_EMP_COST_REVENUE_SOURCE_FIX.md`: bot xác định nguồn active (slot upload/ORDS `SALES_REPORT` + ngày), so phụ trách hiện tại, **nạp bản App Sale mới nhất** đúng emp_code; nếu nguồn vẫn sai → lỗi App Sale (không tự remap). emp_code không hợp lệ → `UNALLOCATED_EMP`, liệt kê. Cần CEO cho 1–2 ví dụ đơn vị/NV sai để truy chính xác.
+
 ### 2026-07-23 — Claude Code (nghiệm thu) — deploy #148 worklist + #150 độ rộng cột `e7c4fd5`: PASS
 - **Kiểm tra độc lập trên main: PASS.** **Worklist #148 giờ đã LIVE** (lần trước thiếu): route `/employee-cost/province-worklist/export.xlsx` **requireAdmin** + audit; xuất 2 đơn vị / 103.588.300đ / 6 cột. Độ rộng cột #150 áp (C36–C45 đủ tên; thu hẹp Thành tiền/Hàm lượng/Nhân viên; nới Đơn vị/Nhà thầu; tooltip; sticky STT+Tên hàng). Server 261/261, web 39/39, build PASS.
 - **Số không đổi:** DN001 41.144.556đ / C44 1.210.470đ / 171/184; ALL 2.391.033.447đ / C44 95.133.877đ. Self-scope (NV emp=ALL→403); C32/C47 không lộ (API/PDF/XLSX). Health 200; rollback sẵn.
