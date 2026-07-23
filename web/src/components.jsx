@@ -176,9 +176,9 @@ export function Clock() {
   );
 }
 
-export function Kpi({ label, value, sub, delta, tone, variant, icon, onClick }) {
+export function Kpi({ label, value, sub, delta, tone, variant, icon, onClick, title }) {
   return (
-    <div className={'kpi' + (variant ? ' k-' + variant : '') + (tone ? ' ' + tone : '') + (onClick ? ' clickable' : '')} onClick={onClick}>
+    <div className={'kpi' + (variant ? ' k-' + variant : '') + (tone ? ' ' + tone : '') + (onClick ? ' clickable' : '')} onClick={onClick} title={title}>
       {icon && <span className="kpi-ic" aria-hidden="true">{icon}</span>}
       <div className="label">{label}</div>
       <div className={'value' + (typeof value === 'string' && value.length > 12 ? ' small' : '')}>{value}</div>

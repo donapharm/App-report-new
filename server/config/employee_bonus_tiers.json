@@ -1,0 +1,7 @@
+{
+  "base": "revenue_before_vat",
+  "currency": "VND",
+  "capPct": 0.5,
+  "tiers": [],
+  "note": "Mỗi bậc: đạt % target trong [fromPct, toPct) thì thưởng = doanh thu trước VAT × bonusPct ÷ 100. CEO điền tầng nấc sau."
+}

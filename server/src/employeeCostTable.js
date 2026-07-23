@@ -1,5 +1,7 @@
 'use strict';
 
+const employeeBonus = require('./employeeBonus');
+
 const BLOCKED = new Set(['c32', 'c47']);
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZES = Object.freeze([20, 50, 100]);
@@ -341,6 +343,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
     from: source[0]?.from || periodKeys[0] || '', to: source[0]?.to || periodKeys.at(-1) || '',
     periods,
     employees: roster.map((employee) => ({ empCode: employee.emp_code, employeeName: employee.name })),
+    bonus: employeeBonus.aggregateBonusSummaries(source, roster),
   };
 }
 

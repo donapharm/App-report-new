@@ -140,4 +140,6 @@ test('routes hard-lock ALL to CEO/admin for view and export', () => {
   assert.match(source, /employeeCostAllPayload[\s\S]*?mapWithConcurrency\(roster, 3/);
   assert.match(source, /date: req\.query\.date/);
   assert.match(source, /employeeCostTableOptions\(req, \{ paginate: true \}\)/);
+  assert.match(source, /targetKpiSummary\(ky, \{ empCode \}, \[empCode\]\)/);
+  assert.match(source, /employeeBonus\.buildBonusSummary\(bonusKpi/);
 });

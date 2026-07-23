@@ -23,6 +23,7 @@ const catalogManagement = require('./catalogManagement');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
+const employeeBonus = require('./employeeBonus');
 const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostDataQuality = require('./employeeCostDataQuality');
 const employeeCostExport = require('./employeeCostExport');
@@ -530,6 +531,7 @@ async function employeeCostPayload(req, {
   auditEvent = 'view',
   roster = employeeCostRosterRows(),
   sharedCatalogRowsByPeriod = null,
+  bonusConfig = null,
 } = {}) {
   const s = auth.scopeOf(req.session);
   const admin = auth.isAdmin(req.session.role);
@@ -567,7 +569,7 @@ async function employeeCostPayload(req, {
         console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
       }
     }
-    return employeeCost.getForSession({
+    const payload = await employeeCost.getForSession({
       session: req.session,
       scope: s,
       requestedEmp,
@@ -587,6 +589,12 @@ async function employeeCostPayload(req, {
         sortDir: req.query.sortDir,
       },
     });
+    const ky = employeeCost.toUiMonth(range.to);
+    const bonusKpi = empCode ? targetKpiSummary(ky, { empCode }, [empCode]) : { ky };
+    return {
+      ...payload,
+      bonus: employeeBonus.buildBonusSummary(bonusKpi, bonusConfig || employeeBonus.loadConfig()),
+    };
   });
 }
 
@@ -611,6 +619,7 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
   const roster = employeeCostRosterRows();
+  const bonusConfig = employeeBonus.loadConfig();
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   const sharedCatalogRowsByPeriod = {};
   for (const period of range.months) {
@@ -627,6 +636,7 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
     auditEvent,
     roster,
     sharedCatalogRowsByPeriod,
+    bonusConfig,
   }));
   const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
   return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate, allEmployees: true }));

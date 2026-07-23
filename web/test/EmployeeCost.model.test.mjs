@@ -2,10 +2,34 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  buildEmployeeCostColumns, currentMonthValue, employeeCostColumnKpis, employeeCostViewModel,
+  buildEmployeeCostColumns, currentMonthValue, employeeBonusViewModel, employeeCostColumnKpis, employeeCostViewModel,
   employeeCostHighlightParts, employeeCostPageItems, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
   formatMonthLabel, normalizeEmployeeCostSearch,
 } from '../src/employeeCostModel.js';
+
+test('bonus model keeps backend amounts, month/quarter context and exact unconfigured state', () => {
+  assert.equal(employeeBonusViewModel({}).message, 'Chưa cấu hình mức thưởng');
+  const bonus = employeeBonusViewModel({
+    configured: true, base: 'revenue_before_vat', capPct: 0.5, ky: '07.2026', quarterLabel: 'Q3/2026',
+    month: { target: 100_000_000, achieved: 105_000_000, pct: 105, bonusPct: 0.2, amount: 210_000, status: 'matched', tier: { fromPct: 100, toPct: 110, bonusPct: 0.2 } },
+    quarter: { target: 300_000_000, achieved: 390_000_000, pct: 130, bonusPct: 0.5, amount: 1_950_000, status: 'matched' },
+  });
+  assert.equal(bonus.configured, true);
+  assert.equal(bonus.month.amount, 210_000);
+  assert.deepEqual(bonus.month.tier, { fromPct: 100, toPct: 110, bonusPct: 0.2 });
+  assert.equal(bonus.quarter.amount, 1_950_000);
+});
+
+test('bonus KPI contract labels it as forecast/reference and displays month plus quarter', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /label="Thưởng dự kiến"/);
+  assert.match(page, /Chưa cấu hình mức thưởng/);
+  assert.match(page, /theo mức đạt target · tham khảo/);
+  assert.match(page, /lũy kế \$\{bonus\.quarterLabel\}/);
+  assert.match(page, /month\.status === 'below_tier'/);
+  assert.doesNotMatch(page, /if \(month\.amount == null\) return/);
+  assert.match(page, /không phải số chi chính thức/);
+});
 
 test('dynamic columns follow approved order, keep bid price before quantity, and block c32/c47', () => {
   const columns = buildEmployeeCostColumns([

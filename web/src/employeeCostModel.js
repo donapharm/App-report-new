@@ -122,6 +122,45 @@ function normalizedFilterFacet(raw = {}, fallbackAvailable = true) {
   };
 }
 
+function normalizedBonusPeriod(raw = {}) {
+  const numberOrNull = (value) => value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+  return {
+    target: numberOrNull(raw.target),
+    achieved: numberOrNull(raw.achieved),
+    pct: numberOrNull(raw.pct),
+    bonusPct: numberOrNull(raw.bonusPct),
+    amount: numberOrNull(raw.amount),
+    status: String(raw.status || ''),
+    contributors: numberOrNull(raw.contributors),
+    tier: raw.tier && typeof raw.tier === 'object' ? {
+      fromPct: numberOrNull(raw.tier.fromPct),
+      toPct: numberOrNull(raw.tier.toPct),
+      bonusPct: numberOrNull(raw.tier.bonusPct),
+    } : null,
+  };
+}
+
+export function employeeBonusViewModel(raw = {}) {
+  return {
+    configured: raw.configured === true,
+    aggregate: raw.aggregate === true,
+    message: String(raw.message || (raw.configured === true ? '' : 'Chưa cấu hình mức thưởng')),
+    base: String(raw.base || 'revenue_before_vat'),
+    currency: String(raw.currency || 'VND'),
+    capPct: Number.isFinite(Number(raw.capPct)) ? Number(raw.capPct) : 0.5,
+    ky: String(raw.ky || ''),
+    quarterLabel: String(raw.quarterLabel || ''),
+    month: normalizedBonusPeriod(raw.month),
+    quarter: normalizedBonusPeriod(raw.quarter),
+    employeeSubtotals: (Array.isArray(raw.employeeSubtotals) ? raw.employeeSubtotals : []).map((item) => ({
+      empCode: String(item?.empCode || ''),
+      employeeName: String(item?.employeeName || item?.empCode || ''),
+      month: normalizedBonusPeriod(item?.month),
+      quarter: normalizedBonusPeriod(item?.quarter),
+    })),
+  };
+}
+
 function periodViewModel(payload = {}) {
   const template = {
     key: String(payload.template?.key || ''),
@@ -262,6 +301,7 @@ export function employeeCostViewModel(payload = {}) {
       filteredRows: Number(payload.search?.filteredRows ?? rows.length),
       totalRows: Number(payload.search?.totalRows ?? rows.length),
     },
+    bonus: employeeBonusViewModel(payload.bonus),
   };
 }
 

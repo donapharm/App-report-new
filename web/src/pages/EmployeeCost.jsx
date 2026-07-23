@@ -204,6 +204,36 @@ function CostColumnKpi({ item }) {
   </div>;
 }
 
+function bonusPctLabel(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}%` : '0%';
+}
+
+function targetPctLabel(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : '—';
+}
+
+function BonusKpi({ bonus }) {
+  if (!bonus.configured) return <Kpi label="Thưởng dự kiến" value="Chưa cấu hình mức thưởng" sub="theo mức đạt target · tham khảo" title="App Report chỉ tính tham khảo; không gửi thưởng và không ghi payroll." />;
+  const month = bonus.month;
+  const quarter = bonus.quarter;
+  const monthAmount = month.amount == null ? '—' : formatEmployeeCostCell(month.amount, moneyColumn);
+  const quarterAmount = quarter.amount == null ? '—' : formatEmployeeCostCell(quarter.amount, moneyColumn);
+  const monthContext = bonus.aggregate
+    ? (month.amount == null ? 'Tháng chưa có target' : `Tổng ${month.contributors || bonus.employeeSubtotals.length} NV`)
+    : month.status === 'below_tier'
+      ? `đạt ${targetPctLabel(month.pct)} target · không đạt bậc · thưởng 0`
+      : month.amount == null
+        ? 'Tháng chưa có target'
+        : `đạt ${targetPctLabel(month.pct)} target · bậc ${bonusPctLabel(month.bonusPct)}`;
+  const quarterContext = bonus.quarterLabel ? `lũy kế ${bonus.quarterLabel}: ${quarterAmount}` : `lũy kế quý: ${quarterAmount}`;
+  const title = bonus.aggregate
+    ? `Tổng thưởng dự kiến được cộng từ từng nhân viên theo đúng bậc cá nhân. ${quarterContext}. App Report không gửi thưởng/không ghi payroll.`
+    : `Tháng: ${monthAmount}; đạt ${targetPctLabel(month.pct)} target${month.tier ? ` · bậc ${bonusPctLabel(month.bonusPct)}` : ''}. Quý: ${quarterAmount}; đạt ${targetPctLabel(quarter.pct)}${quarter.tier ? ` · bậc ${bonusPctLabel(quarter.bonusPct)}` : ''}. Chỉ tham khảo, không phải số chi chính thức.`;
+  return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · tham khảo`} title={title} />;
+}
+
 function VisibilityPanel({ adminCode, panel, loading, saving, message, error, onChange, onSave }) {
   const storageKey = visibilityCollapseStorageKey(adminCode);
   const [collapsed, setCollapsed] = useState(() => readVisibilityCollapsed(browserStorage(), storageKey));
@@ -740,8 +770,18 @@ export default function EmployeeCost({ me }) {
       <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${model.match.threshold}%`} />
       <Kpi label={multiple ? 'Tổng cả kỳ (chưa gồm khoản cuối năm)' : 'Tổng chi phí tháng (chưa gồm khoản cuối năm)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`} />
       <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
+      <BonusKpi bonus={model.bonus} />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
     </div>
+
+    {allEmployees && model.bonus.configured && !!model.bonus.employeeSubtotals.length && <details className="employee-cost-subtotals employee-cost-bonus-subtotals">
+      <summary>Thưởng dự kiến theo nhân viên ({model.bonus.employeeSubtotals.length}) · tham khảo</summary>
+      <div>{model.bonus.employeeSubtotals.map((item) => <span key={item.empCode}>
+        <b>{item.empCode} · {item.employeeName}</b>
+        <small>Tháng: {formatEmployeeCostCell(item.month.amount, moneyColumn)} · đạt {targetPctLabel(item.month.pct)}{item.month.tier ? ` · bậc ${bonusPctLabel(item.month.bonusPct)}` : ' · không đạt bậc'}</small>
+        <small>{model.bonus.quarterLabel || 'Quý'}: {formatEmployeeCostCell(item.quarter.amount, moneyColumn)} · đạt {targetPctLabel(item.quarter.pct)}</small>
+      </span>)}</div>
+    </details>}
 
     <div className="card employee-cost-table-toolbar">
       <label><span>Tìm trong toàn bảng</span><input type="search" value={tableQuery} onChange={(event) => { setTableQuery(event.target.value); setTablePage(1); }} placeholder="Không dấu, nhiều từ khóa (AND)…" /></label>
