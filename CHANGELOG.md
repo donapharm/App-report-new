@@ -1,3 +1,7 @@
+### 2026-07-23 — Claude Code (review) — ô "Thưởng dự kiến" `467eb2e`: PASS
+- **Review `467eb2e`: PASS.** `amount = doanh thu (revenue_before_vat) × bonusPct ÷ 100`. **Cap 0.5% khóa 3 lớp** (`min(config,0.5)` + mỗi bậc `min(bonusPct,capPct,0.5)`). **Fail-closed:** config rỗng/sai → "Chưa cấu hình mức thưởng"; **thiếu target → không bịa** (`missing_target`); dưới bậc → 0. **Phát hiện tầng chồng lấn** (overlap → unconfigured). Self-scope (tính theo empCode đã khóa). Test 292/292, web 48/48. Trên main, chưa deploy.
+- Tầng nấc `employee_bonus_tiers.json` để trống → CEO điền sau (0.2–0.5%). Nhãn "dự kiến", không payroll.
+
 ### 2026-07-23 — Claude Code (giao bot) — App Report ĐỌC điểm/xu/phạt từ App VAT SSOT (đã ổn định)
 - **App VAT chốt SSOT xong** (`/api/khoan/dashboard`, service auth Bearer + bắt buộc emp_code + no view-all, bill/carry thống nhất, commit `365b0c5`, rule_version `khoan-ssot-v2026-05-r1`). Contract-level PASS (App VAT repo khác, không soi code trực tiếp — tin test + commit App VAT).
 - Directive `DIRECTIVE_EMP_COST_DIEMXU_CONSUME.md`: App Report **proxy backend** đọc App VAT (VAT_SERVICE_TOKEN backend-only, self-scope 2 lớp, fail-closed, audit, không LLM); FE **3 KPI** (điểm/xu/phạt) + **dòng "cấn trừ do thiếu xu"** (tách khỏi chi phí DataHub, display-only, "chi phí gốc − cấn trừ = còn lại") + **cảnh báo sớm** khi pct<90%. App Report chỉ đọc, không tính/không payroll.
