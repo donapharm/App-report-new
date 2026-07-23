@@ -161,7 +161,7 @@ test('DQ routes require authentication, keep backend scope, expose admin-only be
   assert.match(block, /admin && !requested \? null : employeeCost\.resolveScopedEmployee/);
   assert.match(block, /employeeCostVisibility\.run/);
   assert.match(block, /scopedEmp \? \{ empCode: scopedEmp \} : \{\}/);
-  assert.match(routes, /catalogManagement\.getCachedSnapshot\(key\) \|\| await canonicalAssignmentSnapshot\(key\)/);
+  assert.match(routes, /catalogManagement\.getCachedDataQualitySnapshot\(key\) \|\| await canonicalAssignmentSnapshot\(key\)/);
   assert.match(block, /scope: \{ admin, employeeCode:/);
   assert.equal(/c32|c47/i.test(block), false);
 });

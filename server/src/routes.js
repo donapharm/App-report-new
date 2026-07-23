@@ -823,7 +823,7 @@ async function employeeCostDqCatalogSnapshot(period) {
   // DQ is read-only and must not make the request path rewrite/validate every
   // retained catalog month. Prefer the already-validated snapshot for this
   // exact period; only use the live canonical flow when no LKG exists.
-  const value = catalogManagement.getCachedSnapshot(key) || await canonicalAssignmentSnapshot(key);
+  const value = catalogManagement.getCachedDataQualitySnapshot(key) || await canonicalAssignmentSnapshot(key);
   employeeCostDqCatalogSnapshots.set(key, { at: Date.now(), value });
   if (employeeCostDqCatalogSnapshots.size > 24) employeeCostDqCatalogSnapshots.delete(employeeCostDqCatalogSnapshots.keys().next().value);
   return value;
