@@ -11,6 +11,7 @@ import {
 } from '../employeeCostVisibilityModel.js';
 import { employeeCostGapView, gapReasonLabel } from '../employeeCostGapModel.js';
 import { dataQualityTypeLabel, employeeCostDataQualityView } from '../employeeCostDataQualityModel.js';
+import { employeeVatKhoanDeduction, employeeVatKhoanViewModel } from '../employeeVatKhoanModel.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -232,6 +233,68 @@ function BonusKpi({ bonus }) {
     ? `Tổng thưởng dự kiến được cộng từ từng nhân viên theo đúng bậc cá nhân. ${quarterContext}. App Report không gửi thưởng/không ghi payroll.`
     : `Tháng: ${monthAmount}; đạt ${targetPctLabel(month.pct)} target${month.tier ? ` · bậc ${bonusPctLabel(month.bonusPct)}` : ''}. Quý: ${quarterAmount}; đạt ${targetPctLabel(quarter.pct)}${quarter.tier ? ` · bậc ${bonusPctLabel(quarter.bonusPct)}` : ''}. Chỉ tham khảo, không phải số chi chính thức.`;
   return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · tham khảo`} title={title} />;
+}
+
+function diemXuNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 2 }) : '—';
+}
+
+function KhoanKpis({ khoan, loading }) {
+  const note = loading ? 'Đang tải nguồn App VAT…' : khoan.note;
+  if (!khoan.available) return <>
+    <Kpi label="Điểm (tháng · quý)" value="— · —" sub={note} />
+    <Kpi label="Xu tích lũy" value="— · —" sub={note} />
+    <Kpi label="Phạt dự kiến" value="—" sub={`${note} · không payroll`} />
+  </>;
+  const source = `Nguồn: ${khoan.source} · ${khoan.ruleVersion}`;
+  return <>
+    <Kpi label="Điểm (tháng · quý)" value={`${diemXuNumber(khoan.diemThang)} · ${diemXuNumber(khoan.diemQuy)}`} sub={source} />
+    <Kpi label="Xu tích lũy (tháng · quý)" value={`${diemXuNumber(khoan.xuThang)} · ${diemXuNumber(khoan.xuQuyTong)}`} sub={`Quý gốc ${diemXuNumber(khoan.xuQuy)} + carry ${diemXuNumber(khoan.carry)} · ${source}`} />
+    <Kpi
+      label={<span>Phạt dự kiến {khoan.phatDuKien > 0 && <span className="employee-cost-khoan-danger-badge">Cảnh báo</span>}</span>}
+      value={formatEmployeeCostCell(khoan.phatDuKien, moneyColumn)}
+      sub={`${khoan.aggregate ? 'Tổng projection từng NV' : `đạt ${targetPctLabel(khoan.pctQuy)} xu/điểm quý`} · tham khảo · không payroll`}
+      tone={khoan.phatDuKien > 0 ? 'danger' : ''}
+      title={`${khoan.penaltyRule || 'Mức phạt do App VAT quyết định'}. App Report chỉ đọc và hiển thị.`}
+    />
+  </>;
+}
+
+function KhoanWarning({ khoan }) {
+  if (!khoan.available) return null;
+  if (khoan.aggregate) {
+    if (!khoan.warningCount) return null;
+    return <div className="employee-cost-khoan-warning" role="alert"><b>⚠ Cảnh báo sớm từ App VAT:</b> {khoan.warningCount.toLocaleString('vi-VN')} nhân viên đang dưới 90% xu/điểm quý.</div>;
+  }
+  if (!(khoan.pctQuy < 90 && khoan.diemQuy > 0)) return null;
+  return <div className="employee-cost-khoan-warning" role="alert" title={khoan.upstreamWarning}>
+    <b>⚠ Cảnh báo sớm · {khoan.quarterLabel || `Q${khoan.selected.quarter}/${khoan.selected.year}`}:</b>{' '}
+    cần {diemXuNumber(khoan.diemQuy)} xu (= điểm doanh thu quý), bạn đạt {diemXuNumber(khoan.xuQuyTong)} xu
+    {khoan.carry > 0 ? ` (gồm carry ${diemXuNumber(khoan.carry)})` : ''}, thiếu {diemXuNumber(khoan.thieuXu)} xu →
+    App VAT tính phạt dự kiến {formatEmployeeCostCell(khoan.phatDuKien, moneyColumn)}.<br />
+    <b>Diễn giải rule nguồn:</b> floor(điểm thiếu ÷ 2) × tiền mỗi bậc theo rule App VAT ({khoan.penaltyRule}) = {formatEmployeeCostCell(khoan.phatDuKien, moneyColumn)}. App Report không tự tính lại.
+  </div>;
+}
+
+function KhoanDeduction({ khoan, baseCost, multiMonth }) {
+  if (!khoan.available) return null;
+  if (multiMonth) return <div className="card employee-cost-khoan-deduction">
+    <div className="section-head">Cấn trừ do thiếu xu chi tiêu (quý) · dự kiến</div>
+    <p><b>Chưa hiển thị phép cấn trừ cho kỳ nhiều tháng.</b> Phạt dự kiến phía trên thuộc tháng kết thúc kỳ, còn chi phí gốc là tổng nhiều tháng. Chọn đúng một tháng để xem phép tính display-only, tránh ghép sai kỳ.</p>
+  </div>;
+  const display = employeeVatKhoanDeduction(baseCost, khoan.phatDuKien);
+  return <div className="card employee-cost-khoan-deduction">
+    <div className="section-head">Cấn trừ do thiếu xu chi tiêu (quý) · dự kiến</div>
+    <div className="employee-cost-khoan-equation">
+      <span><small>Chi phí gốc</small><b>{formatEmployeeCostCell(display.baseCost, moneyColumn)}</b><em>Nguồn DataHub/App Report</em></span>
+      <strong>+</strong>
+      <span className="deduction"><small>Cấn trừ thiếu xu</small><b>{formatEmployeeCostCell(display.deduction, moneyColumn)}</b><em>Nguồn App VAT</em></span>
+      <strong>=</strong>
+      <span><small>Còn lại (display-only)</small><b>{formatEmployeeCostCell(display.remaining, moneyColumn)}</b><em>Không ghi DataHub/payroll</em></span>
+    </div>
+    <p><b>Chi phí gốc − cấn trừ thiếu xu = còn lại.</b> Số cấn trừ được thể hiện âm trên màn hình. Hai nguồn được trình bày cạnh nhau; App Report không sửa chi phí gốc và không phát lệnh chi/trừ.</p>
+  </div>;
 }
 
 function VisibilityPanel({ adminCode, panel, loading, saving, message, error, onChange, onSave }) {
@@ -493,6 +556,8 @@ export default function EmployeeCost({ me }) {
   const [draftRange, setDraftRange] = useState({ from: month, to: month });
   const [range, setRange] = useState({ from: month, to: month });
   const [payload, setPayload] = useState(EMPTY);
+  const [khoanPayload, setKhoanPayload] = useState({});
+  const [khoanLoading, setKhoanLoading] = useState(!admin);
   const [loading, setLoading] = useState(!admin);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState({});
@@ -568,6 +633,19 @@ export default function EmployeeCost({ me }) {
   }, [admin, selectedEmp, range, view, debouncedQuery, tableSort, tablePage, tablePageSize, tableFilters]);
 
   useEffect(() => {
+    if (admin && view !== 'cost') return undefined;
+    if (admin && !selectedEmp) { setKhoanPayload({}); setKhoanLoading(false); return undefined; }
+    let alive = true;
+    setKhoanPayload({ note: 'chưa lấy được điểm/xu kỳ này' });
+    setKhoanLoading(true);
+    api.employeeCostDiemXu(admin ? selectedEmp : undefined, range)
+      .then((data) => { if (alive) setKhoanPayload(data); })
+      .catch(() => { if (alive) setKhoanPayload({ note: 'chưa lấy được điểm/xu kỳ này' }); })
+      .finally(() => { if (alive) setKhoanLoading(false); });
+    return () => { alive = false; };
+  }, [admin, selectedEmp, range, view]);
+
+  useEffect(() => {
     if (admin && view !== 'gaps') return undefined;
     let alive = true;
     setGapLoading(true);
@@ -600,6 +678,7 @@ export default function EmployeeCost({ me }) {
   }, [admin, range, view]);
 
   const model = useMemo(() => employeeCostViewModel(payload), [payload]);
+  const khoan = useMemo(() => employeeVatKhoanViewModel(khoanPayload), [khoanPayload]);
   const selected = employees.find((employee) => employee.emp_code === selectedEmp);
   const employeeLabel = admin
     ? (selectedEmp === 'ALL' ? 'Tất cả nhân viên' : (selected ? employeeOptionLabel(selected) : 'Chưa chọn nhân viên'))
@@ -771,8 +850,12 @@ export default function EmployeeCost({ me }) {
       <Kpi label={multiple ? 'Tổng cả kỳ (chưa gồm khoản cuối năm)' : 'Tổng chi phí tháng (chưa gồm khoản cuối năm)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`} />
       <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
       <BonusKpi bonus={model.bonus} />
+      <KhoanKpis khoan={khoan} loading={khoanLoading} />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
     </div>
+
+    <KhoanWarning khoan={khoan} />
+    <KhoanDeduction khoan={khoan} baseCost={model.summary.periodTotal} multiMonth={multiple} />
 
     {allEmployees && model.bonus.configured && !!model.bonus.employeeSubtotals.length && <details className="employee-cost-subtotals employee-cost-bonus-subtotals">
       <summary>Thưởng dự kiến theo nhân viên ({model.bonus.employeeSubtotals.length}) · tham khảo</summary>
