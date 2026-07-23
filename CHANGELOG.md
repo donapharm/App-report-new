@@ -1,3 +1,8 @@
+### 2026-07-23 — Report Bot điều tra App VAT + Claude chốt hướng — điểm/xu/phạt = App VAT SSOT, App Report đọc
+- **Kết quả điều tra (Report Bot):** App VAT ĐÃ có + expose điểm/xu per-NV. **Điểm** = `DT × hệ số ÷ 100tr` (CL/NT/NCL đơn vị 025–028=2.0; NCL thường=1.0 từ T05). **Xu** = `bill ÷ 500.000 × tỷ lệ` (1.3 từ T05). **Target xu = điểm doanh thu quý**. **PHẠT** = `floor(điểm thiếu ÷ 2) × 600.000đ` (từ T05). API: `/api/khoan/dashboard` (đủ nhất) + `/api/vat/xu-stats` + `/xu-overview`; self-scope NV OK.
+- **Chốt hướng:** App VAT = **SSOT điểm/xu/phạt**, App Report **chỉ đọc** (không dựng engine). **CHƯA tích hợp** — 4 chốt App VAT phải xử trước (vì phạt = tiền thật): (1) 2 API tính bill khác → chọn 1 endpoint SSOT; (2) carry/reset + tỷ lệ/cảnh báo bất nhất; (3) chưa có auth service-to-service cho DataHub; (4) code điểm/xu chưa commit Git baseline. Task đã gửi App VAT Bot (`TASK_APPVAT_DIEMXU_SSOT.md`). Sau khi App VAT chốt: App Report đọc → 3 KPI (điểm/xu/phạt) + dòng "cấn trừ do thiếu xu" + cảnh báo (display-only, không payroll).
+- **Riêng ô "Thưởng dự kiến" (target-based #159/#160)** độc lập — App Report tự tính từ target, chạy song song, không chờ App VAT.
+
 ### 2026-07-23 — Claude Code (giao bot) — Công thức tầng nấc thưởng: % doanh thu 0.2–0.5% (bổ sung #159)
 - CEO chốt: thưởng là **% DOANH THU** (không phải tiền cố định), **kịch trần 0.5% cho đạt XUẤT SẮC**, sàn **0.2% khi đạt target**. Directive `DIRECTIVE_EMP_COST_BONUS_TIERS.md`: `Thưởng = doanh thu trước VAT × bonusPct(% đạt target)`; config `employee_bonus_tiers.json` dùng **`bonusPct`** (100–110%→0.2 · 110–120%→0.3 · 120–130%→0.4 · ≥130%→0.5), `capPct:0.5` chặn trần; <100%→0. Tháng & quý tính riêng. tiers rỗng → "Chưa cấu hình". Nhãn "dự kiến". Cấu hình được, CEO đổi không sửa code.
 
