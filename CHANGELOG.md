@@ -1,6 +1,19 @@
+### 2026-07-23 — Report Bot (review, chưa deploy) — #150 độ rộng cột + #148 worklist
+- Trên đúng nhánh `review/employee-cost-table-ux-20260722`, merge `origin/main`/directive `DIRECTIVE_EMP_COST_COLUMN_WIDTHS.md`, giữ nguyên worklist #148. Bảng web hiện đủ nhãn **C36/C41/C43/C44/C45** (header wrap, C44 giữ badge **cuối năm**); thu gọn **Thành tiền xuất bán trước VAT · Hàm lượng · Nhân viên**, nới **Đơn vị · Nhà thầu** bằng class cột `min/max-width`.
+- Hàm lượng và tên NV dài cắt `…` kèm tooltip; Đơn vị/Nhà thầu tối đa 2 dòng kèm title. Chỉ STT/Tên hàng sticky đúng directive (Nhân viên cuộn bình thường để không lệch/chồng offset), cuộn ngang trong khung và mobile không tràn body.
+- Không sửa backend, model tài chính, quyền hoặc export. Gate: server **261/261 PASS**, web **39/39 PASS**, focused Employee Cost **26/26 PASS**, production build và `git diff --check` PASS. Render headless 1440×900 + 390×844 xác nhận header % đủ 2 dòng, sticky/scroll ngang đúng, không body overflow.
+- Nghiệm thu #148 giữ đúng file T07/2026 **2 đơn vị / 103.588.300đ**, đúng 6 cột, không C32/C47. Chưa deploy; chờ Claude review PASS để deploy chung đúng 1 lần.
+
 ### 2026-07-22 — Claude Code (review #148 PASS + giao độ rộng cột) — worklist tỉnh `80a8c4c`
 - **Review worklist #148 `80a8c4c`: PASS.** Route `/employee-cost/province-worklist/export.xlsx` = requireAdmin (CEO/admin), không nhận emp, **không %/C32/C47**; chỉ lấy tỉnh nguồn chính thức (loại catalog/inferred/guessed), xung đột tỉnh fail-closed. T07: **2 đơn vị** cần gán tỉnh (doanh thu ảnh hưởng 103.588.300đ). Audit đủ. Server 261/261, web 39/39, build + quét C32/C47 PASS.
 - **CEO thêm: tinh chỉnh độ rộng cột** (thuần CSS): C36–C45 hiện **đủ tên** (header wrap); thu hẹp Thành tiền-trước-VAT · Hàm lượng (1 dòng+…+tooltip) · Nhân viên; **nới rộng Đơn vị · Nhà thầu**. Directive `DIRECTIVE_EMP_COST_COLUMN_WIDTHS.md`. Làm cùng nhánh → **deploy chung worklist #148 + độ rộng cột**. Không đổi số/quyền.
+
+### 2026-07-22 — Report Bot (review, chưa deploy) — #148 worklist đơn vị chưa gán tỉnh
+- Thêm endpoint CEO/admin-only `GET /api/employee-cost/province-worklist/export.xlsx?from=YYYY-MM&to=YYYY-MM` và nút **Xuất ĐV chưa gán tỉnh**. Backend luôn gom toàn roster, không nhận `emp`, không gọi DataHub tỷ lệ; audit metadata-only riêng và response `private, no-store`.
+- Excel chỉ có 6 cột **Mã đơn vị · Tên đơn vị · Tuyến · #NV liên quan · Doanh thu ảnh hưởng · Tỉnh cần điền**; đơn vị duy nhất, tuyến/NV distinct, xếp doanh thu giảm dần, cột tỉnh để trống. Số thật/định dạng kế toán VN, A4 ngang, fit-to-width, lặp/freeze header, footer trang; không chứa %/chi phí/C32/C47.
+- T07/2026 trên dữ liệu thật: **1.550 dòng / 21 NV → 2 đơn vị chưa gán tỉnh / 103.588.300đ**: `175.BVĐK VŨNG TÀU` **91.975.200đ** và `135.HTNT-FPT LONG CHÂU` **11.613.100đ**. File QA: `/tmp/employee-cost-province-worklist-2026-07.xlsx`.
+- Sửa cache metadata tỉnh: `unit_province.json` có version/mtime trong cache revenue/CST; config CEO duyệt ưu tiên trước catalog fallback. Điền map sẽ tự áp mà không giữ dữ liệu enrich cũ; catalog/name inference vẫn không được dùng cho Employee Cost, xung đột vẫn fail closed. Không đổi công thức/tổng tiền.
+- Gate nhánh review: server **261/261 PASS**, web **39/39 PASS**, production build/syntax/`git diff --check` PASS; chỉ warning chunk-size cũ. Chưa deploy, chờ Claude review.
 
 ### 2026-07-22 — Claude Code (nghiệm thu) — bảng UX production `3e29784`: PASS (worklist #148 CHƯA kèm)
 - **Kiểm tra độc lập trên main: PASS.** Code khớp bản review `d0c6b56` (pageSize 20, filter `date`, Vùng/Tỉnh chỉ nguồn chính thức). **Số không đổi:** DN001 41.144.556đ / C44 1.210.470đ / 92,9%; ALL 2.391.033.447đ / C44 95.133.877đ. Self-scope chắc (NV emp=ALL→403; ép DN016→DN001); C32/C47 không lộ (API/PDF/XLSX). Pager pill 20 dòng trên/dưới; lọc kết hợp + tìm bỏ dấu + ngày + "Chưa gán tỉnh"=7 chạy đúng.

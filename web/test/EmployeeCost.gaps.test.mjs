@@ -55,6 +55,9 @@ test('Employee Cost UI uses secure gap API, admin tab, filters, progress, and au
   assert.match(page, /employeeCostGaps/);
   assert.match(page, /downloadEmployeeCostGaps/);
   assert.match(page, /downloadEmployeeCostReport/);
+  assert.match(page, /downloadEmployeeCostProvinceWorklist/);
+  assert.match(page, /Xuất ĐV chưa gán tỉnh/);
+  assert.match(page, /\{admin && <button[^>]+onClick=\{exportProvinceWorklist\}/);
   assert.match(page, /exportCost\('xlsx'\)/);
   assert.match(page, /exportCost\('pdf'\)/);
   assert.match(page, /exportFile\('xlsx'\)/);
@@ -68,4 +71,5 @@ test('Employee Cost UI uses secure gap API, admin tab, filters, progress, and au
   assert.match(api, /X-Device-Id/);
   assert.match(api, /employee-cost\/gaps/);
   assert.match(api, /employee-cost', format/);
+  assert.match(api, /employee-cost\/province-worklist/);
 });

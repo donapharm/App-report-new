@@ -132,5 +132,20 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
   `paginate=false`; Excel/PDF đều có STT ở cột đầu, ALL có thêm cột Nhân viên và tổng
   phụ. File ghi rõ ngữ cảnh bộ lọc và X/Y dòng; không nhận hàng/số tính từ frontend.
 
+## 10. Worklist đơn vị chưa gán tỉnh
+- `GET /api/employee-cost/province-worklist/export.xlsx?from=YYYY-MM&to=YYYY-MM`
+  chỉ dành CEO/admin (`requireAuth` + `requireAdmin`) và luôn tổng hợp toàn roster ở
+  backend. Route không nhận `emp`, không gọi DataHub tỷ lệ và không trả JSON chi tiết.
+- Worklist giữ một dòng cho mỗi khóa mã đơn vị chưa có tỉnh chính thức trên dòng doanh
+  thu và chưa có trong `server/config/unit_province.json`. Nguồn `catalog`, `inferred`,
+  `guessed_from_name` bị loại; xung đột nhiều tỉnh chính thức cùng mã tiếp tục fail closed.
+- File chỉ có: Mã đơn vị, Tên đơn vị, Tuyến, #NV liên quan, Doanh thu ảnh hưởng và cột
+  trống `Tỉnh cần điền`; xếp doanh thu giảm dần. Excel dùng số thật/định dạng kế toán,
+  A4 ngang, fit-to-width, lặp/freeze header, audit metadata-only và `private, no-store`.
+  Không chứa tỷ lệ, tiền chi phí, C32 hoặc C47.
+- `province.js` theo dõi version/mtime của `unit_province.json`; cache dòng doanh thu và
+  CST đưa version này vào chữ ký. Vì vậy sau khi admin cập nhật map, App Report tự nạp
+  tỉnh mới mà không giữ dữ liệu enrich cũ; các công thức và tổng tiền không thay đổi.
+
 ---
 *Phía Data Hub: C32/C47 tiếp tục khóa cứng; C48 hiện chưa có trong payload nên App Report hiển thị `—` và chờ Data Hub bổ sung theo task riêng.*

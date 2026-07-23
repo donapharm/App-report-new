@@ -245,6 +245,10 @@ export async function downloadEmployeeCostGaps(format = 'xlsx', params = {}) {
   return downloadEmployeeCostFile('employee-cost/gaps', format, params, 'employee-cost-gaps');
 }
 
+export async function downloadEmployeeCostProvinceWorklist(params = {}) {
+  return downloadEmployeeCostFile('employee-cost/province-worklist', 'xlsx', params, 'employee-cost-province-worklist');
+}
+
 export async function downloadDormantReport(format, snapshotId) {
   const extension = format === 'pdf' ? 'pdf' : 'xlsx';
   const url = `/api/dormant/reports/export.${extension}?` + new URLSearchParams({ snapshot_id: snapshotId }).toString();

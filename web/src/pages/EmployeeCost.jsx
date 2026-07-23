@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { api, downloadEmployeeCostGaps, downloadEmployeeCostReport } from '../api.js';
+import { api, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
   currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostViewModel,
@@ -83,6 +83,7 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
   const renderCell = (row, column) => {
     const text = formatEmployeeCostCell(row[column.key], column);
     if (column.tooltip && text !== '—') return <button type="button" className="employee-cost-ellipsis" title={text} onClick={() => setTooltip(text)}>{text}</button>;
+    if (column.key === 'c7' || column.key === 'contractorName') return <span className="employee-cost-clamp-2" title={text}><Highlight value={text} query={query} /></span>;
     return <Highlight value={text} query={query} />;
   };
   const sortHeader = (column) => {
@@ -96,10 +97,10 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
       <thead>
         <tr>
           <th className="employee-cost-sticky-stt employee-cost-number">STT</th>
-          {allEmployees && <th className="employee-cost-sticky-employee"><button type="button" onClick={() => sortHeader({ key: 'employeeCode' })}>Nhân viên{sort.key === 'employeeCode' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>}
-          {period.columns.map((column) => <th key={column.key} title={column.kind === 'percent' ? column.label : undefined} className={`${column.annual ? 'employee-cost-annual ' : ''}${column.kind === 'percent' ? 'employee-cost-percent ' : ''}${column.key === 'c16' ? 'employee-cost-sticky-product' : ''}`}>
-            <button type="button" onClick={() => sortHeader(column)}>{column.kind === 'percent' ? column.shortLabel : column.label}{sort.key === column.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button>
-            {column.annual && <span className="employee-cost-annual-badge">⏳</span>}
+          {allEmployees && <th className="employee-cost-employee"><button type="button" onClick={() => sortHeader({ key: 'employeeCode' })}>Nhân viên{sort.key === 'employeeCode' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>}
+          {period.columns.map((column) => <th key={column.key} title={column.kind === 'percent' ? column.label : undefined} className={`${column.annual ? 'employee-cost-annual ' : ''}${column.kind === 'percent' ? 'employee-cost-percent ' : ''}${column.key === 'c16' ? 'employee-cost-sticky-product ' : ''}employee-cost-col-${column.key}`}>
+            <button type="button" onClick={() => sortHeader(column)}>{column.label}{sort.key === column.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button>
+            {column.annual && <span className="employee-cost-annual-badge">cuối năm</span>}
           </th>)}
         </tr>
       </thead>
@@ -112,8 +113,8 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
         </tr>}
         <tr>
           <td className="employee-cost-sticky-stt employee-cost-number">{row.stt || rowIndex + 1}</td>
-          {allEmployees && <td className="employee-cost-sticky-employee"><b><Highlight value={row.employeeCode} query={query} /></b><small><Highlight value={row.employeeName} query={query} /></small></td>}
-          {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}${column.kind === 'percent' ? ' employee-cost-percent' : ''}${column.key === 'c16' ? ' employee-cost-sticky-product' : ''}`}>
+          {allEmployees && <td className="employee-cost-employee"><b><Highlight value={row.employeeCode} query={query} /></b><small title={row.employeeName}><Highlight value={row.employeeName} query={query} /></small></td>}
+          {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}${column.kind === 'percent' ? ' employee-cost-percent' : ''}${column.key === 'c16' ? ' employee-cost-sticky-product' : ''} employee-cost-col-${column.key}`}>
             {renderCell(row, column)}
           </td>)}
         </tr>
@@ -402,6 +403,7 @@ export default function EmployeeCost({ me }) {
   const [gapError, setGapError] = useState('');
   const [costExporting, setCostExporting] = useState('');
   const [costExportError, setCostExportError] = useState('');
+  const [provinceWorklistExporting, setProvinceWorklistExporting] = useState(false);
   const [tableQuery, setTableQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [tableSort, setTableSort] = useState({ key: '', dir: 'asc' });
@@ -527,6 +529,12 @@ export default function EmployeeCost({ me }) {
     catch (requestError) { setCostExportError(requestError.message || 'Không xuất được báo cáo chi phí'); }
     finally { setCostExporting(''); }
   };
+  const exportProvinceWorklist = async () => {
+    setProvinceWorklistExporting(true); setCostExportError('');
+    try { await downloadEmployeeCostProvinceWorklist(range); }
+    catch (requestError) { setCostExportError(requestError.message || 'Không xuất được danh sách đơn vị chưa gán tỉnh'); }
+    finally { setProvinceWorklistExporting(false); }
+  };
   const changeEmployee = (value) => {
     setSelectedEmp(value); setTablePage(1); setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '', date: '' });
   };
@@ -597,6 +605,7 @@ export default function EmployeeCost({ me }) {
         {view === 'cost' && <div className="employee-cost-export-actions">
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('xlsx')}>{costExporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('pdf')}>{costExporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
+          {admin && <button type="button" className="btn secondary" disabled={loading || provinceWorklistExporting} onClick={exportProvinceWorklist}>{provinceWorklistExporting ? 'Đang xuất ĐV…' : 'Xuất ĐV chưa gán tỉnh'}</button>}
         </div>}
         {rangeInvalid && <small role="alert">Từ tháng không được sau Đến tháng.</small>}
       </form>
