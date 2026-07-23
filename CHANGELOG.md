@@ -1,3 +1,9 @@
+### 2026-07-23 — Report Bot (khẩn cấp) — cách ly doanh thu sai phụ trách, DN023 chỉ còn đơn vị 140
+- Active T07 chuyển sang nguồn mới nhất CRM MISA run **#185** + APP WEB: **1.555 dòng / 23.778.161.153đ**. Giữ nguyên tổng doanh thu; không remap/đoán nhân viên tại App Report.
+- Đối soát roster Data Hub **2026-07 v3.7**: **26 dòng / 8 đơn vị / 403.042.400đ** có `emp_code` nguồn xung đột được fail-safe về `UNALLOCATED`, giữ `raw_emp_code` và audit đầy đủ. **DN023 hiện chỉ còn 1 dòng / 9.699.600đ tại `140.BVĐK BÌNH PHƯỚC`**, không còn thấy BV Quân Dân Y 16, TTYT Bù Đốp hay đơn vị khác.
+- Thêm attribution guard vào materializer để lịch tự động không ghi đè lỗi trở lại; snapshot roster thiếu/rỗng/trùng khóa thì fail closed. App Sale vẫn phải sửa mapping gốc `unit_product_employees` và xuất lại `emp_code`; khi nguồn đúng, guard tự ngừng cách ly.
+- Gate: server **265/265 PASS**; active slot duy nhất `rev_2src_072026_20260723011949`; production health 200. Backup/audit trước xử lý: `backups/revenue-attribution-emergency-20260723_081713/`.
+
 ### 2026-07-23 — Claude Code (giao bot) — SỬA doanh thu gán SAI nhân viên phụ trách (nguồn App Sale)
 - **CEO báo:** doanh thu lấy từ App Sale gán **không đúng NV phụ trách**. Chẩn đoán từ code: `store.js` gán NV theo **field `emp_code` trong nguồn** (`getRows` chỉ lọc `r.emp_code===empCode`); **App Report KHÔNG remap phụ trách** (điều chuyển NV đã cắt). ⇒ Sai attribution = **nguồn doanh thu active bị cũ/sai emp_code**, không phải lỗi tính.
 - Directive `DIRECTIVE_EMP_COST_REVENUE_SOURCE_FIX.md`: bot xác định nguồn active (slot upload/ORDS `SALES_REPORT` + ngày), so phụ trách hiện tại, **nạp bản App Sale mới nhất** đúng emp_code; nếu nguồn vẫn sai → lỗi App Sale (không tự remap). emp_code không hợp lệ → `UNALLOCATED_EMP`, liệt kê. Cần CEO cho 1–2 ví dụ đơn vị/NV sai để truy chính xác.

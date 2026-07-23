@@ -11,6 +11,8 @@ const path = require('path');
 const REPORT_ROOT = path.join(__dirname, '..', '..');
 const DATA_DIR = path.join(REPORT_ROOT, 'server', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
+const ROSTER_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json');
+const { quarantineRosterConflicts } = require('../src/revenueAttributionGuard');
 
 function loadEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -73,6 +75,17 @@ function buildSlotId() {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
   return `rev_2src_${PERIOD.ky.replace('.', '')}_${stamp}`;
+}
+function rosterPeriod(ky) {
+  const [mm, yyyy] = String(ky || '').split('.');
+  return `${yyyy}-${mm}`;
+}
+function currentRosterSnapshot(period) {
+  const value = readJson(ROSTER_FILE, null);
+  const snapshot = value?.snapshots?.[period]
+    || (value?.period === period && Array.isArray(value?.rows) ? value : null);
+  if (!snapshot) throw new Error(`NO_CURRENT_ROSTER_SNAPSHOT:${period}`);
+  return snapshot;
 }
 
 async function latestRun() {
@@ -214,8 +227,15 @@ async function main() {
   if (!run) throw new Error('NO_MISA_SUCCESS_SNAPSHOT');
   const misa = await fetchMisa(run.id);
   const partner = await fetchPartner();
-  const rows = [...misa, ...partner];
+  const sourceRows = [...misa, ...partner];
+  // Không remap sang NV khác. Dòng nguồn xung đột roster hiện hành được cách ly
+  // về UNALLOCATED để chặn lộ doanh thu sai cho NV cho đến khi App Sale sửa export.
+  const roster = currentRosterSnapshot(rosterPeriod(PERIOD.ky));
+  const guarded = quarantineRosterConflicts(sourceRows, roster, rosterPeriod(PERIOD.ky));
+  const rows = guarded.rows;
   const total = rows.reduce((s, r) => s + num(r.revenue), 0);
+  const sourceTotal = sourceRows.reduce((s, r) => s + num(r.revenue), 0);
+  if (total !== sourceTotal) throw new Error(`ATTRIBUTION_GUARD_CHANGED_TOTAL:${sourceTotal}:${total}`);
   const bySource = rows.reduce((m, r) => { const x = m[r.source] ||= { rows: 0, orders: new Set(), revenue: 0 }; x.rows++; x.orders.add(r.source_order); x.revenue += num(r.revenue); return m; }, {});
   const summaryBySource = Object.fromEntries(Object.entries(bySource).map(([k, v]) => [k, { rows: v.rows, orders: v.orders.size, revenue: v.revenue }]));
   const slotId = process.env.JULY_SLOT_ID || buildSlotId();
@@ -235,20 +255,28 @@ async function main() {
     source: 'CRM_MISA_PLUS_APP_WEB',
     sourceRunId: String(run.id), sourceSnapshotFinishedAt: run.finished_at,
     sourceSummary: summaryBySource, data_as_of: process.env.REVENUE_DATA_AS_OF || new Date().toISOString(),
+    attributionPolicy: 'ROSTER_CONFLICT_TO_UNALLOCATED_NO_REMAP',
+    attributionConflictRows: guarded.summary.rows,
+    attributionConflictUnits: guarded.summary.units,
+    attributionConflictRevenue: guarded.summary.revenue,
+    rosterSource: roster.meta?.source || 'data-hub-lkg',
+    rosterVersion: roster.meta?.version || null,
+    rosterChecksum: roster.meta?.checksum || null,
   });
   writeJson(slotsPath, slots);
   const artifact = {
     generatedAt: new Date().toISOString(), dataAsOf: process.env.REVENUE_DATA_AS_OF || new Date().toISOString(), slotId, file, ky: PERIOD.ky, latestMisaRun: { id: String(run.id), finished_at: run.finished_at, raw_summary: run.raw_summary },
-    summary: { rows: rows.length, totalRevenue: total, bySource: summaryBySource, empCount: new Set(rows.map((r) => r.emp_code).filter(Boolean)).size },
+    summary: { rows: rows.length, totalRevenue: total, bySource: summaryBySource, empCount: new Set(rows.map((r) => r.emp_code).filter(Boolean)).size, attributionConflicts: guarded.summary },
+    attributionConflicts: guarded.conflicts,
     samples: { misa: misa.slice(0, 10), partner: partner.slice(0, 10) },
   };
   const artDir = path.join(REPORT_ROOT, 'artifacts'); fs.mkdirSync(artDir, { recursive: true });
   writeJson(path.join(artDir, `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}.json`), artifact);
   const md = [`# Revenue — CRM MISA + APP WEB`, '', `Generated: ${artifact.generatedAt}`, '', `MISA run: #${run.id}, finished_at=${run.finished_at}`, '', '| Source | Rows | Orders | Revenue |', '|---|---:|---:|---:|'];
   for (const [k, v] of Object.entries(summaryBySource)) md.push(`| ${k} | ${v.rows} | ${v.orders} | ${v.revenue} |`);
-  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, period `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, period effective date, period order creation date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- Closed periods stay frozen; this script only creates/replaces active slot for the requested/current period.', '');
+  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', `Attribution guard: ${guarded.summary.rows} dòng / ${guarded.summary.units} đơn vị / ${guarded.summary.revenue}đ được đưa về UNALLOCATED do emp_code nguồn xung đột roster hiện hành. Không remap sang NV khác.`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, period `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, period effective date, period order creation date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- Closed periods stay frozen; this script only creates/replaces active slot for the requested/current period.', '');
   fs.writeFileSync(path.join(artDir, `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}.md`), md.join('\n'));
-  console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length }, null, 2));
+  console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length, attributionConflicts: guarded.summary }, null, 2));
   await pool.end();
 }
 
