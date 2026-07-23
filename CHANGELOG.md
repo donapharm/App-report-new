@@ -1,3 +1,8 @@
+### 2026-07-23 — Claude Code (nghiệm thu) — deploy #148 worklist + #150 độ rộng cột `e7c4fd5`: PASS
+- **Kiểm tra độc lập trên main: PASS.** **Worklist #148 giờ đã LIVE** (lần trước thiếu): route `/employee-cost/province-worklist/export.xlsx` **requireAdmin** + audit; xuất 2 đơn vị / 103.588.300đ / 6 cột. Độ rộng cột #150 áp (C36–C45 đủ tên; thu hẹp Thành tiền/Hàm lượng/Nhân viên; nới Đơn vị/Nhà thầu; tooltip; sticky STT+Tên hàng). Server 261/261, web 39/39, build PASS.
+- **Số không đổi:** DN001 41.144.556đ / C44 1.210.470đ / 171/184; ALL 2.391.033.447đ / C44 95.133.877đ. Self-scope (NV emp=ALL→403); C32/C47 không lộ (API/PDF/XLSX). Health 200; rollback sẵn.
+- **Tiếp theo:** CEO điền `unit_province.json` từ worklist → Vùng/Tỉnh 100%. Còn: DQ center #141; DataHub %/alias.
+
 ### 2026-07-23 — Report Bot (deploy + nghiệm thu production) — #148 worklist + #150 độ rộng cột
 - Claude Opus review commit `52339b2`: **PASS**, xác nhận thuần hiển thị và an toàn deploy chung. Đã merge vào `main` và deploy đồng bộ đúng **1 lần** tại release **`e7c4fd5`**, version **`e7c4fd5-20260723-074338-175`**; HTTPS/health 200. `app-report` PID **2287526** / restart **86**, `app-report-tgbot` PID **2287545** / restart **39**. Rollback: `backups/employee-cost-worklist-widths-deploy-20260723_074336/` (baseline `fe5da49`).
 - Bảng web hiện đủ nhãn **C36/C41/C43/C44/C45** (header wrap, C44 badge **cuối năm**); thu gọn **Thành tiền trước VAT · Hàm lượng · Nhân viên**, nới **Đơn vị · Nhà thầu**; ellipsis/tooltip đúng. Chỉ STT/Tên hàng sticky, cuộn ngang desktop/mobile không tràn body. Live bundle kiểm đủ marker #148/#150.
