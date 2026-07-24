@@ -8,11 +8,16 @@ function numberOrNull(value) {
 
 export function employeeVatKhoanViewModel(raw = {}) {
   const available = raw.available === true;
+  const source = String(raw.source || 'App VAT');
+  const pointRuleVersion = String(raw.point_rule_version || raw.rule_version || '');
+  const pointLocalActive = source === 'App Report' && /^point-local-/i.test(pointRuleVersion);
   return {
     available,
     aggregate: raw.aggregate === true,
-    source: String(raw.source || 'App Report'),
-    sourceLabel: String(raw.source_label || raw.source || 'App Report (điểm) + App VAT (xu)'),
+    source,
+    pointSource: pointLocalActive ? 'App Report' : 'App VAT',
+    pointLocalActive,
+    sourceLabel: String(raw.source_label || raw.source || 'App VAT'),
     note: String(raw.note || (available ? '' : NOTE)),
     empCode: String(raw.emp_code || ''),
     empName: String(raw.emp_name || raw.emp_code || ''),
@@ -35,10 +40,10 @@ export function employeeVatKhoanViewModel(raw = {}) {
     duXu: numberOrNull(raw.excess_quarter ?? raw.du_xu),
     phatDuKien: numberOrNull(raw.penalty_display ?? raw.phat_du_kien),
     penaltyApplied: numberOrNull(raw.penalty_applied),
-    pointRuleVersion: String(raw.point_rule_version || raw.rule_version || ''),
+    pointRuleVersion,
     pointRuleEffectiveFrom: String(raw.point_rule_effective_from || ''),
     xuRuleVersion: String(raw.xu_rule_version || ''),
-    ruleVersion: String(raw.point_rule_version || raw.rule_version || ''),
+    ruleVersion: pointRuleVersion,
     upstreamWarning: String(raw.upstream_warning || ''),
     warningCount: numberOrNull(raw.warning_count) || 0,
     dqWarningCount: numberOrNull(raw.dq_warning_count) || 0,

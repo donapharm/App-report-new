@@ -272,7 +272,7 @@ export default function App() {
       <ScrollTopButton />
       <UpdateBanner />
       <DormantGate me={me} tab={tab} />
-      {!['catalogManagement', 'dailySales', 'products', 'dormantReports'].includes(tab) && <ZaloMobileAccess />}
+      {!['catalogManagement', 'dailySales', 'products', 'dormantReports', 'employeeCost'].includes(tab) && <ZaloMobileAccess />}
       {tab !== 'dailySales' && <nav className="nav">
         {tabs.filter((t) => !t.hidden).map((t) => (
           <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>

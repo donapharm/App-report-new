@@ -1952,6 +1952,12 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-filters .btn { min-height:38px; }
 .employee-cost-filters small { flex-basis:100%; color:#a33; text-align:right; }
 .page-desktop .employee-cost-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
+.employee-cost-tone-point,.employee-cost-khoan-equation .xu { border-color:#c7d2fe; background:#eef2ff; }
+.employee-cost-tone-point .label,.employee-cost-tone-point .value,.employee-cost-khoan-equation .xu small,.employee-cost-khoan-equation .xu b { color:#4338ca; }
+.employee-cost-tone-reward { border-color:#a7f3d0; background:#ecfdf5; }
+.employee-cost-tone-reward .label,.employee-cost-tone-reward .value { color:#047857; }
+.employee-cost-tone-penalty { border-color:#fecaca; background:#fef2f2; }
+.employee-cost-tone-penalty .label,.employee-cost-tone-penalty .value { color:#b91c1c; }
 .employee-cost-column-kpi .label { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
 .employee-cost-kpi-annual { border:2px solid #d68700; background:linear-gradient(145deg,#fff8e6,#fffdf8); box-shadow:0 7px 18px rgba(214,135,0,.13); }
 .employee-cost-kpi-annual .value { color:#a95d00; }
@@ -2030,7 +2036,7 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-khoan-danger-badge { display:inline-flex; margin-left:5px; padding:2px 6px; border-radius:999px; background:#b3261e; color:#fff; font-size:9px; font-weight:900; }
 .employee-cost-khoan-warning { margin-top:10px; padding:11px 13px; border:1px solid #e7a18e; border-left:4px solid #b3261e; border-radius:10px; background:#fff4f1; color:#7a251e; font-size:12px; }
 .employee-cost-khoan-deduction { margin-top:10px; border-left:4px solid #b3261e; }
-.employee-cost-khoan-equation { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; margin-top:10px; }
+.employee-cost-khoan-equation { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; margin-top:10px; }
 .employee-cost-khoan-equation > span { display:grid; gap:3px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:#f7fafc; }
 .employee-cost-khoan-equation small,.employee-cost-khoan-equation em { color:var(--muted); font-size:10px; font-style:normal; }
 .employee-cost-khoan-equation b { color:#075d9b; font-size:16px; font-variant-numeric:tabular-nums; }
