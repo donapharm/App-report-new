@@ -1,3 +1,7 @@
+### 2026-07-25 — Report Bot — Sửa KPI “Khớp doanh thu” ở chế độ tất cả nhân viên (review, chưa deploy)
+- KPI đầu trang ở chế độ `ALL` nay đọc `period.match` đã gộp bởi `mergeEmployeeReports`, thay vì `model.match` top-level rỗng làm hiện sai `0/20 mã`; ví dụ nghiệm thu hiển thị đúng `98,7% · 1245/1262 mã` như chân bảng.
+- Chỉ đổi nguồn dữ liệu hiển thị của thẻ KPI frontend; không sửa doanh thu, số dòng, công thức ghép, backend hay quyền truy cập. Bổ sung regression test cho payload `ALL` thiếu `match` top-level.
+
 ### 2026-07-25 — Claude Code (CEO chốt) — Thưởng v3.1: TỰ SUY target nhóm (P2 lên luôn) + target quý = trung bình quý
 - **CEO: khỏi nhập tay target nhóm → tự suy để P2 chạy ngay; vẫn cho CEO tự chỉnh đè.** Directive `DIRECTIVE_EMP_COST_BONUS_V3_1_AUTO_GROUP_TARGET.md`.
 - **Tự suy (mặc định bật):** `target_nhóm_g(tháng) = target_NV(tháng) × (DT nhóm_g ÷ tổng DT_NV)` theo C10 (trước VAT). ⇒ `P2_g = max(0, DT_nhóm − target_nhóm) × rate` = **phần vượt nhóm × rate**, có ngay khi NV vượt tổng target. Nhóm nào CEO **nhập tay → đè** (đánh dấu `auto`/`manual`), theo tầng, versioned+audit+preview.

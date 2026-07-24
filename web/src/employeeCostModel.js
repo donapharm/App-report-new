@@ -91,6 +91,21 @@ export function formatMatchRate(match = {}) {
   return Number.isFinite(rate) ? rate.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—';
 }
 
+export function employeeCostKpiMatch(model = {}) {
+  const fallback = model.match || {};
+  if (!model.allEmployees) return fallback;
+  const periodMatches = (Array.isArray(model.periods) ? model.periods : [])
+    .map((period) => period?.match)
+    .filter(Boolean);
+  if (!periodMatches.length) return fallback;
+  if (periodMatches.length === 1) return periodMatches[0];
+  const matchedRows = periodMatches.reduce((sum, match) => sum + Number(match.matchedRows || 0), 0);
+  const totalRows = periodMatches.reduce((sum, match) => sum + Number(match.totalRows || 0), 0);
+  const threshold = Number(periodMatches.find((match) => Number.isFinite(Number(match.threshold)))?.threshold ?? 90);
+  const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
+  return { matchedRows, totalRows, rate, threshold, low: rate != null && rate < threshold };
+}
+
 function normalizedMatch(rawMatch = {}, rowCount = 0) {
   return {
     matchedRows: Number(rawMatch.matchedRows || 0),
