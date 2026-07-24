@@ -1,3 +1,7 @@
+### 2026-07-23 — Claude Code (duyệt deploy) — LIVE parity điểm/xu/phạt PASS 0 sai số → READY DEPLOY
+- **LIVE production parity #162 PASS 4/4 NV, sai số điểm/xu/phạt = 0** (App Report hiển thị = App VAT dashboard). Bằng chứng `1d7e100`. Token không lộ (chỉ `sid` băm). ⇒ App Report đọc đúng, không lệch/không bịa — an toàn "không trừ oan tiền NV".
+- **Duyệt deploy** 2 nhánh reward (đều review PASS): ô Thưởng dự kiến `467eb2e` + đọc điểm/xu/phạt `0c1da00`. Directive `DIRECTIVE_EMP_COST_REWARD_DEPLOY.md` (deploy FE+BE đồng bộ + `.env` VAT_BASE/VAT_SERVICE_TOKEN backend-only + nghiệm thu). Sau deploy: CEO điền `employee_bonus_tiers.json`; (tùy chọn) rotate token.
+
 ### 2026-07-23 — Claude Code (review) — App Report đọc điểm/xu/phạt `0c1da00`: PASS (chờ live parity)
 - **Review `0c1da00`: PASS.** `employeeVatKhoan.getForSession`: token backend-only (`VAT_SERVICE_TOKEN`), **KHÔNG log token** (audit chỉ actor+emp); **self-scope** (NV ép own; kiểm response `emp_code===empCode` chống App VAT trả nhầm NV); fail-closed (token<16/emp sai/baseUrl thiếu→không gọi; 401/timeout→retry→note). FE: 3 KPI điểm/xu/phạt + dòng cấn trừ (display-only) + cảnh báo. Test 305/305, web 53/53.
 - **App VAT gỡ token-logging** (`473de59`: thay bằng `sid=sha256[:12]`, scrub log cũ) → **live parity chạy được**. Đề nghị nhẹ: rotate VAT_SERVICE_TOKEN. **Còn lại:** Report Bot chạy live parity (đối chiếu số App Report ↔ App VAT dashboard) → rồi deploy. Chưa merge/deploy.
