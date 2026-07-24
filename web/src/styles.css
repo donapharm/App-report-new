@@ -1952,12 +1952,18 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-filters .btn { min-height:38px; }
 .employee-cost-filters small { flex-basis:100%; color:#a33; text-align:right; }
 .page-desktop .employee-cost-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
-.employee-cost-tone-point,.employee-cost-khoan-equation .xu { border-color:#c7d2fe; background:#eef2ff; }
-.employee-cost-tone-point .label,.employee-cost-tone-point .value,.employee-cost-khoan-equation .xu small,.employee-cost-khoan-equation .xu b { color:#4338ca; }
-.employee-cost-tone-reward { border-color:#a7f3d0; background:#ecfdf5; }
-.employee-cost-tone-reward .label,.employee-cost-tone-reward .value { color:#047857; }
-.employee-cost-tone-penalty { border-color:#fecaca; background:#fef2f2; }
-.employee-cost-tone-penalty .label,.employee-cost-tone-penalty .value { color:#b91c1c; }
+.employee-cost-tone-point { border-color:#4338ca; background:linear-gradient(135deg,#4338ca,#4f46e5); }
+.employee-cost-tone-point .value { color:#fff; }
+.employee-cost-tone-point .label,.employee-cost-tone-point .delta { color:#c7d2fe; }
+.employee-cost-tone-reward { border-color:#047857; background:linear-gradient(135deg,#047857,#059669); }
+.employee-cost-tone-reward .value { color:#fff; }
+.employee-cost-tone-reward .label,.employee-cost-tone-reward .delta { color:#bbf7d0; }
+.employee-cost-tone-penalty { border-color:#b91c1c; background:linear-gradient(135deg,#b91c1c,#dc2626); }
+.employee-cost-tone-penalty .value { color:#fff; }
+.employee-cost-tone-penalty .label,.employee-cost-tone-penalty .delta { color:#fecaca; }
+.employee-cost-tone-base { border-color:#fde68a; background:#fffbeb; }
+.employee-cost-tone-base .label { color:#b45309; }
+.employee-cost-tone-base .value { color:#0f172a; }
 .employee-cost-column-kpi .label { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
 .employee-cost-kpi-annual { border:2px solid #d68700; background:linear-gradient(145deg,#fff8e6,#fffdf8); box-shadow:0 7px 18px rgba(214,135,0,.13); }
 .employee-cost-kpi-annual .value { color:#a95d00; }
@@ -2040,6 +2046,13 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-khoan-equation > span { display:grid; gap:3px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:#f7fafc; }
 .employee-cost-khoan-equation small,.employee-cost-khoan-equation em { color:var(--muted); font-size:10px; font-style:normal; }
 .employee-cost-khoan-equation b { color:#075d9b; font-size:16px; font-variant-numeric:tabular-nums; }
+.employee-cost-khoan-equation .xu { border-color:#c7d2fe; background:#eef2ff; }
+.employee-cost-khoan-equation .xu b { color:#3730a3; }
+.employee-cost-khoan-equation .xu small,.employee-cost-khoan-equation .xu em { color:#6366f1; }
+.employee-cost-khoan-equation .penalty { border-color:#b91c1c; background:linear-gradient(135deg,#b91c1c,#dc2626); }
+.employee-cost-khoan-equation .penalty b { color:#fff; }
+.employee-cost-khoan-equation .penalty small,.employee-cost-khoan-equation .penalty em { color:#fecaca; }
+.employee-cost-khoan-equation .penalty .employee-cost-khoan-danger-badge { background:#fff; color:#b91c1c; }
 .employee-cost-khoan-equation .deduction b { color:#b3261e; }
 .employee-cost-khoan-equation > strong { color:var(--muted); font-size:20px; }
 .employee-cost-khoan-deduction > p { margin:9px 0 0; color:var(--muted); font-size:11px; }

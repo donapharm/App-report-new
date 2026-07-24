@@ -52,7 +52,7 @@ test('dynamic columns follow approved order, keep bid price before quantity, and
 
 test('KPI and period metadata distinguish order lines from unique unit-product keys', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
-  assert.match(page, /label="Số dòng đơn hàng"/);
+  assert.match(page, /label="Nhân viên"[\s\S]*sub=\{`Hiện \$\{filteredCount[^`]*\/\$\{totalTableRows[^`]* dòng`\}/);
   assert.match(page, /mã \(đơn vị×mặt hàng\) · ngưỡng/);
   assert.match(page, /mã đơn vị×mặt hàng\)/);
   assert.doesNotMatch(page, /matchedRows}\/\$\{[^}]*totalRows} dòng/);
