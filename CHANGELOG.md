@@ -1,3 +1,8 @@
+### 2026-07-24 — Claude Code (review hậu kiểm) — Target KPI + drill-down `bb822c2` deploy: PASS
+- **Review độc lập diff (đã deploy production): PASS.** `targetKpiDetail.js` **read-only** — chỉ đọc lại `targetKpiSummary` + `resolveTargets`, **không tự tính số** (mọi target/đạt/% do backend cũ sở hữu). **Không endpoint mới** — gắn vào payload `employee-cost` đã **self-scope** (empCode khóa qua `resolveScopedEmployee`; `empCode ? ... : null`). Live self-scope OK (DN001 đòi DN006→ép DN001; ALL→403). Ghi chú "quý tính trên T07 (T08/T09 chưa giao) → % quý sẽ đổi" + "so trước VAT" đúng directive.
+- Rebase đúng: `bb822c2` nằm trên `6ff3ed1` (directive v3) + P0-B trong lịch sử (không revert). Số khớp `/targets/kpi` (DN001 T07: target 2,5 tỷ · doanh thu trước VAT 2.600.847.928đ · 104%).
+- **CEO giờ bấm NV (vd DN006) để xem chi tiết cách tính target** → quyết chỉnh target. Còn lại chờ Report Bot: SSO v3 (push thật) · P0 cache (push review) · Thưởng v3.
+
 ### 2026-07-24 — Report Bot — KPI Target tháng/quý + giải thích nguồn trên Chi phí của tôi (review, chưa deploy)
 - Thêm thẻ **Target (tháng · quý)** cho đúng một nhân viên: target và tỷ lệ đạt tháng/quý lấy nguyên từ `targetKpiSummary`; chế độ ALL không trả/gộp target để tránh hiểu sai.
 - Modal **Chi tiết cách tính target** hiển thị target, doanh thu trước VAT, tỷ lệ backend đã tính và nguồn `manual/upload/carryover/appsale/AI` từng tháng; tháng chưa giao được ghi rõ và có giải thích tỷ lệ quý sẽ đổi khi giao thêm.
