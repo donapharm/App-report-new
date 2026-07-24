@@ -1,3 +1,11 @@
+### 2026-07-24 — Claude Code (review hậu kiểm) — Thưởng v3 `23aef11` (P2 vượt-target-nhóm) deploy: PASS
+- **Review độc lập + chạy 24/24 test bonus PASS. VERDICT: PASS**, P2 đúng directive v3.
+- **Công thức đúng:** `excess_g = resolvedTarget.assigned ? max(0, groupRevenue_g − target_g) : null`; `amount = round(excess_g × rate_g/100)` khi eligible+assigned+rate+excess>0. **KHÔNG dùng full-revenue** ở nhánh v3. Gate `pct ≥ 101%`.
+- **Fail-closed đúng:** chưa giao target nhóm → `reason=target_missing`, **P2_g=0** (không bịa, không lấy trọn doanh thu nhóm); C10 thiếu → `source_unavailable` 0; excess≤0 → `at_or_below_target` 0; rate không đơn trị → 0.
+- **Chỉ kỳ ĐÓNG mới legacy:** `legacyPriorityActive` = mọi period < `2026-07` → dùng công thức v2 cũ (số đã đóng không đổi). **T07 (`'2026-07'<'2026-07'`=false) → dùng v3 excess** (đúng). Config `schemaVersion:3` + `priorityTargets` (mặc định null). **Cảnh báo mềm** `group_targets_exceed_total_target` khi Σ target nhóm > target tổng.
+- Production `23aef11`: T07 P2=0 toàn bộ (chưa giao target nhóm) — fail-closed đúng; DN006 P2=0. Không payroll, không sửa DataHub, nhóm chỉ từ C10, C32/C47 khóa.
+- **Để P2 chạy: CEO giao target nhóm C10 trong bảng cấu hình Thưởng** (tầng đè). Chưa giao → P2 vẫn 0 (an toàn).
+
 ### 2026-07-24 — Claude Code (review bảo mật v3) — Trusted-device SSO `13fd824`: PASS toàn diện (mọi blocker/hardening đã xử)
 - **Verify độc lập + chạy 12/12 test SSO PASS. VERDICT: PASS về code, hết blocker.** Mọi điểm review v1 đã khắc phục:
   - **BLOCKER rebase: XONG** — `f97f766` (P0-B) là ancestor; merge không revert perf fix.
