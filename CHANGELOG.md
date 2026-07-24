@@ -1,3 +1,10 @@
+### 2026-07-24 — Claude Code (chốt giữ deploy) — SSO v3: App Report SẴN SÀNG; GIỮ deploy vì 2 blocker App Sale
+- **App Report side XONG + verify độc lập nhánh `integration/report-trusted-device-sso-v3-main-20260724` (`6c98c99`): sound.** P0-B (`f97f766`) + Thưởng v3 (`2bcec09`) là ancestor (đã merge main mới, không revert); `start()` **vẫn KHÔNG trả `expectedEmployeeCode`** (hardening giữ sau merge); rate-limit còn. Secret S2S chmod 600 khớp hash App Sale; migration 0103/CORS PASS; live API assertion 200 · replay 409 · hết hạn 403.
+- **‼ GIỮ deploy — 2 blocker THUỘC APP SALE (endorse quyết định của Report Bot):**
+  1. **Lỗ hổng chữ ký (nặng):** verifier App Sale chấp nhận **base64url KHÔNG canonical** (7/128 mẫu) → chữ ký malleable; nếu khóa chống-replay dùng chuỗi thô thì biến thể non-canonical **lách "đã dùng" → replay bypass**. Sửa: decode→bytes + `timingSafeEqual`, reject non-canonical (round-trip), khóa replay theo bytes canonical. **Nghiệm thu 0/128.**
+  2. **Contract v3 chưa live:** App Sale còn bắt browser gửi `expectedEmployeeCode` → phiên thật trả `400 invalid_request`. **App Report KHÔNG gửi lại mã NV** (giữ chống enumeration). App Sale phải tự xác định NV từ **cookie của chính nó**, không nhận mã do browser khai.
+- **Đúng nguyên tắc:** không hạ bảo mật App Report để khớp App Sale cũ. Task Sale Bot: `TASK_SALE_SSO_V3_CONTRACT_CANONICAL.md` (kèm: worktree App Sale thấp hơn production 13 commit → cherry-pick/rebase, không merge stale). Sau khi App Sale v3 live + 0/128 → Report Bot chạy lại E2E → trình CEO 3 nút. **Chưa deploy.**
+
 ### 2026-07-24 — Claude Code (review hậu kiểm) — Thưởng v3 `23aef11` (P2 vượt-target-nhóm) deploy: PASS
 - **Review độc lập + chạy 24/24 test bonus PASS. VERDICT: PASS**, P2 đúng directive v3.
 - **Công thức đúng:** `excess_g = resolvedTarget.assigned ? max(0, groupRevenue_g − target_g) : null`; `amount = round(excess_g × rate_g/100)` khi eligible+assigned+rate+excess>0. **KHÔNG dùng full-revenue** ở nhánh v3. Gate `pct ≥ 101%`.
