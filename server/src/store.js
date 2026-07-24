@@ -292,6 +292,10 @@ function employeeCostDataSignature() {
   return [
     targetDataSignature(),
     fileSignature(
+      process.env.EMPLOYEE_BONUS_POLICY_FILE || path.join(DATA_DIR, 'employee_bonus_policies.json'),
+      'employee-bonus-policies',
+    ),
+    fileSignature(
       process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json'),
       'catalog-management',
     ),

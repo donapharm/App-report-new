@@ -91,7 +91,7 @@ test('heavy read memo key separates query, actor, role and employee scope and in
   }
 });
 
-test('employee-cost ALL memo reuses exact payload and splits page/signature while non-admin stays forbidden', async () => {
+test('employee-cost ALL shares one admin base across actors/pages/filters and invalidates on signature', async () => {
   const originalSignature = store.activeDataSignature;
   const originalEmployeeCostSignature = store.employeeCostDataSignature;
   const originalTargetRoster = store.targetRoster;
@@ -99,13 +99,17 @@ test('employee-cost ALL memo reuses exact payload and splits page/signature whil
   const originalSnapshot = catalogManagement.getSnapshot;
   let signature = 'cost-slot-a';
   let builds = 0;
+  let catalogBuilds = 0;
   store.activeDataSignature = () => signature;
   store.employeeCostDataSignature = () => signature;
   store.targetRoster = () => [
     { emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true },
     { emp_code: 'DN003', name: 'NV 3', role: 'sale', has_target: true },
   ];
-  catalogManagement.getSnapshot = async () => ({ rows: [], catalog: [] });
+  catalogManagement.getSnapshot = async () => {
+    catalogBuilds += 1;
+    return { rows: [], catalog: [] };
+  };
   employeeCost.getForSession = async ({ requestedEmp }, options) => {
     builds += 1;
     const range = employeeCost.parseMonthRange({ from: options.from, to: options.to });
@@ -122,14 +126,21 @@ test('employee-cost ALL memo reuses exact payload and splits page/signature whil
     assert.deepEqual(concurrent.body, first.body);
     assert.ok(firstBuilds > 1, 'first ALL request must build roster payloads');
     assert.equal(firstBuilds, 2, 'concurrent identical request must share one in-flight build');
+    assert.equal(catalogBuilds, 3, 'concurrent requests must coalesce the three month/quarter catalog snapshots');
 
     const second = await invoke('/employee-cost', query, admin);
     assert.equal(second.status, 200);
     assert.deepEqual(second.body, first.body);
     assert.equal(builds, firstBuilds, 'identical ALL request must be memoized');
 
+    const otherAdmin = await invoke('/employee-cost', query, admin2);
+    assert.deepEqual(otherAdmin.body, first.body);
+    assert.equal(builds, firstBuilds, 'ALL is admin-only and must share the exact company payload across admins');
+
     await invoke('/employee-cost', { ...query, page: '2' }, admin);
-    assert.ok(builds > firstBuilds, 'page belongs to the ALL cache key');
+    assert.equal(builds, firstBuilds, 'another page must transform the shared heavy base without rebuilding employees');
+    await invoke('/employee-cost', { ...query, q: 'khong-co-ket-qua' }, admin2);
+    assert.equal(builds, firstBuilds, 'another filter must transform the shared heavy base without rebuilding employees');
     const afterPageBuilds = builds;
 
     signature = 'cost-slot-b';
@@ -188,11 +199,21 @@ test('all requested P0 routes are memoized after auth and cache keeps private/no
     const escaped = routePath.replace('/', '\\/');
     assert.match(source, new RegExp(`router\\.get\\('${escaped}', auth\\.requireAuth, memoJson\\('${name}'`));
   }
-  assert.match(source, /employeeCostAllPayload[\s\S]*?readCacheKey\(req, 'employee-cost-all'/);
+  assert.match(source, /function employeeCostAllCacheKey[\s\S]*?'ADMIN_ALL'/);
+  assert.match(source, /employeeCostAllCacheKey\(req, 'base'\)[\s\S]*?EMPLOYEE_COST_ALL_BASE_TTL_MS/);
+  assert.match(source, /employeeCostAllCacheKey\(req, 'view'\)[\s\S]*?EMPLOYEE_COST_ALL_VIEW_TTL_MS/);
+  assert.match(source, /revenueRefresh\.onMaterialized\([\s\S]*?warmEmployeeCostAllCache/);
+  assert.match(source, /scheduleEmployeeCostAllWarm\(slot\.ky, 'upload_commit'\)/);
+  assert.match(source, /scheduleEmployeeCostAllWarm\(slot\.ky, 'upload_activate'\)/);
   assert.match(source, /router\.get\('\/employee-cost'[\s\S]*?Cache-Control', 'private, no-store'/);
   assert.match(source, /function memoJson[\s\S]*?Cache-Control', 'private, no-store'/);
   assert.match(source, /function currentMemoDataSignature\(\)[\s\S]*?store\.activeDataSignature\(\)[\s\S]*?memo\.clear\(\)/);
   assert.match(source, /v\.catch\(\(\) => \{ if \(memo\.get\(key\) === entry\) memo\.delete\(key\); \}\)/);
   const analyticsSource = fs.readFileSync(require.resolve('../src/analytics'), 'utf8');
   assert.match(analyticsSource, /cacheKey = JSON\.stringify\(\{ data: store\.dashboardDataSignature\(\), list,/);
+  const storeSource = fs.readFileSync(require.resolve('../src/store'), 'utf8');
+  assert.match(storeSource, /function employeeCostDataSignature[\s\S]*?EMPLOYEE_BONUS_POLICY_FILE[\s\S]*?catalog_management_lkg\.json/);
+  const refreshSource = fs.readFileSync(require.resolve('../src/revenueRefresh'), 'utf8');
+  assert.match(refreshSource, /notifyMaterialized\(run\)/);
+  assert.match(refreshSource, /setImmediate\(\(\) => Promise\.resolve\(listener\(run\)\)/);
 });

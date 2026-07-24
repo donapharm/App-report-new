@@ -69,14 +69,21 @@ const requireCeoQlnb = (req, res, next) => (req.session.role === 'ceo' || String
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
 let memoDataSignature = null;
+const EMPLOYEE_COST_ALL_BASE_TTL_MS = 6 * 60 * 60 * 1000;
+const EMPLOYEE_COST_ALL_VIEW_TTL_MS = 60 * 1000;
+const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
+  'from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route', 'date',
+]);
 const bonusPolicyPreviews = new Map();
 const canonicalAssignmentSnapshots = new Map();
 async function canonicalAssignmentSnapshot(period) {
   const key = catalogManagement.toHubPeriod(period);
   const hit = canonicalAssignmentSnapshots.get(key);
   if (hit && Date.now() - hit.at < 15 * 60 * 1000) return hit.value;
-  const value = await catalogManagement.getSnapshot(key);
-  canonicalAssignmentSnapshots.set(key, { at: Date.now(), value });
+  const value = Promise.resolve().then(() => catalogManagement.getSnapshot(key));
+  const entry = { at: Date.now(), value };
+  canonicalAssignmentSnapshots.set(key, entry);
+  value.catch(() => { if (canonicalAssignmentSnapshots.get(key) === entry) canonicalAssignmentSnapshots.delete(key); });
   if (canonicalAssignmentSnapshots.size > 24) canonicalAssignmentSnapshots.delete(canonicalAssignmentSnapshots.keys().next().value);
   return value;
 }
@@ -146,6 +153,21 @@ function readCacheKey(req, routeName, extra = {}) {
     scope.empCode || 'ADMIN',
     JSON.stringify(stableCacheValue(req.query || {})),
     JSON.stringify(stableCacheValue(extra)),
+  ].join(':');
+}
+
+function employeeCostAllCacheKey(req, phase) {
+  // ALL is admin-only and contains the same company-wide payload for every
+  // authorized admin. Deliberately omit actor/role so CEO/admin sessions share
+  // one cache, while keeping the fixed ADMIN_ALL scope and data signature.
+  currentMemoDataSignature();
+  const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  const view = phase === 'view'
+    ? Object.fromEntries(EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS.map((key) => [key, req.query?.[key] ?? '']))
+    : { from: range.from, to: range.to };
+  return [
+    'employee-cost-all', phase, routeDataSignature('employee-cost-all'), 'ADMIN_ALL',
+    JSON.stringify(stableCacheValue(view)),
   ].join(':');
 }
 
@@ -635,6 +657,7 @@ async function employeeCostPayload(req, {
   roster = employeeCostRosterRows(),
   sharedCatalogRowsByPeriod = null,
   bonusConfig = null,
+  suppressAudit = false,
 } = {}) {
   const s = auth.scopeOf(req.session);
   const admin = auth.isAdmin(req.session.role);
@@ -682,6 +705,7 @@ async function employeeCostPayload(req, {
       revenueRowsByPeriod,
       catalogRowsByPeriod,
       auditEvent,
+      ...(suppressAudit ? { auditImpl: () => {} } : {}),
       auditFilters: {
         province: req.query.province,
         unitGroup: req.query.unitGroup,
@@ -748,38 +772,77 @@ function employeeCostTableOptions(req, { paginate = false, allEmployees = false 
   };
 }
 
-async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view_all' } = {}) {
+async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view_all', suppressAudit = false } = {}) {
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
-  const build = async () => {
-    const roster = employeeCostRosterRows();
-    const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
-    const sharedCatalogRowsByPeriod = {};
-    const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
-    const catalogPeriods = [...new Set([...range.months, ...bonusQuarter.kys.map((ky) => catalogManagement.toHubPeriod(ky))])];
-    for (const period of catalogPeriods) {
-      try {
-        const snapshot = await canonicalAssignmentSnapshot(period);
-        sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
-      } catch (error) {
-        sharedCatalogRowsByPeriod[period] = [];
-        console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
-      }
+  const roster = employeeCostRosterRows();
+  const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  const sharedCatalogRowsByPeriod = {};
+  const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
+  const catalogPeriods = [...new Set([...range.months, ...bonusQuarter.kys.map((ky) => catalogManagement.toHubPeriod(ky))])];
+  // Stabilize the catalog/LKG source before deriving the key. getSnapshot may
+  // refresh the local signature; keying before this step would place a warm
+  // result under the previous signature and make the very next request cold.
+  for (const period of catalogPeriods) {
+    try {
+      const snapshot = await canonicalAssignmentSnapshot(period);
+      sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
+    } catch (error) {
+      sharedCatalogRowsByPeriod[period] = [];
+      console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
     }
+  }
+  const buildMerged = async () => {
     const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
       requestedEmp: employee.emp_code,
       auditEvent,
       roster,
       sharedCatalogRowsByPeriod,
+      suppressAudit,
     }));
-    const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
-    return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate, allEmployees: true }));
+    return employeeCostTable.mergeEmployeeReports(reports, roster);
   };
-  // Export giữ nguyên đường audit riêng; chỉ memo bảng ALL tương tác trên UI.
-  if (!paginate || auditEvent !== 'view_all') return build();
-  return memoGet(readCacheKey(req, 'employee-cost-all', { paginate, auditEvent }), 60 * 1000, build);
+  // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
+  // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
+  // không chứa actor/session nên mọi admin hợp lệ dùng chung đúng một bản.
+  if (!paginate) {
+    const merged = await buildMerged();
+    return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: false, allEmployees: true }));
+  }
+  const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMerged);
+  return memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
+    employeeCostTable.transformReport(await merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
+  ));
 }
+
+function monthInputForKy(ky) {
+  const match = /^(\d{2})\.(\d{4})$/.exec(String(ky || '').trim());
+  return match ? `${match[2]}-${match[1]}` : '';
+}
+
+async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
+  const month = monthInputForKy(ky);
+  if (!month) return false;
+  const startedAt = Date.now();
+  await employeeCostAllPayload({
+    session: { emp_code: 'CACHE_WARMER', role: 'admin' },
+    query: { emp: 'ALL', from: month, to: month, page: '1', pageSize: '20', sortDir: 'asc' },
+  }, { paginate: true, auditEvent: `warm_all:${reason}`, suppressAudit: true });
+  console.log('[employee-cost] ALL cache warmed', { ky, reason, durationMs: Date.now() - startedAt });
+  return true;
+}
+
+function scheduleEmployeeCostAllWarm(ky, reason) {
+  setImmediate(() => warmEmployeeCostAllCache(ky, reason).catch((error) => {
+    // Upload/activate responses remain successful when optional warming fails.
+    console.warn('[employee-cost] ALL cache warm failed', { ky, reason, message: error.message });
+  }));
+}
+
+// revenueRefresh invokes listeners in a detached task after a successful
+// materialize, so this Promise cannot delay or roll back the source refresh.
+revenueRefresh.onMaterialized((run) => warmEmployeeCostAllCache(run?.ky, 'revenue_refresh'));
 
 // Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
 // chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
@@ -3928,6 +3991,7 @@ router.post('/upload/commit', auth.requireAuth, auth.requireAdmin, (req, res) =>
   if (!previewId || !ky) return res.status(400).json({ error: 'Thiếu previewId hoặc kỳ.' });
   try {
     const slot = uploadSvc.commitSlot({ previewId, ky, dateFrom, dateTo, mode: mode === 'update' ? 'update' : 'new', user: req.session });
+    scheduleEmployeeCostAllWarm(slot.ky, 'upload_commit');
     res.json({ ok: true, slot });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -3943,6 +4007,7 @@ router.get('/upload/slots', auth.requireAuth, auth.requireAdmin, (req, res) => {
 router.post('/upload/activate', auth.requireAuth, auth.requireAdmin, (req, res) => {
   try {
     const slot = uploadSvc.activateSlot({ id: (req.body || {}).id, user: req.session });
+    scheduleEmployeeCostAllWarm(slot.ky, 'upload_activate');
     res.json({ ok: true, slot });
   } catch (e) {
     res.status(400).json({ error: e.message });

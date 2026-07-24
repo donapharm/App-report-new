@@ -24,6 +24,23 @@ const state = {
   lastRun: null,
   lastSkip: null,
 };
+const materializedListeners = new Set();
+
+function onMaterialized(listener) {
+  if (typeof listener !== 'function') throw new TypeError('materialized listener must be a function');
+  materializedListeners.add(listener);
+  return () => materializedListeners.delete(listener);
+}
+
+function notifyMaterialized(run) {
+  for (const listener of materializedListeners) {
+    // Warming is deliberately detached: a cache failure must never turn a
+    // successful revenue refresh into a failed/rolled-back data refresh.
+    setImmediate(() => Promise.resolve(listener(run)).catch((error) => {
+      console.warn('[revenue-refresh] post-materialize listener failed', String(error?.message || error));
+    }));
+  }
+}
 
 function enabled() {
   return /^(1|true|yes|on)$/i.test(String(process.env.REVENUE_REFRESH_ENABLED || 'true'));
@@ -179,6 +196,7 @@ async function runOnce({ force = false, reason = 'manual', ky } = {}) {
     run.ok = true;
     state.lastRun = run;
     console.log('[revenue-refresh] success', JSON.stringify({ reason, ky: run.ky, dataAsOf: run.dataAsOf, materialize: run.materialize }));
+    notifyMaterialized(run);
     return run;
   } catch (e) {
     run.finishedAt = new Date().toISOString();
@@ -233,4 +251,4 @@ function config() {
 }
 function status() { return { ...config(), inFlight: state.inFlight, lastSlot: state.lastSlot, lastRun: state.lastRun, lastSkip: state.lastSkip, nowVn: vnIsoNow(), dueNow: isDue() }; }
 
-module.exports = { start, runOnce, status, isDue, currentKy, kyToRange, vnIsoNow, kyFromParts, previousKyFromParts, runScheduled };
+module.exports = { start, runOnce, status, isDue, currentKy, kyToRange, vnIsoNow, kyFromParts, previousKyFromParts, runScheduled, onMaterialized };
