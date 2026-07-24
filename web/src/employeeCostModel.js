@@ -192,6 +192,43 @@ export function employeeBonusViewModel(raw = {}) {
   };
 }
 
+function normalizedTargetPeriod(raw = {}) {
+  const numberOrNull = (value) => value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+  return {
+    ky: String(raw.ky || ''),
+    label: String(raw.label || raw.ky || ''),
+    target: numberOrNull(raw.target),
+    achieved: numberOrNull(raw.achieved),
+    pct: numberOrNull(raw.pct),
+    assigned: raw.assigned === true,
+    source: String(raw.source || ''),
+    sourceLabel: String(raw.source_label || (raw.assigned === true ? '' : 'Chưa giao target')),
+    sourceKy: String(raw.source_ky || ''),
+    reference: raw.reference === true,
+  };
+}
+
+export function employeeTargetViewModel(raw = {}) {
+  const month = normalizedTargetPeriod(raw.month);
+  return {
+    available: !!raw.emp_code && !!raw.ky,
+    empCode: String(raw.emp_code || ''),
+    ky: String(raw.ky || ''),
+    basis: String(raw.basis || ''),
+    basisLabel: String(raw.basis_label || ''),
+    month,
+    quarter: {
+      label: String(raw.quarter?.label || ''),
+      target: raw.quarter?.target == null || !Number.isFinite(Number(raw.quarter.target)) ? null : Number(raw.quarter.target),
+      achieved: raw.quarter?.achieved == null || !Number.isFinite(Number(raw.quarter.achieved)) ? null : Number(raw.quarter.achieved),
+      pct: raw.quarter?.pct == null || !Number.isFinite(Number(raw.quarter.pct)) ? null : Number(raw.quarter.pct),
+      months: (Array.isArray(raw.quarter?.months) ? raw.quarter.months : []).map(normalizedTargetPeriod),
+      unassignedKys: (Array.isArray(raw.quarter?.unassigned_kys) ? raw.quarter.unassigned_kys : []).map(String),
+      clarification: String(raw.quarter?.clarification || ''),
+    },
+  };
+}
+
 function periodViewModel(payload = {}) {
   const template = {
     key: String(payload.template?.key || ''),
@@ -332,6 +369,7 @@ export function employeeCostViewModel(payload = {}) {
       filteredRows: Number(payload.search?.filteredRows ?? rows.length),
       totalRows: Number(payload.search?.totalRows ?? rows.length),
     },
+    target: employeeTargetViewModel(payload.target),
     bonus: employeeBonusViewModel(payload.bonus),
   };
 }

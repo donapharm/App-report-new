@@ -177,8 +177,16 @@ export function Clock() {
 }
 
 export function Kpi({ label, value, sub, delta, tone, variant, icon, onClick, title }) {
+  const activate = (event) => {
+    if (!onClick || (event.type === 'keydown' && !['Enter', ' '].includes(event.key))) return;
+    if (event.type === 'keydown') event.preventDefault();
+    onClick(event);
+  };
   return (
-    <div className={'kpi' + (variant ? ' k-' + variant : '') + (tone ? ' ' + tone : '') + (onClick ? ' clickable' : '')} onClick={onClick} title={title}>
+    <div className={'kpi' + (variant ? ' k-' + variant : '') + (tone ? ' ' + tone : '') + (onClick ? ' clickable' : '')}
+      onClick={onClick ? activate : undefined} onKeyDown={onClick ? activate : undefined}
+      role={onClick ? 'button' : undefined} tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `${label}: ${value}. Mở chi tiết` : undefined} title={title}>
       {icon && <span className="kpi-ic" aria-hidden="true">{icon}</span>}
       <div className="label">{label}</div>
       <div className={'value' + (typeof value === 'string' && value.length > 12 ? ' small' : '')}>{value}</div>

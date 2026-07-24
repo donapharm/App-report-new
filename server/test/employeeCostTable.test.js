@@ -141,5 +141,8 @@ test('routes hard-lock ALL to CEO/admin for view and export', () => {
   assert.match(source, /date: req\.query\.date/);
   assert.match(source, /employeeCostTableOptions\(req, \{ paginate: true \}\)/);
   assert.match(source, /targetKpiSummary\(ky, \{ empCode \}, \[empCode\]\)/);
+  assert.match(source, /target: empCode \? buildTargetKpiDetail\(\{/);
+  assert.match(source, /scope: \{ empCode \}/);
+  assert.match(source, /resolveTargets: targetAdmin\.resolveTargets/);
   assert.match(source, /employeeBonus\.buildBonusSummary\(bonusKpi/);
 });

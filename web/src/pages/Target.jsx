@@ -5,6 +5,7 @@ import { Spinner, Bar, Kpi, TargetKpiStrip, RankRow, UnitLabel } from '../compon
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { TargetGauge } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
+import { normalizeTargetNavigation, targetAdminKyAfterPeriods } from '../targetNavigationModel.js';
 
 const rowsFmt = (n) => Number(n || 0).toLocaleString('vi-VN');
 const SOURCE_LABELS = { carryover: 'Nhân bản kỳ trước', upload: 'Upload', manual: 'Sửa tay', ai: 'AI đề xuất' };
@@ -217,7 +218,7 @@ function BonusPolicyPanel({ ky, employees = [] }) {
   </div>;
 }
 
-function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
+function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -236,6 +237,12 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
   const fileRef = useRef(null);
   async function load() { if (!ky) return; setData(null); setData(await api.adminTargets(ky)); }
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [ky]);
+  useEffect(() => {
+    if (!data || !focusEmp) return;
+    const card = document.getElementById(`target-admin-${focusEmp}`);
+    card?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    card?.focus?.({ preventScroll: true });
+  }, [data, focusEmp]);
   async function manual(row) {
     const raw = prompt(`Nhập target cho ${row.emp_code} - ${row.emp_name} kỳ ${ky} (để trống = huỷ, không đổi)`, row.target || 0);
     if (raw == null) return;
@@ -376,7 +383,8 @@ function TargetAdminPanel({ ky, onKyChange, onTargetsChanged }) {
         <div className="section-title">Danh sách đang dùng ({data.rows.length} NV/CTV)</div>
         <div className="list-grid target-admin-grid">
           {data.rows.map((r) => (
-            <div className="card detail-card" key={r.emp_code}>
+            <div id={`target-admin-${r.emp_code}`} tabIndex={r.emp_code === focusEmp ? -1 : undefined}
+              className={`card detail-card${r.emp_code === focusEmp ? ' target-admin-focused' : ''}`} key={r.emp_code}>
               <div className="detail-head detail-head-two">
                 <div className="detail-title-wrap">
                   <div>
@@ -715,11 +723,22 @@ function EmployeeDetail({ data }) {
   );
 }
 
+function consumeTargetNavigation() {
+  try {
+    const payload = JSON.parse(sessionStorage.getItem('app_nav_payload') || '{}');
+    const navigation = normalizeTargetNavigation(payload);
+    if (!navigation.openAdmin) return {};
+    sessionStorage.removeItem('app_nav_payload');
+    return navigation;
+  } catch { return {}; }
+}
+
 export default function Target({ me, onNavigate }) {
-  const [view, setView] = useState('now'); // now | forecast | admin | assignment | adjustment | mine
+  const [navigation] = useState(consumeTargetNavigation);
+  const [view, setView] = useState(me.isAdmin && navigation.openAdmin ? 'admin' : 'now'); // now | forecast | admin | assignment | adjustment | mine
   const [periods, setPeriods] = useState([]);
   const [periodSel, setPeriodSel] = useState(null);
-  const [adminKy, setAdminKy] = useState('');
+  const [adminKy, setAdminKy] = useState(me.isAdmin ? navigation.ky : '');
   const [now, setNow] = useState(null);
   const [fc, setFc] = useState(null);
   const [empSel, setEmpSel] = useState(null);
@@ -729,7 +748,11 @@ export default function Target({ me, onNavigate }) {
   const openEmp = (emp) => { setEmpSel(emp); setEmpData(null); setView('employee'); };
 
   useEffect(() => {
-    api.periods().then((p) => { setPeriods(p.periods || []); setPeriodSel(defaultPeriodSelection(p.periods || [], p.latest)); setAdminKy(p.latest || p.periods?.at(-1)?.ky || ''); });
+    api.periods().then((p) => {
+      setPeriods(p.periods || []);
+      setPeriodSel(defaultPeriodSelection(p.periods || [], p.latest));
+      setAdminKy((currentKy) => targetAdminKyAfterPeriods(currentKy, p));
+    });
   }, []);
   useEffect(() => {
     // Không để tab Target kẹt spinner nếu PeriodFilter hydrate chậm: backend tự dùng kỳ mới nhất.
@@ -838,7 +861,7 @@ export default function Target({ me, onNavigate }) {
         <TargetAdjustmentPanel ky={selectedKy} isAdmin={me.isAdmin} onChanged={refreshTargetKpis} />
       ) : view === 'mine' ? (
         <MyAssignmentsView ky={selectedKy} />
-      ) : <TargetAdminPanel ky={adminSelectedKy} onKyChange={setAdminKy} onTargetsChanged={refreshTargetKpis} />}
+      ) : <TargetAdminPanel ky={adminSelectedKy} focusEmp={navigation.emp} onKyChange={setAdminKy} onTargetsChanged={refreshTargetKpis} />}
     </>
   );
 }

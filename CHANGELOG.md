@@ -1,3 +1,9 @@
+### 2026-07-24 — Report Bot — KPI Target tháng/quý + giải thích nguồn trên Chi phí của tôi (review, chưa deploy)
+- Thêm thẻ **Target (tháng · quý)** cho đúng một nhân viên: target và tỷ lệ đạt tháng/quý lấy nguyên từ `targetKpiSummary`; chế độ ALL không trả/gộp target để tránh hiểu sai.
+- Modal **Chi tiết cách tính target** hiển thị target, doanh thu trước VAT, tỷ lệ backend đã tính và nguồn `manual/upload/carryover/appsale/AI` từng tháng; tháng chưa giao được ghi rõ và có giải thích tỷ lệ quý sẽ đổi khi giao thêm.
+- Quyền giữ nguyên: backend resolve mã NV theo phiên trước, rồi mới dựng chi tiết với duy nhất `[empCode]`; NV thường không thể đọc target của NV khác. Nút **Chỉnh target** chỉ hiện cho CEO/admin, mở đúng kỳ trên màn Quản target và đưa focus tới đúng NV.
+- Frontend chỉ normalize/format contract, không cộng target hoặc tính lại phần trăm. Thẻ KPI hỗ trợ Enter/Space; modal quản lý Escape, focus trap và trả focus khi đóng. Bổ sung test giữ nguyên số backend, self-scope, nguồn và trạng thái tháng chưa giao; build review vào `/tmp/app-report-target-kpi-build`, chưa ghi production.
+
 ### 2026-07-24 — Claude Code (CEO chốt) — Thưởng v3: P2 tính trên phần VƯỢT target riêng từng nhóm (không phải toàn bộ doanh thu nhóm)
 - **CEO sửa lỗi P2 "chưa hợp lý".** Cũ: P2 = toàn bộ doanh thu nhóm × rate → phình to (48tr). Mới (phương án **B**): P2 chỉ tính **phần vượt target RIÊNG từng nhóm**. Directive `DIRECTIVE_EMP_COST_BONUS_V3_P2_EXCESS.md`.
 - **Công thức chốt:** P1 giữ nguyên (>130% = 0,25%). **P2** (khi TỔNG ≥101%): mỗi nhóm C10 `vượt_g = max(0, doanh thu_nhóm_g trướcVAT − target_nhóm_g)`; `P2_g = vượt_g × rate_g`; `P2 = ΣP2_g`. Tổng = P1+P2. **Hiệu lực từ T07.2026** (T07 đang mở → tính lại, P2 giảm mạnh).

@@ -3,9 +3,71 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   buildEmployeeCostColumns, currentMonthValue, employeeBonusViewModel, employeeCostColumnKpis, employeeCostViewModel,
-  employeeCostHighlightParts, employeeCostPageItems, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
+  employeeCostHighlightParts, employeeCostPageItems, employeeTargetViewModel, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
   formatMonthLabel, normalizeEmployeeCostSearch,
 } from '../src/employeeCostModel.js';
+import { normalizeTargetNavigation, targetAdminKyAfterPeriods } from '../src/targetNavigationModel.js';
+
+test('target model preserves backend month, quarter, sources and percentages without recomputing', () => {
+  const target = employeeTargetViewModel({
+    emp_code: 'DN006', ky: '07.2026', basis: 'revenue_before_vat', basis_label: 'Target và doanh thu đều so trước VAT.',
+    month: { ky: '07.2026', label: 'T07/2026', target: 100_000_000, achieved: 72_500_000, pct: 72.5, assigned: true, source: 'manual', source_label: 'Sửa tay', source_ky: '07.2026' },
+    quarter: {
+      label: 'Q3/2026', target: 100_000_000, achieved: 72_500_000, pct: 72.5,
+      months: [
+        { ky: '07.2026', label: 'T07/2026', target: 100_000_000, achieved: 72_500_000, pct: 72.5, assigned: true, source: 'manual', source_label: 'Sửa tay' },
+        { ky: '08.2026', label: 'T08/2026', target: 0, achieved: 0, pct: null, assigned: false, source_label: 'Chưa giao target' },
+        { ky: '09.2026', label: 'T09/2026', target: 0, achieved: 0, pct: null, assigned: false, source_label: 'Chưa giao target' },
+      ],
+      unassigned_kys: ['08.2026', '09.2026'],
+      clarification: 'Quý hiện tính trên T07/2026 (T08/2026/T09/2026 chưa giao target). Khi giao thêm, target quý tăng → % đạt quý sẽ đổi.',
+    },
+  });
+  assert.equal(target.available, true);
+  assert.deepEqual([target.month.target, target.month.achieved, target.month.pct], [100_000_000, 72_500_000, 72.5]);
+  assert.deepEqual([target.quarter.target, target.quarter.achieved, target.quarter.pct], [100_000_000, 72_500_000, 72.5]);
+  assert.equal(target.quarter.months[0].sourceLabel, 'Sửa tay');
+  assert.equal(target.quarter.months[1].assigned, false);
+  assert.deepEqual(target.quarter.unassignedKys, ['08.2026', '09.2026']);
+  assert.match(target.quarter.clarification, /target quý tăng → % đạt quý sẽ đổi/);
+});
+
+test('target KPI and modal display only backend-owned values and keep edit action admin-only', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  const components = fs.readFileSync(new URL('../src/components.jsx', import.meta.url), 'utf8');
+  const targetPage = fs.readFileSync(new URL('../src/pages/Target.jsx', import.meta.url), 'utf8');
+  const start = page.indexOf('function TargetKpi');
+  const end = page.indexOf('function BonusKpi');
+  const targetUi = page.slice(start, end);
+  assert.match(targetUi, /Target \(tháng · quý\)/);
+  assert.match(targetUi, /Chi tiết cách tính target/);
+  assert.match(targetUi, /target\.month\.target/);
+  assert.match(targetUi, /target\.quarter\.target/);
+  assert.match(targetUi, /target\.month\.pct/);
+  assert.match(targetUi, /target\.quarter\.pct/);
+  assert.match(targetUi, /target\.quarter\.months\.map/);
+  assert.match(targetUi, /target\.quarter\.clarification/);
+  assert.match(targetUi, /target\.basisLabel/);
+  assert.match(targetUi, /\{admin && <button[^>]*>Chỉnh target<\/button>\}/);
+  assert.match(targetUi, /aria-modal="true"/);
+  assert.match(targetUi, /closeRef\.current\?\.focus\(\)/);
+  assert.match(targetUi, /event\.key !== 'Tab'/);
+  assert.match(components, /role=\{onClick \? 'button' : undefined\}/);
+  assert.match(components, /onKeyDown=\{onClick \? activate : undefined\}/);
+  assert.match(targetUi, /targetView: 'admin'/);
+  assert.match(targetPage, /normalizeTargetNavigation\(payload\)/);
+  assert.match(targetPage, /me\.isAdmin && navigation\.openAdmin \? 'admin' : 'now'/);
+  assert.match(targetPage, /focusEmp=\{navigation\.emp\}/);
+  assert.doesNotMatch(targetUi, /\.reduce\(|\.target\s*\+|achieved\s*\/|target\s*\/\s*achieved/);
+});
+
+test('target edit deep-link keeps exact period and employee after periods hydrate', () => {
+  const navigation = normalizeTargetNavigation({ tab: 'target', targetView: 'admin', ky: '07.2026', emp: 'dn006' });
+  assert.deepEqual(navigation, { openAdmin: true, ky: '07.2026', emp: 'DN006' });
+  assert.equal(targetAdminKyAfterPeriods(navigation.ky, { latest: '09.2026', periods: [{ ky: '08.2026' }, { ky: '09.2026' }] }), '07.2026');
+  assert.equal(targetAdminKyAfterPeriods('', { latest: '09.2026', periods: [{ ky: '08.2026' }, { ky: '09.2026' }] }), '09.2026');
+  assert.deepEqual(normalizeTargetNavigation({ tab: 'target', targetView: 'now', ky: '07.2026', emp: 'DN006' }), {});
+});
 
 test('bonus model keeps backend amounts, month/quarter context and exact unconfigured state', () => {
   assert.equal(employeeBonusViewModel({}).message, 'Chưa cấu hình mức thưởng');

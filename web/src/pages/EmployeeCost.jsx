@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadEmployeeCostDataQuality, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
@@ -216,6 +216,114 @@ function bonusPctLabel(value) {
 function targetPctLabel(value) {
   const number = Number(value);
   return Number.isFinite(number) ? `${number.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : '—';
+}
+
+function TargetKpi({ target, onOpen }) {
+  if (!target.available) return <Kpi label="Target (tháng · quý)" value="Chọn 1 NV" sub="Chọn đúng một nhân viên để xem target và cách tính" tone="employee-cost-tone-target" />;
+  const monthTarget = formatEmployeeCostCell(target.month.target, moneyColumn);
+  const quarterTarget = formatEmployeeCostCell(target.quarter.target, moneyColumn);
+  return <Kpi
+    label="Target (tháng · quý)"
+    value={`${monthTarget} · ${targetPctLabel(target.month.pct)}`}
+    sub={`${target.month.label}: target · % đạt | ${target.quarter.label || 'Quý'}: ${quarterTarget} · ${targetPctLabel(target.quarter.pct)} · Bấm xem cách tính`}
+    tone="employee-cost-tone-target"
+    title="Mở chi tiết target, nguồn giao và doanh thu trước VAT do backend cung cấp."
+    onClick={onOpen}
+  />;
+}
+
+function targetSourceContext(period) {
+  if (!period.assigned) return 'Chưa giao target';
+  return `${period.sourceLabel || period.source || 'Nguồn chưa đặt tên'}${period.sourceKy ? ` · kỳ ${period.sourceKy}` : ''}${period.reference ? ' · tham khảo' : ''}`;
+}
+
+function TargetDetailModal({ target, employeeLabel, admin, onClose, onNavigate }) {
+  const modalRef = useRef(null);
+  const closeRef = useRef(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    closeRef.current?.focus();
+    const keepFocusInside = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...(modalRef.current?.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', keepFocusInside);
+    return () => {
+      window.removeEventListener('keydown', keepFocusInside);
+      previousFocus?.focus?.();
+    };
+  }, [onClose]);
+  if (!target.available) return null;
+  const openTarget = () => {
+    onClose();
+    onNavigate?.('target', { targetView: 'admin', ky: target.ky, emp: target.empCode });
+  };
+  return <div className="modal-backdrop employee-cost-target-modal-backdrop" role="presentation" onClick={onClose}>
+    <div ref={modalRef} className="modal-card employee-cost-target-modal" role="dialog" aria-modal="true" aria-labelledby="employee-cost-target-modal-title" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-head">
+        <div>
+          <b id="employee-cost-target-modal-title">Chi tiết cách tính target</b>
+          <small>{employeeLabel} · kỳ {target.ky}</small>
+        </div>
+        <button ref={closeRef} type="button" className="employee-cost-target-modal-close" aria-label="Đóng chi tiết target" onClick={onClose}>×</button>
+      </div>
+
+      <section className="employee-cost-target-section">
+        <h3>Tháng {target.month.label}</h3>
+        <div className="employee-cost-target-equation">
+          <span>Target {target.month.label}<small>{targetSourceContext(target.month)}</small></span>
+          <b>{formatEmployeeCostCell(target.month.target, moneyColumn)}</b>
+          <span>Doanh thu trước VAT {target.month.label}</span>
+          <b>{formatEmployeeCostCell(target.month.achieved, moneyColumn)}</b>
+          <span>% đạt tháng<small>Doanh thu trước VAT ÷ target × 100</small></span>
+          <b>{targetPctLabel(target.month.pct)}</b>
+        </div>
+      </section>
+
+      <section className="employee-cost-target-section">
+        <h3>Quý {target.quarter.label}</h3>
+        <div className="employee-cost-target-months">
+          {target.quarter.months.map((item) => <div key={item.ky} className={!item.assigned ? 'is-unassigned' : ''}>
+            <span><b>{item.label}</b><small>{targetSourceContext(item)}</small></span>
+            <span><b>{formatEmployeeCostCell(item.target, moneyColumn)}</b><small>DT trước VAT: {formatEmployeeCostCell(item.achieved, moneyColumn)} · đạt {targetPctLabel(item.pct)}</small></span>
+          </div>)}
+        </div>
+        <div className="employee-cost-target-equation employee-cost-target-quarter-summary">
+          <span>Target quý<small>Backend cộng target 3 tháng nêu trên</small></span>
+          <b>{formatEmployeeCostCell(target.quarter.target, moneyColumn)}</b>
+          <span>Doanh thu trước VAT quý</span>
+          <b>{formatEmployeeCostCell(target.quarter.achieved, moneyColumn)}</b>
+          <span>% đạt quý<small>Doanh thu trước VAT quý ÷ target quý × 100</small></span>
+          <b>{targetPctLabel(target.quarter.pct)}</b>
+        </div>
+      </section>
+
+      <div className="employee-cost-target-note" role="note">
+        <b>Lưu ý</b>
+        <span>{target.quarter.clarification}</span>
+        <span>{target.basisLabel || 'Target và doanh thu đều so trước VAT.'}</span>
+      </div>
+      <div className="employee-cost-target-modal-actions">
+        {admin && <button type="button" className="btn" onClick={openTarget}>Chỉnh target</button>}
+        <button type="button" className="btn secondary" onClick={onClose}>Đóng</button>
+      </div>
+    </div>
+  </div>;
 }
 
 function BonusKpi({ bonus }) {
@@ -533,7 +641,7 @@ function DataQualityPanel({ payload, loading, error, range, admin, onOpenRow }) 
   </div>;
 }
 
-export default function EmployeeCost({ me }) {
+export default function EmployeeCost({ me, onNavigate }) {
   const admin = !!me?.isAdmin;
   const [view, setView] = useState(() => {
     if (!admin) return 'cost';
@@ -580,6 +688,7 @@ export default function EmployeeCost({ me }) {
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(20);
   const [tableFilters, setTableFilters] = useState({ province: '', unitGroup: '', route: '', date: '' });
+  const [targetModalOpen, setTargetModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(tableQuery), 180);
@@ -719,6 +828,10 @@ export default function EmployeeCost({ me }) {
   const totalTableRows = model.search.totalRows;
   const activeTableFilter = tableQuery || tableFilters.province || tableFilters.unitGroup || tableFilters.route || tableFilters.date || tableSort.key;
 
+  useEffect(() => {
+    if (!model.target.available) setTargetModalOpen(false);
+  }, [model.target.available]);
+
   const applyRange = (event) => {
     event.preventDefault();
     if (rangeInvalid) return;
@@ -765,6 +878,7 @@ export default function EmployeeCost({ me }) {
     finally { setProvinceWorklistExporting(false); }
   };
   const changeEmployee = (value) => {
+    setTargetModalOpen(false);
     setSelectedEmp(value); setTablePage(1); setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '', date: '' });
   };
   const changeTableFilter = (key, value) => {
@@ -875,11 +989,20 @@ export default function EmployeeCost({ me }) {
       <Kpi label="Nhân viên" value={employeeLabel} sub={`Hiện ${filteredCount.toLocaleString('vi-VN')}/${totalTableRows.toLocaleString('vi-VN')} dòng`} />
       <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
       <KhoanPointKpi khoan={khoan} loading={khoanLoading} />
+      <TargetKpi target={model.target} onOpen={model.target.available ? () => setTargetModalOpen(true) : undefined} />
       <Kpi label={multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`} tone="employee-cost-tone-base" />
       <BonusKpi bonus={model.bonus} />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
       <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${model.match.threshold}%`} />
     </div>
+
+    {targetModalOpen && <TargetDetailModal
+      target={model.target}
+      employeeLabel={employeeLabel}
+      admin={admin}
+      onClose={() => setTargetModalOpen(false)}
+      onNavigate={onNavigate}
+    />}
 
     <KhoanWarning khoan={khoan} />
     <KhoanDeduction khoan={khoan} baseCost={model.summary.periodTotal} multiMonth={multiple} loading={khoanLoading} />

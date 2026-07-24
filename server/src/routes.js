@@ -18,6 +18,7 @@ const dailySales = require('./dailySales');
 const dailySalesOrders = require('./dailySalesOrders');
 const reconcile = require('./reconcile');
 const targetAdmin = require('./targetAdmin');
+const { buildTargetKpiDetail } = require('./targetKpiDetail');
 const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
@@ -630,6 +631,13 @@ async function employeeCostPayload(req, {
       : employeeBonus.loadConfig());
     return {
       ...payload,
+      target: empCode ? buildTargetKpiDetail({
+        ky,
+        scope: { empCode },
+        empCode,
+        targetKpiSummary,
+        resolveTargets: targetAdmin.resolveTargets,
+      }) : null,
       bonus: employeeBonus.buildBonusSummary(bonusKpi, resolvedBonusConfig, bonusPriority),
     };
   });
@@ -3101,6 +3109,7 @@ function targetKpiSummary(ky, scope, codesOverride) {
     pacing: { days_elapsed: pacing.daysElapsed, days_in_month: pacing.daysInMonth, time_pct: +(pacing.factor * 100).toFixed(1), is_current: pacing.isCurrent },
   };
 }
+
 router.get('/admin/targets', auth.requireAuth, auth.requireAdmin, (req, res) => {
   const ky = req.query.ky || store.latestKy();
   const scope = auth.scopeOf(req.session);
