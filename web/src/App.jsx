@@ -78,13 +78,13 @@ export default function App() {
       const phone = getLastPhone();
       if (!phone) return false;
       try {
-        const result = await api.deviceLogin(phone);
+        const result = await api.trustedDeviceLogin(phone);
         setToken(result.token);
         const current = await api.me();
         if (alive) setMe(current);
         return true;
       } catch (error) {
-        // Chưa đủ 3 OTP / quá 30 ngày / fingerprint đổi: rơi về OTP bình thường.
+        // App Sale không tin cậy, bridge thiếu config hoặc upstream lỗi: rơi về OTP bình thường.
         // Nếu phiên mới đã cấp nhưng /me gặp lỗi mạng/5xx thì giữ token và hiện
         // trạng thái kết nối lại, không mở màn OTP gây hiểu nhầm.
         if (alive && getToken() && error?.status !== 401 && error?.status !== 403) {
