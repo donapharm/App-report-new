@@ -1,0 +1,136 @@
+diff --git a/apps/api/scripts/test-trusted-device-assertion.mts b/apps/api/scripts/test-trusted-device-assertion.mts
+index dcb31f30..a22a14af 100644
+--- a/apps/api/scripts/test-trusted-device-assertion.mts
++++ b/apps/api/scripts/test-trusted-device-assertion.mts
+@@ -135,7 +135,8 @@ async function withServer(
+     rateLimitPerMinute,
+     normalizePhone: (phone) => phone.replace(/\D/g, ""),
+     checkTrustedDeviceStatus: async (_phone, meta) => ({
+-      trusted: meta.deviceId === "sale-device-1234567890" && meta.expectedEmployeeCode === "DN001",
++      trusted: meta.deviceId === "sale-device-1234567890"
++        && (!meta.expectedEmployeeCode || meta.expectedEmployeeCode === "DN001"),
+       employeeCode: "DN001",
+       subjectType: "employee",
+       reverifyDays: 30,
+@@ -154,7 +155,6 @@ async function withServer(
+
+ const validBody = () => ({
+   phone: "0912345678",
+-  expectedEmployeeCode: "DN001",
+   reportDeviceId: crypto.randomUUID(),
+   nonce: crypto.randomBytes(24).toString("base64url"),
+ });
+@@ -257,7 +257,7 @@ await withServer(rawKey, async (baseUrl) => {
+     assertion: verified.assertion,
+     nonce: body.nonce,
+     reportDeviceId: body.reportDeviceId,
+-    expectedEmployeeCode: body.expectedEmployeeCode,
++    expectedEmployeeCode: "DN001",
+   };
+   const consume = await fetch(`${baseUrl}${TRUSTED_DEVICE_REPORT_CONSUME_PATH}`, {
+     method: "POST",
+@@ -327,7 +327,7 @@ await withServer(rawKey, async (baseUrl) => {
+     assertion: sharedAssertion,
+     nonce: sharedBody.nonce,
+     reportDeviceId: sharedBody.reportDeviceId,
+-    expectedEmployeeCode: sharedBody.expectedEmployeeCode,
++    expectedEmployeeCode: "DN001",
+   };
+   const first = await fetch(`${baseUrl}${TRUSTED_DEVICE_REPORT_CONSUME_PATH}`, {
+     method: "POST",
+@@ -344,7 +344,7 @@ await withServer(rawKey, async (baseUrl) => {
+       assertion: sharedAssertion,
+       nonce: sharedBody.nonce,
+       reportDeviceId: sharedBody.reportDeviceId,
+-      expectedEmployeeCode: sharedBody.expectedEmployeeCode,
++      expectedEmployeeCode: "DN001",
+     }),
+   });
+   assert.equal(replay.status, 409, "JTI must remain consumed across API instances/restarts");
+diff --git a/apps/api/src/auth.ts b/apps/api/src/auth.ts
+index 599139a3..09c6f3c3 100644
+--- a/apps/api/src/auth.ts
++++ b/apps/api/src/auth.ts
+@@ -970,7 +970,7 @@ export async function checkTrustedDeviceStatus(
+   if (!identity.ok || String(identity.user?.id || '') !== String(row.id)) return none;
+   const employeeCode = String(identity.employee?.code || identity.user?.username || '').trim().toUpperCase();
+   const expected = String(meta.expectedEmployeeCode || '').trim().toUpperCase();
+-  if (!employeeCode || !expected || employeeCode !== expected) return none;
++  if (!employeeCode || (expected && employeeCode !== expected)) return none;
+   return {
+     trusted: true,
+     employeeCode,
+diff --git a/apps/api/src/trustedDeviceReportRoutes.ts b/apps/api/src/trustedDeviceReportRoutes.ts
+index a22ceb9b..ad0b1410 100644
+--- a/apps/api/src/trustedDeviceReportRoutes.ts
++++ b/apps/api/src/trustedDeviceReportRoutes.ts
+@@ -126,7 +126,7 @@ export function registerTrustedDeviceReportRoutes(options: RegisterOptions): voi
+     const nonce = String(req.body?.nonce || "").trim();
+     const saleDeviceId = readSingleCookieValue(req.headers.cookie, "appsale_device_id");
+     if (!/^0\d{8,10}$/.test(phone)
+-      || !/^[A-Z0-9._-]{2,64}$/.test(expectedEmployeeCode)
++      || (expectedEmployeeCode && !/^[A-Z0-9._-]{2,64}$/.test(expectedEmployeeCode))
+       || reportDeviceId.length < 16 || reportDeviceId.length > 200
+       || !/^[A-Za-z0-9_-]{22,128}$/.test(nonce))
+       return res.status(400).json({ error: "invalid_request" });
+@@ -150,14 +150,17 @@ export function registerTrustedDeviceReportRoutes(options: RegisterOptions): voi
+     if (bucket.count > configuredRateLimit)
+       return res.status(429).json({ error: "rate_limited" });
+
+-    const nonceKey = sha256Base64Url(`${expectedEmployeeCode}|${reportDeviceId}|${nonce}`);
++    // v3 no longer needs Report's canonical employee code in the browser.
++    // Phone + Report challenge remains unique, and consume still binds the
++    // signed subject to the employee code held only by Report's backend.
++    const nonceKey = sha256Base64Url(`${phone}|${reportDeviceId}|${nonce}`);
+     try {
+       if (!(await claimTrustedDeviceReplayKey(pool, "nonce", nonceKey, new Date(now + 120_000))))
+         return res.status(409).json({ error: "nonce_replayed" });
+       const status = await checkTrustedDeviceStatus(phone, {
+         deviceId: saleDeviceId,
+         device: String(req.get("user-agent") || "").slice(0, 500),
+-        expectedEmployeeCode,
++        ...(expectedEmployeeCode ? { expectedEmployeeCode } : {}),
+       });
+       if (!status.trusted || !status.employeeCode || !status.subjectType)
+         return res.json({ trusted: false, reverifyDays: status.reverifyDays });
+diff --git a/docs/integrations/APP_REPORT_TRUSTED_DEVICE_SSO.md b/docs/integrations/APP_REPORT_TRUSTED_DEVICE_SSO.md
+index 16e34ff0..95ab13c4 100644
+--- a/docs/integrations/APP_REPORT_TRUSTED_DEVICE_SSO.md
++++ b/docs/integrations/APP_REPORT_TRUSTED_DEVICE_SSO.md
+@@ -1,4 +1,4 @@
+-# App Report trusted-device SSO — contract v2
++# App Report trusted-device SSO — contract v3
+
+ ## Security boundary
+
+@@ -16,9 +16,12 @@ Report backend creates and stores:
+
+ - `nonce`: cryptographically random base64url, 22–128 characters;
+ - `reportDeviceId`: Report's own random device id, 16–200 characters;
+-- `expectedEmployeeCode`: canonical Report account code;
++- `expectedEmployeeCode`: canonical Report account code, stored only in Report backend;
+ - expiry ≤ 2 minutes and status `pending`.
+
++`/auth/trusted-device/start` returns a uniform pending shape and never exposes
++`expectedEmployeeCode` to the browser.
++
+ ### 2. Browser requests the App Sale assertion
+
+ From exactly the configured `TRUSTED_DEVICE_REPORT_ORIGIN` (default `https://report.donapharm.asia`):
+@@ -32,7 +35,6 @@ const response = await fetch(
+     headers: { "content-type": "application/json" },
+     body: JSON.stringify({
+       phone,
+-      expectedEmployeeCode,
+       reportDeviceId,
+       nonce,
+     }),
+@@ -98,7 +100,7 @@ Report must atomically mark its pending nonce used before issuing the session an
+ | App Sale cookie missing or duplicated | `trusted:false` |
+ | Device expired/revoked/inactive/fingerprint mismatch | `trusted:false` |
+ | Phone ↔ App Sale user ↔ employee mismatch | `trusted:false` |
+-| Expected employee differs | `trusted:false` |
++| Stored expected employee differs at consume | 403 / Report keeps OTP login |
+ | Nonce reused at assertion issue | 409 |
+ | Assertion tampered/expired/wrong binding | 403 |
+ | Assertion consumed twice | 409 |

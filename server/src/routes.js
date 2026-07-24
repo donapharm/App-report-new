@@ -430,7 +430,12 @@ router.get('/auth/demo-users', (req, res) => {
 });
 
 // Cho frontend biết chế độ đăng nhập: có OTP/SSO thật không, còn cho demo không.
-router.get('/auth/mode', (req, res) => res.json({ live: auth.liveAuthEnabled(), demo: auth.demoAllowed(), telegram: auth.telegramConfigured() }));
+router.get('/auth/mode', (req, res) => res.json({
+  live: auth.liveAuthEnabled(),
+  demo: auth.demoAllowed(),
+  telegram: auth.telegramConfigured(),
+  trustedDeviceSso: auth.trustedDeviceSsoConfigured(),
+}));
 
 // --- Đăng nhập THẬT (chỉ chạy khi cấu hình env OTP/SSO) ---
 router.post('/auth/otp/request', async (req, res) => {
@@ -454,15 +459,34 @@ router.post('/auth/otp/select', (req, res) => {
     res.json(r);
   } catch (e) { res.status(400).json({ error: e.message }); }
 });
-router.post('/auth/device-login', (req, res) => {
+// Public fast-login is exclusively backed by App Sale's trusted-device bridge.
+// The legacy local Report device score no longer creates sessions on its own.
+router.post('/auth/device-login', (_req, res) => res.status(401).json({
+  error: 'Vui lòng xác nhận thiết bị qua App Sale hoặc dùng OTP.',
+  code: 'DEVICE_NOT_TRUSTED',
+}));
+router.post('/auth/trusted-device/start', (req, res) => {
   try {
-    const r = auth.loginByTrustedDevice((req.body.phone || '').trim(), loginCtx(req));
-    if (!r) return res.status(401).json({
-      error: 'Thiết bị chưa đủ điều kiện vào nhanh, vui lòng đăng nhập OTP.',
-      code: 'DEVICE_NOT_TRUSTED',
+    res.json(auth.startTrustedDeviceSso((req.body.phone || '').trim(), loginCtx(req)));
+  } catch (e) {
+    const rateLimited = e?.status === 429;
+    res.status(rateLimited ? 429 : 401).json({
+      error: rateLimited ? 'Vui lòng thử lại sau.' : 'Không thể xác nhận thiết bị tin cậy; vui lòng dùng OTP.',
+      code: rateLimited ? 'TRUSTED_DEVICE_RATE_LIMITED' : 'TRUSTED_DEVICE_REJECTED',
     });
-    res.json(r);
-  } catch (e) { res.status(e.status || 400).json({ error: e.message }); }
+  }
+});
+router.post('/auth/trusted-device/consume', async (req, res) => {
+  try {
+    const result = await auth.consumeTrustedDeviceSso(req.body.attemptId, req.body.assertion, loginCtx(req));
+    res.json(result);
+  } catch (e) {
+    const rateLimited = e?.status === 429;
+    res.status(rateLimited ? 429 : 401).json({
+      error: rateLimited ? 'Vui lòng thử lại sau.' : 'Không thể xác nhận thiết bị tin cậy; vui lòng dùng OTP.',
+      code: rateLimited ? 'TRUSTED_DEVICE_RATE_LIMITED' : 'TRUSTED_DEVICE_REJECTED',
+    });
+  }
 });
 router.post('/auth/sso', async (req, res) => {
   try {

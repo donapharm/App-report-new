@@ -2,6 +2,8 @@
 const TOKEN_KEY = 'rpt_token';
 const OTP_AUTH_TIMEOUT_MS = 12000;
 const ME_TIMEOUT_MS = 8000;
+const TRUSTED_DEVICE_VERIFY_TIMEOUT_MS = 5000;
+const APP_SALE_TRUSTED_DEVICE_VERIFY_URL = 'https://sale.donapharm.asia/api/internal/trusted-device/verify';
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
 
@@ -88,6 +90,45 @@ async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = 
   }
 }
 
+export async function trustedDeviceLogin(phone) {
+  const pending = await req('POST', '/auth/trusted-device/start', { phone }, {
+    timeoutMs: TRUSTED_DEVICE_VERIFY_TIMEOUT_MS,
+    timeoutMessage: 'Không thể bắt đầu xác nhận thiết bị tin cậy.',
+  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TRUSTED_DEVICE_VERIFY_TIMEOUT_MS);
+  let verified;
+  try {
+    const response = await fetch(APP_SALE_TRUSTED_DEVICE_VERIFY_URL, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        phone,
+        reportDeviceId: pending.reportDeviceId,
+        nonce: pending.nonce,
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error('trusted-device verify rejected');
+    verified = await response.json();
+  } catch {
+    throw new Error('Thiết bị chưa được xác nhận; vui lòng dùng OTP.');
+  } finally {
+    clearTimeout(timer);
+  }
+  if (verified?.trusted !== true || typeof verified.assertion !== 'string') {
+    throw new Error('Thiết bị chưa được xác nhận; vui lòng dùng OTP.');
+  }
+  return req('POST', '/auth/trusted-device/consume', {
+    attemptId: pending.attemptId,
+    assertion: verified.assertion,
+  }, {
+    timeoutMs: TRUSTED_DEVICE_VERIFY_TIMEOUT_MS + 1000,
+    timeoutMessage: 'Không xác nhận được thiết bị tin cậy; vui lòng dùng OTP.',
+  });
+}
+
 export const api = {
   login: (emp_code) => req('POST', '/auth/login', { emp_code }),
   demoUsers: () => req('GET', '/auth/demo-users'),
@@ -104,10 +145,7 @@ export const api = {
     timeoutMs: OTP_AUTH_TIMEOUT_MS,
     timeoutMessage: 'Hệ thống OTP phản hồi quá lâu. Vui lòng thử lại.',
   }).then((r) => { if (r.token) rememberLastPhone(phone); return r; }),
-  deviceLogin: (phone) => req('POST', '/auth/device-login', { phone }, {
-    timeoutMs: OTP_AUTH_TIMEOUT_MS,
-    timeoutMessage: 'Hệ thống đăng nhập nhanh phản hồi quá lâu. Vui lòng thử lại.',
-  }),
+  trustedDeviceLogin,
   sso: (sso_token) => req('POST', '/auth/sso', { sso_token }),
   // Telegram login (chính)
   telegramStart: () => req('POST', '/auth/telegram/start', {}),
