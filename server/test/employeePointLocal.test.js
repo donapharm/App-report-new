@@ -103,6 +103,7 @@ test('parity gate stays closed until exact-zero artifact + matching rule + emplo
   persist.save('employee_point_parity_gate', {
     exact_zero_parity: true,
     point_rule_version: 'point-local-2026-05-r1',
+    period: '2026-09',
     required_employees: ['DN001'],
     artifact: 'parity-2026q3.txt',
     checked_at: '2026-07-24T09:00:00.000Z',
@@ -111,9 +112,10 @@ test('parity gate stays closed until exact-zero artifact + matching rule + emplo
   assert.equal(parity.available, true);
   assert.equal(parity.status, 'chốt quý — cấn trừ');
 
-  const nonQuarterEnd = pointLocal.parityStatus({ empCode: 'DN001', period: '2026-07', pointRuleVersion: 'point-local-2026-05-r1' });
-  assert.equal(nonQuarterEnd.available, true);
-  assert.equal(nonQuarterEnd.status, 'dự kiến — chưa trừ');
+  const wrongPeriod = pointLocal.parityStatus({ empCode: 'DN001', period: '2026-07', pointRuleVersion: 'point-local-2026-05-r1' });
+  assert.equal(wrongPeriod.available, false);
+  assert.equal(wrongPeriod.periodMatch, false);
+  assert.equal(wrongPeriod.status, 'đang đối soát');
 
   const wrongRule = pointLocal.parityStatus({ empCode: 'DN001', period: '2026-09', pointRuleVersion: 'point-local-2026-06-r2' });
   assert.equal(wrongRule.available, false);

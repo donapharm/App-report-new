@@ -172,12 +172,16 @@ function parityStatus({ empCode, period, pointRuleVersion }) {
   const matchingRule = safeText(gate.point_rule_version, 120) === safeText(pointRuleVersion, 120);
   const employees = Array.isArray(gate.required_employees) ? gate.required_employees.map(normEmp) : [];
   const hasEmp = empCode ? employees.includes(normEmp(empCode)) : true;
+  const gatePeriod = normalizeMonth(gate.period);
+  const requestedPeriod = normalizeMonth(period);
+  const matchingPeriod = !!gatePeriod && gatePeriod === requestedPeriod;
   const exactZero = gate.exact_zero_parity === true;
-  const passed = exactZero && matchingRule && hasEmp;
+  const passed = exactZero && matchingRule && matchingPeriod && hasEmp;
   return {
     available: passed,
     exactZeroParity: exactZero,
     pointRuleVersionMatch: matchingRule,
+    periodMatch: matchingPeriod,
     quarterEnd,
     status: passed ? (quarterEnd ? 'chốt quý — cấn trừ' : 'dự kiến — chưa trừ') : 'đang đối soát',
     note: passed ? '' : 'đang đối soát',

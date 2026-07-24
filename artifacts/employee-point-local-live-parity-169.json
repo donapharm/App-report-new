@@ -1,0 +1,100 @@
+{
+  "task": "TASK_REPORT_DIEM_LOCAL",
+  "generated_at": "2026-07-24T03:25:35.798Z",
+  "period": "2026-07",
+  "employees": [
+    "DN009",
+    "DN016",
+    "DN024",
+    "DN001"
+  ],
+  "required_exact_delta": 0,
+  "endpoint": "/api/khoan/dashboard",
+  "credentials_in_artifact": false,
+  "rows": [
+    {
+      "emp_code": "DN009",
+      "app_report": {
+        "point_month": 53.96,
+        "point_quarter": 53.96,
+        "source": "App Report",
+        "rule_version": "point-local-2026-05-r1"
+      },
+      "app_vat": {
+        "point_month": 0,
+        "point_quarter": 0,
+        "source": "App VAT",
+        "rule_version": "khoan-ssot-v2026-05-r1"
+      },
+      "delta": {
+        "point_month": 53.96,
+        "point_quarter": 53.96
+      },
+      "exact_zero": false
+    },
+    {
+      "emp_code": "DN016",
+      "app_report": {
+        "point_month": 48.01,
+        "point_quarter": 48.01,
+        "source": "App Report",
+        "rule_version": "point-local-2026-05-r1"
+      },
+      "app_vat": {
+        "point_month": 0,
+        "point_quarter": 0,
+        "source": "App VAT",
+        "rule_version": "khoan-ssot-v2026-05-r1"
+      },
+      "delta": {
+        "point_month": 48.01,
+        "point_quarter": 48.01
+      },
+      "exact_zero": false
+    },
+    {
+      "emp_code": "DN024",
+      "app_report": {
+        "point_month": 21.7,
+        "point_quarter": 21.7,
+        "source": "App Report",
+        "rule_version": "point-local-2026-05-r1"
+      },
+      "app_vat": {
+        "point_month": 0,
+        "point_quarter": 0,
+        "source": "App VAT",
+        "rule_version": "khoan-ssot-v2026-05-r1"
+      },
+      "delta": {
+        "point_month": 21.7,
+        "point_quarter": 21.7
+      },
+      "exact_zero": false
+    },
+    {
+      "emp_code": "DN001",
+      "app_report": {
+        "point_month": 41.21,
+        "point_quarter": 41.21,
+        "source": "App Report",
+        "rule_version": "point-local-2026-05-r1"
+      },
+      "app_vat": {
+        "point_month": 0,
+        "point_quarter": 0,
+        "source": "App VAT",
+        "rule_version": "khoan-ssot-v2026-05-r1"
+      },
+      "delta": {
+        "point_month": 41.21,
+        "point_quarter": 41.21
+      },
+      "exact_zero": false
+    }
+  ],
+  "exact_zero_parity": false,
+  "deploy_gate": "BLOCKED",
+  "penalty_export_gate": "CLOSED",
+  "note": "App VAT vẫn trả điểm lệch; phạt phải null/đang đối soát và chưa deploy."
+}

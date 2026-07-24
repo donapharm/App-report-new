@@ -28,6 +28,7 @@ const employeeBonusPolicy = require('./employeeBonusPolicy');
 const employeeVatKhoan = require('./employeeVatKhoan');
 const employeePointLocal = require('./employeePointLocal');
 const employeePointNotifications = require('./employeePointNotifications');
+const employeePointPenaltyExport = require('./employeePointPenaltyExport');
 const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostDataQuality = require('./employeeCostDataQuality');
 const employeeCostExport = require('./employeeCostExport');
@@ -892,6 +893,27 @@ router.get('/admin/employee-point/notifications/preview', auth.requireAuth, auth
   });
   res.set('Cache-Control', 'private, no-store');
   return res.json({ send_enabled: false, preview_only: true, preview, combined });
+}));
+
+// DataHub đọc đúng một NV/quý để CEO duyệt cấn trừ tại DataHub. Route này chỉ
+// đọc, không có body ghi, không gọi payroll và không sửa dữ liệu DataHub.
+router.get('/integrations/datahub/employee-quarter-penalty', auth.requireDataHubService, asyncJsonRoute(async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const requested = String(req.query.emp || '').trim().toUpperCase();
+  const roster = employeeCostRosterRows();
+  if (!requested || requested === 'ALL' || !roster.some((employee) => employee.emp_code === requested)) {
+    return res.status(400).json({ error: 'Nhân viên không thuộc roster chi phí được duyệt.', code: 'EMPLOYEE_POINT_PENALTY_EMP_INVALID' });
+  }
+  const quarter = employeePointPenaltyExport.parseQuarter(req.query.quarter);
+  const period = { month: quarter.month, year: quarter.year, period: quarter.period };
+  const combined = await employeePointXuPayload(req, {
+    requestedEmp: requested,
+    roster,
+    period,
+    auditEvent: 'datahub_penalty_read',
+  });
+  const payload = employeePointPenaltyExport.buildExportPayload({ empCode: requested, quarter, combined });
+  return res.status(payload.available ? 200 : 409).json(payload);
 }));
 
 async function mapWithConcurrency(items, limit, worker) {
