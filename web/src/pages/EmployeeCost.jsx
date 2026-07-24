@@ -338,18 +338,25 @@ function BonusKpi({ bonus }) {
     ? 'P2 chờ DataHub C10'
     : month.priorityStatus === 'below_threshold'
       ? `P2 chưa đạt ngưỡng ${targetPctLabel(month.priorityThresholdPct)}`
-      : `P2 nhóm C10 ${priorityAmount}`;
+      : month.priorityStatus === 'targets_missing'
+        ? 'P2 = 0 · chưa giao target nhóm'
+        : month.priorityStatus === 'partially_missing_targets'
+          ? `P2 ${priorityAmount} · có nhóm chưa giao target`
+          : `P2 phần vượt nhóm C10 ${priorityAmount}`;
   const monthContext = bonus.aggregate
     ? (month.amount == null ? 'Tháng chưa có target' : `Tổng ${month.contributors || bonus.employeeSubtotals.length} NV · P1 ${baseAmount} · P2 ${priorityAmount}`)
     : month.amount == null
       ? 'Tháng chưa có target'
       : `đạt ${targetPctLabel(month.pct)} · P1 ${baseAmount} (${bonusPctLabel(month.baseBonusPct)}) · ${c10Context}`;
   const quarterContext = bonus.quarterLabel ? `lũy kế ${bonus.quarterLabel}: ${quarterAmount}` : `lũy kế quý: ${quarterAmount}`;
-  const groupDetail = (month.priorityGroups || []).filter((item) => item.amount > 0)
-    .map((item) => `${item.group}: ${formatEmployeeCostCell(item.amount, moneyColumn)} (${bonusPctLabel(item.ratePct)} × ${formatEmployeeCostCell(item.revenue, moneyColumn)})`).join('; ') || 'không cộng nhóm';
+  const groupDetail = (month.priorityGroups || []).map((item) => {
+    if (item.reason === 'ambiguous_scope') return `${item.group}: thiếu mapping tuyến/đơn vị duy nhất của NV → P2 = 0`;
+    if (item.target == null) return `${item.group}: chưa giao target → P2 = 0`;
+    return `${item.group}: ${formatEmployeeCostCell(item.amount || 0, moneyColumn)} (${bonusPctLabel(item.ratePct)} × phần vượt ${formatEmployeeCostCell(item.excess || 0, moneyColumn)}; doanh thu ${formatEmployeeCostCell(item.revenue || 0, moneyColumn)} − target ${formatEmployeeCostCell(item.target, moneyColumn)})`;
+  }).join('; ') || 'không có nhóm C10';
   const title = bonus.aggregate
     ? `Tổng thưởng dự kiến cộng từ từng nhân viên: Phần 1 ${baseAmount}; Phần 2 ${priorityAmount}. ${quarterContext}. Không gửi thưởng/không ghi payroll.`
-    : `Tháng: ${monthAmount} = Phần 1 ${baseAmount} + Phần 2 ${priorityAmount}. Chi tiết C10: ${groupDetail}. Coverage C10: ${targetPctLabel(month.priorityCoverage?.coveragePct)}. Giai đoạn ${bonus.effectiveFrom || '—'} · version ${bonus.version || '—'}. Chỉ tham khảo, không phải số chi chính thức.`;
+    : `Tháng: ${monthAmount} = Phần 1 ${baseAmount} + Phần 2 ${priorityAmount}. P2 chỉ tính rate × phần vượt target riêng từng nhóm C10: ${groupDetail}. Coverage C10: ${targetPctLabel(month.priorityCoverage?.coveragePct)}. Giai đoạn ${bonus.effectiveFrom || '—'} · version ${bonus.version || '—'}. Dự kiến/tham khảo, không phải payroll hay số chi chính thức.`;
   return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · dự kiến/tham khảo`} title={title} tone="employee-cost-tone-reward" />;
 }
 

@@ -118,6 +118,34 @@ const DEFAULT_BONUS_TIERS = [
   { fromPct: 130, toPct: null, bonusPct: 0.25 },
 ];
 const DEFAULT_PRIORITY_RATES = { 'H.A*': 1, 'H.A': 0.8, 'H.B': 0.5, 'H.C': 0.1, 'H.D': 0.1 };
+const EMPTY_PRIORITY_TARGETS = { 'H.A*': '', 'H.A': '', 'H.B': '', 'H.C': '', 'H.D': '' };
+const GROUP_REASON_LABELS = {
+  matched: 'Tính trên phần vượt', at_or_below_target: 'Chưa vượt target nhóm',
+  target_missing: 'Chưa giao target nhóm', target_invalid: 'Target nhóm không hợp lệ',
+  ambiguous_scope: 'Chưa có mapping tuyến/đơn vị duy nhất của NV',
+  below_threshold: 'Tổng chưa đạt ngưỡng 101%', source_unavailable: 'Thiếu C10 DataHub',
+  rate_ambiguous: 'Rate đè tầng chưa xác định duy nhất', legacy_pre_v3: 'Công thức lịch sử trước T07.2026',
+  aggregate: 'Cộng theo từng NV',
+};
+
+function BonusGroupPreview({ title, period }) {
+  if (!period) return null;
+  return <div className="bonus-group-preview">
+    <div className="section-title">{title}</div>
+    <div className="table-scroll"><table className="data-table bonus-preview-table">
+      <thead><tr><th>Nhóm C10</th><th>Doanh thu trước VAT</th><th>Target nhóm</th><th>Phần vượt</th><th>Rate</th><th>P2 nhóm</th><th>Trạng thái</th></tr></thead>
+      <tbody>{(period.priorityGroups || []).map((item) => <tr key={item.group}>
+        <td><b>{item.group}</b></td><td className="num">{money(item.revenue || 0)}</td>
+        <td className="num">{item.target == null ? '—' : money(item.target)}</td>
+        <td className="num">{item.excess == null ? '—' : money(item.excess)}</td>
+        <td className="num">{item.ratePct == null ? '—' : `${item.ratePct}%`}</td>
+        <td className="num"><b>{money(item.amount || 0)}</b></td>
+        <td>{GROUP_REASON_LABELS[item.reason] || item.reason || '—'}</td>
+      </tr>)}</tbody>
+      <tfoot><tr><td colSpan="5"><b>Tổng P2</b></td><td className="num"><b>{money(period.priorityAmount || 0)}</b></td><td>{period.priorityStatus || '—'}</td></tr></tfoot>
+    </table></div>
+  </div>;
+}
 
 function BonusPolicyPanel({ ky, employees = [] }) {
   const [data, setData] = useState(null);
@@ -128,7 +156,7 @@ function BonusPolicyPanel({ ky, employees = [] }) {
   const [form, setForm] = useState({
     effectiveFrom: ky || '', effectiveTo: '', scopeType: 'default', scopeValue: '', employee: '',
     baseTiers: DEFAULT_BONUS_TIERS, priorityThresholdPct: 101, priorityRates: DEFAULT_PRIORITY_RATES,
-    totalCapPct: '', note: '',
+    priorityTargets: EMPTY_PRIORITY_TARGETS, missingTargets: {}, totalCapPct: '', note: '',
   });
   const update = (patch) => { setForm((current) => ({ ...current, ...patch })); setPreview(null); setMsg(''); };
   async function load() {
@@ -151,15 +179,36 @@ function BonusPolicyPanel({ ky, employees = [] }) {
   useEffect(() => { load(); }, [ky]);
   useEffect(() => { if (!form.employee && employees[0]?.emp_code) update({ employee: employees[0].emp_code }); }, [employees]);
   const tier = (index, key, value) => update({ baseTiers: form.baseTiers.map((item, i) => i === index ? { ...item, [key]: value === '' && key === 'toPct' ? null : Number(value) } : item) });
+  const employeeScopeValue = form.scopeType === 'default' ? 'ALL' : form.scopeType === 'employee' ? form.scopeValue : 'CUSTOM';
+  const targetPatch = () => Object.fromEntries(Object.keys(DEFAULT_PRIORITY_RATES).flatMap((group) => {
+    if (form.missingTargets[group]) return [[group, null]];
+    const raw = String(form.priorityTargets[group] ?? '').trim();
+    if (!raw) return [];
+    return [[group, Number(raw)]];
+  }));
+  const configPatch = () => {
+    const current = data?.resolved?.config || {};
+    const patch = {};
+    const baseTiers = form.baseTiers.map((item) => ({
+      fromPct: Number(item.fromPct), toPct: item.toPct == null || item.toPct === '' ? null : Number(item.toPct), bonusPct: Number(item.bonusPct),
+    }));
+    if (JSON.stringify(baseTiers) !== JSON.stringify(current.baseTiers || [])) patch.baseTiers = baseTiers;
+    const threshold = Number(form.priorityThresholdPct);
+    if (threshold !== Number(current.priorityThresholdPct)) patch.priorityThresholdPct = threshold;
+    const priorityRates = Object.fromEntries(Object.entries(form.priorityRates)
+      .map(([group, value]) => [group, Number(value)])
+      .filter(([group, value]) => value !== Number(current.priorityRates?.[group])));
+    if (Object.keys(priorityRates).length) patch.priorityRates = priorityRates;
+    const priorityTargets = targetPatch();
+    if (form.scopeType !== 'productGroup' && Object.keys(priorityTargets).length) patch.priorityTargets = priorityTargets;
+    const totalCapPct = form.totalCapPct === '' ? null : Number(form.totalCapPct);
+    if (totalCapPct !== (current.totalCapPct ?? null)) patch.totalCapPct = totalCapPct;
+    return patch;
+  };
   const payload = () => ({
     effectiveFrom: form.effectiveFrom, effectiveTo: form.effectiveTo || null,
     scope: { type: form.scopeType, value: form.scopeType === 'default' ? '*' : form.scopeValue },
-    patch: {
-      baseTiers: form.baseTiers,
-      priorityThresholdPct: Number(form.priorityThresholdPct),
-      priorityRates: Object.fromEntries(Object.entries(form.priorityRates).map(([group, value]) => [group, Number(value)])),
-      totalCapPct: form.totalCapPct === '' ? null : Number(form.totalCapPct),
-    },
+    patch: configPatch(),
     note: form.note, previewPeriod: ky, emp_code: form.employee,
   });
   async function runPreview() {
@@ -173,32 +222,45 @@ function BonusPolicyPanel({ ky, employees = [] }) {
     setBusy(true); setErr(''); setMsg('');
     try {
       await api.adminBonusPolicySave({ previewId: preview.previewId });
-      setMsg('Đã lưu phiên bản cấu hình thưởng và ghi audit. Đây vẫn là thưởng dự kiến, không payroll/không gửi thưởng.');
+      setMsg('Đã lưu đúng version đã preview và ghi audit. Thưởng vẫn chỉ là dự kiến/tham khảo, không payroll.');
       setPreview(null); await load();
     } catch (error) { setErr(error.message); }
     setBusy(false);
   }
   const monthPreview = preview?.summary?.month;
+  const quarterPreview = preview?.summary?.quarter;
+  const enteredTargetTotal = Object.values(targetPatch()).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const totalTarget = Number(monthPreview?.target || 0);
+  const targetWarning = totalTarget > 0 && enteredTargetTotal > totalTarget;
+  const previewTargetWarning = monthPreview?.priorityTargetWarning === 'group_targets_exceed_total_target';
+  const routeUnitTargetBlocked = ['route', 'unit'].includes(form.scopeType) && Object.keys(targetPatch()).length > 0
+    && data?.targetScopeMetadata?.[form.scopeType] === false;
+  const closed = !!data?.closedForV3Edit;
   return <div className="bonus-policy-panel">
-    <div className="meta muted">Đè tầng: mặc định → nhóm hàng C10 → tuyến → đơn vị → NV. Menu chỉ chỉnh công thức/rate, <b>không sửa mapping C10</b>.</div>
+    <div className="meta muted">Thưởng v3 từ T07.2026: P2 = Σ max(0, doanh thu C10 nhóm − target nhóm) × rate. Gate tổng ≥101%. <b>Chỉ dự kiến/tham khảo, không payroll.</b></div>
     {busy && <Spinner />}
     {err && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>}
     {msg && <div className="card" style={{ borderColor: 'var(--ok)', color: 'var(--ok)' }}>✔ {msg}</div>}
+    {closed && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>🔒 Kỳ trước T07.2026 đã đóng; Thưởng v3 không cho sửa kỳ này.</div>}
     <div className="filter-grid">
+      <label><span>NV / mức chung</span><select value={employeeScopeValue} onChange={(e) => {
+        if (e.target.value === 'ALL') update({ scopeType: 'default', scopeValue: '' });
+        else if (e.target.value !== 'CUSTOM') update({ scopeType: 'employee', scopeValue: e.target.value, employee: e.target.value });
+      }}><option value="ALL">Toàn bộ NV (mức chung)</option>{employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>{employee.emp_code} · {employee.emp_name}</option>)}{employeeScopeValue === 'CUSTOM' && <option value="CUSTOM">Phạm vi tùy chỉnh</option>}</select></label>
       <label><span>Hiệu lực từ</span><input value={form.effectiveFrom} onChange={(e) => update({ effectiveFrom: e.target.value })} placeholder="07.2026" /></label>
       <label><span>Đến kỳ (trống = mở)</span><input value={form.effectiveTo} onChange={(e) => update({ effectiveTo: e.target.value })} placeholder="12.2026" /></label>
-      <label><span>Tầng áp dụng</span><select value={form.scopeType} onChange={(e) => update({ scopeType: e.target.value, scopeValue: '' })}><option value="default">Mặc định</option><option value="productGroup">Nhóm hàng C10</option><option value="route">Tuyến</option><option value="unit">Đơn vị</option><option value="employee">Nhân viên</option></select></label>
+      <label><span>Tầng áp dụng</span><select value={form.scopeType} onChange={(e) => update({ scopeType: e.target.value, scopeValue: '' })}><option value="default">Toàn bộ NV (mức chung)</option><option value="productGroup">Nhóm hàng C10 (rate)</option><option value="route">Tuyến</option><option value="unit">Đơn vị</option><option value="employee">Nhân viên</option></select></label>
       {form.scopeType !== 'default' && <label><span>Giá trị phạm vi</span>{form.scopeType === 'productGroup'
         ? <select value={form.scopeValue} onChange={(e) => update({ scopeValue: e.target.value })}><option value="">Chọn nhóm</option>{Object.keys(DEFAULT_PRIORITY_RATES).map((group) => <option key={group}>{group}</option>)}</select>
         : form.scopeType === 'employee'
-          ? <select value={form.scopeValue} onChange={(e) => update({ scopeValue: e.target.value })}><option value="">Chọn NV</option>{employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>{employee.emp_code} · {employee.emp_name}</option>)}</select>
+          ? <select value={form.scopeValue} onChange={(e) => update({ scopeValue: e.target.value, employee: e.target.value || form.employee })}><option value="">Chọn NV</option>{employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>{employee.emp_code} · {employee.emp_name}</option>)}</select>
           : <input value={form.scopeValue} onChange={(e) => update({ scopeValue: e.target.value })} placeholder={form.scopeType === 'route' ? 'CL' : '001'} />}</label>}
-      <label><span>NV mô phỏng</span><select value={form.employee} onChange={(e) => update({ employee: e.target.value })}>{employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>{employee.emp_code} · {employee.emp_name}</option>)}</select></label>
-      <label><span>Ngưỡng cộng phần 2 (%)</span><input type="number" step="0.1" value={form.priorityThresholdPct} onChange={(e) => update({ priorityThresholdPct: e.target.value })} /></label>
+      <label><span>NV đối chiếu preview</span><select value={form.employee} onChange={(e) => update({ employee: e.target.value })}>{employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>{employee.emp_code} · {employee.emp_name}</option>)}</select></label>
+      <label><span>Ngưỡng P2 (%)</span><input type="number" step="0.1" value={form.priorityThresholdPct} onChange={(e) => update({ priorityThresholdPct: e.target.value })} /></label>
       <label><span>Cap tổng (%)</span><input type="number" min="0" step="0.01" value={form.totalCapPct} onChange={(e) => update({ totalCapPct: e.target.value })} placeholder="Không kẹp" /></label>
       <label><span>Ghi chú version</span><input value={form.note} onChange={(e) => update({ note: e.target.value })} placeholder="Lý do thay đổi" /></label>
     </div>
-    <div className="section-title">Bậc phần 1 — cơ bản</div>
+    <div className="section-title">Bậc P1 — cơ bản (giữ nguyên bậc ≥130% = 0,25%)</div>
     <div className="bonus-tier-editor">{form.baseTiers.map((item, index) => <div className="target-admin-actions compact-actions" key={`${index}-${item.fromPct}`}>
       <label className="field-inline"><span>Từ %</span><input type="number" step="0.1" value={item.fromPct} onChange={(e) => tier(index, 'fromPct', e.target.value)} /></label>
       <label className="field-inline"><span>Đến %</span><input type="number" step="0.1" value={item.toPct ?? ''} onChange={(e) => tier(index, 'toPct', e.target.value)} placeholder="∞" /></label>
@@ -206,15 +268,25 @@ function BonusPolicyPanel({ ky, employees = [] }) {
       <button className="btn ghost danger-btn" onClick={() => update({ baseTiers: form.baseTiers.filter((_, i) => i !== index) })}>Xóa</button>
     </div>)}</div>
     <button className="btn ghost" onClick={() => update({ baseTiers: [...form.baseTiers, { fromPct: 0, toPct: null, bonusPct: 0 }] })}>+ Thêm bậc</button>
-    <div className="section-title">Rate phần 2 — nhóm ưu tiên C10</div>
-    <div className="filter-grid">{Object.keys(DEFAULT_PRIORITY_RATES).map((group) => <label key={group}><span>{group} (%)</span><input type="number" min="0" step="0.01" value={form.priorityRates[group]} onChange={(e) => update({ priorityRates: { ...form.priorityRates, [group]: e.target.value } })} /></label>)}</div>
-    <div className="target-admin-actions compact-actions"><button className="btn" disabled={busy} onClick={runPreview}>🔎 Mô phỏng trước khi lưu</button><button className="btn" disabled={busy || !preview?.previewId} onClick={save}>💾 Lưu version đã preview</button></div>
+    <div className="section-title">P2 — target và rate riêng từng nhóm C10</div>
+    {form.scopeType === 'productGroup' && <div className="meta muted">Tầng nhóm hàng chỉ chỉnh rate; target nhóm dùng đúng tầng Mặc định → tuyến → đơn vị → NV.</div>}
+    <div className="filter-grid bonus-target-grid">{Object.keys(DEFAULT_PRIORITY_RATES).map((group) => <div className="bonus-target-field" key={group}>
+      <b>{group}</b>
+      <label><span>Target nhóm (VND)</span><input type="number" min="0" step="1" disabled={form.scopeType === 'productGroup' || form.missingTargets[group]} value={form.priorityTargets[group]} onChange={(e) => update({ priorityTargets: { ...form.priorityTargets, [group]: e.target.value }, missingTargets: { ...form.missingTargets, [group]: false } })} placeholder="Trống = kế thừa" /></label>
+      <label className="bonus-missing-check"><input type="checkbox" disabled={form.scopeType === 'productGroup'} checked={!!form.missingTargets[group]} onChange={(e) => update({ missingTargets: { ...form.missingTargets, [group]: e.target.checked }, priorityTargets: { ...form.priorityTargets, [group]: '' } })} /> Chưa giao target nhóm (P2 = 0)</label>
+      <label><span>Rate (%)</span><input type="number" min="0" step="0.01" value={form.priorityRates[group]} onChange={(e) => update({ priorityRates: { ...form.priorityRates, [group]: e.target.value } })} /></label>
+    </div>)}</div>
+    {(targetWarning || previewTargetWarning) && <div className="card" style={{ borderColor: 'var(--warn)', color: 'var(--warn)' }}>⚠ Tổng target nhóm {previewTargetWarning ? `đang áp ${money(monthPreview.priorityTargetTotal)}` : `đang nhập ${money(enteredTargetTotal)}`} lớn hơn target tổng NV {money(totalTarget)}. Đây là cảnh báo mềm; CEO vẫn có thể quyết định sau khi đối chiếu preview.</div>}
+    {(routeUnitTargetBlocked || preview?.targetScopeWarning) && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {preview?.targetScopeWarning || 'Tầng tuyến/đơn vị chưa có metadata tổ chức NV duy nhất; target nhóm sẽ fail-closed, không suy diễn từ đơn vị khách hàng.'}</div>}
+    <div className="target-admin-actions compact-actions"><button className="btn" disabled={busy || closed} onClick={runPreview}>🔎 Mô phỏng trước khi lưu</button><button className="btn" disabled={busy || closed || !preview?.previewId} onClick={save}>💾 Lưu đúng version đã preview</button></div>
     {monthPreview && <div className="upload-preview-box"><b>Preview · {preview.employee} · kỳ {ky}</b>
-      <div className="meta muted">Đạt {pct(monthPreview.pct || 0)} · Phần 1 {money(monthPreview.baseAmount || 0)} + Phần 2 {money(monthPreview.priorityAmount || 0)} = <b>{money(monthPreview.amount || 0)}</b>.</div>
-      <div className="meta muted">C10: {monthPreview.priorityStatus === 'source_unavailable' ? 'DataHub chưa expose — phần 2 fail-closed = 0' : `coverage ${pct(monthPreview.priorityCoverage?.coveragePct || 0)}`} · chưa lưu · không payroll.</div>
+      <div className="meta muted">Đạt {pct(monthPreview.pct || 0)} · P1 {money(monthPreview.baseAmount || 0)} + P2 phần vượt {money(monthPreview.priorityAmount || 0)} = <b>{money(monthPreview.amount || 0)}</b>.</div>
+      <div className="meta muted">C10: {monthPreview.priorityStatus === 'source_unavailable' ? 'DataHub chưa sẵn sàng — P2 fail-closed = 0' : `coverage ${pct(monthPreview.priorityCoverage?.coveragePct || 0)}`} · chưa lưu · không payroll.</div>
+      <BonusGroupPreview title="Chi tiết P2 tháng" period={monthPreview} />
+      <BonusGroupPreview title="Chi tiết P2 quý (target quý = tổng 3 tháng)" period={quarterPreview} />
     </div>}
     <div className="section-title">Version gần nhất</div>
-    <div className="card">{(data?.policies || []).slice(-8).reverse().map((policy) => <div className="row" key={policy.id}><div className="main"><div className="name">v{policy.version} · {policy.scope.type}:{policy.scope.value}</div><div className="meta muted">{policy.effectiveFrom}{policy.effectiveTo ? ` → ${policy.effectiveTo}` : ' → mở'} · {policy.actor} · {policy.note || '—'}</div></div></div>)}{!data?.policies?.length && 'Chưa có override; đang dùng công thức mặc định v2.'}</div>
+    <div className="card">{(data?.policies || []).slice(-8).reverse().map((policy) => <div className="row" key={policy.id}><div className="main"><div className="name">v{policy.version} · {policy.scope.type}:{policy.scope.value}</div><div className="meta muted">{policy.effectiveFrom}{policy.effectiveTo ? ` → ${policy.effectiveTo}` : ' → mở'} · {policy.actor} · {policy.note || '—'}</div></div></div>)}{!data?.policies?.length && 'Chưa có override; đang dùng công thức mặc định v3.'}</div>
   </div>;
 }
 
@@ -366,7 +438,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           <button className="btn" disabled={busy} onClick={() => setTool('template')}>⬇ Template</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('upload')}>⬆ Upload</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('quarter')}>📅 Nhập theo Quý</button>
-          <button className="btn ghost" disabled={busy} onClick={() => setTool('bonus')}>🎯 Cấu hình Thưởng v2</button>
+          <button className="btn ghost" disabled={busy} onClick={() => setTool('bonus')}>🎯 Cấu hình Thưởng v3</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('ai')}>🤖 AI đề xuất</button>
           <button className="btn ghost" disabled={busy} onClick={() => { setRollbackId(lastBatch?.batchId || ''); setTool('rollback'); }}>↩ Rollback</button>
         </div>
@@ -406,7 +478,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           ))}
         </div>
       </>}
-      <Modal id="bonus" title="🎯 Cấu hình Thưởng dự kiến v2">
+      <Modal id="bonus" title="🎯 Cấu hình Thưởng dự kiến v3">
         <BonusPolicyPanel ky={ky} employees={data?.rows || []} />
       </Modal>
       <Modal id="template" title="⬇ Xuất/Tải template target">

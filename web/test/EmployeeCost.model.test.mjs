@@ -72,14 +72,19 @@ test('target edit deep-link keeps exact period and employee after periods hydrat
 test('bonus model keeps backend amounts, month/quarter context and exact unconfigured state', () => {
   assert.equal(employeeBonusViewModel({}).message, 'Chưa cấu hình mức thưởng');
   const bonus = employeeBonusViewModel({
-    configured: true, schemaVersion: 2, version: 'v2-test', effectiveFrom: '2026-07-01', base: 'revenue_before_vat', totalCapPct: null, priorityThresholdPct: 101, ky: '07.2026', quarterLabel: 'Q3/2026',
-    month: { target: 100_000_000, achieved: 105_000_000, pct: 105, bonusPct: 0.15, baseBonusPct: 0.15, baseAmount: 157_500, priorityAmount: 100_000, amount: 257_500, priorityStatus: 'matched', priorityCoverage: { source: 'datahub_catalog_c10', sourceAvailable: true, coveragePct: 80 }, priorityGroups: [{ group: 'H.A*', revenue: 10_000_000, ratePct: 1, amount: 100_000 }], status: 'matched', tier: { fromPct: 100, toPct: 110, bonusPct: 0.15 } },
+    configured: true, schemaVersion: 3, version: 'v3-test', effectiveFrom: '2026-07-01', base: 'revenue_before_vat', totalCapPct: null, priorityThresholdPct: 101, priorityTargets: { 'H.A*': 4_000_000 }, disclaimer: 'Dự kiến/tham khảo, không phải payroll.', ky: '07.2026', quarterLabel: 'Q3/2026',
+    month: { target: 100_000_000, achieved: 105_000_000, pct: 105, bonusPct: 0.15, baseBonusPct: 0.15, baseAmount: 157_500, priorityAmount: 60_000, amount: 217_500, priorityStatus: 'matched', priorityTargetTotal: 4_000_000, priorityTargetAssignedCount: 1, priorityCoverage: { source: 'datahub_catalog_c10', sourceAvailable: true, coveragePct: 80 }, priorityGroups: [{ group: 'H.A*', revenue: 10_000_000, target: 4_000_000, targetStatus: 'assigned', excess: 6_000_000, ratePct: 1, amount: 60_000, reason: 'matched' }], status: 'matched', tier: { fromPct: 100, toPct: 110, bonusPct: 0.15 } },
     quarter: { target: 300_000_000, achieved: 390_000_000, pct: 130, bonusPct: 0.25, baseAmount: 975_000, priorityAmount: 0, amount: 975_000, status: 'matched' },
   });
   assert.equal(bonus.configured, true);
-  assert.equal(bonus.month.amount, 257_500);
+  assert.equal(bonus.month.amount, 217_500);
   assert.equal(bonus.month.baseAmount, 157_500);
   assert.equal(bonus.month.priorityGroups[0].group, 'H.A*');
+  assert.equal(bonus.month.priorityGroups[0].target, 4_000_000);
+  assert.equal(bonus.month.priorityGroups[0].excess, 6_000_000);
+  assert.equal(bonus.month.priorityGroups[0].reason, 'matched');
+  assert.equal(bonus.month.priorityTargetAssignedCount, 1);
+  assert.equal(bonus.disclaimer, 'Dự kiến/tham khảo, không phải payroll.');
   assert.deepEqual(bonus.month.tier, { fromPct: 100, toPct: 110, bonusPct: 0.15 });
   assert.equal(bonus.quarter.amount, 975_000);
 });
@@ -95,7 +100,9 @@ test('bonus KPI contract labels it as forecast/reference and displays month plus
   assert.match(page, /Phần 2/);
   assert.match(page, /DataHub C10/);
   assert.doesNotMatch(page, /if \(month\.amount == null\) return/);
-  assert.match(page, /không phải số chi chính thức/);
+  assert.match(page, /rate × phần vượt target riêng từng nhóm C10/);
+  assert.match(page, /chưa giao target → P2 = 0/);
+  assert.match(page, /không phải payroll hay số chi chính thức/);
 });
 
 test('dynamic columns follow approved order, keep bid price before quantity, and block c32/c47', () => {
