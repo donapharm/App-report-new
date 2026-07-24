@@ -1,3 +1,11 @@
+### 2026-07-24 — Report Bot — Thưởng v3 excess-only theo target riêng từng nhóm C10 (review, chưa deploy)
+- Nâng engine/config lên `schemaVersion: 3`, hiệu lực từ T07/2026. P1 giữ nguyên (`≥130% = 0,25%`); P2 mới = `Σ max(0, doanh thu trước VAT nhóm C10 − target nhóm) × rate`, gate mặc định `≥101%`. Kỳ trước T07 giữ công thức lịch sử.
+- Thêm target `H.A* / H.A / H.B / H.C / H.D` theo NV/tháng; target quý cộng đủ ba tháng. Thiếu/null/không hợp lệ làm riêng nhóm fail-closed, không mặc định thành 0. Nhóm chỉ từ C10 DataHub, không đọc App Sale `priority/tech_rank`.
+- Policy target versioned theo `Mặc định → tuyến → đơn vị → NV`; explicit `null` = chủ động chưa giao. Preview/save khóa one-time theo actor + candidate canonical + revision/hash; audit lưu patch, before/after, source, candidate/revision/preview hash; save xóa route RAM memo.
+- Không suy đơn vị khách hàng thành đơn vị tổ chức NV. Nếu target tuyến/đơn vị tồn tại nhưng thiếu mapping tổ chức NV duy nhất, trả `ambiguous_scope` và P2 nhóm = 0.
+- UI “Cấu hình Thưởng v3” thêm “Toàn bộ NV (mức chung)”, 5 ô target nhóm, cảnh báo mềm tổng target nhóm và preview tháng/quý đủ doanh thu · target · phần vượt · rate · P2 nhóm · tổng. Luôn ghi rõ dự kiến/tham khảo, không payroll.
+- DN006 T07: target `2.693.559.151đ`, doanh thu trước VAT `3.423.138.838đ`, đạt `127,1%`, P1 `6.161.650đ`. Seed chưa giao target nhóm nên P2 fail-closed = 0; fixture đối chiếu excess-only cho P2 mới `7.439.198đ` < cách cũ `26.419.198đ`, không lưu production. Evidence: `artifacts/employee-bonus-v3-dn006-acceptance-20260724.json`.
+
 ### 2026-07-24 — Claude Code (review hậu kiểm) — Target KPI + drill-down `bb822c2` deploy: PASS
 - **Review độc lập diff (đã deploy production): PASS.** `targetKpiDetail.js` **read-only** — chỉ đọc lại `targetKpiSummary` + `resolveTargets`, **không tự tính số** (mọi target/đạt/% do backend cũ sở hữu). **Không endpoint mới** — gắn vào payload `employee-cost` đã **self-scope** (empCode khóa qua `resolveScopedEmployee`; `empCode ? ... : null`). Live self-scope OK (DN001 đòi DN006→ép DN001; ALL→403). Ghi chú "quý tính trên T07 (T08/T09 chưa giao) → % quý sẽ đổi" + "so trước VAT" đúng directive.
 - Rebase đúng: `bb822c2` nằm trên `6ff3ed1` (directive v3) + P0-B trong lịch sử (không revert). Số khớp `/targets/kpi` (DN001 T07: target 2,5 tỷ · doanh thu trước VAT 2.600.847.928đ · 104%).

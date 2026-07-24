@@ -2199,3 +2199,29 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-target-modal-actions { display:grid; grid-template-columns:1fr; }
   .employee-cost-target-modal-actions .btn { width:100%; }
 }
+
+/* Thưởng v3 — target nhóm C10 và preview phần vượt */
+.bonus-target-grid { align-items: stretch; }
+.bonus-target-field { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fbfdff; }
+.bonus-target-field > b { color: var(--brand-ink); font-size: 15px; }
+.bonus-target-field label { margin: 0; }
+.bonus-missing-check { display: flex !important; flex-direction: row !important; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+.bonus-missing-check input { width: auto; min-height: 0; }
+.bonus-group-preview { margin-top: 14px; }
+.bonus-preview-table { min-width: 860px; }
+.bonus-preview-table tfoot td { padding: 10px 11px; border-top: 2px solid var(--line); background: #f5f9ff; }
+
+@media (max-width: 760px) {
+  .bonus-preview-table { min-width: 0; }
+  .bonus-preview-table tbody { display: grid; }
+  .bonus-preview-table tfoot { display: block; padding: 0 8px 8px; }
+  .bonus-preview-table tfoot tr { display: grid; }
+  .bonus-preview-table td:nth-child(1)::before { content: 'Nhóm C10: '; }
+  .bonus-preview-table td:nth-child(2)::before { content: 'Doanh thu: '; }
+  .bonus-preview-table td:nth-child(3)::before { content: 'Target nhóm: '; }
+  .bonus-preview-table td:nth-child(4)::before { content: 'Phần vượt: '; }
+  .bonus-preview-table td:nth-child(5)::before { content: 'Rate: '; }
+  .bonus-preview-table td:nth-child(6)::before { content: 'P2 nhóm: '; }
+  .bonus-preview-table td:nth-child(7)::before { content: 'Trạng thái: '; }
+  .bonus-preview-table tfoot td::before { content: none !important; }
+}

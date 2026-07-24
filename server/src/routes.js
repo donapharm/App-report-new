@@ -89,6 +89,9 @@ const REVENUE_SEND_MIME = {
 };
 function clearTargetDependentCache() {
   if (typeof A.clearOverviewCache === 'function') A.clearOverviewCache();
+  // Bonus policy participates in employee-cost responses. Purge route RAM memo
+  // after each versioned save so no actor/scope receives a stale formula.
+  memo.clear();
 }
 function memoGet(key, ttlMs, build) {
   const hit = memo.get(key);
@@ -539,7 +542,10 @@ async function employeeBonusPriorityForPeriods(empCode, uiPeriods, catalogRowsBy
       }
     }
     const revenueRows = store.getRows({ ky: catalogManagement.toUiPeriod(hubPeriod), scope: { empCode } });
-    items.push(employeeBonus.buildPriorityRevenue(revenueRows, catalogRowsByPeriod[hubPeriod], { vatDivisor: A.VAT_DIVISOR }));
+    items.push(employeeBonus.buildPriorityRevenue(revenueRows, catalogRowsByPeriod[hubPeriod], {
+      vatDivisor: A.VAT_DIVISOR,
+      period: hubPeriod,
+    }));
   }
   return employeeBonus.mergePriorityRevenue(items);
 }
@@ -622,9 +628,21 @@ async function employeeCostPayload(req, {
       quarter: await employeeBonusPriorityForPeriods(empCode, bonusKpi.quarter_kys || [], catalogRowsByPeriod),
     } : {};
     if (empCode) {
-      const resolver = (segment = {}) => employeeBonusPolicy.resolve({ period: ky, context: { employee: empCode, ...segment } });
+      const resolver = (segment = {}) => employeeBonusPolicy.resolve({
+        period: segment.period || ky,
+        context: { employee: empCode, ...segment },
+      });
+      // Group targets are per employee/period. Route/unit target overrides require a
+      // unique organizational assignment source; customer units in revenue rows are
+      // intentionally not reused because that would subtract the target repeatedly.
+      const targetResolver = ({ period } = {}) => employeeBonusPolicy.resolve({
+        period: period || ky,
+        context: { employee: empCode, targetScopeStrict: true },
+      });
       bonusPriority.month.configResolver = resolver;
       bonusPriority.quarter.configResolver = resolver;
+      bonusPriority.month.targetResolver = targetResolver;
+      bonusPriority.quarter.targetResolver = targetResolver;
     }
     const resolvedBonusConfig = bonusConfig || (empCode
       ? employeeBonusPolicy.resolve({ period: ky, context: { employee: empCode } }).config
@@ -3129,7 +3147,18 @@ router.get('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, r
   res.json({
     period: employeeBonusPolicy.monthKey(period),
     layers: employeeBonusPolicy.LAYERS,
+    targetLayers: employeeBonusPolicy.TARGET_LAYERS,
     priorityGroups: employeeBonus.PRIORITY_GROUPS,
+    v3EffectiveFrom: employeeBonus.BONUS_V3_EFFECTIVE_MONTH,
+    closedForV3Edit: employeeBonusPolicy.monthKey(period) < employeeBonus.BONUS_V3_EFFECTIVE_MONTH,
+    revision: employeeBonusPolicy.revision(),
+    targetScopeMetadata: {
+      default: true,
+      employee: true,
+      route: false,
+      unit: false,
+      reason: 'route_unit_employee_assignment_unavailable',
+    },
     policies: employeeBonusPolicy.list(),
     audit: employeeBonusPolicy.audit().slice(0, 100),
     resolved: employeeBonusPolicy.resolve({ period, context }),
@@ -3146,20 +3175,41 @@ router.post('/admin/bonus-policies/preview', auth.requireAuth, auth.requireAdmin
   const monthPriority = await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod);
   const quarterPriority = await employeeBonusPriorityForPeriods(empCode, kpi.quarter_kys || [], catalogRowsByPeriod);
   const resolver = (segment = {}) => employeeBonusPolicy.resolve({
-    period: ky,
+    period: segment.period || ky,
     context: { employee: empCode, ...segment },
+    extraPolicies: [policyPreview.candidate],
+  });
+  const targetResolver = ({ period } = {}) => employeeBonusPolicy.resolve({
+    period: period || ky,
+    context: { employee: empCode, targetScopeStrict: true },
     extraPolicies: [policyPreview.candidate],
   });
   monthPriority.configResolver = resolver;
   quarterPriority.configResolver = resolver;
+  monthPriority.targetResolver = targetResolver;
+  quarterPriority.targetResolver = targetResolver;
   const config = resolver({}).config;
   const summary = employeeBonus.buildBonusSummary(kpi, config, { month: monthPriority, quarter: quarterPriority });
   const previewId = crypto.randomBytes(18).toString('base64url');
   const actor = String(req.session.emp_code || req.session.name || 'ADMIN');
-  bonusPolicyPreviews.set(previewId, { at: Date.now(), actor, payload: req.body });
+  bonusPolicyPreviews.set(previewId, {
+    at: Date.now(), actor,
+    candidate: policyPreview.candidate,
+    revision: policyPreview.revision,
+    previewHash: policyPreview.previewHash,
+  });
   for (const [id, item] of bonusPolicyPreviews) if (Date.now() - item.at > 15 * 60 * 1000) bonusPolicyPreviews.delete(id);
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ previewId, expiresInSeconds: 900, candidate: policyPreview.candidate, resolved: policyPreview.resolved, employee: empCode, summary, saved: false });
+  const targetScopeWarning = ['route', 'unit'].includes(policyPreview.candidate.scope.type)
+    && Object.prototype.hasOwnProperty.call(policyPreview.candidate.patch || {}, 'priorityTargets')
+    ? 'Target nhóm tầng tuyến/đơn vị chưa áp vào NV vì chưa có nguồn metadata tổ chức duy nhất; preview giữ fail-closed, không suy diễn từ đơn vị khách hàng.'
+    : null;
+  return res.json({
+    previewId, expiresInSeconds: 900, candidate: policyPreview.candidate,
+    resolved: policyPreview.resolved, employee: empCode, summary,
+    previewHash: policyPreview.previewHash, revision: policyPreview.revision,
+    targetScopeWarning, saved: false,
+  });
 }));
 
 router.post('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, res) => {
@@ -3171,7 +3221,7 @@ router.post('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, 
     return res.status(409).json({ error: 'Preview đã hết hạn hoặc không thuộc phiên hiện tại. Vui lòng mô phỏng lại trước khi lưu.', code: 'BONUS_POLICY_PREVIEW_REQUIRED' });
   }
   bonusPolicyPreviews.delete(previewId);
-  const result = employeeBonusPolicy.save(preview.payload, actor);
+  const result = employeeBonusPolicy.savePreview(preview, actor);
   clearTargetDependentCache();
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ...result, saved: true, audit: employeeBonusPolicy.audit().slice(0, 20) });

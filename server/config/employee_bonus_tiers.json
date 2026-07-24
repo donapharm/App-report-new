@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 2,
-  "version": "bonus-v2-default-2026-07-r1",
+  "schemaVersion": 3,
+  "version": "bonus-v3-default-2026-07-r1",
   "effectiveFrom": "2026-07-01",
   "base": "revenue_before_vat",
   "currency": "VND",
@@ -19,6 +19,13 @@
     "H.C": 0.1,
     "H.D": 0.1
   },
+  "priorityTargets": {
+    "H.A*": null,
+    "H.A": null,
+    "H.B": null,
+    "H.C": null,
+    "H.D": null
+  },
   "totalCapPct": null,
-  "note": "Thưởng dự kiến v2: phần cơ bản + phần nhóm ưu tiên C10 DataHub. Không payroll/không gửi thưởng. C10 thiếu hoặc ngoài allowlist thì phần nhóm fail-closed bằng 0."
+  "note": "Thưởng dự kiến v3 từ T07.2026: P1 giữ nguyên; P2 chỉ tính phần doanh thu C10 vượt target riêng từng nhóm. Nhóm chưa giao target hoặc C10 thiếu thì P2 nhóm bằng 0. Dự kiến/tham khảo, không payroll."
 }

@@ -1,0 +1,56 @@
+{
+  "task": "DIRECTIVE_EMP_COST_BONUS_V3_P2_EXCESS",
+  "status": "review_only_not_deployed",
+  "period": "07.2026",
+  "employee": "DN006",
+  "basis": {
+    "target_total_vnd": 2693559151,
+    "revenue_before_vat_vnd": 3423138838,
+    "achievement_pct": 127.1,
+    "p1_vnd": 6161650,
+    "vat_divisor": 1.05,
+    "c10_source": "DataHub catalog C10",
+    "classified_revenue_vnd": 3398453124,
+    "unclassified_c10_revenue_vnd": 24685714,
+    "c10_coverage_pct": 99.3
+  },
+  "current_fail_closed_result": {
+    "group_targets": "all_unassigned_in_seed_config",
+    "p2_vnd": 0,
+    "reason": "targets_missing",
+    "note": "Không mặc định target thiếu thành 0; từng nhóm chưa giao nhận P2_g = 0."
+  },
+  "deterministic_acceptance_fixture_not_saved": {
+    "purpose": "Đối chiếu tay công thức excess-only; đây không phải target nghiệp vụ và không được ghi vào policy/production.",
+    "p2_old_full_group_revenue_vnd": 26419198,
+    "p2_new_excess_only_vnd": 7439198,
+    "new_total_bonus_vnd": 13600848,
+    "groups": [
+      { "group": "H.A*", "revenue_vnd": 1534009669, "target_vnd": 1100000000, "excess_vnd": 434009669, "rate_pct": 1.0, "p2_vnd": 4340097 },
+      { "group": "H.A", "revenue_vnd": 978570038, "target_vnd": 700000000, "excess_vnd": 278570038, "rate_pct": 0.8, "p2_vnd": 2228560 },
+      { "group": "H.B", "revenue_vnd": 591166846, "target_vnd": 430000000, "excess_vnd": 161166846, "rate_pct": 0.5, "p2_vnd": 805834 },
+      { "group": "H.C", "revenue_vnd": 192728667, "target_vnd": 150000000, "excess_vnd": 42728667, "rate_pct": 0.1, "p2_vnd": 42729 },
+      { "group": "H.D", "revenue_vnd": 101977905, "target_vnd": 80000000, "excess_vnd": 21977905, "rate_pct": 0.1, "p2_vnd": 21978 }
+    ],
+    "manual_check": "P2 = sum(round(max(0, revenue-target) * rate_pct / 100))",
+    "comparison": "7439198 < 26419198"
+  },
+  "gate": {
+    "server_tests": "340/340 PASS",
+    "web_tests": "63/63 PASS",
+    "focused_server_tests": "24/24 PASS",
+    "isolated_vite_build": "PASS at /tmp/app-report-bonus-v3-build-final2-20260724",
+    "json_validation": "PASS",
+    "build_note": "recharts chunk >500 kB warning only"
+  },
+  "known_blockers": [
+    "Chưa có SSOT trạng thái kỳ mở/đóng; code khóa mọi kỳ trước 2026-07 nhưng chưa thể khóa động một kỳ từ 2026-07 trở đi khi nghiệp vụ đóng kỳ.",
+    "Chưa có metadata tổ chức NV duy nhất cho tầng tuyến/đơn vị; các target tầng này trả ambiguous_scope và fail-closed cho tới khi có SSOT."
+  ],
+  "safety": {
+    "payroll": false,
+    "datahub_write": false,
+    "production_deploy": false,
+    "source_grouping": "C10_only_no_App_Sale_priority_or_tech_rank"
+  }
+}
