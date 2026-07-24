@@ -70,7 +70,7 @@ test('display-only deduction keeps source cost separate and does not mutate it',
   assert.deepEqual(employeeVatKhoanDeduction(null, 1_800_000), { baseCost: null, deduction: null, remaining: null });
 });
 
-test('Employee Cost UI groups reward/penalty and moves Xu to the four-card deduction row', () => {
+test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction, remaining in one row', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
   const styles = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
@@ -85,17 +85,23 @@ test('Employee Cost UI groups reward/penalty and moves Xu to the four-card deduc
   assert.match(page, /Cấn trừ do thiếu xu chi tiêu \(quý\) · dự kiến/);
   assert.match(page, /Chưa hiển thị phép cấn trừ cho kỳ nhiều tháng/);
   assert.match(page, /multiMonth=\{multiple\}/);
-  assert.match(page, /Chi phí gốc/);
-  assert.match(page, /Chi phí gốc − cấn trừ thiếu xu = còn lại/);
+  assert.match(page, /Tổng chi phí tháng \(chi phí gốc\)/);
+  assert.match(page, /Còn lại = chi phí gốc ở hàng KPI trên − cấn trừ thiếu xu/);
   assert.match(page, /Còn lại \(display-only\)/);
   assert.match(page, /Không ghi DataHub\/payroll/);
-  assert.ok(page.indexOf('<BonusKpi') < page.indexOf('<KhoanPenaltyKpi'), 'Thưởng phải đứng ngay trước Phạt');
-  assert.doesNotMatch(page.match(/<div className="kpi-grid employee-cost-kpis">[\s\S]*?<\/div>/)?.[0] || '', /Xu tích lũy/);
-  assert.match(page, /className="employee-cost-khoan-equation"[\s\S]*className="xu"[\s\S]*Chi phí gốc[\s\S]*<strong>−<\/strong>[\s\S]*Cấn trừ thiếu xu[\s\S]*<strong>=<\/strong>[\s\S]*Còn lại/);
+  const kpiGridStart = page.indexOf('<div className="kpi-grid employee-cost-kpis">');
+  const kpiGrid = page.slice(kpiGridStart, page.indexOf('<KhoanWarning', kpiGridStart));
+  const equation = page.match(/<div className="employee-cost-khoan-equation">[\s\S]*?<\/div>/)?.[0] || '';
+  assert.doesNotMatch(kpiGrid, /Xu tích lũy|Phạt dự kiến/);
+  assert.equal((page.match(/Tổng chi phí tháng \(chi phí gốc\)/g) || []).length, 1);
+  assert.doesNotMatch(equation, /<small>Chi phí gốc<\/small>/);
+  assert.match(equation, /className="xu"[\s\S]*className="penalty"[\s\S]*<strong>−<\/strong>[\s\S]*Cấn trừ thiếu xu[\s\S]*<strong>=<\/strong>[\s\S]*Còn lại/);
   assert.match(styles, /#4338ca/);
   assert.match(styles, /#eef2ff/);
   assert.match(styles, /#047857/);
   assert.match(styles, /#b91c1c/);
+  assert.match(styles, /\.employee-cost-khoan-equation \.penalty[^\n]*#fecaca[^\n]*#fef2f2/);
+  assert.match(styles, /\.employee-cost-khoan-equation \.penalty small[^\n]*#b91c1c/);
   assert.match(styles, /@media \(max-width: 767px\)[\s\S]*\.employee-cost-kpis \{ grid-template-columns:1fr; \}/);
   assert.match(styles, /@media \(max-width: 767px\)[\s\S]*\.employee-cost-khoan-equation \{ grid-template-columns:1fr; \}/);
   assert.match(app, /\['catalogManagement', 'dailySales', 'products', 'dormantReports', 'employeeCost'\]\.includes\(tab\)/);

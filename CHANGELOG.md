@@ -2019,3 +2019,8 @@
 - **Hoàn thiện tài liệu audit app cũ → app mới trong `MIGRATION_MATRIX.md`.** Đã rà các nguồn app cũ `report.html`, `report-main-v23.js`, `report-extra.js`, `kho-dulieu.html`, các bản `report-cst/report-force/report-new` và `chart.min.js`; cập nhật ma trận đầy đủ theo tab/nút/tính năng với trạng thái `done/partial/todo`.
 - **Ghi rõ backlog chưa chuyển:** biểu đồ, tab Nhân viên, màn Đối chiếu, PDF/print, hoạt chất/nhóm thuốc ở Products, Kho dữ liệu master/rollback parity, Target admin editor, Target NV/thưởng 3P, Điều chuyển NV, export mẫu cũ và upload file lỗi.
 - **Thêm kế hoạch biểu đồ — chưa code:** khuyến nghị Recharts thay vì Chart.js cho React/Vite; đề xuất 4 biểu đồ doanh thu theo kỳ, top ĐV/SP, donut cơ cấu tuyến/nhà thầu/gói thầu, target progress ring; nêu API/scope/period requirements, bundle-size impact và vị trí đặt ở Tổng quan/Phân tích/Target để CEO/Claude duyệt trước khi triển khai.
+
+### 2026-07-24 — Report Bot
+- **Sắp xếp lại UI “Chi phí của tôi” theo mockup v2 §3B.** Bỏ thẻ `Chi phí gốc` bị lặp trong khối cấn trừ; thẻ KPI phía trên đổi thành `Tổng chi phí tháng (chi phí gốc)`. Chuyển `Phạt dự kiến` xuống cạnh `Xu tích lũy`, để hàng cấn trừ đọc liền `[Xu] [Phạt dự kiến] − [Cấn trừ thiếu xu] = [Còn lại]`; mobile tiếp tục một cột theo đúng thứ tự.
+- **Giữ nguyên logic số/quyền và fail-closed.** `Phạt dự kiến` và `Cấn trừ thiếu xu` dùng cùng số backend; chỉ mở khi parity exact-zero PASS, nếu chưa đạt vẫn `— / đang đối soát`. Không sửa công thức, quyền, API, DataHub/payroll hay luồng notification; giữ Phạt đỏ `#b91c1c`, Xu indigo `#eef2ff/#4338ca`.
+- **Gates source review:** focused web `6/6` PASS; full web `57/57` PASS; Vite production build PASS; `git diff --check` PASS. Trạng thái: source review, **chưa deploy production**.
