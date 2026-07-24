@@ -1,3 +1,11 @@
+### 2026-07-24 — Claude Code (review bảo mật v3) — Trusted-device SSO `13fd824`: PASS toàn diện (mọi blocker/hardening đã xử)
+- **Verify độc lập + chạy 12/12 test SSO PASS. VERDICT: PASS về code, hết blocker.** Mọi điểm review v1 đã khắc phục:
+  - **BLOCKER rebase: XONG** — `f97f766` (P0-B) là ancestor; merge không revert perf fix.
+  - **Enumeration oracle: ĐÓNG** — `start()` **KHÔNG còn trả `expectedEmployeeCode`** (mã ở lại backend); unknown/ambiguous nhận **cùng response**; `consume()` dùng **decoy `NO_REPORT_<hash>`** để **latency không lộ** phone→NV; unknown luôn fail-closed (empCode='' ≠ code thật → 401).
+  - **Rate-limit: CÓ** — start & consume, theo IP + IP·phone/attemptId, 10/phút (cấu hình được), `PENDING_LIMIT`, 429.
+- **Giữ nguyên các tính chất PASS v1:** FE relay không tin cậy, re-validate qua App Sale S2S; fail-closed OTP mọi lỗi; one-time (pending→used, TTL 2p); audience='app-report'; re-verify user+phone; không log token; token env-only.
+- **Chỉ còn cổng LIVE (không phải code):** (1) cấp **S2S token qua kênh secret** (đang thiếu → SSO vẫn tắt an toàn); (2) App Sale migration `0103` replay atomic (bot xác nhận đã có) — chống replay THẬT nằm ở đây do one-time claim App Report là in-memory per-process; (3) **test live**: máy tin cậy KHÔNG hỏi OTP; thử replay/hết hạn PHẢI rơi về OTP. Đủ 3 → CEO duyệt deploy. Chưa deploy.
+
 ### 2026-07-24 — Claude Code (review hậu kiểm) — Target KPI + drill-down `bb822c2` deploy: PASS
 - **Review độc lập diff (đã deploy production): PASS.** `targetKpiDetail.js` **read-only** — chỉ đọc lại `targetKpiSummary` + `resolveTargets`, **không tự tính số** (mọi target/đạt/% do backend cũ sở hữu). **Không endpoint mới** — gắn vào payload `employee-cost` đã **self-scope** (empCode khóa qua `resolveScopedEmployee`; `empCode ? ... : null`). Live self-scope OK (DN001 đòi DN006→ép DN001; ALL→403). Ghi chú "quý tính trên T07 (T08/T09 chưa giao) → % quý sẽ đổi" + "so trước VAT" đúng directive.
 - Rebase đúng: `bb822c2` nằm trên `6ff3ed1` (directive v3) + P0-B trong lịch sử (không revert). Số khớp `/targets/kpi` (DN001 T07: target 2,5 tỷ · doanh thu trước VAT 2.600.847.928đ · 104%).
