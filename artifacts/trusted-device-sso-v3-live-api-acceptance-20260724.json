@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-24T15:40:25.194Z",
+  "appReportIntegrationCommit": "5fa938ae6bd58dd45a9b8627061f4d2be3fa7300",
+  "approvedSsoCommitAncestor": "13fd8245e4c485ef684da595f9f2679db3b1715c",
+  "appSaleEndpoint": "https://sale.donapharm.asia/api/internal/trusted-device/consume",
+  "assertionsOrTokensStored": false,
+  "checks": {
+    "productionConsumeFresh": true,
+    "productionReplayRejectedAtomic": true,
+    "productionExpiredRejected": true,
+    "reportBridgeFreshAccepted": true,
+    "reportBridgeLocalReplayRejected": true
+  },
+  "observedStatus": {
+    "freshConsume": 200,
+    "replayConsume": 409,
+    "expiredConsume": 403,
+    "localReplayCode": "TRUSTED_DEVICE_PENDING_REUSED"
+  },
+  "note": "API-level live acceptance uses a production-key signed ephemeral assertion without storing or printing the raw assertion. Browser trusted-cookie acceptance remains a separate required gate."
+}

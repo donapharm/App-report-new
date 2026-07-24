@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-24T15:47:29.354Z",
+  "status": "BLOCKED_APP_SALE_CONTRACT_V3_NOT_LIVE",
+  "appReport": {
+    "integrationCommit": "5fa938ae6bd58dd45a9b8627061f4d2be3fa7300",
+    "reviewedSsoCommit": "13fd8245e4c485ef684da595f9f2679db3b1715c",
+    "reviewedCommitIsAncestor": true,
+    "secretChannelConfigured": true,
+    "secretMatchesAppSaleProductionHash": true,
+    "secretOrRawAssertionStored": false,
+    "isolatedBuild": {
+      "status": "PASS",
+      "path": "/tmp/app-report-sso-v3-review-build-5fa938a",
+      "version": "5fa938a-20260724-223543-357"
+    },
+    "tests": {
+      "server": {
+        "pass": 352,
+        "fail": 0
+      },
+      "web": {
+        "pass": 63,
+        "fail": 0
+      }
+    }
+  },
+  "appSale": {
+    "productionRevision": "e74560a991efb7cf98742d7a1898426f01de47b1",
+    "migration0103": {
+      "schemaMigrationRecorded": true,
+      "tableExists": true,
+      "primaryKeyExists": true
+    },
+    "cors": {
+      "origin": "https://report.donapharm.asia",
+      "preflightStatus": 204,
+      "allowCredentials": true,
+      "status": "PASS"
+    },
+    "consumeApiAcceptance": {
+      "productionConsumeFresh": true,
+      "productionReplayRejectedAtomic": true,
+      "productionExpiredRejected": true,
+      "reportBridgeFreshAccepted": true,
+      "reportBridgeLocalReplayRejected": true
+    },
+    "verifyContract": {
+      "path": "/api/internal/trusted-device/verify",
+      "productionRequiresBrowserExpectedEmployeeCode": true,
+      "v3RequiresBrowserExpectedEmployeeCode": false,
+      "status": "FAIL_V3_NOT_DEPLOYED"
+    }
+  },
+  "browserAcceptance": {
+    "origin": "https://report.donapharm.asia",
+    "appSaleAuthenticatedProfile": true,
+    "v3RequestOmittedExpectedEmployeeCode": true,
+    "observedHttpStatus": 400,
+    "observedError": "invalid_request",
+    "trustedSkipOtp": "NOT_TESTABLE_UNTIL_APP_SALE_V3_CONTRACT_DEPLOYED",
+    "otpFallbackPreserved": true
+  },
+  "deployment": {
+    "appReportRestarted": false,
+    "appReportAssetsChanged": false,
+    "productionSsoStillDisabled": true
+  },
+  "nextRequiredAction": "Sale Bot must review/commit/deploy the v3 verify contract that derives the employee subject from phone + host-only cookie and no longer requires expectedEmployeeCode from the browser. Then rerun trusted-device browser acceptance before CEO approval for App Report deployment."
+}
