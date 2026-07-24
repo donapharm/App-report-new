@@ -54,8 +54,9 @@ Phạt cấn trừ **tiền thật**. Vì điểm giờ do App Report tính còn
 ## 5. FRONTEND
 - Ô KPI **Điểm (tháng·quý)**: đổi nhãn nguồn **"App VAT" → "App Report"** (và `rule_version` điểm local).
 - Ô **Xu**: giữ nhãn nguồn **"App VAT"**. Ô **Phạt dự kiến**: nguồn "App Report (điểm) + App VAT (xu)".
-- Giữ **cảnh báo sớm** (đang thiếu xu → dự kiến phạt) + dòng **"Cấn trừ do thiếu xu"** display-only, tách bạch chi phí
-  (DataHub) — **không đổi** cách tách nguồn hiện có.
+- Giữ **cảnh báo sớm** (đang thiếu xu → dự kiến phạt) + dòng **"Cấn trừ do thiếu xu"**, tách bạch chi phí (DataHub).
+- **Phân biệt trạng thái theo tháng trong quý (mục 8):** tháng chưa cuối quý → dòng cấn trừ ghi **"dự kiến — chưa trừ"**;
+  **tháng cuối quý** (T03/T06/T09/T12) → **"chốt quý — cấn trừ"**. Cảnh báo tháng dùng giọng **nghiêm khắc**.
 
 ## 6. NGHIỆM THU
 1. DN009 (và ≥3 NV khác) hiện **điểm > 0 khớp doanh thu** của họ (không còn 0·0); nhãn nguồn = **App Report**.
@@ -64,10 +65,41 @@ Phạt cấn trừ **tiền thật**. Vì điểm giờ do App Report tính còn
 4. Self-scope 2 lớp giữ nguyên (NV chỉ thấy mình); **không** ghi payroll; **không** lộ token/PII; C32/C47 vẫn khóa.
 5. Test server/web PASS; `git diff --check` PASS; CHANGELOG cập nhật.
 
-## 7. GHI CHÚ / ĐỂ CEO CHỐT
-- **Phạt** phụ thuộc điểm nên directive này cho App Report tính phạt "dự kiến" tại chỗ (CEO mới nêu rõ **điểm**; phạt suy
-  ra). Nếu CEO muốn phạt vẫn **chỉ lấy con số App VAT** (để trùng tuyệt đối số thực trừ) → App Report chỉ tính **điểm**,
-  còn **xu + phạt** đọc App VAT. **Đề xuất mặc định:** App Report tính điểm + phạt-dự-kiến, nhưng **gate bằng parity**
-  (mục 4) để không lệch số thực trừ. Chờ CEO xác nhận 1 trong 2.
+## 7. GHI CHÚ
+- **Phạt** phụ thuộc điểm → App Report tính **phạt dự kiến** tại chỗ (điểm của mình + xu App VAT), **gate bằng parity**
+  (mục 4). App Report **KHÔNG tự thực hiện lệnh trừ tiền** — chỉ hiển thị + cảnh báo + gửi thông báo (xem mục 8).
 - Task kèm cho **App VAT Bot**: đọc đúng doanh thu (đồng bộ App Sale) để điểm nội bộ App VAT khớp App Report — nếu không,
   App VAT nên **tiêu thụ điểm từ App Report** làm SSOT thay vì tự tính từ bản doanh thu cũ.
+
+## 8. CƠ CHẾ PHẠT THEO QUÝ + CẢNH BÁO + THÔNG BÁO TRƯỚC KHI TRỪ (CEO chốt 2026-07-24)
+**Nguyên tắc:** cảnh báo **hàng tháng** cho NV ý thức, nhưng **chỉ chốt trừ 1 lần vào cuối quý**. App Report gửi thông
+báo trước; **không tự ghi payroll / không sửa chi phí DataHub**.
+
+### 8.1 Cảnh báo hàng tháng (nghiêm khắc)
+- Mỗi **cuối tháng**, nếu **xu tích lũy < điểm doanh thu** (đang thiếu) → hiển thị **cảnh báo NGHIÊM KHẮC** trên
+  "Chi phí của tôi" + **đẩy Telegram/Email** cho NV: đang thiếu bao nhiêu xu, **dự kiến phạt** nếu hết quý vẫn thiếu, và
+  **thời hạn khắc phục** (còn mấy tháng tới cuối quý). Mục tiêu: NV kịp chạy, không bị bất ngờ.
+- Cảnh báo tháng = **CHƯA TRỪ TIỀN** (chỉ dự kiến). Ghi rõ "dự kiến — chưa cấn trừ".
+
+### 8.2 Chốt trừ vào THÁNG CUỐI của quý
+- Chốt tại **cuối tháng cuối quý** (T03 · T06 · **T09** · T12). Ví dụ đang **T07/2026** (quý 3 = T07–T09):
+  cuối T07/T08 chỉ **cảnh cáo nghiêm khắc**; **đến cuối T09/2026** mới chốt.
+- Điều kiện phạt tại chốt quý: **xu tích lũy cả quý KHÔNG cân bằng với điểm doanh thu quý** (xu_quý < điểm_quý → thiếu).
+- Số phạt = `floor( max(điểm_quý − xu_quý, 0) ÷ 2 ) × 600.000đ` (mục 2) → **trừ vào chi phí bán hàng của NV** tại
+  **tháng cuối quý** (T09), tách bạch dòng **"Cấn trừ do thiếu xu (chốt quý)"**.
+
+### 8.3 ‼ THÔNG BÁO TRƯỚC KHI TRỪ (bắt buộc)
+Trước khi con số phạt được cấn trừ, **gửi Telegram + Email** cho NV (self-scope, chỉ số của NV đó), gồm:
+1. **Số liệu:** điểm_quý · xu_quý · **thiếu (điểm − xu)** · **số tiền phạt** · kỳ (quý/tháng chốt).
+2. **Quy tắc tính điểm:** `điểm = Σ(doanh thu × hệ số ÷ 100.000.000)`; bảng hệ số (CL/NT/NCL 025–028 = 2.0; còn lại 1.0).
+3. **Quy tắc tính xu:** `xu = tiền bill ÷ 500.000 × tỷ lệ` (1.3 từ T05/2026); target xu = điểm doanh thu quý; carry 1 quý.
+4. **Công thức phạt:** `floor(điểm thiếu ÷ 2) × 600.000đ`, và **mốc thời gian** (đã cảnh báo các tháng trước).
+- Thông báo phải đi **TRƯỚC** thời điểm cấn trừ đủ để NV nắm/đối chiếu (không trừ âm thầm). Ghi **audit** đã gửi
+  (kênh · thời điểm · NV · kỳ), **không log token/PII**.
+
+### 8.4 Ranh giới thực thi (không trừ oan)
+- **App Report:** tính điểm (SSOT) · tính phạt dự kiến · cảnh báo tháng · **gửi Telegram/Email** · hiển thị dòng cấn trừ.
+- **App Report KHÔNG:** ghi payroll, sửa số chi phí DataHub, tự phát lệnh chi/trừ. Việc **ghi cấn trừ thật** vào chi phí
+  bán hàng do **chủ sở hữu chi phí (DataHub/quy trình tài chính) hoặc App VAT** thực hiện, dùng **đúng con số đã qua
+  parity** — App Report chỉ cung cấp số + thông báo. **Cần CEO chốt đơn vị THỰC THI lệnh trừ** (đề xuất: nơi đang giữ
+  "chi phí bán hàng" = DataHub, hoặc App VAT SSOT khoản) để 1 nơi duy nhất ghi, tránh trừ 2 lần / lệch số.
