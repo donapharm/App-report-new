@@ -1,0 +1,47 @@
+{
+  "schema": "app-report.employee-kpi-layout-v2.production-deploy.v1",
+  "approved_by": "CEO",
+  "approval_action": "approve_deploy_ui_kpi_v2_0729971",
+  "approved_review_commit": "072997119040210b2ba0e6a88b15efb35d58222c",
+  "main_merge_commit": "2430f5d31bf08835bf4852446a681006fcf686f0",
+  "production_version": "2430f5d-20260724-144314-865",
+  "production_url": "https://report.donapharm.asia",
+  "deployment_scope": "frontend-ui-only",
+  "rollback": {
+    "branch": "backup/pre-ui-kpi-v2-deploy-20260724-144248",
+    "backup_dir": "backups/ui-kpi-v2-deploy-20260724-144248",
+    "pre_deploy_commit": "3f2cf957b1d8c407035711f50670719eebed77d7"
+  },
+  "gates": {
+    "focused_web": "23/23 PASS",
+    "full_web": "57/57 PASS",
+    "targeted_server_regression": "86/86 PASS",
+    "vite_build": "PASS",
+    "git_diff_check": "PASS",
+    "independent_review": "PASS"
+  },
+  "production_checks": {
+    "local_health": "HTTP 200",
+    "public_health": "HTTP 200",
+    "public_version_commit": "2430f5d",
+    "javascript_asset_sha256": "a5cf3542f0e0189677224f4541c22532c9a5763b101008b0cc30a946078f1db0",
+    "css_asset_sha256": "31a7c3d8dd2009d8ebe5598431526bcfbfe112ab5c112d7363b14131f4a203b4",
+    "public_local_asset_parity": true,
+    "required_labels_present": true,
+    "required_colors_present": true,
+    "pm2_status": "online",
+    "pm2_pid_before_after": 1125147,
+    "pm2_restarts_before_after": 116,
+    "backend_restarted": false
+  },
+  "controls": {
+    "backend_changed": false,
+    "api_changed": false,
+    "permissions_changed": false,
+    "datahub_write": false,
+    "payroll_write": false,
+    "notification_sent": false,
+    "c32_c47_changed": false
+  },
+  "result": "PASS"
+}
