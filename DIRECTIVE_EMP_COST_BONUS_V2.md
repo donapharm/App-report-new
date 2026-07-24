@@ -14,11 +14,12 @@
 **Tổng thưởng dự kiến = Phần 1 + Phần 2.** Base tối đa 0.25% (không kẹp cap 0.5% cũ vào tổng); phần nhóm cộng riêng.
 **Cap tổng** để cấu hình (mặc định không kẹp; CEO đặt trần an toàn nếu muốn).
 
-## 2. NHÓM ƯU TIÊN (mã QLNB → nhóm) — nguồn phân loại
-- **Ưu tiên (a):** nếu catalog/App Sale đã có **cột phân loại ưu tiên** (H.A*/H.A/H.B/H.C/H.D) → bot đọc trực tiếp. **Bot xác minh
-  có sẵn không.**
-- **Nếu chưa (b):** config `server/config/employee_bonus_priority_groups.json` (`{ "H.A*": [mã...], ... }` hoặc `mã→nhóm`),
-  CEO khai báo/đổi không sửa code. Mã không thuộc nhóm nào → không cộng phần 2 (không bịa).
+## 2. NHÓM ƯU TIÊN (mã QLNB → nhóm) — nguồn: **CEO vault cột C10 (DataHub)** ‼ CEO chốt
+- **Nguồn chính thức = `C10` trong CEO vault (DataHub)** — mỗi mã QLNB có nhóm `H.A*/H.A/H.B/H.C/H.D`. **App Report ĐỌC C10**
+  từ catalog snapshot DataHub cấp; **KHÔNG tự phân loại, KHÔNG config tay.** C10 = SSOT phân loại.
+- **Phụ thuộc DataHub:** DataHub phải **expose C10** vào catalog snapshot App Report đọc (task `TASK_DATAHUB_EXPOSE_C10_PRIORITY.md`,
+  whitelist như C48, vẫn khóa C32/C47). **Bot xác minh** C10 đã có trong snapshot chưa; chưa có → chờ DataHub bổ sung.
+- Mã có C10 rỗng (chưa phân nhóm) → **không cộng phần 2** cho mã đó (không bịa). C10 là thuộc tính sản phẩm (không per-NV).
 
 ## 3. CONFIG LINH HOẠT (điểm "thông minh" CEO yêu cầu)
 - **Theo GIAI ĐOẠN (versioned):** mỗi kỳ/giai đoạn 1 bản config (hiệu lực từ ngày…); kỳ cũ tính đúng bản cũ, không mất lịch sử.

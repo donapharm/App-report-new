@@ -9,6 +9,9 @@
 - **VERDICT: PASS · DEPLOY_DECISION: READY_FOR_DEPLOY_APPROVAL.** Claude review read-only toàn bộ directive, backend/FE, self-scope hai lớp, fail-closed, audit, token backend-only, UI display-only và artifact production parity; xác nhận không còn blocker kỹ thuật.
 - Bằng chứng production: App VAT `473de59`, health OK; T06/2026 `DN001/DN009/DN016/DN024` khớp tuyệt đối, sai số 0; DN009 phạt `13.800.000đ`; log chỉ sid băm, không full token/prefix. `.env` production đã có `VAT_BASE`/`VAT_SERVICE_TOKEN` backend-only; focused tests `13/13 + 5/5`, build PASS. Review lưu tại `artifacts/claude-review-employee-vat-khoan-162.md`. **Chưa deploy/restart App Report; chờ CEO duyệt deploy riêng.**
 
+### 2026-07-23 — Claude Code (cập nhật) — Nguồn nhóm ưu tiên Thưởng v2 = C10 (CEO vault/DataHub)
+- CEO chốt: nhóm ưu tiên (H.A*/H.A/H.B/H.C/H.D) = **cột C10 trong CEO vault (DataHub)**. App Report **đọc C10** từ catalog snapshot, không tự phân loại/không config tay. **Phụ thuộc DataHub expose C10** (task `TASK_DATAHUB_EXPOSE_C10_PRIORITY.md` — whitelist như C48, khóa C32/C47). Cập nhật §2 directive Thưởng v2.
+
 ### 2026-07-23 — Claude Code (giao bot) — Thưởng v2: 2 phần (cơ bản + nhóm ưu tiên) + config linh hoạt
 - CEO nâng cấp thưởng. Directive `DIRECTIVE_EMP_COST_BONUS_V2.md`: **Phần 1** cơ bản (`<90→0·90–100→0.10·100–110→0.15·110–130→0.18·≥130→0.25` × DT trước VAT); **Phần 2** nhóm ưu tiên (khi TỔNG đạt ≥101%): `H.A*→1.0·H.A→0.8·H.B→0.5·H.C→0.1·H.D→0.1` × DT nhóm. Tổng = P1+P2.
 - **Linh hoạt:** config theo **giai đoạn (versioned)** + **đè tầng** (mặc định→nhóm hàng→tuyến→đơn vị→NV) + **menu chỉnh trong Target** + **preview** trước khi lưu + audit. Nhóm QLNB→ưu tiên: đọc catalog nếu có, không thì config CEO khai. Vẫn "dự kiến", không payroll, self-scope, fail-closed. Còn hỏi CEO: nguồn phân loại nhóm + "1% = 1% doanh thu nhóm". Chưa deploy.
