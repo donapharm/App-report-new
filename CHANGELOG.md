@@ -1,3 +1,8 @@
+### 2026-07-24 — Claude Code (review hậu kiểm) — P0-B perf `f97f766` deploy: PASS + bước tiếp (bảng ALL còn 13s)
+- **Review độc lập diff `84ff7c1..f97f766` (đã deploy production): PASS, không blocker.** Kiểm phần cache App VAT: **key cache có `empCode`** (`${empCode}:${year}-${month}`) → **KHÔNG lẫn dữ liệu giữa NV** (self-scope giữ); **chỉ cache projection đã validate, KHÔNG cache raw/token**; TTL ngắn có trần (ok 60s / lỗi 15s) + inflight dedup + bounded size; test injection bỏ cache (cô lập). Hash dữ liệu trước/sau **trùng tuyệt đối** → số không đổi.
+- **Kết quả:** chế độ ALL **không còn fan-out App VAT 21 lượt** (điểm/xu lazy per-NV); single-NV **2,43s fresh / 279ms cache hit**. Đúng mục tiêu P0-B.
+- **‼ CÒN LẠI — bảng ALL vẫn ~12,7–13,4s:** không phải App VAT nữa, mà là **tính bảng chi phí 21 NV** (catalog + ghép chi phí per-NV) **chưa cache**. **Bước tiếp (P0):** memo-cache `employeeCostAllPayload` theo (kỳ + filters + scope admin), **invalidate theo chữ ký slot** (đổi upload → xóa cache) → lần 2 tức thì. Kèm P0 chung (memoGet cho `/analysis /alerts /revenue /cst /filters`) cho Tổng quan. Nguyên tắc như P0-B: chỉ tốc độ, không đổi số/quyền, key có scope.
+
 ### 2026-07-24 — Report Bot — P0-B hiệu năng Chi phí của tôi (review, chưa deploy)
 - Chế độ CEO/admin `Tất cả nhân viên` chỉ tải bảng chi phí, **không gọi** `/employee-cost/diem-xu?emp=ALL` nên loại bỏ fan-out App VAT khoảng 21 NV lúc mở trang. Điểm/xu/phạt được tải bất đồng bộ khi chọn đúng một NV; request bảng có ưu tiên render trước.
 - Cache App VAT theo `(empCode, period)` TTL 60 giây, có in-flight coalescing; cache chỉ giữ projection đã validate, không giữ token/raw response. F5/đổi lại NV-kỳ không gọi lặp upstream.
