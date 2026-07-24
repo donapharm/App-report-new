@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-24T16:26:30.254Z",
+  "scope": "P0 read-route memoization and Employee Cost ALL shared background-warmed cache",
+  "baseCommit": "45712c3f36f08da8233aa3d10bb6748a6a34cc47",
+  "implementationCommits": [
+    "beb78a2b52c367a1d4fed493481a57a644802f68",
+    "0c8488c"
+  ],
+  "branch": "review/report-perf-p0-cache-20260724",
+  "environment": {
+    "data": "active App Report production JSON/upload snapshots",
+    "env": "repository .env loaded; isolated temporary auth storage",
+    "runtime": "route handlers invoked in fresh Node processes; no production write/deploy/restart"
+  },
+  "employeeCostAll": {
+    "baseline": {
+      "firstMs": 62329.374,
+      "secondMs": 11292.74,
+      "payloadHash": "248b069201370b0334fce5e9c3714993d22c36442a35ca922180527c0d6cd66a",
+      "numericHash": "56176e52327149a542e0eae0aeeec645a89fe3ca287f15090a9d9ba398411bd5"
+    },
+    "final": {
+      "coldMs": 123674.21,
+      "sameAdminWarmMs": 25.155,
+      "otherAdminWarmMs": 15.02,
+      "page2FromSharedBaseMs": 75.197,
+      "filteredFromSharedBaseMs": 1388.178,
+      "payloadHash": "248b069201370b0334fce5e9c3714993d22c36442a35ca922180527c0d6cd66a",
+      "numericHash": "56176e52327149a542e0eae0aeeec645a89fe3ca287f15090a9d9ba398411bd5"
+    },
+    "parity": {
+      "baselinePayloadExact": true,
+      "baselineNumericExact": true,
+      "sameAdminPayloadExact": true,
+      "sameAdminNumericExact": true,
+      "otherAdminPayloadExact": true,
+      "otherAdminNumericExact": true
+    },
+    "totals": {
+      "totalRows": 1685,
+      "revenueTotal": 26172927415,
+      "revenueBeforeVatTotal": 24926597538.095245
+    },
+    "cacheControlPrivateNoStore": true,
+    "warmSpeedupVsFinalCold": 4916.5,
+    "behavior": [
+      "authorization checked before cache lookup",
+      "one ADMIN_ALL heavy base shared by all authorized admins",
+      "view cache separates period/filter/sort/page",
+      "slot, target, bonus-policy and catalog signatures invalidate base",
+      "rejected Promises are evicted",
+      "catalog snapshot requests coalesce",
+      "revenue materialize and upload commit/activate schedule detached best-effort warm",
+      "export keeps independent build/audit path"
+    ]
+  },
+  "otherP0Routes": {
+    "analysis_admin": {
+      "baselineMs": {
+        "first": 1735.949,
+        "second": 1155.47
+      },
+      "memoizedMs": {
+        "first": 1506.17,
+        "second": 6.618
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "5675c379480552a6086890c6cd6632fa489b7709c92af42ea7556c9bef41cbc4",
+        "numericHash": "1d40e8e7030ed8d755d5a5f46b099850d15b8f931ad46d28f495599078397a7b"
+      }
+    },
+    "analysis_dn001": {
+      "baselineMs": {
+        "first": 642.54,
+        "second": 676.856
+      },
+      "memoizedMs": {
+        "first": 636.97,
+        "second": 6.547
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "95a87826163d6c97f99161503e7d9cc4a414fbf60627ea73ecb36d87ac005687",
+        "numericHash": "622bfbde85bcd81f74598a17eeaa183f6fed3935be3cede769d042dfabb93454"
+      }
+    },
+    "alerts_admin": {
+      "baselineMs": {
+        "first": 640.252,
+        "second": 634.058
+      },
+      "memoizedMs": {
+        "first": 620.716,
+        "second": 6.61
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "1393839fe1dab3c12383f15cc9b1acd399c5969f45aca9e4764e3a8867d97ba6",
+        "numericHash": "41b5041c528f76b121ecead76e7059f33528f7294aae6e95eafa4ab3b77905c6"
+      }
+    },
+    "alerts_dn001": {
+      "baselineMs": {
+        "first": 503.419,
+        "second": 436.23
+      },
+      "memoizedMs": {
+        "first": 462.088,
+        "second": 6.533
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "d7b3675eb605862ae829c27acaaa1ea3a148689e0c2427692add65df28be81db",
+        "numericHash": "d6980c17e7599f6cd9373a63ee08fb02e8d68812326e1341fab4ef00d3b12bf6"
+      }
+    },
+    "revenue_admin": {
+      "baselineMs": {
+        "first": 279.906,
+        "second": 272.743
+      },
+      "memoizedMs": {
+        "first": 264.464,
+        "second": 7.607
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "e140a4eb64399a30055219c0f0ab5bbf41245bdbaf05c29fd30dbb45e4a3c3a3",
+        "numericHash": "e44e92d5b0be4293c5d7591f1a1110db2a8805f23dc02b741ef5379c1c63e694"
+      }
+    },
+    "revenue_dn001": {
+      "baselineMs": {
+        "first": 257.953,
+        "second": 218.594
+      },
+      "memoizedMs": {
+        "first": 262.615,
+        "second": 10.494
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "d8a12fa78864038d7955712ec082511febb6f52f26e6dd4a17b1430571811f9d",
+        "numericHash": "ccba0cd41b1fb384db643f472e25111c20a6e8cbb610f570225c6e91c8bd7d31"
+      }
+    },
+    "cst_admin": {
+      "baselineMs": {
+        "first": 701.636,
+        "second": 98.319
+      },
+      "memoizedMs": {
+        "first": 1177.59,
+        "second": 137.544
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "c54a0de159f8579e91fab5e35e552609837185b18725357ad4f369ef72ed75e8",
+        "numericHash": "3c8b066c31621a19a0e2f260ef9e44296d3044024cea5700e33a6ea067425706"
+      }
+    },
+    "cst_dn001": {
+      "baselineMs": {
+        "first": 183.005,
+        "second": 19.658
+      },
+      "memoizedMs": {
+        "first": 145.423,
+        "second": 6.376
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "8237914213f5c40577e3746c44752e5f18fd75e0770f44a8660ddc2ed6a2bd64",
+        "numericHash": "309d6fa558840bd3bdc133a02ac16619168eeeb574a628aef816f3f7d1466096"
+      }
+    },
+    "filters_admin": {
+      "baselineMs": {
+        "first": 627.897,
+        "second": 559.861
+      },
+      "memoizedMs": {
+        "first": 677.225,
+        "second": 555.231
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "37579d1364b637ffccde1adb183ea6e190e3a02edd32ffb61a1d4630cbca9568",
+        "numericHash": "d54444916422c9cb81212f84ecc5d36eff807c9526807f4b9be65ef188d5d560"
+      }
+    },
+    "filters_dn001": {
+      "baselineMs": {
+        "first": 38563.086,
+        "second": 344.4
+      },
+      "memoizedMs": {
+        "first": 37749.27,
+        "second": 8.212
+      },
+      "parity": {
+        "payloadExact": true,
+        "numericExact": true,
+        "payloadHash": "a5a994961280d5b0376e8fda67fbd2446824b15182d096929660a57e98400126",
+        "numericHash": "1eef98478fe94d05227fa540c99a71d2743c97b1c46f2a71f3b0e772aae71581"
+      }
+    }
+  },
+  "lazyBonusTarget": {
+    "implemented": false,
+    "reason": "Page-only calculation would change ALL grand totals, employee subtotals, sort/filter semantics and numeric hashes; retained full-roster calculation behind background warm."
+  },
+  "gates": {
+    "server": "345/345 PASS",
+    "web": "63/63 PASS (no web source changed after run)",
+    "focused": "5/5 PASS",
+    "isolatedWebBuild": "PASS to /tmp/app-report-p0-cache-review-build-final",
+    "diffCheck": "PASS"
+  },
+  "deployment": {
+    "performed": false,
+    "requires": "Claude review PASS and CEO approval"
+  }
+}
