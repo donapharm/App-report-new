@@ -1,4 +1,4 @@
-# App Report trusted-device SSO — contract v2
+# App Report trusted-device SSO — contract v3
 
 ## Security boundary
 
@@ -16,8 +16,12 @@ Report backend creates and stores:
 
 - `nonce`: cryptographically random base64url, 22–128 characters;
 - `reportDeviceId`: Report's own random device id, 16–200 characters;
-- `expectedEmployeeCode`: canonical Report account code;
+- `expectedEmployeeCode`: canonical Report account code, stored only in Report backend;
 - expiry ≤ 2 minutes and status `pending`.
+
+`/auth/trusted-device/start` always returns the same public pending shape for a
+syntactically valid phone, including unknown/ambiguous Report accounts. It never
+returns `expectedEmployeeCode`; those attempts fail closed during consume.
 
 ### 2. Browser requests the App Sale assertion
 
@@ -32,7 +36,6 @@ const response = await fetch(
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       phone,
-      expectedEmployeeCode,
       reportDeviceId,
       nonce,
     }),
@@ -85,7 +88,7 @@ Authorization: Bearer <dedicated Report backend token>
 
 Only `200 {"valid":true,...}` permits Report to create its own session. The consume endpoint authenticates the Report backend, then checks HMAC, TTL, issuer, audience, subject, Report device binding, nonce, and one-time `jti`. A second consume returns HTTP 409. The raw backend token stays only in Report's secret configuration; App Sale stores only its prefixed SHA-256 hash.
 
-Report must atomically mark its pending nonce used before issuing the session and must also reject a reused/expired pending nonce locally. Do not trust the browser's phone/account fields during consume; use values stored by Report backend.
+Report must atomically mark its pending nonce used before issuing the session and must also reject a reused/expired pending nonce locally. Do not trust the browser's phone/account fields during consume; use values stored by Report backend. App Sale may still accept `expectedEmployeeCode` on verify for backward compatibility, but contract v3 does not send it from the browser.
 
 ## Fail-closed matrix
 
@@ -98,7 +101,7 @@ Report must atomically mark its pending nonce used before issuing the session an
 | App Sale cookie missing or duplicated | `trusted:false` |
 | Device expired/revoked/inactive/fingerprint mismatch | `trusted:false` |
 | Phone ↔ App Sale user ↔ employee mismatch | `trusted:false` |
-| Expected employee differs | `trusted:false` |
+| Stored expected employee differs at consume | 403 / Report keeps OTP login |
 | Nonce reused at assertion issue | 409 |
 | Assertion tampered/expired/wrong binding | 403 |
 | Assertion consumed twice | 409 |

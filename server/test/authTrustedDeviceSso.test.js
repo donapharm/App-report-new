@@ -73,6 +73,7 @@ test('trusted success consumes server-to-server and creates a normal scoped sess
     // Exercise the real S2S contract with an isolated account store.
     const bridge = bridgeWith({ fetchImpl: global.fetch });
     const pending = bridge.start('0867409960');
+    assert.equal(Object.hasOwn(pending, 'expectedEmployeeCode'), false);
     const bridgedUser = await bridge.consume(pending.attemptId, ASSERTION);
     assert.equal(bridgedUser.emp_code, 'DN016');
     assert.equal(consumeRequest.url, 'https://sale.donapharm.asia/api/internal/trusted-device/consume');
@@ -173,15 +174,70 @@ test('account binding mismatch and missing configuration never authenticate', as
   assert.throws(() => missing.start('0867409960'), (error) => error?.code === 'TRUSTED_DEVICE_NOT_CONFIGURED');
 });
 
+test('start does not enumerate Report accounts or expose employee codes', async () => {
+  const upstreamBodies = [];
+  const fetchImpl = async (_url, options) => {
+    upstreamBodies.push(JSON.parse(options.body));
+    return jsonResponse(403, { error: 'invalid_assertion' });
+  };
+  const bridge = bridgeWith({ fetchImpl });
+  const known = bridge.start('0867409960', { ip: '10.0.0.1' });
+  const unknown = bridge.start('0900000000', { ip: '10.0.0.1' });
+  const duplicateStore = {
+    listUsers: () => [
+      ...users,
+      { emp_code: 'DN017', phone: '0867409960', name: 'Oanh', role: 'sale' },
+    ],
+    findUserByCode: userStore.findUserByCode,
+  };
+  const duplicateBridge = bridgeWith({ fetchImpl, store: duplicateStore });
+  const duplicate = duplicateBridge.start('0867409960', { ip: '10.0.0.2' });
+  for (const pending of [known, unknown, duplicate]) {
+    assert.deepEqual(Object.keys(pending).sort(), ['attemptId', 'expiresAt', 'nonce', 'reportDeviceId']);
+    assert.equal(Object.hasOwn(pending, 'expectedEmployeeCode'), false);
+  }
+  await rejectsCode(bridge.consume(unknown.attemptId, ASSERTION, { ip: '10.0.0.1' }), 'TRUSTED_DEVICE_CONSUME_REJECTED');
+  await rejectsCode(duplicateBridge.consume(duplicate.attemptId, ASSERTION, { ip: '10.0.0.2' }), 'TRUSTED_DEVICE_CONSUME_REJECTED');
+  assert.equal(upstreamBodies.length, 2, 'unknown and ambiguous accounts must use the same S2S rejection path');
+  for (const body of upstreamBodies) {
+    assert.match(body.expectedEmployeeCode, /^NO_REPORT_[A-F0-9]{16}$/);
+    assert.notEqual(body.expectedEmployeeCode, 'DN016');
+  }
+});
+
+test('start and consume enforce bounded per-IP rate limits', async () => {
+  const env = {
+    TRUSTED_DEVICE_REPORT_S2S_TOKEN: 't'.repeat(48),
+    TRUSTED_DEVICE_REPORT_START_RATE_LIMIT_PER_MINUTE: '2',
+    TRUSTED_DEVICE_REPORT_CONSUME_RATE_LIMIT_PER_MINUTE: '2',
+  };
+  const bridge = bridgeWith({ env, fetchImpl: async () => jsonResponse(500, {}) });
+  bridge.start('0867409960', { ip: '10.0.0.2' });
+  bridge.start('0900000000', { ip: '10.0.0.2' });
+  assert.throws(
+    () => bridge.start('0910000000', { ip: '10.0.0.2' }),
+    (error) => error?.status === 429 && error?.code === 'TRUSTED_DEVICE_RATE_LIMITED',
+  );
+
+  const pending = bridge.start('0867409960', { ip: '10.0.0.3' });
+  await rejectsCode(bridge.consume(pending.attemptId, 'bad', { ip: '10.0.0.3' }), 'TRUSTED_DEVICE_ASSERTION_INVALID');
+  await rejectsCode(bridge.consume(pending.attemptId, 'bad', { ip: '10.0.0.3' }), 'TRUSTED_DEVICE_ASSERTION_INVALID');
+  await rejectsCode(bridge.consume(pending.attemptId, 'bad', { ip: '10.0.0.3' }), 'TRUSTED_DEVICE_RATE_LIMITED');
+});
+
 test('browser contract uses host-only App Sale cookie implicitly and never exposes server token', () => {
   const apiSource = fs.readFileSync(path.join(__dirname, '../../web/src/api.js'), 'utf8');
   const loginSource = fs.readFileSync(path.join(__dirname, '../../web/src/pages/Login.jsx'), 'utf8');
   assert.match(apiSource, /https:\/\/sale\.donapharm\.asia\/api\/internal\/trusted-device\/verify/);
   assert.match(apiSource, /credentials:\s*'include'/);
-  assert.match(apiSource, /expectedEmployeeCode:\s*pending\.expectedEmployeeCode/);
+  assert.doesNotMatch(apiSource, /expectedEmployeeCode:\s*pending\.expectedEmployeeCode/);
   assert.match(apiSource, /reportDeviceId:\s*pending\.reportDeviceId/);
   assert.match(apiSource, /nonce:\s*pending\.nonce/);
   assert.doesNotMatch(apiSource, /appsale_device_id|TRUSTED_DEVICE_REPORT_S2S_TOKEN|Domain=/);
   assert.match(loginSource, /catch \{ \/\* fail closed: keep the normal OTP flow \*\//);
+  const routesSource = fs.readFileSync(path.join(__dirname, '../src/routes.js'), 'utf8');
+  assert.match(routesSource, /TRUSTED_DEVICE_RATE_LIMITED/);
+  assert.match(routesSource, /TRUSTED_DEVICE_REJECTED/);
+  assert.doesNotMatch(routesSource.match(/router\.post\('\/auth\/trusted-device\/start'[\s\S]*?router\.post\('\/auth\/sso'/)?.[0] || '', /error:\s*e\.message/);
   assert.match(loginSource, /await api\.otpRequest\(p\)/);
 });

@@ -464,14 +464,26 @@ router.post('/auth/device-login', (_req, res) => res.status(401).json({
 }));
 router.post('/auth/trusted-device/start', (req, res) => {
   try {
-    res.json(auth.startTrustedDeviceSso((req.body.phone || '').trim()));
-  } catch (e) { res.status(e.status || 400).json({ error: e.message, ...(e.code ? { code: e.code } : {}) }); }
+    res.json(auth.startTrustedDeviceSso((req.body.phone || '').trim(), loginCtx(req)));
+  } catch (e) {
+    const rateLimited = e?.status === 429;
+    res.status(rateLimited ? 429 : 401).json({
+      error: rateLimited ? 'Vui lòng thử lại sau.' : 'Không thể xác nhận thiết bị tin cậy; vui lòng dùng OTP.',
+      code: rateLimited ? 'TRUSTED_DEVICE_RATE_LIMITED' : 'TRUSTED_DEVICE_REJECTED',
+    });
+  }
 });
 router.post('/auth/trusted-device/consume', async (req, res) => {
   try {
     const result = await auth.consumeTrustedDeviceSso(req.body.attemptId, req.body.assertion, loginCtx(req));
     res.json(result);
-  } catch (e) { res.status(e.status || 400).json({ error: e.message, ...(e.code ? { code: e.code } : {}) }); }
+  } catch (e) {
+    const rateLimited = e?.status === 429;
+    res.status(rateLimited ? 429 : 401).json({
+      error: rateLimited ? 'Vui lòng thử lại sau.' : 'Không thể xác nhận thiết bị tin cậy; vui lòng dùng OTP.',
+      code: rateLimited ? 'TRUSTED_DEVICE_RATE_LIMITED' : 'TRUSTED_DEVICE_REJECTED',
+    });
+  }
 });
 router.post('/auth/sso', async (req, res) => {
   try {

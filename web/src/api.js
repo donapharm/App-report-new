@@ -105,7 +105,6 @@ export async function trustedDeviceLogin(phone) {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         phone,
-        expectedEmployeeCode: pending.expectedEmployeeCode,
         reportDeviceId: pending.reportDeviceId,
         nonce: pending.nonce,
       }),
