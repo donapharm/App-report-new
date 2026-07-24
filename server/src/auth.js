@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const store = require('./store');
 const persist = require('./persist');
 const { deviceIdHash, deviceFingerprint } = require('./trustedDevice');
+const trustedDeviceSso = require('./trustedDeviceSso');
 
 const SESSION_IDLE_DAYS = Math.max(1, Number(process.env.SESSION_IDLE_DAYS || 7) || 7);
 const SESSION_IDLE_MS = SESSION_IDLE_DAYS * 24 * 60 * 60 * 1000; // rolling idle TTL
@@ -448,6 +449,18 @@ function loginByTrustedDevice(phone, opts = {}) {
   return { token, user: pub(user) };
 }
 
+function startTrustedDeviceSso(phone) {
+  return trustedDeviceSso.start(phone);
+}
+
+async function consumeTrustedDeviceSso(attemptId, assertion, opts = {}) {
+  const user = await trustedDeviceSso.consume(attemptId, assertion);
+  return {
+    token: issueToken(user, { ...opts, phone: normPhone(user.phone), method: 'trusted-device-sso' }),
+    user: pub(user),
+  };
+}
+
 async function verifySso(ssoToken, opts = {}) {
   if (!SSO_URL) throw new Error('Chưa cấu hình SSO_VERIFY_URL');
   if (!ssoToken) return null;
@@ -608,6 +621,7 @@ function requireAdmin(req, res, next) {
 module.exports = {
   mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireAdmin, isAdmin, scopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
+  startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),
   // Mapping + thiết bị + hủy phiên
