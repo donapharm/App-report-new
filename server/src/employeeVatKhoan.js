@@ -4,7 +4,7 @@ const persist = require('./persist');
 
 const CONTRACT_PATH = '/api/khoan/dashboard';
 const SOURCE = 'App VAT';
-const DEFAULT_NOTE = 'chưa lấy được điểm/xu kỳ này';
+const DEFAULT_NOTE = 'chưa lấy được xu kỳ này';
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_BACKOFF_MS = Object.freeze([250, 750]);
 const AUDIT_FILE = 'employee_vat_khoan_audit';
@@ -78,20 +78,13 @@ function projectDashboard(raw, expectedEmp, expectedPeriod) {
   const selectedMonth = finite(raw?.selected?.month);
   const selectedYear = finite(raw?.selected?.year);
   const selectedQuarter = finite(raw?.selected?.quarter);
-  const penaltyRule = safeText(raw?.rules?.penalty, 240);
+  const ruleVersion = safeText(raw?.rule_version, 120);
+  const xuRuleVersion = safeText(raw?.xu_rule_version || raw?.rules?.xu || ruleVersion, 120);
   const fields = {
-    diem_thang: finite(raw?.diem?.thang?.total),
-    diem_quy: finite(raw?.diem?.quy?.total),
     xu_thang: finite(raw?.xu?.thang?.xu),
     xu_quy: finite(raw?.xu?.quy?.xu),
     xu_quy_tong: finite(raw?.xu?.quy?.xu_tong),
     carry: finite(raw?.xu?.du_quy_truoc),
-    pct_thang: finite(raw?.pct?.thang),
-    pct_quy: finite(raw?.pct?.quy),
-    thieu_du: finite(raw?.thieu_du),
-    thieu_xu: finite(raw?.thieu_xu),
-    du_xu: finite(raw?.du_xu),
-    phat_du_kien: finite(raw?.phat_du_kien),
   };
   const valid = raw?.ok === true
     && normEmp(raw?.emp_code) === empCode
@@ -99,13 +92,9 @@ function projectDashboard(raw, expectedEmp, expectedPeriod) {
     && selectedMonth === expectedPeriod.month
     && selectedYear === expectedPeriod.year
     && Number.isInteger(selectedQuarter) && selectedQuarter >= 1 && selectedQuarter <= 4
-    && safeText(raw?.rule_version, 120)
-    && penaltyRule
+    && !!ruleVersion
     && Object.values(fields).every((value) => value != null)
-    && fields.diem_thang >= 0 && fields.diem_quy >= 0
-    && fields.xu_thang >= 0 && fields.xu_quy >= 0 && fields.xu_quy_tong >= 0 && fields.carry >= 0
-    && fields.pct_thang >= 0 && fields.pct_quy >= 0
-    && fields.thieu_xu >= 0 && fields.du_xu >= 0 && fields.phat_du_kien >= 0;
+    && fields.xu_thang >= 0 && fields.xu_quy >= 0 && fields.xu_quy_tong >= 0 && fields.carry >= 0;
   if (!valid) return null;
   return {
     available: true,
@@ -117,8 +106,8 @@ function projectDashboard(raw, expectedEmp, expectedPeriod) {
     selected: { month: selectedMonth, year: selectedYear, quarter: selectedQuarter },
     quarter_label: safeText(raw?.quy?.label, 120) || `Q${selectedQuarter}/${selectedYear}`,
     ...fields,
-    rule_version: safeText(raw.rule_version, 120),
-    penalty_rule: penaltyRule,
+    rule_version: ruleVersion,
+    xu_rule_version: xuRuleVersion,
     upstream_warning: safeText(raw?.warning?.message, 500),
   };
 }
@@ -254,8 +243,8 @@ function aggregatePayloads(payloads = [], roster = [], period = {}) {
     return { ...emptyPayload('ALL', period), aggregate: true, employeeSubtotals: [] };
   }
   const versions = [...new Set(rows.map((payload) => payload.rule_version))];
-  const penaltyRules = [...new Set(rows.map((payload) => payload.penalty_rule))];
-  if (versions.length !== 1 || penaltyRules.length !== 1) return { ...emptyPayload('ALL', period), aggregate: true, employeeSubtotals: [] };
+  const xuVersions = [...new Set(rows.map((payload) => payload.xu_rule_version || payload.rule_version))];
+  if (versions.length !== 1 || xuVersions.length !== 1) return { ...emptyPayload('ALL', period), aggregate: true, employeeSubtotals: [] };
   const names = new Map(roster.map((employee) => [normEmp(employee.emp_code), String(employee.name || employee.emp_code || '')]));
   const sum = (key) => rows.reduce((total, payload) => total + Number(payload[key] || 0), 0);
   return {
@@ -267,32 +256,19 @@ function aggregatePayloads(payloads = [], roster = [], period = {}) {
     emp_name: 'Tất cả nhân viên',
     selected: { ...rows[0].selected },
     quarter_label: rows[0].quarter_label,
-    diem_thang: sum('diem_thang'),
-    diem_quy: sum('diem_quy'),
     xu_thang: sum('xu_thang'),
     xu_quy: sum('xu_quy'),
     xu_quy_tong: sum('xu_quy_tong'),
     carry: sum('carry'),
-    pct_thang: null,
-    pct_quy: null,
-    thieu_du: sum('thieu_du'),
-    thieu_xu: sum('thieu_xu'),
-    du_xu: sum('du_xu'),
-    phat_du_kien: sum('phat_du_kien'),
     rule_version: versions[0],
-    penalty_rule: penaltyRules[0],
+    xu_rule_version: xuVersions[0],
     upstream_warning: '',
-    warning_count: rows.filter((payload) => payload.pct_quy < 90 && payload.diem_quy > 0).length,
     employeeSubtotals: rows.map((payload) => ({
       emp_code: payload.emp_code,
       emp_name: names.get(payload.emp_code) || payload.emp_name || payload.emp_code,
-      diem_thang: payload.diem_thang,
-      diem_quy: payload.diem_quy,
       xu_thang: payload.xu_thang,
       xu_quy_tong: payload.xu_quy_tong,
       carry: payload.carry,
-      pct_quy: payload.pct_quy,
-      phat_du_kien: payload.phat_du_kien,
     })),
   };
 }

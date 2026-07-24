@@ -26,6 +26,8 @@ const employeeCost = require('./employeeCost');
 const employeeBonus = require('./employeeBonus');
 const employeeBonusPolicy = require('./employeeBonusPolicy');
 const employeeVatKhoan = require('./employeeVatKhoan');
+const employeePointLocal = require('./employeePointLocal');
+const employeePointNotifications = require('./employeePointNotifications');
 const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostDataQuality = require('./employeeCostDataQuality');
 const employeeCostExport = require('./employeeCostExport');
@@ -713,8 +715,125 @@ async function employeeVatKhoanPayload(req, {
   }, { auditEvent }));
 }
 
-// Điểm/xu/phạt chỉ là projection read-only từ App VAT SSOT. Sale luôn bị ép
-// về mã phiên đăng nhập; CEO/admin có thể chọn một NV hoặc tổng hợp từng NV.
+function quarterPenaltyDisplay(pointQuarter, xuQuarterTotal) {
+  const missing = Math.max(0, Number(pointQuarter || 0) - Number(xuQuarterTotal || 0));
+  return Math.floor(missing / 2) * 600000;
+}
+
+function quarterPct(pointQuarter, xuQuarterTotal) {
+  const point = Number(pointQuarter || 0);
+  const xu = Number(xuQuarterTotal || 0);
+  if (!(point > 0)) return null;
+  return +((xu / point) * 100).toFixed(1);
+}
+
+function combinePointXu({ pointPayload, xuPayload, empCode, period }) {
+  const xuAvailable = xuPayload?.available === true;
+  const pointMonth = Number(pointPayload?.point_month || 0);
+  const pointQuarter = Number(pointPayload?.point_quarter || 0);
+  const xuMonth = xuAvailable ? Number(xuPayload.xu_thang || 0) : null;
+  const xuQuarter = xuAvailable ? Number(xuPayload.xu_quy || 0) : null;
+  const xuQuarterTotal = xuAvailable ? Number(xuPayload.xu_quy_tong || 0) : null;
+  const carry = xuAvailable ? Number(xuPayload.carry || 0) : null;
+  const pctMonth = xuAvailable && pointMonth > 0 ? +((xuMonth / pointMonth) * 100).toFixed(1) : null;
+  const pctQuarter = xuAvailable ? quarterPct(pointQuarter, xuQuarterTotal) : null;
+  const missingQuarter = xuAvailable ? Math.max(0, pointQuarter - xuQuarterTotal) : null;
+  const excessQuarter = xuAvailable ? Math.max(0, xuQuarterTotal - pointQuarter) : null;
+  const parity = pointPayload?.parity || employeePointLocal.parityStatus({ empCode, period, pointRuleVersion: pointPayload?.point_rule_version || '' });
+  const penaltyDisplay = xuAvailable ? quarterPenaltyDisplay(pointQuarter, xuQuarterTotal) : null;
+  return {
+    available: true,
+    aggregate: false,
+    source: pointPayload.source,
+    source_label: `${pointPayload.source} (điểm) + ${employeeVatKhoan.SOURCE} (xu)`,
+    note: xuAvailable ? '' : 'chưa lấy được xu kỳ này',
+    emp_code: empCode,
+    selected: {
+      month: Number(period.month || 0) || null,
+      year: Number(period.year || 0) || null,
+      quarter: xuPayload?.selected?.quarter || null,
+    },
+    quarter_label: pointPayload.quarter_label || xuPayload?.quarter_label || '',
+    point_month: pointMonth,
+    point_quarter: pointQuarter,
+    xu_month: xuMonth,
+    xu_quarter: xuQuarter,
+    xu_quarter_total: xuQuarterTotal,
+    carry,
+    pct_month: pctMonth,
+    pct_quarter: pctQuarter,
+    missing_quarter: missingQuarter,
+    excess_quarter: excessQuarter,
+    penalty_display: penaltyDisplay,
+    penalty_applied: parity.available && xuAvailable ? penaltyDisplay : null,
+    point_rule_version: pointPayload.point_rule_version,
+    point_rule_effective_from: pointPayload.point_rule_effective_from,
+    xu_rule_version: xuPayload?.xu_rule_version || xuPayload?.rule_version || '',
+    dq_warning_count: Number(pointPayload?.dq_warning_count || 0),
+    parity,
+    quarter_status: parity.status,
+  };
+}
+
+function aggregateCombinedPayloads(rows = [], roster = [], period) {
+  if (!rows.length || rows.some((item) => !item || item.available !== true)) {
+    return { available: false, aggregate: true, note: 'chưa lấy được xu kỳ này', emp_code: 'ALL', employeeSubtotals: [] };
+  }
+  const pointVersions = [...new Set(rows.map((item) => item.point_rule_version))];
+  if (pointVersions.length !== 1) return { available: false, aggregate: true, note: 'đang đối soát', emp_code: 'ALL', employeeSubtotals: [] };
+  const names = new Map(roster.map((employee) => [String(employee.emp_code || '').trim().toUpperCase(), String(employee.name || employee.emp_code || '')]));
+  const sumOrNull = (key) => rows.some((item) => item[key] == null) ? null : rows.reduce((total, item) => total + Number(item[key] || 0), 0);
+  return {
+    available: true,
+    aggregate: true,
+    source: 'App Report',
+    source_label: `App Report (điểm) + ${employeeVatKhoan.SOURCE} (xu)`,
+    note: rows.some((item) => item.note) ? 'chưa lấy được xu kỳ này' : '',
+    emp_code: 'ALL',
+    emp_name: 'Tất cả nhân viên',
+    selected: { month: period.month, year: period.year, quarter: rows[0].selected?.quarter || null },
+    quarter_label: rows[0].quarter_label,
+    point_month: sumOrNull('point_month'),
+    point_quarter: sumOrNull('point_quarter'),
+    xu_month: sumOrNull('xu_month'),
+    xu_quarter: sumOrNull('xu_quarter'),
+    xu_quarter_total: sumOrNull('xu_quarter_total'),
+    carry: sumOrNull('carry'),
+    pct_month: null,
+    pct_quarter: null,
+    missing_quarter: sumOrNull('missing_quarter'),
+    excess_quarter: sumOrNull('excess_quarter'),
+    penalty_display: sumOrNull('penalty_display'),
+    penalty_applied: rows.every((item) => item.parity?.available) ? sumOrNull('penalty_display') : null,
+    point_rule_version: rows[0].point_rule_version,
+    point_rule_effective_from: rows[0].point_rule_effective_from,
+    xu_rule_version: rows[0].xu_rule_version,
+    dq_warning_count: rows.reduce((total, item) => total + Number(item.dq_warning_count || 0), 0),
+    parity: {
+      available: rows.every((item) => item.parity?.available),
+      status: rows.every((item) => item.parity?.available) ? rows[0].quarter_status : 'đang đối soát',
+      note: rows.every((item) => item.parity?.available) ? '' : 'đang đối soát',
+    },
+    quarter_status: rows.every((item) => item.parity?.available) ? rows[0].quarter_status : 'đang đối soát',
+    employeeSubtotals: rows.map((item) => ({
+      emp_code: item.emp_code,
+      emp_name: names.get(item.emp_code) || item.emp_code,
+      point_quarter: item.point_quarter,
+      xu_quarter_total: item.xu_quarter_total,
+      penalty_display: item.penalty_display,
+      quarter_status: item.quarter_status,
+    })),
+  };
+}
+
+async function employeePointXuPayload(req, { requestedEmp = req.query.emp, auditEvent = 'view', roster = employeeCostRosterRows(), period = employeeVatKhoan.parsePeriod(req.query) } = {}) {
+  const scope = auth.scopeOf(req.session);
+  const empCode = employeeCost.resolveScopedEmployee({ session: req.session, scope, requestedEmp });
+  const pointPayload = employeePointLocal.buildLocalPointPayload({ empCode, period: period.period });
+  const xuPayload = await employeeVatKhoanPayload(req, { requestedEmp: empCode, auditEvent, roster, period });
+  return combinePointXu({ pointPayload, xuPayload, empCode, period });
+}
+
 router.get('/employee-cost/diem-xu', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const admin = auth.isAdmin(req.session.role);
   const requested = String(req.query.emp || '').trim().toUpperCase();
@@ -722,21 +841,57 @@ router.get('/employee-cost/diem-xu', auth.requireAuth, asyncJsonRoute(async (req
   const period = employeeVatKhoan.parsePeriod(req.query);
   let payload;
   if (admin && requested === 'ALL') {
-    const reports = await mapWithConcurrency(roster, 3, (employee) => employeeVatKhoanPayload(req, {
+    const reports = await mapWithConcurrency(roster, 3, (employee) => employeePointXuPayload(req, {
       requestedEmp: employee.emp_code,
       auditEvent: 'view_all',
       roster,
       period,
     }));
-    payload = employeeVatKhoan.aggregatePayloads(reports, roster, period);
+    payload = aggregateCombinedPayloads(reports, roster, period);
   } else {
     if (admin && requested && !roster.some((employee) => employee.emp_code === requested)) {
       return res.status(400).json({ error: 'Nhân viên không thuộc roster chi phí được duyệt.', code: 'EMPLOYEE_VAT_KHOAN_EMP_INVALID' });
     }
-    payload = await employeeVatKhoanPayload(req, { requestedEmp: requested, roster, period });
+    payload = await employeePointXuPayload(req, { requestedEmp: requested, roster, period });
   }
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
+}));
+
+router.get('/admin/employee-point/notifications/preview', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const period = employeeVatKhoan.parsePeriod(req.query);
+  const requested = String(req.query.emp || '').trim().toUpperCase();
+  const roster = employeeCostRosterRows();
+  if (!requested || !roster.some((employee) => employee.emp_code === requested)) {
+    return res.status(400).json({ error: 'Nhân viên không thuộc roster chi phí được duyệt.', code: 'EMPLOYEE_POINT_NOTIFICATION_EMP_INVALID' });
+  }
+  const combined = await employeePointXuPayload(req, { requestedEmp: requested, roster, period, auditEvent: 'notification_preview' });
+  const employee = roster.find((item) => item.emp_code === requested);
+  const monthValue = String(period.period || '');
+  const monthNumber = Number(monthValue.slice(5, 7) || 0);
+  const quarterEndMonth = Math.floor((monthNumber - 1) / 3) * 3 + 3;
+  const monthsToQuarterEnd = quarterEndMonth > 0 ? Math.max(0, quarterEndMonth - monthNumber) : 0;
+  const preview = employeePointNotifications.createPreview({
+    actor: req.session.emp_code,
+    role: req.session.role,
+    empCode: requested,
+    empName: employee?.name || requested,
+    period: period.period,
+    quarterLabel: combined.quarter_label,
+    pointMonth: combined.point_month,
+    pointQuarter: combined.point_quarter,
+    xuMonth: combined.xu_month,
+    xuQuarterTotal: combined.xu_quarter_total,
+    missingQuarter: combined.missing_quarter,
+    penaltyDisplay: combined.penalty_display,
+    pointRuleVersion: combined.point_rule_version,
+    xuRuleVersion: combined.xu_rule_version,
+    quarterStatus: combined.quarter_status,
+    monthsToQuarterEnd,
+    strict: true,
+  });
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ send_enabled: false, preview_only: true, preview, combined });
 }));
 
 async function mapWithConcurrency(items, limit, worker) {
