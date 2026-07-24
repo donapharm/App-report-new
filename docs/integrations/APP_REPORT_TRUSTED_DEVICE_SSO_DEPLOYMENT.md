@@ -8,6 +8,8 @@ Configure through the approved backend secret channel only:
 
 - `TRUSTED_DEVICE_REPORT_S2S_TOKEN`: raw token dedicated to App Report, at least 32 characters;
 - `TRUSTED_DEVICE_REPORT_TIMEOUT_MS`: optional, default `5000`, clamped to 500–10000 ms.
+- `TRUSTED_DEVICE_REPORT_START_RATE_LIMIT_PER_MINUTE`: optional, default `10`;
+- `TRUSTED_DEVICE_REPORT_CONSUME_RATE_LIMIT_PER_MINUTE`: optional, default `10`.
 
 The raw token must not be placed in a `VITE_*` variable, frontend bundle, source control, chat, screenshots, or logs. App Report does not own or receive App Sale's assertion-signing key.
 
@@ -17,8 +19,9 @@ The raw token must not be placed in a `VITE_*` variable, frontend bundle, source
 2. Configure the exact allowed origin `https://report.donapharm.asia` in App Sale.
 3. Provision App Sale's assertion key and prefixed S2S token hash through its approved secret channel.
 4. Provision the matching raw App Report S2S token through a separate approved secret channel.
-5. Run App Sale verify/consume contract tests with mock credentials, then request separate approval for production config and deploy.
-6. After approved deployment, verify that untrusted, malformed, timeout, 4xx/5xx and replay cases still show the existing OTP flow.
+5. Deploy the paired App Sale contract v3 change that accepts verify without browser-visible `expectedEmployeeCode`.
+6. Run App Sale verify/consume contract tests with mock credentials, then request separate approval for production config and deploy.
+7. After approved deployment, verify that untrusted, malformed, timeout, 4xx/5xx and replay cases still show the existing OTP flow.
 
 ## Live acceptance gate
 

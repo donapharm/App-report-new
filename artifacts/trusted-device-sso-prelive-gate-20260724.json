@@ -1,0 +1,65 @@
+{
+  "task": "TRUSTED_DEVICE_SSO_SALE_REPORT_20260724",
+  "scope": "pre-live review only",
+  "reportBranch": "review/report-trusted-device-sso-20260724",
+  "rebasedHeadBeforeHardening": "dd0b859",
+  "originMainAtRebase": "4c50196",
+  "p0bCommitRetained": "f97f766",
+  "hardening": {
+    "startOmitsExpectedEmployeeCode": true,
+    "uniformPendingForKnownUnknownOrAmbiguousAccount": true,
+    "uniformConsumeS2sRejectPathWithInternalDecoy": true,
+    "genericPublicErrors": true,
+    "startRateLimitPerIpAndTarget": true,
+    "consumeRateLimitPerIpAndTarget": true,
+    "failClosedToOtp": true
+  },
+  "pairedAppSaleContractV3": {
+    "patch": "artifacts/trusted-device-sso-appsale-contract-v3.patch",
+    "sha256": "32c0d3e651f424498a2d8378a3634b7abc7db06eab0fed5fc03924efa7e4b2a4",
+    "verifyAcceptsBrowserRequestWithoutEmployeeCode": true,
+    "consumeStillRequiresBackendStoredEmployeeCode": true
+  },
+  "appSaleReplay": {
+    "migration0103LiveTablePresent": true,
+    "livePrimaryKeyPresent": true,
+    "liveExpiryIndexPresent": true,
+    "claimImplementation": "single INSERT ON CONFLICT ... RETURNING atomic claim",
+    "isolatedPostgresConcurrentClaimTest": "PASS",
+    "restartPersistenceTest": "PASS",
+    "expiredClaimReplacementTest": "PASS"
+  },
+  "tests": {
+    "reportFocusedTrustedDevice": "12/12 PASS",
+    "reportServerFull": "340/340 PASS",
+    "reportWebFull": "58/58 PASS",
+    "reportViteIsolatedBuild": "PASS (/tmp/app-report-trusted-sso-build)",
+    "appSaleTrustedAssertionContract": "PASS",
+    "appSaleReplayPostgresIsolated": "PASS",
+    "appSaleApiTypecheck": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "liveConfigReadOnly": {
+    "appSaleAssertionKeyValid": true,
+    "appSaleS2sTokenHashValid": true,
+    "appSaleReportOriginExact": true,
+    "appSaleRateLimitConfigured": true,
+    "appReportS2sTokenValid": false,
+    "appReportStartRateExplicitlyConfigured": false,
+    "appReportConsumeRateExplicitlyConfigured": false,
+    "s2sTokenMatchesAppSaleHash": false
+  },
+  "liveAcceptance": {
+    "trustedDeviceSkipsOtp": "BLOCKED_NOT_RUN",
+    "replayFallsBackToOtp": "BLOCKED_NOT_RUN",
+    "expiredAssertionFallsBackToOtp": "BLOCKED_NOT_RUN"
+  },
+  "actionsNotPerformed": [
+    "no push",
+    "no merge",
+    "no production config write",
+    "no production deploy",
+    "no production restart",
+    "no live secret output"
+  ]
+}

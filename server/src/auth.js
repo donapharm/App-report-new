@@ -449,12 +449,12 @@ function loginByTrustedDevice(phone, opts = {}) {
   return { token, user: pub(user) };
 }
 
-function startTrustedDeviceSso(phone) {
-  return trustedDeviceSso.start(phone);
+function startTrustedDeviceSso(phone, opts = {}) {
+  return trustedDeviceSso.start(phone, opts);
 }
 
 async function consumeTrustedDeviceSso(attemptId, assertion, opts = {}) {
-  const user = await trustedDeviceSso.consume(attemptId, assertion);
+  const user = await trustedDeviceSso.consume(attemptId, assertion, opts);
   return {
     token: issueToken(user, { ...opts, phone: normPhone(user.phone), method: 'trusted-device-sso' }),
     user: pub(user),
