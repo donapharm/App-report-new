@@ -9,6 +9,11 @@
 - **VERDICT: PASS · DEPLOY_DECISION: READY_FOR_DEPLOY_APPROVAL.** Claude review read-only toàn bộ directive, backend/FE, self-scope hai lớp, fail-closed, audit, token backend-only, UI display-only và artifact production parity; xác nhận không còn blocker kỹ thuật.
 - Bằng chứng production: App VAT `473de59`, health OK; T06/2026 `DN001/DN009/DN016/DN024` khớp tuyệt đối, sai số 0; DN009 phạt `13.800.000đ`; log chỉ sid băm, không full token/prefix. `.env` production đã có `VAT_BASE`/`VAT_SERVICE_TOKEN` backend-only; focused tests `13/13 + 5/5`, build PASS. Review lưu tại `artifacts/claude-review-employee-vat-khoan-162.md`. **Chưa deploy/restart App Report; chờ CEO duyệt deploy riêng.**
 
+### 2026-07-23 — Claude Code (giao bot) — Thưởng v2: 2 phần (cơ bản + nhóm ưu tiên) + config linh hoạt
+- CEO nâng cấp thưởng. Directive `DIRECTIVE_EMP_COST_BONUS_V2.md`: **Phần 1** cơ bản (`<90→0·90–100→0.10·100–110→0.15·110–130→0.18·≥130→0.25` × DT trước VAT); **Phần 2** nhóm ưu tiên (khi TỔNG đạt ≥101%): `H.A*→1.0·H.A→0.8·H.B→0.5·H.C→0.1·H.D→0.1` × DT nhóm. Tổng = P1+P2.
+- **Linh hoạt:** config theo **giai đoạn (versioned)** + **đè tầng** (mặc định→nhóm hàng→tuyến→đơn vị→NV) + **menu chỉnh trong Target** + **preview** trước khi lưu + audit. Nhóm QLNB→ưu tiên: đọc catalog nếu có, không thì config CEO khai. Vẫn "dự kiến", không payroll, self-scope, fail-closed. Còn hỏi CEO: nguồn phân loại nhóm + "1% = 1% doanh thu nhóm". Chưa deploy.
+- **Điểm/xu/phạt (`0c1da00`) deploy độc lập ngay** (#165, parity PASS) — không chờ Thưởng v2.
+
 ### 2026-07-23 — Claude Code (duyệt deploy) — LIVE parity điểm/xu/phạt PASS 0 sai số → READY DEPLOY
 - **LIVE production parity #162 PASS 4/4 NV, sai số điểm/xu/phạt = 0** (App Report hiển thị = App VAT dashboard). Bằng chứng `1d7e100`. Token không lộ (chỉ `sid` băm). ⇒ App Report đọc đúng, không lệch/không bịa — an toàn "không trừ oan tiền NV".
 - **Duyệt deploy** 2 nhánh reward (đều review PASS): ô Thưởng dự kiến `467eb2e` + đọc điểm/xu/phạt `0c1da00`. Directive `DIRECTIVE_EMP_COST_REWARD_DEPLOY.md` (deploy FE+BE đồng bộ + `.env` VAT_BASE/VAT_SERVICE_TOKEN backend-only + nghiệm thu). Sau deploy: CEO điền `employee_bonus_tiers.json`; (tùy chọn) rotate token.
