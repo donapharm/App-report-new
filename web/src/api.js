@@ -131,6 +131,14 @@ export const api = {
     const query = params.toString();
     return req('GET', '/employee-cost' + (query ? `?${query}` : ''));
   },
+  employeeCostDiemXu: (emp, range = {}) => {
+    const params = new URLSearchParams();
+    if (emp) params.set('emp', emp);
+    if (range.from) params.set('from', range.from);
+    if (range.to) params.set('to', range.to);
+    const query = params.toString();
+    return req('GET', '/employee-cost/diem-xu' + (query ? `?${query}` : ''));
+  },
   employeeCostGaps: (emp, range = {}) => {
     const params = new URLSearchParams();
     if (emp) params.set('emp', emp);

@@ -24,6 +24,7 @@ const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
 const employeeBonus = require('./employeeBonus');
+const employeeVatKhoan = require('./employeeVatKhoan');
 const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostDataQuality = require('./employeeCostDataQuality');
 const employeeCostExport = require('./employeeCostExport');
@@ -652,6 +653,55 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
   const payload = wantsAll
     ? await employeeCostAllPayload(req)
     : employeeCostTable.transformReport(await employeeCostPayload(req), employeeCostTableOptions(req, { paginate: true }));
+  res.set('Cache-Control', 'private, no-store');
+  return res.json(payload);
+}));
+
+async function employeeVatKhoanPayload(req, {
+  requestedEmp = req.query.emp,
+  auditEvent = 'view',
+  roster = employeeCostRosterRows(),
+  period = employeeVatKhoan.parsePeriod(req.query),
+} = {}) {
+  const scope = auth.scopeOf(req.session);
+  const admin = auth.isAdmin(req.session.role);
+  const empCode = employeeCost.resolveScopedEmployee({ session: req.session, scope, requestedEmp });
+  return employeeCostVisibility.run({
+    admin,
+    actor: req.session.emp_code,
+    role: req.session.role,
+    empCode,
+    roster,
+  }, () => employeeVatKhoan.getForSession({
+    session: req.session,
+    scope,
+    requestedEmp,
+    period,
+  }, { auditEvent }));
+}
+
+// Điểm/xu/phạt chỉ là projection read-only từ App VAT SSOT. Sale luôn bị ép
+// về mã phiên đăng nhập; CEO/admin có thể chọn một NV hoặc tổng hợp từng NV.
+router.get('/employee-cost/diem-xu', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const admin = auth.isAdmin(req.session.role);
+  const requested = String(req.query.emp || '').trim().toUpperCase();
+  const roster = employeeCostRosterRows();
+  const period = employeeVatKhoan.parsePeriod(req.query);
+  let payload;
+  if (admin && requested === 'ALL') {
+    const reports = await mapWithConcurrency(roster, 3, (employee) => employeeVatKhoanPayload(req, {
+      requestedEmp: employee.emp_code,
+      auditEvent: 'view_all',
+      roster,
+      period,
+    }));
+    payload = employeeVatKhoan.aggregatePayloads(reports, roster, period);
+  } else {
+    if (admin && requested && !roster.some((employee) => employee.emp_code === requested)) {
+      return res.status(400).json({ error: 'Nhân viên không thuộc roster chi phí được duyệt.', code: 'EMPLOYEE_VAT_KHOAN_EMP_INVALID' });
+    }
+    payload = await employeeVatKhoanPayload(req, { requestedEmp: requested, roster, period });
+  }
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
 }));

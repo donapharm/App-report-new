@@ -1,0 +1,242 @@
+{
+  "recorded_at": "2026-07-24T06:49:00+07:00",
+  "task": "#162",
+  "result": "PASS",
+  "deployment_status": "not_deployed",
+  "vat_runtime": {
+    "service": "dona-vat",
+    "pid": 542573,
+    "port": 3867,
+    "health": "ok",
+    "commit": "473de59"
+  },
+  "contract": {
+    "endpoint": "/api/khoan/dashboard",
+    "rule_version": "khoan-ssot-v2026-05-r1",
+    "auth": "Bearer service token (redacted)",
+    "scope": "required emp_code"
+  },
+  "parity": {
+    "test": "PRODUCTION LIVE parity #162",
+    "vat_base": "http://127.0.0.1:3867",
+    "vat_commit": "473de59",
+    "period": {
+      "month": 6,
+      "year": 2026,
+      "period": "2026-06"
+    },
+    "endpoint": "/api/khoan/dashboard",
+    "employees": [
+      {
+        "emp_code": "DN001",
+        "emp_name": "Đặng Xuân Trung",
+        "http_ok": true,
+        "outcome": "ok",
+        "available": true,
+        "selected": {
+          "month": 6,
+          "year": 2026,
+          "quarter": 2
+        },
+        "rule_version_raw": "khoan-ssot-v2026-05-r1",
+        "rule_version_report": "khoan-ssot-v2026-05-r1",
+        "app_vat": {
+          "diem_thang": 38.05,
+          "diem_quy": 118.05,
+          "xu_thang": 0,
+          "xu_quy_tong": 118.02,
+          "carry": 0,
+          "pct_quy": 99.97,
+          "thieu_xu": 0.03,
+          "phat_du_kien": 0
+        },
+        "app_report": {
+          "diem_thang": 38.05,
+          "diem_quy": 118.05,
+          "xu_thang": 0,
+          "xu_quy_tong": 118.02,
+          "carry": 0,
+          "pct_quy": 99.97,
+          "thieu_xu": 0.03,
+          "phat_du_kien": 0
+        },
+        "diffs": {
+          "diem_thang": 0,
+          "diem_quy": 0,
+          "xu_thang": 0,
+          "xu_quy": 0,
+          "xu_quy_tong": 0,
+          "carry": 0,
+          "pct_thang": 0,
+          "pct_quy": 0,
+          "thieu_du": 0,
+          "thieu_xu": 0,
+          "du_xu": 0,
+          "phat_du_kien": 0
+        },
+        "exact_match": true
+      },
+      {
+        "emp_code": "DN009",
+        "emp_name": "Trần Thị Thanh Huyền",
+        "http_ok": true,
+        "outcome": "ok",
+        "available": true,
+        "selected": {
+          "month": 6,
+          "year": 2026,
+          "quarter": 2
+        },
+        "rule_version_raw": "khoan-ssot-v2026-05-r1",
+        "rule_version_report": "khoan-ssot-v2026-05-r1",
+        "app_vat": {
+          "diem_thang": 58.64,
+          "diem_quy": 163.31,
+          "xu_thang": 23.83,
+          "xu_quy_tong": 115.81,
+          "carry": 6.48,
+          "pct_quy": 70.91,
+          "thieu_xu": 47.5,
+          "phat_du_kien": 13800000
+        },
+        "app_report": {
+          "diem_thang": 58.64,
+          "diem_quy": 163.31,
+          "xu_thang": 23.83,
+          "xu_quy_tong": 115.81,
+          "carry": 6.48,
+          "pct_quy": 70.91,
+          "thieu_xu": 47.5,
+          "phat_du_kien": 13800000
+        },
+        "diffs": {
+          "diem_thang": 0,
+          "diem_quy": 0,
+          "xu_thang": 0,
+          "xu_quy": 0,
+          "xu_quy_tong": 0,
+          "carry": 0,
+          "pct_thang": 0,
+          "pct_quy": 0,
+          "thieu_du": 0,
+          "thieu_xu": 0,
+          "du_xu": 0,
+          "phat_du_kien": 0
+        },
+        "exact_match": true
+      },
+      {
+        "emp_code": "DN016",
+        "emp_name": "Trần Thị Ngọc Ánh",
+        "http_ok": true,
+        "outcome": "ok",
+        "available": true,
+        "selected": {
+          "month": 6,
+          "year": 2026,
+          "quarter": 2
+        },
+        "rule_version_raw": "khoan-ssot-v2026-05-r1",
+        "rule_version_report": "khoan-ssot-v2026-05-r1",
+        "app_vat": {
+          "diem_thang": 45.18,
+          "diem_quy": 169.63,
+          "xu_thang": 54.04,
+          "xu_quy_tong": 229.3,
+          "carry": 0,
+          "pct_quy": 135.18,
+          "thieu_xu": 0,
+          "phat_du_kien": 0
+        },
+        "app_report": {
+          "diem_thang": 45.18,
+          "diem_quy": 169.63,
+          "xu_thang": 54.04,
+          "xu_quy_tong": 229.3,
+          "carry": 0,
+          "pct_quy": 135.18,
+          "thieu_xu": 0,
+          "phat_du_kien": 0
+        },
+        "diffs": {
+          "diem_thang": 0,
+          "diem_quy": 0,
+          "xu_thang": 0,
+          "xu_quy": 0,
+          "xu_quy_tong": 0,
+          "carry": 0,
+          "pct_thang": 0,
+          "pct_quy": 0,
+          "thieu_du": 0,
+          "thieu_xu": 0,
+          "du_xu": 0,
+          "phat_du_kien": 0
+        },
+        "exact_match": true
+      },
+      {
+        "emp_code": "DN024",
+        "emp_name": "Hoàng Văn Hà",
+        "http_ok": true,
+        "outcome": "ok",
+        "available": true,
+        "selected": {
+          "month": 6,
+          "year": 2026,
+          "quarter": 2
+        },
+        "rule_version_raw": "khoan-ssot-v2026-05-r1",
+        "rule_version_report": "khoan-ssot-v2026-05-r1",
+        "app_vat": {
+          "diem_thang": 29.14,
+          "diem_quy": 85.51,
+          "xu_thang": 23.3,
+          "xu_quy_tong": 106.64,
+          "carry": 1.2,
+          "pct_quy": 124.71,
+          "thieu_xu": 0,
+          "phat_du_kien": 0
+        },
+        "app_report": {
+          "diem_thang": 29.14,
+          "diem_quy": 85.51,
+          "xu_thang": 23.3,
+          "xu_quy_tong": 106.64,
+          "carry": 1.2,
+          "pct_quy": 124.71,
+          "thieu_xu": 0,
+          "phat_du_kien": 0
+        },
+        "diffs": {
+          "diem_thang": 0,
+          "diem_quy": 0,
+          "xu_thang": 0,
+          "xu_quy": 0,
+          "xu_quy_tong": 0,
+          "carry": 0,
+          "pct_thang": 0,
+          "pct_quy": 0,
+          "thieu_du": 0,
+          "thieu_xu": 0,
+          "du_xu": 0,
+          "phat_du_kien": 0
+        },
+        "exact_match": true
+      }
+    ],
+    "all_exact_match": true
+  },
+  "security": {
+    "requests": 4,
+    "full_token_leaked": false,
+    "token_prefix_leaked": false,
+    "anonymous_sid_present": true
+  },
+  "gates": {
+    "focused_server_tests": "13/13 PASS",
+    "focused_web_tests": "5/5 PASS",
+    "production_build": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "note": "App Report projection matched App VAT production dashboard exactly for all compared fields. Token and prefix are not stored in this artifact."
+}

@@ -2027,6 +2027,16 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-summary-row b { min-width:140px; color:#075d9b; text-align:right; font-size:14px; font-variant-numeric:tabular-nums; }
 .employee-cost-annual-total { margin-top:8px; border:1px dashed #9dafbb; border-radius:9px; background:#f6f7f8; color:#6f7d86; font-style:italic; opacity:.78; }
 .employee-cost-source-note { margin-top:9px; color:var(--muted); font-size:11px; }
+.employee-cost-khoan-danger-badge { display:inline-flex; margin-left:5px; padding:2px 6px; border-radius:999px; background:#b3261e; color:#fff; font-size:9px; font-weight:900; }
+.employee-cost-khoan-warning { margin-top:10px; padding:11px 13px; border:1px solid #e7a18e; border-left:4px solid #b3261e; border-radius:10px; background:#fff4f1; color:#7a251e; font-size:12px; }
+.employee-cost-khoan-deduction { margin-top:10px; border-left:4px solid #b3261e; }
+.employee-cost-khoan-equation { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr); align-items:center; gap:12px; margin-top:10px; }
+.employee-cost-khoan-equation > span { display:grid; gap:3px; padding:10px 12px; border:1px solid var(--line); border-radius:9px; background:#f7fafc; }
+.employee-cost-khoan-equation small,.employee-cost-khoan-equation em { color:var(--muted); font-size:10px; font-style:normal; }
+.employee-cost-khoan-equation b { color:#075d9b; font-size:16px; font-variant-numeric:tabular-nums; }
+.employee-cost-khoan-equation .deduction b { color:#b3261e; }
+.employee-cost-khoan-equation > strong { color:var(--muted); font-size:20px; }
+.employee-cost-khoan-deduction > p { margin:9px 0 0; color:var(--muted); font-size:11px; }
 .employee-cost-daily { margin-top:16px; padding-top:14px; border-top:1px dashed var(--line); }
 .employee-cost-daily .employee-cost-match-warning { margin-top:9px; }
 .employee-cost-date { white-space:nowrap; font-weight:800; }
@@ -2134,4 +2144,6 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-page-numbers { max-width:100%; overflow-x:auto; }
   .employee-cost-page-jump { display:none; }
   .employee-cost-subtotals > div { grid-template-columns:1fr; }
+  .employee-cost-khoan-equation { grid-template-columns:1fr; }
+  .employee-cost-khoan-equation > strong { text-align:center; }
 }
