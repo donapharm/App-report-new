@@ -1,0 +1,295 @@
+{
+  "recorded_at": "2026-07-24T00:47:23.359Z",
+  "task": "#162 / deploy #165",
+  "result": "PASS",
+  "deployment_status": "deployed",
+  "release": {
+    "commit": "55f8bd0",
+    "version": "55f8bd0-20260724-072611-012",
+    "domain": "https://report.donapharm.asia",
+    "local_health": "ok",
+    "public_health": "ok",
+    "frontend_asset": "/assets/index-6Yl7SDzT.js",
+    "runtime": {
+      "dona-vat": {
+        "pid": 542573,
+        "status": "online",
+        "restarts": 8
+      },
+      "app-report": {
+        "pid": 652694,
+        "status": "online",
+        "restarts": 110
+      },
+      "app-report-tgbot": {
+        "pid": 652702,
+        "status": "online",
+        "restarts": 53
+      },
+      "data-hub": {
+        "pid": 3896084,
+        "status": "online",
+        "restarts": 0
+      }
+    },
+    "rollback": {
+      "branch": "backup/pre-reward-diemxu-deploy-20260724-072453",
+      "backup": "backups/reward-diemxu-deploy-20260724_072903"
+    }
+  },
+  "gates": {
+    "full_server_tests": "PASS",
+    "full_web_tests": "PASS",
+    "focused_server_tests": "13/13 PASS",
+    "focused_web_tests": "5/5 PASS",
+    "production_build": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "vat_parity": {
+    "period": "2026-06",
+    "employees": [
+      {
+        "emp_code": "DN009",
+        "report": {
+          "diem_thang": 58.64,
+          "diem_quy": 163.31,
+          "xu_thang": 23.83,
+          "xu_quy": 109.33,
+          "xu_quy_tong": 115.81,
+          "carry": 6.48,
+          "pct_thang": 40.64,
+          "pct_quy": 70.91,
+          "thieu_du": -47.5,
+          "thieu_xu": 47.5,
+          "du_xu": 0,
+          "phat_du_kien": 13800000
+        },
+        "vat": {
+          "diem_thang": 58.64,
+          "diem_quy": 163.31,
+          "xu_thang": 23.83,
+          "xu_quy": 109.33,
+          "xu_quy_tong": 115.81,
+          "carry": 6.48,
+          "pct_thang": 40.64,
+          "pct_quy": 70.91,
+          "thieu_du": -47.5,
+          "thieu_xu": 47.5,
+          "du_xu": 0,
+          "phat_du_kien": 13800000
+        },
+        "diffs": {
+          "diem_thang": 0,
+          "diem_quy": 0,
+          "xu_thang": 0,
+          "xu_quy": 0,
+          "xu_quy_tong": 0,
+          "carry": 0,
+          "pct_thang": 0,
+          "pct_quy": 0,
+          "thieu_du": 0,
+          "thieu_xu": 0,
+          "du_xu": 0,
+          "phat_du_kien": 0
+        },
+        "exact": true,
+        "rule_version_report": "khoan-ssot-v2026-05-r1",
+        "rule_version_vat": "khoan-ssot-v2026-05-r1",
+        "source": "App VAT"
+      },
+      {
+        "emp_code": "DN016",
+        "report": {
+          "diem_thang": 45.18,
+          "diem_quy": 169.63,
+          "xu_thang": 54.04,
+          "xu_quy": 229.3,
+          "xu_quy_tong": 229.3,
+          "carry": 0,
+          "pct_thang": 119.61,
+          "pct_quy": 135.18,
+          "thieu_du": 59.67,
+          "thieu_xu": 0,
+          "du_xu": 59.67,
+          "phat_du_kien": 0
+        },
+        "vat": {
+          "diem_thang": 45.18,
+          "diem_quy": 169.63,
+          "xu_thang": 54.04,
+          "xu_quy": 229.3,
+          "xu_quy_tong": 229.3,
+          "carry": 0,
+          "pct_thang": 119.61,
+          "pct_quy": 135.18,
+          "thieu_du": 59.67,
+          "thieu_xu": 0,
+          "du_xu": 59.67,
+          "phat_du_kien": 0
+        },
+        "diffs": {
+          "diem_thang": 0,
+          "diem_quy": 0,
+          "xu_thang": 0,
+          "xu_quy": 0,
+          "xu_quy_tong": 0,
+          "carry": 0,
+          "pct_thang": 0,
+          "pct_quy": 0,
+          "thieu_du": 0,
+          "thieu_xu": 0,
+          "du_xu": 0,
+          "phat_du_kien": 0
+        },
+        "exact": true,
+        "rule_version_report": "khoan-ssot-v2026-05-r1",
+        "rule_version_vat": "khoan-ssot-v2026-05-r1",
+        "source": "App VAT"
+      }
+    ],
+    "all_exact_match": true,
+    "public_proxy": {
+      "emp_code": "DN009",
+      "phat_du_kien": 13800000,
+      "rule_version": "khoan-ssot-v2026-05-r1",
+      "pass": true
+    },
+    "self_scope": {
+      "actor": "DN009",
+      "requested": "DN016",
+      "returned": "DN009",
+      "pass": true
+    }
+  },
+  "ui_acceptance": {
+    "employee": "DN009",
+    "period": "2026-06",
+    "reward": {
+      "configured": false,
+      "display": "Chưa cấu hình mức thưởng"
+    },
+    "points": {
+      "month": 58.64,
+      "quarter": 163.31
+    },
+    "coins": {
+      "month": 23.83,
+      "quarter_total": 115.81,
+      "carry": 6.48
+    },
+    "quarter_percent": 70.91,
+    "warning_below_90": true,
+    "expected_penalty": 13800000,
+    "deduction_row": {
+      "separate": true,
+      "labels": [
+        "Chi phí gốc",
+        "Nguồn DataHub/App Report",
+        "Cấn trừ thiếu xu",
+        "Nguồn App VAT",
+        "Còn lại (display-only)",
+        "Không ghi DataHub/payroll"
+      ],
+      "datahub_cost_mutated": false,
+      "fail_closed_note": "Kỳ 06/2026 có tỷ lệ ghép chi phí 0% nên tiền cấn trừ/còn lại hiển thị —; không ghi DataHub/payroll."
+    },
+    "screenshot": {
+      "path": "artifacts/employee-reward-diemxu-prod-ui-162.png",
+      "sha256": "76fee9cc7a18809fe0a7662768bff2502b65bf6dbe600b7be09e6f00629b7377"
+    }
+  },
+  "datahub_source_unchanged": {
+    "before": {
+      "at": "2026-07-24T00:29:05.875Z",
+      "empCode": "DN001",
+      "period": "2026-07",
+      "outcome": "ok",
+      "rowCount": 10982,
+      "columnCount": 5,
+      "sourceHash": "0afe9a2feca2d996d5fb161e18a54a782c7481e74efdf7f9f0f8134649ba19e3"
+    },
+    "after": {
+      "at": "2026-07-24T00:41:40.007Z",
+      "empCode": "DN001",
+      "period": "2026-07",
+      "outcome": "ok",
+      "rowCount": 10982,
+      "columnCount": 5,
+      "sourceHash": "0afe9a2feca2d996d5fb161e18a54a782c7481e74efdf7f9f0f8134649ba19e3"
+    },
+    "unchanged": true
+  },
+  "security": {
+    "scope": "full active App Report/App VAT PM2 logs plus deployed production JS",
+    "scans": [
+      {
+        "file": "app-report-out.log",
+        "bytes": 60226,
+        "counts": {
+          "vat-full": 0,
+          "vat-prefix16": 0,
+          "qa-ceo-full": 0,
+          "qa-ceo-prefix16": 0,
+          "qa-dn009-full": 0,
+          "qa-dn009-prefix16": 0
+        }
+      },
+      {
+        "file": "app-report-error.log",
+        "bytes": 62776,
+        "counts": {
+          "vat-full": 0,
+          "vat-prefix16": 0,
+          "qa-ceo-full": 0,
+          "qa-ceo-prefix16": 0,
+          "qa-dn009-full": 0,
+          "qa-dn009-prefix16": 0
+        }
+      },
+      {
+        "file": "dona-vat-out.log",
+        "bytes": 84500351,
+        "counts": {
+          "vat-full": 0,
+          "vat-prefix16": 0,
+          "qa-ceo-full": 0,
+          "qa-ceo-prefix16": 0,
+          "qa-dn009-full": 0,
+          "qa-dn009-prefix16": 0
+        }
+      },
+      {
+        "file": "dona-vat-error.log",
+        "bytes": 1852936045,
+        "counts": {
+          "vat-full": 0,
+          "vat-prefix16": 0,
+          "qa-ceo-full": 0,
+          "qa-ceo-prefix16": 0,
+          "qa-dn009-full": 0,
+          "qa-dn009-prefix16": 0
+        }
+      }
+    ],
+    "fullOrPrefix16Leaked": false,
+    "anonymousSidCount": 81,
+    "deployedAsset": "/assets/index-6Yl7SDzT.js",
+    "deployedFrontendLeak": false,
+    "legacyPrefixFragmentsRedacted": 3,
+    "pass": true,
+    "redaction": {
+      "legacy_prefix_fragments": 3,
+      "full_token_was_present": false,
+      "prefix16_still_present": false,
+      "bytes_changed": 48
+    },
+    "qa_sessions_removed": 2,
+    "qa_sessions_remaining": 0,
+    "secrets_in_artifact": false
+  },
+  "notes": [
+    "App VAT remains SSOT; App Report only projects read-only fields.",
+    "Reward tiers remain intentionally empty/fail-closed until CEO configures them.",
+    "No service token or QA token value/prefix is stored in this artifact."
+  ]
+}
