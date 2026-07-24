@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-07-24T11:24:12.091Z",
+  "benchmark": {
+    "before_all_fanout_mock_21x100ms_concurrency3": {
+      "calls": 21,
+      "ms": 705.9
+    },
+    "after_all_open": {
+      "calls": 0,
+      "ms": 0,
+      "reason": "ALL skips point/xu request; cost table request remains independent"
+    },
+    "selected_employee_app_vat": {
+      "fresh_ms": 108.94,
+      "cached_ms": 0.024,
+      "upstream_calls": 1,
+      "speedup": 4539.2
+    }
+  },
+  "parity": {
+    "fresh_hash": "935181b33e691f0f55699002bd9d66ed44d981e241d40ae503330de7cce564cb",
+    "cached_hash": "935181b33e691f0f55699002bd9d66ed44d981e241d40ae503330de7cce564cb",
+    "exact": true,
+    "cost_table_route_before_hash": "f2b5ea57ca6b2a80e82ae56b7d39a9cb0ee4e8a86854e1864e9d89340e344870",
+    "cost_table_route_after_hash": "f2b5ea57ca6b2a80e82ae56b7d39a9cb0ee4e8a86854e1864e9d89340e344870",
+    "cost_table_route_unchanged": true
+  },
+  "scope": {
+    "cache_key_dimensions": [
+      "empCode",
+      "year",
+      "month"
+    ],
+    "frontend_all_calls_app_vat": false
+  }
+}

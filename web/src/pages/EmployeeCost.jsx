@@ -13,6 +13,9 @@ import { employeeCostGapView, gapReasonLabel } from '../employeeCostGapModel.js'
 import { dataQualityTypeLabel, employeeCostDataQualityView } from '../employeeCostDataQualityModel.js';
 import { employeeVatKhoanDeduction, employeeVatKhoanViewModel } from '../employeeVatKhoanModel.js';
 
+const pointXuCache = new Map();
+const POINT_XU_CACHE_MS = 60 * 1000;
+
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
@@ -631,15 +634,44 @@ export default function EmployeeCost({ me }) {
   useEffect(() => {
     if (admin && view !== 'cost') return undefined;
     if (admin && !selectedEmp) { setKhoanPayload({}); setKhoanLoading(false); return undefined; }
+    // ALL chỉ tải bảng chi phí. Không fan-out App VAT cho toàn roster lúc mở trang;
+    // điểm/xu/phạt được tải khi CEO chọn đúng một nhân viên.
+    if (admin && selectedEmp === 'ALL') {
+      setKhoanPayload({ note: 'Chọn một nhân viên để tải điểm/xu' });
+      setKhoanLoading(false);
+      return undefined;
+    }
     let alive = true;
+    let idleId;
+    let timerId;
+    const empCode = admin ? selectedEmp : String(me?.emp_code || '');
+    const cacheKey = `${empCode}:${range.from || ''}:${range.to || ''}`;
+    const hit = pointXuCache.get(cacheKey);
+    if (hit && Date.now() - hit.at < POINT_XU_CACHE_MS) {
+      setKhoanPayload(hit.value);
+      setKhoanLoading(false);
+      return undefined;
+    }
     setKhoanPayload({ note: 'chưa lấy được xu kỳ này' });
     setKhoanLoading(true);
-    api.employeeCostDiemXu(admin ? selectedEmp : undefined, range)
-      .then((data) => { if (alive) setKhoanPayload(data); })
+    const load = () => api.employeeCostDiemXu(admin ? selectedEmp : undefined, range)
+      .then((data) => {
+        pointXuCache.set(cacheKey, { at: Date.now(), value: data });
+        if (pointXuCache.size > 40) pointXuCache.delete(pointXuCache.keys().next().value);
+        if (alive) setKhoanPayload(data);
+      })
       .catch(() => { if (alive) setKhoanPayload({ note: 'chưa lấy được xu kỳ này' }); })
       .finally(() => { if (alive) setKhoanLoading(false); });
-    return () => { alive = false; };
-  }, [admin, selectedEmp, range, view]);
+    // Để request bảng chi phí được ưu tiên render trước; timeout giữ đường lui
+    // cho browser không hỗ trợ requestIdleCallback.
+    if (typeof window.requestIdleCallback === 'function') idleId = window.requestIdleCallback(load, { timeout: 1200 });
+    else timerId = window.setTimeout(load, 150);
+    return () => {
+      alive = false;
+      if (idleId != null && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId);
+      if (timerId != null) window.clearTimeout(timerId);
+    };
+  }, [admin, selectedEmp, range, view, me?.emp_code]);
 
   useEffect(() => {
     if (admin && view !== 'gaps') return undefined;

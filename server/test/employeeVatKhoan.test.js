@@ -245,6 +245,35 @@ test('ALL aggregates xu-only upstream projections and fails closed on partial da
   assert.equal(khoan.aggregatePayloads([one, { ...two, xu_rule_version: 'rule khác' }], [], PERIOD).available, false);
 });
 
+test('short cache and in-flight coalescing call App VAT once per employee-period', async () => {
+  khoan.clearDashboardCache();
+  let calls = 0;
+  const options = {
+    cache: true,
+    cacheMs: 60_000,
+    baseUrl: 'http://vat.test',
+    serviceToken: TOKEN,
+    backoffMs: [],
+    fetchImpl: async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return response();
+    },
+  };
+  const [first, concurrent] = await Promise.all([
+    khoan.fetchDashboardCached('DN001', PERIOD, options),
+    khoan.fetchDashboardCached('DN001', PERIOD, options),
+  ]);
+  const repeated = await khoan.fetchDashboardCached('DN001', PERIOD, options);
+  assert.equal(calls, 1);
+  assert.equal(first.outcome, 'ok');
+  assert.equal(concurrent.outcome, 'ok');
+  assert.equal(repeated.outcome, 'ok');
+  assert.equal(repeated.cached, true);
+  assert.equal(repeated.attempts, 0);
+  khoan.clearDashboardCache();
+});
+
 test('route contract keeps auth/scope backend-side and token names out of frontend source', () => {
   const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
   const apiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'src', 'api.js'), 'utf8');
@@ -252,5 +281,7 @@ test('route contract keeps auth/scope backend-side and token names out of fronte
   assert.ok(pointLocal.loadConfig().version.includes('point-local-2026-05-r1'));
   assert.match(routes, /auth\.scopeOf\(req\.session\)/);
   assert.match(routes, /employeeCost\.resolveScopedEmployee/);
+  assert.match(routes, /employee unavailable[\s\S]*note: 'chưa lấy được xu kỳ này'/);
+  assert.match(routes, /employeeSubtotals:[\s\S]*available: item\.xu_quarter_total != null[\s\S]*note: item\.note/);
   assert.doesNotMatch(apiSource, /VAT_SERVICE_TOKEN|Authorization:\s*Bearer/);
 });

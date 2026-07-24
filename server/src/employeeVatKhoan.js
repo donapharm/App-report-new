@@ -7,8 +7,12 @@ const SOURCE = 'App VAT';
 const DEFAULT_NOTE = 'chưa lấy được xu kỳ này';
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_BACKOFF_MS = Object.freeze([250, 750]);
+const DEFAULT_CACHE_MS = 60 * 1000;
+const DEFAULT_ERROR_CACHE_MS = 15 * 1000;
 const AUDIT_FILE = 'employee_vat_khoan_audit';
 const AUDIT_LIMIT = 5000;
+const dashboardCache = new Map();
+const dashboardInflight = new Map();
 
 function normEmp(value) {
   return String(value || '').trim().toUpperCase();
@@ -184,6 +188,53 @@ async function fetchDashboard(empCode, period, options = {}) {
   }
 }
 
+function dashboardCacheKey(empCode, period) {
+  return `${normEmp(empCode)}:${Number(period?.year || 0)}-${String(Number(period?.month || 0)).padStart(2, '0')}`;
+}
+
+function boundedTtl(value, fallback, max) {
+  const parsed = Number(value);
+  return Math.min(max, Math.max(0, Number.isFinite(parsed) ? parsed : fallback));
+}
+
+/**
+ * Cache projection đã validate (không cache raw response/token). Đồng thời gộp
+ * request đang chạy để nhiều tab/F5 không cùng bắn một lượt sang App VAT.
+ * Khi test inject transport/config, mặc định bỏ cache để test vẫn cô lập.
+ */
+async function fetchDashboardCached(empCode, period, options = {}) {
+  const injected = ['fetchImpl', 'baseUrl', 'serviceToken', 'timeoutMs', 'backoffMs', 'sleepImpl']
+    .some((key) => Object.prototype.hasOwnProperty.call(options, key));
+  const enabled = options.cache === true || (options.cache !== false && !injected);
+  if (!enabled) return fetchDashboard(empCode, period, options);
+
+  const key = dashboardCacheKey(empCode, period);
+  const now = Date.now();
+  const hit = dashboardCache.get(key);
+  if (hit && now < hit.expiresAt) return { ...hit.value, attempts: 0, cached: true };
+  if (hit) dashboardCache.delete(key);
+  if (dashboardInflight.has(key)) {
+    const value = await dashboardInflight.get(key);
+    return { ...value, attempts: 0, cached: true };
+  }
+
+  const pending = fetchDashboard(empCode, period, options).then((value) => {
+    const okTtl = boundedTtl(options.cacheMs ?? process.env.VAT_KHOAN_CACHE_MS, DEFAULT_CACHE_MS, 5 * 60 * 1000);
+    const errorTtl = boundedTtl(options.errorCacheMs ?? process.env.VAT_KHOAN_ERROR_CACHE_MS, DEFAULT_ERROR_CACHE_MS, 60 * 1000);
+    const ttl = value.outcome === 'ok' ? okTtl : errorTtl;
+    if (ttl > 0) dashboardCache.set(key, { expiresAt: Date.now() + ttl, value });
+    if (dashboardCache.size > 200) dashboardCache.delete(dashboardCache.keys().next().value);
+    return value;
+  }).finally(() => dashboardInflight.delete(key));
+  dashboardInflight.set(key, pending);
+  return pending;
+}
+
+function clearDashboardCache() {
+  dashboardCache.clear();
+  dashboardInflight.clear();
+}
+
 function writeAudit({ actor, role, empCode, period, outcome, attempts, ruleVersion, event = 'view' }) {
   const rows = persist.load(AUDIT_FILE, []);
   rows.push({
@@ -214,7 +265,7 @@ async function getForSession({ session, scope, requestedEmp, period }, options =
     }
   };
   const result = empCode
-    ? await fetchDashboard(empCode, period, options)
+    ? await fetchDashboardCached(empCode, period, options)
     : { payload: emptyPayload('', period), outcome: 'missing_emp', attempts: 0 };
   const audited = audit({
     actor: session?.emp_code,
@@ -279,6 +330,8 @@ module.exports = {
   DEFAULT_NOTE,
   DEFAULT_TIMEOUT_MS,
   DEFAULT_BACKOFF_MS,
+  DEFAULT_CACHE_MS,
+  DEFAULT_ERROR_CACHE_MS,
   AUDIT_FILE,
   normEmp,
   resolveVatBase,
@@ -286,6 +339,8 @@ module.exports = {
   emptyPayload,
   projectDashboard,
   fetchDashboard,
+  fetchDashboardCached,
+  clearDashboardCache,
   writeAudit,
   getForSession,
   aggregatePayloads,

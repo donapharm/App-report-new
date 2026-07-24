@@ -819,6 +819,8 @@ function aggregateCombinedPayloads(rows = [], roster = [], period) {
     employeeSubtotals: rows.map((item) => ({
       emp_code: item.emp_code,
       emp_name: names.get(item.emp_code) || item.emp_code,
+      available: item.xu_quarter_total != null,
+      note: item.note || '',
       point_quarter: item.point_quarter,
       xu_quarter_total: item.xu_quarter_total,
       penalty_display: item.penalty_display,
@@ -842,12 +844,37 @@ router.get('/employee-cost/diem-xu', auth.requireAuth, asyncJsonRoute(async (req
   const period = employeeVatKhoan.parsePeriod(req.query);
   let payload;
   if (admin && requested === 'ALL') {
-    const reports = await mapWithConcurrency(roster, 3, (employee) => employeePointXuPayload(req, {
-      requestedEmp: employee.emp_code,
-      auditEvent: 'view_all',
-      roster,
-      period,
-    }));
+    const reports = await mapWithConcurrency(roster, 3, async (employee) => {
+      try {
+        return await employeePointXuPayload(req, {
+          requestedEmp: employee.emp_code,
+          auditEvent: 'view_all',
+          roster,
+          period,
+        });
+      } catch (error) {
+        // Fail closed theo từng NV: endpoint ALL vẫn 200, không suy diễn xu/phạt.
+        console.warn('[employee-cost/diem-xu] employee unavailable', { empCode: employee.emp_code, code: error?.code || 'UPSTREAM_UNAVAILABLE' });
+        return {
+          available: true,
+          aggregate: false,
+          emp_code: employee.emp_code,
+          note: 'chưa lấy được xu kỳ này',
+          selected: { month: period.month, year: period.year, quarter: null },
+          point_month: null,
+          point_quarter: null,
+          xu_month: null,
+          xu_quarter: null,
+          xu_quarter_total: null,
+          carry: null,
+          missing_quarter: null,
+          excess_quarter: null,
+          penalty_display: null,
+          parity: { available: false, status: 'đang đối soát', note: 'đang đối soát' },
+          quarter_status: 'đang đối soát',
+        };
+      }
+    });
     payload = aggregateCombinedPayloads(reports, roster, period);
   } else {
     if (admin && requested && !roster.some((employee) => employee.emp_code === requested)) {

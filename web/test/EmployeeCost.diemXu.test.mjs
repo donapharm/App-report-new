@@ -119,3 +119,16 @@ test('frontend calls only the Report proxy and contains no App VAT credential or
   assert.match(api, /\/employee-cost\/diem-xu/);
   assert.doesNotMatch(`${api}\n${page}`, /VAT_SERVICE_TOKEN|VAT_BASE|\/api\/khoan\/dashboard|Bearer \$\{.*VAT/);
 });
+
+test('ALL renders cost table without calling the point-xu fan-out endpoint', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  const skipAll = page.indexOf("if (admin && selectedEmp === 'ALL')");
+  const pointXuRequest = page.indexOf('api.employeeCostDiemXu', skipAll);
+  assert.ok(skipAll >= 0);
+  assert.ok(pointXuRequest > skipAll);
+  const guardedBlock = page.slice(skipAll, pointXuRequest);
+  assert.match(guardedBlock, /Chọn một nhân viên để tải điểm\/xu/);
+  assert.match(guardedBlock, /return undefined/);
+  assert.match(page, /requestIdleCallback\(load, \{ timeout: 1200 \}\)/);
+  assert.match(page, /POINT_XU_CACHE_MS = 60 \* 1000/);
+});
