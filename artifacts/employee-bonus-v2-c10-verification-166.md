@@ -57,6 +57,16 @@ Contract đề nghị:
 
 ## Quyết định triển khai App Report
 
-- Pha 1 engine: tiếp tục trên nhánh review với input C10 strict, fixture/test đủ các nhóm và fail-closed khi thiếu nguồn.
-- Pha 2 menu/config: có thể xây config bậc/rate/giai đoạn/đè-tầng/preview; không cho menu sửa mapping C10.
+- Independent C10 audit xác nhận: DataHub production/LKG thực sự thiếu C10; App Sale `tech_rank` bị cấm làm fallback; trường `priority` suy từ `tech_rank` nếu có chỉ được giữ display-only và không được đi vào engine thưởng.
+- Pha 1 engine đã hoàn tất tại `f373dfc`: input C10 strict, đủ công thức hai phần, coverage và fixture cho mọi nhóm; thiếu/rỗng/sai/xung đột C10 đều fail-closed.
+- Pha 2 menu/config đã hoàn tất tại `18641fd`: config versioned theo giai đoạn, đè tầng `default → productGroup → route → unit → employee`, preview theo NV bắt buộc trước lưu, preview-id dùng một lần/cùng actor/hết hạn 15 phút, ghi audit nguyên tử. Menu không cho sửa mapping C10.
+- Catalog App Report chỉ thêm `c10` vào optional whitelist/projection; `c32/c47` tiếp tục bị khóa cứng.
+- Gate review branch: server **313/313**, web **56/56**, production build và `git diff --check` PASS; security scan không thấy secret hoặc input runtime `App Sale priority/tech_rank`.
 - Chưa deploy Thưởng v2 cho đến khi DataHub expose C10 và parity/acceptance nguồn hoàn tất.
+
+## Gates còn bắt buộc trước production
+
+1. DataHub expose C10 trong snapshot chính thức, có version/checksum và giữ C32/C47 bị chặn.
+2. App Report kiểm contract: C10 chỉ thuộc allowlist, QLNB `c5` không có mapping C10 xung đột, coverage được báo rõ.
+3. Chạy parity/acceptance nguồn C10 độc lập; xác nhận App Sale classification không thể đi vào calculation path.
+4. Review độc lập nhánh `review/employee-cost-bonus-v2-166` PASS và CEO duyệt deploy riêng.

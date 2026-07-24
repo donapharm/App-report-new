@@ -1,3 +1,8 @@
+### 2026-07-24 — Report Bot — hoàn tất nhánh review Thưởng v2 #166 (chưa deploy)
+- Pha 1 `f373dfc`: engine 2 phần đúng directive — cơ bản theo mức đạt target và cộng nhóm ưu tiên từ **DataHub C10 duy nhất** khi tổng đạt `≥101%`; tổng cap mặc định tắt. Thiếu/rỗng/sai/xung đột C10 đều fail-closed về 0 phần 2 và trả coverage/note; code không đọc `App Sale priority/tech_rank`.
+- Pha 2 `18641fd`: menu **Target → Cấu hình Thưởng v2** có version theo giai đoạn, bậc/rate/ngưỡng/cap, đè tầng `mặc định → nhóm C10 → tuyến → đơn vị → NV`, preview theo NV trước khi lưu, preview-id một lần/15 phút/cùng actor, audit nguyên tử. Menu không cho sửa mapping C10; kết quả vẫn là **dự kiến/read-only**, không payroll/không gửi thưởng.
+- Catalog chỉ whitelist/project tùy chọn `c10`; khóa cứng `c32/c47` không đổi. Gate nhánh: server **313/313**, web **56/56**, build production và `git diff --check` PASS; quét source/diff không có fallback App Sale hoặc secret. **DEPLOY BLOCKED** vì DataHub production/LKG v3.9 vẫn chưa expose C10; chỉ push nhánh `review/employee-cost-bonus-v2-166` để review độc lập.
+
 ### 2026-07-24 — Report Bot — xác minh nguồn C10 cho Thưởng v2 #166/#167
 - DataHub production catalog-management version `3.9` trả **27.719 catalog + 27.719 assignments**, nhưng chỉ expose `c3,c4,c5,c6,c7,c15,c16,c17,c25,c31`; **không có `c10/C10`**, vẫn khóa đúng `c32/c47`. LKG App Report cùng version cũng không có C10.
 - App Sale production revision `8b42c07e` có `products.tech_rank` cho đủ **371/371 QLNB**: `H.A*=136`, `H.A=102`, `H.B=62`, `H.C=46`, `H.D=17`, ngoài directive còn `H.E=4`, `H.F=4`; không thiếu/trùng QLNB xung đột. Đây chỉ là bằng chứng đối chiếu, **không được dùng runtime** vì SSOT chính thức là C10 CEO vault/DataHub.
