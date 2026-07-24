@@ -122,8 +122,7 @@ function appendDq(entries = []) {
 
 function collectRevenueRows(periods, empCode) {
   const kys = periods.map(toUiMonth).filter(Boolean);
-  const scope = empCode ? { empCode } : {};
-  return store.getRowsRange({ kys, scope });
+  return store.getRowsRange({ kys, scope: {} }).filter((row) => !empCode || normEmp(row.emp_code) === normEmp(empCode));
 }
 
 function summarizePoints(rows, config, empCode) {
@@ -188,21 +187,38 @@ function parityStatus({ empCode, period, pointRuleVersion }) {
 }
 
 function buildLocalPointPayload({ empCode, period }) {
+  const normalizedPeriod = normalizeMonth(period);
   const config = loadConfig();
-  const monthPeriods = monthRangeInclusive(period, period).length ? [normalizeMonth(period)] : [];
-  const quarterPeriods = quarterMonths(period);
-  const monthRows = collectRevenueRows(monthPeriods, empCode);
+  if (!normalizedPeriod) {
+    return {
+      available: false,
+      source: SOURCE,
+      note: 'kỳ điểm không hợp lệ',
+      point_rule_version: config.version,
+      point_rule_effective_from: config.effective_from,
+      selected_period: '',
+      quarter_label: '',
+      emp_code: normEmp(empCode),
+      point_month: 0,
+      point_quarter: 0,
+      dq_warning_count: 0,
+      parity: parityStatus({ empCode, period: '', pointRuleVersion: config.version }),
+    };
+  }
+  const monthRows = collectRevenueRows([normalizedPeriod], empCode);
+  const quarterPeriods = quarterMonths(normalizedPeriod);
   const quarterRows = collectRevenueRows(quarterPeriods, empCode);
   const monthSummary = summarizePoints(monthRows, config, empCode);
   const quarterSummary = summarizePoints(quarterRows, config, empCode);
-  const parity = parityStatus({ empCode, period, pointRuleVersion: config.version });
+  const parity = parityStatus({ empCode, period: normalizedPeriod, pointRuleVersion: config.version });
   return {
     available: true,
     source: SOURCE,
+    note: '',
     point_rule_version: config.version,
     point_rule_effective_from: config.effective_from,
-    selected_period: normalizeMonth(period),
-    quarter_label: quarterLabel(period),
+    selected_period: normalizedPeriod,
+    quarter_label: quarterLabel(normalizedPeriod),
     emp_code: normEmp(empCode),
     point_month: monthSummary.total,
     point_quarter: quarterSummary.total,
