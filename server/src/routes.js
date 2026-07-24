@@ -519,6 +519,25 @@ function employeeCostRosterRows() {
   return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
 }
 
+async function employeeBonusPriorityForPeriods(empCode, uiPeriods, catalogRowsByPeriod) {
+  const items = [];
+  for (const uiPeriod of uiPeriods || []) {
+    const hubPeriod = catalogManagement.toHubPeriod(uiPeriod);
+    if (!Object.prototype.hasOwnProperty.call(catalogRowsByPeriod, hubPeriod)) {
+      try {
+        const snapshot = await canonicalAssignmentSnapshot(hubPeriod);
+        catalogRowsByPeriod[hubPeriod] = snapshot.catalog || [];
+      } catch (error) {
+        catalogRowsByPeriod[hubPeriod] = [];
+        console.warn('[employee-bonus] C10 catalog unavailable', { period: hubPeriod, message: error.message });
+      }
+    }
+    const revenueRows = store.getRows({ ky: catalogManagement.toUiPeriod(hubPeriod), scope: { empCode } });
+    items.push(employeeBonus.buildPriorityRevenue(revenueRows, catalogRowsByPeriod[hubPeriod], { vatDivisor: A.VAT_DIVISOR }));
+  }
+  return employeeBonus.mergePriorityRevenue(items);
+}
+
 router.get('/me', auth.requireAuth, (req, res) => {
   const isAdmin = auth.isAdmin(req.session.role);
   const visibility = isAdmin
@@ -592,9 +611,13 @@ async function employeeCostPayload(req, {
     });
     const ky = employeeCost.toUiMonth(range.to);
     const bonusKpi = empCode ? targetKpiSummary(ky, { empCode }, [empCode]) : { ky };
+    const bonusPriority = empCode ? {
+      month: await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod),
+      quarter: await employeeBonusPriorityForPeriods(empCode, bonusKpi.quarter_kys || [], catalogRowsByPeriod),
+    } : {};
     return {
       ...payload,
-      bonus: employeeBonus.buildBonusSummary(bonusKpi, bonusConfig || employeeBonus.loadConfig()),
+      bonus: employeeBonus.buildBonusSummary(bonusKpi, bonusConfig || employeeBonus.loadConfig(), bonusPriority),
     };
   });
 }
@@ -623,7 +646,9 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
   const bonusConfig = employeeBonus.loadConfig();
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   const sharedCatalogRowsByPeriod = {};
-  for (const period of range.months) {
+  const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
+  const catalogPeriods = [...new Set([...range.months, ...bonusQuarter.kys.map((ky) => catalogManagement.toHubPeriod(ky))])];
+  for (const period of catalogPeriods) {
     try {
       const snapshot = await canonicalAssignmentSnapshot(period);
       sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];

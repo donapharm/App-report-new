@@ -14,7 +14,9 @@ const EMPLOYEE_FORBIDDEN_KEYS = /(^|_)(?:(?:old|new|from|to)[_-]?emp|counterpart
 const EMPLOYEE_FORBIDDEN_PHRASES = /bàn giao cho|nhận từ/i;
 const PERMANENTLY_BLOCKED_CATALOG_FIELDS = Object.freeze(['c32', 'c47']);
 const PERMANENTLY_BLOCKED_CATALOG_SET = new Set(PERMANENTLY_BLOCKED_CATALOG_FIELDS);
-const APPROVED_OPTIONAL_CATALOG_FIELDS = Object.freeze([]);
+// C10 is the CEO-vault/DataHub SSOT for Thưởng v2 priority groups. It is
+// optional until DataHub exposes it; C32/C47 remain permanently blocked.
+const APPROVED_OPTIONAL_CATALOG_FIELDS = Object.freeze(['c10']);
 const APPROVED_OPTIONAL_CATALOG_SET = new Set(APPROVED_OPTIONAL_CATALOG_FIELDS);
 
 function normalizedFieldName(value) {
@@ -107,8 +109,8 @@ function dataQualityProjection(snapshot, periodInput) {
   return {
     period,
     catalog: (snapshot?.catalog || []).map((row) => ({
-      c4: row.c4, c5: row.c5, c7: row.c7, c15: row.c15,
-      c16: row.c16, c17: row.c17, c25: row.c25, c31: row.c31,
+      c4: row.c4, c5: row.c5, c7: row.c7, c10: row.c10,
+      c15: row.c15, c16: row.c16, c17: row.c17, c25: row.c25, c31: row.c31,
     })),
     rows: (snapshot?.rows || []).map((row) => ({
       type: row.type, unit_code: row.unit_code, unit_name: row.unit_name,

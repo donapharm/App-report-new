@@ -221,18 +221,25 @@ function BonusKpi({ bonus }) {
   const quarter = bonus.quarter;
   const monthAmount = month.amount == null ? '—' : formatEmployeeCostCell(month.amount, moneyColumn);
   const quarterAmount = quarter.amount == null ? '—' : formatEmployeeCostCell(quarter.amount, moneyColumn);
+  const baseAmount = month.baseAmount == null ? '—' : formatEmployeeCostCell(month.baseAmount, moneyColumn);
+  const priorityAmount = month.priorityAmount == null ? '—' : formatEmployeeCostCell(month.priorityAmount, moneyColumn);
+  const c10Context = month.priorityStatus === 'source_unavailable'
+    ? 'P2 chờ DataHub C10'
+    : month.priorityStatus === 'below_threshold'
+      ? `P2 chưa đạt ngưỡng ${targetPctLabel(month.priorityThresholdPct)}`
+      : `P2 nhóm C10 ${priorityAmount}`;
   const monthContext = bonus.aggregate
-    ? (month.amount == null ? 'Tháng chưa có target' : `Tổng ${month.contributors || bonus.employeeSubtotals.length} NV`)
-    : month.status === 'below_tier'
-      ? `đạt ${targetPctLabel(month.pct)} target · không đạt bậc · thưởng 0`
-      : month.amount == null
-        ? 'Tháng chưa có target'
-        : `đạt ${targetPctLabel(month.pct)} target · bậc ${bonusPctLabel(month.bonusPct)}`;
+    ? (month.amount == null ? 'Tháng chưa có target' : `Tổng ${month.contributors || bonus.employeeSubtotals.length} NV · P1 ${baseAmount} · P2 ${priorityAmount}`)
+    : month.amount == null
+      ? 'Tháng chưa có target'
+      : `đạt ${targetPctLabel(month.pct)} · P1 ${baseAmount} (${bonusPctLabel(month.baseBonusPct)}) · ${c10Context}`;
   const quarterContext = bonus.quarterLabel ? `lũy kế ${bonus.quarterLabel}: ${quarterAmount}` : `lũy kế quý: ${quarterAmount}`;
+  const groupDetail = (month.priorityGroups || []).filter((item) => item.amount > 0)
+    .map((item) => `${item.group}: ${formatEmployeeCostCell(item.amount, moneyColumn)} (${bonusPctLabel(item.ratePct)} × ${formatEmployeeCostCell(item.revenue, moneyColumn)})`).join('; ') || 'không cộng nhóm';
   const title = bonus.aggregate
-    ? `Tổng thưởng dự kiến được cộng từ từng nhân viên theo đúng bậc cá nhân. ${quarterContext}. App Report không gửi thưởng/không ghi payroll.`
-    : `Tháng: ${monthAmount}; đạt ${targetPctLabel(month.pct)} target${month.tier ? ` · bậc ${bonusPctLabel(month.bonusPct)}` : ''}. Quý: ${quarterAmount}; đạt ${targetPctLabel(quarter.pct)}${quarter.tier ? ` · bậc ${bonusPctLabel(quarter.bonusPct)}` : ''}. Chỉ tham khảo, không phải số chi chính thức.`;
-  return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · tham khảo`} title={title} />;
+    ? `Tổng thưởng dự kiến cộng từ từng nhân viên: Phần 1 ${baseAmount}; Phần 2 ${priorityAmount}. ${quarterContext}. Không gửi thưởng/không ghi payroll.`
+    : `Tháng: ${monthAmount} = Phần 1 ${baseAmount} + Phần 2 ${priorityAmount}. Chi tiết C10: ${groupDetail}. Coverage C10: ${targetPctLabel(month.priorityCoverage?.coveragePct)}. Giai đoạn ${bonus.effectiveFrom || '—'} · version ${bonus.version || '—'}. Chỉ tham khảo, không phải số chi chính thức.`;
+  return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · dự kiến/tham khảo`} title={title} />;
 }
 
 function diemXuNumber(value) {

@@ -5,7 +5,10 @@ const path = require('path');
 
 const CONFIG_FILE = path.join(__dirname, '..', 'config', 'employee_bonus_tiers.json');
 const BASE = 'revenue_before_vat';
-const MAX_CAP_PCT = 0.5;
+const SCHEMA_VERSION = 2;
+const PRIORITY_GROUPS = Object.freeze(['H.A*', 'H.A', 'H.B', 'H.C', 'H.D']);
+const PRIORITY_GROUP_SET = new Set(PRIORITY_GROUPS);
+const MAX_BASE_RATE_PCT = 0.25;
 const UNCONFIGURED_MESSAGE = 'Chưa cấu hình mức thưởng';
 
 function finite(value) {
@@ -22,44 +25,78 @@ function unconfigured(reason = 'empty_tiers') {
   return {
     configured: false,
     reason,
+    schemaVersion: SCHEMA_VERSION,
+    version: '',
+    effectiveFrom: '',
     base: BASE,
     currency: 'VND',
-    capPct: MAX_CAP_PCT,
+    totalCapPct: null,
+    capPct: null,
+    baseTiers: [],
     tiers: [],
+    priorityThresholdPct: null,
+    priorityRates: {},
     message: UNCONFIGURED_MESSAGE,
   };
 }
 
+function normalizePriorityGroup(value) {
+  const group = String(value || '').trim().toUpperCase();
+  return PRIORITY_GROUP_SET.has(group) ? group : '';
+}
+
+function validateBaseTiers(rawTiers) {
+  if (!Array.isArray(rawTiers) || rawTiers.length === 0) return { error: 'empty_tiers' };
+  const tiers = [];
+  for (const rawTier of rawTiers) {
+    const fromPct = configNumber(rawTier?.fromPct);
+    const toPct = rawTier?.toPct == null ? null : configNumber(rawTier.toPct);
+    const bonusPct = configNumber(rawTier?.bonusPct);
+    if (fromPct == null || bonusPct == null || fromPct < 0 || bonusPct < 0 || bonusPct > MAX_BASE_RATE_PCT
+      || (toPct != null && toPct <= fromPct)) return { error: 'invalid_tier' };
+    tiers.push({ fromPct, toPct, bonusPct });
+  }
+  tiers.sort((left, right) => left.fromPct - right.fromPct || (left.toPct ?? Infinity) - (right.toPct ?? Infinity));
+  if (tiers[0].fromPct !== 0) return { error: 'tier_coverage_gap' };
+  for (let index = 1; index < tiers.length; index += 1) {
+    if (tiers[index - 1].toPct == null) return { error: 'tier_after_open_end' };
+    if (tiers[index].fromPct !== tiers[index - 1].toPct) return { error: 'tier_coverage_gap' };
+  }
+  if (tiers.at(-1).toPct != null) return { error: 'tier_open_end_missing' };
+  return { tiers };
+}
+
 function validateConfig(raw = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return unconfigured('invalid_config');
-  if (raw.base != null && raw.base !== BASE) return unconfigured('invalid_base');
-  if (!Array.isArray(raw.tiers) || raw.tiers.length === 0) return unconfigured('empty_tiers');
-
-  const configuredCap = raw.capPct == null ? MAX_CAP_PCT : configNumber(raw.capPct);
-  if (configuredCap == null || configuredCap < 0) return unconfigured('invalid_cap');
-  const capPct = Math.min(configuredCap, MAX_CAP_PCT);
-  const tiers = [];
-  for (const rawTier of raw.tiers) {
-    const fromPct = configNumber(rawTier?.fromPct);
-    const toPct = configNumber(rawTier?.toPct);
-    const bonusPct = configNumber(rawTier?.bonusPct);
-    // Placeholder [0, 0) and the deprecated flat `bonus` shape both fail closed.
-    if (fromPct == null || toPct == null || bonusPct == null || fromPct < 0 || toPct <= fromPct || bonusPct < 0) {
-      return unconfigured('invalid_tier');
-    }
-    tiers.push({ fromPct, toPct, bonusPct: Math.min(bonusPct, capPct, MAX_CAP_PCT) });
+  if (raw.schemaVersion !== SCHEMA_VERSION) return unconfigured('invalid_schema_version');
+  if (raw.base !== BASE) return unconfigured('invalid_base');
+  const base = validateBaseTiers(raw.baseTiers);
+  if (base.error) return unconfigured(base.error);
+  const threshold = configNumber(raw.priorityThresholdPct);
+  if (threshold == null || threshold < 0) return unconfigured('invalid_priority_threshold');
+  if (!raw.priorityRates || typeof raw.priorityRates !== 'object' || Array.isArray(raw.priorityRates)) return unconfigured('invalid_priority_rates');
+  const priorityRates = {};
+  for (const group of PRIORITY_GROUPS) {
+    const rate = configNumber(raw.priorityRates[group]);
+    if (rate == null || rate < 0) return unconfigured('invalid_priority_rate');
+    priorityRates[group] = rate;
   }
-  tiers.sort((left, right) => left.fromPct - right.fromPct || left.toPct - right.toPct);
-  for (let index = 1; index < tiers.length; index += 1) {
-    if (tiers[index].fromPct < tiers[index - 1].toPct) return unconfigured('overlapping_tiers');
-  }
+  const totalCapPct = raw.totalCapPct == null ? null : configNumber(raw.totalCapPct);
+  if (raw.totalCapPct != null && (totalCapPct == null || totalCapPct < 0)) return unconfigured('invalid_total_cap');
   return {
     configured: true,
     reason: null,
+    schemaVersion: SCHEMA_VERSION,
+    version: String(raw.version || ''),
+    effectiveFrom: String(raw.effectiveFrom || ''),
     base: BASE,
     currency: String(raw.currency || 'VND'),
-    capPct,
-    tiers,
+    totalCapPct,
+    capPct: totalCapPct,
+    baseTiers: base.tiers,
+    tiers: base.tiers,
+    priorityThresholdPct: threshold,
+    priorityRates,
     message: '',
   };
 }
@@ -72,51 +109,179 @@ function loadConfig(file = CONFIG_FILE) {
   }
 }
 
-function periodBonus(period = {}, config = unconfigured()) {
+function revenueCode(row = {}) {
+  return String(row.iit_code ?? row.qlnb_code ?? row.product_code ?? row.c5
+    ?? row.IIT_CODE ?? row.QLNB_CODE ?? row.PRODUCT_CODE ?? '').trim().toUpperCase();
+}
+
+function revenueBeforeVat(row = {}, vatDivisor = 1) {
+  const explicit = finite(row.revenue_before_vat ?? row.REVENUE_BEFORE_VAT);
+  if (explicit != null) return explicit;
+  const gross = finite(row.revenue ?? row.tong_tien ?? row.REVENUE ?? row.TONG_TIEN) ?? 0;
+  return gross / (finite(vatDivisor) > 0 ? Number(vatDivisor) : 1);
+}
+
+function c10Of(row = {}) {
+  return row.c10 ?? row.C10;
+}
+
+/** Build a C10-only revenue projection. Never reads App Sale's `priority`/`tech_rank`. */
+function buildPriorityRevenue(revenueRows = [], catalogRows = [], { vatDivisor = 1 } = {}) {
+  const catalog = Array.isArray(catalogRows) ? catalogRows : [];
+  const sourceAvailable = catalog.some((row) => Object.prototype.hasOwnProperty.call(row || {}, 'c10')
+    || Object.prototype.hasOwnProperty.call(row || {}, 'C10'));
+  const groupsByCode = new Map();
+  const invalidCodes = new Set();
+  for (const row of catalog) {
+    const code = revenueCode(row);
+    if (!code) continue;
+    const raw = c10Of(row);
+    const group = normalizePriorityGroup(raw);
+    if (!group) {
+      if (raw != null && String(raw).trim()) invalidCodes.add(code);
+      continue;
+    }
+    const groups = groupsByCode.get(code) || new Set();
+    groups.add(group);
+    groupsByCode.set(code, groups);
+  }
+  const conflictCodes = new Set([...groupsByCode].filter(([, groups]) => groups.size > 1).map(([code]) => code));
+  const groupRevenue = Object.fromEntries(PRIORITY_GROUPS.map((group) => [group, 0]));
+  let totalRevenue = 0;
+  let classifiedRevenue = 0;
+  let unclassifiedRevenue = 0;
+  let invalidRevenue = 0;
+  let conflictRevenue = 0;
+  let classifiedRows = 0;
+  let unclassifiedRows = 0;
+  for (const row of Array.isArray(revenueRows) ? revenueRows : []) {
+    const amount = revenueBeforeVat(row, vatDivisor);
+    if (!Number.isFinite(amount)) continue;
+    totalRevenue += amount;
+    const code = revenueCode(row);
+    const groups = groupsByCode.get(code);
+    if (!sourceAvailable || !code || !groups || groups.size !== 1 || conflictCodes.has(code)) {
+      unclassifiedRevenue += amount;
+      unclassifiedRows += 1;
+      if (invalidCodes.has(code)) invalidRevenue += amount;
+      if (conflictCodes.has(code)) conflictRevenue += amount;
+      continue;
+    }
+    const group = [...groups][0];
+    groupRevenue[group] += amount;
+    classifiedRevenue += amount;
+    classifiedRows += 1;
+  }
+  const roundMoney = (value) => Math.round(value);
+  return {
+    source: 'datahub_catalog_c10',
+    sourceAvailable,
+    groupRevenue: Object.fromEntries(PRIORITY_GROUPS.map((group) => [group, roundMoney(groupRevenue[group])])),
+    totalRevenue: roundMoney(totalRevenue),
+    classifiedRevenue: roundMoney(classifiedRevenue),
+    unclassifiedRevenue: roundMoney(unclassifiedRevenue),
+    invalidRevenue: roundMoney(invalidRevenue),
+    conflictRevenue: roundMoney(conflictRevenue),
+    classifiedRows,
+    unclassifiedRows,
+    catalogRows: catalog.length,
+    c10ConflictCodes: conflictCodes.size,
+    c10InvalidCodes: invalidCodes.size,
+    coveragePct: totalRevenue > 0 ? +(classifiedRevenue / totalRevenue * 100).toFixed(1) : null,
+  };
+}
+
+function mergePriorityRevenue(items = []) {
+  const list = (Array.isArray(items) ? items : []).filter(Boolean);
+  const merged = {
+    source: 'datahub_catalog_c10',
+    sourceAvailable: list.length > 0 && list.every((item) => item.sourceAvailable === true),
+    groupRevenue: Object.fromEntries(PRIORITY_GROUPS.map((group) => [group, 0])),
+    totalRevenue: 0, classifiedRevenue: 0, unclassifiedRevenue: 0, invalidRevenue: 0, conflictRevenue: 0,
+    classifiedRows: 0, unclassifiedRows: 0, catalogRows: 0, c10ConflictCodes: 0, c10InvalidCodes: 0,
+  };
+  for (const item of list) {
+    for (const group of PRIORITY_GROUPS) merged.groupRevenue[group] += finite(item.groupRevenue?.[group]) || 0;
+    for (const key of ['totalRevenue', 'classifiedRevenue', 'unclassifiedRevenue', 'invalidRevenue', 'conflictRevenue', 'classifiedRows', 'unclassifiedRows', 'catalogRows', 'c10ConflictCodes', 'c10InvalidCodes']) merged[key] += finite(item[key]) || 0;
+  }
+  merged.coveragePct = merged.totalRevenue > 0 ? +(merged.classifiedRevenue / merged.totalRevenue * 100).toFixed(1) : null;
+  return merged;
+}
+
+function emptyPriority() {
+  return mergePriorityRevenue([]);
+}
+
+function periodBonus(period = {}, config = unconfigured(), priority = emptyPriority()) {
   const target = finite(period.target) ?? 0;
   const achieved = finite(period.achieved) ?? 0;
   const pct = finite(period.pct);
+  const coverage = priority && typeof priority === 'object' ? priority : emptyPriority();
   if (!config.configured) {
-    return { target, achieved, pct, bonusPct: null, amount: null, tier: null, status: 'unconfigured' };
+    return { target, achieved, pct, bonusPct: null, baseBonusPct: null, baseAmount: null, priorityAmount: null, amount: null, tier: null, priorityGroups: [], priorityStatus: 'unconfigured', priorityCoverage: coverage, capped: false, status: 'unconfigured' };
   }
   if (pct == null || target <= 0) {
-    return { target, achieved, pct: null, bonusPct: null, amount: null, tier: null, status: 'missing_target' };
+    return { target, achieved, pct: null, bonusPct: null, baseBonusPct: null, baseAmount: null, priorityAmount: null, amount: null, tier: null, priorityGroups: [], priorityStatus: 'missing_target', priorityCoverage: coverage, capped: false, status: 'missing_target' };
   }
-  const tier = config.tiers.find((item) => pct >= item.fromPct && pct < item.toPct) || null;
-  const bonusPct = tier?.bonusPct || 0;
+  const tier = config.baseTiers.find((item) => pct >= item.fromPct && (item.toPct == null || pct < item.toPct)) || null;
+  const baseBonusPct = tier?.bonusPct || 0;
+  const baseAmount = Math.round(achieved * baseBonusPct / 100);
+  const eligible = pct >= config.priorityThresholdPct;
+  const priorityGroups = PRIORITY_GROUPS.map((group) => {
+    const revenue = finite(coverage.groupRevenue?.[group]) || 0;
+    const ratePct = config.priorityRates[group];
+    return { group, revenue, ratePct, amount: coverage.sourceAvailable && eligible ? Math.round(revenue * ratePct / 100) : 0 };
+  });
+  const priorityAmount = priorityGroups.reduce((sum, item) => sum + item.amount, 0);
+  const uncappedAmount = baseAmount + priorityAmount;
+  const capAmount = config.totalCapPct == null ? null : Math.round(achieved * config.totalCapPct / 100);
+  const amount = capAmount == null ? uncappedAmount : Math.min(uncappedAmount, capAmount);
+  const priorityStatus = !coverage.sourceAvailable ? 'source_unavailable' : !eligible ? 'below_threshold' : 'matched';
   return {
-    target,
-    achieved,
-    pct,
-    bonusPct,
-    amount: Math.round(achieved * bonusPct / 100),
+    target, achieved, pct,
+    bonusPct: baseBonusPct,
+    baseBonusPct,
+    baseAmount,
+    priorityThresholdPct: config.priorityThresholdPct,
+    priorityEligible: eligible,
+    priorityAmount,
+    priorityGroups,
+    priorityStatus,
+    priorityCoverage: coverage,
+    uncappedAmount,
+    capAmount,
+    capped: capAmount != null && amount < uncappedAmount,
+    amount,
     tier,
     status: tier ? 'matched' : 'below_tier',
   };
 }
 
-function buildBonusSummary(kpi = {}, config = loadConfig()) {
+function buildBonusSummary(kpi = {}, config = loadConfig(), priority = {}) {
   const normalized = config?.configured == null ? validateConfig(config) : config;
   return {
     configured: !!normalized.configured,
     reason: normalized.reason || null,
     message: normalized.configured ? '' : UNCONFIGURED_MESSAGE,
+    schemaVersion: SCHEMA_VERSION,
+    version: normalized.version || '',
+    effectiveFrom: normalized.effectiveFrom || '',
     base: BASE,
     currency: normalized.currency || 'VND',
-    capPct: finite(normalized.capPct) ?? MAX_CAP_PCT,
+    totalCapPct: finite(normalized.totalCapPct),
+    capPct: finite(normalized.totalCapPct),
+    priorityThresholdPct: finite(normalized.priorityThresholdPct),
+    priorityRates: normalized.priorityRates || {},
     ky: String(kpi.ky || ''),
     quarterLabel: String(kpi.quarter_label || ''),
-    month: periodBonus(kpi.month, normalized),
-    quarter: periodBonus(kpi.quarter, normalized),
+    month: periodBonus(kpi.month, normalized, priority.month || emptyPriority()),
+    quarter: periodBonus(kpi.quarter, normalized, priority.quarter || emptyPriority()),
     employeeSubtotals: [],
   };
 }
 
 function aggregateBonusSummaries(reports = [], roster = []) {
-  const names = new Map(roster.map((employee) => [
-    String(employee.emp_code || '').toUpperCase(),
-    String(employee.name || employee.emp_code || ''),
-  ]));
+  const names = new Map(roster.map((employee) => [String(employee.emp_code || '').toUpperCase(), String(employee.name || employee.emp_code || '')]));
   const items = reports.filter((report) => report?.bonus).map((report) => ({
     empCode: String(report.empCode || '').toUpperCase(),
     employeeName: names.get(String(report.empCode || '').toUpperCase()) || String(report.empCode || '').toUpperCase(),
@@ -131,33 +296,21 @@ function aggregateBonusSummaries(reports = [], roster = []) {
     const achieved = periods.reduce((sum, item) => sum + (finite(item.achieved) || 0), 0);
     const amounts = periods.filter((item) => item.amount != null && finite(item.amount) != null);
     return {
-      target,
-      achieved,
+      target, achieved,
       pct: target > 0 ? +(achieved / target * 100).toFixed(1) : null,
-      bonusPct: null,
+      bonusPct: null, baseBonusPct: null,
+      baseAmount: periods.reduce((sum, item) => sum + (finite(item.baseAmount) || 0), 0),
+      priorityAmount: periods.reduce((sum, item) => sum + (finite(item.priorityAmount) || 0), 0),
       amount: amounts.length ? amounts.reduce((sum, item) => sum + finite(item.amount), 0) : null,
-      tier: null,
-      status: 'aggregate',
-      contributors: amounts.length,
+      tier: null, priorityGroups: [], priorityStatus: 'aggregate', priorityCoverage: emptyPriority(),
+      capped: periods.some((item) => item.capped), status: 'aggregate', contributors: amounts.length,
     };
   };
-  return {
-    ...first,
-    aggregate: true,
-    month: aggregatePeriod('month'),
-    quarter: aggregatePeriod('quarter'),
-    employeeSubtotals: items,
-  };
+  return { ...first, aggregate: true, month: aggregatePeriod('month'), quarter: aggregatePeriod('quarter'), employeeSubtotals: items };
 }
 
 module.exports = {
-  CONFIG_FILE,
-  BASE,
-  MAX_CAP_PCT,
-  UNCONFIGURED_MESSAGE,
-  validateConfig,
-  loadConfig,
-  periodBonus,
-  buildBonusSummary,
-  aggregateBonusSummaries,
+  CONFIG_FILE, BASE, SCHEMA_VERSION, PRIORITY_GROUPS, MAX_BASE_RATE_PCT, UNCONFIGURED_MESSAGE,
+  validateConfig, loadConfig, normalizePriorityGroup, buildPriorityRevenue, mergePriorityRevenue,
+  periodBonus, buildBonusSummary, aggregateBonusSummaries,
 };

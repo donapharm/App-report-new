@@ -1,7 +1,24 @@
 {
+  "schemaVersion": 2,
+  "version": "bonus-v2-default-2026-07-r1",
+  "effectiveFrom": "2026-07-01",
   "base": "revenue_before_vat",
   "currency": "VND",
-  "capPct": 0.5,
-  "tiers": [],
-  "note": "Mỗi bậc: đạt % target trong [fromPct, toPct) thì thưởng = doanh thu trước VAT × bonusPct ÷ 100. CEO điền tầng nấc sau."
+  "baseTiers": [
+    { "fromPct": 0, "toPct": 90, "bonusPct": 0 },
+    { "fromPct": 90, "toPct": 100, "bonusPct": 0.1 },
+    { "fromPct": 100, "toPct": 110, "bonusPct": 0.15 },
+    { "fromPct": 110, "toPct": 130, "bonusPct": 0.18 },
+    { "fromPct": 130, "toPct": null, "bonusPct": 0.25 }
+  ],
+  "priorityThresholdPct": 101,
+  "priorityRates": {
+    "H.A*": 1,
+    "H.A": 0.8,
+    "H.B": 0.5,
+    "H.C": 0.1,
+    "H.D": 0.1
+  },
+  "totalCapPct": null,
+  "note": "Thưởng dự kiến v2: phần cơ bản + phần nhóm ưu tiên C10 DataHub. Không payroll/không gửi thưởng. C10 thiếu hoặc ngoài allowlist thì phần nhóm fail-closed bằng 0."
 }

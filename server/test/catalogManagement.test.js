@@ -168,7 +168,7 @@ test('privacy assertion chặn field/phrase cấm nếu serializer bị sửa sa
   assert.throws(() => catalogManagement.assertEmployeeSafe({ message: 'Nhận từ một nhân viên khác' }), /privacy phrase/i);
 });
 
-test('C32 và C47 bị khóa cứng kể cả payload reset/restore, còn c41 có thể được duyệt sau', () => {
+test('C10 được whitelist cho Thưởng v2; C32/C47 khóa cứng và C41 vẫn chưa được duyệt', () => {
   assert.deepEqual(catalogManagement.PERMANENTLY_BLOCKED_CATALOG_FIELDS, ['c32', 'c47']);
   for (const field of ['c32', 'C32', 'c_32', 'c47', 'C47', 'c_47']) {
     assert.equal(catalogManagement.isPermanentlyBlockedCatalogField(field), true, field);
@@ -178,7 +178,8 @@ test('C32 và C47 bị khóa cứng kể cả payload reset/restore, còn c41 c�
     );
     assert.throws(() => catalogManagement.assertEmployeeSafe({ [field]: 'SECRET' }), /privacy field/i);
   }
-  assert.deepEqual(catalogManagement.APPROVED_OPTIONAL_CATALOG_FIELDS, []);
+  assert.deepEqual(catalogManagement.APPROVED_OPTIONAL_CATALOG_FIELDS, ['c10']);
+  assert.doesNotThrow(() => catalogManagement.assertCatalogFieldPolicy({ catalog: [{ c10: 'H.A*' }] }));
   assert.doesNotThrow(() => catalogManagement.assertNoPermanentCatalogFields({ catalog: [{ c41: 'FUTURE_OPTIONAL' }] }));
   assert.throws(
     () => catalogManagement.assertCatalogFieldPolicy({ catalog: [{ c41: 'NOT_APPROVED_YET' }] }),

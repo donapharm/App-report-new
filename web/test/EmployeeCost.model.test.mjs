@@ -10,14 +10,16 @@ import {
 test('bonus model keeps backend amounts, month/quarter context and exact unconfigured state', () => {
   assert.equal(employeeBonusViewModel({}).message, 'Chưa cấu hình mức thưởng');
   const bonus = employeeBonusViewModel({
-    configured: true, base: 'revenue_before_vat', capPct: 0.5, ky: '07.2026', quarterLabel: 'Q3/2026',
-    month: { target: 100_000_000, achieved: 105_000_000, pct: 105, bonusPct: 0.2, amount: 210_000, status: 'matched', tier: { fromPct: 100, toPct: 110, bonusPct: 0.2 } },
-    quarter: { target: 300_000_000, achieved: 390_000_000, pct: 130, bonusPct: 0.5, amount: 1_950_000, status: 'matched' },
+    configured: true, schemaVersion: 2, version: 'v2-test', effectiveFrom: '2026-07-01', base: 'revenue_before_vat', totalCapPct: null, priorityThresholdPct: 101, ky: '07.2026', quarterLabel: 'Q3/2026',
+    month: { target: 100_000_000, achieved: 105_000_000, pct: 105, bonusPct: 0.15, baseBonusPct: 0.15, baseAmount: 157_500, priorityAmount: 100_000, amount: 257_500, priorityStatus: 'matched', priorityCoverage: { source: 'datahub_catalog_c10', sourceAvailable: true, coveragePct: 80 }, priorityGroups: [{ group: 'H.A*', revenue: 10_000_000, ratePct: 1, amount: 100_000 }], status: 'matched', tier: { fromPct: 100, toPct: 110, bonusPct: 0.15 } },
+    quarter: { target: 300_000_000, achieved: 390_000_000, pct: 130, bonusPct: 0.25, baseAmount: 975_000, priorityAmount: 0, amount: 975_000, status: 'matched' },
   });
   assert.equal(bonus.configured, true);
-  assert.equal(bonus.month.amount, 210_000);
-  assert.deepEqual(bonus.month.tier, { fromPct: 100, toPct: 110, bonusPct: 0.2 });
-  assert.equal(bonus.quarter.amount, 1_950_000);
+  assert.equal(bonus.month.amount, 257_500);
+  assert.equal(bonus.month.baseAmount, 157_500);
+  assert.equal(bonus.month.priorityGroups[0].group, 'H.A*');
+  assert.deepEqual(bonus.month.tier, { fromPct: 100, toPct: 110, bonusPct: 0.15 });
+  assert.equal(bonus.quarter.amount, 975_000);
 });
 
 test('bonus KPI contract labels it as forecast/reference and displays month plus quarter', () => {
@@ -26,7 +28,10 @@ test('bonus KPI contract labels it as forecast/reference and displays month plus
   assert.match(page, /Chưa cấu hình mức thưởng/);
   assert.match(page, /theo mức đạt target · tham khảo/);
   assert.match(page, /lũy kế \$\{bonus\.quarterLabel\}/);
-  assert.match(page, /month\.status === 'below_tier'/);
+  assert.match(page, /month\.priorityStatus === 'source_unavailable'/);
+  assert.match(page, /Phần 1/);
+  assert.match(page, /Phần 2/);
+  assert.match(page, /DataHub C10/);
   assert.doesNotMatch(page, /if \(month\.amount == null\) return/);
   assert.match(page, /không phải số chi chính thức/);
 });
