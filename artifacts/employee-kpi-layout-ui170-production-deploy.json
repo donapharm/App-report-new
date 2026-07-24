@@ -1,0 +1,44 @@
+{
+  "task": "TASK_REPORT_UI_KPI_LAYOUT",
+  "deployment": "PRODUCTION_PASS",
+  "approved_by": "CEO Telegram 1748199545",
+  "approval_value": "approve_deploy_ui_998dc8b",
+  "review_commit": "998dc8b",
+  "deploy_commit": "a18c453",
+  "production_version": "a18c453-20260724-120751-096",
+  "built_at": "24/07/2026 12:07:51 GMT+7",
+  "production_url": "https://report.donapharm.asia",
+  "health": {
+    "local_http": 200,
+    "public_version_http": 200,
+    "service": "app-report",
+    "pm2_status": "online",
+    "pm2_pid": 1125147,
+    "pm2_restarts": 116,
+    "backend_restart_for_ui": false
+  },
+  "assets": {
+    "js": "/assets/index-DR0c9KYr.js",
+    "js_sha256": "f8394217a2b2b9802c0f1798876901c23965979c67d23a3e80ffcaff0a4e8991",
+    "css": "/assets/index-JWzZWywT.css",
+    "css_sha256": "7d871ccc036fdfbecadc91dcae6d40df1c454ef6e7c34bc5eb8694c192ecaacb",
+    "public_local_byte_parity": true,
+    "approved_color_markers": true,
+    "point_local_source_marker": true,
+    "penalty_locked_copy_marker": true
+  },
+  "safety": {
+    "ui_only": true,
+    "penalty_unlocked": false,
+    "datahub_write": false,
+    "payroll_write": false,
+    "notification_send": false,
+    "c32_c47_unchanged": true
+  },
+  "rollback": {
+    "branch": "backup/pre-ui-kpi-deploy-20260724-120734",
+    "directory": "backups/ui-kpi-deploy-20260724-120734",
+    "pre_deploy_commit": "fbe0f6a"
+  },
+  "credentials_in_artifact": false
+}
