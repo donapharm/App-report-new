@@ -273,8 +273,9 @@ function KhoanWarning({ khoan }) {
 }
 
 function KhoanDeduction({ khoan, baseCost, multiMonth, loading }) {
-  const penaltyOpen = khoan.available && khoan.parity.available && !multiMonth;
-  const display = employeeVatKhoanDeduction(baseCost, penaltyOpen ? khoan.phatDuKien : null);
+  const penaltyOpen = khoan.available && khoan.parity.available;
+  const deductionOpen = penaltyOpen && !multiMonth;
+  const display = employeeVatKhoanDeduction(baseCost, deductionOpen ? khoan.phatDuKien : null);
   const xuRule = khoan.xuRuleVersion ? ` · ${khoan.xuRuleVersion}` : '';
   const penaltyStatus = khoan.quarterStatus || 'đang đối soát';
   const penaltyNote = loading ? 'Đang tải điểm local + xu App VAT…' : khoan.note;
@@ -282,9 +283,9 @@ function KhoanDeduction({ khoan, baseCost, multiMonth, loading }) {
     <div className="section-head">Cấn trừ do thiếu xu chi tiêu (quý) · dự kiến</div>
     <div className="employee-cost-khoan-equation">
       <span className="xu"><small>Xu tích lũy (tháng · quý)</small><b>{khoan.available ? `${diemXuNumber(khoan.xuThang)} · ${diemXuNumber(khoan.xuQuyTong)}` : '— · —'}</b><em>Nguồn: App VAT{xuRule}</em></span>
-      <span className="penalty"><small>Phạt dự kiến {penaltyOpen && khoan.phatDuKien > 0 && <span className="employee-cost-khoan-danger-badge">Cảnh báo</span>}</small><b>{penaltyOpen ? formatEmployeeCostCell(khoan.phatDuKien, moneyColumn) : '—'}</b><em>{khoan.available ? `${penaltyStatus} · không payroll` : `${penaltyNote} · đang đối soát`}</em></span>
+      <span className="penalty"><small>Phạt dự kiến {penaltyOpen && khoan.phatDuKien > 0 && <span className="employee-cost-khoan-danger-badge">Cảnh báo</span>}</small><b>{penaltyOpen ? formatEmployeeCostCell(khoan.phatDuKien, moneyColumn) : 'đang đối soát'}</b><em>{khoan.available ? `${penaltyStatus} · App Report (điểm) + App VAT (xu) · không payroll` : penaltyNote}</em></span>
       <strong>−</strong>
-      <span className="deduction"><small>Cấn trừ thiếu xu</small><b>{penaltyOpen ? formatEmployeeCostCell(Math.abs(display.deduction), moneyColumn) : '—'}</b><em>{penaltyOpen ? 'Parity exact-zero PASS' : 'đang đối soát'}</em></span>
+      <span className="deduction"><small>Cấn trừ thiếu xu</small><b>{deductionOpen ? formatEmployeeCostCell(Math.abs(display.deduction), moneyColumn) : '—'}</b><em>{deductionOpen ? 'Parity exact-zero PASS' : 'đang đối soát'}</em></span>
       <strong>=</strong>
       <span><small>Còn lại (display-only)</small><b>{formatEmployeeCostCell(display.remaining, moneyColumn)}</b><em>Không ghi DataHub/payroll</em></span>
     </div>
@@ -839,14 +840,13 @@ export default function EmployeeCost({ me }) {
     {!admin && <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin={false} onOpenRow={openDqRow} />}
 
     <div className="kpi-grid employee-cost-kpis">
-      <Kpi label="Nhân viên" value={employeeLabel} />
-      <Kpi label="Số dòng đơn hàng" value={filteredCount.toLocaleString('vi-VN')} sub={`Hiện ${filteredCount.toLocaleString('vi-VN')}/${totalTableRows.toLocaleString('vi-VN')} dòng`} />
-      <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${model.match.threshold}%`} />
-      <Kpi label={multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`} />
+      <Kpi label="Nhân viên" value={employeeLabel} sub={`Hiện ${filteredCount.toLocaleString('vi-VN')}/${totalTableRows.toLocaleString('vi-VN')} dòng`} />
       <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
       <KhoanPointKpi khoan={khoan} loading={khoanLoading} />
+      <Kpi label={multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`} tone="employee-cost-tone-base" />
       <BonusKpi bonus={model.bonus} />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
+      <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${model.match.threshold}%`} />
     </div>
 
     <KhoanWarning khoan={khoan} />
