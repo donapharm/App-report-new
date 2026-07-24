@@ -1,0 +1,338 @@
+{
+  "generatedAt": "2026-07-24T12:23:35.791Z",
+  "baseCommit": "4c50196a30eb8b989df5edff1002198dc4cc6fc9",
+  "branch": "review/report-perf-p0-cache-20260724",
+  "fixture": {
+    "source": "production data snapshot referenced from isolated benchmark worktrees",
+    "credentialsDisabled": true,
+    "authData": "temporary isolated directory",
+    "deploymentTouched": false
+  },
+  "assertions": {
+    "allBaselinePayloadHashesExact": true,
+    "allBaselineNumericHashesExact": true,
+    "allRepeatPayloadHashesExact": true,
+    "allRepeatNumericHashesExact": true
+  },
+  "employeeCostAll": {
+    "displayedRows": 20,
+    "totalRows": 1685,
+    "revenueTotal": 26172927415,
+    "revenueBeforeVatTotal": 24926597538.095245
+  },
+  "cases": {
+    "analysis_admin": {
+      "path": "/analysis",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026"
+      },
+      "scope": "CEO",
+      "baselineMs": {
+        "first": 1745.204,
+        "second": 976.268
+      },
+      "afterMs": {
+        "first": 1781.375,
+        "second": 8.015
+      },
+      "cacheHitSpeedup": 222.3,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "5675c379480552a6086890c6cd6632fa489b7709c92af42ea7556c9bef41cbc4",
+      "numericHash": "1d40e8e7030ed8d755d5a5f46b099850d15b8f931ad46d28f495599078397a7b"
+    },
+    "analysis_dn001": {
+      "path": "/analysis",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026"
+      },
+      "scope": "DN001",
+      "baselineMs": {
+        "first": 741.309,
+        "second": 598.41
+      },
+      "afterMs": {
+        "first": 728.925,
+        "second": 6.315
+      },
+      "cacheHitSpeedup": 115.4,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "95a87826163d6c97f99161503e7d9cc4a414fbf60627ea73ecb36d87ac005687",
+      "numericHash": "622bfbde85bcd81f74598a17eeaa183f6fed3935be3cede769d042dfabb93454"
+    },
+    "alerts_admin": {
+      "path": "/alerts",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026"
+      },
+      "scope": "CEO",
+      "baselineMs": {
+        "first": 561.718,
+        "second": 603.104
+      },
+      "afterMs": {
+        "first": 586.054,
+        "second": 6.392
+      },
+      "cacheHitSpeedup": 91.7,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "1393839fe1dab3c12383f15cc9b1acd399c5969f45aca9e4764e3a8867d97ba6",
+      "numericHash": "41b5041c528f76b121ecead76e7059f33528f7294aae6e95eafa4ab3b77905c6"
+    },
+    "alerts_dn001": {
+      "path": "/alerts",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026"
+      },
+      "scope": "DN001",
+      "baselineMs": {
+        "first": 485.858,
+        "second": 512.231
+      },
+      "afterMs": {
+        "first": 428.338,
+        "second": 6.383
+      },
+      "cacheHitSpeedup": 67.1,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "d7b3675eb605862ae829c27acaaa1ea3a148689e0c2427692add65df28be81db",
+      "numericHash": "d6980c17e7599f6cd9373a63ee08fb02e8d68812326e1341fab4ef00d3b12bf6"
+    },
+    "revenue_admin": {
+      "path": "/revenue",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026",
+        "dimension": "emp"
+      },
+      "scope": "CEO",
+      "baselineMs": {
+        "first": 258.253,
+        "second": 204.794
+      },
+      "afterMs": {
+        "first": 219.137,
+        "second": 8.853
+      },
+      "cacheHitSpeedup": 24.8,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "e140a4eb64399a30055219c0f0ab5bbf41245bdbaf05c29fd30dbb45e4a3c3a3",
+      "numericHash": "e44e92d5b0be4293c5d7591f1a1110db2a8805f23dc02b741ef5379c1c63e694"
+    },
+    "revenue_dn001": {
+      "path": "/revenue",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026",
+        "dimension": "emp"
+      },
+      "scope": "DN001",
+      "baselineMs": {
+        "first": 196.938,
+        "second": 200.06
+      },
+      "afterMs": {
+        "first": 272.194,
+        "second": 13.149
+      },
+      "cacheHitSpeedup": 20.7,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "d8a12fa78864038d7955712ec082511febb6f52f26e6dd4a17b1430571811f9d",
+      "numericHash": "ccba0cd41b1fb384db643f472e25111c20a6e8cbb610f570225c6e91c8bd7d31"
+    },
+    "cst_admin": {
+      "path": "/cst",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026"
+      },
+      "scope": "CEO",
+      "baselineMs": {
+        "first": 602.046,
+        "second": 106.541
+      },
+      "afterMs": {
+        "first": 670.51,
+        "second": 8.013
+      },
+      "cacheHitSpeedup": 83.7,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "c54a0de159f8579e91fab5e35e552609837185b18725357ad4f369ef72ed75e8",
+      "numericHash": "3c8b066c31621a19a0e2f260ef9e44296d3044024cea5700e33a6ea067425706"
+    },
+    "cst_dn001": {
+      "path": "/cst",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026"
+      },
+      "scope": "DN001",
+      "baselineMs": {
+        "first": 129.778,
+        "second": 16.334
+      },
+      "afterMs": {
+        "first": 145.627,
+        "second": 6.206
+      },
+      "cacheHitSpeedup": 23.5,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "8237914213f5c40577e3746c44752e5f18fd75e0770f44a8660ddc2ed6a2bd64",
+      "numericHash": "309d6fa558840bd3bdc133a02ac16619168eeeb574a628aef816f3f7d1466096"
+    },
+    "filters_admin": {
+      "path": "/filters",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026"
+      },
+      "scope": "CEO",
+      "baselineMs": {
+        "first": 538.122,
+        "second": 652.32
+      },
+      "afterMs": {
+        "first": 576.289,
+        "second": 6.199
+      },
+      "cacheHitSpeedup": 93,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "da0d3a3f7b57ccd3d772870ad07a0c71c8a2481602ea8b083ba2a0c7c6f14a24",
+      "numericHash": "a1a33ceae3c396483b63ebc10db8cd5e442002a209617ef8cae60f244ce0d1a5"
+    },
+    "filters_dn001": {
+      "path": "/filters",
+      "query": {
+        "ky": "07.2026",
+        "from": "07.2026",
+        "to": "07.2026"
+      },
+      "scope": "DN001",
+      "baselineMs": {
+        "first": 7646.324,
+        "second": 307.159
+      },
+      "afterMs": {
+        "first": 6989.565,
+        "second": 6.302
+      },
+      "cacheHitSpeedup": 1109.1,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "573dfc555c0fc209e416d9ffc8083c46f789bbec298b6d238a64cc1b2d5bd07b",
+      "numericHash": "95f88a037bd0adb1d3fac54041694bbeb1d195ea21ac8910e04fe5e12e8e1eb1"
+    },
+    "employee_cost_all": {
+      "path": "/employee-cost",
+      "query": {
+        "emp": "ALL",
+        "from": "2026-07",
+        "to": "2026-07",
+        "sortDir": "asc",
+        "page": "1",
+        "pageSize": "20"
+      },
+      "scope": "CEO",
+      "baselineMs": {
+        "first": 24843.984,
+        "second": 6263.05
+      },
+      "afterMs": {
+        "first": 24454.118,
+        "second": 8.33
+      },
+      "cacheHitSpeedup": 2935.7,
+      "baselineParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "repeatParity": {
+        "payload": true,
+        "numeric": true
+      },
+      "payloadHash": "e3447da33e819504f500c3c61e689badc0f21596b40cf1bb6ebba899816402d6",
+      "numericHash": "25ae79b0fd49b76066a8f83485dbd9a9c1b529c4dfb984d6d1b83b467a5d146d"
+    }
+  }
+}

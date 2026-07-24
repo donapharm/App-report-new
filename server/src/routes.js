@@ -68,6 +68,7 @@ const requireCeoDelivery = (req, res, next) => (req.session.role === 'ceo' || re
 const requireCeoQlnb = (req, res, next) => (req.session.role === 'ceo' || String(req.session.emp_code || '').toUpperCase() === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được xem dữ liệu quản trị QLNB.', code: 'DORMANT_CEO_REQUIRED' });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
+let memoDataSignature = null;
 const bonusPolicyPreviews = new Map();
 const canonicalAssignmentSnapshots = new Map();
 async function canonicalAssignmentSnapshot(period) {
@@ -98,8 +99,78 @@ function memoGet(key, ttlMs, build) {
   const t = Date.now();
   if (hit && t - hit.t < ttlMs) return hit.v;
   const v = build();
-  memo.set(key, { t, v });
+  const entry = { t, v };
+  memo.set(key, entry);
+  // Promise đang chạy được dùng chung cho request đồng thời. Nếu upstream lỗi,
+  // bỏ ngay entry để lần sau được retry thay vì giữ rejected Promise hết TTL.
+  if (v && typeof v.then === 'function') {
+    v.catch(() => { if (memo.get(key) === entry) memo.delete(key); });
+  }
+  if (memo.size > 500) memo.delete(memo.keys().next().value);
   return v;
+}
+
+function stableCacheValue(value) {
+  if (Array.isArray(value)) return value.map(stableCacheValue);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableCacheValue(value[key])]));
+}
+
+function currentMemoDataSignature() {
+  const signature = store.activeDataSignature();
+  if (memoDataSignature !== signature) {
+    memo.clear();
+    if (typeof A.clearOverviewCache === 'function') A.clearOverviewCache();
+    memoDataSignature = signature;
+  }
+  return signature;
+}
+
+function routeDataSignature(routeName) {
+  if (routeName === 'filters') return store.unitGroupDataSignature();
+  if (routeName === 'cst') return store.cstDataSignature();
+  if (routeName === 'alerts' || routeName === 'analysis') return store.dashboardDataSignature();
+  if (routeName === 'employee-cost-all') return store.employeeCostDataSignature();
+  return currentMemoDataSignature();
+}
+
+function readCacheKey(req, routeName, extra = {}) {
+  const scope = auth.scopeOf(req.session);
+  // Luôn gọi chữ ký core để upload/activate slot có thể dọn cả memo map;
+  // key route sau đó chỉ ghép thêm đúng nguồn phụ mà route thực sự sử dụng.
+  currentMemoDataSignature();
+  return [
+    'read', routeName, routeDataSignature(routeName),
+    String(req.session.role || '').toLowerCase(),
+    String(req.session.emp_code || ''),
+    scope.empCode || 'ADMIN',
+    JSON.stringify(stableCacheValue(req.query || {})),
+    JSON.stringify(stableCacheValue(extra)),
+  ].join(':');
+}
+
+/**
+ * Memo JSON sau auth. Key luôn có role + actor + backend scope + query chuẩn
+ * hóa + chữ ký slot. Chỉ cache response 2xx; lỗi không bị giữ lại.
+ */
+function memoJson(routeName, ttlMs = 45 * 1000) {
+  return (req, res, next) => {
+    // Memo chỉ ở RAM backend; trình duyệt/proxy không được giữ payload theo quyền.
+    res.set('Cache-Control', 'private, no-store');
+    const key = readCacheKey(req, routeName);
+    const hit = memo.get(key);
+    const t = Date.now();
+    if (hit && t - hit.t < ttlMs) return res.json(hit.v);
+    const sendJson = res.json.bind(res);
+    res.json = (value) => {
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        memo.set(key, { t: Date.now(), v: value });
+        if (memo.size > 500) memo.delete(memo.keys().next().value);
+      }
+      return sendJson(value);
+    };
+    return next();
+  };
 }
 
 // Ngữ cảnh phiên/thiết bị: deviceId (từ body/header), IP thật (qua Cloudflare), user-agent.
@@ -681,28 +752,33 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
-  const roster = employeeCostRosterRows();
-  const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
-  const sharedCatalogRowsByPeriod = {};
-  const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
-  const catalogPeriods = [...new Set([...range.months, ...bonusQuarter.kys.map((ky) => catalogManagement.toHubPeriod(ky))])];
-  for (const period of catalogPeriods) {
-    try {
-      const snapshot = await canonicalAssignmentSnapshot(period);
-      sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
-    } catch (error) {
-      sharedCatalogRowsByPeriod[period] = [];
-      console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+  const build = async () => {
+    const roster = employeeCostRosterRows();
+    const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+    const sharedCatalogRowsByPeriod = {};
+    const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
+    const catalogPeriods = [...new Set([...range.months, ...bonusQuarter.kys.map((ky) => catalogManagement.toHubPeriod(ky))])];
+    for (const period of catalogPeriods) {
+      try {
+        const snapshot = await canonicalAssignmentSnapshot(period);
+        sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
+      } catch (error) {
+        sharedCatalogRowsByPeriod[period] = [];
+        console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
+      }
     }
-  }
-  const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
-    requestedEmp: employee.emp_code,
-    auditEvent,
-    roster,
-    sharedCatalogRowsByPeriod,
-  }));
-  const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
-  return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate, allEmployees: true }));
+    const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
+      requestedEmp: employee.emp_code,
+      auditEvent,
+      roster,
+      sharedCatalogRowsByPeriod,
+    }));
+    const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+    return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate, allEmployees: true }));
+  };
+  // Export giữ nguyên đường audit riêng; chỉ memo bảng ALL tương tác trên UI.
+  if (!paginate || auditEvent !== 'view_all') return build();
+  return memoGet(readCacheKey(req, 'employee-cost-all', { paginate, auditEvent }), 60 * 1000, build);
 }
 
 // Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
@@ -1554,7 +1630,7 @@ router.use(async (req, res, next) => {
   });
 });
 
-router.get('/filters', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+router.get('/filters', auth.requireAuth, memoJson('filters', 30 * 1000), asyncJsonRoute(async (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const uniq = (arr, key, label = key) => {
@@ -1916,7 +1992,7 @@ router.get('/trend', auth.requireAuth, (req, res) => {
   const filters = revenueFiltersFromQuery(req.query);
   const empFilter = new Set(A.selectedEmployeeCodes(filters));
   const targetComparable = A.targetFiltersComparable(filters);
-  const cacheKey = `trend:${scope.empCode || 'ALL'}:${JSON.stringify(filters)}`;
+  const cacheKey = `trend:${store.targetDataSignature()}:${scope.empCode || 'ALL'}:${JSON.stringify(filters)}`;
   res.json(memoGet(cacheKey, 60 * 1000, () => store.listPeriods().map((p) => {
     // Lightweight trend: không gọi overviewKpis vì hàm đó còn tính CST/target từng NV.
     const rows = A.applyFilters(store.getRows({ ky: p.ky, scope }), filters);
@@ -1936,7 +2012,7 @@ router.get('/trend', auth.requireAuth, (req, res) => {
   })));
 });
 
-router.get('/alerts', auth.requireAuth, (req, res) => {
+router.get('/alerts', auth.requireAuth, memoJson('alerts'), (req, res) => {
   res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session), compareMode: req.query.compareMode, filters: revenueFiltersFromQuery(req.query) }));
 });
 
@@ -2091,7 +2167,7 @@ router.post('/dormant/feedback/:id/ack', auth.requireAuth, (req, res) => {
 });
 
 /* ---------- Revenue drill-down ---------- */
-router.get('/revenue', auth.requireAuth, (req, res) => {
+router.get('/revenue', auth.requireAuth, memoJson('revenue'), (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const dimension = ['emp', 'unit', 'product'].includes(req.query.dimension) ? req.query.dimension : 'emp';
@@ -2600,7 +2676,7 @@ router.get('/daily-sales/orders', auth.requireAuth, dailySalesOrders.createHandl
 }));
 
 /* ---------- Phân tích: so kỳ trước theo đơn vị/sản phẩm/tuyến/NV ---------- */
-router.get('/analysis', auth.requireAuth, (req, res) => {
+router.get('/analysis', auth.requireAuth, memoJson('analysis'), (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
   const { ky, kys } = pc;
@@ -2821,7 +2897,7 @@ router.get('/analysis', auth.requireAuth, (req, res) => {
 });
 
 /* ---------- Cơ số thầu ---------- */
-router.get('/cst', auth.requireAuth, async (req, res) => {
+router.get('/cst', auth.requireAuth, memoJson('cst', 30 * 1000), async (req, res) => {
   const scope = auth.scopeOf(req.session);
   const num = (v) => (v === undefined || v === '' ? null : Number(v));
   const contractorLookup = contractorLookupFor(scope);

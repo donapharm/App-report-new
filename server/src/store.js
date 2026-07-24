@@ -250,8 +250,54 @@ function mergeLatestUploadIntoCst(rows) {
 function slotsSig(slots) {
   return slots.map((s) => {
     let mt = 0; try { mt = fs.statSync(path.join(UP_DIR, s.id + '.json')).mtimeMs; } catch { mt = 0; }
-    return `${s.id}:${s.ky}:${mt}`;
+    return [s.id, s.ky, s.dateFrom, s.dateTo, s.data_as_of || s.dataAsOf || s.uploadedAt, mt]
+      .map((value) => String(value || '')).join(':');
   }).sort().join('|');
+}
+function fileSignature(filePath, label = path.basename(filePath)) {
+  try {
+    const stat = fs.statSync(filePath);
+    return `${label}:${stat.size}:${stat.mtimeMs}`;
+  } catch { return `${label}:missing`; }
+}
+/**
+ * Chữ ký kỹ thuật nguồn doanh thu đang active. Các route ghép thêm chữ ký
+ * target/CST/Data Hub đúng theo nguồn mình dùng để tránh một cache phụ thay
+ * đổi làm vô hiệu hóa mọi route không liên quan. Không chứa dữ liệu nghiệp vụ.
+ */
+function activeDataSignature() {
+  return `${provinceMapVersion()}|${slotsSig(activeSlots())}`;
+}
+function targetDataSignature() {
+  return [activeDataSignature(), ...[
+    'target_entries.json', 'targets_real.json', 'target_baseline_202606.json', 'target_roster.json',
+  ].map((name) => fileSignature(path.join(DATA_DIR, name), name))].join('|');
+}
+function cstBaseDataSignature() {
+  return `${activeDataSignature()}|${fileSignature(path.join(DATA_DIR, 'cst_real.json'), 'cst-real')}`;
+}
+function cstDataSignature() {
+  return `${cstBaseDataSignature()}|${fileSignature(path.join(DATA_DIR, 'cst_appsale_tender_quota.json'), 'cst-appsale')}`;
+}
+function unitGroupDataSignature() {
+  return `${activeDataSignature()}|${fileSignature(
+    process.env.DATA_HUB_UNIT_GROUPS_CACHE_FILE || path.join(DATA_DIR, 'datahub_unit_groups_lkg.json'),
+    'datahub-unit-groups',
+  )}`;
+}
+function dashboardDataSignature() {
+  return `${targetDataSignature()}|${fileSignature(path.join(DATA_DIR, 'cst_real.json'), 'cst-real')}`;
+}
+function employeeCostDataSignature() {
+  return [
+    targetDataSignature(),
+    fileSignature(
+      process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json'),
+      'catalog-management',
+    ),
+    ...['employee_bonus_tiers.json', 'employee_cost_groups.json', 'employee_cost_templates.json', 'employee_cost_unit_groups.json']
+      .map((name) => fileSignature(path.join(__dirname, '..', 'config', name), name)),
+  ].join('|');
 }
 // CACHE dòng doanh thu đã enrich. Trước đây allRows() ĐỌC LẠI file slot + enrich (có
 // provinceOf) MỖI LẦN GỌI, và getRowsRange gọi nó 1 lần/kỳ -> chậm rõ khi nhiều kỳ.
@@ -531,7 +577,10 @@ module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
   periodKys, periodFreshness, periodRange, previousKys, comparePeriods,
   currentKyByDate, lastCompleteKy, nextKy,
-  getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache, empCodesWithData, empCodesWithRows,
+  getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache,
+  activeDataSignature, targetDataSignature, cstBaseDataSignature, cstDataSignature,
+  unitGroupDataSignature, dashboardDataSignature, employeeCostDataSignature,
+  empCodesWithData, empCodesWithRows,
   employeeType, hasTarget, isActiveSalesUser, targetRoster, targetRosterCodes, targetRosterConfig,
   isValidEmpCode, UNALLOCATED_EMP, UNALLOCATED_LABEL,
   // giữ tên cũ để nơi khác không vỡ

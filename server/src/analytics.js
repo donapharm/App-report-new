@@ -146,7 +146,7 @@ function clearOverviewCache() { overviewCache.clear(); }
 /** KPI tổng quan cho 1 kỳ hoặc nhiều kỳ trong phạm vi quyền. */
 function overviewKpis({ ky, kys, scope, label, filters = {} }) {
   const list = normKys({ ky, kys });
-  const cacheKey = JSON.stringify({ list, empCode: scope?.empCode || null, label: label || '', filters });
+  const cacheKey = JSON.stringify({ data: store.dashboardDataSignature(), list, empCode: scope?.empCode || null, label: label || '', filters });
   const cached = overviewCache.get(cacheKey);
   if (cached && Date.now() - cached.at < OVERVIEW_CACHE_MS) return cached.value;
   const rows = applyFilters(store.getRowsRange({ kys: list, scope }), filters);
