@@ -1,3 +1,7 @@
+### 2026-07-25 — Report Bot — Sửa KPI “Khớp doanh thu” ở chế độ tất cả nhân viên (review, chưa deploy)
+- KPI đầu trang ở chế độ `ALL` nay đọc `period.match` đã gộp bởi `mergeEmployeeReports`, thay vì `model.match` top-level rỗng làm hiện sai `0/20 mã`; ví dụ nghiệm thu hiển thị đúng `98,7% · 1245/1262 mã` như chân bảng.
+- Chỉ đổi nguồn dữ liệu hiển thị của thẻ KPI frontend; không sửa doanh thu, số dòng, công thức ghép, backend hay quyền truy cập. Bổ sung regression test cho payload `ALL` thiếu `match` top-level.
+
 ### 2026-07-25 — Claude Code (review hậu kiểm) — P0 cache `beb78a2`+`0c8488c` (bảng ALL) deploy: PASS + UOM candidate tách khỏi SSO
 - **P0 cache đã lên main (merge chưa qua review trước) → em review hậu kiểm: PASS.** Key cache (`readCacheKey`) gồm `role + session.emp_code + scope.empCode('ADMIN' nếu admin) + TOÀN BỘ query (có ?emp=) + chữ ký dữ liệu per-route`. ⇒ **Không lẫn dữ liệu giữa NV**; admin xem DN006→DN009 khác key (không stale nhầm NV); **tự invalidate** theo `activeDataSignature`/`employeeCostDataSignature` khi upload/refresh. Bảng ALL dùng key `ADMIN_ALL` **chung cho mọi admin** (an toàn: route admin-only + payload company-wide) + **warm cache khi sync** (`0c8488c`) → lần đầu cũng nhanh. Chỉ cache kết quả đã tính, không cache token; số không đổi. **Bảng ALL hết "quay hoài".**
 - **Lưu ý quy trình:** P0 cache merge thẳng main **không chờ Claude review trước** như thỏa thuận. Lần này hậu kiểm PASS, nhưng nhắc lại: bản đụng cache/số/quyền **đẩy nhánh review trước**, Claude soát rồi merge.

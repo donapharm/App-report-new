@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   buildEmployeeCostColumns, currentMonthValue, employeeBonusViewModel, employeeCostColumnKpis, employeeCostViewModel,
-  employeeCostHighlightParts, employeeCostPageItems, employeeTargetViewModel, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
+  employeeCostHighlightParts, employeeCostKpiMatch, employeeCostPageItems, employeeTargetViewModel, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
   formatMonthLabel, normalizeEmployeeCostSearch,
 } from '../src/employeeCostModel.js';
 import { normalizeTargetNavigation, targetAdminKyAfterPeriods } from '../src/targetNavigationModel.js';
@@ -122,9 +122,26 @@ test('dynamic columns follow approved order, keep bid price before quantity, and
 test('KPI and period metadata distinguish order lines from unique unit-product keys', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   assert.match(page, /label="Nhân viên"[\s\S]*sub=\{`Hiện \$\{filteredCount[^`]*\/\$\{totalTableRows[^`]* dòng`\}/);
+  assert.match(page, /formatMatchRate\(kpiMatch\)/);
+  assert.match(page, /kpiMatch\.matchedRows/);
   assert.match(page, /mã \(đơn vị×mặt hàng\) · ngưỡng/);
   assert.match(page, /mã đơn vị×mặt hàng\)/);
   assert.doesNotMatch(page, /matchedRows}\/\$\{[^}]*totalRows} dòng/);
+});
+
+test('ALL revenue-match KPI reads merged period match instead of empty top-level match', () => {
+  const model = employeeCostViewModel({
+    empCode: 'ALL', allEmployees: true, from: '2026-07', to: '2026-07',
+    periods: [{
+      empCode: 'ALL', period: '2026-07', rows: [], columns: [],
+      match: { matchedRows: 1245, totalRows: 1262, rate: 98.7, threshold: 90, low: false },
+      summary: { reliable: true },
+    }],
+    summary: { reliable: true },
+  });
+  assert.deepEqual(model.match, { matchedRows: 0, totalRows: 0, rate: null, threshold: 90, low: false });
+  assert.deepEqual(employeeCostKpiMatch(model), { matchedRows: 1245, totalRows: 1262, rate: 98.7, threshold: 90, low: false });
+  assert.equal(formatMatchRate(employeeCostKpiMatch(model)), '98,7%');
 });
 
 test('full-time and part-time template metadata produce exactly 19 and 15 columns', () => {

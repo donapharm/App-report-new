@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadEmployeeCostDataQuality, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
-  currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostViewModel,
+  currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostViewModel,
   employeeCostPageItems, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
@@ -831,6 +831,7 @@ export default function EmployeeCost({ me, onNavigate }) {
   const multiple = model.periods.length > 1;
   const columnKpis = employeeCostColumnKpis(model);
   const allEmployees = admin && selectedEmp === 'ALL';
+  const kpiMatch = employeeCostKpiMatch(model);
   const filteredCount = model.search.filteredRows;
   const totalTableRows = model.search.totalRows;
   const activeTableFilter = tableQuery || tableFilters.province || tableFilters.unitGroup || tableFilters.route || tableFilters.date || tableSort.key;
@@ -1000,7 +1001,7 @@ export default function EmployeeCost({ me, onNavigate }) {
       <Kpi label={multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`} tone="employee-cost-tone-base" />
       <BonusKpi bonus={model.bonus} />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
-      <Kpi label="Khớp doanh thu" value={formatMatchRate(model.match)} sub={`${model.match.matchedRows}/${model.match.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${model.match.threshold}%`} />
+      <Kpi label="Khớp doanh thu" value={formatMatchRate(kpiMatch)} sub={`${kpiMatch.matchedRows}/${kpiMatch.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}%`} />
     </div>
 
     {targetModalOpen && <TargetDetailModal
