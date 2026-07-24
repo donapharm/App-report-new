@@ -7,6 +7,7 @@ const multer = require('multer');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { Worker } = require('worker_threads');
 const store = require('./store');
 const auth = require('./auth');
 const A = require('./analytics');
@@ -772,10 +773,7 @@ function employeeCostTableOptions(req, { paginate = false, allEmployees = false 
   };
 }
 
-async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view_all', suppressAudit = false } = {}) {
-  if (!auth.isAdmin(req.session.role)) {
-    throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
-  }
+async function prepareEmployeeCostAll(req) {
   const roster = employeeCostRosterRows();
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   const sharedCatalogRowsByPeriod = {};
@@ -793,16 +791,27 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
     }
   }
-  const buildMerged = async () => {
-    const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
-      requestedEmp: employee.emp_code,
-      auditEvent,
-      roster,
-      sharedCatalogRowsByPeriod,
-      suppressAudit,
-    }));
-    return employeeCostTable.mergeEmployeeReports(reports, roster);
-  };
+  return { roster, sharedCatalogRowsByPeriod };
+}
+
+async function buildEmployeeCostAllMerged(req, context, { auditEvent = 'view_all', suppressAudit = false } = {}) {
+  const { roster, sharedCatalogRowsByPeriod } = context;
+  const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
+    requestedEmp: employee.emp_code,
+    auditEvent,
+    roster,
+    sharedCatalogRowsByPeriod,
+    suppressAudit,
+  }));
+  return employeeCostTable.mergeEmployeeReports(reports, roster);
+}
+
+async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view_all', suppressAudit = false } = {}) {
+  if (!auth.isAdmin(req.session.role)) {
+    throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
+  }
+  const context = await prepareEmployeeCostAll(req);
+  const buildMerged = () => buildEmployeeCostAllMerged(req, context, { auditEvent, suppressAudit });
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
   // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
   // không chứa actor/session nên mọi admin hợp lệ dùng chung đúng một bản.
@@ -821,15 +830,64 @@ function monthInputForKy(ky) {
   return match ? `${match[2]}-${match[1]}` : '';
 }
 
+async function buildEmployeeCostAllWarmBase(query) {
+  const req = { session: { emp_code: 'CACHE_WARMER', role: 'admin' }, query };
+  const context = await prepareEmployeeCostAll(req);
+  const merged = await buildEmployeeCostAllMerged(req, context, {
+    auditEvent: 'warm_all:worker',
+    suppressAudit: true,
+  });
+  return {
+    merged,
+    coreSignature: store.activeDataSignature(),
+    employeeSignature: store.employeeCostDataSignature(),
+  };
+}
+
+function buildEmployeeCostAllWarmBaseInWorker(query) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, 'employeeCostWarmWorker.js'), {
+      workerData: { query },
+      resourceLimits: { maxOldGenerationSizeMb: 2048 },
+    });
+    let settled = false;
+    worker.once('message', (message) => {
+      settled = true;
+      if (message?.ok) resolve(message.result);
+      else reject(Object.assign(new Error(message?.error?.message || 'Employee Cost warm worker failed'), { stack: message?.error?.stack }));
+    });
+    worker.once('error', (error) => { settled = true; reject(error); });
+    worker.once('exit', (code) => {
+      if (!settled && code !== 0) reject(new Error(`Employee Cost warm worker exited with code ${code}`));
+      else if (!settled) reject(new Error('Employee Cost warm worker exited without a result'));
+    });
+  });
+}
+
 async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
   const month = monthInputForKy(ky);
   if (!month) return false;
   const startedAt = Date.now();
-  await employeeCostAllPayload({
+  const req = {
     session: { emp_code: 'CACHE_WARMER', role: 'admin' },
     query: { emp: 'ALL', from: month, to: month, page: '1', pageSize: '20', sortDir: 'asc' },
-  }, { paginate: true, auditEvent: `warm_all:${reason}`, suppressAudit: true });
-  console.log('[employee-cost] ALL cache warmed', { ky, reason, durationMs: Date.now() - startedAt });
+  };
+  if (process.env.NODE_TEST_CONTEXT || process.env.EMPLOYEE_COST_WARM_IN_PROCESS === '1') {
+    await employeeCostAllPayload(req, { paginate: true, auditEvent: `warm_all:${reason}`, suppressAudit: true });
+  } else {
+    const result = await buildEmployeeCostAllWarmBaseInWorker(req.query);
+    currentMemoDataSignature();
+    if (result.coreSignature !== store.activeDataSignature() || result.employeeSignature !== store.employeeCostDataSignature()) {
+      throw new Error('Employee Cost source changed while background warm was running');
+    }
+    const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, () => Promise.resolve(result.merged));
+    await memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
+      employeeCostTable.transformReport(await merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
+    ));
+  }
+  console.log('[employee-cost] ALL cache warmed', {
+    ky, reason, mode: process.env.NODE_TEST_CONTEXT ? 'test-in-process' : 'worker', durationMs: Date.now() - startedAt,
+  });
   return true;
 }
 
@@ -4012,6 +4070,13 @@ router.post('/upload/activate', auth.requireAuth, auth.requireAdmin, (req, res) 
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// Worker-thread entry point only. Non-enumerable so Express/router behavior and
+// the public HTTP surface remain unchanged.
+Object.defineProperty(router, '__buildEmployeeCostAllWarmBase', {
+  value: buildEmployeeCostAllWarmBase,
+  enumerable: false,
 });
 
 module.exports = router;

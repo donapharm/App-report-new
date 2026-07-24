@@ -193,6 +193,7 @@ test('employee-cost ALL does not retain a rejected Promise', async () => {
 
 test('all requested P0 routes are memoized after auth and cache keeps private/no-store employee-cost semantics', () => {
   const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const warmWorkerSource = fs.readFileSync(require.resolve('../src/employeeCostWarmWorker'), 'utf8');
   for (const [routePath, name] of [
     ['/filters', 'filters'], ['/alerts', 'alerts'], ['/revenue', 'revenue'], ['/analysis', 'analysis'], ['/cst', 'cst'],
   ]) {
@@ -203,6 +204,9 @@ test('all requested P0 routes are memoized after auth and cache keeps private/no
   assert.match(source, /employeeCostAllCacheKey\(req, 'base'\)[\s\S]*?EMPLOYEE_COST_ALL_BASE_TTL_MS/);
   assert.match(source, /employeeCostAllCacheKey\(req, 'view'\)[\s\S]*?EMPLOYEE_COST_ALL_VIEW_TTL_MS/);
   assert.match(source, /revenueRefresh\.onMaterialized\([\s\S]*?warmEmployeeCostAllCache/);
+  assert.match(source, /new Worker\([\s\S]*?employeeCostWarmWorker\.js/);
+  assert.match(warmWorkerSource, /JSON\.parse\(JSON\.stringify\(result\)\)/);
+  assert.match(source, /result\.coreSignature !== store\.activeDataSignature\(\)[\s\S]*?result\.employeeSignature !== store\.employeeCostDataSignature\(\)/);
   assert.match(source, /scheduleEmployeeCostAllWarm\(slot\.ky, 'upload_commit'\)/);
   assert.match(source, /scheduleEmployeeCostAllWarm\(slot\.ky, 'upload_activate'\)/);
   assert.match(source, /router\.get\('\/employee-cost'[\s\S]*?Cache-Control', 'private, no-store'/);
