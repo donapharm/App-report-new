@@ -67,7 +67,8 @@ Phạt cấn trừ **tiền thật**. Vì điểm giờ do App Report tính còn
 
 ## 7. GHI CHÚ
 - **Phạt** phụ thuộc điểm → App Report tính **phạt dự kiến** tại chỗ (điểm của mình + xu App VAT), **gate bằng parity**
-  (mục 4). App Report **KHÔNG tự thực hiện lệnh trừ tiền** — chỉ hiển thị + cảnh báo + gửi thông báo (xem mục 8).
+  (mục 4). App Report **KHÔNG tự thực hiện lệnh trừ tiền** — chỉ hiển thị + cảnh báo + gửi thông báo + **xuất số cho
+  DataHub**. **Nút trừ thật do CEO bấm tại DataHub smart app** (§8.4).
 - Task kèm cho **App VAT Bot**: đọc đúng doanh thu (đồng bộ App Sale) để điểm nội bộ App VAT khớp App Report — nếu không,
   App VAT nên **tiêu thụ điểm từ App Report** làm SSOT thay vì tự tính từ bản doanh thu cũ.
 
@@ -97,9 +98,15 @@ Trước khi con số phạt được cấn trừ, **gửi Telegram + Email** ch
 - Thông báo phải đi **TRƯỚC** thời điểm cấn trừ đủ để NV nắm/đối chiếu (không trừ âm thầm). Ghi **audit** đã gửi
   (kênh · thời điểm · NV · kỳ), **không log token/PII**.
 
-### 8.4 Ranh giới thực thi (không trừ oan)
-- **App Report:** tính điểm (SSOT) · tính phạt dự kiến · cảnh báo tháng · **gửi Telegram/Email** · hiển thị dòng cấn trừ.
-- **App Report KHÔNG:** ghi payroll, sửa số chi phí DataHub, tự phát lệnh chi/trừ. Việc **ghi cấn trừ thật** vào chi phí
-  bán hàng do **chủ sở hữu chi phí (DataHub/quy trình tài chính) hoặc App VAT** thực hiện, dùng **đúng con số đã qua
-  parity** — App Report chỉ cung cấp số + thông báo. **Cần CEO chốt đơn vị THỰC THI lệnh trừ** (đề xuất: nơi đang giữ
-  "chi phí bán hàng" = DataHub, hoặc App VAT SSOT khoản) để 1 nơi duy nhất ghi, tránh trừ 2 lần / lệch số.
+### 8.4 Ranh giới thực thi — **CEO chốt 2026-07-24: NÚT TRỪ Ở DATAHUB SMART APP**
+- **App Report:** tính điểm (SSOT) · tính **phạt dự kiến** (đã qua parity) · cảnh báo tháng · **gửi Telegram/Email** ·
+  hiển thị dòng cấn trừ (display-only). **Xuất số phạt chốt quý** cho DataHub đọc qua **service endpoint self-scope**
+  (per-NV, per-quý: `emp_code · quý · điểm_quý · xu_quý · thiếu · phat_tien · rule_version`). **App Report KHÔNG** ghi
+  payroll / KHÔNG tự trừ / KHÔNG sửa số chi phí.
+- **DataHub smart app = NƠI THỰC THI lệnh trừ** (chủ sở hữu "chi phí bán hàng"). **CEO bấm nút duyệt trừ** tại DataHub
+  cho từng NV/kỳ (hoặc theo lô), DataHub **ghi cấn trừ thật** vào chi phí bán hàng của NV bằng **đúng con số App Report
+  xuất** (đã parity) — **1 nơi duy nhất ghi**, tránh trừ 2 lần / lệch số. DataHub versioned + audit ai bấm/khi nào/số nào.
+- **Chốt luồng:** App Report tính + báo NV (Telegram/Email kèm quy tắc) → **CEO xem & bấm nút ở DataHub** → DataHub trừ +
+  ghi audit → App Report hiển thị trạng thái "đã cấn trừ (DataHub)". Không nút nào ở App Report tự động trừ tiền.
+- Task giao **DataHub Bot**: `TASK_DATAHUB_PENALTY_DEDUCT.md` (dựng nút duyệt + đọc số phạt từ App Report + ghi cấn trừ +
+  audit; không tự tính lại số — dùng số App Report SSOT đã parity).
