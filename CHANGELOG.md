@@ -1,3 +1,8 @@
+### 2026-07-24 — Report Bot — xác minh nguồn C10 cho Thưởng v2 #166/#167
+- DataHub production catalog-management version `3.9` trả **27.719 catalog + 27.719 assignments**, nhưng chỉ expose `c3,c4,c5,c6,c7,c15,c16,c17,c25,c31`; **không có `c10/C10`**, vẫn khóa đúng `c32/c47`. LKG App Report cùng version cũng không có C10.
+- App Sale production revision `8b42c07e` có `products.tech_rank` cho đủ **371/371 QLNB**: `H.A*=136`, `H.A=102`, `H.B=62`, `H.C=46`, `H.D=17`, ngoài directive còn `H.E=4`, `H.F=4`; không thiếu/trùng QLNB xung đột. Đây chỉ là bằng chứng đối chiếu, **không được dùng runtime** vì SSOT chính thức là C10 CEO vault/DataHub.
+- Kết luận: phụ thuộc DataHub expose C10 đang **BLOCKED**. App Report tiếp tục làm engine/menu trên nhánh review với C10 strict và fail-closed; không fallback App Sale, không tự phân nhóm, chưa deploy. Evidence: `artifacts/employee-bonus-v2-c10-verification-166.md`.
+
 ### 2026-07-24 — Claude Code (nghiệm thu) — production reward `55f8bd0`: PASS
 - **Kiểm tra độc lập trên main: PASS.** `employeeVatKhoan.js` + routes đọc App VAT trên main; **`VAT_SERVICE_TOKEN` KHÔNG ở FE** (chỉ backend, FE dùng session token user). Code deploy = bản review `0c1da00` + **parity 0 sai số** (điểm/xu/phạt App Report = App VAT). Self-scope 2 lớp, không lộ token (chỉ sid băm ở App VAT), số chi phí DataHub không đổi. Version live `55f8bd0-20260724-072611`.
 - Ô **Thưởng dự kiến** live nhưng hiện "Chưa cấu hình" (chờ Thưởng v2 + C10). **Đã LIVE:** điểm/xu/phạt + dòng cấn trừ + cảnh báo.
