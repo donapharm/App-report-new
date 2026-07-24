@@ -42,6 +42,8 @@ test('view model preserves local point + VAT xu fields without inventing hidden 
   assert.equal(model.phatDuKien, 1_800_000);
   assert.equal(model.ruleVersion, 'point-local-2026-05-r1');
   assert.equal(model.pointRuleVersion, 'point-local-2026-05-r1');
+  assert.equal(model.pointSource, 'App Report');
+  assert.equal(model.pointLocalActive, true);
   assert.equal(model.xuRuleVersion, 'xu-v2026-05-r1');
   assert.equal(model.quarterStatus, 'đang đối soát');
 });
@@ -53,6 +55,13 @@ test('missing source fails closed with exact note and no invented KPI values', (
   assert.equal(model.diemThang, null);
   assert.equal(model.xuQuyTong, null);
   assert.equal(model.phatDuKien, null);
+  assert.equal(model.pointSource, 'App VAT');
+  assert.equal(model.pointLocalActive, false);
+});
+
+test('point source falls back to App VAT until the local rule is active', () => {
+  assert.equal(employeeVatKhoanViewModel({ available: true, source: 'App VAT', rule_version: 'khoan-ssot-v2026-05-r1' }).pointSource, 'App VAT');
+  assert.equal(employeeVatKhoanViewModel({ available: true, source: 'App Report' }).pointSource, 'App VAT');
 });
 
 test('display-only deduction keeps source cost separate and does not mutate it', () => {
@@ -61,12 +70,14 @@ test('display-only deduction keeps source cost separate and does not mutate it',
   assert.deepEqual(employeeVatKhoanDeduction(null, 1_800_000), { baseCost: null, deduction: null, remaining: null });
 });
 
-test('Employee Cost UI has three KPIs, local/vat sources, parity status, and separate display-only deduction', () => {
+test('Employee Cost UI groups reward/penalty and moves Xu to the four-card deduction row', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  const styles = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(page, /Điểm \(tháng · quý\)/);
   assert.match(page, /Xu tích lũy \(tháng · quý\)/);
   assert.match(page, /Phạt dự kiến/);
-  assert.match(page, /Nguồn: App Report/);
+  assert.match(page, /const pointSource = `Nguồn: \$\{source\}/);
   assert.match(page, /Nguồn: App VAT/);
   assert.match(page, /khoan\.pctQuy < 90/);
   assert.match(page, /floor\(điểm thiếu quý ÷ 2\) × 600\.000đ/);
@@ -78,6 +89,16 @@ test('Employee Cost UI has three KPIs, local/vat sources, parity status, and sep
   assert.match(page, /Chi phí gốc − cấn trừ thiếu xu = còn lại/);
   assert.match(page, /Còn lại \(display-only\)/);
   assert.match(page, /Không ghi DataHub\/payroll/);
+  assert.ok(page.indexOf('<BonusKpi') < page.indexOf('<KhoanPenaltyKpi'), 'Thưởng phải đứng ngay trước Phạt');
+  assert.doesNotMatch(page.match(/<div className="kpi-grid employee-cost-kpis">[\s\S]*?<\/div>/)?.[0] || '', /Xu tích lũy/);
+  assert.match(page, /className="employee-cost-khoan-equation"[\s\S]*className="xu"[\s\S]*Chi phí gốc[\s\S]*<strong>−<\/strong>[\s\S]*Cấn trừ thiếu xu[\s\S]*<strong>=<\/strong>[\s\S]*Còn lại/);
+  assert.match(styles, /#4338ca/);
+  assert.match(styles, /#eef2ff/);
+  assert.match(styles, /#047857/);
+  assert.match(styles, /#b91c1c/);
+  assert.match(styles, /@media \(max-width: 767px\)[\s\S]*\.employee-cost-kpis \{ grid-template-columns:1fr; \}/);
+  assert.match(styles, /@media \(max-width: 767px\)[\s\S]*\.employee-cost-khoan-equation \{ grid-template-columns:1fr; \}/);
+  assert.match(app, /\['catalogManagement', 'dailySales', 'products', 'dormantReports', 'employeeCost'\]\.includes\(tab\)/);
   assert.match(page, /setKhoanPayload\(\{ note: 'chưa lấy được xu kỳ này' \}\);\s*setKhoanLoading\(true\)/);
 });
 

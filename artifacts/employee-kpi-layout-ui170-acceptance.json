@@ -1,0 +1,97 @@
+{
+  "task": "TASK_REPORT_UI_KPI_LAYOUT",
+  "checked_at": "2026-07-24T04:59:58.617Z",
+  "deployment": "NOT_DEPLOYED",
+  "authenticated_scope": "CEO; desktop selected DN009",
+  "desktop": {
+    "mode": "desktop",
+    "viewport": [
+      1440,
+      1400
+    ],
+    "labels": [
+      "Nhân viên",
+      "Số dòng đơn hàng",
+      "Khớp doanh thu",
+      "Tổng chi phí tháng (chưa gồm khoản cuối năm)",
+      "Doanh thu chưa VAT",
+      "Điểm (tháng · quý)",
+      "Thưởng dự kiến",
+      "Phạt dự kiến",
+      "C36 CP ctv/khác (%)",
+      "C41 CP đặt hàng (%)",
+      "C43 CP bs/td (%)",
+      "C44 Lương cuối năm (%)\nCUỐI NĂM",
+      "C45 Lương tăng thêm (%)"
+    ],
+    "eq": [
+      "Xu tích lũy (tháng · quý)",
+      "Chi phí gốc",
+      "−",
+      "Cấn trừ thiếu xu",
+      "=",
+      "Còn lại (display-only)"
+    ],
+    "point": "Điểm (tháng · quý)\n53,96 · 53,96\nNguồn: App Report · point-local-2026-05-r1",
+    "penalty": "Phạt dự kiến\n—\nđang đối soát · nguồn App Report (điểm) + App VAT (xu) · không payroll",
+    "mainColumns": 4,
+    "equationColumns": 6,
+    "colors": {
+      "point": "rgb(67, 56, 202)",
+      "pointBg": "rgb(238, 242, 255)",
+      "xu": "rgb(67, 56, 202)",
+      "xuBg": "rgb(238, 242, 255)",
+      "reward": "rgb(4, 120, 87)",
+      "penalty": "rgb(185, 28, 28)"
+    }
+  },
+  "mobile": {
+    "mode": "mobile",
+    "viewport": [
+      390,
+      1200
+    ],
+    "labels": [
+      "Nhân viên",
+      "Số dòng đơn hàng",
+      "Khớp doanh thu",
+      "Tổng chi phí tháng (chưa gồm khoản cuối năm)",
+      "Doanh thu chưa VAT",
+      "Điểm (tháng · quý)",
+      "Thưởng dự kiến",
+      "Phạt dự kiến",
+      "C36 CP ctv/khác (%)",
+      "C41 CP đặt hàng (%)",
+      "C43 CP bs/td (%)",
+      "C44 Lương cuối năm (%)\nCUỐI NĂM",
+      "C45 Lương tăng thêm (%)"
+    ],
+    "eq": [
+      "Xu tích lũy (tháng · quý)",
+      "Chi phí gốc",
+      "−",
+      "Cấn trừ thiếu xu",
+      "=",
+      "Còn lại (display-only)"
+    ],
+    "point": "Điểm (tháng · quý)\n428,31 · 428,31\nNguồn: App Report · point-local-2026-05-r1",
+    "penalty": "Phạt dự kiến\n—\nđang đối soát · nguồn App Report (điểm) + App VAT (xu) · không payroll",
+    "mainColumns": 1,
+    "equationColumns": 1,
+    "colors": {
+      "point": "rgb(67, 56, 202)",
+      "pointBg": "rgb(238, 242, 255)",
+      "xu": "rgb(67, 56, 202)",
+      "xuBg": "rgb(238, 242, 255)",
+      "reward": "rgb(4, 120, 87)",
+      "penalty": "rgb(185, 28, 28)"
+    },
+    "zaloMobileVisible": false
+  },
+  "screenshots": [
+    "artifacts/employee-kpi-layout-ui170-desktop.png",
+    "artifacts/employee-kpi-layout-ui170-mobile.png"
+  ],
+  "secrets_in_artifact": false,
+  "visual_blockers": []
+}
