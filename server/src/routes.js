@@ -23,6 +23,7 @@ const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
+const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
 const employeeBonus = require('./employeeBonus');
 const employeeBonusPolicy = require('./employeeBonusPolicy');
@@ -1427,6 +1428,9 @@ async function employeeCostDqPayload(req, event = 'dq_view') {
     }
     const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
     const rawConfig = loadEmployeeCostDqConfig();
+    // One read per HTTP request. The client coalesces concurrent requests and
+    // serves its bounded RAM TTL; never fetch once per selected month.
+    const productCrosswalk = await appSaleProductCrosswalk.getSnapshot();
     const analyzedByPeriod = [];
     for (const period of range.months) {
       const periodRows = store.getRows({ ky: employeeCost.toUiMonth(period), scope: scopedEmp ? { empCode: scopedEmp } : {} })
@@ -1445,6 +1449,7 @@ async function employeeCostDqPayload(req, event = 'dq_view') {
         // fail-closed (zero candidates) until a grounded gap snapshot exists.
         gapPairs: [],
         config: rawConfig,
+        productCrosswalk,
       }));
     }
     const allItems = mergeDqItems(analyzedByPeriod.flatMap((result) => result.exceptions.map(publicDqItem)));
@@ -1456,6 +1461,7 @@ async function employeeCostDqPayload(req, event = 'dq_view') {
       from: range.from, to: range.to,
       scope: { admin, employeeCode: admin ? (requested || null) : ownEmp },
       config: { ...analyzedConfig, alertThresholds: thresholds },
+      sources: { productMasterCrosswalk: appSaleProductCrosswalk.publicSource(productCrosswalk) },
       filters: filtered.filters,
       summary,
       alert: summary.redCount >= Math.max(1, Number(thresholds.redCount || 1))
@@ -1478,7 +1484,7 @@ router.get('/employee-cost/data-quality', auth.requireAuth, asyncJsonRoute(async
 router.get('/employee-cost/data-quality/summary', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   const payload = await employeeCostDqPayload(req, 'dq_bell_view');
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ ...payload.summary, alert: payload.alert, from: payload.from, to: payload.to });
+  return res.json({ ...payload.summary, alert: payload.alert, from: payload.from, to: payload.to, sources: payload.sources });
 }));
 router.get('/employee-cost/data-quality/export.xlsx', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const payload = await employeeCostDqPayload(req, 'dq_export_xlsx');

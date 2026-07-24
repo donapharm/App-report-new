@@ -617,6 +617,9 @@ function DataQualityPanel({ payload, loading, error, range, admin, onOpenRow }) 
       <Kpi label="🟡 Thiếu hiển thị" value={Number(view.summary.yellowCount).toLocaleString('vi-VN')} />
       <Kpi label="Doanh thu ảnh hưởng" value={formatEmployeeCostCell(view.summary.revenueAffected, moneyColumn)} sub="Không cộng dồn thành thiệt hại" />
     </div>
+    {!loading && view.uomRuleUnavailable && <div className="employee-cost-match-warning" role="alert" data-source-status="source_unavailable">
+      Quy tắc ĐVT tạm ngưng vì nguồn quy đổi sản phẩm App Sale không sẵn sàng. Các quy tắc kiểm soát dữ liệu khác vẫn hoạt động.
+    </div>}
     <div className="employee-cost-dq-filters">
       <label><span>Tìm mã/tên/đơn vị</span><input type="search" value={filters.q} onChange={(event) => setFilter('q', event.target.value)} placeholder="Không dấu, hoa/thường…" /></label>
       <label><span>Loại lỗi</span><select value={filters.type} onChange={(event) => setFilter('type', event.target.value)}><option value="">Tất cả</option>{view.typeOptions.map((type) => <option key={type} value={type}>{dataQualityTypeLabel(type)}</option>)}</select></label>

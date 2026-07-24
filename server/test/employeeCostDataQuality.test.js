@@ -21,7 +21,10 @@ function buildFixture() {
     { period: '2026-07', employeeCode: 'DN002', unitLabel: 'U1.Bệnh viện Mất %', productCode: 'P1', productName: 'Thiếu mã', revenueAffected: 200, orderLineCount: 1, reason: 'missing' },
     { period: '2026-07', employeeCode: 'DN001', unitLabel: 'U2.Bệnh viện Lệch mã', productCode: 'P2.OLD', productName: 'Lệch QĐ', revenueAffected: 900, orderLineCount: 1, reason: 'qd_mismatch', suggestedCatalogCode: 'P2.NEW' },
   ];
-  return { revenueRows, catalogRows, gapPairs };
+  return {
+    revenueRows, catalogRows, gapPairs,
+    productCrosswalkRows: [{ sub_code: 'OTHER.SUB', master_code: 'OTHER.MASTER', sub_uom: 'Viên', master_uom: 'Viên', relation: 'same_product', convert_factor: 1 }],
+  };
 }
 
 test('groups and sorts exceptions deterministically with summary totals', () => {
@@ -58,7 +61,10 @@ test('keeps source inputs immutable and never leaks blocked fields', () => {
   const catalogRows = [{ c7: 'U1.BV', c5: 'P1', c16: 'Thuốc', c25: 'Viên', c31: 10, c32: 88, c47: 99 }];
   const gapPairs = [{ unitLabel: 'U1.BV', productCode: 'P1', productName: 'Thuốc', revenueAffected: 100, orderLineCount: 1, reason: 'missing', c32: 1, c47: 2 }];
   const before = JSON.stringify({ revenueRows, catalogRows, gapPairs });
-  const result = dq.analyzeDataQuality({ revenueRows, catalogRows, gapPairs });
+  const result = dq.analyzeDataQuality({
+    revenueRows, catalogRows, gapPairs,
+    productCrosswalkRows: [{ sub_code: 'OTHER.SUB', master_code: 'OTHER.MASTER', sub_uom: 'Viên', master_uom: 'Viên', relation: 'same_product', convert_factor: 1 }],
+  });
   assert.equal(JSON.stringify({ revenueRows, catalogRows, gapPairs }), before);
   const json = JSON.stringify(result);
   assert.equal(/c32|c47/i.test(json), false);
@@ -123,6 +129,110 @@ test('treats UNALLOCATED attribution as PRODUCT_MISMATCH without adding a sixth 
   assert.equal(result.summary.redCount, 1);
 });
 
+test('suppresses UOM mismatch only for the exact directed phu_convert mapping', () => {
+  const subCode = 'G3.ĐY.QĐ141.214.N3.107';
+  const masterCode = 'G3.ĐY.QĐ141.213.N3.107';
+  const revenueRows = [{
+    emp_code: 'DN001', period: '2026-07', unit_code: 'U1', unit_name: 'U1.BV',
+    iit_code: subCode, product_name: 'Thuốc quy đổi', uom: 'Gói', bid_price: 100, revenue: 500,
+  }];
+  const sourceCatalog = [{ c7: 'U1.BV', c5: subCode, c16: 'Thuốc quy đổi', c25: 'Gam', c31: 100 }];
+  const valid = {
+    sub_code: subCode, master_code: masterCode, sub_uom: 'Gói', master_uom: 'Gam',
+    relation: 'phu_convert', convert_factor: 5,
+  };
+  const master = {
+    sub_code: masterCode, master_code: masterCode, sub_uom: 'Gam', master_uom: 'Gam',
+    relation: 'goc', convert_factor: 1,
+  };
+  const analyze = (mapping, catalogRows = sourceCatalog, { includeMaster = true } = {}) => dq.analyzeDataQuality({
+    revenueRows, catalogRows, knownUnits: ['U1'],
+    productCrosswalk: { status: 'ready', rows: mapping == null ? [] : [mapping, ...(includeMaster && mapping.sub_code !== masterCode ? [master] : [])] },
+  });
+  assert.equal(analyze(valid).exceptions.some((item) => item.type === 'UOM_MISMATCH'), false);
+  assert.equal(analyze(valid, [{ c7: 'U1.BV', c5: masterCode, c16: 'Thuốc master', c25: 'Gam', c31: 100 }]).exceptions.length, 0);
+
+  const invalidMappings = [
+    { ...valid, relation: undefined },
+    { ...valid, convert_factor: null },
+    { ...valid, relation: 'alias' },
+    { ...valid, convert_factor: 0 },
+    { ...valid, convert_factor: -5 },
+    { ...valid, sub_code: masterCode, master_code: subCode },
+    { ...valid, sub_code: 'OTHER.CODE' },
+    { ...valid, sub_uom: 'Hộp' },
+    { ...valid, master_uom: 'Viên' },
+  ];
+  for (const mapping of invalidMappings) {
+    const result = analyze(mapping);
+    assert.equal(result.sources.productMasterCrosswalk.status, 'ready', JSON.stringify(mapping));
+    assert.equal(result.exceptions.filter((item) => item.type === 'UOM_MISMATCH').length, 1, JSON.stringify(mapping));
+  }
+  assert.equal(analyze(valid, sourceCatalog, { includeMaster: false }).exceptions.filter((item) => item.type === 'UOM_MISMATCH').length, 1);
+
+  const duplicate = analyzeDataQualityWithRows([valid, { ...valid, master_code: 'OTHER.MASTER' }, master]);
+  assert.equal(duplicate.sources.productMasterCrosswalk.status, 'source_unavailable');
+  assert.equal(duplicate.exceptions.some((item) => item.type === 'UOM_MISMATCH'), false);
+  assert.equal(duplicate.exceptions.filter((item) => item.type === 'UOM_CONVERSION_UNVERIFIED').length, 1);
+
+  function analyzeDataQualityWithRows(rows) {
+    return dq.analyzeDataQuality({
+      revenueRows, catalogRows: sourceCatalog, knownUnits: ['U1'],
+      productCrosswalk: { status: 'ready', rows },
+    });
+  }
+});
+
+test('crosswalk handles reverse direction without changing business numbers and rejects ambiguous reverse mappings', () => {
+  const subCode = 'SUB.1';
+  const masterCode = 'MASTER.1';
+  const mapping = { sub_code: subCode, master_code: masterCode, sub_uom: 'Gói', master_uom: 'Gam', relation: 'phu_convert', convert_factor: 5 };
+  const master = { sub_code: masterCode, master_code: masterCode, sub_uom: 'Gam', master_uom: 'Gam', relation: 'goc', convert_factor: 1 };
+  const revenueRows = [{ emp_code: 'DN001', unit_code: 'U1', iit_code: masterCode, uom: 'Gam', bid_price: 100, revenue: 500, quantity: 25 }];
+  const catalogRows = [{ c7: 'U1.BV', c5: masterCode, c25: 'Gói', c31: 100 }];
+  const before = JSON.stringify({ revenueRows, catalogRows });
+  const reverse = dq.analyzeDataQuality({ revenueRows, catalogRows, knownUnits: ['U1'], productCrosswalk: { status: 'ready', rows: [mapping, master] } });
+  assert.equal(reverse.exceptions.some((item) => item.type === 'UOM_MISMATCH'), false);
+  assert.equal(reverse.exceptions.some((item) => item.type === 'UOM_CONVERSION_UNVERIFIED'), false);
+  assert.equal(JSON.stringify({ revenueRows, catalogRows }), before, 'không đổi quantity/revenue/input khi chuẩn hóa cảnh báo');
+
+  const mapping2 = { ...mapping, sub_code: 'SUB.2', convert_factor: 10 };
+  const ambiguous = dq.analyzeDataQuality({ revenueRows, catalogRows, knownUnits: ['U1'], productCrosswalk: { status: 'ready', rows: [mapping, mapping2, master] } });
+  assert.equal(ambiguous.exceptions.some((item) => item.type === 'UOM_MISMATCH'), false);
+  assert.equal(ambiguous.exceptions.filter((item) => item.type === 'UOM_CONVERSION_UNVERIFIED').length, 1);
+});
+
+test('same UOM needs no crosswalk; authoritative not-found alone creates mismatch', () => {
+  const base = { emp_code: 'DN001', unit_code: 'U1', iit_code: 'P1', bid_price: 100, revenue: 500 };
+  const same = dq.analyzeDataQuality({
+    revenueRows: [{ ...base, uom: 'Gói' }],
+    catalogRows: [{ c7: 'U1.BV', c5: 'P1', c25: 'Gói', c31: 100 }],
+    knownUnits: ['U1'], productCrosswalk: { status: 'source_unavailable', rows: [] },
+  });
+  assert.equal(same.exceptions.some((item) => item.type.startsWith('UOM_')), false);
+
+  const notFound = dq.analyzeDataQuality({
+    revenueRows: [{ ...base, uom: 'Gói' }],
+    catalogRows: [{ c7: 'U1.BV', c5: 'P1', c25: 'Gam', c31: 100 }],
+    knownUnits: ['U1'], productCrosswalk: { status: 'ready', rows: [] },
+  });
+  assert.equal(notFound.exceptions.filter((item) => item.type === 'UOM_MISMATCH').length, 1);
+  assert.equal(notFound.exceptions.some((item) => item.type === 'UOM_CONVERSION_UNVERIFIED'), false);
+});
+
+test('source-unavailable crosswalk records unverified UOM and leaves the other rules active', () => {
+  const result = dq.analyzeDataQuality({
+    revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', unit_name: 'U1.BV', iit_code: 'P1', uom: 'Gói', bid_price: 0, revenue: 900 }],
+    catalogRows: [{ c7: 'U1.BV', c5: 'P1', c25: 'Gam', c31: 100 }],
+    knownUnits: ['U1'],
+    productCrosswalk: { status: 'source_unavailable', message: 'provider down', rows: [] },
+  });
+  assert.deepEqual(result.exceptions.map((item) => item.type), ['BID_PRICE_INVALID', 'UOM_CONVERSION_UNVERIFIED']);
+  assert.equal(result.exceptions.some((item) => item.type === 'UOM_MISMATCH'), false);
+  assert.equal(result.sources.productMasterCrosswalk.status, 'source_unavailable');
+  assert.match(result.sources.productMasterCrosswalk.message, /provider down/);
+});
+
 test('Vietnamese DQ Excel/PDF exports reuse the secure Employee Cost export conventions', async () => {
   const payload = {
     from: '2026-07', to: '2026-07', scope: { admin: false, employeeCode: 'DN001' },
@@ -161,6 +271,9 @@ test('DQ routes require authentication, keep backend scope, expose admin-only be
   assert.match(block, /admin && !requested \? null : employeeCost\.resolveScopedEmployee/);
   assert.match(block, /employeeCostVisibility\.run/);
   assert.match(block, /scopedEmp \? \{ empCode: scopedEmp \} : \{\}/);
+  assert.equal((block.match(/appSaleProductCrosswalk\.getSnapshot\(\)/g) || []).length, 1);
+  assert.match(block, /productCrosswalk,/);
+  assert.match(block, /sources: \{ productMasterCrosswalk: appSaleProductCrosswalk\.publicSource\(productCrosswalk\) \}/);
   assert.match(routes, /catalogManagement\.getCachedDataQualitySnapshot\(key\) \|\| await canonicalAssignmentSnapshot\(key\)/);
   assert.match(block, /scope: \{ admin, employeeCode:/);
   assert.equal(/c32|c47/i.test(block), false);

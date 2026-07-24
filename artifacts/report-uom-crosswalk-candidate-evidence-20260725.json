@@ -1,0 +1,100 @@
+{
+  "generatedAt": "2026-07-24T23:17:38.934Z",
+  "branch": "fix/report-uom-crosswalk-s2s-20260725",
+  "fixture": {
+    "product": "Hoàn bổ trung ích khí",
+    "subCode": "G3.ĐY.QĐ141.214.N3.107",
+    "masterCode": "G3.ĐY.QĐ141.213.N3.107",
+    "subUom": "Gói",
+    "masterUom": "Gam",
+    "relation": "phu_convert",
+    "convertFactor": 5
+  },
+  "immutability": {
+    "inputBeforeHash": "7a933290033d574f8d6641cc1377492cf6f2c70f9eb05273f0da70e7e1e548f9",
+    "inputAfterHash": "7a933290033d574f8d6641cc1377492cf6f2c70f9eb05273f0da70e7e1e548f9",
+    "inputImmutable": true,
+    "businessNumbersBeforeHash": "0aa986c68dfe897913d4aaa6ee7040a0bd3a7642a70d73a8c0178964c9234bda",
+    "businessNumbersAfterHash": "0aa986c68dfe897913d4aaa6ee7040a0bd3a7642a70d73a8c0178964c9234bda",
+    "reverseInputBeforeHash": "0b10910fb79735bd3f4cbba4842c7c3d57c80cb148c714bbbb639b6f4843f8ae",
+    "reverseInputAfterHash": "0b10910fb79735bd3f4cbba4842c7c3d57c80cb148c714bbbb639b6f4843f8ae",
+    "noQuantityRevenueMutation": true
+  },
+  "parityFourOtherRules": {
+    "ruleTypes": [
+      "PRODUCT_MISSING",
+      "PRODUCT_MISMATCH",
+      "BID_PRICE_INVALID",
+      "UNIT_UNKNOWN"
+    ],
+    "baselineHash": "48acdf45041fae9f44662b2c394c01a826f2f8e787ffea2588d6a329f50588be",
+    "candidateReadyHash": "48acdf45041fae9f44662b2c394c01a826f2f8e787ffea2588d6a329f50588be",
+    "candidateUnavailableHash": "48acdf45041fae9f44662b2c394c01a826f2f8e787ffea2588d6a329f50588be",
+    "baselineTypes": [
+      "BID_PRICE_INVALID",
+      "PRODUCT_MISSING",
+      "PRODUCT_MISMATCH",
+      "UNIT_UNKNOWN"
+    ],
+    "candidateReadyTypes": [
+      "BID_PRICE_INVALID",
+      "PRODUCT_MISSING",
+      "PRODUCT_MISMATCH",
+      "UNIT_UNKNOWN"
+    ],
+    "candidateUnavailableTypes": [
+      "BID_PRICE_INVALID",
+      "PRODUCT_MISSING",
+      "PRODUCT_MISMATCH",
+      "UNIT_UNKNOWN"
+    ],
+    "allFourRepresented": true,
+    "allHashesMatch": true
+  },
+  "outcomes": {
+    "baselineTypes": [
+      "BID_PRICE_INVALID",
+      "PRODUCT_MISSING",
+      "PRODUCT_MISMATCH",
+      "UOM_MISMATCH",
+      "UNIT_UNKNOWN"
+    ],
+    "candidateReadyTypes": [
+      "BID_PRICE_INVALID",
+      "PRODUCT_MISSING",
+      "PRODUCT_MISMATCH",
+      "UNIT_UNKNOWN"
+    ],
+    "candidateUnavailableTypes": [
+      "BID_PRICE_INVALID",
+      "PRODUCT_MISSING",
+      "PRODUCT_MISMATCH",
+      "UNIT_UNKNOWN",
+      "UOM_CONVERSION_UNVERIFIED"
+    ],
+    "validConversionSuppressesMismatch": true,
+    "unavailableIsUnverifiedNotMismatch": true,
+    "reverseDirectionExplained": true,
+    "ambiguousReverseIsUnverified": true
+  },
+  "security": {
+    "selfScopeAppliedAtStoreRead": true,
+    "c32C47AbsentFromCandidateOutput": true,
+    "snapshotSha256": {
+      "expected": "04e1f2207d323cbc90a53694002980a14fc745a74788c5a3ebdeaec84ea82374",
+      "validatedSignature": "04e1f2207d323cbc90a53694002980a14fc745a74788c5a3ebdeaec84ea82374",
+      "contentVerified": true,
+      "tamperRejected": true
+    },
+    "noDirectDbAccessInCrosswalkClient": true,
+    "crosswalkClientSourceSha256": "d4aba321ead768246d8d3b834284d78113e19ec1038b3772a5eed682dc8a9f80",
+    "scopedRouteBlockSha256": "aa62f22c1dfc0921856d2ebbcdd228d38de09aabd21ae7c6195027365c9ec854"
+  },
+  "gates": {
+    "focusedServer": "17/17 PASS",
+    "focusedWeb": "6/6 PASS",
+    "fullServer": "353/353 PASS",
+    "fullWeb": "65/65 PASS",
+    "productionBuild": "PASS"
+  }
+}

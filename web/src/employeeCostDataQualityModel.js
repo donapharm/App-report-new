@@ -6,6 +6,7 @@ export const DQ_TYPE_LABELS = Object.freeze({
   PRODUCT_MISSING: 'Thiếu % chi phí',
   PRODUCT_MISMATCH: 'Lệch mã QĐ/QLNB',
   UOM_MISMATCH: 'ĐVT không khớp',
+  UOM_CONVERSION_UNVERIFIED: 'Quy đổi ĐVT chưa xác minh',
   BID_PRICE_INVALID: 'Giá thầu bất thường',
   UNIT_UNKNOWN: 'Đơn vị chưa nhận diện',
 });
@@ -47,11 +48,24 @@ function normalizeItem(source = {}) {
 export function normalizeEmployeeCostDataQuality(payload = {}) {
   const items = (Array.isArray(payload.items) ? payload.items : payload.exceptions || []).map(normalizeItem).filter(Boolean);
   const summary = payload.summary || {};
+  const crosswalk = payload.sources?.productMasterCrosswalk || {};
+  const crosswalkStatus = safeText(crosswalk.status, 80) === 'ready' ? 'ready' : 'source_unavailable';
   return {
     from: safeText(payload.from, 20),
     to: safeText(payload.to, 20),
     scope: payload.scope || {},
     config: payload.config || {},
+    sources: {
+      productMasterCrosswalk: {
+        status: crosswalkStatus,
+        source: safeText(crosswalk.source, 80),
+        snapshotAt: safeText(crosswalk.snapshotAt, 80) || null,
+        version: safeText(crosswalk.version, 160) || null,
+        rowCount: Number.isFinite(Number(crosswalk.rowCount)) ? Number(crosswalk.rowCount) : 0,
+        message: safeText(crosswalk.message, 400) || null,
+      },
+    },
+    uomRuleUnavailable: crosswalkStatus === 'source_unavailable',
     summary: {
       exceptionCount: Number(summary.exceptionCount ?? items.length) || 0,
       redCount: Number(summary.redCount ?? items.filter((item) => item.severity === 'red').length) || 0,

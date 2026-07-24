@@ -140,6 +140,142 @@ function buildCatalogContext(catalogRows = []) {
   return { byPair, byCode, knownUnits };
 }
 
+function normalizeProductCrosswalk(input = {}) {
+  const candidate = input.productCrosswalk ?? input.productCrosswalkSource ?? input.crosswalk;
+  const directRows = Array.isArray(input.productCrosswalkRows) ? input.productCrosswalkRows : null;
+  const rows = directRows || (Array.isArray(candidate?.rows) ? candidate.rows : []);
+  const explicitlyReady = directRows !== null || candidate?.status === 'ready' || candidate?.available === true;
+  const seenSubCodes = new Set();
+  const hasDuplicateSubCode = rows.some((row) => {
+    const subCode = upper(row?.sub_code, 180);
+    if (!subCode) return false;
+    if (seenSubCodes.has(subCode)) return true;
+    seenSubCodes.add(subCode);
+    return false;
+  });
+  // Transport/schema validation belongs to the S2S client. At rule level a
+  // malformed relation/factor is simply not a valid conversion and therefore
+  // must not suppress a mismatch. Only an unavailable or ambiguous snapshot
+  // disables the UOM rule.
+  const ready = explicitlyReady && !hasDuplicateSubCode;
+  return {
+    status: ready ? 'ready' : 'source_unavailable',
+    source: safeText(candidate?.source, 80) || 'app_sale_s2s',
+    endpoint: safeText(candidate?.endpoint, 240) || '/api/integrations/app-report/product-master-crosswalk',
+    snapshotAt: safeText(candidate?.snapshotAt ?? candidate?.snapshot_at, 80) || null,
+    version: safeText(candidate?.version, 160) || null,
+    signature: /^[a-f0-9]{64}$/i.test(safeText(candidate?.signature, 80)) ? safeText(candidate.signature, 80).toLowerCase() : null,
+    cache: candidate?.cache === 'lkg' ? 'lkg' : 'fresh',
+    rowCount: ready ? rows.length : 0,
+    message: ready ? null : (safeText(candidate?.message, 400)
+      || (hasDuplicateSubCode ? 'Nguồn quy đổi sản phẩm App Sale có mã phụ trùng/xung đột.' : 'Nguồn quy đổi sản phẩm App Sale không sẵn sàng hoặc snapshot không hợp lệ.')),
+    rows: ready ? rows : [],
+  };
+}
+
+function normalizeCrosswalkRow(row = {}) {
+  return {
+    subCode: upper(row.sub_code, 180),
+    masterCode: upper(row.master_code, 180),
+    subUom: normalizedText(row.sub_uom, 100),
+    masterUom: normalizedText(row.master_uom, 100),
+    relation: safeText(row.relation, 80).toLowerCase(),
+    convertFactor: numericValue(row.convert_factor),
+  };
+}
+
+function buildProductCrosswalkContext(source = {}) {
+  const bySubCode = new Map();
+  const byMasterCode = new Map();
+  if (source.status !== 'ready') return { available: false, bySubCode, byMasterCode };
+  for (const raw of Array.isArray(source.rows) ? source.rows : []) {
+    const row = normalizeCrosswalkRow(raw);
+    if (!row.subCode) continue;
+    const rows = bySubCode.get(row.subCode) || [];
+    rows.push(row);
+    bySubCode.set(row.subCode, rows);
+    const masterRows = byMasterCode.get(row.masterCode) || [];
+    masterRows.push(row);
+    byMasterCode.set(row.masterCode, masterRows);
+  }
+  return { available: true, bySubCode, byMasterCode };
+}
+
+function isDirectedPhuConvert(row = {}) {
+  return row.relation === 'phu_convert'
+    && !!row.subCode
+    && !!row.masterCode
+    && row.subCode !== row.masterCode
+    && !!row.subUom
+    && !!row.masterUom
+    && Number.isFinite(row.convertFactor)
+    && row.convertFactor > 0;
+}
+
+function hasValidMasterReference(mapping, crosswalkContext) {
+  const masters = crosswalkContext.bySubCode.get(mapping.masterCode) || [];
+  return masters.length === 1
+    && masters[0].subCode === mapping.masterCode
+    && masters[0].masterCode === mapping.masterCode
+    && masters[0].relation === 'goc'
+    && masters[0].subUom === mapping.masterUom;
+}
+
+function conversionResolution({ sourceProductCode, catalogProductCode, saleUom, catalogUom, crosswalkContext }) {
+  if (!crosswalkContext.available) return { status: 'unverified', mappings: [] };
+  const relevant = [
+    ...(crosswalkContext.bySubCode.get(sourceProductCode) || []),
+    ...(crosswalkContext.byMasterCode.get(sourceProductCode) || []),
+    ...(catalogProductCode === sourceProductCode ? [] : (crosswalkContext.bySubCode.get(catalogProductCode) || [])),
+    ...(catalogProductCode === sourceProductCode ? [] : (crosswalkContext.byMasterCode.get(catalogProductCode) || [])),
+  ];
+  const unique = new Map();
+  for (const mapping of relevant) {
+    if (!isDirectedPhuConvert(mapping) || !hasValidMasterReference(mapping, crosswalkContext)) continue;
+    const codes = new Set([mapping.subCode, mapping.masterCode]);
+    if (!codes.has(sourceProductCode) || !codes.has(catalogProductCode)) continue;
+    const forward = saleUom === mapping.subUom && catalogUom === mapping.masterUom;
+    const reverse = saleUom === mapping.masterUom && catalogUom === mapping.subUom;
+    if (!forward && !reverse) continue;
+    unique.set([
+      mapping.subCode, mapping.masterCode, mapping.subUom, mapping.masterUom, mapping.convertFactor,
+    ].join('\u001f'), mapping);
+  }
+  const mappings = [...unique.values()];
+  if (mappings.length === 1) return { status: 'explained', mappings };
+  if (mappings.length > 1) return { status: 'unverified', mappings };
+  return { status: 'not_found', mappings: [] };
+}
+
+function conversionExplainsUomMismatch(input = {}) {
+  return conversionResolution(input).status === 'explained';
+}
+
+function resolveMappedUomCatalogRow(revenueRow, catalogContext, crosswalkContext) {
+  const sourceProductCode = productCodeOf(revenueRow);
+  const unitCode = unitCodeOf(revenueRow);
+  const saleUom = normalizedText(uomOf(revenueRow), 80);
+  const mappings = [
+    ...(crosswalkContext.bySubCode.get(sourceProductCode) || []),
+    ...(crosswalkContext.byMasterCode.get(sourceProductCode) || []),
+  ].filter((mapping) => isDirectedPhuConvert(mapping) && hasValidMasterReference(mapping, crosswalkContext));
+  const candidates = [];
+  for (const mapping of mappings) {
+    const sourceIsSub = sourceProductCode === mapping.subCode;
+    const sourceIsMaster = sourceProductCode === mapping.masterCode;
+    if (!sourceIsSub && !sourceIsMaster) continue;
+    const counterpartCode = sourceIsSub ? mapping.masterCode : mapping.subCode;
+    const counterpartUom = sourceIsSub ? mapping.masterUom : mapping.subUom;
+    const sourceUom = sourceIsSub ? mapping.subUom : mapping.masterUom;
+    if (saleUom !== sourceUom) continue;
+    const exact = unitCode ? consistentCatalogRow(catalogContext.byPair.get(`${unitCode}\u001f${counterpartCode}`) || []) : null;
+    const catalogRow = exact || consistentCatalogRow(catalogContext.byCode.get(counterpartCode) || []);
+    if (catalogRow && normalizedText(uomOf(catalogRow), 80) === counterpartUom) candidates.push(catalogRow);
+  }
+  const unique = new Map(candidates.map((row) => [catalogSignature(row), row]));
+  return unique.size === 1 ? [...unique.values()][0] : null;
+}
+
 function consistentCatalogRow(rows = []) {
   if (!Array.isArray(rows) || !rows.length) return null;
   const signatures = new Set(rows.map((row) => catalogSignature(row)));
@@ -291,7 +427,7 @@ function buildUnallocatedCandidates(revenueRows = [], config) {
   return candidates;
 }
 
-function buildRevenueCandidates(revenueRows = [], catalogContext, unitIndex, config) {
+function buildRevenueCandidates(revenueRows = [], catalogContext, unitIndex, crosswalkContext, config) {
   const candidates = [];
   for (const row of Array.isArray(revenueRows) ? revenueRows : []) {
     const revenueAffected = revenueAmountOf(row);
@@ -303,6 +439,9 @@ function buildRevenueCandidates(revenueRows = [], catalogContext, unitIndex, con
     const employeeCode = employeeCodeOf(row);
     const route = routeOf(row);
     const catalogRow = resolveCatalogRow(row, catalogContext);
+    const uomCatalogRow = catalogRow || (crosswalkContext.available
+      ? resolveMappedUomCatalogRow(row, catalogContext, crosswalkContext)
+      : null);
 
     if (config.rules.UNIT_UNKNOWN.enabled) {
       const knownUnit = sourceUnitCode && unitIndex.units.has(sourceUnitCode);
@@ -353,19 +492,46 @@ function buildRevenueCandidates(revenueRows = [], catalogContext, unitIndex, con
       }
     }
 
-    if (!catalogRow) continue;
+    if (!catalogRow && !uomCatalogRow) continue;
 
-    if (config.rules.UOM_MISMATCH.enabled) {
+    if (uomCatalogRow && config.rules.UOM_MISMATCH.enabled) {
       const saleUom = normalizedText(uomOf(row), 80);
-      const catalogUom = normalizedText(uomOf(catalogRow), 80);
-      if (saleUom && catalogUom && saleUom !== catalogUom) {
+      const catalogUom = normalizedText(uomOf(uomCatalogRow), 80);
+      const catalogProductCode = productCodeOf(uomCatalogRow);
+      const resolution = conversionResolution({
+        sourceProductCode,
+        catalogProductCode,
+        saleUom,
+        catalogUom,
+        crosswalkContext,
+      });
+      if (saleUom && catalogUom && saleUom !== catalogUom && resolution.status === 'unverified') {
+        candidates.push(makeCandidate({
+          type: 'UOM_CONVERSION_UNVERIFIED',
+          severity: 'yellow',
+          field: 'Đơn vị tính',
+          errorValue: `${uomOf(row)} ↔ ${uomOf(uomCatalogRow)}`,
+          sourceProductCode,
+          sourceProductName: sourceProductName || productNameOf(uomCatalogRow),
+          sourceUnitCode,
+          sourceUnitLabel,
+          route,
+          employeeCode,
+          period,
+          revenueAffected,
+          lineCount: 1,
+          cause: 'Chưa thể xác minh duy nhất quan hệ quy đổi ĐVT từ snapshot App Sale có thẩm quyền.',
+          action: 'Chờ nguồn crosswalk App Sale sẵn sàng/không mơ hồ rồi chạy lại kiểm tra; không kết luận sai ĐVT.',
+          repairSource: 'App Sale product master crosswalk',
+        }));
+      } else if (saleUom && catalogUom && saleUom !== catalogUom && resolution.status === 'not_found') {
         candidates.push(makeCandidate({
           type: 'UOM_MISMATCH',
           severity: config.rules.UOM_MISMATCH.severity,
           field: 'Đơn vị tính',
-          errorValue: `${uomOf(row)} ≠ ${uomOf(catalogRow)}`,
+          errorValue: `${uomOf(row)} ≠ ${uomOf(uomCatalogRow)}`,
           sourceProductCode,
-          sourceProductName: sourceProductName || productNameOf(catalogRow),
+          sourceProductName: sourceProductName || productNameOf(uomCatalogRow),
           sourceUnitCode,
           sourceUnitLabel,
           route,
@@ -380,7 +546,7 @@ function buildRevenueCandidates(revenueRows = [], catalogContext, unitIndex, con
       }
     }
 
-    if (config.rules.BID_PRICE_INVALID.enabled && !bidPriceAlreadyFlagged) {
+    if (catalogRow && config.rules.BID_PRICE_INVALID.enabled && !bidPriceAlreadyFlagged) {
       const saleBidPrice = bidPriceOf(row);
       const catalogBidPrice = bidPriceOf(catalogRow);
       const minPositive = config.rules.BID_PRICE_INVALID.minPositive;
@@ -521,21 +687,36 @@ function analyzeDataQuality(input = {}) {
   const knownUnits = Array.isArray(input.knownUnits) ? input.knownUnits.slice() : [];
   const gapPairs = extractGapPairs(input);
   const config = normalizeConfig(input.config);
+  const productCrosswalk = normalizeProductCrosswalk(input);
 
   assertPrerequisites({ revenueRows, catalogRows, config, knownUnits, rosterRows });
 
   const catalogContext = buildCatalogContext(catalogRows);
   const unitIndex = buildKnownUnitIndex({ knownUnits, rosterRows, catalogContext });
+  const crosswalkContext = buildProductCrosswalkContext(productCrosswalk);
   const candidates = [
     ...buildGapCandidates(gapPairs, config),
     ...buildUnallocatedCandidates(revenueRows, config),
-    ...buildRevenueCandidates(revenueRows, catalogContext, unitIndex, config),
+    ...buildRevenueCandidates(revenueRows, catalogContext, unitIndex, crosswalkContext, config),
   ];
   const exceptions = groupCandidates(candidates);
   return {
     exceptions,
     summary: summarize(exceptions),
     config: publicConfig(config),
+    sources: {
+      productMasterCrosswalk: {
+        status: productCrosswalk.status,
+        source: productCrosswalk.source,
+        endpoint: productCrosswalk.endpoint,
+        snapshotAt: productCrosswalk.snapshotAt,
+        version: productCrosswalk.version,
+        signature: productCrosswalk.signature,
+        cache: productCrosswalk.cache,
+        rowCount: productCrosswalk.rowCount,
+        message: productCrosswalk.message,
+      },
+    },
   };
 }
 
@@ -548,5 +729,9 @@ module.exports = {
   normalizeConfig,
   buildCatalogContext,
   buildKnownUnitIndex,
+  normalizeProductCrosswalk,
+  buildProductCrosswalkContext,
+  conversionResolution,
+  conversionExplainsUomMismatch,
   analyzeDataQuality,
 };

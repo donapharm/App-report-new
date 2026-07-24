@@ -5,6 +5,7 @@ import { employeeCostDataQualityView, normalizeEmployeeCostDataQuality, dataQual
 
 const payload = {
   from: '2026-07', to: '2026-07', scope: { admin: true },
+  sources: { productMasterCrosswalk: { status: 'ready', source: 'app_sale_s2s', rowCount: 1 } },
   summary: { exceptionCount: 3, redCount: 2, yellowCount: 1, revenueAffected: 15_000_000, redRevenueAffected: 13_000_000 },
   items: [
     { key: 'unit', type: 'UNIT_UNKNOWN', severity: 'yellow', productCode: 'P3', productName: 'Thuốc C', unitCode: '999', unitLabels: ['999.BV lạ'], employeeCodes: ['DN001'], routes: ['CL'], revenueAffected: 2_000_000, lineCount: 1, cause: 'Mã đơn vị chưa có trong danh mục.', action: 'Bổ sung danh mục đơn vị.', repairSource: 'App Sale / danh mục đơn vị' },
@@ -37,6 +38,31 @@ test('DQ normalization drops unsupported rules and does not surface forbidden co
   assert.equal(/C32|C47|percent/i.test(JSON.stringify(model)), false);
 });
 
+test('DQ model exposes unavailable UOM source without dropping other exceptions', () => {
+  const model = normalizeEmployeeCostDataQuality({
+    sources: { productMasterCrosswalk: { status: 'source_unavailable', message: 'provider down' } },
+    items: [{ type: 'BID_PRICE_INVALID', productCode: 'P1', unitCode: '001', severity: 'red' }],
+  });
+  assert.equal(model.uomRuleUnavailable, true);
+  assert.equal(model.sources.productMasterCrosswalk.status, 'source_unavailable');
+  assert.match(model.sources.productMasterCrosswalk.message, /provider down/);
+  assert.equal(model.items.length, 1);
+});
+
+test('DQ model keeps unverified UOM separate from definitive mismatch', () => {
+  const view = employeeCostDataQualityView({
+    sources: { productMasterCrosswalk: { status: 'source_unavailable' } },
+    items: [{
+      type: 'UOM_CONVERSION_UNVERIFIED', severity: 'yellow', productCode: 'P1', unitCode: 'U1',
+      invalidValue: 'Gói ↔ Gam', revenueAffected: 500,
+    }],
+  });
+  assert.equal(view.items.length, 1);
+  assert.equal(view.items[0].type, 'UOM_CONVERSION_UNVERIFIED');
+  assert.equal(dataQualityTypeLabel(view.items[0].type), 'Quy đổi ĐVT chưa xác minh');
+  assert.equal(view.items.some((item) => item.type === 'UOM_MISMATCH'), false);
+});
+
 test('Employee Cost dashboard and existing bell expose DQ API, exports and deep link', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   const bell = fs.readFileSync(new URL('../src/CeoNotificationBell.jsx', import.meta.url), 'utf8');
@@ -47,6 +73,8 @@ test('Employee Cost dashboard and existing bell expose DQ API, exports and deep 
   assert.match(page, /addEventListener\('app:navigate'/);
   assert.match(page, /event\.detail\.view === 'dq'/);
   assert.match(page, /code !== 'UNALLOCATED'/);
+  assert.match(page, /data-source-status="source_unavailable"/);
+  assert.match(page, /Các quy tắc kiểm soát dữ liệu khác vẫn hoạt động/);
   assert.match(bell, /employeeCostDataQualitySummary/);
   assert.match(bell, /dq\.redCount/);
   assert.match(api, /employee-cost\/data-quality/);
