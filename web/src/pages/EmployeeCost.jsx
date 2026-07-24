@@ -248,22 +248,24 @@ function diemXuNumber(value) {
 }
 
 function KhoanKpis({ khoan, loading }) {
-  const note = loading ? 'Đang tải nguồn App VAT…' : khoan.note;
+  const note = loading ? 'Đang tải điểm local + xu App VAT…' : khoan.note;
   if (!khoan.available) return <>
-    <Kpi label="Điểm (tháng · quý)" value="— · —" sub={note} />
-    <Kpi label="Xu tích lũy" value="— · —" sub={note} />
-    <Kpi label="Phạt dự kiến" value="—" sub={`${note} · không payroll`} />
+    <Kpi label="Điểm (tháng · quý)" value="— · —" sub={`Nguồn: App Report · ${note}`} />
+    <Kpi label="Xu tích lũy" value="— · —" sub={`Nguồn: App VAT · ${note}`} />
+    <Kpi label="Phạt dự kiến" value="—" sub={`${note} · đang đối soát · không payroll`} />
   </>;
-  const source = `Nguồn: ${khoan.source} · ${khoan.ruleVersion}`;
+  const pointSource = `Nguồn: App Report · ${khoan.pointRuleVersion}`;
+  const xuSource = `Nguồn: App VAT${khoan.xuRuleVersion ? ` · ${khoan.xuRuleVersion}` : ''}`;
+  const penaltyStatus = khoan.quarterStatus || 'đang đối soát';
   return <>
-    <Kpi label="Điểm (tháng · quý)" value={`${diemXuNumber(khoan.diemThang)} · ${diemXuNumber(khoan.diemQuy)}`} sub={source} />
-    <Kpi label="Xu tích lũy (tháng · quý)" value={`${diemXuNumber(khoan.xuThang)} · ${diemXuNumber(khoan.xuQuyTong)}`} sub={`Quý gốc ${diemXuNumber(khoan.xuQuy)} + carry ${diemXuNumber(khoan.carry)} · ${source}`} />
+    <Kpi label="Điểm (tháng · quý)" value={`${diemXuNumber(khoan.diemThang)} · ${diemXuNumber(khoan.diemQuy)}`} sub={pointSource} />
+    <Kpi label="Xu tích lũy (tháng · quý)" value={`${diemXuNumber(khoan.xuThang)} · ${diemXuNumber(khoan.xuQuyTong)}`} sub={`Quý gốc ${diemXuNumber(khoan.xuQuy)} + carry ${diemXuNumber(khoan.carry)} · ${xuSource}`} />
     <Kpi
       label={<span>Phạt dự kiến {khoan.phatDuKien > 0 && <span className="employee-cost-khoan-danger-badge">Cảnh báo</span>}</span>}
       value={formatEmployeeCostCell(khoan.phatDuKien, moneyColumn)}
-      sub={`${khoan.aggregate ? 'Tổng projection từng NV' : `đạt ${targetPctLabel(khoan.pctQuy)} xu/điểm quý`} · tham khảo · không payroll`}
+      sub={`${penaltyStatus} · nguồn App Report (điểm) + App VAT (xu) · không payroll`}
       tone={khoan.phatDuKien > 0 ? 'danger' : ''}
-      title={`${khoan.penaltyRule || 'Mức phạt do App VAT quyết định'}. App Report chỉ đọc và hiển thị.`}
+      title={`Điểm local App Report + xu App VAT. Penalty display-only = floor(thiếu quý ÷ 2) × 600.000đ; chỉ mở khi parity exact-zero đã đạt.`}
     />
   </>;
 }
@@ -271,16 +273,17 @@ function KhoanKpis({ khoan, loading }) {
 function KhoanWarning({ khoan }) {
   if (!khoan.available) return null;
   if (khoan.aggregate) {
-    if (!khoan.warningCount) return null;
-    return <div className="employee-cost-khoan-warning" role="alert"><b>⚠ Cảnh báo sớm từ App VAT:</b> {khoan.warningCount.toLocaleString('vi-VN')} nhân viên đang dưới 90% xu/điểm quý.</div>;
+    if (!khoan.employeeSubtotals.some((item) => Number(item.phatDuKien || 0) > 0)) return null;
+    return <div className="employee-cost-khoan-warning" role="alert"><b>⚠ Cảnh báo sớm:</b> có nhân viên đang thiếu xu so với điểm quý; phạt chỉ ở trạng thái preview/display-only.</div>;
   }
   if (!(khoan.pctQuy < 90 && khoan.diemQuy > 0)) return null;
   return <div className="employee-cost-khoan-warning" role="alert" title={khoan.upstreamWarning}>
-    <b>⚠ Cảnh báo sớm · {khoan.quarterLabel || `Q${khoan.selected.quarter}/${khoan.selected.year}`}:</b>{' '}
+    <b>⚠ Cảnh báo nghiêm khắc · {khoan.quarterLabel || `Q${khoan.selected.quarter}/${khoan.selected.year}`}:</b>{' '}
     cần {diemXuNumber(khoan.diemQuy)} xu (= điểm doanh thu quý), bạn đạt {diemXuNumber(khoan.xuQuyTong)} xu
     {khoan.carry > 0 ? ` (gồm carry ${diemXuNumber(khoan.carry)})` : ''}, thiếu {diemXuNumber(khoan.thieuXu)} xu →
-    App VAT tính phạt dự kiến {formatEmployeeCostCell(khoan.phatDuKien, moneyColumn)}.<br />
-    <b>Diễn giải rule nguồn:</b> floor(điểm thiếu ÷ 2) × tiền mỗi bậc theo rule App VAT ({khoan.penaltyRule}) = {formatEmployeeCostCell(khoan.phatDuKien, moneyColumn)}. App Report không tự tính lại.
+    dự kiến phạt {formatEmployeeCostCell(khoan.phatDuKien, moneyColumn)}. Trạng thái: <b>{khoan.quarterStatus}</b>.<br />
+    <b>Quy tắc điểm:</b> App Report tự tính Σ(doanh thu × hệ số ÷ 100.000.000), rule {khoan.pointRuleVersion}.<br />
+    <b>Quy tắc xu:</b> App VAT cung cấp xu tháng/quý. <b>Công thức phạt:</b> floor(điểm thiếu quý ÷ 2) × 600.000đ. Nếu parity chưa exact-zero thì giữ trạng thái đang đối soát.
   </div>;
 }
 
@@ -290,17 +293,17 @@ function KhoanDeduction({ khoan, baseCost, multiMonth }) {
     <div className="section-head">Cấn trừ do thiếu xu chi tiêu (quý) · dự kiến</div>
     <p><b>Chưa hiển thị phép cấn trừ cho kỳ nhiều tháng.</b> Phạt dự kiến phía trên thuộc tháng kết thúc kỳ, còn chi phí gốc là tổng nhiều tháng. Chọn đúng một tháng để xem phép tính display-only, tránh ghép sai kỳ.</p>
   </div>;
-  const display = employeeVatKhoanDeduction(baseCost, khoan.phatDuKien);
+  const display = employeeVatKhoanDeduction(baseCost, khoan.parity.available ? khoan.phatDuKien : null);
   return <div className="card employee-cost-khoan-deduction">
     <div className="section-head">Cấn trừ do thiếu xu chi tiêu (quý) · dự kiến</div>
     <div className="employee-cost-khoan-equation">
       <span><small>Chi phí gốc</small><b>{formatEmployeeCostCell(display.baseCost, moneyColumn)}</b><em>Nguồn DataHub/App Report</em></span>
       <strong>+</strong>
-      <span className="deduction"><small>Cấn trừ thiếu xu</small><b>{formatEmployeeCostCell(display.deduction, moneyColumn)}</b><em>Nguồn App VAT</em></span>
+      <span className="deduction"><small>Cấn trừ thiếu xu</small><b>{khoan.parity.available ? formatEmployeeCostCell(display.deduction, moneyColumn) : '—'}</b><em>{khoan.parity.available ? 'Parity exact-zero PASS' : 'đang đối soát'}</em></span>
       <strong>=</strong>
       <span><small>Còn lại (display-only)</small><b>{formatEmployeeCostCell(display.remaining, moneyColumn)}</b><em>Không ghi DataHub/payroll</em></span>
     </div>
-    <p><b>Chi phí gốc − cấn trừ thiếu xu = còn lại.</b> Số cấn trừ được thể hiện âm trên màn hình. Hai nguồn được trình bày cạnh nhau; App Report không sửa chi phí gốc và không phát lệnh chi/trừ.</p>
+    <p><b>Chi phí gốc − cấn trừ thiếu xu = còn lại.</b> Số cấn trừ chỉ mở khi parity exact-zero PASS; nếu chưa đạt thì giữ trạng thái <b>đang đối soát</b>. App Report không sửa chi phí gốc và không phát lệnh chi/trừ.</p>
   </div>;
 }
 
@@ -643,11 +646,11 @@ export default function EmployeeCost({ me }) {
     if (admin && view !== 'cost') return undefined;
     if (admin && !selectedEmp) { setKhoanPayload({}); setKhoanLoading(false); return undefined; }
     let alive = true;
-    setKhoanPayload({ note: 'chưa lấy được điểm/xu kỳ này' });
+    setKhoanPayload({ note: 'chưa lấy được xu kỳ này' });
     setKhoanLoading(true);
     api.employeeCostDiemXu(admin ? selectedEmp : undefined, range)
       .then((data) => { if (alive) setKhoanPayload(data); })
-      .catch(() => { if (alive) setKhoanPayload({ note: 'chưa lấy được điểm/xu kỳ này' }); })
+      .catch(() => { if (alive) setKhoanPayload({ note: 'chưa lấy được xu kỳ này' }); })
       .finally(() => { if (alive) setKhoanLoading(false); });
     return () => { alive = false; };
   }, [admin, selectedEmp, range, view]);

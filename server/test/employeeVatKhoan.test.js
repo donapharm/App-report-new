@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const khoan = require('../src/employeeVatKhoan');
+const pointLocal = require('../src/employeePointLocal');
 
 const PERIOD = { month: 7, year: 2026, period: '2026-07' };
 const TOKEN = 'test-vat-service-token-secret';
@@ -25,6 +26,7 @@ function vatFixture(overrides = {}) {
     du_xu: 0,
     phat_du_kien: 1_800_000,
     rule_version: 'khoan-ssot-v2026-05-r1',
+    xu_rule_version: 'xu-v2026-05-r1',
     warning: { message: 'Cảnh báo từ VAT' },
     rules: { penalty: '2đ thiếu = 600Kđ phạt' },
     service_auth: { header: 'must not pass through' },
@@ -48,39 +50,29 @@ test('period parser uses the end month and rejects partial/invalid ranges before
   ]) assert.throws(() => khoan.parsePeriod(input), { code: 'EMPLOYEE_VAT_KHOAN_PERIOD_INVALID' });
 });
 
-test('projection copies canonical VAT fields exactly and drops unrelated/auth fields', () => {
+test('projection keeps xu-only upstream fields and drops diem/auth fields', () => {
   const projected = khoan.projectDashboard(vatFixture(), 'DN001', PERIOD);
   assert.deepEqual({
-    diem_thang: projected.diem_thang,
-    diem_quy: projected.diem_quy,
     xu_thang: projected.xu_thang,
     xu_quy: projected.xu_quy,
     xu_quy_tong: projected.xu_quy_tong,
     carry: projected.carry,
-    pct_thang: projected.pct_thang,
-    pct_quy: projected.pct_quy,
-    thieu_du: projected.thieu_du,
-    thieu_xu: projected.thieu_xu,
-    du_xu: projected.du_xu,
-    phat_du_kien: projected.phat_du_kien,
   }, {
-    diem_thang: 12.34, diem_quy: 28.5,
     xu_thang: 9.1, xu_quy: 20.25, xu_quy_tong: 22.25, carry: 2,
-    pct_thang: 73.74, pct_quy: 78.07,
-    thieu_du: -6.25, thieu_xu: 6.25, du_xu: 0, phat_du_kien: 1_800_000,
   });
+  assert.equal(projected.diem_thang, undefined);
   assert.equal(projected.rule_version, 'khoan-ssot-v2026-05-r1');
+  assert.equal(projected.xu_rule_version, 'xu-v2026-05-r1');
   assert.equal(projected.service_auth, undefined);
   assert.equal(projected.doanh_thu, undefined);
 });
 
-test('projection fails closed on identity, all-scope, period, missing-field or invalid-number mismatches', () => {
+test('projection fails closed on identity, all-scope, period, missing xu field or invalid-number mismatches', () => {
   assert.equal(khoan.projectDashboard(vatFixture({ emp_code: 'DN999' }), 'DN001', PERIOD), null);
   assert.equal(khoan.projectDashboard(vatFixture({ viewAll: true }), 'DN001', PERIOD), null);
   assert.equal(khoan.projectDashboard(vatFixture({ selected: { month: 6, year: 2026, quarter: 2 } }), 'DN001', PERIOD), null);
-  assert.equal(khoan.projectDashboard(vatFixture({ diem: { thang: {}, quy: { total: 1 } } }), 'DN001', PERIOD), null);
-  assert.equal(khoan.projectDashboard(vatFixture({ phat_du_kien: -1 }), 'DN001', PERIOD), null);
-  assert.equal(khoan.projectDashboard(vatFixture({ rules: {} }), 'DN001', PERIOD), null);
+  assert.equal(khoan.projectDashboard(vatFixture({ xu: { thang: {}, quy: { xu: 1, xu_tong: 2 }, du_quy_truoc: 0 } }), 'DN001', PERIOD), null);
+  assert.equal(khoan.projectDashboard(vatFixture({ xu: { thang: { xu: -1 }, quy: { xu: 1, xu_tong: 2 }, du_quy_truoc: 0 } }), 'DN001', PERIOD), null);
 });
 
 test('sale spoofed emp is ignored, upstream receives own code and Bearer stays backend-only', async () => {
@@ -130,7 +122,7 @@ test('missing config fails before network; 401/400 fail closed without token or 
     });
     assert.equal(result.outcome, status === 401 ? 'upstream_unauthorized' : 'upstream_bad_request');
     assert.equal(result.payload.available, false);
-    assert.equal(result.payload.note, 'chưa lấy được điểm/xu kỳ này');
+    assert.equal(result.payload.note, 'chưa lấy được xu kỳ này');
     assert.equal(result.payload.phat_du_kien, undefined);
   }
 });
@@ -233,32 +225,31 @@ test('successful upstream data fails closed when mandatory audit cannot be persi
     auditImpl: () => { throw new Error('audit unavailable'); },
   });
   assert.equal(payload.available, false);
-  assert.equal(payload.note, 'chưa lấy được điểm/xu kỳ này');
+  assert.equal(payload.note, 'chưa lấy được xu kỳ này');
   assert.equal(payload.phat_du_kien, undefined);
 });
 
-test('ALL is a display-only sum of complete per-employee VAT projections and fails closed on partial data', () => {
+test('ALL aggregates xu-only upstream projections and fails closed on partial data', () => {
   const one = khoan.projectDashboard(vatFixture(), 'DN001', PERIOD);
-  const two = khoan.projectDashboard(vatFixture({ emp_code: 'DN002', phat_du_kien: 600_000, pct: { thang: 100, quy: 95 } }), 'DN002', PERIOD);
+  const two = khoan.projectDashboard(vatFixture({ emp_code: 'DN002', xu: { thang: { xu: 5 }, quy: { xu: 10, xu_tong: 11 }, du_quy_truoc: 1 } }), 'DN002', PERIOD);
   const aggregate = khoan.aggregatePayloads([one, two], [
     { emp_code: 'DN001', name: 'Một' }, { emp_code: 'DN002', name: 'Hai' },
   ], PERIOD);
   assert.equal(aggregate.available, true);
-  assert.equal(aggregate.diem_quy, 57);
-  assert.equal(aggregate.phat_du_kien, 2_400_000);
-  assert.equal(aggregate.pct_quy, null);
-  assert.equal(aggregate.warning_count, 1);
-  assert.deepEqual(aggregate.employeeSubtotals.map((item) => [item.emp_code, item.emp_name, item.phat_du_kien]), [
-    ['DN001', 'Một', 1_800_000], ['DN002', 'Hai', 600_000],
+  assert.equal(aggregate.xu_quy_tong, 33.25);
+  assert.equal(aggregate.carry, 3);
+  assert.deepEqual(aggregate.employeeSubtotals.map((item) => [item.emp_code, item.emp_name, item.xu_quy_tong]), [
+    ['DN001', 'Một', 22.25], ['DN002', 'Hai', 11],
   ]);
   assert.equal(khoan.aggregatePayloads([one, khoan.emptyPayload('DN002', PERIOD)], [], PERIOD).available, false);
-  assert.equal(khoan.aggregatePayloads([one, { ...two, penalty_rule: 'rule khác' }], [], PERIOD).available, false);
+  assert.equal(khoan.aggregatePayloads([one, { ...two, xu_rule_version: 'rule khác' }], [], PERIOD).available, false);
 });
 
 test('route contract keeps auth/scope backend-side and token names out of frontend source', () => {
   const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
   const apiSource = fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'src', 'api.js'), 'utf8');
   assert.match(routes, /router\.get\('\/employee-cost\/diem-xu', auth\.requireAuth/);
+  assert.ok(pointLocal.loadConfig().version.includes('point-local-2026-05-r1'));
   assert.match(routes, /auth\.scopeOf\(req\.session\)/);
   assert.match(routes, /employeeCost\.resolveScopedEmployee/);
   assert.doesNotMatch(apiSource, /VAT_SERVICE_TOKEN|Authorization:\s*Bearer/);

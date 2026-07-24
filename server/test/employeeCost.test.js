@@ -2,6 +2,9 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const employeeCost = require('../src/employeeCost');
 const employeeCostTemplates = require('../src/employeeCostTemplates');
+const pointLocal = require('../src/employeePointLocal');
+const notifications = require('../src/employeePointNotifications');
+const persist = require('../src/persist');
 
 const ASSIGNMENT_KEY = 'assignment-service-key';
 const EMPLOYEE_KEYS = 'DN001=employee-secret-key-dn001,DN002=employee-secret-key-dn002';
@@ -274,6 +277,79 @@ test('catalog ambiguity fails closed and annual columns are configurable', () =>
   assert.equal(employeeCost.resolveProductCode({ c5: 'QL02', c7: 'U1', c16: 'Cùng tên' }, index), 'QL02');
   assert.deepEqual([...employeeCost.configuredAnnualColumnKeys('c43,c45,c32,c47')], ['c43', 'c45']);
   assert.equal(employeeCost.calculateAmount(10_000_000, null), null);
+});
+
+test('local point engine computes monthly/quarter points from App Report revenue with CL/NT/NCL multipliers', () => {
+  const store = require('../src/store');
+  const previous = store.getRowsRange;
+  store.getRowsRange = ({ kys }) => {
+    const rows = [
+      { ky: '07.2026', emp_code: 'DN001', revenue: 100_000_000, route: 'CL', unit_code: '001.BV', iit_code: 'A' },
+      { ky: '07.2026', emp_code: 'DN001', revenue: 50_000_000, route: 'NCL', unit_code: '025.X', iit_code: 'B' },
+      { ky: '08.2026', emp_code: 'DN001', revenue: 100_000_000, route: 'NT', unit_code: '999.X', iit_code: 'C' },
+      { ky: '09.2026', emp_code: 'DN001', revenue: 100_000_000, route: 'NCL', unit_code: '111.X', iit_code: 'D' },
+      { ky: '07.2026', emp_code: 'DN021', revenue: 999_000_000, route: 'CL', unit_code: '001.BV', iit_code: 'E' },
+    ];
+    return rows.filter((row) => kys.includes(row.ky));
+  };
+  try {
+    const payload = pointLocal.buildLocalPointPayload({ empCode: 'DN001', period: '2026-07' });
+    assert.equal(payload.available, true);
+    assert.equal(payload.point_month, 3);
+    assert.equal(payload.point_quarter, 6);
+    assert.equal(payload.point_rule_version, 'point-local-2026-05-r1');
+  } finally {
+    store.getRowsRange = previous;
+  }
+});
+
+test('local point engine defaults safely and audits DQ warnings for missing route/unit data', () => {
+  const store = require('../src/store');
+  const previousRows = store.getRowsRange;
+  const previousLoad = persist.load;
+  const previousSave = persist.save;
+  let saved = [];
+  store.getRowsRange = () => ([
+    { ky: '07.2026', emp_code: 'DN001', revenue: 100_000_000, route: '', unit_code: '', iit_code: 'A' },
+    { ky: '08.2026', emp_code: 'DN001', revenue: 100_000_000, route: 'NCL', unit_code: '', iit_code: 'B' },
+  ]);
+  persist.load = () => [];
+  persist.save = (name, data) => { if (name === 'employee_point_local_dq') saved = data; };
+  try {
+    const payload = pointLocal.buildLocalPointPayload({ empCode: 'DN001', period: '2026-07' });
+    assert.equal(payload.point_month, 2);
+    assert.equal(payload.point_quarter, 2);
+    assert.equal(payload.dq_warning_count, 4);
+    assert.equal(saved.length, 2);
+  } finally {
+    store.getRowsRange = previousRows;
+    persist.load = previousLoad;
+    persist.save = previousSave;
+  }
+});
+
+test('notification preview is secure preview-only and audits without send side effects', () => {
+  const previousLoad = persist.load;
+  const previousSave = persist.save;
+  const writes = new Map();
+  persist.load = (name, def) => writes.get(name) || def;
+  persist.save = (name, data) => { writes.set(name, data); };
+  try {
+    const preview = notifications.createPreview({
+      actor: 'CEO', role: 'ceo', empCode: 'DN001', empName: 'Nhân viên Một', period: '2026-07', quarterLabel: 'Q3/2026',
+      pointMonth: 12.34, pointQuarter: 28.5, xuMonth: 9.1, xuQuarterTotal: 22.25, missingQuarter: 6.25,
+      penaltyDisplay: 1_800_000, pointRuleVersion: 'point-local-2026-05-r1', xuRuleVersion: 'xu-v2026-05-r1',
+      quarterStatus: 'đang đối soát', monthsToQuarterEnd: 2, strict: true,
+    });
+    assert.equal(preview.outcome, 'preview_only_send_disabled');
+    assert.match(preview.messages.telegram, /CẢNH BÁO NGHIÊM KHẮC/);
+    assert.equal(preview.actor_hash.length, 64);
+    assert.equal((writes.get('employee_point_notification_preview') || []).length, 1);
+    assert.equal((writes.get('employee_point_notification_audit') || []).length, 1);
+  } finally {
+    persist.load = previousLoad;
+    persist.save = previousSave;
+  }
 });
 
 test('empty grounded payload does not present a zero total as real data', () => {

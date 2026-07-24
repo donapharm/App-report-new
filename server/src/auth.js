@@ -580,6 +580,18 @@ function requireTargetAuth(req, res, next) {
   if (svc) { req.session = svc; return next(); }
   return requireAuth(req, res, next);
 }
+
+// Endpoint tích hợp DataHub chỉ chấp nhận service token riêng. Không cho phép
+// cookie/session người dùng thay thế để tránh biến API machine-to-machine thành
+// một đường đọc dữ liệu quản trị ngoài ý muốn.
+function requireDataHubService(req, res, next) {
+  const svc = serviceSessionFromRequest(req);
+  if (!svc || svc.service !== 'datahub') {
+    return res.status(401).json({ error: 'DataHub service token không hợp lệ.', code: 'DATAHUB_SERVICE_AUTH_REQUIRED' });
+  }
+  req.session = svc;
+  next();
+}
 const isAdmin = (role) => role === 'ceo' || role === 'admin';
 function scopeOf(session) {
   return { empCode: isAdmin(session.role) ? null : session.emp_code };
@@ -594,7 +606,7 @@ function requireAdmin(req, res, next) {
 }
 
 module.exports = {
-  mockLogin, requireAuth, requireTargetAuth, requireAdmin, isAdmin, scopeOf, sessionForUser, getSession,
+  mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireAdmin, isAdmin, scopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),

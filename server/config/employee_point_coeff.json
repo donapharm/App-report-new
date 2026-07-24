@@ -1,0 +1,10 @@
+{
+  "version": "point-local-2026-05-r1",
+  "effective_from": "2026-05",
+  "default": 1,
+  "by_route": {
+    "CL": 2,
+    "NT": 2
+  },
+  "ncl_units_2x": ["025", "026", "027", "028"]
+}
