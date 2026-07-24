@@ -24,6 +24,7 @@ const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const employeeCost = require('./employeeCost');
 const employeeBonus = require('./employeeBonus');
+const employeeBonusPolicy = require('./employeeBonusPolicy');
 const employeeVatKhoan = require('./employeeVatKhoan');
 const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostDataQuality = require('./employeeCostDataQuality');
@@ -63,6 +64,7 @@ const requireCeoDelivery = (req, res, next) => (req.session.role === 'ceo' || re
 const requireCeoQlnb = (req, res, next) => (req.session.role === 'ceo' || String(req.session.emp_code || '').toUpperCase() === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được xem dữ liệu quản trị QLNB.', code: 'DORMANT_CEO_REQUIRED' });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
+const bonusPolicyPreviews = new Map();
 const canonicalAssignmentSnapshots = new Map();
 async function canonicalAssignmentSnapshot(period) {
   const key = catalogManagement.toHubPeriod(period);
@@ -615,9 +617,17 @@ async function employeeCostPayload(req, {
       month: await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod),
       quarter: await employeeBonusPriorityForPeriods(empCode, bonusKpi.quarter_kys || [], catalogRowsByPeriod),
     } : {};
+    if (empCode) {
+      const resolver = (segment = {}) => employeeBonusPolicy.resolve({ period: ky, context: { employee: empCode, ...segment } });
+      bonusPriority.month.configResolver = resolver;
+      bonusPriority.quarter.configResolver = resolver;
+    }
+    const resolvedBonusConfig = bonusConfig || (empCode
+      ? employeeBonusPolicy.resolve({ period: ky, context: { employee: empCode } }).config
+      : employeeBonus.loadConfig());
     return {
       ...payload,
-      bonus: employeeBonus.buildBonusSummary(bonusKpi, bonusConfig || employeeBonus.loadConfig(), bonusPriority),
+      bonus: employeeBonus.buildBonusSummary(bonusKpi, resolvedBonusConfig, bonusPriority),
     };
   });
 }
@@ -643,7 +653,6 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
   const roster = employeeCostRosterRows();
-  const bonusConfig = employeeBonus.loadConfig();
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   const sharedCatalogRowsByPeriod = {};
   const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
@@ -662,7 +671,6 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
     auditEvent,
     roster,
     sharedCatalogRowsByPeriod,
-    bonusConfig,
   }));
   const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
   return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate, allEmployees: true }));
@@ -2895,6 +2903,67 @@ router.get('/admin/targets', auth.requireAuth, auth.requireAdmin, (req, res) => 
   const baseline = targetAdmin.baseline202606();
   res.json({ ky, rows: targetMatrix(ky), kpi: targetKpiSummary(ky, scope), baseline: { ky: baseline.ky, total: baseline.total, count: baseline.rows.length, label: 'T06/2026 Lumos' }, history: targetAdmin.listAudit().slice(0, 30) });
 });
+
+router.get('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const period = req.query.period || req.query.ky || store.latestKy();
+  const context = {
+    employee: req.query.employee || req.query.emp || '',
+    productGroup: req.query.productGroup || '',
+    route: req.query.route || '',
+    unit: req.query.unit || '',
+  };
+  res.set('Cache-Control', 'private, no-store');
+  res.json({
+    period: employeeBonusPolicy.monthKey(period),
+    layers: employeeBonusPolicy.LAYERS,
+    priorityGroups: employeeBonus.PRIORITY_GROUPS,
+    policies: employeeBonusPolicy.list(),
+    audit: employeeBonusPolicy.audit().slice(0, 100),
+    resolved: employeeBonusPolicy.resolve({ period, context }),
+  });
+});
+
+router.post('/admin/bonus-policies/preview', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const policyPreview = employeeBonusPolicy.preview(req.body, req.session.emp_code || req.session.name || 'ADMIN');
+  const ky = catalogManagement.toUiPeriod(policyPreview.resolved.period);
+  const empCode = String(req.body.emp_code || req.body.employee || '').trim().toUpperCase();
+  if (!/^(?:DN|VP)\d{3}$/.test(empCode)) return res.status(400).json({ error: 'Chọn mã nhân viên để mô phỏng.', code: 'BONUS_PREVIEW_EMPLOYEE_REQUIRED' });
+  const kpi = targetKpiSummary(ky, { empCode }, [empCode]);
+  const catalogRowsByPeriod = {};
+  const monthPriority = await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod);
+  const quarterPriority = await employeeBonusPriorityForPeriods(empCode, kpi.quarter_kys || [], catalogRowsByPeriod);
+  const resolver = (segment = {}) => employeeBonusPolicy.resolve({
+    period: ky,
+    context: { employee: empCode, ...segment },
+    extraPolicies: [policyPreview.candidate],
+  });
+  monthPriority.configResolver = resolver;
+  quarterPriority.configResolver = resolver;
+  const config = resolver({}).config;
+  const summary = employeeBonus.buildBonusSummary(kpi, config, { month: monthPriority, quarter: quarterPriority });
+  const previewId = crypto.randomBytes(18).toString('base64url');
+  const actor = String(req.session.emp_code || req.session.name || 'ADMIN');
+  bonusPolicyPreviews.set(previewId, { at: Date.now(), actor, payload: req.body });
+  for (const [id, item] of bonusPolicyPreviews) if (Date.now() - item.at > 15 * 60 * 1000) bonusPolicyPreviews.delete(id);
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ previewId, expiresInSeconds: 900, candidate: policyPreview.candidate, resolved: policyPreview.resolved, employee: empCode, summary, saved: false });
+}));
+
+router.post('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const previewId = String(req.body.previewId || '').trim();
+  const preview = bonusPolicyPreviews.get(previewId);
+  const actor = String(req.session.emp_code || req.session.name || 'ADMIN');
+  if (!preview || Date.now() - preview.at > 15 * 60 * 1000 || preview.actor !== actor) {
+    bonusPolicyPreviews.delete(previewId);
+    return res.status(409).json({ error: 'Preview đã hết hạn hoặc không thuộc phiên hiện tại. Vui lòng mô phỏng lại trước khi lưu.', code: 'BONUS_POLICY_PREVIEW_REQUIRED' });
+  }
+  bonusPolicyPreviews.delete(previewId);
+  const result = employeeBonusPolicy.save(preview.payload, actor);
+  clearTargetDependentCache();
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ...result, saved: true, audit: employeeBonusPolicy.audit().slice(0, 20) });
+});
+
 router.get('/admin/targets/template.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   const ky = String(req.query.ky || store.latestKy()).trim();
   const basis = String(req.query.basis || 't06').trim().toLowerCase();

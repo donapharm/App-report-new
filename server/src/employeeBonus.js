@@ -125,6 +125,17 @@ function c10Of(row = {}) {
   return row.c10 ?? row.C10;
 }
 
+function routeOf(row = {}) {
+  return String(row.route ?? row.tuyen ?? row.ROUTE ?? row.TUYEN ?? '').trim().toUpperCase();
+}
+
+function unitOf(row = {}) {
+  const direct = String(row.unit_code ?? row.unitCode ?? row.UNIT_CODE ?? '').trim();
+  if (direct) return direct;
+  const raw = String(row.DONVI ?? row.donvi ?? row.c7 ?? row.C7 ?? '').trim();
+  return raw.includes('.') ? raw.split('.', 1)[0] : raw;
+}
+
 /** Build a C10-only revenue projection. Never reads App Sale's `priority`/`tech_rank`. */
 function buildPriorityRevenue(revenueRows = [], catalogRows = [], { vatDivisor = 1 } = {}) {
   const catalog = Array.isArray(catalogRows) ? catalogRows : [];
@@ -154,23 +165,32 @@ function buildPriorityRevenue(revenueRows = [], catalogRows = [], { vatDivisor =
   let conflictRevenue = 0;
   let classifiedRows = 0;
   let unclassifiedRows = 0;
+  const segments = new Map();
   for (const row of Array.isArray(revenueRows) ? revenueRows : []) {
     const amount = revenueBeforeVat(row, vatDivisor);
     if (!Number.isFinite(amount)) continue;
     totalRevenue += amount;
     const code = revenueCode(row);
     const groups = groupsByCode.get(code);
+    let group = '';
     if (!sourceAvailable || !code || !groups || groups.size !== 1 || conflictCodes.has(code)) {
       unclassifiedRevenue += amount;
       unclassifiedRows += 1;
       if (invalidCodes.has(code)) invalidRevenue += amount;
       if (conflictCodes.has(code)) conflictRevenue += amount;
-      continue;
+    } else {
+      group = [...groups][0];
+      groupRevenue[group] += amount;
+      classifiedRevenue += amount;
+      classifiedRows += 1;
     }
-    const group = [...groups][0];
-    groupRevenue[group] += amount;
-    classifiedRevenue += amount;
-    classifiedRows += 1;
+    const route = routeOf(row);
+    const unit = unitOf(row);
+    const key = `${group}\u001f${route}\u001f${unit}`;
+    const segment = segments.get(key) || { productGroup: group, group, route, unit, revenue: 0, rows: 0 };
+    segment.revenue += amount;
+    segment.rows += 1;
+    segments.set(key, segment);
   }
   const roundMoney = (value) => Math.round(value);
   return {
@@ -188,6 +208,7 @@ function buildPriorityRevenue(revenueRows = [], catalogRows = [], { vatDivisor =
     c10ConflictCodes: conflictCodes.size,
     c10InvalidCodes: invalidCodes.size,
     coveragePct: totalRevenue > 0 ? +(classifiedRevenue / totalRevenue * 100).toFixed(1) : null,
+    revenueSegments: [...segments.values()].map((segment) => ({ ...segment, revenue: roundMoney(segment.revenue) })),
   };
 }
 
@@ -199,10 +220,12 @@ function mergePriorityRevenue(items = []) {
     groupRevenue: Object.fromEntries(PRIORITY_GROUPS.map((group) => [group, 0])),
     totalRevenue: 0, classifiedRevenue: 0, unclassifiedRevenue: 0, invalidRevenue: 0, conflictRevenue: 0,
     classifiedRows: 0, unclassifiedRows: 0, catalogRows: 0, c10ConflictCodes: 0, c10InvalidCodes: 0,
+    revenueSegments: [],
   };
   for (const item of list) {
     for (const group of PRIORITY_GROUPS) merged.groupRevenue[group] += finite(item.groupRevenue?.[group]) || 0;
     for (const key of ['totalRevenue', 'classifiedRevenue', 'unclassifiedRevenue', 'invalidRevenue', 'conflictRevenue', 'classifiedRows', 'unclassifiedRows', 'catalogRows', 'c10ConflictCodes', 'c10InvalidCodes']) merged[key] += finite(item[key]) || 0;
+    merged.revenueSegments.push(...(Array.isArray(item.revenueSegments) ? item.revenueSegments : []));
   }
   merged.coveragePct = merged.totalRevenue > 0 ? +(merged.classifiedRevenue / merged.totalRevenue * 100).toFixed(1) : null;
   return merged;
@@ -222,6 +245,64 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
   }
   if (pct == null || target <= 0) {
     return { target, achieved, pct: null, bonusPct: null, baseBonusPct: null, baseAmount: null, priorityAmount: null, amount: null, tier: null, priorityGroups: [], priorityStatus: 'missing_target', priorityCoverage: coverage, capped: false, status: 'missing_target' };
+  }
+  const configResolver = typeof coverage.configResolver === 'function' ? coverage.configResolver : null;
+  const segments = Array.isArray(coverage.revenueSegments) ? coverage.revenueSegments : [];
+  if (configResolver && segments.length) {
+    const groupTotals = new Map(PRIORITY_GROUPS.map((group) => [group, { revenue: 0, amount: 0, rates: new Set() }]));
+    const baseRates = new Set();
+    const thresholds = new Set();
+    let baseAmount = 0;
+    let priorityAmount = 0;
+    let uncappedAmount = 0;
+    let amount = 0;
+    let anyEligible = false;
+    let capped = false;
+    for (const segment of segments) {
+      const resolved = configResolver({ productGroup: segment.productGroup || '', route: segment.route || '', unit: segment.unit || '' });
+      const segmentConfig = resolved?.config?.configured != null ? resolved.config : resolved;
+      const active = segmentConfig?.configured ? segmentConfig : config;
+      const segmentTier = active.baseTiers.find((item) => pct >= item.fromPct && (item.toPct == null || pct < item.toPct)) || null;
+      const baseRate = segmentTier?.bonusPct || 0;
+      const revenue = finite(segment.revenue) || 0;
+      const segmentBase = Math.round(revenue * baseRate / 100);
+      const threshold = active.priorityThresholdPct;
+      const eligible = pct >= threshold;
+      const group = normalizePriorityGroup(segment.productGroup);
+      const groupRate = group ? active.priorityRates[group] : 0;
+      const segmentPriority = coverage.sourceAvailable && eligible && group ? Math.round(revenue * groupRate / 100) : 0;
+      const segmentUncapped = segmentBase + segmentPriority;
+      const segmentCap = active.totalCapPct == null ? null : Math.round(revenue * active.totalCapPct / 100);
+      const segmentAmount = segmentCap == null ? segmentUncapped : Math.min(segmentUncapped, segmentCap);
+      baseAmount += segmentBase;
+      priorityAmount += segmentPriority;
+      uncappedAmount += segmentUncapped;
+      amount += segmentAmount;
+      capped ||= segmentAmount < segmentUncapped;
+      baseRates.add(baseRate);
+      thresholds.add(threshold);
+      anyEligible ||= eligible;
+      if (group) {
+        const total = groupTotals.get(group);
+        total.revenue += revenue;
+        total.amount += segmentPriority;
+        total.rates.add(groupRate);
+      }
+    }
+    const priorityGroups = PRIORITY_GROUPS.map((group) => {
+      const total = groupTotals.get(group);
+      return { group, revenue: Math.round(total.revenue), ratePct: total.rates.size === 1 ? [...total.rates][0] : null, amount: total.amount };
+    });
+    const baseBonusPct = baseRates.size === 1 ? [...baseRates][0] : null;
+    const priorityThresholdPct = thresholds.size === 1 ? [...thresholds][0] : null;
+    return {
+      target, achieved, pct, bonusPct: baseBonusPct, baseBonusPct, baseAmount,
+      priorityThresholdPct, priorityEligible: anyEligible, priorityAmount, priorityGroups,
+      priorityStatus: !coverage.sourceAvailable ? 'source_unavailable' : !anyEligible ? 'below_threshold' : 'matched',
+      priorityCoverage: coverage, uncappedAmount, capAmount: null, capped, amount,
+      tier: baseRates.size === 1 ? config.baseTiers.find((item) => item.bonusPct === baseBonusPct && pct >= item.fromPct && (item.toPct == null || pct < item.toPct)) || null : null,
+      status: 'matched', overrideApplied: true,
+    };
   }
   const tier = config.baseTiers.find((item) => pct >= item.fromPct && (item.toPct == null || pct < item.toPct)) || null;
   const baseBonusPct = tier?.bonusPct || 0;
