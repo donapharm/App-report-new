@@ -50,6 +50,11 @@ Phạt cấn trừ **tiền thật**. Vì điểm giờ do App Report tính còn
   **điểm App Report** với **điểm App VAT** *khi App VAT đã đọc đúng doanh thu*. Mục tiêu: **cùng số** (sai số 0).
 - Nếu còn lệch: **KHÔNG deploy phạt**; hiển thị điểm/xu, ẩn/gắn cờ phạt "đang đối soát" cho tới khi khớp. Việc App VAT
   đọc đúng doanh thu để tự đồng bộ điểm là **task riêng App VAT** (xem mục 7) — nhưng SSOT điểm là App Report.
+- **‼ LÀM RÕ (2026-07-24, sau review 95a41bf):** App VAT tuy **xu-only cho hiển thị** nhưng **VẪN phải tính điểm nội bộ**
+  để làm **oracle đối chiếu độc lập** (defense-in-depth "không trừ oan"). Parity so **điểm App Report** ↔ **điểm App VAT
+  (tính lại từ ĐÚNG doanh thu App Sale)**. Hiện parity **KHÔNG thể = 0** vì **App VAT vẫn trả điểm = 0** (chưa đọc đúng
+  doanh thu) → cổng phạt fail-closed đúng, nhưng **sẽ kẹt vĩnh viễn tới khi App VAT sửa**. ⇒ Blocker mở khóa phạt nằm ở
+  **App VAT**, không phải App Report. App Report tính điểm đã đúng (DN009=53,96 · DN016=48,01 · DN024=21,70 · DN001=41,21).
 
 ## 5. FRONTEND
 - Ô KPI **Điểm (tháng·quý)**: đổi nhãn nguồn **"App VAT" → "App Report"** (và `rule_version` điểm local).
