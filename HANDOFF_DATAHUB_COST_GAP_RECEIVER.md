@@ -72,11 +72,13 @@ dùng cho bên đọc "Chi phí của tôi" — `SPEC_REPORT_EMP_COST_SELFVIEW.m
 App Report đã có script E2E tự chứa — kèm **1 mock receiver mẫu** đúng contract này (idempotent theo checksum, chặn
 cột cấm, kiểm `x-assignment-key`). DataHub có thể soi mock trong `server/scripts/test_gap_sync_e2e.js` như bản tham
 chiếu một receiver đạt chuẩn.
-- **Chạy ngay (mock):** `cd server && npm run test:gap-sync` → 9/9 kịch bản (gửi/whitelist/actor/idempotent/sai
-  key/chặn cột cấm/rỗng/404-dormant/chưa-cấu-hình).
-- **Đóng E2E hai đầu (khi DataHub lên endpoint thật):**
+- **Chạy ngay (mock + route):** `cd server && npm run test:gap-sync` → **18/18** (13 module: gửi/whitelist/actor/
+  idempotent/**canonical-checksum**/**bad-response {}**/chặn cột cấm/**không-confirm**/rỗng/**quá-nhiều-items**/sai-key/
+  404-dormant/chưa-cấu-hình · 4 route thật qua HTTP: **NV→403**, **CEO-không-confirm→400**, 📝 note→200, NV-note→403 · 1 canonical).
+- **Đóng E2E hai đầu (khi DataHub lên endpoint thật) — AN TOÀN mặc định:**
   `REAL_DATAHUB=1 DATA_HUB_BASE_URL=<datahub> DATA_HUB_ASSIGNMENT_KEY=<key> npm run test:gap-sync`
-  → chạy cùng bộ assertion đập thẳng vào cửa nhận thật (gửi thật + idempotent + từ chối sai key).
+  → mặc định chỉ **kiểm cấu hình + dựng gói khô (KHÔNG POST, KHÔNG gửi sai key lên prod)**. Muốn thật sự gửi 1 gói
+  **test-marked** (`E2E-TEST-DELETE-ME`, kỳ `2000-01`) để kiểm idempotent thật thì thêm `REAL_DATAHUB_ALLOW_WRITE=1`.
 
 ## Nghiệm thu E2E (khi cả 2 đầu sẵn sàng)
 1. CEO bấm "Đồng bộ" trên App Report → DataHub nhận đúng số mã, trả 2xx + `worklist_id`.

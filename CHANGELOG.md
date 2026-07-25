@@ -1,3 +1,7 @@
+### 2026-07-26 — Claude Code (đồng bộ tài liệu) — directive/handoff khớp code sau fix 8 blocker
+- Cập nhật `DIRECTIVE_EMP_COST_GAP_SYNC_DATAHUB.md` §3 (3 nút: ✅ Duyệt & gửi / 📝 Ghi ý kiến-không-gửi / ❌), §4 (thêm gate confirm, validate response, giới hạn 12 tháng/5000 items/1MB, audit mọi outcome), §6 NGHIỆM THU = ✅ PASS 18/18 + 0 regression.
+- Cập nhật `HANDOFF_DATAHUB_COST_GAP_RECEIVER.md` §Bộ E2E: 18/18 (13 module + 4 route + canonical) + REAL mode AN TOÀN mặc định (dry, cần `REAL_DATAHUB_ALLOW_WRITE=1` mới gửi gói test-marked). Chỉ tài liệu, không đụng code.
+
 ### 2026-07-26 — Claude Code (sửa NO-GO review của bot) — 8 blocker gap-sync đã fix, 0 regression
 - Bot review commit gap-sync trả **NO-GO 8 blocker**. Đã sửa hết trên cùng nhánh (chờ bot re-review):
   1. **FE nút 📝 Ý kiến khác** — modal giờ 3 nút ✅ Duyệt & gửi / 📝 Ghi ý kiến (không gửi) / ❌ Không duyệt + ô ghi chú; 📝 chỉ ghi audit, KHÔNG gửi DataHub (`recordNote`).

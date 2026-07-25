@@ -64,35 +64,47 @@
 
 ## 3. FRONTEND (tab "Mặt hàng thiếu %", chỉ CEO/ADMIN)
 - Thêm nút **"📤 Đồng bộ sang DataHub"** cạnh **"Xuất Excel"/"Xuất PDF"** (giữ cả 2 nút xuất — kênh dự phòng).
-- Bấm → **modal PREVIEW** (theo mẫu catalog transfer): *"Gửi **N mã** (doanh thu ảnh hưởng **W**, kỳ **MM.YYYY**)
-  sang DataHub để điền %."* + đúng 3 lựa chọn **✅ Duyệt · ❌ Không duyệt · 📝 Ý kiến khác**; **chỉ ✅ Duyệt** mới POST.
+- Bấm → **modal PREVIEW** (theo mẫu catalog transfer): *"Gửi **N mã** (doanh thu ảnh hưởng **W**, kỳ **từ→đến**)
+  sang DataHub để điền %."* + ô ghi chú (tuỳ chọn) + đúng 3 lựa chọn:
+  - **✅ Duyệt & gửi** → POST `{confirm:true, note?}` — chỉ nút này gửi worklist đi.
+  - **📝 Ghi ý kiến (không gửi)** → POST `{action:'note', note}` — chỉ ghi audit, KHÔNG gửi DataHub.
+  - **❌ Không duyệt** → đóng modal, không gọi gì.
 - Thành công → toast *"Đã gửi N mã sang DataHub. Vào DataHub để điền %."* + refresh audit.
 - **Trạng thái nút:**
   - DataHub chưa cấu hình → nút **disabled** + tooltip *"Chưa cấu hình DataHub"*.
   - DataHub 404 (chưa build cửa nhận) → toast *"DataHub chưa mở cửa nhận worklist — dùng tạm Xuất Excel."* (dormant, không vỡ).
   - Lỗi mạng/timeout → *"DataHub phản hồi chậm, thử lại."* (không tự retry ngầm).
 
-## 4. BẢO MẬT / FAIL-SAFE (bất di)
-1. **CEO/ADMIN-only** (requireAdmin); NV không thấy nút, gọi route bị 403.
+## 4. BẢO MẬT / FAIL-SAFE (bất di) — đã hiện thực + test
+1. **CEO/ADMIN-only** (requireAdmin); NV không thấy nút, gọi route bị **403**.
 2. Worklist **dựng ở backend từ nguồn gap**, không tin body client.
-3. **Không %/cost/PII/C32/C47** trong payload (assert trước khi gửi — fail-closed nếu lỡ dính).
-4. **No auto-retry POST**; idempotent qua checksum; `configured()` sai → 503, không ghi local.
-5. **Audit** mọi lần đồng bộ: actor · kỳ · số mã · checksum · kết quả DataHub (dùng `employee_cost_gap_audit` sẵn có).
-6. Số nghiệp vụ/quyền không đổi; đây chỉ là **kênh chuyển danh sách**, không tính toán mới.
+3. **Không %/cost/PII/C32/C47** trong payload (`assertNoForbiddenKeys` fail-closed trước khi gửi).
+4. **Gate xác nhận:** route yêu cầu `confirm===true` (đặt SỚM trước khi dựng payload) + lớp `sync({confirmed})`; admin
+   gọi thẳng API mà không Duyệt → **400**, không gửi.
+5. **Validate phản hồi DataHub:** 2xx nhưng thiếu `ok/worklist_id` (kể cả `{}`) → `GAP_SYNC_BAD_RESPONSE`, KHÔNG coi
+   là thành công.
+6. **No auto-retry POST**; idempotent qua **checksum canonical** (sort đơn vị + sort items theo mã → độc lập thứ tự);
+   `configured()` sai → 503 dormant, không ghi local.
+7. **Giới hạn:** tháng ≤ 12 (route) · items ≤ 5000 · payload ≤ 1 MB → **413** rõ ràng.
+8. **Audit MỌI outcome** (kể cả từ chối: not-confirmed/not-configured/empty/limit/forbidden/bad-response) vào
+   `employee_cost_gap_sync_audit`: actor · role · kỳ · số mã · checksum · kết quả. `note` chỉ vào audit, **không** gửi DataHub.
+9. Số nghiệp vụ/quyền không đổi; đây chỉ là **kênh chuyển danh sách**, không tính toán mới.
 
 ## 5. RANH GIỚI (giữ nguyên nguyên tắc gap tool)
 - App Report: **phát hiện + đóng gói + GỬI** danh sách thiếu %. **DataHub: điền % / chuẩn hoá mã (SSOT).**
 - App Report **không** tự ánh xạ, **không** tự điền %, **không** giữ raw cost. Sau khi DataHub cập nhật catalog →
   App Report sync catalog như hiện tại → coverage lên, **không sửa code**.
 
-## 6. NGHIỆM THU
-1. `configured()`=false → route trả 503 thân thiện; nút disabled + tooltip đúng.
-2. Payload build từ backend, **assert 0 field cost/%/PII/C32/C47** (test chèn thử → fail-closed).
-3. POST không auto-retry; gửi 2 lần cùng kỳ+checksum → DataHub dedupe (khi có cửa nhận).
-4. CEO-only: NV gọi route → 403; nút không hiện với NV.
-5. UI preview 3 nút, chỉ ✅ Duyệt mới POST; toast + audit đúng.
-6. Dormant: DataHub 404 → thông báo rõ, không vỡ app; Xuất Excel/PDF vẫn chạy.
-7. Test + build PASS; push nhánh review; báo Claude review; **chưa deploy** tới khi DataHub xong cửa nhận.
+## 6. NGHIỆM THU — trạng thái: ✅ PASS (bộ `npm run test:gap-sync` 18/18)
+1. `configured()`=false → 503 dormant; nút disabled + tooltip *"Chưa cấu hình DataHub"* (GET gaps trả `sync.configured`).
+2. Payload build từ backend, **assert 0 field cost/%/PII/C32/C47** (chèn thử c47 → fail-closed).
+3. POST không auto-retry; gửi lại cùng kỳ+checksum → dedupe; **đảo thứ tự items → cùng checksum** (canonical).
+4. CEO-only: NV gọi route → **403**; nút không hiện với NV.
+5. UI 3 nút: ✅ Duyệt & gửi → POST worklist; 📝 → chỉ ghi audit; ❌ → đóng. Không confirm → **400**.
+6. DataHub 2xx rỗng → `GAP_SYNC_BAD_RESPONSE`; giới hạn tháng/items/payload → 413.
+7. Dormant: DataHub 404 / unreachable / timeout → thông báo rõ, không vỡ app; Xuất Excel/PDF vẫn chạy.
+8. `node --test test/*.test.js`: 0 regression (fail chỉ là OTP baseline + export thiếu font ở container review).
+9. Push nhánh review; báo bot re-review; **chưa deploy** tới khi DataHub xong cửa nhận + bot duyệt GO.
 
 ## 6-BIS. PHẠM VI CỘT % ĐƯỢC GHI (CEO chốt 2026-07-25)
 Màn DataHub điền % chỉ ghi vào **đúng allowlist `C33–C46` CEO đang bật** (dùng chung allowlist động của bên đọc
