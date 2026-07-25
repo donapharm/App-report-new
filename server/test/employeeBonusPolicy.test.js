@@ -45,6 +45,22 @@ test('versioned policy saves atomically, audits patch and keeps month history', 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('auto group target defaults on, can be versioned off/on, and remains in preview plus audit', () => {
+  const { dir, store } = fixture();
+  assert.equal(store.resolve({ period: '07.2026' }).config.autoGroupTargets, true);
+  const preview = store.preview({
+    effectiveFrom: '07.2026', scope: { type: 'employee', value: 'DN006' },
+    patch: { autoGroupTargets: false }, previewPeriod: '07.2026',
+  }, 'CEO');
+  assert.equal(preview.resolved.config.autoGroupTargets, false);
+  store.savePreview(preview, 'CEO');
+  assert.equal(store.resolve({ period: '07.2026', context: { employee: 'DN006' } }).config.autoGroupTargets, false);
+  assert.equal(store.audit()[0].patch.autoGroupTargets, false);
+  assert.equal(store.audit()[0].afterConfig.autoGroupTargets, false);
+  assert.throws(() => store.save({ effectiveFrom: '07.2026', scope: { type: 'default' }, patch: { autoGroupTargets: 'yes' } }, 'CEO'), (error) => error.code === 'BONUS_POLICY_AUTO_TARGET_INVALID');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('rate precedence stays default → product group → route → unit → employee', () => {
   const { dir, store } = fixture();
   const save = (scope, rate) => store.save({ effectiveFrom: '07.2026', scope, patch: { priorityRates: { 'H.A*': rate } } }, 'CEO');
@@ -59,7 +75,7 @@ test('rate precedence stays default → product group → route → unit → emp
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('group target precedence is default → route → unit → employee and null explicitly blocks inheritance', () => {
+test('group target precedence is default → route → unit → employee and null clears manual inheritance for auto', () => {
   const { dir, store } = fixture();
   const save = (scope, value) => store.save({ effectiveFrom: '07.2026', scope, patch: { priorityTargets: { 'H.A*': value } } }, 'CEO');
   save({ type: 'default' }, 100);
@@ -86,7 +102,7 @@ test('route/unit group target fails closed when employee organizational scope is
   store.save({ effectiveFrom: '07.2026', scope: { type: 'route', value: 'CL' }, patch: { priorityTargets: { 'H.A*': 90 } } }, 'CEO');
   let result = store.resolve({ period: '07.2026', context: { employee: 'DN006', targetScopeStrict: true } });
   assert.equal(result.priorityTargetStatuses['H.A*'], 'ambiguous_scope');
-  // Explicit employee null is intentional "chưa giao" and wins over ambiguous lower layers.
+  // Explicit employee null clears the lower manual target so auto can win safely.
   store.save({ effectiveFrom: '07.2026', scope: { type: 'employee', value: 'DN006' }, patch: { priorityTargets: { 'H.A*': null } } }, 'CEO');
   result = store.resolve({ period: '07.2026', context: { employee: 'DN006', targetScopeStrict: true } });
   assert.equal(result.config.priorityTargets['H.A*'], null);

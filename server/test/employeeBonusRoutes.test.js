@@ -34,10 +34,14 @@ test('quarter resolver keeps each source month instead of fixing all months to c
   assert.match(routes, /period: segment\.period \|\| ky/);
   assert.match(routes, /period: period \|\| ky/);
   assert.match(routes, /period: hubPeriod/);
+  assert.match(routes, /kpi\.quarter\?\.assigned_kys/);
+  assert.match(routes, /average: true/);
+  assert.match(routes, /employeeTargetsByPeriod/);
+  assert.match(routes, /summarizeAssignedQuarter/);
 });
 
 test('preview contract exposes detailed P2 group formula and target scope warning', () => {
-  for (const field of ['revenue', 'target', 'excess', 'ratePct', 'amount', 'reason']) {
+  for (const field of ['revenue', 'target', 'targetSource', 'targetPeriods', 'excess', 'ratePct', 'amount', 'reason']) {
     assert.match(engine, new RegExp(`\\b${field}\\b`));
   }
   assert.match(routes, /targetScopeWarning/);

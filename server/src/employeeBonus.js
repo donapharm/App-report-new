@@ -31,7 +31,8 @@ function unconfigured(reason = 'empty_tiers') {
   return {
     configured: false, reason, schemaVersion: SCHEMA_VERSION, version: '', effectiveFrom: '', base: BASE,
     currency: 'VND', totalCapPct: null, capPct: null, baseTiers: [], tiers: [],
-    priorityThresholdPct: null, priorityRates: {}, priorityTargets: {}, message: UNCONFIGURED_MESSAGE,
+    priorityThresholdPct: null, priorityRates: {}, priorityTargets: {}, autoGroupTargets: true,
+    message: UNCONFIGURED_MESSAGE,
   };
 }
 
@@ -85,11 +86,13 @@ function validateConfig(raw = {}) {
   }
   const totalCapPct = raw.totalCapPct == null ? null : configNumber(raw.totalCapPct);
   if (raw.totalCapPct != null && (totalCapPct == null || totalCapPct < 0)) return unconfigured('invalid_total_cap');
+  const autoGroupTargets = raw.autoGroupTargets == null ? true : raw.autoGroupTargets;
+  if (typeof autoGroupTargets !== 'boolean') return unconfigured('invalid_auto_group_targets');
   return {
     configured: true, reason: null, schemaVersion: SCHEMA_VERSION, version: String(raw.version || ''),
     effectiveFrom: String(raw.effectiveFrom || ''), base: BASE, currency: String(raw.currency || 'VND'),
     totalCapPct, capPct: totalCapPct, baseTiers: base.tiers, tiers: base.tiers,
-    priorityThresholdPct: threshold, priorityRates, priorityTargets, message: '',
+    priorityThresholdPct: threshold, priorityRates, priorityTargets, autoGroupTargets, message: '',
   };
 }
 
@@ -177,14 +180,15 @@ function buildPriorityRevenue(revenueRows = [], catalogRows = [], { vatDivisor =
   };
 }
 
-function mergePriorityRevenue(items = []) {
+function mergePriorityRevenue(items = [], { aggregation = 'sum' } = {}) {
   const list = (Array.isArray(items) ? items : []).filter(Boolean);
   const merged = {
     source: 'datahub_catalog_c10', sourceAvailable: list.length > 0 && list.every((item) => item.sourceAvailable === true),
     periods: [], groupRevenue: Object.fromEntries(PRIORITY_GROUPS.map((group) => [group, 0])),
     totalRevenue: 0, classifiedRevenue: 0, unclassifiedRevenue: 0, invalidRevenue: 0, conflictRevenue: 0,
     classifiedRows: 0, unclassifiedRows: 0, catalogRows: 0, c10ConflictCodes: 0, c10InvalidCodes: 0,
-    revenueSegments: [],
+    revenueSegments: [], periodBreakdown: [], aggregation: aggregation === 'average' ? 'average' : 'sum',
+    periodCount: list.length,
   };
   const periods = new Set();
   for (const item of list) {
@@ -192,6 +196,26 @@ function mergePriorityRevenue(items = []) {
     for (const group of PRIORITY_GROUPS) merged.groupRevenue[group] += finite(item.groupRevenue?.[group]) || 0;
     for (const key of ['totalRevenue', 'classifiedRevenue', 'unclassifiedRevenue', 'invalidRevenue', 'conflictRevenue', 'classifiedRows', 'unclassifiedRows', 'catalogRows', 'c10ConflictCodes', 'c10InvalidCodes']) merged[key] += finite(item[key]) || 0;
     merged.revenueSegments.push(...(Array.isArray(item.revenueSegments) ? item.revenueSegments : []));
+    const itemPeriods = Array.isArray(item.periods) ? item.periods.filter(Boolean) : [];
+    if (itemPeriods.length === 1) {
+      merged.periodBreakdown.push({
+        period: String(itemPeriods[0]),
+        groupRevenue: Object.fromEntries(PRIORITY_GROUPS.map((group) => [group, Math.round(finite(item.groupRevenue?.[group]) || 0)])),
+        totalRevenue: Math.round(finite(item.totalRevenue) || 0),
+      });
+    } else if (Array.isArray(item.periodBreakdown)) {
+      merged.periodBreakdown.push(...item.periodBreakdown);
+    }
+  }
+  if (merged.aggregation === 'average' && list.length > 0) {
+    const divisor = list.length;
+    for (const group of PRIORITY_GROUPS) merged.groupRevenue[group] = Math.round(merged.groupRevenue[group] / divisor);
+    for (const key of ['totalRevenue', 'classifiedRevenue', 'unclassifiedRevenue', 'invalidRevenue', 'conflictRevenue']) {
+      merged[key] = Math.round(merged[key] / divisor);
+    }
+    merged.revenueSegments = merged.revenueSegments.map((segment) => ({
+      ...segment, revenue: Math.round((finite(segment.revenue) || 0) / divisor),
+    }));
   }
   merged.periods = [...periods].sort();
   merged.coveragePct = merged.totalRevenue > 0 ? +(merged.classifiedRevenue / merged.totalRevenue * 100).toFixed(1) : null;
@@ -210,33 +234,75 @@ function sourceKey(source) {
   return `${source.scope?.type || 'seed'}:${source.scope?.value || '*'}:${source.id || 'seed'}`;
 }
 
-function resolveTargetForGroup(group, coverage, config, targetResolver) {
+function periodRevenueForGroup(coverage, period, group) {
+  const row = (coverage.periodBreakdown || []).find((item) => String(item.period || '') === String(period || ''));
+  if (row) return {
+    groupRevenue: Math.round(finite(row.groupRevenue?.[group]) || 0),
+    totalRevenue: Math.round(finite(row.totalRevenue) || 0),
+  };
+  const periods = Array.isArray(coverage.periods) ? coverage.periods : [];
+  if (periods.length <= 1) return {
+    groupRevenue: Math.round(finite(coverage.groupRevenue?.[group]) || 0),
+    totalRevenue: Math.round(finite(coverage.totalRevenue) || 0),
+  };
+  return null;
+}
+
+function autoTargetForPeriod(group, coverage, period, fallbackEmployeeTarget) {
+  const employeeTarget = finite(coverage.employeeTargetsByPeriod?.[period]) ?? finite(fallbackEmployeeTarget);
+  const revenue = periodRevenueForGroup(coverage, period, group);
+  if (employeeTarget == null || employeeTarget < 0 || !revenue) return null;
+  return {
+    target: revenue.totalRevenue > 0
+      ? Math.round(employeeTarget * revenue.groupRevenue / revenue.totalRevenue)
+      : 0,
+    employeeTarget: Math.round(employeeTarget),
+    groupRevenue: revenue.groupRevenue,
+    totalRevenue: revenue.totalRevenue,
+  };
+}
+
+function resolveTargetForGroup(group, coverage, config, targetResolver, fallbackEmployeeTarget) {
   const periods = Array.isArray(coverage.periods) && coverage.periods.length ? coverage.periods : [''];
   const details = [];
   let total = 0;
   for (const period of periods) {
+    let active = config;
+    let source = null;
     if (!targetResolver) {
-      const value = config.priorityTargets?.[group];
-      if (value == null) return { assigned: false, target: null, status: 'missing', periods: details };
+      source = config.priorityTargets?.[group] == null ? null : { id: 'seed', scope: { type: 'default', value: '*' } };
+    } else {
+      // Group target is per employee/period. Route/unit must come from unique organizational
+      // metadata supplied by the caller; customer units in revenue rows are deliberately not used.
+      const result = targetResolver({ period, productGroup: group, group });
+      if (result?.priorityTargetStatuses?.[group] === 'ambiguous_scope') {
+        return { assigned: false, target: null, status: 'ambiguous_scope', source: 'unresolved', periods: details };
+      }
+      active = resolvedConfig(result, config);
+      source = result?.priorityTargetSources?.[group] || null;
+    }
+    const value = active?.priorityTargets?.[group];
+    if (value != null) {
+      if (!Number.isFinite(Number(value)) || Number(value) < 0) return { assigned: false, target: null, status: 'invalid', source: 'unresolved', periods: details };
       total += Number(value);
-      details.push({ period, target: Number(value), source: { id: 'seed', scope: { type: 'default', value: '*' } } });
+      details.push({ period, target: Number(value), targetSource: 'manual', source, sourceKey: sourceKey(source) });
       continue;
     }
-    // Group target is per employee/period. Route/unit must come from unique organizational
-    // metadata supplied by the caller; customer units in revenue rows are deliberately not used.
-    const result = targetResolver({ period, productGroup: group, group });
-    if (result?.priorityTargetStatuses?.[group] === 'ambiguous_scope') {
-      return { assigned: false, target: null, status: 'ambiguous_scope', periods: details };
-    }
-    const active = resolvedConfig(result, config);
-    const value = active?.priorityTargets?.[group];
-    const source = result?.priorityTargetSources?.[group] || null;
-    if (value == null) return { assigned: false, target: null, status: 'missing', periods: details };
-    if (!Number.isFinite(Number(value)) || Number(value) < 0) return { assigned: false, target: null, status: 'invalid', periods: details };
-    total += Number(value);
-    details.push({ period, target: Number(value), source, sourceKey: sourceKey(source) });
+    if (active?.autoGroupTargets !== true) return { assigned: false, target: null, status: 'missing', source: 'missing', periods: details };
+    const automatic = autoTargetForPeriod(group, coverage, period, periods.length === 1 ? fallbackEmployeeTarget : null);
+    if (!automatic) return { assigned: false, target: null, status: 'missing_employee_target', source: 'unresolved', periods: details };
+    total += automatic.target;
+    details.push({
+      period, target: automatic.target, targetSource: 'auto',
+      source: { type: 'auto', formula: 'employee_target_x_group_revenue_share' },
+      employeeTarget: automatic.employeeTarget, groupRevenue: automatic.groupRevenue,
+      totalRevenue: automatic.totalRevenue,
+    });
   }
-  return { assigned: true, target: Math.round(total), status: 'assigned', periods: details };
+  const divisor = coverage.aggregation === 'average' && details.length ? details.length : 1;
+  const targetSources = new Set(details.map((item) => item.targetSource));
+  const source = targetSources.size === 1 ? [...targetSources][0] : 'mixed';
+  return { assigned: true, target: Math.round(total / divisor), status: 'assigned', source, periods: details };
 }
 
 function legacyPriorityActive(coverage, config) {
@@ -298,7 +364,7 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
     const rates = groupRates.get(group);
     if (!rates.size) rates.add(Number(config.priorityRates[group]));
     const ratePct = rates.size === 1 ? [...rates][0] : null;
-    const resolvedTarget = resolveTargetForGroup(group, coverage, config, targetResolver);
+    const resolvedTarget = resolveTargetForGroup(group, coverage, config, targetResolver, target);
     let excess = resolvedTarget.assigned ? Math.max(0, revenue - resolvedTarget.target) : null;
     let amount = 0;
     let reason = 'matched';
@@ -319,7 +385,7 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
     else amount = Math.round(excess * ratePct / 100);
     return {
       group, revenue, target: resolvedTarget.assigned ? resolvedTarget.target : null,
-      targetStatus: resolvedTarget.status, targetPeriods: resolvedTarget.periods,
+      targetStatus: resolvedTarget.status, targetSource: resolvedTarget.source, targetPeriods: resolvedTarget.periods,
       excess, ratePct, amount, reason,
     };
   });
@@ -358,6 +424,7 @@ function buildBonusSummary(kpi = {}, config = loadConfig(), priority = {}) {
     base: BASE, currency: normalized.currency || 'VND', totalCapPct: finite(normalized.totalCapPct),
     capPct: finite(normalized.totalCapPct), priorityThresholdPct: finite(normalized.priorityThresholdPct),
     priorityRates: normalized.priorityRates || {}, priorityTargets: normalized.priorityTargets || {},
+    autoGroupTargets: normalized.autoGroupTargets === true,
     ky: String(kpi.ky || ''), quarterLabel: String(kpi.quarter_label || ''),
     month: periodBonus(kpi.month, normalized, priority.month || emptyPriority()),
     quarter: periodBonus(kpi.quarter, normalized, priority.quarter || emptyPriority()), employeeSubtotals: [],
@@ -383,10 +450,12 @@ function aggregateBonusSummaries(reports = [], roster = []) {
       const rows = periods.map((item) => (item.priorityGroups || []).find((row) => row.group === group)).filter(Boolean);
       const assigned = rows.filter((row) => row.target != null);
       const fullyAssigned = rows.length > 0 && assigned.length === rows.length;
+      const sources = new Set(rows.map((row) => row.targetSource).filter(Boolean));
       return {
         group, revenue: rows.reduce((sum, row) => sum + (finite(row.revenue) || 0), 0),
         target: fullyAssigned ? assigned.reduce((sum, row) => sum + finite(row.target), 0) : null,
         targetStatus: fullyAssigned ? 'aggregate' : 'partially_missing',
+        targetSource: sources.size === 1 ? [...sources][0] : sources.size ? 'mixed' : '',
         excess: fullyAssigned ? rows.reduce((sum, row) => sum + (finite(row.excess) || 0), 0) : null,
         ratePct: null, amount: rows.reduce((sum, row) => sum + (finite(row.amount) || 0), 0), reason: 'aggregate',
       };

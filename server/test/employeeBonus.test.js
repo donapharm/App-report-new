@@ -96,15 +96,58 @@ test('P2 starts at 101% and applies rate only to excess over each assigned C10 g
   assert.equal(matched.amount, 490_000);
 });
 
-test('missing group target fails closed and is never treated as zero', () => {
+test('missing manual group target auto-infers by employee revenue share; explicit auto-off keeps old fail-closed option', () => {
   const config = { ...v3Config, priorityTargets: { ...v3Config.priorityTargets, 'H.A*': null } };
   const result = summary(110, 100_000_000, config, { 'H.A*': 80_000_000, 'H.A': 20_000_000 }).month;
   const star = result.priorityGroups.find((item) => item.group === 'H.A*');
-  assert.equal(star.target, null);
-  assert.equal(star.excess, null);
+  assert.equal(star.target, 80_000_000);
+  assert.equal(star.targetSource, 'auto');
+  assert.equal(star.excess, 0);
   assert.equal(star.amount, 0);
-  assert.equal(star.reason, 'target_missing');
-  assert.equal(result.priorityStatus, 'partially_missing_targets');
+  assert.equal(star.reason, 'at_or_below_target');
+  assert.equal(star.targetPeriods[0].source.formula, 'employee_target_x_group_revenue_share');
+
+  const disabled = summary(110, 100_000_000, { ...config, autoGroupTargets: false }, { 'H.A*': 80_000_000, 'H.A': 20_000_000 }).month;
+  const disabledStar = disabled.priorityGroups.find((item) => item.group === 'H.A*');
+  assert.equal(disabledStar.target, null);
+  assert.equal(disabledStar.reason, 'target_missing');
+  assert.equal(disabled.priorityStatus, 'partially_missing_targets');
+});
+
+test('DN006 hand-check: auto targets and P2 match target × C10 share on 729,579,687 total excess', () => {
+  const config = { ...v3Config, priorityTargets: Object.fromEntries(bonus.PRIORITY_GROUPS.map((group) => [group, null])) };
+  const target = 2_693_559_151;
+  const achieved = 3_423_138_838;
+  const groups = { 'H.A*': 1_534_009_669, 'H.A': 978_570_038, 'H.B': 591_166_846, 'H.C': 192_728_667, 'H.D': 101_977_905 };
+  const coverage = priority(groups, true, ['2026-07']);
+  coverage.totalRevenue = achieved;
+  coverage.employeeTargetsByPeriod = { '2026-07': target };
+  const result = bonus.periodBonus({ target, achieved, pct: 127.1 }, bonus.validateConfig(config), coverage);
+  assert.equal(achieved - target, 729_579_687);
+  assert.deepEqual(result.priorityGroups.map((item) => [item.group, item.target, item.excess, item.amount, item.targetSource]), [
+    ['H.A*', 1_207_063_452, 326_946_217, 3_269_462, 'auto'],
+    ['H.A', 770_005_660, 208_564_378, 1_668_515, 'auto'],
+    ['H.B', 465_170_402, 125_996_444, 629_982, 'auto'],
+    ['H.C', 151_652_062, 41_076_605, 41_077, 'auto'],
+    ['H.D', 80_243_172, 21_734_733, 21_735, 'auto'],
+  ]);
+  assert.equal(result.priorityAmount, 5_630_771);
+  assert.ok(result.priorityAmount > 0);
+});
+
+test('manual layered target overrides auto for exactly that group and exposes manual source', () => {
+  const config = { ...v3Config, priorityTargets: Object.fromEntries(bonus.PRIORITY_GROUPS.map((group) => [group, null])) };
+  const coverage = priority({ 'H.A*': 80, 'H.A': 20 }, true, ['2026-07']);
+  coverage.employeeTargetsByPeriod = { '2026-07': 90 };
+  coverage.targetResolver = () => ({
+    config: bonus.validateConfig({ ...config, priorityTargets: { ...config.priorityTargets, 'H.A*': 60 } }),
+    priorityTargetSources: { 'H.A*': { id: 'employee-manual-v4', version: 4, scope: { type: 'employee', value: 'DN006' } } },
+  });
+  const result = bonus.periodBonus({ target: 90, achieved: 100, pct: 111.1 }, bonus.validateConfig(config), coverage);
+  const star = result.priorityGroups.find((item) => item.group === 'H.A*');
+  const a = result.priorityGroups.find((item) => item.group === 'H.A');
+  assert.deepEqual([star.target, star.targetSource, star.targetPeriods[0].source.id], [60, 'manual', 'employee-manual-v4']);
+  assert.deepEqual([a.target, a.targetSource], [18, 'auto']);
 });
 
 test('ambiguous route/unit employee scope keeps the affected group P2 at zero', () => {
@@ -121,25 +164,51 @@ test('ambiguous route/unit employee scope keeps the affected group P2 at zero', 
   assert.equal(result.priorityStatus, 'partially_missing_targets');
 });
 
-test('quarter target is sum of all three monthly group targets; one missing month fails closed', () => {
+test('quarter group target and revenue use average of assigned months (T07-only and full three-month average)', () => {
   const coverage = priority({ 'H.A*': 30_000_000 }, true, ['2026-07', '2026-08', '2026-09']);
+  coverage.aggregation = 'average';
+  coverage.employeeTargetsByPeriod = { '2026-07': 100_000_000, '2026-08': 120_000_000, '2026-09': 140_000_000 };
   coverage.targetResolver = ({ period }) => ({
     config: bonus.validateConfig({ ...v3Config, priorityTargets: { ...v3Config.priorityTargets, 'H.A*': period === '2026-08' ? 6_000_000 : 5_000_000 } }),
     priorityTargetSources: { 'H.A*': { id: period, scope: { type: 'employee', value: 'DN006' } } },
   });
-  const ok = bonus.periodBonus({ target: 300_000_000, achieved: 330_000_000, pct: 110 }, bonus.validateConfig(v3Config), coverage);
+  const ok = bonus.periodBonus({ target: 120_000_000, achieved: 132_000_000, pct: 110 }, bonus.validateConfig(v3Config), coverage);
   const group = ok.priorityGroups.find((item) => item.group === 'H.A*');
-  assert.equal(group.target, 16_000_000);
-  assert.equal(group.excess, 14_000_000);
-  assert.equal(group.amount, 140_000);
+  assert.equal(group.target, 5_333_333);
+  assert.equal(group.excess, 24_666_667);
+  assert.equal(group.amount, 246_667);
 
-  coverage.targetResolver = ({ period }) => ({
-    config: bonus.validateConfig({ ...v3Config, priorityTargets: { ...v3Config.priorityTargets, 'H.A*': period === '2026-08' ? null : 5_000_000 } }),
-    priorityTargetSources: { 'H.A*': null },
+  const july = priority({ 'H.A*': 10_000_000 }, true, ['2026-07']);
+  july.aggregation = 'average';
+  july.employeeTargetsByPeriod = { '2026-07': 100_000_000 };
+  july.targetResolver = coverage.targetResolver;
+  const julyOnly = bonus.periodBonus({ target: 100_000_000, achieved: 110_000_000, pct: 110 }, bonus.validateConfig(v3Config), july);
+  assert.equal(julyOnly.priorityGroups.find((item) => item.group === 'H.A*').target, 5_000_000);
+});
+
+test('quarter auto group targets average each assigned month formula together with group revenue', () => {
+  const config = bonus.validateConfig({
+    ...v3Config,
+    priorityTargets: Object.fromEntries(bonus.PRIORITY_GROUPS.map((group) => [group, null])),
   });
-  const missing = bonus.periodBonus({ target: 300_000_000, achieved: 330_000_000, pct: 110 }, bonus.validateConfig(v3Config), coverage);
-  assert.equal(missing.priorityGroups.find((item) => item.group === 'H.A*').reason, 'target_missing');
-  assert.equal(missing.priorityGroups.find((item) => item.group === 'H.A*').amount, 0);
+  const month = (period, totalRevenue, groupRevenue) => {
+    const item = priority({ 'H.A*': groupRevenue }, true, [period]);
+    item.totalRevenue = totalRevenue;
+    return item;
+  };
+  const coverage = bonus.mergePriorityRevenue([
+    month('2026-07', 100_000_000, 60_000_000),
+    month('2026-08', 200_000_000, 100_000_000),
+    month('2026-09', 300_000_000, 90_000_000),
+  ], { aggregation: 'average' });
+  coverage.employeeTargetsByPeriod = { '2026-07': 80_000_000, '2026-08': 120_000_000, '2026-09': 160_000_000 };
+  const result = bonus.periodBonus({ target: 120_000_000, achieved: 200_000_000, pct: 166.7 }, config, coverage);
+  const star = result.priorityGroups.find((item) => item.group === 'H.A*');
+  assert.equal(star.revenue, 83_333_333);
+  assert.equal(star.target, 52_000_000); // avg(48m, 60m, 48m)
+  assert.equal(star.targetSource, 'auto');
+  assert.deepEqual(star.targetPeriods.map((item) => item.target), [48_000_000, 60_000_000, 48_000_000]);
+  assert.equal(star.amount, 313_333);
 });
 
 test('v3 starts T07.2026 while a closed pre-July period retains historical full-revenue P2', () => {

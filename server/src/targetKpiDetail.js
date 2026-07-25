@@ -50,11 +50,10 @@ function buildTargetKpiDetail({ ky, scope, empCode, targetKpiSummary, resolveTar
   };
   const assignedLabels = months.filter((item) => item.assigned).map((item) => item.label);
   const unassignedLabels = months.filter((item) => !item.assigned).map((item) => item.label);
-  const clarification = unassignedLabels.length
-    ? assignedLabels.length
-      ? `Quý hiện tính trên ${assignedLabels.join(' + ')} (${unassignedLabels.join('/')} chưa giao target). Khi giao thêm, target quý tăng → % đạt quý sẽ đổi.`
-      : `Quý chưa có tháng nào được giao target (${unassignedLabels.join('/')} chưa giao target). Khi giao thêm, target quý tăng → % đạt quý sẽ đổi.`
-    : 'Quý đã có target đủ 3 tháng.';
+  const calculationLabel = 'Target quý = trung bình các tháng đã giao';
+  const clarification = assignedLabels.length
+    ? `${calculationLabel}: ${assignedLabels.join(' + ')}${unassignedLabels.length ? ` (${unassignedLabels.join('/')} chưa giao target)` : ''}. Doanh thu và % đạt quý dùng cùng trung bình này.`
+    : `${calculationLabel}: quý chưa có tháng nào được giao target${unassignedLabels.length ? ` (${unassignedLabels.join('/')} chưa giao target)` : ''}.`;
   return {
     emp_code: code,
     ky,
@@ -68,6 +67,8 @@ function buildTargetKpiDetail({ ky, scope, empCode, targetKpiSummary, resolveTar
       pct: summary.quarter.pct,
       months,
       unassigned_kys: months.filter((item) => !item.assigned).map((item) => item.ky),
+      calculation: 'average_assigned_months',
+      calculation_label: calculationLabel,
       clarification,
     },
   };

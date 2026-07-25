@@ -1,0 +1,163 @@
+{
+  "task": "DIRECTIVE_EMP_COST_BONUS_V3_1_AUTO_GROUP_TARGET",
+  "status": "candidate_review_only_not_committed_not_pushed_not_deployed",
+  "base_commit": "84bc327aab976866c075a4b2c7d2c8ac116b9315",
+  "branch": "feature/employee-bonus-v3-1-auto-target-20260725",
+  "config": {
+    "schema_version": 3,
+    "version": "bonus-v3.1-auto-group-target-2026-07-r1",
+    "effective_from": "2026-07-01",
+    "auto_group_targets_default": true,
+    "monthly_auto_formula": "round(employee_month_target_vnd * c10_group_revenue_before_vat_vnd / employee_total_revenue_before_vat_vnd)",
+    "manual_override_precedence": "default -> route -> unit -> employee",
+    "p2_formula": "sum(round(max(0, c10_group_revenue_before_vat_vnd - resolved_group_target_vnd) * group_rate_pct / 100))",
+    "p2_employee_gate_pct": 101,
+    "quarter_formula": "average of assigned monthly targets and corresponding achieved revenue; group target is the average of each assigned month's resolved group target"
+  },
+  "dn006_t07_hand_check": {
+    "employee": "DN006",
+    "period": "07.2026",
+    "employee_target_vnd": 2693559151,
+    "employee_revenue_before_vat_vnd": 3423138838,
+    "employee_total_excess_vnd": 729579687,
+    "achievement_pct": 127.1,
+    "p1_rate_pct": 0.18,
+    "p1_vnd": 6161650,
+    "classified_c10_revenue_vnd": 3398453125,
+    "unclassified_c10_revenue_vnd": 24685713,
+    "groups": [
+      {
+        "group": "H.A*",
+        "revenue_vnd": 1534009669,
+        "target_vnd": 1207063452,
+        "target_source": "auto",
+        "excess_vnd": 326946217,
+        "rate_pct": 1,
+        "p2_vnd": 3269462
+      },
+      {
+        "group": "H.A",
+        "revenue_vnd": 978570038,
+        "target_vnd": 770005660,
+        "target_source": "auto",
+        "excess_vnd": 208564378,
+        "rate_pct": 0.8,
+        "p2_vnd": 1668515
+      },
+      {
+        "group": "H.B",
+        "revenue_vnd": 591166846,
+        "target_vnd": 465170402,
+        "target_source": "auto",
+        "excess_vnd": 125996444,
+        "rate_pct": 0.5,
+        "p2_vnd": 629982
+      },
+      {
+        "group": "H.C",
+        "revenue_vnd": 192728667,
+        "target_vnd": 151652062,
+        "target_source": "auto",
+        "excess_vnd": 41076605,
+        "rate_pct": 0.1,
+        "p2_vnd": 41077
+      },
+      {
+        "group": "H.D",
+        "revenue_vnd": 101977905,
+        "target_vnd": 80243172,
+        "target_source": "auto",
+        "excess_vnd": 21734733,
+        "rate_pct": 0.1,
+        "p2_vnd": 21735
+      }
+    ],
+    "p2_vnd": 5630771,
+    "total_forecast_bonus_vnd": 11792421,
+    "assertion": "P2 is positive immediately because total achievement is above 101%; no manual group target is required."
+  },
+  "manual_override_acceptance": {
+    "employee_target_vnd": 90000000,
+    "employee_revenue_before_vat_vnd": 100000000,
+    "groups": {
+      "H.A*": {
+        "revenue_vnd": 80000000,
+        "manual_target_vnd": 60000000,
+        "resolved_target_vnd": 60000000,
+        "target_source": "manual"
+      },
+      "H.A": {
+        "revenue_vnd": 20000000,
+        "resolved_target_vnd": 18000000,
+        "target_source": "auto"
+      }
+    },
+    "assertion": "A manual layered target replaces auto only for that group; remaining groups continue to infer automatically."
+  },
+  "quarter_acceptance": {
+    "ui_label": "Target quý = trung bình các tháng đã giao",
+    "t07_only": {
+      "assigned_months": ["2026-07"],
+      "quarter_target_vnd": 100000000,
+      "quarter_achieved_before_vat_vnd": 110000000,
+      "achievement_pct": 110
+    },
+    "three_months": {
+      "assigned_months": ["2026-07", "2026-08", "2026-09"],
+      "monthly_targets_vnd": [80000000, 120000000, 160000000],
+      "quarter_target_vnd": 120000000,
+      "monthly_achieved_before_vat_vnd": [100000000, 200000000, 300000000],
+      "quarter_achieved_before_vat_vnd": 200000000,
+      "achievement_pct": 166.7,
+      "h_a_star_monthly_auto_targets_vnd": [48000000, 60000000, 48000000],
+      "h_a_star_quarter_target_vnd": 52000000
+    }
+  },
+  "safety": {
+    "grouping_source": "DataHub catalog C10 only",
+    "app_sale_priority_or_tech_rank_read": false,
+    "c32_c47_exposed": false,
+    "self_scope_changed": false,
+    "payroll_write": false,
+    "datahub_write": false,
+    "production_restart": false,
+    "production_deploy": false,
+    "closed_period_behavior_before_2026_07_changed": false,
+    "p1_above_130_pct_rate": 0.25,
+    "presentation": "forecast_reference_only"
+  },
+  "verification": {
+    "focused_server": {
+      "command": "node --test server/test/employeeBonus.test.js server/test/employeeBonusPolicy.test.js server/test/employeeBonusRoutes.test.js server/test/targetKpi.test.js server/test/targetKpiDetail.test.js server/test/employeeCostTable.test.js",
+      "result": "43/43 PASS"
+    },
+    "focused_web": {
+      "command": "node --test web/test/EmployeeCost.model.test.mjs web/test/Target.bonusPolicy.test.mjs",
+      "result": "26/26 PASS"
+    },
+    "full_server": {
+      "command": "node --test server/test/*.test.js",
+      "result": "360/360 PASS"
+    },
+    "full_web": {
+      "command": "node --test web/test/*.test.mjs",
+      "result": "66/66 PASS"
+    },
+    "production_build": {
+      "command": "npm --prefix web run build",
+      "result": "PASS",
+      "note": "Vite reported only the existing recharts chunk-size warning."
+    },
+    "diff_check": "PASS",
+    "json_validation": "PASS",
+    "dn006_evidence_engine_parity": "PASS"
+  },
+  "known_constraints": [
+    "Dynamic open/closed-period SSOT after T07.2026 is not available; the preserved legacy boundary remains periods before 2026-07.",
+    "Route/unit manual target policies remain fail-closed when a unique employee organizational scope is unavailable."
+  ],
+  "independent_review": {
+    "claude_review": "not_performed",
+    "note": "Do not attribute PASS to Claude unless Claude independently reviews the exact pushed commit."
+  }
+}

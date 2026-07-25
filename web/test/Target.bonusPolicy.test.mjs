@@ -14,10 +14,12 @@ test('Target admin exposes versioned Thưởng v3 editor, all layers and C10-onl
   assert.doesNotMatch(target, /tech_rank/);
 });
 
-test('editor captures group target tri-state and warns when group total exceeds employee total target', () => {
-  assert.match(target, /Target nhóm \(VND\)/);
-  assert.match(target, /Trống = kế thừa/);
-  assert.match(target, /Chưa giao target nhóm \(P2 = 0\)/);
+test('editor defaults auto target on, captures manual override/clear and warns on manual group total', () => {
+  assert.match(target, /Target nhóm manual \(VND\)/);
+  assert.match(target, /Trống = kế thừa manual \/ dùng auto/);
+  assert.match(target, /Xóa manual tại tầng này → dùng auto/);
+  assert.match(target, /Tự suy target nhóm khi chưa có manual \(mặc định bật\)/);
+  assert.match(target, /patch\.autoGroupTargets = form\.autoGroupTargets/);
   assert.match(target, /const priorityTargets = targetPatch\(\)/);
   assert.match(target, /Object\.keys\(priorityTargets\)\.length/);
   assert.match(target, /patch: configPatch\(\)/);
@@ -28,8 +30,10 @@ test('editor captures group target tri-state and warns when group total exceeds 
 
 test('preview renders month and quarter detail for revenue, target, excess, rate and P2 group', () => {
   assert.match(target, /Chi tiết P2 tháng/);
-  assert.match(target, /target quý = tổng 3 tháng/);
-  for (const label of ['Doanh thu trước VAT', 'Target nhóm', 'Phần vượt', 'Rate', 'P2 nhóm', 'Tổng P2']) assert.match(target, new RegExp(label));
+  assert.match(target, /Target quý = trung bình các tháng đã giao/);
+  for (const label of ['Doanh thu trước VAT', 'Target nhóm', 'Nguồn target', 'Phần vượt', 'Rate', 'P2 nhóm', 'Tổng P2']) assert.match(target, new RegExp(label));
+  assert.match(target, /auto · tự suy/);
+  assert.match(target, /manual · CEO nhập/);
   assert.match(target, /P2 = Σ max\(0, doanh thu C10 nhóm − target nhóm\) × rate/);
 });
 

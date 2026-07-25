@@ -54,7 +54,8 @@ test('detail stays self-scoped and preserves every backend-owned amount and perc
   assert.equal(detail.quarter.months[1].source_label, 'Chưa giao target');
   assert.equal(detail.quarter.months[2].source_label, 'Upload');
   assert.deepEqual(detail.quarter.unassigned_kys, ['08.2026']);
-  assert.equal(detail.quarter.clarification, 'Quý hiện tính trên T07/2026 + T09/2026 (T08/2026 chưa giao target). Khi giao thêm, target quý tăng → % đạt quý sẽ đổi.');
+  assert.equal(detail.quarter.calculation_label, 'Target quý = trung bình các tháng đã giao');
+  assert.equal(detail.quarter.clarification, 'Target quý = trung bình các tháng đã giao: T07/2026 + T09/2026 (T08/2026 chưa giao target). Doanh thu và % đạt quý dùng cùng trung bình này.');
   assert.equal(detail.basis_label, 'Target và doanh thu đều so trước VAT.');
 });
 
