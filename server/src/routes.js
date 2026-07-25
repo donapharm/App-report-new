@@ -1349,6 +1349,8 @@ async function employeeCostGapPayload(req, event = 'gaps_view') {
 // roster hoặc chọn ?emp=. Payload chỉ có mã/đơn vị/doanh thu, không chứa %.
 router.get('/employee-cost/gaps', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const payload = await employeeCostGapPayload(req, 'gaps_view');
+  // FE cần biết DataHub đã cấu hình chưa để bật/tắt nút "Đồng bộ" + tooltip (blocker 7).
+  if (auth.isAdmin(req.session.role)) payload.sync = { configured: employeeCostGapSync.configured() };
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
 }));
@@ -1380,10 +1382,29 @@ router.get('/employee-cost/gaps/export.pdf', auth.requireAuth, asyncJsonRoute(as
 // Đồng bộ worklist "mã thiếu %" sang DataHub (CEO/admin-only). Worklist dựng lại
 // từ nguồn gap ở backend — KHÔNG tin body client. Payload không chứa %/cost/PII/
 // C32-C47 (assert fail-closed trong module). Dormant khi DataHub chưa mở cửa nhận.
+const GAP_SYNC_MAX_MONTHS = 12;
 router.post('/employee-cost/gaps/sync-datahub', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const body = req.body || {};
+  // 📝 "Ý kiến khác": chỉ ghi nhận, KHÔNG gửi DataHub (blocker 1 phía backend).
+  if (body.action === 'note') {
+    const result = employeeCostGapSync.recordNote({ from: req.query.from, to: req.query.to, note: body.note }, req.session);
+    return res.json(result);
+  }
+  // Gate xác nhận sớm: admin gọi thẳng API mà không Duyệt thì KHÔNG gửi (blocker 2).
+  // Đặt trước khi dựng payload để 400 nhanh, không chạm DataHub.
+  if (body.confirm !== true) return res.status(400).json({ error: 'Cần xác nhận Duyệt trước khi gửi (confirm=true).' });
+  // Giới hạn số tháng để chặn quét kỳ quá rộng (blocker 6).
+  try {
+    const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+    if (range.months.length > GAP_SYNC_MAX_MONTHS) {
+      return res.status(413).json({ error: `Khoảng ${range.months.length} tháng vượt trần ${GAP_SYNC_MAX_MONTHS}; thu hẹp kỳ.` });
+    }
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'Kỳ không hợp lệ' });
+  }
   const payload = await employeeCostGapPayload(req, 'gaps_sync_datahub');
   if (payload.disabled) return res.status(403).json({ error: payload.note || 'Chức năng chi phí đang tắt cho bạn.' });
-  const result = await employeeCostGapSync.sync(payload, req.session);
+  const result = await employeeCostGapSync.sync({ ...payload, note: body.note }, req.session, { confirmed: true });
   res.set('Cache-Control', 'private, no-store');
   return res.json(result);
 }));

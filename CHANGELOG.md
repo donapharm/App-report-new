@@ -1,3 +1,16 @@
+### 2026-07-26 — Claude Code (sửa NO-GO review của bot) — 8 blocker gap-sync đã fix, 0 regression
+- Bot review commit gap-sync trả **NO-GO 8 blocker**. Đã sửa hết trên cùng nhánh (chờ bot re-review):
+  1. **FE nút 📝 Ý kiến khác** — modal giờ 3 nút ✅ Duyệt & gửi / 📝 Ghi ý kiến (không gửi) / ❌ Không duyệt + ô ghi chú; 📝 chỉ ghi audit, KHÔNG gửi DataHub (`recordNote`).
+  2. **Gate confirm ở backend** — route yêu cầu `confirm===true` (đặt SỚM trước khi dựng payload) + lớp `sync({confirmed})`; admin gọi thẳng API không Duyệt → 400, không gửi.
+  3. **Validate phản hồi DataHub** — 2xx nhưng thiếu `ok/worklist_id` (kể cả `{}`) → `GAP_SYNC_BAD_RESPONSE`, không coi là thành công.
+  4. **Checksum canonical** — sort `don_vi_anh_huong` + sort items theo mã trước khi băm → độc lập thứ tự nguồn, DataHub dedupe ổn định.
+  5. **Audit ghi MỌI outcome** — bọc `sync()` try/catch ghi cả nhánh từ chối (not-confirmed/not-configured/empty/limit/forbidden/bad-response); persist đồng bộ+atomic nên không race in-process.
+  6. **Giới hạn** — tháng ≤12 (route), items ≤5000, payload ≤1MB → 413 rõ ràng.
+  7. **Nút biết trạng thái DataHub** — GET `/employee-cost/gaps` trả `sync.configured` cho admin; nút disabled + tooltip "Chưa cấu hình DataHub" khi chưa cấu hình.
+  8. **REAL_DATAHUB an toàn** — mặc định REAL chỉ kiểm cấu hình + dựng gói KHÔ (không POST, không gửi sai key lên prod); muốn gửi thật phải `REAL_DATAHUB_ALLOW_WRITE=1` với gói test-marked. Bỏ scenario sai-key khỏi REAL.
+  + **Meta:** thêm test ROUTE thật qua HTTP (spawn server): NV→403, CEO-không-confirm→400, 📝 note→200, NV note→403.
+- **Test:** `npm run test:gap-sync` → **18/18 PASS** (13 module + 1 canonical + 4 route). Web build PASS. Full `node --test test/*.test.js`: **371/378** — 7 fail = 3 OTP baseline + 4 export (thiếu font PDF ở container review này); **0 regression** (baseline không-đổi cũng đúng 7 fail đó). Không đụng file trong `test/`.
+
 ### 2026-07-25 — Claude Code (chuẩn bị E2E khớp) — bộ test gap-sync tự chứa + mock receiver mẫu
 - **Việc đã làm:** `server/scripts/test_gap_sync_e2e.js` + npm `test:gap-sync`. Bộ E2E tự chứa gồm **mock receiver** mô phỏng đúng cửa nhận DataHub (idempotent theo checksum, chặn cột cấm, kiểm `x-assignment-key`) — cũng là **bản tham chiếu** cho DataHub build.
 - **9/9 PASS:** gửi thành công + trả `{ok,sent,checksum}`; receiver nhận đúng field whitelist (không cột cấm); header `x-app-report-actor`; idempotent (gửi lại cùng kỳ+checksum → dedupe); sai `x-assignment-key` → từ chối; chèn c47 → fail-closed trước khi gửi; items rỗng → chặn; DataHub 404 → dormant; chưa cấu hình → dormant.

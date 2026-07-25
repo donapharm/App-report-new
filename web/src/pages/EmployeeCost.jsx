@@ -545,8 +545,9 @@ function AdminGapPanel({ payload, loading, error, range }) {
   const [filters, setFilters] = useState({ q: '', employee: '', unit: '', reason: '' });
   const [exporting, setExporting] = useState('');
   const [exportError, setExportError] = useState('');
-  const [syncing, setSyncing] = useState(false);
+  const [syncing, setSyncing] = useState('');
   const [syncConfirm, setSyncConfirm] = useState(false);
+  const [syncNote, setSyncNote] = useState('');
   const [syncMessage, setSyncMessage] = useState('');
   const [syncError, setSyncError] = useState('');
   const view = useMemo(() => employeeCostGapView(payload, filters), [payload, filters]);
@@ -560,35 +561,54 @@ function AdminGapPanel({ payload, loading, error, range }) {
   };
   const syncCodeCount = view.items.length;
   const syncRevenue = view.items.reduce((total, item) => total + (Number(item.revenueAffected) || 0), 0);
+  // DataHub chưa cấu hình → khoá nút + tooltip (blocker 7). Chỉ khoá khi backend
+  // báo rõ configured===false; lúc chưa biết (đang tải) thì không chặn nhầm.
+  const dataHubUnconfigured = payload?.sync && payload.sync.configured === false;
+  const syncBlockReason = dataHubUnconfigured ? 'Chưa cấu hình DataHub' : '';
   const runSync = async () => {
-    setSyncing(true); setSyncError(''); setSyncMessage('');
+    setSyncing('send'); setSyncError(''); setSyncMessage('');
     try {
-      const result = await api.employeeCostGapSyncDataHub({ ...range, ...filters });
+      const result = await api.employeeCostGapSyncDataHub({ ...range, ...filters }, { confirm: true, note: syncNote.trim() || undefined });
       setSyncMessage(`Đã gửi ${Number(result.sent || 0).toLocaleString('vi-VN')} mã sang DataHub. Vào DataHub để điền %.`);
-      setSyncConfirm(false);
+      setSyncConfirm(false); setSyncNote('');
     } catch (requestError) {
       setSyncError(requestError.message || 'Không đồng bộ được sang DataHub.');
-    } finally { setSyncing(false); }
+    } finally { setSyncing(''); }
+  };
+  const saveNote = async () => {
+    setSyncing('note'); setSyncError(''); setSyncMessage('');
+    try {
+      await api.employeeCostGapSyncDataHub({ ...range, ...filters }, { action: 'note', note: syncNote.trim() });
+      setSyncMessage('Đã ghi ý kiến (chưa gửi DataHub).');
+      setSyncConfirm(false); setSyncNote('');
+    } catch (requestError) {
+      setSyncError(requestError.message || 'Không ghi được ý kiến.');
+    } finally { setSyncing(''); }
   };
   return <div className="card employee-cost-gap-admin">
     <div className="employee-cost-gap-title">
       <div><div className="section-head">Gộp theo mã QLNB</div><p>Ưu tiên từ trên xuống theo doanh thu bị ảnh hưởng. Tỷ lệ và ánh xạ vẫn do DataHub cập nhật.</p></div>
       <div className="employee-cost-export-actions">
-        <button type="button" className="btn" disabled={loading || syncing || !syncCodeCount} onClick={() => { setSyncError(''); setSyncMessage(''); setSyncConfirm(true); }}>📤 Đồng bộ sang DataHub</button>
+        <button type="button" className="btn" title={syncBlockReason} disabled={loading || !!syncing || !syncCodeCount || !!syncBlockReason} onClick={() => { setSyncError(''); setSyncMessage(''); setSyncConfirm(true); }}>📤 Đồng bộ sang DataHub</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
       </div>
     </div>
+    {syncBlockReason && <p className="employee-cost-gap-note">DataHub chưa cấu hình — nút Đồng bộ tạm khoá; dùng Xuất Excel/PDF.</p>}
     {syncMessage && <div className="employee-cost-visibility-success" role="status">{syncMessage}</div>}
-    {syncError && <div className="employee-cost-match-warning" role="alert">{syncError}</div>}
+    {syncError && !syncConfirm && <div className="employee-cost-match-warning" role="alert">{syncError}</div>}
     {syncConfirm && <div className="modal-backdrop" role="presentation" onClick={() => !syncing && setSyncConfirm(false)}>
       <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="gap-sync-title" onClick={(event) => event.stopPropagation()}>
         <div className="section-head" id="gap-sync-title">Đồng bộ worklist thiếu % sang DataHub</div>
         <p>Gửi <b>{syncCodeCount.toLocaleString('vi-VN')} mã</b> (doanh thu ảnh hưởng <b>{syncRevenue.toLocaleString('vi-VN')}</b>, kỳ <b>{range.from === range.to ? range.from : `${range.from} → ${range.to}`}</b>) sang DataHub để điền %. App Report chỉ gửi danh sách mã; tỷ lệ do DataHub cập nhật.</p>
+        <label className="employee-cost-gap-note-field"><span>Ý kiến (tuỳ chọn — dùng cho 📝 hoặc gửi kèm)</span>
+          <textarea value={syncNote} onChange={(event) => setSyncNote(event.target.value)} rows={2} maxLength={500} placeholder="VD: cần rà mã QĐ… trước khi điền %" />
+        </label>
         {syncError && <div className="employee-cost-match-warning" role="alert">{syncError}</div>}
         <div className="employee-cost-export-actions">
-          <button type="button" className="btn" disabled={syncing} onClick={runSync}>{syncing ? 'Đang gửi…' : '✅ Duyệt & gửi'}</button>
-          <button type="button" className="btn secondary" disabled={syncing} onClick={() => setSyncConfirm(false)}>❌ Không duyệt</button>
+          <button type="button" className="btn" disabled={!!syncing} onClick={runSync}>{syncing === 'send' ? 'Đang gửi…' : '✅ Duyệt & gửi'}</button>
+          <button type="button" className="btn secondary" disabled={!!syncing || !syncNote.trim()} onClick={saveNote}>{syncing === 'note' ? 'Đang ghi…' : '📝 Ghi ý kiến (không gửi)'}</button>
+          <button type="button" className="btn secondary" disabled={!!syncing} onClick={() => { setSyncConfirm(false); setSyncError(''); }}>❌ Không duyệt</button>
         </div>
       </div>
     </div>}
