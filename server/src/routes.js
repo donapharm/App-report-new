@@ -33,6 +33,7 @@ const employeePointLocal = require('./employeePointLocal');
 const employeePointNotifications = require('./employeePointNotifications');
 const employeePointPenaltyExport = require('./employeePointPenaltyExport');
 const employeeCostGaps = require('./employeeCostGaps');
+const employeeCostGapSync = require('./employeeCostGapSync');
 const employeeCostDataQuality = require('./employeeCostDataQuality');
 const employeeCostExport = require('./employeeCostExport');
 const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
@@ -1374,6 +1375,17 @@ router.get('/employee-cost/gaps/export.pdf', auth.requireAuth, asyncJsonRoute(as
   res.setHeader('Content-Disposition', `attachment; filename="employee-cost-gaps_${from}_${to}.pdf"`);
   res.setHeader('Cache-Control', 'private, no-store');
   return res.send(buffer);
+}));
+
+// Đồng bộ worklist "mã thiếu %" sang DataHub (CEO/admin-only). Worklist dựng lại
+// từ nguồn gap ở backend — KHÔNG tin body client. Payload không chứa %/cost/PII/
+// C32-C47 (assert fail-closed trong module). Dormant khi DataHub chưa mở cửa nhận.
+router.post('/employee-cost/gaps/sync-datahub', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostGapPayload(req, 'gaps_sync_datahub');
+  if (payload.disabled) return res.status(403).json({ error: payload.note || 'Chức năng chi phí đang tắt cho bạn.' });
+  const result = await employeeCostGapSync.sync(payload, req.session);
+  res.set('Cache-Control', 'private, no-store');
+  return res.json(result);
 }));
 
 const EMPLOYEE_COST_DQ_CONFIG = path.join(__dirname, '..', 'config', 'employee_cost_data_quality.json');

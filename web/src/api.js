@@ -214,6 +214,14 @@ export const api = {
       timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
     });
   },
+  employeeCostGapSyncDataHub: (params = {}) => {
+    const query = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value != null)),
+    ).toString();
+    return req('POST', '/employee-cost/gaps/sync-datahub' + (query ? `?${query}` : ''), {}, {
+      timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+    });
+  },
   employeeCostDataQuality: (params = {}) => req('GET', '/employee-cost/data-quality?' + new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value != null)),
   ).toString(), undefined, {

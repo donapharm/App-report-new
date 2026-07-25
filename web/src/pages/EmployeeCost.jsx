@@ -545,6 +545,10 @@ function AdminGapPanel({ payload, loading, error, range }) {
   const [filters, setFilters] = useState({ q: '', employee: '', unit: '', reason: '' });
   const [exporting, setExporting] = useState('');
   const [exportError, setExportError] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncConfirm, setSyncConfirm] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncError, setSyncError] = useState('');
   const view = useMemo(() => employeeCostGapView(payload, filters), [payload, filters]);
   const pager = useEmployeeCostPage(view.items, JSON.stringify(filters));
   const setFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
@@ -554,14 +558,40 @@ function AdminGapPanel({ payload, loading, error, range }) {
     catch (requestError) { setExportError(requestError.message || 'Không xuất được file'); }
     finally { setExporting(''); }
   };
+  const syncCodeCount = view.items.length;
+  const syncRevenue = view.items.reduce((total, item) => total + (Number(item.revenueAffected) || 0), 0);
+  const runSync = async () => {
+    setSyncing(true); setSyncError(''); setSyncMessage('');
+    try {
+      const result = await api.employeeCostGapSyncDataHub({ ...range, ...filters });
+      setSyncMessage(`Đã gửi ${Number(result.sent || 0).toLocaleString('vi-VN')} mã sang DataHub. Vào DataHub để điền %.`);
+      setSyncConfirm(false);
+    } catch (requestError) {
+      setSyncError(requestError.message || 'Không đồng bộ được sang DataHub.');
+    } finally { setSyncing(false); }
+  };
   return <div className="card employee-cost-gap-admin">
     <div className="employee-cost-gap-title">
       <div><div className="section-head">Gộp theo mã QLNB</div><p>Ưu tiên từ trên xuống theo doanh thu bị ảnh hưởng. Tỷ lệ và ánh xạ vẫn do DataHub cập nhật.</p></div>
       <div className="employee-cost-export-actions">
-        <button type="button" className="btn" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
+        <button type="button" className="btn" disabled={loading || syncing || !syncCodeCount} onClick={() => { setSyncError(''); setSyncMessage(''); setSyncConfirm(true); }}>📤 Đồng bộ sang DataHub</button>
+        <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
       </div>
     </div>
+    {syncMessage && <div className="employee-cost-visibility-success" role="status">{syncMessage}</div>}
+    {syncError && <div className="employee-cost-match-warning" role="alert">{syncError}</div>}
+    {syncConfirm && <div className="modal-backdrop" role="presentation" onClick={() => !syncing && setSyncConfirm(false)}>
+      <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="gap-sync-title" onClick={(event) => event.stopPropagation()}>
+        <div className="section-head" id="gap-sync-title">Đồng bộ worklist thiếu % sang DataHub</div>
+        <p>Gửi <b>{syncCodeCount.toLocaleString('vi-VN')} mã</b> (doanh thu ảnh hưởng <b>{syncRevenue.toLocaleString('vi-VN')}</b>, kỳ <b>{range.from === range.to ? range.from : `${range.from} → ${range.to}`}</b>) sang DataHub để điền %. App Report chỉ gửi danh sách mã; tỷ lệ do DataHub cập nhật.</p>
+        {syncError && <div className="employee-cost-match-warning" role="alert">{syncError}</div>}
+        <div className="employee-cost-export-actions">
+          <button type="button" className="btn" disabled={syncing} onClick={runSync}>{syncing ? 'Đang gửi…' : '✅ Duyệt & gửi'}</button>
+          <button type="button" className="btn secondary" disabled={syncing} onClick={() => setSyncConfirm(false)}>❌ Không duyệt</button>
+        </div>
+      </div>
+    </div>}
     <div className="employee-cost-gap-filters">
       <label><span>Tìm mã/tên/đơn vị</span><input value={filters.q} onChange={(event) => setFilter('q', event.target.value)} placeholder="VD: Valgesic, Vũng Tàu…" /></label>
       <label><span>Nhân viên</span><select value={filters.employee} onChange={(event) => setFilter('employee', event.target.value)}><option value="">Tất cả</option>{view.employeeOptions.map((employee) => <option key={employee.employeeCode} value={employee.employeeCode}>{employee.employeeCode} · {employee.employeeName}</option>)}</select></label>
