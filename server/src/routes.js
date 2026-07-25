@@ -78,16 +78,35 @@ const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
 ]);
 const bonusPolicyPreviews = new Map();
 const canonicalAssignmentSnapshots = new Map();
+const CANONICAL_ASSIGNMENT_TTL_MS = 15 * 60 * 1000;
+function canonicalAssignmentFetch(key) {
+  const value = Promise.resolve().then(() => catalogManagement.getSnapshot(key));
+  const entry = { at: Date.now(), value, resolved: null, refreshing: false };
+  canonicalAssignmentSnapshots.set(key, entry);
+  value.then((v) => { entry.resolved = v; entry.at = Date.now(); })
+    .catch(() => { if (canonicalAssignmentSnapshots.get(key) === entry) canonicalAssignmentSnapshots.delete(key); });
+  if (canonicalAssignmentSnapshots.size > 24) canonicalAssignmentSnapshots.delete(canonicalAssignmentSnapshots.keys().next().value);
+  return entry;
+}
 async function canonicalAssignmentSnapshot(period) {
   const key = catalogManagement.toHubPeriod(period);
   const hit = canonicalAssignmentSnapshots.get(key);
-  if (hit && Date.now() - hit.at < 15 * 60 * 1000) return hit.value;
-  const value = Promise.resolve().then(() => catalogManagement.getSnapshot(key));
-  const entry = { at: Date.now(), value };
-  canonicalAssignmentSnapshots.set(key, entry);
-  value.catch(() => { if (canonicalAssignmentSnapshots.get(key) === entry) canonicalAssignmentSnapshots.delete(key); });
-  if (canonicalAssignmentSnapshots.size > 24) canonicalAssignmentSnapshots.delete(canonicalAssignmentSnapshots.keys().next().value);
-  return value;
+  // Còn hạn (kể cả bản in-flight) -> dùng chung promise để coalesce request đồng thời.
+  if (hit && Date.now() - hit.at < CANONICAL_ASSIGNMENT_TTL_MS) return hit.value;
+  // Stale-while-revalidate: có bản CŨ đã resolved thì trả NGAY, làm mới ở nền
+  // (single-flight). Request không phải chờ DataHub ở ranh giới 15 phút. An toàn
+  // nhờ Fix#1: bản mới cùng dữ liệu không làm vỡ memo employee-cost-all.
+  if (hit && hit.resolved) {
+    if (!hit.refreshing) {
+      hit.refreshing = true;
+      Promise.resolve().then(() => catalogManagement.getSnapshot(key))
+        .then((v) => canonicalAssignmentSnapshots.set(key, { at: Date.now(), value: Promise.resolve(v), resolved: v, refreshing: false }))
+        .catch(() => { hit.refreshing = false; }); // giữ bản cũ, thử lại lần sau
+    }
+    return hit.resolved;
+  }
+  // Lạnh (chưa có bản nào) -> phải chờ lần lấy đầu tiên.
+  return canonicalAssignmentFetch(key).value;
 }
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
 const REVENUE_SEND_FORMATS = ['xlsx', 'csv', 'pdf', 'pptx'];
@@ -820,7 +839,10 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
   // Stabilize the catalog/LKG source before deriving the key. getSnapshot may
   // refresh the local signature; keying before this step would place a warm
   // result under the previous signature and make the very next request cold.
-  for (const period of catalogPeriods) {
+  // Song song hóa (Promise.all): trước đây nối tiếp, mỗi kỳ chờ tới 6.5s timeout
+  // DataHub -> ~4 kỳ ≈ 26s treo trên request lạnh. canonicalAssignmentSnapshot
+  // vẫn coalesce theo kỳ nên số lần gọi upstream không đổi; giữ cô lập lỗi từng kỳ.
+  await Promise.all(catalogPeriods.map(async (period) => {
     try {
       const snapshot = await canonicalAssignmentSnapshot(period);
       sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
@@ -828,7 +850,7 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       sharedCatalogRowsByPeriod[period] = [];
       console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
     }
-  }
+  }));
   const buildMerged = async () => {
     const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
       requestedEmp: employee.emp_code,
