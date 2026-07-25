@@ -1,3 +1,8 @@
+### 2026-07-25 — Claude Code (chuẩn bị E2E khớp) — bộ test gap-sync tự chứa + mock receiver mẫu
+- **Việc đã làm:** `server/scripts/test_gap_sync_e2e.js` + npm `test:gap-sync`. Bộ E2E tự chứa gồm **mock receiver** mô phỏng đúng cửa nhận DataHub (idempotent theo checksum, chặn cột cấm, kiểm `x-assignment-key`) — cũng là **bản tham chiếu** cho DataHub build.
+- **9/9 PASS:** gửi thành công + trả `{ok,sent,checksum}`; receiver nhận đúng field whitelist (không cột cấm); header `x-app-report-actor`; idempotent (gửi lại cùng kỳ+checksum → dedupe); sai `x-assignment-key` → từ chối; chèn c47 → fail-closed trước khi gửi; items rỗng → chặn; DataHub 404 → dormant; chưa cấu hình → dormant.
+- **Sẵn cho cutover thật:** `REAL_DATAHUB=1 DATA_HUB_BASE_URL=… DATA_HUB_ASSIGNMENT_KEY=… npm run test:gap-sync` → cùng bộ assertion đập vào endpoint DataHub thật khi họ báo sẵn. Cách dùng ghi trong handoff §Bộ E2E khớp.
+
 ### 2026-07-25 — Claude Code (chốt contract theo phản hồi DataHub) — 2 khóa trước khi DataHub build
 - **DataHub verify commit `e2c2916` OK**, nêu 2 điểm cần khóa trước khi build cửa nhận. Đã chốt:
   1. **Kỳ = `from`/`to` (YYYY-MM), bỏ `period` đơn lẻ** — thống nhất directive theo file handoff (gap tool vốn theo khoảng tháng). Code + handoff vốn đã `from/to`; sửa directive §2 cho khớp, ghi chú ở §7.

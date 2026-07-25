@@ -16,7 +16,8 @@
     "deck:v5:test-build": "node scripts/test_ceo_deck_v5_build.js",
     "deck:v5d:build": "node src/report/deckReportV5D.js",
     "deck:v5d:test": "node scripts/test_ceo_deck_v5d.js",
-    "deck:v5d:test-build": "node scripts/test_ceo_deck_v5d_build.js"
+    "deck:v5d:test-build": "node scripts/test_ceo_deck_v5d_build.js",
+    "test:gap-sync": "node scripts/test_gap_sync_e2e.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

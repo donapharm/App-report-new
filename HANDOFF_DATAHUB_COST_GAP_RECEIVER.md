@@ -68,6 +68,16 @@ dùng cho bên đọc "Chi phí của tôi" — `SPEC_REPORT_EMP_COST_SELFVIEW.m
 - **App Report không tham gia phạm vi này:** worklist chỉ nêu *mã nào cần chú ý* (write-agnostic), KHÔNG mang theo và
   KHÔNG chỉ định cột nào nhận %. Toàn bộ việc chọn cột nằm ở allowlist DataHub (SSOT).
 
+## Bộ E2E khớp đã sẵn (App Report chuẩn bị trước)
+App Report đã có script E2E tự chứa — kèm **1 mock receiver mẫu** đúng contract này (idempotent theo checksum, chặn
+cột cấm, kiểm `x-assignment-key`). DataHub có thể soi mock trong `server/scripts/test_gap_sync_e2e.js` như bản tham
+chiếu một receiver đạt chuẩn.
+- **Chạy ngay (mock):** `cd server && npm run test:gap-sync` → 9/9 kịch bản (gửi/whitelist/actor/idempotent/sai
+  key/chặn cột cấm/rỗng/404-dormant/chưa-cấu-hình).
+- **Đóng E2E hai đầu (khi DataHub lên endpoint thật):**
+  `REAL_DATAHUB=1 DATA_HUB_BASE_URL=<datahub> DATA_HUB_ASSIGNMENT_KEY=<key> npm run test:gap-sync`
+  → chạy cùng bộ assertion đập thẳng vào cửa nhận thật (gửi thật + idempotent + từ chối sai key).
+
 ## Nghiệm thu E2E (khi cả 2 đầu sẵn sàng)
 1. CEO bấm "Đồng bộ" trên App Report → DataHub nhận đúng số mã, trả 2xx + `worklist_id`.
 2. Gửi lại cùng kỳ + checksum → DataHub **không** tạo bản trùng.
