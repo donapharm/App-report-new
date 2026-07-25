@@ -898,6 +898,39 @@ function scheduleEmployeeCostAllWarm(ky, reason) {
   }));
 }
 
+// #3 — Warm định kỳ kỳ hiện tại. Warming theo sự kiện (upload/materialize) đã có,
+// nhưng sau restart hoặc khi hết TTL memo mà không có sự kiện, CEO vẫn có thể trúng
+// lần dựng lạnh. Vòng lặp này giữ base memo employee-cost-all luôn nóng cho kỳ hiện
+// tại. Khởi động TỪ index.js (không chạy lúc require) để không sinh việc thật trong test.
+const EMPLOYEE_COST_ALL_WARM_INTERVAL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.EMPLOYEE_COST_ALL_WARM_INTERVAL_MS || 10 * 60 * 1000) || 10 * 60 * 1000,
+);
+function currentWarmKy() {
+  try {
+    const byDate = typeof store.currentKyByDate === 'function' ? store.currentKyByDate() : null;
+    return byDate || store.latestKy();
+  } catch { return store.latestKy(); }
+}
+let employeeCostAllWarmTimer = null;
+function startEmployeeCostAllWarmLoop() {
+  if (employeeCostAllWarmTimer) return employeeCostAllWarmTimer;
+  if (String(process.env.EMPLOYEE_COST_ALL_WARM_DISABLED || '') === '1') return null;
+  scheduleEmployeeCostAllWarm(currentWarmKy(), 'startup');
+  employeeCostAllWarmTimer = setInterval(() => {
+    scheduleEmployeeCostAllWarm(currentWarmKy(), 'interval');
+  }, EMPLOYEE_COST_ALL_WARM_INTERVAL_MS);
+  // unref: timer nền không giữ tiến trình sống (không cản shutdown/test runner).
+  if (typeof employeeCostAllWarmTimer.unref === 'function') employeeCostAllWarmTimer.unref();
+  console.log('[employee-cost] ALL cache warm loop started', { intervalMs: EMPLOYEE_COST_ALL_WARM_INTERVAL_MS });
+  return employeeCostAllWarmTimer;
+}
+function stopEmployeeCostAllWarmLoop() {
+  if (employeeCostAllWarmTimer) { clearInterval(employeeCostAllWarmTimer); employeeCostAllWarmTimer = null; }
+}
+router.startEmployeeCostAllWarmLoop = startEmployeeCostAllWarmLoop;
+router.stopEmployeeCostAllWarmLoop = stopEmployeeCostAllWarmLoop;
+
 // revenueRefresh invokes listeners in a detached task after a successful
 // materialize, so this Promise cannot delay or roll back the source refresh.
 revenueRefresh.onMaterialized((run) => warmEmployeeCostAllCache(run?.ky, 'revenue_refresh'));
