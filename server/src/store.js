@@ -288,6 +288,39 @@ function unitGroupDataSignature() {
 function dashboardDataSignature() {
   return `${targetDataSignature()}|${fileSignature(path.join(DATA_DIR, 'cst_real.json'), 'cst-real')}`;
 }
+// Chữ ký catalog LKG theo NỘI DUNG (version + checksum) thay vì mtime/size.
+// Materializer/canonicalAssignmentSnapshot ghi đè file này mỗi ~15 phút kể cả khi
+// dữ liệu không đổi (updatedAt/lastSyncAt luôn mới) -> mtime đổi -> nếu ký theo
+// mtime thì memo employee-cost-all (TTL 6h) vỡ mỗi 15 phút và phải dựng lại 21 NV.
+// Đường nóng chỉ stat(); chỉ đọc phần đầu file (không JSON.parse cả LKG nhiều MB)
+// khi mtime/size đổi, và trích checksum nội dung (ổn định khi dữ liệu không đổi).
+let _catalogLkgSig = null;
+let _catalogLkgKey = '';
+function catalogLkgSignature(filePath) {
+  let stat;
+  try { stat = fs.statSync(filePath); }
+  catch { _catalogLkgSig = 'catalog-management:missing'; _catalogLkgKey = `${filePath}:missing`; return _catalogLkgSig; }
+  const key = `${filePath}:${stat.size}:${stat.mtimeMs}`;
+  if (_catalogLkgSig && _catalogLkgKey === key) return _catalogLkgSig;
+  // Fallback: nếu không trích được checksum thì giữ hành vi cũ (ký theo mtime/size).
+  let sig = `catalog-management:${stat.size}:${stat.mtimeMs}`;
+  try {
+    const fd = fs.openSync(filePath, 'r');
+    try {
+      const buf = Buffer.alloc(Math.min(stat.size, 16 * 1024));
+      const bytes = fs.readSync(fd, buf, 0, buf.length, 0);
+      const head = buf.toString('utf8', 0, bytes);
+      // Thứ tự ghi top-level: source, version, checksum, updatedAt, snapshots ->
+      // match ĐẦU TIÊN là top-level (không dính checksum của snapshot bên trong).
+      const checksum = /"checksum"\s*:\s*"([^"]*)"/.exec(head)?.[1];
+      const version = /"version"\s*:\s*"([^"]*)"/.exec(head)?.[1];
+      if (checksum) sig = `catalog-management:v=${version || ''}:c=${checksum}`;
+    } finally { fs.closeSync(fd); }
+  } catch { /* giữ fallback theo mtime */ }
+  _catalogLkgSig = sig;
+  _catalogLkgKey = key;
+  return sig;
+}
 function employeeCostDataSignature() {
   return [
     targetDataSignature(),
@@ -295,10 +328,8 @@ function employeeCostDataSignature() {
       process.env.EMPLOYEE_BONUS_POLICY_FILE || path.join(DATA_DIR, 'employee_bonus_policies.json'),
       'employee-bonus-policies',
     ),
-    fileSignature(
-      process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json'),
-      'catalog-management',
-    ),
+    // Ký catalog LKG theo nội dung (version+checksum) thay vì mtime — xem catalogLkgSignature.
+    catalogLkgSignature(process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json')),
     ...['employee_bonus_tiers.json', 'employee_cost_groups.json', 'employee_cost_templates.json', 'employee_cost_unit_groups.json']
       .map((name) => fileSignature(path.join(__dirname, '..', 'config', name), name)),
   ].join('|');

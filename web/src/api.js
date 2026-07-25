@@ -2,6 +2,11 @@
 const TOKEN_KEY = 'rpt_token';
 const OTP_AUTH_TIMEOUT_MS = 12000;
 const ME_TIMEOUT_MS = 8000;
+// Chi phí/nhân viên gọi DataHub (nối tiếp, timeout 6.5s/kỳ ở backend) + tính bảng.
+// Không có timeout ở client -> spinner quay vô tận khi DataHub chậm. Chặn trần để
+// hết "quay mãi": quá hạn thì báo lỗi có nút thử lại thay vì treo im lặng.
+const EMPLOYEE_COST_TIMEOUT_MS = 45000;
+const EMPLOYEE_COST_TIMEOUT_MESSAGE = 'DataHub đang phản hồi chậm. Vui lòng thử lại.';
 const TRUSTED_DEVICE_VERIFY_TIMEOUT_MS = 5000;
 const APP_SALE_TRUSTED_DEVICE_VERIFY_URL = 'https://sale.donapharm.asia/api/internal/trusted-device/verify';
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
@@ -185,7 +190,9 @@ export const api = {
       if (range[key] != null && range[key] !== '') params.set(key, range[key]);
     }
     const query = params.toString();
-    return req('GET', '/employee-cost' + (query ? `?${query}` : ''));
+    return req('GET', '/employee-cost' + (query ? `?${query}` : ''), undefined, {
+      timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+    });
   },
   employeeCostDiemXu: (emp, range = {}) => {
     const params = new URLSearchParams();
@@ -193,7 +200,9 @@ export const api = {
     if (range.from) params.set('from', range.from);
     if (range.to) params.set('to', range.to);
     const query = params.toString();
-    return req('GET', '/employee-cost/diem-xu' + (query ? `?${query}` : ''));
+    return req('GET', '/employee-cost/diem-xu' + (query ? `?${query}` : ''), undefined, {
+      timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+    });
   },
   employeeCostGaps: (emp, range = {}) => {
     const params = new URLSearchParams();
@@ -201,12 +210,18 @@ export const api = {
     if (range.from) params.set('from', range.from);
     if (range.to) params.set('to', range.to);
     const query = params.toString();
-    return req('GET', '/employee-cost/gaps' + (query ? `?${query}` : ''));
+    return req('GET', '/employee-cost/gaps' + (query ? `?${query}` : ''), undefined, {
+      timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+    });
   },
   employeeCostDataQuality: (params = {}) => req('GET', '/employee-cost/data-quality?' + new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value != null)),
-  ).toString()),
-  employeeCostDataQualitySummary: () => req('GET', '/employee-cost/data-quality/summary'),
+  ).toString(), undefined, {
+    timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+  }),
+  employeeCostDataQualitySummary: () => req('GET', '/employee-cost/data-quality/summary', undefined, {
+    timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+  }),
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   employeeCostVisibility: () => req('GET', '/employee-cost/visibility'),
   employeeCostVisibilitySave: (payload) => req('POST', '/employee-cost/visibility', payload),
