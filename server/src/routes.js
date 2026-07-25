@@ -19,6 +19,7 @@ const dailySalesOrders = require('./dailySalesOrders');
 const reconcile = require('./reconcile');
 const targetAdmin = require('./targetAdmin');
 const { buildTargetKpiDetail } = require('./targetKpiDetail');
+const { summarizeAssignedQuarter } = require('./targetKpi');
 const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
@@ -622,7 +623,7 @@ function employeeCostRosterRows() {
   return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
 }
 
-async function employeeBonusPriorityForPeriods(empCode, uiPeriods, catalogRowsByPeriod) {
+async function employeeBonusPriorityForPeriods(empCode, uiPeriods, catalogRowsByPeriod, { average = false, employeeTargetsByPeriod = {} } = {}) {
   const items = [];
   for (const uiPeriod of uiPeriods || []) {
     const hubPeriod = catalogManagement.toHubPeriod(uiPeriod);
@@ -641,7 +642,9 @@ async function employeeBonusPriorityForPeriods(empCode, uiPeriods, catalogRowsBy
       period: hubPeriod,
     }));
   }
-  return employeeBonus.mergePriorityRevenue(items);
+  const merged = employeeBonus.mergePriorityRevenue(items, { aggregation: average ? 'average' : 'sum' });
+  merged.employeeTargetsByPeriod = { ...employeeTargetsByPeriod };
+  return merged;
 }
 
 router.get('/me', auth.requireAuth, (req, res) => {
@@ -719,9 +722,17 @@ async function employeeCostPayload(req, {
     });
     const ky = employeeCost.toUiMonth(range.to);
     const bonusKpi = empCode ? targetKpiSummary(ky, { empCode }, [empCode]) : { ky };
+    const quarterAssignedKys = bonusKpi.quarter?.assigned_kys || [];
     const bonusPriority = empCode ? {
-      month: await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod),
-      quarter: await employeeBonusPriorityForPeriods(empCode, bonusKpi.quarter_kys || [], catalogRowsByPeriod),
+      month: await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod, {
+        employeeTargetsByPeriod: { [catalogManagement.toHubPeriod(ky)]: bonusKpi.month.target },
+      }),
+      quarter: await employeeBonusPriorityForPeriods(empCode, quarterAssignedKys, catalogRowsByPeriod, {
+        average: true,
+        employeeTargetsByPeriod: Object.fromEntries((bonusKpi.quarter?.months || [])
+          .filter((item) => item.assigned)
+          .map((item) => [catalogManagement.toHubPeriod(item.ky), item.target])),
+      }),
     } : {};
     if (empCode) {
       const resolver = (segment = {}) => employeeBonusPolicy.resolve({
@@ -731,9 +742,9 @@ async function employeeCostPayload(req, {
       // Group targets are per employee/period. Route/unit target overrides require a
       // unique organizational assignment source; customer units in revenue rows are
       // intentionally not reused because that would subtract the target repeatedly.
-      const targetResolver = ({ period } = {}) => employeeBonusPolicy.resolve({
+      const targetResolver = ({ period, productGroup, group } = {}) => employeeBonusPolicy.resolve({
         period: period || ky,
-        context: { employee: empCode, targetScopeStrict: true },
+        context: { employee: empCode, productGroup: productGroup || group || '', targetScopeStrict: true },
       });
       bonusPriority.month.configResolver = resolver;
       bonusPriority.quarter.configResolver = resolver;
@@ -3252,23 +3263,36 @@ function quarterMetaOf(ky) {
 }
 function targetKpiSummary(ky, scope, codesOverride) {
   const codes = codesOverride || store.targetRosterCodes({ scope });
-  const codeSet = new Set(codes);
+  const codeSet = new Set(codes.map((code) => String(code || '').toUpperCase()));
   const qm = quarterMetaOf(ky);
-  const sumTargets = (kys) => Math.round(kys.reduce((s, k) => s + targetAdmin.resolveTargets({ ky: k, empCodes: codes }).reduce((a, e) => a + (Number(e.target) > 0 ? Number(e.target) : 0), 0), 0));
-  const revBeforeVat = (kys) => {
-    let rev = 0;
-    for (const r of store.getRowsRange({ kys, scope })) if (codeSet.has(r.emp_code)) rev += Number(r.revenue || 0);
-    return Math.round(rev / A.VAT_DIVISOR);
-  };
+  const targetByKy = new Map(qm.kys.map((monthKy) => [monthKy, new Map(targetAdmin.resolveTargets({ ky: monthKy, empCodes: codes })
+    .map((item) => [String(item.emp_code || '').toUpperCase(), Number(item.target) > 0 ? Number(item.target) : 0]))]));
+  const revenueByKy = new Map(qm.kys.map((monthKy) => [monthKy, new Map()]));
+  for (const monthKy of qm.kys) {
+    const map = revenueByKy.get(monthKy);
+    for (const row of store.getRows({ ky: monthKy, scope })) {
+      const code = String(row.emp_code || '').toUpperCase();
+      if (!codeSet.has(code)) continue;
+      map.set(code, (map.get(code) || 0) + Number(row.revenue || 0) / A.VAT_DIVISOR);
+    }
+  }
   const pacing = A.targetPacingMeta(ky);
   const pct = (a, t) => (t > 0 ? +(a / t * 100).toFixed(1) : null);
-  const monthTarget = sumTargets([ky]); const monthAchieved = revBeforeVat([ky]);
-  const qTarget = sumTargets(qm.kys); const qAchieved = revBeforeVat(qm.kys);
+  const summarized = summarizeAssignedQuarter({ ky, quarterKys: qm.kys, codes, targetByKy, revenueByKy });
+  const monthTarget = summarized.month.target; const monthAchieved = summarized.month.achieved;
+  const qTarget = summarized.quarter.target; const qAchieved = summarized.quarter.achieved;
   return {
     ky, quarter_label: qm.q ? `Q${qm.q}/${qm.year}` : null, quarter_kys: qm.kys,
     assigned_count: targetAdmin.resolveTargets({ ky, empCodes: codes }).filter((e) => Number(e.target) > 0).length, total_nv: codes.length,
     month: { target: monthTarget, achieved: monthAchieved, pct: pct(monthAchieved, monthTarget), gap: monthAchieved - monthTarget },
-    quarter: { target: qTarget, achieved: qAchieved, pct: pct(qAchieved, qTarget), gap: qAchieved - qTarget },
+    quarter: {
+      target: qTarget, achieved: qAchieved, pct: pct(qAchieved, qTarget), gap: qAchieved - qTarget,
+      calculation: summarized.quarter.calculation,
+      calculation_label: summarized.quarter.calculation_label,
+      assigned_kys: summarized.quarter.assigned_kys,
+      assigned_month_count: summarized.quarter.assigned_month_count,
+      months: summarized.quarter.months,
+    },
     pacing: { days_elapsed: pacing.daysElapsed, days_in_month: pacing.daysInMonth, time_pct: +(pacing.factor * 100).toFixed(1), is_current: pacing.isCurrent },
   };
 }
@@ -3318,15 +3342,21 @@ router.post('/admin/bonus-policies/preview', auth.requireAuth, auth.requireAdmin
   const kpi = targetKpiSummary(ky, { empCode }, [empCode]);
   const catalogRowsByPeriod = {};
   const monthPriority = await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod);
-  const quarterPriority = await employeeBonusPriorityForPeriods(empCode, kpi.quarter_kys || [], catalogRowsByPeriod);
+  const quarterPriority = await employeeBonusPriorityForPeriods(empCode, kpi.quarter?.assigned_kys || [], catalogRowsByPeriod, {
+    average: true,
+    employeeTargetsByPeriod: Object.fromEntries((kpi.quarter?.months || [])
+      .filter((item) => item.assigned)
+      .map((item) => [catalogManagement.toHubPeriod(item.ky), item.target])),
+  });
+  monthPriority.employeeTargetsByPeriod = { [catalogManagement.toHubPeriod(ky)]: kpi.month.target };
   const resolver = (segment = {}) => employeeBonusPolicy.resolve({
     period: segment.period || ky,
     context: { employee: empCode, ...segment },
     extraPolicies: [policyPreview.candidate],
   });
-  const targetResolver = ({ period } = {}) => employeeBonusPolicy.resolve({
+  const targetResolver = ({ period, productGroup, group } = {}) => employeeBonusPolicy.resolve({
     period: period || ky,
-    context: { employee: empCode, targetScopeStrict: true },
+    context: { employee: empCode, productGroup: productGroup || group || '', targetScopeStrict: true },
     extraPolicies: [policyPreview.candidate],
   });
   monthPriority.configResolver = resolver;

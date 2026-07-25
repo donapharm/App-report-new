@@ -2219,9 +2219,10 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .bonus-preview-table td:nth-child(1)::before { content: 'Nhóm C10: '; }
   .bonus-preview-table td:nth-child(2)::before { content: 'Doanh thu: '; }
   .bonus-preview-table td:nth-child(3)::before { content: 'Target nhóm: '; }
-  .bonus-preview-table td:nth-child(4)::before { content: 'Phần vượt: '; }
-  .bonus-preview-table td:nth-child(5)::before { content: 'Rate: '; }
-  .bonus-preview-table td:nth-child(6)::before { content: 'P2 nhóm: '; }
-  .bonus-preview-table td:nth-child(7)::before { content: 'Trạng thái: '; }
+  .bonus-preview-table td:nth-child(4)::before { content: 'Nguồn target: '; }
+  .bonus-preview-table td:nth-child(5)::before { content: 'Phần vượt: '; }
+  .bonus-preview-table td:nth-child(6)::before { content: 'Rate: '; }
+  .bonus-preview-table td:nth-child(7)::before { content: 'P2 nhóm: '; }
+  .bonus-preview-table td:nth-child(8)::before { content: 'Trạng thái: '; }
   .bonus-preview-table tfoot td::before { content: none !important; }
 }

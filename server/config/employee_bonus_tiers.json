@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "version": "bonus-v3-default-2026-07-r1",
+  "version": "bonus-v3.1-auto-group-target-2026-07-r1",
   "effectiveFrom": "2026-07-01",
   "base": "revenue_before_vat",
   "currency": "VND",
@@ -26,6 +26,7 @@
     "H.C": null,
     "H.D": null
   },
+  "autoGroupTargets": true,
   "totalCapPct": null,
-  "note": "Thưởng dự kiến v3 từ T07.2026: P1 giữ nguyên; P2 chỉ tính phần doanh thu C10 vượt target riêng từng nhóm. Nhóm chưa giao target hoặc C10 thiếu thì P2 nhóm bằng 0. Dự kiến/tham khảo, không payroll."
+  "note": "Thưởng dự kiến v3.1 từ T07.2026: target nhóm C10 tự suy theo tỷ trọng doanh thu khi chưa có số nhập tay; manual đè auto. P2 chỉ tính phần vượt target nhóm, gate tổng >=101%. Dự kiến/tham khảo, không payroll."
 }

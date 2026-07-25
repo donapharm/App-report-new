@@ -304,11 +304,11 @@ function TargetDetailModal({ target, employeeLabel, admin, onClose, onNavigate }
           </div>)}
         </div>
         <div className="employee-cost-target-equation employee-cost-target-quarter-summary">
-          <span>Target quý<small>Backend cộng target 3 tháng nêu trên</small></span>
+          <span>Target quý<small>Target quý = trung bình các tháng đã giao</small></span>
           <b>{formatEmployeeCostCell(target.quarter.target, moneyColumn)}</b>
           <span>Doanh thu trước VAT quý</span>
           <b>{formatEmployeeCostCell(target.quarter.achieved, moneyColumn)}</b>
-          <span>% đạt quý<small>Doanh thu trước VAT quý ÷ target quý × 100</small></span>
+          <span>% đạt quý<small>Doanh thu trước VAT trung bình cùng các tháng đã giao ÷ target quý × 100</small></span>
           <b>{targetPctLabel(target.quarter.pct)}</b>
         </div>
       </section>
@@ -339,7 +339,7 @@ function BonusKpi({ bonus }) {
     : month.priorityStatus === 'below_threshold'
       ? `P2 chưa đạt ngưỡng ${targetPctLabel(month.priorityThresholdPct)}`
       : month.priorityStatus === 'targets_missing'
-        ? 'P2 = 0 · chưa giao target nhóm'
+        ? 'P2 = 0 · auto target nhóm đang tắt'
         : month.priorityStatus === 'partially_missing_targets'
           ? `P2 ${priorityAmount} · có nhóm chưa giao target`
           : `P2 phần vượt nhóm C10 ${priorityAmount}`;
@@ -351,12 +351,13 @@ function BonusKpi({ bonus }) {
   const quarterContext = bonus.quarterLabel ? `lũy kế ${bonus.quarterLabel}: ${quarterAmount}` : `lũy kế quý: ${quarterAmount}`;
   const groupDetail = (month.priorityGroups || []).map((item) => {
     if (item.reason === 'ambiguous_scope') return `${item.group}: thiếu mapping tuyến/đơn vị duy nhất của NV → P2 = 0`;
-    if (item.target == null) return `${item.group}: chưa giao target → P2 = 0`;
-    return `${item.group}: ${formatEmployeeCostCell(item.amount || 0, moneyColumn)} (${bonusPctLabel(item.ratePct)} × phần vượt ${formatEmployeeCostCell(item.excess || 0, moneyColumn)}; doanh thu ${formatEmployeeCostCell(item.revenue || 0, moneyColumn)} − target ${formatEmployeeCostCell(item.target, moneyColumn)})`;
+    if (item.target == null) return `${item.group}: chưa có target (auto tắt hoặc chưa xác định) → P2 = 0`;
+    const source = item.targetSource === 'manual' ? 'manual CEO nhập' : item.targetSource === 'auto' ? 'auto tự suy' : item.targetSource || 'chưa rõ nguồn';
+    return `${item.group}: ${formatEmployeeCostCell(item.amount || 0, moneyColumn)} (${bonusPctLabel(item.ratePct)} × phần vượt ${formatEmployeeCostCell(item.excess || 0, moneyColumn)}; doanh thu ${formatEmployeeCostCell(item.revenue || 0, moneyColumn)} − target ${formatEmployeeCostCell(item.target, moneyColumn)}; nguồn ${source})`;
   }).join('; ') || 'không có nhóm C10';
   const title = bonus.aggregate
     ? `Tổng thưởng dự kiến cộng từ từng nhân viên: Phần 1 ${baseAmount}; Phần 2 ${priorityAmount}. ${quarterContext}. Không gửi thưởng/không ghi payroll.`
-    : `Tháng: ${monthAmount} = Phần 1 ${baseAmount} + Phần 2 ${priorityAmount}. P2 chỉ tính rate × phần vượt target riêng từng nhóm C10: ${groupDetail}. Coverage C10: ${targetPctLabel(month.priorityCoverage?.coveragePct)}. Giai đoạn ${bonus.effectiveFrom || '—'} · version ${bonus.version || '—'}. Dự kiến/tham khảo, không phải payroll hay số chi chính thức.`;
+    : `Tháng: ${monthAmount} = Phần 1 ${baseAmount} + Phần 2 ${priorityAmount}. P2 chỉ tính rate × phần vượt target riêng từng nhóm C10; target nhóm auto tự suy khi chưa có manual: ${groupDetail}. Target quý = trung bình các tháng đã giao. Coverage C10: ${targetPctLabel(month.priorityCoverage?.coveragePct)}. Giai đoạn ${bonus.effectiveFrom || '—'} · version ${bonus.version || '—'}. Dự kiến/tham khảo, không phải payroll hay số chi chính thức.`;
   return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · dự kiến/tham khảo`} title={title} tone="employee-cost-tone-reward" />;
 }
 

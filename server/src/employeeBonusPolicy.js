@@ -72,6 +72,7 @@ function rawConfig(config) {
     priorityThresholdPct: normalized.priorityThresholdPct,
     priorityRates: { ...normalized.priorityRates },
     priorityTargets: { ...normalized.priorityTargets },
+    autoGroupTargets: normalized.autoGroupTargets === true,
     totalCapPct: normalized.totalCapPct,
   };
 }
@@ -81,6 +82,7 @@ function mergeConfig(base, patch = {}) {
     ...base,
     ...(Object.prototype.hasOwnProperty.call(patch, 'baseTiers') ? { baseTiers: patch.baseTiers } : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, 'priorityThresholdPct') ? { priorityThresholdPct: patch.priorityThresholdPct } : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, 'autoGroupTargets') ? { autoGroupTargets: patch.autoGroupTargets } : {}),
     ...(Object.prototype.hasOwnProperty.call(patch, 'totalCapPct') ? { totalCapPct: patch.totalCapPct } : {}),
     priorityRates: { ...(base.priorityRates || {}), ...(patch.priorityRates || {}) },
     priorityTargets: { ...(base.priorityTargets || {}), ...(patch.priorityTargets || {}) },
@@ -90,7 +92,7 @@ function mergeConfig(base, patch = {}) {
 function normalizePatch(raw = {}, seedConfig, scope = { type: 'default' }) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw Object.assign(new Error('Cấu hình thưởng không hợp lệ'), { status: 400, code: 'BONUS_POLICY_PATCH_INVALID' });
   const patch = {};
-  for (const key of ['baseTiers', 'priorityThresholdPct', 'priorityRates', 'priorityTargets', 'totalCapPct']) {
+  for (const key of ['baseTiers', 'priorityThresholdPct', 'priorityRates', 'priorityTargets', 'autoGroupTargets', 'totalCapPct']) {
     if (Object.prototype.hasOwnProperty.call(raw, key)) patch[key] = raw[key];
   }
   if (!Object.keys(patch).length) throw Object.assign(new Error('Chưa có trường cấu hình nào để lưu'), { status: 400, code: 'BONUS_POLICY_PATCH_EMPTY' });
@@ -108,6 +110,9 @@ function normalizePatch(raw = {}, seedConfig, scope = { type: 'default' }) {
         throw Object.assign(new Error(`Target nhóm ${official} phải là số không âm hoặc để trống.`), { status: 400, code: 'BONUS_POLICY_TARGET_INVALID' });
       }
     }
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'autoGroupTargets') && typeof patch.autoGroupTargets !== 'boolean') {
+    throw Object.assign(new Error('Cờ tự suy target nhóm phải là bật hoặc tắt.'), { status: 400, code: 'BONUS_POLICY_AUTO_TARGET_INVALID' });
   }
   const candidate = mergeConfig(seedConfig, patch);
   const validated = employeeBonus.validateConfig(candidate);
@@ -130,6 +135,7 @@ function normalizePatch(raw = {}, seedConfig, scope = { type: 'default' }) {
       normalized.priorityTargets[official] = value == null ? null : Number(value);
     }
   }
+  if (Object.prototype.hasOwnProperty.call(patch, 'autoGroupTargets')) normalized.autoGroupTargets = validated.autoGroupTargets;
   if (Object.prototype.hasOwnProperty.call(patch, 'totalCapPct')) normalized.totalCapPct = validated.totalCapPct;
   return normalized;
 }
@@ -199,8 +205,8 @@ function createPolicyStore({ policyFile = POLICY_FILE, auditFile = AUDIT_FILE, s
     if (context?.targetScopeStrict === true) {
       const employeePolicy = selected.find((policy) => policy.scope.type === 'employee');
       for (const group of employeeBonus.PRIORITY_GROUPS) {
-        // An explicit employee value (including null = deliberately unassigned) is
-        // the highest target layer and therefore resolves the ambiguity below it.
+        // An explicit employee value (including null = clear manual override and use auto)
+        // is the highest target layer and therefore resolves the ambiguity below it.
         if (Object.prototype.hasOwnProperty.call(employeePolicy?.patch?.priorityTargets || {}, group)) continue;
         const ambiguous = active.some((policy) => ['route', 'unit'].includes(policy.scope.type)
           && !contextValue(context, policy.scope.type)
