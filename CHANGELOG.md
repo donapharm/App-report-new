@@ -1,3 +1,9 @@
+### 2026-07-25 — Claude Code (chốt contract theo phản hồi DataHub) — 2 khóa trước khi DataHub build
+- **DataHub verify commit `e2c2916` OK**, nêu 2 điểm cần khóa trước khi build cửa nhận. Đã chốt:
+  1. **Kỳ = `from`/`to` (YYYY-MM), bỏ `period` đơn lẻ** — thống nhất directive theo file handoff (gap tool vốn theo khoảng tháng). Code + handoff vốn đã `from/to`; sửa directive §2 cho khớp, ghi chú ở §7.
+  2. **Phạm vi cột % được GHI (CEO chốt): đúng allowlist `C33–C46` CEO đang bật** — dùng chung allowlist động của bên đọc "Chi phí của tôi" (`SPEC_REPORT_EMP_COST_SELFVIEW.md`); ghi động không hardcode; **C32/C47 cấm ghi/cấm suy ra tuyệt đối**; % theo từng dòng. App Report write-agnostic (worklist chỉ nêu mã, không chỉ định cột). Khóa vào cả `HANDOFF_DATAHUB_COST_GAP_RECEIVER.md` (§Phạm vi cột %) và directive (§6-BIS).
+- **Không đổi code app** (chỉ tài liệu contract). DataHub: build cửa nhận theo handoff đã chốt; C32/C47 hard-block, ghi trong allowlist C33–C46.
+
 ### 2026-07-25 — Claude Code (CEO chốt "B" build thẳng) — App Report: nút "📤 Đồng bộ worklist thiếu % sang DataHub"
 - **Việc đã làm:** build phía App Report cho nút đồng bộ (theo `DIRECTIVE_EMP_COST_GAP_SYNC_DATAHUB.md`). CEO bấm trong tab "Mặt hàng thiếu %" → App Report đẩy danh sách mã thiếu % sang DataHub → CEO vào DataHub điền %.
   - **Backend `server/src/employeeCostGapSync.js` (mới):** `buildWorklist()` dựng gói từ gap payload (field thật `productCode/productName/unitLabels/revenueAffected/reason/suggestedCatalogCode` + coverage), checksum SHA-256 để idempotent; `sync()` POST S2S `x-assignment-key` + `x-app-report-actor` tới `…/api/integrations/app-report/cost-gap-worklist`, **không auto-retry**, timeout `DATA_HUB_TIMEOUT_MS`, audit `employee_cost_gap_sync_audit`. **Chốt chặn fail-closed `assertNoForbiddenKeys`**: cấm C32-C47/cost/%/PII lọt gói.

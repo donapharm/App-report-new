@@ -57,6 +57,17 @@ Headers:
 - Lỗi: mã lỗi HTTP tương ứng + `{ "error": "<mô tả>" }`.
 - **Chưa build xong endpoint** → cứ để **404**: App Report hiểu là "chưa mở cửa nhận" và báo CEO dùng tạm Excel (không vỡ).
 
+## Phạm vi cột % được phép GHI (CEO chốt 2026-07-25) — KHÓA TRƯỚC KHI MỞ LUỒNG CẬP NHẬT
+Màn DataHub điền % chỉ được ghi vào **đúng allowlist `C33–C46` mà CEO đang bật** (chính danh sách cột động đang
+dùng cho bên đọc "Chi phí của tôi" — `SPEC_REPORT_EMP_COST_SELFVIEW.md §"C33–C46 allowlist"`):
+- **Ghi ĐỘNG theo allowlist, KHÔNG hardcode key/số cột.** CEO đổi allowlist bất cứ lúc nào → áp dụng ngay (đọc↔ghi
+  dùng chung 1 allowlist, nhất quán).
+- **`C32` (tổng) + `C47` (đầu ra): CẤM GHI/CẤM SUY RA tuyệt đối, vĩnh viễn** — hard-block ở DataHub, không được điền,
+  không tự dựng lại "tổng"/"đầu ra".
+- Giá trị là **tỷ lệ % theo từng dòng** (mã QLNB × đơn vị), không cộng dồn.
+- **App Report không tham gia phạm vi này:** worklist chỉ nêu *mã nào cần chú ý* (write-agnostic), KHÔNG mang theo và
+  KHÔNG chỉ định cột nào nhận %. Toàn bộ việc chọn cột nằm ở allowlist DataHub (SSOT).
+
 ## Nghiệm thu E2E (khi cả 2 đầu sẵn sàng)
 1. CEO bấm "Đồng bộ" trên App Report → DataHub nhận đúng số mã, trả 2xx + `worklist_id`.
 2. Gửi lại cùng kỳ + checksum → DataHub **không** tạo bản trùng.

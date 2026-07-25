@@ -34,9 +34,12 @@
 - **Idempotent:** dedupe theo `worklist_checksum` (gửi lại cùng kỳ+checksum → cập nhật, không nhân đôi).
 
 ## 2. PAYLOAD (dùng ĐÚNG field gap thật — không cost/PII)
+> **Kỳ = khoảng `from`/`to` (YYYY-MM), KHÔNG dùng `period` đơn lẻ.** Gap tool App Report vốn theo khoảng tháng; bản
+> `period` đơn trước đây là rút gọn cũ — đã bỏ. Contract chuẩn thống nhất với `HANDOFF_DATAHUB_COST_GAP_RECEIVER.md`.
 ```json
 {
-  "period": "2026-07",
+  "from": "2026-06",
+  "to": "2026-07",
   "actor": "CEO",
   "worklist_checksum": "<sha256 của items chuẩn hoá>",
   "coverage": { "matched_pairs": 171, "total_pairs": 184 },
@@ -91,8 +94,18 @@
 6. Dormant: DataHub 404 → thông báo rõ, không vỡ app; Xuất Excel/PDF vẫn chạy.
 7. Test + build PASS; push nhánh review; báo Claude review; **chưa deploy** tới khi DataHub xong cửa nhận.
 
+## 6-BIS. PHẠM VI CỘT % ĐƯỢC GHI (CEO chốt 2026-07-25)
+Màn DataHub điền % chỉ ghi vào **đúng allowlist `C33–C46` CEO đang bật** (dùng chung allowlist động của bên đọc
+"Chi phí của tôi" — `SPEC_REPORT_EMP_COST_SELFVIEW.md`):
+- Ghi **động theo allowlist, không hardcode**; CEO đổi allowlist → áp dụng ngay (đọc↔ghi nhất quán).
+- **`C32` (tổng) + `C47` (đầu ra): cấm ghi/cấm suy ra tuyệt đối** — hard-block ở DataHub.
+- Giá trị **% theo từng dòng**, không cộng dồn.
+- **App Report write-agnostic:** worklist chỉ nêu *mã cần chú ý*, không mang/không chỉ định cột nhận %. Việc chọn cột
+  hoàn toàn ở allowlist DataHub (SSOT).
+
 ## 7. VIỆC DATAHUB (cross-app — chặn hard, phải làm song song)
 - Build `POST /api/integrations/app-report/cost-gap-worklist` (auth `x-assignment-key`, idempotent theo checksum).
-- Màn cho **CEO điền %/ánh xạ mã** trên đúng worklist nhận (thay việc nhập tay từ Excel).
+- Màn cho **CEO điền %/ánh xạ mã** trên đúng worklist nhận (thay việc nhập tay từ Excel), **ghi trong allowlist C33–C46
+  (§6-BIS), C32/C47 hard-block**.
 - Trả 2xx JSON khi nhận; báo App Report khi contract sẵn sàng để bật thật.
-- Chốt contract §1b/§2 với Claude trước khi 2 đầu đóng E2E.
+- Chốt contract §1b/§2 (**kỳ = `from`/`to`, không `period`**) với Claude trước khi 2 đầu đóng E2E.
