@@ -1,3 +1,9 @@
+### 2026-07-25 — Report Bot — Mobile header refresh + bottom menu UX (candidate review, chưa deploy)
+- Thêm nút **Làm mới** nổi bật ở cả desktop topbar và mobile header; nút bắn `app:reload-active-tab` để tái dùng `reloadTick` trên các page đã hỗ trợ, remount có kiểm soát cho page chưa có hook, đồng thời nghe `app:request-state` để hiện trạng thái `Đang tải…` đúng vòng đời request.
+- Mobile bỏ dải điều hướng dài, thay bằng bottom bar 4 mục nhanh `Tổng quan / Doanh thu / Chi phí của tôi / Target` + nút `☰ Menu`. Menu mở bottom sheet có tìm kiếm tiếng Việt không phụ thuộc dấu, grid icon+tên, highlight tab hiện tại, chạm 1 lần là chuyển tab và đóng sheet; hỗ trợ Escape/backdrop/body-lock an toàn cho layout mobile.
+- Desktop sidebar giữ nguyên; filter quyền `adminOnly / ceoEmployeeOnly / employeeCostControlled / hidden` không đổi vì menu mới vẫn dựng từ cùng danh sách tab đã lọc.
+- Bổ sung contract test web cho bottom bar/menu sheet/header refresh (`web/test/App.mobileMenu.contract.test.mjs`). Chưa deploy/restart.
+
 ### 2026-07-25 — Report Bot — Crosswalk publication hardening (candidate review, chưa deploy)
 - Consumer `appSaleProductCrosswalk.js` chỉ nhận publication top-level `status === 'committed'`; bắt buộc `version_no`, `expected_row_count`, `total` là number nguyên dương và `expected_row_count === total === rows.length`. Payload bọc `{data: ...}`, version cắt cụt dù tự checksum, checksum sai hoặc contract sai đều trả `source_unavailable`.
 - Body được đọc streaming tối đa 10 MiB và cancel/abort ngay khi vượt ngưỡng. LKG RAM chỉ được dùng cho transport outage/timeout; HTTP/redirect/JSON/status/count/checksum/version/oversize đã có response đều fail-closed, không dùng snapshot cũ.

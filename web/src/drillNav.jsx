@@ -30,6 +30,11 @@ export function DrillNav({ crumbs = [], onBack, onCrumb, onReload, busy = false,
 
 export function useReloadTick() {
   const [reloadTick, setReloadTick] = useState(0);
+  useEffect(() => {
+    const onReload = () => setReloadTick((x) => x + 1);
+    window.addEventListener('app:reload-active-tab', onReload);
+    return () => window.removeEventListener('app:reload-active-tab', onReload);
+  }, []);
   return { reloadTick, reload: () => setReloadTick((x) => x + 1) };
 }
 

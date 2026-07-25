@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { api, forgetLastPhone, getLastPhone, getToken, rememberLastPhone, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { useIsDesktop } from './hooks.js';
@@ -39,6 +39,12 @@ const TABS = [
 ];
 
 const HOME_URL = 'https://home.donapharm.asia';
+const MOBILE_PRIMARY_TAB_KEYS = ['overview', 'revenue', 'employeeCost', 'target'];
+const RELOAD_TICK_TAB_KEYS = new Set(['overview', 'revenue', 'revenueFull', 'products', 'analysis', 'dailySales', 'cst', 'target']);
+
+function normalizeMenuSearch(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
 
 function HomeButton() {
   return (
@@ -58,6 +64,22 @@ function HomeButton() {
   );
 }
 
+function RefreshButton({ loading, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`refresh-button${loading ? ' is-loading' : ''}`}
+      aria-label={loading ? 'Đang tải lại dữ liệu trang hiện tại' : 'Tải lại dữ liệu trang hiện tại'}
+      aria-busy={loading}
+      disabled={loading}
+      onClick={onClick}
+    >
+      <span className="refresh-button-ic" aria-hidden="true">↻</span>
+      <span>{loading ? 'Đang tải…' : 'Làm mới'}</span>
+    </button>
+  );
+}
+
 export default function App() {
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -70,7 +92,16 @@ export default function App() {
     } catch { return 'overview'; }
   });
   const [tabStack, setTabStack] = useState([]); // các tab đã đi qua, để nút "Quay lại" lùi về
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuQuery, setMobileMenuQuery] = useState('');
+  const [headerReloadBusy, setHeaderReloadBusy] = useState(false);
+  const [fallbackReloadTick, setFallbackReloadTick] = useState(0);
   const desktop = useIsDesktop();
+  const reloadNoRequestRef = useRef(null);
+  const reloadMaxRef = useRef(null);
+  const headerReloadBusyRef = useRef(false);
+  const headerReloadStartedRef = useRef(false);
+  const mobileMenuSearchRef = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -164,6 +195,64 @@ export default function App() {
     return () => document.documentElement.classList.remove('catalog-mode');
   }, [me, tab]);
 
+  useEffect(() => {
+    const finishHeaderReload = () => {
+      headerReloadBusyRef.current = false;
+      headerReloadStartedRef.current = false;
+      window.clearTimeout(reloadNoRequestRef.current);
+      window.clearTimeout(reloadMaxRef.current);
+      setHeaderReloadBusy(false);
+    };
+    const onRequestState = (event) => {
+      if (!headerReloadBusyRef.current) return;
+      const detail = event?.detail || {};
+      if (detail.phase === 'start') {
+        headerReloadStartedRef.current = true;
+        window.clearTimeout(reloadNoRequestRef.current);
+      }
+      if (detail.phase === 'end' && headerReloadStartedRef.current && Number(detail.active || 0) === 0) finishHeaderReload();
+    };
+    window.addEventListener('app:request-state', onRequestState);
+    return () => window.removeEventListener('app:request-state', onRequestState);
+  }, []);
+
+  useEffect(() => () => {
+    window.clearTimeout(reloadNoRequestRef.current);
+    window.clearTimeout(reloadMaxRef.current);
+  }, []);
+
+  useEffect(() => {
+    if (desktop && mobileMenuOpen) {
+      setMobileMenuOpen(false);
+      setMobileMenuQuery('');
+    }
+  }, [desktop, mobileMenuOpen]);
+
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      setMobileMenuOpen(false);
+      setMobileMenuQuery('');
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+        setMobileMenuQuery('');
+      }
+    };
+    document.body.classList.add('nav-sheet-open');
+    const rafId = window.requestAnimationFrame(() => mobileMenuSearchRef.current?.focus());
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.classList.remove('nav-sheet-open');
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [mobileMenuOpen]);
+
   if (loading) return <Spinner />;
   if (!me && bootError && getToken()) return (
     <div className="login">
@@ -185,7 +274,18 @@ export default function App() {
       ? { ...t, label: 'Danh mục bán hàng của tôi', full: 'Danh mục bán hàng của tôi' }
       : t
   ));
+  const visibleTabs = tabs.filter((t) => !t.hidden);
+  const mobilePrimaryTabs = MOBILE_PRIMARY_TAB_KEYS.map((key) => visibleTabs.find((t) => t.key === key)).filter(Boolean);
+  const normalizedMenuQuery = normalizeMenuSearch(mobileMenuQuery);
+  const mobileMenuTabs = visibleTabs.filter((t) => {
+    if (!normalizedMenuQuery) return true;
+    return normalizeMenuSearch(`${t.label} ${t.full || ''} ${t.key}`).includes(normalizedMenuQuery);
+  });
   const Active = (tabs.find((t) => t.key === tab) || tabs[0]).C;
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false);
+    setMobileMenuQuery('');
+  };
   const switchTab = (targetTab, payload = {}, mode = 'push') => {
     try { sessionStorage.setItem('app_nav_payload', JSON.stringify({ tab: targetTab, ...payload, ts: Date.now() })); } catch { /* ignore */ }
     window.dispatchEvent(new CustomEvent('app:navigate', { detail: { tab: targetTab, ...payload } }));
@@ -197,6 +297,30 @@ export default function App() {
   };
   const navigate = (targetTab, payload = {}) => switchTab(targetTab, payload, 'push');
   const navBack = { back: () => window.history.back(), canBack: tabStack.length > 0 };
+  const triggerHeaderReload = () => {
+    headerReloadBusyRef.current = true;
+    headerReloadStartedRef.current = false;
+    setHeaderReloadBusy(true);
+    window.clearTimeout(reloadNoRequestRef.current);
+    window.clearTimeout(reloadMaxRef.current);
+    reloadNoRequestRef.current = window.setTimeout(() => {
+      if (!headerReloadStartedRef.current) {
+        headerReloadBusyRef.current = false;
+        window.clearTimeout(reloadMaxRef.current);
+        setHeaderReloadBusy(false);
+      }
+    }, 800);
+    reloadMaxRef.current = window.setTimeout(() => {
+      headerReloadBusyRef.current = false;
+      headerReloadStartedRef.current = false;
+      setHeaderReloadBusy(false);
+    }, 15_000);
+    if (RELOAD_TICK_TAB_KEYS.has(tab)) {
+      window.dispatchEvent(new CustomEvent('app:reload-active-tab', { detail: { tab, ts: Date.now() } }));
+    } else {
+      setFallbackReloadTick((tick) => tick + 1);
+    }
+  };
 
   // ---------- Desktop: sidebar dashboard ----------
   if (desktop) {
@@ -205,7 +329,7 @@ export default function App() {
         <aside className="sidebar">
           <div className="side-logo"><Logo size={42} /></div>
           <nav className="side-nav">
-            {tabs.filter((t) => !t.hidden).map((t) => (
+            {visibleTabs.map((t) => (
               <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>
                 <span className="ic">{t.ic}</span> {t.label}
               </button>
@@ -229,12 +353,13 @@ export default function App() {
             </div>
             <div className="topbar-actions">
               <CeoNotificationBell me={me} onNavigate={navigate} />
+              <RefreshButton loading={headerReloadBusy} onClick={triggerHeaderReload} />
               <HomeButton />
               <Clock />
             </div>
           </header>
           <main className={`page-desktop ${tab === 'catalogManagement' ? 'page-desktop-wide' : ''}`}>
-            <NavCtx.Provider value={navBack}><Active me={me} desktop onNavigate={navigate} /></NavCtx.Provider>
+            <NavCtx.Provider value={navBack}><Active key={RELOAD_TICK_TAB_KEYS.has(tab) ? tab : `${tab}:${fallbackReloadTick}`} me={me} desktop onNavigate={navigate} /></NavCtx.Provider>
           </main>
           <ScrollTopButton />
           <UpdateBanner />
@@ -261,26 +386,81 @@ export default function App() {
         <div className="hdr-r2">
           <Clock />
           <div className="hdr-actions">
+            <RefreshButton loading={headerReloadBusy} onClick={triggerHeaderReload} />
             <HomeButton />
             <button className="logout" onClick={logout}>Đăng xuất</button>
           </div>
         </div>
       </header>
       <main className="page">
-        <NavCtx.Provider value={navBack}><Active me={me} onNavigate={navigate} /></NavCtx.Provider>
+        <NavCtx.Provider value={navBack}><Active key={RELOAD_TICK_TAB_KEYS.has(tab) ? tab : `${tab}:${fallbackReloadTick}`} me={me} onNavigate={navigate} /></NavCtx.Provider>
       </main>
       <ScrollTopButton />
       <UpdateBanner />
       <DormantGate me={me} tab={tab} />
       {!['catalogManagement', 'dailySales', 'products', 'dormantReports', 'employeeCost'].includes(tab) && <ZaloMobileAccess />}
-      {tab !== 'dailySales' && <nav className="nav">
-        {tabs.filter((t) => !t.hidden).map((t) => (
-          <button key={t.key} className={tab === t.key ? 'active' : ''} onClick={() => switchTab(t.key)}>
+      {mobileMenuOpen && <div
+        className="mobile-nav-sheet-backdrop"
+        onClick={(event) => { if (event.target === event.currentTarget) closeMobileMenu(); }}
+      >
+        <section id="mobile-nav-sheet" className="mobile-nav-sheet" role="dialog" aria-modal="true" aria-labelledby="mobile-nav-sheet-title">
+          <header className="mobile-nav-sheet-head">
+            <div>
+              <span>Đi đến nhanh</span>
+              <h2 id="mobile-nav-sheet-title">Toàn bộ menu App Report</h2>
+            </div>
+            <button type="button" className="mobile-nav-sheet-close" aria-label="Đóng menu" onClick={closeMobileMenu}>×</button>
+          </header>
+          <div className="mobile-nav-sheet-body">
+            <label className="mobile-nav-search">
+              <span className="sr-only">Tìm mục trong menu App Report</span>
+              <input
+                ref={mobileMenuSearchRef}
+                type="search"
+                value={mobileMenuQuery}
+                onChange={(event) => setMobileMenuQuery(event.target.value)}
+                placeholder="Tìm mục báo cáo..."
+                aria-label="Tìm mục trong menu App Report"
+              />
+            </label>
+            <div className="mobile-nav-grid">
+              {mobileMenuTabs.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`mobile-nav-tile${tab === t.key ? ' active' : ''}`}
+                  aria-current={tab === t.key ? 'page' : undefined}
+                  onClick={() => { switchTab(t.key); closeMobileMenu(); }}
+                >
+                  <span className="ic" aria-hidden="true">{t.ic}</span>
+                  <span className="mobile-nav-tile-label">{t.full || t.label}</span>
+                  <span className="mobile-nav-tile-state">{tab === t.key ? 'Đang mở' : 'Mở tab'}</span>
+                </button>
+              ))}
+            </div>
+            {!mobileMenuTabs.length && <div className="mobile-nav-empty">Không tìm thấy mục phù hợp.</div>}
+          </div>
+        </section>
+      </div>}
+      <nav className="nav nav-mobile-primary" aria-label="Điều hướng nhanh App Report">
+        {mobilePrimaryTabs.map((t) => (
+          <button key={t.key} className={tab === t.key ? 'active' : ''} aria-current={tab === t.key ? 'page' : undefined} onClick={() => switchTab(t.key)}>
             <span className="ic">{t.ic}</span>
             <span>{t.label}</span>
           </button>
         ))}
-      </nav>}
+        <button
+          type="button"
+          className={mobileMenuOpen || !mobilePrimaryTabs.some((t) => t.key === tab) ? 'active' : ''}
+          aria-haspopup="dialog"
+          aria-expanded={mobileMenuOpen}
+          aria-controls="mobile-nav-sheet"
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <span className="ic" aria-hidden="true">☰</span>
+          <span>Menu</span>
+        </button>
+      </nav>
     </>
   );
 }

@@ -55,9 +55,26 @@ function requestError(message, res, data) {
   return error;
 }
 
+let activeRequestCount = 0;
+
+function emitRequestState(phase, meta = {}) {
+  if (typeof window === 'undefined') return;
+  activeRequestCount = phase === 'start'
+    ? activeRequestCount + 1
+    : Math.max(0, activeRequestCount - 1);
+  try {
+    window.dispatchEvent(new CustomEvent('app:request-state', {
+      detail: { phase, active: activeRequestCount, ...meta },
+    }));
+  } catch {
+    /* ignore */
+  }
+}
+
 async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = {}) {
   const controller = timeoutMs > 0 ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  emitRequestState('start', { method, path });
   try {
     const res = await fetch('/api' + path, {
       method,
@@ -87,6 +104,7 @@ async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = 
     throw e;
   } finally {
     if (timer) clearTimeout(timer);
+    emitRequestState('end', { method, path });
   }
 }
 
