@@ -86,4 +86,7 @@ app.listen(PORT, HOST, () => {
   console.log(`  Health: http://${HOST}:${PORT}/api/health`);
   revenueRefresh.start();
   deckScheduler.start();
+  // Giữ cache "Chi phí · Tất cả NV" luôn nóng cho kỳ hiện tại (warm định kỳ),
+  // để CEO/admin không trúng lần dựng lạnh sau restart/hết TTL.
+  if (typeof routes.startEmployeeCostAllWarmLoop === 'function') routes.startEmployeeCostAllWarmLoop();
 });
