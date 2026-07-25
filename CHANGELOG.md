@@ -1,3 +1,10 @@
+### 2026-07-25 — Claude Code (kiến trúc, CEO chốt nghiên cứu) — DIRECTIVE nút "Đồng bộ worklist thiếu % sang DataHub"
+- **Bối cảnh:** CEO muốn bỏ thao tác thủ công *Xuất Excel → mở DataHub → nhập tay*; thay bằng **1 nút "Đồng bộ sang DataHub"** trong tab "Mặt hàng thiếu %" → CEO vào DataHub điền % trên đúng danh sách đẩy sang.
+- **Việc đã làm (chỉ TÀI LIỆU — đúng vai kiến trúc, không đụng code app song song bot):** soạn `DIRECTIVE_EMP_COST_GAP_SYNC_DATAHUB.md` — hợp đồng API S2S 2 đầu (App Report `POST /employee-cost/gaps/sync-datahub` requireAdmin ↔ DataHub receiver `POST …/cost-gap-worklist` auth `x-assignment-key`), payload dùng **field gap thật** (`productCode/productName/unitLabels/revenueAffected/reason/suggestedCatalogCode`) + coverage, mô phỏng đúng đường ghi `catalogManagement.transfer()` đã có.
+- **‼ Điểm chặn ghi rõ:** DataHub **chưa có cửa nhận** worklist thiếu % (cửa ghi duy nhất hiện tại là `assignments/transfer`, khác việc này). ⇒ phải build **cả 2 đầu**; App Report làm dạng **dormant/fail-safe** (404 → báo "DataHub chưa mở cửa nhận", không vỡ; giữ Xuất Excel/PDF làm kênh dự phòng). Bật thật khi DataHub xong receiver + chốt contract.
+- **Bảo mật khóa trong spec:** CEO/ADMIN-only, worklist dựng ở backend (không tin body client), **payload cấm cost/%/PII/C32/C47** (assert fail-closed), no auto-retry POST + idempotent theo checksum, audit đầy đủ. Ranh giới giữ nguyên: App Report gửi danh sách THIẾU %, **DataHub điền % (SSOT)**.
+- **Bàn giao:** Report Bot build phía App Report theo directive; DataHub team build cửa nhận (§7). Chưa code app, chưa deploy.
+
 ### 2026-07-25 — Claude Code (review hậu deploy) — PR #191 employee-cost perf merge `c457b09`: PASS (code+merge), live theo evidence bot
 - **VERDICT: PASS (phần Claude kiểm được = code + merge).** 3 fix hiệu năng "Chi phí · Tất cả NV" (`e81a46b` cache ký nội dung + timeout 45s, `70f894a` DataHub song song + stale-while-revalidate, `0f659d2` warm loop định kỳ) đã vào `origin/main`.
 - **‼ Ranh giới attribution (ghi rõ để CEO duyệt đúng):**
