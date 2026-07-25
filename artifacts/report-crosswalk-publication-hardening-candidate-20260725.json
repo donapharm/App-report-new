@@ -1,0 +1,103 @@
+{
+  "generatedAt": "2026-07-25T11:14:04+07:00",
+  "branch": "fix/report-crosswalk-publication-hardening-20260725",
+  "baseCommit": "c29ef1413876a640e8241481fb55761bbc0a5d9e",
+  "scope": "App Report read-only App Sale product crosswalk consumer hardening; no migration, secret, deployment, restart or provider activation",
+  "consumerContract": {
+    "endpoint": "/api/integrations/app-report/product-master-crosswalk",
+    "statusMustEqual": "committed",
+    "strictNumericFields": [
+      "version_no",
+      "expected_row_count",
+      "total"
+    ],
+    "rowCountInvariant": "expected_row_count === total === rows.length",
+    "snapshotSha256": "canonical rows SHA-256 required",
+    "wrappedDataPayloadRejected": true,
+    "streamingByteLimit": 10485760,
+    "abortOnOverflow": true,
+    "lastKnownGoodPolicy": {
+      "allowedOnlyFor": [
+        "transport_unavailable",
+        "transport_timeout"
+      ],
+      "forbiddenFor": [
+        "http_error",
+        "redirect",
+        "invalid_json",
+        "publication_status",
+        "row_count",
+        "checksum",
+        "version_contract",
+        "response_too_large"
+      ]
+    }
+  },
+  "providerShapedLocalE2E": {
+    "pathAndBearerVerified": true,
+    "fixture": "Hoàn bổ trung ích khí: 1 Gói = 5 Gam; convert_factor=5",
+    "committedSnapshotSuppressesUomMismatch": true,
+    "committedSnapshotProducesNoUnverifiedWarning": true,
+    "truncatedSelfChecksummedPublicationRejected": true,
+    "truncatedPublicationResult": "source_unavailable",
+    "truncatedPublicationProduces": "UOM_CONVERSION_UNVERIFIED",
+    "lkgNotUsedForContractFailure": true
+  },
+  "parityFourOtherRules": {
+    "rules": [
+      "PRODUCT_MISSING",
+      "PRODUCT_MISMATCH",
+      "BID_PRICE_INVALID",
+      "UNIT_UNKNOWN"
+    ],
+    "baselineHash": "13c444df75273680bedee9715caac158f412884142a218ee4d684ce7a154c4ea",
+    "candidateReadyHash": "13c444df75273680bedee9715caac158f412884142a218ee4d684ce7a154c4ea",
+    "candidateUnavailableHash": "13c444df75273680bedee9715caac158f412884142a218ee4d684ce7a154c4ea",
+    "allHashesMatch": true
+  },
+  "gates": {
+    "focusedCrosswalk": "8/8 PASS",
+    "focusedDataQuality": "13/13 PASS",
+    "fullServer": "364/364 PASS",
+    "fullWeb": "66/66 PASS",
+    "productionBuild": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "evidenceHashes": {
+    "consumerSourceSha256": "5eac9bec472de7e9d2bc761ce7da9c67a8dc9bf2e75f7997e0af63f05b0e19fc",
+    "consumerTestSha256": "ae129cce47325143cbcac35c42b235cfa9576c82f4dc991e796aaabd22b4381e",
+    "fullServerLogSha256": "48224d1888f800213ae5736abadc745ed09c1fef6cdaf83a6e22a9c4f35dd68e",
+    "fullWebLogSha256": "ae7f4b1e6922921bf5250dd161f49fe049fdd0fc3da0c479bff57c4cf8f6d64a"
+  },
+  "liveProviderGate": {
+    "checkedAt": "2026-07-25T11:13:56+07:00",
+    "appSaleHealth": 200,
+    "crosswalkEndpoint": {
+      "status": 404,
+      "body": "Cannot GET /api/integrations/app-report/product-master-crosswalk",
+      "result": "BLOCKED_PROVIDER_NOT_LIVE"
+    },
+    "ssoV3ShapeProbe": {
+      "origin": "https://report.donapharm.asia",
+      "requestKeys": [
+        "nonce",
+        "phone",
+        "reportDeviceId"
+      ],
+      "status": 400,
+      "body": {
+        "error": "invalid_request"
+      },
+      "result": "BLOCKED_APP_SALE_CONTRACT_V3_NOT_LIVE"
+    },
+    "liveBrowserE2E": "NOT_RUN_PROVIDER_NOT_LIVE",
+    "liveCrosswalkParity": "NOT_RUN_PROVIDER_NOT_LIVE_OR_PROD_TOKEN"
+  },
+  "prohibitedActionsConfirmed": {
+    "migration0104": false,
+    "prodTokenIssuedOrConfigured": false,
+    "appReportDeploy": false,
+    "appSaleDeploy": false,
+    "restart": false
+  }
+}
