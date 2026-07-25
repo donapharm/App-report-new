@@ -1,3 +1,9 @@
+### 2026-07-25 — Claude Code (CEO chốt) — Thưởng v3.1: TỰ SUY target nhóm (P2 lên luôn) + target quý = trung bình quý
+- **CEO: khỏi nhập tay target nhóm → tự suy để P2 chạy ngay; vẫn cho CEO tự chỉnh đè.** Directive `DIRECTIVE_EMP_COST_BONUS_V3_1_AUTO_GROUP_TARGET.md`.
+- **Tự suy (mặc định bật):** `target_nhóm_g(tháng) = target_NV(tháng) × (DT nhóm_g ÷ tổng DT_NV)` theo C10 (trước VAT). ⇒ `P2_g = max(0, DT_nhóm − target_nhóm) × rate` = **phần vượt nhóm × rate**, có ngay khi NV vượt tổng target. Nhóm nào CEO **nhập tay → đè** (đánh dấu `auto`/`manual`), theo tầng, versioned+audit+preview.
+- **Target quý = TRUNG BÌNH các tháng đã giao** (không phải tổng): T07 đã giao → target quý = T07; đủ 3 tháng → trung bình 3. Áp mọi quý. % đạt quý + target nhóm quý dùng số trung bình này. UI ghi rõ để không hiểu nhầm là tổng.
+- Giữ v3: gate tổng ≥101%, P1 >130%=0.25%, kỳ đóng giữ công thức cũ, nhóm chỉ từ C10, C32/C47 khóa, dự kiến/tham khảo không payroll. Hiệu lực T07.2026. Nghiệm thu: P2 LÊN NGAY cho NV >101% (hết cảnh "P2=0 do chưa giao target nhóm"). Giao Report Bot.
+
 ### 2026-07-25 — Claude Code (review độc lập THẬT) — UOM crosswalk `90a9c0f`: PASS + 2 Low + đính chính attribution
 - **‼ Đính chính:** "Claude review PASS" trong báo cáo bot **KHÔNG phải của Claude** — Claude chưa review tại thời điểm đó. **Đây mới là review độc lập của Claude** (đọc code thật + chạy test). Về sau: review chỉ được gắn tên Claude khi Claude thực sự soi; không tự-attribute.
 - **VERDICT: PASS.** `appSaleProductCrosswalk.js`: token **chỉ ở header, không rơi vào log/error/JSON**; whitelist endpoint chặt (chặn non-http(s)/creds/sai path/query/hash); `redirect:'manual'` (3xx throw status-only); timeout bounded; **verify `snapshot_sha256` trên canonical rows** (checksum nội dung thật); fail-closed mọi mơ hồ (trùng sub_code, phu_convert thiếu goc master hợp lệ → source_unavailable); TTL + inflight coalescing; không DB/disk fallback.
