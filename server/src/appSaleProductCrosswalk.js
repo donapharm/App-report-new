@@ -27,6 +27,14 @@ function boundedNumber(value, fallback, min, max) {
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : fallback;
 }
 
+function crosswalkError(message, { allowLkg = false, code = 'contract_invalid' } = {}) {
+  const error = new Error(message);
+  error.crosswalkFailure = true;
+  error.allowLkg = allowLkg;
+  error.code = code;
+  return error;
+}
+
 function configuredEndpoint() {
   const raw = safeText(process.env.APP_SALE_PRODUCT_CROSSWALK_URL, 2000);
   if (!raw) throw new Error('Thiếu APP_SALE_PRODUCT_CROSSWALK_URL.');
@@ -93,18 +101,29 @@ function snapshotSha256ForRows(rows = []) {
 }
 
 function validateSnapshot(payload) {
-  const snapshot = payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : payload;
+  const snapshot = payload;
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot) || !Array.isArray(snapshot.rows)) {
     throw new Error('Crosswalk không có snapshot rows hợp lệ.');
   }
+  if (snapshot.status !== 'committed') throw new Error('Crosswalk publication status phải là committed.');
   if (!snapshot.rows.length) throw new Error('Crosswalk snapshot rỗng.');
-  const versionNo = Number(snapshot.version_no);
-  if (!Number.isSafeInteger(versionNo) || versionNo <= 0) throw new Error('Crosswalk thiếu version_no hợp lệ.');
+  const versionNo = snapshot.version_no;
+  if (typeof versionNo !== 'number' || !Number.isSafeInteger(versionNo) || versionNo <= 0) {
+    throw new Error('Crosswalk thiếu version_no hợp lệ.');
+  }
+  const expectedRowCount = snapshot.expected_row_count;
+  if (typeof expectedRowCount !== 'number' || !Number.isSafeInteger(expectedRowCount) || expectedRowCount <= 0) {
+    throw new Error('Crosswalk thiếu expected_row_count hợp lệ.');
+  }
+  const total = snapshot.total;
+  if (typeof total !== 'number' || !Number.isSafeInteger(total) || total <= 0) {
+    throw new Error('Crosswalk thiếu total hợp lệ.');
+  }
+  if (expectedRowCount !== total || total !== snapshot.rows.length) {
+    throw new Error('Crosswalk expected_row_count/total không khớp số dòng.');
+  }
   const signature = safeText(snapshot.snapshot_sha256, 80).toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(signature)) throw new Error('Crosswalk thiếu snapshot_sha256 hợp lệ.');
-  if (snapshot.total != null && (!Number.isSafeInteger(Number(snapshot.total)) || Number(snapshot.total) !== snapshot.rows.length)) {
-    throw new Error('Crosswalk total không khớp số dòng.');
-  }
   const rows = snapshot.rows.map(normalizeRow);
   const bySubCode = new Map();
   for (const row of rows) {
@@ -127,10 +146,46 @@ function validateSnapshot(payload) {
     snapshotAt: safeText(snapshot.snapshot_at || snapshot.generated_at || snapshot.updated_at, 80) || null,
     version: String(versionNo),
     signature,
+    expectedRowCount,
     rowCount: rows.length,
     rows,
     message: null,
   };
+}
+
+async function readBoundedResponseText(response, controller) {
+  const declaredLength = Number(response.headers?.get?.('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) {
+    controller.abort();
+    throw crosswalkError('App Sale crosswalk vượt giới hạn kích thước.', { code: 'response_too_large' });
+  }
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    throw crosswalkError('App Sale crosswalk không có response stream hợp lệ.');
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      size += chunk.length;
+      if (size > MAX_RESPONSE_BYTES) {
+        const failure = crosswalkError('App Sale crosswalk vượt giới hạn kích thước.', { code: 'response_too_large' });
+        try { await reader.cancel(failure); }
+        catch { /* cancellation is best-effort */ }
+        controller.abort(failure);
+        throw failure;
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    try { reader.releaseLock(); }
+    catch { /* already released/cancelled */ }
+  }
+  return Buffer.concat(chunks, size).toString('utf8');
 }
 
 function unavailable(cause) {
@@ -154,28 +209,49 @@ async function remoteSnapshot() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      redirect: 'manual',
-      signal: controller.signal,
-      headers: {
-        accept: 'application/json',
-        authorization: `Bearer ${token}`,
-      },
-    });
-    if (response.status >= 300 && response.status < 400) throw new Error(`App Sale từ chối redirect HTTP ${response.status}.`);
-    if (!response.ok) throw new Error(`App Sale crosswalk HTTP ${response.status}.`);
-    const declaredLength = Number(response.headers?.get?.('content-length'));
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_RESPONSE_BYTES) throw new Error('App Sale crosswalk vượt giới hạn kích thước.');
-    const text = await response.text();
-    if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) throw new Error('App Sale crosswalk vượt giới hạn kích thước.');
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'GET',
+        redirect: 'manual',
+        signal: controller.signal,
+        headers: {
+          accept: 'application/json',
+          authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (cause) {
+      if (cause?.crosswalkFailure) throw cause;
+      if (controller.signal.aborted || cause?.name === 'AbortError') {
+        throw crosswalkError(`App Sale crosswalk timeout sau ${timeoutMs}ms.`, { allowLkg: true, code: 'transport_timeout' });
+      }
+      throw crosswalkError(`App Sale crosswalk transport lỗi: ${safeText(cause?.message || cause, 200) || 'kết nối thất bại'}`, {
+        allowLkg: true,
+        code: 'transport_unavailable',
+      });
+    }
+    if (response.status >= 300 && response.status < 400) {
+      throw crosswalkError(`App Sale từ chối redirect HTTP ${response.status}.`);
+    }
+    if (!response.ok) throw crosswalkError(`App Sale crosswalk HTTP ${response.status}.`);
+
+    let text;
+    try { text = await readBoundedResponseText(response, controller); }
+    catch (cause) {
+      if (cause?.crosswalkFailure) throw cause;
+      if (controller.signal.aborted || cause?.name === 'AbortError') {
+        throw crosswalkError(`App Sale crosswalk timeout sau ${timeoutMs}ms.`, { allowLkg: true, code: 'transport_timeout' });
+      }
+      throw crosswalkError(`App Sale crosswalk stream lỗi: ${safeText(cause?.message || cause, 200) || 'kết nối thất bại'}`, {
+        allowLkg: true,
+        code: 'transport_unavailable',
+      });
+    }
     let body;
     try { body = JSON.parse(text); }
-    catch { throw new Error('App Sale crosswalk trả JSON không hợp lệ.'); }
-    return validateSnapshot(body);
-  } catch (cause) {
-    if (cause?.name === 'AbortError') throw new Error(`App Sale crosswalk timeout sau ${timeoutMs}ms.`);
-    throw cause;
+    catch { throw crosswalkError('App Sale crosswalk trả JSON không hợp lệ.'); }
+    try { return validateSnapshot(body); }
+    catch (cause) { throw crosswalkError(cause?.message || 'App Sale crosswalk sai contract.'); }
   } finally {
     clearTimeout(timer);
   }
@@ -188,15 +264,19 @@ async function getSnapshot({ force = false } = {}) {
   if (!force && inflight) return inflight;
   const load = (async () => {
     let value;
+    let allowLkg = false;
     try { value = await remoteSnapshot(); }
-    catch (cause) { value = unavailable(cause); }
+    catch (cause) {
+      allowLkg = cause?.allowLkg === true;
+      value = unavailable(cause);
+    }
     if (value.status === 'ready') {
       memory = { at: Date.now(), value };
       return value;
     }
     // A previously validated RAM-only snapshot may serve as bounded LKG.
     // Once that short window expires, the UOM rule becomes source_unavailable.
-    if (memory && Date.now() - memory.at < lkgTtlMs) {
+    if (allowLkg && memory && Date.now() - memory.at < lkgTtlMs) {
       return {
         ...memory.value,
         cache: 'lkg',
@@ -234,6 +314,7 @@ module.exports = {
   DEFAULT_TIMEOUT_MS,
   DEFAULT_TTL_MS,
   DEFAULT_LKG_TTL_MS,
+  MAX_RESPONSE_BYTES,
   snapshotSha256ForRows,
   validateSnapshot,
   getSnapshot,

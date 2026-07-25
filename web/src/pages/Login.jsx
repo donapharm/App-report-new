@@ -120,7 +120,18 @@ export default function Login({ onLogin }) {
     const p = phone.trim();
     if (!/^\d{9,11}$/.test(p.replace(/\s/g, ''))) { setErr('Nhập số điện thoại hợp lệ.'); return; }
     setBusy(true); setErr('');
-    try { await api.otpRequest(p); setStep('code'); }
+    try {
+      // A trusted App Sale device may skip OTP only after the Report backend
+      // consumes a valid one-time assertion. Any bridge failure continues to OTP.
+      if (mode?.trustedDeviceSso) {
+        try {
+          const trusted = await api.trustedDeviceLogin(p);
+          if (trusted?.token) { await finish(trusted.token); return; }
+        } catch { /* fail closed: keep the normal OTP flow */ }
+      }
+      await api.otpRequest(p);
+      setStep('code');
+    }
     catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   }

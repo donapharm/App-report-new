@@ -16,13 +16,15 @@ test('device id is durable in localStorage and cookie and sent on every auth req
   assert.match(api, /'X-Device-Id': getDeviceId\(\)/);
   assert.match(api, /otpRequest:[\s\S]*?'\/auth\/otp\/request'/);
   assert.match(api, /otpVerify:[\s\S]*?'\/auth\/otp\/verify'/);
-  assert.match(api, /deviceLogin:[\s\S]*?'\/auth\/device-login'/);
+  assert.match(api, /trustedDeviceLogin/);
+  assert.match(api, /'\/auth\/trusted-device\/start'/);
+  assert.match(api, /'\/auth\/trusted-device\/consume'/);
 });
 
 test('bootstrap tries trusted device before showing OTP and remembers phone only after OTP session', () => {
   assert.match(api, /rememberLastPhone\(phone\)/);
   assert.match(app, /if \(!getToken\(\)\)[\s\S]*?restoreTrustedDevice\(\)/);
-  assert.match(app, /api\.deviceLogin\(phone\)/);
+  assert.match(app, /api\.trustedDeviceLogin\(phone\)/);
   assert.match(app, /current\?\.method === 'otp' && current\?\.phone/);
   assert.match(app, /rememberLastPhone\(current\.phone\)/);
   assert.match(app, /error\?\.status === 401 \|\| error\?\.status === 403/);
@@ -30,8 +32,10 @@ test('bootstrap tries trusted device before showing OTP and remembers phone only
   assert.match(login, /useState\(\(\) => getLastPhone\(\)\)/);
 });
 
-test('backend implements the App Sale equivalent trust contract', () => {
-  assert.match(routes, /router\.post\('\/auth\/device-login'/);
+test('backend delegates OTP bypass exclusively to App Sale trusted-device consume', () => {
+  assert.match(routes, /router\.post\('\/auth\/trusted-device\/start'/);
+  assert.match(routes, /router\.post\('\/auth\/trusted-device\/consume'/);
+  assert.match(routes, /router\.post\('\/auth\/device-login'[\s\S]*?DEVICE_NOT_TRUSTED/);
   assert.match(routes, /auth\.requestOtp\([\s\S]*?loginCtx\(req\)\)/);
   assert.match(auth, /SESSION_TRUSTED_LOGIN_THRESHOLD \|\| 3/);
   assert.match(auth, /SESSION_TRUSTED_DEVICE_REVERIFY_DAYS \|\| 30/);

@@ -69,3 +69,9 @@ Toàn bộ điểm cần thay được đánh dấu bằng `// TODO(LIVE)` trong
 | 3. Target | `server/src/store.js` (`getTargets`) | Nối `/api/targets` backend thật + fallback `V_TEM_TARGET_BONUS`. |
 
 Xem thêm `.env.example` cho biến môi trường.
+
+### Trusted-device SSO từ App Sale
+
+App Report chỉ bỏ OTP sau khi backend `consume` một assertion dùng một lần do App Sale cấp. Frontend gọi trực tiếp endpoint `verify` tại `sale.donapharm.asia` với `credentials: include`; cookie App Sale vẫn là host-only và JavaScript App Report không đọc được cookie đó. Backend App Report chỉ giữ raw secret riêng `TRUSTED_DEVICE_REPORT_S2S_TOKEN` qua secret channel và không sử dụng khóa ký assertion của App Sale.
+
+Trước khi bật live cần hoàn tất migration App Sale `0103_trusted_device_report_replay.sql`, cấu hình origin chính xác `https://report.donapharm.asia`, cấp key/hash phía App Sale và raw S2S token phía App Report. Timeout, lỗi upstream, config thiếu, assertion sai/replay hoặc account mismatch đều giữ nguyên luồng OTP. Xem contract tại `docs/integrations/APP_REPORT_TRUSTED_DEVICE_SSO.md` và checklist tại `docs/integrations/APP_REPORT_TRUSTED_DEVICE_SSO_DEPLOYMENT.md`.
