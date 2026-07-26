@@ -191,7 +191,7 @@ test('cost PDF is A4 landscape with embedded Unicode font, Vietnamese text, tota
   assert.match(result.fonts, /NotoSans|DejaVuSans|LiberationSans/);
   assert.match(result.fonts, /yes\s+yes/);
   assert.match(result.text, /BÁO CÁO CHI PHÍ CỦA TÔI/);
-  assert.match(result.text, /Công ty TNHH Dược phẩm Donapharm/);
+  assert.match(result.text, /CÔNG TY CỔ PHẦN DONAPHARM/);
   assert.match(result.text, /2\.278\.049\.356,19/);
   assert.match(result.text, /41\.144\.556 đ/);
   assert.match(result.text, /Bằng chữ: Bốn mươi mốt triệu/);

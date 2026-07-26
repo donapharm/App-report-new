@@ -20,7 +20,8 @@ test('Group-Dona là DONA + AFP; đối tác là các nhà thầu còn lại', (
   assert.equal(A.companyGroupOf(rows[2]), 'dona');
   assert.equal(A.companyGroupOf({ contractor_code: '01.DONAPHARM' }), 'dona');
   assert.equal(A.companyGroupOf({ contractor_code: '02.AFP PHARMA' }), 'dona');
-  assert.equal(A.companyGroupOf({ contractor_code: 'Công Ty Tnhh Dược Phẩm Donapharm' }), 'dona');
+  assert.equal(A.companyGroupOf({ contractor_code: 'CÔNG TY CỔ PHẦN DONAPHARM' }), 'dona');
+  assert.equal(A.companyGroupOf({ contractor_code: 'Công Ty Tnhh Dược Phẩm Donapharm' }), 'dona'); // alias dữ liệu lịch sử
   assert.equal(A.companyGroupOf({ contractor_code: 'Công Ty Tnhh Afp Pharma' }), 'dona');
   assert.equal(A.companyGroupOf(rows[1]), 'partner');
   assert.equal(revenue({ companyGroup: 'dona' }), 900);

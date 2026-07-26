@@ -5,7 +5,7 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
-const COMPANY_NAME = 'Công ty TNHH Dược phẩm Donapharm';
+const COMPANY_NAME = 'CÔNG TY CỔ PHẦN DONAPHARM';
 const SOURCE_FOOTER = 'Nguồn số: DataHub (SSOT) · chỉ hiển thị chi phí của chính nhân viên';
 const COST_TITLE = 'BÁO CÁO CHI PHÍ CỦA TÔI';
 const GAP_TITLE = 'DANH SÁCH MẶT HÀNG CHƯA CÓ % CHI PHÍ';

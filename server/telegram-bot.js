@@ -44,6 +44,7 @@ const smart = require('./src/smart');
 const targetNotify = require('./src/targetNotify');
 const notifyChannels = require('./src/notifyChannels');
 const salesReport = require('./src/salesReport');
+const { salesReportSchedulePolicy } = require('./src/salesReportSchedulePolicy');
 
 const PENDING_TG_GRANTS_FILE = path.join(__dirname, 'data', 'auth', 'telegram_pending_grants.json');
 function loadPendingTelegramGrants() {
@@ -340,8 +341,11 @@ function startMilestoneScheduler() {
 }
 
 function startSalesReportScheduler() {
-  if (process.env.SALES_REPORT_NOTIFY === '0') { console.log('ℹ SalesReport scheduler: TẮT (SALES_REPORT_NOTIFY=0).'); return; }
-  const dailyEnabled = process.env.SALES_REPORT_DAILY_NOTIFY !== '0';
+  // Fail closed: thiếu biến hoặc giá trị khác chính xác \"1\" đều phải TẮT.
+  // Daily là cờ riêng để không vô tình bật gửi hằng ngày khi chỉ duyệt tuần/tháng.
+  const policy = salesReportSchedulePolicy(process.env);
+  if (!policy.masterEnabled) { console.log('ℹ SalesReport scheduler: TẮT (chỉ bật khi SALES_REPORT_NOTIFY=1).'); return; }
+  const dailyEnabled = policy.dailyEnabled;
   let lastWeeklyKey = '';
   let lastMonthlyKey = '';
   let lastDailyKey = '';
