@@ -131,8 +131,8 @@ test('KPI and period metadata distinguish order lines from unique unit-product k
   assert.match(page, /label="Nhân viên"[\s\S]*sub=\{`Hiện \$\{filteredCount[^`]*\/\$\{totalTableRows[^`]* dòng`\}/);
   assert.match(page, /formatMatchRate\(kpiMatch\)/);
   assert.match(page, /kpiMatch\.matchedRows/);
-  assert.match(page, /mã \(đơn vị×mặt hàng\) · ngưỡng/);
-  assert.match(page, /mã đơn vị×mặt hàng\)/);
+  assert.match(page, /cặp \(đơn vị×mặt hàng\) · ngưỡng/);
+  assert.match(page, /cặp đơn vị×mặt hàng\)/);
   assert.doesNotMatch(page, /matchedRows}\/\$\{[^}]*totalRows} dòng/);
 });
 

@@ -145,7 +145,7 @@ function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmplo
       <div>
         <div className="section-head">Tháng {formatMonthLabel(period.period)}</div>
         <div className="employee-cost-panel-meta">
-          Mẫu {period.template.label || 'chi phí'} · {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} mã đơn vị×mặt hàng) · hiện {filteredCount.toLocaleString('vi-VN')}/{totalCount.toLocaleString('vi-VN')} dòng
+          Mẫu {period.template.label || 'chi phí'} · {period.dynamicCount.toLocaleString('vi-VN')} cột tỷ lệ · khớp {formatMatchRate(period.match)} ({period.match.matchedRows}/{period.match.totalRows} cặp đơn vị×mặt hàng) · hiện {filteredCount.toLocaleString('vi-VN')}/{totalCount.toLocaleString('vi-VN')} dòng
         </div>
       </div>
       {!!period.rows.length && <button type="button" className="btn secondary" onClick={onToggle} aria-expanded={expanded}>
@@ -216,6 +216,26 @@ function bonusPctLabel(value) {
 function targetPctLabel(value) {
   const number = Number(value);
   return Number.isFinite(number) ? `${number.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : '—';
+}
+
+// Target tổng đội (chế độ "Tất cả NV"): cộng target/đạt của từng NV từ dữ liệu thưởng
+// dự kiến đã tải sẵn — display-only/tham khảo, KHÔNG phát sinh nguồn số mới.
+function teamTargetSummary(subtotals = []) {
+  const acc = { monthTarget: 0, monthAchieved: 0, quarterTarget: 0, assigned: 0, total: 0 };
+  for (const item of Array.isArray(subtotals) ? subtotals : []) {
+    acc.total += 1;
+    if (Number.isFinite(item?.month?.target)) { acc.monthTarget += item.month.target; acc.assigned += 1; }
+    if (Number.isFinite(item?.month?.achieved)) acc.monthAchieved += item.month.achieved;
+    if (Number.isFinite(item?.quarter?.target)) acc.quarterTarget += item.quarter.target;
+  }
+  return {
+    hasData: acc.monthTarget > 0,
+    assigned: acc.assigned,
+    total: acc.total,
+    monthTarget: acc.monthTarget,
+    monthPct: acc.monthTarget > 0 ? +(acc.monthAchieved / acc.monthTarget * 100).toFixed(1) : null,
+    quarterTarget: acc.quarterTarget,
+  };
 }
 
 function TargetKpi({ target, onOpen }) {
@@ -1050,12 +1070,26 @@ export default function EmployeeCost({ me, onNavigate }) {
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} sub={`Hiện ${filteredCount.toLocaleString('vi-VN')}/${totalTableRows.toLocaleString('vi-VN')} dòng`} />
       <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
-      <KhoanPointKpi khoan={khoan} loading={khoanLoading} />
-      <TargetKpi target={model.target} onOpen={model.target.available ? () => setTargetModalOpen(true) : undefined} />
+      {/* Điểm/Target/Xu/Cấn trừ là chỉ số TỪNG NGƯỜI — không gộp được qua nhiều NV.
+          Ở "Tất cả NV" ẩn hẳn (thay vì hiện ô trống trông như lỗi) + 1 thẻ gợi ý. */}
+      {!allEmployees && <KhoanPointKpi khoan={khoan} loading={khoanLoading} />}
+      {!allEmployees && <TargetKpi target={model.target} onOpen={model.target.available ? () => setTargetModalOpen(true) : undefined} />}
+      {allEmployees && (() => {
+        const team = teamTargetSummary(model.bonus.employeeSubtotals);
+        return team.hasData
+          ? <Kpi label="Target tổng đội (tham khảo)" value={`${formatEmployeeCostCell(team.monthTarget, moneyColumn)} · ${targetPctLabel(team.monthPct)}`} sub={`Tháng: Σ target · % đạt toàn đội (${team.assigned}/${team.total} NV có target) | Quý: ${formatEmployeeCostCell(team.quarterTarget, moneyColumn)} · từ thưởng dự kiến`} tone="employee-cost-tone-target" />
+          : <Kpi label="Target tổng đội" value="—" sub="Chưa đủ target giao cho đội trong kỳ này" tone="employee-cost-tone-target" />;
+      })()}
+      {allEmployees && <Kpi label="Điểm · Xu · Cấn trừ" value="Chọn 1 NV" sub="Các mục tính theo từng người — chọn đúng một nhân viên để xem" />}
       <Kpi label={multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`} tone="employee-cost-tone-base" />
       <BonusKpi bonus={model.bonus} />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
-      <Kpi label="Khớp doanh thu" value={formatMatchRate(kpiMatch)} sub={`${kpiMatch.matchedRows}/${kpiMatch.totalRows} mã (đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}%`} />
+      {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt
+          hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng
+          biệt nên số nhỏ hơn — không mâu thuẫn, khác thước đo. */}
+      <Kpi label="Khớp doanh thu" value={formatMatchRate(kpiMatch)} sub={allEmployees
+        ? `${kpiMatch.matchedRows}/${kpiMatch.totalRows} cặp (nhân viên×đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}% · số mã cần bổ sung xem tab "Mặt hàng thiếu %"`
+        : `${kpiMatch.matchedRows}/${kpiMatch.totalRows} cặp (đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}%`} />
     </div>
 
     {targetModalOpen && <TargetDetailModal
@@ -1066,8 +1100,9 @@ export default function EmployeeCost({ me, onNavigate }) {
       onNavigate={onNavigate}
     />}
 
-    <KhoanWarning khoan={khoan} />
-    <KhoanDeduction khoan={khoan} baseCost={model.summary.periodTotal} multiMonth={multiple} loading={khoanLoading} />
+    {/* Cảnh báo xu + phép cấn trừ thiếu xu là theo TỪNG NGƯỜI — ẩn ở "Tất cả NV". */}
+    {!allEmployees && <KhoanWarning khoan={khoan} />}
+    {!allEmployees && <KhoanDeduction khoan={khoan} baseCost={model.summary.periodTotal} multiMonth={multiple} loading={khoanLoading} />}
 
     {allEmployees && model.bonus.configured && !!model.bonus.employeeSubtotals.length && <details className="employee-cost-subtotals employee-cost-bonus-subtotals">
       <summary>Thưởng dự kiến theo nhân viên ({model.bonus.employeeSubtotals.length}) · tham khảo</summary>
