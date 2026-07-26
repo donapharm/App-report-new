@@ -109,7 +109,13 @@ test('admin invalid roster target and unavailable catalog/cost source fail close
   };
   await assert.rejects(gaps.buildForSession({ ...base, requestedEmp: 'DN999' }), { code: 'EMPLOYEE_COST_GAPS_EMP_INVALID' });
   await assert.rejects(gaps.buildForSession({ ...base, catalogRowsFor: async () => [] }), { code: 'EMPLOYEE_COST_GAPS_CATALOG_UNAVAILABLE' });
-  await assert.rejects(gaps.buildForSession({ ...base, fetchCost: async (empCode) => ({ outcome: 'upstream_unavailable', payload: rangePayload(empCode, []) }) }), { code: 'EMPLOYEE_COST_GAPS_SOURCE_UNAVAILABLE' });
+  // Nguồn chi phí của NV lỗi: KHÔNG ném lỗi làm trắng cả worklist nữa (CEO không
+  // hiểu vì sao mất danh sách). Thay vào đó bỏ NV đó ra + nêu ĐÍCH DANH, và tuyệt
+  // đối không suy ra "thiếu %" cho họ — vẫn fail-closed về mặt số liệu.
+  const degraded = await gaps.buildForSession({ ...base, fetchCost: async (empCode) => ({ outcome: 'upstream_unavailable', payload: rangePayload(empCode, []) }) });
+  assert.deepEqual(degraded.unavailable.employees, ['DN001']);
+  assert.equal(degraded.pairs.length, 0);
+  assert.equal(degraded.coverageByEmployee.length, 0);
 });
 
 test('Excel worklist has two sheets, blank fill/confirmation cells, and mismatch mapping', async () => {

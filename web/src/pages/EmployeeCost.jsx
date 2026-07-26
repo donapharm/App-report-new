@@ -561,6 +561,9 @@ function EmployeeGapPanel({ payload, loading, error, range }) {
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'PDF'}</button>
       </div>
     </div>
+    {!!view.unavailable?.count && <div className="employee-cost-match-warning" role="alert">
+      <b>⚠ Danh sách chưa đủ.</b> {view.unavailable.note || `Chưa lấy được dữ liệu chi phí của ${view.unavailable.employees.join(', ')}.`}
+    </div>}
     {(error || exportError) && <div className="employee-cost-match-warning" role="alert">{error || exportError}</div>}
     {loading ? <Spinner /> : expanded && <>
       <GapPairTable pairs={view.pairs} resetKey={`${payload.from || ''}|${payload.to || ''}|${view.pairs.length}`} />
@@ -623,6 +626,11 @@ function AdminGapPanel({ payload, loading, error, range }) {
       </div>
     </div>
     {syncBlockReason && <p className="employee-cost-gap-note">DataHub chưa cấu hình — nút Đồng bộ tạm khoá; dùng Xuất Excel/PDF.</p>}
+    {/* Trước đây 1 NV lỗi nguồn là cả tab báo lỗi trắng màn. Nay vẫn hiện danh
+        sách + nói rõ thiếu ai, để người xem biết danh sách chưa đủ vì lý do gì. */}
+    {!!view.unavailable?.count && <div className="employee-cost-match-warning" role="alert">
+      <b>⚠ Danh sách chưa đủ.</b> {view.unavailable.note || `Chưa lấy được dữ liệu chi phí của ${view.unavailable.employees.join(', ')}.`} Đây là <b>lỗi nguồn DataHub</b>, không phải mã đủ %.
+    </div>}
     {syncMessage && <div className="employee-cost-visibility-success" role="status">{syncMessage}</div>}
     {syncError && !syncConfirm && <div className="employee-cost-match-warning" role="alert">{syncError}</div>}
     {syncConfirm && <div className="modal-backdrop" role="presentation" onClick={() => !syncing && setSyncConfirm(false)}>

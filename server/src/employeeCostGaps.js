@@ -263,13 +263,14 @@ async function buildForSession({
     catalogRowsByPeriod[period] = catalogRows;
   }
 
-  const employeeResults = await mapLimit(uniqueTargets, 3, async (empCode) => {
+  const employeeResults0 = await mapLimit(uniqueTargets, 3, async (empCode) => {
     const result = await fetchCostCached(empCode, { from: range.from, to: range.to }, fetchCost, cacheCost);
+    // NV chưa lấy được nguồn tỷ lệ: KHÔNG ném lỗi làm trắng cả màn (trước đây
+    // 1 NV lỗi là mất sạch danh sách, người dùng không hiểu vì sao). Bỏ NV đó ra
+    // khỏi worklist — tuyệt đối không suy ra "thiếu %" cho họ — và trả về danh
+    // sách ĐÍCH DANH để UI nói rõ danh sách đang chưa đủ vì ai.
     if (result.outcome !== 'ok') {
-      throw Object.assign(new Error(`Nguồn tỷ lệ chi phí của ${empCode} chưa sẵn sàng; không lập gap để tránh báo thiếu sai.`), {
-        status: 502,
-        code: 'EMPLOYEE_COST_GAPS_SOURCE_UNAVAILABLE',
-      });
+      return { empCode, employeeName: rosterMap.get(empCode)?.name || empCode, outcome: result.outcome, unavailable: true, pairs: [], coverage: coverageSummary([]) };
     }
     const revenueRowsByPeriod = {};
     for (const period of range.months) revenueRowsByPeriod[period] = await revenueRowsFor(empCode, period);
@@ -285,6 +286,17 @@ async function buildForSession({
     return { empCode, employeeName, outcome: result.outcome, pairs, coverage };
   });
 
+  // Tách NV lỗi nguồn ra khỏi coverage để tỷ lệ phản ánh ĐÚNG phần catalog thiếu %
+  // (giống cách màn "Chi phí theo nhân viên" đang làm) — 2 màn nói cùng một ngôn ngữ.
+  const unavailableEntries = employeeResults0.filter((entry) => entry.unavailable);
+  const employeeResults = employeeResults0.filter((entry) => !entry.unavailable);
+  const unavailable = {
+    employees: unavailableEntries.map((entry) => entry.empCode),
+    count: unavailableEntries.length,
+    note: unavailableEntries.length
+      ? `Chưa lấy được dữ liệu chi phí của ${unavailableEntries.map((entry) => entry.empCode).join(', ')} — danh sách dưới đây CHƯA gồm nhân viên này (không phải họ đủ %).`
+      : '',
+  };
   const allPairs = employeeResults.flatMap((entry) => entry.pairs);
   const coverageByEmployee = employeeResults.map((entry) => ({
     employeeCode: entry.empCode,
@@ -314,6 +326,7 @@ async function buildForSession({
       allGapCodeCount: aggregatePairs(allPairs).length,
     },
     coverageByEmployee,
+    unavailable,
     filters: normalizedFilters,
     pairs,
     items,
@@ -331,6 +344,7 @@ async function buildForSession({
       totalPairs: baseCoverage.totalPairs,
       gapPairCount: allPairs.length,
       gapCodeCount: response.coverage.allGapCodeCount,
+      unavailableEmployees: unavailable.employees,
     });
   } catch (error) {
     console.warn('[employee-cost-gaps] audit write failed', { actor: normEmp(session?.emp_code), message: error.message });

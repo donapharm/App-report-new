@@ -37,6 +37,13 @@ export function normalizeEmployeeCostGaps(payload = {}) {
     scope: { admin: !!payload.scope?.admin, employeeCode: upper(payload.scope?.employeeCode) || null },
     coverage: { ...EMPTY_COVERAGE, ...(payload.coverage || {}) },
     coverageByEmployee,
+    // NV chưa lấy được nguồn chi phí — worklist chưa gồm họ, phải nói rõ để không
+    // ai hiểu nhầm "họ đã đủ %".
+    unavailable: {
+      employees: Array.isArray(payload.unavailable?.employees) ? payload.unavailable.employees.map(String) : [],
+      count: Number(payload.unavailable?.count || 0),
+      note: text(payload.unavailable?.note),
+    },
     pairs,
   };
 }
