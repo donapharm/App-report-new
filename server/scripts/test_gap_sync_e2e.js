@@ -45,14 +45,18 @@ function startMockReceiver() {
       if (!Array.isArray(body.items) || !body.items.length) return send(400, { error: 'items rỗng' });
       server.__lastBody = body;
       server.__lastActor = req.headers['x-app-report-actor'];
-      if (server.__emptyOnce) { server.__emptyOnce = false; return send(200, {}); } // test blocker 3
+      if (server.__replyOnce) {
+        const reply = server.__replyOnce;
+        server.__replyOnce = null;
+        return send(reply.status, reply.body);
+      }
       const dedupeKey = `${body.from}|${body.to}|${body.worklist_checksum}`;
       const existing = store.get(dedupeKey);
       if (existing) return send(200, { ok: true, worklist_id: existing.id, received: existing.received, deduped: true });
       seq += 1;
       const record = { id: `wl_${seq}`, received: body.items.length };
       store.set(dedupeKey, record);
-      return send(200, { ok: true, worklist_id: record.id, received: record.received, deduped: false });
+      return send(201, { ok: true, worklist_id: record.id, received: record.received, deduped: false });
     });
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
@@ -113,10 +117,39 @@ async function moduleTests(sync, mock, server404) {
     const b = sync.buildWorklist(shuffled, { actor: 'CEO' });
     assert.strictEqual(a.worklist_checksum, b.worklist_checksum, 'checksum phải độc lập thứ tự');
   });
-  await check('5) DataHub 2xx nhưng {} → GAP_SYNC_BAD_RESPONSE (blocker 3)', async () => {
-    mock.__emptyOnce = true;
-    try { await sync.sync({ ...samplePayload(), from: '2026-05', to: '2026-05' }, CEO, { confirmed: true }); throw new Error('đáng lẽ chặn'); }
-    catch (error) { assert.strictEqual(error.code, 'GAP_SYNC_BAD_RESPONSE'); }
+  const expectBadResponse = async (status, body, suffix) => {
+    mock.__replyOnce = { status, body };
+    try {
+      await sync.sync({ ...samplePayload(), from: `2025-${suffix}`, to: `2025-${suffix}` }, CEO, { confirmed: true });
+      throw new Error('đáng lẽ chặn');
+    } catch (error) {
+      assert.strictEqual(error.code, 'GAP_SYNC_BAD_RESPONSE');
+      assert.strictEqual(error.status, 502);
+    }
+  };
+  await check('5a) DataHub 2xx nhưng {} → GAP_SYNC_BAD_RESPONSE', async () => {
+    await expectBadResponse(200, {}, '01');
+  });
+  await check('5b) ok:true nhưng thiếu worklist_id → fail-closed', async () => {
+    await expectBadResponse(201, { ok: true, received: 2, deduped: false }, '02');
+  });
+  await check('5c) worklist_id có nhưng ok!==true → fail-closed', async () => {
+    await expectBadResponse(201, { ok: false, worklist_id: 'wl_bad', received: 2, deduped: false }, '03');
+  });
+  await check('5d) received không đúng số mã đã gửi → fail-closed', async () => {
+    await expectBadResponse(201, { ok: true, worklist_id: 'wl_bad', received: 1, deduped: false }, '04');
+  });
+  await check('5e) deduped không phải boolean → fail-closed', async () => {
+    await expectBadResponse(201, { ok: true, worklist_id: 'wl_bad', received: 2, deduped: 'false' }, '05');
+  });
+  await check('5f) HTTP 202 dù đủ field → fail-closed', async () => {
+    await expectBadResponse(202, { ok: true, worklist_id: 'wl_bad', received: 2, deduped: false }, '06');
+  });
+  await check('5g) HTTP 200 nhưng deduped=false → fail-closed', async () => {
+    await expectBadResponse(200, { ok: true, worklist_id: 'wl_bad', received: 2, deduped: false }, '07');
+  });
+  await check('5h) HTTP 201 nhưng deduped=true → fail-closed', async () => {
+    await expectBadResponse(201, { ok: true, worklist_id: 'wl_bad', received: 2, deduped: true }, '08');
   });
   await check('6) chèn cột cấm (c47) → assert fail-closed', async () => {
     try { sync.assertNoForbiddenKeys({ items: [{ ma_qlnb: 'X', c47: 1 }] }); throw new Error('đáng lẽ chặn'); }

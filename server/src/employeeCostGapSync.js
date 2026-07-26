@@ -112,10 +112,23 @@ async function pushWorklist(worklist, serialized) {
       throw Object.assign(new Error(body.error || `DataHub HTTP ${response.status}`), { status: response.status, upstream: true });
     }
     const data = body && typeof body === 'object' && body.data && typeof body.data === 'object' ? body.data : body;
-    // KHÔNG coi mọi 2xx (kể cả {}) là thành công (blocker 3): DataHub phải xác nhận
-    // rõ bằng ok:true hoặc worklist_id, nếu không → coi là chưa nhận chắc.
-    if (!data || typeof data !== 'object' || (data.ok !== true && !data.worklist_id)) {
-      throw Object.assign(new Error('DataHub trả 2xx nhưng thiếu xác nhận (ok/worklist_id); coi như chưa nhận chắc.'), {
+    // Chỉ xác nhận thành công đúng contract production của receiver:
+    // - 201 cho lần nhận mới (deduped=false), 200 cho bản dedupe (deduped=true)
+    // - ok:true, worklist_id không rỗng, received khớp chính xác số mã đã gửi
+    // - deduped bắt buộc là boolean. Mọi 2xx khác/kết quả thiếu field đều fail-closed.
+    const expectedReceived = worklist.items.length;
+    const validStatus = (response.status === 201 && data?.deduped === false)
+      || (response.status === 200 && data?.deduped === true);
+    const validData = data
+      && typeof data === 'object'
+      && data.ok === true
+      && typeof data.worklist_id === 'string'
+      && data.worklist_id.trim().length > 0
+      && Number.isInteger(data.received)
+      && data.received === expectedReceived
+      && typeof data.deduped === 'boolean';
+    if (!validStatus || !validData) {
+      throw Object.assign(new Error('DataHub trả response không đúng contract nhận worklist; coi như chưa nhận chắc.'), {
         status: 502,
         code: 'GAP_SYNC_BAD_RESPONSE',
         upstream: true,
