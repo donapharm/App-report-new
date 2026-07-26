@@ -276,6 +276,30 @@ test('trang hien banner tu bao khi thieu du lieu, co nêu ma NV', () => {
   assert.match(page, /nguồn chi phí DataHub chưa trả dữ liệu/);
 });
 
+test('gui worklist xong phai hien BIEN NHAN cua DataHub, khong chi noi da gui', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  // Phải nêu rõ DataHub đã xác nhận + số mã DataHub báo nhận được.
+  assert.match(page, /DataHub ĐÃ XÁC NHẬN NHẬN/);
+  assert.match(page, /receipt\.received/);
+  assert.match(page, /receipt\.worklist_id/);
+  // Phải phân biệt worklist mới với bản trùng, và có mã kiểm tra để đối chiếu.
+  assert.match(page, /receipt\.deduped === true/);
+  assert.match(page, /Mã kiểm tra/);
+});
+
+test('tab phai hien BADGE so ma/so cap va so exception, khong bat phai bam vao moi thay', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  // Badge nằm ngay trên nút tab.
+  assert.match(page, /Mặt hàng thiếu %\{gapBadge\.loaded/);
+  assert.match(page, /Kiểm soát dữ liệu\{dqBadge\.loaded/);
+  // Hiện đủ số mã + số cặp cho tab thiếu %, số exception cho tab kiểm soát.
+  assert.match(page, /gapBadge\.codeCount\} mã · \$\{gapBadge\.pairCount\} cặp/);
+  assert.match(page, /dqBadge\.count\} exception/);
+  // Số đếm phải tải BẤT KỂ đang ở tab nào (không phụ thuộc view === 'gaps').
+  assert.match(page, /api\.employeeCostGapsSummary\(range\)/);
+  assert.match(page, /api\.employeeCostDataQualitySummary\(\)/);
+});
+
 test('gap coverage panel states the full arithmetic so pair count reconciles with match KPI', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   assert.match(page, /đã khớp \+ \{remainingPairs/);
