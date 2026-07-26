@@ -335,16 +335,30 @@ function mergeEmployeeReports(reports = [], roster = []) {
       const employeeName = employeeNames.get(employeeCode) || employeeCode;
       return (period.rows || []).map((row) => ({ ...row, employeeCode, employeeName }));
     });
-    const matchedRows = blocks.reduce((sum, item) => sum + numeric(item.period.match?.matchedRows), 0);
-    const totalRows = blocks.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
+    // ‼ Tách 2 nguyên nhân "chưa khớp" — trước đây gộp chung nên coverage ALL
+    // (80,3%) đá nhau với tab "Mặt hàng thiếu %" (98,7%):
+    //   a) catalog THIẾU % thật  → đúng phần DataHub cần điền (khớp tab thiếu %).
+    //   b) NV KHÔNG lấy được nguồn tỷ lệ (sourceOutcome != 'ok') → mọi dòng của NV
+    //      đó hiện như chưa khớp, nhưng KHÔNG phải catalog thiếu; đây là lỗi tạm
+    //      thời/nguồn. Đưa vào coverage sẽ báo sai và làm số trôi mỗi lần cache.
+    const available = blocks.filter(({ report }) => String(report.sourceOutcome || 'ok') === 'ok');
+    const unavailable = blocks.filter(({ report }) => String(report.sourceOutcome || 'ok') !== 'ok');
+    const matchedRows = available.reduce((sum, item) => sum + numeric(item.period.match?.matchedRows), 0);
+    const totalRows = available.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
+    const unavailablePairs = unavailable.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
+    const unavailableEmployees = unavailable.map(({ report }) => String(report.empCode || '').toUpperCase()).filter(Boolean);
     const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
     const threshold = Number(blocks.find((item) => Number.isFinite(Number(item.period.match?.threshold)))?.period.match.threshold || 90);
     const low = rate != null && rate < threshold;
     return {
       empCode: 'ALL', period: periodKey, columns, rows,
       template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: [] },
-      match: { matchedRows, totalRows, rate, threshold, low },
-      summary: { reliable: !low },
+      match: {
+        matchedRows, totalRows, rate, threshold, low,
+        unavailablePairs, unavailableEmployees, unavailableEmployeeCount: unavailableEmployees.length,
+      },
+      // Còn NV chưa lấy được nguồn ⇒ tổng chưa đầy đủ ⇒ vẫn để "tạm tính".
+      summary: { reliable: !low && unavailableEmployees.length === 0 },
       daily: { reliable: false, reason: 'Chế độ tất cả nhân viên dùng bảng tổng hợp phân trang.', dates: [], totals: [] },
     };
   });

@@ -146,8 +146,8 @@ test('ALL revenue-match KPI reads merged period match instead of empty top-level
     }],
     summary: { reliable: true },
   });
-  assert.deepEqual(model.match, { matchedRows: 0, totalRows: 0, rate: null, threshold: 90, low: false });
-  assert.deepEqual(employeeCostKpiMatch(model), { matchedRows: 1245, totalRows: 1262, rate: 98.7, threshold: 90, low: false });
+  assert.deepEqual(model.match, { matchedRows: 0, totalRows: 0, rate: null, threshold: 90, low: false, unavailablePairs: 0, unavailableEmployeeCount: 0 });
+  assert.deepEqual(employeeCostKpiMatch(model), { matchedRows: 1245, totalRows: 1262, rate: 98.7, threshold: 90, low: false, unavailablePairs: 0, unavailableEmployeeCount: 0 });
   assert.equal(formatMatchRate(employeeCostKpiMatch(model)), '98,7%');
 });
 

@@ -920,8 +920,14 @@ export default function EmployeeCost({ me, onNavigate }) {
   // cặp còn thiếu, để đối chiếu thẳng với tab "Mặt hàng thiếu %".
   const provisionalTotals = model.summary.periodTotal == null && model.summary.provisionalPeriodTotal != null;
   const missingPairs = Math.max(0, Number(kpiMatch.totalRows || 0) - Number(kpiMatch.matchedRows || 0));
+  const unavailablePairs = Number(kpiMatch.unavailablePairs || 0);
+  const unavailableEmps = Number(kpiMatch.unavailableEmployeeCount || 0);
   const coverageNote = provisionalTotals
-    ? `Tạm tính trên ${formatMatchRate(kpiMatch)} đã khớp · còn ${missingPairs.toLocaleString('vi-VN')} cặp thiếu % (xem tab "Mặt hàng thiếu %")`
+    ? [
+      `Tạm tính trên ${formatMatchRate(kpiMatch)} đã khớp`,
+      missingPairs ? `còn ${missingPairs.toLocaleString('vi-VN')} cặp thiếu % (tab "Mặt hàng thiếu %")` : '',
+      unavailableEmps ? `chưa lấy được chi phí của ${unavailableEmps} NV (${unavailablePairs.toLocaleString('vi-VN')} cặp)` : '',
+    ].filter(Boolean).join(' · ')
     : '';
   const filteredCount = model.search.filteredRows;
   const totalTableRows = model.search.totalRows;
@@ -1114,8 +1120,12 @@ export default function EmployeeCost({ me, onNavigate }) {
           hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng
           biệt nên số nhỏ hơn — không mâu thuẫn, khác thước đo. */}
       <Kpi label="Khớp doanh thu" value={formatMatchRate(kpiMatch)} sub={allEmployees
-        ? `${kpiMatch.matchedRows}/${kpiMatch.totalRows} cặp (nhân viên×đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}% · số mã cần bổ sung xem tab "Mặt hàng thiếu %"`
-        : `${kpiMatch.matchedRows}/${kpiMatch.totalRows} cặp (đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}%`} />
+        ? [
+          `${kpiMatch.matchedRows.toLocaleString('vi-VN')} khớp + ${missingPairs.toLocaleString('vi-VN')} thiếu % = ${kpiMatch.totalRows.toLocaleString('vi-VN')} cặp (nhân viên×đơn vị×mặt hàng)`,
+          `ngưỡng ${kpiMatch.threshold}% · khớp số ở tab "Mặt hàng thiếu %"`,
+          unavailableEmps ? `⚠ ${unavailableEmps} NV chưa lấy được dữ liệu chi phí (${unavailablePairs.toLocaleString('vi-VN')} cặp) — KHÔNG tính vào tỷ lệ này` : '',
+        ].filter(Boolean).join(' · ')
+        : `${kpiMatch.matchedRows.toLocaleString('vi-VN')} khớp + ${missingPairs.toLocaleString('vi-VN')} thiếu % = ${kpiMatch.totalRows.toLocaleString('vi-VN')} cặp (đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}%`} />
     </div>
 
     {targetModalOpen && <TargetDetailModal

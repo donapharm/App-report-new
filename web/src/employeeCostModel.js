@@ -101,9 +101,11 @@ export function employeeCostKpiMatch(model = {}) {
   if (periodMatches.length === 1) return periodMatches[0];
   const matchedRows = periodMatches.reduce((sum, match) => sum + Number(match.matchedRows || 0), 0);
   const totalRows = periodMatches.reduce((sum, match) => sum + Number(match.totalRows || 0), 0);
+  const unavailablePairs = periodMatches.reduce((sum, match) => sum + Number(match.unavailablePairs || 0), 0);
+  const unavailableEmployeeCount = Math.max(0, ...periodMatches.map((match) => Number(match.unavailableEmployeeCount || 0)));
   const threshold = Number(periodMatches.find((match) => Number.isFinite(Number(match.threshold)))?.threshold ?? 90);
   const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
-  return { matchedRows, totalRows, rate, threshold, low: rate != null && rate < threshold };
+  return { matchedRows, totalRows, rate, threshold, low: rate != null && rate < threshold, unavailablePairs, unavailableEmployeeCount };
 }
 
 function normalizedMatch(rawMatch = {}, rowCount = 0) {
@@ -113,6 +115,9 @@ function normalizedMatch(rawMatch = {}, rowCount = 0) {
     rate: rawMatch.rate == null ? null : Number(rawMatch.rate),
     threshold: Number(rawMatch.threshold ?? 90),
     low: !!rawMatch.low,
+    // Cặp thuộc NV chưa lấy được nguồn tỷ lệ — KHÔNG phải catalog thiếu %.
+    unavailablePairs: Number(rawMatch.unavailablePairs || 0),
+    unavailableEmployeeCount: Number(rawMatch.unavailableEmployeeCount || 0),
   };
 }
 

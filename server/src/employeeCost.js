@@ -962,6 +962,11 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
       rate: result.payload.match.rate, threshold: result.payload.match.threshold,
     });
   }
+  // Gắn trạng thái nguồn vào payload. Khi nguồn tỷ lệ của NV này KHÔNG lấy được,
+  // mọi dòng của họ hiện ra như "chưa khớp" — nếu gộp thẳng vào coverage sẽ bị
+  // hiểu nhầm thành "catalog thiếu %", trong khi thực chất là lỗi nguồn tạm thời.
+  // Tầng gộp (mergeEmployeeReports) dùng cờ này để tách bạch 2 nguyên nhân.
+  result.payload.sourceOutcome = String(result.outcome || 'unknown');
   return result.payload;
 }
 
