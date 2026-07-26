@@ -1,5 +1,7 @@
 'use strict';
 
+const { reportContractorLabel } = require('./contractorIdentity');
+
 /**
  * CEO deck V2 FACTS layer.
  * - CEO/company scope only.
@@ -226,8 +228,8 @@ async function build({ kind = 'week', asOf } = {}) {
   const scale = kind === 'month' ? dayOfMonth(dataAsOf) / daysInMonth(p.previous.from) : 1;
   const comparisonValid = kind === 'month' || canCompareExactly;
   const previousRevenueRaw = sumRevenue(previousRows); const comparisonRevenue = comparisonValid ? previousRevenueRaw * scale : null; const totalRevenue = sumRevenue(currentRows); const deltaRevenue = comparisonValid ? totalRevenue - comparisonRevenue : null; const deltaPct = comparisonValid && comparisonRevenue ? deltaRevenue / comparisonRevenue * 100 : null;
-  const keyFns = { route: canonicalRoute, sourceGroup, customerType, therapy, employee: (r) => upper(r.emp_code), unit: (r) => txt(r.unit_code), product: (r) => txt(r.iit_code), contractor: (r) => txt(r.contractor_code) || '—' };
-  const labelFns = { route: canonicalRoute, sourceGroup, customerType, therapy, employee: (r) => txt(r.emp_name) || upper(r.emp_code), unit: (r) => txt(r.unit_name) || txt(r.unit_code), product: (r) => txt(r.product_name) || txt(r.iit_code), contractor: (r) => txt(r.contractor_code) || '—' };
+  const keyFns = { route: canonicalRoute, sourceGroup, customerType, therapy, employee: (r) => upper(r.emp_code), unit: (r) => txt(r.unit_code), product: (r) => txt(r.iit_code), contractor: (r) => reportContractorLabel(r.contractor_code) || '—' };
+  const labelFns = { route: canonicalRoute, sourceGroup, customerType, therapy, employee: (r) => txt(r.emp_name) || upper(r.emp_code), unit: (r) => txt(r.unit_name) || txt(r.unit_code), product: (r) => txt(r.product_name) || txt(r.iit_code), contractor: (r) => reportContractorLabel(r.contractor_code) || '—' };
   const eligibleCurrent = currentRows.filter((r) => !EXCLUDED.has(upper(r.emp_code))); const eligiblePrevious = previousRows.filter((r) => !EXCLUDED.has(upper(r.emp_code)));
   const dimensions = {};
   for (const k of ['route', 'sourceGroup', 'customerType', 'therapy', 'employee', 'unit', 'product', 'contractor']) dimensions[k] = grouped(k === 'employee' ? eligibleCurrent : currentRows, keyFns[k], labelFns[k]);

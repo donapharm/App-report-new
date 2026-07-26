@@ -7,6 +7,7 @@ const store = require('../store');
 const analytics = require('../analytics');
 const diemXu = require('../diemXu');
 const salesReport = require('../salesReport');
+const { reportContractorLabel } = require('./contractorIdentity');
 
 const VALID_KINDS = new Set(['week', 'month']);
 const CANONICAL_ROUTES = new Set(['CL', 'NCL', 'NT']);
@@ -317,7 +318,11 @@ async function build({ kind = 'week', ranges: suppliedRanges } = {}) {
   const products = groupRows(currentRows, (r) => r.iit_code, (r) => r.product_name || r.iit_code);
   const customerTypes = groupRows(currentRows, (r) => customerType(r, indexes));
   const therapies = groupRows(currentRows, (r) => therapyGroup(r, indexes));
-  const contractors = groupRows(currentRows, (r) => r.contractor_code, (r) => r.contractor_name || r.contractor_code);
+  const contractors = groupRows(
+    currentRows,
+    (r) => reportContractorLabel(r.contractor_code),
+    (r) => reportContractorLabel(r.contractor_name || r.contractor_code),
+  );
   const routes = routeBreakdown(currentRows, previousRows, indexes, comparison.factor).map((route) => {
     const rows = currentRows.filter((row) => canonicalRoute(row, indexes) === route.key);
     return {
