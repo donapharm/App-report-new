@@ -56,6 +56,9 @@ test('cost Excel is A4 landscape, numeric/formula capable, Vietnamese, and block
   assert.equal(sheet.pageSetup.orientation, 'landscape');
   assert.equal(sheet.pageSetup.fitToWidth, 1);
   assert.equal(sheet.pageSetup.printTitlesRow, '7:7');
+  assert.match(sheet.getCell('B1').value, /CÔNG TY CỔ PHẦN DONAPHARM/);
+  assert.match(sheet.getCell('B1').value, /3603611886/);
+  assert.match(sheet.headerFooter.oddHeader, /3603611886/);
   const headers = sheet.getRow(7).values.slice(1);
   assert.equal(headers[0], 'STT');
   assert.equal(sheet.getRow(8).getCell(1).value, 1);
@@ -192,6 +195,7 @@ test('cost PDF is A4 landscape with embedded Unicode font, Vietnamese text, tota
   assert.match(result.fonts, /yes\s+yes/);
   assert.match(result.text, /BÁO CÁO CHI PHÍ CỦA TÔI/);
   assert.match(result.text, /CÔNG TY CỔ PHẦN DONAPHARM/);
+  assert.match(result.text, /3603611886/);
   assert.match(result.text, /2\.278\.049\.356,19/);
   assert.match(result.text, /41\.144\.556 đ/);
   assert.match(result.text, /Bằng chữ: Bốn mươi mốt triệu/);

@@ -6,6 +6,7 @@ const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 
 const COMPANY_NAME = 'CÔNG TY CỔ PHẦN DONAPHARM';
+const COMPANY_TAX_CODE = '3603611886';
 const SOURCE_FOOTER = 'Nguồn số: DataHub (SSOT) · chỉ hiển thị chi phí của chính nhân viên';
 const COST_TITLE = 'BÁO CÁO CHI PHÍ CỦA TÔI';
 const GAP_TITLE = 'DANH SÁCH MẶT HÀNG CHƯA CÓ % CHI PHÍ';
@@ -145,7 +146,7 @@ function excelHeader(sheet, { title, period, employee, exportedAt, columnCount, 
     sheet.addImage(imageId, { tl: { col: 0.15, row: 0.1 }, ext: { width: 70, height: 40 } });
   }
   sheet.mergeCells(1, 2, 1, columnCount);
-  sheet.getCell(1, 2).value = COMPANY_NAME;
+  sheet.getCell(1, 2).value = `${COMPANY_NAME} · MST ${COMPANY_TAX_CODE}`;
   sheet.getCell(1, 2).font = { bold: true, size: 12, color: { argb: 'FF1F4E78' } };
   sheet.getCell(1, 2).alignment = { horizontal: 'center' };
   sheet.mergeCells(2, 2, 2, columnCount);
@@ -171,7 +172,7 @@ function configurePrint(sheet, repeatRows) {
     printTitlesRow: `${repeatRows}:${repeatRows}`,
   };
   sheet.headerFooter = {
-    oddHeader: `&C${COMPANY_NAME}`,
+    oddHeader: `&C${COMPANY_NAME} · MST ${COMPANY_TAX_CODE}`,
     oddFooter: `&L${SOURCE_FOOTER}&RTrang &P/&N`,
   };
   sheet.views = [{ state: 'frozen', ySplit: repeatRows }];
@@ -479,7 +480,7 @@ function createPdfDocument(title) {
 function pdfHeader(doc, { title, period, employee, exportedAt }) {
   const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   if (fs.existsSync(LOGO_PATH)) { try { doc.image(LOGO_PATH, doc.page.margins.left, 18, { fit: [52, 30], align: 'left' }); } catch { /* company heading remains */ } }
-  doc.font('VN-Bold').fontSize(9).fillColor('#1F4E78').text(COMPANY_NAME, doc.page.margins.left + 55, 18, { width: width - 110, align: 'center' });
+  doc.font('VN-Bold').fontSize(9).fillColor('#1F4E78').text(`${COMPANY_NAME} · MST ${COMPANY_TAX_CODE}`, doc.page.margins.left + 55, 18, { width: width - 110, align: 'center' });
   doc.font('VN-Bold').fontSize(13).fillColor('#075D9B').text(title, doc.page.margins.left, 32, { width, align: 'center' });
   doc.font('VN').fontSize(6.5).fillColor('#526574').text(`${period} · Nhân viên: ${employee} · Ngày xuất: ${exportedAt}`, doc.page.margins.left, 49, { width, align: 'center' });
   doc.y = 67;
