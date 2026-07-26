@@ -53,3 +53,20 @@ test('báo cả khi ĐÃ KHÔI PHỤC, rồi im lặng nếu vẫn ổn', async 
   const quiet = await alert.checkAndNotify(payloadWith([], 0), '08.2026', { now: now + 2000, sendImpl });
   assert.equal(quiet.skipped, 'no_issue');
 });
+
+// Blocker#3 (bot review): hai recovery check ĐỒNG THỜI cùng kỳ không được gửi ĐÚP.
+test('hai recovery check song song cùng kỳ → chỉ gửi 1 tin (tuần tự hóa theo kỳ)', async () => {
+  let sends = 0;
+  // sendImpl chậm (nhường lượt) để phơi bày race nếu không có khóa.
+  const sendImpl = async () => { sends += 1; await new Promise((r) => setImmediate(r)); return { sent: 1 }; };
+  const now = Date.now();
+  await alert.checkAndNotify(payloadWith(['DN007'], 50), 'CC.2026', { now, sendImpl }); // gây lỗi trước
+  sends = 0;
+  const [r1, r2] = await Promise.all([
+    alert.checkAndNotify(payloadWith([], 0), 'CC.2026', { now: now + 1000, sendImpl }),
+    alert.checkAndNotify(payloadWith([], 0), 'CC.2026', { now: now + 1000, sendImpl }),
+  ]);
+  assert.equal(sends, 1); // CHỈ 1 tin khôi phục dù 2 check song song
+  assert.equal([r1, r2].filter((r) => r.recovered).length, 1);
+  assert.equal([r1, r2].filter((r) => r.skipped === 'no_issue').length, 1);
+});

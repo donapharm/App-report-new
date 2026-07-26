@@ -214,6 +214,16 @@ export const api = {
       timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
     });
   },
+  // Đếm nhẹ cho badge trên tab (không kèm danh sách).
+  employeeCostGapsSummary: (range = {}) => {
+    const params = new URLSearchParams();
+    if (range.from) params.set('from', range.from);
+    if (range.to) params.set('to', range.to);
+    const query = params.toString();
+    return req('GET', '/employee-cost/gaps/summary' + (query ? `?${query}` : ''), undefined, {
+      timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+    });
+  },
   employeeCostGapSyncDataHub: (params = {}, body = { confirm: true }) => {
     const query = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value != null)),

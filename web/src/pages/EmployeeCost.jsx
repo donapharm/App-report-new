@@ -349,7 +349,7 @@ function TargetDetailModal({ target, employeeLabel, admin, onClose, onNavigate }
   </div>;
 }
 
-function BonusKpi({ bonus }) {
+function BonusKpi({ bonus, onOpen }) {
   if (!bonus.configured) return <Kpi label="Thưởng dự kiến" value="Chưa cấu hình mức thưởng" sub="theo mức đạt target · tham khảo" title="App Report chỉ tính tham khảo; không gửi thưởng và không ghi payroll." tone="employee-cost-tone-reward" />;
   const month = bonus.month;
   const quarter = bonus.quarter;
@@ -381,7 +381,129 @@ function BonusKpi({ bonus }) {
   const title = bonus.aggregate
     ? `Tổng thưởng dự kiến cộng từ từng nhân viên: Phần 1 ${baseAmount}; Phần 2 ${priorityAmount}. ${quarterContext}. Không gửi thưởng/không ghi payroll.`
     : `Tháng: ${monthAmount} = Phần 1 ${baseAmount} + Phần 2 ${priorityAmount}. P2 chỉ tính rate × phần vượt target riêng từng nhóm C10; target nhóm auto tự suy khi chưa có manual: ${groupDetail}. Target quý = trung bình các tháng đã giao. Coverage C10: ${targetPctLabel(month.priorityCoverage?.coveragePct)}. Giai đoạn ${bonus.effectiveFrom || '—'} · version ${bonus.version || '—'}. Dự kiến/tham khảo, không phải payroll hay số chi chính thức.`;
-  return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · dự kiến/tham khảo`} title={title} tone="employee-cost-tone-reward" />;
+  return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · dự kiến · Bấm xem cách tính`} title={title} tone="employee-cost-tone-reward" onClick={onOpen} />;
+}
+
+// Diễn giải trạng thái Phần 2 (phần vượt nhóm C10) ở cấp tháng — nói rõ VÌ SAO
+// P2 thấp/bằng 0, giữ minh bạch fail-closed (không giấu, không tự suy số).
+function bonusMonthP2Status(month) {
+  switch (month.priorityStatus) {
+    case 'source_unavailable': return 'Phần 2 đang chờ dữ liệu nhóm C10 từ DataHub — tạm tính 0.';
+    case 'below_threshold': return `Phần 2 chưa mở: % đạt chưa tới ngưỡng ${targetPctLabel(month.priorityThresholdPct)}.`;
+    case 'targets_missing': return 'Phần 2 = 0 · auto target nhóm đang tắt (chưa nhóm nào có target).';
+    case 'partially_missing_targets': return 'Phần 2 tính một phần · còn nhóm chưa được giao target.';
+    default: return 'Phần 2 = tổng phần vượt target riêng của từng nhóm C10.';
+  }
+}
+
+// Modal "bấm bung" cách tính thưởng — song song ô Target nhưng giàu hơn: có bảng
+// Phần 2 theo từng nhóm C10 + lý do fail-closed. Chỉ RENDER số backend đã tính sẵn
+// trong payload (bonus.month/quarter); KHÔNG đẻ số mới, KHÔNG payroll, KHÔNG lộ NV khác
+// (chế độ Tất cả NV chỉ hiện tổng P1/P2, chi tiết từng người ở danh sách bên dưới).
+function BonusDetailModal({ bonus, employeeLabel, onClose }) {
+  const modalRef = useRef(null);
+  const closeRef = useRef(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    closeRef.current?.focus();
+    const keepFocusInside = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = [...(modalRef.current?.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', keepFocusInside);
+    return () => {
+      window.removeEventListener('keydown', keepFocusInside);
+      previousFocus?.focus?.();
+    };
+  }, [onClose]);
+  if (!bonus.configured) return null;
+  const month = bonus.month;
+  const quarter = bonus.quarter;
+  const cell = (value) => (value == null ? '—' : formatEmployeeCostCell(value, moneyColumn));
+  const groups = Array.isArray(month.priorityGroups) ? month.priorityGroups : [];
+  const contributors = month.contributors || bonus.employeeSubtotals.length;
+  return <div className="modal-backdrop employee-cost-target-modal-backdrop" role="presentation" onClick={onClose}>
+    <div ref={modalRef} className="modal-card employee-cost-target-modal employee-cost-bonus-modal" role="dialog" aria-modal="true" aria-labelledby="employee-cost-bonus-modal-title" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-head">
+        <div>
+          <b id="employee-cost-bonus-modal-title">Chi tiết cách tính thưởng</b>
+          <small>{employeeLabel}{bonus.quarterLabel ? ` · ${bonus.quarterLabel}` : ''}</small>
+        </div>
+        <button ref={closeRef} type="button" className="employee-cost-target-modal-close" aria-label="Đóng chi tiết thưởng" onClick={onClose}>×</button>
+      </div>
+
+      <section className="employee-cost-target-section">
+        <h3>Thưởng tháng</h3>
+        <div className="employee-cost-target-equation employee-cost-bonus-equation">
+          <span>Phần 1 — theo bậc đạt target<small>{bonus.aggregate ? `Tổng ${contributors} NV` : (month.amount == null ? 'Chưa có target tháng' : `đạt ${targetPctLabel(month.pct)} → bậc thưởng ${bonusPctLabel(month.baseBonusPct)}`)}</small></span>
+          <b>{cell(month.baseAmount)}</b>
+          <span>Phần 2 — phần vượt nhóm C10<small>{bonus.aggregate ? 'Tổng phần vượt các NV' : bonusMonthP2Status(month)}</small></span>
+          <b>{cell(month.priorityAmount)}</b>
+          <span className="employee-cost-bonus-total">Tổng thưởng tháng<small>Phần 1 + Phần 2</small></span>
+          <b className="employee-cost-bonus-total">{cell(month.amount)}</b>
+        </div>
+      </section>
+
+      {!bonus.aggregate && !!groups.length && <section className="employee-cost-target-section">
+        <h3>Phần 2 theo từng nhóm C10</h3>
+        <table className="employee-cost-bonus-groups">
+          <thead><tr><th>Nhóm</th><th>Cách tính</th><th>Thành tiền</th></tr></thead>
+          <tbody>
+            {groups.map((item) => {
+              let detail;
+              if (item.reason === 'ambiguous_scope') detail = 'Thiếu mapping tuyến/đơn vị duy nhất của NV → P2 = 0';
+              else if (item.target == null) detail = 'Chưa có target nhóm (auto tắt hoặc chưa xác định) → P2 = 0';
+              else {
+                const src = item.targetSource === 'manual' ? 'manual (CEO nhập)' : item.targetSource === 'auto' ? 'auto tự suy' : (item.targetSource || 'chưa rõ nguồn');
+                detail = `${bonusPctLabel(item.ratePct)} × phần vượt ${cell(item.excess)} (doanh thu ${cell(item.revenue)} − target ${cell(item.target)}) · nguồn target: ${src}`;
+              }
+              return <tr key={item.group} className={(item.reason || item.target == null) ? 'is-zero' : ''}>
+                <td>{item.group}</td><td>{detail}</td><td>{cell(item.amount || 0)}</td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+        <div className="employee-cost-bonus-coverage"><small>Coverage nhóm C10: {targetPctLabel(month.priorityCoverage?.coveragePct)}</small></div>
+      </section>}
+
+      {bonus.aggregate && <div className="employee-cost-target-note" role="note">
+        <b>Chế độ Tất cả nhân viên</b>
+        <span>Đang hiển thị TỔNG dự kiến cộng từ {contributors} nhân viên. Chi tiết từng người xem ở mục “Thưởng dự kiến theo nhân viên” bên dưới.</span>
+      </div>}
+
+      <section className="employee-cost-target-section">
+        <h3>Lũy kế quý</h3>
+        <div className="employee-cost-target-equation">
+          <span>{bonus.quarterLabel || 'Quý'}<small>Cộng dồn thưởng các tháng trong quý</small></span>
+          <b>{cell(quarter.amount)}</b>
+        </div>
+      </section>
+
+      <div className="employee-cost-target-note" role="note">
+        <b>Lưu ý</b>
+        <span>Số dự kiến/tham khảo. App Report KHÔNG gửi thưởng và KHÔNG ghi payroll.</span>
+        <span>Do backend tính · version {bonus.version || '—'} · hiệu lực từ {bonus.effectiveFrom || '—'}.</span>
+      </div>
+      <div className="employee-cost-target-modal-actions">
+        <button type="button" className="btn secondary" onClick={onClose}>Đóng</button>
+      </div>
+    </div>
+  </div>;
 }
 
 function diemXuNumber(value) {
@@ -600,7 +722,18 @@ function AdminGapPanel({ payload, loading, error, range }) {
     setSyncing('send'); setSyncError(''); setSyncMessage('');
     try {
       const result = await api.employeeCostGapSyncDataHub({ ...range, ...filters }, { confirm: true, note: syncNote.trim() || undefined });
-      setSyncMessage(`Đã gửi ${Number(result.sent || 0).toLocaleString('vi-VN')} mã sang DataHub. Vào DataHub để điền %.`);
+      // Hiện BIÊN NHẬN của DataHub, không chỉ nói "đã gửi": mã worklist + số mã
+      // DataHub xác nhận nhận được + trạng thái mới/trùng + mã kiểm tra để đối
+      // chiếu trực tiếp với màn DataHub. Có biên nhận mới coi là nhận thành công.
+      const receipt = result.datahub || {};
+      const confirmed = Number(receipt.received ?? result.sent ?? 0);
+      setSyncMessage([
+        `✅ DataHub ĐÃ XÁC NHẬN NHẬN ${confirmed.toLocaleString('vi-VN')}/${Number(result.sent || 0).toLocaleString('vi-VN')} mã`,
+        receipt.worklist_id ? `Mã worklist DataHub: ${receipt.worklist_id}` : '',
+        receipt.deduped === true ? 'Trạng thái: trùng với lần gửi trước (DataHub không tạo bản mới)' : 'Trạng thái: worklist mới',
+        result.checksum ? `Mã kiểm tra: ${String(result.checksum).slice(0, 12)}… (đối chiếu với màn DataHub)` : '',
+        'Vào DataHub để điền %.',
+      ].filter(Boolean).join(' · '));
       setSyncConfirm(false); setSyncNote('');
     } catch (requestError) {
       setSyncError(requestError.message || 'Không đồng bộ được sang DataHub.');
@@ -772,6 +905,10 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [visibilityMessage, setVisibilityMessage] = useState('');
   const [visibilityError, setVisibilityError] = useState('');
+  // Số đếm cho badge trên tab — tải nền, độc lập với tab đang mở, để CEO thấy
+  // ngay còn bao nhiêu việc mà không phải bấm vào từng tab.
+  const [gapBadge, setGapBadge] = useState({ loaded: false, codeCount: 0, pairCount: 0, revenueAffected: 0 });
+  const [dqBadge, setDqBadge] = useState({ loaded: false, count: 0, revenueAffected: 0 });
   const [gapPayload, setGapPayload] = useState({ pairs: [], coverageByEmployee: [] });
   const [gapLoading, setGapLoading] = useState(!admin);
   const [gapError, setGapError] = useState('');
@@ -788,6 +925,7 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [tablePageSize, setTablePageSize] = useState(20);
   const [tableFilters, setTableFilters] = useState({ province: '', unitGroup: '', route: '', date: '' });
   const [targetModalOpen, setTargetModalOpen] = useState(false);
+  const [bonusModalOpen, setBonusModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(tableQuery), 180);
@@ -881,6 +1019,20 @@ export default function EmployeeCost({ me, onNavigate }) {
     };
   }, [admin, selectedEmp, range, view, me?.emp_code]);
 
+  // Tải số đếm cho badge — CHẠY BẤT KỂ đang ở tab nào (chỉ admin), để con số
+  // hiện sẵn trên tab. Lỗi thì im lặng ẩn badge, không làm phiền màn chính.
+  useEffect(() => {
+    if (!admin) return undefined;
+    let alive = true;
+    api.employeeCostGapsSummary(range)
+      .then((data) => { if (alive) setGapBadge(data?.disabled ? { loaded: false, codeCount: 0, pairCount: 0, revenueAffected: 0 } : { loaded: true, codeCount: Number(data.codeCount || 0), pairCount: Number(data.pairCount || 0), revenueAffected: Number(data.revenueAffected || 0) }); })
+      .catch(() => { if (alive) setGapBadge((current) => ({ ...current, loaded: false })); });
+    api.employeeCostDataQualitySummary()
+      .then((data) => { if (alive) setDqBadge({ loaded: true, count: Number(data.count || 0), revenueAffected: Number(data.revenueAffected || data.revenue || 0) }); })
+      .catch(() => { if (alive) setDqBadge((current) => ({ ...current, loaded: false })); });
+    return () => { alive = false; };
+  }, [admin, range, view]);
+
   useEffect(() => {
     if (admin && view !== 'gaps') return undefined;
     let alive = true;
@@ -947,6 +1099,10 @@ export default function EmployeeCost({ me, onNavigate }) {
     if (!model.target.available) setTargetModalOpen(false);
   }, [model.target.available]);
 
+  useEffect(() => {
+    if (!model.bonus.configured) setBonusModalOpen(false);
+  }, [model.bonus.configured]);
+
   const applyRange = (event) => {
     event.preventDefault();
     if (rangeInvalid) return;
@@ -994,6 +1150,7 @@ export default function EmployeeCost({ me, onNavigate }) {
   };
   const changeEmployee = (value) => {
     setTargetModalOpen(false);
+    setBonusModalOpen(false);
     setSelectedEmp(value); setTablePage(1); setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '', date: '' });
   };
   const changeTableFilter = (key, value) => {
@@ -1081,8 +1238,14 @@ export default function EmployeeCost({ me, onNavigate }) {
 
     {admin && <div className="employee-cost-tabs" role="tablist" aria-label="Chế độ xem chi phí">
       <button type="button" role="tab" aria-selected={view === 'cost'} className={view === 'cost' ? 'active' : ''} onClick={() => setView('cost')}>Chi phí theo nhân viên</button>
-      <button type="button" role="tab" aria-selected={view === 'gaps'} className={view === 'gaps' ? 'active' : ''} onClick={() => setView('gaps')}>Mặt hàng thiếu %</button>
-      <button type="button" role="tab" aria-selected={view === 'dq'} className={view === 'dq' ? 'active' : ''} onClick={() => setView('dq')}>Kiểm soát dữ liệu</button>
+      {/* Badge số ngay trên tab: CEO nhìn phát thấy còn bao nhiêu mã/dòng đang
+          vướng, không phải bấm vào tab mới biết. */}
+      <button type="button" role="tab" aria-selected={view === 'gaps'} className={view === 'gaps' ? 'active' : ''} onClick={() => setView('gaps')}>
+        Mặt hàng thiếu %{gapBadge.loaded && <span className={`employee-cost-tab-badge${gapBadge.codeCount ? ' warn' : ' ok'}`} title={gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp · ${gapBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không còn mã thiếu %'}>{gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp` : '0'}</span>}
+      </button>
+      <button type="button" role="tab" aria-selected={view === 'dq'} className={view === 'dq' ? 'active' : ''} onClick={() => setView('dq')}>
+        Kiểm soát dữ liệu{dqBadge.loaded && <span className={`employee-cost-tab-badge${dqBadge.count ? ' warn' : ' ok'}`} title={dqBadge.count ? `${dqBadge.count} exception · ${dqBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không có exception'}>{dqBadge.count ? `${dqBadge.count} exception` : '0'}</span>}
+      </button>
     </div>}
 
     {admin && view === 'dq' ? <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin onOpenRow={openDqRow} /> : admin && view === 'gaps' ? <AdminGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} /> : <>
@@ -1131,7 +1294,7 @@ export default function EmployeeCost({ me, onNavigate }) {
           ? `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · ${coverageNote}`
           : `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`}
         tone="employee-cost-tone-base" />
-      <BonusKpi bonus={model.bonus} />
+      <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote} />)}
       {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt
           hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng
@@ -1151,6 +1314,12 @@ export default function EmployeeCost({ me, onNavigate }) {
       admin={admin}
       onClose={() => setTargetModalOpen(false)}
       onNavigate={onNavigate}
+    />}
+
+    {bonusModalOpen && <BonusDetailModal
+      bonus={model.bonus}
+      employeeLabel={allEmployees ? 'Tất cả nhân viên' : employeeLabel}
+      onClose={() => setBonusModalOpen(false)}
     />}
 
     {/* Cảnh báo xu + phép cấn trừ thiếu xu là theo TỪNG NGƯỜI — ẩn ở "Tất cả NV". */}

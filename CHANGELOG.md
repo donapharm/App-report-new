@@ -1,3 +1,11 @@
+### 2026-07-26 — RELEASE App Report employee-cost (bundle SẠCH trên production f1f4e2f)
+> ⚠ Thay bundle CŨ dbc76a71 (đã lỗi thời): dbc76a71 chỉ 5 file, chứa self-heal CÒN 3 BLOCKER,
+> THIẾU hẳn employeeCostSourceAlert.js (alert+tin mềm NV+fix#3). KHÔNG deploy dbc76a71.
+> Bundle mới = production f1f4e2f + overlay ĐÚNG 9 file employee-cost (bản ĐÃ vá blocker), 0 xung đột.
+- Gồm: badge tab + biên nhận DataHub + ô Thưởng bấm bung + self-heal (đã vá 3 blocker) + tin mềm NV.
+- 9 file: routes.js, employeeCostSourceAlert.js, api.js, EmployeeCost.jsx, styles.css + 4 test.
+- KHÔNG lùi file report nào của production (f1f4e2f giữ nguyên). Build + full test bên dưới.
+
 ### 2026-07-26 — Claude Code — công cụ TỰ KIỂM đường cảnh báo Telegram (`scripts/test_telegram_alert.js`)
 - **CEO hỏi "sao không tự test thử gửi Telegram":** Claude **KHÔNG gửi thật được** từ môi trường của mình — không có `TELEGRAM_BOT_TOKEN` (`.env` nằm trên server thật), không có bảng liên kết chat_id, và mạng ra `api.telegram.org` bị chặn (HTTP 000). Đã nói rõ thay vì thử rồi báo mơ hồ.
 - **Đã chứng minh được phần kiểm được:** chặn `fetch` để xem chính xác request app sẽ gửi → đúng `POST https://api.telegram.org/bot<TOKEN>/sendMessage`, đúng `chat_id`, đúng nội dung tin; `sendTelegram` trả `{ok:true}`.

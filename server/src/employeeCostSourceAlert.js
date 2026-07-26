@@ -12,7 +12,10 @@
  * - Chỉ gửi khi TRẠNG THÁI ĐỔI (danh sách NV lỗi khác lần trước) hoặc quá hạn nhắc
  *   lại → không spam mỗi vòng warm.
  * - Báo cả khi ĐÃ KHÔI PHỤC để CEO biết chuyện đã xong, không phải tự đi kiểm.
- * - KHÔNG gửi số tiền/%/PII — chỉ mã NV, số cặp, kỳ. Người nhận chỉ CEO/ADMIN.
+ * - KHÔNG gửi số tiền/%/PII — chỉ mã NV, số cặp, kỳ. Tin VẬN HÀNH gửi CEO/ADMIN.
+ * - (CEO chốt 2026-07-26) NGOÀI RA gửi CHÍNH NV bị ảnh hưởng 1 tin MỀM, trấn an
+ *   (không số, không lộ NV khác, không quy trách nhiệm), chỉ khi NV có Telegram và
+ *   chỉ khi MỚI bị ảnh hưởng (không spam mỗi 6h). Khôi phục thì báo NV "đã đủ".
  * - Không bao giờ ném lỗi ra ngoài: cảnh báo hỏng thì cũng không được làm hỏng warm.
  */
 
@@ -69,6 +72,55 @@ function buildMessage({ employees, pairs, ky, recovered }) {
   ].join('\n');
 }
 
+// Bản đồ mã NV → chatId Telegram (mọi vai đã liên kết). Dùng để nhắn CHÍNH NV.
+function employeeTelegramMap() {
+  const map = new Map();
+  try {
+    for (const entry of auth.listTelegramMap()) {
+      const code = String(entry.emp_code || '').toUpperCase();
+      const chatId = String(entry.telegram_id || '');
+      if (code && chatId) map.set(code, chatId);
+    }
+  } catch { return new Map(); }
+  return map;
+}
+
+// Tin MỀM gửi cho CHÍNH nhân viên bị ảnh hưởng (CEO chốt 2026-07-26): thuần thông
+// tin, TRẤN AN — KHÔNG kèm số tiền/%, KHÔNG lộ NV khác, KHÔNG quy trách nhiệm NV.
+function buildEmployeeMessage({ ky, recovered }) {
+  if (recovered) {
+    return [
+      '✅ App Report — chi phí của bạn đã cập nhật đủ',
+      `Kỳ ${ky}: hệ thống đã lấy đủ dữ liệu. Số trên "Chi phí của tôi" giờ đã đầy đủ (không còn tạm tính).`,
+    ].join('\n');
+  }
+  return [
+    'ℹ️ App Report — chi phí của bạn đang TẠM TÍNH',
+    `Kỳ ${ky}: hệ thống đang lấy lại dữ liệu chi phí từ nguồn, nên số trên "Chi phí của tôi" tạm thời chưa đầy đủ.`,
+    'Bạn KHÔNG cần làm gì — số sẽ tự cập nhật khi có đủ dữ liệu.',
+  ].join('\n');
+}
+
+// Gửi tin mềm cho các NV chỉ định (chỉ NV có Telegram; NV không liên kết thì bỏ qua,
+// không ép). Không bao giờ ném lỗi ra ngoài.
+async function notifyAffectedEmployees(empCodes = [], { ky, recovered }, sender) {
+  const map = employeeTelegramMap();
+  const text = buildEmployeeMessage({ ky, recovered });
+  let targeted = 0; let sent = 0;
+  for (const code of empCodes) {
+    const chatId = map.get(String(code).toUpperCase());
+    if (!chatId) continue;
+    targeted += 1;
+    try {
+      const result = await sender(chatId, text);
+      if (result?.ok) sent += 1;
+    } catch (error) {
+      console.warn('[employee-cost-alert] gửi tin NV thất bại', { empCode: code, message: error.message });
+    }
+  }
+  return { targeted, sent };
+}
+
 async function send(text) {
   const recipients = adminRecipients();
   if (!recipients.length) return { sent: 0, reason: 'không có CEO/ADMIN nào liên kết Telegram' };
@@ -90,7 +142,7 @@ async function send(text) {
  * @param {object} payload payload ALL (có periods[].match)
  * @param {string} ky nhãn kỳ để hiển thị
  */
-async function checkAndNotify(payload = {}, ky = '', { now = Date.now(), sendImpl = send } = {}) {
+async function checkAndNotifyInner(payload = {}, ky = '', { now = Date.now(), sendImpl = send, sendEmployeeImpl = notifyChannels.sendTelegram } = {}) {
   try {
     if (!notifyChannels.telegramReady()) return { skipped: 'telegram_not_configured' };
     const periods = Array.isArray(payload.periods) ? payload.periods : [];
@@ -101,13 +153,17 @@ async function checkAndNotify(payload = {}, ky = '', { now = Date.now(), sendImp
     const signature = signatureOf(employees);
     const state = readState();
     const previous = state[ky] || { signature: '', at: 0 };
+    // Danh sách NV lần trước suy trực tiếp từ signature (đã sort, nối ',').
+    const prevEmployees = previous.signature ? previous.signature.split(',') : [];
 
     if (!employees.length) {
       // Đã khôi phục: chỉ báo nếu lần trước đang có lỗi.
       if (!previous.signature) return { skipped: 'no_issue' };
       const result = await sendImpl(buildMessage({ employees, pairs, ky, recovered: true }));
+      // Báo cho CHÍNH các NV trước đó bị ảnh hưởng rằng số đã cập nhật đủ.
+      const employeeNotified = await notifyAffectedEmployees(prevEmployees, { ky, recovered: true }, sendEmployeeImpl);
       persist.save(STATE_FILE, { ...state, [ky]: { signature: '', at: now } });
-      return { recovered: true, ...result };
+      return { recovered: true, employeeNotified, ...result };
     }
 
     const changed = previous.signature !== signature;
@@ -115,8 +171,15 @@ async function checkAndNotify(payload = {}, ky = '', { now = Date.now(), sendImp
     if (!changed && !stale) return { skipped: 'deduped' };
 
     const result = await sendImpl(buildMessage({ employees, pairs, ky, recovered: false }));
+    // Tin mềm cho NV: CHỈ khi danh sách ĐỔI (NV MỚI bị ảnh hưởng) — không spam mỗi
+    // 6h khi nhắc lại. NV đã báo lần trước thì không nhắc lại tin mềm.
+    let employeeNotified = { targeted: 0, sent: 0 };
+    if (changed) {
+      const newlyAffected = employees.filter((code) => !prevEmployees.includes(code));
+      employeeNotified = await notifyAffectedEmployees(newlyAffected, { ky, recovered: false }, sendEmployeeImpl);
+    }
     persist.save(STATE_FILE, { ...state, [ky]: { signature, at: now } });
-    return { alerted: true, employees, pairs, ...result };
+    return { alerted: true, employees, pairs, employeeNotified, ...result };
   } catch (error) {
     // Cảnh báo hỏng KHÔNG được làm hỏng luồng warm/nghiệp vụ.
     console.warn('[employee-cost-alert] check thất bại', { message: error.message });
@@ -124,4 +187,23 @@ async function checkAndNotify(payload = {}, ky = '', { now = Date.now(), sendImp
   }
 }
 
-module.exports = { STATE_FILE, REMIND_MS, checkAndNotify, buildMessage, signatureOf, adminRecipients };
+// Blocker#3 (bot review): read state → send → write state KHÔNG nguyên tử. Hai check
+// khôi phục đồng thời cùng đọc state cũ rồi cùng gửi → gửi đúp. Tuần tự hóa THEO KỲ:
+// các check cùng kỳ nối đuôi nhau, check sau đọc state SAU khi check trước đã ghi →
+// dedup đúng, không gửi đúp. Khác kỳ vẫn chạy song song bình thường.
+const checkInFlight = new Map();
+function checkAndNotify(payload = {}, ky = '', opts = {}) {
+  const prev = checkInFlight.get(ky) || Promise.resolve();
+  const run = prev.then(
+    () => checkAndNotifyInner(payload, ky, opts),
+    () => checkAndNotifyInner(payload, ky, opts),
+  );
+  checkInFlight.set(ky, run);
+  run.finally(() => { if (checkInFlight.get(ky) === run) checkInFlight.delete(ky); });
+  return run;
+}
+
+module.exports = {
+  STATE_FILE, REMIND_MS, checkAndNotify, checkAndNotifyInner, buildMessage, signatureOf, adminRecipients,
+  buildEmployeeMessage, notifyAffectedEmployees, employeeTelegramMap,
+};

@@ -2071,6 +2071,18 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-target-quarter-summary { margin-top:11px; padding-top:11px; border-top:1px solid #b7d9d5; }
 .employee-cost-target-note { display:grid; gap:5px; margin-top:12px; padding:11px 12px; border-left:4px solid #d98a1f; border-radius:8px; background:#fff8e8; color:#654717; font-size:12px; line-height:1.45; }
 .employee-cost-target-modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+/* Modal "bấm bung" cách tính thưởng — tái dùng khung target, thêm bảng nhóm C10 + dòng tổng. */
+.employee-cost-bonus-modal .employee-cost-target-section { border-color:#e6c98a; background:#fffdf5; }
+.employee-cost-bonus-modal .employee-cost-target-section h3 { color:#b06f0f; }
+.employee-cost-bonus-total { padding-top:9px; margin-top:3px; border-top:1px dashed #e0b96a; font-size:15px; }
+.employee-cost-bonus-total small { color:#8a6414 !important; }
+.employee-cost-bonus-equation > b.employee-cost-bonus-total { color:#8a4b00; }
+.employee-cost-bonus-groups { width:100%; border-collapse:collapse; font-size:12px; }
+.employee-cost-bonus-groups th, .employee-cost-bonus-groups td { padding:7px 8px; border:1px solid #ecdcb4; text-align:left; vertical-align:top; }
+.employee-cost-bonus-groups thead th { background:#fbf1d8; color:#7a5410; font-weight:800; }
+.employee-cost-bonus-groups td:last-child, .employee-cost-bonus-groups th:last-child { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.employee-cost-bonus-groups tr.is-zero td { color:#8a6414; background:#fff8e8; }
+.employee-cost-bonus-coverage { margin-top:8px; color:var(--muted); font-size:11px; }
 .target-admin-focused { border-color:#0f766e !important; box-shadow:0 0 0 3px rgba(15,118,110,.2),0 10px 24px rgba(15,118,110,.16); }
 .employee-cost-number { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .employee-cost-table th.employee-cost-percent, .employee-cost-table td.employee-cost-percent { width:106px; min-width:96px; max-width:118px; padding-left:7px; padding-right:7px; text-align:right; font-variant-numeric:tabular-nums; }
@@ -2177,6 +2189,10 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-tabs { display:flex; gap:6px; padding:5px; border:1px solid var(--line); border-radius:11px; background:#f3f7fa; }
 .employee-cost-tabs button { flex:1; padding:10px 14px; border:0; border-radius:8px; background:transparent; color:var(--muted); font-weight:900; cursor:pointer; }
 .employee-cost-tabs button.active { background:#fff; color:#075d9b; box-shadow:0 2px 8px rgba(7,93,155,.14); }
+/* Badge số ngay trên tab: CEO thấy còn bao nhiêu việc mà không phải bấm vào. */
+.employee-cost-tab-badge { display:inline-block; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:.78em; font-weight:900; white-space:nowrap; vertical-align:middle; }
+.employee-cost-tab-badge.warn { background:#fdecea; color:#a4291c; border:1px solid #f3b7b0; }
+.employee-cost-tab-badge.ok { background:#e8f5ec; color:#1c7a3d; border:1px solid #b7dcc3; }
 .employee-cost-gap-admin, .employee-cost-gap-employee { display:grid; gap:14px; border-top:4px solid #0b7a54; }
 .employee-cost-gap-title { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
 .employee-cost-gap-title p { margin:5px 0 0; color:var(--muted); font-size:12px; }

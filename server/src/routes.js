@@ -881,14 +881,105 @@ function monthInputForKy(ky) {
   return match ? `${match[2]}-${match[1]}` : '';
 }
 
+// SELF-HEAL nguồn chi phí (SPEC_EMP_COST_SOURCE_SELFHEAL.md): timeout/backoff RIÊNG
+// cho đường warm/re-probe — payload lớn cold-start không bị tuyên "unavailable" oan.
+const EMPLOYEE_COST_WARM_TIMEOUT_MS = Math.max(
+  100, Number(process.env.APP_REPORT_COST_WARM_TIMEOUT_MS || 15000) || 15000,
+);
+const EMPLOYEE_COST_WARM_BACKOFF = Object.freeze([2000, 4000, 8000]);
+
+// Blocker#1 (bot review): key ALL có chứa view JSON với "from"/"to" (stableCacheValue
+// giữ nguyên value). Khớp ĐÚNG kỳ đang self-heal để KHÔNG xoá cache kỳ khác oan.
+// Không truyền range → khớp mọi key ALL (giữ hành vi cũ khi cần).
+function employeeCostAllKeyMatchesRange(key, range) {
+  if (typeof key !== 'string' || !key.startsWith('employee-cost-all:')) return false;
+  if (!range || !range.from || !range.to) return true;
+  return key.includes(`"from":${JSON.stringify(range.from)}`)
+    && key.includes(`"to":${JSON.stringify(range.to)}`);
+}
+
+// Xoá memo cache "Tất cả NV" CHỈ của kỳ chỉ định (range) — để lần build kế tiếp đọc
+// nguồn TƯƠI thay vì bản cache 6h cũ. Chỉ đụng cache ALL đúng kỳ, không đụng kỳ khác.
+function invalidateEmployeeCostAll(range) {
+  let cleared = 0;
+  for (const key of memo.keys()) {
+    if (employeeCostAllKeyMatchesRange(key, range)) { memo.delete(key); cleared += 1; }
+  }
+  return cleared;
+}
+
+// Blocker#2 (bot review): warm định kỳ + revenue-refresh có thể chạy CHỒNG nhau cho
+// cùng kỳ → cùng probe/invalidate/rebuild. Single-flight theo khóa: chu kỳ đang chạy
+// cho khóa đó được DÙNG CHUNG, không nhân đôi. Generic + thuần để test.
+function singleFlight(map, key, fn) {
+  if (map.has(key)) return map.get(key);
+  const task = Promise.resolve().then(fn).finally(() => { if (map.get(key) === task) map.delete(key); });
+  map.set(key, task);
+  return task;
+}
+const employeeCostSelfHealInFlight = new Map();
+
+// Gom mã NV nguồn-fail từ payload merged (các period · match.unavailableEmployees).
+function collectUnavailableEmployees(payload = {}) {
+  const periods = Array.isArray(payload.periods) ? payload.periods : [];
+  return [...new Set(periods.flatMap((period) => (
+    Array.isArray(period?.match?.unavailableEmployees) ? period.match.unavailableEmployees.map(String) : []
+  )))].sort();
+}
+
+// Logic tự lành thuần (deps tiêm vào để test): re-probe RIÊNG các NV đã fail bằng
+// nguồn tươi; NV nào hồi (outcome==='ok') → invalidate cache ALL → rebuild sạch.
+// FAIL-CLOSED: chỉ coi là hồi khi nguồn trả 'ok'; lỗi/timeout/scope_mismatch ⇒ giữ
+// tạm tính, KHÔNG suy số. Không có NV hồi → trả nguyên payload cũ (0 tác dụng phụ).
+async function selfHealUnavailableCostSources({ payload, probe, invalidate, rebuild }) {
+  const unavailable = collectUnavailableEmployees(payload);
+  if (!unavailable.length) return { payload, unavailable: [], recovered: [] };
+  const recovered = [];
+  for (const emp of unavailable) {
+    let outcome = 'probe_error';
+    try { const r = await probe(emp); outcome = r && r.outcome; } catch { outcome = 'probe_error'; }
+    if (outcome === 'ok') recovered.push(emp);
+  }
+  if (!recovered.length) return { payload, unavailable, recovered: [] };
+  invalidate();
+  const fresh = await rebuild();
+  return { payload: fresh, unavailable, recovered };
+}
+
 async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
   const month = monthInputForKy(ky);
   if (!month) return false;
   const startedAt = Date.now();
-  const payload = await employeeCostAllPayload({
+  const warmReq = {
     session: { emp_code: 'CACHE_WARMER', role: 'admin' },
     query: { emp: 'ALL', from: month, to: month, page: '1', pageSize: '20', sortDir: 'asc' },
-  }, { paginate: true, auditEvent: `warm_all:${reason}`, suppressAudit: true });
+  };
+  let payload = await employeeCostAllPayload(warmReq, { paginate: true, auditEvent: `warm_all:${reason}`, suppressAudit: true });
+
+  // SELF-HEAL: nếu có NV nguồn-fail, re-probe riêng bằng nguồn tươi (bỏ qua cache
+  // ALL 6h). NV hồi → xoá cache ALL, rebuild sạch NGAY → UI hết "tạm tính" và
+  // recovery Telegram bắn kịp, không kẹt tới 6h. Lỗi self-heal KHÔNG được hỏng warm.
+  try {
+    const range = employeeCost.parseMonthRange({ from: month, to: month });
+    // Single-flight theo KỲ: warm + revenue-refresh chồng nhau chỉ chạy 1 chu kỳ
+    // self-heal cho cùng kỳ (Blocker#2). Invalidate CHỈ kỳ này (Blocker#1).
+    const healed = await singleFlight(employeeCostSelfHealInFlight, ky, () => selfHealUnavailableCostSources({
+      payload,
+      probe: (emp) => employeeCost.fetchEmployeeCost(emp, {
+        from: range.from, to: range.to,
+        timeoutMs: EMPLOYEE_COST_WARM_TIMEOUT_MS, backoffMs: EMPLOYEE_COST_WARM_BACKOFF,
+      }),
+      invalidate: () => invalidateEmployeeCostAll(range),
+      rebuild: () => employeeCostAllPayload(warmReq, { paginate: true, auditEvent: 'warm_all:selfheal', suppressAudit: true }),
+    }));
+    payload = healed.payload;
+    if (healed.recovered.length) {
+      console.log('[employee-cost] self-heal', { ky, recovered: healed.recovered, wasUnavailable: healed.unavailable });
+    }
+  } catch (error) {
+    console.warn('[employee-cost] self-heal failed', { ky, message: error.message });
+  }
+
   console.log('[employee-cost] ALL cache warmed', { ky, reason, durationMs: Date.now() - startedAt });
   // Hệ thống TỰ BÁO khi DataHub thiếu dữ liệu chi phí, thay vì đợi CEO phát hiện
   // số lệch rồi mới đi truy. Không được làm hỏng warm nếu gửi lỗi.
@@ -937,6 +1028,12 @@ function stopEmployeeCostAllWarmLoop() {
 }
 router.startEmployeeCostAllWarmLoop = startEmployeeCostAllWarmLoop;
 router.stopEmployeeCostAllWarmLoop = stopEmployeeCostAllWarmLoop;
+// Xuất cho test self-heal (SPEC_EMP_COST_SOURCE_SELFHEAL.md).
+router.selfHealUnavailableCostSources = selfHealUnavailableCostSources;
+router.collectUnavailableEmployees = collectUnavailableEmployees;
+router.invalidateEmployeeCostAll = invalidateEmployeeCostAll;
+router.employeeCostAllKeyMatchesRange = employeeCostAllKeyMatchesRange;
+router.singleFlight = singleFlight;
 
 // revenueRefresh invokes listeners in a detached task after a successful
 // materialize, so this Promise cannot delay or roll back the source refresh.
@@ -1359,6 +1456,25 @@ router.get('/employee-cost/gaps', auth.requireAuth, asyncJsonRoute(async (req, r
   if (auth.isAdmin(req.session.role)) payload.sync = { configured: employeeCostGapSync.configured() };
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
+}));
+
+// Chỉ số đếm cho BADGE trên tab — CEO nhìn phát thấy ngay còn bao nhiêu mã/cặp
+// đang vướng, không phải bấm vào tab mới biết. Payload nhẹ, không kèm danh sách.
+router.get('/employee-cost/gaps/summary', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await employeeCostGapPayload(req, 'gaps_badge_view');
+  res.set('Cache-Control', 'private, no-store');
+  // Chức năng đang tắt → nói rõ "disabled" thay vì trả 0 (0 sẽ bị hiểu nhầm là
+  // "không còn mã nào thiếu", trong khi thực tế là chưa được xem).
+  if (payload.disabled) return res.json({ disabled: true, note: payload.note || 'Chức năng chi phí đang tắt cho bạn.' });
+  return res.json({
+    from: payload.from,
+    to: payload.to,
+    codeCount: Number(payload.coverage?.gapCodeCount || 0),
+    pairCount: Number(payload.coverage?.gapPairCount || 0),
+    revenueAffected: (Array.isArray(payload.items) ? payload.items : [])
+      .reduce((sum, item) => sum + (Number(item.revenueAffected) || 0), 0),
+    unavailableEmployees: Array.isArray(payload.unavailable?.employees) ? payload.unavailable.employees : [],
+  });
 }));
 
 router.get('/employee-cost/gaps/export.xlsx', auth.requireAuth, asyncJsonRoute(async (req, res) => {
