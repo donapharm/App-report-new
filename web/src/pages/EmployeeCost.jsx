@@ -642,9 +642,9 @@ function AdminGapPanel({ payload, loading, error, range }) {
         </label>
         {syncError && <div className="employee-cost-match-warning" role="alert">{syncError}</div>}
         <div className="employee-cost-export-actions">
-          <button type="button" className="btn" disabled={!!syncing} onClick={runSync}>{syncing === 'send' ? 'Đang gửi…' : '✅ Duyệt & gửi'}</button>
-          <button type="button" className="btn secondary" disabled={!!syncing || !syncNote.trim()} onClick={saveNote}>{syncing === 'note' ? 'Đang ghi…' : '📝 Ghi ý kiến (không gửi)'}</button>
+          <button type="button" className="btn" disabled={!!syncing} onClick={runSync}>{syncing === 'send' ? 'Đang gửi…' : '✅ Duyệt'}</button>
           <button type="button" className="btn secondary" disabled={!!syncing} onClick={() => { setSyncConfirm(false); setSyncError(''); }}>❌ Không duyệt</button>
+          <button type="button" className="btn secondary" disabled={!!syncing || !syncNote.trim()} onClick={saveNote}>{syncing === 'note' ? 'Đang ghi…' : '📝 Ý kiến khác'}</button>
         </div>
       </div>
     </div>}

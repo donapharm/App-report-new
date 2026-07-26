@@ -1,7 +1,8 @@
 # Gửi DataHub — Cửa nhận "worklist mã thiếu %" từ App Report
 
-> **1 việc cần build:** 1 endpoint nhận + 1 màn cho CEO điền %. App Report đã build xong phía gửi (đang "ngủ an toàn",
-> tự bật khi endpoint này lên). Contract dưới đây là bản chốt — nếu cần đổi field, báo lại App Report trước khi khớp E2E.
+> **Trạng thái 2026-07-26:** receiver DataHub đã deploy production tại commit
+> `cd821a46689ce8f124600d5295584479b5444f19`. App Report phía gửi vẫn giữ dormant cho tới khi CEO duyệt triển khai riêng.
+> Contract dưới đây là bản chốt — nếu cần đổi field/status, phải báo lại App Report trước khi khớp E2E.
 
 ## Bối cảnh (1 đoạn)
 CEO đang phải *xuất Excel mã thiếu % → mở DataHub → nhập tay*. App Report thêm nút **"Đồng bộ sang DataHub"**: CEO bấm →
@@ -52,10 +53,12 @@ Headers:
 - **Payload cố ý KHÔNG chứa** `%`/cost/margin/payout/`C32`–`C47`/PII. Chỉ có mã + thống kê ảnh hưởng + doanh thu. Đây là
   danh sách **thiếu %**, không phải số chi phí.
 
-### Response mong đợi
-- Thành công: **HTTP 2xx** + JSON `{ "ok": true, "worklist_id": "<id>", "received": <số item> }`.
-- Lỗi: mã lỗi HTTP tương ứng + `{ "error": "<mô tả>" }`.
-- **Chưa build xong endpoint** → cứ để **404**: App Report hiểu là "chưa mở cửa nhận" và báo CEO dùng tạm Excel (không vỡ).
+### Response bắt buộc (fail-closed)
+- Lần nhận mới: **HTTP 201** + JSON `{ "ok": true, "worklist_id": "<id-không-rỗng>", "received": <đúng số item>, "deduped": false }`.
+- Gửi trùng checksum/kỳ: **HTTP 200** + JSON `{ "ok": true, "worklist_id": "<id-không-rỗng>", "received": <đúng số item>, "deduped": true }`.
+- `received` phải là số nguyên và bằng chính xác số item App Report đã gửi; `deduped` phải là boolean.
+- Mọi response khác — gồm `{}`, mọi 2xx khác, thiếu/sai type field, `200 + deduped:false`, `201 + deduped:true` — đều bị App Report từ chối bằng `GAP_SYNC_BAD_RESPONSE`.
+- Lỗi nghiệp vụ/auth: mã lỗi HTTP tương ứng + `{ "error": "<mô tả>" }`.
 
 ## Phạm vi cột % được phép GHI (CEO chốt 2026-07-25) — KHÓA TRƯỚC KHI MỞ LUỒNG CẬP NHẬT
 Màn DataHub điền % chỉ được ghi vào **đúng allowlist `C33–C46` mà CEO đang bật** (chính danh sách cột động đang
@@ -72,17 +75,13 @@ dùng cho bên đọc "Chi phí của tôi" — `SPEC_REPORT_EMP_COST_SELFVIEW.m
 App Report đã có script E2E tự chứa — kèm **1 mock receiver mẫu** đúng contract này (idempotent theo checksum, chặn
 cột cấm, kiểm `x-assignment-key`). DataHub có thể soi mock trong `server/scripts/test_gap_sync_e2e.js` như bản tham
 chiếu một receiver đạt chuẩn.
-- **Chạy ngay (mock + route):** `cd server && npm run test:gap-sync` → **18/18** (13 module: gửi/whitelist/actor/
-  idempotent/**canonical-checksum**/**bad-response {}**/chặn cột cấm/**không-confirm**/rỗng/**quá-nhiều-items**/sai-key/
-  404-dormant/chưa-cấu-hình · 4 route thật qua HTTP: **NV→403**, **CEO-không-confirm→400**, 📝 note→200, NV-note→403 · 1 canonical).
-- **Đóng E2E hai đầu (khi DataHub lên endpoint thật) — AN TOÀN mặc định:**
-  `REAL_DATAHUB=1 DATA_HUB_BASE_URL=<datahub> DATA_HUB_ASSIGNMENT_KEY=<key> npm run test:gap-sync`
-  → mặc định chỉ **kiểm cấu hình + dựng gói khô (KHÔNG POST, KHÔNG gửi sai key lên prod)**. Muốn thật sự gửi 1 gói
-  **test-marked** (`E2E-TEST-DELETE-ME`, kỳ `2000-01`) để kiểm idempotent thật thì thêm `REAL_DATAHUB_ALLOW_WRITE=1`.
+- **Chạy ngay (mock + route):** `cd server && npm run test:gap-sync` → **25/25**; gồm strict receipt contract, whitelist/actor/idempotency/canonical checksum, malformed 2xx, chặn cột cấm, gate confirm, giới hạn, auth và route thật.
+- Route test khóa cứng: **CEO không-confirm** và **📝 Ý kiến khác** đều tạo **0 request** tới receiver; NV bị 403.
+- Trong preflight production **không chạy `REAL_DATAHUB` với key/payload hợp lệ**. Chỉ kiểm boundary không-key/không-write. Worklist production đầu tiên chỉ được gửi khi CEO trực tiếp bấm **✅ Duyệt** trong App Report sau triển khai được duyệt.
 
 ## Nghiệm thu E2E (khi cả 2 đầu sẵn sàng)
-1. CEO bấm "Đồng bộ" trên App Report → DataHub nhận đúng số mã, trả 2xx + `worklist_id`.
-2. Gửi lại cùng kỳ + checksum → DataHub **không** tạo bản trùng.
+1. CEO bấm **✅ Duyệt** trên App Report → DataHub nhận đúng số mã, trả `201 + deduped:false` cùng đủ receipt field.
+2. Gửi lại cùng kỳ + checksum → DataHub **không** tạo bản trùng và trả `200 + deduped:true` cùng `worklist_id` cũ.
 3. CEO điền % trên DataHub → catalog cập nhật → App Report coverage "Mặt hàng thiếu %" giảm tương ứng.
 4. Sai key `x-assignment-key` → DataHub từ chối (401/403).
 

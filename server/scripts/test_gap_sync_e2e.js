@@ -217,10 +217,30 @@ async function api(port, method, url, token, body) {
 }
 async function routeTests() {
   const port = 3900 + Math.floor((process.pid % 90));
+  const receiverProbe = http.createServer((req, res) => {
+    if (req.method === 'POST' && req.url === ENDPOINT_PATH) {
+      receiverProbe.__hits = Number(receiverProbe.__hits || 0) + 1;
+      req.resume();
+      res.writeHead(500, { 'content-type': 'application/json' });
+      res.end('{"error":"route probe must never be reached"}');
+      return;
+    }
+    req.resume();
+    res.writeHead(404, { 'content-type': 'application/json' });
+    res.end('{"error":"not found"}');
+  });
+  await new Promise((resolve) => receiverProbe.listen(0, '127.0.0.1', resolve));
   const authDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gapsync-e2e-'));
   const child = spawn(process.execPath, ['src/index.js'], {
     cwd: path.join(__dirname, '..'),
-    env: { ...process.env, PORT: String(port), ALLOW_DEMO_LOGIN: '1', AUTH_DATA_DIR: authDir, DATA_HUB_BASE_URL: '', DATA_HUB_ASSIGNMENT_KEY: '' },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      ALLOW_DEMO_LOGIN: '1',
+      AUTH_DATA_DIR: authDir,
+      DATA_HUB_BASE_URL: `http://127.0.0.1:${receiverProbe.address().port}`,
+      DATA_HUB_ASSIGNMENT_KEY: 'route-probe-key',
+    },
     stdio: 'ignore',
   });
   try {
@@ -231,13 +251,15 @@ async function routeTests() {
       const r = await api(port, 'POST', '/api/employee-cost/gaps/sync-datahub?from=2026-07&to=2026-07', dn, { confirm: true });
       assert.strictEqual(r.status, 403, `nhận ${r.status}`);
     });
-    await check('R2) CEO POST không confirm → 400 (gate xác nhận)', async () => {
+    await check('R2) CEO POST không confirm → 400 + 0 request DataHub', async () => {
       const r = await api(port, 'POST', '/api/employee-cost/gaps/sync-datahub?from=2026-07&to=2026-07', ceo, {});
       assert.strictEqual(r.status, 400, `nhận ${r.status}`);
+      assert.strictEqual(Number(receiverProbe.__hits || 0), 0, 'không-confirm tuyệt đối không được gọi receiver');
     });
-    await check('R3) CEO 📝 action=note → 200 noted (không gửi DataHub)', async () => {
+    await check('R3) CEO 📝 action=note → 200 noted + 0 request DataHub', async () => {
       const r = await api(port, 'POST', '/api/employee-cost/gaps/sync-datahub?from=2026-07&to=2026-07', ceo, { action: 'note', note: 'rà mã trước' });
       assert.strictEqual(r.status, 200, `nhận ${r.status}`); assert.strictEqual(r.data.noted, true);
+      assert.strictEqual(Number(receiverProbe.__hits || 0), 0, 'action=note chỉ ghi nhận, không được gọi receiver');
     });
     await check('R4) NV 📝 action=note → 403 (vẫn requireAdmin)', async () => {
       const r = await api(port, 'POST', '/api/employee-cost/gaps/sync-datahub?from=2026-07&to=2026-07', dn, { action: 'note', note: 'x' });
@@ -245,6 +267,7 @@ async function routeTests() {
     });
   } finally {
     child.kill('SIGKILL');
+    receiverProbe.close();
     try { fs.rmSync(authDir, { recursive: true, force: true }); } catch { /* ignore */ }
   }
 }
