@@ -150,10 +150,16 @@ function summarizeRows(rows = [], columns = [], baseSummary = null) {
     return [key, rows.reduce((sum, row) => sum + numeric(row.amounts?.[key]), 0)];
   }));
   const reliable = baseSummary?.reliable !== false;
+  // provisional* = tổng phần ĐÃ khớp %, luôn tính để UI hiện kèm nhãn coverage.
+  const provisionalMonthlyTotal = rows.reduce((sum, row) => sum + numeric(row.rowMonthlyTotal), 0);
+  const provisionalAnnualTotal = rows.reduce((sum, row) => sum + numeric(row.rowAnnualTotal), 0);
   return {
     reliable,
-    monthlyTotal: reliable ? rows.reduce((sum, row) => sum + numeric(row.rowMonthlyTotal), 0) : null,
-    annualTotal: reliable ? rows.reduce((sum, row) => sum + numeric(row.rowAnnualTotal), 0) : null,
+    monthlyTotal: reliable ? provisionalMonthlyTotal : null,
+    annualTotal: reliable ? provisionalAnnualTotal : null,
+    provisionalMonthlyTotal,
+    provisionalAnnualTotal,
+    provisionalColumnTotals: columnTotals,
     revenueTotal: rows.reduce((sum, row) => sum + numeric(row.revenue), 0),
     revenueBeforeVatTotal: rows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
     columnTotals: reliable ? columnTotals : null,
@@ -299,7 +305,12 @@ function transformReport(report = {}, options = {}) {
       annualTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.annualTotal), 0) : null,
       revenueTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0),
       revenueBeforeVatTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0),
-      columnTotals: reliable ? Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.columnTotals?.[key]), 0)])) : null,
+      columnTotals: reliable ? Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.provisionalColumnTotals?.[key]), 0)])) : null,
+      // Số "tạm tính" LUÔN có (tổng phần đã khớp %) để UI hiện kèm nhãn coverage,
+      // thay vì bỏ trống. Không thay hành vi fail-closed của columnTotals ở trên.
+      provisionalPeriodTotal: periods.reduce((sum, period) => sum + numeric(period.summary.provisionalMonthlyTotal), 0),
+      provisionalAnnualTotal: periods.reduce((sum, period) => sum + numeric(period.summary.provisionalAnnualTotal), 0),
+      provisionalColumnTotals: Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.provisionalColumnTotals?.[key]), 0)])),
       annualColumnKeys: [...new Set(periods.flatMap((period) => period.summary.annualColumnKeys || []))],
     },
     displayedRows: allRows.length,

@@ -183,8 +183,8 @@ test('view model renders percent without percent sign and reads pre-VAT sale fie
   assert.equal(model.summary.monthlyTotal, 800000);
   assert.equal(model.summary.revenueBeforeVatTotal, 10_000_000);
   assert.deepEqual(employeeCostColumnKpis(model), [
-    { key: 'c36', label: 'CP (%)', annual: false, value: 800_000 },
-    { key: 'c44', label: 'Cuối năm', annual: true, value: 30_000 },
+    { key: 'c36', label: 'CP (%)', annual: false, value: 800_000, provisional: false },
+    { key: 'c44', label: 'Cuối năm', annual: true, value: 30_000, provisional: false },
   ]);
   assert.equal(formatEmployeeCostCell(8, model.costColumns[0]), '8.0');
   assert.equal(formatEmployeeCostCell(0.3, model.costColumns[1]), '0.3');
@@ -231,6 +231,33 @@ test('view model normalizes backend-owned combined filter state and dynamic face
   assert.deepEqual(model.search, { query: 'cerecaps', filteredRows: 2, totalRows: 9 });
 });
 
+test('low coverage still shows provisional totals but flags them and keeps guarded totals null', () => {
+  const model = employeeCostViewModel({
+    columns: [{ key: 'c36', label: 'CP (%)' }],
+    rows: [{ c36: 8, rowMonthlyTotal: 80_000 }],
+    match: { matchedRows: 84, totalRows: 100, rate: 84.8, threshold: 90, low: true },
+    summary: {
+      reliable: false, monthlyTotal: null, annualTotal: null, columnTotals: null,
+      provisionalMonthlyTotal: 80_000, provisionalAnnualTotal: 0, provisionalColumnTotals: { c36: 80_000 },
+    },
+  });
+  // Khóa fail-closed giữ nguyên: số "chính thức" vẫn null cho export/nơi khác.
+  assert.equal(model.summary.monthlyTotal, null);
+  assert.equal(model.summary.columnTotals, null);
+  // Nhưng KPI vẫn có số để CEO nhìn, kèm cờ provisional để UI ghi rõ "tạm tính".
+  const kpis = employeeCostColumnKpis(model);
+  assert.deepEqual(kpis, [{ key: 'c36', label: 'CP (%)', annual: false, value: 80_000, provisional: true }]);
+});
+
+test('gap coverage panel states the full arithmetic so pair count reconciles with match KPI', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /đã khớp \+ \{remainingPairs/);
+  assert.match(page, /cặp thiếu gộp thành/);
+  assert.match(page, /remainingPairs=\{view\.remainingPairs\}/);
+  assert.match(page, /item\.pairCount\.toLocaleString/);
+  assert.match(page, /Số cặp thiếu<\/th>/);
+});
+
 test('KPI column cards stay dynamic for part-time templates and never invent annual columns', () => {
   const model = employeeCostViewModel({
     empCode: 'DN021', period: '2026-07',
@@ -244,7 +271,7 @@ test('KPI column cards stay dynamic for part-time templates and never invent ann
     },
   });
   assert.deepEqual(employeeCostColumnKpis(model), [
-    { key: 'c36', label: 'C36 CP ctv/khác (%)', annual: false, value: 80_000 },
+    { key: 'c36', label: 'C36 CP ctv/khác (%)', annual: false, value: 80_000, provisional: false },
   ]);
 });
 

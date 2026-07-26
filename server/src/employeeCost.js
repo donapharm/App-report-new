@@ -714,10 +714,16 @@ function enrichWithRevenue(payload, options = {}) {
   const dayMonthlyTotal = dayTotals.reduce((sum, day) => sum + day.monthlyTotal, 0);
   const dayAnnualTotal = dayTotals.reduce((sum, day) => sum + day.annualTotal, 0);
   const reconciled = dailyReliable && dayMonthlyTotal === monthlyMatchedTotal && dayAnnualTotal === annualMatchedTotal;
-  const columnTotals = !hasGroundedRows || low ? null : Object.fromEntries(columns.map((column) => [
+  // Tổng theo cột tính trên các dòng ĐÃ khớp %. `columnTotals` giữ nguyên hành vi
+  // fail-closed cũ (null khi coverage < ngưỡng) để export/nơi khác không đổi.
+  // `provisional*` LUÔN được tính để UI hiển thị "tạm tính" kèm nhãn rõ coverage,
+  // thay vì bỏ trống làm CEO tưởng hỏng. Đây là số của phần đã khớp, chưa gồm
+  // phần thiếu % — nhãn ở UI phải nói rõ điều đó.
+  const provisionalColumnTotals = Object.fromEntries(columns.map((column) => [
     column.key,
     rows.reduce((sum, row) => sum + (Number.isFinite(row.amounts[column.key]) ? row.amounts[column.key] : 0), 0),
   ]));
+  const columnTotals = !hasGroundedRows || low ? null : provisionalColumnTotals;
   const basePayload = { ...payload };
   if (rows.length) delete basePayload.note;
   return {
@@ -739,6 +745,9 @@ function enrichWithRevenue(payload, options = {}) {
       revenueTotal: rows.reduce((sum, row) => sum + row.revenue, 0),
       revenueBeforeVatTotal: rows.reduce((sum, row) => sum + row.revenueBeforeVat, 0),
       columnTotals,
+      provisionalMonthlyTotal: monthlyMatchedTotal,
+      provisionalAnnualTotal: annualMatchedTotal,
+      provisionalColumnTotals,
       annualColumnKeys: columns.filter((column) => column.annual).map((column) => column.key),
       annualLabels,
     },

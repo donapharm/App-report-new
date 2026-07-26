@@ -297,6 +297,9 @@ function periodViewModel(payload = {}) {
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
     revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
     columnTotals: normalizedColumnTotals(rawSummary.columnTotals, costColumns),
+    provisionalMonthlyTotal: rawSummary.provisionalMonthlyTotal == null ? null : Number(rawSummary.provisionalMonthlyTotal),
+    provisionalAnnualTotal: rawSummary.provisionalAnnualTotal == null ? null : Number(rawSummary.provisionalAnnualTotal),
+    provisionalColumnTotals: normalizedColumnTotals(rawSummary.provisionalColumnTotals, costColumns),
     annualColumnKeys: Array.isArray(rawSummary.annualColumnKeys) ? rawSummary.annualColumnKeys.map(String) : [],
     annualLabels: Array.isArray(rawSummary.annualLabels) ? rawSummary.annualLabels.map(String) : [],
   };
@@ -365,10 +368,19 @@ export function employeeCostViewModel(payload = {}) {
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
     revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
     columnTotals: normalizedColumnTotals(rawSummary.columnTotals, first.costColumns),
+    // Số tạm tính (tổng phần đã khớp %) — dùng để hiển thị kèm nhãn coverage khi
+    // chưa đạt ngưỡng, thay vì để trống làm người xem tưởng hỏng.
+    provisionalPeriodTotal: rawSummary.provisionalPeriodTotal == null ? null : Number(rawSummary.provisionalPeriodTotal),
+    provisionalAnnualTotal: rawSummary.provisionalAnnualTotal == null ? null : Number(rawSummary.provisionalAnnualTotal),
+    provisionalColumnTotals: normalizedColumnTotals(rawSummary.provisionalColumnTotals, first.costColumns),
     annualColumnKeys: Array.isArray(rawSummary.annualColumnKeys) ? rawSummary.annualColumnKeys.map(String) : [],
     monthlyTotal: periods.length === 1 ? periods[0].summary.monthlyTotal : null,
     annualLabels: [...new Set(periods.flatMap((period) => period.summary.annualLabels))],
-  } : { ...periods[0].summary, periodTotal: periods[0].summary.monthlyTotal };
+  } : {
+    ...periods[0].summary,
+    periodTotal: periods[0].summary.monthlyTotal,
+    provisionalPeriodTotal: periods[0].summary.provisionalMonthlyTotal ?? null,
+  };
   return {
     empCode: String(payload.empCode || first.empCode || ''),
     from: String(payload.from || first.period || ''),
@@ -520,10 +532,16 @@ export function employeeCostHighlightParts(value, query) {
 export function employeeCostColumnKpis(model = {}) {
   const annualKeys = new Set(Array.isArray(model.summary?.annualColumnKeys) ? model.summary.annualColumnKeys : []);
   const totals = model.summary?.columnTotals;
+  // Khi coverage chưa đạt ngưỡng, `columnTotals` bị khóa null (fail-closed) làm ô
+  // KPI trống trơn. Vẫn hiện số tổng của PHẦN ĐÃ KHỚP nhưng gắn cờ `provisional`
+  // để UI ghi rõ "tạm tính · chưa gồm mã thiếu %", không để người xem hiểu nhầm.
+  const provisional = totals == null;
+  const source = provisional ? model.summary?.provisionalColumnTotals : totals;
   return (Array.isArray(model.costColumns) ? model.costColumns : []).map((column) => ({
     key: column.key,
     label: column.label,
     annual: annualKeys.has(column.key),
-    value: totals?.[column.key] ?? null,
+    value: source?.[column.key] ?? null,
+    provisional: provisional && source?.[column.key] != null,
   }));
 }

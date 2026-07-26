@@ -197,14 +197,17 @@ function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel =
   </select>;
 }
 
-function CostColumnKpi({ item }) {
+function CostColumnKpi({ item, coverageNote = '' }) {
   return <div className={`kpi employee-cost-column-kpi${item.annual ? ' employee-cost-kpi-annual' : ''}`}>
     <div className="label">
       <span>{item.label}</span>
       {item.annual && <span className="employee-cost-kpi-badge">cuối năm</span>}
+      {item.provisional && <span className="employee-cost-kpi-badge">tạm tính</span>}
     </div>
     <div className="value small">{formatEmployeeCostCell(item.value, moneyColumn)}</div>
-    <div className="delta muted">{item.annual ? 'Khoản riêng · chi trả T12' : 'Tổng thành tiền theo cột'}</div>
+    <div className="delta muted">{item.provisional
+      ? (coverageNote || 'Tổng phần đã khớp % · chưa gồm mã thiếu %')
+      : (item.annual ? 'Khoản riêng · chi trả T12' : 'Tổng thành tiền theo cột')}</div>
   </div>;
 }
 
@@ -496,12 +499,17 @@ function VisibilityPanel({ adminCode, panel, loading, saving, message, error, on
   </div>;
 }
 
-function GapCoverage({ coverage, remainingCodes }) {
+function GapCoverage({ coverage, remainingCodes, remainingPairs = 0 }) {
   const rate = Math.max(0, Math.min(100, Number(coverage.rate || 0)));
+  const matched = Number(coverage.matchedPairs || 0);
+  const total = Number(coverage.totalPairs || 0);
+  // Ghi ĐỦ phép cộng để không còn "ẩn số": đã khớp + thiếu = tổng, rồi mới nói
+  // số cặp thiếu đó gộp lại thành bao nhiêu mã (một mã có thể nằm ở nhiều
+  // nhân viên/đơn vị nên số mã luôn nhỏ hơn số cặp).
   return <div className="employee-cost-gap-coverage">
     <div className="employee-cost-gap-coverage-head">
       <b>Coverage {rate.toLocaleString('vi-VN')}%</b>
-      <span>{Number(coverage.matchedPairs || 0).toLocaleString('vi-VN')}/{Number(coverage.totalPairs || 0).toLocaleString('vi-VN')} cặp đã khớp · còn {remainingCodes.toLocaleString('vi-VN')} mã</span>
+      <span>{matched.toLocaleString('vi-VN')} đã khớp + {remainingPairs.toLocaleString('vi-VN')} thiếu % = {total.toLocaleString('vi-VN')} cặp · {remainingPairs.toLocaleString('vi-VN')} cặp thiếu gộp thành <b>{remainingCodes.toLocaleString('vi-VN')} mã</b> bên dưới</span>
     </div>
     <div className="employee-cost-gap-progress" role="progressbar" aria-label="Tỷ lệ mã đã có phần trăm chi phí" aria-valuemin="0" aria-valuemax="100" aria-valuenow={rate}>
       <span style={{ width: `${rate}%` }} />
@@ -638,18 +646,20 @@ function AdminGapPanel({ payload, loading, error, range }) {
       <label><span>Đơn vị</span><select value={filters.unit} onChange={(event) => setFilter('unit', event.target.value)}><option value="">Tất cả</option>{view.unitOptions.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
       <label><span>Lý do</span><select value={filters.reason} onChange={(event) => setFilter('reason', event.target.value)}><option value="">Tất cả</option><option value="missing">Thiếu hẳn</option><option value="qd_mismatch">Lệch mã QĐ/QLNB</option></select></label>
     </div>
-    <GapCoverage coverage={view.coverage} remainingCodes={view.remainingCodes} />
+    <GapCoverage coverage={view.coverage} remainingCodes={view.remainingCodes} remainingPairs={view.remainingPairs} />
     {(error || exportError) && <div className="employee-cost-match-warning" role="alert">{error || exportError}</div>}
     {loading ? <Spinner /> : !view.items.length ? <div className="center">Không có mã thiếu phù hợp bộ lọc.</div> : <>
       <EmployeeCostPager pagination={pager.pagination} onPage={pager.setPage} onPageSize={pager.setPageSize} location="top" unit="mã" />
       <div className="employee-cost-table-wrap">
       <table className="employee-cost-gap-table admin">
-        <thead><tr><th>STT</th><th>Mã QLNB · tên hàng</th><th>Đơn vị ảnh hưởng</th><th>NV</th><th>Doanh thu ảnh hưởng</th><th>Lý do/gợi ý</th></tr></thead>
+        <thead><tr><th>STT</th><th>Mã QLNB · tên hàng</th><th>Đơn vị ảnh hưởng</th><th>NV</th><th>Số cặp thiếu</th><th>Doanh thu ảnh hưởng</th><th>Lý do/gợi ý</th></tr></thead>
         <tbody>{pager.rows.map((item, index) => <tr key={item.productCode}>
           <td className="employee-cost-number">{pager.start + index + 1}</td>
           <td><b>{item.productCode}</b><small>{item.productName}</small></td>
           <td><b>{item.unitCount.toLocaleString('vi-VN')} đơn vị</b><small>{item.unitLabels.join('; ')}</small></td>
           <td>{item.employeeCodes.join(', ')}</td>
+          {/* Cộng cột này qua các mã = đúng số cặp thiếu ở KPI "Khớp doanh thu". */}
+          <td className="employee-cost-number"><b>{item.pairCount.toLocaleString('vi-VN')}</b></td>
           <td className="employee-cost-number"><b>{formatEmployeeCostCell(item.revenueAffected, moneyColumn)}</b></td>
           <td><span className={`employee-cost-gap-reason ${item.reason}`}>{gapReasonLabel(item.reason)}</span>{!!item.suggestedCatalogCodes.length && <small>Gợi ý: {item.suggestedCatalogCodes.join('; ')}</small>}</td>
         </tr>)}</tbody>
@@ -906,6 +916,13 @@ export default function EmployeeCost({ me, onNavigate }) {
   const columnKpis = employeeCostColumnKpis(model);
   const allEmployees = admin && selectedEmp === 'ALL';
   const kpiMatch = employeeCostKpiMatch(model);
+  // Tổng bị khóa (coverage < ngưỡng) → hiện số tạm tính kèm ghi chú nêu ĐÚNG số
+  // cặp còn thiếu, để đối chiếu thẳng với tab "Mặt hàng thiếu %".
+  const provisionalTotals = model.summary.periodTotal == null && model.summary.provisionalPeriodTotal != null;
+  const missingPairs = Math.max(0, Number(kpiMatch.totalRows || 0) - Number(kpiMatch.matchedRows || 0));
+  const coverageNote = provisionalTotals
+    ? `Tạm tính trên ${formatMatchRate(kpiMatch)} đã khớp · còn ${missingPairs.toLocaleString('vi-VN')} cặp thiếu % (xem tab "Mặt hàng thiếu %")`
+    : '';
   const filteredCount = model.search.filteredRows;
   const totalTableRows = model.search.totalRows;
   const activeTableFilter = tableQuery || tableFilters.province || tableFilters.unitGroup || tableFilters.route || tableFilters.date || tableSort.key;
@@ -1081,9 +1098,18 @@ export default function EmployeeCost({ me, onNavigate }) {
           : <Kpi label="Target tổng đội" value="—" sub="Chưa đủ target giao cho đội trong kỳ này" tone="employee-cost-tone-target" />;
       })()}
       {allEmployees && <Kpi label="Điểm · Xu · Cấn trừ" value="Chọn 1 NV" sub="Các mục tính theo từng người — chọn đúng một nhân viên để xem" />}
-      <Kpi label={multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'} value={formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)} sub={`${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`} tone="employee-cost-tone-base" />
+      {/* Coverage dưới ngưỡng thì tổng bị khóa null (fail-closed) → trước đây ô trống
+          trơn, nhìn như hỏng. Nay hiện tổng PHẦN ĐÃ KHỚP + nhãn "tạm tính" nói rõ
+          còn thiếu bao nhiêu, để CEO vẫn có số mà không hiểu nhầm là số cuối. */}
+      <Kpi
+        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${provisionalTotals ? ' · tạm tính' : ''}`}
+        value={formatEmployeeCostCell(provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal, moneyColumn)}
+        sub={provisionalTotals
+          ? `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · ${coverageNote}`
+          : `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`}
+        tone="employee-cost-tone-base" />
       <BonusKpi bonus={model.bonus} />
-      {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} />)}
+      {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote} />)}
       {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt
           hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng
           biệt nên số nhỏ hơn — không mâu thuẫn, khác thước đo. */}

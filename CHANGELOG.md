@@ -1,3 +1,12 @@
+### 2026-07-26 — Claude Code (CEO phản hồi: ô KPI trống + "13 mã vs 15,2% vô lý") — TRUY ĐÚNG GỐC, sửa 2 lỗi hiển thị
+- **‼ Claude nhận sai 2 điểm đã giải thích trước đó:** (1) nói các ô C36–C45 "có số tổng ở chế độ ALL" — ảnh CEO chứng minh **trống trơn**; (2) giải thích 13 vs 15,2% bằng "khác thước đo" nhưng **không chỉ ra được số nối**, nên CEO đọc thành "ẩn số vô lý". Đã tra lại code, tìm ra nguyên nhân thật:
+  - **Ô KPI trống KHÔNG do chế độ ALL** mà do **khóa fail-closed theo ngưỡng**: `employeeCost.js` `low = rate < threshold` (84,8% < 90%) → `employeeCostTable.js:336 summary.reliable=!low=false` → `summarizeRows` trả `monthlyTotal/annualTotal/columnTotals = null` → thẻ hiện "—"/rỗng. Đúng thiết kế an toàn nhưng UI **không nói lý do**, nhìn như app hỏng.
+  - **13 vs 192 KHÔNG phải mất dữ liệu:** cả 2 đường dùng **chung nguồn** (cùng `canonicalAssignmentSnapshot` + cùng `store.getRows`) nên cờ `revenueMatched` giống nhau. `pairs` (cặp NV×đơn vị×mã, ≈192) **đã có sẵn trong payload** nhưng UI **chỉ hiển thị số mã gộp (13)**, giấu mất số cặp → mất mắt xích đối chiếu.
+- **Sửa (an toàn, KHÔNG nới lỏng khóa tài chính):**
+  1. **Thêm nhánh số "tạm tính" riêng** — `provisionalMonthlyTotal/AnnualTotal/ColumnTotals` LUÔN tính (tổng phần đã khớp %), **giữ nguyên `columnTotals` fail-closed = null** để export/nơi khác không đổi hành vi. UI hiện số tạm tính + **badge "tạm tính"** + ghi rõ *"Tạm tính trên 84,8% đã khớp · còn N cặp thiếu %"*. Không còn ô trống.
+  2. **Tab "Mặt hàng thiếu %" ghi đủ phép cộng:** *"1.074 đã khớp + 192 thiếu % = 1.266 cặp · 192 cặp thiếu gộp thành 13 mã"* + thêm cột **"Số cặp thiếu"** mỗi mã (cộng tay ra đúng tổng). Hết "ẩn số".
+- **Test:** web **73/73 PASS** (thêm 2 test khóa hành vi: fail-closed vẫn null + KPI có cờ `provisional`; panel gap phải ghi đủ phép cộng); web build PASS; server **371/378** = đúng 7 fail baseline (3 OTP + 4 font PDF container này) → **0 regression**.
+
 ### 2026-07-26 — Claude Code — push thẳng `main` `cf71ed8` (CEO duyệt, bot Report kẹt phiên)
 - **Bối cảnh:** bot Report kẹt phiên không merge/deploy được. **CEO duyệt miệng "OK push main"** → Claude push fast-forward `ca2d306 → cf71ed8` lên `main`. Deploy do **cron `scripts/auto-deploy.sh`** trên server tự kéo (mỗi 1 phút, chỉ deploy khi fast-forward, build lỗi thì giữ bản cũ).
 - **Ngoại lệ có kiểm soát:** bỏ bước bot review độc lập lần này vì thay đổi là **FE-only**, đã web 71/71 + build PASS + server 0 regression + gap-sync 18/18. Kiểm tra trước push: fast-forward sạch, working tree sạch, đúng 2 commit (1 code FE + 1 tài liệu).
