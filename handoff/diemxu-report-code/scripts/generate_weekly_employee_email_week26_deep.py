@@ -163,7 +163,7 @@ body{{margin:0;background:#f6fbfb;font-family:Arial,Helvetica,sans-serif;color:#
 <div class='section'><h3>6. So sánh tăng/giảm so cùng kỳ T05</h3><div class='grid2'><div><h4>Đơn vị tăng mạnh</h4><table><tr><th>Đơn vị</th><th class='r'>T06</th><th class='r'>T05</th><th class='r'>Chênh</th><th>Ghi chú</th></tr>{rows_cmp(up_units)}</table></div><div><h4>Đơn vị giảm/chưa phát sinh</h4><table><tr><th>Đơn vị</th><th class='r'>T06</th><th class='r'>T05</th><th class='r'>Chênh</th><th>Ghi chú</th></tr>{rows_cmp(down_units)}</table></div></div></div>
 <div class='section'><h3>7. Tồn tại cần xử lý</h3><ul class='todo'>{exists_html}</ul></div>
 <div class='section'><h3>8. Kiến nghị hành động tuần tới</h3><table><tr><th>Nhóm việc</th><th>Khuyến nghị cụ thể</th><th>Thời hạn</th></tr><tr><td>Giữ điểm lớn</td><td>{esc(', '.join(top_unit_names) or 'Chưa có điểm lớn rõ ràng')}</td><td>48 giờ</td></tr><tr><td>Kéo lại điểm giảm</td><td>{esc(focus_down)}</td><td>Trước giữa tuần</td></tr><tr><td>Đẩy mã có sức kéo</td><td>{esc(list_sentence(up_prod,'mã tăng'))}</td><td>3 ngày đầu tuần</td></tr><tr><td>Chặn tụt mã cũ</td><td>{esc(focus_down_prod)}</td><td>Trong tuần</td></tr></table></div>
-<p style='margin-top:28px'>Trân trọng,<br><b>ĐẶNG XUÂN TRUNG</b><br>CEO — Công ty TNHH Dược phẩm DONAPHARM<br>Hotline: 0886.396.668</p><p class='small'><em>E-mail này được gửi từ văn phòng CEO DONAPHARM với sự hỗ trợ AI agent Donapharm. Đây là bản test DN001 để CEO góp ý trước khi gửi chính thức cho nhân viên.</em></p></div></div></div></body></html>"""
+<p style='margin-top:28px'>Trân trọng,<br><b>ĐẶNG XUÂN TRUNG</b><br>CEO — CÔNG TY CỔ PHẦN DONAPHARM<br>MST: 3603611886<br>Hotline: 0886.396.668</p><p class='small'><em>E-mail này được gửi từ văn phòng CEO DONAPHARM với sự hỗ trợ AI agent Donapharm. Đây là bản test DN001 để CEO góp ý trước khi gửi chính thức cho nhân viên.</em></p></div></div></div></body></html>"""
 
 def report_txt(code):
     name=EMP_NAMES.get(code,code); a=aggregate(jun,code); b=aggregate(may,code); p=points.get(code,{})
@@ -194,7 +194,8 @@ Nguồn dữ liệu: App Report/Excel doanh số 01/06–26/06/2026 + Excel đi�
 
 Trân trọng,
 ĐẶNG XUÂN TRUNG
-CEO — Công ty TNHH Dược phẩm DONAPHARM
+CEO — CÔNG TY CỔ PHẦN DONAPHARM
+MST: 3603611886
 Hotline: 0886.396.668
 """
 
