@@ -921,12 +921,14 @@ export default function EmployeeCost({ me, onNavigate }) {
   const provisionalTotals = model.summary.periodTotal == null && model.summary.provisionalPeriodTotal != null;
   const missingPairs = Math.max(0, Number(kpiMatch.totalRows || 0) - Number(kpiMatch.matchedRows || 0));
   const unavailablePairs = Number(kpiMatch.unavailablePairs || 0);
+  const unavailableEmpCodes = Array.isArray(kpiMatch.unavailableEmployees) ? kpiMatch.unavailableEmployees : [];
   const unavailableEmps = Number(kpiMatch.unavailableEmployeeCount || 0);
+  const unavailableEmpLabel = unavailableEmpCodes.length ? unavailableEmpCodes.join(', ') : `${unavailableEmps} NV`;
   const coverageNote = provisionalTotals
     ? [
       `Tạm tính trên ${formatMatchRate(kpiMatch)} đã khớp`,
       missingPairs ? `còn ${missingPairs.toLocaleString('vi-VN')} cặp thiếu % (tab "Mặt hàng thiếu %")` : '',
-      unavailableEmps ? `chưa lấy được chi phí của ${unavailableEmps} NV (${unavailablePairs.toLocaleString('vi-VN')} cặp)` : '',
+      unavailableEmps ? `chưa lấy được chi phí của ${unavailableEmpLabel} (${unavailablePairs.toLocaleString('vi-VN')} cặp)` : '',
     ].filter(Boolean).join(' · ')
     : '';
   const filteredCount = model.search.filteredRows;
@@ -1090,6 +1092,13 @@ export default function EmployeeCost({ me, onNavigate }) {
     {!admin && <EmployeeGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} />}
     {!admin && <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin={false} onOpenRow={openDqRow} />}
 
+    {/* Hệ thống TỰ BÁO khi thiếu dữ liệu, nêu đích danh NV — không để người dùng
+        phải tự phát hiện số sai rồi đi truy nguồn. */}
+    {!!unavailableEmps && <div className="employee-cost-match-warning" role="alert">
+      <b>⚠ Dữ liệu chưa đầy đủ — số đang là TẠM TÍNH.</b> Chưa lấy được dữ liệu chi phí của <b>{unavailableEmpLabel}</b> ({unavailablePairs.toLocaleString('vi-VN')} cặp, kỳ {formatMonthLabel(model.from)}{model.from === model.to ? '' : ` → ${formatMonthLabel(model.to)}`}).
+      Phần này <b>không</b> phải "thiếu % catalog" mà là <b>nguồn chi phí DataHub chưa trả dữ liệu</b> — báo DataHub kiểm tra. Tỷ lệ khớp phía dưới đã loại phần này ra để không báo sai.
+    </div>}
+
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} sub={`Hiện ${filteredCount.toLocaleString('vi-VN')}/${totalTableRows.toLocaleString('vi-VN')} dòng`} />
       <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
@@ -1123,7 +1132,7 @@ export default function EmployeeCost({ me, onNavigate }) {
         ? [
           `${kpiMatch.matchedRows.toLocaleString('vi-VN')} khớp + ${missingPairs.toLocaleString('vi-VN')} thiếu % = ${kpiMatch.totalRows.toLocaleString('vi-VN')} cặp (nhân viên×đơn vị×mặt hàng)`,
           `ngưỡng ${kpiMatch.threshold}% · khớp số ở tab "Mặt hàng thiếu %"`,
-          unavailableEmps ? `⚠ ${unavailableEmps} NV chưa lấy được dữ liệu chi phí (${unavailablePairs.toLocaleString('vi-VN')} cặp) — KHÔNG tính vào tỷ lệ này` : '',
+          unavailableEmps ? `⚠ chưa lấy được dữ liệu chi phí của ${unavailableEmpLabel} (${unavailablePairs.toLocaleString('vi-VN')} cặp) — KHÔNG tính vào tỷ lệ này` : '',
         ].filter(Boolean).join(' · ')
         : `${kpiMatch.matchedRows.toLocaleString('vi-VN')} khớp + ${missingPairs.toLocaleString('vi-VN')} thiếu % = ${kpiMatch.totalRows.toLocaleString('vi-VN')} cặp (đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}%`} />
     </div>

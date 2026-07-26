@@ -146,8 +146,8 @@ test('ALL revenue-match KPI reads merged period match instead of empty top-level
     }],
     summary: { reliable: true },
   });
-  assert.deepEqual(model.match, { matchedRows: 0, totalRows: 0, rate: null, threshold: 90, low: false, unavailablePairs: 0, unavailableEmployeeCount: 0 });
-  assert.deepEqual(employeeCostKpiMatch(model), { matchedRows: 1245, totalRows: 1262, rate: 98.7, threshold: 90, low: false, unavailablePairs: 0, unavailableEmployeeCount: 0 });
+  assert.deepEqual(model.match, { matchedRows: 0, totalRows: 0, rate: null, threshold: 90, low: false, unavailablePairs: 0, unavailableEmployeeCount: 0, unavailableEmployees: [] });
+  assert.deepEqual(employeeCostKpiMatch(model), { matchedRows: 1245, totalRows: 1262, rate: 98.7, threshold: 90, low: false, unavailablePairs: 0, unavailableEmployeeCount: 0, unavailableEmployees: [] });
   assert.equal(formatMatchRate(employeeCostKpiMatch(model)), '98,7%');
 });
 
@@ -247,6 +247,33 @@ test('low coverage still shows provisional totals but flags them and keeps guard
   // Nhưng KPI vẫn có số để CEO nhìn, kèm cờ provisional để UI ghi rõ "tạm tính".
   const kpis = employeeCostColumnKpis(model);
   assert.deepEqual(kpis, [{ key: 'c36', label: 'CP (%)', annual: false, value: 80_000, provisional: true }]);
+});
+
+test('nguon chi phi loi phai neu DICH DANH ma NV, khong chi dem so luong', () => {
+  const model = employeeCostViewModel({
+    empCode: 'ALL', allEmployees: true, from: '2026-07', to: '2026-07',
+    periods: [{
+      empCode: 'ALL', period: '2026-07', columns: [{ key: 'c36', label: 'CP (%)' }], rows: [],
+      match: {
+        matchedRows: 1074, totalRows: 1080, rate: 99.4, threshold: 90, low: false,
+        unavailablePairs: 186, unavailableEmployeeCount: 1, unavailableEmployees: ['DN007'],
+      },
+      summary: { reliable: false },
+    }],
+    summary: { reliable: false },
+  });
+  const match = employeeCostKpiMatch(model);
+  assert.deepEqual(match.unavailableEmployees, ['DN007']);
+  assert.equal(match.unavailablePairs, 186);
+  // Tổng cặp có dữ liệu + cặp lỗi nguồn phải cộng lại đúng toàn bộ.
+  assert.equal(match.totalRows + match.unavailablePairs, 1266);
+});
+
+test('trang hien banner tu bao khi thieu du lieu, co nêu ma NV', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /Dữ liệu chưa đầy đủ — số đang là TẠM TÍNH/);
+  assert.match(page, /unavailableEmpLabel/);
+  assert.match(page, /nguồn chi phí DataHub chưa trả dữ liệu/);
 });
 
 test('gap coverage panel states the full arithmetic so pair count reconciles with match KPI', () => {
