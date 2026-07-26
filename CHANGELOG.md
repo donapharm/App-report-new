@@ -1,3 +1,10 @@
+### 2026-07-26 — Claude Code (CEO duyệt) — CẢNH BÁO TỰ ĐỘNG Telegram khi nguồn chi phí DataHub thiếu dữ liệu
+- **Mục tiêu (CEO):** hết cảnh CEO phải tự phát hiện số lệch rồi bắt các bên đi truy — **hệ thống phải tự tố cáo**, kể cả khi CEO không mở app.
+- **Thêm `server/src/employeeCostSourceAlert.js`:** cắm vào **vòng warm cache ALL định kỳ**; phát hiện `match.unavailableEmployees` → nhắn **Telegram cho CEO/ADMIN** (chỉ người có role ceo/admin đã liên kết Telegram), nêu **đích danh mã NV + số cặp ảnh hưởng + kỳ**, nói rõ *"KHÔNG phải mã thiếu % catalog — là nguồn chi phí DataHub chưa trả dữ liệu"*.
+- **Chống phiền + không giấu:** chỉ gửi khi **trạng thái đổi** (danh sách NV lỗi khác lần trước) hoặc **quá 6 giờ** vẫn còn lỗi; **báo cả khi ĐÃ KHÔI PHỤC** để CEO biết chuyện đã xong mà không phải tự kiểm.
+- **An toàn:** tin nhắn **không chứa số tiền/%/PII/C33–C46** (có test chặn); chưa cấu hình `TELEGRAM_BOT_TOKEN` → no-op; lỗi gửi **không bao giờ** làm hỏng vòng warm hay nghiệp vụ.
+- **Test:** thêm `server/test/employeeCostSourceAlert.test.js` (3 test: nội dung nêu đích danh & không lộ tiền · dedupe không spam · báo khôi phục rồi im lặng). Server **378/385** = đúng 7 fail baseline → **0 regression**; web **75/75**; build PASS.
+
 ### 2026-07-26 — Claude Code (CEO: tab "Mặt hàng thiếu %" cũng phải rõ) — bỏ trắng-màn, nêu đích danh NV lỗi nguồn
 - **Vấn đề:** khi 1 NV chưa lấy được nguồn chi phí, `employeeCostGaps.buildForSession` **ném lỗi** (`EMPLOYEE_COST_GAPS_SOURCE_UNAVAILABLE`) → **cả tab trắng, mất sạch danh sách**, người xem không hiểu vì sao. Trong khi màn "Chi phí theo nhân viên" đã xử lý mềm → 2 màn hành xử khác nhau, càng khó hiểu.
 - **Sửa:** NV lỗi nguồn được **bỏ khỏi worklist thay vì ném lỗi**; trả thêm `unavailable { employees[], count, note }`; UI (cả panel admin lẫn panel NV) hiện banner *"⚠ Danh sách chưa đủ — chưa lấy được dữ liệu chi phí của DNxxx… Đây là lỗi nguồn DataHub, không phải mã đủ %"*. Audit ghi kèm `unavailableEmployees`.

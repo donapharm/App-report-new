@@ -34,6 +34,7 @@ const employeePointNotifications = require('./employeePointNotifications');
 const employeePointPenaltyExport = require('./employeePointPenaltyExport');
 const employeeCostGaps = require('./employeeCostGaps');
 const employeeCostGapSync = require('./employeeCostGapSync');
+const employeeCostSourceAlert = require('./employeeCostSourceAlert');
 const employeeCostDataQuality = require('./employeeCostDataQuality');
 const employeeCostExport = require('./employeeCostExport');
 const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
@@ -884,11 +885,16 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
   const month = monthInputForKy(ky);
   if (!month) return false;
   const startedAt = Date.now();
-  await employeeCostAllPayload({
+  const payload = await employeeCostAllPayload({
     session: { emp_code: 'CACHE_WARMER', role: 'admin' },
     query: { emp: 'ALL', from: month, to: month, page: '1', pageSize: '20', sortDir: 'asc' },
   }, { paginate: true, auditEvent: `warm_all:${reason}`, suppressAudit: true });
   console.log('[employee-cost] ALL cache warmed', { ky, reason, durationMs: Date.now() - startedAt });
+  // Hệ thống TỰ BÁO khi DataHub thiếu dữ liệu chi phí, thay vì đợi CEO phát hiện
+  // số lệch rồi mới đi truy. Không được làm hỏng warm nếu gửi lỗi.
+  employeeCostSourceAlert.checkAndNotify(payload, ky).catch((error) => {
+    console.warn('[employee-cost] alert check failed', { ky, message: error.message });
+  });
   return true;
 }
 
