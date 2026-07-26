@@ -1,3 +1,9 @@
+### 2026-07-26 — Claude Code — công cụ TỰ KIỂM đường cảnh báo Telegram (`scripts/test_telegram_alert.js`)
+- **CEO hỏi "sao không tự test thử gửi Telegram":** Claude **KHÔNG gửi thật được** từ môi trường của mình — không có `TELEGRAM_BOT_TOKEN` (`.env` nằm trên server thật), không có bảng liên kết chat_id, và mạng ra `api.telegram.org` bị chặn (HTTP 000). Đã nói rõ thay vì thử rồi báo mơ hồ.
+- **Đã chứng minh được phần kiểm được:** chặn `fetch` để xem chính xác request app sẽ gửi → đúng `POST https://api.telegram.org/bot<TOKEN>/sendMessage`, đúng `chat_id`, đúng nội dung tin; `sendTelegram` trả `{ok:true}`.
+- **Thêm công cụ tự kiểm chạy TRÊN SERVER THẬT:** `node scripts/test_telegram_alert.js` (chẩn đoán: có token chưa · có ai liên kết Telegram chưa · in trước tin sẽ gửi) và `--send` (gửi tin thử thật, in `message_id` từng người). Tự nạp `.env` cạnh repo giống `src/index.js`.
+- **Test:** server **378/385** = đúng 7 fail baseline → **0 regression**.
+
 ### 2026-07-26 — Claude Code (CEO duyệt) — CẢNH BÁO TỰ ĐỘNG Telegram khi nguồn chi phí DataHub thiếu dữ liệu
 - **Mục tiêu (CEO):** hết cảnh CEO phải tự phát hiện số lệch rồi bắt các bên đi truy — **hệ thống phải tự tố cáo**, kể cả khi CEO không mở app.
 - **Thêm `server/src/employeeCostSourceAlert.js`:** cắm vào **vòng warm cache ALL định kỳ**; phát hiện `match.unavailableEmployees` → nhắn **Telegram cho CEO/ADMIN** (chỉ người có role ceo/admin đã liên kết Telegram), nêu **đích danh mã NV + số cặp ảnh hưởng + kỳ**, nói rõ *"KHÔNG phải mã thiếu % catalog — là nguồn chi phí DataHub chưa trả dữ liệu"*.
