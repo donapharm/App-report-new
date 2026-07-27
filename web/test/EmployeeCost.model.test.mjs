@@ -105,9 +105,9 @@ test('bonus KPI contract labels it as forecast/reference and displays month plus
   assert.match(page, /Phần 2/);
   assert.match(page, /DataHub C10/);
   assert.doesNotMatch(page, /if \(month\.amount == null\) return/);
-  assert.match(page, /rate × phần vượt target riêng từng nhóm C10/);
-  assert.match(page, /target nhóm auto tự suy khi chưa có manual/);
-  assert.match(page, /nguồn \$\{source\}/);
+  assert.match(page, /chia cho từng nhóm C10 theo tỷ trọng doanh thu thực/);
+  assert.match(page, /rà theo mã QLNB → cột C10/);
+  assert.match(page, /được chia từ phần vượt/);
   assert.match(page, /Target quý = trung bình các tháng đã giao/);
   assert.match(page, /không phải payroll hay số chi chính thức/);
 });
