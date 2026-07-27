@@ -12,17 +12,26 @@
 - Nhánh `claude/new-session-eifd44` trước đó **lệch 2 chiều**: code app **cũ hơn** main (thiếu bản tích hợp của bot), nhưng 11 file thì **chưa lên main**. Để vậy là bẫy — merge nhầm sẽ xoá công của bot.
 - Đặt lại nhánh về `origin/main`, chỉ giữ **11 file thật sự chưa merge**: 7 script an toàn phát hành + 2 SPEC + 2 DIRECTIVE. **Không đụng `scripts/auto-deploy.sh`** (giữ bản `a82381f`). Commit `b288e60`.
 
-**‼ Còn 15 nhánh cũ trên remote — CHƯA XOÁ ĐƯỢC (thiếu quyền push xoá/tag)**
+**15 nhánh cũ trên remote — đã rà và xác định phải xoá** *(kết quả cuối ở mục dưới)*
 Đã kiểm **từng dòng code** mỗi nhánh thêm mới xem `main` có chưa. Kết quả: nội dung **đã có đủ trên `main`**; các dòng "thiếu" đều là **bản cũ đã bị thay**, không phải công bị mất (vd `release/bonus-v32-c10` là bản P2 SAI mà CEO đã bác — **không được** đưa lên main).
-- **13 nhánh của Claude** (xoá được): `release/badge-stable` · `release/bonus-prorata` · `release/bonus-v32-c10` · `release/c10-template-layout` · `release/catalog-layout` · `release/control-chars` · `release/cost-c10-column` · `release/dq-badge-fix` · `release/dq-uom-equiv` · `release/gap-unit-code` · `release/target-v32` · `release/app-report-employee-cost` · `release/sso-v3-crosswalk-prod-20260725`
-- **2 nhánh của Report Bot** (để bot tự xoá): `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — **nhánh nguy hiểm**, từng suýt merge làm mất sanitizer + badge + perf) · `fix/app-report-deploy-stability-20260727` (`09a6477` — trùng khít main)
+- **13 nhánh của Claude**: `release/badge-stable` · `release/bonus-prorata` · `release/bonus-v32-c10` · `release/c10-template-layout` · `release/catalog-layout` · `release/control-chars` · `release/cost-c10-column` · `release/dq-badge-fix` · `release/dq-uom-equiv` · `release/gap-unit-code` · `release/target-v32` · `release/app-report-employee-cost` · `release/sso-v3-crosswalk-prod-20260725`
+- **2 nhánh của Report Bot**: `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — **nhánh nguy hiểm**, từng suýt merge làm mất sanitizer + badge + perf) · `fix/app-report-deploy-stability-20260727` (`09a6477` — trùng khít main)
 - **Rủi ro nếu để nguyên:** nhánh nào cũng **cũ hơn `main`**; merge nhầm là **lùi mất** công bên kia. Đã dính 1 lần với `b70cab9`.
 
-**CẬP NHẬT cùng ngày — CẢ HAI BÊN ĐỀU KHÔNG XOÁ ĐƯỢC, việc này phải do CEO chạy**
+**KẾT THÚC — ✅ ĐÃ XOÁ ĐỦ 15/15 NHÁNH (bot Report thực hiện)**
+- Bot đọc nhầm quyền lúc đầu; sau đó chạy được, có **kiểm `origin/main` chứa `a82381f` trước khi xoá**.
+- **Claude xác minh độc lập:** `git ls-remote` từng nhánh → **cả 15 ref không còn** · `origin/main` vẫn `a82381f`, **không mất commit nào** · 6 mốc bắt buộc + P2 bản đúng còn nguyên trên `main`.
+- 2 nhánh nguy hiểm nhất đã biến mất: `release/bonus-v32-c10` (P2 SAI, thổi phồng thưởng) và `fix/c7-cost-gap-worklist-20260727` (`b70cab9`).
+- **Phát hiện thêm — còn 8 nhánh cũ hơn (đợt 19–25/07) chưa xoá:** `fix/c30-freshness-20260719` · `fix/c7-canonical-latest-20260727` · `fix/ceo-bell-safe-mobile-20260719` · `fix/qlnb-unit-workflow-20260719` · `fix/report-crosswalk-publication-hardening-20260725` · `fix/report-uom-crosswalk-s2s-20260725` · `fix/kpi-match-all-display-20260725` · `hotfix/report-p0-warm-worker-20260724`. Đã kiểm từng dòng: **không nhánh nào chứa công bị mất** (2 nhánh cuối "thiếu" dòng chỉ vì giữ bản KPI / hook test warm-worker **cũ đã bị thay**). Cùng loại rủi ro, không ảnh hưởng app; **chưa xoá vì chưa được yêu cầu**.
+- **Luật thường trực ghi vào `HANDOFF.md`:** không merge nhánh `release/*` / `fix/*` / `hotfix/*` cũ; cần gì thì nhặt từ `main` hoặc rẽ nhánh mới từ `main`.
+
+<details><summary>Lịch sử: giai đoạn bị chặn (đã giải quyết)</summary>
 - **Claude:** `git push origin --delete <nhánh>` → **HTTP 403** từ git proxy (chỉ được push vào đúng nhánh làm việc của mình). `git push --tags` cũng 403 → **các thẻ `archive/*` chỉ nằm local, không lên remote**. Bộ công cụ GitHub có `create_branch` nhưng **không có** lệnh xoá nhánh.
 - **Bot Report:** báo phiên hiện tại **không được cấp công cụ git/exec** → chưa xoá nhánh nào, chưa xác nhận lại.
 - ⇒ **Không ai trong hai bên làm được.** Đã soạn 1 lệnh chạy thẳng trên server (`~/.openclaw/workspace-report/App-report`) có **chốt an toàn**: chỉ xoá khi `origin/main` thật sự đã chứa `a82381f`; kèm đường lối thay thế qua giao diện GitHub.
-- **Mức độ khẩn: THẤP.** Nhánh cũ nằm im **không ảnh hưởng app đang chạy**; chỉ nguy hiểm nếu có người **bấm merge** chúng. Trong lúc chưa xoá, luật tạm: **không merge bất kỳ nhánh `release/*` hay `fix/*` cũ nào**, đặc biệt `release/bonus-v32-c10` (P2 SAI, thổi phồng thưởng) và `fix/c7-cost-gap-worklist-20260727` (`b70cab9`).
+- **Mức độ khẩn: THẤP.** Nhánh cũ nằm im **không ảnh hưởng app đang chạy**; chỉ nguy hiểm nếu có người **bấm merge** chúng.
+
+</details>
 
 **Viết lại `HANDOFF.md`** (bản cũ đứng yên từ 01/07, đọc vào là lạc): trạng thái thật + số test + P1/P2 v3.2 + C10 + gap-sync C7 + DQ + self-heal + bộ script phát hành + việc còn treo của DataHub/App Sale + 3 cái bẫy đã trả giá (`template.columns` ghi đè default · join key phải là mã C7 · P2 không được dồn hạng cao).
 ### 2026-07-27 — FIX: worklist “mã thiếu %” gửi đúng mã đơn vị C7

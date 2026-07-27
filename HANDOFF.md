@@ -114,20 +114,36 @@ Kết quả đã đạt: **13 mã → 8 mã / 11 cặp** (loại 5 báo oan, xá
 
 ---
 
-## 6. Dọn nhánh — CÒN TREO, phải do CEO chạy
+## 6. Dọn nhánh — ✅ ĐÃ XONG 27/07
 
-**15 nhánh cũ** đã hết giá trị. Đã kiểm từng dòng: **toàn bộ nội dung đã nằm trên `main`**,
-nhưng chúng **cũ hơn main** → ai lỡ merge là **lùi mất** công của bên kia (đã suýt dính với `b70cab9`).
+**15 nhánh cũ đã xoá hết** (bot Report thực hiện, có kiểm `origin/main` chứa `a82381f` trước khi xoá).
+Claude đã xác minh độc lập: cả 15 ref không còn · `main` vẫn `a82381f`, không mất commit nào ·
+6 mốc bắt buộc + P2 bản đúng còn nguyên.
 
-Cả hai bên đều **không xoá được**: Claude bị git proxy trả **403** khi push xoá (và cả khi push tag);
-bot Report báo phiên không có công cụ git/exec. Bộ công cụ GitHub không có lệnh xoá nhánh.
+Trong đó 2 nhánh nguy hiểm nhất đã biến mất: `release/bonus-v32-c10` (bản P2 **SAI**, thổi phồng
+thưởng — CEO đã bác) và `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — merge vào là mất
+sanitizer + badge + perf).
 
-**Luật tạm cho tới khi xoá xong:** ❌ **Không merge bất kỳ nhánh `release/*` hoặc `fix/*` cũ nào.**
-Hai nhánh nguy hiểm nhất: `release/bonus-v32-c10` (bản P2 **SAI**, thổi phồng thưởng — CEO đã bác)
-và `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — sẽ xoá mất sanitizer + badge + perf).
+### Còn 8 nhánh cũ hơn (đợt 19–25/07) — CHƯA xoá, chưa ai yêu cầu
+Claude đã kiểm từng dòng, **không nhánh nào chứa công bị mất**:
 
-Danh sách đầy đủ + lệnh xoá có chốt an toàn: xem mục "Dọn nhánh" trong `CHANGELOG.md` ngày 27/07.
-Nhánh cũ **không ảnh hưởng app đang chạy** — mức khẩn thấp, chỉ nguy hiểm khi có người bấm merge.
+| Nhánh | Kết luận |
+|---|---|
+| `fix/c30-freshness-20260719` | main đã có đủ |
+| `fix/c7-canonical-latest-20260727` | main đã có đủ |
+| `fix/ceo-bell-safe-mobile-20260719` | main đã có đủ |
+| `fix/qlnb-unit-workflow-20260719` | main đã có đủ |
+| `fix/report-crosswalk-publication-hardening-20260725` | main đã có đủ |
+| `fix/report-uom-crosswalk-s2s-20260725` | main đã có đủ |
+| `fix/kpi-match-all-display-20260725` | main thiếu 2/17 dòng — là **bản KPI cũ đã bị thay** |
+| `hotfix/report-p0-warm-worker-20260724` | main thiếu 47/77 dòng — là **hook test warm-worker cũ đã bị thay** |
+
+Cùng loại rủi ro: đều **cũ hơn `main`**, merge nhầm là lùi mất công bên kia.
+**Không ảnh hưởng app đang chạy.** Khi nào CEO cho phép thì xoá nốt, dùng đúng lệnh có chốt
+`git merge-base --is-ancestor a82381f origin/main` như đợt 15 nhánh.
+
+**Luật thường trực:** ❌ **Không merge nhánh `release/*` / `fix/*` / `hotfix/*` cũ.** Cần nội dung
+nào thì nhặt lại từ `main` hoặc làm mới trên nhánh rẽ từ `main`.
 
 ---
 
