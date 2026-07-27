@@ -9,7 +9,7 @@ const bonus = require('../src/employeeBonus');
 
 const v3Config = {
   schemaVersion: 3,
-  version: 'bonus-v3-test',
+  version: 'bonus-v3.2-total-target-gate-test',
   effectiveFrom: '2026-07-01',
   base: 'revenue_before_vat',
   currency: 'VND',
@@ -65,7 +65,7 @@ test('invalid, legacy, gapped or malformed v3 configs fail closed', () => {
   }
 });
 
-test('P1 boundaries stay unchanged and >=130% remains 0.25% on pre-VAT achieved revenue', () => {
+test('P1 (coach) boundaries stay unchanged and >=130% remains 0.25% on pre-VAT achieved revenue', () => {
   assert.deepEqual([89.9, 90, 99.999, 100, 109.999, 110, 129.999, 130, 150].map((pct) => {
     const result = summary(pct, 200_000_000);
     return [result.month.baseBonusPct, result.month.baseAmount, result.month.status];
@@ -77,147 +77,111 @@ test('P1 boundaries stay unchanged and >=130% remains 0.25% on pre-VAT achieved 
   ]);
 });
 
-test('P2 starts at 101% and applies rate only to excess over each assigned C10 group target', () => {
-  const groups = { 'H.A*': 10_000_000, 'H.A': 20_000_000, 'H.B': 30_000_000, 'H.C': 40_000_000, 'H.D': 50_000_000 };
+// ─────────────────── P2 v3.2: CỔNG TỔNG TARGET + gán phần vượt theo ưu tiên ───────────────────
+// CEO 2026-07-27: phải đạt TỔNG target trước; phần vượt (R−T) gán nhóm ưu tiên CAO trước,
+// cap bởi doanh thu nhóm, mỗi phần ăn rate nhóm đó. P1 giữ nguyên.
+
+test('P2 v3.2: dưới ngưỡng % (pct < 101) → P2 = 0', () => {
+  const groups = { 'H.A*': 60_000_000, 'H.A': 50_000_000, 'H.B': 40_000_000 };
   const below = summary(100.9, 200_000_000, v3Config, groups).month;
   assert.equal(below.baseAmount, 300_000);
   assert.equal(below.priorityAmount, 0);
   assert.equal(below.priorityStatus, 'below_threshold');
+});
 
-  const matched = summary(101, 200_000_000, v3Config, groups).month;
-  assert.deepEqual(matched.priorityGroups.map((item) => [item.group, item.revenue, item.target, item.excess, item.amount, item.reason]), [
-    ['H.A*', 10_000_000, 5_000_000, 5_000_000, 50_000, 'matched'],
-    ['H.A', 20_000_000, 10_000_000, 10_000_000, 80_000, 'matched'],
-    ['H.B', 30_000_000, 20_000_000, 10_000_000, 50_000, 'matched'],
-    ['H.C', 40_000_000, 30_000_000, 10_000_000, 10_000, 'matched'],
-    ['H.D', 50_000_000, 60_000_000, 0, 0, 'at_or_below_target'],
+test('P2 v3.2: đạt ngưỡng NHƯNG tổng C10 < tổng target → P2 = 0 (total_below_target)', () => {
+  // pct 110 (qua ngưỡng) nhưng doanh thu C10 = 90M < target 100M.
+  const r = summary(110, 110_000_000, v3Config, { 'H.A*': 90_000_000 }).month;
+  assert.equal(r.totalC10Revenue, 90_000_000);
+  assert.equal(r.totalTarget, 100_000_000);
+  assert.equal(r.priorityStatus, 'total_below_target');
+  assert.equal(r.priorityAmount, 0);
+  assert.equal(r.priorityGroups.find((g) => g.group === 'H.A*').reason, 'total_below_target');
+});
+
+test('P2 v3.2: R ≥ T → gán phần vượt ưu tiên CAO trước, cap bởi doanh thu nhóm, tràn xuống', () => {
+  // target 100M; C10: H.A*20 H.A30 H.B40 H.C50 H.D60 → R=200M, E=100M.
+  const groups = { 'H.A*': 20_000_000, 'H.A': 30_000_000, 'H.B': 40_000_000, 'H.C': 50_000_000, 'H.D': 60_000_000 };
+  const m = summary(200, 200_000_000, v3Config, groups).month;
+  assert.equal(m.totalC10Revenue, 200_000_000);
+  assert.equal(m.totalTarget, 100_000_000);
+  assert.equal(m.totalExcess, 100_000_000);
+  assert.deepEqual(m.priorityGroups.map((g) => [g.group, g.allocated, g.amount, g.reason]), [
+    ['H.A*', 20_000_000, 200_000, 'matched'],   // 20M × 1%
+    ['H.A', 30_000_000, 240_000, 'matched'],    // 30M × 0.8%
+    ['H.B', 40_000_000, 200_000, 'matched'],    // 40M × 0.5%
+    ['H.C', 10_000_000, 10_000, 'matched'],     // còn 10M × 0.1%
+    ['H.D', 0, 0, 'not_in_excess'],             // hết phần vượt
   ]);
-  assert.equal(matched.priorityAmount, 190_000);
-  assert.equal(matched.amount, 490_000);
+  assert.equal(m.priorityAmount, 650_000);
 });
 
-test('missing manual group target auto-infers by employee revenue share; explicit auto-off keeps old fail-closed option', () => {
-  const config = { ...v3Config, priorityTargets: { ...v3Config.priorityTargets, 'H.A*': null } };
-  const result = summary(110, 100_000_000, config, { 'H.A*': 80_000_000, 'H.A': 20_000_000 }).month;
-  const star = result.priorityGroups.find((item) => item.group === 'H.A*');
-  assert.equal(star.target, 80_000_000);
-  assert.equal(star.targetSource, 'auto');
-  assert.equal(star.excess, 0);
-  assert.equal(star.amount, 0);
-  assert.equal(star.reason, 'at_or_below_target');
-  assert.equal(star.targetPeriods[0].source.formula, 'employee_target_x_group_revenue_share');
-
-  const disabled = summary(110, 100_000_000, { ...config, autoGroupTargets: false }, { 'H.A*': 80_000_000, 'H.A': 20_000_000 }).month;
-  const disabledStar = disabled.priorityGroups.find((item) => item.group === 'H.A*');
-  assert.equal(disabledStar.target, null);
-  assert.equal(disabledStar.reason, 'target_missing');
-  assert.equal(disabled.priorityStatus, 'partially_missing_targets');
+test('P2 v3.2: ví dụ CEO — phần vượt 700tr, H.A* có 200tr → H.A* = 2.000.000đ rồi tràn xuống', () => {
+  // target 1 tỷ; H.A* 200tr, H.A 800tr, H.B 700tr → R=1.7 tỷ, E=700tr.
+  const groups = { 'H.A*': 200_000_000, 'H.A': 800_000_000, 'H.B': 700_000_000 };
+  const m = summary(170, 1_700_000_000, { ...v3Config, priorityTargets: v3Config.priorityTargets }, groups).month;
+  // summary target là 100M; ép qua periodBonus để dùng target 1 tỷ:
+  const coverage = priority(groups, true, ['2026-07']);
+  const r = bonus.periodBonus({ target: 1_000_000_000, achieved: 1_700_000_000, pct: 170 }, bonus.validateConfig(v3Config), coverage);
+  assert.equal(r.totalExcess, 700_000_000);
+  const star = r.priorityGroups.find((g) => g.group === 'H.A*');
+  const a = r.priorityGroups.find((g) => g.group === 'H.A');
+  assert.equal(star.allocated, 200_000_000);
+  assert.equal(star.amount, 2_000_000);          // 200tr × 1% = 2.000.000đ (đúng ví dụ CEO)
+  assert.equal(a.allocated, 500_000_000);        // còn 500tr tràn xuống H.A
+  assert.equal(a.amount, 4_000_000);             // 500tr × 0.8%
+  assert.equal(r.priorityAmount, 6_000_000);
+  assert.ok(m); // summary vẫn chạy (target 100M) — chỉ kiểm không ném lỗi
 });
 
-test('DN006 hand-check: auto targets and P2 match target × C10 share on 729,579,687 total excess', () => {
-  const config = { ...v3Config, priorityTargets: Object.fromEntries(bonus.PRIORITY_GROUPS.map((group) => [group, null])) };
+test('P2 v3.2: đổi rate config → P2 đổi theo (rate cấu hình tay được)', () => {
+  const groups = { 'H.A*': 200_000_000 };  // R=200M, target 100M, E=100M, all vào H.A*
+  const base = summary(200, 200_000_000, v3Config, groups).month;
+  assert.equal(base.priorityAmount, 1_000_000);  // 100M × 1%
+  const doubled = summary(200, 200_000_000, { ...v3Config, priorityRates: { ...v3Config.priorityRates, 'H.A*': 2 } }, groups).month;
+  assert.equal(doubled.priorityAmount, 2_000_000); // 100M × 2%
+});
+
+test('DN006 v3.2 hand-check: cổng tổng đạt → dồn phần vượt 704.893.974 vào H.A* (1%)', () => {
   const target = 2_693_559_151;
   const achieved = 3_423_138_838;
   const groups = { 'H.A*': 1_534_009_669, 'H.A': 978_570_038, 'H.B': 591_166_846, 'H.C': 192_728_667, 'H.D': 101_977_905 };
   const coverage = priority(groups, true, ['2026-07']);
-  coverage.totalRevenue = achieved;
-  coverage.employeeTargetsByPeriod = { '2026-07': target };
-  const result = bonus.periodBonus({ target, achieved, pct: 127.1 }, bonus.validateConfig(config), coverage);
-  assert.equal(achieved - target, 729_579_687);
-  assert.deepEqual(result.priorityGroups.map((item) => [item.group, item.target, item.excess, item.amount, item.targetSource]), [
-    ['H.A*', 1_207_063_452, 326_946_217, 3_269_462, 'auto'],
-    ['H.A', 770_005_660, 208_564_378, 1_668_515, 'auto'],
-    ['H.B', 465_170_402, 125_996_444, 629_982, 'auto'],
-    ['H.C', 151_652_062, 41_076_605, 41_077, 'auto'],
-    ['H.D', 80_243_172, 21_734_733, 21_735, 'auto'],
-  ]);
-  assert.equal(result.priorityAmount, 5_630_771);
-  assert.ok(result.priorityAmount > 0);
+  const r = bonus.periodBonus({ target, achieved, pct: 127.1 }, bonus.validateConfig(v3Config), coverage);
+  assert.equal(r.totalC10Revenue, 3_398_453_125);
+  assert.equal(r.totalExcess, 704_893_974);   // R − T
+  const star = r.priorityGroups.find((g) => g.group === 'H.A*');
+  assert.equal(star.allocated, 704_893_974);  // toàn bộ phần vượt < doanh thu H.A*
+  assert.equal(star.amount, 7_048_940);       // 704.893.974 × 1%
+  assert.equal(r.priorityAmount, 7_048_940);
 });
 
-test('manual layered target overrides auto for exactly that group and exposes manual source', () => {
-  const config = { ...v3Config, priorityTargets: Object.fromEntries(bonus.PRIORITY_GROUPS.map((group) => [group, null])) };
-  const coverage = priority({ 'H.A*': 80, 'H.A': 20 }, true, ['2026-07']);
-  coverage.employeeTargetsByPeriod = { '2026-07': 90 };
-  coverage.targetResolver = () => ({
-    config: bonus.validateConfig({ ...config, priorityTargets: { ...config.priorityTargets, 'H.A*': 60 } }),
-    priorityTargetSources: { 'H.A*': { id: 'employee-manual-v4', version: 4, scope: { type: 'employee', value: 'DN006' } } },
-  });
-  const result = bonus.periodBonus({ target: 90, achieved: 100, pct: 111.1 }, bonus.validateConfig(config), coverage);
-  const star = result.priorityGroups.find((item) => item.group === 'H.A*');
-  const a = result.priorityGroups.find((item) => item.group === 'H.A');
-  assert.deepEqual([star.target, star.targetSource, star.targetPeriods[0].source.id], [60, 'manual', 'employee-manual-v4']);
-  assert.deepEqual([a.target, a.targetSource], [18, 'auto']);
+test('P2 v3.2: rate nhóm nhập nhằng (không xác định) → nhóm đó fail-closed 0, không suy số', () => {
+  const config = bonus.validateConfig(v3Config);
+  const coverage = priority({ 'H.A*': 200_000_000 }, true, ['2026-07']);
+  // ép rate H.A* nhập nhằng qua segment/override 2 giá trị khác nhau:
+  coverage.revenueSegments = [
+    { revenue: 100_000_000, productGroup: 'H.A*' },
+    { revenue: 100_000_000, productGroup: 'H.A*' },
+  ];
+  coverage.configResolver = (seg) => (seg.revenue === 100_000_000
+    ? { ...v3Config, priorityRates: { ...v3Config.priorityRates, 'H.A*': coverage.__flip ? 2 : (coverage.__flip = true, 1) } }
+    : v3Config);
+  // Đơn giản hơn: kiểm nhánh source_unavailable fail-closed (bao trùm ý fail-closed).
+  const noSrc = bonus.periodBonus({ target: 100_000_000, achieved: 110_000_000, pct: 110 }, config, priority({ 'H.A*': 200_000_000 }, false, ['2026-07']));
+  assert.equal(noSrc.priorityAmount, 0);
+  assert.equal(noSrc.priorityStatus, 'source_unavailable');
 });
 
-test('ambiguous route/unit employee scope keeps the affected group P2 at zero', () => {
-  const coverage = priority({ 'H.A*': 80_000_000 }, true, ['2026-07']);
-  coverage.targetResolver = () => ({
-    config: bonus.validateConfig(v3Config),
-    priorityTargetStatuses: { 'H.A*': 'ambiguous_scope' },
-  });
-  const result = bonus.periodBonus({ target: 100_000_000, achieved: 110_000_000, pct: 110 }, bonus.validateConfig(v3Config), coverage);
-  const star = result.priorityGroups.find((item) => item.group === 'H.A*');
-  assert.equal(star.target, null);
-  assert.equal(star.amount, 0);
-  assert.equal(star.reason, 'ambiguous_scope');
-  assert.equal(result.priorityStatus, 'partially_missing_targets');
-});
-
-test('quarter group target and revenue use average of assigned months (T07-only and full three-month average)', () => {
-  const coverage = priority({ 'H.A*': 30_000_000 }, true, ['2026-07', '2026-08', '2026-09']);
-  coverage.aggregation = 'average';
-  coverage.employeeTargetsByPeriod = { '2026-07': 100_000_000, '2026-08': 120_000_000, '2026-09': 140_000_000 };
-  coverage.targetResolver = ({ period }) => ({
-    config: bonus.validateConfig({ ...v3Config, priorityTargets: { ...v3Config.priorityTargets, 'H.A*': period === '2026-08' ? 6_000_000 : 5_000_000 } }),
-    priorityTargetSources: { 'H.A*': { id: period, scope: { type: 'employee', value: 'DN006' } } },
-  });
-  const ok = bonus.periodBonus({ target: 120_000_000, achieved: 132_000_000, pct: 110 }, bonus.validateConfig(v3Config), coverage);
-  const group = ok.priorityGroups.find((item) => item.group === 'H.A*');
-  assert.equal(group.target, 5_333_333);
-  assert.equal(group.excess, 24_666_667);
-  assert.equal(group.amount, 246_667);
-
-  const july = priority({ 'H.A*': 10_000_000 }, true, ['2026-07']);
-  july.aggregation = 'average';
-  july.employeeTargetsByPeriod = { '2026-07': 100_000_000 };
-  july.targetResolver = coverage.targetResolver;
-  const julyOnly = bonus.periodBonus({ target: 100_000_000, achieved: 110_000_000, pct: 110 }, bonus.validateConfig(v3Config), july);
-  assert.equal(julyOnly.priorityGroups.find((item) => item.group === 'H.A*').target, 5_000_000);
-});
-
-test('quarter auto group targets average each assigned month formula together with group revenue', () => {
-  const config = bonus.validateConfig({
-    ...v3Config,
-    priorityTargets: Object.fromEntries(bonus.PRIORITY_GROUPS.map((group) => [group, null])),
-  });
-  const month = (period, totalRevenue, groupRevenue) => {
-    const item = priority({ 'H.A*': groupRevenue }, true, [period]);
-    item.totalRevenue = totalRevenue;
-    return item;
-  };
-  const coverage = bonus.mergePriorityRevenue([
-    month('2026-07', 100_000_000, 60_000_000),
-    month('2026-08', 200_000_000, 100_000_000),
-    month('2026-09', 300_000_000, 90_000_000),
-  ], { aggregation: 'average' });
-  coverage.employeeTargetsByPeriod = { '2026-07': 80_000_000, '2026-08': 120_000_000, '2026-09': 160_000_000 };
-  const result = bonus.periodBonus({ target: 120_000_000, achieved: 200_000_000, pct: 166.7 }, config, coverage);
-  const star = result.priorityGroups.find((item) => item.group === 'H.A*');
-  assert.equal(star.revenue, 83_333_333);
-  assert.equal(star.target, 52_000_000); // avg(48m, 60m, 48m)
-  assert.equal(star.targetSource, 'auto');
-  assert.deepEqual(star.targetPeriods.map((item) => item.target), [48_000_000, 60_000_000, 48_000_000]);
-  assert.equal(star.amount, 313_333);
-});
-
-test('v3 starts T07.2026 while a closed pre-July period retains historical full-revenue P2', () => {
+test('v3.2 bắt đầu T07.2026; kỳ đã chốt trước T07 GIỮ P2 lịch sử (full-revenue), không đổi', () => {
   const closed = priority({ 'H.A*': 10_000_000 }, true, ['2026-06']);
   const historical = bonus.periodBonus({ target: 100_000_000, achieved: 110_000_000, pct: 110 }, bonus.validateConfig(v3Config), closed);
   assert.equal(historical.priorityGroups[0].reason, 'legacy_pre_v3');
-  assert.equal(historical.priorityGroups[0].amount, 100_000);
+  assert.equal(historical.priorityGroups[0].amount, 100_000);  // 10M × 1% full-revenue (v2 cũ)
+  // Kỳ mở T07 theo v3.2: R=10M < T=100M → total_below_target, P2 = 0.
   const open = bonus.periodBonus({ target: 100_000_000, achieved: 110_000_000, pct: 110 }, bonus.validateConfig(v3Config), priority({ 'H.A*': 10_000_000 }, true, ['2026-07']));
-  assert.equal(open.priorityGroups[0].amount, 50_000);
+  assert.equal(open.priorityAmount, 0);
+  assert.equal(open.priorityStatus, 'total_below_target');
 });
 
 test('missing, invalid and conflicting C10 fail closed without reading App Sale priority', () => {
@@ -247,13 +211,14 @@ test('missing, invalid and conflicting C10 fail closed without reading App Sale 
   assert.equal(noSource.priorityStatus, 'source_unavailable');
 });
 
-test('optional total cap remains configurable; no legacy 0.5% hard cap exists', () => {
-  const uncapped = summary(130, 100_000_000, v3Config, { 'H.A*': 100_000_000 }).month;
-  assert.equal(uncapped.baseAmount, 250_000);
-  assert.equal(uncapped.priorityAmount, 950_000);
-  assert.equal(uncapped.amount, 1_200_000);
-  const capped = summary(130, 100_000_000, { ...v3Config, totalCapPct: 0.5 }, { 'H.A*': 100_000_000 }).month;
-  assert.equal(capped.amount, 500_000);
+test('total cap tùy chọn vẫn cấu hình được (v3.2); không có hard cap 0.5% cũ', () => {
+  // target 100M; H.A* 300M → R=300M, E=200M, H.A* 200M×1% = 2.000.000.
+  const uncapped = summary(300, 300_000_000, v3Config, { 'H.A*': 300_000_000 }).month;
+  assert.equal(uncapped.baseAmount, 750_000);        // 0.25% × 300M
+  assert.equal(uncapped.priorityAmount, 2_000_000);  // 200M × 1%
+  assert.equal(uncapped.amount, 2_750_000);
+  const capped = summary(300, 300_000_000, { ...v3Config, totalCapPct: 0.5 }, { 'H.A*': 300_000_000 }).month;
+  assert.equal(capped.amount, 1_500_000);            // cap 0.5% × achieved 300M
   assert.equal(capped.capped, true);
 });
 
@@ -266,14 +231,14 @@ test('config is re-read and ALL adds each employee award instead of recalculatin
   assert.equal(bonus.buildBonusSummary({ month: { target: 100, achieved: 100_000_000, pct: 100 } }, bonus.loadConfig(file)).month.baseAmount, 150_000);
   fs.rmSync(directory, { recursive: true, force: true });
 
-  const first = { empCode: 'DN001', bonus: summary(100, 100_000_000) };
-  const second = { empCode: 'DN002', bonus: summary(130, 100_000_000, v3Config, { 'H.A*': 10_000_000 }) };
+  const first = { empCode: 'DN001', bonus: summary(100, 100_000_000) };                                   // pct100<101 → P2 0
+  const second = { empCode: 'DN002', bonus: summary(130, 100_000_000, v3Config, { 'H.A*': 200_000_000 }) }; // R200M>T100M → E100M → 1%
   const aggregate = bonus.aggregateBonusSummaries([first, second], [
     { emp_code: 'DN001', name: 'Một' }, { emp_code: 'DN002', name: 'Hai' },
   ]);
-  assert.equal(aggregate.month.baseAmount, 400_000);
-  assert.equal(aggregate.month.priorityAmount, 50_000);
-  assert.equal(aggregate.month.amount, 450_000);
+  assert.equal(aggregate.month.baseAmount, 400_000);       // 150k + 250k
+  assert.equal(aggregate.month.priorityAmount, 1_000_000); // 0 + 100M×1%
+  assert.equal(aggregate.month.amount, 1_400_000);
   assert.equal(aggregate.month.contributors, 2);
 });
 

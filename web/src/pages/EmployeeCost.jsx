@@ -361,11 +361,12 @@ function BonusKpi({ bonus, onOpen }) {
     ? 'P2 chờ DataHub C10'
     : month.priorityStatus === 'below_threshold'
       ? `P2 chưa đạt ngưỡng ${targetPctLabel(month.priorityThresholdPct)}`
-      : month.priorityStatus === 'targets_missing'
-        ? 'P2 = 0 · auto target nhóm đang tắt'
-        : month.priorityStatus === 'partially_missing_targets'
-          ? `P2 ${priorityAmount} · có nhóm chưa giao target`
-          : `P2 phần vượt nhóm C10 ${priorityAmount}`;
+      // v3.2: cổng TỔNG target — chưa đạt tổng thì P2 = 0.
+      : month.priorityStatus === 'total_below_target'
+        ? 'P2 = 0 · tổng C10 chưa đạt tổng target'
+        : month.priorityStatus === 'partially_ambiguous_rates'
+          ? `P2 ${priorityAmount} · có nhóm chưa rõ mức thưởng`
+          : `P2 ${priorityAmount} · chia phần vượt theo ưu tiên C10`;
   const monthContext = bonus.aggregate
     ? (month.amount == null ? 'Tháng chưa có target' : `Tổng ${month.contributors || bonus.employeeSubtotals.length} NV · P1 ${baseAmount} · P2 ${priorityAmount}`)
     : month.amount == null
@@ -387,12 +388,14 @@ function BonusKpi({ bonus, onOpen }) {
 // Diễn giải trạng thái Phần 2 (phần vượt nhóm C10) ở cấp tháng — nói rõ VÌ SAO
 // P2 thấp/bằng 0, giữ minh bạch fail-closed (không giấu, không tự suy số).
 function bonusMonthP2Status(month) {
+  const money = (value) => formatEmployeeCostCell(value, moneyColumn);
   switch (month.priorityStatus) {
     case 'source_unavailable': return 'Phần 2 đang chờ dữ liệu nhóm C10 từ DataHub — tạm tính 0.';
     case 'below_threshold': return `Phần 2 chưa mở: % đạt chưa tới ngưỡng ${targetPctLabel(month.priorityThresholdPct)}.`;
-    case 'targets_missing': return 'Phần 2 = 0 · auto target nhóm đang tắt (chưa nhóm nào có target).';
-    case 'partially_missing_targets': return 'Phần 2 tính một phần · còn nhóm chưa được giao target.';
-    default: return 'Phần 2 = tổng phần vượt target riêng của từng nhóm C10.';
+    // v3.2: cổng TỔNG target — chưa đạt tổng thì P2 = 0, dù có nhóm lẻ vượt.
+    case 'total_below_target': return `Phần 2 chưa mở: tổng doanh thu C10 ${money(month.totalC10Revenue)} CHƯA đạt tổng target ${money(month.totalTarget)}.`;
+    case 'partially_ambiguous_rates': return 'Phần 2 tính một phần · còn nhóm chưa xác định được mức thưởng (fail-closed).';
+    default: return `Phần 2 = phần vượt tổng target ${money(month.totalExcess)}, gán cho nhóm ưu tiên cao trước.`;
   }
 }
 
@@ -452,7 +455,7 @@ function BonusDetailModal({ bonus, employeeLabel, onClose }) {
         <div className="employee-cost-target-equation employee-cost-bonus-equation">
           <span>Phần 1 — theo bậc đạt target<small>{bonus.aggregate ? `Tổng ${contributors} NV` : (month.amount == null ? 'Chưa có target tháng' : `đạt ${targetPctLabel(month.pct)} → bậc thưởng ${bonusPctLabel(month.baseBonusPct)}`)}</small></span>
           <b>{cell(month.baseAmount)}</b>
-          <span>Phần 2 — phần vượt nhóm C10<small>{bonus.aggregate ? 'Tổng phần vượt các NV' : bonusMonthP2Status(month)}</small></span>
+          <span>Phần 2 — chia phần vượt theo ưu tiên C10<small>{bonus.aggregate ? 'Tổng phần vượt các NV' : bonusMonthP2Status(month)}</small></span>
           <b>{cell(month.priorityAmount)}</b>
           <span className="employee-cost-bonus-total">Tổng thưởng tháng<small>Phần 1 + Phần 2</small></span>
           <b className="employee-cost-bonus-total">{cell(month.amount)}</b>
@@ -460,25 +463,37 @@ function BonusDetailModal({ bonus, employeeLabel, onClose }) {
       </section>
 
       {!bonus.aggregate && !!groups.length && <section className="employee-cost-target-section">
-        <h3>Phần 2 theo từng nhóm C10</h3>
+        <h3>Phần 2 — chia phần vượt theo thứ tự ưu tiên C10</h3>
+        {/* v3.2: KHÔNG còn target riêng từng nhóm. Phần vượt tổng được gán cho nhóm
+            ưu tiên CAO trước (H.A*→H.A→…), cap bởi doanh thu nhóm, ăn rate nhóm đó. */}
+        <div className="employee-cost-target-equation employee-cost-bonus-equation">
+          <span>Tổng doanh thu C10<small>Cộng doanh thu mọi nhóm C10</small></span>
+          <b>{cell(month.totalC10Revenue)}</b>
+          <span>Tổng target phải đạt<small>Chưa đạt thì Phần 2 = 0</small></span>
+          <b>{cell(month.totalTarget)}</b>
+          <span className="employee-cost-bonus-total">Phần vượt đem chia<small>Tổng doanh thu C10 − Tổng target</small></span>
+          <b className="employee-cost-bonus-total">{cell(month.totalExcess)}</b>
+        </div>
         <table className="employee-cost-bonus-groups">
-          <thead><tr><th>Nhóm</th><th>Cách tính</th><th>Thành tiền</th></tr></thead>
+          <thead><tr><th>Nhóm</th><th>Cách tính (ưu tiên cao chia trước)</th><th>Thành tiền</th></tr></thead>
           <tbody>
             {groups.map((item) => {
+              const allocated = item.allocated ?? item.excess ?? 0;
               let detail;
-              if (item.reason === 'ambiguous_scope') detail = 'Thiếu mapping tuyến/đơn vị duy nhất của NV → P2 = 0';
-              else if (item.target == null) detail = 'Chưa có target nhóm (auto tắt hoặc chưa xác định) → P2 = 0';
-              else {
-                const src = item.targetSource === 'manual' ? 'manual (CEO nhập)' : item.targetSource === 'auto' ? 'auto tự suy' : (item.targetSource || 'chưa rõ nguồn');
-                detail = `${bonusPctLabel(item.ratePct)} × phần vượt ${cell(item.excess)} (doanh thu ${cell(item.revenue)} − target ${cell(item.target)}) · nguồn target: ${src}`;
-              }
-              return <tr key={item.group} className={(item.reason || item.target == null) ? 'is-zero' : ''}>
+              if (item.reason === 'source_unavailable') detail = 'Chưa có dữ liệu C10 từ DataHub → tạm tính 0';
+              else if (item.reason === 'below_threshold') detail = 'Chưa đạt ngưỡng % để mở Phần 2 → 0';
+              else if (item.reason === 'total_below_target') detail = 'Tổng doanh thu C10 chưa đạt tổng target → 0';
+              else if (item.reason === 'rate_ambiguous') detail = 'Chưa xác định được mức thưởng của nhóm (fail-closed) → 0';
+              else if (item.reason === 'not_in_excess') detail = `Doanh thu nhóm ${cell(item.revenue)} — đã hết phần vượt, không còn để chia → 0`;
+              else if (item.reason === 'legacy_pre_v3') detail = `${bonusPctLabel(item.ratePct)} × toàn bộ doanh thu ${cell(item.revenue)} (kỳ cũ trước T07/2026, giữ số đã chốt)`;
+              else detail = `${bonusPctLabel(item.ratePct)} × ${cell(allocated)} được chia từ phần vượt (doanh thu nhóm ${cell(item.revenue)})`;
+              return <tr key={item.group} className={item.amount ? '' : 'is-zero'}>
                 <td>{item.group}</td><td>{detail}</td><td>{cell(item.amount || 0)}</td>
               </tr>;
             })}
           </tbody>
         </table>
-        <div className="employee-cost-bonus-coverage"><small>Coverage nhóm C10: {targetPctLabel(month.priorityCoverage?.coveragePct)}</small></div>
+        <div className="employee-cost-bonus-coverage"><small>Coverage nhóm C10: {targetPctLabel(month.priorityCoverage?.coveragePct)} · nguồn phân nhóm: cột C10 của danh mục</small></div>
       </section>}
 
       {bonus.aggregate && <div className="employee-cost-target-note" role="note">
