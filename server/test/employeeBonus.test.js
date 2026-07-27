@@ -99,39 +99,54 @@ test('P2 v3.2: đạt ngưỡng NHƯNG tổng C10 < tổng target → P2 = 0 (to
   assert.equal(r.priorityGroups.find((g) => g.group === 'H.A*').reason, 'total_below_target');
 });
 
-test('P2 v3.2: R ≥ T → gán phần vượt ưu tiên CAO trước, cap bởi doanh thu nhóm, tràn xuống', () => {
+test('P2 v3.2: R ≥ T → phần vượt CHIA THEO TỶ TRỌNG THỰC từng nhóm (không dồn hạng cao)', () => {
   // target 100M; C10: H.A*20 H.A30 H.B40 H.C50 H.D60 → R=200M, E=100M.
+  // Tỷ trọng: 10/15/20/25/30% → phần vượt chia đúng theo đó (KHÔNG dồn hết vào H.A*).
   const groups = { 'H.A*': 20_000_000, 'H.A': 30_000_000, 'H.B': 40_000_000, 'H.C': 50_000_000, 'H.D': 60_000_000 };
   const m = summary(200, 200_000_000, v3Config, groups).month;
   assert.equal(m.totalC10Revenue, 200_000_000);
   assert.equal(m.totalTarget, 100_000_000);
   assert.equal(m.totalExcess, 100_000_000);
-  assert.deepEqual(m.priorityGroups.map((g) => [g.group, g.allocated, g.amount, g.reason]), [
-    ['H.A*', 20_000_000, 200_000, 'matched'],   // 20M × 1%
-    ['H.A', 30_000_000, 240_000, 'matched'],    // 30M × 0.8%
-    ['H.B', 40_000_000, 200_000, 'matched'],    // 40M × 0.5%
-    ['H.C', 10_000_000, 10_000, 'matched'],     // còn 10M × 0.1%
-    ['H.D', 0, 0, 'not_in_excess'],             // hết phần vượt
+  assert.deepEqual(m.priorityGroups.map((g) => [g.group, g.allocated, g.amount]), [
+    ['H.A*', 10_000_000, 100_000],   // 10% × 100M = 10M × 1%
+    ['H.A', 15_000_000, 120_000],    // 15% → 15M × 0.8%
+    ['H.B', 20_000_000, 100_000],    // 20% → 20M × 0.5%
+    ['H.C', 25_000_000, 25_000],     // 25% → 25M × 0.1%
+    ['H.D', 30_000_000, 30_000],     // 30% → 30M × 0.1%
   ]);
-  assert.equal(m.priorityAmount, 650_000);
+  // Σ phần được chia == đúng phần vượt (không tạo/mất tiền do làm tròn).
+  assert.equal(m.priorityGroups.reduce((sum, g) => sum + g.allocated, 0), 100_000_000);
+  assert.equal(m.priorityAmount, 375_000);
 });
 
-test('P2 v3.2: ví dụ CEO — phần vượt 700tr, H.A* có 200tr → H.A* = 2.000.000đ rồi tràn xuống', () => {
-  // target 1 tỷ; H.A* 200tr, H.A 800tr, H.B 700tr → R=1.7 tỷ, E=700tr.
-  const groups = { 'H.A*': 200_000_000, 'H.A': 800_000_000, 'H.B': 700_000_000 };
-  const m = summary(170, 1_700_000_000, { ...v3Config, priorityTargets: v3Config.priorityTargets }, groups).month;
-  // summary target là 100M; ép qua periodBonus để dùng target 1 tỷ:
+test('P2 v3.2: phần vượt rơi nhiều vào H.C/H.D thì H.A* chỉ được ÍT — thưởng KHÔNG bị thổi phồng', () => {
+  // H.A* chỉ chiếm 2% doanh thu; H.D chiếm 88% → phần vượt chủ yếu là H.D (rate thấp).
+  const groups = { 'H.A*': 20_000_000, 'H.A': 50_000_000, 'H.B': 50_000_000, 'H.C': 80_000_000, 'H.D': 800_000_000 };
   const coverage = priority(groups, true, ['2026-07']);
-  const r = bonus.periodBonus({ target: 1_000_000_000, achieved: 1_700_000_000, pct: 170 }, bonus.validateConfig(v3Config), coverage);
+  const r = bonus.periodBonus({ target: 500_000_000, achieved: 1_000_000_000, pct: 200 }, bonus.validateConfig(v3Config), coverage);
+  assert.equal(r.totalC10Revenue, 1_000_000_000);
+  assert.equal(r.totalExcess, 500_000_000);
+  const star = r.priorityGroups.find((g) => g.group === 'H.A*');
+  const d = r.priorityGroups.find((g) => g.group === 'H.D');
+  assert.equal(star.allocated, 10_000_000);   // chỉ 2% phần vượt
+  assert.equal(star.amount, 100_000);         // 10M × 1% — KHÔNG phải 5.000.000
+  assert.equal(d.allocated, 400_000_000);     // 80% phần vượt nằm ở H.D
+  assert.equal(d.amount, 400_000);            // rate thấp 0.1%
+  assert.equal(r.priorityAmount, 865_000);
+});
+
+test('P2 v3.2: ví dụ CEO — trong phần vượt 700tr có 200tr thuộc H.A* → H.A* = 2.000.000đ', () => {
+  // R=1,75 tỷ · T=1,05 tỷ → E=700tr. H.A* chiếm 500/1750 = 28,57% → được chia đúng 200tr.
+  const groups = { 'H.A*': 500_000_000, 'H.A': 750_000_000, 'H.B': 500_000_000 };
+  const coverage = priority(groups, true, ['2026-07']);
+  const r = bonus.periodBonus({ target: 1_050_000_000, achieved: 1_750_000_000, pct: 166.7 }, bonus.validateConfig(v3Config), coverage);
   assert.equal(r.totalExcess, 700_000_000);
   const star = r.priorityGroups.find((g) => g.group === 'H.A*');
-  const a = r.priorityGroups.find((g) => g.group === 'H.A');
   assert.equal(star.allocated, 200_000_000);
-  assert.equal(star.amount, 2_000_000);          // 200tr × 1% = 2.000.000đ (đúng ví dụ CEO)
-  assert.equal(a.allocated, 500_000_000);        // còn 500tr tràn xuống H.A
-  assert.equal(a.amount, 4_000_000);             // 500tr × 0.8%
-  assert.equal(r.priorityAmount, 6_000_000);
-  assert.ok(m); // summary vẫn chạy (target 100M) — chỉ kiểm không ném lỗi
+  assert.equal(star.amount, 2_000_000);        // 200tr × 1% — đúng ví dụ CEO
+  assert.equal(r.priorityGroups.find((g) => g.group === 'H.A').amount, 2_400_000);  // 300tr × 0.8%
+  assert.equal(r.priorityGroups.find((g) => g.group === 'H.B').amount, 1_000_000);  // 200tr × 0.5%
+  assert.equal(r.priorityAmount, 5_400_000);
 });
 
 test('P2 v3.2: đổi rate config → P2 đổi theo (rate cấu hình tay được)', () => {
@@ -142,18 +157,22 @@ test('P2 v3.2: đổi rate config → P2 đổi theo (rate cấu hình tay đư�
   assert.equal(doubled.priorityAmount, 2_000_000); // 100M × 2%
 });
 
-test('DN006 v3.2 hand-check: cổng tổng đạt → dồn phần vượt 704.893.974 vào H.A* (1%)', () => {
+test('DN006 v3.2 hand-check: cổng tổng đạt → chia 704.893.974 theo tỷ trọng thực từng nhóm', () => {
   const target = 2_693_559_151;
-  const achieved = 3_423_138_838;
   const groups = { 'H.A*': 1_534_009_669, 'H.A': 978_570_038, 'H.B': 591_166_846, 'H.C': 192_728_667, 'H.D': 101_977_905 };
   const coverage = priority(groups, true, ['2026-07']);
-  const r = bonus.periodBonus({ target, achieved, pct: 127.1 }, bonus.validateConfig(v3Config), coverage);
+  const r = bonus.periodBonus({ target, achieved: 3_423_138_838, pct: 127.1 }, bonus.validateConfig(v3Config), coverage);
   assert.equal(r.totalC10Revenue, 3_398_453_125);
-  assert.equal(r.totalExcess, 704_893_974);   // R − T
-  const star = r.priorityGroups.find((g) => g.group === 'H.A*');
-  assert.equal(star.allocated, 704_893_974);  // toàn bộ phần vượt < doanh thu H.A*
-  assert.equal(star.amount, 7_048_940);       // 704.893.974 × 1%
-  assert.equal(r.priorityAmount, 7_048_940);
+  assert.equal(r.totalExcess, 704_893_974);
+  assert.deepEqual(r.priorityGroups.map((g) => [g.group, g.allocated, g.amount]), [
+    ['H.A*', 318_178_339, 3_181_783],
+    ['H.A', 202_971_204, 1_623_770],
+    ['H.B', 122_617_536, 613_088],
+    ['H.C', 39_975_033, 39_975],
+    ['H.D', 21_151_862, 21_152],
+  ]);
+  assert.equal(r.priorityGroups.reduce((sum, g) => sum + g.allocated, 0), 704_893_974);
+  assert.equal(r.priorityAmount, 5_479_768);
 });
 
 test('P2 v3.2: rate nhóm nhập nhằng (không xác định) → nhóm đó fail-closed 0, không suy số', () => {
