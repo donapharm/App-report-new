@@ -406,6 +406,11 @@ function canonicalDimensions(revenueRow, unit, product, catalogIndex, provinceBy
       ?? displayValue(catalogRow, ['strength', 'ham_luong', 'c17', 'STRENGTH', 'HAM_LUONG', 'C17']), 2000),
     bidPrice: numericValue(displayValue(revenueRow, ['bid_price', 'c31', 'BID_PRICE', 'C31'])
       ?? displayValue(catalogRow, ['bid_price', 'c31', 'BID_PRICE', 'C31'])),
+    // CEO 2026-07-27: hiện nhóm ưu tiên C10 ngay cạnh mã QLNB trong bảng chi phí —
+    // đây là căn cứ chia thưởng P2, phải nhìn thấy tại chỗ. Lấy từ catalog (SSOT);
+    // thiếu thì ĐỂ TRỐNG, không suy đoán — chỗ trống chính là dấu hiệu cần bổ sung.
+    c10: safeText(displayValue(catalogRow, ['c10', 'C10'])
+      ?? displayValue(revenueRow, ['c10', 'C10']), 20),
   };
 }
 

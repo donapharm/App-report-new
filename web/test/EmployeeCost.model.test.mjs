@@ -121,7 +121,7 @@ test('dynamic columns follow approved order, keep bid price before quantity, and
     { key: 'c5', label: 'Không lặp' },
   ]);
   assert.deepEqual(columns.map((column) => column.key), [
-    'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25',
+    'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25',
     'bidPrice', 'quantity', 'revenueBeforeVat', 'c36', 'c43', 'rowMonthlyTotal', 'note',
   ]);
 });
@@ -151,14 +151,14 @@ test('ALL revenue-match KPI reads merged period match instead of empty top-level
   assert.equal(formatMatchRate(employeeCostKpiMatch(model)), '98,7%');
 });
 
-test('full-time and part-time template metadata produce exactly 19 and 15 columns', () => {
-  const base = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'revenueBeforeVat'];
+test('full-time and part-time template metadata produce exactly 20 and 16 columns', () => {
+  const base = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'revenueBeforeVat'];
   const suffix = ['rowMonthlyTotal', 'note'];
   const costs = ['c36', 'c41', 'c43', 'c44', 'c45'].map((key) => ({ key, label: key, annual: key === 'c44' }));
   const fulltime = buildEmployeeCostColumns(costs, { columns: [...base, 'c36', 'c41', 'c43', 'c44', 'c45', ...suffix] });
   const parttime = buildEmployeeCostColumns(costs.slice(0, 1), { columns: [...base, 'c36', ...suffix] });
-  assert.equal(fulltime.length, 19);
-  assert.equal(parttime.length, 15);
+  assert.equal(fulltime.length, 20);
+  assert.equal(parttime.length, 16);
   assert.equal(fulltime.at(-1).key, 'note');
   assert.ok(fulltime.findIndex((column) => column.key === 'bidPrice') < fulltime.findIndex((column) => column.key === 'quantity'));
 });
@@ -466,4 +466,16 @@ test('badge Kiểm soát dữ liệu đọc exceptionCount và đếm đúng k�
   assert.match(page, /employeeCostDataQualitySummary\(range\)/);
   const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
   assert.match(api, /employeeCostDataQualitySummary: \(range = \{\}\)/);
+});
+
+// CEO 2026-07-27: C10 là căn cứ chia thưởng P2 → phải thấy NGAY cạnh mã QLNB
+// trong bảng "Chi phí của tôi", không phải đi tra chỗ khác.
+test('bảng Chi phí của tôi có cột C10 ngay cạnh Mã hàng (QLNB)', () => {
+  const model = fs.readFileSync(new URL('../src/employeeCostModel.js', import.meta.url), 'utf8');
+  assert.match(model, /key: 'c10', label: 'C10'/);
+  const order = ['c5', 'c10'];
+  const idx = order.map((k) => model.indexOf(`'${k}', 'c16'`) >= 0 || model.indexOf(`key: '${k}'`) >= 0);
+  assert.ok(idx.every(Boolean), 'c5 và c10 phải cùng có trong danh sách cột');
+  // c10 phải đứng NGAY SAU c5 trong thứ tự cột mặc định
+  assert.match(model, /'c5', 'c10', 'c16'/);
 });
