@@ -298,6 +298,18 @@ function unitCodeOf(row = {}) {
   return normCode(raw.includes('.') ? raw.split('.', 1)[0] : raw);
 }
 
+function catalogUnitCodeOf(row = {}) {
+  const raw = normCode(row.DONVI ?? row.donvi ?? '');
+  // Legacy uploads can carry both unit_code="171" (the short cost-join key)
+  // and DONVI="171.PKĐK NAM VIỆT" (the exact C7 catalog key). Vault must get
+  // the latter, so prefer a valid full raw DONVI over every short alias.
+  if (raw.includes('.') && !raw.startsWith('.') && !raw.endsWith('.')) return raw;
+  const direct = normCode(row.unit_code ?? row.c7 ?? row.UNIT_CODE ?? row.C7);
+  // Preserve the direct value for existing employee-cost display/filter paths.
+  // If it is only a prefix, employeeCostGaps rejects it before worklist sync.
+  return direct;
+}
+
 function addCandidate(map, key, code) {
   if (!key || !code) return;
   const candidates = map.get(key) || new Set();
@@ -385,6 +397,10 @@ function canonicalDimensions(revenueRow, unit, product, catalogIndex, provinceBy
   const unitGroup = employeeCostUnitGroups.resolve(unit);
   return {
     c5: product,
+    // C7 canonical used for catalog/worklist joins. Keep it separate from c7:
+    // c7 is the human-facing company/unit name and must never be reused as a
+    // join key when App Report sends a repair worklist to CEO Vault.
+    unitCode: catalogUnitCodeOf(revenueRow) || unit,
     // Hai field chỉ làm metadata lọc backend, không tham gia công thức chi phí.
     // Province chỉ tồn tại khi dòng doanh thu/config chính thức của cùng mã đơn vị
     // có đúng một giá trị; suy tên hoặc nguồn xung đột đều fail closed.

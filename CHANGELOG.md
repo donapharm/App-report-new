@@ -1,3 +1,9 @@
+### 2026-07-27 — FIX: worklist “mã thiếu %” gửi đúng mã đơn vị C7
+- Tách `unitCode` canonical khỏi `c7` tên hiển thị; `don_vi_anh_huong` chỉ nhận mã C7 thật (`135.HTNT-FPT LONG CHÂU`, `001.NT-BVĐK ĐỒNG NAI`…), không còn tên công ty.
+- Mã C7 được uppercase + trim + dedup + sort trước khi tính lại `so_don_vi` và `worklist_checksum`; thiếu C7 thì fail-closed, không lấy tên hiển thị thay thế.
+- Giữ nguyên cột C10 mới nhất và giữ raw `DONVI` đầy đủ cho worklist dù engine chi phí vẫn join legacy bằng tiền tố.
+- Test: full server **410/410**, gap-sync E2E **28/28**, web build PASS.
+
 ### 2026-07-27 — SỬA GẤP: P2 chia phần vượt theo TỶ TRỌNG THỰC (không dồn hạng cao)
 > CEO chỉ ra bản vừa deploy SAI. Bản trước dồn phần vượt vào H.A* trước → **thổi phồng thưởng**.
 - **Đúng:** rà theo mã QLNB → cột C10, xem phần vượt **thực sự rơi vào nhóm nào**. Nhóm chiếm bao nhiêu % doanh thu C10 thì hưởng bấy nhiêu phần vượt, ăn rate nhóm đó.

@@ -531,6 +531,26 @@ test('raw App Report upload aliases retain the two real Cerecaps T06 DN001 lines
   assert.deepEqual(rows.map((row) => row.date), ['2026-06-13', '2026-06-16']);
 });
 
+test('raw DONVI keeps short cost join but exposes exact full C7 for Vault worklists', () => {
+  const product = 'G3.ĐY.QĐ141.145.N3.133';
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001', columns: fullColumns({ c36: 'CP tháng' }),
+    rows: [fullRow({ c5: product, c7: '171', c16: 'Cerecaps', c36: 5 })],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-06',
+    catalogRows: [{ c5: product, c7: '171', c16: 'Cerecaps', c25: 'Viên' }],
+    revenueRows: [{
+      DATE: '2026-06-13', unit_code: '171', DONVI: '171.PKĐK NAM VIỆT', EMP_NUMBER: 'DN001',
+      IIT_CODE: product, ITEM_NAME: 'Cerecaps', UOM: 'Viên', QUANTITY: 1, REVENUE: 1_000_000,
+    }],
+  });
+  assert.equal(enriched.rows.length, 1);
+  assert.equal(enriched.rows[0].unitCode, '171.PKĐK NAM VIỆT');
+  assert.equal(Object.prototype.hasOwnProperty.call(enriched.rows[0], 'c10'), true);
+  assert.equal(enriched.rows[0].c10, null);
+});
+
 test('one order with multiple products renders one row per source line', () => {
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001', columns: fullColumns({ c36: 'CP tháng' }),

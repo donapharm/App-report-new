@@ -14,20 +14,20 @@ const rangePayload = (empCode, rows) => ({
 function fixtureDeps({ employees = ['DN001'], sameGap = false } = {}) {
   const calls = [];
   const revenueRowsFor = async (empCode) => [
-    { emp_code: empCode, unit_code: `U-${empCode}`, iit_code: 'MATCH', product_name: 'Thuốc đã khớp', revenue: 1_000_000 },
-    { emp_code: empCode, unit_code: `GAP-${empCode}`, iit_code: sameGap ? 'G1.GE.QĐ139.2963.N4.549' : `MISS-${empCode}`, product_name: 'Valesto', revenue: empCode === 'DN001' ? 2_000_000 : 3_000_000 },
+    { emp_code: empCode, unit_code: `001.U-${empCode}`, iit_code: 'MATCH', product_name: 'Thuốc đã khớp', revenue: 1_000_000 },
+    { emp_code: empCode, unit_code: `002.GAP-${empCode}`, iit_code: sameGap ? 'G1.GE.QĐ139.2963.N4.549' : `MISS-${empCode}`, product_name: 'Valesto', revenue: empCode === 'DN001' ? 2_000_000 : 3_000_000 },
   ];
   const catalogRowsFor = async () => employees.flatMap((empCode) => [
-    { c7: `U-${empCode}`, c5: 'MATCH', c16: 'Thuốc đã khớp' },
-    { c7: `GAP-${empCode}`, c5: sameGap ? 'G1.GE.QĐ48.549.N4.549' : `CAT-${empCode}`, c16: 'Valesto' },
+    { c7: `001.U-${empCode}`, c5: 'MATCH', c16: 'Thuốc đã khớp' },
+    { c7: `002.GAP-${empCode}`, c5: sameGap ? 'G1.GE.QĐ48.549.N4.549' : `CAT-${empCode}`, c16: 'Valesto' },
   ]);
   const fetchCost = async (empCode) => {
     calls.push(empCode);
     return {
       outcome: 'ok', attempts: 1,
       payload: rangePayload(empCode, [
-        costRow({ c7: `U-${empCode}`, c5: 'MATCH', c16: 'Thuốc đã khớp', c36: 5 }),
-        costRow({ c7: `GAP-${empCode}`, c5: sameGap ? 'G1.GE.QĐ48.549.N4.549' : `CAT-${empCode}`, c16: 'Valesto', c36: 5 }),
+        costRow({ c7: `001.U-${empCode}`, c5: 'MATCH', c16: 'Thuốc đã khớp', c36: 5 }),
+        costRow({ c7: `002.GAP-${empCode}`, c5: sameGap ? 'G1.GE.QĐ48.549.N4.549' : `CAT-${empCode}`, c16: 'Valesto', c36: 5 }),
       ]),
     };
   };
@@ -35,27 +35,40 @@ function fixtureDeps({ employees = ['DN001'], sameGap = false } = {}) {
 }
 
 test('QD suggestion requires same unit and product name and never auto-maps the revenue code', () => {
-  const pair = { unitLabel: 'U1.Bệnh viện', productCode: 'G1.GE.QĐ139.2963.N4.549', productName: 'Valesto' };
+  const pair = { unitCode: 'U1.BỆNH VIỆN', unitLabel: 'Công ty hiển thị A', productCode: 'G1.GE.QĐ139.2963.N4.549', productName: 'Valesto' };
   const suggestion = gaps.findCatalogSuggestion(pair, [
-    { c7: 'U2.Bệnh viện khác', c5: 'G1.GE.QĐ48.549.N4.549', c16: 'Valesto' },
-    { c7: 'U1.Bệnh viện', c5: 'G1.GE.QĐ48.549.N4.549', c16: 'Thuốc khác' },
-    { c7: 'U1.Bệnh viện', c5: 'G1.GE.QĐ48.549.N4.549', c16: 'Valesto' },
+    { unit_code: 'U2.BỆNH VIỆN KHÁC', c7: 'Công ty hiển thị A', c5: 'G1.GE.QĐ48.549.N4.549', c16: 'Valesto' },
+    { unit_code: 'U1.BỆNH VIỆN', c7: 'Tên công ty hoàn toàn khác', c5: 'G1.GE.QĐ48.549.N4.549', c16: 'Thuốc khác' },
+    { unit_code: 'U1.BỆNH VIỆN', c7: 'Tên công ty hoàn toàn khác', c5: 'G1.GE.QĐ48.549.N4.549', c16: 'Valesto' },
   ]);
   assert.equal(suggestion, 'G1.GE.QĐ48.549.N4.549');
   assert.notEqual(suggestion, pair.productCode);
   assert.equal(gaps.findCatalogSuggestion(pair, [
-    { c7: 'U1.Bệnh viện', c5: 'G9.BT.QĐ999.1.N1.2', c16: 'Valesto' },
+    { unit_code: 'U1.BỆNH VIỆN', c7: 'Tên công ty hoàn toàn khác', c5: 'G9.BT.QĐ999.1.N1.2', c16: 'Valesto' },
   ]), null);
 });
 
 test('DN001 T07 acceptance grain keeps 13 unique missing unit-product pairs', () => {
   const rows = [
-    ...Array.from({ length: 171 }, (_, index) => ({ c7: `MATCH-${index}`, c5: `OK-${index}`, c16: 'Đã có tỷ lệ', revenue: 1, revenueMatched: true })),
-    ...Array.from({ length: 13 }, (_, index) => ({ c7: `GAP-${index}`, c5: `MISS-${index}`, c16: 'Thiếu tỷ lệ', revenue: index + 1, revenueMatched: false })),
+    ...Array.from({ length: 171 }, (_, index) => ({ unitCode: `900.MATCH-${index}`, c7: `Tên match ${index}`, c5: `OK-${index}`, c16: 'Đã có tỷ lệ', revenue: 1, revenueMatched: true })),
+    ...Array.from({ length: 13 }, (_, index) => ({ unitCode: `901.GAP-${index}`, c7: `Tên công ty ${index}`, c5: `MISS-${index}`, c16: 'Thiếu tỷ lệ', revenue: index + 1, revenueMatched: false })),
   ];
   const pairs = gaps.groupGapRows({ rows }, { empCode: 'DN001', employeeName: 'DN001', period: '2026-07', catalogRows: [] });
   assert.equal(pairs.length, 13);
-  assert.equal(new Set(pairs.map((pair) => `${pair.unitLabel}\u001f${pair.productCode}`)).size, 13);
+  assert.equal(new Set(pairs.map((pair) => `${pair.unitCode}\u001f${pair.productCode}`)).size, 13);
+});
+
+test('missing or prefix-only C7 fails closed instead of silently dropping a partial row', () => {
+  const valid = { unitCode: '135.HTNT-FPT LONG CHÂU', c7: 'Công ty hiển thị', c5: 'VALID', c16: 'Thuốc A', revenue: 1, revenueMatched: false };
+  for (const invalid of [
+    { unitCode: '', c7: 'CÔNG TY CHỈ LÀ TÊN HIỂN THỊ', c5: 'MISS-C7', c16: 'Thuốc B', revenue: 2, revenueMatched: false },
+    { unitCode: '171', c7: 'PKĐK Nam Việt', c5: 'PREFIX-C7', c16: 'Thuốc C', revenue: 3, revenueMatched: false },
+  ]) {
+    assert.throws(
+      () => gaps.groupGapRows({ rows: [valid, invalid] }, { empCode: 'DN001', employeeName: 'DN001', period: '2026-07', catalogRows: [] }),
+      { code: 'EMPLOYEE_COST_GAP_UNIT_CODE_REQUIRED', status: 502 },
+    );
+  }
 });
 
 test('sale gap read is self-scoped, returns only missing pairs, and exposes no percentages', async () => {
@@ -152,44 +165,6 @@ test('gap and export routes are authenticated and reuse the employee-cost visibi
   assert.match(block, /scope: \{ empCode: targetEmp \}/);
 });
 
-// CEO 27/07: worklist gửi TÊN đơn vị nên DataHub so với mã C7 → không khớp → báo
-// thiếu OAN, đồng bộ lại vẫn tái diễn. Khoá: phải gửi MÃ ĐƠN VỊ CHÍNH XÁC, nguyên
-// vẹn (KHÔNG cắt ở dấu chấm), song song với tên để người đọc.
-test('worklist mang MÃ đơn vị chính xác, không cắt cụt ở dấu chấm', () => {
-  const gapSync = require('../src/employeeCostGapSync');
-  const payload = {
-    from: '2026-07', to: '2026-07',
-    items: [{
-      productCode: 'G1.GE.QĐ139.455.N1.713',
-      productName: 'Clisma-lax',
-      unitLabels: ['CÔNG TY CỔ PHẦN DƯỢC PHẨM FPT LONG CHÂU'],
-      unitCodesExact: ['135.HTNT-FPT LONG CHÂU'],
-      unitCount: 1, employeeCount: 1, revenueAffected: 3798000, reason: 'missing',
-    }],
-  };
-  const worklist = gapSync.buildWorklist(payload, { actor: 'CEO' });
-  const item = worklist.items[0];
-  // Phải gửi MÃ C7 NGUYÊN VẸN (không phải tên, không cắt cụt thành '135')
-  assert.deepEqual(item.don_vi_anh_huong, ['135.HTNT-FPT LONG CHÂU']);
-  assert.ok(!item.don_vi_anh_huong.includes('135'), 'không được cắt cụt ở dấu chấm');
-  assert.ok(!item.don_vi_anh_huong.some((v) => v.startsWith('CÔNG TY')), 'không được gửi tên hiển thị');
-  // KHÔNG thêm trường mới — giữ nguyên hợp đồng payload với DataHub
-  assert.equal(item.ma_don_vi_anh_huong, undefined);
-});
-
-test('thiếu mã đơn vị thì lùi về tên, không làm rỗng worklist', () => {
-  const gapSync = require('../src/employeeCostGapSync');
-  const worklist = gapSync.buildWorklist({
-    from: '2026-07', to: '2026-07',
-    items: [{
-      productCode: 'X1', productName: 'Thuốc X',
-      unitLabels: ['BỆNH VIỆN ABC'], unitCodesExact: [],
-      unitCount: 1, employeeCount: 1, revenueAffected: 1000, reason: 'missing',
-    }],
-  }, { actor: 'CEO' });
-  assert.deepEqual(worklist.items[0].don_vi_anh_huong, ['BỆNH VIỆN ABC']);
-});
-
 // P1 (bot DataHub 27/07): regex cũ chỉ chặn C0+DEL → LỌT ký tự điều khiển C1 (\u0085)
 // và ký tự định dạng ẩn (zero-width \u200b, RLO \u202e đảo chiều hiển thị). Worklist
 // đi sang hệ khác nên phải sạch tuyệt đối. Khoá bằng bảng ca.
@@ -204,7 +179,7 @@ test('worklist lọc SẠCH mọi ký tự điều khiển/định dạng ẩn (
       from: '2026-07', to: '2026-07',
       items: [{
         productCode: `X1${ban}`, productName: `Thuoc${ban}X`,
-        unitLabels: [], unitCodesExact: [`135.HTNT${ban}-FPT LONG CHAU`],
+        unitLabels: [], unitCodes: [`135.HTNT${ban}-FPT LONG CHAU`],
         unitCount: 1, employeeCount: 1, revenueAffected: 1000, reason: 'missing',
       }],
     }, { actor: 'CEO' });
@@ -220,7 +195,7 @@ test('lọc ký tự ẩn KHÔNG phá tiếng Việt có dấu', () => {
     from: '2026-07', to: '2026-07',
     items: [{
       productCode: 'X1', productName: 'Thuốc Đồng Nai',
-      unitLabels: [], unitCodesExact: ['135.HTNT-FPT LONG CHÂU'],
+      unitLabels: [], unitCodes: ['135.HTNT-FPT LONG CHÂU'],
       unitCount: 1, employeeCount: 1, revenueAffected: 1000, reason: 'missing',
     }],
   }, { actor: 'CEO' });

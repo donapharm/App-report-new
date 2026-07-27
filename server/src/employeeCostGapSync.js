@@ -27,14 +27,29 @@ function timeoutMs() {
   return Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
 }
 function safeText(value, max = 300) {
-  // P1 (bot DataHub 27/07): regex cũ chỉ chặn C0+DEL, LỌT ký tự điều khiển C1
-  // (vd \u0085 NEL) và ký tự định dạng ẩn (zero-width, RLO đảo chiều hiển thị).
-  // \p{Cc} = mọi control, \p{Cf} = mọi format ẩn. Không ảnh hưởng tiếng Việt có dấu.
+  // Worklist crosses system boundaries: strip every control/format character,
+  // including C1, zero-width and bidi markers, without damaging Vietnamese.
   return String(value ?? '').replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 function num(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+function canonicalUnitCodeList(values, max = 240) {
+  const unique = new Set();
+  for (const value of Array.isArray(values) ? values : []) {
+    const text = safeText(value, max);
+    if (!text) continue;
+    const canonical = text.toUpperCase();
+    if (!canonical.includes('.') || canonical.startsWith('.') || canonical.endsWith('.')) {
+      throw Object.assign(new Error(`Mã đơn vị C7 không hợp lệ: ${text}`), {
+        status: 502,
+        code: 'GAP_SYNC_UNIT_CODE_INVALID',
+      });
+    }
+    unique.add(canonical);
+  }
+  return [...unique].sort((a, b) => a.localeCompare(b, 'vi'));
 }
 function assertNoForbiddenKeys(value, pathName = 'worklist') {
   if (Array.isArray(value)) {
@@ -58,29 +73,27 @@ function assertNoForbiddenKeys(value, pathName = 'worklist') {
 // CANONICAL: sort đơn vị trong item + sort items theo mã → checksum độc lập thứ tự
 // đầu vào (blocker 4), để DataHub dedupe ổn định dù thứ tự nguồn thay đổi.
 function buildWorklist(payload = {}, { actor = '' } = {}) {
-  const items = (Array.isArray(payload.items) ? payload.items : []).map((item) => ({
-    ma_qlnb: safeText(item.productCode, 160),
-    ten_hang: safeText(item.productName, 300),
-    // ‼ Gửi MÃ ĐƠN VỊ CHÍNH XÁC (C7 nguyên vẹn), KHÔNG gửi tên hiển thị.
-    // Lỗi cũ (CEO 27/07): gửi tên "CÔNG TY CỔ PHẦN DƯỢC PHẨM FPT LONG CHÂU" trong
-    // khi catalog dùng mã "135.HTNT-FPT LONG CHÂU" → DataHub so tên với C7 → không
-    // bao giờ khớp → báo thiếu OAN, sửa xong đồng bộ lại vẫn tái diễn.
-    // Dùng ĐÚNG trường cũ (không thêm trường mới) để KHÔNG đổi hợp đồng payload.
-    // Mã C7 vốn có dạng "<mã>.<tên>" nên vẫn đọc được, không mất thông tin cho người xem.
-    // Thiếu mã thì lùi về tên (fail-open ở mức hiển thị, DataHub vẫn tự đối chiếu được).
-    don_vi_anh_huong: (() => {
-      const codes = (Array.isArray(item.unitCodesExact) ? item.unitCodesExact : [])
-        .map((code) => safeText(code, 240)).filter(Boolean);
-      const source = codes.length ? codes : (Array.isArray(item.unitLabels) ? item.unitLabels : []);
-      return source.map((value) => safeText(value, 240)).filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, 'vi'));
-    })(),
-    so_don_vi: num(item.unitCount),
-    so_nv: num(item.employeeCount),
-    doanh_thu_anh_huong: num(item.revenueAffected),
-    ly_do: item.reason === 'qd_mismatch' ? 'qd_mismatch' : 'missing',
-    ma_catalog_goi_y: item.suggestedCatalogCode ? safeText(item.suggestedCatalogCode, 160) : null,
-  })).filter((item) => item.ma_qlnb)
+  const items = (Array.isArray(payload.items) ? payload.items : []).map((item) => {
+    const maQlnb = safeText(item.productCode, 160);
+    const unitCodes = canonicalUnitCodeList(item.unitCodes, 240);
+    if (maQlnb && !unitCodes.length) {
+      throw Object.assign(new Error(`Mã ${maQlnb} thiếu mã đơn vị C7 canonical; không gửi tên hiển thị thay thế.`), {
+        status: 502,
+        code: 'GAP_SYNC_UNIT_CODE_REQUIRED',
+      });
+    }
+    return {
+      ma_qlnb: maQlnb,
+      ten_hang: safeText(item.productName, 300),
+      // Contract join key: exact canonical C7 codes, never display company names.
+      don_vi_anh_huong: unitCodes,
+      so_don_vi: unitCodes.length,
+      so_nv: num(item.employeeCount),
+      doanh_thu_anh_huong: num(item.revenueAffected),
+      ly_do: item.reason === 'qd_mismatch' ? 'qd_mismatch' : 'missing',
+      ma_catalog_goi_y: item.suggestedCatalogCode ? safeText(item.suggestedCatalogCode, 160) : null,
+    };
+  }).filter((item) => item.ma_qlnb)
     .sort((a, b) => a.ma_qlnb.localeCompare(b.ma_qlnb, 'vi'));
   const worklist = {
     from: safeText(payload.from, 7) || null,

@@ -72,8 +72,8 @@ function samplePayload() {
     from: '2026-06', to: '2026-07',
     coverage: { matchedPairs: 171, totalPairs: 184 },
     items: [
-      { productCode: 'QĐ123.ABC', productName: 'Valgesic 500mg', unitLabels: ['Vũng Tàu', 'Đồng Nai'], unitCount: 2, employeeCount: 1, revenueAffected: 12345678, reason: 'qd_mismatch', suggestedCatalogCode: 'QĐ123.ABC.X' },
-      { productCode: 'ZZZ001', productName: 'Hàng thiếu hẳn', unitLabels: ['HCM'], unitCount: 1, employeeCount: 1, revenueAffected: 5000, reason: 'missing', suggestedCatalogCode: null },
+      { productCode: 'QĐ123.ABC', productName: 'Valgesic 500mg', unitCodes: ['135.HTNT-FPT LONG CHÂU', '001.NT-BVĐK ĐỒNG NAI'], unitLabels: ['CÔNG TY CỔ PHẦN DƯỢC PHẨM FPT LONG CHÂU', 'BỆNH VIỆN ĐA KHOA ĐỒNG NAI'], unitCount: 2, employeeCount: 1, revenueAffected: 12345678, reason: 'qd_mismatch', suggestedCatalogCode: 'QĐ123.ABC.X' },
+      { productCode: 'ZZZ001', productName: 'Hàng thiếu hẳn', unitCodes: ['002.BVĐK THỐNG NHẤT ĐN'], unitLabels: ['BỆNH VIỆN ĐA KHOA THỐNG NHẤT'], unitCount: 1, employeeCount: 1, revenueAffected: 5000, reason: 'missing', suggestedCatalogCode: null },
     ],
   };
 }
@@ -100,6 +100,12 @@ async function moduleTests(sync, mock, server404) {
     const keys = Object.keys(body.items[0]).sort().join(',');
     assert.strictEqual(keys, 'doanh_thu_anh_huong,don_vi_anh_huong,ly_do,ma_catalog_goi_y,ma_qlnb,so_don_vi,so_nv,ten_hang', `item keys sai: ${keys}`);
   });
+  await check('2b) don_vi_anh_huong dùng mã C7 canonical, không dùng tên công ty', async () => {
+    const item = mock.__lastBody.items.find((row) => row.ma_qlnb === 'QĐ123.ABC');
+    assert.deepStrictEqual(item.don_vi_anh_huong, ['001.NT-BVĐK ĐỒNG NAI', '135.HTNT-FPT LONG CHÂU']);
+    assert.strictEqual(item.so_don_vi, 2);
+    assert(!item.don_vi_anh_huong.some((value) => value.startsWith('CÔNG TY ')), 'không được gửi tên công ty vào field join');
+  });
   await check('3) header actor đi kèm (x-app-report-actor)', async () => {
     assert.strictEqual(mock.__lastActor, 'CEO', `actor sai: ${mock.__lastActor}`);
   });
@@ -114,6 +120,7 @@ async function moduleTests(sync, mock, server404) {
     const a = sync.buildWorklist(samplePayload(), { actor: 'CEO' });
     const shuffled = samplePayload(); shuffled.items.reverse();
     shuffled.items[shuffled.items.findIndex((i) => i.productCode === 'QĐ123.ABC')].unitLabels = ['Đồng Nai', 'Vũng Tàu'];
+    shuffled.items[shuffled.items.findIndex((i) => i.productCode === 'QĐ123.ABC')].unitCodes = ['135.htnt-fpt long châu', '001.nt-bvđk đồng nai', '135.HTNT-FPT LONG CHÂU'];
     const b = sync.buildWorklist(shuffled, { actor: 'CEO' });
     assert.strictEqual(a.worklist_checksum, b.worklist_checksum, 'checksum phải độc lập thứ tự');
   });
@@ -163,9 +170,21 @@ async function moduleTests(sync, mock, server404) {
     try { await sync.sync({ from: '2026-07', to: '2026-07', items: [] }, CEO, { confirmed: true }); throw new Error('đáng lẽ chặn'); }
     catch (error) { assert.strictEqual(error.code, 'GAP_SYNC_EMPTY'); }
   });
+  await check('8b) chỉ có tên hiển thị, thiếu mã C7 → fail-closed, không gửi', async () => {
+    const invalid = samplePayload();
+    delete invalid.items[0].unitCodes;
+    try { sync.buildWorklist(invalid, { actor: 'CEO' }); throw new Error('đáng lẽ chặn'); }
+    catch (error) { assert.strictEqual(error.code, 'GAP_SYNC_UNIT_CODE_REQUIRED'); assert.strictEqual(error.status, 502); }
+  });
+  await check('8c) mã prefix không phải C7 đầy đủ → fail-closed, không gửi partial', async () => {
+    const invalid = samplePayload();
+    invalid.items[0].unitCodes = ['171', '135.HTNT-FPT LONG CHÂU'];
+    try { sync.buildWorklist(invalid, { actor: 'CEO' }); throw new Error('đáng lẽ chặn'); }
+    catch (error) { assert.strictEqual(error.code, 'GAP_SYNC_UNIT_CODE_INVALID'); assert.strictEqual(error.status, 502); }
+  });
   await check('9) quá nhiều items → GAP_SYNC_TOO_MANY_ITEMS (blocker 6)', async () => {
     const big = { from: '2026-07', to: '2026-07', items: [] };
-    for (let i = 0; i <= sync.MAX_ITEMS; i += 1) big.items.push({ productCode: `M${i}`, productName: 'x', unitLabels: ['U'], unitCount: 1, employeeCount: 1, revenueAffected: 1, reason: 'missing' });
+    for (let i = 0; i <= sync.MAX_ITEMS; i += 1) big.items.push({ productCode: `M${i}`, productName: 'x', unitCodes: ['999.U'], unitLabels: ['Tên hiển thị'], unitCount: 1, employeeCount: 1, revenueAffected: 1, reason: 'missing' });
     try { await sync.sync(big, CEO, { confirmed: true }); throw new Error('đáng lẽ chặn'); }
     catch (error) { assert.strictEqual(error.code, 'GAP_SYNC_TOO_MANY_ITEMS'); assert.strictEqual(error.status, 413); }
   });
@@ -283,7 +302,7 @@ async function realTests(sync) {
   });
   if (process.env.REAL_DATAHUB_ALLOW_WRITE === '1') {
     await check('REAL-3) gửi 1 gói TEST-MARKED (có chủ đích) + idempotent', async () => {
-      const marked = { from: '2000-01', to: '2000-01', coverage: {}, items: [{ productCode: 'E2E-TEST-DELETE-ME', productName: 'E2E marker — bỏ qua', unitLabels: ['E2E'], unitCount: 1, employeeCount: 0, revenueAffected: 0, reason: 'missing', suggestedCatalogCode: null }] };
+      const marked = { from: '2000-01', to: '2000-01', coverage: {}, items: [{ productCode: 'E2E-TEST-DELETE-ME', productName: 'E2E marker — bỏ qua', unitCodes: ['999.E2E'], unitLabels: ['Tên hiển thị E2E'], unitCount: 1, employeeCount: 0, revenueAffected: 0, reason: 'missing', suggestedCatalogCode: null }] };
       const a = await sync.sync(marked, { emp_code: 'E2E-DRYRUN', role: 'ceo' }, { confirmed: true });
       const b = await sync.sync(marked, { emp_code: 'E2E-DRYRUN', role: 'ceo' }, { confirmed: true });
       assert.strictEqual(a.checksum, b.checksum);

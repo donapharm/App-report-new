@@ -23,22 +23,14 @@ function searchText(value) {
   return safeText(value, 1000).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toUpperCase();
 }
 
-function unitIdentity(row = {}) {
-  return safeText(row.c7 ?? row.unit_name ?? row.unit_code ?? row.C7 ?? row.UNIT_NAME ?? row.UNIT_CODE, 240).toUpperCase();
+function sourceUnitCode(row = {}) {
+  return safeText(row.unitCode ?? row.unit_code ?? row.UNIT_CODE, 240).toUpperCase();
 }
 
-function unitCode(value) {
-  const text = safeText(value, 240);
-  return text.includes('.') ? text.split('.', 1)[0].trim().toUpperCase() : text.toUpperCase();
-}
-
-// ‼ MÃ ĐƠN VỊ CHÍNH XÁC (C7 nguyên vẹn) — dùng làm KHÓA ĐỐI CHIẾU với catalog.
-// Lỗi cũ (CEO 27/07): worklist gửi TÊN đơn vị ("CÔNG TY CỔ PHẦN DƯỢC PHẨM FPT
-// LONG CHÂU") còn catalog dùng MÃ ("135.HTNT-FPT LONG CHÂU") → không bao giờ khớp
-// → báo thiếu OAN, và mỗi lần đồng bộ lại tái diễn. Ở đây lấy đúng mã, KHÔNG cắt
-// ở dấu chấm (cắt sẽ mất "135.HTNT-FPT LONG CHÂU" thành "135").
-function unitCodeExact(row = {}) {
-  return safeText(row.unit_code ?? row.UNIT_CODE ?? row.ma_don_vi ?? row.c7 ?? row.C7, 240).trim().toUpperCase();
+function catalogUnitCode(row = {}) {
+  // Catalog snapshots may expose the canonical C7 as unit_code or c7. Never
+  // fall back to unit_name: a display company name is not a catalog join key.
+  return sourceUnitCode(row) || safeText(row.c7 ?? row.C7, 240).toUpperCase();
 }
 
 function productCode(row = {}) {
@@ -76,14 +68,14 @@ function suggestionScore(gapCode, candidateCode) {
 }
 
 function findCatalogSuggestion(pair, catalogRows = []) {
-  const pairUnit = safeText(pair.unitLabel, 240).toUpperCase();
+  const pairUnit = safeText(pair.unitCode, 240).toUpperCase();
   const pairName = searchText(pair.productName);
   const pairCode = safeText(pair.productCode, 160).toUpperCase();
   if (!pairUnit || !pairName || !pairCode) return null;
   const candidates = [];
   for (const row of Array.isArray(catalogRows) ? catalogRows : []) {
     const code = productCode(row);
-    if (!code || code === pairCode || unitIdentity(row) !== pairUnit || searchText(productName(row)) !== pairName) continue;
+    if (!code || code === pairCode || catalogUnitCode(row) !== pairUnit || searchText(productName(row)) !== pairName) continue;
     const score = suggestionScore(pairCode, code);
     if (score > 0) candidates.push({ code, score: 100 + score });
   }
@@ -96,15 +88,24 @@ function groupGapRows(periodPayload = {}, context = {}) {
   for (const row of Array.isArray(periodPayload.rows) ? periodPayload.rows : []) {
     if (row.revenueMatched) continue;
     const code = safeText(row.c5, 160).toUpperCase();
-    const unitLabel = safeText(row.c7, 240);
-    if (!code || !unitLabel) continue;
-    const key = `${context.empCode}\u001f${context.period}\u001f${unitLabel.toUpperCase()}\u001f${code}`;
+    const unitCode = sourceUnitCode(row);
+    const unitLabel = safeText(row.c7, 240) || unitCode;
+    if (!code) continue;
+    // Fail closed instead of silently dropping one bad row and sending a
+    // deceptively "clean" partial worklist. A valid canonical C7 is a full
+    // catalog key (prefix + dot + suffix), never a bare legacy prefix.
+    if (!unitCode || !unitCode.includes('.') || unitCode.startsWith('.') || unitCode.endsWith('.')) {
+      throw Object.assign(new Error(`Mã ${code} thiếu mã đơn vị C7 canonical; dừng worklist thay vì bỏ âm thầm.`), {
+        status: 502,
+        code: 'EMPLOYEE_COST_GAP_UNIT_CODE_REQUIRED',
+      });
+    }
+    const key = `${context.empCode}\u001f${context.period}\u001f${unitCode}\u001f${code}`;
     const current = map.get(key) || {
       period: context.period,
       employeeCode: normEmp(context.empCode),
       employeeName: safeText(context.employeeName || context.empCode, 160),
-      unitCode: unitCode(unitLabel),
-      unitCodeExact: unitCodeExact(row),
+      unitCode,
       unitLabel,
       productCode: code,
       productName: safeText(row.c16 || code, 300),
@@ -133,8 +134,8 @@ function aggregatePairs(pairs = []) {
     const current = map.get(key) || {
       productCode: key,
       productName: pair.productName || key,
+      unitCodes: new Set(),
       unitLabels: new Set(),
-      unitCodesExact: new Set(),
       employeeCodes: new Set(),
       periods: new Set(),
       suggestedCatalogCodes: new Set(),
@@ -143,8 +144,8 @@ function aggregatePairs(pairs = []) {
       orderLineCount: 0,
       reason: REASON_MISSING,
     };
-    current.unitLabels.add(pair.unitLabel);
-    if (pair.unitCodeExact) current.unitCodesExact.add(pair.unitCodeExact);
+    current.unitCodes.add(pair.unitCode);
+    current.unitLabels.add(pair.unitLabel || pair.unitCode);
     current.employeeCodes.add(pair.employeeCode);
     current.periods.add(pair.period);
     if (pair.suggestedCatalogCode) current.suggestedCatalogCodes.add(pair.suggestedCatalogCode);
@@ -155,16 +156,16 @@ function aggregatePairs(pairs = []) {
     map.set(key, current);
   }
   return [...map.values()].map((item) => {
+    const unitCodes = [...item.unitCodes].filter(Boolean).sort((a, b) => a.localeCompare(b, 'vi'));
     const unitLabels = [...item.unitLabels].sort((a, b) => a.localeCompare(b, 'vi'));
-    const unitCodesExact = [...item.unitCodesExact].sort();
     const employeeCodes = [...item.employeeCodes].sort();
     const suggestedCatalogCodes = [...item.suggestedCatalogCodes].sort((a, b) => a.localeCompare(b, 'vi'));
     return {
       productCode: item.productCode,
       productName: item.productName,
+      unitCodes,
       unitLabels,
-      unitCodesExact,
-      unitCount: unitLabels.length,
+      unitCount: unitCodes.length,
       employeeCodes,
       employeeCount: employeeCodes.length,
       periods: [...item.periods].sort(),
