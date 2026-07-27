@@ -29,7 +29,13 @@
 
 **Cờ bật — fail-closed, phải đúng chuỗi "1":** `TARGET_NOTIFY` · `EMP_COST_NOTIFY` (mới) · `BONUS_NOTIFY` (mới). Chưa đặt → im lặng hoàn toàn, không crash.
 
-**Test:** thêm **27 ca mới** (`bonusNotify` 9 · `employeeCostNotify` 9 · `notifySchedule` 9 — khoá cả khung giờ, đổi giờ là test đỏ). Server **432/439** = đúng 7 fail baseline (3 OTP + 4 font PDF của container) → **0 regression** · gap-sync E2E **28/28** · web **83/83** · build PASS.
+**Test:** thêm **31 ca mới** (`bonusNotify` 9 · `employeeCostNotify` 9 · `notifySchedule` 9 — khoá cả khung giờ, đổi giờ là test đỏ). Server **436/443** = đúng 7 fail baseline (3 OTP + 4 font PDF của container) → **0 regression** · gap-sync E2E **28/28** · web **83/83** · build PASS.
+
+**Bổ sung cùng ngày — CEO xin thêm dòng "Số tạm giữ cho cuối năm" vào tin CUỐI THÁNG**
+- Lấy từ các cột được khai `annual` trong cấu hình (mặc định `c44` = "Lương cuối năm"), đọc qua summary chứ **không viết cứng tên cột** — đổi `EMPLOYEE_COST_ANNUAL_COLUMNS` là số tự chạy theo.
+- **Cùng luật fail-closed** với tổng tháng: chưa chốt thì rơi về số tạm tính và nhãn ⚠ TẠM TÍNH bao trùm cả dòng này.
+- Không có số hợp lệ → **bỏ hẳn dòng**, không in "—" hay 0đ (NV khỏi hiểu nhầm là bị giữ 0 đồng).
+- **Chỉ hiện ở tin cuối tháng**, tin tuần giữ nguyên. Thêm 4 test khoá.
 
 **CHƯA BẬT TRÊN APP.** Code đã sẵn nhưng 2 cờ mới còn tắt — CEO bật khi muốn chạy thật.
 ### 2026-07-27 — Claude Code — KIỂM XUNG ĐỘT với bot + dọn nhánh + viết lại HANDOFF
