@@ -32,6 +32,15 @@ function unitCode(value) {
   return text.includes('.') ? text.split('.', 1)[0].trim().toUpperCase() : text.toUpperCase();
 }
 
+// ‼ MÃ ĐƠN VỊ CHÍNH XÁC (C7 nguyên vẹn) — dùng làm KHÓA ĐỐI CHIẾU với catalog.
+// Lỗi cũ (CEO 27/07): worklist gửi TÊN đơn vị ("CÔNG TY CỔ PHẦN DƯỢC PHẨM FPT
+// LONG CHÂU") còn catalog dùng MÃ ("135.HTNT-FPT LONG CHÂU") → không bao giờ khớp
+// → báo thiếu OAN, và mỗi lần đồng bộ lại tái diễn. Ở đây lấy đúng mã, KHÔNG cắt
+// ở dấu chấm (cắt sẽ mất "135.HTNT-FPT LONG CHÂU" thành "135").
+function unitCodeExact(row = {}) {
+  return safeText(row.unit_code ?? row.UNIT_CODE ?? row.ma_don_vi ?? row.c7 ?? row.C7, 240).trim().toUpperCase();
+}
+
 function productCode(row = {}) {
   return safeText(row.c5 ?? row.product_code ?? row.iit_code ?? row.qlnb_code ?? row.C5 ?? row.PRODUCT_CODE ?? row.IIT_CODE ?? row.QLNB_CODE, 160).toUpperCase();
 }
@@ -95,6 +104,7 @@ function groupGapRows(periodPayload = {}, context = {}) {
       employeeCode: normEmp(context.empCode),
       employeeName: safeText(context.employeeName || context.empCode, 160),
       unitCode: unitCode(unitLabel),
+      unitCodeExact: unitCodeExact(row),
       unitLabel,
       productCode: code,
       productName: safeText(row.c16 || code, 300),
@@ -124,6 +134,7 @@ function aggregatePairs(pairs = []) {
       productCode: key,
       productName: pair.productName || key,
       unitLabels: new Set(),
+      unitCodesExact: new Set(),
       employeeCodes: new Set(),
       periods: new Set(),
       suggestedCatalogCodes: new Set(),
@@ -133,6 +144,7 @@ function aggregatePairs(pairs = []) {
       reason: REASON_MISSING,
     };
     current.unitLabels.add(pair.unitLabel);
+    if (pair.unitCodeExact) current.unitCodesExact.add(pair.unitCodeExact);
     current.employeeCodes.add(pair.employeeCode);
     current.periods.add(pair.period);
     if (pair.suggestedCatalogCode) current.suggestedCatalogCodes.add(pair.suggestedCatalogCode);
@@ -144,12 +156,14 @@ function aggregatePairs(pairs = []) {
   }
   return [...map.values()].map((item) => {
     const unitLabels = [...item.unitLabels].sort((a, b) => a.localeCompare(b, 'vi'));
+    const unitCodesExact = [...item.unitCodesExact].sort();
     const employeeCodes = [...item.employeeCodes].sort();
     const suggestedCatalogCodes = [...item.suggestedCatalogCodes].sort((a, b) => a.localeCompare(b, 'vi'));
     return {
       productCode: item.productCode,
       productName: item.productName,
       unitLabels,
+      unitCodesExact,
       unitCount: unitLabels.length,
       employeeCodes,
       employeeCount: employeeCodes.length,
