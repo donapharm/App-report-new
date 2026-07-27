@@ -189,3 +189,41 @@ test('thiếu mã đơn vị thì lùi về tên, không làm rỗng worklist', 
   }, { actor: 'CEO' });
   assert.deepEqual(worklist.items[0].don_vi_anh_huong, ['BỆNH VIỆN ABC']);
 });
+
+// P1 (bot DataHub 27/07): regex cũ chỉ chặn C0+DEL → LỌT ký tự điều khiển C1 (\u0085)
+// và ký tự định dạng ẩn (zero-width \u200b, RLO \u202e đảo chiều hiển thị). Worklist
+// đi sang hệ khác nên phải sạch tuyệt đối. Khoá bằng bảng ca.
+test('worklist lọc SẠCH mọi ký tự điều khiển/định dạng ẩn (kể cả C1, zero-width, RLO)', () => {
+  const gapSync = require('../src/employeeCostGapSync');
+  const NEL = String.fromCharCode(0x85);
+  const ZWSP = String.fromCharCode(0x200b);
+  const RLO = String.fromCharCode(0x202e);
+  const BEL = String.fromCharCode(0x07);
+  for (const [ten, ban] of [['C1 NEL', NEL], ['zero-width', ZWSP], ['RLO', RLO], ['C0 BEL', BEL]]) {
+    const worklist = gapSync.buildWorklist({
+      from: '2026-07', to: '2026-07',
+      items: [{
+        productCode: `X1${ban}`, productName: `Thuoc${ban}X`,
+        unitLabels: [], unitCodesExact: [`135.HTNT${ban}-FPT LONG CHAU`],
+        unitCount: 1, employeeCount: 1, revenueAffected: 1000, reason: 'missing',
+      }],
+    }, { actor: 'CEO' });
+    const item = worklist.items[0];
+    const joined = [item.ma_qlnb, item.ten_hang, ...item.don_vi_anh_huong].join('|');
+    assert.ok(!/[\p{Cc}\p{Cf}]/u.test(joined), `${ten} vẫn lọt vào worklist`);
+  }
+});
+
+test('lọc ký tự ẩn KHÔNG phá tiếng Việt có dấu', () => {
+  const gapSync = require('../src/employeeCostGapSync');
+  const worklist = gapSync.buildWorklist({
+    from: '2026-07', to: '2026-07',
+    items: [{
+      productCode: 'X1', productName: 'Thuốc Đồng Nai',
+      unitLabels: [], unitCodesExact: ['135.HTNT-FPT LONG CHÂU'],
+      unitCount: 1, employeeCount: 1, revenueAffected: 1000, reason: 'missing',
+    }],
+  }, { actor: 'CEO' });
+  assert.equal(worklist.items[0].ten_hang, 'Thuốc Đồng Nai');
+  assert.deepEqual(worklist.items[0].don_vi_anh_huong, ['135.HTNT-FPT LONG CHÂU']);
+});
