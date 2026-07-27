@@ -88,6 +88,44 @@ function periodOf(row = {}) {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(date) ? date : '';
 }
 
+// CEO chốt 2026-07-27: một số ĐVT ghi khác chữ nhưng THỰC CHẤT LÀ MỘT (1:1),
+// vd "gói" và "ống" (Gói/ống = gói chính là ống). Những cặp này KHÔNG phải sai lệch
+// nên không được báo đỏ. FAIL-CLOSED: chỉ các cặp KHAI BÁO dưới đây mới coi là tương
+// đương; mọi ĐVT khác vẫn kiểm như cũ, KHÔNG tự suy diễn.
+const DEFAULT_UOM_EQUIVALENTS = Object.freeze([
+  Object.freeze(['goi', 'ong']),
+]);
+
+// Chuẩn hoá ĐVT về dạng so sánh: bỏ dấu, thường hoá, bỏ ký tự thừa.
+function uomKey(value) {
+  return String(value == null ? '' : value)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/gi, 'd')
+    .toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Tách ĐVT ghi ghép kiểu "Gói/ống", "gói - ống" thành từng thành phần.
+function uomParts(value) {
+  return String(value == null ? '' : value)
+    .split(/[/;,+\-]| hoac | hoặc /i)
+    .map((part) => uomKey(part))
+    .filter(Boolean);
+}
+
+// Hai ĐVT coi là MỘT khi: giống hệt sau chuẩn hoá, HOẶC có thành phần nào của bên này
+// tương đương với thành phần nào của bên kia theo bảng khai báo (vd goi ≡ ong).
+function uomEquivalent(a, b, equivalents = DEFAULT_UOM_EQUIVALENTS) {
+  const left = uomParts(a);
+  const right = uomParts(b);
+  if (!left.length || !right.length) return false;
+  if (left.some((x) => right.includes(x))) return true;   // trùng thành phần: "Gói/ống" ↔ "ống"
+  for (const pair of equivalents) {
+    const set = new Set(pair.map(uomKey));
+    if (left.some((x) => set.has(x)) && right.some((y) => set.has(y))) return true;
+  }
+  return false;
+}
+
 function normalizeConfig(config = {}) {
   const inputRules = config && typeof config === 'object' ? config.rules || {} : {};
   const rules = {};
@@ -505,7 +543,7 @@ function buildRevenueCandidates(revenueRows = [], catalogContext, unitIndex, cro
         catalogUom,
         crosswalkContext,
       });
-      if (saleUom && catalogUom && saleUom !== catalogUom && resolution.status === 'unverified') {
+      if (saleUom && catalogUom && saleUom !== catalogUom && !uomEquivalent(saleUom, catalogUom) && resolution.status === 'unverified') {
         candidates.push(makeCandidate({
           type: 'UOM_CONVERSION_UNVERIFIED',
           severity: 'yellow',
@@ -524,7 +562,7 @@ function buildRevenueCandidates(revenueRows = [], catalogContext, unitIndex, cro
           action: 'Chờ nguồn crosswalk App Sale sẵn sàng/không mơ hồ rồi chạy lại kiểm tra; không kết luận sai ĐVT.',
           repairSource: 'App Sale product master crosswalk',
         }));
-      } else if (saleUom && catalogUom && saleUom !== catalogUom && resolution.status === 'not_found') {
+      } else if (saleUom && catalogUom && saleUom !== catalogUom && !uomEquivalent(saleUom, catalogUom) && resolution.status === 'not_found') {
         candidates.push(makeCandidate({
           type: 'UOM_MISMATCH',
           severity: config.rules.UOM_MISMATCH.severity,
@@ -721,6 +759,7 @@ function analyzeDataQuality(input = {}) {
 }
 
 module.exports = {
+  uomEquivalent, uomParts, uomKey, DEFAULT_UOM_EQUIVALENTS,
   RULE_ORDER,
   DEFAULT_CONFIG,
   GAP_REASON_QD_MISMATCH,
