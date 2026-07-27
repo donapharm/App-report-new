@@ -479,3 +479,18 @@ test('bảng Chi phí của tôi có cột C10 ngay cạnh Mã hàng (QLNB)', ()
   // c10 phải đứng NGAY SAU c5 trong thứ tự cột mặc định
   assert.match(model, /'c5', 'c10', 'c16'/);
 });
+
+// Bug 27/07: layout do template quy định GHI ĐÈ DEFAULT_PREFIX → cột C10 khai ở
+// mặc định không bao giờ hiện trên production (mẫu FULL-TIME/PART-TIME chưa có c10).
+// Khoá lại: template thiếu c10 thì phải TỰ CHÈN ngay sau c5.
+test('template layout thiếu c10 → vẫn phải chèn C10 ngay sau Mã hàng (QLNB)', () => {
+  const costs = [{ key: 'c36', label: 'c36' }];
+  const layoutNoC10 = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16',
+    'strength', 'c25', 'bidPrice', 'quantity', 'revenueBeforeVat', 'c36', 'rowMonthlyTotal', 'note'];
+  const keys = buildEmployeeCostColumns(costs, { columns: layoutNoC10 }).map((c) => c.key);
+  assert.equal(keys[keys.indexOf('c5') + 1], 'c10', 'C10 phải nằm ngay sau c5');
+  // template ĐÃ có c10 thì giữ nguyên, không chèn trùng
+  const layoutWithC10 = ['c5', 'c10', 'c16'];
+  const keys2 = buildEmployeeCostColumns([], { columns: layoutWithC10 }).map((c) => c.key);
+  assert.deepEqual(keys2, ['c5', 'c10', 'c16']);
+});
