@@ -1,3 +1,11 @@
+### 2026-07-27 — RELEASE: Thưởng P2 v3.2 (cổng tổng target) + cột C10 trong danh mục
+> Bundle overlay trên production `d8b24ba`, chỉ 6 file; không lùi file report nào.
+- **P2 v3.2 (CEO chốt):** phải đạt TỔNG target trước (`R<T` → P2=0); phần vượt `E=R−T` **chia cho nhóm ưu tiên CAO trước** (H.A*→H.A→…), cap bởi doanh thu nhóm, ăn rate nhóm đó. **P1 (coach) KHÔNG đụng.** Rate chỉnh tay được.
+- **Test P2 viết lại 14/14**: ví dụ CEO (H.A* 200tr → 2.000.000đ) · hand-check DN006 (E=704.893.974 → 7.048.940đ) · cổng tổng · tràn ưu tiên · đổi rate · fail-closed nguồn thiếu · kỳ trước T07 giữ số lịch sử.
+- **Modal Thưởng** nói đúng v3.2: khối Tổng doanh thu C10 · Tổng target · Phần vượt đem chia; bảng nhóm ghi `rate × phần ĐƯỢC CHIA`, lý do rõ khi 0; ghi nguồn phân nhóm = cột C10 danh mục.
+- **Cột C10 cạnh mã QLNB** trong danh mục (cả 2 bảng): badge xanh khi có, **ĐỎ khi thiếu**, tìm kiếm được. Thiếu C10 để trống — không suy đoán, không chặn danh mục.
+- ⚠ **Số P2 sẽ ĐỔI** theo chính sách mới (DN006: 5.630.771đ → 7.048.940đ). Build PASS · full server 397/404 (7 fail pre-existing) · web 27/27.
+
 ### 2026-07-26 — RELEASE App Report employee-cost (bundle SẠCH trên production f1f4e2f)
 > ⚠ Thay bundle CŨ dbc76a71 (đã lỗi thời): dbc76a71 chỉ 5 file, chứa self-heal CÒN 3 BLOCKER,
 > THIẾU hẳn employeeCostSourceAlert.js (alert+tin mềm NV+fix#3). KHÔNG deploy dbc76a71.

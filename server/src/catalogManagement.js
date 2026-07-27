@@ -254,7 +254,10 @@ function enrichRowsFromCatalog(rows, catalog) {
   }
   return rows.map((row) => {
     const item = byPair.get(`${String(row.unit_code || '').trim()}\u001f${String(row.qlnb_code || '').trim()}`);
-    return item ? { ...row, contractor_code: item.c4 || null, product_name: item.c16 || null, active_ingredient: item.c15 || null, strength: item.c17 || null, uom: item.c25 || null, bid_price: item.c31 ?? null } : row;
+    // c10 = nhóm ưu tiên (SSOT cho Thưởng P2). Đưa xuống UI để CEO nhìn NGAY cạnh mã
+    // QLNB, khỏi phải đi tra chỗ khác; thiếu c10 thì để trống (KHÔNG suy đoán, không
+    // chặn danh mục) — chính chỗ trống đó là dấu hiệu cần bổ sung.
+    return item ? { ...row, contractor_code: item.c4 || null, product_name: item.c16 || null, active_ingredient: item.c15 || null, strength: item.c17 || null, uom: item.c25 || null, bid_price: item.c31 ?? null, c10: item.c10 || null } : row;
   });
 }
 function assertContractorCoverage(catalog = []) {
@@ -491,7 +494,7 @@ function activeIn(row, period) {
   return row.active !== false && row.effective_from <= period && (!row.effective_to || row.effective_to >= period);
 }
 function employeeItem(row, status) {
-  return { id: row.id, type: row.type, value: row.value, label: row.label, route: row.route, province: row.province || provinceOf(row.unit_code, row.unit_code), contractor_code: row.contractor_code, unit_code: row.unit_code, qlnb_code: row.qlnb_code, product_name: row.product_name, active_ingredient: row.active_ingredient, strength: row.strength, uom: row.uom, bid_price: row.bid_price, cst_initial: row.cst_initial, cst_remaining: row.cst_remaining, effective_from: row.effective_from, effective_to: row.effective_to, status };
+  return { id: row.id, type: row.type, value: row.value, label: row.label, route: row.route, province: row.province || provinceOf(row.unit_code, row.unit_code), contractor_code: row.contractor_code, unit_code: row.unit_code, qlnb_code: row.qlnb_code, c10: row.c10 || null, product_name: row.product_name, active_ingredient: row.active_ingredient, strength: row.strength, uom: row.uom, bid_price: row.bid_price, cst_initial: row.cst_initial, cst_remaining: row.cst_remaining, effective_from: row.effective_from, effective_to: row.effective_to, status };
 }
 function assertEmployeeSafe(value, pathName = 'response') {
   if (Array.isArray(value)) return value.forEach((v, i) => assertEmployeeSafe(v, `${pathName}[${i}]`));

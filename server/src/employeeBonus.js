@@ -359,34 +359,45 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
   const threshold = thresholds.size === 1 ? [...thresholds][0] : Math.max(...thresholds);
   const eligible = pct >= threshold;
   const preV3 = legacyPriorityActive(coverage, config);
+  // ── P2 v3.2 (CEO 2026-07-27, SPEC_BONUS_P2_TOTAL_TARGET_GATE.md): CỔNG TỔNG TARGET
+  //    rồi gán phần vượt theo ưu tiên CAO trước (H.A*→H.A→...). P1 (baseAmount) GIỮ
+  //    NGUYÊN — tuyệt đối không đụng. Rate đọc từ config SSOT (cấu hình tay ở CEO-vault).
+  const totalC10Revenue = PRIORITY_GROUPS.reduce(
+    (sum, group) => sum + Math.round(finite(coverage.groupRevenue?.[group]) || 0), 0,
+  );
+  const totalTarget = Math.round(target);                    // T = TỔNG target NV (không chia nhỏ)
+  const activeP2 = coverage.sourceAvailable && eligible && !preV3;
+  const totalExcess = activeP2 ? Math.max(0, totalC10Revenue - totalTarget) : null;
+  let remainingExcess = activeP2 && totalC10Revenue >= totalTarget ? (totalC10Revenue - totalTarget) : 0;
+
   const priorityGroups = PRIORITY_GROUPS.map((group) => {
     const revenue = Math.round(finite(coverage.groupRevenue?.[group]) || 0);
     const rates = groupRates.get(group);
     if (!rates.size) rates.add(Number(config.priorityRates[group]));
     const ratePct = rates.size === 1 ? [...rates][0] : null;
-    const resolvedTarget = resolveTargetForGroup(group, coverage, config, targetResolver, target);
-    let excess = resolvedTarget.assigned ? Math.max(0, revenue - resolvedTarget.target) : null;
+    let allocated = 0;
     let amount = 0;
     let reason = 'matched';
     if (!coverage.sourceAvailable) reason = 'source_unavailable';
     else if (!eligible) reason = 'below_threshold';
     else if (preV3) {
-      // Historical v2 path exists only for periods before T07.2026 so closed figures remain unchanged.
-      excess = null;
+      // Kỳ trước T07.2026 (v2) — GIỮ NGUYÊN, số đã chốt không đổi.
       amount = ratePct == null ? 0 : Math.round(revenue * ratePct / 100);
       reason = ratePct == null ? 'rate_ambiguous' : 'legacy_pre_v3';
-    } else if (!resolvedTarget.assigned) {
-      reason = resolvedTarget.status === 'invalid' ? 'target_invalid'
-        : resolvedTarget.status === 'ambiguous_scope' ? 'ambiguous_scope'
-          : 'target_missing';
+    } else if (totalC10Revenue < totalTarget) {
+      reason = 'total_below_target';                          // chưa đạt TỔNG target → P2 = 0
+    } else {
+      // Gán phần vượt cho nhóm ưu tiên cao trước, cap bởi doanh thu nhóm.
+      allocated = Math.min(remainingExcess, revenue);
+      remainingExcess -= allocated;
+      if (ratePct == null) reason = 'rate_ambiguous';
+      else if (allocated <= 0) reason = 'not_in_excess';      // nhóm này không nằm trong phần vượt
+      else amount = Math.round(allocated * ratePct / 100);
     }
-    else if (ratePct == null) reason = 'rate_ambiguous';
-    else if (excess <= 0) reason = 'at_or_below_target';
-    else amount = Math.round(excess * ratePct / 100);
     return {
-      group, revenue, target: resolvedTarget.assigned ? resolvedTarget.target : null,
-      targetStatus: resolvedTarget.status, targetSource: resolvedTarget.source, targetPeriods: resolvedTarget.periods,
-      excess, ratePct, amount, reason,
+      group, revenue, ratePct, allocated, amount, reason,
+      // v3.2: KHÔNG còn target riêng từng nhóm; 'excess' = phần doanh thu nhóm được GÁN vào phần vượt.
+      excess: allocated, target: null, targetStatus: 'total_gate', targetSource: null, targetPeriods: [],
     };
   });
   const priorityAmount = priorityGroups.reduce((sum, item) => sum + item.amount, 0);
@@ -398,16 +409,17 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
   const priorityStatus = !coverage.sourceAvailable ? 'source_unavailable'
     : !eligible ? 'below_threshold'
       : preV3 ? 'legacy_pre_v3'
-          : priorityGroups.every((item) => item.targetStatus === 'missing') ? 'targets_missing'
-          : priorityGroups.some((item) => ['target_missing', 'target_invalid', 'ambiguous_scope'].includes(item.reason)) ? 'partially_missing_targets'
+        : totalC10Revenue < totalTarget ? 'total_below_target'
+          : priorityGroups.some((item) => item.reason === 'rate_ambiguous') ? 'partially_ambiguous_rates'
             : 'matched';
-  const configuredTargetTotal = priorityGroups.reduce((sum, item) => sum + (item.target == null ? 0 : item.target), 0);
-  const assignedTargetCount = priorityGroups.filter((item) => item.targetStatus === 'assigned').length;
+  const rewardedGroupCount = priorityGroups.filter((item) => item.amount > 0).length;
   return {
     target, achieved, pct, bonusPct: baseBonusPct, baseBonusPct, baseAmount,
     priorityThresholdPct: threshold, priorityEligible: eligible, priorityAmount, priorityGroups, priorityStatus,
-    priorityTargetTotal: configuredTargetTotal, priorityTargetAssignedCount: assignedTargetCount,
-    priorityTargetWarning: configuredTargetTotal > target ? 'group_targets_exceed_total_target' : null,
+    // v3.2 total-gate: phơi ra tổng doanh thu C10, tổng target, tổng phần vượt.
+    totalC10Revenue, totalTarget, totalExcess,
+    priorityTargetTotal: totalTarget, priorityRewardedGroupCount: rewardedGroupCount,
+    priorityTargetWarning: null,
     priorityCoverage: coverage, uncappedAmount, capAmount, capped: capAmount != null && amount < uncappedAmount,
     amount,
     tier: baseRates.size === 1 ? config.baseTiers.find((item) => item.bonusPct === baseBonusPct && pct >= item.fromPct && (item.toPct == null || pct < item.toPct)) || null : null,

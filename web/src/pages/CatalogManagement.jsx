@@ -44,7 +44,7 @@ const smartTokenMatch = (queryToken, candidateToken) => {
   const limit = queryToken.length >= 8 ? 2 : queryToken.length >= 4 ? 1 : 0;
   return limit > 0 && editDistanceWithin(queryToken, candidateToken, limit) <= limit;
 };
-const catalogSearchText = (row) => [row.emp_code, row.emp_name, row.type, row.value, row.label, row.province, row.route, row.contractor_code, row.unit_code, row.qlnb_code, row.product_name, row.active_ingredient, row.strength, row.uom].filter(Boolean).join(' ');
+const catalogSearchText = (row) => [row.emp_code, row.emp_name, row.type, row.value, row.label, row.province, row.route, row.contractor_code, row.unit_code, row.qlnb_code, row.c10, row.product_name, row.active_ingredient, row.strength, row.uom].filter(Boolean).join(' ');
 const matchesSmartSearch = (row, query) => {
   const q = normalizeSearch(query); if (!q) return true;
   const haystack = normalizeSearch(catalogSearchText(row));
@@ -132,7 +132,7 @@ function EmployeeSections({ data }) {
     </div>
     <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog">
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
         const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
         const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
         const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -142,6 +142,7 @@ function EmployeeSections({ data }) {
           <PreviewCell value={r.contractor_code || '—'} />
           <PreviewCell value={r.unit_code || '—'} />
           <PreviewCell value={r.qlnb_code || '—'} />
+          <PreviewCell value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
           <PreviewCell value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
           <PreviewCell value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
           <PreviewCell value={r.uom || '—'} />
@@ -463,7 +464,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
       </div>
       <CatalogTableCard id="catalog-table-top" tableId="admin-catalog">
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
           const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
           const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
           const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -474,6 +475,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
             <PreviewCell value={r.contractor_code || '—'} />
             <PreviewCell value={r.unit_code || '—'} />
             <PreviewCell value={r.qlnb_code || '—'} />
+          <PreviewCell value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
             <PreviewCell value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
             <PreviewCell value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
             <PreviewCell value={r.uom || '—'} />

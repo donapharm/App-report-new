@@ -2304,3 +2304,6 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .bonus-preview-table td:nth-child(8)::before { content: 'Trạng thái: '; }
   .bonus-preview-table tfoot td::before { content: none !important; }
 }
+/* Cột C10 cạnh mã QLNB — CEO nhìn phát biết mã nào đã có nhóm ưu tiên, mã nào còn thiếu. */
+.catalog-c10 { display:inline-block; padding:1px 7px; border-radius:999px; font-weight:800; font-size:11.5px; background:#e8f3ff; color:#0b5aa6; }
+.catalog-c10.is-missing { background:#ffe9e9; color:#a12020; }
