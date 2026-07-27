@@ -237,9 +237,16 @@ export const api = {
   ).toString(), undefined, {
     timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
   }),
-  employeeCostDataQualitySummary: () => req('GET', '/employee-cost/data-quality/summary', undefined, {
-    timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
-  }),
+  // Badge phải đếm ĐÚNG KỲ đang xem — trước đây không truyền from/to nên đếm kỳ mặc định.
+  employeeCostDataQualitySummary: (range = {}) => {
+    const params = new URLSearchParams();
+    if (range.from) params.set('from', range.from);
+    if (range.to) params.set('to', range.to);
+    const query = params.toString();
+    return req('GET', `/employee-cost/data-quality/summary${query ? `?${query}` : ''}`, undefined, {
+      timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+    });
+  },
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   employeeCostVisibility: () => req('GET', '/employee-cost/visibility'),
   employeeCostVisibilitySave: (payload) => req('POST', '/employee-cost/visibility', payload),

@@ -1043,8 +1043,8 @@ export default function EmployeeCost({ me, onNavigate }) {
     api.employeeCostGapsSummary(range)
       .then((data) => { if (alive) setGapBadge(data?.disabled ? { loaded: false, codeCount: 0, pairCount: 0, revenueAffected: 0 } : { loaded: true, codeCount: Number(data.codeCount || 0), pairCount: Number(data.pairCount || 0), revenueAffected: Number(data.revenueAffected || 0) }); })
       .catch(() => { if (alive) setGapBadge((current) => ({ ...current, loaded: false })); });
-    api.employeeCostDataQualitySummary()
-      .then((data) => { if (alive) setDqBadge({ loaded: true, count: Number(data.count || 0), revenueAffected: Number(data.revenueAffected || data.revenue || 0) }); })
+    api.employeeCostDataQualitySummary(range)
+      .then((data) => { if (alive) setDqBadge({ loaded: true, count: Number(data.exceptionCount ?? data.count ?? 0), revenueAffected: Number(data.revenueAffected || 0) }); })
       .catch(() => { if (alive) setDqBadge((current) => ({ ...current, loaded: false })); });
     return () => { alive = false; };
   }, [admin, range, view]);
