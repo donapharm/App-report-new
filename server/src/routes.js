@@ -4287,4 +4287,75 @@ router.post('/upload/activate', auth.requireAuth, auth.requireAdmin, (req, res) 
   }
 });
 
+// ── Dịch vụ cho bộ lịch thông báo (telegram-bot.js) ─────────────────────────
+// Bot KHÔNG được tự tính tiền. Hai hàm dưới đi đúng đường mà app đang dùng để
+// hiện số trên màn hình, nên tin nhắn và giao diện luôn khớp nhau.
+// Self-scoped: bắt buộc truyền empCode; session tổng hợp chỉ mang quyền của
+// chính NV đó (role 'sale'), không phải admin -> không thể lộ số người khác.
+function notifySessionFor(empCode) {
+  const code = String(empCode || '').trim().toUpperCase();
+  const user = store.findUserByCode(code);
+  if (!user) return null;
+  const session = auth.sessionForUser(user);
+  if (!session || auth.isAdmin(session.role)) return null; // chặn đường lấy số toàn công ty
+  return session;
+}
+
+/** Tổng chi phí NV tự nhận trong khoảng [from,to] (định dạng kỳ 'YYYY-MM'). */
+async function employeeCostSummaryForNotify(empCode, { from, to } = {}) {
+  const session = notifySessionFor(empCode);
+  if (!session) return null;
+  const req = {
+    session,
+    query: { emp: session.emp_code, from, to },
+  };
+  const payload = await employeeCostPayload(req, {
+    requestedEmp: session.emp_code,
+    auditEvent: 'notify',
+    suppressAudit: false,
+  });
+  if (!payload || payload.disabled) return null;
+  const view = employeeCostTable.transformReport(payload, {});
+  return {
+    empCode: session.emp_code,
+    summary: view.summary || {},
+    match: payload.match || {},
+    sourceAvailable: payload.sourceOutcome ? payload.sourceOutcome === 'ok' : true,
+  };
+}
+
+/** Số thưởng P1/P2 của 1 NV ở 1 kỳ — cùng đường tính với màn "Chi phí của tôi". */
+async function employeeBonusSummaryForNotify(empCode, ky) {
+  const session = notifySessionFor(empCode);
+  if (!session) return null;
+  const code = session.emp_code;
+  const kpi = targetKpiSummary(ky, { empCode: code }, [code]);
+  const catalogRowsByPeriod = {};
+  const monthPriority = await employeeBonusPriorityForPeriods(code, [ky], catalogRowsByPeriod, {
+    employeeTargetsByPeriod: { [catalogManagement.toHubPeriod(ky)]: kpi.month.target },
+  });
+  const quarterPriority = await employeeBonusPriorityForPeriods(code, kpi.quarter?.assigned_kys || [], catalogRowsByPeriod, {
+    average: true,
+    employeeTargetsByPeriod: Object.fromEntries((kpi.quarter?.months || [])
+      .filter((item) => item.assigned)
+      .map((item) => [catalogManagement.toHubPeriod(item.ky), item.target])),
+  });
+  const resolver = (segment = {}) => employeeBonusPolicy.resolve({
+    period: segment.period || ky,
+    context: { employee: code, ...segment },
+  });
+  const targetResolver = ({ period, productGroup, group } = {}) => employeeBonusPolicy.resolve({
+    period: period || ky,
+    context: { employee: code, productGroup: productGroup || group || '', targetScopeStrict: true },
+  });
+  monthPriority.configResolver = resolver;
+  quarterPriority.configResolver = resolver;
+  monthPriority.targetResolver = targetResolver;
+  quarterPriority.targetResolver = targetResolver;
+  const summary = employeeBonus.buildBonusSummary(kpi, resolver({}).config, { month: monthPriority, quarter: quarterPriority });
+  return { empCode: code, ky, bonus: summary?.month || {}, sourceAvailable: monthPriority.sourceAvailable !== false };
+}
+
+router.notifyServices = { employeeCostSummaryForNotify, employeeBonusSummaryForNotify };
+
 module.exports = router;

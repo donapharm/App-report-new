@@ -1,3 +1,76 @@
+### 2026-07-27 — Claude Code (CEO chốt) — Dời giờ 07:30 + THÔNG BÁO CHI PHÍ & THƯỞNG
+> Spec: `SPEC_NOTIFY_COST_BONUS_SCHEDULE.md`. Đụng tiền nên viết spec trước, code sau.
+
+**‼ CEO nói P1/P2 bị NGƯỢC — đã cảnh báo trước khi làm, CEO chốt sửa lại cho đúng**
+- CEO ban đầu: "100% = P1, 110% = P2". Đối chiếu `config/employee_bonus_tiers.json` đang chạy thì **ngược**: **P1 bắt đầu ở 90%** (bậc đầu có `bonusPct > 0`), **P2 bắt đầu ở 101%** (`priorityThresholdPct`). Hai mốc CEO chọn thực ra là điểm **P1 nhảy bậc**.
+- Nếu làm y lời, NV đạt 101–109% đã có P2 nhưng không được báo, và tin ở mốc 110% sẽ nói sai bản chất.
+- **CEO chốt: nhắn đủ 4 mốc 90/100/101/110, gọi ĐÚNG tên.** Ngưỡng **suy ra từ cấu hình**, đổi config là mốc tự đổi — không hardcode.
+
+**Khung giờ (CEO chốt: chỉ tin HẰNG NGÀY dời sáng)**
+- Nhắc target + digest + báo cáo doanh thu NGÀY: **18:00 → 07:30**. Thứ 7 13:00 giữ nguyên.
+- **Báo cáo THÁNG cố tình GIỮ 18:00** — dời sáng thì chốt sổ khi tháng chưa xong.
+- 🆕 Tổng chi phí: **12:30 thứ 7** (lũy kế) + **17:30 ngày cuối tháng** (trọn tháng).
+- 🆕 Tổng thưởng tháng: **17:40 ngày cuối tháng** (sau chi phí 17:30, trước báo cáo tháng 18:00).
+- **Gộp tin:** mốc target + mốc thưởng cùng nhịp 07:30 → **1 tin/người**, không bắn 2–3 tin trong cùng một phút.
+
+**Mới: `src/employeeCostNotify.js` — tổng chi phí NV tự nhận**
+- Ngoại lệ có kiểm soát, kế thừa `SPEC_REPORT_EMP_COST_SELFVIEW.md`: **self-scoped tuyệt đối**, **không có bản tổng cho CEO/admin qua kênh này**, số do DataHub tính.
+- **CEO chốt: số còn tạm tính thì VẪN gửi nhưng BẮT BUỘC gắn nhãn "⚠ TẠM TÍNH — còn N dòng chưa được gán tỷ lệ %".**
+- Mất nguồn chi phí → gửi tin báo lỗi nguồn, **tuyệt đối không nêu số** (có test chặn mọi chuỗi tiền).
+- Nói **"dòng"** chứ không phải "mã": `payload.match` chỉ có `matchedRows/totalRows`. Gọi đúng tên con số mình có — không lặp lại vụ lẫn "13 mã" với "192 cặp".
+
+**Mới: `src/bonusNotify.js` — mốc thưởng + tổng thưởng tháng**
+- Chỉ **định dạng chữ**; mọi con số tiền do `employeeBonus` tính. **P1 KHÔNG ĐỤNG**, P2 giữ nguyên v3.2.
+- Thiếu nguồn chi phí hoặc cấu hình hỏng → **không gửi gì** (fail-closed, thà im còn hơn hứa sai tiền).
+
+**Nối dữ liệu thật:** thêm `routes.notifyServices` (2 hàm) đi **đúng đường app đang dùng để hiện số**, nên tin nhắn và giao diện luôn khớp. Session tổng hợp mang quyền **sale** của chính NV, chặn cứng đường lấy số toàn công ty.
+
+**‼ Test bắt được 1 lỗi thật trước khi lên app:** `Number(null) === 0` trong JS → tổng bị **khóa fail-closed (`null`) sẽ biến thành "0đ" gửi cho NV** — đúng thứ vừa hứa không được xảy ra. Đã vá `finite()` ở cả 2 module, có test khoá.
+
+**Cờ bật — fail-closed, phải đúng chuỗi "1":** `TARGET_NOTIFY` · `EMP_COST_NOTIFY` (mới) · `BONUS_NOTIFY` (mới). Chưa đặt → im lặng hoàn toàn, không crash.
+
+**Test:** thêm **27 ca mới** (`bonusNotify` 9 · `employeeCostNotify` 9 · `notifySchedule` 9 — khoá cả khung giờ, đổi giờ là test đỏ). Server **432/439** = đúng 7 fail baseline (3 OTP + 4 font PDF của container) → **0 regression** · gap-sync E2E **28/28** · web **83/83** · build PASS.
+
+**CHƯA BẬT TRÊN APP.** Code đã sẵn nhưng 2 cờ mới còn tắt — CEO bật khi muốn chạy thật.
+### 2026-07-27 — Claude Code — KIỂM XUNG ĐỘT với bot + dọn nhánh + viết lại HANDOFF
+> CEO hỏi "các bản mới nhất có xung đột với bot nào không". Kết luận: **KHÔNG xung đột.**
+
+**Kiểm xung đột (bằng chứng, không phán đoán)**
+- `origin/main` = `a82381f` (Report Bot). Không có commit bot nào mới hơn. Nhánh Claude `claude/new-session-eifd44` = `main` + 1 commit tài liệu → **không lệch code app**.
+- `fix/c7-canonical-latest-20260727` đã nằm trong `main`. `fix/app-report-deploy-stability-20260727` (`09a6477`) **trùng khít** `a82381f` (diff `auto-deploy.sh` rỗng) → nhánh chết.
+- Xác minh **hành vi** chứ không so chữ, 6 mốc còn nguyên trên `main`: sanitize `/[\p{Cc}\p{Cf}]/gu` · `catalogUnitCodeOf` · fail-closed `GAP_SYNC_UNIT_CODE_REQUIRED` · `EMPLOYEE_COST_GAP_UNIT_CODE_REQUIRED` · badge `loading` không biến mất · memo `employee-cost-gaps-summary`.
+- **P2 bản ĐÚNG (chia theo tỷ trọng) có trên main; bản SAI (dồn hạng cao) KHÔNG lọt lên.**
+- Test lại trên `a82381f`: server **405/412** = đúng 7 fail baseline (3 OTP + 4 font PDF của container) → **0 regression** · gap-sync E2E **28/28** · web **83/83** · build PASS · release-safety **41/41**.
+
+**Dọn nhánh làm việc của Claude**
+- Nhánh `claude/new-session-eifd44` trước đó **lệch 2 chiều**: code app **cũ hơn** main (thiếu bản tích hợp của bot), nhưng 11 file thì **chưa lên main**. Để vậy là bẫy — merge nhầm sẽ xoá công của bot.
+- Đặt lại nhánh về `origin/main`, chỉ giữ **11 file thật sự chưa merge**: 7 script an toàn phát hành + 2 SPEC + 2 DIRECTIVE. **Không đụng `scripts/auto-deploy.sh`** (giữ bản `a82381f`). Commit `b288e60`.
+
+**15 nhánh cũ trên remote — đã rà và xác định phải xoá** *(kết quả cuối ở mục dưới)*
+Đã kiểm **từng dòng code** mỗi nhánh thêm mới xem `main` có chưa. Kết quả: nội dung **đã có đủ trên `main`**; các dòng "thiếu" đều là **bản cũ đã bị thay**, không phải công bị mất (vd `release/bonus-v32-c10` là bản P2 SAI mà CEO đã bác — **không được** đưa lên main).
+- **13 nhánh của Claude**: `release/badge-stable` · `release/bonus-prorata` · `release/bonus-v32-c10` · `release/c10-template-layout` · `release/catalog-layout` · `release/control-chars` · `release/cost-c10-column` · `release/dq-badge-fix` · `release/dq-uom-equiv` · `release/gap-unit-code` · `release/target-v32` · `release/app-report-employee-cost` · `release/sso-v3-crosswalk-prod-20260725`
+- **2 nhánh của Report Bot**: `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — **nhánh nguy hiểm**, từng suýt merge làm mất sanitizer + badge + perf) · `fix/app-report-deploy-stability-20260727` (`09a6477` — trùng khít main)
+- **Rủi ro nếu để nguyên:** nhánh nào cũng **cũ hơn `main`**; merge nhầm là **lùi mất** công bên kia. Đã dính 1 lần với `b70cab9`.
+
+**KẾT THÚC — ✅ ĐÃ XOÁ ĐỦ 15/15 NHÁNH (bot Report thực hiện)**
+- Bot đọc nhầm quyền lúc đầu; sau đó chạy được, có **kiểm `origin/main` chứa `a82381f` trước khi xoá**.
+- **Claude xác minh độc lập:** `git ls-remote` từng nhánh → **cả 15 ref không còn** · `origin/main` vẫn `a82381f`, **không mất commit nào** · 6 mốc bắt buộc + P2 bản đúng còn nguyên trên `main`.
+- 2 nhánh nguy hiểm nhất đã biến mất: `release/bonus-v32-c10` (P2 SAI, thổi phồng thưởng) và `fix/c7-cost-gap-worklist-20260727` (`b70cab9`).
+- **Phát hiện thêm — còn 8 nhánh cũ hơn (đợt 19–25/07).** CEO cho phép xoá tiếp "cái nào không ảnh hưởng". Rà kỹ lần 2 (so file, không chỉ so dòng):
+  - **7 nhánh xoá được:** `fix/c30-freshness-20260719` · `fix/c7-canonical-latest-20260727` · `fix/ceo-bell-safe-mobile-20260719` · `fix/qlnb-unit-workflow-20260719` · `fix/report-crosswalk-publication-hardening-20260725` · `fix/report-uom-crosswalk-s2s-20260725` · `fix/kpi-match-all-display-20260725`. **Không nhánh nào có file mà `main` thiếu.** Riêng `kpi-match` "thiếu" 2 dòng chỉ vì giữ **bản KPI cũ**; `main` có bản mới hơn (thêm nhánh `allEmployees`, tách `unavailablePairs`).
+  - ‼ **`hotfix/report-p0-warm-worker-20260724` — GIỮ LẠI, KHÔNG XOÁ.** **Claude nói sai ở lần rà trước** ("chỉ là hook test cũ đã bị thay"). Rà lại: nhánh này chứa **`server/src/employeeCostWarmWorker.js` — file CHƯA BAO GIỜ có trên `main`** (kiểm `git log --all --diff-filter=A`: chỉ xuất hiện ở đúng commit `c7fa85b`). Đây là hướng giải khác (đẩy warm sang **worker thread**), làm lúc 25/07 00:02 +07; `main` sau đó chọn hướng **vòng warm định kỳ inline** (`0f659d2`, muộn hơn ~16 giờ) nên bản worker bị bỏ dở, không ai merge.
+  - **Xoá nhánh này = mất bản duy nhất của file đó.** Không ảnh hưởng app đang chạy (`main` chưa từng dùng), nhưng mất hẳn một phương án tăng tốc nếu sau này cần. Giữ 1 nhánh không tốn gì → **giữ**.
+- **Luật thường trực ghi vào `HANDOFF.md`:** không merge nhánh `release/*` / `fix/*` / `hotfix/*` cũ; cần gì thì nhặt từ `main` hoặc rẽ nhánh mới từ `main`.
+
+<details><summary>Lịch sử: giai đoạn bị chặn (đã giải quyết)</summary>
+- **Claude:** `git push origin --delete <nhánh>` → **HTTP 403** từ git proxy (chỉ được push vào đúng nhánh làm việc của mình). `git push --tags` cũng 403 → **các thẻ `archive/*` chỉ nằm local, không lên remote**. Bộ công cụ GitHub có `create_branch` nhưng **không có** lệnh xoá nhánh.
+- **Bot Report:** báo phiên hiện tại **không được cấp công cụ git/exec** → chưa xoá nhánh nào, chưa xác nhận lại.
+- ⇒ **Không ai trong hai bên làm được.** Đã soạn 1 lệnh chạy thẳng trên server (`~/.openclaw/workspace-report/App-report`) có **chốt an toàn**: chỉ xoá khi `origin/main` thật sự đã chứa `a82381f`; kèm đường lối thay thế qua giao diện GitHub.
+- **Mức độ khẩn: THẤP.** Nhánh cũ nằm im **không ảnh hưởng app đang chạy**; chỉ nguy hiểm nếu có người **bấm merge** chúng.
+
+</details>
+
+**Viết lại `HANDOFF.md`** (bản cũ đứng yên từ 01/07, đọc vào là lạc): trạng thái thật + số test + P1/P2 v3.2 + C10 + gap-sync C7 + DQ + self-heal + bộ script phát hành + việc còn treo của DataHub/App Sale + 3 cái bẫy đã trả giá (`template.columns` ghi đè default · join key phải là mã C7 · P2 không được dồn hạng cao).
 ### 2026-07-27 — FIX: worklist “mã thiếu %” gửi đúng mã đơn vị C7
 - Tách `unitCode` canonical khỏi `c7` tên hiển thị; `don_vi_anh_huong` chỉ nhận mã C7 thật (`135.HTNT-FPT LONG CHÂU`, `001.NT-BVĐK ĐỒNG NAI`…), không còn tên công ty.
 - Mã C7 được uppercase + trim + dedup + sort trước khi tính lại `so_don_vi` và `worklist_checksum`; thiếu C7 thì fail-closed, không lấy tên hiển thị thay thế.
