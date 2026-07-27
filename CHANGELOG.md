@@ -18,6 +18,12 @@
 - **2 nhánh của Report Bot** (để bot tự xoá): `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — **nhánh nguy hiểm**, từng suýt merge làm mất sanitizer + badge + perf) · `fix/app-report-deploy-stability-20260727` (`09a6477` — trùng khít main)
 - **Rủi ro nếu để nguyên:** nhánh nào cũng **cũ hơn `main`**; merge nhầm là **lùi mất** công bên kia. Đã dính 1 lần với `b70cab9`.
 
+**CẬP NHẬT cùng ngày — CẢ HAI BÊN ĐỀU KHÔNG XOÁ ĐƯỢC, việc này phải do CEO chạy**
+- **Claude:** `git push origin --delete <nhánh>` → **HTTP 403** từ git proxy (chỉ được push vào đúng nhánh làm việc của mình). `git push --tags` cũng 403 → **các thẻ `archive/*` chỉ nằm local, không lên remote**. Bộ công cụ GitHub có `create_branch` nhưng **không có** lệnh xoá nhánh.
+- **Bot Report:** báo phiên hiện tại **không được cấp công cụ git/exec** → chưa xoá nhánh nào, chưa xác nhận lại.
+- ⇒ **Không ai trong hai bên làm được.** Đã soạn 1 lệnh chạy thẳng trên server (`~/.openclaw/workspace-report/App-report`) có **chốt an toàn**: chỉ xoá khi `origin/main` thật sự đã chứa `a82381f`; kèm đường lối thay thế qua giao diện GitHub.
+- **Mức độ khẩn: THẤP.** Nhánh cũ nằm im **không ảnh hưởng app đang chạy**; chỉ nguy hiểm nếu có người **bấm merge** chúng. Trong lúc chưa xoá, luật tạm: **không merge bất kỳ nhánh `release/*` hay `fix/*` cũ nào**, đặc biệt `release/bonus-v32-c10` (P2 SAI, thổi phồng thưởng) và `fix/c7-cost-gap-worklist-20260727` (`b70cab9`).
+
 **Viết lại `HANDOFF.md`** (bản cũ đứng yên từ 01/07, đọc vào là lạc): trạng thái thật + số test + P1/P2 v3.2 + C10 + gap-sync C7 + DQ + self-heal + bộ script phát hành + việc còn treo của DataHub/App Sale + 3 cái bẫy đã trả giá (`template.columns` ghi đè default · join key phải là mã C7 · P2 không được dồn hạng cao).
 ### 2026-07-27 — FIX: worklist “mã thiếu %” gửi đúng mã đơn vị C7
 - Tách `unitCode` canonical khỏi `c7` tên hiển thị; `don_vi_anh_huong` chỉ nhận mã C7 thật (`135.HTNT-FPT LONG CHÂU`, `001.NT-BVĐK ĐỒNG NAI`…), không còn tên công ty.

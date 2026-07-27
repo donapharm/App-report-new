@@ -114,10 +114,20 @@ Kết quả đã đạt: **13 mã → 8 mã / 11 cặp** (loại 5 báo oan, xá
 
 ---
 
-## 6. Dọn nhánh (chưa làm được — cần quyền)
-`main` hiện có **15 nhánh cũ** đã hết giá trị. Đã kiểm từng dòng: **toàn bộ nội dung đã nằm trên `main`**,
-nhưng chúng **cũ hơn main** → ai lỡ merge là **lùi mất** công của bên kia (đã suýt dính 1 lần với `b70cab9`).
-Danh sách + cách xử lý xem mục "Dọn nhánh" trong `CHANGELOG.md` ngày 27/07.
+## 6. Dọn nhánh — CÒN TREO, phải do CEO chạy
+
+**15 nhánh cũ** đã hết giá trị. Đã kiểm từng dòng: **toàn bộ nội dung đã nằm trên `main`**,
+nhưng chúng **cũ hơn main** → ai lỡ merge là **lùi mất** công của bên kia (đã suýt dính với `b70cab9`).
+
+Cả hai bên đều **không xoá được**: Claude bị git proxy trả **403** khi push xoá (và cả khi push tag);
+bot Report báo phiên không có công cụ git/exec. Bộ công cụ GitHub không có lệnh xoá nhánh.
+
+**Luật tạm cho tới khi xoá xong:** ❌ **Không merge bất kỳ nhánh `release/*` hoặc `fix/*` cũ nào.**
+Hai nhánh nguy hiểm nhất: `release/bonus-v32-c10` (bản P2 **SAI**, thổi phồng thưởng — CEO đã bác)
+và `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — sẽ xoá mất sanitizer + badge + perf).
+
+Danh sách đầy đủ + lệnh xoá có chốt an toàn: xem mục "Dọn nhánh" trong `CHANGELOG.md` ngày 27/07.
+Nhánh cũ **không ảnh hưởng app đang chạy** — mức khẩn thấp, chỉ nguy hiểm khi có người bấm merge.
 
 ---
 
