@@ -1,3 +1,24 @@
+### 2026-07-27 — Claude Code (CEO chốt) — "Không có tin gì thì KHÔNG gửi" + bật báo cáo doanh thu ngày
+> CEO yêu cầu bật luồng báo cáo doanh thu hằng ngày, và chốt luật: **không có tin thì không gửi**.
+
+**‼ Phát hiện trước khi bật: `salesReport.sendAll` gửi VÔ ĐIỀU KIỆN**
+- Không có bất kỳ chốt nào kiểm dữ liệu rỗng. Bật `SALES_REPORT_DAILY_NOTIFY=1` là **07:30 sáng nào 17 NV cũng nhận tin "Doanh thu: 0đ"** — kể cả Chủ nhật, ngày chưa upload, ngày nghỉ lễ. Đúng thứ CEO vừa nói không được.
+- **Vá trước, bật sau.** Không bật rồi mới sửa.
+
+**Sửa `sendAll` (2 tầng chốt)**
+1. **NV không có dòng nào trong kỳ → bỏ qua hẳn** (`skipped: 'no_data'`), không gửi tin rỗng.
+2. **Cả kỳ không ai có dữ liệu → im lặng hoàn toàn**, KHÔNG gửi cả bản tổng cho CEO. Chốt đặt **trước** `renderCeoDigest` để khỏi tốn công dựng digest.
+3. **Kỳ rỗng KHÔNG bị đánh dấu "đã gửi"** → dữ liệu về muộn thì lần chạy sau vẫn gửi được đúng kỳ đó, không bị nuốt mất.
+
+**Khoá luật ở CẢ BA luồng** (`test/notifyNoEmptySend.test.js`, 10 ca) vì mỗi luồng có đường thoát riêng:
+- Doanh thu: 3 ca (bỏ qua NV rỗng · im lặng cả kỳ · không markSent khi chưa gửi)
+- Chi phí: 3 ca (không số → `messageFor` null · bot bỏ qua · số tạm giữ rỗng thì bỏ dòng)
+- Thưởng: 3 ca (chưa qua mốc → không sự kiện · không P1/P2 → null · bot bỏ qua khi thiếu nguồn)
+- Tin gộp 07:30: 1 ca (không dòng nội dung nào → không gửi)
+
+**Test:** server **446/453** = đúng 7 fail baseline → **0 regression** · gap-sync E2E **28/28**.
+
+**Ghi nhận sai sót của Claude:** lượt trước nói "28/07 là ngày cuối tháng" — **SAI, tháng 7 có 31 ngày**. Tin chi phí/thưởng tháng chạy **17:30 và 17:40 thứ Sáu 31/07**, không phải 28/07. Đã đính chính với CEO.
 ### 2026-07-27 — Claude Code (CEO chốt) — Dời giờ 07:30 + THÔNG BÁO CHI PHÍ & THƯỞNG
 > Spec: `SPEC_NOTIFY_COST_BONUS_SCHEDULE.md`. Đụng tiền nên viết spec trước, code sau.
 
