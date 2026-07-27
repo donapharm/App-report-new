@@ -53,6 +53,14 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
     });
   }
   const requestedLayout = Array.isArray(template?.columns) ? template.columns.map(String) : [];
+  // Layout do template quy định sẽ GHI ĐÈ danh sách mặc định. Template hiện hành
+  // (FULL-TIME/PART-TIME) chưa liệt kê 'c10' nên cột C10 không bao giờ hiện dù đã
+  // khai báo ở DEFAULT_PREFIX. C10 là căn cứ chia thưởng P2 (CEO 27/07) nên phải
+  // luôn có: chèn ngay SAU 'c5' (mã QLNB) khi template thiếu.
+  if (requestedLayout.length && !requestedLayout.includes('c10')) {
+    const at = requestedLayout.indexOf('c5');
+    if (at >= 0) requestedLayout.splice(at + 1, 0, 'c10');
+  }
   const layout = requestedLayout.length ? requestedLayout : [...DEFAULT_PREFIX, ...costs.keys(), ...DEFAULT_SUFFIX];
   const seen = new Set();
   const result = [];
