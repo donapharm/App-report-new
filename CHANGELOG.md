@@ -1,3 +1,37 @@
+### 2026-07-27 — Claude Code (CEO chốt) — Dời giờ 07:30 + THÔNG BÁO CHI PHÍ & THƯỞNG
+> Spec: `SPEC_NOTIFY_COST_BONUS_SCHEDULE.md`. Đụng tiền nên viết spec trước, code sau.
+
+**‼ CEO nói P1/P2 bị NGƯỢC — đã cảnh báo trước khi làm, CEO chốt sửa lại cho đúng**
+- CEO ban đầu: "100% = P1, 110% = P2". Đối chiếu `config/employee_bonus_tiers.json` đang chạy thì **ngược**: **P1 bắt đầu ở 90%** (bậc đầu có `bonusPct > 0`), **P2 bắt đầu ở 101%** (`priorityThresholdPct`). Hai mốc CEO chọn thực ra là điểm **P1 nhảy bậc**.
+- Nếu làm y lời, NV đạt 101–109% đã có P2 nhưng không được báo, và tin ở mốc 110% sẽ nói sai bản chất.
+- **CEO chốt: nhắn đủ 4 mốc 90/100/101/110, gọi ĐÚNG tên.** Ngưỡng **suy ra từ cấu hình**, đổi config là mốc tự đổi — không hardcode.
+
+**Khung giờ (CEO chốt: chỉ tin HẰNG NGÀY dời sáng)**
+- Nhắc target + digest + báo cáo doanh thu NGÀY: **18:00 → 07:30**. Thứ 7 13:00 giữ nguyên.
+- **Báo cáo THÁNG cố tình GIỮ 18:00** — dời sáng thì chốt sổ khi tháng chưa xong.
+- 🆕 Tổng chi phí: **12:30 thứ 7** (lũy kế) + **17:30 ngày cuối tháng** (trọn tháng).
+- 🆕 Tổng thưởng tháng: **17:40 ngày cuối tháng** (sau chi phí 17:30, trước báo cáo tháng 18:00).
+- **Gộp tin:** mốc target + mốc thưởng cùng nhịp 07:30 → **1 tin/người**, không bắn 2–3 tin trong cùng một phút.
+
+**Mới: `src/employeeCostNotify.js` — tổng chi phí NV tự nhận**
+- Ngoại lệ có kiểm soát, kế thừa `SPEC_REPORT_EMP_COST_SELFVIEW.md`: **self-scoped tuyệt đối**, **không có bản tổng cho CEO/admin qua kênh này**, số do DataHub tính.
+- **CEO chốt: số còn tạm tính thì VẪN gửi nhưng BẮT BUỘC gắn nhãn "⚠ TẠM TÍNH — còn N dòng chưa được gán tỷ lệ %".**
+- Mất nguồn chi phí → gửi tin báo lỗi nguồn, **tuyệt đối không nêu số** (có test chặn mọi chuỗi tiền).
+- Nói **"dòng"** chứ không phải "mã": `payload.match` chỉ có `matchedRows/totalRows`. Gọi đúng tên con số mình có — không lặp lại vụ lẫn "13 mã" với "192 cặp".
+
+**Mới: `src/bonusNotify.js` — mốc thưởng + tổng thưởng tháng**
+- Chỉ **định dạng chữ**; mọi con số tiền do `employeeBonus` tính. **P1 KHÔNG ĐỤNG**, P2 giữ nguyên v3.2.
+- Thiếu nguồn chi phí hoặc cấu hình hỏng → **không gửi gì** (fail-closed, thà im còn hơn hứa sai tiền).
+
+**Nối dữ liệu thật:** thêm `routes.notifyServices` (2 hàm) đi **đúng đường app đang dùng để hiện số**, nên tin nhắn và giao diện luôn khớp. Session tổng hợp mang quyền **sale** của chính NV, chặn cứng đường lấy số toàn công ty.
+
+**‼ Test bắt được 1 lỗi thật trước khi lên app:** `Number(null) === 0` trong JS → tổng bị **khóa fail-closed (`null`) sẽ biến thành "0đ" gửi cho NV** — đúng thứ vừa hứa không được xảy ra. Đã vá `finite()` ở cả 2 module, có test khoá.
+
+**Cờ bật — fail-closed, phải đúng chuỗi "1":** `TARGET_NOTIFY` · `EMP_COST_NOTIFY` (mới) · `BONUS_NOTIFY` (mới). Chưa đặt → im lặng hoàn toàn, không crash.
+
+**Test:** thêm **27 ca mới** (`bonusNotify` 9 · `employeeCostNotify` 9 · `notifySchedule` 9 — khoá cả khung giờ, đổi giờ là test đỏ). Server **432/439** = đúng 7 fail baseline (3 OTP + 4 font PDF của container) → **0 regression** · gap-sync E2E **28/28** · web **83/83** · build PASS.
+
+**CHƯA BẬT TRÊN APP.** Code đã sẵn nhưng 2 cờ mới còn tắt — CEO bật khi muốn chạy thật.
 ### 2026-07-27 — Claude Code — KIỂM XUNG ĐỘT với bot + dọn nhánh + viết lại HANDOFF
 > CEO hỏi "các bản mới nhất có xung đột với bot nào không". Kết luận: **KHÔNG xung đột.**
 

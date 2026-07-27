@@ -45,6 +45,9 @@ const targetNotify = require('./src/targetNotify');
 const notifyChannels = require('./src/notifyChannels');
 const salesReport = require('./src/salesReport');
 const { salesReportSchedulePolicy } = require('./src/salesReportSchedulePolicy');
+const bonusNotify = require('./src/bonusNotify');
+const employeeCostNotify = require('./src/employeeCostNotify');
+const employeeBonus = require('./src/employeeBonus');
 
 const PENDING_TG_GRANTS_FILE = path.join(__dirname, 'data', 'auth', 'telegram_pending_grants.json');
 function loadPendingTelegramGrants() {
@@ -207,12 +210,19 @@ function digestScheduleSlots() {
   return legacy ? [{ ...legacy, key: `${String(legacy.hour).padStart(2, '0')}:${String(legacy.minute).padStart(2, '0')}` }] : parseTimeList('07:30,18:00');
 }
 // CEO chốt: digest/target chỉ gửi 18:00 hằng ngày + 13:00 thứ 7 (GMT+7).
+// CEO chốt 2026-07-27: tin HẰNG NGÀY dời 18:00 -> 07:30. Khung thứ 7 13:00 giữ nguyên.
+// Báo cáo THÁNG cố tình KHÔNG dời sang sáng (dời thì chốt sổ khi tháng chưa xong).
 function approvedDigestTargetSlots() {
   return [
-    { type: 'daily', hour: 18, minute: 0, key: 'daily-18:00', label: '18:00 hằng ngày' },
+    { type: 'daily', hour: 7, minute: 30, key: 'daily-07:30', label: '07:30 hằng ngày' },
     { type: 'weekly', dow: 6, hour: 13, minute: 0, key: 'sat-13:00', label: '13:00 thứ 7' },
   ];
 }
+// Các mốc cố định khác (giờ VN) — khai tường minh để test khoá được, không rải số trong code.
+const COST_WEEKLY_SLOT = { dow: 6, hour: 12, minute: 30, label: '12:30 thứ 7' };
+const COST_MONTH_END_SLOT = { hour: 17, minute: 30, label: '17:30 ngày cuối tháng' };
+const BONUS_MONTH_END_SLOT = { hour: 17, minute: 40, label: '17:40 ngày cuối tháng' };
+const SALES_DAILY_SLOT = { hour: 7, minute: 30, label: '07:30 hằng ngày' };
 function slotDue(slot, d) {
   if (d.getUTCHours() !== slot.hour || d.getUTCMinutes() !== slot.minute) return false;
   if (slot.type === 'weekly') return d.getUTCDay() === slot.dow;
@@ -301,21 +311,55 @@ async function runTargetMilestones() {
   const maps = auth.listTelegramMap();
   const tidByEmp = {};
   for (const m of maps) tidByEmp[String(m.emp_code || '').toUpperCase()] = String(m.telegram_id);
+  // Mốc THƯỞNG (CEO chốt 2026-07-27) chạy cùng nhịp và GỘP CHUNG 1 tin/người,
+  // để NV không nhận 2-3 tin liền trong cùng một phút.
+  // Ngưỡng đọc từ cấu hình thật (90 = P1 bắt đầu, 101 = P2 bắt đầu…), không hardcode.
+  let bonusEvents = [];
+  if (process.env.BONUS_NOTIFY === '1') {
+    try {
+      const ev = targetNotify.evaluate({});
+      bonusEvents = bonusNotify.pendingEvents({
+        ky: ev.ky, rows: ev.rows, config: employeeBonus.loadConfig(), isMuted: targetNotify.isMuted,
+      }).events;
+    } catch (err) { console.error('bonus milestone build error:', err.message); }
+  }
+
+  const byEmp = new Map();
+  const push = (emp, item) => {
+    if (!byEmp.has(emp)) byEmp.set(emp, { target: [], bonus: [], lines: [] });
+    byEmp.get(emp)[item.bucket].push(item.event);
+    byEmp.get(emp).lines.push(item.line);
+  };
+  for (const e of events) push(e.emp_code, { bucket: 'target', event: e, line: targetNotify.messageFor(e) });
+  for (const e of bonusEvents) push(e.emp_code, { bucket: 'bonus', event: e, line: bonusNotify.messageFor(e) });
+
   const sent = [];
-  for (const e of events) {
-    const user = store.findUserByCode(e.emp_code);
+  const bonusSent = [];
+  for (const [empCode, group] of byEmp) {
+    const user = store.findUserByCode(empCode);
     if (!user || user.no_auto_notify) continue;
-    const tid = tidByEmp[e.emp_code];
-    const email = notifyChannels.emailFor(e.emp_code, user?.email);
+    const tid = tidByEmp[empCode];
+    const email = notifyChannels.emailFor(empCode, user?.email);
     // Telegram cần đã map + không opt-out; email gửi nếu có địa chỉ.
     const telegramId = (tid && prefEnabled(tid)) ? tid : null;
     if (!telegramId && !email) continue; // chưa có kênh nào -> để dành
     try {
-      const r = await notifyChannels.deliver({ telegramId, email, subject: 'DNPHARMA — Nhắc target', text: targetNotify.messageFor(e), html: targetNotify.emailHtmlFor(e) });
-      if (r.ok) sent.push(e);
-    } catch (err) { console.error('milestone send error:', e.emp_code, err.message); }
+      // Email giữ mẫu HTML đẹp của sự kiện target đầu tiên; khi chỉ có tin thưởng
+      // thì dựng HTML gọn từ chính nội dung text (không để trống thân thư).
+      const firstTarget = group.target[0];
+      const text = group.lines.filter(Boolean).join('\n\n');
+      if (!text) continue;
+      const r = await notifyChannels.deliver({
+        telegramId, email,
+        subject: 'DNPHARMA — Nhắc target',
+        text,
+        html: firstTarget && group.lines.length === 1 ? targetNotify.emailHtmlFor(firstTarget) : employeeCostNotify.htmlFor(text),
+      });
+      if (r.ok) { sent.push(...group.target); bonusSent.push(...group.bonus); }
+    } catch (err) { console.error('milestone send error:', empCode, err.message); }
   }
   targetNotify.markSent(sent);
+  bonusNotify.markSent(bonusSent);
   const digest = targetNotify.ceoDigest({});
   for (const m of maps) {
     const u = store.findUserByCode(m.emp_code);
@@ -325,6 +369,137 @@ async function runTargetMilestones() {
   }
   console.log(`✔ Target milestones: gửi ${sent.length} tin NV + CEO digest.`);
 }
+// ── Người nhận chung cho các tin tự động (self-scoped) ──────────────────────
+// Lọc đúng 4 tầng chặn: chưa liên kết kênh nào · mã trong notify_optout.json ·
+// cờ no_auto_notify trên hồ sơ · NV tự tắt trong Telegram.
+function autoNotifyRecipients() {
+  const tidByEmp = {};
+  for (const m of auth.listTelegramMap()) tidByEmp[String(m.emp_code || '').toUpperCase()] = String(m.telegram_id);
+  const out = [];
+  for (const u of store.targetRoster({ scope: {} })) {
+    const code = String(u.emp_code || '').toUpperCase();
+    if (!code || targetNotify.isMuted(code)) continue;
+    const tid = tidByEmp[code];
+    const telegramId = (tid && prefEnabled(tid)) ? tid : null;
+    const email = notifyChannels.emailFor(code, u.email);
+    if (!telegramId && !email) continue;
+    out.push({ emp_code: code, name: u.name || code, telegramId, email });
+  }
+  return out;
+}
+
+// routes.js nạp muộn: tránh vòng require lúc khởi động bot.
+function notifyServices() {
+  try { return require('./src/routes').notifyServices || null; }
+  catch (e) { console.error('notifyServices unavailable:', e.message); return null; }
+}
+
+const isoDay = (d) => d.toISOString().slice(0, 10);
+const startOfMonthIso = (day) => `${String(day).slice(0, 7)}-01`;
+
+// ── TỔNG CHI PHÍ NV TỰ NHẬN (CEO chốt: T7 12:30 lũy kế · cuối tháng 17:30 trọn tháng)
+// Fail-closed: cờ phải đúng "1". Số do DataHub tính; còn tạm tính thì BẮT BUỘC gắn nhãn.
+async function runEmployeeCostNotify({ kind, asOfDay }) {
+  if (process.env.EMP_COST_NOTIFY !== '1') return;
+  const svc = notifyServices();
+  if (!svc) return;
+  const monthKey = String(asOfDay).slice(0, 7);
+  const from = monthKey;
+  const to = monthKey;
+  const periodKey = `${kind}|${kind === 'month' ? monthKey : asOfDay}`;
+  const ky = `${monthKey.slice(5, 7)}.${monthKey.slice(0, 4)}`;
+  let sent = 0; let skipped = 0; let failed = 0;
+  for (const r of autoNotifyRecipients()) {
+    if (employeeCostNotify.alreadySent(kind, periodKey, r.emp_code)) { skipped += 1; continue; }
+    try {
+      const row = { emp_code: r.emp_code, name: r.name, ky, from: kind === 'month' ? startOfMonthIso(asOfDay) : startOfMonthIso(asOfDay), to: asOfDay };
+      const res = await svc.employeeCostSummaryForNotify(r.emp_code, { from, to });
+      let text;
+      if (!res || res.sourceAvailable === false) {
+        text = employeeCostNotify.unavailableMessageFor(row);
+      } else {
+        const total = employeeCostNotify.totalFromSummary(res.summary);
+        // Không có số dùng được -> im lặng, KHÔNG gửi "0đ" gây hoang mang.
+        if (!total) { skipped += 1; continue; }
+        // Số dòng còn chờ gán % = tổng dòng − dòng đã khớp (đúng nghĩa "cặp", không phải "mã gộp").
+        const totalRows = Number(res.match?.totalRows);
+        const matchedRows = Number(res.match?.matchedRows);
+        const pairs = Number.isFinite(totalRows) && Number.isFinite(matchedRows) ? totalRows - matchedRows : null;
+        text = employeeCostNotify.messageFor({ kind, row, total, gaps: { pairs } });
+      }
+      if (!text) { skipped += 1; continue; }
+      const out = await notifyChannels.deliver({
+        telegramId: r.telegramId, email: r.email,
+        subject: employeeCostNotify.subjectFor(kind, row),
+        text, html: employeeCostNotify.htmlFor(text),
+      });
+      if (out.ok) { employeeCostNotify.markSent(kind, periodKey, r.emp_code); sent += 1; } else failed += 1;
+    } catch (e) { failed += 1; console.error('emp-cost notify error:', r.emp_code, e.message); }
+  }
+  console.log(`✔ Chi phí NV (${kind}) ${periodKey}: gửi ${sent}, bỏ qua ${skipped}, lỗi ${failed}.`);
+}
+
+// ── TỔNG THƯỞNG CUỐI THÁNG (CEO chốt 17:40 ngày cuối tháng) ─────────────────
+async function runBonusMonthEnd({ asOfDay }) {
+  if (process.env.BONUS_NOTIFY !== '1') return;
+  const svc = notifyServices();
+  if (!svc) return;
+  const monthKey = String(asOfDay).slice(0, 7);
+  const ky = `${monthKey.slice(5, 7)}.${monthKey.slice(0, 4)}`;
+  const ev = targetNotify.evaluate({ ky });
+  const byEmp = new Map(ev.rows.map((r) => [r.emp_code, r]));
+  const periodKey = `bonus_month|${monthKey}`;
+  let sent = 0; let skipped = 0; let failed = 0;
+  for (const r of autoNotifyRecipients()) {
+    const row = byEmp.get(r.emp_code);
+    if (!row) { skipped += 1; continue; }                       // chưa giao target -> không nhắc
+    if (employeeCostNotify.alreadySent('bonus_month', periodKey, r.emp_code)) { skipped += 1; continue; }
+    try {
+      const res = await svc.employeeBonusSummaryForNotify(r.emp_code, ky);
+      if (!res || res.sourceAvailable === false) { skipped += 1; continue; }  // thiếu nguồn -> không hứa tiền
+      const text = bonusNotify.monthEndMessage({ ...row, ky }, res.bonus);
+      if (!text) { skipped += 1; continue; }
+      const out = await notifyChannels.deliver({
+        telegramId: r.telegramId, email: r.email,
+        subject: `DONAPHARM — Thưởng dự kiến tháng ${ky.split('.')[0]} (${r.emp_code})`,
+        text, html: employeeCostNotify.htmlFor(text),
+      });
+      if (out.ok) { employeeCostNotify.markSent('bonus_month', periodKey, r.emp_code); sent += 1; } else failed += 1;
+    } catch (e) { failed += 1; console.error('bonus month-end error:', r.emp_code, e.message); }
+  }
+  console.log(`✔ Thưởng cuối tháng ${monthKey}: gửi ${sent}, bỏ qua ${skipped}, lỗi ${failed}.`);
+}
+
+// ── LỊCH: chi phí T7 12:30 · chi phí cuối tháng 17:30 · thưởng cuối tháng 17:40 ──
+function startCostBonusScheduler() {
+  const costOn = process.env.EMP_COST_NOTIFY === '1';
+  const bonusOn = process.env.BONUS_NOTIFY === '1';
+  if (!costOn && !bonusOn) {
+    console.log('ℹ Chi phí/Thưởng notify: TẮT (đặt EMP_COST_NOTIFY=1 và/hoặc BONUS_NOTIFY=1).');
+    return;
+  }
+  console.log(`✔ Chi phí/Thưởng scheduler: chi phí ${costOn ? `${COST_WEEKLY_SLOT.label} + ${COST_MONTH_END_SLOT.label}` : 'TẮT'}; `
+    + `thưởng tháng ${bonusOn ? BONUS_MONTH_END_SLOT.label : 'TẮT'} GMT+7`);
+  let lastWeekly = ''; let lastCostMonth = ''; let lastBonusMonth = '';
+  setInterval(() => {
+    const d = vnDate();               // getUTC* của vnDate CHÍNH LÀ giờ VN
+    const day = isoDay(d);
+    const hh = d.getUTCHours();
+    const mm = d.getUTCMinutes();
+    const monthEnd = salesReport.isMonthEnd(day);
+
+    if (costOn && d.getUTCDay() === COST_WEEKLY_SLOT.dow && hh === COST_WEEKLY_SLOT.hour && mm === COST_WEEKLY_SLOT.minute) {
+      if (lastWeekly !== day) { lastWeekly = day; runEmployeeCostNotify({ kind: 'week', asOfDay: day }).catch((e) => console.error('cost weekly error:', e.message)); }
+    }
+    if (costOn && monthEnd && hh === COST_MONTH_END_SLOT.hour && mm === COST_MONTH_END_SLOT.minute) {
+      if (lastCostMonth !== day) { lastCostMonth = day; runEmployeeCostNotify({ kind: 'month', asOfDay: day }).catch((e) => console.error('cost month error:', e.message)); }
+    }
+    if (bonusOn && monthEnd && hh === BONUS_MONTH_END_SLOT.hour && mm === BONUS_MONTH_END_SLOT.minute) {
+      if (lastBonusMonth !== day) { lastBonusMonth = day; runBonusMonthEnd({ asOfDay: day }).catch((e) => console.error('bonus month error:', e.message)); }
+    }
+  }, 30 * 1000);
+}
+
 function startMilestoneScheduler() {
   if (process.env.TARGET_NOTIFY !== '1') { console.log('ℹ Target milestone notify: TẮT (đặt TARGET_NOTIFY=1 để bật).'); return; }
   const slots = approvedDigestTargetSlots();
@@ -349,13 +524,13 @@ function startSalesReportScheduler() {
   let lastWeeklyKey = '';
   let lastMonthlyKey = '';
   let lastDailyKey = '';
-  console.log(`✔ SalesReport scheduler armed: ngày ${dailyEnabled ? '18:00' : 'TẮT'}; tuần Thứ 7 13:00; tháng 18:00 ngày cuối tháng. TZ=${process.env.TZ}`);
+  console.log(`✔ SalesReport scheduler armed: ngày ${dailyEnabled ? SALES_DAILY_SLOT.label : 'TẮT'}; tuần Thứ 7 13:00; tháng 18:00 ngày cuối tháng. TZ=${process.env.TZ}`);
   setInterval(() => {
     const d = vnDate(); // giống digest scheduler: getUTC* của vnDate chính là giờ/phút/ngày VN; KHÔNG trừ thêm 7.
     const day = d.toISOString().slice(0, 10);
     const hh = d.getUTCHours();
     const mm = d.getUTCMinutes();
-    if (dailyEnabled && hh === 18 && mm === 0) {
+    if (dailyEnabled && hh === SALES_DAILY_SLOT.hour && mm === SALES_DAILY_SLOT.minute) {
       const ranges = salesReport.defaultRanges(day);
       const key = salesReport.salesReportPeriodKey('day', ranges);
       if (lastDailyKey !== key) {
@@ -502,6 +677,7 @@ async function main() {
   startDigestScheduler();
   startMilestoneScheduler();
   startSalesReportScheduler();
+  startCostBonusScheduler();
   let offset = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
