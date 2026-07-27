@@ -923,8 +923,8 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [visibilityError, setVisibilityError] = useState('');
   // Số đếm cho badge trên tab — tải nền, độc lập với tab đang mở, để CEO thấy
   // ngay còn bao nhiêu việc mà không phải bấm vào từng tab.
-  const [gapBadge, setGapBadge] = useState({ loaded: false, codeCount: 0, pairCount: 0, revenueAffected: 0 });
-  const [dqBadge, setDqBadge] = useState({ loaded: false, count: 0, revenueAffected: 0 });
+  const [gapBadge, setGapBadge] = useState({ loaded: false, loading: true, codeCount: 0, pairCount: 0, revenueAffected: 0 });
+  const [dqBadge, setDqBadge] = useState({ loaded: false, loading: true, count: 0, revenueAffected: 0 });
   const [gapPayload, setGapPayload] = useState({ pairs: [], coverageByEmployee: [] });
   const [gapLoading, setGapLoading] = useState(!admin);
   const [gapError, setGapError] = useState('');
@@ -1037,17 +1037,23 @@ export default function EmployeeCost({ me, onNavigate }) {
 
   // Tải số đếm cho badge — CHẠY BẤT KỂ đang ở tab nào (chỉ admin), để con số
   // hiện sẵn trên tab. Lỗi thì im lặng ẩn badge, không làm phiền màn chính.
+  // Badge là thông tin PHỤ — không được giành tài nguyên với bảng chính lúc mở trang.
+  // Hoãn ~1,2s để bảng chính tải xong trước; đổi tab KHÔNG tải lại (bỏ 'view' khỏi
+  // deps) vì số đếm không phụ thuộc tab đang mở.
   useEffect(() => {
     if (!admin) return undefined;
     let alive = true;
-    api.employeeCostGapsSummary(range)
-      .then((data) => { if (alive) setGapBadge(data?.disabled ? { loaded: false, codeCount: 0, pairCount: 0, revenueAffected: 0 } : { loaded: true, codeCount: Number(data.codeCount || 0), pairCount: Number(data.pairCount || 0), revenueAffected: Number(data.revenueAffected || 0) }); })
-      .catch(() => { if (alive) setGapBadge((current) => ({ ...current, loaded: false })); });
-    api.employeeCostDataQualitySummary(range)
-      .then((data) => { if (alive) setDqBadge({ loaded: true, count: Number(data.exceptionCount ?? data.count ?? 0), revenueAffected: Number(data.revenueAffected || 0) }); })
-      .catch(() => { if (alive) setDqBadge((current) => ({ ...current, loaded: false })); });
-    return () => { alive = false; };
-  }, [admin, range, view]);
+    const timer = window.setTimeout(() => {
+      if (!alive) return;
+      api.employeeCostGapsSummary(range)
+        .then((data) => { if (alive) setGapBadge(data?.disabled ? { loaded: false, loading: false, codeCount: 0, pairCount: 0, revenueAffected: 0 } : { loaded: true, loading: false, codeCount: Number(data.codeCount || 0), pairCount: Number(data.pairCount || 0), revenueAffected: Number(data.revenueAffected || 0) }); })
+        .catch(() => { if (alive) setGapBadge((current) => ({ ...current, loading: false })); });
+      api.employeeCostDataQualitySummary(range)
+        .then((data) => { if (alive) setDqBadge({ loaded: true, loading: false, count: Number(data.exceptionCount ?? data.count ?? 0), revenueAffected: Number(data.revenueAffected || 0) }); })
+        .catch(() => { if (alive) setDqBadge((current) => ({ ...current, loading: false })); });
+    }, 1200);
+    return () => { alive = false; window.clearTimeout(timer); };
+  }, [admin, range]);
 
   useEffect(() => {
     if (admin && view !== 'gaps') return undefined;
@@ -1257,10 +1263,10 @@ export default function EmployeeCost({ me, onNavigate }) {
       {/* Badge số ngay trên tab: CEO nhìn phát thấy còn bao nhiêu mã/dòng đang
           vướng, không phải bấm vào tab mới biết. */}
       <button type="button" role="tab" aria-selected={view === 'gaps'} className={view === 'gaps' ? 'active' : ''} onClick={() => setView('gaps')}>
-        Mặt hàng thiếu %{gapBadge.loaded && <span className={`employee-cost-tab-badge${gapBadge.codeCount ? ' warn' : ' ok'}`} title={gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp · ${gapBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không còn mã thiếu %'}>{gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp` : '0'}</span>}
+        Mặt hàng thiếu %{!gapBadge.loaded && gapBadge.loading && <span className="employee-cost-tab-badge loading" title="Đang đếm…">…</span>}{gapBadge.loaded && <span className={`employee-cost-tab-badge${gapBadge.codeCount ? ' warn' : ' ok'}`} title={gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp · ${gapBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không còn mã thiếu %'}>{gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp` : '0'}</span>}
       </button>
       <button type="button" role="tab" aria-selected={view === 'dq'} className={view === 'dq' ? 'active' : ''} onClick={() => setView('dq')}>
-        Kiểm soát dữ liệu{dqBadge.loaded && <span className={`employee-cost-tab-badge${dqBadge.count ? ' warn' : ' ok'}`} title={dqBadge.count ? `${dqBadge.count} exception · ${dqBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không có exception'}>{dqBadge.count ? `${dqBadge.count} exception` : '0'}</span>}
+        Kiểm soát dữ liệu{!dqBadge.loaded && dqBadge.loading && <span className="employee-cost-tab-badge loading" title="Đang đếm…">…</span>}{dqBadge.loaded && <span className={`employee-cost-tab-badge${dqBadge.count ? ' warn' : ' ok'}`} title={dqBadge.count ? `${dqBadge.count} exception · ${dqBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không có exception'}>{dqBadge.count ? `${dqBadge.count} exception` : '0'}</span>}
       </button>
     </div>}
 
