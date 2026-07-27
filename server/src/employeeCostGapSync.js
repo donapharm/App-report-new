@@ -27,7 +27,10 @@ function timeoutMs() {
   return Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
 }
 function safeText(value, max = 300) {
-  return String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+  // P1 (bot DataHub 27/07): regex cũ chỉ chặn C0+DEL, LỌT ký tự điều khiển C1
+  // (vd \u0085 NEL) và ký tự định dạng ẩn (zero-width, RLO đảo chiều hiển thị).
+  // \p{Cc} = mọi control, \p{Cf} = mọi format ẩn. Không ảnh hưởng tiếng Việt có dấu.
+  return String(value ?? '').replace(/[\p{Cc}\p{Cf}]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 function num(value) {
   const parsed = Number(value);
