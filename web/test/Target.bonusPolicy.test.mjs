@@ -15,7 +15,7 @@ test('Target admin exposes versioned Thưởng v3 editor, all layers and C10-onl
 });
 
 test('editor defaults auto target on, captures manual override/clear and warns on manual group total', () => {
-  assert.match(target, /Target nhóm manual \(VND\)/);
+  assert.match(target, /Target nhóm manual \(v3\.2 KHÔNG dùng\)/);
   assert.match(target, /Trống = kế thừa manual \/ dùng auto/);
   assert.match(target, /Xóa manual tại tầng này → dùng auto/);
   assert.match(target, /Tự suy target nhóm khi chưa có manual \(mặc định bật\)/);
@@ -31,10 +31,10 @@ test('editor defaults auto target on, captures manual override/clear and warns o
 test('preview renders month and quarter detail for revenue, target, excess, rate and P2 group', () => {
   assert.match(target, /Chi tiết P2 tháng/);
   assert.match(target, /Target quý = trung bình các tháng đã giao/);
-  for (const label of ['Doanh thu trước VAT', 'Target nhóm', 'Nguồn target', 'Phần vượt', 'Rate', 'P2 nhóm', 'Tổng P2']) assert.match(target, new RegExp(label));
+  for (const label of ['Doanh thu trước VAT', 'Target nhóm', 'Tỷ trọng C10', 'Phần vượt', 'Rate', 'P2 nhóm', 'Tổng P2']) assert.match(target, new RegExp(label));
   assert.match(target, /auto · tự suy/);
   assert.match(target, /manual · CEO nhập/);
-  assert.match(target, /P2 = Σ max\(0, doanh thu C10 nhóm − target nhóm\) × rate/);
+  assert.match(target, /phần vượt = tổng doanh thu C10 − tổng target/);
 });
 
 test('save stays disabled until canonical server preview and API uses one-time preview id', () => {
