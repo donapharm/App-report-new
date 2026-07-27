@@ -1460,7 +1460,10 @@ router.get('/employee-cost/gaps', auth.requireAuth, asyncJsonRoute(async (req, r
 
 // Chỉ số đếm cho BADGE trên tab — CEO nhìn phát thấy ngay còn bao nhiêu mã/cặp
 // đang vướng, không phải bấm vào tab mới biết. Payload nhẹ, không kèm danh sách.
-router.get('/employee-cost/gaps/summary', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+// Badge chỉ hiển thị SỐ ĐẾM nhưng phía dưới là phép phân tích nặng (quét toàn bộ
+// dòng doanh thu + catalog). Memo 2 phút theo quyền+kỳ để mở trang không phải
+// tính lại từ đầu — con số đếm chậm 2 phút là chấp nhận được, đổi lấy trang mượt.
+router.get('/employee-cost/gaps/summary', auth.requireAuth, memoJson('employee-cost-gaps-summary', 120 * 1000), asyncJsonRoute(async (req, res) => {
   const payload = await employeeCostGapPayload(req, 'gaps_badge_view');
   res.set('Cache-Control', 'private, no-store');
   // Chức năng đang tắt → nói rõ "disabled" thay vì trả 0 (0 sẽ bị hiểu nhầm là
@@ -1726,7 +1729,7 @@ router.get('/employee-cost/data-quality', auth.requireAuth, asyncJsonRoute(async
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
 }));
-router.get('/employee-cost/data-quality/summary', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+router.get('/employee-cost/data-quality/summary', auth.requireAuth, auth.requireAdmin, memoJson('employee-cost-dq-summary', 120 * 1000), asyncJsonRoute(async (req, res) => {
   const payload = await employeeCostDqPayload(req, 'dq_bell_view');
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ...payload.summary, alert: payload.alert, from: payload.from, to: payload.to, sources: payload.sources });

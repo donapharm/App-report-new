@@ -2351,3 +2351,6 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 
 /* Hoạt chất: cho 3 dòng thay vì 2 để đỡ bị cắt cụt "Acar bos…" */
 .catalog-table-products .catalog-two-lines { -webkit-line-clamp:3; line-clamp:3; max-height:3.8em; }
+/* Badge đang tính — hiện "…" thay vì BIẾN MẤT (CEO 27/07: cứ deploy xong là badge
+   mất một lúc vì cache bị xoá, nhìn tưởng hỏng mất tính năng). */
+.employee-cost-tab-badge.loading { background:#eef2f7; color:#64748b; letter-spacing:1px; }

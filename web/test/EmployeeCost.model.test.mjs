@@ -290,8 +290,8 @@ test('gui worklist xong phai hien BIEN NHAN cua DataHub, khong chi noi da gui', 
 test('tab phai hien BADGE so ma/so cap va so exception, khong bat phai bam vao moi thay', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   // Badge nằm ngay trên nút tab.
-  assert.match(page, /Mặt hàng thiếu %\{gapBadge\.loaded/);
-  assert.match(page, /Kiểm soát dữ liệu\{dqBadge\.loaded/);
+  assert.match(page, /Mặt hàng thiếu %\{!gapBadge\.loaded/);
+  assert.match(page, /Kiểm soát dữ liệu\{!dqBadge\.loaded/);
   // Hiện đủ số mã + số cặp cho tab thiếu %, số exception cho tab kiểm soát.
   assert.match(page, /gapBadge\.codeCount\} mã · \$\{gapBadge\.pairCount\} cặp/);
   assert.match(page, /dqBadge\.count\} exception/);
@@ -493,4 +493,18 @@ test('template layout thiếu c10 → vẫn phải chèn C10 ngay sau Mã hàng 
   const layoutWithC10 = ['c5', 'c10', 'c16'];
   const keys2 = buildEmployeeCostColumns([], { columns: layoutWithC10 }).map((c) => c.key);
   assert.deepEqual(keys2, ['c5', 'c10', 'c16']);
+});
+
+// CEO 27/07: cứ deploy xong là badge "biến mất" một lúc (cache bị xoá, phải tính lại)
+// → nhìn tưởng hỏng mất tính năng. Khoá: đang tính phải hiện "…", và lỗi tạm thời
+// KHÔNG được xoá số cũ đang hiển thị.
+test('badge hiện … khi đang tính và KHÔNG biến mất khi lỗi tạm thời', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  // có nhánh loading hiển thị dấu …
+  assert.match(page, /employee-cost-tab-badge loading/);
+  assert.match(page, /Đang đếm/);
+  // khi lỗi chỉ tắt cờ loading, KHÔNG set loaded:false (không xoá số cũ)
+  assert.doesNotMatch(page, /catch\(\(\) => \{ if \(alive\) setGapBadge\(\(current\) => \(\{ \.\.\.current, loaded: false \}\)\); \}\)/);
+  assert.match(page, /setGapBadge\(\(current\) => \(\{ \.\.\.current, loading: false \}\)\)/);
+  assert.match(page, /setDqBadge\(\(current\) => \(\{ \.\.\.current, loading: false \}\)\)/);
 });
