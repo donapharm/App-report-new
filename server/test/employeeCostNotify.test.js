@@ -51,6 +51,39 @@ test('không có số nào dùng được -> null, nơi gọi bỏ qua (không g
   assert.equal(costNotify.messageFor({ kind: 'week', row: ROW, total: null }), null);
 });
 
+test('tin CUỐI THÁNG có thêm dòng "Số tạm giữ cho cuối năm"', () => {
+  const annual = costNotify.annualFromSummary({ reliable: true, annualTotal: 12_345_678, provisionalAnnualTotal: 12_345_678 });
+  assert.deepEqual(annual, { amount: 12_345_678, provisional: false });
+  const text = costNotify.messageFor({
+    kind: 'month', row: ROW, total: { amount: 46_878_505, provisional: false }, annual,
+  });
+  assert.match(text, /Trọn tháng 07: 46\.878\.505đ/);
+  assert.match(text, /Số tạm giữ cho cuối năm: 12\.345\.678đ/);
+});
+
+test('số tạm giữ cũng fail-closed: chưa chốt thì rơi về số tạm tính', () => {
+  const annual = costNotify.annualFromSummary({ reliable: false, annualTotal: null, provisionalAnnualTotal: 9_000_000 });
+  assert.deepEqual(annual, { amount: 9_000_000, provisional: true });
+  const text = costNotify.messageFor({
+    kind: 'month', row: ROW, total: { amount: 1_000, provisional: true }, annual, gaps: { pairs: 5 },
+  });
+  assert.match(text, /Số tạm giữ cho cuối năm: 9\.000\.000đ/);
+  assert.match(text, /TẠM TÍNH/, 'nhãn tạm tính vẫn phải bao trùm cả số tạm giữ');
+});
+
+test('không có số tạm giữ hợp lệ -> BỎ HẲN dòng, không in 0đ hay dấu gạch', () => {
+  assert.equal(costNotify.annualFromSummary({ reliable: false, annualTotal: null, provisionalAnnualTotal: null }), null);
+  assert.equal(costNotify.annualFromSummary({}), null);
+  const text = costNotify.messageFor({ kind: 'month', row: ROW, total: { amount: 1_000, provisional: false }, annual: null });
+  assert.doesNotMatch(text, /tạm giữ/);
+});
+
+test('tin TUẦN KHÔNG kèm số tạm giữ (CEO chỉ yêu cầu ở tin cuối tháng)', () => {
+  const annual = { amount: 12_345_678, provisional: false };
+  const text = costNotify.messageFor({ kind: 'week', row: ROW, total: { amount: 1_000, provisional: false }, annual });
+  assert.doesNotMatch(text, /tạm giữ/);
+});
+
 test('tin tuần ghi lũy kế theo ngày; tin tháng ghi trọn tháng', () => {
   const total = { amount: 5_000_000, provisional: false };
   assert.match(costNotify.messageFor({ kind: 'week', row: ROW, total }), /Lũy kế từ 01\/07 đến 27\/07/);

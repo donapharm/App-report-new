@@ -60,6 +60,22 @@ function totalFromSummary(summary = {}) {
 }
 
 /**
+ * Số TẠM GIỮ CHO CUỐI NĂM (CEO xin thêm 2026-07-27) — là tổng các cột được khai
+ * `annual` trong cấu hình, mặc định `c44` ("Lương cuối năm"). Đọc từ cấu hình qua
+ * summary chứ không viết cứng tên cột, để đổi `EMPLOYEE_COST_ANNUAL_COLUMNS` là
+ * số tự chạy theo.
+ * Cùng luật fail-closed với tổng tháng: chưa chốt thì rơi về số tạm tính.
+ */
+function annualFromSummary(summary = {}) {
+  const reliable = summary.reliable !== false;
+  const settled = finite(summary.annualTotal);
+  const provisional = finite(summary.provisionalAnnualTotal);
+  const amount = reliable && settled != null ? settled : provisional;
+  if (amount == null) return null;
+  return { amount, provisional: !reliable };
+}
+
+/**
  * Tin gửi 1 NV.
  *   kind: 'week' (lũy kế từ đầu tháng) | 'month' (trọn tháng)
  *   row : { emp_code, name, ky, from, to }
@@ -69,7 +85,7 @@ function totalFromSummary(summary = {}) {
  *          matchedRows/totalRows, không có số mã gộp. Gọi đúng tên con số mình
  *          thực sự có, tránh lặp lại vụ lẫn lộn "13 mã" với "192 cặp".
  */
-function messageFor({ kind, row = {}, total, gaps = {} } = {}) {
+function messageFor({ kind, row = {}, total, gaps = {}, annual = null } = {}) {
   if (!total) return null;
   const monthNo = String(row.ky || '').split('.')[0];
   const who = row.name || row.emp_code;
@@ -80,6 +96,9 @@ function messageFor({ kind, row = {}, total, gaps = {} } = {}) {
     `💰 [Tháng ${monthNo}] ${who} — tổng chi phí bán hàng bạn nhận`,
     `${scope}: ${moneyShort(total.amount)}`,
   ];
+  // CEO xin thêm: chỉ hiện ở tin CUỐI THÁNG. Không có số hợp lệ thì bỏ hẳn dòng,
+  // không in "—" hay 0đ để NV khỏi hiểu là bị giữ 0 đồng.
+  if (kind === 'month' && annual) lines.push(`Số tạm giữ cho cuối năm: ${moneyShort(annual.amount)}`);
   if (total.provisional) {
     const pairs = finite(gaps.pairs);
     const detail = pairs > 0 ? ` — còn ${pairs.toLocaleString('vi-VN')} dòng chưa được gán tỷ lệ %` : '';
@@ -120,6 +139,7 @@ module.exports = {
   alreadySent,
   markSent,
   totalFromSummary,
+  annualFromSummary,
   messageFor,
   unavailableMessageFor,
   subjectFor,

@@ -425,7 +425,9 @@ async function runEmployeeCostNotify({ kind, asOfDay }) {
         const totalRows = Number(res.match?.totalRows);
         const matchedRows = Number(res.match?.matchedRows);
         const pairs = Number.isFinite(totalRows) && Number.isFinite(matchedRows) ? totalRows - matchedRows : null;
-        text = employeeCostNotify.messageFor({ kind, row, total, gaps: { pairs } });
+        // Số tạm giữ cuối năm chỉ đi kèm tin CUỐI THÁNG (CEO chốt).
+        const annual = kind === 'month' ? employeeCostNotify.annualFromSummary(res.summary) : null;
+        text = employeeCostNotify.messageFor({ kind, row, total, gaps: { pairs }, annual });
       }
       if (!text) { skipped += 1; continue; }
       const out = await notifyChannels.deliver({
