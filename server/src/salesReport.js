@@ -312,10 +312,17 @@ async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false 
   const sent = [];
   const skipped = [];
   const failed = [];
+  let anyData = false;
   for (const r of recipients) {
     if (!force && alreadySentTo(kind, ranges, r.code)) { skipped.push({ code: r.code, reason: 'duplicate' }); continue; }
     try {
       const rep = await renderEmployeeReport({ empCode: r.code, kind, ranges });
+      // CEO chốt 2026-07-27: "không có tin gì thì KHÔNG gửi".
+      // Trước đây gửi vô điều kiện -> Chủ nhật / ngày chưa upload là 17 người
+      // cùng nhận tin "Doanh thu: 0đ" lúc 07:30. Kỳ nào NV không có dòng nào
+      // thì bỏ qua hẳn, không gửi tin rỗng.
+      if (!rep.data?.rows?.length) { skipped.push({ code: r.code, reason: 'no_data' }); continue; }
+      anyData = true;
       const res = await notify.deliver({ telegramId: r.telegramId, email: r.email, subject: rep.subject, text: rep.text, html: rep.html });
       if (res.ok) {
         sent.push({ code: r.code, email: r.email, telegramId: r.telegramId, channels: res.channels });
@@ -324,6 +331,11 @@ async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false 
     } catch (e) {
       failed.push({ code: r.code, email: r.email, error: e.message });
     }
+  }
+  // Không ai có dữ liệu -> im lặng hoàn toàn, kể cả bản tổng gửi CEO. KHÔNG đánh
+  // dấu "đã gửi" để lần chạy sau (khi dữ liệu đã về) vẫn gửi được đúng kỳ này.
+  if (!anyData) {
+    return { ok: true, skipped: 'no_data', key, kind, ranges, sent: [], skippedRecipients: skipped, failed };
   }
   const ceo = await renderCeoDigest({ kind, ranges });
   const ceoTo = ceoRecipient();
