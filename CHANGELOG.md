@@ -1,3 +1,10 @@
+### 2026-07-27 — SỬA GẤP: P2 chia phần vượt theo TỶ TRỌNG THỰC (không dồn hạng cao)
+> CEO chỉ ra bản vừa deploy SAI. Bản trước dồn phần vượt vào H.A* trước → **thổi phồng thưởng**.
+- **Đúng:** rà theo mã QLNB → cột C10, xem phần vượt **thực sự rơi vào nhóm nào**. Nhóm chiếm bao nhiêu % doanh thu C10 thì hưởng bấy nhiêu phần vượt, ăn rate nhóm đó.
+- **DN006: 7.048.940đ (sai) → 5.479.768đ (đúng).** Có NV sẽ **GIẢM** nếu phần vượt rơi nhiều vào H.C/H.D — đúng bản chất.
+- Σ phần được chia == đúng phần vượt (dư làm tròn dồn nhóm doanh thu lớn nhất — không tạo/mất tiền).
+- Test **15/15**, thêm ca "phần vượt rơi H.C/H.D → H.A* chỉ được ít, không thổi phồng". Modal nói đúng tỷ trọng.
+
 ### 2026-07-27 — RELEASE: Thưởng P2 v3.2 (cổng tổng target) + cột C10 trong danh mục
 > Bundle overlay trên production `d8b24ba`, chỉ 6 file; không lùi file report nào.
 - **P2 v3.2 (CEO chốt):** phải đạt TỔNG target trước (`R<T` → P2=0); phần vượt `E=R−T` **chia cho nhóm ưu tiên CAO trước** (H.A*→H.A→…), cap bởi doanh thu nhóm, ăn rate nhóm đó. **P1 (coach) KHÔNG đụng.** Rate chỉnh tay được.

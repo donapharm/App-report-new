@@ -359,19 +359,37 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
   const threshold = thresholds.size === 1 ? [...thresholds][0] : Math.max(...thresholds);
   const eligible = pct >= threshold;
   const preV3 = legacyPriorityActive(coverage, config);
-  // ── P2 v3.2 (CEO 2026-07-27, SPEC_BONUS_P2_TOTAL_TARGET_GATE.md): CỔNG TỔNG TARGET
-  //    rồi gán phần vượt theo ưu tiên CAO trước (H.A*→H.A→...). P1 (baseAmount) GIỮ
-  //    NGUYÊN — tuyệt đối không đụng. Rate đọc từ config SSOT (cấu hình tay ở CEO-vault).
-  const totalC10Revenue = PRIORITY_GROUPS.reduce(
-    (sum, group) => sum + Math.round(finite(coverage.groupRevenue?.[group]) || 0), 0,
-  );
+  // ── P2 v3.2 (CEO chốt 2026-07-27): CỔNG TỔNG TARGET rồi phân bổ phần vượt theo
+  //    TỶ TRỌNG THỰC của từng nhóm C10 (rà theo mã QLNB → cột C10 của danh mục).
+  //    ‼ KHÔNG "dồn phần vượt vào nhóm hạng cao trước" — làm vậy sẽ THỔI PHỒNG thưởng:
+  //    nếu phần vượt chủ yếu rơi vào H.C/H.D còn H.A* chỉ chiếm doanh thu nhỏ, thì
+  //    H.A* chỉ được hưởng đúng phần nhỏ đó. Tỷ trọng doanh thu nào, phần vượt nấy.
+  //    P1 (baseAmount) GIỮ NGUYÊN — tuyệt đối không đụng.
+  const groupRevenueOf = (group) => Math.round(finite(coverage.groupRevenue?.[group]) || 0);
+  const totalC10Revenue = PRIORITY_GROUPS.reduce((sum, group) => sum + groupRevenueOf(group), 0);
   const totalTarget = Math.round(target);                    // T = TỔNG target NV (không chia nhỏ)
   const activeP2 = coverage.sourceAvailable && eligible && !preV3;
+  const gateOpen = activeP2 && totalC10Revenue >= totalTarget;
   const totalExcess = activeP2 ? Math.max(0, totalC10Revenue - totalTarget) : null;
-  let remainingExcess = activeP2 && totalC10Revenue >= totalTarget ? (totalC10Revenue - totalTarget) : 0;
+
+  // Phân bổ theo tỷ trọng, làm tròn tới đồng; phần dư do làm tròn dồn vào nhóm có
+  // doanh thu lớn nhất để Σ phần được chia == đúng phần vượt (không tạo/mất tiền).
+  const allocationByGroup = new Map(PRIORITY_GROUPS.map((group) => [group, 0]));
+  if (gateOpen && totalC10Revenue > 0 && totalExcess > 0) {
+    let assigned = 0;
+    let biggest = PRIORITY_GROUPS[0];
+    for (const group of PRIORITY_GROUPS) {
+      const share = Math.round(totalExcess * groupRevenueOf(group) / totalC10Revenue);
+      allocationByGroup.set(group, share);
+      assigned += share;
+      if (groupRevenueOf(group) > groupRevenueOf(biggest)) biggest = group;
+    }
+    const residual = totalExcess - assigned;
+    if (residual !== 0) allocationByGroup.set(biggest, allocationByGroup.get(biggest) + residual);
+  }
 
   const priorityGroups = PRIORITY_GROUPS.map((group) => {
-    const revenue = Math.round(finite(coverage.groupRevenue?.[group]) || 0);
+    const revenue = groupRevenueOf(group);
     const rates = groupRates.get(group);
     if (!rates.size) rates.add(Number(config.priorityRates[group]));
     const ratePct = rates.size === 1 ? [...rates][0] : null;
@@ -387,16 +405,16 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
     } else if (totalC10Revenue < totalTarget) {
       reason = 'total_below_target';                          // chưa đạt TỔNG target → P2 = 0
     } else {
-      // Gán phần vượt cho nhóm ưu tiên cao trước, cap bởi doanh thu nhóm.
-      allocated = Math.min(remainingExcess, revenue);
-      remainingExcess -= allocated;
+      allocated = allocationByGroup.get(group) || 0;          // phần vượt THỰC của nhóm này
       if (ratePct == null) reason = 'rate_ambiguous';
-      else if (allocated <= 0) reason = 'not_in_excess';      // nhóm này không nằm trong phần vượt
+      else if (allocated <= 0) reason = 'no_group_revenue';   // nhóm không có doanh thu trong kỳ
       else amount = Math.round(allocated * ratePct / 100);
     }
     return {
       group, revenue, ratePct, allocated, amount, reason,
-      // v3.2: KHÔNG còn target riêng từng nhóm; 'excess' = phần doanh thu nhóm được GÁN vào phần vượt.
+      // Tỷ trọng doanh thu nhóm trong tổng C10 — chính là tỷ lệ phần vượt được chia.
+      sharePct: totalC10Revenue > 0 ? +(revenue / totalC10Revenue * 100).toFixed(2) : 0,
+      // v3.2: KHÔNG còn target riêng từng nhóm; 'excess' = phần vượt được chia cho nhóm.
       excess: allocated, target: null, targetStatus: 'total_gate', targetSource: null, targetPeriods: [],
     };
   });
