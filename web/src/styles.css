@@ -2307,3 +2307,47 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 /* Cột C10 cạnh mã QLNB — CEO nhìn phát biết mã nào đã có nhóm ưu tiên, mã nào còn thiếu. */
 .catalog-c10 { display:inline-block; padding:1px 7px; border-radius:999px; font-weight:800; font-size:11.5px; background:#e8f3ff; color:#0b5aa6; }
 .catalog-c10.is-missing { background:#ffe9e9; color:#a12020; }
+
+/* ── Layout cột bảng danh mục (CEO 27/07: cột chật mà trang dư chỗ) ──
+   Bảng dùng table-layout:fixed + % bề ngang → tận dụng hết khung 1600px,
+   không còn cảnh tiêu đề bị cắt ("Đơn giá trún", "CST còn l") trong khi
+   bên phải bỏ trống. Cột dài (tên thuốc, hoạt chất) được ưu tiên chỗ. */
+.catalog-table-products { min-width:1320px; table-layout:fixed; }
+.catalog-table-products th { white-space:normal; line-height:1.25; vertical-align:bottom; }
+.catalog-table-products td { overflow-wrap:anywhere; }
+.catalog-table-products .catalog-money { text-align:right; white-space:nowrap; }
+.catalog-table-products .catalog-drug-name { min-width:0; max-width:none; }
+
+/* Bảng TOÀN danh mục (có cột Nhân viên) — 14 cột */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(1)  { width:9%; }   /* Nhân viên */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(2)  { width:4.5%; } /* Tuyến */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(3)  { width:6%; }   /* Mã nhà thầu */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(4)  { width:9%; }   /* Mã đơn vị */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(5)  { width:10%; }  /* Mã QLNB */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(6)  { width:4.5%; } /* C10 */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(7)  { width:13%; }  /* Tên thuốc */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(8)  { width:13%; }  /* Hoạt chất + Hàm lượng */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(9)  { width:4.5%; } /* ĐVT */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(10) { width:7.5%; } /* Đơn giá trúng thầu */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(11) { width:6.5%; } /* CST ban đầu */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(12) { width:6.5%; } /* CST còn lại */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(13) { width:3%; }   /* Từ kỳ */
+.catalog-table-products:not(.catalog-table-employee) th:nth-child(14) { width:3%; }   /* Đến kỳ */
+
+/* Bảng danh mục CỦA TÔI (không có cột Nhân viên) — 13 cột */
+.catalog-table-employee th:nth-child(1)  { width:5%; }    /* Tuyến */
+.catalog-table-employee th:nth-child(2)  { width:6.5%; }  /* Mã nhà thầu */
+.catalog-table-employee th:nth-child(3)  { width:10%; }   /* Mã đơn vị */
+.catalog-table-employee th:nth-child(4)  { width:11%; }   /* Mã QLNB */
+.catalog-table-employee th:nth-child(5)  { width:5%; }    /* C10 */
+.catalog-table-employee th:nth-child(6)  { width:14%; }   /* Tên thuốc */
+.catalog-table-employee th:nth-child(7)  { width:14%; }   /* Hoạt chất + Hàm lượng */
+.catalog-table-employee th:nth-child(8)  { width:5%; }    /* ĐVT */
+.catalog-table-employee th:nth-child(9)  { width:8.5%; }  /* Đơn giá trúng thầu */
+.catalog-table-employee th:nth-child(10) { width:7%; }    /* CST ban đầu */
+.catalog-table-employee th:nth-child(11) { width:7%; }    /* CST còn lại */
+.catalog-table-employee th:nth-child(12) { width:3.5%; }  /* Từ kỳ */
+.catalog-table-employee th:nth-child(13) { width:3.5%; }  /* Đến kỳ */
+
+/* Hoạt chất: cho 3 dòng thay vì 2 để đỡ bị cắt cụt "Acar bos…" */
+.catalog-table-products .catalog-two-lines { -webkit-line-clamp:3; line-clamp:3; max-height:3.8em; }
