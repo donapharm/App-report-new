@@ -5,6 +5,7 @@ export const EMPLOYEE_COST_DIMENSIONS = Object.freeze([
   { key: 'c7', label: 'Đơn vị', kind: 'dimension' },
   { key: 'contractorName', label: 'Nhà thầu', kind: 'dimension' },
   { key: 'c5', label: 'Mã hàng (QLNB)', kind: 'dimension' },
+  { key: 'c10', label: 'C10', kind: 'dimension' },
   { key: 'c16', label: 'Tên hàng', kind: 'dimension' },
   { key: 'strength', label: 'Hàm lượng', kind: 'dimension', tooltip: true },
   { key: 'c25', label: 'ĐVT', kind: 'dimension' },
@@ -16,7 +17,7 @@ export const EMPLOYEE_COST_DIMENSIONS = Object.freeze([
 ]);
 
 const FIELD_BY_KEY = new Map(EMPLOYEE_COST_DIMENSIONS.map((column) => [column.key, column]));
-const DEFAULT_PREFIX = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'revenueBeforeVat'];
+const DEFAULT_PREFIX = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'revenueBeforeVat'];
 const DEFAULT_SUFFIX = ['rowMonthlyTotal', 'note'];
 const BLOCKED = new Set(['c32', 'c47']);
 const EMPTY_NOTE = 'chưa có dữ liệu chi phí kỳ này';
