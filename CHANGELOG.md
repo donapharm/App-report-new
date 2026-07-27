@@ -1,3 +1,24 @@
+### 2026-07-27 — Claude Code — KIỂM XUNG ĐỘT với bot + dọn nhánh + viết lại HANDOFF
+> CEO hỏi "các bản mới nhất có xung đột với bot nào không". Kết luận: **KHÔNG xung đột.**
+
+**Kiểm xung đột (bằng chứng, không phán đoán)**
+- `origin/main` = `a82381f` (Report Bot). Không có commit bot nào mới hơn. Nhánh Claude `claude/new-session-eifd44` = `main` + 1 commit tài liệu → **không lệch code app**.
+- `fix/c7-canonical-latest-20260727` đã nằm trong `main`. `fix/app-report-deploy-stability-20260727` (`09a6477`) **trùng khít** `a82381f` (diff `auto-deploy.sh` rỗng) → nhánh chết.
+- Xác minh **hành vi** chứ không so chữ, 6 mốc còn nguyên trên `main`: sanitize `/[\p{Cc}\p{Cf}]/gu` · `catalogUnitCodeOf` · fail-closed `GAP_SYNC_UNIT_CODE_REQUIRED` · `EMPLOYEE_COST_GAP_UNIT_CODE_REQUIRED` · badge `loading` không biến mất · memo `employee-cost-gaps-summary`.
+- **P2 bản ĐÚNG (chia theo tỷ trọng) có trên main; bản SAI (dồn hạng cao) KHÔNG lọt lên.**
+- Test lại trên `a82381f`: server **405/412** = đúng 7 fail baseline (3 OTP + 4 font PDF của container) → **0 regression** · gap-sync E2E **28/28** · web **83/83** · build PASS · release-safety **41/41**.
+
+**Dọn nhánh làm việc của Claude**
+- Nhánh `claude/new-session-eifd44` trước đó **lệch 2 chiều**: code app **cũ hơn** main (thiếu bản tích hợp của bot), nhưng 11 file thì **chưa lên main**. Để vậy là bẫy — merge nhầm sẽ xoá công của bot.
+- Đặt lại nhánh về `origin/main`, chỉ giữ **11 file thật sự chưa merge**: 7 script an toàn phát hành + 2 SPEC + 2 DIRECTIVE. **Không đụng `scripts/auto-deploy.sh`** (giữ bản `a82381f`). Commit `b288e60`.
+
+**‼ Còn 15 nhánh cũ trên remote — CHƯA XOÁ ĐƯỢC (thiếu quyền push xoá/tag)**
+Đã kiểm **từng dòng code** mỗi nhánh thêm mới xem `main` có chưa. Kết quả: nội dung **đã có đủ trên `main`**; các dòng "thiếu" đều là **bản cũ đã bị thay**, không phải công bị mất (vd `release/bonus-v32-c10` là bản P2 SAI mà CEO đã bác — **không được** đưa lên main).
+- **13 nhánh của Claude** (xoá được): `release/badge-stable` · `release/bonus-prorata` · `release/bonus-v32-c10` · `release/c10-template-layout` · `release/catalog-layout` · `release/control-chars` · `release/cost-c10-column` · `release/dq-badge-fix` · `release/dq-uom-equiv` · `release/gap-unit-code` · `release/target-v32` · `release/app-report-employee-cost` · `release/sso-v3-crosswalk-prod-20260725`
+- **2 nhánh của Report Bot** (để bot tự xoá): `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — **nhánh nguy hiểm**, từng suýt merge làm mất sanitizer + badge + perf) · `fix/app-report-deploy-stability-20260727` (`09a6477` — trùng khít main)
+- **Rủi ro nếu để nguyên:** nhánh nào cũng **cũ hơn `main`**; merge nhầm là **lùi mất** công bên kia. Đã dính 1 lần với `b70cab9`.
+
+**Viết lại `HANDOFF.md`** (bản cũ đứng yên từ 01/07, đọc vào là lạc): trạng thái thật + số test + P1/P2 v3.2 + C10 + gap-sync C7 + DQ + self-heal + bộ script phát hành + việc còn treo của DataHub/App Sale + 3 cái bẫy đã trả giá (`template.columns` ghi đè default · join key phải là mã C7 · P2 không được dồn hạng cao).
 ### 2026-07-27 — FIX: worklist “mã thiếu %” gửi đúng mã đơn vị C7
 - Tách `unitCode` canonical khỏi `c7` tên hiển thị; `don_vi_anh_huong` chỉ nhận mã C7 thật (`135.HTNT-FPT LONG CHÂU`, `001.NT-BVĐK ĐỒNG NAI`…), không còn tên công ty.
 - Mã C7 được uppercase + trim + dedup + sort trước khi tính lại `so_don_vi` và `worklist_checksum`; thiếu C7 thì fail-closed, không lấy tên hiển thị thay thế.

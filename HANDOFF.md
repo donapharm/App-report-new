@@ -1,37 +1,132 @@
 # HANDOFF — App Report
 
-Cập nhật: 2026-07-01. Người build: Claude (phiên với CEO). Người tiếp nhận: bot report / phiên Claude kế tiếp.
+Cập nhật: **2026-07-27** (Claude Code). Người tiếp nhận: bot report / phiên Claude kế tiếp.
+Đọc theo thứ tự: `CLAUDE.md` → `CHANGELOG.md` (mới nhất trên cùng) → file này.
 
-## Trạng thái: CHẠY ĐƯỢC, đã verify bằng preview trên cả mobile + PC.
+> ⚠ Bản HANDOFF cũ (01/07) đã lỗi thời nặng: không có module Chi phí, thưởng P1/P2,
+> cột C10, đồng bộ "mã thiếu %", Kiểm soát dữ liệu. Đừng dùng lại bản đó.
 
-### Đã xong ✅
-- Kiến trúc React (Vite) + API Express tách riêng, **1 codebase responsive** (mobile bottom-nav, PC sidebar dashboard).
-- Nhận diện Donapharm (logo SVG placeholder, tông xanh dược).
-- **6 lõi:** Tổng quan + cảnh báo chủ động; Doanh thu drill-down (NV→ĐV→SP); Cơ số thầu (lọc/cảnh báo); Target (xem % đạt + **dự báo theo trend, có giải thích**); Export Excel (qua backend, có kiểm quyền); AI hỏi nhanh (code-first, hiểu không dấu).
-- **Upload (admin):** parse+validate xlsx ở backend → preview → commit slot → audit log → rollback. Test với `server/data/sample_upload.xlsx`.
-- **Phân quyền backend:** đã kiểm — NV Sale chỉ thấy dữ liệu của mình, không có tab Nhân viên/Upload, bị 403 khi gọi API admin.
-- **LLM (AI diễn giải) grounded:** điểm cắm sẵn ở `llm.js`; chưa có key thì tự fallback code-first (đã test).
+---
 
-### Đã nối dữ liệu thật (một phần) ✅
-- **Upload → Báo cáo (dây chính, đã test):** `store.js` đọc slot upload `active` làm nguồn doanh thu; upload 1 kỳ mới là báo cáo hiện kỳ đó ngay (không cần restart). Ưu tiên: slot upload → ORDS → mẫu.
-- **ORDS fallback:** `ords.js` — code sẵn, TẮT mặc định, bật bằng env `ORDS_SQL_API` (chạy trên server nội bộ). Chưa test live.
-- **OTP/SSO:** `auth.js` (`requestOtp/verifyOtp/verifySso`) + routes `/auth/otp/*`, `/auth/sso`, `/auth/mode` — code sẵn, TẮT mặc định, bật bằng env. Chưa test live.
+## 1. Trạng thái: ĐANG CHẠY THẬT trên server nội bộ
 
-### Chưa làm / việc tiếp theo (ưu tiên từ trên xuống)
-1. **Bật + kiểm 2 dây còn lại TRÊN SERVER nội bộ** (máy ngoài mạng không test được):
-   - ORDS: điền `ORDS_SQL_API`/`ORDS_AUTH`, xác nhận tên bảng/cột + format response (`ords.js` có ghi chú).
-   - OTP/SSO: điền `OTP_BACKEND_URL`/`SSO_VERIFY_URL`, khớp path/response thật; **làm UI nhập SĐT→OTP ở frontend** (hiện demo dùng nút chọn tài khoản mẫu; gọi `GET /auth/mode` để biết chế độ).
-   - Targets: fallback `V_TEM_TARGET_BONUS` khi kỳ chưa nhập target (`store.getTargets` có TODO).
-2. **Logo Donapharm thật** thay placeholder trong `web/src/logo.jsx` (`// TODO(BRAND)`).
-3. **Siết CORS** trong `server/src/index.js` về đúng domain (hiện mở cho demo).
-4. **Session bền** (hiện lưu RAM `auth.js`) → chuyển sang store bền (Redis/KV) khi nhiều instance.
-5. **Export PDF** (hiện chỉ Excel) nếu CEO cần.
-6. Deploy theo `DEPLOY_CLOUDFLARE.md` (Pages + Tunnel + Access).
+- `main` = `a82381f`. Nhánh làm việc của Claude = `claude/new-session-eifd44`.
+- Deploy: `scripts/auto-deploy.sh` chạy bằng cron + PM2, ra ngoài qua Cloudflare Tunnel.
+- **Auto-deploy đang KHÓA: `DISABLED_BY_CEO_20260727`.** Muốn deploy phải mở khóa có chủ đích.
 
-### Điểm cần biết
-- Dữ liệu mẫu do `seed.js` sinh (ổn định, có PRNG hạt giống). `server/data/*.json` bị .gitignore (là dữ liệu sinh/runtime) → chạy `npm run seed` sau khi clone.
-- Data contract chuẩn: xem `ReportRow` / `TenderQuotaRow` trong audit gốc mục 10.3; hiện thực trong `store.js`/`upload.js`.
-- Không có secret thật trong repo. `.env` theo `.env.example`.
+### Kết quả test trên `a82381f` (chạy lại 27/07)
+| Bộ | Kết quả |
+|---|---|
+| server `node --test "test/**/*.test.js"` | **405/412** — đúng 7 fail baseline (3 OTP + 4 font PDF của container này), **0 regression** |
+| `npm run test:gap-sync` (E2E) | **28/28** |
+| web `node --test "test/**/*.test.mjs"` | **83/83** |
+| `npm run build` (web) | PASS |
+| `bash scripts/test_release_safety.sh` | **41/41** |
 
-### Cách bàn giao cho bot report
-Repo này tự chứa đủ ngữ cảnh: mở ra, đọc `CLAUDE.md` → `HANDOFF.md`, chạy `npm run setup && npm run dev`, rồi làm tiếp mục "việc tiếp theo".
+7 fail baseline là **của môi trường container**, không phải lỗi app — 3 ca OTP cần backend OTP thật,
+4 ca PDF cần font Unicode nhúng chỉ có trên server. Đừng "sửa" chúng.
+
+---
+
+## 2. Bản đồ nghiệp vụ hiện tại (ngoài 6 lõi trong `CLAUDE.md`)
+
+### 2.1 Chi phí của tôi (ngoại lệ CEO chốt 20/07) — `SPEC_REPORT_EMP_COST_SELFVIEW.md`
+- Số **do DataHub tính (SSOT)**, App Report chỉ hiển thị. **KHÔNG dựng engine chi phí riêng.**
+- Self-scoped: NV chỉ thấy chi phí/hoa hồng của chính mình; backend khóa quyền.
+- `server/src/employeeCost.js` · `employeeCostTable.js` · `employeeCostExport.js`
+- Cache nền ALL: **6 giờ** (`EMPLOYEE_COST_ALL_BASE_TTL_MS`), có **self-heal trong vòng warm**
+  (`SPEC_EMP_COST_SOURCE_SELFHEAL.md`) để không kẹt 6h khi 1 NV lỗi nguồn.
+- **Fail-closed về SỐ:** NV lỗi nguồn KHÔNG bị suy thành "thiếu %"; tổng bị khóa `null`,
+  UI hiện nhánh "tạm tính" riêng + banner nêu **đích danh mã NV**.
+
+### 2.2 Thưởng P1 / P2 — `SPEC_BONUS_P2_TOTAL_TARGET_GATE.md`
+- `server/src/employeeBonus.js`.
+- **P1 (coach) = `baseAmount` — CEO chốt ĐÚNG RỒI, TUYỆT ĐỐI KHÔNG SỬA.**
+- **P2 v3.2** (`priorityAmount`), nhóm ưu tiên theo cột **C10**: `H.A* · H.A · H.B · H.C · H.D`.
+  1. **Cổng tổng:** `R` (tổng doanh thu C10) `< T` (tổng target) → **P2 = 0** (`total_below_target`).
+  2. Phần vượt `E = R − T` **chia theo TỶ TRỌNG DOANH THU THỰC của từng nhóm** — không dồn hạng cao.
+  3. Mỗi nhóm ăn rate của chính nó; dư làm tròn dồn nhóm doanh thu lớn nhất (Σ == E, không tạo/mất tiền).
+- **Hệ quả đã cảnh báo CEO:** có NV **GIẢM** nếu phần vượt rơi nhiều vào H.C/H.D — đúng bản chất.
+- Rate **chỉnh tay được** và **có ghi audit**.
+- ‼ Từng làm SAI 1 lần (dồn phần vượt vào H.A* trước → thổi phồng: DN006 7.048.940đ thay vì 5.479.768đ).
+  Test `server/test/employeeBonus.test.js` đã khóa cả ca đúng lẫn ca chống-thổi-phồng. **Đừng gỡ.**
+
+### 2.3 Mặt hàng thiếu % + đồng bộ DataHub
+- `server/src/employeeCostGaps.js` · `employeeCostGapSync.js`.
+- **Join key là MÃ C7 canonical** (vd `135.HTNT-FPT LONG CHÂU`), **KHÔNG BAO GIỜ gửi tên hiển thị**.
+  Thiếu C7 → **fail-closed 502 `GAP_SYNC_UNIT_CODE_REQUIRED`**, không lấy tên thay thế.
+  → Đây chính là gốc của vòng lặp "báo thiếu oan" kéo dài cả tuần. Đừng nới lỏng.
+- Worklist canonical (sort + dedup) → `worklist_checksum` độc lập thứ tự đầu vào.
+- `assertNoForbiddenKeys` chặn tiền/%/PII lọt sang DataHub; sanitize `/[\p{Cc}\p{Cf}]/gu`
+  (chặn cả C1, zero-width, và RLO giả mạo hiển thị).
+- **"Đồng bộ sang DataHub" chỉ GỬI worklist.** DataHub phải thực sự gán % thì mã mới hết —
+  code còn nằm đó là bình thường, không phải app hỏng.
+
+### 2.4 Kiểm soát dữ liệu (DQ) — `server/src/employeeCostDataQuality.js`
+- ĐVT tương đương khai báo tường minh, fail-closed: hiện chỉ `gói ≡ ống`
+  (`DEFAULT_UOM_EQUIVALENTS`). Muốn thêm cặp phải khai, **không suy đoán**.
+- Badge số trên 2 tab đọc `exceptionCount` (không phải `count`) và phải truyền `from/to`.
+
+### 2.5 Cột C10
+- Xuyên suốt: `catalogManagement.js` → `employeeCost.js` → `web/src/employeeCostModel.js`.
+- ‼ Bẫy đã dính: `template.columns` **GHI ĐÈ** `DEFAULT_PREFIX`. Thêm cột vào default là **không đủ** —
+  phải chèn vào layout của template nữa, nếu không cột không bao giờ hiện.
+- Thiếu C10 → để trống + badge đỏ. **Không suy đoán, không chặn danh mục.**
+
+---
+
+## 3. Ba "dây cắm LIVE" (tìm `// TODO(LIVE)`)
+1. `auth.js` → OTP (port 3848) + SSO verify (port 3862).
+2. `store.js` → slot upload active + fallback ORDS (`SALES_REPORT`), targets (`V_TEM_TARGET_BONUS`).
+3. `.env` → `ANTHROPIC_API_KEY` bật AI diễn giải.
+
+---
+
+## 4. An toàn phát hành — `DIRECTIVE_DEPLOY_RELEASE_SAFETY.md`
+Bộ script trong `scripts/` (**41/41 PASS**, hiện **đứng độc lập, CHƯA nối vào `auto-deploy.sh`**):
+
+| Script | Việc |
+|---|---|
+| `release_lib.sh` | hàm dùng chung, fail-closed |
+| `release_manifest.sh` | chốt manifest (bắt cả đổi quyền file / UID / GID / `node_modules`) |
+| `backup_data.sh` | sao lưu `data/` trước khi động vào |
+| `verify_approval.sh` | chặn phát hành chưa duyệt |
+| `safe_pm2_cutover.sh` | chuyển PM2 an toàn |
+| `safe_rollback.sh` | lùi bản, chạy lệnh **của bản cũ** |
+| `test_release_safety.sh` | 41 ca diễn tập |
+
+`auto-deploy.sh` bản `a82381f` đã tự vá 2 nguyên nhân sập ngày 27/07:
+đổi `web/dist` **nguyên khối**, chỉ reload backend **khi file server đổi**, build hỏng thì **giữ bản đang chạy**.
+
+---
+
+## 5. Việc còn treo (KHÔNG thuộc App Report)
+
+| Bên | Việc | Trạng thái |
+|---|---|---|
+| **DataHub** | Gán % cho **8 mã thiếu thật** | Cần **ticket duyệt riêng của CEO** (đụng dữ liệu chi phí) |
+| **DataHub** | Đóng/thay worklist cũ `cgw_139caea571e69f1c_202607_202607` | Còn `open`, 0/13 |
+| **DataHub** | Siết test âm (bảng `{input, expectedCode}`), revalidate C7 lúc commit | Bot tự nêu |
+| **App Sale** | **P1:** validate bất biến V2 **lúc IMPORT**, hỏng thì loại cả lô, giữ bản tốt cuối | REJECT, phải sửa trước |
+| **App Sale** | Thêm đơn vị `175.BVĐK Vũng Tàu`; điền crosswalk "hàng nhiều mã" đủ 6 trường (`sub_code`, `master_code`, `sub_uom`, `master_uom`, `relation`, `convert_factor`), map 1-1 không mập mờ | Chờ P1 xong |
+
+Kết quả đã đạt: **13 mã → 8 mã / 11 cặp** (loại 5 báo oan, xác nhận 6 cặp FPT đã có sẵn).
+
+---
+
+## 6. Dọn nhánh (chưa làm được — cần quyền)
+`main` hiện có **15 nhánh cũ** đã hết giá trị. Đã kiểm từng dòng: **toàn bộ nội dung đã nằm trên `main`**,
+nhưng chúng **cũ hơn main** → ai lỡ merge là **lùi mất** công của bên kia (đã suýt dính 1 lần với `b70cab9`).
+Danh sách + cách xử lý xem mục "Dọn nhánh" trong `CHANGELOG.md` ngày 27/07.
+
+---
+
+## 7. Luật bất di bất dịch (nhắc lại, đã trả giá để có)
+1. **Quyền quyết ở backend** — mọi query qua `auth.scopeOf(session)`. Frontend không tự lọc quyền.
+2. **Không hardcode PII/nhân viên** trong bundle frontend.
+3. **AI không bịa số** — chỉ diễn giải trên FACTS đã tính.
+4. **Export đi qua backend** + kiểm quyền.
+5. **Fail-closed:** thiếu dữ liệu thì **báo thiếu**, tuyệt đối không đoán, không tự điền %.
+6. **C32/C47 khóa vĩnh viễn.** Không gửi tiền/%/PII sang DataHub.
+7. **Mọi thay đổi ghi 1 mục vào `CHANGELOG.md`** (mới nhất trên cùng).
+8. Chỉ nói **"xong"** khi đã **lên app thật** — không phải khi mới lên `main`.
