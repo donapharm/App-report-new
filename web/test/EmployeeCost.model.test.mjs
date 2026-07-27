@@ -297,7 +297,7 @@ test('tab phai hien BADGE so ma/so cap va so exception, khong bat phai bam vao m
   assert.match(page, /dqBadge\.count\} exception/);
   // Số đếm phải tải BẤT KỂ đang ở tab nào (không phụ thuộc view === 'gaps').
   assert.match(page, /api\.employeeCostGapsSummary\(range\)/);
-  assert.match(page, /api\.employeeCostDataQualitySummary\(\)/);
+  assert.match(page, /api\.employeeCostDataQualitySummary\(range\)/);
 });
 
 test('gap coverage panel states the full arithmetic so pair count reconciles with match KPI', () => {
@@ -456,4 +456,14 @@ test('acceptance contract includes CEO-only ALL, compact full-label columns, sti
   assert.match(css, /\.employee-cost-pagination\.is-top \{ position:sticky/);
   assert.match(css, /\.employee-cost-page-numbers button\.active/);
   assert.match(css, /max-height:72vh/);
+});
+
+// Bug 2026-07-27: backend trả `exceptionCount` nhưng FE đọc `count` → badge luôn 0
+// dù bảng có exception. Khoá lại: phải đọc exceptionCount VÀ truyền kỳ đang xem.
+test('badge Kiểm soát dữ liệu đọc exceptionCount và đếm đúng kỳ đang xem', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /data\.exceptionCount/);
+  assert.match(page, /employeeCostDataQualitySummary\(range\)/);
+  const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
+  assert.match(api, /employeeCostDataQualitySummary: \(range = \{\}\)/);
 });
