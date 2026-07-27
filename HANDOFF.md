@@ -124,23 +124,32 @@ Trong đó 2 nhánh nguy hiểm nhất đã biến mất: `release/bonus-v32-c10
 thưởng — CEO đã bác) và `fix/c7-cost-gap-worklist-20260727` (`b70cab9` — merge vào là mất
 sanitizer + badge + perf).
 
-### Còn 8 nhánh cũ hơn (đợt 19–25/07) — CHƯA xoá, chưa ai yêu cầu
-Claude đã kiểm từng dòng, **không nhánh nào chứa công bị mất**:
+### Đợt 2 — 8 nhánh cũ hơn (19–25/07): xoá 7, GIỮ 1
 
 | Nhánh | Kết luận |
 |---|---|
-| `fix/c30-freshness-20260719` | main đã có đủ |
-| `fix/c7-canonical-latest-20260727` | main đã có đủ |
-| `fix/ceo-bell-safe-mobile-20260719` | main đã có đủ |
-| `fix/qlnb-unit-workflow-20260719` | main đã có đủ |
-| `fix/report-crosswalk-publication-hardening-20260725` | main đã có đủ |
-| `fix/report-uom-crosswalk-s2s-20260725` | main đã có đủ |
-| `fix/kpi-match-all-display-20260725` | main thiếu 2/17 dòng — là **bản KPI cũ đã bị thay** |
-| `hotfix/report-p0-warm-worker-20260724` | main thiếu 47/77 dòng — là **hook test warm-worker cũ đã bị thay** |
+| `fix/c30-freshness-20260719` | main đã có đủ → xoá |
+| `fix/c7-canonical-latest-20260727` | main đã có đủ → xoá |
+| `fix/ceo-bell-safe-mobile-20260719` | main đã có đủ → xoá |
+| `fix/qlnb-unit-workflow-20260719` | main đã có đủ → xoá |
+| `fix/report-crosswalk-publication-hardening-20260725` | main đã có đủ → xoá |
+| `fix/report-uom-crosswalk-s2s-20260725` | main đã có đủ → xoá |
+| `fix/kpi-match-all-display-20260725` | chỉ giữ **bản KPI cũ**; main có bản mới hơn → xoá |
+| ‼ `hotfix/report-p0-warm-worker-20260724` | **GIỮ LẠI** — xem dưới |
 
-Cùng loại rủi ro: đều **cũ hơn `main`**, merge nhầm là lùi mất công bên kia.
-**Không ảnh hưởng app đang chạy.** Khi nào CEO cho phép thì xoá nốt, dùng đúng lệnh có chốt
-`git merge-base --is-ancestor a82381f origin/main` như đợt 15 nhánh.
+**‼ `hotfix/report-p0-warm-worker-20260724` là ngoại lệ, ĐỪNG xoá.**
+Nhánh này giữ **`server/src/employeeCostWarmWorker.js` — file chưa bao giờ có trên `main`**
+(chỉ tồn tại ở đúng commit `c7fa85b`). Đó là hướng giải khác: đẩy warm cache sang **worker thread**,
+làm 25/07 00:02 +07. `main` sau đó chọn hướng **vòng warm định kỳ inline** (`0f659d2`, muộn hơn ~16 giờ)
+nên bản worker bị bỏ dở. Xoá nhánh = **mất bản duy nhất**. Không ảnh hưởng app đang chạy
+(`main` chưa từng dùng), nhưng mất hẳn một phương án tăng tốc dự phòng → **giữ**.
+
+Cách kiểm trước khi xoá bất kỳ nhánh nào (đừng chỉ so dòng — phải so **file**):
+```bash
+comm -23 <(git ls-tree -r --name-only origin/<nhánh> | sort) \
+         <(git ls-tree -r --name-only origin/main    | sort)
+```
+Ra rỗng = không có file nào chỉ nhánh mới có → xoá an toàn.
 
 **Luật thường trực:** ❌ **Không merge nhánh `release/*` / `fix/*` / `hotfix/*` cũ.** Cần nội dung
 nào thì nhặt lại từ `main` hoặc làm mới trên nhánh rẽ từ `main`.
