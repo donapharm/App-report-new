@@ -58,9 +58,20 @@ function buildWorklist(payload = {}, { actor = '' } = {}) {
   const items = (Array.isArray(payload.items) ? payload.items : []).map((item) => ({
     ma_qlnb: safeText(item.productCode, 160),
     ten_hang: safeText(item.productName, 300),
-    don_vi_anh_huong: (Array.isArray(item.unitLabels) ? item.unitLabels : [])
-      .map((label) => safeText(label, 240)).filter(Boolean)
-      .sort((a, b) => a.localeCompare(b, 'vi')),
+    // ‼ Gửi MÃ ĐƠN VỊ CHÍNH XÁC (C7 nguyên vẹn), KHÔNG gửi tên hiển thị.
+    // Lỗi cũ (CEO 27/07): gửi tên "CÔNG TY CỔ PHẦN DƯỢC PHẨM FPT LONG CHÂU" trong
+    // khi catalog dùng mã "135.HTNT-FPT LONG CHÂU" → DataHub so tên với C7 → không
+    // bao giờ khớp → báo thiếu OAN, sửa xong đồng bộ lại vẫn tái diễn.
+    // Dùng ĐÚNG trường cũ (không thêm trường mới) để KHÔNG đổi hợp đồng payload.
+    // Mã C7 vốn có dạng "<mã>.<tên>" nên vẫn đọc được, không mất thông tin cho người xem.
+    // Thiếu mã thì lùi về tên (fail-open ở mức hiển thị, DataHub vẫn tự đối chiếu được).
+    don_vi_anh_huong: (() => {
+      const codes = (Array.isArray(item.unitCodesExact) ? item.unitCodesExact : [])
+        .map((code) => safeText(code, 240)).filter(Boolean);
+      const source = codes.length ? codes : (Array.isArray(item.unitLabels) ? item.unitLabels : []);
+      return source.map((value) => safeText(value, 240)).filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, 'vi'));
+    })(),
     so_don_vi: num(item.unitCount),
     so_nv: num(item.employeeCount),
     doanh_thu_anh_huong: num(item.revenueAffected),

@@ -151,3 +151,41 @@ test('gap and export routes are authenticated and reuse the employee-cost visibi
   assert.match(block, /employeeCostVisibility\.run/);
   assert.match(block, /scope: \{ empCode: targetEmp \}/);
 });
+
+// CEO 27/07: worklist gửi TÊN đơn vị nên DataHub so với mã C7 → không khớp → báo
+// thiếu OAN, đồng bộ lại vẫn tái diễn. Khoá: phải gửi MÃ ĐƠN VỊ CHÍNH XÁC, nguyên
+// vẹn (KHÔNG cắt ở dấu chấm), song song với tên để người đọc.
+test('worklist mang MÃ đơn vị chính xác, không cắt cụt ở dấu chấm', () => {
+  const gapSync = require('../src/employeeCostGapSync');
+  const payload = {
+    from: '2026-07', to: '2026-07',
+    items: [{
+      productCode: 'G1.GE.QĐ139.455.N1.713',
+      productName: 'Clisma-lax',
+      unitLabels: ['CÔNG TY CỔ PHẦN DƯỢC PHẨM FPT LONG CHÂU'],
+      unitCodesExact: ['135.HTNT-FPT LONG CHÂU'],
+      unitCount: 1, employeeCount: 1, revenueAffected: 3798000, reason: 'missing',
+    }],
+  };
+  const worklist = gapSync.buildWorklist(payload, { actor: 'CEO' });
+  const item = worklist.items[0];
+  // Phải gửi MÃ C7 NGUYÊN VẸN (không phải tên, không cắt cụt thành '135')
+  assert.deepEqual(item.don_vi_anh_huong, ['135.HTNT-FPT LONG CHÂU']);
+  assert.ok(!item.don_vi_anh_huong.includes('135'), 'không được cắt cụt ở dấu chấm');
+  assert.ok(!item.don_vi_anh_huong.some((v) => v.startsWith('CÔNG TY')), 'không được gửi tên hiển thị');
+  // KHÔNG thêm trường mới — giữ nguyên hợp đồng payload với DataHub
+  assert.equal(item.ma_don_vi_anh_huong, undefined);
+});
+
+test('thiếu mã đơn vị thì lùi về tên, không làm rỗng worklist', () => {
+  const gapSync = require('../src/employeeCostGapSync');
+  const worklist = gapSync.buildWorklist({
+    from: '2026-07', to: '2026-07',
+    items: [{
+      productCode: 'X1', productName: 'Thuốc X',
+      unitLabels: ['BỆNH VIỆN ABC'], unitCodesExact: [],
+      unitCount: 1, employeeCount: 1, revenueAffected: 1000, reason: 'missing',
+    }],
+  }, { actor: 'CEO' });
+  assert.deepEqual(worklist.items[0].don_vi_anh_huong, ['BỆNH VIỆN ABC']);
+});
