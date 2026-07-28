@@ -1,3 +1,26 @@
+### 2026-07-28 — Claude Code — ‼ Diễn tập khô BẮT ĐƯỢC LỖI THẬT: ~15 NV sắp nhận tin "thưởng 0đ"
+> Chính là lý do phải diễn tập trước ngày chốt tháng. Nếu không chạy, 17:40 thứ Sáu 31/07 mới vỡ lẽ.
+
+**Kết quả diễn tập toàn bộ 21 NV:** chi phí gửi 3 / bỏ qua 18 · **thưởng gửi 21 / bỏ qua 0**.
+
+**Con số "thưởng gửi 21/21" là DẤU HIỆU HỎNG, không phải tốt.** Sáng nay chỉ **6 NV** qua mốc 90% — tức chỉ 6 người có thưởng. Vậy 15 người còn lại nhận tin gì?
+
+**Gốc lỗi:** dưới ngưỡng thì `employeeBonus` trả `baseAmount = 0` — **số thật, không phải `null`** — nên nhánh `if (p1 == null && p2 == null)` không chặn được. Tin dựng ra là:
+```
+🏆 [Tháng 07] Nguyễn Đức Tuấn — thưởng dự kiến tháng
+Đạt 1,8% target (9.237.714đ/500.000.000đ)
+P1 (coach): 0đ · P2: 0đ · Tổng dự kiến: 0đ
+```
+Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừa **phản cảm**: nhắn "thưởng của bạn: 0đ" cho người chưa đạt, vào đúng chiều cuối tháng.
+
+**Sửa:** `monthEndMessage` trả `null` khi **tổng ≤ 0**. Ai có tiền dù ít (vd đạt 95% → P1 0,1%) thì **vẫn gửi** — không chặn nhầm. Thêm 3 test khoá (tổng 0 → null · 95.000đ vẫn gửi · chỉ có P2 vẫn gửi).
+
+**Bài học lặp lại lần 2 trong ngày:** `Number(null) === 0` hôm qua, `baseAmount = 0` hôm nay — **"không có tiền" và "số 0" là hai chuyện khác nhau**, phải phân biệt tường minh ở mọi nơi đụng tiền.
+
+**Còn chờ CEO quyết:** 18/21 NV bị **tắt công tắc "Chi phí của tôi"** nên sẽ không nhận tin chi phí ngày 31/07. Đây là quyết định về quyền xem tiền — Claude không tự bật.
+
+**Test:** server **454/461** = đúng 7 fail baseline → **0 regression**.
+
 ### 2026-07-28 — Claude Code — Diễn tập KHÔ trước ngày chốt tháng + lý do bỏ qua phải hiện ra
 > Luồng thưởng đã chạy thật 07:31:17 ngày 28/07: **6 NV, 14 mốc**. Đối chiếu độc lập với bảng target của CEO: 3 NV ≥100% (DN001, DN006, DN008) — **khớp chính xác** con số "3 NV đạt". Con số `gửi 0 tin NV` hôm qua đúng là do lỗi log, không phải luồng câm.
 
