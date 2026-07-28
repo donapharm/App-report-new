@@ -48,7 +48,6 @@ const { salesReportSchedulePolicy } = require('./src/salesReportSchedulePolicy')
 const bonusNotify = require('./src/bonusNotify');
 const employeeCostNotify = require('./src/employeeCostNotify');
 const employeeBonus = require('./src/employeeBonus');
-const diemXu = require('./src/diemXu');
 
 const PENDING_TG_GRANTS_FILE = path.join(__dirname, 'data', 'auth', 'telegram_pending_grants.json');
 function loadPendingTelegramGrants() {
@@ -383,12 +382,11 @@ function autoNotifyRecipients() {
   for (const u of store.targetRoster({ scope: {} })) {
     const code = String(u.emp_code || '').toUpperCase();
     if (!code || targetNotify.isMuted(code)) continue;
-    // ‼ SPEC mục 2.2 yêu cầu loại cả danh sách EXCLUDED của diemXu, nhưng bản
-    //   đầu QUÊN kiểm. Hậu quả tiềm ẩn: VP018 nằm trong EXCLUDED nhưng KHÔNG có
-    //   no_auto_notify và KHÔNG có trong notify_optout.json — hiện chỉ "an toàn"
-    //   nhờ chưa được giao target. Ngày nào giao target là nhận tin ngay, dù CEO
-    //   đã cố ý loại. Chặn ở đây cho khớp spec và cho khớp salesRecipients().
-    if (diemXu.isExcluded(code)) continue;
+    // Chặn thông báo dùng ĐÚNG MỘT nguồn: targetNotify.isMuted
+    // (= notify_optout.json + cờ no_auto_notify trên hồ sơ).
+    // ‼ KHÔNG dùng diemXu.EXCLUDE ở đây: đó là danh sách "không tính ĐIỂM XU",
+    //   khác mục đích. Nó có DN022 — người CEO chốt 28/07 là PHẢI nhận thông báo
+    //   như NV chính thức. Trộn hai danh sách là chặn nhầm người.
     const tid = tidByEmp[code];
     const telegramId = (tid && prefEnabled(tid)) ? tid : null;
     const email = notifyChannels.emailFor(code, u.email);

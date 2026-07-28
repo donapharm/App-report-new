@@ -1,17 +1,30 @@
-### 2026-07-28 — Claude Code — Bot phát hiện lỗ hổng VP018: SPEC yêu cầu loại EXCLUDED nhưng code QUÊN kiểm
-> Diễn tập trên `ad124808` sạch: chi phí **18**, thưởng **7**, chặn tin 0đ **14**, lỗi **0**. Bot rà thêm và tìm ra lỗ hổng thật.
+### 2026-07-28 — Claude Code — 4 DANH SÁCH LOẠI TRỪ MÂU THUẪN NHAU: tách bạch "không tính điểm xu" khỏi "không nhận thông báo"
+> Bot phát hiện VP018 lọt lưới. Claude vá lần 1 SAI (dùng nhầm danh sách), CEO chốt DN022 làm lộ ra gốc vấn đề, vá lại lần 2 cho đúng.
 
-**Lỗ hổng:** `SPEC_NOTIFY_COST_BONUS_SCHEDULE.md` mục 2.2 ghi rõ người nhận phải trừ *"danh sách `EXCLUDED` của `diemXu`"*, nhưng `autoNotifyRecipients()` **chỉ kiểm `targetNotify.isMuted`**, không hề nạp `diemXu`.
-- Hệ quả: **VP018** nằm trong `EXCLUDED` (`DN021, DN022, DN023, VP004, VP018`) nhưng **không** có `no_auto_notify`, **không** có trong `notify_optout.json` → hiện chỉ "an toàn" nhờ **chưa được giao target**. Ngày nào giao target là **nhận tin ngay**, dù CEO đã cố ý loại.
-- Lệch cả với `salesRecipients()` của báo cáo doanh thu — chỗ đó có kiểm `EXCLUDED`, chỗ này thì không. Cùng một danh sách loại trừ mà hai luồng hành xử khác nhau.
+**Hiện trạng: 4 danh sách, mâu thuẫn nhau**
 
-**Sửa:** nạp `diemXu` vào bot, thêm `if (diemXu.isExcluded(code)) continue;` trong `autoNotifyRecipients`. **Không đổi hành vi hôm nay** (DN022 vốn đã bị `no_auto_notify` chặn; VP018 chưa có target) — đây là vá phòng thủ cho khớp spec.
+| Danh sách | Mục đích | DN022 | VP018 |
+|---|---|---|---|
+| `diemXu.EXCLUDE` | **không tính điểm xu** (+ bị mượn để lọc báo cáo doanh thu) | CHẶN | CHẶN |
+| `dormantFeedback.TELEGRAM_HARD_EXCLUDED` | phạm vi gửi CEO duyệt | — | CHẶN |
+| `filteredEmployeeDelivery.EXCLUDED_EMP_CODES` | phạm vi gửi CEO duyệt | — | CHẶN |
+| `notify_optout.json` | chặn thông báo target | — | **— (LỖ HỔNG)** |
 
-**Test:** thêm 2 ca — chốt phải nằm ĐÚNG trong `autoNotifyRecipients` và vẫn giữ `isMuted`; danh sách EXCLUDED phải khớp giữa hai luồng và không loại nhầm NV thường. Server **456/463** = đúng 7 fail baseline → **0 regression** · gap-sync **28/28**.
+**Lỗ hổng thật:** `VP018` thiếu ở `notify_optout.json`, lại không có `no_auto_notify` → chỉ "an toàn" nhờ **chưa được giao target**. Giao target là nhận tin ngay.
 
-**Đây là lần thứ 2 SPEC nói một đằng code làm một nẻo** (lần trước: quên hiện thực D-1 cho bản tin sáng). Bài học: viết spec xong phải **rà ngược từng dòng spec vào code**, không tin trí nhớ.
+**‼ Claude vá lần 1 SAI:** thêm `diemXu.isExcluded()` vào `autoNotifyRecipients`. Đó là danh sách **"không tính ĐIỂM XU"**, khác mục đích — và nó có **DN022**, đúng người CEO vừa chốt (28/07) là **phải nhận đủ như NV chính thức** (doanh thu ngày/tuần/tháng, target tháng/quý, thưởng P1/P2). Vá kiểu đó là chặn nhầm chính người CEO muốn mở. **Đã gỡ bỏ.**
 
-**DN009 giải thích xong:** đạt **90,3%** — vừa vượt mốc trong ngày, sau lần chạy 07:31. Sáng 29/07 sẽ tự nhận tin mốc. Không phải lỗi.
+**Vá lần 2 — đúng gốc, tách bạch hai khái niệm:**
+1. **Chặn thông báo = ĐÚNG MỘT nguồn** `targetNotify.isMuted` (= `notify_optout.json` + cờ `no_auto_notify`).
+2. Thêm **`VP018`** vào `notify_optout.json` → thành `DN021, DN023, VP004, VP018`, **khớp chính xác** 2 danh sách phạm vi gửi CEO đã duyệt. Bịt lỗ hổng.
+3. `salesRecipients()` đổi từ lọc `diemXu.EXCLUDE` sang lọc `targetNotify.isMuted` → **DN022 nhận được báo cáo doanh thu** như CEO chốt.
+4. **`diemXu.EXCLUDE` GIỮ NGUYÊN** (vẫn có DN022) — điểm xu **không đổi**. Hai việc khác nhau, từ nay không trộn.
+
+**Còn lại cho bot:** gỡ cờ `no_auto_notify` của **DN022** ở dữ liệu gốc — đây là master data, Claude không đụng.
+
+**Test:** thay 2 ca sai bằng **4 ca đúng** — bot không được nạp/gọi `diemXu`; optout phải khớp 2 phạm vi CEO duyệt và **không** có DN022; `salesRecipients` phải dùng `isMuted`; `diemXu.EXCLUDE` phải giữ nguyên DN022. Server **458/465** = đúng 7 fail baseline → **0 regression** · gap-sync **28/28**.
+
+**DN009 giải thích xong:** đạt **90,3%** — vừa vượt mốc sau lần chạy 07:31, sáng 29/07 sẽ tự nhận tin. Không phải lỗi.
 
 ### 2026-07-28 — Claude Code — ‼ Diễn tập khô BẮT ĐƯỢC LỖI THẬT: ~15 NV sắp nhận tin "thưởng 0đ"
 > Chính là lý do phải diễn tập trước ngày chốt tháng. Nếu không chạy, 17:40 thứ Sáu 31/07 mới vỡ lẽ.
