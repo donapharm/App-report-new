@@ -75,6 +75,47 @@ Cập nhật: **2026-07-27** (Claude Code). Người tiếp nhận: bot report /
 
 ---
 
+### 2.6 Thông báo tự động Telegram + email — `SPEC_NOTIFY_COST_BONUS_SCHEDULE.md`
+Chạy thật từ 28/07/2026. Bộ lịch nằm ở `server/telegram-bot.js` (PM2 `app-report-tgbot`).
+
+| Tin | Giờ (GMT+7) | Module |
+|---|---|---|
+| Mốc target + mốc thưởng (**gộp 1 tin/người**) | 07:30 ngày | `targetNotify` + `bonusNotify` |
+| Digest tổng quan | 07:30 ngày · 13:00 T7 | `telegram-bot.js` |
+| Báo cáo doanh thu NGÀY (**số hôm trước**) | 07:30 ngày | `salesReport` |
+| Báo cáo doanh thu TUẦN / THÁNG | 13:00 T7 · 18:00 ngày cuối tháng | `salesReport` |
+| Tổng chi phí NV tự nhận | 12:30 T7 · **17:30 ngày cuối tháng** | `employeeCostNotify` |
+| Tổng thưởng tháng | **17:40 ngày cuối tháng** | `bonusNotify` |
+
+**Cờ bật — fail-closed, phải đúng chuỗi `"1"`:** `TARGET_NOTIFY` · `DIGEST_NOTIFY` (tắt bằng `0`) ·
+`EMP_COST_NOTIFY` · `BONUS_NOTIFY` · `SALES_REPORT_NOTIFY` + `SALES_REPORT_DAILY_NOTIFY`.
+
+#### ‼ Bốn cái bẫy đã trả giá — đừng lặp lại
+1. **"Không có tiền" ≠ "số 0".** `Number(null) === 0`, và `employeeBonus` trả `baseAmount = 0`
+   (số thật) khi dưới ngưỡng. Cả hai đều suýt gửi tin **"0đ"** cho NV. Mọi nơi đụng tiền phải
+   phân biệt tường minh *chưa có số* với *số bằng 0*.
+2. **Bản tin sáng phải báo số NGÀY HÔM TRƯỚC** (`previousDay(day)`). Lấy "hôm nay" lúc 07:30 thì
+   luôn rỗng → gặp chốt "không có dữ liệu thì không gửi" → **câm vĩnh viễn**.
+3. **Chặn thông báo dùng ĐÚNG MỘT nguồn:** `targetNotify.isMuted`
+   (= `config/notify_optout.json` + cờ `no_auto_notify`). **KHÔNG** dùng `diemXu.EXCLUDE` —
+   đó là danh sách *"không tính điểm xu"*, khác mục đích và có DN022 (người CEO chốt phải nhận tin).
+4. **Thêm chốt bỏ qua thì phải sửa log tương ứng.** Nếu không, mọi lần bỏ qua hợp lệ đều trông
+   như sự cố (`ceo=fail` khi thực ra không có dữ liệu).
+
+#### Bắt buộc trước ngày chốt tháng
+```bash
+node scripts/test_notify_dryrun.js --all     # chạy y hệt đường thật, KHÔNG gửi gì
+```
+Hai đường lấy số cho tin cuối tháng chỉ chạy 12:30 T7 / 17:30 / 17:40, và bộ lịch **nuốt lỗi rồi
+bỏ qua** — hỏng thì cả công ty không nhận được gì mà không ai biết. Lần chạy đầu đã bắt được
+lỗi thật ở bẫy số 1.
+
+#### Ai nhận (chốt 28/07/2026)
+- **18 NV** bật công tắc "Chi phí của tôi": `DN001–DN012, DN016, DN017, DN018, DN019, DN022, DN024`.
+- **Chặn hoàn toàn:** `DN021, DN023, VP004, VP018`.
+- **DN022** nhận đủ như NV chính thức (doanh thu, target, thưởng) nhưng **vẫn không tính điểm xu**.
+- Công tắc "Chi phí của tôi" **chỉ** chi phối tin chi phí, **không** chi phối target/thưởng.
+
 ## 3. Ba "dây cắm LIVE" (tìm `// TODO(LIVE)`)
 1. `auth.js` → OTP (port 3848) + SSO verify (port 3862).
 2. `store.js` → slot upload active + fallback ORDS (`SALES_REPORT`), targets (`V_TEM_TARGET_BONUS`).
