@@ -24,7 +24,22 @@ LOG="${LOG:-$REPO_DIR/auto-deploy.log}"
 
 log() { echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${PORT:-3873}/api/health}"
+HEALTH_TRIES="${HEALTH_TRIES:-6}"      # 6 lần x 5s = 30s cho backend đứng dậy
+DISABLE_FILE="${DISABLE_FILE:-$REPO_DIR/.auto-deploy.disabled}"
+
 cd "$REPO_DIR" 2>/dev/null || { echo "REPO_DIR không tồn tại: $REPO_DIR" >&2; exit 1; }
+
+# --- CÔNG TẮC TẮT NHÌN THẤY ĐƯỢC ---
+# Trước đây "khoá auto-deploy" chỉ là dòng cron bị chú thích: không ai nhìn thấy,
+# không ghi log, và bật lại là quên mất vì sao từng tắt. Nay tắt bằng FILE có nội
+# dung là LÝ DO, script tôn trọng và ghi rõ mỗi lượt.
+#   Tắt : echo "DISABLED_BY_CEO_20260727 — deploy tay an toàn hơn" > .auto-deploy.disabled
+#   Bật : rm .auto-deploy.disabled
+if [ -f "$DISABLE_FILE" ]; then
+  log "TẮT: $(head -c 200 "$DISABLE_FILE" 2>/dev/null | tr '\n' ' ') (xoá $DISABLE_FILE để bật lại)"
+  exit 0
+fi
 
 # --- Khoá chống chạy chồng ---
 exec 9>"$REPO_DIR/.auto-deploy.lock"
@@ -82,6 +97,19 @@ else
 fi
 
 log "Bản mới ${LOCAL:0:7} -> ${REMOTE:0:7}: bắt đầu cập nhật."
+
+# --- Sao lưu dữ liệu TRƯỚC khi động vào code (rẻ, và là thứ duy nhất không dựng lại được) ---
+if [ -x "$REPO_DIR/scripts/backup_data.sh" ] && [ -d "$REPO_DIR/server/data" ]; then
+  BK_DIR="${BACKUP_DIR:-$REPO_DIR/../backups}"
+  mkdir -p "$BK_DIR" 2>/dev/null || true
+  BK_FILE="$BK_DIR/data-$(date '+%Y%m%d-%H%M%S')-before-${REMOTE:0:7}.tgz"
+  if DATA="$REPO_DIR/server/data" ARCHIVE="$BK_FILE" "$REPO_DIR/scripts/backup_data.sh" create >> "$LOG" 2>&1; then
+    log "Đã sao lưu dữ liệu: $BK_FILE"
+  else
+    log "SAO LƯU LỖI -> DỪNG, không deploy (không đánh đổi dữ liệu lấy tốc độ)."
+    exit 1
+  fi
+fi
 CHANGED=$(git diff --name-only "$LOCAL" "$REMOTE")
 git reset --hard "origin/$BRANCH" --quiet
 
@@ -139,8 +167,10 @@ if [ -e web/dist ] || [ -L web/dist ]; then
     rm -rf web/dist.new
     exit 1
   fi
-  # Sau exchange, dist.new chính là bản cũ; chỉ xoá khi dist mới đã hiện diện.
-  rm -rf web/dist.new
+  # Sau exchange, dist.new CHÍNH LÀ bản cũ. GIỮ lại thành dist.prev để lùi được
+  # tức thì nếu bản mới hỏng — xoá ngay là tự tay vứt lưới an toàn.
+  rm -rf web/dist.prev
+  mv web/dist.new web/dist.prev
 else
   # Lần cài đầu chưa có dist: một rename duy nhất cũng là atomic.
   mv web/dist.new web/dist
@@ -152,9 +182,42 @@ BACKEND_CHANGED=0
 if echo "$CHANGED" | grep -qE '^(server/|ecosystem[^/]*\.(js|cjs|json)$|package(-lock)?\.json$)'; then
   BACKEND_CHANGED=1
 fi
+# Kiểm app còn sống thật hay không. `pm2 reload` trả 0 vẫn có thể để lại app 502
+# (lỗi lúc khởi động, thiếu env, cổng chưa mở) — đó chính là kiểu sập đã gặp.
+health_ok() {
+  for _ in $(seq 1 "$HEALTH_TRIES"); do
+    curl -fsS --max-time 5 "$HEALTH_URL" > /dev/null 2>&1 && return 0
+    sleep 5
+  done
+  return 1
+}
+
+# Lùi về bản trước: trả code VÀ frontend về nguyên trạng rồi reload lại.
+rollback_to_previous() {
+  log "LÙI BẢN: quay lại ${LOCAL:0:7}."
+  git reset --hard "$LOCAL" --quiet 2>>"$LOG" || log "  ! git reset khi lùi bản LỖI"
+  if [ -d web/dist.prev ]; then
+    rm -rf web/dist.new
+    if atomic_exchange web/dist.prev web/dist >> "$LOG" 2>&1; then
+      log "  đã trả web/dist về bản cũ."
+    else
+      log "  ! trả web/dist về bản cũ LỖI — frontend đang là bản mới."
+    fi
+  fi
+  pm2 reload "$PM2_APP" --update-env >> "$LOG" 2>&1 || log "  ! pm2 reload khi lùi bản LỖI"
+  if health_ok; then log "  ĐÃ LÙI XONG, app khoẻ lại."; else log "  ‼ LÙI RỒI VẪN KHÔNG KHOẺ — CẦN NGƯỜI VÀO XEM NGAY."; fi
+}
+
 if [ "$BACKEND_CHANGED" = 1 ]; then
-  pm2 reload "$PM2_APP" --update-env >> "$LOG" 2>&1 || { log "pm2 reload LỖI"; exit 1; }
+  pm2 reload "$PM2_APP" --update-env >> "$LOG" 2>&1 || { log "pm2 reload LỖI"; rollback_to_previous; exit 1; }
   log "Đã reload backend $PM2_APP vì có file server thay đổi."
+
+  if ! health_ok; then
+    log "‼ SAU RELOAD APP KHÔNG KHOẺ ($HEALTH_URL) -> tự lùi về bản trước."
+    rollback_to_previous
+    exit 1
+  fi
+  log "Health OK sau reload."
 
   # Worker không phục vụ HTTP nhưng phải nạp code server mới khi đang chạy.
   if pm2 describe "$PM2_WORKER" > /dev/null 2>&1; then

@@ -235,7 +235,34 @@ env DATA="$DRB" ARCHIVE="$ARCHIVE" \
 if [ -f "$RBMARK" ] && [ ! -f "$NEWMARK" ]; then echo "  ✅ (5) rollback chạy lệnh BẢN CŨ, không đụng START_CMD bản mới"; PASS=$((PASS+1));
 else echo "  ❌ (5) rollback dùng sai lệnh khởi động (rb=$( [ -f "$RBMARK" ] && echo 1 || echo 0 ) new=$( [ -f "$NEWMARK" ] && echo 1 || echo 0 ))"; FAIL=$((FAIL+1)); fi
 
+# ── auto-deploy: 4 lớp bảo vệ mới (28/07) ───────────────────────────────────
 echo
+echo "--- auto-deploy.sh: công tắc TẮT · sao lưu · giữ dist cũ · health + tự lùi bản ---"
+AD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/auto-deploy.sh"
+chk() { # chk "tên ca" <lệnh...>
+  local name="$1"; shift
+  if "$@" > /dev/null 2>&1; then echo "  ✅ $name"; PASS=$((PASS+1));
+  else echo "  ❌ $name"; FAIL=$((FAIL+1)); fi
+}
+has() { grep -qF -- "$2" "$1"; }
+
+chk "auto-deploy.sh cú pháp hợp lệ" bash -n "$AD"
+
+chk "(1) có công tắc TẮT bằng file, nhìn thấy được" has "$AD" 'if [ -f "$DISABLE_FILE" ]; then'
+chk "(1) log nói rõ cách bật lại"                   has "$AD" 'xoá $DISABLE_FILE để bật lại'
+
+chk "(2) sao lưu hỏng thì DỪNG, không deploy"       has "$AD" 'SAO LƯU LỖI -> DỪNG'
+chk "(2) sao lưu chạy TRƯỚC khi đụng code" \
+  awk 'BEGIN{b=0;r=0} /backup_data.sh" create/{if(!b)b=NR} /git reset --hard "origin/{if(!r)r=NR} END{exit !(b&&r&&b<r)}' "$AD"
+
+chk "(3) giữ bản frontend cũ để lùi được"           has "$AD" 'mv web/dist.new web/dist.prev'
+
+chk "(4) có kiểm health thật"                       has "$AD" 'health_ok() {'
+chk "(4) reload xong không khoẻ thì tự lùi bản"     has "$AD" 'SAU RELOAD APP KHÔNG KHOẺ'
+chk "(4) lùi rồi vẫn hỏng thì kêu người"            has "$AD" 'CẦN NGƯỜI VÀO XEM NGAY'
+chk "(4) pm2 reload lỗi cũng lùi bản"               has "$AD" 'log "pm2 reload LỖI"; rollback_to_previous; exit 1'
+chk "(4) lùi bản trả lại CẢ code lẫn frontend"      has "$AD" 'git reset --hard "$LOCAL"'
+
 echo "========================================"
 echo "  $PASS PASS · $FAIL FAIL"
 [ "$FAIL" -eq 0 ] && echo "  ✅ TẤT CẢ CA DIỄN TẬP ĐẠT" || echo "  ❌ CÒN CA CHƯA ĐẠT"
