@@ -112,3 +112,29 @@ test('không có số thưởng hợp lệ -> trả null, KHÔNG bịa 0đ', () 
   assert.equal(bonusNotify.monthEndMessage({ ky: '07.2026' }, {}), null);
   assert.equal(bonusNotify.monthEndMessage({ ky: '07.2026' }, { baseAmount: null, priorityAmount: null }), null);
 });
+
+test('‼ chưa tới ngưỡng (P1=0, P2=0) -> KHÔNG gửi tin "Tổng dự kiến: 0đ"', () => {
+  // employeeBonus trả 0 (SỐ THẬT, không phải null) khi dưới ngưỡng, nên nhánh
+  // null không chặn được. Không có chốt này thì ~15/21 NV nhận tin thưởng 0đ.
+  assert.equal(bonusNotify.monthEndMessage(
+    { emp_code: 'DN0XX', name: 'A', ky: '07.2026', pct: 1.8, target: 500_000_000, achieved: 9_237_714 },
+    { baseAmount: 0, priorityAmount: 0 },
+  ), null);
+});
+
+test('có tiền dù ít thì VẪN gửi — không được chặn nhầm người đã đạt ngưỡng', () => {
+  const text = bonusNotify.monthEndMessage(
+    { emp_code: 'DN002', name: 'B', ky: '07.2026', pct: 95, target: 100_000_000, achieved: 95_000_000 },
+    { baseAmount: 95_000, priorityAmount: 0 },
+  );
+  assert.match(text, /P1 \(coach\): 95\.000đ/);
+  assert.match(text, /Tổng dự kiến: 95\.000đ/);
+});
+
+test('chỉ có P2 mà không có P1 thì vẫn gửi', () => {
+  const text = bonusNotify.monthEndMessage(
+    { emp_code: 'DN006', name: 'C', ky: '07.2026', pct: 112 },
+    { baseAmount: 0, priorityAmount: 5_479_768 },
+  );
+  assert.match(text, /Tổng dự kiến: 5\.479\.768đ/);
+});

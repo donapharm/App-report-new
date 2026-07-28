@@ -119,6 +119,12 @@ function monthEndMessage(row = {}, bonus = {}) {
   if (p1 == null && p2 == null) return null;
   const monthNo = String(row.ky).split('.')[0];
   const total = (p1 || 0) + (p2 || 0);
+  // ‼ Chưa tới ngưỡng thưởng thì employeeBonus trả 0 (SỐ THẬT, không phải null),
+  //   nên nhánh null ở trên không chặn được. Nếu không có chốt này thì chiều cuối
+  //   tháng ~15/21 NV sẽ nhận tin "Tổng dự kiến: 0đ" — vừa trái luật CEO chốt
+  //   ("không có tin gì thì không gửi"), vừa phản cảm với người chưa đạt.
+  //   Ai có dù chỉ vài đồng (vd đạt 95% -> P1 0,1%) thì VẪN gửi.
+  if (total <= 0) return null;
   return [
     `🏆 [Tháng ${monthNo}] ${row.name || row.emp_code} — thưởng dự kiến tháng`,
     `Đạt ${pctText(row.pct)} target (${moneyShort(row.achieved)}/${moneyShort(row.target)})`,
