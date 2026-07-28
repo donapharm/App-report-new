@@ -118,3 +118,34 @@ test('log mốc 07:30 đếm RIÊNG mốc target và mốc thưởng', () => {
   assert.match(SRC, /mốc target \$\{sent\.length\}, mốc thưởng \$\{bonusSent\.length\}/);
   assert.match(SRC, /BONUS_NOTIFY đang TẮT/, 'phải nói rõ khi cờ thưởng đang tắt');
 });
+
+test('‼ chặn thông báo dùng ĐÚNG MỘT nguồn: notify_optout + no_auto_notify', () => {
+  // Từng vá sai: lấy diemXu.EXCLUDE (danh sách "không tính điểm xu") làm danh sách
+  // chặn thông báo. Nó có DN022 — người CEO chốt 28/07 PHẢI nhận thông báo.
+  // Chỉ cấm DÙNG THẬT; chú thích giải thích vì sao không dùng thì phải giữ lại.
+  assert.doesNotMatch(SRC, /require\('\.\/src\/diemXu'\)/, 'bot không được nạp diemXu');
+  assert.doesNotMatch(SRC, /diemXu\.\w+\(/, 'bot không được gọi hàm nào của diemXu');
+  const fn = /function autoNotifyRecipients\(\) \{[\s\S]*?\n\}/.exec(SRC)[0];
+  assert.match(fn, /targetNotify\.isMuted/);
+});
+
+test('danh sách chặn thông báo khớp với 2 phạm vi CEO đã duyệt, và KHÔNG có DN022', () => {
+  const optout = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'notify_optout.json'), 'utf8'));
+  assert.deepEqual([...optout.codes].sort(), ['DN021', 'DN023', 'VP004', 'VP018'],
+    'phải khớp dormantFeedback.TELEGRAM_HARD_EXCLUDED và filteredEmployeeDelivery.EXCLUDED_EMP_CODES');
+  assert.ok(!optout.codes.includes('DN022'), 'DN022 nhận thông báo như NV chính thức (CEO chốt 28/07)');
+  assert.ok(optout.codes.includes('VP018'), 'VP018 từng lọt vì thiếu ở đây');
+});
+
+test('báo cáo doanh thu lọc người nhận bằng isMuted, KHÔNG bằng diemXu.EXCLUDE', () => {
+  const sales = fs.readFileSync(path.join(__dirname, '..', 'src', 'salesReport.js'), 'utf8');
+  const fn = /function salesRecipients\(\) \{[\s\S]*?\n\}/.exec(sales)[0];
+  assert.match(fn, /targetNotify\.isMuted/);
+  assert.doesNotMatch(fn, /EXCLUDED\.has/, 'không được lọc bằng danh sách điểm xu nữa');
+});
+
+test('diemXu.EXCLUDE GIỮ NGUYÊN cho việc tính điểm xu — không đụng', () => {
+  const diemXu = require('../src/diemXu');
+  assert.equal(diemXu.isExcluded('DN022'), true, 'DN022 vẫn KHÔNG tính điểm xu');
+  assert.deepEqual([...diemXu.EXCLUDE].sort(), ['DN021', 'DN022', 'DN023', 'VP004', 'VP018']);
+});

@@ -20,6 +20,7 @@ const path = require('path');
 const store = require('./store');
 const analytics = require('./analytics');
 const diemXu = require('./diemXu');
+const targetNotify = require('./targetNotify');
 const notify = require('./notifyChannels');
 const appSaleCst = require('./appSaleCst');
 const persist = require('./persist');
@@ -156,7 +157,15 @@ function enrichRecipient(code, tgByEmp = telegramByEmp()) {
 }
 function salesRecipients() {
   const tgByEmp = telegramByEmp();
-  return store.targetRosterCodes({ scope: {} }).filter((c) => !EXCLUDED.has(String(c).toUpperCase())).map((code) => enrichRecipient(code, tgByEmp));
+  // ‼ Chặn người nhận dùng ĐÚNG MỘT nguồn: targetNotify.isMuted
+  //   (= config/notify_optout.json + cờ no_auto_notify trên hồ sơ).
+  //   Bản cũ lọc bằng diemXu.EXCLUDE — đó là danh sách "KHÔNG TÍNH ĐIỂM XU",
+  //   khác hẳn mục đích. Nó có DN022, nên DN022 bị cắt báo cáo doanh thu dù
+  //   CEO chốt 28/07 là DN022 phải nhận đủ như NV chính thức.
+  //   diemXu.EXCLUDE giữ nguyên cho việc tính điểm xu — KHÔNG đụng.
+  return store.targetRosterCodes({ scope: {} })
+    .filter((c) => !targetNotify.isMuted(c))
+    .map((code) => enrichRecipient(code, tgByEmp));
 }
 function ceoRecipient() {
   return enrichRecipient(CEO_CODE, telegramByEmp());

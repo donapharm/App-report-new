@@ -1,3 +1,31 @@
+### 2026-07-28 — Claude Code — 4 DANH SÁCH LOẠI TRỪ MÂU THUẪN NHAU: tách bạch "không tính điểm xu" khỏi "không nhận thông báo"
+> Bot phát hiện VP018 lọt lưới. Claude vá lần 1 SAI (dùng nhầm danh sách), CEO chốt DN022 làm lộ ra gốc vấn đề, vá lại lần 2 cho đúng.
+
+**Hiện trạng: 4 danh sách, mâu thuẫn nhau**
+
+| Danh sách | Mục đích | DN022 | VP018 |
+|---|---|---|---|
+| `diemXu.EXCLUDE` | **không tính điểm xu** (+ bị mượn để lọc báo cáo doanh thu) | CHẶN | CHẶN |
+| `dormantFeedback.TELEGRAM_HARD_EXCLUDED` | phạm vi gửi CEO duyệt | — | CHẶN |
+| `filteredEmployeeDelivery.EXCLUDED_EMP_CODES` | phạm vi gửi CEO duyệt | — | CHẶN |
+| `notify_optout.json` | chặn thông báo target | — | **— (LỖ HỔNG)** |
+
+**Lỗ hổng thật:** `VP018` thiếu ở `notify_optout.json`, lại không có `no_auto_notify` → chỉ "an toàn" nhờ **chưa được giao target**. Giao target là nhận tin ngay.
+
+**‼ Claude vá lần 1 SAI:** thêm `diemXu.isExcluded()` vào `autoNotifyRecipients`. Đó là danh sách **"không tính ĐIỂM XU"**, khác mục đích — và nó có **DN022**, đúng người CEO vừa chốt (28/07) là **phải nhận đủ như NV chính thức** (doanh thu ngày/tuần/tháng, target tháng/quý, thưởng P1/P2). Vá kiểu đó là chặn nhầm chính người CEO muốn mở. **Đã gỡ bỏ.**
+
+**Vá lần 2 — đúng gốc, tách bạch hai khái niệm:**
+1. **Chặn thông báo = ĐÚNG MỘT nguồn** `targetNotify.isMuted` (= `notify_optout.json` + cờ `no_auto_notify`).
+2. Thêm **`VP018`** vào `notify_optout.json` → thành `DN021, DN023, VP004, VP018`, **khớp chính xác** 2 danh sách phạm vi gửi CEO đã duyệt. Bịt lỗ hổng.
+3. `salesRecipients()` đổi từ lọc `diemXu.EXCLUDE` sang lọc `targetNotify.isMuted` → **DN022 nhận được báo cáo doanh thu** như CEO chốt.
+4. **`diemXu.EXCLUDE` GIỮ NGUYÊN** (vẫn có DN022) — điểm xu **không đổi**. Hai việc khác nhau, từ nay không trộn.
+
+**Còn lại cho bot:** gỡ cờ `no_auto_notify` của **DN022** ở dữ liệu gốc — đây là master data, Claude không đụng.
+
+**Test:** thay 2 ca sai bằng **4 ca đúng** — bot không được nạp/gọi `diemXu`; optout phải khớp 2 phạm vi CEO duyệt và **không** có DN022; `salesRecipients` phải dùng `isMuted`; `diemXu.EXCLUDE` phải giữ nguyên DN022. Server **458/465** = đúng 7 fail baseline → **0 regression** · gap-sync **28/28**.
+
+**DN009 giải thích xong:** đạt **90,3%** — vừa vượt mốc sau lần chạy 07:31, sáng 29/07 sẽ tự nhận tin. Không phải lỗi.
+
 ### 2026-07-28 — Claude Code — ‼ Diễn tập khô BẮT ĐƯỢC LỖI THẬT: ~15 NV sắp nhận tin "thưởng 0đ"
 > Chính là lý do phải diễn tập trước ngày chốt tháng. Nếu không chạy, 17:40 thứ Sáu 31/07 mới vỡ lẽ.
 

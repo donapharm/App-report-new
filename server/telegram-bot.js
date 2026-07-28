@@ -382,6 +382,11 @@ function autoNotifyRecipients() {
   for (const u of store.targetRoster({ scope: {} })) {
     const code = String(u.emp_code || '').toUpperCase();
     if (!code || targetNotify.isMuted(code)) continue;
+    // Chặn thông báo dùng ĐÚNG MỘT nguồn: targetNotify.isMuted
+    // (= notify_optout.json + cờ no_auto_notify trên hồ sơ).
+    // ‼ KHÔNG dùng diemXu.EXCLUDE ở đây: đó là danh sách "không tính ĐIỂM XU",
+    //   khác mục đích. Nó có DN022 — người CEO chốt 28/07 là PHẢI nhận thông báo
+    //   như NV chính thức. Trộn hai danh sách là chặn nhầm người.
     const tid = tidByEmp[code];
     const telegramId = (tid && prefEnabled(tid)) ? tid : null;
     const email = notifyChannels.emailFor(code, u.email);
