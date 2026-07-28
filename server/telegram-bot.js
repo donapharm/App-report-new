@@ -367,7 +367,10 @@ async function runTargetMilestones() {
       try { await notifyChannels.deliver({ telegramId: String(m.telegram_id), email: notifyChannels.emailFor(u.emp_code, u.email), subject: 'DNPHARMA — Tổng hợp target', text: digest, html: targetNotify.ceoDigestHtml({}) }); } catch (err) { console.error('ceo digest error:', err.message); }
     }
   }
-  console.log(`✔ Target milestones: gửi ${sent.length} tin NV + CEO digest.`);
+  // Đếm RIÊNG mốc target và mốc thưởng. Bản trước chỉ in `sent.length` (chỉ mốc
+  // target) nên tin thưởng gửi hay không đều vô hình — không cách nào kiểm chứng.
+  console.log(`✔ Mốc 07:30: ${byEmp.size} NV nhận tin — mốc target ${sent.length}, mốc thưởng ${bonusSent.length}`
+    + `${process.env.BONUS_NOTIFY === '1' ? '' : ' (BONUS_NOTIFY đang TẮT)'}. Kèm CEO digest.`);
 }
 // ── Người nhận chung cho các tin tự động (self-scoped) ──────────────────────
 // Lọc đúng 4 tầng chặn: chưa liên kết kênh nào · mã trong notify_optout.json ·
@@ -523,6 +526,19 @@ function startMilestoneScheduler() {
   }, 30 * 1000);
 }
 
+// Log phải phân biệt "bỏ qua vì không có dữ liệu" với "gửi CEO THẤT BẠI".
+// Bản cũ in `ceo=fail` cho cả hai, nên lần chạy đúng-theo-thiết-kế cũng đọc
+// như hỏng hóc — mất cả buổi đi truy một thứ không sai.
+function salesReportDoneLine(kind, r = {}, key = '') {
+  if (r.skipped === 'no_data') {
+    const n = r.skippedRecipients?.length || 0;
+    return `✔ SalesReport ${kind}: KHÔNG GỬI — kỳ này chưa có dữ liệu (${n} NV bỏ qua). Đúng thiết kế, không phải lỗi. key=${key}`;
+  }
+  if (r.skipped === 'duplicate') return `ℹ SalesReport ${kind}: bỏ qua vì đã gửi kỳ này rồi. key=${key}`;
+  return `✔ SalesReport ${kind} done: sent=${r.sent?.length || 0}, failed=${r.failed?.length || 0}, `
+    + `ceo=${r.ceoResult?.ok ? 'ok' : 'fail'}, key=${key}`;
+}
+
 function startSalesReportScheduler() {
   // Fail closed: thiếu biến hoặc giá trị khác chính xác \"1\" đều phải TẮT.
   // Daily là cờ riêng để không vô tình bật gửi hằng ngày khi chỉ duyệt tuần/tháng.
@@ -548,7 +564,7 @@ function startSalesReportScheduler() {
       if (lastDailyKey !== key) {
         lastDailyKey = key;
         if (salesReport.alreadySent('day', ranges)) console.log(`ℹ SalesReport day skip duplicate: ${key}`);
-        else salesReport.sendAll({ kind: 'day', ranges }).then((r) => console.log(`✔ SalesReport day done: sent=${r.sent?.length || 0}, failed=${r.failed?.length || 0}, ceo=${r.ceoResult?.ok ? 'ok' : 'fail'}, key=${key}`)).catch((e) => console.error('salesReport day scheduler error:', e.message));
+        else salesReport.sendAll({ kind: 'day', ranges }).then((r) => console.log(salesReportDoneLine('day', r, key))).catch((e) => console.error('salesReport day scheduler error:', e.message));
       }
     }
     if (d.getUTCDay() === 6 && hh === 13 && mm === 0) {
@@ -557,7 +573,7 @@ function startSalesReportScheduler() {
       if (lastWeeklyKey !== key) {
         lastWeeklyKey = key;
         if (salesReport.alreadySent('week', ranges)) console.log(`ℹ SalesReport week skip duplicate: ${key}`);
-        else salesReport.sendAll({ kind: 'week', ranges }).then((r) => console.log(`✔ SalesReport week done: sent=${r.sent?.length || 0}, failed=${r.failed?.length || 0}, ceo=${r.ceoResult?.ok ? 'ok' : 'fail'}, key=${key}`)).catch((e) => console.error('salesReport week scheduler error:', e.message));
+        else salesReport.sendAll({ kind: 'week', ranges }).then((r) => console.log(salesReportDoneLine('week', r, key))).catch((e) => console.error('salesReport week scheduler error:', e.message));
       }
     }
     if (hh === 18 && mm === 0) {
@@ -567,7 +583,7 @@ function startSalesReportScheduler() {
       if (lastMonthlyKey !== key) {
         lastMonthlyKey = key;
         if (salesReport.alreadySent('month', ranges)) console.log(`ℹ SalesReport month skip duplicate: ${key}`);
-        else salesReport.sendAll({ kind: 'month', ranges }).then((r) => console.log(`✔ SalesReport month done: sent=${r.sent?.length || 0}, failed=${r.failed?.length || 0}, ceo=${r.ceoResult?.ok ? 'ok' : 'fail'}, key=${key}`)).catch((e) => console.error('salesReport month scheduler error:', e.message));
+        else salesReport.sendAll({ kind: 'month', ranges }).then((r) => console.log(salesReportDoneLine('month', r, key))).catch((e) => console.error('salesReport month scheduler error:', e.message));
       }
     }
   }, 30 * 1000);

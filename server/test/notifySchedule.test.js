@@ -96,3 +96,25 @@ test('báo cáo TUẦN và THÁNG vẫn dùng ngày chạy, KHÔNG lùi 1 ngày'
   const weekly = /getUTCDay\(\) === 6 && hh === 13[\s\S]{0,120}?defaultRanges\((\w+)\)/.exec(SRC);
   assert.equal(weekly[1], 'day', 'tuần giữ nguyên mốc chạy');
 });
+
+test('log SalesReport phân biệt "không có dữ liệu" với "gửi CEO thất bại"', () => {
+  const m = /function salesReportDoneLine[\s\S]*?\n\}/.exec(SRC);
+  assert.ok(m, 'thiếu salesReportDoneLine');
+  // eslint-disable-next-line no-new-func
+  const line = new Function(`${m[0]}; return salesReportDoneLine;`)();
+
+  const empty = line('day', { skipped: 'no_data', skippedRecipients: new Array(17) }, 'k');
+  assert.match(empty, /KHÔNG GỬI/);
+  assert.match(empty, /Đúng thiết kế, không phải lỗi/);
+  assert.doesNotMatch(empty, /ceo=fail/, 'bỏ qua vì rỗng KHÔNG được đọc thành lỗi');
+
+  const broken = line('day', { sent: [], failed: new Array(2), ceoResult: { ok: false } }, 'k');
+  assert.match(broken, /ceo=fail/, 'hỏng thật thì vẫn phải báo fail');
+  assert.match(broken, /failed=2/);
+});
+
+test('log mốc 07:30 đếm RIÊNG mốc target và mốc thưởng', () => {
+  // Bản trước chỉ in sent.length (chỉ mốc target) -> tin thưởng gửi hay không đều vô hình.
+  assert.match(SRC, /mốc target \$\{sent\.length\}, mốc thưởng \$\{bonusSent\.length\}/);
+  assert.match(SRC, /BONUS_NOTIFY đang TẮT/, 'phải nói rõ khi cờ thưởng đang tắt');
+});

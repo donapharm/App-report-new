@@ -1,3 +1,16 @@
+### 2026-07-28 — Claude Code — Log nói SAI SỰ THẬT ở 2 chỗ, sửa để còn kiểm chứng được
+> Sau lần chạy thật đầu tiên 07:30 ngày 28/07. Không phải lỗi nghiệp vụ — lỗi QUAN SÁT, nhưng nguy hiểm ngang: số liệu đúng mà đọc log lại tưởng hỏng, hoặc tưởng chạy mà thực ra không kiểm được.
+
+**Log thật bot dán về:** `SalesReport: sent=0, failed=0, ceo=fail` · `Digest: sent=16, skipped=1` · `Target milestones: gửi 0 tin NV`.
+
+**Chỗ 1 — `ceo=fail` là BÁO ĐỘNG GIẢ.** Khi cả kỳ không ai có dữ liệu, `sendAll` thoát sớm và **không có** `ceoResult`; dòng log in `r.ceoResult?.ok ? 'ok' : 'fail'` → `undefined` → **`fail`**. Tức là lần chạy **đúng y thiết kế** lại đọc thành hỏng. Thêm `salesReportDoneLine()` phân biệt 3 trạng thái: `KHÔNG GỬI — chưa có dữ liệu (đúng thiết kế, không phải lỗi)` · `bỏ qua vì đã gửi rồi` · số liệu thật kèm `ceo=ok/fail`.
+
+**Chỗ 2 — `gửi 0 tin NV` KHÔNG chứng minh được tin thưởng có gửi hay không.** Dòng này in `sent.length`, mà `sent` **chỉ chứa mốc target**; mốc thưởng nằm ở `bonusSent` nên **vô hình hoàn toàn**. Không thể kết luận luồng thưởng chạy hay câm. Đổi thành: `✔ Mốc 07:30: N NV nhận tin — mốc target X, mốc thưởng Y` + ghi rõ khi `BONUS_NOTIFY` đang tắt.
+
+**Bài học ghi lại:** thêm chốt "không có dữ liệu thì không gửi" mà **không sửa log tương ứng** thì mọi lần bỏ qua hợp lệ đều trông như sự cố. Chốt và log phải đi cùng nhau.
+
+**Test:** thêm 2 ca (`notifySchedule`) — log rỗng KHÔNG được đọc thành `ceo=fail`, hỏng thật thì vẫn phải `fail`; log mốc phải đếm riêng target/thưởng. Server **451/458** = đúng 7 fail baseline → **0 regression**.
+
 ### 2026-07-28 — Claude Code — ‼ Bản tin 07:30 phải báo số NGÀY HÔM QUA (nếu không luồng doanh thu CÂM VĨNH VIỄN)
 > Phát hiện ngay sau khi bot bật `SALES_REPORT_DAILY_NOTIFY=1`, trước lần chạy thật đầu tiên.
 
