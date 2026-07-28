@@ -1,3 +1,18 @@
+### 2026-07-28 — Claude Code (CEO duyệt) — Nối 4 lớp bảo vệ vào auto-deploy
+> CEO: "Auto-deploy vẫn khoá... làm luôn nhé". Nối bộ script an toàn đã có sẵn nhưng **chưa dùng**, và **GIỮ NGUYÊN trạng thái khoá**.
+
+**‼ Phát hiện: "khoá auto-deploy" trước nay là ẢO.** Chuỗi `DISABLED_BY_CEO_20260727` **không hề có trong `auto-deploy.sh`** — nó chỉ là dòng cron bị chú thích trên server. Không ai nhìn thấy, không ghi log, bật lại thì quên mất vì sao từng tắt.
+
+**Bốn lớp bảo vệ mới**
+1. **Công tắc TẮT nhìn thấy được** — file `.auto-deploy.disabled`, nội dung là **LÝ DO**. Script tôn trọng và **ghi log mỗi lượt** kèm cách bật lại. Tắt: ghi file. Bật: xoá file.
+2. **Sao lưu dữ liệu TRƯỚC khi đụng code** (`backup_data.sh create`). Sao lưu hỏng → **DỪNG, không deploy**. Dữ liệu là thứ duy nhất không dựng lại được.
+3. **Giữ bản frontend cũ** thành `web/dist.prev` thay vì xoá ngay sau atomic swap → lùi được tức thì. Bản cũ xoá bản cũ ngay = tự tay vứt lưới an toàn.
+4. **Kiểm health thật + TỰ LÙI BẢN.** `pm2 reload` trả 0 vẫn có thể để lại app **502** (lỗi khởi động, thiếu env, cổng chưa mở) — đúng kiểu sập đã gặp. Nay gọi `/api/health` (6 lần × 5s); không khoẻ → **tự lùi cả code lẫn frontend** rồi reload lại. Lùi rồi vẫn hỏng → **kêu người**, không im lặng.
+
+**Vẫn ĐANG KHOÁ.** Chưa bật lại auto-deploy — đặc biệt **không bật trước 31/07**, vì một lần deploy hỏng đúng ngày chốt tháng là mất luôn tin chi phí + thưởng của cả công ty.
+
+**Test:** `test_release_safety.sh` **41 → 52 ca, PASS toàn bộ**. Thêm 11 ca khoá đúng 4 lớp trên, gồm cả thứ tự "sao lưu phải chạy TRƯỚC khi `git reset`".
+
 ### 2026-07-28 — Claude Code — 4 DANH SÁCH LOẠI TRỪ MÂU THUẪN NHAU: tách bạch "không tính điểm xu" khỏi "không nhận thông báo"
 > Bot phát hiện VP018 lọt lưới. Claude vá lần 1 SAI (dùng nhầm danh sách), CEO chốt DN022 làm lộ ra gốc vấn đề, vá lại lần 2 cho đúng.
 
