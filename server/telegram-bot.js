@@ -395,6 +395,12 @@ function notifyServices() {
 }
 
 const isoDay = (d) => d.toISOString().slice(0, 10);
+// Ngày liền trước theo lịch (chuỗi 'YYYY-MM-DD'), dùng cho bản tin buổi sáng.
+function previousDay(iso) {
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
 const startOfMonthIso = (day) => `${String(day).slice(0, 7)}-01`;
 
 // ── TỔNG CHI PHÍ NV TỰ NHẬN (CEO chốt: T7 12:30 lũy kế · cuối tháng 17:30 trọn tháng)
@@ -533,7 +539,11 @@ function startSalesReportScheduler() {
     const hh = d.getUTCHours();
     const mm = d.getUTCMinutes();
     if (dailyEnabled && hh === SALES_DAILY_SLOT.hour && mm === SALES_DAILY_SLOT.minute) {
-      const ranges = salesReport.defaultRanges(day);
+      // ‼ Bản tin buổi sáng phải báo số của NGÀY HÔM QUA.
+      //   Trước đây lấy `day` = hôm nay: chạy lúc 07:30 thì ngày đó chưa có đơn
+      //   nào, báo cáo luôn rỗng -> với chốt "không có dữ liệu thì không gửi",
+      //   luồng này sẽ CÂM VĨNH VIỄN. Đúng bản chất là chốt sổ ngày đã qua.
+      const ranges = salesReport.defaultRanges(previousDay(day));
       const key = salesReport.salesReportPeriodKey('day', ranges);
       if (lastDailyKey !== key) {
         lastDailyKey = key;

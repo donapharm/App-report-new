@@ -71,3 +71,28 @@ test('mốc target + mốc thưởng GỘP 1 tin/người, không bắn 2 tin c�
 test('bộ lịch mới được khởi động cùng các bộ lịch cũ', () => {
   assert.match(SRC, /startCostBonusScheduler\(\);/);
 });
+
+test('‼ bản tin 07:30 phải báo số NGÀY HÔM QUA, không phải hôm nay', () => {
+  // Chạy 07:30 mà lấy dữ liệu của chính hôm đó thì luôn rỗng -> với chốt
+  // "không có dữ liệu thì không gửi", luồng báo cáo ngày sẽ câm vĩnh viễn.
+  assert.match(SRC, /const ranges = salesReport\.defaultRanges\(previousDay\(day\)\);/,
+    'nhánh báo cáo ngày phải dùng previousDay(day)');
+  assert.doesNotMatch(SRC, /dailyEnabled[\s\S]{0,400}?defaultRanges\(day\)\);/,
+    'không được còn sót defaultRanges(day) trong nhánh hằng ngày');
+});
+
+test('previousDay nhảy đúng qua đầu tháng và đầu năm', () => {
+  const m = /function previousDay\(iso\) \{[\s\S]*?\n\}/.exec(SRC);
+  assert.ok(m, 'thiếu hàm previousDay');
+  // eslint-disable-next-line no-new-func
+  const previousDay = new Function(`${m[0]}; return previousDay;`)();
+  assert.equal(previousDay('2026-07-28'), '2026-07-27');
+  assert.equal(previousDay('2026-08-01'), '2026-07-31', 'qua đầu tháng');
+  assert.equal(previousDay('2027-01-01'), '2026-12-31', 'qua đầu năm');
+  assert.equal(previousDay('2026-03-01'), '2026-02-28', 'tháng 2');
+});
+
+test('báo cáo TUẦN và THÁNG vẫn dùng ngày chạy, KHÔNG lùi 1 ngày', () => {
+  const weekly = /getUTCDay\(\) === 6 && hh === 13[\s\S]{0,120}?defaultRanges\((\w+)\)/.exec(SRC);
+  assert.equal(weekly[1], 'day', 'tuần giữ nguyên mốc chạy');
+});

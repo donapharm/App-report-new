@@ -1,3 +1,12 @@
+### 2026-07-28 — Claude Code — ‼ Bản tin 07:30 phải báo số NGÀY HÔM QUA (nếu không luồng doanh thu CÂM VĨNH VIỄN)
+> Phát hiện ngay sau khi bot bật `SALES_REPORT_DAILY_NOTIFY=1`, trước lần chạy thật đầu tiên.
+
+- **Lỗi:** nhánh báo cáo ngày dùng `defaultRanges(day)` với `day` = **hôm nay**. Chạy lúc **07:30 sáng** thì ngày đó **chưa có đơn nào** → báo cáo luôn rỗng → gặp chốt "không có dữ liệu thì không gửi" (vừa thêm hôm qua) → **luồng vừa bật sẽ không bao giờ gửi được tin nào**. Hai thay đổi đúng riêng lẻ, ghép lại thành câm.
+- **SPEC đã ghi "07:30 báo số của ngày HÔM TRƯỚC" nhưng code chưa làm** — Claude viết kỳ vọng vào spec rồi quên hiện thực. Nay khớp lại.
+- **Sửa:** thêm `previousDay(day)` cho **riêng nhánh hằng ngày**. Tuần (T7 13:00) và tháng (18:00 ngày cuối) **giữ nguyên mốc chạy** — định nghĩa "lũy kế đến mốc chạy" là CEO chốt, không đụng.
+- **Test:** thêm 3 ca (`notifySchedule`): nhánh ngày phải dùng `previousDay` và không được sót `defaultRanges(day)` · `previousDay` nhảy đúng qua đầu tháng/đầu năm/tháng 2 · tuần-tháng không bị lùi ngày. Server **449/456** = đúng 7 fail baseline → **0 regression** · gap-sync **28/28**.
+- **Đính chính thời điểm:** bot deploy lúc **06:54 ngày 28/07**, nên lần chạy thật đầu tiên là **07:30 SÁNG 28/07**, không phải 29/07 như Claude nói trước đó.
+
 ### 2026-07-27 — Claude Code (CEO chốt) — "Không có tin gì thì KHÔNG gửi" + bật báo cáo doanh thu ngày
 > CEO yêu cầu bật luồng báo cáo doanh thu hằng ngày, và chốt luật: **không có tin thì không gửi**.
 
