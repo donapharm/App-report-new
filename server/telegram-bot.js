@@ -423,6 +423,8 @@ async function runEmployeeCostNotify({ kind, asOfDay }) {
     try {
       const row = { emp_code: r.emp_code, name: r.name, ky, from: kind === 'month' ? startOfMonthIso(asOfDay) : startOfMonthIso(asOfDay), to: asOfDay };
       const res = await svc.employeeCostSummaryForNotify(r.emp_code, { from, to });
+      // Lý do bỏ qua phải HIỆN RA log, không im lặng nuốt.
+      if (res?.skipped) { skipped += 1; console.log(`  ↷ ${r.emp_code} bỏ qua chi phí: ${res.skipped}`); continue; }
       let text;
       if (!res || res.sourceAvailable === false) {
         text = employeeCostNotify.unavailableMessageFor(row);
@@ -467,6 +469,7 @@ async function runBonusMonthEnd({ asOfDay }) {
     if (employeeCostNotify.alreadySent('bonus_month', periodKey, r.emp_code)) { skipped += 1; continue; }
     try {
       const res = await svc.employeeBonusSummaryForNotify(r.emp_code, ky);
+      if (res?.skipped) { skipped += 1; console.log(`  ↷ ${r.emp_code} bỏ qua thưởng: ${res.skipped}`); continue; }
       if (!res || res.sourceAvailable === false) { skipped += 1; continue; }  // thiếu nguồn -> không hứa tiền
       const text = bonusNotify.monthEndMessage({ ...row, ky }, res.bonus);
       if (!text) { skipped += 1; continue; }
