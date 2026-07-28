@@ -1,3 +1,18 @@
+### 2026-07-28 — Claude Code — Bot phát hiện lỗ hổng VP018: SPEC yêu cầu loại EXCLUDED nhưng code QUÊN kiểm
+> Diễn tập trên `ad124808` sạch: chi phí **18**, thưởng **7**, chặn tin 0đ **14**, lỗi **0**. Bot rà thêm và tìm ra lỗ hổng thật.
+
+**Lỗ hổng:** `SPEC_NOTIFY_COST_BONUS_SCHEDULE.md` mục 2.2 ghi rõ người nhận phải trừ *"danh sách `EXCLUDED` của `diemXu`"*, nhưng `autoNotifyRecipients()` **chỉ kiểm `targetNotify.isMuted`**, không hề nạp `diemXu`.
+- Hệ quả: **VP018** nằm trong `EXCLUDED` (`DN021, DN022, DN023, VP004, VP018`) nhưng **không** có `no_auto_notify`, **không** có trong `notify_optout.json` → hiện chỉ "an toàn" nhờ **chưa được giao target**. Ngày nào giao target là **nhận tin ngay**, dù CEO đã cố ý loại.
+- Lệch cả với `salesRecipients()` của báo cáo doanh thu — chỗ đó có kiểm `EXCLUDED`, chỗ này thì không. Cùng một danh sách loại trừ mà hai luồng hành xử khác nhau.
+
+**Sửa:** nạp `diemXu` vào bot, thêm `if (diemXu.isExcluded(code)) continue;` trong `autoNotifyRecipients`. **Không đổi hành vi hôm nay** (DN022 vốn đã bị `no_auto_notify` chặn; VP018 chưa có target) — đây là vá phòng thủ cho khớp spec.
+
+**Test:** thêm 2 ca — chốt phải nằm ĐÚNG trong `autoNotifyRecipients` và vẫn giữ `isMuted`; danh sách EXCLUDED phải khớp giữa hai luồng và không loại nhầm NV thường. Server **456/463** = đúng 7 fail baseline → **0 regression** · gap-sync **28/28**.
+
+**Đây là lần thứ 2 SPEC nói một đằng code làm một nẻo** (lần trước: quên hiện thực D-1 cho bản tin sáng). Bài học: viết spec xong phải **rà ngược từng dòng spec vào code**, không tin trí nhớ.
+
+**DN009 giải thích xong:** đạt **90,3%** — vừa vượt mốc trong ngày, sau lần chạy 07:31. Sáng 29/07 sẽ tự nhận tin mốc. Không phải lỗi.
+
 ### 2026-07-28 — Claude Code — ‼ Diễn tập khô BẮT ĐƯỢC LỖI THẬT: ~15 NV sắp nhận tin "thưởng 0đ"
 > Chính là lý do phải diễn tập trước ngày chốt tháng. Nếu không chạy, 17:40 thứ Sáu 31/07 mới vỡ lẽ.
 
