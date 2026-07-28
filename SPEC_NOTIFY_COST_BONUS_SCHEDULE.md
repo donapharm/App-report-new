@@ -46,6 +46,12 @@ Còn mã chưa được DataHub gán %. Khi đó `summary.reliable = false` và 
 | 🆕 Tổng thưởng THÁNG | — | **17:40 ngày cuối tháng** |
 
 ⚠ **07:30 báo số của ngày HÔM TRƯỚC** — đúng bản chất bản tin buổi sáng.
+Hiện thực bằng `previousDay(day)` trong **riêng nhánh hằng ngày** của `startSalesReportScheduler`.
+Tuần và tháng **giữ mốc chạy**, không lùi ngày.
+
+> ‼ Bản đầu quên hiện thực chỗ này: code lấy `day` = hôm nay. Chạy 07:30 thì ngày đó
+> chưa có đơn nào → rỗng → gặp chốt "không có dữ liệu thì không gửi" → **luồng báo cáo
+> ngày câm vĩnh viễn**. Hai thay đổi đúng riêng lẻ, ghép lại thành hỏng. Đã vá 28/07.
 
 ### Gộp tin để không dồn cục
 07:30 có thể vừa có mốc target vừa có mốc thưởng. **Gộp thành 1 tin/người**, không bắn 2 tin.
@@ -132,7 +138,63 @@ Tổng dự kiến: 8.599.768đ
 4. Lỗi gửi được nuốt và ghi log; không làm hỏng nghiệp vụ hay vòng lặp.
 5. Mỗi luồng có state chống trùng riêng, không dùng chung file.
 
-## 5. Nghiệm thu
+## 5. Quyết định phát sinh KHI TRIỂN KHAI (bổ sung 28/07)
+
+Những điều dưới đây **không có trong bản spec đầu**, phát sinh khi code và khi chạy thật.
+Ghi lại để người sau không hiểu sai hệ thống.
+
+### 5.1 Thêm dòng "Số tạm giữ cho cuối năm" — chỉ ở tin CUỐI THÁNG
+CEO xin thêm sau khi xem tin mẫu. Lấy tổng các cột khai `annual` trong cấu hình
+(mặc định **`c44` = "Lương cuối năm"**), đọc qua `summary.annualTotal` /
+`provisionalAnnualTotal` — **không viết cứng tên cột**.
+Cùng luật fail-closed; không có số hợp lệ thì **bỏ hẳn dòng**, không in `—` hay `0đ`.
+Tin tuần **không** kèm dòng này.
+
+### 5.2 "Không có tin gì thì KHÔNG gửi" — áp cho CẢ BA luồng
+CEO chốt. Mỗi luồng có đường thoát riêng nên phải chặn từng chỗ:
+- **Doanh thu** (`salesReport.sendAll`): NV không có dòng nào → bỏ qua; cả kỳ không ai có
+  dữ liệu → im lặng hoàn toàn, **không gửi cả bản tổng CEO**, và **không đánh dấu "đã gửi"**
+  để dữ liệu về muộn vẫn gửi được đúng kỳ đó.
+- **Chi phí**: không có số dùng được → `messageFor` trả `null`, bot bỏ qua.
+- **Thưởng**: xem 5.3.
+
+### 5.3 ‼ "Không có tiền" ≠ "số 0"
+Dính **hai lần trong một ngày**, cùng một kiểu:
+1. `Number(null) === 0` → tổng bị **khóa fail-closed (`null`)** biến thành **"0đ"** gửi cho NV.
+2. Dưới ngưỡng thì `employeeBonus` trả `baseAmount = 0` — **số thật, không phải `null`** —
+   nên nhánh kiểm `null` không chặn được; ~15/21 NV suýt nhận tin **"Tổng dự kiến: 0đ"**
+   vào chiều cuối tháng.
+
+**Luật:** mọi nơi đụng tiền phải phân biệt tường minh *chưa có số* với *số bằng 0*.
+`monthEndMessage` trả `null` khi **tổng ≤ 0**; ai có tiền dù ít (đạt 95% → P1 0,1%) **vẫn gửi**.
+
+### 5.4 Công tắc "Chi phí của tôi" quyết định ai nhận tin CHI PHÍ
+- Công tắc TẮT → `employeeCostSummaryForNotify` trả `{skipped:'visibility_off'}` → **không gửi**.
+- ‼ Công tắc này **KHÔNG** chi phối tin **target** và **mốc thưởng** — hai luồng đó đi theo
+  roster + `notify_optout.json` + cờ `no_auto_notify`. Đừng nhầm hai thứ.
+- CEO bật cho **18 NV** ngày 28/07: `DN001–DN012, DN016, DN017, DN018, DN019, DN022, DN024`.
+
+### 5.5 Lý do bỏ qua phải HIỆN RA, không im lặng nuốt
+Hai hàm dịch vụ trả `{skipped: 'no_session' | 'no_payload' | 'visibility_off'}` thay vì `null`
+trơn; bot **in lý do vào log** từng NV. Nếu ngày chốt tháng cả công ty không nhận được gì,
+phải biết **ngay** là vì đâu.
+
+### 5.6 Log phải nói thật
+- `salesReportDoneLine()` phân biệt *không có dữ liệu (đúng thiết kế)* với *gửi CEO thất bại*.
+  Bản đầu in `ceo=fail` cho cả hai → lần chạy đúng cũng đọc như hỏng.
+- Log mốc 07:30 đếm **riêng** mốc target và mốc thưởng. Bản đầu chỉ in số mốc target nên
+  **không cách nào kiểm chứng** luồng thưởng có chạy hay không.
+- **Luật:** thêm chốt bỏ qua thì phải sửa log tương ứng — nếu không, mọi lần bỏ qua hợp lệ
+  đều trông như sự cố.
+
+### 5.7 Bắt buộc DIỄN TẬP KHÔ trước ngày chốt tháng
+`server/scripts/test_notify_dryrun.js` — chạy **y hệt** đường thật, **in ra tin sẽ gửi**,
+**không gửi gì** (không import `notifyChannels`).
+Lý do: hai đường lấy số cho tin cuối tháng chỉ chạy 12:30 T7 / 17:30 / 17:40, và bộ lịch
+**nuốt lỗi rồi bỏ qua** — hỏng thì cả công ty không nhận được gì mà không ai biết.
+Lần chạy đầu tiên đã **bắt được lỗi thật** ở 5.3 mục 2.
+
+## 6. Nghiệm thu
 - Test đơn vị cho mốc thưởng (đọc ngưỡng từ config, 1 lần/kỳ, fail-closed khi thiếu cấu hình).
 - Test đơn vị cho tin chi phí (bắt buộc có nhãn TẠM TÍNH khi `reliable === false`; không lộ số người khác).
 - Test khung giờ: slot hằng ngày = 07:30, T7 = 13:00, chi phí T7 = 12:30, cuối tháng 17:30 / 17:40.
