@@ -1,3 +1,20 @@
+### 2026-07-28 — Claude Code — Diễn tập KHÔ trước ngày chốt tháng + lý do bỏ qua phải hiện ra
+> Luồng thưởng đã chạy thật 07:31:17 ngày 28/07: **6 NV, 14 mốc**. Đối chiếu độc lập với bảng target của CEO: 3 NV ≥100% (DN001, DN006, DN008) — **khớp chính xác** con số "3 NV đạt". Con số `gửi 0 tin NV` hôm qua đúng là do lỗi log, không phải luồng câm.
+
+**‼ Rủi ro còn lại: đường lấy số cho tin CUỐI THÁNG chưa hề chạy lần nào**
+- `employeeCostSummaryForNotify` và `employeeBonusSummaryForNotify` **chỉ** chạy lúc 12:30 T7 / 17:30 / 17:40. Lần thật đầu tiên là **17:30 thứ Sáu 31/07 — đúng ngày chốt tháng**.
+- Bộ lịch **nuốt lỗi rồi bỏ qua NV đó**. Nếu hai hàm này ném lỗi, cả công ty không nhận được gì và **không ai biết cho tới khi đã muộn**.
+
+**Thêm `server/scripts/test_notify_dryrun.js` — diễn tập khô, KHÔNG GỬI GÌ**
+- Chạy **y hệt** đường thật rồi **in ra tin sẽ gửi**. Không import `notifyChannels`, không có bất kỳ đường gửi nào (đã kiểm: chỉ khớp đúng 1 dòng chú thích).
+- `node scripts/test_notify_dryrun.js` (3 NV đầu) · `DN001` (1 NV) · `--all` (toàn roster). Có lỗi thì thoát mã 1 và liệt kê.
+
+**Lý do bỏ qua phải HIỆN RA, không im lặng nuốt**
+- Hai hàm dịch vụ trước trả `null` trơn cho mọi nguyên nhân. Nay trả `{skipped: 'no_session' | 'no_payload' | 'visibility_off'}`; bot **in lý do vào log** từng NV; script diễn tập dịch sang tiếng người kèm cách xử lý.
+- Đã bắt được ngay 1 ca thật khi chạy thử: `visibility_off` — **công tắc "Chi phí của tôi" TẮT thì NV không nhận tin chi phí**, đúng thiết kế nhưng trước đây sẽ im lặng, không ai biết vì sao.
+
+**Test:** server **451/458** = đúng 7 fail baseline → **0 regression** · gap-sync **28/28**.
+
 ### 2026-07-28 — Claude Code — Log nói SAI SỰ THẬT ở 2 chỗ, sửa để còn kiểm chứng được
 > Sau lần chạy thật đầu tiên 07:30 ngày 28/07. Không phải lỗi nghiệp vụ — lỗi QUAN SÁT, nhưng nguy hiểm ngang: số liệu đúng mà đọc log lại tưởng hỏng, hoặc tưởng chạy mà thực ra không kiểm được.
 

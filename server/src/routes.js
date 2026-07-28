@@ -4303,8 +4303,11 @@ function notifySessionFor(empCode) {
 
 /** Tổng chi phí NV tự nhận trong khoảng [from,to] (định dạng kỳ 'YYYY-MM'). */
 async function employeeCostSummaryForNotify(empCode, { from, to } = {}) {
+  // Trả LÝ DO cụ thể thay vì null trơn. Nếu ngày chốt tháng cả công ty không
+  // nhận được gì, phải biết NGAY là vì đâu: sai mã NV, tắt quyền xem chi phí,
+  // hay nguồn DataHub chưa về. Mỗi nguyên nhân xử lý một kiểu khác nhau.
   const session = notifySessionFor(empCode);
-  if (!session) return null;
+  if (!session) return { skipped: 'no_session', empCode: String(empCode || '').toUpperCase() };
   const req = {
     session,
     query: { emp: session.emp_code, from, to },
@@ -4314,7 +4317,8 @@ async function employeeCostSummaryForNotify(empCode, { from, to } = {}) {
     auditEvent: 'notify',
     suppressAudit: false,
   });
-  if (!payload || payload.disabled) return null;
+  if (!payload) return { skipped: 'no_payload', empCode: session.emp_code };
+  if (payload.disabled) return { skipped: 'visibility_off', empCode: session.emp_code };
   const view = employeeCostTable.transformReport(payload, {});
   return {
     empCode: session.emp_code,
@@ -4327,7 +4331,7 @@ async function employeeCostSummaryForNotify(empCode, { from, to } = {}) {
 /** Số thưởng P1/P2 của 1 NV ở 1 kỳ — cùng đường tính với màn "Chi phí của tôi". */
 async function employeeBonusSummaryForNotify(empCode, ky) {
   const session = notifySessionFor(empCode);
-  if (!session) return null;
+  if (!session) return { skipped: 'no_session', empCode: String(empCode || '').toUpperCase() };
   const code = session.emp_code;
   const kpi = targetKpiSummary(ky, { empCode: code }, [code]);
   const catalogRowsByPeriod = {};
