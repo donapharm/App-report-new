@@ -61,7 +61,7 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
 
 ## Tài liệu liên quan
 - `CHANGELOG.md` — **đọc đầu tiên**: nhật ký thay đổi + trạng thái hiện tại.
-- `SPEC_BONUS_PENALTY_V33.md` — **Phạt v3.3** (CEO chốt 2026-07-29): trừ vào **cột C45 "Lương tăng thêm"** — 70–90% trừ 0,2%, 50–70% trừ 0,3%, **dưới 50% loại trọn C45** khỏi chi phí tháng; trần phạt = chính tiền C45. Cộng phạt thiếu Xu (dùng lại `xuPolicy.js`, không viết lại). **Tất cả NV xem được phạt của chính mình + công thức** (self-scoped). Phạt là trường RIÊNG, KHÔNG trộn vào `amount`, KHÔNG ghi đè số DataHub. Thêm 4 ô KPI. Ship = nâng version lên v3.3.
+- `SPEC_BONUS_PENALTY_V33.md` — **Phạt v3.3** (CEO chốt 2026-07-29): trừ vào **cột C45 "Lương tăng thêm"** — **≥90% không phạt**, 70–90% trừ 0,2%, 50–70% trừ 0,3%, **≤50% mất trắng C45** (không cộng vào tổng chi phí nhận); trần phạt = chính tiền C45. Cộng phạt thiếu Xu (dùng lại `xuPolicy.js`, không viết lại). **Tất cả NV xem được phạt của chính mình + công thức** (self-scoped). Phạt là trường RIÊNG, KHÔNG trộn vào `amount`, KHÔNG ghi đè số DataHub. Thêm 4 ô KPI. Ship = nâng version lên v3.3.
 - `README.md` — chạy + tổng quan.
 - `HANDOFF.md` — trạng thái hiện tại + việc còn lại (đọc trước khi code tiếp).
 - `DEPLOY_CLOUDFLARE.md` — deploy Pages + Tunnel + Access.

@@ -4,7 +4,7 @@
 
 | # | CEO chốt | Ghi chú |
 |---|---|---|
-| 1 | Đạt **70–89%** target ⇒ trừ **0,2%** tại C45 · **51–69%** ⇒ trừ **0,3%** tại C45 · **<50%** ⇒ **C45 không tính vào chi phí tháng** | thay cho bậc âm |
+| 1 | **≥90%** ⇒ **không phạt**, chạy công thức thưởng · **70–89%** ⇒ trừ **0,2%** tại C45 · **51–69%** ⇒ trừ **0,3%** · **≤50%** ⇒ **mất trắng C45** (không tính vào chi phí tháng) | thay cho bậc âm |
 | 2 | Trần tiền phạt: **theo ý số 1** ⇒ trần chính là **số tiền C45** | không trừ quá thành âm |
 | 3 | **TẤT CẢ nhân viên** được nhìn thấy **số tiền phạt + công thức tính** | **đảo ngược** chốt "chỉ báo CEO" lúc sáng |
 | 4 | Thêm **đúng 4 ô KPI** trong mục "quyền quản trị tự xem chi phí", màu **đối nghịch** với ô hiện có | xem mục 5 |
@@ -18,7 +18,7 @@ Ship xong nâng `FORMULA_VERSION` **v3.2 → v3.3** (mục 8).
 
 **a) C45 là gì.** `config/employee_cost_templates.json`: `"c45": "C45 Lương tăng thêm (%)"`. Là **1 trong 4 cột chi phí THÁNG** (`c36, c41, c43, c45`); `c44` "Lương cuối năm" nằm ngoài tổng tháng. Số thật đã nghiệm thu (T06 DN001): `c36 750.400 + c41 7.995.379 + c43 26.489.506 + c45 7.599.706 = 42.834.991đ`.
 
-⇒ Ý CEO rất rõ: **không đạt target thì bị cắt vào phần "lương tăng thêm"**, đạt dưới 50% thì **mất trắng phần đó**.
+⇒ Ý CEO rất rõ: **không đạt target thì bị cắt vào phần "lương tăng thêm"**; đạt **bằng hoặc dưới 50%** thì **C45 không cộng vào tổng chi phí nhận nữa** (mất trắng phần đó).
 
 **b) Phạt thiếu Xu ĐÃ CÓ SẴN và chạy đúng** — `server/src/xuPolicy.js`: `PENALTY_PER_MISSING_XU = 300000`, tháng tạm tính / quý quyết toán, có `prior_booked` để **không phạt hai lần**. Hiện chỉ được gọi trong `dormantService.js`. Trang chi phí **đã có sẵn khối** "Cấn trừ do thiếu xu chi tiêu (quý) · dự kiến" (`EmployeeCost.jsx:563`) nhưng đang ở trạng thái *"đang đối soát"*. ⇒ **KHÔNG viết lại máy tính**, chỉ phơi ra thành ô KPI.
 
@@ -43,12 +43,19 @@ Ship xong nâng `FORMULA_VERSION` **v3.2 → v3.3** (mục 8).
 
 | % đạt target tháng | Xử lý | `penaltyTier` |
 |---|---|---|
-| **≥ 90%** | không phạt | `none` |
+| **pct ≥ 90%** | **không phạt** — chạy đúng công thức thưởng v3.2 | `none` |
 | **70% ≤ pct < 90%** | trừ **0,2%** vào C45 | `t70_90` |
-| **50% ≤ pct < 70%** | trừ **0,3%** vào C45 | `t50_70` |
-| **pct < 50%** | **loại toàn bộ C45** khỏi chi phí tháng | `drop_c45` |
+| **50% < pct < 70%** | trừ **0,3%** vào C45 | `t50_70` |
+| **pct ≤ 50%** | **mất trắng C45** — loại toàn bộ khỏi chi phí tháng | `drop_c45` |
 
-> **‼ Claude đã bịt lỗ hổng mốc — CEO xác nhận lại giúp.** CEO nói "70 đến 89", "51 đến 69", "<50". Đọc nguyên văn thì **89–90%, 69–70%, 50–51% và đúng 50%** bị **hở** — NV rơi vào đó thì máy không biết xử sao. Bảng trên dùng **mốc liền mạch**, giữ đúng ranh giới CEO nêu và giữ nguyên "**dưới 50%** mới mất trắng". Đúng 50,0% ⇒ vào bậc 0,3%, **không** mất trắng.
+> **Mốc đã CEO chốt lại 29/07 (chiều).** CEO nói nguyên văn: *"target từ đủ 90% trở lên là tính theo công thức thưởng rồi · phạt khi chỉ đủ 70–89 là 0,2% · phạt khi 51–69 là 0,3% · phạt khi chỉ bằng 50% trở xuống thì mất trắng"*.
+> Bảng trên là bản **liền mạch, không còn khe hở** — mọi giá trị `pct` đều rơi đúng **một** bậc:
+> - **Đúng 90,0%** ⇒ không phạt (CEO: "từ **đủ** 90% trở lên").
+> - **Đúng 70,0%** ⇒ bậc 0,2%.
+> - **Đúng 50,0%** ⇒ **mất trắng** (CEO: "chỉ bằng 50% **trở xuống**"). ‼ Khác bản sáng — bản sáng cho 50,0% vào bậc 0,3%, nay **đã sửa**.
+> - `89,5%` ⇒ 0,2% · `69,5%` ⇒ 0,3% · `50,5%` ⇒ 0,3%.
+
+> **"Mất trắng (0,5%)" nghĩa là gì — CEO đã chốt:** **mất trắng toàn bộ C45**, tức đúng số tiền C45 của người đó (ví dụ 7.599.706đ), mỗi người một khác vì `%C45` từng mặt hàng khác nhau. **Không phải** "trừ 0,5% doanh thu". Con số *0,5%* chỉ là cách CEO gọi tên bậc thứ 3 nối tiếp 0,2% – 0,3%.
 
 ### 2.2 Số tiền phạt
 
@@ -56,7 +63,7 @@ Ship xong nâng `FORMULA_VERSION` **v3.2 → v3.3** (mục 8).
 phạtTarget = min( rate × doanhThuTrướcVAT , tiềnC45 )      với rate = 0,2% hoặc 0,3%
 ```
 
-Nếu `pct < 50%`: `phạtTarget = tiềnC45` (loại trọn cột).
+Nếu `pct ≤ 50%`: `phạtTarget = tiềnC45` (loại trọn cột — **mất trắng**, không nhân tỷ lệ nào).
 
 **Vì sao nhân với doanh thu chứ không nhân với C45:** C45 vốn được tính `doanh thu × %C45`. "Trừ 0,2% tại cột C45" = hạ tỷ lệ C45 đi 0,2 điểm ⇒ tiền giảm đúng bằng `0,2% × doanh thu`. **Hai cách đọc ra cùng một số.**
 
@@ -77,7 +84,7 @@ Nếu `pct < 50%`: `phạtTarget = tiềnC45` (loại trọn cột).
 
 **`c45_unavailable` là bẫy quan trọng nhất.** Coverage thấp thì tổng chi phí bị khoá `null` (fail-closed đang có). `Number(null) === 0` ⇒ trần phạt thành 0 ⇒ *may là không phạt*, nhưng nếu code đi nhánh khác thì thành "phạt trọn 0đ" hoặc "còn lại = số âm". Đã dính bẫy này **2 lần trong tháng 7**. Bắt buộc kiểm `null` tường minh, không dùng `|| 0`.
 
-### 2.4 Rủi ro kỹ thuật khi `pct < 50%` — bot đọc kỹ
+### 2.4 Rủi ro kỹ thuật khi `pct ≤ 50%` — bot đọc kỹ
 
 Loại C45 khỏi tổng tháng **theo từng NV, từng kỳ** (không phải loại cứng như `c44`). Phải giữ được các bất biến đang có:
 - **Σ theo ngày = tổng tháng** (phần lẻ dồn ngày cuối).
@@ -195,23 +202,24 @@ Tách file phạt mới (vd `src/penalty.js`) thì **phải thêm vào `FORMULA_
 5. Thưởng P1/P2 **không đổi một đồng** so với v3.2 ở mọi ca trên.
 6. Xu: thiếu 2 Xu ⇒ 600.000đ; đã hạch toán 600.000đ ⇒ quý cộng thêm **0đ**.
 
-**Mốc — bịt lỗ hổng**
-7. Đúng **90,0%** ⇒ không phạt. Đúng **70,0%** ⇒ 0,2%. Đúng **50,0%** ⇒ 0,3% (**không** mất trắng). **49,99%** ⇒ mất trắng.
-8. `89,5%` / `69,5%` / `50,5%` đều rơi đúng một bậc, **không ca nào không khớp bậc nào**.
+**Mốc — không còn khe hở**
+7. Đúng **90,0%** ⇒ **không phạt** (chạy công thức thưởng). Đúng **70,0%** ⇒ 0,2%. Đúng **50,0%** ⇒ **mất trắng C45**. **50,01%** ⇒ 0,3%.
+8. `89,5%` / `69,5%` / `50,5%` đều rơi đúng một bậc; quét `pct` từ 0 đến 150 bước 0,1 ⇒ **không giá trị nào không khớp bậc nào**.
+9. `pct ≤ 50%` ⇒ **tổng chi phí nhận KHÔNG còn C45**: `tổngSauPhạt = tổngGốc − tiềnC45`, và `c45Dropped: true`.
 
 **Fail-closed**
-9. Chưa giao target ⇒ **không phạt**, `missing_target`.
-10. `penaltyEnabled=false` ⇒ không phạt kể cả khi cấu hình có bậc.
-11. Tiền C45 `null` ⇒ **không phạt** (`c45_unavailable`), **không** ra số âm.
-12. Tổng chi phí `null` ⇒ ô "sau phạt" **ẩn**, không render.
-13. Chưa đấu nối app lương ⇒ ô ứng hiện **"Chưa đấu nối"**, `assert.doesNotMatch(value, /^0/)`.
+10. Chưa giao target ⇒ **không phạt**, `missing_target`.
+11. `penaltyEnabled=false` ⇒ không phạt kể cả khi cấu hình có bậc.
+12. Tiền C45 `null` ⇒ **không phạt** (`c45_unavailable`), **không** ra số âm.
+13. Tổng chi phí `null` ⇒ ô "sau phạt" **ẩn**, không render.
+14. Chưa đấu nối app lương ⇒ ô ứng hiện **"Chưa đấu nối"**, `assert.doesNotMatch(value, /^0/)`.
 
 **Quyền**
-14. NV chỉ thấy phạt **của mình**; ép `emp_code` người khác ⇒ **403**.
-15. Màn "Tất cả NV" với session NV ⇒ vẫn **403** `EMPLOYEE_COST_ALL_FORBIDDEN`.
+15. NV chỉ thấy phạt **của mình**; ép `emp_code` người khác ⇒ **403**.
+16. Màn "Tất cả NV" với session NV ⇒ vẫn **403** `EMPLOYEE_COST_ALL_FORBIDDEN`.
 
 **Version**
-16. Đổi bậc phạt / `perMissingXu` mà không nâng version ⇒ `bonusFormulaVersion.test.js` **đỏ**.
+17. Đổi bậc phạt / `perMissingXu` mà không nâng version ⇒ `bonusFormulaVersion.test.js` **đỏ**.
 
 ---
 
@@ -231,7 +239,7 @@ Tách file phạt mới (vd `src/penalty.js`) thì **phải thêm vào `FORMULA_
 
 ## 11. CEO còn phải chốt
 
-1. **Xác nhận mốc liền mạch ở 2.1** (≥90 / 70–90 / 50–70 / <50), đặc biệt **đúng 50% thì trừ 0,3%, chưa mất trắng**.
+1. ~~Xác nhận mốc~~ — **XONG 29/07 chiều.** Mốc ở 2.1 là bản CEO chốt: ≥90% không phạt · 70–90% 0,2% · 50–70% 0,3% · **≤50% mất trắng C45**. "Mất trắng (0,5%)" = **loại trọn C45**, không phải trừ 0,5% doanh thu.
 2. **Tin nhắn** xử lý theo (a), (b) hay (c) ở mục 7.
 3. **Mức 300.000đ/Xu** giữ hay đổi.
-4. **Vách đá 50%:** ở 50,1% chỉ mất ~0,3% doanh thu; xuống 49,9% **mất trắng C45** (ví dụ 7,6 triệu). Chênh nhau rất lớn chỉ vì 0,2% target. Claude đề nghị **giữ đúng ý Sếp** nhưng app phải **cảnh báo sớm**: *"Còn thiếu … đồng nữa là mất trắng C45"* — để NV còn kịp chạy, chứ không phải cuối tháng mới biết.
+4. **Vách đá 50%:** ở 50,1% chỉ mất ~0,3% doanh thu; chạm đúng 50,0% là **mất trắng C45** (ví dụ 7,6 triệu). Chênh nhau rất lớn chỉ vì 0,2% target. Claude đề nghị **giữ đúng ý Sếp** nhưng app phải **cảnh báo sớm**: *"Còn thiếu … đồng nữa là mất trắng C45"* — để NV còn kịp chạy, chứ không phải cuối tháng mới biết.
