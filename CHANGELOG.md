@@ -1,3 +1,24 @@
+### 2026-07-29 (đóng spec) — Claude Code — PHẠT v3.3: CEO chốt nốt điểm cuối, spec ĐỦ để bot làm
+> CEO: "Mức phạt thiếu Xu 300.000đ/Xu — anh đồng ý giữ nguyên nhé."
+
+**Đóng nốt điểm treo thứ 4/4.** Giữ nguyên `PENALTY_PER_MISSING_XU = 300000`, không đụng `xuPolicy.js`. Vẫn đưa vào `xuPenalty.perMissingXu = 300000` để sau này CEO chỉnh được qua đúng luồng preview→save có audit, **nhưng giá trị hiện tại y nguyên**.
+
+**Bảng chốt cuối — bot KHÔNG cần hỏi thêm gì:**
+
+| # | Việc | Chốt |
+|---|---|---|
+| 1 | Mốc bậc phạt | ≥90% không phạt · 70–90% 0,2% · 50–70% 0,3% · **≤50% mất trắng C45** |
+| 2 | Tin nhắn | **KHÔNG đụng** — giữ nguyên 4 khung giờ đang chạy |
+| 3 | Phạt thiếu Xu | **GIỮ NGUYÊN 300.000đ/Xu** |
+| 4 | Vách đá 50% | Giữ luật, **bắt buộc có cảnh báo sớm** (mục 5B) |
+
+**Ba thứ tuyệt đối không được làm sai** (ghi thành mục 12 trong spec):
+1. **Mốc 50% phải VƯỢT mới thoát** — gap có đệm 1.000đ, làm tròn LÊN.
+2. **T07.2026 không trừ một đồng nào** — `warn_only`, tự chuyển `enforced` lúc 01/08/2026.
+3. **P1/P2 không sửa một dòng** — phạt là trường riêng.
+
+**Spec `SPEC_BONUS_PENALTY_V33.md` đã ĐÓNG**, 32 ca test bắt buộc, đủ để bot triển khai. Chưa đụng code app.
+
 ### 2026-07-29 (chốt cuối ngày) — Claude Code — PHẠT v3.3: cảnh báo sớm + LỊCH ÁP DỤNG tự bật 01/08/2026
 > CEO: "chỉ vì con số 50,5 và 50,0 mà mất tiền triệu của nhân viên thì đau lắm... spec nhấn mạnh là **bạn có thể mất trắng số tiền tại cột C45 là ... nếu bạn không cố gắng thêm giá trị đơn hàng là ... (trước VAT)**. Như vậy NV sẽ khâm phục và khẩu phục" + "Tháng 07.2026 chỉ đưa vào cảnh báo. Công thức tính phạt kích hoạt vào T08.2026, ngày bắt đầu áp dụng 01/08/2026. Trong cài đặt em cũng cài đặt rõ luôn, kẻo hôm sau lại quên kích hoạt".
 
