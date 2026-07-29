@@ -189,6 +189,8 @@ function styleTableHeader(row) {
 }
 
 function costColumns(period, report = {}) {
+  const hasPenalty = report?.penalty && typeof report.penalty === 'object'
+    || (period.employeeSubtotals || []).some((item) => item?.penalty && typeof item.penalty === 'object');
   const base = [
     ['stt', 'STT', 'number', 7],
     ...(report.allEmployees ? [['employee', 'Nhân viên', 'text', 24]] : []),
@@ -206,7 +208,46 @@ function costColumns(period, report = {}) {
     dynamic.push({ key, label: safeText(column.label || key, 100), fullLabel: safeText(column.label || key, 100), kind: 'percent', width: 8, annual: !!column.annual, value: (row) => row[key] });
     dynamic.push({ key: `${key}_amount`, label: `Thành tiền ${key.toUpperCase()}`, kind: 'money', width: 16, annual: !!column.annual, value: (row) => row.amounts?.[key] });
   }
-  return [...base, ...dynamic, { key: 'rowMonthlyTotal', label: 'Tổng chi phí tháng', kind: 'money', width: 17, value: (row) => row.rowMonthlyTotal }, { key: 'note', label: 'Ghi chú', kind: 'text', width: 24, value: (row) => row.note }];
+  return [
+    ...base,
+    ...dynamic,
+    { key: 'rowMonthlyTotal', label: 'Tổng chi phí tháng', kind: 'money', width: 17, value: (row) => row.rowMonthlyTotal },
+    ...(hasPenalty ? [{
+      key: 'penalty', label: 'Phạt dự kiến', kind: 'money', width: 17,
+      value: (row) => row.__penaltySummary ? row.penalty?.total : null,
+    }] : []),
+    { key: 'note', label: 'Ghi chú', kind: 'text', width: 24, value: (row) => row.note },
+  ];
+}
+
+function reportPenaltyTotal(report = {}, period = {}) {
+  if (report.allEmployees) {
+    const values = (period.employeeSubtotals || [])
+      .map((item) => numberOrNull(item?.penalty?.total))
+      .filter((value) => value != null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  }
+  return numberOrNull(report.penalty?.total);
+}
+
+function penaltySummaryRows(report = {}, period = {}) {
+  if (report.allEmployees) return (period.employeeSubtotals || []).map((item) => ({
+    __penaltySummary: true,
+    stt: '',
+    employeeCode: item.employeeCode,
+    employeeName: `TỔNG PHỤ · ${item.employeeName}`,
+    rowMonthlyTotal: item.monthlyTotal,
+    penalty: item.penalty,
+    note: item.penalty?.formulaText || item.penalty?.label || '',
+  }));
+  if (!report.penalty || typeof report.penalty !== 'object') return [];
+  return [{
+    __penaltySummary: true,
+    stt: '',
+    rowMonthlyTotal: period.summary?.monthlyTotal,
+    penalty: report.penalty,
+    note: report.penalty.formulaText || report.penalty.label || '',
+  }];
 }
 
 function safeSheetName(value, fallback, used) {
@@ -271,6 +312,7 @@ function createCostWorkbook(reports = [], options = {}) {
             if (index === 0) return '';
             if (index === 1) return `TỔNG PHỤ ${subtotal.employeeCode} · ${subtotal.employeeName} (${subtotal.rowCount} dòng)`;
             if (column.key === 'rowMonthlyTotal') return numberOrNull(subtotal.monthlyTotal);
+            if (column.key === 'penalty') return numberOrNull(subtotal.penalty?.total);
             if (column.key.endsWith('_amount')) return numberOrNull(subtotal.columnTotals?.[column.key.replace(/_amount$/, '')]);
             return '';
           }));
@@ -285,8 +327,10 @@ function createCostWorkbook(reports = [], options = {}) {
         const letter = sheet.getColumn(index + 1).letter;
         const backendValue = column.key === 'rowMonthlyTotal'
           ? numberOrNull(period.summary?.monthlyTotal)
+          : column.key === 'penalty' ? reportPenaltyTotal(report, period)
           : column.key.endsWith('_amount') ? numberOrNull(period.summary?.columnTotals?.[column.key.replace(/_amount$/, '')]) : null;
         if (backendValue == null) return '';
+        if (column.key === 'penalty') return backendValue;
         return dataRows.length ? { formula: `SUM(${letter}${firstDataRow}:${letter}${lastDataRow})`, result: backendValue } : backendValue;
       }));
       totalRow.font = { bold: true, color: { argb: 'FF075D9B' } };
@@ -569,10 +613,19 @@ function costPdfBuffer(reports = [], options = {}) {
       }));
       const hasAnnual = (period.columns || []).some((column) => column.annual);
       const subtotalNote = report.allEmployees && period.employeeSubtotals?.length
-        ? `\nTổng phụ: ${period.employeeSubtotals.map((item) => `${item.employeeCode} ${formatMoneyVi(item.monthlyTotal)} (${item.rowCount} dòng)`).join(' · ')}`
+        ? `\nTổng phụ: ${period.employeeSubtotals.map((item) => {
+          const penalty = numberOrNull(item?.penalty?.total);
+          return `${item.employeeCode} ${formatMoneyVi(item.monthlyTotal)} · Phạt ${formatMoneyVi(penalty)} (${item.rowCount} dòng)`;
+        }).join(' · ')}`
         : '';
-      const titleNote = `Tổng chi phí tháng: ${formatMoneyVi(period.summary?.monthlyTotal)} · Bằng chữ: ${numberToVietnameseWords(period.summary?.monthlyTotal || 0)}${subtotalNote}${hasAnnual ? `\nKhoản cuối năm (C44 · chi trả T12): ${formatMoneyVi(period.summary?.annualTotal)}\nGhi chú: C44 không tính vào tổng tháng; dòng “—” = chưa có %.` : '\nGhi chú: Dòng “—” = chưa có %.'}`;
-      const pdfRows = (period.rows || []).map((row, index) => ({ ...row, stt: numberOrNull(row.stt) || index + 1 }));
+      const ownPenaltyNote = !report.allEmployees && report.penalty
+        ? `\nPhạt dự kiến: ${formatMoneyVi(report.penalty.total)} · ${safeText(report.penalty.formulaText || report.penalty.label, 1000)}`
+        : '';
+      const titleNote = `Tổng chi phí tháng: ${formatMoneyVi(period.summary?.monthlyTotal)} · Bằng chữ: ${numberToVietnameseWords(period.summary?.monthlyTotal || 0)}${ownPenaltyNote}${subtotalNote}${hasAnnual ? `\nKhoản cuối năm (C44 · chi trả T12): ${formatMoneyVi(period.summary?.annualTotal)}\nGhi chú: C44 không tính vào tổng tháng; dòng “—” = chưa có %.` : '\nGhi chú: Dòng “—” = chưa có %.'}`;
+      const pdfRows = [
+        ...(period.rows || []).map((row, index) => ({ ...row, stt: numberOrNull(row.stt) || index + 1 })),
+        ...penaltySummaryRows(report, period),
+      ];
       pdfTable(doc, columns, pdfRows, { titleContext, noteAfter: titleNote });
     }
     if (!section) { pdfHeader(doc, { title: COST_TITLE, period: formatPeriod('', ''), employee: '—', exportedAt }); doc.font('VN').fontSize(10).text('Chưa có dữ liệu.'); }

@@ -168,7 +168,7 @@ function summarizeRows(rows = [], columns = [], baseSummary = null) {
   };
 }
 
-function employeeSubtotals(rows = [], columns = []) {
+function employeeSubtotals(rows = [], columns = [], penalties = {}) {
   const groups = new Map();
   for (const row of rows) {
     const employeeCode = String(row.employeeCode || '').trim().toUpperCase() || '—';
@@ -177,7 +177,15 @@ function employeeSubtotals(rows = [], columns = []) {
     groups.set(employeeCode, group);
   }
   return [...groups.values()].sort((a, b) => a.employeeCode.localeCompare(b.employeeCode, 'vi', { numeric: true }))
-    .map((group) => ({ ...group, rowCount: group.rows.length, ...summarizeRows(group.rows, columns), rows: undefined }));
+    .map((group) => ({
+      ...group,
+      rowCount: group.rows.length,
+      ...summarizeRows(group.rows, columns),
+      penalty: penalties?.[group.employeeCode] && typeof penalties[group.employeeCode] === 'object'
+        ? { ...penalties[group.employeeCode] }
+        : null,
+      rows: undefined,
+    }));
 }
 
 function parsePage(value, fallback = 1) {
@@ -275,7 +283,7 @@ function transformPeriod(period = {}, options = {}) {
     daily: filteredDaily(period.daily, numbered, columns),
     search: { query, filteredRows: numbered.length, totalRows: sourceRows.length },
     pagination: { page, pageSize, pageCount, filteredRows: numbered.length, totalRows: sourceRows.length },
-    employeeSubtotals: options.allEmployees ? employeeSubtotals(numbered, columns) : [],
+    employeeSubtotals: options.allEmployees ? employeeSubtotals(numbered, columns, period.employeePenalties) : [],
   };
 }
 
@@ -352,6 +360,15 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const low = rate != null && rate < threshold;
     return {
       empCode: 'ALL', period: periodKey, columns, rows,
+      // Only the report's selected/final month owns a PHẠT v3.3 summary.
+      // Keeping the map in the merged backend payload lets filtered ALL
+      // subtotals retain the server-calculated penalty without client math.
+      employeePenalties: Object.fromEntries(blocks.flatMap(({ report }) => {
+        const employeeCode = String(report.empCode || '').toUpperCase();
+        return periodKey === report.to && employeeCode && report.penalty
+          ? [[employeeCode, { ...report.penalty }]]
+          : [];
+      })),
       template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: [] },
       match: {
         matchedRows, totalRows, rate, threshold, low,
