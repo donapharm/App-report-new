@@ -307,6 +307,19 @@ function BonusPolicyPanel({ ky, employees = [], onSaved }) {
   </div>;
 }
 
+// Phải là component cấp module. Nếu khai báo Modal bên trong TargetAdminPanel,
+// mỗi lần trang cha reload KPI React sẽ thấy một component type mới, remount
+// toàn bộ BonusPolicyPanel và làm mất preview "ĐÃ LƯU" vừa hiển thị.
+function TargetAdminModal({ open, title, onClose, children }) {
+  if (!open) return null;
+  return <div className="modal-backdrop" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+    <div className="modal-card smart-drawer">
+      <div className="modal-head"><b>{title}</b><button className="btn ghost" onClick={onClose}>Đóng</button></div>
+      {children}
+    </div>
+  </div>;
+}
+
 function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -433,14 +446,6 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
-  const Modal = ({ id, title, children }) => tool === id ? (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) setTool(null); }}>
-      <div className="modal-card smart-drawer">
-        <div className="modal-head"><b>{title}</b><button className="btn ghost" onClick={() => setTool(null)}>Đóng</button></div>
-        {children}
-      </div>
-    </div>
-  ) : null;
   const bonusFv = data?.bonusFormulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
   return (
     <>
@@ -496,17 +501,17 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           ))}
         </div>
       </>}
-      <Modal id="bonus" title={`🎯 Cấu hình Thưởng dự kiến ${bonusFv}`}>
+      <TargetAdminModal open={tool === 'bonus'} title={`🎯 Cấu hình Thưởng dự kiến ${bonusFv}`} onClose={() => setTool(null)}>
         {/* onSaved: lưu xong phải nạp lại KPI/target của trang cha, nếu không
             màn hình vẫn giữ số cũ và trông như "chỉnh tay không ăn". */}
         <BonusPolicyPanel ky={ky} employees={data?.rows || []} onSaved={onTargetsChanged} />
-      </Modal>
-      <Modal id="template" title="⬇ Xuất/Tải template target">
+      </TargetAdminModal>
+      <TargetAdminModal open={tool === 'template'} title="⬇ Xuất/Tải template target" onClose={() => setTool(null)}>
         <div className="meta muted">Template xuất đúng kỳ đang chọn, đủ 21 NV theo DB. Căn cứ chỉ là mốc để CEO sửa, không tự thành target live.</div>
         <label className="field-inline modal-field"><span>Căn cứ template</span><select value={templateBasis} onChange={(e) => setTemplateBasis(e.target.value)}><option value="t06">Theo T06/2026 (Lumos)</option><option value="blank">Trống</option><option value="latest">Theo kỳ gần nhất đã giao</option></select></label>
         <button className="btn" disabled={busy} onClick={downloadTemplate}>⬇ Xuất/Tải template target</button>
-      </Modal>
-      <Modal id="upload" title="⬆ Upload target">
+      </TargetAdminModal>
+      <TargetAdminModal open={tool === 'upload'} title="⬆ Upload target" onClose={() => setTool(null)}>
         <div className="meta muted">Upload lại file template đã sửa. Ô Target trống sẽ giữ nguyên, không ghi đè target hiện tại.</div>
         <input ref={fileRef} type="file" accept=".xlsx" onChange={onFile} />
         {preview && <div className="upload-preview-box">
@@ -516,8 +521,8 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           {preview.skipped?.length > 0 && <div className="meta muted">Giữ nguyên do ô target trống: {preview.skipped.map((r) => `${r.emp_code}/${r.ky}`).join(', ')}</div>}
           <button className="btn" disabled={busy} onClick={commitUpload}>✔ Ghi target upload</button>
         </div>}
-      </Modal>
-      <Modal id="quarter" title="📅 Nhập tổng kế hoạch 3 tháng — chia đều">
+      </TargetAdminModal>
+      <TargetAdminModal open={tool === 'quarter'} title="📅 Nhập tổng kế hoạch 3 tháng — chia đều" onClose={() => setTool(null)}>
         <div className="meta muted">Tiện ích này nhận tổng kế hoạch 3 tháng theo từng NV rồi chia đều thành target tháng. KPI và Thưởng vẫn áp dụng: <b>Target quý = trung bình các tháng đã giao</b>. Sau khi chia, từng tháng vẫn sửa tay từng NV được.</div>
         <div className="target-admin-actions compact-actions">
           <label className="field-inline"><span>Năm</span><input value={qYear} onChange={(e) => setQYear(e.target.value)} /></label>
@@ -525,8 +530,8 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
         </div>
         <textarea className="target-quarter-textarea" value={qLines} onChange={(e) => setQLines(e.target.value)} placeholder="DN001 6000000000&#10;DN002 4500000000" />
         <button className="btn" disabled={busy} onClick={applyQuarter}>Chia tổng kế hoạch thành 3 tháng</button>
-      </Modal>
-      <Modal id="carryover" title="📤 Nhân bản target sang kỳ khác">
+      </TargetAdminModal>
+      <TargetAdminModal open={tool === 'carryover'} title="📤 Nhân bản target sang kỳ khác" onClose={() => setTool(null)}>
         <div className="meta muted">Copy toàn bộ target đang dùng của kỳ <b>{ky}</b> sang kỳ đích — KHÔNG cần file. Sau đó chỉ cần <b>Sửa tay</b> vài NV muốn đổi (Sửa tay luôn ưu tiên hơn nên không bị đè).</div>
         <div className="target-admin-actions compact-actions">
           <label className="field-inline"><span>Từ kỳ</span><input value={ky || ''} readOnly /></label>
@@ -534,8 +539,8 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
         </div>
         <label className="field-check"><input type="checkbox" checked={coOverwrite} onChange={(e) => setCoOverwrite(e.target.checked)} /> Ghi đè cả NV đã có target ở kỳ đích <span className="muted">(mặc định chỉ điền NV chưa giao)</span></label>
         <button className="btn" disabled={busy} onClick={applyCarryover}>📤 Nhân bản {ky} → {coTo || '…'}</button>
-      </Modal>
-      <Modal id="ai" title="🤖 AI đề xuất target">
+      </TargetAdminModal>
+      <TargetAdminModal open={tool === 'ai'} title="🤖 AI đề xuất target" onClose={() => setTool(null)}>
         <div className="meta muted">AI chỉ đề xuất song song. CEO bấm áp dụng thì mới ghi thành target thật.</div>
         <button className="btn" disabled={busy} onClick={proposeAi}>Tạo đề xuất AI</button>
         {ai?.items?.length > 0 && <div className="upload-preview-box">
@@ -543,12 +548,12 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           {ai.items.slice(0, 8).map((r) => <div key={r.emp_code} className="row"><div className="main"><div className="name">{r.emp_code} · {r.emp_name}</div><div className="meta">Neo {r.last_ky} · {r.reason}</div></div><div className="amt">{money(r.suggested_target)}</div></div>)}
           <button className="btn" disabled={busy} onClick={applyAi}>Áp dụng AI ({ai.next_ky})</button>
         </div>}
-      </Modal>
-      <Modal id="rollback" title="↩ Rollback target upload">
+      </TargetAdminModal>
+      <TargetAdminModal open={tool === 'rollback'} title="↩ Rollback target upload" onClose={() => setTool(null)}>
         <div className="meta muted">Nhập mã batch cần rollback. Có thể dùng batch mới nhất nếu vừa upload.</div>
         <input value={rollbackId} onChange={(e) => setRollbackId(e.target.value)} placeholder="Mã batch rollback" />
         <button className="btn" disabled={busy || !rollbackId} onClick={() => rollbackBatch(rollbackId)}>↩ Rollback batch</button>
-      </Modal>
+      </TargetAdminModal>
     </>
   );
 }

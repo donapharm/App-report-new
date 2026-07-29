@@ -6,7 +6,8 @@ const target = fs.readFileSync(new URL('../src/pages/Target.jsx', import.meta.ur
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
 
 test('Target admin exposes versioned Thưởng v3 editor, all layers and C10-only wording', () => {
-  assert.match(target, /Cấu hình Thưởng v3/);
+  assert.match(target, /BONUS_FORMULA_VERSION_FALLBACK = 'v3\.2'/);
+  assert.match(target, /Cấu hình Thưởng \{bonusFv\}/);
   for (const layer of ['default', 'productGroup', 'route', 'unit', 'employee']) assert.match(target, new RegExp(`value="${layer}"`));
   for (const group of ['H.A\\*', 'H.A', 'H.B', 'H.C', 'H.D']) assert.match(target, new RegExp(`'${group}'`));
   assert.match(target, /Toàn bộ NV \(mức chung\)/);
@@ -15,7 +16,7 @@ test('Target admin exposes versioned Thưởng v3 editor, all layers and C10-onl
 });
 
 test('editor defaults auto target on, captures manual override/clear and warns on manual group total', () => {
-  assert.match(target, /Target nhóm manual \(v3\.2 KHÔNG dùng\)/);
+  assert.match(target, /Target nhóm manual \(\{fv\} KHÔNG dùng\)/);
   assert.match(target, /Trống = kế thừa manual \/ dùng auto/);
   assert.match(target, /Xóa manual tại tầng này → dùng auto/);
   assert.match(target, /Tự suy target nhóm khi chưa có manual \(mặc định bật\)/);
@@ -39,10 +40,21 @@ test('preview renders month and quarter detail for revenue, target, excess, rate
 
 test('save stays disabled until canonical server preview and API uses one-time preview id', () => {
   assert.match(target, /Mô phỏng trước khi lưu/);
-  assert.match(target, /disabled=\{busy \|\| closed \|\| !preview\?\.previewId\}/);
+  assert.match(target, /disabled=\{busy \|\| closed \|\| !preview\?\.previewId \|\| preview\?\.saved\}/);
   assert.match(target, /adminBonusPolicySave\(\{ previewId: preview\.previewId \}\)/);
   assert.match(api, /adminBonusPolicyPreview/);
   assert.match(api, /adminBonusPolicySave/);
+});
+
+test('bonus modal keeps saved preview state while parent KPI reloads', () => {
+  const modalAt = target.indexOf('function TargetAdminModal');
+  const panelAt = target.indexOf('function TargetAdminPanel');
+  assert.ok(modalAt >= 0 && modalAt < panelAt, 'TargetAdminModal must have stable module-level identity');
+  assert.doesNotMatch(target.slice(panelAt, target.indexOf('const bonusFv', panelAt)), /const Modal\s*=/);
+  assert.match(target, /<TargetAdminModal open=\{tool === 'bonus'\}/);
+  assert.match(target, /setPreview\(\{ \.\.\.\(await api\.adminBonusPolicyPreview\(payload\(\)\)\), saved: true \}\)/);
+  assert.match(target, /await onSaved\?\.\(\)/);
+  assert.match(target, /ĐÃ LƯU — số đang áp dụng/);
 });
 
 test('editor keeps P1 tiers, 101 gate, rates and optional total cap', () => {
