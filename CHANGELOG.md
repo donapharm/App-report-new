@@ -1,3 +1,9 @@
+### 2026-07-29 (đêm) — Report Bot — cảnh báo MISA thiếu ngày doanh thu
+
+Không vá doanh thu bằng ngày đặt/ngày tạo đơn. Với dòng MISA `official`/`pending`, số tiền khác 0 nhưng `revenue_date` NULL, App Report vẫn không tính vào kỳ nhưng đưa vào nhóm cảnh báo dữ liệu `Dữ liệu MISA thiếu ngày doanh thu` trong trung tâm cảnh báo, kèm mã đơn, số tiền, NV và đơn vị để sửa tại nguồn.
+
+Ca live đang bắt được: `DH479815711` / `2.399.520đ` / `DN010 - Trần Quốc Cường` / `015.TTYT H. Cẩm Mỹ`. Đây là lỗi dữ liệu nguồn; kế toán/MISA cần nhập `revenue_date` tại gốc.
+
 ### 2026-07-29 (tối) — Report Bot — T07 tính `HOLD_GOLIVE` đã giao vào APP WEB partner
 
 Claude/CEO chốt sau đối soát file Excel: 45 dòng `HOLD_GOLIVE` có phản hồi đối tác, `delivered_qty > 0`, tổng `382.578.400đ` phải tính vào doanh thu T07. `HOLD_GOLIVE` ở ca này là cờ kỹ thuật soft-launch/quota audit; `cst_quota` đang thiếu dữ liệu nên chưa được dùng làm căn cứ loại doanh thu của nhân viên.

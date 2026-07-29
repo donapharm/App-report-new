@@ -5,6 +5,9 @@ const path = require('node:path');
 
 const serverRoot = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(serverRoot, 'scripts', 'materialize_july_revenue.js'), 'utf8');
+const storeSource = fs.readFileSync(path.join(serverRoot, 'src', 'store.js'), 'utf8');
+const smartSource = fs.readFileSync(path.join(serverRoot, 'src', 'smart.js'), 'utf8');
+const overviewSource = fs.readFileSync(path.join(serverRoot, '..', 'web', 'src', 'pages', 'Overview.jsx'), 'utf8');
 const uploadSource = fs.readFileSync(path.join(serverRoot, 'src', 'upload.js'), 'utf8');
 const legacySource = fs.readFileSync(path.join(serverRoot, 'scripts', 'import_legacy.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'), 'utf8'));
@@ -71,6 +74,29 @@ test('APP WEB partner response model is one row per order_item_id to prevent dou
     'order item joins to the deduplicated partner CTE');
   assert.match(source, /source_line_id: `WEB:\$\{r\.order_item_id\}`/,
     'materialized identity is stable by order_item_id, so a later status change cannot create a second source id');
+});
+
+
+test('MISA lines with money but missing revenue_date are warned, not assigned to an order-created fallback date', () => {
+  assert.match(source, /async function fetchMisaDataQualityWarnings\(runId\)/, 'materializer must collect data-quality warnings from the latest MISA run');
+  assert.match(source, /l\.revenue_date IS NULL/, 'missing revenue_date must be detected explicitly');
+  assert.match(source, /COALESCE\(l\.invoice_export_amount,l\.official_amount,0\) <> 0/, 'only money-bearing MISA rows need the warning');
+  assert.match(source, /const misaDataQuality = await fetchMisaDataQualityWarnings\(run\.id\)/, 'main must collect warnings before writing the slot');
+  assert.match(source, /dataQualityWarnings:\s*\{\s*misaMissingRevenueDate: misaDataQuality/s, 'warning must be persisted into slot metadata');
+  const fetchMisaAt = source.indexOf('async function fetchMisa(runId)');
+  const fetchPartnerAt = source.indexOf('async function fetchPartner()', fetchMisaAt);
+  const fetchMisaSource = source.slice(fetchMisaAt, fetchPartnerAt);
+  assert.match(fetchMisaSource, /l\.revenue_date >= \$2::date/);
+  assert.match(fetchMisaSource, /l\.revenue_date <= \$3::date/);
+  assert.doesNotMatch(fetchMisaSource, /COALESCE\(l\.revenue_date\s*,\s*l\.sale_order_date/, 'do not silently replace missing MISA revenue_date with order date');
+  assert.doesNotMatch(fetchMisaSource, /COALESCE\(l\.revenue_date\s*,\s*l\.created_at/, 'do not silently replace missing MISA revenue_date with created_at');
+});
+
+test('overview alert center exposes MISA missing revenue_date as data-quality warning', () => {
+  assert.match(storeSource, /function activeDataQualityWarnings\(\{ scope \} = \{\}\)/, 'store must expose active slot data-quality warnings');
+  assert.match(smartSource, /key: 'data_quality'/, 'alert center must include a data-quality group');
+  assert.match(smartSource, /MISA official\/pending có tiền nhưng revenue_date NULL/, 'alert note must explain why row is not counted');
+  assert.match(overviewSource, /group\.key === 'data_quality'/, 'Overview UI must render data quality rows with order/amount/NV/unit');
 });
 
 test('all slot writers share the same lock and atomic JSON writer', () => {
