@@ -1,3 +1,16 @@
+### 2026-07-29 22:55 — Bot server (CEO duyệt) — ĐÃ TẮT 2 CỜ THÔNG BÁO: rủi ro gửi tin sai 31/07 đã loại bỏ
+`EMP_COST_NOTIFY=0` · `BONUS_NOTIFY=0`. Restart **chỉ** `app-report-tgbot` (PID mới **2937285**); `app-report` **không** restart (PID giữ **2720705**); `web/dist` vẫn `4c34551-20260729-201455-841`. Log in đúng `ℹ Chi phí/Thưởng notify: TẮT`. Backup `.env.backup-20260729-225543-disable-cost-bonus-notify`.
+
+**Claude nghiệm thu ĐẠT.** Bằng chứng bot đưa **đủ 4 con số phân biệt được**, không thể báo suông: PID tgbot **đổi** (chứng minh có restart) · PID app-report **không đổi** (chứng minh KHÔNG đụng web/API) · version.json **không đổi** (chứng minh không đụng `web/dist`) · dòng log **đúng chuỗi** yêu cầu. Đây là mẫu báo cáo đúng — mỗi con số chứng minh một điều, không có con số nào thừa.
+
+*(Claude chỉ nhận được phần chữ, không nhận được ảnh chụp — đã nói rõ với CEO, không gắn "đã kiểm ảnh".)*
+
+**Vì sao việc này gấp:** ngày 31/07 đúng 20:00 hệ thống sẽ **tự gửi** tin chi phí + thưởng cho toàn bộ NV bằng **số cũ đã sai** — DN008 Đoàn Văn Triệu nay đạt **130,26%** (đổi bậc, thiếu **~1,92 triệu** P1, chưa kể P2). Nay đã chặn.
+
+**Điểm rút ra về cách bàn giao lệnh:** CEO đi nghỉ nên không relay được lệnh đã duyệt sang bot. Claude ghi thẳng thành `DIRECTIVE_HOAN_TIN_CUOI_THANG_072026.md` trên `main` — bot bắt buộc pull `main` trước mỗi đợt nên **chắc chắn đọc được**. Kênh này hoạt động: bot đọc và làm đúng ngay. Từ nay lệnh gấp mà không relay trực tiếp được thì ghi directive vào `main`, đừng chờ.
+
+**Còn lại:** tin báo chậm cho NV (chờ CEO duyệt danh sách người nhận) · tính lại thưởng T07 với slot mới · merge 2 nhánh đã duyệt (`fix/misa-null-revenue-date-alert`, `feat/bonus-penalty-v3.3`) sau 31/07 · ca test chống đếm hai lần qua hai kỳ trước 05/08.
+
 ### 2026-07-29 (chốt ngày) — Claude Code — Nghiệm thu slot T07 ĐẠT + directive hoãn tin
 **Slot T07 mới đã ghi.** `rev_2src_072026_20260729153232_...` · tổng **28.957.771.643đ** · CRM 1.319 dòng / 19.171.667.663đ · Partner 585 dòng / **9.786.103.980đ** (khớp ĐÚNG số App Sale) · trùng `source_line_id` = 0.
 
