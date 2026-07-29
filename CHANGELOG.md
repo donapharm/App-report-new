@@ -1,3 +1,18 @@
+### 2026-07-29 (chốt ngày) — Claude Code — Nghiệm thu slot T07 ĐẠT + directive hoãn tin
+**Slot T07 mới đã ghi.** `rev_2src_072026_20260729153232_...` · tổng **28.957.771.643đ** · CRM 1.319 dòng / 19.171.667.663đ · Partner 585 dòng / **9.786.103.980đ** (khớp ĐÚNG số App Sale) · trùng `source_line_id` = 0.
+
+**Claude nghiệm thu ĐẠT — kiểm cả 2 tỷ lệ guard mà bot không thể tự bịa:** `revenueRatio` 1.01338848 và `rowRatio` 1.02420656, tự tính lại **khớp từng chữ số**. Guard PASS là đúng vì đây là **tăng 1,34%** (đúng phần HOLD_GOLIVE), mà guard chỉ chặn khi **tụt** dưới 70%.
+
+**Vụ đối chiếu doanh thu KHÉP LẠI:** từ 384.977.920đ hoang mang buổi sáng, còn đúng **2.399.520đ** đã biết rõ nguyên nhân (1 dòng MISA thiếu `revenue_date`) và biết ai sửa. **Không còn đồng nào bí ẩn.**
+
+**Kiểm thêm:** bot push `ce7549d` lên `main` — Claude soát lại **3 spec + 1 directive vẫn còn nguyên**, không bị đè.
+
+**‼ VIỆC GẤP CHƯA XONG — đã ghi thành directive vì CEO đi nghỉ:** hai cờ `EMP_COST_NOTIFY`/`BONUS_NOTIFY` **VẪN BẬT**. Ngày 31/07 hệ thống sẽ **tự gửi tin thưởng bằng số cũ đã sai** — DN008 nay đạt 130,26% (đổi bậc, thiếu ~1,92 triệu). CEO đã duyệt tắt từ trước nhưng bot chưa nhận được lệnh.
+
+Đã ghi `DIRECTIVE_HOAN_TIN_CUOI_THANG_072026.md` để bot đọc được ngay ở đợt pull kế tiếp, gồm 4 việc theo thứ tự ưu tiên + 5 ranh giới không được làm. Nhấn mạnh: **sửa `.env` không thôi KHÔNG ăn**, phải restart `app-report-tgbot` (tiến trình riêng, không đụng web/API).
+
+**HANDOFF.md viết lại phần đầu** — trước đây còn dừng ở 27/07, nay có 2 việc gấp lên đầu, bảng khép vụ 384,98 triệu, và 4 spec mới của ngày 29/07.
+
 ### 2026-07-29 (khuya, bổ sung) — Claude Code (CEO chốt) — CẢNH BÁO TELEGRAM khi đồng bộ lỗi
 > CEO: "khi đồng bộ mà lỗi thì hệ thống báo về Telegram cho VP018/DN007/CEO để biết xử lý. Và báo về bot Sale luôn."
 
