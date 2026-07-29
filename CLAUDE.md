@@ -62,6 +62,7 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
 ## Tài liệu liên quan
 - `CHANGELOG.md` — **đọc đầu tiên**: nhật ký thay đổi + trạng thái hiện tại.
 - `SPEC_BONUS_PENALTY_V33.md` — **Phạt v3.3** (CEO chốt 2026-07-29): trừ vào **cột C45 "Lương tăng thêm"** — **≥90% không phạt**, 70–90% trừ 0,2%, 50–70% trừ 0,3%, **≤50% mất trắng C45** (không cộng vào tổng chi phí nhận); trần phạt = chính tiền C45. Cộng phạt thiếu Xu (dùng lại `xuPolicy.js`, không viết lại). **Tất cả NV xem được phạt của chính mình + công thức** (self-scoped). Phạt là trường RIÊNG, KHÔNG trộn vào `amount`, KHÔNG ghi đè số DataHub. Thêm 4 ô KPI + **cảnh báo sớm** ("mất trắng … nếu không thêm … trước VAT"). **T07.2026 chỉ cảnh báo; tự trừ thật từ 01/08/2026** theo `penaltyEffectiveFrom` — không có bước bật cờ tay. Chưa đụng tin nhắn. Ship = nâng version lên v3.3.
+- `SPEC_REVENUE_DELIVERY_PERIOD.md` — **Quy kỳ doanh thu theo NGÀY THỰC GIAO** (CEO chốt 2026-07-29). Truy ra 382,6 triệu biến mất vì **bộ lọc kép ngày** làm đơn rơi khỏi CẢ HAI kỳ. Kỳ **khoá sổ hết ngày 5 tháng sau**; **KHÔNG hồi tố**, không đòi lại thưởng đã báo, không phạt hồi tố.
 - `README.md` — chạy + tổng quan.
 - `HANDOFF.md` — trạng thái hiện tại + việc còn lại (đọc trước khi code tiếp).
 - `DEPLOY_CLOUDFLARE.md` — deploy Pages + Tunnel + Access.
