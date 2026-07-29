@@ -128,3 +128,40 @@ Bot review read-only (chưa exec) nêu 5 điểm; **phần lớn đúng, đã s�
 1. Bot sửa **P1-3 → P1-1 → P1-2 → P2** (+ P3 đã có bản reference), kèm **log diễn tập ĐƯỜNG THẬT** từng ca nghiệm thu.
 2. Claude review lại; đủ bằng chứng đường thật mới đổi verdict sang GO.
 3. **Chỉ khi GO** mới được cutover đợt tiếp theo.
+
+## P4 — ‼ CẤM BUILD TRONG THƯ MỤC ĐANG PHỤC VỤ (CEO duyệt 2026-07-29, sau sự cố thật)
+
+**Sự cố tối 29/07:** bản frontend nhánh `feat/bonus-penalty-v3.3` (`ccacba0`) **lên production ngoài ý muốn**.
+Bot đã khôi phục về `4c34551` trong ~vài phút. Nhưng nguyên nhân mới là điều đáng nhớ.
+
+**‼ Auto-deploy KHÔNG hề bị vượt qua.** `.auto-deploy.disabled` còn nguyên suốt, hoàn toàn vô can.
+Bản build sai lên production vì **`npm run build` chạy ngay trong cây thư mục production**, ghi thẳng đè
+`web/dist` đang phục vụ. Vite xoá + ghi lại `dist` là **live ngay lập tức**, không cần deploy, không cần
+restart, không ai bấm nút nào.
+
+⇒ **Khoá auto-deploy canh cửa trước; build tại chỗ là cửa sau — và cửa sau chưa có khoá nào.**
+Mọi lớp bảo vệ P1–P3 ở trên đều **đứng ngoài** đường đi này.
+
+**Hai thiệt hại đã xảy ra thật:**
+1. Ba ô **"Phạt dự kiến" / "Phạt thiếu Xu" / "Ứng lần 1"** được vẽ **vô điều kiện** cho mọi NV mở
+   "Chi phí của tôi" ⇒ nhân viên có thể đã thấy ô phạt **trước khi CEO công bố chính sách**.
+2. Cây thư mục server bị bỏ lại ở **HEAD nhánh phạt** (`a5ad541`). PM2 không restart nên backend vẫn chạy
+   code cũ **trong RAM** — nhưng **lần khởi động lại kế tiếp** (sập / reboot / cron) sẽ **tự nạp backend phạt**,
+   không ai bấm gì. Quả mìn nằm im. Đã tháo lúc kéo workspace về `main@9cda0c4`.
+
+### Quy tắc bắt buộc
+
+1. **CẤM `npm run build` (hoặc bất kỳ lệnh build nào) trong cây thư mục production.**
+   Build ở **worktree/thư mục staging riêng**, xong mới đổi chỗ nguyên khối (atomic swap) như P1/P2.
+2. **`web/dist` đang phục vụ chỉ được thay bằng đúng một thao tác: đổi chỗ.** Không bao giờ ghi từng file vào đó.
+3. **Sau MỌI thao tác trên server** — kể cả chỉ "build thử", "test nhanh", "xem chút" — phải trả cây thư mục
+   về đúng nhánh/commit đang chạy production, rồi **kiểm bằng `git rev-parse HEAD` + `git status`**.
+   PM2 PID không đổi **KHÔNG** chứng minh đĩa sạch: PID chỉ nói backend đang chạy code cũ trong RAM.
+4. **Tài liệu an toàn phải được COMMIT, không để ở working tree.** Giữ ở working tree "cho khỏi lệch HEAD"
+   là làm ngược: `git reset --hard` đợt sau **xoá sạch** đúng cái file luật này. Commit lên nhánh rồi PR.
+5. **Muốn thử frontend nhánh khác thì dựng cổng riêng**, không đụng `web/dist` production.
+
+### Nghiệm thu
+- Chạy build trong cây production ⇒ script/hook **chặn**, báo lỗi rõ, không tạo được `web/dist`.
+- Sau mỗi phiên làm việc trên server: `git rev-parse HEAD` **phải khớp** commit production đang chạy.
+- `version.json` public **phải khớp** commit đó.
