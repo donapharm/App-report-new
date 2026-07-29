@@ -1,3 +1,29 @@
+### 2026-07-29 (bổ sung chiều) — Claude Code (CEO chốt số thật) — PHẠT v3.3 đổi sang trừ cột C45 + 4 ô KPI
+> CEO chốt: 70–89% trừ 0,2% tại C45 · 51–69% trừ 0,3% · <50% thì C45 không tính vào chi phí tháng. Cho TẤT CẢ NV xem số phạt + công thức. Thêm đúng 4 ô KPI.
+
+**Bỏ cách "bậc âm nối tiếp P1" của bản sáng.** CEO chốt cách gọn hơn: trừ thẳng vào **C45 "Lương tăng thêm"** — 1 trong 4 cột chi phí tháng (`c36/c41/c43/c45`). Ý rất rõ: không đạt target thì bị cắt vào phần lương tăng thêm, dưới 50% thì mất trắng phần đó.
+
+**Chốt cách đọc "trừ 0,2% tại C45":** C45 vốn = `doanh thu × %C45`, nên hạ tỷ lệ đi 0,2 điểm **ra đúng cùng một số** với `0,2% × doanh thu`. Hai cách đọc trùng nhau ⇒ không còn mơ hồ. **Trần phạt = chính tiền C45** (CEO chốt ý 2), không bao giờ để C45 âm.
+
+**‼ Bịt 4 lỗ hổng mốc %.** Đọc nguyên văn CEO ("70 đến 89", "51 đến 69", "<50") thì **89–90%, 69–70%, 50–51% và đúng 50%** bị hở — NV rơi vào đó máy không biết xử sao. Spec dùng mốc liền mạch **≥90 / 70–90 / 50–70 / <50**, giữ nguyên "dưới 50% mới mất trắng"; đúng 50,0% vào bậc 0,3%. **Đã ghi rõ để CEO xác nhận lại.**
+
+**Đảo ngược chốt sáng "chỉ báo CEO":** nay **tất cả NV xem được phạt của chính mình + công thức**, vẫn self-scoped (không thấy của người khác). `formulaText` do **backend sinh** để câu chữ luôn đi cùng số.
+
+**4 ô KPI mới** (cạnh đúng ô CEO chỉ định): Phạt dự kiến · Tổng chi phí sau phạt · Phạt thiếu Xu cuối quý · Ứng lần 1. Ba chỗ bắt buộc làm đúng:
+1. Ô **Ứng lần 1** chưa có API app lương ⇒ phải hiện **"Chưa đấu nối"**, tuyệt đối không hiện `0đ` — hiện 0đ là nói với NV "tháng này anh không được ứng đồng nào".
+2. Tổng gốc `null` (coverage thấp) ⇒ **ẩn hẳn** ô "sau phạt", không lấy `null` làm 0 rồi ra số âm.
+3. Ô phạt Xu chỉ có số tháng cuối quý ⇒ 2 tháng kia hiện **"Chốt vào cuối quý (T9)"**, không để trống.
+
+**Màu đã có sẵn, không chế mới:** `.employee-cost-tone-penalty` (đỏ) đã nằm trong `styles.css:2026` từ trước mà **chưa dùng ở đâu** — đối nghịch đúng với ô thưởng xanh lá. Kèm yêu cầu **không phân biệt chỉ bằng màu**: số phạt luôn có dấu − và chữ "Phạt".
+
+**Rủi ro kỹ thuật đã cảnh báo cho bot:** loại C45 khi <50% là loại **theo từng NV/từng kỳ** (khác `c44` loại cứng) — phải giữ bất biến **Σ theo ngày = tổng tháng**, logic residual/làm tròn, và coverage không được đổi vì việc loại cột.
+
+**Mâu thuẫn còn treo, cần CEO chốt:** NV thấy phạt trên app nhưng tin nhắn 12:30 T7 / 17:30 vẫn báo **tổng chi phí gốc** ⇒ hai số khác nhau. Claude khuyến nghị **đợt này không đụng tin nhắn**, chạy 1 kỳ cho chắc rồi mới đưa vào.
+
+**Vách đá 50% — đã nêu để CEO cân nhắc:** ở 50,1% chỉ mất ~0,3% doanh thu, xuống 49,9% **mất trắng C45** (ví dụ 7,6 triệu). Claude đề nghị giữ đúng ý CEO nhưng app phải **cảnh báo sớm** "còn thiếu … đồng nữa là mất trắng C45" để NV còn kịp chạy.
+
+**Tài liệu:** `SPEC_BONUS_PENALTY_V33.md` (viết lại toàn bộ, 16 ca test bắt buộc). Chưa đụng code app.
+
 ### 2026-07-29 — Claude Code (CEO chốt) — SPEC PHẠT v3.3: "đã có thưởng là phải có phạt"
 > CEO: "Xong việc này anh muốn làm luôn cách tính phạt nữa nhé. Vì đã có thưởng là phải có phạt."
 
