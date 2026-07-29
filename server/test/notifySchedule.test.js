@@ -35,22 +35,29 @@ test('báo cáo doanh thu NGÀY chạy 07:30', () => {
   assert.match(SRC, /dailyEnabled && hh === SALES_DAILY_SLOT\.hour && mm === SALES_DAILY_SLOT\.minute/);
 });
 
-test('báo cáo THÁNG cố tình GIỮ buổi chiều 18:00 (dời sáng thì chốt sổ khi tháng chưa xong)', () => {
-  assert.match(SRC, /if \(hh === 18 && mm === 0\) \{[\s\S]{0,200}?isMonthEnd/, 'nhánh tháng phải còn ở 18:00');
+test('báo cáo THÁNG chạy 20:30 — CEO dời từ 18:00 vì chiều số liệu chưa xử lý xong', () => {
+  assert.deepEqual(slotBlock('SALES_MONTH_END_SLOT'), { hour: 20, minute: 30 });
+  assert.match(SRC, /if \(hh === SALES_MONTH_END_SLOT\.hour && mm === SALES_MONTH_END_SLOT\.minute\) \{[\s\S]{0,200}?isMonthEnd/,
+    'nhánh tháng phải đọc từ hằng số, không rải số trong code');
+  assert.doesNotMatch(SRC, /hh === 18 && mm === 0/, 'không được còn sót mốc 18:00 cũ');
 });
 
-test('tổng chi phí: 12:30 thứ 7 và 17:30 ngày cuối tháng', () => {
+test('tổng chi phí: 12:30 thứ 7 và 20:00 ngày cuối tháng (CEO dời 17:30 -> 20:00)', () => {
   assert.deepEqual(slotBlock('COST_WEEKLY_SLOT'), { dow: 6, hour: 12, minute: 30 });
-  assert.deepEqual(slotBlock('COST_MONTH_END_SLOT'), { hour: 17, minute: 30 });
+  assert.deepEqual(slotBlock('COST_MONTH_END_SLOT'), { hour: 20, minute: 0 });
 });
 
-test('tổng thưởng tháng: 17:40 ngày cuối tháng — sau chi phí 17:30, trước báo cáo tháng 18:00', () => {
-  const bonus = slotBlock('BONUS_MONTH_END_SLOT');
-  assert.deepEqual(bonus, { hour: 17, minute: 40 });
-  const cost = slotBlock('COST_MONTH_END_SLOT');
+test('‼ THỨ TỰ khối cuối tháng: chi phí -> thưởng -> báo cáo tháng, KHÔNG được đảo', () => {
   const mins = (s) => s.hour * 60 + s.minute;
-  assert.ok(mins(cost) < mins(bonus), 'chi phí phải trước thưởng');
-  assert.ok(mins(bonus) < 18 * 60, 'thưởng phải trước báo cáo tháng 18:00');
+  const cost = slotBlock('COST_MONTH_END_SLOT');
+  const bonus = slotBlock('BONUS_MONTH_END_SLOT');
+  const sales = slotBlock('SALES_MONTH_END_SLOT');
+  assert.deepEqual(bonus, { hour: 20, minute: 10 });
+  assert.ok(mins(cost) < mins(bonus), 'chi phí phải TRƯỚC thưởng');
+  assert.ok(mins(bonus) < mins(sales), 'thưởng phải TRƯỚC báo cáo doanh thu tháng');
+  // Dời SỚM lại là chốt sổ khi số liệu chưa xử lý xong — đúng lý do CEO nêu 29/07.
+  assert.ok(mins(cost) >= 20 * 60, 'khối cuối tháng bắt đầu từ 20:00 (CEO chốt 29/07)');
+  assert.doesNotMatch(SRC, /hour: 17, minute: 30|hour: 17, minute: 40/, 'không được sót mốc chiều cũ');
 });
 
 test('cả 3 luồng mới đều fail-closed: chỉ chạy khi cờ đúng "1"', () => {

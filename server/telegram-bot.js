@@ -220,8 +220,12 @@ function approvedDigestTargetSlots() {
 }
 // Các mốc cố định khác (giờ VN) — khai tường minh để test khoá được, không rải số trong code.
 const COST_WEEKLY_SLOT = { dow: 6, hour: 12, minute: 30, label: '12:30 thứ 7' };
-const COST_MONTH_END_SLOT = { hour: 17, minute: 30, label: '17:30 ngày cuối tháng' };
-const BONUS_MONTH_END_SLOT = { hour: 17, minute: 40, label: '17:40 ngày cuối tháng' };
+// CEO chốt 2026-07-29: dời KHỐI CUỐI THÁNG từ chiều sang tối. Lý do CEO nêu —
+// "lúc 17h30 là chưa xử lý số liệu xong" — đúng cho CẢ BA tin cuối tháng, nên dời
+// cả ba và GIỮ NGUYÊN thứ tự: chi phí -> thưởng -> báo cáo doanh thu tháng.
+const COST_MONTH_END_SLOT = { hour: 20, minute: 0, label: '20:00 ngày cuối tháng' };
+const BONUS_MONTH_END_SLOT = { hour: 20, minute: 10, label: '20:10 ngày cuối tháng' };
+const SALES_MONTH_END_SLOT = { hour: 20, minute: 30, label: '20:30 ngày cuối tháng' };
 const SALES_DAILY_SLOT = { hour: 7, minute: 30, label: '07:30 hằng ngày' };
 function slotDue(slot, d) {
   if (d.getUTCHours() !== slot.hour || d.getUTCMinutes() !== slot.minute) return false;
@@ -584,7 +588,7 @@ function startSalesReportScheduler() {
         else salesReport.sendAll({ kind: 'week', ranges }).then((r) => console.log(salesReportDoneLine('week', r, key))).catch((e) => console.error('salesReport week scheduler error:', e.message));
       }
     }
-    if (hh === 18 && mm === 0) {
+    if (hh === SALES_MONTH_END_SLOT.hour && mm === SALES_MONTH_END_SLOT.minute) {
       const ranges = salesReport.defaultRanges(day);
       if (!salesReport.isMonthEnd(ranges.asOf)) return;
       const key = salesReport.salesReportPeriodKey('month', ranges);
