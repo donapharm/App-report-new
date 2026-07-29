@@ -27,6 +27,7 @@ const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
 const employeeBonus = require('./employeeBonus');
+const employeePenalty = require('./employeePenalty');
 const employeeBonusPolicy = require('./employeeBonusPolicy');
 const employeeVatKhoan = require('./employeeVatKhoan');
 const employeePointLocal = require('./employeePointLocal');
@@ -710,6 +711,14 @@ async function employeeCostPayload(req, {
 } = {}) {
   const s = auth.scopeOf(req.session);
   const admin = auth.isAdmin(req.session.role);
+  const requestedCode = String(requestedEmp || '').trim().toUpperCase();
+  const ownCode = String(s?.empCode || req.session?.emp_code || '').trim().toUpperCase();
+  if (!admin && requestedCode && requestedCode !== ownCode) {
+    throw Object.assign(new Error('Nhân viên chỉ được xem dữ liệu chi phí/phạt của chính mình.'), {
+      status: 403,
+      code: 'EMPLOYEE_COST_EMP_FORBIDDEN',
+    });
+  }
   const empCode = employeeCost.resolveScopedEmployee({
     session: req.session,
     scope: s,
@@ -799,8 +808,41 @@ async function employeeCostPayload(req, {
     const resolvedBonusConfig = bonusConfig || (empCode
       ? employeeBonusPolicy.resolve({ period: ky, context: { employee: empCode } }).config
       : employeeBonus.loadConfig());
+    const bonus = employeeBonus.buildBonusSummary(bonusKpi, resolvedBonusConfig, bonusPriority);
+    const costPeriod = (payload.periods || []).find((item) => item.period === range.to) || null;
+    const closed = range.to < employeeCost.currentMonth();
+    const monthEnd = `${range.to}-${new Date(Date.UTC(Number(range.to.slice(0, 4)), Number(range.to.slice(5, 7)), 0)).getUTCDate()}`;
+    const today = new Date().toISOString().slice(0, 10);
+    const asOf = closed ? monthEnd : (today.startsWith(range.to) ? today : `${range.to}-01`);
+    const xu = empCode ? employeePenalty.buildXuPenalty({
+      config: resolvedBonusConfig,
+      empCode,
+      asOf,
+      scoreFn: diemXu.scoreForEmp,
+      priorBookedAdjustment: null,
+    }) : null;
+    const penalty = empCode ? employeePenalty.buildPenalty({
+      period: range.to,
+      target: bonus.month?.target,
+      achieved: bonus.month?.achieved,
+      c45Amount: costPeriod?.summary?.columnTotals == null ? null : costPeriod.summary.columnTotals.c45,
+      costTotal: costPeriod?.summary?.monthlyTotal,
+      closed,
+      config: resolvedBonusConfig,
+      xu,
+    }) : null;
+    const periods = penalty ? (payload.periods || []).map((item) => (
+      item.period === range.to ? employeePenalty.applyToCostPeriod(item, penalty) : item
+    )) : payload.periods;
     return {
       ...payload,
+      ...(periods ? { periods } : {}),
+      summary: penalty ? {
+        ...payload.summary,
+        penaltyAppliedAmount: penalty.appliedAmount,
+        afterPenaltyTotal: payload.summary?.periodTotal == null
+          ? null : Math.max(0, payload.summary.periodTotal - penalty.appliedAmount),
+      } : payload.summary,
       target: empCode ? buildTargetKpiDetail({
         ky,
         scope: { empCode },
@@ -808,7 +850,8 @@ async function employeeCostPayload(req, {
         targetKpiSummary,
         resolveTargets: targetAdmin.resolveTargets,
       }) : null,
-      bonus: employeeBonus.buildBonusSummary(bonusKpi, resolvedBonusConfig, bonusPriority),
+      bonus,
+      penalty,
     };
   });
 }

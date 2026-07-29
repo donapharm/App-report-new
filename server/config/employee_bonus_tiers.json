@@ -1,15 +1,35 @@
 {
   "schemaVersion": 3,
-  "version": "bonus-v3.2-total-gate-prorata-2026-07-r1",
+  "version": "bonus-v3.3-penalty-c45-2026-08-r1",
   "effectiveFrom": "2026-07-01",
   "base": "revenue_before_vat",
   "currency": "VND",
   "baseTiers": [
-    { "fromPct": 0, "toPct": 90, "bonusPct": 0 },
-    { "fromPct": 90, "toPct": 100, "bonusPct": 0.1 },
-    { "fromPct": 100, "toPct": 110, "bonusPct": 0.15 },
-    { "fromPct": 110, "toPct": 130, "bonusPct": 0.18 },
-    { "fromPct": 130, "toPct": null, "bonusPct": 0.25 }
+    {
+      "fromPct": 0,
+      "toPct": 90,
+      "bonusPct": 0
+    },
+    {
+      "fromPct": 90,
+      "toPct": 100,
+      "bonusPct": 0.1
+    },
+    {
+      "fromPct": 100,
+      "toPct": 110,
+      "bonusPct": 0.15
+    },
+    {
+      "fromPct": 110,
+      "toPct": 130,
+      "bonusPct": 0.18
+    },
+    {
+      "fromPct": 130,
+      "toPct": null,
+      "bonusPct": 0.25
+    }
   ],
   "priorityThresholdPct": 101,
   "priorityRates": {
@@ -28,5 +48,38 @@
   },
   "autoGroupTargets": true,
   "totalCapPct": null,
-  "note": "Thưởng dự kiến v3.2 từ T07.2026 (CEO chốt 27/07): P2 phải đạt TỔNG target trước; đạt rồi thì phần vượt = tổng doanh thu C10 - tổng target, chia cho từng nhóm C10 theo đúng tỷ trọng doanh thu thực, mỗi phần nhân rate nhóm. KHÔNG còn target riêng từng nhóm. Gate ngưỡng >=101% giữ nguyên. Dự kiến/tham khảo, không payroll."
+  "note": "Thưởng/phạt dự kiến v3.3: giữ nguyên P1/P2 v3.2; phạt target là trường riêng, trừ tại C45 theo bậc, T07.2026 chỉ cảnh báo và tự áp dụng từ 01/08/2026. Phạt thiếu Xu mặc định tắt. Dự kiến/tham khảo, không payroll.",
+  "penaltyTiers": [
+    {
+      "tier": "drop_c45",
+      "fromPct": null,
+      "toPct": 50,
+      "dropC45": true
+    },
+    {
+      "tier": "t50_70",
+      "fromExclusivePct": 50,
+      "toPct": 70,
+      "ratePct": 0.3
+    },
+    {
+      "tier": "t70_90",
+      "fromPct": 70,
+      "toPct": 90,
+      "ratePct": 0.2
+    },
+    {
+      "tier": "none",
+      "fromPct": 90,
+      "toPct": null,
+      "ratePct": 0
+    }
+  ],
+  "penaltyEffectiveFrom": "2026-08-01",
+  "penaltyWarnFrom": "2026-07-01",
+  "penaltyEnabled": true,
+  "xuPenalty": {
+    "enabled": false,
+    "perMissingXu": 300000
+  }
 }

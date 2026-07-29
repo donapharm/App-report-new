@@ -15,7 +15,7 @@ const BONUS_V3_EFFECTIVE_MONTH = '2026-07';
 // thoại sửa tay ghi v3.1 nên CEO không biết đang sửa bản nào (CEO chốt 29/07).
 // Quy tắc: SỬA CÁCH TÍNH THƯỞNG => nâng số hiệu này + cập nhật
 // config/bonus_formula_lock.json (test bonusFormulaVersion sẽ đỏ nếu quên).
-const FORMULA_VERSION = 'v3.2';
+const FORMULA_VERSION = 'v3.3';
 const UNCONFIGURED_MESSAGE = 'Chưa cấu hình mức thưởng';
 
 function finite(value) {
@@ -99,6 +99,11 @@ function validateConfig(raw = {}) {
     effectiveFrom: String(raw.effectiveFrom || ''), base: BASE, currency: String(raw.currency || 'VND'),
     totalCapPct, capPct: totalCapPct, baseTiers: base.tiers, tiers: base.tiers,
     priorityThresholdPct: threshold, priorityRates, priorityTargets, autoGroupTargets, message: '',
+    penaltyTiers: Array.isArray(raw.penaltyTiers) ? raw.penaltyTiers.map((tier) => ({ ...tier })) : [],
+    penaltyEffectiveFrom: String(raw.penaltyEffectiveFrom || ''),
+    penaltyWarnFrom: String(raw.penaltyWarnFrom || ''),
+    penaltyEnabled: raw.penaltyEnabled === true,
+    xuPenalty: raw.xuPenalty && typeof raw.xuPenalty === 'object' ? { ...raw.xuPenalty } : {},
   };
 }
 
@@ -474,6 +479,10 @@ function aggregateBonusSummaries(reports = [], roster = []) {
     empCode: String(report.empCode || '').toUpperCase(),
     employeeName: names.get(String(report.empCode || '').toUpperCase()) || String(report.empCode || '').toUpperCase(),
     month: report.bonus.month, quarter: report.bonus.quarter,
+    // PHẠT v3.3 is calculated by the backend for each self-scoped report.
+    // Preserve that exact result for the CEO/admin ALL view; never rederive it
+    // from the aggregate target/bonus values in the client.
+    penalty: report.penalty && typeof report.penalty === 'object' ? { ...report.penalty } : null,
   }));
   const first = reports.find((report) => report?.bonus)?.bonus;
   if (!first?.configured) return { ...(first || buildBonusSummary()), employeeSubtotals: items, aggregate: true };

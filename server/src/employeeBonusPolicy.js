@@ -74,6 +74,11 @@ function rawConfig(config) {
     priorityTargets: { ...normalized.priorityTargets },
     autoGroupTargets: normalized.autoGroupTargets === true,
     totalCapPct: normalized.totalCapPct,
+    penaltyTiers: Array.isArray(normalized.penaltyTiers) ? normalized.penaltyTiers.map((tier) => ({ ...tier })) : [],
+    penaltyEffectiveFrom: normalized.penaltyEffectiveFrom || '',
+    penaltyWarnFrom: normalized.penaltyWarnFrom || '',
+    penaltyEnabled: normalized.penaltyEnabled === true,
+    xuPenalty: { ...(normalized.xuPenalty || {}) },
   };
 }
 

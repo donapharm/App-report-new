@@ -1,3 +1,8 @@
+### 2026-07-29 — PHẠT v3.3 backend batch 1
+- Thêm máy tính phạt target tách biệt P1/P2: bậc chính xác 90/70/50, trần C45, mất trắng C45, fail-closed target/C45, lịch T07 cảnh báo → T08 áp dụng, `formulaText` và cảnh báo sớm có gap làm tròn lên.
+- Tái dùng `xuPolicy.buildCheckpoint` cho phạt thiếu Xu (mặc định tắt), thêm `PENALTY_NOTIFY` mặc định tắt và giữ nguyên toàn bộ hàm dựng tin Telegram/email.
+- Tích hợp payload chi phí cá nhân với `penalty`, tổng sau phạt và đối soát tổng ngày; nâng khoá công thức lên v3.3.
+
 ### 2026-07-29 (đóng spec) — Claude Code — PHẠT v3.3: CEO chốt nốt điểm cuối, spec ĐỦ để bot làm
 > CEO: "Mức phạt thiếu Xu 300.000đ/Xu — anh đồng ý giữ nguyên nhé."
 

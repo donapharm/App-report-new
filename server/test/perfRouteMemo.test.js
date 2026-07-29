@@ -150,6 +150,9 @@ test('employee-cost ALL shares one admin base across actors/pages/filters and in
     const forbidden = await invoke('/employee-cost', query, sale);
     assert.equal(forbidden.status, 403);
     assert.equal(forbidden.body.code, 'EMPLOYEE_COST_ALL_FORBIDDEN');
+    const forcedOther = await invoke('/employee-cost', { ...query, emp: 'DN002' }, sale);
+    assert.equal(forcedOther.status, 403);
+    assert.equal(forcedOther.body.code, 'EMPLOYEE_COST_EMP_FORBIDDEN');
   } finally {
     store.activeDataSignature = originalSignature;
     store.employeeCostDataSignature = originalEmployeeCostSignature;
