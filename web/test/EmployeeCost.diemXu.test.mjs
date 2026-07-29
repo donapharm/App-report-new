@@ -107,6 +107,19 @@ test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction,
   assert.doesNotMatch(kpiGrid, /\{!allEmployees && <PenaltyKpi/, '4 ô phạt không được ẩn ở chế độ Tất cả NV');
   assert.match(kpiGrid, /allEmployees\s*\n?\s*\? <Kpi label="Phạt dự kiến" value="Chọn 1 NV"/,
     'ở Tất cả NV phải ghi rõ "Chọn 1 NV", không hiện số 0 và không ẩn ô');
+  // ‼ CEO chốt 30/07: CHỌN 1 NV thì phải thấy ĐỦ CẢ 4 Ô — để chính NV đó biết
+  // mình có thể bị phạt bao nhiêu. Không ô nào được tự ẩn vì thiếu dữ liệu.
+  assert.doesNotMatch(kpiGrid, /periodTotal != null && <AfterPenaltyKpi/,
+    'ô "Tổng sau phạt" không được ẩn khi tổng gốc null — phải hiện và nói rõ chưa đủ dữ liệu');
+  for (const re of [/: <AfterPenaltyKpi penalty=/, /: <PenaltyKpi penalty=/, /: <XuPenaltyKpi penalty=/]) {
+    assert.match(kpiGrid, re, 'nhánh chọn-1-NV phải render ô này vô điều kiện');
+  }
+  assert.match(kpiGrid, /^\s*<SalaryAdvanceKpi \/>$/m, 'ô Ứng lần 1 hiện ở mọi chế độ, không bọc điều kiện');
+  // Fail-closed vẫn giữ: thiếu dữ liệu thì nói CHỮ, tuyệt đối không hiện số 0/số âm giả.
+  assert.match(page, /if \(baseTotal == null\) \{[\s\S]{0,400}?Chưa đủ dữ liệu chi phí/,
+    'tổng gốc null phải hiện chữ "Chưa đủ dữ liệu chi phí", không được suy ra số');
+  assert.doesNotMatch(page, /if \(baseTotal == null\) return null;/,
+    'không được ẩn ô bằng return null');
   assert.match(kpiGrid, /label="Nhân viên"[\s\S]*label="Doanh thu chưa VAT"[\s\S]*<KhoanPointKpi[\s\S]*Tổng chi phí tháng \(chi phí gốc\)/);
   assert.match(kpiGrid, /Tổng chi phí tháng \(chi phí gốc\)[\s\S]*tone="employee-cost-tone-base"[\s\S]*<BonusKpi/);
   assert.equal((page.match(/Tổng chi phí tháng \(chi phí gốc\)/g) || []).length, 1);

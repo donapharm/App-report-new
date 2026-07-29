@@ -1,3 +1,16 @@
+### 2026-07-30 — Claude Code (CEO chốt) — CHỌN 1 NV phải thấy ĐỦ CẢ 4 Ô, không ô nào tự ẩn
+> CEO: "ở chế độ xem từng nhân viên thì mỗi nhân viên phải thấy được số phạt mình dự kiến có thể bị. Nghĩa là khi tôi lọc từng nhân viên thì cũng sẽ thấy được cả 4 ô KPI."
+
+Sau PR #229 thì 3 ô đã luôn hiện, **nhưng ô "Tổng chi phí tháng sau phạt" vẫn tự ẩn** khi tổng gốc `null` (coverage khớp doanh thu chưa đạt ngưỡng) — cả ở điều kiện ngoài (`periodTotal != null &&`) lẫn trong component (`if (baseTotal == null) return null`).
+
+**Đã bỏ cả hai chỗ ẩn.** Fail-closed **KHÔNG mất** mà chuyển vào trong component: tổng gốc `null` thì hiện **chữ "Chưa đủ dữ liệu chi phí"** kèm giải thích, **tuyệt đối không suy ra số và không hiện 0**. Nguyên tắc: *thiếu dữ liệu thì nói thẳng, đừng ẩn ô* — ẩn ô là để người xem tưởng tính năng không tồn tại, đúng chuyện CEO vừa gặp.
+
+**‼ Lần thứ HAI trong ngày gặp test khoá luật đã bị CEO thay.** Ca `employeePenaltyFrontend.test.js` khoá cứng `model.summary.periodTotal != null && <AfterPenaltyKpi` — chính cái CEO yêu cầu bỏ. **Không xoá cho qua**: đã đổi thành khoá luật mới — cấm điều kiện ẩn ngoài · bắt buộc render vô điều kiện · bắt buộc `null` thì hiện chữ · **cấm `return null`**. Cùng cách xử lý với ca `EmployeeCost.diemXu.test.mjs` sáng nay.
+
+Rút ra: mỗi lần CEO đổi yêu cầu hiển thị, phải **soát cả hai bộ test** (`server/test/employeePenaltyFrontend.test.js` và `web/test/EmployeeCost.diemXu.test.mjs`) — cả hai đều đọc `EmployeeCost.jsx` và cùng khoá bố cục lưới KPI.
+
+**Test:** server **505/514** đúng 9 ca đỏ baseline, **0 hồi quy** · web **84/84** · build PASS.
+
 ### 2026-07-30 — Claude Code (CEO yêu cầu) — Đưa CÁCH TÍNH PHẠT vào Quản target + mở 4 ô KPI ở "Tất cả NV"
 > CEO: "công thức tính phạt tại sao vẫn không có tại mục quản target — tôi yêu cầu mục này phải được hiển thị trong phần quản target. Tôi yêu cầu 4 ô KPI mới phải được hiển thị trong màn hình cho tôi."
 
