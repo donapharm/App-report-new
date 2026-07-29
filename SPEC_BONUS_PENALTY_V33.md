@@ -421,9 +421,29 @@ Tách file phạt mới (vd `src/penalty.js`) thì **phải thêm vào `FORMULA_
 
 ---
 
-## 11. CEO còn phải chốt
+## 11. Trạng thái chốt — ‼ ĐÃ ĐỦ, BOT LÀM ĐƯỢC NGAY
 
 1. ~~Xác nhận mốc~~ — **XONG 29/07 chiều.** Mốc ở 2.1 là bản CEO chốt: ≥90% không phạt · 70–90% 0,2% · 50–70% 0,3% · **≤50% mất trắng C45**. "Mất trắng (0,5%)" = **loại trọn C45**, không phải trừ 0,5% doanh thu.
 2. ~~Tin nhắn~~ — **XONG 29/07.** CEO chốt **phương án (a)**: đợt này không đụng tin nhắn, app chạy đúng 1 kỳ rồi mới bàn.
-3. **Mức 300.000đ/Xu** giữ hay đổi. *(Chưa chốt — mặc định giữ 300.000đ.)*
+3. ~~Mức 300.000đ/Xu~~ — **XONG 29/07. CEO chốt GIỮ NGUYÊN 300.000đ/Xu.** Không đổi `PENALTY_PER_MISSING_XU`; đưa vào `xuPenalty.perMissingXu = 300000` để sau này chỉnh được qua đúng luồng preview→save, nhưng **giá trị hiện tại giữ y nguyên**.
 4. ~~Vách đá 50%~~ — **XONG 29/07.** CEO chốt giữ nguyên luật, **bắt buộc có cảnh báo sớm** (mục **5B**): *"bạn có thể mất trắng số tiền tại cột C45 là … nếu bạn không cố gắng thêm giá trị đơn hàng là … (trước VAT)"*. Đã viết thành spec đầy đủ kèm 8 ca test.
+
+---
+
+## 12. Chốt cuối — không còn gì chờ CEO
+
+**Cả 4 điểm treo đã đóng ngày 29/07.** Bot **không cần hỏi thêm gì**, làm theo spec này là đủ:
+
+| # | Việc | Chốt |
+|---|---|---|
+| 1 | Mốc bậc phạt | ≥90% không phạt · 70–90% 0,2% · 50–70% 0,3% · **≤50% mất trắng C45** |
+| 2 | Tin nhắn | **KHÔNG đụng** — giữ nguyên 4 khung giờ đang chạy |
+| 3 | Phạt thiếu Xu | **GIỮ NGUYÊN 300.000đ/Xu** |
+| 4 | Vách đá 50% | Giữ luật, **bắt buộc có cảnh báo sớm** (mục 5B) |
+
+**Ba thứ tuyệt đối không được làm sai:**
+1. **Mốc 50% phải VƯỢT mới thoát** — gap có đệm 1.000đ, làm tròn LÊN (5B.2).
+2. **T07.2026 không trừ một đồng nào** — `warn_only`, tự chuyển `enforced` lúc 01/08/2026 (2.0).
+3. **P1/P2 không sửa một dòng** — phạt là trường riêng.
+
+Ship = nâng `FORMULA_VERSION` **v3.2 → v3.3** + cập nhật `bonus_formula_lock.json`, nếu không `bonusFormulaVersion.test.js` đỏ.
