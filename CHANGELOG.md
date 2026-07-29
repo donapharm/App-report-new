@@ -1,3 +1,8 @@
+### 2026-07-29 (đêm) — Report Bot — cảnh báo MISA thiếu ngày doanh thu
+
+Không vá doanh thu bằng ngày đặt/ngày tạo đơn. Với dòng MISA `official`/`pending`, số tiền khác 0 nhưng `revenue_date` NULL, App Report vẫn không tính vào kỳ nhưng đưa vào nhóm cảnh báo dữ liệu `Dữ liệu MISA thiếu ngày doanh thu` trong trung tâm cảnh báo, kèm mã đơn, số tiền, NV và đơn vị để sửa tại nguồn.
+
+Ca live đang bắt được: `DH479815711` / `2.399.520đ` / `DN010 - Trần Quốc Cường` / `015.TTYT H. Cẩm Mỹ`. Đây là lỗi dữ liệu nguồn; kế toán/MISA cần nhập `revenue_date` tại gốc.
 ### 2026-07-29 22:55 — Bot server (CEO duyệt) — ĐÃ TẮT 2 CỜ THÔNG BÁO: rủi ro gửi tin sai 31/07 đã loại bỏ
 `EMP_COST_NOTIFY=0` · `BONUS_NOTIFY=0`. Restart **chỉ** `app-report-tgbot` (PID mới **2937285**); `app-report` **không** restart (PID giữ **2720705**); `web/dist` vẫn `4c34551-20260729-201455-841`. Log in đúng `ℹ Chi phí/Thưởng notify: TẮT`. Backup `.env.backup-20260729-225543-disable-cost-bonus-notify`.
 

@@ -138,7 +138,12 @@ function buildAlerts({ scope, ky, kys, compareMode, filters = {} }) {
   cstLow.sort((a, b) => a.remain_pct - b.remain_pct);
   cstHigh.sort((a, b) => b.remain_pct - a.remain_pct);
 
+  const dataQualityItems = store.activeDataQualityWarnings({ scope })
+    .filter((item) => String(item.issue || '') === 'MISA_REVENUE_DATE_NULL')
+    .sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0));
+
   const groups = [
+    { key: 'data_quality', icon: '🧯', tone: 'danger', title: 'Dữ liệu MISA thiếu ngày doanh thu', total: dataQualityItems.length, items: top(dataQualityItems), note: 'MISA official/pending có tiền nhưng revenue_date NULL: App Report không tính vào kỳ và không tự lấy ngày đặt thay ngày doanh thu. Cần sửa revenue_date ở nguồn.' },
     { key: 'target', icon: '🎯', tone: 'danger', title: 'NV chưa đạt target', total: targetItems.length, items: top(targetItems), note: targetComparable ? '' : 'Target chưa được phân bổ theo lát cắt tuyến/group/nhóm đơn vị.' },
     { key: 'unit_up', icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh (so kỳ trước)', total: unitUpItems.length, items: top(unitUpItems), note: cmpNote },
     { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm mạnh (so kỳ trước)', total: unitItems.length, items: top(unitItems), note: cmpNote },
@@ -153,6 +158,7 @@ function buildAlerts({ scope, ky, kys, compareMode, filters = {} }) {
     cst_low: cstLow.length,
     cst_high: cstHigh.length,
     cst_queued: cstQueued.length,
+    data_quality: dataQualityItems.length,
   };
   // "Cần chú ý" = các mục CẢNH BÁO (không tính đơn vị tăng trưởng — đó là tin vui).
   const count = groups.filter((g) => g.key !== 'unit_up' && g.key !== 'cst_queued').reduce((s, g) => s + g.total, 0);

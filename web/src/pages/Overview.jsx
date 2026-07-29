@@ -15,6 +15,14 @@ function CstOwnerLine({ item }) {
 }
 
 function AlertLine({ group, item }) {
+  if (group.key === 'data_quality') {
+    return (
+      <div className="alert-line data-quality-line">
+        <b>{item.sale_order_no || item.source_line_id || '—'} · {money(item.amount)}</b>
+        <span>{item.emp_code || '—'}{item.emp_name ? ` - ${item.emp_name}` : ''} · {item.unit_name || item.unit_code || '—'} · thiếu ngày doanh thu</span>
+      </div>
+    );
+  }
   if (group.key === 'cst_queued') {
     return <div className="alert-line"><b>{item.product_name || '—'}</b><span>{item.unit_name || item.unit_code || '—'} · hiện hành {item.cst_sequence?.current?.code || 'cần xác nhận'} còn {pct(item.cst_sequence?.current?.remainPct)} · kế tiếp {item.iit_code}</span><CstOwnerLine item={item} /></div>;
   }

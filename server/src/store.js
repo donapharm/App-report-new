@@ -152,6 +152,27 @@ function kySortValue(ky) {
   const [mm, yyyy] = String(ky || '').split('.').map(Number);
   return (yyyy || 0) * 100 + (mm || 0);
 }
+
+function activeDataQualityWarnings({ scope } = {}) {
+  const emp = scope?.empCode ? String(scope.empCode).trim().toUpperCase() : null;
+  const out = [];
+  for (const slot of activeSlots()) {
+    const missing = slot.dataQualityWarnings?.misaMissingRevenueDate;
+    for (const item of (missing?.items || [])) {
+      const itemEmp = String(item.emp_code || '').trim().toUpperCase();
+      if (emp && itemEmp !== emp) continue;
+      out.push({
+        ...item,
+        ky: slot.ky,
+        slotId: slot.id,
+        amount: Number(item.amount || 0),
+        severity: 'high',
+      });
+    }
+  }
+  return out;
+}
+
 function latestActiveSlot() {
   return activeSlots().sort((a, b) => kySortValue(a.ky) - kySortValue(b.ky) || String(a.dateTo || '').localeCompare(String(b.dateTo || ''))).at(-1) || null;
 }
@@ -612,7 +633,7 @@ module.exports = {
   base, listPeriods, latestKy, listUsers, findUserByPhone, findUserByCode,
   periodKys, periodFreshness, periodRange, previousKys, comparePeriods,
   currentKyByDate, lastCompleteKy, nextKy,
-  getRows, getRowsRange, getCst, getTargets, getTargetsRange, clearCache,
+  getRows, getRowsRange, getCst, getTargets, getTargetsRange, activeDataQualityWarnings, clearCache,
   activeDataSignature, targetDataSignature, cstBaseDataSignature, cstDataSignature,
   unitGroupDataSignature, dashboardDataSignature, employeeCostDataSignature,
   empCodesWithData, empCodesWithRows,
