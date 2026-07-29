@@ -1,0 +1,182 @@
+# SPEC — MÀN "CHƯA ĐỒNG BỘ": mọi dòng bị loại đều phải nêu tên và nêu lý do
+
+> **CEO chốt 2026-07-29:** *"anh đề nghị có một màn riêng để lọc ra những mã đơn hàng / mặt hàng / nhà thầu chưa đồng bộ qua App Report được, phải có kèm nội dung lý do sao không cho đồng bộ với đơn hàng đó / mã hàng đó / mã nhà thầu đó. Để xử lý tại chỗ, tránh chạy lòng vòng như thế này mệt lắm rồi."*
+
+Người triển khai: **bot server**. Claude: kiến trúc + review.
+
+---
+
+## 0. Vì sao cần — hai vụ thật trong cùng một ngày
+
+| Khoản | Mất bao lâu không ai biết | Vì sao không ai biết |
+|---|---|---|
+| **382.578.400đ** | từ 11/07 → 29/07 (**18 ngày**) | Bị loại lặng lẽ bởi `o.status <> 'HOLD_GOLIVE'` |
+| **2.399.520đ** | cả tháng 7 | Bị loại lặng lẽ vì `revenue_date` NULL |
+
+Cả hai **chỉ lộ ra vì CEO tình cờ mở hai màn hình cạnh nhau rồi trừ tay**. Không có cái đó thì đến giờ vẫn không ai biết.
+
+Rồi truy ra mất **gần trọn một ngày** của cả CEO lẫn hai bot — đúng cái CEO gọi là *"chạy lòng vòng, mệt lắm rồi"*.
+
+**Vấn đề gốc không phải hai khoản tiền đó. Vấn đề là hệ thống ném dòng đi mà không nói với ai.**
+
+---
+
+## 1. ‼ NGUYÊN TẮC SỐ MỘT — KHÔNG DÒNG NÀO ĐƯỢC BIẾN MẤT LẶNG LẼ
+
+Hiện `fetchMisa()` / `fetchPartner()` loại dòng bằng mệnh đề `WHERE`. Dòng bị loại **không để lại dấu vết nào** — không log, không đếm, không hiện ở đâu.
+
+**Phải đảo ngược cách làm:**
+
+```
+Bước 1  Lấy TOÀN BỘ dòng của kỳ (universe), KHÔNG lọc
+Bước 2  Phân loại từng dòng: ĐƯA VÀO  hoặc  LOẠI + MÃ LÝ DO
+Bước 3  Ghi 2 kết quả:
+          - dòng ĐƯA VÀO  -> slot doanh thu (như hiện nay)
+          - dòng LOẠI     -> bảng ngoại lệ, KÈM LÝ DO
+```
+
+Số tiền không đổi một đồng so với hôm nay. Khác duy nhất: **phần bị loại nay có tên, có mặt, có lý do.**
+
+### 1.1 Bất biến số học — bắt buộc kiểm mỗi lần chạy
+
+```
+Σ(đưa vào) + Σ(loại)  ==  Σ(toàn bộ nguồn)
+số dòng đưa vào + số dòng loại  ==  số dòng nguồn
+```
+
+**Không khớp ⇒ DỪNG, không ghi slot, báo lỗi.** Nghĩa là có dòng rơi ở chỗ không ai khai báo.
+
+Chỉ riêng phép kiểm này đã **bắt được cả hai vụ hôm nay ngay lần chạy đầu tiên**.
+
+---
+
+## 2. Danh mục lý do — mỗi lý do phải nói rõ AI XỬ LÝ và XỬ THẾ NÀO
+
+Không được dùng lý do chung chung kiểu *"không hợp lệ"*. Người đọc phải **làm được ngay**.
+
+### 2.1 Nguồn CRM MISA
+
+| Mã lý do | Nghĩa | Ai xử lý | Làm gì |
+|---|---|---|---|
+| `MISA_CHUA_GHI_DOANH_SO` | bucket ngoài `official`/`pending` | Kế toán | Ghi doanh số, hoặc xác nhận huỷ |
+| **`MISA_THIEU_NGAY_DOANH_THU`** | **đã ghi doanh số, có tiền, nhưng `revenue_date` NULL** | **Kế toán MISA** | **Nhập ngày ghi doanh thu** |
+| `MISA_NGAY_NGOAI_KY` | `revenue_date` thuộc kỳ khác | — | Chỉ để biết, sẽ vào kỳ của nó |
+| `MISA_NGHI_DON_TEST` | `is_test_suspected = true` | App Sale | Xác nhận thật/test rồi gỡ cờ |
+| `MISA_TIEN_BANG_0` | thành tiền = 0 | Kế toán | Kiểm lại đơn giá / số lượng |
+
+> `MISA_THIEU_NGAY_DOANH_THU` chính là vụ **2.399.520đ** — đơn `DH479815711`.
+
+### 2.2 Nguồn APP WEB đối tác
+
+| Mã lý do | Nghĩa | Ai xử lý | Làm gì |
+|---|---|---|---|
+| `WEB_CHUA_CO_PHAN_HOI` | đối tác chưa phản hồi đơn | NV phụ trách | Nhắc đối tác phản hồi |
+| `WEB_GIAO_BANG_0` | có phản hồi nhưng SL giao = 0 | NV phụ trách | Xác nhận đã giao hay huỷ |
+| `WEB_DON_TEST` | `is_test` và chưa phản hồi | App Sale | Gỡ cờ test |
+| `WEB_NGAY_NGOAI_KY` | ngày quy kỳ thuộc kỳ khác | — | Chỉ để biết |
+| `WEB_SAI_NHOM` | `entity_group` ≠ `PARTNER` | App Sale | Kiểm lại phân loại đơn |
+
+### 2.3 Vào được nhưng THIẾU THÔNG TIN — cảnh báo riêng, không loại
+
+Nhóm này **vẫn tính tiền đủ**, nhưng thiếu dữ liệu nên **rơi khỏi bộ lọc** — nguy hiểm vì nhìn tổng thì đúng, lọc ra thì mất.
+
+| Mã lý do | Nghĩa | Ai xử lý | Làm gì |
+|---|---|---|---|
+| **`DON_VI_THIEU_DANH_MUC`** | mã đơn vị không có trong danh mục App Report ⇒ **mất tỉnh** ⇒ **biến mất khi lọc theo tỉnh** | DataHub / App Report | Thêm mã đơn vị vào danh mục |
+| `MA_HANG_THIEU_DANH_MUC` | mã QLNB không có trong danh mục | DataHub | Thêm mã hàng |
+| `NV_XUNG_DOT_ROSTER` | `emp_code` nguồn không khớp roster ⇒ dồn về `UNALLOCATED` | Nhân sự | Sửa phân công |
+
+> `DON_VI_THIEU_DANH_MUC` chính là vụ **mã 175.BVĐK Vũng Tàu** — tiền tính đủ 275,9 triệu nhưng lọc theo tỉnh thì không thấy.
+
+### 2.4 Ghi chú, KHÔNG phải ngoại lệ
+
+| Mã | Nghĩa |
+|---|---|
+| `WEB_HOLD_GOLIVE_DA_GIAO` | đơn `HOLD_GOLIVE` nhưng đã giao thực ⇒ **VẪN TÍNH** (CEO chốt 29/07). Hiện ra để theo dõi, **không** nằm trong nhóm bị loại |
+
+---
+
+## 3. Màn hình — ba cách nhóm CEO yêu cầu
+
+Trang mới **"Chưa đồng bộ"**, dựng theo đúng khuôn `DataQualityPanel` đang có (cùng bộ lọc, cùng nút xuất Excel) — **không dựng UI mới từ đầu**.
+
+### 3.1 Hàng KPI trên cùng
+
+| Ô | Nội dung |
+|---|---|
+| **Tổng chưa đồng bộ** | số dòng + **tổng tiền** |
+| **Cần xử lý gấp** | chỉ nhóm CÓ TIỀN mà đáng lẽ phải vào (vd thiếu ngày doanh thu) |
+| **Chỉ để biết** | ngày thuộc kỳ khác, chưa ghi doanh số — không cần làm gì |
+| **Thiếu danh mục** | vào được nhưng mất tỉnh / mất mã hàng |
+
+**Fail-closed:** chưa chạy đối soát ⇒ hiện **"Chưa có dữ liệu đối soát"**, **tuyệt đối không hiện `0`**. Số 0 nghĩa là *"đã kiểm, không có gì"* — nói sai chỗ này còn tệ hơn không nói.
+
+### 3.2 Ba tab nhóm — đúng yêu cầu CEO
+
+| Tab | Nhóm theo | Mỗi dòng hiện |
+|---|---|---|
+| **Đơn hàng** | mã đơn | mã đơn · ngày · NV · đơn vị · tiền · **lý do** · **ai xử lý** · **làm gì** |
+| **Mặt hàng** | mã QLNB | mã hàng · tên · số đơn dính · tổng tiền · **lý do hay gặp nhất** |
+| **Nhà thầu** | mã nhà thầu | tên nhà thầu · số đơn · tổng tiền · **lý do** |
+
+Bấm vào dòng nhóm ⇒ bung ra **danh sách đơn chi tiết** bên dưới. Không phải mở trang khác.
+
+### 3.3 Bộ lọc
+Kỳ · nguồn (CRM / WEB) · mã lý do · nhân viên · đơn vị · tỉnh · **chỉ dòng có tiền**.
+
+### 3.4 Xuất Excel
+Đúng phần đang lọc, đủ cột lý do — để gửi thẳng cho kế toán / DataHub / App Sale mà không phải chép tay.
+
+---
+
+## 4. Quyền
+
+1. **CEO/admin**: xem toàn bộ.
+2. **NV**: chỉ thấy đơn **của chính mình** — `auth.scopeOf(session)`, khoá ở backend. Đây là dữ liệu doanh thu, đúng nguyên tắc self-scoped đang có.
+3. Xuất Excel theo đúng phạm vi người xuất.
+
+---
+
+## 5. ‼ KHÔNG tự sửa dữ liệu
+
+Màn này để **nhìn ra và giao việc**, **không phải để sửa**.
+
+- **Không** cho bấm nút sửa ngày, gỡ cờ, thêm mã ngay trên màn.
+- **Không** cho App Report tự đoán ngày thay `revenue_date` NULL. Hôm nay 1 dòng; mai kia 50 dòng thì **doanh thu nhảy tháng hàng loạt mà không ai hay**.
+- Sửa phải làm **ở nguồn** — MISA, App Sale, DataHub — rồi chạy lại đối soát thì dòng tự biến mất khỏi danh sách.
+
+Đó là cách "xử lý tại chỗ" đúng nghĩa: **nhìn thấy ngay, biết giao cho ai ngay** — chứ không phải sửa liều ở nơi chỉ đọc.
+
+---
+
+## 6. Test bắt buộc
+
+**Bất biến — quan trọng nhất**
+1. `Σ(đưa vào) + Σ(loại) == Σ(nguồn)` về **cả tiền lẫn số dòng**. Lệch ⇒ **DỪNG, không ghi slot**.
+2. Cố tình thêm một bộ lọc mới mà **quên khai mã lý do** ⇒ bất biến vỡ ⇒ **test đỏ**. Đây là lưới chặn đúng lỗi đã xảy ra hai lần hôm nay.
+
+**Dựng lại đúng hai vụ thật**
+3. Dòng `official` + tiền ≠ 0 + `revenue_date` NULL ⇒ ra `MISA_THIEU_NGAY_DOANH_THU`, **đúng 2.399.520đ**, kèm đúng mã đơn `DH479815711`.
+4. Dòng `HOLD_GOLIVE` đã giao ⇒ **KHÔNG** nằm trong nhóm bị loại (đã tính vào doanh thu).
+5. Mã đơn vị ngoài danh mục ⇒ ra `DON_VI_THIEU_DANH_MUC`, **tiền vẫn tính đủ** (không được trừ đi).
+
+**Fail-closed**
+6. Chưa chạy đối soát ⇒ hiện **"Chưa có dữ liệu đối soát"**, `assert.doesNotMatch(value, /^0/)`.
+7. Mọi mã lý do đều **phải có** đủ 3 phần: nghĩa · ai xử lý · làm gì. Thiếu một phần ⇒ test đỏ.
+
+**Quyền**
+8. NV chỉ thấy đơn của mình; ép `emp_code` người khác ⇒ **403**.
+
+---
+
+## 7. Thứ tự làm
+
+| Đợt | Việc | Ghi chú |
+|---|---|---|
+| **1** | Đảo cách lọc: lấy toàn bộ → phân loại → 2 kết quả. **Kèm bất biến ở 1.1** | Backend. Số tiền **không đổi một đồng** |
+| **2** | Màn hình + 3 tab + xuất Excel | Theo khuôn `DataQualityPanel` |
+| **3** | Nối vào lịch chạy đối soát hằng ngày | Có ngoại lệ mới thì báo CEO |
+
+**Đợt 1 đã có giá trị ngay** kể cả khi chưa có màn hình — chỉ cần con số ngoại lệ in ra log mỗi lần chạy là đã hơn hẳn hôm nay.
+
+**KHÔNG deploy trước 31/07.**

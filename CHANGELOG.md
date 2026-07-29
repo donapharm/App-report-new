@@ -1,3 +1,29 @@
+### 2026-07-29 (khuya) — Claude Code (CEO chốt) — MÀN "CHƯA ĐỒNG BỘ": cấm dòng nào biến mất lặng lẽ
+> CEO: "anh đề nghị có một màn riêng để lọc ra những mã đơn hàng/mặt hàng/nhà thầu chưa đồng bộ qua App Report được, phải có kèm nội dung lý do sao không cho đồng bộ... để xử lý tại chỗ, tránh chạy lòng vòng như thế này mệt lắm rồi."
+
+**Vấn đề gốc không phải hai khoản tiền, mà là hệ thống ném dòng đi không nói với ai:**
+
+| Khoản | Mất bao lâu không ai biết | Vì sao |
+|---|---|---|
+| **382.578.400đ** | 11/07 → 29/07, **18 ngày** | bị loại lặng lẽ bởi `o.status <> 'HOLD_GOLIVE'` |
+| **2.399.520đ** | cả tháng 7 | bị loại lặng lẽ vì `revenue_date` NULL |
+
+Cả hai **chỉ lộ ra vì CEO tình cờ mở hai màn hình cạnh nhau rồi trừ tay**, rồi truy mất gần trọn một ngày của CEO lẫn hai bot.
+
+**Nguyên tắc mới: KHÔNG DÒNG NÀO ĐƯỢC BIẾN MẤT LẶNG LẼ.** Đảo ngược cách lọc — thay vì `WHERE` ném dòng đi, phải **lấy toàn bộ → phân loại từng dòng (đưa vào / loại + mã lý do) → ghi 2 kết quả**. Số tiền không đổi một đồng; khác duy nhất là phần bị loại **nay có tên, có mặt, có lý do**.
+
+**‼ Bất biến số học bắt buộc mỗi lần chạy:** `Σ(đưa vào) + Σ(loại) == Σ(nguồn)` cả tiền lẫn số dòng. Không khớp ⇒ **DỪNG, không ghi slot**. Riêng phép kiểm này **đã bắt được cả hai vụ ngay lần chạy đầu**. Thêm ca test: cố tình thêm bộ lọc mới mà quên khai mã lý do ⇒ bất biến vỡ ⇒ đỏ.
+
+**Mỗi mã lý do phải đủ 3 phần: nghĩa · AI xử lý · LÀM GÌ** — cấm lý do chung chung kiểu "không hợp lệ". 13 mã chia 4 nhóm: CRM MISA (5) · WEB đối tác (5) · **vào được nhưng thiếu danh mục** (3) · ghi chú không phải ngoại lệ (1).
+
+**Nhóm thứ 3 nguy hiểm nhất và chưa ai để ý:** dòng **vẫn tính tiền đủ** nhưng thiếu danh mục nên **rơi khỏi bộ lọc** — nhìn tổng thì đúng, lọc ra thì mất. Đây chính là vụ **mã 175.BVĐK Vũng Tàu**: 275,9 triệu tính đủ nhưng lọc theo tỉnh không thấy.
+
+**Màn hình** dựng theo đúng khuôn `DataQualityPanel` đã có (không dựng UI mới), 3 tab theo đúng yêu cầu CEO: **đơn hàng · mặt hàng · nhà thầu**, bấm vào bung chi tiết, xuất Excel gửi thẳng cho kế toán/DataHub/App Sale. Self-scoped: NV chỉ thấy đơn của mình.
+
+**‼ KHÔNG cho sửa dữ liệu trên màn này.** Đặc biệt **cấm App Report tự đoán ngày** thay `revenue_date` NULL — hôm nay 1 dòng, mai kia 50 dòng thì doanh thu nhảy tháng hàng loạt mà không ai hay. Sửa ở nguồn, chạy lại thì dòng tự biến mất khỏi danh sách.
+
+**Tài liệu:** `SPEC_REVENUE_SYNC_EXCEPTIONS.md` — 8 ca test bắt buộc, trong đó 2 ca dựng lại đúng hai vụ thật hôm nay. Đợt 1 (backend + bất biến) **đã có giá trị ngay** kể cả chưa có màn hình.
+
 ### 2026-07-29 (tối) — Report Bot — T07 tính `HOLD_GOLIVE` đã giao vào APP WEB partner
 
 Claude/CEO chốt sau đối soát file Excel: 45 dòng `HOLD_GOLIVE` có phản hồi đối tác, `delivered_qty > 0`, tổng `382.578.400đ` phải tính vào doanh thu T07. `HOLD_GOLIVE` ở ca này là cờ kỹ thuật soft-launch/quota audit; `cst_quota` đang thiếu dữ liệu nên chưa được dùng làm căn cứ loại doanh thu của nhân viên.
