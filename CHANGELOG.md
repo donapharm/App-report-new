@@ -1,3 +1,30 @@
+### 2026-07-29 (khuya, bổ sung) — Claude Code (CEO chốt) — CẢNH BÁO TELEGRAM khi đồng bộ lỗi
+> CEO: "khi đồng bộ mà lỗi thì hệ thống báo về Telegram cho VP018/DN007/CEO để biết xử lý. Và báo về bot Sale luôn."
+
+**Lý do cần:** màn "Chưa đồng bộ" vẫn phải **có người chủ động mở ra mới thấy** — mà chính vì không ai mở nên 382,6 triệu nằm im 18 ngày.
+
+**‼ BẪY TÌM THẤY TRƯỚC KHI CODE: VP018 đang bị chặn thông báo tuyệt đối.** VP018 nằm trong `notify_optout.json` (cùng DN021/DN023/VP004) và `dormantFeedback.TELEGRAM_HARD_EXCLUDED`. Có **hai cách làm sai**, cả hai đều hỏng:
+- Lọc cảnh báo qua `targetNotify.isMuted` ⇒ **VP018 không nhận được gì** — đúng người CEO chỉ định lại bị chặn.
+- Gỡ VP018 khỏi optout ⇒ VP018 **nhận lại toàn bộ** tin target/thưởng/chi phí/doanh thu đã cố ý loại.
+
+**Đây đúng loại lỗi đã dính 28/07** — lấy danh sách của việc này dùng cho việc khác (lần đó là `diemXu.EXCLUDE`, suýt chặn nhầm DN022). Cách đúng: **danh sách HOÀN TOÀN MỚI** `config/sync_alert_recipients.json`, kèm ghi chú nói rõ optout chỉ chặn **thông báo hiệu suất**, không áp cho **cảnh báo vận hành**. Bổ sung một câu vào `notify_optout.json` để lần sau không ai hiểu nhầm.
+
+**Mỗi người nhận ĐÚNG phần của mình**, không phải bản giống nhau: VP018+DN007 nhận phần đơn hàng/ngày giao/đơn vị (thứ họ sửa được) · CEO nhận bản tổng · bot App Sale nhận phần thuộc App Sale. Nhận thứ mình không sửa được thì lần sau sẽ không đọc nữa.
+
+**Hai mức, khác nhau rõ:**
+- **KHẨN, gửi ngay:** bất biến `Σ(đưa vào)+Σ(loại)=Σ(nguồn)` vỡ — đây **không phải ngoại lệ dữ liệu mà là hệ thống hỏng**, kèm luôn "đã DỪNG, chưa ghi slot".
+- **Cần xử lý, gửi 07:30:** chỉ 2 nhóm — có tiền đáng lẽ phải vào, và thiếu danh mục.
+
+**TUYỆT ĐỐI không báo nhóm "chỉ để biết"** (chưa ghi doanh số · ngày kỳ khác · chưa phản hồi). Mấy cái này lúc nào cũng có; báo hằng ngày thì 3 hôm là không ai đọc, và **cảnh báo thật sẽ chìm nghỉm giữa đống rác**.
+
+**Chống spam:** một ngoại lệ tồn 10 ngày **không được nhắn 10 lần** — chỉ nhắn cái mới, cái cũ gộp vào 1 dòng tồn đọng, xử lý xong báo 1 lần rồi thôi. **Không có gì mới ⇒ không gửi** (đúng chốt 28/07).
+
+**Mỗi mục trong tin bắt buộc đủ 4 phần: cái gì · bao nhiêu tiền · vì sao · AI LÀM GÌ.** Thiếu phần cuối thì người nhận lại phải đi hỏi — đúng cái "chạy lòng vòng" CEO muốn bỏ.
+
+**⛔ Blocker đã biết:** kênh sang bot App Sale **chưa có** (29/07 Report Bot thử gửi, thất bại, không có agent Sale trong allowlist). Đề nghị mở **nhóm Telegram chung** cho cả hai bot — vừa cho bot vừa cho người. Chưa có kênh thì **vẫn làm phần VP018/DN007/CEO trước**, không để một chỗ chặn cả việc.
+
+**Test:** 8 ca, trong đó 3 ca khoá đúng cái bẫy VP018 (nhận được cảnh báo đồng bộ · KHÔNG nhận tin hiệu suất · mã nguồn không được gọi `targetNotify.isMuted`).
+
 ### 2026-07-29 (khuya) — Claude Code (CEO chốt) — MÀN "CHƯA ĐỒNG BỘ": cấm dòng nào biến mất lặng lẽ
 > CEO: "anh đề nghị có một màn riêng để lọc ra những mã đơn hàng/mặt hàng/nhà thầu chưa đồng bộ qua App Report được, phải có kèm nội dung lý do sao không cho đồng bộ... để xử lý tại chỗ, tránh chạy lòng vòng như thế này mệt lắm rồi."
 

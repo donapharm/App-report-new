@@ -180,3 +180,116 @@ Màn này để **nhìn ra và giao việc**, **không phải để sửa**.
 **Đợt 1 đã có giá trị ngay** kể cả khi chưa có màn hình — chỉ cần con số ngoại lệ in ra log mỗi lần chạy là đã hơn hẳn hôm nay.
 
 **KHÔNG deploy trước 31/07.**
+
+---
+
+## 8. CẢNH BÁO TELEGRAM KHI ĐỒNG BỘ LỖI (CEO chốt 2026-07-29)
+
+> CEO: *"khi đồng bộ mà lỗi thì hệ thống báo về Telegram cho VP018 / DN007 / CEO để biết xử lý. Và báo về bot Sale luôn."*
+
+Không có cảnh báo thì màn hình ở mục 3 vẫn phải **có người chủ động mở ra mới thấy** — mà chính vì không ai mở nên 382,6 triệu nằm im 18 ngày.
+
+### 8.1 ‼ NGƯỜI NHẬN — PHẢI LÀ DANH SÁCH RIÊNG, TUYỆT ĐỐI KHÔNG DÙNG LẠI DANH SÁCH CŨ
+
+**VP018 hiện đang nằm trong `config/notify_optout.json`** — danh sách *"TUYỆT ĐỐI không nhận thông báo tự động"* (cùng `DN021`, `DN023`, `VP004`), và cũng có trong `dormantFeedback.TELEGRAM_HARD_EXCLUDED`.
+
+Có **hai cách làm sai**, cả hai đều hỏng:
+
+| Làm sai | Hậu quả |
+|---|---|
+| Lọc cảnh báo đồng bộ qua `targetNotify.isMuted` | **VP018 không nhận được gì** — đúng người CEO chỉ định lại bị chặn |
+| Gỡ VP018 khỏi `notify_optout.json` | VP018 **nhận lại toàn bộ** tin target / mốc thưởng / chi phí / doanh thu — thứ đã cố ý loại |
+
+**Đây đúng loại lỗi đã dính ngày 28/07** — lấy danh sách của việc này dùng cho việc khác. Lần đó là `diemXu.EXCLUDE`, suýt chặn nhầm DN022.
+
+**Cách đúng:** danh sách **HOÀN TOÀN MỚI**, mục đích khác, không dính gì tới 4 danh sách đang có.
+
+```
+server/config/sync_alert_recipients.json
+```
+
+Ghi chú bắt buộc trong file đó, nguyên văn:
+
+> *Đây là kênh CẢNH BÁO VẬN HÀNH khi đồng bộ doanh thu lỗi — KHÁC hoàn toàn với thông báo hiệu suất (target/thưởng/chi phí/doanh thu). `notify_optout.json` chỉ chặn thông báo hiệu suất; **KHÔNG áp vào đây**. VP018 nằm trong optout nhưng **VẪN PHẢI** nhận cảnh báo đồng bộ, vì VP018 là người sửa ngày thực giao.*
+
+Đồng thời **bổ sung một câu vào `notify_optout.json`** nói rõ phạm vi của nó chỉ là thông báo hiệu suất, để lần sau không ai hiểu nhầm.
+
+**Người nhận và phần việc:**
+
+| Người | Nhận phần nào |
+|---|---|
+| **VP018**, **DN007** | Đơn hàng · ngày giao · đơn vị — **những thứ họ sửa được** |
+| **CEO** | Bản tổng: tổng số mục, tổng tiền, ai đang phải xử lý bao nhiêu |
+| **Bot App Sale** | Phần thuộc App Sale: cờ test, `entity_group` sai, `HOLD_GOLIVE` bất thường |
+
+Mỗi người nhận **đúng phần của mình**, không phải bản giống nhau. Nhận thứ mình không sửa được thì lần sau sẽ không đọc nữa.
+
+### 8.2 Hai mức cảnh báo — KHÁC NHAU RÕ
+
+**Mức 1 — KHẨN, gửi NGAY, không đợi khung giờ**
+
+Bất biến ở mục 1.1 vỡ: `Σ(đưa vào) + Σ(loại) ≠ Σ(nguồn)`.
+
+Đây **không phải ngoại lệ dữ liệu — đây là hệ thống hỏng**: có dòng rơi ở chỗ không ai khai báo. Kèm luôn: **đã DỪNG, chưa ghi slot**.
+
+**Mức 2 — CẦN XỬ LÝ, gửi theo khung 07:30 hằng ngày**
+
+Chỉ 2 nhóm:
+- Nhóm **cần xử lý** (có tiền, đáng lẽ phải vào): thiếu ngày doanh thu · tiền = 0 · giao = 0 · sai nhóm · nghi đơn test
+- Nhóm **thiếu danh mục**: đơn vị / mã hàng ngoài danh mục · NV xung đột roster
+
+**TUYỆT ĐỐI KHÔNG báo nhóm "chỉ để biết"** — chưa ghi doanh số · ngày thuộc kỳ khác · đối tác chưa phản hồi. Mấy cái này **lúc nào cũng có**; báo hằng ngày thì 3 hôm là không ai đọc nữa, và **cảnh báo thật sẽ chìm nghỉm giữa đống rác**.
+
+### 8.3 Chống spam — chỉ báo cái MỚI
+
+Một ngoại lệ tồn tại 10 ngày **không được nhắn 10 lần**.
+
+- Chỉ nhắn ngoại lệ **mới xuất hiện lần đầu**.
+- Cái đã nhắn rồi ⇒ chỉ gộp vào **một dòng tóm tắt**: *"còn tồn N mục cũ chưa xử lý — xem trên app"*.
+- Ngoại lệ đã được xử lý xong ⇒ **báo một lần** *"đã hết"*, rồi thôi.
+- **Không có gì mới ⇒ KHÔNG GỬI.** Đúng chốt của CEO ngày 28/07: *"không có tin gì thì không gửi"*.
+
+Trạng thái đã-nhắn lưu ở `data/sync_alert_state.json`, cùng cách `notif_cost_state.json` đang làm.
+
+### 8.4 Mẫu tin
+
+```
+⚠ ĐỒNG BỘ DOANH THU — 3 mục mới cần xử lý (kỳ 07.2026)
+
+1. Đơn DH479815711 · 2.399.520đ · DN010
+   Lý do: đã ghi doanh số nhưng THIẾU NGÀY DOANH THU
+   → Kế toán MISA nhập ngày ghi doanh thu
+
+2. Đơn vị 175.BVĐK Vũng Tàu · 275.925.600đ
+   Lý do: mã đơn vị chưa có trong danh mục → mất tỉnh, không lọc được
+   → DataHub thêm mã đơn vị
+
+3. ...
+
+Còn tồn 12 mục cũ chưa xử lý — xem trên app.
+```
+
+Mỗi mục **bắt buộc** có: **cái gì · bao nhiêu tiền · vì sao · ai làm gì**. Thiếu phần "ai làm gì" thì người nhận lại phải đi hỏi — đúng cái *"chạy lòng vòng"* CEO muốn bỏ.
+
+### 8.5 ⛔ Kênh sang bot App Sale — CHƯA CÓ, phải mở trước
+
+Ngày 29/07 Report Bot đã thử gửi sang App Sale và **thất bại**: không có agent Sale trong allowlist, `sessions_list` timeout. Bot **không giả vờ đã gửi** — ghi nhận đúng.
+
+**Phải mở kênh trước khi làm mục 8.** Hai cách, chọn một:
+- **(a)** Một nhóm Telegram chung cho cả hai bot — đơn giản nhất, người cũng đọc được
+- **(b)** Một endpoint HTTP có token để Report Bot đẩy sang App Sale
+
+**Khuyến nghị (a)** — vừa cho bot, vừa cho người, không phải dựng thêm hạ tầng.
+
+Chưa có kênh thì **vẫn làm phần VP018/DN007/CEO trước**, phần App Sale bổ sung sau. Không để một chỗ chặn cả việc.
+
+### 8.6 Test bắt buộc
+
+1. **VP018 nhận được cảnh báo đồng bộ** dù đang nằm trong `notify_optout.json`.
+2. **VP018 KHÔNG nhận** tin target / mốc thưởng / chi phí / doanh thu — optout vẫn nguyên hiệu lực.
+3. Mã nguồn cảnh báo đồng bộ **không được gọi** `targetNotify.isMuted` — khoá bằng test đọc mã, như `notifySchedule.test.js` đang làm.
+4. Bất biến vỡ ⇒ gửi **NGAY**, nội dung có chữ **"đã DỪNG, chưa ghi slot"**.
+5. Chỉ có ngoại lệ nhóm "chỉ để biết" ⇒ **KHÔNG GỬI**.
+6. Cùng một ngoại lệ ở lần chạy thứ hai ⇒ **không nhắn lại**, chỉ vào dòng tồn đọng.
+7. Không có gì mới ⇒ **không gửi tin nào**.
+8. Mỗi mục trong tin phải có đủ 4 phần (cái gì · tiền · vì sao · ai làm gì).
