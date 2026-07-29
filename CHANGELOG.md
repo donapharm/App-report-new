@@ -1,3 +1,27 @@
+### 2026-07-29 (tối) — Claude Code — TRUY RA 382 TRIỆU BIẾN MẤT: bộ lọc kép làm đơn rơi khỏi CẢ HAI kỳ
+> CEO: "app sale thì 28,96 tỷ, còn app report lại 28,58 tỷ, vậy con số gần 400 triệu đang nằm ở đâu?"
+
+**Bot trả lời SAI 2 chỗ, Claude bác bằng số học:**
+1. Bot nói *"nguồn nhà thầu đối tác khớp"* — **ngược hoàn toàn**. Tách chênh lệch theo nguồn: đối tác lệch **382.578.400đ**, CRM lệch **2.399.520đ**, cộng lại **đúng bằng 384.977.920đ** không dư một đồng ⇒ **99,4% chênh lệch nằm đúng ở nguồn bot bảo là khớp**.
+2. Bot nói phần dư *"12–22 triệu do làm tròn"* — **không thể**. Hai số đều chính xác tới **đồng** (28.960.171.163 và 28.575.193.243); làm tròn sai lệch dưới 1đ. **17.546.000đ vẫn chưa có lời giải.**
+
+**‼ NGUYÊN NHÂN GỐC — nặng hơn "nằm ở kỳ khác":** `fetchPartner()` bắt đơn phải thoả **CẢ HAI** điều kiện: `o.created_at` trong kỳ **VÀ** `effective_date` trong kỳ. Đơn nào có ngày đặt và ngày ghi nhận ở hai tháng khác nhau thì **bị loại khỏi CẢ HAI kỳ** — không nằm ở tháng 6, cũng không ở tháng 7, **biến mất khỏi báo cáo**. *(Claude đã tự đính chính: lượt trước nói "tiền nằm ở kỳ T06" là SAI.)*
+
+**Nguyên nhân sâu:** form phản hồi WEB **không có ô "Ngày thực giao"**, nên máy tự đoán `effective_date` = **ngày đối tác bấm phản hồi**. Đơn giao thật 25/06 mà phản hồi 01/07 thì máy ghi 01/07 — máy **không có cách nào biết** hàng đã giao 25/06.
+
+**CEO chốt 3 điều:**
+- **Quy kỳ theo NGÀY THỰC GIAO.** Đơn đặt 25/06 giao 02/07 ⇒ doanh thu **T07**.
+- **Kỳ khoá sổ: hết ngày 5 tháng sau.** Trước đó VP018/DN007 sửa ngày giao thoải mái; sau đó phải CEO duyệt từng đơn.
+- **KHÔNG HỒI TỐ.** Sổ kỳ đã chốt không sửa đè; thưởng đã báo không đòi lại; **không phạt hồi tố** (tháng đã qua, NV không thể bán bù).
+
+**Vá được NGAY, không chờ ai:** bỏ bộ lọc kép, quy kỳ theo **một** mốc ngày duy nhất. Kể cả khi App Sale chưa kịp thêm ô ngày giao thì tiền cũng **thôi biến mất** — cùng lắm rơi nhầm tháng, còn hơn mất hẳn.
+
+**‼ Cảnh báo Claude nêu:** không hồi tố + không chặn = **bán đơn lớn cuối tháng, nhận thưởng, tháng sau trả lại, không mất gì cả**. Đề nghị chặn từ đầu: đơn lớn phát sinh 3 ngày cuối tháng phải **chờ 15 ngày** mới tính vào target. Đang chờ CEO chốt ngưỡng.
+
+**Tài liệu:** `SPEC_REVENUE_DELIVERY_PERIOD.md` — kèm bảng nghiệm thu 5 bước (bắt buộc kiểm **không đếm hai lần**). Ba mục còn chờ CEO: cơ chế đơn bù, ngưỡng đơn lớn, tách "doanh thu tài chính / doanh thu đánh giá NV". **Chưa có quyết định thì không code 3 mục đó.**
+
+**Cũng trong tối 29/07:** xảy ra **sự cố deploy ngoài ý muốn** — bản frontend nhánh phạt `ccacba0` lỡ lên production, bot đã khôi phục về `4c34551`. Claude xác minh bản lỗi **vẽ 3 ô "Phạt dự kiến"/"Phạt thiếu Xu"/"Ứng lần 1" vô điều kiện** cho mọi NV ⇒ nhân viên có thể đã nhìn thấy ô phạt **trước khi CEO công bố chính sách**. Việc gấp nhất: kiểm **thư mục code trên server đang ở commit nào** — PID không đổi chỉ chứng minh backend đang chạy code cũ **trong RAM**, nếu đĩa đã là code phạt thì lần restart tới sẽ tự chạy.
+
 ### 2026-07-29 (đóng spec) — Claude Code — PHẠT v3.3: CEO chốt nốt điểm cuối, spec ĐỦ để bot làm
 > CEO: "Mức phạt thiếu Xu 300.000đ/Xu — anh đồng ý giữ nguyên nhé."
 
