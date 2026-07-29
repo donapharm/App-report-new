@@ -419,7 +419,16 @@ function PenaltyKpi({ penalty, onOpen }) {
 function AfterPenaltyKpi({ penalty, baseTotal, multiple }) {
   // Fail-closed: tổng gốc null thì component không được gọi/render. Tuyệt đối
   // không biến null thành 0 rồi tạo một số âm giả.
-  if (baseTotal == null) return null;
+  // Fail-closed NHƯNG KHÔNG ẨN Ô (CEO chốt 30/07: chọn 1 NV phải thấy đủ 4 ô).
+  // Tổng gốc null = coverage chi phí chưa đủ. Tuyệt đối không biến null thành 0
+  // rồi ra một số âm giả; nhưng ẩn ô đi thì người xem tưởng tính năng không có.
+  // => Vẫn hiện ô, nói thẳng là chưa đủ dữ liệu.
+  if (baseTotal == null) {
+    return <Kpi label={multiple ? 'Tổng cả kỳ sau phạt' : 'Tổng chi phí tháng sau phạt'}
+      value="Chưa đủ dữ liệu chi phí"
+      sub="Tỷ lệ khớp doanh thu chưa đạt ngưỡng nên tổng gốc bị khoá — không suy ra số sau phạt từ số chưa chắc"
+      tone="employee-cost-tone-after-penalty" />;
+  }
   const value = penalty.afterPenaltyTotal == null ? baseTotal : penalty.afterPenaltyTotal;
   return <Kpi
     label={multiple ? 'Tổng cả kỳ sau phạt' : 'Tổng chi phí tháng sau phạt'}
@@ -1432,7 +1441,7 @@ export default function EmployeeCost({ me, onNavigate }) {
           Cộng dồn toàn đội phải do BACKEND tính, KHÔNG cộng ở frontend. */}
       {allEmployees
         ? <Kpi label="Tổng chi phí tháng sau phạt" value="Chọn 1 NV" sub="Phạt tính theo từng người — chọn đúng một nhân viên để xem" tone="employee-cost-tone-after-penalty" />
-        : model.summary.periodTotal != null && <AfterPenaltyKpi penalty={model.penalty} baseTotal={model.summary.periodTotal} multiple={multiple} />}
+        : <AfterPenaltyKpi penalty={model.penalty} baseTotal={model.summary.periodTotal} multiple={multiple} />}
       <SalaryAdvanceKpi />
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
       {allEmployees

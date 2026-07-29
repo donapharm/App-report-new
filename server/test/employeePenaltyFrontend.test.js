@@ -41,7 +41,18 @@ test('employee penalty UI has exactly the four v3.3 KPI labels and fail-closed t
     'Phạt thiếu Xu cuối quý',
     'Ứng lần 1 tháng này',
   ]) assert.match(PAGE, new RegExp(label));
-  assert.match(PAGE, /model\.summary\.periodTotal != null && <AfterPenaltyKpi/);
+  // ‼ CEO chốt 30/07: CHỌN 1 NV phải thấy ĐỦ CẢ 4 Ô — để chính NV đó biết mình có
+  // thể bị phạt bao nhiêu. Luật cũ (ẩn ô "Tổng sau phạt" khi tổng gốc null) đã BỎ:
+  // ẩn đi thì người xem tưởng tính năng không tồn tại — CEO đã gặp đúng chuyện này.
+  // Fail-closed KHÔNG mất: chuyển vào trong component, hiện CHỮ thay vì ẩn ô.
+  assert.doesNotMatch(PAGE, /model\.summary\.periodTotal != null && <AfterPenaltyKpi/,
+    'ô "Tổng sau phạt" không được ẩn theo điều kiện ngoài');
+  assert.match(PAGE, /: <AfterPenaltyKpi penalty=\{model\.penalty\} baseTotal=\{model\.summary\.periodTotal\}/,
+    'nhánh chọn-1-NV phải render ô "Tổng sau phạt" vô điều kiện');
+  assert.match(PAGE, /if \(baseTotal == null\) \{[\s\S]{0,400}?Chưa đủ dữ liệu chi phí/,
+    'tổng gốc null phải hiện chữ, KHÔNG được suy ra số và KHÔNG được ẩn ô');
+  assert.doesNotMatch(PAGE, /if \(baseTotal == null\) return null;/,
+    'cấm ẩn ô bằng return null');
   assert.match(PAGE, /value="Chưa đấu nối app lương"/);
   assert.doesNotMatch(PAGE.match(/function SalaryAdvanceKpi\(\)[\s\S]*?\n}/)?.[0] || '', /0đ/);
   assert.match(PAGE, /tone="employee-cost-tone-penalty"/);
