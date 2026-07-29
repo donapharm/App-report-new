@@ -1,3 +1,27 @@
+### 2026-07-29 (chốt lại mốc) — Claude Code — PHẠT v3.3: CEO chốt mốc cuối, ≤50% mất trắng C45
+> CEO: "target từ đủ 90% trở lên là tính theo công thức thưởng rồi · phạt khi chỉ đủ 70–89 là 0,2% · phạt khi 51–69 là 0,3% · phạt khi chỉ bằng 50% trở xuống thì mất trắng (0,5%)" + "nếu target chỉ đạt bằng hoặc thấp hơn 50% thì không tính cột c45 vào mục chi phí tổng nhận nữa".
+
+**Bảng mốc CUỐI (thay bản sáng):**
+
+| % đạt target | Xử lý | `penaltyTier` |
+|---|---|---|
+| **≥ 90%** | **không phạt** — chạy công thức thưởng v3.2 | `none` |
+| **70% ≤ pct < 90%** | trừ **0,2%** vào C45 | `t70_90` |
+| **50% < pct < 70%** | trừ **0,3%** vào C45 | `t50_70` |
+| **≤ 50%** | **mất trắng C45** — không cộng vào tổng chi phí nhận | `drop_c45` |
+
+**‼ Đổi so với bản sáng:** bản sáng cho **đúng 50,0%** vào bậc 0,3%; CEO chốt lại **"bằng 50% trở xuống"** ⇒ đúng 50,0% **mất trắng**. Đã sửa spec + ca test.
+
+**Làm rõ "(0,5%)" — CEO chốt: mất trắng TOÀN BỘ C45**, tức đúng số tiền C45 của người đó (vd 7.599.706đ), mỗi người một khác vì %C45 từng mặt hàng khác nhau. **Không phải** trừ 0,5% doanh thu. Con số 0,5% chỉ là cách gọi tên bậc thứ 3 nối tiếp 0,2% – 0,3%. Nếu hiểu nhầm thành "trừ 0,5% doanh thu" thì NV có %C45 cao hơn 0,5% vẫn còn lại một phần — sai hẳn ý CEO.
+
+**Mốc nay liền mạch tuyệt đối:** thêm ca test **quét pct từ 0 đến 150 bước 0,1**, không giá trị nào rơi ra ngoài bậc. Ba mốc biên khoá cứng: 90,0 ⇒ không phạt · 70,0 ⇒ 0,2% · 50,0 ⇒ mất trắng · 50,01 ⇒ 0,3%.
+
+**Thêm 1 ca test:** `pct ≤ 50%` ⇒ `tổngSauPhạt = tổngGốc − tiềnC45` và `c45Dropped: true` — khoá đúng câu CEO nói "không tính cột c45 vào mục chi phí tổng nhận". Tổng ca test bắt buộc: **16 → 17**.
+
+**Vách đá 50% giờ dốc hơn:** ở 50,01% chỉ mất ~0,3% doanh thu, chạm đúng 50,0% là mất trắng C45 (vd 7,6 triệu). Claude vẫn đề nghị app **cảnh báo sớm** "còn thiếu … đồng nữa là mất trắng C45" để NV kịp chạy.
+
+**Còn treo:** cách xử lý tin nhắn (app hiện phạt nhưng tin 12:30 T7 / 17:30 vẫn báo tổng gốc) — Claude khuyến nghị đợt này chưa đụng tin nhắn.
+
 ### 2026-07-29 (bổ sung chiều) — Claude Code (CEO chốt số thật) — PHẠT v3.3 đổi sang trừ cột C45 + 4 ô KPI
 > CEO chốt: 70–89% trừ 0,2% tại C45 · 51–69% trừ 0,3% · <50% thì C45 không tính vào chi phí tháng. Cho TẤT CẢ NV xem số phạt + công thức. Thêm đúng 4 ô KPI.
 
