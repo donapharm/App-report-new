@@ -111,6 +111,50 @@ test('ALL employee Excel/PDF export keeps STT + employee identity and employee s
   assert.match(pdf.text, /Tổng phụ: DN001/);
 });
 
+test('self Excel/PDF export includes only the backend penalty amount and formula', async () => {
+  const report = costReport();
+  report.penalty = {
+    total: 2_400_000,
+    appliedAmount: 0,
+    formulaText: 'Đạt 78% → trừ 0,2% × doanh thu trước VAT',
+    label: 'T07.2026 CHỈ CẢNH BÁO — chưa trừ tiền.',
+  };
+  const workbook = exportService.createCostWorkbook([report]);
+  const sheet = workbook.worksheets[0];
+  const headers = sheet.getRow(7).values.slice(1);
+  const penaltyColumn = headers.indexOf('Phạt dự kiến') + 1;
+  assert.ok(penaltyColumn > 0);
+  assert.equal(sheet.getRow(9).getCell(penaltyColumn).value, 2_400_000);
+  assert.equal(sheet.getRow(8).getCell(penaltyColumn).value, null);
+  const pdf = inspectPdf(await exportService.costPdfBuffer([report]), 'cost-self-penalty');
+  assert.match(pdf.text, /Phạt dự kiến/);
+  assert.match(pdf.text, /2\.400\.000/);
+  assert.match(pdf.text, /0,2%/);
+});
+
+test('CEO ALL Excel/PDF export has one backend penalty value per employee subtotal', async () => {
+  const report = costReport();
+  report.empCode = 'ALL'; report.employeeName = 'Tất cả nhân viên'; report.allEmployees = true;
+  report.periods[0].rows[0].employeeCode = 'DN001';
+  report.periods[0].rows[0].employeeName = 'Đặng Xuân Trung';
+  report.periods[0].employeeSubtotals = [{
+    employeeCode: 'DN001', employeeName: 'Đặng Xuân Trung', rowCount: 1,
+    monthlyTotal: 41_144_556, columnTotals: { c36: 41_144_556, c44: 1_210_470 },
+    penalty: { total: 7_599_706, formulaText: 'Mất trắng C45 backend' },
+  }];
+  const workbook = exportService.createCostWorkbook([report]);
+  const sheet = workbook.worksheets[0];
+  const headers = sheet.getRow(7).values.slice(1);
+  const penaltyColumn = headers.indexOf('Phạt dự kiến') + 1;
+  assert.ok(penaltyColumn > 0);
+  assert.equal(sheet.getRow(9).getCell(penaltyColumn).value, 7_599_706);
+  assert.equal(sheet.getRow(10).getCell(penaltyColumn).value, 7_599_706);
+  const pdf = inspectPdf(await exportService.costPdfBuffer([report]), 'cost-all-penalty');
+  assert.match(pdf.text, /DN001/);
+  assert.match(pdf.text, /Phạt dự kiến/);
+  assert.match(pdf.text, /7\.599\.706/);
+});
+
 test('cost Excel/PDF print the same province, unit-group, route, date and search slice resolved by backend', async () => {
   const report = costReport();
   report.filters = { province: 'ĐỒNG NAI', unitGroup: 'BV', route: 'CL', date: '2026-07-02' };

@@ -2026,6 +2026,15 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-tone-penalty { border-color:#b91c1c; background:linear-gradient(135deg,#b91c1c,#dc2626); }
 .employee-cost-tone-penalty .value { color:#fff; }
 .employee-cost-tone-penalty .label,.employee-cost-tone-penalty .delta { color:#fecaca; }
+.employee-cost-tone-penalty-soft { border-color:#fecaca; background:#fff1f2; }
+.employee-cost-tone-penalty-soft .label { color:#b91c1c; }
+.employee-cost-tone-penalty-soft .value { color:#7f1d1d; }
+.employee-cost-tone-after-penalty { border-color:#172554; background:linear-gradient(135deg,#172554,#1e3a8a); }
+.employee-cost-tone-after-penalty .value { color:#fff; }
+.employee-cost-tone-after-penalty .label,.employee-cost-tone-after-penalty .delta { color:#dbeafe; }
+.employee-cost-tone-neutral { border-color:#cbd5e1; background:#f8fafc; }
+.employee-cost-tone-neutral .label { color:#475569; }
+.employee-cost-tone-neutral .value { color:#0f172a; }
 .employee-cost-tone-base { border-color:#fde68a; background:#fffbeb; }
 .employee-cost-tone-base .label { color:#b45309; }
 .employee-cost-tone-base .value { color:#0f172a; }
@@ -2129,6 +2138,15 @@ th.employee-cost-sticky-product { z-index:6; background:#0b6aa9 !important; colo
 .employee-cost-subtotals > div { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; padding:0 10px 10px; }
 .employee-cost-subtotals span { display:grid; gap:2px; padding:7px 9px; border-radius:7px; background:#fff; font-size:11px; }
 .employee-cost-subtotals small { color:var(--muted); }
+.employee-cost-bonus-penalty-table { display:grid!important; grid-template-columns:1fr!important; }
+.employee-cost-bonus-penalty-table > span { grid-template-columns:minmax(150px,1.4fr) repeat(3,minmax(120px,1fr)); align-items:center; }
+.employee-cost-bonus-penalty-head { background:#e2e8f0!important; color:#334155; }
+.employee-cost-bonus-penalty-table [role="cell"]:not(:first-child),.employee-cost-bonus-penalty-table [role="columnheader"]:not(:first-child) { text-align:right; }
+.employee-cost-c45-dropped { background:#fff1f2!important; text-decoration-color:#b91c1c; }
+.employee-cost-after-penalty-total { border-color:#fecaca; color:#7f1d1d; }
+.employee-cost-after-penalty-total small { font-weight:600; }
+.employee-cost-penalty-formula,.employee-cost-penalty-warning { display:grid; gap:5px; margin:12px 0; padding:12px 14px; border:1px solid #fecaca; border-radius:10px; background:#fff1f2; color:#7f1d1d; }
+.employee-cost-penalty-warning.is-warn-only { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
 .employee-cost-panel-meta { margin-top:3px; color:var(--muted); font-size:11px; }
 .employee-cost-annual { color:#7890a1 !important; font-style:italic; opacity:.58; }
 th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !important; }
@@ -2267,6 +2285,8 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-page-numbers { max-width:100%; overflow-x:auto; }
   .employee-cost-page-jump { display:none; }
   .employee-cost-subtotals > div { grid-template-columns:1fr; }
+  .employee-cost-bonus-penalty-table { overflow-x:auto; }
+  .employee-cost-bonus-penalty-table > span { min-width:650px; }
   .employee-cost-khoan-equation { grid-template-columns:1fr; }
   .employee-cost-khoan-equation > strong { text-align:center; }
   .employee-cost-target-modal { border-radius:18px 18px 0 0; }
