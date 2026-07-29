@@ -1,3 +1,34 @@
+### 2026-07-29 (chốt cuối ngày) — Claude Code — PHẠT v3.3: cảnh báo sớm + LỊCH ÁP DỤNG tự bật 01/08/2026
+> CEO: "chỉ vì con số 50,5 và 50,0 mà mất tiền triệu của nhân viên thì đau lắm... spec nhấn mạnh là **bạn có thể mất trắng số tiền tại cột C45 là ... nếu bạn không cố gắng thêm giá trị đơn hàng là ... (trước VAT)**. Như vậy NV sẽ khâm phục và khẩu phục" + "Tháng 07.2026 chỉ đưa vào cảnh báo. Công thức tính phạt kích hoạt vào T08.2026, ngày bắt đầu áp dụng 01/08/2026. Trong cài đặt em cũng cài đặt rõ luôn, kẻo hôm sau lại quên kích hoạt".
+
+**1) CẢNH BÁO SỚM thành mục riêng 5B — phần quan trọng nhất của module.** Phạt mà không báo trước chỉ làm NV ức chế. Câu chữ do **backend sinh**, bắt buộc đủ 3 phần: **số tiền đang bị đe doạ** + **số doanh thu cần thêm (ghi rõ "trước VAT")** + **mốc % phải chạm và % hiện tại**.
+
+**‼ Hai cái bẫy chết người đã khoá bằng test:**
+- **Mốc 50% phải VƯỢT, hai mốc kia chỉ cần CHẠM.** Luật là `pct ≤ 50%` mất trắng ⇒ đạt đúng 50,0% **vẫn mất trắng**. Bảo NV "thêm 30 triệu là thoát" mà chạy xong đúng 50,0% vẫn mất 7,6 triệu thì hỏng hết niềm tin. Gap mốc 50% phải **+1.000đ đệm**.
+- **LUÔN làm tròn LÊN.** Làm tròn xuống ⇒ NV chạy đúng con số app bảo mà vẫn thiếu vài trăm đồng ⇒ vẫn mất tiền.
+- Ca test mạnh nhất: quét `pct` 0→89,9 bước 0,1, lấy `revenueGap` app trả cộng vào doanh thu, tính lại bậc ⇒ **phải sang bậc tốt hơn**. Chống đúng lỗi "bảo thoát mà không thoát".
+
+**Chọn mốc gần nhất, không phải luôn mốc 90%.** Bảo người đang ở 45% rằng "thêm 500 triệu là hết phạt" thì họ bỏ cuộc. Phải cho thấy mốc gần nhất **cứu được nhiều tiền nhất** trước.
+
+**2) LỊCH ÁP DỤNG — chống quên bằng NGÀY, không bằng nút bấm.** CEO lo "hôm sau lại quên kích hoạt" nên Claude **bỏ hẳn bước bật cờ tay**:
+```
+penaltyWarnFrom: "2026-07-01"   penaltyEffectiveFrom: "2026-08-01"   penaltyEnabled: true
+```
+| Kỳ | Chế độ | Tính số | TRỪ tiền | Cảnh báo |
+|---|---|---|---|---|
+| T07.2026 | `warn_only` | có | **KHÔNG** | CÓ |
+| Từ 01/08/2026 | `enforced` | có | CÓ | có |
+
+`penaltyEnabled` **chỉ để TẮT KHẨN CẤP**, mặc định `true`. Deploy tháng 7 an toàn **tự động** vì lịch chặn — không phụ thuộc ai nhớ gì. **Không còn bước "đợt 3: bật cờ"** trong kế hoạch. Deploy 01/08 hay 15/08 đều ra kết quả giống hệt cho kỳ T08 vì chế độ tính theo **kỳ dữ liệu**, không theo ngày bấm nút (đã có ca test giả lập 4 mốc giờ hệ thống).
+
+**Tháng 7 là tháng tập dượt:** NV nhìn thấy mình *sẽ* mất bao nhiêu mà chưa mất đồng nào. Đến 01/08 không ai kêu bị đánh úp. Câu chữ riêng cho `warn_only` (mục 5B.3b) **bắt buộc có chữ "chưa trừ tiền" + "01/08/2026"**, cấm dùng câu thể đe doạ trần trụi.
+
+**Ngày áp dụng nằm trong khoá version** — dời ngày phạt = đổi thời điểm NV bị trừ tiền, phải để lại dấu vết version + CHANGELOG, không sửa lén được. Bổ sung `FORMULA_CONFIG_KEYS`: `penaltyTiers`, `penaltyEffectiveFrom`, `penaltyWarnFrom`, `penaltyEnabled`, `xuPenalty`.
+
+**3) Tin nhắn — CEO chốt phương án (a): KHÔNG ĐỤNG.** Tin 07:30 / 12:30 T7 / 17:30 / 17:40 giữ nguyên 100%. Cờ `PENALTY_NOTIFY` tạo sẵn nhưng **mặc định TẮT**. Ghi chú cho bot: T07 ở `warn_only` nên số trên app **bằng đúng** số trong tin ⇒ **tháng 7 không hề có mâu thuẫn**; mâu thuẫn chỉ phát sinh từ 01/08.
+
+**Ca test bắt buộc: 17 → 32.** Thêm 8 ca cảnh báo sớm, 6 ca lịch áp dụng, 2 ca khoá tin nhắn.
+
 ### 2026-07-29 (chốt lại mốc) — Claude Code — PHẠT v3.3: CEO chốt mốc cuối, ≤50% mất trắng C45
 > CEO: "target từ đủ 90% trở lên là tính theo công thức thưởng rồi · phạt khi chỉ đủ 70–89 là 0,2% · phạt khi 51–69 là 0,3% · phạt khi chỉ bằng 50% trở xuống thì mất trắng (0,5%)" + "nếu target chỉ đạt bằng hoặc thấp hơn 50% thì không tính cột c45 vào mục chi phí tổng nhận nữa".
 

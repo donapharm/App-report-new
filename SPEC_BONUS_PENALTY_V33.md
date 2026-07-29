@@ -8,6 +8,8 @@
 | 2 | Trần tiền phạt: **theo ý số 1** ⇒ trần chính là **số tiền C45** | không trừ quá thành âm |
 | 3 | **TẤT CẢ nhân viên** được nhìn thấy **số tiền phạt + công thức tính** | **đảo ngược** chốt "chỉ báo CEO" lúc sáng |
 | 4 | Thêm **đúng 4 ô KPI** trong mục "quyền quản trị tự xem chi phí", màu **đối nghịch** với ô hiện có | xem mục 5 |
+| 5 | **T07.2026 CHỈ CẢNH BÁO** — công thức phạt **bắt đầu áp dụng 01/08/2026**. Cài sẵn trong cấu hình, **tự bật theo ngày**, không ai phải nhớ bấm | xem mục **2.0** |
+| 6 | **Chưa đụng tin nhắn** đợt này — app chạy đúng 1 kỳ rồi mới đưa phạt vào tin | mục 7, phương án (a) |
 
 Người triển khai: **bot server**. Claude: kiến trúc + review.
 Ship xong nâng `FORMULA_VERSION` **v3.2 → v3.3** (mục 8).
@@ -38,6 +40,45 @@ Ship xong nâng `FORMULA_VERSION` **v3.2 → v3.3** (mục 8).
 ---
 
 ## 2. Phạt theo target — công thức
+
+### 2.0 ‼ LỊCH ÁP DỤNG — tự bật theo ngày, KHÔNG dùng nút bấm tay
+
+> **CEO chốt 29/07:** *"Tháng 07.2026 chỉ đưa vào cảnh báo. Công thức tính phạt sẽ kích hoạt vào Tháng 08.2026, ngày bắt đầu áp dụng là 01/08/2026. Trong cài đặt em cũng cài đặt rõ luôn, kẻo hôm sau lại quên kích hoạt."*
+
+**Đây là yêu cầu chống-quên, phải làm bằng NGÀY chứ không bằng cờ bật tay.** Một cái cờ `penaltyEnabled=false` chờ người vào bấm là **chắc chắn có ngày quên** — hoặc quên bật (phạt không chạy, NV tưởng thoát), hoặc bấm nhầm sớm (trừ tiền oan tháng 7).
+
+```json
+"penaltyEffectiveFrom": "2026-08-01",
+"penaltyWarnFrom":      "2026-07-01",
+"penaltyEnabled":       true
+```
+
+| Kỳ | Chế độ | Có tính số? | Có TRỪ tiền? | Có cảnh báo? |
+|---|---|---|---|---|
+| Trước T07.2026 | `off` | không | không | không |
+| **T07.2026** | **`warn_only`** | **có** (để đối chiếu) | **KHÔNG** | **CÓ** |
+| **Từ 01/08/2026** | **`enforced`** | có | **CÓ** | có |
+
+**Quy tắc quyết định — bot làm đúng thứ tự này:**
+```js
+if (penaltyEnabled !== true)             mode = 'off';        // công tắc TẮT KHẨN CẤP
+else if (ngàyKỳ >= penaltyEffectiveFrom) mode = 'enforced';
+else if (ngàyKỳ >= penaltyWarnFrom)      mode = 'warn_only';
+else                                     mode = 'off';
+```
+
+**`penaltyEnabled` chỉ để TẮT KHẨN CẤP, không phải để bật.** Mặc định `true`. Deploy vào tháng 7 vẫn an toàn **tự động** vì lịch chặn, không phụ thuộc ai nhớ gì.
+
+**Ở `warn_only` (tháng 7):**
+- `penalty.total` vẫn tính ra số thật, nhưng **`appliedAmount = 0`** — tổng chi phí **không đổi một đồng**.
+- Ô "Tổng chi phí sau phạt" hiện **đúng bằng** tổng gốc, kèm nhãn.
+- Nhãn bắt buộc, hiện ở cả ô KPI lẫn hộp cách tính:
+  > **T07.2026 CHỈ CẢNH BÁO — chưa trừ tiền. Từ 01/08/2026 mới áp dụng trừ thật.**
+- Nói rõ số "nếu áp dụng thì sẽ mất bao nhiêu" để NV **có một tháng tập dượt**.
+
+**Đây là điểm mạnh nhất của cách làm này:** NV có nguyên tháng 7 nhìn thấy mình *sẽ* mất bao nhiêu mà chưa mất đồng nào. Đến 01/08 không ai kêu bị đánh úp.
+
+**Đổi 3 giá trị lịch trên = đổi cách tính thưởng/phạt ⇒ PHẢI nâng version** (mục 8). Chúng nằm trong vân tay `bonus_formula_lock.json`.
 
 ### 2.1 Bậc phạt
 
@@ -75,7 +116,8 @@ Nếu `pct ≤ 50%`: `phạtTarget = tiềnC45` (loại trọn cột — **mất
 
 | Tình huống | Kết quả | `penaltyStatus` |
 |---|---|---|
-| `penaltyEnabled !== true` | không phạt | `disabled` |
+| `penaltyEnabled !== true` (tắt khẩn cấp) | không phạt | `disabled` |
+| Kỳ **trước** `penaltyEffectiveFrom` (vd T07.2026) | tính số nhưng **KHÔNG trừ**, `appliedAmount = 0` | `warn_only` |
 | Chưa giao target (`target <= 0` / `pct == null`) | **không phạt** | `missing_target` |
 | Tiền C45 chưa tính được (coverage thấp ⇒ `null`) | **không phạt** | `c45_unavailable` |
 | Chưa cấu hình bậc phạt | không phạt | `unconfigured` |
@@ -108,6 +150,8 @@ Loại C45 khỏi tổng tháng **theo từng NV, từng kỳ** (không phải l
 
 ```json
 "penalty": {
+  "mode": "enforced",
+  "effectiveFrom": "2026-08-01",
   "enabled": true,
   "targetPct": 78.4,
   "tier": "t70_90",
@@ -120,6 +164,7 @@ Loại C45 khỏi tổng tháng **theo từng NV, từng kỳ** (không phải l
   "xuStatus": "quarter_pending",
   "xuMissing": 2,
   "total": 2400000,
+  "appliedAmount": 2400000,
   "cappedByC45": false,
   "provisional": true,
   "formulaText": "Đạt 78,4% → bậc 70–90% → trừ 0,2% × doanh thu 1.200.000.000đ = 2.400.000đ (tối đa bằng C45 7.599.706đ)",
@@ -157,6 +202,114 @@ Loại C45 khỏi tổng tháng **theo từng NV, từng kỳ** (không phải l
 
 ---
 
+## 5B. ‼ CẢNH BÁO SỚM — phần QUAN TRỌNG NHẤT của module này
+
+> **CEO chốt 29/07:** *"chỉ vì con số 50,5 và con số 50,0 mà mất tiền triệu của nhân viên thì đau lắm. Spec nhấn mạnh là **bạn có thể mất trắng số tiền tại cột C45 là … nếu bạn không cố gắng thêm giá trị đơn hàng là … (trước VAT)**. Như vậy NV sẽ khâm phục và khẩu phục."*
+
+Phạt mà không báo trước thì chỉ làm NV ức chế, không cải thiện được gì. Cảnh báo sớm biến ô phạt từ **hình phạt** thành **động lực**. Đây **không phải** tính năng phụ — làm phạt mà thiếu phần này là **làm thiếu**.
+
+### 5B.1 Câu chữ chuẩn (backend sinh, không để frontend tự ghép)
+
+Mốc **mất trắng** — nặng nhất, ưu tiên hiện:
+```
+⚠ Bạn có thể MẤT TRẮNG 7.599.706đ ở cột C45 (Lương tăng thêm)
+   nếu không tăng thêm 31.000.000đ giá trị đơn hàng (trước VAT) trong tháng này.
+   Hiện đạt 48,2% target — cần vượt mốc 50%.
+```
+
+Mốc **giảm bậc phạt**:
+```
+⚠ Đang bị trừ 0,3% (2.850.000đ) ở cột C45.
+   Thêm 96.000.000đ giá trị đơn hàng (trước VAT) là xuống còn 0,2% — đỡ 950.000đ.
+   Hiện đạt 62,1% target — cần đạt mốc 70%.
+```
+
+Mốc **thoát phạt hoàn toàn**:
+```
+✅ Thêm 142.000.000đ giá trị đơn hàng (trước VAT) là HẾT PHẠT và bắt đầu được thưởng.
+   Hiện đạt 81,5% target — cần đạt mốc 90%.
+```
+
+Ba thành phần **bắt buộc có đủ**, thiếu cái nào là chưa đạt yêu cầu CEO:
+1. **Số tiền đang bị đe doạ** (mất trắng bao nhiêu / đang bị trừ bao nhiêu).
+2. **Số tiền doanh thu cần thêm**, ghi rõ **(trước VAT)**.
+3. **Mốc % phải chạm** và **% hiện tại**.
+
+### 5B.2 Cách tính khoảng cách — 2 cái bẫy
+
+```
+gapTớiMốc = target × mốc% − doanhThuHiệnTại (trước VAT)
+```
+
+**‼ Bẫy 1 — mốc 50% phải VƯỢT, hai mốc kia chỉ cần CHẠM.**
+Luật là `pct ≤ 50%` mất trắng, nên đạt **đúng** 50,0% **vẫn mất trắng**. Ba mốc **không đối xứng**:
+
+| Mốc | Điều kiện thoát | Cách tính gap |
+|---|---|---|
+| **50%** | phải **> 50%** | `ceil1k(target × 0,5 − achieved)` **+ 1.000đ đệm** |
+| **70%** | chỉ cần **≥ 70%** | `ceil1k(target × 0,7 − achieved)` |
+| **90%** | chỉ cần **≥ 90%** | `ceil1k(target × 0,9 − achieved)` |
+
+Đây **đúng** chỗ CEO lo (50,0 và 50,5). Bảo NV "thêm 30.000.000đ là thoát" mà chạy xong đúng 50,0% vẫn mất trắng thì **hỏng hết niềm tin**. Đệm 1.000đ là rẻ, mất trắng 7,6 triệu là đắt.
+
+**‼ Bẫy 2 — LUÔN làm tròn LÊN, tuyệt đối không làm tròn xuống.**
+`ceil1k` = làm tròn **lên** đến nghìn. Làm tròn xuống ⇒ NV chạy đúng con số app bảo mà **vẫn thiếu vài trăm đồng** ⇒ vẫn mất tiền. Làm tròn lên thì cùng lắm NV vượt dư một chút — không ai thiệt.
+
+### 5B.3 Chọn mốc nào để hiện
+
+Hiện **mốc kế tiếp gần nhất** theo % hiện tại, không phải luôn hiện mốc 90%:
+
+| Đang ở | Mốc hiện chính | Có thể hiện thêm |
+|---|---|---|
+| `pct ≤ 50%` | **50%** (thoát mất trắng) | 70%, 90% |
+| `50% < pct < 70%` | **70%** (0,3% → 0,2%) | 90% |
+| `70% ≤ pct < 90%` | **90%** (hết phạt) | — |
+| `pct ≥ 90%` | **không hiện cảnh báo phạt** | *(tuỳ chọn: thêm bao nhiêu để lên bậc thưởng cao hơn)* |
+
+Mốc gần nhất là mốc NV **với tới được**. Bảo người đang ở 45% rằng "thêm 500 triệu là hết phạt" thì họ bỏ cuộc luôn — phải cho họ thấy **mốc gần nhất cứu được nhiều tiền nhất trước**.
+
+### 5B.3b Câu chữ tháng 7 (`warn_only`) — phải nói rõ CHƯA TRỪ
+
+Tháng 7 số phạt tính ra nhưng **chưa trừ đồng nào**. Cảnh báo phải nói đúng điều đó, nếu không NV tưởng đã mất tiền rồi:
+
+```
+ℹ T07.2026 — THÁNG CHẠY THỬ, CHƯA TRỪ TIỀN.
+   Nếu áp dụng, bạn sẽ MẤT TRẮNG 7.599.706đ ở cột C45.
+   Từ 01/08/2026 mới trừ thật.
+   Muốn thoát: tăng thêm 31.000.000đ giá trị đơn hàng (trước VAT). Hiện đạt 48,2%.
+```
+
+**Cấm** dùng câu ở 5B.1 (thể đe doạ "bạn có thể mất trắng…") cho kỳ `warn_only` mà không kèm chữ **"chưa trừ tiền"** — sẽ có NV tưởng tháng 7 đã bị trừ.
+
+### 5B.4 Fail-closed của cảnh báo
+
+| Tình huống | Xử lý |
+|---|---|
+| Chưa giao target | **không hiện cảnh báo** — không có mốc để so |
+| Tiền C45 `null` (coverage thấp) | hiện **mốc doanh thu**, **KHÔNG** nói số tiền mất (chưa biết thì không được bịa) |
+| `penaltyEnabled = false` | không hiện |
+| Kỳ `warn_only` (T07.2026) | **vẫn hiện**, dùng câu chữ ở **5B.3b** — đây chính là mục đích của tháng chạy thử |
+| **Kỳ đã đóng** (tháng đã hết) | **đổi câu chữ** sang thể đã rồi: *"Tháng này đạt 48,2% — C45 7.599.706đ không được tính vào chi phí tháng."* **Cấm** dùng *"nếu không cố gắng…"* khi tháng đã hết — vô nghĩa và phản cảm. |
+
+### 5B.5 Hiện ở đâu
+
+1. Dòng `sub` của **ô KPI "Phạt dự kiến"** — rút gọn 1 dòng.
+2. **Đầy đủ** trong hộp bấm-bung "cách tính phạt" (song song hộp cách tính thưởng đã có).
+3. Trường riêng trong payload:
+```json
+"warning": {
+  "kind": "drop_c45",
+  "nextThresholdPct": 50,
+  "mustExceed": true,
+  "revenueGap": 31000000,
+  "moneyAtRisk": 7599706,
+  "text": "Bạn có thể MẤT TRẮNG 7.599.706đ ở cột C45 (Lương tăng thêm) nếu không tăng thêm 31.000.000đ giá trị đơn hàng (trước VAT) trong tháng này. Hiện đạt 48,2% target — cần vượt mốc 50%."
+}
+```
+4. **Tin nhắn Telegram: CHƯA** (mục 7 đang chờ CEO chốt). Khi mở, đây là nội dung **đáng gửi nhất** trong cả module phạt.
+
+---
+
 ## 6. Quyền — CEO chốt: TẤT CẢ NV được xem
 
 Đảo ngược chốt "chỉ báo CEO" lúc sáng. Nay:
@@ -172,12 +325,15 @@ Loại C45 khỏi tổng tháng **theo từng NV, từng kỳ** (không phải l
 
 **Mâu thuẫn cần giải:** NV nhìn thấy phạt trên app, nhưng tin nhắn chi phí (**12:30 thứ 7** và **17:30 ngày cuối tháng**) đang báo **tổng chi phí gốc**. Hai nơi ra hai số khác nhau ⇒ NV sẽ hỏi *"số nào đúng?"*.
 
-Ba lựa chọn:
-- **(a) — Claude khuyến nghị:** đợt này **không đụng tin nhắn**. App hiện phạt trước, chạy 1 kỳ cho chắc số, rồi mới đưa vào tin.
-- (b) Thêm **1 dòng** "Trừ phạt dự kiến … · Còn lại …" vào tin cuối tháng.
-- (c) Đổi hẳn số trong tin thành số sau phạt — **không nên**, mất số gốc để đối chiếu.
+**CEO chốt 29/07: theo phương án (a) — ĐỢT NÀY KHÔNG ĐỤNG TIN NHẮN.**
 
-Cờ `PENALTY_NOTIFY` mặc định **tắt**, fail-closed như 3 luồng kia.
+- Tin **07:30 hằng ngày**, **12:30 thứ 7**, **17:30 / 17:40 ngày cuối tháng**: **giữ nguyên 100%**, không thêm chữ nào về phạt.
+- Phạt chỉ hiện **trên app**. Chạy đúng 1 kỳ, đối chiếu xong, CEO gật thì mới bàn đưa vào tin.
+- Cờ `PENALTY_NOTIFY` **tạo sẵn, mặc định TẮT**, fail-closed như 3 luồng kia. Có cờ để sau này khỏi sửa code, **không phải để bật bây giờ**.
+
+*(Đã cân nhắc và loại: (b) thêm 1 dòng vào tin cuối tháng — sớm quá, tháng 7 còn chưa áp dụng; (c) đổi hẳn số trong tin thành số sau phạt — mất số gốc để đối chiếu.)*
+
+**Lưu ý cho bot:** T07.2026 đang ở `warn_only`, số trên app **bằng đúng** số trong tin (chưa trừ gì) ⇒ **tháng 7 không hề có mâu thuẫn**. Mâu thuẫn chỉ phát sinh từ 01/08 — đó là lúc phải quay lại quyết định mục này.
 
 ---
 
@@ -189,6 +345,12 @@ Cờ `PENALTY_NOTIFY` mặc định **tắt**, fail-closed như 3 luồng kia.
 4. Ghi 1 mục `CHANGELOG.md`.
 
 Tách file phạt mới (vd `src/penalty.js`) thì **phải thêm vào `FORMULA_SOURCES`** trong `bonusFormulaVersion.test.js`, nếu không sửa công thức phạt sẽ **lọt khoá**.
+
+**Bổ sung `FORMULA_CONFIG_KEYS`** trong `bonusFormulaVersion.test.js` — nếu không, sửa bậc phạt hoặc **đổi ngày áp dụng** sẽ không làm test đỏ:
+```js
+'penaltyTiers', 'penaltyEffectiveFrom', 'penaltyWarnFrom', 'penaltyEnabled', 'xuPenalty'
+```
+**Ngày áp dụng nằm trong khoá version là có chủ ý:** dời ngày phạt = đổi thời điểm NV bị trừ tiền — đó là thay đổi công thức, phải để lại dấu vết version + CHANGELOG, không được sửa lén.
 
 ---
 
@@ -207,39 +369,61 @@ Tách file phạt mới (vd `src/penalty.js`) thì **phải thêm vào `FORMULA_
 8. `89,5%` / `69,5%` / `50,5%` đều rơi đúng một bậc; quét `pct` từ 0 đến 150 bước 0,1 ⇒ **không giá trị nào không khớp bậc nào**.
 9. `pct ≤ 50%` ⇒ **tổng chi phí nhận KHÔNG còn C45**: `tổngSauPhạt = tổngGốc − tiềnC45`, và `c45Dropped: true`.
 
+**‼ Cảnh báo sớm (mục 5B) — CEO nhấn mạnh, test kỹ nhất**
+10. **Chạy đúng số app bảo thì phải THOÁT.** Với mọi `pct` từ 0 đến 89,9 bước 0,1: lấy `revenueGap` app trả, cộng vào `achieved`, tính lại bậc ⇒ **phải sang bậc tốt hơn**. Đây là ca chống "bảo thêm 30 triệu là thoát, chạy xong vẫn mất trắng".
+11. **Mốc 50% phải VƯỢT:** `target = 1 tỷ`, `achieved = 480tr` ⇒ `revenueGap` cộng vào phải cho `pct > 50`, **không** phải `= 50`. Kiểm bằng `assert.ok(newPct > 50)`, không phải `>=`.
+12. **Làm tròn LÊN:** gap thô `30.000.001đ` ⇒ hiện `30.001.000đ`, **không** phải `30.000.000đ`. `assert.ok(gap >= gapThô)` cho 200 giá trị ngẫu nhiên có seed cố định.
+13. **Chọn đúng mốc gần nhất:** `pct=45` ⇒ mốc chính **50**; `pct=62` ⇒ **70**; `pct=81` ⇒ **90**; `pct=95` ⇒ **không có cảnh báo phạt**.
+14. **Câu chữ đủ 3 phần bắt buộc:** `text` phải chứa số tiền C45, số doanh thu cần thêm, chữ **"(trước VAT)"**, mốc % và % hiện tại. `assert.match(text, /trước VAT/)`.
+15. Chưa giao target ⇒ **không có** `warning`.
+16. C45 `null` ⇒ `warning` có mốc doanh thu nhưng `moneyAtRisk == null` và `text` **không chứa số tiền mất**.
+17. **Kỳ đã đóng** ⇒ `text` **không** chứa "nếu không" / "cố gắng"; phải là thể đã rồi. `assert.doesNotMatch(text, /nếu không|cố gắng/)`.
+
+**‼ Lịch áp dụng (mục 2.0) — khoá chống-quên**
+18. **Kỳ T07.2026** ⇒ `mode: 'warn_only'`, `appliedAmount === 0`, **tổng chi phí bằng ĐÚNG tổng gốc** (`assert.equal(tổngSauPhạt, tổngGốc)`), nhưng `warning` **vẫn có**.
+19. **Kỳ T08.2026** ⇒ `mode: 'enforced'`, `appliedAmount === total`, tổng chi phí **giảm đúng bằng** số phạt.
+20. **Biên ngày:** `2026-07-31` ⇒ `warn_only`; `2026-08-01` ⇒ `enforced`. Không lệch một ngày.
+21. **Không phụ thuộc ngày chạy máy:** chạy test với giờ hệ thống giả lập là 05/07, 31/07, 01/08, 20/09 ⇒ kết quả cho **kỳ T08** luôn là `enforced`. Chế độ tính theo **kỳ dữ liệu**, không theo ngày bấm nút.
+22. `penaltyEnabled=false` ⇒ `mode: 'off'` **kể cả sau 01/08** (công tắc tắt khẩn cấp thắng lịch).
+23. Nhãn `warn_only` phải chứa **"chưa trừ tiền"** và **"01/08/2026"**: `assert.match(label, /chưa trừ tiền/)`.
+
+**Tin nhắn — khoá phương án (a)**
+24. Không tin nào cho NV chứa chữ về phạt: đọc mã `telegram-bot.js` + `salesReport.js` ⇒ `assert.doesNotMatch(SRC, /phạt|penalty/i)` trong các hàm dựng tin NV.
+25. `PENALTY_NOTIFY` mặc định **tắt**, fail-closed giống 3 luồng kia.
+
 **Fail-closed**
-10. Chưa giao target ⇒ **không phạt**, `missing_target`.
-11. `penaltyEnabled=false` ⇒ không phạt kể cả khi cấu hình có bậc.
-12. Tiền C45 `null` ⇒ **không phạt** (`c45_unavailable`), **không** ra số âm.
-13. Tổng chi phí `null` ⇒ ô "sau phạt" **ẩn**, không render.
-14. Chưa đấu nối app lương ⇒ ô ứng hiện **"Chưa đấu nối"**, `assert.doesNotMatch(value, /^0/)`.
+26. Chưa giao target ⇒ **không phạt**, `missing_target`.
+27. Tiền C45 `null` ⇒ **không phạt** (`c45_unavailable`), **không** ra số âm.
+28. Tổng chi phí `null` ⇒ ô "sau phạt" **ẩn**, không render.
+29. Chưa đấu nối app lương ⇒ ô ứng hiện **"Chưa đấu nối"**, `assert.doesNotMatch(value, /^0/)`.
 
 **Quyền**
-15. NV chỉ thấy phạt **của mình**; ép `emp_code` người khác ⇒ **403**.
-16. Màn "Tất cả NV" với session NV ⇒ vẫn **403** `EMPLOYEE_COST_ALL_FORBIDDEN`.
+30. NV chỉ thấy phạt **của mình**; ép `emp_code` người khác ⇒ **403**.
+31. Màn "Tất cả NV" với session NV ⇒ vẫn **403** `EMPLOYEE_COST_ALL_FORBIDDEN`.
 
 **Version**
-17. Đổi bậc phạt / `perMissingXu` mà không nâng version ⇒ `bonusFormulaVersion.test.js` **đỏ**.
+32. Đổi bậc phạt / `perMissingXu` / **3 giá trị lịch ở 2.0** mà không nâng version ⇒ `bonusFormulaVersion.test.js` **đỏ**.
 
 ---
 
 ## 10. Thứ tự làm
 
-| Đợt | Việc | Vì sao |
+| Đợt | Việc | Khi nào |
 |---|---|---|
-| **1** | Máy tính phạt target + phạt Xu (backend), **cờ TẮT** | có số để đối chiếu, chưa ai thấy |
-| **2** | 4 ô KPI + `formulaText` + cột phạt | Sếp soi số thật trước khi công bố |
-| **3** | Bật `penaltyEnabled`, công bố cho NV | sau khi Sếp gật |
-| **4** | Đấu API app lương cho ô ứng lần 1 | phụ thuộc bên app lương |
+| **1** | Máy tính phạt target + phạt Xu + **lịch áp dụng (2.0)** | ngay, deploy **sau 31/07** |
+| **2** | 4 ô KPI + `formulaText` + **cảnh báo sớm (5B)** + cột phạt | cùng đợt 1 hoặc ngay sau. **Không tách 5B ra sau** — công bố phạt mà chưa có cảnh báo là NV chỉ thấy bị phạt |
+| **3** | *(không có bước "bật cờ")* — **tự chuyển sang trừ thật lúc 00:00 ngày 01/08/2026** | tự động |
+| **4** | Đấu API app lương cho ô ứng lần 1 | khi app lương sẵn sàng |
 
 **KHÔNG deploy trước 31/07** — ngày chốt tháng đang chạy tin chi phí + thưởng thật.
-**KHÔNG bật cờ trong đợt deploy đầu.**
+
+**Không còn bước "nhớ bật cờ".** Lịch ở mục 2.0 lo việc đó. Deploy ngày 01/08 hay 15/08 đều ra kết quả **giống hệt** cho kỳ T08 — không phụ thuộc ai bấm gì lúc nào.
 
 ---
 
 ## 11. CEO còn phải chốt
 
 1. ~~Xác nhận mốc~~ — **XONG 29/07 chiều.** Mốc ở 2.1 là bản CEO chốt: ≥90% không phạt · 70–90% 0,2% · 50–70% 0,3% · **≤50% mất trắng C45**. "Mất trắng (0,5%)" = **loại trọn C45**, không phải trừ 0,5% doanh thu.
-2. **Tin nhắn** xử lý theo (a), (b) hay (c) ở mục 7.
-3. **Mức 300.000đ/Xu** giữ hay đổi.
-4. **Vách đá 50%:** ở 50,1% chỉ mất ~0,3% doanh thu; chạm đúng 50,0% là **mất trắng C45** (ví dụ 7,6 triệu). Chênh nhau rất lớn chỉ vì 0,2% target. Claude đề nghị **giữ đúng ý Sếp** nhưng app phải **cảnh báo sớm**: *"Còn thiếu … đồng nữa là mất trắng C45"* — để NV còn kịp chạy, chứ không phải cuối tháng mới biết.
+2. ~~Tin nhắn~~ — **XONG 29/07.** CEO chốt **phương án (a)**: đợt này không đụng tin nhắn, app chạy đúng 1 kỳ rồi mới bàn.
+3. **Mức 300.000đ/Xu** giữ hay đổi. *(Chưa chốt — mặc định giữ 300.000đ.)*
+4. ~~Vách đá 50%~~ — **XONG 29/07.** CEO chốt giữ nguyên luật, **bắt buộc có cảnh báo sớm** (mục **5B**): *"bạn có thể mất trắng số tiền tại cột C45 là … nếu bạn không cố gắng thêm giá trị đơn hàng là … (trước VAT)"*. Đã viết thành spec đầy đủ kèm 8 ca test.
