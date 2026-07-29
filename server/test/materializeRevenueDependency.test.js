@@ -35,6 +35,20 @@ test('fail-closed guard runs before candidate file write and active-slot replace
   assert.match(source, /writeJson = writeJsonAtomic/);
 });
 
+test('APP WEB partner period uses only the effective revenue date, not order-created date', () => {
+  const fetchPartnerAt = source.indexOf('async function fetchPartner()');
+  const mainAt = source.indexOf('async function main()', fetchPartnerAt);
+  assert.ok(fetchPartnerAt >= 0 && mainAt > fetchPartnerAt, 'fetchPartner block must be present');
+  const fetchPartnerSource = source.slice(fetchPartnerAt, mainAt);
+  assert.match(fetchPartnerSource, /Quy kỳ theo MỘT mốc ngày duy nhất/);
+  assert.doesNotMatch(fetchPartnerSource, /AND\s+o\.created_at\s+>=/,
+    'partner revenue must not be filtered by order creation start date');
+  assert.doesNotMatch(fetchPartnerSource, /AND\s+o\.created_at\s+</,
+    'partner revenue must not be filtered by order creation end date');
+  assert.match(fetchPartnerSource, /COALESCE\(partner\.effective_date, \(o\.created_at AT TIME ZONE 'Asia\/Bangkok'\)::date\) >= \$1::date/);
+  assert.match(fetchPartnerSource, /COALESCE\(partner\.effective_date, \(o\.created_at AT TIME ZONE 'Asia\/Bangkok'\)::date\) <= \$2::date/);
+});
+
 test('all slot writers share the same lock and atomic JSON writer', () => {
   for (const [label, text] of [['manual upload', uploadSource], ['legacy import', legacySource]]) {
     assert.match(text, /revenue_materialize\.lock/, `${label} must use the shared lock path`);

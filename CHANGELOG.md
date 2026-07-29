@@ -17,6 +17,12 @@
 
 **Không ảnh hưởng đợt 31/07** vì hai cờ `EMP_COST_NOTIFY`/`BONUS_NOTIFY` đang được TẮT theo lệnh hoãn của CEO. Lịch mới có hiệu lực từ kỳ sau khi deploy và bật lại cờ.
 
+### 2026-07-29 (tối) — Report Bot — App Report bỏ lọc kép WEB partner theo ngày đặt
+
+Triển khai mục 3 của `SPEC_REVENUE_DELIVERY_PERIOD.md`: `fetchPartner()` trong materializer WEB partner không còn lọc thêm `o.created_at` theo kỳ; quy kỳ chỉ theo một mốc ngày duy nhất là `effective_date`/ngày quy kỳ. Thêm regression để cấm đưa điều kiện `o.created_at >=` / `<` quay lại trong block `fetchPartner()`.
+
+Dry-run T06/T07 hiện tại chỉ đọc DB, chưa ghi slot: nguồn App Sale hiện có không còn dòng `effective_date` T07 nhưng `created_at` ngoài T07 nên APP_WEB_PARTNER T07 chưa tăng; số 9,786 tỷ trong spec cần Claude/App Sale xác nhận lại snapshot/tiêu chí trước khi ghi thật.
+
 ### 2026-07-29 (tối) — Claude Code — TRUY RA 382 TRIỆU BIẾN MẤT: bộ lọc kép làm đơn rơi khỏi CẢ HAI kỳ
 > CEO: "app sale thì 28,96 tỷ, còn app report lại 28,58 tỷ, vậy con số gần 400 triệu đang nằm ở đâu?"
 

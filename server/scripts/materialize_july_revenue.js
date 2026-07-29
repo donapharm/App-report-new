@@ -205,10 +205,9 @@ async function fetchPartner() {
        AND COALESCE(o.entity_group, oi.entity_group, '')='PARTNER'
        AND o.status <> 'HOLD_GOLIVE'
        AND (COALESCE(o.is_test,false) IS NOT TRUE OR partner.responded_at IS NOT NULL)
-       -- PA-A / app cũ: kỳ WEB partner theo kỳ đơn đặt; đơn T06 giao sang T07
-       -- vẫn thuộc nhóm theo dõi/còn nợ kỳ trước, không cộng vào doanh thu T07.
-       AND o.created_at >= ($1::date::text || ' 00:00:00+07')::timestamptz
-       AND o.created_at < (($2::date + INTERVAL '1 day')::date::text || ' 00:00:00+07')::timestamptz
+       -- Quy kỳ theo MỘT mốc ngày duy nhất: ngày quy kỳ/effective_date.
+       -- Không lọc kép theo ngày đặt o.created_at; nếu không đơn đặt cuối T06 giao/phản hồi T07
+       -- sẽ rơi khỏi cả hai kỳ và làm mất doanh thu.
        AND COALESCE(partner.effective_date, (o.created_at AT TIME ZONE 'Asia/Bangkok')::date) >= $1::date
        AND COALESCE(partner.effective_date, (o.created_at AT TIME ZONE 'Asia/Bangkok')::date) <= $2::date
        AND COALESCE(partner.delivered_qty,0) > 0
@@ -347,7 +346,7 @@ async function main() {
   writeJson(path.join(artDir, `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}.json`), artifact);
   const md = [`# Revenue — CRM MISA + APP WEB`, '', `Generated: ${artifact.generatedAt}`, '', `MISA run: #${run.id}, finished_at=${run.finished_at}`, '', '| Source | Rows | Orders | Revenue |', '|---|---:|---:|---:|'];
   for (const [k, v] of Object.entries(summaryBySource)) md.push(`| ${k} | ${v.rows} | ${v.orders} | ${v.revenue} |`);
-  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', `Materialize guard: PASS; baseline=${previousSlot?.id || 'none'}; revenueRatio=${materializeGuard.metrics?.revenueRatio ?? 'n/a'}; rowRatio=${materializeGuard.metrics?.rowRatio ?? 'n/a'}.`, '', `Attribution guard: ${guarded.summary.rows} dòng / ${guarded.summary.units} đơn vị / ${guarded.summary.revenue}đ được đưa về UNALLOCATED do emp_code nguồn xung đột roster hiện hành. Không remap sang NV khác.`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, period `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, period effective date, period order creation date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- Closed periods stay frozen; this script only creates/replaces active slot for the requested/current period.', '');
+  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', `Materialize guard: PASS; baseline=${previousSlot?.id || 'none'}; revenueRatio=${materializeGuard.metrics?.revenueRatio ?? 'n/a'}; rowRatio=${materializeGuard.metrics?.rowRatio ?? 'n/a'}.`, '', `Attribution guard: ${guarded.summary.rows} dòng / ${guarded.summary.units} đơn vị / ${guarded.summary.revenue}đ được đưa về UNALLOCATED do emp_code nguồn xung đột roster hiện hành. Không remap sang NV khác.`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, period `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, period effective date only, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- Closed periods stay frozen; this script only creates/replaces active slot for the requested/current period.', '');
   const latestArtifactBase = `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}`;
   atomicWriteFile(path.join(artDir, `${latestArtifactBase}.md`), md.join('\n'));
   writeJson(path.join(artDir, `${latestArtifactBase}_${slotId}.json`), artifact);
