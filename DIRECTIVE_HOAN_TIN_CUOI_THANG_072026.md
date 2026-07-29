@@ -15,7 +15,14 @@ Gửi tin bằng số cũ = **nhân viên nhận số thiếu**, rồi vài hôm
 
 ---
 
-## Việc 1 — TẮT 2 CỜ (làm trước 31/07, càng sớm càng tốt)
+## ✅ Việc 1 — TẮT 2 CỜ — **ĐÃ XONG 29/07 22:55**
+
+> `EMP_COST_NOTIFY=0` · `BONUS_NOTIFY=0` · restart **chỉ** `app-report-tgbot` (PID mới **2937285**)
+> `app-report` **không** restart (PID giữ **2720705**) · `web/dist` vẫn `4c34551-20260729-201455-841`
+> Log đã in `ℹ Chi phí/Thưởng notify: TẮT` · backup `.env.backup-20260729-225543-disable-cost-bonus-notify`
+> **⇒ Rủi ro gửi tin sai ngày 31/07 đã được loại bỏ.** Claude nghiệm thu ĐẠT.
+
+### (giữ lại để tra cứu) Yêu cầu ban đầu của Việc 1
 
 CEO đã duyệt cả hai:
 - Tin **thưởng**: CEO chốt phương án **(B) Hoãn tin thưởng tháng 7**
@@ -114,5 +121,5 @@ Lý do: tháng 8 go-live xong, **45 dòng `HOLD_GOLIVE` vừa thêm** sẽ đổ
 | Chênh lệch với App Sale | **2.399.520đ** — 1 dòng thiếu `revenue_date`, đã biết rõ |
 | Lịch tin cuối tháng dời 17:30 → 20:00 | **XONG** trên `main`, **chưa deploy** |
 | Phạt v3.3 | Trên nhánh `feat/bonus-penalty-v3.3`, Claude đã duyệt, **chưa merge** |
-| Hai cờ thông báo | **VẪN BẬT** ⚠ — Việc 1 ở trên |
+| Hai cờ thông báo | **ĐÃ TẮT** ✅ 29/07 22:55, có bằng chứng PID + log |
 | Tin báo chậm cho NV | **CHƯA GỬI** — Việc 2 |
