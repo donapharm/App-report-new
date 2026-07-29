@@ -1,3 +1,28 @@
+### 2026-07-30 — Claude Code (CEO yêu cầu) — Đưa CÁCH TÍNH PHẠT vào Quản target + mở 4 ô KPI ở "Tất cả NV"
+> CEO: "công thức tính phạt tại sao vẫn không có tại mục quản target — tôi yêu cầu mục này phải được hiển thị trong phần quản target. Tôi yêu cầu 4 ô KPI mới phải được hiển thị trong màn hình cho tôi."
+
+**Hai nguyên nhân, cả hai là thiếu sót thật:**
+
+**1. `Target.jsx` có ĐÚNG 0 lần nhắc tới phạt.** Spec `SPEC_BONUS_PENALTY_V33.md` chỉ yêu cầu 4 ô KPI ở trang Chi phí, **không** yêu cầu panel phạt trong Quản target — nên bot không làm. **Lỗi của Claude khi viết spec**: nút "Cấu hình Thưởng" đã nằm đó thì cách tính Phạt phải nằm cạnh, mới đối xứng.
+
+**2. Cả 4 ô KPI đều bị chặn bởi `!allEmployees`** — mà CEO mở màn ở chế độ **"Tất cả nhân viên"**. Nên **dù deploy CEO vẫn không thấy gì**. Đây là lý do thật, không phải chưa làm.
+
+**Đã thêm `PenaltyPolicyPanel` vào Quản target** (nút "⚠ Cách tính Phạt v3.3" cạnh nút Thưởng): trạng thái áp dụng theo **kỳ dữ liệu** (T07 chỉ cảnh báo / từ 01/08 trừ thật) · bảng **4 bậc liền mạch** kèm giải thích mốc 50% phải VƯỢT còn 70/90% chỉ cần chạm · phạt thiếu Xu 300.000đ/Xu + trạng thái bật/tắt · mô tả cảnh báo sớm và vì sao **làm tròn LÊN + cộng đệm**.
+
+**‼ Panel CHỈ ĐỌC, có chủ ý — và ghi rõ vì sao ngay trên màn hình.** Bậc phạt nằm trong **vân tay công thức** (`bonus_formula_lock.json`). Cho sửa từ giao diện là **phá khoá chống-quên**: đổi bậc mà không nâng `FORMULA_VERSION` thì **số tiền nhân viên nhận đổi mà không ai biết**. Khác với Thưởng — Thưởng sửa được vì đi qua luồng preview→save→audit có phân tầng.
+
+**Panel nạp cấu hình riêng** (`api.adminBonusPolicies` theo kỳ), không phải mở hộp Thưởng trước mới xem được.
+
+**4 ô KPI nay hiện ở MỌI chế độ.** Ở "Tất cả NV" ghi rõ **"Chọn 1 NV"** — vì backend chỉ tính phạt khi có `empCode` (`routes.js`: `empCode ? buildPenalty(...) : null`). **Thà nói thật là chưa có số còn hơn ẩn đi để người dùng tưởng tính năng không tồn tại.** Ô "Ứng lần 1" bỏ chặn hoàn toàn vì nội dung là "Chưa đấu nối app lương", không phụ thuộc NV.
+
+**KHÔNG cộng dồn toàn đội ở frontend** — đã ghi chú thẳng trong code. Cộng ở frontend là tự dựng nguồn số thứ hai, đúng cái đã gây ra vụ hai app lệch 382,6 triệu. Muốn có số toàn đội thì **backend phải tính**, ghi thành việc còn lại.
+
+**Một ca web test đỏ — và nó ĐÚNG là luật cũ đã bị CEO thay:** `EmployeeCost.diemXu.test.mjs` cấm đưa "Phạt dự kiến" thành ô KPI (thiết kế cũ để nó ở hàng phép tính cấn trừ). **Không xoá cho qua** — đã sửa thành khoá **yêu cầu mới**: giữ nguyên cấm "Xu tích lũy" làm ô riêng, nhưng bắt buộc lưới KPI **phải có** 3 ô phạt + `SalaryAdvanceKpi`, **cấm** `{!allEmployees && <PenaltyKpi`, và bắt buộc ở "Tất cả NV" phải ghi "Chọn 1 NV". Đổi một guard cũ đã lạc hậu thành guard mới mạnh hơn.
+
+**Test:** server **505/514** đúng 9 ca đỏ baseline (3 auth + 6 `pdfinfo`), **0 hồi quy** · web **84/84** · web build PASS.
+
+**Còn lại cho bot:** (a) **deploy** — production vẫn ở `4c34551`, chưa có gì của 2 ngày qua; (b) backend cộng dồn phạt toàn đội cho chế độ "Tất cả NV".
+
 ### 2026-07-29 — PHẠT v3.3 backend batch 1
 - Thêm máy tính phạt target tách biệt P1/P2: bậc chính xác 90/70/50, trần C45, mất trắng C45, fail-closed target/C45, lịch T07 cảnh báo → T08 áp dụng, `formulaText` và cảnh báo sớm có gap làm tròn lên.
 - Tái dùng `xuPolicy.buildCheckpoint` cho phạt thiếu Xu (mặc định tắt), thêm `PENALTY_NOTIFY` mặc định tắt và giữ nguyên toàn bộ hàm dựng tin Telegram/email.

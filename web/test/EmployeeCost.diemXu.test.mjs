@@ -92,7 +92,21 @@ test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction,
   const kpiGridStart = page.indexOf('<div className="kpi-grid employee-cost-kpis">');
   const kpiGrid = page.slice(kpiGridStart, page.indexOf('<KhoanWarning', kpiGridStart));
   const equation = page.match(/<div className="employee-cost-khoan-equation">[\s\S]*?<\/div>/)?.[0] || '';
-  assert.doesNotMatch(kpiGrid, /Xu tích lũy|Phạt dự kiến/);
+  // "Xu tích lũy" vẫn KHÔNG được làm ô KPI riêng — nó thuộc hàng phép tính cấn trừ.
+  // Nhưng "Phạt dự kiến" thì ĐƯỢC: CEO chốt 30/07 bắt buộc hiện thành ô KPI ở MỌI
+  // chế độ, kể cả "Tất cả NV". Trước đó 4 ô bị chặn bởi !allEmployees nên CEO mở ra
+  // không thấy gì và tưởng tính năng chưa làm.
+  assert.doesNotMatch(kpiGrid, /Xu tích lũy/);
+  // Khoá yêu cầu MỚI: 4 ô phải có mặt trong lưới KPI, và ở "Tất cả NV" phải nói rõ
+  // "Chọn 1 NV" thay vì ẩn đi — thà nói thật là chưa có số còn hơn để người dùng
+  // tưởng tính năng không tồn tại.
+  for (const label of ['Phạt dự kiến', 'Tổng chi phí tháng sau phạt', 'Phạt thiếu Xu cuối quý']) {
+    assert.ok(kpiGrid.includes(label), `lưới KPI phải có ô "${label}"`);
+  }
+  assert.match(kpiGrid, /<SalaryAdvanceKpi \/>/, 'ô Ứng lần 1 phải hiện ở mọi chế độ');
+  assert.doesNotMatch(kpiGrid, /\{!allEmployees && <PenaltyKpi/, '4 ô phạt không được ẩn ở chế độ Tất cả NV');
+  assert.match(kpiGrid, /allEmployees\s*\n?\s*\? <Kpi label="Phạt dự kiến" value="Chọn 1 NV"/,
+    'ở Tất cả NV phải ghi rõ "Chọn 1 NV", không hiện số 0 và không ẩn ô');
   assert.match(kpiGrid, /label="Nhân viên"[\s\S]*label="Doanh thu chưa VAT"[\s\S]*<KhoanPointKpi[\s\S]*Tổng chi phí tháng \(chi phí gốc\)/);
   assert.match(kpiGrid, /Tổng chi phí tháng \(chi phí gốc\)[\s\S]*tone="employee-cost-tone-base"[\s\S]*<BonusKpi/);
   assert.equal((page.match(/Tổng chi phí tháng \(chi phí gốc\)/g) || []).length, 1);

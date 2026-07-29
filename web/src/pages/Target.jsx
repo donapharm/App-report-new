@@ -307,6 +307,90 @@ function BonusPolicyPanel({ ky, employees = [], onSaved }) {
   </div>;
 }
 
+// ── CÁCH TÍNH PHẠT v3.3 (CEO yêu cầu 2026-07-30: phải hiện trong Quản target) ──
+// CHỈ ĐỌC, có chủ ý. Bậc phạt nằm trong VÂN TAY công thức
+// (config/bonus_formula_lock.json). Sửa được từ giao diện là phá khoá chống-quên:
+// đổi bậc mà không nâng FORMULA_VERSION thì số nhân viên nhận đổi mà không ai
+// biết. Muốn đổi phải qua đủ 4 bước ở CLAUDE.md mục 5.
+const PENALTY_TIER_LABELS = {
+  none: { range: 'Từ 90% trở lên', action: 'KHÔNG phạt — chạy công thức thưởng', tone: 'ok' },
+  t70_90: { range: '70% đến dưới 90%', action: 'Trừ 0,2% doanh thu trước VAT vào cột C45', tone: 'warn' },
+  t50_70: { range: 'Trên 50% đến dưới 70%', action: 'Trừ 0,3% doanh thu trước VAT vào cột C45', tone: 'warn' },
+  drop_c45: { range: 'Bằng hoặc dưới 50%', action: 'MẤT TRẮNG toàn bộ cột C45 — không cộng vào tổng chi phí nhận', tone: 'hi' },
+};
+const PENALTY_TIER_ORDER = ['none', 't70_90', 't50_70', 'drop_c45'];
+
+function dmy(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || '—');
+}
+
+function PenaltyPolicyPanel({ config, formulaVersion, period }) {
+  const fv = formulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
+  if (!config || !Object.prototype.hasOwnProperty.call(config, 'penaltyTiers')) {
+    return <div className="card">Chưa tải được cấu hình phạt từ backend.</div>;
+  }
+  const tiers = Array.isArray(config.penaltyTiers) ? config.penaltyTiers : [];
+  const byTier = Object.fromEntries(tiers.map((item) => [String(item?.tier || ''), item]));
+  const effFrom = config.penaltyEffectiveFrom || '';
+  const warnFrom = config.penaltyWarnFrom || '';
+  const enabled = config.penaltyEnabled === true;
+  const xu = config.xuPenalty || {};
+  // Chế độ tính theo KỲ DỮ LIỆU, không theo ngày mở màn hình — giống backend.
+  const start = /^(\d{2})\.(\d{4})$/.test(String(period || '')) ? `${String(period).slice(3)}-${String(period).slice(0, 2)}-01` : '';
+  const mode = !enabled ? 'off' : (start && effFrom && start >= effFrom) ? 'enforced' : (start && warnFrom && start >= warnFrom) ? 'warn_only' : 'off';
+  const modeText = mode === 'enforced' ? `ĐANG TRỪ THẬT (kỳ ${period})`
+    : mode === 'warn_only' ? `CHỈ CẢNH BÁO — chưa trừ tiền (kỳ ${period})`
+      : `CHƯA ÁP DỤNG cho kỳ ${period}`;
+  return <div className="bonus-policy-panel">
+    <div className="meta muted">Phạt {fv} — trừ vào <b>cột C45 "Lương tăng thêm"</b>. Cơ số: doanh thu <b>trước VAT</b>.
+      Trần phạt = <b>chính số tiền C45</b>, không bao giờ để C45 âm. Phạt là <b>số riêng</b>, KHÔNG trộn vào tiền thưởng và KHÔNG ghi đè số DataHub.
+      <b> Chỉ dự kiến/tham khảo, không payroll.</b></div>
+
+    <div className="card" style={{ borderColor: mode === 'enforced' ? 'var(--hi)' : 'var(--warn)' }}>
+      <b>Trạng thái áp dụng: {modeText}</b>
+      <div className="meta muted">Tự chuyển theo lịch, <b>không có nút bật tay</b>: chỉ cảnh báo từ <b>{dmy(warnFrom)}</b> · bắt đầu <b>trừ thật từ {dmy(effFrom)}</b>.
+        Chế độ tính theo <b>kỳ dữ liệu</b>, không theo ngày mở màn hình — nên chạy lại kỳ cũ vẫn ra đúng kết quả của kỳ đó.</div>
+    </div>
+
+    <div className="section-title">Bậc phạt theo % đạt target tháng</div>
+    <div className="table-scroll"><table className="data-table">
+      <thead><tr><th>% đạt target</th><th>Xử lý</th><th>Mã bậc</th></tr></thead>
+      <tbody>{PENALTY_TIER_ORDER.filter((key) => byTier[key]).map((key) => {
+        const label = PENALTY_TIER_LABELS[key];
+        return <tr key={key}>
+          <td><b>{label.range}</b></td>
+          <td style={{ color: `var(--${label.tone})` }}>{label.action}</td>
+          <td className="mono">{key}</td>
+        </tr>;
+      })}</tbody>
+    </table></div>
+    <div className="meta muted">Bốn bậc <b>liền mạch, không có khe hở</b>: mọi mức đạt đều rơi đúng một bậc.
+      Riêng mốc 50% phải <b>VƯỢT</b> mới thoát (đúng 50,0% vẫn mất trắng); hai mốc 70% và 90% chỉ cần <b>chạm</b>.</div>
+
+    <div className="section-title">Phạt thiếu Xu chi tiêu</div>
+    <div className="card">
+      <b>{Number(xu.perMissingXu || 0).toLocaleString('vi-VN')}đ / mỗi Xu thiếu</b> · hiện <b>{xu.enabled === true ? 'ĐANG BẬT' : 'ĐANG TẮT'}</b>
+      <div className="meta muted">Tháng chỉ tạm tính, <b>quyết toán vào cuối quý</b>, có đối trừ số kế toán đã hạch toán để <b>không phạt hai lần</b>. Số do <code>xuPolicy</code> tính, App Report chỉ hiển thị lại.</div>
+    </div>
+
+    <div className="section-title">Cảnh báo sớm cho nhân viên</div>
+    <div className="card">
+      Mỗi NV thấy trên màn <b>"Chi phí của tôi"</b>: <i>"có thể mất trắng … ở cột C45 nếu không tăng thêm … giá trị đơn hàng (trước VAT)"</i>,
+      kèm <b>mốc phải chạm</b> và <b>% hiện tại</b>.
+      <div className="meta muted">Số doanh thu cần thêm <b>luôn làm tròn LÊN</b>, và mốc 50% có <b>cộng đệm</b> — để NV chạy đúng con số app khuyên là <b>thoát thật</b>, không bị hụt vài trăm đồng rồi vẫn mất tiền.</div>
+    </div>
+
+    <div className="card" style={{ borderColor: 'var(--hi)' }}>
+      <b>🔒 Vì sao không sửa được bậc phạt ở đây</b>
+      <div className="meta muted">Bậc phạt nằm trong <b>vân tay công thức</b> (<code>bonus_formula_lock.json</code>). Cho sửa từ giao diện là phá khoá chống-quên:
+        đổi bậc mà không nâng số hiệu công thức thì <b>số tiền nhân viên nhận đổi mà không ai biết</b>.
+        Muốn đổi phải làm đủ 4 bước: nâng <code>FORMULA_VERSION</code> → sửa file cấu hình → ghi lại vân tay → ghi <code>CHANGELOG</code>.
+        Quên bước nào thì test đỏ, không ship được. Xem <code>CLAUDE.md</code> mục 5.</div>
+    </div>
+  </div>;
+}
+
 // Phải là component cấp module. Nếu khai báo Modal bên trong TargetAdminPanel,
 // mỗi lần trang cha reload KPI React sẽ thấy một component type mới, remount
 // toàn bộ BonusPolicyPanel và làm mất preview "ĐÃ LƯU" vừa hiển thị.
@@ -322,6 +406,9 @@ function TargetAdminModal({ open, title, onClose, children }) {
 
 function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   const [data, setData] = useState(null);
+  // Cấu hình phạt nạp riêng: hộp "Cách tính Phạt" phải xem được mà không cần
+  // mở hộp Thưởng trước. Chỉ đọc nên gọi một lần theo kỳ là đủ.
+  const [bonusPolicy, setBonusPolicy] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -338,6 +425,10 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   const [coOverwrite, setCoOverwrite] = useState(false);
   const fileRef = useRef(null);
   async function load() { if (!ky) return; setData(null); setData(await api.adminTargets(ky)); }
+  useEffect(() => {
+    if (!ky) return;
+    api.adminBonusPolicies({ period: ky }).then(setBonusPolicy).catch(() => setBonusPolicy(null));
+  }, [ky]);
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [ky]);
   useEffect(() => {
     if (!data || !focusEmp) return;
@@ -446,7 +537,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
-  const bonusFv = data?.bonusFormulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
+  const bonusFv = bonusPolicy?.formulaVersion || data?.bonusFormulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
   return (
     <>
       <div className="card smart-admin-head">
@@ -462,6 +553,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           <button className="btn ghost" disabled={busy} onClick={() => setTool('upload')}>⬆ Upload</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('quarter')}>📅 Nhập theo Quý</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('bonus')}>🎯 Cấu hình Thưởng {bonusFv}</button>
+          <button className="btn ghost" disabled={busy} onClick={() => setTool('penalty')}>⚠ Cách tính Phạt {bonusFv}</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('ai')}>🤖 AI đề xuất</button>
           <button className="btn ghost" disabled={busy} onClick={() => { setRollbackId(lastBatch?.batchId || ''); setTool('rollback'); }}>↩ Rollback</button>
         </div>
@@ -505,6 +597,9 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
         {/* onSaved: lưu xong phải nạp lại KPI/target của trang cha, nếu không
             màn hình vẫn giữ số cũ và trông như "chỉnh tay không ăn". */}
         <BonusPolicyPanel ky={ky} employees={data?.rows || []} onSaved={onTargetsChanged} />
+      </TargetAdminModal>
+      <TargetAdminModal open={tool === 'penalty'} title={`⚠ Cách tính Phạt ${bonusFv}`} onClose={() => setTool(null)}>
+        <PenaltyPolicyPanel config={bonusPolicy?.resolved?.config} formulaVersion={bonusPolicy?.formulaVersion} period={ky} />
       </TargetAdminModal>
       <TargetAdminModal open={tool === 'template'} title="⬇ Xuất/Tải template target" onClose={() => setTool(null)}>
         <div className="meta muted">Template xuất đúng kỳ đang chọn, đủ 21 NV theo DB. Căn cứ chỉ là mốc để CEO sửa, không tự thành target live.</div>

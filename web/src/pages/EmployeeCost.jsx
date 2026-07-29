@@ -1424,11 +1424,23 @@ export default function EmployeeCost({ me, onNavigate }) {
           ? `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · ${coverageNote}`
           : `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`}
         tone="employee-cost-tone-base" />
-      {!allEmployees && model.summary.periodTotal != null && <AfterPenaltyKpi penalty={model.penalty} baseTotal={model.summary.periodTotal} multiple={multiple} />}
-      {!allEmployees && <SalaryAdvanceKpi />}
+      {/* CEO yêu cầu 30/07: 4 ô này phải HIỆN ở mọi chế độ, kể cả "Tất cả NV".
+          Trước đây bị chặn bởi !allEmployees nên CEO mở ra không thấy gì và tưởng
+          chưa làm. Backend chỉ tính phạt khi chọn 1 NV (routes.js: `empCode ? ...`),
+          nên ở "Tất cả NV" ô VẪN HIỆN nhưng ghi rõ "Chọn 1 NV" — thà nói thật là
+          chưa có số còn hơn ẩn đi để người dùng tưởng tính năng không tồn tại.
+          Cộng dồn toàn đội phải do BACKEND tính, KHÔNG cộng ở frontend. */}
+      {allEmployees
+        ? <Kpi label="Tổng chi phí tháng sau phạt" value="Chọn 1 NV" sub="Phạt tính theo từng người — chọn đúng một nhân viên để xem" tone="employee-cost-tone-after-penalty" />
+        : model.summary.periodTotal != null && <AfterPenaltyKpi penalty={model.penalty} baseTotal={model.summary.periodTotal} multiple={multiple} />}
+      <SalaryAdvanceKpi />
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
-      {!allEmployees && <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />}
-      {!allEmployees && <XuPenaltyKpi penalty={model.penalty} period={model.to} />}
+      {allEmployees
+        ? <Kpi label="Phạt dự kiến" value="Chọn 1 NV" sub="Phạt tính theo từng người — chọn đúng một nhân viên để xem cách tính" tone="employee-cost-tone-penalty" />
+        : <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />}
+      {allEmployees
+        ? <Kpi label="Phạt thiếu Xu cuối quý" value="Chọn 1 NV" sub="Quyết toán theo quý, tính theo từng người" tone="employee-cost-tone-penalty-soft" />
+        : <XuPenaltyKpi penalty={model.penalty} period={model.to} />}
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote} />)}
       {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt
           hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng
