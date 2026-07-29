@@ -49,6 +49,30 @@ test('APP WEB partner period uses only the effective revenue date, not order-cre
   assert.match(fetchPartnerSource, /COALESCE\(partner\.effective_date, \(o\.created_at AT TIME ZONE 'Asia\/Bangkok'\)::date\) <= \$2::date/);
 });
 
+
+test('APP WEB partner includes delivered HOLD_GOLIVE but still excludes zero-delivery rows', () => {
+  const fetchPartnerAt = source.indexOf('async function fetchPartner()');
+  const mainAt = source.indexOf('async function main()', fetchPartnerAt);
+  const fetchPartnerSource = source.slice(fetchPartnerAt, mainAt);
+  assert.doesNotMatch(fetchPartnerSource, /o\.status\s*<>\s*['"]HOLD_GOLIVE['"]/, 'HOLD_GOLIVE delivered rows must not be excluded by status alone');
+  assert.match(fetchPartnerSource, /HOLD_GOLIVE là cờ kỹ thuật soft-launch\/quota audit/);
+  assert.match(fetchPartnerSource, /COALESCE\(partner\.delivered_qty,0\) > 0/, 'only rows with delivered quantity are eligible');
+});
+
+test('APP WEB partner response model is one row per order_item_id to prevent double count after status changes', () => {
+  const fetchPartnerAt = source.indexOf('async function fetchPartner()');
+  const mainAt = source.indexOf('async function main()', fetchPartnerAt);
+  const fetchPartnerSource = source.slice(fetchPartnerAt, mainAt);
+  assert.match(fetchPartnerSource, /row_number\(\) OVER \(PARTITION BY r\.order_item_id ORDER BY r\.responded_at DESC NULLS LAST, r\.id DESC\) rn/,
+    'latest response must be selected per order_item_id');
+  assert.match(fetchPartnerSource, /response_one AS \(SELECT \* FROM latest_response WHERE rn=1\)/,
+    'only one response row per order_item_id may enter partner CTE');
+  assert.match(fetchPartnerSource, /LEFT JOIN partner ON partner\.order_item_id=oi\.id/,
+    'order item joins to the deduplicated partner CTE');
+  assert.match(source, /source_line_id: `WEB:\$\{r\.order_item_id\}`/,
+    'materialized identity is stable by order_item_id, so a later status change cannot create a second source id');
+});
+
 test('all slot writers share the same lock and atomic JSON writer', () => {
   for (const [label, text] of [['manual upload', uploadSource], ['legacy import', legacySource]]) {
     assert.match(text, /revenue_materialize\.lock/, `${label} must use the shared lock path`);

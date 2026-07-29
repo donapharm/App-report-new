@@ -1,3 +1,9 @@
+### 2026-07-29 (tối) — Report Bot — T07 tính `HOLD_GOLIVE` đã giao vào APP WEB partner
+
+Claude/CEO chốt sau đối soát file Excel: 45 dòng `HOLD_GOLIVE` có phản hồi đối tác, `delivered_qty > 0`, tổng `382.578.400đ` phải tính vào doanh thu T07. `HOLD_GOLIVE` ở ca này là cờ kỹ thuật soft-launch/quota audit; `cst_quota` đang thiếu dữ liệu nên chưa được dùng làm căn cứ loại doanh thu của nhân viên.
+
+Giữ nguyên điều kiện chỉ tính dòng có SL giao > 0, nên 1 dòng HOLD_GOLIVE giao 0 và 2 dòng chưa phản hồi không vào doanh thu. Thêm test khóa chống đếm hai lần: dữ liệu partner vẫn dedupe theo `order_item_id` qua latest response/source id `WEB:<order_item_id>`, nên khi trạng thái thoát HOLD_GOLIVE sau go-live không được sinh thêm một dòng doanh thu thứ hai.
+
 ### 2026-07-29 (tối) — Claude Code (CEO chốt) — DỜI KHỐI TIN CUỐI THÁNG 17:30 → 20:00
 > CEO: "báo cáo tháng sẽ được gửi vào lúc 20h00 thay vì 17h30 ngày cuối cùng của tháng nhé. vì lúc 17h30 là chưa xử lý số liệu xong đâu."
 
