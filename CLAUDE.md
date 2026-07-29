@@ -43,6 +43,7 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
 2. **Không hardcode PII/nhân viên trong bundle frontend.**
 3. **AI không bịa số:** số do `analytics.js`/`smart.js` tính; LLM (nếu bật) chỉ diễn giải trên FACTS đã tính, cấm chế số.
 4. **Export đi qua backend** + kiểm quyền.
+5. **Đổi cách tính thưởng ⇒ PHẢI nâng version** (CEO chốt 2026-07-29). Số hiệu công thức chỉ có 1 nguồn: `employeeBonus.FORMULA_VERSION`; file cấu hình, nhãn trên nút/hộp thoại đều lấy từ đó, cấm ghi thẳng "v3.x" vào JSX. Sửa công thức thì làm đủ: nâng `FORMULA_VERSION` → sửa `version`+`note` trong `config/employee_bonus_tiers.json` → ghi lại `version`+`sourceHash` vào `config/bonus_formula_lock.json` → ghi `CHANGELOG.md`. Quên bước nào thì `server/test/bonusFormulaVersion.test.js` đỏ.
 
 ## 3 "dây cắm LIVE" khi lên server thật (tìm `// TODO(LIVE)`)
 1. `auth.js` → OTP (port 3848) + SSO verify (port 3862).

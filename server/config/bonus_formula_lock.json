@@ -1,0 +1,12 @@
+{
+  "version": "v3.2",
+  "sourceHash": "56a709581259a8fb052781b85530aab8e5ab0eee53b1c8286c077ea626de796a",
+  "lockedAt": "2026-07-29",
+  "lockedBy": "CEO",
+  "sources": [
+    "src/employeeBonus.js",
+    "src/employeeBonusPolicy.js",
+    "config/employee_bonus_tiers.json (base, baseTiers, priorityThresholdPct, priorityRates, autoGroupTargets, totalCapPct)"
+  ],
+  "rule": "Đổi cách tính thưởng => nâng FORMULA_VERSION trong src/employeeBonus.js, sửa version+note trong employee_bonus_tiers.json, ghi lại version+sourceHash ở đây, và ghi 1 mục CHANGELOG.md. Test server/test/bonusFormulaVersion.test.js sẽ đỏ nếu quên."
+}
