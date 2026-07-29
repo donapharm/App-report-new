@@ -1,10 +1,36 @@
 # HANDOFF — App Report
 
-Cập nhật: **2026-07-27** (Claude Code). Người tiếp nhận: bot report / phiên Claude kế tiếp.
+Cập nhật: **2026-07-29 khuya** (Claude Code). Người tiếp nhận: bot report / phiên Claude kế tiếp.
 Đọc theo thứ tự: `CLAUDE.md` → `CHANGELOG.md` (mới nhất trên cùng) → file này.
 
-> ⚠ Bản HANDOFF cũ (01/07) đã lỗi thời nặng: không có module Chi phí, thưởng P1/P2,
-> cột C10, đồng bộ "mã thiếu %", Kiểm soát dữ liệu. Đừng dùng lại bản đó.
+## ‼ ĐỌC NGAY — 2 việc gấp tối 29/07
+
+1. **`DIRECTIVE_HOAN_TIN_CUOI_THANG_072026.md`** — hai cờ `EMP_COST_NOTIFY` / `BONUS_NOTIFY` **VẪN ĐANG BẬT**.
+   Ngày **31/07** hệ thống sẽ tự gửi tin thưởng bằng **số cũ đã SAI** (DN008 thiếu ~1,92 triệu).
+   CEO **đã duyệt tắt**. Làm trước 31/07.
+2. **Gửi tin báo chậm cho NV** — nội dung CEO đã duyệt, nằm trong directive trên.
+   Bắt buộc **in danh sách người nhận cho CEO duyệt trước** khi gửi thật.
+
+## Chốt ngày 29/07 — vụ đối chiếu doanh thu đã KHÉP
+
+Từ **384.977.920đ** lệch giữa App Sale và App Report, đã truy ra **100%**:
+
+| Khoản | Nguyên nhân | Xử lý |
+|---|---|---|
+| **382.578.400đ** | `HOLD_GOLIVE` — cờ kỹ thuật soft-launch, hàng đã giao thật | **Đã tính vào**, slot T07 ghi lại xong |
+| **2.399.520đ** | 1 dòng MISA thiếu `revenue_date` (`DH479815711`) | Kế toán nhập ngày; App Report **không được tự đoán** |
+
+Slot T07 active: `rev_2src_072026_20260729153232_2916955_6ffe9252-de1e-4c2f-a922-ff341998e76c`
+Tổng **28.957.771.643đ** · CRM 1.319 dòng · Partner 585 dòng · guard PASS · trùng `source_line_id` = 0.
+
+**Bốn spec mới ngày 29/07 — đọc trước khi code:**
+- `SPEC_BONUS_PENALTY_V33.md` — Phạt v3.3 (nhánh `feat/bonus-penalty-v3.3` Claude đã duyệt, **chưa merge**)
+- `SPEC_REVENUE_DELIVERY_PERIOD.md` — quy kỳ theo ngày thực giao, khoá sổ ngày 5
+- `SPEC_REVENUE_SYNC_EXCEPTIONS.md` — màn "Chưa đồng bộ" + cảnh báo Telegram
+- `DIRECTIVE_DEPLOY_RELEASE_SAFETY.md` mục **P4** — cấm build trong cây production
+
+**Sự cố 29/07:** bản frontend nhánh phạt lỡ lên production do build tại chỗ. Đã khôi phục.
+**Auto-deploy vô can** — build trong cây đang phục vụ là cửa sau chưa có khoá. Xem P4.
 
 ---
 
