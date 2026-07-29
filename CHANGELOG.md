@@ -1,3 +1,22 @@
+### 2026-07-29 (tối) — Claude Code (CEO chốt) — DỜI KHỐI TIN CUỐI THÁNG 17:30 → 20:00
+> CEO: "báo cáo tháng sẽ được gửi vào lúc 20h00 thay vì 17h30 ngày cuối cùng của tháng nhé. vì lúc 17h30 là chưa xử lý số liệu xong đâu."
+
+**Lý do CEO nêu đúng cho CẢ BA tin cuối tháng**, không riêng tin nào — cả ba đều đọc số liệu của chính ngày đó. Nên dời cả ba và **giữ nguyên thứ tự**:
+
+| Tin | Cũ | Mới |
+|---|---|---|
+| Chi phí tháng | 17:30 | **20:00** |
+| Thưởng tháng | 17:40 | **20:10** |
+| Báo cáo doanh thu tháng | 18:00 | **20:30** |
+
+**Mốc 20:00 đặt đúng chỗ CEO nói**; hai tin còn lại giữ nguyên khoảng cách tương đối để không đảo thứ tự **chi phí → thưởng → báo cáo doanh thu**.
+
+**Dọn thêm một chỗ rải số:** mốc báo cáo tháng trước đây viết thẳng `hh === 18 && mm === 0` trong code, không có hằng số nên test không khoá được. Nay có `SALES_MONTH_END_SLOT` khai tường minh như 3 mốc kia — đúng chuẩn chú thích sẵn trong file *"khai tường minh để test khoá được, không rải số trong code"*.
+
+**Test khoá lại chặt hơn bản cũ:** thay 3 ca rời bằng 3 ca có ràng buộc thứ tự — chi phí **phải trước** thưởng, thưởng **phải trước** báo cáo doanh thu, và **cả khối không được dời sớm hơn 20:00** (dời sớm là chốt sổ khi số liệu chưa xử lý xong — đúng vấn đề CEO vừa nêu). Thêm ca chặn sót mốc chiều cũ. `notifySchedule` **18/18 PASS**; toàn bộ server **482/489**, đúng 7 ca đỏ baseline (3 auth + 4 thiếu `pdfinfo`), **0 hồi quy**.
+
+**Không ảnh hưởng đợt 31/07** vì hai cờ `EMP_COST_NOTIFY`/`BONUS_NOTIFY` đang được TẮT theo lệnh hoãn của CEO. Lịch mới có hiệu lực từ kỳ sau khi deploy và bật lại cờ.
+
 ### 2026-07-29 (tối) — Claude Code — TRUY RA 382 TRIỆU BIẾN MẤT: bộ lọc kép làm đơn rơi khỏi CẢ HAI kỳ
 > CEO: "app sale thì 28,96 tỷ, còn app report lại 28,58 tỷ, vậy con số gần 400 triệu đang nằm ở đâu?"
 
