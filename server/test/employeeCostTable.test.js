@@ -133,6 +133,39 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   assert.equal(byDate.summary.periodTotal, 20);
 });
 
+test('ALL payload preserves each backend-computed penalty in bonus and cost employeeSubtotals', () => {
+  const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
+  const first = report([rows[1]]);
+  const second = report([{ ...rows[2], sourceLineId: 'dn2' }]);
+  second.empCode = 'DN002';
+  for (const [item, amount] of [[first, 2_400_000], [second, 7_599_706]]) {
+    item.bonus = {
+      configured: false,
+      month: { target: 1_000_000_000, achieved: 780_000_000, amount: 0 },
+      quarter: {},
+      employeeSubtotals: [],
+    };
+    item.penalty = {
+      total: amount,
+      appliedAmount: 0,
+      afterPenaltyTotal: item.periods[0].summary.monthlyTotal,
+      formulaText: `Backend penalty ${amount}`,
+    };
+  }
+  const transformed = table.transformReport(table.mergeEmployeeReports([first, second], roster), {
+    allEmployees: true,
+    paginate: false,
+  });
+  assert.deepEqual(transformed.bonus.employeeSubtotals.map((item) => [item.empCode, item.penalty.total]), [
+    ['DN001', 2_400_000],
+    ['DN002', 7_599_706],
+  ]);
+  assert.deepEqual(transformed.periods[0].employeeSubtotals.map((item) => [item.employeeCode, item.penalty.total]), [
+    ['DN001', 2_400_000],
+    ['DN002', 7_599_706],
+  ]);
+});
+
 test('routes hard-lock ALL to CEO/admin for view and export', () => {
   const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   assert.match(source, /wantsAll && !auth\.isAdmin\(req\.session\.role\)/);

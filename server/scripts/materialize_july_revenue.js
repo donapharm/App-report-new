@@ -97,6 +97,37 @@ function currentRosterSnapshot(period) {
 async function latestRun() {
   return (await pool.query(`SELECT id, finished_at, raw_summary FROM misa_revenue_sync_runs WHERE status='success' AND finished_at IS NOT NULL ORDER BY finished_at DESC, id DESC LIMIT 1`)).rows[0] || null;
 }
+async function fetchMisaDataQualityWarnings(runId) {
+  const q = await pool.query(`
+    SELECT l.id, l.sale_order_no, l.revenue_date, l.sale_order_date,
+           l.employee_code, l.employee_name, l.unit_code, l.unit_name,
+           COALESCE(l.invoice_export_amount,l.official_amount,0)::numeric amount,
+           l.revenue_bucket, l.revenue_status, l.mapping_status
+      FROM misa_revenue_snapshot_lines l
+     WHERE l.run_id=$1
+       AND l.revenue_bucket = ANY(ARRAY['official','pending']::text[])
+       AND COALESCE(l.is_test_suspected,false) IS NOT TRUE
+       AND l.revenue_date IS NULL
+       AND COALESCE(l.invoice_export_amount,l.official_amount,0) <> 0
+     ORDER BY l.sale_order_no, l.id`, [runId]);
+  const items = q.rows.map((r) => ({
+    source: 'CRM_MISA',
+    source_line_id: `MISA:${r.id}`,
+    sale_order_no: cleanCode(r.sale_order_no, ''),
+    amount: Math.round(num(r.amount)),
+    emp_code: cleanCode(r.employee_code, ''),
+    emp_name: cleanCode(r.employee_name, ''),
+    unit_code: cleanCode(r.unit_code, ''),
+    unit_name: cleanCode(r.unit_name, ''),
+    revenue_bucket: r.revenue_bucket,
+    revenue_status: r.revenue_status,
+    mapping_status: r.mapping_status || '',
+    issue: 'MISA_REVENUE_DATE_NULL',
+    action: 'Sửa revenue_date ở nguồn MISA/App Sale; App Report không tự lấy ngày đặt thay ngày doanh thu.',
+  }));
+  return { rows: items.length, totalAmount: items.reduce((sum, r) => sum + Number(r.amount || 0), 0), items };
+}
+
 async function fetchMisa(runId) {
   const q = await pool.query(`
     SELECT l.id, l.sale_order_no, l.revenue_date, l.sale_order_date, l.invoice_date,
@@ -240,6 +271,7 @@ async function main() {
   const previousSlot = baselineActiveSlots.at(-1) || null;
   const run = await latestRun();
   if (!run) throw new Error('NO_MISA_SUCCESS_SNAPSHOT');
+  const misaDataQuality = await fetchMisaDataQualityWarnings(run.id);
   const misa = await fetchMisa(run.id);
   const partner = await fetchPartner();
   const sourceRunAfterRead = await latestRun();
@@ -336,12 +368,16 @@ async function main() {
       metrics: materializeGuard.metrics || null,
       thresholds: materializeGuard.thresholds,
     },
+    dataQualityWarnings: {
+      misaMissingRevenueDate: misaDataQuality,
+    },
   });
   writeJson(slotsPath, commitSlots);
   const artifact = {
     generatedAt: new Date().toISOString(), dataAsOf: process.env.REVENUE_DATA_AS_OF || new Date().toISOString(), slotId, file, ky: PERIOD.ky, latestMisaRun: { id: String(run.id), finished_at: run.finished_at, raw_summary: run.raw_summary },
     summary: { rows: rows.length, totalRevenue: total, bySource: summaryBySource, empCount: new Set(rows.map((r) => r.emp_code).filter(Boolean)).size, attributionConflicts: guarded.summary },
     materializeGuard: { status: 'passed', previousSlotId: previousSlot?.id || null, metrics: materializeGuard.metrics || null, thresholds: materializeGuard.thresholds },
+    dataQualityWarnings: { misaMissingRevenueDate: misaDataQuality },
     attributionConflicts: guarded.conflicts,
     samples: { misa: misa.slice(0, 10), partner: partner.slice(0, 10) },
   };
@@ -353,7 +389,7 @@ async function main() {
   atomicWriteFile(path.join(artDir, `${latestArtifactBase}.md`), md.join('\n'));
   writeJson(path.join(artDir, `${latestArtifactBase}_${slotId}.json`), artifact);
   atomicWriteFile(path.join(artDir, `${latestArtifactBase}_${slotId}.md`), md.join('\n'));
-  console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length, attributionConflicts: guarded.summary, materializeGuard: { status: 'passed', previousSlotId: previousSlot?.id || null, metrics: materializeGuard.metrics || null } }, null, 2));
+  console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length, attributionConflicts: guarded.summary, dataQualityWarnings: { misaMissingRevenueDate: { rows: misaDataQuality.rows, totalAmount: misaDataQuality.totalAmount } }, materializeGuard: { status: 'passed', previousSlotId: previousSlot?.id || null, metrics: materializeGuard.metrics || null } }, null, 2));
   await pool.end();
   } finally {
     releaseLock();
@@ -361,7 +397,7 @@ async function main() {
 }
 
 // Cho phép require lại (tool đối soát) mà KHÔNG chạy materialize; chỉ chạy khi gọi trực tiếp.
-module.exports = { main, fetchMisa, fetchPartner, latestRun, kyToRange, dateOnly, pool, PERIOD };
+module.exports = { main, fetchMisa, fetchMisaDataQualityWarnings, fetchPartner, latestRun, kyToRange, dateOnly, pool, PERIOD };
 
 if (require.main === module) {
   main().catch(async (e) => { console.error(e); try { await pool.end(); } catch {} process.exit(1); });

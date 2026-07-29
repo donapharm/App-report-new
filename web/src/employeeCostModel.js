@@ -237,7 +237,53 @@ export function employeeBonusViewModel(raw = {}) {
       employeeName: String(item?.employeeName || item?.empCode || ''),
       month: normalizedBonusPeriod(item?.month),
       quarter: normalizedBonusPeriod(item?.quarter),
+      // Chỉ nhận số phạt đã được backend tính theo đúng scope. Frontend không tự
+      // suy phạt của nhân viên khác trong màn ALL.
+      penalty: item?.penalty && typeof item.penalty === 'object' ? employeePenaltyViewModel(item.penalty) : null,
     })),
+  };
+}
+
+function numberOrNull(value) {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+export function employeePenaltyViewModel(raw = {}) {
+  const warning = raw.warning && typeof raw.warning === 'object' ? {
+    kind: String(raw.warning.kind || ''),
+    nextThresholdPct: numberOrNull(raw.warning.nextThresholdPct),
+    mustExceed: raw.warning.mustExceed === true,
+    revenueGap: numberOrNull(raw.warning.revenueGap),
+    moneyAtRisk: numberOrNull(raw.warning.moneyAtRisk),
+    text: String(raw.warning.text || ''),
+  } : null;
+  return {
+    available: !!raw && typeof raw === 'object' && Object.keys(raw).length > 0,
+    mode: String(raw.mode || 'off'),
+    effectiveFrom: String(raw.effectiveFrom || ''),
+    enabled: raw.enabled === true,
+    targetPct: numberOrNull(raw.targetPct),
+    tier: String(raw.tier || ''),
+    ratePct: numberOrNull(raw.ratePct),
+    c45Amount: numberOrNull(raw.c45Amount),
+    targetAmount: numberOrNull(raw.targetAmount),
+    targetStatus: String(raw.targetStatus || raw.penaltyStatus || ''),
+    penaltyStatus: String(raw.penaltyStatus || raw.targetStatus || ''),
+    c45Dropped: raw.c45Dropped === true,
+    c45WouldDrop: raw.c45WouldDrop === true,
+    xuAmount: numberOrNull(raw.xuAmount),
+    xuStatus: String(raw.xuStatus || ''),
+    xuMissing: numberOrNull(raw.xuMissing),
+    total: numberOrNull(raw.total),
+    appliedAmount: numberOrNull(raw.appliedAmount),
+    cappedByC45: raw.cappedByC45 === true,
+    provisional: raw.provisional === true,
+    formulaText: String(raw.formulaText || ''),
+    label: String(raw.label || 'Dự kiến/tham khảo — chưa trừ lương'),
+    warning,
+    afterPenaltyTotal: numberOrNull(raw.afterPenaltyTotal),
   };
 }
 
@@ -320,6 +366,8 @@ function periodViewModel(payload = {}) {
     provisionalColumnTotals: normalizedColumnTotals(rawSummary.provisionalColumnTotals, costColumns),
     annualColumnKeys: Array.isArray(rawSummary.annualColumnKeys) ? rawSummary.annualColumnKeys.map(String) : [],
     annualLabels: Array.isArray(rawSummary.annualLabels) ? rawSummary.annualLabels.map(String) : [],
+    penaltyAppliedAmount: numberOrNull(rawSummary.penaltyAppliedAmount),
+    afterPenaltyTotal: numberOrNull(rawSummary.afterPenaltyTotal),
   };
   const rawDaily = payload.daily || {};
   const dates = rawDaily.reliable && Array.isArray(rawDaily.dates) ? rawDaily.dates.map(String) : [];
@@ -394,6 +442,8 @@ export function employeeCostViewModel(payload = {}) {
     annualColumnKeys: Array.isArray(rawSummary.annualColumnKeys) ? rawSummary.annualColumnKeys.map(String) : [],
     monthlyTotal: periods.length === 1 ? periods[0].summary.monthlyTotal : null,
     annualLabels: [...new Set(periods.flatMap((period) => period.summary.annualLabels))],
+    penaltyAppliedAmount: numberOrNull(rawSummary.penaltyAppliedAmount),
+    afterPenaltyTotal: numberOrNull(rawSummary.afterPenaltyTotal),
   } : {
     ...periods[0].summary,
     periodTotal: periods[0].summary.monthlyTotal,
@@ -434,6 +484,7 @@ export function employeeCostViewModel(payload = {}) {
     },
     target: employeeTargetViewModel(payload.target),
     bonus: employeeBonusViewModel(payload.bonus),
+    penalty: employeePenaltyViewModel(payload.penalty),
   };
 }
 

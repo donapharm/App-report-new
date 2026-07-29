@@ -77,7 +77,7 @@ function Highlight({ value, query }) {
     : <React.Fragment key={`${part.text}-${index}`}>{part.text}</React.Fragment>);
 }
 
-function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEmployees = false, onPage, onPageSize }) {
+function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEmployees = false, onPage, onPageSize, c45Dropped = false }) {
   const [tooltip, setTooltip] = useState('');
   const sourceRows = daily ? period.daily.rows : period.rows;
   // Search/filter/sort/STT are resolved by the backend for both self and ALL
@@ -103,9 +103,10 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
         <tr>
           <th className="employee-cost-sticky-stt employee-cost-number">STT</th>
           {allEmployees && <th className="employee-cost-employee"><button type="button" onClick={() => sortHeader({ key: 'employeeCode' })}>Nhân viên{sort.key === 'employeeCode' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>}
-          {period.columns.map((column) => <th key={column.key} title={column.kind === 'percent' ? column.label : undefined} className={`${column.annual ? 'employee-cost-annual ' : ''}${column.kind === 'percent' ? 'employee-cost-percent ' : ''}${column.key === 'c16' ? 'employee-cost-sticky-product ' : ''}employee-cost-col-${column.key}`}>
+          {period.columns.map((column) => <th key={column.key} title={column.kind === 'percent' ? column.label : undefined} className={`${column.annual ? 'employee-cost-annual ' : ''}${column.kind === 'percent' ? 'employee-cost-percent ' : ''}${column.key === 'c16' ? 'employee-cost-sticky-product ' : ''}${column.key === 'c45' && c45Dropped ? 'employee-cost-c45-dropped ' : ''}employee-cost-col-${column.key}`}>
             <button type="button" onClick={() => sortHeader(column)}>{column.label}{sort.key === column.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button>
             {column.annual && <span className="employee-cost-annual-badge">cuối năm</span>}
+            {column.key === 'c45' && c45Dropped && <span className="employee-cost-annual-badge">không cộng sau phạt</span>}
           </th>)}
         </tr>
       </thead>
@@ -114,6 +115,7 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
           <td colSpan={columnCount}>
             <b>Ngày {formatEmployeeCostCell(row.date, { key: 'date', kind: 'dimension' })}</b>
             <span>Σ ngày: {formatEmployeeCostCell(totalsByDate.get(row.date)?.monthlyTotal, moneyColumn)} (chưa gồm cuối năm)</span>
+            {totalsByDate.get(row.date)?.afterPenaltyTotal != null && <span>· sau phạt: {formatEmployeeCostCell(totalsByDate.get(row.date).afterPenaltyTotal, moneyColumn)}</span>}
           </td>
         </tr>}
         <tr>
@@ -136,7 +138,7 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
   </>;
 }
 
-function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmployees, onPage, onPageSize }) {
+function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmployees, onPage, onPageSize, penalty }) {
   const annualNote = period.summary.annualLabels.join(', ');
   const filteredCount = period.search.filteredRows;
   const totalCount = period.search.totalRows;
@@ -163,11 +165,15 @@ function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmplo
         <summary>Tổng phụ theo nhân viên ({period.employeeSubtotals.length})</summary>
         <div>{period.employeeSubtotals.map((item) => <span key={item.employeeCode}><b>{item.employeeCode} · {item.employeeName}</b><small>{item.rowCount.toLocaleString('vi-VN')} dòng · {formatEmployeeCostCell(item.monthlyTotal, moneyColumn)}</small></span>)}</div>
       </details>}
-      <CostTable period={period} query={query} sort={sort} onSort={onSort} allEmployees={allEmployees} onPage={onPage} onPageSize={onPageSize} />
+      <CostTable period={period} query={query} sort={sort} onSort={onSort} allEmployees={allEmployees} onPage={onPage} onPageSize={onPageSize} c45Dropped={penalty?.c45Dropped} />
       <div className="employee-cost-summary-row">
         <span>{query ? 'Tổng các dòng đang lọc' : 'Tổng chi phí tháng'} (chưa gồm khoản cuối năm)</span>
         <b>{formatEmployeeCostCell(period.summary.monthlyTotal, moneyColumn)}</b>
       </div>
+      {penalty?.afterPenaltyTotal != null && <div className="employee-cost-summary-row employee-cost-after-penalty-total">
+        <span>Tổng chi phí tháng sau phạt <small>· {penalty?.label || 'Dự kiến/tham khảo — chưa trừ lương'}</small></span>
+        <b>{formatEmployeeCostCell(penalty.afterPenaltyTotal, moneyColumn)}</b>
+      </div>}
       {!!period.summary.annualLabels.length && <div className="employee-cost-summary-row employee-cost-annual-total">
         <span>Khoản cuối năm (tạm tính · chi trả T12)</span>
         <b>{formatEmployeeCostCell(period.summary.annualTotal, moneyColumn)}</b>
@@ -179,7 +185,7 @@ function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmplo
       {!period.daily.reliable
         ? <div className="employee-cost-match-warning" role="alert">Không thể tách theo ngày: {period.daily.reason || 'dữ liệu ngày chưa đủ để đối chiếu tổng tháng'}.</div>
         : !period.daily.rows.length ? <div className="center">Chưa có doanh thu theo ngày.</div>
-          : <CostTable period={period} daily query={query} sort={sort} onSort={onSort} />}
+          : <CostTable period={period} daily query={query} sort={sort} onSort={onSort} c45Dropped={penalty?.c45Dropped} />}
     </div>}
 
     {!!period.rows.length && <div className="employee-cost-source-note">
@@ -383,6 +389,102 @@ function BonusKpi({ bonus, onOpen }) {
     ? `Tổng thưởng dự kiến cộng từ từng nhân viên: Phần 1 ${baseAmount}; Phần 2 ${priorityAmount}. ${quarterContext}. Không gửi thưởng/không ghi payroll.`
     : `Tháng: ${monthAmount} = Phần 1 ${baseAmount} + Phần 2 ${priorityAmount}. P2 = phần vượt TỔNG target, chia cho từng nhóm C10 theo tỷ trọng doanh thu thực (rà theo mã QLNB → cột C10), mỗi phần ăn rate nhóm đó: ${groupDetail}. Target quý = trung bình các tháng đã giao. Coverage C10: ${targetPctLabel(month.priorityCoverage?.coveragePct)}. Giai đoạn ${bonus.effectiveFrom || '—'} · version ${bonus.version || '—'}. Dự kiến/tham khảo, không phải payroll hay số chi chính thức.`;
   return <Kpi label="Thưởng dự kiến" value={monthAmount} sub={`${monthContext} · ${quarterContext} · dự kiến · Bấm xem cách tính`} title={title} tone="employee-cost-tone-reward" onClick={onOpen} />;
+}
+
+function penaltyNoAmountReason(penalty) {
+  if (!penalty.available) return 'Chưa có dữ liệu phạt từ backend';
+  if (penalty.penaltyStatus === 'missing_target') return 'Chưa giao target — không có căn cứ phạt';
+  if (penalty.penaltyStatus === 'c45_unavailable') return 'C45 chưa đủ dữ liệu — fail-closed, không phạt';
+  if (penalty.penaltyStatus === 'unconfigured') return 'Chưa cấu hình đủ bậc phạt — không phạt';
+  if (penalty.mode === 'off' || penalty.penaltyStatus === 'disabled') return 'Chính sách chưa áp dụng cho kỳ này';
+  if (penalty.targetPct != null && penalty.targetPct >= 90) return `Đạt ${targetPctLabel(penalty.targetPct)} — không bị phạt`;
+  return penalty.formulaText || 'Không bị phạt';
+}
+
+function PenaltyKpi({ penalty, onOpen }) {
+  const hasPenalty = penalty.total != null && penalty.total > 0;
+  const value = hasPenalty ? `−${formatEmployeeCostCell(penalty.total, moneyColumn)}` : 'Không bị phạt';
+  const warning = penalty.warning?.text || penaltyNoAmountReason(penalty);
+  const mode = penalty.mode === 'warn_only' ? penalty.label : penalty.label || 'Dự kiến/tham khảo — chưa trừ lương';
+  return <Kpi
+    label="Phạt dự kiến"
+    value={value}
+    sub={`${mode} · ${warning}${penalty.available ? ' · Bấm xem cách tính' : ''}`}
+    title={penalty.formulaText || warning}
+    tone="employee-cost-tone-penalty"
+    onClick={penalty.available ? onOpen : undefined}
+  />;
+}
+
+function AfterPenaltyKpi({ penalty, baseTotal, multiple }) {
+  // Fail-closed: tổng gốc null thì component không được gọi/render. Tuyệt đối
+  // không biến null thành 0 rồi tạo một số âm giả.
+  if (baseTotal == null) return null;
+  const value = penalty.afterPenaltyTotal == null ? baseTotal : penalty.afterPenaltyTotal;
+  return <Kpi
+    label={multiple ? 'Tổng cả kỳ sau phạt' : 'Tổng chi phí tháng sau phạt'}
+    value={formatEmployeeCostCell(value, moneyColumn)}
+    sub={penalty.mode === 'warn_only' ? penalty.label : `${penalty.label || 'Dự kiến/tham khảo — chưa trừ lương'} · Gốc ${formatEmployeeCostCell(baseTotal, moneyColumn)}`}
+    tone="employee-cost-tone-after-penalty"
+  />;
+}
+
+function quarterEndMonth(period) {
+  const monthNumber = Number(String(period || '').slice(5, 7));
+  return Number.isInteger(monthNumber) && monthNumber >= 1 && monthNumber <= 12 ? Math.ceil(monthNumber / 3) * 3 : null;
+}
+
+function XuPenaltyKpi({ penalty, period }) {
+  const endMonth = quarterEndMonth(period);
+  const currentMonth = Number(String(period || '').slice(5, 7));
+  if (endMonth && currentMonth !== endMonth) return <Kpi label="Phạt thiếu Xu cuối quý" value={`Chốt vào cuối quý (T${endMonth})`} sub="Tháng chỉ tạm tính · không phạt hai lần" tone="employee-cost-tone-penalty-soft" />;
+  const value = penalty.xuAmount == null
+    ? (penalty.xuStatus === 'disabled' ? 'Chưa bật' : penalty.xuStatus === 'xu_source_unavailable' ? 'Chưa đủ nguồn Xu' : 'Đang quyết toán')
+    : penalty.xuAmount > 0 ? `−${formatEmployeeCostCell(penalty.xuAmount, moneyColumn)}` : 'Không bị phạt';
+  return <Kpi label="Phạt thiếu Xu cuối quý" value={value} sub={`${penalty.xuMissing == null ? 'Thiếu Xu: —' : `Thiếu ${diemXuNumber(penalty.xuMissing)} Xu`} · dự kiến/tham khảo`} tone="employee-cost-tone-penalty-soft" />;
+}
+
+function SalaryAdvanceKpi() {
+  return <Kpi label="Ứng lần 1 tháng này" value="Chưa đấu nối app lương" sub="App Report không tự tính số ứng" tone="employee-cost-tone-neutral" />;
+}
+
+function PenaltyDetailModal({ penalty, employeeLabel, onClose }) {
+  const modalRef = useRef(null);
+  const closeRef = useRef(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    closeRef.current?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+      if (event.key !== 'Tab') return;
+      const focusable = [...(modalRef.current?.querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') || [])];
+      if (!focusable.length) return;
+      const first = focusable[0]; const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => { window.removeEventListener('keydown', onKeyDown); previousFocus?.focus?.(); };
+  }, [onClose]);
+  const cell = (value) => value == null ? '—' : formatEmployeeCostCell(value, moneyColumn);
+  return <div className="modal-backdrop employee-cost-target-modal-backdrop" role="presentation" onClick={onClose}>
+    <div ref={modalRef} className="modal-card employee-cost-target-modal employee-cost-penalty-modal" role="dialog" aria-modal="true" aria-labelledby="employee-cost-penalty-modal-title" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-head"><div><b id="employee-cost-penalty-modal-title">Chi tiết cách tính phạt</b><small>{employeeLabel}</small></div><button ref={closeRef} type="button" className="employee-cost-target-modal-close" aria-label="Đóng chi tiết phạt" onClick={onClose}>×</button></div>
+      <section className="employee-cost-target-section">
+        <h3>Phạt theo target tại C45</h3>
+        <div className="employee-cost-target-equation employee-cost-penalty-equation">
+          <span>% đạt target</span><b>{targetPctLabel(penalty.targetPct)}</b>
+          <span>C45 gốc<small>Giữ nguyên số DataHub</small></span><b>{cell(penalty.c45Amount)}</b>
+          <span>Phạt target<small>{penalty.cappedByC45 ? 'Đã kẹp tối đa bằng C45' : penalty.c45Dropped ? 'Mất trắng C45' : penalty.c45WouldDrop ? 'Chạy thử: nếu áp dụng sẽ mất C45' : 'Không vượt quá C45'}</small></span><b>{penalty.targetAmount > 0 ? `−${cell(penalty.targetAmount)}` : cell(penalty.targetAmount)}</b>
+          <span className="employee-cost-bonus-total">Phạt áp dụng kỳ này<small>{penalty.mode === 'warn_only' ? 'Chạy thử — chưa trừ tiền' : penalty.label}</small></span><b className="employee-cost-bonus-total">{penalty.appliedAmount > 0 ? `−${cell(penalty.appliedAmount)}` : cell(penalty.appliedAmount)}</b>
+        </div>
+      </section>
+      <div className="employee-cost-penalty-formula" role="note"><b>Công thức backend</b><span>{penalty.formulaText || penaltyNoAmountReason(penalty)}</span></div>
+      {penalty.warning?.text && <div className={`employee-cost-penalty-warning${penalty.mode === 'warn_only' ? ' is-warn-only' : ''}`} role="alert"><b>{penalty.mode === 'warn_only' ? 'ℹ Cảnh báo chạy thử' : '⚠ Cảnh báo sớm'}</b><span>{penalty.warning.text}</span></div>}
+      <div className="employee-cost-target-note" role="note"><b>Lưu ý</b><span>{penalty.label || 'Dự kiến/tham khảo — chưa trừ lương'}</span><span>Frontend chỉ hiển thị công thức và số do backend trả về; không tự tính, không ghi DataHub/payroll.</span></div>
+      <div className="employee-cost-target-modal-actions"><button type="button" className="btn secondary" onClick={onClose}>Đóng</button></div>
+    </div>
+  </div>;
 }
 
 // Diễn giải trạng thái Phần 2 (phần vượt nhóm C10) ở cấp tháng — nói rõ VÌ SAO
@@ -942,6 +1044,7 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [tableFilters, setTableFilters] = useState({ province: '', unitGroup: '', route: '', date: '' });
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [bonusModalOpen, setBonusModalOpen] = useState(false);
+  const [penaltyModalOpen, setPenaltyModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(tableQuery), 180);
@@ -1125,6 +1228,10 @@ export default function EmployeeCost({ me, onNavigate }) {
     if (!model.bonus.configured) setBonusModalOpen(false);
   }, [model.bonus.configured]);
 
+  useEffect(() => {
+    if (!model.penalty.available) setPenaltyModalOpen(false);
+  }, [model.penalty.available]);
+
   const applyRange = (event) => {
     event.preventDefault();
     if (rangeInvalid) return;
@@ -1173,6 +1280,7 @@ export default function EmployeeCost({ me, onNavigate }) {
   const changeEmployee = (value) => {
     setTargetModalOpen(false);
     setBonusModalOpen(false);
+    setPenaltyModalOpen(false);
     setSelectedEmp(value); setTablePage(1); setTableQuery(''); setDebouncedQuery(''); setTableSort({ key: '', dir: 'asc' }); setTableFilters({ province: '', unitGroup: '', route: '', date: '' });
   };
   const changeTableFilter = (key, value) => {
@@ -1316,7 +1424,11 @@ export default function EmployeeCost({ me, onNavigate }) {
           ? `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · ${coverageNote}`
           : `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`}
         tone="employee-cost-tone-base" />
+      {!allEmployees && model.summary.periodTotal != null && <AfterPenaltyKpi penalty={model.penalty} baseTotal={model.summary.periodTotal} multiple={multiple} />}
+      {!allEmployees && <SalaryAdvanceKpi />}
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
+      {!allEmployees && <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />}
+      {!allEmployees && <XuPenaltyKpi penalty={model.penalty} period={model.to} />}
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote} />)}
       {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt
           hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng
@@ -1344,17 +1456,27 @@ export default function EmployeeCost({ me, onNavigate }) {
       onClose={() => setBonusModalOpen(false)}
     />}
 
+    {penaltyModalOpen && <PenaltyDetailModal
+      penalty={model.penalty}
+      employeeLabel={employeeLabel}
+      onClose={() => setPenaltyModalOpen(false)}
+    />}
+
     {/* Cảnh báo xu + phép cấn trừ thiếu xu là theo TỪNG NGƯỜI — ẩn ở "Tất cả NV". */}
     {!allEmployees && <KhoanWarning khoan={khoan} />}
     {!allEmployees && <KhoanDeduction khoan={khoan} baseCost={model.summary.periodTotal} multiMonth={multiple} loading={khoanLoading} />}
 
     {allEmployees && model.bonus.configured && !!model.bonus.employeeSubtotals.length && <details className="employee-cost-subtotals employee-cost-bonus-subtotals">
       <summary>Thưởng dự kiến theo nhân viên ({model.bonus.employeeSubtotals.length}) · tham khảo</summary>
-      <div>{model.bonus.employeeSubtotals.map((item) => <span key={item.empCode}>
-        <b>{item.empCode} · {item.employeeName}</b>
-        <small>Tháng: {formatEmployeeCostCell(item.month.amount, moneyColumn)} · đạt {targetPctLabel(item.month.pct)}{item.month.tier ? ` · bậc ${bonusPctLabel(item.month.bonusPct)}` : ' · không đạt bậc'}</small>
-        <small>{model.bonus.quarterLabel || 'Quý'}: {formatEmployeeCostCell(item.quarter.amount, moneyColumn)} · đạt {targetPctLabel(item.quarter.pct)}</small>
-      </span>)}</div>
+      <div className="employee-cost-bonus-penalty-table" role="table" aria-label="Thưởng và phạt dự kiến theo nhân viên">
+        <span className="employee-cost-bonus-penalty-head" role="row"><b role="columnheader">Nhân viên</b><b role="columnheader">Thưởng dự kiến</b><b role="columnheader">Phạt dự kiến</b><b role="columnheader">Tổng sau phạt</b></span>
+        {model.bonus.employeeSubtotals.map((item) => <span key={item.empCode} role="row">
+          <b role="cell">{item.empCode} · {item.employeeName}</b>
+          <small role="cell">{formatEmployeeCostCell(item.month.amount, moneyColumn)} · đạt {targetPctLabel(item.month.pct)}</small>
+          <small role="cell">{item.penalty?.total > 0 ? `−${formatEmployeeCostCell(item.penalty.total, moneyColumn)}` : item.penalty ? 'Không bị phạt' : 'Chưa có dữ liệu'}</small>
+          <small role="cell">{item.penalty?.afterPenaltyTotal == null ? '—' : formatEmployeeCostCell(item.penalty.afterPenaltyTotal, moneyColumn)}</small>
+        </span>)}
+      </div>
     </details>}
 
     <div className="card employee-cost-table-toolbar">
@@ -1381,6 +1503,7 @@ export default function EmployeeCost({ me, onNavigate }) {
         sort={tableSort}
         onSort={changeSort}
         allEmployees={allEmployees}
+        penalty={!allEmployees && period.period === model.to ? model.penalty : null}
         onPage={setTablePage}
         onPageSize={(value) => { setTablePageSize(value); setTablePage(1); }}
       />)}

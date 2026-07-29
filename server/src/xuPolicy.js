@@ -55,18 +55,20 @@ function rangesFor(asOf) {
     quarter: { from: startOfQuarter(asOf), to: asOf, end: quarterEnd, closing: asOf === quarterEnd },
   };
 }
-function moneyForMissing(missingXu) {
-  return Math.round(Math.max(0, Number(missingXu || 0)) * PENALTY_PER_MISSING_XU);
+function moneyForMissing(missingXu, perMissingXu = PENALTY_PER_MISSING_XU) {
+  const rate = Number(perMissingXu);
+  if (!Number.isFinite(rate) || rate < 0) throw new Error('Mức phạt mỗi Xu không hợp lệ');
+  return Math.round(Math.max(0, Number(missingXu || 0)) * rate);
 }
 function round4(value) { return +Number(value || 0).toFixed(4); }
-function buildCheckpoint({ empCode, asOf, scoreFn, priorBookedAdjustment = null }) {
+function buildCheckpoint({ empCode, asOf, scoreFn, priorBookedAdjustment = null, perMissingXu = PENALTY_PER_MISSING_XU }) {
   if (typeof scoreFn !== 'function') throw new Error('Thiếu hàm tính Điểm/Xu');
   const ranges = rangesFor(asOf);
   const score = scoreFn({ empCode, weekRange: ranges.week, monthRange: ranges.month, quarterRange: ranges.quarter });
   const monthMissing = Math.max(0, Number(score.diem_thang || 0) - Number(score.xu_thang || 0));
   const quarterMissing = Math.max(0, Number(score.diem_quy || 0) - Number(score.xu_quy || 0));
-  const monthEstimated = moneyForMissing(monthMissing);
-  const quarterTotal = moneyForMissing(quarterMissing);
+  const monthEstimated = moneyForMissing(monthMissing, perMissingXu);
+  const quarterTotal = moneyForMissing(quarterMissing, perMissingXu);
   const bookedKnown = priorBookedAdjustment !== null && priorBookedAdjustment !== undefined && Number.isFinite(Number(priorBookedAdjustment));
   const booked = bookedKnown ? Math.max(0, Math.round(Number(priorBookedAdjustment))) : null;
   const quarterAdditional = bookedKnown ? Math.max(0, quarterTotal - booked) : null;
@@ -80,8 +82,8 @@ function buildCheckpoint({ empCode, asOf, scoreFn, priorBookedAdjustment = null 
       thieu_xu_quy: round4(quarterMissing),
     },
     adjustment: {
-      policy: '2 Xu thiếu = 600.000đ',
-      per_missing_xu: PENALTY_PER_MISSING_XU,
+      policy: `1 Xu thiếu = ${Math.round(Number(perMissingXu)).toLocaleString('vi-VN')}đ`,
+      per_missing_xu: Number(perMissingXu),
       month_estimated: monthEstimated,
       quarter_total_estimated: quarterTotal,
       prior_booked: booked,
