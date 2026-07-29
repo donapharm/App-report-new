@@ -184,7 +184,8 @@ function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed =
   let targetAmount = null;
   let cappedByC45 = false;
   let c45Dropped = false;
-  if (mode === 'off') status = normalized.penaltyEnabled ? 'disabled' : 'disabled';
+  let c45WouldDrop = false;
+  if (mode === 'off') status = 'disabled';
   else if (!(numericTarget > 0) || pct == null) status = 'missing_target';
   else if (!normalized.configured || !tier) status = 'unconfigured';
   else if (tier.tier === 'none') {
@@ -192,10 +193,12 @@ function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed =
     status = mode === 'warn_only' ? 'warn_only' : (closed ? 'final' : 'provisional');
   } else if (numericC45 == null) status = 'c45_unavailable';
   else {
-    c45Dropped = tier.dropC45 === true;
-    const uncapped = c45Dropped ? numericC45 : Math.round(numericAchieved * (tier.ratePct || 0) / 100);
+    const tierDropsC45 = tier.dropC45 === true;
+    c45Dropped = mode === 'enforced' && tierDropsC45;
+    c45WouldDrop = mode === 'warn_only' && tierDropsC45;
+    const uncapped = tierDropsC45 ? numericC45 : Math.round(numericAchieved * (tier.ratePct || 0) / 100);
     targetAmount = Math.max(0, Math.min(Math.round(numericC45), uncapped));
-    cappedByC45 = !c45Dropped && uncapped > numericC45;
+    cappedByC45 = !tierDropsC45 && uncapped > numericC45;
     status = mode === 'warn_only' ? 'warn_only' : (closed ? 'final' : 'provisional');
   }
   const xuAmount = finite(xu?.amount);
@@ -209,6 +212,7 @@ function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed =
   else if (status === 'unconfigured') formulaText = 'Chưa cấu hình đủ bậc phạt — không phạt.';
   else if (mode === 'off') formulaText = 'Chính sách phạt chưa áp dụng cho kỳ này.';
   else if (tier?.tier === 'none') formulaText = `Đạt ${formatPct(pct)}% (từ 90% trở lên) — không phạt, tiếp tục công thức thưởng.`;
+  else if (c45WouldDrop) formulaText = `Chạy thử: đạt ${formatPct(pct)}% (bằng hoặc dưới 50%) → nếu áp dụng từ 01/08/2026 sẽ mất trắng C45 ${formatMoney(numericC45)}; tháng này chưa trừ tiền.`;
   else if (c45Dropped) formulaText = `Đạt ${formatPct(pct)}% (bằng hoặc dưới 50%) → mất trắng C45 ${formatMoney(numericC45)}.`;
   else formulaText = `Đạt ${formatPct(pct)}% → bậc ${tier.tier === 't70_90' ? '70–89%' : 'trên 50–dưới 70%'} → trừ ${formatPct(ratePct)}% × doanh thu ${formatMoney(numericAchieved)} = ${formatMoney(targetAmount)} (tối đa bằng C45 ${formatMoney(numericC45)})`;
   const warning = warningFor({
@@ -229,6 +233,7 @@ function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed =
     targetStatus: status,
     penaltyStatus: status,
     c45Dropped,
+    c45WouldDrop,
     xuAmount,
     xuStatus: xu?.status || (normalized.xuPenalty.enabled ? 'xu_source_unavailable' : 'disabled'),
     xuMissing: finite(xu?.missing),

@@ -475,7 +475,7 @@ function PenaltyDetailModal({ penalty, employeeLabel, onClose }) {
         <div className="employee-cost-target-equation employee-cost-penalty-equation">
           <span>% đạt target</span><b>{targetPctLabel(penalty.targetPct)}</b>
           <span>C45 gốc<small>Giữ nguyên số DataHub</small></span><b>{cell(penalty.c45Amount)}</b>
-          <span>Phạt target<small>{penalty.cappedByC45 ? 'Đã kẹp tối đa bằng C45' : penalty.c45Dropped ? 'Mất trắng C45' : 'Không vượt quá C45'}</small></span><b>{penalty.targetAmount > 0 ? `−${cell(penalty.targetAmount)}` : cell(penalty.targetAmount)}</b>
+          <span>Phạt target<small>{penalty.cappedByC45 ? 'Đã kẹp tối đa bằng C45' : penalty.c45Dropped ? 'Mất trắng C45' : penalty.c45WouldDrop ? 'Chạy thử: nếu áp dụng sẽ mất C45' : 'Không vượt quá C45'}</small></span><b>{penalty.targetAmount > 0 ? `−${cell(penalty.targetAmount)}` : cell(penalty.targetAmount)}</b>
           <span className="employee-cost-bonus-total">Phạt áp dụng kỳ này<small>{penalty.mode === 'warn_only' ? 'Chạy thử — chưa trừ tiền' : penalty.label}</small></span><b className="employee-cost-bonus-total">{penalty.appliedAmount > 0 ? `−${cell(penalty.appliedAmount)}` : cell(penalty.appliedAmount)}</b>
         </div>
       </section>

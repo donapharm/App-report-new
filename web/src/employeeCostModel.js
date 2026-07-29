@@ -272,6 +272,7 @@ export function employeePenaltyViewModel(raw = {}) {
     targetStatus: String(raw.targetStatus || raw.penaltyStatus || ''),
     penaltyStatus: String(raw.penaltyStatus || raw.targetStatus || ''),
     c45Dropped: raw.c45Dropped === true,
+    c45WouldDrop: raw.c45WouldDrop === true,
     xuAmount: numberOrNull(raw.xuAmount),
     xuStatus: String(raw.xuStatus || ''),
     xuMissing: numberOrNull(raw.xuMissing),

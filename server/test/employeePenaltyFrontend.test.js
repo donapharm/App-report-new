@@ -21,7 +21,7 @@ test('penalty view model preserves backend numbers and keeps null distinct from 
     summary: { reliable: true, periodTotal: null, afterPenaltyTotal: null },
     penalty: {
       mode: 'warn_only', total: 7_599_706, appliedAmount: 0,
-      c45Amount: 7_599_706, afterPenaltyTotal: null,
+      c45Amount: 7_599_706, c45Dropped: false, c45WouldDrop: true, afterPenaltyTotal: null,
       warning: { revenueGap: 31_000_000, moneyAtRisk: 7_599_706, text: 'CHƯA TRỪ TIỀN · trước VAT' },
     },
   });
@@ -29,6 +29,8 @@ test('penalty view model preserves backend numbers and keeps null distinct from 
   assert.equal(model.summary.afterPenaltyTotal, null);
   assert.equal(model.penalty.total, 7_599_706);
   assert.equal(model.penalty.appliedAmount, 0);
+  assert.equal(model.penalty.c45Dropped, false);
+  assert.equal(model.penalty.c45WouldDrop, true);
   assert.equal(model.penalty.warning.revenueGap, 31_000_000);
 });
 
@@ -44,6 +46,10 @@ test('employee penalty UI has exactly the four v3.3 KPI labels and fail-closed t
   assert.doesNotMatch(PAGE.match(/function SalaryAdvanceKpi\(\)[\s\S]*?\n}/)?.[0] || '', /0đ/);
   assert.match(PAGE, /tone="employee-cost-tone-penalty"/);
   assert.match(CSS, /\.employee-cost-tone-penalty\s*\{/);
+  assert.match(PAGE, /c45Dropped=\{penalty\?\.c45Dropped\}/,
+    'badge/gạch mờ C45 chỉ được điều khiển bởi cờ đã áp dụng');
+  assert.doesNotMatch(PAGE, /c45Dropped=\{penalty\?\.c45WouldDrop\}/,
+    'cờ chạy thử không được gắn badge hoặc gạch mờ C45');
 });
 
 test('quarter Xu copy, warning detail and admin-only penalty column are present', () => {

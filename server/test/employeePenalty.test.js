@@ -123,15 +123,19 @@ test('closed period uses past-tense wording, never tells employee to try harder'
 });
 
 test('period-derived schedule is deterministic and honors emergency off switch', () => {
-  const july = build({ period: '2026-07' });
+  const july = build({ period: '2026-07', achieved: 450_000_000 });
   assert.equal(july.mode, 'warn_only');
   assert.equal(july.appliedAmount, 0);
   assert.equal(july.afterPenaltyTotal, 42_834_991);
+  assert.equal(july.c45Dropped, false, 'T07 chạy thử không được đánh dấu C45 đã bị loại');
+  assert.equal(july.c45WouldDrop, true, 'T07 chỉ giữ cờ riêng cho tình huống giả lập');
   assert.ok(july.warning);
   assert.match(july.label, /chưa trừ tiền/i);
   assert.match(july.label, /01\/08\/2026/);
-  const august = build({ period: '2026-08' });
+  const august = build({ period: '2026-08', achieved: 450_000_000 });
   assert.equal(august.mode, 'enforced');
+  assert.equal(august.c45Dropped, true);
+  assert.equal(august.c45WouldDrop, false);
   assert.equal(august.appliedAmount, august.total);
   assert.equal(august.afterPenaltyTotal, 42_834_991 - august.total);
   assert.equal(penalty.resolveMode('2026-07-31', config), 'warn_only');
