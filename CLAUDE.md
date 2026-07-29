@@ -61,6 +61,7 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
 
 ## Tài liệu liên quan
 - `CHANGELOG.md` — **đọc đầu tiên**: nhật ký thay đổi + trạng thái hiện tại.
+- `SPEC_BONUS_PENALTY_V33.md` — **Phạt v3.3** (CEO chốt 2026-07-29): bậc âm nối tiếp P1 + phạt thiếu Xu. Phạt là trường RIÊNG, **CEO-only, khoá ở backend**, KHÔNG ghi đè số chi phí DataHub. Ship = nâng version lên v3.3.
 - `README.md` — chạy + tổng quan.
 - `HANDOFF.md` — trạng thái hiện tại + việc còn lại (đọc trước khi code tiếp).
 - `DEPLOY_CLOUDFLARE.md` — deploy Pages + Tunnel + Access.

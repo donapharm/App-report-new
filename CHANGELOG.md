@@ -1,3 +1,24 @@
+### 2026-07-29 — Claude Code (CEO chốt) — SPEC PHẠT v3.3: "đã có thưởng là phải có phạt"
+> CEO: "Xong việc này anh muốn làm luôn cách tính phạt nữa nhé. Vì đã có thưởng là phải có phạt."
+
+**‼ Phát hiện: PHẠT ĐÃ CÓ SẴN MÀ KHÔNG AI BIẾT.** `server/src/xuPolicy.js` tính phạt **thiếu Xu 300.000đ/Xu** (2 Xu = 600.000đ), tháng tạm tính - quý quyết toán, có đối trừ số Finance đã hạch toán để **không phạt hai lần**. Nhưng nó chỉ được gọi trong `dormantService.js` — **không route, không màn hình, không thông báo**. NV không biết mình đang bị tính phạt bao nhiêu. Nên "làm phạt" thực chất là **2 việc**: phơi cái đã có, và làm mới phần phạt theo target.
+
+**CEO chốt 4 điểm:** (1) phạt theo **không đạt target tháng + thiếu Xu**; (2) tính bằng **bậc âm nối tiếp P1**, CEO tự nhập mốc/%; (3) tiền phạt **trừ vào tổng chi phí bán hàng NV nhận**; (4) **chỉ báo CEO, KHÔNG báo NV**.
+
+**Claude nêu lo ngại về điểm (3), CEO vẫn chốt — đã thiết kế cách giữ được cả hai:** App Report **không ghi đè số DataHub**. Màn hình CEO hiện **3 dòng tách bạch** — *Chi phí DataHub (SSOT) / Trừ phạt (dự kiến) / Còn lại (tham khảo)*. Số gốc không bị đụng, sau này muốn trừ thật thì chuyển sang DataHub trừ, App Report quay về chỉ đọc. Không bao giờ để hai bên cùng trừ.
+
+**Rào chắn kỹ thuật để phạt KHÔNG THỂ rò sang NV:** phạt là **trường riêng `penaltyAmount`**, tuyệt đối không trộn vào `amount`/`baseAmount`. Trộn chung thì mọi chỗ đang hiện `amount` (self-view chi phí NV, tin Telegram 17h40, export) sẽ **tự động lộ phạt**. Tách trường + backend chỉ đính khối `penalty` khi `isAdmin` ⇒ NV không thể thấy dù giao diện có lỗi. **P1 giữ nguyên, không sửa một dòng.**
+
+**Fail-closed của phạt = KHÔNG PHẠT** (không phải "phạt 0đ"). Đặc biệt: **chưa giao target thì tuyệt đối không phạt** — phạt NV vì CEO chưa giao target là lỗi nặng nhất module này có thể gây ra. Chi phí DataHub `null` thì **không hiện dòng "Còn lại"** — đúng cái bẫy `Number(null) === 0` đã dính 2 lần trong tháng 7.
+
+**Bắt buộc:** ship phạt = đổi cách tính thưởng ⇒ nâng `FORMULA_VERSION` **v3.2 → v3.3** + cập nhật `bonus_formula_lock.json`, nếu không `bonusFormulaVersion.test.js` đỏ. Tách file phạt mới thì phải thêm vào `FORMULA_SOURCES`, kẻo sửa công thức phạt lọt khoá.
+
+**Thứ tự đề nghị:** đợt 1 phơi phạt Xu (máy đã đúng, rủi ro thấp) → đợt 2 phạt theo target → đợt 3 mục phạt trong digest CEO. **KHÔNG bật cờ `penaltyEnabled` cùng đợt deploy đầu**, và **KHÔNG deploy trước 31/07** (ngày chốt tháng đang chạy tin chi phí + thưởng thật).
+
+**CEO còn phải chốt:** mốc + % phạt thật, trần tiền phạt/NV/tháng, giữ hay đổi mức 300k/Xu, và sau này có cho NV nhìn thấy phạt của chính mình không.
+
+**Tài liệu:** `SPEC_BONUS_PENALTY_V33.md`. Chưa đụng code — đây là spec cho bot triển khai.
+
 ### 2026-07-29 — Claude Code (CEO yêu cầu) — Thưởng P1/P2: sửa tay xong PHẢI thấy số nhảy + khoá version công thức
 > CEO: "chỉnh bằng tay áp dụng rồi? Vẫn không thấy số nhảy. Trong bảng nhìn vào thì hiển thị V3.2 còn nhấn vào fix tay thì bản V3.1 rất khập khiễng. Đề nghị cho đồng bộ. Yêu cầu thêm mỗi lần chỉnh sửa cách tính thưởng thì phải cập nhật nâng version mới."
 
