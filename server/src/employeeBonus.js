@@ -10,6 +10,12 @@ const PRIORITY_GROUPS = Object.freeze(['H.A*', 'H.A', 'H.B', 'H.C', 'H.D']);
 const PRIORITY_GROUP_SET = new Set(PRIORITY_GROUPS);
 const MAX_BASE_RATE_PCT = 0.25;
 const BONUS_V3_EFFECTIVE_MONTH = '2026-07';
+// ‼ NGUỒN DUY NHẤT của số hiệu công thức thưởng. Backend, file cấu hình và mọi
+// nhãn trên giao diện đều phải lấy từ đây — trước đây nút bấm ghi v3.2 còn hộp
+// thoại sửa tay ghi v3.1 nên CEO không biết đang sửa bản nào (CEO chốt 29/07).
+// Quy tắc: SỬA CÁCH TÍNH THƯỞNG => nâng số hiệu này + cập nhật
+// config/bonus_formula_lock.json (test bonusFormulaVersion sẽ đỏ nếu quên).
+const FORMULA_VERSION = 'v3.2';
 const UNCONFIGURED_MESSAGE = 'Chưa cấu hình mức thưởng';
 
 function finite(value) {
@@ -504,7 +510,8 @@ function aggregateBonusSummaries(reports = [], roster = []) {
 }
 
 module.exports = {
-  CONFIG_FILE, BASE, SCHEMA_VERSION, PRIORITY_GROUPS, MAX_BASE_RATE_PCT, BONUS_V3_EFFECTIVE_MONTH, UNCONFIGURED_MESSAGE,
+  CONFIG_FILE, BASE, SCHEMA_VERSION, PRIORITY_GROUPS, MAX_BASE_RATE_PCT, BONUS_V3_EFFECTIVE_MONTH,
+  FORMULA_VERSION, UNCONFIGURED_MESSAGE,
   validateConfig, loadConfig, normalizePriorityGroup, buildPriorityRevenue, mergePriorityRevenue,
   periodBonus, buildBonusSummary, aggregateBonusSummaries,
 };

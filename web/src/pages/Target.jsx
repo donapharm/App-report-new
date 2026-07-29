@@ -148,7 +148,12 @@ function BonusGroupPreview({ title, period }) {
   </div>;
 }
 
-function BonusPolicyPanel({ ky, employees = [] }) {
+// Chỉ dùng trong lúc chờ API trả về. Số hiệu thật lấy từ backend
+// (employeeBonus.FORMULA_VERSION) để nhãn trên nút, tiêu đề hộp thoại và phần
+// mô tả công thức không bao giờ lệch nhau nữa.
+const BONUS_FORMULA_VERSION_FALLBACK = 'v3.2';
+
+function BonusPolicyPanel({ ky, employees = [], onSaved }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -225,8 +230,14 @@ function BonusPolicyPanel({ ky, employees = [] }) {
     setBusy(true); setErr(''); setMsg('');
     try {
       await api.adminBonusPolicySave({ previewId: preview.previewId });
-      setMsg('Đã lưu đúng version đã preview và ghi audit. Thưởng vẫn chỉ là dự kiến/tham khảo, không payroll.');
-      setPreview(null); await load();
+      await load();
+      // Trước đây lưu xong là xoá luôn hộp số -> màn hình trống, CEO tưởng
+      // "chỉnh tay rồi mà số không nhảy". Nay chạy lại mô phỏng với đúng cấu
+      // hình vừa lưu để hiện SỐ THỰC TẾ đang áp dụng.
+      try { setPreview({ ...(await api.adminBonusPolicyPreview(payload())), saved: true }); }
+      catch { setPreview(null); }
+      setMsg('Đã lưu đúng version đã preview và ghi audit. Số bên dưới là số ĐANG ÁP DỤNG sau khi lưu. Thưởng vẫn chỉ là dự kiến/tham khảo, không payroll.');
+      await onSaved?.();
     } catch (error) { setErr(error.message); }
     setBusy(false);
   }
@@ -239,8 +250,9 @@ function BonusPolicyPanel({ ky, employees = [] }) {
   const routeUnitTargetBlocked = ['route', 'unit'].includes(form.scopeType) && Object.keys(targetPatch()).length > 0
     && data?.targetScopeMetadata?.[form.scopeType] === false;
   const closed = !!data?.closedForV3Edit;
+  const fv = data?.formulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
   return <div className="bonus-policy-panel">
-    <div className="meta muted">Thưởng v3.2 từ T07.2026 (CEO chốt 27/07): <b>phải đạt TỔNG target trước</b> — tổng doanh thu C10 chưa đạt tổng target thì P2 = 0. Đạt rồi thì <b>phần vượt = tổng doanh thu C10 − tổng target</b>, chia cho từng nhóm C10 <b>theo đúng tỷ trọng doanh thu thực</b> (rà theo mã QLNB → cột C10), mỗi phần × rate của nhóm đó. Sửa rate bên dưới rồi <b>Mô phỏng → Lưu</b>, hệ thống ghi nhận lịch sử thay đổi (ai · khi nào · cũ→mới). Gate ngưỡng ≥101% vẫn giữ. <b>Chỉ dự kiến/tham khảo, không payroll.</b></div>
+    <div className="meta muted">Thưởng {fv} từ T07.2026 (CEO chốt 27/07): <b>phải đạt TỔNG target trước</b> — tổng doanh thu C10 chưa đạt tổng target thì P2 = 0. Đạt rồi thì <b>phần vượt = tổng doanh thu C10 − tổng target</b>, chia cho từng nhóm C10 <b>theo đúng tỷ trọng doanh thu thực</b> (rà theo mã QLNB → cột C10), mỗi phần × rate của nhóm đó. Sửa rate bên dưới rồi <b>Mô phỏng → Lưu</b>, hệ thống ghi nhận lịch sử thay đổi (ai · khi nào · cũ→mới). Gate ngưỡng ≥101% vẫn giữ. <b>Chỉ dự kiến/tham khảo, không payroll.</b></div>
     {busy && <Spinner />}
     {err && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>}
     {msg && <div className="card" style={{ borderColor: 'var(--ok)', color: 'var(--ok)' }}>✔ {msg}</div>}
@@ -273,25 +285,25 @@ function BonusPolicyPanel({ ky, employees = [] }) {
     </div>)}</div>
     <button className="btn ghost" onClick={() => update({ baseTiers: [...form.baseTiers, { fromPct: 0, toPct: null, bonusPct: 0 }] })}>+ Thêm bậc</button>
     <div className="section-title">P2 — RATE riêng từng nhóm C10</div>
-    <div className="meta muted">v3.2 <b>không còn target riêng từng nhóm</b> (phần vượt chia theo tỷ trọng doanh thu thực). Ở đây chỉ chỉnh <b>Rate</b>; ô target nhóm bên dưới giữ lại để tra cứu lịch sử và đã khoá.</div>
+    <div className="meta muted">{fv} <b>không còn target riêng từng nhóm</b> (phần vượt chia theo tỷ trọng doanh thu thực). Ở đây chỉ chỉnh <b>Rate</b>; ô target nhóm bên dưới giữ lại để tra cứu lịch sử và đã khoá.</div>
     {form.scopeType === 'productGroup' && <div className="meta muted">Tầng nhóm hàng chỉ chỉnh rate; target nhóm dùng đúng tầng Mặc định → tuyến → đơn vị → NV.</div>}
     <div className="filter-grid bonus-target-grid">{Object.keys(DEFAULT_PRIORITY_RATES).map((group) => <div className="bonus-target-field" key={group}>
       <b>{group}</b>
-      <label><span>Target nhóm manual (v3.2 KHÔNG dùng)</span><input type="number" min="0" step="1" disabled value={form.priorityTargets[group]} onChange={(e) => update({ priorityTargets: { ...form.priorityTargets, [group]: e.target.value }, missingTargets: { ...form.missingTargets, [group]: false } })} placeholder="Trống = kế thừa manual / dùng auto" /></label>
+      <label><span>Target nhóm manual ({fv} KHÔNG dùng)</span><input type="number" min="0" step="1" disabled value={form.priorityTargets[group]} onChange={(e) => update({ priorityTargets: { ...form.priorityTargets, [group]: e.target.value }, missingTargets: { ...form.missingTargets, [group]: false } })} placeholder="Trống = kế thừa manual / dùng auto" /></label>
       <label className="bonus-missing-check"><input type="checkbox" disabled checked={!!form.missingTargets[group]} onChange={(e) => update({ missingTargets: { ...form.missingTargets, [group]: e.target.checked }, priorityTargets: { ...form.priorityTargets, [group]: '' } })} /> Xóa manual tại tầng này → dùng auto</label>
       <label><span>Rate (%)</span><input type="number" min="0" step="0.01" value={form.priorityRates[group]} onChange={(e) => update({ priorityRates: { ...form.priorityRates, [group]: e.target.value } })} /></label>
     </div>)}</div>
     {(targetWarning || previewTargetWarning) && <div className="card" style={{ borderColor: 'var(--warn)', color: 'var(--warn)' }}>⚠ Tổng target nhóm {previewTargetWarning ? `đang áp ${money(monthPreview.priorityTargetTotal)}` : `đang nhập ${money(enteredTargetTotal)}`} lớn hơn target tổng NV {money(totalTarget)}. Đây là cảnh báo mềm; CEO vẫn có thể quyết định sau khi đối chiếu preview.</div>}
     {(routeUnitTargetBlocked || preview?.targetScopeWarning) && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {preview?.targetScopeWarning || 'Tầng tuyến/đơn vị chưa có metadata tổ chức NV duy nhất; target nhóm sẽ fail-closed, không suy diễn từ đơn vị khách hàng.'}</div>}
-    <div className="target-admin-actions compact-actions"><button className="btn" disabled={busy || closed} onClick={runPreview}>🔎 Mô phỏng trước khi lưu</button><button className="btn" disabled={busy || closed || !preview?.previewId} onClick={save}>💾 Lưu đúng version đã preview</button></div>
-    {monthPreview && <div className="upload-preview-box"><b>Preview · {preview.employee} · kỳ {ky}</b>
+    <div className="target-admin-actions compact-actions"><button className="btn" disabled={busy || closed} onClick={runPreview}>🔎 Mô phỏng trước khi lưu</button><button className="btn" disabled={busy || closed || !preview?.previewId || preview?.saved} onClick={save}>💾 Lưu đúng version đã preview</button></div>
+    {monthPreview && <div className="upload-preview-box"><b>{preview?.saved ? 'ĐÃ LƯU — số đang áp dụng' : 'Preview'} · {preview.employee} · kỳ {ky}</b>
       <div className="meta muted">Đạt {pct(monthPreview.pct || 0)} · P1 {money(monthPreview.baseAmount || 0)} + P2 phần vượt {money(monthPreview.priorityAmount || 0)} = <b>{money(monthPreview.amount || 0)}</b>.</div>
-      <div className="meta muted">C10: {monthPreview.priorityStatus === 'source_unavailable' ? 'DataHub chưa sẵn sàng — P2 fail-closed = 0' : `coverage ${pct(monthPreview.priorityCoverage?.coveragePct || 0)}`} · chưa lưu · không payroll.</div>
+      <div className="meta muted">C10: {monthPreview.priorityStatus === 'source_unavailable' ? 'DataHub chưa sẵn sàng — P2 fail-closed = 0' : `coverage ${pct(monthPreview.priorityCoverage?.coveragePct || 0)}`} · {preview?.saved ? 'đã lưu' : 'chưa lưu'} · không payroll.</div>
       <BonusGroupPreview title="Chi tiết P2 tháng" period={monthPreview} />
       <BonusGroupPreview title="Chi tiết P2 quý · Target quý = trung bình các tháng đã giao" period={quarterPreview} />
     </div>}
     <div className="section-title">Version gần nhất</div>
-    <div className="card">{(data?.policies || []).slice(-8).reverse().map((policy) => <div className="row" key={policy.id}><div className="main"><div className="name">v{policy.version} · {policy.scope.type}:{policy.scope.value}</div><div className="meta muted">{policy.effectiveFrom}{policy.effectiveTo ? ` → ${policy.effectiveTo}` : ' → mở'} · {policy.actor} · {policy.note || '—'}</div></div></div>)}{!data?.policies?.length && 'Chưa có override; đang dùng công thức mặc định v3.1.'}</div>
+    <div className="card">{(data?.policies || []).slice(-8).reverse().map((policy) => <div className="row" key={policy.id}><div className="main"><div className="name">v{policy.version} · {policy.scope.type}:{policy.scope.value}</div><div className="meta muted">{policy.effectiveFrom}{policy.effectiveTo ? ` → ${policy.effectiveTo}` : ' → mở'} · {policy.actor} · {policy.note || '—'}</div></div></div>)}{!data?.policies?.length && `Chưa có override; đang dùng công thức mặc định ${fv}.`}</div>
   </div>;
 }
 
@@ -429,6 +441,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
       </div>
     </div>
   ) : null;
+  const bonusFv = data?.bonusFormulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
   return (
     <>
       <div className="card smart-admin-head">
@@ -443,7 +456,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           <button className="btn" disabled={busy} onClick={() => setTool('template')}>⬇ Template</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('upload')}>⬆ Upload</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('quarter')}>📅 Nhập theo Quý</button>
-          <button className="btn ghost" disabled={busy} onClick={() => setTool('bonus')}>🎯 Cấu hình Thưởng v3.2</button>
+          <button className="btn ghost" disabled={busy} onClick={() => setTool('bonus')}>🎯 Cấu hình Thưởng {bonusFv}</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('ai')}>🤖 AI đề xuất</button>
           <button className="btn ghost" disabled={busy} onClick={() => { setRollbackId(lastBatch?.batchId || ''); setTool('rollback'); }}>↩ Rollback</button>
         </div>
@@ -483,8 +496,10 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           ))}
         </div>
       </>}
-      <Modal id="bonus" title="🎯 Cấu hình Thưởng dự kiến v3.1">
-        <BonusPolicyPanel ky={ky} employees={data?.rows || []} />
+      <Modal id="bonus" title={`🎯 Cấu hình Thưởng dự kiến ${bonusFv}`}>
+        {/* onSaved: lưu xong phải nạp lại KPI/target của trang cha, nếu không
+            màn hình vẫn giữ số cũ và trông như "chỉnh tay không ăn". */}
+        <BonusPolicyPanel ky={ky} employees={data?.rows || []} onSaved={onTargetsChanged} />
       </Modal>
       <Modal id="template" title="⬇ Xuất/Tải template target">
         <div className="meta muted">Template xuất đúng kỳ đang chọn, đủ 21 NV theo DB. Căn cứ chỉ là mốc để CEO sửa, không tự thành target live.</div>
@@ -842,9 +857,12 @@ export default function Target({ me, onNavigate }) {
   }, [view, reloadTick]);
   const selectedKy = (periodSel?.mode === 'range' ? periodSel.to : periodSel?.ky) || periods.at(-1)?.ky || now?.ky;
   const adminSelectedKy = adminKy || selectedKy;
-  async function refreshTargetKpis() {
-    if (!periodSel) return;
-    setNow(await api.targets(periodParams(periodSel)));
+  // Sửa target HOẶC sửa công thức thưởng xong thì mọi số phụ thuộc phải đổi
+  // ngay: KPI kỳ này, chi tiết NV, dự báo, bản xem trước thông báo. Trước đây
+  // chỉ nạp lại KPI nên CEO lưu xong vẫn thấy số cũ.
+  function refreshTargetKpis() {
+    setFc(null);
+    reload();
   }
   useEffect(() => {
     if (view === 'employee' && empSel) api.employeeDetail(empSel, selectedKy).then(setEmpData).catch(() => setEmpData(null));

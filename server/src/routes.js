@@ -3538,7 +3538,7 @@ router.get('/admin/targets', auth.requireAuth, auth.requireAdmin, (req, res) => 
   const ky = req.query.ky || store.latestKy();
   const scope = auth.scopeOf(req.session);
   const baseline = targetAdmin.baseline202606();
-  res.json({ ky, rows: targetMatrix(ky), kpi: targetKpiSummary(ky, scope), baseline: { ky: baseline.ky, total: baseline.total, count: baseline.rows.length, label: 'T06/2026 Lumos' }, history: targetAdmin.listAudit().slice(0, 30) });
+  res.json({ ky, rows: targetMatrix(ky), kpi: targetKpiSummary(ky, scope), bonusFormulaVersion: employeeBonus.FORMULA_VERSION, baseline: { ky: baseline.ky, total: baseline.total, count: baseline.rows.length, label: 'T06/2026 Lumos' }, history: targetAdmin.listAudit().slice(0, 30) });
 });
 
 router.get('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, res) => {
@@ -3556,6 +3556,7 @@ router.get('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, r
     targetLayers: employeeBonusPolicy.TARGET_LAYERS,
     priorityGroups: employeeBonus.PRIORITY_GROUPS,
     v3EffectiveFrom: employeeBonus.BONUS_V3_EFFECTIVE_MONTH,
+    formulaVersion: employeeBonus.FORMULA_VERSION,
     closedForV3Edit: employeeBonusPolicy.monthKey(period) < employeeBonus.BONUS_V3_EFFECTIVE_MONTH,
     revision: employeeBonusPolicy.revision(),
     targetScopeMetadata: {

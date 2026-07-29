@@ -1,3 +1,19 @@
+### 2026-07-29 — Claude Code (CEO yêu cầu) — Thưởng P1/P2: sửa tay xong PHẢI thấy số nhảy + khoá version công thức
+> CEO: "chỉnh bằng tay áp dụng rồi? Vẫn không thấy số nhảy. Trong bảng nhìn vào thì hiển thị V3.2 còn nhấn vào fix tay thì bản V3.1 rất khập khiễng. Đề nghị cho đồng bộ. Yêu cầu thêm mỗi lần chỉnh sửa cách tính thưởng thì phải cập nhật nâng version mới."
+
+**Đã kiểm: MÁY TÍNH THƯỞNG KHÔNG SAI.** Chạy lại đúng đường lưu thật (`preview` → `savePreview`): đổi rate H.A 0,8% → 5% thì P2 nhảy **1.600.000đ → 10.000.000đ**. Backend cũng đã xoá cache ngay sau khi lưu. Lỗi nằm ở **màn hình**, không nằm ở công thức.
+
+**Ba lỗi thật đã sửa**
+1. **Lưu xong màn hình xoá trắng số.** Bấm "Lưu" là `setPreview(null)` → hộp số biến mất. Người dùng thấy đúng cảnh "áp dụng rồi mà không có số nào nhảy". Nay lưu xong **chạy lại mô phỏng với đúng cấu hình vừa lưu** và hiện nhãn **"ĐÃ LƯU — số đang áp dụng"**; nút Lưu khoá lại để không lưu trùng một bản y hệt.
+2. **Trang cha không nạp lại.** Hộp Cấu hình Thưởng nằm trong trang Quản target nhưng lưu xong **không báo cho trang cha**, nên KPI/chi tiết NV vẫn là số lấy về TRƯỚC khi lưu. Nay `onSaved` → nạp lại toàn bộ số phụ thuộc (KPI kỳ này, chi tiết NV, dự báo, xem trước thông báo).
+3. **Nhãn version lệch nhau ở 3 chỗ.** Nút bấm ghi *v3.2*, tiêu đề hộp sửa tay ghi *v3.1*, file cấu hình `employee_bonus_tiers.json` cũng còn ghi *v3.1* — trong khi công thức đang chạy **là v3.2** (cổng tổng target + chia phần vượt theo tỷ trọng). Nay **một nguồn duy nhất**: `employeeBonus.FORMULA_VERSION`, backend trả ra cho cả 2 route, giao diện chỉ hiển thị lại.
+
+**Quy tắc mới CEO yêu cầu: ĐỔI CÁCH TÍNH THƯỞNG => PHẢI NÂNG VERSION.** Chốt bằng máy chứ không bằng lời hứa: `server/config/bonus_formula_lock.json` giữ **vân tay (sha256)** của phần mã tính thưởng. Đụng vào công thức mà quên nâng version → test đỏ, in sẵn 3 bước phải làm. Sửa chú thích/giải thích thì không bị bắt nâng version.
+
+**Test:** thêm `server/test/bonusFormulaVersion.test.js` — 7 ca, PASS. Đã thử phá (đổi 1 hằng số trong máy tính thưởng) để chắc chắn khoá **có cắn**. Toàn bộ bộ test: 464 pass / 7 fail — 7 ca đỏ là **có sẵn từ trước**, do máy này thiếu `pdfinfo` và fixture auth, không liên quan thay đổi này. Web build OK.
+
+**Chưa đụng:** công thức tính vẫn **y nguyên** — P1 (`baseAmount`) không sửa một dòng nào, đúng nguyên tắc đã chốt.
+
 ### 2026-07-28 — Claude Code (CEO duyệt) — Nối 4 lớp bảo vệ vào auto-deploy
 > CEO: "Auto-deploy vẫn khoá... làm luôn nhé". Nối bộ script an toàn đã có sẵn nhưng **chưa dùng**, và **GIỮ NGUYÊN trạng thái khoá**.
 
