@@ -10,16 +10,19 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 const ExcelJS = require('exceljs');
+const { writeJsonAtomic, acquireFileLock } = require('./materializeFileSafety');
 
 const DATA = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA, 'uploads');
 const SLOTS = path.join(DATA, 'upload_slots.json');
 const AUDIT = path.join(DATA, 'audit.json');
+const MATERIALIZE_LOCK = path.join(DATA, 'revenue_materialize.lock');
 fs.mkdirSync(UP_DIR, { recursive: true });
 
 const readJson = (p, def) => (fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : def);
-const writeJson = (p, o) => fs.writeFileSync(p, JSON.stringify(o, null, 2), 'utf8');
+const writeJson = writeJsonAtomic;
 
 // Bản đồ header linh hoạt -> field chuẩn
 const HEADER_MAP = {
@@ -144,7 +147,11 @@ function appendAudit(entry) {
   writeJson(AUDIT, a);
 }
 
-function commitSlot({ previewId, ky, dateFrom, dateTo, mode = 'new', user }) {
+function commitSlot(input) {
+  const releaseLock = acquireFileLock(MATERIALIZE_LOCK);
+  try { return commitSlotLocked(input); } finally { releaseLock(); }
+}
+function commitSlotLocked({ previewId, ky, dateFrom, dateTo, mode = 'new', user }) {
   const pv = previewCache.get(previewId);
   if (!pv) throw new Error('Preview đã hết hạn, vui lòng chọn lại file.');
   const existing = activeSlotForKy(ky);
@@ -154,9 +161,16 @@ function commitSlot({ previewId, ky, dateFrom, dateTo, mode = 'new', user }) {
   if (mode === 'update' && !existing) {
     throw new Error(`Kỳ ${ky} chưa có dữ liệu đang dùng. Vui lòng chuyển sang Import mới.`);
   }
-  const id = 'slot_' + ky.replace('.', '') + '_' + Math.floor(pv.ts).toString(36);
-  writeJson(path.join(UP_DIR, id + '.json'), pv.rows);
-  const slots = readJson(SLOTS, []).map((s) => (s.ky === ky ? { ...s, active: false } : s));
+  const id = 'slot_' + ky.replace('.', '') + '_' + Math.floor(pv.ts).toString(36) + '_' + randomUUID();
+  const file = path.join(UP_DIR, id + '.json');
+  const registry = readJson(SLOTS, []);
+  if (registry.some((s) => String(s.id) === id) || fs.existsSync(file)) {
+    const error = new Error('UPLOAD_SLOT_ID_COLLISION');
+    error.code = 'UPLOAD_SLOT_ID_COLLISION';
+    throw error;
+  }
+  writeJson(file, pv.rows);
+  const slots = registry.map((s) => (s.ky === ky ? { ...s, active: false } : s));
   const slot = {
     id, ky, dateFrom, dateTo,
     totalRows: pv.meta.totalRows,
@@ -189,7 +203,11 @@ function commitSlot({ previewId, ky, dateFrom, dateTo, mode = 'new', user }) {
 }
 
 // Rollback / kích hoạt lại một slot cũ của cùng kỳ
-function activateSlot({ id, user }) {
+function activateSlot(input) {
+  const releaseLock = acquireFileLock(MATERIALIZE_LOCK);
+  try { return activateSlotLocked(input); } finally { releaseLock(); }
+}
+function activateSlotLocked({ id, user }) {
   const slots = readJson(SLOTS, []);
   const target = slots.find((s) => s.id === id);
   if (!target) throw new Error('Không tìm thấy slot.');

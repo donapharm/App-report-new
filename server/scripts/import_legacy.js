@@ -18,12 +18,15 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
+const { writeJsonAtomic, acquireFileLock } = require('../src/materializeFileSafety');
 
 const DATA = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA, 'uploads');
+const MATERIALIZE_LOCK = path.join(DATA, 'revenue_materialize.lock');
 fs.mkdirSync(UP_DIR, { recursive: true });
 const readJson = (p, def) => (fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : def);
-const writeJson = (p, o) => fs.writeFileSync(p, JSON.stringify(o, null, 2), 'utf8');
+const writeJson = writeJsonAtomic;
 const noAccent = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
 
 // Bản đồ tên cột cũ -> field mới (thêm alias nếu app cũ dùng tên khác)
@@ -95,9 +98,16 @@ function importFile(file, { ky, dateFrom, dateTo } = {}) {
   const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
   const empCount = new Set(rows.map((r) => r.emp_code)).size;
 
-  const id = 'legacy_' + ky.replace('.', '') + '_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36);
-  writeJson(path.join(UP_DIR, id + '.json'), rows);
-  const slots = readJson(path.join(DATA, 'upload_slots.json'), []).map((s) => (s.ky === ky ? { ...s, active: false } : s));
+  const id = 'legacy_' + ky.replace('.', '') + '_' + Date.now().toString(36) + '_' + randomUUID();
+  const uploadFile = path.join(UP_DIR, id + '.json');
+  const registry = readJson(path.join(DATA, 'upload_slots.json'), []);
+  if (registry.some((s) => String(s.id) === id) || fs.existsSync(uploadFile)) {
+    const error = new Error('LEGACY_SLOT_ID_COLLISION');
+    error.code = 'LEGACY_SLOT_ID_COLLISION';
+    throw error;
+  }
+  writeJson(uploadFile, rows);
+  const slots = registry.map((s) => (s.ky === ky ? { ...s, active: false } : s));
   slots.push({
     id, ky, dateFrom: dateFrom || ky, dateTo: dateTo || ky,
     totalRows: rows.length, totalRevenue, empCount,
@@ -129,7 +139,15 @@ if (fs.statSync(target).isDirectory()) {
   files = [target];
 }
 
-const results = files.map((f) => importFile(f, f === target ? { ky: kyArg, dateFrom: fromArg, dateTo: toArg } : {}));
+const releaseLock = acquireFileLock(MATERIALIZE_LOCK);
+let results;
+try {
+  // Giữ chung một lock cho toàn batch để materializer/manual upload không xen
+  // giữa các kỳ và ghi đè registry slot vừa import.
+  results = files.map((f) => importFile(f, f === target ? { ky: kyArg, dateFrom: fromArg, dateTo: toArg } : {}));
+} finally {
+  releaseLock();
+}
 
 // ---- Bảng tổng kết để KIỂM TRA ----
 console.log('KỲ      | DÒNG  | NV | TỔNG DOANH THU        | FILE');

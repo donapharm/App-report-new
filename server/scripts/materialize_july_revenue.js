@@ -7,12 +7,15 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 
 const REPORT_ROOT = path.join(__dirname, '..', '..');
 const DATA_DIR = path.join(REPORT_ROOT, 'server', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
 const ROSTER_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json');
 const { quarantineRosterConflicts } = require('../src/revenueAttributionGuard');
+const { evaluateRevenueCandidate } = require('../src/revenueMaterializeGuard');
+const { atomicWriteFile, writeJsonAtomic, acquireFileLock } = require('../src/materializeFileSafety');
 
 function loadEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -37,7 +40,10 @@ const pool = new Pg.Pool(process.env.APPSALE_DATABASE_URL ? {
   database: process.env.APPSALE_PGDATABASE || process.env.PGDATABASE,
 });
 const readJson = (p, def) => fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : def;
-const writeJson = (p, o) => fs.writeFileSync(p, JSON.stringify(o, null, 2) + '\n', 'utf8');
+const writeJson = writeJsonAtomic;
+function acquireMaterializeLock() {
+  return acquireFileLock(path.join(DATA_DIR, 'revenue_materialize.lock'));
+}
 const num = (v) => Number(v || 0);
 const validEmp = (v) => /^(DN|VP)\d{3}$/.test(String(v || '').trim().toUpperCase());
 function cleanCode(v, fallback = '') { return String(v || fallback || '').trim(); }
@@ -74,7 +80,7 @@ const PERIOD = kyToRange(process.env.REVENUE_REFRESH_KY || process.env.MATERIALI
 function buildSlotId() {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
-  return `rev_2src_${PERIOD.ky.replace('.', '')}_${stamp}`;
+  return `rev_2src_${PERIOD.ky.replace('.', '')}_${stamp}_${process.pid}_${randomUUID()}`;
 }
 function rosterPeriod(ky) {
   const [mm, yyyy] = String(ky || '').split('.');
@@ -222,11 +228,20 @@ async function fetchPartner() {
   }));
 }
 async function main() {
+  const releaseLock = acquireMaterializeLock();
+  try {
   fs.mkdirSync(UP_DIR, { recursive: true });
+  const slotsPath = path.join(DATA_DIR, 'upload_slots.json');
+  const baselineSlots = readJson(slotsPath, []);
+  const baselinePeriodSlots = baselineSlots.filter((s) => s.ky === PERIOD.ky);
+  const baselineActiveSlots = baselinePeriodSlots.filter((s) => s.active);
+  const baselineActiveIds = baselineActiveSlots.map((s) => String(s.id)).sort();
+  const previousSlot = baselineActiveSlots.at(-1) || null;
   const run = await latestRun();
   if (!run) throw new Error('NO_MISA_SUCCESS_SNAPSHOT');
   const misa = await fetchMisa(run.id);
   const partner = await fetchPartner();
+  const sourceRunAfterRead = await latestRun();
   const sourceRows = [...misa, ...partner];
   // Không remap sang NV khác. Dòng nguồn xung đột roster hiện hành được cách ly
   // về UNALLOCATED để chặn lộ doanh thu sai cho NV cho đến khi App Sale sửa export.
@@ -238,13 +253,65 @@ async function main() {
   if (total !== sourceTotal) throw new Error(`ATTRIBUTION_GUARD_CHANGED_TOTAL:${sourceTotal}:${total}`);
   const bySource = rows.reduce((m, r) => { const x = m[r.source] ||= { rows: 0, orders: new Set(), revenue: 0 }; x.rows++; x.orders.add(r.source_order); x.revenue += num(r.revenue); return m; }, {});
   const summaryBySource = Object.fromEntries(Object.entries(bySource).map(([k, v]) => [k, { rows: v.rows, orders: v.orders.size, revenue: v.revenue }]));
-  const slotId = process.env.JULY_SLOT_ID || buildSlotId();
+  const requestedSlotId = String(process.env.JULY_SLOT_ID || '').trim().replace(/[^0-9A-Za-z._-]+/g, '-');
+  const slotId = requestedSlotId ? `${requestedSlotId}_${process.pid}_${randomUUID()}` : buildSlotId();
+  const candidate = {
+    ky: PERIOD.ky,
+    totalRows: rows.length,
+    totalRevenue: total,
+    sourceRunId: String(run.id),
+    sourceRunIdAfterRead: String(sourceRunAfterRead?.id || ''),
+    sourceSummary: summaryBySource,
+  };
+  const materializeGuard = evaluateRevenueCandidate({ previousSlot, candidate });
+  if (baselinePeriodSlots.length > 0 && baselineActiveIds.length === 0) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({ code: 'MISSING_ACTIVE_SLOT', periodSlotIds: baselinePeriodSlots.map((s) => String(s.id)).sort() });
+  }
+  if (baselineActiveIds.length > 1) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({ code: 'MULTIPLE_ACTIVE_SLOTS', activeSlotIds: baselineActiveIds });
+  }
+  const commitSlots = readJson(slotsPath, []);
   const file = path.join(UP_DIR, `${slotId}.json`);
+  if (commitSlots.some((s) => String(s.id) === slotId) || fs.existsSync(file)) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({ code: 'SLOT_ID_COLLISION', slotId, fileExists: fs.existsSync(file) });
+  }
+  const commitActiveIds = commitSlots.filter((s) => s.active && s.ky === PERIOD.ky).map((s) => String(s.id)).sort();
+  if (JSON.stringify(commitActiveIds) !== JSON.stringify(baselineActiveIds)) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({
+      code: 'ACTIVE_SLOT_CHANGED_DURING_MATERIALIZE',
+      selectedBaseline: baselineActiveIds,
+      latestBaseline: commitActiveIds,
+    });
+  }
+  const artDir = path.join(REPORT_ROOT, 'artifacts');
+  fs.mkdirSync(artDir, { recursive: true });
+  if (!materializeGuard.ok) {
+    const rejectedFile = path.join(artDir, `revenue_2source_rejected_${slotId}.json`);
+    const rejection = {
+      generatedAt: new Date().toISOString(),
+      dataAsOf: process.env.REVENUE_DATA_AS_OF || new Date().toISOString(),
+      slotId,
+      latestMisaRun: { id: String(run.id), finished_at: run.finished_at },
+      guard: materializeGuard,
+    };
+    writeJson(rejectedFile, rejection);
+    const reasonCodes = materializeGuard.reasons.map((reason) => reason.code).join(',');
+    console.error('[revenue-materialize-guard] rejected', JSON.stringify({ slotId, reasonCodes, rejectedFile, previous: materializeGuard.previous, candidate: materializeGuard.candidate }));
+    const error = new Error(`REVENUE_MATERIALIZE_GUARD_REJECTED:${reasonCodes}`);
+    error.code = 'REVENUE_MATERIALIZE_GUARD_REJECTED';
+    error.auditFile = rejectedFile;
+    throw error;
+  }
+
+  // Chỉ ghi file và đổi active slot SAU KHI guard đã pass. Nếu nguồn đang race/
+  // mất dữ liệu, exception ở trên giữ nguyên slot tốt gần nhất trong production.
   writeJson(file, rows);
-  const slotsPath = path.join(DATA_DIR, 'upload_slots.json');
-  const slots = readJson(slotsPath, []);
-  for (const s of slots) if (s.ky === PERIOD.ky) s.active = false;
-  slots.push({
+  for (const s of commitSlots) if (s.ky === PERIOD.ky) s.active = false;
+  commitSlots.push({
     id: slotId,
     ky: PERIOD.ky,
     dateFrom: PERIOD.from, dateTo: PERIOD.to,
@@ -262,22 +329,34 @@ async function main() {
     rosterSource: roster.meta?.source || 'data-hub-lkg',
     rosterVersion: roster.meta?.version || null,
     rosterChecksum: roster.meta?.checksum || null,
+    materializeGuard: {
+      status: 'passed',
+      previousSlotId: previousSlot?.id || null,
+      metrics: materializeGuard.metrics || null,
+      thresholds: materializeGuard.thresholds,
+    },
   });
-  writeJson(slotsPath, slots);
+  writeJson(slotsPath, commitSlots);
   const artifact = {
     generatedAt: new Date().toISOString(), dataAsOf: process.env.REVENUE_DATA_AS_OF || new Date().toISOString(), slotId, file, ky: PERIOD.ky, latestMisaRun: { id: String(run.id), finished_at: run.finished_at, raw_summary: run.raw_summary },
     summary: { rows: rows.length, totalRevenue: total, bySource: summaryBySource, empCount: new Set(rows.map((r) => r.emp_code).filter(Boolean)).size, attributionConflicts: guarded.summary },
+    materializeGuard: { status: 'passed', previousSlotId: previousSlot?.id || null, metrics: materializeGuard.metrics || null, thresholds: materializeGuard.thresholds },
     attributionConflicts: guarded.conflicts,
     samples: { misa: misa.slice(0, 10), partner: partner.slice(0, 10) },
   };
-  const artDir = path.join(REPORT_ROOT, 'artifacts'); fs.mkdirSync(artDir, { recursive: true });
   writeJson(path.join(artDir, `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}.json`), artifact);
   const md = [`# Revenue — CRM MISA + APP WEB`, '', `Generated: ${artifact.generatedAt}`, '', `MISA run: #${run.id}, finished_at=${run.finished_at}`, '', '| Source | Rows | Orders | Revenue |', '|---|---:|---:|---:|'];
   for (const [k, v] of Object.entries(summaryBySource)) md.push(`| ${k} | ${v.rows} | ${v.orders} | ${v.revenue} |`);
-  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', `Attribution guard: ${guarded.summary.rows} dòng / ${guarded.summary.units} đơn vị / ${guarded.summary.revenue}đ được đưa về UNALLOCATED do emp_code nguồn xung đột roster hiện hành. Không remap sang NV khác.`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, period `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, period effective date, period order creation date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- Closed periods stay frozen; this script only creates/replaces active slot for the requested/current period.', '');
-  fs.writeFileSync(path.join(artDir, `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}.md`), md.join('\n'));
-  console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length, attributionConflicts: guarded.summary }, null, 2));
+  md.push(`| TOTAL | ${rows.length} | — | ${total} |`, '', `Materialize guard: PASS; baseline=${previousSlot?.id || 'none'}; revenueRatio=${materializeGuard.metrics?.revenueRatio ?? 'n/a'}; rowRatio=${materializeGuard.metrics?.rowRatio ?? 'n/a'}.`, '', `Attribution guard: ${guarded.summary.rows} dòng / ${guarded.summary.units} đơn vị / ${guarded.summary.revenue}đ được đưa về UNALLOCATED do emp_code nguồn xung đột roster hiện hành. Không remap sang NV khác.`, '', 'Rules:', '- CRM MISA: latest successful `misa_revenue_snapshot_lines`, `revenue_bucket in (official,pending)`, period `revenue_date`, amount `invoice_export_amount`.', '- APP WEB partner PA-A: latest `partner_order_line_responses` per order_item, period effective date, period order creation date, `delivered_qty * price`, non-test, exclude HOLD_GOLIVE.', '- PA-A trace: excludes carried-over Partner order `DT-260630-0115` (`1.960.000đ`) so WEB = `550.673.600đ`, matching old app snapshot #27.', '- Closed periods stay frozen; this script only creates/replaces active slot for the requested/current period.', '');
+  const latestArtifactBase = `revenue_2source_materialize_${PERIOD.ky.replace('.', '')}`;
+  atomicWriteFile(path.join(artDir, `${latestArtifactBase}.md`), md.join('\n'));
+  writeJson(path.join(artDir, `${latestArtifactBase}_${slotId}.json`), artifact);
+  atomicWriteFile(path.join(artDir, `${latestArtifactBase}_${slotId}.md`), md.join('\n'));
+  console.log(JSON.stringify({ slotId, total, bySource: summaryBySource, rows: rows.length, attributionConflicts: guarded.summary, materializeGuard: { status: 'passed', previousSlotId: previousSlot?.id || null, metrics: materializeGuard.metrics || null } }, null, 2));
   await pool.end();
+  } finally {
+    releaseLock();
+  }
 }
 
 // Cho phép require lại (tool đối soát) mà KHÔNG chạy materialize; chỉ chạy khi gọi trực tiếp.
