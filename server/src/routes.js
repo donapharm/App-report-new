@@ -4557,6 +4557,9 @@ async function employeeCostSummaryForNotify(empCode, { from, to } = {}) {
   return {
     empCode: session.emp_code,
     summary: view.summary || {},
+    // Tin phạt phải dùng NGUYÊN payload backend đã tính và đã đính nhãn giải
+    // thích C45. Worker chỉ dựng chữ, tuyệt đối không tính lại tiền.
+    penalty: view.penalty || payload.penalty || null,
     match: payload.match || {},
     sourceAvailable: payload.sourceOutcome ? payload.sourceOutcome === 'ok' : true,
   };

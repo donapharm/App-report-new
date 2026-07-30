@@ -93,3 +93,22 @@ test('mọi số trong tin đều là số backend đã tính, module không t�
 test('tiêu đề thư nêu đúng tháng và mã NV', () => {
   assert.equal(penaltyNotify.subjectFor(ROW, '08.2026'), 'DONAPHARM — Cảnh báo phạt tháng 08 (DN018)');
 });
+
+test('worker nối builder vào backend SSOT, gửi Telegram và khoá kỳ + bậc', () => {
+  const bot = fs.readFileSync(path.join(__dirname, '..', 'telegram-bot.js'), 'utf8');
+  const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
+  assert.match(bot, /const penaltyNotify = require\('\.\/src\/penaltyNotify'\)/);
+  assert.match(bot, /process\.env\.PENALTY_NOTIFY !== '1'/, 'cờ phải fail-closed');
+  assert.match(bot, /employeeCostSummaryForNotify\(r\.emp_code/);
+  assert.match(bot, /penaltyNotify\.messageFor\([\s\S]{0,180}?penalty: res\?\.penalty/);
+  assert.match(bot, /penaltyNotify\.notifyKey\(\{ ky, penalty: res\.penalty \}\)/);
+  assert.match(bot, /notifyChannels\.sendTelegram\(r\.telegramId, text\)/, 'tin phạt thật phải đi Telegram');
+  assert.match(bot, /startPenaltyNotifyScheduler\(\);/);
+  assert.match(bot, /Penalty scheduler: \$\{PENALTY_NOTIFY_SLOT\.label\}/, 'log khởi động phải in mốc lịch');
+  assert.match(bot, /process\.env\.PENALTY_NOTIFY_STARTUP_EMP/,
+    'nghiệm thu lúc restart phải khoá đúng 1 mã NV, không blast roster');
+  assert.doesNotMatch(bot, /runPenaltyNotify\(\{ trigger: 'startup' \}\)/,
+    'không được quét toàn bộ roster chỉ vì bot restart');
+  assert.match(routes, /penalty: view\.penalty \|\| payload\.penalty \|\| null/,
+    'worker phải nhận nguyên penalty backend đã tính, không tự tính lại');
+});
