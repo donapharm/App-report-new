@@ -1,4 +1,10 @@
-# DIRECTIVE — DEPLOY bản v3.4 lên production (CEO duyệt 2026-07-30)
+# DIRECTIVE — DEPLOY bản v3.5 lên production (CEO duyệt 2026-07-30)
+
+> **Cập nhật lần 3:** bản cần deploy giờ là **v3.5** — thêm **khoá sổ kỳ hết ngày 8 tháng sau** (CEO chốt 30/07).
+> Nghiệm thu thêm 3 việc:
+> - `GET /api/employee-cost?emp=DN00x&from=2026-07&to=2026-07` phải trả `periodClose.closed=false` và `periodClose.note = "doanh thu còn cập nhật đến hết ngày 08/08/2026"`; kỳ **T06** phải trả `closed=true`.
+> - Màn Chi phí: ô **"Tổng chi phí tháng (chi phí gốc) · dự kiến"**, và nhãn phạt ghi **DỰ KIẾN** kèm ngày 08/08/2026. Kỳ đã khoá sổ thì ghi **ĐÃ CHỐT KỲ — số chính thức**.
+> - `formulaVersion` phải là **`v3.5`** (không còn v3.4).
 
 **Bot đọc file này SAU khi `git pull origin main`.** Chỉ deploy đúng commit ghi dưới đây.
 
