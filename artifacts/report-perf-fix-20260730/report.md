@@ -2,72 +2,73 @@
 
 ## Scope and safety
 
+- Approval: `APPROVE_REPORT_PERF_FIX_20260730` — code/build/test only.
 - Branch: `perf/report-ram-nav-20260730`; approved base: `0c4c5b60753cdb28fe988c55ddaad7bfde9bf528`.
-- Changes and tests stayed in the isolated worktree. No deploy, PM2 restart, production config/env change, production data write/delete, symlink change, or external message.
-- Existing fail-closed catalog validation, revenue materialization guard, active-slot race check, common file lock, and atomic rename remain in place.
+- Validated code HEAD before this evidence-only update: `2068b25`.
+- Work stayed in the isolated worktree. **No deploy, PM2 restart, PROD config/env or data change, `current` symlink change, cleanup, or external message.**
 
-## Changes
+## Implemented
 
-### Catalog/LKG and backend RAM
+### 1. Catalog/LKG, RAM and I/O
 
-- Added content-complete semantic fingerprints plus a tiny atomic sidecar index for the main catalog LKG and DQ projection.
-- Sidecar trust is tied to file device/inode/size/mtime identity. A replaced/corrupt file cannot be skipped merely because metadata matches.
-- Unchanged refreshes preserve main/DQ/index bytes, inode and mtime; changed content still atomically rewrites even if upstream version/checksum was not bumped.
-- DQ fingerprint is computed row-by-row from approved projection fields; an unchanged refresh no longer creates duplicate ~100 MiB projections just to compare them.
-- Added period single-flight and bounded snapshot LRU: max 4 snapshots, TTL 2 minutes. Canonical assignment retention reduced from 24 potentially-large entries to 6.
-- Employee-cost ALL warm interval changed from 10 to 30 minutes, matching the revenue refresh cadence and avoiding redundant warm work. An unchanged revenue heartbeat no longer rebuilds the ALL cache.
+- Added content-complete fingerprints and a small atomic sidecar index for the main catalog LKG and DQ projection.
+- Index trust is bound to device/inode/size/mtime. If an indexed LKG is replaced or corrupt, the next refresh atomically repairs it instead of silently accepting it.
+- Unchanged snapshots preserve main/DQ/index bytes, inode and mtime; changed content still writes atomically even when upstream version/checksum was not bumped.
+- Added same-period single-flight and bounded snapshot cache: maximum 4 periods, TTL 2 minutes.
+- Reduced canonical assignment retention from 24 potentially large entries to 6.
+- Changed Employee Cost ALL warm interval from 10 to 30 minutes. An unchanged revenue heartbeat no longer triggers another giant ALL warm.
 
-### Revenue materialization
+### 2. Revenue materialization
 
-- Candidate JSON receives an incremental exact-byte SHA-256 and a versioned semantic identity.
-- Exact-byte fast path streams and validates the active file; row/key ordering-only changes use a canonical semantic comparison.
-- An equivalent candidate keeps the active slot, records a successful `skipped: unchanged` heartbeat, and creates no candidate payload, new slot, or artifact.
-- Legacy active slots get a one-time small atomic manifest metadata backfill; subsequent runs do not parse the giant active JSON. Changed data still follows the original guarded atomic commit/history path.
-- No historical production files are deleted.
+- Added exact payload SHA-256 plus versioned semantic identity.
+- Exact match validates the active artifact; ordering-only changes use semantic comparison.
+- Unchanged data keeps the active slot and returns successful `skipped: "unchanged"`; it creates no duplicate payload, slot or artifact.
+- Legacy slots receive a one-time atomic hash metadata backfill. Changed data still uses the existing guard, race check, lock and atomic commit path.
+- No historical files are deleted.
 
-### Frontend navigation/employee switching
+### 3. Faster menu/employee switching
 
-- Added a bounded 12-entry request coordinator: concurrent GET coalescing and short private response cache (default 12 s; employee-cost 20 s; point/xu 30 s).
-- Cache keys include method, full path/query, body, auth token digest, device ID, and backend data signature. Raw tokens are never retained as cache keys.
-- Successful mutations clear response cache. Token changes clear cache and generation. Backend sends only an opaque data-generation header for immediate file/slot invalidation.
-- Employee cost and point/xu use latest-request-wins gates and AbortController. Old employee/filter requests cannot overwrite the latest employee; shared requests abort only after all consumers leave.
-- Removed the previous module-global point/xu cache whose key lacked session/device/data-generation scope.
+- Added a bounded 12-entry request coordinator:
+  - concurrent identical GETs coalesce;
+  - short private cache: default 12 seconds, Employee Cost 20 seconds, point/xu 30 seconds;
+  - successful mutations and auth/data-generation changes invalidate cache.
+- Cache keys are isolated by opaque local auth generation, device, full path/query/body and backend data generation. **Bearer tokens are not stored in cache keys.**
+- Backend data header is SHA-256 opaque; internal slot IDs/periods/timestamps are not exposed.
+- Employee Cost and point/xu use latest-request-wins and AbortController, preventing an old employee/filter response from overwriting the latest selection.
+- Removed the old module-global point/xu cache whose key lacked auth/device/data-generation isolation.
 
 ## Benchmarks
 
-Synthetic temp fixtures on Node 22.22.0; details in `benchmarks.json`.
+Synthetic fixtures in fresh Node processes; see `benchmarks.json`.
 
 | Scenario | Before | After |
 |---|---:|---:|
-| Catalog 8,000 rows, unchanged call | 1,566.63 ms; 2 writes; 10,786,300 B | 0.02 ms warm; 0 writes; 0 B |
-| Catalog max RSS in fixture | 192.9 MiB | 141.6 MiB (-26.6%) |
-| Revenue 30,000 rows / 5,954,984 B | duplicate candidate write | 0 payload/slot/artifact writes |
-| Frontend 10 same concurrent consumers | up to 10 loads without coordination | 1 network load |
-| Frontend 1,000 bounded-cache reads | network/remount dependent | 2.28 ms total |
+| Catalog 8,000 rows, unchanged fresh process | 1,235.93 ms; 2 writes; 10,306,300 B | 935.02 ms; 0 writes; 0 B |
+| Catalog unchanged max RSS | 172.2 MiB | 111.1 MiB (-35.5%) |
+| Revenue 30,000 rows / 5.95 MB unchanged | duplicate commit path possible | identity pass 170.44 ms; 0 duplicate writes |
+| 10 identical concurrent frontend requests | up to 10 loads | 1 network load |
+| 1,000 frontend cache reads | network/remount dependent | 2.05 ms total |
 
-Trade-off: revenue identity verification took 204.19 ms on the 5.95 MB fixture versus 57.14 ms for a bare duplicate payload write. This bounded CPU cost removes large duplicate files, slot history and downstream warm work; the normal exact-byte path avoids full semantic parsing after one-time metadata backfill.
-
-The production audit baseline (~700 MiB RSS, 77–80 s cold/start warm, 12–14 s revenue-refresh warm) was not rerun because this task explicitly used local fixtures/test processes only. Production impact must be measured after a separately approved deployment.
+Trade-off: the first optimized catalog publication is slower in the synthetic fixture (1,450.28 ms vs 907.90 ms) because it creates the sidecar and computes complete fingerprints. The recurring unchanged refresh is 24.35% faster, avoids 10.3 MB and 2 writes in this small fixture, and lowers max RSS by 61.1 MiB. Production LKG/DQ are much larger, but production impact was intentionally not measured without deploy approval.
 
 ## Verification
 
-- Focused changed-area server tests: **47/47 pass**.
-- All web tests: **92/92 pass**.
-- Vite production build: **pass**, 645 modules, 6.22 s.
-- Syntax and `git diff --check`: **pass**.
-- Broad server run: 553/556 pass. Three pre-existing date/fixture failures in `authTrustedDevice.test.js` reproduce in isolation; those files are unchanged from the approved base. See `test-evidence.txt`.
+- Complete server tests: **558/558 pass**.
+- Complete web tests: **92/92 pass**.
+- Total: **650/650 pass**.
+- Final Vite production build: **pass**, 645 modules, 8.11 s.
+- Syntax, `git diff --check`, focused persistence/revenue/request tests: **pass**.
+- Existing non-blocking build warning remains: Recharts chunk >500 kB.
 
-Focused tests cover unchanged no-write and inode/mtime stability, changed snapshot rewrite, concurrent catalog single-flight, exact/semantic revenue equivalence, changed revenue, versioned metadata, request coalescing, latest response, auth/device/query/data-generation isolation, per-consumer cancellation, and LRU limits.
+The earlier 3 trusted-device failures were traced to missing `server/data/users.json` in the clean worktree (`server/data/*.json` is ignored). With the same runtime fixture used by PROD, the trusted-device file passes 4/4 on both base and optimized branches; final full suite passes 558/558. This was a TEST fixture issue, not a regression.
 
-## Risks and rollout plan
+## Deploy gate and rollback
 
-1. **Before deploy:** back up current manifest/LKG sidecar area; record active revenue slot, file hashes, process RSS/heap and cold/warm endpoint timings.
-2. **Deploy only with a new CEO approval:** deploy the committed SHA using the normal App Report process; do not alter the current symlink manually.
-3. **First refresh:** expect one-time catalog index creation and legacy revenue manifest hash backfill. Verify no active slot change when payload is unchanged.
-4. **Acceptance:** compare LKG/DQ/slot write count and bytes over at least two 30-minute slots; test CEO and one employee scope; rapidly switch 3 employees and modules; confirm no stale overwrite or cross-scope data.
-5. **Monitor:** RSS/heap, event-loop delay, Data Hub latency, refresh duration, skipped/changed counters, active-slot ID, and cache warm logs for 24 hours.
-6. **Rollback:** revert this commit and redeploy through the approved path. Existing LKG and revenue payload formats stay backward-compatible; the sidecar and optional slot hash fields can remain harmlessly.
+1. A **separate CEO deploy approval** is required.
+2. Before deploy: record active revenue slot/hash, LKG/DQ identity, process RSS/heap and API timings.
+3. Deploy via the normal atomic App Report release path; do not manually alter `current`.
+4. Verify two consecutive 30-minute refresh slots, CEO plus employee scope, and rapid switching across at least 3 employees/modules.
+5. Monitor RSS/heap, event-loop delay, Data Hub latency, skipped/changed counters and cache warm logs for 24 hours.
+6. Rollback by redeploying the previous approved commit. LKG/revenue formats remain backward-compatible; optional sidecar/hash metadata can remain harmlessly.
 
-## Follow-up
-
-A larger schema migration (month-sharded catalog LKG instead of one monolith) would further reduce cold parse/write amplification, but was intentionally not introduced in this safe incremental fix. It needs a separate migration/rollback plan and production-sized acceptance dataset.
+A later month-sharded catalog migration could reduce cold parse/write further, but it is intentionally outside this safe incremental change and requires a separate migration/rollback approval.

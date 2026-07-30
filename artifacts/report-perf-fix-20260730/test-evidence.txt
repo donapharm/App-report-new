@@ -1,29 +1,40 @@
-App Report performance fix — test evidence (2026-07-30)
+App Report performance fix — final TEST evidence (2026-07-30)
 
-PASS focused server:
-  node --test test/catalogManagement.test.js test/catalogManagementPersistence.test.js test/revenuePayloadIdentity.test.js test/revenueRefreshSchedule.test.js test/materializeRevenueDependency.test.js test/perfRouteMemo.test.js test/employeeCostWarmCache.test.js test/employeeCostWarmLoop.test.js
-  47 tests, 47 pass, 0 fail, 2.059 s
+Candidate branch: perf/report-ram-nav-20260730
+Approved base: 0c4c5b60753cdb28fe988c55ddaad7bfde9bf528
+Validated code HEAD before this evidence-only update: 2068b25
 
-PASS all web tests:
-  node --test test/*.test.mjs
-  92 tests, 92 pass, 0 fail, 0.865 s
+PASS complete server test set:
+  node --test server/test/*.test.js
+  558 tests, 558 pass, 0 fail, 8.657 s
 
-PASS web production build:
+PASS complete web test set:
+  node --test web/test/*.test.js web/test/*.test.mjs
+  92 tests, 92 pass, 0 fail, 0.672 s
+
+PASS final production build:
   npm run build
-  645 modules transformed, build 6.22 s
-  Output: index JS 467.65 kB (130.93 kB gzip), recharts 573.00 kB (167.30 kB gzip)
-  Existing Vite warning: recharts chunk > 500 kB.
+  645 modules transformed, 8.11 s
+  index JS 468.04 kB (131.05 kB gzip)
+  recharts 573.00 kB (167.30 kB gzip)
+  Existing non-blocking Vite warning: recharts chunk > 500 kB.
 
-PASS syntax/diff:
+PASS focused changed-area rerun before code commit:
+  server catalog persistence/replacement repair, revenue identity/materialization and scheduler: 16/16
+  web request coordinator and Employee Cost point/xu: 12/12
+
+PASS syntax and patch hygiene:
+  node --check changed backend modules
   git diff --check
-  node --check server/src/catalogManagement.js
-  node --check server/src/revenuePayloadIdentity.js
-  node --check server/scripts/materialize_july_revenue.js
-  node --check server/src/routes.js
+  git diff --cached --check
 
-Broad server suite:
-  node --test test/*.test.js
-  556 tests: 553 pass, 3 fail.
-  All three failures are in test/authTrustedDevice.test.js (fixture cannot resolve users[0].phone).
-  The affected implementation and test are unchanged from approved base 0c4c5b6; isolated rerun reproduces the same 3 failures.
-  No performance-focused or changed-area test failed.
+Trusted-device failure classification:
+  The first broad run in the clean worktree reported 3 authTrustedDevice failures because
+  server/data/users.json is a runtime file excluded by .gitignore and was absent. With the
+  same users fixture used by PROD, authTrustedDevice.test.js passes 4/4 on both approved base
+  0c4c5b6 and the optimized branch. Final complete suite with that fixture passes 558/558.
+  Therefore this was a missing TEST fixture, not a code regression.
+
+Safety gate:
+  No deploy, PM2 restart, .env/config change, current symlink change, PROD data write/delete,
+  retention cleanup or external notification was performed.
