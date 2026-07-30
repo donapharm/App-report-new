@@ -454,6 +454,15 @@ function PenaltyPolicyPanel({ period, onSaved }) {
   const impact = preview?.impact;
   const previewRows = impact?.rows || [];
   return <div className="bonus-policy-panel penalty-policy-editor">
+    {/* CEO hỏi 30/07: màn phạt không có ô chọn "từng NV / tất cả" như bên Thưởng.
+        Đây là CHỦ Ý — phạt là luật CHUNG cho cả đội, không có phạt riêng từng người.
+        Nói thẳng ra đây để không ai phải hỏi lại. */}
+    <div className="card" style={{ borderColor: 'var(--warn)', background: '#fffbeb' }}>
+      <b>ℹ Phạt áp dụng CHUNG cho toàn bộ nhân viên</b>
+      <div className="meta muted">Khác với Thưởng, cấu hình phạt <b>không chọn theo từng NV</b> — cùng một bậc %, cùng tỷ lệ cho tất cả (CEO chốt: không có phạt riêng từng người).
+        Sửa mốc/tỷ lệ/ngày ở dưới → bấm <b>Mô phỏng toàn đội</b> để xem trước tiền phạt của từng NV → bấm <b>✅ Duyệt</b> mới lưu.
+        Muốn phạt thật thì phải <b>tick "Bật chính sách phạt"</b>; chưa tick thì trạng thái là "CHƯA ÁP DỤNG".</div>
+    </div>
     <div className="meta muted">Engine <b>{fv}</b> · policy đang dùng <b>p{currentPolicy?.version ?? 0}</b>. CEO có thể tạo công thức theo từng tháng/giai đoạn.
       Mỗi lần lưu tạo <b>version mới, không ghi đè kỳ cũ</b>; backend tự chọn đúng version theo kỳ dữ liệu. Chỉ là dự kiến/tham khảo, không payroll.</div>
     {busy && <Spinner />}
