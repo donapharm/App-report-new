@@ -1,3 +1,12 @@
+### 2026-07-30 chiều — Claude Code — DIRECTIVE TỔNG cho bot chạy một mạch (CEO uỷ quyền tự sắp thứ tự)
+> CEO: "thứ tự em tự làm các việc đó luôn, cho anh không cần hỏi lại. Xong báo cáo chắc chắn cho anh."
+
+Gom mọi việc production còn lại thành **một** `DIRECTIVE_MASTER_20260730_CHIEU.md`, sắp đúng thứ tự an toàn: (1) deploy v3.6 · (2) bật công tắc NV xem chi phí · (3) soát đếm trùng đơn · (4) **cổng chặn tiền: DN008 phải ≈130,26%** trước khi bật cờ · (5) bật 2 cờ thông báo chi phí/thưởng · (6) bật cờ tin phạt. Mỗi bước có cổng chặn riêng; bước nào không đạt thì DỪNG, không nhảy.
+
+Vì sao thứ tự này: deploy trước (không có code mới thì bật cờ vô nghĩa) → cổng tiền trước mọi lần bật cờ (số sai mà gửi là không rút lại được, đúng lý do tắt cờ tối 29/07) → tin phạt cuối vì rủi ro cao nhất (T08 trừ tiền thật).
+
+Code của cả 6 việc CEO giao đã xong và trên `main` (`73af725`): cảnh báo đồng bộ, chặn đếm trùng, tin phạt, đơn >50 triệu, khoá sổ ngày 8, nâng hạn mức lịch sử. Test: server 571/580 (9 đỏ đúng mức nền), web 87/87, khoá vân tay XANH. Việc còn lại thuần thao tác server — bot làm theo directive tổng.
+
 ### 2026-07-30 — Claude Code (CEO chốt) — TIN NHẮN PHẠT cho NV (việc 4) + ĐƠN TRÊN 50 TRIỆU nhắn chủ động (việc 5.2)
 > CEO: "Việc số 4 đồng ý duyệt tin nhắn phạt để nv nhận được." · "tất cả các đơn, với những đơn giá trị cao trên 50 triệu thì chủ động nhắn tin telegram cho nhân viên có đơn đó, cho vp018, cho ceo nắm rõ."
 
