@@ -92,13 +92,16 @@ const requireCeoPenaltyFormula = (req, res, next) => (
 );
 const canonicalAssignmentSnapshots = new Map();
 const CANONICAL_ASSIGNMENT_TTL_MS = 15 * 60 * 1000;
+const CANONICAL_ASSIGNMENT_MAX = 6;
 function canonicalAssignmentFetch(key) {
   const value = Promise.resolve().then(() => catalogManagement.getSnapshot(key));
   const entry = { at: Date.now(), value, resolved: null, refreshing: false };
   canonicalAssignmentSnapshots.set(key, entry);
   value.then((v) => { entry.resolved = v; entry.at = Date.now(); })
     .catch(() => { if (canonicalAssignmentSnapshots.get(key) === entry) canonicalAssignmentSnapshots.delete(key); });
-  if (canonicalAssignmentSnapshots.size > 24) canonicalAssignmentSnapshots.delete(canonicalAssignmentSnapshots.keys().next().value);
+  // A snapshot can be tens of MiB. Keep only the most recently used working
+  // set instead of retaining up to 24 giant months in the web process.
+  while (canonicalAssignmentSnapshots.size > CANONICAL_ASSIGNMENT_MAX) canonicalAssignmentSnapshots.delete(canonicalAssignmentSnapshots.keys().next().value);
   return entry;
 }
 async function canonicalAssignmentSnapshot(period) {
@@ -166,6 +169,25 @@ function currentMemoDataSignature() {
   }
   return signature;
 }
+
+// Frontend RAM cache is private and session-bound; this opaque generation lets
+// it invalidate immediately after slot activation/upload instead of serving a
+// previous generation until its short TTL expires. Hash the internal signature
+// so slot ids, periods and timestamps are never exposed in a response header.
+let clientDataSignatureRaw = '';
+let clientDataSignatureHash = '';
+function currentClientDataSignature() {
+  const raw = currentMemoDataSignature();
+  if (raw !== clientDataSignatureRaw) {
+    clientDataSignatureRaw = raw;
+    clientDataSignatureHash = crypto.createHash('sha256').update(raw).digest('hex');
+  }
+  return clientDataSignatureHash;
+}
+router.use((req, res, next) => {
+  if (req.method === 'GET') res.set('X-App-Data-Signature', currentClientDataSignature());
+  next();
+});
 
 function routeDataSignature(routeName) {
   if (routeName === 'filters') return store.unitGroupDataSignature();
@@ -1102,7 +1124,7 @@ function scheduleEmployeeCostAllWarm(ky, reason) {
 // tại. Khởi động TỪ index.js (không chạy lúc require) để không sinh việc thật trong test.
 const EMPLOYEE_COST_ALL_WARM_INTERVAL_MS = Math.max(
   60 * 1000,
-  Number(process.env.EMPLOYEE_COST_ALL_WARM_INTERVAL_MS || 10 * 60 * 1000) || 10 * 60 * 1000,
+  Number(process.env.EMPLOYEE_COST_ALL_WARM_INTERVAL_MS || 30 * 60 * 1000) || 30 * 60 * 1000,
 );
 function currentWarmKy() {
   try {

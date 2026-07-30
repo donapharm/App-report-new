@@ -1,0 +1,40 @@
+App Report performance fix — final TEST evidence (2026-07-30)
+
+Candidate branch: perf/report-ram-nav-20260730
+Approved base: 0c4c5b60753cdb28fe988c55ddaad7bfde9bf528
+Validated code HEAD before this evidence-only update: 2068b25
+
+PASS complete server test set:
+  node --test server/test/*.test.js
+  558 tests, 558 pass, 0 fail, 8.657 s
+
+PASS complete web test set:
+  node --test web/test/*.test.js web/test/*.test.mjs
+  92 tests, 92 pass, 0 fail, 0.672 s
+
+PASS final production build:
+  npm run build
+  645 modules transformed, 8.11 s
+  index JS 468.04 kB (131.05 kB gzip)
+  recharts 573.00 kB (167.30 kB gzip)
+  Existing non-blocking Vite warning: recharts chunk > 500 kB.
+
+PASS focused changed-area rerun before code commit:
+  server catalog persistence/replacement repair, revenue identity/materialization and scheduler: 16/16
+  web request coordinator and Employee Cost point/xu: 12/12
+
+PASS syntax and patch hygiene:
+  node --check changed backend modules
+  git diff --check
+  git diff --cached --check
+
+Trusted-device failure classification:
+  The first broad run in the clean worktree reported 3 authTrustedDevice failures because
+  server/data/users.json is a runtime file excluded by .gitignore and was absent. With the
+  same users fixture used by PROD, authTrustedDevice.test.js passes 4/4 on both approved base
+  0c4c5b6 and the optimized branch. Final complete suite with that fixture passes 558/558.
+  Therefore this was a missing TEST fixture, not a code regression.
+
+Safety gate:
+  No deploy, PM2 restart, .env/config change, current symlink change, PROD data write/delete,
+  retention cleanup or external notification was performed.

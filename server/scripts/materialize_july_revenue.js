@@ -15,6 +15,7 @@ const UP_DIR = path.join(DATA_DIR, 'uploads');
 const ROSTER_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json');
 const { quarantineRosterConflicts } = require('../src/revenueAttributionGuard');
 const { evaluateRevenueCandidate } = require('../src/revenueMaterializeGuard');
+const { REVENUE_SEMANTIC_VERSION, equivalentToActiveSlot } = require('../src/revenuePayloadIdentity');
 const { atomicWriteFile, writeJsonAtomic, acquireFileLock } = require('../src/materializeFileSafety');
 
 function loadEnv(file) {
@@ -321,8 +322,8 @@ async function main() {
     });
   }
   const artDir = path.join(REPORT_ROOT, 'artifacts');
-  fs.mkdirSync(artDir, { recursive: true });
   if (!materializeGuard.ok) {
+    fs.mkdirSync(artDir, { recursive: true });
     const rejectedFile = path.join(artDir, `revenue_2source_rejected_${slotId}.json`);
     const rejection = {
       generatedAt: new Date().toISOString(),
@@ -340,8 +341,50 @@ async function main() {
     throw error;
   }
 
+  // Guard and active-slot race checks have passed. If the candidate business
+  // payload is semantically identical, keep the current slot authoritative and
+  // avoid another large upload/manifest/artifact generation. The scheduler's
+  // run state remains a successful heartbeat and records this explicit skip.
+  const identity = await equivalentToActiveSlot({ rows, activeSlot: previousSlot, uploadsDir: UP_DIR });
+  if (identity.equivalent) {
+    // One-time metadata backfill means subsequent scheduler slots only stream-
+    // verify the active bytes; they never parse the giant active JSON again.
+    const committedActive = commitSlots.find((slot) => slot.active && String(slot.id) === String(previousSlot.id));
+    if (committedActive && (!committedActive.payloadSha256
+      || !committedActive.payloadSemanticSha256
+      || Number(committedActive.payloadSemanticVersion) !== REVENUE_SEMANTIC_VERSION)) {
+      committedActive.payloadSha256 = identity.activeSha256;
+      committedActive.payloadSemanticSha256 = identity.activeSemanticSha256;
+      committedActive.payloadSemanticVersion = REVENUE_SEMANTIC_VERSION;
+      writeJson(slotsPath, commitSlots);
+    }
+    const unchanged = {
+      ok: true,
+      skipped: 'unchanged',
+      activeSlotId: String(previousSlot.id),
+      candidateSlotId: slotId,
+      ky: PERIOD.ky,
+      summary: {
+        rows: rows.length,
+        totalRevenue: total,
+        bySource: summaryBySource,
+        empCount: new Set(rows.map((row) => row.emp_code).filter(Boolean)).size,
+        attributionConflicts: guarded.summary,
+      },
+      payloadSha256: identity.candidateSha256,
+      payloadSemanticSha256: identity.candidateSemanticSha256,
+      sourceRunId: String(run.id),
+      checkedAt: new Date().toISOString(),
+      materializeGuard: { status: 'passed', previousSlotId: previousSlot.id, metrics: materializeGuard.metrics || null },
+    };
+    console.log(JSON.stringify(unchanged, null, 2));
+    await pool.end();
+    return unchanged;
+  }
+
   // Chỉ ghi file và đổi active slot SAU KHI guard đã pass. Nếu nguồn đang race/
   // mất dữ liệu, exception ở trên giữ nguyên slot tốt gần nhất trong production.
+  fs.mkdirSync(artDir, { recursive: true });
   writeJson(file, rows);
   for (const s of commitSlots) if (s.ky === PERIOD.ky) s.active = false;
   commitSlots.push({
@@ -351,6 +394,9 @@ async function main() {
     totalRows: rows.length, totalRevenue: total,
     empCount: new Set(rows.map((r) => r.emp_code).filter(Boolean)).size,
     filename: `${slotId}.json`, uploadedBy: 'SYSTEM', uploadedByName: 'CRM MISA + APP WEB materializer',
+    payloadSha256: identity.candidateSha256,
+    payloadSemanticSha256: identity.candidateSemanticSha256,
+    payloadSemanticVersion: REVENUE_SEMANTIC_VERSION,
     uploadedAt: new Date().toISOString(), active: true,
     source: 'CRM_MISA_PLUS_APP_WEB',
     sourceRunId: String(run.id), sourceSnapshotFinishedAt: run.finished_at,

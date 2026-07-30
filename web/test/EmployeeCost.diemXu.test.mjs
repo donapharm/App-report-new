@@ -160,5 +160,7 @@ test('ALL renders cost table without calling the point-xu fan-out endpoint', () 
   assert.match(guardedBlock, /Chọn một nhân viên để tải điểm\/xu/);
   assert.match(guardedBlock, /return undefined/);
   assert.match(page, /requestIdleCallback\(load, \{ timeout: 1200 \}\)/);
-  assert.match(page, /POINT_XU_CACHE_MS = 60 \* 1000/);
+  assert.doesNotMatch(page, /pointXuCache/);
+  const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
+  assert.match(api, /employeeCostDiemXu[\s\S]*cacheMs: 30 \* 1000/);
 });
