@@ -1,0 +1,29 @@
+App Report performance fix — test evidence (2026-07-30)
+
+PASS focused server:
+  node --test test/catalogManagement.test.js test/catalogManagementPersistence.test.js test/revenuePayloadIdentity.test.js test/revenueRefreshSchedule.test.js test/materializeRevenueDependency.test.js test/perfRouteMemo.test.js test/employeeCostWarmCache.test.js test/employeeCostWarmLoop.test.js
+  47 tests, 47 pass, 0 fail, 2.059 s
+
+PASS all web tests:
+  node --test test/*.test.mjs
+  92 tests, 92 pass, 0 fail, 0.865 s
+
+PASS web production build:
+  npm run build
+  645 modules transformed, build 6.22 s
+  Output: index JS 467.65 kB (130.93 kB gzip), recharts 573.00 kB (167.30 kB gzip)
+  Existing Vite warning: recharts chunk > 500 kB.
+
+PASS syntax/diff:
+  git diff --check
+  node --check server/src/catalogManagement.js
+  node --check server/src/revenuePayloadIdentity.js
+  node --check server/scripts/materialize_july_revenue.js
+  node --check server/src/routes.js
+
+Broad server suite:
+  node --test test/*.test.js
+  556 tests: 553 pass, 3 fail.
+  All three failures are in test/authTrustedDevice.test.js (fixture cannot resolve users[0].phone).
+  The affected implementation and test are unchanged from approved base 0c4c5b6; isolated rerun reproduces the same 3 failures.
+  No performance-focused or changed-area test failed.

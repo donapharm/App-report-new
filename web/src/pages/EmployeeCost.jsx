@@ -12,9 +12,7 @@ import {
 import { employeeCostGapView, gapReasonLabel } from '../employeeCostGapModel.js';
 import { dataQualityTypeLabel, employeeCostDataQualityView } from '../employeeCostDataQualityModel.js';
 import { employeeVatKhoanDeduction, employeeVatKhoanViewModel } from '../employeeVatKhoanModel.js';
-
-const pointXuCache = new Map();
-const POINT_XU_CACHE_MS = 60 * 1000;
+import { createLatestRequestGate } from '../requestCoordinator.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -1101,6 +1099,8 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [bonusModalOpen, setBonusModalOpen] = useState(false);
   const [penaltyModalOpen, setPenaltyModalOpen] = useState(false);
+  const costRequestGate = useRef(createLatestRequestGate());
+  const pointRequestGate = useRef(createLatestRequestGate());
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(tableQuery), 180);
@@ -1128,7 +1128,7 @@ export default function EmployeeCost({ me, onNavigate }) {
   useEffect(() => {
     if (admin && view !== 'cost') return undefined;
     if (admin && !selectedEmp) { setPayload(EMPTY); setLoading(false); return; }
-    let alive = true;
+    const request = costRequestGate.current.next();
     setLoading(true);
     setError('');
     setExpanded({});
@@ -1141,15 +1141,15 @@ export default function EmployeeCost({ me, onNavigate }) {
       ...tableFilters,
       page: tablePage,
       pageSize: tablePageSize,
-    })
-      .then((data) => { if (alive) setPayload(data); })
+    }, { signal: request.signal })
+      .then((data) => { if (request.isLatest()) setPayload(data); })
       .catch((requestError) => {
-        if (!alive) return;
+        if (!request.isLatest() || requestError?.name === 'AbortError') return;
         setPayload({ ...EMPTY, ...range });
         setError(requestError.message || 'Không thể tải dữ liệu');
       })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+      .finally(() => { if (request.isLatest()) setLoading(false); });
+    return () => { if (request.isLatest()) costRequestGate.current.cancel(); };
   }, [admin, selectedEmp, range, view, debouncedQuery, tableSort, tablePage, tablePageSize, tableFilters]);
 
   useEffect(() => {
@@ -1165,30 +1165,25 @@ export default function EmployeeCost({ me, onNavigate }) {
     let alive = true;
     let idleId;
     let timerId;
-    const empCode = admin ? selectedEmp : String(me?.emp_code || '');
-    const cacheKey = `${empCode}:${range.from || ''}:${range.to || ''}`;
-    const hit = pointXuCache.get(cacheKey);
-    if (hit && Date.now() - hit.at < POINT_XU_CACHE_MS) {
-      setKhoanPayload(hit.value);
-      setKhoanLoading(false);
-      return undefined;
-    }
     setKhoanPayload({ note: 'chưa lấy được xu kỳ này' });
     setKhoanLoading(true);
-    const load = () => api.employeeCostDiemXu(admin ? selectedEmp : undefined, range)
+    let request = null;
+    const load = () => {
+      request = pointRequestGate.current.next();
+      return api.employeeCostDiemXu(admin ? selectedEmp : undefined, range, { signal: request.signal })
       .then((data) => {
-        pointXuCache.set(cacheKey, { at: Date.now(), value: data });
-        if (pointXuCache.size > 40) pointXuCache.delete(pointXuCache.keys().next().value);
-        if (alive) setKhoanPayload(data);
+        if (alive && request.isLatest()) setKhoanPayload(data);
       })
-      .catch(() => { if (alive) setKhoanPayload({ note: 'chưa lấy được xu kỳ này' }); })
-      .finally(() => { if (alive) setKhoanLoading(false); });
+      .catch((error) => { if (alive && request.isLatest() && error?.name !== 'AbortError') setKhoanPayload({ note: 'chưa lấy được xu kỳ này' }); })
+      .finally(() => { if (alive && request.isLatest()) setKhoanLoading(false); });
+    };
     // Để request bảng chi phí được ưu tiên render trước; timeout giữ đường lui
     // cho browser không hỗ trợ requestIdleCallback.
     if (typeof window.requestIdleCallback === 'function') idleId = window.requestIdleCallback(load, { timeout: 1200 });
     else timerId = window.setTimeout(load, 150);
     return () => {
       alive = false;
+      if (request?.isLatest()) pointRequestGate.current.cancel();
       if (idleId != null && typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId);
       if (timerId != null) window.clearTimeout(timerId);
     };

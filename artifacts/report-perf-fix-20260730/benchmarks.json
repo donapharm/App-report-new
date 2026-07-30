@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-07-30T13:05:00+07:00",
+  "environment": "isolated worktree, synthetic temp fixtures, Node 22.22.0; no production process or data writes",
+  "catalogSnapshot": {
+    "fixtureRows": 8000,
+    "baseline": { "firstMs": 1373.64, "unchangedMs": 1566.63, "unchangedWrites": 2, "unchangedBytes": 10786300, "maxRssMiB": 192.9, "fetches": 2 },
+    "optimized": { "firstMs": 1676.96, "warmMs": 0.02, "unchangedWrites": 0, "unchangedBytes": 0, "maxRssMiB": 141.6, "fetches": 1 },
+    "notes": "The first optimized call also creates the atomic fingerprint sidecar. Focused persistence tests independently verify unchanged LKG/DQ/index inode, mtime and bytes remain stable and changed content is rewritten."
+  },
+  "revenueIdentity": {
+    "fixtureRows": 30000,
+    "payloadBytes": 5954984,
+    "baselineCandidateWriteMs": 57.14,
+    "optimizedUnchangedCheckMs": 204.19,
+    "optimizedWrites": 0,
+    "equivalent": true,
+    "maxRssMiB": 127.1,
+    "notes": "Incremental hashing trades bounded CPU for eliminating a duplicate payload/slot/artifact. Exact-byte fast path avoids semantic canonicalization after metadata backfill."
+  },
+  "frontendCoordinator": {
+    "concurrentConsumers": 10,
+    "networkLoads": 1,
+    "coalescedMs": 41.97,
+    "cachedReads": 1000,
+    "cachedReadsTotalMs": 2.28,
+    "averageCachedMs": 0.0023,
+    "retainedEntries": 1
+  },
+  "productionAuditBaselineNotRetested": {
+    "appRssMiBApprox": 700,
+    "coldOrStartupWarmSeconds": "77-80",
+    "revenueRefreshWarmSeconds": "12-14",
+    "reason": "Approval required local fixtures/test processes only; no production restart, deploy, or production data write was performed."
+  }
+}
