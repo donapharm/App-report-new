@@ -1,6 +1,7 @@
 'use strict';
 
 const employeeBonus = require('./employeeBonus');
+const employeePenaltyAggregate = require('./employeePenaltyAggregate');
 
 const BLOCKED = new Set(['c32', 'c47']);
 const DEFAULT_PAGE_SIZE = 20;
@@ -296,8 +297,22 @@ function transformReport(report = {}, options = {}) {
   const reliable = periods.every((period) => period.summary.reliable);
   const costKeys = [...new Set(periods.flatMap((period) => period.columns.map((column) => String(column.key || '').toLowerCase())
     .filter((key) => /^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key))))];
+  const periodTotal = reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.monthlyTotal), 0) : null;
+  // PHẠT toàn đội (CEO chốt 30/07): ở "Tất cả NV" phải thấy TỔNG HỢP, không phải
+  // chữ "Chọn 1 NV". Cộng từ số phạt đã tính riêng cho từng NV, lấy theo đúng bộ lọc
+  // đang xem (employeeSubtotals của kỳ chốt), KHÔNG tính lại theo target tổng.
+  const finalPeriod = periods.find((period) => period.period === report.to) || periods.at(-1) || null;
+  const aggregatePenalty = options.allEmployees
+    ? employeePenaltyAggregate.aggregate({
+      periodTotal,
+      penalties: (finalPeriod?.employeeSubtotals || [])
+        .filter((item) => item?.penalty)
+        .map((item) => ({ ...item.penalty, empCode: item.employeeCode, employeeName: item.employeeName })),
+    })
+    : null;
   return {
     ...report,
+    ...(aggregatePenalty ? { penalty: aggregatePenalty } : {}),
     periods,
     rows: undefined,
     allEmployees: !!options.allEmployees,
@@ -309,7 +324,11 @@ function transformReport(report = {}, options = {}) {
     search: { query: String(options.q || '').slice(0, 200), filteredRows, totalRows },
     summary: {
       reliable,
-      periodTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.monthlyTotal), 0) : null,
+      periodTotal,
+      ...(aggregatePenalty ? {
+        penaltyAppliedAmount: aggregatePenalty.appliedAmount,
+        afterPenaltyTotal: aggregatePenalty.afterPenaltyTotal,
+      } : {}),
       annualTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.annualTotal), 0) : null,
       revenueTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0),
       revenueBeforeVatTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0),

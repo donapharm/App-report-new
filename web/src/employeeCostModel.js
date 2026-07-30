@@ -260,7 +260,9 @@ export function employeePenaltyViewModel(raw = {}) {
     text: String(raw.warning.text || ''),
   } : null;
   return {
-    available: !!raw && typeof raw === 'object' && Object.keys(raw).length > 0,
+    // Bản tổng hợp toàn đội tự khai available=false khi không có NV nào có số phạt;
+    // tôn trọng cờ đó thay vì cứ thấy object là coi như có dữ liệu.
+    available: !!raw && typeof raw === 'object' && Object.keys(raw).length > 0 && raw.available !== false,
     mode: String(raw.mode || 'off'),
     effectiveFrom: String(raw.effectiveFrom || ''),
     enabled: raw.enabled === true,
@@ -284,6 +286,38 @@ export function employeePenaltyViewModel(raw = {}) {
     label: String(raw.label || 'Dự kiến/tham khảo — chưa trừ lương'),
     warning,
     afterPenaltyTotal: numberOrNull(raw.afterPenaltyTotal),
+    // Diễn giải cho người xem (CEO chốt 30/07): tên cột C45 và bảng 4 ngữ cảnh phạt
+    // do BACKEND sinh từ config (penaltyDisplay). Frontend không tự viết mốc %.
+    c45Label: String(raw.c45Label || ''),
+    modeText: String(raw.modeText || ''),
+    tiers: Array.isArray(raw.tiers) ? raw.tiers.map((tier) => ({
+      tier: String(tier?.tier || ''),
+      range: String(tier?.range || ''),
+      effect: String(tier?.effect || ''),
+      example: String(tier?.example || ''),
+      ratePct: numberOrNull(tier?.ratePct),
+      dropC45: tier?.dropC45 === true,
+      active: tier?.active === true,
+      employees: numberOrNull(tier?.employees),
+      amount: numberOrNull(tier?.amount),
+    })) : [],
+    // Tổng hợp toàn đội ở màn "Tất cả NV" — backend cộng sẵn, frontend chỉ hiển thị.
+    aggregate: raw.aggregate === true,
+    employees: numberOrNull(raw.employees),
+    counted: numberOrNull(raw.counted),
+    missing: numberOrNull(raw.missing),
+    incomplete: raw.incomplete === true,
+    c45DroppedCount: numberOrNull(raw.c45DroppedCount),
+    c45WouldDropCount: numberOrNull(raw.c45WouldDropCount),
+    atRisk: Array.isArray(raw.atRisk) ? raw.atRisk.map((item) => ({
+      empCode: String(item?.empCode || '').toUpperCase(),
+      employeeName: String(item?.employeeName || item?.empCode || ''),
+      tier: String(item?.tier || ''),
+      targetPct: numberOrNull(item?.targetPct),
+      targetAmount: numberOrNull(item?.targetAmount),
+      c45Amount: numberOrNull(item?.c45Amount),
+      revenueGap: numberOrNull(item?.revenueGap),
+    })) : [],
   };
 }
 

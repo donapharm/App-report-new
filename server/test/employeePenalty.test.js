@@ -186,8 +186,85 @@ test('employee-cost service route attaches backend penalty using self-scoped pay
   assert.match(service, /resolveScopedEmployee/);
   assert.match(service, /employeePenalty\.buildPenalty/);
   assert.match(service, /c45Amount: costPeriod\?\.summary\?\.columnTotals/);
-  assert.match(service, /bonus,\s*\n\s*penalty,/);
+  // Payload phạt do backend trả nguyên vẹn, chỉ ĐÍNH THÊM phần diễn giải (tên cột
+  // C45 + bảng ngữ cảnh) sinh từ config ở backend — không tính lại tiền, không để
+  // frontend tự viết mốc %/tỷ lệ (CEO chốt 30/07).
+  assert.match(service, /penalty: penalty \? \{\s*\n\s*\.\.\.penalty,/);
+  assert.match(service, /c45Label: penaltyDisplay\.C45_LABEL/);
+  assert.match(service, /tiers: penaltyDisplay\.tierTable\(resolvedBonusConfig/);
   assert.match(service, /afterPenaltyTotal/);
+});
+
+test('bảng ngữ cảnh phạt sinh từ config, không ghi mốc %/tỷ lệ vào JSX', () => {
+  const penaltyDisplay = require('../src/penaltyDisplay');
+  const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'employee_bonus_tiers.json'), 'utf8'));
+  const tiers = penaltyDisplay.tierTable(config, { activeTier: 't70_90', achieved: 1_000_000_000, c45Amount: 5_000_000 });
+  assert.equal(tiers.length, 4);
+  assert.deepEqual(tiers.map((tier) => tier.tier), ['none', 't70_90', 't50_70', 'drop_c45']);
+  assert.equal(tiers.filter((tier) => tier.active).length, 1);
+  // Mọi bậc phải nói rõ trừ ở cột nào bằng TÊN CỘT, không chỉ mã "C45".
+  assert.match(tiers.find((tier) => tier.tier === 'drop_c45').effect, /Lương tăng thêm/);
+  assert.match(tiers.find((tier) => tier.tier === 't70_90').effect, /Lương tăng thêm/);
+  assert.match(tiers.find((tier) => tier.tier === 'drop_c45').range, /Bằng hoặc dưới 50%/);
+  assert.match(tiers.find((tier) => tier.tier === 't50_70').range, /Trên 50% đến dưới 70%/);
+  assert.match(tiers.find((tier) => tier.tier === 't70_90').range, /Từ 70% đến dưới 90%/);
+  assert.match(tiers.find((tier) => tier.tier === 'none').range, /Từ 90% trở lên/);
+  // Ví dụ tiền chỉ hiện cho bậc đang đứng và phải là 0,2% × doanh thu thật.
+  assert.match(tiers.find((tier) => tier.tier === 't70_90').example, /2\.000\.000đ/);
+  assert.equal(tiers.find((tier) => tier.tier === 'none').example, '');
+  // Sửa mốc trong config thì chữ đổi theo, không cần sửa code/JSX.
+  const moved = penaltyDisplay.tierTable({
+    ...config,
+    penaltyTiers: config.penaltyTiers.map((tier) => (tier.tier === 't70_90' ? { ...tier, toPct: 95 } : tier)),
+  }, {});
+  assert.match(moved.find((tier) => tier.tier === 't70_90').range, /đến dưới 95%/);
+});
+
+test('tổng hợp phạt toàn đội chỉ CỘNG số đã tính riêng, không coi thiếu dữ liệu là 0đ', () => {
+  const aggregateModule = require('../src/employeePenaltyAggregate');
+  const items = [
+    { empCode: 'DN001', employeeName: 'A', mode: 'enforced', tier: 't70_90', targetPct: 72, targetAmount: 1_000_000, total: 1_000_000, appliedAmount: 1_000_000, c45Amount: 4_000_000, xuAmount: null, warning: { revenueGap: 9_000_000 } },
+    { empCode: 'DN002', employeeName: 'B', mode: 'enforced', tier: 'drop_c45', targetPct: 41, targetAmount: 3_000_000, total: 3_000_000, appliedAmount: 3_000_000, c45Amount: 3_000_000, c45Dropped: true, xuAmount: null },
+    { empCode: 'DN003', employeeName: 'C', mode: 'enforced', tier: 'none', targetPct: 118, targetAmount: 0, total: 0, appliedAmount: 0, c45Amount: 2_000_000, xuAmount: null },
+    // C45 chưa về ⇒ total null ⇒ KHÔNG được cộng thành 0đ, phải đếm là còn thiếu.
+    { empCode: 'DN004', employeeName: 'D', mode: 'enforced', tier: 't50_70', targetPct: 55, targetAmount: null, total: null, appliedAmount: 0, c45Amount: null, xuAmount: null },
+  ];
+  const result = aggregateModule.aggregate({ penalties: items, periodTotal: 100_000_000 });
+  assert.equal(result.aggregate, true);
+  assert.equal(result.available, true);
+  assert.equal(result.employees, 4);
+  assert.equal(result.counted, 3);
+  assert.equal(result.missing, 1);
+  assert.equal(result.incomplete, true);
+  assert.equal(result.total, 4_000_000);
+  assert.equal(result.appliedAmount, 4_000_000);
+  assert.equal(result.afterPenaltyTotal, 96_000_000);
+  assert.equal(result.c45DroppedCount, 1);
+  assert.equal(result.tierCounts.drop_c45, 1);
+  assert.equal(result.tierAmounts.t70_90, 1_000_000);
+  assert.equal(result.atRisk.length, 3);
+  assert.equal(result.atRisk[0].empCode, 'DN002');
+  // Tổng gốc bị khoá (coverage thấp) thì không suy ra tổng sau phạt.
+  assert.equal(aggregateModule.aggregate({ penalties: items, periodTotal: null }).afterPenaltyTotal, null);
+  const empty = aggregateModule.aggregate({ penalties: [] });
+  assert.equal(empty.available, false);
+  assert.equal(empty.total, null);
+});
+
+test('màn "Tất cả NV" nhận tổng hợp phạt từ backend, frontend không tự cộng', () => {
+  const table = fs.readFileSync(path.join(__dirname, '..', 'src', 'employeeCostTable.js'), 'utf8');
+  assert.match(table, /employeePenaltyAggregate\.aggregate\(\{/);
+  assert.match(table, /options\.allEmployees\s*\n?\s*\?\s*employeePenaltyAggregate\.aggregate/);
+  const page = fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'src', 'pages', 'EmployeeCost.jsx'), 'utf8');
+  const kpiGrid = /const columnKpis[\s\S]*?<\/div>\n\n    \{targetModalOpen/.exec(page)?.[0] || page;
+  // Không còn ô nào ghi "Chọn 1 NV" cho 4 ô phạt/chi phí sau phạt.
+  assert.doesNotMatch(kpiGrid, /label="Phạt dự kiến" value="Chọn 1 NV"/);
+  assert.match(kpiGrid, /<AggregateAfterPenaltyKpi penalty=\{model\.penalty\}/);
+  assert.match(kpiGrid, /<AggregatePenaltyKpi penalty=\{model\.penalty\}/);
+  assert.match(kpiGrid, /<AggregateXuPenaltyKpi penalty=\{model\.penalty\}/);
+  // Frontend chỉ đọc số backend cộng sẵn: không có phép cộng dồn phạt ở JSX.
+  const aggregateComponents = /function AggregatePenaltyKpi[\s\S]*?function AggregatePenaltyDetailModal/.exec(page)?.[0] || '';
+  assert.doesNotMatch(aggregateComponents, /reduce\(/);
 });
 
 test('PENALTY_NOTIFY defaults off without changing existing message builders', () => {

@@ -97,16 +97,20 @@ test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction,
   // chế độ, kể cả "Tất cả NV". Trước đó 4 ô bị chặn bởi !allEmployees nên CEO mở ra
   // không thấy gì và tưởng tính năng chưa làm.
   assert.doesNotMatch(kpiGrid, /Xu tích lũy/);
-  // Khoá yêu cầu MỚI: 4 ô phải có mặt trong lưới KPI, và ở "Tất cả NV" phải nói rõ
-  // "Chọn 1 NV" thay vì ẩn đi — thà nói thật là chưa có số còn hơn để người dùng
-  // tưởng tính năng không tồn tại.
+  // Khoá yêu cầu MỚI (CEO chốt 30/07, sửa lần 2): 4 ô phải có mặt trong lưới KPI, và
+  // ở "Tất cả NV" phải hiện TỔNG HỢP TOÀN ĐỘI — không còn chữ "Chọn 1 NV".
   for (const label of ['Phạt dự kiến', 'Tổng chi phí tháng sau phạt', 'Phạt thiếu Xu cuối quý']) {
     assert.ok(kpiGrid.includes(label), `lưới KPI phải có ô "${label}"`);
   }
   assert.match(kpiGrid, /<SalaryAdvanceKpi \/>/, 'ô Ứng lần 1 phải hiện ở mọi chế độ');
   assert.doesNotMatch(kpiGrid, /\{!allEmployees && <PenaltyKpi/, '4 ô phạt không được ẩn ở chế độ Tất cả NV');
-  assert.match(kpiGrid, /allEmployees\s*\n?\s*\? <Kpi label="Phạt dự kiến" value="Chọn 1 NV"/,
-    'ở Tất cả NV phải ghi rõ "Chọn 1 NV", không hiện số 0 và không ẩn ô');
+  // Ô "Điểm · Xu · Cấn trừ" vẫn được phép ghi "Chọn 1 NV" (điểm cá nhân không cộng
+  // được), nhưng 3 ô phạt/chi phí sau phạt thì KHÔNG.
+  assert.doesNotMatch(kpiGrid, /label="(?:Phạt[^"]*|[^"]*sau phạt[^"]*)" value="Chọn 1 NV"/,
+    'ở Tất cả NV không được trả lời "Chọn 1 NV" cho ô phạt — phải hiện tổng hợp toàn đội');
+  for (const re of [/<AggregateAfterPenaltyKpi penalty=\{model\.penalty\}/, /<AggregatePenaltyKpi penalty=\{model\.penalty\}/, /<AggregateXuPenaltyKpi penalty=\{model\.penalty\}/]) {
+    assert.match(kpiGrid, re, 'nhánh Tất cả NV phải render ô tổng hợp toàn đội');
+  }
   // ‼ CEO chốt 30/07: CHỌN 1 NV thì phải thấy ĐỦ CẢ 4 Ô — để chính NV đó biết
   // mình có thể bị phạt bao nhiêu. Không ô nào được tự ẩn vì thiếu dữ liệu.
   assert.doesNotMatch(kpiGrid, /periodTotal != null && <AfterPenaltyKpi/,

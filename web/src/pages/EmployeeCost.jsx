@@ -457,6 +457,97 @@ function SalaryAdvanceKpi() {
   return <Kpi label="Ứng lần 1 tháng này" value="Chưa đấu nối app lương" sub="App Report không tự tính số ứng" tone="employee-cost-tone-neutral" />;
 }
 
+// ─── TOÀN CẢNH "TẤT CẢ NHÂN VIÊN" (CEO chốt 30/07) ────────────────────────────
+// CEO phải thấy TỔNG HỢP của 4 ô, không phải chữ "Chọn 1 NV". Mọi số dưới đây do
+// BACKEND cộng sẵn (employeePenaltyAggregate) — frontend không cộng, không chia,
+// không suy phạt từ target tổng.
+function aggregateCoverageNote(penalty) {
+  return penalty.incomplete
+    ? `tổng của ${penalty.counted}/${penalty.employees} NV · ${penalty.missing} NV chưa đủ dữ liệu (không tính là 0đ)`
+    : `tổng đủ ${penalty.counted}/${penalty.employees} NV`;
+}
+
+function AggregatePenaltyKpi({ penalty, onOpen }) {
+  const value = penalty.total == null ? 'Chưa có số' : penalty.total > 0 ? `−${formatEmployeeCostCell(penalty.total, moneyColumn)}` : 'Không ai bị phạt';
+  const dropped = penalty.c45DroppedCount || penalty.c45WouldDropCount;
+  return <Kpi
+    label="Phạt dự kiến · toàn đội"
+    value={value}
+    sub={[
+      aggregateCoverageNote(penalty),
+      dropped ? `${dropped} NV ${penalty.c45DroppedCount ? 'mất trắng' : 'sẽ mất trắng'} C45` : '',
+      penalty.available ? 'Bấm xem tổng hợp theo bậc' : '',
+    ].filter(Boolean).join(' · ')}
+    title={penalty.formulaText}
+    tone="employee-cost-tone-penalty"
+    onClick={penalty.available ? onOpen : undefined} />;
+}
+
+function AggregateAfterPenaltyKpi({ penalty, baseTotal, multiple }) {
+  const label = multiple ? 'Tổng cả kỳ sau phạt · toàn đội' : 'Tổng chi phí tháng sau phạt · toàn đội';
+  if (baseTotal == null) {
+    return <Kpi label={label} value="Chưa đủ dữ liệu chi phí"
+      sub="Tỷ lệ khớp doanh thu chưa đạt ngưỡng nên tổng gốc bị khoá — không suy ra số sau phạt từ số chưa chắc"
+      tone="employee-cost-tone-after-penalty" />;
+  }
+  const value = penalty.afterPenaltyTotal == null ? baseTotal : penalty.afterPenaltyTotal;
+  return <Kpi label={label} value={formatEmployeeCostCell(value, moneyColumn)}
+    sub={`${penalty.mode === 'warn_only' ? penalty.label : penalty.label} · Gốc ${formatEmployeeCostCell(baseTotal, moneyColumn)} · đã trừ ${formatEmployeeCostCell(penalty.appliedAmount || 0, moneyColumn)}`}
+    tone="employee-cost-tone-after-penalty" />;
+}
+
+function AggregateXuPenaltyKpi({ penalty, period }) {
+  const endMonth = quarterEndMonth(period);
+  const currentMonth = Number(String(period || '').slice(5, 7));
+  if (endMonth && currentMonth !== endMonth) return <Kpi label="Phạt thiếu Xu cuối quý · toàn đội" value={`Chốt vào cuối quý (T${endMonth})`} sub="Tháng chỉ tạm tính · không phạt hai lần" tone="employee-cost-tone-penalty-soft" />;
+  const value = penalty.xuAmount == null
+    ? (penalty.xuStatus === 'disabled' ? 'Chưa bật' : penalty.xuStatus === 'xu_source_unavailable' ? 'Chưa đủ nguồn Xu' : 'Đang quyết toán')
+    : penalty.xuAmount > 0 ? `−${formatEmployeeCostCell(penalty.xuAmount, moneyColumn)}` : 'Không ai bị phạt';
+  return <Kpi label="Phạt thiếu Xu cuối quý · toàn đội" value={value} sub={`${aggregateCoverageNote(penalty)} · dự kiến/tham khảo`} tone="employee-cost-tone-penalty-soft" />;
+}
+
+function AggregatePenaltyDetailModal({ penalty, c45Label, modalRef, closeRef, cell, onClose }) {
+  const pct = (value) => value == null ? '—' : `${Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}%`;
+  return <div className="modal-backdrop employee-cost-target-modal-backdrop" role="presentation" onClick={onClose}>
+    <div ref={modalRef} className="modal-card employee-cost-target-modal employee-cost-penalty-modal" role="dialog" aria-modal="true" aria-labelledby="employee-cost-penalty-modal-title" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-head"><div><b id="employee-cost-penalty-modal-title">Tổng hợp phạt toàn đội · {c45Label}</b><small>Tất cả nhân viên trong bộ lọc hiện tại</small></div><button ref={closeRef} type="button" className="employee-cost-target-modal-close" aria-label="Đóng tổng hợp phạt" onClick={onClose}>×</button></div>
+      <section className="employee-cost-target-section">
+        <h3>Tổng hợp</h3>
+        <div className="employee-cost-target-equation employee-cost-penalty-equation">
+          <span>Phạt target (Σ)<small>{aggregateCoverageNote(penalty)}</small></span><b>{penalty.targetAmount > 0 ? `−${cell(penalty.targetAmount)}` : cell(penalty.targetAmount)}</b>
+          <span>Phạt thiếu Xu (Σ)</span><b>{penalty.xuAmount == null ? '—' : penalty.xuAmount > 0 ? `−${cell(penalty.xuAmount)}` : cell(0)}</b>
+          <span className="employee-cost-bonus-total">Phạt áp dụng kỳ này (Σ)<small>{penalty.mode === 'warn_only' ? 'Chạy thử — chưa trừ tiền' : penalty.label}</small></span><b className="employee-cost-bonus-total">{penalty.appliedAmount > 0 ? `−${cell(penalty.appliedAmount)}` : cell(penalty.appliedAmount)}</b>
+        </div>
+      </section>
+      {!!penalty.tiers?.length && <section className="employee-cost-target-section employee-cost-penalty-tiers">
+        <h3>Theo bậc</h3>
+        <div className="employee-cost-penalty-tier-list" role="list">
+          {penalty.tiers.map((tier) => <div key={tier.tier} role="listitem" className={`employee-cost-penalty-tier${tier.dropC45 ? ' is-drop' : ''}`}>
+            <b>{tier.range} · {tier.employees} NV</b>
+            <span>{tier.effect}</span>
+            <em>Tổng bậc này: {tier.amount > 0 ? `−${cell(tier.amount)}` : cell(tier.amount)}</em>
+          </div>)}
+        </div>
+      </section>}
+      {!!penalty.atRisk?.length && <section className="employee-cost-target-section">
+        <h3>Nhân viên đang ở bậc bị phạt ({penalty.atRisk.length})</h3>
+        <div className="employee-cost-bonus-penalty-table" role="table" aria-label="Nhân viên đang ở bậc bị phạt">
+          <span className="employee-cost-bonus-penalty-head" role="row"><b role="columnheader">Nhân viên</b><b role="columnheader">% target</b><b role="columnheader">Phạt tại C45</b><b role="columnheader">Cần thêm (trước VAT)</b></span>
+          {penalty.atRisk.map((item) => <span key={item.empCode} role="row">
+            <b role="cell">{item.empCode} · {item.employeeName}</b>
+            <small role="cell">{pct(item.targetPct)}</small>
+            <small role="cell">{item.targetAmount > 0 ? `−${cell(item.targetAmount)}` : cell(item.targetAmount)}</small>
+            <small role="cell">{item.revenueGap == null ? '—' : cell(item.revenueGap)}</small>
+          </span>)}
+        </div>
+      </section>}
+      <div className="employee-cost-penalty-formula" role="note"><b>Cách cộng</b><span>{penalty.formulaText}</span></div>
+      <div className="employee-cost-target-note" role="note"><b>Lưu ý</b><span>{penalty.label}</span><span>Mỗi số phạt do backend tính riêng cho từng nhân viên rồi cộng lại; không suy phạt từ target tổng của đội.</span></div>
+      <div className="employee-cost-target-modal-actions"><button type="button" className="btn secondary" onClick={onClose}>Đóng</button></div>
+    </div>
+  </div>;
+}
+
 function PenaltyDetailModal({ penalty, employeeLabel, onClose }) {
   const modalRef = useRef(null);
   const closeRef = useRef(null);
@@ -476,18 +567,40 @@ function PenaltyDetailModal({ penalty, employeeLabel, onClose }) {
     return () => { window.removeEventListener('keydown', onKeyDown); previousFocus?.focus?.(); };
   }, [onClose]);
   const cell = (value) => value == null ? '—' : formatEmployeeCostCell(value, moneyColumn);
+  const c45Label = penalty.c45Label || 'C45 (Lương tăng thêm)';
+  if (penalty.aggregate) return <AggregatePenaltyDetailModal penalty={penalty} c45Label={c45Label} modalRef={modalRef} closeRef={closeRef} cell={cell} onClose={onClose} />;
   return <div className="modal-backdrop employee-cost-target-modal-backdrop" role="presentation" onClick={onClose}>
     <div ref={modalRef} className="modal-card employee-cost-target-modal employee-cost-penalty-modal" role="dialog" aria-modal="true" aria-labelledby="employee-cost-penalty-modal-title" onClick={(event) => event.stopPropagation()}>
-      <div className="modal-head"><div><b id="employee-cost-penalty-modal-title">Chi tiết cách tính phạt</b><small>{employeeLabel}</small></div><button ref={closeRef} type="button" className="employee-cost-target-modal-close" aria-label="Đóng chi tiết phạt" onClick={onClose}>×</button></div>
+      <div className="modal-head"><div><b id="employee-cost-penalty-modal-title">Chi tiết cách tính phạt · {c45Label}</b><small>{employeeLabel}</small></div><button ref={closeRef} type="button" className="employee-cost-target-modal-close" aria-label="Đóng chi tiết phạt" onClick={onClose}>×</button></div>
+      {/* CEO yêu cầu 30/07: NV không biết "C45" là cột gì ⇒ mọi chỗ nhắc C45 đều
+          phải ghi kèm tên cột (Lương tăng thêm), tên lấy từ backend. */}
+      <div className="employee-cost-penalty-c45-note" role="note">
+        <b>Phạt trừ ở đâu?</b>
+        <span>Chỉ trừ tại <b>{c45Label}</b> — cột lương tăng thêm hằng tháng của bạn. Không trừ vào lương cơ bản, không trừ sang cột khác, và không bao giờ trừ quá số tiền C45 đang có.</span>
+        {penalty.modeText && <span>{penalty.modeText}</span>}
+      </div>
       <section className="employee-cost-target-section">
-        <h3>Phạt theo target tại C45</h3>
+        <h3>Phạt theo target, trừ tại {c45Label}</h3>
         <div className="employee-cost-target-equation employee-cost-penalty-equation">
           <span>% đạt target</span><b>{targetPctLabel(penalty.targetPct)}</b>
-          <span>C45 gốc<small>Giữ nguyên số DataHub</small></span><b>{cell(penalty.c45Amount)}</b>
-          <span>Phạt target<small>{penalty.cappedByC45 ? 'Đã kẹp tối đa bằng C45' : penalty.c45Dropped ? 'Mất trắng C45' : penalty.c45WouldDrop ? 'Chạy thử: nếu áp dụng sẽ mất C45' : 'Không vượt quá C45'}</small></span><b>{penalty.targetAmount > 0 ? `−${cell(penalty.targetAmount)}` : cell(penalty.targetAmount)}</b>
+          <span>{c45Label} gốc<small>Giữ nguyên số DataHub</small></span><b>{cell(penalty.c45Amount)}</b>
+          <span>Phạt target<small>{penalty.cappedByC45 ? `Đã kẹp tối đa bằng ${c45Label}` : penalty.c45Dropped ? `Mất trắng ${c45Label}` : penalty.c45WouldDrop ? `Chạy thử: nếu áp dụng sẽ mất ${c45Label}` : `Không vượt quá ${c45Label}`}</small></span><b>{penalty.targetAmount > 0 ? `−${cell(penalty.targetAmount)}` : cell(penalty.targetAmount)}</b>
           <span className="employee-cost-bonus-total">Phạt áp dụng kỳ này<small>{penalty.mode === 'warn_only' ? 'Chạy thử — chưa trừ tiền' : penalty.label}</small></span><b className="employee-cost-bonus-total">{penalty.appliedAmount > 0 ? `−${cell(penalty.appliedAmount)}` : cell(penalty.appliedAmount)}</b>
         </div>
       </section>
+      {/* Bảng ngữ cảnh: NV nhìn một lần là biết mình đang ở bậc nào và bậc kế tiếp
+          mất/được gì. Mốc %, tỷ lệ và ví dụ tiền đều do backend sinh từ config. */}
+      {!!penalty.tiers?.length && <section className="employee-cost-target-section employee-cost-penalty-tiers">
+        <h3>Khi nào bị phạt? (4 ngữ cảnh)</h3>
+        <div className="employee-cost-penalty-tier-list" role="list">
+          {penalty.tiers.map((tier) => <div key={tier.tier} role="listitem"
+            className={`employee-cost-penalty-tier${tier.active ? ' is-active' : ''}${tier.dropC45 ? ' is-drop' : ''}`}>
+            <b>{tier.range}{tier.active ? ' · BẠN ĐANG Ở ĐÂY' : ''}</b>
+            <span>{tier.effect}</span>
+            {tier.example && <em>{tier.example}</em>}
+          </div>)}
+        </div>
+      </section>}
       <div className="employee-cost-penalty-formula" role="note"><b>Công thức backend</b><span>{penalty.formulaText || penaltyNoAmountReason(penalty)}</span></div>
       {penalty.warning?.text && <div className={`employee-cost-penalty-warning${penalty.mode === 'warn_only' ? ' is-warn-only' : ''}`} role="alert"><b>{penalty.mode === 'warn_only' ? 'ℹ Cảnh báo chạy thử' : '⚠ Cảnh báo sớm'}</b><span>{penalty.warning.text}</span></div>}
       <div className="employee-cost-target-note" role="note"><b>Lưu ý</b><span>{penalty.label || 'Dự kiến/tham khảo — chưa trừ lương'}</span><span>Frontend chỉ hiển thị công thức và số do backend trả về; không tự tính, không ghi DataHub/payroll.</span></div>
@@ -1433,22 +1546,27 @@ export default function EmployeeCost({ me, onNavigate }) {
           ? `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · ${coverageNote}`
           : `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`}
         tone="employee-cost-tone-base" />
-      {/* CEO yêu cầu 30/07: 4 ô này phải HIỆN ở mọi chế độ, kể cả "Tất cả NV".
-          Trước đây bị chặn bởi !allEmployees nên CEO mở ra không thấy gì và tưởng
-          chưa làm. Backend chỉ tính phạt khi chọn 1 NV (routes.js: `empCode ? ...`),
-          nên ở "Tất cả NV" ô VẪN HIỆN nhưng ghi rõ "Chọn 1 NV" — thà nói thật là
-          chưa có số còn hơn ẩn đi để người dùng tưởng tính năng không tồn tại.
-          Cộng dồn toàn đội phải do BACKEND tính, KHÔNG cộng ở frontend. */}
+      {/* CEO yêu cầu 30/07: 4 ô này phải HIỆN ở mọi chế độ.
+          - Chọn 1 NV  → số của chính NV đó.
+          - Tất cả NV  → TỔNG HỢP toàn đội (backend cộng từ số đã tính riêng của từng
+            NV: employeePenaltyAggregate). Frontend KHÔNG cộng, KHÔNG suy phạt từ
+            target tổng. NV nào chưa đủ dữ liệu thì đếm riêng, không tính là 0đ. */}
       {allEmployees
-        ? <Kpi label="Tổng chi phí tháng sau phạt" value="Chọn 1 NV" sub="Phạt tính theo từng người — chọn đúng một nhân viên để xem" tone="employee-cost-tone-after-penalty" />
+        ? (model.penalty?.aggregate
+          ? <AggregateAfterPenaltyKpi penalty={model.penalty} baseTotal={model.summary.periodTotal} multiple={multiple} />
+          : <Kpi label="Tổng chi phí tháng sau phạt · toàn đội" value="Chưa có dữ liệu phạt" sub="Backend chưa trả tổng hợp phạt cho bộ lọc này" tone="employee-cost-tone-after-penalty" />)
         : <AfterPenaltyKpi penalty={model.penalty} baseTotal={model.summary.periodTotal} multiple={multiple} />}
       <SalaryAdvanceKpi />
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
       {allEmployees
-        ? <Kpi label="Phạt dự kiến" value="Chọn 1 NV" sub="Phạt tính theo từng người — chọn đúng một nhân viên để xem cách tính" tone="employee-cost-tone-penalty" />
+        ? (model.penalty?.aggregate
+          ? <AggregatePenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />
+          : <Kpi label="Phạt dự kiến · toàn đội" value="Chưa có dữ liệu phạt" sub="Backend chưa trả tổng hợp phạt cho bộ lọc này" tone="employee-cost-tone-penalty" />)
         : <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />}
       {allEmployees
-        ? <Kpi label="Phạt thiếu Xu cuối quý" value="Chọn 1 NV" sub="Quyết toán theo quý, tính theo từng người" tone="employee-cost-tone-penalty-soft" />
+        ? (model.penalty?.aggregate
+          ? <AggregateXuPenaltyKpi penalty={model.penalty} period={model.to} />
+          : <Kpi label="Phạt thiếu Xu cuối quý · toàn đội" value="Chưa có dữ liệu phạt" sub="Backend chưa trả tổng hợp phạt cho bộ lọc này" tone="employee-cost-tone-penalty-soft" />)
         : <XuPenaltyKpi penalty={model.penalty} period={model.to} />}
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote} />)}
       {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt

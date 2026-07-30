@@ -28,6 +28,7 @@ const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
 const employeeBonus = require('./employeeBonus');
 const employeePenalty = require('./employeePenalty');
+const penaltyDisplay = require('./penaltyDisplay');
 const employeeBonusPolicy = require('./employeeBonusPolicy');
 const employeeVatKhoan = require('./employeeVatKhoan');
 const employeePointLocal = require('./employeePointLocal');
@@ -851,7 +852,18 @@ async function employeeCostPayload(req, {
         resolveTargets: targetAdmin.resolveTargets,
       }) : null,
       bonus,
-      penalty,
+      // Bảng "khi nào bị phạt" đi kèm số của chính NV đó — sinh từ CONFIG ở backend
+      // (penaltyDisplay), không ghi chữ/mốc % vào JSX để khỏi lệch khi CEO sửa bậc.
+      penalty: penalty ? {
+        ...penalty,
+        c45Label: penaltyDisplay.C45_LABEL,
+        modeText: penaltyDisplay.modeText(penalty),
+        tiers: penaltyDisplay.tierTable(resolvedBonusConfig, {
+          activeTier: penalty.tier,
+          achieved: bonus.month?.achieved ?? null,
+          c45Amount: penalty.c45Amount,
+        }),
+      } : null,
     };
   });
 }

@@ -2147,6 +2147,18 @@ th.employee-cost-sticky-product { z-index:6; background:#0b6aa9 !important; colo
 .employee-cost-after-penalty-total small { font-weight:600; }
 .employee-cost-penalty-formula,.employee-cost-penalty-warning { display:grid; gap:5px; margin:12px 0; padding:12px 14px; border:1px solid #fecaca; border-radius:10px; background:#fff1f2; color:#7f1d1d; }
 .employee-cost-penalty-warning.is-warn-only { border-color:#93c5fd; background:#eff6ff; color:#1e3a8a; }
+/* Tên cột C45 + 4 ngữ cảnh phạt (CEO chốt 30/07): NV phải hiểu ngay trừ ở cột nào,
+   đang ở bậc nào, cố thêm bao nhiêu thì thoát bậc. */
+.employee-cost-penalty-c45-note { display:grid; gap:5px; margin:12px 0; padding:12px 14px; border:1px solid #bfd8ea; border-left:4px solid #0a6ba8; border-radius:10px; background:#f2f8fd; color:#123a55; font-size:12px; }
+.employee-cost-penalty-c45-note b { font-size:12px; }
+.employee-cost-penalty-tier-list { display:grid; gap:8px; }
+.employee-cost-penalty-tier { display:grid; gap:3px; padding:10px 12px; border:1px solid var(--line); border-left:4px solid #9dafbb; border-radius:9px; background:#fbfcfd; font-size:12px; }
+.employee-cost-penalty-tier b { font-size:12px; }
+.employee-cost-penalty-tier span { color:#41525d; }
+.employee-cost-penalty-tier em { color:#7f1d1d; font-style:normal; font-weight:700; }
+.employee-cost-penalty-tier.is-drop { border-left-color:#b3261e; background:#fff6f6; }
+.employee-cost-penalty-tier.is-active { border-color:#0a6ba8; border-left-color:#0a6ba8; background:#eaf4fc; box-shadow:0 0 0 2px rgba(10,107,168,.14); }
+.employee-cost-penalty-tier.is-active.is-drop { border-color:#b3261e; border-left-color:#b3261e; background:#ffecec; box-shadow:0 0 0 2px rgba(179,38,30,.16); }
 .employee-cost-panel-meta { margin-top:3px; color:var(--muted); font-size:11px; }
 .employee-cost-annual { color:#7890a1 !important; font-style:italic; opacity:.58; }
 th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !important; }
