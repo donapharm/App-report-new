@@ -1,4 +1,10 @@
 {
   "note": "Các mã NV TUYỆT ĐỐI không nhận thông báo tự động (Telegram + email): target, mốc thưởng, tổng chi phí, báo cáo doanh thu. CEO chốt. Áp ở tầng engine targetNotify -> mọi nút/kênh/lịch tự động đều loại. Vẫn có thể xuất hiện trong bản tổng gửi CEO (chỉ để CEO nắm), nhưng KHÔNG bao giờ được nhắn tới. ‼ ĐÂY LÀ DANH SÁCH DUY NHẤT dùng để chặn thông báo — KHÔNG dùng diemXu.EXCLUDE (danh sách đó là 'không tính điểm xu', mục đích khác, và có DN022 là người CEO chốt 28/07 PHẢI nhận thông báo).",
-  "codes": ["DN021", "DN023", "VP004", "VP018"]
+  "codes": [
+    "DN021",
+    "DN023",
+    "VP004",
+    "VP018"
+  ],
+  "scope": "CHỈ áp cho THÔNG BÁO HIỆU SUẤT (target, mốc thưởng, tổng chi phí, báo cáo doanh thu). TUYỆT ĐỐI KHÔNG áp cho CẢNH BÁO VẬN HÀNH khi đồng bộ doanh thu lỗi — cảnh báo đó dùng danh sách riêng config/sync_alert_recipients.json, và VP018 tuy nằm trong danh sách này nhưng VẪN PHẢI nhận cảnh báo đồng bộ vì VP018 là người sửa ngày thực giao."
 }

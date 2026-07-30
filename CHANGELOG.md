@@ -1,3 +1,24 @@
+### 2026-07-30 — Claude Code (CEO chốt) — CẢNH BÁO ĐỒNG BỘ DOANH THU (việc 2) + nâng hạn mức lịch sử (việc 6, v3.6)
+> CEO: "việc số 2 em phải làm ngay. Để tránh tình trạng chạy loanh quanh tìm số không khớp mãi mới ra được. Do không có người canh cửa nên hậu quả là chạy lòng vòng đi tìm." · "việc số 6 đề xuất tăng số dòng lên gấp đôi."
+
+**VIỆC 2 — Cảnh báo Telegram khi đồng bộ lỗi** (`src/syncAlert.js` + `config/sync_alert_recipients.json`):
+- **Danh sách người nhận HOÀN TOÀN RIÊNG.** `VP018` đang nằm trong `notify_optout.json` nhưng **VẪN PHẢI** nhận cảnh báo đồng bộ vì VP018 chính là người sửa ngày thực giao. Test khoá: lọc qua `isMuted`/`optout`/`diemXu.EXCLUDE` là đỏ ngay. Đây đúng loại lỗi đã dính 28/07 — lấy danh sách của việc này dùng cho việc khác.
+- Đồng thời **ghi rõ phạm vi** vào `notify_optout.json`: chỉ chặn **thông báo hiệu suất**, không áp cho cảnh báo vận hành.
+- **Mỗi người nhận đúng phần mình sửa được**: VP018/DN007 nhận đơn · ngày giao · đơn vị · CEO chỉ nhận **bản tổng** (bao nhiêu mục, tổng tiền, ai đang phải xử lý bao nhiêu). Nhận thứ mình không sửa được thì lần sau không đọc nữa.
+- **Mỗi mục đủ 4 phần: cái gì · bao nhiêu tiền · vì sao · AI LÀM GÌ.** Thiếu phần "ai làm gì" là người nhận lại phải đi hỏi — đúng cái "chạy lòng vòng" CEO muốn bỏ. Khai báo sẵn 10 mã lý do; mã **lạ vẫn hiện ra** kèm chữ "CHƯA KHAI BÁO", không im lặng bỏ.
+- **Chống spam:** chỉ báo mục **MỚI**; mục đã nhắn gộp một dòng *"còn tồn N mục cũ"*; xử lý xong báo *"đã hết"* **đúng một lần**; **không có gì mới ⇒ KHÔNG GỬI**.
+- **Hai mức:** MỨC 1 KHẨN khi bất biến vỡ (`Σ(đưa vào)+Σ(loại) ≠ Σ(nguồn)`) — gửi cho **cả 3 người**, nói rõ **"ĐÃ DỪNG, CHƯA GHI SLOT"**, quét mỗi 5 phút không đợi khung giờ. MỨC 2 gửi **07:30 hằng ngày**.
+- **Chỉ ghi "đã nhắn" khi CÓ tin đi được** — gửi lỗi hết mà vẫn ghi state là mất cảnh báo vĩnh viễn.
+- **Kênh bot App Sale: khai báo `enabled=false`** vì chưa có đường gửi thật (spec mục 8.5). Test khoá điều này để không ai tưởng đã báo cho App Sale.
+- Cắt bản ghi trạng thái **chỉ cắt mục ĐÃ XỬ LÝ**, không bao giờ cắt mục đang tồn.
+- Log khởi động bot in thêm: `cảnh báo đồng bộ 07:30 hằng ngày (cảnh báo đồng bộ) + quét KHẨN mỗi 5 phút`.
+
+**VIỆC 6 — hạn mức lịch sử sửa cấu hình Thưởng: 2.000 → 4.000.** Đúng lý CEO nêu: dữ liệu thật còn xa mức đó nên nâng lên không ảnh hưởng gì, mà lịch sử không bị cắt.
+
+**Nâng v3.5 → v3.6** vì việc 6 đụng `employeeBonusPolicy.js` (nằm trong vân tay công thức). **KHÔNG đổi một đồng nào** — chỉ nâng hạn mức lưu lịch sử. Đã làm đủ 4 bước, `sourceHash 14f50e4c…`, test khoá vân tay XANH. (Đây là lần bump thứ hai trong ngày cho việc không đổi tiền; ghi rõ ở `note` của config để về sau tra lại không hiểu nhầm.)
+
+**Test:** server **550/559** (9 đỏ đúng mức nền) · web **87/87** · build PASS. Thêm `server/test/syncAlert.test.js` **9 ca**, mỗi ca khoá đúng một cách làm sai đã từng xảy ra.
+
 ### 2026-07-30 — Claude Code (CEO chốt phương án A) — BẬT LẠI 2 công tắc thông báo + log nêu đủ 4 mốc
 > CEO: "ANH CHỌN A NHÉ" — bật cả hai công tắc ngay, để 20:00 ngày 31/07 gửi tin tháng 7 (số DỰ KIẾN) và 20:00/20:10 ngày 09/08 gửi lại SỐ CHỐT.
 

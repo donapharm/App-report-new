@@ -1,0 +1,29 @@
+{
+  "note": "‼ ĐÂY LÀ KÊNH CẢNH BÁO VẬN HÀNH khi đồng bộ doanh thu lỗi — KHÁC HOÀN TOÀN với thông báo hiệu suất (target/thưởng/chi phí/doanh thu). `notify_optout.json` chỉ chặn thông báo HIỆU SUẤT; TUYỆT ĐỐI KHÔNG áp vào đây. VP018 nằm trong optout nhưng VẪN PHẢI nhận cảnh báo đồng bộ, vì VP018 chính là người sửa ngày thực giao. Cũng KHÔNG dùng targetNotify.isMuted, KHÔNG dùng diemXu.EXCLUDE, KHÔNG dùng dormantFeedback.TELEGRAM_HARD_EXCLUDED để lọc danh sách này — lấy danh sách của việc khác dùng cho việc này đúng là lỗi đã dính ngày 28/07.",
+  "spec": "SPEC_REVENUE_SYNC_EXCEPTIONS.md mục 8",
+  "recipients": [
+    {
+      "emp_code": "VP018",
+      "role": "fixer",
+      "scope": ["order", "delivery_date", "unit"],
+      "note": "Sửa ngày thực giao, mã đơn vị. Nhận đúng phần mình sửa được."
+    },
+    {
+      "emp_code": "DN007",
+      "role": "fixer",
+      "scope": ["order", "delivery_date", "unit"],
+      "note": "Sửa ngày thực giao đơn của mình và đơn vị liên quan."
+    },
+    {
+      "emp_code": "CEO",
+      "role": "overview",
+      "scope": ["summary"],
+      "note": "Chỉ nhận bản tổng: bao nhiêu mục, tổng tiền, ai đang phải xử lý bao nhiêu."
+    }
+  ],
+  "appSaleBot": {
+    "enabled": false,
+    "scope": ["is_test", "entity_group", "hold_golive"],
+    "note": "‼ Kênh sang bot App Sale CHƯA MỞ (spec mục 8.5). Giữ enabled=false cho tới khi có đường gửi thật; KHÔNG được coi là đã báo cho App Sale khi cờ này còn false."
+  }
+}

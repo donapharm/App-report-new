@@ -47,6 +47,7 @@ const salesReport = require('./src/salesReport');
 const { salesReportSchedulePolicy } = require('./src/salesReportSchedulePolicy');
 const bonusNotify = require('./src/bonusNotify');
 const employeeCostNotify = require('./src/employeeCostNotify');
+const syncAlert = require('./src/syncAlert');
 // Ngày khoá sổ kỳ (ngày 8 tháng sau) chỉ có MỘT nguồn: employeeCost.
 const employeeCost = require('./src/employeeCost');
 const employeeBonus = require('./src/employeeBonus');
@@ -229,6 +230,8 @@ const COST_MONTH_END_SLOT = { hour: 20, minute: 0, label: '20:00 ngày cuối th
 const BONUS_MONTH_END_SLOT = { hour: 20, minute: 10, label: '20:10 ngày cuối tháng' };
 const SALES_MONTH_END_SLOT = { hour: 20, minute: 30, label: '20:30 ngày cuối tháng' };
 const SALES_DAILY_SLOT = { hour: 7, minute: 30, label: '07:30 hằng ngày' };
+// Cảnh báo đồng bộ mức 2 đi cùng khung 07:30 (spec SPEC_REVENUE_SYNC_EXCEPTIONS mục 8.2).
+const SYNC_ALERT_SLOT = { hour: 7, minute: 30, label: '07:30 hằng ngày (cảnh báo đồng bộ)' };
 // ‼ CEO chốt 2026-07-30: tin 20:00 cuối tháng VẪN GỬI nhưng là số DỰ KIẾN (doanh thu
 // còn cập nhật đến hết ngày khoá sổ). Số CHỐT gửi ở lượt riêng, NGÀY SAU ngày khoá
 // sổ — lấy ngày từ employeeCost.PERIOD_CLOSE_DAY để chỉ có MỘT nguồn biết ngày 8.
@@ -473,6 +476,47 @@ async function runEmployeeCostNotify({ kind, asOfDay, stage = 'provisional' }) {
 }
 
 // ── TỔNG THƯỞNG CUỐI THÁNG (CEO chốt 17:40 ngày cuối tháng) ─────────────────
+/**
+ * CẢNH BÁO ĐỒNG BỘ DOANH THU (CEO chốt 29/07, yêu cầu làm ngay 30/07).
+ * "Không có người canh cửa nên hậu quả là chạy lòng vòng đi tìm."
+ *
+ * KHÔNG lọc người nhận qua optout/isMuted — danh sách riêng ở
+ * config/sync_alert_recipients.json. VP018 nằm trong optout nhưng PHẢI nhận.
+ * Không có mục MỚI ⇒ không gửi gì.
+ */
+async function runSyncAlert({ urgent = null } = {}) {
+  if (process.env.SYNC_ALERT_NOTIFY === '0') { console.log('ℹ Cảnh báo đồng bộ: TẮT (SYNC_ALERT_NOTIFY=0).'); return; }
+  const who = syncAlert.recipients();
+  if (!who.ok) { console.error(`❌ Cảnh báo đồng bộ: không đọc được danh sách người nhận (${who.reason}).`); return; }
+  // Nguồn ngoại lệ: cảnh báo chất lượng dữ liệu của slot đang active (thiếu ngày
+  // doanh thu…). Bổ sung nguồn khác thì nối vào mảng này, KHÔNG sửa syncAlert.
+  const items = store.activeDataQualityWarnings({}).map((item) => ({
+    ...item, reason: item.issue || item.reason,
+  }));
+  const pendingUrgent = urgent || persist.load('sync_alert_urgent', null);
+  const state = syncAlert.loadState(persist);
+  const ky = items[0]?.ky || store.latestKy();
+  const messages = syncAlert.buildMessages({ ky, items, state, recipientList: who.list, urgent: pendingUrgent });
+  if (!messages.length) { console.log(`ℹ Cảnh báo đồng bộ ${ky}: không có mục mới -> không gửi.`); return; }
+  const tidByEmp = {};
+  for (const m of auth.listTelegramMap()) tidByEmp[String(m.emp_code || '').toUpperCase()] = String(m.telegram_id);
+  let sent = 0; let failed = 0;
+  for (const message of messages) {
+    const user = store.findUserByCode(message.empCode);
+    const out = await notifyChannels.deliver({
+      telegramId: tidByEmp[message.empCode] || null,
+      email: notifyChannels.emailFor(message.empCode, user?.email),
+      subject: `DONAPHARM — Cảnh báo đồng bộ doanh thu ${ky}`,
+      text: message.text, html: employeeCostNotify.htmlFor(message.text),
+    });
+    if (out.ok) sent += 1; else { failed += 1; console.error(`  ✗ cảnh báo đồng bộ ${message.empCode}: ${out.error || 'không gửi được'}`); }
+  }
+  // Chỉ ghi đã-nhắn khi CÓ tin đi được; gửi lỗi hết mà ghi state là mất cảnh báo vĩnh viễn.
+  if (sent > 0) syncAlert.saveState(syncAlert.markState({ items, state }), persist);
+  if (pendingUrgent && sent > 0) persist.save('sync_alert_urgent', null);
+  console.log(`✔ Cảnh báo đồng bộ ${ky}: gửi ${sent}, lỗi ${failed}${pendingUrgent ? ' (MỨC KHẨN)' : ''}.`);
+}
+
 async function runBonusMonthEnd({ asOfDay, stage = 'provisional' }) {
   if (process.env.BONUS_NOTIFY !== '1') return;
   const svc = notifyServices();
@@ -519,9 +563,11 @@ function startCostBonusScheduler() {
   // Log phải nêu ĐỦ CẢ LƯỢT SỐ CHỐT, nếu không thì không ai chứng minh được lượt đó
   // đã lên lịch — mà đây chính là lượt quyết định NV nhận số cuối cùng.
   console.log(`✔ Chi phí/Thưởng scheduler: chi phí ${costOn ? `${COST_WEEKLY_SLOT.label} + ${COST_MONTH_END_SLOT.label} (dự kiến) + ${COST_MONTH_FINAL_SLOT.label} (số chốt)` : 'TẮT'}; `
-    + `thưởng tháng ${bonusOn ? `${BONUS_MONTH_END_SLOT.label} (dự kiến) + ${BONUS_MONTH_FINAL_SLOT.label} (số chốt)` : 'TẮT'} GMT+7`);
+    + `thưởng tháng ${bonusOn ? `${BONUS_MONTH_END_SLOT.label} (dự kiến) + ${BONUS_MONTH_FINAL_SLOT.label} (số chốt)` : 'TẮT'}; `
+    + `cảnh báo đồng bộ ${process.env.SYNC_ALERT_NOTIFY === '0' ? 'TẮT' : `${SYNC_ALERT_SLOT.label} + quét KHẨN mỗi 5 phút`} GMT+7`);
   let lastWeekly = ''; let lastCostMonth = ''; let lastBonusMonth = '';
   let lastCostFinal = ''; let lastBonusFinal = '';
+  let lastSyncAlert = ''; let lastSyncUrgent = '';
   setInterval(() => {
     const d = vnDate();               // getUTC* của vnDate CHÍNH LÀ giờ VN
     const day = isoDay(d);
@@ -537,6 +583,16 @@ function startCostBonusScheduler() {
     }
     if (bonusOn && monthEnd && hh === BONUS_MONTH_END_SLOT.hour && mm === BONUS_MONTH_END_SLOT.minute) {
       if (lastBonusMonth !== day) { lastBonusMonth = day; runBonusMonthEnd({ asOfDay: day }).catch((e) => console.error('bonus month error:', e.message)); }
+    }
+    // Cảnh báo đồng bộ MỨC 2: 07:30 hằng ngày (spec mục 8.2).
+    if (hh === SYNC_ALERT_SLOT.hour && mm === SYNC_ALERT_SLOT.minute) {
+      if (lastSyncAlert !== day) { lastSyncAlert = day; runSyncAlert().catch((e) => console.error('sync alert error:', e.message)); }
+    }
+    // MỨC 1 KHẨN: bất biến vỡ thì KHÔNG đợi khung giờ. Quét mỗi 5 phút để tin đi
+    // trong vòng vài phút kể từ lúc script materialize ghi cờ khẩn.
+    if (mm % 5 === 0 && persist.load('sync_alert_urgent', null)) {
+      const urgentKey = `${day} ${hh}:${mm}`;
+      if (lastSyncUrgent !== urgentKey) { lastSyncUrgent = urgentKey; runSyncAlert().catch((e) => console.error('sync alert urgent error:', e.message)); }
     }
     // LƯỢT SỐ CHỐT: chạy ngày MONTH_CLOSE_DAY, gửi cho kỳ VỪA KHOÁ = tháng TRƯỚC.
     // Dùng ngày cuối tháng trước làm asOfDay để mọi hàm bên dưới lấy đúng kỳ đó.

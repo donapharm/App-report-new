@@ -11,6 +11,8 @@ const AUDIT_FILE = process.env.EMPLOYEE_BONUS_POLICY_AUDIT_FILE || path.join(DAT
 const LAYERS = Object.freeze(['default', 'productGroup', 'route', 'unit', 'employee']);
 const TARGET_LAYERS = Object.freeze(['default', 'route', 'unit', 'employee']);
 const LAYER_INDEX = new Map(LAYERS.map((layer, index) => [layer, index]));
+// Hạn mức lịch sử sửa cấu hình THƯỞNG. CEO chốt 30/07 nâng gấp đôi.
+const AUDIT_LIMIT = 4000;
 
 function readJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
@@ -296,7 +298,9 @@ function createPolicyStore({ policyFile = POLICY_FILE, auditFile = AUDIT_FILE, s
       revisionBefore: currentRevision, revisionAfter: revision([...policies, candidate]),
       candidateHash: sha256(candidate), previewHash, note: candidate.note,
     };
-    writeAtomic(auditFile, [event, ...audit()].slice(0, 2000));
+    // CEO chốt 30/07: nâng gấp đôi hạn mức lịch sử (2.000 -> 4.000). Dữ liệu thật
+    // còn xa mức này nên không ảnh hưởng gì, mà lịch sử sửa mức thưởng không bị cắt.
+    writeAtomic(auditFile, [event, ...audit()].slice(0, AUDIT_LIMIT));
     return { policy: candidate, resolved: after, revision: revision([...policies, candidate]), previewHash };
   }
 

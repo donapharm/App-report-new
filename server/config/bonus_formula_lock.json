@@ -1,6 +1,6 @@
 {
-  "version": "v3.5",
-  "sourceHash": "02b6d579888b52787bc0dc487240c2c3feda07a6e31c0a5d0db0b0c356bf0c5a",
+  "version": "v3.6",
+  "sourceHash": "14f50e4cf48cc7dd82c58c893ffeb8226f913d55f24cbc2310729b07ccb784da",
   "lockedAt": "2026-07-30",
   "lockedBy": "CEO",
   "sources": [
@@ -13,5 +13,5 @@
     "config/employee_bonus_tiers.json (base, baseTiers, priorityThresholdPct, priorityRates, autoGroupTargets, totalCapPct, penaltyTiers, penaltyEffectiveFrom, penaltyWarnFrom, penaltyEnabled, xuPenalty)"
   ],
   "rule": "Đổi cách tính thưởng/phạt hoặc lịch áp dụng => nâng FORMULA_VERSION, cập nhật config+sourceHash+CHANGELOG. Test server/test/bonusFormulaVersion.test.js sẽ đỏ nếu quên.",
-  "note": "v3.5 = v3.4 + khoá sổ kỳ hết ngày 8 tháng sau (nhãn DỰ KIẾN → SỐ CHÍNH THỨC, phạt chỉ chốt sau khoá sổ). Cách tính tiền P1/P2 và bậc phạt KHÔNG đổi."
+  "note": "v3.6 = v3.5 + nâng hạn mức lịch sử audit thưởng 2.000 -> 4.000. Không đổi cách tính tiền."
 }
