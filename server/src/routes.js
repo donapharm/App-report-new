@@ -172,9 +172,20 @@ function currentMemoDataSignature() {
 
 // Frontend RAM cache is private and session-bound; this opaque generation lets
 // it invalidate immediately after slot activation/upload instead of serving a
-// previous generation until its short TTL expires. It carries no business data.
+// previous generation until its short TTL expires. Hash the internal signature
+// so slot ids, periods and timestamps are never exposed in a response header.
+let clientDataSignatureRaw = '';
+let clientDataSignatureHash = '';
+function currentClientDataSignature() {
+  const raw = currentMemoDataSignature();
+  if (raw !== clientDataSignatureRaw) {
+    clientDataSignatureRaw = raw;
+    clientDataSignatureHash = crypto.createHash('sha256').update(raw).digest('hex');
+  }
+  return clientDataSignatureHash;
+}
 router.use((req, res, next) => {
-  if (req.method === 'GET') res.set('X-App-Data-Signature', currentMemoDataSignature());
+  if (req.method === 'GET') res.set('X-App-Data-Signature', currentClientDataSignature());
   next();
 });
 
