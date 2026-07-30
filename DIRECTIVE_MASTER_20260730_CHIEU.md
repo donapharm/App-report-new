@@ -10,13 +10,15 @@ Ràng buộc chung, không nới: cấm `npm run build` trong cây production ·
 
 ## BƯỚC 1 — Deploy `main` mới nhất (v3.6)
 
-Production đang ở `0c4c5b6` (v3.5). `main` đã tới `73af725` (v3.6). v3.6 **không đổi một đồng nào** so với v3.5 — chỉ nâng hạn mức lịch sử 2.000→4.000 và thêm các module notify/soát-trùng (đều nằm sau cờ, chưa tự chạy).
+Production đang ở `0c4c5b6` (v3.5). `main` đã tới **`3f45acc`** (v3.6). v3.6 **không đổi một đồng nào** so với v3.5 — chỉ nâng hạn mức lịch sử 2.000→4.000, thêm các module notify/soát-trùng (đều nằm sau cờ, chưa tự chạy), worker tin phạt (bot đã nối), và một hộp giải thích trên màn Cấu hình Phạt (áp dụng chung toàn đội, không chọn từng NV).
 
-1. `git pull origin main` → `git rev-parse HEAD` phải ra **`73af725`** (hoặc mới hơn nếu Claude push thêm — deploy đầu `main`).
+1. `git pull origin main` → `git rev-parse HEAD` phải ra **`3f45acc`** (hoặc mới hơn — luôn deploy đầu `main`).
 2. Chạy **TOÀN BỘ** test: `cd server && node --test "test/*.test.js"` và `cd web && node --test "test/*.test.mjs"`. Mức nền: server **571/580** (9 đỏ = 3 fixture `authTrustedDevice` thiếu `users.json` + 6 PDF thiếu `pdfinfo`; server thật có `pdfinfo` thì 6 PDF phải XANH), web **87/87**. `bonusFormulaVersion` phải XANH.
 3. Deploy đầu `main` (build ở cây riêng, đưa `dist` sang).
 
 **CỔNG CHẶN:** `formulaVersion` phải là **`v3.6`**. Còn `v3.5` ⇒ deploy chưa ăn, DỪNG.
+
+**Kiểm bằng mắt:** mở màn Quản target → nút Cấu hình Phạt → đầu màn phải có hộp vàng **"Phạt áp dụng CHUNG cho toàn bộ nhân viên"** (giải thích vì sao không chọn từng NV). Chưa có ⇒ frontend chưa lên bản mới.
 
 ---
 
