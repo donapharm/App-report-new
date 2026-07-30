@@ -47,6 +47,7 @@ const salesReport = require('./src/salesReport');
 const { salesReportSchedulePolicy } = require('./src/salesReportSchedulePolicy');
 const bonusNotify = require('./src/bonusNotify');
 const employeeCostNotify = require('./src/employeeCostNotify');
+const penaltyNotify = require('./src/penaltyNotify');
 const syncAlert = require('./src/syncAlert');
 // Ngày khoá sổ kỳ (ngày 8 tháng sau) chỉ có MỘT nguồn: employeeCost.
 const employeeCost = require('./src/employeeCost');
@@ -232,6 +233,9 @@ const SALES_MONTH_END_SLOT = { hour: 20, minute: 30, label: '20:30 ngày cuối 
 const SALES_DAILY_SLOT = { hour: 7, minute: 30, label: '07:30 hằng ngày' };
 // Cảnh báo đồng bộ mức 2 đi cùng khung 07:30 (spec SPEC_REVENUE_SYNC_EXCEPTIONS mục 8.2).
 const SYNC_ALERT_SLOT = { hour: 7, minute: 30, label: '07:30 hằng ngày (cảnh báo đồng bộ)' };
+// Cảnh báo phạt đi cùng nhịp quản trị 07:30 đã được CEO duyệt. Quét lại hằng
+// ngày nhưng khoá chống trùng theo kỳ + bậc, nên cùng bậc không bắn lại.
+const PENALTY_NOTIFY_SLOT = { hour: 7, minute: 30, label: '07:30 hằng ngày' };
 // ‼ CEO chốt 2026-07-30: tin 20:00 cuối tháng VẪN GỬI nhưng là số DỰ KIẾN (doanh thu
 // còn cập nhật đến hết ngày khoá sổ). Số CHỐT gửi ở lượt riêng, NGÀY SAU ngày khoá
 // sổ — lấy ngày từ employeeCost.PERIOD_CLOSE_DAY để chỉ có MỘT nguồn biết ngày 8.
@@ -415,6 +419,60 @@ function autoNotifyRecipients() {
 function notifyServices() {
   try { return require('./src/routes').notifyServices || null; }
   catch (e) { console.error('notifyServices unavailable:', e.message); return null; }
+}
+
+const penaltyStateKey = (empCode, notifyKey) => `${String(empCode || '').toUpperCase()}|${notifyKey}`;
+const loadPenaltyNotifyState = () => persist.load('penalty_notify_state', {});
+function markPenaltyNotifySent(state, key, { empCode, text, providerMessageId } = {}) {
+  state[key] = {
+    emp_code: String(empCode || '').toUpperCase(),
+    sent_at: new Date().toISOString(),
+    provider_message_id: String(providerMessageId || ''),
+    // Giữ đúng nội dung đã gửi để CEO nghiệm thu; không phải dựng lại từ số có
+    // thể đã đổi sau thời điểm gửi.
+    text: String(text || ''),
+  };
+  persist.save('penalty_notify_state', state);
+}
+
+function monthKeyFromKy(ky) {
+  const m = /^(\d{2})\.(\d{4})$/.exec(String(ky || ''));
+  return m ? `${m[2]}-${m[1]}` : '';
+}
+
+// Tin PHẠT chỉ gửi Telegram, đúng kênh CEO duyệt. Mỗi NV chỉ nhận số của mình;
+// dữ liệu penalty lấy nguyên từ employeeCostSummaryForNotify (backend SSOT).
+async function runPenaltyNotify({ ky = store.latestKy(), trigger = 'schedule', empCode = '' } = {}) {
+  if (process.env.PENALTY_NOTIFY !== '1') return { skipped: 'disabled' };
+  const svc = notifyServices();
+  if (!svc) return { skipped: 'services_unavailable' };
+  const monthKey = monthKeyFromKy(ky);
+  if (!monthKey) return { skipped: 'invalid_period' };
+  const state = loadPenaltyNotifyState();
+  let sent = 0; let skipped = 0; let failed = 0;
+  const onlyEmp = String(empCode || '').trim().toUpperCase();
+  for (const r of autoNotifyRecipients()) {
+    if (onlyEmp && r.emp_code !== onlyEmp) continue;
+    // VIỆC B yêu cầu tin Telegram thật. Không có Telegram thì không gửi vòng qua
+    // email rồi ghi nhầm là đã nghiệm thu Telegram.
+    if (!r.telegramId) { skipped += 1; continue; }
+    try {
+      const res = await svc.employeeCostSummaryForNotify(r.emp_code, { from: monthKey, to: monthKey });
+      if (res?.skipped) { skipped += 1; console.log(`  ↷ ${r.emp_code} bỏ qua phạt: ${res.skipped}`); continue; }
+      const text = penaltyNotify.messageFor({ row: { emp_code: r.emp_code, name: r.name, ky }, ky, penalty: res?.penalty });
+      if (!text) { skipped += 1; continue; }
+      const key = penaltyStateKey(r.emp_code, penaltyNotify.notifyKey({ ky, penalty: res.penalty }));
+      if (state[key]) { skipped += 1; continue; }
+      const out = await notifyChannels.sendTelegram(r.telegramId, text);
+      if (!out.ok) { failed += 1; console.error('penalty notify error:', r.emp_code, out.description || 'telegram_send_failed'); continue; }
+      markPenaltyNotifySent(state, key, {
+        empCode: r.emp_code, text, providerMessageId: out.provider_message_id,
+      });
+      sent += 1;
+    } catch (e) { failed += 1; console.error('penalty notify error:', r.emp_code, e.message); }
+  }
+  console.log(`✔ Phạt NV ${ky} (${trigger}): gửi ${sent}, bỏ qua ${skipped}, lỗi ${failed}.`);
+  return { ky, trigger, sent, skipped, failed };
 }
 
 const isoDay = (d) => d.toISOString().slice(0, 10);
@@ -603,6 +661,32 @@ function startCostBonusScheduler() {
     }
     if (bonusOn && isCloseDay && hh === BONUS_MONTH_FINAL_SLOT.hour && mm === BONUS_MONTH_FINAL_SLOT.minute) {
       if (lastBonusFinal !== day) { lastBonusFinal = day; runBonusMonthEnd({ asOfDay: closedPeriodAsOf, stage: 'final' }).catch((e) => console.error('bonus month final error:', e.message)); }
+    }
+  }, 30 * 1000);
+}
+
+function startPenaltyNotifyScheduler() {
+  if (process.env.PENALTY_NOTIFY !== '1') {
+    console.log('ℹ Penalty notify: TẮT (đặt PENALTY_NOTIFY=1 để bật).');
+    return;
+  }
+  const startupEmp = String(process.env.PENALTY_NOTIFY_STARTUP_EMP || '').trim().toUpperCase();
+  console.log(`✔ Penalty scheduler: ${PENALTY_NOTIFY_SLOT.label} GMT+7; chống trùng theo kỳ + bậc.`
+    + `${startupEmp ? ` Nghiệm thu lúc khởi động: ${startupEmp}.` : ''}`);
+  // Nghiệm thu có kiểm soát: chỉ gửi đúng 1 mã NV khi CEO chỉ định, tuyệt đối
+  // không blast toàn bộ roster chỉ vì worker vừa restart. Lịch 07:30 vẫn quét
+  // tất cả người đủ điều kiện; dedupe bền vững chặn cùng kỳ + bậc.
+  if (startupEmp) setTimeout(() => runPenaltyNotify({ trigger: 'startup', empCode: startupEmp })
+    .catch((e) => console.error('penalty startup error:', e.message)), 5 * 1000);
+  let lastKey = '';
+  setInterval(() => {
+    const d = vnDate();
+    const hh = d.getUTCHours(); const mm = d.getUTCMinutes();
+    if (hh !== PENALTY_NOTIFY_SLOT.hour || mm !== PENALTY_NOTIFY_SLOT.minute) return;
+    const key = `${isoDay(d)} ${PENALTY_NOTIFY_SLOT.label}`;
+    if (lastKey !== key) {
+      lastKey = key;
+      runPenaltyNotify({ trigger: 'schedule' }).catch((e) => console.error('penalty scheduler error:', e.message));
     }
   }, 30 * 1000);
 }
@@ -802,6 +886,7 @@ async function main() {
   startMilestoneScheduler();
   startSalesReportScheduler();
   startCostBonusScheduler();
+  startPenaltyNotifyScheduler();
   let offset = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {

@@ -196,7 +196,10 @@ async function runOnce({ force = false, reason = 'manual', ky } = {}) {
     run.ok = true;
     state.lastRun = run;
     console.log('[revenue-refresh] success', JSON.stringify({ reason, ky: run.ky, dataAsOf: run.dataAsOf, materialize: run.materialize }));
-    notifyMaterialized(run);
+    // An unchanged candidate is still a successful scheduler heartbeat, but
+    // there is no new data to warm. Avoid rebuilding the giant ALL cache for a
+    // slot that deliberately stayed active.
+    if (run.materialize?.skipped !== 'unchanged') notifyMaterialized(run);
     return run;
   } catch (e) {
     run.finishedAt = new Date().toISOString();

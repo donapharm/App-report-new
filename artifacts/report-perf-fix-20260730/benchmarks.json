@@ -1,0 +1,43 @@
+{
+  "generatedAt": "2026-07-30T13:00:00+07:00",
+  "environment": "isolated worktree; synthetic temporary fixtures; Node 22.22.0; no PROD process or PROD data writes",
+  "catalogFreshProcess": {
+    "fixtureRows": 8000,
+    "baselineFirst": { "ms": 907.90, "writes": 2, "bytes": 10306300, "maxRssMiB": 139.9 },
+    "baselineUnchanged": { "ms": 1235.93, "writes": 2, "bytes": 10306300, "maxRssMiB": 172.2 },
+    "optimizedFirst": { "ms": 1450.28, "writes": 3, "bytes": 10420339, "maxRssMiB": 140.3 },
+    "optimizedUnchanged": { "ms": 935.02, "writes": 0, "bytes": 0, "maxRssMiB": 111.1 },
+    "unchangedImprovement": {
+      "latencyPercent": 24.35,
+      "bytesAvoidedPerRefresh": 10306300,
+      "writesAvoidedPerRefresh": 2,
+      "maxRssReductionMiB": 61.1,
+      "maxRssReductionPercent": 35.48
+    },
+    "notes": "Each measurement starts a fresh Node process against the same persisted cache directory. The optimized first run pays the one-time sidecar/index creation and content fingerprint cost; subsequent unchanged fresh-process refreshes preserve LKG/DQ/index and perform zero writes."
+  },
+  "revenueIdentity": {
+    "fixtureRows": 30000,
+    "payloadBytes": 5954984,
+    "optimizedUnchangedCheckMs": 170.44,
+    "writes": 0,
+    "equivalent": true,
+    "maxRssMiB": 108.9,
+    "notes": "Exact-byte identity check against the active artifact; no duplicate candidate payload, slot or artifact is created."
+  },
+  "frontendCoordinator": {
+    "concurrentConsumers": 10,
+    "networkLoads": 1,
+    "coalescedMs": 41.98,
+    "cachedReads": 1000,
+    "cachedReadsTotalMs": 2.05,
+    "averageCachedMs": 0.0021,
+    "retainedEntries": 1
+  },
+  "productionAuditBaselineNotRetested": {
+    "appRssMiBApprox": 700,
+    "coldOrStartupWarmSeconds": "77-80",
+    "revenueRefreshWarmSeconds": "12-14",
+    "reason": "Current approval is TEST/build only. No deploy, restart, current symlink change, PROD config/env change or PROD data write was performed."
+  }
+}

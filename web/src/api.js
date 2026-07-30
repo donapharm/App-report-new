@@ -1,4 +1,5 @@
 // api.js — gọi backend, tự đính token. Frontend KHÔNG tự quyết quyền.
+import { RequestCoordinator, requestScopeKey } from './requestCoordinator.js';
 const TOKEN_KEY = 'rpt_token';
 const OTP_AUTH_TIMEOUT_MS = 12000;
 const ME_TIMEOUT_MS = 8000;
@@ -10,7 +11,25 @@ const EMPLOYEE_COST_TIMEOUT_MESSAGE = 'DataHub đang phản hồi chậm. Vui l�
 const TRUSTED_DEVICE_VERIFY_TIMEOUT_MS = 5000;
 const APP_SALE_TRUSTED_DEVICE_VERIFY_URL = 'https://sale.donapharm.asia/api/internal/trusted-device/verify';
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
+const requestCoordinator = new RequestCoordinator({ maxEntries: 12 });
+let backendDataSignature = 'boot';
+let observedToken;
+let authScopeGeneration = 0;
+function authScopeFor(token) {
+  if (token !== observedToken) {
+    observedToken = token;
+    authScopeGeneration += 1;
+    requestCoordinator.clear();
+  }
+  return `${token ? 'AUTH' : 'ANON'}:${authScopeGeneration}`;
+}
+export const setToken = (t) => {
+  requestCoordinator.clear();
+  backendDataSignature = 'boot';
+  observedToken = String(t || '');
+  authScopeGeneration += 1;
+  return t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
+};
 
 // deviceId bền cho "thiết bị tin cậy": đồng bộ localStorage + cookie 1 năm.
 // Ưu tiên cookie giống App Sale để hai bản sao không luân phiên nhau.
@@ -76,22 +95,47 @@ function emitRequestState(phase, meta = {}) {
   }
 }
 
-async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = {}) {
-  const controller = timeoutMs > 0 ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-  emitRequestState('start', { method, path });
-  try {
+function combineAbortSignals(signals) {
+  const active = signals.filter(Boolean);
+  if (active.length < 2) return active[0];
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(active);
+  const controller = new AbortController();
+  const abort = (event) => controller.abort(event?.target?.reason);
+  for (const candidate of active) {
+    if (candidate.aborted) { controller.abort(candidate.reason); break; }
+    candidate.addEventListener('abort', abort, { once: true });
+  }
+  return controller.signal;
+}
+
+async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '', signal, cacheMs } = {}) {
+  const token = getToken() || '';
+  const authScope = authScopeFor(token);
+  const deviceId = getDeviceId();
+  const bodyKey = body ? JSON.stringify(body) : '';
+  const key = requestScopeKey({ method, path, authScope, deviceId, dataSignature: backendDataSignature, body: bodyKey });
+  const perform = async (coordinatorSignal) => {
+    const timeoutController = timeoutMs > 0 ? new AbortController() : null;
+    const timer = timeoutController ? setTimeout(() => timeoutController.abort(), timeoutMs) : null;
+    const fetchSignal = combineAbortSignals([coordinatorSignal, timeoutController?.signal]);
+    emitRequestState('start', { method, path });
+    try {
     const res = await fetch('/api' + path, {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'X-Device-Id': getDeviceId(),
-        ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}),
+        'X-Device-Id': deviceId,
+        ...(token ? { Authorization: 'Bearer ' + token } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
-      ...(controller ? { signal: controller.signal } : {}),
+      ...(fetchSignal ? { signal: fetchSignal } : {}),
     });
     const data = await res.json().catch(() => ({}));
+    const responseSignature = String(res.headers?.get?.('x-app-data-signature') || '');
+    if (responseSignature && responseSignature !== backendDataSignature) {
+      backendDataSignature = responseSignature;
+      requestCoordinator.invalidateCache();
+    }
     if (res.status === 401) {
       // OTP sai/hết hạn không phải là phiên đăng nhập hết hạn.
       if (path === '/auth/otp/verify') {
@@ -101,9 +145,12 @@ async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = 
       throw requestError(data.error || 'Phiên đăng nhập hết hạn', res, data);
     }
     if (!res.ok) throw requestError(data.error || 'Lỗi máy chủ', res, data);
+    // Any successful mutation may alter settings/permissions that are not part
+    // of the file-backed data signature. Never reuse a pre-mutation response.
+    if (method !== 'GET') requestCoordinator.invalidateCache();
     return data;
   } catch (e) {
-    if (controller?.signal.aborted) {
+    if (timeoutController?.signal.aborted) {
       throw new Error(timeoutMessage || 'Hệ thống phản hồi quá lâu. Vui lòng thử lại.');
     }
     throw e;
@@ -111,6 +158,11 @@ async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '' } = 
     if (timer) clearTimeout(timer);
     emitRequestState('end', { method, path });
   }
+  };
+  // A short private cache makes a quick menu round-trip instant. Scope keys
+  // include auth, device, full query and backend generation; mutations clear it.
+  if (method === 'GET') return requestCoordinator.run(key, perform, { cacheMs: cacheMs ?? 12 * 1000, signal });
+  return perform(signal);
 }
 
 export async function trustedDeviceLogin(phone) {
@@ -183,7 +235,7 @@ export const api = {
     timeoutMs: ME_TIMEOUT_MS,
     timeoutMessage: 'Không tải được thông tin đăng nhập. Vui lòng tải lại trang.',
   }),
-  employeeCost: (emp, range = {}) => {
+  employeeCost: (emp, range = {}, requestOptions = {}) => {
     const params = new URLSearchParams();
     if (emp) params.set('emp', emp);
     for (const key of ['from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route', 'date']) {
@@ -192,9 +244,10 @@ export const api = {
     const query = params.toString();
     return req('GET', '/employee-cost' + (query ? `?${query}` : ''), undefined, {
       timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+      cacheMs: 20 * 1000, ...requestOptions,
     });
   },
-  employeeCostDiemXu: (emp, range = {}) => {
+  employeeCostDiemXu: (emp, range = {}, requestOptions = {}) => {
     const params = new URLSearchParams();
     if (emp) params.set('emp', emp);
     if (range.from) params.set('from', range.from);
@@ -202,6 +255,7 @@ export const api = {
     const query = params.toString();
     return req('GET', '/employee-cost/diem-xu' + (query ? `?${query}` : ''), undefined, {
       timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
+      cacheMs: 30 * 1000, ...requestOptions,
     });
   },
   employeeCostGaps: (emp, range = {}) => {

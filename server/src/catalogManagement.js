@@ -8,6 +8,9 @@ const { provinceOf } = require('./province');
 const CACHE_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(__dirname, '..', 'data', 'catalog_management_lkg.json');
 const DQ_CACHE_FILE = process.env.EMPLOYEE_COST_DQ_CATALOG_CACHE_FILE
   || (process.env.CATALOG_MANAGEMENT_CACHE_FILE ? `${CACHE_FILE}.dq.json` : path.join(__dirname, '..', 'data', 'employee_cost_dq_catalog_lkg.json'));
+const CACHE_INDEX_FILE = process.env.CATALOG_MANAGEMENT_CACHE_INDEX_FILE || `${CACHE_FILE}.index.json`;
+const CACHE_SCHEMA_VERSION = 2;
+const DQ_CACHE_SCHEMA_VERSION = 2;
 const DEFAULT_TIMEOUT_MS = 6500;
 const TYPE_LABELS = { unit_qlnb: 'Đơn vị + Mã QLNB', unit: 'Đơn vị', group: 'Nhóm ưu tiên', route: 'Tuyến', iit: 'Mã QLNB', special: 'Hàng cần đẩy', all: 'Toàn bộ' };
 const EMPLOYEE_FORBIDDEN_KEYS = /(^|_)(?:(?:old|new|from|to)[_-]?emp|counterpart|actor|batch|transfer_batch_id|note|audit|history|by|internal)(_|$)/i;
@@ -89,6 +92,96 @@ function toUiPeriod(value) {
 function checksum(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
+function stableHash(value) {
+  const hash = crypto.createHash('sha256');
+  const visit = (item) => {
+    if (item === null) { hash.update('null;'); return; }
+    if (Array.isArray(item)) {
+      hash.update(`array:${item.length}[`);
+      for (const child of item) visit(child);
+      hash.update(']');
+      return;
+    }
+    if (typeof item === 'object') {
+      const keys = Object.keys(item).sort();
+      hash.update(`object:${keys.length}{`);
+      for (const key of keys) {
+        hash.update(`${JSON.stringify(key)}:`);
+        visit(item[key]);
+      }
+      hash.update('}');
+      return;
+    }
+    hash.update(`${typeof item}:${JSON.stringify(item)};`);
+  };
+  visit(value);
+  return hash.digest('hex');
+}
+function atomicJson(file, value) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(value), { mode: 0o600 });
+  fs.renameSync(tmp, file);
+}
+function cacheFileUsable(file) {
+  try { return fs.statSync(file).isFile() && fs.statSync(file).size > 2; }
+  catch { return false; }
+}
+function cacheFileIdentity(file) {
+  try {
+    const stat = fs.statSync(file, { bigint: true });
+    if (!stat.isFile() || stat.size <= 2n) return null;
+    return { dev: String(stat.dev), ino: String(stat.ino), size: String(stat.size), mtimeNs: String(stat.mtimeNs) };
+  } catch { return null; }
+}
+function sameCacheFile(file, expected) {
+  const actual = cacheFileIdentity(file);
+  return Boolean(actual && expected
+    && actual.dev === expected.dev && actual.ino === expected.ino
+    && actual.size === expected.size && actual.mtimeNs === expected.mtimeNs);
+}
+function readCacheIndex() {
+  try {
+    const value = JSON.parse(fs.readFileSync(CACHE_INDEX_FILE, 'utf8'));
+    return value && value.schemaVersion === CACHE_SCHEMA_VERSION && value.periods && typeof value.periods === 'object'
+      ? value : { schemaVersion: CACHE_SCHEMA_VERSION, periods: {} };
+  } catch { return { schemaVersion: CACHE_SCHEMA_VERSION, periods: {} }; }
+}
+function snapshotFingerprint(snapshot) {
+  // Include actual durable content as well as Data Hub's version/checksum.
+  // This catches an upstream payload change even if its metadata was not
+  // bumped, while deliberately excluding volatile refresh metadata.
+  return stableHash({
+    schemaVersion: CACHE_SCHEMA_VERSION,
+    period: snapshot?.period,
+    version: String(snapshot?.meta?.version || ''),
+    checksum: String(snapshot?.meta?.checksum || ''),
+    rows: snapshot?.rows || [],
+    catalog: snapshot?.catalog || [],
+    history: snapshot?.history || [],
+  });
+}
+function dqSnapshotFingerprint(snapshot) {
+  // Hash only projection fields row-by-row. Building the complete DQ object
+  // merely to decide that nothing changed used to temporarily duplicate the
+  // ~100 MiB projection on every successful refresh.
+  const hash = crypto.createHash('sha256');
+  hash.update(`dq:${DQ_CACHE_SCHEMA_VERSION}:${toHubPeriod(snapshot?.period)}:`);
+  hash.update(`${String(snapshot?.meta?.version || '')}:${String(snapshot?.meta?.checksum || '')};`);
+  const catalog = snapshot?.catalog || [];
+  hash.update(`catalog:${catalog.length};`);
+  for (const row of catalog) hash.update(stableHash({
+    c4: row.c4, c5: row.c5, c7: row.c7, c10: row.c10,
+    c15: row.c15, c16: row.c16, c17: row.c17, c25: row.c25, c31: row.c31,
+  }));
+  const rows = snapshot?.rows || [];
+  hash.update(`rows:${rows.length};`);
+  for (const row of rows) hash.update(stableHash({
+    type: row.type, unit_code: row.unit_code, unit_name: row.unit_name,
+    qlnb_code: row.qlnb_code, label: row.label,
+  }));
+  return hash.digest('hex');
+}
 function readCache(period) {
   try {
     const value = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
@@ -130,13 +223,33 @@ function readDataQualityCache(period) {
     return snapshot;
   } catch { return null; }
 }
-function writeDataQualityCacheAtomic(snapshot) {
-  const projected = dataQualityProjection(snapshot, snapshot.period);
+function writeDataQualityCacheAtomic(snapshot, { index = readCacheIndex() } = {}) {
+  const fingerprint = dqSnapshotFingerprint(snapshot);
+  const period = toHubPeriod(snapshot?.period);
+  let current = null;
+  const indexedDqFileMatches = sameCacheFile(DQ_CACHE_FILE, index.dqFile);
+  let sameProjection = indexedDqFileMatches
+    && index.periods?.[period]?.dqFingerprint === fingerprint;
+  // Only seed a legacy/missing sidecar by parsing the monolith. Once an exact
+  // file identity has been indexed, a mismatch means replacement/corruption and
+  // must force an atomic repair rather than silently blessing the new file.
+  if (!sameProjection && !index.dqFile && cacheFileUsable(DQ_CACHE_FILE)) {
+    try {
+      current = JSON.parse(fs.readFileSync(DQ_CACHE_FILE, 'utf8')) || {};
+      const persisted = current?.snapshots?.[period] || null;
+      sameProjection = Boolean(persisted && dqSnapshotFingerprint(persisted) === fingerprint);
+    } catch { current = {}; }
+  }
+  if (sameProjection) {
+    return { projected: null, written: false, fingerprint };
+  }
+  const projected = dataQualityProjection(snapshot, period);
   assertCatalogFieldPolicy(projected, `employeeCostDqCatalogLkg.${projected.period}`);
   assertCatalogSnapshotContract(projected, `employeeCostDqCatalogLkg.${projected.period}`);
   fs.mkdirSync(path.dirname(DQ_CACHE_FILE), { recursive: true });
-  let current = {};
-  try { current = JSON.parse(fs.readFileSync(DQ_CACHE_FILE, 'utf8')) || {}; } catch { current = {}; }
+  if (!current) {
+    try { current = JSON.parse(fs.readFileSync(DQ_CACHE_FILE, 'utf8')) || {}; } catch { current = {}; }
+  }
   const snapshots = current.snapshots && typeof current.snapshots === 'object' ? current.snapshots : {};
   snapshots[projected.period] = projected;
   const periods = Object.keys(snapshots).sort().slice(-18);
@@ -144,14 +257,14 @@ function writeDataQualityCacheAtomic(snapshot) {
   const tmp = `${DQ_CACHE_FILE}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(value), { mode: 0o600 });
   fs.renameSync(tmp, DQ_CACHE_FILE);
-  return projected;
+  return { projected, written: true, fingerprint };
 }
 function getCachedDataQualitySnapshot(periodInput) {
   const period = toHubPeriod(periodInput);
   const cachedProjection = readDataQualityCache(period);
   const projected = cachedProjection || (() => {
     const cached = readCache(period);
-    return cached ? writeDataQualityCacheAtomic(cached) : null;
+    return cached ? writeDataQualityCacheAtomic(cached).projected : null;
   })();
   if (!projected) return null;
   return {
@@ -183,25 +296,64 @@ function writeCacheAtomic(snapshot) {
   assertCatalogFieldPolicy(snapshot, 'catalogSnapshot');
   assertCatalogSnapshotContract(snapshot, 'catalogSnapshot');
   fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
-  let current = {};
-  try { current = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) || {}; } catch { current = {}; }
-  const restoredSnapshots = current.snapshots || (Array.isArray(current.rows) && current.period ? { [current.period]: current } : {});
-  // A reset/restore may bring back an old poisoned snapshot. Never carry it
-  // into the next LKG: retain only snapshots that pass the current policy.
-  const snapshots = safeRestoredSnapshots(restoredSnapshots);
-  snapshots[snapshot.period] = snapshot;
-  const periods = Object.keys(snapshots).sort().slice(-18);
-  const value = {
-    source: 'data-hub-lkg', version: snapshot.meta.version, checksum: snapshot.meta.checksum,
-    updatedAt: snapshot.meta.updatedAt, snapshots: Object.fromEntries(periods.map((p) => [p, snapshots[p]])),
-  };
-  assertCatalogFieldPolicy(value, 'catalogLkg');
-  const tmp = `${CACHE_FILE}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
-  fs.renameSync(tmp, CACHE_FILE);
+  const index = readCacheIndex();
+  const indexBefore = JSON.stringify(index);
+  const fingerprint = snapshotFingerprint(snapshot);
+  let current = null;
+  const indexedMainFileMatches = sameCacheFile(CACHE_FILE, index.mainFile);
+  let sameMain = indexedMainFileMatches
+    && index.periods?.[snapshot.period]?.fingerprint === fingerprint;
+  // Sidecars from older releases do not have a content-complete fingerprint.
+  // Parse the monolith at most once to seed it without rewriting an unchanged
+  // LKG. If an indexed file identity later changes, force an atomic repair.
+  if (!sameMain && !index.mainFile && cacheFileUsable(CACHE_FILE)) {
+    try {
+      current = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) || {};
+      const persisted = current?.snapshots?.[snapshot.period]
+        || (current?.period === snapshot.period && Array.isArray(current?.rows) ? current : null);
+      sameMain = Boolean(persisted && snapshotFingerprint(persisted) === fingerprint);
+    } catch { current = {}; }
+  }
+  let mainWritten = false;
+  if (!sameMain) {
+    if (!current) {
+      try { current = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')) || {}; } catch { current = {}; }
+    }
+    const restoredSnapshots = current.snapshots || (Array.isArray(current.rows) && current.period ? { [current.period]: current } : {});
+    // A reset/restore may bring back an old poisoned snapshot. Never carry it
+    // into the next LKG: retain only snapshots that pass the current policy.
+    const snapshots = safeRestoredSnapshots(restoredSnapshots);
+    snapshots[snapshot.period] = snapshot;
+    const periods = Object.keys(snapshots).sort().slice(-18);
+    const value = {
+      source: 'data-hub-lkg', version: snapshot.meta.version, checksum: snapshot.meta.checksum,
+      updatedAt: snapshot.meta.updatedAt, snapshots: Object.fromEntries(periods.map((p) => [p, snapshots[p]])),
+    };
+    assertCatalogFieldPolicy(value, 'catalogLkg');
+    const tmp = `${CACHE_FILE}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
+    fs.renameSync(tmp, CACHE_FILE);
+    mainWritten = true;
+  }
   // Materializers run out-of-process, so keep a small DQ-only projection ready
   // for the API instead of forcing the web process to parse the full LKG.
-  writeDataQualityCacheAtomic(snapshot);
+  const dq = writeDataQualityCacheAtomic(snapshot, { index });
+  index.periods[snapshot.period] = {
+    fingerprint,
+    dqFingerprint: dq.fingerprint,
+    version: String(snapshot.meta?.version || ''),
+    checksum: String(snapshot.meta?.checksum || ''),
+  };
+  index.mainFile = cacheFileIdentity(CACHE_FILE);
+  index.dqFile = cacheFileIdentity(DQ_CACHE_FILE);
+  // Bound the tiny sidecar to the same retention window as the LKG. It is
+  // written only after all required LKG writes succeeded, so a crash can at
+  // worst cause one harmless retry, never a false skip.
+  const retained = Object.keys(index.periods).sort().slice(-18);
+  index.periods = Object.fromEntries(retained.map((period) => [period, index.periods[period]]));
+  const indexWritten = indexBefore !== JSON.stringify(index) || !cacheFileUsable(CACHE_INDEX_FILE);
+  if (indexWritten) atomicJson(CACHE_INDEX_FILE, index);
+  return { written: mainWritten || dq.written, mainWritten, dqWritten: dq.written, indexWritten, fingerprint };
 }
 function unwrap(value) {
   if (value && typeof value === 'object' && value.data && typeof value.data === 'object') return value.data;
@@ -473,8 +625,18 @@ async function remoteSnapshot(period) {
   writeCacheAtomic(snapshot);
   return snapshot;
 }
-async function getSnapshot(periodInput) {
-  const period = toHubPeriod(periodInput);
+const SNAPSHOT_CACHE_TTL_MS = Math.max(5 * 1000, Number(process.env.CATALOG_SNAPSHOT_CACHE_TTL_MS || 2 * 60 * 1000) || 2 * 60 * 1000);
+const SNAPSHOT_CACHE_MAX = Math.max(1, Math.min(8, Number(process.env.CATALOG_SNAPSHOT_CACHE_MAX || 4) || 4));
+const SNAPSHOT_IN_FLIGHT_MAX = Math.max(SNAPSHOT_CACHE_MAX, 8);
+const snapshotCache = new Map();
+const snapshotInFlight = new Map();
+function rememberSnapshot(period, value) {
+  snapshotCache.delete(period);
+  snapshotCache.set(period, { at: Date.now(), value });
+  while (snapshotCache.size > SNAPSHOT_CACHE_MAX) snapshotCache.delete(snapshotCache.keys().next().value);
+  return value;
+}
+async function loadSnapshot(period) {
   // Data Hub is the only source of truth. Never present the legacy 1,808-row
   // local seed as the managed sales catalog. If configuration is temporarily
   // unavailable, only a previously validated Data Hub snapshot may be shown.
@@ -489,6 +651,30 @@ async function getSnapshot(periodInput) {
     if (cached) return { ...cached, period, readOnly: true, meta: { ...cached.meta, source: 'data-hub-lkg', stale: true, readOnly: true, message: `Data Hub tạm lỗi; giữ bản đồng bộ tốt gần nhất. ${error.message}` } };
     throw Object.assign(new Error(`Data Hub tạm lỗi và chưa có bản đồng bộ tốt gần nhất: ${error.message}`), { status: 503 });
   }
+}
+async function getSnapshot(periodInput) {
+  const period = toHubPeriod(periodInput);
+  const hit = snapshotCache.get(period);
+  if (hit && Date.now() - hit.at < SNAPSHOT_CACHE_TTL_MS) {
+    // LRU touch without cloning the giant snapshot.
+    snapshotCache.delete(period);
+    snapshotCache.set(period, hit);
+    return hit.value;
+  }
+  if (snapshotInFlight.has(period)) return snapshotInFlight.get(period);
+  // Same-period callers always share one promise. Fail closed rather than
+  // launching untracked duplicate fetches if arbitrary periods fill the cap.
+  if (snapshotInFlight.size >= SNAPSHOT_IN_FLIGHT_MAX) {
+    throw Object.assign(new Error('Quá nhiều kỳ danh mục đang được đồng bộ; vui lòng thử lại.'), {
+      status: 503,
+      code: 'CATALOG_SNAPSHOT_IN_FLIGHT_LIMIT',
+    });
+  }
+  const task = loadSnapshot(period)
+    .then((value) => rememberSnapshot(period, value))
+    .finally(() => { if (snapshotInFlight.get(period) === task) snapshotInFlight.delete(period); });
+  snapshotInFlight.set(period, task);
+  return task;
 }
 function activeIn(row, period) {
   return row.active !== false && row.effective_from <= period && (!row.effective_to || row.effective_to >= period);
@@ -559,4 +745,4 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE };
+module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };
