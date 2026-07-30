@@ -1,6 +1,7 @@
 'use strict';
 
 const employeeBonus = require('./employeeBonus');
+const employeePenaltyAggregate = require('./employeePenaltyAggregate');
 
 const BLOCKED = new Set(['c32', 'c47']);
 const DEFAULT_PAGE_SIZE = 20;
@@ -139,6 +140,12 @@ function sortRows(rows, sortKey, sortDir = 'asc') {
 function numeric(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function numberOrNull(value) {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function summarizeRows(rows = [], columns = [], baseSummary = null) {
@@ -320,6 +327,11 @@ function transformReport(report = {}, options = {}) {
       provisionalAnnualTotal: periods.reduce((sum, period) => sum + numeric(period.summary.provisionalAnnualTotal), 0),
       provisionalColumnTotals: Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.provisionalColumnTotals?.[key]), 0)])),
       annualColumnKeys: [...new Set(periods.flatMap((period) => period.summary.annualColumnKeys || []))],
+      // Penalty is calculated before table filters/pagination and represents the
+      // full selected employee/team range. Preserve that backend scope instead of
+      // subtracting it from a filtered row slice in the client.
+      penaltyAppliedAmount: numberOrNull(report.summary?.penaltyAppliedAmount ?? report.penalty?.appliedAmount),
+      afterPenaltyTotal: numberOrNull(report.summary?.afterPenaltyTotal ?? report.penalty?.afterPenaltyTotal),
     },
     displayedRows: allRows.length,
   };
@@ -386,6 +398,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
     periods,
     employees: roster.map((employee) => ({ empCode: employee.emp_code, employeeName: employee.name })),
     bonus: employeeBonus.aggregateBonusSummaries(source, roster),
+    penalty: employeePenaltyAggregate.aggregatePenaltySummaries(source),
   };
 }
 
@@ -405,6 +418,7 @@ module.exports = {
   normalizeSortKey,
   sortRows,
   summarizeRows,
+  numberOrNull,
   employeeSubtotals,
   facetOptions,
   buildFilterOptions,

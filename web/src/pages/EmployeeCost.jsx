@@ -402,17 +402,29 @@ function penaltyNoAmountReason(penalty) {
 }
 
 function PenaltyKpi({ penalty, onOpen }) {
-  const hasPenalty = penalty.total != null && penalty.total > 0;
-  const value = hasPenalty ? `−${formatEmployeeCostCell(penalty.total, moneyColumn)}` : 'Không bị phạt';
+  const policyOff = penalty.aggregate && penalty.mode === 'off';
+  const aggregateSubtotal = penalty.aggregate && penalty.contributors > 0 ? penalty.provisionalTotal : null;
+  const displayTotal = penalty.total == null ? aggregateSubtotal : penalty.total;
+  const hasPenalty = displayTotal != null && displayTotal > 0;
+  const value = policyOff
+    ? 'Chưa áp dụng'
+    : displayTotal == null
+    ? 'Chưa đủ dữ liệu phạt'
+    : hasPenalty ? `−${formatEmployeeCostCell(displayTotal, moneyColumn)}${penalty.total == null ? ' · tạm tính' : ''}` : 'Không bị phạt';
   const warning = penalty.warning?.text || penaltyNoAmountReason(penalty);
   const mode = penalty.mode === 'warn_only' ? penalty.label : penalty.label || 'Dự kiến/tham khảo — chưa trừ lương';
+  const aggregateNote = penalty.aggregate
+    ? policyOff
+      ? 'Chính sách phạt chưa áp dụng cho kỳ này · backend không suy số 0'
+      : `${penalty.complete ? 'Đủ' : 'Tạm tính'} ${penalty.contributors}/${penalty.employeeCount} NV · backend cộng từ kết quả từng người · không đổi theo bộ lọc bảng`
+    : `${mode} · ${warning}${penalty.available ? ' · Bấm xem cách tính' : ''}`;
   return <Kpi
     label="Phạt dự kiến"
     value={value}
-    sub={`${mode} · ${warning}${penalty.available ? ' · Bấm xem cách tính' : ''}`}
+    sub={aggregateNote}
     title={penalty.formulaText || warning}
     tone="employee-cost-tone-penalty"
-    onClick={penalty.available ? onOpen : undefined}
+    onClick={penalty.available && !penalty.aggregate ? onOpen : undefined}
   />;
 }
 
@@ -426,14 +438,24 @@ function AfterPenaltyKpi({ penalty, baseTotal, multiple }) {
   if (baseTotal == null) {
     return <Kpi label={multiple ? 'Tổng cả kỳ sau phạt' : 'Tổng chi phí tháng sau phạt'}
       value="Chưa đủ dữ liệu chi phí"
-      sub="Tỷ lệ khớp doanh thu chưa đạt ngưỡng nên tổng gốc bị khoá — không suy ra số sau phạt từ số chưa chắc"
+      sub={penalty.aggregate
+        ? `Tổng toàn đội chưa đủ nguồn (${penalty.contributors}/${penalty.employeeCount} NV có số phạt) — không suy số sau phạt`
+        : 'Tỷ lệ khớp doanh thu chưa đạt ngưỡng nên tổng gốc bị khoá — không suy ra số sau phạt từ số chưa chắc'}
+      tone="employee-cost-tone-after-penalty" />;
+  }
+  if (penalty.aggregate && penalty.afterPenaltyTotal == null) {
+    return <Kpi label={multiple ? 'Tổng cả kỳ sau phạt' : 'Tổng chi phí tháng sau phạt'}
+      value="Chưa đủ dữ liệu phạt"
+      sub={`Đã có tổng gốc toàn đội ${formatEmployeeCostCell(baseTotal, moneyColumn)}, nhưng số phạt áp dụng chưa đủ — không thay null bằng 0`}
       tone="employee-cost-tone-after-penalty" />;
   }
   const value = penalty.afterPenaltyTotal == null ? baseTotal : penalty.afterPenaltyTotal;
   return <Kpi
     label={multiple ? 'Tổng cả kỳ sau phạt' : 'Tổng chi phí tháng sau phạt'}
     value={formatEmployeeCostCell(value, moneyColumn)}
-    sub={penalty.mode === 'warn_only' ? penalty.label : `${penalty.label || 'Dự kiến/tham khảo — chưa trừ lương'} · Gốc ${formatEmployeeCostCell(baseTotal, moneyColumn)}`}
+    sub={penalty.aggregate
+      ? `${penalty.label} · Gốc toàn đội ${formatEmployeeCostCell(baseTotal, moneyColumn)} · không đổi theo bộ lọc bảng`
+      : penalty.mode === 'warn_only' ? penalty.label : `${penalty.label || 'Dự kiến/tham khảo — chưa trừ lương'} · Gốc ${formatEmployeeCostCell(baseTotal, moneyColumn)}`}
     tone="employee-cost-tone-after-penalty"
   />;
 }
@@ -446,11 +468,14 @@ function quarterEndMonth(period) {
 function XuPenaltyKpi({ penalty, period }) {
   const endMonth = quarterEndMonth(period);
   const currentMonth = Number(String(period || '').slice(5, 7));
-  if (endMonth && currentMonth !== endMonth) return <Kpi label="Phạt thiếu Xu cuối quý" value={`Chốt vào cuối quý (T${endMonth})`} sub="Tháng chỉ tạm tính · không phạt hai lần" tone="employee-cost-tone-penalty-soft" />;
-  const value = penalty.xuAmount == null
-    ? (penalty.xuStatus === 'disabled' ? 'Chưa bật' : penalty.xuStatus === 'xu_source_unavailable' ? 'Chưa đủ nguồn Xu' : 'Đang quyết toán')
-    : penalty.xuAmount > 0 ? `−${formatEmployeeCostCell(penalty.xuAmount, moneyColumn)}` : 'Không bị phạt';
-  return <Kpi label="Phạt thiếu Xu cuối quý" value={value} sub={`${penalty.xuMissing == null ? 'Thiếu Xu: —' : `Thiếu ${diemXuNumber(penalty.xuMissing)} Xu`} · dự kiến/tham khảo`} tone="employee-cost-tone-penalty-soft" />;
+  if (endMonth && currentMonth !== endMonth) return <Kpi label="Phạt thiếu Xu cuối quý" value={`Chốt vào cuối quý (T${endMonth})`} sub={`${penalty.aggregate ? 'Toàn đội · ' : ''}tháng chỉ tạm tính · không phạt hai lần`} tone="employee-cost-tone-penalty-soft" />;
+  const aggregateSubtotal = penalty.aggregate && penalty.xuContributors > 0 ? penalty.provisionalXuAmount : null;
+  const displayXu = penalty.xuAmount == null ? aggregateSubtotal : penalty.xuAmount;
+  const value = displayXu == null
+    ? (penalty.xuStatus === 'disabled' ? 'Chưa bật' : ['xu_source_unavailable', 'partially_unavailable'].includes(penalty.xuStatus) ? 'Chưa đủ nguồn Xu' : 'Đang quyết toán')
+    : displayXu > 0 ? `−${formatEmployeeCostCell(displayXu, moneyColumn)}${penalty.xuAmount == null ? ' · tạm tính' : ''}` : 'Không bị phạt';
+  const coverage = penalty.aggregate ? ` · ${penalty.xuContributors}/${penalty.xuEmployeeCount} NV có số` : '';
+  return <Kpi label="Phạt thiếu Xu cuối quý" value={value} sub={`${penalty.xuMissing == null ? 'Thiếu Xu: —' : `Thiếu ${diemXuNumber(penalty.xuMissing)} Xu`}${coverage} · dự kiến/tham khảo`} tone="employee-cost-tone-penalty-soft" />;
 }
 
 function SalaryAdvanceKpi() {
@@ -1433,23 +1458,17 @@ export default function EmployeeCost({ me, onNavigate }) {
           ? `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · ${coverageNote}`
           : `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`}
         tone="employee-cost-tone-base" />
-      {/* CEO yêu cầu 30/07: 4 ô này phải HIỆN ở mọi chế độ, kể cả "Tất cả NV".
-          Trước đây bị chặn bởi !allEmployees nên CEO mở ra không thấy gì và tưởng
-          chưa làm. Backend chỉ tính phạt khi chọn 1 NV (routes.js: `empCode ? ...`),
-          nên ở "Tất cả NV" ô VẪN HIỆN nhưng ghi rõ "Chọn 1 NV" — thà nói thật là
-          chưa có số còn hơn ẩn đi để người dùng tưởng tính năng không tồn tại.
-          Cộng dồn toàn đội phải do BACKEND tính, KHÔNG cộng ở frontend. */}
-      {allEmployees
-        ? <Kpi label="Tổng chi phí tháng sau phạt" value="Chọn 1 NV" sub="Phạt tính theo từng người — chọn đúng một nhân viên để xem" tone="employee-cost-tone-after-penalty" />
-        : <AfterPenaltyKpi penalty={model.penalty} baseTotal={model.summary.periodTotal} multiple={multiple} />}
+      {/* Bốn ô luôn hiện ở cả chế độ từng NV và "Tất cả NV". Payload ALL đã có
+          penalty tổng đội do backend cộng từ kết quả self-scoped của từng người;
+          frontend chỉ hiển thị, tuyệt đối không reduce/tính lại từ subtotals. */}
+      <AfterPenaltyKpi
+        penalty={model.penalty}
+        baseTotal={allEmployees ? model.penalty.baseTotal : model.summary.periodTotal}
+        multiple={multiple} />
       <SalaryAdvanceKpi />
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
-      {allEmployees
-        ? <Kpi label="Phạt dự kiến" value="Chọn 1 NV" sub="Phạt tính theo từng người — chọn đúng một nhân viên để xem cách tính" tone="employee-cost-tone-penalty" />
-        : <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />}
-      {allEmployees
-        ? <Kpi label="Phạt thiếu Xu cuối quý" value="Chọn 1 NV" sub="Quyết toán theo quý, tính theo từng người" tone="employee-cost-tone-penalty-soft" />
-        : <XuPenaltyKpi penalty={model.penalty} period={model.to} />}
+      <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />
+      <XuPenaltyKpi penalty={model.penalty} period={model.to} />
       {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote} />)}
       {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt
           hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng

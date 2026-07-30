@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const penalty = require('../src/employeePenalty');
+const penaltyAggregate = require('../src/employeePenaltyAggregate');
 const employeeBonus = require('../src/employeeBonus');
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'employee_bonus_tiers.json'), 'utf8'));
@@ -144,6 +145,98 @@ test('period-derived schedule is deterministic and honors emergency off switch',
     assert.equal(penalty.resolveMode('2026-08', config, fakeNow), 'enforced');
   }
   assert.equal(penalty.resolveMode('2026-09', { ...config, penaltyEnabled: false }), 'off');
+});
+
+test('ALL aggregation sums backend employee penalties without inventing a team tier or pct', () => {
+  const firstPenalty = build({ period: '2026-07', achieved: 780_000_000, costTotal: 42_834_991 });
+  const secondPenalty = build({ period: '2026-07', achieved: 450_000_000, c45Amount: 3_000_000, costTotal: 20_000_000 });
+  const aggregate = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: firstPenalty, summary: { periodTotal: 100_000_000, afterPenaltyTotal: 100_000_000 } },
+    { empCode: 'DN002', penalty: secondPenalty, summary: { periodTotal: 60_000_000, afterPenaltyTotal: 60_000_000 } },
+  ]);
+  assert.equal(aggregate.aggregate, true);
+  assert.equal(aggregate.scope, 'team_full_range');
+  assert.equal(aggregate.employeeCount, 2);
+  assert.equal(aggregate.contributors, 2);
+  assert.equal(aggregate.complete, true);
+  assert.equal(aggregate.total, firstPenalty.total + secondPenalty.total);
+  assert.equal(aggregate.provisionalTotal, aggregate.total);
+  assert.equal(aggregate.appliedAmount, 0, 'T07 warn-only must aggregate to zero applied');
+  assert.equal(aggregate.baseTotal, 160_000_000);
+  assert.equal(aggregate.afterPenaltyTotal, 160_000_000, 'range total comes from report summary, not only final month');
+  assert.equal(aggregate.targetPct, null);
+  assert.equal(aggregate.ratePct, null);
+  assert.equal(aggregate.tier, 'aggregate');
+  assert.match(aggregate.formulaText, /backend tính/);
+});
+
+test('ALL aggregation keeps incomplete totals null and exposes only an explicit provisional subtotal', () => {
+  const known = build({ period: '2026-08', achieved: 780_000_000, costTotal: 40_000_000 });
+  const unavailable = build({ period: '2026-08', achieved: 450_000_000, c45Amount: null, costTotal: null });
+  const aggregate = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: known, summary: { periodTotal: 80_000_000, afterPenaltyTotal: 80_000_000 - known.appliedAmount } },
+    { empCode: 'DN002', penalty: unavailable, summary: { periodTotal: null, afterPenaltyTotal: null } },
+  ]);
+  assert.equal(aggregate.total, null);
+  assert.equal(aggregate.provisionalTotal, known.total);
+  assert.equal(aggregate.appliedAmount, null, 'enforced unknown must not become an applied zero');
+  assert.equal(aggregate.provisionalAppliedAmount, known.appliedAmount);
+  assert.equal(aggregate.appliedContributors, 1);
+  assert.equal(aggregate.complete, false);
+  assert.equal(aggregate.contributors, 1);
+  assert.equal(aggregate.unavailableCount, 1);
+  assert.deepEqual(aggregate.unavailableEmployees, ['DN002']);
+  assert.equal(aggregate.baseTotal, null);
+  assert.equal(aggregate.afterPenaltyTotal, null);
+  assert.match(aggregate.label, /Tạm tính 1\/2 NV/);
+});
+
+test('warn-only unknown potential penalty still has exact applied zero and known after-total', () => {
+  const known = build({ period: '2026-07', achieved: 780_000_000, costTotal: 40_000_000 });
+  const unavailable = build({ period: '2026-07', achieved: 450_000_000, c45Amount: null, costTotal: 30_000_000 });
+  const aggregate = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: known, summary: { periodTotal: 40_000_000, afterPenaltyTotal: 40_000_000 } },
+    { empCode: 'DN002', penalty: unavailable, summary: { periodTotal: 30_000_000, afterPenaltyTotal: 30_000_000 } },
+  ]);
+  assert.equal(aggregate.total, null);
+  assert.equal(aggregate.appliedAmount, 0);
+  assert.equal(aggregate.appliedContributors, 2);
+  assert.equal(aggregate.baseTotal, 70_000_000);
+  assert.equal(aggregate.afterPenaltyTotal, 70_000_000);
+});
+
+test('ALL aggregation preserves C45-drop and Xu disabled/pending/unavailable states', () => {
+  const dropped = build({ period: '2026-08', achieved: 450_000_000, c45Amount: 3_000_000, costTotal: 20_000_000 });
+  const c45 = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: dropped, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+  ]);
+  assert.equal(c45.c45Dropped, true);
+  assert.equal(c45.total, 3_000_000);
+  assert.equal(c45.appliedAmount, 3_000_000);
+
+  const base = { ...dropped, total: 3_000_000, appliedAmount: 3_000_000 };
+  const xu = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: { ...base, xuStatus: 'provisional', xuAmount: 600_000, xuMissing: 2 }, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+    { empCode: 'DN002', penalty: { ...base, xuStatus: 'xu_source_unavailable', xuAmount: null, xuMissing: null }, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+    { empCode: 'DN003', penalty: { ...base, xuStatus: 'disabled', xuAmount: null, xuMissing: null }, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+  ]);
+  assert.equal(xu.xuStatus, 'partially_unavailable');
+  assert.equal(xu.xuAmount, null);
+  assert.equal(xu.provisionalXuAmount, 600_000);
+  assert.equal(xu.xuEmployeeCount, 2);
+  assert.equal(xu.xuContributors, 1);
+
+  const pending = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: { ...base, xuStatus: 'quarter_pending', xuAmount: null }, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+  ]);
+  assert.equal(pending.xuStatus, 'quarter_pending');
+  assert.equal(pending.xuAmount, null);
+  const absent = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN404', penalty: null, summary: { periodTotal: null, afterPenaltyTotal: null } },
+  ]);
+  assert.equal(absent.xuStatus, 'partially_unavailable');
+  assert.equal(absent.xuAmount, null);
+  assert.equal(penaltyAggregate.aggregatePenaltySummaries([]), null, 'empty team remains explicit null, never an invented zero');
 });
 
 test('daily C45 drop reconciles exactly to adjusted monthly total', () => {

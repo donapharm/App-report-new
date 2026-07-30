@@ -1,3 +1,11 @@
+### 2026-07-30 — Report Bot — Tổng phạt toàn đội do backend tính cho “Tất cả NV”
+- `GET /api/employee-cost?emp=ALL` trả top-level `penalty` tổng hợp trực tiếp từ kết quả phạt self-scoped từng nhân viên; không tính lại target/bậc/tỷ lệ và không cộng ở frontend.
+- Giữ fail-closed: tổng thiếu nguồn là `null`, subtotal biết được nằm ở trường `provisional*` kèm coverage; kỳ warn-only vẫn có `appliedAmount=0`, còn kỳ enforced thiếu số áp dụng giữ `null`.
+- Tổng phạt và tổng sau phạt có scope toàn kỳ/toàn đội, không thay đổi theo filter/phân trang bảng; trạng thái Xu disabled/pending/unavailable được giữ riêng.
+- UI “Tất cả NV” đọc top-level backend payload cho 3 KPI phạt; ô “Ứng lần 1” vẫn giữ “Chưa đấu nối app lương”.
+- Test: targeted 40/40, web 84/84, production build PASS; server full 516/519, đúng 3 lỗi fixture `authTrustedDevice.test.js` đã có trên baseline do thiếu `server/data/users.json`, không có hồi quy mới.
+- Chỉ hoàn thiện trên branch riêng; chưa deploy production.
+
 ### 2026-07-30 — Claude Code (CEO chốt) — CHỌN 1 NV phải thấy ĐỦ CẢ 4 Ô, không ô nào tự ẩn
 > CEO: "ở chế độ xem từng nhân viên thì mỗi nhân viên phải thấy được số phạt mình dự kiến có thể bị. Nghĩa là khi tôi lọc từng nhân viên thì cũng sẽ thấy được cả 4 ô KPI."
 

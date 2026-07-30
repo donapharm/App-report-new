@@ -97,23 +97,26 @@ test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction,
   // chế độ, kể cả "Tất cả NV". Trước đó 4 ô bị chặn bởi !allEmployees nên CEO mở ra
   // không thấy gì và tưởng tính năng chưa làm.
   assert.doesNotMatch(kpiGrid, /Xu tích lũy/);
-  // Khoá yêu cầu MỚI: 4 ô phải có mặt trong lưới KPI, và ở "Tất cả NV" phải nói rõ
-  // "Chọn 1 NV" thay vì ẩn đi — thà nói thật là chưa có số còn hơn để người dùng
-  // tưởng tính năng không tồn tại.
+  // Khoá yêu cầu MỚI: 4 ô phải có mặt trong lưới KPI. Ở "Tất cả NV", ba ô phạt
+  // chỉ đọc payload aggregate do backend cộng; frontend không tự reduce subtotals.
   for (const label of ['Phạt dự kiến', 'Tổng chi phí tháng sau phạt', 'Phạt thiếu Xu cuối quý']) {
-    assert.ok(kpiGrid.includes(label), `lưới KPI phải có ô "${label}"`);
+    assert.ok(page.includes(label), `component KPI phải khai báo nhãn "${label}"`);
   }
   assert.match(kpiGrid, /<SalaryAdvanceKpi \/>/, 'ô Ứng lần 1 phải hiện ở mọi chế độ');
   assert.doesNotMatch(kpiGrid, /\{!allEmployees && <PenaltyKpi/, '4 ô phạt không được ẩn ở chế độ Tất cả NV');
-  assert.match(kpiGrid, /allEmployees\s*\n?\s*\? <Kpi label="Phạt dự kiến" value="Chọn 1 NV"/,
-    'ở Tất cả NV phải ghi rõ "Chọn 1 NV", không hiện số 0 và không ẩn ô');
+  assert.doesNotMatch(kpiGrid, /label="Phạt dự kiến" value="Chọn 1 NV"/,
+    'ALL đã có tổng phạt backend, không được giữ placeholder cũ');
+  assert.match(kpiGrid, /baseTotal=\{allEmployees \? model\.penalty\.baseTotal : model\.summary\.periodTotal\}/,
+    'tổng sau phạt ALL phải dùng baseTotal toàn đội từ backend');
+  assert.match(kpiGrid, /^\s*<PenaltyKpi penalty=\{model\.penalty\}/m,
+    'ô Phạt dự kiến dùng top-level backend penalty ở mọi chế độ');
+  assert.match(kpiGrid, /^\s*<XuPenaltyKpi penalty=\{model\.penalty\}/m,
+    'ô phạt Xu dùng top-level backend penalty ở mọi chế độ');
   // ‼ CEO chốt 30/07: CHỌN 1 NV thì phải thấy ĐỦ CẢ 4 Ô — để chính NV đó biết
   // mình có thể bị phạt bao nhiêu. Không ô nào được tự ẩn vì thiếu dữ liệu.
   assert.doesNotMatch(kpiGrid, /periodTotal != null && <AfterPenaltyKpi/,
     'ô "Tổng sau phạt" không được ẩn khi tổng gốc null — phải hiện và nói rõ chưa đủ dữ liệu');
-  for (const re of [/: <AfterPenaltyKpi penalty=/, /: <PenaltyKpi penalty=/, /: <XuPenaltyKpi penalty=/]) {
-    assert.match(kpiGrid, re, 'nhánh chọn-1-NV phải render ô này vô điều kiện');
-  }
+  assert.match(kpiGrid, /^\s*<AfterPenaltyKpi/m, 'ô Tổng sau phạt phải render vô điều kiện');
   assert.match(kpiGrid, /^\s*<SalaryAdvanceKpi \/>$/m, 'ô Ứng lần 1 hiện ở mọi chế độ, không bọc điều kiện');
   // Fail-closed vẫn giữ: thiếu dữ liệu thì nói CHỮ, tuyệt đối không hiện số 0/số âm giả.
   assert.match(page, /if \(baseTotal == null\) \{[\s\S]{0,400}?Chưa đủ dữ liệu chi phí/,
