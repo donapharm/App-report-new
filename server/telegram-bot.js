@@ -516,8 +516,10 @@ function startCostBonusScheduler() {
     console.log('ℹ Chi phí/Thưởng notify: TẮT (đặt EMP_COST_NOTIFY=1 và/hoặc BONUS_NOTIFY=1).');
     return;
   }
-  console.log(`✔ Chi phí/Thưởng scheduler: chi phí ${costOn ? `${COST_WEEKLY_SLOT.label} + ${COST_MONTH_END_SLOT.label}` : 'TẮT'}; `
-    + `thưởng tháng ${bonusOn ? BONUS_MONTH_END_SLOT.label : 'TẮT'} GMT+7`);
+  // Log phải nêu ĐỦ CẢ LƯỢT SỐ CHỐT, nếu không thì không ai chứng minh được lượt đó
+  // đã lên lịch — mà đây chính là lượt quyết định NV nhận số cuối cùng.
+  console.log(`✔ Chi phí/Thưởng scheduler: chi phí ${costOn ? `${COST_WEEKLY_SLOT.label} + ${COST_MONTH_END_SLOT.label} (dự kiến) + ${COST_MONTH_FINAL_SLOT.label} (số chốt)` : 'TẮT'}; `
+    + `thưởng tháng ${bonusOn ? `${BONUS_MONTH_END_SLOT.label} (dự kiến) + ${BONUS_MONTH_FINAL_SLOT.label} (số chốt)` : 'TẮT'} GMT+7`);
   let lastWeekly = ''; let lastCostMonth = ''; let lastBonusMonth = '';
   let lastCostFinal = ''; let lastBonusFinal = '';
   setInterval(() => {

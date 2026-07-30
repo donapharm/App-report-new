@@ -1,3 +1,14 @@
+### 2026-07-30 — Claude Code (CEO chốt phương án A) — BẬT LẠI 2 công tắc thông báo + log nêu đủ 4 mốc
+> CEO: "ANH CHỌN A NHÉ" — bật cả hai công tắc ngay, để 20:00 ngày 31/07 gửi tin tháng 7 (số DỰ KIẾN) và 20:00/20:10 ngày 09/08 gửi lại SỐ CHỐT.
+
+- Thêm `DIRECTIVE_BAT_THONG_BAO_20260730.md`: cách bật `EMP_COST_NOTIFY=1` + `BONUS_NOTIFY=1`, **chỉ restart `app-report-tgbot`**, 5 bằng chứng nghiệm thu, và việc phải báo lại sau 20:00 ngày 31/07 + ngày 09/08.
+- **‼ CỔNG CHẶN trước khi bật:** phải chứng minh thưởng T07 đã tính lại theo slot doanh thu mới — `bonus.month.pct` của **DN008 phải ≈130,26%**. Còn 117,71% là **CHƯA** tính lại ⇒ **KHÔNG BẬT**. Đây đúng là lý do 2 cờ bị tắt tối 29/07 (thiếu 382 triệu, DN008 sai bậc ~1,92 triệu); bật khi số còn sai là gửi sai cho toàn bộ NV và không rút lại được.
+- **Sửa log khởi động bot**: trước đây chỉ nêu 2 mốc cuối tháng nên **không ai chứng minh được lượt SỐ CHỐT đã lên lịch** — mà đó chính là lượt quyết định NV nhận số cuối. Nay in đủ 4 mốc: `20:00 ngày cuối tháng (dự kiến)` · `20:00 ngày 9 (sau khoá sổ) (số chốt)` · `20:10 ngày cuối tháng (dự kiến)` · `20:10 ngày 9 (sau khoá sổ) (số chốt)`.
+- **Giữ nguyên TẮT:** `PENALTY_NOTIFY` — tin nhắn về PHẠT chưa được CEO duyệt gửi. Directive ghi rõ chỉ được đụng đúng 2 cờ, không đụng cờ nào khác.
+- Không gửi cho 4 mã trong `config/notify_optout.json`: DN021, DN023, VP004, VP018. Directive bắt bot dán danh sách người nhận (chỉ mã + kênh, không số tiền) để CEO soát trước 20:00.
+
+**Test:** server **541/550** (9 đỏ đúng mức nền) · web **87/87**.
+
 ### 2026-07-30 — Claude Code (CEO chốt) — Tin 20:00 cuối tháng VẪN GỬI nhưng là DỰ KIẾN · thêm lượt gửi SỐ CHỐT sau ngày 8
 > CEO: "TIN NHẮN 20H00 VẪN BẬT NHƯNG CHỈ LÀ DỰ KIẾN, VÌ CHỐT SỐ PHẢI CHỜ ĐẾN NGÀY 08/08 MỚI CHỐT SỐ CHUẨN. NÊN EM CỨ CHO Ý KIẾN MÀ LÀM NHÉ."
 
