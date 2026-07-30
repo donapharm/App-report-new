@@ -202,7 +202,7 @@ function buildXuPenalty({ config, empCode, asOf, scoreFn, priorBookedAdjustment 
   }
 }
 
-function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed = false, config = {}, xu = null } = {}) {
+function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed = false, closeLabel = '', config = {}, xu = null } = {}) {
   const normalized = normalizeConfig(config);
   const mode = resolveMode(period, config);
   const numericTarget = finite(target);
@@ -260,9 +260,21 @@ function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed =
   });
   const label = mode === 'warn_only'
     ? `${uiPeriod(period)} CHỈ CẢNH BÁO — chưa trừ tiền. Từ ${formatDate(normalized.penaltyEffectiveFrom)} mới áp dụng trừ thật.`
-    : `${closed ? 'ĐÃ CHỐT KỲ' : 'TẠM TÍNH'} — ${DISCLAIMER}`;
+    // NHÃN THEO KHOÁ SỔ (CEO chốt 30/07): trước khi khoá sổ mọi số là DỰ KIẾN vì
+    // doanh thu còn cập nhật; sau ngày khoá sổ mới là SỐ CHÍNH THỨC của kỳ.
+    // Ngày khoá sổ do tầng gọi truyền vào qua `closeLabel`
+    // (employeeCost.periodCloseLabel) để chỉ có MỘT nguồn biết ngày — module này
+    // không tự đoán ngày.
+    : closed
+      ? `ĐÃ CHỐT KỲ — số chính thức của kỳ${closeLabel ? ` · ${closeLabel}` : ''}. Kế toán chi trả theo bảng lương.`
+      : `DỰ KIẾN — ${closeLabel || 'doanh thu còn cập nhật, chưa khoá sổ'} · ${DISCLAIMER}`;
   return {
     mode,
+    // Kỳ đã khoá sổ chưa, và số phạt đã là số cuối chưa. `finalized` chỉ đúng khi
+    // vừa TRỪ THẬT vừa ĐÃ KHOÁ SỔ — đây là điều kiện để chuyển số cho kế toán.
+    closed: closed === true,
+    closeLabel: String(closeLabel || ''),
+    finalized: mode === 'enforced' && closed === true,
     effectiveFrom: normalized.penaltyEffectiveFrom,
     enabled: normalized.penaltyEnabled,
     targetPct: pct == null ? null : +pct.toFixed(2),

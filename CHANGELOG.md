@@ -1,3 +1,26 @@
+### 2026-07-30 — Claude Code (CEO chốt) — KHOÁ SỔ KỲ HẾT NGÀY 8 THÁNG SAU · nhãn DỰ KIẾN → SỐ CHÍNH THỨC (v3.5)
+> CEO: "dữ liệu từ ngày 05 tháng sau đổ về trước thì mình sẽ dùng từ **dự kiến** vì còn cập nhật lại doanh thu... đẹp nhất là **trước ngày 08** cho rộng rãi để chốt" · "Phạt sẽ chốt sau ngày 08 tháng sau (khi chốt đủ dữ liệu) thì câu tạm tính/dự kiến sẽ chuyển thành chính thức/chốt kỳ".
+> CEO trả lời câu chặn: **ứng lần 01 rơi vào cuối tháng đó và app lương đã tự tính**, không cần số chốt trước ngày 8 ⇒ chọn được ngày 8.
+
+**‼ LỖI CŨ ĐÃ SỬA — chốt sổ từ ngày 01, không phải ngày 5.** `routes.js` chỉ so tháng (`kỳ < tháng hiện tại`) nên **00:00 ngày 01/08 đã dán nhãn "ĐÃ CHỐT KỲ" cho T07** trong khi doanh thu còn về tới ngày 5 (theo chốt cũ) / ngày 8 (chốt mới). Sai với **cả hai** phương án — Sếp hỏi mới lộ ra.
+
+**Đã làm:**
+- **Một nguồn duy nhất** trong `employeeCost.js`: `PERIOD_CLOSE_DAY = 8` · `periodCloseDate()` · `isPeriodClosed()` · `periodCloseNote()` · `periodCloseLabel()`. Ngày tính theo **giờ Việt Nam** (`Asia/Bangkok`) — server chạy UTC nên quanh nửa đêm lấy giờ máy là lệch một ngày.
+- **Biên chính xác:** 23:59 ngày 08 **chưa** chốt · 00:00 ngày 09 **mới** chốt · vắt năm (T12 → 08/01) đúng.
+- **Nhãn phạt:** trước khoá `DỰ KIẾN — doanh thu còn cập nhật đến hết ngày 08/09/2026 · …`; sau khoá `ĐÃ CHỐT KỲ — số chính thức của kỳ · đã khoá sổ hết ngày … Kế toán chi trả theo bảng lương.` Bỏ hẳn chữ "TẠM TÍNH" ở nhãn phạt (dễ lẫn với nghĩa thiếu %).
+- **Cờ `penalty.finalized`** = vừa TRỪ THẬT **và** ĐÃ KHOÁ SỔ. Trong tháng đang chạy, phạt vẫn hiện để NV biết mà cố gắng, nhưng **không phải số cuối** — đúng ý Sếp "chỉ vì 50,5 với 50,0 mà mất tiền triệu thì đau".
+- **Nhãn ra cả màn chi phí, không chỉ ô phạt:** payload trả `periodClose`, ô "Tổng chi phí tháng" hiện `· dự kiến` kèm câu "doanh thu còn cập nhật đến hết ngày 08/xx".
+- **HAI NHÃN GIỮ RIÊNG, không gộp:** `dự kiến` = chưa khoá sổ (chờ đến ngày 8) · `tạm tính` = danh mục thiếu % (DataHub/App Sale phải điền). Một kỳ có thể vừa dự kiến vừa tạm tính.
+- Cập nhật `SPEC_REVENUE_DELIVERY_PERIOD.md` mục 4: ngày 5 → **ngày 8**, kèm biên và lý do.
+- Sửa 2 test tự-lệch: `employeePenalty` (khoá thứ tự `bonus → periodClose → penalty`) và `Target.bonusPolicy` (đọc `FORMULA_VERSION` từ backend thay vì ghi cứng `v3.4` — đây là lần thứ hai test này phải sửa tay, nay hết).
+
+**Nâng v3.4 → v3.5** vì có sửa `employeePenalty.js` (nằm trong vân tay). **Cách tính tiền P1/P2 và bậc phạt KHÔNG đổi** — v3.5 chỉ đổi *khi nào số được coi là chốt* và *chữ trên màn hình*. Đã làm đủ 4 bước, `sourceHash 02b6d579…`, test khoá vân tay XANH.
+
+**Test:** server **539/548** (9 đỏ đúng mức nền container) · web **87/87** · build PASS · thêm `server/test/periodClose.test.js` 7 ca (biên ngày, giờ VN, cấm so tháng, nhãn, finalized, tách hai nhãn ở UI).
+**Thử thật:** kỳ T07 xem ngày 30/07 → `closed:false`, "còn cập nhật đến hết ngày 08/08/2026"; kỳ T06 → `closed:true`, "đã khoá sổ hết ngày 08/07/2026".
+
+**Chưa làm — chờ Sếp duyệt riêng:** tin nhắn cuối tháng 20:00 vẫn chưa gắn nhãn "DỰ KIẾN" và chưa có lượt gửi số chốt sau ngày 8. Hai cờ thông báo vẫn TẮT nên chưa gửi gì, nhưng khi bật thì phải làm việc này trước.
+
 ### 2026-07-30 — Claude Code (review) — Chốt MỘT đường cấu hình phạt: giữ store của bot, xoá phần trùng của Claude
 > Bot đã push `59dc9d3` (nhánh `feat/penalty-formula-editor-20260730`). Claude đọc xong và chốt: **spec gộp ở `SPEC_MERGE_PENALTY_CONFIG_20260730.md`**.
 

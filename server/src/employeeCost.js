@@ -75,6 +75,63 @@ function currentMonth(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// ── KHOÁ SỔ KỲ: HẾT NGÀY 8 THÁNG SAU (CEO chốt 2026-07-30) ───────────────────
+// CEO: "từ ngày 05 tháng sau đổ về trước thì dùng từ DỰ KIẾN vì còn cập nhật lại
+// doanh thu... đẹp nhất là trước ngày 08 cho rộng rãi để chốt" → chốt ngày 08.
+//
+// ‼ Trước đây code coi kỳ là ĐÃ CHỐT ngay khi sang tháng mới (`kỳ < tháng hiện
+// tại`), tức 00:00 ngày 01 đã dán nhãn "ĐÃ CHỐT KỲ" trong khi doanh thu còn về
+// tới ngày 8. Mọi chỗ hỏi "kỳ này chốt chưa" phải dùng ĐÚNG hàm dưới đây.
+//
+// Ngày tính theo GIỜ VIỆT NAM (Asia/Bangkok, UTC+7 không có DST) — server chạy
+// UTC nên nếu lấy giờ máy thì quanh nửa đêm sẽ lệch một ngày.
+const PERIOD_CLOSE_DAY = 8;
+
+function vnToday(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now instanceof Date ? now : new Date(now));
+}
+
+// Ngày khoá sổ của kỳ = ngày 08 của THÁNG SAU. Trả 'YYYY-MM-DD'.
+function periodCloseDate(period, closeDay = PERIOD_CLOSE_DAY) {
+  const month = normalizeMonth(period);
+  if (!month) return '';
+  const year = Number(month.slice(0, 4));
+  const index = Number(month.slice(5, 7));
+  const nextYear = index === 12 ? year + 1 : year;
+  const nextMonth = index === 12 ? 1 : index + 1;
+  return `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(closeDay).padStart(2, '0')}`;
+}
+
+// Đã chốt = đã QUA hết ngày khoá sổ. 23:59 ngày 08 vẫn CHƯA chốt; 00:00 ngày 09
+// mới chốt. Truyền `today` để test không phụ thuộc đồng hồ thật.
+function isPeriodClosed(period, today = vnToday(), closeDay = PERIOD_CLOSE_DAY) {
+  const close = periodCloseDate(period, closeDay);
+  if (!close) return false;
+  return String(today) > close;
+}
+
+// Câu mô tả trạng thái khoá sổ, KHÔNG kèm tiền tố "DỰ KIẾN"/"ĐÃ CHỐT KỲ" — để nơi
+// gọi tự ghép tiền tố theo ngữ cảnh, tránh lặp "DỰ KIẾN — DỰ KIẾN —".
+function periodCloseNote(period, today = vnToday(), closeDay = PERIOD_CLOSE_DAY) {
+  const close = periodCloseDate(period, closeDay);
+  if (!close) return '';
+  const dmy = close.split('-').reverse().join('/');
+  return isPeriodClosed(period, today, closeDay)
+    ? `đã khoá sổ hết ngày ${dmy}`
+    : `doanh thu còn cập nhật đến hết ngày ${dmy}`;
+}
+
+// Nhãn đầy đủ cho chỗ hiển thị độc lập (không nằm sau tiền tố nào).
+function periodCloseLabel(period, today = vnToday(), closeDay = PERIOD_CLOSE_DAY) {
+  const note = periodCloseNote(period, today, closeDay);
+  if (!note) return '';
+  return isPeriodClosed(period, today, closeDay)
+    ? `ĐÃ CHỐT KỲ — số chính thức, ${note}`
+    : `DỰ KIẾN — ${note}`;
+}
+
 function normalizeMonth(value) {
   const text = String(value || '').trim();
   let match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(text);
@@ -1000,6 +1057,7 @@ module.exports = {
   NOTE_KEY,
   VAT_DIVISOR,
   currentMonth,
+  PERIOD_CLOSE_DAY, vnToday, periodCloseDate, isPeriodClosed, periodCloseNote, periodCloseLabel,
   normalizeMonth,
   toUiMonth,
   monthsBetween,

@@ -493,6 +493,15 @@ export function employeeCostViewModel(payload = {}) {
     summary,
     note: String(payload.note || (rows.length ? '' : EMPTY_NOTE)),
     dynamicCount: periods.reduce((sum, period) => sum + period.dynamicCount, 0),
+    // Trạng thái khoá sổ kỳ (CEO chốt 30/07): trước ngày 8 tháng sau là DỰ KIẾN.
+    // Frontend KHÔNG tự tính ngày — chỉ đọc lại số backend đã quyết theo giờ VN.
+    periodClose: {
+      closed: payload.periodClose?.closed === true,
+      closeDay: Number(payload.periodClose?.closeDay || 0) || null,
+      closeDate: String(payload.periodClose?.closeDate || ''),
+      note: String(payload.periodClose?.note || ''),
+      label: String(payload.periodClose?.label || ''),
+    },
     allEmployees: !!payload.allEmployees,
     filters: {
       province: String(payload.filters?.province || ''),

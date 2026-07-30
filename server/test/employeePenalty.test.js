@@ -302,7 +302,9 @@ test('employee-cost service route attaches backend penalty using self-scoped pay
   assert.match(service, /resolveScopedEmployee/);
   assert.match(service, /employeePenalty\.buildPenalty/);
   assert.match(service, /c45Amount: costPeriod\?\.summary\?\.columnTotals/);
-  assert.match(service, /bonus,\s*\n\s*penalty,/);
+  // v3.5 chèn `periodClose` giữa bonus và penalty: payload phải mang trạng thái khoá
+  // sổ để giao diện dán nhãn DỰ KIẾN/CHÍNH THỨC, nên khoá luôn thứ tự này.
+  assert.match(service, /bonus,\s*\n[\s\S]*?periodClose: \{[\s\S]*?\n\s*penalty,/);
   assert.match(service, /afterPenaltyTotal/);
 });
 

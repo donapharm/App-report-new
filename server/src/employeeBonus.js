@@ -15,7 +15,7 @@ const BONUS_V3_EFFECTIVE_MONTH = '2026-07';
 // thoại sửa tay ghi v3.1 nên CEO không biết đang sửa bản nào (CEO chốt 29/07).
 // Quy tắc: SỬA CÁCH TÍNH THƯỞNG => nâng số hiệu này + cập nhật
 // config/bonus_formula_lock.json (test bonusFormulaVersion sẽ đỏ nếu quên).
-const FORMULA_VERSION = 'v3.4';
+const FORMULA_VERSION = 'v3.5';
 const UNCONFIGURED_MESSAGE = 'Chưa cấu hình mức thưởng';
 
 function finite(value) {

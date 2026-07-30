@@ -826,7 +826,9 @@ async function employeeCostPayload(req, {
     const activePenaltyConfig = penaltyConfig || currentPenaltyConfig;
     const bonus = employeeBonus.buildBonusSummary(bonusKpi, resolvedBonusConfig, bonusPriority);
     const costPeriod = (payload.periods || []).find((item) => item.period === range.to) || null;
-    const closed = range.to < employeeCost.currentMonth();
+    // KHOÁ SỔ HẾT NGÀY 8 THÁNG SAU (CEO chốt 30/07). Trước đây so sánh tháng nên
+    // 00:00 ngày 01 đã coi là ĐÃ CHỐT dù doanh thu còn về tới ngày 8.
+    const closed = employeeCost.isPeriodClosed(range.to);
     const monthEnd = `${range.to}-${new Date(Date.UTC(Number(range.to.slice(0, 4)), Number(range.to.slice(5, 7)), 0)).getUTCDate()}`;
     const today = new Date().toISOString().slice(0, 10);
     const asOf = closed ? monthEnd : (today.startsWith(range.to) ? today : `${range.to}-01`);
@@ -846,6 +848,7 @@ async function employeeCostPayload(req, {
         c45Amount: costPeriod?.summary?.columnTotals == null ? null : costPeriod.summary.columnTotals.c45,
         costTotal: costPeriod?.summary?.monthlyTotal,
         closed,
+        closeLabel: employeeCost.periodCloseNote(range.to),
         config,
         xu,
       });
@@ -888,6 +891,16 @@ async function employeeCostPayload(req, {
         resolveTargets: targetAdmin.resolveTargets,
       }) : null,
       bonus,
+      // TRẠNG THÁI KHOÁ SỔ của kỳ (CEO chốt 30/07) — để nhãn "DỰ KIẾN" hiện trên
+      // TOÀN màn chi phí, không chỉ ở ô phạt: trước ngày 8 tháng sau doanh thu còn
+      // về nên mọi số đều là dự kiến.
+      periodClose: {
+        closed,
+        closeDay: employeeCost.PERIOD_CLOSE_DAY,
+        closeDate: employeeCost.periodCloseDate(range.to),
+        note: employeeCost.periodCloseNote(range.to),
+        label: employeeCost.periodCloseLabel(range.to),
+      },
       penalty,
       ...(penaltyBaseline ? { penaltyBaseline } : {}),
       penaltyPolicy: resolvedPenaltyPolicy ? {

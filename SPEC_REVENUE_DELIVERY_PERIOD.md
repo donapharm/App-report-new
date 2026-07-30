@@ -117,12 +117,31 @@ Sau khi sửa, hai ca trên rơi đúng chỗ:
 
 ---
 
-## 4. Kỳ khoá sổ — **CEO chốt 29/07: hết ngày 5 tháng sau**
+## 4. Kỳ khoá sổ — **CEO chốt lại 30/07: hết ngày 8 tháng sau** (thay cho ngày 5)
+
+> CEO 30/07: *"dữ liệu từ ngày 05 tháng sau đổ về trước thì mình sẽ dùng từ **dự kiến** vì còn cập nhật lại doanh thu bán hàng trong khoảng thời gian đó. Còn không thì đẹp nhất là **trước ngày 08** hàng tháng cho rộng rãi để chốt."*
+> Vì sao ngày 8: ngày 5 dễ rơi vào thứ 7/CN nên thực tế chỉ còn 2–3 ngày làm việc; các ca như 275.925.600đ chờ App Sale sửa mã đơn vị không xong trong 2 ngày.
+> CEO đã xác nhận **ứng lần 01 rơi vào cuối tháng đó và app lương tự tính**, nên không cần số chốt trước ngày 8.
 
 | | |
 |---|---|
-| Kỳ T06 khoá lúc | **hết ngày 05/07** |
-| Kỳ T07 khoá lúc | **hết ngày 05/08** |
+| Kỳ T06 khoá lúc | **hết ngày 08/07** |
+| Kỳ T07 khoá lúc | **hết ngày 08/08** |
+| Kỳ T12 khoá lúc | **hết ngày 08/01 năm sau** |
+
+**Biên chính xác:** 23:59 ngày 08 **vẫn chưa** chốt; 00:00 ngày 09 **mới** chốt. Tính theo **giờ Việt Nam**, không theo giờ máy chủ (server chạy UTC).
+
+**‼ Lỗi đã sửa ở v3.5:** trước đó code chốt bằng cách so tháng (`kỳ < tháng hiện tại`) nên **00:00 ngày 01 tháng sau đã dán nhãn "ĐÃ CHỐT KỲ"** trong khi doanh thu còn về tới ngày 8. Mọi chỗ hỏi "kỳ này chốt chưa" nay bắt buộc dùng `employeeCost.isPeriodClosed()`.
+
+**Hai nhãn KHÁC NHAU, không gộp:**
+| Nhãn | Nghĩa | Ai xử lý |
+|---|---|---|
+| **DỰ KIẾN** | Kỳ chưa khoá sổ, doanh thu còn về | Chờ đến ngày 8 |
+| **tạm tính** | Danh mục còn mã chưa gán % | DataHub / App Sale phải điền |
+
+Một kỳ có thể **vừa dự kiến vừa tạm tính**; gộp một từ là mất thông tin.
+
+**Phạt:** trong kỳ và tới hết ngày 8 chỉ là **DỰ KIẾN**; sau ngày 8 mới là **SỐ CHÍNH THỨC**. Cờ `penalty.finalized` chỉ đúng khi **vừa trừ thật vừa đã khoá sổ** — đây là điều kiện để chuyển số cho kế toán.
 
 **Trước ngày khoá:** VP018 / DN007 sửa ngày thực giao thoải mái, số tự chạy về đúng kỳ.
 

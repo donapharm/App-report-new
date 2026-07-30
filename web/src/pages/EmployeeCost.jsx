@@ -1473,12 +1473,20 @@ export default function EmployeeCost({ me, onNavigate }) {
       {/* Coverage dưới ngưỡng thì tổng bị khóa null (fail-closed) → trước đây ô trống
           trơn, nhìn như hỏng. Nay hiện tổng PHẦN ĐÃ KHỚP + nhãn "tạm tính" nói rõ
           còn thiếu bao nhiêu, để CEO vẫn có số mà không hiểu nhầm là số cuối. */}
+      {/* HAI NHÃN KHÁC NHAU, KHÔNG GỘP (CEO chốt 30/07):
+          · "DỰ KIẾN"  = kỳ chưa khoá sổ, doanh thu còn về đến hết ngày 8 tháng sau
+                         → chờ đến ngày đó, không ai phải làm gì.
+          · "tạm tính" = danh mục còn mã chưa gán % → DataHub/App Sale phải điền.
+          Một kỳ có thể vừa dự kiến vừa tạm tính; gộp một từ là mất thông tin. */}
       <Kpi
-        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${provisionalTotals ? ' · tạm tính' : ''}`}
+        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${model.periodClose.closed ? '' : ' · dự kiến'}${provisionalTotals ? ' · tạm tính' : ''}`}
         value={formatEmployeeCostCell(provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal, moneyColumn)}
-        sub={provisionalTotals
-          ? `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · ${coverageNote}`
-          : `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · chưa gồm khoản cuối năm`}
+        sub={[
+          `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`,
+          model.periodClose.note,
+          provisionalTotals ? coverageNote : 'chưa gồm khoản cuối năm',
+        ].filter(Boolean).join(' · ')}
+        title={model.periodClose.label}
         tone="employee-cost-tone-base" />
       {/* Bốn ô luôn hiện ở cả chế độ từng NV và "Tất cả NV". Payload ALL đã có
           penalty tổng đội do backend cộng từ kết quả self-scoped của từng người;

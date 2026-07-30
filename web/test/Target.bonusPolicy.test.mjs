@@ -6,7 +6,12 @@ const target = fs.readFileSync(new URL('../src/pages/Target.jsx', import.meta.ur
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
 
 test('Target admin exposes versioned Thưởng v3 editor, all layers and C10-only wording', () => {
-  assert.match(target, /BONUS_FORMULA_VERSION_FALLBACK = 'v3\.4'/);
+  // Số hiệu công thức chỉ có MỘT nguồn (backend). Ghi cứng ở đây thì mỗi lần nâng
+  // version lại phải sửa tay chính test này — đọc từ employeeBonus.FORMULA_VERSION.
+  const backend = fs.readFileSync(new URL('../../server/src/employeeBonus.js', import.meta.url), 'utf8');
+  const backendVersion = /const FORMULA_VERSION = '([^']+)'/.exec(backend)?.[1];
+  assert.ok(backendVersion, 'không đọc được FORMULA_VERSION ở backend');
+  assert.match(target, new RegExp(`BONUS_FORMULA_VERSION_FALLBACK = '${backendVersion.replace('.', '\\.')}'`));
   assert.match(target, /Cấu hình Thưởng \{bonusFv\}/);
   for (const layer of ['default', 'productGroup', 'route', 'unit', 'employee']) assert.match(target, new RegExp(`value="${layer}"`));
   for (const group of ['H.A\\*', 'H.A', 'H.B', 'H.C', 'H.D']) assert.match(target, new RegExp(`'${group}'`));
