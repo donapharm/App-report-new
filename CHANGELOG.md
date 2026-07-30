@@ -1,3 +1,18 @@
+### 2026-07-30 — Claude Code (review) — Chốt MỘT đường cấu hình phạt: giữ store của bot, xoá phần trùng của Claude
+> Bot đã push `59dc9d3` (nhánh `feat/penalty-formula-editor-20260730`). Claude đọc xong và chốt: **spec gộp ở `SPEC_MERGE_PENALTY_CONFIG_20260730.md`**.
+
+Hai nhánh cùng tách từ `0d3e559` và **cùng làm việc 2 + việc 4** của CEO mà không bên nào biết bên kia đang làm.
+
+**Giữ bản của BOT** cho store cấu hình phạt và tổng hợp toàn đội. Bản bot mạnh hơn đúng ở chỗ quyết định tiền và dấu vết: lưu **full snapshot** từng version · audit **append-only không cắt** · file cấu hình hỏng thì **fail rõ** thay vì âm thầm quay về mức mặc định · **rollback policy nếu ghi audit lỗi** · **chỉ CEO** được sửa · ID do backend sinh · chặn tạo version cho kỳ đã qua · có `effectiveTo` · dùng lại version cũ phải **khớp từng tham số**.
+
+**Xoá phần trùng của Claude** — 3 điểm dưới đây là **lỗi thật của bản Claude**, không phải khác gu: audit **cắt còn 2.000** bản ghi · file policy hỏng thì **âm thầm về seed** (mức phạt đổi mà không ai biết) · `normalizeCandidate` **nhận `id` từ client** nên có thể trùng khoá làm hỏng store. Cụ thể xoá: phần phạt trong `employeeBonusPolicy.js`, 2 route `/admin/penalty-policies` của Claude, `penaltyPolicySnapshot`, hàm `aggregate` bản Claude, `PenaltyPolicyPanel` bản Claude, 2 file test khoá đường đã bỏ.
+
+**Giữ của Claude và GHÉP VÀO** (bot chưa có): `penaltyDisplay.js` + hộp giải thích **"C45 (Lương tăng thêm)"** + bảng **4 ngữ cảnh phạt** — chính việc số 1 CEO yêu cầu, nhánh bot có **0** lần chữ "Lương tăng thêm" · danh sách **`atRisk`** (NV đang ở bậc bị phạt kèm số doanh thu cần thêm trước VAT) · **test HTTP dùng middleware quyền THẬT** (test HTTP của bot thay `auth.requireAuth` bằng hàm giả nên không có ca 401) · sửa lỗ **"đốt" preview của người khác** · **rào chắn tỷ lệ**: chặn cứng > 5% và cảnh báo khi > 1% (gõ `30` thay vì `0,3` là mất trọn C45 của cả đội).
+
+**Version:** hai nhánh đều nâng `v3.4` với nội dung khác nhau ⇒ hai `sourceHash` — đây là "blocker" bot thấy. **Giữ nhãn `v3.4`** cho bản gộp vì production còn `v3.3`, **chưa nhân viên nào từng thấy số v3.4**; ghi lại vân tay một lần sau khi gộp.
+
+**Chưa gộp vào `main`:** Claude đã thử `git merge` để đo, có **7 file xung đột** trải cả backend/frontend/test, và việc gộp phải **xoá bớt code của chính Claude** — làm dở dang trên `main` thì tệ hơn. Nên: bot thực hiện gộp theo spec (bot giữ code chính, có dữ liệu thật để thử), Claude review lại. **Deploy vẫn DỪNG** cho tới khi mục 4 của spec xanh hết.
+
 ### 2026-07-30 — Claude Code — Trả lời review: test HTTP thật cho cấu hình phạt + siết session binding
 > Review báo 8 điểm (1 blocker, 1 high, 2 medium, 4 thiếu test) trên commit `59dc9d3` của bot — commit này **chưa push** nên Claude không đọc được mã; đã soát 8 điểm đó **trên `main`** và phân loại theo từng bản (bảng đầy đủ ở §9 của `DIRECTIVE_DEPLOY_V34_20260730.md`).
 
