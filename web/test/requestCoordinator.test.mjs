@@ -31,10 +31,10 @@ test('latest-request gate cancels old employee switch and rejects stale overwrit
 });
 
 test('cache key isolates CEO/employee session, device, query and data generation', () => {
-  const base = { method: 'GET', path: '/employee-cost?emp=ALL', token: 'ceo-token', deviceId: 'ceo-device', dataSignature: 'slot-a' };
+  const base = { method: 'GET', path: '/employee-cost?emp=ALL', authScope: 'AUTH:1', deviceId: 'ceo-device', dataSignature: 'slot-a' };
   const key = requestScopeKey(base);
   for (const changed of [
-    { token: 'employee-token' },
+    { authScope: 'AUTH:2' },
     { deviceId: 'employee-device' },
     { path: '/employee-cost?emp=DN016' },
     { dataSignature: 'slot-b' },

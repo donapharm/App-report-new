@@ -5,11 +5,11 @@ function abortError() {
   return error;
 }
 
-export function requestScopeKey({ method = 'GET', path = '', token = '', deviceId = '', dataSignature = '', body = '' } = {}) {
-  // Every cache/coalescing key is bound to the authenticated session, device,
-  // backend data generation and full query. CEO and employee payloads can never
-  // share an entry even when their URLs happen to be the same.
-  return [method, path, token || 'ANON', deviceId || 'NO_DEVICE', dataSignature || 'NO_DATA_SIGNATURE', body || ''].join('\u001f');
+export function requestScopeKey({ method = 'GET', path = '', authScope = 'ANON', deviceId = '', dataSignature = '', body = '' } = {}) {
+  // Every cache/coalescing key is bound to an opaque local auth generation,
+  // device, backend data generation and full query. Never retain a bearer token
+  // inside cache keys; CEO and employee payloads still cannot share an entry.
+  return [method, path, authScope, deviceId || 'NO_DEVICE', dataSignature || 'NO_DATA_SIGNATURE', body || ''].join('\u001f');
 }
 
 export class RequestCoordinator {

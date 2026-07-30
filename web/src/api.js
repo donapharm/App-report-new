@@ -13,9 +13,21 @@ const APP_SALE_TRUSTED_DEVICE_VERIFY_URL = 'https://sale.donapharm.asia/api/inte
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 const requestCoordinator = new RequestCoordinator({ maxEntries: 12 });
 let backendDataSignature = 'boot';
+let observedToken;
+let authScopeGeneration = 0;
+function authScopeFor(token) {
+  if (token !== observedToken) {
+    observedToken = token;
+    authScopeGeneration += 1;
+    requestCoordinator.clear();
+  }
+  return `${token ? 'AUTH' : 'ANON'}:${authScopeGeneration}`;
+}
 export const setToken = (t) => {
   requestCoordinator.clear();
   backendDataSignature = 'boot';
+  observedToken = String(t || '');
+  authScopeGeneration += 1;
   return t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
 };
 
@@ -98,9 +110,10 @@ function combineAbortSignals(signals) {
 
 async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '', signal, cacheMs } = {}) {
   const token = getToken() || '';
+  const authScope = authScopeFor(token);
   const deviceId = getDeviceId();
   const bodyKey = body ? JSON.stringify(body) : '';
-  const key = requestScopeKey({ method, path, token, deviceId, dataSignature: backendDataSignature, body: bodyKey });
+  const key = requestScopeKey({ method, path, authScope, deviceId, dataSignature: backendDataSignature, body: bodyKey });
   const perform = async (coordinatorSignal) => {
     const timeoutController = timeoutMs > 0 ? new AbortController() : null;
     const timer = timeoutController ? setTimeout(() => timeoutController.abort(), timeoutMs) : null;
