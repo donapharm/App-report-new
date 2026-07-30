@@ -2,7 +2,7 @@
 
 const xuPolicy = require('./xuPolicy');
 
-const WARN_ONLY_LABEL = 'T07.2026 CHỈ CẢNH BÁO — chưa trừ tiền. Từ 01/08/2026 mới áp dụng trừ thật.';
+const WARN_ONLY_LABEL = 'T07.2026 CHỈ CẢNH BÁO — chưa trừ tiền. Seed mặc định áp dụng trừ thật từ 01/08/2026.';
 const DISCLAIMER = 'Dự kiến/tham khảo — chưa trừ lương';
 const DEFAULT_TIERS = Object.freeze([
   { tier: 'drop_c45', toPct: 50, dropC45: true },
@@ -45,9 +45,20 @@ function normalizeConfig(raw = {}) {
     ratePct: finite(tier?.ratePct),
     dropC45: tier?.dropC45 === true,
   }));
+  const byTier = Object.fromEntries(normalizedTiers.map((tier) => [tier.tier, tier]));
+  const requiredTiers = ['drop_c45', 't50_70', 't70_90', 'none'];
   const configured = normalizedTiers.length === 4
     && new Set(normalizedTiers.map((tier) => tier.tier)).size === 4
-    && normalizedTiers.every((tier) => ['drop_c45', 't50_70', 't70_90', 'none'].includes(tier.tier));
+    && normalizedTiers.every((tier) => requiredTiers.includes(tier.tier))
+    && byTier.drop_c45?.toPct != null && byTier.drop_c45.toPct >= 0
+    && byTier.t50_70?.fromExclusivePct === byTier.drop_c45?.toPct
+    && byTier.t50_70?.toPct != null && byTier.t50_70.toPct > byTier.t50_70.fromExclusivePct
+    && byTier.t70_90?.fromPct === byTier.t50_70?.toPct
+    && byTier.t70_90?.toPct != null && byTier.t70_90.toPct > byTier.t70_90.fromPct
+    && byTier.none?.fromPct === byTier.t70_90?.toPct
+    && [byTier.t50_70?.ratePct, byTier.t70_90?.ratePct].every((rate) => rate != null && rate >= 0)
+    && (byTier.drop_c45?.dropC45 === true || (byTier.drop_c45?.ratePct != null && byTier.drop_c45.ratePct >= 0))
+    && byTier.none?.ratePct === 0;
   return {
     penaltyEnabled: raw.penaltyEnabled === true,
     penaltyWarnFrom: String(raw.penaltyWarnFrom || ''),
@@ -95,44 +106,63 @@ function formatPct(value) {
   return Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
 }
 
-function nextThreshold(tier) {
-  if (tier === 'drop_c45') return { pct: 50, mustExceed: true };
-  if (tier === 't50_70') return { pct: 70, mustExceed: false };
-  if (tier === 't70_90') return { pct: 90, mustExceed: false };
-  return null;
+function formatDate(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || '');
+}
+
+function tierRangeText(tier = {}) {
+  if (tier.tier === 'drop_c45') return `bằng hoặc dưới ${formatPct(tier.toPct)}%`;
+  if (tier.tier === 'none') return `từ ${formatPct(tier.fromPct)}% trở lên`;
+  if (tier.fromExclusivePct != null) return `trên ${formatPct(tier.fromExclusivePct)}% đến dưới ${formatPct(tier.toPct)}%`;
+  return `${formatPct(tier.fromPct)}% đến dưới ${formatPct(tier.toPct)}%`;
+}
+
+function nextThreshold(tier, rawConfig = { penaltyTiers: DEFAULT_TIERS }) {
+  const selected = normalizeConfig(rawConfig).penaltyTiers.find((item) => item.tier === tier);
+  if (!selected || selected.toPct == null) return null;
+  return { pct: selected.toPct, mustExceed: selected.tier === 'drop_c45' };
 }
 
 function warningFor({ period, mode, closed = false, target, achieved, pct, tier, c45Amount, targetAmount, rawConfig }) {
   if (mode === 'off' || !tier || tier === 'none' || !(target > 0) || !Number.isFinite(achieved)) return null;
-  const threshold = nextThreshold(tier);
+  const normalized = normalizeConfig(rawConfig);
+  const selectedTier = normalized.penaltyTiers.find((item) => item.tier === tier);
+  const threshold = nextThreshold(tier, rawConfig);
   if (!threshold) return null;
   const rawGap = target * threshold.pct / 100 - achieved;
   const revenueGap = ceil1k(rawGap) + (threshold.mustExceed ? 1000 : 0);
   const moneyAtRisk = c45Amount == null ? null : Math.max(0, Math.round(c45Amount));
   const displayedPct = formatPct(pct);
+  const dropsC45 = selectedTier?.dropC45 === true;
+  const rateLabel = selectedTier?.ratePct == null ? '—' : `${formatPct(selectedTier.ratePct)}%`;
   let text;
-  if (closed) {
-    if (tier === 'drop_c45' && moneyAtRisk != null) {
+  // Warn-only luôn phải nói rõ chưa trừ, kể cả khi xem lại một kỳ đã đóng.
+  // Không để nhánh "closed" biến cảnh báo lịch sử thành câu khẳng định đã phạt.
+  if (mode === 'warn_only') {
+    const consequence = dropsC45
+      ? (moneyAtRisk == null ? 'thuộc bậc mất trắng C45 (số tiền C45 chưa đủ dữ liệu)' : `sẽ MẤT TRẮNG ${formatMoney(moneyAtRisk)} ở cột C45`)
+      : (moneyAtRisk == null ? `bị trừ ${rateLabel} tại C45 (số tiền chưa đủ dữ liệu)` : `bị trừ ${formatMoney(targetAmount)} tại C45`);
+    const action = closed
+      ? `Kỳ đã đóng ở mức ${displayedPct}%; mốc thoát bậc là ${threshold.mustExceed ? 'vượt' : 'đạt'} ${formatPct(threshold.pct)}%.`
+      : `Muốn thoát bậc này: tăng thêm ${formatMoney(revenueGap)} giá trị đơn hàng (trước VAT). Hiện đạt ${displayedPct}% — cần ${threshold.mustExceed ? 'vượt' : 'đạt'} mốc ${formatPct(threshold.pct)}%.`;
+    text = `${uiPeriod(period)} — THÁNG CHẠY THỬ, CHƯA TRỪ TIỀN. Nếu áp dụng, bạn ${consequence}. Từ ${formatDate(normalized.penaltyEffectiveFrom)} mới trừ thật. ${action}`;
+  } else if (closed) {
+    if (dropsC45 && moneyAtRisk != null) {
       text = `Tháng này đạt ${displayedPct}% target — C45 ${formatMoney(moneyAtRisk)} không được tính vào chi phí tháng.`;
     } else if (moneyAtRisk != null) {
-      text = `Tháng này đạt ${displayedPct}% target — phạt tại C45 là ${formatMoney(targetAmount)} theo bậc ${tier === 't50_70' ? '0,3%' : '0,2%'}.`;
+      text = `Tháng này đạt ${displayedPct}% target — phạt tại C45 là ${formatMoney(targetAmount)} theo bậc ${rateLabel}.`;
     } else {
       text = `Tháng này đạt ${displayedPct}% target — thuộc bậc phạt tại C45; số tiền chưa xác định do C45 chưa đủ dữ liệu.`;
     }
-  } else if (mode === 'warn_only') {
-    const consequence = tier === 'drop_c45'
-      ? (moneyAtRisk == null ? 'thuộc bậc mất trắng C45 (số tiền C45 chưa đủ dữ liệu)' : `sẽ MẤT TRẮNG ${formatMoney(moneyAtRisk)} ở cột C45`)
-      : (moneyAtRisk == null ? `bị trừ ${tier === 't50_70' ? '0,3%' : '0,2%'} tại C45 (số tiền chưa đủ dữ liệu)` : `bị trừ ${formatMoney(targetAmount)} tại C45`);
-    text = `${uiPeriod(period)} — THÁNG CHẠY THỬ, CHƯA TRỪ TIỀN. Nếu áp dụng, bạn ${consequence}. Từ 01/08/2026 mới trừ thật. Muốn thoát bậc này: tăng thêm ${formatMoney(revenueGap)} giá trị đơn hàng (trước VAT). Hiện đạt ${displayedPct}% — cần ${threshold.mustExceed ? 'vượt' : 'đạt'} mốc ${threshold.pct}%.`;
-  } else if (tier === 'drop_c45') {
+  } else if (dropsC45) {
     const risk = moneyAtRisk == null ? 'MẤT TRẮNG cột C45 (Lương tăng thêm; số tiền chưa đủ dữ liệu)' : `MẤT TRẮNG ${formatMoney(moneyAtRisk)} ở cột C45 (Lương tăng thêm)`;
-    text = `Bạn có thể ${risk} nếu không tăng thêm ${formatMoney(revenueGap)} giá trị đơn hàng (trước VAT) trong tháng này. Hiện đạt ${displayedPct}% target — cần vượt mốc 50%.`;
-  } else if (tier === 't50_70') {
-    const amount = moneyAtRisk == null ? 'Đang ở bậc trừ 0,3% tại C45 (số tiền chưa đủ dữ liệu).' : `Đang bị trừ 0,3% (${formatMoney(targetAmount)}) ở cột C45.`;
-    text = `${amount} Thêm ${formatMoney(revenueGap)} giá trị đơn hàng (trước VAT) là xuống còn 0,2%. Hiện đạt ${displayedPct}% target — cần đạt mốc 70%.`;
+    text = `Bạn có thể ${risk} nếu không tăng thêm ${formatMoney(revenueGap)} giá trị đơn hàng (trước VAT) trong tháng này. Hiện đạt ${displayedPct}% target — cần vượt mốc ${formatPct(threshold.pct)}%.`;
   } else {
-    const amount = moneyAtRisk == null ? 'Đang ở bậc trừ 0,2% tại C45 (số tiền chưa đủ dữ liệu).' : `Đang bị trừ 0,2% (${formatMoney(targetAmount)}) ở cột C45.`;
-    text = `${amount} Thêm ${formatMoney(revenueGap)} giá trị đơn hàng (trước VAT) là HẾT PHẠT và bắt đầu được thưởng. Hiện đạt ${displayedPct}% target — cần đạt mốc 90%.`;
+    const amount = moneyAtRisk == null ? `Đang ở bậc trừ ${rateLabel} tại C45 (số tiền chưa đủ dữ liệu).` : `Đang bị trừ ${rateLabel} (${formatMoney(targetAmount)}) ở cột C45.`;
+    const nextTier = normalized.penaltyTiers.find((item) => item.fromPct === threshold.pct);
+    const outcome = nextTier?.tier === 'none' ? 'HẾT PHẠT và bắt đầu được thưởng' : `chuyển sang mức ${formatPct(nextTier?.ratePct)}%`;
+    text = `${amount} Thêm ${formatMoney(revenueGap)} giá trị đơn hàng (trước VAT) là ${outcome}. Hiện đạt ${displayedPct}% target — cần đạt mốc ${formatPct(threshold.pct)}%.`;
   }
   return {
     kind: tier,
@@ -202,24 +232,34 @@ function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed =
     status = mode === 'warn_only' ? 'warn_only' : (closed ? 'final' : 'provisional');
   }
   const xuAmount = finite(xu?.amount);
-  const total = targetAmount == null ? null : Math.max(0, targetAmount + (xuAmount || 0));
-  const appliedAmount = mode === 'enforced' && total != null ? total : 0;
-  const afterPenaltyTotal = costTotal == null ? null : Math.max(0, Math.round(Number(costTotal)) - appliedAmount);
+  const xuComplete = !normalized.xuPenalty.enabled || xuAmount != null;
+  // Khi bật Xu nhưng nguồn/chốt quý chưa đủ, tổng phạt vẫn là unknown. Không
+  // được ngầm coi Xu=0; phần target đã biết chỉ xuất qua provisionalTotal.
+  const total = targetAmount == null || !xuComplete ? null : Math.max(0, targetAmount + (xuAmount || 0));
+  const provisionalTotal = targetAmount == null ? null : Math.max(0, targetAmount + (xuAmount || 0));
+  // Warn/off có số trừ chính xác bằng 0. Kỳ enforced mà tổng chưa biết phải
+  // giữ null xuyên suốt để không tạo số sau-phạt giả.
+  const appliedAmount = mode === 'enforced' ? total : 0;
+  const numericCostTotal = finite(costTotal);
+  const afterPenaltyTotal = numericCostTotal == null || appliedAmount == null
+    ? null
+    : Math.max(0, Math.round(numericCostTotal) - appliedAmount);
   const ratePct = tier?.ratePct ?? null;
   let formulaText = '';
   if (status === 'missing_target') formulaText = 'Chưa giao target — không có căn cứ phạt.';
   else if (status === 'c45_unavailable') formulaText = 'C45 chưa đủ dữ liệu — fail-closed, không phạt.';
   else if (status === 'unconfigured') formulaText = 'Chưa cấu hình đủ bậc phạt — không phạt.';
   else if (mode === 'off') formulaText = 'Chính sách phạt chưa áp dụng cho kỳ này.';
-  else if (tier?.tier === 'none') formulaText = `Đạt ${formatPct(pct)}% (từ 90% trở lên) — không phạt, tiếp tục công thức thưởng.`;
-  else if (c45WouldDrop) formulaText = `Chạy thử: đạt ${formatPct(pct)}% (bằng hoặc dưới 50%) → nếu áp dụng từ 01/08/2026 sẽ mất trắng C45 ${formatMoney(numericC45)}; tháng này chưa trừ tiền.`;
-  else if (c45Dropped) formulaText = `Đạt ${formatPct(pct)}% (bằng hoặc dưới 50%) → mất trắng C45 ${formatMoney(numericC45)}.`;
-  else formulaText = `Đạt ${formatPct(pct)}% → bậc ${tier.tier === 't70_90' ? '70–89%' : 'trên 50–dưới 70%'} → trừ ${formatPct(ratePct)}% × doanh thu ${formatMoney(numericAchieved)} = ${formatMoney(targetAmount)} (tối đa bằng C45 ${formatMoney(numericC45)})`;
+  else if (tier?.tier === 'none') formulaText = `Đạt ${formatPct(pct)}% (${tierRangeText(tier)}) — không phạt, tiếp tục công thức thưởng.`;
+  else if (c45WouldDrop) formulaText = `Chạy thử: đạt ${formatPct(pct)}% (${tierRangeText(tier)}) → nếu áp dụng từ ${formatDate(normalized.penaltyEffectiveFrom)} sẽ mất trắng C45 ${formatMoney(numericC45)}; tháng này chưa trừ tiền.`;
+  else if (c45Dropped) formulaText = `Đạt ${formatPct(pct)}% (${tierRangeText(tier)}) → mất trắng C45 ${formatMoney(numericC45)}.`;
+  else formulaText = `Đạt ${formatPct(pct)}% → bậc ${tierRangeText(tier)} → trừ ${formatPct(ratePct)}% × doanh thu ${formatMoney(numericAchieved)} = ${formatMoney(targetAmount)} (tối đa bằng C45 ${formatMoney(numericC45)})`;
   const warning = warningFor({
     period, mode, closed, target: numericTarget, achieved: numericAchieved, pct,
     tier: tier?.tier, c45Amount: numericC45, targetAmount, rawConfig: config,
   });
-  const label = mode === 'warn_only' ? WARN_ONLY_LABEL
+  const label = mode === 'warn_only'
+    ? `${uiPeriod(period)} CHỈ CẢNH BÁO — chưa trừ tiền. Từ ${formatDate(normalized.penaltyEffectiveFrom)} mới áp dụng trừ thật.`
     : `${closed ? 'ĐÃ CHỐT KỲ' : 'TẠM TÍNH'} — ${DISCLAIMER}`;
   return {
     mode,
@@ -238,6 +278,7 @@ function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed =
     xuStatus: xu?.status || (normalized.xuPenalty.enabled ? 'xu_source_unavailable' : 'disabled'),
     xuMissing: finite(xu?.missing),
     total,
+    provisionalTotal,
     appliedAmount,
     cappedByC45,
     provisional: status === 'provisional' || status === 'warn_only',
@@ -264,7 +305,23 @@ function distributeAdjustment(dailyTotals, amount) {
 
 function applyToCostPeriod(periodPayload, penalty) {
   if (!periodPayload || typeof periodPayload !== 'object') return periodPayload;
-  const applied = finite(penalty?.appliedAmount) || 0;
+  const applied = finite(penalty?.appliedAmount);
+  if (applied == null) {
+    return {
+      ...periodPayload,
+      summary: {
+        ...periodPayload.summary,
+        penaltyAppliedAmount: null,
+        afterPenaltyTotal: null,
+      },
+      daily: {
+        ...periodPayload.daily,
+        totals: periodPayload.daily?.reliable
+          ? (periodPayload.daily.totals || []).map((day) => ({ ...day, penaltyAmount: null, afterPenaltyTotal: null }))
+          : [],
+      },
+    };
+  }
   let dailyTotals = periodPayload.daily?.reliable ? distributeAdjustment(periodPayload.daily.totals, applied) : [];
   if (periodPayload.daily?.reliable && penalty?.c45Dropped && penalty?.mode === 'enforced') {
     const c45ByDate = new Map();

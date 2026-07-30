@@ -15,7 +15,7 @@ const BONUS_V3_EFFECTIVE_MONTH = '2026-07';
 // thoại sửa tay ghi v3.1 nên CEO không biết đang sửa bản nào (CEO chốt 29/07).
 // Quy tắc: SỬA CÁCH TÍNH THƯỞNG => nâng số hiệu này + cập nhật
 // config/bonus_formula_lock.json (test bonusFormulaVersion sẽ đỏ nếu quên).
-const FORMULA_VERSION = 'v3.3';
+const FORMULA_VERSION = 'v3.4';
 const UNCONFIGURED_MESSAGE = 'Chưa cấu hình mức thưởng';
 
 function finite(value) {
@@ -479,7 +479,7 @@ function aggregateBonusSummaries(reports = [], roster = []) {
     empCode: String(report.empCode || '').toUpperCase(),
     employeeName: names.get(String(report.empCode || '').toUpperCase()) || String(report.empCode || '').toUpperCase(),
     month: report.bonus.month, quarter: report.bonus.quarter,
-    // PHẠT v3.3 is calculated by the backend for each self-scoped report.
+    // PHẠT v3.4 is calculated by the backend for each self-scoped report.
     // Preserve that exact result for the CEO/admin ALL view; never rederive it
     // from the aggregate target/bonus values in the client.
     penalty: report.penalty && typeof report.penalty === 'object' ? { ...report.penalty } : null,

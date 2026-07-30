@@ -372,7 +372,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const low = rate != null && rate < threshold;
     return {
       empCode: 'ALL', period: periodKey, columns, rows,
-      // Only the report's selected/final month owns a PHẠT v3.3 summary.
+      // Only the report's selected/final month owns a PHẠT v3.4 summary.
       // Keeping the map in the merged backend payload lets filtered ALL
       // subtotals retain the server-calculated penalty without client math.
       employeePenalties: Object.fromEntries(blocks.flatMap(({ report }) => {

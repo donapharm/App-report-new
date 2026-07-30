@@ -6,7 +6,7 @@ const target = fs.readFileSync(new URL('../src/pages/Target.jsx', import.meta.ur
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
 
 test('Target admin exposes versioned Thưởng v3 editor, all layers and C10-only wording', () => {
-  assert.match(target, /BONUS_FORMULA_VERSION_FALLBACK = 'v3\.3'/);
+  assert.match(target, /BONUS_FORMULA_VERSION_FALLBACK = 'v3\.4'/);
   assert.match(target, /Cấu hình Thưởng \{bonusFv\}/);
   for (const layer of ['default', 'productGroup', 'route', 'unit', 'employee']) assert.match(target, new RegExp(`value="${layer}"`));
   for (const group of ['H.A\\*', 'H.A', 'H.B', 'H.C', 'H.D']) assert.match(target, new RegExp(`'${group}'`));

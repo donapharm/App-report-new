@@ -110,7 +110,8 @@ test('warning fail-closes missing target and omits unknown C45 money', () => {
   const out = build({ c45Amount: null });
   assert.equal(out.penaltyStatus, 'c45_unavailable');
   assert.equal(out.targetAmount, null);
-  assert.equal(out.appliedAmount, 0);
+  assert.equal(out.appliedAmount, null, 'enforced unknown must stay null, never become zero');
+  assert.equal(out.afterPenaltyTotal, null);
   assert.equal(out.warning.moneyAtRisk, null);
   assert.match(out.warning.text, /giá trị đơn hàng \(trước VAT\)/);
   assert.doesNotMatch(out.warning.text, /MẤT TRẮNG [\d.]+đ/);
@@ -133,6 +134,11 @@ test('period-derived schedule is deterministic and honors emergency off switch',
   assert.ok(july.warning);
   assert.match(july.label, /chưa trừ tiền/i);
   assert.match(july.label, /01\/08\/2026/);
+  const closedJuly = build({ period: '2026-07', achieved: 450_000_000, closed: true });
+  assert.equal(closedJuly.appliedAmount, 0);
+  assert.match(closedJuly.warning.text, /CHƯA TRỪ TIỀN/);
+  assert.match(closedJuly.warning.text, /Kỳ đã đóng/);
+  assert.doesNotMatch(closedJuly.warning.text, /không được tính vào chi phí tháng/);
   const august = build({ period: '2026-08', achieved: 450_000_000 });
   assert.equal(august.mode, 'enforced');
   assert.equal(august.c45Dropped, true);
@@ -231,6 +237,23 @@ test('ALL aggregation preserves C45-drop and Xu disabled/pending/unavailable sta
   ]);
   assert.equal(pending.xuStatus, 'quarter_pending');
   assert.equal(pending.xuAmount, null);
+
+  const xuPendingConfig = { ...config, xuPenalty: { enabled: true, perMissingXu: 300_000 } };
+  const pendingPenalty = build({
+    period: '2026-08', achieved: 780_000_000, costTotal: 20_000_000,
+    config: xuPendingConfig, xu: { amount: null, status: 'quarter_pending', missing: 2 },
+  });
+  assert.equal(pendingPenalty.total, null);
+  assert.ok(pendingPenalty.provisionalTotal > 0);
+  const pendingSubtotal = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: pendingPenalty, summary: { periodTotal: 20_000_000, afterPenaltyTotal: null } },
+  ]);
+  assert.equal(pendingSubtotal.total, null);
+  assert.equal(pendingSubtotal.provisionalTotal, pendingPenalty.provisionalTotal);
+  assert.equal(pendingSubtotal.provisionalContributors, 1);
+  assert.equal(pendingSubtotal.contributors, 0);
+  assert.equal(pendingSubtotal.appliedAmount, null);
+  assert.equal(pendingSubtotal.afterPenaltyTotal, null);
   const absent = penaltyAggregate.aggregatePenaltySummaries([
     { empCode: 'DN404', penalty: null, summary: { periodTotal: null, afterPenaltyTotal: null } },
   ]);

@@ -1,3 +1,10 @@
+### 2026-07-30 — Report Bot — Công thức Phạt v3.4 có version theo tháng/giai đoạn (chưa deploy)
+- Thêm store phạt riêng dạng full snapshot, effective-from/to, immutable version, audit append-only không cắt lịch sử, copy-forward phải khớp nguyên bản; kỳ lịch sử tự resolve đúng policy và file hỏng fail rõ `PENALTY_POLICY_STORE_CORRUPT`.
+- Luồng CEO-only: sửa → backend mô phỏng toàn đội → đúng 3 nút `✅ Duyệt / ❌ Không duyệt / 📝 Ý kiến khác` → save bằng preview ID 15 phút, khóa actor/session/revision/hash và chữ ký nguồn Xu SQLite/WAL; save xong xoá cache.
+- Cho cấu hình 3 mốc target, rate 3 bậc, mất C45 hoặc rate ở bậc đáy, lịch cảnh báo/trừ thật, bật/tắt và đơn giá Xu; backend giữ `null` khi enforced/Xu chưa đủ, warn-only luôn `appliedAmount=0` chính xác.
+- Nâng vân tay công thức từ v3.3 lên v3.4 vì evaluator chuyển từ mốc/date cứng sang policy động. P1/P2 không đổi.
+- Chỉ hoàn thiện trên branch/worktree riêng; chưa deploy/restart production.
+
 ### 2026-07-30 — Report Bot — Tổng phạt toàn đội do backend tính cho “Tất cả NV”
 - `GET /api/employee-cost?emp=ALL` trả top-level `penalty` tổng hợp trực tiếp từ kết quả phạt self-scoped từng nhân viên; không tính lại target/bậc/tỷ lệ và không cộng ở frontend.
 - Giữ fail-closed: tổng thiếu nguồn là `null`, subtotal biết được nằm ở trường `provisional*` kèm coverage; kỳ warn-only vẫn có `appliedAmount=0`, còn kỳ enforced thiếu số áp dụng giữ `null`.

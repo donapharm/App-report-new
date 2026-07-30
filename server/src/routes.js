@@ -28,6 +28,8 @@ const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
 const employeeBonus = require('./employeeBonus');
 const employeePenalty = require('./employeePenalty');
+const employeePenaltyAggregate = require('./employeePenaltyAggregate');
+const employeePenaltyPolicy = require('./employeePenaltyPolicy');
 const employeeBonusPolicy = require('./employeeBonusPolicy');
 const employeeVatKhoan = require('./employeeVatKhoan');
 const employeePointLocal = require('./employeePointLocal');
@@ -80,6 +82,12 @@ const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
   'from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route', 'date',
 ]);
 const bonusPolicyPreviews = new Map();
+const penaltyPolicyPreviews = new Map();
+const requireCeoPenaltyFormula = (req, res, next) => (
+  String(req.session?.emp_code || '').trim().toUpperCase() === 'CEO'
+    ? next()
+    : res.status(403).json({ error: 'Chỉ CEO được thay đổi công thức phạt.', code: 'PENALTY_POLICY_CEO_REQUIRED' })
+);
 const canonicalAssignmentSnapshots = new Map();
 const CANONICAL_ASSIGNMENT_TTL_MS = 15 * 60 * 1000;
 function canonicalAssignmentFetch(key) {
@@ -707,6 +715,9 @@ async function employeeCostPayload(req, {
   roster = employeeCostRosterRows(),
   sharedCatalogRowsByPeriod = null,
   bonusConfig = null,
+  penaltyConfig = null,
+  includePenaltyBaseline = false,
+  rangeOverride = null,
   suppressAudit = false,
 } = {}) {
   const s = auth.scopeOf(req.session);
@@ -733,7 +744,7 @@ async function employeeCostPayload(req, {
     empCode,
     roster,
   }, async () => {
-    const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+    const range = rangeOverride || employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
     const revenueRowsByPeriod = {};
     const catalogRowsByPeriod = sharedCatalogRowsByPeriod || {};
     // Doanh thu và catalog được lấy riêng đúng từng kỳ, luôn với scope backend.
@@ -808,29 +819,39 @@ async function employeeCostPayload(req, {
     const resolvedBonusConfig = bonusConfig || (empCode
       ? employeeBonusPolicy.resolve({ period: ky, context: { employee: empCode } }).config
       : employeeBonus.loadConfig());
+    const resolvedPenaltyPolicy = empCode ? employeePenaltyPolicy.resolve({ period: range.to }) : null;
+    const currentPenaltyConfig = resolvedPenaltyPolicy?.config || resolvedBonusConfig;
+    const activePenaltyConfig = penaltyConfig || currentPenaltyConfig;
     const bonus = employeeBonus.buildBonusSummary(bonusKpi, resolvedBonusConfig, bonusPriority);
     const costPeriod = (payload.periods || []).find((item) => item.period === range.to) || null;
     const closed = range.to < employeeCost.currentMonth();
     const monthEnd = `${range.to}-${new Date(Date.UTC(Number(range.to.slice(0, 4)), Number(range.to.slice(5, 7)), 0)).getUTCDate()}`;
     const today = new Date().toISOString().slice(0, 10);
     const asOf = closed ? monthEnd : (today.startsWith(range.to) ? today : `${range.to}-01`);
-    const xu = empCode ? employeePenalty.buildXuPenalty({
-      config: resolvedBonusConfig,
-      empCode,
-      asOf,
-      scoreFn: diemXu.scoreForEmp,
-      priorBookedAdjustment: null,
-    }) : null;
-    const penalty = empCode ? employeePenalty.buildPenalty({
-      period: range.to,
-      target: bonus.month?.target,
-      achieved: bonus.month?.achieved,
-      c45Amount: costPeriod?.summary?.columnTotals == null ? null : costPeriod.summary.columnTotals.c45,
-      costTotal: costPeriod?.summary?.monthlyTotal,
-      closed,
-      config: resolvedBonusConfig,
-      xu,
-    }) : null;
+    const buildPenaltyForConfig = (config) => {
+      if (!empCode) return null;
+      const xu = employeePenalty.buildXuPenalty({
+        config,
+        empCode,
+        asOf,
+        scoreFn: diemXu.scoreForEmp,
+        priorBookedAdjustment: null,
+      });
+      return employeePenalty.buildPenalty({
+        period: range.to,
+        target: bonus.month?.target,
+        achieved: bonus.month?.achieved,
+        c45Amount: costPeriod?.summary?.columnTotals == null ? null : costPeriod.summary.columnTotals.c45,
+        costTotal: costPeriod?.summary?.monthlyTotal,
+        closed,
+        config,
+        xu,
+      });
+    };
+    const penalty = buildPenaltyForConfig(activePenaltyConfig);
+    const penaltyBaseline = includePenaltyBaseline && penaltyConfig
+      ? buildPenaltyForConfig(currentPenaltyConfig)
+      : null;
     const periods = penalty ? (payload.periods || []).map((item) => (
       item.period === range.to ? employeePenalty.applyToCostPeriod(item, penalty) : item
     )) : payload.periods;
@@ -840,7 +861,7 @@ async function employeeCostPayload(req, {
       summary: penalty ? {
         ...payload.summary,
         penaltyAppliedAmount: penalty.appliedAmount,
-        afterPenaltyTotal: payload.summary?.periodTotal == null
+        afterPenaltyTotal: payload.summary?.periodTotal == null || penalty.appliedAmount == null
           ? null : Math.max(0, payload.summary.periodTotal - penalty.appliedAmount),
       } : payload.summary,
       target: empCode ? buildTargetKpiDetail({
@@ -852,6 +873,13 @@ async function employeeCostPayload(req, {
       }) : null,
       bonus,
       penalty,
+      ...(penaltyBaseline ? { penaltyBaseline } : {}),
+      penaltyPolicy: resolvedPenaltyPolicy ? {
+        formulaVersion: employeeBonus.FORMULA_VERSION,
+        engineVersion: resolvedPenaltyPolicy.engineVersion,
+        policyVersion: resolvedPenaltyPolicy.source?.version ?? 0,
+        ...resolvedPenaltyPolicy.source,
+      } : null,
     };
   });
 }
@@ -1077,6 +1105,8 @@ router.collectUnavailableEmployees = collectUnavailableEmployees;
 router.invalidateEmployeeCostAll = invalidateEmployeeCostAll;
 router.employeeCostAllKeyMatchesRange = employeeCostAllKeyMatchesRange;
 router.singleFlight = singleFlight;
+// Hook nội bộ cho HTTP integration test của preview một lần; không phải route API.
+router.penaltyPolicyPreviews = penaltyPolicyPreviews;
 
 // revenueRefresh invokes listeners in a detached task after a successful
 // materialize, so this Promise cannot delay or roll back the source refresh.
@@ -3682,6 +3712,134 @@ router.post('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, 
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ...result, saved: true, audit: employeeBonusPolicy.audit().slice(0, 20) });
 });
+
+async function penaltyPolicyImpactPreview(req, policyPreview) {
+  const period = policyPreview.candidate.previewPeriod;
+  const range = employeeCost.parseMonthRange({ from: period, to: period });
+  const roster = employeeCostRosterRows();
+  const sharedCatalogRowsByPeriod = {};
+  try {
+    const snapshot = await canonicalAssignmentSnapshot(period);
+    sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
+  } catch (error) {
+    sharedCatalogRowsByPeriod[period] = [];
+    console.warn('[penalty-policy] preview catalog unavailable', { period, message: error.message });
+  }
+  const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
+    requestedEmp: employee.emp_code,
+    auditEvent: 'penalty_policy_preview',
+    roster,
+    sharedCatalogRowsByPeriod,
+    penaltyConfig: policyPreview.resolved.config,
+    includePenaltyBaseline: true,
+    rangeOverride: range,
+    suppressAudit: true,
+  }));
+  const currentReports = reports.map((report) => {
+    const baseline = report.penaltyBaseline || null;
+    const baseTotal = report.summary?.periodTotal;
+    return {
+      ...report,
+      penalty: baseline,
+      summary: {
+        ...report.summary,
+        penaltyAppliedAmount: baseline?.appliedAmount ?? null,
+        afterPenaltyTotal: baseTotal == null || baseline?.appliedAmount == null
+          ? null : Math.max(0, baseTotal - baseline.appliedAmount),
+      },
+    };
+  });
+  const current = employeePenaltyAggregate.aggregatePenaltySummaries(currentReports);
+  const candidate = employeePenaltyAggregate.aggregatePenaltySummaries(reports);
+  const rows = reports.map((report) => {
+    const before = report.penaltyBaseline || {};
+    const after = report.penalty || {};
+    const beforeTotal = Number.isFinite(Number(before.total)) && before.total != null ? Number(before.total) : null;
+    const afterTotal = Number.isFinite(Number(after.total)) && after.total != null ? Number(after.total) : null;
+    const changed = beforeTotal !== afterTotal || before.appliedAmount !== after.appliedAmount
+      || before.targetAmount !== after.targetAmount || before.mode !== after.mode || before.tier !== after.tier
+      || before.ratePct !== after.ratePct || before.c45Dropped !== after.c45Dropped
+      || before.c45WouldDrop !== after.c45WouldDrop || before.xuStatus !== after.xuStatus
+      || before.effectiveFrom !== after.effectiveFrom;
+    return {
+      empCode: report.empCode,
+      employeeName: report.employeeName,
+      changed,
+      before: { mode: before.mode || '', tier: before.tier || '', ratePct: before.ratePct ?? null, total: beforeTotal, appliedAmount: before.appliedAmount ?? null },
+      after: { mode: after.mode || '', tier: after.tier || '', ratePct: after.ratePct ?? null, total: afterTotal, appliedAmount: after.appliedAmount ?? null },
+      difference: beforeTotal == null || afterTotal == null ? null : afterTotal - beforeTotal,
+    };
+  }).sort((left, right) => Number(right.changed) - Number(left.changed) || String(left.empCode).localeCompare(String(right.empCode)));
+  return {
+    period,
+    employeeCount: rows.length,
+    affectedEmployeeCount: rows.filter((row) => row.changed).length,
+    unavailableEmployeeCount: rows.filter((row) => row.after.total == null).length,
+    current,
+    candidate,
+    rows,
+  };
+}
+
+router.get('/admin/penalty-policies', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const period = req.query.period || req.query.ky || store.latestKy();
+  res.set('Cache-Control', 'private, no-store');
+  res.json({
+    period: employeePenaltyPolicy.monthKey(period),
+    formulaVersion: employeeBonus.FORMULA_VERSION,
+    engineVersion: employeePenaltyPolicy.ENGINE_VERSION,
+    minEffectiveMonth: [employeePenaltyPolicy.MIN_EFFECTIVE_MONTH, employeeCost.currentMonth()].sort().at(-1),
+    revision: employeePenaltyPolicy.revision(),
+    canEdit: String(req.session?.emp_code || '').trim().toUpperCase() === 'CEO',
+    policies: employeePenaltyPolicy.list(),
+    audit: employeePenaltyPolicy.audit().slice(0, 100),
+    resolved: employeePenaltyPolicy.resolve({ period }),
+  });
+});
+
+router.post('/admin/penalty-policies/preview', auth.requireAuth, auth.requireAdmin, requireCeoPenaltyFormula, asyncJsonRoute(async (req, res) => {
+  const actor = String(req.session.emp_code || '').trim().toUpperCase();
+  const sessionKey = String(req.session.th || actor);
+  const policyPreview = employeePenaltyPolicy.preview(req.body, actor);
+  const impact = await penaltyPolicyImpactPreview(req, policyPreview);
+  const previewId = crypto.randomBytes(18).toString('base64url');
+  penaltyPolicyPreviews.set(previewId, {
+    at: Date.now(), actor, sessionKey,
+    candidate: policyPreview.candidate,
+    revision: policyPreview.revision,
+    previewHash: policyPreview.previewHash,
+    dataSignature: store.employeeCostDataSignature(),
+  });
+  for (const [id, item] of penaltyPolicyPreviews) if (Date.now() - item.at > 15 * 60 * 1000) penaltyPolicyPreviews.delete(id);
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({
+    previewId, expiresInSeconds: 900, candidate: policyPreview.candidate,
+    before: policyPreview.before, resolved: policyPreview.resolved,
+    previewHash: policyPreview.previewHash, revision: policyPreview.revision,
+    impact, saved: false,
+  });
+}));
+
+router.post('/admin/penalty-policies', auth.requireAuth, auth.requireAdmin, requireCeoPenaltyFormula, asyncJsonRoute(async (req, res) => {
+  const previewId = String(req.body.previewId || '').trim();
+  const preview = penaltyPolicyPreviews.get(previewId);
+  const actor = String(req.session.emp_code || '').trim().toUpperCase();
+  const sessionKey = String(req.session.th || actor);
+  if (!preview || Date.now() - preview.at > 15 * 60 * 1000
+    || preview.actor !== actor || preview.sessionKey !== sessionKey) {
+    penaltyPolicyPreviews.delete(previewId);
+    return res.status(409).json({ error: 'Preview đã hết hạn hoặc không thuộc phiên CEO hiện tại. Vui lòng mô phỏng lại trước khi lưu.', code: 'PENALTY_POLICY_PREVIEW_REQUIRED' });
+  }
+  if (preview.dataSignature !== store.employeeCostDataSignature()) {
+    penaltyPolicyPreviews.delete(previewId);
+    return res.status(409).json({ error: 'Dữ liệu target/doanh thu/chi phí đã thay đổi sau khi mô phỏng. Vui lòng mô phỏng lại.', code: 'PENALTY_POLICY_PREVIEW_DATA_CHANGED' });
+  }
+  penaltyPolicyPreviews.delete(previewId);
+  const result = employeePenaltyPolicy.savePreview(preview, actor);
+  clearTargetDependentCache();
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ...result, saved: true, audit: employeePenaltyPolicy.audit().slice(0, 20) });
+}));
 
 router.get('/admin/targets/template.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   const ky = String(req.query.ky || store.latestKy()).trim();

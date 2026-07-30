@@ -58,7 +58,7 @@ test('ALL penalty view model preserves backend aggregate coverage and provisiona
   assert.equal(model.penalty.complete, false);
 });
 
-test('employee penalty UI has exactly the four v3.3 KPI labels and fail-closed total gate', () => {
+test('employee penalty UI has exactly the four v3.4 KPI labels and fail-closed total gate', () => {
   for (const label of [
     'Phạt dự kiến',
     'Tổng chi phí tháng sau phạt',

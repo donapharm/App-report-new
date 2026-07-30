@@ -1,12 +1,14 @@
 {
-  "version": "v3.3",
-  "sourceHash": "8c98a71ac2f42c9b1d00a0ec1a19e35c875aca852d2ee6eae22fbf9490b2348c",
+  "version": "v3.4",
+  "sourceHash": "8a9d086bcffbfd1e9d0a931ed068c7a82c3fa8447f3af8499069672c20354713",
   "lockedAt": "2026-07-29",
   "lockedBy": "CEO",
   "sources": [
     "src/employeeBonus.js",
     "src/employeeBonusPolicy.js",
     "src/employeePenalty.js",
+    "src/employeePenaltyAggregate.js",
+    "src/employeePenaltyPolicy.js",
     "src/xuPolicy.js",
     "config/employee_bonus_tiers.json (base, baseTiers, priorityThresholdPct, priorityRates, autoGroupTargets, totalCapPct, penaltyTiers, penaltyEffectiveFrom, penaltyWarnFrom, penaltyEnabled, xuPenalty)"
   ],

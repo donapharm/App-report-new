@@ -33,6 +33,11 @@ function aggregatePenaltySummaries(reports = []) {
   const aggregateField = (key) => aggregateValues(items.map((item) => finite(item.penalty?.[key])));
   const target = aggregateField('targetAmount');
   const total = aggregateField('total');
+  // Khi Xu chưa chốt, penalty.total phải null nhưng phần target/C45 đã biết vẫn
+  // nằm ở penalty.provisionalTotal. Chỉ đưa phần này ra field provisional rõ
+  // ràng; không nâng nó thành total/applied chính thức.
+  const provisionalTotals = items.map((item) => finite(item.penalty?.total) ?? finite(item.penalty?.provisionalTotal));
+  const provisionalKnown = provisionalTotals.filter((value) => value != null);
   // buildPenalty intentionally returns appliedAmount=0 in warn-only periods even
   // when a potential amount is unavailable: zero is final because nothing may be
   // deducted in that mode. In enforced mode, however, total=null means the applied
@@ -109,7 +114,8 @@ function aggregatePenaltySummaries(reports = []) {
     xuEmployeeCount: xuRows.length,
     xuContributors: xuKnown.length,
     total: total.value,
-    provisionalTotal: total.provisional,
+    provisionalTotal: provisionalKnown.reduce((sum, value) => sum + value, 0),
+    provisionalContributors: provisionalKnown.length,
     appliedAmount: applied.value,
     provisionalAppliedAmount: applied.provisional,
     appliedContributors: applied.contributors,

@@ -343,11 +343,21 @@ function catalogLkgSignature(filePath) {
   return sig;
 }
 function employeeCostDataSignature() {
+  const vatDb = process.env.VAT_DB_PATH || '/home/osboxes/.openclaw/workspace-main/webapp_donapharm/data/vat.db';
   return [
     targetDataSignature(),
+    // Xu đọc từ SQLite VAT. Ký cả WAL/journal vì giao dịch mới có thể chưa
+    // checkpoint vào file .db; preview phải hết hiệu lực nếu Xu đổi trước save.
+    fileSignature(vatDb, 'vat-db-xu'),
+    fileSignature(`${vatDb}-wal`, 'vat-db-xu-wal'),
+    fileSignature(`${vatDb}-journal`, 'vat-db-xu-journal'),
     fileSignature(
       process.env.EMPLOYEE_BONUS_POLICY_FILE || path.join(DATA_DIR, 'employee_bonus_policies.json'),
       'employee-bonus-policies',
+    ),
+    fileSignature(
+      process.env.EMPLOYEE_PENALTY_POLICY_FILE || path.join(DATA_DIR, 'employee_penalty_policies.json'),
+      'employee-penalty-policies',
     ),
     // Ký catalog LKG theo nội dung (version+checksum) thay vì mtime — xem catalogLkgSignature.
     catalogLkgSignature(process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json')),

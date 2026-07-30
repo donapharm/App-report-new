@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "version": "bonus-v3.3-penalty-c45-2026-08-r1",
+  "version": "bonus-v3.4-penalty-policy-2026-07-r1",
   "effectiveFrom": "2026-07-01",
   "base": "revenue_before_vat",
   "currency": "VND",
@@ -48,7 +48,7 @@
   },
   "autoGroupTargets": true,
   "totalCapPct": null,
-  "note": "Thưởng/phạt dự kiến v3.3: giữ nguyên P1/P2 v3.2; phạt target là trường riêng, trừ tại C45 theo bậc, T07.2026 chỉ cảnh báo và tự áp dụng từ 01/08/2026. Phạt thiếu Xu mặc định tắt. Dự kiến/tham khảo, không payroll.",
+  "note": "Thưởng/phạt dự kiến v3.4: giữ nguyên P1/P2; engine phạt hỗ trợ policy CEO version hóa theo tháng/giai đoạn, seed vẫn giữ bậc 50/70/90, T07.2026 cảnh báo và từ 01/08/2026 trừ thật. Phạt thiếu Xu seed mặc định tắt. Dự kiến/tham khảo, không payroll.",
   "penaltyTiers": [
     {
       "tier": "drop_c45",
