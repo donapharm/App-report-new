@@ -85,3 +85,26 @@ Nếu muốn chứng minh chặn hồi tố: gọi preview với `penaltyEffecti
 
 ## 7. Nếu có sự cố
 Rollback về `5c119a5` (bản production hiện tại) theo đúng quy trình ở `DIRECTIVE_DEPLOY_RELEASE_SAFETY.md`, rồi báo lại kèm log lỗi. Ghi 1 mục `CHANGELOG.md` cho cả deploy và rollback.
+
+---
+
+## 9. TRẢ LỜI 8 PHÁT HIỆN REVIEW (Claude soát trên `main`, 30/07)
+
+Phân loại theo **áp cho bản nào**, để khi chốt đường không xử lý trùng và không bỏ sót.
+
+| # | Phát hiện | Áp cho | Trạng thái trên `main` |
+|---|---|---|---|
+| 1 | Blocker: vân tay công thức không khớp | cây của bot | **Không xảy ra trên `main`**: `bonusFormulaVersion` XANH 7/7 (`v3.4` · `b598f1c5…`). Nguyên nhân là cây bot chưa pull `main`. Xem mục DỪNG (3). |
+| 2 | High: preview dùng dữ liệu Xu từ `vat.db` nhưng chữ ký nguồn không ký | **bản của bot** | Không áp cho `main`: preview phạt của `main` **không đọc Xu** — chỉ trả bảng bậc + chế độ kỳ. `diemXu` chỉ dùng ở màn chi phí (chỗ `buildXuPenalty`), không nằm trong đường preview/save cấu hình. Bản nào hiển thị số Xu trong preview thì **phải** ký nguồn đó. |
+| 3 | Medium: audit bị cắt còn 2.000 bản ghi | **CẢ HAI** | `employeeBonusPolicy.js` cũng cắt 2.000 (`slice(0, 2000)`). **Chưa sửa, có chủ ý**: file này nằm trong vân tay công thức nên sửa là buộc nâng version lần hai trong ngày cho một việc **không đổi cách tính tiền** — sai tín hiệu với CEO. **Phải sửa một lần duy nhất trong module được giữ, ngay sau khi chốt đường**: ghi lịch sử đầy đủ dạng append-only (JSONL), mảng JSON 2.000 bản chỉ để hiển thị. |
+| 4 | Medium: `copiedFromVersion` không xác minh tham số | **bản của bot** | `main` không có tính năng copy-forward. Nếu giữ bản bot: phải so **từng tham số** với version nguồn, lệch thì từ chối hoặc **không** ghi là copy-forward. |
+| 5 | Thiếu test HTTP thật (GET/preview/save · quyền CEO · session binding · preview một lần) | **CẢ HAI** | **ĐÃ LÀM trên `main`** (`b71f3f1`): `server/test/penaltyPolicyHttp.test.js` — 8 ca, gọi thật qua HTTP với middleware quyền thật. Đồng thời **siết session binding**: preview buộc theo **phiên** (`session.th`), không chỉ theo mã người dùng — phiên khác của cùng CEO cũng không lưu được; và lần gọi sai của người lạ **không "đốt" được** preview hợp lệ của CEO. |
+| 6 | Thiếu test: `vat.db` đổi giữa preview/save phải làm preview hết hiệu lực | **bản của bot** | Không áp cho `main` (preview không đọc Xu). Giữ bản bot thì bắt buộc có test này. |
+| 7 | Thiếu test: lỗi ghi audit/rollback hai file + chính sách lưu giữ > 2.000 | **CẢ HAI** | Làm cùng lúc với #3, trong module được giữ. |
+| 8 | Thiếu test: gửi `copiedFromVersion` nhưng sửa tham số phải bị từ chối | **bản của bot** | Đi cùng #4. |
+
+**Việc còn lại trước khi deploy (theo đúng thứ tự):**
+1. Bot **push** `59dc9d3` (mục DỪNG (1)).
+2. CEO chốt giữ **một** đường cấu hình phạt.
+3. Trong module được giữ: xử lý #3 + #7, và nếu giữ bản bot thì thêm #2, #4, #6, #8.
+4. Chạy **full** suite hai bên xanh về mức nền → deploy theo §3–§6.

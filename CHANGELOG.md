@@ -1,3 +1,18 @@
+### 2026-07-30 — Claude Code — Trả lời review: test HTTP thật cho cấu hình phạt + siết session binding
+> Review báo 8 điểm (1 blocker, 1 high, 2 medium, 4 thiếu test) trên commit `59dc9d3` của bot — commit này **chưa push** nên Claude không đọc được mã; đã soát 8 điểm đó **trên `main`** và phân loại theo từng bản (bảng đầy đủ ở §9 của `DIRECTIVE_DEPLOY_V34_20260730.md`).
+
+**Đã sửa trên `main`** (`b71f3f1`):
+- **Thêm test HTTP thật** `server/test/penaltyPolicyHttp.test.js` (8/8 xanh): gọi 3 route qua HTTP với middleware quyền thật — không token **401**, NV sale **403**, CEO 200 · preview **không ghi gì** · `previewId` **dùng một lần** (lần hai 409) · preview của **người khác/phiên khác** không lưu được · lưu xong `GET` trả **ngay** bậc mới (đã xoá cache) · HTTP cũng chặn **hồi tố** và **bậc có khe hở** · mỗi lần lưu là một version riêng, audit giữ cả cấu hình trước và sau. Review đúng: bộ test route cũ chỉ đọc mã bằng regex — chứng minh "mã có viết đúng câu", không chứng minh "gọi thật thì chặn thật".
+- **Siết session binding**: preview cấu hình phạt buộc theo **phiên** (`session.th`), không chỉ theo mã người dùng — **phiên khác của chính CEO cũng không lưu được**. Kèm một lỗ nhỏ tự phát hiện khi viết test: bản cũ xoá preview ngay khi có lần gọi sai, nghĩa là **một phiên lạ chỉ cần gọi sai một lần là "đốt" bản mô phỏng hợp lệ của CEO**; nay chỉ chủ đúng phiên mới xoá được.
+
+**Cố ý CHƯA sửa (đã ghi vào directive):** audit cắt còn 2.000 bản ghi — `employeeBonusPolicy.js` cũng bị (`slice(0, 2000)`), nhưng file này **nằm trong vân tay công thức**, sửa là buộc **nâng version lần hai trong ngày** cho một việc **không đổi cách tính tiền** ⇒ sai tín hiệu với CEO. Phải sửa **một lần duy nhất** trong module được giữ sau khi chốt đường, kèm test lưu giữ > 2.000 và test rollback hai file.
+
+**Không áp cho `main`:** chữ ký nguồn Xu (`vat.db`) và copy-forward — preview phạt của `main` **không đọc Xu** (chỉ trả bảng bậc + chế độ kỳ), và `main` không có tính năng copy-forward. Hai việc này chỉ cần nếu giữ bản của bot.
+
+**Blocker vân tay không tái hiện trên `main`:** `bonusFormulaVersion` XANH 7/7 với `v3.4` + `sourceHash b598f1c5…` — cây của bot chưa pull `main`.
+
+**Test:** server **525/534** (9 đỏ đúng mức nền container) · lock + policy 16/16 · web **87/87** · build PASS.
+
 ### 2026-07-30 — Claude Code — ĐÃ GỘP VÀO `main` + directive deploy v3.4 cho bot
 > CEO: "CEO đồng ý cho em làm luôn nhe"
 
