@@ -3747,6 +3747,10 @@ router.post('/admin/penalty-policies/preview', auth.requireAuth, auth.requireAdm
   const actor = String(req.session.emp_code || req.session.name || 'ADMIN');
   penaltyPolicyPreviews.set(previewId, {
     at: Date.now(), actor,
+    // Buộc theo ĐÚNG PHIÊN đã mô phỏng, không chỉ theo mã người dùng: token khác
+    // (máy khác, phiên cũ) không lưu được bản preview này. Review 30/07 chỉ ra
+    // trước đây chỉ so mã actor nên hai phiên cùng một người dùng lẫn của nhau.
+    sessionHash: req.session?.th || '',
     candidate: policyPreview.candidate,
     revision: policyPreview.revision,
     previewHash: policyPreview.previewHash,
@@ -3768,8 +3772,11 @@ router.post('/admin/penalty-policies', auth.requireAuth, auth.requireAdmin, (req
   const previewId = String(req.body.previewId || '').trim();
   const preview = penaltyPolicyPreviews.get(previewId);
   const actor = String(req.session.emp_code || req.session.name || 'ADMIN');
-  if (!preview || Date.now() - preview.at > 15 * 60 * 1000 || preview.actor !== actor) {
-    penaltyPolicyPreviews.delete(previewId);
+  const sameSession = !!preview?.sessionHash && preview.sessionHash === (req.session?.th || '');
+  if (!preview || Date.now() - preview.at > 15 * 60 * 1000 || preview.actor !== actor || !sameSession) {
+    // Không xoá preview của người khác: nếu xoá, một phiên lạ chỉ cần gọi sai một
+    // lần là "đốt" bản mô phỏng hợp lệ của CEO (biến thành cách phá hoại rẻ tiền).
+    if (preview && preview.actor === actor && sameSession) penaltyPolicyPreviews.delete(previewId);
     return res.status(409).json({ error: 'Preview đã hết hạn hoặc không thuộc phiên hiện tại. Vui lòng mô phỏng lại trước khi lưu.', code: 'PENALTY_POLICY_PREVIEW_REQUIRED' });
   }
   penaltyPolicyPreviews.delete(previewId);
