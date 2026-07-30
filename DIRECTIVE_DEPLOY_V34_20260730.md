@@ -32,13 +32,14 @@ Bot báo đỏ vì cây của bot **chưa có** bản v3.4 trên `main` (hoặc 
 ---
 
 ## 0. Mục tiêu
-Production đang chạy `5c119a5` — **cũ 4 commit**. CEO mở app thật nên **chưa thấy**:
+Production đang chạy bản **cũ hơn `main`** (bot báo `17d8272`; trước đó ghi nhận `5c119a5` — lấy SHA thật tại cây production, xem mục DỪNG (4)). CEO mở app thật nên **chưa thấy**:
 - panel "⚠ Cách tính Phạt" trong Quản target (và giờ **sửa được**),
 - 4 ô KPI ở chế độ "Tất cả nhân viên" (tổng hợp toàn đội),
 - nhãn "C45 (Lương tăng thêm)" + bảng "Khi nào bị phạt? (4 ngữ cảnh)".
 
-**Commit phải deploy: `d92807f` (đầu `main` lúc viết directive này).**
-Trước khi build, in ra `git rev-parse HEAD` và **đối chiếu đúng `d92807f`**. Nếu `main` đã có commit mới hơn thì deploy đầu `main` và **ghi rõ SHA thật đã deploy** — tuyệt đối không deploy SHA cũ hơn.
+**Deploy ĐẦU `main`, không deploy SHA cũ hơn.** Đầu `main` khi viết mục này là `9c93cea` (gồm `beb4ce7` + `d92807f` + `b71f3f1`).
+Trước khi build, in `git rev-parse HEAD` và **dán vào báo cáo**. `main` có commit mới hơn thì deploy commit mới nhất.
+**Nhưng chỉ deploy sau khi xong 4 việc ở mục DỪNG.**
 
 ## 1. Nội dung bản này (để biết cần nghiệm thu gì)
 - `beb4ce7` — nhãn C45 + bảng 4 ngữ cảnh phạt; 4 ô KPI tổng hợp toàn đội ở "Tất cả NV".
@@ -58,7 +59,7 @@ Chạy **TOÀN BỘ** suite, không chạy chọn lọc:
 cd server && node --test "test/*.test.js"
 cd web    && node --test "test/*.test.mjs"
 ```
-Mức nền trên container của Claude: server **517/526** (9 đỏ = 3 fixture `authTrustedDevice` thiếu `phone` + 6 test PDF thiếu `pdfinfo`), web **87/87**.
+Mức nền trên container của Claude (cập nhật sau khi thêm test HTTP): server **525/534** (9 đỏ = 3 fixture `authTrustedDevice` thiếu `phone`/`users.json` + 6 test PDF thiếu `pdfinfo`), web **87/87**.
 Trên server thật nếu có `pdfinfo` thì **6 ca PDF phải XANH**. Đỏ khác mức nền ⇒ **DỪNG**, báo lại, không deploy.
 Test `server/test/bonusFormulaVersion.test.js` phải **XANH** — nếu đỏ nghĩa là version/vân tay lệch, dừng ngay.
 
@@ -84,7 +85,7 @@ Chỉ bấm **Mô phỏng** rồi **Đóng** (không bấm Lưu) để xác nh�
 Nếu muốn chứng minh chặn hồi tố: gọi preview với `penaltyEffectiveFrom` = `2026-06-01` và dán lại đúng thông báo lỗi `Không được áp phạt hồi tố…`. Preview **không ghi gì**, an toàn.
 
 ## 7. Nếu có sự cố
-Rollback về `5c119a5` (bản production hiện tại) theo đúng quy trình ở `DIRECTIVE_DEPLOY_RELEASE_SAFETY.md`, rồi báo lại kèm log lỗi. Ghi 1 mục `CHANGELOG.md` cho cả deploy và rollback.
+Rollback về đúng SHA production đã ghi nhận TRƯỚC khi deploy (in `git rev-parse HEAD` và lưu lại trước khi làm gì) theo đúng quy trình ở `DIRECTIVE_DEPLOY_RELEASE_SAFETY.md`, rồi báo lại kèm log lỗi. Ghi 1 mục `CHANGELOG.md` cho cả deploy và rollback.
 
 ---
 
