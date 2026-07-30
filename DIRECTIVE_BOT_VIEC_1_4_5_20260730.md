@@ -28,7 +28,7 @@ Hoặc gọi API: `POST /api/employee-cost/visibility` với `{"department":"on"
 
 `PENALTY_NOTIFY` hiện chỉ là **cái cờ trống**: `src/penaltyNotifyPolicy.js` có hàm `enabled()` nhưng **chưa có nội dung tin phạt nào được viết**. Bật cờ bây giờ thì **không tin nào đi**, và tệ hơn là mọi người tưởng đã bật xong.
 
-**Điều kiện bật:** trên `main` phải có module dựng tin phạt + test của nó (Claude đang viết, sẽ push kèm ghi chú trong `CHANGELOG.md`).
+**✅ CẬP NHẬT 30/07 trưa: ĐIỀU KIỆN ĐÃ ĐỦ.** `server/src/penaltyNotify.js` + `server/test/penaltyNotify.test.js` (7 ca) đã có trên `main`. Vẫn phải tự chạy test để chứng minh, đừng tin văn bản này.
 
 **Kiểm điều kiện trước khi bật:**
 ```

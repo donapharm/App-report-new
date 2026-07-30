@@ -1,3 +1,27 @@
+### 2026-07-30 — Claude Code (CEO chốt) — TIN NHẮN PHẠT cho NV (việc 4) + ĐƠN TRÊN 50 TRIỆU nhắn chủ động (việc 5.2)
+> CEO: "Việc số 4 đồng ý duyệt tin nhắn phạt để nv nhận được." · "tất cả các đơn, với những đơn giá trị cao trên 50 triệu thì chủ động nhắn tin telegram cho nhân viên có đơn đó, cho vp018, cho ceo nắm rõ."
+
+**VIỆC 4 — `src/penaltyNotify.js`** (7 ca test). T08 là tháng **trừ tiền thật**; DN018 chỉ còn cách mốc mất trắng C45 **3.550.175đ** — không nhắc thì NV mất tiền vì không biết.
+- **Luôn có ĐƯỜNG THOÁT:** mỗi tin nêu **cần thêm bao nhiêu doanh thu trước VAT** để thoát bậc, lấy từ cảnh báo sớm backend đã tính. Tin chỉ báo mất tiền mà không nói cách thoát là tin vô ích.
+- Nêu đủ: **% đạt · số tiền · TÊN CỘT "C45 (Lương tăng thêm)" · mốc phải chạm/vượt**.
+- **Kỳ chạy thử phải nói CHƯA TRỪ TIỀN** — tiêu đề là *"CẢNH BÁO PHẠT (chưa trừ tiền)"*, câu *"Nếu áp dụng, bạn sẽ…"*. Test khoá: kỳ chạy thử không được dùng câu khẳng định đã phạt.
+- **KHÔNG có việc gì thì KHÔNG GỬI:** đạt ≥ mốc không phạt · chính sách chưa áp dụng · **chưa giao target** · **C45 chưa về** ⇒ trả `null`. Nhắc tiền khi chưa có số là hứa một con số mình không có.
+- **Khoá chống trùng theo kỳ + BẬC:** tụt bậc là tin **mới** (số tiền và đường thoát đã khác); cùng bậc thì không nhắc lại.
+- **Không tự tính lại một đồng nào** — test khoá: module dựng chữ không được có phép tính tiền, không được gọi engine phạt.
+
+**VIỆC 5.2 — `src/highValueOrderAlert.js` + `config/high_value_order_alert.json`** (6 ca test).
+- **Ngưỡng 50 triệu nằm ở CONFIG**, test khoá: cấm ghi cứng số trong code.
+- Người nhận: **NV có đơn + VP018 + CEO**. **KHÔNG lọc qua optout** — VP018 nằm trong optout nhưng chính là người theo đơn (cùng lý do như cảnh báo đồng bộ).
+- Mỗi đơn nhắn **một lần**; đơn đổi tiền **đáng kể** (khác bậc triệu) mới là tin mới, lệch vài nghìn thì không nhắc lại.
+- **Thiếu mã đơn hoặc thiếu tiền ⇒ KHÔNG nhắn nhưng đếm ra**, không báo sai.
+- **Config hỏng ⇒ fail-closed, nêu lý do**, không âm thầm dùng ngưỡng mặc định.
+
+**Một lỗi tự bắt:** `markState` ban đầu có biểu thức rác `Array.isArray(orders) ? raw ? orders : orders : orders` — chạy đúng do may, đọc thì vô nghĩa. Đã sửa.
+
+**Test:** server **571/580** (9 đỏ đúng mức nền) · thêm 13 ca (7 + 6).
+
+**Còn lại của việc 4 và 5.2:** nối nguồn và bật cờ trên server — bot làm theo `DIRECTIVE_BOT_VIEC_1_4_5_20260730.md`. Điều kiện bật `PENALTY_NOTIFY` (có `src/penaltyNotify.js` + test xanh) nay **đã đủ**.
+
 ### 2026-07-30 — Claude Code (CEO chốt) — CHẶN ĐẾM TRÙNG ĐƠN GIỮA CÁC KỲ (việc 3) + yêu cầu cho bot (việc 1/4/5)
 > CEO: "phải có cơ chế chặn trùng đơn, tránh một đơn tính cho cả 2 tháng (như tính T06 rồi T07 tính nữa / tính T07 rồi T08 tính lại nữa)."
 

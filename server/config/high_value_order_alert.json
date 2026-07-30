@@ -1,0 +1,8 @@
+{
+  "note": "Đơn giá trị cao thì chủ động nhắn Telegram cho NV có đơn đó + VP018 + CEO (CEO chốt 2026-07-30, việc 5.2). Đây là kênh CẢNH BÁO VẬN HÀNH — KHÔNG lọc qua notify_optout.json / targetNotify.isMuted / diemXu.EXCLUDE, vì VP018 nằm trong optout nhưng chính là người theo đơn.",
+  "thresholdAmount": 50000000,
+  "thresholdNote": "CEO chốt: mọi đơn đều áp quy tắc chung; đơn TRÊN 50 triệu (trước VAT) thì nhắn chủ động.",
+  "alwaysNotify": ["VP018", "CEO"],
+  "notifyOrderOwner": true,
+  "ownerNote": "NV có đơn đó luôn được nhắn, lấy từ emp_code của đơn — không cần khai trước."
+}
