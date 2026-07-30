@@ -2,6 +2,35 @@
 
 **Bot đọc file này SAU khi `git pull origin main`.** Chỉ deploy đúng commit ghi dưới đây.
 
+---
+
+## ‼ TẠM DỪNG DEPLOY — ĐỌC MỤC NÀY TRƯỚC (cập nhật 30/07, sau báo cáo commit `59dc9d3`)
+
+**1) VIỆC CẦN LÀM NGAY — CỨU CODE CỦA BOT TRƯỚC KHI PULL.**
+Commit `59dc9d3e140610cd7cfbf16dc6e50c140f7865f4` **CHƯA được push** — trên repo không có commit này, Claude không đọc được để review.
+Directive này (và mọi quy trình cũ) có bước `git pull` / `git reset --hard origin/main`. **Chạy bước đó bây giờ là XOÁ MẤT commit `59dc9d3`.**
+
+Việc đầu tiên, trước mọi việc khác:
+```
+git push -u origin <nhánh-đang-làm>      # đẩy đúng commit 59dc9d3 lên, KHÔNG reset, KHÔNG rebase
+git log --oneline -1                      # dán lại SHA để đối chiếu
+```
+
+**2) DỪNG deploy cả hai bản cho tới khi chốt MỘT đường.**
+Hiện có **HAI bản cấu hình phạt** làm cùng một yêu cầu của CEO:
+- **Bản trên `main`** (`d92807f`, Claude): sửa phạt qua **tầng đè dùng lại của Thưởng** (`employeeBonusPolicy`) — một sổ audit duy nhất, endpoint `/admin/penalty-policies`.
+- **Bản của bot** (`59dc9d3`, chưa push): module **riêng** `server/src/employeePenaltyPolicy.js` — sổ policy + sổ audit thứ hai, có thêm copy-forward.
+
+Deploy cả hai = **hai nguồn sự thật** cho câu hỏi "ai đã đổi mức phạt", đúng thứ phải tránh nhất. **Không deploy bản nào** cho đến khi CEO chốt giữ đường nào; sau khi chốt thì phần cứng hoá của bản kia được **ghép vào** bản được giữ.
+
+**3) Blocker vân tay công thức là do lệch nền, không phải lỗi test.**
+Trên `main` hiện tại `server/test/bonusFormulaVersion.test.js` **XANH 7/7** với `FORMULA_VERSION = v3.4` và `sourceHash = b598f1c5…`.
+Bot báo đỏ vì cây của bot **chưa có** bản v3.4 trên `main` (hoặc đã sửa file trong vân tay mà chưa làm đủ 4 bước). Cách xử lý: **push xong** ở bước (1) → `git pull origin main` → chạy lại full suite → nếu vẫn đỏ thì làm đủ 4 bước ở `CLAUDE.md` mục 5 (nâng `FORMULA_VERSION` → sửa `version`+`note` → ghi lại `sourceHash` → ghi `CHANGELOG`). **Vân tay còn đỏ thì tuyệt đối không deploy.**
+
+**4) Ghi nhận đúng số production.** Bot báo production đang ở `17d8272`; directive này ban đầu ghi `5c119a5`. Cả hai đều **cũ hơn** `main`. Khi deploy, lấy SHA thật bằng `git rev-parse HEAD` tại cây production và **dán vào báo cáo**, không dùng lại số trong văn bản.
+
+---
+
 ## 0. Mục tiêu
 Production đang chạy `5c119a5` — **cũ 4 commit**. CEO mở app thật nên **chưa thấy**:
 - panel "⚠ Cách tính Phạt" trong Quản target (và giờ **sửa được**),
