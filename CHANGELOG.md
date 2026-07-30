@@ -1,3 +1,25 @@
+### 2026-07-30 — Claude Code (CEO chốt) — NV hiểu C45 là cột nào · CEO thấy 4 ô KPI TỔNG HỢP · CẤU HÌNH PHẠT sửa được (v3.4)
+> CEO: "1. có nút phạt rồi, yêu cầu thêm cột c45 (lương tăng thêm) để nv biết rõ, họ không biết cột c45 là cột gì. phần giải thích khi bấm ra phải rõ hơn để nv hình dung được các ngữ cảnh có thể bị phạt nếu không cố gắng · 2. Ở trạng thái hiển thị tất cả nhân viên thì màn hình ceo chưa thấy được 4 ô kpi, yêu cầu ceo phải thấy được toàn cảnh các ô này phải hiện tổng hợp. chỉ khi chọn theo từng nv mới hiển thị theo từng nv · 3. màn này đã thấy rồi · 4. Nút cấu hình chỉ mới thấy và cấu hình được phần thưởng. còn phần cấu hình phần phạt hiện chưa thao tác được."
+
+**(1) NV biết ngay bị trừ ở cột nào.** Mọi chỗ nhắc C45 trong hộp giải thích đổi thành **"C45 (Lương tăng thêm)"**, nhãn lấy từ backend (`penaltyDisplay.C45_LABEL`) — một nguồn duy nhất, không ghi chữ vào JSX. Thêm hộp **"Phạt trừ ở đâu?"**: chỉ trừ tại C45, không trừ lương cơ bản, không trừ sang cột khác, không quá số tiền C45 đang có, kèm câu nói rõ kỳ này **trừ thật** hay **chỉ cảnh báo**. Thêm bảng **"Khi nào bị phạt? (4 ngữ cảnh)"**: mỗi bậc ghi khoảng %, hậu quả; **bậc NV đang đứng được tô đậm + ví dụ tiền tính từ doanh thu và C45 THẬT của chính NV đó**. Mốc %/tỷ lệ **sinh từ config ở backend** ⇒ CEO sửa bậc là chữ tự đổi theo (chống lệch như vụ nhãn v3.1/v3.2).
+
+**(2) "Tất cả nhân viên" hiện TỔNG HỢP, không còn "Chọn 1 NV".** Backend cộng (`employeePenaltyAggregate`): Σ phạt target · Σ phạt Xu · Σ phạt áp dụng · tổng chi phí sau phạt · số NV theo từng bậc · **danh sách NV đang ở bậc bị phạt kèm số cần thêm trước VAT** (bấm ô Phạt để xem). Nguyên tắc: **CỘNG, KHÔNG TÍNH LẠI** — mỗi số vẫn do `employeePenalty.buildPenalty` tính riêng theo target + C45 của từng người; **không suy phạt từ target tổng của đội**. **Fail-closed có nói rõ**: NV chưa giao target / C45 chưa về thì **KHÔNG tính là 0đ**, đếm riêng và ghi "tổng của N/M NV"; chưa NV nào đủ dữ liệu thì tổng là **"chưa có số"** chứ không phải 0đ. Nguồn cộng lấy từ **bản đồ phạt của backend** (đủ mọi NV, kể cả NV chưa có dòng chi phí) và chỉ thu hẹp theo bộ lọc khi CEO đang lọc — tránh "mất số lặng lẽ". Frontend **không cộng, không chia** (test khoá: không có `reduce` trong nhóm component tổng hợp).
+
+**(4) CẤU HÌNH PHẠT thao tác được — nâng version lên v3.4.** Hộp "⚠ Cách tính Phạt" trong Quản target giờ **sửa được**: 3 mốc % · 2 tỷ lệ · bật/tắt phạt · ngày bắt đầu cảnh báo · ngày bắt đầu trừ thật · bật/tắt + số tiền phạt thiếu Xu. Luồng **Mô phỏng → đối chiếu bậc CŨ→MỚI → Lưu**, mỗi lần lưu là **một version có dấu vết ai · khi nào · cũ→mới** (dùng lại đúng tầng đè + audit của Thưởng, endpoint riêng `/admin/penalty-policies`).
+
+3 hàng rào **giữ nguyên** khi mở quyền sửa:
+- **File gốc + vân tay công thức KHÔNG đổi** khi CEO sửa qua giao diện (sửa vào tầng đè) ⇒ khoá chống-quên-nâng-version còn nguyên. Có test đọc lại 2 file để chứng minh.
+- **Chỉ tầng chung** ("Toàn bộ NV") — chặn phạt riêng từng người (`PENALTY_POLICY_SCOPE_INVALID`).
+- **KHÔNG HỒI TỐ**: không lùi ngày trừ thật về tháng đã chạy (chỉ chặn khi CEO ĐỔI ngày; gửi lại đúng ngày đang áp dụng thì không chặn, nếu không sang tháng sau CEO không mô phỏng nổi). Kèm: 4 bậc phải **liền mạch không khe hở**, bậc đạt thấp **không được phạt nhẹ hơn** bậc đạt cao, trần tỷ lệ **1%** doanh thu, trần **5.000.000đ**/Xu thiếu, bậc không phạt phải mở đến vô cùng.
+
+**Vì sao nâng v3.4** (theo CLAUDE.md mục 5): `employeePenalty.js` + `employeeBonusPolicy.js` đều nằm trong vân tay công thức và đều bị sửa để mở đường cấu hình. **Cách tính tiền không đổi** so với v3.3 — v3.4 chỉ mở quyền sửa mức. Đã làm đủ: nâng `FORMULA_VERSION` → sửa `version` + `note` trong `employee_bonus_tiers.json` → ghi lại `sourceHash` vào `bonus_formula_lock.json` → ghi mục này. Test `bonusFormulaVersion` xanh.
+
+**Sửa thêm một chỗ tự-lệch:** `web/test/Target.bonusPolicy.test.mjs` ghi cứng `'v3.3'` nên chính test cũng phải sửa tay mỗi lần nâng version — nay đọc `FORMULA_VERSION` từ backend, hết lệch.
+
+**Test:** server **517/526** đúng 9 ca đỏ baseline của container (3 fixture `authTrustedDevice` thiếu `phone` + 6 test PDF thiếu `pdfinfo`), **0 hồi quy** · web **87/87** · build PASS. Thử thật trên server local: `/admin/bonus-policies` trả đúng bảng bậc + `earliestEffectiveFrom`; preview đổi 0,3% → 0,35% ra đúng bảng cũ→mới, lưu ghi audit version 1; thử lùi ngày về 01/06/2026 bị chặn đúng thông báo "Không được áp phạt hồi tố"; `employee-cost?emp=ALL` trả tổng hợp `12 NV · 0/12 đủ dữ liệu` (sandbox không có nguồn chi phí) — đúng kiểu nói thật, không bịa 0đ.
+
+**Chưa làm (cần bot trên server thật):** deploy bản này lên production (production đang ở `5c119a5`, thiếu cả panel phạt trong Quản target lẫn 4 ô tổng hợp).
+
 ### 2026-07-30 — Claude Code (CEO chốt) — CHỌN 1 NV phải thấy ĐỦ CẢ 4 Ô, không ô nào tự ẩn
 > CEO: "ở chế độ xem từng nhân viên thì mỗi nhân viên phải thấy được số phạt mình dự kiến có thể bị. Nghĩa là khi tôi lọc từng nhân viên thì cũng sẽ thấy được cả 4 ô KPI."
 

@@ -302,13 +302,21 @@ function transformReport(report = {}, options = {}) {
   // chữ "Chọn 1 NV". Cộng từ số phạt đã tính riêng cho từng NV, lấy theo đúng bộ lọc
   // đang xem (employeeSubtotals của kỳ chốt), KHÔNG tính lại theo target tổng.
   const finalPeriod = periods.find((period) => period.period === report.to) || periods.at(-1) || null;
+  // Không lọc gì thì cộng theo BẢN ĐỒ PHẠT của backend (đủ mọi NV, kể cả NV chưa có
+  // dòng chi phí nào — nếu chỉ dựa vào tổng phụ theo dòng thì NV đó biến mất khỏi
+  // tổng, đúng kiểu "mất số lặng lẽ" mà CEO đã bắt lỗi).
+  // Có lọc/tìm kiếm thì thu hẹp về đúng NV còn trong bộ lọc, để tổng khớp bảng.
+  const filtersActive = !!String(options.q || '').trim()
+    || FILTER_KEYS.some((key) => !!requestedFilterValue(options, key));
+  const employeeNames = new Map((Array.isArray(report.employees) ? report.employees : [])
+    .map((employee) => [String(employee.empCode || '').toUpperCase(), String(employee.employeeName || employee.empCode || '')]));
+  const penaltyList = filtersActive
+    ? (finalPeriod?.employeeSubtotals || []).filter((item) => item?.penalty)
+      .map((item) => ({ ...item.penalty, empCode: item.employeeCode, employeeName: item.employeeName }))
+    : Object.entries(finalPeriod?.employeePenalties || {})
+      .map(([empCode, penalty]) => ({ ...penalty, empCode, employeeName: employeeNames.get(String(empCode).toUpperCase()) || empCode }));
   const aggregatePenalty = options.allEmployees
-    ? employeePenaltyAggregate.aggregate({
-      periodTotal,
-      penalties: (finalPeriod?.employeeSubtotals || [])
-        .filter((item) => item?.penalty)
-        .map((item) => ({ ...item.penalty, empCode: item.employeeCode, employeeName: item.employeeName })),
-    })
+    ? employeePenaltyAggregate.aggregate({ periodTotal, penalties: penaltyList })
     : null;
   return {
     ...report,

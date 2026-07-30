@@ -258,6 +258,10 @@ export const api = {
   adminBonusPolicies: (params = {}) => req('GET', '/admin/bonus-policies?' + new URLSearchParams(params).toString()),
   adminBonusPolicyPreview: (payload) => req('POST', '/admin/bonus-policies/preview', payload),
   adminBonusPolicySave: (payload) => req('POST', '/admin/bonus-policies', payload),
+  // Cấu hình PHẠT: cùng đường preview → lưu → audit như Thưởng, endpoint riêng để
+  // hai hộp thoại không lưu lẫn bản của nhau.
+  adminPenaltyPolicyPreview: (payload) => req('POST', '/admin/penalty-policies/preview', payload),
+  adminPenaltyPolicySave: (payload) => req('POST', '/admin/penalty-policies', payload),
   adminTargetManual: (payload) => req('POST', '/admin/targets/manual', payload),
   adminTargetBulk: (payload) => req('POST', '/admin/targets/bulk', payload),
   adminTargetQuarter: (payload) => req('POST', '/admin/targets/quarter', payload),

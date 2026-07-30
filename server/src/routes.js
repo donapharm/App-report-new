@@ -81,6 +81,9 @@ const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
   'from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route', 'date',
 ]);
 const bonusPolicyPreviews = new Map();
+// Preview cấu hình PHẠT tách riêng khỏi preview Thưởng: hai hộp thoại độc lập, để
+// mô phỏng bên này không vô tình lưu bản của bên kia.
+const penaltyPolicyPreviews = new Map();
 const canonicalAssignmentSnapshots = new Map();
 const CANONICAL_ASSIGNMENT_TTL_MS = 15 * 60 * 1000;
 function canonicalAssignmentFetch(key) {
@@ -3624,6 +3627,17 @@ router.get('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, r
     policies: employeeBonusPolicy.list(),
     audit: employeeBonusPolicy.audit().slice(0, 100),
     resolved: employeeBonusPolicy.resolve({ period, context }),
+    // Cấu hình PHẠT đang áp dụng cho kỳ này + giới hạn khi sửa, để hộp "Cách tính
+    // Phạt" hiện đúng trạng thái mà không phải đoán ở frontend.
+    penalty: {
+      ...penaltyPolicySnapshot(employeeBonusPolicy.resolve({ period, context: {} }).config, period),
+      layers: employeeBonusPolicy.PENALTY_LAYERS,
+      maxRatePct: employeePenalty.MAX_PENALTY_RATE_PCT,
+      maxPerMissingXu: employeePenalty.MAX_PER_MISSING_XU,
+      editable: employeeBonusPolicy.monthKey(period) >= employeeBonus.BONUS_V3_EFFECTIVE_MONTH,
+      // Sớm nhất được đặt ngày trừ thật: không hồi tố về tháng đã chạy.
+      earliestEffectiveFrom: [`${employeeBonusPolicy.monthKey(period)}-01`, `${new Date().toISOString().slice(0, 7)}-01`].sort().at(-1),
+    },
   });
 });
 
@@ -3693,6 +3707,81 @@ router.post('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, 
   clearTargetDependentCache();
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ...result, saved: true, audit: employeeBonusPolicy.audit().slice(0, 20) });
+});
+
+// ── CẤU HÌNH PHẠT (CEO chốt 2026-07-30) ───────────────────────────────────────
+// CEO: "Nút cấu hình chỉ mới thấy và cấu hình được phần thưởng. Còn phần cấu hình
+// phần phạt hiện chưa thao tác được."
+//
+// Dùng LẠI đúng đường tầng-đè của Thưởng (preview → lưu → audit, có revision +
+// previewHash chống lưu sai bản). Nhờ vậy:
+//   - file seed employee_bonus_tiers.json và vân tay công thức KHÔNG đổi ⇒ khoá
+//     chống-quên-nâng-version còn nguyên;
+//   - mọi lần CEO đổi bậc phạt đều có dấu vết ai · khi nào · cũ→mới.
+// Preview KHÔNG hiện số tiền phạt của NV: muốn có số tiền phải có C45 của từng
+// người theo kỳ. Thay vào đó hiện BẢNG BẬC trước→sau + chế độ áp dụng của kỳ, và
+// nói thẳng số tiền xem ở màn "Chi phí của tôi" sau khi lưu. Không bịa số.
+function penaltyPolicySnapshot(config, period) {
+  return {
+    // resolveMode nhận cả 'YYYY-MM' và 'MM.YYYY'; chế độ tính theo KỲ DỮ LIỆU.
+    mode: employeePenalty.resolveMode(period, config),
+    enabled: config?.penaltyEnabled === true,
+    warnFrom: String(config?.penaltyWarnFrom || ''),
+    effectiveFrom: String(config?.penaltyEffectiveFrom || ''),
+    xuPenalty: { ...(config?.xuPenalty || {}) },
+    tiers: penaltyDisplay.tierTable(config || {}, {}),
+    rawTiers: Array.isArray(config?.penaltyTiers) ? config.penaltyTiers.map((tier) => ({ ...tier })) : [],
+    c45Label: penaltyDisplay.C45_LABEL,
+  };
+}
+
+router.post('/admin/penalty-policies/preview', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const period = employeeBonusPolicy.monthKey(req.body.previewPeriod || req.body.period || req.body.effectiveFrom || store.latestKy());
+  const before = employeeBonusPolicy.resolve({ period, context: {} });
+  const policyPreview = employeeBonusPolicy.preview({
+    ...req.body,
+    scope: { type: 'default', value: '*' },
+    previewPeriod: period,
+  }, req.session.emp_code || req.session.name || 'ADMIN');
+  const previewId = crypto.randomBytes(18).toString('base64url');
+  const actor = String(req.session.emp_code || req.session.name || 'ADMIN');
+  penaltyPolicyPreviews.set(previewId, {
+    at: Date.now(), actor,
+    candidate: policyPreview.candidate,
+    revision: policyPreview.revision,
+    previewHash: policyPreview.previewHash,
+  });
+  for (const [id, item] of penaltyPolicyPreviews) if (Date.now() - item.at > 15 * 60 * 1000) penaltyPolicyPreviews.delete(id);
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({
+    previewId, expiresInSeconds: 900, saved: false,
+    period, candidate: policyPreview.candidate,
+    revision: policyPreview.revision, previewHash: policyPreview.previewHash,
+    before: penaltyPolicySnapshot(before.config, period),
+    after: penaltyPolicySnapshot(policyPreview.resolved.config, period),
+    formulaVersion: employeeBonus.FORMULA_VERSION,
+    note: 'Bảng bậc và chế độ áp dụng là số thật của kỳ. Số tiền phạt từng nhân viên hiện ở màn "Chi phí của tôi" sau khi lưu — ở đây không suy số tiền.',
+  });
+}));
+
+router.post('/admin/penalty-policies', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const previewId = String(req.body.previewId || '').trim();
+  const preview = penaltyPolicyPreviews.get(previewId);
+  const actor = String(req.session.emp_code || req.session.name || 'ADMIN');
+  if (!preview || Date.now() - preview.at > 15 * 60 * 1000 || preview.actor !== actor) {
+    penaltyPolicyPreviews.delete(previewId);
+    return res.status(409).json({ error: 'Preview đã hết hạn hoặc không thuộc phiên hiện tại. Vui lòng mô phỏng lại trước khi lưu.', code: 'PENALTY_POLICY_PREVIEW_REQUIRED' });
+  }
+  penaltyPolicyPreviews.delete(previewId);
+  const result = employeeBonusPolicy.savePreview(preview, actor);
+  clearTargetDependentCache();
+  const period = employeeBonusPolicy.monthKey(req.body.period || result.policy.effectiveFrom);
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({
+    ...result, saved: true, period,
+    after: penaltyPolicySnapshot(result.resolved.config, period),
+    audit: employeeBonusPolicy.audit().slice(0, 20),
+  });
 });
 
 router.get('/admin/targets/template.xlsx', auth.requireAuth, auth.requireAdmin, async (req, res) => {

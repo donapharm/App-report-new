@@ -144,6 +144,135 @@ function warningFor({ period, mode, closed = false, target, achieved, pct, tier,
   };
 }
 
+// ── CEO SỬA ĐƯỢC BẬC PHẠT (CEO chốt 2026-07-30) ───────────────────────────────
+// CEO: "Nút cấu hình chỉ mới thấy và cấu hình được phần thưởng, còn phần cấu hình
+// phần phạt hiện chưa thao tác được."
+//
+// Cho sửa, nhưng KHÔNG phá 3 hàng rào:
+//   1. Sửa qua TẦNG ĐÈ có preview → lưu → audit (employeeBonusPolicy), file seed
+//      và vân tay công thức không đổi ⇒ khoá chống-quên-nâng-version còn nguyên.
+//   2. Chỉ tầng "toàn bộ NV" (mức chung). Không có phạt riêng từng người.
+//   3. KHÔNG HỒI TỐ: ngày bắt đầu trừ thật không được lùi về trước tháng hiện tại
+//      hay trước tháng hiệu lực của bản đè. Nới lỏng/hoãn thì tuỳ CEO.
+const PENALTY_TIER_KEYS = Object.freeze(['drop_c45', 't50_70', 't70_90', 'none']);
+const MAX_PENALTY_RATE_PCT = 1;      // trần an toàn: 1% doanh thu (CEO đang dùng 0,2–0,3%)
+const MAX_PER_MISSING_XU = 5_000_000;
+
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function monthStart(value) {
+  const month = monthKey(value);
+  return month ? `${month}-01` : '';
+}
+
+function invalid(reason, message) {
+  return { ok: false, reason, message };
+}
+
+// Nhận đúng 4 bậc liền mạch, không khe hở, không chồng lấn — vì mọi % đạt phải rơi
+// vào đúng một bậc. Bậc thấp hơn không được phạt nhẹ hơn bậc cao hơn.
+function validatePenaltyTiers(rawTiers) {
+  if (!Array.isArray(rawTiers) || rawTiers.length !== 4) return invalid('penalty_tiers_count', 'Bậc phạt phải có đúng 4 bậc.');
+  const byTier = new Map();
+  for (const tier of rawTiers) {
+    const key = String(tier?.tier || '');
+    if (!PENALTY_TIER_KEYS.includes(key)) return invalid('penalty_tier_unknown', `Mã bậc phạt không hợp lệ: ${key || '(trống)'}`);
+    if (byTier.has(key)) return invalid('penalty_tier_duplicate', `Bậc phạt bị lặp: ${key}`);
+    byTier.set(key, tier);
+  }
+  const drop = byTier.get('drop_c45');
+  const low = byTier.get('t50_70');
+  const mid = byTier.get('t70_90');
+  const none = byTier.get('none');
+  const dropTo = finite(drop.toPct);
+  const lowFrom = finite(low.fromExclusivePct);
+  const lowTo = finite(low.toPct);
+  const midFrom = finite(mid.fromPct);
+  const midTo = finite(mid.toPct);
+  const noneFrom = finite(none.fromPct);
+  if (dropTo == null || lowTo == null || midTo == null) return invalid('penalty_tier_bounds', 'Thiếu mốc % kết thúc của một bậc.');
+  if (!(dropTo > 0)) return invalid('penalty_tier_bounds', 'Mốc mất trắng C45 phải lớn hơn 0%.');
+  if (lowFrom !== dropTo) return invalid('penalty_tier_gap', `Bậc trên ${dropTo}% phải bắt đầu đúng tại mốc mất trắng (${dropTo}%).`);
+  if (midFrom !== lowTo) return invalid('penalty_tier_gap', `Bậc kế tiếp phải bắt đầu đúng tại ${lowTo}%.`);
+  if (noneFrom !== midTo) return invalid('penalty_tier_gap', `Bậc không phạt phải bắt đầu đúng tại ${midTo}%.`);
+  if (!(dropTo < lowTo && lowTo < midTo)) return invalid('penalty_tier_order', 'Các mốc % phải tăng dần: mất trắng < bậc giữa < bậc không phạt.');
+  if (finite(none.toPct) != null) return invalid('penalty_tier_open_end', 'Bậc không phạt phải để trống mốc kết thúc (mở đến vô cùng).');
+  if (drop.dropC45 !== true) return invalid('penalty_tier_drop_flag', 'Bậc mất trắng phải bật cờ dropC45.');
+  for (const tier of [low, mid, none]) {
+    if (tier.dropC45 === true) return invalid('penalty_tier_drop_flag', `Chỉ bậc mất trắng được bật dropC45 (đang bật ở ${tier.tier}).`);
+  }
+  const lowRate = finite(low.ratePct);
+  const midRate = finite(mid.ratePct);
+  if (lowRate == null || midRate == null) return invalid('penalty_tier_rate', 'Thiếu tỷ lệ phạt của bậc.');
+  for (const [key, rate] of [['t50_70', lowRate], ['t70_90', midRate]]) {
+    if (rate < 0 || rate > MAX_PENALTY_RATE_PCT) return invalid('penalty_tier_rate', `Tỷ lệ phạt bậc ${key} phải trong khoảng 0–${MAX_PENALTY_RATE_PCT}% doanh thu.`);
+  }
+  if (lowRate < midRate) return invalid('penalty_tier_rate_order', 'Bậc đạt thấp hơn không được phạt nhẹ hơn bậc đạt cao hơn.');
+  if (finite(none.ratePct) !== 0) return invalid('penalty_tier_rate', 'Bậc không phạt phải có tỷ lệ 0%.');
+  return {
+    ok: true,
+    tiers: [
+      { tier: 'drop_c45', fromPct: null, toPct: dropTo, dropC45: true },
+      { tier: 't50_70', fromExclusivePct: lowFrom, toPct: lowTo, ratePct: lowRate },
+      { tier: 't70_90', fromPct: midFrom, toPct: midTo, ratePct: midRate },
+      { tier: 'none', fromPct: noneFrom, toPct: null, ratePct: 0 },
+    ],
+  };
+}
+
+// raw: chỉ các trường phạt CEO gửi lên. periodMonth: tháng hiệu lực của bản đè.
+// currentMonth: tháng hiện tại (truyền vào để test không phụ thuộc đồng hồ).
+function validatePenaltyOverride(raw = {}, { periodMonth = '', currentMonth = '', seed = {} } = {}) {
+  const patch = {};
+  if (Object.prototype.hasOwnProperty.call(raw, 'penaltyTiers')) {
+    const result = validatePenaltyTiers(raw.penaltyTiers);
+    if (!result.ok) return result;
+    patch.penaltyTiers = result.tiers;
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, 'penaltyEnabled')) {
+    if (typeof raw.penaltyEnabled !== 'boolean') return invalid('penalty_enabled_invalid', 'Cờ bật/tắt phạt phải là bật hoặc tắt.');
+    patch.penaltyEnabled = raw.penaltyEnabled;
+  }
+  for (const key of ['penaltyWarnFrom', 'penaltyEffectiveFrom']) {
+    if (!Object.prototype.hasOwnProperty.call(raw, key)) continue;
+    if (!isIsoDate(raw[key])) return invalid('penalty_date_invalid', `Ngày ${key} phải có dạng YYYY-MM-DD.`);
+    patch[key] = String(raw[key]);
+  }
+  const warnFrom = patch.penaltyWarnFrom || String(seed.penaltyWarnFrom || '');
+  const effectiveFrom = patch.penaltyEffectiveFrom || String(seed.penaltyEffectiveFrom || '');
+  if (warnFrom && effectiveFrom && warnFrom > effectiveFrom) {
+    return invalid('penalty_date_order', 'Ngày bắt đầu cảnh báo phải trước hoặc bằng ngày bắt đầu trừ thật.');
+  }
+  // KHÔNG HỒI TỐ (CEO chốt 29/07 và nhắc lại 30/07): chỉ chặn khi CEO ĐỔI ngày.
+  // Gửi lại đúng ngày đang áp dụng (vd bấm Mô phỏng mà không sửa gì) thì không
+  // chặn — nếu chặn, sang tháng sau CEO không mô phỏng nổi dù chưa đổi gì.
+  if (Object.prototype.hasOwnProperty.call(patch, 'penaltyEffectiveFrom')
+    && patch.penaltyEffectiveFrom !== String(seed.penaltyEffectiveFrom || '')) {
+    const floor = [monthStart(periodMonth), monthStart(currentMonth)].filter(Boolean).sort().at(-1) || '';
+    if (floor && patch.penaltyEffectiveFrom < floor) {
+      return invalid('penalty_retroactive', `Không được áp phạt hồi tố: ngày trừ thật sớm nhất là ${floor}.`);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(raw, 'xuPenalty')) {
+    const xu = raw.xuPenalty;
+    if (!xu || typeof xu !== 'object' || Array.isArray(xu)) return invalid('xu_penalty_invalid', 'Cấu hình phạt thiếu Xu không hợp lệ.');
+    if (typeof xu.enabled !== 'boolean') return invalid('xu_penalty_invalid', 'Cờ bật/tắt phạt thiếu Xu phải là bật hoặc tắt.');
+    const perMissingXu = finite(xu.perMissingXu);
+    if (perMissingXu == null || perMissingXu < 0 || perMissingXu > MAX_PER_MISSING_XU) {
+      return invalid('xu_penalty_amount', `Số tiền mỗi Xu thiếu phải trong khoảng 0–${MAX_PER_MISSING_XU.toLocaleString('vi-VN')}đ.`);
+    }
+    patch.xuPenalty = { enabled: xu.enabled, perMissingXu };
+  }
+  if (!Object.keys(patch).length) return invalid('penalty_patch_empty', 'Chưa có trường phạt nào để lưu.');
+  // Bản sau khi đè phải vẫn đủ 4 bậc hợp lệ, nếu không backend sẽ fail-closed và
+  // không ai bị phạt — im lặng như thế là tệ hơn báo lỗi ngay.
+  const merged = normalizeConfig({ ...seed, ...patch });
+  if (!merged.configured) return invalid('penalty_config_invalid', 'Cấu hình phạt sau khi đè không đủ 4 bậc hợp lệ.');
+  return { ok: true, patch };
+}
+
 function buildXuPenalty({ config, empCode, asOf, scoreFn, priorBookedAdjustment = null } = {}) {
   const normalized = normalizeConfig(config);
   if (!normalized.xuPenalty.enabled) return { amount: null, status: 'disabled', missing: null, checkpoint: null };
@@ -297,6 +426,11 @@ module.exports = {
   WARN_ONLY_LABEL,
   DISCLAIMER,
   DEFAULT_TIERS,
+  PENALTY_TIER_KEYS,
+  MAX_PENALTY_RATE_PCT,
+  MAX_PER_MISSING_XU,
+  validatePenaltyTiers,
+  validatePenaltyOverride,
   normalizeConfig,
   resolveMode,
   tierForPct,

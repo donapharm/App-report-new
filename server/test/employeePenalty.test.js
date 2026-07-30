@@ -249,6 +249,14 @@ test('tổng hợp phạt toàn đội chỉ CỘNG số đã tính riêng, khô
   const empty = aggregateModule.aggregate({ penalties: [] });
   assert.equal(empty.available, false);
   assert.equal(empty.total, null);
+  // Có NV nhưng CHƯA NV nào đủ dữ liệu ⇒ tổng là "chưa có số" (null), không phải 0đ.
+  const allMissing = aggregateModule.aggregate({
+    penalties: items.filter((item) => item.total == null), periodTotal: 100_000_000,
+  });
+  assert.equal(allMissing.counted, 0);
+  assert.equal(allMissing.total, null);
+  assert.equal(allMissing.targetAmount, null);
+  assert.equal(allMissing.incomplete, true);
 });
 
 test('màn "Tất cả NV" nhận tổng hợp phạt từ backend, frontend không tự cộng', () => {

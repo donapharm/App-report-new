@@ -43,7 +43,9 @@ function aggregate({ penalties = [], periodTotal = null } = {}) {
   const missing = items.length - known.length;
   const modes = [...new Set(items.map((item) => String(item.mode || 'off')))];
   const sum = (list, key) => list.reduce((total, item) => total + (finite(item[key]) || 0), 0);
-  const targetAmount = sum(known, 'targetAmount');
+  // Không NV nào có số ⇒ tổng là "chưa có số" (null), KHÔNG phải 0đ. Hiện 0đ ở đây
+  // là nói dối: 0đ có nghĩa "đã tính xong và không ai bị phạt".
+  const targetAmount = known.length ? sum(known, 'targetAmount') : null;
   const xuKnown = items.filter((item) => finite(item.xuAmount) != null);
   const appliedAmount = sum(items, 'appliedAmount');
   const tierCounts = Object.fromEntries(TIERS.map((tier) => [tier, items.filter((item) => item.tier === tier).length]));
@@ -76,7 +78,7 @@ function aggregate({ penalties = [], periodTotal = null } = {}) {
     targetAmount,
     xuAmount: xuKnown.length ? sum(xuKnown, 'xuAmount') : null,
     xuMissing: null,
-    total: sum(known, 'total'),
+    total: known.length ? sum(known, 'total') : null,
     appliedAmount,
     // Tổng gốc null (coverage chưa đạt) thì KHÔNG suy ra tổng sau phạt.
     afterPenaltyTotal: finite(periodTotal) == null ? null : Math.max(0, Math.round(finite(periodTotal)) - appliedAmount),
