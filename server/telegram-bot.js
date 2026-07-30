@@ -47,6 +47,8 @@ const salesReport = require('./src/salesReport');
 const { salesReportSchedulePolicy } = require('./src/salesReportSchedulePolicy');
 const bonusNotify = require('./src/bonusNotify');
 const employeeCostNotify = require('./src/employeeCostNotify');
+// Ngày khoá sổ kỳ (ngày 8 tháng sau) chỉ có MỘT nguồn: employeeCost.
+const employeeCost = require('./src/employeeCost');
 const employeeBonus = require('./src/employeeBonus');
 
 const PENDING_TG_GRANTS_FILE = path.join(__dirname, 'data', 'auth', 'telegram_pending_grants.json');
@@ -227,6 +229,12 @@ const COST_MONTH_END_SLOT = { hour: 20, minute: 0, label: '20:00 ngày cuối th
 const BONUS_MONTH_END_SLOT = { hour: 20, minute: 10, label: '20:10 ngày cuối tháng' };
 const SALES_MONTH_END_SLOT = { hour: 20, minute: 30, label: '20:30 ngày cuối tháng' };
 const SALES_DAILY_SLOT = { hour: 7, minute: 30, label: '07:30 hằng ngày' };
+// ‼ CEO chốt 2026-07-30: tin 20:00 cuối tháng VẪN GỬI nhưng là số DỰ KIẾN (doanh thu
+// còn cập nhật đến hết ngày khoá sổ). Số CHỐT gửi ở lượt riêng, NGÀY SAU ngày khoá
+// sổ — lấy ngày từ employeeCost.PERIOD_CLOSE_DAY để chỉ có MỘT nguồn biết ngày 8.
+const MONTH_CLOSE_DAY = employeeCost.PERIOD_CLOSE_DAY + 1;
+const COST_MONTH_FINAL_SLOT = { hour: 20, minute: 0, label: `20:00 ngày ${MONTH_CLOSE_DAY} (sau khoá sổ)` };
+const BONUS_MONTH_FINAL_SLOT = { hour: 20, minute: 10, label: `20:10 ngày ${MONTH_CLOSE_DAY} (sau khoá sổ)` };
 function slotDue(slot, d) {
   if (d.getUTCHours() !== slot.hour || d.getUTCMinutes() !== slot.minute) return false;
   if (slot.type === 'weekly') return d.getUTCDay() === slot.dow;
@@ -417,14 +425,14 @@ const startOfMonthIso = (day) => `${String(day).slice(0, 7)}-01`;
 
 // ── TỔNG CHI PHÍ NV TỰ NHẬN (CEO chốt: T7 12:30 lũy kế · cuối tháng 17:30 trọn tháng)
 // Fail-closed: cờ phải đúng "1". Số do DataHub tính; còn tạm tính thì BẮT BUỘC gắn nhãn.
-async function runEmployeeCostNotify({ kind, asOfDay }) {
+async function runEmployeeCostNotify({ kind, asOfDay, stage = 'provisional' }) {
   if (process.env.EMP_COST_NOTIFY !== '1') return;
   const svc = notifyServices();
   if (!svc) return;
   const monthKey = String(asOfDay).slice(0, 7);
   const from = monthKey;
   const to = monthKey;
-  const periodKey = `${kind}|${kind === 'month' ? monthKey : asOfDay}`;
+  const periodKey = `${kind}|${kind === 'month' ? monthKey : asOfDay}${kind === 'month' ? `|${stage}` : ''}`;
   const ky = `${monthKey.slice(5, 7)}.${monthKey.slice(0, 4)}`;
   let sent = 0; let skipped = 0; let failed = 0;
   for (const r of autoNotifyRecipients()) {
@@ -447,7 +455,10 @@ async function runEmployeeCostNotify({ kind, asOfDay }) {
         const pairs = Number.isFinite(totalRows) && Number.isFinite(matchedRows) ? totalRows - matchedRows : null;
         // Số tạm giữ cuối năm chỉ đi kèm tin CUỐI THÁNG (CEO chốt).
         const annual = kind === 'month' ? employeeCostNotify.annualFromSummary(res.summary) : null;
-        text = employeeCostNotify.messageFor({ kind, row, total, gaps: { pairs }, annual });
+        text = employeeCostNotify.messageFor({
+          kind, row, total, gaps: { pairs }, annual,
+          stage, closeNote: employeeCost.periodCloseNote(monthKey),
+        });
       }
       if (!text) { skipped += 1; continue; }
       const out = await notifyChannels.deliver({
@@ -462,7 +473,7 @@ async function runEmployeeCostNotify({ kind, asOfDay }) {
 }
 
 // ── TỔNG THƯỞNG CUỐI THÁNG (CEO chốt 17:40 ngày cuối tháng) ─────────────────
-async function runBonusMonthEnd({ asOfDay }) {
+async function runBonusMonthEnd({ asOfDay, stage = 'provisional' }) {
   if (process.env.BONUS_NOTIFY !== '1') return;
   const svc = notifyServices();
   if (!svc) return;
@@ -470,7 +481,9 @@ async function runBonusMonthEnd({ asOfDay }) {
   const ky = `${monthKey.slice(5, 7)}.${monthKey.slice(0, 4)}`;
   const ev = targetNotify.evaluate({ ky });
   const byEmp = new Map(ev.rows.map((r) => [r.emp_code, r]));
-  const periodKey = `bonus_month|${monthKey}`;
+  // periodKey mang theo stage: lượt dự kiến và lượt chốt là HAI tin khác nhau,
+  // không được coi lượt chốt là 'đã gửi rồi' vì cuối tháng đã gửi bản dự kiến.
+  const periodKey = `bonus_month|${monthKey}|${stage}`;
   let sent = 0; let skipped = 0; let failed = 0;
   for (const r of autoNotifyRecipients()) {
     const row = byEmp.get(r.emp_code);
@@ -480,7 +493,9 @@ async function runBonusMonthEnd({ asOfDay }) {
       const res = await svc.employeeBonusSummaryForNotify(r.emp_code, ky);
       if (res?.skipped) { skipped += 1; console.log(`  ↷ ${r.emp_code} bỏ qua thưởng: ${res.skipped}`); continue; }
       if (!res || res.sourceAvailable === false) { skipped += 1; continue; }  // thiếu nguồn -> không hứa tiền
-      const text = bonusNotify.monthEndMessage({ ...row, ky }, res.bonus);
+      const text = bonusNotify.monthEndMessage({ ...row, ky }, res.bonus, {
+        stage, closeNote: employeeCost.periodCloseNote(monthKey),
+      });
       if (!text) { skipped += 1; continue; }
       const out = await notifyChannels.deliver({
         telegramId: r.telegramId, email: r.email,
@@ -504,6 +519,7 @@ function startCostBonusScheduler() {
   console.log(`✔ Chi phí/Thưởng scheduler: chi phí ${costOn ? `${COST_WEEKLY_SLOT.label} + ${COST_MONTH_END_SLOT.label}` : 'TẮT'}; `
     + `thưởng tháng ${bonusOn ? BONUS_MONTH_END_SLOT.label : 'TẮT'} GMT+7`);
   let lastWeekly = ''; let lastCostMonth = ''; let lastBonusMonth = '';
+  let lastCostFinal = ''; let lastBonusFinal = '';
   setInterval(() => {
     const d = vnDate();               // getUTC* của vnDate CHÍNH LÀ giờ VN
     const day = isoDay(d);
@@ -519,6 +535,16 @@ function startCostBonusScheduler() {
     }
     if (bonusOn && monthEnd && hh === BONUS_MONTH_END_SLOT.hour && mm === BONUS_MONTH_END_SLOT.minute) {
       if (lastBonusMonth !== day) { lastBonusMonth = day; runBonusMonthEnd({ asOfDay: day }).catch((e) => console.error('bonus month error:', e.message)); }
+    }
+    // LƯỢT SỐ CHỐT: chạy ngày MONTH_CLOSE_DAY, gửi cho kỳ VỪA KHOÁ = tháng TRƯỚC.
+    // Dùng ngày cuối tháng trước làm asOfDay để mọi hàm bên dưới lấy đúng kỳ đó.
+    const isCloseDay = d.getUTCDate() === MONTH_CLOSE_DAY;
+    const closedPeriodAsOf = isCloseDay ? isoDay(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 0))) : '';
+    if (costOn && isCloseDay && hh === COST_MONTH_FINAL_SLOT.hour && mm === COST_MONTH_FINAL_SLOT.minute) {
+      if (lastCostFinal !== day) { lastCostFinal = day; runEmployeeCostNotify({ kind: 'month', asOfDay: closedPeriodAsOf, stage: 'final' }).catch((e) => console.error('cost month final error:', e.message)); }
+    }
+    if (bonusOn && isCloseDay && hh === BONUS_MONTH_FINAL_SLOT.hour && mm === BONUS_MONTH_FINAL_SLOT.minute) {
+      if (lastBonusFinal !== day) { lastBonusFinal = day; runBonusMonthEnd({ asOfDay: closedPeriodAsOf, stage: 'final' }).catch((e) => console.error('bonus month final error:', e.message)); }
     }
   }, 30 * 1000);
 }

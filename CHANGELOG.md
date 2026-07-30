@@ -1,3 +1,21 @@
+### 2026-07-30 — Claude Code (CEO chốt) — Tin 20:00 cuối tháng VẪN GỬI nhưng là DỰ KIẾN · thêm lượt gửi SỐ CHỐT sau ngày 8
+> CEO: "TIN NHẮN 20H00 VẪN BẬT NHƯNG CHỈ LÀ DỰ KIẾN, VÌ CHỐT SỐ PHẢI CHỜ ĐẾN NGÀY 08/08 MỚI CHỐT SỐ CHUẨN. NÊN EM CỨ CHO Ý KIẾN MÀ LÀM NHÉ."
+
+**Tin 20:00 ngày cuối tháng — giữ nguyên giờ, đổi cách nói:**
+- Thưởng: tiêu đề `thưởng DỰ KIẾN tháng` · dòng cuối `ℹ Số DỰ KIẾN, CHƯA CHỐT (doanh thu còn cập nhật đến hết ngày 08/08/2026). Sau khi khoá sổ hệ thống gửi lại số chốt. Không phải bảng lương.`
+- Chi phí: thêm đúng một dòng cùng ý, **ngày lấy từ `employeeCost.periodCloseNote()`** — không ghi cứng ngày trong tin.
+
+**Thêm LƯỢT GỬI SỐ CHỐT — 20:00/20:10 ngày 9 (ngày sau khoá sổ):**
+- Ngày suy từ `employeeCost.PERIOD_CLOSE_DAY + 1`, **không ghi cứng số 9** — sau này CEO đổi ngày khoá sổ thì lượt này tự đi theo.
+- Gửi cho **kỳ VỪA KHOÁ = tháng TRƯỚC** (dùng ngày cuối tháng trước làm `asOfDay`), không phải tháng đang chạy.
+- Tin chốt: `thưởng CHỐT tháng` · `Tổng chốt: …` · `✅ Số CHÍNH THỨC của kỳ (đã khoá sổ hết ngày 08/08/2026)`. **Bỏ hẳn** chữ "dự kiến" — có test khoá điều này.
+- **Khoá chống gửi trùng mang theo `stage`**: `bonus_month|2026-07|provisional` khác `bonus_month|2026-07|final`. Nếu không tách, hệ thống sẽ thấy "tháng này gửi rồi" và **lượt chốt không bao giờ đi** — đây là cái bẫy dễ mắc nhất ở đây.
+
+**Vẫn giữ nguyên:** hai cờ `EMP_COST_NOTIFY=0`, `BONUS_NOTIFY=0` **đang TẮT** — cả hai lượt đều nằm sau cờ, nên deploy bản này **không tự gửi cho ai**. Khi CEO cho bật thì tin đã đúng cách nói.
+**Hai nhãn vẫn giữ riêng:** `TẠM TÍNH` (thiếu % — DataHub/App Sale phải điền) và `CHƯA CHỐT` (chờ tới ngày khoá sổ) là hai dòng khác nhau trong cùng một tin.
+
+**Test:** server **541/550** (9 đỏ đúng mức nền) · web **87/87**. Thêm 2 ca: tin chốt phải đổi hẳn cách nói và không còn chữ dự kiến; bộ hẹn giờ phải có lượt chốt, suy ngày từ `PERIOD_CLOSE_DAY`, gửi cho tháng trước, và tách khoá chống trùng theo stage. Sửa 1 test cũ khoá câu chữ đã đổi.
+
 ### 2026-07-30 — Claude Code (CEO chốt) — KHOÁ SỔ KỲ HẾT NGÀY 8 THÁNG SAU · nhãn DỰ KIẾN → SỐ CHÍNH THỨC (v3.5)
 > CEO: "dữ liệu từ ngày 05 tháng sau đổ về trước thì mình sẽ dùng từ **dự kiến** vì còn cập nhật lại doanh thu... đẹp nhất là **trước ngày 08** cho rộng rãi để chốt" · "Phạt sẽ chốt sau ngày 08 tháng sau (khi chốt đủ dữ liệu) thì câu tạm tính/dự kiến sẽ chuyển thành chính thức/chốt kỳ".
 > CEO trả lời câu chặn: **ứng lần 01 rơi vào cuối tháng đó và app lương đã tự tính**, không cần số chốt trước ngày 8 ⇒ chọn được ngày 8.

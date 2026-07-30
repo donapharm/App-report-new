@@ -85,7 +85,9 @@ function annualFromSummary(summary = {}) {
  *          matchedRows/totalRows, không có số mã gộp. Gọi đúng tên con số mình
  *          thực sự có, tránh lặp lại vụ lẫn lộn "13 mã" với "192 cặp".
  */
-function messageFor({ kind, row = {}, total, gaps = {}, annual = null } = {}) {
+// stage/closeNote: xem bonusNotify — tin cuối tháng là DỰ KIẾN (doanh thu còn cập
+// nhật đến hết ngày khoá sổ), sau khoá sổ mới gửi số CHỐT (CEO chốt 30/07).
+function messageFor({ kind, row = {}, total, gaps = {}, annual = null, stage = 'provisional', closeNote = '' } = {}) {
   if (!total) return null;
   const monthNo = String(row.ky || '').split('.')[0];
   const who = row.name || row.emp_code;
@@ -103,6 +105,14 @@ function messageFor({ kind, row = {}, total, gaps = {}, annual = null } = {}) {
     const pairs = finite(gaps.pairs);
     const detail = pairs > 0 ? ` — còn ${pairs.toLocaleString('vi-VN')} dòng chưa được gán tỷ lệ %` : '';
     lines.push(`⚠ TẠM TÍNH${detail}. Số cuối kỳ có thể thay đổi.`);
+  }
+  // HAI NHÃN RIÊNG, không gộp: "TẠM TÍNH" ở trên là thiếu % (DataHub/App Sale phải
+  // điền); dòng dưới là CHƯA KHOÁ SỔ (chỉ cần chờ tới ngày khoá sổ).
+  if (kind === 'month') {
+    const closing = closeNote ? ` (${closeNote})` : '';
+    lines.push(stage === 'final'
+      ? `✅ Số CHÍNH THỨC của kỳ${closing}.`
+      : `ℹ Số DỰ KIẾN, CHƯA CHỐT${closing}. Sau khi khoá sổ hệ thống gửi lại số chốt.`);
   }
   return lines.join('\n');
 }

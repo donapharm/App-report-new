@@ -113,7 +113,10 @@ function messageFor(e) {
  * Tin tổng thưởng cuối tháng. `bonus` lấy thẳng từ employeeBonus.buildBonusSummary.
  * Không có số P1/P2 hợp lệ -> trả null để nơi gọi bỏ qua, KHÔNG bịa 0đ.
  */
-function monthEndMessage(row = {}, bonus = {}) {
+// stage: 'provisional' (tin 20:00 cuối tháng — doanh thu còn cập nhật) hoặc 'final'
+// (tin sau khoá sổ ngày 8). closeNote do employeeCost.periodCloseNote() cấp — module
+// này KHÔNG tự đoán ngày khoá sổ (CEO chốt 30/07).
+function monthEndMessage(row = {}, bonus = {}, { stage = 'provisional', closeNote = '' } = {}) {
   const p1 = finite(bonus.baseAmount);
   const p2 = finite(bonus.priorityAmount);
   if (p1 == null && p2 == null) return null;
@@ -125,13 +128,22 @@ function monthEndMessage(row = {}, bonus = {}) {
   //   ("không có tin gì thì không gửi"), vừa phản cảm với người chưa đạt.
   //   Ai có dù chỉ vài đồng (vd đạt 95% -> P1 0,1%) thì VẪN gửi.
   if (total <= 0) return null;
+  // ‼ CEO chốt 30/07: tin 20:00 cuối tháng VẪN GỬI nhưng phải nói thẳng đây là số
+  // DỰ KIẾN vì doanh thu còn cập nhật đến hết ngày khoá sổ; số chốt gửi lại sau đó.
+  // Không được để NV hiểu tin cuối tháng là số cuối cùng.
+  const isFinal = stage === 'final';
+  const closing = closeNote ? ` (${closeNote})` : '';
   return [
-    `🏆 [Tháng ${monthNo}] ${row.name || row.emp_code} — thưởng dự kiến tháng`,
+    isFinal
+      ? `🏆 [Tháng ${monthNo}] ${row.name || row.emp_code} — thưởng CHỐT tháng`
+      : `🏆 [Tháng ${monthNo}] ${row.name || row.emp_code} — thưởng DỰ KIẾN tháng`,
     `Đạt ${pctText(row.pct)} target (${moneyShort(row.achieved)}/${moneyShort(row.target)})`,
     `P1 (coach): ${p1 == null ? '—' : moneyShort(p1)}`,
     `P2 (ưu tiên C10): ${p2 == null ? '—' : moneyShort(p2)}`,
-    `Tổng dự kiến: ${moneyShort(total)}`,
-    'ℹ Số DỰ KIẾN theo chính sách hiện hành, không phải bảng lương.',
+    `${isFinal ? 'Tổng chốt' : 'Tổng dự kiến'}: ${moneyShort(total)}`,
+    isFinal
+      ? `✅ Số CHÍNH THỨC của kỳ${closing}. Không phải bảng lương — kế toán chi trả theo bảng lương.`
+      : `ℹ Số DỰ KIẾN, CHƯA CHỐT${closing}. Sau khi khoá sổ hệ thống gửi lại số chốt. Không phải bảng lương.`,
   ].join('\n');
 }
 

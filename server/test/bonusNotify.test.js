@@ -105,7 +105,47 @@ test('tin tổng thưởng cuối tháng: có đủ P1 + P2 + tổng, và ghi r�
   assert.match(text, /P1 \(coach\): 3\.120\.000đ/);
   assert.match(text, /P2 \(ưu tiên C10\): 5\.479\.768đ/);
   assert.match(text, /Tổng dự kiến: 8\.599\.768đ/);
-  assert.match(text, /DỰ KIẾN.*không phải bảng lương/);
+  // CEO chốt 30/07: tin 20:00 cuối tháng VẪN GỬI nhưng phải nói rõ CHƯA CHỐT, kèm
+  // ngày khoá sổ và lời hứa gửi lại số chốt — không để NV tưởng đây là số cuối.
+  assert.match(text, /thưởng DỰ KIẾN tháng/);
+  assert.match(text, /Số DỰ KIẾN, CHƯA CHỐT/);
+  assert.match(text, /gửi lại số chốt/);
+  assert.match(text, /[Kk]hông phải bảng lương/);
+});
+
+test('lượt sau khoá sổ: tin đổi thành SỐ CHỐT, bỏ hẳn chữ dự kiến', () => {
+  const employeeCost = require('../src/employeeCost');
+  const row = { emp_code: 'DN006', name: 'Trần B', ky: '07.2026', pct: 112.4, target: 1_000_000_000, achieved: 1_124_000_000 };
+  const bonus = { baseAmount: 3_120_000, priorityAmount: 5_479_768 };
+  const provisional = bonusNotify.monthEndMessage(row, bonus, {
+    stage: 'provisional', closeNote: employeeCost.periodCloseNote('2026-07', '2026-07-31'),
+  });
+  assert.match(provisional, /còn cập nhật đến hết ngày 08\/08\/2026/);
+
+  const final = bonusNotify.monthEndMessage(row, bonus, {
+    stage: 'final', closeNote: employeeCost.periodCloseNote('2026-07', '2026-08-09'),
+  });
+  assert.match(final, /thưởng CHỐT tháng/);
+  assert.match(final, /Tổng chốt: 8\.599\.768đ/);
+  assert.match(final, /Số CHÍNH THỨC của kỳ/);
+  assert.match(final, /đã khoá sổ hết ngày 08\/08\/2026/);
+  assert.doesNotMatch(final, /DỰ KIẾN/, 'tin chốt không được còn chữ dự kiến');
+});
+
+test('bộ hẹn giờ có lượt gửi SỐ CHỐT sau ngày khoá sổ, tách khoá chống trùng theo stage', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const bot = fs.readFileSync(path.join(__dirname, '..', 'telegram-bot.js'), 'utf8');
+  // Ngày lượt chốt phải suy từ employeeCost.PERIOD_CLOSE_DAY, không ghi cứng số 9.
+  assert.match(bot, /const MONTH_CLOSE_DAY = employeeCost\.PERIOD_CLOSE_DAY \+ 1;/);
+  assert.match(bot, /COST_MONTH_FINAL_SLOT = \{ hour: 20, minute: 0/);
+  assert.match(bot, /BONUS_MONTH_FINAL_SLOT = \{ hour: 20, minute: 10/);
+  // Lượt chốt gửi cho kỳ VỪA KHOÁ = tháng TRƯỚC, không phải tháng đang chạy.
+  assert.match(bot, /closedPeriodAsOf = isCloseDay \? isoDay\(new Date\(Date\.UTC\(d\.getUTCFullYear\(\), d\.getUTCMonth\(\), 0\)\)\) : ''/);
+  assert.match(bot, /stage: 'final'/);
+  // Hai lượt là HAI tin khác nhau: khoá chống gửi trùng phải mang stage.
+  assert.match(bot, /bonus_month\|\$\{monthKey\}\|\$\{stage\}/);
+  assert.match(bot, /kind === 'month' \? `\|\$\{stage\}` : ''/);
 });
 
 test('không có số thưởng hợp lệ -> trả null, KHÔNG bịa 0đ', () => {
