@@ -1,3 +1,12 @@
+### 2026-07-30 — Claude Code — ĐÃ GỘP VÀO `main` + directive deploy v3.4 cho bot
+> CEO: "CEO đồng ý cho em làm luôn nhe"
+
+Đã gộp nhánh `claude/new-session-eifd44` vào **`main`** (fast-forward, không rebase, không mất commit nào): `0d3e559` → **`d92807f`**. Nội dung: nhãn C45 (Lương tăng thêm) + bảng 4 ngữ cảnh phạt · 4 ô KPI tổng hợp toàn đội ở "Tất cả NV" · **cấu hình phạt sửa được** (v3.4).
+
+Thêm `DIRECTIVE_DEPLOY_V34_20260730.md` để bot deploy: chốt **đúng SHA `d92807f`**, giữ nguyên **2 cờ thông báo TẮT**, giữ **auto-deploy khoá**, **cấm build trong cây production** (§P4), **cấm ghi đè `server/data/employee_bonus_policies.json`** (dữ liệu tầng đè thật), bắt chạy **toàn bộ** suite (không chạy chọn lọc), và **6 bằng chứng nghiệm thu phân biệt được** (SHA · hash `web/dist` · PID app-report đổi / PID tgbot không đổi · log "notify: TẮT" · `formulaVersion=v3.4` + 4 bậc từ API · `penalty.aggregate=true` với số NV thật).
+
+Production trước deploy vẫn là `5c119a5` — đó chính là lý do CEO mở app chưa thấy 3 thứ trên.
+
 ### 2026-07-30 — Claude Code (CEO chốt) — NV hiểu C45 là cột nào · CEO thấy 4 ô KPI TỔNG HỢP · CẤU HÌNH PHẠT sửa được (v3.4)
 > CEO: "1. có nút phạt rồi, yêu cầu thêm cột c45 (lương tăng thêm) để nv biết rõ, họ không biết cột c45 là cột gì. phần giải thích khi bấm ra phải rõ hơn để nv hình dung được các ngữ cảnh có thể bị phạt nếu không cố gắng · 2. Ở trạng thái hiển thị tất cả nhân viên thì màn hình ceo chưa thấy được 4 ô kpi, yêu cầu ceo phải thấy được toàn cảnh các ô này phải hiện tổng hợp. chỉ khi chọn theo từng nv mới hiển thị theo từng nv · 3. màn này đã thấy rồi · 4. Nút cấu hình chỉ mới thấy và cấu hình được phần thưởng. còn phần cấu hình phần phạt hiện chưa thao tác được."
 
