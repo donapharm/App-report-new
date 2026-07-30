@@ -135,4 +135,7 @@ function nvUnitDrop(prevKy, ky) {
   return [...byNv.values()].sort((a, b) => b.units.length - a.units.length);
 }
 
-module.exports = { reconcileKy, nvUnitDrop };
+// rawSlotRows/activeSlotsForKy xuất ra để script soát ĐẾM TRÙNG CHÉO KỲ đọc đúng
+// DÒNG GỐC của slot — store.getRows đã chuẩn hoá nên không còn source_line_id, dùng
+// nó thì mọi dòng đều "không nhận dạng được" và guard thành vô dụng.
+module.exports = { reconcileKy, nvUnitDrop, rawSlotRows, activeSlotsForKy };

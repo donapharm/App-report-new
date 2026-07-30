@@ -1,3 +1,20 @@
+### 2026-07-30 — Claude Code (CEO chốt) — CHẶN ĐẾM TRÙNG ĐƠN GIỮA CÁC KỲ (việc 3) + yêu cầu cho bot (việc 1/4/5)
+> CEO: "phải có cơ chế chặn trùng đơn, tránh một đơn tính cho cả 2 tháng (như tính T06 rồi T07 tính nữa / tính T07 rồi T08 tính lại nữa)."
+
+**‼ Lớp cũ KHÔNG bắt được ca này.** `reconcile.duplicateLines` chỉ soát trùng **trong cùng một kỳ** (`seenLineId` dựng lại mỗi lần `reconcileKy`). Một dòng nằm ở T06 rồi lại nằm ở T07 thì **cả hai kỳ nhìn riêng đều SẠCH** — không ai phát hiện được bằng mắt. Rủi ro thật: quy kỳ theo **ngày thực giao**, nên VP018/DN007 sửa ngày là dòng chuyển kỳ; kỳ cũ chưa bỏ dòng ra thì thành cộng hai lần và **NV được thưởng trên doanh thu đếm đôi**.
+
+**Đã làm** (`src/crossPeriodDuplicates.js` + `scripts/check_cross_period_duplicates.js`):
+- Nhận dạng dòng theo 3 mức tin cậy: `source_line_id` → `order_item_id` → bộ ghép `mã đơn + mã hàng + đơn vị`.
+- Chỉ ra **dòng nào nằm ở những kỳ nào** và **số tiền đang đếm đôi** (giữ 1 lần là đúng, các lần sau là thừa). Xuất hiện 3 kỳ = đếm đôi 2 lần.
+- **KHÔNG tự chọn kỳ nào giữ** — đó là quyết định nghiệp vụ của VP018/DN007; câu chữ nói thẳng *"App Report KHÔNG tự chọn giúp"*.
+- **Fail-closed đủ hai chiều:** dòng **không có khoá nhận dạng** ⇒ `unverifiable`, không phải "sạch". Và **kỳ không có dòng nào cũng KHÔNG được tuyên sạch** — bản nháp đầu của Claude in *"✅ không có đơn nào bị tính hai kỳ"* khi cả hai kỳ đều **0 dòng**; tự phát hiện, đã sửa và khoá bằng test. Không có dữ liệu để soát khác hoàn toàn với đã soát và không thấy trùng.
+- Xuất `reconcile.rawSlotRows` / `activeSlotsForKy` để script đọc **DÒNG GỐC** của slot — bản nháp đầu dùng `store.getRows` (đã chuẩn hoá, rụng `source_line_id`) nên mọi dòng đều "không nhận dạng được" và guard thành vô dụng. Cũng tự phát hiện khi chạy thật.
+- Script thoát mã ≠ 0 khi chưa sạch, dùng được làm cổng chặn **trước khi khoá sổ ngày 8**.
+
+**Thêm `DIRECTIVE_BOT_VIEC_1_4_5_20260730.md`** cho bot: (A) bật công tắc NV tự xem chi phí cho **cả 12 NV** + 3 bằng chứng · (B) bật `PENALTY_NOTIFY` **nhưng phải chờ** — hiện `penaltyNotifyPolicy.js` chỉ là cờ trống, **chưa có nội dung tin phạt nào**, bật bây giờ thì không tin nào đi mà ai cũng tưởng đã xong · (C) quy tắc **đơn bù tách riêng**, giữ `parent_order_code`, **không sửa đè ngày đơn gốc**, và bot phải báo **quy mô** trước khi đổi gì · (D) ghi nhận 5.2 và 5.3 (**gộp, không tách** doanh thu tài chính/đánh giá NV).
+
+**Test:** server **558/567** (9 đỏ đúng mức nền) · thêm `crossPeriodDuplicates.test.js` **8 ca**.
+
 ### 2026-07-30 — Claude Code (CEO chốt) — CẢNH BÁO ĐỒNG BỘ DOANH THU (việc 2) + nâng hạn mức lịch sử (việc 6, v3.6)
 > CEO: "việc số 2 em phải làm ngay. Để tránh tình trạng chạy loanh quanh tìm số không khớp mãi mới ra được. Do không có người canh cửa nên hậu quả là chạy lòng vòng đi tìm." · "việc số 6 đề xuất tăng số dòng lên gấp đôi."
 
