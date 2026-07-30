@@ -44,6 +44,8 @@ Dán **nguyên văn** kết quả.
 
 ## BƯỚC 4 — ‼ CỔNG CHẶN TIỀN: kiểm thưởng T07 đã tính lại chưa
 
+> **‼ ĐÃ SỬA (2026-07-30 tối) — xem `DIRECTIVE_FINISH_20260730_TOI.md` VIỆC 2.** Mốc `130,26%` dưới đây **SAI** (tính sau VAT). Chuẩn app là **TRƯỚC VAT** ⇒ mốc đúng ~**124,21%**. Đừng dùng 130,26% làm cổng nữa.
+
 **Trước khi bật BẤT KỲ cờ thông báo nào**, kiểm DN008:
 ```
 GET /api/employee-cost?emp=DN008&from=2026-07&to=2026-07   (token CEO)
