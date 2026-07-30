@@ -29,12 +29,36 @@ test('penalty view model preserves backend numbers and keeps null distinct from 
   assert.equal(model.summary.afterPenaltyTotal, null);
   assert.equal(model.penalty.total, 7_599_706);
   assert.equal(model.penalty.appliedAmount, 0);
+  assert.equal(model.penalty.appliedContributors, 0);
   assert.equal(model.penalty.c45Dropped, false);
   assert.equal(model.penalty.c45WouldDrop, true);
   assert.equal(model.penalty.warning.revenueGap, 31_000_000);
 });
 
-test('employee penalty UI has exactly the four v3.3 KPI labels and fail-closed total gate', () => {
+test('ALL penalty view model preserves backend aggregate coverage and provisional subtotal', async () => {
+  const { employeeCostViewModel } = await modelModule();
+  const model = employeeCostViewModel({
+    empCode: 'ALL', allEmployees: true, from: '2026-07', to: '2026-07', periods: [],
+    summary: { reliable: false, periodTotal: null, afterPenaltyTotal: null },
+    penalty: {
+      aggregate: true, scope: 'team_full_range', mode: 'warn_only', total: null,
+      provisionalTotal: 9_999_706, appliedAmount: 0, appliedContributors: 2, baseTotal: null, afterPenaltyTotal: null,
+      employeeCount: 2, contributors: 1, unavailableCount: 1, unavailableEmployees: ['DN002'], complete: false,
+    },
+  });
+  assert.equal(model.penalty.aggregate, true);
+  assert.equal(model.penalty.scope, 'team_full_range');
+  assert.equal(model.penalty.total, null);
+  assert.equal(model.penalty.provisionalTotal, 9_999_706);
+  assert.equal(model.penalty.appliedAmount, 0);
+  assert.equal(model.penalty.appliedContributors, 2);
+  assert.equal(model.penalty.employeeCount, 2);
+  assert.equal(model.penalty.contributors, 1);
+  assert.deepEqual(model.penalty.unavailableEmployees, ['DN002']);
+  assert.equal(model.penalty.complete, false);
+});
+
+test('employee penalty UI has exactly the four v3.4 KPI labels and fail-closed total gate', () => {
   for (const label of [
     'Phạt dự kiến',
     'Tổng chi phí tháng sau phạt',
@@ -47,8 +71,14 @@ test('employee penalty UI has exactly the four v3.3 KPI labels and fail-closed t
   // Fail-closed KHÔNG mất: chuyển vào trong component, hiện CHỮ thay vì ẩn ô.
   assert.doesNotMatch(PAGE, /model\.summary\.periodTotal != null && <AfterPenaltyKpi/,
     'ô "Tổng sau phạt" không được ẩn theo điều kiện ngoài');
-  assert.match(PAGE, /: <AfterPenaltyKpi penalty=\{model\.penalty\} baseTotal=\{model\.summary\.periodTotal\}/,
-    'nhánh chọn-1-NV phải render ô "Tổng sau phạt" vô điều kiện');
+  assert.match(PAGE, /<AfterPenaltyKpi[\s\S]{0,220}?baseTotal=\{allEmployees \? model\.penalty\.baseTotal : model\.summary\.periodTotal\}/,
+    'mọi chế độ phải render ô "Tổng sau phạt"; ALL chỉ đọc baseTotal backend');
+  assert.match(PAGE, /if \(penalty\.aggregate && penalty\.afterPenaltyTotal == null\) \{[\s\S]{0,350}?Chưa đủ dữ liệu phạt/,
+    'ALL enforced thiếu số áp dụng phải fail-closed, không được dùng tổng gốc như tổng sau phạt');
+  assert.doesNotMatch(PAGE, /label="Phạt dự kiến" value="Chọn 1 NV"/,
+    'ALL đã có tổng backend, không được giữ placeholder cũ');
+  assert.match(PAGE, /<PenaltyKpi penalty=\{model\.penalty\}/);
+  assert.match(PAGE, /<XuPenaltyKpi penalty=\{model\.penalty\}/);
   assert.match(PAGE, /if \(baseTotal == null\) \{[\s\S]{0,400}?Chưa đủ dữ liệu chi phí/,
     'tổng gốc null phải hiện chữ, KHÔNG được suy ra số và KHÔNG được ẩn ô');
   assert.doesNotMatch(PAGE, /if \(baseTotal == null\) return null;/,

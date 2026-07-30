@@ -4,17 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const employeeBonus = require('./employeeBonus');
-const employeePenalty = require('./employeePenalty');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const POLICY_FILE = process.env.EMPLOYEE_BONUS_POLICY_FILE || path.join(DATA_DIR, 'employee_bonus_policies.json');
 const AUDIT_FILE = process.env.EMPLOYEE_BONUS_POLICY_AUDIT_FILE || path.join(DATA_DIR, 'employee_bonus_policy_audit.json');
 const LAYERS = Object.freeze(['default', 'productGroup', 'route', 'unit', 'employee']);
 const TARGET_LAYERS = Object.freeze(['default', 'route', 'unit', 'employee']);
-// Phạt là chính sách CHUNG (CEO chốt 30/07): chỉ sửa ở tầng "toàn bộ NV". Không mở
-// tầng nhóm hàng/tuyến/đơn vị/NV để tránh phạt riêng từng người.
-const PENALTY_LAYERS = Object.freeze(['default']);
-const PENALTY_KEYS = Object.freeze(['penaltyTiers', 'penaltyEnabled', 'penaltyWarnFrom', 'penaltyEffectiveFrom', 'xuPenalty']);
 const LAYER_INDEX = new Map(LAYERS.map((layer, index) => [layer, index]));
 
 function readJson(file, fallback) {
@@ -96,36 +91,14 @@ function mergeConfig(base, patch = {}) {
     ...(Object.prototype.hasOwnProperty.call(patch, 'totalCapPct') ? { totalCapPct: patch.totalCapPct } : {}),
     priorityRates: { ...(base.priorityRates || {}), ...(patch.priorityRates || {}) },
     priorityTargets: { ...(base.priorityTargets || {}), ...(patch.priorityTargets || {}) },
-    // Trường phạt đè NGUYÊN KHỐI (thay cả mảng bậc, không trộn từng bậc) để không
-    // bao giờ tạo ra bảng bậc nửa cũ nửa mới có khe hở.
-    ...Object.fromEntries(PENALTY_KEYS
-      .filter((key) => Object.prototype.hasOwnProperty.call(patch, key))
-      .map((key) => [key, patch[key]])),
   };
 }
 
-function normalizePatch(raw = {}, seedConfig, scope = { type: 'default' }, options = {}) {
+function normalizePatch(raw = {}, seedConfig, scope = { type: 'default' }) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw Object.assign(new Error('Cấu hình thưởng không hợp lệ'), { status: 400, code: 'BONUS_POLICY_PATCH_INVALID' });
   const patch = {};
   for (const key of ['baseTiers', 'priorityThresholdPct', 'priorityRates', 'priorityTargets', 'autoGroupTargets', 'totalCapPct']) {
     if (Object.prototype.hasOwnProperty.call(raw, key)) patch[key] = raw[key];
-  }
-  // PHẠT: CEO sửa được bậc/ngày/xu qua tầng đè, nhưng chỉ ở tầng chung và phải qua
-  // đủ kiểm tra của employeePenalty (4 bậc liền mạch, không hồi tố).
-  const penaltyRaw = Object.fromEntries(PENALTY_KEYS
-    .filter((key) => Object.prototype.hasOwnProperty.call(raw, key))
-    .map((key) => [key, raw[key]]));
-  if (Object.keys(penaltyRaw).length) {
-    if (!PENALTY_LAYERS.includes(scope.type)) {
-      throw Object.assign(new Error('Cấu hình phạt là chính sách chung — chỉ sửa ở tầng "Toàn bộ NV".'), { status: 400, code: 'PENALTY_POLICY_SCOPE_INVALID' });
-    }
-    const result = employeePenalty.validatePenaltyOverride(penaltyRaw, {
-      periodMonth: options.periodMonth || '',
-      currentMonth: options.currentMonth || new Date().toISOString().slice(0, 7),
-      seed: seedConfig || {},
-    });
-    if (!result.ok) throw Object.assign(new Error(result.message), { status: 400, code: `PENALTY_POLICY_${String(result.reason || 'invalid').toUpperCase()}` });
-    Object.assign(patch, result.patch);
   }
   if (!Object.keys(patch).length) throw Object.assign(new Error('Chưa có trường cấu hình nào để lưu'), { status: 400, code: 'BONUS_POLICY_PATCH_EMPTY' });
   if (Object.prototype.hasOwnProperty.call(patch, 'priorityTargets') && !TARGET_LAYERS.includes(scope.type)) {
@@ -169,10 +142,6 @@ function normalizePatch(raw = {}, seedConfig, scope = { type: 'default' }, optio
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'autoGroupTargets')) normalized.autoGroupTargets = validated.autoGroupTargets;
   if (Object.prototype.hasOwnProperty.call(patch, 'totalCapPct')) normalized.totalCapPct = validated.totalCapPct;
-  // Trường phạt đã được employeePenalty chuẩn hoá ở trên; ghi lại nguyên khối.
-  for (const key of PENALTY_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(patch, key)) normalized[key] = patch[key];
-  }
   return normalized;
 }
 
@@ -274,7 +243,7 @@ function createPolicyStore({ policyFile = POLICY_FILE, auditFile = AUDIT_FILE, s
       employee: scope.type === 'employee' ? scope.value : undefined,
     };
     const baseForScope = resolve({ period: effectiveFrom, context }).config;
-    const patch = normalizePatch(payload.patch || payload.config || {}, rawConfig(baseForScope) || seed, scope, { periodMonth: effectiveFrom, currentMonth: payload.currentMonth });
+    const patch = normalizePatch(payload.patch || payload.config || {}, rawConfig(baseForScope) || seed, scope);
     return {
       id: String(payload.id || `bonus-policy-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`),
       version: Number(payload.version || 0), effectiveFrom, effectiveTo, scope, patch,
@@ -355,8 +324,7 @@ function createPolicyStore({ policyFile = POLICY_FILE, auditFile = AUDIT_FILE, s
 
 const store = createPolicyStore();
 module.exports = {
-  POLICY_FILE, AUDIT_FILE, LAYERS, TARGET_LAYERS, PENALTY_LAYERS, PENALTY_KEYS,
-  monthKey, normalizeScope, mergeConfig, createPolicyStore,
+  POLICY_FILE, AUDIT_FILE, LAYERS, TARGET_LAYERS, monthKey, normalizeScope, mergeConfig, createPolicyStore,
   list: store.list, audit: store.audit, revision: store.revision, resolve: store.resolve,
   preview: store.preview, savePreview: store.savePreview, save: store.save,
 };

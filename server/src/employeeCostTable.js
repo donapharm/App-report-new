@@ -142,6 +142,12 @@ function numeric(value) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function numberOrNull(value) {
+  if (value == null || value === '' || typeof value === 'boolean') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function summarizeRows(rows = [], columns = [], baseSummary = null) {
   const costColumns = columns.filter((column) => /^c(?:3[3-9]|4[0-6])$/.test(String(column?.key || '').toLowerCase())
     && !BLOCKED.has(String(column.key).toLowerCase()));
@@ -297,30 +303,8 @@ function transformReport(report = {}, options = {}) {
   const reliable = periods.every((period) => period.summary.reliable);
   const costKeys = [...new Set(periods.flatMap((period) => period.columns.map((column) => String(column.key || '').toLowerCase())
     .filter((key) => /^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key))))];
-  const periodTotal = reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.monthlyTotal), 0) : null;
-  // PHẠT toàn đội (CEO chốt 30/07): ở "Tất cả NV" phải thấy TỔNG HỢP, không phải
-  // chữ "Chọn 1 NV". Cộng từ số phạt đã tính riêng cho từng NV, lấy theo đúng bộ lọc
-  // đang xem (employeeSubtotals của kỳ chốt), KHÔNG tính lại theo target tổng.
-  const finalPeriod = periods.find((period) => period.period === report.to) || periods.at(-1) || null;
-  // Không lọc gì thì cộng theo BẢN ĐỒ PHẠT của backend (đủ mọi NV, kể cả NV chưa có
-  // dòng chi phí nào — nếu chỉ dựa vào tổng phụ theo dòng thì NV đó biến mất khỏi
-  // tổng, đúng kiểu "mất số lặng lẽ" mà CEO đã bắt lỗi).
-  // Có lọc/tìm kiếm thì thu hẹp về đúng NV còn trong bộ lọc, để tổng khớp bảng.
-  const filtersActive = !!String(options.q || '').trim()
-    || FILTER_KEYS.some((key) => !!requestedFilterValue(options, key));
-  const employeeNames = new Map((Array.isArray(report.employees) ? report.employees : [])
-    .map((employee) => [String(employee.empCode || '').toUpperCase(), String(employee.employeeName || employee.empCode || '')]));
-  const penaltyList = filtersActive
-    ? (finalPeriod?.employeeSubtotals || []).filter((item) => item?.penalty)
-      .map((item) => ({ ...item.penalty, empCode: item.employeeCode, employeeName: item.employeeName }))
-    : Object.entries(finalPeriod?.employeePenalties || {})
-      .map(([empCode, penalty]) => ({ ...penalty, empCode, employeeName: employeeNames.get(String(empCode).toUpperCase()) || empCode }));
-  const aggregatePenalty = options.allEmployees
-    ? employeePenaltyAggregate.aggregate({ periodTotal, penalties: penaltyList })
-    : null;
   return {
     ...report,
-    ...(aggregatePenalty ? { penalty: aggregatePenalty } : {}),
     periods,
     rows: undefined,
     allEmployees: !!options.allEmployees,
@@ -332,11 +316,7 @@ function transformReport(report = {}, options = {}) {
     search: { query: String(options.q || '').slice(0, 200), filteredRows, totalRows },
     summary: {
       reliable,
-      periodTotal,
-      ...(aggregatePenalty ? {
-        penaltyAppliedAmount: aggregatePenalty.appliedAmount,
-        afterPenaltyTotal: aggregatePenalty.afterPenaltyTotal,
-      } : {}),
+      periodTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.monthlyTotal), 0) : null,
       annualTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.annualTotal), 0) : null,
       revenueTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0),
       revenueBeforeVatTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0),
@@ -347,6 +327,11 @@ function transformReport(report = {}, options = {}) {
       provisionalAnnualTotal: periods.reduce((sum, period) => sum + numeric(period.summary.provisionalAnnualTotal), 0),
       provisionalColumnTotals: Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.provisionalColumnTotals?.[key]), 0)])),
       annualColumnKeys: [...new Set(periods.flatMap((period) => period.summary.annualColumnKeys || []))],
+      // Penalty is calculated before table filters/pagination and represents the
+      // full selected employee/team range. Preserve that backend scope instead of
+      // subtracting it from a filtered row slice in the client.
+      penaltyAppliedAmount: numberOrNull(report.summary?.penaltyAppliedAmount ?? report.penalty?.appliedAmount),
+      afterPenaltyTotal: numberOrNull(report.summary?.afterPenaltyTotal ?? report.penalty?.afterPenaltyTotal),
     },
     displayedRows: allRows.length,
   };
@@ -387,7 +372,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const low = rate != null && rate < threshold;
     return {
       empCode: 'ALL', period: periodKey, columns, rows,
-      // Only the report's selected/final month owns a PHẠT v3.3 summary.
+      // Only the report's selected/final month owns a PHẠT v3.4 summary.
       // Keeping the map in the merged backend payload lets filtered ALL
       // subtotals retain the server-calculated penalty without client math.
       employeePenalties: Object.fromEntries(blocks.flatMap(({ report }) => {
@@ -413,6 +398,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
     periods,
     employees: roster.map((employee) => ({ empCode: employee.emp_code, employeeName: employee.name })),
     bonus: employeeBonus.aggregateBonusSummaries(source, roster),
+    penalty: employeePenaltyAggregate.aggregatePenaltySummaries(source),
   };
 }
 
@@ -432,6 +418,7 @@ module.exports = {
   normalizeSortKey,
   sortRows,
   summarizeRows,
+  numberOrNull,
   employeeSubtotals,
   facetOptions,
   buildFilterOptions,

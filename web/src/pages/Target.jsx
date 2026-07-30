@@ -307,165 +307,234 @@ function BonusPolicyPanel({ ky, employees = [], onSaved }) {
   </div>;
 }
 
-// ── CÁCH TÍNH PHẠT — XEM VÀ SỬA ĐƯỢC (CEO chốt 2026-07-30) ────────────────────
-// CEO: "Nút cấu hình chỉ mới thấy và cấu hình được phần thưởng. Còn phần cấu hình
-// phần phạt hiện chưa thao tác được."
-//
-// Sửa qua ĐÚNG đường tầng-đè của Thưởng: Mô phỏng → Lưu → ghi audit. File seed và
-// vân tay công thức KHÔNG đổi nên khoá chống-quên-nâng-version vẫn còn. Mọi kiểm
-// tra (4 bậc liền mạch, không hồi tố, trần tỷ lệ) do BACKEND quyết, frontend chỉ
-// gửi số CEO nhập và hiện lỗi backend trả về.
+// ── CẤU HÌNH PHẠT v3.4 — version dữ liệu theo tháng/giai đoạn, CEO-only save ──
+const DEFAULT_PENALTY_PARAMETERS = {
+  penaltyEnabled: true,
+  warningFrom: '2026-07-01',
+  enforcedFrom: '2026-08-01',
+  dropThresholdPct: 50,
+  upperPenaltyThresholdPct: 70,
+  noPenaltyThresholdPct: 90,
+  lowerRatePct: 0.3,
+  upperRatePct: 0.2,
+  bottomDropC45: true,
+  bottomRatePct: 0.3,
+  xuEnabled: false,
+  perMissingXu: 300000,
+};
+
+function kyMonth(ky) {
+  const match = /^(0[1-9]|1[0-2])\.(\d{4})$/.exec(String(ky || ''));
+  return match ? `${match[2]}-${match[1]}` : String(ky || '').slice(0, 7);
+}
+
 function dmy(iso) {
   const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || '—');
 }
 
-const PENALTY_MODE_TEXT = {
-  enforced: 'ĐANG TRỪ THẬT',
-  warn_only: 'CHỈ CẢNH BÁO — chưa trừ tiền',
-  off: 'CHƯA ÁP DỤNG',
-};
-
-// Bảng bậc do backend sinh từ config (mốc %, hậu quả) — frontend không tự viết chữ.
-function PenaltyTierTable({ tiers = [] }) {
-  if (!tiers.length) return <div className="card">Chưa tải được bảng bậc phạt từ backend.</div>;
-  return <div className="table-scroll"><table className="data-table">
-    <thead><tr><th>% đạt target</th><th>Xử lý</th><th>Mã bậc</th></tr></thead>
-    <tbody>{tiers.map((tier) => <tr key={tier.tier}>
-      <td><b>{tier.range}</b></td>
-      <td style={{ color: `var(--${tier.dropC45 ? 'hi' : tier.ratePct ? 'warn' : 'ok'})` }}>{tier.effect}</td>
-      <td className="mono">{tier.tier}</td>
-    </tr>)}</tbody>
-  </table></div>;
+function penaltyMoney(value, provisional = null) {
+  if (value != null) return money(value);
+  return provisional != null ? `${money(provisional)} · tạm tính` : 'Chưa đủ dữ liệu';
 }
 
-function tierFormFrom(snapshot) {
-  const byTier = Object.fromEntries((snapshot?.rawTiers || []).map((tier) => [String(tier?.tier || ''), tier]));
-  return {
-    dropTo: byTier.drop_c45?.toPct ?? 50,
-    lowTo: byTier.t50_70?.toPct ?? 70,
-    midTo: byTier.t70_90?.toPct ?? 90,
-    lowRate: byTier.t50_70?.ratePct ?? 0.3,
-    midRate: byTier.t70_90?.ratePct ?? 0.2,
-    enabled: snapshot?.enabled === true,
-    warnFrom: snapshot?.warnFrom || '',
-    effectiveFrom: snapshot?.effectiveFrom || '',
-    xuEnabled: snapshot?.xuPenalty?.enabled === true,
-    perMissingXu: snapshot?.xuPenalty?.perMissingXu ?? 300000,
-    note: '',
-  };
-}
-
-function PenaltyPolicyPanel({ snapshot, formulaVersion, period, onSaved }) {
-  const fv = formulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
-  const [form, setForm] = useState(() => tierFormFrom(snapshot));
-  const [preview, setPreview] = useState(null);
+function PenaltyPolicyPanel({ period, onSaved }) {
+  const selectedMonth = kyMonth(period);
+  const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
-  // Đổi kỳ / nạp lại cấu hình ⇒ form quay về đúng số đang áp dụng của kỳ đó.
-  useEffect(() => { setForm(tierFormFrom(snapshot)); setPreview(null); setErr(''); setMsg(''); }, [period, snapshot?.effectiveFrom, snapshot?.warnFrom, snapshot?.enabled, JSON.stringify(snapshot?.rawTiers || [])]);
-  const update = (patch) => { setForm((current) => ({ ...current, ...patch })); setPreview(null); setMsg(''); };
-  if (!snapshot) return <div className="card">Chưa tải được cấu hình phạt từ backend.</div>;
-  const number = (value) => (String(value).trim() === '' ? null : Number(value));
-  const patch = () => ({
-    penaltyTiers: [
-      { tier: 'drop_c45', fromPct: null, toPct: number(form.dropTo), dropC45: true },
-      { tier: 't50_70', fromExclusivePct: number(form.dropTo), toPct: number(form.lowTo), ratePct: number(form.lowRate) },
-      { tier: 't70_90', fromPct: number(form.lowTo), toPct: number(form.midTo), ratePct: number(form.midRate) },
-      { tier: 'none', fromPct: number(form.midTo), toPct: null, ratePct: 0 },
-    ],
-    penaltyEnabled: !!form.enabled,
-    penaltyWarnFrom: form.warnFrom,
-    penaltyEffectiveFrom: form.effectiveFrom,
-    xuPenalty: { enabled: !!form.xuEnabled, perMissingXu: Number(form.perMissingXu) },
+  const [preview, setPreview] = useState(null);
+  const [form, setForm] = useState({
+    effectiveFrom: selectedMonth,
+    effectiveTo: '',
+    previewPeriod: selectedMonth,
+    copiedFromVersion: null,
+    note: '',
+    ...DEFAULT_PENALTY_PARAMETERS,
+  });
+  const update = (patch) => {
+    const formulaKeys = new Set([
+      'penaltyEnabled', 'warningFrom', 'enforcedFrom', 'dropThresholdPct', 'upperPenaltyThresholdPct',
+      'noPenaltyThresholdPct', 'lowerRatePct', 'upperRatePct', 'bottomDropC45', 'bottomRatePct',
+      'xuEnabled', 'perMissingXu',
+    ]);
+    setForm((current) => {
+      const formulaChanged = !Object.prototype.hasOwnProperty.call(patch, 'copiedFromVersion')
+        && Object.keys(patch).some((key) => formulaKeys.has(key));
+      return { ...current, ...patch, ...(formulaChanged ? { copiedFromVersion: null } : {}) };
+    });
+    setPreview(null); setMsg('');
+  };
+  async function load() {
+    if (!selectedMonth) return;
+    setBusy(true); setErr('');
+    try {
+      const result = await api.adminPenaltyPolicies({ period: selectedMonth });
+      setData(result);
+      const parameters = result.resolved?.parameters || DEFAULT_PENALTY_PARAMETERS;
+      const editableMonth = result.minEffectiveMonth > selectedMonth ? result.minEffectiveMonth : selectedMonth;
+      setForm((current) => ({
+        ...current,
+        ...parameters,
+        effectiveFrom: editableMonth,
+        effectiveTo: '',
+        previewPeriod: editableMonth,
+      }));
+    } catch (error) { setErr(error.message); }
+    setBusy(false);
+  }
+  useEffect(() => { load(); }, [selectedMonth]);
+
+  const parameters = () => ({
+    penaltyEnabled: form.penaltyEnabled,
+    warningFrom: form.warningFrom,
+    enforcedFrom: form.enforcedFrom,
+    dropThresholdPct: Number(form.dropThresholdPct),
+    upperPenaltyThresholdPct: Number(form.upperPenaltyThresholdPct),
+    noPenaltyThresholdPct: Number(form.noPenaltyThresholdPct),
+    lowerRatePct: Number(form.lowerRatePct),
+    upperRatePct: Number(form.upperRatePct),
+    bottomDropC45: form.bottomDropC45,
+    bottomRatePct: Number(form.bottomRatePct),
+    xuEnabled: form.xuEnabled,
+    perMissingXu: Number(form.perMissingXu),
+  });
+  const payload = () => ({
+    effectiveFrom: form.effectiveFrom,
+    effectiveTo: form.effectiveTo || null,
+    previewPeriod: form.previewPeriod,
+    copiedFromVersion: form.copiedFromVersion,
+    note: form.note,
+    parameters: parameters(),
   });
   async function runPreview() {
     setBusy(true); setErr(''); setMsg('');
-    try { setPreview(await api.adminPenaltyPolicyPreview({ period, effectiveFrom: period, patch: patch(), note: form.note })); }
+    try { setPreview(await api.adminPenaltyPolicyPreview(payload())); }
     catch (error) { setPreview(null); setErr(error.message); }
     setBusy(false);
   }
-  async function save() {
+  async function approveAndSave() {
     if (!preview?.previewId) return;
     setBusy(true); setErr(''); setMsg('');
     try {
-      const result = await api.adminPenaltyPolicySave({ previewId: preview.previewId, period });
-      setPreview({ ...preview, after: result.after || preview.after, saved: true });
-      setMsg(`Đã lưu bậc phạt mới (version v${result.policy?.version ?? '?'}) và ghi audit ai · khi nào · cũ→mới. Số tiền phạt từng NV cập nhật ở màn "Chi phí của tôi".`);
+      await api.adminPenaltyPolicySave({ previewId: preview.previewId });
+      setPreview({ ...preview, saved: true });
+      setMsg(`Đã lưu policy phạt p${preview.candidate.version}; lịch sử cũ giữ nguyên. Backend đã xoá cache liên quan.`);
+      await load();
       await onSaved?.();
     } catch (error) { setErr(error.message); }
     setBusy(false);
   }
-  const current = preview?.saved ? preview.after : snapshot;
-  const mode = current?.mode || 'off';
-  const editable = snapshot.editable !== false;
-  return <div className="bonus-policy-panel">
-    <div className="meta muted">Phạt {fv} — trừ vào <b>cột C45 "Lương tăng thêm"</b>. Cơ số: doanh thu <b>trước VAT</b>.
-      Trần phạt = <b>chính số tiền C45</b>, không bao giờ để C45 âm. Phạt là <b>số riêng</b>, KHÔNG trộn vào tiền thưởng và KHÔNG ghi đè số DataHub.
-      <b> Chỉ dự kiến/tham khảo, không payroll.</b></div>
+  function rejectPreview() {
+    setPreview(null);
+    setMsg('Đã chọn Không duyệt — không lưu, không thay đổi công thức đang dùng.');
+  }
+  function commentPreview() {
+    setPreview(null);
+    setMsg('Đã dừng lưu. Sếp chỉnh lại thông số/ghi chú rồi bấm Mô phỏng lại.');
+  }
+  function copyPolicy(policy) {
+    const editableMonth = data?.minEffectiveMonth > selectedMonth ? data.minEffectiveMonth : selectedMonth;
+    update({
+      ...(policy.parameters || DEFAULT_PENALTY_PARAMETERS),
+      effectiveFrom: editableMonth,
+      effectiveTo: '',
+      previewPeriod: editableMonth,
+      copiedFromVersion: policy.version,
+      note: `Dùng lại cấu hình p${policy.version}: ${policy.note || 'không ghi chú'}`,
+    });
+  }
 
-    <div className="card" style={{ borderColor: mode === 'enforced' ? 'var(--hi)' : 'var(--warn)' }}>
-      <b>Trạng thái áp dụng: {PENALTY_MODE_TEXT[mode] || mode} (kỳ {period})</b>
-      <div className="meta muted">Tự chuyển theo lịch, <b>không có nút bật tay</b>: chỉ cảnh báo từ <b>{dmy(current?.warnFrom)}</b> · bắt đầu <b>trừ thật từ {dmy(current?.effectiveFrom)}</b>.
-        Chế độ tính theo <b>kỳ dữ liệu</b>, không theo ngày mở màn hình — nên chạy lại kỳ cũ vẫn ra đúng kết quả của kỳ đó.</div>
-    </div>
-
-    <div className="section-title">Bậc phạt đang áp dụng cho kỳ {period}</div>
-    <PenaltyTierTable tiers={current?.tiers || []} />
-    <div className="meta muted">Bốn bậc <b>liền mạch, không có khe hở</b>: mọi mức đạt đều rơi đúng một bậc.
-      Riêng mốc mất trắng phải <b>VƯỢT</b> mới thoát (đúng mốc vẫn mất trắng); hai mốc trên chỉ cần <b>chạm</b>.</div>
-
+  const fv = data?.formulaVersion || 'v3.4';
+  const currentPolicy = data?.resolved?.source;
+  const modeAtPreview = !form.penaltyEnabled ? 'CHƯA ÁP DỤNG'
+    : `${form.previewPeriod}-01` >= form.enforcedFrom ? 'TRỪ THẬT'
+      : `${form.previewPeriod}-01` >= form.warningFrom ? 'CHỈ CẢNH BÁO' : 'CHƯA ÁP DỤNG';
+  const impact = preview?.impact;
+  const previewRows = impact?.rows || [];
+  return <div className="bonus-policy-panel penalty-policy-editor">
+    <div className="meta muted">Engine <b>{fv}</b> · policy đang dùng <b>p{currentPolicy?.version ?? 0}</b>. CEO có thể tạo công thức theo từng tháng/giai đoạn.
+      Mỗi lần lưu tạo <b>version mới, không ghi đè kỳ cũ</b>; backend tự chọn đúng version theo kỳ dữ liệu. Chỉ là dự kiến/tham khảo, không payroll.</div>
     {busy && <Spinner />}
     {err && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>⚠ {err}</div>}
     {msg && <div className="card" style={{ borderColor: 'var(--ok)', color: 'var(--ok)' }}>✔ {msg}</div>}
-    {!editable && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>🔒 Kỳ trước T07.2026 đã đóng — không sửa cấu hình phạt cho kỳ này.</div>}
+    {!data?.canEdit && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>🔒 Chỉ tài khoản CEO được mô phỏng và lưu công thức phạt.</div>}
 
-    <div className="section-title">Sửa cấu hình phạt (áp dụng từ kỳ {period}, tầng chung cho toàn bộ NV)</div>
+    <div className="section-title">1. Giai đoạn và lịch áp dụng</div>
     <div className="filter-grid">
-      <label><span>Mốc mất trắng C45 — đạt ≤ (%)</span><input type="number" step="0.1" min="0" value={form.dropTo} onChange={(e) => update({ dropTo: e.target.value })} /></label>
-      <label><span>Bậc phạt nặng đến dưới (%)</span><input type="number" step="0.1" min="0" value={form.lowTo} onChange={(e) => update({ lowTo: e.target.value })} /></label>
-      <label><span>Hết phạt từ (%)</span><input type="number" step="0.1" min="0" value={form.midTo} onChange={(e) => update({ midTo: e.target.value })} /></label>
-      <label><span>Tỷ lệ bậc nặng (% doanh thu)</span><input type="number" step="0.01" min="0" max={snapshot.maxRatePct ?? 1} value={form.lowRate} onChange={(e) => update({ lowRate: e.target.value })} /></label>
-      <label><span>Tỷ lệ bậc nhẹ (% doanh thu)</span><input type="number" step="0.01" min="0" max={snapshot.maxRatePct ?? 1} value={form.midRate} onChange={(e) => update({ midRate: e.target.value })} /></label>
-      <label><span>Bắt đầu CẢNH BÁO từ ngày</span><input type="date" value={form.warnFrom} onChange={(e) => update({ warnFrom: e.target.value })} /></label>
-      <label><span>Bắt đầu TRỪ THẬT từ ngày</span><input type="date" min={snapshot.earliestEffectiveFrom || undefined} value={form.effectiveFrom} onChange={(e) => update({ effectiveFrom: e.target.value })} /></label>
-      <label><span>Tiền mỗi Xu thiếu (đ)</span><input type="number" step="1000" min="0" max={snapshot.maxPerMissingXu ?? undefined} value={form.perMissingXu} onChange={(e) => update({ perMissingXu: e.target.value })} /></label>
-      <label className="bonus-missing-check"><input type="checkbox" checked={form.enabled} onChange={(e) => update({ enabled: e.target.checked })} /> Bật chính sách phạt</label>
-      <label className="bonus-missing-check"><input type="checkbox" checked={form.xuEnabled} onChange={(e) => update({ xuEnabled: e.target.checked })} /> Bật phạt thiếu Xu (quyết toán cuối quý)</label>
+      <label><span>Hiệu lực từ tháng</span><input type="month" min={data?.minEffectiveMonth || ''} value={form.effectiveFrom} onChange={(e) => update({ effectiveFrom: e.target.value, previewPeriod: e.target.value })} /></label>
+      <label><span>Đến tháng (trống = mở)</span><input type="month" min={form.effectiveFrom || data?.minEffectiveMonth || ''} value={form.effectiveTo} onChange={(e) => update({ effectiveTo: e.target.value })} /></label>
+      <label><span>Kỳ mô phỏng</span><input type="month" min={form.effectiveFrom || data?.minEffectiveMonth || ''} value={form.previewPeriod} onChange={(e) => update({ previewPeriod: e.target.value })} /></label>
+      <label><span>Cảnh báo từ</span><input type="date" value={form.warningFrom} onChange={(e) => update({ warningFrom: e.target.value })} /></label>
+      <label><span>Trừ thật từ</span><input type="date" value={form.enforcedFrom} onChange={(e) => update({ enforcedFrom: e.target.value })} /></label>
+      <label className="bonus-missing-check"><input type="checkbox" checked={form.penaltyEnabled} onChange={(e) => update({ penaltyEnabled: e.target.checked })} /> Bật chính sách phạt</label>
       <label><span>Ghi chú version</span><input value={form.note} onChange={(e) => update({ note: e.target.value })} placeholder="Lý do thay đổi" /></label>
     </div>
-    <div className="meta muted">Giới hạn backend giữ nguyên khi sửa: tỷ lệ tối đa <b>{snapshot.maxRatePct ?? 1}%</b> doanh thu · bậc đạt thấp <b>không được nhẹ hơn</b> bậc đạt cao ·
-      4 bậc phải <b>liền mạch</b> · <b>KHÔNG hồi tố</b> (ngày trừ thật sớm nhất là <b>{dmy(snapshot.earliestEffectiveFrom)}</b>) · chỉ sửa ở <b>tầng chung</b>, không có phạt riêng từng người.</div>
+    <div className="card" style={{ borderColor: modeAtPreview === 'TRỪ THẬT' ? 'var(--hi)' : 'var(--warn)' }}>
+      <b>Kỳ {form.previewPeriod || '—'}: {modeAtPreview}</b>
+      <div className="meta muted">Cảnh báo từ {dmy(form.warningFrom)} · trừ thật từ {dmy(form.enforcedFrom)} · lịch luôn tính theo kỳ dữ liệu.</div>
+    </div>
+
+    <div className="section-title">2. Ba mốc và mức phạt</div>
+    <div className="filter-grid">
+      <label><span>Mốc bậc đáy (≤ %)</span><input type="number" step="0.1" min="0" value={form.dropThresholdPct} onChange={(e) => update({ dropThresholdPct: e.target.value })} /></label>
+      <label><span>Mốc chuyển bậc trên (≥ %)</span><input type="number" step="0.1" min="0" value={form.upperPenaltyThresholdPct} onChange={(e) => update({ upperPenaltyThresholdPct: e.target.value })} /></label>
+      <label><span>Mốc không phạt (≥ %)</span><input type="number" step="0.1" min="0" value={form.noPenaltyThresholdPct} onChange={(e) => update({ noPenaltyThresholdPct: e.target.value })} /></label>
+      <label><span>Rate bậc dưới (%)</span><input type="number" step="0.01" min="0" value={form.lowerRatePct} onChange={(e) => update({ lowerRatePct: e.target.value })} /></label>
+      <label><span>Rate bậc trên (%)</span><input type="number" step="0.01" min="0" value={form.upperRatePct} onChange={(e) => update({ upperRatePct: e.target.value })} /></label>
+      <label className="bonus-missing-check"><input type="checkbox" checked={form.bottomDropC45} onChange={(e) => update({ bottomDropC45: e.target.checked })} /> Bậc đáy mất toàn bộ C45</label>
+      {!form.bottomDropC45 && <label><span>Rate bậc đáy (%)</span><input type="number" step="0.01" min="0" value={form.bottomRatePct} onChange={(e) => update({ bottomRatePct: e.target.value })} /></label>}
+    </div>
+    <div className="table-scroll"><table className="data-table"><thead><tr><th>Khoảng target</th><th>Cách xử lý</th></tr></thead><tbody>
+      <tr><td>≥ {form.noPenaltyThresholdPct}%</td><td>Không phạt</td></tr>
+      <tr><td>≥ {form.upperPenaltyThresholdPct}% và &lt; {form.noPenaltyThresholdPct}%</td><td>Trừ {form.upperRatePct}% doanh thu trước VAT, tối đa C45</td></tr>
+      <tr><td>&gt; {form.dropThresholdPct}% và &lt; {form.upperPenaltyThresholdPct}%</td><td>Trừ {form.lowerRatePct}% doanh thu trước VAT, tối đa C45</td></tr>
+      <tr><td>≤ {form.dropThresholdPct}%</td><td>{form.bottomDropC45 ? 'Mất toàn bộ C45' : `Trừ ${form.bottomRatePct}% doanh thu trước VAT, tối đa C45`}</td></tr>
+    </tbody></table></div>
+    <div className="meta muted">Backend chặn gap/overlap: ba mốc phải tăng dần. Mốc đáy phải <b>vượt</b> mới thoát; các mốc còn lại chỉ cần chạm.</div>
+
+    <div className="section-title">3. Phạt thiếu Xu cuối quý</div>
+    <div className="filter-grid">
+      <label className="bonus-missing-check"><input type="checkbox" checked={form.xuEnabled} onChange={(e) => update({ xuEnabled: e.target.checked })} /> Bật phạt thiếu Xu</label>
+      <label><span>Số tiền / Xu thiếu</span><input type="number" min="0" step="1000" value={form.perMissingXu} onChange={(e) => update({ perMissingXu: e.target.value })} /></label>
+    </div>
+    <div className="meta muted">Chỉ quyết toán cuối quý, giữ đối trừ khoản đã hạch toán để không phạt hai lần.</div>
 
     <div className="target-admin-actions compact-actions">
-      <button className="btn" disabled={busy || !editable} onClick={runPreview}>🔎 Mô phỏng trước khi lưu</button>
-      <button className="btn" disabled={busy || !editable || !preview?.previewId || preview?.saved} onClick={save}>💾 Lưu đúng bản đã mô phỏng</button>
+      <button className="btn" disabled={busy || !data?.canEdit} onClick={runPreview}>🔎 Mô phỏng toàn đội trước khi lưu</button>
     </div>
 
-    {preview && <div className="upload-preview-box">
-      <b>{preview.saved ? 'ĐÃ LƯU — bậc đang áp dụng' : 'Mô phỏng'} · kỳ {preview.period || period}</b>
-      <div className="meta muted">Trạng thái sau khi áp: <b>{PENALTY_MODE_TEXT[preview.after?.mode] || preview.after?.mode}</b> · cảnh báo từ <b>{dmy(preview.after?.warnFrom)}</b> · trừ thật từ <b>{dmy(preview.after?.effectiveFrom)}</b> · phạt thiếu Xu <b>{preview.after?.xuPenalty?.enabled ? 'BẬT' : 'TẮT'}</b> ({Number(preview.after?.xuPenalty?.perMissingXu || 0).toLocaleString('vi-VN')}đ/Xu).</div>
-      <div className="section-title">Bậc trước khi sửa</div>
-      <PenaltyTierTable tiers={preview.before?.tiers || []} />
-      <div className="section-title">Bậc sau khi sửa</div>
-      <PenaltyTierTable tiers={preview.after?.tiers || []} />
-      <div className="meta muted">{preview.note || 'Số tiền phạt từng nhân viên hiện ở màn "Chi phí của tôi" — ở đây không suy số tiền.'}</div>
+    {impact && <div className="upload-preview-box">
+      <b>{preview.saved ? 'ĐÃ LƯU' : 'PREVIEW CHƯA LƯU'} · p{preview.candidate.version} · kỳ {impact.period}</b>
+      <div className="kpi-grid">
+        <Kpi label="NV thay đổi" value={`${impact.affectedEmployeeCount}/${impact.employeeCount}`} sub="So với policy đang dùng" />
+        <Kpi label="Tổng phạt hiện tại" value={penaltyMoney(impact.current?.total, impact.current?.provisionalTotal)} sub={`${impact.current?.contributors || 0}/${impact.current?.employeeCount || 0} NV đủ số`} />
+        <Kpi label="Tổng phạt sau cấu hình" value={penaltyMoney(impact.candidate?.total, impact.candidate?.provisionalTotal)} sub={`${impact.candidate?.contributors || 0}/${impact.candidate?.employeeCount || 0} NV đủ số`} />
+        <Kpi label="Thiếu dữ liệu" value={rowsFmt(impact.unavailableEmployeeCount)} sub="Giữ null, không đổi thành 0" />
+      </div>
+      <div className="table-scroll"><table className="data-table"><thead><tr><th>NV</th><th>Trước</th><th>Sau</th><th>Chênh lệch</th></tr></thead><tbody>
+        {previewRows.map((row) => <tr key={row.empCode}><td><b>{row.empCode}</b> · {row.employeeName}</td><td>{penaltyMoney(row.before.total)}</td><td>{penaltyMoney(row.after.total)}</td><td>{row.difference == null ? '—' : money(row.difference)}</td></tr>)}
+      </tbody></table></div>
+      {/* Rào chắn gõ sai dấu phẩy: 0,3% và 30% khác nhau 100 lần. Không chặn quyền
+          quyết của CEO, nhưng phải hiện thẳng con số trước khi bấm Duyệt. */}
+      {!!preview.rateWarnings?.length && <div className="card" style={{ borderColor: 'var(--hi)', color: 'var(--hi)' }}>
+        <b>⚠ Kiểm tra lại tỷ lệ phạt</b>
+        {preview.rateWarnings.map((text) => <div className="meta" key={text}>{text}</div>)}
+      </div>}
+      {!preview.saved && <div className="target-admin-actions compact-actions penalty-approval-actions">
+        <button className="btn" disabled={busy} onClick={approveAndSave}>✅ Duyệt</button>
+        <button className="btn ghost danger-btn" disabled={busy} onClick={rejectPreview}>❌ Không duyệt</button>
+        <button className="btn ghost" disabled={busy} onClick={commentPreview}>📝 Ý kiến khác</button>
+      </div>}
     </div>}
 
-    <div className="section-title">Cảnh báo sớm cho nhân viên</div>
-    <div className="card">
-      Mỗi NV thấy trên màn <b>"Chi phí của tôi"</b>: <i>"có thể mất trắng … ở cột C45 (Lương tăng thêm) nếu không tăng thêm … giá trị đơn hàng (trước VAT)"</i>,
-      kèm <b>mốc phải chạm</b> và <b>% hiện tại</b>.
-      <div className="meta muted">Số doanh thu cần thêm <b>luôn làm tròn LÊN</b>, và mốc mất trắng có <b>cộng đệm</b> — để NV chạy đúng con số app khuyên là <b>thoát thật</b>, không bị hụt vài trăm đồng rồi vẫn mất tiền.</div>
-    </div>
-
-    <div className="card" style={{ borderColor: 'var(--warn)' }}>
-      <b>⚠ Sửa ở đây đi vào tầng đè, KHÔNG sửa file công thức gốc</b>
-      <div className="meta muted">Mỗi lần lưu tạo <b>một version có dấu vết</b> (ai · khi nào · cũ→mới) và có thể tra lại ở danh sách version của hộp Thưởng.
-        File gốc <code>employee_bonus_tiers.json</code> và <b>vân tay công thức</b> không đổi, nên khoá chống-quên-nâng-version vẫn còn nguyên.
-        Đổi <b>cách tính</b> (không phải mức) thì vẫn phải nâng <code>FORMULA_VERSION</code> theo <code>CLAUDE.md</code> mục 5.</div>
-    </div>
+    <div className="section-title">Version công thức phạt</div>
+    <div className="card">{(data?.policies || []).slice().reverse().map((policy) => <div className="row" key={policy.id}>
+      <div className="main"><div className="name">p{policy.version} · {policy.effectiveFrom}{policy.effectiveTo ? ` → ${policy.effectiveTo}` : ' → mở'}</div><div className="meta muted">{policy.actor} · {policy.note || '—'}{policy.copiedFromVersion ? ` · dùng lại p${policy.copiedFromVersion}` : ''}</div></div>
+      <button className="btn ghost" disabled={!data?.canEdit} onClick={() => copyPolicy(policy)}>↩ Dùng lại</button>
+    </div>)}{!data?.policies?.length && <div>Đang dùng seed {fv}; chưa có policy CEO ghi từ giao diện.</div>}</div>
+    <div className="meta muted">“Dùng lại” không xoá lịch sử: hệ thống nạp thông số cũ, CEO vẫn phải Mô phỏng và bấm ✅ Duyệt để tạo policy mới.</div>
   </div>;
 }
 
@@ -484,9 +553,6 @@ function TargetAdminModal({ open, title, onClose, children }) {
 
 function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   const [data, setData] = useState(null);
-  // Cấu hình phạt nạp riêng: hộp "Cách tính Phạt" phải xem được mà không cần
-  // mở hộp Thưởng trước. Chỉ đọc nên gọi một lần theo kỳ là đủ.
-  const [bonusPolicy, setBonusPolicy] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
@@ -503,14 +569,6 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   const [coOverwrite, setCoOverwrite] = useState(false);
   const fileRef = useRef(null);
   async function load() { if (!ky) return; setData(null); setData(await api.adminTargets(ky)); }
-  // Nạp lại được sau khi lưu cấu hình phạt: hộp phải hiện NGAY bậc mới đang áp dụng,
-  // không để CEO phải đóng/mở lại rồi tưởng "lưu không ăn".
-  async function loadBonusPolicy() {
-    if (!ky) return;
-    try { setBonusPolicy(await api.adminBonusPolicies({ period: ky })); }
-    catch { setBonusPolicy(null); }
-  }
-  useEffect(() => { loadBonusPolicy(); }, [ky]);
   useEffect(() => { load().catch((e) => setErr(e.message)); }, [ky]);
   useEffect(() => {
     if (!data || !focusEmp) return;
@@ -619,7 +677,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
-  const bonusFv = bonusPolicy?.formulaVersion || data?.bonusFormulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
+  const bonusFv = data?.bonusFormulaVersion || BONUS_FORMULA_VERSION_FALLBACK;
   return (
     <>
       <div className="card smart-admin-head">
@@ -635,7 +693,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
           <button className="btn ghost" disabled={busy} onClick={() => setTool('upload')}>⬆ Upload</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('quarter')}>📅 Nhập theo Quý</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('bonus')}>🎯 Cấu hình Thưởng {bonusFv}</button>
-          <button className="btn ghost" disabled={busy} onClick={() => setTool('penalty')}>⚠ Cách tính Phạt {bonusFv}</button>
+          <button className="btn ghost" disabled={busy} onClick={() => setTool('penalty')}>⚠ Cấu hình Phạt {bonusFv}</button>
           <button className="btn ghost" disabled={busy} onClick={() => setTool('ai')}>🤖 AI đề xuất</button>
           <button className="btn ghost" disabled={busy} onClick={() => { setRollbackId(lastBatch?.batchId || ''); setTool('rollback'); }}>↩ Rollback</button>
         </div>
@@ -680,12 +738,8 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
             màn hình vẫn giữ số cũ và trông như "chỉnh tay không ăn". */}
         <BonusPolicyPanel ky={ky} employees={data?.rows || []} onSaved={onTargetsChanged} />
       </TargetAdminModal>
-      <TargetAdminModal open={tool === 'penalty'} title={`⚠ Cách tính Phạt ${bonusFv}`} onClose={() => setTool(null)}>
-        <PenaltyPolicyPanel
-          snapshot={bonusPolicy?.penalty}
-          formulaVersion={bonusPolicy?.formulaVersion}
-          period={ky}
-          onSaved={async () => { await loadBonusPolicy(); await onTargetsChanged?.(); }} />
+      <TargetAdminModal open={tool === 'penalty'} title={`⚠ Cấu hình Phạt ${bonusFv}`} onClose={() => setTool(null)}>
+        <PenaltyPolicyPanel period={ky} onSaved={onTargetsChanged} />
       </TargetAdminModal>
       <TargetAdminModal open={tool === 'template'} title="⬇ Xuất/Tải template target" onClose={() => setTool(null)}>
         <div className="meta muted">Template xuất đúng kỳ đang chọn, đủ 21 NV theo DB. Căn cứ chỉ là mốc để CEO sửa, không tự thành target live.</div>

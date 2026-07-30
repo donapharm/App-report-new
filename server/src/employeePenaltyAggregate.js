@@ -1,112 +1,139 @@
 'use strict';
 
-// TỔNG HỢP PHẠT CHO MÀN "TẤT CẢ NHÂN VIÊN" (CEO chốt 2026-07-30).
-//
-// CEO: "Ở trạng thái hiển thị tất cả nhân viên thì màn hình CEO chưa thấy được 4 ô
-// KPI, yêu cầu CEO phải thấy được toàn cảnh các ô này phải hiện tổng hợp."
-//
-// Nguyên tắc:
-//   1. CỘNG, KHÔNG TÍNH LẠI. Mỗi số phạt đã do employeePenalty.buildPenalty tính
-//      riêng cho từng NV (self-scoped, có target + C45 của chính NV đó). Ở đây chỉ
-//      cộng lại. Không suy phạt từ target tổng / doanh thu tổng — làm vậy ra số khác
-//      và sai bậc.
-//   2. KHÔNG CỘNG Ở FRONTEND. Vì thế file này ở backend.
-//   3. FAIL-CLOSED CÓ NÓI RÕ: NV nào chưa đủ dữ liệu (chưa giao target, C45 chưa về)
-//      thì KHÔNG coi là 0đ; đếm riêng và báo "tổng của N/M NV" để CEO biết còn thiếu.
-//   4. File này KHÔNG nằm trong FORMULA_SOURCES vì không quyết định số tiền của ai.
-const employeePenalty = require('./employeePenalty');
-
-const TIERS = Object.freeze(['drop_c45', 't50_70', 't70_90', 'none']);
-
 function finite(value) {
   if (value == null || value === '' || typeof value === 'boolean') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
 
-// Tổng hợp từ danh sách phạt của TỪNG NV (đã lọc theo bộ lọc đang xem).
-function aggregate({ penalties = [], periodTotal = null } = {}) {
-  const items = (Array.isArray(penalties) ? penalties : []).filter((item) => item && typeof item === 'object');
-  if (!items.length) {
+// ALL/CEO view: only aggregate penalty results that were already calculated by
+// the backend for each self-scoped employee report. Never rederive a team tier,
+// target percentage or rate: those values have no valid aggregate meaning.
+//
+// `total` remains fail-closed when even one employee has no calculable penalty.
+// `provisionalTotal` is exposed separately so the UI may state the known subtotal
+// together with its coverage instead of silently converting an unknown value to 0.
+function aggregatePenaltySummaries(reports = []) {
+  const items = (Array.isArray(reports) ? reports : []).filter(Boolean).map((report) => ({
+    empCode: String(report.empCode || '').trim().toUpperCase(),
+    penalty: report.penalty && typeof report.penalty === 'object' ? report.penalty : null,
+    baseTotal: finite(report.summary?.periodTotal),
+    afterPenaltyTotal: finite(report.summary?.afterPenaltyTotal),
+  }));
+  if (!items.length) return null;
+
+  const aggregateValues = (fieldValues) => {
+    const known = fieldValues.filter((value) => value != null);
     return {
-      aggregate: true, available: false, c45Label: '', tiers: [],
-      employees: 0, counted: 0, missing: 0, incomplete: false,
-      mode: 'off', modes: [], label: 'Chưa có dữ liệu phạt của nhân viên nào trong bộ lọc này',
-      targetAmount: null, xuAmount: null, total: null, appliedAmount: 0, afterPenaltyTotal: null,
-      tierCounts: Object.fromEntries(TIERS.map((tier) => [tier, 0])),
-      tierAmounts: Object.fromEntries(TIERS.map((tier) => [tier, 0])),
-      c45DroppedCount: 0, c45WouldDropCount: 0, warnedCount: 0, atRisk: [],
-      formulaText: 'Chưa có số phạt nào để cộng.', penaltyStatus: 'no_data', xuStatus: 'no_data',
+      value: known.length === items.length ? known.reduce((sum, value) => sum + value, 0) : null,
+      provisional: known.reduce((sum, value) => sum + value, 0),
+      contributors: known.length,
     };
-  }
-  const known = items.filter((item) => finite(item.total) != null);
-  const missing = items.length - known.length;
-  const modes = [...new Set(items.map((item) => String(item.mode || 'off')))];
-  const sum = (list, key) => list.reduce((total, item) => total + (finite(item[key]) || 0), 0);
-  // Không NV nào có số ⇒ tổng là "chưa có số" (null), KHÔNG phải 0đ. Hiện 0đ ở đây
-  // là nói dối: 0đ có nghĩa "đã tính xong và không ai bị phạt".
-  const targetAmount = known.length ? sum(known, 'targetAmount') : null;
-  const xuKnown = items.filter((item) => finite(item.xuAmount) != null);
-  const appliedAmount = sum(items, 'appliedAmount');
-  const tierCounts = Object.fromEntries(TIERS.map((tier) => [tier, items.filter((item) => item.tier === tier).length]));
-  const tierAmounts = Object.fromEntries(TIERS.map((tier) => [
-    tier, items.filter((item) => item.tier === tier).reduce((total, item) => total + (finite(item.targetAmount) || 0), 0),
-  ]));
-  const c45DroppedCount = items.filter((item) => item.c45Dropped === true).length;
-  const c45WouldDropCount = items.filter((item) => item.c45WouldDrop === true).length;
-  const warned = items.filter((item) => item.warning?.text);
-  const mode = modes.length === 1 ? modes[0] : 'mixed';
-  const label = mode === 'warn_only' ? employeePenalty.WARN_ONLY_LABEL
-    : mode === 'mixed' ? `Nhiều chế độ trong kỳ (${modes.join(', ')}) — ${employeePenalty.DISCLAIMER}`
-      : mode === 'off' ? 'Chính sách phạt chưa áp dụng cho kỳ này'
-        : `TỔNG HỢP TOÀN ĐỘI — ${employeePenalty.DISCLAIMER}`;
-  // Bảng bậc phạt dùng chung cho cả đội: lấy lại bảng backend đã sinh cho từng NV,
-  // bỏ phần "ví dụ theo số của bạn" và bỏ đánh dấu bậc đang đứng (toàn đội không có
-  // một bậc duy nhất).
-  const tiers = (items.find((item) => Array.isArray(item.tiers) && item.tiers.length)?.tiers || [])
-    .map((tier) => ({ ...tier, example: '', active: false, employees: tierCounts[tier.tier] ?? 0, amount: tierAmounts[tier.tier] ?? 0 }));
+  };
+  const aggregateField = (key) => aggregateValues(items.map((item) => finite(item.penalty?.[key])));
+  const target = aggregateField('targetAmount');
+  const total = aggregateField('total');
+  // Khi Xu chưa chốt, penalty.total phải null nhưng phần target/C45 đã biết vẫn
+  // nằm ở penalty.provisionalTotal. Chỉ đưa phần này ra field provisional rõ
+  // ràng; không nâng nó thành total/applied chính thức.
+  const provisionalTotals = items.map((item) => finite(item.penalty?.total) ?? finite(item.penalty?.provisionalTotal));
+  const provisionalKnown = provisionalTotals.filter((value) => value != null);
+  // buildPenalty intentionally returns appliedAmount=0 in warn-only periods even
+  // when a potential amount is unavailable: zero is final because nothing may be
+  // deducted in that mode. In enforced mode, however, total=null means the applied
+  // amount is also unknown and must not be silently aggregated as zero.
+  const applied = aggregateValues(items.map((item) => {
+    if (!item.penalty || (item.penalty.mode === 'enforced' && finite(item.penalty.total) == null)) return null;
+    return finite(item.penalty.appliedAmount);
+  }));
+  const c45 = aggregateField('c45Amount');
+  const baseValues = items.map((item) => item.baseTotal);
+  const afterValues = items.map((item) => item.afterPenaltyTotal);
+  const baseKnown = baseValues.filter((value) => value != null);
+  const afterKnown = afterValues.filter((value) => value != null);
+  const baseTotal = baseKnown.length === items.length ? baseKnown.reduce((sum, value) => sum + value, 0) : null;
+  const afterPenaltyTotal = applied.contributors === items.length && afterKnown.length === items.length
+    ? afterKnown.reduce((sum, value) => sum + value, 0)
+    : null;
+
+  // Xu may legitimately be null while disabled or while the quarter is still
+  // open. Only numeric Xu values are summed; source failures remain explicit.
+  const xuRows = items.filter((item) => item.penalty?.xuStatus !== 'disabled');
+  const xuKnown = xuRows.map((item) => finite(item.penalty?.xuAmount)).filter((value) => value != null);
+  const xuMissingValues = xuRows.map((item) => finite(item.penalty?.xuMissing));
+  const validXuStatuses = new Set(['quarter_pending', 'provisional', 'final', 'xu_source_unavailable', 'finance_reconciliation_pending']);
+  const xuUnavailable = xuRows.some((item) => !item.penalty
+    || !validXuStatuses.has(item.penalty.xuStatus)
+    || item.penalty.xuStatus === 'xu_source_unavailable'
+    || item.penalty.xuStatus === 'finance_reconciliation_pending');
+  const xuPending = xuRows.some((item) => item.penalty?.xuStatus === 'quarter_pending');
+  const xuAmount = xuRows.length > 0 && !xuUnavailable && !xuPending && xuKnown.length === xuRows.length
+    ? xuKnown.reduce((sum, value) => sum + value, 0)
+    : null;
+  const xuMissing = xuRows.length > 0 && xuMissingValues.every((value) => value != null)
+    ? xuMissingValues.reduce((sum, value) => sum + value, 0)
+    : null;
+  const xuStatus = !xuRows.length ? 'disabled'
+    : xuUnavailable ? 'partially_unavailable'
+      : xuPending ? 'quarter_pending'
+        : xuRows.some((item) => item.penalty?.xuStatus === 'provisional') ? 'provisional'
+          : 'final';
+
+  const unavailableEmployees = items
+    .filter((item) => !item.penalty || finite(item.penalty.total) == null)
+    .map((item) => item.empCode).filter(Boolean);
+  const modes = new Set(items.map((item) => String(item.penalty?.mode || '')).filter(Boolean));
+  const effectiveFroms = new Set(items.map((item) => String(item.penalty?.effectiveFrom || '')).filter(Boolean));
+  const complete = total.contributors === items.length;
+  const formulaText = complete
+    ? `Cộng trực tiếp ${items.length}/${items.length} kết quả phạt từng nhân viên do backend tính; không tính lại target, bậc hoặc tỷ lệ ở frontend.`
+    : `Tạm cộng ${total.contributors}/${items.length} kết quả phạt từng nhân viên do backend tính; còn thiếu ${unavailableEmployees.join(', ') || `${items.length - total.contributors} nhân viên`}.`;
+  const disclaimer = 'Dự kiến/tham khảo — chưa trừ lương';
+
   return {
     aggregate: true,
-    available: true,
-    c45Label: items.find((item) => item.c45Label)?.c45Label || '',
-    tiers,
-    employees: items.length,
-    counted: known.length,
-    missing,
-    incomplete: missing > 0,
-    mode, modes, label,
-    targetAmount,
-    xuAmount: xuKnown.length ? sum(xuKnown, 'xuAmount') : null,
-    xuMissing: null,
-    total: known.length ? sum(known, 'total') : null,
-    appliedAmount,
-    // Tổng gốc null (coverage chưa đạt) thì KHÔNG suy ra tổng sau phạt.
-    afterPenaltyTotal: finite(periodTotal) == null ? null : Math.max(0, Math.round(finite(periodTotal)) - appliedAmount),
-    tierCounts, tierAmounts,
-    c45DroppedCount, c45WouldDropCount,
-    warnedCount: warned.length,
-    // Danh sách NV đang ở bậc bị phạt, để CEO bấm vào là biết nhắc ai.
-    atRisk: items
-      .filter((item) => item.tier && item.tier !== 'none')
-      .map((item) => ({
-        empCode: String(item.empCode || '').toUpperCase(),
-        employeeName: String(item.employeeName || item.empCode || ''),
-        tier: item.tier,
-        targetPct: finite(item.targetPct),
-        targetAmount: finite(item.targetAmount),
-        c45Amount: finite(item.c45Amount),
-        revenueGap: finite(item.warning?.revenueGap),
-      }))
-      .sort((left, right) => (left.targetPct ?? 999) - (right.targetPct ?? 999)),
-    penaltyStatus: known.length ? (missing ? 'aggregate_partial' : 'aggregate') : 'aggregate_unavailable',
-    xuStatus: xuKnown.length ? 'aggregate' : (items[0]?.xuStatus || 'disabled'),
-    formulaText: [
-      `Tổng hợp phạt của ${known.length}/${items.length} nhân viên trong bộ lọc hiện tại (cộng số đã tính riêng cho từng người, không tính lại theo target tổng).`,
-      missing ? `${missing} nhân viên chưa đủ dữ liệu (chưa giao target hoặc C45 chưa về) — KHÔNG tính là 0đ.` : '',
-      c45DroppedCount ? `${c45DroppedCount} nhân viên mất trắng C45.` : '',
-      c45WouldDropCount ? `${c45WouldDropCount} nhân viên sẽ mất trắng C45 nếu áp dụng (tháng này chỉ cảnh báo).` : '',
-    ].filter(Boolean).join(' '),
+    scope: 'team_full_range',
+    mode: modes.size === 1 ? [...modes][0] : 'mixed',
+    effectiveFrom: effectiveFroms.size === 1 ? [...effectiveFroms][0] : '',
+    enabled: items.some((item) => item.penalty?.enabled === true),
+    targetPct: null,
+    tier: 'aggregate',
+    ratePct: null,
+    c45Amount: c45.value,
+    provisionalC45Amount: c45.provisional,
+    targetAmount: target.value,
+    provisionalTargetAmount: target.provisional,
+    targetStatus: complete ? 'aggregate' : 'partially_unavailable',
+    penaltyStatus: complete ? 'aggregate' : 'partially_unavailable',
+    c45Dropped: items.some((item) => item.penalty?.c45Dropped === true),
+    c45WouldDrop: items.some((item) => item.penalty?.c45WouldDrop === true),
+    xuAmount,
+    provisionalXuAmount: xuKnown.reduce((sum, value) => sum + value, 0),
+    xuStatus,
+    xuMissing,
+    xuEmployeeCount: xuRows.length,
+    xuContributors: xuKnown.length,
+    total: total.value,
+    provisionalTotal: provisionalKnown.reduce((sum, value) => sum + value, 0),
+    provisionalContributors: provisionalKnown.length,
+    appliedAmount: applied.value,
+    provisionalAppliedAmount: applied.provisional,
+    appliedContributors: applied.contributors,
+    cappedByC45: items.some((item) => item.penalty?.cappedByC45 === true),
+    provisional: !complete || items.some((item) => item.penalty?.provisional === true),
+    formulaText,
+    label: complete
+      ? `Tổng toàn đội từ backend · ${disclaimer}`
+      : `Tạm tính ${total.contributors}/${items.length} NV · ${disclaimer}`,
+    warning: null,
+    baseTotal,
+    afterPenaltyTotal,
+    employeeCount: items.length,
+    contributors: total.contributors,
+    unavailableCount: items.length - total.contributors,
+    unavailableEmployees,
+    complete,
   };
 }
 
-module.exports = { TIERS, aggregate };
+module.exports = { aggregatePenaltySummaries };

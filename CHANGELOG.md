@@ -59,6 +59,21 @@ Production trước deploy vẫn là `5c119a5` — đó chính là lý do CEO m�
 
 **Chưa làm (cần bot trên server thật):** deploy bản này lên production (production đang ở `5c119a5`, thiếu cả panel phạt trong Quản target lẫn 4 ô tổng hợp).
 
+### 2026-07-30 — Report Bot — Công thức Phạt v3.4 có version theo tháng/giai đoạn (chưa deploy)
+- Thêm store phạt riêng dạng full snapshot, effective-from/to, immutable version, audit append-only không cắt lịch sử, copy-forward phải khớp nguyên bản; kỳ lịch sử tự resolve đúng policy và file hỏng fail rõ `PENALTY_POLICY_STORE_CORRUPT`.
+- Luồng CEO-only: sửa → backend mô phỏng toàn đội → đúng 3 nút `✅ Duyệt / ❌ Không duyệt / 📝 Ý kiến khác` → save bằng preview ID 15 phút, khóa actor/session/revision/hash và chữ ký nguồn Xu SQLite/WAL; save xong xoá cache.
+- Cho cấu hình 3 mốc target, rate 3 bậc, mất C45 hoặc rate ở bậc đáy, lịch cảnh báo/trừ thật, bật/tắt và đơn giá Xu; backend giữ `null` khi enforced/Xu chưa đủ, warn-only luôn `appliedAmount=0` chính xác.
+- Nâng vân tay công thức từ v3.3 lên v3.4 vì evaluator chuyển từ mốc/date cứng sang policy động. P1/P2 không đổi.
+- Chỉ hoàn thiện trên branch/worktree riêng; chưa deploy/restart production.
+
+### 2026-07-30 — Report Bot — Tổng phạt toàn đội do backend tính cho “Tất cả NV”
+- `GET /api/employee-cost?emp=ALL` trả top-level `penalty` tổng hợp trực tiếp từ kết quả phạt self-scoped từng nhân viên; không tính lại target/bậc/tỷ lệ và không cộng ở frontend.
+- Giữ fail-closed: tổng thiếu nguồn là `null`, subtotal biết được nằm ở trường `provisional*` kèm coverage; kỳ warn-only vẫn có `appliedAmount=0`, còn kỳ enforced thiếu số áp dụng giữ `null`.
+- Tổng phạt và tổng sau phạt có scope toàn kỳ/toàn đội, không thay đổi theo filter/phân trang bảng; trạng thái Xu disabled/pending/unavailable được giữ riêng.
+- UI “Tất cả NV” đọc top-level backend payload cho 3 KPI phạt; ô “Ứng lần 1” vẫn giữ “Chưa đấu nối app lương”.
+- Test: targeted 40/40, web 84/84, production build PASS; server full 516/519, đúng 3 lỗi fixture `authTrustedDevice.test.js` đã có trên baseline do thiếu `server/data/users.json`, không có hồi quy mới.
+- Chỉ hoàn thiện trên branch riêng; chưa deploy production.
+
 ### 2026-07-30 — Claude Code (CEO chốt) — CHỌN 1 NV phải thấy ĐỦ CẢ 4 Ô, không ô nào tự ẩn
 > CEO: "ở chế độ xem từng nhân viên thì mỗi nhân viên phải thấy được số phạt mình dự kiến có thể bị. Nghĩa là khi tôi lọc từng nhân viên thì cũng sẽ thấy được cả 4 ô KPI."
 

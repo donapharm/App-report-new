@@ -1,14 +1,17 @@
 {
   "version": "v3.4",
-  "sourceHash": "b598f1c5deb0512896256fce15f738af101a2550483568215d403f5c66ab63bc",
+  "sourceHash": "5323559326af63005b3512cbb15db2dd586b37b526940fb8e3a5ca243a33f259",
   "lockedAt": "2026-07-30",
   "lockedBy": "CEO",
   "sources": [
     "src/employeeBonus.js",
     "src/employeeBonusPolicy.js",
     "src/employeePenalty.js",
+    "src/employeePenaltyAggregate.js",
+    "src/employeePenaltyPolicy.js",
     "src/xuPolicy.js",
     "config/employee_bonus_tiers.json (base, baseTiers, priorityThresholdPct, priorityRates, autoGroupTargets, totalCapPct, penaltyTiers, penaltyEffectiveFrom, penaltyWarnFrom, penaltyEnabled, xuPenalty)"
   ],
-  "rule": "Đổi cách tính thưởng/phạt hoặc lịch áp dụng => nâng FORMULA_VERSION, cập nhật config+sourceHash+CHANGELOG. Test server/test/bonusFormulaVersion.test.js sẽ đỏ nếu quên."
+  "rule": "Đổi cách tính thưởng/phạt hoặc lịch áp dụng => nâng FORMULA_VERSION, cập nhật config+sourceHash+CHANGELOG. Test server/test/bonusFormulaVersion.test.js sẽ đỏ nếu quên.",
+  "note": "v3.4 = bản GỘP: store cấu hình phạt có version (bot) + trần tỷ lệ 5% (Claude). Cách tính P1/P2 không đổi. Chưa deploy bản v3.4 nào trước đó nên nhãn v3.4 giữ nguyên."
 }

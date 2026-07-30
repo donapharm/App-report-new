@@ -35,7 +35,7 @@ test('hộp giải thích có bảng 4 ngữ cảnh và mốc % do backend sinh'
   assert.doesNotMatch(modal, /0,2%|0,3%|90%|70%|50%/);
 });
 
-test('view model nhận nhãn C45 + bảng bậc + tổng hợp toàn đội từ backend', () => {
+test('view model nhận nhãn C45 + bảng bậc, và giữ đúng các trường tổng hợp của backend', () => {
   const single = employeePenaltyViewModel({
     mode: 'warn_only', tier: 't70_90', total: 1_000_000, appliedAmount: 0,
     c45Label: 'C45 (Lương tăng thêm)', modeText: 'Kỳ này CHỈ CẢNH BÁO',
@@ -45,19 +45,21 @@ test('view model nhận nhãn C45 + bảng bậc + tổng hợp toàn đội t�
   assert.equal(single.modeText, 'Kỳ này CHỈ CẢNH BÁO');
   assert.equal(single.tiers.length, 1);
   assert.equal(single.tiers[0].active, true);
-  assert.equal(single.aggregate, false);
+  assert.equal(single.tiers[0].range, 'Từ 70% đến dưới 90%');
 
+  // Bản tổng hợp toàn đội do backend cộng (employeePenaltyAggregate): view model chỉ
+  // đọc lại, KHÔNG tự cộng. Thiếu số thì giữ null, không biến thành 0đ.
   const team = employeePenaltyViewModel({
-    aggregate: true, available: true, employees: 12, counted: 11, missing: 1, incomplete: true,
-    total: 4_000_000, appliedAmount: 0, c45DroppedCount: 0, c45WouldDropCount: 2,
-    atRisk: [{ empCode: 'dn018', employeeName: 'X', tier: 'drop_c45', targetPct: 44.5, targetAmount: 3_000_000, revenueGap: 3_550_175 }],
+    mode: 'warn_only', total: null, provisionalTotal: 4_000_000, appliedAmount: 0,
+    baseTotal: 500_000_000, afterPenaltyTotal: 500_000_000,
+    employeeCount: 12, contributors: 11, unavailableCount: 1, unavailableEmployees: ['dn018'], complete: false,
+    c45Label: 'C45 (Lương tăng thêm)',
   });
-  assert.equal(team.aggregate, true);
-  assert.equal(team.counted, 11);
-  assert.equal(team.missing, 1);
-  assert.equal(team.incomplete, true);
-  assert.equal(team.atRisk[0].empCode, 'DN018');
-  assert.equal(team.atRisk[0].revenueGap, 3_550_175);
-  // Backend nói "không có NV nào có số phạt" thì view model phải tôn trọng cờ đó.
-  assert.equal(employeePenaltyViewModel({ aggregate: true, available: false, total: null }).available, false);
+  assert.equal(team.total, null, 'chưa đủ số thì giữ null, không hiện 0đ');
+  assert.equal(team.baseTotal, 500_000_000);
+  assert.equal(team.employeeCount, 12);
+  assert.equal(team.contributors, 11);
+  assert.equal(team.unavailableCount, 1);
+  assert.equal(team.complete, false);
+  assert.equal(team.c45Label, 'C45 (Lương tăng thêm)');
 });

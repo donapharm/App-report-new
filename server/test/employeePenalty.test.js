@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const penalty = require('../src/employeePenalty');
+const penaltyAggregate = require('../src/employeePenaltyAggregate');
 const employeeBonus = require('../src/employeeBonus');
 
 const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'employee_bonus_tiers.json'), 'utf8'));
@@ -109,7 +110,8 @@ test('warning fail-closes missing target and omits unknown C45 money', () => {
   const out = build({ c45Amount: null });
   assert.equal(out.penaltyStatus, 'c45_unavailable');
   assert.equal(out.targetAmount, null);
-  assert.equal(out.appliedAmount, 0);
+  assert.equal(out.appliedAmount, null, 'enforced unknown must stay null, never become zero');
+  assert.equal(out.afterPenaltyTotal, null);
   assert.equal(out.warning.moneyAtRisk, null);
   assert.match(out.warning.text, /giá trị đơn hàng \(trước VAT\)/);
   assert.doesNotMatch(out.warning.text, /MẤT TRẮNG [\d.]+đ/);
@@ -132,6 +134,11 @@ test('period-derived schedule is deterministic and honors emergency off switch',
   assert.ok(july.warning);
   assert.match(july.label, /chưa trừ tiền/i);
   assert.match(july.label, /01\/08\/2026/);
+  const closedJuly = build({ period: '2026-07', achieved: 450_000_000, closed: true });
+  assert.equal(closedJuly.appliedAmount, 0);
+  assert.match(closedJuly.warning.text, /CHƯA TRỪ TIỀN/);
+  assert.match(closedJuly.warning.text, /Kỳ đã đóng/);
+  assert.doesNotMatch(closedJuly.warning.text, /không được tính vào chi phí tháng/);
   const august = build({ period: '2026-08', achieved: 450_000_000 });
   assert.equal(august.mode, 'enforced');
   assert.equal(august.c45Dropped, true);
@@ -144,6 +151,115 @@ test('period-derived schedule is deterministic and honors emergency off switch',
     assert.equal(penalty.resolveMode('2026-08', config, fakeNow), 'enforced');
   }
   assert.equal(penalty.resolveMode('2026-09', { ...config, penaltyEnabled: false }), 'off');
+});
+
+test('ALL aggregation sums backend employee penalties without inventing a team tier or pct', () => {
+  const firstPenalty = build({ period: '2026-07', achieved: 780_000_000, costTotal: 42_834_991 });
+  const secondPenalty = build({ period: '2026-07', achieved: 450_000_000, c45Amount: 3_000_000, costTotal: 20_000_000 });
+  const aggregate = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: firstPenalty, summary: { periodTotal: 100_000_000, afterPenaltyTotal: 100_000_000 } },
+    { empCode: 'DN002', penalty: secondPenalty, summary: { periodTotal: 60_000_000, afterPenaltyTotal: 60_000_000 } },
+  ]);
+  assert.equal(aggregate.aggregate, true);
+  assert.equal(aggregate.scope, 'team_full_range');
+  assert.equal(aggregate.employeeCount, 2);
+  assert.equal(aggregate.contributors, 2);
+  assert.equal(aggregate.complete, true);
+  assert.equal(aggregate.total, firstPenalty.total + secondPenalty.total);
+  assert.equal(aggregate.provisionalTotal, aggregate.total);
+  assert.equal(aggregate.appliedAmount, 0, 'T07 warn-only must aggregate to zero applied');
+  assert.equal(aggregate.baseTotal, 160_000_000);
+  assert.equal(aggregate.afterPenaltyTotal, 160_000_000, 'range total comes from report summary, not only final month');
+  assert.equal(aggregate.targetPct, null);
+  assert.equal(aggregate.ratePct, null);
+  assert.equal(aggregate.tier, 'aggregate');
+  assert.match(aggregate.formulaText, /backend tính/);
+});
+
+test('ALL aggregation keeps incomplete totals null and exposes only an explicit provisional subtotal', () => {
+  const known = build({ period: '2026-08', achieved: 780_000_000, costTotal: 40_000_000 });
+  const unavailable = build({ period: '2026-08', achieved: 450_000_000, c45Amount: null, costTotal: null });
+  const aggregate = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: known, summary: { periodTotal: 80_000_000, afterPenaltyTotal: 80_000_000 - known.appliedAmount } },
+    { empCode: 'DN002', penalty: unavailable, summary: { periodTotal: null, afterPenaltyTotal: null } },
+  ]);
+  assert.equal(aggregate.total, null);
+  assert.equal(aggregate.provisionalTotal, known.total);
+  assert.equal(aggregate.appliedAmount, null, 'enforced unknown must not become an applied zero');
+  assert.equal(aggregate.provisionalAppliedAmount, known.appliedAmount);
+  assert.equal(aggregate.appliedContributors, 1);
+  assert.equal(aggregate.complete, false);
+  assert.equal(aggregate.contributors, 1);
+  assert.equal(aggregate.unavailableCount, 1);
+  assert.deepEqual(aggregate.unavailableEmployees, ['DN002']);
+  assert.equal(aggregate.baseTotal, null);
+  assert.equal(aggregate.afterPenaltyTotal, null);
+  assert.match(aggregate.label, /Tạm tính 1\/2 NV/);
+});
+
+test('warn-only unknown potential penalty still has exact applied zero and known after-total', () => {
+  const known = build({ period: '2026-07', achieved: 780_000_000, costTotal: 40_000_000 });
+  const unavailable = build({ period: '2026-07', achieved: 450_000_000, c45Amount: null, costTotal: 30_000_000 });
+  const aggregate = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: known, summary: { periodTotal: 40_000_000, afterPenaltyTotal: 40_000_000 } },
+    { empCode: 'DN002', penalty: unavailable, summary: { periodTotal: 30_000_000, afterPenaltyTotal: 30_000_000 } },
+  ]);
+  assert.equal(aggregate.total, null);
+  assert.equal(aggregate.appliedAmount, 0);
+  assert.equal(aggregate.appliedContributors, 2);
+  assert.equal(aggregate.baseTotal, 70_000_000);
+  assert.equal(aggregate.afterPenaltyTotal, 70_000_000);
+});
+
+test('ALL aggregation preserves C45-drop and Xu disabled/pending/unavailable states', () => {
+  const dropped = build({ period: '2026-08', achieved: 450_000_000, c45Amount: 3_000_000, costTotal: 20_000_000 });
+  const c45 = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: dropped, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+  ]);
+  assert.equal(c45.c45Dropped, true);
+  assert.equal(c45.total, 3_000_000);
+  assert.equal(c45.appliedAmount, 3_000_000);
+
+  const base = { ...dropped, total: 3_000_000, appliedAmount: 3_000_000 };
+  const xu = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: { ...base, xuStatus: 'provisional', xuAmount: 600_000, xuMissing: 2 }, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+    { empCode: 'DN002', penalty: { ...base, xuStatus: 'xu_source_unavailable', xuAmount: null, xuMissing: null }, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+    { empCode: 'DN003', penalty: { ...base, xuStatus: 'disabled', xuAmount: null, xuMissing: null }, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+  ]);
+  assert.equal(xu.xuStatus, 'partially_unavailable');
+  assert.equal(xu.xuAmount, null);
+  assert.equal(xu.provisionalXuAmount, 600_000);
+  assert.equal(xu.xuEmployeeCount, 2);
+  assert.equal(xu.xuContributors, 1);
+
+  const pending = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: { ...base, xuStatus: 'quarter_pending', xuAmount: null }, summary: { periodTotal: 20_000_000, afterPenaltyTotal: 17_000_000 } },
+  ]);
+  assert.equal(pending.xuStatus, 'quarter_pending');
+  assert.equal(pending.xuAmount, null);
+
+  const xuPendingConfig = { ...config, xuPenalty: { enabled: true, perMissingXu: 300_000 } };
+  const pendingPenalty = build({
+    period: '2026-08', achieved: 780_000_000, costTotal: 20_000_000,
+    config: xuPendingConfig, xu: { amount: null, status: 'quarter_pending', missing: 2 },
+  });
+  assert.equal(pendingPenalty.total, null);
+  assert.ok(pendingPenalty.provisionalTotal > 0);
+  const pendingSubtotal = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN001', penalty: pendingPenalty, summary: { periodTotal: 20_000_000, afterPenaltyTotal: null } },
+  ]);
+  assert.equal(pendingSubtotal.total, null);
+  assert.equal(pendingSubtotal.provisionalTotal, pendingPenalty.provisionalTotal);
+  assert.equal(pendingSubtotal.provisionalContributors, 1);
+  assert.equal(pendingSubtotal.contributors, 0);
+  assert.equal(pendingSubtotal.appliedAmount, null);
+  assert.equal(pendingSubtotal.afterPenaltyTotal, null);
+  const absent = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN404', penalty: null, summary: { periodTotal: null, afterPenaltyTotal: null } },
+  ]);
+  assert.equal(absent.xuStatus, 'partially_unavailable');
+  assert.equal(absent.xuAmount, null);
+  assert.equal(penaltyAggregate.aggregatePenaltySummaries([]), null, 'empty team remains explicit null, never an invented zero');
 });
 
 test('daily C45 drop reconciles exactly to adjusted monthly total', () => {
@@ -186,93 +302,8 @@ test('employee-cost service route attaches backend penalty using self-scoped pay
   assert.match(service, /resolveScopedEmployee/);
   assert.match(service, /employeePenalty\.buildPenalty/);
   assert.match(service, /c45Amount: costPeriod\?\.summary\?\.columnTotals/);
-  // Payload phạt do backend trả nguyên vẹn, chỉ ĐÍNH THÊM phần diễn giải (tên cột
-  // C45 + bảng ngữ cảnh) sinh từ config ở backend — không tính lại tiền, không để
-  // frontend tự viết mốc %/tỷ lệ (CEO chốt 30/07).
-  assert.match(service, /penalty: penalty \? \{\s*\n\s*\.\.\.penalty,/);
-  assert.match(service, /c45Label: penaltyDisplay\.C45_LABEL/);
-  assert.match(service, /tiers: penaltyDisplay\.tierTable\(resolvedBonusConfig/);
+  assert.match(service, /bonus,\s*\n\s*penalty,/);
   assert.match(service, /afterPenaltyTotal/);
-});
-
-test('bảng ngữ cảnh phạt sinh từ config, không ghi mốc %/tỷ lệ vào JSX', () => {
-  const penaltyDisplay = require('../src/penaltyDisplay');
-  const config = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'employee_bonus_tiers.json'), 'utf8'));
-  const tiers = penaltyDisplay.tierTable(config, { activeTier: 't70_90', achieved: 1_000_000_000, c45Amount: 5_000_000 });
-  assert.equal(tiers.length, 4);
-  assert.deepEqual(tiers.map((tier) => tier.tier), ['none', 't70_90', 't50_70', 'drop_c45']);
-  assert.equal(tiers.filter((tier) => tier.active).length, 1);
-  // Mọi bậc phải nói rõ trừ ở cột nào bằng TÊN CỘT, không chỉ mã "C45".
-  assert.match(tiers.find((tier) => tier.tier === 'drop_c45').effect, /Lương tăng thêm/);
-  assert.match(tiers.find((tier) => tier.tier === 't70_90').effect, /Lương tăng thêm/);
-  assert.match(tiers.find((tier) => tier.tier === 'drop_c45').range, /Bằng hoặc dưới 50%/);
-  assert.match(tiers.find((tier) => tier.tier === 't50_70').range, /Trên 50% đến dưới 70%/);
-  assert.match(tiers.find((tier) => tier.tier === 't70_90').range, /Từ 70% đến dưới 90%/);
-  assert.match(tiers.find((tier) => tier.tier === 'none').range, /Từ 90% trở lên/);
-  // Ví dụ tiền chỉ hiện cho bậc đang đứng và phải là 0,2% × doanh thu thật.
-  assert.match(tiers.find((tier) => tier.tier === 't70_90').example, /2\.000\.000đ/);
-  assert.equal(tiers.find((tier) => tier.tier === 'none').example, '');
-  // Sửa mốc trong config thì chữ đổi theo, không cần sửa code/JSX.
-  const moved = penaltyDisplay.tierTable({
-    ...config,
-    penaltyTiers: config.penaltyTiers.map((tier) => (tier.tier === 't70_90' ? { ...tier, toPct: 95 } : tier)),
-  }, {});
-  assert.match(moved.find((tier) => tier.tier === 't70_90').range, /đến dưới 95%/);
-});
-
-test('tổng hợp phạt toàn đội chỉ CỘNG số đã tính riêng, không coi thiếu dữ liệu là 0đ', () => {
-  const aggregateModule = require('../src/employeePenaltyAggregate');
-  const items = [
-    { empCode: 'DN001', employeeName: 'A', mode: 'enforced', tier: 't70_90', targetPct: 72, targetAmount: 1_000_000, total: 1_000_000, appliedAmount: 1_000_000, c45Amount: 4_000_000, xuAmount: null, warning: { revenueGap: 9_000_000 } },
-    { empCode: 'DN002', employeeName: 'B', mode: 'enforced', tier: 'drop_c45', targetPct: 41, targetAmount: 3_000_000, total: 3_000_000, appliedAmount: 3_000_000, c45Amount: 3_000_000, c45Dropped: true, xuAmount: null },
-    { empCode: 'DN003', employeeName: 'C', mode: 'enforced', tier: 'none', targetPct: 118, targetAmount: 0, total: 0, appliedAmount: 0, c45Amount: 2_000_000, xuAmount: null },
-    // C45 chưa về ⇒ total null ⇒ KHÔNG được cộng thành 0đ, phải đếm là còn thiếu.
-    { empCode: 'DN004', employeeName: 'D', mode: 'enforced', tier: 't50_70', targetPct: 55, targetAmount: null, total: null, appliedAmount: 0, c45Amount: null, xuAmount: null },
-  ];
-  const result = aggregateModule.aggregate({ penalties: items, periodTotal: 100_000_000 });
-  assert.equal(result.aggregate, true);
-  assert.equal(result.available, true);
-  assert.equal(result.employees, 4);
-  assert.equal(result.counted, 3);
-  assert.equal(result.missing, 1);
-  assert.equal(result.incomplete, true);
-  assert.equal(result.total, 4_000_000);
-  assert.equal(result.appliedAmount, 4_000_000);
-  assert.equal(result.afterPenaltyTotal, 96_000_000);
-  assert.equal(result.c45DroppedCount, 1);
-  assert.equal(result.tierCounts.drop_c45, 1);
-  assert.equal(result.tierAmounts.t70_90, 1_000_000);
-  assert.equal(result.atRisk.length, 3);
-  assert.equal(result.atRisk[0].empCode, 'DN002');
-  // Tổng gốc bị khoá (coverage thấp) thì không suy ra tổng sau phạt.
-  assert.equal(aggregateModule.aggregate({ penalties: items, periodTotal: null }).afterPenaltyTotal, null);
-  const empty = aggregateModule.aggregate({ penalties: [] });
-  assert.equal(empty.available, false);
-  assert.equal(empty.total, null);
-  // Có NV nhưng CHƯA NV nào đủ dữ liệu ⇒ tổng là "chưa có số" (null), không phải 0đ.
-  const allMissing = aggregateModule.aggregate({
-    penalties: items.filter((item) => item.total == null), periodTotal: 100_000_000,
-  });
-  assert.equal(allMissing.counted, 0);
-  assert.equal(allMissing.total, null);
-  assert.equal(allMissing.targetAmount, null);
-  assert.equal(allMissing.incomplete, true);
-});
-
-test('màn "Tất cả NV" nhận tổng hợp phạt từ backend, frontend không tự cộng', () => {
-  const table = fs.readFileSync(path.join(__dirname, '..', 'src', 'employeeCostTable.js'), 'utf8');
-  assert.match(table, /employeePenaltyAggregate\.aggregate\(\{/);
-  assert.match(table, /options\.allEmployees\s*\n?\s*\?\s*employeePenaltyAggregate\.aggregate/);
-  const page = fs.readFileSync(path.join(__dirname, '..', '..', 'web', 'src', 'pages', 'EmployeeCost.jsx'), 'utf8');
-  const kpiGrid = /const columnKpis[\s\S]*?<\/div>\n\n    \{targetModalOpen/.exec(page)?.[0] || page;
-  // Không còn ô nào ghi "Chọn 1 NV" cho 4 ô phạt/chi phí sau phạt.
-  assert.doesNotMatch(kpiGrid, /label="Phạt dự kiến" value="Chọn 1 NV"/);
-  assert.match(kpiGrid, /<AggregateAfterPenaltyKpi penalty=\{model\.penalty\}/);
-  assert.match(kpiGrid, /<AggregatePenaltyKpi penalty=\{model\.penalty\}/);
-  assert.match(kpiGrid, /<AggregateXuPenaltyKpi penalty=\{model\.penalty\}/);
-  // Frontend chỉ đọc số backend cộng sẵn: không có phép cộng dồn phạt ở JSX.
-  const aggregateComponents = /function AggregatePenaltyKpi[\s\S]*?function AggregatePenaltyDetailModal/.exec(page)?.[0] || '';
-  assert.doesNotMatch(aggregateComponents, /reduce\(/);
 });
 
 test('PENALTY_NOTIFY defaults off without changing existing message builders', () => {

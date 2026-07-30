@@ -139,6 +139,7 @@ test('ALL payload preserves each backend-computed penalty in bonus and cost empl
   const second = report([{ ...rows[2], sourceLineId: 'dn2' }]);
   second.empCode = 'DN002';
   for (const [item, amount] of [[first, 2_400_000], [second, 7_599_706]]) {
+    const baseTotal = item.periods[0].rows.reduce((sum, row) => sum + row.rowMonthlyTotal, 0);
     item.bonus = {
       configured: false,
       month: { target: 1_000_000_000, achieved: 780_000_000, amount: 0 },
@@ -148,11 +149,13 @@ test('ALL payload preserves each backend-computed penalty in bonus and cost empl
     item.penalty = {
       total: amount,
       appliedAmount: 0,
-      afterPenaltyTotal: item.periods[0].summary.monthlyTotal,
+      afterPenaltyTotal: baseTotal,
       formulaText: `Backend penalty ${amount}`,
     };
+    item.summary = { periodTotal: baseTotal, afterPenaltyTotal: baseTotal };
   }
-  const transformed = table.transformReport(table.mergeEmployeeReports([first, second], roster), {
+  const merged = table.mergeEmployeeReports([first, second], roster);
+  const transformed = table.transformReport(merged, {
     allEmployees: true,
     paginate: false,
   });
@@ -164,6 +167,18 @@ test('ALL payload preserves each backend-computed penalty in bonus and cost empl
     ['DN001', 2_400_000],
     ['DN002', 7_599_706],
   ]);
+  assert.equal(transformed.penalty.aggregate, true);
+  assert.equal(transformed.penalty.total, 9_999_706);
+  assert.equal(transformed.penalty.appliedAmount, 0);
+  assert.equal(transformed.penalty.baseTotal, 30);
+  assert.equal(transformed.penalty.afterPenaltyTotal, 30);
+  assert.equal(transformed.summary.penaltyAppliedAmount, 0);
+  assert.equal(transformed.summary.afterPenaltyTotal, 30);
+
+  const filtered = table.transformReport(merged, { allEmployees: true, q: 'không tồn tại', paginate: true });
+  assert.equal(filtered.summary.periodTotal, 0, 'table total follows the filtered row slice');
+  assert.equal(filtered.penalty.total, 9_999_706, 'team penalty keeps its full backend scope');
+  assert.equal(filtered.penalty.baseTotal, 30, 'team after-penalty base must not be recomputed from filtered rows');
 });
 
 test('routes hard-lock ALL to CEO/admin for view and export', () => {

@@ -260,9 +260,9 @@ export function employeePenaltyViewModel(raw = {}) {
     text: String(raw.warning.text || ''),
   } : null;
   return {
-    // Bản tổng hợp toàn đội tự khai available=false khi không có NV nào có số phạt;
-    // tôn trọng cờ đó thay vì cứ thấy object là coi như có dữ liệu.
-    available: !!raw && typeof raw === 'object' && Object.keys(raw).length > 0 && raw.available !== false,
+    available: !!raw && typeof raw === 'object' && Object.keys(raw).length > 0,
+    aggregate: raw.aggregate === true,
+    scope: String(raw.scope || ''),
     mode: String(raw.mode || 'off'),
     effectiveFrom: String(raw.effectiveFrom || ''),
     enabled: raw.enabled === true,
@@ -270,24 +270,38 @@ export function employeePenaltyViewModel(raw = {}) {
     tier: String(raw.tier || ''),
     ratePct: numberOrNull(raw.ratePct),
     c45Amount: numberOrNull(raw.c45Amount),
+    provisionalC45Amount: numberOrNull(raw.provisionalC45Amount),
     targetAmount: numberOrNull(raw.targetAmount),
+    provisionalTargetAmount: numberOrNull(raw.provisionalTargetAmount),
     targetStatus: String(raw.targetStatus || raw.penaltyStatus || ''),
     penaltyStatus: String(raw.penaltyStatus || raw.targetStatus || ''),
     c45Dropped: raw.c45Dropped === true,
     c45WouldDrop: raw.c45WouldDrop === true,
     xuAmount: numberOrNull(raw.xuAmount),
+    provisionalXuAmount: numberOrNull(raw.provisionalXuAmount),
     xuStatus: String(raw.xuStatus || ''),
     xuMissing: numberOrNull(raw.xuMissing),
+    xuEmployeeCount: Number(raw.xuEmployeeCount || 0),
+    xuContributors: Number(raw.xuContributors || 0),
     total: numberOrNull(raw.total),
+    provisionalTotal: numberOrNull(raw.provisionalTotal),
     appliedAmount: numberOrNull(raw.appliedAmount),
+    provisionalAppliedAmount: numberOrNull(raw.provisionalAppliedAmount),
+    appliedContributors: Number(raw.appliedContributors || 0),
     cappedByC45: raw.cappedByC45 === true,
     provisional: raw.provisional === true,
     formulaText: String(raw.formulaText || ''),
     label: String(raw.label || 'Dự kiến/tham khảo — chưa trừ lương'),
     warning,
+    baseTotal: numberOrNull(raw.baseTotal),
     afterPenaltyTotal: numberOrNull(raw.afterPenaltyTotal),
+    employeeCount: Number(raw.employeeCount || 0),
+    contributors: Number(raw.contributors || 0),
+    unavailableCount: Number(raw.unavailableCount || 0),
+    unavailableEmployees: (Array.isArray(raw.unavailableEmployees) ? raw.unavailableEmployees : []).map(String),
+    complete: raw.complete === true,
     // Diễn giải cho người xem (CEO chốt 30/07): tên cột C45 và bảng 4 ngữ cảnh phạt
-    // do BACKEND sinh từ config (penaltyDisplay). Frontend không tự viết mốc %.
+    // do BACKEND sinh từ cấu hình đang áp dụng. Frontend không tự viết mốc %/tỷ lệ.
     c45Label: String(raw.c45Label || ''),
     modeText: String(raw.modeText || ''),
     tiers: Array.isArray(raw.tiers) ? raw.tiers.map((tier) => ({
@@ -298,25 +312,6 @@ export function employeePenaltyViewModel(raw = {}) {
       ratePct: numberOrNull(tier?.ratePct),
       dropC45: tier?.dropC45 === true,
       active: tier?.active === true,
-      employees: numberOrNull(tier?.employees),
-      amount: numberOrNull(tier?.amount),
-    })) : [],
-    // Tổng hợp toàn đội ở màn "Tất cả NV" — backend cộng sẵn, frontend chỉ hiển thị.
-    aggregate: raw.aggregate === true,
-    employees: numberOrNull(raw.employees),
-    counted: numberOrNull(raw.counted),
-    missing: numberOrNull(raw.missing),
-    incomplete: raw.incomplete === true,
-    c45DroppedCount: numberOrNull(raw.c45DroppedCount),
-    c45WouldDropCount: numberOrNull(raw.c45WouldDropCount),
-    atRisk: Array.isArray(raw.atRisk) ? raw.atRisk.map((item) => ({
-      empCode: String(item?.empCode || '').toUpperCase(),
-      employeeName: String(item?.employeeName || item?.empCode || ''),
-      tier: String(item?.tier || ''),
-      targetPct: numberOrNull(item?.targetPct),
-      targetAmount: numberOrNull(item?.targetAmount),
-      c45Amount: numberOrNull(item?.c45Amount),
-      revenueGap: numberOrNull(item?.revenueGap),
     })) : [],
   };
 }

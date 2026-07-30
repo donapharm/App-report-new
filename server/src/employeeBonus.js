@@ -479,7 +479,7 @@ function aggregateBonusSummaries(reports = [], roster = []) {
     empCode: String(report.empCode || '').toUpperCase(),
     employeeName: names.get(String(report.empCode || '').toUpperCase()) || String(report.empCode || '').toUpperCase(),
     month: report.bonus.month, quarter: report.bonus.quarter,
-    // PHẠT v3.3 is calculated by the backend for each self-scoped report.
+    // PHẠT v3.4 is calculated by the backend for each self-scoped report.
     // Preserve that exact result for the CEO/admin ALL view; never rederive it
     // from the aggregate target/bonus values in the client.
     penalty: report.penalty && typeof report.penalty === 'object' ? { ...report.penalty } : null,
