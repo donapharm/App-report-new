@@ -469,6 +469,9 @@ export function remainingAfterAdvanceViewModel(raw = {}) {
     status: String(raw.status || 'provisional'),
     overAdvance: raw.overAdvance === true,
     overAdvanceCount: Number(raw.overAdvanceCount || 0),
+    suspect: raw.suspect === true,
+    suspectCount: Number(raw.suspectCount || 0),
+    suspectEmployees: (Array.isArray(raw.suspectEmployees) ? raw.suspectEmployees : []).map(String),
     note: String(raw.note || ''),
     reason: raw.reason == null ? null : String(raw.reason),
   };
@@ -561,6 +564,10 @@ export function employeeCostViewModel(payload = {}) {
       locked: payload.salaryAdvance.locked == null ? null : payload.salaryAdvance.locked === true,
       status: String(payload.salaryAdvance.status || ''),
       reason: payload.salaryAdvance.reason == null ? null : String(payload.salaryAdvance.reason),
+      suspect: payload.salaryAdvance.suspect === true,
+      suspectReason: payload.salaryAdvance.suspectReason == null ? null : String(payload.salaryAdvance.suspectReason),
+      suspectMessage: payload.salaryAdvance.suspectMessage == null ? null : String(payload.salaryAdvance.suspectMessage),
+      comparisonAfterPenaltyTotal: numberOrNull(payload.salaryAdvance.comparisonAfterPenaltyTotal),
     } : null,
     remainingAfterAdvance: remainingAfterAdvanceViewModel(payload.remainingAfterAdvance),
   };

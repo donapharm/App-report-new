@@ -1,7 +1,9 @@
 ### 2026-07-31 — App Report — KPI “Còn lại sau ứng lần 1” (VIỆC 2)
 
 - Backend là SSOT cho `remainingAfterAdvance.amount = summary.afterPenaltyTotal - salaryAdvance.amount`; frontend chỉ hiển thị projection, không tự trừ hoặc làm tròn lại. DN009: `336.334.260 - 59.736.053 = 276.598.207đ`.
-- Fail-closed: thiếu tổng sau phạt hoặc thiếu số ứng App Salary thì `amount=null` và UI hiện `—`; tuyệt đối không coi số thiếu là 0. Số âm được giữ nguyên, kèm ghi chú **đã ứng vượt — khấu trừ kỳ sau**.
+- Fail-closed: thiếu tổng sau phạt hoặc thiếu số ứng App Salary thì `amount=null` và UI hiện `—`; tuyệt đối không coi số thiếu là 0.
+- Chốt chặn khẩn sau đối chiếu DN006: nếu số App Salary lớn hơn tổng sau phạt, backend gắn `salaryAdvance.suspect=true` với lý do `amount_exceeds_after_penalty_total`, dừng phép trừ (`remainingAfterAdvance.amount=null`) và frontend cảnh báo đỏ **“Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu”**. Không còn hiển thị số âm như một kết quả đúng hay tự kết luận “khấu trừ kỳ sau”.
+- DN006 kỳ 07/2026 được truy tới `af=600.000.007đ` trong App Salary, sinh `ghiNhan=598.978.982đ`; đây là số “Sếp đề xuất” dẫn xuất trong App Salary, không cùng SSOT với tổng chi phí tháng sau phạt `459.441.306đ` của App Report. Vì vậy KPI này **dừng ship/không deploy** cho tới khi CEO + Finance chốt lại cơ sở hiển thị.
 - Trạng thái chỉ là `locked` khi kỳ chi phí đã khoá sổ **và** số ứng App Salary đã khoá; mọi trường hợp khác là `provisional`/dự kiến.
 - Chế độ `ALL` gọi App Salary theo từng NV bên trong cổng concurrency hiện có (`mapWithConcurrency(..., 3)`). Backend cộng số còn lại đã tính từng NV, trả `subtotal`, `contributors`, `missingCount` và `missingEmployees`; tổng hoàn chỉnh vẫn `null` nếu còn NV thiếu nguồn, không biến thiếu thành 0.
 - UI thêm ô **Còn lại sau ứng lần 1** ngay sau **Ứng lần 1 tháng này**, ghi rõ nguồn **App Salary + DataHub** và trạng thái dự kiến/đã chốt.

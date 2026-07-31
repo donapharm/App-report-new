@@ -209,6 +209,7 @@ test('view model preserves only the backend-owned self-scoped first-advance proj
   assert.deepEqual(model.salaryAdvance, {
     available: true, applicable: true, period: '2026-07', emp_code: 'DN009',
     amount: 59_736_053, currency: 'VND', locked: false, status: 'draft', reason: null,
+    suspect: false, suspectReason: null, suspectMessage: null, comparisonAfterPenaltyTotal: null,
   });
   assert.equal(employeeCostViewModel({ periods: [] }).salaryAdvance, null);
 });

@@ -52,13 +52,23 @@ test('missing Salary or after-penalty input fails closed instead of treating it 
   assert.equal(missingCost.reason, 'after_penalty_unavailable');
 });
 
-test('negative amount is preserved and carries over-advance note', () => {
-  const projection = remaining.buildRemainingAfterAdvance({
-    period: '2026-07', afterPenaltyTotal: 50_000_000, salaryAdvance: salary(59_736_053),
+test('advance above after-penalty total is a fail-closed anomaly, never a plausible negative amount', () => {
+  const assessed = remaining.assessSalaryAdvance({
+    afterPenaltyTotal: 459_441_306, salaryAdvance: salary(598_978_982),
   });
-  assert.equal(projection.amount, -9_736_053);
-  assert.equal(projection.overAdvance, true);
-  assert.match(projection.note, /Đã ứng vượt — khấu trừ kỳ sau/);
+  assert.equal(assessed.suspect, true);
+  assert.equal(assessed.suspectReason, 'amount_exceeds_after_penalty_total');
+  assert.equal(assessed.comparisonAfterPenaltyTotal, 459_441_306);
+
+  const projection = remaining.buildRemainingAfterAdvance({
+    period: '2026-07', afterPenaltyTotal: 459_441_306, salaryAdvance: assessed,
+  });
+  assert.equal(projection.available, false);
+  assert.equal(projection.amount, null);
+  assert.equal(projection.suspect, true);
+  assert.equal(projection.status, 'anomaly');
+  assert.equal(projection.reason, 'salary_advance_exceeds_after_penalty_total');
+  assert.match(projection.note, /nghi sai, đang đối chiếu/);
 });
 
 test('status is locked only when both cost period and Salary are locked', () => {
@@ -75,12 +85,13 @@ test('ALL partial aggregate exposes known subtotal and missing coverage without 
   ];
   const aggregate = remaining.aggregateRemainingAfterAdvance(reports);
   assert.equal(aggregate.amount, null, 'incomplete team total remains fail-closed');
-  assert.equal(aggregate.subtotal, 266_598_207, 'known negative is included; missing employee is not');
-  assert.equal(aggregate.contributors, 2);
+  assert.equal(aggregate.subtotal, 276_598_207, 'suspect and missing employees are both excluded from subtotal');
+  assert.equal(aggregate.contributors, 1);
   assert.equal(aggregate.employeeCount, 3);
-  assert.equal(aggregate.missingCount, 1);
-  assert.deepEqual(aggregate.missingEmployees, ['DN010']);
-  assert.equal(aggregate.overAdvanceCount, 1);
+  assert.equal(aggregate.missingCount, 2);
+  assert.deepEqual(aggregate.missingEmployees, ['DN010', 'DN011']);
+  assert.equal(aggregate.suspectCount, 1);
+  assert.deepEqual(aggregate.suspectEmployees, ['DN011']);
   assert.equal(aggregate.complete, false);
 
   const merged = table.mergeEmployeeReports(reports, reports.map((item) => ({ emp_code: item.empCode, name: item.empCode })));

@@ -912,7 +912,14 @@ async function employeeCostPayload(req, {
       afterPenaltyTotal: payload.summary?.periodTotal == null || penalty.appliedAmount == null
         ? null : Math.max(0, payload.summary.periodTotal - penalty.appliedAmount),
     } : payload.summary;
-    const salaryAdvanceProjection = await salaryAdvancePromise;
+    const rawSalaryAdvanceProjection = await salaryAdvancePromise;
+    // App Salary chỉ trả giá trị "ghi nhận" của kỳ. So sánh tại backend với
+    // tổng sau phạt của App Report; nếu lớn hơn thì gắn cờ nghi sai và chặn phép
+    // trừ. Không được biến dữ liệu bất thường thành một số âm có vẻ hợp lệ.
+    const salaryAdvanceProjection = remainingAfterAdvance.assessSalaryAdvance({
+      afterPenaltyTotal: summary?.afterPenaltyTotal,
+      salaryAdvance: rawSalaryAdvanceProjection,
+    });
     // SSOT tiền còn lại: backend trừ từ TỔNG SAU PHẠT, tuyệt đối không giao phép
     // trừ này cho frontend. Thiếu một trong hai nguồn thì amount=null (fail-closed).
     const remainingAfterAdvanceProjection = remainingAfterAdvance.buildRemainingAfterAdvance({

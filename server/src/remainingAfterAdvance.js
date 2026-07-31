@@ -16,6 +16,22 @@ function unavailableReason(afterPenaltyTotal, salaryAdvance) {
   return null;
 }
 
+function assessSalaryAdvance({ afterPenaltyTotal, salaryAdvance } = {}) {
+  if (!salaryAdvance || typeof salaryAdvance !== 'object') return salaryAdvance ?? null;
+  const baseAmount = moneyOrNull(afterPenaltyTotal);
+  const advanceAmount = moneyOrNull(salaryAdvance.amount);
+  const comparable = baseAmount != null && advanceAmount != null
+    && salaryAdvance.available === true && salaryAdvance.applicable === true;
+  const suspect = comparable && advanceAmount > baseAmount;
+  return Object.freeze({
+    ...salaryAdvance,
+    suspect,
+    suspectReason: suspect ? 'amount_exceeds_after_penalty_total' : null,
+    suspectMessage: suspect ? 'Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu' : null,
+    comparisonAfterPenaltyTotal: comparable ? baseAmount : null,
+  });
+}
+
 function buildRemainingAfterAdvance({ period, afterPenaltyTotal, salaryAdvance, periodClosed = false } = {}) {
   const normalizedPeriod = String(period || '').trim();
   const baseAmount = moneyOrNull(afterPenaltyTotal);
@@ -36,9 +52,24 @@ function buildRemainingAfterAdvance({ period, afterPenaltyTotal, salaryAdvance, 
     reason,
   });
 
+  if (salaryAdvance.suspect === true || advanceAmount > baseAmount) return Object.freeze({
+    available: false,
+    aggregate: false,
+    period: normalizedPeriod,
+    currency: 'VND',
+    amount: null,
+    afterPenaltyTotal: baseAmount,
+    salaryAdvanceAmount: advanceAmount,
+    locked: false,
+    status: 'anomaly',
+    overAdvance: false,
+    suspect: true,
+    note: 'Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu',
+    reason: 'salary_advance_exceeds_after_penalty_total',
+  });
+
   const amount = baseAmount - advanceAmount;
   const locked = periodClosed === true && salaryAdvance.locked === true;
-  const overAdvance = amount < 0;
   return Object.freeze({
     available: true,
     aggregate: false,
@@ -49,8 +80,9 @@ function buildRemainingAfterAdvance({ period, afterPenaltyTotal, salaryAdvance, 
     salaryAdvanceAmount: advanceAmount,
     locked,
     status: locked ? 'locked' : 'provisional',
-    overAdvance,
-    note: overAdvance ? 'Đã ứng vượt — khấu trừ kỳ sau.' : (locked ? 'Đã chốt.' : 'Dự kiến · chưa chốt.'),
+    overAdvance: false,
+    suspect: false,
+    note: locked ? 'Đã chốt.' : 'Dự kiến · chưa chốt.',
     reason: null,
   });
 }
@@ -64,12 +96,13 @@ function aggregateRemainingAfterAdvance(reports = []) {
   }));
   const known = items.filter((item) => moneyOrNull(item.value?.amount) != null);
   const missing = items.filter((item) => moneyOrNull(item.value?.amount) == null);
+  const suspect = items.filter((item) => item.value?.suspect === true
+    || item.value?.reason === 'salary_advance_exceeds_after_penalty_total');
   const subtotal = known.length
     ? known.reduce((sum, item) => sum + moneyOrNull(item.value.amount), 0)
     : null;
   const complete = items.length > 0 && missing.length === 0;
   const locked = complete && known.every((item) => item.value.locked === true && item.value.status === 'locked');
-  const overAdvanceCount = known.filter((item) => item.value.overAdvance === true || moneyOrNull(item.value.amount) < 0).length;
   return Object.freeze({
     available: complete,
     aggregate: true,
@@ -85,9 +118,12 @@ function aggregateRemainingAfterAdvance(reports = []) {
     complete,
     locked,
     status: locked ? 'locked' : 'provisional',
-    overAdvance: overAdvanceCount > 0,
-    overAdvanceCount,
-    note: overAdvanceCount > 0 ? 'Có nhân viên đã ứng vượt — khấu trừ kỳ sau.'
+    overAdvance: false,
+    overAdvanceCount: 0,
+    suspect: suspect.length > 0,
+    suspectCount: suspect.length,
+    suspectEmployees: suspect.map((item) => item.empCode).filter(Boolean),
+    note: suspect.length > 0 ? 'Có số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu.'
       : complete ? (locked ? 'Đã chốt toàn đội.' : 'Dự kiến · chưa chốt toàn đội.')
         : 'Tạm tính trên nhân viên đủ dữ liệu; nhân viên thiếu nguồn không được coi là 0.',
     reason: complete ? null : 'partially_unavailable',
@@ -96,6 +132,7 @@ function aggregateRemainingAfterAdvance(reports = []) {
 
 module.exports = {
   moneyOrNull,
+  assessSalaryAdvance,
   buildRemainingAfterAdvance,
   aggregateRemainingAfterAdvance,
 };

@@ -24,13 +24,13 @@ test('view model preserves backend-owned DN009 amount and missing null without c
   assert.equal(missing.remainingAfterAdvance.amount, null);
 });
 
-test('ALL partial model preserves backend subtotal, contributors, missing count and negative flag', () => {
+test('ALL partial model preserves backend subtotal, missing and suspect metadata', () => {
   const model = employeeCostViewModel({
     empCode: 'ALL', allEmployees: true, from: '2026-07', to: '2026-07', periods: [],
     remainingAfterAdvance: {
       aggregate: true, amount: null, subtotal: 266_598_207,
       employeeCount: 3, contributors: 2, missingCount: 1, missingEmployees: ['DN010'],
-      complete: false, status: 'provisional', overAdvance: true, overAdvanceCount: 1,
+      complete: false, status: 'provisional', suspect: true, suspectCount: 1, suspectEmployees: ['DN011'],
     },
   });
   assert.equal(model.remainingAfterAdvance.amount, null);
@@ -38,7 +38,8 @@ test('ALL partial model preserves backend subtotal, contributors, missing count 
   assert.equal(model.remainingAfterAdvance.contributors, 2);
   assert.equal(model.remainingAfterAdvance.missingCount, 1);
   assert.deepEqual(model.remainingAfterAdvance.missingEmployees, ['DN010']);
-  assert.equal(model.remainingAfterAdvance.overAdvanceCount, 1);
+  assert.equal(model.remainingAfterAdvance.suspectCount, 1);
+  assert.deepEqual(model.remainingAfterAdvance.suspectEmployees, ['DN011']);
 });
 
 test('KPI is immediately after Salary, uses exact copy, renders missing dash and never subtracts in frontend', () => {
@@ -47,7 +48,8 @@ test('KPI is immediately after Salary, uses exact copy, renders missing dash and
   assert.match(page, /Tổng sau phạt − ứng lần 1 · dự kiến · nguồn: App Salary \+ DataHub/);
   assert.match(page, /Tổng sau phạt − ứng lần 1 · đã chốt · nguồn: App Salary \+ DataHub/);
   assert.match(page, /projection\.amount == null[\s\S]{0,120}?value="—"/);
-  assert.match(page, /đã ứng vượt — khấu trừ kỳ sau/);
+  assert.match(page, /Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu/);
+  assert.match(page, /DỪNG TÍNH · NGHI BẤT THƯỜNG/);
   assert.match(page, /<SalaryAdvanceKpi[\s\S]{0,220}?<RemainingAfterAdvanceKpi/);
 
   const component = page.slice(page.indexOf('function RemainingAfterAdvanceKpi'), page.indexOf('function PenaltyDetailModal'));
