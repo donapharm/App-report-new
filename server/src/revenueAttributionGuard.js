@@ -1,4 +1,5 @@
 const VALID_EMP = /^(DN|VP)\d{3}$/;
+const employeeRevenuePolicy = require('./employeeRevenuePolicy');
 
 function upper(value) {
   return String(value ?? '').trim().toUpperCase();
@@ -18,10 +19,12 @@ function activeIn(row, period) {
  * Fail-safe attribution guard.
  *
  * App Report never guesses or remaps a source employee to another employee.
- * When a valid source emp_code conflicts with the current authoritative
- * unit+QLNB roster, quarantine the row as UNALLOCATED until App Sale fixes the
- * source export. Company totals remain unchanged and no employee sees another
- * employee's conflicting revenue.
+ * Quarantine as UNALLOCATED when either:
+ *  - a valid source emp_code conflicts with the authoritative unit+QLNB roster;
+ *  - source assigns revenue to a role explicitly blocked from Sale attribution
+ *    (VP018/Telesaler), even when no roster pair exists.
+ * Company totals remain unchanged and no employee receives conflicting or
+ * role-ineligible revenue.
  */
 function quarantineRosterConflicts(rows = [], snapshot = {}, period, now = new Date().toISOString()) {
   if (!period || !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(period))) {
@@ -45,6 +48,20 @@ function quarantineRosterConflicts(rows = [], snapshot = {}, period, now = new D
     const expected = roster.get(pairKey(row));
     const actualEmp = upper(row.emp_code);
     const expectedEmp = upper(expected?.emp_code);
+    if (employeeRevenuePolicy.isRevenueAttributionBlocked(actualEmp)) {
+      conflicts.push({
+        index,
+        source_line_id: row.source_line_id || null,
+        source_order: row.source_order || null,
+        unit_code: row.unit_code || null,
+        iit_code: row.iit_code || row.qlnb_code || null,
+        from_emp: actualEmp,
+        expected_emp: expectedEmp || null,
+        reason: 'NON_SALES_ROLE',
+        revenue: Number(row.revenue || 0),
+      });
+      return employeeRevenuePolicy.quarantineRevenueRow(row, { now });
+    }
     if (!expected || !VALID_EMP.test(actualEmp) || actualEmp === expectedEmp) return row;
 
     conflicts.push({

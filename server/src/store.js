@@ -18,6 +18,7 @@ const path = require('path');
 const ords = require('./ords');
 const targetAdmin = require('./targetAdmin');
 const { provinceResolution, provinceMapVersion } = require('./province');
+const employeeRevenuePolicy = require('./employeeRevenuePolicy');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
@@ -37,7 +38,11 @@ function isValidEmpCode(v) {
 function normEmpCode(v) { return String(v || '').trim().toUpperCase(); }
 function normalizeEmpForReport(r = {}) {
   const code = String(r.emp_code || '').trim().toUpperCase();
-  if (!code || isValidEmpCode(code)) return r;
+  if (!code) return r;
+  if (employeeRevenuePolicy.isRevenueAttributionBlocked(code)) {
+    return employeeRevenuePolicy.quarantineRevenueRow(r);
+  }
+  if (isValidEmpCode(code)) return r;
   return {
     ...r,
     raw_emp_code: r.raw_emp_code || r.raw_nv || r.emp_code,
@@ -552,7 +557,7 @@ function getRows({ ky, scope }) {
   if (ky) rows = rows.filter((r) => r.ky === ky);
   // Fallback ORDS khi kỳ trống và có cấu hình (chạy trên server)
   if (ky && rows.length === 0 && ords.isEnabled()) {
-    rows = base().sampleRows.length ? rows : ords.getRowsSyncCached(ky);
+    rows = base().sampleRows.length ? rows : ords.getRowsSyncCached(ky).map(normalizeEmpForReport);
   }
   if (scope && scope.empCode) rows = rows.filter((r) => r.emp_code === scope.empCode);
   return rows;
@@ -649,6 +654,7 @@ module.exports = {
   empCodesWithData, empCodesWithRows,
   employeeType, hasTarget, isActiveSalesUser, targetRoster, targetRosterCodes, targetRosterConfig,
   isValidEmpCode, UNALLOCATED_EMP, UNALLOCATED_LABEL,
+  normalizeEmpForReport,
   // giữ tên cũ để nơi khác không vỡ
   db: base,
 };

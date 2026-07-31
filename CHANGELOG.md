@@ -1,3 +1,9 @@
+### 2026-07-31 — Report Bot — VP018 là Telesaler, fail-closed phân bổ doanh thu
+- CEO duyệt `APP_REPORT_VP018_POLICY_PUSH_CLAUDE_APPROVE`: VP018 không phải Sale, không được phân bổ doanh thu C6/`emp_code`, không nhận thưởng/phạt hoặc báo cáo doanh số ngày/tháng.
+- Thêm policy riêng: nếu nguồn tương lai gán nhầm VP018, App Report giữ nguyên doanh thu toàn công ty nhưng chuyển phân bổ nhân viên sang `UNALLOCATED` với trạng thái `NON_SALES_ROLE_QUARANTINED`.
+- Chốt ở materializer attribution guard, slot/upload/sample reader và ORDS fallback để không có đường vòng. Cảnh báo vận hành riêng vẫn hoạt động vì không phải thông báo hiệu suất/doanh số.
+- Chưa merge/deploy/restart/gửi thông báo thật; chờ test và Claude review SHA mới trên PR #231.
+
 ### 2026-07-31 — Report Bot — v3.7 tách DN022 khỏi công thức tiền hiện tại
 - CEO duyệt `APP_REPORT_DN022_SEPARATE_FORMULA_APPROVE`: DN022 không tính thưởng P1/P2, không tính phạt target/C45 và không nhận thông báo thưởng/phạt tiền theo công thức hiện tại; giao diện ghi rõ đang chờ công thức riêng của CEO.
 - Luồng Điểm/Xu được tách độc lập: chỉ DN002, DN004, DN022 thuộc phạm vi phạt thiếu Xu; DN022 được đưa lại vào phép tính Điểm/Xu nhưng không được quay lại công thức target/C45.

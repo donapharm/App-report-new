@@ -11,6 +11,7 @@
  */
 const SQL_API = process.env.ORDS_SQL_API || '';
 const AUTH = process.env.ORDS_AUTH || ''; // ví dụ "Basic xxx" hoặc "Bearer xxx"
+const employeeRevenuePolicy = require('./employeeRevenuePolicy');
 
 function isEnabled() { return !!SQL_API; }
 
@@ -20,7 +21,7 @@ const _pending = new Set();
 
 // Chuẩn hoá 1 dòng ORDS về ReportRow của app.
 function mapRow(r, ky) {
-  return {
+  return employeeRevenuePolicy.quarantineRevenueRow({
     ky,
     date: r.NGAY || r.DATE || ky,
     emp_code: String(r.EMP_NUMBER || r.MA_NV || r.EMP_CODE || '').trim().toUpperCase(),
@@ -32,7 +33,7 @@ function mapRow(r, ky) {
     revenue: Number(r.REVENUE || r.TONG_TIEN || 0),
     bid_package: r.GOI_THAU || r.BID_PACKAGE || null,
     contractor_code: r.NCC || r.CONTRACTOR_CODE || null,
-  };
+  });
 }
 
 /** Gọi ORDS lấy doanh thu 1 kỳ (async). Trả rows[] hoặc [] nếu lỗi. */
@@ -74,4 +75,4 @@ function getRowsSyncCached(ky) {
   return [];
 }
 
-module.exports = { isEnabled, queryRows, getRowsSyncCached };
+module.exports = { isEnabled, queryRows, getRowsSyncCached, mapRow };
