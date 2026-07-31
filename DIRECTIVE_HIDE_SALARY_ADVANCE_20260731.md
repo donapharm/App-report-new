@@ -20,3 +20,10 @@ Lý do: App Salary endpoint `first-advance` **chiếu nhầm cột** — trả `
 
 ## KHI APP SALARY SỬA XONG (ghi để nhớ, chưa làm bây giờ)
 Nguồn trả đúng trường "Ứng trong tháng" + dọn AF rác DN006 → đổi cờ `SALARY_ADVANCE_UI = true`, merge branch guard `feat/kpi-remaining-after-advance` (đã có chốt chặn ứng>tổng), QA lại DN006/DN009 rồi mới bật.
+
+### Hành vi bắt buộc của ô "Ứng lần 1" khi bật lại (CEO chốt 31/07)
+- **Chọn TẤT CẢ NV:** ô hiện **TỔNG số ứng của các NV CÓ ứng lần 1** (giống cách tổng hợp ô Thưởng/Phạt). Hiện kèm **"X/Y NV có ứng"**.
+- **Chọn 1 NV:** ô tách về **đúng số ứng của NV đó**.
+- **Kỷ luật fail-closed cho phép SUM:** NV **thiếu số** hoặc **nghi bất thường (suspect, ứng>tổng)** ⇒ **KHÔNG cộng vào tổng, KHÔNG coi là 0** — tách ra đếm riêng (`contributors` / `missingCount` / `suspectCount`). Còn NV chưa đủ nguồn thì tổng để **`null`/"tạm tính"**, không phải con số "hoàn chỉnh" giả.
+- Dùng lại đúng khuôn `aggregateRemainingAfterAdvance` (đã có `contributors`/`missing`/`overAdvanceCount`) — không viết engine tổng hợp mới. ALL-mode fan-out App Salary giữ trong cổng concurrency hiện có.
+- KHÔNG bật riêng phần SUM này khi cờ `SALARY_ADVANCE_UI` còn `false` — sum số nhầm cột = tổng rác (riêng DN006 ném vào ~599 triệu).
