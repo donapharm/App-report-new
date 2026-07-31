@@ -480,7 +480,7 @@ function SalaryAdvanceKpi({ salaryAdvance, loading, allEmployees, period }) {
   const periodText = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(period || ''))
     ? `Kỳ ${String(period).slice(5, 7)}/${String(period).slice(0, 4)}`
     : 'Kỳ đang chọn';
-  if (allEmployees) return <Kpi label="Ứng lần 1 tháng này" value="Chọn 1 NV" sub="Không tổng hợp hoặc gọi App Salary cho toàn đội" tone="employee-cost-tone-neutral" />;
+  if (allEmployees) return <Kpi label="Ứng lần 1 tháng này" value="Xem tổng còn lại bên dưới" sub="Backend lấy App Salary theo từng NV với giới hạn đồng thời; số thiếu được đếm riêng" tone="employee-cost-tone-neutral" />;
   if (loading) return <Kpi label="Ứng lần 1 tháng này" value="Đang lấy…" sub={`${periodText} · Nguồn App Salary`} tone="employee-cost-tone-neutral" />;
   if (salaryAdvance?.available && salaryAdvance?.applicable === false) {
     return <Kpi label="Ứng lần 1 tháng này" value="Không áp dụng" sub={`${periodText} · Mã nhân viên không thuộc nhóm Sale trên App Salary`} tone="employee-cost-tone-neutral" />;
@@ -497,6 +497,35 @@ function SalaryAdvanceKpi({ salaryAdvance, loading, allEmployees, period }) {
     : ['period_not_found', 'employee_not_found'].includes(reason) ? `${periodText} · Không suy đoán theo tên hoặc kỳ khác`
       : `${periodText} · Các KPI chi phí khác vẫn hoạt động bình thường`;
   return <Kpi label="Ứng lần 1 tháng này" value={value} sub={sub} tone="employee-cost-tone-neutral" />;
+}
+
+function RemainingAfterAdvanceKpi({ remainingAfterAdvance, loading }) {
+  const projection = remainingAfterAdvance || {};
+  const sourceSub = projection.status === 'locked'
+    ? 'Tổng sau phạt − ứng lần 1 · đã chốt · nguồn: App Salary + DataHub'
+    : 'Tổng sau phạt − ứng lần 1 · dự kiến · nguồn: App Salary + DataHub';
+  if (loading) return <Kpi label="Còn lại sau ứng lần 1" value="Đang tính…" sub={sourceSub} tone="employee-cost-tone-after-penalty" />;
+
+  if (projection.aggregate) {
+    const displayAmount = projection.amount == null ? projection.subtotal : projection.amount;
+    const value = displayAmount == null ? '—'
+      : `${formatEmployeeCostCell(displayAmount, moneyColumn)}${projection.complete ? '' : ' · tạm tính'}`;
+    const coverage = `${projection.contributors}/${projection.employeeCount} NV có đủ số`;
+    const missing = projection.missingCount > 0
+      ? ` · thiếu ${projection.missingCount} NV (không coi là 0)`
+      : '';
+    const over = projection.overAdvanceCount > 0
+      ? ` · ${projection.overAdvanceCount} NV đã ứng vượt — khấu trừ kỳ sau`
+      : '';
+    return <Kpi label="Còn lại sau ứng lần 1" value={value}
+      sub={`${sourceSub} · ${coverage}${missing}${over}`} tone="employee-cost-tone-after-penalty" />;
+  }
+
+  if (projection.amount == null) return <Kpi label="Còn lại sau ứng lần 1" value="—"
+    sub={`${sourceSub} · chưa đủ dữ liệu`} tone="employee-cost-tone-after-penalty" />;
+  return <Kpi label="Còn lại sau ứng lần 1" value={formatEmployeeCostCell(projection.amount, moneyColumn)}
+    sub={`${sourceSub}${projection.overAdvance ? ' · đã ứng vượt — khấu trừ kỳ sau' : ''}`}
+    tone="employee-cost-tone-after-penalty" />;
 }
 
 function PenaltyDetailModal({ penalty, employeeLabel, onClose }) {
@@ -1511,6 +1540,7 @@ export default function EmployeeCost({ me, onNavigate }) {
         multiple={multiple} />
       <SalaryAdvanceKpi salaryAdvance={model.salaryAdvance} loading={loading}
         allEmployees={allEmployees} period={range.to} />
+      <RemainingAfterAdvanceKpi remainingAfterAdvance={model.remainingAfterAdvance} loading={loading} />
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
       <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />
       <XuPenaltyKpi penalty={model.penalty} period={model.to} />

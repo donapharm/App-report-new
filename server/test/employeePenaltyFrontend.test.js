@@ -58,14 +58,15 @@ test('ALL penalty view model preserves backend aggregate coverage and provisiona
   assert.equal(model.penalty.complete, false);
 });
 
-test('employee penalty UI has exactly the four v3.4 KPI labels and fail-closed total gate', () => {
+test('employee penalty UI keeps v3.4 KPI labels, adds remaining-after-advance, and preserves fail-closed gates', () => {
   for (const label of [
     'Phạt dự kiến',
     'Tổng chi phí tháng sau phạt',
     'Phạt thiếu Xu cuối quý',
     'Ứng lần 1 tháng này',
+    'Còn lại sau ứng lần 1',
   ]) assert.match(PAGE, new RegExp(label));
-  // ‼ CEO chốt 30/07: CHỌN 1 NV phải thấy ĐỦ CẢ 4 Ô — để chính NV đó biết mình có
+  // ‼ CEO chốt 31/07: CHỌN 1 NV phải thấy đủ 5 ô liên quan phạt/ứng/còn lại — để chính NV đó biết mình có
   // thể bị phạt bao nhiêu. Luật cũ (ẩn ô "Tổng sau phạt" khi tổng gốc null) đã BỎ:
   // ẩn đi thì người xem tưởng tính năng không tồn tại — CEO đã gặp đúng chuyện này.
   // Fail-closed KHÔNG mất: chuyển vào trong component, hiện CHỮ thay vì ẩn ô.

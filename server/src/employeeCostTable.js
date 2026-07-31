@@ -2,6 +2,7 @@
 
 const employeeBonus = require('./employeeBonus');
 const employeePenaltyAggregate = require('./employeePenaltyAggregate');
+const remainingAfterAdvance = require('./remainingAfterAdvance');
 
 const BLOCKED = new Set(['c32', 'c47']);
 const DEFAULT_PAGE_SIZE = 20;
@@ -399,6 +400,9 @@ function mergeEmployeeReports(reports = [], roster = []) {
     employees: roster.map((employee) => ({ empCode: employee.emp_code, employeeName: employee.name })),
     bonus: employeeBonus.aggregateBonusSummaries(source, roster),
     penalty: employeePenaltyAggregate.aggregatePenaltySummaries(source),
+    // Cộng đúng số backend đã tính cho từng NV. Nhân viên thiếu một nguồn vẫn nằm
+    // trong missingCount; subtotal chỉ gồm contributors và không bao giờ thay null=0.
+    remainingAfterAdvance: remainingAfterAdvance.aggregateRemainingAfterAdvance(source),
   };
 }
 

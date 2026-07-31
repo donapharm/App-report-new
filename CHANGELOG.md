@@ -1,3 +1,11 @@
+### 2026-07-31 — App Report — KPI “Còn lại sau ứng lần 1” (VIỆC 2)
+
+- Backend là SSOT cho `remainingAfterAdvance.amount = summary.afterPenaltyTotal - salaryAdvance.amount`; frontend chỉ hiển thị projection, không tự trừ hoặc làm tròn lại. DN009: `336.334.260 - 59.736.053 = 276.598.207đ`.
+- Fail-closed: thiếu tổng sau phạt hoặc thiếu số ứng App Salary thì `amount=null` và UI hiện `—`; tuyệt đối không coi số thiếu là 0. Số âm được giữ nguyên, kèm ghi chú **đã ứng vượt — khấu trừ kỳ sau**.
+- Trạng thái chỉ là `locked` khi kỳ chi phí đã khoá sổ **và** số ứng App Salary đã khoá; mọi trường hợp khác là `provisional`/dự kiến.
+- Chế độ `ALL` gọi App Salary theo từng NV bên trong cổng concurrency hiện có (`mapWithConcurrency(..., 3)`). Backend cộng số còn lại đã tính từng NV, trả `subtotal`, `contributors`, `missingCount` và `missingEmployees`; tổng hoàn chỉnh vẫn `null` nếu còn NV thiếu nguồn, không biến thiếu thành 0.
+- UI thêm ô **Còn lại sau ứng lần 1** ngay sau **Ứng lần 1 tháng này**, ghi rõ nguồn **App Salary + DataHub** và trạng thái dự kiến/đã chốt.
+
 ### 2026-07-31 — App Report — đưa đấu nối App Salary “Ứng lần 1” về main (VIỆC 1)
 
 - Khôi phục connector server-only đã được nghiệm thu trên production: App Report gọi App Salary qua `GET /api/integrations/app-report/first-advance?period=YYYY-MM&emp_code=...`; bearer chỉ nằm ở backend, không đưa sang trình duyệt/log/artifact.

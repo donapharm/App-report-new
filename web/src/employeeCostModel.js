@@ -448,6 +448,32 @@ function periodViewModel(payload = {}) {
   };
 }
 
+export function remainingAfterAdvanceViewModel(raw = {}) {
+  return {
+    available: raw.available === true,
+    aggregate: raw.aggregate === true,
+    scope: String(raw.scope || ''),
+    period: String(raw.period || ''),
+    currency: String(raw.currency || ''),
+    // Chỉ chuẩn hoá projection backend. Không có phép trừ tiền nào ở frontend.
+    amount: numberOrNull(raw.amount),
+    subtotal: numberOrNull(raw.subtotal),
+    afterPenaltyTotal: numberOrNull(raw.afterPenaltyTotal),
+    salaryAdvanceAmount: numberOrNull(raw.salaryAdvanceAmount),
+    employeeCount: Number(raw.employeeCount || 0),
+    contributors: Number(raw.contributors || 0),
+    missingCount: Number(raw.missingCount || 0),
+    missingEmployees: (Array.isArray(raw.missingEmployees) ? raw.missingEmployees : []).map(String),
+    complete: raw.complete === true,
+    locked: raw.locked === true,
+    status: String(raw.status || 'provisional'),
+    overAdvance: raw.overAdvance === true,
+    overAdvanceCount: Number(raw.overAdvanceCount || 0),
+    note: String(raw.note || ''),
+    reason: raw.reason == null ? null : String(raw.reason),
+  };
+}
+
 export function employeeCostViewModel(payload = {}) {
   const hasPeriods = Array.isArray(payload.periods);
   const periods = (hasPeriods ? payload.periods : [payload]).map(periodViewModel);
@@ -536,6 +562,7 @@ export function employeeCostViewModel(payload = {}) {
       status: String(payload.salaryAdvance.status || ''),
       reason: payload.salaryAdvance.reason == null ? null : String(payload.salaryAdvance.reason),
     } : null,
+    remainingAfterAdvance: remainingAfterAdvanceViewModel(payload.remainingAfterAdvance),
   };
 }
 

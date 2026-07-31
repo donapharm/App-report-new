@@ -136,8 +136,10 @@ test('main employee-cost response owns the self-scoped Salary field and browser 
   const api = fs.readFileSync(path.join(root, 'web/src/api.js'), 'utf8');
   assert.equal((page.match(/<SalaryAdvanceKpi\b/g) || []).length, 1, 'KPI component count does not increase');
   assert.equal((page.match(/function SalaryAdvanceKpi\b/g) || []).length, 1);
-  assert.match(routes, /salaryAdvance:\s*await salaryAdvancePromise/);
-  assert.match(routes, /includeSalaryAdvance:\s*false/);
+  assert.match(routes, /const salaryAdvanceProjection = await salaryAdvancePromise/);
+  assert.match(routes, /salaryAdvance:\s*salaryAdvanceProjection/);
+  assert.match(routes, /mapWithConcurrency\(roster, 3[\s\S]*?includeSalaryAdvance:\s*true/,
+    'ALL reuses the existing bounded concurrency gate for Salary calls');
   assert.match(page, /salaryAdvance=\{model\.salaryAdvance\}/);
   assert.doesNotMatch(page, /employeeCostSalaryAdvance\(/);
   assert.match(page, /period=\{range\.to\}/);

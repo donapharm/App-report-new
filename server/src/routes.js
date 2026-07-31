@@ -47,6 +47,7 @@ const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
 const salaryAdvance = require('./salaryAdvance');
+const remainingAfterAdvance = require('./remainingAfterAdvance');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -773,8 +774,8 @@ async function employeeCostPayload(req, {
     const range = rangeOverride || employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
     // Bắt đầu gọi App Salary song song với phần dựng chi phí nhưng luôn cô lập lỗi:
     // field này thuộc đúng mã NV đã được backend resolve self-scope ở trên. Chế độ
-    // ALL tạm tắt fan-out tại employeeCostAllPayload; VIỆC 2 sẽ bổ sung phép tổng
-    // hợp có kiểm soát sau khi connector đã nằm an toàn trên main.
+    // ALL gọi hàm này bên trong mapWithConcurrency(..., 3), nên fan-out App Salary
+    // dùng đúng cổng concurrency hiện có, không tạo một vòng gọi không giới hạn.
     const salaryAdvancePromise = includeSalaryAdvance && empCode
       ? salaryAdvance.safeGetFirstAdvance(range.to, empCode, salaryAdvance.getFirstAdvance)
       : Promise.resolve(null);
@@ -905,15 +906,25 @@ async function employeeCostPayload(req, {
     const periods = penalty ? (payload.periods || []).map((item) => (
       item.period === range.to ? employeePenalty.applyToCostPeriod(item, penalty) : item
     )) : payload.periods;
+    const summary = penalty ? {
+      ...payload.summary,
+      penaltyAppliedAmount: penalty.appliedAmount,
+      afterPenaltyTotal: payload.summary?.periodTotal == null || penalty.appliedAmount == null
+        ? null : Math.max(0, payload.summary.periodTotal - penalty.appliedAmount),
+    } : payload.summary;
+    const salaryAdvanceProjection = await salaryAdvancePromise;
+    // SSOT tiền còn lại: backend trừ từ TỔNG SAU PHẠT, tuyệt đối không giao phép
+    // trừ này cho frontend. Thiếu một trong hai nguồn thì amount=null (fail-closed).
+    const remainingAfterAdvanceProjection = remainingAfterAdvance.buildRemainingAfterAdvance({
+      period: range.to,
+      afterPenaltyTotal: summary?.afterPenaltyTotal,
+      salaryAdvance: salaryAdvanceProjection,
+      periodClosed: closed,
+    });
     return {
       ...payload,
       ...(periods ? { periods } : {}),
-      summary: penalty ? {
-        ...payload.summary,
-        penaltyAppliedAmount: penalty.appliedAmount,
-        afterPenaltyTotal: payload.summary?.periodTotal == null || penalty.appliedAmount == null
-          ? null : Math.max(0, payload.summary.periodTotal - penalty.appliedAmount),
-      } : payload.summary,
+      summary,
       target: empCode ? buildTargetKpiDetail({
         ky,
         scope: { empCode },
@@ -933,7 +944,8 @@ async function employeeCostPayload(req, {
         label: employeeCost.periodCloseLabel(range.to),
       },
       penalty,
-      salaryAdvance: await salaryAdvancePromise,
+      salaryAdvance: salaryAdvanceProjection,
+      remainingAfterAdvance: remainingAfterAdvanceProjection,
       ...(penaltyBaseline ? { penaltyBaseline } : {}),
       penaltyPolicy: resolvedPenaltyPolicy ? {
         formulaVersion: employeeBonus.FORMULA_VERSION,
@@ -991,7 +1003,7 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       auditEvent,
       roster,
       sharedCatalogRowsByPeriod,
-      includeSalaryAdvance: false,
+      includeSalaryAdvance: true,
       suppressAudit,
     }));
     return employeeCostTable.mergeEmployeeReports(reports, roster);
