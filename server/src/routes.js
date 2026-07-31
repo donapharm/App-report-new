@@ -864,6 +864,7 @@ async function employeeCostPayload(req, {
         priorBookedAdjustment: null,
       });
       return employeePenalty.buildPenalty({
+        empCode,
         period: range.to,
         target: bonus.month?.target,
         achieved: bonus.month?.achieved,
@@ -3643,6 +3644,7 @@ function targetKpiSummary(ky, scope, codesOverride) {
   const monthTarget = summarized.month.target; const monthAchieved = summarized.month.achieved;
   const qTarget = summarized.quarter.target; const qAchieved = summarized.quarter.achieved;
   return {
+    emp_code: codes.length === 1 ? String(codes[0] || '').toUpperCase() : '',
     ky, quarter_label: qm.q ? `Q${qm.q}/${qm.year}` : null, quarter_kys: qm.kys,
     assigned_count: targetAdmin.resolveTargets({ ky, empCodes: codes }).filter((e) => Number(e.target) > 0).length, total_nv: codes.length,
     month: { target: monthTarget, achieved: monthAchieved, pct: pct(monthAchieved, monthTarget), gap: monthAchieved - monthTarget },

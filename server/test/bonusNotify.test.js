@@ -86,6 +86,32 @@ test('thiếu nguồn chi phí hoặc bị chặn -> không sinh sự kiện', (
   assert.equal(noSource.events.length, 0, 'không hứa tiền khi dữ liệu chưa đủ');
 });
 
+test('DN022 không thể lọt qua mốc thưởng hay tin thưởng cuối tháng', (t) => {
+  freshState(t);
+  const result = bonusNotify.pendingEvents({
+    ky: '07.2026', rows: [row({ emp_code: 'DN022', pct: 150, achieved: 750_000_000 })], config: REAL_CONFIG,
+  });
+  assert.equal(result.events.length, 0);
+  assert.equal(bonusNotify.monthEndMessage(
+    { emp_code: 'DN022', name: 'CTV 22', ky: '07.2026', pct: 150 },
+    { baseAmount: 10_000_000, priorityAmount: 20_000_000 },
+  ), null);
+});
+
+test('DN002/DN004 bị chặn riêng khỏi tin thưởng tiền nhưng không cần đưa vào optout chung', (t) => {
+  freshState(t);
+  for (const emp_code of ['DN002', 'DN004']) {
+    const result = bonusNotify.pendingEvents({
+      ky: '07.2026', rows: [row({ emp_code, pct: 150, achieved: 750_000_000 })], config: REAL_CONFIG,
+    });
+    assert.equal(result.events.length, 0, `${emp_code} không sinh mốc thưởng`);
+    assert.equal(bonusNotify.monthEndMessage(
+      { emp_code, name: emp_code, ky: '07.2026', pct: 150 },
+      { baseAmount: 10_000_000, priorityAmount: 20_000_000 },
+    ), null, `${emp_code} không sinh tin thưởng cuối tháng`);
+  }
+});
+
 test('tin mốc P2 nói ĐÚNG bản chất, không gọi nhầm 110% là P2', (t) => {
   freshState(t);
   const { events } = bonusNotify.pendingEvents({ ky: '07.2026', rows: [row({ pct: 115, achieved: 575_000_000 })], config: REAL_CONFIG });
@@ -164,7 +190,7 @@ test('‼ chưa tới ngưỡng (P1=0, P2=0) -> KHÔNG gửi tin "Tổng dự ki
 
 test('có tiền dù ít thì VẪN gửi — không được chặn nhầm người đã đạt ngưỡng', () => {
   const text = bonusNotify.monthEndMessage(
-    { emp_code: 'DN002', name: 'B', ky: '07.2026', pct: 95, target: 100_000_000, achieved: 95_000_000 },
+    { emp_code: 'DN003', name: 'B', ky: '07.2026', pct: 95, target: 100_000_000, achieved: 95_000_000 },
     { baseAmount: 95_000, priorityAmount: 0 },
   );
   assert.match(text, /P1 \(coach\): 95\.000đ/);

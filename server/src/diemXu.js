@@ -3,7 +3,9 @@
  * Công thức chốt từ T05/2026 — xem SPEC_DIEM_XU_TICH_LUY.md.
  *   Điểm dòng  = doanh thu × hệ số / 100.000.000  (CL/NT=2; NCL ngoại lệ 025-028=2; NCL thường=1)
  *   Xu         = số tiền tính xu / 500.000 × 1,3   (từ vat.db bảng vat_bills)
- * LOẠI trừ khỏi điểm/xu (CEO chốt 2026-07-09): DN021, DN022, DN023, VP004, VP018.
+ * LOẠI trừ khỏi điểm/xu: DN021, DN023, VP004, VP018.
+ * CEO chốt 31/07/2026: DN022 vẫn phải được tính Điểm/Xu vì thuộc nhóm chỉ
+ * phạt thiếu Xu; DN022 chỉ bị loại khỏi công thức thưởng/phạt target-C45.
  *
  * KHÓA CỨNG CEO chốt 2026-07-19 — CEO_XU_TO_DN001_ONLY:
  * - Chỉ trong phép tính XU của báo cáo Điểm/Xu, DN001 được cộng các dòng VAT emp_code=CEO.
@@ -16,7 +18,7 @@ const store = require('./store');
 const POINT_EXCEPTION_UNITS = new Set(['025', '026', '027', '028']);
 const XU_BASE = 500000, XU_PER = 1.3;
 const VAT_DB = process.env.VAT_DB_PATH || '/home/osboxes/.openclaw/workspace-main/webapp_donapharm/data/vat.db';
-const EXCLUDE = new Set(['DN021', 'DN022', 'DN023', 'VP004', 'VP018']);
+const EXCLUDE = new Set(['DN021', 'DN023', 'VP004', 'VP018']);
 const CEO_XU_TO_DN001_ONLY = 'CEO_XU_TO_DN001_ONLY';
 const CEO_VAT_CODE = 'CEO';
 const CEO_SALES_CODE = 'DN001';

@@ -1,6 +1,7 @@
 'use strict';
 
 const xuPolicy = require('./xuPolicy');
+const employeeIncentivePolicy = require('./employeeIncentivePolicy');
 
 const WARN_ONLY_LABEL = 'T07.2026 CHỈ CẢNH BÁO — chưa trừ tiền. Seed mặc định áp dụng trừ thật từ 01/08/2026.';
 const DISCLAIMER = 'Dự kiến/tham khảo — chưa trừ lương';
@@ -176,6 +177,9 @@ function warningFor({ period, mode, closed = false, target, achieved, pct, tier,
 
 function buildXuPenalty({ config, empCode, asOf, scoreFn, priorBookedAdjustment = null } = {}) {
   const normalized = normalizeConfig(config);
+  if (!employeeIncentivePolicy.isXuPenaltyEmployee(empCode)) {
+    return { amount: null, status: 'disabled', missing: null, checkpoint: null };
+  }
   if (!normalized.xuPenalty.enabled) return { amount: null, status: 'disabled', missing: null, checkpoint: null };
   if (typeof scoreFn !== 'function' || !asOf || normalized.xuPenalty.perMissingXu == null
     || normalized.xuPenalty.perMissingXu < 0) {
@@ -202,8 +206,43 @@ function buildXuPenalty({ config, empCode, asOf, scoreFn, priorBookedAdjustment 
   }
 }
 
-function buildPenalty({ period, target, achieved, c45Amount, costTotal, closed = false, closeLabel = '', config = {}, xu = null } = {}) {
+function buildPenalty({ empCode = '', period, target, achieved, c45Amount, costTotal, closed = false, closeLabel = '', config = {}, xu = null } = {}) {
   const normalized = normalizeConfig(config);
+  if (employeeIncentivePolicy.requiresSeparateFormula(empCode)) {
+    const xuAmount = finite(xu?.amount);
+    const xuFinal = xu?.status === 'final' && xuAmount != null;
+    const appliedAmount = xuFinal ? Math.max(0, xuAmount) : 0;
+    const numericCostTotal = finite(costTotal);
+    return {
+      mode: 'xu_only',
+      closed: closed === true,
+      closeLabel: String(closeLabel || ''),
+      finalized: xuFinal,
+      effectiveFrom: '',
+      enabled: true,
+      targetPct: null,
+      tier: null,
+      ratePct: null,
+      c45Amount: null,
+      targetAmount: null,
+      targetStatus: employeeIncentivePolicy.SEPARATE_FORMULA_REASON,
+      penaltyStatus: employeeIncentivePolicy.SEPARATE_FORMULA_REASON,
+      c45Dropped: false,
+      c45WouldDrop: false,
+      xuAmount,
+      xuStatus: xu?.status || 'xu_source_unavailable',
+      xuMissing: finite(xu?.missing),
+      total: xuFinal ? appliedAmount : null,
+      provisionalTotal: xuAmount,
+      appliedAmount,
+      cappedByC45: false,
+      provisional: !xuFinal,
+      formulaText: employeeIncentivePolicy.SEPARATE_FORMULA_MESSAGE,
+      label: 'DN022: chỉ áp dụng phạt thiếu Xu; chờ công thức thưởng/phạt riêng của CEO.',
+      warning: null,
+      afterPenaltyTotal: numericCostTotal == null ? null : Math.max(0, Math.round(numericCostTotal) - appliedAmount),
+    };
+  }
   const mode = resolveMode(period, config);
   const numericTarget = finite(target);
   const numericAchieved = finite(achieved);

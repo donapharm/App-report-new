@@ -273,3 +273,21 @@ test('ALL excludes missing awards and stays unavailable when nobody has a total 
   assert.equal(empty.month.amount, null);
   assert.equal(empty.month.contributors, 0);
 });
+
+test('DN022 fail-closed khỏi cả thưởng tháng và quý trong khi chờ công thức CEO', () => {
+  const result = bonus.buildBonusSummary({
+    emp_code: 'DN022', ky: '07.2026', quarter_label: 'Q3/2026',
+    month: { target: 1_000_000_000, achieved: 1_500_000_000, pct: 150 },
+    quarter: { target: 3_000_000_000, achieved: 4_500_000_000, pct: 150 },
+  }, v3Config, {
+    month: { available: true, source: 'test', groups: [] },
+    quarter: { available: true, source: 'test', groups: [] },
+  });
+  assert.equal(result.configured, false);
+  assert.equal(result.reason, 'employee_separate_formula_pending');
+  assert.equal(result.month.baseAmount, null);
+  assert.equal(result.month.priorityAmount, null);
+  assert.equal(result.month.amount, null);
+  assert.equal(result.quarter.amount, null);
+  assert.match(result.message, /DN022.*chờ công thức thưởng\/phạt riêng/i);
+});

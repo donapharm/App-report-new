@@ -136,11 +136,11 @@ test('‼ chặn thông báo dùng ĐÚNG MỘT nguồn: notify_optout + no_auto
   assert.match(fn, /targetNotify\.isMuted/);
 });
 
-test('danh sách chặn thông báo khớp với 2 phạm vi CEO đã duyệt, và KHÔNG có DN022', () => {
+test('notify_optout chung không bị dùng để trộn chính sách riêng DN022', () => {
   const optout = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'config', 'notify_optout.json'), 'utf8'));
   assert.deepEqual([...optout.codes].sort(), ['DN021', 'DN023', 'VP004', 'VP018'],
     'phải khớp dormantFeedback.TELEGRAM_HARD_EXCLUDED và filteredEmployeeDelivery.EXCLUDED_EMP_CODES');
-  assert.ok(!optout.codes.includes('DN022'), 'DN022 nhận thông báo như NV chính thức (CEO chốt 28/07)');
+  assert.ok(!optout.codes.includes('DN022'), 'DN022 chỉ chặn thưởng/phạt bằng employeeIncentivePolicy; không chặn nhầm target/doanh thu ở đây');
   assert.ok(optout.codes.includes('VP018'), 'VP018 từng lọt vì thiếu ở đây');
 });
 
@@ -151,8 +151,8 @@ test('báo cáo doanh thu lọc người nhận bằng isMuted, KHÔNG bằng di
   assert.doesNotMatch(fn, /EXCLUDED\.has/, 'không được lọc bằng danh sách điểm xu nữa');
 });
 
-test('diemXu.EXCLUDE GIỮ NGUYÊN cho việc tính điểm xu — không đụng', () => {
+test('DN022 được tính Điểm/Xu cho luồng chỉ phạt Xu; các mã còn lại giữ nguyên', () => {
   const diemXu = require('../src/diemXu');
-  assert.equal(diemXu.isExcluded('DN022'), true, 'DN022 vẫn KHÔNG tính điểm xu');
-  assert.deepEqual([...diemXu.EXCLUDE].sort(), ['DN021', 'DN022', 'DN023', 'VP004', 'VP018']);
+  assert.equal(diemXu.isExcluded('DN022'), false, 'DN022 phải có số Điểm/Xu để phạt Xu riêng');
+  assert.deepEqual([...diemXu.EXCLUDE].sort(), ['DN021', 'DN023', 'VP004', 'VP018']);
 });

@@ -354,6 +354,7 @@ function TargetDetailModal({ target, employeeLabel, admin, onClose, onNavigate }
 }
 
 function BonusKpi({ bonus, onOpen }) {
+  if (bonus.reason === 'employee_separate_formula_pending') return <Kpi label="Thưởng dự kiến" value="Chờ công thức riêng" sub={bonus.message || 'DN022 chưa áp dụng công thức thưởng P1/P2 hiện tại'} title={bonus.message} tone="employee-cost-tone-reward" />;
   if (!bonus.configured) return <Kpi label="Thưởng dự kiến" value="Chưa cấu hình mức thưởng" sub="theo mức đạt target · tham khảo" title="App Report chỉ tính tham khảo; không gửi thưởng và không ghi payroll." tone="employee-cost-tone-reward" />;
   const month = bonus.month;
   const quarter = bonus.quarter;

@@ -19,7 +19,7 @@ const ROUTES = ['CL', 'NCL', 'NT'];
 const UNCLASSIFIED = 'Chưa phân loại';
 const UNGROUPED = 'Chưa phân nhóm';
 const UNKNOWN_GROUP = 'Chưa xác định';
-const EXCLUDED = diemXu.EXCLUDE || new Set(['DN021', 'DN022', 'DN023', 'VP004', 'VP018']);
+const EXCLUDED = diemXu.EXCLUDE || new Set(['DN021', 'DN023', 'VP004', 'VP018']);
 
 const n = (v) => Number(v || 0);
 const txt = (v) => String(v == null ? '' : v).trim();

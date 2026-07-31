@@ -18,7 +18,7 @@ const ROOT = path.join(__dirname, '..');
 const employeeBonus = require('../src/employeeBonus');
 const LOCK_FILE = path.join(ROOT, 'config', 'bonus_formula_lock.json');
 // Mã quyết định số tiền thưởng. Thêm file mới có ảnh hưởng công thức thì thêm vào đây.
-const FORMULA_SOURCES = ['src/employeeBonus.js', 'src/employeeBonusPolicy.js', 'src/employeePenalty.js', 'src/employeePenaltyAggregate.js', 'src/employeePenaltyPolicy.js', 'src/xuPolicy.js'];
+const FORMULA_SOURCES = ['src/employeeBonus.js', 'src/employeeBonusPolicy.js', 'src/employeePenalty.js', 'src/employeePenaltyAggregate.js', 'src/employeePenaltyPolicy.js', 'src/employeeIncentivePolicy.js', 'src/xuPolicy.js'];
 const FORMULA_CONFIG_KEYS = [
   'base', 'baseTiers', 'priorityThresholdPct', 'priorityRates', 'autoGroupTargets', 'totalCapPct',
   'penaltyTiers', 'penaltyEffectiveFrom', 'penaltyWarnFrom', 'penaltyEnabled', 'xuPenalty',

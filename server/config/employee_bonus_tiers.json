@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "version": "bonus-v3.6-audit-limit-4000-r1",
+  "version": "bonus-v3.7-dn022-separate-formula-r1",
   "effectiveFrom": "2026-07-01",
   "base": "revenue_before_vat",
   "currency": "VND",
@@ -48,7 +48,7 @@
   },
   "autoGroupTargets": true,
   "totalCapPct": null,
-  "note": "Thưởng/phạt v3.6: KHÔNG đổi một đồng nào so với v3.5 — chỉ nâng hạn mức lịch sử sửa cấu hình thưởng từ 2.000 lên 4.000 bản ghi (CEO chốt 30/07: \"tăng gấp đôi để không bị cắt dòng\"). Giữ nguyên cách tính P1/P2, bậc phạt, và quy tắc khoá sổ kỳ hết ngày 8 tháng sau của v3.5. Dự kiến/tham khảo, không payroll.",
+  "note": "Thưởng/phạt v3.7: DN022 chờ công thức riêng của CEO nên không áp dụng thưởng P1/P2 hoặc phạt target/C45 hiện tại; DN022 vẫn thuộc luồng phạt thiếu Xu. Phạt thiếu Xu chỉ áp dụng cho DN002, DN004, DN022. Công thức tiền của các nhân viên còn lại và quy tắc khoá sổ hết ngày 8 tháng sau giữ nguyên v3.6. Dự kiến/tham khảo, không payroll.",
   "penaltyTiers": [
     {
       "tier": "drop_c45",

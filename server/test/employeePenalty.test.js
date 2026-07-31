@@ -284,16 +284,47 @@ test('daily C45 drop reconciles exactly to adjusted monthly total', () => {
 test('Xu reuses checkpoint semantics: 2 missing = 600k and prior-booked prevents double charge', () => {
   const xuConfig = { ...config, xuPenalty: { enabled: true, perMissingXu: 300000 } };
   const scoreFn = () => ({ diem_thang: 2, xu_thang: 0, diem_quy: 2, xu_quy: 0, xu_tuan: 0 });
-  const gross = penalty.buildXuPenalty({ config: xuConfig, empCode: 'DN001', asOf: '2026-09-30', scoreFn, priorBookedAdjustment: 0 });
+  const gross = penalty.buildXuPenalty({ config: xuConfig, empCode: 'DN002', asOf: '2026-09-30', scoreFn, priorBookedAdjustment: 0 });
   assert.equal(gross.checkpoint.adjustment.quarter_total_estimated, 600_000);
   assert.equal(gross.amount, 600_000);
-  const booked = penalty.buildXuPenalty({ config: xuConfig, empCode: 'DN001', asOf: '2026-09-30', scoreFn, priorBookedAdjustment: 600_000 });
+  const booked = penalty.buildXuPenalty({ config: xuConfig, empCode: 'DN002', asOf: '2026-09-30', scoreFn, priorBookedAdjustment: 600_000 });
   assert.equal(booked.amount, 0);
   const configured = penalty.buildXuPenalty({
     config: { ...xuConfig, xuPenalty: { enabled: true, perMissingXu: 400_000 } },
-    empCode: 'DN001', asOf: '2026-09-30', scoreFn, priorBookedAdjustment: 0,
+    empCode: 'DN002', asOf: '2026-09-30', scoreFn, priorBookedAdjustment: 0,
   });
   assert.equal(configured.amount, 800_000);
+});
+
+test('phạt Xu fail-closed ngoài allowlist DN002/DN004/DN022', () => {
+  const xuConfig = { ...config, xuPenalty: { enabled: true, perMissingXu: 300000 } };
+  const scoreFn = () => ({ diem_thang: 2, xu_thang: 0, diem_quy: 2, xu_quy: 0, xu_tuan: 0 });
+  for (const empCode of ['DN001', 'DN021', 'DN023', 'VP004', 'VP018']) {
+    assert.deepEqual(
+      penalty.buildXuPenalty({ config: xuConfig, empCode, asOf: '2026-09-30', scoreFn }),
+      { amount: null, status: 'disabled', missing: null, checkpoint: null },
+      `${empCode} không được tính phạt Xu`,
+    );
+  }
+});
+
+test('DN022 bỏ toàn bộ phạt target/C45 nhưng vẫn giữ kết quả phạt Xu', () => {
+  const out = penalty.buildPenalty({
+    empCode: 'DN022', period: '2026-09', target: 1_000_000_000, achieved: 400_000_000,
+    c45Amount: 8_000_000, costTotal: 20_000_000, closed: true, config,
+    xu: { amount: 600_000, status: 'final', missing: 2 },
+  });
+  assert.equal(out.mode, 'xu_only');
+  assert.equal(out.targetPct, null);
+  assert.equal(out.tier, null);
+  assert.equal(out.c45Amount, null);
+  assert.equal(out.targetAmount, null);
+  assert.equal(out.c45Dropped, false);
+  assert.equal(out.xuAmount, 600_000);
+  assert.equal(out.total, 600_000);
+  assert.equal(out.appliedAmount, 600_000);
+  assert.equal(out.afterPenaltyTotal, 19_400_000);
+  assert.match(out.formulaText, /chờ công thức thưởng\/phạt riêng/i);
 });
 
 test('employee-cost service route attaches backend penalty using self-scoped payload data', () => {
@@ -301,6 +332,7 @@ test('employee-cost service route attaches backend penalty using self-scoped pay
   const service = /async function employeeCostPayload[\s\S]*?\n}\n\nfunction employeeCostTableOptions/.exec(source)?.[0] || '';
   assert.match(service, /resolveScopedEmployee/);
   assert.match(service, /employeePenalty\.buildPenalty/);
+  assert.match(service, /employeePenalty\.buildPenalty\(\{\s*empCode,/);
   assert.match(service, /c45Amount: costPeriod\?\.summary\?\.columnTotals/);
   // v3.5 chèn `periodClose` giữa bonus và penalty: payload phải mang trạng thái khoá
   // sổ để giao diện dán nhãn DỰ KIẾN/CHÍNH THỨC, nên khoá luôn thứ tự này.
