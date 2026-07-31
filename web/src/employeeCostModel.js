@@ -523,6 +523,19 @@ export function employeeCostViewModel(payload = {}) {
     target: employeeTargetViewModel(payload.target),
     bonus: employeeBonusViewModel(payload.bonus),
     penalty: employeePenaltyViewModel(payload.penalty),
+    // Projection App Salary đã được backend self-scope + allowlist. Frontend chỉ
+    // chuẩn hoá để hiển thị, không nhận token và không tự suy số 0 khi thiếu.
+    salaryAdvance: payload.salaryAdvance && typeof payload.salaryAdvance === 'object' ? {
+      available: payload.salaryAdvance.available === true,
+      applicable: payload.salaryAdvance.applicable == null ? null : payload.salaryAdvance.applicable === true,
+      period: String(payload.salaryAdvance.period || ''),
+      emp_code: String(payload.salaryAdvance.emp_code || ''),
+      amount: Number.isSafeInteger(payload.salaryAdvance.amount) ? payload.salaryAdvance.amount : null,
+      currency: String(payload.salaryAdvance.currency || ''),
+      locked: payload.salaryAdvance.locked == null ? null : payload.salaryAdvance.locked === true,
+      status: String(payload.salaryAdvance.status || ''),
+      reason: payload.salaryAdvance.reason == null ? null : String(payload.salaryAdvance.reason),
+    } : null,
   };
 }
 

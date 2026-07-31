@@ -247,6 +247,18 @@ export const api = {
       cacheMs: 20 * 1000, ...requestOptions,
     });
   },
+  employeeCostSalaryAdvance: (emp, period, requestOptions = {}) => {
+    const params = new URLSearchParams();
+    if (emp) params.set('emp', emp);
+    if (period) params.set('period', period);
+    const query = params.toString();
+    return req('GET', '/employee-cost/salary-advance' + (query ? `?${query}` : ''), undefined, {
+      timeoutMs: 8000,
+      timeoutMessage: 'App Salary đang phản hồi chậm. Các chỉ số chi phí khác vẫn dùng bình thường.',
+      cacheMs: 20 * 1000,
+      ...requestOptions,
+    });
+  },
   employeeCostDiemXu: (emp, range = {}, requestOptions = {}) => {
     const params = new URLSearchParams();
     if (emp) params.set('emp', emp);

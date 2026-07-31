@@ -46,6 +46,7 @@ const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
+const salaryAdvance = require('./salaryAdvance');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -741,6 +742,7 @@ async function employeeCostPayload(req, {
   bonusConfig = null,
   penaltyConfig = null,
   includePenaltyBaseline = false,
+  includeSalaryAdvance = true,
   rangeOverride = null,
   suppressAudit = false,
 } = {}) {
@@ -769,6 +771,13 @@ async function employeeCostPayload(req, {
     roster,
   }, async () => {
     const range = rangeOverride || employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+    // Bắt đầu gọi App Salary song song với phần dựng chi phí nhưng luôn cô lập lỗi:
+    // field này thuộc đúng mã NV đã được backend resolve self-scope ở trên. Chế độ
+    // ALL tạm tắt fan-out tại employeeCostAllPayload; VIỆC 2 sẽ bổ sung phép tổng
+    // hợp có kiểm soát sau khi connector đã nằm an toàn trên main.
+    const salaryAdvancePromise = includeSalaryAdvance && empCode
+      ? salaryAdvance.safeGetFirstAdvance(range.to, empCode, salaryAdvance.getFirstAdvance)
+      : Promise.resolve(null);
     const revenueRowsByPeriod = {};
     const catalogRowsByPeriod = sharedCatalogRowsByPeriod || {};
     // Doanh thu và catalog được lấy riêng đúng từng kỳ, luôn với scope backend.
@@ -924,6 +933,7 @@ async function employeeCostPayload(req, {
         label: employeeCost.periodCloseLabel(range.to),
       },
       penalty,
+      salaryAdvance: await salaryAdvancePromise,
       ...(penaltyBaseline ? { penaltyBaseline } : {}),
       penaltyPolicy: resolvedPenaltyPolicy ? {
         formulaVersion: employeeBonus.FORMULA_VERSION,
@@ -981,6 +991,7 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       auditEvent,
       roster,
       sharedCatalogRowsByPeriod,
+      includeSalaryAdvance: false,
       suppressAudit,
     }));
     return employeeCostTable.mergeEmployeeReports(reports, roster);
@@ -1175,6 +1186,42 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
     : employeeCostTable.transformReport(await employeeCostPayload(req), employeeCostTableOptions(req, { paginate: true }));
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
+}));
+
+// Independent KPI projection: an unavailable Salary service must never fail the
+// main /employee-cost payload. Scope and visibility are resolved at this backend.
+router.get('/employee-cost/salary-advance', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const admin = auth.isAdmin(req.session.role);
+  const requestedEmp = salaryAdvance.normalizeEmpCode(req.query.emp);
+  const period = String(req.query.period || '').trim();
+  if (!salaryAdvance.PERIOD_RE.test(period)) {
+    return res.status(400).json({ error: 'Kỳ KPI phải đúng YYYY-MM.', code: 'SALARY_ADVANCE_INVALID_PERIOD' });
+  }
+  if (requestedEmp === 'ALL') {
+    if (!admin) return res.status(403).json({ error: 'Nhân viên chỉ được xem số ứng của chính mình.', code: 'SALARY_ADVANCE_EMP_FORBIDDEN' });
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ salaryAdvance: { available: false, applicable: null, period, emp_code: 'ALL', amount: null, currency: 'VND', locked: null, status: 'unavailable', reason: 'select_employee' } });
+  }
+  const scope = auth.scopeOf(req.session);
+  const ownCode = salaryAdvance.normalizeEmpCode(scope?.empCode || req.session?.emp_code);
+  if (!admin && requestedEmp && requestedEmp !== ownCode) {
+    return res.status(403).json({ error: 'Nhân viên chỉ được xem số ứng của chính mình.', code: 'SALARY_ADVANCE_EMP_FORBIDDEN' });
+  }
+  const empCode = employeeCost.resolveScopedEmployee({ session: req.session, scope, requestedEmp });
+  if (!salaryAdvance.EMP_CODE_RE.test(empCode || '')) {
+    return res.status(400).json({ error: 'Hãy chọn đúng một nhân viên.', code: 'SALARY_ADVANCE_EMP_REQUIRED' });
+  }
+  const projection = await employeeCostVisibility.run({
+    admin,
+    actor: req.session.emp_code,
+    role: req.session.role,
+    empCode,
+    roster: employeeCostRosterRows(),
+  }, async () => {
+    return salaryAdvance.safeGetFirstAdvance(period, empCode, salaryAdvance.getFirstAdvance);
+  });
+  res.set('Cache-Control', 'private, no-store');
+  return res.json(projection?.disabled ? projection : { salaryAdvance: projection });
 }));
 
 async function employeeVatKhoanPayload(req, {

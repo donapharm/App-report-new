@@ -1,3 +1,11 @@
+### 2026-07-31 — App Report — đưa đấu nối App Salary “Ứng lần 1” về main (VIỆC 1)
+
+- Khôi phục connector server-only đã được nghiệm thu trên production: App Report gọi App Salary qua `GET /api/integrations/app-report/first-advance?period=YYYY-MM&emp_code=...`; bearer chỉ nằm ở backend, không đưa sang trình duyệt/log/artifact.
+- Mã nhân viên được resolve và khóa self-scope tại backend. Nhân viên chỉ nhận số của chính mình; CEO/admin chỉ nhận số của đúng một mã đã chọn. Payload App Salary dùng exact allowlist, bắt buộc khớp kỳ/mã/VND; lỗi nguồn hoặc thiếu cấu hình trả `amount=null`, không suy thành 0.
+- Response chính `/api/employee-cost` có field `salaryAdvance` self-scoped. UI đọc field này từ một response backend duy nhất; route tương thích `/api/employee-cost/salary-advance` vẫn giữ cho client cũ.
+- Trạng thái `draft` hiển thị **Dự kiến · chưa chốt trên App Salary**; chỉ `locked` mới hiển thị đã chốt. Đây chưa phải payroll/số chi chính thức.
+- Chế độ `ALL` chưa fan-out App Salary trong VIỆC 1. Phần tổng hợp toàn đội và KPI “Còn lại sau ứng lần 1” thuộc VIỆC 2, chỉ làm sau khi commit này đã có trên `main`.
+
 ### 2026-07-30 chiều — Claude Code — DIRECTIVE TỔNG cho bot chạy một mạch (CEO uỷ quyền tự sắp thứ tự)
 > CEO: "thứ tự em tự làm các việc đó luôn, cho anh không cần hỏi lại. Xong báo cáo chắc chắn cho anh."
 

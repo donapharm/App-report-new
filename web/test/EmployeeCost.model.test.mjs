@@ -197,6 +197,22 @@ test('view model renders percent without percent sign and reads pre-VAT sale fie
   assert.equal(formatEmployeeCostCell(null, { kind: 'money' }), '—');
 });
 
+test('view model preserves only the backend-owned self-scoped first-advance projection', () => {
+  const model = employeeCostViewModel({
+    empCode: 'DN009', periods: [],
+    salaryAdvance: {
+      available: true, applicable: true, period: '2026-07', emp_code: 'DN009',
+      amount: 59_736_053, currency: 'VND', locked: false, status: 'draft', reason: null,
+      payroll_secret: 'must-not-pass',
+    },
+  });
+  assert.deepEqual(model.salaryAdvance, {
+    available: true, applicable: true, period: '2026-07', emp_code: 'DN009',
+    amount: 59_736_053, currency: 'VND', locked: false, status: 'draft', reason: null,
+  });
+  assert.equal(employeeCostViewModel({ periods: [] }).salaryAdvance, null);
+});
+
 test('low coverage state preserves null amounts and unreliable totals', () => {
   const model = employeeCostViewModel({
     columns: [{ key: 'c36', label: 'CP (%)' }],

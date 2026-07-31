@@ -102,7 +102,7 @@ test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction,
   for (const label of ['Phạt dự kiến', 'Tổng chi phí tháng sau phạt', 'Phạt thiếu Xu cuối quý']) {
     assert.ok(page.includes(label), `component KPI phải khai báo nhãn "${label}"`);
   }
-  assert.match(kpiGrid, /<SalaryAdvanceKpi \/>/, 'ô Ứng lần 1 phải hiện ở mọi chế độ');
+  assert.match(kpiGrid, /<SalaryAdvanceKpi\b/, 'ô Ứng lần 1 phải hiện ở mọi chế độ');
   assert.doesNotMatch(kpiGrid, /\{!allEmployees && <PenaltyKpi/, '4 ô phạt không được ẩn ở chế độ Tất cả NV');
   assert.doesNotMatch(kpiGrid, /label="Phạt dự kiến" value="Chọn 1 NV"/,
     'ALL đã có tổng phạt backend, không được giữ placeholder cũ');
@@ -117,7 +117,7 @@ test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction,
   assert.doesNotMatch(kpiGrid, /periodTotal != null && <AfterPenaltyKpi/,
     'ô "Tổng sau phạt" không được ẩn khi tổng gốc null — phải hiện và nói rõ chưa đủ dữ liệu');
   assert.match(kpiGrid, /^\s*<AfterPenaltyKpi/m, 'ô Tổng sau phạt phải render vô điều kiện');
-  assert.match(kpiGrid, /^\s*<SalaryAdvanceKpi \/>$/m, 'ô Ứng lần 1 hiện ở mọi chế độ, không bọc điều kiện');
+  assert.match(kpiGrid, /^\s*<SalaryAdvanceKpi\b/m, 'ô Ứng lần 1 hiện ở mọi chế độ, không bọc điều kiện');
   // Fail-closed vẫn giữ: thiếu dữ liệu thì nói CHỮ, tuyệt đối không hiện số 0/số âm giả.
   assert.match(page, /if \(baseTotal == null\) \{[\s\S]{0,400}?Chưa đủ dữ liệu chi phí/,
     'tổng gốc null phải hiện chữ "Chưa đủ dữ liệu chi phí", không được suy ra số');

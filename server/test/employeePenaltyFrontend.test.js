@@ -83,8 +83,10 @@ test('employee penalty UI has exactly the four v3.4 KPI labels and fail-closed t
     'tổng gốc null phải hiện chữ, KHÔNG được suy ra số và KHÔNG được ẩn ô');
   assert.doesNotMatch(PAGE, /if \(baseTotal == null\) return null;/,
     'cấm ẩn ô bằng return null');
-  assert.match(PAGE, /value="Chưa đấu nối app lương"/);
-  assert.doesNotMatch(PAGE.match(/function SalaryAdvanceKpi\(\)[\s\S]*?\n}/)?.[0] || '', /0đ/);
+  assert.match(PAGE, /function SalaryAdvanceKpi\(\{ salaryAdvance, loading, allEmployees, period \}\)/);
+  assert.match(PAGE, /Number\.isSafeInteger\(salaryAdvance\.amount\)/);
+  assert.match(PAGE, /Dự kiến · chưa chốt trên App Salary/);
+  assert.doesNotMatch(PAGE, /Chưa đấu nối app lương/);
   assert.match(PAGE, /tone="employee-cost-tone-penalty"/);
   assert.match(CSS, /\.employee-cost-tone-penalty\s*\{/);
   assert.match(PAGE, /c45Dropped=\{penalty\?\.c45Dropped\}/,

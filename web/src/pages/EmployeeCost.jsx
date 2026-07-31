@@ -476,8 +476,27 @@ function XuPenaltyKpi({ penalty, period }) {
   return <Kpi label="Phạt thiếu Xu cuối quý" value={value} sub={`${penalty.xuMissing == null ? 'Thiếu Xu: —' : `Thiếu ${diemXuNumber(penalty.xuMissing)} Xu`}${coverage} · dự kiến/tham khảo`} tone="employee-cost-tone-penalty-soft" />;
 }
 
-function SalaryAdvanceKpi() {
-  return <Kpi label="Ứng lần 1 tháng này" value="Chưa đấu nối app lương" sub="App Report không tự tính số ứng" tone="employee-cost-tone-neutral" />;
+function SalaryAdvanceKpi({ salaryAdvance, loading, allEmployees, period }) {
+  const periodText = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(period || ''))
+    ? `Kỳ ${String(period).slice(5, 7)}/${String(period).slice(0, 4)}`
+    : 'Kỳ đang chọn';
+  if (allEmployees) return <Kpi label="Ứng lần 1 tháng này" value="Chọn 1 NV" sub="Không tổng hợp hoặc gọi App Salary cho toàn đội" tone="employee-cost-tone-neutral" />;
+  if (loading) return <Kpi label="Ứng lần 1 tháng này" value="Đang lấy…" sub={`${periodText} · Nguồn App Salary`} tone="employee-cost-tone-neutral" />;
+  if (salaryAdvance?.available && salaryAdvance?.applicable === false) {
+    return <Kpi label="Ứng lần 1 tháng này" value="Không áp dụng" sub={`${periodText} · Mã nhân viên không thuộc nhóm Sale trên App Salary`} tone="employee-cost-tone-neutral" />;
+  }
+  if (salaryAdvance?.available && salaryAdvance?.applicable === true && Number.isSafeInteger(salaryAdvance.amount)) {
+    return <Kpi label="Ứng lần 1 tháng này" value={`${salaryAdvance.amount.toLocaleString('vi-VN')} ₫`}
+      sub={`${periodText} · ${salaryAdvance.locked ? 'Đã chốt trên App Salary' : 'Dự kiến · chưa chốt trên App Salary'}`} tone="employee-cost-tone-neutral" />;
+  }
+  const reason = salaryAdvance?.reason;
+  const value = reason === 'duplicate_employee' ? 'Dữ liệu bị trùng mã'
+    : ['period_not_found', 'employee_not_found'].includes(reason) ? 'Chưa có dữ liệu kỳ này'
+      : 'Tạm thời chưa lấy được từ App Salary';
+  const sub = reason === 'duplicate_employee' ? `${periodText} · Đã fail-closed; cần App Salary xử lý mã trùng`
+    : ['period_not_found', 'employee_not_found'].includes(reason) ? `${periodText} · Không suy đoán theo tên hoặc kỳ khác`
+      : `${periodText} · Các KPI chi phí khác vẫn hoạt động bình thường`;
+  return <Kpi label="Ứng lần 1 tháng này" value={value} sub={sub} tone="employee-cost-tone-neutral" />;
 }
 
 function PenaltyDetailModal({ penalty, employeeLabel, onClose }) {
@@ -1490,7 +1509,8 @@ export default function EmployeeCost({ me, onNavigate }) {
         penalty={model.penalty}
         baseTotal={allEmployees ? model.penalty.baseTotal : model.summary.periodTotal}
         multiple={multiple} />
-      <SalaryAdvanceKpi />
+      <SalaryAdvanceKpi salaryAdvance={model.salaryAdvance} loading={loading}
+        allEmployees={allEmployees} period={range.to} />
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
       <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />
       <XuPenaltyKpi penalty={model.penalty} period={model.to} />
