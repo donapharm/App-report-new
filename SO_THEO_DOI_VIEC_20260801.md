@@ -9,7 +9,7 @@ Rà bằng git thật (branch/commit/code), không nhớ mò. Cập nhật mỗi
 
 | # | Việc | Khi nào | Ai làm | Vì sao thứ tự này |
 |---|---|---|---|---|
-| **1** | **Cứu DataHub trả lại chi phí** | **NGAY** | Bot | Cả đội đang thấy **0đ**. Mất số là nặng nhất, không phụ thuộc việc nào khác → làm song song được |
+| ~~**1**~~ | ~~**Cứu DataHub trả lại chi phí**~~ | ✅ **XONG 01/08 17:56** | Bot | Xem mục **G** bên dưới — đã chữa, nhưng **còn nguy cơ lặp lại** |
 | **2** | **Dọn drift** (`main` = production) | **NGAY** | Bot | **Cổng chặn**: chưa sạch thì mọi deploy sau đều sai nền. Chặn cả #3 và #4 |
 | **3** | **Merge fix tháng T08** | Sau #2 | Bot merge | Code đã xong ở `claude/fix-default-month-20260801`. Chỉ merge + deploy |
 | **4** | **Merge VP018 + DN022 (v3.7)** | **Trước 08/08** | Bot → Claude review → merge | ‼ Trễ là 09/08 gửi **tiền sai** cho VP018/DN022. Cần #2 xong mới rebase sạch |
@@ -68,6 +68,26 @@ Phạt v3.3+ (C45, 4 bậc, cảnh báo sớm) · Cấu hình phạt CEO sửa �
 ## ✅ E. ĐÃ KHÉP — không truy tiếp
 - **AF DN006** `600.000.007đ` → App Salary sửa, ứng đúng **65.978.975đ** (14,4%).
 - **Ẩn/hiện ô Ứng lần 1** → CEO chốt **HIỆN**, directive ẩn đã thu hồi.
+
+## ✅→⚠️ G. SỰ CỐ MẤT SỐ CHI PHÍ 01/08 — ĐÃ CHỮA, NHƯNG CHƯA HẾT NGUY CƠ
+
+**Đã chữa (bot, 01/08 17:56):** `APP_REPORT_COST_TIMEOUT_MS` 6500 → **15000**, restart App Report, dọn lock/temp mồ côi. DN006 kỳ 07 về đúng **459.441.306đ** (1.197 ms). 21/21 mã PASS, 27.719 dòng, 0 lỗi. Fail-closed + banner giữ nguyên.
+
+**Nguyên nhân gốc (bot chốt):** DataHub bị **PM2 restart do vượt ngưỡng RAM** đúng lúc đang giữ **`vault-audit.lock`** ⇒ để lại **khóa mồ côi**. Mỗi request employee-cost phải chờ ghi audit ⇒ kẹt ~**10 giây** > timeout cũ 6,5 giây ⇒ fail-closed. Cache "Tất cả NV" 6 giờ làm lộ muộn. **Không phải** Worklist archive (chưa deploy), **không phải** payload DN006.
+
+### ‼ VÒNG LẶP CHƯA CẮT — sẽ tái diễn nếu không xử
+```
+Mở "Tất cả NV" (21 mã) → RAM DataHub vọt → PM2 restart theo guard
+→ nếu đang giữ vault-audit.lock → khóa mồ côi → mọi request kẹt ~10s
+→ vượt timeout → CẢ ĐỘI MẤT SỐ (lộ muộn 6h vì cache)
+```
+Nâng timeout 6,5→15s chỉ **mua thêm biên**, **không cắt vòng lặp**. Chính màn "Tất cả NV" là thứ châm ngòi, mà đó là màn CEO hay mở nhất.
+
+### Việc phải làm (theo thứ tự giá trị)
+1. **KHÓA PHẢI TỰ LÀNH (quan trọng nhất, làm ở DataHub).** `vault-audit.lock` cần **ghi PID chủ + TTL**; ai vào sau thấy **chủ đã chết** hoặc **quá TTL** thì **tự phá khóa** và ghi audit sự kiện. Lý do: RAM còn vọt là còn restart; **tiến trình chết khi đang giữ khóa là điều PHẢI chịu được**, không thể dựa vào việc "đừng bao giờ chết". Đây là thứ duy nhất cắt được vòng lặp.
+2. **Cổng RAM riêng** (bot đã đề xuất — đồng ý): App Report từng đạt **~1,48 GB**; aggregate 21 mã đẩy DataHub vượt guard. Profiling + giảm bộ nhớ, **KHÔNG nâng guard để che**.
+3. **Xem lại thiết kế "Tất cả NV":** cold **22,4s** / ổn định **4,9s** cho màn CEO hay mở là chậm, và chính nó châm ngòi RAM. Cân nhắc **tính sẵn/cache có kiểm soát** thay vì fan-out 21 lời gọi sống mỗi lần mở.
+4. **Cache lỗi 6 giờ quá dài:** lỗi bị giấu 6h mới lộ. Nên **cache kết quả LỖI ngắn hơn nhiều** (vài phút) so với cache kết quả tốt — hỏng thì phải biết sớm, không phải nửa ngày sau.
 
 ## 🗑 F. BRANCH CHẾT — nội dung ĐÃ có trên main, bỏ được
 `claude/penalty-in-target` · `claude/kpi4-always-visible` (4 ô KPI + Phạt trong Quản target đã lên main qua đợt merge khác).
