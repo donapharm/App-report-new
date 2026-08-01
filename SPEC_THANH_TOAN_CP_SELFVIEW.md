@@ -24,6 +24,13 @@ Bản mẫu giao diện CEO đã duyệt: mockup "Thanh toán CP của tôi" (3 
 - **C44:** cột DataHub (Lương cuối năm), sổ riêng, cộng dồn tới T12.
 - App Report **KHÔNG bịa số**: lần 2/3 là phép tính **minh bạch** từ số thật (Tổng, Lần 1) + quy tắc 60/40 CEO chốt; còn "đã trả" **phải do người có quyền GHI NHẬN**, không tự đánh dấu.
 
+## 3b. Số lần linh động theo tổng (CEO chốt 31/07)
+- **Tổng ≥ 60tr → 3 lần:** Lần 1 (ứng) + Lần 2 (60%) + Lần 3 (tất toán 40%).
+- **Tổng < 60tr → 2 lần:** Lần 1 (ứng) + Lần 2 (**tất toán** phần còn lại). **BỎ lần 3.**
+- **Ngưỡng 60tr nằm ở CONFIG** (không ghi cứng trong code) để CEO chỉnh sau — theo chuẩn ngưỡng cấu hình như `high_value_order_alert`.
+- Mặc định nhóm <60tr là 2 lần; admin vẫn có thể chọn 3 lần nếu cần. **Bất biến giữ nguyên:** tổng các lần (2 HOẶC 3) = Tổng kỳ.
+- Lịch 2-lần: Lần 2 tất toán dùng mốc tất toán (+60 ngày) như lần 3; NV vẫn chủ động nhận, có nhắc Telegram.
+
 ## 4. Trạng thái từng lần + "cộng dồn"
 - Trạng thái mỗi lần: **✓ đã trả · ◷ sắp/đang tới hạn · ○ chưa tới hạn · 🔴 quá hạn**.
 - **Trạng thái tĩnh hiển thị ĐỦ tổng** — NV luôn thấy tổng được nhận.
