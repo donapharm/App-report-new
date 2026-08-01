@@ -13,6 +13,18 @@
    > *"T08 mới bắt đầu · T07 đang chốt tới 08/08 — bấm để xem"*
    Bấm vào → chuyển period về **tháng trước** (T07). Tháng/ngày trong câu lấy động, không ghi cứng.
 
+## ‼ BỔ SUNG (Claude soi 01/08) — SỬA ĐỦ 3 TRANG, đừng chỉ sửa Tổng quan
+
+Cùng một bug nằm ở **3 trang**, không riêng Tổng quan. Sửa mỗi Tổng quan thì Target/Phân tích vẫn kẹt T07:
+- `web/src/pages/Overview.jsx:212` — `defaultPeriodSelection(p.periods, p.latest)`
+- `web/src/pages/Target.jsx:1094` — `defaultPeriodSelection(p.periods || [], p.latest)`
+- `web/src/pages/Analysis.jsx:223` — `defaultPeriodSelection(p.periods || [], p.latest)`
+- **Và** `web/src/pages/PeriodFilter.jsx:37` — fallback `kys.at(-1)` (cũng là "tháng data cuối").
+
+**Cách sửa gọn nhất (1 nguồn, không vá 3 chỗ):** đưa quy tắc vào **`defaultPeriodSelection`** — ưu tiên **tháng lịch VN hiện tại**, chỉ lùi về `latest` khi tháng hiện tại không hợp lệ/không có trong danh sách. Cả 3 trang gọi chung hàm này nên sửa 1 chỗ là xong; tránh mỗi trang tự chế logic rồi lệch nhau (đúng bài học "một nguồn duy nhất").
+
+**Nghiệm thu thêm:** mở **Target** và **Phân tích** ngày 01/08 cũng phải mặc định **T08.2026**, không còn T07.
+
 ## Nghiệm thu
 - Mở Tổng quan ngày 01/08 → mặc định **T08.2026** (không còn T07).
 - Ô tháng chọn được T08 (dù data ~0); các ô KPI hiện 0/— gọn, không vỡ.
