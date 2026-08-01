@@ -6,6 +6,9 @@ Làm đúng thứ tự. Bước 1 là CỔNG — chưa xong không nhảy bướ
 
 ## BƯỚC 1 — ‼ DỌN DRIFT: đưa production về đúng `main`
 
+> **⏫ CEO NÂNG ƯU TIÊN (01/08 chiều):** bước này đang **chặn fix tháng mặc định** — CEO mở app vẫn thấy **T07** dù hôm nay 01/08, và mỗi lần mở lại thấy sai. **Làm dứt điểm Bước 1 TRƯỚC MỌI VIỆC KHÁC.** Xong là **báo ngay 2 SHA trùng** (đừng đợi gộp báo cáo cuối), rồi deploy fix tháng cùng lượt.
+> Nếu reconcile vướng (conflict, commit mồ côi, không rõ commit nào đang chạy) ⇒ **báo ngay chỗ vướng**, đừng im lặng xử lâu — Claude gỡ cùng.
+
 Hiện production chạy `97b87d6` (và có `5873806` Worklist, `640685c` KPI) — **không có trên `origin/main`** (`origin/main` đang ở đầu docs/spec của Claude + connector `e5a7df1`). Đây là lần thứ 3 deploy từ bản local. Phải chấm dứt.
 
 1. **Reconcile:** gộp mọi commit ĐÃ DEPLOY (`97b87d6`, `5873806`, `640685c`, branch `feat/kpi-remaining-after-advance` = ô Còn lại + guard) **lên `origin/main`**. **GIỮ NGUYÊN** toàn bộ docs/spec/directive Claude đã push trên main (SPEC_*, DIRECTIVE_*) — không được rớt.
