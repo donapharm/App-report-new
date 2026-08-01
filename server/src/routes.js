@@ -47,6 +47,7 @@ const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
 const salaryAdvance = require('./salaryAdvance');
+const remainingAfterAdvance = require('./remainingAfterAdvance');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -905,6 +906,14 @@ async function employeeCostPayload(req, {
     const periods = penalty ? (payload.periods || []).map((item) => (
       item.period === range.to ? employeePenalty.applyToCostPeriod(item, penalty) : item
     )) : payload.periods;
+    const afterPenaltyTotal = penalty?.afterPenaltyTotal ?? costPeriod?.summary?.monthlyTotal;
+    const resolvedSalaryAdvance = salaryAdvance.withAfterPenaltyGuard(await salaryAdvancePromise, afterPenaltyTotal);
+    const resolvedRemainingAfterAdvance = remainingAfterAdvance.buildRemainingAfterAdvance({
+      period: range.to,
+      afterPenaltyTotal,
+      salaryAdvance: resolvedSalaryAdvance,
+      periodClosed: closed,
+    });
     return {
       ...payload,
       ...(periods ? { periods } : {}),
@@ -933,7 +942,8 @@ async function employeeCostPayload(req, {
         label: employeeCost.periodCloseLabel(range.to),
       },
       penalty,
-      salaryAdvance: await salaryAdvancePromise,
+      salaryAdvance: resolvedSalaryAdvance,
+      remainingAfterAdvance: resolvedRemainingAfterAdvance,
       ...(penaltyBaseline ? { penaltyBaseline } : {}),
       penaltyPolicy: resolvedPenaltyPolicy ? {
         formulaVersion: employeeBonus.FORMULA_VERSION,

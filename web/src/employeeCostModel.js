@@ -535,6 +535,25 @@ export function employeeCostViewModel(payload = {}) {
       locked: payload.salaryAdvance.locked == null ? null : payload.salaryAdvance.locked === true,
       status: String(payload.salaryAdvance.status || ''),
       reason: payload.salaryAdvance.reason == null ? null : String(payload.salaryAdvance.reason),
+      suspect: payload.salaryAdvance.suspect == null ? null : payload.salaryAdvance.suspect === true,
+      suspect_reason: payload.salaryAdvance.suspect_reason == null ? null : String(payload.salaryAdvance.suspect_reason),
+    } : null,
+    // Phép trừ thuộc backend; frontend chỉ giữ projection allowlist để hiển thị.
+    remainingAfterAdvance: payload.remainingAfterAdvance && typeof payload.remainingAfterAdvance === 'object' ? {
+      available: payload.remainingAfterAdvance.available === true,
+      period: String(payload.remainingAfterAdvance.period || ''),
+      amount: Number.isSafeInteger(payload.remainingAfterAdvance.amount) && payload.remainingAfterAdvance.amount >= 0
+        ? payload.remainingAfterAdvance.amount : null,
+      afterPenaltyTotal: Number.isSafeInteger(payload.remainingAfterAdvance.afterPenaltyTotal)
+        && payload.remainingAfterAdvance.afterPenaltyTotal >= 0 ? payload.remainingAfterAdvance.afterPenaltyTotal : null,
+      salaryAdvanceAmount: Number.isSafeInteger(payload.remainingAfterAdvance.salaryAdvanceAmount)
+        && payload.remainingAfterAdvance.salaryAdvanceAmount >= 0 ? payload.remainingAfterAdvance.salaryAdvanceAmount : null,
+      currency: String(payload.remainingAfterAdvance.currency || ''),
+      locked: payload.remainingAfterAdvance.locked === true,
+      status: String(payload.remainingAfterAdvance.status || 'provisional'),
+      suspect: payload.remainingAfterAdvance.suspect === true,
+      reason: payload.remainingAfterAdvance.reason == null ? null : String(payload.remainingAfterAdvance.reason),
+      note: String(payload.remainingAfterAdvance.note || ''),
     } : null,
   };
 }

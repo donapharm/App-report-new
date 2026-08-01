@@ -1,3 +1,16 @@
+### 2026-08-01 — App Report — CEO duyệt KPI “Còn lại sau ứng lần 1” theo từng NV
+
+- Backend là SSOT cho phép tính `tổng chi phí tháng sau phạt − ứng lần 1`; frontend chỉ hiển thị projection, không tự trừ hoặc ghi ngược App Salary/payroll.
+- Chỉ tính cho đúng một NV đã self-scope. `ALL` tiếp tục yêu cầu chọn một NV, không fan-out và không tổng hợp tiền ứng/toàn đội.
+- Thiếu tổng sau phạt hoặc thiếu số ứng thì `amount=null` và UI hiện `— / chưa đủ dữ liệu`, không coi là 0. Nếu số ứng vượt tổng sau phạt thì cảnh báo nghi sai và không hiển thị số âm giả.
+- Trạng thái chỉ **Đã chốt** khi kỳ chi phí và số ứng App Salary đều đã chốt; còn lại hiển thị **Dự kiến · chưa chốt**.
+
+### 2026-08-01 — App Report — CEO duyệt bật KPI “Ứng lần 1” từ App Salary
+
+- Bật cờ giao diện `SALARY_ADVANCE_UI` cho KPI **Ứng lần 1 tháng này**, dùng field server-only đã khóa self-scope trong response `/api/employee-cost`.
+- Chế độ `ALL` vẫn yêu cầu chọn đúng một nhân viên, không fan-out/tổng hợp App Salary. Thiếu dữ liệu giữ `amount=null`, không suy thành 0; trạng thái draft/locked hiển thị rõ.
+- Bổ sung guard backend: nếu số ứng lớn hơn tổng chi phí tháng sau phạt cùng kỳ thì payload đánh `suspect=true` và UI cảnh báo đỏ; không sửa số nguồn, không tính KPI **Còn lại sau ứng lần 1**.
+
 ### 2026-07-31 — App Report — đưa đấu nối App Salary “Ứng lần 1” về main (VIỆC 1)
 
 - Khôi phục connector server-only đã được nghiệm thu trên production: App Report gọi App Salary qua `GET /api/integrations/app-report/first-advance?period=YYYY-MM&emp_code=...`; bearer chỉ nằm ở backend, không đưa sang trình duyệt/log/artifact.
