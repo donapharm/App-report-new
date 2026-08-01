@@ -2074,6 +2074,17 @@ function specialCandidates(scope) {
 }
 
 /* ---------- Metadata ---------- */
+// Tháng lịch hiện tại theo giờ VN, dạng ky `MM.YYYY`. Server là SSOT cho "hôm nay
+// là kỳ nào" — không để mỗi trang frontend tự tính rồi lệch múi giờ.
+function currentKyVN(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit',
+  }).formatToParts(now);
+  const get = (type) => parts.find((p) => p.type === type)?.value || '';
+  const year = get('year'); const month = get('month');
+  return year && month ? `${month}.${year}` : '';
+}
+
 router.get('/periods', auth.requireAuth, (req, res) => {
   const admin = auth.isAdmin(req.session.role);
   const periods = store.listPeriods().map((p) => {
@@ -2084,7 +2095,22 @@ router.get('/periods', auth.requireAuth, (req, res) => {
     const { sourceSummary, ...safe } = row;
     return safe;
   });
-  res.json({ periods, latest: store.latestKy() });
+  // Kỳ hiện tại phải CHỌN ĐƯỢC ngay cả khi chưa có đơn nào (ngày đầu tháng).
+  // Chỉ bổ sung ở RESPONSE này, KHÔNG đụng `store.listPeriods()` — nơi khác đang
+  // giả định mọi kỳ trong đó đều có dữ liệu; thêm kỳ rỗng vào đó sẽ vỡ chỗ khác.
+  const currentKy = currentKyVN();
+  if (currentKy && !periods.some((p) => p.ky === currentKy)) {
+    const month = Number(currentKy.slice(0, 2)); const year = Number(currentKy.slice(3));
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    periods.push({
+      ky: currentKy,
+      dateFrom: `${year}-${String(month).padStart(2, '0')}-01`,
+      dateTo: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+      source: 'calendar', data_as_of: null, noData: true,
+      throughDate: null, dayCovered: 0, daysInMonth: lastDay, complete: false, granular: false,
+    });
+  }
+  res.json({ periods, latest: store.latestKy(), currentKy });
 });
 
 router.get('/admin/revenue-refresh/status', auth.requireAuth, auth.requireAdmin, (req, res) => {
