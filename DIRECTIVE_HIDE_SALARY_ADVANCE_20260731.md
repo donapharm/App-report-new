@@ -1,6 +1,6 @@
 # DIRECTIVE — TẠM ẨN ô "Ứng lần 1" + "Còn lại sau ứng" (CEO chốt 2026-07-31)
 
-> **Cập nhật CEO 01/08/2026:** cho phép bật lại riêng ô **“Ứng lần 1”** theo từng NV. Đợt này `ALL` vẫn “Chọn 1 NV”, không fan-out/tổng hợp; ô **“Còn lại sau ứng lần 1”** tiếp tục chưa bật. Khi ứng lớn hơn tổng tháng sau phạt, App Report phải cảnh báo đỏ và giữ nguyên số nguồn để đối chiếu.
+> **Cập nhật CEO 01/08/2026:** cho phép bật lại ô **“Ứng lần 1”** và bổ sung ô **“Còn lại sau ứng lần 1”** theo từng NV. `ALL` vẫn “Chọn 1 NV”, không fan-out/tổng hợp. Số còn lại do backend tính từ tổng chi phí tháng sau phạt trừ ứng lần 1; thiếu nguồn hiện `—`, ứng vượt tổng thì cảnh báo nghi sai và không hiện số âm giả.
 
 CEO: *"Tạm ẩn để anh cho sửa lại đã."*
 
@@ -20,9 +20,9 @@ Lý do: App Salary endpoint `first-advance` **chiếu nhầm cột** — trả `
 - PID `app-report` (API) **KHÔNG đổi** · chỉ frontend lên bản mới.
 - Xác nhận `formulaVersion` không đổi (đây là thay đổi UI thuần, không đụng công thức).
 
-## GIAI ĐOẠN TỔNG HỢP ALL / “CÒN LẠI” — CHƯA ĐƯỢC DUYỆT 01/08
+## GIAI ĐOẠN TỔNG HỢP ALL — CHƯA ĐƯỢC DUYỆT 01/08
 
-Cờ `SALARY_ADVANCE_UI = true` ngày 01/08 chỉ áp dụng cho **một NV đã chọn** và có guard ứng vượt tổng. Phần tổng hợp `ALL` cùng KPI “Còn lại sau ứng lần 1” dưới đây là thiết kế lưu để xem xét sau, không thuộc lần bật này.
+Cờ `SALARY_ADVANCE_UI = true` ngày 01/08 áp dụng cho **một NV đã chọn** và có guard ứng vượt tổng. KPI “Còn lại sau ứng lần 1” đã được CEO duyệt bổ sung ngày 01/08 nhưng chỉ self-scope; phần tổng hợp `ALL` dưới đây vẫn chỉ là thiết kế lưu để xem xét sau.
 
 ### Thiết kế từng đề xuất cho giai đoạn sau (CEO chốt 31/07)
 - **Chọn TẤT CẢ NV:** ô hiện **TỔNG số ứng của các NV CÓ ứng lần 1** (giống cách tổng hợp ô Thưởng/Phạt). Hiện kèm **"X/Y NV có ứng"**.

@@ -18,8 +18,8 @@ const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
 const EMPLOYEE_COST_PAGE_SIZES = [20, 50, 100];
-// CEO duyệt bật lại 01/08/2026: chỉ KPI Ứng lần 1 theo đúng một NV.
-// ALL không fan-out/tổng hợp; chưa bật KPI Còn lại sau ứng lần 1.
+// CEO duyệt 01/08/2026: bật Ứng lần 1 và Còn lại sau ứng theo đúng một NV.
+// ALL không fan-out/tổng hợp; cả hai ô đều yêu cầu chọn một nhân viên.
 const SALARY_ADVANCE_UI = true;
 const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 const browserStorage = () => {
@@ -505,6 +505,32 @@ function SalaryAdvanceKpi({ salaryAdvance, loading, allEmployees, period }) {
     : ['period_not_found', 'employee_not_found'].includes(reason) ? `${periodText} · Không suy đoán theo tên hoặc kỳ khác`
       : `${periodText} · Các KPI chi phí khác vẫn hoạt động bình thường`;
   return <Kpi label="Ứng lần 1 tháng này" value={value} sub={sub} tone="employee-cost-tone-neutral" />;
+}
+
+function RemainingAfterAdvanceKpi({ remainingAfterAdvance, loading, allEmployees, period }) {
+  const projection = remainingAfterAdvance || {};
+  const periodText = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(period || ''))
+    ? `Kỳ ${String(period).slice(5, 7)}/${String(period).slice(0, 4)}`
+    : 'Kỳ đang chọn';
+  if (allEmployees) return <Kpi label="Còn lại sau ứng lần 1" value="Chọn 1 NV"
+    sub="Không tổng hợp hoặc gọi App Salary cho toàn đội" tone="employee-cost-tone-after-penalty" />;
+  if (loading) return <Kpi label="Còn lại sau ứng lần 1" value="Đang tính…"
+    sub={`${periodText} · Tổng sau phạt − ứng lần 1`} tone="employee-cost-tone-after-penalty" />;
+  if (projection.suspect || projection.reason === 'salary_advance_exceeds_after_penalty_total') {
+    return <Kpi label="Còn lại sau ứng lần 1" value="—"
+      sub={`${periodText} · Số ứng nghi sai; chưa thể tính số còn lại`} tone="employee-cost-tone-penalty" />;
+  }
+  if (!projection.available || !Number.isSafeInteger(projection.amount)) {
+    return <Kpi label="Còn lại sau ứng lần 1" value="—"
+      sub={`${periodText} · Chưa đủ dữ liệu, không coi là 0`} tone="employee-cost-tone-after-penalty" />;
+  }
+  const statusText = projection.locked ? 'Đã chốt' : 'Dự kiến · chưa chốt';
+  const formulaText = Number.isSafeInteger(projection.afterPenaltyTotal) && Number.isSafeInteger(projection.salaryAdvanceAmount)
+    ? `${projection.afterPenaltyTotal.toLocaleString('vi-VN')} − ${projection.salaryAdvanceAmount.toLocaleString('vi-VN')} ₫`
+    : 'Tổng sau phạt − ứng lần 1';
+  return <Kpi label="Còn lại sau ứng lần 1" value={`${projection.amount.toLocaleString('vi-VN')} ₫`}
+    sub={`${periodText} · ${statusText} · ${formulaText} · nguồn App Report + App Salary`}
+    tone="employee-cost-tone-after-penalty" />;
 }
 
 function PenaltyDetailModal({ penalty, employeeLabel, onClose }) {
@@ -1519,6 +1545,8 @@ export default function EmployeeCost({ me, onNavigate }) {
         multiple={multiple} />
       {SALARY_ADVANCE_UI && <SalaryAdvanceKpi salaryAdvance={model.salaryAdvance} loading={loading}
         allEmployees={allEmployees} period={range.to} />}
+      {SALARY_ADVANCE_UI && <RemainingAfterAdvanceKpi remainingAfterAdvance={model.remainingAfterAdvance}
+        loading={loading} allEmployees={allEmployees} period={range.to} />}
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
       <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />
       <XuPenaltyKpi penalty={model.penalty} period={model.to} />

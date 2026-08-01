@@ -89,7 +89,7 @@ test('safe projection embeds upstream data and fails closed without inventing ze
   });
 });
 
-test('after-penalty guard flags impossible advances without calculating a remaining KPI', () => {
+test('after-penalty guard flags impossible advances without mutating the Salary projection amount', () => {
   const projection = valid({ amount: 120_000 });
   const normal = salaryAdvance.withAfterPenaltyGuard(projection, 150_000);
   assert.equal(normal.suspect, false);
@@ -99,7 +99,7 @@ test('after-penalty guard flags impossible advances without calculating a remain
   assert.equal(suspect.amount, 120_000, 'raw upstream amount remains unchanged');
   assert.equal(suspect.suspect, true);
   assert.equal(suspect.suspect_reason, 'amount_exceeds_after_penalty_total');
-  assert.equal(Object.hasOwn(suspect, 'remainingAfterAdvance'), false);
+  assert.equal(Object.hasOwn(suspect, 'remainingAfterAdvance'), false, 'remaining KPI belongs to its backend module');
 
   const unknown = salaryAdvance.withAfterPenaltyGuard(projection, null);
   assert.equal(unknown.suspect, null);
@@ -156,6 +156,7 @@ test('main employee-cost response owns the self-scoped Salary field and browser 
   assert.match(page, /const SALARY_ADVANCE_UI = true/);
   assert.match(routes, /salaryAdvance:\s*resolvedSalaryAdvance/);
   assert.match(routes, /salaryAdvance\.withAfterPenaltyGuard/);
+  assert.match(routes, /remainingAfterAdvance:\s*resolvedRemainingAfterAdvance/);
   assert.match(routes, /includeSalaryAdvance:\s*false/);
   assert.match(page, /salaryAdvance=\{model\.salaryAdvance\}/);
   assert.doesNotMatch(page, /employeeCostSalaryAdvance\(/);
@@ -165,7 +166,7 @@ test('main employee-cost response owns the self-scoped Salary field and browser 
   assert.match(page, /Dự kiến · chưa chốt trên App Salary/);
   assert.match(page, /Số ứng lớn hơn tổng chi phí sau phạt — nghi sai, đang đối chiếu/);
   assert.match(page, /const statusText = salaryAdvance\.locked \? 'Đã chốt trên App Salary' : 'Dự kiến · chưa chốt trên App Salary'/);
-  assert.doesNotMatch(page, /function RemainingAfterAdvanceKpi|<RemainingAfterAdvanceKpi\b/);
+  assert.match(page, /function RemainingAfterAdvanceKpi|<RemainingAfterAdvanceKpi\b/);
   const apiBlock = api.match(/employeeCostSalaryAdvance:[\s\S]*?\n  employeeCostDiemXu:/)?.[0] || '';
   assert.match(apiBlock, /employee-cost\/salary-advance/);
   assert.doesNotMatch(apiBlock, /SALARY_SERVICE_TOKEN|document\.cookie|credentials|Cookie/i);

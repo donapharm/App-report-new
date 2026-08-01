@@ -209,8 +209,28 @@ test('view model preserves only the backend-owned self-scoped first-advance proj
   assert.deepEqual(model.salaryAdvance, {
     available: true, applicable: true, period: '2026-07', emp_code: 'DN009',
     amount: 59_736_053, currency: 'VND', locked: false, status: 'draft', reason: null,
+    suspect: null, suspect_reason: null,
   });
   assert.equal(employeeCostViewModel({ periods: [] }).salaryAdvance, null);
+});
+
+test('view model preserves only backend-owned remaining-after-advance fields', () => {
+  const model = employeeCostViewModel({
+    empCode: 'DN009', periods: [],
+    remainingAfterAdvance: {
+      available: true, period: '2026-07', amount: 276_598_207,
+      afterPenaltyTotal: 336_334_260, salaryAdvanceAmount: 59_736_053,
+      currency: 'VND', locked: false, status: 'provisional', suspect: false,
+      reason: null, note: 'Dự kiến · chưa chốt.', payroll_secret: 'must-not-pass',
+    },
+  });
+  assert.deepEqual(model.remainingAfterAdvance, {
+    available: true, period: '2026-07', amount: 276_598_207,
+    afterPenaltyTotal: 336_334_260, salaryAdvanceAmount: 59_736_053,
+    currency: 'VND', locked: false, status: 'provisional', suspect: false,
+    reason: null, note: 'Dự kiến · chưa chốt.',
+  });
+  assert.equal(employeeCostViewModel({ periods: [] }).remainingAfterAdvance, null);
 });
 
 test('low coverage state preserves null amounts and unreliable totals', () => {

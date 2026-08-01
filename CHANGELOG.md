@@ -1,3 +1,10 @@
+### 2026-08-01 — App Report — CEO duyệt KPI “Còn lại sau ứng lần 1” theo từng NV
+
+- Backend là SSOT cho phép tính `tổng chi phí tháng sau phạt − ứng lần 1`; frontend chỉ hiển thị projection, không tự trừ hoặc ghi ngược App Salary/payroll.
+- Chỉ tính cho đúng một NV đã self-scope. `ALL` tiếp tục yêu cầu chọn một NV, không fan-out và không tổng hợp tiền ứng/toàn đội.
+- Thiếu tổng sau phạt hoặc thiếu số ứng thì `amount=null` và UI hiện `— / chưa đủ dữ liệu`, không coi là 0. Nếu số ứng vượt tổng sau phạt thì cảnh báo nghi sai và không hiển thị số âm giả.
+- Trạng thái chỉ **Đã chốt** khi kỳ chi phí và số ứng App Salary đều đã chốt; còn lại hiển thị **Dự kiến · chưa chốt**.
+
 ### 2026-08-01 — App Report — CEO duyệt bật KPI “Ứng lần 1” từ App Salary
 
 - Bật cờ giao diện `SALARY_ADVANCE_UI` cho KPI **Ứng lần 1 tháng này**, dùng field server-only đã khóa self-scope trong response `/api/employee-cost`.

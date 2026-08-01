@@ -127,7 +127,7 @@ async function safeGetFirstAdvance(period, empCode, get = (...args) => client.ge
 }
 
 // App Report chỉ cảnh báo, không tự sửa/kẹp số App Salary. Guard dùng đúng tổng
-// chi phí tháng sau phạt cùng kỳ; không tính KPI "Còn lại sau ứng lần 1".
+// chi phí tháng sau phạt cùng kỳ; phép trừ KPI nằm riêng ở remainingAfterAdvance.
 function withAfterPenaltyGuard(projection, afterPenaltyTotal) {
   if (!projection || typeof projection !== 'object') return projection;
   if (!(projection.available === true && projection.applicable === true && Number.isSafeInteger(projection.amount))) {
