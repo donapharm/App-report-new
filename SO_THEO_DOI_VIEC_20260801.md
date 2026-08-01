@@ -5,6 +5,23 @@ Rà bằng git thật (branch/commit/code), không nhớ mò. Cập nhật mỗi
 
 ---
 
+## 📅 LỊCH LÀM — THỨ TỰ CHỐT (CEO chốt 01/08). Làm từ trên xuống, không nhảy cóc.
+
+| # | Việc | Khi nào | Ai làm | Vì sao thứ tự này |
+|---|---|---|---|---|
+| **1** | **Cứu DataHub trả lại chi phí** | **NGAY** | Bot | Cả đội đang thấy **0đ**. Mất số là nặng nhất, không phụ thuộc việc nào khác → làm song song được |
+| **2** | **Dọn drift** (`main` = production) | **NGAY** | Bot | **Cổng chặn**: chưa sạch thì mọi deploy sau đều sai nền. Chặn cả #3 và #4 |
+| **3** | **Merge fix tháng T08** | Sau #2 | Bot merge | Code đã xong ở `claude/fix-default-month-20260801`. Chỉ merge + deploy |
+| **4** | **Merge VP018 + DN022 (v3.7)** | **Trước 08/08** | Bot → Claude review → merge | ‼ Trễ là 09/08 gửi **tiền sai** cho VP018/DN022. Cần #2 xong mới rebase sạch |
+| **5** | **Bật 2 cờ tin thưởng** | **09/08** | Bot | Phải sau khoá sổ 08/08 **và** sau #4. Qua cổng DN008 before-VAT ~124,21% |
+| **6** | **Module "Thanh toán CP" GĐ1** | Sau 09/08 | Bot code → Claude review | Việc lớn, không gấp. Làm khi 5 việc trên đã yên |
+| **7** | **Data Hub trusted-device Cổng 2** | Xen kẽ lúc rảnh | Bot | Hết cảnh CEO phải nhập OTP lại. Tiện ích, không chặn ai |
+
+**Ràng buộc cứng:** #2 trước #3 và #4 · #4 trước #5 · #5 đúng ngày 09/08.
+**Mốc chết:** #4 phải xong **trước 08/08** — không thì #5 phải hoãn.
+
+---
+
 ## 🔴 A. BỎ QUÊN — CEO ĐÃ DUYỆT, BOT LÀM XONG, KHÔNG AI MERGE
 
 Branch **`fix/dn022-separate-formula-20260731`** (2 commit, chưa merge, chưa deploy). Bot ghi *"chờ test và Claude review SHA mới trên PR #231"* — Claude chưa review, việc chìm luôn từ 31/07.
