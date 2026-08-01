@@ -18,6 +18,9 @@ const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
 const moneyColumn = { kind: 'money' };
 const EMPLOYEE_COST_PAGE_SIZES = [20, 50, 100];
+// CEO duyệt bật lại 01/08/2026: chỉ KPI Ứng lần 1 theo đúng một NV.
+// ALL không fan-out/tổng hợp; chưa bật KPI Còn lại sau ứng lần 1.
+const SALARY_ADVANCE_UI = true;
 const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 const browserStorage = () => {
   try { return globalThis.localStorage; } catch { return null; }
@@ -486,6 +489,11 @@ function SalaryAdvanceKpi({ salaryAdvance, loading, allEmployees, period }) {
     return <Kpi label="Ứng lần 1 tháng này" value="Không áp dụng" sub={`${periodText} · Mã nhân viên không thuộc nhóm Sale trên App Salary`} tone="employee-cost-tone-neutral" />;
   }
   if (salaryAdvance?.available && salaryAdvance?.applicable === true && Number.isSafeInteger(salaryAdvance.amount)) {
+    if (salaryAdvance.suspect === true) {
+      const statusText = salaryAdvance.locked ? 'Đã chốt trên App Salary' : 'Dự kiến · chưa chốt trên App Salary';
+      return <Kpi label="Ứng lần 1 tháng này" value={`⚠ ${salaryAdvance.amount.toLocaleString('vi-VN')} ₫`}
+        sub={`${periodText} · ${statusText} · Số ứng lớn hơn tổng chi phí sau phạt — nghi sai, đang đối chiếu`} tone="employee-cost-tone-penalty" />;
+    }
     return <Kpi label="Ứng lần 1 tháng này" value={`${salaryAdvance.amount.toLocaleString('vi-VN')} ₫`}
       sub={`${periodText} · ${salaryAdvance.locked ? 'Đã chốt trên App Salary' : 'Dự kiến · chưa chốt trên App Salary'}`} tone="employee-cost-tone-neutral" />;
   }
@@ -1509,8 +1517,8 @@ export default function EmployeeCost({ me, onNavigate }) {
         penalty={model.penalty}
         baseTotal={allEmployees ? model.penalty.baseTotal : model.summary.periodTotal}
         multiple={multiple} />
-      <SalaryAdvanceKpi salaryAdvance={model.salaryAdvance} loading={loading}
-        allEmployees={allEmployees} period={range.to} />
+      {SALARY_ADVANCE_UI && <SalaryAdvanceKpi salaryAdvance={model.salaryAdvance} loading={loading}
+        allEmployees={allEmployees} period={range.to} />}
       <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
       <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />
       <XuPenaltyKpi penalty={model.penalty} period={model.to} />

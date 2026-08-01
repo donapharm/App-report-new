@@ -905,6 +905,10 @@ async function employeeCostPayload(req, {
     const periods = penalty ? (payload.periods || []).map((item) => (
       item.period === range.to ? employeePenalty.applyToCostPeriod(item, penalty) : item
     )) : payload.periods;
+    const resolvedSalaryAdvance = salaryAdvance.withAfterPenaltyGuard(
+      await salaryAdvancePromise,
+      penalty?.afterPenaltyTotal ?? costPeriod?.summary?.monthlyTotal,
+    );
     return {
       ...payload,
       ...(periods ? { periods } : {}),
@@ -933,7 +937,7 @@ async function employeeCostPayload(req, {
         label: employeeCost.periodCloseLabel(range.to),
       },
       penalty,
-      salaryAdvance: await salaryAdvancePromise,
+      salaryAdvance: resolvedSalaryAdvance,
       ...(penaltyBaseline ? { penaltyBaseline } : {}),
       penaltyPolicy: resolvedPenaltyPolicy ? {
         formulaVersion: employeeBonus.FORMULA_VERSION,

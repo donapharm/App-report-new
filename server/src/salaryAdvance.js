@@ -126,6 +126,24 @@ async function safeGetFirstAdvance(period, empCode, get = (...args) => client.ge
   catch { return unavailableProjection(period, empCode); }
 }
 
+// App Report chỉ cảnh báo, không tự sửa/kẹp số App Salary. Guard dùng đúng tổng
+// chi phí tháng sau phạt cùng kỳ; không tính KPI "Còn lại sau ứng lần 1".
+function withAfterPenaltyGuard(projection, afterPenaltyTotal) {
+  if (!projection || typeof projection !== 'object') return projection;
+  if (!(projection.available === true && projection.applicable === true && Number.isSafeInteger(projection.amount))) {
+    return Object.freeze({ ...projection, suspect: false, suspect_reason: null });
+  }
+  if (!Number.isSafeInteger(afterPenaltyTotal) || afterPenaltyTotal < 0) {
+    return Object.freeze({ ...projection, suspect: null, suspect_reason: 'after_penalty_total_unavailable' });
+  }
+  const suspect = projection.amount > afterPenaltyTotal;
+  return Object.freeze({
+    ...projection,
+    suspect,
+    suspect_reason: suspect ? 'amount_exceeds_after_penalty_total' : null,
+  });
+}
+
 module.exports = {
   PERIOD_RE,
   EMP_CODE_RE,
@@ -135,4 +153,5 @@ module.exports = {
   createClient,
   getFirstAdvance: (...args) => client.get(...args),
   safeGetFirstAdvance,
+  withAfterPenaltyGuard,
 };
