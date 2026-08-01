@@ -14,7 +14,7 @@ Rà bằng git thật (branch/commit/code), không nhớ mò. Cập nhật mỗi
 | **3** | **Merge fix tháng T08** | Sau #2 | Bot merge | Code đã xong ở `claude/fix-default-month-20260801`. Chỉ merge + deploy |
 | **4** | **Merge VP018 + DN022 (v3.7)** | **Trước 08/08** | Bot → Claude review → merge | ‼ Trễ là 09/08 gửi **tiền sai** cho VP018/DN022. Cần #2 xong mới rebase sạch |
 | **5** | **Bật 2 cờ tin thưởng** | **09/08** | Bot | Phải sau khoá sổ 08/08 **và** sau #4. Qua cổng DN008 before-VAT ~124,21% |
-| **6** | **Module "Thanh toán CP" GĐ1** | Sau 09/08 | Bot code → Claude review | Việc lớn, không gấp. Làm khi 5 việc trên đã yên |
+| **6** | **Module "Thanh toán CP" GĐ1** | **CODE: ngay sau #2** · **DEPLOY: sau 09/08** | Bot code → Claude review | Không có ràng buộc kỹ thuật nào bắt chờ 09/08 — chỉ là **không để việc lớn tranh chỗ với mốc tiền 08/08**. Nên **tách**: code sớm trên branch riêng (không đụng production), chỉ hoãn phần deploy. **Nếu #4 chưa xong mà đã tới 06/08 ⇒ dừng code module, dồn sức cho #4.** |
 | **7** | **Data Hub trusted-device Cổng 2** | Xen kẽ lúc rảnh | Bot | Hết cảnh CEO phải nhập OTP lại. Tiện ích, không chặn ai |
 
 **Ràng buộc cứng:** #2 trước #3 và #4 · #4 trước #5 · #5 đúng ngày 09/08.
