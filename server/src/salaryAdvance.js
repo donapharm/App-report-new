@@ -131,16 +131,33 @@ async function safeGetFirstAdvance(period, empCode, get = (...args) => client.ge
 function withAfterPenaltyGuard(projection, afterPenaltyTotal) {
   if (!projection || typeof projection !== 'object') return projection;
   if (!(projection.available === true && projection.applicable === true && Number.isSafeInteger(projection.amount))) {
-    return Object.freeze({ ...projection, suspect: false, suspect_reason: null });
+    return Object.freeze({
+      ...projection,
+      suspect: false,
+      suspect_reason: null,
+      suspectReason: null,
+      suspectMessage: null,
+      comparisonAfterPenaltyTotal: null,
+    });
   }
   if (!Number.isSafeInteger(afterPenaltyTotal) || afterPenaltyTotal < 0) {
-    return Object.freeze({ ...projection, suspect: null, suspect_reason: 'after_penalty_total_unavailable' });
+    return Object.freeze({
+      ...projection,
+      suspect: null,
+      suspect_reason: 'after_penalty_total_unavailable',
+      suspectReason: 'after_penalty_total_unavailable',
+      suspectMessage: null,
+      comparisonAfterPenaltyTotal: null,
+    });
   }
   const suspect = projection.amount > afterPenaltyTotal;
   return Object.freeze({
     ...projection,
     suspect,
     suspect_reason: suspect ? 'amount_exceeds_after_penalty_total' : null,
+    suspectReason: suspect ? 'amount_exceeds_after_penalty_total' : null,
+    suspectMessage: suspect ? 'Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu' : null,
+    comparisonAfterPenaltyTotal: afterPenaltyTotal,
   });
 }
 

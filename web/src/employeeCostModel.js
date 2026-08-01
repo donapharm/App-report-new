@@ -537,6 +537,10 @@ export function employeeCostViewModel(payload = {}) {
       reason: payload.salaryAdvance.reason == null ? null : String(payload.salaryAdvance.reason),
       suspect: payload.salaryAdvance.suspect == null ? null : payload.salaryAdvance.suspect === true,
       suspect_reason: payload.salaryAdvance.suspect_reason == null ? null : String(payload.salaryAdvance.suspect_reason),
+      suspectReason: payload.salaryAdvance.suspectReason == null ? null : String(payload.salaryAdvance.suspectReason),
+      suspectMessage: payload.salaryAdvance.suspectMessage == null ? null : String(payload.salaryAdvance.suspectMessage),
+      comparisonAfterPenaltyTotal: Number.isSafeInteger(payload.salaryAdvance.comparisonAfterPenaltyTotal)
+        && payload.salaryAdvance.comparisonAfterPenaltyTotal >= 0 ? payload.salaryAdvance.comparisonAfterPenaltyTotal : null,
     } : null,
     // Phép trừ thuộc backend; frontend chỉ giữ projection allowlist để hiển thị.
     remainingAfterAdvance: payload.remainingAfterAdvance && typeof payload.remainingAfterAdvance === 'object' ? {

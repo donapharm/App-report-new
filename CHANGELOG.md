@@ -4,6 +4,7 @@
 - Chỉ tính cho đúng một NV đã self-scope. `ALL` tiếp tục yêu cầu chọn một NV, không fan-out và không tổng hợp tiền ứng/toàn đội.
 - Thiếu tổng sau phạt hoặc thiếu số ứng thì `amount=null` và UI hiện `— / chưa đủ dữ liệu`, không coi là 0. Nếu số ứng vượt tổng sau phạt thì cảnh báo nghi sai và không hiển thị số âm giả.
 - Trạng thái chỉ **Đã chốt** khi kỳ chi phí và số ứng App Salary đều đã chốt; còn lại hiển thị **Dự kiến · chưa chốt**.
+- Guard fail-closed từ `0ca68a2`: payload ghi rõ lý do/cảnh báo và tổng sau phạt đã dùng để đối chiếu; khi ứng vượt tổng, trạng thái là `anomaly`, số còn lại luôn `null` và UI hiện **DỪNG TÍNH · NGHI BẤT THƯỜNG**. Vẫn giữ `ALL` chọn một NV, tuyệt đối không fan-out/tổng hợp App Salary.
 
 ### 2026-08-01 — App Report — CEO duyệt bật KPI “Ứng lần 1” từ App Salary
 

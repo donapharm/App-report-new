@@ -94,16 +94,23 @@ test('after-penalty guard flags impossible advances without mutating the Salary 
   const normal = salaryAdvance.withAfterPenaltyGuard(projection, 150_000);
   assert.equal(normal.suspect, false);
   assert.equal(normal.suspect_reason, null);
+  assert.equal(normal.suspectReason, null);
+  assert.equal(normal.suspectMessage, null);
+  assert.equal(normal.comparisonAfterPenaltyTotal, 150_000);
 
   const suspect = salaryAdvance.withAfterPenaltyGuard(projection, 100_000);
   assert.equal(suspect.amount, 120_000, 'raw upstream amount remains unchanged');
   assert.equal(suspect.suspect, true);
   assert.equal(suspect.suspect_reason, 'amount_exceeds_after_penalty_total');
+  assert.equal(suspect.suspectReason, 'amount_exceeds_after_penalty_total');
+  assert.match(suspect.suspectMessage, /nghi sai, đang đối chiếu/);
+  assert.equal(suspect.comparisonAfterPenaltyTotal, 100_000);
   assert.equal(Object.hasOwn(suspect, 'remainingAfterAdvance'), false, 'remaining KPI belongs to its backend module');
 
   const unknown = salaryAdvance.withAfterPenaltyGuard(projection, null);
   assert.equal(unknown.suspect, null);
   assert.equal(unknown.suspect_reason, 'after_penalty_total_unavailable');
+  assert.equal(unknown.comparisonAfterPenaltyTotal, null);
 });
 
 function invokeRoute(handler, req) {
@@ -164,7 +171,7 @@ test('main employee-cost response owns the self-scoped Salary field and browser 
   assert.match(page, /Number\.isSafeInteger\(salaryAdvance\.amount\)/);
   assert.match(page, /salaryAdvance\.amount\.toLocaleString\('vi-VN'\).*₫/s);
   assert.match(page, /Dự kiến · chưa chốt trên App Salary/);
-  assert.match(page, /Số ứng lớn hơn tổng chi phí sau phạt — nghi sai, đang đối chiếu/);
+  assert.match(page, /Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu/);
   assert.match(page, /const statusText = salaryAdvance\.locked \? 'Đã chốt trên App Salary' : 'Dự kiến · chưa chốt trên App Salary'/);
   assert.match(page, /function RemainingAfterAdvanceKpi|<RemainingAfterAdvanceKpi\b/);
   const apiBlock = api.match(/employeeCostSalaryAdvance:[\s\S]*?\n  employeeCostDiemXu:/)?.[0] || '';
