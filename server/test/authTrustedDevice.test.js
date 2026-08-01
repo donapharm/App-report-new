@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const AUTH_MODULES = ['../src/auth', '../src/persist'];
+const FIXTURE_USER = { emp_code: 'DN016', phone: '0867409960', name: 'Ánh', role: 'sale' };
 function clearAuthModules() {
   for (const mod of AUTH_MODULES) delete require.cache[require.resolve(mod)];
 }
@@ -17,6 +18,19 @@ function withAuthDir(run) {
   for (const name of ['sessions', 'devices', 'audit_auth']) {
     fs.writeFileSync(path.join(dir, `${name}.json`), '[]');
   }
+  // The trusted-device unit tests must not depend on the deployment's private
+  // users.json. Keep the auth contract realistic with an isolated store fixture.
+  const storePath = require.resolve('../src/store');
+  const previousStore = require.cache[storePath];
+  require.cache[storePath] = {
+    id: storePath,
+    filename: storePath,
+    loaded: true,
+    exports: {
+      findUserByCode: (code) => String(code || '').toUpperCase() === FIXTURE_USER.emp_code ? { ...FIXTURE_USER } : null,
+      listUsers: () => [{ ...FIXTURE_USER }],
+    },
+  };
   clearAuthModules();
   try { return run(dir, require('../src/auth')); }
   finally {
@@ -24,6 +38,8 @@ function withAuthDir(run) {
     else process.env.AUTH_DATA_DIR = oldDir;
     fs.rmSync(dir, { recursive: true, force: true });
     clearAuthModules();
+    if (previousStore) require.cache[storePath] = previousStore;
+    else delete require.cache[storePath];
   }
 }
 
@@ -32,7 +48,7 @@ const CHROME_WINDOWS_NEW_VERSION = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Ap
 const SAFARI_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile Safari/604.1';
 
 test('trusted device requires 3 OTP logins and preserves the 30-day OTP anchor', () => withAuthDir((dir, auth) => {
-  const user = require('../src/store').findUserByCode('DN016');
+  const user = { ...FIXTURE_USER };
   const ctx = { method: 'otp', phone: user.phone, deviceId: 'device-dn016', ua: CHROME_WINDOWS };
 
   auth.issueToken(user, ctx);
@@ -75,7 +91,7 @@ test('trusted device requires 3 OTP logins and preserves the 30-day OTP anchor',
 }));
 
 test('Telegram and SSO sessions never increase OTP trust count', () => withAuthDir((_dir, auth) => {
-  const user = require('../src/store').findUserByCode('DN016');
+  const user = { ...FIXTURE_USER };
   for (const method of ['telegram', 'sso', 'device']) {
     auth.issueToken(user, { method, phone: user.phone, deviceId: 'device-other-auth', ua: CHROME_WINDOWS });
   }
@@ -86,7 +102,7 @@ test('Telegram and SSO sessions never increase OTP trust count', () => withAuthD
 }));
 
 test('revoking a device removes its trusted login and active sessions', () => withAuthDir((_dir, auth) => {
-  const user = require('../src/store').findUserByCode('DN016');
+  const user = { ...FIXTURE_USER };
   const ctx = { method: 'otp', phone: user.phone, deviceId: 'device-to-revoke', ua: CHROME_WINDOWS };
   auth.issueToken(user, ctx);
   auth.issueToken(user, ctx);
