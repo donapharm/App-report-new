@@ -42,6 +42,7 @@ Bản mẫu giao diện CEO đã duyệt: mockup "Thanh toán CP của tôi" (3 
 - Lần 3 (tất toán): **+60 ngày**.
 - C44: T12.
 - Lưu ý chồng lấn: nếu Lần 2 trôi tới ~ngày 60 thì gộp với Lần 3 tất toán (một lần quét).
+- **Ghi RÕ khoảng cách cho NV hiểu (bắt buộc hiển thị):** Lần 1 → Lần 2 ≈ **45 ngày (±15)**; Lần 2 → Lần 3 ≈ **15 ngày**; tổng Lần 1 → tất toán = **60 ngày**. Màn NV + mỗi lần đều hiển thị "còn … ngày tới lần sau" / "ngày N" để NV không phải tự nhẩm.
 
 ## 6. Thông báo Telegram (dùng lại hạ tầng notify, KHÔNG viết mới)
 - **Mở cửa sổ Lần 2:** nhắn NV + CEO — "Lần 2 (…đ) đã có thể nhận, hạn tới …".
