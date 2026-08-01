@@ -17,10 +17,12 @@ Bản mẫu giao diện CEO đã duyệt: mockup "Thanh toán CP của tôi" (3 
 - C44 KHÔNG trộn vào 3 lần, KHÔNG cộng vào tổng kỳ.
 - Lệch bất kỳ → hiển thị cảnh báo, KHÔNG show số chỏi nhau (theo tinh thần SPEC_REVENUE_SYNC_EXCEPTIONS).
 
-## 3. SSOT — ai nắm số nào
-- **Số tiền & ngày ĐÃ CHI mỗi lần: App Salary (SSOT).** App Report chỉ hiển thị & theo dõi, **KHÔNG tự đánh dấu "đã trả", KHÔNG tự tính tiền chi**.
-- **Kế hoạch chia (60/40, số sửa tay):** nên nằm ở **App Salary**. Nếu để trên App Report thì chỉ là **"kế hoạch dự kiến"** (admin/CEO), **cấm ghi đè** số thật App Salary. Sửa 1 lần → tự tính lại lần 3, giữ bất biến mục 2.
-- App Report **KHÔNG dựng engine chi trả riêng** (giống nguyên tắc chi phí self-view hiện có).
+## 3. SSOT — ai nắm số nào (CEO đính chính 31/07)
+- **Tổng chi phí kỳ:** DataHub (SSOT).
+- **Lần 1 · Ứng:** App Salary (SSOT) — App Salary **CHỈ xuất DUY NHẤT 1 lần ứng cho mỗi tháng** (T07 → ứng lần 1 của T07; T08 → ứng lần 1 của T08). Read-only, App Report không sửa.
+- **Lần 2 + Lần 3: SỐ TẠI APP REPORT.** App Salary KHÔNG có 2 số này. App Report tự tính từ `(Tổng − Lần 1)`, chia 60/40 (sửa được), và **tự ghi nhận đã trả** (xem mục 8).
+- **C44:** cột DataHub (Lương cuối năm), sổ riêng, cộng dồn tới T12.
+- App Report **KHÔNG bịa số**: lần 2/3 là phép tính **minh bạch** từ số thật (Tổng, Lần 1) + quy tắc 60/40 CEO chốt; còn "đã trả" **phải do người có quyền GHI NHẬN**, không tự đánh dấu.
 
 ## 4. Trạng thái từng lần + "cộng dồn"
 - Trạng thái mỗi lần: **✓ đã trả · ◷ sắp/đang tới hạn · ○ chưa tới hạn · 🔴 quá hạn**.
@@ -43,12 +45,17 @@ Bản mẫu giao diện CEO đã duyệt: mockup "Thanh toán CP của tôi" (3 
 - **NV:** self-scoped, chỉ thấy sổ của chính mình (backend khóa quyền `scopeOf`).
 - **CEO/admin (ALL):** bảng toàn đội — tổng kỳ · đã nhận · còn nợ · lần kế + hạn · trạng thái; đánh dấu **ai quá hạn**. NV thiếu/nghi tách riêng, không thành 0 (khuôn aggregate hiện có).
 
-## 8. ‼ CHẶN NGUỒN — điều kiện tiên quyết trước khi build phần "số thật"
-App Salary hiện mới xuất **Lần 1** (`first-advance`). Module cần endpoint trả **cả 3 lần + ngày thật + C44** theo từng NV/kỳ (self-scoped, allowlist, khớp kỳ/mã/VND — như connector lần 1). **Chưa có ⇒ chưa build phần số thật lần 2/3.**
+## 8. Ghi nhận thanh toán Lần 2 / Lần 3 — App Report là SỔ GHI NHẬN
+App Salary KHÔNG có lần 2/3 ⇒ App Report là nơi ghi nhận. Vì đây là số tiền thật, phải khoá chặt:
+- **Số lần 2/3:** tự tính 60/40; cho **người có quyền (CEO/admin)** sửa số **Lần 2** → **Lần 3 tự tính lại** = `Tổng − Lần 1 − Lần 2` (giữ bất biến mục 2). NV không sửa.
+- **Đánh dấu "đã trả":** chỉ **người có quyền** ghi (ngày + số tiền thật đã chuyển). **KHÔNG tự đánh dấu, không auto-assume.** NV chỉ XEM (tuỳ chọn: nút "xác nhận đã nhận").
+- **BẮT BUỘC AUDIT:** mỗi lần sửa số / ghi nhận đã trả lưu **ai · khi nào · số cũ → mới**; không ghi đè lặng, có lịch sử (theo chuẩn version như cấu hình phạt).
+- **Fail-closed:** chưa ai ghi nhận ⇒ trạng thái là "kế hoạch/chưa trả", TUYỆT ĐỐI không hiện như đã trả.
 
-## 9. Lộ trình 2 giai đoạn
-- **GĐ1 (làm được ngay):** khung màn + sổ; **Lần 1 = số thật** (đã có); **Lần 2/3 = kế hoạch** (số 60/40 + ngày dự kiến từ Lần 1); C44 cộng dồn. Phần "đã trả" lần 2/3 ghi "chờ App Salary".
-- **GĐ2 (sau khi App Salary cấp endpoint 3 lần):** điền **số/ngày thật** lần 2/3 → bật **đối chiếu bất biến** + **cảnh báo Telegram** quá hạn.
+## 9. Lộ trình (KHÔNG còn chặn nguồn — build được ngay)
+App Salary chỉ cần lần 1 (đã có) ⇒ không phải chờ ai.
+- **GĐ1:** khung màn + sổ; **Lần 1 = số App Salary**; **Lần 2/3 = App Report tính 60/40** (trạng thái "kế hoạch"); C44 cộng dồn; màn CEO + self-scope NV.
+- **GĐ2:** thêm **ghi nhận đã trả lần 2/3** (admin, audit) + **Telegram** nhắc mở cửa sổ / quá hạn + **đối chiếu bất biến**.
 
 ## 10. Nghiệm thu (khi build)
 - DN001 T07: Tổng 200tr · Đã nhận 50tr · Còn nợ (cộng dồn) 150tr · Lần 2 90tr / Lần 3 60tr · C44 sổ riêng.
