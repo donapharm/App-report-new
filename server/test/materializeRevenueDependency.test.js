@@ -34,6 +34,18 @@ test('fail-closed guard runs before candidate file write and active-slot replace
   assert.match(source, /REVENUE_MATERIALIZE_GUARD_REJECTED/);
   assert.match(source, /acquireMaterializeLock\(\)/);
   assert.match(source, /ACTIVE_SLOT_CHANGED_DURING_MATERIALIZE/);
+  assert.match(source, /selectCanonicalPeriodSlots\(baselineSlots, PERIOD\.ky\)/,
+    'the complete manifest ky metadata must be validated before selecting a period');
+  assert.doesNotMatch(source, /baselineSlots\.filter\(\(s\) => s\.ky === PERIOD\.ky\)/,
+    'orchestration must not bypass malformed ky by filtering before validation');
+  assert.match(source, /INVALID_SLOT_PERIOD_METADATA_DURING_MATERIALIZE/,
+    'commit-time manifest ky mutations must fail closed');
+  assert.match(source, /PERIOD_SLOTS_CHANGED_DURING_MATERIALIZE/);
+  assert.match(source, /PLACEHOLDER_CHANGED_DURING_MATERIALIZE/);
+  assert.match(source, /periodSlotsSnapshot\(commitSlots, PERIOD\.ky\) !== baselinePeriodSnapshot/,
+    'the complete period manifest must be compared again after source reads');
+  assert.match(source, /canBootstrapFromInactivePlaceholders\(\{ slots: commitPeriodSlots, uploadsDir: UP_DIR \}\)/,
+    'placeholder metadata and payload must be revalidated at commit time');
   assert.match(source, /SLOT_ID_COLLISION/);
   assert.match(source, /writeJson = writeJsonAtomic/);
 });

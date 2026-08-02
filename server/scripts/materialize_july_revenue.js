@@ -14,7 +14,13 @@ const DATA_DIR = path.join(REPORT_ROOT, 'server', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
 const ROSTER_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json');
 const { quarantineRosterConflicts } = require('../src/revenueAttributionGuard');
-const { evaluateRevenueCandidate } = require('../src/revenueMaterializeGuard');
+const {
+  evaluateRevenueCandidate,
+  canBootstrapFromInactivePlaceholders,
+  invalidSlotPeriods,
+  selectCanonicalPeriodSlots,
+  periodSlotsSnapshot,
+} = require('../src/revenueMaterializeGuard');
 const { REVENUE_SEMANTIC_VERSION, equivalentToActiveSlot } = require('../src/revenuePayloadIdentity');
 const { atomicWriteFile, writeJsonAtomic, acquireFileLock } = require('../src/materializeFileSafety');
 
@@ -266,10 +272,13 @@ async function main() {
   fs.mkdirSync(UP_DIR, { recursive: true });
   const slotsPath = path.join(DATA_DIR, 'upload_slots.json');
   const baselineSlots = readJson(slotsPath, []);
-  const baselinePeriodSlots = baselineSlots.filter((s) => s.ky === PERIOD.ky);
+  const baselinePeriodSlots = selectCanonicalPeriodSlots(baselineSlots, PERIOD.ky);
+  const baselinePeriodSnapshot = periodSlotsSnapshot(baselineSlots, PERIOD.ky);
   const baselineActiveSlots = baselinePeriodSlots.filter((s) => s.active);
   const baselineActiveIds = baselineActiveSlots.map((s) => String(s.id)).sort();
   const previousSlot = baselineActiveSlots.at(-1) || null;
+  const bootstrapFromInactivePlaceholders = baselineActiveIds.length === 0
+    && canBootstrapFromInactivePlaceholders({ slots: baselinePeriodSlots, uploadsDir: UP_DIR });
   const run = await latestRun();
   if (!run) throw new Error('NO_MISA_SUCCESS_SNAPSHOT');
   const misaDataQuality = await fetchMisaDataQualityWarnings(run.id);
@@ -298,7 +307,7 @@ async function main() {
     sourceSummary: summaryBySource,
   };
   const materializeGuard = evaluateRevenueCandidate({ previousSlot, candidate });
-  if (baselinePeriodSlots.length > 0 && baselineActiveIds.length === 0) {
+  if (baselinePeriodSlots.length > 0 && baselineActiveIds.length === 0 && !bootstrapFromInactivePlaceholders) {
     materializeGuard.ok = false;
     materializeGuard.reasons.push({ code: 'MISSING_ACTIVE_SLOT', periodSlotIds: baselinePeriodSlots.map((s) => String(s.id)).sort() });
   }
@@ -306,7 +315,29 @@ async function main() {
     materializeGuard.ok = false;
     materializeGuard.reasons.push({ code: 'MULTIPLE_ACTIVE_SLOTS', activeSlotIds: baselineActiveIds });
   }
+  // Re-read the complete period state after the slow source queries. Active IDs
+  // alone are insufficient: an inactive real/corrupt slot or a changed legacy
+  // placeholder must also stop the commit.
   const commitSlots = readJson(slotsPath, []);
+  const commitInvalidPeriods = invalidSlotPeriods(commitSlots);
+  if (commitInvalidPeriods.length > 0) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({ code: 'INVALID_SLOT_PERIOD_METADATA_DURING_MATERIALIZE', invalidSlots: commitInvalidPeriods });
+  }
+  const commitPeriodSlots = commitSlots.filter((s) => s.ky === PERIOD.ky);
+  if (periodSlotsSnapshot(commitSlots, PERIOD.ky) !== baselinePeriodSnapshot) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({
+      code: 'PERIOD_SLOTS_CHANGED_DURING_MATERIALIZE',
+      selectedSlotIds: baselinePeriodSlots.map((s) => String(s.id)).sort(),
+      latestSlotIds: commitPeriodSlots.map((s) => String(s.id)).sort(),
+    });
+  }
+  if (bootstrapFromInactivePlaceholders
+    && !canBootstrapFromInactivePlaceholders({ slots: commitPeriodSlots, uploadsDir: UP_DIR })) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({ code: 'PLACEHOLDER_CHANGED_DURING_MATERIALIZE' });
+  }
   const file = path.join(UP_DIR, `${slotId}.json`);
   if (commitSlots.some((s) => String(s.id) === slotId) || fs.existsSync(file)) {
     materializeGuard.ok = false;
@@ -411,6 +442,7 @@ async function main() {
     materializeGuard: {
       status: 'passed',
       previousSlotId: previousSlot?.id || null,
+      bootstrapMode: bootstrapFromInactivePlaceholders ? 'empty_system_placeholders' : null,
       metrics: materializeGuard.metrics || null,
       thresholds: materializeGuard.thresholds,
     },
@@ -422,7 +454,7 @@ async function main() {
   const artifact = {
     generatedAt: new Date().toISOString(), dataAsOf: process.env.REVENUE_DATA_AS_OF || new Date().toISOString(), slotId, file, ky: PERIOD.ky, latestMisaRun: { id: String(run.id), finished_at: run.finished_at, raw_summary: run.raw_summary },
     summary: { rows: rows.length, totalRevenue: total, bySource: summaryBySource, empCount: new Set(rows.map((r) => r.emp_code).filter(Boolean)).size, attributionConflicts: guarded.summary },
-    materializeGuard: { status: 'passed', previousSlotId: previousSlot?.id || null, metrics: materializeGuard.metrics || null, thresholds: materializeGuard.thresholds },
+    materializeGuard: { status: 'passed', previousSlotId: previousSlot?.id || null, bootstrapMode: bootstrapFromInactivePlaceholders ? 'empty_system_placeholders' : null, metrics: materializeGuard.metrics || null, thresholds: materializeGuard.thresholds },
     dataQualityWarnings: { misaMissingRevenueDate: misaDataQuality },
     attributionConflicts: guarded.conflicts,
     samples: { misa: misa.slice(0, 10), partner: partner.slice(0, 10) },
