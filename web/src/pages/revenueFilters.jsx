@@ -1,6 +1,7 @@
 import React from 'react';
 import { DateInput } from '../components.jsx';
 import { formatDate, formatDateTime } from '../util.js';
+import { bangkokToday } from '../revenueCoverage.js';
 
 export const emptyRevenueFilters = { emp: '', province: '', unit: '', group: '', product: '', route: '', priority: '', contractor: '', bid: '', dateFrom: '', dateTo: '', q: '' };
 
@@ -127,7 +128,9 @@ export function RevenueFilters({ me, ky, periods, options, filters, setKy, setFi
   const lastPeriod = periods?.at(-1) || {};
   const availableMinDate = String(firstPeriod.dateFrom || '').slice(0, 10);
   const availableMaxDate = String(lastPeriod.throughDate || lastPeriod.data_as_of || lastPeriod.dataAsOf || lastPeriod.dateTo || '').slice(0, 10);
-  const baseDate = asOf ? new Date(asOf) : new Date();
+  // GIỜ VIỆT NAM (GMT+7). Khi kỳ chưa có mốc dữ liệu thì mốc gốc phải là "hôm nay giờ VN",
+  // không lấy giờ máy người dùng — máy lệch múi giờ sẽ chọn nhầm ngày ở đầu/cuối tháng.
+  const baseDate = asOf ? new Date(asOf) : new Date(`${bangkokToday()}T00:00:00Z`);
   const iso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const clamp = (d) => {
     const s = iso(d);

@@ -6,6 +6,7 @@ import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from 
 import { TargetGauge } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 import { normalizeTargetNavigation, targetAdminKyAfterPeriods } from '../targetNavigationModel.js';
+import { bangkokToday } from '../revenueCoverage.js';
 
 const rowsFmt = (n) => Number(n || 0).toLocaleString('vi-VN');
 const SOURCE_LABELS = { carryover: 'Nhân bản kỳ trước', upload: 'Upload', manual: 'Sửa tay', ai: 'AI đề xuất' };
@@ -569,7 +570,8 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   const [lastBatch, setLastBatch] = useState(null);
   const [ai, setAi] = useState(null);
   const [templateBasis, setTemplateBasis] = useState('t06');
-  const [qYear, setQYear] = useState(String(new Date().getFullYear()));
+  // GIỜ VIỆT NAM (GMT+7), không lấy năm theo giờ máy người dùng.
+  const [qYear, setQYear] = useState(bangkokToday().slice(0, 4));
   const [qQuarter, setQQuarter] = useState('3');
   const [qLines, setQLines] = useState('DN001\t6000000000');
   const [tool, setTool] = useState(null);

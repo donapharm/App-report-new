@@ -3,10 +3,13 @@ import { useDonaTableCellTools } from '@donapharm/dona-table-cell-tools/react';
 import '@donapharm/dona-table-cell-tools/css';
 import { api, downloadFilteredEmployeeReport, downloadFilteredEmployeeSummary } from '../api.js';
 import { Spinner } from '../components.jsx';
+import { bangkokToday } from '../revenueCoverage.js';
 
 const uiToHub = (ky) => { const m = String(ky || '').match(/^(\d{2})\.(\d{4})$/); return m ? `${m[2]}-${m[1]}` : ky; };
 const hubToUi = (period) => { const m = String(period || '').match(/^(\d{4})-(\d{2})$/); return m ? `${m[2]}.${m[1]}` : period; };
-const currentKy = () => `${String(new Date().getMonth() + 1).padStart(2, '0')}.${new Date().getFullYear()}`;
+// GIỜ VIỆT NAM (GMT+7). Trước đây lấy `new Date().getMonth()` = giờ MÁY NGƯỜI DÙNG:
+// máy để lệch múi giờ (hoặc mở app từ nước khác) sẽ ra sai tháng, nhất là ngày đầu/cuối tháng.
+const currentKy = () => { const [y, m] = bangkokToday().split('-'); return `${m}.${y}`; };
 const sourceLabel = (source) => ({ 'data-hub': 'Data Hub', 'data-hub-lkg': 'Data Hub · bản tốt gần nhất' }[source] || source || '—');
 const dateText = (iso) => iso ? new Date(iso).toLocaleString('vi-VN') : 'Chưa đồng bộ';
 const moneyText = (value) => {
