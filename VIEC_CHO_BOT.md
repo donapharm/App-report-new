@@ -38,7 +38,46 @@ git cherry-pick 21867c4
 
 ---
 
-## 🔴 VIỆC 0B — ‼ VÊNH SỐ APP SALE ↔ APP REPORT (T08) — CHỨNG MINH TỚI TỪNG DÒNG
+## 🛑 VIỆC 0B — DỪNG: KHÔNG ĐƯỢC ĐỔI SANG "NGÀY TẠO ĐƠN" (Claude chặn 02/08)
+
+**Bot điều tra ĐÚNG, nhưng hướng sửa SAI.** Đọc kỹ trước khi làm bất cứ gì.
+
+### Bot đã tìm ra (ghi nhận, số liệu tốt)
+App Report T08 = 76.993.720đ = MISA official **23.437.000đ** + MISA pending **0đ** + WEB **53.556.720đ**.
+3 đơn WEB **tạo 29–30/07, phản hồi 01/08** → App Report xếp vào **T08**; App Sale (lọc theo **ngày tạo đơn**) xếp vào T07 nên T08 hiện 0.
+Nghi vấn `monthly.delivered_qty` của Claude **SAI** — cả 3 dòng dùng `resp.delivered_qty` thật, `monthly` đều NULL. ✅ bot kiểm đúng.
+
+### ‼ VÌ SAO KHÔNG ĐƯỢC ĐỔI — `SPEC_REVENUE_DELIVERY_PERIOD.md`, CEO chốt 29/07
+Spec đó ra đời vì đúng vụ **mất 382,6 triệu**, và lệnh của CEO là:
+
+> **Mục 3:** *"**Bỏ hẳn** hai dòng lọc theo `o.created_at`. Quy kỳ **chỉ theo MỘT mốc ngày duy nhất**."*
+> **Mục 2.2:** `ngày quy kỳ = NGÀY THỰC GIAO → ngày hoá đơn → ngày phản hồi`
+> **Mục 3:** *"ngay cả khi App Sale chưa kịp thêm ô ngày giao, bỏ bộ lọc kép vẫn khiến tiền không còn biến mất — **cùng lắm là rơi nhầm tháng, còn hơn mất hẳn**."*
+
+⇒ **Lọc theo `created_at` chính là điều kiện (1) mà CEO đã ra lệnh XOÁ.** Đưa nó trở lại = **phá bản vá 29/07**, rủi ro mất doanh thu lần nữa.
+⇒ Hiện tượng "3 đơn rơi sang T08" **chính là cái đánh đổi CEO đã chấp nhận** ngày 29/07, không phải lỗi mới.
+
+### GỐC THẬT: App Sale CHƯA có ô "NGÀY THỰC GIAO"
+Spec mục **2.1** giao **App Sale** thêm ô *"Ngày thực giao"* (bắt buộc, cho chọn lùi, có nhật ký). **Chưa có ô đó nên App Report buộc phải đoán bằng ngày phản hồi** — đúng thứ tự dự phòng CEO đã duyệt.
+**Có ô đó thì hai app tự khớp**, không phải sửa công thức App Report.
+
+### VIỆC PHẢI LÀM (thay cho việc sửa công thức)
+1. **KHÔNG** đổi quy kỳ sang `created_at`. **KHÔNG** commit bản sửa VIỆC 0B theo hướng cũ.
+2. **Hỏi App Sale/vận hành: 3 đơn đó GIAO THẬT ngày nào?** (tạo 29–30/07, phản hồi 01/08)
+   - Giao **trong T07** ⇒ đúng ra thuộc **T07**. **T07 CHƯA khoá sổ** (khoá hết ngày 08/08) nên **được phép chỉnh** — chỉnh xong trước 08/08.
+   - Giao **01/08** ⇒ App Report **đang đúng**, App Sale mới là bên xếp nhầm kỳ.
+3. **Thúc App Sale làm mục 2.1** — thêm ô "Ngày thực giao". Đây là việc chặn gốc, không làm thì tháng nào cũng lệch.
+4. Trên màn App Report, ghi nhãn rõ: **"Quy kỳ theo ngày thực giao (tạm dùng ngày phản hồi khi chưa có)"** để không ai hiểu nhầm khi đối chiếu với App Sale.
+
+### ✏️ Claude sửa lại chỉ thị trước của mình
+Chỉ thị cũ *"T07 đã chốt sổ — cấm đổi"* là **SAI**: theo quy tắc khoá sổ, **T07 khoá hết ngày 08/08**, hôm nay 02/08 nên **vẫn mở**. Và **chưa gửi tin thưởng nào** (2 cờ đang tắt tới 09/08).
+⇒ T07 **được phép chỉnh cho đúng** nếu tìm ra ngày giao thật, miễn **chốt xong trước 08/08**. Nhưng **không** chỉnh bằng cách đổi công thức sang `created_at`.
+
+---
+
+<details><summary>(lưu vết — phân tích ban đầu VIỆC 0B)</summary>
+
+## VIỆC 0B — vênh số App Sale ↔ App Report (T08)
 
 **CEO đối chiếu 02/08 21:44:**
 - **App Report** kỳ 08.2026: **76.993.720đ** (trước VAT 73.327.352đ) · **7 dòng** · 4 ĐV · 6 SP · 2 NV · *"Dữ liệu tới 01/08/26 · 1/31 ngày"*
@@ -84,7 +123,9 @@ App Report 76,99tr − MISA ~23tr ⇒ **~54tr đến từ phần đối tác**, 
    - Áp công thức thống nhất từ **T08 trở đi**; T07 giữ nguyên số đã chốt.
 5. **Kiểm kỳ:** App Report ghi *"dữ liệu tới 01/08"* trong khi App Sale lọc tới 02/08 — 02/08 có đơn không, vì sao chưa vào App Report?
 
-**Ràng buộc:** chỉ ĐỌC App Sale. **KHÔNG tự đổi định nghĩa doanh thu** — báo số, chờ CEO chốt. Nếu phát hiện App Report đang cộng nhầm thì nêu rõ **sai bao nhiêu tiền** trước khi sửa.
+**Ràng buộc:** chỉ ĐỌC App Sale. **KHÔNG tự đổi định nghĩa doanh thu** — báo số, chờ CEO chốt.
+
+</details>
 
 ---
 
