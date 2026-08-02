@@ -38,7 +38,18 @@ git cherry-pick 21867c4
 
 ---
 
-## 🛑 VIỆC 0B — DỪNG: KHÔNG ĐƯỢC ĐỔI SANG "NGÀY TẠO ĐƠN" (Claude chặn 02/08)
+## ⏸ VIỆC 0B — ĐANG TREO, CHỜ NGƯỜI NGOÀI (bot KHÔNG làm gì thêm)
+
+Bot đã dừng đúng, kết luận đúng. **Không code, không chỉnh số** cho tới khi có 2 thứ sau — cả hai đều do người ngoài cung cấp:
+1. **Ngày GIAO THẬT của 3 đơn WEB** (tạo 29–30/07, phản hồi 01/08) — vận hành/App Sale trả lời.
+2. **App Sale thêm ô "Ngày thực giao"** (spec mục 2.1) — đây là việc chặn gốc.
+
+Có (1) → biết 3 đơn thuộc T07 hay T08, chỉnh trước 08/08. Có (2) → hai app tự khớp vĩnh viễn.
+**Trong lúc chờ: làm VIỆC 3 rồi VIỆC 4 bên dưới.**
+
+<details><summary>(chi tiết phân tích + lý do chặn)</summary>
+
+### DỪNG: KHÔNG ĐƯỢC ĐỔI SANG "NGÀY TẠO ĐƠN" (Claude chặn 02/08)
 
 **Bot điều tra ĐÚNG, nhưng hướng sửa SAI.** Đọc kỹ trước khi làm bất cứ gì.
 
@@ -69,9 +80,15 @@ Spec mục **2.1** giao **App Sale** thêm ô *"Ngày thực giao"* (bắt buộ
 3. **Thúc App Sale làm mục 2.1** — thêm ô "Ngày thực giao". Đây là việc chặn gốc, không làm thì tháng nào cũng lệch.
 4. Trên màn App Report, ghi nhãn rõ: **"Quy kỳ theo ngày thực giao (tạm dùng ngày phản hồi khi chưa có)"** để không ai hiểu nhầm khi đối chiếu với App Sale.
 
-### ✏️ Claude sửa lại chỉ thị trước của mình
+</details>
+
+<details><summary>(Claude tự sửa chỉ thị sai trước đó)</summary>
+
+### Claude sửa lại chỉ thị trước của mình
 Chỉ thị cũ *"T07 đã chốt sổ — cấm đổi"* là **SAI**: theo quy tắc khoá sổ, **T07 khoá hết ngày 08/08**, hôm nay 02/08 nên **vẫn mở**. Và **chưa gửi tin thưởng nào** (2 cờ đang tắt tới 09/08).
 ⇒ T07 **được phép chỉnh cho đúng** nếu tìm ra ngày giao thật, miễn **chốt xong trước 08/08**. Nhưng **không** chỉnh bằng cách đổi công thức sang `created_at`.
+
+</details>
 
 ---
 
@@ -175,7 +192,7 @@ Cùng loại sự cố với vụ mất số chi phí 01/08: **nguồn có số,
 
 ---
 
-## 🟠 VIỆC 3 — VP018 + DN022: ĐÃ MERGE, còn NGHIỆM THU trên production
+## 🔴 VIỆC 3 — LÀM NGAY: nghiệm thu VP018 + DN022 trên production (mốc chết 08/08)
 Đã có trên `origin/main`: `employeeIncentivePolicy.js` + `revenueAttributionGuard.js`; `formulaVersion` = **v3.7**, lock **v3.7** khớp. Test nền: **618 pass / 6 fail** (6 lỗi PDF do thiếu `pdfinfo`, không phải lỗi code).
 **Còn phải làm:** deploy từ `origin/main` rồi dán nghiệm thu bên dưới. Chưa nghiệm thu xong thì **chưa được bật cờ tin thưởng 09/08**.
 
@@ -197,7 +214,13 @@ Branch `fix/dn022-separate-formula-20260731` — CEO đã duyệt từ 31/07, **
 
 ---
 
-## 🟡 VIỆC 4 — Chống tái diễn sự cố mất số chi phí (sau VIỆC 3)
+## 🟠 VIỆC 4 — Deploy bản RAM `9986f0a` (sau VIỆC 3)
+
+Candidate đã xong local, 3 điểm review đã sửa (đồng thời 2 · TTL lỗi ≤2 phút · admission 576 + dự phòng 192 MiB).
+**Trước khi deploy phải đo lại:** hạ đồng thời 3→2 làm màn "Tất cả NV" chậm hơn ~1,5×. Số cũ: ổn định 4,9s · **cold 22,4s** ⇒ cold mới có thể **~33s**. **Đo cold thật + kiểm không vượt timeout frontend.** Vá RAM mà đẻ ra "tải mãi không xong" là đổi bệnh này lấy bệnh khác.
+Deploy từ `origin/main`, dán 2 SHA trùng.
+
+<details><summary>(bối cảnh vì sao cần)</summary>
 
 Sự cố 01/08 đã chữa nhưng **vòng lặp chưa cắt**:
 ```
@@ -205,7 +228,8 @@ Mở "Tất cả NV" → RAM DataHub vọt → PM2 restart theo guard
 → nếu đang giữ vault-audit.lock → khóa mồ côi → mọi request kẹt ~10s → mất số
 ```
 **Việc quan trọng nhất:** `vault-audit.lock` phải **TỰ LÀNH** — ghi **PID chủ + TTL**, ai vào sau thấy chủ đã chết hoặc quá TTL thì **tự phá khóa** + ghi audit. Tiến trình chết khi đang giữ khóa là điều **phải chịu được**.
-Kèm: cổng RAM riêng (**không nâng guard để che**), xem lại thiết kế "Tất cả NV" (cold 22,4s là chậm), **rút ngắn cache kết quả LỖI** (6h là quá lâu — hỏng phải biết sớm).
+Kèm: cổng RAM riêng (**không nâng guard để che**), xem lại thiết kế "Tất cả NV", **rút ngắn cache kết quả LỖI**.
+</details>
 
 ---
 
