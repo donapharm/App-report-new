@@ -44,9 +44,12 @@ export function currentKyVN(now = new Date()) {
 // Vẫn lùi về `latest` khi tháng hiện tại không có trong danh sách kỳ (server chưa mở kỳ),
 // để không bao giờ trả về ky rỗng làm vỡ bộ lọc.
 export function defaultPeriodSelection(periods, latest, now = new Date()) {
-  const kys = (periods || []).map((p) => p.ky);
+  const kys = (Array.isArray(periods) ? periods : [])
+    .map((p) => p?.ky)
+    .filter((ky) => /^(0[1-9]|1[0-2])\.\d{4}$/.test(String(ky || '')));
   const current = currentKyVN(now);
-  const ky = (current && kys.includes(current)) ? current : (latest || kys.at(-1) || '');
+  const safeLatest = kys.includes(latest) ? latest : '';
+  const ky = (current && kys.includes(current)) ? current : (safeLatest || kys.at(-1) || '');
   return { mode: 'month', ky, from: ky, to: ky, quarter: qOf(ky), year: yearOf(ky) };
 }
 
