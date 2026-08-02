@@ -1,7 +1,7 @@
 {
-  "version": "v3.6",
-  "sourceHash": "14f50e4cf48cc7dd82c58c893ffeb8226f913d55f24cbc2310729b07ccb784da",
-  "lockedAt": "2026-07-30",
+  "version": "v3.7",
+  "sourceHash": "c86117313bb2fa602badb0b1ced066a35d9348cc1f2fd2f37ae97bd32d55fb03",
+  "lockedAt": "2026-07-31",
   "lockedBy": "CEO",
   "sources": [
     "src/employeeBonus.js",
@@ -9,9 +9,10 @@
     "src/employeePenalty.js",
     "src/employeePenaltyAggregate.js",
     "src/employeePenaltyPolicy.js",
+    "src/employeeIncentivePolicy.js",
     "src/xuPolicy.js",
     "config/employee_bonus_tiers.json (base, baseTiers, priorityThresholdPct, priorityRates, autoGroupTargets, totalCapPct, penaltyTiers, penaltyEffectiveFrom, penaltyWarnFrom, penaltyEnabled, xuPenalty)"
   ],
   "rule": "Đổi cách tính thưởng/phạt hoặc lịch áp dụng => nâng FORMULA_VERSION, cập nhật config+sourceHash+CHANGELOG. Test server/test/bonusFormulaVersion.test.js sẽ đỏ nếu quên.",
-  "note": "v3.6 = v3.5 + nâng hạn mức lịch sử audit thưởng 2.000 -> 4.000. Không đổi cách tính tiền."
+  "note": "v3.7 = DN022 chờ công thức riêng nên loại khỏi P1/P2 và phạt target/C45 hiện tại; vẫn giữ phạt Xu. Phạt Xu chỉ cho DN002, DN004, DN022. Các mã khác giữ nguyên v3.6."
 }

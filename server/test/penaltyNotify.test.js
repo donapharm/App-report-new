@@ -71,6 +71,24 @@ test('‼ KHÔNG có việc gì thì KHÔNG GỬI', () => {
   assert.equal(penaltyNotify.messageFor({ row: ROW, ky: '08.2026', penalty: noC45 }), null);
 });
 
+test('DN022 không thể nhận tin phạt target/C45 dù caller truyền payload có tiền', () => {
+  const forged = penaltyFor({ achieved: 450_000_000 });
+  assert.ok(forged.targetAmount > 0 || forged.c45Dropped);
+  assert.equal(penaltyNotify.messageFor({
+    row: { emp_code: 'DN022', name: 'CTV 22', ky: '08.2026' },
+    ky: '08.2026', penalty: forged,
+  }), null);
+});
+
+test('DN002/DN004 không thể nhận tin phạt target/C45 bằng tiền', () => {
+  const forged = penaltyFor({ achieved: 450_000_000 });
+  for (const emp_code of ['DN002', 'DN004']) {
+    assert.equal(penaltyNotify.messageFor({
+      row: { emp_code, name: emp_code, ky: '08.2026' }, ky: '08.2026', penalty: forged,
+    }), null);
+  }
+});
+
 test('khoá chống gửi trùng theo kỳ + BẬC: đổi bậc là tin mới, cùng bậc thì không nhắc lại', () => {
   const mid = penaltyFor({ achieved: 780_000_000 });
   const worse = penaltyFor({ achieved: 450_000_000 });

@@ -13,6 +13,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const employeeIncentivePolicy = require('./employeeIncentivePolicy');
 
 const STATE_FILE = path.join(__dirname, '..', 'data', 'notif_bonus_state.json');
 
@@ -72,7 +73,7 @@ function pendingEvents({ ky, rows = [], config = {}, isMuted = () => false } = {
   const events = [];
   for (const row of rows) {
     const emp = String(row?.emp_code || '').trim().toUpperCase();
-    if (!emp || isMuted(emp)) continue;
+    if (!emp || isMuted(emp) || employeeIncentivePolicy.isMonetaryNotifyBlocked(emp)) continue;
     if (row.sourceAvailable === false) continue;
     const pct = finite(row.pct);
     if (pct == null) continue;
@@ -117,6 +118,7 @@ function messageFor(e) {
 // (tin sau khoá sổ ngày 8). closeNote do employeeCost.periodCloseNote() cấp — module
 // này KHÔNG tự đoán ngày khoá sổ (CEO chốt 30/07).
 function monthEndMessage(row = {}, bonus = {}, { stage = 'provisional', closeNote = '' } = {}) {
+  if (employeeIncentivePolicy.isMonetaryNotifyBlocked(row.emp_code)) return null;
   const p1 = finite(bonus.baseAmount);
   const p2 = finite(bonus.priorityAmount);
   if (p1 == null && p2 == null) return null;

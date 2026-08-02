@@ -173,10 +173,10 @@ function salesRecipients() {
   const tgByEmp = telegramByEmp();
   // ‼ Chặn người nhận dùng ĐÚNG MỘT nguồn: targetNotify.isMuted
   //   (= config/notify_optout.json + cờ no_auto_notify trên hồ sơ).
-  //   Bản cũ lọc bằng diemXu.EXCLUDE — đó là danh sách "KHÔNG TÍNH ĐIỂM XU",
-  //   khác hẳn mục đích. Nó có DN022, nên DN022 bị cắt báo cáo doanh thu dù
-  //   CEO chốt 28/07 là DN022 phải nhận đủ như NV chính thức.
-  //   diemXu.EXCLUDE giữ nguyên cho việc tính điểm xu — KHÔNG đụng.
+  //   Bản cũ lọc bằng diemXu.EXCLUDE — đó là danh sách "KHÔNG TÍNH ĐIỂM/XU",
+  //   khác hẳn mục đích. CEO chốt 31/07: DN022 phải được tính Xu cho luồng
+  //   phạt Xu nhưng vẫn không dùng công thức thưởng/phạt target-C45 hiện tại.
+  //   Hai phạm vi này phải tiếp tục tách rời.
   return store.targetRosterCodes({ scope: {} })
     .filter((c) => !targetNotify.isMuted(c))
     .map((code) => enrichRecipient(code, tgByEmp));
@@ -300,7 +300,7 @@ async function renderCeoDigest({ kind = 'week', ranges = defaultRanges() } = {})
   const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
   const kindText = kind === 'day' ? 'ngày' : kind === 'month' ? 'tháng' : 'tuần';
   const range = kind === 'day' ? ranges.dayRange : kind === 'month' ? ranges.monthRange : ranges.weekRange;
-  const html = `<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Arial;background:#f6fbfb;color:#163235}.wrap{max-width:980px;margin:auto;background:white;border:1px solid #d8eeee;border-radius:16px;padding:24px}h2{color:#087565}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border:1px solid #d8eeee;padding:8px}th{background:#e7f7f4;color:#005f52}.r{text-align:right}.neg{color:#b42318;font-weight:bold}.pos{color:#087565;font-weight:bold}</style></head><body><div class='wrap'><h2>DONAPHARM — CEO Digest báo cáo ${kindText}</h2><p>Kỳ ${range.from}–${range.to}. Người nhận chính thức: ${rows.length} NV KD (đã loại DN021, DN022, DN023, VP004, VP018).</p><p><b>Tổng doanh thu:</b> ${fmtMoney(totalRevenue)} · <b>NV cảnh báo xu &lt;90%:</b> ${rows.filter((r) => r.warn).length}</p><table><tr><th>NV</th><th>Tên</th><th class='r'>Doanh thu</th><th class='r'>Điểm tháng</th><th class='r'>Xu quý</th><th class='r'>Thiếu xu</th><th class='r'>Tỷ lệ quý</th></tr>${rows.map((r) => `<tr><td>${esc(r.code)}</td><td>${esc(r.name)}</td><td class='r'>${fmtMoney(r.revenue)}</td><td class='r'>${fmtNum(r.score.diem_thang)}</td><td class='r'>${fmtNum(r.score.xu_quy)}</td><td class='r ${r.score.thieu_xu ? 'neg' : ''}'>${fmtNum(r.score.thieu_xu)}</td><td class='r ${r.warn ? 'neg' : 'pos'}'>${pct(r.score.ty_le_quy)}</td></tr>`).join('')}</table><p style='font-size:12px;color:#667'>Nguồn: Số liệu được tổng hợp tự động từ hệ thống nội bộ DONAPHARM. Không chứa chi phí/giá vốn/lợi nhuận.</p>${renderCanonicalSignatureHtml()}</div></body></html>`;
+  const html = `<!doctype html><html><head><meta charset='utf-8'><style>body{font-family:Arial;background:#f6fbfb;color:#163235}.wrap{max-width:980px;margin:auto;background:white;border:1px solid #d8eeee;border-radius:16px;padding:24px}h2{color:#087565}table{border-collapse:collapse;width:100%;font-size:13px}td,th{border:1px solid #d8eeee;padding:8px}th{background:#e7f7f4;color:#005f52}.r{text-align:right}.neg{color:#b42318;font-weight:bold}.pos{color:#087565;font-weight:bold}</style></head><body><div class='wrap'><h2>DONAPHARM — CEO Digest báo cáo ${kindText}</h2><p>Kỳ ${range.from}–${range.to}. Người nhận chính thức: ${rows.length} NV KD (không tính Điểm/Xu: ${[...EXCLUDED].join(', ')}).</p><p><b>Tổng doanh thu:</b> ${fmtMoney(totalRevenue)} · <b>NV cảnh báo xu &lt;90%:</b> ${rows.filter((r) => r.warn).length}</p><table><tr><th>NV</th><th>Tên</th><th class='r'>Doanh thu</th><th class='r'>Điểm tháng</th><th class='r'>Xu quý</th><th class='r'>Thiếu xu</th><th class='r'>Tỷ lệ quý</th></tr>${rows.map((r) => `<tr><td>${esc(r.code)}</td><td>${esc(r.name)}</td><td class='r'>${fmtMoney(r.revenue)}</td><td class='r'>${fmtNum(r.score.diem_thang)}</td><td class='r'>${fmtNum(r.score.xu_quy)}</td><td class='r ${r.score.thieu_xu ? 'neg' : ''}'>${fmtNum(r.score.thieu_xu)}</td><td class='r ${r.warn ? 'neg' : 'pos'}'>${pct(r.score.ty_le_quy)}</td></tr>`).join('')}</table><p style='font-size:12px;color:#667'>Nguồn: Số liệu được tổng hợp tự động từ hệ thống nội bộ DONAPHARM. Không chứa chi phí/giá vốn/lợi nhuận.</p>${renderCanonicalSignatureHtml()}</div></body></html>`;
   const text = `DONAPHARM CEO Digest ${kind}: ${rows.length} NV KD, tổng DT ${fmtMoney(totalRevenue)}, cảnh báo xu <90%: ${rows.filter((r) => r.warn).length}.\n\n${renderCanonicalSignatureText()}`;
   return { html, text, subject: `DONAPHARM — CEO Digest ${kindText} (${range.from}–${range.to})`, rows };
 }

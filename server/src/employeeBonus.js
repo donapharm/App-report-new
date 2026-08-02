@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const employeeIncentivePolicy = require('./employeeIncentivePolicy');
 
 const CONFIG_FILE = path.join(__dirname, '..', 'config', 'employee_bonus_tiers.json');
 const BASE = 'revenue_before_vat';
@@ -15,7 +16,7 @@ const BONUS_V3_EFFECTIVE_MONTH = '2026-07';
 // thoại sửa tay ghi v3.1 nên CEO không biết đang sửa bản nào (CEO chốt 29/07).
 // Quy tắc: SỬA CÁCH TÍNH THƯỞNG => nâng số hiệu này + cập nhật
 // config/bonus_formula_lock.json (test bonusFormulaVersion sẽ đỏ nếu quên).
-const FORMULA_VERSION = 'v3.6';
+const FORMULA_VERSION = 'v3.7';
 const UNCONFIGURED_MESSAGE = 'Chưa cấu hình mức thưởng';
 
 function finite(value) {
@@ -458,6 +459,51 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
 
 function buildBonusSummary(kpi = {}, config = loadConfig(), priority = {}) {
   const normalized = config?.configured == null ? validateConfig(config) : config;
+  const empCode = employeeIncentivePolicy.normalizeEmpCode(kpi.emp_code || kpi.empCode);
+  if (employeeIncentivePolicy.requiresSeparateFormula(empCode)) {
+    const excludedPeriod = (period = {}) => ({
+      target: period.target == null ? null : Number(period.target),
+      achieved: period.achieved == null ? null : Number(period.achieved),
+      pct: period.pct == null ? null : Number(period.pct),
+      bonusPct: null,
+      baseBonusPct: null,
+      baseAmount: null,
+      priorityThresholdPct: null,
+      priorityEligible: false,
+      priorityAmount: null,
+      priorityGroups: [],
+      priorityStatus: employeeIncentivePolicy.SEPARATE_FORMULA_REASON,
+      priorityCoverage: emptyPriority(),
+      uncappedAmount: null,
+      capAmount: null,
+      capped: false,
+      amount: null,
+      tier: null,
+      status: employeeIncentivePolicy.SEPARATE_FORMULA_REASON,
+    });
+    return {
+      configured: false,
+      reason: employeeIncentivePolicy.SEPARATE_FORMULA_REASON,
+      message: employeeIncentivePolicy.SEPARATE_FORMULA_MESSAGE,
+      schemaVersion: SCHEMA_VERSION,
+      version: normalized.version || '',
+      effectiveFrom: normalized.effectiveFrom || '',
+      base: BASE,
+      currency: normalized.currency || 'VND',
+      totalCapPct: null,
+      capPct: null,
+      priorityThresholdPct: null,
+      priorityRates: {},
+      priorityTargets: {},
+      autoGroupTargets: false,
+      ky: String(kpi.ky || ''),
+      quarterLabel: String(kpi.quarter_label || ''),
+      month: excludedPeriod(kpi.month),
+      quarter: excludedPeriod(kpi.quarter),
+      employeeSubtotals: [],
+      disclaimer: employeeIncentivePolicy.SEPARATE_FORMULA_MESSAGE,
+    };
+  }
   return {
     configured: !!normalized.configured, reason: normalized.reason || null,
     message: normalized.configured ? '' : UNCONFIGURED_MESSAGE,

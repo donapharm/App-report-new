@@ -1,4 +1,5 @@
 'use strict';
+const employeeIncentivePolicy = require('./employeeIncentivePolicy');
 /**
  * TIN NHẮN PHẠT CHO NHÂN VIÊN (CEO duyệt 2026-07-30, việc 4)
  *
@@ -36,6 +37,7 @@ function monthNo(ky) {
  * Trả null khi KHÔNG có gì để nhắc.
  */
 function messageFor({ row = {}, penalty = null, ky = '' } = {}) {
+  if (employeeIncentivePolicy.isMonetaryNotifyBlocked(row.emp_code)) return null;
   if (!penalty || typeof penalty !== 'object') return null;
   // Chưa áp dụng cho kỳ này, hoặc đạt mốc không phạt ⇒ không có việc gì để nhắc.
   if (penalty.mode === 'off') return null;

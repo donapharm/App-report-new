@@ -34,6 +34,18 @@ test('does not guess when no roster pair exists', () => {
   assert.equal(result.summary.rows, 0);
 });
 
+test('VP018 luôn bị quarantine dù không có cặp roster vì là Telesaler', () => {
+  const row = { unit_code: 'UNKNOWN', iit_code: 'P9', emp_code: 'VP018', emp_name: 'Telesaler', revenue: 35 };
+  const result = quarantineRosterConflicts([row], snapshot, '2026-07', '2026-07-31T02:00:00.000Z');
+  assert.equal(result.rows[0].emp_code, 'UNALLOCATED');
+  assert.equal(result.rows[0].raw_emp_code, 'VP018');
+  assert.equal(result.rows[0].blocked_emp_code, 'VP018');
+  assert.equal(result.rows[0].attribution_status, 'NON_SALES_ROLE_QUARANTINED');
+  assert.equal(result.rows[0].revenue, 35);
+  assert.equal(result.conflicts[0].reason, 'NON_SALES_ROLE');
+  assert.deepEqual(result.summary, { rows: 1, units: 1, revenue: 35 });
+});
+
 test('fails closed for an empty roster snapshot', () => {
   assert.throws(() => quarantineRosterConflicts([], { rows: [] }, '2026-07'), /ROSTER_SNAPSHOT_EMPTY/);
 });
