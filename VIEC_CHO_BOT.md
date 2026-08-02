@@ -59,10 +59,24 @@ Chỉ tính đơn App Sale coi là **"đã thực hiện"**: CRM **đã xuất h
 **2. TRỤC NGÀY (tính vào tháng nào) — GIỮ NGUYÊN, KHÔNG ĐỘNG**
 Vẫn quy kỳ theo **ngày hoá đơn → ngày xác nhận giao**. **TUYỆT ĐỐI KHÔNG** quay lại lọc theo `o.created_at` — đó là bản vá 29/07, đổi là mất 382,6 triệu lần nữa.
 
+### ✅ GỠ MÂU THUẪN (Claude sửa lệnh của chính mình, 02/08 khuya)
+Bot phát hiện đúng: *"một định nghĩa dùng chung mọi tháng"* + *"T07 không được đổi"* là **hai điều loại trừ nhau**, vì T07 có chứa `manual_zalo` (2.152.974.290đ). **Lỗi diễn đạt của Claude.**
+
+**Cách giải — dùng đúng cơ chế app ĐÃ CÓ:** luật tính doanh thu có **NGÀY HIỆU LỰC**, y như `effectiveFrom` của công thức thưởng và `penaltyEffectiveFrom` của phạt. Kỳ cũ giữ luật cũ, kỳ mới theo luật mới. Đây là **chuẩn sẵn có của app**, KHÔNG phải ngoại lệ chắp vá.
+
+```
+REVENUE_RULE_EFFECTIVE_FROM = 08.2026
+```
+- **T07 và trước đó:** giữ nguyên luật cũ ⇒ **T07 = 30.917.892.673đ, KHÔNG ĐỔI**. Không materialize lại T07.
+- **T08 trở đi:** luật mới (loại đơn nhập tay chưa xác nhận giao) ⇒ **T08 = 23.437.000đ**.
+- "Một định nghĩa dùng chung" = **từ ngày hiệu lực trở đi**, không bới lại kỳ đã tính.
+- Ngày hiệu lực nằm ở **CONFIG**, không ghi cứng trong code — sau này CEO đổi được.
+
 ### ‼ CỔNG CHẶN TIỀN — kiểm TRƯỚC khi ghi bất cứ gì
 Chạy **mô phỏng** (không ghi slot) rồi dán 2 số:
 1. **T08 mới** — phải ra **23.437.000đ**. Lệch ⇒ DỪNG, báo.
-2. **T07 mới** — phải vẫn là **30.917.892.673đ**. **Nếu T07 ĐỔI ⇒ DỪNG NGAY, báo CEO số cũ/số mới + chênh bao nhiêu, KHÔNG tự áp.** T07 chốt sổ 08/08, gửi tin thưởng 09/08.
+2. **T07** — phải vẫn là **30.917.892.673đ** (vì luật mới chỉ hiệu lực từ T08, **KHÔNG materialize lại T07**). Nếu T07 vẫn đổi ⇒ ngày hiệu lực chưa vào đúng chỗ ⇒ DỪNG, báo.
+3. Kiểm thêm **T06 = số cũ không đổi** — chứng minh ngày hiệu lực chặn đúng mọi kỳ cũ.
 
 Đạt cả 2 cổng ⇒ áp thật cho T08, giữ nguyên T07, báo CEO.
 Không đạt ⇒ dừng, báo, chờ CEO.
