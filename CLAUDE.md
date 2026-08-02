@@ -8,7 +8,18 @@
 - Quy trình: bot đẩy 1 đợt → Claude pull review → báo duyệt/điểm cần sửa. Mọi thay đổi vẫn ghi `CHANGELOG.md`.
 - **‼ BOT PHẢI `git pull origin main` (hoặc `git fetch && git reset --hard origin/main`) TRƯỚC MỖI ĐỢT LÀM** để có directive/spec mới nhất Claude push. Đã có vụ bot "không thấy file DIRECTIVE_*" vì làm trên bản cũ. Đọc CHANGELOG.md + các `DIRECTIVE_*.md`/`SPEC_*.md` mới nhất trước khi code.
 
-## Chạy nhanh
+## ‼ MÚI GIỜ — GMT+7, KHÔNG BAO GIỜ DÙNG UTC (CEO nhắc nhiều lần, 2026-08-03)
+> CEO: *"tao làm việc theo giờ GMT+7, tao đã nói nhiều rồi, mày phải ghi nhớ lại — hèn chi cái vụ giờ giấc mày cứ lộn hoài, ảnh hưởng đến truy vấn đơn hàng/doanh thu."*
+
+**Toàn bộ ngày/giờ nghiệp vụ chạy theo giờ Việt Nam (GMT+7 · `Asia/Bangkok`).**
+
+1. **CẤM `new Date().toISOString().slice(0,10)`** để lấy "hôm nay". Nó trả ngày **UTC** ⇒ từ **00:00–07:00 sáng giờ VN** ra **NGÀY HÔM QUA**, làm lệch `asOf`, cắt mất doanh thu/chi phí trong ngày, chọn nhầm kỳ đầu tháng. Đây là lỗi đã xảy ra thật (`routes.js` `asOf`, `employeePenaltyPolicy` `currentMonth`).
+2. **Dùng helper sẵn có:** `employeeCost.vnToday()` (server) · `revenueCoverage.bangkokToday()` / `PeriodFilter.currentKyVN()` (web). Cần mới thì bọc `Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', ... })`.
+3. **SQL:** ngày lấy từ cột timestamp phải `AT TIME ZONE 'Asia/Bangkok'` trước khi `::date`.
+4. **Khi báo cáo cho CEO:** luôn ghi **giờ GMT+7**, không ghi UTC. Mốc lịch (20:00 tin nhắn, khoá sổ ngày 8, hạn 08/08…) đều là **giờ VN**.
+5. Viết code mới có dính ngày/tháng ⇒ **mặc định GMT+7**, không hỏi lại.
+
+
 ```bash
 npm run setup   # cài server+web, sinh dữ liệu mẫu ẩn danh
 npm run dev     # API :3873 + web :5173  → mở http://localhost:5173

@@ -873,7 +873,10 @@ async function employeeCostPayload(req, {
     // 00:00 ngày 01 đã coi là ĐÃ CHỐT dù doanh thu còn về tới ngày 8.
     const closed = employeeCost.isPeriodClosed(range.to);
     const monthEnd = `${range.to}-${new Date(Date.UTC(Number(range.to.slice(0, 4)), Number(range.to.slice(5, 7)), 0)).getUTCDate()}`;
-    const today = new Date().toISOString().slice(0, 10);
+    // GIỜ VIỆT NAM (GMT+7), KHÔNG dùng `toISOString()` — nó trả ngày theo UTC nên
+    // từ 00:00 đến 07:00 sáng giờ VN sẽ ra NGÀY HÔM QUA, làm `asOf` lùi một ngày và
+    // cắt mất doanh thu/chi phí phát sinh trong ngày. CEO làm việc theo GMT+7.
+    const today = employeeCost.vnToday();
     const asOf = closed ? monthEnd : (today.startsWith(range.to) ? today : `${range.to}-01`);
     const buildPenaltyForConfig = (config) => {
       if (!empCode) return null;
