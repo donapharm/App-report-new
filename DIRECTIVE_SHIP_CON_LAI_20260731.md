@@ -17,14 +17,15 @@ Cho **CẢ HAI** ô "Ứng lần 1" và "Còn lại":
 - **Fail-closed:** NV thiếu số hoặc **nghi bất thường (ứng > tổng)** ⇒ **KHÔNG cộng vào tổng, KHÔNG coi là 0** — đếm riêng (`contributors`/`missingCount`/`suspectCount`). Còn NV chưa đủ nguồn ⇒ tổng để **`null`/"tạm tính"**, không phải số "hoàn chỉnh" giả.
 
 ## GIỮ NGUYÊN guard (đã có, không gỡ)
-Ứng > tổng ⇒ ô "Còn lại" hiện **"DỪNG TÍNH · NGHI BẤT THƯỜNG"**, KHÔNG hiện số âm. (DN006 sẽ rơi vào đây tới khi Finance xác nhận AF.)
+Ứng > tổng ⇒ ô "Còn lại" hiện **"DỪNG TÍNH · NGHI BẤT THƯỜNG"**, KHÔNG hiện số âm. Guard này **giữ nguyên** (còn dùng cho ca tương lai), dù hiện tại không NV nào rơi vào.
 
 ## NGHIỆM THU (dán số thật)
 - **DN009:** "Còn lại" = **276.598.207đ** (336.334.260 − 59.736.053).
-- **DN006:** "Còn lại" hiện **cảnh báo ứng vượt** (không âm) — vì AF 600.000.007đ đang chờ Finance xác nhận.
+- **DN006:** "Còn lại" = **393.462.331đ** (459.441.306 − 65.978.975). Số dương bình thường, **KHÔNG** còn cảnh báo ứng vượt.
 - **Chọn TẤT CẢ:** cả "Ứng lần 1" và "Còn lại" ra **tổng đội**, kèm "X/Y NV có số"; NV thiếu/nghi không thành 0.
 - Cây build = đầu `origin/main` · PID `app-report` KHÔNG đổi · `formulaVersion` KHÔNG đổi (đây là hiển thị, không đụng công thức).
 - Test: server + web XANH (mức nền cũ), `bonusFormulaVersion` XANH.
 
-## RIÊNG — DN006 (song song, không chặn deploy)
-AF "Sếp đề xuất" = 600.000.007đ (đuôi +7đ nghi gõ nhầm) → CEO đang xác nhận với App Salary/Finance thật hay nhầm. Tới khi có kết luận, ô DN006 giữ cảnh báo là đúng.
+## ✅ ĐÃ KHÉP — DN006 (CEO xác nhận 01/08)
+Lỗi nằm ở **App Salary**, đã xử lý: AF cũ `600.000.007đ` (nghi gõ nhầm) → số ứng đúng là **65.978.975đ** (14,4% tổng — đúng dải bình thường như DN005 10% / DN009 18% / DN008 38%). **Không truy tiếp mục này.**
+Ghi lại để nhớ: guard "ứng > tổng" chính là thứ đã **bắt được** con số sai này trước khi nó trôi vào sổ — giữ guard, đừng gỡ.
