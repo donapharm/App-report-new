@@ -53,6 +53,15 @@ function ceoActor(actor) {
   return value;
 }
 
+// GIỜ VIỆT NAM (GMT+7). `toISOString()` trả ngày UTC nên từ 00:00–07:00 sáng giờ VN
+// máy còn tưởng là hôm qua — đầu tháng sẽ chặn nhầm CEO không cho tạo chính sách kỳ mới.
+// Không tiêm `now` lệch giờ vì `now` còn dùng cho dấu thời gian nhật ký, phải là giờ thật.
+function vnDateOf(date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date);
+}
+
 function monthKey(value) {
   const text = String(value || '').trim();
   let match = text.match(/^(\d{4})-(0[1-9]|1[0-2])(?:-\d{2})?$/);
@@ -239,7 +248,7 @@ function createPolicyStore({ policyFile = POLICY_FILE, auditFile = AUDIT_FILE, s
     const normalizedActor = ceoActor(actor);
     const effectiveFrom = monthKey(payload.effectiveFrom || payload.period);
     const effectiveTo = payload.effectiveTo ? monthKey(payload.effectiveTo) : null;
-    const currentMonth = monthKey(now().toISOString().slice(0, 10));
+    const currentMonth = monthKey(vnDateOf(now()));
     const earliestEditableMonth = currentMonth > MIN_EFFECTIVE_MONTH ? currentMonth : MIN_EFFECTIVE_MONTH;
     if (effectiveFrom < earliestEditableMonth) {
       throw policyError(`Không được tạo phiên bản mới ghi đè kỳ lịch sử trước ${earliestEditableMonth}.`, 'PENALTY_POLICY_CLOSED_PERIOD', 409);

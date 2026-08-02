@@ -1,7 +1,7 @@
 {
-  "version": "v3.7",
-  "sourceHash": "c86117313bb2fa602badb0b1ced066a35d9348cc1f2fd2f37ae97bd32d55fb03",
-  "lockedAt": "2026-07-31",
+  "version": "v3.8",
+  "sourceHash": "25c06edcad3bcd5af8a5e9c1d5ba8fb68e54e4e142f68e13f8044dbdf811530e",
+  "lockedAt": "2026-08-03",
   "lockedBy": "CEO",
   "sources": [
     "src/employeeBonus.js",
