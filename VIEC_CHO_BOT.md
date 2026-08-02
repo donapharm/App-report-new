@@ -4,11 +4,16 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 02/08/2026
+**Cập nhật lần cuối:** 02/08/2026 (sau deploy a1e17aa)
 
 ---
 
-## 🔴 VIỆC 1 — Sửa nốt lỗi "nhãn T08 nhưng số T07" (LÀM NGAY)
+## ✅ VIỆC 1 — XONG 02/08 (deploy `a1e17aa`)
+T08 → `revenue 0, emptyPeriod:true` · T07 → `30.917.892.673đ` · cả 3 màn mặc định T08, không mượn số kỳ khác. **Không làm lại.**
+
+<details><summary>(lưu vết — nội dung cũ)</summary>
+
+### VIỆC 1 — Sửa lỗi "nhãn T08 nhưng số T07"
 
 Bot đã tự phát hiện & báo trung thực: *"Phân tích: bộ chọn T08 nhưng thẻ doanh thu vẫn ghi 07.2026 do backend fallback"*.
 **Đây KHÔNG phải ngoài phạm vi** — là nửa còn lại của cùng một lỗi. Claude đã sửa sẵn.
@@ -29,12 +34,16 @@ git cherry-pick 21867c4
 - `GET /api/overview?ky=07.2026` → **30.917.892.673đ**
 - Mở **Phân tích** chọn T08 → thẻ doanh thu ghi **08.2026 · 0đ**, KHÔNG còn ghi 07.2026
 
+</details>
+
 ---
 
-## 🟠 VIỆC 2 — Dọn drift (đang chặn việc có mốc chết)
+## 🔴 VIỆC 2 — Dọn drift ‼ CEO ĐÃ PHÊ DUYỆT, LÀM NGAY (không cần hỏi lại)
+
+> Bot hỏi *"reconcile các commit production vẫn cần phê duyệt riêng"* — **CEO duyệt rồi, đây là phê duyệt đó.** Cứ làm.
 
 **5 commit đang chạy production nhưng CHƯA lên `origin/main`:**
-`97b87d6` · `5873806` · `640685c` · `6e17949` · `8824e83`
+`97b87d6` · `5873806` · `640685c` · `6e17949` · `8824e83` · `7b3418a` · `a1e17aa`
 ⇒ Máy bot hỏng là **mất trắng** phần code đang chạy thật. Git không khôi phục được.
 
 **Làm:** gộp hết lên `origin/main`, **giữ nguyên** toàn bộ `SPEC_*.md` / `DIRECTIVE_*.md` / `REVIEW_*.md` của Claude (không được rớt).
