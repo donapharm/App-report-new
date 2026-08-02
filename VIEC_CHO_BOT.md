@@ -38,34 +38,48 @@ git cherry-pick 21867c4
 
 ---
 
-## 🔴 VIỆC 0B — MỞ LẠI: CHỨNG MINH 53,5 TRIỆU PHẦN ĐỐI TÁC (gấp nhất)
+## 🔴 VIỆC 0C — ‼ GẤP NHẤT: SOÁT `manual_zalo` TRONG T07 (trước 08/08)
 
-> CEO kiểm App Sale 02/08: *"chỉ có đơn CRM là xác nhận đã ghi doanh số và có ghi ngày giao hàng, giá trị hơn 23tr. Vậy lấy đơn nào vào mà tới hơn 77tr?"*
+**Bot đã chứng minh xong 0B.** 53.556.720đ phần đối tác T08 đến từ **3 đơn nhập tay**:
+`DT-260729-0398` (11.840.400đ) · `DT-260730-0404` (17.904.000đ) · `DT-260730-0410` (23.812.320đ)
+Nguồn **`manual_zalo`** — *"Đối tác báo qua Zalo"*, nhập 07:29 ngày 01/08 bởi **VP018** (thao tác: Nguyễn Thị Kim Ngọc – ADMIN). **Không số HĐ, không ngày HĐ, không dòng đối soát.**
 
-**Claude đã đóng việc này quá sớm — SAI, nay mở lại.**
+**Đối chiếu luật CEO** (*"ngày giao có xác nhận với web + xác nhận xuất hoá đơn + chứng minh số tiền thanh toán"*): **trượt cả 3 tiêu chí** ⇒ chưa đủ điều kiện ghi doanh thu.
 
-```
-App Report T08 = 76.993.720đ
-  ├── CRM MISA  23.437.000đ  ← CEO đã thấy trên App Sale, KHỚP ✅
-  └── ĐỐI TÁC   53.556.720đ  ← CEO KHÔNG thấy đơn đối tác nào được xác nhận giao ❌
-```
+### ‼ VIỆC PHẢI LÀM NGAY — soát T07 (chỉ ĐỌC, không sửa)
+T07 = **30.917.892.673đ** đang dùng để tính **thưởng/phạt cả đội**, chốt sổ **08/08**, gửi tin **09/08**. Nếu T07 cũng chứa `manual_zalo` chưa hoá đơn thì **thưởng đang dựa trên số chưa chắc chắn**.
 
-**Mâu thuẫn:** bot nói 3 đơn đối tác có `resp.delivered_qty > 0`, phản hồi 01/08. CEO nhìn App Sale thì **không có đơn đối tác nào xác nhận giao**. Hai điều này không thể cùng đúng.
+**Dán bảng tổng hợp cho T07 (và T08):**
 
-### CHỈ LÀM ĐÚNG 1 VIỆC — không phân tích, không sửa code
-**Dán ra bảng 3 đơn đối tác đó**, mỗi đơn đủ các cột sau (thiếu cột nào ghi rõ NULL):
+| Kỳ | Nguồn ghi nhận giao | Số đơn | Số dòng | Thành tiền | % tổng kỳ |
+|---|---|---|---|---|---|
+| T07 | đối tác tự xác nhận trên web | | | | |
+| T07 | **`manual_zalo` / nhập tay** | | | | |
+| T07 | có số hoá đơn | | | | |
+| T07 | **KHÔNG có số hoá đơn** | | | | |
 
-| Mã đơn (để CEO tra App Sale) | order_item_id | Sản phẩm | `delivered_qty` | Đơn giá | Thành tiền | `responded_at` | `invoice_no` | `invoice_date` | `effective_date` | `is_test` | `hold_golive` | NV | Đơn vị |
-
-Kèm 3 câu trả lời ngắn:
-1. **`delivered_qty` lấy từ BẢNG NÀO, CỘT NÀO?** (đường dẫn đầy đủ) — có đúng là ô đối tác tự khai khi bấm xác nhận giao không, hay là cột khác (số đặt, số dự kiến, tồn...)?
-2. **Đơn đó trên App Sale hiển thị ở đâu?** Vào màn nào, lọc thế nào thì CEO thấy nó? Nếu App Sale ghi "chưa phản hồi" thì **vì sao App Report lại đọc ra đã giao** — hai bên đọc khác bảng hay khác điều kiện?
-3. **Nếu 3 đơn này KHÔNG phải giao thật** ⇒ App Report đang **thổi phồng 53,5 triệu** doanh thu T08 ⇒ báo ngay, coi như sự cố tiền.
+Kèm:
+1. **Ai được phép nhập tay?** Danh sách tài khoản đã nhập `manual_zalo` trong T07 + số tiền mỗi người.
+2. **Bao nhiêu tiền trong T07 chưa có hoá đơn?** Con số tuyệt đối + % của 30,9 tỷ.
+3. **Nếu loại hết đơn chưa hoá đơn, T07 còn bao nhiêu?** (chỉ mô phỏng, **KHÔNG ghi**)
+4. Có NV nào **đạt/trượt mốc thưởng** chỉ nhờ phần `manual_zalo` không? Liệt kê mã NV + chênh lệch.
 
 ### CẤM
-- **KHÔNG** sửa code, **KHÔNG** đổi quy kỳ, **KHÔNG** chỉnh số. Chỉ **DÁN BẰNG CHỨNG**.
-- **KHÔNG** kết luận "đang đúng" nếu chưa chỉ được đơn đó nằm ở đâu trên App Sale.
-- Nếu tra ra `delivered_qty` **không phải** ô xác nhận giao thật ⇒ đó là **lỗi nguồn số**, phải báo, không được im.
+- **KHÔNG** sửa code, **KHÔNG** đổi số T07/T08, **KHÔNG** xoá đơn nào. Chỉ **ĐỌC và BÁO**.
+- **KHÔNG** tự quyết có tính `manual_zalo` hay không — **CEO quyết** sau khi xem số.
+- Nếu chưa soát xong ⇒ **KHÔNG bật cờ tin thưởng 09/08.**
+
+---
+
+<details><summary>(lưu vết — VIỆC 0B đã chứng minh xong)</summary>
+
+## VIỆC 0B — ĐÃ CHỨNG MINH XONG (bot, 02/08)
+App Report T08 = 76.993.720đ = MISA 23.437.000đ + đối tác 53.556.720đ (3 đơn `manual_zalo` nêu trên).
+App Sale mặc định lọc **ngày đặt** nên 3 đơn (tạo 29–30/07) không hiện ở T08 — bản ghi phản hồi ngày 01/08 vẫn tồn tại.
+Cách CEO tự xem: *Đặt hàng → Đối chiếu ĐT → Phản hồi đủ/Tất cả → tìm mã đơn → Mở đối chiếu* (hiện "nhập tay – Zalo").
+T07 không đổi: 30.917.892.673đ.
+
+</details>
 
 ---
 
