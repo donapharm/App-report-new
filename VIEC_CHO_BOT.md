@@ -122,6 +122,28 @@ Branch review → Claude soi → merge → deploy từ `origin/main`. **Không �
 
 ---
 
+## 🟠 VIỆC 2C — Nốt 1 chỗ lệch múi giờ trong file KHOÁ công thức
+
+Claude đã rà + sửa toàn bộ múi giờ GMT+7 (commit `037c4e5`, `abca32b`) — **trừ 1 chỗ** vì nó nằm trong nhóm file khoá vân tay:
+
+`server/src/employeePenaltyPolicy.js:242`
+```js
+const currentMonth = monthKey(now().toISOString().slice(0, 10));   // ← giờ UTC
+```
+Phải đổi sang giờ VN (`Asia/Bangkok`, dùng `Intl.DateTimeFormat('en-CA', …)`).
+
+**Ảnh hưởng:** rạng sáng đầu tháng (0h–7h giờ VN), máy còn tưởng là tháng trước ⇒ **chặn nhầm CEO không cho tạo chính sách phạt kỳ mới**.
+
+**Vì sao Claude không tự sửa:** file này trong `FORMULA_SOURCES`, sửa là test khoá vân tay đỏ và **phải nâng `FORMULA_VERSION`**. Nhưng đây **chỉ là lỗi giờ, KHÔNG đổi một đồng tiền nào** — nâng version thưởng cho việc này là sai bản chất.
+
+**Cách làm đúng (bot chọn 1, báo CEO biết):**
+- **Cách A (khuyến nghị):** đưa hàm lấy "tháng hiện tại" ra **file riêng ngoài `FORMULA_SOURCES`** (vd `vnTime.js`), `employeePenaltyPolicy` gọi vào. Vân tay không đổi, không phải nâng version.
+- **Cách B:** sửa tại chỗ + nâng `FORMULA_VERSION` v3.7 → v3.8 + cập nhật `bonus_formula_lock.json` + ghi CHANGELOG rõ *"chỉ sửa múi giờ, không đổi công thức tiền"*.
+
+**Cổng chặn:** sau khi sửa, số tiền thưởng/phạt của mọi NV **KHÔNG được đổi**. Đổi một đồng ⇒ DỪNG, báo.
+
+---
+
 ## 🔴 VIỆC 3 — LÀM NGAY: deploy + nghiệm thu VP018 + DN022 (mốc chết 08/08)
 
 > ### ✅ CEO ĐÃ DUYỆT DEPLOY — không cần hỏi lại
