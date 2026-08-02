@@ -38,157 +38,24 @@ git cherry-pick 21867c4
 
 ---
 
-## ⏸ VIỆC 0B — ĐANG TREO, CHỜ NGƯỜI NGOÀI (bot KHÔNG làm gì thêm)
+## ✅ VIỆC 0B — ĐÓNG. APP REPORT ĐANG ĐÚNG, KHÔNG SỬA GÌ (CEO chốt 02/08)
 
-Bot đã dừng đúng, kết luận đúng. **Không code, không chỉnh số** cho tới khi có 2 thứ sau — cả hai đều do người ngoài cung cấp:
-1. **Ngày GIAO THẬT của 3 đơn WEB** (tạo 29–30/07, phản hồi 01/08) — vận hành/App Sale trả lời.
-2. **App Sale thêm ô "Ngày thực giao"** (spec mục 2.1) — đây là việc chặn gốc.
+> CEO: *"tôi không quan tâm ngày nào tạo đơn, tôi chỉ yêu cầu ghi nhận doanh thu **đúng ngày giao hàng có xác nhận với web và xác nhận xuất hoá đơn**. Cứ làm y chang T07.2026."*
 
-Có (1) → biết 3 đơn thuộc T07 hay T08, chỉnh trước 08/08. Có (2) → hai app tự khớp vĩnh viễn.
-**Trong lúc chờ: làm VIỆC 3 rồi VIỆC 4 bên dưới.**
+**Luật CEO = đúng thứ tự máy đang chạy:**
+```
+ngày quy kỳ = ngày HOÁ ĐƠN → ngày XÁC NHẬN trên web → (dự phòng)
+```
+Ngày **tạo đơn** không tham gia — đúng ý CEO, và đúng bản vá 29/07.
 
-<details><summary>(chi tiết phân tích + lý do chặn)</summary>
+**3 đơn WEB** (tạo 29–30/07, **xác nhận web 01/08**) → ghi vào **T08**. **ĐÚNG.** Không phải lỗi.
+App Sale hiện T08 = 0 vì **màn hình bên App Sale lọc theo ngày TẠO đơn** — hai màn trả lời hai câu khác nhau. Muốn khớp thì sửa **màn App Sale**, KHÔNG sửa App Report.
 
-### DỪNG: KHÔNG ĐƯỢC ĐỔI SANG "NGÀY TẠO ĐƠN" (Claude chặn 02/08)
-
-**Bot điều tra ĐÚNG, nhưng hướng sửa SAI.** Đọc kỹ trước khi làm bất cứ gì.
-
-### Bot đã tìm ra (ghi nhận, số liệu tốt)
-App Report T08 = 76.993.720đ = MISA official **23.437.000đ** + MISA pending **0đ** + WEB **53.556.720đ**.
-3 đơn WEB **tạo 29–30/07, phản hồi 01/08** → App Report xếp vào **T08**; App Sale (lọc theo **ngày tạo đơn**) xếp vào T07 nên T08 hiện 0.
-Nghi vấn `monthly.delivered_qty` của Claude **SAI** — cả 3 dòng dùng `resp.delivered_qty` thật, `monthly` đều NULL. ✅ bot kiểm đúng.
-
-### ‼ VÌ SAO KHÔNG ĐƯỢC ĐỔI — `SPEC_REVENUE_DELIVERY_PERIOD.md`, CEO chốt 29/07
-Spec đó ra đời vì đúng vụ **mất 382,6 triệu**, và lệnh của CEO là:
-
-> **Mục 3:** *"**Bỏ hẳn** hai dòng lọc theo `o.created_at`. Quy kỳ **chỉ theo MỘT mốc ngày duy nhất**."*
-> **Mục 2.2:** `ngày quy kỳ = NGÀY THỰC GIAO → ngày hoá đơn → ngày phản hồi`
-> **Mục 3:** *"ngay cả khi App Sale chưa kịp thêm ô ngày giao, bỏ bộ lọc kép vẫn khiến tiền không còn biến mất — **cùng lắm là rơi nhầm tháng, còn hơn mất hẳn**."*
-
-⇒ **Lọc theo `created_at` chính là điều kiện (1) mà CEO đã ra lệnh XOÁ.** Đưa nó trở lại = **phá bản vá 29/07**, rủi ro mất doanh thu lần nữa.
-⇒ Hiện tượng "3 đơn rơi sang T08" **chính là cái đánh đổi CEO đã chấp nhận** ngày 29/07, không phải lỗi mới.
-
-### GỐC THẬT: App Sale CHƯA có ô "NGÀY THỰC GIAO"
-Spec mục **2.1** giao **App Sale** thêm ô *"Ngày thực giao"* (bắt buộc, cho chọn lùi, có nhật ký). **Chưa có ô đó nên App Report buộc phải đoán bằng ngày phản hồi** — đúng thứ tự dự phòng CEO đã duyệt.
-**Có ô đó thì hai app tự khớp**, không phải sửa công thức App Report.
-
-### VIỆC PHẢI LÀM (thay cho việc sửa công thức)
-1. **KHÔNG** đổi quy kỳ sang `created_at`. **KHÔNG** commit bản sửa VIỆC 0B theo hướng cũ.
-2. **Hỏi App Sale/vận hành: 3 đơn đó GIAO THẬT ngày nào?** (tạo 29–30/07, phản hồi 01/08)
-   - Giao **trong T07** ⇒ đúng ra thuộc **T07**. **T07 CHƯA khoá sổ** (khoá hết ngày 08/08) nên **được phép chỉnh** — chỉnh xong trước 08/08.
-   - Giao **01/08** ⇒ App Report **đang đúng**, App Sale mới là bên xếp nhầm kỳ.
-3. **Thúc App Sale làm mục 2.1** — thêm ô "Ngày thực giao". Đây là việc chặn gốc, không làm thì tháng nào cũng lệch.
-4. Trên màn App Report, ghi nhãn rõ: **"Quy kỳ theo ngày thực giao (tạm dùng ngày phản hồi khi chưa có)"** để không ai hiểu nhầm khi đối chiếu với App Sale.
-
-</details>
-
-<details><summary>(Claude tự sửa chỉ thị sai trước đó)</summary>
-
-### Claude sửa lại chỉ thị trước của mình
-Chỉ thị cũ *"T07 đã chốt sổ — cấm đổi"* là **SAI**: theo quy tắc khoá sổ, **T07 khoá hết ngày 08/08**, hôm nay 02/08 nên **vẫn mở**. Và **chưa gửi tin thưởng nào** (2 cờ đang tắt tới 09/08).
-⇒ T07 **được phép chỉnh cho đúng** nếu tìm ra ngày giao thật, miễn **chốt xong trước 08/08**. Nhưng **không** chỉnh bằng cách đổi công thức sang `created_at`.
-
-</details>
-
----
-
-<details><summary>(lưu vết — phân tích ban đầu VIỆC 0B)</summary>
-
-## VIỆC 0B — vênh số App Sale ↔ App Report (T08)
-
-**CEO đối chiếu 02/08 21:44:**
-- **App Report** kỳ 08.2026: **76.993.720đ** (trước VAT 73.327.352đ) · **7 dòng** · 4 ĐV · 6 SP · 2 NV · *"Dữ liệu tới 01/08/26 · 1/31 ngày"*
-- **App Sale** (CRM MISA — Đối chiếu doanh thu), lọc **2026-08-01 → 2026-08-02**, snapshot 18:01 02/08:
-  - TỔNG ĐẶT **183,43tr** · **ĐÃ THỰC HIỆN 23,44tr** (23.437.000đ) · CHƯA THỰC HIỆN 160tr
-  - CRM tổng đặt 45,16tr · CRM đã xuất HĐ **23,44tr** · CRM chưa xuất HĐ 21,73tr
-  - Đối tác tổng đặt (WEB) 138,27tr · **Đối tác ĐÃ XUẤT/GIAO 0đ (0 đơn)** · Đối tác chưa phản hồi 138,27tr
-
-**Claude đã soi `materialize_july_revenue.js` — App Report cộng:**
-1. CRM MISA: `revenue_bucket IN ('official','pending')`, amount `invoice_export_amount` → **CÓ CẢ `pending`**
-2. WEB đối tác: `delivered_qty > 0`, `delivered_qty × price`, **đếm cả dòng `HOLD_GOLIVE`** (code ghi: *"HOLD_GOLIVE là cờ kỹ thuật soft-launch/quota audit"*)
-
-**Mâu thuẫn nặng nhất:** App Sale nói đối tác giao **0 đơn / 0đ**; CRM cả 2 ngày mới đặt 45,16tr — **vẫn nhỏ hơn** 76,99tr mà App Report báo cho **1 ngày**. ⇒ nghi App Report **báo cao hơn thực giao** (ảnh hưởng target + thưởng).
-
-### ‼ CEO ĐÃ CHỐT (02/08): PHƯƠNG ÁN (A) — CHỈ TÍNH DOANH THU **ĐÃ THỰC HIỆN**
-> CEO: *"chỉ tính doanh thu thực tại App Sale để đẩy dữ liệu qua. T07.2026 đã tính đúng rồi, T08.2026 lại vẽ ra kiểu khác là sao."*
-
-**Nguyên tắc bất di bất dịch từ nay:** App Report **BÁM ĐÚNG con số "ĐÃ THỰC HIỆN" của App Sale** — *CRM đã xuất HĐ + Đối tác đã xuất/giao*. **Tháng nào cũng một công thức**, không được đổi theo tháng, không tự nới định nghĩa.
-
-### Claude đã soi code — QUY TẮC KHÔNG HỀ ĐỔI GIỮA T07 VÀ T08
-- **Không có** dòng code nào khoá riêng tháng 7. Kỳ lấy theo biến; tên file `materialize_july_revenue.js` chỉ là tên cũ.
-- Ghi chú "loại đơn `DT-260630-0115`" **chỉ là text trong báo cáo markdown**, KHÔNG phải logic.
-⇒ Chênh lệch **không do đổi công thức**, mà do **định nghĩa phần ĐỐI TÁC lệch với App Sale**.
-
-### CHÊNH NẰM Ở PHẦN ĐỐI TÁC (WEB) — không phải MISA
-| Phần | App Sale | App Report | |
-|---|---|---|---|
-| CRM MISA | Thành tiền xuất HĐ **23,44tr** (Đã ghi + Đề nghị ghi) | `invoice_export_amount`, bucket official+pending | ✅ cùng định nghĩa |
-| Đối tác WEB | **Đã xuất/giao 0đ · 0 đơn** · chưa phản hồi 138,27tr | `delivered_qty > 0`, **tính cả `HOLD_GOLIVE`** | ❌ **LỆCH** |
-
-App Report 76,99tr − MISA ~23tr ⇒ **~54tr đến từ phần đối tác**, trong khi App Sale nói đối tác **chưa giao đơn nào**. Mâu thuẫn trực tiếp: App Sale ghi **chưa phản hồi 100%**, App Report lại tìm ra dòng có `delivered_qty > 0`.
-**Nghi điểm cụ thể:** nhánh fallback `COALESCE(resp.delivered_qty, resp.qty_delivered, monthly.delivered_qty, 0)` — có thể đang lấy `delivered_qty` từ bảng `monthly` (dữ liệu tổng/kỳ khác) chứ không phải phản hồi thật của đối tác trong kỳ. **Soi kỹ chỗ này.**
-
-### VIỆC PHẢI LÀM — dán bằng chứng, không giải thích suông
-1. **Dán CẢ 7 DÒNG** trong slot T08 của App Report. Mỗi dòng: `source` (MISA/WEB) · `revenue_bucket` · `revenue_status` · mã đơn / `order_item_id` · `revenue_date` · số tiền · `emp_code` · đơn vị.
-2. **Cộng nhóm:** tổng theo MISA-official / MISA-pending / WEB-delivered / WEB-HOLD_GOLIVE. Bốn số này cộng lại phải = **76.993.720đ**.
-3. **Đối chiếu từng nhóm với App Sale:**
-   - MISA-official có khớp **23,44tr** (CRM đã xuất HĐ) không?
-   - MISA-pending có nằm trong **21,73tr** (CRM chưa xuất HĐ) không?
-   - WEB-delivered: App Sale ghi **0 đơn / 0đ** — vậy App Report lấy đơn nào? Dán mã đơn + `delivered_qty` + `responded_at`.
-4. **CEO ĐÃ CHỐT (A)** — không hỏi lại. Sửa cho App Report **khớp "ĐÃ THỰC HIỆN" của App Sale**: chỉ CRM đã xuất HĐ + đối tác đã thực giao. **Trước khi sửa phải báo: T07 có bị đổi số không, đổi bao nhiêu.**
-   - ‼ **T07 ĐÃ CHỐT SỔ — KHÔNG ĐƯỢC ĐỔI SỐ T07** (đã dùng để tính thưởng/phạt). Nếu công thức mới làm T07 lệch khỏi 30.917.892.673đ thì **DỪNG, báo CEO ngay**, không tự áp.
-   - Áp công thức thống nhất từ **T08 trở đi**; T07 giữ nguyên số đã chốt.
-5. **Kiểm kỳ:** App Report ghi *"dữ liệu tới 01/08"* trong khi App Sale lọc tới 02/08 — 02/08 có đơn không, vì sao chưa vào App Report?
-
-**Ràng buộc:** chỉ ĐỌC App Sale. **KHÔNG tự đổi định nghĩa doanh thu** — báo số, chờ CEO chốt.
-
-</details>
-
----
-
-## 🔴 VIỆC 0 — ‼ GẤP NHẤT: vì sao T08 chưa kéo doanh thu từ App Sale?
-
-**CEO hỏi 02/08:** T08 hiện 0đ, trong khi T07 đã kéo được từ App Sale (CRM_MISA 20,26 tỷ + APP_WEB_PARTNER 10,65 tỷ = 30,92 tỷ).
-
-**Đã biết:** `server/scripts/materialize_july_revenue.js` kéo từ **2 nguồn App Sale**, **KHÔNG khoá cứng tháng 7** — kỳ lấy theo `REVENUE_REFRESH_KY` → `MATERIALIZE_KY` → `defaultKy()` (tự ra tháng lịch VN = **08.2026**). Vậy đường nối CÓ sẵn, chỉ là chưa chạy cho T08.
-
-**Trả lời 3 câu, dán bằng chứng:**
-1. **Lịch tự chạy có bật không?** Báo cáo deploy hôm nay ghi *"Scheduler/refresh/send đều tắt"* — materialize doanh thu có nằm trong nhóm bị tắt không? Trước đây T07 được refresh bằng cách nào (cron? tay? mốc giờ nào)?
-2. **Chạy thử cho T08** (chế độ an toàn, đọc App Sale read-only): `REVENUE_REFRESH_KY=08.2026 node server/scripts/materialize_july_revenue.js`. Kết quả ra sao — có đơn nào không, hay App Sale cũng đang rỗng vì 01/08 là thứ Bảy và 02/08 là Chủ nhật?
-3. **Cần gì để T08 tự cập nhật hằng ngày như T07?** Nếu chỉ là bật lại lịch thì nêu rõ tên job + mốc giờ, xin CEO duyệt bật.
-
-**Ràng buộc:** script chỉ ĐỌC App Sale, chỉ GHI slot của App Report — không đụng dữ liệu App Sale.
-
-### ‼ CEO ĐÃ KIỂM TRỰC TIẾP APP SALE (02/08) — CẤM TRẢ LỜI "CHƯA CÓ ĐƠN"
-> CEO: *"tao đã xem bên App Sale rồi, thứ 7 ngày hôm qua **đã có phát sinh đơn hàng và đã có phát sinh số tiền** rồi nhé."*
-
-⇒ **Dữ liệu T08 CÓ THẬT bên App Sale.** App Report hiện **0đ là SAI — là MẤT SỐ**, không phải "tháng mới chưa bán".
-Cùng loại sự cố với vụ mất số chi phí 01/08: **nguồn có số, App Report không lấy được.**
-
-- Câu trả lời "App Sale cũng rỗng" **KHÔNG được chấp nhận**, trừ khi dán truy vấn thẳng App Sale cho ngày **01/08/2026** chứng minh 0 đơn (mà CEO đã thấy là CÓ).
-- Phải chỉ rõ **đứt ở khâu nào**: chưa chạy materializer? lịch tắt? chạy mà lỗi? guard chặn? ghi slot hỏng?
-- Chạy `REVENUE_REFRESH_KY=08.2026 node server/scripts/materialize_july_revenue.js` → **dán nguyên văn log**, kể cả log lỗi.
-- Nếu đọc được đơn 01/08 mà slot không lên app ⇒ soi `revenueMaterializeGuard.js` / `revenuePayloadIdentity.js` xem có bị chặn.
-
-**Nghiệm thu:** app kỳ **08.2026** phải ra **đúng doanh thu các ngày đã bán của tháng 8** (khớp App Sale), KHÔNG phải 0. Nếu T08 thật sự chưa có đơn thì **báo đúng là chưa có**, KHÔNG tự chế số.
-
----
-
-## ✅ VIỆC 2 — XONG 02/08: drift đã dọn
-`origin/main` = `026db87` đã gộp đủ commit production (`640685c`,`6e17949`,`7b3418a`,`8824e83`,`a1e17aa`) + fix tháng của Claude. Docs/spec còn nguyên. **Từ nay CHỈ deploy từ `origin/main`.**
-
-<details><summary>(lưu vết)</summary>
-
-> Bot hỏi *"reconcile các commit production vẫn cần phê duyệt riêng"* — **CEO duyệt rồi, đây là phê duyệt đó.** Cứ làm.
-
-**5 commit đang chạy production nhưng CHƯA lên `origin/main`:**
-`97b87d6` · `5873806` · `640685c` · `6e17949` · `8824e83` · `7b3418a` · `a1e17aa`
-⇒ Máy bot hỏng là **mất trắng** phần code đang chạy thật. Git không khôi phục được.
-
-**Làm:** gộp hết lên `origin/main`, **giữ nguyên** toàn bộ `SPEC_*.md` / `DIRECTIVE_*.md` / `REVIEW_*.md` của Claude (không được rớt).
-**Cổng chặn:** báo **2 SHA trùng** — `git rev-parse origin/main` == SHA đang chạy production. Kèm: test nền XANH, `formulaVersion` không đổi.
-**Từ đây trở đi: CHỈ deploy từ `origin/main`**, không deploy bản local nữa.
-</details>
+### ⛔ KẾT LUẬN — CẤM ĐỘNG VÀO
+- **KHÔNG** sửa `materialize_july_revenue.js`. **KHÔNG** đổi quy kỳ. **KHÔNG** chỉnh số T07/T08.
+- **KHÔNG** mở lại điều tra 0B. Việc này ĐÓNG.
+- T08 sẽ tự lên số khi đơn được **xác nhận trên web / xuất hoá đơn** — cứ để chạy.
+- (Tuỳ chọn, không chặn gì: nếu sau này App Sale thêm ô "Ngày thực giao" cho đối tác khai lùi ngày, số sẽ chính xác tuyệt đối thay vì lấy ngày xác nhận. Không có cũng không sao.)
 
 ---
 
