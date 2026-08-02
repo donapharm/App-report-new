@@ -4,7 +4,7 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 02/08/2026 (sau deploy a1e17aa)
+**Cập nhật lần cuối:** 02/08/2026 — sau khi bot dọn drift xong (`origin/main` = `026db87`)
 
 ---
 
@@ -49,11 +49,27 @@ git cherry-pick 21867c4
 2. **Chạy thử cho T08** (chế độ an toàn, đọc App Sale read-only): `REVENUE_REFRESH_KY=08.2026 node server/scripts/materialize_july_revenue.js`. Kết quả ra sao — có đơn nào không, hay App Sale cũng đang rỗng vì 01/08 là thứ Bảy và 02/08 là Chủ nhật?
 3. **Cần gì để T08 tự cập nhật hằng ngày như T07?** Nếu chỉ là bật lại lịch thì nêu rõ tên job + mốc giờ, xin CEO duyệt bật.
 
-**Ràng buộc:** script chỉ ĐỌC App Sale, chỉ GHI slot của App Report — không đụng dữ liệu App Sale. Nếu T08 thật sự chưa có đơn thì **báo đúng là chưa có**, KHÔNG tự chế số.
+**Ràng buộc:** script chỉ ĐỌC App Sale, chỉ GHI slot của App Report — không đụng dữ liệu App Sale.
+
+### ‼ CEO ĐÃ KIỂM TRỰC TIẾP APP SALE (02/08) — CẤM TRẢ LỜI "CHƯA CÓ ĐƠN"
+> CEO: *"tao đã xem bên App Sale rồi, thứ 7 ngày hôm qua **đã có phát sinh đơn hàng và đã có phát sinh số tiền** rồi nhé."*
+
+⇒ **Dữ liệu T08 CÓ THẬT bên App Sale.** App Report hiện **0đ là SAI — là MẤT SỐ**, không phải "tháng mới chưa bán".
+Cùng loại sự cố với vụ mất số chi phí 01/08: **nguồn có số, App Report không lấy được.**
+
+- Câu trả lời "App Sale cũng rỗng" **KHÔNG được chấp nhận**, trừ khi dán truy vấn thẳng App Sale cho ngày **01/08/2026** chứng minh 0 đơn (mà CEO đã thấy là CÓ).
+- Phải chỉ rõ **đứt ở khâu nào**: chưa chạy materializer? lịch tắt? chạy mà lỗi? guard chặn? ghi slot hỏng?
+- Chạy `REVENUE_REFRESH_KY=08.2026 node server/scripts/materialize_july_revenue.js` → **dán nguyên văn log**, kể cả log lỗi.
+- Nếu đọc được đơn 01/08 mà slot không lên app ⇒ soi `revenueMaterializeGuard.js` / `revenuePayloadIdentity.js` xem có bị chặn.
+
+**Nghiệm thu:** app kỳ **08.2026** phải ra **đúng doanh thu các ngày đã bán của tháng 8** (khớp App Sale), KHÔNG phải 0. Nếu T08 thật sự chưa có đơn thì **báo đúng là chưa có**, KHÔNG tự chế số.
 
 ---
 
-## 🔴 VIỆC 2 — Dọn drift ‼ CEO ĐÃ PHÊ DUYỆT, LÀM NGAY (không cần hỏi lại)
+## ✅ VIỆC 2 — XONG 02/08: drift đã dọn
+`origin/main` = `026db87` đã gộp đủ commit production (`640685c`,`6e17949`,`7b3418a`,`8824e83`,`a1e17aa`) + fix tháng của Claude. Docs/spec còn nguyên. **Từ nay CHỈ deploy từ `origin/main`.**
+
+<details><summary>(lưu vết)</summary>
 
 > Bot hỏi *"reconcile các commit production vẫn cần phê duyệt riêng"* — **CEO duyệt rồi, đây là phê duyệt đó.** Cứ làm.
 
@@ -64,10 +80,15 @@ git cherry-pick 21867c4
 **Làm:** gộp hết lên `origin/main`, **giữ nguyên** toàn bộ `SPEC_*.md` / `DIRECTIVE_*.md` / `REVIEW_*.md` của Claude (không được rớt).
 **Cổng chặn:** báo **2 SHA trùng** — `git rev-parse origin/main` == SHA đang chạy production. Kèm: test nền XANH, `formulaVersion` không đổi.
 **Từ đây trở đi: CHỈ deploy từ `origin/main`**, không deploy bản local nữa.
+</details>
 
 ---
 
-## 🔴 VIỆC 3 — VP018 + DN022 (‼ MỐC CHẾT 08/08)
+## 🟠 VIỆC 3 — VP018 + DN022: ĐÃ MERGE, còn NGHIỆM THU trên production
+Đã có trên `origin/main`: `employeeIncentivePolicy.js` + `revenueAttributionGuard.js`; `formulaVersion` = **v3.7**, lock **v3.7** khớp. Test nền: **618 pass / 6 fail** (6 lỗi PDF do thiếu `pdfinfo`, không phải lỗi code).
+**Còn phải làm:** deploy từ `origin/main` rồi dán nghiệm thu bên dưới. Chưa nghiệm thu xong thì **chưa được bật cờ tin thưởng 09/08**.
+
+<details><summary>(chi tiết)</summary>
 
 Branch `fix/dn022-separate-formula-20260731` — CEO đã duyệt từ 31/07, **Claude đã review PASS** (`REVIEW_VP018_DN022_20260801.md`). **Cổng review ĐÃ MỞ, không phải chờ Claude nữa.**
 
@@ -79,7 +100,9 @@ Branch `fix/dn022-separate-formula-20260731` — CEO đã duyệt từ 31/07, **
 **Vì sao gấp:** ngày **09/08** bật 2 cờ tin thưởng. Chưa merge kịp thì **VP018** (telesaler, không phải Sale) và **DN022** (chờ công thức riêng) sẽ nhận **TIN TIỀN SAI** — gửi rồi không rút lại được.
 **Nếu tới 08/08 chưa xong ⇒ KHÔNG được bật `EMP_COST_NOTIFY`/`BONUS_NOTIFY`.**
 
-**Nghiệm thu sau merge:** DN022 không có thưởng P1/P2 & không phạt target/C45 nhưng **vẫn có Điểm/Xu** · VP018 không được phân bổ doanh thu, **doanh thu toàn công ty KHÔNG đổi** · `formulaVersion` = **v3.7** · VP018 **vẫn nhận** cảnh báo vận hành (đồng bộ, đơn >50tr).
+</details>
+
+**Nghiệm thu bắt buộc trên production:** DN022 không có thưởng P1/P2 & không phạt target/C45 nhưng **vẫn có Điểm/Xu** · VP018 không được phân bổ doanh thu, **doanh thu toàn công ty KHÔNG đổi** · API trả `formulaVersion` = **v3.7** · VP018 **vẫn nhận** cảnh báo vận hành (đồng bộ, đơn >50tr).
 
 ---
 
