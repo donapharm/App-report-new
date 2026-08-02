@@ -38,6 +38,21 @@ git cherry-pick 21867c4
 
 ---
 
+## 🔴 VIỆC 0 — ‼ GẤP NHẤT: vì sao T08 chưa kéo doanh thu từ App Sale?
+
+**CEO hỏi 02/08:** T08 hiện 0đ, trong khi T07 đã kéo được từ App Sale (CRM_MISA 20,26 tỷ + APP_WEB_PARTNER 10,65 tỷ = 30,92 tỷ).
+
+**Đã biết:** `server/scripts/materialize_july_revenue.js` kéo từ **2 nguồn App Sale**, **KHÔNG khoá cứng tháng 7** — kỳ lấy theo `REVENUE_REFRESH_KY` → `MATERIALIZE_KY` → `defaultKy()` (tự ra tháng lịch VN = **08.2026**). Vậy đường nối CÓ sẵn, chỉ là chưa chạy cho T08.
+
+**Trả lời 3 câu, dán bằng chứng:**
+1. **Lịch tự chạy có bật không?** Báo cáo deploy hôm nay ghi *"Scheduler/refresh/send đều tắt"* — materialize doanh thu có nằm trong nhóm bị tắt không? Trước đây T07 được refresh bằng cách nào (cron? tay? mốc giờ nào)?
+2. **Chạy thử cho T08** (chế độ an toàn, đọc App Sale read-only): `REVENUE_REFRESH_KY=08.2026 node server/scripts/materialize_july_revenue.js`. Kết quả ra sao — có đơn nào không, hay App Sale cũng đang rỗng vì 01/08 là thứ Bảy và 02/08 là Chủ nhật?
+3. **Cần gì để T08 tự cập nhật hằng ngày như T07?** Nếu chỉ là bật lại lịch thì nêu rõ tên job + mốc giờ, xin CEO duyệt bật.
+
+**Ràng buộc:** script chỉ ĐỌC App Sale, chỉ GHI slot của App Report — không đụng dữ liệu App Sale. Nếu T08 thật sự chưa có đơn thì **báo đúng là chưa có**, KHÔNG tự chế số.
+
+---
+
 ## 🔴 VIỆC 2 — Dọn drift ‼ CEO ĐÃ PHÊ DUYỆT, LÀM NGAY (không cần hỏi lại)
 
 > Bot hỏi *"reconcile các commit production vẫn cần phê duyệt riêng"* — **CEO duyệt rồi, đây là phê duyệt đó.** Cứ làm.
