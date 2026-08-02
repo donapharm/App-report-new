@@ -276,21 +276,24 @@ function transformPeriod(period = {}, options = {}) {
   const query = String(options.q || '').slice(0, 200);
   const filtered = sourceRows.filter((row) => rowMatchesView(row, columns, { ...options, q: query }));
   const sorted = sortRows(filtered, options.sortKey, options.sortDir);
-  const numbered = sorted.map((row, index) => ({ ...row, stt: index + 1 }));
   const pageSize = parsePageSize(options.pageSize);
-  const pageCount = Math.max(1, Math.ceil(numbered.length / pageSize));
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
   const page = Math.min(parsePage(options.page), pageCount);
-  const rows = options.paginate === false ? numbered : numbered.slice((page - 1) * pageSize, page * pageSize);
-  const summary = summarizeRows(numbered, columns, period.summary);
+  const pageStart = options.paginate === false ? 0 : (page - 1) * pageSize;
+  const selectedRows = options.paginate === false ? sorted : sorted.slice(pageStart, pageStart + pageSize);
+  // Only response rows need STT. The previous code cloned every filtered row
+  // before slicing a 20-row page, creating a large avoidable peak for ALL.
+  const rows = selectedRows.map((row, index) => ({ ...row, stt: pageStart + index + 1 }));
+  const summary = summarizeRows(sorted, columns, period.summary);
   return {
     ...period,
     columns,
     rows,
     summary,
-    daily: filteredDaily(period.daily, numbered, columns),
-    search: { query, filteredRows: numbered.length, totalRows: sourceRows.length },
-    pagination: { page, pageSize, pageCount, filteredRows: numbered.length, totalRows: sourceRows.length },
-    employeeSubtotals: options.allEmployees ? employeeSubtotals(numbered, columns, period.employeePenalties) : [],
+    daily: filteredDaily(period.daily, sorted, columns),
+    search: { query, filteredRows: sorted.length, totalRows: sourceRows.length },
+    pagination: { page, pageSize, pageCount, filteredRows: sorted.length, totalRows: sourceRows.length },
+    employeeSubtotals: options.allEmployees ? employeeSubtotals(sorted, columns, period.employeePenalties) : [],
   };
 }
 
@@ -337,7 +340,7 @@ function transformReport(report = {}, options = {}) {
   };
 }
 
-function mergeEmployeeReports(reports = [], roster = []) {
+function mergeEmployeeReports(reports = [], roster = [], { consumeRows = false } = {}) {
   const employeeNames = new Map(roster.map((employee) => [String(employee.emp_code || '').toUpperCase(), String(employee.name || employee.emp_code || '')]));
   const source = reports.filter(Boolean);
   const periodKeys = [...new Set(source.flatMap((report) => (report.periods || []).map((period) => period.period)))].sort();
@@ -353,7 +356,14 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const rows = blocks.flatMap(({ report, period }) => {
       const employeeCode = String(report.empCode || '').toUpperCase();
       const employeeName = employeeNames.get(employeeCode) || employeeCode;
-      return (period.rows || []).map((row) => ({ ...row, employeeCode, employeeName }));
+      return (period.rows || []).map((row) => {
+        if (!consumeRows) return { ...row, employeeCode, employeeName };
+        // ALL route owns these freshly-built reports, so enriching in place is
+        // safe there and prevents a second full-company row allocation.
+        row.employeeCode = employeeCode;
+        row.employeeName = employeeName;
+        return row;
+      });
     });
     // ‼ Tách 2 nguyên nhân "chưa khớp" — trước đây gộp chung nên coverage ALL
     // (80,3%) đá nhau với tab "Mặt hàng thiếu %" (98,7%):

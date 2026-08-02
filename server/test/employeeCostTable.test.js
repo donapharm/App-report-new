@@ -133,6 +133,22 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   assert.equal(byDate.summary.periodTotal, 20);
 });
 
+test('ALL consumeRows mode reuses owned rows while default merge stays non-mutating', () => {
+  const roster = [{ emp_code: 'DN001', name: 'Anh Một' }];
+  const defaultInput = report([{ ...rows[1] }]);
+  const defaultRow = defaultInput.periods[0].rows[0];
+  const defaultMerged = table.mergeEmployeeReports([defaultInput], roster);
+  assert.notEqual(defaultMerged.periods[0].rows[0], defaultRow);
+  assert.equal(defaultRow.employeeCode, undefined);
+
+  const ownedInput = report([{ ...rows[1] }]);
+  const ownedRow = ownedInput.periods[0].rows[0];
+  const consumed = table.mergeEmployeeReports([ownedInput], roster, { consumeRows: true });
+  assert.equal(consumed.periods[0].rows[0], ownedRow, 'owned ALL rows should not be cloned a second time');
+  assert.equal(ownedRow.employeeCode, 'DN001');
+  assert.equal(ownedRow.employeeName, 'Anh Một');
+});
+
 test('ALL payload preserves each backend-computed penalty in bonus and cost employeeSubtotals', () => {
   const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
   const first = report([rows[1]]);
@@ -210,7 +226,10 @@ test('routes hard-lock ALL to CEO/admin for view and export', () => {
   const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   assert.match(source, /wantsAll && !auth\.isAdmin\(req\.session\.role\)/);
   assert.match(source, /requested === 'ALL'[\s\S]*?if \(!admin\)/);
-  assert.match(source, /employeeCostAllPayload[\s\S]*?mapWithConcurrency\(roster, 3/);
+  assert.match(source, /employeeCostAllPayload[\s\S]*?mapWithDeadline\(roster, EMPLOYEE_COST_ALL_BUILD_CONCURRENCY/);
+  assert.match(source, /assertMemoryBudget\(\{ limitBytes: EMPLOYEE_COST_ALL_MAX_RSS_BYTES \}\)/);
+  assert.match(source, /ttlForValue:[\s\S]*?EMPLOYEE_COST_ALL_ERROR_TTL_MS/);
+  assert.match(source, /base-generation:\$\{baseGeneration\}/);
   assert.match(source, /date: req\.query\.date/);
   assert.match(source, /employeeCostTableOptions\(req, \{ paginate: true \}\)/);
   assert.match(source, /targetKpiSummary\(ky, \{ empCode \}, \[empCode\]\)/);
