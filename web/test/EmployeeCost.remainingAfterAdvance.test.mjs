@@ -15,7 +15,7 @@ test('remaining KPI is immediately after first advance and stays self-scoped', (
 test('missing and suspect inputs render dash without inventing zero or a negative amount', () => {
   const component = page.slice(page.indexOf('function RemainingAfterAdvanceKpi'), page.indexOf('function PenaltyDetailModal'));
   assert.match(component, /projection\.suspect \|\| projection\.reason === 'salary_advance_exceeds_after_penalty_total'/);
-  assert.match(component, /value="—"[\s\S]{0,180}?Số ứng nghi sai; chưa thể tính số còn lại/);
+  assert.match(component, /value="DỪNG TÍNH · NGHI BẤT THƯỜNG"[\s\S]{0,220}?Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu/);
   assert.match(component, /value="—"[\s\S]{0,180}?Chưa đủ dữ liệu, không coi là 0/);
   assert.doesNotMatch(component, /afterPenaltyTotal\s*-\s*salaryAdvanceAmount|Math\.max\(/,
     'frontend must not recalculate or clamp the backend-owned amount');

@@ -492,7 +492,9 @@ function SalaryAdvanceKpi({ salaryAdvance, loading, allEmployees, period }) {
     if (salaryAdvance.suspect === true) {
       const statusText = salaryAdvance.locked ? 'Đã chốt trên App Salary' : 'Dự kiến · chưa chốt trên App Salary';
       return <Kpi label="Ứng lần 1 tháng này" value={`⚠ ${salaryAdvance.amount.toLocaleString('vi-VN')} ₫`}
-        sub={`${periodText} · ${statusText} · Số ứng lớn hơn tổng chi phí sau phạt — nghi sai, đang đối chiếu`} tone="employee-cost-tone-penalty" />;
+        sub={`${periodText} · ${statusText} · ${salaryAdvance.suspectMessage || 'Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu'}`}
+        title="Backend đã fail-closed: không dùng số này để tính còn lại."
+        tone="employee-cost-tone-penalty" />;
     }
     return <Kpi label="Ứng lần 1 tháng này" value={`${salaryAdvance.amount.toLocaleString('vi-VN')} ₫`}
       sub={`${periodText} · ${salaryAdvance.locked ? 'Đã chốt trên App Salary' : 'Dự kiến · chưa chốt trên App Salary'}`} tone="employee-cost-tone-neutral" />;
@@ -517,8 +519,10 @@ function RemainingAfterAdvanceKpi({ remainingAfterAdvance, loading, allEmployees
   if (loading) return <Kpi label="Còn lại sau ứng lần 1" value="Đang tính…"
     sub={`${periodText} · Tổng sau phạt − ứng lần 1`} tone="employee-cost-tone-after-penalty" />;
   if (projection.suspect || projection.reason === 'salary_advance_exceeds_after_penalty_total') {
-    return <Kpi label="Còn lại sau ứng lần 1" value="—"
-      sub={`${periodText} · Số ứng nghi sai; chưa thể tính số còn lại`} tone="employee-cost-tone-penalty" />;
+    return <Kpi label="Còn lại sau ứng lần 1" value="DỪNG TÍNH · NGHI BẤT THƯỜNG"
+      sub={`${periodText} · Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu`}
+      title="Không hiển thị số âm như số đúng khi nguồn ứng bất thường."
+      tone="employee-cost-tone-penalty" />;
   }
   if (!projection.available || !Number.isSafeInteger(projection.amount)) {
     return <Kpi label="Còn lại sau ứng lần 1" value="—"

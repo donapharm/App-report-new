@@ -32,11 +32,11 @@ function buildRemainingAfterAdvance({ period, afterPenaltyTotal, salaryAdvance, 
     available: false,
     amount: null,
     locked: false,
-    status: 'provisional',
+    status: reason === 'salary_advance_exceeds_after_penalty_total' ? 'anomaly' : 'provisional',
     suspect: reason === 'salary_advance_exceeds_after_penalty_total',
     reason,
     note: reason === 'salary_advance_exceeds_after_penalty_total'
-      ? 'Số ứng nghi sai; chưa thể tính số còn lại.'
+      ? 'Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu.'
       : 'Chưa đủ dữ liệu để tính số còn lại sau ứng lần 1.',
   });
 
@@ -47,10 +47,10 @@ function buildRemainingAfterAdvance({ period, afterPenaltyTotal, salaryAdvance, 
     available: false,
     amount: null,
     locked: false,
-    status: 'provisional',
+    status: 'anomaly',
     suspect: true,
     reason: 'salary_advance_exceeds_after_penalty_total',
-    note: 'Số ứng nghi sai; chưa thể tính số còn lại.',
+    note: 'Số ứng App Salary lớn hơn tổng nhận — nghi sai, đang đối chiếu.',
   });
 
   const locked = periodClosed === true && salaryAdvance.locked === true;

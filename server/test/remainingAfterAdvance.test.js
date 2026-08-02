@@ -66,13 +66,16 @@ test('suspect or over-advance input yields dash projection instead of a negative
   });
   assert.equal(guarded.amount, null);
   assert.equal(guarded.suspect, true);
+  assert.equal(guarded.status, 'anomaly');
   assert.equal(guarded.reason, 'salary_advance_exceeds_after_penalty_total');
+  assert.match(guarded.note, /nghi sai, đang đối chiếu/);
 
   const independentGuard = remaining.buildRemainingAfterAdvance({
     period: '2026-07', afterPenaltyTotal: 50_000_000, salaryAdvance: salary(60_000_000),
   });
   assert.equal(independentGuard.amount, null);
   assert.equal(independentGuard.suspect, true);
+  assert.equal(independentGuard.status, 'anomaly');
   assert.equal(Object.values(independentGuard).includes(-10_000_000), false);
 });
 
