@@ -279,12 +279,23 @@ function periodCtx(q) {
   }
   else if (q.from && q.to) kys = store.periodRange(String(q.from), String(q.to));
   else if (q.ky) kys = periods.includes(String(q.ky)) ? [String(q.ky)] : [];
-  // Chỉ fallback kỳ mới nhất khi KHÔNG có khoảng ngày rõ ràng. Khoảng ngoài dữ
-  // liệu phải trả rỗng thật, không âm thầm nhảy về kỳ mới nhất.
-  if (!kys.length && !dateFrom && !dateTo) kys = [latest];
+  // Kỳ được hỏi TƯỜNG MINH, đúng dạng MM.YYYY (vd tháng lịch mới mở, chưa có đơn).
+  const askedKy = /^(0[1-9]|1[0-2])\.\d{4}$/.test(String(q.ky || '')) ? String(q.ky) : '';
+  // Chỉ fallback kỳ mới nhất khi người gọi KHÔNG nêu kỳ nào và không có khoảng ngày.
+  // ‼ Hỏi rõ một kỳ mà kỳ đó chưa có dữ liệu thì PHẢI trả RỖNG. Trước đây rơi vào
+  // fallback nên xin T08 lại nhận số T07, còn giao diện dán nhãn "Tháng 08.2026" —
+  // số của kỳ này gắn tên kỳ khác là nói dối, nguy hiểm hơn cả việc hiện 0.
+  if (!kys.length && !dateFrom && !dateTo && !askedKy) kys = [latest];
   const realKys = kys.filter((k) => periods.includes(k));
-  const ky = realKys.at(-1) || latest;
-  return { ky, kys, from: realKys[0] || null, to: realKys.at(-1) || null, dateFrom: dateFrom || null, dateTo: dateTo || null };
+  // Giữ đúng kỳ được hỏi để nhãn và số luôn cùng một kỳ (rỗng thì rỗng của CHÍNH kỳ đó).
+  const ky = realKys.at(-1) || askedKy || latest;
+  return {
+    ky, kys, from: realKys[0] || null, to: realKys.at(-1) || null,
+    dateFrom: dateFrom || null, dateTo: dateTo || null,
+    // Kỳ có thật trên lịch nhưng chưa có dòng dữ liệu nào — để nơi gọi nói rõ
+    // "chưa có dữ liệu", không để người đọc tưởng là đã bán 0 đồng.
+    emptyPeriod: !realKys.length && !!askedKy,
+  };
 }
 
 function qdOf(v) {
