@@ -2520,7 +2520,10 @@ router.get('/admin/assignments/template.xlsx', auth.requireAuth, auth.requireAdm
 router.get('/overview', auth.requireAuth, (req, res) => {
   const scope = auth.scopeOf(req.session);
   const pc = periodCtx(req.query);
-  res.json(A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }));
+  res.json({
+    ...A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }),
+    emptyPeriod: pc.emptyPeriod,
+  });
 });
 
 router.get('/trend', auth.requireAuth, (req, res) => {
