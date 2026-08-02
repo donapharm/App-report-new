@@ -1,0 +1,109 @@
+# 📋 VIỆC CHO BOT — đọc file này mỗi lần pull main
+
+> **Bot:** đây là hàng đợi việc DUY NHẤT. Mỗi đợt làm: `git pull origin main` → đọc file này → làm từ trên xuống → báo CEO từng việc xong.
+> File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
+> **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
+
+**Cập nhật lần cuối:** 02/08/2026 (sau deploy a1e17aa)
+
+---
+
+## ✅ VIỆC 1 — XONG 02/08 (deploy `a1e17aa`)
+T08 → `revenue 0, emptyPeriod:true` · T07 → `30.917.892.673đ` · cả 3 màn mặc định T08, không mượn số kỳ khác. **Không làm lại.**
+
+<details><summary>(lưu vết — nội dung cũ)</summary>
+
+### VIỆC 1 — Sửa lỗi "nhãn T08 nhưng số T07"
+
+Bot đã tự phát hiện & báo trung thực: *"Phân tích: bộ chọn T08 nhưng thẻ doanh thu vẫn ghi 07.2026 do backend fallback"*.
+**Đây KHÔNG phải ngoài phạm vi** — là nửa còn lại của cùng một lỗi. Claude đã sửa sẵn.
+
+```
+git fetch origin claude/fix-default-month-20260801
+git cherry-pick 21867c4
+```
+- Chỉ sửa `server/src/routes.js` → hàm `periodCtx`.
+- Bản chất: hỏi kỳ chưa có dữ liệu thì **trả rỗng của CHÍNH kỳ đó**, không âm thầm mượn số kỳ mới nhất. Thêm cờ `emptyPeriod` để màn hình nói rõ "chưa có dữ liệu".
+- Dùng chung cho cả 3 màn (Tổng quan/Target/Phân tích).
+- **BẮT BUỘC restart `app-report`** (có sửa backend).
+
+**Claude đã kiểm bằng server thật:** `?ky=08.2026` → `ky=08.2026`, doanh thu **0** (trước đó trả số T07) · `?ky=06.2026` → `4.758.211.000đ` không đổi · server test **587/596** (9 lỗi nền cũ).
+
+**Nghiệm thu — dán số thật:**
+- `GET /api/overview?ky=08.2026` → `"ky":"08.2026"`, doanh thu **0**
+- `GET /api/overview?ky=07.2026` → **30.917.892.673đ**
+- Mở **Phân tích** chọn T08 → thẻ doanh thu ghi **08.2026 · 0đ**, KHÔNG còn ghi 07.2026
+
+</details>
+
+---
+
+## 🔴 VIỆC 0 — ‼ GẤP NHẤT: vì sao T08 chưa kéo doanh thu từ App Sale?
+
+**CEO hỏi 02/08:** T08 hiện 0đ, trong khi T07 đã kéo được từ App Sale (CRM_MISA 20,26 tỷ + APP_WEB_PARTNER 10,65 tỷ = 30,92 tỷ).
+
+**Đã biết:** `server/scripts/materialize_july_revenue.js` kéo từ **2 nguồn App Sale**, **KHÔNG khoá cứng tháng 7** — kỳ lấy theo `REVENUE_REFRESH_KY` → `MATERIALIZE_KY` → `defaultKy()` (tự ra tháng lịch VN = **08.2026**). Vậy đường nối CÓ sẵn, chỉ là chưa chạy cho T08.
+
+**Trả lời 3 câu, dán bằng chứng:**
+1. **Lịch tự chạy có bật không?** Báo cáo deploy hôm nay ghi *"Scheduler/refresh/send đều tắt"* — materialize doanh thu có nằm trong nhóm bị tắt không? Trước đây T07 được refresh bằng cách nào (cron? tay? mốc giờ nào)?
+2. **Chạy thử cho T08** (chế độ an toàn, đọc App Sale read-only): `REVENUE_REFRESH_KY=08.2026 node server/scripts/materialize_july_revenue.js`. Kết quả ra sao — có đơn nào không, hay App Sale cũng đang rỗng vì 01/08 là thứ Bảy và 02/08 là Chủ nhật?
+3. **Cần gì để T08 tự cập nhật hằng ngày như T07?** Nếu chỉ là bật lại lịch thì nêu rõ tên job + mốc giờ, xin CEO duyệt bật.
+
+**Ràng buộc:** script chỉ ĐỌC App Sale, chỉ GHI slot của App Report — không đụng dữ liệu App Sale. Nếu T08 thật sự chưa có đơn thì **báo đúng là chưa có**, KHÔNG tự chế số.
+
+---
+
+## 🔴 VIỆC 2 — Dọn drift ‼ CEO ĐÃ PHÊ DUYỆT, LÀM NGAY (không cần hỏi lại)
+
+> Bot hỏi *"reconcile các commit production vẫn cần phê duyệt riêng"* — **CEO duyệt rồi, đây là phê duyệt đó.** Cứ làm.
+
+**5 commit đang chạy production nhưng CHƯA lên `origin/main`:**
+`97b87d6` · `5873806` · `640685c` · `6e17949` · `8824e83` · `7b3418a` · `a1e17aa`
+⇒ Máy bot hỏng là **mất trắng** phần code đang chạy thật. Git không khôi phục được.
+
+**Làm:** gộp hết lên `origin/main`, **giữ nguyên** toàn bộ `SPEC_*.md` / `DIRECTIVE_*.md` / `REVIEW_*.md` của Claude (không được rớt).
+**Cổng chặn:** báo **2 SHA trùng** — `git rev-parse origin/main` == SHA đang chạy production. Kèm: test nền XANH, `formulaVersion` không đổi.
+**Từ đây trở đi: CHỈ deploy từ `origin/main`**, không deploy bản local nữa.
+
+---
+
+## 🔴 VIỆC 3 — VP018 + DN022 (‼ MỐC CHẾT 08/08)
+
+Branch `fix/dn022-separate-formula-20260731` — CEO đã duyệt từ 31/07, **Claude đã review PASS** (`REVIEW_VP018_DN022_20260801.md`). **Cổng review ĐÃ MỞ, không phải chờ Claude nữa.**
+
+**Làm sau VIỆC 2** (cần main sạch để rebase):
+1. Rebase lên `origin/main` — conflict **chỉ ở `CHANGELOG.md`** (hai bên cùng thêm mục đầu file), giải bằng cách **giữ cả hai**, không có conflict code.
+2. Kiểm `formulaVersion` **v3.6 → v3.7**, khớp `bonus_formula_lock.json` (`sourceHash c86117…fb03`).
+3. Full test → merge → deploy từ `origin/main`.
+
+**Vì sao gấp:** ngày **09/08** bật 2 cờ tin thưởng. Chưa merge kịp thì **VP018** (telesaler, không phải Sale) và **DN022** (chờ công thức riêng) sẽ nhận **TIN TIỀN SAI** — gửi rồi không rút lại được.
+**Nếu tới 08/08 chưa xong ⇒ KHÔNG được bật `EMP_COST_NOTIFY`/`BONUS_NOTIFY`.**
+
+**Nghiệm thu sau merge:** DN022 không có thưởng P1/P2 & không phạt target/C45 nhưng **vẫn có Điểm/Xu** · VP018 không được phân bổ doanh thu, **doanh thu toàn công ty KHÔNG đổi** · `formulaVersion` = **v3.7** · VP018 **vẫn nhận** cảnh báo vận hành (đồng bộ, đơn >50tr).
+
+---
+
+## 🟡 VIỆC 4 — Chống tái diễn sự cố mất số chi phí (sau VIỆC 3)
+
+Sự cố 01/08 đã chữa nhưng **vòng lặp chưa cắt**:
+```
+Mở "Tất cả NV" → RAM DataHub vọt → PM2 restart theo guard
+→ nếu đang giữ vault-audit.lock → khóa mồ côi → mọi request kẹt ~10s → mất số
+```
+**Việc quan trọng nhất:** `vault-audit.lock` phải **TỰ LÀNH** — ghi **PID chủ + TTL**, ai vào sau thấy chủ đã chết hoặc quá TTL thì **tự phá khóa** + ghi audit. Tiến trình chết khi đang giữ khóa là điều **phải chịu được**.
+Kèm: cổng RAM riêng (**không nâng guard để che**), xem lại thiết kế "Tất cả NV" (cold 22,4s là chậm), **rút ngắn cache kết quả LỖI** (6h là quá lâu — hỏng phải biết sớm).
+
+---
+
+## 🟢 VIỆC 5 — Module "Thanh toán CP của tôi" GĐ1 (không gấp)
+
+Spec: `SPEC_THANH_TOAN_CP_SELFVIEW.md`. **CODE** được phép bắt đầu ngay sau VIỆC 2 (branch riêng); **DEPLOY** sau 09/08.
+Nếu tới **06/08** mà VIỆC 3 chưa xong ⇒ **dừng module**, dồn sức cho việc tiền.
+
+---
+
+## ✅ ĐÃ XONG (không làm lại)
+- **P0 mất số chi phí 01/08** — timeout 6500→15000, dọn lock mồ côi, restart. DN006 về 459.441.306đ.
+- **App nhảy T08** — `/api/periods` trả `08.2026` + `currentKy`; cả 3 màn mặc định T08. (Còn nốt VIỆC 1.)
+- **Data Hub trusted-device Cổng 1** — 841 test PASS. Cổng 2 chờ duyệt deploy riêng.
+- **AF DN006** — App Salary đã sửa, ứng đúng 65.978.975đ.
