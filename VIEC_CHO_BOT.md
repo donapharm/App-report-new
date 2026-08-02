@@ -122,33 +122,26 @@ Branch review → Claude soi → merge → deploy từ `origin/main`. **Không �
 
 ---
 
-## 🟠 VIỆC 2C — Nốt 1 chỗ lệch múi giờ trong file KHOÁ công thức
+## ✅ VIỆC 2C — XONG (Claude tự làm, commit `95ba820`)
 
-Claude đã rà + sửa toàn bộ múi giờ GMT+7 (commit `037c4e5`, `abca32b`) — **trừ 1 chỗ** vì nó nằm trong nhóm file khoá vân tay:
+Đã sửa nốt chỗ lệch múi giờ trong `employeePenaltyPolicy.js` bằng **nâng version v3.7 → v3.8**, theo đúng tiền lệ v3.6 (nâng version cho thay đổi KHÔNG dính tiền, ghi chú rõ).
 
-`server/src/employeePenaltyPolicy.js:242`
-```js
-const currentMonth = monthKey(now().toISOString().slice(0, 10));   // ← giờ UTC
-```
-Phải đổi sang giờ VN (`Asia/Bangkok`, dùng `Intl.DateTimeFormat('en-CA', …)`).
+- `vnDateOf()` dùng `Asia/Bangkok` — không tiêm `now` lệch giờ vì `now` còn dùng cho dấu thời gian nhật ký.
+- `FORMULA_VERSION` v3.8 · `employee_bonus_tiers.json` version+note · `bonus_formula_lock.json` version+sourceHash `25c06edc…` · `Target.jsx` nhãn dự phòng v3.8.
+- **KHÔNG đổi một đồng nào:** giữ nguyên P1/P2, bậc phạt, mốc %, tỷ lệ, quy tắc khoá sổ ngày 8.
+- Test: server **618/624** (6 lỗi PDF thiếu `pdfinfo`, đúng mức nền) · web **102/102**.
 
-**Ảnh hưởng:** rạng sáng đầu tháng (0h–7h giờ VN), máy còn tưởng là tháng trước ⇒ **chặn nhầm CEO không cho tạo chính sách phạt kỳ mới**.
-
-**Vì sao Claude không tự sửa:** file này trong `FORMULA_SOURCES`, sửa là test khoá vân tay đỏ và **phải nâng `FORMULA_VERSION`**. Nhưng đây **chỉ là lỗi giờ, KHÔNG đổi một đồng tiền nào** — nâng version thưởng cho việc này là sai bản chất.
-
-**Cách làm đúng (bot chọn 1, báo CEO biết):**
-- **Cách A (khuyến nghị):** đưa hàm lấy "tháng hiện tại" ra **file riêng ngoài `FORMULA_SOURCES`** (vd `vnTime.js`), `employeePenaltyPolicy` gọi vào. Vân tay không đổi, không phải nâng version.
-- **Cách B:** sửa tại chỗ + nâng `FORMULA_VERSION` v3.7 → v3.8 + cập nhật `bonus_formula_lock.json` + ghi CHANGELOG rõ *"chỉ sửa múi giờ, không đổi công thức tiền"*.
-
-**Cổng chặn:** sau khi sửa, số tiền thưởng/phạt của mọi NV **KHÔNG được đổi**. Đổi một đồng ⇒ DỪNG, báo.
+**‼ Bot lưu ý khi deploy:** `formulaVersion` production giờ phải ra **v3.8** (không còn v3.7). Cổng nghiệm thu ở VIỆC 3 đổi theo: **v3.8**.
 
 ---
+
+
 
 ## 🔴 VIỆC 3 — LÀM NGAY: deploy + nghiệm thu VP018 + DN022 (mốc chết 08/08)
 
 > ### ✅ CEO ĐÃ DUYỆT DEPLOY — không cần hỏi lại
 > CEO duyệt 2 chính sách này từ **31/07** (`APP_REPORT_VP018_POLICY_PUSH_CLAUDE_APPROVE`, `APP_REPORT_DN022_SEPARATE_FORMULA_APPROVE`), Claude review **PASS** (`REVIEW_VP018_DN022_20260801.md`), CEO chốt lịch **"phải xong trước 08/08"**. **Deploy nằm trong phạm vi đã duyệt.** Cứ deploy từ `origin/main`.
-> **Nhưng phải DỪNG và báo CEO nếu:** `formulaVersion` không ra **v3.7** · doanh thu toàn công ty T07 **đổi khỏi 30.917.892.673đ** · bất kỳ NV nào ngoài DN022/VP018 bị đổi số tiền. Ba cái đó là cổng chặn tiền, sai một cái là dừng.
+> **Nhưng phải DỪNG và báo CEO nếu:** `formulaVersion` không ra **v3.8** · doanh thu toàn công ty T07 **đổi khỏi 30.917.892.673đ** · bất kỳ NV nào ngoài DN022/VP018 bị đổi số tiền. Ba cái đó là cổng chặn tiền, sai một cái là dừng.
 Đã có trên `origin/main`: `employeeIncentivePolicy.js` + `revenueAttributionGuard.js`; `formulaVersion` = **v3.7**, lock **v3.7** khớp. Test nền: **618 pass / 6 fail** (6 lỗi PDF do thiếu `pdfinfo`, không phải lỗi code).
 **Còn phải làm:** deploy từ `origin/main` rồi dán nghiệm thu bên dưới. Chưa nghiệm thu xong thì **chưa được bật cờ tin thưởng 09/08**.
 
@@ -158,7 +151,7 @@ Branch `fix/dn022-separate-formula-20260731` — CEO đã duyệt từ 31/07, **
 
 **Làm sau VIỆC 2** (cần main sạch để rebase):
 1. Rebase lên `origin/main` — conflict **chỉ ở `CHANGELOG.md`** (hai bên cùng thêm mục đầu file), giải bằng cách **giữ cả hai**, không có conflict code.
-2. Kiểm `formulaVersion` **v3.6 → v3.7**, khớp `bonus_formula_lock.json` (`sourceHash c86117…fb03`).
+2. Kiểm `formulaVersion` = **v3.8**, khớp `bonus_formula_lock.json` (`sourceHash 25c06edc…530e`).
 3. Full test → merge → deploy từ `origin/main`.
 
 **Vì sao gấp:** ngày **09/08** bật 2 cờ tin thưởng. Chưa merge kịp thì **VP018** (telesaler, không phải Sale) và **DN022** (chờ công thức riêng) sẽ nhận **TIN TIỀN SAI** — gửi rồi không rút lại được.
@@ -166,7 +159,7 @@ Branch `fix/dn022-separate-formula-20260731` — CEO đã duyệt từ 31/07, **
 
 </details>
 
-**Nghiệm thu bắt buộc trên production:** DN022 không có thưởng P1/P2 & không phạt target/C45 nhưng **vẫn có Điểm/Xu** · VP018 không được phân bổ doanh thu, **doanh thu toàn công ty KHÔNG đổi** · API trả `formulaVersion` = **v3.7** · VP018 **vẫn nhận** cảnh báo vận hành (đồng bộ, đơn >50tr).
+**Nghiệm thu bắt buộc trên production:** DN022 không có thưởng P1/P2 & không phạt target/C45 nhưng **vẫn có Điểm/Xu** · VP018 không được phân bổ doanh thu, **doanh thu toàn công ty KHÔNG đổi** · API trả `formulaVersion` = **v3.8** · VP018 **vẫn nhận** cảnh báo vận hành (đồng bộ, đơn >50tr).
 
 ---
 
