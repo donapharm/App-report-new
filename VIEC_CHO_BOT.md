@@ -88,6 +88,40 @@ Không đạt ⇒ dừng, báo, chờ CEO.
 
 ---
 
+## 🔴 VIỆC 2B — MÀN "CHƯA ĐỒNG BỘ": danh mục dòng LỆCH + lý do (CEO đòi lại 02/08)
+
+> CEO 02/08: *"để không phải tìm vòng vo số không khớp thì nên có **một danh mục những dòng không khớp và nguyên nhân không khớp**. Nhìn vào là thấy ngay khỏi đi tìm."*
+> **CEO đã yêu cầu việc này từ 29/07** (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) — **chưa ai build**. Hiện chỉ có `syncAlert.js` (bắn Telegram), **KHÔNG có màn hình nào**. Đây là **món nợ**, làm ngay sau VIỆC 0C.
+
+**Vì sao đáng làm nhất lúc này:** tối 02/08 CEO mất cả buổi truy 53.556.720đ lệch giữa 2 app. Có màn này thì **nhìn phát ra ngay**, không phải nhờ bot đào DB.
+
+### Nội dung — theo `SPEC_REVENUE_SYNC_EXCEPTIONS.md`
+- **Bất biến:** `Σ(đưa vào) + Σ(loại ra) == Σ(nguồn)`. Lệch một đồng ⇒ **DỪNG, báo đỏ**, không hiển thị số chỏi.
+- **Mỗi dòng bị loại phải ghi đủ 3 thứ:** **nghĩa là gì · ai xử lý · phải làm gì**. Cấm mã lý do trống nghĩa.
+- **KHÔNG dòng nào được biến mất lặng lẽ.**
+
+### Mã lý do phải có (lấy từ chính các ca đã gặp)
+| Mã | Nghĩa | Ai xử lý | Làm gì |
+|---|---|---|---|
+| `MANUAL_ZALO_CHUA_XAC_NHAN` | Đối tác báo qua Zalo, NV nhập tay, chưa có xác nhận/hoá đơn | VP018 + đối tác | Đối tác xác nhận trên web hoặc xuất HĐ |
+| `CHUA_XUAT_HOA_DON` | Đã giao nhưng chưa có số hoá đơn | Kế toán | Xuất HĐ, điền số |
+| `DE_NGHI_GHI` | MISA còn ở trạng thái "Đề nghị ghi" | Kế toán | Chốt thành "Đã ghi" |
+| `LECH_KY` | Ngày đặt và ngày giao khác tháng | VP018 | Xác nhận ngày giao thật |
+| `THIEU_KHOA_NHAN_DANG` | Không có `source_line_id`/`order_item_id` | DataHub | Cấp khoá nhận dạng |
+| `NON_SALES_ROLE` | Mã không thuộc vai trò Sale (vd VP018) | — | Đúng thiết kế, chỉ hiển thị |
+
+### Màn hình
+- Vào từ **Doanh thu** (và Tổng quan khi có dòng lệch): nút/thẻ **"⚠ N dòng chưa đồng bộ · X đ"**.
+- Bảng: mã đơn · sản phẩm · tiền · **mã lý do + câu giải thích** · ai xử lý · NV · đơn vị · ngày.
+- **Lọc theo kỳ + theo mã lý do.** Xuất Excel.
+- Trên cùng ghi **phép cộng kiểm tra**: `nguồn = đưa vào + loại ra` — cho CEO tự soi.
+- Quyền: **CEO/admin xem tất cả**; NV chỉ thấy dòng của mình (self-scope backend).
+
+### Cách giao
+Branch review → Claude soi → merge → deploy từ `origin/main`. **Không đụng công thức tiền**, chỉ hiển thị phần đã bị loại.
+
+---
+
 ## 🔴 VIỆC 3 — LÀM NGAY: deploy + nghiệm thu VP018 + DN022 (mốc chết 08/08)
 
 > ### ✅ CEO ĐÃ DUYỆT DEPLOY — không cần hỏi lại
