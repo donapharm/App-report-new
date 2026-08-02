@@ -38,48 +38,39 @@ git cherry-pick 21867c4
 
 ---
 
-## 🔴 VIỆC 0C — ‼ GẤP NHẤT: SOÁT `manual_zalo` TRONG T07 (trước 08/08)
+## 🔴 VIỆC 0C — CEO RA LỆNH: APP REPORT PHẢI KHỚP APP SALE (làm ngay)
 
-**Bot đã chứng minh xong 0B.** 53.556.720đ phần đối tác T08 đến từ **3 đơn nhập tay**:
-`DT-260729-0398` (11.840.400đ) · `DT-260730-0404` (17.904.000đ) · `DT-260730-0410` (23.812.320đ)
-Nguồn **`manual_zalo`** — *"Đối tác báo qua Zalo"*, nhập 07:29 ngày 01/08 bởi **VP018** (thao tác: Nguyễn Thị Kim Ngọc – ADMIN). **Không số HĐ, không ngày HĐ, không dòng đối soát.**
+> CEO 02/08: *"App Sale mới xác định doanh thu chỉ có **23.437.000đ** cả VAT. Tại sao lại lôi vào cả các đơn **chưa cập nhật xác nhận giao hàng**? Tao muốn số bên App Sale phải **KHỚP** với bên App Report."*
 
-**Đối chiếu luật CEO** (*"ngày giao có xác nhận với web + xác nhận xuất hoá đơn + chứng minh số tiền thanh toán"*): **trượt cả 3 tiêu chí** ⇒ chưa đủ điều kiện ghi doanh thu.
+**ĐÂY LÀ QUYẾT ĐỊNH CUỐI. Không hỏi lại, không phân tích thêm.**
 
-### ‼ VIỆC PHẢI LÀM NGAY — soát T07 (chỉ ĐỌC, không sửa)
-T07 = **30.917.892.673đ** đang dùng để tính **thưởng/phạt cả đội**, chốt sổ **08/08**, gửi tin **09/08**. Nếu T07 cũng chứa `manual_zalo` chưa hoá đơn thì **thưởng đang dựa trên số chưa chắc chắn**.
+### Mục tiêu (nghiệm thu bằng đúng 1 con số)
+```
+App Report T08.2026  =  23.437.000đ   (đúng bằng App Sale "ĐÃ THỰC HIỆN")
+```
+Loại 3 đơn `manual_zalo` chưa xác nhận giao: `DT-260729-0398`, `DT-260730-0404`, `DT-260730-0410` (53.556.720đ).
 
-**Dán bảng tổng hợp cho T07 (và T08):**
+### Cách làm — TÁCH RÕ 2 TRỤC, đừng lẫn
+**1. ĐIỀU KIỆN (đơn nào được tính) — SỬA, copy y hệt App Sale**
+Chỉ tính đơn App Sale coi là **"đã thực hiện"**: CRM **đã xuất hoá đơn** + đối tác **đã xác nhận giao thật**.
+**LOẠI** đơn nhập tay `manual_zalo` / nguồn không phải đối tác tự xác nhận / **chưa có số hoá đơn**.
+→ **Không tự chế điều kiện.** Đọc đúng điều kiện App Sale dùng cho ô *"ĐỐI TÁC — THÀNH TIỀN ĐÃ XUẤT GIAO HÀNG"* rồi dùng lại y nguyên. Một định nghĩa, dùng chung, tháng nào cũng vậy.
 
-| Kỳ | Nguồn ghi nhận giao | Số đơn | Số dòng | Thành tiền | % tổng kỳ |
-|---|---|---|---|---|---|
-| T07 | đối tác tự xác nhận trên web | | | | |
-| T07 | **`manual_zalo` / nhập tay** | | | | |
-| T07 | có số hoá đơn | | | | |
-| T07 | **KHÔNG có số hoá đơn** | | | | |
+**2. TRỤC NGÀY (tính vào tháng nào) — GIỮ NGUYÊN, KHÔNG ĐỘNG**
+Vẫn quy kỳ theo **ngày hoá đơn → ngày xác nhận giao**. **TUYỆT ĐỐI KHÔNG** quay lại lọc theo `o.created_at` — đó là bản vá 29/07, đổi là mất 382,6 triệu lần nữa.
 
-Kèm:
-1. **Ai được phép nhập tay?** Danh sách tài khoản đã nhập `manual_zalo` trong T07 + số tiền mỗi người.
-2. **Bao nhiêu tiền trong T07 chưa có hoá đơn?** Con số tuyệt đối + % của 30,9 tỷ.
-3. **Nếu loại hết đơn chưa hoá đơn, T07 còn bao nhiêu?** (chỉ mô phỏng, **KHÔNG ghi**)
-4. Có NV nào **đạt/trượt mốc thưởng** chỉ nhờ phần `manual_zalo` không? Liệt kê mã NV + chênh lệch.
+### ‼ CỔNG CHẶN TIỀN — kiểm TRƯỚC khi ghi bất cứ gì
+Chạy **mô phỏng** (không ghi slot) rồi dán 2 số:
+1. **T08 mới** — phải ra **23.437.000đ**. Lệch ⇒ DỪNG, báo.
+2. **T07 mới** — phải vẫn là **30.917.892.673đ**. **Nếu T07 ĐỔI ⇒ DỪNG NGAY, báo CEO số cũ/số mới + chênh bao nhiêu, KHÔNG tự áp.** T07 chốt sổ 08/08, gửi tin thưởng 09/08.
 
-### CẤM
-- **KHÔNG** sửa code, **KHÔNG** đổi số T07/T08, **KHÔNG** xoá đơn nào. Chỉ **ĐỌC và BÁO**.
-- **KHÔNG** tự quyết có tính `manual_zalo` hay không — **CEO quyết** sau khi xem số.
-- Nếu chưa soát xong ⇒ **KHÔNG bật cờ tin thưởng 09/08.**
+Đạt cả 2 cổng ⇒ áp thật cho T08, giữ nguyên T07, báo CEO.
+Không đạt ⇒ dừng, báo, chờ CEO.
 
----
-
-<details><summary>(lưu vết — VIỆC 0B đã chứng minh xong)</summary>
-
-## VIỆC 0B — ĐÃ CHỨNG MINH XONG (bot, 02/08)
-App Report T08 = 76.993.720đ = MISA 23.437.000đ + đối tác 53.556.720đ (3 đơn `manual_zalo` nêu trên).
-App Sale mặc định lọc **ngày đặt** nên 3 đơn (tạo 29–30/07) không hiện ở T08 — bản ghi phản hồi ngày 01/08 vẫn tồn tại.
-Cách CEO tự xem: *Đặt hàng → Đối chiếu ĐT → Phản hồi đủ/Tất cả → tìm mã đơn → Mở đối chiếu* (hiện "nhập tay – Zalo").
-T07 không đổi: 30.917.892.673đ.
-
-</details>
+### Sau khi xong
+- Đối chiếu lại: App Sale và App Report cùng ra **23.437.000đ** cho T08.
+- Ghi vào `CHANGELOG.md`: từ nay App Report **bám định nghĩa "đã thực hiện" của App Sale**, không tự nới.
+- Nếu sau này đối tác xác nhận giao thật/xuất hoá đơn cho 3 đơn kia → chúng **tự vào lại** theo ngày xác nhận. Không xoá dữ liệu, chỉ không tính khi chưa đủ điều kiện.
 
 ---
 
