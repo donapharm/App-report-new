@@ -38,24 +38,34 @@ git cherry-pick 21867c4
 
 ---
 
-## ✅ VIỆC 0B — ĐÓNG. APP REPORT ĐANG ĐÚNG, KHÔNG SỬA GÌ (CEO chốt 02/08)
+## 🔴 VIỆC 0B — MỞ LẠI: CHỨNG MINH 53,5 TRIỆU PHẦN ĐỐI TÁC (gấp nhất)
 
-> CEO: *"tôi không quan tâm ngày nào tạo đơn, tôi chỉ yêu cầu ghi nhận doanh thu **đúng ngày giao hàng có xác nhận với web và xác nhận xuất hoá đơn**. Cứ làm y chang T07.2026."*
+> CEO kiểm App Sale 02/08: *"chỉ có đơn CRM là xác nhận đã ghi doanh số và có ghi ngày giao hàng, giá trị hơn 23tr. Vậy lấy đơn nào vào mà tới hơn 77tr?"*
 
-**Luật CEO = đúng thứ tự máy đang chạy:**
+**Claude đã đóng việc này quá sớm — SAI, nay mở lại.**
+
 ```
-ngày quy kỳ = ngày HOÁ ĐƠN → ngày XÁC NHẬN trên web → (dự phòng)
+App Report T08 = 76.993.720đ
+  ├── CRM MISA  23.437.000đ  ← CEO đã thấy trên App Sale, KHỚP ✅
+  └── ĐỐI TÁC   53.556.720đ  ← CEO KHÔNG thấy đơn đối tác nào được xác nhận giao ❌
 ```
-Ngày **tạo đơn** không tham gia — đúng ý CEO, và đúng bản vá 29/07.
 
-**3 đơn WEB** (tạo 29–30/07, **xác nhận web 01/08**) → ghi vào **T08**. **ĐÚNG.** Không phải lỗi.
-App Sale hiện T08 = 0 vì **màn hình bên App Sale lọc theo ngày TẠO đơn** — hai màn trả lời hai câu khác nhau. Muốn khớp thì sửa **màn App Sale**, KHÔNG sửa App Report.
+**Mâu thuẫn:** bot nói 3 đơn đối tác có `resp.delivered_qty > 0`, phản hồi 01/08. CEO nhìn App Sale thì **không có đơn đối tác nào xác nhận giao**. Hai điều này không thể cùng đúng.
 
-### ⛔ KẾT LUẬN — CẤM ĐỘNG VÀO
-- **KHÔNG** sửa `materialize_july_revenue.js`. **KHÔNG** đổi quy kỳ. **KHÔNG** chỉnh số T07/T08.
-- **KHÔNG** mở lại điều tra 0B. Việc này ĐÓNG.
-- T08 sẽ tự lên số khi đơn được **xác nhận trên web / xuất hoá đơn** — cứ để chạy.
-- (Tuỳ chọn, không chặn gì: nếu sau này App Sale thêm ô "Ngày thực giao" cho đối tác khai lùi ngày, số sẽ chính xác tuyệt đối thay vì lấy ngày xác nhận. Không có cũng không sao.)
+### CHỈ LÀM ĐÚNG 1 VIỆC — không phân tích, không sửa code
+**Dán ra bảng 3 đơn đối tác đó**, mỗi đơn đủ các cột sau (thiếu cột nào ghi rõ NULL):
+
+| Mã đơn (để CEO tra App Sale) | order_item_id | Sản phẩm | `delivered_qty` | Đơn giá | Thành tiền | `responded_at` | `invoice_no` | `invoice_date` | `effective_date` | `is_test` | `hold_golive` | NV | Đơn vị |
+
+Kèm 3 câu trả lời ngắn:
+1. **`delivered_qty` lấy từ BẢNG NÀO, CỘT NÀO?** (đường dẫn đầy đủ) — có đúng là ô đối tác tự khai khi bấm xác nhận giao không, hay là cột khác (số đặt, số dự kiến, tồn...)?
+2. **Đơn đó trên App Sale hiển thị ở đâu?** Vào màn nào, lọc thế nào thì CEO thấy nó? Nếu App Sale ghi "chưa phản hồi" thì **vì sao App Report lại đọc ra đã giao** — hai bên đọc khác bảng hay khác điều kiện?
+3. **Nếu 3 đơn này KHÔNG phải giao thật** ⇒ App Report đang **thổi phồng 53,5 triệu** doanh thu T08 ⇒ báo ngay, coi như sự cố tiền.
+
+### CẤM
+- **KHÔNG** sửa code, **KHÔNG** đổi quy kỳ, **KHÔNG** chỉnh số. Chỉ **DÁN BẰNG CHỨNG**.
+- **KHÔNG** kết luận "đang đúng" nếu chưa chỉ được đơn đó nằm ở đâu trên App Sale.
+- Nếu tra ra `delivered_qty` **không phải** ô xác nhận giao thật ⇒ đó là **lỗi nguồn số**, phải báo, không được im.
 
 ---
 
