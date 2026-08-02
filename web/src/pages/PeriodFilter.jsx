@@ -26,30 +26,8 @@ export function periodLabel(sel) {
   return `${sel.from} → ${sel.to}`;
 }
 
-// Tháng LỊCH hiện tại theo giờ VN (Asia/Bangkok), dạng ky `MM.YYYY`.
-// Không dùng giờ máy người dùng: máy để lệch múi giờ sẽ nhảy tháng sai ngày đầu/cuối.
-export function currentKyVN(now = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit',
-  }).formatToParts(now);
-  const get = (type) => parts.find((p) => p.type === type)?.value || '';
-  const year = get('year'); const month = get('month');
-  return year && month ? `${month}.${year}` : '';
-}
-
-// CEO 01/08/2026: hôm nay 01/08 mà app vẫn đứng ở T07 — vì mặc định lấy "tháng có
-// DỮ LIỆU cuối" (`latest`), tháng mới chưa có đơn nên không được chọn.
-// Sửa: mặc định theo THÁNG LỊCH. Đây là NGUỒN DUY NHẤT cho cả Tổng quan/Target/Phân tích —
-// đừng vá riêng từng trang rồi lệch nhau.
-// Vẫn lùi về `latest` khi tháng hiện tại không có trong danh sách kỳ (server chưa mở kỳ),
-// để không bao giờ trả về ky rỗng làm vỡ bộ lọc.
-export function defaultPeriodSelection(periods, latest, now = new Date()) {
-  const kys = (Array.isArray(periods) ? periods : [])
-    .map((p) => p?.ky)
-    .filter((ky) => /^(0[1-9]|1[0-2])\.\d{4}$/.test(String(ky || '')));
-  const current = currentKyVN(now);
-  const safeLatest = kys.includes(latest) ? latest : '';
-  const ky = (current && kys.includes(current)) ? current : (safeLatest || kys.at(-1) || '');
+export function defaultPeriodSelection(periods, latest) {
+  const ky = latest || periods.at(-1)?.ky || '';
   return { mode: 'month', ky, from: ky, to: ky, quarter: qOf(ky), year: yearOf(ky) };
 }
 
