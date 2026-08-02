@@ -53,6 +53,25 @@ git cherry-pick 21867c4
 
 **Mâu thuẫn nặng nhất:** App Sale nói đối tác giao **0 đơn / 0đ**; CRM cả 2 ngày mới đặt 45,16tr — **vẫn nhỏ hơn** 76,99tr mà App Report báo cho **1 ngày**. ⇒ nghi App Report **báo cao hơn thực giao** (ảnh hưởng target + thưởng).
 
+### ‼ CEO ĐÃ CHỐT (02/08): PHƯƠNG ÁN (A) — CHỈ TÍNH DOANH THU **ĐÃ THỰC HIỆN**
+> CEO: *"chỉ tính doanh thu thực tại App Sale để đẩy dữ liệu qua. T07.2026 đã tính đúng rồi, T08.2026 lại vẽ ra kiểu khác là sao."*
+
+**Nguyên tắc bất di bất dịch từ nay:** App Report **BÁM ĐÚNG con số "ĐÃ THỰC HIỆN" của App Sale** — *CRM đã xuất HĐ + Đối tác đã xuất/giao*. **Tháng nào cũng một công thức**, không được đổi theo tháng, không tự nới định nghĩa.
+
+### Claude đã soi code — QUY TẮC KHÔNG HỀ ĐỔI GIỮA T07 VÀ T08
+- **Không có** dòng code nào khoá riêng tháng 7. Kỳ lấy theo biến; tên file `materialize_july_revenue.js` chỉ là tên cũ.
+- Ghi chú "loại đơn `DT-260630-0115`" **chỉ là text trong báo cáo markdown**, KHÔNG phải logic.
+⇒ Chênh lệch **không do đổi công thức**, mà do **định nghĩa phần ĐỐI TÁC lệch với App Sale**.
+
+### CHÊNH NẰM Ở PHẦN ĐỐI TÁC (WEB) — không phải MISA
+| Phần | App Sale | App Report | |
+|---|---|---|---|
+| CRM MISA | Thành tiền xuất HĐ **23,44tr** (Đã ghi + Đề nghị ghi) | `invoice_export_amount`, bucket official+pending | ✅ cùng định nghĩa |
+| Đối tác WEB | **Đã xuất/giao 0đ · 0 đơn** · chưa phản hồi 138,27tr | `delivered_qty > 0`, **tính cả `HOLD_GOLIVE`** | ❌ **LỆCH** |
+
+App Report 76,99tr − MISA ~23tr ⇒ **~54tr đến từ phần đối tác**, trong khi App Sale nói đối tác **chưa giao đơn nào**. Mâu thuẫn trực tiếp: App Sale ghi **chưa phản hồi 100%**, App Report lại tìm ra dòng có `delivered_qty > 0`.
+**Nghi điểm cụ thể:** nhánh fallback `COALESCE(resp.delivered_qty, resp.qty_delivered, monthly.delivered_qty, 0)` — có thể đang lấy `delivered_qty` từ bảng `monthly` (dữ liệu tổng/kỳ khác) chứ không phải phản hồi thật của đối tác trong kỳ. **Soi kỹ chỗ này.**
+
 ### VIỆC PHẢI LÀM — dán bằng chứng, không giải thích suông
 1. **Dán CẢ 7 DÒNG** trong slot T08 của App Report. Mỗi dòng: `source` (MISA/WEB) · `revenue_bucket` · `revenue_status` · mã đơn / `order_item_id` · `revenue_date` · số tiền · `emp_code` · đơn vị.
 2. **Cộng nhóm:** tổng theo MISA-official / MISA-pending / WEB-delivered / WEB-HOLD_GOLIVE. Bốn số này cộng lại phải = **76.993.720đ**.
@@ -60,7 +79,9 @@ git cherry-pick 21867c4
    - MISA-official có khớp **23,44tr** (CRM đã xuất HĐ) không?
    - MISA-pending có nằm trong **21,73tr** (CRM chưa xuất HĐ) không?
    - WEB-delivered: App Sale ghi **0 đơn / 0đ** — vậy App Report lấy đơn nào? Dán mã đơn + `delivered_qty` + `responded_at`.
-4. **Chốt câu hỏi nghiệp vụ cho CEO quyết:** doanh thu App Report **nên** tính theo *"đã thực hiện"* (chỉ đã xuất HĐ + đã giao) hay *"đặt hàng"* (gồm pending/chưa giao)? Nêu rõ **hiện đang** theo cách nào và **lệch bao nhiêu tiền**.
+4. **CEO ĐÃ CHỐT (A)** — không hỏi lại. Sửa cho App Report **khớp "ĐÃ THỰC HIỆN" của App Sale**: chỉ CRM đã xuất HĐ + đối tác đã thực giao. **Trước khi sửa phải báo: T07 có bị đổi số không, đổi bao nhiêu.**
+   - ‼ **T07 ĐÃ CHỐT SỔ — KHÔNG ĐƯỢC ĐỔI SỐ T07** (đã dùng để tính thưởng/phạt). Nếu công thức mới làm T07 lệch khỏi 30.917.892.673đ thì **DỪNG, báo CEO ngay**, không tự áp.
+   - Áp công thức thống nhất từ **T08 trở đi**; T07 giữ nguyên số đã chốt.
 5. **Kiểm kỳ:** App Report ghi *"dữ liệu tới 01/08"* trong khi App Sale lọc tới 02/08 — 02/08 có đơn không, vì sao chưa vào App Report?
 
 **Ràng buộc:** chỉ ĐỌC App Sale. **KHÔNG tự đổi định nghĩa doanh thu** — báo số, chờ CEO chốt. Nếu phát hiện App Report đang cộng nhầm thì nêu rõ **sai bao nhiêu tiền** trước khi sửa.
