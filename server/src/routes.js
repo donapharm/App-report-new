@@ -46,6 +46,7 @@ const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
+const employeeCostAllGuard = require('./employeeCostAllGuard');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
@@ -87,26 +88,29 @@ const requireCeoDelivery = (req, res, next) => (req.session.role === 'ceo' || re
 const requireCeoQlnb = (req, res, next) => (req.session.role === 'ceo' || String(req.session.emp_code || '').toUpperCase() === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được xem dữ liệu quản trị QLNB.', code: 'DORMANT_CEO_REQUIRED' });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
+let memoGeneration = 0;
 let memoDataSignature = null;
 const EMPLOYEE_COST_ALL_BASE_TTL_MS = 6 * 60 * 60 * 1000;
 // ‼ Kết quả TỐT giữ 6 giờ thì hợp lý, nhưng kết quả CÓ NV LỖI NGUỒN mà cũng giữ 6
 // giờ thì hỏng nửa ngày mới lộ — đúng vụ 01/08: 21 NV hiện 0đ, cache che mất tới
 // chiều mới thấy. Hỏng thì phải biết SỚM: giữ ngắn để lần mở kế tiếp tự thử lại.
-const EMPLOYEE_COST_ALL_DEGRADED_TTL_MS = 2 * 60 * 1000;
+const EMPLOYEE_COST_ALL_ERROR_TTL_MS = employeeCostAllGuard.errorTtlMs();
+const EMPLOYEE_COST_ALL_DEGRADED_TTL_MS = EMPLOYEE_COST_ALL_ERROR_TTL_MS;
 
 // Bản gộp có NV nào không lấy được nguồn, hoặc đang phải dùng bảng tỷ lệ cũ?
 function employeeCostAllDegraded(merged) {
   if (!merged || typeof merged !== 'object') return false;
   if (merged.rateStale === true) return true;
-  const periods = Array.isArray(merged.periods) ? merged.periods : [merged];
-  return periods.some((period) => Number(period?.match?.unavailableEmployeeCount || 0) > 0
-    || (Array.isArray(period?.match?.unavailableEmployees) && period.match.unavailableEmployees.length > 0));
+  return employeeCostAllGuard.isDegradedPayload(merged);
 }
 // Bản gộp hết hạn vẫn được dùng tạm tối đa 10 phút trong lúc dựng lại ngầm.
 const EMPLOYEE_COST_ALL_STALE_MS = 10 * 60 * 1000;
 // Nạp kho số ứng lần 1 cho bảng toàn đội — hạn riêng, ngắn hơn hạn chung.
 const SALARY_ADVANCE_WARM_DEADLINE_MS = 8_000;
 const EMPLOYEE_COST_ALL_VIEW_TTL_MS = 60 * 1000;
+const EMPLOYEE_COST_ALL_BUILD_CONCURRENCY = employeeCostAllGuard.buildConcurrency();
+const EMPLOYEE_COST_ALL_MAX_RSS_BYTES = employeeCostAllGuard.maxRssBytes();
+const EMPLOYEE_COST_ALL_ADMISSION_RSS_BYTES = employeeCostAllGuard.admissionLimitBytes(EMPLOYEE_COST_ALL_MAX_RSS_BYTES);
 const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
   'from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route', 'date',
 ]);
@@ -165,43 +169,58 @@ function clearTargetDependentCache() {
   // after each versioned save so no actor/scope receives a stale formula.
   memo.clear();
 }
-// `ttlFor(value)` (tuỳ chọn) cho phép rút ngắn TTL sau khi biết kết quả — dùng để
-// kết quả THIẾU/LỖI không được giữ lâu bằng kết quả tốt.
-/**
- * @param {number} staleMs  CEO duyệt 04/08 — TRẢ SỐ CŨ NGAY, DỰNG LẠI NGẦM.
- *   Hết hạn mà vẫn còn bản cũ trong khoảng này thì trả luôn bản cũ (mở màn tức thì)
- *   rồi dựng bản mới ở nền cho lần sau. Trước đây người xui xẻo mở đúng lúc cache
- *   vừa hết hạn phải ngồi chờ dựng lại cả bảng 21 NV.
- *   ‼ Chỉ hoãn việc TẢI LẠI, không bịa số: bản cũ là số thật của ≤ staleMs trước,
- *   và vẫn mang nguyên cờ "thiếu nguồn"/tên NV lỗi của lần dựng đó.
- */
-function memoGet(key, ttlMs, build, ttlFor, { staleMs = 0 } = {}) {
+// `ttlForValue` cho phép rút ngắn TTL sau khi biết kết quả; `staleMs` trả bản
+// cũ ngay trong lúc dựng lại ngầm. Hỗ trợ chữ ký positional cũ để không phá call site.
+function memoGet(key, ttlMs, build, ttlForOrOptions = null, maybeOptions = {}) {
+  const positionalTtlFor = typeof ttlForOrOptions === 'function' ? ttlForOrOptions : null;
+  const options = positionalTtlFor
+    ? maybeOptions
+    : (ttlForOrOptions && typeof ttlForOrOptions === 'object' ? ttlForOrOptions : maybeOptions);
+  const ttlForValue = options.ttlForValue || positionalTtlFor;
+  const staleMs = Number(options.staleMs || 0);
   const hit = memo.get(key);
   const t = Date.now();
-  const ttl = hit?.ttl ?? ttlMs;
-  if (hit && t - hit.t < ttl) return hit.v;
-  if (hit && staleMs > 0 && t - hit.t < ttl + staleMs && !hit.refreshing) {
+  const hitTtl = hit?.ttlMs ?? ttlMs;
+  const hitStaleMs = hit?.staleMs ?? staleMs;
+  if (hit && t - hit.t < hitTtl) return hit.v;
+  if (hit && hitStaleMs > 0 && t - hit.t < hitTtl + hitStaleMs && !hit.refreshing) {
     hit.refreshing = true;
     Promise.resolve().then(build).then((fresh) => {
-      const entry = { t: Date.now(), v: fresh, ttl: typeof ttlFor === 'function' ? (Number(ttlFor(fresh)) || ttlMs) : ttlMs };
-      memo.set(key, entry);
+      const selected = typeof ttlForValue === 'function' ? Number(ttlForValue(fresh)) : ttlMs;
+      const selectedTtl = Number.isFinite(selected) && selected > 0 ? selected : ttlMs;
+      memo.set(key, {
+        t: Date.now(), v: fresh, ttlMs: selectedTtl,
+        // Never mask source recovery: stale-while-refresh is healthy-only.
+        staleMs: selectedTtl < ttlMs ? 0 : staleMs,
+        generation: memoGet.generation = (memoGet.generation || 0) + 1,
+      });
     }).catch((error) => {
-      // Dựng ngầm hỏng thì GIỮ bản cũ và cho phép thử lại — không xoá trắng.
       hit.refreshing = false;
       console.warn('[memo] dựng lại ngầm thất bại', { key: String(key).slice(0, 60), message: error?.message });
     });
     return hit.v;
   }
   const v = build();
-  const entry = { t, v, ttl: ttlMs };
+  const entry = { t, v, ttlMs, staleMs, generation: memoGet.generation = (memoGet.generation || 0) + 1, refreshing: false };
   memo.set(key, entry);
-  if (typeof ttlFor === 'function') {
-    Promise.resolve(v).then((resolved) => { entry.ttl = Number(ttlFor(resolved)) || ttlMs; }).catch(() => {});
-  }
-  // Promise đang chạy được dùng chung cho request đồng thời. Nếu upstream lỗi,
-  // bỏ ngay entry để lần sau được retry thay vì giữ rejected Promise hết TTL.
   if (v && typeof v.then === 'function') {
-    v.catch(() => { if (memo.get(key) === entry) memo.delete(key); });
+    v.then((value) => {
+      if (memo.get(key) !== entry) return;
+      if (typeof ttlForValue === 'function') {
+        const selected = Number(ttlForValue(value));
+        if (Number.isFinite(selected) && selected > 0) {
+          entry.ttlMs = selected;
+          if (selected < ttlMs) entry.staleMs = 0;
+        }
+      }
+      entry.t = Date.now();
+    }, () => { if (memo.get(key) === entry) memo.delete(key); });
+  } else if (typeof ttlForValue === 'function') {
+    const selected = Number(ttlForValue(v));
+    if (Number.isFinite(selected) && selected > 0) {
+      entry.ttlMs = selected;
+      if (selected < ttlMs) entry.staleMs = 0;
+    }
   }
   if (memo.size > 500) memo.delete(memo.keys().next().value);
   return v;
@@ -1071,40 +1090,51 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
+  // Reject before catalog fan-out as well as before employee fan-out. The lower
+  // admission threshold reserves reviewed headroom for parsing/merge/transform.
+  employeeCostAllGuard.assertMemoryBudget({ limitBytes: EMPLOYEE_COST_ALL_ADMISSION_RSS_BYTES });
   const roster = employeeCostRosterRows();
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   const sharedCatalogRowsByPeriod = {};
+  const catalogUnavailablePeriods = new Set();
   const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
   const catalogPeriods = [...new Set([...range.months, ...bonusQuarter.kys.map((ky) => catalogManagement.toHubPeriod(ky))])];
   // Stabilize the catalog/LKG source before deriving the key. getSnapshot may
   // refresh the local signature; keying before this step would place a warm
   // result under the previous signature and make the very next request cold.
-  // Song song hóa (Promise.all): trước đây nối tiếp, mỗi kỳ chờ tới 6.5s timeout
-  // DataHub -> ~4 kỳ ≈ 26s treo trên request lạnh. canonicalAssignmentSnapshot
-  // vẫn coalesce theo kỳ nên số lần gọi upstream không đổi; giữ cô lập lỗi từng kỳ.
-  await Promise.all(catalogPeriods.map(async (period) => {
+  // Keep catalog fan-out under the same reviewed ceiling as employee reads.
+  // canonicalAssignmentSnapshot still coalesces identical periods across callers.
+  await mapWithConcurrency(catalogPeriods, EMPLOYEE_COST_ALL_BUILD_CONCURRENCY, async (period) => {
+    employeeCostAllGuard.assertMemoryBudget({ limitBytes: EMPLOYEE_COST_ALL_MAX_RSS_BYTES });
     try {
       const snapshot = await canonicalAssignmentSnapshot(period);
       sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
     } catch (error) {
       sharedCatalogRowsByPeriod[period] = [];
+      catalogUnavailablePeriods.add(period);
       console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
     }
-  }));
+  });
   const buildMerged = async () => {
+    // Re-admit after catalog hydration before starting employee payloads.
+    employeeCostAllGuard.assertMemoryBudget({ limitBytes: EMPLOYEE_COST_ALL_ADMISSION_RSS_BYTES });
     const deadlineAt = Date.now() + EMPLOYEE_COST_ALL_DEADLINE_MS;
-    const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => employeeCostPayload(req, {
+    const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_BUILD_CONCURRENCY, (employee) => {
+      employeeCostAllGuard.assertMemoryBudget({ limitBytes: EMPLOYEE_COST_ALL_MAX_RSS_BYTES });
+      return employeeCostPayload(req, {
       requestedEmp: employee.emp_code,
       auditEvent,
       roster,
       sharedCatalogRowsByPeriod,
       includeSalaryAdvance: false,
       suppressAudit,
-    }), {
+      });
+    }, {
       deadlineAt,
       // NV chưa kịp ⇒ vào đúng luồng "thiếu nguồn" đã có, hiện tên trên băng đỏ.
       // Tuyệt đối KHÔNG trả 0 đồng thay cho "chưa lấy được".
       onSkip: (employee, reason, error) => {
+        if (error?.code === 'EMPLOYEE_COST_ALL_MEMORY_PRESSURE') throw error;
         if (reason === 'error') {
           console.warn('[employee-cost] NV lỗi nguồn', { empCode: employee.emp_code, message: error?.message });
         }
@@ -1119,7 +1149,8 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
         return stub;
       },
     });
-    const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+    employeeCostAllGuard.assertMemoryBudget({ limitBytes: EMPLOYEE_COST_ALL_ADMISSION_RSS_BYTES });
+    const merged = employeeCostTable.mergeEmployeeReports(reports, roster, { consumeRows: true });
     // ‼ NẠP KHO SỐ ỨNG LẦN 1 CHO NHỮNG NV CHƯA CÓ (CEO báo 04/08 19:30: bảng toàn
     // đội trống trơn trong khi xem từng người thì vẫn ra số).
     //
@@ -1175,22 +1206,41 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       merged.paymentTeam = null;
       console.warn('[payment-team] không dựng được bảng toàn đội', { message: error.message });
     }
+    Object.defineProperty(merged, 'sourceHealth', {
+      value: { catalogUnavailablePeriods: [...catalogUnavailablePeriods].sort() },
+      enumerable: false,
+      configurable: false,
+      writable: false,
+    });
     return merged;
+
   };
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
   // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
   // không chứa actor/session nên mọi admin hợp lệ dùng chung đúng một bản.
   if (!paginate) {
     const merged = await buildMerged();
+    employeeCostAllGuard.assertMemoryBudget({ limitBytes: EMPLOYEE_COST_ALL_ADMISSION_RSS_BYTES });
     return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: false, allEmployees: true }));
   }
-  // Giữ 6 giờ chỉ khi bản gộp SẠCH; có NV lỗi nguồn thì chỉ giữ 2 phút.
-  const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMerged,
-    (value) => (employeeCostAllDegraded(value) ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS : EMPLOYEE_COST_ALL_BASE_TTL_MS),
-    { staleMs: EMPLOYEE_COST_ALL_STALE_MS });
-  return memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
-    employeeCostTable.transformReport(await merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
-  ));
+  const baseKey = employeeCostAllCacheKey(req, 'base');
+  const merged = memoGet(baseKey, EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMerged, {
+    ttlForValue: (value) => value?.rateStale === true
+      ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS
+      : employeeCostAllGuard.ttlForPayload(
+        value, EMPLOYEE_COST_ALL_BASE_TTL_MS, EMPLOYEE_COST_ALL_ERROR_TTL_MS,
+      ),
+    staleMs: EMPLOYEE_COST_ALL_STALE_MS,
+  });
+  // Couple each light view to the exact base generation so an old view cannot
+  // outlive a rebuilt base after a degraded/error TTL.
+  const baseGeneration = memo.get(baseKey)?.generation || 0;
+  const viewKey = `${employeeCostAllCacheKey(req, 'view')}:base-generation:${baseGeneration}`;
+  return memoGet(viewKey, EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => {
+    const base = await merged;
+    employeeCostAllGuard.assertMemoryBudget({ limitBytes: EMPLOYEE_COST_ALL_ADMISSION_RSS_BYTES });
+    return employeeCostTable.transformReport(base, employeeCostTableOptions(req, { paginate: true, allEmployees: true }));
+  });
 }
 
 function monthInputForKy(ky) {

@@ -72,7 +72,7 @@ test('‼ hạn chót phải nhỏ hơn ngưỡng trình duyệt/Cloudflare bỏ
   assert.ok(EMPLOYEE_COST_ALL_DEADLINE_MS < 100_000, 'phải dưới 100s (Cloudflare cắt, lỗi 524)');
   assert.ok(EMPLOYEE_COST_ALL_CONCURRENCY >= 4, 'ít luồng quá thì 21 NV chia thành quá nhiều đợt');
   // ‼ Bản "Tất cả NV" BẮT BUỘC đi qua hạn chót — quay lại mapWithConcurrency là treo lại.
-  assert.match(source, /mapWithDeadline\(roster, EMPLOYEE_COST_ALL_CONCURRENCY/);
+  assert.match(source, /mapWithDeadline\(roster, EMPLOYEE_COST_ALL_BUILD_CONCURRENCY/);
 });
 
 test('‼ NV bị cắt phải HIỆN TÊN, không được biến mất khỏi bảng', () => {

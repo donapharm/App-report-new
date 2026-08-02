@@ -10,6 +10,7 @@ process.env.DATA_HUB_UNIT_GROUPS_CACHE_FILE = path.join(os.tmpdir(), 'report-per
 const store = require('../src/store');
 const smart = require('../src/smart');
 const employeeCost = require('../src/employeeCost');
+const employeeCostAllGuard = require('../src/employeeCostAllGuard');
 const catalogManagement = require('../src/catalogManagement');
 const router = require('../src/routes');
 
@@ -201,6 +202,257 @@ test('employee-cost ALL: một NV lỗi không kéo sập bảng, và không gi�
   }
 });
 
+test('employee-cost ALL retries a degraded source snapshot after short TTL but keeps a recovered snapshot hot', async () => {
+  const realNow = Date.now;
+  const originalSignature = store.activeDataSignature;
+  const originalEmployeeCostSignature = store.employeeCostDataSignature;
+  const originalTargetRoster = store.targetRoster;
+  const originalGetForSession = employeeCost.getForSession;
+  const originalSnapshot = catalogManagement.getSnapshot;
+  let now = realNow();
+  let builds = 0;
+  let outcome = 'upstream_unavailable';
+  Date.now = () => now;
+  store.activeDataSignature = () => 'cost-outcome-aware-ttl';
+  store.employeeCostDataSignature = () => 'cost-outcome-aware-ttl';
+  store.targetRoster = () => [{ emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true }];
+  catalogManagement.getSnapshot = async () => ({ rows: [], catalog: [] });
+  employeeCost.getForSession = async ({ requestedEmp }, options) => {
+    builds += 1;
+    return {
+      ...employeeCost.emptyRangePayload(requestedEmp, employeeCost.parseMonthRange({ from: options.from, to: options.to })),
+      sourceOutcome: outcome,
+    };
+  };
+  const query = { emp: 'ALL', from: '2026-05', to: '2026-05', page: '1', pageSize: '20' };
+  try {
+    const degraded = await invoke('/employee-cost', query, admin);
+    assert.equal(degraded.body.periods[0].match.unavailableEmployeeCount, 1);
+    assert.equal(builds, 1);
+
+    now += employeeCostAllGuard.DEFAULT_ERROR_TTL_MS - 1;
+    await invoke('/employee-cost', query, admin);
+    assert.equal(builds, 1, 'degraded base stays coalesced only inside its short TTL');
+
+    outcome = 'ok';
+    now += 2;
+    const recovered = await invoke('/employee-cost', query, admin);
+    assert.equal(builds, 2, 'degraded base must retry without waiting six hours');
+    assert.equal(recovered.body.periods[0].match.unavailableEmployeeCount, 0);
+
+    now += 60 * 60 * 1000;
+    await invoke('/employee-cost', query, admin);
+    assert.equal(builds, 2, 'healthy recovered base keeps the established long TTL');
+  } finally {
+    Date.now = realNow;
+    store.activeDataSignature = originalSignature;
+    store.employeeCostDataSignature = originalEmployeeCostSignature;
+    store.targetRoster = originalTargetRoster;
+    employeeCost.getForSession = originalGetForSession;
+    catalogManagement.getSnapshot = originalSnapshot;
+  }
+});
+
+test('employee-cost ALL bounds both catalog and employee fan-out at reviewed concurrency two', async () => {
+  const originalSignature = store.activeDataSignature;
+  const originalEmployeeCostSignature = store.employeeCostDataSignature;
+  const originalTargetRoster = store.targetRoster;
+  const originalGetForSession = employeeCost.getForSession;
+  const originalSnapshot = catalogManagement.getSnapshot;
+  let activeCatalog = 0;
+  let maxCatalog = 0;
+  let catalogCalls = 0;
+  let activeEmployees = 0;
+  let maxEmployees = 0;
+  let employeeCalls = 0;
+  const pause = () => new Promise((resolve) => setTimeout(resolve, 5));
+  store.activeDataSignature = () => 'cost-bounded-fanout-2031';
+  store.employeeCostDataSignature = () => 'cost-bounded-fanout-2031';
+  store.targetRoster = () => Array.from({ length: 5 }, (_, index) => ({
+    emp_code: `DN${String(index + 1).padStart(3, '0')}`,
+    name: `NV ${index + 1}`,
+    role: 'sale',
+    has_target: true,
+  }));
+  catalogManagement.getSnapshot = async () => {
+    catalogCalls += 1;
+    activeCatalog += 1;
+    maxCatalog = Math.max(maxCatalog, activeCatalog);
+    await pause();
+    activeCatalog -= 1;
+    return { rows: [], catalog: [] };
+  };
+  employeeCost.getForSession = async ({ requestedEmp }, options) => {
+    employeeCalls += 1;
+    activeEmployees += 1;
+    maxEmployees = Math.max(maxEmployees, activeEmployees);
+    await pause();
+    activeEmployees -= 1;
+    return { ...employeeCost.emptyRangePayload(requestedEmp, employeeCost.parseMonthRange({ from: options.from, to: options.to })), sourceOutcome: 'ok' };
+  };
+  try {
+    const response = await invoke('/employee-cost', {
+      emp: 'ALL', from: '2031-01', to: '2031-06', page: '1', pageSize: '20',
+    }, admin);
+    assert.equal(response.status, 200);
+    assert.equal(catalogCalls, 6, 'six unique requested/quarter periods must each be read once');
+    assert.equal(maxCatalog, 2, 'catalog DataHub fan-out must be bounded to two');
+    assert.equal(employeeCalls, 5);
+    assert.equal(maxEmployees, 2, 'employee DataHub fan-out must be bounded to two');
+  } finally {
+    store.activeDataSignature = originalSignature;
+    store.employeeCostDataSignature = originalEmployeeCostSignature;
+    store.targetRoster = originalTargetRoster;
+    employeeCost.getForSession = originalGetForSession;
+    catalogManagement.getSnapshot = originalSnapshot;
+  }
+});
+
+test('catalog failure marks the hidden base degraded and retries after the short TTL', async () => {
+  const realNow = Date.now;
+  const originalSignature = store.activeDataSignature;
+  const originalEmployeeCostSignature = store.employeeCostDataSignature;
+  const originalTargetRoster = store.targetRoster;
+  const originalGetForSession = employeeCost.getForSession;
+  const originalSnapshot = catalogManagement.getSnapshot;
+  let now = realNow();
+  let builds = 0;
+  let catalogFails = true;
+  Date.now = () => now;
+  store.activeDataSignature = () => 'cost-catalog-degraded-2032';
+  store.employeeCostDataSignature = () => 'cost-catalog-degraded-2032';
+  store.targetRoster = () => [{ emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true }];
+  catalogManagement.getSnapshot = async () => {
+    if (catalogFails) throw new Error('catalog unavailable in test');
+    return { rows: [], catalog: [] };
+  };
+  employeeCost.getForSession = async ({ requestedEmp }, options) => {
+    builds += 1;
+    return { ...employeeCost.emptyRangePayload(requestedEmp, employeeCost.parseMonthRange({ from: options.from, to: options.to })), sourceOutcome: 'ok' };
+  };
+  const query = { emp: 'ALL', from: '2032-05', to: '2032-05', page: '1', pageSize: '20' };
+  try {
+    const degraded = await invoke('/employee-cost', query, admin);
+    assert.equal(degraded.status, 200);
+    assert.equal(Object.prototype.hasOwnProperty.call(degraded.body, 'sourceHealth'), false, 'internal health metadata must not change public JSON');
+    assert.equal(degraded.body.periods[0].match.unavailableEmployeeCount, 0, 'employee source itself remains healthy in this regression');
+    assert.equal(builds, 1);
+
+    now += employeeCostAllGuard.DEFAULT_ERROR_TTL_MS - 1;
+    await invoke('/employee-cost', query, admin);
+    assert.equal(builds, 1, 'catalog-degraded base remains hot only inside error TTL');
+
+    catalogFails = false;
+    now += 2;
+    await invoke('/employee-cost', query, admin);
+    assert.equal(builds, 2, 'catalog-degraded base must rebuild after two minutes');
+
+    now += 60 * 60 * 1000;
+    await invoke('/employee-cost', query, admin);
+    assert.equal(builds, 2, 'recovered catalog base keeps healthy TTL');
+  } finally {
+    Date.now = realNow;
+    store.activeDataSignature = originalSignature;
+    store.employeeCostDataSignature = originalEmployeeCostSignature;
+    store.targetRoster = originalTargetRoster;
+    employeeCost.getForSession = originalGetForSession;
+    catalogManagement.getSnapshot = originalSnapshot;
+  }
+});
+
+test('RAM gate rejection makes zero catalog/employee calls and is evicted for a safe retry', async () => {
+  const originalSignature = store.activeDataSignature;
+  const originalEmployeeCostSignature = store.employeeCostDataSignature;
+  const originalTargetRoster = store.targetRoster;
+  const originalGetForSession = employeeCost.getForSession;
+  const originalSnapshot = catalogManagement.getSnapshot;
+  const originalAssertMemoryBudget = employeeCostAllGuard.assertMemoryBudget;
+  let catalogCalls = 0;
+  let employeeCalls = 0;
+  store.activeDataSignature = () => 'cost-ram-gate-eviction';
+  store.employeeCostDataSignature = () => 'cost-ram-gate-eviction';
+  store.targetRoster = () => [{ emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true }];
+  catalogManagement.getSnapshot = async () => {
+    catalogCalls += 1;
+    return { rows: [], catalog: [] };
+  };
+  employeeCost.getForSession = async ({ requestedEmp }, options) => {
+    employeeCalls += 1;
+    return employeeCost.emptyRangePayload(requestedEmp, employeeCost.parseMonthRange({ from: options.from, to: options.to }));
+  };
+  const query = { emp: 'ALL', from: '2033-04', to: '2033-04', page: '1', pageSize: '20' };
+  try {
+    employeeCostAllGuard.assertMemoryBudget = () => { throw employeeCostAllGuard.memoryPressureError(); };
+    const blocked = await invoke('/employee-cost', query, admin);
+    assert.equal(blocked.status, 503);
+    assert.equal(blocked.body.code, 'EMPLOYEE_COST_ALL_MEMORY_PRESSURE');
+    assert.equal(catalogCalls, 0, 'admission gate must run before the first catalog fetch');
+    assert.equal(employeeCalls, 0, 'admission gate must run before the first employee fetch');
+
+    employeeCostAllGuard.assertMemoryBudget = originalAssertMemoryBudget;
+    const retried = await invoke('/employee-cost', query, admin);
+    assert.equal(retried.status, 200);
+    assert.ok(catalogCalls > 0);
+    assert.equal(employeeCalls, 1, 'rejected request must not poison the retry');
+  } finally {
+    employeeCostAllGuard.assertMemoryBudget = originalAssertMemoryBudget;
+    store.activeDataSignature = originalSignature;
+    store.employeeCostDataSignature = originalEmployeeCostSignature;
+    store.targetRoster = originalTargetRoster;
+    employeeCost.getForSession = originalGetForSession;
+    catalogManagement.getSnapshot = originalSnapshot;
+  }
+});
+
+test('rising RSS during employee fan-out stops before remaining employees and before merge', async () => {
+  const originalSignature = store.activeDataSignature;
+  const originalEmployeeCostSignature = store.employeeCostDataSignature;
+  const originalTargetRoster = store.targetRoster;
+  const originalGetForSession = employeeCost.getForSession;
+  const originalSnapshot = catalogManagement.getSnapshot;
+  const originalAssertMemoryBudget = employeeCostAllGuard.assertMemoryBudget;
+  const hardLimit = employeeCostAllGuard.maxRssBytes();
+  let hardChecks = 0;
+  let employeeCalls = 0;
+  store.activeDataSignature = () => 'cost-rising-ram-2034';
+  store.employeeCostDataSignature = () => 'cost-rising-ram-2034';
+  store.targetRoster = () => Array.from({ length: 4 }, (_, index) => ({
+    emp_code: `DN${String(index + 1).padStart(3, '0')}`,
+    name: `NV ${index + 1}`,
+    role: 'sale',
+    has_target: true,
+  }));
+  catalogManagement.getSnapshot = async () => ({ rows: [], catalog: [] });
+  employeeCost.getForSession = async ({ requestedEmp }, options) => {
+    employeeCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    return employeeCost.emptyRangePayload(requestedEmp, employeeCost.parseMonthRange({ from: options.from, to: options.to }));
+  };
+  employeeCostAllGuard.assertMemoryBudget = ({ limitBytes } = {}) => {
+    if (limitBytes === hardLimit) {
+      hardChecks += 1;
+      // 3 catalog checks, then permit exactly the first 2 employee requests.
+      if (hardChecks >= 6) throw employeeCostAllGuard.memoryPressureError();
+    }
+    return { rss: 1, limitBytes };
+  };
+  try {
+    const blocked = await invoke('/employee-cost', {
+      emp: 'ALL', from: '2034-08', to: '2034-08', page: '1', pageSize: '20',
+    }, admin);
+    assert.equal(blocked.status, 503);
+    assert.equal(blocked.body.code, 'EMPLOYEE_COST_ALL_MEMORY_PRESSURE');
+    assert.equal(employeeCalls, 2, 'no employee beyond the first admitted pair may start');
+  } finally {
+    employeeCostAllGuard.assertMemoryBudget = originalAssertMemoryBudget;
+    store.activeDataSignature = originalSignature;
+    store.employeeCostDataSignature = originalEmployeeCostSignature;
+    store.targetRoster = originalTargetRoster;
+    employeeCost.getForSession = originalGetForSession;
+    catalogManagement.getSnapshot = originalSnapshot;
+  }
+});
+
 test('all requested P0 routes are memoized after auth and cache keeps private/no-store employee-cost semantics', () => {
   const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   for (const [routePath, name] of [
@@ -218,7 +470,8 @@ test('all requested P0 routes are memoized after auth and cache keeps private/no
   assert.match(source, /router\.get\('\/employee-cost'[\s\S]*?Cache-Control', 'private, no-store'/);
   assert.match(source, /function memoJson[\s\S]*?Cache-Control', 'private, no-store'/);
   assert.match(source, /function currentMemoDataSignature\(\)[\s\S]*?store\.activeDataSignature\(\)[\s\S]*?memo\.clear\(\)/);
-  assert.match(source, /v\.catch\(\(\) => \{ if \(memo\.get\(key\) === entry\) memo\.delete\(key\); \}\)/);
+  assert.match(source, /v\.then\([\s\S]*?memo\.get\(key\) === entry[\s\S]*?memo\.delete\(key\)/);
+  assert.match(source, /ttlForValue:[\s\S]*?EMPLOYEE_COST_ALL_ERROR_TTL_MS/);
   const analyticsSource = fs.readFileSync(require.resolve('../src/analytics'), 'utf8');
   assert.match(analyticsSource, /cacheKey = JSON\.stringify\(\{ data: store\.dashboardDataSignature\(\), list,/);
   const storeSource = fs.readFileSync(require.resolve('../src/store'), 'utf8');
