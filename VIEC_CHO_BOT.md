@@ -9,39 +9,36 @@
 
 ---
 
-# 📌 THỨ TỰ VIỆC — cập nhật 03/08/2026 23:40 GMT+7
+# 📌 VIỆC CÒN LẠI — cập nhật 04/08/2026 00:05 GMT+7
 
-### ‼ VIỆC 2 — làm ĐÚNG thứ tự, cấm tự đoán nghĩa trạng thái
-App Salary vừa thêm **bước duyệt kỳ**: chưa duyệt thì họ trả `amount = 0` kèm `status` mới (`approved` / `provisional`). Hai trạng thái này **không có trong hợp đồng** nên App Report chặn — đúng thiết kế.
-1. **Dán nguyên JSON thật** của `first-advance` (kỳ 07/2026, DN007 và DN009) cho CEO.
-2. **Hỏi App Salary bằng văn bản**: `provisional` và `approved` nghĩa chính xác là gì; khi `provisional` thì `amount = 0` là *"chưa duyệt nên chưa có số"* hay *"đã duyệt và bằng 0"*. **Khác nhau ở đây là khác nhau về TIỀN.**
-3. Có câu trả lời rồi mới sửa: cập nhật `docs/APP_REPORT_EMPLOYEE_COST_CONTRACT.md`-tương đương cho salary-advance + `validateProjection` + hiển thị.
-4. **‼ Chặn tiền:** `provisional` (chưa duyệt) **KHÔNG được** đưa vào KPI "Còn lại sau ứng lần 1". Nếu tính, "còn lại" sẽ bằng nguyên tổng chi phí — số sai mà trông như số thật. Hiện đang giữ `—`, phải giữ nguyên như vậy cho tới khi chốt xong.
-5. Claude duyệt trước khi deploy. Không nới hợp đồng bằng cách đoán.
+> Làm từ trên xuống. Xong việc nào báo CEO việc đó rồi mới sang việc kế. Không mở việc mới giữa chừng.
 
-
-
-| # | Việc | Hạn | Trạng thái | Ai làm |
+| # | Việc | Hạn | Đang vướng ở đâu | Ai làm |
 |---|---|---|---|---|
-| ✅ | ~~Deploy `4e759bd`~~ — XONG 22:34. T08 "Tất cả NV" **đã lên số**: tổng `118.066.246đ`, policy hiệu lực từ 07/2026. T07/DN007 `68.726.986đ` không đổi một đồng. | — | **xong** | — |
-| ✅ | ~~Deploy `c1fb222`~~ — XONG 23:02. Nút tháng T08/T07/T06/T05 chạy · bộ lọc nâng cao đóng sẵn · doanh thu hiện cả trước và sau VAT. | — | **xong** | — |
-| **1** | **Deploy `383692f`** (nằm ngay trên `c1fb222`, cùng nhánh, fast-forward sạch) — ô doanh thu ghi rõ *"chưa gồm N dòng đang cách ly"*, để CEO nhìn là hiểu vì sao App Report `2.149.979.172đ` còn App Sale `2.151.774.772đ`. **Kèm việc: dán ra dòng cách ly T08 là đơn nào · mã hàng nào · vì sao chưa gán được NV · ai xử lý.** Xử lý xong hai app khớp `0đ`. | sáng 04/08 | code xong, đã test | bot |
-| **2** | **Chốt hợp đồng "Ứng lần 1" với App Salary** — họ trả `status: approved/provisional` ngoài hợp đồng 10 khoá. App Report đang hiện đúng *"App Salary đổi hợp đồng"* và giữ "Còn lại sau ứng" = `—`. **Đừng vá vội.** | sáng 04/08 | chờ chốt nghĩa | bot + App Salary → Claude duyệt |
-| **3** | **Nghiệm thu VP018 + DN022** | **08/08** | code đã lên PROD, chưa nghiệm thu | bot |
+| **1** | **Deploy `383692f`** — ô doanh thu ghi rõ *"chưa gồm N dòng đang cách ly"*. Nằm ngay trên `c1fb222`, fast-forward sạch. **Kèm: dán ra dòng cách ly T08** — đơn nào · mã hàng nào · vì sao chưa gán được NV · ai xử lý. Xử lý xong hai app khớp `0đ`. | ngay | code xong, đã test, chờ bấm | bot |
+| **2** | **Chốt hợp đồng "Ứng lần 1"** — App Salary trả `status: approved/provisional` ngoài hợp đồng 10 khoá. **Cấm tự đoán nghĩa** (chi tiết mục dưới). Đang hiện đúng *"App Salary đổi hợp đồng"*, "Còn lại sau ứng" giữ `—`. | 04/08 | chờ App Salary trả lời bằng văn bản | bot + App Salary → Claude duyệt |
+| **3** | **Nghiệm thu VP018 + DN022** trên PROD | **08/08** | code đã lên PROD, chưa nghiệm thu | bot |
 | **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
-| ✅ | ~~Giao target T08~~ — **CEO ĐÃ GIAO XONG**, xác nhận trên ảnh 23:21: Target tổng đội `31.270.318.669đ` · **21/21 NV có target** · Quý `31.490.318.669đ`. Cả 3 ô Target/Thưởng/Phạt đã mở. Claude ghi nhầm là "chưa giao" — đã sửa. | — | **xong** | — |
-| **6** | **Bật tin nhắn chi phí/thưởng** | **09/08** | chờ xong #3 | bot |
-| **7** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do | sau 08/08 | nợ từ 29/07, chưa có màn nào | bot |
-| **8** | **So tháng trước + nhớ lựa chọn** (CEO duyệt 03/08) | sau 08/08 | chưa code | Claude |
-| **9** | **Bản RAM `9986f0a`** — cắt loop mất dữ liệu chi phí | sau 08/08 | chưa deploy | bot |
-| **10** | **Module "Thanh toán CP của tôi" GĐ1** | không gấp | có spec + PowerPoint, chưa code | bot |
-| **11** | **Đổi `SALARY_SERVICE_TOKEN`** | không gấp | Claude đề xuất, CEO chưa gật | bot, 5 phút |
+| **5** | **Bật tin nhắn chi phí/thưởng** (`EMP_COST_NOTIFY`, `BONUS_NOTIFY`) | **09/08** | chờ xong #3 | bot |
+| **6** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) | sau 08/08 | nợ từ 29/07, **chưa có màn nào** | bot |
+| **7** | **So tháng trước + nhớ lựa chọn** (CEO duyệt 03/08) | sau 08/08 | chưa code | Claude |
+| **8** | **Bản RAM `9986f0a`** — cắt loop mất dữ liệu chi phí (`vault-audit.lock` chưa tự chữa) | sau 08/08 | chưa deploy | bot |
+| **9** | **Module "Thanh toán CP của tôi" GĐ1** | không gấp | có spec + PowerPoint, chưa code | bot |
+| **10** | **Đổi `SALARY_SERVICE_TOKEN`** | không gấp | CEO chưa gật | bot, 5 phút |
 
-**Quy tắc:** làm từ trên xuống, xong việc nào báo CEO việc đó rồi mới sang việc kế. Không mở việc mới giữa chừng.
+**Không còn việc nào nằm ở CEO.**
 
-### Chi tiết việc 8 — CEO đã duyệt 03/08
-- **So với tháng trước:** mỗi ô tiền thêm ↑↓ và % so tháng liền trước. Làm dạng **nút bật/tắt** (không tự tải) vì chế độ "Tất cả NV" mà tải thêm một tháng nữa sẽ nặng gấp đôi; trạng thái bật/tắt được nhớ lại.
-- **Nhớ lựa chọn lần trước:** mở app về đúng NV + kỳ đang xem dở, thay vì luôn nhảy về "Tất cả NV" tháng hiện tại. **Chỉ lưu lựa chọn (mã NV, kỳ)** — tuyệt đối không lưu số tiền/dữ liệu nhân sự; đọc ra phải kiểm định dạng, rác trong storage không được thành tham số truy vấn.
+### ✅ Đã xong 03/08 (không làm lại)
+Doanh thu khớp App Sale `0đ` (`bf7a7a0`) · tỷ lệ % **tự có hiệu lực sang mọi tháng sau** (`d1fdfdf`) · T08 "Tất cả NV" lên số `118.066.246đ` · ô "Ứng lần 1" nói đúng lý do (`4e759bd`) · nút chọn tháng + bộ lọc nâng cao + doanh thu trước/sau VAT (`c1fb222`) · **CEO đã giao target T08 đủ 21/21 NV**.
+Ghim tiền: **T06 `28.403.136.096đ`** · **T07 `30.917.892.673đ`** · **T08 `2.151.774.772đ`** · T07/DN007 `68.726.986đ`. Lệch là DỪNG.
+
+### ‼ Chi tiết việc 2 — cấm tự đoán nghĩa trạng thái
+App Salary vừa thêm **bước duyệt kỳ**: chưa duyệt thì trả `amount = 0` kèm `status` mới (`approved` / `provisional`) — không có trong hợp đồng nên App Report chặn, đúng thiết kế.
+1. **Dán nguyên JSON thật** của `first-advance` (kỳ 07/2026, DN007 và DN009) cho CEO.
+2. **Hỏi App Salary bằng văn bản**: `provisional` và `approved` nghĩa chính xác là gì; `provisional` + `amount = 0` là *"chưa duyệt nên chưa có số"* hay *"đã duyệt và bằng 0"*. **Khác nhau ở đây là khác nhau về TIỀN.**
+3. Có câu trả lời rồi mới sửa hợp đồng + `validateProjection` + hiển thị.
+4. **‼ Chặn tiền:** `provisional` (chưa duyệt) **KHÔNG được** đưa vào KPI "Còn lại sau ứng lần 1" — nếu tính, "còn lại" sẽ bằng nguyên tổng chi phí, số sai mà trông như số thật. Đang giữ `—`, phải giữ nguyên tới khi chốt xong.
+5. Claude duyệt trước khi deploy.
 
 ---
 
