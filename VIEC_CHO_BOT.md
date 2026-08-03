@@ -4,8 +4,43 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 03/08/2026 — VIỆC 0D ĐÃ XONG (`bf7a7a0`, chênh 0đ). Việc kế tiếp: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
+**Cập nhật lần cuối:** 03/08/2026 19:50 GMT+7 — thêm **VIỆC 3A** (màn "Chi phí của tôi" T08 không ra số) lên trên cùng. Sau đó: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
 
+
+---
+
+# 🔴🔴 VIỆC 3A — CEO ĐANG BỊ CHẶN, LÀM TRƯỚC MỌI THỨ
+
+> CEO 03/08 19:44 (ảnh màn "Chi phí của tôi", T08.2026): *"đề nghị mày lấy lại giống như T07.2026 tao đã làm kỹ rồi. Giờ mày thay đổi tùm lum, tao rối quá là rối. Bây giờ các ô KPI này cũng không lấy được số là sao vậy."*
+
+### Claude đã soi code — KHÔNG phải do việc doanh thu (VIỆC 0D)
+`git log` từ 28/07: **không commit nào của VIỆC 0D đụng** `employeeCost.js` / `employeeCostTable.js` / `EmployeeCost.jsx`. Projection vẫn giữ nguyên `unit_code` + `iit_code` (`qlnb_code`) — đúng 2 trường dùng để tra %. **Không được đổi luật doanh thu để "chữa" màn này.**
+
+### Nguyên nhân thật
+Màn hình tự khai ra: **`0 khớp + 301 thiếu % = 301 cặp`**. Tra % theo khoá `đơn vị × mã hàng × THÁNG`; kỳ T08 chưa có bảng tỷ lệ nên `costLookup` rỗng ⇒ mọi ô tiền không tính được. T07 CEO đã nạp đủ nên đầy số.
+Ba ô còn lại KHÔNG phải lỗi: *Target tổng đội* = **T08 chưa giao target**; *Ứng lần 1* / *Còn lại sau ứng lần 1* = **đúng thiết kế đã duyệt 01/08** (App Salary chỉ self-scope, phải chọn 1 NV, cấm tổng hợp toàn đội).
+
+### Việc 1 — XÁC MINH (làm đầu tiên, 5 phút, đừng sửa gì trước khi có kết quả)
+1. Mở đúng màn đó, đổi bộ lọc sang **Tháng Bảy 2026** → dán lại **Khớp doanh thu %** và **Tổng chi phí tháng**.
+   - **T07 vẫn đầy số** ⇒ code không hỏng, chỉ thiếu dữ liệu T08 → làm tiếp việc 2.
+   - **T07 cũng về 0%** ⇒ **DỪNG NGAY, báo CEO**, đây là hồi quy thật, không được vá giao diện đè lên.
+2. Hỏi DataHub: kỳ **08/2026** đã có bảng tỷ lệ % chi phí theo mã hàng chưa? Dán câu trả lời (có/không + ngày dự kiến có).
+3. Nếu DataHub bảo **đã có** mà app vẫn 0 khớp ⇒ dán 3 cặp `unit_code` + `iit_code` phía doanh thu và 3 cặp phía bảng %, so từng ký tự để chỉ ra lệch ở đâu.
+
+### Việc 2 — LẤY BẢN VÁ HIỂN THỊ (Claude đã làm sẵn)
+```
+git fetch origin claude/fix-cost-nomatch-display-20260803
+git cherry-pick dc07a18
+```
+- Chỉ đụng **lớp hiển thị web**: 0 dòng khớp ⇒ ô tiền hiện **"—"** kèm câu *"Kỳ này CHƯA CÓ bảng % chi phí — N/N cặp thiếu %…"*, thay cho **0đ · tạm tính** đang làm CEO tưởng app hỏng.
+- **KHÔNG đổi công thức, KHÔNG đụng backend, KHÔNG đổi một đồng nào.** Coverage thấp mà vẫn có dòng khớp thì giữ nguyên số tạm tính như cũ (đã có test chặn).
+- Claude đã chạy: web **104/104 pass** (thêm 2 test hồi quy) · `npm run build` sạch.
+- Deploy: build web, reload **chỉ** `app-report`. Không restart bot Telegram.
+
+### Nghiệm thu
+- T08 → ô tổng chi phí hiện **"—" · nhãn "chưa có bảng %"**, KHÔNG còn `0đ`.
+- T07 → số **không đổi một đồng** so với trước khi cherry-pick.
+- Dán cho CEO: kỳ 08/2026 thiếu **đúng cái gì** và **ai** phải nạp (DataHub hay App Sale), kèm ngày có.
 
 ---
 
@@ -16,6 +51,7 @@ Làm đúng thứ tự dưới đây, xong việc nào báo CEO việc đó:
 
 | Thứ tự | Việc | Vì sao trước |
 |---|---|---|
+| **0** | **VIỆC 3A** (ngay phía trên) — màn "Chi phí của tôi" T08 không ra số | **CEO đang bị chặn ngay lúc này** |
 | **1** | **VIỆC 3** — nghiệm thu VP018 + DN022 trên app thật | **có mốc chết 08/08** |
 | **2** | **VIỆC 2B** — màn "Chưa đồng bộ" (danh mục dòng lệch + lý do) | CEO đòi từ 29/07, đã bị bỏ quên 1 lần |
 | 3 | VIỆC 4 — deploy bản RAM `9986f0a` | hết loop hụt dữ liệu |
