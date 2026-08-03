@@ -4,39 +4,55 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 03/08/2026 21:20 GMT+7 — **DEPLOY NGAY `b8602fb`** (lệnh CEO, không để qua đêm). Sau đó: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
+**Cập nhật lần cuối:** 03/08/2026 22:40 GMT+7 — `d1fdfdf` đã lên PROD ✅. Còn nợ: **`4e759bd` (Ứng lần 1)** + **"Tất cả NV" T08 (DN016/DN018)**. Sau đó: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
 
 
 ---
 
-# 🔴🔴🔴 DEPLOY NGAY TỐI NAY — CEO RA LỆNH 21:10, KHÔNG ĐỂ QUA ĐÊM
+# 🔴🔴🔴 DEPLOY TIẾP NGAY — Ô "ỨNG LẦN 1" (CEO 22:26, chưa xong)
 
-> CEO: *"Tao yêu cầu mày xử lý dứt điểm trong tối nay cho tao luôn, tao hết tin tưởng rồi, mai là mày lại lơ luôn."*
+> CEO: *"vẫn chưa nối lại để ô KPI ứng lần 1 của tháng lên số nhé"* — ảnh DN009/T07 vẫn hiện câu chung *"Tạm thời chưa lấy được từ App Salary"*.
 
-**Claude đã viết + chạy test xong. Bot chỉ còn deploy.**
+**Đã xác minh:** `d1fdfdf` đang chạy PROD **KHÔNG gồm** phần này (`server/src/salaryAdvance.js` vẫn là bản cũ đếm đúng 10 khoá).
+
+Claude đã ghép riêng **lên đúng nền PROD `d1fdfdf`**, không đụng `employeeCost.js`, không conflict:
 
 ```
-git fetch origin claude/fix-cost-t08-effective-rates-20260803
-git merge --ff-only origin/claude/fix-cost-t08-effective-rates-20260803   # hoặc cherry-pick a568313 9416206 b8602fb
+git fetch origin claude/fix-advance-reason-20260803
+git merge --ff-only origin/claude/fix-advance-reason-20260803
 ```
-Đầu nhánh: **`b8602fb`**. Đã chạy: server **660 pass / 6 fail** (đúng 6 lỗi PDF thiếu `pdfinfo` — mức nền) · web **104/104** · `npm run build` sạch.
+Đầu nhánh **`4e759bd`** — diff so với `d1fdfdf` đúng **4 file**: `salaryAdvance.js` · `salaryAdvance.test.js` · `EmployeeCost.jsx` · `CHANGELOG.md`.
 
-### Gồm 3 việc
-1. **Tỷ lệ % tự có hiệu lực sang tháng sau** — kỳ chưa công bố bảng riêng thì dùng bảng gần nhất (lùi tối đa 3 tháng), hiện nhãn *"Tỷ lệ % đang hiệu lực từ MM/YYYY"*. Áp vĩnh viễn cho T09, T10… CEO không phải nạp lại mỗi tháng.
-2. **"Ứng lần 1" hết vỡ khi App Salary thêm field** — bỏ ràng buộc "đếm đúng 10 khoá"; khoá lạ bị loại bỏ, số lương vẫn không lọt sang. Lỗi nay ghi đúng `contract_mismatch` / `unauthorized` / `upstream_timeout` thay vì một câu chung.
-3. **0 dòng khớp % thì hiện "—"**, không hiện `0đ` giả.
+### Nội dung
+1. **Hết vỡ khi App Salary thêm nhãn mới.** `validateProjection()` bỏ ràng buộc "đếm đúng 10 khoá" → chỉ bắt buộc **có đủ** 10 khoá hợp đồng; khoá lạ bị **loại bỏ**. Mọi phép kiểm giá trị giữ nguyên 100%.
+2. **Số lương vẫn không lọt sang App Report** — chỉ 10 khoá đi tiếp; server `console.warn` **tên** khoá lạ (không ghi giá trị) để vẫn phát hiện bên kia trả field ngoài hợp đồng.
+3. **Ô KPI nói đúng lý do**: *"App Salary đổi hợp đồng"* / *"Sai khoá kết nối App Salary"* / *"App Salary phản hồi chậm"*, thay câu chung chung.
+
+Claude đã chạy trên nền PROD: server **666/672** (6 lỗi PDF do máy build thiếu `pdfinfo` — trên server của bot phải là **672/672**) · web **108/108** · build sạch.
 
 ### Deploy
-`npm --prefix web run build` → reload **CHỈ** `app-report`. **Không** restart bot Telegram, **không** bật cờ thông báo, **không** đụng doanh thu.
+Build web → reload **CHỈ** `app-report`. Không restart Telegram bot, không bật cờ thông báo, không đụng doanh thu.
 
-### Nghiệm thu — dán số cho CEO ngay sau khi deploy
-- **T07/DN007 KHÔNG ĐỔI MỘT ĐỒNG**: tổng `68.726.986đ` · C43 `60.824.695đ` · C41 `5.198.524đ` · C45 `2.703.767đ` · C44 `3.041.235đ` · khớp `100,0%`.
-- **T08 "Tất cả NV"**: 6 ô tiền **ra số**, kèm nhãn ghi tỷ lệ hiệu lực từ tháng nào. Nếu vẫn trắng ⇒ dán `outcome` trong `employee_cost_audit` (xem Việc 0 bên dưới) — lúc đó mới là chuyện khác.
-- **Ô "Ứng lần 1"**: ra số, hoặc ghi rõ *"App Salary đổi hợp đồng"* / *"Sai khoá kết nối"* — không còn câu chung chung.
-- Doanh thu T08 vẫn **`2.151.774.772đ`**, T06/T07 nguyên vẹn.
+### Nghiệm thu — dán cho CEO
+- Ô **"Ứng lần 1"** kỳ 07/2026 (DN007 và DN009): **ra số**, hoặc hiện **đúng lý do cụ thể**. Không còn câu *"Tạm thời chưa lấy được"*.
+- Nếu hiện *"App Salary đổi hợp đồng"* ⇒ dán luôn **JSON thật** từ App Salary (`curl` ở Việc 0A) và chỉ ra khoá/giá trị nào lệch. Đó là việc của bên App Salary, báo CEO rõ.
+- **T07/DN009 không đổi một đồng:** tổng `336.334.260đ` · C41 `19.813.217đ` · C43 `303.661.009đ` · C44 `15.176.446đ` · C45 `12.860.034đ` · khớp `99,0%`.
+- **T07/DN007 không đổi một đồng:** tổng `68.726.986đ` · khớp `100,0%`.
+- Doanh thu T08 `2.151.774.772đ`, T06/T07 frozen.
 
-### Nếu deploy hỏng
-`git revert` đúng 3 commit trên rồi build lại. Không đụng gì khác.
+---
+
+# 🔴 VIỆC 3A-2 — "TẤT CẢ NV" T08 VẪN CHƯA LÊN SỐ (DN016/DN018)
+
+Bot báo: *"ALL T08 gặp snapshot DataHub chỏi DN016/DN018, fail-closed: ẩn badge số, hiện ⚠ chưa đồng nhất."*
+**CEO luôn mở ở chế độ "Tất cả nhân viên"** — cả 5 ảnh tối nay đều vậy. Nên với CEO, màn hình **vẫn chưa lên số**.
+
+Phải trả lời trước khi sửa:
+1. **DN016 và DN018 chỏi cái gì?** Trường nào · hai giá trị là gì · snapshot nào chỏi snapshot nào. Dán ra.
+2. **Ai sửa được** — DataHub hay App Report? Bao lâu?
+3. **19 NV còn lại có sạch không?**
+
+Nếu 19 NV sạch: **đề xuất hiện số của 19 người + ghi rõ "chưa gồm DN016, DN018 — dữ liệu chỏi"**, thay vì giấu cả đội. Giấu sạch vì 2 người là **phạt nhầm 19 người còn lại** — mất thông tin chứ không phải fail-closed. **Chưa phải lệnh** — cần biết bản chất chỏi trước khi quyết. Trả lời 3 câu trên rồi Claude chốt.
 
 ---
 
