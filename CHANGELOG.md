@@ -1,3 +1,10 @@
+### 2026-08-04 — Ô doanh thu: đổi nhãn thành "đã phân bổ" thay vì nêu số dòng cách ly
+
+- Bot chặn đúng trước khi deploy `383692f`: câu *"chưa gồm N dòng đang cách ly"* dùng `dqBadge.count` — đó là **tổng mọi loại exception DQ**, không riêng dòng doanh thu bị cách ly, và còn hiện cả khi xem từng nhân viên. Nêu số như vậy là **báo sai**.
+- Bỏ hẳn phần nêu số. Thay bằng: nhãn ô đổi thành **"Doanh thu chưa VAT · đã phân bổ"** — tự nó đã đúng ở cả hai chế độ và giải thích được vì sao lệch với App Sale; thêm một câu chỉ đường *"dòng chưa gán được NV nằm ở tab Kiểm soát dữ liệu"*, **chỉ hiện ở chế độ Tất cả NV**, không kèm con số nào.
+- Dòng cách ly T08 đã truy ra: đơn `DH479816174` · MISA `341964` · 03/08/2026 · `G1.GE.QĐ139.1104.N2.162` Pizar-3 · SL 40 · **1.795.600đ** · đơn vị `120.HTNT-PHARMACITY` · nguồn gán `VP018` → bị chặn theo policy phân bổ doanh thu nên thành `NON_SALES_ROLE_QUARANTINED`. **Nơi xử lý: App Sale / danh mục phân công gán lại cho NV Sale hợp lệ — App Report không được tự đoán.**
+- Test: web **110/110** (cập nhật assertion nhãn) · build sạch.
+
 ### 2026-08-04 — MỘT đường duy nhất lấy tỷ lệ: KPI và badge "thiếu %" hết chỏi nhau
 
 Bot chẩn đoán đúng (`artifacts/dn016-dn018-answers-20260803-232300`): T08 có hai API đọc policy theo hai cách khác nhau — KPI áp policy kế thừa T07 (DN016 khớp 20/20, DN018 khớp 22/22) trong khi API badge "thiếu %" chỉ đọc **exact T08** nên báo thiếu toàn bộ. Hai màn ra hai con số ⇒ UI fail-closed ⇒ CEO không xem được badge.
