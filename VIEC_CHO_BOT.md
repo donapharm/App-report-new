@@ -38,7 +38,41 @@ git cherry-pick 21867c4
 
 ---
 
-## 🔴 VIỆC 0D — ‼ SỬA GẤP: BỎ BỘ LỌC TỰ CHẾ, LẤY ĐÚNG "ĐÃ THỰC HIỆN" CỦA APP SALE
+## 🔴 VIỆC 0D — ‼ CÁCH SỬA ĐƠN GIẢN NHẤT: DEPLOY LẠI TỪ `origin/main`
+
+> CEO 03/08 16:57: *"tại sao lại bị lệch mà không xử lý cho tao vậy nào"*
+
+### Số đo lúc 16:55–16:57 (chụp cùng lúc)
+| | Số |
+|---|---|
+| App Sale — ĐÃ THỰC HIỆN | **2.135.324.772đ** = CRM xuất HĐ `1.340.385.772` + Đối tác đã xuất/giao `794.939.000` (**43 đơn**) |
+| App Report | **1.647.400.772đ** (204 dòng) |
+| **THIẾU** | **487.924.000đ** — và đang **tăng dần** (15:18 lệch 176tr → 16:57 lệch 487tr) |
+
+### ‼ PHÁT HIỆN QUAN TRỌNG — BỘ LỌC KHÔNG CÓ TRÊN `main`
+Claude kiểm `origin/main` (`d169a3c`): **KHÔNG có** `PARTNER_TOKEN_INVOICE_V1`, **KHÔNG có** `manual_zalo` — sạch.
+Bộ lọc gây lệch **chỉ tồn tại trong bản `a4e1a7f` bot tự build rồi đem lên production**. Lại là drift: production chạy code không có trên git.
+
+### ⇒ CÁCH SỬA: DEPLOY LẠI TỪ `origin/main`
+**Không phải viết code mới. Không phải chờ App Sale. Chỉ deploy đúng đầu `main`.**
+1. `git fetch origin main` → deploy **đúng `origin/main`** (bỏ bản `a4e1a7f` có bộ lọc).
+2. Materialize lại T08 bằng luật trên main (đối tác: `delivered_qty > 0`, không loại nguồn nhập tay).
+3. Reload `app-report`. **Không** restart bot Telegram, **không** bật thông báo.
+
+### CỔNG NGHIỆM THU — chụp 2 màn cùng lúc, chênh < 2 phút
+- **App Report == App Sale "ĐÃ THỰC HIỆN"** (hiện ~2,135 tỷ), chênh **0đ**.
+- Còn lệch ⇒ dán **bảng đối chiếu 2 nhóm**: `CRM xuất HĐ` (App Sale 1.340.385.772) và `Đối tác đã xuất/giao` (App Sale 794.939.000 / 43 đơn) — chỉ rõ App Report đang thiếu/thừa đơn nào.
+- **T07 = 30.917.892.673đ**, **T06 = 28.403.136.096đ** — ghim, đổi là DỪNG.
+
+### ‼ KỶ LUẬT — LẶP LẠI LẦN THỨ 4
+**CẤM deploy bản local không có trên `origin/main`.** Đây là lần thứ 4 production chạy code không có trên git (`97b87d6`, `640685c`, `a1e17aa`, giờ `a4e1a7f`), và lần này nó **gây lệch tiền thật**.
+Từ nay: **push lên `origin/main` TRƯỚC, deploy TỪ `origin/main`.** Không có ngoại lệ.
+
+---
+
+<details><summary>(lưu vết — phân tích 0D ban đầu)</summary>
+
+### BỎ BỘ LỌC TỰ CHẾ, LẤY ĐÚNG "ĐÃ THỰC HIỆN" CỦA APP SALE
 
 > CEO 03/08 15:18: *"tại sao làm hoài hai con số của App Sale và App Report vẫn không khớp nhau vậy. Tao đã yêu cầu phải khớp cả hai số ở hai bên rồi mà sao vẫn vậy."*
 
@@ -69,6 +103,8 @@ Chụp **cùng lúc** (chênh < 2 phút), cùng kỳ, App Sale mốc **"Ngày ph
 - **App Report == App Sale "ĐÃ THỰC HIỆN"**, chênh **0đ**. Còn lệch ⇒ dán bảng đối chiếu từng nhóm (CRM xuất HĐ / Đối tác đã giao) chỉ rõ dòng nào thừa-thiếu.
 - **T07 = 30.917.892.673đ** và **T06 = 28.403.136.096đ** — vẫn ghim, đổi là DỪNG.
 - Tổng nguồn = đưa vào + loại ra.
+
+</details>
 
 ### GHI NHỚ ĐỂ KHÔNG LẶP LẠI
 **App Report KHÔNG được tự định nghĩa doanh thu.** App Sale là nguồn sự thật; App Report **soi chiếu**, không diễn giải lại. Muốn đổi cách tính ⇒ đổi ở **App Sale trước**, App Report theo sau.
