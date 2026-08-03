@@ -44,6 +44,13 @@ git cherry-pick 21867c4
 
 **ĐÂY LÀ QUYẾT ĐỊNH CUỐI. Không hỏi lại, không phân tích thêm.**
 
+### ✅ CLAUDE ĐÃ DUYỆT SẴN — ĐỪNG CHỜ CLAUDE NỮA
+
+CEO hỏi 03/08: *"Vậy là sao? Lý do sao chưa cho lên nào"*. **Claude duyệt trước phần của mình:**
+- Phần làm chắc (frozen payload, chống sửa trộm, claim bind): **ĐẠT, không cần Claude soi lại.**
+- Đạt 3 cổng tiền bên dưới ⇒ **CỨ ÁP THẬT, CỨ DEPLOY.** Không phải chờ Claude duyệt vòng nữa.
+- **Chỉ còn 1 cửa duy nhất: nút duyệt của CEO.** Kiểm xong ⇒ **trình nút cho CEO NGAY**, kèm 3 số (T08 mới · T07 · T06) + danh sách dòng bị loại. Đừng để CEO phải hỏi "sao chưa lên".
+
 ### ⏱ CHỐT PHẠM VI 03/08 — ĐỦ RỒI, ĐỪNG THÊM VIỆC NỮA
 
 Phần làm chắc (frozen payload `O_NOFOLLOW`, chống sửa trộm byte+hash, claim bind byte/semantic hash, ghim T06/T07) — **Claude duyệt, đủ dùng.** Đặc biệt tốt: đổi byte rồi đổi luôn hash mong đợi vẫn bị chặn nhờ đối chiếu tổng dòng/tổng tiền đã parse.
