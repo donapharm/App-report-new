@@ -1,3 +1,11 @@
+### 2026-08-03 (đêm, sau khi deploy d1fdfdf) — "Ứng lần 1": hết vỡ khi App Salary đổi hợp đồng + nói đúng lý do
+
+- `d1fdfdf` trên PROD **không gồm** phần này; ảnh CEO 22:26 (DN009/T07) vẫn hiện câu chung *"Tạm thời chưa lấy được từ App Salary"*. Ghép riêng lên đúng nền PROD.
+- `validateProjection()`: bỏ ràng buộc "đếm đúng 10 khoá" — App Salary chỉ cần THÊM một nhãn (`provisional`…) là cả gói bị vứt, ô KPI trắng. Nay chỉ bắt buộc **có đủ** 10 khoá hợp đồng; khoá lạ bị **loại bỏ** khỏi projection. Mọi phép kiểm giá trị giữ nguyên 100%.
+- Số lương (`net`…) vẫn tuyệt đối không lọt sang App Report — chỉ 10 khoá đi tiếp; server `console.warn` **tên khoá lạ** (không ghi giá trị) để vẫn phát hiện bên kia trả field ngoài hợp đồng.
+- `safeGetFirstAdvance()` không còn nuốt mọi lỗi thành `upstream_unavailable`: trả `contract_mismatch` / `unauthorized` / `upstream_timeout` / `not_configured`. Ô KPI hiện thẳng *"App Salary đổi hợp đồng"*, *"Sai khoá kết nối App Salary"*, *"App Salary phản hồi chậm"* — CEO nhìn là biết chờ ai.
+- Không đổi một công thức tiền nào, không đụng `employeeCost.js`. Test trên nền PROD: server **666/672** (6 lỗi PDF do máy build thiếu `pdfinfo`, không phải lỗi code) · web **108/108** · build sạch.
+
 ### 2026-08-03 — "Chi phí của tôi": 0 dòng khớp % thì hiện "—", KHÔNG hiện 0đ
 
 - Ca thật T08.2026: 303 dòng doanh thu, 301/301 cặp (đơn vị × mã hàng) chưa có tỷ lệ % ⇒ `matchedRows = 0`. Trước bản vá, tổng phần đã khớp bằng 0 nên toàn bộ ô KPI tiền hiện **0đ · tạm tính** — CEO đọc thành "app hỏng"/"tháng này không tốn chi phí".
