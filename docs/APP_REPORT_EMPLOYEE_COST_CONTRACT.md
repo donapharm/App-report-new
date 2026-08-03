@@ -52,6 +52,7 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
 - **Không bao giờ** có `c32`, `c47`, hay bất kỳ cột C33–C46 nào ngoài allowlist.
 - C48 không được đưa vào `columns[]`; App Report sanitize và ánh xạ riêng thành `note`.
 - App Report chỉ tính/hiển thị các cột được mẫu riêng của nhân viên cho phép. Full-time cần đủ 5 tỷ lệ; part-time (`DN021/DN022/DN023`) chỉ cần C36. Thiếu tỷ lệ bắt buộc → hiển thị `—` và tính vào độ phủ để fail closed tổng dưới 90%.
+- **Hiệu lực chính sách:** bảng tỷ lệ là policy dùng liên tục, không bắt CEO nạp lại mỗi tháng. App Report hỏi đúng kỳ trước; nếu kỳ đó chưa có bản riêng thì gọi endpoint không truyền `from/to` để lấy bản công bố mới nhất. Chỉ carry-forward khi response latest có `from=to=YYYY-MM` hợp lệ và tháng nguồn không sau tháng đang xem; tuyệt đối không hồi tố. UI phải hiện `Tỷ lệ % đang hiệu lực từ MM/YYYY`. Nguồn rỗng, lỗi hoặc provenance mơ hồ thì giữ `—` và nêu đúng trạng thái, không đoán.
 
 ## 4. Ràng buộc & lỗi
 - Chỉ trả các dòng có **C6 = emp** (nhân viên chỉ thấy phần của mình).
@@ -68,7 +69,7 @@ GET /api/integrations/app-report/employee-cost?emp=<MÃ_NHÂN_VIÊN>&from=YYYY-M
    bằng cả `x-assignment-key` và `x-employee-cost-key`.
 2. Chọn mẫu bằng `employee_cost_templates.json`, tách biệt hoàn toàn với nhóm công tắc hiển thị.
 3. Dùng C48 duy nhất làm ghi chú; tiếp tục loại mọi field không thuộc hợp đồng.
-4. Ghép tỷ lệ theo **đơn vị × mã hàng × tháng** vào từng order-line doanh thu self-scoped. Nếu nhiều dòng timeline cùng `(đơn vị, mã hàng, tháng)` có tỷ lệ xung đột thì chỉ khóa đó fail-closed thành `—`; không làm mất các đơn vị khác có cùng mã hàng. Cột thường tính trên doanh thu **trước VAT** (`revenue / VAT_DIVISOR × tỷ lệ / 100`). Cột phái sinh lấy **tiền của cột gốc** làm cơ sở theo mapping cấu hình `derivedBases`/`EMPLOYEE_COST_DERIVED_BASE`; mặc định `c44:c43`, nên `tiền_C44 = tiền_C43 × %C44 / 100`. C44 tiếp tục tách khỏi tổng tháng.
+4. Ghép policy tỷ lệ đang hiệu lực theo **đơn vị × mã hàng** vào từng order-line doanh thu của đúng tháng self-scoped. Tháng ở đây là tháng doanh thu và mốc hiệu lực policy, không phải yêu cầu nạp lại một bảng giống nhau mỗi tháng. Nếu nhiều dòng timeline cùng `(đơn vị, mã hàng, tháng hiệu lực)` có tỷ lệ xung đột thì chỉ khóa đó fail-closed thành `—`; không làm mất các đơn vị khác có cùng mã hàng. Cột thường tính trên doanh thu **trước VAT** (`revenue / VAT_DIVISOR × tỷ lệ / 100`). Cột phái sinh lấy **tiền của cột gốc** làm cơ sở theo mapping cấu hình `derivedBases`/`EMPLOYEE_COST_DERIVED_BASE`; mặc định `c44:c43`, nên `tiền_C44 = tiền_C43 × %C44 / 100`. C44 tiếp tục tách khỏi tổng tháng.
 5. Tính coverage trên số khóa `(đơn vị, mã hàng)` doanh thu duy nhất trong kỳ; bảng chi tiết vẫn giữ grain order-line và ngưỡng dưới 90% vẫn ẩn tổng.
 6. Xử lý 401 (sai key) / 502 (thử lại) / 400 (thiếu emp).
 

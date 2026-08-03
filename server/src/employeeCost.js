@@ -886,6 +886,14 @@ function isTransient(error) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Metadata kỳ chỉ dùng làm provenance cho chính sách tỷ lệ. Không suy kỳ từ
+// nội dung dòng: DataHub phải trả đủ `from/to`, đúng dạng và không đảo chiều.
+function sourcePeriodRangeOf(raw) {
+  const from = normalizeMonth(raw?.from);
+  const to = normalizeMonth(raw?.to);
+  return from && to && from <= to ? { from, to } : null;
+}
+
 async function fetchEmployeeCost(empCode, options = {}) {
   const baseUrl = resolveDataHubBaseUrl(options.baseUrl);
   const assignmentKey = String(options.assignmentKey ?? process.env.DATA_HUB_ASSIGNMENT_KEY ?? '').trim();
@@ -939,12 +947,20 @@ async function fetchEmployeeCost(empCode, options = {}) {
       if (normEmp(raw?.empCode) !== normEmp(empCode)) {
         return { payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE), outcome: 'scope_mismatch', attempts };
       }
+      const sourceRange = sourcePeriodRangeOf(raw);
       if (range) {
         const adapted = adaptPeriodPayload(raw, empCode, range);
-        if (!adapted) return { payload: emptyRangePayload(empCode, range), outcome: 'invalid_period_payload', attempts };
-        return { payload: adapted, outcome: 'ok', attempts };
+        const hasPolicyRows = adapted?.periods?.some((period) => Array.isArray(period.rows) && period.rows.length > 0);
+        const provenanceMatchesRequest = sourceRange?.from === range.from && sourceRange?.to === range.to;
+        // Có tỷ lệ nhưng provenance không đúng CHÍNH XÁC range đã hỏi thì không
+        // được coi là snapshot exact. Xóa toàn bộ payload và chuyển qua lookup
+        // policy mới nhất; nhờ vậy T07 không thể bị gắn ngầm thành exact T08.
+        if (!adapted || (hasPolicyRows && !provenanceMatchesRequest)) {
+          return { payload: emptyRangePayload(empCode, range), outcome: 'invalid_period_payload', attempts, sourceRange };
+        }
+        return { payload: adapted, outcome: 'ok', attempts, sourceRange };
       }
-      return { payload: sanitizePayload(raw, empCode), outcome: 'ok', attempts };
+      return { payload: sanitizePayload(raw, empCode), outcome: 'ok', attempts, sourceRange };
     } catch (error) {
       const retryIndex = attempts - 1;
       if (isTransient(error) && retryIndex < backoffMs.length) {
@@ -975,9 +991,12 @@ function auditFilters(value = {}) {
   return output;
 }
 
-function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, event = 'view' }) {
+function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, range, ratePolicy, event = 'view' }) {
   const rows = persist.load(AUDIT_FILE, []);
   const safeFilters = auditFilters(filters);
+  const rangeFrom = normalizeMonth(range?.from);
+  const rangeTo = normalizeMonth(range?.to);
+  const effectiveFrom = normalizeMonth(ratePolicy?.effectiveFrom);
   rows.push({
     at: new Date().toISOString(),
     event: String(event || 'view'),
@@ -986,6 +1005,14 @@ function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, e
     empCode: normEmp(empCode),
     outcome: String(outcome || 'unknown'),
     attempts: Number(attempts || 0),
+    ...(rangeFrom && rangeTo ? { range: { from: rangeFrom, to: rangeTo } } : {}),
+    ...(ratePolicy ? {
+      ratePolicy: {
+        state: String(ratePolicy.state || 'unknown'),
+        lookupOutcome: String(ratePolicy.lookupOutcome || 'unknown'),
+        ...(effectiveFrom ? { effectiveFrom } : {}),
+      },
+    } : {}),
     ...(Object.keys(safeFilters).length ? { filters: safeFilters } : {}),
     ...(match ? {
       revenueMatch: {
@@ -999,6 +1026,57 @@ function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, e
   persist.save(AUDIT_FILE, rows.slice(-AUDIT_LIMIT));
 }
 
+// ‼ CEO chốt 03/08/2026: tỷ lệ % là chính sách có hiệu lực liên tục. Khi tháng
+// đang hỏi chưa có bản riêng, App Report lấy đúng bản công bố mới nhất từ endpoint
+// không truyền kỳ và chỉ áp về PHÍA SAU. Không có giới hạn ba tháng tùy ý; chính
+// sách tiếp tục hiệu lực cho tới khi DataHub công bố bản mới.
+async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest = fetchEmployeeCost) {
+  const periods = Array.isArray(payload?.periods) ? payload.periods : null;
+  if (!periods || !periods.some((period) => !period.rows?.length)) return payload;
+
+  const { from, to, revenueRowsByPeriod, catalogRowsByPeriod, fetchOneImpl, ...lookupOptions } = options;
+  const latest = await fetchLatest(empCode, lookupOptions);
+  const sourceFrom = normalizeMonth(latest?.sourceRange?.from);
+  const sourceTo = normalizeMonth(latest?.sourceRange?.to);
+  const source = latest?.payload;
+  const sourceRows = Array.isArray(source?.rows) ? source.rows : [];
+  const provenanceValid = !!sourceFrom && sourceFrom === sourceTo;
+
+  if (latest?.outcome !== 'ok') {
+    payload.ratePolicy = { state: 'unavailable', lookupOutcome: String(latest?.outcome || 'unknown') };
+    return payload;
+  }
+  if (!sourceRows.length) {
+    payload.ratePolicy = { state: 'missing', lookupOutcome: 'ok' };
+    return payload;
+  }
+  if (!provenanceValid) {
+    payload.ratePolicy = { state: 'ambiguous', lookupOutcome: 'invalid_source_period' };
+    return payload;
+  }
+
+  let applied = 0;
+  for (const period of periods) {
+    if (period.rows?.length || !normalizeMonth(period.period) || period.period < sourceFrom) continue;
+    period.columns = source.columns;
+    period.rows = source.rows;
+    period.note = source.note;
+    period.rateEffectiveFrom = sourceFrom;
+    period.rateSource = 'carry_forward';
+    applied += 1;
+  }
+  const unresolved = periods.filter((period) => !period.rows?.length).length;
+  payload.ratePolicy = {
+    state: applied ? (unresolved ? 'partial' : 'available') : 'not_applicable',
+    lookupOutcome: 'ok',
+    effectiveFrom: sourceFrom,
+    appliedPeriods: applied,
+    unresolvedPeriods: unresolved,
+  };
+  if (applied) payload.rateEffectiveFrom = sourceFrom;
+  return payload;
+}
+
 async function getForSession({ session, scope, requestedEmp }, options = {}) {
   const audit = (entry) => {
     try { (options.auditImpl || writeAudit)(entry); }
@@ -1008,10 +1086,22 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
   const range = options.from != null || options.to != null ? parseMonthRange(options) : null;
   if (!empCode) {
     const result = { payload: range ? emptyRangePayload('', range) : emptyPayload('', DEFAULT_NOTE), outcome: 'missing_emp', attempts: 0 };
-    audit({ actor: session?.emp_code, role: session?.role, empCode, event: options.auditEvent || 'view', outcome: result.outcome, attempts: result.attempts, filters: options.auditFilters });
+    audit({ actor: session?.emp_code, role: session?.role, empCode, event: options.auditEvent || 'view', outcome: result.outcome, attempts: result.attempts, range, filters: options.auditFilters });
     return result.payload;
   }
   const result = await fetchEmployeeCost(empCode, options);
+  // Kỳ chưa có bảng tỷ lệ riêng ⇒ lấy bảng đang hiệu lực (xem applyEffectiveRates).
+  // Cũng chạy khi payload bị từ chối vì lệch kỳ — đó đúng là ca tháng mới chưa mở.
+  if (range && (result.outcome === 'ok' || result.outcome === 'invalid_period_payload')) {
+    result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchEmployeeCost);
+    // Payload range mơ hồ chỉ được phục hồi thành nguồn `ok` khi policy mới nhất
+    // đã lấp ĐỦ mọi kỳ; nếu còn kỳ trước ngày hiệu lực thì tiếp tục fail closed.
+    if (result.outcome === 'invalid_period_payload'
+      && result.payload.ratePolicy?.state === 'available'
+      && Number(result.payload.ratePolicy?.unresolvedPeriods || 0) === 0) {
+      result.outcome = 'ok';
+    }
+  }
   // Revenue belongs to App Report and must stay useful even while the DataHub
   // cost timeline is unavailable/not configured. In that state enrichment
   // preserves every order-line and leaves percentages/amounts as null (—).
@@ -1028,6 +1118,8 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
     outcome: result.outcome,
     attempts: result.attempts,
     match: result.payload.match,
+    range,
+    ratePolicy: result.payload.ratePolicy,
     filters: options.auditFilters,
   });
   if (result.outcome !== 'ok') {
@@ -1069,6 +1161,8 @@ module.exports = {
   emptyPayload,
   emptyRangePayload,
   adaptPeriodPayload,
+  sourcePeriodRangeOf,
+  applyEffectiveRates,
   configuredAnnualColumnKeys,
   configuredMatchWarningPercent,
   safeText,

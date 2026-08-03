@@ -546,11 +546,10 @@ test('badge hiện … khi đang tính và KHÔNG biến mất khi lỗi tạm t
   assert.match(page, /setDqBadge\(\(current\) => \(\{ \.\.\.current, loading: false \}\)\)/);
 });
 
-// ‼ Ca thật 03/08/2026: T08 có 303 dòng doanh thu nhưng DataHub chưa có bảng %
-// chi phí của kỳ ⇒ 0 dòng khớp. Trước bản vá, mọi ô KPI tiền hiện "0đ · tạm tính"
-// làm CEO tưởng app hỏng hoặc tưởng tháng đó không phát sinh chi phí.
-// Luật fail-closed: KHÔNG khớp dòng nào ⇒ hiện "—", tuyệt đối không hiện 0.
-test('kỳ chưa có bảng % chi phí thì mọi ô tiền là "—", không phải 0đ', () => {
+// ‼ Ca thật 03/08/2026: T08 có doanh thu nhưng connector chưa áp policy % đang
+// hiệu lực ⇒ 0 dòng khớp. Dù nguyên nhân nào, luật fail-closed cuối cùng vẫn là:
+// KHÔNG khớp dòng nào ⇒ hiện “—”, tuyệt đối không hiện 0đ giả.
+test('không có policy % hợp lệ thì mọi ô tiền là "—", không phải 0đ', () => {
   const model = employeeCostViewModel({
     empCode: 'ALL', period: '08.2026',
     template: { key: 'fulltime', label: 'FULL-TIME', columns: ['date', 'orderCode', 'revenueBeforeVat', 'c36', 'c44', 'rowMonthlyTotal', 'note'] },
@@ -572,6 +571,21 @@ test('kỳ chưa có bảng % chi phí thì mọi ô tiền là "—", không ph
   for (const kpi of employeeCostColumnKpis(model)) {
     assert.equal(formatEmployeeCostCell(kpi.value, { kind: 'money' }), '—');
   }
+});
+
+test('view model giữ provenance policy hiệu lực để UI không dùng ngầm', () => {
+  const model = employeeCostViewModel({
+    empCode: 'DN007', from: '2026-08', to: '2026-08', rateEffectiveFrom: '2026-07',
+    ratePolicy: { state: 'available', lookupOutcome: 'ok', effectiveFrom: '2026-07', appliedPeriods: 1, unresolvedPeriods: 0 },
+    periods: [{ empCode: 'DN007', period: '2026-08', rateEffectiveFrom: '2026-07', rateSource: 'carry_forward', columns: [], rows: [] }],
+  });
+  assert.equal(model.rateEffectiveFrom, '2026-07');
+  assert.deepEqual(model.rateEffectiveFroms, ['2026-07']);
+  assert.deepEqual(model.ratePolicy, {
+    state: 'available', lookupOutcome: 'ok', effectiveFrom: '2026-07', appliedPeriods: 1, unresolvedPeriods: 0,
+  });
+  assert.equal(model.periods[0].rateEffectiveFrom, '2026-07');
+  assert.equal(model.periods[0].rateSource, 'carry_forward');
 });
 
 // Coverage thấp nhưng CÓ dòng khớp thì vẫn phải hiện số tạm tính như cũ —
@@ -632,10 +646,12 @@ test('badge chỉ được công nhận khi cùng kỳ, cùng số cặp và cù
   assert.equal(stale.mismatch, false);
 });
 
-test('UI ẩn số badge chỏi, báo đỏ và ghi đúng DataHub là chủ nguồn T08', () => {
+test('UI ẩn badge chỏi, nói đúng policy carry-forward và không đòi nạp lại từng tháng', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   assert.match(page, /gapMismatch \? '⚠ chưa đồng nhất'/);
   assert.match(page, /employee-cost-data-mismatch/);
-  assert.match(page, /DataHub phải nạp tỷ lệ theo mã hàng/);
-  assert.doesNotMatch(page, /DataHub\/App Sale phải nạp tỷ lệ theo mã hàng/);
+  assert.match(page, /Tỷ lệ % đang hiệu lực từ/);
+  assert.match(page, /DataHub quản lý policy tỷ lệ/);
+  assert.doesNotMatch(page, /DataHub phải nạp tỷ lệ theo mã hàng cho kỳ này/);
+  assert.doesNotMatch(page, /DataHub\/App Sale phải điền/);
 });

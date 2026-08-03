@@ -181,6 +181,31 @@ test('ALL payload preserves each backend-computed penalty in bonus and cost empl
   assert.equal(filtered.penalty.baseTotal, 30, 'team after-penalty base must not be recomputed from filtered rows');
 });
 
+test('ALL merge giữ provenance policy carry-forward để UI không dùng tỷ lệ ngầm', () => {
+  const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
+  const first = report([rows[0]]);
+  const second = report([{ ...rows[1], sourceLineId: 'dn2' }]);
+  for (const [item, emp] of [[first, 'DN001'], [second, 'DN002']]) {
+    item.empCode = emp;
+    item.from = '2026-08'; item.to = '2026-08'; item.rateEffectiveFrom = '2026-07';
+    item.periods[0].period = '2026-08'; item.periods[0].rateEffectiveFrom = '2026-07';
+  }
+  const merged = table.mergeEmployeeReports([first, second], roster);
+  assert.equal(merged.rateEffectiveFrom, '2026-07');
+  assert.deepEqual(merged.rateEffectiveFroms, ['2026-07']);
+  assert.equal(merged.periods[0].rateEffectiveFrom, '2026-07');
+  assert.deepEqual(merged.periods[0].rateEffectiveFroms, ['2026-07']);
+
+  // DN002 có exact T08 nên payload cá nhân giữ nguyên, không gắn metadata mới;
+  // ALL merge vẫn phải phân biệt exact T08 với DN001 carry-forward từ T07.
+  delete second.rateEffectiveFrom;
+  delete second.periods[0].rateEffectiveFrom;
+  second.sourceOutcome = 'ok';
+  const mixed = table.mergeEmployeeReports([first, second], roster);
+  assert.equal(mixed.rateEffectiveFrom, '');
+  assert.deepEqual(mixed.rateEffectiveFroms, ['2026-07', '2026-08']);
+});
+
 test('routes hard-lock ALL to CEO/admin for view and export', () => {
   const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   assert.match(source, /wantsAll && !auth\.isAdmin\(req\.session\.role\)/);

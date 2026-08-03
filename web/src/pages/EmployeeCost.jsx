@@ -1337,11 +1337,24 @@ export default function EmployeeCost({ me, onNavigate }) {
   const gapMismatchSource = gapMismatchEmployees.length
     ? `DataHub đang tạm thiếu nguồn của ${gapMismatchEmployees.join(', ')}.`
     : 'Hai request đang nhận hai snapshot DataHub khác nhau.';
-  // Không khớp được dòng nào ⇒ nói thẳng "chưa có bảng % chi phí của kỳ này"
-  // kèm việc phải làm, thay vì hiện 0đ rồi để CEO tưởng app hỏng.
+  // Không khớp được dòng nào ⇒ hiện “—” và nói đúng trạng thái lookup policy,
+  // không đổ lỗi rằng DataHub phải nạp lại riêng từng tháng.
   const noMatch = employeeCostNoMatch(model);
+  const effectiveRateMonths = Array.isArray(model.rateEffectiveFroms) ? model.rateEffectiveFroms : [];
+  const rateEffectiveNote = model.rateEffectiveFrom
+    ? `Tỷ lệ % đang hiệu lực từ ${formatMonthLabel(model.rateEffectiveFrom)}`
+    : effectiveRateMonths.length
+      ? `Tỷ lệ % đang hiệu lực từ ${effectiveRateMonths.map(formatMonthLabel).join(', ')}`
+      : '';
+  const noMatchSourceNote = model.ratePolicy.state === 'unavailable'
+    ? 'Chưa lấy được policy % hiện hành từ DataHub.'
+    : model.ratePolicy.state === 'ambiguous'
+      ? 'Policy % DataHub thiếu provenance kỳ hợp lệ nên App Report đã fail-closed.'
+      : model.ratePolicy.state === 'not_applicable'
+        ? 'Không hồi tố policy công bố sau kỳ đang xem.'
+        : 'Chưa tìm thấy policy % đang hiệu lực từ DataHub.';
   const coverageNote = noMatch
-    ? `Kỳ này CHƯA CÓ bảng % chi phí — ${missingPairs.toLocaleString('vi-VN')}/${Number(kpiMatch.totalRows || 0).toLocaleString('vi-VN')} cặp thiếu %. DataHub phải nạp tỷ lệ theo mã hàng cho kỳ này thì số mới lên (tab "Mặt hàng thiếu %").`
+    ? `${noMatchSourceNote} ${missingPairs.toLocaleString('vi-VN')}/${Number(kpiMatch.totalRows || 0).toLocaleString('vi-VN')} cặp chưa tính được (tab "Mặt hàng thiếu %").`
     : provisionalTotals
     ? [
       `Tạm tính trên ${formatMatchRate(kpiMatch)} đã khớp`,
@@ -1444,7 +1457,7 @@ export default function EmployeeCost({ me, onNavigate }) {
     <div className="employee-cost-heading card">
       <div>
         <div className="section-head">{admin && view === 'gaps' ? 'Mặt hàng thiếu % chi phí' : admin && view === 'dq' ? 'Kiểm soát dữ liệu' : 'Chi phí của tôi'}</div>
-        <p>{admin && view === 'gaps' ? 'Danh sách chỉ phục vụ phát hiện và lập worklist cho DataHub; không tự ánh xạ mã hay tự điền tỷ lệ.' : admin && view === 'dq' ? 'Tự bắt lỗi, giải thích nguyên nhân và xếp ưu tiên theo doanh thu ảnh hưởng.' : 'Mỗi đơn × mỗi mặt hàng là một dòng. Chi phí được tính trên thành tiền xuất bán trước VAT và tra tỷ lệ theo mã hàng × tháng.'}</p>
+        <p>{admin && view === 'gaps' ? 'Danh sách chỉ phục vụ phát hiện và lập worklist cho DataHub; không tự ánh xạ mã hay tự điền tỷ lệ.' : admin && view === 'dq' ? 'Tự bắt lỗi, giải thích nguyên nhân và xếp ưu tiên theo doanh thu ảnh hưởng.' : 'Mỗi đơn × mỗi mặt hàng là một dòng. Chi phí được tính trên thành tiền xuất bán trước VAT và tra policy tỷ lệ đang hiệu lực theo mã hàng × đơn vị.'}</p>
       </div>
       <form className="employee-cost-filters" onSubmit={applyRange}>
         {admin && view === 'cost' && <label>
@@ -1561,14 +1574,15 @@ export default function EmployeeCost({ me, onNavigate }) {
       {/* HAI NHÃN KHÁC NHAU, KHÔNG GỘP (CEO chốt 30/07):
           · "DỰ KIẾN"  = kỳ chưa khoá sổ, doanh thu còn về đến hết ngày 8 tháng sau
                          → chờ đến ngày đó, không ai phải làm gì.
-          · "tạm tính" = danh mục còn mã chưa gán % → DataHub/App Sale phải điền.
+          · "tạm tính" = danh mục còn mã chưa gán % → DataHub quản lý policy tỷ lệ.
           Một kỳ có thể vừa dự kiến vừa tạm tính; gộp một từ là mất thông tin. */}
       <Kpi
-        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${model.periodClose.closed ? '' : ' · dự kiến'}${noMatch ? ' · chưa có bảng %' : (provisionalTotals ? ' · tạm tính' : '')}`}
+        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${model.periodClose.closed ? '' : ' · dự kiến'}${noMatch ? ' · chưa có nguồn % hợp lệ' : (provisionalTotals ? ' · tạm tính' : '')}`}
         value={formatEmployeeCostCell(noMatch ? null : (provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal), moneyColumn)}
         sub={[
           `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`,
           noMatch ? '' : model.periodClose.note,
+          rateEffectiveNote,
           noMatch || provisionalTotals ? coverageNote : 'chưa gồm khoản cuối năm',
         ].filter(Boolean).join(' · ')}
         title={model.periodClose.label}

@@ -370,8 +370,24 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
     const threshold = Number(blocks.find((item) => Number.isFinite(Number(item.period.match?.threshold)))?.period.match.threshold || 90);
     const low = rate != null && rate < threshold;
+    const rateEffectiveFroms = [...new Set(blocks
+      .map(({ period, report }) => {
+        const explicit = period.rateEffectiveFrom || report.rateEffectiveFrom;
+        if (explicit) return String(explicit);
+        // Exact snapshots intentionally stay byte-stable in the employee payload.
+        // At ALL merge time, infer "exact this period" only when the upstream was
+        // healthy and supplied policy columns; revenue-only fail-closed rows must
+        // never be mislabeled as an exact policy.
+        const exact = report.sourceOutcome === 'ok'
+          && Array.isArray(period.columns) && period.columns.length > 0
+          ? period.period : '';
+        return String(exact || '');
+      })
+      .filter(Boolean))].sort();
     return {
       empCode: 'ALL', period: periodKey, columns, rows,
+      rateEffectiveFrom: rateEffectiveFroms.length === 1 ? rateEffectiveFroms[0] : '',
+      rateEffectiveFroms,
       // Only the report's selected/final month owns a PHẠT v3.4 summary.
       // Keeping the map in the merged backend payload lets filtered ALL
       // subtotals retain the server-calculated penalty without client math.
@@ -391,10 +407,13 @@ function mergeEmployeeReports(reports = [], roster = []) {
       daily: { reliable: false, reason: 'Chế độ tất cả nhân viên dùng bảng tổng hợp phân trang.', dates: [], totals: [] },
     };
   });
+  const rateEffectiveFroms = [...new Set(periods.flatMap((period) => period.rateEffectiveFroms || []))].sort();
   return {
     empCode: 'ALL', employeeName: 'Tất cả nhân viên', allEmployees: true,
     template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: [] },
     from: source[0]?.from || periodKeys[0] || '', to: source[0]?.to || periodKeys.at(-1) || '',
+    rateEffectiveFrom: rateEffectiveFroms.length === 1 ? rateEffectiveFroms[0] : '',
+    rateEffectiveFroms,
     periods,
     employees: roster.map((employee) => ({ empCode: employee.emp_code, employeeName: employee.name })),
     bonus: employeeBonus.aggregateBonusSummaries(source, roster),

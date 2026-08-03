@@ -453,6 +453,9 @@ function periodViewModel(payload = {}) {
   return {
     empCode: String(payload.empCode || ''),
     period: String(payload.period || ''),
+    rateEffectiveFrom: String(payload.rateEffectiveFrom || ''),
+    rateEffectiveFroms: Array.isArray(payload.rateEffectiveFroms) ? payload.rateEffectiveFroms.map(String).filter(Boolean) : [],
+    rateSource: String(payload.rateSource || ''),
     template,
     columns,
     dimensionColumns,
@@ -519,6 +522,19 @@ export function employeeCostViewModel(payload = {}) {
     empCode: String(payload.empCode || first.empCode || ''),
     from: String(payload.from || first.period || ''),
     to: String(payload.to || first.period || ''),
+    // Tỷ lệ % lấy từ bảng công bố tháng nào (khi tháng đang xem chưa có bảng riêng).
+    // Backend quyết định; UI chỉ nói ra, tuyệt đối không im lặng dùng số tháng khác.
+    rateEffectiveFrom: String(payload.rateEffectiveFrom || ''),
+    rateEffectiveFroms: [...new Set((Array.isArray(payload.rateEffectiveFroms)
+      ? payload.rateEffectiveFroms : [payload.rateEffectiveFrom, ...periods.flatMap((period) => period.rateEffectiveFroms || [period.rateEffectiveFrom])])
+      .filter(Boolean).map(String))].sort(),
+    ratePolicy: {
+      state: String(payload.ratePolicy?.state || ''),
+      lookupOutcome: String(payload.ratePolicy?.lookupOutcome || ''),
+      effectiveFrom: String(payload.ratePolicy?.effectiveFrom || payload.rateEffectiveFrom || ''),
+      appliedPeriods: Number(payload.ratePolicy?.appliedPeriods || 0),
+      unresolvedPeriods: Number(payload.ratePolicy?.unresolvedPeriods || 0),
+    },
     periods,
     period: first.period,
     template: first.template,
