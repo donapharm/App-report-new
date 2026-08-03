@@ -303,10 +303,20 @@ function transformReport(report = {}, options = {}) {
   const reliable = periods.every((period) => period.summary.reliable);
   const costKeys = [...new Set(periods.flatMap((period) => period.columns.map((column) => String(column.key || '').toLowerCase())
     .filter((key) => /^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key))))];
+  // Dòng UNALLOCATED không thuộc bất kỳ report nhân viên nào nên không được
+  // trộn vào bảng/tổng chi phí. Giữ chúng ở metadata riêng, lọc cùng đúng view
+  // hiện hành để ô doanh thu có thể giải thích phần chênh mà không mượn tổng
+  // exception DQ (exception có nhiều loại, không đồng nghĩa với dòng cách ly).
+  const quarantinedRows = options.allEmployees
+    ? (Array.isArray(report.quarantinePeriods) ? report.quarantinePeriods : [])
+      .flatMap((period) => (Array.isArray(period?.rows) ? period.rows : [])
+        .filter((row) => rowMatchesView(row, Array.isArray(period?.columns) ? period.columns : [], options)))
+    : [];
   return {
     ...report,
     periods,
     rows: undefined,
+    quarantinePeriods: undefined,
     allEmployees: !!options.allEmployees,
     filters: Object.fromEntries(FILTER_KEYS.map((key) => {
       const selected = requestedFilterValue(options, key);
@@ -320,6 +330,11 @@ function transformReport(report = {}, options = {}) {
       annualTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.annualTotal), 0) : null,
       revenueTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0),
       revenueBeforeVatTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0),
+      ...(options.allEmployees ? {
+        quarantinedLineCount: quarantinedRows.length,
+        quarantinedRevenueTotal: quarantinedRows.reduce((sum, row) => sum + numeric(row.revenue), 0),
+        quarantinedRevenueBeforeVatTotal: quarantinedRows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
+      } : {}),
       columnTotals: reliable ? Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.provisionalColumnTotals?.[key]), 0)])) : null,
       // Số "tạm tính" LUÔN có (tổng phần đã khớp %) để UI hiện kèm nhãn coverage,
       // thay vì bỏ trống. Không thay hành vi fail-closed của columnTotals ở trên.

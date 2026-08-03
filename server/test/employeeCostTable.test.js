@@ -133,6 +133,36 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   assert.equal(byDate.summary.periodTotal, 20);
 });
 
+test('ALL quarantine count is dedicated, filter-scoped and never borrowed from generic DQ exceptions', () => {
+  const roster = [{ emp_code: 'DN001', name: 'Anh Một' }];
+  const merged = table.mergeEmployeeReports([report()], roster);
+  merged.dqExceptionCount = 99;
+  merged.quarantinePeriods = [{
+    period: '2026-07',
+    columns: [],
+    rows: [{
+      sourceLineId: 'MISA:341964', date: '2026-07-03', province: 'HỒ CHÍ MINH',
+      unitGroup: 'HTNT', unitGroupLabel: 'HTNT · Hệ thống nhà thuốc', route: 'NCL',
+      c7: '120.HTNT-PHARMACITY', c5: 'G1.GE.QĐ139.1104.N2.162', c16: 'Pizar-3',
+      revenue: 1_795_600, revenueBeforeVat: 1_710_095,
+    }],
+  }];
+
+  const all = table.transformReport(merged, { allEmployees: true, paginate: false });
+  assert.equal(all.summary.quarantinedLineCount, 1);
+  assert.equal(all.summary.quarantinedRevenueTotal, 1_795_600);
+  assert.equal(all.summary.quarantinedRevenueBeforeVatTotal, 1_710_095);
+  assert.equal(JSON.stringify(all).includes('quarantinePeriods'), false, 'private rows must not leak to the API');
+
+  const filteredOut = table.transformReport(merged, { allEmployees: true, date: '2026-07-02', paginate: false });
+  assert.equal(filteredOut.summary.quarantinedLineCount, 0);
+  assert.equal(filteredOut.summary.quarantinedRevenueTotal, 0);
+
+  const individual = table.transformReport(merged, { allEmployees: false, paginate: false });
+  assert.equal(Object.hasOwn(individual.summary, 'quarantinedLineCount'), false);
+  assert.equal(all.summary.quarantinedLineCount, 1, 'generic DQ count must not affect quarantine count');
+});
+
 test('ALL payload preserves each backend-computed penalty in bonus and cost employeeSubtotals', () => {
   const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
   const first = report([rows[1]]);
@@ -213,6 +243,8 @@ test('routes hard-lock ALL to CEO/admin for view and export', () => {
   assert.match(source, /employeeCostAllPayload[\s\S]*?mapWithConcurrency\(roster, 3/);
   assert.match(source, /date: req\.query\.date/);
   assert.match(source, /employeeCostTableOptions\(req, \{ paginate: true \}\)/);
+  assert.match(source, /scope: \{ empCode: store\.UNALLOCATED_EMP \}/);
+  assert.match(source, /merged\.quarantinePeriods = employeeCostQuarantinePeriods/);
   assert.match(source, /targetKpiSummary\(ky, \{ empCode \}, \[empCode\]\)/);
   assert.match(source, /target: empCode \? buildTargetKpiDetail\(\{/);
   assert.match(source, /scope: \{ empCode \}/);

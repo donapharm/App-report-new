@@ -75,6 +75,8 @@ test('Employee Cost dashboard and existing bell expose DQ API, exports and deep 
   assert.match(page, /code !== 'UNALLOCATED'/);
   assert.match(page, /data-source-status="source_unavailable"/);
   assert.match(page, /Các quy tắc kiểm soát dữ liệu khác vẫn hoạt động/);
+  assert.match(page, /allEmployees && model\.summary\.quarantinedLineCount > 0/);
+  assert.doesNotMatch(page, /dqBadge\.count[\s\S]{0,180}dòng đang cách ly/);
   assert.match(bell, /employeeCostDataQualitySummary/);
   assert.match(bell, /dq\.redCount/);
   assert.match(api, /employee-cost\/data-quality/);

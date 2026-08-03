@@ -685,3 +685,20 @@ test('view model giữ cả doanh thu trước VAT và đã gồm VAT', () => {
   assert.equal(model.summary.revenueBeforeVatTotal, 2_770_690_213);
   assert.equal(model.summary.revenueTotal, 2_986_744_000);
 });
+
+test('ALL view model preserves dedicated quarantine metadata without deriving it from DQ', () => {
+  const model = employeeCostViewModel({
+    empCode: 'ALL', allEmployees: true, from: '2026-08', to: '2026-08',
+    periods: [{ period: '2026-08', columns: [], rows: [], summary: { reliable: true }, match: { matchedRows: 0, totalRows: 0 } }],
+    match: { matchedRows: 0, totalRows: 0 },
+    summary: {
+      reliable: true, periodTotal: 0, annualTotal: 0, revenueBeforeVatTotal: 0, revenueTotal: 0,
+      quarantinedLineCount: 1, quarantinedRevenueTotal: 1_795_600,
+      quarantinedRevenueBeforeVatTotal: 1_710_095,
+    },
+  });
+  assert.equal(model.allEmployees, true);
+  assert.equal(model.summary.quarantinedLineCount, 1);
+  assert.equal(model.summary.quarantinedRevenueTotal, 1_795_600);
+  assert.equal(model.summary.quarantinedRevenueBeforeVatTotal, 1_710_095);
+});

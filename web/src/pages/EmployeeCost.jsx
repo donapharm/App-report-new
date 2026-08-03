@@ -1602,11 +1602,11 @@ export default function EmployeeCost({ me, onNavigate }) {
         value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)}
         sub={[
           model.summary.revenueTotal == null ? '' : `Đã gồm VAT: ${formatEmployeeCostCell(model.summary.revenueTotal, moneyColumn)}`,
-          // ‼ Dòng bị cách ly (chưa gán được NV) KHÔNG nằm trong tổng ở đây nhưng
-          // VẪN nằm trong doanh thu App Sale. Không nói ra thì hai app lệch nhau mà
-          // không ai biết vì sao — đúng lỗi CEO bắt được 23:21 (lệch 1.795.600đ).
-          dqBadge.loaded && dqBadge.count
-            ? `chưa gồm ${dqBadge.count.toLocaleString('vi-VN')} dòng đang cách ly — xem tab "Kiểm soát dữ liệu"`
+          // Chỉ backend ALL mới cấp số dòng UNALLOCATED chuyên biệt. Không dùng
+          // tổng exception DQ: exception có nhiều loại và không cùng scope với
+          // KPI từng nhân viên.
+          allEmployees && model.summary.quarantinedLineCount > 0
+            ? `chưa gồm ${model.summary.quarantinedLineCount.toLocaleString('vi-VN')} dòng đang cách ly — xem tab "Kiểm soát dữ liệu"`
             : '',
           'số tổng hợp từ backend',
         ].filter(Boolean).join(' · ')} />

@@ -1,3 +1,9 @@
+### 2026-08-04 — Số dòng cách ly dùng metadata UNALLOCATED riêng, không mượn DQ
+
+- Backend ALL đếm riêng dòng `UNALLOCATED` theo đúng kỳ/bộ lọc và trả `quarantinedLineCount` cùng doanh thu trước/sau VAT; không đưa chi tiết riêng tư của dòng cách ly vào payload bảng.
+- UI chỉ hiện câu “chưa gồm N dòng đang cách ly” ở chế độ **Tất cả NV** và chỉ đọc trường backend chuyên biệt. Tổng exception DQ tiếp tục chỉ dùng cho badge/tab kiểm soát dữ liệu.
+- Regression chặn ba lỗi: exception DQ không được làm tăng số cách ly, filter phải cùng scope, và KPI từng nhân viên không được hiện số ALL.
+
 ### 2026-08-04 — MỘT đường duy nhất lấy tỷ lệ: KPI và badge "thiếu %" hết chỏi nhau
 
 Bot chẩn đoán đúng (`artifacts/dn016-dn018-answers-20260803-232300`): T08 có hai API đọc policy theo hai cách khác nhau — KPI áp policy kế thừa T07 (DN016 khớp 20/20, DN018 khớp 22/22) trong khi API badge "thiếu %" chỉ đọc **exact T08** nên báo thiếu toàn bộ. Hai màn ra hai con số ⇒ UI fail-closed ⇒ CEO không xem được badge.

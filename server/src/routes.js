@@ -986,6 +986,29 @@ function employeeCostTableOptions(req, { paginate = false, allEmployees = false 
   };
 }
 
+// Metadata riêng cho doanh thu chưa gán được nhân viên. Không đưa các dòng này
+// vào bảng chi phí (không có policy nhân viên hợp lệ), nhưng vẫn chuẩn hoá qua
+// đúng pipeline revenue để bộ lọc/query và số trước/sau VAT cùng ngữ nghĩa với
+// bảng ALL. Tuyệt đối không dùng exceptionCount DQ thay cho số dòng cách ly.
+function employeeCostQuarantinePeriods(range, catalogRowsByPeriod = {}) {
+  return range.months.map((period) => {
+    const revenueRows = store.getRows({
+      ky: employeeCost.toUiMonth(period),
+      scope: { empCode: store.UNALLOCATED_EMP },
+    });
+    const enriched = employeeCost.enrichWithRevenue({
+      empCode: store.UNALLOCATED_EMP,
+      columns: [],
+      rows: [],
+    }, {
+      period,
+      revenueRows,
+      catalogRows: catalogRowsByPeriod[period] || [],
+    });
+    return { period, columns: enriched.columns, rows: enriched.rows };
+  });
+}
+
 async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view_all', suppressAudit = false } = {}) {
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
@@ -1019,7 +1042,9 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       includeSalaryAdvance: false,
       suppressAudit,
     }));
-    return employeeCostTable.mergeEmployeeReports(reports, roster);
+    const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+    merged.quarantinePeriods = employeeCostQuarantinePeriods(range, sharedCatalogRowsByPeriod);
+    return merged;
   };
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
   // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
