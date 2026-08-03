@@ -37,8 +37,15 @@ git cherry-pick dc07a18
 - Claude đã chạy: web **104/104 pass** (thêm 2 test hồi quy) · `npm run build` sạch.
 - Deploy: build web, reload **chỉ** `app-report`. Không restart bot Telegram.
 
+### Việc 3 — ‼ HAI SỐ TRÊN CÙNG MỘT MÀN KHÔNG KHỚP (ảnh CEO 20:01)
+Ô KPI ghi **`301 cặp thiếu %`**, nhưng chip tab ghi **`98 mã · 281 cặp`**. **Lệch 20 cặp.** Đúng loại "dòng biến mất lặng lẽ" mà CEO đã cấm — CEO không tin được số nào cả.
+- **Nghi ngờ (phải kiểm, đừng tin lời Claude):** `server/src/employeeCostGaps.js` → `aggregatePairs()` có `if (!key) continue;` — cặp nào **rỗng mã sản phẩm** bị bỏ khỏi danh mục mà không đếm vào đâu cả.
+- Yêu cầu: dán ra **20 cặp đó là cặp nào** (đơn vị + mã + NV). Nếu đúng do rỗng mã ⇒ phải **hiện thành một dòng riêng** ("thiếu mã sản phẩm — DataHub cấp mã"), KHÔNG được bỏ im.
+- Bất biến bắt buộc: **số cặp ở KPI == tổng số cặp trong tab**. Lệch là báo đỏ, không hiển thị số chỏi.
+
 ### Nghiệm thu
 - T08 → ô tổng chi phí hiện **"—" · nhãn "chưa có bảng %"**, KHÔNG còn `0đ`.
+- Số cặp ở KPI **bằng đúng** tổng cặp trong tab "Mặt hàng thiếu %".
 - T07 → số **không đổi một đồng** so với trước khi cherry-pick.
 - Dán cho CEO: kỳ 08/2026 thiếu **đúng cái gì** và **ai** phải nạp (DataHub hay App Sale), kèm ngày có.
 
