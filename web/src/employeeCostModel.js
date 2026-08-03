@@ -126,6 +126,36 @@ export function employeeCostNoMatch(model = {}) {
   return Number(match.totalRows || 0) > 0 && Number(match.matchedRows || 0) === 0;
 }
 
+// KPI và badge "Mặt hàng thiếu %" được tải qua hai request độc lập. Nếu một
+// request gặp lỗi nguồn tạm thời ở đúng một NV, hai số có thể thuộc hai snapshot
+// khác nhau. Fail closed: chỉ công nhận badge khi cùng kỳ, cùng số cặp thiếu và
+// cùng danh sách NV lỗi nguồn; UI sẽ ẩn số chỏi thay vì để CEO phải đoán số nào đúng.
+export function employeeCostGapConsistency(model = {}, badge = {}) {
+  const match = employeeCostKpiMatch(model);
+  const expectedPairs = Math.max(0, Number(match.totalRows || 0) - Number(match.matchedRows || 0));
+  const actualPairs = Math.max(0, Number(badge.pairCount || 0));
+  const modelFrom = String(model.from || '');
+  const modelTo = String(model.to || modelFrom);
+  const badgeFrom = String(badge.from || '');
+  const badgeTo = String(badge.to || badgeFrom);
+  const sameRange = !!modelFrom && !!badgeFrom && modelFrom === badgeFrom && modelTo === badgeTo;
+  const expectedUnavailable = [...new Set(Array.isArray(match.unavailableEmployees)
+    ? match.unavailableEmployees.map(String).filter(Boolean) : [])].sort();
+  const actualUnavailable = [...new Set(Array.isArray(badge.unavailableEmployees)
+    ? badge.unavailableEmployees.map(String).filter(Boolean) : [])].sort();
+  const sourceMismatch = expectedUnavailable.join('\u001f') !== actualUnavailable.join('\u001f');
+  const ready = !!badge.loaded && sameRange;
+  return {
+    ready,
+    sameRange,
+    expectedPairs,
+    actualPairs,
+    expectedUnavailable,
+    actualUnavailable,
+    mismatch: ready && (expectedPairs !== actualPairs || sourceMismatch),
+  };
+}
+
 function normalizedMatch(rawMatch = {}, rowCount = 0) {
   return {
     matchedRows: Number(rawMatch.matchedRows || 0),

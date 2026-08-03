@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadEmployeeCostDataQuality, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
-  currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostViewModel,
+  currentMonthValue, employeeCostColumnKpis, employeeCostGapConsistency, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostViewModel,
   employeeCostPageItems, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
@@ -1137,7 +1137,10 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [visibilityError, setVisibilityError] = useState('');
   // Số đếm cho badge trên tab — tải nền, độc lập với tab đang mở, để CEO thấy
   // ngay còn bao nhiêu việc mà không phải bấm vào từng tab.
-  const [gapBadge, setGapBadge] = useState({ loaded: false, loading: true, codeCount: 0, pairCount: 0, revenueAffected: 0 });
+  const [gapBadge, setGapBadge] = useState({
+    loaded: false, loading: true, from: '', to: '', codeCount: 0, pairCount: 0,
+    revenueAffected: 0, unavailableEmployees: [],
+  });
   const [dqBadge, setDqBadge] = useState({ loaded: false, loading: true, count: 0, revenueAffected: 0 });
   const [gapPayload, setGapPayload] = useState({ pairs: [], coverageByEmployee: [] });
   const [gapLoading, setGapLoading] = useState(!admin);
@@ -1255,10 +1258,18 @@ export default function EmployeeCost({ me, onNavigate }) {
   useEffect(() => {
     if (!admin) return undefined;
     let alive = true;
+    setGapBadge((current) => ({ ...current, loading: true }));
     const timer = window.setTimeout(() => {
       if (!alive) return;
       api.employeeCostGapsSummary(range)
-        .then((data) => { if (alive) setGapBadge(data?.disabled ? { loaded: false, loading: false, codeCount: 0, pairCount: 0, revenueAffected: 0 } : { loaded: true, loading: false, codeCount: Number(data.codeCount || 0), pairCount: Number(data.pairCount || 0), revenueAffected: Number(data.revenueAffected || 0) }); })
+        .then((data) => { if (alive) setGapBadge(data?.disabled
+          ? { loaded: false, loading: false, from: range.from, to: range.to, codeCount: 0, pairCount: 0, revenueAffected: 0, unavailableEmployees: [] }
+          : {
+            loaded: true, loading: false, from: String(data.from || range.from), to: String(data.to || range.to),
+            codeCount: Number(data.codeCount || 0), pairCount: Number(data.pairCount || 0),
+            revenueAffected: Number(data.revenueAffected || 0),
+            unavailableEmployees: Array.isArray(data.unavailableEmployees) ? data.unavailableEmployees.map(String) : [],
+          }); })
         .catch(() => { if (alive) setGapBadge((current) => ({ ...current, loading: false })); });
       api.employeeCostDataQualitySummary(range)
         .then((data) => { if (alive) setDqBadge({ loaded: true, loading: false, count: Number(data.exceptionCount ?? data.count ?? 0), revenueAffected: Number(data.revenueAffected || 0) }); })
@@ -1318,11 +1329,19 @@ export default function EmployeeCost({ me, onNavigate }) {
   const unavailableEmpCodes = Array.isArray(kpiMatch.unavailableEmployees) ? kpiMatch.unavailableEmployees : [];
   const unavailableEmps = Number(kpiMatch.unavailableEmployeeCount || 0);
   const unavailableEmpLabel = unavailableEmpCodes.length ? unavailableEmpCodes.join(', ') : `${unavailableEmps} NV`;
+  const gapConsistency = employeeCostGapConsistency(model, gapBadge);
+  const gapMismatch = allEmployees && !loading && gapConsistency.mismatch;
+  const gapMismatchEmployees = [...new Set([
+    ...gapConsistency.expectedUnavailable, ...gapConsistency.actualUnavailable,
+  ])];
+  const gapMismatchSource = gapMismatchEmployees.length
+    ? `DataHub đang tạm thiếu nguồn của ${gapMismatchEmployees.join(', ')}.`
+    : 'Hai request đang nhận hai snapshot DataHub khác nhau.';
   // Không khớp được dòng nào ⇒ nói thẳng "chưa có bảng % chi phí của kỳ này"
   // kèm việc phải làm, thay vì hiện 0đ rồi để CEO tưởng app hỏng.
   const noMatch = employeeCostNoMatch(model);
   const coverageNote = noMatch
-    ? `Kỳ này CHƯA CÓ bảng % chi phí — ${missingPairs.toLocaleString('vi-VN')}/${Number(kpiMatch.totalRows || 0).toLocaleString('vi-VN')} cặp thiếu %. DataHub/App Sale phải nạp tỷ lệ theo mã hàng cho kỳ này thì số mới lên (tab "Mặt hàng thiếu %").`
+    ? `Kỳ này CHƯA CÓ bảng % chi phí — ${missingPairs.toLocaleString('vi-VN')}/${Number(kpiMatch.totalRows || 0).toLocaleString('vi-VN')} cặp thiếu %. DataHub phải nạp tỷ lệ theo mã hàng cho kỳ này thì số mới lên (tab "Mặt hàng thiếu %").`
     : provisionalTotals
     ? [
       `Tạm tính trên ${formatMatchRate(kpiMatch)} đã khớp`,
@@ -1485,11 +1504,19 @@ export default function EmployeeCost({ me, onNavigate }) {
       {/* Badge số ngay trên tab: CEO nhìn phát thấy còn bao nhiêu mã/dòng đang
           vướng, không phải bấm vào tab mới biết. */}
       <button type="button" role="tab" aria-selected={view === 'gaps'} className={view === 'gaps' ? 'active' : ''} onClick={() => setView('gaps')}>
-        Mặt hàng thiếu %{!gapBadge.loaded && gapBadge.loading && <span className="employee-cost-tab-badge loading" title="Đang đếm…">…</span>}{gapBadge.loaded && <span className={`employee-cost-tab-badge${gapBadge.codeCount ? ' warn' : ' ok'}`} title={gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp · ${gapBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không còn mã thiếu %'}>{gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp` : '0'}</span>}
+        Mặt hàng thiếu %{!gapConsistency.ready && gapBadge.loading && <span className="employee-cost-tab-badge loading" title="Đang đếm…">…</span>}{gapConsistency.ready && <span
+          className={`employee-cost-tab-badge${gapMismatch || gapBadge.codeCount ? ' warn' : ' ok'}`}
+          title={gapMismatch ? `Dữ liệu KPI và tab chưa cùng snapshot. ${gapMismatchSource}` : gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp · ${gapBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không còn mã thiếu %'}>
+          {gapMismatch ? '⚠ chưa đồng nhất' : gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp` : '0'}
+        </span>}
       </button>
       <button type="button" role="tab" aria-selected={view === 'dq'} className={view === 'dq' ? 'active' : ''} onClick={() => setView('dq')}>
         Kiểm soát dữ liệu{!dqBadge.loaded && dqBadge.loading && <span className="employee-cost-tab-badge loading" title="Đang đếm…">…</span>}{dqBadge.loaded && <span className={`employee-cost-tab-badge${dqBadge.count ? ' warn' : ' ok'}`} title={dqBadge.count ? `${dqBadge.count} exception · ${dqBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không có exception'}>{dqBadge.count ? `${dqBadge.count} exception` : '0'}</span>}
       </button>
+    </div>}
+
+    {view === 'cost' && gapMismatch && <div className="employee-cost-match-warning employee-cost-data-mismatch" role="alert">
+      <b>⛔ Dữ liệu chưa đồng nhất.</b> KPI và tab "Mặt hàng thiếu %" chưa cùng một snapshot. {gapMismatchSource} Số badge chỏi đã được ẩn; hãy làm mới sau khi nguồn phục hồi.
     </div>}
 
     {admin && view === 'dq' ? <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin onOpenRow={openDqRow} /> : admin && view === 'gaps' ? <AdminGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} /> : <>

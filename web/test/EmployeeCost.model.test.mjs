@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   buildEmployeeCostColumns, currentMonthValue, employeeBonusViewModel, employeeCostColumnKpis, employeeCostViewModel,
-  employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostPageItems, employeeTargetViewModel, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
+  employeeCostGapConsistency, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostPageItems, employeeTargetViewModel, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
   formatMonthLabel, normalizeEmployeeCostSearch,
 } from '../src/employeeCostModel.js';
 import { normalizeTargetNavigation, targetAdminKyAfterPeriods } from '../src/targetNavigationModel.js';
@@ -327,7 +327,7 @@ test('gui worklist xong phai hien BIEN NHAN cua DataHub, khong chi noi da gui', 
 test('tab phai hien BADGE so ma/so cap va so exception, khong bat phai bam vao moi thay', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   // Badge nằm ngay trên nút tab.
-  assert.match(page, /Mặt hàng thiếu %\{!gapBadge\.loaded/);
+  assert.match(page, /Mặt hàng thiếu %\{!gapConsistency\.ready/);
   assert.match(page, /Kiểm soát dữ liệu\{!dqBadge\.loaded/);
   // Hiện đủ số mã + số cặp cho tab thiếu %, số exception cho tab kiểm soát.
   assert.match(page, /gapBadge\.codeCount\} mã · \$\{gapBadge\.pairCount\} cặp/);
@@ -593,4 +593,49 @@ test('coverage thấp mà vẫn có dòng khớp thì giữ nguyên số tạm t
   assert.deepEqual(employeeCostColumnKpis(model), [
     { key: 'c36', label: 'CP ctv/khác (%)', annual: false, value: 800_000, provisional: true },
   ]);
+});
+
+// Ca thật 03/08/2026: KPI đã có đủ 301 cặp nhưng request badge gặp lỗi nguồn
+// riêng DN016 nên chỉ còn 281 cặp. Hai số thuộc hai snapshot khác nhau; UI phải
+// fail closed thay vì đặt 301 và 281 cạnh nhau như thể cả hai đều đáng tin.
+test('KPI 301 nhưng badge 281 do DN016 lỗi nguồn thì báo mismatch', () => {
+  const model = {
+    from: '2026-08', to: '2026-08',
+    match: { matchedRows: 0, totalRows: 301, unavailableEmployees: [] },
+  };
+  const consistency = employeeCostGapConsistency(model, {
+    loaded: true, from: '2026-08', to: '2026-08', pairCount: 281,
+    unavailableEmployees: ['DN016'],
+  });
+  assert.equal(consistency.ready, true);
+  assert.equal(consistency.mismatch, true);
+  assert.equal(consistency.expectedPairs, 301);
+  assert.equal(consistency.actualPairs, 281);
+  assert.deepEqual(consistency.actualUnavailable, ['DN016']);
+});
+
+test('badge chỉ được công nhận khi cùng kỳ, cùng số cặp và cùng trạng thái nguồn', () => {
+  const model = {
+    from: '2026-08', to: '2026-08',
+    match: { matchedRows: 0, totalRows: 301, unavailableEmployees: [] },
+  };
+  assert.deepEqual(employeeCostGapConsistency(model, {
+    loaded: true, from: '2026-08', to: '2026-08', pairCount: 301, unavailableEmployees: [],
+  }), {
+    ready: true, sameRange: true, expectedPairs: 301, actualPairs: 301,
+    expectedUnavailable: [], actualUnavailable: [], mismatch: false,
+  });
+  const stale = employeeCostGapConsistency(model, {
+    loaded: true, from: '2026-07', to: '2026-07', pairCount: 19, unavailableEmployees: [],
+  });
+  assert.equal(stale.ready, false);
+  assert.equal(stale.mismatch, false);
+});
+
+test('UI ẩn số badge chỏi, báo đỏ và ghi đúng DataHub là chủ nguồn T08', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /gapMismatch \? '⚠ chưa đồng nhất'/);
+  assert.match(page, /employee-cost-data-mismatch/);
+  assert.match(page, /DataHub phải nạp tỷ lệ theo mã hàng/);
+  assert.doesNotMatch(page, /DataHub\/App Sale phải nạp tỷ lệ theo mã hàng/);
 });
