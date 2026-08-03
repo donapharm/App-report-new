@@ -29,7 +29,7 @@ App Salary vừa thêm **bước duyệt kỳ**: chưa duyệt thì họ trả `
 | **2** | **Chốt hợp đồng "Ứng lần 1" với App Salary** — họ trả `status: approved/provisional` ngoài hợp đồng 10 khoá. App Report đang hiện đúng *"App Salary đổi hợp đồng"* và giữ "Còn lại sau ứng" = `—`. **Đừng vá vội.** | sáng 04/08 | chờ chốt nghĩa | bot + App Salary → Claude duyệt |
 | **3** | **Nghiệm thu VP018 + DN022** | **08/08** | code đã lên PROD, chưa nghiệm thu | bot |
 | **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
-| **5** | **Giao target T08** → mở 3 ô Target/Thưởng/Phạt | bất cứ lúc nào | chưa giao | **CEO, 5 phút** |
+| ✅ | ~~Giao target T08~~ — **CEO ĐÃ GIAO XONG**, xác nhận trên ảnh 23:21: Target tổng đội `31.270.318.669đ` · **21/21 NV có target** · Quý `31.490.318.669đ`. Cả 3 ô Target/Thưởng/Phạt đã mở. Claude ghi nhầm là "chưa giao" — đã sửa. | — | **xong** | — |
 | **6** | **Bật tin nhắn chi phí/thưởng** | **09/08** | chờ xong #3 | bot |
 | **7** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do | sau 08/08 | nợ từ 29/07, chưa có màn nào | bot |
 | **8** | **So tháng trước + nhớ lựa chọn** (CEO duyệt 03/08) | sau 08/08 | chưa code | Claude |
