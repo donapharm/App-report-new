@@ -15,14 +15,14 @@
 
 | # | Việc | Hạn | Đang vướng ở đâu | Ai làm |
 |---|---|---|---|---|
-| **1** | **Deploy `383692f`** — ô doanh thu ghi rõ *"chưa gồm N dòng đang cách ly"*. Nằm ngay trên `c1fb222`, fast-forward sạch. **Kèm: dán ra dòng cách ly T08** — đơn nào · mã hàng nào · vì sao chưa gán được NV · ai xử lý. Xử lý xong hai app khớp `0đ`. | ngay | code xong, đã test, chờ bấm | bot |
+| **1** | **Deploy `bdf5a10`** (gồm cả `383692f`) — ô doanh thu ghi rõ *"chưa gồm N dòng đang cách ly"*. Nằm ngay trên `c1fb222`, fast-forward sạch. **Kèm: dán ra dòng cách ly T08** — đơn nào · mã hàng nào · vì sao chưa gán được NV · ai xử lý. Xử lý xong hai app khớp `0đ`.<br>**+ Sửa xong DN016/DN018:** KPI và badge "thiếu %" trước đây đọc policy theo hai cách khác nhau (KPI kế thừa T07 → khớp 20/20; badge chỉ đọc exact T08 → báo thiếu 20/20) nên màn phải fail-closed. Nay **mọi đường lấy chi phí đi qua một hàm duy nhất** (`fetchEmployeeCost` bọc `fetchRawEmployeeCost` + `applyEffectiveRates`), có test bất biến chặn đường vòng. **DN016/DN018 vốn sạch; 2 cặp thiếu thật thuộc DN003.** | ngay | code xong, đã test | bot |
 | **2** | **Chốt hợp đồng "Ứng lần 1"** — App Salary trả `status: approved/provisional` ngoài hợp đồng 10 khoá. **Cấm tự đoán nghĩa** (chi tiết mục dưới). Đang hiện đúng *"App Salary đổi hợp đồng"*, "Còn lại sau ứng" giữ `—`. | 04/08 | chờ App Salary trả lời bằng văn bản | bot + App Salary → Claude duyệt |
 | **3** | **Nghiệm thu VP018 + DN022** trên PROD | **08/08** | code đã lên PROD, chưa nghiệm thu | bot |
 | **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
 | **5** | **Bật tin nhắn chi phí/thưởng** (`EMP_COST_NOTIFY`, `BONUS_NOTIFY`) | **09/08** | chờ xong #3 | bot |
 | **6** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) | sau 08/08 | nợ từ 29/07, **chưa có màn nào** | bot |
 | **7** | **So tháng trước + nhớ lựa chọn** (CEO duyệt 03/08) | sau 08/08 | chưa code | Claude |
-| **8** | **Bản RAM `9986f0a`** — cắt loop mất dữ liệu chi phí (`vault-audit.lock` chưa tự chữa) | sau 08/08 | chưa deploy | bot |
+| **8** | **Bản RAM `9986f0a`** + `vault-audit.lock` tự chữa. **‼ NÊN LÀM SỚM:** audit cho thấy lỗi nguồn `unavailable` luân phiên ở DN004/DN007/DN008/DN009/DN011/DN017/DN019/DN024 — snapshot DataHub không ổn định, đúng triệu chứng loop này. Cùng thủ phạm vụ 21 NV hiện 0đ hôm trước. **Cấm vá triệu chứng ở tầng hiển thị.** | sau 08/08 (đề nghị nâng sớm) | chưa deploy | bot |
 | **9** | **Module "Thanh toán CP của tôi" GĐ1** | không gấp | có spec + PowerPoint, chưa code | bot |
 | **10** | **Đổi `SALARY_SERVICE_TOKEN`** | không gấp | CEO chưa gật | bot, 5 phút |
 
