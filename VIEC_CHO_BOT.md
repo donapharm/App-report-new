@@ -44,6 +44,13 @@ git cherry-pick 21867c4
 
 **ĐÂY LÀ QUYẾT ĐỊNH CUỐI. Không hỏi lại, không phân tích thêm.**
 
+### ⏱ CHỐT PHẠM VI 03/08 — ĐỦ RỒI, ĐỪNG THÊM VIỆC NỮA
+
+Phần làm chắc (frozen payload `O_NOFOLLOW`, chống sửa trộm byte+hash, claim bind byte/semantic hash, ghim T06/T07) — **Claude duyệt, đủ dùng.** Đặc biệt tốt: đổi byte rồi đổi luôn hash mong đợi vẫn bị chặn nhờ đối chiếu tổng dòng/tổng tiền đã parse.
+
+**TỪ ĐÂY: KHÔNG thêm hạng mục an toàn mới.** Chạy thẳng Gate 1 → Gate 2 → deploy → báo số. CEO đã chờ 2 ngày cho con số này.
+Phát hiện rủi ro mới mà **không dính tiền T06/T07** ⇒ ghi lại thành việc sau, **đừng chặn deploy**. Chỉ dừng khi: T06/T07 lệch · tổng nguồn ≠ (đưa vào + loại ra) · test nền đỏ thêm.
+
 ### ‼ CẬP NHẬT 03/08 — CEO CHỌN PHƯƠNG ÁN 1: CHỤP LẠI SNAPSHOT MỚI
 
 Bot dừng đúng ở Gate 2: **con số 23.437.000đ là ảnh chụp tối 02/08, đã cũ.** Sáng 03/08 có đơn mới:
