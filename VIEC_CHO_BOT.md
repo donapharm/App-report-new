@@ -38,6 +38,46 @@ git cherry-pick 21867c4
 
 ---
 
+## 🔴 VIỆC 0D — ‼ SỬA GẤP: BỎ BỘ LỌC TỰ CHẾ, LẤY ĐÚNG "ĐÃ THỰC HIỆN" CỦA APP SALE
+
+> CEO 03/08 15:18: *"tại sao làm hoài hai con số của App Sale và App Report vẫn không khớp nhau vậy. Tao đã yêu cầu phải khớp cả hai số ở hai bên rồi mà sao vẫn vậy."*
+
+### Số thực đo (CEO chụp cùng thời điểm, 15:15–15:18 GMT+7, kỳ 01→03/08)
+| | Số |
+|---|---|
+| **App Sale — ĐÃ THỰC HIỆN** | **1.735.284.772đ** = CRM xuất HĐ `1.340.385.772` + Đối tác đã xuất/giao `394.899.000` (23 đơn) |
+| **App Report** | **1.558.525.772đ** (201 dòng) |
+| **CHÊNH** | **176.759.000đ** — App Report **THẤP HƠN** |
+
+### ‼ NGUYÊN NHÂN — LỖI CỦA CHÍNH VIỆC 0C
+App Sale **CÓ tính** đơn đối tác (kể cả nhập tay/Zalo) vào *"ĐỐI TÁC — THÀNH TIỀN ĐÃ XUẤT GIAO HÀNG"* = **394,9 triệu / 23 đơn**.
+VIỆC 0C lại bắt App Report **LOẠI** những đơn đó ⇒ App Report hụt đi.
+
+Tối 02/08 App Sale hiện *"đối tác 0đ / 0 đơn"* — đó **chỉ là do bộ lọc NGÀY chưa quét tới**, KHÔNG phải App Sale không công nhận. Claude và bot đã suy luận sai từ đó, rồi **tự chế thêm một bộ lọc mà App Sale không có**.
+
+### VIỆC PHẢI LÀM
+1. **GỠ BỎ** điều kiện loại `manual_zalo` / "chưa xác nhận giao" mà VIỆC 0C thêm vào. **KHÔNG có bộ lọc tự chế nào nữa.**
+2. **Lấy ĐÚNG định nghĩa "ĐÃ THỰC HIỆN" của App Sale**, không thêm không bớt:
+   ```
+   Doanh thu = CRM đã xuất hoá đơn  +  Đối tác đã xuất/giao
+   ```
+   Đọc **đúng điều kiện SQL** App Sale dùng cho 2 ô đó rồi **dùng lại y nguyên**. Nếu App Sale tính đơn nhập tay thì App Report **cũng tính**.
+3. **Trục ngày giữ nguyên** (ngày hoá đơn → ngày xác nhận giao). KHÔNG quay lại `o.created_at`.
+
+### ‼ CỔNG NGHIỆM THU — SO CÙNG THỜI ĐIỂM
+Chụp **cùng lúc** (chênh < 2 phút), cùng kỳ, App Sale mốc **"Ngày phản hồi/giao"**:
+- **App Report == App Sale "ĐÃ THỰC HIỆN"**, chênh **0đ**. Còn lệch ⇒ dán bảng đối chiếu từng nhóm (CRM xuất HĐ / Đối tác đã giao) chỉ rõ dòng nào thừa-thiếu.
+- **T07 = 30.917.892.673đ** và **T06 = 28.403.136.096đ** — vẫn ghim, đổi là DỪNG.
+- Tổng nguồn = đưa vào + loại ra.
+
+### GHI NHỚ ĐỂ KHÔNG LẶP LẠI
+**App Report KHÔNG được tự định nghĩa doanh thu.** App Sale là nguồn sự thật; App Report **soi chiếu**, không diễn giải lại. Muốn đổi cách tính ⇒ đổi ở **App Sale trước**, App Report theo sau.
+Khi thấy hai app lệch: **kiểm bộ lọc NGÀY của màn App Sale trước tiên** — lệch do bộ lọc ngày trông y hệt lệch do sai công thức, và đã lừa được cả Claude lẫn bot một lần.
+
+---
+
+<details><summary>(lưu vết — VIỆC 0C, hướng đã SAI, giữ để không lặp lại)</summary>
+
 ## 🔴 VIỆC 0C — CEO RA LỆNH: APP REPORT PHẢI KHỚP APP SALE (làm ngay)
 
 > CEO 02/08: *"App Sale mới xác định doanh thu chỉ có **23.437.000đ** cả VAT. Tại sao lại lôi vào cả các đơn **chưa cập nhật xác nhận giao hàng**? Tao muốn số bên App Sale phải **KHỚP** với bên App Report."*
@@ -117,6 +157,10 @@ Không đạt ⇒ dừng, báo, chờ CEO.
 - Đối chiếu lại: App Sale và App Report cùng ra **23.437.000đ** cho T08.
 - Ghi vào `CHANGELOG.md`: từ nay App Report **bám định nghĩa "đã thực hiện" của App Sale**, không tự nới.
 - Nếu sau này đối tác xác nhận giao thật/xuất hoá đơn cho 3 đơn kia → chúng **tự vào lại** theo ngày xác nhận. Không xoá dữ liệu, chỉ không tính khi chưa đủ điều kiện.
+
+---
+
+</details>
 
 ---
 
