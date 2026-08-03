@@ -1600,9 +1600,16 @@ export default function EmployeeCost({ me, onNavigate }) {
           ngay dưới, nhỏ hơn, để đối chiếu nhanh với App Sale mà không phải đổi màn. */}
       <Kpi label="Doanh thu chưa VAT"
         value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)}
-        sub={model.summary.revenueTotal == null
-          ? 'Số tổng hợp từ backend'
-          : `Đã gồm VAT: ${formatEmployeeCostCell(model.summary.revenueTotal, moneyColumn)} · số tổng hợp từ backend`} />
+        sub={[
+          model.summary.revenueTotal == null ? '' : `Đã gồm VAT: ${formatEmployeeCostCell(model.summary.revenueTotal, moneyColumn)}`,
+          // ‼ Dòng bị cách ly (chưa gán được NV) KHÔNG nằm trong tổng ở đây nhưng
+          // VẪN nằm trong doanh thu App Sale. Không nói ra thì hai app lệch nhau mà
+          // không ai biết vì sao — đúng lỗi CEO bắt được 23:21 (lệch 1.795.600đ).
+          dqBadge.loaded && dqBadge.count
+            ? `chưa gồm ${dqBadge.count.toLocaleString('vi-VN')} dòng đang cách ly — xem tab "Kiểm soát dữ liệu"`
+            : '',
+          'số tổng hợp từ backend',
+        ].filter(Boolean).join(' · ')} />
       {/* Điểm/Target/Xu/Cấn trừ là chỉ số TỪNG NGƯỜI — không gộp được qua nhiều NV.
           Ở "Tất cả NV" ẩn hẳn (thay vì hiện ô trống trông như lỗi) + 1 thẻ gợi ý. */}
       {!allEmployees && <KhoanPointKpi khoan={khoan} loading={khoanLoading} />}
