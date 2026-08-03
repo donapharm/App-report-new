@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
   buildEmployeeCostColumns, currentMonthValue, employeeBonusViewModel, employeeCostColumnKpis, employeeCostViewModel,
-  employeeCostHighlightParts, employeeCostKpiMatch, employeeCostPageItems, employeeTargetViewModel, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
+  employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostPageItems, employeeTargetViewModel, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
   formatMonthLabel, normalizeEmployeeCostSearch,
 } from '../src/employeeCostModel.js';
 import { normalizeTargetNavigation, targetAdminKyAfterPeriods } from '../src/targetNavigationModel.js';
@@ -544,4 +544,53 @@ test('badge hiện … khi đang tính và KHÔNG biến mất khi lỗi tạm t
   assert.doesNotMatch(page, /catch\(\(\) => \{ if \(alive\) setGapBadge\(\(current\) => \(\{ \.\.\.current, loaded: false \}\)\); \}\)/);
   assert.match(page, /setGapBadge\(\(current\) => \(\{ \.\.\.current, loading: false \}\)\)/);
   assert.match(page, /setDqBadge\(\(current\) => \(\{ \.\.\.current, loading: false \}\)\)/);
+});
+
+// ‼ Ca thật 03/08/2026: T08 có 303 dòng doanh thu nhưng DataHub chưa có bảng %
+// chi phí của kỳ ⇒ 0 dòng khớp. Trước bản vá, mọi ô KPI tiền hiện "0đ · tạm tính"
+// làm CEO tưởng app hỏng hoặc tưởng tháng đó không phát sinh chi phí.
+// Luật fail-closed: KHÔNG khớp dòng nào ⇒ hiện "—", tuyệt đối không hiện 0.
+test('kỳ chưa có bảng % chi phí thì mọi ô tiền là "—", không phải 0đ', () => {
+  const model = employeeCostViewModel({
+    empCode: 'ALL', period: '08.2026',
+    template: { key: 'fulltime', label: 'FULL-TIME', columns: ['date', 'orderCode', 'revenueBeforeVat', 'c36', 'c44', 'rowMonthlyTotal', 'note'] },
+    columns: [{ key: 'c36', label: 'CP ctv/khác (%)' }, { key: 'c44', label: 'Lương cuối năm (%)', annual: true }],
+    rows: [{ orderCode: 'DH-08', sourceLineId: 'DH-08-1', date: '2026-08-01', revenueBeforeVat: 10_000_000, c36: null, c44: null, rowMonthlyTotal: null, note: '' }],
+    match: { matchedRows: 0, totalRows: 301, rate: 0, threshold: 90, low: true },
+    summary: {
+      reliable: false, monthlyTotal: null, annualTotal: null, revenueBeforeVatTotal: 2_047_599_211,
+      columnTotals: null, provisionalColumnTotals: { c36: 0, c44: 0 },
+      provisionalMonthlyTotal: 0, provisionalAnnualTotal: 0,
+      annualColumnKeys: ['c44'], annualLabels: ['Lương cuối năm (%)'],
+    },
+  });
+  assert.equal(employeeCostNoMatch(model), true);
+  assert.deepEqual(employeeCostColumnKpis(model), [
+    { key: 'c36', label: 'CP ctv/khác (%)', annual: false, value: null, provisional: false },
+    { key: 'c44', label: 'Lương cuối năm (%)', annual: true, value: null, provisional: false },
+  ]);
+  for (const kpi of employeeCostColumnKpis(model)) {
+    assert.equal(formatEmployeeCostCell(kpi.value, { kind: 'money' }), '—');
+  }
+});
+
+// Coverage thấp nhưng CÓ dòng khớp thì vẫn phải hiện số tạm tính như cũ —
+// bản vá chỉ chặn đúng ca 0 khớp, không được làm mất số của các kỳ đang chạy.
+test('coverage thấp mà vẫn có dòng khớp thì giữ nguyên số tạm tính', () => {
+  const model = employeeCostViewModel({
+    empCode: 'ALL', period: '07.2026',
+    template: { key: 'fulltime', label: 'FULL-TIME', columns: ['date', 'orderCode', 'revenueBeforeVat', 'c36', 'rowMonthlyTotal', 'note'] },
+    columns: [{ key: 'c36', label: 'CP ctv/khác (%)' }],
+    rows: [{ orderCode: 'DH-07', sourceLineId: 'DH-07-1', date: '2026-07-02', revenueBeforeVat: 10_000_000, c36: 8, rowMonthlyTotal: 800_000, note: '' }],
+    match: { matchedRows: 40, totalRows: 100, rate: 40, threshold: 90, low: true },
+    summary: {
+      reliable: false, monthlyTotal: null, annualTotal: null, revenueBeforeVatTotal: 10_000_000,
+      columnTotals: null, provisionalColumnTotals: { c36: 800_000 },
+      provisionalMonthlyTotal: 800_000, annualColumnKeys: [], annualLabels: [],
+    },
+  });
+  assert.equal(employeeCostNoMatch(model), false);
+  assert.deepEqual(employeeCostColumnKpis(model), [
+    { key: 'c36', label: 'CP ctv/khác (%)', annual: false, value: 800_000, provisional: true },
+  ]);
 });

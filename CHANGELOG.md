@@ -1,3 +1,11 @@
+### 2026-08-03 — "Chi phí của tôi": 0 dòng khớp % thì hiện "—", KHÔNG hiện 0đ
+
+- Ca thật T08.2026: 303 dòng doanh thu, 301/301 cặp (đơn vị × mã hàng) chưa có tỷ lệ % ⇒ `matchedRows = 0`. Trước bản vá, tổng phần đã khớp bằng 0 nên toàn bộ ô KPI tiền hiện **0đ · tạm tính** — CEO đọc thành "app hỏng"/"tháng này không tốn chi phí".
+- Thêm `employeeCostNoMatch()` (web model): kỳ có doanh thu nhưng không khớp được dòng % nào. Khi đó `employeeCostColumnKpis()` trả `value: null`, bỏ cờ `provisional`; ô tổng chi phí tháng hiện `—`, nhãn đổi thành `· chưa có bảng %`.
+- Ghi chú dưới ô nói thẳng việc phải làm: *"Kỳ này CHƯA CÓ bảng % chi phí — N/N cặp thiếu %. DataHub/App Sale phải nạp tỷ lệ theo mã hàng cho kỳ này thì số mới lên (tab Mặt hàng thiếu %)."*
+- Chỉ đụng lớp hiển thị. KHÔNG đổi công thức, KHÔNG đổi backend, KHÔNG đổi một đồng nào. Coverage thấp mà vẫn có dòng khớp thì giữ nguyên số tạm tính như cũ (có test chặn).
+- Test: web **104/104 pass** (thêm 2 test hồi quy) · `npm run build` sạch.
+
 ### 2026-08-03 — VIỆC 0D đóng lại + xếp thứ tự hàng đợi kế tiếp (tài liệu)
 
 - Xác nhận độc lập trên đúng commit PROD `bf7a7a0`: `revenueRuleLock.test.js` 6/6 pass; phần đối tác của `appSaleRevenueMirror.js` chỉ có MỘT bộ lọc ngày (`o.created_at`) nên lỗi lọc kép từng làm mất 382,6 triệu không tái diễn được; kỳ tự nhảy theo tháng lịch `Asia/Bangkok`, không ghi cứng.
