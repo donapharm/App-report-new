@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadEmployeeCostDataQuality, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
-  currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostViewModel,
+  currentMonthValue, employeeCostColumnKpis, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostViewModel,
   employeeCostPageItems, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
@@ -1318,7 +1318,12 @@ export default function EmployeeCost({ me, onNavigate }) {
   const unavailableEmpCodes = Array.isArray(kpiMatch.unavailableEmployees) ? kpiMatch.unavailableEmployees : [];
   const unavailableEmps = Number(kpiMatch.unavailableEmployeeCount || 0);
   const unavailableEmpLabel = unavailableEmpCodes.length ? unavailableEmpCodes.join(', ') : `${unavailableEmps} NV`;
-  const coverageNote = provisionalTotals
+  // Không khớp được dòng nào ⇒ nói thẳng "chưa có bảng % chi phí của kỳ này"
+  // kèm việc phải làm, thay vì hiện 0đ rồi để CEO tưởng app hỏng.
+  const noMatch = employeeCostNoMatch(model);
+  const coverageNote = noMatch
+    ? `Kỳ này CHƯA CÓ bảng % chi phí — ${missingPairs.toLocaleString('vi-VN')}/${Number(kpiMatch.totalRows || 0).toLocaleString('vi-VN')} cặp thiếu %. DataHub/App Sale phải nạp tỷ lệ theo mã hàng cho kỳ này thì số mới lên (tab "Mặt hàng thiếu %").`
+    : provisionalTotals
     ? [
       `Tạm tính trên ${formatMatchRate(kpiMatch)} đã khớp`,
       missingPairs ? `còn ${missingPairs.toLocaleString('vi-VN')} cặp thiếu % (tab "Mặt hàng thiếu %")` : '',
@@ -1532,12 +1537,12 @@ export default function EmployeeCost({ me, onNavigate }) {
           · "tạm tính" = danh mục còn mã chưa gán % → DataHub/App Sale phải điền.
           Một kỳ có thể vừa dự kiến vừa tạm tính; gộp một từ là mất thông tin. */}
       <Kpi
-        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${model.periodClose.closed ? '' : ' · dự kiến'}${provisionalTotals ? ' · tạm tính' : ''}`}
-        value={formatEmployeeCostCell(provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal, moneyColumn)}
+        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${model.periodClose.closed ? '' : ' · dự kiến'}${noMatch ? ' · chưa có bảng %' : (provisionalTotals ? ' · tạm tính' : '')}`}
+        value={formatEmployeeCostCell(noMatch ? null : (provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal), moneyColumn)}
         sub={[
           `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`,
-          model.periodClose.note,
-          provisionalTotals ? coverageNote : 'chưa gồm khoản cuối năm',
+          noMatch ? '' : model.periodClose.note,
+          noMatch || provisionalTotals ? coverageNote : 'chưa gồm khoản cuối năm',
         ].filter(Boolean).join(' · ')}
         title={model.periodClose.label}
         tone="employee-cost-tone-base" />

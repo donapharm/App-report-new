@@ -119,6 +119,13 @@ export function employeeCostKpiMatch(model = {}) {
   return { matchedRows, totalRows, rate, threshold, low: rate != null && rate < threshold, unavailablePairs, unavailableEmployeeCount, unavailableEmployees };
 }
 
+// Kỳ có doanh thu nhưng KHÔNG khớp được một dòng % nào. Khác hẳn "coverage
+// thấp": ở đây không có gì để tạm tính, mọi ô tiền phải là "—" chứ không phải 0đ.
+export function employeeCostNoMatch(model = {}) {
+  const match = employeeCostKpiMatch(model);
+  return Number(match.totalRows || 0) > 0 && Number(match.matchedRows || 0) === 0;
+}
+
 function normalizedMatch(rawMatch = {}, rowCount = 0) {
   return {
     matchedRows: Number(rawMatch.matchedRows || 0),
@@ -679,12 +686,17 @@ export function employeeCostColumnKpis(model = {}) {
   // KPI trống trơn. Vẫn hiện số tổng của PHẦN ĐÃ KHỚP nhưng gắn cờ `provisional`
   // để UI ghi rõ "tạm tính · chưa gồm mã thiếu %", không để người xem hiểu nhầm.
   const provisional = totals == null;
-  const source = provisional ? model.summary?.provisionalColumnTotals : totals;
+  // ‼ KHÔNG dòng nào khớp % ⇒ tổng phần đã khớp bằng 0, nhưng 0đ ở đây KHÔNG
+  // phải "tạm tính" mà là KHÔNG CÓ SỐ (kỳ chưa có bảng % chi phí). Hiển thị 0đ
+  // làm người xem tưởng app hỏng hoặc tưởng tháng này không tốn chi phí. Theo
+  // luật fail-closed: thiếu dữ liệu hiện "—", không bao giờ hiện 0.
+  const noMatch = employeeCostNoMatch(model);
+  const source = noMatch ? null : (provisional ? model.summary?.provisionalColumnTotals : totals);
   return (Array.isArray(model.costColumns) ? model.costColumns : []).map((column) => ({
     key: column.key,
     label: column.label,
     annual: annualKeys.has(column.key),
     value: source?.[column.key] ?? null,
-    provisional: provisional && source?.[column.key] != null,
+    provisional: !noMatch && provisional && source?.[column.key] != null,
   }));
 }
