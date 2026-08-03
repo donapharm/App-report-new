@@ -37,6 +37,37 @@ git cherry-pick dc07a18
 - Claude đã chạy: web **104/104 pass** (thêm 2 test hồi quy) · `npm run build` sạch.
 - Deploy: build web, reload **chỉ** `app-report`. Không restart bot Telegram.
 
+# 🔴🔴🔴 DEPLOY NGAY TỐI NAY — CEO RA LỆNH 21:10, KHÔNG ĐỂ QUA ĐÊM
+
+> CEO: *"Tao yêu cầu mày xử lý dứt điểm trong tối nay cho tao luôn, tao hết tin tưởng rồi, mai là mày lại lơ luôn."*
+
+**Claude đã viết + chạy test xong. Bot chỉ còn deploy.**
+
+```
+git fetch origin claude/fix-cost-t08-effective-rates-20260803
+git merge --ff-only origin/claude/fix-cost-t08-effective-rates-20260803   # hoặc cherry-pick a568313 9416206 b8602fb
+```
+Đầu nhánh: **`b8602fb`**. Đã chạy: server **660 pass / 6 fail** (đúng 6 lỗi PDF thiếu `pdfinfo` — mức nền) · web **104/104** · `npm run build` sạch.
+
+### Gồm 3 việc
+1. **Tỷ lệ % tự có hiệu lực sang tháng sau** — kỳ chưa công bố bảng riêng thì dùng bảng gần nhất (lùi tối đa 3 tháng), hiện nhãn *"Tỷ lệ % đang hiệu lực từ MM/YYYY"*. Áp vĩnh viễn cho T09, T10… CEO không phải nạp lại mỗi tháng.
+2. **"Ứng lần 1" hết vỡ khi App Salary thêm field** — bỏ ràng buộc "đếm đúng 10 khoá"; khoá lạ bị loại bỏ, số lương vẫn không lọt sang. Lỗi nay ghi đúng `contract_mismatch` / `unauthorized` / `upstream_timeout` thay vì một câu chung.
+3. **0 dòng khớp % thì hiện "—"**, không hiện `0đ` giả.
+
+### Deploy
+`npm --prefix web run build` → reload **CHỈ** `app-report`. **Không** restart bot Telegram, **không** bật cờ thông báo, **không** đụng doanh thu.
+
+### Nghiệm thu — dán số cho CEO ngay sau khi deploy
+- **T07/DN007 KHÔNG ĐỔI MỘT ĐỒNG**: tổng `68.726.986đ` · C43 `60.824.695đ` · C41 `5.198.524đ` · C45 `2.703.767đ` · C44 `3.041.235đ` · khớp `100,0%`.
+- **T08 "Tất cả NV"**: 6 ô tiền **ra số**, kèm nhãn ghi tỷ lệ hiệu lực từ tháng nào. Nếu vẫn trắng ⇒ dán `outcome` trong `employee_cost_audit` (xem Việc 0 bên dưới) — lúc đó mới là chuyện khác.
+- **Ô "Ứng lần 1"**: ra số, hoặc ghi rõ *"App Salary đổi hợp đồng"* / *"Sai khoá kết nối"* — không còn câu chung chung.
+- Doanh thu T08 vẫn **`2.151.774.772đ`**, T06/T07 nguyên vẹn.
+
+### Nếu deploy hỏng
+`git revert` đúng 3 commit trên rồi build lại. Không đụng gì khác.
+
+---
+
 ### ‼ Việc 0A — "Ứng lần 1" mất số vì APP SALARY ĐỔI HỢP ĐỒNG (ảnh CEO 20:56)
 
 Ô **"Ứng lần 1 tháng này"** hiện *"Tạm thời chưa lấy được từ App Salary"* ở kỳ **07/2026** (DN007) — trong khi mọi ô chi phí khác của T07 đều đúng.
