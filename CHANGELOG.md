@@ -1,3 +1,21 @@
+### 2026-08-03 (đêm) — Tỷ lệ % tự có hiệu lực sang tháng sau + nói đúng lý do khi App Salary đổi hợp đồng
+
+**1. Tỷ lệ % là chính sách đứng yên, tự áp cho mọi tháng sau (CEO chốt 03/08).**
+- Hợp đồng DataHub (`docs/APP_REPORT_EMPLOYEE_COST_CONTRACT.md` §3) trả dòng `{c5,c7,c16,c25,c36…}` **không có trường kỳ**: đây là bảng chính sách, không phải số đo từng tháng. Chẩn đoán trước đó ("bảng % lưu theo tháng, T07 không chảy sang T08") là **sai**.
+- Thêm `applyEffectiveRates()`: kỳ đang xem không có dòng tỷ lệ nào ⇒ lấy bảng công bố gần nhất (lùi tối đa 3 tháng), gắn `rateEffectiveFrom` và **bắt buộc hiện nhãn** *"Tỷ lệ % đang hiệu lực từ MM/YYYY (kỳ này chưa công bố bảng riêng)"*.
+- Chỉ lấp phần **tỷ lệ**; doanh thu vẫn là doanh thu của đúng tháng đang xem. Không có bảng nào trong 3 tháng ⇒ vẫn rỗng, **không bịa số**.
+- Ngân sách gọi thêm tính cho **cả lượt** (không phải mỗi kỳ) để chế độ "Tất cả NV" không nhân lên hàng trăm lượt gọi.
+- Cũng chạy khi payload bị từ chối vì lệch kỳ (`invalid_period_payload`) — đúng ca tháng mới chưa mở.
+
+**2. "Ứng lần 1" không còn vỡ khi App Salary thêm nhãn mới.**
+- `validateProjection()` trước đây đếm đúng 10 khoá: App Salary **thêm một** field (vd `provisional`) là vứt cả gói ⇒ ô KPI trắng. Nay chỉ bắt buộc **có đủ** 10 khoá; khoá lạ bị **loại bỏ** chứ không làm hỏng payload. Mọi phép kiểm giá trị giữ nguyên 100%.
+- Số lương (`net`…) vẫn tuyệt đối không lọt sang App Report — chỉ 10 khoá hợp đồng đi tiếp; server `console.warn` **tên khoá lạ** (không ghi giá trị) để vẫn phát hiện được bên kia trả field ngoài hợp đồng.
+- `safeGetFirstAdvance()` không còn nuốt mọi lỗi thành `upstream_unavailable`: trả đúng `contract_mismatch` / `unauthorized` / `upstream_timeout` / `not_configured`. Ô KPI nói thẳng ai phải sửa.
+
+**3. 0 dòng khớp % thì hiện "—", không hiện 0đ** (gộp từ `dc07a18`).
+
+- Không đổi một công thức tiền nào. Test: server **660 pass / 6 fail** (6 lỗi PDF thiếu `pdfinfo`, đúng mức nền) · web **104/104** · build sạch.
+
 ### 2026-08-03 — "Chi phí của tôi": 0 dòng khớp % thì hiện "—", KHÔNG hiện 0đ
 
 - Ca thật T08.2026: 303 dòng doanh thu, 301/301 cặp (đơn vị × mã hàng) chưa có tỷ lệ % ⇒ `matchedRows = 0`. Trước bản vá, tổng phần đã khớp bằng 0 nên toàn bộ ô KPI tiền hiện **0đ · tạm tính** — CEO đọc thành "app hỏng"/"tháng này không tốn chi phí".

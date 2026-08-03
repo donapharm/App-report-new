@@ -1022,11 +1022,16 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchOne = fe
   const periods = Array.isArray(payload?.periods) ? payload.periods : null;
   if (!periods || !periods.some((period) => !period.rows?.length)) return payload;
   const resolved = new Map();
+  // Ngân sách gọi thêm cho CẢ lượt này (không phải mỗi kỳ): kỳ nào cũng rỗng thì
+  // vẫn chỉ dò tối đa từng ấy tháng, tránh chế độ "Tất cả NV" nhân lên hàng trăm lượt.
+  let budget = RATE_EFFECTIVE_LOOKBACK_MONTHS;
   for (const period of periods) {
     if (period.rows?.length) continue;
     let candidate = previousMonth(period.period);
     for (let step = 0; step < RATE_EFFECTIVE_LOOKBACK_MONTHS && candidate; step += 1) {
       if (!resolved.has(candidate)) {
+        if (budget <= 0) break;
+        budget -= 1;
         // eslint-disable-next-line no-await-in-loop
         const earlier = await fetchOne(empCode, { ...options, from: candidate, to: candidate });
         const block = Array.isArray(earlier?.payload?.periods) ? earlier.payload.periods[0] : null;

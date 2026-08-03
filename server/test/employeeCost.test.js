@@ -399,7 +399,9 @@ test('range proxy sends validated from/to with the backend-locked employee scope
     revenueRowsByPeriod: { '2026-06': [], '2026-07': [] }, catalogRowsByPeriod: { '2026-06': [], '2026-07': [] },
     auditImpl: () => {},
     fetchImpl: async (url) => {
-      calledUrl = url;
+      // Chỉ giữ URL của lượt gọi ĐẦU. Từ 03/08/2026 kỳ rỗng còn được dò ngược tìm
+      // bảng tỷ lệ đang hiệu lực, nên sau lượt này còn vài lượt tháng trước nữa.
+      if (!calledUrl) calledUrl = url;
       return {
         ok: true, status: 200, json: async () => ({
           empCode: 'DN001', periods: [

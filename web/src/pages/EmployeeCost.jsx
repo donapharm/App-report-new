@@ -500,13 +500,20 @@ function SalaryAdvanceKpi({ salaryAdvance, loading, allEmployees, period }) {
     return <Kpi label="Ứng lần 1 tháng này" value={`${salaryAdvance.amount.toLocaleString('vi-VN')} ₫`}
       sub={`${periodText} · ${salaryAdvance.locked ? 'Đã chốt trên App Salary' : 'Dự kiến · chưa chốt trên App Salary'}`} tone="employee-cost-tone-neutral" />;
   }
+  // Nói ĐÚNG nguyên nhân + AI phải sửa. Trước đây mọi lỗi đều gộp thành một câu
+  // chung "tạm thời chưa lấy được", CEO không biết chờ ai nên phải đi hỏi từng vòng.
   const reason = salaryAdvance?.reason;
-  const value = reason === 'duplicate_employee' ? 'Dữ liệu bị trùng mã'
-    : ['period_not_found', 'employee_not_found'].includes(reason) ? 'Chưa có dữ liệu kỳ này'
-      : 'Tạm thời chưa lấy được từ App Salary';
-  const sub = reason === 'duplicate_employee' ? `${periodText} · Đã fail-closed; cần App Salary xử lý mã trùng`
-    : ['period_not_found', 'employee_not_found'].includes(reason) ? `${periodText} · Không suy đoán theo tên hoặc kỳ khác`
-      : `${periodText} · Các KPI chi phí khác vẫn hoạt động bình thường`;
+  const REASONS = {
+    duplicate_employee: ['Dữ liệu bị trùng mã', 'Đã fail-closed; cần App Salary xử lý mã trùng'],
+    period_not_found: ['Chưa có dữ liệu kỳ này', 'Không suy đoán theo tên hoặc kỳ khác'],
+    employee_not_found: ['Chưa có dữ liệu kỳ này', 'Không suy đoán theo tên hoặc kỳ khác'],
+    contract_mismatch: ['App Salary đổi hợp đồng', 'App Salary trả trạng thái ngoài hợp đồng — cần hai bên chốt lại rồi App Report mới nhận'],
+    unauthorized: ['Sai khoá kết nối App Salary', 'Cần cấp lại token cho App Report — không phải lỗi số liệu'],
+    upstream_timeout: ['App Salary phản hồi chậm', 'Quá thời gian chờ — bấm Làm mới sau ít phút'],
+    not_configured: ['Chưa cấu hình kết nối App Salary', 'Thiếu địa chỉ hoặc khoá kết nối phía máy chủ'],
+  };
+  const [value, why] = REASONS[reason] || ['Tạm thời chưa lấy được từ App Salary', 'Các KPI chi phí khác vẫn hoạt động bình thường'];
+  const sub = `${periodText} · ${why}`;
   return <Kpi label="Ứng lần 1 tháng này" value={value} sub={sub} tone="employee-cost-tone-neutral" />;
 }
 
@@ -1321,6 +1328,11 @@ export default function EmployeeCost({ me, onNavigate }) {
   // Không khớp được dòng nào ⇒ nói thẳng "chưa có bảng % chi phí của kỳ này"
   // kèm việc phải làm, thay vì hiện 0đ rồi để CEO tưởng app hỏng.
   const noMatch = employeeCostNoMatch(model);
+  // Tỷ lệ % là chính sách đứng yên: tháng đang xem chưa có bảng riêng thì backend
+  // dùng bảng công bố gần nhất. BẮT BUỘC nói ra, không được lặng lẽ dùng số tháng khác.
+  const rateEffectiveNote = model.rateEffectiveFrom
+    ? `Tỷ lệ % đang hiệu lực từ ${formatMonthLabel(model.rateEffectiveFrom)} (kỳ này chưa công bố bảng riêng)`
+    : '';
   const coverageNote = noMatch
     ? `Kỳ này CHƯA CÓ bảng % chi phí — ${missingPairs.toLocaleString('vi-VN')}/${Number(kpiMatch.totalRows || 0).toLocaleString('vi-VN')} cặp thiếu %. DataHub/App Sale phải nạp tỷ lệ theo mã hàng cho kỳ này thì số mới lên (tab "Mặt hàng thiếu %").`
     : provisionalTotals
@@ -1542,6 +1554,7 @@ export default function EmployeeCost({ me, onNavigate }) {
         sub={[
           `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`,
           noMatch ? '' : model.periodClose.note,
+          rateEffectiveNote,
           noMatch || provisionalTotals ? coverageNote : 'chưa gồm khoản cuối năm',
         ].filter(Boolean).join(' · ')}
         title={model.periodClose.label}

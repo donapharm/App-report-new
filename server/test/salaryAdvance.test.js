@@ -16,8 +16,21 @@ test('strict schema preserves zero and rejects wrong scope, non-finite amount an
   assert.equal(salaryAdvance.validateProjection(valid(), { period: '2026-07', empCode: 'DN101' }).amount, 0);
   for (const payload of [
     valid({ period: '2026-08' }), valid({ emp_code: 'DN999' }), valid({ currency: 'USD' }),
-    valid({ amount: Infinity }), { ...valid(), net: 15_000_000 },
+    valid({ amount: Infinity }),
   ]) assert.throws(() => salaryAdvance.validateProjection(payload, { period: '2026-07', empCode: 'DN101' }), { code: 'SALARY_ADVANCE_INVALID_PAYLOAD' });
+  // ‼ Đổi 03/08/2026: App Salary THÊM nhãn mới (vd `provisional`) từng làm vỡ cả gói
+  // ⇒ ô KPI trắng. Nay khoá lạ bị LOẠI BỎ chứ không làm hỏng payload — dữ liệu lương
+  // (`net`) vẫn tuyệt đối không lọt vào App Report, và server console.warn tên khoá.
+  const withExtras = salaryAdvance.validateProjection(
+    { ...valid(), net: 15_000_000, provisional: true }, { period: '2026-07', empCode: 'DN101' },
+  );
+  assert.equal(withExtras.amount, 0);
+  assert.deepEqual(Object.keys(withExtras).sort(), ['amount', 'applicable', 'available', 'currency', 'emp_code', 'locked', 'ok', 'period', 'reason', 'status']);
+  assert.equal('net' in withExtras, false, 'số lương tuyệt đối không được lọt sang App Report');
+  assert.equal('provisional' in withExtras, false);
+  // Thiếu khoá bắt buộc thì vẫn chặn cả gói như cũ.
+  const { status, ...missingKey } = valid();
+  assert.throws(() => salaryAdvance.validateProjection(missingKey, { period: '2026-07', empCode: 'DN101' }), { code: 'SALARY_ADVANCE_INVALID_PAYLOAD' });
   const notSale = valid({ available: true, applicable: false, amount: null, reason: 'not_eligible' });
   assert.equal(salaryAdvance.validateProjection(notSale, { period: '2026-07', empCode: 'DN101' }).applicable, false);
   for (const reason of ['period_not_found', 'employee_not_found', 'duplicate_employee']) {
@@ -148,7 +161,7 @@ test('Report route enforces self/admin/ALL backend scope and isolates upstream f
     assert.equal(res.body.salaryAdvance.reason, 'select_employee'); assert.equal(calls.length, beforeAll, 'ALL never fans out upstream');
     salaryAdvance.getFirstAdvance = async () => { throw Object.assign(new Error('timeout'), { code: 'SALARY_ADVANCE_TIMEOUT' }); };
     res = await invokeRoute(handler, { query: { period: '2026-07', emp: 'DN202' }, session: { emp_code: 'CEO', role: 'ceo' } });
-    assert.equal(res.statusCode, 200); assert.equal(res.body.salaryAdvance.reason, 'upstream_unavailable');
+    assert.equal(res.statusCode, 200); assert.equal(res.body.salaryAdvance.reason, 'upstream_timeout', 'phải phân biệt được timeout với lỗi khác');
     assert.equal(res.headers['cache-control'], 'private, no-store');
   } finally { visibility.run = originalRun; salaryAdvance.getFirstAdvance = originalGet; }
 });
