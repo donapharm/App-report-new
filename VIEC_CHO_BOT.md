@@ -44,6 +44,24 @@ git cherry-pick 21867c4
 
 **ĐÂY LÀ QUYẾT ĐỊNH CUỐI. Không hỏi lại, không phân tích thêm.**
 
+### ‼ CẬP NHẬT 03/08 — CEO CHỌN PHƯƠNG ÁN 1: CHỤP LẠI SNAPSHOT MỚI
+
+Bot dừng đúng ở Gate 2: **con số 23.437.000đ là ảnh chụp tối 02/08, đã cũ.** Sáng 03/08 có đơn mới:
+- Active T08 hiện: 201.264.540đ (run 327)
+- Run 328 — luật cũ: **329.253.640đ** · **luật VIỆC 0C: 211.551.920đ** · loại: 117.701.720đ/11 dòng
+
+**CEO chốt: làm theo phương án 1** — khoá snapshot live mới, dựng lại transition theo doanh thu hợp lệ **hiện tại**, xin lại Gate 1/Gate 2.
+
+**KHÔNG ép về 23.437.000đ.** Ép vậy là **xoá doanh thu thật đã bán sáng nay** ⇒ App Report thành **thấp hơn** App Sale, sai đúng thứ đang muốn sửa.
+
+**Điều CEO yêu cầu là LUẬT, không phải con số:** *chỉ tính đơn đã xuất hoá đơn + đã xác nhận giao*. Áp luật đó lên dữ liệu hiện tại ⇒ **211.551.920đ** (số này cũng sẽ đổi tiếp khi có đơn mới — đúng bản chất).
+
+**Nghiệm thu đổi thành:**
+1. T08 = kết quả áp luật mới lên snapshot **vừa khoá** (hiện ~211.551.920đ). Dán số + mã snapshot.
+2. **T07 vẫn phải = 30.917.892.673đ** (ngày hiệu lực từ T08) — đổi là DỪNG.
+3. **T06 không đổi.**
+4. Dán **danh sách dòng bị loại** (hiện 11 dòng / 117.701.720đ): mã đơn · lý do · tiền — để CEO đối chiếu App Sale.
+
 ### Mục tiêu (nghiệm thu bằng đúng 1 con số)
 ```
 App Report T08.2026  =  23.437.000đ   (đúng bằng App Sale "ĐÃ THỰC HIỆN")
