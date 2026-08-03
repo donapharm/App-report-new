@@ -999,6 +999,56 @@ function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, e
   persist.save(AUDIT_FILE, rows.slice(-AUDIT_LIMIT));
 }
 
+// Số tháng tối đa được lùi lại để tìm bảng tỷ lệ đang hiệu lực.
+const RATE_EFFECTIVE_LOOKBACK_MONTHS = 3;
+
+function previousMonth(period) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(period || ''));
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`;
+}
+
+// ‼ CEO chốt 03/08/2026: bảng tỷ lệ % là **CHÍNH SÁCH ĐỨNG YÊN**, không phải số
+// đo từng tháng — hợp đồng DataHub (docs/APP_REPORT_EMPLOYEE_COST_CONTRACT.md §3)
+// trả dòng `{c5,c7,c16,c25,c36…}` KHÔNG có trường kỳ. Sửa % là sửa chính sách bên
+// DataHub, CEO không phải nạp lại mỗi tháng.
+//   → Tháng đang hỏi chưa có bảng riêng thì DÙNG BẢNG CÔNG BỐ GẦN NHẤT và ghi rõ
+//     `rateEffectiveFrom` để màn hình nói thẳng "tỷ lệ hiệu lực từ MM/YYYY".
+// Đây là hành vi vĩnh viễn, áp cho mọi tháng sau (T09, T10…), không phải vá một lần.
+// Chỉ lấp phần TỶ LỆ; doanh thu vẫn là doanh thu của đúng tháng đang xem.
+async function applyEffectiveRates(payload, empCode, options = {}, fetchOne = fetchEmployeeCost) {
+  const periods = Array.isArray(payload?.periods) ? payload.periods : null;
+  if (!periods || !periods.some((period) => !period.rows?.length)) return payload;
+  const resolved = new Map();
+  for (const period of periods) {
+    if (period.rows?.length) continue;
+    let candidate = previousMonth(period.period);
+    for (let step = 0; step < RATE_EFFECTIVE_LOOKBACK_MONTHS && candidate; step += 1) {
+      if (!resolved.has(candidate)) {
+        // eslint-disable-next-line no-await-in-loop
+        const earlier = await fetchOne(empCode, { ...options, from: candidate, to: candidate });
+        const block = Array.isArray(earlier?.payload?.periods) ? earlier.payload.periods[0] : null;
+        resolved.set(candidate, block?.rows?.length ? block : null);
+      }
+      const source = resolved.get(candidate);
+      if (source) {
+        period.columns = source.columns;
+        period.rows = source.rows;
+        period.note = source.note;
+        // Nhãn nguồn: màn hình BẮT BUỘC hiện ra, không được lặng lẽ dùng số tháng khác.
+        period.rateEffectiveFrom = candidate;
+        break;
+      }
+      candidate = previousMonth(candidate);
+    }
+  }
+  const effective = periods.map((period) => period.rateEffectiveFrom).filter(Boolean);
+  if (effective.length) payload.rateEffectiveFrom = effective.sort().at(-1);
+  return payload;
+}
+
 async function getForSession({ session, scope, requestedEmp }, options = {}) {
   const audit = (entry) => {
     try { (options.auditImpl || writeAudit)(entry); }
@@ -1012,6 +1062,11 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
     return result.payload;
   }
   const result = await fetchEmployeeCost(empCode, options);
+  // Kỳ chưa có bảng tỷ lệ riêng ⇒ lấy bảng đang hiệu lực (xem applyEffectiveRates).
+  // Cũng chạy khi payload bị từ chối vì lệch kỳ — đó đúng là ca tháng mới chưa mở.
+  if (range && (result.outcome === 'ok' || result.outcome === 'invalid_period_payload')) {
+    result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchEmployeeCost);
+  }
   // Revenue belongs to App Report and must stay useful even while the DataHub
   // cost timeline is unavailable/not configured. In that state enrichment
   // preserves every order-line and leaves percentages/amounts as null (—).
@@ -1069,6 +1124,9 @@ module.exports = {
   emptyPayload,
   emptyRangePayload,
   adaptPeriodPayload,
+  previousMonth,
+  applyEffectiveRates,
+  RATE_EFFECTIVE_LOOKBACK_MONTHS,
   configuredAnnualColumnKeys,
   configuredMatchWarningPercent,
   safeText,

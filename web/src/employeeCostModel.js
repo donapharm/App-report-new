@@ -482,6 +482,9 @@ export function employeeCostViewModel(payload = {}) {
     empCode: String(payload.empCode || first.empCode || ''),
     from: String(payload.from || first.period || ''),
     to: String(payload.to || first.period || ''),
+    // Tỷ lệ % lấy từ bảng công bố tháng nào (khi tháng đang xem chưa có bảng riêng).
+    // Backend quyết định; UI chỉ nói ra, tuyệt đối không im lặng dùng số tháng khác.
+    rateEffectiveFrom: String(payload.rateEffectiveFrom || ''),
     periods,
     period: first.period,
     template: first.template,
