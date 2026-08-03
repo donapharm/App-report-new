@@ -4,15 +4,22 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 03/08/2026 22:40 GMT+7 — `d1fdfdf` đã lên PROD ✅. Còn nợ: **`4e759bd` (Ứng lần 1)** + **"Tất cả NV" T08 (DN016/DN018)**. Sau đó: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
+**Cập nhật lần cuối:** 03/08/2026 23:00 GMT+7 — `d1fdfdf` đã lên PROD ✅. Còn nợ: **deploy `c1fb222`** (Ứng lần 1 + giao diện lọc/tháng/VAT) + **"Tất cả NV" T08 (DN016/DN018)**. Sau đó: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
 
 
 ---
 
 # 🔴🔴🔴 CHỈ CÒN MỘT VIỆC: DEPLOY `4e759bd`
 
-**KHÔNG deploy `b8602fb`** (nhánh cũ, lùi PROD). **Deploy đúng `4e759bd`.**
-`4e759bd` cắt thẳng từ `d1fdfdf` đang chạy, diff đúng 4 file, fast-forward sạch, không xoá dòng nào.
+**KHÔNG deploy `b8602fb`** (nhánh cũ, lùi PROD). **Deploy đúng `c1fb222`** (đầu nhánh, gồm cả `4e759bd`).
+Nhánh `claude/fix-advance-reason-20260803` cắt thẳng từ `d1fdfdf` đang chạy — fast-forward sạch, không xoá dòng nào của PROD.
+Diff `d1fdfdf → c1fb222` đúng **7 file**: `salaryAdvance.js` · `salaryAdvance.test.js` · `employeeCostModel.js` · `EmployeeCost.jsx` · `styles.css` · `EmployeeCost.model.test.mjs` · `CHANGELOG.md`. **Không đụng** `employeeCost.js`, không đụng doanh thu.
+
+**Gồm 2 phần:**
+- **(a) Ứng lần 1** — như mô tả bên dưới.
+- **(b) Giao diện CEO yêu cầu 22:39:** nút **chọn tháng nhanh** (4 tháng gần nhất, bám lịch GMT+7, bấm là xem ngay) · gom Vùng/Tỉnh · Nhóm mã · Tuyến · Ngày · Từ/Đến tháng vào **"Bộ lọc nâng cao"** đóng sẵn, còn bật lọc thì nút hiện số · ô **"Doanh thu chưa VAT"** thêm dòng nhỏ **"Đã gồm VAT: …"** ngay dưới (số backend, frontend không tự nhân chia).
+
+Claude đã chạy: web **110/110** · server **666/672** (6 lỗi PDF do máy build thiếu `pdfinfo`; trên server bot phải là 672/672) · build sạch.
 
 ## DEPLOY TIẾP NGAY — Ô "ỨNG LẦN 1" (CEO 22:26, chưa xong)
 
@@ -40,6 +47,7 @@ Build web → reload **CHỈ** `app-report`. Không restart Telegram bot, không
 
 ### Nghiệm thu — dán cho CEO
 - Ô **"Ứng lần 1"** kỳ 07/2026 (DN007 và DN009): **ra số**, hoặc hiện **đúng lý do cụ thể**. Không còn câu *"Tạm thời chưa lấy được"*.
+- Hàng **nút tháng** hiện đúng 4 tháng gần nhất theo lịch VN, bấm là đổi kỳ ngay; **bộ lọc nâng cao đóng sẵn**; ô doanh thu có **dòng "Đã gồm VAT"** ngay dưới.
 - Nếu hiện *"App Salary đổi hợp đồng"* ⇒ dán luôn **JSON thật** từ App Salary (`curl` ở Việc 0A) và chỉ ra khoá/giá trị nào lệch. Đó là việc của bên App Salary, báo CEO rõ.
 - **T07/DN009 không đổi một đồng:** tổng `336.334.260đ` · C41 `19.813.217đ` · C43 `303.661.009đ` · C44 `15.176.446đ` · C45 `12.860.034đ` · khớp `99,0%`.
 - **T07/DN007 không đổi một đồng:** tổng `68.726.986đ` · khớp `100,0%`.
