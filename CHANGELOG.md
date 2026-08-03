@@ -1,3 +1,16 @@
+### 2026-08-04 — MỘT đường duy nhất lấy tỷ lệ: KPI và badge "thiếu %" hết chỏi nhau
+
+Bot chẩn đoán đúng (`artifacts/dn016-dn018-answers-20260803-232300`): T08 có hai API đọc policy theo hai cách khác nhau — KPI áp policy kế thừa T07 (DN016 khớp 20/20, DN018 khớp 22/22) trong khi API badge "thiếu %" chỉ đọc **exact T08** nên báo thiếu toàn bộ. Hai màn ra hai con số ⇒ UI fail-closed ⇒ CEO không xem được badge.
+
+**Lỗi của Claude:** `applyEffectiveRates` chỉ được gắn trong `getForSession`, còn `employeeCostGaps.js` gọi thẳng hàm mạng nên không đi qua kế thừa tỷ lệ.
+
+- Tách `fetchRawEmployeeCost()` (gọi mạng thuần, giữ nguyên 100% ngữ nghĩa cũ, chỉ `applyEffectiveRates` được dùng để tránh đệ quy) và `fetchEmployeeCost()` (bọc = raw + kế thừa tỷ lệ + nâng `invalid_period_payload` → `ok` khi policy đã lấp đủ mọi kỳ).
+- `getForSession` không còn tự gọi `applyEffectiveRates`. **Mọi** nơi lấy chi phí — KPI, badge thiếu %, export — đều đi qua một hàm duy nhất; không còn đường vòng.
+- Thêm test bất biến: đường KPI (`getForSession`) và đường badge (`fetchEmployeeCost` trực tiếp, đúng cách `employeeCostGaps.js` gọi) phải nhận **cùng một bảng tỷ lệ** và cùng `rateEffectiveFrom`. Test cũ về provenance chuyển sang gọi `fetchRawEmployeeCost` — đường mạng thuần vẫn fail-closed y như cũ.
+- Không đổi một công thức tiền nào. Test: server **667/673** (6 lỗi PDF do máy build thiếu `pdfinfo`) · web **110/110** · build sạch.
+
+**Còn lại (không thuộc bản này):** audit cho thấy lỗi nguồn `unavailable` luân phiên ở DN004/DN007/DN008/DN009/DN011/DN017/DN019/DN024 — snapshot DataHub không ổn định. Đây đúng triệu chứng của loop RAM/`vault-audit.lock` chưa cắt; xử lý ở việc bản RAM `9986f0a`, không vá ở đây.
+
 ### 2026-08-03 (đêm) — "Chi phí của tôi": gọn bộ lọc, nút chọn tháng, thêm dòng doanh thu đã gồm VAT
 
 CEO 22:39: *"bố trí lại thành bộ lọc nâng cao, ẩn bớt đi… bổ sung nút chọn tháng… tích hợp hiển thị dòng doanh thu có VAT nhỏ hơn ngay dưới dòng chưa có VAT trong cùng một ô KPI."*
@@ -15,7 +28,6 @@ CEO 22:39: *"bố trí lại thành bộ lọc nâng cao, ẩn bớt đi… bổ
 - Số lương (`net`…) vẫn tuyệt đối không lọt sang App Report — chỉ 10 khoá đi tiếp; server `console.warn` **tên khoá lạ** (không ghi giá trị) để vẫn phát hiện bên kia trả field ngoài hợp đồng.
 - `safeGetFirstAdvance()` không còn nuốt mọi lỗi thành `upstream_unavailable`: trả `contract_mismatch` / `unauthorized` / `upstream_timeout` / `not_configured`. Ô KPI hiện thẳng *"App Salary đổi hợp đồng"*, *"Sai khoá kết nối App Salary"*, *"App Salary phản hồi chậm"* — CEO nhìn là biết chờ ai.
 - Không đổi một công thức tiền nào, không đụng `employeeCost.js`.
-
 ### 2026-08-03 — "Chi phí của tôi": 0 dòng khớp % thì hiện "—", KHÔNG hiện 0đ
 
 - Ca thật T08.2026: 303 dòng doanh thu, 301/301 cặp (đơn vị × mã hàng) chưa có tỷ lệ % ⇒ `matchedRows = 0`. Trước bản vá, tổng phần đã khớp bằng 0 nên toàn bộ ô KPI tiền hiện **0đ · tạm tính** — CEO đọc thành "app hỏng"/"tháng này không tốn chi phí".

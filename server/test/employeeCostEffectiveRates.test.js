@@ -110,13 +110,15 @@ test('nguồn latest lỗi/rỗng/mơ hồ đều giữ rỗng và nêu đúng t
   }
 });
 
+// Kiểm ĐƯỜNG MẠNG THUẦN: provenance sai thì xoá sạch, không đoán. Từ 04/08 hàm
+// này là `fetchRawEmployeeCost` — `fetchEmployeeCost` đã bọc thêm kế thừa tỷ lệ.
 test('range có tỷ lệ nhưng provenance thiếu/sai kỳ bị xóa và fail-closed', async () => {
   for (const raw of [
     { empCode: 'DN001', columns: COLUMNS, rows: ROWS },
     { empCode: 'DN001', from: '2026-07', to: '2026-07', columns: COLUMNS, rows: ROWS },
     { empCode: 'DN001', from: '2026-08', to: '2026-07', columns: COLUMNS, rows: ROWS },
   ]) {
-    const result = await employeeCost.fetchEmployeeCost('DN001', {
+    const result = await employeeCost.fetchRawEmployeeCost('DN001', {
       from: '2026-08', to: '2026-08', baseUrl: 'http://hub.test', assignmentKey: 'assignment-key-1234',
       employeeCostKeys: 'DN001=employee-cost-key-1234', backoffMs: [],
       fetchImpl: async () => ({ ok: true, status: 200, json: async () => raw }),
@@ -176,4 +178,37 @@ test('getForSession T08 gọi range trước rồi latest no-range, audit đủ 
   assert.equal(payload.sourceOutcome, 'ok');
   assert.deepEqual(audits[0].range, { from: '2026-08', to: '2026-08', months: ['2026-08'] });
   assert.equal(audits[0].ratePolicy.effectiveFrom, '2026-07');
+});
+
+// ‼ 04/08/2026 — BẤT BIẾN: ô KPI và tab "Mặt hàng thiếu %" phải thấy ĐÚNG một
+// bảng tỷ lệ. Trước đây KPI đi qua `getForSession` (có kế thừa T07 → khớp 20/20)
+// còn `employeeCostGaps.js` gọi thẳng hàm mạng (chỉ đọc exact T08 → báo thiếu
+// 20/20). Hai màn ra hai con số, UI phải fail-closed, CEO không xem được gì.
+test('mọi đường lấy chi phí đều nhận cùng một bảng tỷ lệ đang hiệu lực', async () => {
+  const credentials = {
+    baseUrl: 'http://hub.test', assignmentKey: 'assignment-key-1234',
+    employeeCostKeys: 'DN001=employee-cost-key-1234', backoffMs: [],
+  };
+  // DataHub chỉ có bảng của T07: hỏi đích danh T08 thì rỗng, hỏi "bảng mới nhất"
+  // (không kèm kỳ) thì trả bảng T07 kèm provenance 2026-07.
+  const fetchImpl = async (url) => {
+    const askedT08 = String(url).includes('from=2026-08');
+    return { ok: true, status: 200, json: async () => (askedT08
+      ? { empCode: 'DN001', from: '2026-08', to: '2026-08', columns: [], rows: [] }
+      : { empCode: 'DN001', from: '2026-07', to: '2026-07', columns: COLUMNS, rows: ROWS }) };
+  };
+  const options = { from: '2026-08', to: '2026-08', ...credentials, fetchImpl };
+
+  // Đường KPI (qua getForSession) và đường badge "thiếu %" (gọi fetchEmployeeCost
+  // trực tiếp, đúng như employeeCostGaps.js làm).
+  const kpi = await employeeCost.getForSession({
+    session: { emp_code: 'CEO', role: 'admin' }, scope: { empCode: 'DN001' }, requestedEmp: 'DN001',
+  }, { ...options, auditImpl: () => {} });
+  const badge = await employeeCost.fetchEmployeeCost('DN001', options);
+
+  assert.deepEqual(badge.payload.periods[0].rows, kpi.periods[0].rows,
+    'badge thiếu % và KPI phải đọc cùng một bảng tỷ lệ');
+  assert.equal(badge.payload.periods[0].rateEffectiveFrom, '2026-07');
+  assert.equal(kpi.periods[0].rateEffectiveFrom, '2026-07');
+  assert.ok(badge.payload.periods[0].rows.length > 0, 'không được rỗng khi đã có policy hiệu lực');
 });
