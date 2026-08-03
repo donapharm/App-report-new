@@ -37,7 +37,46 @@ git cherry-pick dc07a18
 - Claude đã chạy: web **104/104 pass** (thêm 2 test hồi quy) · `npm run build` sạch.
 - Deploy: build web, reload **chỉ** `app-report`. Không restart bot Telegram.
 
+### ‼ Việc 0 — CLAUDE ĐÃ CHẨN SAI, ĐỌC LẠI TRƯỚC KHI LÀM (20:40)
+
+> CEO: *"các ô chi phí % đã có sẵn trong DataHub, vậy tự động lấy sang, chứ chả nhẽ cứ mỗi tháng tao phải đi làm như thế này nữa hả. Nếu có chỉnh chính sách % thì tao chỉnh bên DataHub. Tao đề nghị làm giống T07.2026 và các tháng sau T09/T10… cũng như vậy."*
+
+**CEO đúng, Claude sai.** Claude nói "bảng % lưu theo từng tháng, T07 không chảy sang T08" — **sai**. Mở `docs/APP_REPORT_EMPLOYEE_COST_CONTRACT.md` mục 3: dòng trả về là `{c5, c7, c16, c25, c36, c41, c43, c44, c45, c48}` — **KHÔNG có trường kỳ/tháng nào cả**. Đây là **bảng chính sách đứng yên**, khoá theo `mã QLNB × đơn vị`, đúng như CEO nói. Sửa % là sửa chính sách, không phải nạp lại mỗi tháng.
+
+**Luật từ nay (CEO chốt 03/08):** tỷ lệ % **tự động có hiệu lực sang mọi tháng sau** cho tới khi CEO đổi bên DataHub. T08, T09, T10… không ai phải làm gì thêm.
+
+### Nghi phạm số 1 — App Report tự vứt payload (đọc kỹ chỗ này)
+`server/src/employeeCost.js` → `adaptPeriodPayload()`:
+- Nhánh cuối (payload **không có kỳ**) → **chấp nhận**, gán vào tháng đang hỏi. Màn CEO hỏi đúng 1 tháng (T08→T08) nên nhánh này lẽ ra phải chạy được.
+- **NHƯNG** nếu DataHub trả `periods`/`months` mà kỳ trong đó **không nằm trong kỳ đang hỏi** (vd trả `2026-07` khi App Report hỏi `2026-08`), thì `put()` false ⇒ **`return null` ⇒ vứt SẠCH cả gói** ⇒ `outcome: 'invalid_period_payload'` ⇒ **màn hình trắng đúng như ảnh CEO**.
+- Đây là kiểu "dữ liệu biến mất lặng lẽ" mà CEO đã cấm: DataHub có số, App Report vứt đi, không nói một câu.
+
+### Cách xác định trong 2 phút — ĐỪNG ĐOÁN
+Mở nhật ký `employee_cost_audit` (persist store), lọc bản ghi mới nhất kỳ 2026-08, đọc trường `outcome`:
+
+| `outcome` | Nghĩa | Ai sửa |
+|---|---|---|
+| `invalid_period_payload` | **DataHub CÓ số, App Report vứt** | **App Report — lỗi của mình** |
+| `ok` + `rows` rỗng | DataHub thật sự không trả dòng nào | DataHub |
+| `upstream_*` / `not_configured` | Lỗi kết nối/thiếu key | App Report + hạ tầng |
+
+**Dán nguyên `outcome` + `matchedRows/totalRows` cho CEO trước khi sửa bất cứ dòng code nào.**
+
+### Sửa theo đúng luật CEO vừa chốt
+1. **Cấm vứt cả gói vì một kỳ lạ.** `adaptPeriodPayload` phải **giữ lại phần dùng được**, chỉ bỏ đúng khối sai, và **ghi rõ lý do ra màn hình** — không được im lặng trả rỗng.
+2. **Tỷ lệ đang hiệu lực:** tháng đang hỏi không có bảng riêng ⇒ **dùng bảng công bố gần nhất**, hiển thị nhãn *"tỷ lệ hiệu lực từ MM/YYYY"*. Đây là **hành vi vĩnh viễn**, áp cho T08/T09/T10… không phải vá một lần.
+3. Nếu hoá ra DataHub mới đổi sang trả theo kỳ ⇒ **thống nhất lại hợp đồng**, cập nhật `docs/APP_REPORT_EMPLOYEE_COST_CONTRACT.md`, rồi mới code.
+4. **Không đụng công thức tiền.** Chỉ sửa đường lấy tỷ lệ + nhãn nguồn.
+
+### Nghiệm thu
+- T08 lên **đủ 6 ô tiền**, có nhãn ghi rõ tỷ lệ hiệu lực từ tháng nào.
+- T07 **không đổi một đồng**.
+- Bịa một payload DataHub chứa kỳ lạ ⇒ App Report **vẫn hiện phần dùng được** + báo rõ, KHÔNG trắng màn.
+
+---
+
 ### Việc 3 — ‼ HAI SỐ TRÊN CÙNG MỘT MÀN KHÔNG KHỚP (ảnh CEO 20:01)
+*(cập nhật 20:33: chip đã hiện `99 mã · 301 cặp` khớp đúng 301 cặp ở KPI — lệch 281/301 lúc trước là do màn đang tải dở. Vẫn kiểm lại nhưng hạ ưu tiên.)*
 Ô KPI ghi **`301 cặp thiếu %`**, nhưng chip tab ghi **`98 mã · 281 cặp`**. **Lệch 20 cặp.** Đúng loại "dòng biến mất lặng lẽ" mà CEO đã cấm — CEO không tin được số nào cả.
 - **Nghi ngờ (phải kiểm, đừng tin lời Claude):** `server/src/employeeCostGaps.js` → `aggregatePairs()` có `if (!key) continue;` — cặp nào **rỗng mã sản phẩm** bị bỏ khỏi danh mục mà không đếm vào đâu cả.
 - Yêu cầu: dán ra **20 cặp đó là cặp nào** (đơn vị + mã + NV). Nếu đúng do rỗng mã ⇒ phải **hiện thành một dòng riêng** ("thiếu mã sản phẩm — DataHub cấp mã"), KHÔNG được bỏ im.
