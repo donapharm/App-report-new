@@ -4,8 +4,32 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 03/08/2026 23:00 GMT+7 — `d1fdfdf` đã lên PROD ✅. Còn nợ: **deploy `c1fb222`** (Ứng lần 1 + giao diện lọc/tháng/VAT) + **"Tất cả NV" T08 (DN016/DN018)**. Sau đó: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
+**Cập nhật lần cuối:** 03/08/2026 23:15 GMT+7 — **bảng thứ tự việc ngay bên dưới**, làm từ trên xuống. Sau đó: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
 
+
+---
+
+# 📌 THỨ TỰ VIỆC — CHỐT 03/08/2026 23:15 GMT+7
+
+| # | Việc | Hạn | Trạng thái | Ai làm |
+|---|---|---|---|---|
+| **1** | **Deploy `c1fb222`** — Ứng lần 1 + nút chọn tháng + bộ lọc nâng cao + dòng "Đã gồm VAT" | **tối nay** | code xong, đã test, **chờ bấm** | bot |
+| **2** | **"Tất cả NV" T08 còn ⚠** — DN016/DN018 chỏi snapshot | **tối nay** | chờ bot trả lời 3 câu | bot → Claude chốt |
+| **3** | **Nghiệm thu VP018 + DN022** | **08/08** | code đã lên PROD, chưa nghiệm thu | bot |
+| **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
+| **5** | **Giao target T08** → mở 3 ô Target/Thưởng/Phạt | bất cứ lúc nào | chưa giao | **CEO, 5 phút** |
+| **6** | **Bật tin nhắn chi phí/thưởng** | **09/08** | chờ xong #3 | bot |
+| **7** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do | sau 08/08 | nợ từ 29/07, chưa có màn nào | bot |
+| **8** | **So tháng trước + nhớ lựa chọn** (CEO duyệt 03/08) | sau 08/08 | chưa code | Claude |
+| **9** | **Bản RAM `9986f0a`** — cắt loop mất dữ liệu chi phí | sau 08/08 | chưa deploy | bot |
+| **10** | **Module "Thanh toán CP của tôi" GĐ1** | không gấp | có spec + PowerPoint, chưa code | bot |
+| **11** | **Đổi `SALARY_SERVICE_TOKEN`** | không gấp | Claude đề xuất, CEO chưa gật | bot, 5 phút |
+
+**Quy tắc:** làm từ trên xuống, xong việc nào báo CEO việc đó rồi mới sang việc kế. Không mở việc mới giữa chừng.
+
+### Chi tiết việc 8 — CEO đã duyệt 03/08
+- **So với tháng trước:** mỗi ô tiền thêm ↑↓ và % so tháng liền trước. Làm dạng **nút bật/tắt** (không tự tải) vì chế độ "Tất cả NV" mà tải thêm một tháng nữa sẽ nặng gấp đôi; trạng thái bật/tắt được nhớ lại.
+- **Nhớ lựa chọn lần trước:** mở app về đúng NV + kỳ đang xem dở, thay vì luôn nhảy về "Tất cả NV" tháng hiện tại. **Chỉ lưu lựa chọn (mã NV, kỳ)** — tuyệt đối không lưu số tiền/dữ liệu nhân sự; đọc ra phải kiểm định dạng, rác trong storage không được thành tham số truy vấn.
 
 ---
 
