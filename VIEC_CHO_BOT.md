@@ -6,6 +6,35 @@
 
 **Cập nhật lần cuối:** 03/08/2026 — VIỆC 0D tích hợp exact App Sale SQL mirror theo duyệt CEO
 
+
+---
+
+# 🔴🔴 LÀM NGAY — CHỈ 1 VIỆC, KHÔNG ĐỌC GÌ KHÁC
+
+**CEO đã chờ từ tối 02/08. Doanh thu T08 đang THIẾU ~487 triệu so với App Sale.**
+
+```
+git fetch origin main
+git checkout e9f8d33          # hoặc đầu origin/main
+# deploy ĐÚNG bản này. KHÔNG dùng a4e1a7f (bản local có bộ lọc gây lệch).
+```
+
+1. **Deploy từ `origin/main`** — bản này KHÔNG có bộ lọc `PARTNER_TOKEN_INVOICE_V1`/`manual_zalo`.
+2. **Materialize lại T08** bằng luật trên main.
+3. **Reload `app-report`** (không restart bot Telegram, không bật thông báo).
+4. **Chụp 2 màn cùng lúc** (chênh <2 phút) → dán 2 số cho CEO:
+   - App Sale "ĐÃ THỰC HIỆN" = ?
+   - App Report T08 = ?
+   - **Phải bằng nhau.**
+
+**Cổng chặn:** T07 = `30.917.892.673đ` · T06 = `28.403.136.096đ` — đổi là DỪNG.
+
+**Chạy `node --test test/revenueRuleLock.test.js` trước khi deploy** — khoá mới sẽ chặn nếu bản build lỡ mang bộ lọc cũ theo. Đỏ ⇒ bạn đang cầm nhầm bản.
+
+> Nếu vướng gì **không dính T06/T07** ⇒ ghi lại làm sau, **ĐỪNG chặn deploy**. CEO cần con số, không cần thêm phân tích.
+
+---
+
 ---
 
 ## ✅ VIỆC 1 — XONG 02/08 (deploy `a1e17aa`)
