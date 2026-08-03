@@ -1,3 +1,40 @@
+### 2026-08-04 — Ô doanh thu: đổi nhãn thành "đã phân bổ" thay vì nêu số dòng cách ly
+
+- Bot chặn đúng trước khi deploy `383692f`: câu *"chưa gồm N dòng đang cách ly"* dùng `dqBadge.count` — đó là **tổng mọi loại exception DQ**, không riêng dòng doanh thu bị cách ly, và còn hiện cả khi xem từng nhân viên. Nêu số như vậy là **báo sai**.
+- Bỏ hẳn phần nêu số. Thay bằng: nhãn ô đổi thành **"Doanh thu chưa VAT · đã phân bổ"** — tự nó đã đúng ở cả hai chế độ và giải thích được vì sao lệch với App Sale; thêm một câu chỉ đường *"dòng chưa gán được NV nằm ở tab Kiểm soát dữ liệu"*, **chỉ hiện ở chế độ Tất cả NV**, không kèm con số nào.
+- Dòng cách ly T08 đã truy ra: đơn `DH479816174` · MISA `341964` · 03/08/2026 · `G1.GE.QĐ139.1104.N2.162` Pizar-3 · SL 40 · **1.795.600đ** · đơn vị `120.HTNT-PHARMACITY` · nguồn gán `VP018` → bị chặn theo policy phân bổ doanh thu nên thành `NON_SALES_ROLE_QUARANTINED`. **Nơi xử lý: App Sale / danh mục phân công gán lại cho NV Sale hợp lệ — App Report không được tự đoán.**
+- Test: web **110/110** (cập nhật assertion nhãn) · build sạch.
+
+### 2026-08-04 — MỘT đường duy nhất lấy tỷ lệ: KPI và badge "thiếu %" hết chỏi nhau
+
+Bot chẩn đoán đúng (`artifacts/dn016-dn018-answers-20260803-232300`): T08 có hai API đọc policy theo hai cách khác nhau — KPI áp policy kế thừa T07 (DN016 khớp 20/20, DN018 khớp 22/22) trong khi API badge "thiếu %" chỉ đọc **exact T08** nên báo thiếu toàn bộ. Hai màn ra hai con số ⇒ UI fail-closed ⇒ CEO không xem được badge.
+
+**Lỗi của Claude:** `applyEffectiveRates` chỉ được gắn trong `getForSession`, còn `employeeCostGaps.js` gọi thẳng hàm mạng nên không đi qua kế thừa tỷ lệ.
+
+- Tách `fetchRawEmployeeCost()` (gọi mạng thuần, giữ nguyên 100% ngữ nghĩa cũ, chỉ `applyEffectiveRates` được dùng để tránh đệ quy) và `fetchEmployeeCost()` (bọc = raw + kế thừa tỷ lệ + nâng `invalid_period_payload` → `ok` khi policy đã lấp đủ mọi kỳ).
+- `getForSession` không còn tự gọi `applyEffectiveRates`. **Mọi** nơi lấy chi phí — KPI, badge thiếu %, export — đều đi qua một hàm duy nhất; không còn đường vòng.
+- Thêm test bất biến: đường KPI (`getForSession`) và đường badge (`fetchEmployeeCost` trực tiếp, đúng cách `employeeCostGaps.js` gọi) phải nhận **cùng một bảng tỷ lệ** và cùng `rateEffectiveFrom`. Test cũ về provenance chuyển sang gọi `fetchRawEmployeeCost` — đường mạng thuần vẫn fail-closed y như cũ.
+- Không đổi một công thức tiền nào. Test: server **667/673** (6 lỗi PDF do máy build thiếu `pdfinfo`) · web **110/110** · build sạch.
+
+**Còn lại (không thuộc bản này):** audit cho thấy lỗi nguồn `unavailable` luân phiên ở DN004/DN007/DN008/DN009/DN011/DN017/DN019/DN024 — snapshot DataHub không ổn định. Đây đúng triệu chứng của loop RAM/`vault-audit.lock` chưa cắt; xử lý ở việc bản RAM `9986f0a`, không vá ở đây.
+
+### 2026-08-03 (đêm) — "Chi phí của tôi": gọn bộ lọc, nút chọn tháng, thêm dòng doanh thu đã gồm VAT
+
+CEO 22:39: *"bố trí lại thành bộ lọc nâng cao, ẩn bớt đi… bổ sung nút chọn tháng… tích hợp hiển thị dòng doanh thu có VAT nhỏ hơn ngay dưới dòng chưa có VAT trong cùng một ô KPI."*
+
+- **Nút chọn tháng nhanh** (4 tháng gần nhất, mới nhất trước): bấm một phát là xem ngay tháng đó, không phải chỉnh hai ô rồi bấm Xem. Danh sách tháng bám **lịch Việt Nam** (`currentMonthValueVN`, `quickMonths` dùng `Asia/Bangkok`) — lấy giờ máy thì quanh nửa đêm sẽ đề xuất sai tháng.
+- **Bộ lọc nâng cao mặc định đóng**: Vùng/Tỉnh · Nhóm mã đơn vị · Tuyến · Ngày doanh thu · Từ tháng · Đến tháng. Giữ hiện thường trực **Nhân viên** (thao tác nhiều nhất) và hàng nút tháng.
+- Đang đóng mà còn bộ lọc bật thì nút hiện **số lượng bộ lọc đang áp** — không để CEO xem bảng đã bị lọc mà tưởng mất dữ liệu. Khoảng nhiều tháng cũng hiện thành một chip riêng.
+- **Ô "Doanh thu chưa VAT"**: giữ số trước VAT ở dòng lớn (cơ sở tính chi phí), thêm ngay dưới dòng nhỏ **"Đã gồm VAT: …"** để đối chiếu App Sale không phải đổi màn. Số do backend tính (`summary.revenueTotal`), frontend không tự nhân chia.
+- Chỉ đụng lớp hiển thị. Không đổi công thức, không đổi một đồng nào. Test web **110/110** (thêm 2 test hồi quy: GMT+7 cho nút tháng, giữ đủ hai số doanh thu) · build sạch.
+
+### 2026-08-03 (đêm, sau khi deploy d1fdfdf) — "Ứng lần 1": hết vỡ khi App Salary đổi hợp đồng + nói đúng lý do
+
+- `d1fdfdf` trên PROD **không gồm** phần này; ảnh CEO 22:26 (DN009/T07) vẫn hiện câu chung *"Tạm thời chưa lấy được từ App Salary"*. Ghép riêng lên đúng nền PROD.
+- `validateProjection()`: bỏ ràng buộc "đếm đúng 10 khoá" — App Salary chỉ cần THÊM một nhãn (`provisional`…) là cả gói bị vứt, ô KPI trắng. Nay chỉ bắt buộc **có đủ** 10 khoá hợp đồng; khoá lạ bị **loại bỏ** khỏi projection. Mọi phép kiểm giá trị giữ nguyên 100%.
+- Số lương (`net`…) vẫn tuyệt đối không lọt sang App Report — chỉ 10 khoá đi tiếp; server `console.warn` **tên khoá lạ** (không ghi giá trị) để vẫn phát hiện bên kia trả field ngoài hợp đồng.
+- `safeGetFirstAdvance()` không còn nuốt mọi lỗi thành `upstream_unavailable`: trả `contract_mismatch` / `unauthorized` / `upstream_timeout` / `not_configured`. Ô KPI hiện thẳng *"App Salary đổi hợp đồng"*, *"Sai khoá kết nối App Salary"*, *"App Salary phản hồi chậm"* — CEO nhìn là biết chờ ai.
+- Không đổi một công thức tiền nào, không đụng `employeeCost.js`.
 ### 2026-08-03 — "Chi phí của tôi": 0 dòng khớp % thì hiện "—", KHÔNG hiện 0đ
 
 - Ca thật T08.2026: 303 dòng doanh thu, 301/301 cặp (đơn vị × mã hàng) chưa có tỷ lệ % ⇒ `matchedRows = 0`. Trước bản vá, tổng phần đã khớp bằng 0 nên toàn bộ ô KPI tiền hiện **0đ · tạm tính** — CEO đọc thành "app hỏng"/"tháng này không tốn chi phí".

@@ -2011,6 +2011,22 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .employee-cost-filters { display:flex; align-items:end; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
 .employee-cost-filters label { min-width:145px; }
 .employee-cost-filters label:first-child { min-width:260px; }
+/* Hàng chọn tháng nhanh + nút mở bộ lọc nâng cao — luôn chiếm trọn một dòng để
+   không bị chen ngang khi khối lọc thu gọn lại. */
+.employee-cost-month-quick { display:flex; align-items:center; gap:6px; flex-wrap:wrap; flex-basis:100%; justify-content:flex-end; }
+.employee-cost-month-chip { border:1px solid var(--line,#d5dbe6); background:#fff; color:inherit; border-radius:999px;
+  padding:7px 14px; font-size:.9rem; font-weight:600; cursor:pointer; line-height:1.2; }
+.employee-cost-month-chip:hover { border-color:#2563eb; color:#2563eb; }
+.employee-cost-month-chip.active { background:#2563eb; border-color:#2563eb; color:#fff; }
+.employee-cost-month-chip.range { cursor:default; background:#eef2ff; border-color:#c7d2fe; color:#3730a3; font-weight:500; }
+.employee-cost-month-chip.range:hover { border-color:#c7d2fe; color:#3730a3; }
+.employee-cost-advanced-toggle { border:1px dashed var(--line,#d5dbe6); background:transparent; color:inherit; border-radius:8px;
+  padding:7px 12px; font-size:.9rem; cursor:pointer; margin-inline-start:4px; display:inline-flex; align-items:center; gap:6px; }
+.employee-cost-advanced-toggle:hover, .employee-cost-advanced-toggle.active { border-style:solid; border-color:#2563eb; color:#2563eb; }
+@media (max-width:768px) {
+  .employee-cost-month-quick { justify-content:flex-start; }
+  .employee-cost-month-chip, .employee-cost-advanced-toggle { padding:8px 12px; }
+}
 .employee-cost-filters .btn { min-height:38px; }
 .employee-cost-filters small { flex-basis:100%; color:#a33; text-align:right; }
 .page-desktop .employee-cost-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }

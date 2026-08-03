@@ -25,8 +25,13 @@ function unavailableProjection(periodValue, empCodeValue, reason = 'upstream_una
 
 function validateProjection(payload, expected = {}) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw typedError('App Salary trả payload không hợp lệ.', 'SALARY_ADVANCE_INVALID_PAYLOAD');
-  const keys = Object.keys(payload).sort();
-  if (keys.length !== PROJECTION_KEYS.length || keys.some((key, index) => key !== PROJECTION_KEYS[index])) {
+  // Allowlist vẫn là allowlist: App Report CHỈ đọc và CHỈ trả lại 10 khoá đã thoả
+  // thuận, mọi khoá lạ bị BỎ chứ không đi tiếp (không log, không hiển thị, không lưu).
+  // Nhưng thiếu một khoá bắt buộc thì vẫn chặn cả gói.
+  // ‼ Trước 03/08/2026 chỉ cần App Salary THÊM một nhãn mới là cả gói bị vứt, ô KPI
+  // trắng — bên kia đổi hợp đồng lúc nào thì App Report gãy lúc đó. Bỏ ràng buộc
+  // "đếm đúng số khoá" để hết giòn; các phép kiểm giá trị bên dưới giữ nguyên 100%.
+  if (PROJECTION_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(payload, key))) {
     throw typedError('App Salary trả projection ngoài allowlist.', 'SALARY_ADVANCE_INVALID_PAYLOAD');
   }
   const period = String(expected.period || '');
@@ -50,7 +55,12 @@ function validateProjection(payload, expected = {}) {
       throw typedError('App Salary trả lý do thiếu dữ liệu không hợp lệ.', 'SALARY_ADVANCE_INVALID_PAYLOAD');
     }
   }
-  return Object.freeze({ ...payload });
+  // Chỉ 10 khoá hợp đồng đi tiếp — khoá lạ dừng lại đúng ở đây.
+  // Vẫn phải KÊU LÊN: mục đích ban đầu của allowlist là để phát hiện App Salary lỡ
+  // trả field lương ra ngoài (vd `net`). Ghi TÊN khoá, tuyệt đối không ghi giá trị.
+  const extras = Object.keys(payload).filter((key) => !PROJECTION_KEYS.includes(key));
+  if (extras.length) console.warn('[salary-advance] App Salary trả field ngoài hợp đồng (đã loại bỏ)', { keys: extras.sort() });
+  return Object.freeze(Object.fromEntries(PROJECTION_KEYS.map((key) => [key, payload[key]])));
 }
 
 function createClient({
@@ -121,9 +131,24 @@ function createClient({
 
 const client = createClient();
 
+// ‼ 03/08/2026: mọi lỗi từng bị nuốt chung thành `upstream_unavailable`, nên CEO
+// nhìn ô KPI không phân biệt được *mạng lỗi* / *sai key* / *App Salary đổi hợp đồng*.
+// Giữ nguyên nguyên tắc không lộ nội dung phản hồi, nhưng PHẢI trả đúng MÃ lỗi ra
+// để màn hình nói được ai phải sửa.
+const SAFE_REASON_BY_CODE = new Map([
+  ['SALARY_ADVANCE_INVALID_PAYLOAD', 'contract_mismatch'],
+  ['SALARY_ADVANCE_NOT_CONFIGURED', 'not_configured'],
+  ['SALARY_ADVANCE_TIMEOUT', 'upstream_timeout'],
+  ['SALARY_ADVANCE_INVALID_QUERY', 'invalid_query'],
+]);
+
 async function safeGetFirstAdvance(period, empCode, get = (...args) => client.get(...args)) {
   try { return await get(period, empCode); }
-  catch { return unavailableProjection(period, empCode); }
+  catch (error) {
+    const reason = SAFE_REASON_BY_CODE.get(error?.code)
+      || (error?.upstreamStatus === 401 || error?.upstreamStatus === 403 ? 'unauthorized' : 'upstream_unavailable');
+    return unavailableProjection(period, empCode, reason);
+  }
 }
 
 // App Report chỉ cảnh báo, không tự sửa/kẹp số App Salary. Guard dùng đúng tổng

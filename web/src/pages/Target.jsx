@@ -657,16 +657,40 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   }
   async function proposeAi() {
     setBusy(true); setErr(''); setMsg('');
-    try { setAi(await api.adminTargetAiPropose()); }
-    catch (e) { setErr(e.message); }
+    try {
+      const data = await api.adminTargetAiPropose();
+      setAi(data);
+      // Mặc định chọn hết + giữ đúng số AI đề xuất; CEO sửa/bỏ chọn từng người.
+      setAiRows(Object.fromEntries((data?.items || []).map((item) => [
+        item.emp_code, { on: true, target: String(item.suggested_target ?? '') },
+      ])));
+    } catch (e) { setErr(e.message); }
     setBusy(false);
   }
+  const aiRow = (code) => aiRows[code] || { on: true, target: '' };
+  const setAiRow = (code, patch) => setAiRows((current) => ({ ...current, [code]: { ...aiRow(code), ...patch } }));
+  // Chỉ gửi người ĐƯỢC CHỌN và có số hợp lệ. Số âm/không phải số thì chặn tại đây,
+  // không đẩy sang backend rồi mới báo lỗi.
+  const aiSelected = (ai?.items || []).map((item) => {
+    const row = aiRow(item.emp_code);
+    const target = Number(String(row.target).replace(/[^\d-]/g, ''));
+    return { ...item, on: row.on, target, valid: Number.isFinite(target) && target >= 0,
+      edited: target !== Number(item.suggested_target) };
+  }).filter((item) => item.on);
+  const aiInvalidCount = aiSelected.filter((item) => !item.valid).length;
+  const aiEditedCount = aiSelected.filter((item) => item.valid && item.edited).length;
   async function applyAi() {
     if (!ai?.items?.length) return;
-    if (!confirm(`Áp dụng ${ai.items.length} target AI đề xuất cho kỳ ${ai.next_ky}?`)) return;
+    if (aiInvalidCount) { setErr(`Còn ${aiInvalidCount} dòng nhập số không hợp lệ — sửa xong mới áp được.`); return; }
+    if (!aiSelected.length) { setErr('Chưa chọn nhân viên nào để áp target.'); return; }
+    const edited = aiEditedCount ? ` (${aiEditedCount} dòng CEO đã sửa số)` : '';
+    if (!confirm(`Áp target kỳ ${ai.next_ky} cho ${aiSelected.length}/${ai.items.length} nhân viên${edited}?`)) return;
     setBusy(true); setErr(''); setMsg('');
-    try { const r = await api.adminTargetAiApply({ ky: ai.next_ky, items: ai.items }); setMsg(`Đã áp AI ${r.rows} dòng cho kỳ ${ai.next_ky}.`); setTool(null); await load(); }
-    catch (e) { setErr(e.message); }
+    try {
+      const items = aiSelected.map((item) => ({ emp_code: item.emp_code, target: item.target }));
+      const r = await api.adminTargetAiApply({ ky: ai.next_ky, items });
+      setMsg(`Đã áp ${r.rows} dòng target cho kỳ ${ai.next_ky}${edited}.`); setTool(null); await load();
+    } catch (e) { setErr(e.message); }
     setBusy(false);
   }
   function parseQuarterLines() {

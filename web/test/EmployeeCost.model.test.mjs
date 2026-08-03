@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  buildEmployeeCostColumns, currentMonthValue, employeeBonusViewModel, employeeCostColumnKpis, employeeCostViewModel,
+  buildEmployeeCostColumns, currentMonthValue, currentMonthValueVN, quickMonths, employeeBonusViewModel, employeeCostColumnKpis, employeeCostViewModel,
   employeeCostGapConsistency, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostPageItems, employeeTargetViewModel, filterSortEmployeeCostRows, formatEmployeeCostCell, formatMatchRate,
   formatMonthLabel, normalizeEmployeeCostSearch,
 } from '../src/employeeCostModel.js';
@@ -654,4 +654,34 @@ test('UI ẩn badge chỏi, nói đúng policy carry-forward và không đòi n�
   assert.match(page, /DataHub quản lý policy tỷ lệ/);
   assert.doesNotMatch(page, /DataHub phải nạp tỷ lệ theo mã hàng cho kỳ này/);
   assert.doesNotMatch(page, /DataHub\/App Sale phải điền/);
+});
+
+// CEO 03/08: nút chọn tháng nhanh phải bám lịch Việt Nam (GMT+7). Lấy giờ máy thì
+// quanh nửa đêm sẽ đề xuất sai tháng.
+test('nút chọn tháng nhanh bám lịch GMT+7 và xếp mới nhất trước', () => {
+  // 2026-09-01 00:30 GMT+7 = 2026-08-31 17:30 UTC → phải ra tháng 09, không phải 08.
+  const justAfterMidnightVN = new Date('2026-08-31T17:30:00Z');
+  assert.equal(currentMonthValueVN(justAfterMidnightVN), '2026-09');
+  assert.deepEqual(quickMonths(4, justAfterMidnightVN), ['2026-09', '2026-08', '2026-07', '2026-06']);
+  // Lùi qua mốc năm.
+  assert.deepEqual(quickMonths(3, new Date('2026-02-10T05:00:00Z')), ['2026-02', '2026-01', '2025-12']);
+});
+
+// Ô KPI doanh thu phải giữ được CẢ hai số: trước VAT (cơ sở tính chi phí) và đã
+// gồm VAT (để đối chiếu App Sale) — không được nuốt mất số nào.
+test('view model giữ cả doanh thu trước VAT và đã gồm VAT', () => {
+  const model = employeeCostViewModel({
+    empCode: 'DN009', period: '07.2026',
+    template: { key: 'fulltime', label: 'FULL-TIME', columns: ['date', 'revenueBeforeVat', 'c36', 'rowMonthlyTotal', 'note'] },
+    columns: [{ key: 'c36', label: 'CP (%)' }],
+    rows: [{ orderCode: 'DH-1', sourceLineId: 'DH-1-1', date: '2026-07-02', revenueBeforeVat: 2_770_690_213, c36: 8, rowMonthlyTotal: 100, note: '' }],
+    match: { matchedRows: 1, totalRows: 1, rate: 100, threshold: 90, low: false },
+    summary: {
+      reliable: true, monthlyTotal: 100, annualTotal: 0,
+      revenueBeforeVatTotal: 2_770_690_213, revenueTotal: 2_986_744_000,
+      columnTotals: { c36: 100 }, annualColumnKeys: [], annualLabels: [],
+    },
+  });
+  assert.equal(model.summary.revenueBeforeVatTotal, 2_770_690_213);
+  assert.equal(model.summary.revenueTotal, 2_986_744_000);
 });

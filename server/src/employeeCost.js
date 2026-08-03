@@ -894,7 +894,9 @@ function sourcePeriodRangeOf(raw) {
   return from && to && from <= to ? { from, to } : null;
 }
 
-async function fetchEmployeeCost(empCode, options = {}) {
+// Gọi mạng thuần — KHÔNG kèm kế thừa tỷ lệ. Chỉ `applyEffectiveRates` được dùng
+// hàm này (nếu không sẽ đệ quy vô hạn). Mọi nơi khác phải dùng `fetchEmployeeCost`.
+async function fetchRawEmployeeCost(empCode, options = {}) {
   const baseUrl = resolveDataHubBaseUrl(options.baseUrl);
   const assignmentKey = String(options.assignmentKey ?? process.env.DATA_HUB_ASSIGNMENT_KEY ?? '').trim();
   const employeeCostKeys = parseEmployeeCostKeys(options.employeeCostKeys ?? process.env.APP_REPORT_EMPLOYEE_COST_KEYS);
@@ -1030,7 +1032,7 @@ function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, r
 // đang hỏi chưa có bản riêng, App Report lấy đúng bản công bố mới nhất từ endpoint
 // không truyền kỳ và chỉ áp về PHÍA SAU. Không có giới hạn ba tháng tùy ý; chính
 // sách tiếp tục hiệu lực cho tới khi DataHub công bố bản mới.
-async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest = fetchEmployeeCost) {
+async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest = fetchRawEmployeeCost) {
   const periods = Array.isArray(payload?.periods) ? payload.periods : null;
   if (!periods || !periods.some((period) => !period.rows?.length)) return payload;
 
@@ -1077,6 +1079,27 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
   return payload;
 }
 
+// ‼ 04/08/2026 — MỘT ĐƯỜNG DUY NHẤT LẤY TỶ LỆ.
+// Trước đó `applyEffectiveRates` chỉ chạy trong `getForSession`, còn
+// `employeeCostGaps.js` gọi thẳng hàm mạng ⇒ ô KPI áp policy kế thừa T07 (khớp
+// 20/20) trong khi badge "thiếu %" chỉ đọc đúng T08 (báo thiếu 20/20). Hai màn ra
+// hai con số, UI phải fail-closed và CEO không xem được gì.
+// Từ nay MỌI nơi lấy chi phí đều qua hàm này; không ai còn đường vòng.
+async function fetchEmployeeCost(empCode, options = {}) {
+  const result = await fetchRawEmployeeCost(empCode, options);
+  const hasRange = options.from != null || options.to != null;
+  if (!hasRange || (result.outcome !== 'ok' && result.outcome !== 'invalid_period_payload')) return result;
+  result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchRawEmployeeCost);
+  // Payload range mơ hồ chỉ được phục hồi thành nguồn `ok` khi policy mới nhất đã
+  // lấp ĐỦ mọi kỳ; còn kỳ trước ngày hiệu lực thì tiếp tục fail closed.
+  if (result.outcome === 'invalid_period_payload'
+    && result.payload.ratePolicy?.state === 'available'
+    && Number(result.payload.ratePolicy?.unresolvedPeriods || 0) === 0) {
+    result.outcome = 'ok';
+  }
+  return result;
+}
+
 async function getForSession({ session, scope, requestedEmp }, options = {}) {
   const audit = (entry) => {
     try { (options.auditImpl || writeAudit)(entry); }
@@ -1090,18 +1113,6 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
     return result.payload;
   }
   const result = await fetchEmployeeCost(empCode, options);
-  // Kỳ chưa có bảng tỷ lệ riêng ⇒ lấy bảng đang hiệu lực (xem applyEffectiveRates).
-  // Cũng chạy khi payload bị từ chối vì lệch kỳ — đó đúng là ca tháng mới chưa mở.
-  if (range && (result.outcome === 'ok' || result.outcome === 'invalid_period_payload')) {
-    result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchEmployeeCost);
-    // Payload range mơ hồ chỉ được phục hồi thành nguồn `ok` khi policy mới nhất
-    // đã lấp ĐỦ mọi kỳ; nếu còn kỳ trước ngày hiệu lực thì tiếp tục fail closed.
-    if (result.outcome === 'invalid_period_payload'
-      && result.payload.ratePolicy?.state === 'available'
-      && Number(result.payload.ratePolicy?.unresolvedPeriods || 0) === 0) {
-      result.outcome = 'ok';
-    }
-  }
   // Revenue belongs to App Report and must stay useful even while the DataHub
   // cost timeline is unavailable/not configured. In that state enrichment
   // preserves every order-line and leaves percentages/amounts as null (—).
@@ -1179,6 +1190,7 @@ module.exports = {
   enrichWithRevenue,
   enrichRangePayload,
   fetchEmployeeCost,
+  fetchRawEmployeeCost,
   resolveDataHubBaseUrl,
   getForSession,
 };
