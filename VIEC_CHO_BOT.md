@@ -9,7 +9,12 @@
 
 ---
 
-# 🔴🔴🔴 DEPLOY TIẾP NGAY — Ô "ỨNG LẦN 1" (CEO 22:26, chưa xong)
+# 🔴🔴🔴 CHỈ CÒN MỘT VIỆC: DEPLOY `4e759bd`
+
+**KHÔNG deploy `b8602fb`** (nhánh cũ, lùi PROD). **Deploy đúng `4e759bd`.**
+`4e759bd` cắt thẳng từ `d1fdfdf` đang chạy, diff đúng 4 file, fast-forward sạch, không xoá dòng nào.
+
+## DEPLOY TIẾP NGAY — Ô "ỨNG LẦN 1" (CEO 22:26, chưa xong)
 
 > CEO: *"vẫn chưa nối lại để ô KPI ứng lần 1 của tháng lên số nhé"* — ảnh DN009/T07 vẫn hiện câu chung *"Tạm thời chưa lấy được từ App Salary"*.
 
@@ -64,7 +69,7 @@ Nếu 19 NV sạch: **đề xuất hiện số của 19 người + ghi rõ "chư
 `git log` từ 28/07: **không commit nào của VIỆC 0D đụng** `employeeCost.js` / `employeeCostTable.js` / `EmployeeCost.jsx`. Projection vẫn giữ nguyên `unit_code` + `iit_code` (`qlnb_code`) — đúng 2 trường dùng để tra %. **Không được đổi luật doanh thu để "chữa" màn này.**
 
 ### Nguyên nhân thật
-~~Tra % theo khoá `đơn vị × mã hàng × THÁNG`; T08 chưa có bảng nên rỗng.~~ **SAI — Claude đã tự sửa, đọc "Việc 0" bên dưới.** Hợp đồng DataHub KHÔNG có trường kỳ: tỷ lệ % là **chính sách đứng yên**, phải tự có hiệu lực sang tháng sau. Bản vá `b8602fb` ở trên làm đúng điều đó.
+~~Tra % theo khoá `đơn vị × mã hàng × THÁNG`; T08 chưa có bảng nên rỗng.~~ **SAI — Claude đã tự sửa, đọc "Việc 0" bên dưới.** Hợp đồng DataHub KHÔNG có trường kỳ: tỷ lệ % là **chính sách đứng yên**, phải tự có hiệu lực sang tháng sau. Đã sửa xong và ĐANG CHẠY PROD trong `d1fdfdf`. **CẤM deploy `b8602fb`** — nhánh cũ, lùi PROD, mất safety fix.
 Ba ô còn lại KHÔNG phải lỗi: *Target tổng đội* = **T08 chưa giao target**; *Ứng lần 1* / *Còn lại sau ứng lần 1* = **đúng thiết kế đã duyệt 01/08** (App Salary chỉ self-scope, phải chọn 1 NV, cấm tổng hợp toàn đội).
 
 ### Việc 1 — XÁC MINH (làm đầu tiên, 5 phút, đừng sửa gì trước khi có kết quả)
