@@ -1,3 +1,5 @@
+'use strict';
+
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -5,110 +7,148 @@ const path = require('node:path');
 
 const serverRoot = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(serverRoot, 'scripts', 'materialize_july_revenue.js'), 'utf8');
-const storeSource = fs.readFileSync(path.join(serverRoot, 'src', 'store.js'), 'utf8');
-const smartSource = fs.readFileSync(path.join(serverRoot, 'src', 'smart.js'), 'utf8');
-const overviewSource = fs.readFileSync(path.join(serverRoot, '..', 'web', 'src', 'pages', 'Overview.jsx'), 'utf8');
+const mirrorSource = fs.readFileSync(path.join(serverRoot, 'src', 'appSaleRevenueMirror.js'), 'utf8');
+const transitionSafetySource = fs.readFileSync(path.join(serverRoot, 'src', 'revenueTransitionSafety.js'), 'utf8');
 const uploadSource = fs.readFileSync(path.join(serverRoot, 'src', 'upload.js'), 'utf8');
 const legacySource = fs.readFileSync(path.join(serverRoot, 'scripts', 'import_legacy.js'), 'utf8');
 const pkg = JSON.parse(fs.readFileSync(path.join(serverRoot, 'package.json'), 'utf8'));
 
-test('revenue materializer owns its PostgreSQL dependency', () => {
+test('revenue materializer owns its PostgreSQL dependency and no App Sale checkout dependency', () => {
   assert.match(source, /require\(['"]pg['"]\)/);
   assert.ok(pkg.dependencies?.pg, 'server/package.json must declare pg');
-});
-
-test('revenue materializer does not depend on an App Sale checkout path', () => {
-  assert.doesNotMatch(source, /workspace-main\/projects\/appsale/);
+  assert.doesNotMatch(source, /workspace-(?:main|sale-dev|datahub-dev)/);
   assert.doesNotMatch(source, /node_modules['"], ['"]pg/);
   assert.match(source, /APPSALE_(?:DATABASE_URL|PGHOST)/);
 });
 
-test('fail-closed guard runs before candidate file write and active-slot replacement', () => {
+test('fail-closed guard runs before payload write and active-slot replacement', () => {
   const guardAt = source.indexOf('const materializeGuard = evaluateRevenueCandidate');
   const fileWriteAt = source.indexOf('writeJson(file, rows)', guardAt);
   const deactivateAt = source.indexOf('s.active = false', guardAt);
-  assert.ok(guardAt >= 0, 'materialize guard must be called');
-  assert.ok(fileWriteAt > guardAt, 'candidate file must be written only after guard pass');
-  assert.ok(deactivateAt > guardAt, 'previous active slot must be kept until guard pass');
+  assert.ok(guardAt >= 0 && fileWriteAt > guardAt && deactivateAt > guardAt);
   assert.match(source, /revenue_2source_rejected_/);
   assert.match(source, /REVENUE_MATERIALIZE_GUARD_REJECTED/);
   assert.match(source, /acquireMaterializeLock\(\)/);
   assert.match(source, /ACTIVE_SLOT_CHANGED_DURING_MATERIALIZE/);
-  assert.match(source, /selectCanonicalPeriodSlots\(baselineSlots, PERIOD\.ky\)/,
-    'the complete manifest ky metadata must be validated before selecting a period');
-  assert.doesNotMatch(source, /baselineSlots\.filter\(\(s\) => s\.ky === PERIOD\.ky\)/,
-    'orchestration must not bypass malformed ky by filtering before validation');
-  assert.match(source, /INVALID_SLOT_PERIOD_METADATA_DURING_MATERIALIZE/,
-    'commit-time manifest ky mutations must fail closed');
+  assert.match(source, /selectCanonicalPeriodSlots\(baselineSlots, PERIOD\.ky\)/);
+  assert.doesNotMatch(source, /baselineSlots\.filter\(\(s\) => s\.ky === PERIOD\.ky\)/);
+  assert.match(source, /INVALID_SLOT_PERIOD_METADATA_DURING_MATERIALIZE/);
   assert.match(source, /PERIOD_SLOTS_CHANGED_DURING_MATERIALIZE/);
   assert.match(source, /PLACEHOLDER_CHANGED_DURING_MATERIALIZE/);
-  assert.match(source, /periodSlotsSnapshot\(commitSlots, PERIOD\.ky\) !== baselinePeriodSnapshot/,
-    'the complete period manifest must be compared again after source reads');
-  assert.match(source, /canBootstrapFromInactivePlaceholders\(\{ slots: commitPeriodSlots, uploadsDir: UP_DIR \}\)/,
-    'placeholder metadata and payload must be revalidated at commit time');
   assert.match(source, /SLOT_ID_COLLISION/);
   assert.match(source, /writeJson = writeJsonAtomic/);
 });
 
-test('APP WEB partner period uses only the effective revenue date, not order-created date', () => {
-  const fetchPartnerAt = source.indexOf('async function fetchPartner()');
-  const mainAt = source.indexOf('async function main()', fetchPartnerAt);
-  assert.ok(fetchPartnerAt >= 0 && mainAt > fetchPartnerAt, 'fetchPartner block must be present');
-  const fetchPartnerSource = source.slice(fetchPartnerAt, mainAt);
-  assert.match(fetchPartnerSource, /Quy kỳ theo MỘT mốc ngày duy nhất/);
-  assert.doesNotMatch(fetchPartnerSource, /AND\s+o\.created_at\s+>=/,
-    'partner revenue must not be filtered by order creation start date');
-  assert.doesNotMatch(fetchPartnerSource, /AND\s+o\.created_at\s+</,
-    'partner revenue must not be filtered by order creation end date');
-  assert.match(fetchPartnerSource, /COALESCE\(partner\.effective_date, \(o\.created_at AT TIME ZONE 'Asia\/Bangkok'\)::date\) >= \$1::date/);
-  assert.match(fetchPartnerSource, /COALESCE\(partner\.effective_date, \(o\.created_at AT TIME ZONE 'Asia\/Bangkok'\)::date\) <= \$2::date/);
+test('materialization path removes VIỆC 0C token/invoice/manual_zalo eligibility', () => {
+  assert.doesNotMatch(source, /revenuePartnerEligibility/);
+  assert.doesNotMatch(source, /REVENUE_PARTNER_POLICY_ID/);
+  assert.doesNotMatch(source, /partnerConfirmationRuleActive/);
+  assert.doesNotMatch(source, /partnerRevenueExclusionReason/);
+  assert.doesNotMatch(source, /partnerEligibilityAudit/);
+  assert.doesNotMatch(mirrorSource, /partner_order_response_invoices/);
+  assert.doesNotMatch(mirrorSource, /partner_order_response_invoice_items/);
+  assert.doesNotMatch(mirrorSource, /manual_zalo/);
+  assert.doesNotMatch(mirrorSource, /token_id/);
 });
 
-
-test('APP WEB partner includes delivered HOLD_GOLIVE but still excludes zero-delivery rows', () => {
-  const fetchPartnerAt = source.indexOf('async function fetchPartner()');
-  const mainAt = source.indexOf('async function main()', fetchPartnerAt);
-  const fetchPartnerSource = source.slice(fetchPartnerAt, mainAt);
-  assert.doesNotMatch(fetchPartnerSource, /o\.status\s*<>\s*['"]HOLD_GOLIVE['"]/, 'HOLD_GOLIVE delivered rows must not be excluded by status alone');
-  assert.match(fetchPartnerSource, /HOLD_GOLIVE là cờ kỹ thuật soft-launch\/quota audit/);
-  assert.match(fetchPartnerSource, /COALESCE\(partner\.delivered_qty,0\) > 0/, 'only rows with delivered quantity are eligible');
+test('CRM mirror uses exact App Sale sale_order_date and invoice-export KPI semantics', () => {
+  assert.match(mirrorSource, /period_month=date_trunc\('month',\$1::date\)::date/);
+  assert.match(mirrorSource, /from_date <= \$2::date/);
+  assert.match(mirrorSource, /to_date >= \$1::date/);
+  assert.match(mirrorSource, /sale_order_date >= \$2::date/);
+  assert.match(mirrorSource, /sale_order_date <= \$3::date/);
+  assert.match(mirrorSource, /revenue_bucket <> 'excluded'/);
+  assert.match(mirrorSource, /SUM\(invoice_export_amount\)/);
+  assert.doesNotMatch(mirrorSource, /revenue_date/);
+  assert.doesNotMatch(mirrorSource, /COALESCE\(l\.invoice_export_amount,l\.official_amount/);
+  assert.match(source, /dateFields: \{ crm: 'misa_revenue_snapshot_lines\.sale_order_date', partner: 'orders\.created_at' \}/);
 });
 
-test('APP WEB partner response model is one row per order_item_id to prevent double count after status changes', () => {
-  const fetchPartnerAt = source.indexOf('async function fetchPartner()');
-  const mainAt = source.indexOf('async function main()', fetchPartnerAt);
-  const fetchPartnerSource = source.slice(fetchPartnerAt, mainAt);
-  assert.match(fetchPartnerSource, /row_number\(\) OVER \(PARTITION BY r\.order_item_id ORDER BY r\.responded_at DESC NULLS LAST, r\.id DESC\) rn/,
-    'latest response must be selected per order_item_id');
-  assert.match(fetchPartnerSource, /response_one AS \(SELECT \* FROM latest_response WHERE rn=1\)/,
-    'only one response row per order_item_id may enter partner CTE');
-  assert.match(fetchPartnerSource, /LEFT JOIN partner ON partner\.order_item_id=oi\.id/,
-    'order item joins to the deduplicated partner CTE');
-  assert.match(source, /source_line_id: `WEB:\$\{r\.order_item_id\}`/,
-    'materialized identity is stable by order_item_id, so a later status change cannot create a second source id');
+test('partner mirror uses exact App Sale created_at, status and response quantity semantics', () => {
+  assert.match(mirrorSource, /o\.source_system='APP_SALE'/);
+  assert.match(mirrorSource, /o\.entity_group='PARTNER'/);
+  assert.match(mirrorSource, /COALESCE\(o\.is_test,false\) IS NOT TRUE/);
+  assert.match(mirrorSource, /COALESCE\(o\.status,''\) <> 'DRAFT'/);
+  assert.match(mirrorSource, /o\.created_at >= \$2::date/);
+  assert.match(mirrorSource, /o\.created_at < \(\$3::date \+ 1\)/);
+  assert.match(mirrorSource, /LIKE '%huy%'/);
+  assert.match(mirrorSource, /LIKE '%hủy%'/);
+  assert.match(mirrorSource, /LIKE '%huỷ%'/);
+  assert.match(mirrorSource, /LIKE '%cancel%'/);
+  assert.doesNotMatch(mirrorSource, /status[^\n]*<>[^\n]*HOLD_GOLIVE/);
+  assert.match(mirrorSource, /COALESCE\(MAX\(r\.delivered_qty\),MAX\(r\.qty_delivered\),[\s\S]*MAX\(r\.response_status\)='full'/);
+  assert.match(mirrorSource, /LEFT JOIN partner_order_line_responses r ON r\.order_id=o\.id AND r\.order_item_id=oi\.id/);
+  assert.match(mirrorSource, /COALESCE\(SUM\(delivered_amount\),0\)::numeric delivered_amount/);
 });
 
-
-test('MISA lines with money but missing revenue_date are warned, not assigned to an order-created fallback date', () => {
-  assert.match(source, /async function fetchMisaDataQualityWarnings\(runId\)/, 'materializer must collect data-quality warnings from the latest MISA run');
-  assert.match(source, /l\.revenue_date IS NULL/, 'missing revenue_date must be detected explicitly');
-  assert.match(source, /COALESCE\(l\.invoice_export_amount,l\.official_amount,0\) <> 0/, 'only money-bearing MISA rows need the warning');
-  assert.match(source, /const misaDataQuality = await fetchMisaDataQualityWarnings\(run\.id\)/, 'main must collect warnings before writing the slot');
-  assert.match(source, /dataQualityWarnings:\s*\{\s*misaMissingRevenueDate: misaDataQuality/s, 'warning must be persisted into slot metadata');
-  const fetchMisaAt = source.indexOf('async function fetchMisa(runId)');
-  const fetchPartnerAt = source.indexOf('async function fetchPartner()', fetchMisaAt);
-  const fetchMisaSource = source.slice(fetchMisaAt, fetchPartnerAt);
-  assert.match(fetchMisaSource, /l\.revenue_date >= \$2::date/);
-  assert.match(fetchMisaSource, /l\.revenue_date <= \$3::date/);
-  assert.doesNotMatch(fetchMisaSource, /COALESCE\(l\.revenue_date\s*,\s*l\.sale_order_date/, 'do not silently replace missing MISA revenue_date with order date');
-  assert.doesNotMatch(fetchMisaSource, /COALESCE\(l\.revenue_date\s*,\s*l\.created_at/, 'do not silently replace missing MISA revenue_date with created_at');
+test('partner mirror pins App Sale C31 pricing and exact fallback order from 01/07/2026', () => {
+  assert.match(mirrorSource, /public_data->>'C31'/);
+  assert.match(mirrorSource, /CATALOG_REPRICE_CUTOFF = '2026-07-01'/);
+  assert.match(mirrorSource, /DATE '\$\{CATALOG_REPRICE_CUTOFF\}'/);
+  assert.match(mirrorSource, /CASE WHEN cpe\.price_count=1 THEN cpe\.price END,[\s\S]*CASE WHEN cpu\.price_count=1 THEN cpu\.price END,[\s\S]*COALESCE\(oi\.price,0\)/);
+  assert.match(mirrorSource, /cpe\.contractor_code=UPPER\(COALESCE\(c\.code,''\)\)/);
+  assert.match(mirrorSource, /COUNT\(DISTINCT price\)::int price_count/);
+  assert.match(source, /resolveCatalogVersion\(client\)/);
+  assert.match(source, /catalogVersionNo: catalog\.versionNo/);
 });
 
-test('overview alert center exposes MISA missing revenue_date as data-quality warning', () => {
-  assert.match(storeSource, /function activeDataQualityWarnings\(\{ scope \} = \{\}\)/, 'store must expose active slot data-quality warnings');
-  assert.match(smartSource, /key: 'data_quality'/, 'alert center must include a data-quality group');
-  assert.match(smartSource, /MISA official\/pending có tiền nhưng revenue_date NULL/, 'alert note must explain why row is not counted');
-  assert.match(overviewSource, /group\.key === 'data_quality'/, 'Overview UI must render data quality rows with order/amount/NV/unit');
+test('CRM and partner projections reconcile to exact KPI aggregates inside one repeatable-read snapshot', () => {
+  const snapshotAt = source.indexOf('async function readSourceSnapshot()');
+  const mainAt = source.indexOf('async function main()', snapshotAt);
+  const snapshotSource = source.slice(snapshotAt, mainAt);
+  assert.match(snapshotSource, /BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY/);
+  assert.match(snapshotSource, /txid_current_snapshot\(\)/);
+  assert.match(snapshotSource, /const catalog = await resolveCatalogVersion\(client\)/);
+  assert.match(snapshotSource, /const run = await latestRun\(client\)/);
+  assert.match(snapshotSource, /fetchMisa\(run\.id, client\)/);
+  assert.match(snapshotSource, /fetchPartnerPartition\(catalog\.versionNo, client\)/);
+  assert.match(snapshotSource, /transitionEvidenceDigest\(sourceMirrorProof\)/);
+  assert.match(snapshotSource, /await client\.query\('COMMIT'\)/);
+  assert.match(snapshotSource, /const sourceRunAfterRead = await latestRun\(pool\)/);
+  assert.match(source, /APP_SALE_CRM_KPI_PROJECTION_MISMATCH/);
+  assert.match(source, /APP_SALE_PARTNER_KPI_PROJECTION_MISMATCH/);
+  assert.match(source, /APP_SALE_PARTNER_KPI_PARTITION_DELTA/);
+  assert.match(source, /APP_SALE_MIRROR_TOTAL_INVARIANT_FAILED/);
+});
+
+test('App Sale provenance and mirror proof are persisted without VIỆC 0C policy metadata', () => {
+  assert.match(source, /revenueSourceMirror: APP_SALE_REVENUE_MIRROR_ID/);
+  assert.match(source, /revenueSourceMirrorEvidence:/);
+  assert.match(source, /appSaleRelease: APP_SALE_RELEASE/);
+  assert.match(source, /appSaleSourceSha256: APP_SALE_SOURCE_SHA256/);
+  assert.match(source, /catalogGuardSha256: APP_SALE_CATALOG_GUARD_SHA256/);
+  assert.match(source, /sqlSha256: APP_SALE_SQL_SHA256/);
+  assert.match(source, /transitionEvidenceDigest: sourceMirrorProof\.transitionEvidenceDigest/);
+  const slotAt = source.indexOf('commitSlots.push({');
+  const slotEnd = source.indexOf('writeJson(slotsPath, commitSlots)', slotAt);
+  const slotSource = source.slice(slotAt, slotEnd);
+  assert.doesNotMatch(slotSource, /revenueRulePolicy:/);
+  assert.doesNotMatch(slotSource, /partnerEligibilityAudit:/);
+});
+
+test('approved SQL-mirror transition is explicit, one-shot and before any slot write', () => {
+  const resolveAt = source.indexOf('const approvedRuleTransition = resolveApprovedRuleTransition');
+  const guardAt = source.indexOf('const materializeGuard = evaluateRevenueCandidate');
+  const fileWriteAt = source.indexOf('writeJson(file, rows)', guardAt);
+  const identityAt = source.indexOf('const identity = await equivalentToActiveSlot', guardAt);
+  const verifyAt = source.indexOf('verifiedActivePayloadFingerprint(previousSlot, UP_DIR)', identityAt);
+  const claimAt = source.indexOf('createTransitionClaim({', verifyAt);
+  assert.ok(resolveAt >= 0 && guardAt > resolveAt && identityAt > guardAt && verifyAt > identityAt && claimAt > verifyAt && fileWriteAt > claimAt);
+  assert.match(source, /process\.env\.REVENUE_RULE_TRANSITION_ID/);
+  assert.match(source, /approvedTransition: approvedRuleTransition/);
+  assert.match(source, /PERIOD_SLOTS_CHANGED_BEFORE_TRANSITION_CLAIM/);
+  assert.match(source, /FROZEN_PERIOD_CHANGED_BEFORE_TRANSITION_CLAIM/);
+  assert.match(transitionSafetySource, /O_EXCL/);
+  assert.match(transitionSafetySource, /O_NOFOLLOW/);
+  assert.match(transitionSafetySource, /REVENUE_RULE_TRANSITION_ID_ALREADY_CONSUMED/);
+});
+
+test('attribution quarantine is total-preserving and does not alter source KPI proof', () => {
+  assert.match(source, /const sourceRows = \[\.\.\.misa, \.\.\.partner\]/);
+  assert.match(source, /quarantineRosterConflicts\(sourceRows, roster/);
+  assert.match(source, /ATTRIBUTION_GUARD_CHANGED_TOTAL/);
+  assert.match(source, /ROSTER_CONFLICT_TO_UNALLOCATED_NO_REMAP/);
+  assert.match(source, /không đổi tổng và không remap sang NV khác/);
 });
 
 test('all slot writers share the same lock and atomic JSON writer', () => {

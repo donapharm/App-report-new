@@ -4,7 +4,7 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 02/08/2026 — sau khi bot dọn drift xong (`origin/main` = `026db87`)
+**Cập nhật lần cuối:** 03/08/2026 — VIỆC 0D tích hợp exact App Sale SQL mirror theo duyệt CEO
 
 ---
 
@@ -38,35 +38,28 @@ git cherry-pick 21867c4
 
 ---
 
-## 🔴 VIỆC 0D — ‼ CÁCH SỬA ĐƠN GIẢN NHẤT: DEPLOY LẠI TỪ `origin/main`
+## 🔴 VIỆC 0D — TÍCH HỢP EXACT APP SALE SQL MIRROR LÊN `origin/main`
 
-> CEO 03/08 16:57: *"tại sao lại bị lệch mà không xử lý cho tao vậy nào"*
+> CEO duyệt 03/08: `APPROVE_INTEGRATE_VIEC0D_CDA551A_TO_ORIGIN_MAIN_20260803`.
 
-### Số đo lúc 16:55–16:57 (chụp cùng lúc)
-| | Số |
-|---|---|
-| App Sale — ĐÃ THỰC HIỆN | **2.135.324.772đ** = CRM xuất HĐ `1.340.385.772` + Đối tác đã xuất/giao `794.939.000` (**43 đơn**) |
-| App Report | **1.647.400.772đ** (204 dòng) |
-| **THIẾU** | **487.924.000đ** — và đang **tăng dần** (15:18 lệch 176tr → 16:57 lệch 487tr) |
+### Kết quả kiểm tra lại exact `origin/main e9f8d33`
+Deploy thẳng bị dừng đúng cổng tiền: CRM khớp nhưng partner cao hơn App Sale **53.556.720đ / 3 đơn**.
+Nguyên nhân: code cũ dùng ngày phản hồi/effective date + `order_items.price`; App Sale PROD hiện dùng `orders.created_at` + response delivered quantity + giá C31 và loại trạng thái hủy/cancel.
 
-### ‼ PHÁT HIỆN QUAN TRỌNG — BỘ LỌC KHÔNG CÓ TRÊN `main`
-Claude kiểm `origin/main` (`d169a3c`): **KHÔNG có** `PARTNER_TOKEN_INVOICE_V1`, **KHÔNG có** `manual_zalo` — sạch.
-Bộ lọc gây lệch **chỉ tồn tại trong bản `a4e1a7f` bot tự build rồi đem lên production**. Lại là drift: production chạy code không có trên git.
+### Cách sửa đã duyệt
+1. Tích hợp candidate exact App Sale SQL mirror lên `origin/main`.
+2. Khóa provenance App Sale revision/source SHA và fingerprint SQL/projection.
+3. Chỉ deploy exact commit đã push lên `origin/main`; không deploy local-only.
+4. Materialize one-shot T08, reload **chỉ** `app-report`; không restart bot Telegram, không bật thông báo.
 
-### ⇒ CÁCH SỬA: DEPLOY LẠI TỪ `origin/main`
-**Không phải viết code mới. Không phải chờ App Sale. Chỉ deploy đúng đầu `main`.**
-1. `git fetch origin main` → deploy **đúng `origin/main`** (bỏ bản `a4e1a7f` có bộ lọc).
-2. Materialize lại T08 bằng luật trên main (đối tác: `delivered_qty > 0`, không loại nguồn nhập tay).
-3. Reload `app-report`. **Không** restart bot Telegram, **không** bật thông báo.
+### Cổng nghiệm thu
+- Cùng scope và GMT+7, App Report = CRM App Sale + Partner App Sale, delta từng nhóm và tổng **0đ**.
+- Ảnh hai màn cách nhau dưới 2 phút.
+- **T07 = 30.917.892.673đ**, **T06 = 28.403.136.096đ**; đổi là DỪNG.
+- Source run, active slot, claim, payload, frozen fingerprints hoặc manifest drift là DỪNG.
 
-### CỔNG NGHIỆM THU — chụp 2 màn cùng lúc, chênh < 2 phút
-- **App Report == App Sale "ĐÃ THỰC HIỆN"** (hiện ~2,135 tỷ), chênh **0đ**.
-- Còn lệch ⇒ dán **bảng đối chiếu 2 nhóm**: `CRM xuất HĐ` (App Sale 1.340.385.772) và `Đối tác đã xuất/giao` (App Sale 794.939.000 / 43 đơn) — chỉ rõ App Report đang thiếu/thừa đơn nào.
-- **T07 = 30.917.892.673đ**, **T06 = 28.403.136.096đ** — ghim, đổi là DỪNG.
-
-### ‼ KỶ LUẬT — LẶP LẠI LẦN THỨ 4
-**CẤM deploy bản local không có trên `origin/main`.** Đây là lần thứ 4 production chạy code không có trên git (`97b87d6`, `640685c`, `a1e17aa`, giờ `a4e1a7f`), và lần này nó **gây lệch tiền thật**.
-Từ nay: **push lên `origin/main` TRƯỚC, deploy TỪ `origin/main`.** Không có ngoại lệ.
+### Kỷ luật
+**Push/merge `origin/main` trước, fetch exact remote commit rồi mới deploy. Không ngoại lệ.**
 
 ---
 

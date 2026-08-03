@@ -1,9 +1,11 @@
 {
-  "version": "revenue-v1.0-appsale-parity",
-  "ruleHash": "571e72e26f786ce9b8c488957147342bfaf2162e3a7b2b769db76bd6897608d1",
+  "version": "revenue-v1.1-appsale-live-sql-mirror",
+  "ruleHash": "1e68748bbb107802d9ceade59d8b47d3e29f3f48f14b82ec5bbc915bf79262f7",
   "lockedAt": "2026-08-03",
   "lockedBy": "CEO",
-  "source": "scripts/materialize_july_revenue.js :: fetchMisa() + fetchPartner()",
-  "definition": "App Report tinh doanh thu GIONG HET o 'DA THUC HIEN' cua App Sale = CRM da xuat hoa don + Doi tac da xuat/giao. KHONG them bo loc rieng.",
-  "note": "CEO chot 03/08/2026 sau su co lech 487.924.000d: mot cong thuc duy nhat, thang nao cung tinh nhu nhau, tu nhay theo thang lich gio VN. Doi luat => cap nhat ruleHash + nang version + ghi CHANGELOG, kem so doi chieu App Sale."
+  "source": "src/appSaleRevenueMirror.js SQL + scripts/materialize_july_revenue.js projection",
+  "definition": "App Report mirrors exact live App Sale KPI SQL: CRM sale_order_date/invoice_export_amount/non-excluded + partner orders.created_at/delivered response/C31 pricing.",
+  "appSaleRelease": "0e820022814ef8a7f24d47c082446f3e40b17ebe",
+  "appSaleSourceSha256": "3b065456ed1e25b553c0554b97900a0ea2d89a17e9b487bfc5663fad14c220e0",
+  "mirrorId": "APP_SALE_REVENUE_KPI_SQL_0E820022"
 }

@@ -1,3 +1,11 @@
+### 2026-08-03 — VIỆC 0D — mirror exact App Sale live KPI SQL
+
+- Thay luật response/effective-date + `order_items.price` trên `origin/main` vì read-only gate cho thấy cao hơn App Sale `53.556.720đ` / 3 đơn.
+- CRM mirror `sale_order_date`, `revenue_bucket <> 'excluded'`, `invoice_export_amount`; partner mirror `orders.created_at`, response delivered quantity, loại hủy/cancel và giá C31 đúng thứ tự fallback của App Sale PROD.
+- Gỡ token/invoice/`manual_zalo` khỏi actual materialization eligibility; thêm repeatable-read proof, KPI/projection invariants, source/SQL/projection digests và one-shot transition từ `PARTNER_TOKEN_INVOICE_V1`.
+- Provenance: App Sale revision `0e820022814ef8a7f24d47c082446f3e40b17ebe`, source SHA-256 `3b065456ed1e25b553c0554b97900a0ea2d89a17e9b487bfc5663fad14c220e0`.
+- Đối soát live Gate 1: CRM `1.340.385.772đ`, partner `811.389.000đ`, tổng `2.151.774.772đ`; delta từng nhóm và tổng đều `0đ`. T06/T07 frozen pins giữ nguyên.
+
 ### 2026-08-01 — App Report — CEO duyệt KPI “Còn lại sau ứng lần 1” theo từng NV
 
 - Backend là SSOT cho phép tính `tổng chi phí tháng sau phạt − ứng lần 1`; frontend chỉ hiển thị projection, không tự trừ hoặc ghi ngược App Salary/payroll.
