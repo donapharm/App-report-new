@@ -1,3 +1,13 @@
+> # ⚠️ SPEC NÀY ĐÃ BỊ THAY THẾ (03/08/2026)
+>
+> **Đọc `SPEC_REVENUE_SSOT.md` thay cho file này.**
+>
+> Ngày 03/08 CEO chốt: **App Report phải khớp App Sale từng đồng**. App Report nay **sao chép đúng SQL đang chạy của App Sale**, và App Sale quy kỳ theo **`orders.created_at` (ngày ĐẶT hàng)** — không phải ngày thực giao như spec này đề ra.
+>
+> **Phần CÒN GIÁ TRỊ của file này:** lời cảnh báo về **bộ lọc KÉP ngày** (mục 1) — đó là thứ làm mất 382,6 triệu. Bản đang chạy chỉ lọc **MỘT** mốc `created_at`, **không lọc kép**, nên không mất doanh thu. Đã kiểm chứng 03/08.
+>
+> **Phần KHÔNG còn áp dụng:** quy kỳ theo ngày thực giao (mục 2.2, 3). Muốn quay lại cách đó thì **App Sale phải đổi trước**, App Report theo sau — không được đổi một mình.
+
 # SPEC — QUY KỲ DOANH THU THEO NGÀY THỰC GIAO
 
 > **Bối cảnh:** ngày 29/07 CEO phát hiện App Sale báo **28,96 tỷ** còn App Report báo **28,58 tỷ** — lệch **384.977.920đ**. Truy ra **99,4% chênh lệch nằm ở nguồn đối tác**, và nguyên nhân là **bộ lọc kép ngày** khiến đơn rơi khỏi CẢ HAI kỳ.
