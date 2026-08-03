@@ -37,6 +37,37 @@ git cherry-pick dc07a18
 - Claude đã chạy: web **104/104 pass** (thêm 2 test hồi quy) · `npm run build` sạch.
 - Deploy: build web, reload **chỉ** `app-report`. Không restart bot Telegram.
 
+### ‼ Việc 0A — "Ứng lần 1" mất số vì APP SALARY ĐỔI HỢP ĐỒNG (ảnh CEO 20:56)
+
+Ô **"Ứng lần 1 tháng này"** hiện *"Tạm thời chưa lấy được từ App Salary"* ở kỳ **07/2026** (DN007) — trong khi mọi ô chi phí khác của T07 đều đúng.
+
+**Nguyên nhân gần như chắc chắn:** phía App Salary vừa deploy bản đổi hợp đồng (`d557bd6`, gác duyệt `63b6da2`) — họ trả `amount = 0` khi chưa duyệt **kèm nhãn mới `provisional` / `not_approved`**. `server/src/salaryAdvance.js` → `validateProjection()` là **allowlist khoá cứng đúng 10 khoá**:
+```
+['amount','applicable','available','currency','emp_code','locked','ok','period','reason','status']
+```
+- Thừa **một** khoá lạ ⇒ `keys.length` lệch ⇒ ném `SALARY_ADVANCE_INVALID_PAYLOAD` ⇒ App Report bỏ cả gói.
+- `status` chỉ nhận `draft` / `locked` / `unavailable`. **`not_approved` không nằm trong đó ⇒ chặn.**
+- Riêng `amount = 0` thì KHÔNG chặn — nên vấn đề là **khoá/trạng thái mới**, không phải số 0.
+
+Đây là fail-closed đúng thiết kế CEO duyệt 31/07 (cấm nhận field ngoài hợp đồng), **không phải App Report tự chặn**. Nhưng bên kia đổi mà không báo, nên phải xử lý.
+
+#### Làm đúng thứ tự
+1. **Lấy payload thật** (chạy trên server, có sẵn token, KHÔNG dán token vào báo cáo):
+```
+curl -s -H "Authorization: Bearer $SALARY_SERVICE_TOKEN" \
+  "$SALARY_SERVICE_BASE/api/integrations/app-report/first-advance?period=2026-07&emp_code=DN007"
+```
+Dán **nguyên JSON** cho CEO. Đó là bằng chứng, không đoán.
+2. So với allowlist 10 khoá ở trên → chỉ ra **đúng khoá/giá trị nào làm lệch**.
+3. **Chốt hợp đồng với bên App Salary trước khi sửa code.** Nới allowlist là nới một cửa bảo mật — phải ghi rõ khoá mới nghĩa gì, rồi mới sửa `validateProjection` + `docs/`.
+4. Đồng thời sửa chỗ **giấu nguyên nhân**: `safeGetFirstAdvance()` nuốt mọi lỗi thành `upstream_unavailable`, nên CEO không phân biệt được *mạng lỗi* / *sai key* / *lệch hợp đồng*. Phải đưa mã lỗi thật ra ô KPI (vd *"App Salary trả field ngoài hợp đồng"*). **Không đổi số, chỉ đổi câu giải thích.**
+
+#### Nghiệm thu
+- Ô "Ứng lần 1" T07 của DN007 **ra số**, hoặc nói **đúng lý do** nếu App Salary cố tình trả 0 vì chưa duyệt.
+- Các ô chi phí T07 **không đổi một đồng** (`68.726.986đ`, C43 `60.824.695đ`, C41 `5.198.524đ`, C45 `2.703.767đ`, C44 `3.041.235đ`, khớp doanh thu `100,0%`).
+
+---
+
 ### ‼ Việc 0 — CLAUDE ĐÃ CHẨN SAI, ĐỌC LẠI TRƯỚC KHI LÀM (20:40)
 
 > CEO: *"các ô chi phí % đã có sẵn trong DataHub, vậy tự động lấy sang, chứ chả nhẽ cứ mỗi tháng tao phải đi làm như thế này nữa hả. Nếu có chỉnh chính sách % thì tao chỉnh bên DataHub. Tao đề nghị làm giống T07.2026 và các tháng sau T09/T10… cũng như vậy."*
