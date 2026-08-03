@@ -9,12 +9,23 @@
 
 ---
 
-# 📌 THỨ TỰ VIỆC — CHỐT 03/08/2026 23:15 GMT+7
+# 📌 THỨ TỰ VIỆC — cập nhật 03/08/2026 23:40 GMT+7
+
+### ‼ VIỆC 2 — làm ĐÚNG thứ tự, cấm tự đoán nghĩa trạng thái
+App Salary vừa thêm **bước duyệt kỳ**: chưa duyệt thì họ trả `amount = 0` kèm `status` mới (`approved` / `provisional`). Hai trạng thái này **không có trong hợp đồng** nên App Report chặn — đúng thiết kế.
+1. **Dán nguyên JSON thật** của `first-advance` (kỳ 07/2026, DN007 và DN009) cho CEO.
+2. **Hỏi App Salary bằng văn bản**: `provisional` và `approved` nghĩa chính xác là gì; khi `provisional` thì `amount = 0` là *"chưa duyệt nên chưa có số"* hay *"đã duyệt và bằng 0"*. **Khác nhau ở đây là khác nhau về TIỀN.**
+3. Có câu trả lời rồi mới sửa: cập nhật `docs/APP_REPORT_EMPLOYEE_COST_CONTRACT.md`-tương đương cho salary-advance + `validateProjection` + hiển thị.
+4. **‼ Chặn tiền:** `provisional` (chưa duyệt) **KHÔNG được** đưa vào KPI "Còn lại sau ứng lần 1". Nếu tính, "còn lại" sẽ bằng nguyên tổng chi phí — số sai mà trông như số thật. Hiện đang giữ `—`, phải giữ nguyên như vậy cho tới khi chốt xong.
+5. Claude duyệt trước khi deploy. Không nới hợp đồng bằng cách đoán.
+
+
 
 | # | Việc | Hạn | Trạng thái | Ai làm |
 |---|---|---|---|---|
-| **1** | **Deploy `c1fb222`** — Ứng lần 1 + nút chọn tháng + bộ lọc nâng cao + dòng "Đã gồm VAT" | **tối nay** | code xong, đã test, **chờ bấm** | bot |
-| **2** | **"Tất cả NV" T08 còn ⚠** — DN016/DN018 chỏi snapshot | **tối nay** | chờ bot trả lời 3 câu | bot → Claude chốt |
+| ✅ | ~~Deploy `4e759bd`~~ — XONG 22:34. T08 "Tất cả NV" **đã lên số**: tổng `118.066.246đ`, policy hiệu lực từ 07/2026. T07/DN007 `68.726.986đ` không đổi một đồng. | — | **xong** | — |
+| **1** | **Deploy `c1fb222`** — phần GIAO DIỆN còn lại: nút chọn tháng · bộ lọc nâng cao đóng sẵn · dòng "Đã gồm VAT". `c1fb222` nằm trên `4e759bd`, fast-forward sạch. | sáng 04/08 | code xong, đã test, **chờ bấm** | bot |
+| **2** | **Chốt hợp đồng "Ứng lần 1" với App Salary** — họ trả `status: approved/provisional` ngoài hợp đồng 10 khoá. App Report đang hiện đúng *"App Salary đổi hợp đồng"* và giữ "Còn lại sau ứng" = `—`. **Đừng vá vội.** | sáng 04/08 | chờ chốt nghĩa | bot + App Salary → Claude duyệt |
 | **3** | **Nghiệm thu VP018 + DN022** | **08/08** | code đã lên PROD, chưa nghiệm thu | bot |
 | **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
 | **5** | **Giao target T08** → mở 3 ô Target/Thưởng/Phạt | bất cứ lúc nào | chưa giao | **CEO, 5 phút** |
