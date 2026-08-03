@@ -24,7 +24,8 @@ App Salary vừa thêm **bước duyệt kỳ**: chưa duyệt thì họ trả `
 | # | Việc | Hạn | Trạng thái | Ai làm |
 |---|---|---|---|---|
 | ✅ | ~~Deploy `4e759bd`~~ — XONG 22:34. T08 "Tất cả NV" **đã lên số**: tổng `118.066.246đ`, policy hiệu lực từ 07/2026. T07/DN007 `68.726.986đ` không đổi một đồng. | — | **xong** | — |
-| **1** | **Deploy `c1fb222`** — phần GIAO DIỆN còn lại: nút chọn tháng · bộ lọc nâng cao đóng sẵn · dòng "Đã gồm VAT". `c1fb222` nằm trên `4e759bd`, fast-forward sạch. | sáng 04/08 | code xong, đã test, **chờ bấm** | bot |
+| ✅ | ~~Deploy `c1fb222`~~ — XONG 23:02. Nút tháng T08/T07/T06/T05 chạy · bộ lọc nâng cao đóng sẵn · doanh thu hiện cả trước và sau VAT. | — | **xong** | — |
+| **1** | **Deploy `383692f`** (nằm ngay trên `c1fb222`, cùng nhánh, fast-forward sạch) — ô doanh thu ghi rõ *"chưa gồm N dòng đang cách ly"*, để CEO nhìn là hiểu vì sao App Report `2.149.979.172đ` còn App Sale `2.151.774.772đ`. **Kèm việc: dán ra dòng cách ly T08 là đơn nào · mã hàng nào · vì sao chưa gán được NV · ai xử lý.** Xử lý xong hai app khớp `0đ`. | sáng 04/08 | code xong, đã test | bot |
 | **2** | **Chốt hợp đồng "Ứng lần 1" với App Salary** — họ trả `status: approved/provisional` ngoài hợp đồng 10 khoá. App Report đang hiện đúng *"App Salary đổi hợp đồng"* và giữ "Còn lại sau ứng" = `—`. **Đừng vá vội.** | sáng 04/08 | chờ chốt nghĩa | bot + App Salary → Claude duyệt |
 | **3** | **Nghiệm thu VP018 + DN022** | **08/08** | code đã lên PROD, chưa nghiệm thu | bot |
 | **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
