@@ -4,26 +4,27 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 03/08/2026 — VIỆC 0D tích hợp exact App Sale SQL mirror theo duyệt CEO
+**Cập nhật lần cuối:** 03/08/2026 — VIỆC 0D ĐÃ XONG (`bf7a7a0`, chênh 0đ). Việc kế tiếp: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
 
 
 ---
 
-# 🔴🔴 LÀM NGAY — DEPLOY EXACT SQL MIRROR SAU GATE 2
+# 🔴🔴 LÀM NGAY — THỨ TỰ CHỈ CÓ MỘT
 
-Controlled deploy `e9f8d33` đã chạy và **rollback** vì cổng tiền thất bại:
-- App Sale: `2.151.774.772đ`.
-- App Report từ `e9f8d33`: `2.205.331.492đ`.
-- Lệch thừa: `53.556.720đ / 3 đơn` ở partner.
+Doanh thu đã khớp `0đ` trên PROD `bf7a7a0`. **Đừng đụng lại phần doanh thu nữa.**
+Làm đúng thứ tự dưới đây, xong việc nào báo CEO việc đó:
 
-**CẤM deploy lại `e9f8d33`.** Bản đó dùng response/effective date + `order_items.price`, không khớp App Sale PROD đang dùng `orders.created_at` + response delivered quantity + giá C31.
+| Thứ tự | Việc | Vì sao trước |
+|---|---|---|
+| **1** | **VIỆC 3** — nghiệm thu VP018 + DN022 trên app thật | **có mốc chết 08/08** |
+| **2** | **VIỆC 2B** — màn "Chưa đồng bộ" (danh mục dòng lệch + lý do) | CEO đòi từ 29/07, đã bị bỏ quên 1 lần |
+| 3 | VIỆC 4 — deploy bản RAM `9986f0a` | hết loop hụt dữ liệu |
+| 4 | VIỆC 5 — module "Thanh toán CP của tôi" GĐ1 | không gấp |
 
-Việc duy nhất còn lại:
-1. Fetch exact đầu `origin/main` có mirror `APP_SALE_REVENUE_KPI_SQL_0E820022`.
-2. Chạy lock/full test + live reconciliation; delta CRM/partner/tổng phải `0đ`.
-3. Xin Gate 2 exact commit rồi deploy; materialize one-shot T08; reload **chỉ** `app-report`.
-4. T06 = `28.403.136.096đ`, T07 = `30.917.892.673đ`; đổi là DỪNG.
-5. Chụp App Sale/App Report cách nhau dưới 2 phút và dán hai số cho CEO.
+### ‼ CẤM tuyệt đối
+- **CẤM deploy lại `e9f8d33`** — đã thử, đã rollback, làm App Report vống lên `2.205.331.492đ` (thừa `53.556.720đ / 3 đơn`). Bản đó dùng response/effective date + `order_items.price`; App Sale PROD dùng `orders.created_at` + delivered quantity + giá C31. **Bot đã đúng khi từ chối lệnh cũ của Claude — giữ nguyên cách xử lý đó.**
+- **CẤM sửa luật doanh thu** khi làm 4 việc trên. Đụng vào `appSaleRevenueMirror.js` hay projection của `materialize_july_revenue.js` là `revenueRuleLock.test.js` đỏ — đúng như thiết kế. Muốn đổi thì audit App Sale live trước, nâng version, rồi mới sửa.
+- Ghim tiền: **T06 = `28.403.136.096đ`**, **T07 = `30.917.892.673đ`**, **T08 = App Sale, chênh `0đ`**. Lệch là DỪNG, báo CEO ngay.
 
 ---
 
@@ -59,7 +60,24 @@ git cherry-pick 21867c4
 
 ---
 
-## 🔴 VIỆC 0D — TÍCH HỢP EXACT APP SALE SQL MIRROR LÊN `origin/main`
+## ✅ VIỆC 0D — XONG 03/08 (PROD `bf7a7a0`) — KHÔNG LÀM LẠI
+
+```
+App Sale “ĐÃ THỰC HIỆN”  2.151.774.772đ
+App Report T08.2026      2.151.774.772đ   → chênh 0đ
+   CRM      1.340.385.772đ
+   Đối tác    811.389.000đ (45 đơn)
+```
+Run 339 · 304 dòng · đối soát cách nhau 0,784 giây · T06/T07 nguyên vẹn · chỉ reload `app-report`.
+
+**Claude đã kiểm lại độc lập trên đúng commit đang chạy:**
+- `revenueRuleLock.test.js` **6/6 pass**.
+- `appSaleRevenueMirror.js` phần đối tác chỉ có **MỘT** bộ lọc ngày (`o.created_at`) — **không còn lọc kép**, tức lỗi từng làm bốc hơi 382,6 triệu không tái diễn được.
+- Kỳ tự nhảy theo tháng lịch `Asia/Bangkok`, không ghi cứng tháng; test chặn luôn việc ghi cứng.
+
+**Hệ quả kiến trúc đã báo CEO:** quy kỳ doanh thu nay theo **ngày tạo đơn** của App Sale, **thay thế** quyết định "ngày thực giao" ngày 29/07. `SPEC_REVENUE_DELIVERY_PERIOD.md` đã gắn nhãn SUPERSEDED (`4fe6944`); đọc `SPEC_REVENUE_SSOT.md` thay cho nó. Muốn quay lại ngày giao ⇒ **App Sale sửa trước**, App Report theo sau.
+
+<details><summary>(lưu vết — hồ sơ VIỆC 0D)</summary>
 
 > CEO duyệt 03/08: `APPROVE_INTEGRATE_VIEC0D_CDA551A_TO_ORIGIN_MAIN_20260803`.
 
@@ -81,6 +99,8 @@ Nguyên nhân: code cũ dùng ngày phản hồi/effective date + `order_items.p
 
 ### Kỷ luật
 **Push/merge `origin/main` trước, fetch exact remote commit rồi mới deploy. Không ngoại lệ.**
+
+</details>
 
 ---
 
@@ -217,7 +237,7 @@ Không đạt ⇒ dừng, báo, chờ CEO.
 ## 🔴 VIỆC 2B — MÀN "CHƯA ĐỒNG BỘ": danh mục dòng LỆCH + lý do (CEO đòi lại 02/08)
 
 > CEO 02/08: *"để không phải tìm vòng vo số không khớp thì nên có **một danh mục những dòng không khớp và nguyên nhân không khớp**. Nhìn vào là thấy ngay khỏi đi tìm."*
-> **CEO đã yêu cầu việc này từ 29/07** (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) — **chưa ai build**. Hiện chỉ có `syncAlert.js` (bắn Telegram), **KHÔNG có màn hình nào**. Đây là **món nợ**, làm ngay sau VIỆC 0C.
+> **CEO đã yêu cầu việc này từ 29/07** (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) — **chưa ai build**. Hiện chỉ có `syncAlert.js` (bắn Telegram), **KHÔNG có màn hình nào**. Đây là **món nợ**, làm ngay sau VIỆC 3.
 
 **Vì sao đáng làm nhất lúc này:** tối 02/08 CEO mất cả buổi truy 53.556.720đ lệch giữa 2 app. Có màn này thì **nhìn phát ra ngay**, không phải nhờ bot đào DB.
 
@@ -275,8 +295,8 @@ Branch review → Claude soi → merge → deploy từ `origin/main`. **Không �
 
 Branch `fix/dn022-separate-formula-20260731` — CEO đã duyệt từ 31/07, **Claude đã review PASS** (`REVIEW_VP018_DN022_20260801.md`). **Cổng review ĐÃ MỞ, không phải chờ Claude nữa.**
 
-**Làm sau VIỆC 2** (cần main sạch để rebase):
-1. Rebase lên `origin/main` — conflict **chỉ ở `CHANGELOG.md`** (hai bên cùng thêm mục đầu file), giải bằng cách **giữ cả hai**, không có conflict code.
+**Làm ĐẦU TIÊN** (VIỆC 0D đã xong, `origin/main` sạch để rebase):
+1. Rebase lên `origin/main` (`bf7a7a0` trở lên) — conflict **chỉ ở `CHANGELOG.md`** (hai bên cùng thêm mục đầu file), giải bằng cách **giữ cả hai**, không có conflict code.
 2. Kiểm `formulaVersion` = **v3.8**, khớp `bonus_formula_lock.json` (`sourceHash 25c06edc…530e`).
 3. Full test → merge → deploy từ `origin/main`.
 

@@ -1,3 +1,11 @@
+### 2026-08-03 — VIỆC 0D đóng lại + xếp thứ tự hàng đợi kế tiếp (tài liệu)
+
+- Xác nhận độc lập trên đúng commit PROD `bf7a7a0`: `revenueRuleLock.test.js` 6/6 pass; phần đối tác của `appSaleRevenueMirror.js` chỉ có MỘT bộ lọc ngày (`o.created_at`) nên lỗi lọc kép từng làm mất 382,6 triệu không tái diễn được; kỳ tự nhảy theo tháng lịch `Asia/Bangkok`, không ghi cứng.
+- `SPEC_REVENUE_DELIVERY_PERIOD.md` gắn nhãn SUPERSEDED (`4fe6944`): quy kỳ doanh thu nay theo `orders.created_at` của App Sale, thay thế quyết định "ngày thực giao" 29/07. Muốn quay lại ngày giao thì App Sale phải đổi trước. Cảnh báo lọc kép trong file đó vẫn còn hiệu lực.
+- `VIEC_CHO_BOT.md`: chuyển VIỆC 0D sang mục đã xong (kèm số nghiệm thu), thay khối "LÀM NGAY" bằng bảng thứ tự — VIỆC 3 (nghiệm thu VP018+DN022, mốc chết 08/08) → VIỆC 2B (màn "Chưa đồng bộ") → VIỆC 4 (RAM `9986f0a`) → VIỆC 5 (Thanh toán CP của tôi).
+- Ghi rõ lệnh cấm để bot không bị lệnh cũ dẫn sai: cấm deploy lại `e9f8d33` (đã rollback vì thừa `53.556.720đ`/3 đơn), cấm sửa luật doanh thu khi làm 4 việc trên. Ghim T06 `28.403.136.096đ`, T07 `30.917.892.673đ`, T08 bằng App Sale chênh `0đ`.
+- Không đụng code app, không đổi một đồng nào. Trạng thái test: không chạy lại (chỉ sửa tài liệu); lần chạy gần nhất trên `bf7a7a0` là revenue lock 6/6 pass.
+
 ### 2026-08-03 — VIỆC 0D — mirror exact App Sale live KPI SQL
 
 - Thay luật response/effective-date + `order_items.price` trên `origin/main` vì read-only gate cho thấy cao hơn App Sale `53.556.720đ` / 3 đơn.
