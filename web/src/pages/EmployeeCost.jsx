@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadEmployeeCostDataQuality, downloadEmployeeCostGaps, downloadEmployeeCostProvinceWorklist, downloadEmployeeCostReport } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import {
-  currentMonthValue, employeeCostColumnKpis, employeeCostGapConsistency, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostViewModel,
+  currentMonthValue, quickMonths, employeeCostColumnKpis, employeeCostGapConsistency, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostViewModel,
   employeeCostPageItems, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
 } from '../employeeCostModel.js';
 import {
@@ -1131,6 +1131,8 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [selectedEmp, setSelectedEmp] = useState(admin ? 'ALL' : String(me?.emp_code || ''));
   const [draftRange, setDraftRange] = useState({ from: month, to: month });
   const [range, setRange] = useState({ from: month, to: month });
+  // Bộ lọc nâng cao mặc định ĐÓNG (CEO 03/08): màn hình đỡ rối, mở khi cần lọc sâu.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [payload, setPayload] = useState(EMPTY);
   const [khoanPayload, setKhoanPayload] = useState({});
   const [khoanLoading, setKhoanLoading] = useState(!admin);
@@ -1385,12 +1387,25 @@ export default function EmployeeCost({ me, onNavigate }) {
     if (!model.penalty.available) setPenaltyModalOpen(false);
   }, [model.penalty.available]);
 
+  // Đang đóng mà vẫn có bộ lọc bật thì phải hiện số lên nút — nếu không, CEO xem
+  // một bảng đã bị lọc mà không biết, tưởng mất dữ liệu.
+  const advancedActiveCount = [
+    tableFilters.province, tableFilters.unitGroup, tableFilters.route, tableFilters.date,
+    range.from !== range.to ? 'range' : '',
+  ].filter(Boolean).length;
   const applyRange = (event) => {
     event.preventDefault();
     if (rangeInvalid) return;
     setTablePage(1);
     setTableFilters((current) => ({ ...current, date: '' }));
     setRange({ ...draftRange });
+  };
+  // Bấm một tháng là xem ngay tháng đó, không phải chỉnh hai ô rồi bấm Xem.
+  const pickMonth = (value) => {
+    setTablePage(1);
+    setTableFilters((current) => ({ ...current, date: '' }));
+    setDraftRange({ from: value, to: value });
+    setRange({ from: value, to: value });
   };
   const changeVisibility = (layer, key, setting) => {
     setVisibilityMessage('');
@@ -1477,37 +1492,55 @@ export default function EmployeeCost({ me, onNavigate }) {
             </option>)}
           </select>
         </label>}
-        {view === 'cost' && model.filterOptions.province.available && <label>
+        {advancedOpen && view === 'cost' && model.filterOptions.province.available && <label>
           <span>Vùng/Tỉnh</span>
           <select value={tableFilters.province} onChange={(event) => changeTableFilter('province', event.target.value)}>
             <option value="">Tất cả Vùng/Tỉnh</option>
             {model.filterOptions.province.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
           </select>
         </label>}
-        {view === 'cost' && <label>
+        {advancedOpen && view === 'cost' && <label>
           <span>Nhóm mã đơn vị</span>
           <select value={tableFilters.unitGroup} onChange={(event) => changeTableFilter('unitGroup', event.target.value)}>
             <option value="">Tất cả nhóm mã</option>
             {model.filterOptions.unitGroup.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
           </select>
         </label>}
-        {view === 'cost' && <label>
+        {advancedOpen && view === 'cost' && <label>
           <span>Tuyến</span>
           <select value={tableFilters.route} onChange={(event) => changeTableFilter('route', event.target.value)}>
             <option value="">Tất cả tuyến</option>
             {model.filterOptions.route.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
           </select>
         </label>}
-        {view === 'cost' && <label>
+        {advancedOpen && view === 'cost' && <label>
           <span>Ngày doanh thu</span>
           <select value={tableFilters.date} onChange={(event) => changeTableFilter('date', event.target.value)}>
             <option value="">Tất cả ngày</option>
             {model.filterOptions.date.options.map((option) => <option key={option.value} value={option.value}>{option.label} ({option.count.toLocaleString('vi-VN')})</option>)}
           </select>
         </label>}
-        <label><span>Từ tháng</span><input type="month" value={draftRange.from} onChange={(event) => setDraftRange((current) => ({ ...current, from: event.target.value }))} /></label>
-        <label><span>Đến tháng</span><input type="month" value={draftRange.to} onChange={(event) => setDraftRange((current) => ({ ...current, to: event.target.value }))} /></label>
-        <button type="submit" className="btn" disabled={rangeInvalid || (admin && view === 'gaps' ? gapLoading : admin && view === 'dq' ? dqLoading : loading)}>Xem</button>
+        {/* Chọn tháng bằng MỘT nút — việc hay làm nhất. Khoảng "từ tháng → đến
+            tháng" là việc hiếm nên dời vào bộ lọc nâng cao (CEO chốt 03/08). */}
+        <div className="employee-cost-month-quick" role="group" aria-label="Chọn tháng nhanh">
+          {quickMonths(4).map((value) => {
+            const active = range.from === value && range.to === value;
+            return <button key={value} type="button" aria-pressed={active}
+              className={`employee-cost-month-chip${active ? ' active' : ''}`}
+              onClick={() => pickMonth(value)}>T{formatMonthLabel(value).replace('/', '.')}</button>;
+          })}
+          {range.from !== range.to && <span className="employee-cost-month-chip range" title="Đang xem một khoảng nhiều tháng">
+            {formatMonthLabel(range.from)} → {formatMonthLabel(range.to)}
+          </span>}
+          <button type="button" className={`employee-cost-advanced-toggle${advancedOpen ? ' active' : ''}`}
+            aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>
+            {advancedOpen ? '▲ Ẩn bộ lọc nâng cao' : '▼ Bộ lọc nâng cao'}
+            {!advancedOpen && !!advancedActiveCount && <span className="employee-cost-tab-badge warn">{advancedActiveCount}</span>}
+          </button>
+        </div>
+        {advancedOpen && <label><span>Từ tháng</span><input type="month" value={draftRange.from} onChange={(event) => setDraftRange((current) => ({ ...current, from: event.target.value }))} /></label>}
+        {advancedOpen && <label><span>Đến tháng</span><input type="month" value={draftRange.to} onChange={(event) => setDraftRange((current) => ({ ...current, to: event.target.value }))} /></label>}
+        {advancedOpen && <button type="submit" className="btn" disabled={rangeInvalid || (admin && view === 'gaps' ? gapLoading : admin && view === 'dq' ? dqLoading : loading)}>Xem</button>}
         {view === 'cost' && <div className="employee-cost-export-actions">
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('xlsx')}>{costExporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('pdf')}>{costExporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
@@ -1563,7 +1596,13 @@ export default function EmployeeCost({ me, onNavigate }) {
 
     <div className="kpi-grid employee-cost-kpis">
       <Kpi label="Nhân viên" value={employeeLabel} sub={`Hiện ${filteredCount.toLocaleString('vi-VN')}/${totalTableRows.toLocaleString('vi-VN')} dòng`} />
-      <Kpi label="Doanh thu chưa VAT" value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)} sub="Số tổng hợp từ backend" />
+      {/* Chi phí tính trên số TRƯỚC VAT nên số đó đứng trên, to. Số ĐÃ gồm VAT đặt
+          ngay dưới, nhỏ hơn, để đối chiếu nhanh với App Sale mà không phải đổi màn. */}
+      <Kpi label="Doanh thu chưa VAT"
+        value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)}
+        sub={model.summary.revenueTotal == null
+          ? 'Số tổng hợp từ backend'
+          : `Đã gồm VAT: ${formatEmployeeCostCell(model.summary.revenueTotal, moneyColumn)} · số tổng hợp từ backend`} />
       {/* Điểm/Target/Xu/Cấn trừ là chỉ số TỪNG NGƯỜI — không gộp được qua nhiều NV.
           Ở "Tất cả NV" ẩn hẳn (thay vì hiện ô trống trông như lỗi) + 1 thẻ gợi ý. */}
       {!allEmployees && <KhoanPointKpi khoan={khoan} loading={khoanLoading} />}

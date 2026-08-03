@@ -1,10 +1,20 @@
+### 2026-08-03 (đêm) — "Chi phí của tôi": gọn bộ lọc, nút chọn tháng, thêm dòng doanh thu đã gồm VAT
+
+CEO 22:39: *"bố trí lại thành bộ lọc nâng cao, ẩn bớt đi… bổ sung nút chọn tháng… tích hợp hiển thị dòng doanh thu có VAT nhỏ hơn ngay dưới dòng chưa có VAT trong cùng một ô KPI."*
+
+- **Nút chọn tháng nhanh** (4 tháng gần nhất, mới nhất trước): bấm một phát là xem ngay tháng đó, không phải chỉnh hai ô rồi bấm Xem. Danh sách tháng bám **lịch Việt Nam** (`currentMonthValueVN`, `quickMonths` dùng `Asia/Bangkok`) — lấy giờ máy thì quanh nửa đêm sẽ đề xuất sai tháng.
+- **Bộ lọc nâng cao mặc định đóng**: Vùng/Tỉnh · Nhóm mã đơn vị · Tuyến · Ngày doanh thu · Từ tháng · Đến tháng. Giữ hiện thường trực **Nhân viên** (thao tác nhiều nhất) và hàng nút tháng.
+- Đang đóng mà còn bộ lọc bật thì nút hiện **số lượng bộ lọc đang áp** — không để CEO xem bảng đã bị lọc mà tưởng mất dữ liệu. Khoảng nhiều tháng cũng hiện thành một chip riêng.
+- **Ô "Doanh thu chưa VAT"**: giữ số trước VAT ở dòng lớn (cơ sở tính chi phí), thêm ngay dưới dòng nhỏ **"Đã gồm VAT: …"** để đối chiếu App Sale không phải đổi màn. Số do backend tính (`summary.revenueTotal`), frontend không tự nhân chia.
+- Chỉ đụng lớp hiển thị. Không đổi công thức, không đổi một đồng nào. Test web **110/110** (thêm 2 test hồi quy: GMT+7 cho nút tháng, giữ đủ hai số doanh thu) · build sạch.
+
 ### 2026-08-03 (đêm, sau khi deploy d1fdfdf) — "Ứng lần 1": hết vỡ khi App Salary đổi hợp đồng + nói đúng lý do
 
 - `d1fdfdf` trên PROD **không gồm** phần này; ảnh CEO 22:26 (DN009/T07) vẫn hiện câu chung *"Tạm thời chưa lấy được từ App Salary"*. Ghép riêng lên đúng nền PROD.
 - `validateProjection()`: bỏ ràng buộc "đếm đúng 10 khoá" — App Salary chỉ cần THÊM một nhãn (`provisional`…) là cả gói bị vứt, ô KPI trắng. Nay chỉ bắt buộc **có đủ** 10 khoá hợp đồng; khoá lạ bị **loại bỏ** khỏi projection. Mọi phép kiểm giá trị giữ nguyên 100%.
 - Số lương (`net`…) vẫn tuyệt đối không lọt sang App Report — chỉ 10 khoá đi tiếp; server `console.warn` **tên khoá lạ** (không ghi giá trị) để vẫn phát hiện bên kia trả field ngoài hợp đồng.
 - `safeGetFirstAdvance()` không còn nuốt mọi lỗi thành `upstream_unavailable`: trả `contract_mismatch` / `unauthorized` / `upstream_timeout` / `not_configured`. Ô KPI hiện thẳng *"App Salary đổi hợp đồng"*, *"Sai khoá kết nối App Salary"*, *"App Salary phản hồi chậm"* — CEO nhìn là biết chờ ai.
-- Không đổi một công thức tiền nào, không đụng `employeeCost.js`. Test trên nền PROD: server **666/672** (6 lỗi PDF do máy build thiếu `pdfinfo`, không phải lỗi code) · web **108/108** · build sạch.
+- Không đổi một công thức tiền nào, không đụng `employeeCost.js`.
 
 ### 2026-08-03 — "Chi phí của tôi": 0 dòng khớp % thì hiện "—", KHÔNG hiện 0đ
 

@@ -26,6 +26,24 @@ export function currentMonthValue(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// ‼ GMT+7: `new Date()` lấy giờ máy, quanh nửa đêm sẽ ra tháng sai. Nút chọn
+// tháng nhanh phải bám lịch Việt Nam.
+export function currentMonthValueVN(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok', year: 'numeric', month: '2-digit' })
+    .format(now).slice(0, 7);
+}
+
+// Danh sách tháng bấm nhanh: tháng hiện tại + vài tháng liền trước (mới nhất trước).
+export function quickMonths(count = 4, now = new Date()) {
+  const current = currentMonthValueVN(now);
+  const year = Number(current.slice(0, 4));
+  const month = Number(current.slice(5, 7));
+  return Array.from({ length: Math.max(1, count) }, (unused, index) => {
+    const cursor = year * 12 + month - 1 - index;
+    return `${Math.floor(cursor / 12)}-${String(cursor % 12 + 1).padStart(2, '0')}`;
+  });
+}
+
 export function formatMonthLabel(value) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(value || ''));
   return match ? `${match[2]}/${match[1]}` : String(value || '—');
@@ -426,6 +444,8 @@ function periodViewModel(payload = {}) {
     monthlyTotal: rawSummary.monthlyTotal == null ? null : Number(rawSummary.monthlyTotal),
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
     revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
+    // Doanh thu ĐÃ gồm VAT — backend tính, hiển thị kèm để đối chiếu với App Sale.
+    revenueTotal: rawSummary.revenueTotal == null ? null : Number(rawSummary.revenueTotal),
     columnTotals: normalizedColumnTotals(rawSummary.columnTotals, costColumns),
     provisionalMonthlyTotal: rawSummary.provisionalMonthlyTotal == null ? null : Number(rawSummary.provisionalMonthlyTotal),
     provisionalAnnualTotal: rawSummary.provisionalAnnualTotal == null ? null : Number(rawSummary.provisionalAnnualTotal),
@@ -502,6 +522,7 @@ export function employeeCostViewModel(payload = {}) {
     periodTotal: rawSummary.periodTotal == null ? null : Number(rawSummary.periodTotal),
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
     revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
+    revenueTotal: rawSummary.revenueTotal == null ? null : Number(rawSummary.revenueTotal),
     columnTotals: normalizedColumnTotals(rawSummary.columnTotals, first.costColumns),
     // Số tạm tính (tổng phần đã khớp %) — dùng để hiển thị kèm nhãn coverage khi
     // chưa đạt ngưỡng, thay vì để trống làm người xem tưởng hỏng.
