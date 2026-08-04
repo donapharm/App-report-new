@@ -2190,6 +2190,26 @@ function resolveFlowRecipient(audience, empCode) {
   return target ? { telegramId: target.telegram_id } : null;
 }
 
+/**
+ * NV này có nối Telegram chưa? Chỉ là tra file, rất rẻ — nên tính ĐỒNG BỘ và trả
+ * thẳng về màn hình.
+ *
+ * Vì sao cần (bot báo 04/08 22:08): 5 NV trong roster chưa map Telegram
+ * (DN004 · DN012 · DN021 · DN023 · VP004). Sếp bấm Duyệt cho họ thì tin rơi vào
+ * `no_recipient` — chỉ nằm trong log, màn hình vẫn báo "đã duyệt" bình thường.
+ * Sếp tưởng NV đã biết, NV thì không hay gì. Đúng kiểu HỎNG LẶNG LẼ phải chặn.
+ */
+function flowNotifyReach(audience, empCode) {
+  const target = resolveFlowRecipient(audience, empCode);
+  return {
+    reachable: !!target?.telegramId,
+    audience,
+    note: target?.telegramId ? '' : (audience === 'ceo'
+      ? 'Tài khoản CEO chưa nối Telegram — tin sẽ không tới.'
+      : 'NV này chưa nối Telegram — sẽ KHÔNG nhận được tin, cần báo trực tiếp.'),
+  };
+}
+
 /** Bắn tin cho một lần chuyển nấc. KHÔNG await ở route: gửi hỏng không được làm
  *  hỏng thao tác đã ghi thành công. */
 function fireFlowNotice(payload) {
@@ -2243,7 +2263,7 @@ router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(a
   clearTargetDependentCache();
   fireFlowNotice({ empCode, employeeName: employeeNameOf(empCode), period, key, from: before, to: 'requested', actor, note, ...flowStepFacts(empCode, period, key) });
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null });
+  return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
 }));
 
 // NV xin mở khoá để đề nghị SỚM hơn mốc — CEO chốt: phải có đường gửi yêu cầu.
@@ -2254,7 +2274,7 @@ router.post('/employee-cost/payment/request-unlock', auth.requireAuth, asyncJson
   clearTargetDependentCache();
   fireFlowNotice({ empCode, employeeName: employeeNameOf(empCode), period, key, from: before, to: 'unlock_requested', actor, note, ...flowStepFacts(empCode, period, key) });
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null });
+  return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
 }));
 
 // CEO: mở khoá sớm · duyệt · từ chối. Từ chối ⇒ QUAY VỀ KẾ HOẠCH, NV đề nghị lại được.
@@ -2270,7 +2290,7 @@ for (const [path, action] of [['unlock', 'grantUnlock'], ['approve', 'approvePay
       to: entry.flow[key]?.state || 'plan', actor, note: req.body?.note, ...flowStepFacts(empCode, period, key),
     });
     res.set('Cache-Control', 'private, no-store');
-    return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, audit: entry.audit.slice(-5) });
+    return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, audit: entry.audit.slice(-5), notify: flowNotifyReach('employee', empCode) });
   }));
 }
 

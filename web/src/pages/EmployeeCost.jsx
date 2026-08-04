@@ -636,10 +636,17 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
   const [error, setError] = React.useState('');
   const [draft, setDraft] = React.useState({ key: '', amount: '', paidAt: '' });
 
+  const [notice, setNotice] = React.useState('');
   const run = async (label, call) => {
-    setBusy(label); setError('');
-    try { await call(); setDraft({ key: '', amount: '', paidAt: '' }); await onChanged?.(); }
-    catch (requestError) { setError(requestError.message || 'Không ghi được'); }
+    setBusy(label); setError(''); setNotice('');
+    try {
+      const result = await call();
+      setDraft({ key: '', amount: '', paidAt: '' });
+      // ‼ Ghi thành công NHƯNG tin không tới được thì phải NÓI RA. Im lặng ở đây là
+      // Sếp tưởng NV đã biết, NV thì không hay gì (5 NV chưa nối Telegram, 04/08).
+      if (result?.notify && result.notify.reachable === false) setNotice(result.notify.note || '');
+      await onChanged?.();
+    } catch (requestError) { setError(requestError.message || 'Không ghi được'); }
     setBusy('');
   };
   // Chế độ "Tất cả NV": sổ cá nhân không có nghĩa — nhưng phải NÓI RA, vì trước đây
@@ -670,6 +677,10 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
     {!schedule.invariantOk && <div className="employee-cost-match-warning" role="alert">
       <b>⛔ Sổ chưa cân.</b> Tổng các lần không bằng tổng chi phí kỳ — đã dừng, không hiển thị số chỏi.
     </div>}
+    {!!notice && <div className="employee-cost-match-warning" role="status">
+      <b>✔ Đã ghi nhận, nhưng tin nhắn KHÔNG gửi được.</b> {notice}
+    </div>}
+    {!!error && <div className="employee-cost-match-warning" role="alert">⛔ {error}</div>}
     <div className="kpi-grid">
       <Kpi label="Tổng chi phí kỳ (sau phạt)" value={formatEmployeeCostCell(schedule.total, moneyColumn)}
         sub={schedule.twoInstalmentsOnly ? 'Dưới ngưỡng · tất toán trong 2 lần' : 'Chia 3 lần'} />

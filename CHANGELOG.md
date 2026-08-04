@@ -1,3 +1,22 @@
+### 2026-08-04 — Ghi được nhưng tin KHÔNG tới: phải nói ra, không im lặng
+
+Bot báo sau khi deploy `86571e1`: `telegram_map` đã có `emp_code = CEO`, nhưng **5 NV trong roster chưa nối Telegram** — DN004 · DN012 · DN021 · DN023 · VP004 (toàn bộ active users: 20 chưa map).
+
+**Lỗ hổng:** Sếp bấm **Duyệt** cho một trong 5 người đó ⇒ ghi sổ thành công, màn hình báo bình thường, nhưng tin rơi vào `no_recipient` — **chỉ nằm trong log**. Sếp tưởng NV đã biết, NV thì không hay gì. Đúng loại **hỏng lặng lẽ** đang bị cấm ở mọi chỗ khác trong app.
+
+**Đã bịt:** `flowNotifyReach()` tra bản đồ Telegram **đồng bộ** (chỉ đọc file, rất rẻ) và trả cờ thẳng về màn — không phụ thuộc việc gửi thành công hay không, nên vẫn giữ nguyên luật *"gửi hỏng không được làm hỏng việc ghi sổ"*. Màn hình nay phân biệt rõ **ba** kết quả thay vì hai:
+
+| | Hiện gì |
+|---|---|
+| Ghi hỏng | ⛔ báo đỏ, không ghi gì |
+| Ghi được, tin đã gửi | im lặng như cũ |
+| **Ghi được, tin KHÔNG tới** | ✔ *"Đã ghi nhận, nhưng tin nhắn KHÔNG gửi được — NV này chưa nối Telegram, cần báo trực tiếp."* |
+
+Chiều nào cũng bắt: NV thao tác thì kiểm hộp thư **CEO**; CEO thao tác thì kiểm hộp thư **NV**.
+
+- Test: server **847/853** (6 lỗi PDF nền cũ) · web **161/161** · build sạch.
+- **Việc còn của bot:** map Telegram cho **DN004 · DN012 · DN021 · DN023 · VP004** — 5 người này đang ở trong roster chi phí nên sẽ dùng quy trình đề nghị thật.
+
 ### 2026-08-04 — Telegram hai chiều cho toàn bộ quy trình thanh toán
 
 > CEO: *"cứ mỗi lần NV gửi đề nghị là tin nhắn Telegram gửi qua cho CEO, khi CEO duyệt thì tin nhắn sẽ được phản hồi lại cho NV. Kể cả lệnh xin ứng sớm, duyệt sớm, đề xuất… các nội dung khác cũng gửi tin nhắn Telegram."*

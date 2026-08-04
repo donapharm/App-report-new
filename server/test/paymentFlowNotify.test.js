@@ -99,3 +99,27 @@ test('gửi được thì báo đã gửi', async () => {
   assert.equal(sent[0].telegramId, 'CEO_CHAT', 'đề nghị của NV phải bay tới CEO');
   assert.match(sent[0].text, /ĐỀ NGHỊ NHẬN/);
 });
+
+/* ── Bot báo 04/08 22:08: 5 NV trong roster chưa nối Telegram ───────────────── */
+
+test('‼ ghi được nhưng tin KHÔNG tới thì màn hình phải NÓI RA', () => {
+  const fs = require('node:fs');
+  const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  // Cờ tính đồng bộ (chỉ tra file, rất rẻ) và trả thẳng về màn, không phụ thuộc
+  // việc gửi thành công hay không.
+  assert.match(source, /function flowNotifyReach\(audience, empCode\)/);
+  assert.match(source, /NV này chưa nối Telegram — sẽ KHÔNG nhận được tin/);
+  // Cả 3 nhóm route (NV đề nghị · NV xin mở khoá · CEO duyệt/từ chối) đều trả cờ.
+  assert.ok((source.match(/notify: flowNotifyReach\(/g) || []).length >= 3,
+    'route nào ghi sổ mà không trả cờ thì lỗi vẫn im lặng');
+  // NV thao tác ⇒ người cần nhận là CEO; CEO thao tác ⇒ người cần nhận là NV.
+  assert.match(source, /notify: flowNotifyReach\('ceo', empCode\)/);
+  assert.match(source, /notify: flowNotifyReach\('employee', empCode\)/);
+});
+
+test('màn hình phân biệt "ghi hỏng" với "ghi được nhưng tin không tới"', () => {
+  const fs = require('node:fs');
+  const page = fs.readFileSync(new URL('../../web/src/pages/EmployeeCost.jsx', `file://${__filename}`), 'utf8');
+  assert.match(page, /Đã ghi nhận, nhưng tin nhắn KHÔNG gửi được/);
+  assert.match(page, /result\.notify\.reachable === false/);
+});
