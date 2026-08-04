@@ -2183,10 +2183,18 @@ const employeeNameOf = (empCode) => {
 };
 
 function resolveFlowRecipient(audience, empCode) {
+  const code = String(empCode || '').toUpperCase();
+  // ‼ CEO chốt 04/08 22:20: *"số NV này không phải là nhân viên bán hàng, nên loại
+  // không đưa vào tin nhắn telegram/email nhé"* (VP002·VP003·VP006…VP018).
+  //
+  // Cổng lọc là ROSTER CHI PHÍ, không phải danh sách mã cứng — mã cứng sẽ mục theo
+  // thời gian, còn roster thì tự đúng: ai vào roster thì tự nhận tin, ai rời thì tự
+  // thôi. VP004 NẰM TRONG roster nên vẫn nhận, đúng như bot báo.
+  if (audience !== 'ceo' && !employeeCostRosterRows().some((row) => row.emp_code === code)) return null;
   const map = auth.listTelegramMap();
   const target = audience === 'ceo'
     ? map.find((row) => String(row.emp_code || '').toUpperCase() === 'CEO')
-    : map.find((row) => String(row.emp_code || '').toUpperCase() === String(empCode || '').toUpperCase());
+    : map.find((row) => String(row.emp_code || '').toUpperCase() === code);
   return target ? { telegramId: target.telegram_id } : null;
 }
 
@@ -2206,7 +2214,9 @@ function flowNotifyReach(audience, empCode) {
     audience,
     note: target?.telegramId ? '' : (audience === 'ceo'
       ? 'Tài khoản CEO chưa nối Telegram — tin sẽ không tới.'
-      : 'NV này chưa nối Telegram — sẽ KHÔNG nhận được tin, cần báo trực tiếp.'),
+      : (employeeCostRosterRows().some((row) => row.emp_code === String(empCode || '').toUpperCase())
+        ? 'NV này chưa nối Telegram — sẽ KHÔNG nhận được tin, cần báo trực tiếp.'
+        : 'Người này không thuộc roster bán hàng — không nhận tin thanh toán.')),
   };
 }
 

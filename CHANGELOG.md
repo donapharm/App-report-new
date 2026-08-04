@@ -1,3 +1,18 @@
+### 2026-08-04 — Người không phải NV bán hàng: khoá khỏi tin nhắn tiền
+
+> CEO: *"số NV này không phải là nhân viên bán hàng, nên loại không đưa vào tin nhắn telegram/email nhé"* (VP002 · VP003 · VP006…VP018).
+
+**Kiểm trước khi sửa — không có rò rỉ nào đang xảy ra.** Mọi luồng tin tiền đều đã đi qua roster: `targetNotify`/`bonusNotify` lặp trên `store.targetRoster`; `salesRecipientCatalog` và `filteredEmployeeDelivery` lấy bản đồ Telegram rồi **giao** với roster; route thanh toán đã chặn mã ngoài roster (`PAYMENT_EMP_NOT_IN_ROSTER`). Tức là 15 người kia **vốn đã không nhận** tin tiền nào.
+
+**Vẫn khoá lại tường minh** ở chỗ gửi (`resolveFlowRecipient`), thay vì tin rằng mọi nơi gọi đều nhớ kiểm. Đây là đai bảo hiểm thứ hai, không phải vá lỗi đang chảy.
+
+- **Cổng lọc là ROSTER, không phải danh sách mã cứng.** Mã cứng sẽ mục theo thời gian, và **VP004 đang NẰM TRONG roster** nên sẽ bị loại oan. Có test **cấm ghi mã `VP0xx` vào code**.
+- **CEO không bị cổng này chặn** — tin NV gửi lên luôn phải tới CEO.
+- Người ngoài roster hiện lý do **khác** với người trong roster chưa nối Telegram: *"không thuộc roster bán hàng — không nhận tin thanh toán"* vs *"chưa nối Telegram — cần báo trực tiếp"*. Hai chuyện khác nhau, không gộp một câu.
+
+- Test: server **849/855** (6 lỗi PDF nền cũ).
+- **Việc của bot (CEO thu hẹp 22:25):** chỉ map Telegram cho **DN012 — Đặng Thị Hồng Hạnh**. Bốn người còn lại (DN004 · DN021 · DN023 · VP004) **chờ CEO yêu cầu**, không tự làm.
+
 ### 2026-08-04 — Ghi được nhưng tin KHÔNG tới: phải nói ra, không im lặng
 
 Bot báo sau khi deploy `86571e1`: `telegram_map` đã có `emp_code = CEO`, nhưng **5 NV trong roster chưa nối Telegram** — DN004 · DN012 · DN021 · DN023 · VP004 (toàn bộ active users: 20 chưa map).

@@ -123,3 +123,27 @@ test('màn hình phân biệt "ghi hỏng" với "ghi được nhưng tin không
   assert.match(page, /Đã ghi nhận, nhưng tin nhắn KHÔNG gửi được/);
   assert.match(page, /result\.notify\.reachable === false/);
 });
+
+/* ── CEO chốt 04/08 22:20: người KHÔNG phải NV bán hàng thì không nhận tin ──── */
+
+test('‼ chỉ NGƯỜI TRONG ROSTER BÁN HÀNG mới nhận tin thanh toán', () => {
+  const fs = require('node:fs');
+  const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const fn = source.slice(source.indexOf('function resolveFlowRecipient'), source.indexOf('function flowNotifyReach'));
+  assert.match(fn, /audience !== 'ceo' && !employeeCostRosterRows\(\)\.some/,
+    'thiếu cổng lọc roster ⇒ người ngoài đội bán hàng vẫn nhận tin tiền');
+  // ‼ Lọc bằng ROSTER, không bằng danh sách mã cứng — mã cứng sẽ mục theo thời gian
+  // và VP004 (đang TRONG roster) sẽ bị loại oan.
+  // Bỏ chú thích rồi mới soi: lời cảnh báo trong code có nhắc mã VP, không phải vi phạm.
+  const code = fn.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+  assert.doesNotMatch(code, /VP0\d\d/, 'không được ghi cứng mã VP vào code');
+  // CEO thì không bị cổng này chặn — CEO luôn phải nhận tin NV gửi lên.
+  assert.match(fn, /audience !== 'ceo'/);
+});
+
+test('người ngoài roster phải nói rõ LÝ DO khác với "chưa nối Telegram"', () => {
+  const fs = require('node:fs');
+  const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  assert.match(source, /Người này không thuộc roster bán hàng — không nhận tin thanh toán/);
+  assert.match(source, /NV này chưa nối Telegram — sẽ KHÔNG nhận được tin/);
+});
