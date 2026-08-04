@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
-import { currentMonthValueVN, lastEndedMonthVN, quickMonths, employeeCostViewModel, formatEmployeeCostCell, formatMonthLabel } from '../employeeCostModel.js';
+import { currentMonthValueVN, lastEndedMonthVN, paymentStartMonth, writePaymentPrefs, quickMonths, employeeCostViewModel, formatEmployeeCostCell, formatMonthLabel } from '../employeeCostModel.js';
 import { PaymentSchedulePanel, PaymentTeamPanel, employeeOptionLabel } from './EmployeeCost.jsx';
 
 const moneyColumn = { kind: 'money' };
@@ -18,9 +18,9 @@ const moneyColumn = { kind: 'money' };
  */
 export default function PaymentSchedule({ me, desktop }) {
   const admin = !!me?.isAdmin;
-  // ‼ Mở màn / F5 thì trỏ vào THÁNG LIỀN TRƯỚC, không phải tháng đang chạy (CEO
-  // chốt 04/08 23:07): tháng đang chạy không bao giờ có sổ nên trỏ vào là vô nghĩa.
-  const [month, setMonth] = useState(lastEndedMonthVN());
+  // ‼ F5 thì quay lại ĐÚNG THÁNG ĐANG XEM; chưa xem gì thì lấy tháng liền trước.
+  // Tuyệt đối không trỏ vào tháng đang chạy — nó không bao giờ có sổ.
+  const [month, setMonth] = useState(() => paymentStartMonth(typeof window === 'undefined' ? null : window.localStorage));
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(admin ? 'ALL' : String(me?.emp_code || ''));
   const [payload, setPayload] = useState(null);
@@ -63,6 +63,11 @@ export default function PaymentSchedule({ me, desktop }) {
       });
     return () => request.abort();
   }, [admin, selectedEmp, month, tick, periodEnded]);
+
+  // Nhớ tháng đang xem để lần sau F5 quay lại đúng chỗ.
+  useEffect(() => {
+    if (typeof window !== 'undefined') writePaymentPrefs(window.localStorage, { month });
+  }, [month]);
 
   const model = useMemo(() => employeeCostViewModel(payload || {}), [payload]);
   const allEmployees = admin && selectedEmp === 'ALL';

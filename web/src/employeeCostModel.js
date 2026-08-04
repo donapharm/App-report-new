@@ -49,6 +49,31 @@ export function lastEndedMonthVN(now = new Date()) {
   return month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`;
 }
 
+export const PAYMENT_PREFS_KEY = 'app-report:payment:prefs:v1';
+
+/**
+ * Kỳ mở màn của Thanh toán CP — CEO chốt 04/08 23:25:
+ * *"khi bấm F5 nó vẫn cứ trả về tháng hiện tại, không phải là trả về tháng đang
+ * xem / tháng liền kề."*
+ *
+ * Thứ tự ưu tiên:
+ *   1. **Tháng đang xem lần trước** (nhớ trong máy) — F5 thì quay lại đúng chỗ.
+ *   2. Không có/không hợp lệ ⇒ **tháng liền trước**.
+ * ‼ Kẹp trần ở tháng liền trước: tháng đang chạy không bao giờ có sổ, nên dù bộ nhớ
+ * còn lưu tháng đó (do bản cũ, hoặc do sang tháng mới) cũng KHÔNG được trỏ vào.
+ */
+export function paymentStartMonth(storage, now = new Date()) {
+  const fallback = lastEndedMonthVN(now);
+  let saved = '';
+  try { saved = String(JSON.parse(storage?.getItem?.(PAYMENT_PREFS_KEY) || '{}')?.month || ''); } catch { saved = ''; }
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(saved)) return fallback;
+  return saved > fallback ? fallback : saved;
+}
+
+export function writePaymentPrefs(storage, prefs = {}) {
+  try { storage?.setItem?.(PAYMENT_PREFS_KEY, JSON.stringify(prefs)); } catch { /* chế độ riêng tư: bỏ qua */ }
+}
+
 export function quickMonths(count = 4, now = new Date()) {
   const current = currentMonthValueVN(now);
   const year = Number(current.slice(0, 4));

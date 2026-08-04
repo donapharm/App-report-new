@@ -135,10 +135,26 @@ test('kỳ đang chạy phải nói MỘT câu, chỉ rõ mốc giờ VN mở s�
   assert.match(page, /bấm <b>Làm mới<\/b>/);
 });
 
-test('‼ mở màn/F5 phải trỏ vào THÁNG LIỀN TRƯỚC, không phải tháng đang chạy', () => {
-  // CEO 04/08 23:07: tháng đang chạy không bao giờ có sổ, trỏ vào là vô nghĩa.
-  assert.match(page, /const \[month, setMonth\] = useState\(lastEndedMonthVN\(\)\)/);
+test('‼ F5 phải quay lại ĐÚNG THÁNG ĐANG XEM, không nhảy về tháng hiện tại', () => {
+  // CEO 04/08 23:25: "vẫn cứ trả về tháng hiện tại, không phải tháng đang xem/liền kề".
+  assert.match(page, /useState\(\(\) => paymentStartMonth\(/);
   assert.doesNotMatch(page, /useState\(currentMonthValueVN\(\)\)/, 'không được mặc định vào tháng đang chạy');
+  assert.match(page, /writePaymentPrefs\(window\.localStorage, \{ month \}\)/, 'phải nhớ tháng đang xem');
+});
+
+test('paymentStartMonth: nhớ tháng đang xem, kẹp trần ở tháng liền trước', async () => {
+  const model = await import('../src/employeeCostModel.js');
+  const now = new Date('2026-08-04T23:25:00+07:00');
+  const box = (value) => ({ getItem: () => value });
+  assert.equal(model.paymentStartMonth(box(null), now), '2026-07', 'chưa xem gì ⇒ tháng liền trước');
+  assert.equal(model.paymentStartMonth(box(JSON.stringify({ month: '2026-06' })), now), '2026-06', 'F5 quay lại đúng chỗ');
+  // ‼ Bộ nhớ còn lưu tháng đang chạy (bản cũ, hoặc vừa sang tháng mới) ⇒ KẸP xuống.
+  assert.equal(model.paymentStartMonth(box(JSON.stringify({ month: '2026-08' })), now), '2026-07');
+  assert.equal(model.paymentStartMonth(box(JSON.stringify({ month: '2026-12' })), now), '2026-07', 'tháng tương lai cũng kẹp');
+  // Bộ nhớ hỏng/rác thì không được nổ.
+  for (const junk of ['không phải json', '{}', JSON.stringify({ month: 'bậy' })]) {
+    assert.equal(model.paymentStartMonth(box(junk), now), '2026-07');
+  }
 });
 
 test('lastEndedMonthVN: lùi đúng một tháng, bắc cầu sang năm trước', async () => {

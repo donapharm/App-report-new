@@ -1,3 +1,17 @@
+### 2026-08-04 — F5 quay lại ĐÚNG THÁNG ĐANG XEM
+
+> CEO: *"khi bấm F5 nó vẫn cứ trả về tháng hiện tại, không phải là trả về tháng đang xem / tháng liền kề."*
+
+Bản `db95d29` mới chỉ làm nửa việc (mặc định tháng liền trước) và **chưa được deploy** — PROD lúc CEO chụp là `1beac00`. Nay làm nốt nửa còn lại: **nhớ tháng đang xem**.
+
+`paymentStartMonth()` theo thứ tự ưu tiên:
+1. **Tháng đang xem lần trước** (lưu trong máy) ⇒ F5 quay lại đúng chỗ.
+2. Không có / không hợp lệ ⇒ **tháng liền trước**.
+
+**‼ Kẹp trần ở tháng liền trước.** Bộ nhớ có thể còn lưu tháng đang chạy (do bản cũ, hoặc vừa sang tháng mới) — vẫn KHÔNG được trỏ vào, vì tháng đang chạy không bao giờ có sổ. Tháng tương lai cũng kẹp. Bộ nhớ hỏng/rác thì rơi về mặc định, không nổ.
+
+- Test: web **166/166** · build sạch.
+
 ### 2026-08-04 — Mở màn Thanh toán CP trỏ vào tháng liền trước, không vào tháng đang chạy
 
 > CEO: *"khi bấm F5 lại thì điều hướng chỉ cho trỏ về tháng liền kề tháng hiện tại, do tháng hiện chưa có dữ liệu."*
