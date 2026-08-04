@@ -12,6 +12,11 @@ const PERMANENT_BLOCKED = new Set(['c32', 'c47']);
 const DEFAULT_NOTE = 'chưa có dữ liệu chi phí kỳ này';
 const DEFAULT_TIMEOUT_MS = 6500;
 const DEFAULT_BACKOFF_MS = Object.freeze([2000, 4000]);
+// ‼ Ngân sách chờ tệ nhất của đường mặc định: 6,5 + 2 + 6,5 + 4 + 6,5 ≈ **25 giây**.
+// Nguồn kẹt là NV ngồi nhìn màn hình quay ngần ấy giây rồi mới thấy lỗi — đúng cái
+// CEO gọi là "kẹt". Khi ĐÃ CÓ bản lưu tỷ lệ thì không có lý do gì phải chờ như vậy:
+// hỏi nhanh, không hỏi lại; quá hạn thì trả số cũ NGAY rồi làm tươi ngầm phía sau.
+const FAST_TIMEOUT_MS = 2000;
 const AUDIT_FILE = 'employee_cost_audit';
 const AUDIT_LIMIT = 5000;
 const DEFAULT_ANNUAL_COLUMN_KEYS = Object.freeze(['c44']);
@@ -1087,9 +1092,32 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
 // hai con số, UI phải fail-closed và CEO không xem được gì.
 // Từ nay MỌI nơi lấy chi phí đều qua hàm này; không ai còn đường vòng.
 async function fetchEmployeeCost(empCode, options = {}) {
-  const result = await fetchRawEmployeeCost(empCode, options);
   const hasRange = options.from != null || options.to != null;
   const snapshotOptions = options.rateSnapshotStore ? { store: options.rateSnapshotStore } : {};
+
+  // Đã có bản lưu cho mọi kỳ đang hỏi ⇒ KHÔNG tiêu ngân sách chờ 25 giây nữa.
+  let fastPath = false;
+  if (hasRange && options.timeoutMs == null) {
+    try {
+      const months = parseMonthRange(options).months;
+      fastPath = rateSnapshot.covers(empCode, months, snapshotOptions);
+    } catch { fastPath = false; }
+  }
+  const attemptOptions = fastPath ? { ...options, timeoutMs: FAST_TIMEOUT_MS, backoffMs: [] } : options;
+
+  const result = await fetchRawEmployeeCost(empCode, attemptOptions);
+
+  // Đường nhanh mà nguồn không kịp trả ⇒ dùng số cũ ngay, đồng thời làm tươi NGẦM
+  // bằng ngân sách đầy đủ để lần sau có số mới. Lỗi nền không được nổi lên màn.
+  if (fastPath && result.outcome !== 'ok') {
+    const background = fetchRawEmployeeCost(empCode, options)
+      .then((fresh) => {
+        if (fresh.outcome === 'ok') rateSnapshot.remember(empCode, fresh.payload, snapshotOptions);
+        return fresh;
+      })
+      .catch(() => null);
+    if (options.awaitBackgroundRefresh === true) await background;
+  }
   // ‼ Nguồn DataHub kẹt (khoá mồ côi `vault-audit.lock`) từng làm 21 NV hiện 0đ.
   // Khoá tự lành phải sửa ở DataHub; phía App Report thì KHÔNG được mất số:
   // lấy được thì nhớ lại, kẹt thì dùng bản gần nhất và NÓI RA là số cũ.
@@ -1204,6 +1232,7 @@ module.exports = {
   fetchEmployeeCost,
   fetchRawEmployeeCost,
   rateSnapshot,
+  FAST_TIMEOUT_MS,
   resolveDataHubBaseUrl,
   getForSession,
 };

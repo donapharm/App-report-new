@@ -94,4 +94,11 @@ function restore(empCode, payload, options = {}) {
   return restored;
 }
 
-module.exports = { FILE, MAX_RECORDS, MAX_AGE_MS, keyOf, isStorable, read, write, remember, restore };
+// Có đủ bản lưu cho MỌI kỳ đang hỏi không? Nếu có thì không việc gì phải chờ
+// nguồn kẹt hết ngân sách timeout — cứ trả số cũ ngay rồi làm tươi phía sau.
+function covers(empCode, months = [], options = {}) {
+  const list = Array.isArray(months) ? months : [];
+  return list.length > 0 && list.every((month) => !!read(empCode, month, options));
+}
+
+module.exports = { FILE, MAX_RECORDS, MAX_AGE_MS, keyOf, isStorable, read, write, remember, restore, covers };

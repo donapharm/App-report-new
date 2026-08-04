@@ -86,6 +86,19 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 
 const memo = new Map();
 let memoDataSignature = null;
 const EMPLOYEE_COST_ALL_BASE_TTL_MS = 6 * 60 * 60 * 1000;
+// ‼ Kết quả TỐT giữ 6 giờ thì hợp lý, nhưng kết quả CÓ NV LỖI NGUỒN mà cũng giữ 6
+// giờ thì hỏng nửa ngày mới lộ — đúng vụ 01/08: 21 NV hiện 0đ, cache che mất tới
+// chiều mới thấy. Hỏng thì phải biết SỚM: giữ ngắn để lần mở kế tiếp tự thử lại.
+const EMPLOYEE_COST_ALL_DEGRADED_TTL_MS = 2 * 60 * 1000;
+
+// Bản gộp có NV nào không lấy được nguồn, hoặc đang phải dùng bảng tỷ lệ cũ?
+function employeeCostAllDegraded(merged) {
+  if (!merged || typeof merged !== 'object') return false;
+  if (merged.rateStale === true) return true;
+  const periods = Array.isArray(merged.periods) ? merged.periods : [merged];
+  return periods.some((period) => Number(period?.match?.unavailableEmployeeCount || 0) > 0
+    || (Array.isArray(period?.match?.unavailableEmployees) && period.match.unavailableEmployees.length > 0));
+}
 const EMPLOYEE_COST_ALL_VIEW_TTL_MS = 60 * 1000;
 const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
   'from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route', 'date',
@@ -145,13 +158,18 @@ function clearTargetDependentCache() {
   // after each versioned save so no actor/scope receives a stale formula.
   memo.clear();
 }
-function memoGet(key, ttlMs, build) {
+// `ttlFor(value)` (tuỳ chọn) cho phép rút ngắn TTL sau khi biết kết quả — dùng để
+// kết quả THIẾU/LỖI không được giữ lâu bằng kết quả tốt.
+function memoGet(key, ttlMs, build, ttlFor) {
   const hit = memo.get(key);
   const t = Date.now();
-  if (hit && t - hit.t < ttlMs) return hit.v;
+  if (hit && t - hit.t < (hit.ttl ?? ttlMs)) return hit.v;
   const v = build();
-  const entry = { t, v };
+  const entry = { t, v, ttl: ttlMs };
   memo.set(key, entry);
+  if (typeof ttlFor === 'function') {
+    Promise.resolve(v).then((resolved) => { entry.ttl = Number(ttlFor(resolved)) || ttlMs; }).catch(() => {});
+  }
   // Promise đang chạy được dùng chung cho request đồng thời. Nếu upstream lỗi,
   // bỏ ngay entry để lần sau được retry thay vì giữ rejected Promise hết TTL.
   if (v && typeof v.then === 'function') {
@@ -1068,7 +1086,9 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
     const merged = await buildMerged();
     return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: false, allEmployees: true }));
   }
-  const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMerged);
+  // Giữ 6 giờ chỉ khi bản gộp SẠCH; có NV lỗi nguồn thì chỉ giữ 2 phút.
+  const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMerged,
+    (value) => (employeeCostAllDegraded(value) ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS : EMPLOYEE_COST_ALL_BASE_TTL_MS));
   return memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
     employeeCostTable.transformReport(await merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
   ));

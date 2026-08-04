@@ -75,3 +75,52 @@ test('kỳ đã có số thật thì KHÔNG bị bản lưu đè lên', () => {
   assert.equal(payload.periods[0].rows[0].c36, 8, 'số thật phải thắng bản lưu');
   assert.equal(payload.rateStale, undefined);
 });
+
+// ‼ CEO 04/08: *"giải quyết sao cho KHÔNG MẤT SỐ và KHÔNG KẸT là việc của chúng mày."*
+// "Không mất số" đã có ở các test trên. Đây là phần "không kẹt".
+test('‼ đã có bản lưu ⇒ nguồn kẹt KHÔNG bắt người dùng chờ hết 25 giây', async () => {
+  const store = memStore();
+  const good = { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-07', to: '2026-07', columns: COLUMNS, rows: ROWS }) };
+  await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-07', to: '2026-07', ...credentials, rateSnapshotStore: store, fetchImpl: async () => good,
+  });
+
+  // Nguồn kẹt: mỗi lượt gọi chỉ trả lời sau khi bị huỷ (giống khoá mồ côi).
+  const waits = [];
+  const stalledFetch = async (url, init) => new Promise((resolve, reject) => {
+    const started = Date.now();
+    init?.signal?.addEventListener('abort', () => {
+      waits.push(Date.now() - started);
+      reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    });
+  });
+
+  const started = Date.now();
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-07', to: '2026-07', ...credentials, rateSnapshotStore: store, fetchImpl: stalledFetch,
+  });
+  const elapsed = Date.now() - started;
+
+  assert.equal(result.payload.periods[0].rows.length, 1, 'vẫn có số');
+  assert.equal(result.outcome, 'ok_stale_rates');
+  assert.equal(waits.length, 1, 'chỉ hỏi MỘT lần, không hỏi lại 3 lần');
+  assert.ok(waits[0] <= employeeCost.FAST_TIMEOUT_MS + 500, `chờ ${waits[0]}ms — phải cắt ở ${employeeCost.FAST_TIMEOUT_MS}ms`);
+  assert.ok(elapsed < 6000, `màn chờ ${elapsed}ms — phải nhanh hơn hẳn ngân sách 25 giây`);
+});
+
+test('chưa có bản lưu thì vẫn dùng ngân sách đầy đủ — không cắt ngắn cơ hội lấy số thật', async () => {
+  const waits = [];
+  const stalledFetch = async (url, init) => new Promise((resolve, reject) => {
+    const started = Date.now();
+    init?.signal?.addEventListener('abort', () => {
+      waits.push(Date.now() - started);
+      reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+    });
+  });
+  await employeeCost.fetchEmployeeCost('DN777', {
+    from: '2026-07', to: '2026-07', baseUrl: 'http://hub.test', assignmentKey: 'assignment-key-1234',
+    employeeCostKeys: 'DN777=employee-cost-key-1234', backoffMs: [], timeoutMs: 300,
+    rateSnapshotStore: memStore(), fetchImpl: stalledFetch,
+  });
+  assert.ok(waits[0] >= 250, 'không bị cắt xuống đường nhanh khi chưa có gì để dùng lại');
+});
