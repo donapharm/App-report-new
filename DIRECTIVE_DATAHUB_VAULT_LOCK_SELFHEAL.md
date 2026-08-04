@@ -49,3 +49,15 @@ Khoá hiện tại chỉ là "có file thì coi như đang bận". Đổi thành
 ## 6. Ghi chú về việc tìm mã nguồn
 
 Claude đã tra `donapharm/data-hub-smart-app` (`server/src/services` chỉ có `importService · schemas · sensitive · store`) — **không thấy** `vault-audit.lock` ở đó. Nhiều khả năng khoá nằm ở repo `donapharm/data-hub` hoặc do script vận hành trên máy chủ tạo ra. **Người nắm DataHub xác định đúng chỗ rồi áp thuật toán mục 3** — phần khó là quyết định, không phải là code, và quyết định đã nằm sẵn ở đây.
+
+---
+
+## 7. Phần App Report đã tự lo xong (04/08) — không còn chờ DataHub để hết đau
+
+| Triệu chứng | Trước | Nay |
+|---|---|---|
+| Nguồn kẹt ⇒ **21 NV hiện 0đ** | mất số | **vẫn có số** (bảng tỷ lệ gần nhất) + nhãn "số cũ" + mốc thời gian |
+| Nguồn kẹt ⇒ **chờ ~25 giây** | 6,5+2+6,5+4+6,5 | **cắt ở 2 giây**, hỏi 1 lần, làm tươi ngầm phía sau |
+| Lỗi bị cache **6 giờ** ⇒ nửa ngày mới lộ | 6 giờ | bản có NV lỗi nguồn chỉ giữ **2 phút** |
+
+Nghĩa là: **khoá mồ côi bên DataHub không còn làm mất số hay treo màn của App Report.** Việc ở mục 3 vẫn nên làm — vì nó chữa gốc cho MỌI bên tiêu thụ, không riêng App Report — nhưng **không còn là thứ chặn CEO**.

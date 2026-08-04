@@ -1,3 +1,17 @@
+### 2026-08-04 — Lịch chạy nền một cửa: nhắc thanh toán + AI đề xuất target ngày 01
+
+`server/src/scheduledJobs.js` — bot chỉ cần gọi `runDueJobs()` mỗi ~5 phút, module tự quyết việc nào tới giờ. **Mọi mốc theo giờ Việt Nam** (`Asia/Bangkok`), có test chứng minh: `2026-08-31T17:30Z` = **00:30 ngày 01 giờ VN** vẫn được nhận là **ngày 01** — lấy giờ máy thì lịch "ngày 01" bắn nhầm sang ngày 31 và neo nhầm tháng.
+
+- **`payment_notice`** — mỗi ngày một lần từ 08:00: nhắc Lần 2/Lần 3 tới hạn & quá hạn.
+- **`target_proposal`** — hai mốc: **ngày 01 08:00** đề xuất ngay đầu tháng (neo tháng vừa kết thúc, `closed:false` ⇒ ghi rõ CHƯA khoá sổ); **ngày 09 08:00** tính lại bằng số đã chốt (`closed:true`).
+- **‼ Không tự áp target** — chỉ sinh đề xuất + nhắn CEO. Ghi thành target thật là do CEO bấm.
+- **Mỗi mốc chỉ chạy một lần**; gọi lại trong ngày không lặp.
+- **Việc lỗi thì KHÔNG đánh dấu đã chạy** ⇒ kênh hồi phục là chạy lại, không nuốt mất.
+- `dryRun` để xem trước sẽ chạy gì mà không gửi gì.
+- Test: `scheduledJobs.test.js` **9/9** · server **744/750** (6 lỗi PDF nền cũ).
+
+**Còn của bot:** cắm `runDueJobs()` vào cron/PM2 với hai handler (`paymentNotify.runPaymentNotices` đã sẵn; `target_proposal` gọi `smart.forecastTargets` rồi lưu đề xuất + nhắn CEO). Chạy `dryRun` ít nhất một lần trước khi bật thật.
+
 ### 2026-08-04 — "Không mất số VÀ không kẹt" — làm nốt phần App Report tự lo được
 
 > CEO: *"giải quyết sao cho không mất số và không kẹt là việc của chúng mày tự tính toán đi chứ, sao lại đẩy về cho tao."* — **CEO đúng.** Bản trước mới lo được "không mất số" rồi đẩy phần "không kẹt" sang DataHub. Nay làm nốt phần App Report tự quyết được.
