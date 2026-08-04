@@ -58,6 +58,7 @@ const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
 const paymentFlowNotify = require('./paymentFlowNotify');
+const earlyAdvanceQuota = require('./earlyAdvanceQuota');
 const revenueReportExport = require('./revenueReportExport');
 const ceoDeckReport = require('./report/deckReport');
 const productSearch = require('./productSearch');
@@ -1002,6 +1003,10 @@ async function employeeCostPayload(req, {
       c44Amount: costPeriod?.summary?.annualTotal ?? null,
       today: employeeCost.vnToday(),
     }) : null;
+    // Trạng thái quyền ưu tiên ứng sớm — để màn hình nói trước, đừng để NV bấm rồi
+    // mới báo "hết lượt".
+    const resolvedEarlyQuota = empCode
+      ? earlyAdvanceQuota.check(empCode, range.to, employeeCost.vnToday()) : null;
 
     return {
       ...payload,
@@ -1034,6 +1039,7 @@ async function employeeCostPayload(req, {
       salaryAdvance: resolvedSalaryAdvance,
       remainingAfterAdvance: resolvedRemainingAfterAdvance,
       paymentSchedule: resolvedPaymentSchedule,
+      earlyQuota: resolvedEarlyQuota,
       ...(penaltyBaseline ? { penaltyBaseline } : {}),
       penaltyPolicy: resolvedPenaltyPolicy ? {
         formulaVersion: employeeBonus.FORMULA_VERSION,
@@ -2277,8 +2283,15 @@ router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(a
 }));
 
 // NV xin mở khoá để đề nghị SỚM hơn mốc — CEO chốt: phải có đường gửi yêu cầu.
+// ‼ Có HẠN MỨC: 1 lượt/quý, và không sớm hơn 30 ngày sau khi hết tháng bán hàng.
+// Hết lượt hoặc chưa tới ngày ⇒ CHẶN THẲNG ở backend, không chỉ ẩn nút.
 router.post('/employee-cost/payment/request-unlock', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const { empCode, period, key, actor, note } = selfPaymentTarget(req);
+  const quota = earlyAdvanceQuota.check(empCode, period, employeeCost.vnToday());
+  if (!quota.allowed) {
+    res.set('Cache-Control', 'private, no-store');
+    return res.status(409).json({ error: quota.message, code: quota.code, quota });
+  }
   const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
   const entry = paymentLedgerStore.requestUnlock(empCode, period, key, { actor, note });
   clearTargetDependentCache();
@@ -2294,6 +2307,9 @@ for (const [path, action] of [['unlock', 'grantUnlock'], ['approve', 'approvePay
     const key = String(req.body?.key || '');
     const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
     const entry = paymentLedgerStore[action](empCode, period, key, { actor, note: req.body?.note });
+    // ‼ TIÊU lượt ưu tiên đúng lúc CEO ĐỒNG Ý mở khoá — không tiêu lúc NV bấm xin.
+    // Tiêu lúc xin thì CEO từ chối là NV mất trắng lượt cả quý, vô lý.
+    if (action === 'grantUnlock') earlyAdvanceQuota.consume(empCode, period, { actor });
     clearTargetDependentCache();
     fireFlowNotice({
       empCode, employeeName: employeeNameOf(empCode), period, key, from: before,

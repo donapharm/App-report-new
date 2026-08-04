@@ -41,7 +41,15 @@ export default function PaymentSchedule({ me, desktop }) {
       .catch(() => setEmployees([]));
   }, [admin]);
 
+  // ‼ KỲ ĐANG CHẠY THÌ KHÔNG GỌI GÌ CẢ (CEO chốt 04/08 22:40).
+  // Tháng chưa hết thì chắc chắn chưa có ứng lần 1 ⇒ không có sổ để dựng. Gọi
+  // `/employee-cost` lúc này là kéo cả 21 NV từ DataHub chỉ để kết luận "chưa tới
+  // lúc" — tốn tài nguyên, chậm màn, mà kết quả biết trước.
+  // Qua 00:01 ngày 01 tháng sau (giờ VN) là tự gọi được, không ai phải bật gì.
+  const periodEnded = month < currentMonthValueVN();
+
   useEffect(() => {
+    if (!periodEnded) { setPayload(null); setLoading(false); setError(''); return undefined; }
     const request = new AbortController();
     setLoading(true); setError('');
     api.employeeCost(admin ? selectedEmp : undefined, { from: month, to: month }, { signal: request.signal })
@@ -52,7 +60,7 @@ export default function PaymentSchedule({ me, desktop }) {
         setPayload(null); setError(requestError.message || 'Không lấy được sổ thanh toán'); setLoading(false);
       });
     return () => request.abort();
-  }, [admin, selectedEmp, month, tick]);
+  }, [admin, selectedEmp, month, tick, periodEnded]);
 
   const model = useMemo(() => employeeCostViewModel(payload || {}), [payload]);
   const allEmployees = admin && selectedEmp === 'ALL';
@@ -112,6 +120,18 @@ export default function PaymentSchedule({ me, desktop }) {
       {loading && !error && <Spinner />}
     </div>
 
+    {/* Kỳ đang chạy: nói MỘT câu, không liệt kê 21 lý do giống hệt nhau. */}
+    {!periodEnded && <div className="card">
+      <div className="section-head">Thanh toán CP · kỳ {formatMonthLabel(month)}</div>
+      <div className="employee-cost-match-warning" role="status">
+        <b>Tháng {formatMonthLabel(month)} chưa kết thúc — chưa có sổ thanh toán.</b>{' '}
+        Ứng lần 1 do App Salary chốt vào <b>ngày cuối tháng</b>. Từ <b>00:01 ngày 01/{
+          String(Number(month.slice(5)) % 12 + 1).padStart(2, '0')}/{
+          Number(month.slice(5)) === 12 ? Number(month.slice(0, 4)) + 1 : month.slice(0, 4)} (giờ VN)</b>{' '}
+        bấm <b>Làm mới</b> là sổ kỳ này mở ra. Không cần làm gì thêm.
+      </div>
+    </div>}
+
     {rangeOn && <div className="card">
       <div className="section-head">Gộp nhiều kỳ
         {rangeSummary && <small>· {rangeSummary.months} kỳ</small>}
@@ -146,10 +166,10 @@ export default function PaymentSchedule({ me, desktop }) {
       </>}
     </div>}
 
-    <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
+    {periodEnded && <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
       canRecord={String(me?.role || '').toLowerCase() === 'ceo'}
       empCode={admin ? selectedEmp : String(me?.emp_code || '')}
-      onChanged={() => setTick((current) => current + 1)} />
-    <PaymentTeamPanel team={model.paymentTeam} allEmployees={allEmployees} loading={loading} />
+      onChanged={() => setTick((current) => current + 1)} />}
+    {periodEnded && <PaymentTeamPanel team={model.paymentTeam} allEmployees={allEmployees} loading={loading} />}
   </div>;
 }

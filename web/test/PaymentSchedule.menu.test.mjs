@@ -117,3 +117,20 @@ test('từ chối và xin nhận sớm đều phải hỏi LÝ DO', () => {
 test('‼ kỳ chưa hết tháng phải nói rõ vì sao chưa có sổ', () => {
   assert.match(costPage, /period_not_ended: 'Kỳ chưa hết tháng/);
 });
+
+/* ── CEO chốt 04/08 22:40–22:45 ─────────────────────────────────────────────── */
+
+test('‼ kỳ ĐANG CHẠY thì KHÔNG gọi API chi phí — biết trước kết quả, gọi làm gì', () => {
+  // Trước đây vẫn kéo cả 21 NV từ DataHub chỉ để kết luận "chưa tới lúc".
+  assert.match(page, /const periodEnded = month < currentMonthValueVN\(\)/);
+  assert.match(page, /if \(!periodEnded\) \{ setPayload\(null\); setLoading\(false\); setError\(''\); return undefined; \}/);
+  assert.match(page, /\{periodEnded && <PaymentSchedulePanel/);
+  assert.match(page, /\{periodEnded && <PaymentTeamPanel/);
+});
+
+test('kỳ đang chạy phải nói MỘT câu, chỉ rõ mốc giờ VN mở sổ', () => {
+  assert.match(page, /chưa kết thúc — chưa có sổ thanh toán/);
+  assert.match(page, /00:01 ngày 01\//);
+  assert.match(page, /giờ VN/);
+  assert.match(page, /bấm <b>Làm mới<\/b>/);
+});

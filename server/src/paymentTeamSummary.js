@@ -22,6 +22,13 @@ function moneyOrNull(value) {
 }
 
 // Tổng sau phạt của một NV: ưu tiên số đã trừ phạt, không có thì lấy tổng gốc.
+// C44 (lương cuối năm) của một NV — cùng trường mà sổ cá nhân dùng (`annualTotal`),
+// để hai màn không bao giờ lệch. Không khớp đủ % thì trường này là `null`, KHÔNG
+// được thay bằng 0: 0 nghĩa là "không có khoản nào", null nghĩa là "chưa tính ra".
+function annualOf(subtotal) {
+  return moneyOrNull(subtotal?.annualTotal);
+}
+
 function afterPenaltyOf(subtotal) {
   const applied = moneyOrNull(subtotal?.penalty?.afterPenaltyTotal);
   if (applied != null) return applied;
@@ -75,6 +82,10 @@ function buildPaymentTeamSummary({
       firstAdvancePaid: advance?.locked === true,
       secondOverride: ledger?.secondOverride ?? null,
       paid: ledger?.paid || {},
+      flow: ledger?.flow || {},
+      // ‼ Thiếu dòng này ⇒ ô "Σ C44 · cuối năm" của toàn đội luôn ra 0đ trong khi
+      // sổ từng người vẫn hiện đúng (CEO thấy 04/08 22:43).
+      c44Amount: annualOf(subtotal),
       today,
       ...(splitThresholdVnd == null ? {} : { splitThresholdVnd }),
       ...(secondRatio == null ? {} : { secondRatio }),
@@ -104,7 +115,7 @@ function buildPaymentTeamSummary({
       firstAdvanceNone: firstItem?.status === 'none',
       second: amountOf('second'),
       final: amountOf('final'),
-      c44: Number.isSafeInteger(book.c44?.amount) ? book.c44.amount : 0,
+      c44: moneyOrNull(book.c44?.amount),
       overdueCount: overdue.length,
       overdueAmount: overdue.reduce((sum, item) => sum + item.amount, 0),
       nextLabel: next ? next.label : '',
@@ -135,6 +146,9 @@ function buildPaymentTeamSummary({
       second: sum('second'),
       final: sum('final'),
       c44: sum('c44'),
+      // Bao nhiêu NV CHƯA tính ra được C44 — để ô KPI nói "luỹ kế của N/M người",
+      // không im lặng cộng thiếu rồi trông như đã đủ.
+      c44Unknown: rows.filter((row) => row.c44 == null).length,
       employeesWithoutFirstAdvance: rows.filter((row) => row.firstAdvanceNone).length,
       overdueEmployees: rows.filter((row) => row.overdueCount > 0).length,
       overdueAmount: sum('overdueAmount'),
@@ -144,4 +158,4 @@ function buildPaymentTeamSummary({
   };
 }
 
-module.exports = { buildPaymentTeamSummary, afterPenaltyOf, noneReasonOf };
+module.exports = { buildPaymentTeamSummary, afterPenaltyOf, annualOf, noneReasonOf };

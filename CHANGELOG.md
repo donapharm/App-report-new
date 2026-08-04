@@ -1,3 +1,19 @@
+### 2026-08-04 — Ba yêu cầu CEO 22:40: bỏ gọi kỳ đang chạy · Σ C44 · quyền ưu tiên ứng sớm
+
+**H1 — Kỳ ĐANG CHẠY thì KHÔNG gọi cập nhật chi phí nữa.** Ảnh CEO cho thấy màn T08 vẫn liệt kê 21 NV kèm 21 lý do giống hệt nhau — nghĩa là backend đã kéo cả 21 NV từ DataHub **chỉ để kết luận "chưa tới lúc"**. Nay màn hình tự biết tháng chưa hết là **không gọi gì cả**, hiện đúng một câu kèm mốc: *"Từ 00:01 ngày 01/09/2026 (giờ VN) bấm Làm mới là sổ mở ra"*. Không ai phải bật cờ gì.
+
+**H2 — Ô "Σ C44 · cuối năm" của toàn đội luôn ra 0đ** trong khi sổ từng người hiện đúng (DN003 = 7.175.514đ). Nguyên nhân: bảng đội **không truyền `c44Amount`** vào lúc dựng sổ. Nay lấy từ chính trường `annualTotal` mà sổ cá nhân dùng ⇒ hai màn không thể lệch. NV nào chưa tính ra C44 thì đếm riêng (`c44Unknown`), **không cộng 0 vào tổng** rồi trông như đã đủ.
+
+**H3 — Quyền ưu tiên ứng sớm Lần 2: 1 lượt / quý.**
+- Sớm nhất là **30 ngày sau khi hết tháng bán hàng** = đúng **15 ngày trước hạn Lần 2**. Có test quét nhiều kỳ chứng minh **hai cách CEO diễn đạt ra cùng một ngày**.
+- **Lượt tính theo QUÝ CỦA KỲ BÁN HÀNG**, không theo ngày bấm nút — tính theo ngày bấm thì NV bấm muộn vài ngày là nhảy quý và được thêm lượt.
+- **Lượt TIÊU lúc CEO ĐỒNG Ý mở khoá**, không phải lúc NV bấm xin. Tiêu lúc xin thì CEO từ chối là NV mất trắng lượt cả quý — vô lý, và NV sẽ không dám bấm nữa.
+- Hết lượt ⇒ **backend chặn thẳng** (HTTP 409), không chỉ ẩn nút. Câu báo nêu rõ **đã dùng cho kỳ nào**.
+
+**‼ Một chỗ CEO nói lệch, cần xác nhận:** CEO nêu ví dụ *"T08.2026 thì được ứng vào khoảng ngày 01/09/2026"*, nhưng chính luật CEO đặt (*"không sớm hơn 30 ngày kể từ khi kết thúc tháng"* và *"sớm hơn 15 ngày"*) cho ra **30/09/2026**, không phải 01/09. Đã làm theo **luật**, không theo ví dụ; nếu CEO muốn đúng 01/09 thì đó là *"1 ngày sau khi hết tháng"* = sớm hơn hạn **44 ngày**, khác hẳn.
+
+- Test: `earlyAdvanceQuota.test.js` **12/12** · server **861/867** (6 lỗi PDF nền cũ) · web **163/163**.
+
 ### 2026-08-04 — Người không phải NV bán hàng: khoá khỏi tin nhắn tiền
 
 > CEO: *"số NV này không phải là nhân viên bán hàng, nên loại không đưa vào tin nhắn telegram/email nhé"* (VP002 · VP003 · VP006…VP018).
