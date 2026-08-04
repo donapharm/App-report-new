@@ -1136,10 +1136,29 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       });
     }
     // Bảng thanh toán toàn đội — dựng từ chính subtotals vừa có + kho Lần 1 + sổ ghi nhận.
+    //
+    // ‼ HAI CÁI BẪY, đã dính cái thứ nhất ở bd4ceb4 (bot bắt được 04/08 20:30):
+    //
+    // 1. `employeeSubtotals` KHÔNG có trong `merged` — nó do `transformPeriod` sinh ra
+    //    ở bước SAU. Đọc `merged.employeeSubtotals` luôn ra `undefined` ⇒ bảng đội
+    //    rỗng tuyệt đối (`rows: 0`, `excluded: 0`) dù T07 có đủ 21 NV có số.
+    //
+    // 2. NHƯNG cũng KHÔNG được dời xuống sau `transformReport`: ở đó subtotals tính
+    //    trên `numbered` — tức là rows ĐÃ LỌC theo ô tìm kiếm/tỉnh/tuyến. CEO gõ một
+    //    chữ vào ô tìm kiếm là bảng thanh toán toàn đội tự co lại theo, mà nhìn vẫn
+    //    như số thật. Đó là lỗi tiền, nặng hơn hẳn bảng rỗng.
+    //
+    // Cách đúng: tự tính subtotals TẠI ĐÂY từ rows CHƯA LỌC của đúng kỳ, bằng chính
+    // helper `employeeSubtotals` mà bảng dùng — một công thức, không dựng bản thứ hai.
+    const teamPeriod = (merged.periods || []).find((item) => String(item.period) === String(range.to))
+      || (merged.periods || [])[merged.periods.length - 1] || null;
+    const teamSubtotals = teamPeriod
+      ? employeeCostTable.employeeSubtotals(teamPeriod.rows || [], teamPeriod.columns || [], teamPeriod.employeePenalties)
+      : [];
     try {
       merged.paymentTeam = paymentTeamSummary.buildPaymentTeamSummary({
         period: range.to,
-        subtotals: merged?.employeeSubtotals || merged?.periods?.[0]?.employeeSubtotals || [],
+        subtotals: teamSubtotals,
         readSnapshot: (emp, period) => salaryAdvance.snapshot.read(emp, period),
         readLedger: (emp, period) => paymentLedgerStore.readEntry(emp, period),
         today: employeeCost.vnToday(),

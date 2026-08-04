@@ -1,3 +1,19 @@
+### 2026-08-04 — Bảng "Thanh toán CP toàn đội" rỗng: nối dây sai chỗ (bot bắt đúng, nhưng cách sửa bot đề xuất sẽ gây lỗi nặng hơn)
+
+> Bot: *"deploy bd4ceb4 thành công nhưng nghiệm thu CHƯA ĐẠT… T07 có 21 nhân viên subtotal, tổng ~3.224.290.181đ, nhưng `paymentTeam.rows = 0`."* — **Bot chẩn đoán đúng nguyên nhân.**
+
+**Nguyên nhân:** `employeeSubtotals` do `transformPeriod` sinh ra ở bước **SAU**. Code ở `bd4ceb4` đọc `merged.employeeSubtotals` ngay sau `mergeEmployeeReports` ⇒ luôn `undefined` ⇒ bảng đội **rỗng tuyệt đối** (`rows: 0` và `excluded: 0` — không NV nào được duyệt qua, nên cũng không có lý do nào hiện ra).
+
+**‼ KHÔNG làm theo cách bot đề xuất** ("dựng `paymentTeam` sau `transformReport`). Ở đó subtotals tính trên `numbered` — tức rows **ĐÃ LỌC** theo ô tìm kiếm/tỉnh/tuyến/trang. CEO gõ một chữ vào ô tìm kiếm là **bảng thanh toán toàn đội tự co lại theo**, mà nhìn vẫn như số thật. Đó là **lỗi tiền**, nặng hơn hẳn bảng rỗng — bảng rỗng ít nhất còn nhìn ra là sai.
+
+**Cách đã làm:** tự tính subtotals tại chỗ từ **rows CHƯA LỌC của đúng kỳ đang xem**, bằng chính helper `employeeCostTable.employeeSubtotals` mà bảng vẫn dùng — một công thức, không dựng bản thứ hai. Lấy đúng kỳ `range.to`, không vơ `periods[0]` (sai kỳ khi xem nhiều tháng).
+
+`paymentTeamWiring.test.js` khoá cả hai bẫy: cấm đọc `merged.employeeSubtotals`, cấm dựng sau `transformReport`, và có test **chứng minh bẫy thứ hai có thật** (lọc theo tỉnh xong subtotals rụng từ 3 NV còn 2).
+
+- Test: **5/5** mới · server **812/818** (6 lỗi PDF nền cũ).
+
+**Đính chính cảnh báo 20:15 của Claude:** lúc đó T07 hiện `1.781 dòng / 28.570.134.733đ / 20 NV`, lệch số ghim. Ảnh 20:30 cho thấy **đã về đúng `2.016 dòng / 30.917.892.673đ / 21 NV`** — khớp số ghim từng đồng. Vậy **doanh thu T07 KHÔNG mất**; cú tụt là do lúc đó DataHub thiếu nguồn của 20 NV nên phần *đã phân bổ* tụt theo, hết thiếu thì về. Cảnh báo đó dựng lên là đúng việc, nhưng kết luận "mất 2,35 tỷ" là **sai** — nay đóng lại.
+
 ### 2026-08-04 — Sửa `verify_frozen_periods.js`: bot bắt đúng, script gọi hàm không tồn tại
 
 > Bot: *"script mới verify_frozen_periods.js đang tự trả unknown vì gọi store.revenueRows; em đã kiểm độc lập bằng store.getRows và T06/T07 đều khớp 0 lệch."* — **Bot đúng, lỗi của Claude.**
