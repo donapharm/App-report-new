@@ -1,3 +1,11 @@
+### 2026-08-04 — Nối kho chốt số "Ứng lần 1" vào đường chạy thật
+
+- `safeGetFirstAdvance()` nay đi qua `salaryAdvanceSnapshot`: kỳ **đã chốt** ⇒ **không gọi App Salary lần nào nữa**; kỳ đang mở chỉ làm tươi khi quá hạn (mặc định 6 giờ). Trước đó chỉ có cache RAM 25 giây ⇒ NV mở màn 10 lần là 10 lượt gọi, restart app là mất sạch (CEO chỉ ra 04/08).
+- Trả kèm `fetchedAt` + `fromSnapshot` để màn hình ghi rõ **"số tại lúc …"** — số cũ mà không nói rõ lúc nào thì người xem tưởng số đang sống.
+- **Nguồn lỗi mà kho còn số ⇒ vẫn cho xem số cũ** kèm cờ `stale`, hơn là trắng màn. Kho rỗng + nguồn lỗi ⇒ fail-closed đúng như cũ, vẫn phân biệt `contract_mismatch` / `unauthorized` / `upstream_timeout`.
+- Có `force` cho nút "Làm mới" và cho webhook khi App Salary duyệt.
+- Test: thêm nhánh "đã có số thì KHÔNG gọi lại" và nhánh `stale`; test đường route được dọn kho trước để không dính trạng thái đĩa của lần chạy trước. Server **688/694** (6 lỗi PDF do máy build thiếu `pdfinfo`).
+
 ### 2026-08-04 — Module "Thanh toán CP của tôi" GĐ1: lõi sổ thanh toán (backend)
 
 Gỡ chặn trước (`aa56143`): câu *"không build vội, chờ App Salary"* trong spec là của 31/07 và đã lỗi thời — đường lấy **Lần 1** chạy thật trên PROD từ 31/07, còn **Lần 2/Lần 3 vốn là số của App Report**. CEO nhắc đúng.

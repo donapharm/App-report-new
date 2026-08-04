@@ -92,14 +92,37 @@ test('missing real secret fails before network and build/import remains safe', a
   assert.equal(calls, 0);
 });
 
+// Kho chốt số (CEO 04/08) nằm trên đường này, nên test phải tiêm kho riêng — dùng
+// kho thật sẽ đọc/ghi đĩa và làm test dính vào nhau.
+const memSnapshotStore = () => ({ data: {}, load(n, d) { return this.data[n] ?? d; }, save(n, v) { this.data[n] = v; } });
+
+// Đường qua route dùng kho thật ⇒ dọn sạch trước, để kết quả không phụ thuộc lần
+// chạy trước còn sót gì trên đĩa.
+test.beforeEach(() => { require('../src/persist').save(require('../src/salaryAdvanceSnapshot').FILE, {}); });
+
 test('safe projection embeds upstream data and fails closed without inventing zero', async () => {
-  const available = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN101', async () => valid({ amount: 123_000 }));
+  const store = memSnapshotStore();
+  const available = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN101', async () => valid({ amount: 123_000 }), { snapshotStore: store });
   assert.equal(available.amount, 123_000);
-  const unavailable = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN101', async () => { throw new Error('offline'); });
+  // Kho rỗng + nguồn lỗi ⇒ vẫn fail-closed y như trước, không bịa 0.
+  const unavailable = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN101', async () => { throw new Error('offline'); }, { snapshotStore: memSnapshotStore() });
   assert.deepEqual(unavailable, {
     available: false, applicable: null, period: '2026-07', emp_code: 'DN101', amount: null,
     currency: 'VND', locked: null, status: 'unavailable', reason: 'upstream_unavailable',
   });
+
+  // Đã có số trong kho thì KHÔNG gọi lại nguồn nữa (đúng yêu cầu CEO 04/08).
+  let calls = 0;
+  const again = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN101', async () => { calls += 1; return valid({ amount: 999 }); }, { snapshotStore: store });
+  assert.equal(calls, 0, 'kỳ đã chốt thì không được gọi App Salary lần nữa');
+  assert.equal(again.amount, 123_000);
+  assert.equal(again.fromSnapshot, true);
+  assert.ok(again.fetchedAt, 'phải kèm mốc lấy số để màn hình ghi "số tại lúc …"');
+
+  // Nguồn lỗi mà kho còn số ⇒ cho xem số cũ kèm cờ `stale`, hơn là trắng màn.
+  const stale = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN101', async () => { throw new Error('offline'); }, { snapshotStore: store, force: true });
+  assert.equal(stale.amount, 123_000);
+  assert.equal(stale.stale, true);
 });
 
 test('after-penalty guard flags impossible advances without mutating the Salary projection amount', () => {
@@ -160,6 +183,9 @@ test('Report route enforces self/admin/ALL backend scope and isolates upstream f
     res = await invokeRoute(handler, { query: { period: '2026-07', emp: 'ALL' }, session: { emp_code: 'CEO', role: 'ceo' } });
     assert.equal(res.body.salaryAdvance.reason, 'select_employee'); assert.equal(calls.length, beforeAll, 'ALL never fans out upstream');
     salaryAdvance.getFirstAdvance = async () => { throw Object.assign(new Error('timeout'), { code: 'SALARY_ADVANCE_TIMEOUT' }); };
+    // Nguồn lỗi mà kho CÒN số cũ thì cố ý cho xem số cũ (kèm cờ `stale`). Ở đây ta
+    // kiểm nhánh KHÔNG có gì trong kho, nên dọn trước để đúng ý định của test.
+    salaryAdvance.snapshot.invalidate('DN202', '2026-07');
     res = await invokeRoute(handler, { query: { period: '2026-07', emp: 'DN202' }, session: { emp_code: 'CEO', role: 'ceo' } });
     assert.equal(res.statusCode, 200); assert.equal(res.body.salaryAdvance.reason, 'upstream_timeout', 'phải phân biệt được timeout với lỗi khác');
     assert.equal(res.headers['cache-control'], 'private, no-store');

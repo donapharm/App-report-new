@@ -1,5 +1,7 @@
 'use strict';
 
+const snapshot = require('./salaryAdvanceSnapshot');
+
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const EMP_CODE_RE = /^[A-Z0-9_-]{2,20}$/;
 const RETRYABLE_STATUS = new Set([502, 503, 504]);
@@ -142,9 +144,27 @@ const SAFE_REASON_BY_CODE = new Map([
   ['SALARY_ADVANCE_INVALID_QUERY', 'invalid_query'],
 ]);
 
-async function safeGetFirstAdvance(period, empCode, get = (...args) => client.get(...args)) {
-  try { return await get(period, empCode); }
-  catch (error) {
+// ‼ CEO 04/08: "khi có số ứng lần 1 rồi thì lấy số về luôn, chỉ khi thay đổi số
+// mới đổi số" — trước đây mỗi lần NV mở màn (quá 25s) là một lượt gọi App Salary.
+// Nay đi qua kho: kỳ ĐÃ CHỐT thì không gọi lại lần nào; kỳ đang mở chỉ làm tươi
+// khi quá hạn. Xem `salaryAdvanceSnapshot.js` và SPEC_THANH_TOAN_CP_SELFVIEW.md §11.
+async function safeGetFirstAdvance(period, empCode, get = (...args) => client.get(...args), options = {}) {
+  const store = options.snapshotStore;
+  const snapshotOptions = store ? { store } : {};
+  let stored = null;
+  try { stored = snapshot.read(empCode, period, snapshotOptions); } catch { stored = null; }
+  if (!snapshot.needsRefresh(stored, { now: options.now, ttlMs: options.ttlMs, force: options.force === true })) {
+    // Kèm mốc lấy số để màn hình ghi rõ "số tại lúc …", không để tưởng số đang sống.
+    return Object.freeze({ ...stored.projection, fetchedAt: stored.fetchedAt, fromSnapshot: true });
+  }
+  try {
+    const fresh = await get(period, empCode);
+    try { snapshot.write(empCode, period, fresh, snapshotOptions); } catch { /* kho hỏng không được làm hỏng màn */ }
+    return fresh;
+  } catch (error) {
+    // Nguồn lỗi mà kho còn số cũ ⇒ vẫn cho xem số cũ kèm mốc thời gian, hơn là
+    // trắng màn. Chưa có gì trong kho thì báo đúng loại lỗi như trước.
+    if (stored) return Object.freeze({ ...stored.projection, fetchedAt: stored.fetchedAt, fromSnapshot: true, stale: true });
     const reason = SAFE_REASON_BY_CODE.get(error?.code)
       || (error?.upstreamStatus === 401 || error?.upstreamStatus === 403 ? 'unauthorized' : 'upstream_unavailable');
     return unavailableProjection(period, empCode, reason);
@@ -195,5 +215,6 @@ module.exports = {
   createClient,
   getFirstAdvance: (...args) => client.get(...args),
   safeGetFirstAdvance,
+  snapshot,
   withAfterPenaltyGuard,
 };
