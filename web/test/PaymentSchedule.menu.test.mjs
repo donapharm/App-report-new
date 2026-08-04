@@ -134,3 +134,19 @@ test('kỳ đang chạy phải nói MỘT câu, chỉ rõ mốc giờ VN mở s�
   assert.match(page, /giờ VN/);
   assert.match(page, /bấm <b>Làm mới<\/b>/);
 });
+
+test('‼ mở màn/F5 phải trỏ vào THÁNG LIỀN TRƯỚC, không phải tháng đang chạy', () => {
+  // CEO 04/08 23:07: tháng đang chạy không bao giờ có sổ, trỏ vào là vô nghĩa.
+  assert.match(page, /const \[month, setMonth\] = useState\(lastEndedMonthVN\(\)\)/);
+  assert.doesNotMatch(page, /useState\(currentMonthValueVN\(\)\)/, 'không được mặc định vào tháng đang chạy');
+});
+
+test('lastEndedMonthVN: lùi đúng một tháng, bắc cầu sang năm trước', async () => {
+  const model = await import('../src/employeeCostModel.js');
+  assert.equal(model.lastEndedMonthVN(new Date('2026-08-04T12:00:00+07:00')), '2026-07');
+  // 00:01 ngày 01/09 giờ VN ⇒ T08 vừa đủ điều kiện, tự trỏ sang, không ai chỉnh gì.
+  assert.equal(model.lastEndedMonthVN(new Date('2026-09-01T00:01:00+07:00')), '2026-08');
+  assert.equal(model.lastEndedMonthVN(new Date('2027-01-05T09:00:00+07:00')), '2026-12');
+  // ‼ Đầu tháng 1 giờ VN vẫn còn 31/12 giờ UTC — lấy giờ máy là lùi nhầm sang 11.
+  assert.equal(model.lastEndedMonthVN(new Date('2027-01-01T06:30:00+07:00')), '2026-12');
+});

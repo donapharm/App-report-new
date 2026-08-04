@@ -34,6 +34,21 @@ export function currentMonthValueVN(now = new Date()) {
 }
 
 // Danh sách tháng bấm nhanh: tháng hiện tại + vài tháng liền trước (mới nhất trước).
+/**
+ * Tháng GẦN NHẤT ĐÃ KẾT THÚC, theo giờ VN.
+ *
+ * CEO chốt 04/08 23:07: mở màn Thanh toán CP mà trỏ vào tháng đang chạy thì luôn ra
+ * "chưa có sổ" — vô nghĩa. Tháng đang chạy KHÔNG BAO GIỜ có sổ (ứng lần 1 chốt vào
+ * ngày cuối tháng), nên mặc định phải là tháng liền trước.
+ * Sang 00:01 ngày 01/09 (giờ VN) thì hàm này tự trả T08 — không ai phải chỉnh gì.
+ */
+export function lastEndedMonthVN(now = new Date()) {
+  const current = currentMonthValueVN(now);
+  const year = Number(current.slice(0, 4));
+  const month = Number(current.slice(5, 7));
+  return month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`;
+}
+
 export function quickMonths(count = 4, now = new Date()) {
   const current = currentMonthValueVN(now);
   const year = Number(current.slice(0, 4));

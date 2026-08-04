@@ -1,3 +1,15 @@
+### 2026-08-04 — Mở màn Thanh toán CP trỏ vào tháng liền trước, không vào tháng đang chạy
+
+> CEO: *"khi bấm F5 lại thì điều hướng chỉ cho trỏ về tháng liền kề tháng hiện tại, do tháng hiện chưa có dữ liệu."*
+
+Tháng đang chạy **không bao giờ** có sổ thanh toán (ứng lần 1 chốt vào ngày cuối tháng), nên mở màn trỏ vào đó thì lần nào cũng ra câu "chưa có sổ" — vô nghĩa. Nay mặc định là **tháng liền trước**.
+
+`lastEndedMonthVN()` tính theo **giờ VN** và bắc cầu năm đúng. Có test cho ca hiểm: **06:30 sáng 01/01/2027 giờ VN** vẫn là 31/12 giờ UTC — lấy giờ máy sẽ lùi nhầm về tháng 11.
+
+Sang **00:01 ngày 01/09 (giờ VN)** hàm tự trả T08 — không ai phải chỉnh gì, khớp đúng mốc mở sổ ở H1.
+
+- Test: web **165/165** · build sạch.
+
 ### 2026-08-04 — Đính chính mốc ứng sớm: **01/10**, không phải 30/09
 
 > CEO: *"à tôi bị nhầm, nó phải là sau ngày 01/10 mới đúng nhé"* (kỳ T08.2026).

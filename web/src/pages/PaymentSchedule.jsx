@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
-import { currentMonthValueVN, quickMonths, employeeCostViewModel, formatEmployeeCostCell, formatMonthLabel } from '../employeeCostModel.js';
+import { currentMonthValueVN, lastEndedMonthVN, quickMonths, employeeCostViewModel, formatEmployeeCostCell, formatMonthLabel } from '../employeeCostModel.js';
 import { PaymentSchedulePanel, PaymentTeamPanel, employeeOptionLabel } from './EmployeeCost.jsx';
 
 const moneyColumn = { kind: 'money' };
@@ -18,7 +18,9 @@ const moneyColumn = { kind: 'money' };
  */
 export default function PaymentSchedule({ me, desktop }) {
   const admin = !!me?.isAdmin;
-  const [month, setMonth] = useState(currentMonthValueVN());
+  // ‼ Mở màn / F5 thì trỏ vào THÁNG LIỀN TRƯỚC, không phải tháng đang chạy (CEO
+  // chốt 04/08 23:07): tháng đang chạy không bao giờ có sổ nên trỏ vào là vô nghĩa.
+  const [month, setMonth] = useState(lastEndedMonthVN());
   const [employees, setEmployees] = useState([]);
   const [selectedEmp, setSelectedEmp] = useState(admin ? 'ALL' : String(me?.emp_code || ''));
   const [payload, setPayload] = useState(null);
@@ -29,7 +31,7 @@ export default function PaymentSchedule({ me, desktop }) {
   // khoảng: total bao nhiêu · đã ứng bao nhiêu · còn lại bao nhiêu.
   const [rangeOn, setRangeOn] = useState(false);
   // Mặc định lùi 3 tháng để bật lên là có ý nghĩa ngay, không phải "từ T08 tới T08".
-  const [rangeFrom, setRangeFrom] = useState(() => quickMonths(4)[3] || month);
+  const [rangeFrom, setRangeFrom] = useState(() => quickMonths(5)[4] || quickMonths(4)[3] || month);
   const [rangeSummary, setRangeSummary] = useState(null);
   const [rangeLoading, setRangeLoading] = useState(false);
   const [rangeError, setRangeError] = useState('');
