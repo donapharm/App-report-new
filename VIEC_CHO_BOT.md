@@ -209,7 +209,8 @@ Làm đúng thứ tự dưới đây, xong việc nào báo CEO việc đó:
 
 | Thứ tự | Việc | Vì sao trước |
 |---|---|---|
-| **0** | **DEPLOY `2053012`+ và MAP TELEGRAM CHO DN012** — ‼ CEO chốt 22:25: **CHỈ map DN012 (Đặng Thị Hồng Hạnh)**. Bốn NV còn lại (DN004 · DN021 · DN023 · VP004) **CHỜ CEO yêu cầu**, KHÔNG tự map. 15 NV văn phòng (VP002·VP003·VP006…VP018) **không thuộc diện nhận tin tiền**, đã khoá bằng cổng roster. | **NGAY** | chờ bot | bot |
+| **0** | **‼ ĐỌC `LENH_05082026.md` — lệnh sáng 05/08, Claude điều phối thay CEO.** Mỗi bot đọc đúng phần của mình (A = DataHub · B = bot server · C = người). Gấp nhất: **đếm 2.600 event tồn xem có bao nhiêu cái đụng T06/T07 TRƯỚC KHI chạy**. | **NGAY** | chờ bot | bot |
+| **0a** | **DEPLOY `2053012`+ và MAP TELEGRAM CHO DN012** — ‼ CEO chốt 22:25: **CHỈ map DN012 (Đặng Thị Hồng Hạnh)**. Bốn NV còn lại (DN004 · DN021 · DN023 · VP004) **CHỜ CEO yêu cầu**, KHÔNG tự map. 15 NV văn phòng (VP002·VP003·VP006…VP018) **không thuộc diện nhận tin tiền**, đã khoá bằng cổng roster. | **NGAY** | chờ bot | bot |
 | **0a** | **VIỆC 3A** (ngay phía trên) — màn "Chi phí của tôi" T08 không ra số | **CEO đang bị chặn ngay lúc này** |
 | **1** | **VIỆC 3** — nghiệm thu VP018 + DN022 trên app thật | **có mốc chết 08/08** |
 | **2** | **VIỆC 2B** — màn "Chưa đồng bộ" (danh mục dòng lệch + lý do) | CEO đòi từ 29/07, đã bị bỏ quên 1 lần |
