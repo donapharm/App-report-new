@@ -1,3 +1,22 @@
+### 2026-08-04 — Đính chính mốc ứng sớm: **01/10**, không phải 30/09
+
+> CEO: *"à tôi bị nhầm, nó phải là sau ngày 01/10 mới đúng nhé"* (kỳ T08.2026).
+
+Luật đúng là **phải QUA ĐỦ 30 ngày** kể từ khi hết tháng bán hàng ⇒ bấm được từ **ngày thứ 31**, không phải đúng ngày thứ 30.
+
+| Kỳ | Hết tháng | Bấm được từ | Hạn Lần 2 | Sớm hơn |
+|---|---|---|---|---|
+| T07.2026 | 31/07 | **31/08** | 14/09 | 14 ngày |
+| **T08.2026** | 31/08 | **01/10** ✔ | 15/10 | 14 ngày |
+| T09.2026 | 30/09 | **31/10** | 14/11 | 14 ngày |
+| T02.2027 | 28/02 | **31/03** | 14/04 | 14 ngày |
+
+**Nói thẳng một hệ quả** để sau khỏi ai tưởng sai: mốc này sớm hơn hạn **14 ngày**, không phải 15 như câu nói ban đầu. Hai con số không thể cùng đúng — CEO đã chọn **01/10**, nên "15 ngày" là ước lượng, "01/10" là mốc thật. Đã ghi rõ ngay trong file luật để người sau đọc không sửa ngược lại.
+
+Ổn định cho **mọi tháng, kể cả tháng 2** — luôn đúng 14 ngày, vì cả mốc lẫn hạn đều tính từ ngày cuối tháng. Có test quét 5 kỳ.
+
+- Test: `earlyAdvanceQuota.test.js` **12/12** · server **861/867** (6 lỗi PDF nền cũ).
+
 ### 2026-08-04 — Ba yêu cầu CEO 22:40: bỏ gọi kỳ đang chạy · Σ C44 · quyền ưu tiên ứng sớm
 
 **H1 — Kỳ ĐANG CHẠY thì KHÔNG gọi cập nhật chi phí nữa.** Ảnh CEO cho thấy màn T08 vẫn liệt kê 21 NV kèm 21 lý do giống hệt nhau — nghĩa là backend đã kéo cả 21 NV từ DataHub **chỉ để kết luận "chưa tới lúc"**. Nay màn hình tự biết tháng chưa hết là **không gọi gì cả**, hiện đúng một câu kèm mốc: *"Từ 00:01 ngày 01/09/2026 (giờ VN) bấm Làm mới là sổ mở ra"*. Không ai phải bật cờ gì.

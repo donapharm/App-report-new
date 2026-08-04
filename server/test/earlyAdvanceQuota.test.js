@@ -11,33 +11,39 @@ const { buildPaymentSchedule } = require('../src/paymentSchedule');
 
 const memStore = () => ({ data: {}, load(n, d) { return this.data[n] ?? d; }, save(n, v) { this.data[n] = v; } });
 
-test('‼ "sớm hơn 15 ngày" và "30 ngày sau khi hết tháng" phải là CÙNG MỘT NGÀY', () => {
-  // Hai cách CEO diễn đạt cùng một mốc — nếu lệch nhau thì luật đã sai ở đâu đó.
+test('‼ CEO đính chính: kỳ T08.2026 phải là 01/10, không phải 30/09', () => {
+  assert.equal(policy.periodEndDate('2026-08'), '2026-08-31');
+  assert.equal(policy.earliestRequestDate('2026-08'), '2026-10-01', 'phải QUA ĐỦ 30 ngày ⇒ ngày thứ 31');
+  assert.equal(policy.quarterOf('2026-08'), '2026-Q3');
+});
+
+test('mốc sớm nhất luôn cách hạn Lần 2 đúng 14 ngày, mọi tháng kể cả tháng 2', () => {
   for (const period of ['2026-07', '2026-08', '2026-09', '2026-12', '2027-02']) {
     const due = buildPaymentSchedule({
       period, totalAfterPenalty: 100_000_000, firstAdvanceAmount: 1_000_000,
     }).installments[1].dueDate;
-    const earliest = policy.earliestRequestDate(period);
-    const gap = Math.round((new Date(due) - new Date(earliest)) / 86_400_000);
-    assert.equal(gap, policy.DAYS_BEFORE_DUE, `kỳ ${period}: lệch ${gap} ngày, phải là 15`);
+    const gap = Math.round((new Date(due) - new Date(policy.earliestRequestDate(period))) / 86_400_000);
+    assert.equal(gap, 14, `kỳ ${period}: lệch ${gap} ngày`);
+    // Và phải đúng bằng ngày cuối tháng + 31.
+    assert.equal(
+      Math.round((new Date(policy.earliestRequestDate(period)) - new Date(policy.periodEndDate(period))) / 86_400_000),
+      31, `kỳ ${period}: không phải ngày thứ 31`,
+    );
   }
-});
-
-test('kỳ T08.2026 — đúng ví dụ CEO nêu', () => {
-  assert.equal(policy.periodEndDate('2026-08'), '2026-08-31');
-  assert.equal(policy.earliestRequestDate('2026-08'), '2026-09-30');
-  assert.equal(policy.quarterOf('2026-08'), '2026-Q3');
 });
 
 test('‼ chưa tới ngày sớm nhất thì CHẶN và nói rõ còn mấy ngày', () => {
   const result = policy.checkEarlyRequest({ period: '2026-08', today: '2026-09-15', used: [] });
   assert.equal(result.allowed, false);
   assert.equal(result.code, 'EARLY_TOO_SOON');
-  assert.match(result.message, /Sớm nhất là 30\/09\/2026 \(còn 15 ngày\)/);
+  assert.match(result.message, /Sớm nhất là 01\/10\/2026 \(còn 16 ngày\)/);
+  assert.match(result.message, /qua đủ 30 ngày kể từ khi hết tháng bán hàng/);
 });
 
 test('đúng ngày sớm nhất trở đi thì được', () => {
-  for (const today of ['2026-09-30', '2026-10-05']) {
+  // ‼ Ngày 30/09 là CHƯA đủ — mới tròn 30 ngày, phải QUA nó.
+  assert.equal(policy.checkEarlyRequest({ period: '2026-08', today: '2026-09-30', used: [] }).allowed, false);
+  for (const today of ['2026-10-01', '2026-10-05']) {
     assert.equal(policy.checkEarlyRequest({ period: '2026-08', today, used: [] }).allowed, true, today);
   }
 });

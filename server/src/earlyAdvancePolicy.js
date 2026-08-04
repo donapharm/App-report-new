@@ -10,8 +10,9 @@
  * bạn đã hết lượt và sẽ chặn không cho thao tác tiếp."*
  *
  * Hai điều kiện, phải thoả CẢ HAI:
- *   1. **Chưa quá sớm**: sớm nhất là **30 ngày sau khi hết tháng bán hàng**
- *      = đúng **15 ngày trước** hạn Lần 2 (hạn Lần 2 = hết tháng + 45 ngày).
+ *   1. **Chưa quá sớm**: phải **qua đủ 30 ngày** kể từ khi hết tháng bán hàng.
+ *      Xem đính chính của CEO ngay dưới — con số "15 ngày" trong câu nói trên là
+ *      CEO ước lượng, mốc thật CEO chốt là **01/10 cho kỳ T08**, tức 14 ngày.
  *   2. **Còn lượt**: mỗi NV **1 lượt / quý**. Hết lượt thì CHẶN, không phải cảnh báo suông.
  *
  * ‼ Lượt tính theo QUÝ CỦA KỲ BÁN HÀNG (kỳ T08 thuộc Q3), không phải quý của ngày
@@ -19,8 +20,18 @@
  * được thêm lượt, thành lách luật.
  */
 
-const DAYS_BEFORE_DUE = 15;          // sớm hơn hạn tối đa 15 ngày
-const DAYS_AFTER_PERIOD_END = 30;    // = 45 (hạn Lần 2) − 15
+/**
+ * ‼ CEO đính chính 04/08 23:00: *"nó phải là sau ngày 01/10 mới đúng nhé"* (cho kỳ T08.2026).
+ *
+ * Nghĩa là phải **QUA ĐỦ 30 NGÀY** kể từ khi hết tháng bán hàng, nên được bấm từ
+ * **ngày thứ 31** — không phải đúng ngày thứ 30.
+ *   T08 hết 31/08 → qua đủ 30 ngày là hết 30/09 → bấm được từ **01/10**. ✔ khớp CEO.
+ *
+ * Hệ quả nhỏ, ghi ra để khỏi ai tưởng sai: mốc này sớm hơn hạn Lần 2 **14 ngày**
+ * (không phải 15), và đúng 14 ngày cho MỌI tháng — kể cả tháng 2. Bản trước dùng
+ * ngày thứ 30 nên ra 30/09.
+ */
+const DAYS_AFTER_PERIOD_END = 31;    // qua đủ 30 ngày ⇒ bấm được từ ngày thứ 31
 const QUOTA_PER_QUARTER = 1;
 
 function normalizeMonth(value) {
@@ -99,7 +110,7 @@ function checkEarlyRequest({ period, today, used = [] } = {}) {
     return {
       ...base, allowed: false, code: 'EARLY_TOO_SOON',
       message: `Chưa tới lúc xin ứng sớm. Sớm nhất là ${dmy(earliestDate)} (còn ${wait} ngày)`
-        + ` — đúng ${DAYS_BEFORE_DUE} ngày trước hạn Lần 2.`,
+        + ' — phải qua đủ 30 ngày kể từ khi hết tháng bán hàng.',
     };
   }
 
@@ -110,6 +121,6 @@ function checkEarlyRequest({ period, today, used = [] } = {}) {
 }
 
 module.exports = {
-  DAYS_BEFORE_DUE, DAYS_AFTER_PERIOD_END, QUOTA_PER_QUARTER,
+  DAYS_AFTER_PERIOD_END, QUOTA_PER_QUARTER,
   quarterOf, earliestRequestDate, periodEndDate, checkEarlyRequest,
 };
