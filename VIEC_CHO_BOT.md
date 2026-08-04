@@ -4,34 +4,47 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 04/08/2026 14:40 GMT+7 — PROD `68378a7`. Còn 10 mục, bảng ngay dưới.
+**Cập nhật lần cuối:** 04/08/2026 19:30 GMT+7 — PROD `9b99fa6`, `origin/main` `8b0c75f`. Còn **3 commit chưa deploy** + 9 mục.
 
 ---
 
-# 📌 VIỆC CÒN LẠI — 04/08/2026 14:40 GMT+7
+# 📌 VIỆC CÒN LẠI — 04/08/2026 19:30 GMT+7
 
-> PROD = `68378a7` (deploy 04/08 14:25, PASS). Làm từ trên xuống, xong việc nào báo CEO việc đó.
+## A. ĐÃ CODE XONG, TEST XANH, CHƯA LÊN APP  ⟵ deploy là hết
 
-## ‼ SỬA ĐỊNH NGHĨA "GHIM TIỀN" — đọc trước khi báo đỏ
-- **T06 `28.403.136.096đ` (2.001 dòng) · T07 `30.917.892.673đ` (2.016 dòng) = KỲ ĐÃ KHOÁ SỔ ⇒ FROZEN.** Xác nhận lại 04/08 10:30, đúng từng đồng. Đổi một đồng là DỪNG.
-- **T08 KHÔNG frozen** — tháng đang chạy, doanh thu về thêm mỗi ngày. Số `2.151.774.772đ` chỉ đúng cho ảnh chụp 03/08; refresh 04/08 09:30 ra `2.410.293.372đ` / 324 dòng là **bình thường**, không phải drift.
-- Bất biến của T08 **không phải một con số cố định**, mà là: **App Report == App Sale "ĐÃ THỰC HIỆN" khi so CÙNG THỜI ĐIỂM** (chụp cách nhau < 2 phút). Chỉ so như vậy mới được kết luận lệch.
+PROD = `9b99fa6`. Đầu `origin/main` = **`8b0c75f`**. Lệnh: `git fetch origin main && git reset --hard origin/main` rồi build+restart như mọi lần.
 
-| # | Việc | Hạn | Đang vướng ở đâu | Ai làm |
+| Commit | Nội dung | Vì sao nên deploy sớm |
+|---|---|---|
+| `6e675d8` | **Chặn cứng "Tất cả NV" ở 25 giây** thay vì treo 178 giây · một NV lỗi không kéo sập cả bảng | PROD hiện tại **vẫn còn nguyên rủi ro đứt màn hình** khi DataHub chậm |
+| `9b476fe` | Tách gói biểu đồ (tải lần đầu −40%) · trả số cũ ngay dựng lại ngầm | Mở màn nhanh hơn hẳn |
+| `8b0c75f` | `verify_frozen_periods.js` — canh T06/T07 khỏi bị replay làm lệch | **Cần TRƯỚC khi DataHub drain 2.600 event** |
+
+## B. ĐANG LÀM DỞ — chờ bên ngoài trả lời
+
+| # | Việc | Đang kẹt ở đâu | Ai giữ | Hạn |
 |---|---|---|---|---|
-| **0** | **‼ DEPLOY MENU + 4 SỬA NGHIỆP VỤ SỔ THANH TOÁN** — CEO chỉ ra trên ảnh 04/08: Lần 1 bị kêu "quá hạn" (sai — App Salary duyệt ngày cuối tháng), cột Khoảng cách trống, NV không ứng bị mất sổ, tài khoản CEO chưa tổng hợp chung. Đã sửa đủ + gộp nhiều kỳ. Server **777/783**, web **148/148**, đã mở app thật bằng chromium. Deploy đầu `origin/main`. | **NGAY** | chờ deploy | bot |
-| **0b** | **(gộp vào mục 0)** DEPLOY MENU "Thanh toán CP của tôi" — CEO mở app không tìm thấy mục này (04/08 chiều). Nguyên nhân: sổ nằm lẫn trong trang "Chi phí của tôi" và tự ẩn ở chế độ "Tất cả NV" (mặc định của CEO). Claude đã tách thành **menu riêng** + chặn hiện `0đ` khi chưa có sổ. Web **148/148**, build sạch, **đã chạy thật bằng chromium có ảnh**. Deploy đầu `origin/main`. | **NGAY** | chờ deploy | bot |
-| **1** | **4 ẢNH XÁC MINH** — deploy `68378a7` xong 14:25 nhưng chưa dán ảnh. ① sổ "Thanh toán CP của tôi" 1 NV ② bảng "Thanh toán CP toàn đội" ③ nút "So kỳ trước" đang bật ④ AI target đủ 21 NV. Kèm T07/DN009 `336.334.260đ` · T08 `118.066.246đ`. | ngay | **chưa dán** | bot |
-| **2** | **Hợp đồng "Ứng lần 1"** — App Salary chưa trả lời `provisional`/`approved` nghĩa gì. **Cấm tự đoán** (đoán sai ⇒ "Còn lại sau ứng" bằng nguyên tổng chi phí). Xem `SPEC_SALARY_ADVANCE_AUTO.md`. | càng sớm càng tốt | chờ App Salary | App Salary → bot → Claude duyệt |
-| **3** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
-| **4** | **Gán lại dòng cách ly** `DH479816174` · MISA `341964` · Pizar-3 · `1.795.600đ` · `120.HTNT-PHARMACITY` · đang gán VP018 (telesaler). Gán cho **NV Sale hợp lệ** ⇒ hai app khớp `0đ` tròn. | **08/08** | chưa gán | App Sale / danh mục phân công |
-| **5a** | **‼ GỬI `DIRECTIVE_DATAHUB_VAULT_LOCK_SELFHEAL.md` CHO BÊN DATAHUB** — thuật toán khoá tự lành đã viết sẵn đầy đủ (PID + TTL + gia hạn + thả đúng khoá của mình + audit khi phá khoá) kèm cổng nghiệm thu. **Đây là thứ DUY NHẤT cắt được vòng lặp**; App Report chỉ giảm đau được. Claude đã tra `data-hub-smart-app` nhưng không thấy khoá ở đó — người nắm DataHub xác định đúng chỗ rồi áp. | **ngay** | chưa gửi | bot → DataHub |
-| **5b** | **Bản RAM `9986f0a`** + phần App Report đã xong (`7991d18`: nguồn kẹt vẫn giữ được số, gắn nhãn số cũ). Cũ: **`vault-audit.lock` tự chữa** — ‼ đang **âm thầm phá dữ liệu**: DN004/DN007/DN008/DN009/DN011/DN017/DN019/DN024 luân phiên mất nguồn chi phí (chẩn đoán của chính bot 03/08). Cùng thủ phạm vụ 21 NV hiện 0đ. | ngay sau 08/08 | chưa deploy | bot |
-| **6** | **Bật `EMP_COST_NOTIFY` / `BONUS_NOTIFY`** — cổng nghiệm thu đã mở (v3.8), chỉ chờ tới ngày. | **09/08** | chờ tới ngày | bot |
-| **7** | **Màn "Chưa đồng bộ" — chỉ còn ĐỔ DỮ LIỆU VÀO.** Claude đã xong kho + API + màn hình + bất biến + **cả phần phân loại** (`syncExceptionClassifier.js`, 14/14 test). Bot chỉ còn: lấy **TOÀN BỘ** dòng của kỳ (chưa lọc) → `classifySyncExceptions({period, sourceRows, includedLineIds, knownUnits, knownProducts, roster})` → `syncExceptionStore.write(period, {source, included, exceptions})`; dừng khi `balanced === false`. **Không phải tự nghĩ luật, không phải tự nghĩ mã lý do.** | sau 08/08 | chưa cắm vào materializer | bot |
-| **8** | **Bật lịch nhắc thanh toán Telegram** — code sẵn (`paymentNotify.runPaymentNotices`), có `dryRun`. **Chạy thử ít nhất 1 lần** xem sẽ nhắn ai rồi mới bật thật. | sau 08/08 | chưa bật | bot |
-| **9** | **AI tự đề xuất target 08:00 NGÀY 01 hằng tháng** (GMT+7), tính lại ngày 09 sau khoá sổ, **cấm tự áp**. Spec: phụ lục `SPEC_SALARY_ADVANCE_AUTO.md`. | sau 08/08 | backend chưa code | bot |
-| **10** | **Đổi `SALARY_SERVICE_TOKEN`** — token đang do người build App Salary giữ. | không gấp | CEO chưa gật | bot |
+| **B1** | **DataHub: khoá tự lành** — mới cách ly khoá mồ côi bằng tay, **chưa rõ đã code thuật toán tự lành chưa**. Cách ly tay không tính là xong: PM2 restart lần nữa là tái diễn. | chưa trả lời | bot DataHub | ngay |
+| **B2** | **DataHub: 2.600 event chờ replay** — phải **lọc theo kỳ TRƯỚC khi drain**, báo có bao nhiêu event chạm T06/T07. Có thì DỪNG. Drain xong chạy `verify_frozen_periods.js`. | chưa lọc | bot DataHub | trước khi drain |
+| **B3** | **4 bước nghiệm thu khoá** — lượt đầu 401 do script đọc sai key `.env` (không phải DataHub lỗi) ⇒ **chưa bước nào chạy được**. | chưa chạy lại | bot DataHub | ngay |
+| **B4** | **4 ảnh xác minh PROD** — bot ghi "Ảnh màn hình PROD:" rồi bỏ trống. Cần: menu 💵 Thanh toán CP · DN009 kỳ T07 (Lần 1 phải **✓ đã trả**, "Đã nhận" **57.851.347đ**, "Sổ còn nợ" **278.482.913đ**). | chưa dán | bot | ngay |
+| **B5** | **Hợp đồng "Ứng lần 1"** — App Salary chưa nói `provisional`/`approved` nghĩa gì. **Cấm tự đoán.** (Phần hiển thị CEO đã chốt: có số = đã ứng xong.) | chờ App Salary | App Salary | càng sớm càng tốt |
+
+## C. CHƯA LÀM — việc của người/bot khác
+
+| # | Việc | Ai làm | Hạn |
+|---|---|---|---|
+| **C1** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** — chưa hỏi kế toán | kế toán | **08/08** |
+| **C2** | **Gán lại dòng cách ly `DH479816174`** · MISA `341964` · Pizar-3 · `1.795.600đ` · `120.HTNT-PHARMACITY` · đang gán VP018 (telesaler). Gán cho NV Sale hợp lệ ⇒ hai app khớp `0đ` tròn. | App Sale | **08/08** |
+| **C3** | **Bật `EMP_COST_NOTIFY` / `BONUS_NOTIFY`** — cổng nghiệm thu đã mở (v3.8), chỉ chờ tới ngày | bot | **09/08** |
+| **C4** | **Cắm phân loại vào materializer** — Claude đã xong kho + API + màn hình + `syncExceptionClassifier` (14/14 test). Bot chỉ còn đổ dữ liệu vào rồi `syncExceptionStore.write()`. | bot | sau 08/08 |
+| **C5** | **Bật lịch nhắc Telegram** — `paymentNotify.runPaymentNotices` sẵn, có `dryRun`. **Chạy thử ít nhất 1 lần** xem sẽ nhắn ai rồi mới bật thật. ‼ Phải deploy `9b99fa6` trở lên, nếu không sẽ bắn tin "quá hạn" oan. | bot | trước 09/08 |
+| **C6** | **Cắm `runDueJobs()` vào cron** (`scheduledJobs.js`) — chạy `dryRun` trước | bot | sau 08/08 |
+| **C7** | **Handler AI đề xuất target 08:00 ngày 01** (GMT+7), tính lại ngày 09, **cấm tự áp** | bot | sau 08/08 |
+| **C8** | **Đổi `SALARY_SERVICE_TOKEN`** — token đang do người build App Salary giữ | bot | CEO chưa gật |
+| **C9** | **Bản RAM `9986f0a`** — ‼ Claude tra `git cat-file`: **commit này KHÔNG tồn tại trong repo App Report**. Bot phải xác nhận nó nằm ở repo nào (nhiều khả năng DataHub) hoặc số hiệu ghi sai. | bot | cần làm rõ |
+
+---
 
 ### ✅ ĐÃ XONG VÀ ĐANG CHẠY TRÊN APP (PROD `68378a7`, 04/08 14:25)
 Doanh thu khớp App Sale (chênh **đúng bằng** dòng cách ly, đã truy ra tên) · tỷ lệ % **tự có hiệu lực sang mọi tháng sau** · T08 lên số `118.066.246đ` · KPI và badge "thiếu %" dùng chung một bảng tỷ lệ · ô "Ứng lần 1" nói đúng lý do · **chốt số ứng lần 1** (giảm ~95% lượt gọi App Salary) · nút chọn tháng + bộ lọc nâng cao + doanh thu trước/sau VAT · **nhớ lựa chọn + So kỳ trước** · AI đề xuất target đủ 21 NV, sửa/chọn từng người, chặn số sai · **nghiệm thu VP018 + DN022 (v3.8)** · target T08 21/21 NV · **Sổ "Thanh toán CP của tôi" GĐ1+GĐ2** (3 lần + C44 + sổ còn nợ · ghi nhận đã trả **chỉ CEO** có nhật ký · **bảng toàn đội**) · kho+API+màn "Chưa đồng bộ".
