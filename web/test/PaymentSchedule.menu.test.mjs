@@ -45,7 +45,7 @@ test('‼ thiếu số thì nói thiếu, cấm dựng sổ rỗng trông như �
 });
 
 test('trang riêng dùng LẠI panel của trang Chi phí, không dựng bản thứ hai', () => {
-  assert.match(page, /import \{ PaymentSchedulePanel, PaymentTeamPanel \} from '\.\/EmployeeCost\.jsx'/);
+  assert.match(page, /import \{[^}]*PaymentSchedulePanel[^}]*PaymentTeamPanel[^}]*\} from '\.\/EmployeeCost\.jsx'/);
   assert.doesNotMatch(page, /function PaymentSchedulePanel/, 'dựng lại lần hai là hai màn sẽ lệch số');
 });
 
@@ -69,4 +69,25 @@ test('‼ không NV nào có sổ ⇒ CẤM hiện "0đ" như thể đã trả h
   assert.match(body, /if \(!totals\.employees\) return/, 'phải chặn trước khi vẽ ô KPI');
   assert.match(body, /Chưa NV nào dựng được sổ/);
   assert.match(body, /không phải "đã trả hết"/);
+});
+
+/* ── CEO báo 04/08 19:30 ────────────────────────────────────────────────────── */
+
+test('‼ tab "Chi phí của tôi" KHÔNG được dựng lại sổ thanh toán — đã có menu riêng', () => {
+  // CEO: "ở tab chi phí của tôi đâu cần hiển thị mấy mục Thanh toán CP… chỉ làm rối".
+  assert.doesNotMatch(costPage, /<PaymentSchedulePanel/, 'trang Chi phí không được render sổ cá nhân');
+  assert.doesNotMatch(costPage, /<PaymentTeamPanel/, 'trang Chi phí không được render bảng toàn đội');
+  // Nhưng vẫn phải EXPORT để trang riêng dùng chung một bản dựng.
+  assert.match(costPage, /export function PaymentSchedulePanel/);
+  assert.match(costPage, /export function PaymentTeamPanel/);
+});
+
+test('‼ ô chọn nhân viên phải kèm TÊN, không trơ mã', () => {
+  // Roster trả trường `name`; viết `emp_name` thì ô chọn chỉ hiện "DN009 — ".
+  // Bỏ chú thích rồi mới soi — lời cảnh báo trong file không bị tính là vi phạm.
+  const pageCode = page.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+  assert.doesNotMatch(pageCode, /emp_name/, 'roster không có trường emp_name');
+  assert.match(page, /employeeOptionLabel\(employee\)/, 'phải dùng lại helper của trang Chi phí');
+  assert.match(costPage, /export const employeeOptionLabel/);
+  assert.match(costPage, /employee\.emp_code\} · \$\{employee\.name\}/, 'nhãn phải gồm mã VÀ tên');
 });

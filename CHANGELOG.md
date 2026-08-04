@@ -1,3 +1,19 @@
+### 2026-08-04 — CEO báo 3 lỗi trên PROD; rà ra 4 nguyên nhân khác nhau
+
+> CEO: *"ở tab chi phí của tôi đâu cần hiển thị mấy mục Thanh toán CP… chỉ làm rối"* · *"ở tab thanh toán CP hiện tôi không thấy dữ liệu nào hết cả, lọc nhân viên thì chỉ hiển thị có mỗi mã nv, không thấy kèm tên"* · *"tôi nghĩ đang lỗi chưa đồng bộ hết nhé, mày phải tự rà soát lại chuẩn nhé, đang rất là ẩu nhé."*
+
+**1. Bỏ hai khối trùng khỏi tab "Chi phí của tôi".** Đã có menu riêng thì hiện lại chỉ làm rối. Hai khối vẫn được `export` để trang riêng dùng — **một bản dựng duy nhất**, không nhân đôi.
+
+**2. Ô chọn nhân viên chỉ hiện trơ mã.** Code viết `employee.emp_name`, nhưng roster trả về trường **`name`** ⇒ `undefined` ⇒ ra `"DN009 — "`. Nay dùng lại đúng helper `employeeOptionLabel` sẵn có của trang Chi phí (kèm cả nhãn nhóm): `DN002 · NV Sale 02 · CTV`.
+
+**3. ‼ Bảng "Thanh toán CP toàn đội" trống trơn dù xem từng người vẫn ra số.** Nguyên nhân: bảng đội đọc `salaryAdvanceSnapshot`, mà kho **chỉ được ghi khi có ai đó mở trang của từng người**. Chưa ai mở ⇒ kho rỗng ⇒ mọi NV bị xếp vào "thiếu nguồn" ⇒ bảng rỗng, nhìn ra như *"chưa ai được trả"* — sai hoàn toàn. Nay chế độ "Tất cả NV" **nạp kho một lần cho mỗi kỳ** (có hạn chót riêng 8 giây, dùng `mapWithDeadline`). NV đã có số chốt thì `mustFetch` trả `false` ⇒ **không hỏi lại App Salary**, đúng lệnh CEO.
+
+**4. ‼ Lỗi thứ tư — CEO không báo, tự rà ra, và nó làm hỏng đúng tính năng vừa làm sáng nay.** `salaryAdvanceSnapshot.isStorable` **không lưu** câu trả lời *"người này không có ứng lần 1"* (`not_eligible` / `employee_not_found` / `period_not_found`). Hậu quả kép: (a) tính năng *"NV không có ứng vẫn hiện đủ sổ"* chạy đúng ở màn từng người nhưng **âm thầm hỏng ở bảng đội**; (b) mỗi lần mở màn lại hỏi App Salary một lượt, trái lệnh *"có số rồi thì lấy về luôn"*. Nay lưu cả ba mã đó — **vẫn phân biệt tuyệt đối** với `available: false` (gọi không được), có test cho từng vế.
+
+- Đã mở trình duyệt thật kiểm: trang Chi phí **không còn** hai khối trùng · ô chọn NV ra `DN001 · NV Sale 01` · không lỗi runtime.
+- Test: server **803/809** (6 lỗi PDF nền cũ) · web **157/157** · build sạch.
+- **Chưa kiểm được tại chỗ:** mục 3 và 4 cần App Salary thật mới thấy số — phải nghiệm thu trên PROD sau deploy.
+
 ### 2026-08-04 — Canh kỳ đã khoá sổ, dựng sau tin "outbox còn 2.600 event chờ replay"
 
 Bot DataHub báo đã cách ly khoá mồ côi, nhưng **outbox còn 2.600 event chờ replay**. Replay là ghi lại lịch sử: nếu có event chạm **kỳ đã khoá sổ**, tổng T06/T07 sẽ đổi mà **không ai biết** — bộ canh sẵn có (`revenueMaterializeGuard`) chỉ chạy lúc dựng lại dữ liệu, **không canh thường trực**.

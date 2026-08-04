@@ -102,6 +102,8 @@ function employeeCostAllDegraded(merged) {
 }
 // Bản gộp hết hạn vẫn được dùng tạm tối đa 10 phút trong lúc dựng lại ngầm.
 const EMPLOYEE_COST_ALL_STALE_MS = 10 * 60 * 1000;
+// Nạp kho số ứng lần 1 cho bảng toàn đội — hạn riêng, ngắn hơn hạn chung.
+const SALARY_ADVANCE_WARM_DEADLINE_MS = 8_000;
 const EMPLOYEE_COST_ALL_VIEW_TTL_MS = 60 * 1000;
 const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
   'from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route', 'date',
@@ -1110,8 +1112,30 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       },
     });
     const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
-    // Bảng thanh toán toàn đội — dựng từ chính subtotals vừa có + kho Lần 1 + sổ ghi
-    // nhận. KHÔNG gọi thêm App Salary (chế độ ALL vốn không fan-out, giữ nguyên).
+    // ‼ NẠP KHO SỐ ỨNG LẦN 1 CHO NHỮNG NV CHƯA CÓ (CEO báo 04/08 19:30: bảng toàn
+    // đội trống trơn trong khi xem từng người thì vẫn ra số).
+    //
+    // Nguyên nhân: bảng đội đọc `salaryAdvanceSnapshot`, mà kho chỉ được ghi khi có
+    // ai đó mở TRANG CỦA TỪNG NGƯỜI. Chưa ai mở ⇒ kho rỗng ⇒ mọi NV bị xếp vào
+    // "thiếu nguồn" ⇒ bảng đội rỗng. Nhìn ra như "chưa ai được trả", sai hoàn toàn.
+    //
+    // Nạp một lần cho mỗi kỳ, có hạn chót riêng để không kéo dài yêu cầu. NV đã có
+    // số chốt trong kho thì `mustFetch` trả false ⇒ KHÔNG hỏi lại App Salary
+    // (đúng lệnh CEO: "chốt số ứng lần 1 rồi là không đổi số lại được nữa").
+    const advanceMissing = roster.filter((employee) => salaryAdvance.snapshot.mustFetch(
+      salaryAdvance.snapshot.read(employee.emp_code, range.to),
+    ));
+    if (advanceMissing.length) {
+      await mapWithDeadline(advanceMissing, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => (
+        salaryAdvance.safeGetFirstAdvance(range.to, employee.emp_code, salaryAdvance.getFirstAdvance)
+      ), {
+        deadlineAt: Date.now() + SALARY_ADVANCE_WARM_DEADLINE_MS,
+        // Nạp không kịp thì thôi, KHÔNG chặn bảng đội — NV đó hiện ở phần
+        // "chưa dựng được sổ" kèm lý do, đúng luồng sẵn có.
+        onSkip: () => null,
+      });
+    }
+    // Bảng thanh toán toàn đội — dựng từ chính subtotals vừa có + kho Lần 1 + sổ ghi nhận.
     try {
       merged.paymentTeam = paymentTeamSummary.buildPaymentTeamSummary({
         period: range.to,

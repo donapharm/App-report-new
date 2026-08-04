@@ -22,7 +22,7 @@ const EMPLOYEE_COST_PAGE_SIZES = [20, 50, 100];
 // CEO duyệt 01/08/2026: bật Ứng lần 1 và Còn lại sau ứng theo đúng một NV.
 // ALL không fan-out/tổng hợp; cả hai ô đều yêu cầu chọn một nhân viên.
 const SALARY_ADVANCE_UI = true;
-const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
+export const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 const browserStorage = () => {
   try { return globalThis.localStorage; } catch { return null; }
 };
@@ -1840,13 +1840,9 @@ export default function EmployeeCost({ me, onNavigate }) {
       onSave={saveVisibility}
     />}
 
-    {/* Sổ thanh toán đặt NGAY DƯỚI khối KPI: NV nhìn xong các ô tiền là thấy luôn
-        lịch nhận tiền của mình, không phải cuộn xuống bảng chi tiết. */}
-    <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
-      canRecord={String(me?.role || '').toLowerCase() === 'ceo'}
-      empCode={admin ? selectedEmp : String(me?.emp_code || '')}
-      onChanged={() => setRange((current) => ({ ...current }))} />
-    <PaymentTeamPanel team={model.paymentTeam} allEmployees={allEmployees} loading={loading} />
+    {/* ‼ KHÔNG dựng sổ thanh toán ở đây nữa (CEO 04/08 19:30): đã có menu riêng
+        "Thanh toán CP", hiện thêm ở đây chỉ làm rối. Hai khối vẫn được export để
+        trang PaymentSchedule.jsx dùng — một bản dựng duy nhất. */}
 
     {!admin && <EmployeeGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} />}
     {!admin && <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin={false} onOpenRow={openDqRow} />}

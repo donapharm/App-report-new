@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import { currentMonthValueVN, quickMonths, employeeCostViewModel, formatEmployeeCostCell, formatMonthLabel } from '../employeeCostModel.js';
-import { PaymentSchedulePanel, PaymentTeamPanel } from './EmployeeCost.jsx';
+import { PaymentSchedulePanel, PaymentTeamPanel, employeeOptionLabel } from './EmployeeCost.jsx';
 
 const moneyColumn = { kind: 'money' };
 
@@ -84,8 +84,10 @@ export default function PaymentSchedule({ me, desktop }) {
         {admin && <select value={selectedEmp} aria-label="Chọn nhân viên"
           onChange={(event) => setSelectedEmp(event.target.value)}>
           <option value="ALL">Tất cả NV</option>
+          {/* Roster trả về trường `name`, KHÔNG phải `emp_name` — viết sai tên trường
+              thì ô chọn chỉ hiện trơ mã NV. Dùng lại đúng helper của trang Chi phí. */}
           {employees.map((employee) => <option key={employee.emp_code} value={employee.emp_code}>
-            {employee.emp_code} — {employee.emp_name || ''}
+            {employeeOptionLabel(employee)}
           </option>)}
         </select>}
       </div>

@@ -43,10 +43,19 @@ function isFinal(projection) {
     && (projection.status === 'locked' || projection.status === 'approved');
 }
 
-// Chỉ đáng lưu khi thực sự CÓ số. Lỗi nguồn/chưa duyệt thì không đóng băng cái rỗng.
+// App Salary ĐÃ TRẢ LỜI và câu trả lời là "người này không có ứng lần 1". Đây là
+// một CÂU TRẢ LỜI THẬT, khác hẳn "gọi không được" — nên cũng đáng lưu.
+// ‼ Không lưu ba mã này thì: (1) bảng thanh toán toàn đội không bao giờ dựng được
+// sổ cho họ (kho rỗng ⇒ bị xếp vào "thiếu nguồn"), và (2) mỗi lần mở màn lại hỏi
+// App Salary một lượt, trái lệnh CEO "có số rồi thì lấy về luôn".
+const ANSWERED_NO_ADVANCE = new Set(['not_eligible', 'employee_not_found', 'period_not_found']);
+
+// Chỉ đáng lưu khi App Salary ĐÃ TRẢ LỜI. Lỗi nguồn (available !== true) thì không
+// đóng băng cái rỗng — mai nguồn khoẻ lại phải hỏi lại.
 function isStorable(projection) {
-  return !!projection && projection.available === true && projection.applicable === true
-    && Number.isSafeInteger(projection.amount);
+  if (!projection || projection.available !== true) return false;
+  if (projection.applicable === true && Number.isSafeInteger(projection.amount)) return true;
+  return ANSWERED_NO_ADVANCE.has(String(projection.reason || ''));
 }
 
 function readAll(store = persist) {
@@ -118,6 +127,6 @@ function invalidate(empCode, period, { store = persist } = {}) {
 }
 
 module.exports = {
-  FILE, CONTRACT_KEYS, MAX_RECORDS, REVALIDATE_OPEN_MS,
+  FILE, CONTRACT_KEYS, MAX_RECORDS, REVALIDATE_OPEN_MS, ANSWERED_NO_ADVANCE,
   isFinal, isStorable, read, write, mustFetch, shouldRevalidate, invalidate, keyOf,
 };

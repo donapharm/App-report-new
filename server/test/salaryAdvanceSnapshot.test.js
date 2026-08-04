@@ -57,11 +57,13 @@ test('‼ chỉ lưu 10 khoá hợp đồng — dữ liệu lương không đư�
   assert.equal('bhxh' in saved, false);
 });
 
-test('không đóng băng cái rỗng: chưa có số / lỗi nguồn thì không lưu', () => {
+test('không đóng băng cái rỗng: LỖI NGUỒN thì không lưu', () => {
   const store = memStore();
   for (const bad of [
+    // `available: false` = GỌI KHÔNG ĐƯỢC. Lưu cái này là mai nguồn khoẻ lại vẫn
+    // đọc ra "không có số" — đúng kiểu mất số lặng lẽ.
     projection({ available: false, applicable: null, amount: null, status: 'unavailable' }),
-    projection({ applicable: false, amount: null, reason: 'not_eligible' }),
+    projection({ available: false, applicable: null, amount: null, reason: 'upstream_timeout' }),
     projection({ amount: null }),
     null,
   ]) {
@@ -69,6 +71,33 @@ test('không đóng băng cái rỗng: chưa có số / lỗi nguồn thì khôn
     assert.equal(snap.read('DN001', '2026-09', { store }), null);
   }
   assert.equal(snap.mustFetch(null), true, 'chưa có gì trong kho thì phải gọi');
+});
+
+// ‼ SỬA 04/08 19:45 — CEO báo bảng toàn đội trống trơn. Truy ra: App Salary trả
+// lời RÕ "người này không có ứng lần 1" (`not_eligible`…) nhưng kho KHÔNG lưu, nên
+// bảng đội đọc kho ra rỗng rồi xếp họ vào "thiếu nguồn". Câu trả lời thật khác hẳn
+// với gọi-không-được; phải lưu.
+test('‼ App Salary TRẢ LỜI "không có ứng" là câu trả lời THẬT — phải lưu', () => {
+  for (const reason of ['not_eligible', 'employee_not_found', 'period_not_found']) {
+    const store = memStore();
+    // Phải khai đúng kỳ đang ghi: `read()` chặn bản ghi lệch kỳ (đúng thiết kế).
+    const answered = projection({ period: '2026-09', available: true, applicable: false, amount: null, reason });
+    assert.notEqual(snap.write('DN001', '2026-09', answered, { store }), null, `${reason} phải được lưu`);
+    const record = snap.read('DN001', '2026-09', { store });
+    assert.ok(record, `${reason} phải đọc lại được`);
+    assert.equal(record.projection.reason, reason);
+    assert.equal(record.projection.amount, null, 'lưu đúng "không có số", KHÔNG bịa thành 0');
+    assert.equal(snap.mustFetch(record), false, 'đã có câu trả lời thì thôi hỏi lại App Salary mỗi lần mở màn');
+  }
+});
+
+test('‼ phân biệt tuyệt đối: "không có ứng" LƯU, "gọi không được" KHÔNG lưu', () => {
+  const store = memStore();
+  assert.equal(snap.isStorable(projection({ available: true, applicable: false, amount: null, reason: 'not_eligible' })), true);
+  assert.equal(snap.isStorable(projection({ available: false, applicable: null, amount: null, reason: 'upstream_timeout' })), false);
+  assert.equal(snap.isStorable(projection({ available: false, applicable: null, amount: null, reason: 'not_eligible' })), false,
+    'nguồn hỏng thì dù mã lý do trông giống cũng KHÔNG được lưu');
+  void store;
 });
 
 test('‼ kho hỏng/bị sửa tay KHÔNG được trả nhầm số của người khác hoặc kỳ khác', () => {
