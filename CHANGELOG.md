@@ -1,3 +1,35 @@
+### 2026-08-04 — "Không mất số VÀ không kẹt" — làm nốt phần App Report tự lo được
+
+> CEO: *"giải quyết sao cho không mất số và không kẹt là việc của chúng mày tự tính toán đi chứ, sao lại đẩy về cho tao."* — **CEO đúng.** Bản trước mới lo được "không mất số" rồi đẩy phần "không kẹt" sang DataHub. Nay làm nốt phần App Report tự quyết được.
+
+**1. Hết chờ 25 giây khi nguồn kẹt.** Ngân sách chờ mặc định tệ nhất là `6,5 + 2 + 6,5 + 4 + 6,5 ≈ 25 giây` — NV ngồi nhìn màn quay ngần ấy rồi mới thấy lỗi.
+- **Đã có bản lưu tỷ lệ cho mọi kỳ đang hỏi ⇒ đi đường nhanh:** timeout `2s`, **không hỏi lại**. Quá hạn thì trả số cũ **ngay** (kèm nhãn) rồi **làm tươi ngầm bằng ngân sách đầy đủ** để lần sau có số mới.
+- **Chưa có bản lưu ⇒ giữ nguyên ngân sách đầy đủ** — không cắt ngắn cơ hội lấy số thật, vì lúc đó không có gì để dùng lại.
+- Test đo bằng đồng hồ thật: nguồn kẹt ⇒ **chỉ hỏi 1 lần**, cắt ở `2s`, màn trả về dưới `6s` thay vì ~25s.
+
+**2. Kết quả LỖI không còn được giữ lâu bằng kết quả tốt.** Bản gộp "Tất cả NV" trước đây cache **6 giờ** kể cả khi có NV lỗi nguồn ⇒ hỏng nửa ngày mới lộ (đúng vụ 01/08). Nay `memoGet` nhận `ttlFor(value)`: bản gộp **sạch** giữ 6 giờ, bản gộp **có NV lỗi nguồn hoặc đang dùng tỷ lệ cũ** chỉ giữ **2 phút** ⇒ lần mở kế tiếp tự thử lại.
+
+- Test: server **735/741** (6 lỗi PDF nền cũ) · `employeeCostRateSnapshot.test.js` **8/8**.
+- **Vẫn còn của DataHub:** khoá `vault-audit.lock` tự lành (`DIRECTIVE_DATAHUB_VAULT_LOCK_SELFHEAL.md`). App Report nay **không mất số, không bắt người dùng chờ** — nhưng nguồn vẫn sẽ kẹt cho tới khi khoá tự lành. Đây là giới hạn thật của phía App Report, không phải việc bỏ dở.
+
+### 2026-08-04 — Nguồn chi phí kẹt KHÔNG còn làm mất số (nửa việc của App Report trong mục RAM)
+
+CEO duyệt nâng ưu tiên. Mục này có **hai nửa**, và nửa quan trọng nhất **không nằm ở App Report**:
+- **DataHub:** `vault-audit.lock` phải **tự lành** (ghi PID chủ + TTL, ai vào sau thấy chủ chết/quá hạn thì tự phá khoá). RAM còn vọt là còn restart ⇒ *tiến trình chết khi đang giữ khoá là điều PHẢI chịu được*. Đây là thứ duy nhất **cắt được vòng lặp** — App Report không với tới.
+- **App Report (làm ở bản này):** nguồn kẹt vài giây thì **không được mất số**.
+
+`server/src/employeeCostRateSnapshot.js`:
+- Nguồn tốt ⇒ nhớ lại **bảng tỷ lệ** vừa lấy (nhỏ: chỉ % theo mã hàng × đơn vị).
+- Nguồn kẹt ⇒ dùng lại bản gần nhất, gắn `rateStale` + `rateFetchedAt`, `outcome = ok_stale_rates`, kèm câu *"Nguồn chi phí đang kẹt — đang dùng bảng tỷ lệ lấy được gần nhất"*.
+- **Chưa từng có bản lưu ⇒ vẫn fail-closed như cũ**, không bịa số.
+- **Bản lưu quá 45 ngày thì bỏ** — thà không có còn hơn dùng tỷ lệ lỗi thời.
+- **Kỳ đã có số thật thì bản lưu KHÔNG được đè lên.**
+- Không đóng băng cái rỗng; kho có trần 800 bản ghi.
+- **Đây không phải che lỗi:** cờ số cũ + mốc thời gian luôn hiện ra, cảnh báo nguồn vẫn chạy. Chỉ khác: NV không còn thấy **0đ oan** trong lúc nguồn kẹt — đúng vụ 21 NV hiện 0đ ngày 01/08.
+- Test: `employeeCostRateSnapshot.test.js` **6/6** · server **739/745** (6 lỗi PDF nền cũ).
+
+**Còn của bot:** ① deploy bản RAM `9986f0a` ② **yêu cầu DataHub làm khoá tự lành** — không có nó thì vòng lặp vẫn còn, bản này chỉ đỡ đau chứ không chữa gốc.
+
 ### 2026-08-04 — Màn "Chưa đồng bộ": kho + API + màn hình (phần Claude xong)
 
 - **`server/src/syncExceptionStore.js`** — nơi materializer ghi phần bị loại của mỗi kỳ (`source`/`included`/`exceptions`). Giữ tối đa 24 kỳ, 5.000 dòng/kỳ, cắt bớt thì **nói ra** (`truncated`). Kỳ sai khuôn không ghi được.
