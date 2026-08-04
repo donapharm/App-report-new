@@ -10,7 +10,7 @@
 
 # 📌 VIỆC CÒN LẠI — 04/08/2026 08:40 GMT+7
 
-> PROD = `244d058` (deploy 08:25, Gate 2 PASS). Làm từ trên xuống, xong việc nào báo CEO việc đó.
+> PROD = `68378a7` (deploy 04/08 14:25, PASS). Làm từ trên xuống, xong việc nào báo CEO việc đó.
 
 ## ‼ SỬA ĐỊNH NGHĨA "GHIM TIỀN" — đọc trước khi báo đỏ
 - **T06 `28.403.136.096đ` (2.001 dòng) · T07 `30.917.892.673đ` (2.016 dòng) = KỲ ĐÃ KHOÁ SỔ ⇒ FROZEN.** Xác nhận lại 04/08 10:30, đúng từng đồng. Đổi một đồng là DỪNG.
@@ -19,6 +19,8 @@
 
 | # | Việc | Hạn | Trạng thái | Ai làm |
 |---|---|---|---|---|
+| ✅ | ~~Deploy `68378a7`~~ — **XONG 04/08 14:25.** Server **733/733**, web **138/138**, release safety 51/51, browser console 0 lỗi. Chỉ reload `app-report` (PID 2566920, restart 40); bot Telegram không đụng. Đã lên app: **sổ Thanh toán CP của tôi** (GĐ1+GĐ2) · **bảng toàn đội** · ghi nhận đã trả (chỉ CEO) · nhắc Telegram · nhớ lựa chọn · so kỳ trước · chốt số ứng lần 1 · kho+API+màn "Chưa đồng bộ". | — | **xong** | — |
+| **0** | **‼ CÒN NỢ CEO: 4 ẢNH XÁC MINH** — CEO yêu cầu 04/08, deploy xong vẫn chưa dán. ① sổ "Thanh toán CP của tôi" 1 NV ② bảng "Thanh toán CP toàn đội" (Tất cả NV) ③ nút "So kỳ trước" đang bật ④ AI đề xuất target đủ 21 NV. Kèm số T07/DN009 `336.334.260đ` · T08 `118.066.246đ`. | ngay | **chưa dán** | bot |
 | ✅ | ~~Đối soát T08 với App Sale~~ — **XONG 04/08, khớp tuyệt đối.** App Sale `2.410.293.372đ` · App Report `2.408.497.772đ` · chênh **đúng bằng** dòng cách ly `1.795.600đ`. Cộng lại ra **chính xác** số App Sale. Trước VAT `2.293.807.402đ` × 1,05 = `2.408.497.772đ` ✓. **Không còn ẩn số nào.** | — | **xong** | — |
 | ✅ | ~~Nghiệm thu VP018 + DN022~~ — **ĐÓNG 04/08, sớm 4 ngày.** `formulaVersion = v3.8` xác nhận ở **hai** endpoint độc lập (`/api/admin/targets` → `bonusFormulaVersion`, `/api/employee-cost` → `penaltyPolicy.formulaVersion`). VP018 0 dòng phân bổ, dòng `1.795.600đ` cách ly đúng, cảnh báo vận hành còn · DN022 3/3 dòng, không P1/P2, không phạt target/C45, giữ luồng thiếu Xu · policy/notify 36/36 · cảnh báo vận hành 15/15. | — | **xong** | — |
 | **3** | **Hợp đồng "Ứng lần 1"** — App Salary chưa trả lời nghĩa `provisional`/`approved`, chưa dán JSON đầy đủ. Xem `SPEC_SALARY_ADVANCE_AUTO.md`. **Cấm tự đoán nghĩa** (đoán sai ⇒ "Còn lại sau ứng" bằng nguyên tổng chi phí). | 04/08 | chờ App Salary | bot + App Salary → Claude duyệt |
