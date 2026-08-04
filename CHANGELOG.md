@@ -1,3 +1,12 @@
+### 2026-08-04 — Sửa lỗi rollback: `EmployeeCost.jsx` thiếu import từ `employeeCostModel.js`
+
+- Bot chặn ở **post-deploy browser** trên `39a402c`: `ReferenceError: readEmployeeCostPrefs is not defined` ⇒ rollback về `244d058`. **Bot làm đúng.**
+- Nguyên nhân: `readEmployeeCostPrefs` / `writeEmployeeCostPrefs` / `employeeCostDelta` / `formatDeltaLabel` **được dùng nhưng không được import**. Một lượt vá nguồn của Claude khớp hụt chuỗi nên chỉ ghi phần thân, bỏ mất dòng import. **Build và test đều xanh** vì lỗi chỉ nổ lúc mở màn — đúng lần thứ HAI cùng kiểu (trước đó là `aiRows` thiếu khai báo state).
+- Đã bổ sung đủ 4 import.
+- **Thêm chốt chặn thật sự:** `web/test/EmployeeCost.imports.test.mjs` quét **mọi trang** dùng `employeeCostModel.js` — tên nào được **gọi** mà không có trong danh sách import thì test đỏ, kèm tên cụ thể. Bỏ chuỗi/comment trước khi quét để không báo nhầm.
+- **Đã kiểm chứng test bắt được lỗi thật:** gỡ dòng import ra ⇒ test đỏ và chỉ đúng 4 tên; gắn lại ⇒ xanh.
+- Test: web **131/131** · server **714/720** (6 lỗi PDF nền cũ) · build sạch.
+
 ### 2026-08-04 — "Thanh toán CP" GĐ2 hoàn tất: nút ghi nhận trên màn + nhắc Telegram
 
 **1. Nút ghi nhận ngay trên sổ — chỉ CEO thấy.**

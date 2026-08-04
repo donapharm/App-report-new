@@ -4,6 +4,7 @@ import { Kpi, Spinner } from '../components.jsx';
 import {
   currentMonthValue, quickMonths, employeeCostColumnKpis, employeeCostGapConsistency, employeeCostHighlightParts, employeeCostKpiMatch, employeeCostNoMatch, employeeCostViewModel,
   employeeCostPageItems, formatEmployeeCostCell, formatMatchRate, formatMonthLabel,
+  employeeCostDelta, formatDeltaLabel, readEmployeeCostPrefs, writeEmployeeCostPrefs,
 } from '../employeeCostModel.js';
 import {
   normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
