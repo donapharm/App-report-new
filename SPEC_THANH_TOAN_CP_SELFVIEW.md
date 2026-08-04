@@ -83,3 +83,34 @@ App Salary chỉ cần lần 1 (đã có) ⇒ không phải chờ ai.
 - Sửa Lần 2 → Lần 3 tự đổi, tổng vẫn 200tr.
 - 1 NV thiếu nguồn → "—", không thành 0. Bất biến lệch → cảnh báo, không show số chỏi.
 - Self-scope: NV khác không thấy sổ của nhau.
+
+
+---
+
+## 11. CHỐT SỐ "ỨNG LẦN 1" — KHÔNG GỌI APP SALARY MỖI LẦN MỞ MÀN (CEO chốt 04/08/2026)
+
+> CEO: *"Cứ lấy số ứng lần 1 tại ô KPI thì rất bất tiện — mỗi khi NV truy cập menu Thanh toán CP của tôi là API lại kéo số về, rất tốn tài nguyên. Khi có số rồi thì lấy số về luôn, chỉ khi thay đổi số ứng lần 1 mới đổi số."*
+
+**CEO đúng.** Trước đó chỉ có cache RAM **25 giây** ⇒ NV mở màn 10 lần/ngày là 10 lượt gọi App Salary, restart app là mất sạch. Với 21 NV × nhiều màn thì đây đúng là lãng phí, và còn kéo theo rủi ro: nguồn chậm/lỗi là màn trắng.
+
+### Ba mức — `server/src/salaryAdvanceSnapshot.js`
+| Trạng thái kỳ | Xử lý | Số lượt gọi App Salary |
+|---|---|---|
+| **Đã chốt** (`locked`/`approved`) | Số **không bao giờ đổi** ⇒ đọc kho | **0 — vĩnh viễn** |
+| **Đang mở** (`draft`) | Dùng số trong kho **ngay**, chỉ làm tươi khi quá **6 giờ** | ≤ 4 lượt/ngày/NV |
+| **Chưa có số / lỗi nguồn** | Không lưu — không đóng băng cái rỗng | như cũ |
+
+Phần lớn lượt xem là **tháng đã chốt** ⇒ gần như **không còn lượt gọi nào**.
+
+### Bắt buộc kèm theo
+1. **Luôn hiện `fetchedAt`** — *"số tại lúc HH:MM ngày DD/MM"*. Số cũ mà không nói rõ là số lúc nào thì người xem tưởng số đang sống.
+2. **Nút "Làm mới"** cho NV/CEO ép lấy lại ngay (`force`).
+3. **Webhook App Salary duyệt** (`SPEC_SALARY_ADVANCE_AUTO.md` Lớp 3) gọi `invalidate()` ⇒ số mới hiện tức thì, không phải chờ hết 6 giờ.
+4. **Chỉ lưu 10 khoá hợp đồng.** Dữ liệu lương (`net`…) không được vào kho.
+5. **Kho hỏng/bị sửa tay không được trả nhầm** — đọc ra phải khớp đúng mã NV và đúng kỳ, lệch là bỏ.
+6. Kho **có trần** (600 bản ghi), không phình vô hạn.
+
+### Rủi ro đã cân nhắc
+App Salary sửa lại số của một kỳ **đã chốt** thì kho không tự biết. Chấp nhận, vì "đã chốt" theo định nghĩa là không đổi; và vẫn có **2 đường thoát**: nút Làm mới + webhook. Nếu sau này họ sửa số đã chốt thường xuyên thì phải đổi định nghĩa `locked` phía họ trước.
+
+**Đã code + test:** `server/test/salaryAdvanceSnapshot.test.js` 7/7.
