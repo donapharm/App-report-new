@@ -4,11 +4,11 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 04/08/2026 08:40 GMT+7 — PROD `244d058`. Bảng việc ngay bên dưới.
+**Cập nhật lần cuối:** 04/08/2026 14:40 GMT+7 — PROD `68378a7`. Còn 10 mục, bảng ngay dưới.
 
 ---
 
-# 📌 VIỆC CÒN LẠI — 04/08/2026 08:40 GMT+7
+# 📌 VIỆC CÒN LẠI — 04/08/2026 14:40 GMT+7
 
 > PROD = `68378a7` (deploy 04/08 14:25, PASS). Làm từ trên xuống, xong việc nào báo CEO việc đó.
 
@@ -17,23 +17,21 @@
 - **T08 KHÔNG frozen** — tháng đang chạy, doanh thu về thêm mỗi ngày. Số `2.151.774.772đ` chỉ đúng cho ảnh chụp 03/08; refresh 04/08 09:30 ra `2.410.293.372đ` / 324 dòng là **bình thường**, không phải drift.
 - Bất biến của T08 **không phải một con số cố định**, mà là: **App Report == App Sale "ĐÃ THỰC HIỆN" khi so CÙNG THỜI ĐIỂM** (chụp cách nhau < 2 phút). Chỉ so như vậy mới được kết luận lệch.
 
-| # | Việc | Hạn | Trạng thái | Ai làm |
+| # | Việc | Hạn | Đang vướng ở đâu | Ai làm |
 |---|---|---|---|---|
-| ✅ | ~~Deploy `68378a7`~~ — **XONG 04/08 14:25.** Server **733/733**, web **138/138**, release safety 51/51, browser console 0 lỗi. Chỉ reload `app-report` (PID 2566920, restart 40); bot Telegram không đụng. Đã lên app: **sổ Thanh toán CP của tôi** (GĐ1+GĐ2) · **bảng toàn đội** · ghi nhận đã trả (chỉ CEO) · nhắc Telegram · nhớ lựa chọn · so kỳ trước · chốt số ứng lần 1 · kho+API+màn "Chưa đồng bộ". | — | **xong** | — |
-| **0** | **‼ CÒN NỢ CEO: 4 ẢNH XÁC MINH** — CEO yêu cầu 04/08, deploy xong vẫn chưa dán. ① sổ "Thanh toán CP của tôi" 1 NV ② bảng "Thanh toán CP toàn đội" (Tất cả NV) ③ nút "So kỳ trước" đang bật ④ AI đề xuất target đủ 21 NV. Kèm số T07/DN009 `336.334.260đ` · T08 `118.066.246đ`. | ngay | **chưa dán** | bot |
-| ✅ | ~~Đối soát T08 với App Sale~~ — **XONG 04/08, khớp tuyệt đối.** App Sale `2.410.293.372đ` · App Report `2.408.497.772đ` · chênh **đúng bằng** dòng cách ly `1.795.600đ`. Cộng lại ra **chính xác** số App Sale. Trước VAT `2.293.807.402đ` × 1,05 = `2.408.497.772đ` ✓. **Không còn ẩn số nào.** | — | **xong** | — |
-| ✅ | ~~Nghiệm thu VP018 + DN022~~ — **ĐÓNG 04/08, sớm 4 ngày.** `formulaVersion = v3.8` xác nhận ở **hai** endpoint độc lập (`/api/admin/targets` → `bonusFormulaVersion`, `/api/employee-cost` → `penaltyPolicy.formulaVersion`). VP018 0 dòng phân bổ, dòng `1.795.600đ` cách ly đúng, cảnh báo vận hành còn · DN022 3/3 dòng, không P1/P2, không phạt target/C45, giữ luồng thiếu Xu · policy/notify 36/36 · cảnh báo vận hành 15/15. | — | **xong** | — |
-| **3** | **Hợp đồng "Ứng lần 1"** — App Salary chưa trả lời nghĩa `provisional`/`approved`, chưa dán JSON đầy đủ. Xem `SPEC_SALARY_ADVANCE_AUTO.md`. **Cấm tự đoán nghĩa** (đoán sai ⇒ "Còn lại sau ứng" bằng nguyên tổng chi phí). | 04/08 | chờ App Salary | bot + App Salary → Claude duyệt |
-| **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
-| **5** | **Gán lại dòng cách ly** — `DH479816174` · MISA `341964` · 03/08 · `G1.GE.QĐ139.1104.N2.162` Pizar-3 · SL 40 · `1.795.600đ` · `120.HTNT-PHARMACITY` · đang gán VP018 (telesaler) → `NON_SALES_ROLE_QUARANTINED`. Gán cho **NV Sale hợp lệ**. **App Report KHÔNG tự đoán.** | **08/08** | chưa gán | App Sale / danh mục phân công |
-| **6** | **Bản RAM `9986f0a` + `vault-audit.lock` tự chữa** — ‼ **ĐỀ NGHỊ NÂNG ƯU TIÊN.** Chẩn đoán của chính bot 03/08: DN004/DN007/DN008/DN009/DN011/DN017/DN019/DN024 **luân phiên mất nguồn chi phí**. Cùng thủ phạm vụ 21 NV hiện 0đ. Đang âm thầm phá dữ liệu. | ngay sau 08/08 | chưa deploy | bot |
-| **7** | **Bật `EMP_COST_NOTIFY` / `BONUS_NOTIFY`** | **09/08** | ✅ cổng nghiệm thu đã mở (v3.8 xác nhận) — chỉ chờ tới ngày | bot |
-| **8** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) | sau 08/08 | nợ từ 29/07, chưa có gì | bot |
+| **1** | **4 ẢNH XÁC MINH** — deploy `68378a7` xong 14:25 nhưng chưa dán ảnh. ① sổ "Thanh toán CP của tôi" 1 NV ② bảng "Thanh toán CP toàn đội" ③ nút "So kỳ trước" đang bật ④ AI target đủ 21 NV. Kèm T07/DN009 `336.334.260đ` · T08 `118.066.246đ`. | ngay | **chưa dán** | bot |
+| **2** | **Hợp đồng "Ứng lần 1"** — App Salary chưa trả lời `provisional`/`approved` nghĩa gì. **Cấm tự đoán** (đoán sai ⇒ "Còn lại sau ứng" bằng nguyên tổng chi phí). Xem `SPEC_SALARY_ADVANCE_AUTO.md`. | càng sớm càng tốt | chờ App Salary | App Salary → bot → Claude duyệt |
+| **3** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
+| **4** | **Gán lại dòng cách ly** `DH479816174` · MISA `341964` · Pizar-3 · `1.795.600đ` · `120.HTNT-PHARMACITY` · đang gán VP018 (telesaler). Gán cho **NV Sale hợp lệ** ⇒ hai app khớp `0đ` tròn. | **08/08** | chưa gán | App Sale / danh mục phân công |
+| **5** | **Bản RAM `9986f0a` + `vault-audit.lock` tự chữa** — ‼ đang **âm thầm phá dữ liệu**: DN004/DN007/DN008/DN009/DN011/DN017/DN019/DN024 luân phiên mất nguồn chi phí (chẩn đoán của chính bot 03/08). Cùng thủ phạm vụ 21 NV hiện 0đ. | ngay sau 08/08 | chưa deploy | bot |
+| **6** | **Bật `EMP_COST_NOTIFY` / `BONUS_NOTIFY`** — cổng nghiệm thu đã mở (v3.8), chỉ chờ tới ngày. | **09/08** | chờ tới ngày | bot |
+| **7** | **Màn "Chưa đồng bộ" — phần PHÂN LOẠI.** Claude đã xong kho + API + màn hình + chốt bất biến (`68378a7`). Còn: materializer lấy **TOÀN BỘ** dòng của kỳ → phân loại → `syncExceptionStore.write()`; dừng khi `balanced === false`. Danh mục 14 mã lý do có sẵn ở `syncExceptionCatalog.js`, **không phải tự nghĩ**. | sau 08/08 | chưa code | bot |
+| **8** | **Bật lịch nhắc thanh toán Telegram** — code sẵn (`paymentNotify.runPaymentNotices`), có `dryRun`. **Chạy thử ít nhất 1 lần** xem sẽ nhắn ai rồi mới bật thật. | sau 08/08 | chưa bật | bot |
 | **9** | **AI tự đề xuất target 08:00 NGÀY 01 hằng tháng** (GMT+7), tính lại ngày 09 sau khoá sổ, **cấm tự áp**. Spec: phụ lục `SPEC_SALARY_ADVANCE_AUTO.md`. | sau 08/08 | backend chưa code | bot |
-| **10** | ~~So tháng trước + nhớ lựa chọn~~ — **CLAUDE ĐÃ LÀM XONG `09117f5`**, chờ deploy chung đợt sau. Nhớ đúng NV + kỳ lần trước · nút "So kỳ trước" bật/tắt (**không tự tải**, tránh nặng gấp đôi ở chế độ Tất cả NV) · thiếu một kỳ thì không hiện gì, không hiện `0%` giả. Web 123/123, build sạch. | — | **code xong** | Claude ✅ |
-| **1b** | **‼ DEPLOY XONG PHẢI CHỤP HÌNH GỬI CEO XÁC MINH** (CEO yêu cầu 04/08). Bắt buộc 4 ảnh: ① sổ "Thanh toán CP của tôi" của 1 NV (3 lần + C44 + sổ còn nợ) ② bảng "Thanh toán CP toàn đội" ở chế độ Tất cả NV ③ nút "So kỳ trước" đang bật ④ ô AI đề xuất target hiện đủ 21 NV. Kèm số: T07/DN009 `336.334.260đ` · T08 `118.066.246đ` · doanh thu T08 khớp App Sale. **Không dán ảnh thì chưa gọi là xong.** | ngay sau deploy | chưa | bot |
-| ~~11~~ | **Module "Thanh toán CP của tôi"** — **GĐ1 + GĐ2 backend + bảng toàn đội ĐÃ XONG** (`39a402c`, `0a29d4e`, `6cc915c`). Còn: nút ghi nhận trên màn (chỉ CEO) + Telegram nhắc tới hạn/quá hạn. Cũ: — ‼ **ĐÃ GỠ CHẶN 04/08.** Câu "không build vội, chờ App Salary" trong spec là của 31/07 và **đã lỗi thời**: đường lấy **Lần 1** đã chạy thật trên PROD từ 31/07 (`salaryAdvance.js` → `routes.js:790` → `remainingAfterAdvance.js` → `SalaryAdvanceKpi`), còn **Lần 2/Lần 3 vốn là số của App Report**, không phụ thuộc App Salary. **Claude bắt tay làm GĐ1.** | — | **bắt đầu làm** | Claude |
-| **12** | **Đổi `SALARY_SERVICE_TOKEN`** | không gấp | CEO chưa gật | bot |
+| **10** | **Đổi `SALARY_SERVICE_TOKEN`** — token đang do người build App Salary giữ. | không gấp | CEO chưa gật | bot |
+
+### ✅ ĐÃ XONG VÀ ĐANG CHẠY TRÊN APP (PROD `68378a7`, 04/08 14:25)
+Doanh thu khớp App Sale (chênh **đúng bằng** dòng cách ly, đã truy ra tên) · tỷ lệ % **tự có hiệu lực sang mọi tháng sau** · T08 lên số `118.066.246đ` · KPI và badge "thiếu %" dùng chung một bảng tỷ lệ · ô "Ứng lần 1" nói đúng lý do · **chốt số ứng lần 1** (giảm ~95% lượt gọi App Salary) · nút chọn tháng + bộ lọc nâng cao + doanh thu trước/sau VAT · **nhớ lựa chọn + So kỳ trước** · AI đề xuất target đủ 21 NV, sửa/chọn từng người, chặn số sai · **nghiệm thu VP018 + DN022 (v3.8)** · target T08 21/21 NV · **Sổ "Thanh toán CP của tôi" GĐ1+GĐ2** (3 lần + C44 + sổ còn nợ · ghi nhận đã trả **chỉ CEO** có nhật ký · **bảng toàn đội**) · kho+API+màn "Chưa đồng bộ".
 
 **Không còn việc nào nằm ở CEO.**
 
