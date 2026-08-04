@@ -15,15 +15,59 @@ test('tới ngày thì nhắn MỞ CỬA SỔ, có số tiền và hạn', () =>
   assert.equal(notices.length, 1);
   assert.equal(notices[0].kind, 'open');
   assert.match(notices[0].text, /Lần 2 · Ứng kỳ 2026-07: 90\.000\.000đ đã có thể nhận/);
-  assert.match(notices[0].text, /Hạn 14\/09\/2026/);
+  // CEO chốt 04/08: tin CỨNG đúng ngày mốc, và nói luôn còn nhận được tới ngày nào.
+  assert.match(notices[0].text, /Mốc 14\/09\/2026/);
+  assert.match(notices[0].text, /còn nhận được tới 29\/09\/2026/);
 });
 
 test('quá hạn thì cảnh báo ĐỎ kèm số ngày và sổ còn nợ', () => {
+  // 01/10/2026: Lần 2 (mốc 14/09, hết biên độ 29/09) đã QUÁ HẠN thật — quá 2 ngày.
+  // Lần 3 (mốc 29/09, biên độ tới 14/10) mới tới mốc ⇒ tin MỞ CỬA SỔ, chưa phải đỏ.
   const notices = notify.planNotices(book('2026-10-01'), { empCode: 'DN001' });
-  assert.deepEqual(notices.map((n) => n.kind), ['overdue', 'overdue']);
+  assert.deepEqual(notices.map((n) => n.kind), ['overdue', 'open']);
   assert.match(notices[0].text, /🔴 QUÁ HẠN/);
-  assert.match(notices[0].text, /đã quá 17 ngày/);
+  assert.match(notices[0].text, /hết biên độ 29\/09\/2026 — đã quá 2 ngày/);
   assert.match(notices[0].text, /Sổ còn nợ: 150\.000\.000đ/);
+});
+
+/* ── CEO chốt 04/08: ngày cứng + nhắc lại bổ sung trong 15 ngày ───────────── */
+
+test('‼ chưa tới mốc thì TUYỆT ĐỐI không nhắn', () => {
+  assert.deepEqual(notify.planNotices(book('2026-09-13'), { empCode: 'DN001' }), []);
+});
+
+test('‼ trong biên độ mà chưa nhận ⇒ NHẮC LẠI ở mốc 5·10·15 ngày, không nhắn mỗi ngày', () => {
+  const sent = { [notify.stateKey('DN001', '2026-07', 'second', 'open')]: 'đã gửi' };
+  // Ngày 3: đã gửi tin cứng rồi, chưa tới mốc nhắc lại ⇒ im.
+  assert.deepEqual(notify.planNotices(book('2026-09-17'), { empCode: 'DN001', sent })
+    .filter((n) => n.installmentKey === 'second'), []);
+  // Ngày 5 ⇒ nhắc lại lần 1.
+  const day5 = notify.planNotices(book('2026-09-19'), { empCode: 'DN001', sent })
+    .find((n) => n.installmentKey === 'second');
+  assert.equal(day5.kind, 'remind');
+  assert.match(day5.text, /đã 5 ngày · còn 10 ngày trong biên độ/);
+  // Ngày 7: mốc 5 đã gửi ⇒ im tới mốc 10.
+  sent[day5.key] = 'đã gửi';
+  assert.deepEqual(notify.planNotices(book('2026-09-21'), { empCode: 'DN001', sent })
+    .filter((n) => n.installmentKey === 'second'), []);
+  // Ngày 12 ⇒ mốc 10.
+  const day10 = notify.planNotices(book('2026-09-26'), { empCode: 'DN001', sent })
+    .find((n) => n.installmentKey === 'second');
+  assert.match(day10.key, /remind10$/);
+});
+
+test('‼ mỗi lần chạy chỉ lấy MỐC CAO NHẤT — cron chết mấy hôm không bắn dồn 3 tin', () => {
+  const sent = { [notify.stateKey('DN001', '2026-07', 'second', 'open')]: 'đã gửi' };
+  const notices = notify.planNotices(book('2026-09-29'), { empCode: 'DN001', sent })
+    .filter((n) => n.installmentKey === 'second');
+  assert.equal(notices.length, 1, 'không được dồn cả 3 mốc vào một lần');
+  assert.match(notices[0].key, /remind15$/);
+});
+
+test('‼ lỡ mất ngày mốc thì tin CỨNG vẫn phải gửi, không rơi mất', () => {
+  const notices = notify.planNotices(book('2026-09-20'), { empCode: 'DN001' })
+    .filter((n) => n.installmentKey === 'second');
+  assert.equal(notices[0].kind, 'open', 'chưa gửi tin cứng thì phải gửi bù trước khi nhắc lại');
 });
 
 test('‼ đã ghi nhận trả thì THÔI nhắc lần đó', () => {

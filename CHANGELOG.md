@@ -1,3 +1,21 @@
+### 2026-08-04 — CEO duyệt 2 đề xuất: tách "Đã nhận" + hạn có biên độ trượt 15 ngày
+
+**1. Ô "Đã nhận (lũy kế)" nay TÁCH hai loại tiền.** Trước đây gộp chung "App Salary đã chi" với "CEO đã bấm ghi nhận trả" ⇒ lúc đối chiếu hụt tiền không truy được hụt ở khâu nào. Nay dòng phụ ghi rõ: *"App Salary chi … · CEO ghi nhận …"*. Backend trả `receivedFromSalary` + `receivedRecorded`, có test buộc hai số cộng lại đúng bằng `received`.
+
+**2. Hạn Lần 2 / Lần 3 là một KHOẢNG, không phải một ngày cứng.**
+> CEO: *"anh đồng ý số ngày theo lịch, không kể ngày nghỉ chủ nhật, nghỉ lễ… lần 2 sẽ rơi vào trong khoảng ngày 15/09/2026 có dao động biên độ trượt lên 15 ngày"* và *"có ngày cứng để nhắc tin nhắn telegram là ngày 15/09, nhưng sau đó có thể nhắc lại bổ sung trong vòng 15 ngày, nếu ngày đó chưa thực hiện ứng lần 2."*
+
+- **Ngày mốc vẫn đếm THẲNG theo lịch** — CEO đã cân nhắc và chọn KHÔNG dời tránh Chủ nhật/lễ. `holidays.json` **không được cắm vào** chỗ này; có test khoá lại.
+- **Thêm biên độ 15 ngày:** quá mốc mà còn trong biên độ ⇒ trạng thái mới **"tới hạn · trong biên độ"** (🟡), **không báo đỏ**. Quá biên độ mới là **quá hạn** (🔴). Nhờ vậy hạn rơi vào Chủ nhật hay Tết không bị báo đỏ oan.
+- Cột Hạn ghi rõ *"qua mốc N ngày · còn M ngày biên độ"*.
+
+**3. Tin Telegram theo đúng nhịp CEO mô tả** (`paymentNotify`):
+- **Đúng ngày mốc** ⇒ tin cứng "đã có thể nhận", nói luôn còn nhận được tới ngày nào. **Lỡ mất ngày đó (cron chết) thì lần chạy sau vẫn gửi bù** — tin cứng không được rơi mất.
+- **Nhắc lại bổ sung ở 3 mốc 5 · 10 · 15 ngày** trong biên độ nếu vẫn chưa nhận. Mỗi lần chạy **chỉ lấy mốc cao nhất đã tới** ⇒ cron chết mấy hôm cũng không bắn dồn 3 tin.
+- **Quá biên độ mới bắn tin đỏ.** Trước đây bắn đỏ ngay hôm sau ngày mốc — sẽ nhắn oan hàng loạt khi bật `EMP_COST_NOTIFY` ngày 09/08.
+
+- Test: server **785/791** (6 lỗi PDF nền cũ) · web **150/150** · build sạch · đã mở app thật bằng chromium, tài khoản CEO, không lỗi runtime.
+
 ### 2026-08-04 — Sổ thanh toán: sửa 4 chỗ sai nghiệp vụ CEO chỉ ra trên ảnh chụp
 
 > CEO xem ảnh T07 của DN009 và chỉ ra: Lần 1 **57.851.347đ** bị gắn **"quá 4 ngày · quá hạn"**, cột "Khoảng cách" để trống, NV không có ứng thì mất luôn sổ, và tài khoản CEO chưa phải bảng tổng hợp chung.

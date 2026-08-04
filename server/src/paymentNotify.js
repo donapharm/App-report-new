@@ -18,6 +18,10 @@ const persist = require('./persist');
 
 const STATE_FILE = 'payment_notify_state';
 const OPEN_WINDOW_DAYS = 0;   // đúng ngày tới hạn thì mở cửa sổ
+// CEO chốt 04/08: *"có ngày cứng để nhắc tin nhắn telegram là ngày 15/09, nhưng sau
+// đó có thể nhắc lại bổ sung trong vòng 15 ngày, nếu ngày đó chưa thực hiện ứng lần 2."*
+// ⇒ tin cứng đúng ngày mốc, rồi nhắc lại ở 3 mốc này trong biên độ. Không nhắn mỗi ngày.
+const REMIND_ROUNDS = [5, 10, 15];
 const STATE_LIMIT = 5000;
 
 const money = (value) => Number(value || 0).toLocaleString('vi-VN');
@@ -56,23 +60,45 @@ function planNotices(schedule, { empCode, employeeName = '', sent = {} } = {}) {
     if (days == null) continue;
 
     const who = employeeName ? `${empCode} · ${employeeName}` : String(empCode);
-    if (days < 0) {
+    const openKey = stateKey(empCode, schedule.period, item.key, 'open');
+    const graceLeft = item.daysFromGrace;
+
+    // ① QUÁ BIÊN ĐỘ ⇒ cảnh báo đỏ. Chỉ tới đây mới được gọi là "quá hạn".
+    if (graceLeft != null && graceLeft < 0) {
       const key = stateKey(empCode, schedule.period, item.key, 'overdue');
       if (!sent[key]) {
         notices.push({
           key, kind: 'overdue', empCode, installmentKey: item.key,
-          text: `🔴 QUÁ HẠN — ${who}\n${item.label} kỳ ${schedule.period}: ${money(item.amount)}đ\nHạn ${dmy(item.dueDate)}, đã quá ${Math.abs(days)} ngày chưa nhận.\nSổ còn nợ: ${money(schedule.outstanding)}đ.`,
+          text: `🔴 QUÁ HẠN — ${who}\n${item.label} kỳ ${schedule.period}: ${money(item.amount)}đ\nMốc ${dmy(item.dueDate)}, hết biên độ ${dmy(item.graceDate)} — đã quá ${Math.abs(graceLeft)} ngày.\nSổ còn nợ: ${money(schedule.outstanding)}đ.`,
         });
       }
-    } else if (days <= OPEN_WINDOW_DAYS) {
-      const key = stateKey(empCode, schedule.period, item.key, 'open');
-      if (!sent[key]) {
-        notices.push({
-          key, kind: 'open', empCode, installmentKey: item.key,
-          text: `💰 ${who}\n${item.label} kỳ ${schedule.period}: ${money(item.amount)}đ đã có thể nhận.\nHạn ${dmy(item.dueDate)}.\nSổ còn nợ sau lần này: ${money(Math.max(0, schedule.outstanding - item.amount))}đ.`,
-        });
-      }
+      continue;
     }
+
+    if (days > OPEN_WINDOW_DAYS) continue;   // chưa tới mốc thì chưa nhắn gì
+
+    // ② ĐÚNG NGÀY MỐC ⇒ tin CỨNG. Nếu lịch chạy lỡ mất ngày đó thì lần chạy sau
+    //    vẫn phải gửi — tin này không được rơi mất chỉ vì cron chết một hôm.
+    if (!sent[openKey]) {
+      notices.push({
+        key: openKey, kind: 'open', empCode, installmentKey: item.key,
+        text: `💰 ${who}\n${item.label} kỳ ${schedule.period}: ${money(item.amount)}đ đã có thể nhận.\nMốc ${dmy(item.dueDate)} · còn nhận được tới ${dmy(item.graceDate)}.\nSổ còn nợ sau lần này: ${money(Math.max(0, schedule.outstanding - item.amount))}đ.`,
+      });
+      continue;
+    }
+
+    // ③ TRONG BIÊN ĐỘ 15 NGÀY mà vẫn chưa nhận ⇒ NHẮC LẠI BỔ SUNG (CEO chốt 04/08).
+    //    Chỉ 3 mốc 5·10·15 ngày, và mỗi lần chạy chỉ lấy MỐC CAO NHẤT đã tới ⇒ tối đa
+    //    3 tin cho cả biên độ, không phải ngày nào cũng nhắn.
+    const elapsed = -days;
+    const round = REMIND_ROUNDS.filter((day) => day <= elapsed).pop();
+    if (round == null) continue;
+    const key = stateKey(empCode, schedule.period, item.key, `remind${round}`);
+    if (sent[key]) continue;
+    notices.push({
+      key, kind: 'remind', empCode, installmentKey: item.key,
+      text: `⏳ NHẮC LẠI — ${who}\n${item.label} kỳ ${schedule.period}: ${money(item.amount)}đ vẫn chưa nhận.\nMốc ${dmy(item.dueDate)} · đã ${elapsed} ngày · còn ${graceLeft ?? '—'} ngày trong biên độ (hết ${dmy(item.graceDate)}).`,
+    });
   }
   return notices;
 }
@@ -104,4 +130,4 @@ async function runPaymentNotices(schedules = [], { send, store = persist, now, d
   return { planned, delivered };
 }
 
-module.exports = { STATE_FILE, OPEN_WINDOW_DAYS, stateKey, readState, markSent, planNotices, runPaymentNotices };
+module.exports = { STATE_FILE, OPEN_WINDOW_DAYS, REMIND_ROUNDS, stateKey, readState, markSent, planNotices, runPaymentNotices };

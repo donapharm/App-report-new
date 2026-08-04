@@ -22,6 +22,20 @@ const DEFAULT_SECOND_RATIO = 0.6;
 // Mốc ngày tính TỪ ngày Lần 1 (mục 5). Hiển thị bắt buộc để NV khỏi tự nhẩm.
 const DAYS_TO_SECOND = 45;
 const DAYS_TO_FINAL = 60;
+/**
+ * BIÊN ĐỘ TRƯỢT — CEO chốt 04/08/2026.
+ *
+ * CEO: *"số ngày theo lịch, không kể ngày nghỉ chủ nhật, nghỉ lễ… lần 2 sẽ rơi vào
+ * trong khoảng ngày 15/09/2026 có dao động biên độ trượt lên 15 ngày, kiểu vậy đó."*
+ *
+ * Nghĩa là hai điều, phải làm đúng cả hai:
+ *  1. Ngày mốc vẫn đếm THẲNG theo lịch — KHÔNG dời tránh Chủ nhật/lễ (CEO đã cân
+ *     nhắc và chọn phương án này; không được tự ý cắm `holidays.json` vào đây).
+ *  2. Hạn là một KHOẢNG, không phải một ngày cứng. Quá ngày mốc mà còn trong 15 ngày
+ *     thì là **TỚI HẠN**, chưa phải **QUÁ HẠN**. Nhờ vậy hạn rơi vào Chủ nhật hay
+ *     Tết cũng không bị báo đỏ oan — và tin nhắn nhắc nợ không bắn oan theo.
+ */
+const GRACE_DAYS = 15;
 
 function moneyOrNull(value) {
   // `Number(null)`/`Number('')` đều ra 0 — phải loại thẳng, nếu không "chưa có số"
@@ -181,13 +195,26 @@ function buildPaymentSchedule({
   for (const item of installments) {
     item.daysFromToday = today ? daysBetween(today, item.dueDate) : null;
     // Lần 1 do App Salary chi, App Report KHÔNG đòi nợ nó ⇒ miễn nhiễm "quá hạn".
-    if (item.key === 'advance') continue;
-    if (item.status !== 'paid' && item.daysFromToday != null && item.daysFromToday < 0) item.status = 'overdue';
+    if (item.key === 'advance') { item.graceDate = ''; item.graceDays = 0; continue; }
+    item.graceDays = GRACE_DAYS;
+    item.graceDate = addDays(item.dueDate, GRACE_DAYS);
+    item.daysFromGrace = today ? daysBetween(today, item.graceDate) : null;
+    if (item.status === 'paid') continue;
+    // Quá ngày mốc nhưng CÒN trong biên độ ⇒ "tới hạn", chưa phải "quá hạn".
+    if (item.daysFromGrace != null && item.daysFromGrace < 0) item.status = 'overdue';
+    else if (item.daysFromToday != null && item.daysFromToday < 0) item.status = 'due';
   }
 
   // "Đã nhận" = số THẬT đã chuyển (nếu có ghi nhận), còn lại lấy số của lần đã chốt.
+  const amountReceived = (item) => (Number.isSafeInteger(item.paidAmount) ? item.paidAmount : item.amount);
   const received = installments.filter((item) => item.status === 'paid')
-    .reduce((sum, item) => sum + (Number.isSafeInteger(item.paidAmount) ? item.paidAmount : item.amount), 0);
+    .reduce((sum, item) => sum + amountReceived(item), 0);
+  // ‼ CEO chốt 04/08: TÁCH hai loại tiền — bên lương chi khác với CEO ghi nhận trả.
+  // Gộp chung thì lúc đối chiếu hụt tiền không truy được hụt ở khâu nào.
+  const receivedFromSalary = installments
+    .filter((item) => item.key === 'advance' && item.status === 'paid')
+    .reduce((sum, item) => sum + amountReceived(item), 0);
+  const receivedRecorded = received - receivedFromSalary;
   const outstanding = total - received;
   const sum = installments.reduce((acc, item) => acc + item.amount, 0);
   const invariantOk = sum === total && received + outstanding === total;
@@ -196,6 +223,8 @@ function buildPaymentSchedule({
   return Object.freeze({
     available: true, period: month, reason: null,
     total, installments, received, outstanding,
+    // Hai nguồn tiền của "Đã nhận" — App Salary chi vs CEO ghi nhận trả.
+    receivedFromSalary, receivedRecorded,
     // C44 là SỔ RIÊNG: không cộng vào total, không nằm trong các lần.
     c44: { amount: moneyOrNull(c44Amount), note: 'Khoản riêng · cộng dồn · chi trả T12', includedInTotal: false },
     twoInstalmentsOnly, splitThresholdVnd: Number(splitThresholdVnd),
@@ -244,6 +273,6 @@ function buildPaymentRangeSummary(schedules = []) {
 }
 
 module.exports = {
-  DEFAULT_SPLIT_THRESHOLD_VND, DEFAULT_SECOND_RATIO, DAYS_TO_SECOND, DAYS_TO_FINAL,
+  DEFAULT_SPLIT_THRESHOLD_VND, DEFAULT_SECOND_RATIO, DAYS_TO_SECOND, DAYS_TO_FINAL, GRACE_DAYS,
   buildPaymentSchedule, buildPaymentRangeSummary, periodEndDate, addDays, daysBetween,
 };

@@ -534,6 +534,9 @@ const PAYMENT_STATUS = {
   paid: { icon: '✓', label: 'đã trả', tone: 'ok' },
   plan: { icon: '○', label: 'kế hoạch · chưa trả', tone: '' },
   overdue: { icon: '🔴', label: 'quá hạn', tone: 'warn' },
+  // CEO chốt 04/08: hạn là một KHOẢNG có biên độ trượt 15 ngày, không phải ngày cứng.
+  // Quá mốc mà còn trong biên độ thì là TỚI HẠN — chưa được báo đỏ.
+  due: { icon: '🟡', label: 'tới hạn · trong biên độ', tone: '' },
   // CEO chốt 04/08: Lần 1 do App Salary duyệt vào ngày cuối tháng ⇒ có số là XONG,
   // không bao giờ "quá hạn". Hai trạng thái riêng dưới đây để nói đúng việc đó.
   pending: { icon: '◔', label: 'chưa tới ngày duyệt', tone: '' },
@@ -658,8 +661,11 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
     <div className="kpi-grid">
       <Kpi label="Tổng chi phí kỳ (sau phạt)" value={formatEmployeeCostCell(schedule.total, moneyColumn)}
         sub={schedule.twoInstalmentsOnly ? 'Dưới ngưỡng · tất toán trong 2 lần' : 'Chia 3 lần'} />
+      {/* ‼ CEO chốt 04/08: TÁCH hai loại tiền. Gộp chung thì đối chiếu hụt tiền
+          không truy được hụt ở khâu nào — bên lương chi hay CEO đã ghi nhận trả. */}
       <Kpi label="Đã nhận (lũy kế)" value={formatEmployeeCostCell(schedule.received, moneyColumn)}
-        sub="Chỉ tính lần đã chốt thật" tone="employee-cost-tone-base" />
+        sub={`App Salary chi ${formatEmployeeCostCell(schedule.receivedFromSalary, moneyColumn)} · CEO ghi nhận ${formatEmployeeCostCell(schedule.receivedRecorded, moneyColumn)}`}
+        tone="employee-cost-tone-base" />
       <Kpi label="Sổ còn nợ" value={formatEmployeeCostCell(schedule.outstanding, moneyColumn)}
         sub="Cộng dồn — lần chưa nhận không mất đi" />
       {schedule.c44 && <Kpi label="C44 · Lương cuối năm" value={formatEmployeeCostCell(schedule.c44.amount, moneyColumn)}
@@ -681,7 +687,10 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
               {item.key === 'advance'
                 ? <small>{item.status === 'none' ? 'không phát sinh'
                   : item.status === 'pending' ? 'duyệt vào ngày cuối tháng' : 'App Salary đã duyệt'}</small>
-                : days != null && <small>{days > 0 ? `còn ${days} ngày` : days === 0 ? 'hôm nay' : `quá ${Math.abs(days)} ngày`}</small>}
+                : days != null && <small>{days > 0 ? `còn ${days} ngày` : days === 0 ? 'hôm nay'
+                  : item.daysFromGrace != null && item.daysFromGrace >= 0
+                    ? `qua mốc ${Math.abs(days)} ngày · còn ${item.daysFromGrace} ngày biên độ`
+                    : `quá ${Math.abs(days)} ngày`}</small>}
             </td>
             <td><small>{item.gapNote || '—'}</small></td>
             <td><small>{item.source === 'app_salary' ? 'App Salary · chỉ đọc' : 'App Report tính'}</small></td>

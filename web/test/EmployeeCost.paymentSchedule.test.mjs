@@ -58,3 +58,15 @@ test('màn: sổ chỉ hiện khi chọn 1 NV, có cảnh báo khi sổ chưa c�
   assert.match(source, /chưa ai ghi nhận đã trả thì vẫn là kế hoạch/, 'không được để hiểu nhầm là đã nhận');
   assert.match(source, /còn \$\{days\} ngày/, 'phải ghi "còn N ngày" cho NV khỏi tự nhẩm');
 });
+
+/* ── CEO chốt 04/08 (đợt 2) ────────────────────────────────────────────────── */
+
+test('‼ ô "Đã nhận" phải tách App Salary chi vs CEO ghi nhận trả', () => {
+  assert.match(source, /App Salary chi \$\{formatEmployeeCostCell\(schedule\.receivedFromSalary/);
+  assert.match(source, /CEO ghi nhận \$\{formatEmployeeCostCell\(schedule\.receivedRecorded/);
+});
+
+test('‼ có trạng thái "tới hạn · trong biên độ" — không báo đỏ ngay khi qua mốc', () => {
+  assert.match(source, /due: \{ icon: '🟡', label: 'tới hạn · trong biên độ'/);
+  assert.match(source, /còn \$\{item\.daysFromGrace\} ngày biên độ/);
+});

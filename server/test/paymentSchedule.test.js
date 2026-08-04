@@ -91,9 +91,12 @@ test('mốc ngày: lần 1 cuối tháng kỳ, +45 ngày, +60 ngày; ghi rõ kho
 });
 
 test('quá hạn thì đánh dấu đỏ; lần đã chốt thì giữ nguyên "đã trả"', () => {
+  // CEO chốt 04/08: hạn có BIÊN ĐỘ TRƯỢT 15 ngày. Ngày 01/10/2026:
+  //   Lần 2 mốc 14/09 → hết biên độ 29/09 ⇒ QUÁ HẠN thật.
+  //   Lần 3 mốc 29/09 → còn biên độ tới 14/10 ⇒ mới TỚI HẠN, chưa phải quá hạn.
   const book = buildPaymentSchedule({ ...base, today: '2026-10-01' });
   assert.equal(book.installments[0].status, 'paid', 'lần đã chốt không bị biến thành quá hạn');
-  assert.deepEqual(book.installments.slice(1).map((i) => i.status), ['overdue', 'overdue']);
+  assert.deepEqual(book.installments.slice(1).map((i) => i.status), ['overdue', 'due']);
 });
 
 test('GĐ1 chưa ghi nhận trả lần 2/3 ⇒ vẫn là KẾ HOẠCH, không được hiện như đã trả', () => {
@@ -173,4 +176,61 @@ test('gộp nhiều kỳ: total · đã ứng · lần 2 · lần 3 · C44, kỳ
   assert.deepEqual(range.skipped, [{ period: '2026-05', reason: 'total_unavailable' }],
     'kỳ thiếu nguồn phải hiện ra, không cộng 0 vào tổng');
   assert.equal(range.invariantOk, true);
+});
+
+/* ── CEO chốt 04/08 (đợt 2): tách "Đã nhận" + biên độ trượt 15 ngày ────────── */
+
+test('‼ "Đã nhận" tách rõ App Salary chi vs CEO ghi nhận trả', () => {
+  const book = buildPaymentSchedule({ ...base, today: '2026-09-20' });
+  // Mới có Lần 1 của App Salary, CEO chưa ghi nhận trả lần nào.
+  assert.equal(book.received, 50_000_000);
+  assert.equal(book.receivedFromSalary, 50_000_000);
+  assert.equal(book.receivedRecorded, 0, 'chưa ai bấm ghi nhận thì phải là 0, không gộp vào');
+
+  const afterRecord = buildPaymentSchedule({
+    ...base, today: '2026-09-20',
+    paid: { second: { amount: 90_000_000, paidAt: '2026-09-16', by: 'CEO' } },
+  });
+  assert.equal(afterRecord.receivedFromSalary, 50_000_000);
+  assert.equal(afterRecord.receivedRecorded, 90_000_000);
+  assert.equal(afterRecord.received, 140_000_000, 'hai nguồn cộng lại đúng bằng tổng đã nhận');
+  assert.equal(afterRecord.receivedFromSalary + afterRecord.receivedRecorded, afterRecord.received);
+});
+
+test('‼ BIÊN ĐỘ TRƯỢT 15 NGÀY: quá ngày mốc mà còn trong biên độ ⇒ TỚI HẠN, chưa quá hạn', () => {
+  // Ví dụ CEO nêu: chi phí T07.2026, Lần 1 ứng 31/07, Lần 2 rơi vào khoảng 15/09.
+  const due = buildPaymentSchedule({ ...base, today: '2026-09-14' }).installments[1];
+  assert.equal(due.dueDate, '2026-09-14', 'ngày mốc vẫn đếm thẳng theo lịch');
+  assert.equal(due.graceDate, '2026-09-29', 'biên độ trượt 15 ngày');
+  assert.equal(due.graceDays, 15);
+
+  // Đúng ngày CEO nói (15/09) — vẫn trong biên độ.
+  assert.equal(buildPaymentSchedule({ ...base, today: '2026-09-15' }).installments[1].status, 'due');
+  // Ngày cuối biên độ — vẫn chưa quá hạn.
+  assert.equal(buildPaymentSchedule({ ...base, today: '2026-09-29' }).installments[1].status, 'due');
+  // Qua biên độ mới đỏ.
+  assert.equal(buildPaymentSchedule({ ...base, today: '2026-09-30' }).installments[1].status, 'overdue');
+  // Chưa tới mốc thì vẫn là kế hoạch.
+  assert.equal(buildPaymentSchedule({ ...base, today: '2026-09-01' }).installments[1].status, 'plan');
+});
+
+test('‼ hạn rơi vào Chủ nhật KHÔNG được dời ngày — CEO chọn đếm thẳng theo lịch', () => {
+  // Kỳ 10/2026: 31/10 + 45 = 15/12... chọn kỳ có Lần 3 rơi đúng Chủ nhật để chắc.
+  const book = buildPaymentSchedule({
+    period: '2026-06', totalAfterPenalty: 200_000_000, firstAdvanceAmount: 50_000_000, today: '2026-08-30',
+  });
+  const second = book.installments[1];
+  assert.equal(second.dueDate, '2026-08-14', 'ngày mốc là 30/06 + 45, không nhích đi đâu cả');
+  // Lần 3 = 30/06 + 60 = 29/08/2026, đúng THỨ BẢY — vẫn giữ nguyên, không dời.
+  assert.equal(book.installments[2].dueDate, '2026-08-29');
+  assert.equal(new Date('2026-08-29T00:00:00Z').getUTCDay(), 6, 'thứ Bảy');
+  // Ngày 30/08 đã qua mốc Lần 3 nhưng còn trong biên độ ⇒ KHÔNG báo đỏ oan.
+  assert.equal(book.installments[2].status, 'due');
+});
+
+test('Lần 1 không có biên độ — nó không phải khoản App Report đi đòi', () => {
+  const first = buildPaymentSchedule({ ...base, today: '2026-10-01' }).installments[0];
+  assert.equal(first.graceDate, '');
+  assert.equal(first.graceDays, 0);
+  assert.equal(first.status, 'paid');
 });
