@@ -51,6 +51,7 @@ const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
 const paymentLedgerStore = require('./paymentLedgerStore');
 const paymentTeamSummary = require('./paymentTeamSummary');
+const { mapWithDeadline, EMPLOYEE_COST_ALL_CONCURRENCY, EMPLOYEE_COST_ALL_DEADLINE_MS } = require('./requestDeadline');
 const syncExceptionStore = require('./syncExceptionStore');
 const syncExceptionReport = require('./syncExceptionReport');
 const targetAdjustment = require('./targetAdjustment');
@@ -1058,14 +1059,33 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
     }
   }));
   const buildMerged = async () => {
-    const reports = await mapWithConcurrency(roster, 3, (employee) => employeeCostPayload(req, {
+    const deadlineAt = Date.now() + EMPLOYEE_COST_ALL_DEADLINE_MS;
+    const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => employeeCostPayload(req, {
       requestedEmp: employee.emp_code,
       auditEvent,
       roster,
       sharedCatalogRowsByPeriod,
       includeSalaryAdvance: false,
       suppressAudit,
-    }));
+    }), {
+      deadlineAt,
+      // NV chưa kịp ⇒ vào đúng luồng "thiếu nguồn" đã có, hiện tên trên băng đỏ.
+      // Tuyệt đối KHÔNG trả 0 đồng thay cho "chưa lấy được".
+      onSkip: (employee, reason, error) => {
+        if (reason === 'error') {
+          console.warn('[employee-cost] NV lỗi nguồn', { empCode: employee.emp_code, message: error?.message });
+        }
+        const note = reason === 'error'
+          ? 'Nguồn chi phí lỗi — chưa có số, KHÔNG phải 0đ'
+          : 'Chưa lấy kịp trong hạn — chưa có số, KHÔNG phải 0đ';
+        // ‼ PHẢI dùng đúng khung rỗng chuẩn (có `periods` theo từng kỳ). Trả
+        // `periods: []` thì tầng gộp không thấy NV này ở đâu cả ⇒ họ BIẾN MẤT khỏi
+        // bảng thay vì hiện tên trên băng đỏ. Test `perfRouteMemo` khoá lỗi này lại.
+        const stub = employeeCost.emptyRangePayload(employee.emp_code, range, note);
+        stub.sourceOutcome = reason === 'error' ? 'source_error' : 'deadline';
+        return stub;
+      },
+    });
     const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
     // Bảng thanh toán toàn đội — dựng từ chính subtotals vừa có + kho Lần 1 + sổ ghi
     // nhận. KHÔNG gọi thêm App Salary (chế độ ALL vốn không fan-out, giữ nguyên).
@@ -1575,6 +1595,7 @@ async function mapWithConcurrency(items, limit, worker) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
   return results;
 }
+
 
 async function employeeCostExportReports(req, format) {
   const admin = auth.isAdmin(req.session.role);

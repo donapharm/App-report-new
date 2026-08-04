@@ -1,3 +1,30 @@
+### 2026-08-04 — Điều tra "app load chậm, sợ có ngày treo": đo được 178 giây, đã chặn cứng ở 25 giây
+
+> CEO: *"tại sao app load dữ liệu vẫn bị chậm, tôi sợ có ngày đứt thì toi… cứ mỗi lần nó load là lại cảm giác thấy sợ nó lỗi hay treo luôn."*
+
+**Đo trước, không đoán.** Chạy trình duyệt thật, ghi lại toàn bộ lượt gọi:
+- Màn Tổng quan: **13 lượt API, chạy song song**, không có chuỗi nối tiếp — phần này KHÔNG phải thủ phạm.
+- Bản build thật: `index 511KB + recharts 560KB + css 187KB` (≈**335KB sau nén**) — chấp nhận được. Thư mục `report-assets` 32MB **không** được app tải (không có service worker, không chỗ nào tham chiếu) — loại trừ.
+
+**Thủ phạm: bản "Tất cả NV" khi nguồn chậm.**
+```
+mỗi NV xấu nhất : 6,5s + chờ 2s + 6,5s + chờ 4s + 6,5s = 25,5 giây
+21 NV ÷ 3 luồng = 7 đợt  ⇒  178,5 GIÂY cho một yêu cầu lạnh
+trình duyệt bỏ cuộc ở 45 giây · Cloudflare cắt ở 100 giây (lỗi 524)
+```
+Nghĩa là khi DataHub chậm thì màn hình **chắc chắn đứt**, còn server vẫn cày tiếp cho một người đã bỏ đi. Nỗi lo của CEO là có thật và tính ra được.
+
+**Đã chữa** (`server/src/requestDeadline.js`):
+1. **Hạn chót cho cả yêu cầu — 25 giây.** Tới hạn thì trả ngay phần đã có. Không còn 178 giây, không còn 524.
+2. **NV chưa kịp lấy số ⇒ `sourceOutcome: 'deadline'`**, đi vào đúng luồng "thiếu nguồn" sẵn có, **hiện đích danh tên trên băng đỏ**. Tuyệt đối không trả 0đ thay cho "chưa có số".
+3. **Một NV lỗi không còn kéo sập cả bảng.** Trước đây một NV lỗi ⇒ HTTP 500 ⇒ CEO mở màn hình thấy trắng, 20 người còn lại mất theo. Nay người lỗi hiện tên, người khác vẫn ra số. (Đổi hợp đồng có chủ đích, đã sửa `perfRouteMemo.test.js`.)
+4. **Nâng số luồng 3 → 6** ⇒ 7 đợt còn 4. Không nâng cao hơn vì DataHub đang hay kẹt khoá `vault-audit`.
+
+**Một lỗi tự bắt được giữa chừng:** bản vá đầu tiên trả `periods: []` cho NV bị cắt ⇒ tầng gộp không thấy họ ở đâu ⇒ **NV biến mất khỏi bảng** thay vì hiện tên. Đúng thứ CEO cấm tuyệt đối. Đã sửa dùng khung rỗng chuẩn `emptyRangePayload` và khoá lại bằng test.
+
+- Test: server **792/798** (6 lỗi PDF nền cũ) · `employeeCostAllDeadline.test.js` **7/7**.
+- **Chưa làm, đề xuất tiếp:** tách `recharts` (163KB nén) ra khỏi gói chính vì nhiều trang không vẽ biểu đồ; và trả bản cũ ngay + dựng lại ngầm cho bảng "Tất cả NV" (nay mới làm cho bảng tỷ lệ).
+
 ### 2026-08-04 — CEO duyệt 2 đề xuất: tách "Đã nhận" + hạn có biên độ trượt 15 ngày
 
 **1. Ô "Đã nhận (lũy kế)" nay TÁCH hai loại tiền.** Trước đây gộp chung "App Salary đã chi" với "CEO đã bấm ghi nhận trả" ⇒ lúc đối chiếu hụt tiền không truy được hụt ở khâu nào. Nay dòng phụ ghi rõ: *"App Salary chi … · CEO ghi nhận …"*. Backend trả `receivedFromSalary` + `receivedRecorded`, có test buộc hai số cộng lại đúng bằng `received`.

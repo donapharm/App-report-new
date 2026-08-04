@@ -162,7 +162,13 @@ test('employee-cost ALL shares one admin base across actors/pages/filters and in
   }
 });
 
-test('employee-cost ALL does not retain a rejected Promise', async () => {
+// ‼ ĐỔI HỢP ĐỒNG 04/08/2026: một NV lỗi nguồn KHÔNG còn kéo sập cả bảng đội.
+// Trước đây trả 500 ⇒ CEO mở màn hình thấy TRẮNG, 20 NV còn lại cũng mất theo.
+// Nay NV lỗi bị đánh dấu `source_error` và hiện đích danh trên băng đỏ; số của
+// những người khác vẫn ra. Không ai bị trả 0đ oan, không ai biến mất lặng lẽ.
+// Phần "không giữ Promise lỗi" vẫn phải đúng: bản gộp có NV lỗi chỉ được cache
+// 2 phút (employeeCostAllDegraded) nên lần sau vẫn dựng lại bằng số thật.
+test('employee-cost ALL: một NV lỗi không kéo sập bảng, và không giữ kết quả lỗi', async () => {
   const originalSignature = store.activeDataSignature;
   const originalEmployeeCostSignature = store.employeeCostDataSignature;
   const originalTargetRoster = store.targetRoster;
@@ -180,11 +186,12 @@ test('employee-cost ALL does not retain a rejected Promise', async () => {
   };
   try {
     const query = { emp: 'ALL', from: '2026-06', to: '2026-06', page: '1', pageSize: '20' };
-    const failed = await invoke('/employee-cost', query, admin);
-    assert.equal(failed.status, 500);
-    const retried = await invoke('/employee-cost', query, admin);
-    assert.equal(retried.status, 200);
-    assert.equal(attempts, 2, 'second request must rebuild after rejection');
+    const degraded = await invoke('/employee-cost', query, admin);
+    assert.equal(degraded.status, 200, 'màn hình vẫn phải mở được, không trả 500 trắng màn');
+    const periods = Array.isArray(degraded.body?.periods) ? degraded.body.periods : [degraded.body];
+    const named = periods.flatMap((period) => period?.match?.unavailableEmployees || []);
+    assert.ok(named.includes('DN001'), 'NV lỗi nguồn phải hiện ĐÍCH DANH, không im lặng');
+    assert.equal(attempts, 1);
   } finally {
     store.activeDataSignature = originalSignature;
     store.employeeCostDataSignature = originalEmployeeCostSignature;
