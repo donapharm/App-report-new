@@ -1,3 +1,19 @@
+### 2026-08-04 — Module "Thanh toán CP của tôi" GĐ1: lõi sổ thanh toán (backend)
+
+Gỡ chặn trước (`aa56143`): câu *"không build vội, chờ App Salary"* trong spec là của 31/07 và đã lỗi thời — đường lấy **Lần 1** chạy thật trên PROD từ 31/07, còn **Lần 2/Lần 3 vốn là số của App Report**. CEO nhắc đúng.
+
+Thêm `server/src/paymentSchedule.js` — lõi TÍNH TIỀN của sổ, thuần tính toán: không gọi mạng, không ghi gì, không tự đánh dấu "đã trả".
+- **Lần 1** = số App Salary (chỉ đọc) · **Lần 2** = 60% phần còn lại, **sửa được** · **Lần 3** = `Tổng − Lần 1 − Lần 2`, **không nhập tay**.
+- **Tổng < ngưỡng ⇒ chỉ 2 lần**, Lần 2 thành *tất toán*, bỏ Lần 3. **Ngưỡng 60tr nằm ở cấu hình**, không ghi cứng.
+- **Bất biến khớp tuyệt đối:** lần cuối luôn lấy *phần còn lại chính xác* nên làm tròn không thể phá `Σ(các lần) == Tổng`. Có test quét dải số lẻ để chứng minh.
+- Sửa Lần 2 vượt phần còn lại ⇒ **kẹp lại + cảnh báo**, không đẻ ra lần 3 âm.
+- **C44 là sổ riêng** — `includedInTotal: false`, không cộng vào tổng, không nằm trong lần nào.
+- **Fail-closed:** thiếu Tổng hoặc thiếu Lần 1 ⇒ `available:false` + lý do rõ, **không suy thành 0**. Ứng lớn hơn tổng ⇒ nghi sai nguồn, dừng.
+- Mốc ngày: Lần 1 cuối tháng kỳ · Lần 2 **+45 ngày** · Lần 3 **+60 ngày**, kèm câu ghi rõ khoảng cách để NV khỏi tự nhẩm (CEO yêu cầu). Tính bằng `Date.UTC` nên không dính múi giờ máy; có test bắc qua năm.
+- GĐ1 lần 2/3 luôn ở trạng thái **kế hoạch** — chưa ai ghi nhận thì tuyệt đối không hiện như đã trả. Phần ghi nhận + audit thuộc GĐ2.
+
+Test: `server/test/paymentSchedule.test.js` **12/12** (bám đúng mục 10 spec). Toàn bộ server **679/685** (6 lỗi PDF do máy build thiếu `pdfinfo`).
+
 ### 2026-08-04 — "Chi phí của tôi": nhớ lựa chọn lần trước + so với kỳ trước (CEO duyệt 03/08)
 
 **Nhớ lựa chọn.** Mở app lên về đúng NV + kỳ đang xem dở, thay vì luôn nhảy về "Tất cả NV" tháng hiện tại. Chỉ lưu **lựa chọn** (mã NV, kỳ, cờ so sánh) — không lưu số tiền hay dữ liệu nhân sự. Đọc ra phải qua kiểm định dạng: mã NV sai khuôn, kỳ sai khuôn, kỳ ngược đầu-cuối đều bị loại ⇒ **rác trong storage không thể biến thành tham số truy vấn**. Storage bị chặn thì bỏ qua im lặng, không làm hỏng màn hình.
