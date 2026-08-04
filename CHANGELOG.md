@@ -1,3 +1,15 @@
+### 2026-08-04 — "Chi phí của tôi": nhớ lựa chọn lần trước + so với kỳ trước (CEO duyệt 03/08)
+
+**Nhớ lựa chọn.** Mở app lên về đúng NV + kỳ đang xem dở, thay vì luôn nhảy về "Tất cả NV" tháng hiện tại. Chỉ lưu **lựa chọn** (mã NV, kỳ, cờ so sánh) — không lưu số tiền hay dữ liệu nhân sự. Đọc ra phải qua kiểm định dạng: mã NV sai khuôn, kỳ sai khuôn, kỳ ngược đầu-cuối đều bị loại ⇒ **rác trong storage không thể biến thành tham số truy vấn**. Storage bị chặn thì bỏ qua im lặng, không làm hỏng màn hình.
+
+**So với kỳ trước.** Nút bật/tắt cạnh hàng nút tháng, chỉ hiện khi đang xem đúng một tháng; trạng thái bật/tắt được nhớ lại. Ô "Tổng chi phí tháng" thêm dòng `▲/▼ x% (±…đ) so kỳ trước`.
+- **Cố ý KHÔNG tự tải.** Chế độ "Tất cả NV" mà tự kéo thêm một kỳ nữa là nặng gấp đôi — đúng chỗ đang gây mất nguồn chi phí luân phiên (bản RAM `9986f0a` chưa deploy). Bật thì mới tải.
+- Thiếu một trong hai kỳ ⇒ **không hiện gì**, không hiện `0%` giả. Kỳ trước bằng 0 ⇒ nêu số tuyệt đối, bỏ %.
+
+**Lỗi tự bắt được khi viết test:** `Number(null)` và `Number('')` đều ra `0`, nên bản đầu của `employeeCostDelta` hiểu "chưa có số" thành "bằng 0" và báo **giảm 100% giả**. Cùng loại lỗi bot bắt ở ô nhập target sáng nay. Đã loại `null`/`''` ngay từ đầu hàm, có test chặn.
+
+- Chỉ đụng lớp hiển thị. Không đổi công thức, không đụng backend, không đổi một đồng nào. Test: web **123/123** (thêm 5 test) · build sạch.
+
 ### 2026-08-04 — Sửa lỗi Gate 1: khối "AI đề xuất target" thiếu khai báo state
 
 - Bot chặn đúng ở Gate 1 trên `450dca5`: code dùng `aiRows`/`setAiRows` nhưng **không khai báo state**, và phần render vẫn là bản cũ `slice(0, 8)`. Build vẫn xanh vì lỗi chỉ nổ lúc chạy ⇒ bấm **"Tạo đề xuất AI"** là crash trang Target. Nguyên nhân: một lượt vá nguồn của Claude không chạy (lỗi `cd`), chỉ nửa sau của thay đổi được ghi vào file.

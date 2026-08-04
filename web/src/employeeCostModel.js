@@ -44,6 +44,62 @@ export function quickMonths(count = 4, now = new Date()) {
   });
 }
 
+// ‼ Nhớ lựa chọn lần trước (CEO duyệt 03/08): mở app lên về đúng NV + kỳ đang xem
+// dở, thay vì lúc nào cũng nhảy về "Tất cả NV" tháng hiện tại.
+// CHỈ lưu LỰA CHỌN (mã NV, kỳ, bật/tắt so sánh) — tuyệt đối không lưu số tiền hay
+// dữ liệu nhân sự. Đọc ra phải kiểm định dạng: rác trong storage không được biến
+// thành tham số truy vấn.
+export const EMPLOYEE_COST_PREFS_KEY = 'app-report:employee-cost:prefs:v1';
+const PREF_MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const PREF_EMP_RE = /^(ALL|[A-Z0-9_-]{2,20})$/;
+
+export function readEmployeeCostPrefs(storage, key = EMPLOYEE_COST_PREFS_KEY) {
+  try {
+    const raw = JSON.parse(storage?.getItem(key) || '{}');
+    const emp = String(raw?.emp || '').trim().toUpperCase();
+    const from = String(raw?.from || '');
+    const to = String(raw?.to || '');
+    const validRange = PREF_MONTH_RE.test(from) && PREF_MONTH_RE.test(to) && from <= to;
+    return {
+      emp: PREF_EMP_RE.test(emp) ? emp : '',
+      range: validRange ? { from, to } : null,
+      compare: raw?.compare === true,
+    };
+  } catch {
+    return { emp: '', range: null, compare: false };
+  }
+}
+
+export function writeEmployeeCostPrefs(storage, prefs = {}, key = EMPLOYEE_COST_PREFS_KEY) {
+  try {
+    storage?.setItem(key, JSON.stringify({
+      emp: String(prefs.emp || ''), from: String(prefs.from || ''),
+      to: String(prefs.to || ''), compare: prefs.compare === true,
+    }));
+  } catch { /* storage bị chặn thì bỏ qua, không được làm hỏng màn hình */ }
+}
+
+// Chênh lệch so kỳ trước. Thiếu một trong hai đầu ⇒ trả null, KHÔNG coi là 0 —
+// "không có số để so" khác hẳn "bằng nhau" (luật fail-closed).
+export function employeeCostDelta(current, previous) {
+  // ‼ `Number(null)` và `Number('')` đều ra 0 — nếu chỉ dựa vào Number.isFinite thì
+  // "chưa có số" bị hiểu thành "bằng 0", và màn hình sẽ báo giảm 100% giả.
+  // Cùng loại lỗi bot bắt được ở ô nhập target 04/08. Loại thẳng từ đầu.
+  if (current == null || current === '' || previous == null || previous === '') return null;
+  const now = Number(current);
+  const before = Number(previous);
+  if (!Number.isFinite(now) || !Number.isFinite(before)) return null;
+  const diff = now - before;
+  return { diff, pct: before === 0 ? null : +(diff / Math.abs(before) * 100).toFixed(1) };
+}
+
+export function formatDeltaLabel(delta) {
+  if (!delta) return '';
+  const arrow = delta.diff > 0 ? '▲' : delta.diff < 0 ? '▼' : '=';
+  const pct = delta.pct == null ? '' : ` ${Math.abs(delta.pct).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
+  return `${arrow}${pct} (${delta.diff > 0 ? '+' : ''}${delta.diff.toLocaleString('vi-VN')}đ) so kỳ trước`;
+}
+
 export function formatMonthLabel(value) {
   const match = /^(\d{4})-(\d{2})$/.exec(String(value || ''));
   return match ? `${match[2]}/${match[1]}` : String(value || '—');

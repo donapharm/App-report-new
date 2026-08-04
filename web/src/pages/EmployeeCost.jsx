@@ -218,6 +218,16 @@ function CostColumnKpi({ item, coverageNote = '' }) {
   </div>;
 }
 
+// Tháng liền trước của 'YYYY-MM'. Chuỗi thuần, không đụng đồng hồ máy nên không
+// dính lệch múi giờ.
+function previousMonthValue(value) {
+  const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(value || ''));
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return month === 1 ? `${year - 1}-12` : `${year}-${String(month - 1).padStart(2, '0')}`;
+}
+
 function bonusPctLabel(value) {
   const number = Number(value);
   return Number.isFinite(number) ? `${number.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}%` : '0%';
@@ -1127,10 +1137,17 @@ export default function EmployeeCost({ me, onNavigate }) {
     window.addEventListener('app:navigate', onAppNavigate);
     return () => window.removeEventListener('app:navigate', onAppNavigate);
   }, [admin]);
+  // Khôi phục đúng NV + kỳ CEO đang xem dở lần trước (CEO duyệt 03/08).
+  const savedPrefs = useMemo(() => readEmployeeCostPrefs(typeof window === 'undefined' ? null : window.localStorage), []);
+  const startRange = savedPrefs.range || { from: month, to: month };
   const [employees, setEmployees] = useState([]);
-  const [selectedEmp, setSelectedEmp] = useState(admin ? 'ALL' : String(me?.emp_code || ''));
-  const [draftRange, setDraftRange] = useState({ from: month, to: month });
-  const [range, setRange] = useState({ from: month, to: month });
+  const [selectedEmp, setSelectedEmp] = useState(admin ? (savedPrefs.emp || 'ALL') : String(me?.emp_code || ''));
+  const [draftRange, setDraftRange] = useState(startRange);
+  const [range, setRange] = useState(startRange);
+  // So với kỳ liền trước. Là NÚT BẬT/TẮT, không tự tải: chế độ "Tất cả NV" mà tự
+  // kéo thêm một kỳ nữa là nặng gấp đôi — đúng chỗ đang làm mất dữ liệu chi phí.
+  const [compareOn, setCompareOn] = useState(savedPrefs.compare === true);
+  const [comparePayload, setComparePayload] = useState(null);
   // Bộ lọc nâng cao mặc định ĐÓNG (CEO 03/08): màn hình đỡ rối, mở khi cần lọc sâu.
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [payload, setPayload] = useState(EMPTY);
@@ -1320,6 +1337,7 @@ export default function EmployeeCost({ me, onNavigate }) {
   }, [admin, range, view]);
 
   const model = useMemo(() => employeeCostViewModel(payload), [payload]);
+  const compareModel = useMemo(() => (comparePayload ? employeeCostViewModel(comparePayload) : null), [comparePayload]);
   const khoan = useMemo(() => employeeVatKhoanViewModel(khoanPayload), [khoanPayload]);
   const selected = employees.find((employee) => employee.emp_code === selectedEmp);
   const employeeLabel = admin
@@ -1393,6 +1411,25 @@ export default function EmployeeCost({ me, onNavigate }) {
     tableFilters.province, tableFilters.unitGroup, tableFilters.route, tableFilters.date,
     range.from !== range.to ? 'range' : '',
   ].filter(Boolean).length;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    writeEmployeeCostPrefs(window.localStorage, {
+      emp: admin ? selectedEmp : '', from: range.from, to: range.to, compare: compareOn,
+    });
+  }, [admin, selectedEmp, range.from, range.to, compareOn]);
+
+  // Chỉ tải kỳ trước KHI CEO bật so sánh và đang xem đúng một tháng.
+  useEffect(() => {
+    if (!compareOn || range.from !== range.to || (admin && !selectedEmp)) { setComparePayload(null); return undefined; }
+    let alive = true;
+    const previous = previousMonthValue(range.from);
+    if (!previous) { setComparePayload(null); return undefined; }
+    api.employeeCost(admin ? selectedEmp : undefined, { from: previous, to: previous })
+      .then((data) => { if (alive) setComparePayload({ ...data, period: previous }); })
+      .catch(() => { if (alive) setComparePayload(null); });
+    return () => { alive = false; };
+  }, [compareOn, admin, selectedEmp, range.from, range.to]);
+
   const applyRange = (event) => {
     event.preventDefault();
     if (rangeInvalid) return;
@@ -1532,6 +1569,13 @@ export default function EmployeeCost({ me, onNavigate }) {
           {range.from !== range.to && <span className="employee-cost-month-chip range" title="Đang xem một khoảng nhiều tháng">
             {formatMonthLabel(range.from)} → {formatMonthLabel(range.to)}
           </span>}
+          {/* So kỳ trước: chỉ có nghĩa khi đang xem đúng MỘT tháng. */}
+          {range.from === range.to && <button type="button"
+            className={`employee-cost-advanced-toggle${compareOn ? ' active' : ''}`}
+            aria-pressed={compareOn} onClick={() => setCompareOn((on) => !on)}
+            title="Hiện chênh lệch so với tháng liền trước">
+            {compareOn ? '✓ So kỳ trước' : '↕ So kỳ trước'}
+          </button>}
           <button type="button" className={`employee-cost-advanced-toggle${advancedOpen ? ' active' : ''}`}
             aria-expanded={advancedOpen} onClick={() => setAdvancedOpen((open) => !open)}>
             {advancedOpen ? '▲ Ẩn bộ lọc nâng cao' : '▼ Bộ lọc nâng cao'}
@@ -1635,6 +1679,12 @@ export default function EmployeeCost({ me, onNavigate }) {
         sub={[
           `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`,
           noMatch ? '' : model.periodClose.note,
+          // Chênh lệch so kỳ trước — chỉ hiện khi CEO bật VÀ cả hai kỳ đều có số.
+          // Thiếu một đầu thì im lặng, không hiện "0%" giả.
+          compareOn ? formatDeltaLabel(employeeCostDelta(
+            noMatch ? null : (provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal),
+            compareModel?.summary?.periodTotal ?? compareModel?.summary?.provisionalPeriodTotal ?? null,
+          )) : '',
           rateEffectiveNote,
           noMatch || provisionalTotals ? coverageNote : 'chưa gồm khoản cuối năm',
         ].filter(Boolean).join(' · ')}
