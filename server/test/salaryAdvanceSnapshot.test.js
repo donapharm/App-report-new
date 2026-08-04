@@ -78,10 +78,16 @@ test('không đóng băng cái rỗng: LỖI NGUỒN thì không lưu', () => {
 // bảng đội đọc kho ra rỗng rồi xếp họ vào "thiếu nguồn". Câu trả lời thật khác hẳn
 // với gọi-không-được; phải lưu.
 test('‼ App Salary TRẢ LỜI "không có ứng" là câu trả lời THẬT — phải lưu', () => {
-  for (const reason of ['not_eligible', 'employee_not_found', 'period_not_found']) {
+  // Hai kiểu trả về khác nhau theo hợp đồng App Salary — phải lưu được CẢ HAI.
+  const shapes = [
+    { reason: 'not_eligible', available: true, applicable: false },
+    { reason: 'employee_not_found', available: false, applicable: null },
+    { reason: 'period_not_found', available: false, applicable: null },
+  ];
+  for (const { reason, available, applicable } of shapes) {
     const store = memStore();
     // Phải khai đúng kỳ đang ghi: `read()` chặn bản ghi lệch kỳ (đúng thiết kế).
-    const answered = projection({ period: '2026-09', available: true, applicable: false, amount: null, reason });
+    const answered = projection({ period: '2026-09', available, applicable, amount: null, reason });
     assert.notEqual(snap.write('DN001', '2026-09', answered, { store }), null, `${reason} phải được lưu`);
     const record = snap.read('DN001', '2026-09', { store });
     assert.ok(record, `${reason} phải đọc lại được`);

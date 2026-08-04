@@ -2142,7 +2142,10 @@ router.get('/employee-cost/payment/range', auth.requireAuth, asyncJsonRoute(asyn
   for (const period of months) {
     const payload = await employeeCostPayload(req, {
       requestedEmp: empCode, auditEvent: 'payment_range', suppressAudit: true,
-      rangeOverride: { from: period, to: period },
+      // ‼ `rangeOverride` PHẢI là kết quả của `parseMonthRange` — nó có cả `months`.
+      // Truyền tay `{from, to}` thiếu `months` ⇒ nổ `range.months is not iterable`
+      // ngay giữa màn (CEO gặp 04/08 21:08). Lỗi này chỉ nổ lúc chạy, test không bắt.
+      rangeOverride: employeeCost.parseMonthRange({ from: period, to: period }),
     });
     books.push(payload?.paymentSchedule || { available: false, period, reason: 'total_unavailable' });
   }

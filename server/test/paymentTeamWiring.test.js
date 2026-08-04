@@ -68,3 +68,39 @@ test('subtotals sinh ra phải đúng khoá mà bảng thanh toán cần đọc'
   // afterPenaltyOf phải rút ra được tổng — không rút được thì bảng đội lại rỗng.
   assert.notEqual(afterPenaltyOf(subtotals[0]), null, 'không đọc được tổng ⇒ NV bị loại khỏi bảng đội');
 });
+
+/* ── CEO 04/08 21:04: 4 NV vẫn bị loại khỏi bảng đội ────────────────────────── */
+
+const { noneReasonOf } = require('../src/paymentTeamSummary');
+const snapshot = require('../src/salaryAdvanceSnapshot');
+
+test('‼ App Salary có HAI kiểu "không có bản ghi" — phải bắt cả hai', () => {
+  // Kiểu 1: không thuộc diện ứng.
+  assert.equal(noneReasonOf({ available: true, applicable: false, amount: null, reason: 'not_eligible' }), 'not_eligible');
+  // Kiểu 2: App Salary không có bản ghi (available:false theo đúng hợp đồng).
+  // Bản trước bỏ sót kiểu này ⇒ DN001·DN021·DN022·DN023 bị loại khỏi bảng đội.
+  assert.equal(noneReasonOf({ available: false, applicable: null, amount: null, reason: 'employee_not_found' }), 'employee_not_found');
+  assert.equal(noneReasonOf({ available: false, applicable: null, amount: null, reason: 'period_not_found' }), 'period_not_found');
+});
+
+test('‼ dữ liệu MÂU THUẪN và lỗi vận chuyển vẫn phải fail-closed', () => {
+  for (const reason of ['duplicate_employee', 'upstream_timeout', 'unauthorized', 'not_configured', 'contract_mismatch']) {
+    assert.equal(noneReasonOf({ available: false, applicable: null, amount: null, reason }), null,
+      `${reason} KHÔNG được hiểu thành "không có ứng"`);
+    assert.equal(snapshot.isStorable({ available: false, applicable: null, amount: null, reason }), false,
+      `${reason} không được đóng băng vào kho`);
+  }
+});
+
+test('có số thật thì không bao giờ bị coi là "không ứng"', () => {
+  assert.equal(noneReasonOf({ available: true, applicable: true, amount: 65_978_975, reason: null }), null);
+});
+
+test('‼ route gộp nhiều kỳ phải dùng parseMonthRange, không tự bịa {from,to}', () => {
+  // Truyền tay `{from, to}` thiếu `months` ⇒ nổ "range.months is not iterable"
+  // ngay giữa màn. Lỗi chỉ nổ lúc chạy, build và test cũ không bắt được.
+  assert.match(source, /rangeOverride: employeeCost\.parseMonthRange\(\{ from: period, to: period \}\)/);
+  assert.doesNotMatch(source, /rangeOverride: \{ from: period, to: period \}/);
+  const range = require('../src/employeeCost').parseMonthRange({ from: '2026-07', to: '2026-07' });
+  assert.ok(Array.isArray(range.months) && range.months.length === 1);
+});

@@ -141,8 +141,9 @@ test('‼ App Salary nói KHÔNG CÓ ứng lần 1 ⇒ vẫn dựng sổ ĐỦ, 
   assert.equal(book.available, true, 'không có ứng KHÁC với không lấy được số — vẫn phải dựng sổ');
   assert.deepEqual(book.installments.map((i) => i.amount), [0, 120_000_000, 80_000_000]);
   assert.equal(book.installments[0].status, 'none');
-  assert.match(book.installments[0].label, /Không ứng/);
-  assert.match(book.installments[0].gapNote, /App Salary không ghi nhận ứng lần 1/);
+  // CEO chốt 21:10: ghi thẳng bằng lời của NV, không dùng thuật ngữ hệ thống.
+  assert.match(book.installments[0].label, /Bỏ qua/);
+  assert.match(book.installments[0].gapNote, /Bạn không được ứng lần 1 · bỏ qua bước này/);
   assert.equal(book.installments[0].noneReason, 'not_eligible');
   assert.equal(book.received, 0, 'không ứng thì chưa nhận đồng nào');
   assert.equal(book.outstanding, 200_000_000);

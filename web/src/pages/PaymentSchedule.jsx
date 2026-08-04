@@ -28,7 +28,8 @@ export default function PaymentSchedule({ me, desktop }) {
   // CEO chốt 04/08: cả CEO lẫn NV được chọn TỪ THÁNG → TỚI THÁNG để biết tổng cả
   // khoảng: total bao nhiêu · đã ứng bao nhiêu · còn lại bao nhiêu.
   const [rangeOn, setRangeOn] = useState(false);
-  const [rangeFrom, setRangeFrom] = useState(month);
+  // Mặc định lùi 3 tháng để bật lên là có ý nghĩa ngay, không phải "từ T08 tới T08".
+  const [rangeFrom, setRangeFrom] = useState(() => quickMonths(4)[3] || month);
   const [rangeSummary, setRangeSummary] = useState(null);
   const [rangeLoading, setRangeLoading] = useState(false);
   const [rangeError, setRangeError] = useState('');
@@ -60,8 +61,7 @@ export default function PaymentSchedule({ me, desktop }) {
   useEffect(() => {
     if (!rangeOn || allEmployees) { setRangeSummary(null); return undefined; }
     const request = new AbortController();
-    const from = rangeFrom <= month ? rangeFrom : month;
-    const to = rangeFrom <= month ? month : rangeFrom;
+    const [from, to] = rangeFrom <= month ? [rangeFrom, month] : [month, rangeFrom];
     setRangeLoading(true); setRangeError('');
     api.paymentRange({ emp: admin ? selectedEmp : undefined, from, to }, { signal: request.signal })
       .then((data) => { setRangeSummary(data?.range || null); setRangeLoading(false); })
@@ -98,10 +98,15 @@ export default function PaymentSchedule({ me, desktop }) {
           title="Cộng nhiều tháng để biết tổng · đã ứng · còn lại">
           {rangeOn ? '✓ Gộp nhiều tháng' : 'Σ Gộp nhiều tháng'}
         </button>
+        {/* Hiện ĐÚNG khoảng thật sự đang cộng, đã sắp xuôi. Trước đây in thẳng hai ô
+            nên ra "Từ Tháng Tám 2026 · tới 07/2026" — lộn ngược, nhìn không hiểu. */}
         {rangeOn && <label><span>Từ tháng</span>
-          <input type="month" value={rangeFrom} onChange={(event) => event.target.value && setRangeFrom(event.target.value)} />
+          <input type="month" value={rangeFrom} max={month}
+            onChange={(event) => event.target.value && setRangeFrom(event.target.value)} />
         </label>}
-        {rangeOn && <span className="employee-cost-month-chip range">tới {formatMonthLabel(month)}</span>}
+        {rangeOn && <span className="employee-cost-month-chip range">
+          Đang cộng {formatMonthLabel(rangeFrom <= month ? rangeFrom : month)} → {formatMonthLabel(rangeFrom <= month ? month : rangeFrom)}
+        </span>}
       </div>
       {error && <div className="employee-cost-match-warning" role="alert">⛔ {error}</div>}
       {loading && !error && <Spinner />}

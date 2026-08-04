@@ -148,10 +148,12 @@ function buildPaymentSchedule({
   const installments = [
     {
       index: 1, key: 'advance',
-      label: firstAdvanceNone === true ? 'Lần 1 · Không ứng' : 'Lần 1 · Ứng',
+      // CEO chốt 04/08 21:10: NV không có ứng lần 1 thì ghi thẳng vào ô đó là bỏ qua
+      // bước này, và VẪN hiện đủ ở mọi mục/tổng hợp/báo cáo như các bạn khác.
+      label: firstAdvanceNone === true ? 'Lần 1 · Bỏ qua' : 'Lần 1 · Ứng',
       amount: first, dueDate: firstDate, dayOffset: 0,
       gapNote: firstAdvanceNone === true
-        ? `App Salary không ghi nhận ứng lần 1 kỳ ${month.slice(5)}/${month.slice(0, 4)}`
+        ? 'Bạn không được ứng lần 1 · bỏ qua bước này'
         : `chốt ngày cuối tháng ${month.slice(5)}/${month.slice(0, 4)}`,
       noneReason: firstAdvanceNone === true ? String(firstAdvanceNoneReason || '') : null,
       source: 'app_salary', editable: false,

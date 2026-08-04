@@ -30,12 +30,23 @@ function afterPenaltyOf(subtotal) {
 
 // App Salary ĐÃ TRẢ LỜI và câu trả lời là "không có ứng lần 1" — khác hẳn gọi không
 // được. Chỉ ba trường hợp này mới được coi là 0 thật; mọi lỗi mạng vẫn fail-closed.
-const NONE_REASONS = new Set(['not_eligible', 'employee_not_found', 'period_not_found']);
+// Hợp đồng App Salary có HAI kiểu "tôi không có bản ghi ứng lần 1", trả về khác nhau:
+//   1. `available:true  · applicable:false · reason:'not_eligible'`      — không thuộc diện ứng
+//   2. `available:false · applicable:null  · reason:'employee_not_found'|'period_not_found'`
+// Bản trước chỉ bắt kiểu 1 ⇒ NV rơi vào kiểu 2 bị hiểu nhầm thành "gọi không được"
+// và bị loại khỏi bảng đội (CEO thấy 4 NV: DN001·DN021·DN022·DN023, 04/08 21:04).
+//
+// ‼ `duplicate_employee` KHÔNG nằm ở đây: nó nghĩa là dữ liệu mâu thuẫn, không phải
+// "không có ứng" — vẫn fail-closed. Mọi lý do vận chuyển (timeout, unauthorized,
+// not_configured, contract_mismatch) cũng vậy.
+const NONE_REASONS_ANSWERED = new Set(['not_eligible']);
+const NONE_REASONS_NO_RECORD = new Set(['employee_not_found', 'period_not_found']);
 function noneReasonOf(advance) {
-  if (!advance || advance.available !== true) return null;
-  if (Number.isSafeInteger(advance.amount)) return null;
+  if (!advance || Number.isSafeInteger(advance.amount)) return null;
   const reason = String(advance.reason || '');
-  return NONE_REASONS.has(reason) ? reason : null;
+  if (advance.available === true) return NONE_REASONS_ANSWERED.has(reason) ? reason : null;
+  if (advance.available === false) return NONE_REASONS_NO_RECORD.has(reason) ? reason : null;
+  return null;
 }
 
 function buildPaymentTeamSummary({

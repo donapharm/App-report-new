@@ -1,3 +1,21 @@
+### 2026-08-04 — CEO báo 3 lỗi lúc 21:04; hai trong đó là lỗi Claude gây ra
+
+**1. ‼ 4 NV vẫn bị loại khỏi bảng đội (DN001 · DN021 · DN022 · DN023).** Hợp đồng App Salary có **HAI kiểu** trả lời "tôi không có bản ghi ứng lần 1", và Claude mới bắt một kiểu:
+- `available:true · applicable:false · reason:'not_eligible'` — đã bắt từ trước.
+- `available:false · applicable:null · reason:'employee_not_found'|'period_not_found'` — **bỏ sót** ⇒ bị hiểu nhầm thành "gọi không được" ⇒ loại khỏi bảng.
+
+Nay bắt cả hai. **Vẫn fail-closed tuyệt đối** với `duplicate_employee` (dữ liệu mâu thuẫn, không phải "không có ứng") và mọi lỗi vận chuyển (`upstream_timeout`, `unauthorized`, `not_configured`, `contract_mismatch`) — có test liệt kê từng mã.
+
+Nhãn theo đúng lời CEO: **"Lần 1 · Bỏ qua"** · *"Bạn không được ứng lần 1 · bỏ qua bước này"*. Lần 2/Lần 3 chia trên **toàn bộ** tổng kỳ, NV hiện đủ ở mọi mục như người khác.
+
+**2. ‼ "Gộp nhiều tháng" nổ `range.months is not iterable`** — lỗi Claude. Route gộp kỳ truyền tay `rangeOverride: { from, to }` trong khi downstream cần cả `months`. Nay dùng `employeeCost.parseMonthRange()`. **Lỗi này chỉ nổ lúc chạy — build xanh, test cũ không bắt**; nay có test khoá.
+
+**3. Ô "Gộp nhiều tháng" hiển thị lộn ngược** — ra *"Từ Tháng Tám 2026 · tới 07/2026"*. Nay mặc định lùi 3 tháng (bật lên là có nghĩa ngay), chặn `max` không cho chọn quá kỳ đang xem, và hiện đúng khoảng đang cộng đã sắp xuôi: **"Đang cộng 05/2026 → 07/2026"**.
+
+**Không phải lỗi:** 4 ô KPI về Xu chỉ hiện khi chọn **một** nhân viên — luật này có từ `cf71ed8` (26/07), đã nằm trong PROD từ trước mọi thay đổi hôm nay.
+
+- Test: server **816/822** (6 lỗi PDF nền cũ) · web **157/157**.
+
 ### 2026-08-04 — Bảng "Thanh toán CP toàn đội" rỗng: nối dây sai chỗ (bot bắt đúng, nhưng cách sửa bot đề xuất sẽ gây lỗi nặng hơn)
 
 > Bot: *"deploy bd4ceb4 thành công nhưng nghiệm thu CHƯA ĐẠT… T07 có 21 nhân viên subtotal, tổng ~3.224.290.181đ, nhưng `paymentTeam.rows = 0`."* — **Bot chẩn đoán đúng nguyên nhân.**
