@@ -989,6 +989,7 @@ async function employeeCostPayload(req, {
       period: range.to,
       secondOverride: ledgerEntry?.secondOverride ?? null,
       paid: ledgerEntry?.paid || {},
+      flow: ledgerEntry?.flow || {},
       totalAfterPenalty: afterPenaltyTotal,
       firstAdvanceAmount: resolvedSalaryAdvance?.available === true && resolvedSalaryAdvance?.applicable === true
         ? resolvedSalaryAdvance.amount : null,
@@ -2168,6 +2169,55 @@ function paymentTarget(req) {
     throw Object.assign(new Error('Nhân viên không thuộc roster chi phí'), { status: 400, code: 'PAYMENT_EMP_NOT_IN_ROSTER' });
   }
   return { empCode, period, actor: req.session?.emp_code };
+}
+
+/* ---------- QUY TRÌNH ĐỀ NGHỊ NHẬN LẦN 2 / LẦN 3 (CEO chốt 04/08 21:30) ----------
+   NV tự bấm đề nghị cho CHÍNH MÌNH; CEO duyệt/từ chối/mở khoá sớm.
+   ‼ NV KHÔNG nhập số tiền ở bất kỳ đâu — số vẫn do backend tính. */
+function selfPaymentTarget(req) {
+  const scope = auth.scopeOf(req.session);
+  const own = String(scope?.empCode || req.session?.emp_code || '').trim().toUpperCase();
+  const requested = String(req.body?.emp_code || req.body?.emp || own).trim().toUpperCase();
+  // Admin/CEO thao tác hộ được; NV thì CHỈ của chính mình.
+  if (!auth.isAdmin(req.session.role) && requested !== own) {
+    throw Object.assign(new Error('Chỉ đề nghị được cho chính mình'), { status: 403, code: 'PAYMENT_EMP_FORBIDDEN' });
+  }
+  const period = employeeCost.normalizeMonth(req.body?.period || req.body?.ky);
+  if (!period) throw Object.assign(new Error('Kỳ không hợp lệ'), { status: 400, code: 'PAYMENT_PERIOD_INVALID' });
+  if (!employeeCostRosterRows().some((employee) => employee.emp_code === requested)) {
+    throw Object.assign(new Error('Nhân viên không thuộc roster chi phí'), { status: 400, code: 'PAYMENT_EMP_NOT_IN_ROSTER' });
+  }
+  return { empCode: requested, period, key: String(req.body?.key || ''), actor: req.session?.emp_code, note: req.body?.note };
+}
+
+// NV bấm "Đề nghị nhận" (đã tới mốc, hoặc đã được CEO mở khoá sớm).
+router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const { empCode, period, key, actor, note } = selfPaymentTarget(req);
+  const entry = paymentLedgerStore.requestPayment(empCode, period, key, { actor, note });
+  clearTargetDependentCache();
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null });
+}));
+
+// NV xin mở khoá để đề nghị SỚM hơn mốc — CEO chốt: phải có đường gửi yêu cầu.
+router.post('/employee-cost/payment/request-unlock', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const { empCode, period, key, actor, note } = selfPaymentTarget(req);
+  const entry = paymentLedgerStore.requestUnlock(empCode, period, key, { actor, note });
+  clearTargetDependentCache();
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null });
+}));
+
+// CEO: mở khoá sớm · duyệt · từ chối. Từ chối ⇒ QUAY VỀ KẾ HOẠCH, NV đề nghị lại được.
+for (const [path, action] of [['unlock', 'grantUnlock'], ['approve', 'approvePayment'], ['reject', 'rejectPayment']]) {
+  router.post(`/employee-cost/payment/${path}`, auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+    const { empCode, period, actor } = paymentTarget(req);
+    const key = String(req.body?.key || '');
+    const entry = paymentLedgerStore[action](empCode, period, key, { actor, note: req.body?.note });
+    clearTargetDependentCache();
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, audit: entry.audit.slice(-5) });
+  }));
 }
 
 router.post('/employee-cost/payment/second', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {

@@ -98,6 +98,7 @@ function buildPaymentSchedule({
   firstAdvanceNoneReason = '',
   secondOverride = null,      // CEO/admin sửa Lần 2 (mục 8)
   paid = {},                  // GĐ2: đã ghi nhận trả — { second:{amount,paidAt,by}, final:{…} }
+  flow = {},                  // GĐ3: nấc quy trình đề nghị — { second:{state,by,at}, final:{…} }
   c44Amount = null,           // sổ riêng, chi trả T12
   splitThresholdVnd = DEFAULT_SPLIT_THRESHOLD_VND,
   secondRatio = DEFAULT_SECOND_RATIO,
@@ -105,6 +106,12 @@ function buildPaymentSchedule({
 } = {}) {
   const month = normalizeMonth(period);
   if (!month) return unavailable(period, 'period_invalid');
+
+  // ‼ KỲ CHƯA HẾT THÁNG ⇒ KHÔNG dựng sổ (CEO chốt 04/08 21:45).
+  // Ứng lần 1 do App Salary duyệt vào NGÀY CUỐI THÁNG. Tháng chưa hết thì chưa có
+  // Lần 1, nên mọi con số Lần 2/Lần 3 dựng ra đều là bịa — chia trên một cái tổng
+  // còn đang chạy. Thà không hiện còn hơn hiện số sẽ đổi mỗi ngày.
+  if (today && daysBetween(periodEndDate(month), today) < 0) return unavailable(month, 'period_not_ended');
 
   const total = moneyOrNull(totalAfterPenalty);
   if (total == null) return unavailable(month, 'total_unavailable');
@@ -142,9 +149,9 @@ function buildPaymentSchedule({
   // đã có số của App Salary thì Lần 1 là VIỆC ĐÃ XONG tại ngày đó — KHÔNG BAO GIỜ
   // được gắn "quá hạn". Trước đây Lần 1 bị so với hôm nay rồi kêu "quá 4 ngày", vô lý:
   // App Salary đã chi từ 31/07 rồi mà màn hình lại đòi nợ chính nó.
-  const periodEnded = !today || daysBetween(firstDate, today) >= 0;
-  const firstStatus = firstAdvanceNone === true ? 'none'
-    : (periodEnded ? 'paid' : 'pending');
+  // Tới đây thì kỳ CHẮC CHẮN đã hết tháng (đã chặn ở trên), nên Lần 1 chỉ có hai
+  // khả năng: đã ứng, hoặc App Salary xác nhận không ứng.
+  const firstStatus = firstAdvanceNone === true ? 'none' : 'paid';
   const installments = [
     {
       index: 1, key: 'advance',
@@ -197,7 +204,17 @@ function buildPaymentSchedule({
   for (const item of installments) {
     item.daysFromToday = today ? daysBetween(today, item.dueDate) : null;
     // Lần 1 do App Salary chi, App Report KHÔNG đòi nợ nó ⇒ miễn nhiễm "quá hạn".
-    if (item.key === 'advance') { item.graceDate = ''; item.graceDays = 0; continue; }
+    if (item.key === 'advance') { item.graceDate = ''; item.graceDays = 0; item.flowState = 'n/a'; continue; }
+    // Nấc quy trình đề nghị (GĐ3). Đã ghi nhận trả thì nấc đóng lại ở 'paid'.
+    const step = flow && typeof flow === 'object' ? flow[item.key] : null;
+    item.flowState = item.status === 'paid' ? 'paid' : String(step?.state || 'plan');
+    item.flowBy = String(step?.by || '');
+    item.flowAt = String(step?.at || '');
+    item.flowNote = String(step?.note || '');
+    // Chưa tới mốc mà chưa được mở khoá ⇒ NV phải XIN MỞ KHOÁ, không đề nghị thẳng.
+    item.canRequest = ['plan', 'unlocked'].includes(item.flowState)
+      && (item.flowState === 'unlocked' || (item.daysFromToday != null && item.daysFromToday <= 0));
+    item.canRequestUnlock = item.flowState === 'plan' && item.daysFromToday != null && item.daysFromToday > 0;
     item.graceDays = GRACE_DAYS;
     item.graceDate = addDays(item.dueDate, GRACE_DAYS);
     item.daysFromGrace = today ? daysBetween(today, item.graceDate) : null;

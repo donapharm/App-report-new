@@ -327,6 +327,10 @@ export const api = {
     if (to) params.set('to', to);
     return req('GET', `/employee-cost/payment/range?${params.toString()}`, undefined, requestOptions);
   },
+  // Quy trình đề nghị nhận Lần 2/Lần 3. NV KHÔNG gửi số tiền — chỉ gửi kỳ + lần.
+  paymentFlow: (action, { emp, period, key, note } = {}) => req('POST', `/employee-cost/payment/${action}`, {
+    ...(emp ? { emp_code: emp } : {}), period, key, ...(note ? { note } : {}),
+  }),
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   employeeCostVisibility: () => req('GET', '/employee-cost/visibility'),
   employeeCostVisibilitySave: (payload) => req('POST', '/employee-cost/visibility', payload),

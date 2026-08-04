@@ -91,3 +91,29 @@ test('‼ ô chọn nhân viên phải kèm TÊN, không trơ mã', () => {
   assert.match(costPage, /export const employeeOptionLabel/);
   assert.match(costPage, /employee\.emp_code\} · \$\{employee\.name\}/, 'nhãn phải gồm mã VÀ tên');
 });
+
+/* ── CEO chốt 04/08 21:30–21:45 ─────────────────────────────────────────────── */
+
+test('‼ NV chỉ BẤM đề nghị, KHÔNG có ô nhập số tiền ở luồng đề nghị', () => {
+  const flowBlock = costPage.slice(costPage.indexOf('employee-cost-flow-actions'), costPage.indexOf('employee-cost-flow-actions') + 2200);
+  assert.match(flowBlock, /Đề nghị nhận/);
+  assert.match(flowBlock, /Xin nhận sớm/);
+  assert.doesNotMatch(flowBlock, /draft\.amount/, 'luồng đề nghị không được dính ô nhập tiền');
+});
+
+test('‼ Mở khoá · Duyệt · Từ chối chỉ hiện với CEO', () => {
+  for (const label of ['Mở khoá', 'Duyệt', 'Từ chối']) {
+    const at = costPage.indexOf(`>\n                  ${label}\n`);
+    const near = costPage.slice(Math.max(0, at - 700), at);
+    assert.match(near, /canRecord &&/, `nút "${label}" phải nằm sau canRecord`);
+  }
+});
+
+test('từ chối và xin nhận sớm đều phải hỏi LÝ DO', () => {
+  assert.match(costPage, /Lý do xin nhận sớm hơn hạn/);
+  assert.match(costPage, /Lý do từ chối \(NV sẽ đọc, và đề nghị lại được\)/);
+});
+
+test('‼ kỳ chưa hết tháng phải nói rõ vì sao chưa có sổ', () => {
+  assert.match(costPage, /period_not_ended: 'Kỳ chưa hết tháng/);
+});

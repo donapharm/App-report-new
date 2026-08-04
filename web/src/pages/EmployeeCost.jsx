@@ -542,7 +542,19 @@ const PAYMENT_STATUS = {
   pending: { icon: '◔', label: 'chưa tới ngày duyệt', tone: '' },
   none: { icon: '–', label: 'không thực hiện ứng', tone: '' },
 };
+// Nấc quy trình đề nghị (CEO chốt 04/08 21:30). Nói bằng lời người dùng hiểu ngay,
+// không dùng thuật ngữ hệ thống.
+const PAYMENT_FLOW = {
+  plan: { icon: '○', label: 'chưa đề nghị', tone: '' },
+  unlock_requested: { icon: '🔓', label: 'đã xin mở khoá sớm · chờ Sếp', tone: '' },
+  unlocked: { icon: '🔓', label: 'Sếp đã mở khoá · bấm đề nghị đi', tone: 'ok' },
+  requested: { icon: '📨', label: 'đã đề nghị · chờ Sếp duyệt', tone: '' },
+  approved: { icon: '👍', label: 'Sếp đã duyệt · chờ chuyển tiền', tone: 'ok' },
+  paid: { icon: '✓', label: 'đã trả', tone: 'ok' },
+};
 const PAYMENT_REASON = {
+  // CEO chốt 04/08 21:45: tháng chưa hết thì chưa có ứng lần 1, chưa dựng sổ.
+  period_not_ended: 'Kỳ chưa hết tháng — ứng lần 1 chốt vào ngày cuối tháng, sổ mở sau đó',
   total_unavailable: 'Chưa có tổng chi phí kỳ này',
   first_advance_unavailable: 'Chưa lấy được số ứng lần 1 từ App Salary',
   first_advance_exceeds_total: 'Số ứng lớn hơn tổng chi phí — nghi sai nguồn, đã dừng',
@@ -673,7 +685,7 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
     </div>
     <div className="employee-cost-table-wrap">
       <table className="employee-cost-gap-table">
-        <thead><tr><th>Lần</th><th>Số tiền</th><th>Hạn</th><th>Khoảng cách</th><th>Nguồn</th><th>Trạng thái</th></tr></thead>
+        <thead><tr><th>Lần</th><th>Số tiền</th><th>Hạn</th><th>Khoảng cách</th><th>Nguồn</th><th>Trạng thái</th><th>Đề nghị nhận</th></tr></thead>
         <tbody>{schedule.installments.map((item) => {
           const state = PAYMENT_STATUS[item.status] || PAYMENT_STATUS.plan;
           const days = item.daysFromToday;
@@ -695,6 +707,44 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
             <td><small>{item.gapNote || '—'}</small></td>
             <td><small>{item.source === 'app_salary' ? 'App Salary · chỉ đọc' : 'App Report tính'}</small></td>
             <td><span className={`employee-cost-gap-reason ${state.tone}`}>{state.icon} {state.label}</span></td>
+            {/* Quy trình đề nghị — Lần 1 không có (App Salary chi). */}
+            <td>{item.key === 'advance' ? <small>—</small> : <>
+              <span className={`employee-cost-gap-reason ${(PAYMENT_FLOW[item.flowState] || PAYMENT_FLOW.plan).tone}`}>
+                {(PAYMENT_FLOW[item.flowState] || PAYMENT_FLOW.plan).icon} {(PAYMENT_FLOW[item.flowState] || PAYMENT_FLOW.plan).label}
+              </span>
+              {!!item.flowNote && <small>“{item.flowNote}”</small>}
+              <div className="employee-cost-flow-actions">
+                {/* NV chỉ BẤM, không nhập số — số vẫn do backend tính. */}
+                {item.canRequest && <button type="button" disabled={!!busy}
+                  onClick={() => run(`request:${item.key}`, () => api.paymentFlow('request', { emp: empCode, period: schedule.period, key: item.key }))}>
+                  Đề nghị nhận
+                </button>}
+                {item.canRequestUnlock && <button type="button" disabled={!!busy}
+                  onClick={() => {
+                    const note = window.prompt('Lý do xin nhận sớm hơn hạn (Sếp sẽ đọc):', '');
+                    if (note == null) return;
+                    run(`unlock:${item.key}`, () => api.paymentFlow('request-unlock', { emp: empCode, period: schedule.period, key: item.key, note }));
+                  }}>
+                  Xin nhận sớm
+                </button>}
+                {canRecord && item.flowState === 'unlock_requested' && <button type="button" disabled={!!busy}
+                  onClick={() => run(`grant:${item.key}`, () => api.paymentFlow('unlock', { emp: empCode, period: schedule.period, key: item.key }))}>
+                  Mở khoá
+                </button>}
+                {canRecord && item.flowState === 'requested' && <button type="button" disabled={!!busy}
+                  onClick={() => run(`approve:${item.key}`, () => api.paymentFlow('approve', { emp: empCode, period: schedule.period, key: item.key }))}>
+                  Duyệt
+                </button>}
+                {canRecord && ['requested', 'unlock_requested', 'unlocked', 'approved'].includes(item.flowState) && <button type="button" disabled={!!busy}
+                  onClick={() => {
+                    const note = window.prompt('Lý do từ chối (NV sẽ đọc, và đề nghị lại được):', '');
+                    if (note == null) return;
+                    run(`reject:${item.key}`, () => api.paymentFlow('reject', { emp: empCode, period: schedule.period, key: item.key, note }));
+                  }}>
+                  Từ chối
+                </button>}
+              </div>
+            </>}</td>
           </tr>;
         })}</tbody>
       </table>

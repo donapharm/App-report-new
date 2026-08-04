@@ -1,3 +1,30 @@
+### 2026-08-04 — Quy trình đề nghị nhận Lần 2 / Lần 3 + kỳ chưa hết tháng không dựng sổ
+
+> CEO chốt: *"một số trường hợp có thể được phép đề nghị sớm hơn, nhưng phải có đường để NV gửi yêu cầu mở khoá"* · *"khi sếp từ chối thì quay về kế hoạch để NV đề nghị lại"* · *"đối với tháng chưa hoàn tất thì không đưa vào hiển thị tất toán ứng tiền vào đây."*
+
+**1. Bốn nấc thay cho hai.** Lần 1 vẫn do App Salary. Từ Lần 2:
+
+```
+kế hoạch ──(NV bấm đề nghị)──▶ đã đề nghị ──(CEO duyệt)──▶ đã duyệt ──(CEO ghi)──▶ đã trả
+    ▲                                │
+    └──────── CEO từ chối ───────────┘   quay về kế hoạch, NV đề nghị LẠI được
+```
+
+Chưa tới mốc thì NV **không** bấm đề nghị thẳng — phải **"Xin nhận sớm"** kèm lý do, CEO bấm **"Mở khoá"** thì mới đề nghị được.
+
+- **‼ NV KHÔNG nhập số tiền ở bất kỳ đâu** — chỉ bấm. Số vẫn do backend tính. Có test cấm route đề nghị đọc `amount` từ NV.
+- **Mở khoá · Duyệt · Từ chối: CHỈ CEO** (`requireCeo`). NV chỉ thao tác cho **chính mình** (`PAYMENT_EMP_FORBIDDEN`).
+- **Đứng sai nấc thì TỪ CHỐI kèm nấc hiện tại**, không ghi đè lặng lẽ. Đã ghi nhận trả rồi thì **đóng**, không quay lại quy trình.
+- Từ chối và xin nhận sớm đều **bắt nhập lý do** — người kia đọc được.
+- Mọi bước có nhật ký **ai · lúc nào · từ nấc nào sang nấc nào**.
+
+**2. ‼ Kỳ CHƯA HẾT THÁNG ⇒ không dựng sổ thanh toán.** Ứng lần 1 chốt vào **ngày cuối tháng**; tháng chưa hết thì chưa có Lần 1, nên mọi số Lần 2/Lần 3 dựng ra đều là **bịa** — chia trên một cái tổng còn đang chạy, đổi mỗi ngày. Nay trả `period_not_ended` kèm câu giải thích trên màn. Kỳ tương lai cũng chặn. Hết ngày cuối tháng thì tự mở.
+
+**Sửa test cũ:** test `'kỳ CHƯA hết tháng thì Lần 1 là chưa tới ngày duyệt'` không còn đúng — luật mới chặn từ đầu, nấc `pending` không còn xảy ra được nên đã bỏ khỏi code thay vì để code chết.
+
+- Test: `paymentFlow.test.js` **13/13** · server **831/837** (6 lỗi PDF nền cũ) · web **161/161** · build sạch.
+- **Nghiệm thu PROD `437497c` (bot, 20:40): bảng toàn đội PASS** — 17 dòng có tên NV và số tiền, tổng `3.096.604.281đ`, đã nhận `721.068.072đ`, còn nợ `2.375.536.209đ`. Đúng phần sửa nối dây `paymentTeam`.
+
 ### 2026-08-04 — CEO báo 3 lỗi lúc 21:04; hai trong đó là lỗi Claude gây ra
 
 **1. ‼ 4 NV vẫn bị loại khỏi bảng đội (DN001 · DN021 · DN022 · DN023).** Hợp đồng App Salary có **HAI kiểu** trả lời "tôi không có bản ghi ứng lần 1", và Claude mới bắt một kiểu:

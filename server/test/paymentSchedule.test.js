@@ -127,9 +127,21 @@ test('‼ Lần 1 KHÔNG BAO GIỜ bị gắn "quá hạn" — App Salary đã c
   assert.match(first.gapNote, /chốt ngày cuối tháng 07\/2026/, 'cột Khoảng cách phải nói rõ mốc, không để trống');
 });
 
-test('kỳ CHƯA hết tháng thì Lần 1 là "chưa tới ngày duyệt", cũng không phải quá hạn', () => {
-  const book = buildPaymentSchedule({ ...base, period: '2026-08', today: '2026-08-04' });
-  assert.equal(book.installments[0].status, 'pending');
+test('‼ KỲ CHƯA HẾT THÁNG ⇒ KHÔNG dựng sổ (CEO chốt 04/08 21:45)', () => {
+  // Ứng lần 1 do App Salary duyệt vào NGÀY CUỐI THÁNG. Tháng chưa hết thì chưa có
+  // Lần 1 ⇒ mọi số Lần 2/Lần 3 dựng ra đều là bịa, lại đổi mỗi ngày.
+  const running = buildPaymentSchedule({ ...base, period: '2026-08', today: '2026-08-04' });
+  assert.equal(running.available, false);
+  assert.equal(running.reason, 'period_not_ended');
+  assert.equal(running.total, null, 'không được lộ tổng của kỳ đang chạy ra sổ thanh toán');
+  assert.deepEqual(running.installments, []);
+
+  // Hết ngày cuối tháng thì mở.
+  assert.equal(buildPaymentSchedule({ ...base, period: '2026-08', today: '2026-08-31' }).available, true);
+  // Kỳ tương lai càng không được dựng.
+  assert.equal(buildPaymentSchedule({ ...base, period: '2026-09', today: '2026-08-04' }).reason, 'period_not_ended');
+  // Kỳ đã qua vẫn bình thường.
+  assert.equal(buildPaymentSchedule({ ...base, period: '2026-07', today: '2026-08-04' }).available, true);
 });
 
 test('‼ App Salary nói KHÔNG CÓ ứng lần 1 ⇒ vẫn dựng sổ ĐỦ, Lần 2/Lần 3 chia trên toàn bộ', () => {

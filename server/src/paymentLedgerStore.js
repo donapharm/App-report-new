@@ -32,8 +32,45 @@ function readAll(store) {
   return rows && typeof rows === 'object' && !Array.isArray(rows) ? rows : {};
 }
 
+/**
+ * QUY TRÌNH ĐỀ NGHỊ — CEO chốt 04/08/2026 21:30.
+ *
+ * Lần 1 do App Salary chi. TỪ LẦN 2 trở đi đi qua đúng bốn nấc:
+ *
+ *     kế hoạch ──(NV bấm đề nghị)──▶ đã đề nghị ──(CEO duyệt)──▶ đã duyệt ──▶ đã trả
+ *         ▲                                │
+ *         └──────── CEO từ chối ───────────┘   (quay về kế hoạch, NV đề nghị LẠI được)
+ *
+ * Chưa tới mốc thì NV KHÔNG bấm đề nghị thẳng được — phải **xin mở khoá sớm**, CEO
+ * đồng ý thì mới mở. CEO chốt: *"một số trường hợp có thể được phép đề nghị sớm hơn,
+ * nhưng phải có đường để NV gửi yêu cầu mở khoá"*.
+ *
+ * ‼ NV KHÔNG BAO GIỜ nhập số tiền — chỉ bấm đề nghị. Số vẫn do backend tính.
+ * ‼ Duyệt / từ chối / ghi đã trả: CHỈ CEO.
+ */
+const FLOW_STATES = Object.freeze(['plan', 'unlock_requested', 'unlocked', 'requested', 'approved']);
+
 function emptyEntry() {
-  return { secondOverride: null, paid: {}, audit: [] };
+  return { secondOverride: null, paid: {}, flow: {}, audit: [] };
+}
+
+function normalizeFlow(raw) {
+  const flow = {};
+  for (const key of EDITABLE_KEYS) {
+    const item = raw?.[key];
+    if (!item || typeof item !== 'object') continue;
+    const state = String(item.state || '');
+    if (!FLOW_STATES.includes(state)) continue;
+    flow[key] = {
+      state,
+      by: String(item.by || ''),
+      at: String(item.at || ''),
+      note: String(item.note || '').slice(0, 300),
+      unlockedBy: String(item.unlockedBy || ''),
+      approvedBy: String(item.approvedBy || ''),
+    };
+  }
+  return flow;
 }
 
 function readEntry(empCode, period, { store = persist } = {}) {
@@ -50,6 +87,7 @@ function readEntry(empCode, period, { store = persist } = {}) {
   return {
     secondOverride: moneyOrNull(row.secondOverride),
     paid,
+    flow: normalizeFlow(row.flow),
     audit: Array.isArray(row.audit) ? row.audit.slice(-AUDIT_LIMIT_PER_ENTRY) : [],
   };
 }
@@ -125,4 +163,69 @@ function undoPayment(empCode, period, key, { actor, now = () => new Date().toISO
   return writeEntry(empCode, period, entry, store);
 }
 
-module.exports = { FILE, EDITABLE_KEYS, AUDIT_LIMIT_PER_ENTRY, keyOf, readEntry, setSecondOverride, recordPayment, undoPayment };
+function requireActor(actor) {
+  const who = String(actor || '').trim().toUpperCase();
+  if (!who) throw Object.assign(new Error('Thiếu người thực hiện'), { status: 400, code: 'PAYMENT_ACTOR_REQUIRED' });
+  return who;
+}
+
+function requireKey(key) {
+  if (!EDITABLE_KEYS.has(String(key))) {
+    throw Object.assign(new Error('Chỉ thao tác được Lần 2 hoặc Lần 3'), { status: 400, code: 'PAYMENT_KEY_INVALID' });
+  }
+  return String(key);
+}
+
+const flowError = (message, code) => Object.assign(new Error(message), { status: 409, code });
+
+/**
+ * Chuyển một nấc trong quy trình. `expect` là các nấc được phép đứng trước.
+ * Đứng sai nấc thì TỪ CHỐI kèm nấc hiện tại — không im lặng ghi đè.
+ */
+function moveFlow(empCode, period, key, nextState, {
+  actor, expect, note = '', extra = {}, now = () => new Date().toISOString(), store = persist,
+} = {}) {
+  const who = requireActor(actor);
+  const safeKey = requireKey(key);
+  const entry = readEntry(empCode, period, { store });
+  // Đã trả rồi thì đóng, không quay lại quy trình được nữa.
+  if (entry.paid[safeKey]) throw flowError('Lần này đã ghi nhận trả — không đổi trạng thái nữa', 'PAYMENT_ALREADY_PAID');
+  const current = entry.flow[safeKey]?.state || 'plan';
+  if (Array.isArray(expect) && !expect.includes(current)) {
+    throw flowError(`Đang ở nấc "${current}", không chuyển sang "${nextState}" được`, 'PAYMENT_FLOW_CONFLICT');
+  }
+  const at = now();
+  entry.flow[safeKey] = {
+    ...(entry.flow[safeKey] || {}),
+    state: nextState, by: who, at, note: String(note || '').slice(0, 300),
+    ...extra,
+  };
+  appendAudit(entry, { at, by: who, action: `flow_${safeKey}`, from: current, to: nextState, note: String(note || '').slice(0, 300) });
+  return writeEntry(empCode, period, entry, store);
+}
+
+// NV bấm "Đề nghị nhận". Chỉ từ kế hoạch (đã tới mốc) hoặc đã được mở khoá sớm.
+const requestPayment = (empCode, period, key, options = {}) =>
+  moveFlow(empCode, period, key, 'requested', { ...options, expect: ['plan', 'unlocked'] });
+
+// NV xin mở khoá để đề nghị SỚM hơn mốc.
+const requestUnlock = (empCode, period, key, options = {}) =>
+  moveFlow(empCode, period, key, 'unlock_requested', { ...options, expect: ['plan'] });
+
+// CEO đồng ý cho đề nghị sớm. NV vẫn phải tự bấm đề nghị sau đó.
+const grantUnlock = (empCode, period, key, options = {}) =>
+  moveFlow(empCode, period, key, 'unlocked', { ...options, expect: ['unlock_requested'], extra: { unlockedBy: String(options.actor || '').toUpperCase() } });
+
+// CEO duyệt đề nghị. Duyệt ≠ đã trả — vẫn phải bấm "Đã trả" khi chuyển tiền xong.
+const approvePayment = (empCode, period, key, options = {}) =>
+  moveFlow(empCode, period, key, 'approved', { ...options, expect: ['requested'], extra: { approvedBy: String(options.actor || '').toUpperCase() } });
+
+// CEO từ chối ⇒ QUAY VỀ KẾ HOẠCH để NV đề nghị lại (CEO chốt 04/08).
+const rejectPayment = (empCode, period, key, options = {}) =>
+  moveFlow(empCode, period, key, 'plan', { ...options, expect: ['requested', 'unlock_requested', 'unlocked', 'approved'] });
+
+module.exports = {
+  FILE, EDITABLE_KEYS, FLOW_STATES, AUDIT_LIMIT_PER_ENTRY, keyOf, readEntry,
+  setSecondOverride, recordPayment, undoPayment,
+  moveFlow, requestPayment, requestUnlock, grantUnlock, approvePayment, rejectPayment,
+};
