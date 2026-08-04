@@ -1,3 +1,10 @@
+### 2026-08-04 — Sửa lỗi Gate 1: khối "AI đề xuất target" thiếu khai báo state
+
+- Bot chặn đúng ở Gate 1 trên `450dca5`: code dùng `aiRows`/`setAiRows` nhưng **không khai báo state**, và phần render vẫn là bản cũ `slice(0, 8)`. Build vẫn xanh vì lỗi chỉ nổ lúc chạy ⇒ bấm **"Tạo đề xuất AI"** là crash trang Target. Nguyên nhân: một lượt vá nguồn của Claude không chạy (lỗi `cd`), chỉ nửa sau của thay đổi được ghi vào file.
+- Bổ sung `const [aiRows, setAiRows] = useState({})`; render lại toàn khối: **hiện HẾT nhân viên** (bỏ `slice(0, 8)`), mỗi dòng có **ô tích chọn** + **ô sửa số**, dòng đã sửa hiện *"CEO sửa · AI đề xuất …"*, nút ghi rõ **`Áp dụng N/M NV`** và tự mờ khi chưa chọn ai hoặc còn số không hợp lệ.
+- Thêm `web/test/Target.aiProposal.test.mjs` chặn đúng ba lỗi này: thiếu khai báo ký hiệu · cắt bớt danh sách NV · mất ô chọn/sửa từng người.
+- Chỉ đụng lớp hiển thị trang Target. Không đổi công thức, không đụng backend. Test: web **113/113** · build sạch.
+
 ### 2026-08-04 — Ô doanh thu: đổi nhãn thành "đã phân bổ" thay vì nêu số dòng cách ly
 
 - Bot chặn đúng trước khi deploy `383692f`: câu *"chưa gồm N dòng đang cách ly"* dùng `dqBadge.count` — đó là **tổng mọi loại exception DQ**, không riêng dòng doanh thu bị cách ly, và còn hiện cả khi xem từng nhân viên. Nêu số như vậy là **báo sai**.

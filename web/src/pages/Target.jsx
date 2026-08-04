@@ -569,6 +569,9 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
   const [preview, setPreview] = useState(null);
   const [lastBatch, setLastBatch] = useState(null);
   const [ai, setAi] = useState(null);
+  // Chỉnh/chọn TỪNG nhân viên. Trước đây chỉ có "áp dụng tất cả" — CEO không sửa
+  // được số của riêng ai, cũng không bỏ được ai ra (CEO yêu cầu 04/08).
+  const [aiRows, setAiRows] = useState({});
   const [templateBasis, setTemplateBasis] = useState('t06');
   // GIỜ VIỆT NAM (GMT+7), không lấy năm theo giờ máy người dùng.
   const [qYear, setQYear] = useState(bangkokToday().slice(0, 4));
@@ -815,8 +818,39 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
         <button className="btn" disabled={busy} onClick={proposeAi}>Tạo đề xuất AI</button>
         {ai?.items?.length > 0 && <div className="upload-preview-box">
           <b>AI đề xuất {ai.next_ky}</b>
-          {ai.items.slice(0, 8).map((r) => <div key={r.emp_code} className="row"><div className="main"><div className="name">{r.emp_code} · {r.emp_name}</div><div className="meta">Neo {r.last_ky} · {r.reason}</div></div><div className="amt">{money(r.suggested_target)}</div></div>)}
-          <button className="btn" disabled={busy} onClick={applyAi}>Áp dụng AI ({ai.next_ky})</button>
+          <div className="row">
+            <div className="main"><div className="meta muted">Đang chọn <b>{aiSelected.length}/{ai.items.length}</b> nhân viên{aiEditedCount ? ` · ${aiEditedCount} dòng đã sửa số` : ''}</div></div>
+            <button type="button" className="btn ghost" disabled={busy} onClick={() => setAiRows(Object.fromEntries(ai.items.map((item) => [
+              item.emp_code, { on: aiSelected.length !== ai.items.length, target: aiRow(item.emp_code).target },
+            ])))}>{aiSelected.length === ai.items.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}</button>
+          </div>
+          {/* HIỆN HẾT nhân viên — trước cắt còn 8 người nên CEO không thấy phần còn
+              lại mà nút vẫn ghi target cho cả đội (CEO phát hiện 04/08). */}
+          {ai.items.map((r) => {
+            const row = aiRow(r.emp_code);
+            const value = Number(String(row.target).replace(/[^\d-]/g, ''));
+            const invalid = row.on && !(Number.isFinite(value) && value >= 0);
+            const edited = Number.isFinite(value) && value !== Number(r.suggested_target);
+            return <div key={r.emp_code} className="row">
+              <label className="main" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
+                <input type="checkbox" checked={row.on} onChange={(e) => setAiRow(r.emp_code, { on: e.target.checked })} />
+                <span>
+                  <div className="name">{r.emp_code} · {r.emp_name}</div>
+                  <div className="meta">Neo {r.last_ky} · {r.reason}</div>
+                  {edited && <div className="meta">CEO sửa · AI đề xuất {money(r.suggested_target)}</div>}
+                </span>
+              </label>
+              <div className="amt">
+                <input type="text" inputMode="numeric" value={row.target} disabled={!row.on}
+                  aria-label={`Target ${r.emp_code}`} style={{ textAlign: 'right', width: 160 }}
+                  onChange={(e) => setAiRow(r.emp_code, { target: e.target.value })} />
+                {invalid && <div className="meta" role="alert">số không hợp lệ</div>}
+              </div>
+            </div>;
+          })}
+          <button className="btn" disabled={busy || !aiSelected.length || !!aiInvalidCount} onClick={applyAi}>
+            Áp dụng {aiSelected.length}/{ai.items.length} NV ({ai.next_ky})
+          </button>
         </div>}
       </TargetAdminModal>
       <TargetAdminModal open={tool === 'rollback'} title="↩ Rollback target upload" onClose={() => setTool(null)}>
