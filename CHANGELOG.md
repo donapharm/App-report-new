@@ -1,3 +1,17 @@
+### 2026-08-04 — "Thanh toán CP của tôi" GĐ2 (backend): ghi nhận đã trả + sửa số Lần 2, có nhật ký
+
+`server/src/paymentLedgerStore.js` + 3 route ghi sổ. Đây là **tiền thật** nên khoá chặt theo SPEC §8:
+- **Chỉ CEO/admin ghi được** — cả 3 route qua `requireAuth` + `requireAdmin`; NV chỉ xem. Người ghi lấy từ **phiên đăng nhập**, không lấy từ body.
+- **Không tự đánh dấu:** chưa ai ghi thì mọi lần mãi là **kế hoạch**, tuyệt đối không hiện như đã trả.
+- **Ghi nhận Lần 2 = chốt luôn số Lần 2** (số THẬT đã chuyển thắng số kế hoạch) ⇒ Lần 3 tự co lại, `Σ(các lần) == Tổng` vẫn giữ. Trả lệch số kế hoạch thì **nêu chênh lệch**, không im lặng.
+- **Cấm ghi đè Lần 1** — đó là số App Salary (`PAYMENT_KEY_INVALID`).
+- **Nhật ký bắt buộc:** ai · khi nào · số cũ → số mới, cho cả sửa số / ghi nhận / gỡ ghi nhận. Gỡ vẫn để lại vết, không xoá lịch sử.
+- Chặn tại cửa: số âm/không nguyên/chữ, ngày sai khuôn, mã NV ngoài roster chi phí, thiếu người thực hiện.
+- Bản ghi hỏng trong kho bị bỏ qua — thiếu ngày hoặc số bậy thì **không tính là đã trả**.
+- Test: `paymentLedgerStore.test.js` **9/9** · `paymentLedgerRoutes.test.js` **2/2** (khoá quyền + no-store + nguồn `actor`) · server **699/705** (6 lỗi PDF nền cũ).
+
+**Còn lại của GĐ2:** nút ghi nhận trên màn (admin) · Telegram nhắc mở cửa sổ/quá hạn · bảng toàn đội cho CEO.
+
 ### 2026-08-04 — Module "Thanh toán CP của tôi" GĐ1: lên màn hình
 
 - **API:** `/api/employee-cost` trả thêm `paymentSchedule`, dựng từ đúng hai nguồn đã có sẵn trong cùng response (tổng sau phạt của DataHub + Lần 1 của App Salary) — **không gọi thêm mạng**. Self-scope: chỉ dựng khi đã khoá đúng một NV; chế độ "Tất cả NV" không có sổ, giống KPI ứng/còn lại.

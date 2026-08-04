@@ -49,6 +49,7 @@ const employeeCostTable = require('./employeeCostTable');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
+const paymentLedgerStore = require('./paymentLedgerStore');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -934,8 +935,13 @@ async function employeeCostPayload(req, {
     // Self-scope: chỉ dựng khi đã khoá đúng MỘT nhân viên — chế độ "Tất cả NV"
     // không có sổ, đúng như KPI ứng/còn lại. Số lấy từ chính hai nguồn đã có ở
     // trên (tổng sau phạt của DataHub + Lần 1 của App Salary), không gọi thêm gì.
+    // GĐ2: đọc sổ ghi nhận (số Lần 2 đã chốt + các lần đã trả). Chưa ai ghi thì rỗng
+    // ⇒ mọi lần vẫn là "kế hoạch"; tuyệt đối không tự đánh dấu đã trả.
+    const ledgerEntry = empCode ? paymentLedgerStore.readEntry(empCode, range.to) : null;
     const resolvedPaymentSchedule = empCode ? paymentSchedule.buildPaymentSchedule({
       period: range.to,
+      secondOverride: ledgerEntry?.secondOverride ?? null,
+      paid: ledgerEntry?.paid || {},
       totalAfterPenalty: afterPenaltyTotal,
       firstAdvanceAmount: resolvedSalaryAdvance?.available === true && resolvedSalaryAdvance?.applicable === true
         ? resolvedSalaryAdvance.amount : null,
@@ -1974,6 +1980,49 @@ router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, asyn
 router.get('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   return res.json(employeeCostVisibility.panel(employeeCostRosterRows()));
+}));
+
+/* ---------- Sổ "Thanh toán CP của tôi" — GHI NHẬN (GĐ2) ----------
+   Đây là TIỀN THẬT: chỉ CEO/admin được ghi, NV chỉ xem. Mọi thao tác có nhật ký
+   ai · khi nào · số cũ → số mới (SPEC_THANH_TOAN_CP_SELFVIEW.md §8). */
+function paymentTarget(req) {
+  const empCode = String(req.body?.emp_code || req.body?.emp || '').trim().toUpperCase();
+  const period = employeeCost.normalizeMonth(req.body?.period || req.body?.ky);
+  if (!/^[A-Z0-9_-]{2,20}$/.test(empCode)) {
+    throw Object.assign(new Error('Mã nhân viên không hợp lệ'), { status: 400, code: 'PAYMENT_EMP_INVALID' });
+  }
+  if (!period) throw Object.assign(new Error('Kỳ không hợp lệ'), { status: 400, code: 'PAYMENT_PERIOD_INVALID' });
+  // Chỉ ghi cho người CÓ TRONG roster chi phí — không ghi cho mã lạ.
+  if (!employeeCostRosterRows().some((employee) => employee.emp_code === empCode)) {
+    throw Object.assign(new Error('Nhân viên không thuộc roster chi phí'), { status: 400, code: 'PAYMENT_EMP_NOT_IN_ROSTER' });
+  }
+  return { empCode, period, actor: req.session?.emp_code };
+}
+
+router.post('/employee-cost/payment/second', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const { empCode, period, actor } = paymentTarget(req);
+  const entry = paymentLedgerStore.setSecondOverride(empCode, period, req.body?.amount, { actor });
+  clearTargetDependentCache();
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ok: true, emp_code: empCode, period, secondOverride: entry.secondOverride, audit: entry.audit.slice(-5) });
+}));
+
+router.post('/employee-cost/payment/record', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const { empCode, period, actor } = paymentTarget(req);
+  const entry = paymentLedgerStore.recordPayment(empCode, period, String(req.body?.key || ''), {
+    amount: req.body?.amount, paidAt: req.body?.paid_at || req.body?.paidAt, actor,
+  });
+  clearTargetDependentCache();
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ok: true, emp_code: empCode, period, paid: entry.paid, audit: entry.audit.slice(-5) });
+}));
+
+router.post('/employee-cost/payment/undo', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const { empCode, period, actor } = paymentTarget(req);
+  const entry = paymentLedgerStore.undoPayment(empCode, period, String(req.body?.key || ''), { actor });
+  clearTargetDependentCache();
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ok: true, emp_code: empCode, period, paid: entry.paid, audit: entry.audit.slice(-5) });
 }));
 
 router.post('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {

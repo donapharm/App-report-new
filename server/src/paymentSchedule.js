@@ -78,6 +78,7 @@ function buildPaymentSchedule({
   firstAdvanceAmount,         // App Salary
   firstAdvancePaid = false,   // App Salary đã chốt chi chưa
   secondOverride = null,      // CEO/admin sửa Lần 2 (mục 8)
+  paid = {},                  // GĐ2: đã ghi nhận trả — { second:{amount,paidAt,by}, final:{…} }
   c44Amount = null,           // sổ riêng, chi trả T12
   splitThresholdVnd = DEFAULT_SPLIT_THRESHOLD_VND,
   secondRatio = DEFAULT_SECOND_RATIO,
@@ -141,13 +142,28 @@ function buildPaymentSchedule({
     });
   }
 
+  // GĐ2: gắn ghi nhận đã trả. CHỈ nhận khi có người ghi — không tự đánh dấu.
+  for (const item of installments) {
+    const record = paid && typeof paid === 'object' ? paid[item.key] : null;
+    const amount = moneyOrNull(record?.amount);
+    if (amount != null) {
+      item.status = 'paid';
+      item.paidAmount = amount;
+      item.paidAt = String(record.paidAt || '');
+      item.paidBy = String(record.by || '');
+      // Số thật lệch số kế hoạch thì NÓI RA, không im lặng.
+      if (amount !== item.amount) item.paidDiff = amount - item.amount;
+    }
+  }
+
   for (const item of installments) {
     item.daysFromToday = today ? daysBetween(today, item.dueDate) : null;
     if (item.status !== 'paid' && item.daysFromToday != null && item.daysFromToday < 0) item.status = 'overdue';
   }
 
-  // GĐ1 chưa có ghi nhận đã trả cho lần 2/3 ⇒ "đã nhận" chỉ gồm lần đã chốt thật.
-  const received = installments.filter((item) => item.status === 'paid').reduce((sum, item) => sum + item.amount, 0);
+  // "Đã nhận" = số THẬT đã chuyển (nếu có ghi nhận), còn lại lấy số của lần đã chốt.
+  const received = installments.filter((item) => item.status === 'paid')
+    .reduce((sum, item) => sum + (Number.isSafeInteger(item.paidAmount) ? item.paidAmount : item.amount), 0);
   const outstanding = total - received;
   const sum = installments.reduce((acc, item) => acc + item.amount, 0);
   const invariantOk = sum === total && received + outstanding === total;
