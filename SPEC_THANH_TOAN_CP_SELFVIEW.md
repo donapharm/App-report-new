@@ -93,14 +93,23 @@ App Salary chỉ cần lần 1 (đã có) ⇒ không phải chờ ai.
 
 **CEO đúng.** Trước đó chỉ có cache RAM **25 giây** ⇒ NV mở màn 10 lần/ngày là 10 lượt gọi App Salary, restart app là mất sạch. Với 21 NV × nhiều màn thì đây đúng là lãng phí, và còn kéo theo rủi ro: nguồn chậm/lỗi là màn trắng.
 
-### Ba mức — `server/src/salaryAdvanceSnapshot.js`
-| Trạng thái kỳ | Xử lý | Số lượt gọi App Salary |
-|---|---|---|
-| **Đã chốt** (`locked`/`approved`) | Số **không bao giờ đổi** ⇒ đọc kho | **0 — vĩnh viễn** |
-| **Đang mở** (`draft`) | Dùng số trong kho **ngay**, chỉ làm tươi khi quá **6 giờ** | ≤ 4 lượt/ngày/NV |
-| **Chưa có số / lỗi nguồn** | Không lưu — không đóng băng cái rỗng | như cũ |
+### ‼ ĐÍNH CHÍNH 04/08 — CEO: sửa số là sửa BÊN APP SALARY, số phải TỰ về
+> CEO: *"Khi sửa số ứng lần 1 cho một NV nào đó thì sẽ sửa vào App Salary, và như vậy sẽ được cập nhật vào ô KPI thôi, không có gì khác."*
 
-Phần lớn lượt xem là **tháng đã chốt** ⇒ gần như **không còn lượt gọi nào**.
+Bản đầu của Claude coi kỳ đã chốt là **"không bao giờ hỏi lại"** ⇒ Sếp sửa số bên App Salary mà App Report **không bao giờ thấy**. **Sai, đã bỏ.**
+
+Thay bằng **trả ngay + làm tươi ngầm** (`server/src/salaryAdvanceSnapshot.js`):
+
+| Trạng thái kỳ | Màn hình | Làm tươi ngầm phía sau |
+|---|---|---|
+| **Đã chốt** (`locked`/`approved`) | trả số trong kho **tức thì** | sau **1 giờ** |
+| **Đang mở** (`draft`) | trả số trong kho **tức thì** | sau **10 phút** |
+| **Chưa có số / lỗi nguồn** | không lưu — không đóng băng cái rỗng | như cũ |
+
+- **Màn hình KHÔNG BAO GIỜ phải chờ mạng** khi kho đã có số ⇒ hết cảnh mỗi lần mở menu là một lượt gọi (đúng mối lo của CEO).
+- **Chỉnh sửa bên App Salary vẫn tự về**, không ai phải bấm gì — chậm nhất 10 phút (kỳ mở) / 1 giờ (kỳ chốt), và **tức thì** nếu bấm "Làm mới" hoặc có webhook.
+- Số lượt gọi giảm khoảng **95%** so với cache 25 giây, nhưng **không đánh đổi bằng việc nuốt mất chỉnh sửa**.
+- Đồng hồ đóng dấu và đồng hồ tính hạn phải là **một** — lệch nhau thì "quá hạn chưa" tính sai hoàn toàn (đã có test).
 
 ### Bắt buộc kèm theo
 1. **Luôn hiện `fetchedAt`** — *"số tại lúc HH:MM ngày DD/MM"*. Số cũ mà không nói rõ là số lúc nào thì người xem tưởng số đang sống.
@@ -111,6 +120,6 @@ Phần lớn lượt xem là **tháng đã chốt** ⇒ gần như **không còn
 6. Kho **có trần** (600 bản ghi), không phình vô hạn.
 
 ### Rủi ro đã cân nhắc
-App Salary sửa lại số của một kỳ **đã chốt** thì kho không tự biết. Chấp nhận, vì "đã chốt" theo định nghĩa là không đổi; và vẫn có **2 đường thoát**: nút Làm mới + webhook. Nếu sau này họ sửa số đã chốt thường xuyên thì phải đổi định nghĩa `locked` phía họ trước.
+Chỉnh sửa bên App Salary về **chậm nhất 10 phút / 1 giờ** chứ không tức thì. Chấp nhận được vì đây là số chi trả theo tháng, không phải số theo giây; và vẫn có **2 đường về ngay**: nút "Làm mới" + webhook khi App Salary duyệt.
 
 **Đã code + test:** `server/test/salaryAdvanceSnapshot.test.js` 7/7.

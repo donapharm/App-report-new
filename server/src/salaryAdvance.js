@@ -150,26 +150,45 @@ const SAFE_REASON_BY_CODE = new Map([
 // khi quá hạn. Xem `salaryAdvanceSnapshot.js` và SPEC_THANH_TOAN_CP_SELFVIEW.md §11.
 async function safeGetFirstAdvance(period, empCode, get = (...args) => client.get(...args), options = {}) {
   const store = options.snapshotStore;
-  const snapshotOptions = store ? { store } : {};
+  // Đồng hồ phải THỐNG NHẤT: nếu nơi gọi truyền `now` (test, hoặc job chạy theo
+  // mốc) mà kho lại đóng dấu bằng giờ máy thì so sánh "quá hạn chưa" sẽ sai hoàn toàn.
+  const snapshotOptions = {
+    ...(store ? { store } : {}),
+    ...(typeof options.now === 'function' ? { now: options.now } : {}),
+  };
   let stored = null;
   try { stored = snapshot.read(empCode, period, snapshotOptions); } catch { stored = null; }
-  if (!snapshot.needsRefresh(stored, { now: options.now, ttlMs: options.ttlMs, force: options.force === true })) {
-    // Kèm mốc lấy số để màn hình ghi rõ "số tại lúc …", không để tưởng số đang sống.
-    return Object.freeze({ ...stored.projection, fetchedAt: stored.fetchedAt, fromSnapshot: true });
-  }
-  try {
+
+  const fetchFresh = async () => {
     const fresh = await get(period, empCode);
     try { snapshot.write(empCode, period, fresh, snapshotOptions); } catch { /* kho hỏng không được làm hỏng màn */ }
     return fresh;
+  };
+
+  // Có số trong kho ⇒ TRẢ NGAY, màn không phải chờ mạng.
+  if (!snapshot.mustFetch(stored, { force: options.force === true })) {
+    if (snapshot.shouldRevalidate(stored, { now: options.now })) {
+      // Làm tươi NGẦM: chỉnh sửa bên App Salary vẫn về được App Report mà không ai
+      // phải bấm gì. Lỗi ở đây không được nổi lên màn — lần sau thử lại.
+      const background = fetchFresh().catch(() => null);
+      if (options.awaitRevalidate === true) await background;
+    }
+    const latest = options.awaitRevalidate === true
+      ? (snapshot.read(empCode, period, snapshotOptions) || stored) : stored;
+    return Object.freeze({ ...latest.projection, fetchedAt: latest.fetchedAt, fromSnapshot: true });
+  }
+
+  try {
+    return await fetchFresh();
   } catch (error) {
-    // Nguồn lỗi mà kho còn số cũ ⇒ vẫn cho xem số cũ kèm mốc thời gian, hơn là
-    // trắng màn. Chưa có gì trong kho thì báo đúng loại lỗi như trước.
+    // Nguồn lỗi mà kho còn số cũ ⇒ vẫn cho xem số cũ kèm cờ `stale`, hơn là trắng màn.
     if (stored) return Object.freeze({ ...stored.projection, fetchedAt: stored.fetchedAt, fromSnapshot: true, stale: true });
     const reason = SAFE_REASON_BY_CODE.get(error?.code)
       || (error?.upstreamStatus === 401 || error?.upstreamStatus === 403 ? 'unauthorized' : 'upstream_unavailable');
     return unavailableProjection(period, empCode, reason);
   }
 }
+
 
 // App Report chỉ cảnh báo, không tự sửa/kẹp số App Salary. Guard dùng đúng tổng
 // chi phí tháng sau phạt cùng kỳ; phép trừ KPI nằm riêng ở remainingAfterAdvance.

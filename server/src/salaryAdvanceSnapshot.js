@@ -24,8 +24,14 @@ const persist = require('./persist');
 
 const FILE = 'salary_advance_snapshot';
 const CONTRACT_KEYS = ['amount', 'applicable', 'available', 'currency', 'emp_code', 'locked', 'ok', 'period', 'reason', 'status'];
-// Kỳ đang mở: 6 giờ là đủ tươi cho một con số mỗi tháng chỉ đổi vài lần.
-const DEFAULT_TTL_MS = 6 * 60 * 60 * 1000;
+// ‼ CEO đính chính 04/08: *"khi sửa số ứng lần 1 cho một NV thì sẽ sửa vào App
+// Salary và như vậy sẽ được cập nhật vào ô KPI thôi, không có gì khác."*
+// ⇒ KHÔNG kỳ nào được coi là "không bao giờ hỏi lại". Bản đầu của Claude đóng băng
+// vĩnh viễn kỳ đã chốt ⇒ Sếp sửa số bên App Salary mà App Report không bao giờ thấy.
+// Thay bằng: LUÔN trả số trong kho NGAY (màn không phải chờ), rồi làm tươi NGẦM
+// phía sau khi đã quá ngưỡng dưới đây. NV không thấy chậm, mà số vẫn tự cập nhật.
+const REVALIDATE_OPEN_MS = 10 * 60 * 1000;    // kỳ đang mở: 10 phút
+const REVALIDATE_FINAL_MS = 60 * 60 * 1000;   // kỳ đã chốt: 1 giờ (số hiếm khi đổi)
 // Chặn phình file: 21 NV × ~24 kỳ là quá đủ để tra lại lịch sử.
 const MAX_RECORDS = 600;
 
@@ -85,13 +91,19 @@ function write(empCode, period, projection, { store = persist, now = Date.now } 
  *  - đang mở, quá hạn TTL       → CÓ
  * `force` dành cho nút "Làm mới" của người dùng và cho webhook khi App Salary duyệt.
  */
-function needsRefresh(record, { now = Date.now, ttlMs = DEFAULT_TTL_MS, force = false } = {}) {
-  if (force) return true;
+// Có PHẢI CHỜ gọi nguồn không? Chỉ khi kho chưa có gì, hoặc người dùng ép làm mới.
+// Có số trong kho thì luôn trả ngay, không bắt màn hình đợi.
+function mustFetch(record, { force = false } = {}) {
+  return force === true || !record;
+}
+
+// Có nên làm tươi NGẦM phía sau không? Áp cho mọi kỳ, kể cả kỳ đã chốt — để chỉnh
+// sửa bên App Salary luôn về được App Report mà không ai phải làm gì.
+function shouldRevalidate(record, { now = Date.now, openMs = REVALIDATE_OPEN_MS, finalMs = REVALIDATE_FINAL_MS } = {}) {
   if (!record) return true;
-  if (record.final) return false;
   const at = Date.parse(record.fetchedAt || '');
   if (!Number.isFinite(at)) return true;
-  return now() - at >= Number(ttlMs);
+  return now() - at >= Number(record.final ? finalMs : openMs);
 }
 
 function invalidate(empCode, period, { store = persist } = {}) {
@@ -103,4 +115,7 @@ function invalidate(empCode, period, { store = persist } = {}) {
   return true;
 }
 
-module.exports = { FILE, CONTRACT_KEYS, DEFAULT_TTL_MS, MAX_RECORDS, isFinal, isStorable, read, write, needsRefresh, invalidate, keyOf };
+module.exports = {
+  FILE, CONTRACT_KEYS, MAX_RECORDS, REVALIDATE_OPEN_MS, REVALIDATE_FINAL_MS,
+  isFinal, isStorable, read, write, mustFetch, shouldRevalidate, invalidate, keyOf,
+};

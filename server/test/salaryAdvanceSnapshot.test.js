@@ -11,32 +11,38 @@ const projection = (over = {}) => ({
   emp_code: 'DN001', locked: true, period: '2026-07', reason: null, status: 'locked', ...over,
 });
 
-test('kỳ ĐÃ CHỐT thì không bao giờ gọi lại App Salary', () => {
+// ‼ CEO đính chính 04/08: sửa số ứng lần 1 là sửa BÊN APP SALARY, và số đó phải
+// tự về ô KPI. Nên KHÔNG kỳ nào được đóng băng vĩnh viễn — kể cả kỳ đã chốt.
+test('kỳ đã chốt: trả ngay số trong kho, nhưng vẫn tự làm tươi ngầm sau 1 giờ', () => {
   const store = memStore();
-  snap.write('DN001', '2026-07', projection(), { store });
+  const t0 = Date.parse('2026-08-04T00:00:00Z');
+  snap.write('DN001', '2026-07', projection(), { store, now: () => t0 });
   const record = snap.read('DN001', '2026-07', { store });
   assert.equal(record.final, true);
-  assert.equal(snap.needsRefresh(record), false);
-  // Kể cả một năm sau vẫn không cần gọi lại.
-  assert.equal(snap.needsRefresh(record, { now: () => Date.now() + 365 * 86_400_000 }), false);
+  // Màn hình KHÔNG phải chờ mạng — có số là trả ngay.
+  assert.equal(snap.mustFetch(record), false);
+  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 30 * 60_000 }), false, '30 phút thì thôi');
+  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 2 * 3600_000 }), true, 'quá 1 giờ thì làm tươi ngầm');
+  // Một năm sau vẫn phải làm tươi — không được đóng băng vĩnh viễn.
+  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 365 * 86_400_000 }), true);
 });
 
-test('kỳ đang mở: dùng số trong kho, chỉ gọi lại khi quá hạn', () => {
+test('kỳ đang mở: dùng số trong kho ngay, làm tươi ngầm sau 10 phút', () => {
   const store = memStore();
   const t0 = Date.parse('2026-08-04T00:00:00Z');
   snap.write('DN001', '2026-08', projection({ period: '2026-08', locked: false, status: 'draft' }), { store, now: () => t0 });
   const record = snap.read('DN001', '2026-08', { store });
   assert.equal(record.final, false);
-  assert.equal(snap.needsRefresh(record, { now: () => t0 + 60_000 }), false, 'mới lấy xong thì thôi gọi');
-  assert.equal(snap.needsRefresh(record, { now: () => t0 + 5 * 3600_000 }), false, 'trong 6 giờ vẫn dùng số cũ');
-  assert.equal(snap.needsRefresh(record, { now: () => t0 + 7 * 3600_000 }), true, 'quá hạn thì làm tươi');
+  assert.equal(snap.mustFetch(record), false, 'có số thì trả ngay, không bắt màn chờ');
+  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 60_000 }), false, 'mới lấy xong thì thôi');
+  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 20 * 60_000 }), true, 'quá 10 phút thì làm tươi ngầm');
 });
 
 test('nút Làm mới / webhook App Salary duyệt: ép gọi lại được', () => {
   const store = memStore();
   snap.write('DN001', '2026-07', projection(), { store });
   const record = snap.read('DN001', '2026-07', { store });
-  assert.equal(snap.needsRefresh(record, { force: true }), true);
+  assert.equal(snap.mustFetch(record, { force: true }), true, 'ép làm mới thì CHỜ số mới');
   assert.equal(snap.invalidate('DN001', '2026-07', { store }), true);
   assert.equal(snap.read('DN001', '2026-07', { store }), null);
 });
@@ -61,7 +67,7 @@ test('không đóng băng cái rỗng: chưa có số / lỗi nguồn thì khôn
     assert.equal(snap.write('DN001', '2026-09', bad, { store }), null);
     assert.equal(snap.read('DN001', '2026-09', { store }), null);
   }
-  assert.equal(snap.needsRefresh(null), true, 'chưa có gì trong kho thì phải gọi');
+  assert.equal(snap.mustFetch(null), true, 'chưa có gì trong kho thì phải gọi');
 });
 
 test('‼ kho hỏng/bị sửa tay KHÔNG được trả nhầm số của người khác hoặc kỳ khác', () => {
@@ -80,4 +86,42 @@ test('kho không phình vô hạn', () => {
     snap.write(`DN${i}`, '2026-07', projection({ emp_code: `DN${i}` }), { store, now: () => 1_700_000_000_000 + i * 1000 });
   }
   assert.equal(Object.keys(store.load(snap.FILE, {})).length, snap.MAX_RECORDS);
+});
+
+// ‼ Ca CEO nêu 04/08: sửa số ứng lần 1 BÊN APP SALARY thì App Report phải tự cập
+// nhật. Bản đầu của Claude đóng băng vĩnh viễn kỳ đã chốt ⇒ sửa xong không bao giờ
+// thấy. Test này chứng minh số mới về được mà không ai phải bấm gì.
+const salaryAdvance = require('../src/salaryAdvance');
+
+test('sửa số bên App Salary ⇒ App Report tự cập nhật, không ai phải bấm gì', async () => {
+  const store = memStore();
+  const t0 = Date.parse('2026-08-04T00:00:00Z');
+  let upstream = projection({ amount: 50_000_000 });
+  const get = async () => upstream;
+
+  const first = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN001', get, { snapshotStore: store, now: () => t0 });
+  assert.equal(first.amount, 50_000_000);
+
+  // Kế toán sửa số bên App Salary.
+  upstream = projection({ amount: 55_000_000 });
+
+  // Ngay sau đó: vẫn trả số cũ tức thì (màn không chờ) — đúng thiết kế.
+  const soon = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN001', get, { snapshotStore: store, now: () => t0 + 60_000 });
+  assert.equal(soon.amount, 50_000_000);
+  assert.ok(soon.fetchedAt, 'phải kèm mốc "số tại lúc …"');
+
+  // Quá ngưỡng làm tươi ⇒ tự lấy số mới, KHÔNG cần ai bấm.
+  const later = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN001', get, {
+    snapshotStore: store, now: () => t0 + 2 * 3600_000, awaitRevalidate: true,
+  });
+  assert.equal(later.amount, 55_000_000, 'số sửa bên App Salary phải tự về');
+});
+
+test('nút "Làm mới" lấy số mới ngay lập tức', async () => {
+  const store = memStore();
+  let upstream = projection({ amount: 10_000_000 });
+  await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN001', async () => upstream, { snapshotStore: store });
+  upstream = projection({ amount: 12_000_000 });
+  const forced = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN001', async () => upstream, { snapshotStore: store, force: true });
+  assert.equal(forced.amount, 12_000_000);
 });
