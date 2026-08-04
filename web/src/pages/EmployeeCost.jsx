@@ -527,6 +527,76 @@ function SalaryAdvanceKpi({ salaryAdvance, loading, allEmployees, period }) {
   return <Kpi label="Ứng lần 1 tháng này" value={value} sub={sub} tone="employee-cost-tone-neutral" />;
 }
 
+// SỔ "THANH TOÁN CP CỦA TÔI" — GĐ1 (SPEC_THANH_TOAN_CP_SELFVIEW.md).
+// Chỉ HIỂN THỊ. Mọi số do backend tính và đã kiểm bất biến; frontend không cộng trừ lại.
+const PAYMENT_STATUS = {
+  paid: { icon: '✓', label: 'đã trả', tone: 'ok' },
+  plan: { icon: '○', label: 'kế hoạch · chưa trả', tone: '' },
+  overdue: { icon: '🔴', label: 'quá hạn', tone: 'warn' },
+};
+const PAYMENT_REASON = {
+  total_unavailable: 'Chưa có tổng chi phí kỳ này',
+  first_advance_unavailable: 'Chưa lấy được số ứng lần 1 từ App Salary',
+  first_advance_exceeds_total: 'Số ứng lớn hơn tổng chi phí — nghi sai nguồn, đã dừng',
+  period_invalid: 'Kỳ không hợp lệ',
+};
+
+function PaymentSchedulePanel({ schedule, allEmployees, loading }) {
+  if (allEmployees) return null;
+  if (loading) return <div className="card"><div className="section-head">Thanh toán CP của tôi</div><Spinner /></div>;
+  if (!schedule) return null;
+  if (!schedule.available) {
+    return <div className="card">
+      <div className="section-head">Thanh toán CP của tôi</div>
+      {/* Thiếu nguồn thì nói rõ thiếu gì — KHÔNG dựng sổ rỗng trông như đã trả hết. */}
+      <div className="employee-cost-match-warning" role="status">
+        {PAYMENT_REASON[schedule.reason] || 'Chưa đủ dữ liệu để dựng sổ'} · chưa dựng được sổ thanh toán.
+      </div>
+    </div>;
+  }
+  return <div className="card">
+    <div className="section-head">Thanh toán CP của tôi <small>· kỳ {formatMonthLabel(schedule.period)}</small></div>
+    {!schedule.invariantOk && <div className="employee-cost-match-warning" role="alert">
+      <b>⛔ Sổ chưa cân.</b> Tổng các lần không bằng tổng chi phí kỳ — đã dừng, không hiển thị số chỏi.
+    </div>}
+    <div className="kpi-grid">
+      <Kpi label="Tổng chi phí kỳ (sau phạt)" value={formatEmployeeCostCell(schedule.total, moneyColumn)}
+        sub={schedule.twoInstalmentsOnly ? 'Dưới ngưỡng · tất toán trong 2 lần' : 'Chia 3 lần'} />
+      <Kpi label="Đã nhận (lũy kế)" value={formatEmployeeCostCell(schedule.received, moneyColumn)}
+        sub="Chỉ tính lần đã chốt thật" tone="employee-cost-tone-base" />
+      <Kpi label="Sổ còn nợ" value={formatEmployeeCostCell(schedule.outstanding, moneyColumn)}
+        sub="Cộng dồn — lần chưa nhận không mất đi" />
+      {schedule.c44 && <Kpi label="C44 · Lương cuối năm" value={formatEmployeeCostCell(schedule.c44.amount, moneyColumn)}
+        sub={schedule.c44.note} />}
+    </div>
+    <div className="employee-cost-table-wrap">
+      <table className="employee-cost-gap-table">
+        <thead><tr><th>Lần</th><th>Số tiền</th><th>Hạn</th><th>Khoảng cách</th><th>Nguồn</th><th>Trạng thái</th></tr></thead>
+        <tbody>{schedule.installments.map((item) => {
+          const state = PAYMENT_STATUS[item.status] || PAYMENT_STATUS.plan;
+          const days = item.daysFromToday;
+          return <tr key={item.key}>
+            <td><b>{item.label}</b></td>
+            <td className="employee-cost-number"><b>{formatEmployeeCostCell(item.amount, moneyColumn)}</b></td>
+            <td>{item.dueDate ? item.dueDate.split('-').reverse().join('/') : '—'}
+              {/* Ghi rõ "còn N ngày" để NV khỏi tự nhẩm (CEO yêu cầu). */}
+              {days != null && <small>{days > 0 ? `còn ${days} ngày` : days === 0 ? 'hôm nay' : `quá ${Math.abs(days)} ngày`}</small>}
+            </td>
+            <td><small>{item.gapNote || '—'}</small></td>
+            <td><small>{item.source === 'app_salary' ? 'App Salary · chỉ đọc' : 'App Report tính'}</small></td>
+            <td><span className={`employee-cost-gap-reason ${state.tone}`}>{state.icon} {state.label}</span></td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>
+    <p className="meta muted">
+      Lần 1 là số App Salary đã chi — App Report không sửa. Lần 2/Lần 3 là kế hoạch do App Report tính từ
+      <b> tổng kỳ − lần 1</b>; <b>chưa ai ghi nhận đã trả thì vẫn là kế hoạch</b>, không phải đã nhận.
+      C44 là khoản riêng, chi trả T12, không nằm trong 3 lần.
+    </p>
+  </div>;
+}
+
 function RemainingAfterAdvanceKpi({ remainingAfterAdvance, loading, allEmployees, period }) {
   const projection = remainingAfterAdvance || {};
   const periodText = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(period || ''))
@@ -1627,6 +1697,10 @@ export default function EmployeeCost({ me, onNavigate }) {
       onChange={changeVisibility}
       onSave={saveVisibility}
     />}
+
+    {/* Sổ thanh toán đặt NGAY DƯỚI khối KPI: NV nhìn xong các ô tiền là thấy luôn
+        lịch nhận tiền của mình, không phải cuộn xuống bảng chi tiết. */}
+    <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading} />
 
     {!admin && <EmployeeGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} />}
     {!admin && <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin={false} onOpenRow={openDqRow} />}

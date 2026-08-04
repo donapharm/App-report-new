@@ -48,6 +48,7 @@ const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
+const paymentSchedule = require('./paymentSchedule');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -929,6 +930,20 @@ async function employeeCostPayload(req, {
       salaryAdvance: resolvedSalaryAdvance,
       periodClosed: closed,
     });
+    // SỔ "THANH TOÁN CP CỦA TÔI" GĐ1 (SPEC_THANH_TOAN_CP_SELFVIEW.md).
+    // Self-scope: chỉ dựng khi đã khoá đúng MỘT nhân viên — chế độ "Tất cả NV"
+    // không có sổ, đúng như KPI ứng/còn lại. Số lấy từ chính hai nguồn đã có ở
+    // trên (tổng sau phạt của DataHub + Lần 1 của App Salary), không gọi thêm gì.
+    const resolvedPaymentSchedule = empCode ? paymentSchedule.buildPaymentSchedule({
+      period: range.to,
+      totalAfterPenalty: afterPenaltyTotal,
+      firstAdvanceAmount: resolvedSalaryAdvance?.available === true && resolvedSalaryAdvance?.applicable === true
+        ? resolvedSalaryAdvance.amount : null,
+      firstAdvancePaid: resolvedSalaryAdvance?.locked === true,
+      c44Amount: costPeriod?.summary?.annualTotal ?? null,
+      today: employeeCost.vnToday(),
+    }) : null;
+
     return {
       ...payload,
       ...(periods ? { periods } : {}),
@@ -959,6 +974,7 @@ async function employeeCostPayload(req, {
       penalty,
       salaryAdvance: resolvedSalaryAdvance,
       remainingAfterAdvance: resolvedRemainingAfterAdvance,
+      paymentSchedule: resolvedPaymentSchedule,
       ...(penaltyBaseline ? { penaltyBaseline } : {}),
       penaltyPolicy: resolvedPenaltyPolicy ? {
         formulaVersion: employeeBonus.FORMULA_VERSION,

@@ -1,3 +1,13 @@
+### 2026-08-04 — Module "Thanh toán CP của tôi" GĐ1: lên màn hình
+
+- **API:** `/api/employee-cost` trả thêm `paymentSchedule`, dựng từ đúng hai nguồn đã có sẵn trong cùng response (tổng sau phạt của DataHub + Lần 1 của App Salary) — **không gọi thêm mạng**. Self-scope: chỉ dựng khi đã khoá đúng một NV; chế độ "Tất cả NV" không có sổ, giống KPI ứng/còn lại.
+- **Màn hình:** khối "Thanh toán CP của tôi" ngay dưới các ô KPI — 4 ô (Tổng kỳ sau phạt · Đã nhận lũy kế · Sổ còn nợ · C44) + bảng 3 lần với **số tiền · hạn · còn N ngày · khoảng cách · nguồn · trạng thái**.
+- Ghi rõ để không hiểu nhầm: **Lần 1 là số App Salary, App Report không sửa**; Lần 2/3 là kế hoạch App Report tính từ `tổng kỳ − lần 1`; **chưa ai ghi nhận đã trả thì vẫn là kế hoạch, không phải đã nhận**; C44 là khoản riêng chi trả T12, không nằm trong 3 lần.
+- **Fail-closed:** thiếu tổng hoặc thiếu Lần 1 ⇒ nói đúng thiếu gì (*"Chưa lấy được số ứng lần 1 từ App Salary"*), **không dựng sổ rỗng** trông như đã trả hết. Bất biến gãy ⇒ **"⛔ Sổ chưa cân"**, không hiển thị số chỏi.
+- Frontend **chỉ hiển thị**, không cộng trừ lại — mọi số do backend tính và đã kiểm bất biến.
+- Test: web **127/127** (thêm 4 test) · server **690/696** (6 lỗi PDF nền cũ) · build sạch.
+- **Còn ở GĐ2:** ghi nhận "đã trả" lần 2/3 (chỉ người có quyền, có nhật ký ai-khi nào-số cũ→mới) · sửa số Lần 2 trên màn · Telegram nhắc mở cửa sổ/quá hạn · bảng toàn đội cho CEO.
+
 ### 2026-08-04 — Nối kho chốt số "Ứng lần 1" vào đường chạy thật
 
 - `safeGetFirstAdvance()` nay đi qua `salaryAdvanceSnapshot`: kỳ **đã chốt** ⇒ **không gọi App Salary lần nào nữa**; kỳ đang mở chỉ làm tươi khi quá hạn (mặc định 6 giờ). Trước đó chỉ có cache RAM 25 giây ⇒ NV mở màn 10 lần là 10 lượt gọi, restart app là mất sạch (CEO chỉ ra 04/08).

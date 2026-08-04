@@ -672,6 +672,35 @@ export function employeeCostViewModel(payload = {}) {
       comparisonAfterPenaltyTotal: Number.isSafeInteger(payload.salaryAdvance.comparisonAfterPenaltyTotal)
         && payload.salaryAdvance.comparisonAfterPenaltyTotal >= 0 ? payload.salaryAdvance.comparisonAfterPenaltyTotal : null,
     } : null,
+    // SỔ "Thanh toán CP của tôi" — backend tính hết, frontend CHỈ hiển thị.
+    // Không tự cộng trừ lại: mọi số ở đây phải là số backend đã kiểm bất biến.
+    paymentSchedule: payload.paymentSchedule && typeof payload.paymentSchedule === 'object' ? {
+      available: payload.paymentSchedule.available === true,
+      period: String(payload.paymentSchedule.period || ''),
+      reason: payload.paymentSchedule.reason == null ? null : String(payload.paymentSchedule.reason),
+      total: numberOrNull(payload.paymentSchedule.total),
+      received: numberOrNull(payload.paymentSchedule.received),
+      outstanding: numberOrNull(payload.paymentSchedule.outstanding),
+      twoInstalmentsOnly: payload.paymentSchedule.twoInstalmentsOnly === true,
+      invariantOk: payload.paymentSchedule.invariantOk !== false,
+      warnings: Array.isArray(payload.paymentSchedule.warnings) ? payload.paymentSchedule.warnings.map(String) : [],
+      c44: payload.paymentSchedule.c44 && typeof payload.paymentSchedule.c44 === 'object' ? {
+        amount: numberOrNull(payload.paymentSchedule.c44.amount),
+        note: String(payload.paymentSchedule.c44.note || ''),
+      } : null,
+      installments: (Array.isArray(payload.paymentSchedule.installments) ? payload.paymentSchedule.installments : []).map((item) => ({
+        index: Number(item?.index || 0),
+        key: String(item?.key || ''),
+        label: String(item?.label || ''),
+        amount: numberOrNull(item?.amount),
+        dueDate: String(item?.dueDate || ''),
+        gapNote: String(item?.gapNote || ''),
+        status: String(item?.status || 'plan'),
+        source: String(item?.source || ''),
+        editable: item?.editable === true,
+        daysFromToday: item?.daysFromToday == null ? null : Number(item.daysFromToday),
+      })),
+    } : null,
     // Phép trừ thuộc backend; frontend chỉ giữ projection allowlist để hiển thị.
     remainingAfterAdvance: payload.remainingAfterAdvance && typeof payload.remainingAfterAdvance === 'object' ? {
       available: payload.remainingAfterAdvance.available === true,
