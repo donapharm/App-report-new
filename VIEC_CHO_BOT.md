@@ -13,14 +13,14 @@
 > PROD = `244d058` (deploy 08:25, Gate 2 PASS). Làm từ trên xuống, xong việc nào báo CEO việc đó.
 
 ## ‼ SỬA ĐỊNH NGHĨA "GHIM TIỀN" — đọc trước khi báo đỏ
-- **T06 `28.403.136.096đ` · T07 `30.917.892.673đ` = KỲ ĐÃ KHOÁ SỔ ⇒ FROZEN.** Đổi một đồng là DỪNG.
+- **T06 `28.403.136.096đ` (2.001 dòng) · T07 `30.917.892.673đ` (2.016 dòng) = KỲ ĐÃ KHOÁ SỔ ⇒ FROZEN.** Xác nhận lại 04/08 10:30, đúng từng đồng. Đổi một đồng là DỪNG.
 - **T08 KHÔNG frozen** — tháng đang chạy, doanh thu về thêm mỗi ngày. Số `2.151.774.772đ` chỉ đúng cho ảnh chụp 03/08; refresh 04/08 09:30 ra `2.410.293.372đ` / 324 dòng là **bình thường**, không phải drift.
 - Bất biến của T08 **không phải một con số cố định**, mà là: **App Report == App Sale "ĐÃ THỰC HIỆN" khi so CÙNG THỜI ĐIỂM** (chụp cách nhau < 2 phút). Chỉ so như vậy mới được kết luận lệch.
 
 | # | Việc | Hạn | Trạng thái | Ai làm |
 |---|---|---|---|---|
-| **1** | **Đối soát lại T08 sau refresh** — App Sale vs App Report cùng thời điểm, phải `0đ`. Số mới `2.410.293.372đ` / 324 dòng **chưa được đối soát**. | ngay | chưa | bot |
-| **2** | **Đóng nghiệm thu VP018 + DN022** — Gate 2 đã chứng minh: DN022 đúng 3/3 dòng, không P1/P2, không phạt target/C45, vẫn giữ luồng thiếu Xu · VP018 không phân bổ doanh thu, cảnh báo vận hành còn, notify tiền bị chặn. **Chỉ còn thiếu 1 số: `formulaVersion` phải ra `v3.8`.** Dán số đó là đóng mục này. | **08/08** | gần xong | bot |
+| **1** | **Đối soát T08 với APP SALE — vẫn CHƯA làm.** Báo cáo 10:30 mới chỉ là số nội bộ App Report (`2.410.293.372đ` = CRM `1.598.904.372` + Partner `811.389.000`, cộng đúng). **Chưa có số App Sale để so.** Phải mở App Sale ô "ĐÃ THỰC HIỆN" cùng kỳ, **chụp cách nhau < 2 phút**, dán CẢ HAI số. Lệch ⇒ tách riêng CRM và Partner rồi chỉ ra dòng nào thừa/thiếu. | ngay | **chưa** | bot |
+| **2** | **Đóng nghiệm thu VP018 + DN022** — 04/08 10:30 đã PASS đủ: VP018 0 dòng phân bổ, 1 dòng `1.795.600đ` cách ly đúng, cảnh báo vận hành còn · DN022 3/3 dòng, 0 thiếu, không P1/P2, không phạt target/C45, giữ luồng thiếu Xu · policy/notify 36/36 · cảnh báo vận hành 15/15. Trước đó Gate 2 cũng chứng minh: DN022 đúng 3/3 dòng, không P1/P2, không phạt target/C45, vẫn giữ luồng thiếu Xu · VP018 không phân bổ doanh thu, cảnh báo vận hành còn, notify tiền bị chặn. **Chỉ còn thiếu 1 số: `formulaVersion` phải ra `v3.8`.** Dán số đó là đóng mục này. | **08/08** | gần xong | bot |
 | **3** | **Hợp đồng "Ứng lần 1"** — App Salary chưa trả lời nghĩa `provisional`/`approved`, chưa dán JSON đầy đủ. Xem `SPEC_SALARY_ADVANCE_AUTO.md`. **Cấm tự đoán nghĩa** (đoán sai ⇒ "Còn lại sau ứng" bằng nguyên tổng chi phí). | 04/08 | chờ App Salary | bot + App Salary → Claude duyệt |
 | **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
 | **5** | **Gán lại dòng cách ly** — `DH479816174` · MISA `341964` · 03/08 · `G1.GE.QĐ139.1104.N2.162` Pizar-3 · SL 40 · `1.795.600đ` · `120.HTNT-PHARMACITY` · đang gán VP018 (telesaler) → `NON_SALES_ROLE_QUARANTINED`. Gán cho **NV Sale hợp lệ**. **App Report KHÔNG tự đoán.** | **08/08** | chưa gán | App Sale / danh mục phân công |
