@@ -1,3 +1,22 @@
+### 2026-08-04 — Màn "Chưa đồng bộ": phần QUYẾT ĐỊNH đã xong, bot chỉ còn đổ dữ liệu vào
+
+`server/src/syncExceptionClassifier.js` — hàm **thuần** (không truy vấn, không ghi): đưa vào toàn bộ dòng nguồn của kỳ + danh sách dòng đã tính doanh thu ⇒ trả về từng dòng bị loại **kèm mã lý do**. Nhờ tách như vậy, phần khó và dễ sai (quyết định dòng nào bị loại vì sao) không còn phải chờ máy chủ có DB thật.
+
+Bot chỉ còn đúng hai dòng:
+```js
+const exceptions = classifySyncExceptions({ period, sourceRows, includedLineIds, knownUnits, knownProducts, roster });
+syncExceptionStore.write(period, { source, included, exceptions });
+```
+
+- **Dòng ĐÃ tính tiền chỉ được gắn mã "thiếu thông tin"**, cấm gắn mã loại — nếu không, một dòng vừa được tính tiền vừa bị báo loại thì bất biến `Σ(đưa vào)+Σ(loại)==Σ(nguồn)` sai ngay.
+- **Bị loại mà không khớp luật nào ⇒ vẫn xuất ra với mã `KHONG_RO`** để lộ chỗ chưa khai báo. Thà thừa một dòng lạ còn hơn thiếu một dòng không ai biết.
+- **`HOLD_GOLIVE` đã giao mà vẫn bị loại ⇒ báo ra** (nhóm ghi chú, VẪN TÍNH tiền — CEO chốt 29/07).
+- **Không có danh mục đối chiếu thì KHÔNG tự kết luận là thiếu** — không có `knownUnits` thì không được vu cho dòng đó thiếu đơn vị.
+- Một dòng thiếu nhiều thứ thì **kể hết**, không dừng ở lỗi đầu tiên.
+- Bám đúng hai vụ thật: `MISA_THIEU_NGAY_DOANH_THU` = đơn `DH479815711` **2.399.520đ** (có tiền, đã ghi doanh số, thiếu ngày) · `DON_VI_THIEU_DANH_MUC` = `175.BVĐK Vũng Tàu` **275,9tr** (tính đủ tiền nhưng mất tỉnh khi lọc).
+- Test có ràng buộc **mọi mã do bộ phân loại sinh ra đều phải nằm trong `syncExceptionCatalog.js`** ⇒ thêm luật mới mà quên khai báo lý do thì test đỏ.
+- Test: `syncExceptionClassifier.test.js` **14/14** · server **768/774** (6 lỗi PDF nền cũ).
+
 ### 2026-08-04 — Lịch chạy nền một cửa: nhắc thanh toán + AI đề xuất target ngày 01
 
 `server/src/scheduledJobs.js` — bot chỉ cần gọi `runDueJobs()` mỗi ~5 phút, module tự quyết việc nào tới giờ. **Mọi mốc theo giờ Việt Nam** (`Asia/Bangkok`), có test chứng minh: `2026-08-31T17:30Z` = **00:30 ngày 01 giờ VN** vẫn được nhận là **ngày 01** — lấy giờ máy thì lịch "ngày 01" bắn nhầm sang ngày 31 và neo nhầm tháng.
