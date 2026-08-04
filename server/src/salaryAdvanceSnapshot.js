@@ -24,14 +24,14 @@ const persist = require('./persist');
 
 const FILE = 'salary_advance_snapshot';
 const CONTRACT_KEYS = ['amount', 'applicable', 'available', 'currency', 'emp_code', 'locked', 'ok', 'period', 'reason', 'status'];
-// ‼ CEO đính chính 04/08: *"khi sửa số ứng lần 1 cho một NV thì sẽ sửa vào App
-// Salary và như vậy sẽ được cập nhật vào ô KPI thôi, không có gì khác."*
-// ⇒ KHÔNG kỳ nào được coi là "không bao giờ hỏi lại". Bản đầu của Claude đóng băng
-// vĩnh viễn kỳ đã chốt ⇒ Sếp sửa số bên App Salary mà App Report không bao giờ thấy.
-// Thay bằng: LUÔN trả số trong kho NGAY (màn không phải chờ), rồi làm tươi NGẦM
-// phía sau khi đã quá ngưỡng dưới đây. NV không thấy chậm, mà số vẫn tự cập nhật.
-const REVALIDATE_OPEN_MS = 10 * 60 * 1000;    // kỳ đang mở: 10 phút
-const REVALIDATE_FINAL_MS = 60 * 60 * 1000;   // kỳ đã chốt: 1 giờ (số hiếm khi đổi)
+// ‼ LUẬT NGUỒN (CEO chốt 04/08, hỏi lại 2 lần cho chắc):
+//   - Kỳ ĐÃ CHỐT trên App Salary: *"đã chốt số ứng lần 1 rồi là không đổi lại được
+//     nữa"* ⇒ số BẤT BIẾN ⇒ App Report không hỏi lại lần nào. 0 lượt gọi, vĩnh viễn.
+//   - Kỳ CHƯA CHỐT: số còn sửa được bên App Salary, và sửa xong phải tự về App
+//     Report ⇒ trả ngay số trong kho (màn không chờ) + làm tươi NGẦM sau 10 phút.
+// Hai đường về ngay trong mọi trường hợp: nút "Làm mới" (`force`) và webhook khi
+// App Salary duyệt (`invalidate`). Không có ngõ cụt.
+const REVALIDATE_OPEN_MS = 10 * 60 * 1000;
 // Chặn phình file: 21 NV × ~24 kỳ là quá đủ để tra lại lịch sử.
 const MAX_RECORDS = 600;
 
@@ -97,13 +97,15 @@ function mustFetch(record, { force = false } = {}) {
   return force === true || !record;
 }
 
-// Có nên làm tươi NGẦM phía sau không? Áp cho mọi kỳ, kể cả kỳ đã chốt — để chỉnh
-// sửa bên App Salary luôn về được App Report mà không ai phải làm gì.
-function shouldRevalidate(record, { now = Date.now, openMs = REVALIDATE_OPEN_MS, finalMs = REVALIDATE_FINAL_MS } = {}) {
+// Có nên làm tươi NGẦM phía sau không?
+// Kỳ đã chốt ⇒ KHÔNG, số bên App Salary không đổi được nữa nên hỏi lại là phí.
+// Kỳ chưa chốt ⇒ CÓ, sau `openMs`, để chỉnh sửa bên App Salary tự về.
+function shouldRevalidate(record, { now = Date.now, openMs = REVALIDATE_OPEN_MS } = {}) {
   if (!record) return true;
+  if (record.final) return false;
   const at = Date.parse(record.fetchedAt || '');
   if (!Number.isFinite(at)) return true;
-  return now() - at >= Number(record.final ? finalMs : openMs);
+  return now() - at >= Number(openMs);
 }
 
 function invalidate(empCode, period, { store = persist } = {}) {
@@ -116,6 +118,6 @@ function invalidate(empCode, period, { store = persist } = {}) {
 }
 
 module.exports = {
-  FILE, CONTRACT_KEYS, MAX_RECORDS, REVALIDATE_OPEN_MS, REVALIDATE_FINAL_MS,
+  FILE, CONTRACT_KEYS, MAX_RECORDS, REVALIDATE_OPEN_MS,
   isFinal, isStorable, read, write, mustFetch, shouldRevalidate, invalidate, keyOf,
 };

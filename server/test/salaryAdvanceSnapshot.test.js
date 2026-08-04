@@ -11,9 +11,9 @@ const projection = (over = {}) => ({
   emp_code: 'DN001', locked: true, period: '2026-07', reason: null, status: 'locked', ...over,
 });
 
-// ‼ CEO đính chính 04/08: sửa số ứng lần 1 là sửa BÊN APP SALARY, và số đó phải
-// tự về ô KPI. Nên KHÔNG kỳ nào được đóng băng vĩnh viễn — kể cả kỳ đã chốt.
-test('kỳ đã chốt: trả ngay số trong kho, nhưng vẫn tự làm tươi ngầm sau 1 giờ', () => {
+// CEO chốt 04/08: "App Salary đã chốt số ứng lần 1 rồi là không đổi lại được nữa"
+// ⇒ số bất biến ⇒ không hỏi lại lần nào. Chỉ kỳ CHƯA chốt mới cần làm tươi.
+test('kỳ đã chốt: số bất biến ⇒ không gọi lại App Salary lần nào', () => {
   const store = memStore();
   const t0 = Date.parse('2026-08-04T00:00:00Z');
   snap.write('DN001', '2026-07', projection(), { store, now: () => t0 });
@@ -21,10 +21,11 @@ test('kỳ đã chốt: trả ngay số trong kho, nhưng vẫn tự làm tươi
   assert.equal(record.final, true);
   // Màn hình KHÔNG phải chờ mạng — có số là trả ngay.
   assert.equal(snap.mustFetch(record), false);
-  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 30 * 60_000 }), false, '30 phút thì thôi');
-  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 2 * 3600_000 }), true, 'quá 1 giờ thì làm tươi ngầm');
-  // Một năm sau vẫn phải làm tươi — không được đóng băng vĩnh viễn.
-  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 365 * 86_400_000 }), true);
+  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 2 * 3600_000 }), false);
+  // Một năm sau vẫn không cần hỏi lại — số đã chốt thì không đổi.
+  assert.equal(snap.shouldRevalidate(record, { now: () => t0 + 365 * 86_400_000 }), false);
+  // Nhưng vẫn còn đường về ngay khi cần: nút Làm mới / webhook.
+  assert.equal(snap.mustFetch(record, { force: true }), true);
 });
 
 test('kỳ đang mở: dùng số trong kho ngay, làm tươi ngầm sau 10 phút', () => {
@@ -93,17 +94,18 @@ test('kho không phình vô hạn', () => {
 // thấy. Test này chứng minh số mới về được mà không ai phải bấm gì.
 const salaryAdvance = require('../src/salaryAdvance');
 
-test('sửa số bên App Salary ⇒ App Report tự cập nhật, không ai phải bấm gì', async () => {
+test('kỳ CHƯA chốt: sửa số bên App Salary ⇒ App Report tự cập nhật, không ai phải bấm gì', async () => {
   const store = memStore();
   const t0 = Date.parse('2026-08-04T00:00:00Z');
-  let upstream = projection({ amount: 50_000_000 });
+  const draft = (over = {}) => projection({ locked: false, status: 'draft', ...over });
+  let upstream = draft({ amount: 50_000_000 });
   const get = async () => upstream;
 
   const first = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN001', get, { snapshotStore: store, now: () => t0 });
   assert.equal(first.amount, 50_000_000);
 
-  // Kế toán sửa số bên App Salary.
-  upstream = projection({ amount: 55_000_000 });
+  // Kế toán sửa số bên App Salary (kỳ chưa chốt nên còn sửa được).
+  upstream = draft({ amount: 55_000_000 });
 
   // Ngay sau đó: vẫn trả số cũ tức thì (màn không chờ) — đúng thiết kế.
   const soon = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN001', get, { snapshotStore: store, now: () => t0 + 60_000 });
@@ -112,7 +114,7 @@ test('sửa số bên App Salary ⇒ App Report tự cập nhật, không ai ph�
 
   // Quá ngưỡng làm tươi ⇒ tự lấy số mới, KHÔNG cần ai bấm.
   const later = await salaryAdvance.safeGetFirstAdvance('2026-07', 'DN001', get, {
-    snapshotStore: store, now: () => t0 + 2 * 3600_000, awaitRevalidate: true,
+    snapshotStore: store, now: () => t0 + 20 * 60_000, awaitRevalidate: true,
   });
   assert.equal(later.amount, 55_000_000, 'số sửa bên App Salary phải tự về');
 });

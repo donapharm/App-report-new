@@ -93,18 +93,19 @@ App Salary chỉ cần lần 1 (đã có) ⇒ không phải chờ ai.
 
 **CEO đúng.** Trước đó chỉ có cache RAM **25 giây** ⇒ NV mở màn 10 lần/ngày là 10 lượt gọi App Salary, restart app là mất sạch. Với 21 NV × nhiều màn thì đây đúng là lãng phí, và còn kéo theo rủi ro: nguồn chậm/lỗi là màn trắng.
 
-### ‼ ĐÍNH CHÍNH 04/08 — CEO: sửa số là sửa BÊN APP SALARY, số phải TỰ về
-> CEO: *"Khi sửa số ứng lần 1 cho một NV nào đó thì sẽ sửa vào App Salary, và như vậy sẽ được cập nhật vào ô KPI thôi, không có gì khác."*
+### LUẬT NGUỒN — CEO chốt 04/08 (đã hỏi lại 2 lần cho chắc)
+> *"App Salary đã chốt số ứng lần 1 rồi là **không đổi số lại được nữa**. Nên không có chuyện thay đổi số thường xuyên."*
+> Sửa số chỉ xảy ra **khi kỳ CHƯA chốt**, và sửa xong phải tự về ô KPI.
 
-Bản đầu của Claude coi kỳ đã chốt là **"không bao giờ hỏi lại"** ⇒ Sếp sửa số bên App Salary mà App Report **không bao giờ thấy**. **Sai, đã bỏ.**
-
-Thay bằng **trả ngay + làm tươi ngầm** (`server/src/salaryAdvanceSnapshot.js`):
+`server/src/salaryAdvanceSnapshot.js`:
 
 | Trạng thái kỳ | Màn hình | Làm tươi ngầm phía sau |
 |---|---|---|
-| **Đã chốt** (`locked`/`approved`) | trả số trong kho **tức thì** | sau **1 giờ** |
-| **Đang mở** (`draft`) | trả số trong kho **tức thì** | sau **10 phút** |
+| **Đã chốt** (`locked`/`approved`) | trả số trong kho **tức thì** | **KHÔNG — số bất biến, 0 lượt gọi vĩnh viễn** |
+| **Chưa chốt** (`draft`) | trả số trong kho **tức thì** | sau **10 phút** — để sửa bên App Salary tự về |
 | **Chưa có số / lỗi nguồn** | không lưu — không đóng băng cái rỗng | như cũ |
+
+**Hai đường về ngay trong mọi trường hợp**, kể cả kỳ đã chốt: nút **"Làm mới"** (`force`) và **webhook** khi App Salary duyệt (`invalidate`). Không có ngõ cụt.
 
 - **Màn hình KHÔNG BAO GIỜ phải chờ mạng** khi kho đã có số ⇒ hết cảnh mỗi lần mở menu là một lượt gọi (đúng mối lo của CEO).
 - **Chỉnh sửa bên App Salary vẫn tự về**, không ai phải bấm gì — chậm nhất 10 phút (kỳ mở) / 1 giờ (kỳ chốt), và **tức thì** nếu bấm "Làm mới" hoặc có webhook.
@@ -120,6 +121,7 @@ Thay bằng **trả ngay + làm tươi ngầm** (`server/src/salaryAdvanceSnapsh
 6. Kho **có trần** (600 bản ghi), không phình vô hạn.
 
 ### Rủi ro đã cân nhắc
-Chỉnh sửa bên App Salary về **chậm nhất 10 phút / 1 giờ** chứ không tức thì. Chấp nhận được vì đây là số chi trả theo tháng, không phải số theo giây; và vẫn có **2 đường về ngay**: nút "Làm mới" + webhook khi App Salary duyệt.
+Kỳ **chưa chốt**: sửa bên App Salary về chậm nhất **10 phút** chứ không tức thì — chấp nhận được với một con số theo tháng, và vẫn có 2 đường về ngay.
+Kỳ **đã chốt**: không hỏi lại. Nếu sau này App Salary đổi quy định thành *"đã chốt vẫn sửa được"* thì **phải báo App Report** để mở lại làm tươi ngầm — đây là điều kiện ràng buộc giữa hai bên, ghi rõ ở đây để không ai quên.
 
 **Đã code + test:** `server/test/salaryAdvanceSnapshot.test.js` 7/7.
