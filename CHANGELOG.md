@@ -1,3 +1,18 @@
+### 2026-08-04 — Màn "Chưa đồng bộ": danh mục lý do + chốt bất biến (phần của Claude)
+
+Món nợ từ 29/07. Việc chia đôi: **phân loại dòng bị loại** phải làm trong materializer trên máy chủ (bot, cần DB thật); **hợp đồng dữ liệu + kiểm bất biến + màn hình** là phần Claude. Làm phần Claude trước để bot chỉ việc gắn `code`.
+
+**`server/src/syncExceptionCatalog.js`** — 14 mã lý do, mỗi mã bắt buộc đủ **nghĩa · ai xử lý · làm gì**; có test chặn lý do chung chung. Ba nhóm tách bạch:
+- `excluded` — bị loại, tiền KHÔNG tính (vd `MISA_THIEU_NGAY_DOANH_THU` = vụ `2.399.520đ`, đơn `DH479815711`).
+- `incomplete` — **VÀO ĐỦ TIỀN** nhưng thiếu thông tin nên rơi khỏi bộ lọc (vd `DON_VI_THIEU_DANH_MUC` = vụ `175.BVĐK Vũng Tàu`, tính đủ 275,9 triệu nhưng lọc theo tỉnh thì mất). Nhóm này **không bị trừ khỏi tổng nguồn**.
+- `note` — vẫn tính tiền, chỉ theo dõi (`WEB_HOLD_GOLIVE_DA_GIAO` — CEO chốt 29/07 VẪN TÍNH).
+- **Mã lạ không được nuốt:** hiện ra kèm việc phải làm *"khai báo mã lý do này"*.
+
+**`server/src/syncExceptionReport.js`** — kiểm bất biến `Σ(đưa vào) + Σ(loại) == Σ(nguồn)` cả **tiền lẫn số dòng**; lệch thì nêu **đúng số lệch**, không kết luận cân. **Thiếu số nguồn ⇒ `balanced: null`**, không được coi là "đã cân" — chưa đủ căn cứ khác hẳn đã cân. Gom theo mã lý do, xếp tiền lớn lên đầu để xử trước; mỗi dòng kèm luôn ai xử lý.
+
+- Test: `syncException.test.js` **8/8** · server **722/728** (6 lỗi PDF nền cũ).
+- **Còn của bot:** materializer lấy TOÀN BỘ dòng của kỳ (universe) → phân loại từng dòng → ghi ra danh sách ngoại lệ kèm `code`. Có `buildSyncExceptionReport` rồi thì chỉ cần gọi và dừng khi `balanced === false`.
+
 ### 2026-08-04 — Sửa lỗi rollback: `EmployeeCost.jsx` thiếu import từ `employeeCostModel.js`
 
 - Bot chặn ở **post-deploy browser** trên `39a402c`: `ReferenceError: readEmployeeCostPrefs is not defined` ⇒ rollback về `244d058`. **Bot làm đúng.**
