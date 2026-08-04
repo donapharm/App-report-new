@@ -1,3 +1,13 @@
+### 2026-08-04 — Màn "Chưa đồng bộ": kho + API + màn hình (phần Claude xong)
+
+- **`server/src/syncExceptionStore.js`** — nơi materializer ghi phần bị loại của mỗi kỳ (`source`/`included`/`exceptions`). Giữ tối đa 24 kỳ, 5.000 dòng/kỳ, cắt bớt thì **nói ra** (`truncated`). Kỳ sai khuôn không ghi được.
+- **`GET /api/revenue/sync-exceptions?ky=`** (admin, `no-store`) — đọc kho, chạy qua `syncExceptionReport` rồi mới trả.
+- **‼ Phân biệt hai trạng thái dễ lẫn nhất:** kỳ **chưa chạy phân loại** trả `ran:false` + `report:null` kèm câu nói thẳng — **không** trả báo cáo rỗng làm người xem tưởng sạch. Đây đúng bệnh cũ: tưởng sạch trong khi chưa ai nhìn.
+- **`web/src/pages/SyncExceptions.jsx`** — 4 ô (Tổng nguồn · Đã đưa vào · Bị loại · **Vào đủ tiền nhưng thiếu thông tin**) + bảng **gom theo lý do** (xử cái nhiều tiền trước) + bảng **từng dòng**. Mỗi dòng và mỗi lý do đều kèm **ai xử lý · làm gì**.
+- Không cân ⇒ **"⛔ KHÔNG CÂN — có dòng rơi ở chỗ chưa ai khai báo"** kèm **đúng số lệch**; thiếu căn cứ ⇒ nói rõ **không kết luận là đã cân**; có mã lý do lạ ⇒ hiện ra để khai báo.
+- Test: `syncExceptionRoute.test.js` **5/5** · `SyncExceptions.test.mjs` **7/7** · server **726/732** · web **138/138** · build sạch.
+- **Còn của bot:** materializer lấy TOÀN BỘ dòng của kỳ → phân loại → gọi `syncExceptionStore.write()`. Gắn màn vào thanh điều hướng sau khi có dữ liệu thật.
+
 ### 2026-08-04 — Màn "Chưa đồng bộ": danh mục lý do + chốt bất biến (phần của Claude)
 
 Món nợ từ 29/07. Việc chia đôi: **phân loại dòng bị loại** phải làm trong materializer trên máy chủ (bot, cần DB thật); **hợp đồng dữ liệu + kiểm bất biến + màn hình** là phần Claude. Làm phần Claude trước để bot chỉ việc gắn `code`.

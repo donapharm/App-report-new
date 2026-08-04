@@ -205,6 +205,8 @@ export async function trustedDeviceLogin(phone) {
 }
 
 export const api = {
+  // Màn "Chưa đồng bộ" — chỉ đọc, danh mục dòng bị loại + lý do.
+  syncExceptions: (ky) => req('GET', `/revenue/sync-exceptions?ky=${encodeURIComponent(ky)}`),
   // Sổ "Thanh toán CP của tôi" — GHI NHẬN. Backend chỉ cho CEO; frontend chỉ ẩn nút
   // cho gọn mắt, KHÔNG được coi việc ẩn nút là bảo vệ.
   paymentSetSecond: (payload) => req('POST', '/employee-cost/payment/second', payload),

@@ -51,6 +51,8 @@ const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
 const paymentLedgerStore = require('./paymentLedgerStore');
 const paymentTeamSummary = require('./paymentTeamSummary');
+const syncExceptionStore = require('./syncExceptionStore');
+const syncExceptionReport = require('./syncExceptionReport');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -2040,6 +2042,23 @@ router.post('/employee-cost/payment/undo', auth.requireAuth, auth.requireCeo, as
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ok: true, emp_code: empCode, period, paid: entry.paid, audit: entry.audit.slice(-5) });
 }));
+
+/* ---------- Màn "CHƯA ĐỒNG BỘ" (SPEC_REVENUE_SYNC_EXCEPTIONS.md) ----------
+   Mọi dòng bị loại đều phải nêu tên và nêu lý do. Chỉ ĐỌC — không sửa gì. */
+router.get('/revenue/sync-exceptions', auth.requireAuth, auth.requireAdmin, (req, res) => {
+  const period = employeeCost.normalizeMonth(req.query?.ky || req.query?.period);
+  res.set('Cache-Control', 'private, no-store');
+  if (!period) return res.status(400).json({ error: 'Kỳ không hợp lệ', code: 'SYNC_EXCEPTION_PERIOD_INVALID' });
+  const entry = syncExceptionStore.read(period);
+  // ‼ Chưa chạy phân loại KHÁC HẲN đã chạy và sạch. Không được lẫn hai cái.
+  if (!entry) return res.json({ period, ran: false, report: null, note: 'Kỳ này chưa chạy phân loại dòng bị loại' });
+  return res.json({
+    period, ran: true, at: entry.at, runId: entry.runId, truncated: entry.truncated === true,
+    report: syncExceptionReport.buildSyncExceptionReport({
+      period, source: entry.source, included: entry.included, exceptions: entry.exceptions,
+    }),
+  });
+});
 
 router.post('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   const panel = employeeCostVisibility.save(req.body, {
