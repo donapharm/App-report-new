@@ -56,3 +56,40 @@ test('cùng một kỳ khai hai nơi lệch số ⇒ báo mâu thuẫn ngay', ()
   });
   assert.deepEqual(conflicts, [{ ky: '07.2026', a: 'A', b: 'B' }]);
 });
+
+/* ── Bot bắt lỗi 04/08 19:40: script gọi `store.revenueRows` — HÀM KHÔNG TỒN TẠI ── */
+
+const { readActuals, onSampleData } = require('../scripts/verify_frozen_periods');
+
+test('‼ đọc số sống bằng ĐÚNG hàm của store — đổi tên hàm là phải NỔ, không âm thầm unknown', () => {
+  // Bản đầu dùng `typeof store.revenueRows === 'function' ? ... : null` nên khi gọi
+  // sai tên hàm nó lặng lẽ trả unknown ⇒ script vô dụng mà nhìn vẫn "an toàn".
+  assert.throws(() => readActuals(['07.2026'], { getRows: undefined }), /store\.getRows không còn tồn tại/);
+});
+
+test('đọc được số thật thì trả đủ số dòng và tổng tiền', () => {
+  const fake = { getRows: ({ ky }) => (ky === '07.2026' ? [{ revenue: 100 }, { revenue: 23 }] : []) };
+  assert.deepEqual(readActuals(['07.2026', '06.2026'], fake), {
+    '07.2026': { totalRows: 2, totalRevenue: 123 },
+    '06.2026': { totalRows: 0, totalRevenue: 0 },
+  });
+});
+
+test('‼ chạy trên DỮ LIỆU MẪU thì không được kêu lệch — báo đỏ giả làm người ta quen mắt', () => {
+  const sampleRows = [{ ky: '06.2026', revenue: 1 }, { ky: '07.2026', revenue: 2 }];
+  const seedStore = {
+    base: () => ({ sampleRows }),
+    getRows: ({ ky }) => sampleRows.filter((row) => row.ky === ky),
+  };
+  assert.equal(onSampleData(['06.2026', '07.2026'], seedStore), true);
+});
+
+test('có dữ liệu upload thật thì PHẢI kết luận, không được né', () => {
+  const sampleRows = [{ ky: '06.2026', revenue: 1 }];
+  const realStore = {
+    base: () => ({ sampleRows }),
+    // Dòng thật là đối tượng KHÁC, không nằm trong tập mẫu.
+    getRows: () => [{ ky: '06.2026', revenue: 28_403_136_096 }],
+  };
+  assert.equal(onSampleData(['06.2026'], realStore), false);
+});

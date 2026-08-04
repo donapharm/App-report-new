@@ -1,3 +1,19 @@
+### 2026-08-04 — Sửa `verify_frozen_periods.js`: bot bắt đúng, script gọi hàm không tồn tại
+
+> Bot: *"script mới verify_frozen_periods.js đang tự trả unknown vì gọi store.revenueRows; em đã kiểm độc lập bằng store.getRows và T06/T07 đều khớp 0 lệch."* — **Bot đúng, lỗi của Claude.**
+
+`store.revenueRows` **không tồn tại**; hàm đúng là `store.getRows({ ky })` (đồng bộ, `ky` dạng `MM.YYYY`). Script vì thế **luôn trả `unknown`** ⇒ vô dụng, mà suýt được dùng làm cổng gác cho lần DataHub drain 2.600 event.
+
+Điều duy nhất cứu nó: luật fail-closed — *"không đọc được ≠ khớp"*. Nếu ngày đó code trả `0` thay cho "chưa đọc được" thì script đã **báo `ok` giả** và cổng gác thành vô nghĩa mà không ai biết.
+
+**Đã sửa và khoá lại:**
+- Dùng `store.getRows`. **Đổi tên hàm ở store mà quên sửa đây ⇒ NÉM LỖI**, không âm thầm `unknown` nữa. Có test bắt đúng ca đó.
+- **Thêm chốt chặn dữ liệu mẫu.** Chạy trên máy dev thì kỳ nào cũng "lệch mấy chục tỷ" (seed ≠ production) ⇒ báo đỏ giả ⇒ vài lần là người ta quen mắt rồi bỏ qua, tới lúc lệch THẬT cũng không ai nhìn. Nay nhận biết bằng **tham chiếu đối tượng** (mọi dòng của kỳ ghim đều là dòng seed) rồi thoát mã `2` kèm lời nhắc; muốn thử thì `--force`.
+- Xác nhận số ghim vẫn đúng: **T06 = 28.403.136.096đ / 2.001 dòng · T07 = 30.917.892.673đ / 2.016 dòng**, khớp với kết quả bot kiểm độc lập.
+
+- Test: `verifyFrozenPeriods.test.js` **10/10** · server **807/813** (6 lỗi PDF nền cũ).
+- **‼ Script chỉ dùng làm cổng gác được từ bản này trở đi.** Bản đang nằm trên PROD (`7fdbd41`) là bản hỏng.
+
 ### 2026-08-04 — CEO báo 3 lỗi trên PROD; rà ra 4 nguyên nhân khác nhau
 
 > CEO: *"ở tab chi phí của tôi đâu cần hiển thị mấy mục Thanh toán CP… chỉ làm rối"* · *"ở tab thanh toán CP hiện tôi không thấy dữ liệu nào hết cả, lọc nhân viên thì chỉ hiển thị có mỗi mã nv, không thấy kèm tên"* · *"tôi nghĩ đang lỗi chưa đồng bộ hết nhé, mày phải tự rà soát lại chuẩn nhé, đang rất là ẩu nhé."*

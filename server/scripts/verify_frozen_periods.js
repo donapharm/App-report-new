@@ -58,17 +58,26 @@ function comparePins(pins, actualByKy) {
   });
 }
 
-// Đọc số SỐNG của một kỳ. Không đọc được thì trả `null` — KHÔNG trả 0, vì 0 sẽ bị
-// so ra "lệch -30 tỷ" và làm người đọc hoảng nhầm, còn tệ hơn là nói thẳng "chưa đọc được".
-async function readActuals(kys) {
-  const store = require('../src/store');
+// Đọc số SỐNG của một kỳ.
+// ‼ SỬA 04/08 19:45 — bản đầu gọi `store.revenueRows`, HÀM NÀY KHÔNG TỒN TẠI. Hàm
+// đúng là `store.getRows({ ky })` (đồng bộ, `ky` dạng 'MM.YYYY'). Bản đầu vì thế
+// luôn trả `unknown` ⇒ script vô dụng. Nó KHÔNG báo nhầm là "khớp" chỉ nhờ luật
+// fail-closed; nhưng vô dụng vẫn là vô dụng, và suýt được dùng làm cổng gác thật.
+//
+// Không đọc được thì trả `null` — KHÔNG trả 0, vì 0 sẽ so ra "lệch −30 tỷ" làm
+// người đọc hoảng nhầm, còn tệ hơn là nói thẳng "chưa đọc được".
+function readActuals(kys, store = require('../src/store')) {
+  if (typeof store.getRows !== 'function') {
+    // Đổi tên hàm ở store mà quên sửa đây ⇒ phải NỔ, không được âm thầm unknown.
+    throw new Error('store.getRows không còn tồn tại — sửa verify_frozen_periods.js trước khi dùng làm cổng gác');
+  }
   const out = {};
   for (const ky of kys) {
     try {
-      const rows = typeof store.revenueRows === 'function' ? await store.revenueRows({ ky }) : null;
+      const rows = store.getRows({ ky });
       out[ky] = Array.isArray(rows) ? {
         totalRows: rows.length,
-        totalRevenue: Math.round(rows.reduce((sum, row) => sum + Number(row.revenue ?? row.amount ?? 0), 0)),
+        totalRevenue: Math.round(rows.reduce((sum, row) => sum + Number(row.revenue || 0), 0)),
       } : null;
     } catch (error) {
       console.warn(`[frozen] không đọc được kỳ ${ky}: ${error.message}`);
@@ -78,12 +87,39 @@ async function readActuals(kys) {
   return out;
 }
 
-async function main() {
+/**
+ * ‼ Đang chạy trên DỮ LIỆU MẪU hay dữ liệu THẬT?
+ *
+ * Kỳ đã khoá sổ được ghim theo số PRODUCTION. Chạy script này trên máy dev (dữ liệu
+ * seed) thì kỳ nào cũng "lệch mấy chục tỷ" — báo đỏ giả. Vài lần như vậy là người ta
+ * quen mắt rồi bỏ qua, tới lúc lệch THẬT cũng không ai buồn nhìn.
+ * Nhận biết: mọi dòng của kỳ được ghim đều là dòng seed ⇒ đang đọc dữ liệu mẫu.
+ */
+function onSampleData(kys, store = require('../src/store')) {
+  try {
+    const sample = new Set(store.base().sampleRows || []);
+    if (!sample.size) return false;
+    // Mọi dòng của kỳ được ghim đều là dòng MẪU ⇒ chưa có dữ liệu upload thật.
+    // So bằng THAM CHIẾU đối tượng nên không nhầm với dữ liệu thật trùng số.
+    return kys.every((ky) => {
+      const rows = store.getRows({ ky });
+      return Array.isArray(rows) && rows.every((row) => sample.has(row));
+    });
+  } catch { return false; }
+}
+
+function main() {
   const asJson = process.argv.includes('--json');
+  const { pins: pinsForCheck } = collectPins();
+  if (onSampleData(pinsForCheck.map((pin) => pin.ky)) && !process.argv.includes('--force')) {
+    console.error('⏭  Đang chạy trên DỮ LIỆU MẪU (mọi dòng của kỳ ghim đều là dòng seed) — KHÔNG kết luận.');
+    console.error('   Chỉ chạy trên máy chủ thật. Muốn ép chạy để thử: thêm --force.');
+    process.exit(2);
+  }
   const { pins, conflicts } = collectPins();
   if (!pins.length) { console.error('Không có kỳ nào được ghim — kiểm lại revenueMaterializeGuard.'); process.exit(2); }
 
-  const actuals = await readActuals(pins.map((pin) => pin.ky));
+  const actuals = readActuals(pins.map((pin) => pin.ky));
   const results = comparePins(pins, actuals);
   if (asJson) { console.log(JSON.stringify({ conflicts, results }, null, 2)); }
   else {
@@ -104,5 +140,7 @@ async function main() {
   process.exit(0);
 }
 
-module.exports = { collectPins, comparePins };
-if (require.main === module) main().catch((error) => { console.error(error); process.exit(2); });
+module.exports = { collectPins, comparePins, readActuals, onSampleData };
+if (require.main === module) {
+  try { main(); } catch (error) { console.error(error.message); process.exit(2); }
+}
