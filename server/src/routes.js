@@ -50,6 +50,7 @@ const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
 const paymentLedgerStore = require('./paymentLedgerStore');
+const paymentTeamSummary = require('./paymentTeamSummary');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
@@ -1041,7 +1042,22 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       includeSalaryAdvance: false,
       suppressAudit,
     }));
-    return employeeCostTable.mergeEmployeeReports(reports, roster);
+    const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+    // Bảng thanh toán toàn đội — dựng từ chính subtotals vừa có + kho Lần 1 + sổ ghi
+    // nhận. KHÔNG gọi thêm App Salary (chế độ ALL vốn không fan-out, giữ nguyên).
+    try {
+      merged.paymentTeam = paymentTeamSummary.buildPaymentTeamSummary({
+        period: range.to,
+        subtotals: merged?.employeeSubtotals || merged?.periods?.[0]?.employeeSubtotals || [],
+        readSnapshot: (emp, period) => salaryAdvance.snapshot.read(emp, period),
+        readLedger: (emp, period) => paymentLedgerStore.readEntry(emp, period),
+        today: employeeCost.vnToday(),
+      });
+    } catch (error) {
+      merged.paymentTeam = null;
+      console.warn('[payment-team] không dựng được bảng toàn đội', { message: error.message });
+    }
+    return merged;
   };
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
   // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
@@ -1983,8 +1999,8 @@ router.get('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asy
 }));
 
 /* ---------- Sổ "Thanh toán CP của tôi" — GHI NHẬN (GĐ2) ----------
-   Đây là TIỀN THẬT: chỉ CEO/admin được ghi, NV chỉ xem. Mọi thao tác có nhật ký
-   ai · khi nào · số cũ → số mới (SPEC_THANH_TOAN_CP_SELFVIEW.md §8). */
+   Đây là TIỀN THẬT: **CHỈ CEO** được ghi (CEO chốt 04/08 — admin cũng KHÔNG được),
+   NV chỉ xem. Mọi thao tác có nhật ký ai · khi nào · số cũ → số mới (SPEC §8). */
 function paymentTarget(req) {
   const empCode = String(req.body?.emp_code || req.body?.emp || '').trim().toUpperCase();
   const period = employeeCost.normalizeMonth(req.body?.period || req.body?.ky);
@@ -1999,7 +2015,7 @@ function paymentTarget(req) {
   return { empCode, period, actor: req.session?.emp_code };
 }
 
-router.post('/employee-cost/payment/second', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+router.post('/employee-cost/payment/second', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
   const { empCode, period, actor } = paymentTarget(req);
   const entry = paymentLedgerStore.setSecondOverride(empCode, period, req.body?.amount, { actor });
   clearTargetDependentCache();
@@ -2007,7 +2023,7 @@ router.post('/employee-cost/payment/second', auth.requireAuth, auth.requireAdmin
   return res.json({ ok: true, emp_code: empCode, period, secondOverride: entry.secondOverride, audit: entry.audit.slice(-5) });
 }));
 
-router.post('/employee-cost/payment/record', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+router.post('/employee-cost/payment/record', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
   const { empCode, period, actor } = paymentTarget(req);
   const entry = paymentLedgerStore.recordPayment(empCode, period, String(req.body?.key || ''), {
     amount: req.body?.amount, paidAt: req.body?.paid_at || req.body?.paidAt, actor,
@@ -2017,7 +2033,7 @@ router.post('/employee-cost/payment/record', auth.requireAuth, auth.requireAdmin
   return res.json({ ok: true, emp_code: empCode, period, paid: entry.paid, audit: entry.audit.slice(-5) });
 }));
 
-router.post('/employee-cost/payment/undo', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+router.post('/employee-cost/payment/undo', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
   const { empCode, period, actor } = paymentTarget(req);
   const entry = paymentLedgerStore.undoPayment(empCode, period, String(req.body?.key || ''), { actor });
   clearTargetDependentCache();

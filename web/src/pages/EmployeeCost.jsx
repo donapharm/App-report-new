@@ -541,6 +541,52 @@ const PAYMENT_REASON = {
   period_invalid: 'Kỳ không hợp lệ',
 };
 
+// BẢNG THANH TOÁN TOÀN ĐỘI — chế độ "Tất cả NV" (SPEC §7).
+// CEO nhìn một bảng biết ai đã nhận · ai còn nợ · ai QUÁ HẠN.
+function PaymentTeamPanel({ team, allEmployees, loading }) {
+  if (!allEmployees) return null;
+  if (loading) return <div className="card"><div className="section-head">Thanh toán CP toàn đội</div><Spinner /></div>;
+  if (!team) return null;
+  const { totals } = team;
+  return <div className="card">
+    <div className="section-head">Thanh toán CP toàn đội <small>· kỳ {formatMonthLabel(team.period)}</small></div>
+    {!team.invariantOk && <div className="employee-cost-match-warning" role="alert">
+      <b>⛔ Sổ toàn đội chưa cân.</b> Đã nhận + còn nợ không bằng tổng — đã dừng, không hiển thị số chỏi.
+    </div>}
+    <div className="kpi-grid">
+      <Kpi label="Tổng chi phí toàn đội" value={formatEmployeeCostCell(totals.total, moneyColumn)} sub={`${totals.employees} nhân viên có sổ`} />
+      <Kpi label="Đã nhận" value={formatEmployeeCostCell(totals.received, moneyColumn)} sub="Chỉ tính lần đã ghi nhận trả" tone="employee-cost-tone-base" />
+      <Kpi label="Còn nợ" value={formatEmployeeCostCell(totals.outstanding, moneyColumn)} sub="Cộng dồn toàn đội" />
+      <Kpi label="Quá hạn" value={`${totals.overdueEmployees} NV`}
+        sub={totals.overdueAmount ? `${formatEmployeeCostCell(totals.overdueAmount, moneyColumn)} chưa chi` : 'Không ai quá hạn'}
+        tone={totals.overdueEmployees ? 'employee-cost-tone-warn' : ''} />
+    </div>
+    {!!team.excluded.length && <div className="employee-cost-match-warning" role="status">
+      {/* Thiếu nguồn thì TÁCH RIÊNG kèm lý do — không gộp thành 0 rồi kéo tổng đội xuống. */}
+      <b>⚠ {team.excluded.length} NV chưa dựng được sổ</b> (không tính vào tổng trên):{' '}
+      {team.excluded.map((item) => `${item.empCode} (${PAYMENT_REASON[item.reason] || item.reason})`).join(' · ')}
+    </div>}
+    <div className="employee-cost-table-wrap">
+      <table className="employee-cost-gap-table admin">
+        <thead><tr><th>NV</th><th>Tổng kỳ</th><th>Đã nhận</th><th>Còn nợ</th><th>Lần kế · hạn</th><th>Quá hạn</th></tr></thead>
+        <tbody>{team.rows.map((row) => <tr key={row.empCode}>
+          <td><b>{row.empCode}</b><small>{row.employeeName}</small></td>
+          <td className="employee-cost-number">{formatEmployeeCostCell(row.total, moneyColumn)}</td>
+          <td className="employee-cost-number">{formatEmployeeCostCell(row.received, moneyColumn)}</td>
+          <td className="employee-cost-number"><b>{formatEmployeeCostCell(row.outstanding, moneyColumn)}</b></td>
+          <td>{row.nextLabel || '—'}
+            {row.nextDueDate && <small>{row.nextDueDate.split('-').reverse().join('/')}
+              {row.nextDaysFromToday != null && (row.nextDaysFromToday >= 0 ? ` · còn ${row.nextDaysFromToday} ngày` : ` · quá ${Math.abs(row.nextDaysFromToday)} ngày`)}</small>}
+          </td>
+          <td>{row.overdueCount
+            ? <span className="employee-cost-gap-reason warn">🔴 {row.overdueCount} lần · {formatEmployeeCostCell(row.overdueAmount, moneyColumn)}</span>
+            : <span className="employee-cost-gap-reason ok">✓ đúng hạn</span>}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  </div>;
+}
+
 function PaymentSchedulePanel({ schedule, allEmployees, loading }) {
   if (allEmployees) return null;
   if (loading) return <div className="card"><div className="section-head">Thanh toán CP của tôi</div><Spinner /></div>;
@@ -1701,6 +1747,7 @@ export default function EmployeeCost({ me, onNavigate }) {
     {/* Sổ thanh toán đặt NGAY DƯỚI khối KPI: NV nhìn xong các ô tiền là thấy luôn
         lịch nhận tiền của mình, không phải cuộn xuống bảng chi tiết. */}
     <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading} />
+    <PaymentTeamPanel team={model.paymentTeam} allEmployees={allEmployees} loading={loading} />
 
     {!admin && <EmployeeGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} />}
     {!admin && <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin={false} onOpenRow={openDqRow} />}

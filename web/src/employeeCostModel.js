@@ -672,6 +672,37 @@ export function employeeCostViewModel(payload = {}) {
       comparisonAfterPenaltyTotal: Number.isSafeInteger(payload.salaryAdvance.comparisonAfterPenaltyTotal)
         && payload.salaryAdvance.comparisonAfterPenaltyTotal >= 0 ? payload.salaryAdvance.comparisonAfterPenaltyTotal : null,
     } : null,
+    // Bảng thanh toán TOÀN ĐỘI (chế độ Tất cả NV) — backend dựng, frontend chỉ vẽ.
+    paymentTeam: payload.paymentTeam && typeof payload.paymentTeam === 'object' ? {
+      period: String(payload.paymentTeam.period || ''),
+      invariantOk: payload.paymentTeam.invariantOk !== false,
+      totals: {
+        employees: Number(payload.paymentTeam.totals?.employees || 0),
+        total: numberOrNull(payload.paymentTeam.totals?.total),
+        received: numberOrNull(payload.paymentTeam.totals?.received),
+        outstanding: numberOrNull(payload.paymentTeam.totals?.outstanding),
+        overdueEmployees: Number(payload.paymentTeam.totals?.overdueEmployees || 0),
+        overdueAmount: numberOrNull(payload.paymentTeam.totals?.overdueAmount),
+      },
+      rows: (Array.isArray(payload.paymentTeam.rows) ? payload.paymentTeam.rows : []).map((row) => ({
+        empCode: String(row?.empCode || ''),
+        employeeName: String(row?.employeeName || ''),
+        total: numberOrNull(row?.total),
+        received: numberOrNull(row?.received),
+        outstanding: numberOrNull(row?.outstanding),
+        overdueCount: Number(row?.overdueCount || 0),
+        overdueAmount: numberOrNull(row?.overdueAmount),
+        nextLabel: String(row?.nextLabel || ''),
+        nextDueDate: String(row?.nextDueDate || ''),
+        nextAmount: numberOrNull(row?.nextAmount),
+        nextDaysFromToday: row?.nextDaysFromToday == null ? null : Number(row.nextDaysFromToday),
+      })),
+      excluded: (Array.isArray(payload.paymentTeam.excluded) ? payload.paymentTeam.excluded : []).map((item) => ({
+        empCode: String(item?.empCode || ''),
+        employeeName: String(item?.employeeName || ''),
+        reason: String(item?.reason || ''),
+      })),
+    } : null,
     // SỔ "Thanh toán CP của tôi" — backend tính hết, frontend CHỈ hiển thị.
     // Không tự cộng trừ lại: mọi số ở đây phải là số backend đã kiểm bất biến.
     paymentSchedule: payload.paymentSchedule && typeof payload.paymentSchedule === 'object' ? {

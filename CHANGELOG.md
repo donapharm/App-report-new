@@ -1,3 +1,20 @@
+### 2026-08-04 — "Thanh toán CP" GĐ2: CHỈ CEO được ghi + bảng toàn đội
+
+**1. Siết quyền ghi sổ về đúng một người (CEO chốt 04/08).**
+> *"Chỉ duy nhất CEO được phép ghi thôi nhé."*
+- Thêm `auth.requireCeo` / `auth.isCeo`. `requireAdmin` cho cả `ceo` lẫn `admin` nên **không đủ chặt** cho cửa động vào tiền chi trả.
+- Cả 3 route ghi sổ (`payment/second`, `payment/record`, `payment/undo`) chuyển sang `requireCeo`. **Admin nay bị 403 `CEO_ONLY`.**
+- Test chặn cả hai chiều: phải có `requireCeo` **và** không được còn `requireAdmin`; `admin`/`sale`/rỗng đều 403, chỉ `ceo` đi qua (không phân biệt hoa thường).
+
+**2. Bảng thanh toán toàn đội** — `server/src/paymentTeamSummary.js`, hiện ở chế độ "Tất cả NV".
+- 4 ô: Tổng chi phí toàn đội · Đã nhận · Còn nợ · **Quá hạn (N nhân viên)**; bảng từng NV có **lần kế tiếp + hạn + còn/quá N ngày**, xếp **NV quá hạn lên đầu**.
+- **Không gọi thêm mạng:** dùng lại subtotals của chính bảng ALL đang dựng + **kho Lần 1 đã chốt** + sổ ghi nhận. Chế độ ALL vẫn không fan-out App Salary như trước.
+- **NV thiếu nguồn được TÁCH RIÊNG kèm lý do**, không thành 0 và **không cộng vào tổng đội** — không để một NV thiếu số kéo tổng toàn đội xuống.
+- Bất biến toàn đội `đã nhận + còn nợ == tổng`; gãy ⇒ **"⛔ Sổ toàn đội chưa cân"**, không hiển thị số chỏi.
+- Test: `paymentTeamSummary.test.js` **4/4** · route quyền **3/3** · server **706/712** · web **127/127** · build sạch.
+
+**Còn lại của GĐ2:** nút ghi nhận trên màn (chỉ CEO thấy) · Telegram nhắc mở cửa sổ Lần 2 / quá hạn.
+
 ### 2026-08-04 — "Thanh toán CP của tôi" GĐ2 (backend): ghi nhận đã trả + sửa số Lần 2, có nhật ký
 
 `server/src/paymentLedgerStore.js` + 3 route ghi sổ. Đây là **tiền thật** nên khoá chặt theo SPEC §8:

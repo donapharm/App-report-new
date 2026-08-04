@@ -618,8 +618,17 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// ‼ CEO chốt 04/08/2026: ghi nhận thanh toán CP là việc CHỈ CEO được làm —
+// admin cũng KHÔNG được. `requireAdmin` cho cả 'ceo' lẫn 'admin' nên không đủ chặt
+// cho các cửa động vào tiền chi trả. Dùng đúng hàm này cho những cửa đó.
+function isCeo(role) { return String(role || '').toLowerCase() === 'ceo'; }
+function requireCeo(req, res, next) {
+  if (!isCeo(req.session?.role)) return res.status(403).json({ error: 'Chỉ CEO được thực hiện', code: 'CEO_ONLY' });
+  next();
+}
+
 module.exports = {
-  mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireAdmin, isAdmin, scopeOf, sessionForUser, getSession,
+  mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireAdmin, isAdmin, requireCeo, isCeo, scopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
   // Telegram
