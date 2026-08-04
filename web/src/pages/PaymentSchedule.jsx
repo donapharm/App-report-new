@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
-import { Spinner } from '../components.jsx';
-import { currentMonthValueVN, quickMonths, employeeCostViewModel, formatMonthLabel } from '../employeeCostModel.js';
+import { Kpi, Spinner } from '../components.jsx';
+import { currentMonthValueVN, quickMonths, employeeCostViewModel, formatEmployeeCostCell, formatMonthLabel } from '../employeeCostModel.js';
 import { PaymentSchedulePanel, PaymentTeamPanel } from './EmployeeCost.jsx';
+
+const moneyColumn = { kind: 'money' };
 
 /**
  * MENU RIÊNG "Thanh toán CP của tôi" — CEO báo 04/08: mở app không tìm thấy mục này.
@@ -23,6 +25,13 @@ export default function PaymentSchedule({ me, desktop }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
+  // CEO chốt 04/08: cả CEO lẫn NV được chọn TỪ THÁNG → TỚI THÁNG để biết tổng cả
+  // khoảng: total bao nhiêu · đã ứng bao nhiêu · còn lại bao nhiêu.
+  const [rangeOn, setRangeOn] = useState(false);
+  const [rangeFrom, setRangeFrom] = useState(month);
+  const [rangeSummary, setRangeSummary] = useState(null);
+  const [rangeLoading, setRangeLoading] = useState(false);
+  const [rangeError, setRangeError] = useState('');
 
   useEffect(() => {
     if (!admin) return;
@@ -47,6 +56,22 @@ export default function PaymentSchedule({ me, desktop }) {
   const model = useMemo(() => employeeCostViewModel(payload || {}), [payload]);
   const allEmployees = admin && selectedEmp === 'ALL';
 
+  // Gộp khoảng chỉ có nghĩa khi đã khoá đúng MỘT nhân viên (sổ là của từng người).
+  useEffect(() => {
+    if (!rangeOn || allEmployees) { setRangeSummary(null); return undefined; }
+    const request = new AbortController();
+    const from = rangeFrom <= month ? rangeFrom : month;
+    const to = rangeFrom <= month ? month : rangeFrom;
+    setRangeLoading(true); setRangeError('');
+    api.paymentRange({ emp: admin ? selectedEmp : undefined, from, to }, { signal: request.signal })
+      .then((data) => { setRangeSummary(data?.range || null); setRangeLoading(false); })
+      .catch((requestError) => {
+        if (request.signal.aborted) return;
+        setRangeSummary(null); setRangeError(requestError.message || 'Không gộp được khoảng kỳ'); setRangeLoading(false);
+      });
+    return () => request.abort();
+  }, [rangeOn, allEmployees, admin, selectedEmp, rangeFrom, month, tick]);
+
   return <div className={desktop ? 'page-desktop' : ''}>
     <div className="card">
       <div className="section-head">Thanh toán CP của tôi <small>· kỳ {formatMonthLabel(month)}</small></div>
@@ -64,9 +89,55 @@ export default function PaymentSchedule({ me, desktop }) {
           </option>)}
         </select>}
       </div>
+      <div className="employee-cost-month-quick">
+        <button type="button" aria-pressed={rangeOn}
+          className={`employee-cost-advanced-toggle${rangeOn ? ' active' : ''}`}
+          onClick={() => setRangeOn((on) => !on)}
+          title="Cộng nhiều tháng để biết tổng · đã ứng · còn lại">
+          {rangeOn ? '✓ Gộp nhiều tháng' : 'Σ Gộp nhiều tháng'}
+        </button>
+        {rangeOn && <label><span>Từ tháng</span>
+          <input type="month" value={rangeFrom} onChange={(event) => event.target.value && setRangeFrom(event.target.value)} />
+        </label>}
+        {rangeOn && <span className="employee-cost-month-chip range">tới {formatMonthLabel(month)}</span>}
+      </div>
       {error && <div className="employee-cost-match-warning" role="alert">⛔ {error}</div>}
       {loading && !error && <Spinner />}
     </div>
+
+    {rangeOn && <div className="card">
+      <div className="section-head">Gộp nhiều kỳ
+        {rangeSummary && <small>· {rangeSummary.months} kỳ</small>}
+      </div>
+      {allEmployees && <div className="employee-cost-match-warning" role="status">
+        Gộp nhiều kỳ là sổ của <b>từng người</b> — chọn 1 nhân viên ở ô trên.
+      </div>}
+      {rangeError && <div className="employee-cost-match-warning" role="alert">⛔ {rangeError}</div>}
+      {rangeLoading && !rangeError && <Spinner />}
+      {rangeSummary && !rangeLoading && <>
+        {/* Bất biến gãy thì DỪNG, không hiện số chỏi. */}
+        {!rangeSummary.invariantOk && <div className="employee-cost-match-warning" role="alert">
+          <b>⛔ Tổng khoảng chưa cân.</b> Đã nhận + còn lại không bằng tổng — đã dừng.
+        </div>}
+        <div className="kpi-grid">
+          <Kpi label="Tổng chi phí cả khoảng" value={formatEmployeeCostCell(rangeSummary.total, moneyColumn)}
+            sub={`${rangeSummary.months} kỳ · sau phạt`} />
+          <Kpi label="Đã ứng lần 1" value={formatEmployeeCostCell(rangeSummary.firstAdvance, moneyColumn)}
+            sub={rangeSummary.employeesWithoutFirstAdvance
+              ? `${rangeSummary.employeesWithoutFirstAdvance} kỳ không có ứng`
+              : 'App Salary duyệt cuối tháng'} tone="employee-cost-tone-base" />
+          <Kpi label="Còn lại chưa nhận" value={formatEmployeeCostCell(rangeSummary.outstanding, moneyColumn)}
+            sub="Lần 2 + Lần 3 cộng dồn" />
+          <Kpi label="C44 · tích luỹ" value={formatEmployeeCostCell(rangeSummary.c44, moneyColumn)}
+            sub="Sổ riêng · chi trả T12" />
+        </div>
+        {/* ‼ Kỳ thiếu nguồn KHÔNG được cộng 0 vào tổng — phải kể tên ra. */}
+        {!!rangeSummary.skipped?.length && <div className="employee-cost-match-warning" role="status">
+          <b>⚠ {rangeSummary.skipped.length} kỳ chưa dựng được sổ</b> (không nằm trong tổng trên):{' '}
+          {rangeSummary.skipped.map((item) => `${formatMonthLabel(item.period)} (${item.reason})`).join(' · ')}
+        </div>}
+      </>}
+    </div>}
 
     <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
       canRecord={String(me?.role || '').toLowerCase() === 'ceo'}

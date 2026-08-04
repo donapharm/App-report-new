@@ -62,3 +62,64 @@ test('tổng sau phạt được ưu tiên hơn tổng gốc', () => {
   });
   assert.equal(summary.rows[0].total, 180_000_000, 'phải lấy số ĐÃ trừ phạt');
 });
+
+/* ── CEO chốt 04/08: bảng CEO là TỔNG HỢP CHUNG của cả đội ────────────────── */
+
+test('‼ tổng đội tách rõ: Σ đã ứng L1 · Σ L2 · Σ L3 · Σ C44', () => {
+  const advances = { DN001: 50_000_000, DN002: 20_000_000 };
+  const team = buildPaymentTeamSummary({
+    period: '2026-07',
+    subtotals: [
+      { employeeCode: 'DN001', employeeName: 'A', monthlyTotal: 200_000_000 },
+      { employeeCode: 'DN002', employeeName: 'B', monthlyTotal: 100_000_000 },
+    ],
+    readSnapshot: (emp) => ({
+      projection: { available: true, applicable: true, amount: advances[emp], locked: true },
+    }),
+    today: '2026-08-04',
+  });
+  assert.equal(team.totals.firstAdvance, 70_000_000);
+  assert.equal(team.totals.second + team.totals.final, 230_000_000);
+  assert.equal(team.totals.total, 300_000_000);
+  assert.equal(team.totals.firstAdvance + team.totals.second + team.totals.final, team.totals.total,
+    'ba lần cộng lại phải đúng bằng tổng đội');
+  assert.equal(team.invariantOk, true);
+});
+
+test('‼ App Salary nói KHÔNG ứng ⇒ NV vẫn NẰM TRONG bảng đội, không bị loại', () => {
+  const team = buildPaymentTeamSummary({
+    period: '2026-07',
+    subtotals: [{ employeeCode: 'DN003', employeeName: 'C', monthlyTotal: 100_000_000 }],
+    readSnapshot: () => ({ projection: { available: true, applicable: false, amount: null, reason: 'not_eligible' } }),
+    today: '2026-08-04',
+  });
+  assert.deepEqual(team.excluded, [], 'không có ứng KHÁC thiếu nguồn — không được loại khỏi bảng');
+  assert.equal(team.rows.length, 1);
+  assert.equal(team.rows[0].firstAdvance, 0);
+  assert.equal(team.rows[0].firstAdvanceNone, true);
+  assert.equal(team.totals.employeesWithoutFirstAdvance, 1);
+  assert.equal(team.rows[0].second + team.rows[0].final, 100_000_000);
+});
+
+test('‼ gọi App Salary KHÔNG ĐƯỢC thì vẫn bị loại khỏi tổng đội (fail-closed)', () => {
+  const team = buildPaymentTeamSummary({
+    period: '2026-07',
+    subtotals: [{ employeeCode: 'DN004', employeeName: 'D', monthlyTotal: 100_000_000 }],
+    readSnapshot: () => ({ projection: { available: false, applicable: null, amount: null, reason: 'upstream_timeout' } }),
+    today: '2026-08-04',
+  });
+  assert.equal(team.rows.length, 0);
+  assert.deepEqual(team.excluded.map((item) => item.reason), ['first_advance_unavailable']);
+});
+
+test('Lần 1 không bao giờ làm NV bị đếm là quá hạn', () => {
+  const team = buildPaymentTeamSummary({
+    period: '2026-07',
+    subtotals: [{ employeeCode: 'DN005', employeeName: 'E', monthlyTotal: 200_000_000 }],
+    readSnapshot: () => ({ projection: { available: true, applicable: true, amount: 50_000_000, locked: false } }),
+    today: '2026-08-04',
+  });
+  assert.equal(team.rows[0].overdueCount, 0, 'ngày 04/08 mà kêu ứng lần 1 quá hạn là sai');
+  assert.equal(team.rows[0].received, 50_000_000);
+  assert.match(team.rows[0].nextLabel, /Lần 2/);
+});

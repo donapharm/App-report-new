@@ -97,14 +97,80 @@ test('quá hạn thì đánh dấu đỏ; lần đã chốt thì giữ nguyên "
 });
 
 test('GĐ1 chưa ghi nhận trả lần 2/3 ⇒ vẫn là KẾ HOẠCH, không được hiện như đã trả', () => {
+  // ‼ CEO chốt 04/08: Lần 1 do App Salary duyệt vào NGÀY CUỐI THÁNG của kỳ. Có số
+  // của App Salary nghĩa là việc đó XONG rồi — không phụ thuộc cờ `locked` (hợp đồng
+  // provisional/approved vẫn đang chờ App Salary trả lời). Chỉ Lần 2/Lần 3 mới là kế hoạch.
   const book = buildPaymentSchedule({ ...base, firstAdvancePaid: false });
-  assert.deepEqual(book.installments.map((i) => i.status), ['plan', 'plan', 'plan']);
-  assert.equal(book.received, 0);
-  assert.equal(book.outstanding, 200_000_000);
+  assert.deepEqual(book.installments.map((i) => i.status), ['paid', 'plan', 'plan']);
+  assert.equal(book.received, 50_000_000, 'ứng lần 1 là tiền ĐÃ nhận');
+  assert.equal(book.outstanding, 150_000_000);
   assert.equal(book.invariantOk, true);
 });
 
 test('tháng 12 sang năm mới: mốc ngày không nhảy sai', () => {
   const book = buildPaymentSchedule({ period: '2026-12', totalAfterPenalty: 100_000_000, firstAdvanceAmount: 20_000_000 });
   assert.deepEqual(book.installments.map((i) => i.dueDate), ['2026-12-31', '2027-02-14', '2027-03-01']);
+});
+
+/* ── CEO chốt 04/08/2026 (ảnh chụp T07 của DN009) ──────────────────────────── */
+
+test('‼ Lần 1 KHÔNG BAO GIỜ bị gắn "quá hạn" — App Salary đã chi từ ngày cuối tháng', () => {
+  // Đúng vụ trong ảnh: kỳ 07/2026, hôm nay 04/08 ⇒ màn cũ kêu "quá 4 ngày · quá hạn".
+  const book = buildPaymentSchedule({ ...base, today: '2026-08-04' });
+  const first = book.installments[0];
+  assert.equal(first.status, 'paid', 'phải là ĐÃ HOÀN THÀNH, không phải quá hạn');
+  assert.notEqual(first.status, 'overdue');
+  assert.equal(first.dueDate, '2026-07-31', 'mốc Lần 1 là ngày cuối tháng của kỳ');
+  assert.match(first.gapNote, /chốt ngày cuối tháng 07\/2026/, 'cột Khoảng cách phải nói rõ mốc, không để trống');
+});
+
+test('kỳ CHƯA hết tháng thì Lần 1 là "chưa tới ngày duyệt", cũng không phải quá hạn', () => {
+  const book = buildPaymentSchedule({ ...base, period: '2026-08', today: '2026-08-04' });
+  assert.equal(book.installments[0].status, 'pending');
+});
+
+test('‼ App Salary nói KHÔNG CÓ ứng lần 1 ⇒ vẫn dựng sổ ĐỦ, Lần 2/Lần 3 chia trên toàn bộ', () => {
+  const book = buildPaymentSchedule({
+    period: '2026-07', totalAfterPenalty: 200_000_000,
+    firstAdvanceAmount: null, firstAdvanceNone: true, firstAdvanceNoneReason: 'not_eligible',
+    today: '2026-08-04',
+  });
+  assert.equal(book.available, true, 'không có ứng KHÁC với không lấy được số — vẫn phải dựng sổ');
+  assert.deepEqual(book.installments.map((i) => i.amount), [0, 120_000_000, 80_000_000]);
+  assert.equal(book.installments[0].status, 'none');
+  assert.match(book.installments[0].label, /Không ứng/);
+  assert.match(book.installments[0].gapNote, /App Salary không ghi nhận ứng lần 1/);
+  assert.equal(book.installments[0].noneReason, 'not_eligible');
+  assert.equal(book.received, 0, 'không ứng thì chưa nhận đồng nào');
+  assert.equal(book.outstanding, 200_000_000);
+  assert.equal(book.invariantOk, true);
+});
+
+test('‼ GỌI KHÔNG ĐƯỢC vẫn phải fail-closed — cấm hiểu thành "không có ứng"', () => {
+  const book = buildPaymentSchedule({
+    period: '2026-07', totalAfterPenalty: 200_000_000, firstAdvanceAmount: null, today: '2026-08-04',
+  });
+  assert.equal(book.available, false);
+  assert.equal(book.reason, 'first_advance_unavailable');
+});
+
+test('gộp nhiều kỳ: total · đã ứng · lần 2 · lần 3 · C44, kỳ hỏng thì TÁCH ra', () => {
+  const { buildPaymentRangeSummary } = require('../src/paymentSchedule');
+  const july = buildPaymentSchedule({ ...base, c44Amount: 15_176_446, today: '2026-08-04' });
+  const june = buildPaymentSchedule({
+    period: '2026-06', totalAfterPenalty: 100_000_000, firstAdvanceAmount: 20_000_000,
+    c44Amount: 1_000_000, today: '2026-08-04',
+  });
+  const broken = buildPaymentSchedule({ period: '2026-05', totalAfterPenalty: null });
+  const range = buildPaymentRangeSummary([june, july, broken]);
+  assert.equal(range.months, 2);
+  assert.equal(range.total, 300_000_000);
+  assert.equal(range.firstAdvance, 70_000_000, 'tổng đã ứng lần 1 của cả khoảng');
+  assert.equal(range.second + range.final, 230_000_000);
+  assert.equal(range.c44, 16_176_446);
+  assert.equal(range.received, 70_000_000);
+  assert.equal(range.outstanding, 230_000_000);
+  assert.deepEqual(range.skipped, [{ period: '2026-05', reason: 'total_unavailable' }],
+    'kỳ thiếu nguồn phải hiện ra, không cộng 0 vào tổng');
+  assert.equal(range.invariantOk, true);
 });

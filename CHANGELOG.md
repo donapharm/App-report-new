@@ -1,3 +1,20 @@
+### 2026-08-04 — Sổ thanh toán: sửa 4 chỗ sai nghiệp vụ CEO chỉ ra trên ảnh chụp
+
+> CEO xem ảnh T07 của DN009 và chỉ ra: Lần 1 **57.851.347đ** bị gắn **"quá 4 ngày · quá hạn"**, cột "Khoảng cách" để trống, NV không có ứng thì mất luôn sổ, và tài khoản CEO chưa phải bảng tổng hợp chung.
+
+**1. ‼ Lần 1 KHÔNG BAO GIỜ còn bị gắn "quá hạn".** App Salary **duyệt ứng lần 1 vào NGÀY CUỐI THÁNG của kỳ** — có số nghĩa là việc đó đã xong. Trước đây code đem hạn `31/07` so với hôm nay `04/08` rồi kêu quá hạn: App Report đi đòi nợ chính khoản App Salary đã chi. Nay Lần 1 miễn nhiễm với luật quá hạn; trạng thái là **đã ứng** (kỳ đã hết tháng) hoặc **chưa tới ngày duyệt** (kỳ đang chạy). Kéo theo **"Đã nhận (lũy kế)"** nay tính cả Lần 1 — khớp đúng ô "Còn lại sau ứng lần 1" `278.482.913đ` trong ảnh của CEO.
+
+**2. Cột "Khoảng cách" của Lần 1 hết để trống** — ghi rõ *"chốt ngày cuối tháng 07/2026"*, cột Hạn ghi *"App Salary đã duyệt"* thay cho *"quá 4 ngày"*.
+
+**3. NV không có ứng lần 1 ⇒ VẪN dựng sổ ĐẦY ĐỦ.** Ghi *"Lần 1 · Không ứng — App Salary không ghi nhận"*, Lần 2 và Lần 3 chia trên **toàn bộ** tổng kỳ, và NV đó **vẫn nằm trong bảng toàn đội**.
+- **‼ Vẫn phân biệt tuyệt đối hai chuyện khác nhau:** App Salary *trả lời rõ là không có ứng* (`not_eligible` / `employee_not_found` / `period_not_found`) ⇒ 0 là số thật. *Gọi không được* (timeout, lỗi mạng) ⇒ **vẫn fail-closed**, không được hiểu thành "không có ứng". Có test riêng cho từng vế.
+
+**4. Tài khoản CEO là BẢNG TỔNG HỢP CHUNG** — thêm 4 ô: **Σ Đã ứng lần 1 · Σ Lần 2 · Σ Lần 3 · Σ C44 cuối năm**, kèm số NV không có ứng lần 1. Bất biến mới: `Σ L1 + Σ L2 + Σ L3 == Σ tổng đội`.
+
+**5. Gộp nhiều kỳ (cả CEO lẫn NV)** — nút "Σ Gộp nhiều tháng" + chọn từ tháng → tới tháng, ra: tổng cả khoảng · đã ứng · còn lại chưa nhận · C44 tích luỹ. Tính ở backend (`buildPaymentRangeSummary` + `GET /employee-cost/payment/range`, self-scope, tối đa 24 kỳ). **Kỳ nào thiếu nguồn thì kể tên ra, KHÔNG cộng 0 vào tổng** — cộng 0 làm tổng nhỏ đi mà nhìn vẫn sạch.
+
+- Test: server **777/783** (6 lỗi PDF nền cũ) · web **148/148** · build sạch. Đã mở app thật bằng chromium, tài khoản CEO, không lỗi runtime.
+
 ### 2026-08-04 — "Thanh toán CP của tôi" nay CÓ MENU RIÊNG (CEO báo: mở app không thấy đâu)
 
 > CEO: *"phần thanh toán CP của tôi. Hiện tao truy cập vào app vẫn không tìm thấy mục đó."* — **CEO đúng, báo cáo trước đó của Claude là sai.** Sổ thanh toán CÓ tồn tại, nhưng:

@@ -19,7 +19,8 @@
 
 | # | Việc | Hạn | Đang vướng ở đâu | Ai làm |
 |---|---|---|---|---|
-| **0** | **‼ DEPLOY MENU "Thanh toán CP của tôi"** — CEO mở app không tìm thấy mục này (04/08 chiều). Nguyên nhân: sổ nằm lẫn trong trang "Chi phí của tôi" và tự ẩn ở chế độ "Tất cả NV" (mặc định của CEO). Claude đã tách thành **menu riêng** + chặn hiện `0đ` khi chưa có sổ. Web **148/148**, build sạch, **đã chạy thật bằng chromium có ảnh**. Deploy đầu `origin/main`. | **NGAY** | chờ deploy | bot |
+| **0** | **‼ DEPLOY MENU + 4 SỬA NGHIỆP VỤ SỔ THANH TOÁN** — CEO chỉ ra trên ảnh 04/08: Lần 1 bị kêu "quá hạn" (sai — App Salary duyệt ngày cuối tháng), cột Khoảng cách trống, NV không ứng bị mất sổ, tài khoản CEO chưa tổng hợp chung. Đã sửa đủ + gộp nhiều kỳ. Server **777/783**, web **148/148**, đã mở app thật bằng chromium. Deploy đầu `origin/main`. | **NGAY** | chờ deploy | bot |
+| **0b** | **(gộp vào mục 0)** DEPLOY MENU "Thanh toán CP của tôi" — CEO mở app không tìm thấy mục này (04/08 chiều). Nguyên nhân: sổ nằm lẫn trong trang "Chi phí của tôi" và tự ẩn ở chế độ "Tất cả NV" (mặc định của CEO). Claude đã tách thành **menu riêng** + chặn hiện `0đ` khi chưa có sổ. Web **148/148**, build sạch, **đã chạy thật bằng chromium có ảnh**. Deploy đầu `origin/main`. | **NGAY** | chờ deploy | bot |
 | **1** | **4 ẢNH XÁC MINH** — deploy `68378a7` xong 14:25 nhưng chưa dán ảnh. ① sổ "Thanh toán CP của tôi" 1 NV ② bảng "Thanh toán CP toàn đội" ③ nút "So kỳ trước" đang bật ④ AI target đủ 21 NV. Kèm T07/DN009 `336.334.260đ` · T08 `118.066.246đ`. | ngay | **chưa dán** | bot |
 | **2** | **Hợp đồng "Ứng lần 1"** — App Salary chưa trả lời `provisional`/`approved` nghĩa gì. **Cấm tự đoán** (đoán sai ⇒ "Còn lại sau ứng" bằng nguyên tổng chi phí). Xem `SPEC_SALARY_ADVANCE_AUTO.md`. | càng sớm càng tốt | chờ App Salary | App Salary → bot → Claude duyệt |
 | **3** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |

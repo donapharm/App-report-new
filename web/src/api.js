@@ -320,6 +320,13 @@ export const api = {
       timeoutMs: EMPLOYEE_COST_TIMEOUT_MS, timeoutMessage: EMPLOYEE_COST_TIMEOUT_MESSAGE,
     });
   },
+  paymentRange: ({ emp, from, to } = {}, requestOptions = {}) => {
+    const params = new URLSearchParams();
+    if (emp && emp !== 'ALL') params.set('emp', emp);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    return req('GET', `/employee-cost/payment/range?${params.toString()}`, undefined, requestOptions);
+  },
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
   employeeCostVisibility: () => req('GET', '/employee-cost/visibility'),
   employeeCostVisibilitySave: (payload) => req('POST', '/employee-cost/visibility', payload),

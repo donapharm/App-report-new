@@ -28,6 +28,16 @@ function afterPenaltyOf(subtotal) {
   return moneyOrNull(subtotal?.monthlyTotal ?? subtotal?.periodTotal ?? subtotal?.total);
 }
 
+// App Salary ĐÃ TRẢ LỜI và câu trả lời là "không có ứng lần 1" — khác hẳn gọi không
+// được. Chỉ ba trường hợp này mới được coi là 0 thật; mọi lỗi mạng vẫn fail-closed.
+const NONE_REASONS = new Set(['not_eligible', 'employee_not_found', 'period_not_found']);
+function noneReasonOf(advance) {
+  if (!advance || advance.available !== true) return null;
+  if (Number.isSafeInteger(advance.amount)) return null;
+  const reason = String(advance.reason || '');
+  return NONE_REASONS.has(reason) ? reason : null;
+}
+
 function buildPaymentTeamSummary({
   period, subtotals = [], readSnapshot, readLedger, today = '', splitThresholdVnd, secondRatio,
 } = {}) {
@@ -48,6 +58,9 @@ function buildPaymentTeamSummary({
       period,
       totalAfterPenalty: total,
       firstAdvanceAmount: advance?.available === true && advance?.applicable === true ? advance.amount : null,
+      // App Salary TRẢ LỜI RÕ là NV này không ứng ⇒ dựng sổ đủ, không loại khỏi bảng đội.
+      firstAdvanceNone: noneReasonOf(advance) != null,
+      firstAdvanceNoneReason: noneReasonOf(advance) || '',
       firstAdvancePaid: advance?.locked === true,
       secondOverride: ledger?.secondOverride ?? null,
       paid: ledger?.paid || {},
@@ -63,13 +76,24 @@ function buildPaymentTeamSummary({
     }
 
     const overdue = book.installments.filter((item) => item.status === 'overdue');
-    const next = book.installments.find((item) => item.status !== 'paid') || null;
+    const next = book.installments.find((item) => !['paid', 'none'].includes(item.status)) || null;
+    const amountOf = (key) => {
+      const item = book.installments.find((entry) => entry.key === key);
+      return item && Number.isSafeInteger(item.amount) ? item.amount : 0;
+    };
+    const firstItem = book.installments.find((item) => item.key === 'advance');
     rows.push({
       empCode,
       employeeName,
       total: book.total,
       received: book.received,
       outstanding: book.outstanding,
+      // CEO chốt 04/08: bảng tổng hợp phải tách được đã ứng L1 / còn L2 / tất toán L3 / C44.
+      firstAdvance: amountOf('advance'),
+      firstAdvanceNone: firstItem?.status === 'none',
+      second: amountOf('second'),
+      final: amountOf('final'),
+      c44: Number.isSafeInteger(book.c44?.amount) ? book.c44.amount : 0,
       overdueCount: overdue.length,
       overdueAmount: overdue.reduce((sum, item) => sum + item.amount, 0),
       nextLabel: next ? next.label : '',
@@ -95,6 +119,12 @@ function buildPaymentTeamSummary({
       total: sum('total'),
       received: sum('received'),
       outstanding: sum('outstanding'),
+      // Bốn ô CEO yêu cầu 04/08 — tổng hợp chung của cả đội.
+      firstAdvance: sum('firstAdvance'),
+      second: sum('second'),
+      final: sum('final'),
+      c44: sum('c44'),
+      employeesWithoutFirstAdvance: rows.filter((row) => row.firstAdvanceNone).length,
       overdueEmployees: rows.filter((row) => row.overdueCount > 0).length,
       overdueAmount: sum('overdueAmount'),
     },
@@ -103,4 +133,4 @@ function buildPaymentTeamSummary({
   };
 }
 
-module.exports = { buildPaymentTeamSummary, afterPenaltyOf };
+module.exports = { buildPaymentTeamSummary, afterPenaltyOf, noneReasonOf };

@@ -534,6 +534,10 @@ const PAYMENT_STATUS = {
   paid: { icon: '✓', label: 'đã trả', tone: 'ok' },
   plan: { icon: '○', label: 'kế hoạch · chưa trả', tone: '' },
   overdue: { icon: '🔴', label: 'quá hạn', tone: 'warn' },
+  // CEO chốt 04/08: Lần 1 do App Salary duyệt vào ngày cuối tháng ⇒ có số là XONG,
+  // không bao giờ "quá hạn". Hai trạng thái riêng dưới đây để nói đúng việc đó.
+  pending: { icon: '◔', label: 'chưa tới ngày duyệt', tone: '' },
+  none: { icon: '–', label: 'không thực hiện ứng', tone: '' },
 };
 const PAYMENT_REASON = {
   total_unavailable: 'Chưa có tổng chi phí kỳ này',
@@ -574,6 +578,17 @@ export function PaymentTeamPanel({ team, allEmployees, loading }) {
       <Kpi label="Quá hạn" value={`${totals.overdueEmployees} NV`}
         sub={totals.overdueAmount ? `${formatEmployeeCostCell(totals.overdueAmount, moneyColumn)} chưa chi` : 'Không ai quá hạn'}
         tone={totals.overdueEmployees ? 'employee-cost-tone-warn' : ''} />
+    </div>
+    {/* CEO chốt 04/08: tài khoản CEO là TỔNG HỢP CHUNG của cả đội — tách rõ từng lần. */}
+    <div className="kpi-grid">
+      <Kpi label="Σ Đã ứng lần 1" value={formatEmployeeCostCell(totals.firstAdvance, moneyColumn)}
+        sub={totals.employeesWithoutFirstAdvance
+          ? `${totals.employeesWithoutFirstAdvance} NV không có ứng lần 1`
+          : 'App Salary duyệt ngày cuối tháng'} tone="employee-cost-tone-base" />
+      <Kpi label="Σ Lần 2 · còn lại" value={formatEmployeeCostCell(totals.second, moneyColumn)} sub="Kế hoạch toàn đội" />
+      <Kpi label="Σ Lần 3 · tất toán" value={formatEmployeeCostCell(totals.final, moneyColumn)} sub="Kế hoạch toàn đội" />
+      <Kpi label="Σ C44 · cuối năm" value={formatEmployeeCostCell(totals.c44, moneyColumn)}
+        sub="Sổ riêng · tích luỹ · chi trả T12" />
     </div>
     {!!team.excluded.length && <div className="employee-cost-match-warning" role="status">
       {/* Thiếu nguồn thì TÁCH RIÊNG kèm lý do — không gộp thành 0 rồi kéo tổng đội xuống. */}
@@ -660,8 +675,13 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
             <td><b>{item.label}</b></td>
             <td className="employee-cost-number"><b>{formatEmployeeCostCell(item.amount, moneyColumn)}</b></td>
             <td>{item.dueDate ? item.dueDate.split('-').reverse().join('/') : '—'}
-              {/* Ghi rõ "còn N ngày" để NV khỏi tự nhẩm (CEO yêu cầu). */}
-              {days != null && <small>{days > 0 ? `còn ${days} ngày` : days === 0 ? 'hôm nay' : `quá ${Math.abs(days)} ngày`}</small>}
+              {/* Ghi rõ "còn N ngày" để NV khỏi tự nhẩm (CEO yêu cầu).
+                  ‼ Lần 1 KHÔNG đếm "quá N ngày": App Salary duyệt vào ngày cuối tháng,
+                  đó là việc đã xong chứ không phải nợ quá hạn (CEO chỉnh 04/08). */}
+              {item.key === 'advance'
+                ? <small>{item.status === 'none' ? 'không phát sinh'
+                  : item.status === 'pending' ? 'duyệt vào ngày cuối tháng' : 'App Salary đã duyệt'}</small>
+                : days != null && <small>{days > 0 ? `còn ${days} ngày` : days === 0 ? 'hôm nay' : `quá ${Math.abs(days)} ngày`}</small>}
             </td>
             <td><small>{item.gapNote || '—'}</small></td>
             <td><small>{item.source === 'app_salary' ? 'App Salary · chỉ đọc' : 'App Report tính'}</small></td>

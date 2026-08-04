@@ -966,6 +966,10 @@ async function employeeCostPayload(req, {
       totalAfterPenalty: afterPenaltyTotal,
       firstAdvanceAmount: resolvedSalaryAdvance?.available === true && resolvedSalaryAdvance?.applicable === true
         ? resolvedSalaryAdvance.amount : null,
+      // App Salary trả lời RÕ là NV này không ứng ⇒ vẫn dựng sổ đủ (CEO chốt 04/08),
+      // ghi rõ "không thực hiện ứng lần 1", Lần 2/Lần 3 chia trên toàn bộ tổng kỳ.
+      firstAdvanceNone: paymentTeamSummary.noneReasonOf(resolvedSalaryAdvance) != null,
+      firstAdvanceNoneReason: paymentTeamSummary.noneReasonOf(resolvedSalaryAdvance) || '',
       firstAdvancePaid: resolvedSalaryAdvance?.locked === true,
       c44Amount: costPeriod?.summary?.annualTotal ?? null,
       today: employeeCost.vnToday(),
@@ -2018,6 +2022,44 @@ router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, asyn
 router.get('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   return res.json(employeeCostVisibility.panel(employeeCostRosterRows()));
+}));
+
+/* Gộp NHIỀU KỲ (CEO chốt 04/08): "chọn từ tháng này tới tháng này để biết total bao
+   nhiêu · đã ứng bao nhiêu · còn lại bao nhiêu". Self-scope y hệt màn chi phí: NV chỉ
+   gộp được của chính mình. Kỳ nào thiếu nguồn thì TÁCH RA, không cộng 0 vào tổng. */
+router.get('/employee-cost/payment/range', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const admin = auth.isAdmin(req.session.role);
+  const from = employeeCost.normalizeMonth(req.query.from);
+  const to = employeeCost.normalizeMonth(req.query.to);
+  if (!from || !to || from > to) {
+    return res.status(400).json({ error: 'Khoảng kỳ không hợp lệ', code: 'PAYMENT_RANGE_INVALID' });
+  }
+  const scope = auth.scopeOf(req.session);
+  const requestedEmp = String(req.query.emp || '').trim().toUpperCase();
+  const ownCode = String(scope?.empCode || req.session?.emp_code || '').toUpperCase();
+  if (!admin && requestedEmp && requestedEmp !== ownCode) {
+    return res.status(403).json({ error: 'Nhân viên chỉ xem được sổ của chính mình', code: 'PAYMENT_EMP_FORBIDDEN' });
+  }
+  const empCode = admin ? requestedEmp : ownCode;
+  if (!empCode || empCode === 'ALL') {
+    return res.status(400).json({ error: 'Chọn 1 nhân viên để gộp nhiều kỳ', code: 'PAYMENT_RANGE_SELECT_EMPLOYEE' });
+  }
+  // Quá 24 kỳ là dấu hiệu gọi sai, chặn trước khi nó thành 24 lượt dựng sổ.
+  const months = employeeCost.monthsBetween(from, to);
+  if (months.length > 24) {
+    return res.status(400).json({ error: 'Tối đa 24 kỳ một lần', code: 'PAYMENT_RANGE_TOO_WIDE' });
+  }
+  const today = employeeCost.vnToday();
+  const books = [];
+  for (const period of months) {
+    const payload = await employeeCostPayload(req, {
+      requestedEmp: empCode, auditEvent: 'payment_range', suppressAudit: true,
+      rangeOverride: { from: period, to: period },
+    });
+    books.push(payload?.paymentSchedule || { available: false, period, reason: 'total_unavailable' });
+  }
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ emp_code: empCode, from, to, today, range: paymentSchedule.buildPaymentRangeSummary(books) });
 }));
 
 /* ---------- Sổ "Thanh toán CP của tôi" — GHI NHẬN (GĐ2) ----------

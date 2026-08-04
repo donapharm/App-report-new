@@ -77,6 +77,11 @@ function buildPaymentSchedule({
   totalAfterPenalty,          // DataHub, sau phạt
   firstAdvanceAmount,         // App Salary
   firstAdvancePaid = false,   // App Salary đã chốt chi chưa
+  // ‼ App Salary TRẢ LỜI RÕ là NV này không có ứng lần 1 (not_eligible / không có
+  // bản ghi). Khác hẳn "gọi không được" — CEO chốt 04/08: trường hợp này vẫn dựng
+  // sổ ĐẦY ĐỦ, ghi rõ "không thực hiện ứng lần 1", Lần 2/Lần 3 chia trên toàn bộ.
+  firstAdvanceNone = false,
+  firstAdvanceNoneReason = '',
   secondOverride = null,      // CEO/admin sửa Lần 2 (mục 8)
   paid = {},                  // GĐ2: đã ghi nhận trả — { second:{amount,paidAt,by}, final:{…} }
   c44Amount = null,           // sổ riêng, chi trả T12
@@ -89,7 +94,9 @@ function buildPaymentSchedule({
 
   const total = moneyOrNull(totalAfterPenalty);
   if (total == null) return unavailable(month, 'total_unavailable');
-  const first = moneyOrNull(firstAdvanceAmount);
+  const declared = moneyOrNull(firstAdvanceAmount);
+  // Không có số NHƯNG App Salary đã khẳng định là không ứng ⇒ 0 là số THẬT, không phải đoán.
+  const first = declared == null && firstAdvanceNone === true ? 0 : declared;
   if (first == null) return unavailable(month, 'first_advance_unavailable');
   if (first > total) return unavailable(month, 'first_advance_exceeds_total');
 
@@ -117,12 +124,27 @@ function buildPaymentSchedule({
   const secondDate = addDays(firstDate, DAYS_TO_SECOND);
   const finalDate = addDays(firstDate, DAYS_TO_FINAL);
 
+  // ‼ CEO chốt 04/08: App Salary DUYỆT ỨNG LẦN 1 VÀO NGÀY CUỐI THÁNG của kỳ. Nên khi
+  // đã có số của App Salary thì Lần 1 là VIỆC ĐÃ XONG tại ngày đó — KHÔNG BAO GIỜ
+  // được gắn "quá hạn". Trước đây Lần 1 bị so với hôm nay rồi kêu "quá 4 ngày", vô lý:
+  // App Salary đã chi từ 31/07 rồi mà màn hình lại đòi nợ chính nó.
+  const periodEnded = !today || daysBetween(firstDate, today) >= 0;
+  const firstStatus = firstAdvanceNone === true ? 'none'
+    : (periodEnded ? 'paid' : 'pending');
   const installments = [
     {
-      index: 1, key: 'advance', label: 'Lần 1 · Ứng',
-      amount: first, dueDate: firstDate, dayOffset: 0, gapNote: '',
+      index: 1, key: 'advance',
+      label: firstAdvanceNone === true ? 'Lần 1 · Không ứng' : 'Lần 1 · Ứng',
+      amount: first, dueDate: firstDate, dayOffset: 0,
+      gapNote: firstAdvanceNone === true
+        ? `App Salary không ghi nhận ứng lần 1 kỳ ${month.slice(5)}/${month.slice(0, 4)}`
+        : `chốt ngày cuối tháng ${month.slice(5)}/${month.slice(0, 4)}`,
+      noneReason: firstAdvanceNone === true ? String(firstAdvanceNoneReason || '') : null,
       source: 'app_salary', editable: false,
-      status: firstAdvancePaid ? 'paid' : 'plan',
+      // `firstAdvancePaid` (locked) chỉ để ghi chú tạm tính/đã duyệt, KHÔNG dùng để
+      // quyết định quá hạn — hợp đồng provisional/approved vẫn đang chờ App Salary.
+      salaryLocked: firstAdvancePaid === true,
+      status: firstStatus,
     },
     {
       index: 2, key: 'second',
@@ -158,6 +180,8 @@ function buildPaymentSchedule({
 
   for (const item of installments) {
     item.daysFromToday = today ? daysBetween(today, item.dueDate) : null;
+    // Lần 1 do App Salary chi, App Report KHÔNG đòi nợ nó ⇒ miễn nhiễm "quá hạn".
+    if (item.key === 'advance') continue;
     if (item.status !== 'paid' && item.daysFromToday != null && item.daysFromToday < 0) item.status = 'overdue';
   }
 
@@ -179,7 +203,47 @@ function buildPaymentSchedule({
   });
 }
 
+/**
+ * GỘP NHIỀU KỲ — CEO chốt 04/08: "chọn từ tháng này tới tháng này để biết total bao
+ * nhiêu / đã ứng bao nhiêu / còn lại bao nhiêu".
+ *
+ * ‼ Kỳ nào KHÔNG dựng được sổ thì TÁCH RA kèm lý do, KHÔNG cộng 0 vào tổng. Cộng 0
+ * làm tổng nhiều tháng nhỏ đi mà nhìn vẫn "sạch" — đúng kiểu mất tiền lặng lẽ.
+ */
+function buildPaymentRangeSummary(schedules = []) {
+  const list = Array.isArray(schedules) ? schedules : [];
+  const included = list.filter((book) => book && book.available === true);
+  const skipped = list.filter((book) => book && book.available !== true)
+    .map((book) => ({ period: book.period || '', reason: book.reason || 'unknown' }));
+
+  const sumBy = (pick) => included.reduce((acc, book) => acc + (Number(pick(book)) || 0), 0);
+  const instalment = (key) => included.reduce((acc, book) => {
+    const item = book.installments.find((entry) => entry.key === key);
+    return acc + (item && Number.isSafeInteger(item.amount) ? item.amount : 0);
+  }, 0);
+
+  const total = sumBy((book) => book.total);
+  const received = sumBy((book) => book.received);
+  const outstanding = sumBy((book) => book.outstanding);
+  return {
+    periods: included.map((book) => book.period),
+    months: included.length,
+    skipped,
+    total,
+    received,
+    outstanding,
+    firstAdvance: instalment('advance'),
+    second: instalment('second'),
+    final: instalment('final'),
+    // C44 cộng dồn — sổ RIÊNG, vẫn không nằm trong `total`.
+    c44: included.reduce((acc, book) => acc + (Number(book.c44?.amount) || 0), 0),
+    employeesWithoutFirstAdvance: included
+      .filter((book) => book.installments.some((item) => item.key === 'advance' && item.status === 'none')).length,
+    invariantOk: included.every((book) => book.invariantOk) && received + outstanding === total,
+  };
+}
+
 module.exports = {
   DEFAULT_SPLIT_THRESHOLD_VND, DEFAULT_SECOND_RATIO, DAYS_TO_SECOND, DAYS_TO_FINAL,
-  buildPaymentSchedule, periodEndDate, addDays, daysBetween,
+  buildPaymentSchedule, buildPaymentRangeSummary, periodEndDate, addDays, daysBetween,
 };
