@@ -1,3 +1,30 @@
+### 2026-08-04 — Telegram hai chiều cho toàn bộ quy trình thanh toán
+
+> CEO: *"cứ mỗi lần NV gửi đề nghị là tin nhắn Telegram gửi qua cho CEO, khi CEO duyệt thì tin nhắn sẽ được phản hồi lại cho NV. Kể cả lệnh xin ứng sớm, duyệt sớm, đề xuất… các nội dung khác cũng gửi tin nhắn Telegram."*
+
+`server/src/paymentFlowNotify.js` — **NV làm gì thì báo CEO · CEO làm gì thì báo NV.**
+
+| Việc | Ai nhận | Nội dung |
+|---|---|---|
+| NV **đề nghị nhận** | CEO | tên NV · lần · kỳ · **số tiền** · hạn · biên độ · "vào duyệt hoặc từ chối" |
+| NV **xin nhận sớm** | CEO | như trên + **lý do NV ghi** |
+| CEO **mở khoá** | NV | "được đề nghị sớm — vào bấm Đề nghị nhận" |
+| CEO **duyệt** | NV | "đang chờ chuyển tiền, xong sẽ có tin nữa" |
+| CEO **từ chối** | NV | **lý do** + "bạn ĐỀ NGHỊ LẠI được" |
+| CEO **ghi đã trả** | NV | số tiền + ngày chuyển |
+| CEO **gỡ ghi nhận** | NV | báo quay lại chưa nhận |
+| CEO **đổi số Lần 2** | NV | số mới |
+
+**Ba nguyên tắc:**
+- **Tin gửi CEO phải đủ để quyết mà không cần mở app** — có tên, số tiền, hạn, và lý do NV ghi.
+- **‼ Gửi hỏng KHÔNG được làm hỏng việc ghi sổ.** Sổ đã ghi rồi thì không thể vì Telegram lỗi mà coi thao tác là thất bại. Không `await`, nuốt lỗi, chỉ ghi log. Có test cấm `await` trong hàm bắn tin.
+- **Không tin rác:** đứng yên ở "kế hoạch" thì không nhắn; nấc lạ thì không nhắn bừa.
+
+Module **thuần tính toán** (quyết định gửi cho ai, nội dung gì) tách khỏi phần gửi ⇒ test được toàn bộ luật mà không cần Telegram thật.
+
+- Test: `paymentFlowNotify.test.js` **12/12** · server **845/851** (6 lỗi PDF nền cũ).
+- **Cần của bot:** tài khoản CEO phải có trong `telegram_map` với `emp_code = 'CEO'`; NV chưa map thì tin rơi vào `no_recipient` (có ghi log, không nổ).
+
 ### 2026-08-04 — Quy trình đề nghị nhận Lần 2 / Lần 3 + kỳ chưa hết tháng không dựng sổ
 
 > CEO chốt: *"một số trường hợp có thể được phép đề nghị sớm hơn, nhưng phải có đường để NV gửi yêu cầu mở khoá"* · *"khi sếp từ chối thì quay về kế hoạch để NV đề nghị lại"* · *"đối với tháng chưa hoàn tất thì không đưa vào hiển thị tất toán ứng tiền vào đây."*

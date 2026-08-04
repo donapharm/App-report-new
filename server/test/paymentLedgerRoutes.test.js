@@ -76,3 +76,22 @@ test('‼ NV KHÔNG được nhập số tiền ở luồng đề nghị', () =>
     source.indexOf("for (const [path, action] of"));
   assert.doesNotMatch(selfBlock, /req\.body\?\.amount/, 'luồng đề nghị tuyệt đối không đọc số tiền từ NV');
 });
+
+test('‼ MỌI thao tác thanh toán đều phải bắn tin Telegram (CEO chốt 04/08 21:55)', () => {
+  const source = require('fs').readFileSync(require.resolve('../src/routes'), 'utf8');
+  // 6 thao tác: đề nghị · xin mở khoá · (mở khoá/duyệt/từ chối dùng chung 1 chỗ) ·
+  // ghi đã trả · gỡ ghi nhận · đổi số Lần 2.
+  assert.ok((source.match(/fireFlowNotice\(/g) || []).length >= 6,
+    'thiếu chỗ bắn tin — có thao tác tiền mà không ai được báo');
+  for (const marker of ['request', 'request-unlock', 'record', 'undo', 'second']) {
+    const at = source.indexOf(`/employee-cost/payment/${marker}'`);
+    assert.match(source.slice(at, at + 1800), /fireFlowNotice\(/, `route ${marker} phải bắn tin`);
+  }
+});
+
+test('‼ gửi tin hỏng KHÔNG được làm hỏng việc ghi sổ', () => {
+  const source = require('fs').readFileSync(require.resolve('../src/routes'), 'utf8');
+  const fn = source.slice(source.indexOf('function fireFlowNotice'), source.indexOf('function flowStepFacts'));
+  assert.doesNotMatch(fn, /await /, 'không được await: Telegram chậm/lỗi sẽ treo hoặc lật thao tác đã ghi');
+  assert.match(fn, /\.catch\(\(\) => \{\}\)/, 'phải nuốt lỗi gửi');
+});

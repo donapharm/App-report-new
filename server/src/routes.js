@@ -57,6 +57,7 @@ const syncExceptionReport = require('./syncExceptionReport');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
+const paymentFlowNotify = require('./paymentFlowNotify');
 const revenueReportExport = require('./revenueReportExport');
 const ceoDeckReport = require('./report/deckReport');
 const productSearch = require('./productSearch');
@@ -2171,6 +2172,50 @@ function paymentTarget(req) {
   return { empCode, period, actor: req.session?.emp_code };
 }
 
+/**
+ * Người nhận tin của quy trình (CEO chốt 04/08 21:55).
+ * `employee` → chính NV của sổ · `ceo` → tài khoản CEO trong bản đồ Telegram.
+ * Không tìm ra người nhận thì THÔI, không ném lỗi — sổ đã ghi rồi.
+ */
+const employeeNameOf = (empCode) => {
+  const found = employeeCostRosterRows().find((row) => row.emp_code === String(empCode || '').toUpperCase());
+  return found ? String(found.name || '') : '';
+};
+
+function resolveFlowRecipient(audience, empCode) {
+  const map = auth.listTelegramMap();
+  const target = audience === 'ceo'
+    ? map.find((row) => String(row.emp_code || '').toUpperCase() === 'CEO')
+    : map.find((row) => String(row.emp_code || '').toUpperCase() === String(empCode || '').toUpperCase());
+  return target ? { telegramId: target.telegram_id } : null;
+}
+
+/** Bắn tin cho một lần chuyển nấc. KHÔNG await ở route: gửi hỏng không được làm
+ *  hỏng thao tác đã ghi thành công. */
+function fireFlowNotice(payload) {
+  const notice = paymentFlowNotify.flowNotice(payload);
+  if (!notice) return;
+  paymentFlowNotify.sendFlowNotice(notice, {
+    resolve: resolveFlowRecipient,
+    deliver: notifyChannels.deliver,
+  }).catch(() => {});
+}
+
+/** Số tiền + mốc hạn của một lần, để tin nhắn nói đủ mà người đọc khỏi mở app. */
+function flowStepFacts(empCode, period, key) {
+  try {
+    const ledger = paymentLedgerStore.readEntry(empCode, period);
+    const book = paymentSchedule.buildPaymentSchedule({
+      period,
+      totalAfterPenalty: null,
+      firstAdvanceAmount: null,
+      secondOverride: ledger?.secondOverride ?? null,
+    });
+    const item = (book.installments || []).find((entry) => entry.key === key);
+    return { amount: item?.amount ?? null, dueDate: item?.dueDate || '', graceDate: item?.graceDate || '' };
+  } catch { return { amount: null, dueDate: '', graceDate: '' }; }
+}
+
 /* ---------- QUY TRÌNH ĐỀ NGHỊ NHẬN LẦN 2 / LẦN 3 (CEO chốt 04/08 21:30) ----------
    NV tự bấm đề nghị cho CHÍNH MÌNH; CEO duyệt/từ chối/mở khoá sớm.
    ‼ NV KHÔNG nhập số tiền ở bất kỳ đâu — số vẫn do backend tính. */
@@ -2193,8 +2238,10 @@ function selfPaymentTarget(req) {
 // NV bấm "Đề nghị nhận" (đã tới mốc, hoặc đã được CEO mở khoá sớm).
 router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const { empCode, period, key, actor, note } = selfPaymentTarget(req);
+  const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
   const entry = paymentLedgerStore.requestPayment(empCode, period, key, { actor, note });
   clearTargetDependentCache();
+  fireFlowNotice({ empCode, employeeName: employeeNameOf(empCode), period, key, from: before, to: 'requested', actor, note, ...flowStepFacts(empCode, period, key) });
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null });
 }));
@@ -2202,8 +2249,10 @@ router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(a
 // NV xin mở khoá để đề nghị SỚM hơn mốc — CEO chốt: phải có đường gửi yêu cầu.
 router.post('/employee-cost/payment/request-unlock', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const { empCode, period, key, actor, note } = selfPaymentTarget(req);
+  const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
   const entry = paymentLedgerStore.requestUnlock(empCode, period, key, { actor, note });
   clearTargetDependentCache();
+  fireFlowNotice({ empCode, employeeName: employeeNameOf(empCode), period, key, from: before, to: 'unlock_requested', actor, note, ...flowStepFacts(empCode, period, key) });
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null });
 }));
@@ -2213,8 +2262,13 @@ for (const [path, action] of [['unlock', 'grantUnlock'], ['approve', 'approvePay
   router.post(`/employee-cost/payment/${path}`, auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
     const { empCode, period, actor } = paymentTarget(req);
     const key = String(req.body?.key || '');
+    const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
     const entry = paymentLedgerStore[action](empCode, period, key, { actor, note: req.body?.note });
     clearTargetDependentCache();
+    fireFlowNotice({
+      empCode, employeeName: employeeNameOf(empCode), period, key, from: before,
+      to: entry.flow[key]?.state || 'plan', actor, note: req.body?.note, ...flowStepFacts(empCode, period, key),
+    });
     res.set('Cache-Control', 'private, no-store');
     return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, audit: entry.audit.slice(-5) });
   }));
@@ -2224,6 +2278,10 @@ router.post('/employee-cost/payment/second', auth.requireAuth, auth.requireCeo, 
   const { empCode, period, actor } = paymentTarget(req);
   const entry = paymentLedgerStore.setSecondOverride(empCode, period, req.body?.amount, { actor });
   clearTargetDependentCache();
+  fireFlowNotice({
+    empCode, employeeName: employeeNameOf(empCode), period, key: 'second',
+    from: 'plan', to: 'second_changed', actor, amount: entry.secondOverride,
+  });
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ok: true, emp_code: empCode, period, secondOverride: entry.secondOverride, audit: entry.audit.slice(-5) });
 }));
@@ -2234,6 +2292,12 @@ router.post('/employee-cost/payment/record', auth.requireAuth, auth.requireCeo, 
     amount: req.body?.amount, paidAt: req.body?.paid_at || req.body?.paidAt, actor,
   });
   clearTargetDependentCache();
+  fireFlowNotice({
+    empCode, employeeName: employeeNameOf(empCode), period, key: String(req.body?.key || ''),
+    from: 'approved', to: 'paid', actor,
+    amount: entry.paid?.[String(req.body?.key || '')]?.amount ?? null,
+    dueDate: entry.paid?.[String(req.body?.key || '')]?.paidAt || '',
+  });
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ok: true, emp_code: empCode, period, paid: entry.paid, audit: entry.audit.slice(-5) });
 }));
@@ -2242,6 +2306,10 @@ router.post('/employee-cost/payment/undo', auth.requireAuth, auth.requireCeo, as
   const { empCode, period, actor } = paymentTarget(req);
   const entry = paymentLedgerStore.undoPayment(empCode, period, String(req.body?.key || ''), { actor });
   clearTargetDependentCache();
+  fireFlowNotice({
+    empCode, employeeName: employeeNameOf(empCode), period, key: String(req.body?.key || ''),
+    from: 'paid', to: 'undone', actor,
+  });
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ok: true, emp_code: empCode, period, paid: entry.paid, audit: entry.audit.slice(-5) });
 }));
