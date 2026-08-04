@@ -4,7 +4,7 @@ import { formatDateTime, money, pct } from '../util.js';
 import { Spinner, Kpi, DailySalesKpi, MoneyBig, ZaloCard, UnitLabel } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { ComboSelect, MultiSelect, Select } from './revenueFilters.jsx';
-import { DonutChart, RevenueTrendChart, TargetGauge, TopBarChart } from '../charts.jsx';
+import { DonutChart, RevenueTrendChart, TargetGauge, TopBarChart } from '../chartsLazy.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 function CstOwnerLine({ item }) {

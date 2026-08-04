@@ -35,12 +35,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          recharts: ['recharts'],
-        },
-      },
-    },
+    // ‼ KHÔNG khai `manualChunks: { recharts }` nữa. Khai như vậy biến recharts thành
+    // một mảnh thuộc đồ thị của gói vào ⇒ Vite chèn <link rel="modulepreload"> vào
+    // index.html và trình duyệt TẢI NGAY 167KB dù trang đang mở không có biểu đồ nào.
+    // Để Vite tự tách theo `import()` động trong chartsLazy.jsx thì nó chỉ tải khi
+    // thật sự cần vẽ. Có test khoá lại (charts.lazy.test.mjs).
   },
 });

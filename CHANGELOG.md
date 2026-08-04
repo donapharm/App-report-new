@@ -1,3 +1,21 @@
+### 2026-08-04 — Hai việc tăng tốc CEO duyệt + yêu cầu gửi bot DataHub
+
+**1. Tách thư viện biểu đồ khỏi gói chính.** `recharts` nặng **167KB nén** nằm thẳng trong gói vào ⇒ MỌI trang phải tải, kể cả Chi phí / Thanh toán / Cơ số thầu vốn không vẽ biểu đồ nào.
+- Thêm `web/src/chartsLazy.jsx` — `import()` động, có khung xương giữ chỗ nên **không giật layout**.
+- **Phải bỏ luôn `manualChunks: { recharts }` trong `vite.config.js`.** Đây là bẫy: khai manualChunks biến recharts thành mảnh thuộc đồ thị gói vào ⇒ Vite chèn `<link rel="modulepreload">` vào `index.html` ⇒ trình duyệt **vẫn tải ngay 167KB** dù đã lười. Đo sau khi bỏ: `index.html` không còn preload gói biểu đồ.
+- **Tải lần đầu: 306KB → 184KB nén (giảm ~40%).** Gói biểu đồ 124KB chỉ tải khi thật sự có biểu đồ.
+- Test khoá lại cả 3 mặt: cấm khai `manualChunks`, cấm trang import tĩnh `charts.jsx`, và mọi biểu đồ xuất ra đều phải có bản lazy (thiếu một cái là kéo recharts về gói chính trở lại).
+
+**2. Trả số cũ ngay, dựng lại ngầm** cho bảng "Tất cả NV" (`memoGet` nhận `staleMs`, bật `10 phút` cho khoá base).
+- Trước đây ai mở đúng lúc cache vừa hết hạn thì phải **ngồi chờ dựng lại cả bảng 21 NV**.
+- Nay trả bản cũ tức thì rồi dựng bản mới ở nền. Quá hạn dùng tạm thì mới chờ số mới thật.
+- **Chỉ hoãn việc tải lại, không bịa số:** bản cũ là số thật của ≤10 phút trước và **vẫn mang nguyên** cờ "thiếu nguồn" + tên NV lỗi của lần dựng đó.
+- Dựng ngầm hỏng thì **giữ bản cũ** và cho thử lại — không xoá trắng.
+
+**3. `YEUCAU_GUI_BOT_DATAHUB.md`** — bản rút gọn của `DIRECTIVE_DATAHUB_VAULT_LOCK_SELFHEAL.md`, viết sẵn để CEO copy gửi thẳng bot DataHub, kèm 4 bước nghiệm thu và 2 câu hỏi bắt buộc trả lời (khoá nằm ở repo nào · kết quả nghiệm thu).
+
+- Test: server **795/801** (6 lỗi PDF nền cũ) · web **155/155** · build sạch.
+
 ### 2026-08-04 — Điều tra "app load chậm, sợ có ngày treo": đo được 178 giây, đã chặn cứng ở 25 giây
 
 > CEO: *"tại sao app load dữ liệu vẫn bị chậm, tôi sợ có ngày đứt thì toi… cứ mỗi lần nó load là lại cảm giác thấy sợ nó lỗi hay treo luôn."*

@@ -4,7 +4,7 @@ import { money, pct } from '../util.js';
 import { Spinner, Kpi, DailySalesKpi, useCollapse, TargetKpiStrip, UnitLabel, Pager, usePager } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, MultiSelect, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
-import { DonutChart, TopBarChart } from '../charts.jsx';
+import { DonutChart, TopBarChart } from '../chartsLazy.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 
 function formatCompareKy(ky) {

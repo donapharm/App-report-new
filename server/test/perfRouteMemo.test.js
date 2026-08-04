@@ -227,3 +227,43 @@ test('all requested P0 routes are memoized after auth and cache keeps private/no
   assert.match(refreshSource, /notifyMaterialized\(run\)/);
   assert.match(refreshSource, /setImmediate\(\(\) => Promise\.resolve\(listener\(run\)\)/);
 });
+
+/* ── CEO duyệt 04/08: trả số cũ ngay, dựng lại ngầm ────────────────────────── */
+
+test('‼ hết hạn thì TRẢ NGAY bản cũ và dựng lại NGẦM, không bắt người dùng chờ', async () => {
+  const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const memoGet = new Function('memo', `${source.slice(
+    source.indexOf('function memoGet(key, ttlMs'),
+    source.indexOf('function stableCacheValue'),
+  )}; return memoGet;`)(new Map());
+
+  let builds = 0;
+  const build = async () => { builds += 1; return `bản ${builds}`; };
+  const key = 'k';
+  assert.equal(await memoGet(key, 10, build, null, { staleMs: 60_000 }), 'bản 1');
+  await new Promise((resolve) => setTimeout(resolve, 30));   // quá hạn 10ms
+  // Lần gọi này phải trả NGAY bản cũ, không chờ dựng lại.
+  assert.equal(await memoGet(key, 10, build, null, { staleMs: 60_000 }), 'bản 1', 'phải trả bản cũ tức thì');
+  await new Promise((resolve) => setTimeout(resolve, 30));   // để bản ngầm chạy xong
+  assert.equal(builds, 2, 'bản mới phải được dựng ở nền');
+  assert.equal(await memoGet(key, 10_000, build, null, { staleMs: 60_000 }), 'bản 2', 'lần sau đã là số mới');
+});
+
+test('‼ quá hạn dùng tạm thì KHÔNG được trả bản cũ nữa — phải dựng lại thật', async () => {
+  const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const memoGet = new Function('memo', `${source.slice(
+    source.indexOf('function memoGet(key, ttlMs'),
+    source.indexOf('function stableCacheValue'),
+  )}; return memoGet;`)(new Map());
+  let builds = 0;
+  const build = async () => { builds += 1; return `bản ${builds}`; };
+  assert.equal(await memoGet('k2', 5, build, null, { staleMs: 5 }), 'bản 1');
+  await new Promise((resolve) => setTimeout(resolve, 40));   // quá cả TTL lẫn hạn dùng tạm
+  assert.equal(await memoGet('k2', 5, build, null, { staleMs: 5 }), 'bản 2', 'quá hạn dùng tạm thì phải chờ số mới');
+});
+
+test('bảng "Tất cả NV" phải bật chế độ trả-cũ-dựng-ngầm', () => {
+  const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  assert.match(source, /staleMs: EMPLOYEE_COST_ALL_STALE_MS/);
+  assert.match(source, /const EMPLOYEE_COST_ALL_STALE_MS = 10 \* 60 \* 1000/);
+});

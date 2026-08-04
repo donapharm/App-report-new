@@ -100,6 +100,8 @@ function employeeCostAllDegraded(merged) {
   return periods.some((period) => Number(period?.match?.unavailableEmployeeCount || 0) > 0
     || (Array.isArray(period?.match?.unavailableEmployees) && period.match.unavailableEmployees.length > 0));
 }
+// Bản gộp hết hạn vẫn được dùng tạm tối đa 10 phút trong lúc dựng lại ngầm.
+const EMPLOYEE_COST_ALL_STALE_MS = 10 * 60 * 1000;
 const EMPLOYEE_COST_ALL_VIEW_TTL_MS = 60 * 1000;
 const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
   'from', 'to', 'q', 'sortKey', 'sortDir', 'page', 'pageSize', 'province', 'unitGroup', 'route', 'date',
@@ -161,10 +163,31 @@ function clearTargetDependentCache() {
 }
 // `ttlFor(value)` (tuỳ chọn) cho phép rút ngắn TTL sau khi biết kết quả — dùng để
 // kết quả THIẾU/LỖI không được giữ lâu bằng kết quả tốt.
-function memoGet(key, ttlMs, build, ttlFor) {
+/**
+ * @param {number} staleMs  CEO duyệt 04/08 — TRẢ SỐ CŨ NGAY, DỰNG LẠI NGẦM.
+ *   Hết hạn mà vẫn còn bản cũ trong khoảng này thì trả luôn bản cũ (mở màn tức thì)
+ *   rồi dựng bản mới ở nền cho lần sau. Trước đây người xui xẻo mở đúng lúc cache
+ *   vừa hết hạn phải ngồi chờ dựng lại cả bảng 21 NV.
+ *   ‼ Chỉ hoãn việc TẢI LẠI, không bịa số: bản cũ là số thật của ≤ staleMs trước,
+ *   và vẫn mang nguyên cờ "thiếu nguồn"/tên NV lỗi của lần dựng đó.
+ */
+function memoGet(key, ttlMs, build, ttlFor, { staleMs = 0 } = {}) {
   const hit = memo.get(key);
   const t = Date.now();
-  if (hit && t - hit.t < (hit.ttl ?? ttlMs)) return hit.v;
+  const ttl = hit?.ttl ?? ttlMs;
+  if (hit && t - hit.t < ttl) return hit.v;
+  if (hit && staleMs > 0 && t - hit.t < ttl + staleMs && !hit.refreshing) {
+    hit.refreshing = true;
+    Promise.resolve().then(build).then((fresh) => {
+      const entry = { t: Date.now(), v: fresh, ttl: typeof ttlFor === 'function' ? (Number(ttlFor(fresh)) || ttlMs) : ttlMs };
+      memo.set(key, entry);
+    }).catch((error) => {
+      // Dựng ngầm hỏng thì GIỮ bản cũ và cho phép thử lại — không xoá trắng.
+      hit.refreshing = false;
+      console.warn('[memo] dựng lại ngầm thất bại', { key: String(key).slice(0, 60), message: error?.message });
+    });
+    return hit.v;
+  }
   const v = build();
   const entry = { t, v, ttl: ttlMs };
   memo.set(key, entry);
@@ -1112,7 +1135,8 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
   }
   // Giữ 6 giờ chỉ khi bản gộp SẠCH; có NV lỗi nguồn thì chỉ giữ 2 phút.
   const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMerged,
-    (value) => (employeeCostAllDegraded(value) ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS : EMPLOYEE_COST_ALL_BASE_TTL_MS));
+    (value) => (employeeCostAllDegraded(value) ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS : EMPLOYEE_COST_ALL_BASE_TTL_MS),
+    { staleMs: EMPLOYEE_COST_ALL_STALE_MS });
   return memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
     employeeCostTable.transformReport(await merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
   ));

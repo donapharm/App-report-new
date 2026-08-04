@@ -3,7 +3,7 @@ import { api, downloadTargetTemplate, downloadAssignmentTemplate, downloadExport
 import { formatDateTime, money, pct } from '../util.js';
 import { Spinner, Bar, Kpi, TargetKpiStrip, RankRow, UnitLabel } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
-import { TargetGauge } from '../charts.jsx';
+import { TargetGauge } from '../chartsLazy.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 import { normalizeTargetNavigation, targetAdminKyAfterPeriods } from '../targetNavigationModel.js';
 import { bangkokToday } from '../revenueCoverage.js';
