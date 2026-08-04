@@ -1,3 +1,20 @@
+### 2026-08-04 — Canh kỳ đã khoá sổ, dựng sau tin "outbox còn 2.600 event chờ replay"
+
+Bot DataHub báo đã cách ly khoá mồ côi, nhưng **outbox còn 2.600 event chờ replay**. Replay là ghi lại lịch sử: nếu có event chạm **kỳ đã khoá sổ**, tổng T06/T07 sẽ đổi mà **không ai biết** — bộ canh sẵn có (`revenueMaterializeGuard`) chỉ chạy lúc dựng lại dữ liệu, **không canh thường trực**.
+
+`server/scripts/verify_frozen_periods.js` — chạy được bất cứ lúc nào, không cần materialize:
+- Số ghim đọc **thẳng từ `revenueMaterializeGuard`** (đã export `APPROVED_RULE_TRANSITIONS`), **không chép tay** — chép tay là có ngày hai nơi lệch rồi cãi nhau không biết bên nào đúng.
+- **Lệch một đồng hoặc lệch một dòng đều báo** — không làm tròn cho qua.
+- **‼ Không đọc được số sống ≠ khớp.** Trả `unknown` + mã thoát `2`, không im lặng cho qua và cũng **không trả 0** (trả 0 sẽ so ra "lệch −30 tỷ" làm người đọc hoảng nhầm).
+- Cùng một kỳ khai ở hai bản chuyển đổi mà lệch số ⇒ báo mâu thuẫn ngay.
+- Mã thoát: `0` khớp · `1` **LỆCH, dừng** · `2` chưa đọc được.
+
+Ghim hiện tại: **T06 = 28.403.136.096đ / 2.001 dòng · T07 = 30.917.892.673đ / 2.016 dòng.**
+
+`YEUCAU_GUI_BOT_DATAHUB.md` bổ sung **đợt 2**: nêu rõ cách ly khoá tay mới là dẹp hậu quả, chưa phải sửa nguyên nhân; yêu cầu **lọc outbox theo kỳ TRƯỚC khi drain** và chạy script canh **SAU khi drain**; 4 câu bắt buộc trả lời.
+
+- Test: `verifyFrozenPeriods.test.js` **6/6** · server **801/807** (6 lỗi PDF nền cũ).
+
 ### 2026-08-04 — Hai việc tăng tốc CEO duyệt + yêu cầu gửi bot DataHub
 
 **1. Tách thư viện biểu đồ khỏi gói chính.** `recharts` nặng **167KB nén** nằm thẳng trong gói vào ⇒ MỌI trang phải tải, kể cả Chi phí / Thanh toán / Cơ số thầu vốn không vẽ biểu đồ nào.

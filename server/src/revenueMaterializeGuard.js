@@ -736,6 +736,9 @@ function evaluateRevenueCandidate({ previousSlot, candidate, minTotalRatio = DEF
 }
 
 module.exports = {
+  // Xuất ra để `scripts/verify_frozen_periods.js` đọc thẳng số ghim kỳ đã khoá sổ,
+  // KHÔNG phải chép tay sang chỗ khác (chép tay là có ngày hai nơi lệch rồi cãi nhau).
+  APPROVED_RULE_TRANSITIONS,
   DEFAULT_MIN_TOTAL_RATIO,
   REQUIRED_SOURCES,
   evaluateRevenueCandidate,

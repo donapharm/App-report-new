@@ -61,3 +61,38 @@ Khi muốn lấy khoá:
 
 - Đây là **thứ duy nhất cắt được tận gốc** việc nhân viên luân phiên mất số chi phí. Phía App Report đã làm xong phần chịu đựng: không mất số, không treo màn hình, không bắt chờ 25 giây.
 - Nếu bot DataHub hỏi "có gấp không": **có** — mỗi ngày chưa sửa là mỗi ngày số chi phí của một nhóm nhân viên có thể sai mà không ai biết.
+
+
+---
+
+# ĐỢT 2 — trả lời báo cáo của bot DataHub (04/08, tối)
+
+> Bot báo: lock mồ côi đã backup + cách ly an toàn, không restart · outbox còn **2.600 event chờ replay** · lượt nghiệm thu đầu bị 401 do script đọc sai định dạng key trong `.env` (không phải DataHub lỗi), đã dừng, chưa thử lặp auth.
+
+**Dán tiếp đoạn dưới cho bot DataHub:**
+
+---
+
+Ghi nhận, phần dọn khoá mồ côi làm đúng và an toàn (backup + cách ly, không restart). Ba việc tiếp theo, theo thứ tự ưu tiên:
+
+**1. Cách ly khoá mới là DẸP HẬU QUẢ, chưa phải SỬA NGUYÊN NHÂN.**
+
+Lần này khoá mồ côi được gỡ tay. Lần sau PM2 khởi động lại đúng lúc đang giữ khoá thì **y nguyên sự cố cũ**. Cần trả lời rõ một câu: **thuật toán khoá tự lành đã code chưa?** — tức là khoá có `pid` + `host` + `at` + `ttlMs`, tự phá khi chủ đã chết hoặc quá hạn, **gia hạn** khi việc chạy lâu, và **chỉ thả đúng khoá của mình**. Nếu chưa thì đây vẫn là việc số 1; cách ly tay không tính là xong.
+
+**2. ‼ TRƯỚC KHI REPLAY 2.600 EVENT — phải chốt: có event nào chạm kỳ ĐÃ KHOÁ SỔ không?**
+
+**T06.2026 và T07.2026 là kỳ đã khoá sổ, số đã ghim, đổi một đồng là dừng:**
+
+| Kỳ | Doanh thu ghim | Số dòng |
+|---|---|---|
+| 06.2026 | **28.403.136.096đ** | **2.001** |
+| 07.2026 | **30.917.892.673đ** | **2.016** |
+
+Replay là ghi lại lịch sử. Nếu trong 2.600 event có cái nào rơi vào hai kỳ trên thì tổng sẽ đổi mà **không ai biết**, kéo theo sai thưởng/phạt đã báo cho nhân viên. Đề nghị làm đúng thứ tự:
+
+- **Trước khi drain:** lọc outbox theo kỳ, báo lại **có bao nhiêu event thuộc T06/T07**. Nếu > 0 thì **DỪNG, báo trước**, đừng replay rồi mới nói.
+- **Sau khi drain:** chạy `node server/scripts/verify_frozen_periods.js` trong repo App Report. Mã thoát `0` = khớp, `1` = **LỆCH (dừng ngay)**, `2` = chưa đọc được số (chưa kết luận được là khớp). Gửi lại nguyên văn kết quả.
+
+**3. Nghiệm thu vẫn còn nợ.** 401 do script đọc sai key thì đúng là không phải lỗi DataHub — nhưng nghĩa là **4 bước nghiệm thu chưa bước nào chạy được**. Sau khi sửa cách nạp key, chạy đủ 4 bước ở phần trên rồi gửi kết quả từng bước.
+
+**Cần trả lời:** ① thuật toán tự lành đã code chưa · ② số event thuộc T06/T07 trong outbox · ③ kết quả 4 bước nghiệm thu · ④ khoá `vault-audit.lock` nằm ở repo/thư mục nào.
