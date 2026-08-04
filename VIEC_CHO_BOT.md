@@ -4,10 +4,43 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
-**Cập nhật lần cuối:** 03/08/2026 21:20 GMT+7 — **DEPLOY NGAY `b8602fb`** (lệnh CEO, không để qua đêm). Sau đó: **VIỆC 3** (hạn 08/08) → **VIỆC 2B**.
-
+**Cập nhật lần cuối:** 04/08/2026 08:40 GMT+7 — PROD `244d058`. Bảng việc ngay bên dưới.
 
 ---
+
+# 📌 VIỆC CÒN LẠI — 04/08/2026 08:40 GMT+7
+
+> PROD = `244d058` (deploy 08:25, Gate 2 PASS). Làm từ trên xuống, xong việc nào báo CEO việc đó.
+
+## ‼ SỬA ĐỊNH NGHĨA "GHIM TIỀN" — đọc trước khi báo đỏ
+- **T06 `28.403.136.096đ` · T07 `30.917.892.673đ` = KỲ ĐÃ KHOÁ SỔ ⇒ FROZEN.** Đổi một đồng là DỪNG.
+- **T08 KHÔNG frozen** — tháng đang chạy, doanh thu về thêm mỗi ngày. Số `2.151.774.772đ` chỉ đúng cho ảnh chụp 03/08; refresh 04/08 09:30 ra `2.410.293.372đ` / 324 dòng là **bình thường**, không phải drift.
+- Bất biến của T08 **không phải một con số cố định**, mà là: **App Report == App Sale "ĐÃ THỰC HIỆN" khi so CÙNG THỜI ĐIỂM** (chụp cách nhau < 2 phút). Chỉ so như vậy mới được kết luận lệch.
+
+| # | Việc | Hạn | Trạng thái | Ai làm |
+|---|---|---|---|---|
+| **1** | **Đối soát lại T08 sau refresh** — App Sale vs App Report cùng thời điểm, phải `0đ`. Số mới `2.410.293.372đ` / 324 dòng **chưa được đối soát**. | ngay | chưa | bot |
+| **2** | **Đóng nghiệm thu VP018 + DN022** — Gate 2 đã chứng minh: DN022 đúng 3/3 dòng, không P1/P2, không phạt target/C45, vẫn giữ luồng thiếu Xu · VP018 không phân bổ doanh thu, cảnh báo vận hành còn, notify tiền bị chặn. **Chỉ còn thiếu 1 số: `formulaVersion` phải ra `v3.8`.** Dán số đó là đóng mục này. | **08/08** | gần xong | bot |
+| **3** | **Hợp đồng "Ứng lần 1"** — App Salary chưa trả lời nghĩa `provisional`/`approved`, chưa dán JSON đầy đủ. Xem `SPEC_SALARY_ADVANCE_AUTO.md`. **Cấm tự đoán nghĩa** (đoán sai ⇒ "Còn lại sau ứng" bằng nguyên tổng chi phí). | 04/08 | chờ App Salary | bot + App Salary → Claude duyệt |
+| **4** | **Xác nhận 3.995.000đ MISA "Đề nghị ghi"** | **08/08** | chưa hỏi kế toán | kế toán |
+| **5** | **Gán lại dòng cách ly** — `DH479816174` · MISA `341964` · 03/08 · `G1.GE.QĐ139.1104.N2.162` Pizar-3 · SL 40 · `1.795.600đ` · `120.HTNT-PHARMACITY` · đang gán VP018 (telesaler) → `NON_SALES_ROLE_QUARANTINED`. Gán cho **NV Sale hợp lệ**. **App Report KHÔNG tự đoán.** | **08/08** | chưa gán | App Sale / danh mục phân công |
+| **6** | **Bản RAM `9986f0a` + `vault-audit.lock` tự chữa** — ‼ **ĐỀ NGHỊ NÂNG ƯU TIÊN.** Chẩn đoán của chính bot 03/08: DN004/DN007/DN008/DN009/DN011/DN017/DN019/DN024 **luân phiên mất nguồn chi phí**. Cùng thủ phạm vụ 21 NV hiện 0đ. Đang âm thầm phá dữ liệu. | ngay sau 08/08 | chưa deploy | bot |
+| **7** | **Bật `EMP_COST_NOTIFY` / `BONUS_NOTIFY`** | **09/08** | chờ #2 | bot |
+| **8** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) | sau 08/08 | nợ từ 29/07, chưa có gì | bot |
+| **9** | **AI tự đề xuất target 08:00 NGÀY 01 hằng tháng** (GMT+7), tính lại ngày 09 sau khoá sổ, **cấm tự áp**. Spec: phụ lục `SPEC_SALARY_ADVANCE_AUTO.md`. | sau 08/08 | backend chưa code | bot |
+| **10** | **So tháng trước + nhớ lựa chọn** | sau 08/08 | chưa code | Claude |
+| **11** | **Module "Thanh toán CP của tôi" GĐ1** | không gấp | có spec + PowerPoint | bot |
+| **12** | **Đổi `SALARY_SERVICE_TOKEN`** | không gấp | CEO chưa gật | bot |
+
+**Không còn việc nào nằm ở CEO.**
+
+### ✅ Đã xong (không làm lại)
+Doanh thu khớp App Sale `0đ` · tỷ lệ % **tự có hiệu lực sang mọi tháng sau** · T08 lên số · KPI và badge "thiếu %" dùng chung một bảng tỷ lệ · ô "Ứng lần 1" nói đúng lý do · nút chọn tháng + bộ lọc nâng cao + doanh thu trước/sau VAT · **AI đề xuất target hiện đủ 21 NV, chọn/sửa từng người, chặn số sai** · CEO đã giao target T08 21/21 NV.
+
+---
+
+<details><summary>(lưu vết — hàng đợi 03/08, đã xử lý xong)</summary>
+
 
 # 🔴🔴🔴 DEPLOY NGAY TỐI NAY — CEO RA LỆNH 21:10, KHÔNG ĐỂ QUA ĐÊM
 
@@ -487,3 +520,6 @@ Nếu tới **06/08** mà VIỆC 3 chưa xong ⇒ **dừng module**, dồn sức
 - **App nhảy T08** — `/api/periods` trả `08.2026` + `currentKy`; cả 3 màn mặc định T08. (Còn nốt VIỆC 1.)
 - **Data Hub trusted-device Cổng 1** — 841 test PASS. Cổng 2 chờ duyệt deploy riêng.
 - **AF DN006** — App Salary đã sửa, ứng đúng 65.978.975đ.
+
+
+</details>
