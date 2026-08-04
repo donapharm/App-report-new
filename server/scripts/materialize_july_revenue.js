@@ -23,6 +23,11 @@ const {
   resolveApprovedRuleTransition,
 } = require('../src/revenueMaterializeGuard');
 const { REVENUE_SEMANTIC_VERSION, equivalentToActiveSlot } = require('../src/revenuePayloadIdentity');
+const {
+  inspectActiveSlots,
+  evaluateExistingActivePeriods,
+  evaluateCandidateAgainstActivePeriods,
+} = require('../src/revenueCrossPeriodWebGuard');
 const { atomicWriteFile, writeJsonAtomic, acquireFileLock } = require('../src/materializeFileSafety');
 const {
   safePayloadSha256,
@@ -333,6 +338,20 @@ async function main() {
     process.env.REVENUE_RULE_EFFECTIVE_FROM,
   );
   const baselineSlots = readJson(slotsPath, []);
+  // Snapshot and verify every active period before the slow App Sale read.
+  // Preserve verification errors until the normal rejection-artifact path so
+  // "could not prove uniqueness" is reported, never mistaken for a clean pass.
+  let baselineCrossPeriodWebInspection = null;
+  let baselineCrossPeriodWebError = null;
+  try {
+    baselineCrossPeriodWebInspection = inspectActiveSlots({
+      slots: baselineSlots,
+      candidateKy: PERIOD.ky,
+      uploadsDir: UP_DIR,
+    });
+  } catch (error) {
+    baselineCrossPeriodWebError = error;
+  }
   const baselinePeriodSlots = selectCanonicalPeriodSlots(baselineSlots, PERIOD.ky);
   const baselinePeriodSnapshot = periodSlotsSnapshot(baselineSlots, PERIOD.ky);
   const frozenPeriodsBaseline = approvedRuleTransition
@@ -385,6 +404,15 @@ async function main() {
     ruleTransitionProof: sourceMirrorProof,
   };
   const materializeGuard = evaluateRevenueCandidate({ previousSlot, candidate, approvedTransition: approvedRuleTransition });
+  if (baselineCrossPeriodWebError) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({
+      code: 'CROSS_PERIOD_WEB_BASELINE_ACTIVE_SLOT_UNVERIFIABLE',
+      verificationCode: String(baselineCrossPeriodWebError.code || 'UNKNOWN'),
+      message: String(baselineCrossPeriodWebError.message || baselineCrossPeriodWebError),
+      details: baselineCrossPeriodWebError.details || null,
+    });
+  }
   if (baselinePeriodSlots.length > 0 && baselineActiveIds.length === 0 && !bootstrapFromInactivePlaceholders) {
     materializeGuard.ok = false;
     materializeGuard.reasons.push({ code: 'MISSING_ACTIVE_SLOT', periodSlotIds: baselinePeriodSlots.map((s) => String(s.id)).sort() });
@@ -401,6 +429,61 @@ async function main() {
   if (commitInvalidPeriods.length > 0) {
     materializeGuard.ok = false;
     materializeGuard.reasons.push({ code: 'INVALID_SLOT_PERIOD_METADATA_DURING_MATERIALIZE', invalidSlots: commitInvalidPeriods });
+  }
+  // Re-read, re-parse and re-hash every active period after the slow source
+  // snapshot. The shared materialize lock serializes supported upload writers;
+  // this second snapshot also catches out-of-band changes during read.
+  try {
+    const commitCrossPeriodWebInspection = inspectActiveSlots({
+      slots: commitSlots,
+      candidateKy: PERIOD.ky,
+      uploadsDir: UP_DIR,
+    });
+    if (baselineCrossPeriodWebInspection
+      && commitCrossPeriodWebInspection.snapshotSha256 !== baselineCrossPeriodWebInspection.snapshotSha256) {
+      materializeGuard.ok = false;
+      materializeGuard.reasons.push({
+        code: 'CROSS_PERIOD_WEB_ACTIVE_SLOTS_CHANGED_DURING_MATERIALIZE',
+        baseline: baselineCrossPeriodWebInspection.snapshot,
+        latest: commitCrossPeriodWebInspection.snapshot,
+      });
+    }
+    const existingActiveGuard = evaluateExistingActivePeriods(commitCrossPeriodWebInspection);
+    if (!existingActiveGuard.ok) {
+      materializeGuard.ok = false;
+      materializeGuard.reasons.push({
+        code: 'CROSS_PERIOD_WEB_EXISTING_ACTIVE_DUPLICATE',
+        duplicateCount: existingActiveGuard.duplicateCount,
+        duplicates: existingActiveGuard.duplicates.slice(0, 100),
+        truncated: existingActiveGuard.duplicateCount > 100,
+        decision: existingActiveGuard.decision,
+      });
+    }
+    const crossPeriodWebGuard = evaluateCandidateAgainstActivePeriods({
+      rows,
+      candidateKy: PERIOD.ky,
+      activeInspection: commitCrossPeriodWebInspection,
+    });
+    if (!crossPeriodWebGuard.ok) {
+      materializeGuard.ok = false;
+      materializeGuard.reasons.push({
+        code: 'CROSS_PERIOD_WEB_IDENTITY_DUPLICATE',
+        candidateKy: PERIOD.ky,
+        duplicateCount: crossPeriodWebGuard.duplicateCount,
+        duplicates: crossPeriodWebGuard.duplicates.slice(0, 100),
+        truncated: crossPeriodWebGuard.duplicateCount > 100,
+        checkedActivePeriods: crossPeriodWebGuard.checkedActivePeriods,
+        decision: crossPeriodWebGuard.decision,
+      });
+    }
+  } catch (error) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({
+      code: 'CROSS_PERIOD_WEB_ACTIVE_SLOT_UNVERIFIABLE',
+      verificationCode: String(error.code || 'UNKNOWN'),
+      message: String(error.message || error),
+      details: error.details || null,
+    });
   }
   const commitPeriodSlots = commitSlots.filter((s) => s.ky === PERIOD.ky);
   if (approvedRuleTransition) {
