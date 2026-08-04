@@ -29,7 +29,7 @@
 | **8** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) | sau 08/08 | nợ từ 29/07, chưa có gì | bot |
 | **9** | **AI tự đề xuất target 08:00 NGÀY 01 hằng tháng** (GMT+7), tính lại ngày 09 sau khoá sổ, **cấm tự áp**. Spec: phụ lục `SPEC_SALARY_ADVANCE_AUTO.md`. | sau 08/08 | backend chưa code | bot |
 | **10** | ~~So tháng trước + nhớ lựa chọn~~ — **CLAUDE ĐÃ LÀM XONG `09117f5`**, chờ deploy chung đợt sau. Nhớ đúng NV + kỳ lần trước · nút "So kỳ trước" bật/tắt (**không tự tải**, tránh nặng gấp đôi ở chế độ Tất cả NV) · thiếu một kỳ thì không hiện gì, không hiện `0%` giả. Web 123/123, build sạch. | — | **code xong** | Claude ✅ |
-| **11** | **Module "Thanh toán CP của tôi" GĐ1** | không gấp | có spec + PowerPoint | bot |
+| **11** | **Module "Thanh toán CP của tôi" GĐ1** — ‼ **ĐÃ GỠ CHẶN 04/08.** Câu "không build vội, chờ App Salary" trong spec là của 31/07 và **đã lỗi thời**: đường lấy **Lần 1** đã chạy thật trên PROD từ 31/07 (`salaryAdvance.js` → `routes.js:790` → `remainingAfterAdvance.js` → `SalaryAdvanceKpi`), còn **Lần 2/Lần 3 vốn là số của App Report**, không phụ thuộc App Salary. **Claude bắt tay làm GĐ1.** | — | **bắt đầu làm** | Claude |
 | **12** | **Đổi `SALARY_SERVICE_TOKEN`** | không gấp | CEO chưa gật | bot |
 
 **Không còn việc nào nằm ở CEO.**

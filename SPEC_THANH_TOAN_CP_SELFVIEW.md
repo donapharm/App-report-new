@@ -1,6 +1,19 @@
 # SPEC — Module "Thanh toán CP của tôi" (CEO chốt 2026-07-31)
 
-Mở rộng ô "Còn lại sau ứng lần 1" thành **sổ theo dõi 3 lần thanh toán + C44**. NV theo dõi tiền của mình, CEO quản lý toàn đội. **KHÔNG build vội** — chờ App Salary xác nhận xuất được dữ liệu các lần (mục "Chặn nguồn").
+Mở rộng ô "Còn lại sau ứng lần 1" thành **sổ theo dõi 3 lần thanh toán + C44**. NV theo dõi tiền của mình, CEO quản lý toàn đội.
+
+> ## ✅ 04/08/2026 — GỠ CHẶN, ĐƯỢC PHÉP BUILD
+> Câu *"KHÔNG build vội — chờ App Salary xác nhận xuất được dữ liệu các lần"* viết ngày 31/07, khi đấu nối chưa chạy. **Nay đã lỗi thời** (CEO nhắc 04/08: *"lần 1 đã có trên App Report rồi nhé"* — CEO đúng).
+>
+> Đã kiểm đủ 3 lớp, đường lấy **Lần 1** tồn tại và đã chạy ra số thật:
+> - `server/src/salaryAdvance.js` — client gọi App Salary, khoá self-scope, đã nghiệm thu trên PROD từ 31/07 (`e5a7df1`).
+> - `server/src/routes.js:790` — `safeGetFirstAdvance` + `withAfterPenaltyGuard`, trả field `salaryAdvance` trong `/api/employee-cost`.
+> - `server/src/remainingAfterAdvance.js` — đã tính `Tổng sau phạt − Lần 1`, có cờ `locked` theo khoá sổ kỳ.
+> - `web/src/pages/EmployeeCost.jsx` → `SalaryAdvanceKpi` — đã hiển thị, đã ra số thật cho NV.
+>
+> **Lần 2 và Lần 3 vốn KHÔNG phụ thuộc App Salary** (mục 3: *"số tại App Report"*), nên cũng không có gì chặn.
+>
+> Việc App Salary đang trả `status` ngoài hợp đồng (04/08) chỉ là **sự cố tạm thời của một nguồn**, không phải thiếu năng lực nguồn. Sổ phải **fail-closed đúng lần đó** (Lần 1 hiện "chưa lấy được", sổ không chốt được tổng) chứ **không phải lý do hoãn cả module**.
 
 Bản mẫu giao diện CEO đã duyệt: mockup "Thanh toán CP của tôi" (3 lần + C44 + sổ còn nợ + màn CEO).
 
