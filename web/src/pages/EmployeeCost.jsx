@@ -587,7 +587,17 @@ function PaymentTeamPanel({ team, allEmployees, loading }) {
   </div>;
 }
 
-function PaymentSchedulePanel({ schedule, allEmployees, loading }) {
+function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empCode, onChanged }) {
+  const [busy, setBusy] = React.useState('');
+  const [error, setError] = React.useState('');
+  const [draft, setDraft] = React.useState({ key: '', amount: '', paidAt: '' });
+
+  const run = async (label, call) => {
+    setBusy(label); setError('');
+    try { await call(); setDraft({ key: '', amount: '', paidAt: '' }); await onChanged?.(); }
+    catch (requestError) { setError(requestError.message || 'Không ghi được'); }
+    setBusy('');
+  };
   if (allEmployees) return null;
   if (loading) return <div className="card"><div className="section-head">Thanh toán CP của tôi</div><Spinner /></div>;
   if (!schedule) return null;
@@ -635,6 +645,38 @@ function PaymentSchedulePanel({ schedule, allEmployees, loading }) {
         })}</tbody>
       </table>
     </div>
+    {/* Ghi nhận đã trả — CHỈ CEO thấy. Backend vẫn chặn độc lập (requireCeo),
+        ẩn nút chỉ để gọn mắt, không phải là lớp bảo vệ. */}
+    {canRecord && <div className="employee-cost-gap-filters">
+      <label><span>Ghi nhận lần</span>
+        <select value={draft.key} onChange={(event) => setDraft((current) => ({ ...current, key: event.target.value }))}>
+          <option value="">— chọn lần —</option>
+          {schedule.installments.filter((item) => item.key !== 'advance').map((item) => (
+            <option key={item.key} value={item.key}>{item.label}{item.status === 'paid' ? ' (đã ghi nhận)' : ''}</option>
+          ))}
+        </select>
+      </label>
+      <label><span>Số tiền THẬT đã chuyển</span>
+        <input value={draft.amount} inputMode="numeric" placeholder="vd 88000000"
+          onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))} />
+      </label>
+      <label><span>Ngày chuyển</span>
+        <input type="date" value={draft.paidAt}
+          onChange={(event) => setDraft((current) => ({ ...current, paidAt: event.target.value }))} />
+      </label>
+      <div className="employee-cost-export-actions">
+        <button type="button" className="btn" disabled={!!busy || !draft.key || !draft.amount || !draft.paidAt}
+          onClick={() => run('pay', () => api.paymentRecord({
+            emp_code: empCode, period: schedule.period, key: draft.key,
+            amount: Number(String(draft.amount).replace(/[^\d]/g, '')), paid_at: draft.paidAt,
+          }))}>{busy === 'pay' ? 'Đang ghi…' : '✓ Ghi nhận đã trả'}</button>
+        <button type="button" className="btn secondary" disabled={!!busy || !draft.key}
+          onClick={() => run('undo', () => api.paymentUndo({ emp_code: empCode, period: schedule.period, key: draft.key }))}>
+          {busy === 'undo' ? 'Đang gỡ…' : '↩ Gỡ ghi nhận'}
+        </button>
+      </div>
+      {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
+    </div>}
     <p className="meta muted">
       Lần 1 là số App Salary đã chi — App Report không sửa. Lần 2/Lần 3 là kế hoạch do App Report tính từ
       <b> tổng kỳ − lần 1</b>; <b>chưa ai ghi nhận đã trả thì vẫn là kế hoạch</b>, không phải đã nhận.
@@ -1746,7 +1788,10 @@ export default function EmployeeCost({ me, onNavigate }) {
 
     {/* Sổ thanh toán đặt NGAY DƯỚI khối KPI: NV nhìn xong các ô tiền là thấy luôn
         lịch nhận tiền của mình, không phải cuộn xuống bảng chi tiết. */}
-    <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading} />
+    <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
+      canRecord={String(me?.role || '').toLowerCase() === 'ceo'}
+      empCode={admin ? selectedEmp : String(me?.emp_code || '')}
+      onChanged={() => setRange((current) => ({ ...current }))} />
     <PaymentTeamPanel team={model.paymentTeam} allEmployees={allEmployees} loading={loading} />
 
     {!admin && <EmployeeGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} />}

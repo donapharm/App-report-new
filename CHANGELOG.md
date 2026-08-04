@@ -1,3 +1,22 @@
+### 2026-08-04 — "Thanh toán CP" GĐ2 hoàn tất: nút ghi nhận trên màn + nhắc Telegram
+
+**1. Nút ghi nhận ngay trên sổ — chỉ CEO thấy.**
+- Chọn lần (Lần 2/Lần 3, **không có Lần 1**) → nhập **số tiền THẬT đã chuyển** + **ngày chuyển** → *"✓ Ghi nhận đã trả"*. Có *"↩ Gỡ ghi nhận"* cho trường hợp ghi nhầm.
+- Ghi xong sổ tự tải lại: Lần 3 co lại theo số thật, "đã nhận"/"còn nợ" cập nhật ngay.
+- **Ẩn nút chỉ để gọn mắt, KHÔNG phải lớp bảo vệ** — backend vẫn chặn độc lập bằng `requireCeo`.
+
+**2. Nhắc Telegram** — `server/src/paymentNotify.js`, dùng lại `notifyChannels`, không dựng kênh mới.
+- **Mở cửa sổ:** tới ngày nhận → *"Lần 2 kỳ 2026-07: 90.000.000đ đã có thể nhận. Hạn 14/09/2026."*
+- **Quá hạn:** *"🔴 QUÁ HẠN — Lần 2 … đã quá 17 ngày chưa nhận. Sổ còn nợ: 150.000.000đ."*
+- **Không spam:** mỗi (NV · kỳ · lần · loại tin) chỉ nhắn **một lần**; đã ghi nhận trả thì **thôi nhắc lần đó**.
+- **Không nhắc Lần 1** — đó là việc của App Salary.
+- **Gửi lỗi thì KHÔNG đánh dấu đã gửi** ⇒ kênh hồi phục là nhắc lại, không nuốt mất tin.
+- Có `dryRun` để chạy thử: lên kế hoạch, không gửi, không đánh dấu.
+- Sổ chưa dựng được ⇒ không nhắn gì.
+- Test: `paymentNotify.test.js` **8/8** · server **714/720** (6 lỗi PDF nền cũ) · web **127/127** · build sạch.
+
+**GĐ2 xong.** Còn việc vận hành: bật lịch chạy nhắc trên server (bot) — code đã sẵn, `runPaymentNotices` nhận sẵn `send` và có `dryRun` để chạy thử trước.
+
 ### 2026-08-04 — "Thanh toán CP" GĐ2: CHỈ CEO được ghi + bảng toàn đội
 
 **1. Siết quyền ghi sổ về đúng một người (CEO chốt 04/08).**

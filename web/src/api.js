@@ -205,6 +205,11 @@ export async function trustedDeviceLogin(phone) {
 }
 
 export const api = {
+  // Sổ "Thanh toán CP của tôi" — GHI NHẬN. Backend chỉ cho CEO; frontend chỉ ẩn nút
+  // cho gọn mắt, KHÔNG được coi việc ẩn nút là bảo vệ.
+  paymentSetSecond: (payload) => req('POST', '/employee-cost/payment/second', payload),
+  paymentRecord: (payload) => req('POST', '/employee-cost/payment/record', payload),
+  paymentUndo: (payload) => req('POST', '/employee-cost/payment/undo', payload),
   login: (emp_code) => req('POST', '/auth/login', { emp_code }),
   demoUsers: () => req('GET', '/auth/demo-users'),
   mode: () => req('GET', '/auth/mode'),
