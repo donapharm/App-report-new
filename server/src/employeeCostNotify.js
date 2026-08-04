@@ -89,6 +89,14 @@ function annualFromSummary(summary = {}) {
 // nhật đến hết ngày khoá sổ), sau khoá sổ mới gửi số CHỐT (CEO chốt 30/07).
 function messageFor({ kind, row = {}, total, gaps = {}, annual = null, stage = 'provisional', closeNote = '' } = {}) {
   if (!total) return null;
+  // ‼ KHÔNG GỬI TIN 0đ (bot bắt được ở diễn tập 05/08: DN004·DN005·DN012·DN017 bị
+  // dựng thành tin "bạn nhận 0đ"). Lỗi ở chỗ `!total` chỉ kiểm CÁI HỘP, không kiểm
+  // SỐ TIỀN bên trong — hộp có mà tiền bằng 0 thì vẫn lọt.
+  //
+  // 0đ ở đây là 0 THẬT (kỳ này không phát sinh chi phí). Nhắn "bạn nhận 0đ" vừa vô
+  // ích vừa dễ làm NV hiểu là bị giữ tiền. Trường hợp KHÔNG LẤY ĐƯỢC NGUỒN đi lối
+  // riêng qua `unavailableMessageFor` — hai chuyện khác nhau, không gộp.
+  if (!Number.isFinite(Number(total.amount)) || Number(total.amount) <= 0) return null;
   const monthNo = String(row.ky || '').split('.')[0];
   const who = row.name || row.emp_code;
   const scope = kind === 'month'

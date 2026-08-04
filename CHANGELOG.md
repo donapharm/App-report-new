@@ -1,3 +1,18 @@
+### 2026-08-05 — Diễn tập khô bắt 2 lỗi TRƯỚC KHI có tin nào bay đi
+
+Bot server chạy `dryRun` sáng 05/08 (theo lệnh Claude điều phối) — **kỹ thuật PASS nhưng nghiệm thu FAIL**, đúng như mong đợi của việc chạy thử sớm. Hai lỗi thuộc phần code, đã sửa:
+
+**1. ‼ Vẫn dựng tin "bạn nhận 0đ"** cho DN004 · DN005 · DN012 · DN017, trái chủ đích. Lỗi ở `messageFor`: `if (!total)` chỉ kiểm **cái hộp**, không kiểm **số tiền bên trong** — hộp có mà tiền bằng 0 thì vẫn lọt. Nay chặn mọi `amount` không phải số dương.
+- **Vẫn giữ ranh giới:** `0đ thật` (kỳ không phát sinh) ⇒ **không gửi**; `không lấy được nguồn` ⇒ đi lối riêng `unavailableMessageFor`, tin đó nói rõ *"KHÔNG phải bạn không có chi phí"* và **tuyệt đối không nêu số 0**. Test cấm hai chuyện này gộp làm một.
+
+**2. ‼ MÚI GIỜ — script diễn tập lấy ngày UTC.** Chạy lúc **06:23 ngày 05/08 giờ VN** nhưng in mốc **`2026-08-04`**, vì `toISOString()` trả ngày UTC và từ 00:00–07:00 giờ VN thì UTC vẫn còn hôm qua. Kỳ `ky` cắt ra từ mốc này ⇒ **đầu tháng sẽ diễn tập nhầm tháng trước**, bật thật lại ra kỳ khác. Nay dùng `employeeCost.vnToday()`; có test cấm quay lại kiểu UTC.
+
+**Hai việc còn lại của bot** (không phải code): DN012 nhận được email dù chưa map Telegram — sẽ tự hết sau khi mục 1 chặn tin 0đ; và **config drift**: file `.env` của release ghi hai cờ `=1` trong khi PM2 đang chạy `=0` — **phải dọn trước lần restart tới**, nếu không restart là notify tự bật ngoài ý muốn.
+
+**Ghi nhận:** `9986f0a` đã tìm ra — nằm ở chính repo này, nhánh `candidate/viec4-appreport-1ba8f44-20260802-214655`, nội dung *"bound employee-cost all memory pressure"*, **chưa vào `main`**.
+
+- Test: `employeeCostNotifyZero.test.js` **4/4** · server **865/871** (6 lỗi PDF nền cũ).
+
 ### 2026-08-04 — F5 quay lại ĐÚNG THÁNG ĐANG XEM
 
 > CEO: *"khi bấm F5 nó vẫn cứ trả về tháng hiện tại, không phải là trả về tháng đang xem / tháng liền kề."*

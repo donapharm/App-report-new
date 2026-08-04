@@ -45,7 +45,12 @@ const COST_SKIP_WHY = {
   visibility_off: 'CÔNG TẮC "Chi phí của tôi" đang TẮT cho NV này -> đúng thiết kế, NV không được nhận tin. Muốn nhận thì bật công tắc trong app.',
 };
 
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+// ‼ MÚI GIỜ GMT+7 — bot bắt được 05/08/2026 06:23: script in mốc `2026-08-04`
+// trong khi giờ VN đã sang ngày 05/08. Lý do: `toISOString()` trả ngày UTC, mà từ
+// 00:00–07:00 giờ VN thì UTC vẫn còn HÔM QUA. Kỳ (`ky`) cũng cắt ra từ mốc này nên
+// đầu tháng sẽ chọn NHẦM THÁNG TRƯỚC — diễn tập một kỳ, bật thật lại ra kỳ khác.
+// Dùng chung helper của server, không tự chế lại.
+const todayIso = () => require('../src/employeeCost').vnToday();
 
 async function main() {
   const args = process.argv.slice(2);
