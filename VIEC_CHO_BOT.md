@@ -28,7 +28,7 @@
 | **7** | **Bật `EMP_COST_NOTIFY` / `BONUS_NOTIFY`** | **09/08** | chờ #2 | bot |
 | **8** | **Màn "Chưa đồng bộ"** — danh mục dòng lệch + lý do (`SPEC_REVENUE_SYNC_EXCEPTIONS.md`) | sau 08/08 | nợ từ 29/07, chưa có gì | bot |
 | **9** | **AI tự đề xuất target 08:00 NGÀY 01 hằng tháng** (GMT+7), tính lại ngày 09 sau khoá sổ, **cấm tự áp**. Spec: phụ lục `SPEC_SALARY_ADVANCE_AUTO.md`. | sau 08/08 | backend chưa code | bot |
-| **10** | **So tháng trước + nhớ lựa chọn** | sau 08/08 | chưa code | Claude |
+| **10** | ~~So tháng trước + nhớ lựa chọn~~ — **CLAUDE ĐÃ LÀM XONG `09117f5`**, chờ deploy chung đợt sau. Nhớ đúng NV + kỳ lần trước · nút "So kỳ trước" bật/tắt (**không tự tải**, tránh nặng gấp đôi ở chế độ Tất cả NV) · thiếu một kỳ thì không hiện gì, không hiện `0%` giả. Web 123/123, build sạch. | — | **code xong** | Claude ✅ |
 | **11** | **Module "Thanh toán CP của tôi" GĐ1** | không gấp | có spec + PowerPoint | bot |
 | **12** | **Đổi `SALARY_SERVICE_TOKEN`** | không gấp | CEO chưa gật | bot |
 
