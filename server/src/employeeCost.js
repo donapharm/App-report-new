@@ -4,6 +4,7 @@ const persist = require('./persist');
 const { VAT_DIVISOR } = require('./analytics');
 const employeeCostTemplates = require('./employeeCostTemplates');
 const employeeCostUnitGroups = require('./employeeCostUnitGroups');
+const rateSnapshot = require('./employeeCostRateSnapshot');
 
 const CONTRACT_PATH = '/api/integrations/app-report/employee-cost';
 const DIMENSION_KEYS = Object.freeze(['c5', 'c7', 'c16', 'c25']);
@@ -1088,6 +1089,17 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
 async function fetchEmployeeCost(empCode, options = {}) {
   const result = await fetchRawEmployeeCost(empCode, options);
   const hasRange = options.from != null || options.to != null;
+  const snapshotOptions = options.rateSnapshotStore ? { store: options.rateSnapshotStore } : {};
+  // ‼ Nguồn DataHub kẹt (khoá mồ côi `vault-audit.lock`) từng làm 21 NV hiện 0đ.
+  // Khoá tự lành phải sửa ở DataHub; phía App Report thì KHÔNG được mất số:
+  // lấy được thì nhớ lại, kẹt thì dùng bản gần nhất và NÓI RA là số cũ.
+  if (hasRange && result.outcome === 'ok') {
+    try { rateSnapshot.remember(empCode, result.payload, snapshotOptions); } catch { /* kho hỏng không làm hỏng màn */ }
+  } else if (hasRange && result.outcome !== 'not_configured') {
+    try {
+      if (rateSnapshot.restore(empCode, result.payload, snapshotOptions) > 0) result.outcome = 'ok_stale_rates';
+    } catch { /* kho hỏng thì giữ nguyên fail-closed như cũ */ }
+  }
   if (!hasRange || (result.outcome !== 'ok' && result.outcome !== 'invalid_period_payload')) return result;
   result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchRawEmployeeCost);
   // Payload range mơ hồ chỉ được phục hồi thành nguồn `ok` khi policy mới nhất đã
@@ -1191,6 +1203,7 @@ module.exports = {
   enrichRangePayload,
   fetchEmployeeCost,
   fetchRawEmployeeCost,
+  rateSnapshot,
   resolveDataHubBaseUrl,
   getForSession,
 };
