@@ -10,7 +10,7 @@ import fs from 'node:fs';
 const MODEL_URL = new URL('../src/employeeCostModel.js', import.meta.url);
 const model = fs.readFileSync(MODEL_URL, 'utf8');
 
-const PAGES = ['EmployeeCost.jsx', 'Target.jsx', 'Overview.jsx', 'Revenue.jsx']
+const PAGES = ['EmployeeCost.jsx', 'PaymentSchedule.jsx', 'Target.jsx', 'Overview.jsx', 'Revenue.jsx']
   .map((name) => new URL(`../src/pages/${name}`, import.meta.url))
   .filter((url) => fs.existsSync(url));
 

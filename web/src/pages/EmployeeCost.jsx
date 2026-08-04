@@ -544,11 +544,24 @@ const PAYMENT_REASON = {
 
 // BẢNG THANH TOÁN TOÀN ĐỘI — chế độ "Tất cả NV" (SPEC §7).
 // CEO nhìn một bảng biết ai đã nhận · ai còn nợ · ai QUÁ HẠN.
-function PaymentTeamPanel({ team, allEmployees, loading }) {
+export function PaymentTeamPanel({ team, allEmployees, loading }) {
   if (!allEmployees) return null;
   if (loading) return <div className="card"><div className="section-head">Thanh toán CP toàn đội</div><Spinner /></div>;
-  if (!team) return null;
+  // ‼ Không im lặng biến mất: thiếu số thì nói thiếu, đừng để người dùng tưởng chưa làm.
+  if (!team) return <div className="card">
+    <div className="section-head">Thanh toán CP toàn đội</div>
+    <div className="employee-cost-match-warning" role="status">Chưa dựng được sổ toàn đội cho kỳ này — nguồn chi phí chưa trả số.</div>
+  </div>;
   const { totals } = team;
+  // ‼ KHÔNG NV nào dựng được sổ ⇒ CẤM hiện "0đ". Nhìn "Tổng 0đ · Còn nợ 0đ" người ta
+  // hiểu là đã trả hết, trong khi sự thật là chưa lấy được số. Fail-closed: nói thẳng.
+  if (!totals.employees) return <div className="card">
+    <div className="section-head">Thanh toán CP toàn đội <small>· kỳ {formatMonthLabel(team.period)}</small></div>
+    <div className="employee-cost-match-warning" role="status">
+      <b>Chưa NV nào dựng được sổ kỳ này</b> — không phải "đã trả hết". Chưa có số thì không hiện số.
+      {!!team.excluded.length && <> Lý do: {team.excluded.map((item) => `${item.empCode} (${PAYMENT_REASON[item.reason] || item.reason})`).join(' · ')}</>}
+    </div>
+  </div>;
   return <div className="card">
     <div className="section-head">Thanh toán CP toàn đội <small>· kỳ {formatMonthLabel(team.period)}</small></div>
     {!team.invariantOk && <div className="employee-cost-match-warning" role="alert">
@@ -588,7 +601,7 @@ function PaymentTeamPanel({ team, allEmployees, loading }) {
   </div>;
 }
 
-function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empCode, onChanged }) {
+export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empCode, onChanged }) {
   const [busy, setBusy] = React.useState('');
   const [error, setError] = React.useState('');
   const [draft, setDraft] = React.useState({ key: '', amount: '', paidAt: '' });
@@ -599,9 +612,20 @@ function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empC
     catch (requestError) { setError(requestError.message || 'Không ghi được'); }
     setBusy('');
   };
-  if (allEmployees) return null;
+  // Chế độ "Tất cả NV": sổ cá nhân không có nghĩa — nhưng phải NÓI RA, vì trước đây
+  // trả null làm CEO mở app không thấy mục này đâu, tưởng chưa làm (CEO báo 04/08).
+  if (allEmployees) return <div className="card">
+    <div className="section-head">Thanh toán CP của tôi</div>
+    <div className="employee-cost-match-warning" role="status">
+      Đang xem <b>Tất cả NV</b> — sổ thanh toán là của từng người. Chọn 1 nhân viên ở ô trên để xem sổ của người đó;
+      số toàn đội xem ở bảng <b>Thanh toán CP toàn đội</b> ngay dưới.
+    </div>
+  </div>;
   if (loading) return <div className="card"><div className="section-head">Thanh toán CP của tôi</div><Spinner /></div>;
-  if (!schedule) return null;
+  if (!schedule) return <div className="card">
+    <div className="section-head">Thanh toán CP của tôi</div>
+    <div className="employee-cost-match-warning" role="status">Chưa dựng được sổ thanh toán cho kỳ này — nguồn chi phí chưa trả số.</div>
+  </div>;
   if (!schedule.available) {
     return <div className="card">
       <div className="section-head">Thanh toán CP của tôi</div>

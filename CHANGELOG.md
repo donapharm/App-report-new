@@ -1,3 +1,20 @@
+### 2026-08-04 — "Thanh toán CP của tôi" nay CÓ MENU RIÊNG (CEO báo: mở app không thấy đâu)
+
+> CEO: *"phần thanh toán CP của tôi. Hiện tao truy cập vào app vẫn không tìm thấy mục đó."* — **CEO đúng, báo cáo trước đó của Claude là sai.** Sổ thanh toán CÓ tồn tại, nhưng:
+> 1. Nó chỉ là **một khối nằm lẫn trong trang "Chi phí của tôi"**, không có menu ⇒ không ai đi tìm mà thấy.
+> 2. Tệ hơn: `if (allEmployees) return null` — đang ở chế độ **"Tất cả NV"** thì khối đó **biến mất sạch, không một dòng chữ**. Mà "Tất cả NV" chính là chế độ mặc định của tài khoản CEO ⇒ CEO không bao giờ nhìn thấy nó.
+
+**Đã sửa:**
+- **Menu riêng `💵 Thanh toán CP` → "Thanh toán CP của tôi"** (`web/src/pages/PaymentSchedule.jsx`), đứng ngay dưới "Chi phí của tôi". Có nút chọn tháng nhanh, chọn tháng bất kỳ, và ô chọn NV cho CEO/admin.
+- **Khoá quyền y hệt "Chi phí của tôi"** (`employeeCostControlled`) — ai bị tắt xem chi phí thì cũng không thấy menu này. **Ghi nhận đã trả vẫn CHỈ CEO.**
+- Trang riêng **dùng lại đúng hai khối** `PaymentSchedulePanel` / `PaymentTeamPanel` của trang Chi phí — một bản dựng duy nhất, tránh lặp lại vụ KPI và badge lệch nhau hôm 03/08.
+- **Hết `return null` lặng lẽ:** chế độ "Tất cả NV" nay nói rõ *"sổ thanh toán là của từng người — chọn 1 nhân viên"*; thiếu nguồn thì nói *"chưa dựng được sổ"*.
+- **‼ Không NV nào dựng được sổ ⇒ CẤM hiện `0đ`.** Ảnh chụp lần đầu ra *"Tổng chi phí toàn đội 0đ · Còn nợ 0đ"* — nhìn y như **đã trả hết**, trong khi sự thật là **chưa lấy được số**. Nay thay bằng câu *"Chưa NV nào dựng được sổ kỳ này — không phải 'đã trả hết'"*.
+
+**Đã chạy thật, không chỉ chạy test** (chromium, dữ liệu mẫu): đăng nhập CEO → menu hiện `💵 Thanh toán CP` → mở trang, **không lỗi runtime**; bản điện thoại 412px vào qua nút **Menu** cũng sạch lỗi. Ảnh chụp gửi CEO.
+
+- Test: web **148/148** (thêm `PaymentSchedule.menu.test.mjs` 8 mục) · `npm run build` sạch. `PaymentSchedule.jsx` đã được thêm vào bộ quét "dùng mà chưa import" để không tái diễn vụ `ReferenceError` lúc mở màn.
+
 ### 2026-08-04 — Màn "Chưa đồng bộ": phần QUYẾT ĐỊNH đã xong, bot chỉ còn đổ dữ liệu vào
 
 `server/src/syncExceptionClassifier.js` — hàm **thuần** (không truy vấn, không ghi): đưa vào toàn bộ dòng nguồn của kỳ + danh sách dòng đã tính doanh thu ⇒ trả về từng dòng bị loại **kèm mã lý do**. Nhờ tách như vậy, phần khó và dễ sai (quyết định dòng nào bị loại vì sao) không còn phải chờ máy chủ có DB thật.

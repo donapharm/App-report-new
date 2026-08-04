@@ -49,7 +49,10 @@ test('không có sổ trong payload ⇒ null, màn không vẽ gì', () => {
 
 test('màn: sổ chỉ hiện khi chọn 1 NV, có cảnh báo khi sổ chưa cân, nói rõ lý do thiếu nguồn', () => {
   assert.match(source, /function PaymentSchedulePanel/);
-  assert.match(source, /if \(allEmployees\) return null;/, 'chế độ Tất cả NV không dựng sổ (self-scope)');
+  // Chế độ "Tất cả NV" vẫn KHÔNG dựng sổ cá nhân (self-scope), nhưng từ 04/08 phải
+  // NÓI RA lý do thay vì trả null — trả null làm CEO mở app không thấy mục này đâu.
+  assert.match(source, /if \(allEmployees\) return <div className="card">/, 'chế độ Tất cả NV không dựng sổ cá nhân');
+  assert.match(source, /Chọn 1 nhân viên/, 'phải chỉ đường thay vì biến mất');
   assert.match(source, /Sổ chưa cân/, 'phải cảnh báo khi bất biến gãy');
   assert.match(source, /first_advance_unavailable: 'Chưa lấy được số ứng lần 1 từ App Salary'/);
   assert.match(source, /chưa ai ghi nhận đã trả thì vẫn là kế hoạch/, 'không được để hiểu nhầm là đã nhận');

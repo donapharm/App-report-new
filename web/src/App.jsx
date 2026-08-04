@@ -17,6 +17,7 @@ import DailySalesOrders from './pages/DailySalesOrders.jsx';
 import TenderQuota from './pages/TenderQuota.jsx';
 import Target from './pages/Target.jsx';
 import EmployeeCost from './pages/EmployeeCost.jsx';
+import PaymentSchedule from './pages/PaymentSchedule.jsx';
 import CatalogManagement from './pages/CatalogManagement.jsx';
 import DormantReports from './pages/DormantReports.jsx';
 import AiChat from './pages/AiChat.jsx';
@@ -32,6 +33,7 @@ const TABS = [
   { key: 'cst', label: 'Cơ số thầu', ic: '📦', C: TenderQuota },
   { key: 'target', label: 'Target', ic: '🎯', C: Target },
   { key: 'employeeCost', label: 'Chi phí của tôi', ic: '🧾', C: EmployeeCost, employeeCostControlled: true },
+  { key: 'paymentSchedule', label: 'Thanh toán CP', full: 'Thanh toán CP của tôi', ic: '💵', C: PaymentSchedule, employeeCostControlled: true },
   { key: 'catalogManagement', label: 'Danh mục QL', full: 'Danh mục quản lý', ic: '🗂️', C: CatalogManagement },
   { key: 'dormantReports', label: 'B/c QLNB', full: 'Báo cáo QLNB', ic: '📑', C: DormantReports, ceoEmployeeOnly: true },
   { key: 'ai', label: 'Hỏi nhanh', ic: '🤖', C: AiChat },
