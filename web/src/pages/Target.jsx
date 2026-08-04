@@ -7,6 +7,7 @@ import { TargetGauge } from '../charts.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 import { normalizeTargetNavigation, targetAdminKyAfterPeriods } from '../targetNavigationModel.js';
 import { bangkokToday } from '../revenueCoverage.js';
+import { parseAiTargetInput } from '../targetAiModel.js';
 
 const rowsFmt = (n) => Number(n || 0).toLocaleString('vi-VN');
 const SOURCE_LABELS = { carryover: 'Nhân bản kỳ trước', upload: 'Upload', manual: 'Sửa tay', ai: 'AI đề xuất' };
@@ -659,7 +660,7 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
     setBusy(false);
   }
   async function proposeAi() {
-    setBusy(true); setErr(''); setMsg('');
+    setBusy(true); setErr(''); setMsg(''); setAi(null); setAiRows({});
     try {
       const data = await api.adminTargetAiPropose();
       setAi(data);
@@ -671,28 +672,36 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
     setBusy(false);
   }
   const aiRow = (code) => aiRows[code] || { on: true, target: '' };
-  const setAiRow = (code, patch) => setAiRows((current) => ({ ...current, [code]: { ...aiRow(code), ...patch } }));
+  const setAiRow = (code, patch) => setAiRows((current) => ({
+    ...current,
+    [code]: { ...(current[code] || { on: true, target: '' }), ...patch },
+  }));
   // Chỉ gửi người ĐƯỢC CHỌN và có số hợp lệ. Số âm/không phải số thì chặn tại đây,
   // không đẩy sang backend rồi mới báo lỗi.
   const aiSelected = (ai?.items || []).map((item) => {
     const row = aiRow(item.emp_code);
-    const target = Number(String(row.target).replace(/[^\d-]/g, ''));
-    return { ...item, on: row.on, target, valid: Number.isFinite(target) && target >= 0,
-      edited: target !== Number(item.suggested_target) };
+    const parsed = parseAiTargetInput(row.target);
+    return { ...item, on: row.on, target: parsed.target, valid: parsed.valid,
+      edited: parsed.valid && parsed.target !== Number(item.suggested_target) };
   }).filter((item) => item.on);
   const aiInvalidCount = aiSelected.filter((item) => !item.valid).length;
   const aiEditedCount = aiSelected.filter((item) => item.valid && item.edited).length;
+  const aiZeroCount = aiSelected.filter((item) => item.valid && item.target === 0).length;
   async function applyAi() {
     if (!ai?.items?.length) return;
     if (aiInvalidCount) { setErr(`Còn ${aiInvalidCount} dòng nhập số không hợp lệ — sửa xong mới áp được.`); return; }
     if (!aiSelected.length) { setErr('Chưa chọn nhân viên nào để áp target.'); return; }
-    const edited = aiEditedCount ? ` (${aiEditedCount} dòng CEO đã sửa số)` : '';
-    if (!confirm(`Áp target kỳ ${ai.next_ky} cho ${aiSelected.length}/${ai.items.length} nhân viên${edited}?`)) return;
+    const details = [
+      aiEditedCount ? `${aiEditedCount} dòng CEO đã sửa số` : '',
+      aiZeroCount ? `⚠ ${aiZeroCount} dòng target = 0` : '',
+    ].filter(Boolean).join(' · ');
+    const detailText = details ? ` (${details})` : '';
+    if (!confirm(`Áp target kỳ ${ai.next_ky} cho ${aiSelected.length}/${ai.items.length} nhân viên${detailText}?`)) return;
     setBusy(true); setErr(''); setMsg('');
     try {
       const items = aiSelected.map((item) => ({ emp_code: item.emp_code, target: item.target }));
       const r = await api.adminTargetAiApply({ ky: ai.next_ky, items });
-      setMsg(`Đã áp ${r.rows} dòng target cho kỳ ${ai.next_ky}${edited}.`); setTool(null); await load();
+      setMsg(`Đã áp ${r.rows} dòng target cho kỳ ${ai.next_ky}${detailText}.`); setTool(null); await load();
     } catch (e) { setErr(e.message); }
     setBusy(false);
   }
@@ -828,9 +837,9 @@ function TargetAdminPanel({ ky, focusEmp, onKyChange, onTargetsChanged }) {
               lại mà nút vẫn ghi target cho cả đội (CEO phát hiện 04/08). */}
           {ai.items.map((r) => {
             const row = aiRow(r.emp_code);
-            const value = Number(String(row.target).replace(/[^\d-]/g, ''));
-            const invalid = row.on && !(Number.isFinite(value) && value >= 0);
-            const edited = Number.isFinite(value) && value !== Number(r.suggested_target);
+            const parsed = parseAiTargetInput(row.target);
+            const invalid = row.on && !parsed.valid;
+            const edited = parsed.valid && parsed.target !== Number(r.suggested_target);
             return <div key={r.emp_code} className="row">
               <label className="main" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
                 <input type="checkbox" checked={row.on} onChange={(e) => setAiRow(r.emp_code, { on: e.target.checked })} />

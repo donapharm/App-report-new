@@ -4129,7 +4129,21 @@ router.post('/admin/targets/ai/apply', auth.requireAuth, auth.requireAdmin, (req
   const valid = new Set(store.targetRoster({ scope: {} }).map((u) => u.emp_code));
   const batchId = `ai_${Date.now().toString(36)}`;
   try {
-    const out = items.filter((x) => valid.has(String(x.emp_code || '').toUpperCase())).map((x) => targetAdmin.upsertEntry({ emp_code: x.emp_code, ky, target: x.target ?? x.suggested_target, source: 'ai', user: req.session, note: 'ai_apply', batchId }));
+    // Validate the whole selected batch before the first write, so one malformed
+    // row cannot leave a partially-applied AI batch behind.
+    const selected = items.filter((x) => valid.has(String(x.emp_code || '').toUpperCase())).map((x) => ({
+      emp_code: x.emp_code,
+      target: targetAdmin.validateAiApplyTarget(x.target ?? x.suggested_target),
+    }));
+    const out = selected.map((x) => targetAdmin.upsertEntry({
+      emp_code: x.emp_code,
+      ky,
+      target: x.target,
+      source: 'ai',
+      user: req.session,
+      note: 'ai_apply',
+      batchId,
+    }));
     clearTargetDependentCache(); res.json({ ok: true, batchId, rows: out.length });
   } catch (e) { res.status(400).json({ error: e.message }); }
 });

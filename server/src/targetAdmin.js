@@ -36,6 +36,10 @@ function toNum(v) {
   else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
   return Math.round(Number(s) || 0);
 }
+function validateAiApplyTarget(v) {
+  if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 0) throw new Error('Target AI không hợp lệ');
+  return v;
+}
 function noAccent(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase().trim(); }
 function cellText(v) {
   if (v == null) return '';
@@ -286,4 +290,4 @@ function rollbackBatch({ batchId, user }) {
   appendAudit({ action: 'target_rollback_batch', by: user?.emp_code || 'admin', batchId, rows: n });
   return { batchId, rows: n };
 }
-module.exports = { PRIORITY, resolveTargets, upsertEntry, bulkUpsert, upsertQuarter, quarterMonths, splitQuarterTarget, parseTargetWorkbook, stashPreview, commitPreview, carryOverTargets, overrideInfo, clearManualOverride, rollbackBatch, listAudit, baseline202606, latestAssignedTargets, toNum, normScope };
+module.exports = { PRIORITY, resolveTargets, upsertEntry, bulkUpsert, upsertQuarter, quarterMonths, splitQuarterTarget, parseTargetWorkbook, stashPreview, commitPreview, carryOverTargets, overrideInfo, clearManualOverride, rollbackBatch, listAudit, baseline202606, latestAssignedTargets, toNum, validateAiApplyTarget, normScope };
