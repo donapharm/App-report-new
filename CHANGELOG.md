@@ -1,3 +1,11 @@
+### 2026-08-05 16:20 (giờ VN) — ✅ CEO yêu cầu: lý do "Xin nhận sớm" phải có LỰA CHỌN SẴN, không bắt gõ tay
+
+**Bối cảnh:** CEO chụp màn thấy popup trình duyệt bắt gõ lý do từng chữ. Truy ra ảnh chụp là bản CŨ `ff75a05` (04/08 22:39) còn nằm trong cache trình duyệt — bản hiện hành đã có hộp thoại trong app (`PaymentRequestComposer`). Nhưng yêu cầu vẫn đúng: hộp thoại hiện tại vẫn là ô trống bắt gõ tay.
+
+**Giao bot (gộp vào đợt deploy lại `5ba27ab`):** thêm **danh sách lý do chọn sẵn** cho hộp "Xin nhận sớm" — bấm chọn 1, chỉ "Khác" mới phải gõ. Danh sách đặt ở **`server/config/payment_request_reasons.json`** để sau này CEO đổi chữ không phải sửa code; backend trả xuống, frontend chỉ render. Lý do đã chọn đi nguyên văn vào ghi chú sổ + tin Telegram cho CEO (giữ hợp đồng `note` hiện có — không đổi API). Nhân tiện cùng một hộp thoại, thêm luôn bộ lý do chọn sẵn cho "Từ chối" (NV sẽ đọc). Không đụng số tiền, không đổi luật quota/ngày sớm nhất.
+
+---
+
 ### 2026-08-05 16:10 (giờ VN) — ⚠ Acceptance FAIL của `5ba27ab` là BÁO ĐỘNG GIẢ — lỗi ở cổng nghiệm thu Claude viết, không phải ở bản deploy
 
 **Diễn biến:** bot deploy đúng `5ba27ab` (version `5ba27ab-20260805-143022-859`), cổng (a) `is_ceo=true` PASS, (c) `canEdit=true` PASS, nhưng (d) "thấy đủ 3 nút Duyệt/Từ chối/Mở khoá" FAIL (`actionButtons=[]`) ⇒ bot **dừng ngay và rollback về `b49e585`** đúng quy trình, backup `app-report-pre-5ba27ab-20260805-152115.tgz` (SHA-256 `d448…e85e`). Thao tác của bot chuẩn.
