@@ -268,7 +268,9 @@ export default function App() {
   if (!me) return <Login onLogin={setMe} />;
 
   const logout = () => { setToken(null); forgetLastPhone(); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
-  const canonicalCeo = String(me.role || '').toLowerCase() === 'ceo' || String(me.emp_code || '').toUpperCase() === 'CEO';
+  // Backend chốt ai là CEO (`/me` trả `is_ceo`). Frontend KHÔNG tự đoán từ chuỗi role:
+  // tài khoản CEO thật trên PROD có role 'admin', đoán bằng role là giấu mất chức năng.
+  const canonicalCeo = !!me.is_ceo;
   const tabs = TABS.filter((t) => (!t.adminOnly || me.isAdmin)
     && (!t.ceoEmployeeOnly || canonicalCeo || !me.isAdmin)
     && (!t.employeeCostControlled || me.isAdmin || !me.employeeCostDisabled)).map((t) => (

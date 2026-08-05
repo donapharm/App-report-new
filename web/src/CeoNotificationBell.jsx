@@ -77,7 +77,7 @@ export default function CeoNotificationBell({ me, onNavigate }) {
   const planRequestRef = useRef(0);
   const bellRef = useRef(null);
   const panelRef = useRef(null);
-  const isCeo = String(me?.role || '').toLowerCase() === 'ceo' || String(me?.emp_code || '').toUpperCase() === 'CEO';
+  const isCeo = !!me?.is_ceo;   // do backend chốt, xem `/me`
   const isEmployee = !me?.isAdmin && !!String(me?.emp_code || '').trim() && !isCeo;
   const canSeeDq = !!me?.isAdmin;
   const eligible = isCeo || isEmployee || canSeeDq;

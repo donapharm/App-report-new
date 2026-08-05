@@ -86,7 +86,7 @@ function FocusedItem({ detail, busy, isCeo, onClose, onReload }) {
 }
 
 export default function DormantReports({ me }) {
-  const isCeo = String(me?.role || '').toLowerCase() === 'ceo' || String(me?.emp_code || '').toUpperCase() === 'CEO';
+  const isCeo = !!me?.is_ceo;   // do backend chốt, xem `/me`
   const templates = isCeo ? [['standard', 'Chuẩn'], ['ceo_meeting', 'Họp CEO']] : [['standard', 'Chuẩn'], ['employee_work', 'Công việc cá nhân']];
   const [filters, setFilters] = useState({ emp_code: '', unit_code: '', review_status: '', q: '', template: 'standard' });
   const [report, setReport] = useState(null);

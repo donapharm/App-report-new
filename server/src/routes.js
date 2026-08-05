@@ -83,8 +83,10 @@ const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreFo
 const dormantReport = createDormantReportService({ dormantService, persist });
 const filteredEmployeeReport = createFilteredEmployeeReportService({ store, catalogManagement, appSaleCst, persist });
 const filteredEmployeeDelivery = createFilteredEmployeeDeliveryService({ filteredEmployeeReport, store, listTelegramMap: auth.listTelegramMap, notifyChannels, persist });
-const requireCeoDelivery = (req, res, next) => (req.session.role === 'ceo' || req.session.emp_code === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được quản lý luồng gửi báo cáo cá nhân.', code: 'FILTERED_DELIVERY_CEO_REQUIRED' });
-const requireCeoQlnb = (req, res, next) => (req.session.role === 'ceo' || String(req.session.emp_code || '').toUpperCase() === 'CEO') ? next() : res.status(403).json({ error: 'Chỉ CEO được xem dữ liệu quản trị QLNB.', code: 'DORMANT_CEO_REQUIRED' });
+// ‼ Ba cửa dưới đây từng có BA bản chép tay của cùng một luật "ai là CEO" — một bản
+// còn quên `.toUpperCase()`. Nay tất cả gọi `auth.isCeoActor`, bản duy nhất.
+const requireCeoDelivery = (req, res, next) => auth.isCeoActor(req.session) ? next() : res.status(403).json({ error: 'Chỉ CEO được quản lý luồng gửi báo cáo cá nhân.', code: 'FILTERED_DELIVERY_CEO_REQUIRED' });
+const requireCeoQlnb = (req, res, next) => auth.isCeoActor(req.session) ? next() : res.status(403).json({ error: 'Chỉ CEO được xem dữ liệu quản trị QLNB.', code: 'DORMANT_CEO_REQUIRED' });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 const memo = new Map();
 let memoDataSignature = null;
@@ -113,7 +115,7 @@ const EMPLOYEE_COST_ALL_VIEW_QUERY_KEYS = Object.freeze([
 const bonusPolicyPreviews = new Map();
 const penaltyPolicyPreviews = new Map();
 const requireCeoPenaltyFormula = (req, res, next) => (
-  String(req.session?.emp_code || '').trim().toUpperCase() === 'CEO'
+  auth.isCeoActor(req.session)
     ? next()
     : res.status(403).json({ error: 'Chỉ CEO được thay đổi công thức phạt.', code: 'PENALTY_POLICY_CEO_REQUIRED' })
 );
@@ -794,7 +796,10 @@ router.get('/me', auth.requireAuth, (req, res) => {
   const visibility = isAdmin
     ? { enabled: true }
     : employeeCostVisibility.decision(req.session.emp_code, employeeCostRosterRows());
-  res.json({ ...req.session, isAdmin, employeeCostDisabled: !visibility.enabled });
+  // ‼ BACKEND nói cho frontend biết ai là CEO — frontend KHÔNG được tự đoán từ chuỗi
+  // role. Đúng nguyên tắc "quyền quyết ở backend" trong CLAUDE.md, và đây chính là
+  // chỗ hôm 05/08 làm nút Duyệt biến mất khỏi màn hình CEO.
+  res.json({ ...req.session, isAdmin, is_ceo: auth.isCeoActor(req.session), employeeCostDisabled: !visibility.enabled });
 });
 
 async function employeeCostPayload(req, {
@@ -3025,7 +3030,7 @@ function noStore(res) {
 router.get('/dormant/items/:key/detail', auth.requireAuth, (req, res) => {
   try {
     const scope = auth.scopeOf(req.session);
-    const canonicalCeo = req.session.role === 'ceo' || String(req.session.emp_code || '').toUpperCase() === 'CEO';
+    const canonicalCeo = auth.isCeoActor(req.session);
     if (!scope.empCode && !canonicalCeo) return dormantReportError(res, Object.assign(new Error('Chi tiết QLNB này chỉ dành cho CEO hoặc nhân viên trong phạm vi được giao'), { status: 403, code: 'DORMANT_DETAIL_ROLE_REQUIRED' }));
     noStore(res);
     res.json(dormantService.detailFor({ key: req.params.key, empCode: scope.empCode, isAdmin: canonicalCeo }));
@@ -4360,7 +4365,7 @@ router.get('/admin/penalty-policies', auth.requireAuth, auth.requireAdmin, (req,
     engineVersion: employeePenaltyPolicy.ENGINE_VERSION,
     minEffectiveMonth: [employeePenaltyPolicy.MIN_EFFECTIVE_MONTH, employeeCost.currentMonth()].sort().at(-1),
     revision: employeePenaltyPolicy.revision(),
-    canEdit: String(req.session?.emp_code || '').trim().toUpperCase() === 'CEO',
+    canEdit: auth.isCeoActor(req.session),
     policies: employeePenaltyPolicy.list(),
     audit: employeePenaltyPolicy.audit().slice(0, 100),
     resolved: employeePenaltyPolicy.resolve({ period }),

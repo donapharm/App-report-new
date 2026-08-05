@@ -15,7 +15,13 @@ test('penalty policy routes are admin-read and exact CEO-write only', () => {
   assert.match(routes, /router\.get\('\/admin\/penalty-policies', auth\.requireAuth, auth\.requireAdmin/);
   assert.match(routes, /router\.post\('\/admin\/penalty-policies\/preview', auth\.requireAuth, auth\.requireAdmin, requireCeoPenaltyFormula/);
   assert.match(routes, /router\.post\('\/admin\/penalty-policies', auth\.requireAuth, auth\.requireAdmin, requireCeoPenaltyFormula, asyncJsonRoute/);
-  assert.match(routes, /String\(req\.session\?\.emp_code \|\| ''\)\.trim\(\)\.toUpperCase\(\) === 'CEO'/);
+  // ‼ SỬA 05/08 — trước đây ghim nguyên câu so chuỗi tại chỗ. Câu đó chỉ nhận
+  // `emp_code === 'CEO'`, nên đúng với tài khoản PROD nhưng lại là bản chép thứ tư
+  // của cùng một luật. Nay dùng bản chung `auth.isCeoActor`; ý nghĩa không đổi —
+  // chỉ CEO ghi được, admin khác vẫn trượt (xem `ceoIdentityGate.test.js`).
+  const at = routes.indexOf('const requireCeoPenaltyFormula =');
+  assert.ok(at > 0, 'thiếu requireCeoPenaltyFormula');
+  assert.match(routes.slice(at, at + 260), /auth\.isCeoActor\(req\.session\)/);
   assert.match(routes, /code: 'PENALTY_POLICY_CEO_REQUIRED'/);
 });
 

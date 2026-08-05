@@ -622,13 +622,40 @@ function requireAdmin(req, res, next) {
 // admin cũng KHÔNG được. `requireAdmin` cho cả 'ceo' lẫn 'admin' nên không đủ chặt
 // cho các cửa động vào tiền chi trả. Dùng đúng hàm này cho những cửa đó.
 function isCeo(role) { return String(role || '').toLowerCase() === 'ceo'; }
+
+/**
+ * ‼ AI LÀ CEO? HỎI DANH TÍNH, ĐỪNG HỎI CHUỖI ROLE. (sửa 05/08/2026)
+ *
+ * Tài khoản CEO trên PROD là `emp_code = 'CEO'` nhưng `role = 'admin'` (bot xác nhận
+ * 05/08). `isCeo(role)` vì thế trả **false** cho chính CEO ⇒ **6 cửa tiền**
+ * (approve · reject · unlock · second · record · undo) trả 403 `CEO_ONLY` cho người
+ * duy nhất được phép đi qua. Lỗi này nằm im từ lúc dựng luồng duyệt, không ai kêu vì
+ * frontend lại giấu mất nút (`PaymentSchedule.jsx` xét `role === 'ceo'`).
+ *
+ * ‼ TUYỆT ĐỐI KHÔNG sửa bằng cách cho `isAdmin` đi qua. Ba lý do:
+ *   1. Trái lệnh CEO 04/08 *"chỉ duy nhất CEO được phép ghi thôi"* — admin cũng không.
+ *   2. Làm đỏ chính `paymentLedgerRoutes.test.js` — bài test ghi lại lệnh đó.
+ *   3. Feed thông báo chỉ chiếu `amount` vào vai CEO ⇒ cho admin vào vai CEO là
+ *      **lộ tiền của toàn bộ NV**, phạm nguyên tắc trong CLAUDE.md.
+ *
+ * Nên: nhận diện theo **mã nhân viên**. Admin khác (VD `VP002`) vẫn bị chặn y như cũ.
+ *
+ * ‼ MỘT BẢN DUY NHẤT. Trước đây repo có tới 4 bản chép của luật này (2 đúng, 2 sai);
+ * thêm bản thứ hai ở bất kỳ đâu là tái lập đúng sự cố 05/08.
+ */
+const CEO_EMP_CODES = new Set(
+  String(process.env.CEO_EMP_CODES || 'CEO').split(',').map((code) => code.trim().toUpperCase()).filter(Boolean),
+);
+function isCeoActor(session) {
+  return isCeo(session?.role) || CEO_EMP_CODES.has(String(session?.emp_code || '').trim().toUpperCase());
+}
 function requireCeo(req, res, next) {
-  if (!isCeo(req.session?.role)) return res.status(403).json({ error: 'Chỉ CEO được thực hiện', code: 'CEO_ONLY' });
+  if (!isCeoActor(req.session)) return res.status(403).json({ error: 'Chỉ CEO được thực hiện', code: 'CEO_ONLY' });
   next();
 }
 
 module.exports = {
-  mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireAdmin, isAdmin, requireCeo, isCeo, scopeOf, sessionForUser, getSession,
+  mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
   // Telegram

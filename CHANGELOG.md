@@ -1,3 +1,21 @@
+### 2026-08-05 12:30 (giờ VN) — ✅ SỬA cổng quyền CEO: nhận theo DANH TÍNH, admin khác vẫn bị chặn
+
+**Chặn đã gỡ:** bot xác nhận phiên CEO trên PROD là `emp_code = CEO` · `role = admin`. Đúng như giả thiết, nên cách sửa theo danh tính đứng vững.
+
+**Đã làm** (Claude viết code đợt này vì bot báo "chưa sửa code" — tránh hai bên viết hai bản khác nhau; bot lo nghiệm thu + deploy):
+- `auth.js`: thêm `CEO_EMP_CODES` (đọc từ `process.env.CEO_EMP_CODES`, mặc định `CEO`) và **`isCeoActor(session)`** = role `ceo` **hoặc** `emp_code` nằm trong danh sách. `requireCeo` dùng hàm này.
+- Xoá **toàn bộ bản chép tay**. Tra kỹ ra **bảy** chỗ tự xét "ai là CEO", nhiều hơn con số bốn báo lúc 11:00: `auth.isCeo` · `requireCeoDelivery` (bản này còn **quên `.toUpperCase()`**) · `requireCeoQlnb` · **`requireCeoPenaltyFormula`** · **`canEdit` công thức phạt** · `routes.js:3028` · và 4 chỗ frontend. Hai chỗ in đậm chưa từng được nhắc tới trong review trước — nghĩa là **nút sửa công thức phạt cũng đang khoá nhầm CEO**.
+- `/me` trả thêm **`is_ceo`** do backend tính. Bốn chỗ frontend (`App.jsx` · `CeoNotificationBell.jsx` · `DormantReports.jsx` · `PaymentSchedule.jsx`) nay chỉ đọc cờ đó, **không tự đoán từ chuỗi role** — đúng nguyên tắc "quyền quyết ở backend".
+- Giữ nguyên `row.emp_code === 'CEO'` ở `routes.js:2207`: đó là **tìm dòng dữ liệu** của CEO trong bảng map Telegram, không phải xét quyền. Test phân biệt rõ hai việc, không cấm nhầm.
+
+**Lệnh CEO 04/08 không suy suyển:** `{role:admin, emp_code:VP002}` **vẫn trượt**. Có test khẳng định bằng hành vi (`isCeoActor !== isAdmin`), không chỉ bằng chữ, và test cấm `isCeoActor` gọi `isAdmin`.
+
+**Test:** thêm `server/test/ceoIdentityGate.test.js` (9 ca). Sửa 3 test cũ đang ghim đúng những dòng gây lỗi — ghi rõ lý do sửa ngay trong file, **không xoá ý nghĩa cũ**. Server **910/916** (vẫn đúng 6 lỗi môi trường `pdfinfo`) · web **166/166** · `npm run build` PASS.
+
+**Chưa làm, để bot:** sửa vòng gọi lại của chuông (401/403 phải DỪNG hẳn) — bot đang cầm `CeoNotificationBell.jsx` cho bản `b01a182` làm lại. Và **nghiệm thu trên PROD + xin duyệt deploy**.
+
+---
+
 ### 2026-08-05 11:55 (giờ VN) — 🔧 Bảng V2 CẮT CỤT mã hàng/mã đơn vị — mã cụt tra MISA không ra đơn nào
 
 **Lỗi:** `pad()` dùng `.slice(0, width)`, cột mã hàng rộng 22 ⇒ mã thật `G1.GE.QĐ139.1487.N3.691` (23 ký tự) in ra thành `G1.GE.QĐ139.1487.N3.69`; mã đơn vị `186.BVĐK AN PHÚ CNIII-PKĐK AN PHÚ` thành `186.BVĐK AN PHÚ CNIII-PK`. Lộ ra khi đối chiếu bảng với dòng "MẶT HÀNG" ở cuối bản in thật — hai chỗ ghi hai mã khác nhau cho cùng một dòng.
