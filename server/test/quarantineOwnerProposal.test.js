@@ -160,3 +160,55 @@ test('mặc định trỏ đúng dòng CEO đang hỏi, nhưng đổi được q
   assert.match(script, /arg\('unit', '120\.HTNT-PHARMACITY'\)/);
   assert.match(script, /arg\('order', 'DH479816174'\)/);
 });
+
+/* ── Chẩn đoán CẶP của đơn đang hỏi (thêm 06/08, hạn khoá sổ còn 2 ngày) ─────── */
+
+const { diagnoseOrderPair } = require('../src/quarantineOwnerProposal');
+
+const misa = (over = {}) => ({
+  sale_order_no: 'DH479816174', unit_code: '120.HTNT-PHARMACITY',
+  qlnb_code: 'G1.GE.QĐ139.1104.N2.162', invoice_export_amount: 1_795_600, ...over,
+});
+
+test('‼ cặp THIẾU trong bảng phân công ⇒ chỉ đúng việc App Sale phải làm', () => {
+  const d = diagnoseOrderPair({
+    orderCode: 'DH479816174', unitCode: '120.HTNT-PHARMACITY',
+    lines: [misa()],
+    catalogRows: [cat({ qlnb_code: 'MÃ-KHÁC' })],   // đơn vị có phân công, nhưng không phải cặp này
+  });
+  assert.equal(d.found, true);
+  assert.equal(d.productCode, 'G1.GE.QĐ139.1104.N2.162');
+  assert.equal(d.amount, 1_795_600);
+  assert.equal(d.inCatalog, false);
+  assert.match(d.verdict, /CẶP THIẾU/);
+  assert.match(d.action, /THÊM cặp \(120\.HTNT-PHARMACITY × G1\.GE\.QĐ139\.1104\.N2\.162\)/);
+});
+
+test('‼ cặp gán NHIỀU NV ⇒ bảo gỡ còn một, không bảo thêm mới', () => {
+  const d = diagnoseOrderPair({
+    orderCode: 'DH479816174', unitCode: '120.HTNT-PHARMACITY',
+    lines: [misa()],
+    catalogRows: [cat({ qlnb_code: 'G1.GE.QĐ139.1104.N2.162', nv_cnt: 2, emp_code: 'DN001' })],
+  });
+  assert.equal(d.nvCount, 2);
+  assert.match(d.verdict, /ĐANG GÁN 2 NV/);
+  assert.match(d.action, /GỠ còn ĐÚNG MỘT NV/);
+});
+
+test('cặp đã đúng 1 NV ⇒ nói thẳng lỗi KHÔNG nằm ở bảng phân công', () => {
+  const d = diagnoseOrderPair({
+    orderCode: 'DH479816174', unitCode: '120.HTNT-PHARMACITY',
+    lines: [misa()],
+    catalogRows: [cat({ qlnb_code: 'G1.GE.QĐ139.1104.N2.162', nv_cnt: 1, emp_code: 'DN001' })],
+  });
+  assert.equal(d.nvCount, 1);
+  assert.deepEqual(d.emps, ['DN001']);
+  assert.match(d.action, /KHÔNG phải bảng phân công/);
+});
+
+test('‼ không thấy đơn ⇒ CẤM suy ra "đã hết cách ly"', () => {
+  const d = diagnoseOrderPair({ orderCode: 'DH479816174', unitCode: '120.HTNT-PHARMACITY', lines: [misa({ sale_order_no: 'DH-KHAC' })], catalogRows: [] });
+  assert.equal(d.found, false);
+  assert.match(d.verdict, /KHÔNG TÌM THẤY ĐƠN/);
+  assert.match(d.action, /CẤM suy ra/);
+});

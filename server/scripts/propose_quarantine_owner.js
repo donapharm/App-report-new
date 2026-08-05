@@ -21,7 +21,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { proposeOwner, formatProposal } = require('../src/quarantineOwnerProposal');
+const { proposeOwner, formatProposal, diagnoseOrderPair } = require('../src/quarantineOwnerProposal');
 
 const REPORT_ROOT = path.join(__dirname, '..', '..');
 
@@ -112,6 +112,8 @@ async function main() {
   }
 
   const result = proposeOwner({ unitCode: UNIT, orderCode: ORDER, lines, catalogRows });
+  // ‼ Chỉ thẳng CẶP cần sửa, để App Sale khỏi phải tra thêm vòng nữa (hạn 08/08).
+  result.pair = diagnoseOrderPair({ orderCode: ORDER, unitCode: UNIT, lines, catalogRows });
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ unit: UNIT, order: ORDER, from: FROM, to: TO, ...result }, null, 2));
   } else {

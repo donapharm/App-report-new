@@ -119,6 +119,58 @@ function ambiguousCatalogPairs(catalogRows = []) {
     .map((row) => ({ unit: upper(row?.unit_code), product: upper(row?.qlnb_code), count: Number(row.nv_cnt) }));
 }
 
+/**
+ * ‼ CHẨN ĐOÁN ĐÚNG CẶP CỦA ĐƠN ĐANG HỎI — thêm 06/08/2026 04:45.
+ *
+ * Vì sao cần: App Sale đã gán tay `DH479816174` → DN001 lúc 16:39 ngày 05/08, nhưng ô
+ * KPI "Doanh thu chưa phân bổ" vẫn hiện **1.795.600đ**. Nguyên nhân đã phân tích:
+ * `appSaleRevenueMirror.CRM_ROWS_SQL` **ưu tiên bảng phân công** (`unit_product_employees`,
+ * khi cặp chỉ có 1 NV) hơn `employee_code` của dòng MISA. Sửa dòng MISA vì thế **không
+ * ăn thua** — phải sửa **đúng cặp (đơn vị × mã hàng)** trong bảng phân công.
+ *
+ * Hàm này chỉ ra **chính xác cặp nào** cần sửa và **sửa kiểu gì**, để bot khỏi phải
+ * chạy thêm truy vấn rồi hỏi vòng qua lại — còn 2 ngày tới hạn khoá sổ 08/08.
+ *
+ * @returns {{found:boolean, productCode:string, lines:number, amount:number,
+ *            inCatalog:boolean, nvCount:number, emps:string[], verdict:string, action:string}}
+ */
+function diagnoseOrderPair({ orderCode = '', unitCode = '', lines = [], catalogRows = [] } = {}) {
+  const wanted = text(orderCode).toUpperCase();
+  const own = (Array.isArray(lines) ? lines : []).filter((line) => (
+    text(line?.sale_order_no ?? line?.order_code ?? line?.source_order).toUpperCase() === wanted
+  ));
+  const base = { found: false, productCode: '', lines: 0, amount: 0, inCatalog: false, nvCount: 0, emps: [] };
+  if (!own.length) {
+    return {
+      ...base, unitCode: upper(unitCode), orderCode: wanted,
+      verdict: 'KHÔNG TÌM THẤY ĐƠN trong khoảng ngày đang tra',
+      action: 'Kiểm lại mã đơn và khoảng --from/--to trước khi kết luận. CẤM suy ra "đơn đã hết cách ly".',
+    };
+  }
+  const productCode = upper(own[0]?.qlnb_code ?? own[0]?.iit_code ?? own[0]?.product_code);
+  const amount = Math.round(own.reduce((sum, line) => sum + num(line?.invoice_export_amount ?? line?.revenue ?? line?.amount), 0));
+  // Mọi NV mà danh mục đang gán cho ĐÚNG cặp này (kể cả cặp đang gán nhiều người).
+  const pairRows = (Array.isArray(catalogRows) ? catalogRows : [])
+    .filter((row) => upper(row?.qlnb_code) === productCode);
+  const nvCount = pairRows.reduce((max, row) => Math.max(max, Number(row?.nv_cnt) || 0), 0);
+  const emps = [...new Set(pairRows.map((row) => upper(row?.emp_code)).filter(Boolean))].sort();
+  const hit = { ...base, found: true, unitCode: upper(unitCode), orderCode: wanted, productCode, lines: own.length, amount, inCatalog: !!pairRows.length, nvCount, emps };
+
+  if (!pairRows.length) {
+    return { ...hit,
+      verdict: 'CẶP THIẾU trong bảng phân công ⇒ App Report phải rơi về mã NV của dòng MISA, nên vẫn cách ly',
+      action: `App Sale: THÊM cặp (${upper(unitCode)} × ${productCode}) vào unit_product_employees, gán ĐÚNG MỘT NV.` };
+  }
+  if (nvCount > 1) {
+    return { ...hit,
+      verdict: `CẶP ĐANG GÁN ${nvCount} NV (${emps.join(', ')}) ⇒ danh mục mập mờ, App Report không dám lấy`,
+      action: `App Sale: GỠ còn ĐÚNG MỘT NV cho cặp (${upper(unitCode)} × ${productCode}).` };
+  }
+  return { ...hit,
+    verdict: `Cặp đã có, gán đúng 1 NV (${emps[0] || '—'}) ⇒ đường phân công KHÔNG còn lỗi`,
+    action: 'Vẫn còn cách ly thì lỗi nằm ở đường dựng dữ liệu, KHÔNG phải bảng phân công — dừng và báo Claude.' };
+}
+
 const DECISIONS = Object.freeze({
   CATALOG_AND_REVENUE: { code: 'PROPOSE', strength: 'chắc', note: 'danh mục phân công VÀ lịch sử doanh thu cùng chỉ một người' },
   CATALOG_ONLY: { code: 'PROPOSE', strength: 'khá chắc', note: 'danh mục phân công chỉ một người; đơn vị chưa có lịch sử doanh thu để đối chiếu' },
@@ -213,6 +265,18 @@ function formatProposal(result) {
     out.push(`   ${item.emp.padEnd(8)} ${String(item.empName || '').padEnd(24)} ${item.lines} dòng · ${item.orders} đơn · `
       + `${money(item.amount)} · ${Math.round(item.share * 100)}%`);
   }
+  if (result.pair) {
+    const p = result.pair;
+    out.push('');
+    out.push(`③ CẶP CỦA ĐƠN ĐANG HỎI — ${p.orderCode}`);
+    if (!p.found) out.push(`   ⛔ ${p.verdict}`);
+    else {
+      out.push(`   Mã hàng: ${p.productCode} · ${p.lines} dòng · ${money(p.amount)}`);
+      out.push(`   Trong bảng phân công: ${p.inCatalog ? `CÓ · ${p.nvCount} NV (${p.emps.join(', ') || '—'})` : 'KHÔNG'}`);
+      out.push(`   ⇒ ${p.verdict}`);
+    }
+    out.push(`   ➜ VIỆC CẦN LÀM: ${p.action}`);
+  }
   if (result.warnings.length) {
     out.push('');
     out.push('⚠ LƯU Ý');
@@ -223,6 +287,6 @@ function formatProposal(result) {
 
 module.exports = {
   DOMINANT_LINE_SHARE, DECISIONS,
-  attributableEmp, tallyRevenueByEmployee, tallyCatalogByEmployee, ambiguousCatalogPairs,
+  attributableEmp, tallyRevenueByEmployee, tallyCatalogByEmployee, ambiguousCatalogPairs, diagnoseOrderPair,
   proposeOwner, formatProposal,
 };

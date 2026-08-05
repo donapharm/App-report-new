@@ -1,3 +1,26 @@
+### 2026-08-06 05:00 (giờ VN) — 🔧 V1: script tự chỉ ra ĐÚNG CẶP cần sửa — cắt vòng hỏi qua lại giữa hai bot
+
+**Vì sao làm lúc này:** hạn khoá sổ **08/08 còn 2 ngày**, mà V1 đang kẹt ở vòng lặp: App Report đo → báo CEO → CEO chuyển App Sale → App Sale hỏi lại cặp nào → đo tiếp. Mỗi vòng mất nửa ngày.
+
+**Thêm `diagnoseOrderPair()`** vào `quarantineOwnerProposal.js` + in thành khối ③ trong `propose_quarantine_owner.js`. Một lệnh chạy ra luôn **việc cụ thể App Sale phải làm**:
+
+```
+③ CẶP CỦA ĐƠN ĐANG HỎI — DH479816174
+   Mã hàng: G1.GE.QĐ139.1104.N2.162 · 1 dòng · 1.795.600đ
+   Trong bảng phân công: KHÔNG
+   ⇒ CẶP THIẾU ⇒ App Report rơi về mã NV của dòng MISA, nên vẫn cách ly
+   ➜ VIỆC CẦN LÀM: App Sale THÊM cặp (120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162)
+     vào unit_product_employees, gán ĐÚNG MỘT NV.
+```
+
+Ba kết luận có thể ra, mỗi cái kèm việc khác nhau: **cặp thiếu** ⇒ thêm · **cặp gán >1 NV** ⇒ gỡ còn một · **cặp đã đúng 1 NV** ⇒ nói thẳng *"lỗi KHÔNG nằm ở bảng phân công, dừng và báo Claude"*. Không tìm thấy đơn ⇒ **cấm suy ra "đã hết cách ly"**, bắt kiểm lại tham số.
+
+Bốn test mới khoá cả bốn nhánh. Server **927 bài · 921 PASS · 6 lỗi `pdfinfo`** môi trường — không phát sinh lỗi mới.
+
+Vẫn giữ nguyên: script **chỉ đọc**, không `UPDATE`/`INSERT`; việc gán do App Sale làm.
+
+---
+
 ### 2026-08-06 04:00 (giờ VN) — ⛔ Rollback QUÁ SÂU: PROD tụt về `bf3c7c5`, con số `145,7%` gây hiểu nhầm QUAY LẠI màn hình CEO
 
 Bot cutover `b87fbaa`, acceptance FAIL, rollback về **`bf3c7c5`**. Hai vấn đề, cái thứ hai nghiêm trọng hơn cái thứ nhất.
