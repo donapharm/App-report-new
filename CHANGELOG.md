@@ -1,3 +1,23 @@
+### 2026-08-06 05:15 (giờ VN) — ✅ Đóng lý do FAIL #2: **cache nguội, không phải lỗi `b87fbaa`** — và viết lại cổng (b)
+
+Bot đưa PROD về `3eac0a9` (đúng lệnh "bản tốt gần nhất đã nghiệm thu"), forecast hiện `— · đã qua 3/21 ngày làm việc` ✅, rồi **đối chứng cache nguội trên chính baseline**:
+
+| Lần tải trên `3eac0a9` | Kết quả |
+|---|---|
+| Lần đầu sau deploy | **0/0 dòng · ba ô KPI `—`** |
+| Sau ~1 phút, làm mới | **605/605 dòng** · CP/DT 8,1% · chưa phân bổ 1.795.600đ · khớp 99,0% |
+
+⇒ **Baseline tốt cũng "—" ở lần tải đầu.** Đúng giả thuyết 04:00: bảng 21 NV phải dựng lại từ DataHub, chưa kịp thì các ô **fail-closed về `—` đúng thiết kế**. FAIL #2 **không chứng minh lỗi `b87fbaa`** — đóng, không điều tra thêm.
+
+**Cổng (b) viết lại thành LUẬT** (lần thứ tư sửa kiểu ghim-số-cứng trong hai ngày):
+> Lần tải đầu sau deploy **được phép** hiện `—` (cache nguội, 0/0 dòng). Chờ ~1 phút rồi **Làm mới**: từ lúc đó ba ô **phải có số**. **Chỉ FAIL nếu sau 1 phút vẫn `—`.**
+
+Bot đã tự ghi hai luật vào quy trình: rollback về **bản tốt gần nhất đã nghiệm thu**, và luôn dùng **tiêu chí acceptance mới nhất**. Đây là hai nguyên nhân trực tiếp của hai lần báo động giả đêm qua.
+
+**‼ Còn một mâu thuẫn chưa gỡ:** hai báo cáo gần nhau nói khác nhau về PROD — một bản ghi `b87fbaa` (acceptance (c) PASS, backup `b821be1e…`), bản này ghi `3eac0a9` và *"chưa cutover lại b87fbaa"*. Chưa xác định được bản nào là hiện tại ⇒ **đã hỏi lại, không suy đoán**. Nếu PROD đang là `3eac0a9` thì **cảnh báo lượt ưu tiên chưa lên**: NV vẫn bấm được "Xin nhận sớm" ở kỳ T07 mà không được cảnh báo gì, dù sớm nhất là 31/08.
+
+---
+
 ### 2026-08-06 05:00 (giờ VN) — 🔧 V1: script tự chỉ ra ĐÚNG CẶP cần sửa — cắt vòng hỏi qua lại giữa hai bot
 
 **Vì sao làm lúc này:** hạn khoá sổ **08/08 còn 2 ngày**, mà V1 đang kẹt ở vòng lặp: App Report đo → báo CEO → CEO chuyển App Sale → App Sale hỏi lại cặp nào → đo tiếp. Mỗi vòng mất nửa ngày.
