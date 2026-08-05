@@ -225,7 +225,7 @@ export default function PaymentSchedule({ me, desktop }) {
       </>}
     </div>}
 
-    {periodEnded && <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
+    {periodEnded && <PaymentSchedulePanel schedule={model.paymentSchedule} earlyQuota={model.earlyQuota} allEmployees={allEmployees} loading={loading}
       canRecord={!!me?.is_ceo}
       empCode={admin ? selectedEmp : String(me?.emp_code || '')}
       focusKey={focusKey}

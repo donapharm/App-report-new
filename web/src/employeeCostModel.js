@@ -780,6 +780,17 @@ export function employeeCostViewModel(payload = {}) {
         reason: String(item?.reason || ''),
       })),
     } : null,
+    // Trạng thái xin nhận sớm do backend/policy quyết. Frontend chỉ allowlist chuỗi
+    // để đeo nhãn nút; không tự tính ngày, quý hoặc lượt đã dùng.
+    earlyQuota: payload.earlyQuota && typeof payload.earlyQuota === 'object' ? {
+      allowed: payload.earlyQuota.allowed === true,
+      code: String(payload.earlyQuota.code || ''),
+      message: String(payload.earlyQuota.message || ''),
+      earliestDate: String(payload.earlyQuota.earliestDate || ''),
+      quarter: String(payload.earlyQuota.quarter || ''),
+      usedPeriod: String(payload.earlyQuota.usedPeriod || ''),
+      tableButtonLabel: String(payload.earlyQuota.tableButtonLabel || 'Xin nhận sớm'),
+    } : null,
     // SỔ "Thanh toán CP của tôi" — backend tính hết, frontend CHỈ hiển thị.
     // Không tự cộng trừ lại: mọi số ở đây phải là số backend đã kiểm bất biến.
     paymentSchedule: payload.paymentSchedule && typeof payload.paymentSchedule === 'object' ? {

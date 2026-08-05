@@ -636,7 +636,7 @@ function paymentRequestId(kind, period, key) {
   return `payment-${kind}-${period}-${key}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 }
 
-function PaymentRequestComposer({ mode, item, period, busy, reasons, reasonsError, onClose, onSubmit }) {
+function PaymentRequestComposer({ mode, item, period, busy, reasons, reasonsError, earlyPreview, previewLoading = false, previewError = '', onClose, onSubmit }) {
   const [note, setNote] = React.useState('');
   const [selectedReason, setSelectedReason] = React.useState('');
   const modalRef = React.useRef(null);
@@ -644,12 +644,15 @@ function PaymentRequestComposer({ mode, item, period, busy, reasons, reasonsErro
   const optionRef = React.useRef(null);
   const required = ['early', 'other', 'reject'].includes(mode);
   const presetMode = mode === 'early' || mode === 'reject';
-  const options = presetMode && Array.isArray(reasons?.[mode]) ? reasons[mode] : [];
+  const earlyAllowed = mode !== 'early' || earlyPreview?.allowed === true;
+  const options = presetMode && earlyAllowed && Array.isArray(reasons?.[mode]) ? reasons[mode] : [];
   const selected = options.find((option) => option.id === selectedReason) || null;
   const detailMaxLength = selected?.requiresDetail ? paymentReasonDetailMaxLength(selected) : 300;
-  const composed = presetMode ? composePaymentRequestNote(options, selectedReason, note) : {
-    ok: !required || !!note.trim(), note: note.trim(), error: required && !note.trim() ? 'Nhập nội dung.' : '',
-  };
+  const composed = presetMode
+    ? (earlyAllowed ? composePaymentRequestNote(options, selectedReason, note) : { ok: false, note: '', error: '' })
+    : {
+      ok: !required || !!note.trim(), note: note.trim(), error: required && !note.trim() ? 'Nhập nội dung.' : '',
+    };
   const title = mode === 'early' ? 'Xin nhận sớm' : mode === 'other' ? 'Nội dung khác' : mode === 'reject' ? 'Từ chối đề nghị' : 'Đề nghị nhận';
   React.useEffect(() => {
     const previousFocus = document.activeElement;
@@ -667,16 +670,29 @@ function PaymentRequestComposer({ mode, item, period, busy, reasons, reasonsErro
     return () => { document.removeEventListener('keydown', keepFocusInside); previousFocus?.focus?.(); };
   }, [onClose, presetMode]);
   const submit = () => {
-    if (!composed.ok) return;
+    if (!composed.ok || (mode === 'early' && earlyPreview?.submitDisabled !== false)) return;
     onSubmit(composed.note);
   };
   return <div className="payment-composer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={modalRef} className="payment-composer" role="dialog" aria-modal="true" aria-labelledby="payment-composer-title" aria-describedby="payment-composer-help">
       <header><div><small>{item.label} · {formatMonthLabel(period)}</small><h3 id="payment-composer-title">{title}</h3></div><button type="button" aria-label="Đóng" onClick={onClose}>×</button></header>
-      <p id="payment-composer-help">{mode === 'early' ? 'Lý do xin nhận sớm hơn hạn là bắt buộc. ' : mode === 'reject' ? 'Lý do từ chối (NV sẽ đọc, và đề nghị lại được) là bắt buộc. ' : ''}Chỉ gửi nội dung đề nghị. <b>Không nhập số tiền</b>; số tiền do hệ thống tính và giữ nguyên.</p>
+      <p id="payment-composer-help">{mode === 'early' && earlyAllowed ? 'Lý do xin nhận sớm hơn hạn là bắt buộc. ' : mode === 'reject' ? 'Lý do từ chối (NV sẽ đọc, và đề nghị lại được) là bắt buộc. ' : ''}Chỉ gửi nội dung đề nghị. <b>Không nhập số tiền</b>; số tiền do hệ thống tính và giữ nguyên.</p>
+      {mode === 'early' && previewLoading && <div className="employee-cost-match-warning payment-early-blocked" role="status">
+        <b>Đang kiểm tra ngày và lượt ưu tiên…</b>
+      </div>}
+      {mode === 'early' && !previewLoading && !!previewError && <div className="employee-cost-match-warning payment-early-blocked" role="alert">
+        <b>⛔ Không kiểm tra được quyền xin nhận sớm.</b> {previewError}
+      </div>}
+      {mode === 'early' && !previewLoading && !previewError && !earlyAllowed && <div className="employee-cost-match-warning payment-early-blocked" role="alert">
+        <b>⛔ Không thể gửi xin nhận sớm.</b> {earlyPreview?.message || 'Backend chưa xác nhận được lượt ưu tiên.'}
+      </div>}
+      {mode === 'early' && earlyAllowed && earlyPreview?.warning && <div className="payment-early-warning" role="status">
+        <b>⚠ {earlyPreview.warning.title}</b>
+        {(Array.isArray(earlyPreview.warning.lines) ? earlyPreview.warning.lines : []).map((line) => <p key={line}>{line}</p>)}
+      </div>}
       {presetMode ? <>
-        {!options.length && <div className="employee-cost-match-warning" role="alert">⛔ {reasonsError || 'Danh sách lý do chưa tải được — đã dừng để tránh gửi sai nội dung.'}</div>}
-        {!!options.length && <fieldset className="payment-reason-options">
+        {earlyAllowed && !options.length && <div className="employee-cost-match-warning" role="alert">⛔ {reasonsError || 'Danh sách lý do chưa tải được — đã dừng để tránh gửi sai nội dung.'}</div>}
+        {earlyAllowed && !!options.length && <fieldset className="payment-reason-options">
           <legend>Chọn đúng một lý do</legend>
           {options.map((option, index) => <label key={option.id}>
             <input ref={index === 0 ? optionRef : null} type="radio" name={`payment-reason-${mode}`} value={option.id}
@@ -695,31 +711,22 @@ function PaymentRequestComposer({ mode, item, period, busy, reasons, reasonsErro
           placeholder={mode === 'other' ? 'Nhập nội dung cần CEO xem…' : 'Có thể để trống…'} />
         <small>{note.length}/300 ký tự</small>
       </label>}
-      <footer><button type="button" onClick={onClose}>Hủy</button><button type="button" className="primary" disabled={busy || !composed.ok} onClick={submit}>{busy ? 'Đang gửi…' : `Gửi ${title.toLowerCase()}`}</button></footer>
+      <footer><button type="button" onClick={onClose}>Hủy</button><button type="button" className="primary"
+        disabled={busy || !composed.ok || (mode === 'early' && earlyPreview?.submitDisabled !== false)} onClick={submit}>
+        {previewLoading ? 'Đang kiểm tra…' : busy ? 'Đang gửi…' : mode === 'early' ? (earlyPreview?.submitLabel || 'Không thể gửi xin nhận sớm') : `Gửi ${title.toLowerCase()}`}
+      </button></footer>
     </section>
   </div>;
 }
 
-export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empCode, focusKey = '', requestReasons, requestReasonsError = '', onChanged }) {
+export function PaymentSchedulePanel({ schedule, earlyQuota, allEmployees, loading, canRecord, empCode, focusKey = '', requestReasons, requestReasonsError = '', onChanged }) {
   const [busy, setBusy] = React.useState('');
   const [error, setError] = React.useState('');
   const [draft, setDraft] = React.useState({ key: '', amount: '', paidAt: '' });
   const [composer, setComposer] = React.useState(null);
+  const previewInFlightRef = React.useRef(false);
 
   const [notice, setNotice] = React.useState('');
-  const run = async (label, call) => {
-    setBusy(label); setError(''); setNotice('');
-    try {
-      const result = await call();
-      setDraft({ key: '', amount: '', paidAt: '' });
-      setComposer(null);
-      // ‼ Ghi thành công NHƯNG tin không tới được thì phải NÓI RA. Im lặng ở đây là
-      // Sếp tưởng NV đã biết, NV thì không hay gì (5 NV chưa nối Telegram, 04/08).
-      if (result?.notify && result.notify.reachable === false) setNotice(result.notify.note || '');
-      await onChanged?.();
-    } catch (requestError) { setError(requestError.message || 'Không ghi được'); }
-    setBusy('');
-  };
   // Chế độ "Tất cả NV": sổ cá nhân không có nghĩa — nhưng phải NÓI RA, vì trước đây
   // trả null làm CEO mở app không thấy mục này đâu, tưởng chưa làm (CEO báo 04/08).
   if (allEmployees) return <div className="card">
@@ -743,6 +750,40 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
       </div>
     </div>;
   }
+  const run = async (label, call) => {
+    setBusy(label); setError(''); setNotice('');
+    try {
+      const result = await call();
+      setDraft({ key: '', amount: '', paidAt: '' });
+      setComposer(null);
+      // ‼ Ghi thành công NHƯNG tin không tới được thì phải NÓI RA. Im lặng ở đây là
+      // Sếp tưởng NV đã biết, NV thì không hay gì (5 NV chưa nối Telegram, 04/08).
+      if (result?.notify && result.notify.reachable === false) setNotice(result.notify.note || '');
+      await onChanged?.();
+    } catch (requestError) { setError(requestError.message || 'Không ghi được'); }
+    setBusy('');
+  };
+  const openEarlyComposer = async (item) => {
+    // Một click chỉ có đúng một preview đang bay; không để double-click tạo hai lần
+    // gọi quota/DataHub rồi kết quả cũ ghi đè kết quả mới.
+    if (previewInFlightRef.current) return;
+    previewInFlightRef.current = true;
+    setError(''); setNotice('');
+    setComposer({ mode: 'early', item, earlyPreview: null, previewLoading: true, previewError: '' });
+    try {
+      const data = await api.paymentEarlyPreview({ emp: empCode, period: schedule.period, key: item.key });
+      if (!data?.preview || typeof data.preview !== 'object') throw new Error('Backend chưa trả trạng thái xin nhận sớm.');
+      setComposer((current) => current?.mode === 'early' && current.item?.key === item.key
+        ? { ...current, earlyPreview: data.preview, previewLoading: false, previewError: '' }
+        : current);
+    } catch (requestError) {
+      setComposer((current) => current?.mode === 'early' && current.item?.key === item.key
+        ? { ...current, earlyPreview: null, previewLoading: false, previewError: requestError.message || 'Đã dừng để tránh gửi sai.' }
+        : current);
+    } finally {
+      previewInFlightRef.current = false;
+    }
+  };
   return <div className="card">
     <div className="section-head">Thanh toán CP của tôi <small>· kỳ {formatMonthLabel(schedule.period)}</small></div>
     {!schedule.invariantOk && <div className="employee-cost-match-warning" role="alert">
@@ -801,8 +842,8 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
                 {item.canRequest && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'request', item })}>
                   Đề nghị nhận
                 </button>}
-                {item.canRequestUnlock && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'early', item })}>
-                  Xin nhận sớm
+                {item.canRequestUnlock && <button type="button" disabled={!!busy} onClick={() => openEarlyComposer(item)}>
+                  {earlyQuota?.tableButtonLabel || 'Xin nhận sớm'}
                 </button>}
                 {!canRecord && item.flowState !== 'paid' && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'other', item })}>
                   Nội dung khác
@@ -829,7 +870,8 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
       </table>
     </div>
     {composer && <PaymentRequestComposer mode={composer.mode} item={composer.item} period={schedule.period} busy={!!busy}
-      reasons={requestReasons} reasonsError={requestReasonsError}
+      reasons={requestReasons} reasonsError={requestReasonsError} earlyPreview={composer.earlyPreview}
+      previewLoading={composer.previewLoading} previewError={composer.previewError}
       onClose={() => setComposer(null)} onSubmit={(note) => {
         const action = composer.mode === 'early' ? 'request-unlock' : composer.mode === 'other' ? 'note' : composer.mode === 'reject' ? 'reject' : 'request';
         const requestId = paymentRequestId(composer.mode, schedule.period, composer.item.key);

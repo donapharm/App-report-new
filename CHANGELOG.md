@@ -1,3 +1,12 @@
+### 2026-08-05 20:42 (giờ VN) — Hộp Xin nhận sớm chặn trước thao tác chắc chắn hỏng
+
+- Khi mở hộp, frontend gọi đúng một preview read-only; backend dùng nguyên policy quota/ngày hiện hành và tự lấy số tiền của đúng Lần 2/Lần 3.
+- `EARLY_TOO_SOON`/`EARLY_QUOTA_USED`: không hiện lý do, tắt gửi, nói rõ mốc hoặc kỳ đã dùng; nút bảng đeo nhãn ngày backend cấp.
+- `OK`: cảnh báo vàng bắt buộc có số tiền, quý của kỳ bán hàng và câu “Sếp từ chối thì KHÔNG mất lượt”; nút gửi đổi thành “Dùng lượt ưu tiên · gửi xin nhận sớm”.
+- Route gửi thật vẫn chặn độc lập bằng HTTP 422; frontend không tính ngày/quý/lượt và không gửi amount.
+
+---
+
 ### 2026-08-05 20:19 (giờ VN) — KPI forecast thêm sàn tin cậy 5 ngày làm việc
 
 - Dưới 5 ngày làm việc đã qua: backend trả `—` và dán rõ `đã qua N/tổng ngày làm việc, chưa đủ để dự báo`; không xuất phần trăm dễ gây hiểu nhầm.

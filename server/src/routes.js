@@ -62,6 +62,7 @@ const notifyChannels = require('./notifyChannels');
 const paymentFlowNotify = require('./paymentFlowNotify');
 const paymentRequestReasons = require('./paymentRequestReasons');
 const earlyAdvanceQuota = require('./earlyAdvanceQuota');
+const earlyAdvancePreview = require('./earlyAdvancePreview');
 const revenueReportExport = require('./revenueReportExport');
 const ceoDeckReport = require('./report/deckReport');
 const productSearch = require('./productSearch');
@@ -1018,7 +1019,9 @@ async function employeeCostPayload(req, {
     // Trạng thái quyền ưu tiên ứng sớm — để màn hình nói trước, đừng để NV bấm rồi
     // mới báo "hết lượt".
     const resolvedEarlyQuota = empCode
-      ? earlyAdvanceQuota.check(empCode, range.to, employeeCost.vnToday()) : null;
+      ? earlyAdvancePreview.decorateQuotaForTable(
+        earlyAdvanceQuota.check(empCode, range.to, employeeCost.vnToday()),
+      ) : null;
 
     return {
       ...payload,
@@ -2349,6 +2352,34 @@ router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(a
   return res.json({ ok: true, duplicate, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
 }));
 
+// Preview READ-ONLY khi mở hộp "Xin nhận sớm". Frontend chỉ gửi kỳ + lần;
+// backend tự resolve self-scope, dựng lại đúng sổ và ghép số tiền với policy hiện hành.
+// Không ghi audit/quota/ledger và không nhận amount từ client.
+router.post('/employee-cost/payment/request-unlock-preview', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const { empCode, period, key } = selfPaymentTarget(req);
+  if (!earlyAdvancePreview.INSTALLMENT_KEYS.has(key)) {
+    return res.status(400).json({ error: 'Lần nhận sớm không hợp lệ', code: 'EARLY_INSTALLMENT_INVALID' });
+  }
+  const quota = earlyAdvanceQuota.check(empCode, period, employeeCost.vnToday());
+  // A/B đã bị policy chặn thì không kéo DataHub/App Salary chỉ để lấy một số tiền
+  // không được phép gửi. C vẫn dựng sổ backend để lấy đúng tiền của chính lần đó.
+  let installment = { key };
+  if (quota.allowed === true) {
+    const payload = await employeeCostPayload(req, {
+      requestedEmp: empCode,
+      auditEvent: 'payment_early_preview',
+      suppressAudit: true,
+      rangeOverride: employeeCost.parseMonthRange({ from: period, to: period }),
+    });
+    installment = payload?.paymentSchedule?.available === true
+      ? payload.paymentSchedule.installments.find((item) => item.key === key)
+      : null;
+  }
+  const preview = earlyAdvancePreview.buildEarlyAdvancePreview({ period, key, installment, quota });
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ preview });
+}));
+
 // NV xin mở khoá để đề nghị SỚM hơn mốc — CEO chốt: phải có đường gửi yêu cầu.
 // ‼ Có HẠN MỨC: 1 lượt/quý, và không sớm hơn 30 ngày sau khi hết tháng bán hàng.
 // Hết lượt hoặc chưa tới ngày ⇒ CHẶN THẲNG ở backend, không chỉ ẩn nút.
@@ -2363,7 +2394,7 @@ router.post('/employee-cost/payment/request-unlock', auth.requireAuth, asyncJson
   const quota = earlyAdvanceQuota.check(empCode, period, employeeCost.vnToday());
   if (!quota.allowed) {
     res.set('Cache-Control', 'private, no-store');
-    return res.status(409).json({ error: quota.message, code: quota.code, quota });
+    return res.status(422).json({ error: quota.message, code: quota.code, quota });
   }
   const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
   const entry = paymentLedgerStore.requestUnlock(empCode, period, key, { actor, note, requestId });
