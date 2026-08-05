@@ -1,3 +1,17 @@
+### 2026-08-05 20:30 (giờ VN) — ⚠ Hộp "Xin nhận sớm": thiếu cảnh báo lượt ưu tiên · và đang MỜI NV làm việc chắc chắn hỏng
+
+**CEO yêu cầu:** hộp thoại phải cảnh báo mỗi quý chỉ 1 lượt ứng trước hạn, dùng rồi thì lần sau bị chặn, nên cân nhắc để dành cho kỳ nhiều tiền.
+
+**‼ Soi ảnh CEO gửi thì lòi ra lỗi nặng hơn:** ảnh chụp DN002 kỳ **07/2026**, hai nút "Xin nhận sớm" đang bấm được — nhưng `checkEarlyRequest({period:'2026-07', today:'2026-08-05'})` trả **`EARLY_TOO_SOON` · sớm nhất 31/08/2026 (còn 26 ngày)**. NV chọn lý do, bấm gửi, **chắc chắn ăn lỗi**. Hộp thoại đang mời người ta làm việc không thể thành công. Sửa cùng đợt, ưu tiên ngang phần cảnh báo.
+
+Mốc đối chiếu quý 3: T07 → 31/08 · T08 → **01/10** (khớp đúng mốc CEO chốt 04/08) · T09 → 31/10.
+
+**Spec `SPEC_EARLY_ADVANCE_WARNING.md`** — một lần gọi backend, ba trạng thái: `EARLY_TOO_SOON` và `EARLY_QUOTA_USED` ⇒ **không hiện danh sách lý do**, nút gửi tắt, nói rõ ngày/kỳ đã tiêu lượt; `OK` ⇒ hiện khối cảnh báo **trên** danh sách lý do, bắt buộc có (1) **số tiền của chính lần đang xin** (CEO bảo "để dành cho kỳ nhiều tiền" thì phải cho thấy tiền), (2) tên quý lấy từ `quarterOf(period)` — quý của KỲ BÁN HÀNG, (3) câu **"Sếp từ chối thì KHÔNG mất lượt"** — đúng sự thật kỹ thuật (`consume` chỉ chạy ở nhánh `grantUnlock`); thiếu câu này NV sợ không dám xin, hỏng cả cơ chế.
+
+Luật quota **không viết lại** — dùng nguyên `earlyAdvancePolicy.js`. Frontend chỉ render; backend vẫn phải chặn thật, ẩn nút không phải là bảo vệ.
+
+---
+
 ### 2026-08-05 20:00 (giờ VN) — 🚢 Bot báo XONG TOÀN BỘ (`bf3c7c5` lên PROD) — nhưng 2 việc CHƯA đóng, 1 ô đang hiện số gây hiểu nhầm
 
 **Đã lên PROD thật, ghi nhận:** cổng quyền CEO (nút Duyệt bấm được — thứ CEO chịu đựng cả tuần), chuông có trần retry, lý do chọn sẵn cho Xin nhận sớm/Từ chối, và 3 ô KPI hàng cuối. Không DB/migration, console 0 lỗi, rollback sẵn.
