@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from './api.js';
 import DormantPlanMetrics from './DormantPlanMetrics.jsx';
+import { createNotificationPollingLoop, notificationFailureFromSettled, notificationPollFailure } from './notificationPolling.js';
 
 const TYPE_LABEL = {
   dormant_detected: 'QLNB mới cần xử lý', plan_batch: 'Đã lập kế hoạch', ceo_feedback: 'CEO vừa phản hồi',
@@ -71,10 +72,12 @@ export default function CeoNotificationBell({ me, onNavigate }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [canRetryPolling, setCanRetryPolling] = useState(false);
   const [plans, setPlans] = useState(null);
   const [planBusy, setPlanBusy] = useState(false);
   const [planFilter, setPlanFilter] = useState({ status: 'all', query: '' });
   const planRequestRef = useRef(0);
+  const pollingRef = useRef(null);
   const bellRef = useRef(null);
   const panelRef = useRef(null);
   const isCeo = !!me?.is_ceo;   // do backend chốt, xem `/me`
@@ -83,21 +86,48 @@ export default function CeoNotificationBell({ me, onNavigate }) {
   const eligible = isCeo || isEmployee || canSeeDq;
 
   const refresh = async () => {
-    if (!eligible) return;
+    if (!eligible) return { ok: true };
     const requests = [];
     if (isCeo || isEmployee) requests.push((isCeo ? api.dormantNotifications() : api.dormantEmployeeNotifications()).then(setFeed));
     if (canSeeDq) requests.push(api.employeeCostDataQualitySummary().then((summary) => setDq({
       redCount: Number(summary.redCount || 0), redRevenueAffected: Number(summary.redRevenueAffected || 0), alert: !!summary.alert,
     })));
     const results = await Promise.allSettled(requests);
-    const failed = results.find((result) => result.status === 'rejected');
-    setError(failed ? failed.reason?.message || 'Không tải được thông báo' : '');
+    // Nếu nhiều API cùng hỏng, 401/403 luôn thắng 5xx: lỗi quyền là vĩnh viễn,
+    // không được để một lỗi server đứng trước làm chuông tiếp tục gọi mãi.
+    const failure = notificationFailureFromSettled(results);
+    if (failure) {
+      const policy = notificationPollFailure(failure);
+      setError(policy.message);
+      return { ok: false, error: failure };
+    }
+    setError('');
+    setCanRetryPolling(false);
+    return { ok: true };
   };
   useEffect(() => {
     if (!eligible) return undefined;
-    refresh();
-    const timer = window.setInterval(refresh, 60000);
-    return () => window.clearInterval(timer);
+    const polling = createNotificationPollingLoop({
+      refresh: async () => {
+        const result = await refresh();
+        if (!result.ok) throw result.error;
+      },
+      setTimeoutFn: (callback, delayMs) => window.setTimeout(callback, delayMs),
+      clearTimeoutFn: (timer) => window.clearTimeout(timer),
+      onPermanentError: (message, _error, meta) => {
+        setError(message);
+        setCanRetryPolling(!!meta?.canRetry);
+      },
+    });
+    pollingRef.current = polling;
+    polling.start();
+    const visibility = () => { if (!document.hidden) polling.runNow(); };
+    document.addEventListener('visibilitychange', visibility);
+    return () => {
+      polling.stop();
+      if (pollingRef.current === polling) pollingRef.current = null;
+      document.removeEventListener('visibilitychange', visibility);
+    };
   }, [eligible, isCeo]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return undefined;
@@ -190,8 +220,12 @@ export default function CeoNotificationBell({ me, onNavigate }) {
         {!plans ? <>
           <div className="ceo-notif-summary"><span><em>QLNB chưa đọc</em><b>{feed.unread_count || 0}</b></span><span className="warn"><em>{isCeo ? 'Đến hạn' : 'CEO phản hồi'}</em><b>{isCeo ? counts.due : counts.feedback}</b></span><span className="danger"><em>Khẩn / quá hạn</em><b>{counts.danger}</b></span>{canSeeDq && <span className="danger"><em>DQ đỏ chưa xử lý</em><b>{dq.redCount}</b></span>}</div>
           {canSeeDq && <div className={`ceo-dq-alert${dq.alert || dq.redCount ? ' danger' : ''}`}><div><b>Trung tâm Kiểm soát Dữ liệu</b><span>{dq.redCount.toLocaleString('vi-VN')} lỗi đỏ · {dq.redRevenueAffected.toLocaleString('vi-VN')} đ doanh thu ảnh hưởng</span></div><button type="button" className="primary" onClick={() => { closePanel(); onNavigate?.('employeeCost', { view: 'dq' }); }}>Mở kiểm soát dữ liệu →</button></div>}
-          <div className="ceo-notif-tools"><small>Cập nhật mỗi phút · server tự ép đúng phạm vi</small><div>{isCeo && <button type="button" className="primary" onClick={() => openPlans({})}>Xem toàn bộ kế hoạch</button>}{(isCeo || isEmployee) && <button type="button" disabled={busy || !feed.unread_count} onClick={markAll}>{busy ? 'Đang lưu…' : 'Đánh dấu đã đọc'}</button>}</div></div>
-          {error && <div className="dormant-error">{error}</div>}
+          <div className="ceo-notif-tools"><small>Cập nhật mỗi phút · lỗi mạng thử lại 20 giây và tự giãn tối đa 5 phút · server tự ép đúng phạm vi</small><div>{isCeo && <button type="button" className="primary" onClick={() => openPlans({})}>Xem toàn bộ kế hoạch</button>}{(isCeo || isEmployee) && <button type="button" disabled={busy || !feed.unread_count} onClick={markAll}>{busy ? 'Đang lưu…' : 'Đánh dấu đã đọc'}</button>}</div></div>
+          {error && <div className="dormant-error">{error}{canRetryPolling && <button type="button" onClick={() => {
+            setError('');
+            setCanRetryPolling(false);
+            pollingRef.current?.retryNow();
+          }}>Thử lại</button>}</div>}
           <div className="ceo-notif-list grouped">
             {!groupedEvents.length && <div className="empty">Chưa có thông báo QLNB.</div>}
             {groupedEvents.map((group) => <section className="ceo-notif-unit" key={group.unit_code}><h3>{group.unit_code} · {group.unit_name}<span>{group.events.length}</span></h3>{group.events.map((event) => <article key={event.id} className={`${event.severity || 'info'}${event.read_at ? ' read' : ''}`}>
