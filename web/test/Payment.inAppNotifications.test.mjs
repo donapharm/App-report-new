@@ -26,12 +26,14 @@ test('C44 uses one amber treatment and explicit badge in all three KPI contexts'
   assert.match(styles, /\.employee-cost-tone-c44/);
 });
 
-test('bell has isolated payment tab/count, audience API, adaptive polling and deep-link', () => {
+test('bell has isolated payment tab/count, bounded polling and deep-link', () => {
   assert.match(api, /paymentNotifications:/);
   assert.match(api, /paymentNotificationsRead:/);
   assert.match(bell, /paymentFeed/);
   assert.match(bell, /payment-bell-count/);
-  assert.match(bell, /document\.hidden \? 60000 : 20000/);
+  assert.match(bell, /createNotificationPollingLoop/);
+  assert.match(bell, /polling\.start\(\)/);
+  assert.match(bell, /if \(!document\.hidden\) polling\.runNow\(\)/);
   assert.match(bell, /activeSection === 'payment'/);
   assert.match(bell, /openPaymentEvent/);
   assert.match(paymentPage, /app_nav_payload/);

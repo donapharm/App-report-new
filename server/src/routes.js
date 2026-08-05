@@ -2342,14 +2342,14 @@ router.post('/employee-cost/payment/note', auth.requireAuth, asyncJsonRoute(asyn
 // nhân viên chỉ thấy cập nhật trạng thái của chính mình, không bao giờ thấy số tiền.
 router.get('/employee-cost/payment/notifications', auth.requireAuth, (req, res) => {
   res.set('Cache-Control', 'private, no-store');
-  const ceo = String(req.session?.role || '').toLowerCase() === 'ceo';
+  const ceo = auth.isCeoActor(req.session);
   const scope = auth.scopeOf(req.session);
   if (!ceo && !scope?.empCode) return res.status(403).json({ error: 'Thiếu phạm vi nhân viên', code: 'PAYMENT_NOTIFICATION_SCOPE_REQUIRED' });
   return res.json(paymentNotificationFeed.feed({ ceo, empCode: scope?.empCode }));
 });
 router.post('/employee-cost/payment/notifications/read', auth.requireAuth, (req, res) => {
   res.set('Cache-Control', 'private, no-store');
-  const ceo = String(req.session?.role || '').toLowerCase() === 'ceo';
+  const ceo = auth.isCeoActor(req.session);
   const scope = auth.scopeOf(req.session);
   if (!ceo && !scope?.empCode) return res.status(403).json({ error: 'Thiếu phạm vi nhân viên', code: 'PAYMENT_NOTIFICATION_SCOPE_REQUIRED' });
   return res.json(paymentNotificationFeed.markRead({ ceo, empCode: scope?.empCode, ids: req.body?.ids, all: req.body?.all === true }));

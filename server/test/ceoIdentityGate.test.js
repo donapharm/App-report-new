@@ -91,7 +91,7 @@ test('‼ CHỈ MỘT bản định nghĩa — bảy bản chép là nguyên nh�
   }
 });
 
-test('‼ cả 5 cửa CEO ở backend đều đi qua isCeoActor', () => {
+test('‼ mọi cửa CEO ở backend đều đi qua isCeoActor', () => {
   const routes = code(read('server', 'src', 'routes.js'));
   for (const guard of ['requireCeoDelivery', 'requireCeoQlnb', 'requireCeoPenaltyFormula']) {
     const at = routes.indexOf(`const ${guard} =`);
@@ -99,6 +99,12 @@ test('‼ cả 5 cửa CEO ở backend đều đi qua isCeoActor', () => {
     assert.match(routes.slice(at, at + 260), /auth\.isCeoActor\(req\.session\)/, `${guard} chưa dùng bản chung`);
   }
   assert.match(routes, /canEdit: auth\.isCeoActor\(req\.session\)/, 'nút sửa công thức phạt cũng phải theo danh tính');
+  const paymentFeed = routes.slice(
+    routes.indexOf("router.get('/employee-cost/payment/notifications'"),
+    routes.indexOf("for (const [path, action] of [['unlock'"),
+  );
+  assert.equal((paymentFeed.match(/auth\.isCeoActor\(req\.session\)/g) || []).length, 2,
+    'cả route đọc và đánh dấu feed thanh toán phải nhận CEO theo danh tính');
 });
 
 test('‼ backend phải NÓI cho frontend biết, frontend không được đoán', () => {
