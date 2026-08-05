@@ -1,3 +1,17 @@
+### 2026-08-05 17:00 (giờ VN) — 🔍 Review candidate KPI `c11b5a7`: 1 điểm chặn, 1 lỗ hổng của chính spec Claude
+
+**Chặn cứng — không review được:** `c11b5a7` **không có trên origin** (`git cat-file` toàn bộ nhánh: không tồn tại), file `vnWorkingDays` cũng chưa nhánh nào có. Lặp lại đúng tình huống sáng nay. Không có code trên origin thì không duyệt được, kể cả khi báo cáo đẹp.
+
+**Phần đối chiếu được thì bot ĐÚNG:** Claude chạy độc lập trên `holidays.json` + `holidayFor()` — **T08.2026 = 21 ngày làm việc**, khớp con số bot báo. Ô "chưa phân bổ" ra `1.795.600đ · 1 dòng`, khớp đúng ca `DH479816174` ⇒ ô đó bắt đúng thứ cần bắt; sau khi App Sale gán về DN001, ô này phải tự về **0đ** — một phép thử sống rất tốt.
+
+**‼ Lỗ hổng của chính spec Claude, không phải lỗi bot:** ô dự báo ra `~135,1% target` khi mới đi qua **2/21 ngày làm việc** (01/08 là T7, 02/08 CN ⇒ tới hết 04/08 chỉ có 03 và 04). Kiểm lại: 3.860.878.168 ÷ 2 × 21 ÷ 31.200.318.669 ≈ **130%** — phép tính đúng, nhưng **con số vô nghĩa**: chưa tới 10% tháng, một đơn lớn rơi vào hai ngày đó là dự báo bay lên 130%+, CEO liếc qua tưởng chắc chắn vượt đích. Spec cũ chỉ chặn ca 0 ngày, quên đặt sàn.
+
+**Sửa spec (`SPEC_KPI_HEALTH_ROW.md`, commit `5a54fc5`):** chưa đủ **5 ngày làm việc đã qua** thì KHÔNG hiện số — thay bằng `— · đã qua N/21 ngày làm việc, chưa đủ để dự báo`; ngày thứ 5–9 kèm nhãn `ước lượng sớm`. Sàn đặt một chỗ, cấm rải hằng số.
+
+**Thứ tự:** `5ba27ab` (cổng quyền CEO) vẫn CHƯA lên PROD sau vụ rollback báo động giả — việc đó mở khoá công việc hằng ngày của CEO, phải đi TRƯỚC KPI.
+
+---
+
 ### 2026-08-05 16:28 (giờ VN) — ✅ CEO GẬT V1: gán `DH479816174` → DN001
 
 **Quyết định:** CEO duyệt trực tiếp ("tôi đồng ý nhé") gán đơn cách ly `DH479816174` (MISA `341964` · Pizar-3 · **1.795.600đ** · đơn vị `120.HTNT-PHARMACITY`, đang treo vì gán nhầm VP018-telesaler) về **DN001 — tài khoản SALE** (xem mục cải chính ngay dưới: DN001 KHÔNG phải mã CEO, hai tài khoản chỉ trùng tên).
