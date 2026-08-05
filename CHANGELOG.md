@@ -1,3 +1,27 @@
+### 2026-08-05 15:03 (giờ VN) — ✅ CEO DUYỆT DEPLOY `5ba27ab` (cổng quyền CEO + chuông có trần retry)
+
+**Người duyệt:** CEO, trực tiếp, sau khi đọc bằng chứng. **Trạng thái lúc duyệt:** PROD `b49e585`, chưa đổi.
+
+**Bằng chứng đã trình:**
+- `5ba27ab` trên origin, băm đối chiếu **khớp tuyệt đối** (không phải bản trùng tên).
+- `b49e585` (đang chạy) **là tổ tiên** của `5ba27ab` ⇒ deploy là **đi tới**, không nhảy ngang sang nhánh lạ. Đây là chỗ hay sinh tai nạn, đã loại trước.
+- Server **923/923** trên máy bot (máy có `pdfinfo`) · **917/923** trên máy Claude (thiếu `pdfinfo`, 6 bài đó bỏ qua) — `917 + 6 = 923`, khớp. Web **180/180**. Build PASS.
+- `VP002` gọi feed/approve đều **403**, phản hồi **không chứa `amount`**.
+- Đủ **7 file V1/V2**, không mất gì trong lần gộp.
+
+**Sửa được gì cho CEO:** nút **Duyệt · Từ chối · Mở khoá** hiện lại và bấm ăn — trước nay bị giấu, mà có bấm cũng ăn 403, nên **CEO chưa từng duyệt được khoản nào qua app**. Nút **sửa công thức phạt** cũng vậy, cùng nguyên nhân. Chuông thôi gọi lặp vô hạn, về đúng nhịp 60s.
+
+**Đường lùi:** `git revert 5ba27ab` + gói `app-report-pre-…tgz` (đã có SHA-256).
+
+**Cổng 2 sau deploy — TOÀN LỆNH ĐỌC, không bước nào chi tiền**, làm trong 15 phút:
+`/me` tài khoản CEO ⇒ `is_ceo=true` · `/me` admin khác ⇒ `is_ceo=false` (‼ quan trọng nhất) · `/admin/penalty-policies` ⇒ `canEdit=true` · tab Thanh toán thấy đủ 3 nút (**chỉ nhìn, không bấm**) · chuông 3 phút nhịp 60s không gọi chồng. Hỏng bước nào ⇒ **lùi ngay**, không chữa nóng trên PROD.
+
+**"Bấm Duyệt ăn thật"** không còn là bước nghiệm thu — đó là chi tiền thật, không phải thao tác kiểm thử. Hạ xuống thành **quan sát lần duyệt thật đầu tiên của CEO** trong công việc bình thường, đường lùi để sẵn.
+
+**Mốc còn lại:** V3 (nhắc tin) đang bật, lượt gửi kế tiếp **12:30 thứ Bảy 08/08**. Deploy này PASS thì gỡ điều kiện tắt; không kịp thì vẫn phải tắt trước giờ đó.
+
+---
+
 ### 2026-08-05 12:30 (giờ VN) — ✅ SỬA cổng quyền CEO: nhận theo DANH TÍNH, admin khác vẫn bị chặn
 
 **Chặn đã gỡ:** bot xác nhận phiên CEO trên PROD là `emp_code = CEO` · `role = admin`. Đúng như giả thiết, nên cách sửa theo danh tính đứng vững.
