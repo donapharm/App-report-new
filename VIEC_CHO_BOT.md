@@ -4,6 +4,21 @@
 > File luôn được Claude cập nhật. Việc xong thì Claude chuyển xuống mục "ĐÃ XONG".
 > **CEO không phải chép tay gì nữa** — chỉ nhắn "pull main, đọc VIEC_CHO_BOT.md".
 
+## ‼ LUẬT BÁO CÁO — áp cho MỌI đợt, không riêng hôm nay (CEO chốt 05/08/2026)
+
+**Gặp cổng cần người duyệt thì KHÔNG được báo "đang chờ".** Phải gói thành **một câu để CEO chỉ gật**, đủ ba thứ:
+
+| | |
+|---|---|
+| **Việc sẽ làm** | chính xác cái gì, trên cái gì — không nói chung chung |
+| **Bằng chứng** | số/log/kết quả test chứng minh làm được và an toàn |
+| **Đường lui** | hỏng thì quay lại bằng cách nào, mất bao lâu |
+
+Ví dụ ĐÚNG: *"Gán `DH479816174` cho DN0xx (đang giữ 14/15 đơn khác của đơn vị này) · rollback: gỡ gán, 1 lệnh, 10 giây."*
+Ví dụ SAI: *"Đang chờ App Sale xác nhận."*
+
+Không đủ ba thứ thì **nói thẳng là chưa đủ căn cứ**, kèm số liệu đã tra — vẫn tốt hơn một câu chờ chung chung.
+
 **Cập nhật lần cuối:** 04/08/2026 19:30 GMT+7 — PROD `9b99fa6`, `origin/main` `8b0c75f`. Còn **3 commit chưa deploy** + 9 mục.
 
 ---
