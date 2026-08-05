@@ -1,3 +1,17 @@
+### 2026-08-05 16:10 (giờ VN) — ⚠ Acceptance FAIL của `5ba27ab` là BÁO ĐỘNG GIẢ — lỗi ở cổng nghiệm thu Claude viết, không phải ở bản deploy
+
+**Diễn biến:** bot deploy đúng `5ba27ab` (version `5ba27ab-20260805-143022-859`), cổng (a) `is_ceo=true` PASS, (c) `canEdit=true` PASS, nhưng (d) "thấy đủ 3 nút Duyệt/Từ chối/Mở khoá" FAIL (`actionButtons=[]`) ⇒ bot **dừng ngay và rollback về `b49e585`** đúng quy trình, backup `app-report-pre-5ba27ab-20260805-152115.tgz` (SHA-256 `d448…e85e`). Thao tác của bot chuẩn.
+
+**Chẩn đoán (soi `EmployeeCost.jsx:774–800`):** "Duyệt" chỉ hiện khi `flowState==='requested'`, "Mở khoá" khi `unlock_requested`, "Từ chối" khi có trạng thái chờ. Luồng đề nghị mới lên hôm nay, **chưa NV nào gửi đề nghị** ⇒ mọi dòng đang `plan` ⇒ **không nút nào hiện là hành vi đúng thiết kế**. Cổng (d) do Claude viết ("phải thấy đủ 3 nút") là **tiêu chí sai** — không tính tới trạng thái sổ.
+
+**Bằng chứng bản sửa chạy đúng nằm ngay trong chính kết quả FAIL:** nút "Nội dung khác" (dòng 782) chỉ hiện với người **không phải** CEO (`!canRecord`). `actionButtons=[]` nghĩa là nút đó KHÔNG hiện ⇒ `canRecord=true` ⇒ `is_ceo` đã truyền xuống panel đúng. Nếu cổng quyền hỏng, mảng đã chứa "Nội dung khác".
+
+**Cổng (d) viết lại:** (d1) khu **"Ghi nhận đã trả"** hiện (chỉ CEO thấy) · (d2) **không** có nút "Nội dung khác" · (d3) Duyệt/Từ chối/Mở khoá không bắt buộc — chỉ mọc khi có đề nghị chờ. Cổng (b) (admin khác `is_ceo=false`) lần trước bị bỏ dở vì dừng sớm — lần này phải chạy đủ a→e.
+
+**Quyết định:** deploy lại **đúng `5ba27ab`, không đổi byte nào** — phê duyệt 15:03 của CEO vẫn nguyên hiệu lực. Bài học ghi lại: tiêu chí nghiệm thu UI phải viết theo **trạng thái dữ liệu thật**, không theo danh sách nút lý tưởng.
+
+---
+
 ### 2026-08-05 15:45 (giờ VN) — ✅ CEO duyệt 3 ô KPI hàng cuối · SPEC đã viết, giao bot làm
 
 **CEO chốt** đề xuất 3 ô KPI lấp hàng cuối màn "Chi phí của tôi": **CP/DT hiệu quả chi phí** · **Doanh thu chưa phân bổ NV** · **Dự báo đạt target cuối tháng**, kèm một yêu cầu thêm: dự báo phải tính theo **ngày làm việc** — trừ **T7, CN, ngày lễ lớn và nghỉ bù** theo pháp luật VN, "để sau này không phải tính lại".
