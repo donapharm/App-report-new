@@ -6,6 +6,20 @@ import { PaymentSchedulePanel, PaymentTeamPanel, employeeOptionLabel } from './E
 
 const moneyColumn = { kind: 'money' };
 
+function paymentNavigationPayload() {
+  try {
+    const value = JSON.parse(sessionStorage.getItem('app_nav_payload') || '{}');
+    return value?.tab === 'paymentSchedule' ? value : {};
+  } catch { return {}; }
+}
+
+function paymentStartStorage(link) {
+  if (/^\d{4}-(0[1-9]|1[0-2])$/.test(link?.period || '')) {
+    return { getItem: () => JSON.stringify({ month: link.period }) };
+  }
+  return typeof window === 'undefined' ? null : window.localStorage;
+}
+
 /**
  * MENU RIÊNG "Thanh toán CP của tôi" — CEO báo 04/08: mở app không tìm thấy mục này.
  *
@@ -20,9 +34,11 @@ export default function PaymentSchedule({ me, desktop }) {
   const admin = !!me?.isAdmin;
   // ‼ F5 thì quay lại ĐÚNG THÁNG ĐANG XEM; chưa xem gì thì lấy tháng liền trước.
   // Tuyệt đối không trỏ vào tháng đang chạy — nó không bao giờ có sổ.
-  const [month, setMonth] = useState(() => paymentStartMonth(typeof window === 'undefined' ? null : window.localStorage));
+  const initialLink = useMemo(() => paymentNavigationPayload(), []);
+  const [month, setMonth] = useState(() => paymentStartMonth(paymentStartStorage(initialLink)));
   const [employees, setEmployees] = useState([]);
-  const [selectedEmp, setSelectedEmp] = useState(admin ? 'ALL' : String(me?.emp_code || ''));
+  const [selectedEmp, setSelectedEmp] = useState(admin && initialLink.emp_code ? String(initialLink.emp_code).toUpperCase() : admin ? 'ALL' : String(me?.emp_code || ''));
+  const [focusKey, setFocusKey] = useState(String(initialLink.key || ''));
   const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -35,6 +51,18 @@ export default function PaymentSchedule({ me, desktop }) {
   const [rangeSummary, setRangeSummary] = useState(null);
   const [rangeLoading, setRangeLoading] = useState(false);
   const [rangeError, setRangeError] = useState('');
+
+  useEffect(() => {
+    const navigate = (event) => {
+      const detail = event.detail || {};
+      if (detail.tab !== 'paymentSchedule') return;
+      if (/^\d{4}-(0[1-9]|1[0-2])$/.test(detail.period || '')) setMonth(detail.period);
+      if (admin && detail.emp_code) setSelectedEmp(String(detail.emp_code).toUpperCase());
+      setFocusKey(String(detail.key || ''));
+    };
+    window.addEventListener('app:navigate', navigate);
+    return () => window.removeEventListener('app:navigate', navigate);
+  }, [admin]);
 
   useEffect(() => {
     if (!admin) return;
@@ -71,6 +99,10 @@ export default function PaymentSchedule({ me, desktop }) {
 
   const model = useMemo(() => employeeCostViewModel(payload || {}), [payload]);
   const allEmployees = admin && selectedEmp === 'ALL';
+  useEffect(() => {
+    if (!focusKey || loading) return;
+    window.requestAnimationFrame(() => document.getElementById(`payment-${focusKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  }, [focusKey, loading, payload]);
 
   // Gộp khoảng chỉ có nghĩa khi đã khoá đúng MỘT nhân viên (sổ là của từng người).
   useEffect(() => {
@@ -163,7 +195,7 @@ export default function PaymentSchedule({ me, desktop }) {
           <Kpi label="Còn lại chưa nhận" value={formatEmployeeCostCell(rangeSummary.outstanding, moneyColumn)}
             sub="Lần 2 + Lần 3 cộng dồn" />
           <Kpi label="C44 · tích luỹ" value={formatEmployeeCostCell(rangeSummary.c44, moneyColumn)}
-            sub="Sổ riêng · chi trả T12" />
+            sub="CHI T12 · KHÔNG TRONG 3 LẦN" tone="employee-cost-tone-c44" />
         </div>
         {/* ‼ Kỳ thiếu nguồn KHÔNG được cộng 0 vào tổng — phải kể tên ra. */}
         {!!rangeSummary.skipped?.length && <div className="employee-cost-match-warning" role="status">
@@ -176,6 +208,7 @@ export default function PaymentSchedule({ me, desktop }) {
     {periodEnded && <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
       canRecord={!!me?.is_ceo}
       empCode={admin ? selectedEmp : String(me?.emp_code || '')}
+      focusKey={focusKey}
       onChanged={() => setTick((current) => current + 1)} />}
     {periodEnded && <PaymentTeamPanel team={model.paymentTeam} allEmployees={allEmployees} loading={loading} />}
   </div>;

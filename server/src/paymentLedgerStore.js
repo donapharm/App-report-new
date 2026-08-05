@@ -49,6 +49,44 @@ function readAll(store) {
  * ‼ Duyệt / từ chối / ghi đã trả: CHỈ CEO.
  */
 const FLOW_STATES = Object.freeze(['plan', 'unlock_requested', 'unlocked', 'requested', 'approved']);
+const NOTE_MAX_LENGTH = 300;
+
+function sanitizeNote(value, { required = false } = {}) {
+  const note = String(value == null ? '' : value)
+    .normalize('NFKC')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .trim();
+  if (note.length > NOTE_MAX_LENGTH) {
+    throw Object.assign(new Error(`Ghi chú tối đa ${NOTE_MAX_LENGTH} ký tự`), { status: 400, code: 'PAYMENT_NOTE_TOO_LONG' });
+  }
+  if (required && !note) {
+    throw Object.assign(new Error('Vui lòng nhập ghi chú'), { status: 400, code: 'PAYMENT_NOTE_REQUIRED' });
+  }
+  return note;
+}
+
+function sanitizeRequestId(value) {
+  const requestId = String(value == null ? '' : value).trim();
+  if (requestId && !/^[A-Za-z0-9._:-]{8,100}$/.test(requestId)) {
+    throw Object.assign(new Error('Mã chống gửi trùng không hợp lệ'), { status: 400, code: 'PAYMENT_REQUEST_ID_INVALID' });
+  }
+  return requestId;
+}
+
+function idempotencyRecord(entry, requestId, actor) {
+  if (!requestId) return null;
+  return entry.audit.find((record) => record.requestId === requestId && record.by === actor) || null;
+}
+
+function assertSameRetry(record, expected) {
+  if (!record) return false;
+  const same = Object.entries(expected).every(([key, value]) => record[key] === value);
+  if (!same) {
+    throw Object.assign(new Error('Mã chống gửi trùng đã được dùng cho nội dung khác'), { status: 409, code: 'PAYMENT_IDEMPOTENCY_CONFLICT' });
+  }
+  return true;
+}
 
 function emptyEntry() {
   return { secondOverride: null, paid: {}, flow: {}, audit: [] };
@@ -90,6 +128,15 @@ function readEntry(empCode, period, { store = persist } = {}) {
     flow: normalizeFlow(row.flow),
     audit: Array.isArray(row.audit) ? row.audit.slice(-AUDIT_LIMIT_PER_ENTRY) : [],
   };
+}
+
+function listEntries({ store = persist } = {}) {
+  return Object.entries(readAll(store)).map(([identity]) => {
+    const split = identity.indexOf('|');
+    const empCode = split < 0 ? '' : identity.slice(0, split);
+    const period = split < 0 ? '' : identity.slice(split + 1);
+    return { empCode, period, ...readEntry(empCode, period, { store }) };
+  }).filter((entry) => entry.empCode && entry.period);
 }
 
 function writeEntry(empCode, period, entry, store) {
@@ -183,24 +230,32 @@ const flowError = (message, code) => Object.assign(new Error(message), { status:
  * Đứng sai nấc thì TỪ CHỐI kèm nấc hiện tại — không im lặng ghi đè.
  */
 function moveFlow(empCode, period, key, nextState, {
-  actor, expect, note = '', extra = {}, now = () => new Date().toISOString(), store = persist,
+  actor, expect, note = '', noteRequired = false, requestId = '', extra = {}, now = () => new Date().toISOString(), store = persist,
 } = {}) {
   const who = requireActor(actor);
   const safeKey = requireKey(key);
   const entry = readEntry(empCode, period, { store });
-  // Đã trả rồi thì đóng, không quay lại quy trình được nữa.
+  const safeRequestId = sanitizeRequestId(requestId);
+  const retry = idempotencyRecord(entry, safeRequestId, who);
+  if (retry) {
+    const retryNote = sanitizeNote(note, { required: noteRequired });
+    if (assertSameRetry(retry, { action: `flow_${safeKey}`, to: nextState, note: retryNote })) return entry;
+  }
+  // Trạng thái nghiệp vụ được ưu tiên hơn lỗi payload mới: sau khi đã trả thì luôn báo
+  // sổ đã đóng, nhưng một retry chính xác ở trên vẫn trả thành công idempotent.
   if (entry.paid[safeKey]) throw flowError('Lần này đã ghi nhận trả — không đổi trạng thái nữa', 'PAYMENT_ALREADY_PAID');
   const current = entry.flow[safeKey]?.state || 'plan';
   if (Array.isArray(expect) && !expect.includes(current)) {
     throw flowError(`Đang ở nấc "${current}", không chuyển sang "${nextState}" được`, 'PAYMENT_FLOW_CONFLICT');
   }
+  const safeNote = sanitizeNote(note, { required: noteRequired });
   const at = now();
   entry.flow[safeKey] = {
     ...(entry.flow[safeKey] || {}),
-    state: nextState, by: who, at, note: String(note || '').slice(0, 300),
+    state: nextState, by: who, at, note: safeNote,
     ...extra,
   };
-  appendAudit(entry, { at, by: who, action: `flow_${safeKey}`, from: current, to: nextState, note: String(note || '').slice(0, 300) });
+  appendAudit(entry, { at, by: who, action: `flow_${safeKey}`, from: current, to: nextState, note: safeNote, ...(safeRequestId ? { requestId: safeRequestId } : {}) });
   return writeEntry(empCode, period, entry, store);
 }
 
@@ -210,7 +265,21 @@ const requestPayment = (empCode, period, key, options = {}) =>
 
 // NV xin mở khoá để đề nghị SỚM hơn mốc.
 const requestUnlock = (empCode, period, key, options = {}) =>
-  moveFlow(empCode, period, key, 'unlock_requested', { ...options, expect: ['plan'] });
+  moveFlow(empCode, period, key, 'unlock_requested', { ...options, expect: ['plan'], noteRequired: true });
+
+// NV gửi nội dung có cấu trúc nhưng không đổi nấc quy trình. Ledger audit là nguồn
+// bền vững; requestId giúp retry mạng không tạo hai thông báo giống nhau.
+function addNote(empCode, period, key, { actor, note, requestId = '', now = () => new Date().toISOString(), store = persist } = {}) {
+  const who = requireActor(actor);
+  const safeKey = requireKey(key);
+  const safeNote = sanitizeNote(note, { required: true });
+  const safeRequestId = sanitizeRequestId(requestId);
+  const entry = readEntry(empCode, period, { store });
+  const retry = idempotencyRecord(entry, safeRequestId, who);
+  if (assertSameRetry(retry, { action: `note_${safeKey}`, note: safeNote })) return entry;
+  appendAudit(entry, { at: now(), by: who, action: `note_${safeKey}`, note: safeNote, ...(safeRequestId ? { requestId: safeRequestId } : {}) });
+  return writeEntry(empCode, period, entry, store);
+}
 
 // CEO đồng ý cho đề nghị sớm. NV vẫn phải tự bấm đề nghị sau đó.
 const grantUnlock = (empCode, period, key, options = {}) =>
@@ -221,11 +290,16 @@ const approvePayment = (empCode, period, key, options = {}) =>
   moveFlow(empCode, period, key, 'approved', { ...options, expect: ['requested'], extra: { approvedBy: String(options.actor || '').toUpperCase() } });
 
 // CEO từ chối ⇒ QUAY VỀ KẾ HOẠCH để NV đề nghị lại (CEO chốt 04/08).
+// Lý do bắt buộc ở backend để NV luôn biết vì sao và có thể đề nghị lại đúng nội dung.
 const rejectPayment = (empCode, period, key, options = {}) =>
-  moveFlow(empCode, period, key, 'plan', { ...options, expect: ['requested', 'unlock_requested', 'unlocked', 'approved'] });
+  moveFlow(empCode, period, key, 'plan', {
+    ...options,
+    expect: ['requested', 'unlock_requested', 'unlocked', 'approved'],
+    noteRequired: true,
+  });
 
 module.exports = {
-  FILE, EDITABLE_KEYS, FLOW_STATES, AUDIT_LIMIT_PER_ENTRY, keyOf, readEntry,
+  FILE, EDITABLE_KEYS, FLOW_STATES, AUDIT_LIMIT_PER_ENTRY, NOTE_MAX_LENGTH, keyOf, readEntry, listEntries, sanitizeNote, sanitizeRequestId,
   setSecondOverride, recordPayment, undoPayment,
-  moveFlow, requestPayment, requestUnlock, grantUnlock, approvePayment, rejectPayment,
+  moveFlow, requestPayment, requestUnlock, addNote, grantUnlock, approvePayment, rejectPayment,
 };

@@ -113,3 +113,41 @@ test('bản ghi hỏng trong kho bị bỏ qua, không dựng số rác', () => 
   assert.deepEqual(entry.paid, {}, 'thiếu ngày hoặc số bậy ⇒ không tính là đã trả');
   assert.deepEqual(entry.audit, []);
 });
+
+test('ghi chú được sanitize/validate server-side; xin sớm và từ chối bắt buộc có lý do', () => {
+  const store = memStore();
+  assert.throws(() => ledger.requestUnlock('DN001', '2026-07', 'second', { actor: 'DN001', note: '   ', store }), { code: 'PAYMENT_NOTE_REQUIRED' });
+  ledger.requestPayment('DN001', '2026-07', 'second', { actor: 'DN001', store });
+  assert.throws(() => ledger.rejectPayment('DN001', '2026-07', 'second', { actor: 'CEO', note: '   ', store }), { code: 'PAYMENT_NOTE_REQUIRED' });
+  assert.throws(() => ledger.addNote('DN001', '2026-07', 'second', { actor: 'DN001', note: 'x'.repeat(301), store }), { code: 'PAYMENT_NOTE_TOO_LONG' });
+  ledger.addNote('DN001', '2026-07', 'second', { actor: 'DN001', note: '  Lý do\u0000 hợp lệ  ', requestId: 'note-001', store });
+  const entry = ledger.readEntry('DN001', '2026-07', { store });
+  assert.equal(entry.audit.at(-1).note, 'Lý do hợp lệ');
+});
+
+test('requestId makes flow and custom note retries idempotent', () => {
+  const store = memStore();
+  ledger.requestPayment('DN001', '2026-07', 'second', { actor: 'DN001', requestId: 'request-1', store });
+  ledger.requestPayment('DN001', '2026-07', 'second', { actor: 'DN001', requestId: 'request-1', store });
+  ledger.addNote('DN001', '2026-07', 'second', { actor: 'DN001', note: 'Một nội dung', requestId: 'note-001', store });
+  ledger.addNote('DN001', '2026-07', 'second', { actor: 'DN001', note: 'Một nội dung', requestId: 'note-001', store });
+  const entry = ledger.readEntry('DN001', '2026-07', { store });
+  assert.deepEqual(entry.audit.map((item) => item.action), ['flow_second', 'note_second']);
+});
+
+test('same requestId with another action, key or note fails closed', () => {
+  const store = memStore();
+  ledger.addNote('DN001', '2026-07', 'second', { actor: 'DN001', note: 'Nội dung A', requestId: 'request-conflict', store });
+  assert.throws(() => ledger.addNote('DN001', '2026-07', 'second', {
+    actor: 'DN001', note: 'Nội dung B', requestId: 'request-conflict', store,
+  }), { code: 'PAYMENT_IDEMPOTENCY_CONFLICT' });
+  assert.throws(() => ledger.addNote('DN001', '2026-07', 'final', {
+    actor: 'DN001', note: 'Nội dung A', requestId: 'request-conflict', store,
+  }), { code: 'PAYMENT_IDEMPOTENCY_CONFLICT' });
+  assert.throws(() => ledger.requestPayment('DN001', '2026-07', 'second', {
+    actor: 'DN001', requestId: 'request-conflict', store,
+  }), { code: 'PAYMENT_IDEMPOTENCY_CONFLICT' });
+  assert.throws(() => ledger.addNote('DN001', '2026-07', 'second', {
+    actor: 'DN001', note: 'Nội dung A', requestId: 'bad id', store,
+  }), { code: 'PAYMENT_REQUEST_ID_INVALID' });
+});
