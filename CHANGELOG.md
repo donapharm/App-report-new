@@ -1,3 +1,21 @@
+### 2026-08-05 09:40 (giờ VN) — ✅ V1 · V2: biến "bot đi tra đi" thành hai lệnh chạy được
+
+**Việc đã làm.** V1 và V2 trước nay là hai câu giao việc mơ hồ: tra bằng tay, mỗi người ra một kiểu, không ai kiểm lại được. Nay có **hai công cụ**, luật quyết định chốt trong code và **khoá bằng 32 test**.
+
+Kiến trúc theo đúng lối `syncExceptionClassifier`: tách **phần quyết định** (hàm thuần, test offline được) khỏi **phần lấy dữ liệu** (cần DB thật). Lý do rất cụ thể: Claude **không có đường vào DB App Sale** (proxy chặn `report.donapharm.asia`, cổng 5432 không mở), nhưng phần khó — luật gán chủ, luật chọn nhóm — vẫn phải chốt được ngay và không để ai sửa lén.
+
+**Mới:**
+- `server/src/quarantineOwnerProposal.js` + `server/scripts/propose_quarantine_owner.js` — **V1**: tra hai nguồn (bảng phân công `unit_product_employees` · lịch sử doanh thu của đơn vị) rồi in **một tên đề xuất kèm căn cứ**. VP018 bị loại khỏi mọi ứng viên. **Hai nguồn chỏi nhau, hoặc chia đều không ai áp đảo ⇒ KHÔNG đề xuất ai**, đúng lệnh CEO "cấm đoán" — nhưng vẫn in đủ cả hai bảng số để CEO tự quyết. Có ngưỡng áp đảo 80% cho trường hợp nhiều NV cùng bán, đánh dấu độ chắc **"yếu"** chứ không giả vờ chắc. Mã thoát `0` có đề xuất · `1` cần người quyết · `2` **chưa đọc được dữ liệu** — ‼ `1` và `2` cố ý tách nhau, gộp lại là báo nhầm "đã tra rồi, chịu".
+- `server/src/misaPendingLedger.js` + `server/scripts/misa_pending_detail.js` — **V2**: in bảng để kế toán chỉ điền **GHI/HUỶ**. Không ai biết chắc "Đề nghị ghi" nằm ở cột `revenue_bucket`/`revenue_status`/`mapping_status` nên script **không đoán tên trạng thái**: gom theo bộ ba trạng thái rồi **tìm nhóm cộng đúng 3.995.000đ**. Không khớp, hoặc **hai** nhóm cùng khớp ⇒ in cả bảng phân nhóm và **dừng**, không tự chọn nhóm gần giống. Khớp tới **từng đồng** — "gần đúng" chính là cách dán nhầm bảng rồi ghi nhầm doanh thu vào kỳ sắp khoá sổ. Bất biến: tổng bảng in ra = số đối chiếu, lệch là bản in hét lên "không gửi bảng này đi".
+- Cố ý **không** lọc `revenue_bucket <> 'excluded'` như bản mirror doanh thu — lọc là mất đúng những dòng cần đem đi hỏi. Đã có test khoá.
+- Cả hai script **CHỈ ĐỌC**, có test cấm `UPDATE/INSERT/DELETE/ALTER/DROP`. Việc gán thật do App Sale làm sau khi CEO gật; ghi/huỷ do kế toán làm trong MISA.
+
+**Trạng thái test:** server **897/903** (thêm 32 test mới, vẫn đúng 6 lỗi môi trường `pdfinfo` đã biết — không phát sinh lỗi mới; nền cũ 865/871). Đã chạy thử hai script không có DB: thoát đúng mã **2** kèm câu "CHƯA kết luận được gì", không im lặng, không kết luận bừa.
+
+**Còn lại của V1/V2:** phần **chạy trên máy chủ** là của bot server — dán nguyên văn output + mã thoát. Hạn **08/08** (giờ VN).
+
+---
+
 ### 2026-08-05 08:50 (giờ VN) — ⛔ KHÔNG duyệt bản "chặn bộ nhớ" · ✅ duyệt bật nhắc tin (V3)
 
 **Việc đã làm:** Claude fetch hai nhánh ứng viên vừa được đẩy lên origin và **đọc diff thật**, không kết luận theo báo cáo miệng.
