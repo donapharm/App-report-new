@@ -113,30 +113,55 @@ test('doanh thu chưa phân bổ fail closed khi nguồn lỗi hoặc tổng kh�
   assert.equal(unbalanced.sub, 'tổng chưa cân');
 });
 
-test('dự báo dùng ngày làm việc: T08 có 21 ngày, ngày 05/08 đã qua 2 và còn 19', () => {
+test('dự báo fail closed khi mới qua 2/21 ngày làm việc và giữ đủ bốn đầu vào audit', () => {
   const card = buildTargetForecast({
     period: '2026-08', today: '2026-08-05', currentRevenue: 100, target: 1_000,
   });
-  assert.equal(card.available, true);
+  assert.equal(card.available, false);
+  assert.equal(card.value, '—');
   assert.equal(card.raw.totalWorkingDays, 21);
   assert.equal(card.raw.elapsedWorkingDays, 2);
   assert.equal(card.raw.remainingWorkingDays, 19);
-  assert.equal(card.raw.forecastPct, 105);
-  assert.equal(card.raw.neededPerWorkingDay, 47);
-  assert.match(card.sub, /19 ngày làm việc/);
+  assert.equal(card.raw.currentRevenue, 100);
+  assert.equal(card.raw.target, 1_000);
+  assert.equal(card.sub, 'đã qua 2/21 ngày làm việc, chưa đủ để dự báo');
+});
+
+test('dự báo bắt đầu ở ngày làm việc thứ 5 và gắn nhãn ước lượng sớm', () => {
+  const card = buildTargetForecast({
+    period: '2026-08', today: '2026-08-08', currentRevenue: 500, target: 1_000,
+  });
+  assert.equal(card.available, true);
+  assert.equal(card.raw.totalWorkingDays, 21);
+  assert.equal(card.raw.elapsedWorkingDays, 5);
+  assert.equal(card.raw.currentRevenue, 500);
+  assert.equal(card.raw.target, 1_000);
+  assert.match(card.value, /Dự báo:/);
+  assert.match(card.sub, /ước lượng sớm/);
+});
+
+test('dự báo từ ngày làm việc thứ 10 không còn nhãn ước lượng sớm', () => {
+  const card = buildTargetForecast({
+    period: '2026-08', today: '2026-08-15', currentRevenue: 1_000, target: 2_000,
+  });
+  assert.equal(card.available, true);
+  assert.equal(card.raw.totalWorkingDays, 21);
+  assert.equal(card.raw.elapsedWorkingDays, 10);
+  assert.match(card.value, /Dự báo:/);
+  assert.doesNotMatch(card.sub, /ước lượng sớm/);
 });
 
 test('dự báo fail closed đầu tháng và khi không có target; vượt target có nhãn riêng', () => {
   const early = buildTargetForecast({ period: '2026-08', today: '2026-08-01', currentRevenue: 0, target: 1_000 });
   assert.equal(early.available, false);
   assert.equal(early.value, '—');
-  assert.match(early.sub, /chưa đủ ngày/);
+  assert.match(early.sub, /chưa đủ để dự báo/);
 
   const noTarget = buildTargetForecast({ period: '2026-08', today: '2026-08-05', currentRevenue: 100, target: null });
   assert.equal(noTarget.available, false);
   assert.equal(noTarget.sub, 'kỳ chưa có target');
 
-  const exceeded = buildTargetForecast({ period: '2026-08', today: '2026-08-05', currentRevenue: 1_100, target: 1_000 });
+  const exceeded = buildTargetForecast({ period: '2026-08', today: '2026-08-15', currentRevenue: 1_100, target: 1_000 });
   assert.equal(exceeded.available, true);
   assert.equal(exceeded.raw.exceededBy, 100);
   assert.equal(exceeded.raw.neededPerWorkingDay, null);
@@ -144,16 +169,18 @@ test('dự báo fail closed đầu tháng và khi không có target; vượt tar
 });
 
 test('dự báo năm chưa nạp lịch vẫn trừ cuối tuần và đeo cảnh báo', () => {
-  const card = buildTargetForecast({ period: '2027-01', today: '2027-01-05', currentRevenue: 100, target: 1_000 });
+  const card = buildTargetForecast({ period: '2027-01', today: '2027-01-09', currentRevenue: 100, target: 1_000 });
   assert.equal(card.available, true);
   assert.equal(card.raw.calendarMissing, true);
+  assert.equal(card.raw.elapsedWorkingDays, 5);
+  assert.match(card.sub, /ước lượng sớm/);
   assert.match(card.sub, /⚠ chưa nạp lịch nghỉ lễ 2027/);
 });
 
 test('payload hợp đồng có đúng ba card backend-owned theo thứ tự spec', () => {
   const currentPeriod = costPeriod('2026-08', { lineId: 'L1' });
   const payload = buildEmployeeCostHealthKpis({
-    period: '2026-08', today: '2026-08-05', currentPeriod,
+    period: '2026-08', today: '2026-08-15', currentPeriod,
     sourceRows: [{ source_line_id: 'L1', emp_code: 'DN001', revenue: 4_246_965_985 }],
     sourceAvailable: true, snapshotConsistent: true, target: 4_000_000_000,
   });

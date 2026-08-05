@@ -10,6 +10,11 @@ const employeeCostTable = require('./employeeCostTable');
 const syncExceptionCatalog = require('./syncExceptionCatalog');
 const vnWorkingDays = require('./vnWorkingDays');
 
+// Sàn tin cậy duy nhất cho forecast: dưới 5 ngày làm việc đã qua thì phép tính
+// vẫn đúng số học nhưng chưa đủ ý nghĩa để hiển thị như một dự báo.
+const MIN_FORECAST_ELAPSED_WORKING_DAYS = 5;
+const EARLY_FORECAST_MAX_ELAPSED_WORKING_DAYS = 9;
+
 function finite(value) {
   if (value == null || value === '' || typeof value === 'boolean') return null;
   const number = Number(value);
@@ -219,9 +224,16 @@ function buildTargetForecast({ period, today, currentRevenue, target, sourceAvai
     return unavailableCard('targetForecast', 'Dự báo đạt target cuối tháng', 'kỳ hoặc ngày dự báo không hợp lệ');
   }
   const warning = calendar.calendarMissing ? `⚠ chưa nạp lịch nghỉ lễ ${calendar.year}` : '';
-  if (elapsedWorkingDays <= 0) {
-    return unavailableCard('targetForecast', 'Dự báo đạt target cuối tháng', ['chưa đủ ngày để dự báo', warning].filter(Boolean).join(' · '), {
-      raw: { target: assignedTarget, currentRevenue: current, totalWorkingDays, elapsedWorkingDays, remainingWorkingDays, calendarMissing: calendar.calendarMissing },
+  if (elapsedWorkingDays < MIN_FORECAST_ELAPSED_WORKING_DAYS) {
+    return unavailableCard('targetForecast', 'Dự báo đạt target cuối tháng', [
+      `đã qua ${elapsedWorkingDays.toLocaleString('vi-VN')}/${totalWorkingDays.toLocaleString('vi-VN')} ngày làm việc, chưa đủ để dự báo`,
+      warning,
+    ].filter(Boolean).join(' · '), {
+      raw: {
+        target: rounded(assignedTarget), currentRevenue: rounded(current),
+        totalWorkingDays, elapsedWorkingDays, remainingWorkingDays,
+        calendarMissing: calendar.calendarMissing, calendarYear: calendar.year,
+      },
     });
   }
   const pace = current / elapsedWorkingDays;
@@ -234,7 +246,8 @@ function buildTargetForecast({ period, today, currentRevenue, target, sourceAvai
   if (exceededBy > 0) sub = `đã vượt target — +${money(exceededBy)}`;
   else if (remainingWorkingDays > 0) sub = `cần ${money(neededPerWorkingDay)}/ngày làm việc · còn ${remainingWorkingDays.toLocaleString('vi-VN')} ngày làm việc (tới hết ${monthEndLabel(period)})`;
   else sub = `đã hết ngày làm việc · còn thiếu ${money(Math.max(0, assignedTarget - current))}`;
-  if (warning) sub = `${sub} · ${warning}`;
+  const earlyEstimate = elapsedWorkingDays <= EARLY_FORECAST_MAX_ELAPSED_WORKING_DAYS ? 'ước lượng sớm' : '';
+  sub = [sub, earlyEstimate, warning].filter(Boolean).join(' · ');
   return {
     key: 'targetForecast',
     label: 'Dự báo đạt target cuối tháng',

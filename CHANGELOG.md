@@ -1,3 +1,11 @@
+### 2026-08-05 20:19 (giờ VN) — KPI forecast thêm sàn tin cậy 5 ngày làm việc
+
+- Dưới 5 ngày làm việc đã qua: backend trả `—` và dán rõ `đã qua N/tổng ngày làm việc, chưa đủ để dự báo`; không xuất phần trăm dễ gây hiểu nhầm.
+- Ngày làm việc thứ 5–9: vẫn tính forecast nhưng gắn nhãn `ước lượng sớm`; từ ngày thứ 10 bỏ nhãn.
+- Sàn đặt tại một hằng số backend có tên; test khóa đúng ba mốc 2/5/10 ngày và giữ bốn đầu vào audit (doanh thu kỳ · ngày đã qua · tổng ngày · target).
+
+---
+
 ### 2026-08-05 16:20 (giờ VN) — ✅ CEO yêu cầu: lý do "Xin nhận sớm" phải có LỰA CHỌN SẴN, không bắt gõ tay
 
 **Bối cảnh:** CEO chụp màn thấy popup trình duyệt bắt gõ lý do từng chữ. Truy ra ảnh chụp là bản CŨ `ff75a05` (04/08 22:39) còn nằm trong cache trình duyệt — bản hiện hành đã có hộp thoại trong app (`PaymentRequestComposer`). Nhưng yêu cầu vẫn đúng: hộp thoại hiện tại vẫn là ô trống bắt gõ tay.
