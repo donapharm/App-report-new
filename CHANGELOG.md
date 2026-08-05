@@ -1,3 +1,22 @@
+### 2026-08-05 21:24 (giờ VN) — ✅ CEO DUYỆT DEPLOY `b87fbaa` (sàn dự báo + cảnh báo lượt ưu tiên)
+
+**Người duyệt:** CEO, trực tiếp. **Trạng thái lúc duyệt:** PROD `bf3c7c5`, chưa đổi.
+
+**Một lần deploy xử hai việc** — Claude đã xác minh `b87fbaa` **chứa** `3eac0a9` (sàn dự báo đã duyệt lúc 21:15 nhưng chưa kịp deploy), nên không cần hai đợt.
+
+**Bằng chứng Cổng 1 (Claude tự chạy, không nhận báo cáo suông):**
+- `earlyAdvancePreview.test.js` **6/6 PASS** — đủ ba trạng thái A (`EARLY_TOO_SOON`, mốc 31/08) · B (`EARLY_QUOTA_USED`, giữ tên kỳ đã tiêu lượt) · C (`OK` kèm đủ ba thứ bắt buộc), cộng ca thiếu số tiền ⇒ fail-closed, cộng khẳng định route gửi thật vẫn chặn **422**.
+- Mốc ngày khớp policy cũ: T07 → 31/08 · T08 → **01/10** · T09 → 31/10.
+- Server **953 bài · 947 PASS · 6 lỗi `pdfinfo`** môi trường (khớp 953/953 bot báo trên máy có `pdfinfo`) · web **191/191**.
+- Frontend **chỉ render** `earlyPreview` của backend — không `quarterOf`, không trừ ngày, không đếm lượt; nút gửi **mặc định tắt**, chỉ bật khi `submitDisabled === false`.
+- Làm thêm ngoài spec, giữ nguyên vì tốt hơn: thiếu số tiền ⇒ dừng hẳn, câu *"đã dừng để tránh dùng lượt nhầm kỳ"*.
+
+**CEO thấy gì sau deploy:** ô dự báo hết hiện `145,7%` (đổi thành `— · đã qua 2/21 ngày làm việc, chưa đủ để dự báo`; hiện số lại từ **10/08** kèm nhãn *ước lượng sớm*, bỏ nhãn từ **17/08**); hộp "Xin nhận sớm" có cảnh báo lượt ưu tiên và chặn kỳ chưa tới hạn.
+
+**Đường lùi:** về `bf3c7c5` + gói backup có SHA-256. Cổng 2 **toàn lệnh đọc**, không bấm gửi gì.
+
+---
+
 ### 2026-08-05 22:00 (giờ VN) — 📄 CEO chốt: file kế toán PHẢI nạp được · nhân viên PHẢI tự mapping — spec `SPEC_UPLOAD_REAL_FILE.md`
 
 CEO trả lời **CÓ** cho câu hỏi file `01.DONA_T07.2026.xlsx` có dùng để nạp vào app không, và chốt thêm: *"đối với cột mã nhân viên thì hệ thống phải TỰ MAPPING, hoặc tại App Sale đã có cột nhân viên đó."*
