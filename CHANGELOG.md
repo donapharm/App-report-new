@@ -1,3 +1,23 @@
+### 2026-08-05 08:50 (giờ VN) — ⛔ KHÔNG duyệt bản "chặn bộ nhớ" · ✅ duyệt bật nhắc tin (V3)
+
+**Việc đã làm:** Claude fetch hai nhánh ứng viên vừa được đẩy lên origin và **đọc diff thật**, không kết luận theo báo cáo miệng.
+`origin/candidate/viec4-appreport-1ba8f44-20260802-214655` = `aa5e1b4` · `origin/review/viec4-assertion-only-54365b0` = `54365b0`; hai nhánh **chỉ khác 1 dòng** trong `server/test/employeeCostAllDeadline.test.js`. Commit `b238a9e` **không có object ở đâu cả** — bỏ khỏi mọi kế hoạch.
+
+**⛔ Không duyệt bản chặn bộ nhớ**, 5 căn cứ:
+1. Số đo của chính bot: luồng **2** ⇒ 6/21 NV xong, **15 NV bị cắt**; luồng **6** ⇒ 18/21 xong, 3 bị cắt. 15 NV hiện "chưa lấy được số" **đúng là sự cố 01/08** vừa đi chữa cả tuần.
+2. `buildConcurrency()` = `boundedInteger(value, 2, 1, 2)` ⇒ trần cứng **2**, `.env` chỉ hạ được chứ **không nâng được**. Ra PROD thấy đau là không có nút nào vặn.
+3. `assertMemoryBudget` chạy trước catalog fan-out, ngưỡng **576 MiB** (768 − 192), vượt là ném **503 cho cả request** ⇒ màn "Tất cả NV" (màn mặc định của CEO) chuyển từ "thiếu vài NV kèm nhãn" sang **trắng bảng kèm lỗi đỏ**. Đã yêu cầu bot dán **RSS thật của PROD** trước khi bàn tiếp.
+4. `54365b0` không phải "chỉ đổi tên": assertion `EMPLOYEE_COST_ALL_CONCURRENCY >= 4` nay chỉ còn canh fan-out nạp ứng lần 1 (`routes.js:1168`), còn luồng dựng bảng 21 NV dùng constant khác **bằng 2**. Claude chạy thử trên nhánh đó: **22/22 xanh** — xanh trong khi thứ nó bảo vệ đã biến mất.
+5. Rác kèm theo: `let memoGeneration = 0` khai không dùng; trường `generation` ghi vào mọi entry memo nhưng không ai đọc.
+
+Đã ghi rõ **3 đường được duyệt** (nâng trần luồng lên 6 · giữ luồng 2 nhưng nâng hạn chót ≤ 40s kèm số đo mới · chặn RAM cách khác) kèm 3 điều kiện chung — chi tiết ở `LENH_05082026.md`. Ghi nhận thêm: `memoGet` bị **viết lại** trong cùng commit (`hit.ttl` → `hit.ttlMs`, `staleMs` theo entry, dời mốc `t`); Claude tra thì không còn chỗ nào đọc `.ttl` cũ nên **không gãy**, nhưng đó là sửa lõi cache — lần sau tách commit riêng.
+
+**✅ Duyệt V3:** danh sách diễn tập đã sạch (**13 NV · 251.801.312đ**, không còn DN004/DN005/DN012/DN017 là các tin 0đ, mốc ngày in ra 05/08). Cho bật `EMP_COST_NOTIFY`/`BONUS_NOTIFY` ngay, thứ tự bắt buộc: dọn config drift → bật → **dán lại số tin đã gửi và ai không nhận được**. DN012 vẫn để ngoài danh sách cho tới khi chính chị ấy bấm Start — **cấm đoán Telegram ID**.
+
+**Trạng thái test:** server 865/871 (6 lỗi môi trường `pdfinfo` đã biết) · web 166/166 — không đổi, đợt này chỉ sửa tài liệu điều phối.
+
+---
+
 ### 2026-08-05 — ✅ ĐÓNG rủi ro DataHub: khoá đã tự nhả, kỳ khoá sổ không suy suyển
 
 **Rủi ro tiền — đóng.** Trong 2.600 event tồn: **0 event ghi/sửa** dữ liệu T06/T07. 1.481 event có nhắc T07 nhưng **toàn bộ là đọc** (`employee_cost.read`), tổng số thao tác ghi = **0**.
