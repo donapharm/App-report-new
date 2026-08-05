@@ -1,3 +1,26 @@
+### 2026-08-05 21:40 (giờ VN) — 🧪 Chạy FILE THẬT qua bộ đọc Excel: không dính lỗi ô gộp, nhưng **App Report không đọc nổi file này**
+
+CEO gửi file kế toán thật `01.DONA_T07.2026.xlsx` (93 KB, sheet `7,2026`, 796 dòng). Chạy qua đúng `upload.parseWorkbook`.
+
+**① Nỗi lo ô gộp: KHÔNG có thật.** File **0 vùng ô gộp**. Cộng tay 791 dòng dữ liệu = **10.564.572.484đ**, khớp **đúng từng đồng** với ô `SUBTOTAL` trong file. **0 dòng tiền = 0**, **0 dòng số lượng = 0**. Lỗi App Sale gặp không lây sang đây.
+
+**② Nhưng App Report KHÔNG đọc được file này.** `parseWorkbook` trả 2 lỗi, đọc **0 dòng**:
+```
+["Thiếu cột mã nhân viên (emp_code/ma_nv).","Thiếu cột doanh thu (revenue/tong_tien)."]
+Tiêu đề dò được: ["Tên nhà thầu: CÔNG TY CỔ PHẦN DONAPHARM"]
+```
+Nguyên nhân: parser cứng nhắc lấy **dòng 1 làm tiêu đề, dòng 2 trở đi là dữ liệu**. File thật lại là: dòng 1 tên nhà thầu · dòng 2 địa chỉ · dòng 3 "Tháng 07.2026" · dòng 4 dòng SUBTOTAL · **dòng 5 mới là tiêu đề** · dòng 6 trở đi mới là dữ liệu.
+
+Đây là **fail-closed đúng** (báo lỗi, không nuốt rác) — không phải lỗi toàn vẹn dữ liệu. Nhưng nghĩa là: ai bưng file chuẩn của kế toán lên upload hôm nay thì **bị từ chối thẳng**.
+
+**③ File này KHÔNG có cột nhân viên.** 16 cột: Số TT · Ngày hóa đơn · Số hóa đơn · Phân tuyến · Mã QLNB · Mã đơn vị · Tên khách hàng · Tên hàng hóa · ĐVT · Tổng số lượng bán · Đơn giá · Tổng thanh toán · % CP · Tổng thành tiền CP · Tên nhà thầu · Ghi chú. Muốn biết đơn về tay ai thì phải tra **bảng phân công (đơn vị × mã hàng)** — đúng cơ chế đã phân tích 19:10 cho `DH479816174`.
+
+**④ Ghi để hỏi, không kết luận:** tổng file 10,56 tỷ, trong khi T07 ghim **30,92 tỷ**. Nhiều khả năng file là **một phần** (một nhà thầu / một nhóm), nhưng chưa xác minh.
+
+**Việc tồn (chưa làm, chờ CEO chốt):** file này có dùng để nạp vào app không? Có ⇒ dạy parser **tự dò dòng tiêu đề** thay vì cứng dòng 1 (rẻ, an toàn, fail-closed giữ nguyên). Không ⇒ không cần làm gì. **Không tự ý sửa parser khi chưa biết file có được dùng để upload hay không.**
+
+---
+
 ### 2026-08-05 21:15 (giờ VN) — ✅ Claude DUYỆT Cổng 1 cho `3eac0a9` (sàn tin cậy ô dự báo) — tự chạy lại, không tin báo cáo suông
 
 **Lần đầu trong ngày bot đẩy đủ SHA lên origin trước khi xin duyệt** — `3eac0a9` và `bf3c7c5` đều fetch được, review được. Giữ nếp này.
