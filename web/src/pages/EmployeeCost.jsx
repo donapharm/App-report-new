@@ -2067,6 +2067,16 @@ export default function EmployeeCost({ me, onNavigate }) {
           unavailableEmps ? `⚠ chưa lấy được dữ liệu chi phí của ${unavailableEmpLabel} (${unavailablePairs.toLocaleString('vi-VN')} cặp) — KHÔNG tính vào tỷ lệ này` : '',
         ].filter(Boolean).join(' · ')
         : `${kpiMatch.matchedRows.toLocaleString('vi-VN')} khớp + ${missingPairs.toLocaleString('vi-VN')} thiếu % = ${kpiMatch.totalRows.toLocaleString('vi-VN')} cặp (đơn vị×mặt hàng) · ngưỡng ${kpiMatch.threshold}%`} />
+      {/* Hàng sức khoẻ chỉ dành cho ALL/CEO. Backend đã tính và format toàn bộ;
+          frontend render nguyên chuỗi, không tự nhân/chia để tránh số chỏi. */}
+      {allEmployees && model.healthKpis.cards.map((card) => <Kpi
+        key={card.key}
+        label={card.label}
+        value={card.value}
+        sub={card.sub}
+        tone={card.tone}
+        onClick={card.action === 'open_data_quality' ? () => setView('dq') : undefined}
+      />)}
     </div>
 
     {targetModalOpen && <TargetDetailModal

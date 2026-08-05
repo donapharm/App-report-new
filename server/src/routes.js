@@ -46,6 +46,7 @@ const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
+const employeeCostHealthKpis = require('./employeeCostHealthKpis');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
@@ -281,6 +282,9 @@ function employeeCostAllCacheKey(req, phase) {
     : { from: range.from, to: range.to };
   return [
     'employee-cost-all', phase, routeDataSignature('employee-cost-all'), 'ADMIN_ALL',
+    // Forecast phụ thuộc "hôm nay" theo GMT+7. Không để base cache 6 giờ từ
+    // ngày hôm trước giữ sai elapsed/remaining working days sau nửa đêm.
+    `vn-day=${employeeCost.vnToday()}`,
     JSON.stringify(stableCacheValue(view)),
   ].join(':');
 }
@@ -1100,6 +1104,21 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
     }
   }));
   const buildMerged = async () => {
+    // Chụp đúng một snapshot nguồn doanh thu cho ba KPI. Nếu slot đổi trong lúc
+    // fan-out 21 NV, toàn bộ KPI phụ thuộc nguồn này phải fail closed thay vì trộn
+    // hai bản. Rows được copy mảng ngay tại đây để phép cân không đọc lại store.
+    const healthSnapshotBefore = store.activeDataSignature();
+    const healthUiPeriod = employeeCost.toUiMonth(range.to);
+    const healthSourceRows = [...store.getRows({ ky: healthUiPeriod, scope: {} })];
+    const healthSourceAvailable = healthSourceRows.length > 0
+      || store.listPeriods().some((item) => String(item.ky) === healthUiPeriod);
+    const healthSyncEntry = syncExceptionStore.read(range.to);
+    const healthSyncReport = healthSyncEntry ? syncExceptionReport.buildSyncExceptionReport({
+      period: range.to,
+      source: healthSyncEntry.source,
+      included: healthSyncEntry.included,
+      exceptions: healthSyncEntry.exceptions,
+    }) : null;
     const deadlineAt = Date.now() + EMPLOYEE_COST_ALL_DEADLINE_MS;
     const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => employeeCostPayload(req, {
       requestedEmp: employee.emp_code,
@@ -1128,6 +1147,23 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       },
     });
     const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+    const healthSnapshotAfter = store.activeDataSignature();
+    const healthCurrentPeriod = (merged.periods || []).find((item) => String(item.period) === String(range.to)) || null;
+    const healthPreviousKey = employeeCostHealthKpis.previousMonth(range.to);
+    const healthPreviousPeriod = (merged.periods || []).find((item) => String(item.period) === healthPreviousKey) || null;
+    const healthTarget = targetKpiSummary(healthUiPeriod, {}, roster.map((employee) => employee.emp_code)).month?.target;
+    merged.healthKpis = employeeCostHealthKpis.buildEmployeeCostHealthKpis({
+      period: range.to,
+      today: employeeCost.vnToday(),
+      currentPeriod: healthCurrentPeriod,
+      previousPeriod: healthPreviousPeriod,
+      penalty: merged.penalty,
+      sourceRows: healthSourceRows,
+      syncReport: healthSyncReport,
+      sourceAvailable: healthSourceAvailable,
+      snapshotConsistent: healthSnapshotBefore === healthSnapshotAfter,
+      target: healthTarget,
+    });
     // ‼ NẠP KHO SỐ ỨNG LẦN 1 CHO NHỮNG NV CHƯA CÓ (CEO báo 04/08 19:30: bảng toàn
     // đội trống trơn trong khi xem từng người thì vẫn ra số).
     //

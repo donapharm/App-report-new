@@ -364,6 +364,12 @@ function employeeCostDataSignature() {
       process.env.EMPLOYEE_PENALTY_POLICY_FILE || path.join(DATA_DIR, 'employee_penalty_policies.json'),
       'employee-penalty-policies',
     ),
+    // KPI "doanh thu chưa phân bổ" đọc nhóm INCOMPLETE từ kho ngoại lệ. Kho
+    // đổi phải làm mất hiệu lực memo ALL ngay, không giữ số cũ tới 6 giờ.
+    fileSignature(
+      path.join(process.env.AUTH_DATA_DIR || path.join(DATA_DIR, 'auth'), 'sync_exceptions.json'),
+      'sync-exceptions',
+    ),
     // Ký catalog LKG theo nội dung (version+checksum) thay vì mtime — xem catalogLkgSignature.
     catalogLkgSignature(process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(DATA_DIR, 'catalog_management_lkg.json')),
     ...['employee_bonus_tiers.json', 'employee_cost_groups.json', 'employee_cost_templates.json', 'employee_cost_unit_groups.json']
