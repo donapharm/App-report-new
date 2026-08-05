@@ -1,5 +1,18 @@
 # DIRECTIVE — `vault-audit.lock` PHẢI TỰ LÀNH (gửi bên DataHub)
 
+> ## ✅ ĐÃ HOÀN THÀNH — 05/08/2026 07:14 (giờ VN)
+>
+> DataHub đã code và deploy PROD tại `de9edb7`. Nghiệm thu **4/4 PASS**:
+> tự thu hồi khi chủ chết trong **570ms** (< TTL 15s) · 21 NV × 3 vòng = **63/63, `unavailable` = 0**
+> · audit `LOCK_RECLAIMED_DEAD_OWNER` ghi đúng 1 lần · việc chạy lâu **không** bị phá khoá nhờ heartbeat.
+>
+> **Vị trí khoá (Claude tra thiếu, nay đã rõ):** repo `donapharm/data-hub-smart-app`,
+> file `server/src/ceo-vault/vaultStore.js` — nằm dưới `ceo-vault/`, **không** phải `services/`.
+> Claude chỉ tìm trong `services/` nên báo "không thấy".
+>
+> Giữ file này làm hồ sơ, **không cần làm lại**.
+
+
 > **CEO duyệt 04/08/2026, nâng ưu tiên.** Đây là **thứ duy nhất cắt được vòng lặp** đang âm thầm làm mất dữ liệu chi phí.
 
 ## 1. Sự việc — đã xảy ra thật, hai lần

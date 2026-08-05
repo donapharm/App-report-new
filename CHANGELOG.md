@@ -1,3 +1,23 @@
+### 2026-08-05 — ✅ ĐÓNG rủi ro DataHub: khoá đã tự nhả, kỳ khoá sổ không suy suyển
+
+**Rủi ro tiền — đóng.** Trong 2.600 event tồn: **0 event ghi/sửa** dữ liệu T06/T07. 1.481 event có nhắc T07 nhưng **toàn bộ là đọc** (`employee_cost.read`), tổng số thao tác ghi = **0**.
+
+`verify_frozen_periods.js` chạy trên **PROD thật**, mã thoát **0**:
+```
+✅ 06.2026  ghim 28.403.136.096đ / 2001 dòng
+✅ 07.2026  ghim 30.917.892.673đ / 2016 dòng
+```
+Claude đối chiếu lại: số này **khớp đúng** số ghim trong `revenueMaterializeGuard` — không phải chép nhầm.
+
+**Gốc rễ — đã sửa.** Khoá `vault-audit` nay có chủ (PID/host/boot/token), TTL 15 giây, heartbeat, tự thu hồi khi chủ chết, chỉ thả đúng phiên của mình. Deploy PROD DataHub tại `de9edb7`. Nghiệm thu **4/4 PASS** — tự thu hồi trong **570ms**; 21 NV × 3 vòng = **63/63, `unavailable` = 0**.
+
+Nghĩa là **vụ "nhân viên luân phiên hiện 0đ"** (01/08 và 03/08) đã hết nguyên nhân, không chỉ được giảm đau.
+
+**‼ Hai điều nói thẳng, không tô hồng:**
+
+1. **Cổng chặn "đếm TRƯỚC khi drain" thực tế KHÔNG chạy** — outbox đã tự drain xong trước khi lệnh sáng nay tới. Việc đếm là làm **sau**. Kết quả tốt là nhờ đống event đó vốn chỉ đọc, cộng với `verify_frozen_periods` xác nhận không suy suyển — **không phải nhờ cổng chặn**. Cổng đó **chưa từng được thử thật**; lần tới vẫn phải chạy đúng thứ tự.
+2. **Claude tra thiếu.** Đã báo "tra `data-hub-smart-app` không thấy khoá" — thực ra nó nằm ngay trong repo đó, ở `server/src/ceo-vault/vaultStore.js`; Claude chỉ tìm trong `server/src/services/`. Đã ghi lại vào directive để không ai đi tìm lại.
+
 ### 2026-08-05 — Diễn tập khô bắt 2 lỗi TRƯỚC KHI có tin nào bay đi
 
 Bot server chạy `dryRun` sáng 05/08 (theo lệnh Claude điều phối) — **kỹ thuật PASS nhưng nghiệm thu FAIL**, đúng như mong đợi của việc chạy thử sớm. Hai lỗi thuộc phần code, đã sửa:

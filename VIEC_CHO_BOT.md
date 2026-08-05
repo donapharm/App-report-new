@@ -209,7 +209,8 @@ Làm đúng thứ tự dưới đây, xong việc nào báo CEO việc đó:
 
 | Thứ tự | Việc | Vì sao trước |
 |---|---|---|
-| **0** | **‼ ĐỌC `LENH_05082026.md` — lệnh sáng 05/08, Claude điều phối thay CEO.** Mỗi bot đọc đúng phần của mình (A = DataHub · B = bot server · C = người). Gấp nhất: **đếm 2.600 event tồn xem có bao nhiêu cái đụng T06/T07 TRƯỚC KHI chạy**. | **NGAY** | chờ bot | bot |
+| **0** | **✅ ĐÃ ĐÓNG 05/08 07:14 — DataHub xong.** Khoá `vault-audit` đã có cơ chế tự nhả (`de9edb7`, đã lên PROD DataHub), nghiệm thu **4/4 PASS**, tự thu hồi trong **570ms** < TTL 15s. Outbox = 0, **0 event ghi vào T06/T07**. `verify_frozen_periods.js` chạy trên PROD: **mã thoát 0 — KHỚP**. Khoá nằm ở `donapharm/data-hub-smart-app` → `server/src/ceo-vault/vaultStore.js`. | — | xong | — |
+| **0a** | **‼ ĐỌC `LENH_05082026.md` — lệnh sáng 05/08, Claude điều phối thay CEO.** Mỗi bot đọc đúng phần của mình (A = DataHub · B = bot server · C = người). Gấp nhất: **đếm 2.600 event tồn xem có bao nhiêu cái đụng T06/T07 TRƯỚC KHI chạy**. | **NGAY** | chờ bot | bot |
 | **0a** | **DEPLOY `2053012`+ và MAP TELEGRAM CHO DN012** — ‼ CEO chốt 22:25: **CHỈ map DN012 (Đặng Thị Hồng Hạnh)**. Bốn NV còn lại (DN004 · DN021 · DN023 · VP004) **CHỜ CEO yêu cầu**, KHÔNG tự map. 15 NV văn phòng (VP002·VP003·VP006…VP018) **không thuộc diện nhận tin tiền**, đã khoá bằng cổng roster. | **NGAY** | chờ bot | bot |
 | **0a** | **VIỆC 3A** (ngay phía trên) — màn "Chi phí của tôi" T08 không ra số | **CEO đang bị chặn ngay lúc này** |
 | **1** | **VIỆC 3** — nghiệm thu VP018 + DN022 trên app thật | **có mốc chết 08/08** |
