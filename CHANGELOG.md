@@ -1,3 +1,19 @@
+### 2026-08-05 22:00 (giờ VN) — 📄 CEO chốt: file kế toán PHẢI nạp được · nhân viên PHẢI tự mapping — spec `SPEC_UPLOAD_REAL_FILE.md`
+
+CEO trả lời **CÓ** cho câu hỏi file `01.DONA_T07.2026.xlsx` có dùng để nạp vào app không, và chốt thêm: *"đối với cột mã nhân viên thì hệ thống phải TỰ MAPPING, hoặc tại App Sale đã có cột nhân viên đó."*
+
+**Kiểm thêm thì sửa dòng tiêu đề KHÔNG đủ.** Đối chiếu `HEADER_MAP` với 16 cột thật: **chỉ 1/16 khớp** (`Mã đơn vị`). 15 cột còn lại — kể cả `Tổng thanh toán` (doanh thu) và `Mã quản lý nội bộ` — đều rơi. Nên dù dò đúng dòng tiêu đề, parser vẫn đọc 0 dòng.
+
+**Lỗi kèm theo, nhỏ nhưng gây hên xui:** `noAccent` thay `đ`→`d` **trước** `toLowerCase()` ⇒ `đvt` ra `dvt` còn `ĐVT` ra `đvt`. Cùng tên cột, kế toán gõ hoa hay thường ra hai kết quả. Sửa thứ tự.
+
+**Năm việc trong spec:** ① tự dò dòng tiêu đề (quét 20 dòng đầu, tối thiểu 4 cột khớp, không đạt thì **vẫn từ chối** — không đoán bừa) · ② bổ sung bí danh 16 cột, **cấm** `% CP`/`Tổng thành tiền CP` rơi vào `revenue` (chi phí là SSOT của DataHub) · ③ **tự mapping NV** theo cặp (`unit_code` × `iit_code`) **dùng lại đúng logic `nv_catalog`** của `appSaleRevenueMirror`, thứ tự ưu tiên y hệt, tra không ra thì `UNALLOCATED` + mã lý do sẵn có — **không bỏ dòng, không gán bừa** · ④ đếm và báo số dòng không phải dữ liệu (796 ⇒ 791 dữ liệu, 5 bỏ) · ⑤ đối soát `Σ revenue` với ô `SUBTOTAL` (**lệch là chặn**) và bỏ trần `warnings.slice(0,50)` đang cắt mất cảnh báo.
+
+**Vòng khép kín đáng ghi:** dòng upload không tra ra người sẽ nổi lên đúng ô KPI **"Doanh thu chưa phân bổ"** vừa làm — cùng cơ chế đang bắt `DH479816174`. Một ô KPI phục vụ hai nguồn lỗi khác nhau.
+
+**Nghiệm thu bằng chính file thật:** phải ra **791 dòng · 10.564.572.484đ** (Claude đã cộng tay đối chiếu, khớp ô `SUBTOTAL` từng đồng).
+
+---
+
 ### 2026-08-05 21:40 (giờ VN) — 🧪 Chạy FILE THẬT qua bộ đọc Excel: không dính lỗi ô gộp, nhưng **App Report không đọc nổi file này**
 
 CEO gửi file kế toán thật `01.DONA_T07.2026.xlsx` (93 KB, sheet `7,2026`, 796 dòng). Chạy qua đúng `upload.parseWorkbook`.
