@@ -50,6 +50,7 @@ const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
 const paymentLedgerStore = require('./paymentLedgerStore');
+const { createPaymentNotificationFeed } = require('./paymentNotifications');
 const paymentTeamSummary = require('./paymentTeamSummary');
 const { mapWithDeadline, EMPLOYEE_COST_ALL_CONCURRENCY, EMPLOYEE_COST_ALL_DEADLINE_MS } = require('./requestDeadline');
 const syncExceptionStore = require('./syncExceptionStore');
@@ -63,6 +64,7 @@ const revenueReportExport = require('./revenueReportExport');
 const ceoDeckReport = require('./report/deckReport');
 const productSearch = require('./productSearch');
 const persist = require('./persist');
+const paymentNotificationFeed = createPaymentNotificationFeed({ persist, ledger: paymentLedgerStore });
 const diemXu = require('./diemXu');
 const { createDormantService } = require('./dormantService');
 const { createDormantReportService } = require('./dormantReport');
@@ -2255,6 +2257,12 @@ function flowStepFacts(empCode, period, key) {
 /* ---------- QUY TRÌNH ĐỀ NGHỊ NHẬN LẦN 2 / LẦN 3 (CEO chốt 04/08 21:30) ----------
    NV tự bấm đề nghị cho CHÍNH MÌNH; CEO duyệt/từ chối/mở khoá sớm.
    ‼ NV KHÔNG nhập số tiền ở bất kỳ đâu — số vẫn do backend tính. */
+function paymentRequestAlreadyProcessed(empCode, period, actor, requestId) {
+  if (!requestId) return false;
+  return paymentLedgerStore.readEntry(empCode, period).audit.some((record) =>
+    record.requestId === requestId && String(record.by || '').toUpperCase() === String(actor || '').toUpperCase());
+}
+
 function selfPaymentTarget(req) {
   const scope = auth.scopeOf(req.session);
   const own = String(scope?.empCode || req.session?.emp_code || '').trim().toUpperCase();
@@ -2268,55 +2276,101 @@ function selfPaymentTarget(req) {
   if (!employeeCostRosterRows().some((employee) => employee.emp_code === requested)) {
     throw Object.assign(new Error('Nhân viên không thuộc roster chi phí'), { status: 400, code: 'PAYMENT_EMP_NOT_IN_ROSTER' });
   }
-  return { empCode: requested, period, key: String(req.body?.key || ''), actor: req.session?.emp_code, note: req.body?.note };
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'amount')) {
+    throw Object.assign(new Error('Luồng đề nghị không nhận số tiền'), { status: 400, code: 'PAYMENT_REQUEST_AMOUNT_FORBIDDEN' });
+  }
+  const requestId = paymentLedgerStore.sanitizeRequestId(req.body?.request_id);
+  return {
+    empCode: requested, period, key: String(req.body?.key || ''), actor: req.session?.emp_code,
+    note: req.body?.note, requestId,
+  };
 }
 
 // NV bấm "Đề nghị nhận" (đã tới mốc, hoặc đã được CEO mở khoá sớm).
 router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(async (req, res) => {
-  const { empCode, period, key, actor, note } = selfPaymentTarget(req);
+  const { empCode, period, key, actor, note, requestId } = selfPaymentTarget(req);
+  const duplicate = paymentRequestAlreadyProcessed(empCode, period, actor, requestId);
   const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
-  const entry = paymentLedgerStore.requestPayment(empCode, period, key, { actor, note });
-  clearTargetDependentCache();
-  fireFlowNotice({ empCode, employeeName: employeeNameOf(empCode), period, key, from: before, to: 'requested', actor, note, ...flowStepFacts(empCode, period, key) });
+  const entry = paymentLedgerStore.requestPayment(empCode, period, key, { actor, note, requestId });
+  if (!duplicate) {
+    clearTargetDependentCache();
+    fireFlowNotice({ empCode, employeeName: employeeNameOf(empCode), period, key, from: before, to: 'requested', actor, note, ...flowStepFacts(empCode, period, key) });
+  }
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
+  return res.json({ ok: true, duplicate, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
 }));
 
 // NV xin mở khoá để đề nghị SỚM hơn mốc — CEO chốt: phải có đường gửi yêu cầu.
 // ‼ Có HẠN MỨC: 1 lượt/quý, và không sớm hơn 30 ngày sau khi hết tháng bán hàng.
 // Hết lượt hoặc chưa tới ngày ⇒ CHẶN THẲNG ở backend, không chỉ ẩn nút.
 router.post('/employee-cost/payment/request-unlock', auth.requireAuth, asyncJsonRoute(async (req, res) => {
-  const { empCode, period, key, actor, note } = selfPaymentTarget(req);
+  const { empCode, period, key, actor, note, requestId } = selfPaymentTarget(req);
+  const duplicate = paymentRequestAlreadyProcessed(empCode, period, actor, requestId);
+  if (duplicate) {
+    const entry = paymentLedgerStore.requestUnlock(empCode, period, key, { actor, note, requestId });
+    res.set('Cache-Control', 'private, no-store');
+    return res.json({ ok: true, duplicate: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
+  }
   const quota = earlyAdvanceQuota.check(empCode, period, employeeCost.vnToday());
   if (!quota.allowed) {
     res.set('Cache-Control', 'private, no-store');
     return res.status(409).json({ error: quota.message, code: quota.code, quota });
   }
   const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
-  const entry = paymentLedgerStore.requestUnlock(empCode, period, key, { actor, note });
+  const entry = paymentLedgerStore.requestUnlock(empCode, period, key, { actor, note, requestId });
   clearTargetDependentCache();
   fireFlowNotice({ empCode, employeeName: employeeNameOf(empCode), period, key, from: before, to: 'unlock_requested', actor, note, ...flowStepFacts(empCode, period, key) });
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
+  return res.json({ ok: true, duplicate: false, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
 }));
+
+// NV gửi "Nội dung khác": chỉ thêm audit/nội dung vào feed CEO, không đổi trạng thái.
+router.post('/employee-cost/payment/note', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const { empCode, period, key, actor, note, requestId } = selfPaymentTarget(req);
+  const duplicate = paymentRequestAlreadyProcessed(empCode, period, actor, requestId);
+  const entry = paymentLedgerStore.addNote(empCode, period, key, { actor, note, requestId });
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ ok: true, duplicate, emp_code: empCode, period, key, audit: entry.audit.filter((record) => !requestId || record.requestId === requestId).slice(-1) });
+}));
+
+// Feed thanh toán trong app. Backend tự ép audience: CEO thấy yêu cầu của mọi NV;
+// nhân viên chỉ thấy cập nhật trạng thái của chính mình, không bao giờ thấy số tiền.
+router.get('/employee-cost/payment/notifications', auth.requireAuth, (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const ceo = String(req.session?.role || '').toLowerCase() === 'ceo';
+  const scope = auth.scopeOf(req.session);
+  if (!ceo && !scope?.empCode) return res.status(403).json({ error: 'Thiếu phạm vi nhân viên', code: 'PAYMENT_NOTIFICATION_SCOPE_REQUIRED' });
+  return res.json(paymentNotificationFeed.feed({ ceo, empCode: scope?.empCode }));
+});
+router.post('/employee-cost/payment/notifications/read', auth.requireAuth, (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  const ceo = String(req.session?.role || '').toLowerCase() === 'ceo';
+  const scope = auth.scopeOf(req.session);
+  if (!ceo && !scope?.empCode) return res.status(403).json({ error: 'Thiếu phạm vi nhân viên', code: 'PAYMENT_NOTIFICATION_SCOPE_REQUIRED' });
+  return res.json(paymentNotificationFeed.markRead({ ceo, empCode: scope?.empCode, ids: req.body?.ids, all: req.body?.all === true }));
+});
 
 // CEO: mở khoá sớm · duyệt · từ chối. Từ chối ⇒ QUAY VỀ KẾ HOẠCH, NV đề nghị lại được.
 for (const [path, action] of [['unlock', 'grantUnlock'], ['approve', 'approvePayment'], ['reject', 'rejectPayment']]) {
   router.post(`/employee-cost/payment/${path}`, auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
     const { empCode, period, actor } = paymentTarget(req);
     const key = String(req.body?.key || '');
+    const requestId = paymentLedgerStore.sanitizeRequestId(req.body?.request_id);
+    const duplicate = paymentRequestAlreadyProcessed(empCode, period, actor, requestId);
     const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
-    const entry = paymentLedgerStore[action](empCode, period, key, { actor, note: req.body?.note });
-    // ‼ TIÊU lượt ưu tiên đúng lúc CEO ĐỒNG Ý mở khoá — không tiêu lúc NV bấm xin.
-    // Tiêu lúc xin thì CEO từ chối là NV mất trắng lượt cả quý, vô lý.
-    if (action === 'grantUnlock') earlyAdvanceQuota.consume(empCode, period, { actor });
-    clearTargetDependentCache();
-    fireFlowNotice({
-      empCode, employeeName: employeeNameOf(empCode), period, key, from: before,
-      to: entry.flow[key]?.state || 'plan', actor, note: req.body?.note, ...flowStepFacts(empCode, period, key),
-    });
+    const entry = paymentLedgerStore[action](empCode, period, key, { actor, note: req.body?.note, requestId });
+    if (!duplicate) {
+      // ‼ TIÊU lượt ưu tiên đúng lúc CEO ĐỒNG Ý mở khoá — không tiêu lúc NV bấm xin.
+      // Tiêu lúc xin thì CEO từ chối là NV mất trắng lượt cả quý, vô lý.
+      if (action === 'grantUnlock') earlyAdvanceQuota.consume(empCode, period, { actor });
+      clearTargetDependentCache();
+      fireFlowNotice({
+        empCode, employeeName: employeeNameOf(empCode), period, key, from: before,
+        to: entry.flow[key]?.state || 'plan', actor, note: req.body?.note, ...flowStepFacts(empCode, period, key),
+      });
+    }
     res.set('Cache-Control', 'private, no-store');
-    return res.json({ ok: true, emp_code: empCode, period, key, flow: entry.flow[key] || null, audit: entry.audit.slice(-5), notify: flowNotifyReach('employee', empCode) });
+    return res.json({ ok: true, duplicate, emp_code: empCode, period, key, flow: entry.flow[key] || null, audit: entry.audit.slice(-5), notify: flowNotifyReach('employee', empCode) });
   }));
 }
 

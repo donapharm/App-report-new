@@ -70,11 +70,21 @@ test('‼ duyệt · từ chối · mở khoá sớm CHỈ CEO; đề nghị th�
   assert.match(selfBlock, /PAYMENT_EMP_FORBIDDEN/);
 });
 
-test('‼ NV KHÔNG được nhập số tiền ở luồng đề nghị', () => {
+test('mọi thao tác flow dùng requestId; retry CEO không tiêu quota hoặc gửi tin lần hai', () => {
+  const source = require('fs').readFileSync(require.resolve('../src/routes'), 'utf8');
+  const flowBlock = source.slice(source.indexOf('function paymentRequestAlreadyProcessed'), source.indexOf("router.post('/employee-cost/payment/second'"));
+  assert.match(flowBlock, /sanitizeRequestId\(req\.body\?\.request_id\)/);
+  assert.match(flowBlock, /const duplicate = paymentRequestAlreadyProcessed/);
+  assert.match(flowBlock, /if \(!duplicate\) \{[\s\S]*earlyAdvanceQuota\.consume[\s\S]*fireFlowNotice/);
+  assert.match(flowBlock, /return res\.json\(\{ ok: true, duplicate,/);
+});
+
+test('‼ NV KHÔNG được nhập số tiền ở luồng đề nghị — backend từ chối field amount', () => {
   const source = require('fs').readFileSync(require.resolve('../src/routes'), 'utf8');
   const selfBlock = source.slice(source.indexOf('function selfPaymentTarget'),
     source.indexOf("for (const [path, action] of"));
-  assert.doesNotMatch(selfBlock, /req\.body\?\.amount/, 'luồng đề nghị tuyệt đối không đọc số tiền từ NV');
+  assert.match(selfBlock, /PAYMENT_REQUEST_AMOUNT_FORBIDDEN/);
+  assert.match(selfBlock, /hasOwnProperty\.call\(req\.body \|\| \{\}, 'amount'\)/);
 });
 
 test('‼ MỌI thao tác thanh toán đều phải bắn tin Telegram (CEO chốt 04/08 21:55)', () => {

@@ -206,16 +206,16 @@ function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel =
 }
 
 function CostColumnKpi({ item, coverageNote = '' }) {
-  return <div className={`kpi employee-cost-column-kpi${item.annual ? ' employee-cost-kpi-annual' : ''}`}>
+  return <div className={`kpi employee-cost-column-kpi${item.annual ? ' employee-cost-kpi-annual employee-cost-tone-c44' : ''}`}>
     <div className="label">
       <span>{item.label}</span>
-      {item.annual && <span className="employee-cost-kpi-badge">cuối năm</span>}
+      {item.annual && <span className="employee-cost-kpi-badge">CHI T12 · KHÔNG TRONG 3 LẦN</span>}
       {item.provisional && <span className="employee-cost-kpi-badge">tạm tính</span>}
     </div>
     <div className="value small">{formatEmployeeCostCell(item.value, moneyColumn)}</div>
     <div className="delta muted">{item.provisional
       ? (coverageNote || 'Tổng phần đã khớp % · chưa gồm mã thiếu %')
-      : (item.annual ? 'Khoản riêng · chi trả T12' : 'Tổng thành tiền theo cột')}</div>
+      : (item.annual ? 'Khoản riêng · chi trả T12 · không nằm trong 3 lần' : 'Tổng thành tiền theo cột')}</div>
   </div>;
 }
 
@@ -603,7 +603,7 @@ export function PaymentTeamPanel({ team, allEmployees, loading }) {
       <Kpi label="Σ Lần 2 · còn lại" value={formatEmployeeCostCell(totals.second, moneyColumn)} sub="Kế hoạch toàn đội" />
       <Kpi label="Σ Lần 3 · tất toán" value={formatEmployeeCostCell(totals.final, moneyColumn)} sub="Kế hoạch toàn đội" />
       <Kpi label="Σ C44 · cuối năm" value={formatEmployeeCostCell(totals.c44, moneyColumn)}
-        sub="Sổ riêng · tích luỹ · chi trả T12" />
+        sub="CHI T12 · KHÔNG TRONG 3 LẦN" tone="employee-cost-tone-c44" />
     </div>
     {!!team.excluded.length && <div className="employee-cost-match-warning" role="status">
       {/* Thiếu nguồn thì TÁCH RIÊNG kèm lý do — không gộp thành 0 rồi kéo tổng đội xuống. */}
@@ -631,10 +631,55 @@ export function PaymentTeamPanel({ team, allEmployees, loading }) {
   </div>;
 }
 
-export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empCode, onChanged }) {
+function paymentRequestId(kind, period, key) {
+  return `payment-${kind}-${period}-${key}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+}
+
+function PaymentRequestComposer({ mode, item, period, busy, onClose, onSubmit }) {
+  const [note, setNote] = React.useState('');
+  const modalRef = React.useRef(null);
+  const inputRef = React.useRef(null);
+  const required = ['early', 'other', 'reject'].includes(mode);
+  const title = mode === 'early' ? 'Xin nhận sớm' : mode === 'other' ? 'Nội dung khác' : mode === 'reject' ? 'Từ chối đề nghị' : 'Đề nghị nhận';
+  React.useEffect(() => {
+    const previousFocus = document.activeElement;
+    inputRef.current?.focus();
+    const keepFocusInside = (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+      if (event.key !== 'Tab') return;
+      const focusable = [...(modalRef.current?.querySelectorAll('button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])];
+      if (!focusable.length) return;
+      const first = focusable[0]; const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', keepFocusInside);
+    return () => { document.removeEventListener('keydown', keepFocusInside); previousFocus?.focus?.(); };
+  }, [onClose]);
+  const submit = () => {
+    const clean = note.trim();
+    if (required && !clean) return;
+    onSubmit(clean);
+  };
+  return <div className="payment-composer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section ref={modalRef} className="payment-composer" role="dialog" aria-modal="true" aria-labelledby="payment-composer-title" aria-describedby="payment-composer-help">
+      <header><div><small>{item.label} · {formatMonthLabel(period)}</small><h3 id="payment-composer-title">{title}</h3></div><button type="button" aria-label="Đóng" onClick={onClose}>×</button></header>
+      <p id="payment-composer-help">{mode === 'early' ? 'Lý do xin nhận sớm hơn hạn là bắt buộc. ' : mode === 'reject' ? 'Lý do từ chối (NV sẽ đọc, và đề nghị lại được) là bắt buộc. ' : ''}Chỉ gửi nội dung đề nghị. <b>Không nhập số tiền</b>; số tiền do hệ thống tính và giữ nguyên.</p>
+      <label><span>Ghi chú {required ? '· bắt buộc' : '· không bắt buộc'}</span>
+        <textarea ref={inputRef} rows="4" maxLength="300" value={note} onChange={(event) => setNote(event.target.value)}
+          placeholder={mode === 'early' ? 'Nêu lý do cần nhận sớm…' : mode === 'other' ? 'Nhập nội dung cần CEO xem…' : mode === 'reject' ? 'Nêu lý do để nhân viên biết…' : 'Có thể để trống…'} />
+        <small>{note.length}/300 ký tự</small>
+      </label>
+      <footer><button type="button" onClick={onClose}>Hủy</button><button type="button" className="primary" disabled={busy || (required && !note.trim())} onClick={submit}>{busy ? 'Đang gửi…' : `Gửi ${title.toLowerCase()}`}</button></footer>
+    </section>
+  </div>;
+}
+
+export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empCode, focusKey = '', onChanged }) {
   const [busy, setBusy] = React.useState('');
   const [error, setError] = React.useState('');
   const [draft, setDraft] = React.useState({ key: '', amount: '', paidAt: '' });
+  const [composer, setComposer] = React.useState(null);
 
   const [notice, setNotice] = React.useState('');
   const run = async (label, call) => {
@@ -642,6 +687,7 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
     try {
       const result = await call();
       setDraft({ key: '', amount: '', paidAt: '' });
+      setComposer(null);
       // ‼ Ghi thành công NHƯNG tin không tới được thì phải NÓI RA. Im lặng ở đây là
       // Sếp tưởng NV đã biết, NV thì không hay gì (5 NV chưa nối Telegram, 04/08).
       if (result?.notify && result.notify.reachable === false) setNotice(result.notify.note || '');
@@ -692,7 +738,7 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
       <Kpi label="Sổ còn nợ" value={formatEmployeeCostCell(schedule.outstanding, moneyColumn)}
         sub="Cộng dồn — lần chưa nhận không mất đi" />
       {schedule.c44 && <Kpi label="C44 · Lương cuối năm" value={formatEmployeeCostCell(schedule.c44.amount, moneyColumn)}
-        sub={schedule.c44.note} />}
+        sub="CHI T12 · KHÔNG TRONG 3 LẦN" tone="employee-cost-tone-c44" />}
     </div>
     <div className="employee-cost-table-wrap">
       <table className="employee-cost-gap-table">
@@ -700,7 +746,8 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
         <tbody>{schedule.installments.map((item) => {
           const state = PAYMENT_STATUS[item.status] || PAYMENT_STATUS.plan;
           const days = item.daysFromToday;
-          return <tr key={item.key}>
+          const pending = ['requested', 'unlock_requested'].includes(item.flowState);
+          return <tr key={item.key} id={`payment-${item.key}`} className={`${pending ? 'payment-flow-pending ' : ''}${focusKey === item.key ? 'payment-flow-focused' : ''}`.trim()}>
             <td><b>{item.label}</b></td>
             <td className="employee-cost-number"><b>{formatEmployeeCostCell(item.amount, moneyColumn)}</b></td>
             <td>{item.dueDate ? item.dueDate.split('-').reverse().join('/') : '—'}
@@ -726,32 +773,28 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
               {!!item.flowNote && <small>“{item.flowNote}”</small>}
               <div className="employee-cost-flow-actions">
                 {/* NV chỉ BẤM, không nhập số — số vẫn do backend tính. */}
-                {item.canRequest && <button type="button" disabled={!!busy}
-                  onClick={() => run(`request:${item.key}`, () => api.paymentFlow('request', { emp: empCode, period: schedule.period, key: item.key }))}>
+                {item.canRequest && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'request', item })}>
                   Đề nghị nhận
                 </button>}
-                {item.canRequestUnlock && <button type="button" disabled={!!busy}
-                  onClick={() => {
-                    const note = window.prompt('Lý do xin nhận sớm hơn hạn (Sếp sẽ đọc):', '');
-                    if (note == null) return;
-                    run(`unlock:${item.key}`, () => api.paymentFlow('request-unlock', { emp: empCode, period: schedule.period, key: item.key, note }));
-                  }}>
+                {item.canRequestUnlock && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'early', item })}>
                   Xin nhận sớm
                 </button>}
+                {!canRecord && item.flowState !== 'paid' && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'other', item })}>
+                  Nội dung khác
+                </button>}
                 {canRecord && item.flowState === 'unlock_requested' && <button type="button" disabled={!!busy}
-                  onClick={() => run(`grant:${item.key}`, () => api.paymentFlow('unlock', { emp: empCode, period: schedule.period, key: item.key }))}>
+                  onClick={() => run(`grant:${item.key}`, () => api.paymentFlow('unlock', {
+                    emp: empCode, period: schedule.period, key: item.key, requestId: paymentRequestId('grant', schedule.period, item.key),
+                  }))}>
                   Mở khoá
                 </button>}
                 {canRecord && item.flowState === 'requested' && <button type="button" disabled={!!busy}
-                  onClick={() => run(`approve:${item.key}`, () => api.paymentFlow('approve', { emp: empCode, period: schedule.period, key: item.key }))}>
+                  onClick={() => run(`approve:${item.key}`, () => api.paymentFlow('approve', {
+                    emp: empCode, period: schedule.period, key: item.key, requestId: paymentRequestId('approve', schedule.period, item.key),
+                  }))}>
                   Duyệt
                 </button>}
-                {canRecord && ['requested', 'unlock_requested', 'unlocked', 'approved'].includes(item.flowState) && <button type="button" disabled={!!busy}
-                  onClick={() => {
-                    const note = window.prompt('Lý do từ chối (NV sẽ đọc, và đề nghị lại được):', '');
-                    if (note == null) return;
-                    run(`reject:${item.key}`, () => api.paymentFlow('reject', { emp: empCode, period: schedule.period, key: item.key, note }));
-                  }}>
+                {canRecord && ['requested', 'unlock_requested', 'unlocked', 'approved'].includes(item.flowState) && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'reject', item })}>
                   Từ chối
                 </button>}
               </div>
@@ -760,6 +803,12 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
         })}</tbody>
       </table>
     </div>
+    {composer && <PaymentRequestComposer mode={composer.mode} item={composer.item} period={schedule.period} busy={!!busy}
+      onClose={() => setComposer(null)} onSubmit={(note) => {
+        const action = composer.mode === 'early' ? 'request-unlock' : composer.mode === 'other' ? 'note' : composer.mode === 'reject' ? 'reject' : 'request';
+        const requestId = paymentRequestId(composer.mode, schedule.period, composer.item.key);
+        run(`${action}:${composer.item.key}`, () => api.paymentFlow(action, { emp: empCode, period: schedule.period, key: composer.item.key, note, requestId }));
+      }} />}
     {/* Ghi nhận đã trả — CHỈ CEO thấy. Backend vẫn chặn độc lập (requireCeo),
         ẩn nút chỉ để gọn mắt, không phải là lớp bảo vệ. */}
     {canRecord && <div className="employee-cost-gap-filters">

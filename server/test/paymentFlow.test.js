@@ -66,7 +66,7 @@ test('‼ Lần 1 KHÔNG nằm trong quy trình này — đó là việc của A
 
 test('mọi bước đều có nhật ký ai · lúc nào · từ nấc nào sang nấc nào', () => {
   const s = memStore();
-  store.requestUnlock('DN006', '2026-07', 'second', { actor: 'DN006', store: s });
+  store.requestUnlock('DN006', '2026-07', 'second', { actor: 'DN006', note: 'Cần nhận sớm', store: s });
   store.grantUnlock('DN006', '2026-07', 'second', { actor: 'CEO', store: s });
   const entry = store.requestPayment('DN006', '2026-07', 'second', { actor: 'DN006', store: s });
   assert.deepEqual(entry.audit.map((row) => [row.by, row.from, row.to]), [

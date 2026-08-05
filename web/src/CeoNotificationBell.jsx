@@ -67,6 +67,8 @@ function FeedbackComposer({ item, onSaved }) {
 
 export default function CeoNotificationBell({ me, onNavigate }) {
   const [feed, setFeed] = useState({ unread_count: 0, events: [] });
+  const [paymentFeed, setPaymentFeed] = useState({ unread_count: 0, events: [] });
+  const [activeSection, setActiveSection] = useState('payment');
   const [dq, setDq] = useState({ redCount: 0, redRevenueAffected: 0, alert: false });
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -85,7 +87,10 @@ export default function CeoNotificationBell({ me, onNavigate }) {
   const refresh = async () => {
     if (!eligible) return;
     const requests = [];
-    if (isCeo || isEmployee) requests.push((isCeo ? api.dormantNotifications() : api.dormantEmployeeNotifications()).then(setFeed));
+    if (isCeo || isEmployee) {
+      requests.push((isCeo ? api.dormantNotifications() : api.dormantEmployeeNotifications()).then(setFeed));
+      requests.push(api.paymentNotifications().then(setPaymentFeed));
+    }
     if (canSeeDq) requests.push(api.employeeCostDataQualitySummary().then((summary) => setDq({
       redCount: Number(summary.redCount || 0), redRevenueAffected: Number(summary.redRevenueAffected || 0), alert: !!summary.alert,
     })));
@@ -95,9 +100,15 @@ export default function CeoNotificationBell({ me, onNavigate }) {
   };
   useEffect(() => {
     if (!eligible) return undefined;
-    refresh();
-    const timer = window.setInterval(refresh, 60000);
-    return () => window.clearInterval(timer);
+    let timer = 0; let stopped = false;
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(async () => { await refresh(); if (!stopped) schedule(); }, document.hidden ? 60000 : 20000);
+    };
+    const visibility = () => { refresh(); schedule(); };
+    refresh(); schedule();
+    document.addEventListener('visibilitychange', visibility);
+    return () => { stopped = true; window.clearTimeout(timer); document.removeEventListener('visibilitychange', visibility); };
   }, [eligible, isCeo]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return undefined;
@@ -146,13 +157,19 @@ export default function CeoNotificationBell({ me, onNavigate }) {
   }), [plans, planFilter]);
   if (!eligible) return null;
 
-  async function markAll() {
+  async function markAll(section = activeSection) {
     setBusy(true);
     try {
-      await (isCeo ? api.dormantNotificationsRead({ all: true }) : api.dormantEmployeeNotificationsRead({ all: true }));
+      if (section === 'payment') await api.paymentNotificationsRead({ all: true });
+      else await (isCeo ? api.dormantNotificationsRead({ all: true }) : api.dormantEmployeeNotificationsRead({ all: true }));
       await refresh();
     } catch (e) { setError(e.message); }
     setBusy(false);
+  }
+  async function openPaymentEvent(event) {
+    try { await api.paymentNotificationsRead({ ids: [event.id] }); } catch { /* deep-link remains available */ }
+    closePanel(); await refresh();
+    onNavigate?.(event.target?.tab || 'paymentSchedule', { emp_code: event.target?.emp_code, period: event.target?.period, key: event.target?.key });
   }
   async function openEvent(event) {
     if (!isCeo) {
@@ -165,7 +182,7 @@ export default function CeoNotificationBell({ me, onNavigate }) {
       }
     } else openPlans({ empCode: event.emp_code, unitCode: event.unit_code });
   }
-  function showFeed() { planRequestRef.current += 1; setPlanBusy(false); setOpen(true); setPlans(null); refresh(); }
+  function showFeed() { planRequestRef.current += 1; setPlanBusy(false); setOpen(true); setPlans(null); setActiveSection(paymentFeed.unread_count ? 'payment' : 'qlnb'); refresh(); }
   function closePanel() { planRequestRef.current += 1; setPlanBusy(false); setOpen(false); }
   async function openPlans({ empCode, unitCode } = {}) {
     if (!isCeo) return;
@@ -179,15 +196,33 @@ export default function CeoNotificationBell({ me, onNavigate }) {
     finally { if (id === planRequestRef.current) setPlanBusy(false); }
   }
 
-  const badgeCount = Number(feed.unread_count || 0) + Number(dq.redCount || 0);
+  const badgeCount = Number(feed.unread_count || 0) + Number(paymentFeed.unread_count || 0) + Number(dq.redCount || 0);
   return <>
     <button ref={bellRef} type="button" className={`ceo-bell${counts.danger || dq.alert || dq.redCount ? ' danger' : ''}`} title={canSeeDq ? 'Thông báo và lỗi dữ liệu cần xem' : 'Thông báo QLNB của tôi'} aria-label={`Thông báo, ${badgeCount} mục cần xem`} onClick={showFeed}>
-      <span>🔔</span>{badgeCount > 0 && <b>{badgeCount > 99 ? '99+' : badgeCount}</b>}
+      <span>🔔</span>{badgeCount > 0 && <b>{badgeCount > 99 ? '99+' : badgeCount}</b>}{paymentFeed.unread_count > 0 && <i className="payment-bell-count" aria-label={`${paymentFeed.unread_count} thông báo thanh toán chưa đọc`}>💵 {paymentFeed.unread_count > 99 ? '99+' : paymentFeed.unread_count}</i>}
     </button>
     {open && createPortal(<div className="ceo-notif-backdrop" role="dialog" aria-modal="true" aria-labelledby="qlnb-notification-title" onMouseDown={(e) => { if (e.target === e.currentTarget) closePanel(); }}>
       <section ref={panelRef} tabIndex={-1} className={`ceo-notif-panel${plans ? ' plan-detail' : ''}`}>
         <header><div><span>{canSeeDq ? 'App Report · Kiểm soát' : 'AI QLNB'} · {isCeo ? 'CEO' : me.emp_code}</span><h2 id="qlnb-notification-title">{plans ? 'Kế hoạch chi tiết nhân viên' : canSeeDq ? 'Thông báo cần chú ý' : 'Việc QLNB của tôi'}</h2></div><button type="button" className="ceo-notif-close" aria-label="Đóng thông báo" onClick={closePanel}>×</button></header>
         {!plans ? <>
+          <div className="ceo-notif-tabs" role="tablist" aria-label="Nhóm thông báo">
+            <button type="button" role="tab" aria-selected={activeSection === 'payment'} className={activeSection === 'payment' ? 'active' : ''} onClick={() => setActiveSection('payment')}>💵 Thanh toán <b>{paymentFeed.unread_count || 0}</b></button>
+            <button type="button" role="tab" aria-selected={activeSection === 'qlnb'} className={activeSection === 'qlnb' ? 'active' : ''} onClick={() => setActiveSection('qlnb')}>📋 QLNB <b>{feed.unread_count || 0}</b></button>
+            {canSeeDq && <button type="button" role="tab" aria-selected={activeSection === 'dq'} className={activeSection === 'dq' ? 'active' : ''} onClick={() => setActiveSection('dq')}>🧭 Dữ liệu <b>{dq.redCount || 0}</b></button>}
+          </div>
+          {activeSection === 'payment' ? <>
+            <div className="ceo-notif-summary payment"><span><em>Thanh toán chưa đọc</em><b>{paymentFeed.unread_count || 0}</b></span><span><em>Tổng sự kiện</em><b>{paymentFeed.events?.length || 0}</b></span></div>
+            <div className="ceo-notif-tools"><small>Cập nhật 20 giây khi đang xem · 60 giây nền</small><div><button type="button" disabled={busy || !paymentFeed.unread_count} onClick={() => markAll('payment')}>{busy ? 'Đang lưu…' : 'Đọc hết thanh toán'}</button></div></div>
+            {error && <div className="dormant-error">{error}</div>}
+            <div className="ceo-notif-list payment-list">
+              {!paymentFeed.events?.length && <div className="empty">Chưa có cập nhật thanh toán.</div>}
+              {(paymentFeed.events || []).map((event) => <article key={event.id} className={`${event.read_at ? 'read' : ''} payment`}>
+                <i>💵</i><div><div className="ceo-notif-meta"><b>Thanh toán CP</b><time>{dateTime(event.at)}</time></div><strong>{event.title}</strong><p>{event.message || 'Mở sổ để xem trạng thái.'}</p><small>{event.emp_code} · {event.period} · {event.key === 'final' ? 'Lần 3' : 'Lần 2'}</small><button type="button" className="ceo-plan-open" onClick={() => openPaymentEvent(event)}>Mở đúng sổ →</button></div>
+              </article>)}
+            </div>
+          </> : activeSection === 'dq' ? <>
+            <div className={`ceo-dq-alert${dq.alert || dq.redCount ? ' danger' : ''}`}><div><b>Trung tâm Kiểm soát Dữ liệu</b><span>{dq.redCount.toLocaleString('vi-VN')} lỗi đỏ · {dq.redRevenueAffected.toLocaleString('vi-VN')} đ doanh thu ảnh hưởng</span></div><button type="button" className="primary" onClick={() => { closePanel(); onNavigate?.('employeeCost', { view: 'dq' }); }}>Mở kiểm soát dữ liệu →</button></div>
+          </> : <>
           <div className="ceo-notif-summary"><span><em>QLNB chưa đọc</em><b>{feed.unread_count || 0}</b></span><span className="warn"><em>{isCeo ? 'Đến hạn' : 'CEO phản hồi'}</em><b>{isCeo ? counts.due : counts.feedback}</b></span><span className="danger"><em>Khẩn / quá hạn</em><b>{counts.danger}</b></span>{canSeeDq && <span className="danger"><em>DQ đỏ chưa xử lý</em><b>{dq.redCount}</b></span>}</div>
           {canSeeDq && <div className={`ceo-dq-alert${dq.alert || dq.redCount ? ' danger' : ''}`}><div><b>Trung tâm Kiểm soát Dữ liệu</b><span>{dq.redCount.toLocaleString('vi-VN')} lỗi đỏ · {dq.redRevenueAffected.toLocaleString('vi-VN')} đ doanh thu ảnh hưởng</span></div><button type="button" className="primary" onClick={() => { closePanel(); onNavigate?.('employeeCost', { view: 'dq' }); }}>Mở kiểm soát dữ liệu →</button></div>}
           <div className="ceo-notif-tools"><small>Cập nhật mỗi phút · server tự ép đúng phạm vi</small><div>{isCeo && <button type="button" className="primary" onClick={() => openPlans({})}>Xem toàn bộ kế hoạch</button>}{(isCeo || isEmployee) && <button type="button" disabled={busy || !feed.unread_count} onClick={markAll}>{busy ? 'Đang lưu…' : 'Đánh dấu đã đọc'}</button>}</div></div>
@@ -198,6 +233,7 @@ export default function CeoNotificationBell({ me, onNavigate }) {
               <i>{iconFor(event)}</i><div><div className="ceo-notif-meta"><b>{TYPE_LABEL[event.type] || 'Thông báo'}</b><time>{dateTime(event.at)}</time></div><strong>{event.title}</strong><p>{event.message}</p><small>{event.emp_code || '—'} · {event.qlnb_codes?.[0] || 'QLNB'}{event.action_cycle ? ` · Chu kỳ xử lý ${event.action_cycle}` : ''}</small>{event.escalation?.preview_only && <span className="notif-escalation">Chỉ preview · {event.escalation.unresolved_3_business_days ? 'chưa xử lý sau ba ngày làm việc' : 'chưa đọc sau một ngày'}</span>}<button type="button" className="ceo-plan-open" onClick={() => openEvent(event)}>{isCeo ? 'Xem kế hoạch chi tiết →' : 'Mở đúng QLNB →'}</button></div>
             </article>)}</section>)}
           </div>
+          </>}
         </> : <>
           <div className="ceo-plan-nav"><button type="button" onClick={showFeed}>← Thông báo</button><small>Dữ liệu đến {dateVi(plans.as_of)} · CEO phản hồi có cấu trúc, nhân viên xác nhận đã đọc/đã cập nhật</small></div>
           <div className="ceo-plan-filters">
