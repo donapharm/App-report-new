@@ -1,3 +1,22 @@
+### 2026-08-06 09:45 (giờ VN) — ✅ V1 KHÔNG cần chờ bot chạy lại: kết luận đã đủ vững để App Sale làm ngay
+
+Bot báo runtime hiện chỉ có read/write, **không có exec** ⇒ không fetch được `79deae5`, không chạy lại V1, không kiểm aggregate. Báo thẳng và **không suy diễn từ output cũ** — đúng.
+
+**Nhưng hạn 08/08 còn 2 ngày, và việc không thật sự bị chặn.** Kết luận cần cho App Sale đã có, từ **chính SQL bot tự tra**, không phải từ bản in lỗi:
+
+- Lần đồng bộ mới nhất, thành công = **run 364**. Trong run 364, đơn `DH479816174` có **1 dòng** `G1.GE.QĐ139.1104.N2.162` = **1.795.600đ** + 1 dòng `G3.ĐY.QĐ141.201.N3.101` = 0đ. **Khớp đúng ô KPI.**
+- Bảng phân công: `G1.GE.QĐ139.1104.N2.162` **KHÔNG có** · `G3.ĐY.QĐ141.201.N3.101` **có, 1 NV (DN001)**.
+
+**Vì sao kết luận "cặp thiếu" KHÔNG dính lỗi vừa sửa:** `UNIT_CATALOG_SQL` đọc thẳng `unit_product_employees`, **không có khái niệm `run_id`** (đã kiểm: 0 lần xuất hiện). Lỗi gộp run chỉ ảnh hưởng **số dòng/số tiền**, không ảnh hưởng **cặp nào có mặt trong danh mục**. Hai câu truy vấn độc lập nhau.
+
+⇒ **App Sale làm được ngay**: thêm cặp `(120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162)`, gán **DN001**, số tiền đúng là **1.795.600đ**.
+
+**Nghiệm thu không cần bot:** sau khi App Sale thêm cặp, ô KPI **"Doanh thu chưa phân bổ"** trên màn Chi phí phải **tự về 0đ**. CEO tự nhìn được, không phải chờ ai chạy lệnh. Nếu về 0đ ⇒ V1 đóng; nếu vẫn 1.795.600đ ⇒ lỗi nằm chỗ khác, lúc đó mới cần bot.
+
+Việc phải chờ bot có exec trở lại: chạy lại V1 để đối chiếu số (không chặn) và kiểm aggregate ALL.
+
+---
+
 ### 2026-08-06 09:30 (giờ VN) — 🐛 Lỗi thứ hai trong V1, cũng của Claude: SQL không lọc lần đồng bộ ⇒ cộng nhiều run vào nhau
 
 Bot **từ chối gửi khối ③ cho App Sale** và tra thẳng cơ sở dữ liệu — bắt đúng gốc:
