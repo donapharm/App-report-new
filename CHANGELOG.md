@@ -1,3 +1,30 @@
+### 2026-08-05 11:00 (giờ VN) — ⛔ Review `b01a182`: cổng quyền CEO hỏng SẴN trên PROD, cấm sửa bằng cách nới cho admin
+
+**Bối cảnh.** Bot deploy `b01a182` (thông báo thanh toán trong app), nghiệm thu bằng trình duyệt thật phát hiện tab Thanh toán trả **403 `PAYMENT_NOTIFICATION_SCOPE_REQUIRED`** và chuông gọi lại lặp vô hạn. Bot **tự rollback về `b49e585`**, kèm backup + SHA-256 + xác nhận T06/T07 lệch 0 + notify vẫn tắt. **Rollback đúng, bằng chứng đủ.**
+
+**‼ Nhưng nguyên nhân sâu hơn báo cáo.** Báo cáo ghi "API mới chỉ nhận `ceo`" — thực ra **API cũ cũng chỉ nhận `ceo`**. `b01a182` không tạo ra lỗi, nó chỉ **làm lỗi lộ ra** (chuông có vòng gọi lại nên 403 hiện lên màn). Claude chạy thử trên chính code đang chạy PROD:
+
+```
+{"role":"admin","emp_code":"CEO"}   → requireCeo: 403 CEO_ONLY     ← tài khoản CEO thật
+{"role":"ceo","emp_code":"CEO"}     → ĐI QUA
+```
+
+`auth.requireCeo` đang gác **6 route tiền** (`approve`/`reject`/`unlock`/`second`/`record`/`undo`) ⇒ **tài khoản CEO thật trên PROD chưa từng duyệt được khoản nào**. Không ai kêu vì `PaymentSchedule.jsx:177` để `canRecord={role === 'ceo'}` nên **nút Duyệt/Từ chối/Mở khoá bị giấu** — nút giấu che mất cổng khoá. **Lỗi này của Claude**, không phải của `b01a182`.
+
+**Gốc rễ:** repo đang có **4 định nghĩa "ai là CEO"** — `auth.isCeo` (chỉ role, sai), `requireCeoQlnb` + `routes.js:3028` + 3 chỗ frontend (role **hoặc** `emp_code==='CEO'`, đúng), và `PaymentSchedule.jsx:177` (chỉ role, sai). Bốn bản sao thì kiểu gì cũng lệch.
+
+**⛔ Cấm cách sửa hiển nhiên.** Nới cho `admin` đi qua sẽ: (1) trao quyền duyệt tiền cho **mọi** tài khoản admin, trái lệnh CEO 04/08 *"chỉ duy nhất CEO được phép ghi thôi — admin cũng không"*; (2) làm đỏ chính test ghi lại lệnh đó (`paymentLedgerRoutes.test.js`); (3) **lộ số tiền của toàn bộ NV** vì feed chỉ chiếu `amount` vào vai CEO — phạm nguyên tắc "KHÔNG để lộ số người khác/tổng payout".
+
+**✅ Cách sửa đã duyệt:** phân quyền theo **danh tính**, không theo chuỗi role — một hàm duy nhất `auth.isCeoActor(session)` (role `ceo` **hoặc** `emp_code` nằm trong `CEO_EMP_CODES` đọc từ config), thay cho cả 4 bản sao; `/me` trả `is_ceo` để **frontend thôi tự đoán quyền**. Admin khác (vd `VP002`) **vẫn bị chặn**. Kèm sửa riêng: chuông gặp **401/403 phải DỪNG hẳn**, chỉ 5xx/lỗi mạng mới thử lại và phải giãn dần.
+
+**Chặn trước khi code:** bot phải dán `emp_code` + `role` của phiên CEO trên PROD — cách sửa chỉ đứng được nếu `emp_code = 'CEO'`.
+
+Chi tiết đầy đủ + 5 test bắt buộc + mẫu câu xin duyệt deploy: **`DIRECTIVE_CEO_IDENTITY_FIX.md`**. Claude **không sửa code app** đợt này (đúng mô hình phối hợp: bot cầm code, tránh đụng repo) — chỉ ra spec và bằng chứng.
+
+**V3 (bật notify) lùi lại sau việc này** — bật tin tiền trong lúc CEO chưa duyệt được gì chỉ tổ gây hoang mang.
+
+---
+
 ### 2026-08-05 09:40 (giờ VN) — ✅ V1 · V2: biến "bot đi tra đi" thành hai lệnh chạy được
 
 **Việc đã làm.** V1 và V2 trước nay là hai câu giao việc mơ hồ: tra bằng tay, mỗi người ra một kiểu, không ai kiểm lại được. Nay có **hai công cụ**, luật quyết định chốt trong code và **khoá bằng 32 test**.
