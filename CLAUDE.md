@@ -49,6 +49,12 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
   src/api.js                 client gọi /api (đính token)
 ```
 
+## ‼ DANH TÍNH TÀI KHOẢN — CEO chốt 05/08/2026, CẤM NHẦM LẪN
+- Tài khoản **`CEO`** (trên PROD mang role `admin`) = tài khoản **QUẢN TRỊ**. Quyền CEO nhận theo danh tính qua `auth.isCeoActor` (`CEO_EMP_CODES`, mặc định chỉ có `CEO`).
+- Tài khoản **`DN001`** = tài khoản **NHÂN VIÊN SALE** bình thường, có sổ chi phí/doanh số riêng, đăng nhập bằng SĐT khác. **KHÔNG** phải tài khoản CEO, **KHÔNG** có quyền quản trị, **CẤM** đưa vào `CEO_EMP_CODES`.
+- Hai tài khoản chỉ **trùng tên người** (Đặng Xuân Trung). Cấm suy "DN001 = CEO" trong code, phân quyền, báo cáo hay lập luận duyệt-chi. Sai lầm này đã xảy ra 05/08/2026 (Claude gọi DN001 là "mã của chính CEO", treo oan việc gán đơn `DH479816174`) — không lặp lại.
+- Luồng "NV xin nhận sớm → CEO duyệt" giữa DN001 và CEO vì thế là **hai vai đúng nghĩa**, không phải tự duyệt.
+
 ## Nguyên tắc bất di bất dịch
 1. **Quyền quyết ở backend.** Mọi query đi qua `auth.scopeOf(session)`; NV sale chỉ thấy `emp_code` của mình. Frontend KHÔNG tự lọc quyền.
 2. **Không hardcode PII/nhân viên trong bundle frontend.**

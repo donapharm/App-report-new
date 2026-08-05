@@ -1,3 +1,15 @@
+### 2026-08-05 16:35 (giờ VN) — ‼ CẢI CHÍNH: DN001 KHÔNG phải "mã của CEO" — hai tài khoản riêng, chỉ trùng tên
+
+CEO đính chính trực tiếp: tài khoản **`CEO` = QUẢN TRỊ**, tài khoản **`DN001` = SALE**, đăng nhập bằng hai SĐT khác nhau, **chỉ trùng tên người Đặng Xuân Trung**. Các ghi chú trước đó của Claude (mục 11:30 "DN001 chính là mã của CEO — người duyệt và người nhận là một", và cảnh báo "tự duyệt cho chính mình" ở màn Xin nhận sớm) là **hiểu nhầm** — cải chính tại đây, không sửa lùi mục cũ.
+
+Hệ quả đã rà:
+- **Cổng quyền không bị ảnh hưởng, không sửa gì:** `CEO_EMP_CODES = ['CEO']`, chạy thử `isCeoActor({role:'sale', emp_code:'DN001'}) = false`. DN001 chưa từng và không được có quyền quản trị.
+- **Luồng "DN001 xin nhận sớm → tài khoản CEO duyệt" là hai vai đúng nghĩa**, không phải tự duyệt — bỏ mọi dè chừng đã nêu.
+- **V1 hết vướng:** đề xuất gán `DH479816174` → DN001 đứng nguyên trên căn cứ dữ liệu (143/143 cặp phân công · 100% lịch sử doanh thu); chỉ còn chờ CEO gật như mọi quyết định gán khác, không còn caveat "tự quyết cho mình".
+- Ghi vĩnh viễn vào `CLAUDE.md` (mục "Danh tính tài khoản") để mọi phiên sau đọc trước, không tái phạm. Không ghi SĐT vào tài liệu repo.
+
+---
+
 ### 2026-08-05 16:20 (giờ VN) — ✅ CEO yêu cầu: lý do "Xin nhận sớm" phải có LỰA CHỌN SẴN, không bắt gõ tay
 
 **Bối cảnh:** CEO chụp màn thấy popup trình duyệt bắt gõ lý do từng chữ. Truy ra ảnh chụp là bản CŨ `ff75a05` (04/08 22:39) còn nằm trong cache trình duyệt — bản hiện hành đã có hộp thoại trong app (`PaymentRequestComposer`). Nhưng yêu cầu vẫn đúng: hộp thoại hiện tại vẫn là ô trống bắt gõ tay.
