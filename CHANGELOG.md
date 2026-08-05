@@ -1,3 +1,20 @@
+### 2026-08-06 08:30 (giờ VN) — 🔧 Tinh chỉnh cổng (b): FAIL phải là SO SÁNH, không phải tuyệt đối
+
+Bot dừng ở cổng (b): *"CP/DT vẫn `—` sau >1 phút do upstream employee-cost"* và hỏi CEO chọn **chờ KPI hồi phục** hay **deploy UI**. Kèm số: test **955/955**, Vite 651 modules, browser mobile/desktop + console/HTTP 5xx PASS, independent re-audit PASS.
+
+**Phán quyết: KHÔNG chặn deploy.** Bot ghi rõ đây là *"blocker LIVE hiện tại"* — tức quan sát trên **bản đang chạy (`3eac0a9`), TRƯỚC khi cutover**. Triệu chứng đã có sẵn trước deploy ⇒ **nguyên nhân là nguồn upstream, không phải `b87fbaa`**. Cùng đúng lối lập luận đã đóng FAIL #2 lúc 05:15: đối chứng với baseline.
+
+Và ô để `—` thay vì hiện số sai chính là **fail-closed chạy đúng** — app đang làm điều phải làm.
+
+**Cổng (b) viết lại lần cuối (lần thứ năm sửa kiểu tiêu chí trong hai ngày):**
+> (b) chỉ **FAIL** khi ô `—` trên **bản MỚI** trong khi **bản CŨ có số** ở cùng thời điểm. Cả hai bản cùng `—` ⇒ **sự cố nguồn upstream**, ghi nhận riêng, **KHÔNG chặn deploy** — vì bản deploy không đụng đường dữ liệu KPI, chặn kiểu đó thì hễ DataHub chập là cả hệ thống đứng bánh.
+
+**Việc riêng, không chặn nhưng phải theo:** nguồn `employee-cost` đang yếu. Lúc 05:15 ba ô đều có số (CP/DT 8,1% · chưa phân bổ 1.795.600đ · khớp 99,0%); nay riêng **CP/DT** mất số ⇒ hỏng ở **vế chi phí**, không phải vế doanh thu. Trước đó đã ghi nhận *"DataHub tạm thiếu nguồn DN006"*. Cần bot nói rõ: mất cả 21 NV hay chỉ vài NV.
+
+**Ưu tiên không đổi:** cutover `b87fbaa` → **V1 (hạn 08/08, còn 2 ngày)** → bộ lọc thu gọn. V1 hoàn toàn độc lập với ô KPI đang lỗi, không có lý do gì để nó chờ.
+
+---
+
 ### 2026-08-06 05:40 (giờ VN) — 🔒 Luật: bộ lọc ĐANG ÁP DỤNG thì chip + câu cảnh báo KHÔNG được ẩn khi thu gọn
 
 CEO xác nhận **có yêu cầu** tính năng thu gọn bộ lọc trang Tổng quan (Claude đã hỏi lại, không phải bot tự làm thêm). Audit của bot trả **NEEDS FIX** với 4 mục — Claude giữ nguyên kết luận, nhưng **nâng mục #2 từ Medium lên CHẶN** và **hạ yêu cầu ở #3**.
