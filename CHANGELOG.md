@@ -1,3 +1,13 @@
+### 2026-08-05 16:28 (giờ VN) — ✅ CEO GẬT V1: gán `DH479816174` → DN001
+
+**Quyết định:** CEO duyệt trực tiếp ("tôi đồng ý nhé") gán đơn cách ly `DH479816174` (MISA `341964` · Pizar-3 · **1.795.600đ** · đơn vị `120.HTNT-PHARMACITY`, đang treo vì gán nhầm VP018-telesaler) về **DN001 — tài khoản SALE** (xem mục cải chính ngay dưới: DN001 KHÔNG phải mã CEO, hai tài khoản chỉ trùng tên).
+
+**Căn cứ đã trình:** `propose_quarantine_owner.js` chạy trên PROD, thoát 0 — danh mục phân công 143/143 cặp mã hàng của đơn vị thuộc DN001; lịch sử T06–T08: 109 dòng · 50 đơn · 582.140.315đ · **100% một người**. Hai nguồn không mâu thuẫn.
+
+**Thực thi:** việc GÁN nằm bên **App Sale** (App Report chỉ đọc — đã khoá bằng test cấm UPDATE/INSERT). Đã soạn lệnh cho bot App Sale qua CEO chuyển. Sau khi App Sale gán xong, bot server App Report chạy xác minh: `propose_quarantine_owner.js` phải hết dòng cách ly cho đơn vị này, đối soát App Report ↔ App Sale phải về **0đ tròn**, và `verify_frozen_periods.js` vẫn exit 0 (gán lại NV không đổi tổng doanh thu kỳ — chỉ đổi phân bổ, làm TRƯỚC khoá sổ 08/08 nên hợp lệ, không hồi tố).
+
+---
+
 ### 2026-08-05 16:35 (giờ VN) — ‼ CẢI CHÍNH: DN001 KHÔNG phải "mã của CEO" — hai tài khoản riêng, chỉ trùng tên
 
 CEO đính chính trực tiếp: tài khoản **`CEO` = QUẢN TRỊ**, tài khoản **`DN001` = SALE**, đăng nhập bằng hai SĐT khác nhau, **chỉ trùng tên người Đặng Xuân Trung**. Các ghi chú trước đó của Claude (mục 11:30 "DN001 chính là mã của CEO — người duyệt và người nhận là một", và cảnh báo "tự duyệt cho chính mình" ở màn Xin nhận sớm) là **hiểu nhầm** — cải chính tại đây, không sửa lùi mục cũ.
