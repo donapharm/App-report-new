@@ -14,6 +14,7 @@ import { employeeCostGapView, gapReasonLabel } from '../employeeCostGapModel.js'
 import { dataQualityTypeLabel, employeeCostDataQualityView } from '../employeeCostDataQualityModel.js';
 import { employeeVatKhoanDeduction, employeeVatKhoanViewModel } from '../employeeVatKhoanModel.js';
 import { createLatestRequestGate } from '../requestCoordinator.js';
+import { composePaymentRequestNote, paymentReasonDetailMaxLength } from '../paymentRequestReasons.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -635,19 +636,28 @@ function paymentRequestId(kind, period, key) {
   return `payment-${kind}-${period}-${key}-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
 }
 
-function PaymentRequestComposer({ mode, item, period, busy, onClose, onSubmit }) {
+function PaymentRequestComposer({ mode, item, period, busy, reasons, reasonsError, onClose, onSubmit }) {
   const [note, setNote] = React.useState('');
+  const [selectedReason, setSelectedReason] = React.useState('');
   const modalRef = React.useRef(null);
   const inputRef = React.useRef(null);
+  const optionRef = React.useRef(null);
   const required = ['early', 'other', 'reject'].includes(mode);
+  const presetMode = mode === 'early' || mode === 'reject';
+  const options = presetMode && Array.isArray(reasons?.[mode]) ? reasons[mode] : [];
+  const selected = options.find((option) => option.id === selectedReason) || null;
+  const detailMaxLength = selected?.requiresDetail ? paymentReasonDetailMaxLength(selected) : 300;
+  const composed = presetMode ? composePaymentRequestNote(options, selectedReason, note) : {
+    ok: !required || !!note.trim(), note: note.trim(), error: required && !note.trim() ? 'Nhập nội dung.' : '',
+  };
   const title = mode === 'early' ? 'Xin nhận sớm' : mode === 'other' ? 'Nội dung khác' : mode === 'reject' ? 'Từ chối đề nghị' : 'Đề nghị nhận';
   React.useEffect(() => {
     const previousFocus = document.activeElement;
-    inputRef.current?.focus();
+    (presetMode ? optionRef : inputRef).current?.focus();
     const keepFocusInside = (event) => {
       if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
       if (event.key !== 'Tab') return;
-      const focusable = [...(modalRef.current?.querySelectorAll('button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])];
+      const focusable = [...(modalRef.current?.querySelectorAll('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') || [])];
       if (!focusable.length) return;
       const first = focusable[0]; const last = focusable[focusable.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
@@ -655,27 +665,42 @@ function PaymentRequestComposer({ mode, item, period, busy, onClose, onSubmit })
     };
     document.addEventListener('keydown', keepFocusInside);
     return () => { document.removeEventListener('keydown', keepFocusInside); previousFocus?.focus?.(); };
-  }, [onClose]);
+  }, [onClose, presetMode]);
   const submit = () => {
-    const clean = note.trim();
-    if (required && !clean) return;
-    onSubmit(clean);
+    if (!composed.ok) return;
+    onSubmit(composed.note);
   };
   return <div className="payment-composer-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={modalRef} className="payment-composer" role="dialog" aria-modal="true" aria-labelledby="payment-composer-title" aria-describedby="payment-composer-help">
       <header><div><small>{item.label} · {formatMonthLabel(period)}</small><h3 id="payment-composer-title">{title}</h3></div><button type="button" aria-label="Đóng" onClick={onClose}>×</button></header>
       <p id="payment-composer-help">{mode === 'early' ? 'Lý do xin nhận sớm hơn hạn là bắt buộc. ' : mode === 'reject' ? 'Lý do từ chối (NV sẽ đọc, và đề nghị lại được) là bắt buộc. ' : ''}Chỉ gửi nội dung đề nghị. <b>Không nhập số tiền</b>; số tiền do hệ thống tính và giữ nguyên.</p>
-      <label><span>Ghi chú {required ? '· bắt buộc' : '· không bắt buộc'}</span>
+      {presetMode ? <>
+        {!options.length && <div className="employee-cost-match-warning" role="alert">⛔ {reasonsError || 'Danh sách lý do chưa tải được — đã dừng để tránh gửi sai nội dung.'}</div>}
+        {!!options.length && <fieldset className="payment-reason-options">
+          <legend>Chọn đúng một lý do</legend>
+          {options.map((option, index) => <label key={option.id}>
+            <input ref={index === 0 ? optionRef : null} type="radio" name={`payment-reason-${mode}`} value={option.id}
+              checked={selectedReason === option.id}
+              onChange={() => { setSelectedReason(option.id); setNote(''); if (option.requiresDetail) window.requestAnimationFrame(() => inputRef.current?.focus()); }} />
+            <span>{option.label}</span>
+          </label>)}
+        </fieldset>}
+        {selected?.requiresDetail && <label><span>Ghi rõ · bắt buộc ít nhất {selected.minLength} ký tự</span>
+          <textarea ref={inputRef} rows="3" maxLength={detailMaxLength} minLength={selected.minLength} value={note}
+            onChange={(event) => setNote(event.target.value)} placeholder="Nhập lý do cụ thể…" />
+          <small>{note.trim().length}/{detailMaxLength} ký tự</small>
+        </label>}
+      </> : <label><span>Ghi chú {required ? '· bắt buộc' : '· không bắt buộc'}</span>
         <textarea ref={inputRef} rows="4" maxLength="300" value={note} onChange={(event) => setNote(event.target.value)}
-          placeholder={mode === 'early' ? 'Nêu lý do cần nhận sớm…' : mode === 'other' ? 'Nhập nội dung cần CEO xem…' : mode === 'reject' ? 'Nêu lý do để nhân viên biết…' : 'Có thể để trống…'} />
+          placeholder={mode === 'other' ? 'Nhập nội dung cần CEO xem…' : 'Có thể để trống…'} />
         <small>{note.length}/300 ký tự</small>
-      </label>
-      <footer><button type="button" onClick={onClose}>Hủy</button><button type="button" className="primary" disabled={busy || (required && !note.trim())} onClick={submit}>{busy ? 'Đang gửi…' : `Gửi ${title.toLowerCase()}`}</button></footer>
+      </label>}
+      <footer><button type="button" onClick={onClose}>Hủy</button><button type="button" className="primary" disabled={busy || !composed.ok} onClick={submit}>{busy ? 'Đang gửi…' : `Gửi ${title.toLowerCase()}`}</button></footer>
     </section>
   </div>;
 }
 
-export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empCode, focusKey = '', onChanged }) {
+export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecord, empCode, focusKey = '', requestReasons, requestReasonsError = '', onChanged }) {
   const [busy, setBusy] = React.useState('');
   const [error, setError] = React.useState('');
   const [draft, setDraft] = React.useState({ key: '', amount: '', paidAt: '' });
@@ -804,6 +829,7 @@ export function PaymentSchedulePanel({ schedule, allEmployees, loading, canRecor
       </table>
     </div>
     {composer && <PaymentRequestComposer mode={composer.mode} item={composer.item} period={schedule.period} busy={!!busy}
+      reasons={requestReasons} reasonsError={requestReasonsError}
       onClose={() => setComposer(null)} onSubmit={(note) => {
         const action = composer.mode === 'early' ? 'request-unlock' : composer.mode === 'other' ? 'note' : composer.mode === 'reject' ? 'reject' : 'request';
         const requestId = paymentRequestId(composer.mode, schedule.period, composer.item.key);

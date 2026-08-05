@@ -37,6 +37,13 @@ test('‼ xin nhận sớm phải kèm LÝ DO cho CEO đọc', () => {
   assert.match(notice.text, /MỞ KHOÁ hoặc TỪ CHỐI/);
 });
 
+test('lý do preset đi nguyên văn vào tin Telegram của người nhận', () => {
+  const early = 'Cần trả chi phí cho đơn vị/khách đúng cam kết';
+  const reject = 'Cần bổ sung chứng từ trước';
+  assert.match(flowNotice({ ...base, from: 'plan', to: 'unlock_requested', note: early }).text, new RegExp(`“${early}”`));
+  assert.match(flowNotice({ ...base, from: 'requested', to: 'plan', note: reject }).text, new RegExp(`“${reject}”`));
+});
+
 test('‼ từ chối phải nói rõ NV ĐỀ NGHỊ LẠI được, kèm lý do', () => {
   const notice = flowNotice({ ...base, from: 'requested', to: 'plan', note: 'chờ thu tiền về' });
   assert.match(notice.text, /SẾP CHƯA DUYỆT/);

@@ -59,6 +59,7 @@ const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
 const paymentFlowNotify = require('./paymentFlowNotify');
+const paymentRequestReasons = require('./paymentRequestReasons');
 const earlyAdvanceQuota = require('./earlyAdvanceQuota');
 const revenueReportExport = require('./revenueReportExport');
 const ceoDeckReport = require('./report/deckReport');
@@ -2166,6 +2167,13 @@ router.get('/employee-cost/payment/range', auth.requireAuth, asyncJsonRoute(asyn
   }
   res.set('Cache-Control', 'private, no-store');
   return res.json({ emp_code: empCode, from, to, today, range: paymentSchedule.buildPaymentRangeSummary(books) });
+}));
+
+// Danh sách do backend/config sở hữu. Frontend chỉ render và gửi nguyên văn `note`;
+// đổi câu chữ trong config có hiệu lực mà không phải build lại web.
+router.get('/employee-cost/payment/request-reasons', auth.requireAuth, asyncJsonRoute(async (_req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  return res.json(paymentRequestReasons.readFromFile());
 }));
 
 /* ---------- Sổ "Thanh toán CP của tôi" — GHI NHẬN (GĐ2) ----------

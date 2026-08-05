@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "early": [
+    { "id": "customer_commitment", "label": "Cần trả chi phí cho đơn vị/khách đúng cam kết" },
+    { "id": "family_emergency", "label": "Việc gia đình đột xuất, cần tiền gấp" },
+    { "id": "documents_complete", "label": "Chứng từ kỳ này đã đủ, xin tất toán sớm" },
+    { "id": "large_cost_cashflow", "label": "Chi phí kỳ này lớn, cần xoay vòng" },
+    { "id": "other", "label": "Khác (ghi rõ)", "requiresDetail": true, "minLength": 5 }
+  ],
+  "reject": [
+    { "id": "not_due", "label": "Chưa tới hạn — chờ đúng lịch" },
+    { "id": "quarterly_priority_exhausted", "label": "Đã hết lượt ưu tiên của quý này" },
+    { "id": "documents_required", "label": "Cần bổ sung chứng từ trước" },
+    { "id": "other", "label": "Khác (ghi rõ)", "requiresDetail": true, "minLength": 5 }
+  ]
+}

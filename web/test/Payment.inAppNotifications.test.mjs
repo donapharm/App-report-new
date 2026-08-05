@@ -17,6 +17,9 @@ test('payment composer replaces prompt, has 300-char note and no amount input', 
   assert.ok((employeeCost.match(/paymentRequestId\(/g) || []).length >= 4, 'request, unlock, approve/reject đều phải có mã chống gửi trùng');
   const composer = employeeCost.slice(employeeCost.indexOf('function PaymentRequestComposer'), employeeCost.indexOf('export function PaymentSchedulePanel'));
   assert.doesNotMatch(composer, /inputMode="numeric"|type="number"/);
+  assert.match(composer, /type="radio"/);
+  assert.match(composer, /composePaymentRequestNote/);
+  assert.match(composer, /selected\?\.requiresDetail/);
 });
 
 test('C44 uses one amber treatment and explicit badge in all three KPI contexts', () => {

@@ -331,6 +331,7 @@ export const api = {
   paymentFlow: (action, { emp, period, key, note, requestId } = {}) => req('POST', `/employee-cost/payment/${action}`, {
     ...(emp ? { emp_code: emp } : {}), period, key, ...(note ? { note } : {}), ...(requestId ? { request_id: requestId } : {}),
   }),
+  paymentRequestReasons: (requestOptions = {}) => req('GET', '/employee-cost/payment/request-reasons', undefined, requestOptions),
   paymentNotifications: () => req('GET', '/employee-cost/payment/notifications'),
   paymentNotificationsRead: (payload = {}) => req('POST', '/employee-cost/payment/notifications/read', payload),
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),
