@@ -1,3 +1,17 @@
+### 2026-08-05 21:30 (giờ VN) — 🚢 PROD = `3eac0a9`: ô dự báo đã sạch, NHƯNG mới lên một nửa thứ CEO duyệt
+
+**Xong thật, ghi nhận:** ô dự báo hết hiện `145,7%`, nay là `— · đã qua 2/21 ngày làm việc, chưa đủ để dự báo`. Con số gây hiểu nhầm đã biến khỏi màn hình CEO. Ba ô KPI kia có số bình thường; **Khớp doanh thu lên 99,0%** (chiều nay 94,5%). Console 0 lỗi, backup có SHA-256, chỉ reload app-report, V3 giữ nguyên 1/1.
+
+**‼ Nhưng CEO duyệt `b87fbaa`, bot deploy `3eac0a9`.** `b87fbaa` **chứa** `3eac0a9`, nên phần đã lên là **tập con** của phần được duyệt — an toàn về hướng, không có gì ngoài ý muốn ra PROD. Song **cảnh báo lượt ưu tiên chưa lên**: hộp "Xin nhận sớm" trên PROD vẫn không cảnh báo gì và vẫn cho bấm ở kỳ T07 dù sớm nhất là 31/08.
+
+**Và "acceptance PASS" là nói quá:** cổng 2 có 4 mục a·b·c·d; báo cáo dán a·b·d, **thiếu hẳn (c)** — mục kiểm hộp "Xin nhận sớm". Không phải bot bỏ sót khi kiểm, mà (c) **không thể chạy** vì tính năng đó chưa deploy. Đúng phải ghi **acceptance 3/4**. Bot tự ghi mục nợ số 2 là trung thực; chỉ là dòng kết luận trên đầu chưa khớp với chính nó.
+
+**Quyết định:** deploy tiếp `b87fbaa` — **không cần cổng duyệt mới**, vì đó chính là commit CEO đã duyệt lúc 21:24; `3eac0a9` chỉ là nửa đường. Deploy xong chạy **riêng mục (c)**.
+
+Mục nợ 3 đã đóng: `4490def` reachable trên origin qua hai nhánh candidate — không cần nhánh riêng.
+
+---
+
 ### 2026-08-05 21:24 (giờ VN) — ✅ CEO DUYỆT DEPLOY `b87fbaa` (sàn dự báo + cảnh báo lượt ưu tiên)
 
 **Người duyệt:** CEO, trực tiếp. **Trạng thái lúc duyệt:** PROD `bf3c7c5`, chưa đổi.
