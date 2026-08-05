@@ -1,3 +1,25 @@
+### 2026-08-06 09:30 (giờ VN) — 🐛 Lỗi thứ hai trong V1, cũng của Claude: SQL không lọc lần đồng bộ ⇒ cộng nhiều run vào nhau
+
+Bot **từ chối gửi khối ③ cho App Sale** và tra thẳng cơ sở dữ liệu — bắt đúng gốc:
+
+| Lần đồng bộ | `G1.GE.QĐ139.1104.N2.162` của `DH479816174` |
+|---|---|
+| run 330 | 0đ |
+| run 331 | 1.795.600đ |
+| **run 364** (mới nhất, thành công) | **1.795.600đ** |
+
+`UNIT_LINES_SQL` của Claude **không có điều kiện `run_id`** ⇒ gộp cả ba lần đồng bộ ⇒ khối ③ ra **"3 dòng · 3.591.200đ"**, trong khi sự thật theo run 364 chỉ là **1 dòng · 1.795.600đ** — **đúng bằng ô KPI**. Ô KPI không sai; script của Claude sai.
+
+Nếu bot cứ nghe theo bản in mà chuyển cho App Sale, họ sẽ thêm cặp phân công dựa trên **con số gấp đôi**. Đây là lần thứ hai trong buổi sáng chẩn đoán V1 suýt sai — và cả hai lần đều do bot **đối chiếu chéo** rồi dừng lại, không phải do Claude tự bắt được.
+
+**Sửa:** lấy **lần đồng bộ thành công MỚI NHẤT của TỪNG THÁNG** (dùng lại `LATEST_MISA_RUN_SQL` của `appSaleRevenueMirror`, không tự viết), lọc `l.run_id = ANY(...)`. Bản in nói rõ **đã lấy run nào cho tháng nào**; tháng nào không có lần đồng bộ thành công thì **kể tên**, không im lặng bỏ qua; không tháng nào có thì **thoát mã 2**.
+
+4 test mới, gồm ca `monthsBetween` bắc cầu sang năm. Server **932 bài · 926 PASS · 6 lỗi `pdfinfo`** môi trường.
+
+**Kết luận nghiệp vụ vẫn không đổi:** cặp `(120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162)` **thiếu thật** trong bảng phân công — chỉ con số dòng/tiền là sai. Chạy lại bằng bản mới rồi mới giao App Sale.
+
+---
+
 ### 2026-08-06 09:00 (giờ VN) — 🐛 Lỗi trong khối ③ của Claude: gán TIỀN CẢ ĐƠN cho MỘT cặp — sửa trước khi App Sale động tay
 
 Bot chạy lại V1, khối ③ ra **"5 dòng · 3.591.200đ"** trong khi ô KPI chỉ **1 dòng · 1.795.600đ**. Hai con số chỏi nhau ⇒ soi lại: `3.591.200 ÷ 1.795.600 = 2` chẵn, **không phải bội của 5** ⇒ 5 dòng KHÔNG cùng một mặt hàng.

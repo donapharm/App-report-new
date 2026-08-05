@@ -22,6 +22,7 @@
 const fs = require('fs');
 const path = require('path');
 const { proposeOwner, formatProposal, diagnoseOrderPair } = require('../src/quarantineOwnerProposal');
+const { LATEST_MISA_RUN_SQL } = require('../src/appSaleRevenueMirror');
 
 const REPORT_ROOT = path.join(__dirname, '..', '..');
 
@@ -45,17 +46,47 @@ const ORDER = arg('order', 'DH479816174');
 const FROM = arg('from', '2026-06-01');
 const TO = arg('to', '2026-08-31');
 
-/** Doanh thu của ĐÚNG đơn vị này, mọi trạng thái — kể cả dòng đang cách ly. */
+/**
+ * Doanh thu của ĐÚNG đơn vị này, mọi trạng thái — kể cả dòng đang cách ly.
+ *
+ * ‼ SỬA 06/08 09:30 — bản đầu KHÔNG lọc `run_id`, nên gộp nhiều lần đồng bộ MISA vào
+ * cùng một kết quả. Bot phát hiện bằng SQL thật: đơn `DH479816174` mặt hàng
+ * `G1.GE.QĐ139.1104.N2.162` xuất hiện ở **run 330 (0đ) · run 331 (1.795.600đ) ·
+ * run 364 (1.795.600đ)** ⇒ khối ③ cộng ra "3 dòng · 3.591.200đ" trong khi sự thật
+ * theo run mới nhất (364) chỉ là **1 dòng · 1.795.600đ** — đúng bằng ô KPI.
+ *
+ * Nếu cứ thế giao cho App Sale thì họ thêm cặp phân công dựa trên con số GẤP ĐÔI.
+ * Nay chỉ lấy **lần đồng bộ thành công MỚI NHẤT của TỪNG THÁNG**, đúng cách
+ * `misa_pending_detail.js` đang làm.
+ */
 const UNIT_LINES_SQL = `SELECT l.sale_order_no, l.sale_order_date::text, l.unit_code, l.unit_name,
        l.qlnb_code, COALESCE(l.product_name, l.misa_product_name, '') product_name,
        COALESCE(l.employee_code,'') employee_code, COALESCE(l.employee_name,'') employee_name,
        COALESCE(l.invoice_export_amount,0)::numeric invoice_export_amount,
-       l.revenue_bucket, l.revenue_status, l.mapping_status
+       l.run_id, l.revenue_bucket, l.revenue_status, l.mapping_status
   FROM misa_revenue_snapshot_lines l
  WHERE l.unit_code = $1
    AND l.sale_order_date >= $2::date
    AND l.sale_order_date <= $3::date
+   AND l.run_id = ANY($4::bigint[])
  ORDER BY l.sale_order_date, l.sale_order_no, l.id`;
+
+/** Các tháng chạm vào khoảng ngày đang tra, dạng 'YYYY-MM-01'. */
+function monthsBetween(from, to) {
+  const out = [];
+  let year = Number(from.slice(0, 4));
+  let month = Number(from.slice(5, 7));
+  const last = Number(to.slice(0, 4)) * 12 + Number(to.slice(5, 7));
+  while (year * 12 + month <= last) {
+    out.push(`${year}-${String(month).padStart(2, '0')}-01`);
+    month += 1;
+    if (month > 12) { month = 1; year += 1; }
+  }
+  return out;
+}
+
+const lastDayOfMonth = (firstDay) => new Date(Date.UTC(Number(firstDay.slice(0, 4)), Number(firstDay.slice(5, 7)), 0))
+  .toISOString().slice(0, 10);
 
 /** Bảng phân công chính thức của đơn vị (đúng CTE nv_catalog mà App Sale đang dùng). */
 const UNIT_CATALOG_SQL = `SELECT u.code unit_code, p.qlnb_code,
@@ -88,9 +119,24 @@ async function main() {
 
   let lines = [];
   let catalogRows = [];
+  const runs = [];
+  const missingRuns = [];
   try {
+    // ‼ Lấy lần đồng bộ THÀNH CÔNG MỚI NHẤT của từng tháng. Tháng nào không có thì
+    // KỂ TÊN ra, không im lặng bỏ qua — thiếu một tháng là thiếu bằng chứng.
+    for (const monthStart of monthsBetween(FROM, TO)) {
+      const monthEnd = lastDayOfMonth(monthStart);
+      const run = (await pool.query(LATEST_MISA_RUN_SQL, [monthStart, monthEnd])).rows[0];
+      if (run) runs.push({ month: monthStart.slice(0, 7), id: Number(run.id), key: run.run_key || '' });
+      else missingRuns.push(monthStart.slice(0, 7));
+    }
+    if (!runs.length) {
+      console.error(`⏭  Không tháng nào trong ${FROM}…${TO} có lần đồng bộ MISA thành công — CHƯA kết luận được gì.`);
+      await pool.end().catch(() => {});
+      process.exit(2);
+    }
     const [linesResult, catalogResult] = await Promise.all([
-      pool.query(UNIT_LINES_SQL, [UNIT, FROM, TO]),
+      pool.query(UNIT_LINES_SQL, [UNIT, FROM, TO, runs.map((run) => run.id)]),
       pool.query(UNIT_CATALOG_SQL, [UNIT]),
     ]);
     lines = linesResult.rows || [];
@@ -115,11 +161,13 @@ async function main() {
   // ‼ Chỉ thẳng CẶP cần sửa, để App Sale khỏi phải tra thêm vòng nữa (hạn 08/08).
   result.pair = diagnoseOrderPair({ orderCode: ORDER, unitCode: UNIT, lines, catalogRows });
   if (process.argv.includes('--json')) {
-    console.log(JSON.stringify({ unit: UNIT, order: ORDER, from: FROM, to: TO, ...result }, null, 2));
+    console.log(JSON.stringify({ unit: UNIT, order: ORDER, from: FROM, to: TO, runs, missingRuns, ...result }, null, 2));
   } else {
     console.log(formatProposal(result));
     console.log('');
     console.log(`(đã đọc ${lines.length} dòng doanh thu · ${catalogRows.length} dòng phân công · ${FROM}…${TO})`);
+    console.log(`(chỉ lấy lần đồng bộ MISA mới nhất mỗi tháng: ${runs.map((run) => `${run.month}→run ${run.id}`).join(' · ')})`);
+    if (missingRuns.length) console.log(`⚠ Tháng KHÔNG có lần đồng bộ thành công: ${missingRuns.join(', ')} — số dưới đây thiếu các tháng này.`);
   }
   process.exit(result.decision === 'PROPOSE' ? 0 : 1);
 }

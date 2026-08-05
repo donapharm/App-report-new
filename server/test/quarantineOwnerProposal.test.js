@@ -220,3 +220,35 @@ test('dòng thiếu mã hàng vẫn phải hiện, không bị nuốt', () => {
   assert.equal(d.products[0].code, '(thiếu mã hàng)');
   assert.equal(d.products[0].state, 'MISSING');
 });
+
+/* ── Lọc lần đồng bộ (sửa 06/08 09:30, bot bắt được bằng SQL thật) ───────────── */
+
+test('‼ SQL phải lọc run_id — không lọc là cộng nhiều lần đồng bộ vào nhau', () => {
+  // Bot tra thật: G1.GE.QĐ139.1104.N2.162 của DH479816174 nằm ở run 330 (0đ),
+  // run 331 (1.795.600đ) và run 364 (1.795.600đ). Không lọc run ⇒ khối ③ ra
+  // "3 dòng · 3.591.200đ" trong khi sự thật theo run mới nhất là 1 dòng · 1.795.600đ.
+  // Giao con số gấp đôi đó cho App Sale là họ sửa phân công theo số sai.
+  assert.match(script, /AND l\.run_id = ANY\(\$4::bigint\[\]\)/, 'thiếu bộ lọc lần đồng bộ');
+  assert.match(script, /LATEST_MISA_RUN_SQL/, 'phải dùng lại truy vấn lần đồng bộ mới nhất, không tự viết');
+  assert.match(script, /pool\.query\(UNIT_LINES_SQL, \[UNIT, FROM, TO, runs\.map/);
+});
+
+test('‼ tháng không có lần đồng bộ phải KỂ TÊN, không im lặng bỏ qua', () => {
+  assert.match(script, /missingRuns/);
+  assert.match(script, /Tháng KHÔNG có lần đồng bộ thành công/);
+  assert.match(script, /Không tháng nào trong .* có lần đồng bộ MISA thành công/);
+});
+
+test('bản in phải nói rõ đã lấy lần đồng bộ nào — để không ai phải hỏi lại', () => {
+  assert.match(script, /chỉ lấy lần đồng bộ MISA mới nhất mỗi tháng/);
+});
+
+test('monthsBetween cắt đúng các tháng chạm khoảng ngày', () => {
+  // Đọc hàm ra khỏi script để test không cần DB.
+  const body = script.slice(script.indexOf('function monthsBetween'), script.indexOf('const lastDayOfMonth'));
+  // eslint-disable-next-line no-new-func
+  const monthsBetween = new Function(`${body}; return monthsBetween;`)();
+  assert.deepEqual(monthsBetween('2026-06-01', '2026-08-31'), ['2026-06-01', '2026-07-01', '2026-08-01']);
+  assert.deepEqual(monthsBetween('2026-12-01', '2027-01-31'), ['2026-12-01', '2027-01-01'], 'bắc cầu sang năm');
+  assert.deepEqual(monthsBetween('2026-07-15', '2026-07-20'), ['2026-07-01'], 'trong cùng một tháng');
+});
