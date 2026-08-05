@@ -1,3 +1,15 @@
+### 2026-08-05 20:50 (giờ VN) — ✅ Đối chiếu lỗi "ô gộp đọc thành 0" của App Sale: **App Report KHÔNG dính**
+
+Bot App Sale báo NO-GO cho bản của họ, trong đó có P1: file Excel hợp lệ có ô gộp dọc bị đọc âm thầm thành `qty=0, amount=0`. App Report cũng parse .xlsx (`upload.js`) nên Claude kiểm chéo ngay.
+
+**Kết quả: không dính.** Dựng file có `mergeCells('A2:A3')` + `mergeCells('B2:B3')` rồi đọc bằng đúng cách `upload.js` đang dùng (`ws.getRow(r).values`): dòng 3 vẫn trả `["DN009", 2890000]` — ExcelJS tự điền giá trị ô gộp cho các dòng dưới. Không có mất mát.
+
+**Giới hạn của phép thử, ghi ra để không ai tưởng đã phủ hết:** file test do chính ExcelJS sinh; file xuất từ Excel thật có thể khác. Lớp bảo vệ bền vẫn là bất biến fail-closed, chưa có: hiện dòng thiếu tiền vẫn được nhập với `revenue=0` kèm cảnh báo, mà **danh sách cảnh báo bị cắt ở 50 dòng** (`warnings.slice(0, 50)`) — file lỗi nhiều là người duyệt không thấy hết. Đưa vào việc tồn, **không gấp**: đường doanh thu chính hiện đi qua materializer (mirror App Sale), không qua upload xlsx.
+
+`72043f26` là PROD của **App Sale**, không phải App Report — câu hỏi "PROD đang chạy gì" ở mục 20:30 nhắm nhầm hệ thống, rút lại. Phần còn đúng: `bf3c7c5` và `4490def` (App Report) vẫn chưa có trên origin.
+
+---
+
 ### 2026-08-05 20:30 (giờ VN) — ⚠ Hộp "Xin nhận sớm": thiếu cảnh báo lượt ưu tiên · và đang MỜI NV làm việc chắc chắn hỏng
 
 **CEO yêu cầu:** hộp thoại phải cảnh báo mỗi quý chỉ 1 lượt ứng trước hạn, dùng rồi thì lần sau bị chặn, nên cân nhắc để dành cho kỳ nhiều tiền.
