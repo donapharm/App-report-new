@@ -1,3 +1,25 @@
+### 2026-08-06 09:00 (giờ VN) — 🐛 Lỗi trong khối ③ của Claude: gán TIỀN CẢ ĐƠN cho MỘT cặp — sửa trước khi App Sale động tay
+
+Bot chạy lại V1, khối ③ ra **"5 dòng · 3.591.200đ"** trong khi ô KPI chỉ **1 dòng · 1.795.600đ**. Hai con số chỏi nhau ⇒ soi lại: `3.591.200 ÷ 1.795.600 = 2` chẵn, **không phải bội của 5** ⇒ 5 dòng KHÔNG cùng một mặt hàng.
+
+**Lỗi:** `diagnoseOrderPair` lấy mã hàng của **dòng đầu** nhưng cộng tiền của **tất cả dòng**. Đơn nhiều mặt hàng ⇒ dồn hết tiền vào một cặp ⇒ **chỉ sai cặp cho App Sale sửa**, và sửa xong vẫn còn cách ly. Suýt để App Sale thao tác trên chẩn đoán sai — đúng vào lúc còn 2 ngày tới hạn.
+
+**Sửa:** tách theo **từng mặt hàng**, mỗi cặp một kết luận riêng (`MISSING` / `AMBIGUOUS` / `OK`), tiền của đúng mặt hàng đó, kèm mã NV mà dòng đang ghi. Câu "việc cần làm" **chỉ liệt kê cặp hỏng** — cặp đã đúng không được đưa vào để App Sale khỏi sửa nhầm.
+
+```
+③ CẶP CỦA ĐƠN ĐANG HỎI — DH479816174
+   Đơn có 5 dòng · 4 mặt hàng · tổng 3.591.200đ
+     ✗ THIẾU CẶP   G1.GE.QĐ139.1104.N2.162    2 dòng · 3.591.200đ · dòng ghi NV: UNALLOCATED
+     ✓ đã đúng     QL-B                       1 dòng · 0đ · dòng ghi NV: DN001
+   ⇒ 1/4 mặt hàng của đơn có cặp hỏng
+```
+
+5 test mới (gồm ca "dòng thiếu mã hàng vẫn phải hiện, không bị nuốt"). Server **931 bài · 925 PASS · 6 lỗi `pdfinfo`** môi trường.
+
+**Vẫn còn một câu hỏi cho bot, phải trả lời trước khi App Sale sửa:** ô KPI đếm **1 dòng · 1.795.600đ**, khối ③ đếm **2 dòng cùng mã hàng · 3.591.200đ**. Hai dòng giống hệt nhau về tiền ⇒ hoặc đơn có thật 2 dòng, hoặc **nguồn đang nhân đôi**. Nếu nhân đôi thì thêm cặp phân công sẽ kéo **gấp đôi tiền** vào doanh số DN001.
+
+---
+
 ### 2026-08-06 08:30 (giờ VN) — 🔧 Tinh chỉnh cổng (b): FAIL phải là SO SÁNH, không phải tuyệt đối
 
 Bot dừng ở cổng (b): *"CP/DT vẫn `—` sau >1 phút do upstream employee-cost"* và hỏi CEO chọn **chờ KPI hồi phục** hay **deploy UI**. Kèm số: test **955/955**, Vite 651 modules, browser mobile/desktop + console/HTTP 5xx PASS, independent re-audit PASS.

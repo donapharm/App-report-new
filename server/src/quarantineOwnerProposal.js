@@ -139,36 +139,55 @@ function diagnoseOrderPair({ orderCode = '', unitCode = '', lines = [], catalogR
   const own = (Array.isArray(lines) ? lines : []).filter((line) => (
     text(line?.sale_order_no ?? line?.order_code ?? line?.source_order).toUpperCase() === wanted
   ));
-  const base = { found: false, productCode: '', lines: 0, amount: 0, inCatalog: false, nvCount: 0, emps: [] };
+  const head = { unitCode: upper(unitCode), orderCode: wanted, found: false, lines: 0, amount: 0, products: [] };
   if (!own.length) {
-    return {
-      ...base, unitCode: upper(unitCode), orderCode: wanted,
+    return { ...head,
       verdict: 'KHÔNG TÌM THẤY ĐƠN trong khoảng ngày đang tra',
-      action: 'Kiểm lại mã đơn và khoảng --from/--to trước khi kết luận. CẤM suy ra "đơn đã hết cách ly".',
-    };
+      action: 'Kiểm lại mã đơn và khoảng --from/--to trước khi kết luận. CẤM suy ra "đơn đã hết cách ly".' };
   }
-  const productCode = upper(own[0]?.qlnb_code ?? own[0]?.iit_code ?? own[0]?.product_code);
-  const amount = Math.round(own.reduce((sum, line) => sum + num(line?.invoice_export_amount ?? line?.revenue ?? line?.amount), 0));
-  // Mọi NV mà danh mục đang gán cho ĐÚNG cặp này (kể cả cặp đang gán nhiều người).
-  const pairRows = (Array.isArray(catalogRows) ? catalogRows : [])
-    .filter((row) => upper(row?.qlnb_code) === productCode);
-  const nvCount = pairRows.reduce((max, row) => Math.max(max, Number(row?.nv_cnt) || 0), 0);
-  const emps = [...new Set(pairRows.map((row) => upper(row?.emp_code)).filter(Boolean))].sort();
-  const hit = { ...base, found: true, unitCode: upper(unitCode), orderCode: wanted, productCode, lines: own.length, amount, inCatalog: !!pairRows.length, nvCount, emps };
 
-  if (!pairRows.length) {
-    return { ...hit,
-      verdict: 'CẶP THIẾU trong bảng phân công ⇒ App Report phải rơi về mã NV của dòng MISA, nên vẫn cách ly',
-      action: `App Sale: THÊM cặp (${upper(unitCode)} × ${productCode}) vào unit_product_employees, gán ĐÚNG MỘT NV.` };
+  // ‼ SỬA 06/08 09:00 — bản đầu lấy mã hàng của DÒNG ĐẦU nhưng cộng tiền của TẤT CẢ
+  // dòng. Bản in thật ra "5 dòng · 3.591.200đ" trong khi ô KPI chỉ 1 dòng · 1.795.600đ
+  // ⇒ đơn có NHIỀU mặt hàng. Gán cả 3,59tr cho một cặp là chỉ sai cặp cho App Sale sửa.
+  // Nay tách theo TỪNG mặt hàng, mỗi cặp một kết luận riêng.
+  const byProduct = new Map();
+  for (const line of own) {
+    const code = upper(line?.qlnb_code ?? line?.iit_code ?? line?.product_code) || '(thiếu mã hàng)';
+    const hit = byProduct.get(code) || { code, lines: 0, amount: 0, emps: new Set() };
+    hit.lines += 1;
+    hit.amount += num(line?.invoice_export_amount ?? line?.revenue ?? line?.amount);
+    const emp = upper(line?.employee_code ?? line?.emp_code);
+    if (emp) hit.emps.add(emp);
+    byProduct.set(code, hit);
   }
-  if (nvCount > 1) {
-    return { ...hit,
-      verdict: `CẶP ĐANG GÁN ${nvCount} NV (${emps.join(', ')}) ⇒ danh mục mập mờ, App Report không dám lấy`,
-      action: `App Sale: GỠ còn ĐÚNG MỘT NV cho cặp (${upper(unitCode)} × ${productCode}).` };
+
+  const products = [...byProduct.values()].map((item) => {
+    const pairRows = (Array.isArray(catalogRows) ? catalogRows : []).filter((row) => upper(row?.qlnb_code) === item.code);
+    const nvCount = pairRows.reduce((max, row) => Math.max(max, Number(row?.nv_cnt) || 0), 0);
+    const catalogEmps = [...new Set(pairRows.map((row) => upper(row?.emp_code)).filter(Boolean))].sort();
+    const state = !pairRows.length ? 'MISSING' : (nvCount > 1 ? 'AMBIGUOUS' : 'OK');
+    return {
+      code: item.code, lines: item.lines, amount: Math.round(item.amount),
+      lineEmps: [...item.emps].sort(), inCatalog: !!pairRows.length, nvCount, catalogEmps, state,
+      action: state === 'MISSING'
+        ? `THÊM cặp (${upper(unitCode)} × ${item.code}) vào unit_product_employees, gán ĐÚNG MỘT NV.`
+        : state === 'AMBIGUOUS'
+          ? `GỠ còn ĐÚNG MỘT NV cho cặp (${upper(unitCode)} × ${item.code}) — đang gán ${nvCount} NV (${catalogEmps.join(', ')}).`
+          : `Không phải sửa — cặp đã gán đúng 1 NV (${catalogEmps[0] || '—'}).`,
+    };
+  }).sort((a, b) => b.amount - a.amount || a.code.localeCompare(b.code));
+
+  const broken = products.filter((item) => item.state !== 'OK');
+  const amount = products.reduce((sum, item) => sum + item.amount, 0);
+  const head2 = { ...head, found: true, lines: own.length, amount, products };
+  if (!broken.length) {
+    return { ...head2,
+      verdict: `Cả ${products.length} mặt hàng của đơn đều đã có cặp gán đúng 1 NV ⇒ đường phân công KHÔNG còn lỗi`,
+      action: 'Vẫn còn cách ly thì lỗi nằm ở đường dựng dữ liệu, KHÔNG phải bảng phân công — dừng và báo Claude.' };
   }
-  return { ...hit,
-    verdict: `Cặp đã có, gán đúng 1 NV (${emps[0] || '—'}) ⇒ đường phân công KHÔNG còn lỗi`,
-    action: 'Vẫn còn cách ly thì lỗi nằm ở đường dựng dữ liệu, KHÔNG phải bảng phân công — dừng và báo Claude.' };
+  return { ...head2,
+    verdict: `${broken.length}/${products.length} mặt hàng của đơn có cặp hỏng (${broken.map((item) => item.code).join(', ')})`,
+    action: broken.map((item) => `App Sale: ${item.action}`).join('  |  ') };
 }
 
 const DECISIONS = Object.freeze({
@@ -271,8 +290,12 @@ function formatProposal(result) {
     out.push(`③ CẶP CỦA ĐƠN ĐANG HỎI — ${p.orderCode}`);
     if (!p.found) out.push(`   ⛔ ${p.verdict}`);
     else {
-      out.push(`   Mã hàng: ${p.productCode} · ${p.lines} dòng · ${money(p.amount)}`);
-      out.push(`   Trong bảng phân công: ${p.inCatalog ? `CÓ · ${p.nvCount} NV (${p.emps.join(', ') || '—'})` : 'KHÔNG'}`);
+      out.push(`   Đơn có ${p.lines} dòng · ${p.products.length} mặt hàng · tổng ${money(p.amount)}`);
+      for (const item of p.products) {
+        const icon = item.state === 'MISSING' ? '✗ THIẾU CẶP' : item.state === 'AMBIGUOUS' ? `✗ ${item.nvCount} NV` : '✓ đã đúng';
+        out.push(`     ${icon.padEnd(13)} ${item.code.padEnd(26)} ${item.lines} dòng · ${money(item.amount)}`
+          + `${item.lineEmps.length ? ` · dòng ghi NV: ${item.lineEmps.join(', ')}` : ''}`);
+      }
       out.push(`   ⇒ ${p.verdict}`);
     }
     out.push(`   ➜ VIỆC CẦN LÀM: ${p.action}`);
