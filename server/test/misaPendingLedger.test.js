@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   statusKeyOf, groupByStatus, findGroupsMatching, reasonOf,
-  detailRowOf, buildDetail, auditTotals, formatGroups, formatDetail,
+  detailRowOf, buildDetail, splitByMoney, frozenPeriodPin, auditTotals, formatGroups, formatDetail,
 } = require('../src/misaPendingLedger');
 
 /**
@@ -57,13 +57,23 @@ test('‼ lệch MỘT ĐỒNG là không khớp — "gần đúng" chính là c
   assert.deepEqual(findGroupsMatching(groups, 0), [], 'số cần tìm bằng 0 thì không khớp bừa vào nhóm rỗng');
 });
 
-test('lý do lấy từ danh mục 14 mã có sẵn, không tự nghĩ chữ mới', () => {
-  const outside = reasonOf(line({ revenue_bucket: 'proposed' }));
+test('‼ lý do gọi LẠI classifyMisa, không viết luật riêng', () => {
+  // Bản đầu tự viết luật rồi NÓI SAI trên PROD: dán nhãn "Bucket ngoài
+  // official/pending" cho 18 dòng có bucket = 'pending' — tức đang nằm TRONG.
+  const outside = reasonOf(line({ revenue_bucket: 'proposed' }), '2026-07');
   assert.equal(outside.code, 'MISA_CHUA_GHI_DOANH_SO');
-  assert.match(outside.owner, /Kế toán/);
-  assert.match(outside.action, /Ghi doanh số|xác nhận huỷ/);
-  const noDate = reasonOf({ revenue_bucket: 'official', sale_order_date: '' });
+  const zero = reasonOf(line({ revenue_bucket: 'pending', invoice_export_amount: 0 }), '2026-07');
+  assert.equal(zero.code, 'MISA_TIEN_BANG_0', 'dòng 0đ phải ra đúng mã của nó');
+  const noDate = reasonOf({ revenue_bucket: 'official', sale_order_date: '', invoice_export_amount: 5 }, '2026-07');
   assert.equal(noDate.code, 'MISA_THIEU_NGAY_DOANH_THU');
+});
+
+test('‼ bucket "pending" có tiền KHÔNG phải ngoại lệ — cấm dán nhãn sai', () => {
+  const ok = reasonOf(line({ revenue_bucket: 'pending', invoice_export_amount: 3_995_000, sale_order_date: '2026-07-29' }), '2026-07');
+  assert.equal(ok.code, '');
+  assert.equal(ok.excluded, false);
+  assert.doesNotMatch(ok.meaning, /ngoài official\/pending/, 'đây chính là câu đã nói sai trên PROD');
+  assert.match(ok.meaning, /VẪN được tính vào doanh thu/);
 });
 
 test('dòng bảng có đủ 6 cột CEO yêu cầu, thiếu thì hiện "—" chứ không hiện rỗng', () => {
@@ -102,15 +112,52 @@ test('‼ tổng lệch thì BẢN IN phải hét lên, không được in êm r
 });
 
 test('bản in cho kế toán: có cột GHI/HUỶ, có hạn 08/08, có tên đơn vị và mặt hàng', () => {
-  const rows = buildDetail([line(), line({ sale_order_no: 'DH2', qlnb_code: 'QL08', product_name: 'Pizar-5', invoice_export_amount: 2_995_000 })]);
-  const printed = formatDetail({ rows, audit: auditTotals(rows, 3_995_000), period: '2026-07' });
+  const rows = buildDetail([line(), line({ sale_order_no: 'DH2', qlnb_code: 'QL08', product_name: 'Pizar-5', invoice_export_amount: 2_995_000 })], '2026-07');
+  const printed = formatDetail({ rows, audit: auditTotals(rows, 3_995_000), period: '2026-07', frozen: null });
   assert.match(printed, /GHI\/HUỶ/);
   assert.match(printed, /GHI hay HUỶ/);
   assert.match(printed, /08\/08/);
   assert.match(printed, /Pizar-3/);
   assert.match(printed, /Pizar-5/);
   assert.match(printed, /175\.BVĐK/);
-  assert.match(printed, /VÌ SAO CÁC DÒNG NÀY CHƯA VÀO DOANH THU/);
+  assert.match(printed, /VÌ SAO CÁC ĐƠN NÀY CẦN QUYẾT/);
+});
+
+/* ── Sửa 05/08 11:20, sau bản in THẬT trên PROD ─────────────────────────────── */
+
+test('‼ 17 dòng 0đ KHÔNG được trộn vào câu hỏi của kế toán', () => {
+  // Bản in thật: 18 dòng · 11 đơn, nhưng toàn bộ tiền nằm ở ĐÚNG MỘT đơn.
+  // Đưa cả 11 đơn cho kế toán là bắt họ quyết 11 lần cho 1 câu hỏi.
+  // Dựng đúng dữ liệu THẬT của PROD: bucket 'pending' (không phải 'proposed').
+  const real = { revenue_bucket: 'pending' };
+  const lines = [
+    ...Array.from({ length: 17 }, (_, i) => line({ ...real, sale_order_no: `DH0${i}`, invoice_export_amount: 0 })),
+    line({ ...real, sale_order_no: 'DH479816093', invoice_export_amount: 3_995_000 }),
+  ];
+  const rows = buildDetail(lines, '2026-07');
+  const { decide, zero } = splitByMoney(rows);
+  assert.equal(decide.length, 1);
+  assert.equal(zero.length, 17);
+  const printed = formatDetail({ rows, audit: auditTotals(rows, 3_995_000), period: '2026-07', frozen: null });
+  assert.match(printed, /TRẢ LỜI 1 CÂU/, 'phải nói rõ chỉ có 1 câu hỏi');
+  assert.match(printed, /17 DÒNG 0đ .* KHÔNG hỏi kế toán/);
+  assert.match(printed, /MISA_TIEN_BANG_0/, 'dòng 0đ vẫn phải hiện — không dòng nào biến mất lặng lẽ');
+  assert.match(printed, /Chuyển App Sale \/ MISA soát lại/, 'phải chỉ đúng người xử lý');
+});
+
+test('‼ kỳ ĐÃ KHOÁ SỔ thì phải cảnh báo HUỶ không miễn phí', () => {
+  const pin = frozenPeriodPin('2026-07');
+  assert.ok(pin, 'T07 phải nằm trong danh sách kỳ đã ghim');
+  assert.equal(pin.ky, '07.2026');
+  const rows = buildDetail([line({ invoice_export_amount: 3_995_000 })], '2026-07');
+  const printed = formatDetail({ rows, audit: auditTotals(rows, 3_995_000), period: '2026-07' });
+  assert.match(printed, /KỲ 07\.2026 ĐÃ KHOÁ SỔ/);
+  assert.match(printed, /GHI  ⇒ số không đổi/);
+  assert.match(printed, /HUỶ  ⇒ doanh thu kỳ GIẢM 3\.995\.000đ/);
+  assert.match(printed, /BÁO CEO TRƯỚC/);
+  // Kỳ chưa khoá sổ thì không doạ người ta.
+  assert.equal(frozenPeriodPin('2026-08'), null);
+  assert.doesNotMatch(formatDetail({ rows, period: '2026-08' }), /ĐÃ KHOÁ SỔ/);
 });
 
 test('‼ không tìm ra nhóm khớp ⇒ in TOÀN BỘ phân nhóm và nói rõ chưa gửi ai', () => {

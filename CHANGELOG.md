@@ -1,3 +1,29 @@
+### 2026-08-05 11:30 (giờ VN) — ⛔ Đóng hẳn bản chặn bộ nhớ (RSS thật 851 MiB) · ✅ V1 chốt · 🔧 sửa lỗi bản in V2
+
+**① Bản chặn bộ nhớ — ĐÓNG, không sửa nữa.** Bot dán RSS thật của `app-report` lúc 11:05:44 giờ VN: **851,47 MiB**. Chạy thẳng vào chính module của bản ứng viên:
+
+```
+ngưỡng NHẬN VIỆC : 576 MiB   ← 768 − 192 dự phòng
+trần CỨNG        : 768 MiB
+RSS thật         : 851 MiB
+=> CHẶN: 503 EMPLOYEE_COST_ALL_MEMORY_PRESSURE
+```
+
+Máy đang chạy **cao hơn cả trần cứng 83 MiB**. Deploy bản đó là màn "Tất cả NV" — màn mặc định của CEO — **trả 503 ở 100% lượt mở**, không phải "thỉnh thoảng thiếu vài NV". Ngưỡng được chọn mà **chưa ai đo máy thật**. Không xin sửa lại nữa: bỏ hẳn cổng 503, giữ mỗi phần rút ngắn TTL kết quả lỗi (2 phút) — phần đó tốt, không tranh cãi. Muốn thật sự giảm RAM thì phải bắt đầu bằng **đo**, và mở việc riêng.
+
+**② V1 — có đề xuất, độ chắc cao nhất.** `propose_quarantine_owner.js` chạy trên PROD, thoát **0**:
+`DH479816174` → **DN001 (Đặng Xuân Trung)**. Căn cứ: danh mục phân công **143/143 cặp mã hàng** của `120.HTNT-PHARMACITY` đều thuộc DN001; lịch sử T06–T08 **109 dòng · 50 đơn · 582.140.315đ · 100%** một người. Hai nguồn không mâu thuẫn ⇒ không rơi vào nhánh "cấm đoán". Đọc 116 dòng, 109 gán được ⇒ 7 dòng còn lại là phần đang cách ly, khớp với bài toán. **Đã báo CEO rằng DN001 chính là mã của CEO** — người duyệt và người nhận là một, phải biết trước khi gật.
+
+**③ V2 — bản in đầu NÓI SAI một câu, đã sửa.** Bảng thật trên PROD dán nhãn *"Bucket ngoài official/pending"* cho 18 dòng có `revenue_bucket = 'pending'` — tức đang nằm **TRONG**. Nguyên nhân: `reasonOf` **tự viết lại** một luật đã có ở `syncExceptionClassifier.classifyMisa` — đúng cái tội "nhiều định nghĩa cho một luật" vừa phê bình ở review `b01a182` sáng nay. Nay gọi thẳng bản gốc, xoá bản chép.
+
+Sửa kèm, đều từ dữ liệu thật:
+- **Tách dòng 0đ khỏi câu hỏi của kế toán.** Bảng thật là 18 dòng · 11 đơn nhưng **17 dòng bằng 0đ**; toàn bộ 3.995.000đ nằm ở **đúng một đơn `DH479816093`** (29/07 · 186.BVĐK AN PHÚ CNIII · DN001). Bản cũ bắt kế toán quyết **11 lần** cho **1 câu hỏi** — kiểu bảng đó người ta trả lời bừa hoặc bỏ đấy tới hết hạn. Nay in **1 câu**. 17 dòng 0đ **không biến mất**, xuống khối riêng với mã `MISA_TIEN_BANG_0` và ghi rõ chủ xử lý là App Sale/MISA, không phải kế toán.
+- **Cảnh báo kỳ đã khoá sổ.** T07 đã ghim 30.917.892.673đ, và bucket `pending` **đang được tính** vào doanh thu kỳ. Nên **GHI** = số không đổi (an toàn), **HUỶ** = doanh thu T07 **giảm 3.995.000đ** so với số đã dùng tính thưởng/phạt **đã trả**. Bản in nay nói thẳng: trả lời HUỶ thì **báo CEO trước**, không tự sửa (`SPEC_REVENUE_DELIVERY_PERIOD`: không hồi tố). Trước đây bản in coi hai lựa chọn như nhau.
+
+**Trạng thái test:** server **900/906** (+3 test mới khoá đúng ba lỗi trên; vẫn đúng 6 lỗi môi trường `pdfinfo`).
+
+---
+
 ### 2026-08-05 11:00 (giờ VN) — ⛔ Review `b01a182`: cổng quyền CEO hỏng SẴN trên PROD, cấm sửa bằng cách nới cho admin
 
 **Bối cảnh.** Bot deploy `b01a182` (thông báo thanh toán trong app), nghiệm thu bằng trình duyệt thật phát hiện tab Thanh toán trả **403 `PAYMENT_NOTIFICATION_SCOPE_REQUIRED`** và chuông gọi lại lặp vô hạn. Bot **tự rollback về `b49e585`**, kèm backup + SHA-256 + xác nhận T06/T07 lệch 0 + notify vẫn tắt. **Rollback đúng, bằng chứng đủ.**

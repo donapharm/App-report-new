@@ -23,6 +23,9 @@
  */
 
 const syncExceptionCatalog = require('./syncExceptionCatalog');
+// ‼ Dùng LẠI bản phân loại gốc, không viết bản thứ hai. Bản chép tay hôm 05/08 đã dán
+// nhãn sai ("Bucket ngoài official/pending") cho 18 dòng bucket = 'pending'.
+const syncExceptionClassifier = require('./syncExceptionClassifier');
 
 const text = (value) => String(value ?? '').trim();
 const num = (value) => {
@@ -72,21 +75,36 @@ function findGroupsMatching(groups = [], targetAmount) {
 }
 
 /**
- * Lý do dòng đang nằm ngoài doanh thu — lấy NGHĨA từ danh mục 14 mã có sẵn, không tự
- * nghĩ chữ mới. Bucket ngoài official/pending chính là `MISA_CHUA_GHI_DOANH_SO`.
+ * Lý do dòng đang ở trạng thái này.
+ *
+ * ‼ SỬA 05/08 11:20 — bản đầu tự viết luật riêng và **NÓI SAI**: bản in thật trên PROD
+ * dán nhãn *"Bucket ngoài official/pending"* cho 18 dòng có `revenue_bucket = 'pending'`
+ * — tức là **đang nằm TRONG** official/pending. Nhãn sai thì kế toán quyết sai.
+ *
+ * Nguyên nhân: viết lại một luật đã có sẵn ở `syncExceptionClassifier.classifyMisa`
+ * (đúng cái tội "bốn định nghĩa cho một luật" vừa phê bình chỗ khác sáng nay). Nay
+ * gọi thẳng bản gốc, không giữ bản chép.
+ *
+ * `classifyMisa` trả chuỗi RỖNG nghĩa là **không phải ngoại lệ** — dòng vẫn được tính
+ * vào doanh thu kỳ, chỉ là MISA chưa ghi chính thức. Trường hợp này KHÔNG bịa mã mới
+ * nhét vào danh mục 14 mã; nói thẳng bằng tiếng Việt.
  */
-function reasonOf(line = {}) {
-  const bucket = text(line.revenue_bucket).toLowerCase();
-  const code = bucket && !['official', 'pending'].includes(bucket)
-    ? 'MISA_CHUA_GHI_DOANH_SO'
-    : (!text(line.revenue_date || line.sale_order_date) ? 'MISA_THIEU_NGAY_DOANH_THU' : 'MISA_CHUA_GHI_DOANH_SO');
+function reasonOf(line = {}, period = '') {
+  const code = syncExceptionClassifier.classifyMisa(line, period);
+  if (!code) {
+    return {
+      code: '', excluded: false,
+      meaning: 'Không phải ngoại lệ — bucket "pending" VẪN được tính vào doanh thu kỳ, đang chờ MISA ghi chính thức',
+      owner: 'Kế toán MISA', action: 'Ghi chính thức, hoặc xác nhận huỷ',
+    };
+  }
   const meta = syncExceptionCatalog.describe(code);
-  return { code, meaning: meta.meaning, owner: meta.owner, action: meta.action };
+  return { code, excluded: syncExceptionCatalog.isExcluded(code), meaning: meta.meaning, owner: meta.owner, action: meta.action };
 }
 
 /** Một dòng của bảng kế toán sẽ đọc. */
-function detailRowOf(line = {}) {
-  const reason = reasonOf(line);
+function detailRowOf(line = {}, period = '') {
+  const reason = reasonOf(line, period);
   return {
     orderCode: text(line.sale_order_no || line.order_code) || '—',
     date: text(line.sale_order_date || line.invoice_date).slice(0, 10) || '—',
@@ -103,10 +121,44 @@ function detailRowOf(line = {}) {
   };
 }
 
-function buildDetail(lines = []) {
+function buildDetail(lines = [], period = '') {
   return (Array.isArray(lines) ? lines : [])
-    .map(detailRowOf)
+    .map((line) => detailRowOf(line, period))
     .sort((a, b) => a.date.localeCompare(b.date) || a.orderCode.localeCompare(b.orderCode) || a.productCode.localeCompare(b.productCode));
+}
+
+/**
+ * ‼ TÁCH DÒNG CÓ TIỀN KHỎI DÒNG 0đ — sửa 05/08 11:20 sau bản in thật trên PROD.
+ *
+ * Bảng thật ra **18 dòng · 11 đơn**, nhưng **17 dòng là 0đ**; toàn bộ 3.995.000đ nằm
+ * ở **đúng MỘT đơn** (`DH479816093`). Đưa nguyên cả 18 dòng cho kế toán là bắt họ
+ * quyết 11 lần cho một câu hỏi duy nhất — kiểu bảng đó người ta đọc lướt rồi trả lời
+ * bừa, hoặc bỏ đấy tới khi hết hạn.
+ *
+ * Dòng 0đ KHÔNG biến mất (nguyên tắc "không dòng nào biến mất lặng lẽ") — chúng
+ * xuống khối riêng, vì chúng là **việc khác của người khác**: `MISA_TIEN_BANG_0` là
+ * lỗi dữ liệu, không phải câu hỏi ghi/huỷ.
+ */
+function splitByMoney(rows = []) {
+  const list = Array.isArray(rows) ? rows : [];
+  return { decide: list.filter((row) => Math.round(num(row.amount)) !== 0), zero: list.filter((row) => Math.round(num(row.amount)) === 0) };
+}
+
+/**
+ * Kỳ này đã KHOÁ SỔ chưa? Nếu rồi thì "HUỶ" không phải câu trả lời miễn phí — nó làm
+ * đổi tổng doanh thu của kỳ đã dùng để tính thưởng/phạt đã trả cho nhân viên.
+ * Số ghim lấy từ `revenueMaterializeGuard`, không chép tay.
+ */
+function frozenPeriodPin(period = '', transitions = null) {
+  const month = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(text(period));
+  if (!month) return null;
+  const ky = `${month[2]}.${month[1]}`;
+  const source = transitions || require('./revenueMaterializeGuard').APPROVED_RULE_TRANSITIONS;
+  for (const transition of Object.values(source || {})) {
+    const pin = (transition?.frozenPeriods || {})[ky];
+    if (pin) return { ky, ...pin };
+  }
+  return null;
 }
 
 /**
@@ -134,17 +186,20 @@ function formatGroups(groups = [], targetAmount) {
 }
 
 /** Bảng chi tiết — kế toán chỉ việc điền GHI hoặc HUỶ vào cột cuối. */
-function formatDetail({ rows = [], group = null, audit = null, period = '' } = {}) {
+function formatDetail({ rows = [], group = null, audit = null, period = '', frozen = undefined } = {}) {
   const out = [];
+  const { decide, zero } = splitByMoney(rows);
+  const pin = frozen === undefined ? frozenPeriodPin(period) : frozen;
   out.push(`BẢNG KÊ MISA "ĐỀ NGHỊ GHI" — kỳ ${period || '—'}`);
   if (group) out.push(`Trạng thái nguồn: ${group.key}  ·  ${group.lines} dòng · ${group.orders} đơn · ${money(group.amount)}`);
   out.push('');
-  out.push('‼ KẾ TOÁN CHỈ CẦN TRẢ LỜI: mỗi đơn dưới đây → GHI hay HUỶ. Hạn 08/08 (giờ VN),');
-  out.push('   quá hạn là kỳ khoá sổ, không sửa được nữa.');
+  const orders = [...new Set(decide.map((row) => row.orderCode))];
+  out.push(`‼ KẾ TOÁN CHỈ CẦN TRẢ LỜI ${orders.length} CÂU: mỗi đơn dưới đây → GHI hay HUỶ.`);
+  out.push('   Hạn 08/08 (giờ VN), quá hạn là kỳ khoá sổ, không sửa được nữa.');
   out.push('');
   out.push(`${pad('MÃ ĐƠN', 16)} ${pad('NGÀY', 11)} ${pad('ĐƠN VỊ', 24)} ${pad('MẶT HÀNG', 22)} ${pad('NV', 8)} ${pad('TIỀN', 14)} GHI/HUỶ`);
   out.push('─'.repeat(112));
-  for (const row of rows) {
+  for (const row of decide) {
     out.push(`${pad(row.orderCode, 16)} ${pad(row.date, 11)} ${pad(row.unitCode, 24)} ${pad(row.productCode, 22)} `
       + `${pad(row.empCode, 8)} ${pad(money(row.amount), 14)} ______`);
   }
@@ -156,21 +211,46 @@ function formatDetail({ rows = [], group = null, audit = null, period = '' } = {
       out.push(`⛔ LỆCH ${money(audit.diff)} so với số cần đối chiếu (${money(audit.expected)}) — DỪNG, không gửi bảng này đi.`);
     }
   }
-  const reasons = [...new Set(rows.map((row) => `${row.reasonCode} — ${row.reasonMeaning}`))];
+
+  // ‼ Kỳ đã khoá sổ ⇒ "HUỶ" KHÔNG phải câu trả lời miễn phí. Phải nói trước, đừng để
+  // kế toán trả lời xong mới phát hiện là đụng vào số đã trả thưởng cho nhân viên.
+  if (pin) {
+    out.push('');
+    out.push(`‼ KỲ ${pin.ky} ĐÃ KHOÁ SỔ — ghim ${money(pin.totalRevenue)} / ${pin.totalRows} dòng.`);
+    out.push('   Bucket "pending" ĐANG ĐƯỢC TÍNH vào doanh thu kỳ. Nên:');
+    out.push('     · GHI  ⇒ số không đổi, chỉ là MISA ghi chính thức. An toàn.');
+    out.push(`     · HUỶ  ⇒ doanh thu kỳ GIẢM ${money(audit ? audit.detailTotal : 0)} so với số đã chốt`);
+    out.push('              và đã dùng tính thưởng/phạt đã trả. Trả lời HUỶ thì BÁO CEO TRƯỚC,');
+    out.push('              không tự sửa — theo SPEC_REVENUE_DELIVERY_PERIOD: không hồi tố.');
+  }
+
+  const reasons = [...new Set(decide.map((row) => `${row.reasonCode || '(không phải ngoại lệ)'} — ${row.reasonMeaning}`))];
   if (reasons.length) {
     out.push('');
-    out.push('VÌ SAO CÁC DÒNG NÀY CHƯA VÀO DOANH THU');
+    out.push('VÌ SAO CÁC ĐƠN NÀY CẦN QUYẾT');
     for (const reason of reasons) out.push(`   · ${reason}`);
   }
-  const units = [...new Set(rows.map((row) => `${row.unitCode}${row.unitName ? ` — ${row.unitName}` : ''}`))];
-  const products = [...new Set(rows.map((row) => `${row.productCode}${row.productName ? ` — ${row.productName}` : ''}`))];
+
+  // Dòng 0đ: KHÔNG bỏ đi, nhưng cũng KHÔNG bắt kế toán quyết. Việc khác, người khác.
+  if (zero.length) {
+    const zeroReasons = [...new Set(zero.map((row) => `${row.reasonCode || '(không rõ)'} — ${row.reasonMeaning}`))];
+    const zeroOrders = [...new Set(zero.map((row) => row.orderCode))];
+    out.push('');
+    out.push(`── ${zero.length} DÒNG 0đ (${zeroOrders.length} đơn) — KHÔNG hỏi kế toán, đây là lỗi dữ liệu ──`);
+    for (const reason of zeroReasons) out.push(`   · ${reason}`);
+    out.push(`   Đơn: ${zeroOrders.join(' · ')}`);
+    out.push('   Không ảnh hưởng tổng tiền ở trên (đều bằng 0đ). Chuyển App Sale / MISA soát lại.');
+  }
+
+  const units = [...new Set(decide.map((row) => `${row.unitCode}${row.unitName ? ` — ${row.unitName}` : ''}`))];
+  const products = [...new Set(decide.map((row) => `${row.productCode}${row.productName ? ` — ${row.productName}` : ''}`))];
   out.push('');
-  out.push(`ĐƠN VỊ (${units.length}): ${units.join(' · ')}`);
+  out.push(`ĐƠN VỊ CẦN QUYẾT (${units.length}): ${units.join(' · ')}`);
   out.push(`MẶT HÀNG (${products.length}): ${products.join(' · ')}`);
   return out.join('\n');
 }
 
 module.exports = {
   statusKeyOf, groupByStatus, findGroupsMatching, reasonOf,
-  detailRowOf, buildDetail, auditTotals, formatGroups, formatDetail,
+  detailRowOf, buildDetail, splitByMoney, frozenPeriodPin, auditTotals, formatGroups, formatDetail,
 };

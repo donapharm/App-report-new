@@ -117,7 +117,7 @@ async function main() {
   }
 
   const group = chosen[0];
-  const rows = buildDetail(lines.filter((line) => statusKeyOf(line) === group.key));
+  const rows = buildDetail(lines.filter((line) => statusKeyOf(line) === group.key), PERIOD);
   const audit = auditTotals(rows, STATUS ? group.amount : AMOUNT);
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ period: PERIOD, group, audit, rows }, null, 2));
