@@ -1,3 +1,19 @@
+### 2026-08-06 04:00 (giờ VN) — ⛔ Rollback QUÁ SÂU: PROD tụt về `bf3c7c5`, con số `145,7%` gây hiểu nhầm QUAY LẠI màn hình CEO
+
+Bot cutover `b87fbaa`, acceptance FAIL, rollback về **`bf3c7c5`**. Hai vấn đề, cái thứ hai nghiêm trọng hơn cái thứ nhất.
+
+**① Lý do FAIL thứ nhất là TIÊU CHÍ ĐÃ BỊ THAY THẾ.** Bot ghi *"Exact 2/21 không xuất hiện sau khi ngày live đã sang 06/08"*. Nhưng lúc 03:04 chính bot hỏi và Claude **đã duyệt đổi 2/21 → 3/21**, kèm bảng đối chiếu cả tháng và lệnh viết tiêu chí **thành luật, không thành số**. Bot vẫn chạy tiêu chí cũ ⇒ **báo động giả**, không phải lỗi code. (Lỗi gốc vẫn là của Claude: ghim số cứng vào cổng nghiệm thu — lần thứ ba trong ngày.)
+
+**② Lý do thứ hai chưa được chứng minh, mà hậu quả rollback thì có thật.** *"Lần tải stable đầu không dựng được ba KPI có số"* — chưa có đối chứng. `b87fbaa` **không đụng file nào của KPI** (`git diff --name-only 3eac0a9 b87fbaa` không có `healthKpi`/`workingDay`). Nhiều khả năng là **cold cache sau reload**: bảng 21 NV phải dựng lại từ DataHub, quá hạn thì các ô fail-closed về `—` **đúng thiết kế** — và `3eac0a9` reload nguội cũng sẽ y hệt. Muốn kết luận phải **đối chứng**: tải nguội `3eac0a9` và `b87fbaa` rồi so.
+
+**‼ Hậu quả nặng nhất: rollback đi quá xa.** Lệnh ghi rõ *"lùi về `3eac0a9`, KHÔNG lùi sâu hơn"*. `bf3c7c5` là **cha của `3eac0a9`**, tức là bản **trước** sàn dự báo. Nên PROD lúc này **đã mất sàn**, ô dự báo **hiện lại `145,7%`** — đúng con số CEO đọc nhầm thành "chắc chắn vượt đích", đã sửa xong và đã nghiệm thu PASS lúc 21:30.
+
+**Luật rollback từ nay:** lùi về **bản tốt gần nhất đã nghiệm thu**, không lùi về một release cũ tuỳ ý. Ở đây bản đó là `3eac0a9` — deploy PASS · acceptance PASS lúc 21:30.
+
+**Việc ngay:** đưa PROD về `3eac0a9` (đã duyệt, đã nghiệm thu, không cần cổng mới). Sau đó mới bàn tiếp `b87fbaa` bằng tiêu chí đúng.
+
+---
+
 ### 2026-08-05 21:30 (giờ VN) — 🚢 PROD = `3eac0a9`: ô dự báo đã sạch, NHƯNG mới lên một nửa thứ CEO duyệt
 
 **Xong thật, ghi nhận:** ô dự báo hết hiện `145,7%`, nay là `— · đã qua 2/21 ngày làm việc, chưa đủ để dự báo`. Con số gây hiểu nhầm đã biến khỏi màn hình CEO. Ba ô KPI kia có số bình thường; **Khớp doanh thu lên 99,0%** (chiều nay 94,5%). Console 0 lỗi, backup có SHA-256, chỉ reload app-report, V3 giữ nguyên 1/1.
