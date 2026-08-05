@@ -1,3 +1,19 @@
+### 2026-08-06 05:40 (giờ VN) — 🔒 Luật: bộ lọc ĐANG ÁP DỤNG thì chip + câu cảnh báo KHÔNG được ẩn khi thu gọn
+
+CEO xác nhận **có yêu cầu** tính năng thu gọn bộ lọc trang Tổng quan (Claude đã hỏi lại, không phải bot tự làm thêm). Audit của bot trả **NEEDS FIX** với 4 mục — Claude giữ nguyên kết luận, nhưng **nâng mục #2 từ Medium lên CHẶN** và **hạ yêu cầu ở #3**.
+
+**#2 — nâng lên chặn, vì nó không phải chuyện thẩm mỹ.** Khối `overview-filter-note` bị ẩn khi thu gọn KHÔNG chỉ chứa chip tên bộ lọc; nó chứa cả câu *"Target không phân bổ theo lát cắt này nên App không tính % target sai."* Thu gọn ⇒ giấu câu đó, trong khi các ô KPI **vẫn đang bị lọc** ⇒ người dùng đọc doanh thu và % target mà **không biết đang nhìn một lát cắt**. Không sai số, nhưng **giấu điều kiện để hiểu số** — cùng họ với *"không dòng nào biến mất lặng lẽ"*.
+
+> **LUẬT (áp cho mọi màn có bộ lọc, không riêng Tổng quan):** khi có bộ lọc đang áp dụng, **chip tên bộ lọc và câu cảnh báo cách đọc số KHÔNG được ẩn**, kể cả ở trạng thái thu gọn. Chỉ được thu gọn phần **chọn** lọc.
+
+**#3 — đúng nhưng hạ yêu cầu cho vừa hạ tầng.** Bot tự chê test của mình là quét regex, không bắt được #1/#2 — chê đúng. Nhưng repo **không có `jsdom`/`testing-library`** (đã tra `web/package.json`), toàn bộ test web đang là quét mã nguồn; dựng hạ tầng render chỉ vì một toggle là không đáng. Yêu cầu vừa sức: khoá **đúng bất biến** (khối note nằm NGOÀI nhánh collapse · `aria-expanded` đổi theo state · header có `flex-wrap`). Test nào không thể fail được thì bỏ, đừng giữ cho đẹp số.
+
+**#1 · #4 — đúng, sửa rẻ:** `flex-wrap: wrap` + `min-width: 0`; giữ panel trong DOM với `hidden` (giữ được `aria-controls`, và #4 tự hết).
+
+**Thứ tự (Claude đề xuất, CEO có thể đổi):** ① cutover `b87fbaa` (đã duyệt 21:24, chưa lên PROD) → ② chạy V1 và giao việc cho App Sale (**hạn 08/08, còn 2 ngày**) → ③ sửa bộ lọc thu gọn trong lúc chờ App Sale. Đường tới hạn của V1 nằm ở App Sale, không nằm ở bot, nên làm ② sớm rồi ③ chạy song song là không việc nào bị đói.
+
+---
+
 ### 2026-08-06 05:15 (giờ VN) — ✅ Đóng lý do FAIL #2: **cache nguội, không phải lỗi `b87fbaa`** — và viết lại cổng (b)
 
 Bot đưa PROD về `3eac0a9` (đúng lệnh "bản tốt gần nhất đã nghiệm thu"), forecast hiện `— · đã qua 3/21 ngày làm việc` ✅, rồi **đối chứng cache nguội trên chính baseline**:
