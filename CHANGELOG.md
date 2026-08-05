@@ -1,3 +1,25 @@
+### 2026-08-05 19:10 (giờ VN) — 🔑 Đơn `DH479816174` giữ bền bằng BẢNG PHÂN CÔNG, không cần cổng override
+
+App Sale đã gán VP018 → DN001 lúc 16:39:14 (audit 19752, tiền/ngày/đơn khác không đổi, bảng phân công checksum giữ nguyên), kèm cảnh báo: **sync MISA hàng giờ có thể ghi đè lại** vì baseline chưa hỗ trợ override từng đơn, và đề xuất dựng "cổng sửa/build riêng".
+
+**Không cần dựng gì cả.** Đọc `appSaleRevenueMirror.CRM_ROWS_SQL` — câu SQL App Report dùng để quy đơn về nhân viên:
+
+```sql
+COALESCE(NULLIF(CASE WHEN nc.nv_cnt=1 THEN nc.emp_code END,''), l.employee_code,'') employee_code
+```
+
+`nc` = `unit_product_employees` (bảng phân công). Nghĩa là: **cặp (đơn vị × mã hàng) nào trong bảng phân công chỉ có ĐÚNG MỘT nhân viên thì lấy người đó — `l.employee_code` của dòng MISA chỉ là phương án dự phòng.** Bảng phân công **thắng** MISA.
+
+Hệ quả:
+- Sync MISA ghi đè `employee_code` về VP018 **cũng không đổi con số của App Report**, miễn là cặp (`120.HTNT-PHARMACITY` × mã hàng Pizar-3) có trong bảng phân công với đúng 1 NV. App Sale vừa xác nhận sync **không đụng** bảng phân công (checksum giữ nguyên) ⇒ sửa ở đó là **bền**, không cần cổng override, không cần build gấp trước 08/08.
+- Nếu đơn vẫn bị cách ly sau sync thì nguyên nhân là **cặp đó thiếu trong bảng phân công, hoặc đang gán >1 NV** — V1 đã đếm 143 cặp của đơn vị này đều thuộc DN001, nên nhiều khả năng chỉ thiếu đúng cặp của mã hàng này. Sửa đúng chỗ: **thêm/`nv_cnt`=1 hoá cặp đó**, không sửa dòng MISA.
+
+**Cấm dựng cổng override từng đơn** trong lúc này: nó tạo **nguồn phân công thứ hai** — đúng cái sai đã trả giá hai lần hôm nay (7 bản chép luật "ai là CEO", suýt có 2 lịch nghỉ lễ).
+
+Lúc ghi mục này là **19:08**, các nhịp sync 17:00 và 18:00 đã chạy — trạng thái thật phải **đo**, không suy đoán: chạy lại `propose_quarantine_owner.js` là biết ngay.
+
+---
+
 ### 2026-08-05 17:00 (giờ VN) — 🔍 Review candidate KPI `c11b5a7`: 1 điểm chặn, 1 lỗ hổng của chính spec Claude
 
 **Chặn cứng — không review được:** `c11b5a7` **không có trên origin** (`git cat-file` toàn bộ nhánh: không tồn tại), file `vnWorkingDays` cũng chưa nhánh nào có. Lặp lại đúng tình huống sáng nay. Không có code trên origin thì không duyệt được, kể cả khi báo cáo đẹp.
