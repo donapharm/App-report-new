@@ -171,14 +171,30 @@ function auditTotals(detailRows = [], expectedAmount) {
   return { ok: detailTotal === expected, detailTotal, expected, diff: detailTotal - expected, rows: detailRows.length };
 }
 
-const pad = (value, width) => String(value ?? '').padEnd(width).slice(0, width);
+/**
+ * ‼ CẤM CẮT CỤT. Sửa 05/08 11:50.
+ *
+ * Bản đầu dùng `.slice(0, width)`, cột mã hàng rộng 22 ⇒ mã thật
+ * `G1.GE.QĐ139.1487.N3.691` (23 ký tự) in ra thành `G1.GE.QĐ139.1487.N3.69`.
+ * Mã đơn vị cũng bị cụt: `186.BVĐK AN PHÚ CNIII-PKĐK AN PHÚ` → `186.BVĐK AN PHÚ CNIII-PK`.
+ *
+ * Kế toán cầm mã cụt đi tra MISA thì **không ra đơn nào** — đúng cái kiểu sai mà cả bộ
+ * này sinh ra để chặn. Thà bảng rộng còn hơn bảng sai. Nay chỉ đệm, không bao giờ cắt,
+ * và bề rộng cột **tự tính theo dữ liệu thật**.
+ */
+const pad = (value, width) => String(value ?? '').padEnd(width);
+const widthOf = (rows, get, header, min = 0) => Math.max(
+  String(header).length, min, ...(Array.isArray(rows) ? rows : []).map((row) => String(get(row) ?? '').length),
+);
 
 /** Bảng phân nhóm — dùng khi KHÔNG tìm ra nhóm nào khớp số. */
 function formatGroups(groups = [], targetAmount) {
   const out = [`Không nhóm trạng thái nào cộng đúng ${money(targetAmount)}. Toàn bộ nhóm hiện có:`, ''];
-  out.push(`   ${pad('bucket | status | mapping', 52)} ${pad('dòng', 6)} ${pad('đơn', 6)} tiền`);
+  // Tên trạng thái cũng KHÔNG được cắt — cắt là chỉ nhầm nhóm ở lần chạy sau.
+  const keyWidth = widthOf(groups, (group) => group.key, 'bucket | status | mapping');
+  out.push(`   ${pad('bucket | status | mapping', keyWidth)} ${pad('dòng', 6)} ${pad('đơn', 6)} tiền`);
   for (const group of groups) {
-    out.push(`   ${pad(group.key, 52)} ${pad(group.lines, 6)} ${pad(group.orders, 6)} ${money(group.amount)}`);
+    out.push(`   ${pad(group.key, keyWidth)} ${pad(group.lines, 6)} ${pad(group.orders, 6)} ${money(group.amount)}`);
   }
   out.push('');
   out.push('⛔ CHƯA gửi bảng nào cho kế toán. Chỉ đúng tên trạng thái rồi chạy lại với --status="…".');
@@ -197,15 +213,25 @@ function formatDetail({ rows = [], group = null, audit = null, period = '', froz
   out.push(`‼ KẾ TOÁN CHỈ CẦN TRẢ LỜI ${orders.length} CÂU: mỗi đơn dưới đây → GHI hay HUỶ.`);
   out.push('   Hạn 08/08 (giờ VN), quá hạn là kỳ khoá sổ, không sửa được nữa.');
   out.push('');
-  out.push(`${pad('MÃ ĐƠN', 16)} ${pad('NGÀY', 11)} ${pad('ĐƠN VỊ', 24)} ${pad('MẶT HÀNG', 22)} ${pad('NV', 8)} ${pad('TIỀN', 14)} GHI/HUỶ`);
-  out.push('─'.repeat(112));
+  // Bề rộng tự tính từ dữ liệu THẬT — không có cột nào cắt cụt mã.
+  const w = {
+    order: widthOf(decide, (row) => row.orderCode, 'MÃ ĐƠN'),
+    date: widthOf(decide, (row) => row.date, 'NGÀY'),
+    unit: widthOf(decide, (row) => row.unitCode, 'ĐƠN VỊ'),
+    product: widthOf(decide, (row) => row.productCode, 'MẶT HÀNG'),
+    emp: widthOf(decide, (row) => row.empCode, 'NV'),
+    money: widthOf(decide, (row) => money(row.amount), 'TIỀN'),
+  };
+  const rule = '─'.repeat(w.order + w.date + w.unit + w.product + w.emp + w.money + 6 + 7);
+  out.push(`${pad('MÃ ĐƠN', w.order)} ${pad('NGÀY', w.date)} ${pad('ĐƠN VỊ', w.unit)} ${pad('MẶT HÀNG', w.product)} ${pad('NV', w.emp)} ${pad('TIỀN', w.money)} GHI/HUỶ`);
+  out.push(rule);
   for (const row of decide) {
-    out.push(`${pad(row.orderCode, 16)} ${pad(row.date, 11)} ${pad(row.unitCode, 24)} ${pad(row.productCode, 22)} `
-      + `${pad(row.empCode, 8)} ${pad(money(row.amount), 14)} ______`);
+    out.push(`${pad(row.orderCode, w.order)} ${pad(row.date, w.date)} ${pad(row.unitCode, w.unit)} ${pad(row.productCode, w.product)} `
+      + `${pad(row.empCode, w.emp)} ${pad(money(row.amount), w.money)} ______`);
   }
-  out.push('─'.repeat(112));
+  out.push(rule);
   if (audit) {
-    out.push(`${pad('TỔNG', 84)} ${pad(money(audit.detailTotal), 14)}`);
+    out.push(`${pad('TỔNG', w.order + w.date + w.unit + w.product + w.emp + 5)} ${pad(money(audit.detailTotal), w.money)}`);
     if (!audit.ok) {
       out.push('');
       out.push(`⛔ LỆCH ${money(audit.diff)} so với số cần đối chiếu (${money(audit.expected)}) — DỪNG, không gửi bảng này đi.`);

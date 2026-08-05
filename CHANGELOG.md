@@ -1,3 +1,11 @@
+### 2026-08-05 11:55 (giờ VN) — 🔧 Bảng V2 CẮT CỤT mã hàng/mã đơn vị — mã cụt tra MISA không ra đơn nào
+
+**Lỗi:** `pad()` dùng `.slice(0, width)`, cột mã hàng rộng 22 ⇒ mã thật `G1.GE.QĐ139.1487.N3.691` (23 ký tự) in ra thành `G1.GE.QĐ139.1487.N3.69`; mã đơn vị `186.BVĐK AN PHÚ CNIII-PKĐK AN PHÚ` thành `186.BVĐK AN PHÚ CNIII-PK`. Lộ ra khi đối chiếu bảng với dòng "MẶT HÀNG" ở cuối bản in thật — hai chỗ ghi hai mã khác nhau cho cùng một dòng.
+
+Kế toán cầm mã cụt đi tra MISA thì **không ra đơn nào** — đúng kiểu sai mà cả bộ này sinh ra để chặn. **Sửa:** không bao giờ cắt, bề rộng cột **tự tính theo dữ liệu thật** (cả bảng chi tiết lẫn bảng phân nhóm trạng thái). Thà bảng rộng còn hơn bảng sai. Test khoá bằng chính hai chuỗi thật ở trên. Server **901/907**.
+
+---
+
 ### 2026-08-05 11:30 (giờ VN) — ⛔ Đóng hẳn bản chặn bộ nhớ (RSS thật 851 MiB) · ✅ V1 chốt · 🔧 sửa lỗi bản in V2
 
 **① Bản chặn bộ nhớ — ĐÓNG, không sửa nữa.** Bot dán RSS thật của `app-report` lúc 11:05:44 giờ VN: **851,47 MiB**. Chạy thẳng vào chính module của bản ứng viên:

@@ -145,6 +145,24 @@ test('‼ 17 dòng 0đ KHÔNG được trộn vào câu hỏi của kế toán',
   assert.match(printed, /Chuyển App Sale \/ MISA soát lại/, 'phải chỉ đúng người xử lý');
 });
 
+test('‼ CẤM cắt cụt mã đơn vị / mã hàng — mã cụt tra MISA không ra đơn nào', () => {
+  // Bản in thật cắt `G1.GE.QĐ139.1487.N3.691` (23 ký tự) thành `…N3.69` vì cột rộng 22,
+  // và `186.BVĐK AN PHÚ CNIII-PKĐK AN PHÚ` thành `186.BVĐK AN PHÚ CNIII-PK`.
+  const product = 'G1.GE.QĐ139.1487.N3.691';
+  const unit = '186.BVĐK AN PHÚ CNIII-PKĐK AN PHÚ';
+  const rows = buildDetail([line({
+    revenue_bucket: 'pending', sale_order_no: 'DH479816093', unit_code: unit,
+    qlnb_code: product, invoice_export_amount: 3_995_000,
+  })], '2026-07');
+  const printed = formatDetail({ rows, audit: auditTotals(rows, 3_995_000), period: '2026-07' });
+  assert.ok(printed.includes(product), 'mã hàng phải in ĐỦ, không cắt');
+  assert.ok(printed.includes(unit), 'mã đơn vị phải in ĐỦ, không cắt');
+  // Tên trạng thái ở bảng phân nhóm cũng vậy.
+  const longKey = 'pending | Đề nghị ghi chờ kế toán xác nhận lần cuối | mapped_by_catalog';
+  const groups = groupByStatus([line({ revenue_status: 'Đề nghị ghi chờ kế toán xác nhận lần cuối', mapping_status: 'mapped_by_catalog', revenue_bucket: 'pending' })]);
+  assert.ok(formatGroups(groups, 1).includes(longKey), 'tên nhóm cắt cụt là chỉ nhầm nhóm ở lần chạy sau');
+});
+
 test('‼ kỳ ĐÃ KHOÁ SỔ thì phải cảnh báo HUỶ không miễn phí', () => {
   const pin = frozenPeriodPin('2026-07');
   assert.ok(pin, 'T07 phải nằm trong danh sách kỳ đã ghim');
