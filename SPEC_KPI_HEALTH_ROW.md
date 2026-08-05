@@ -77,6 +77,17 @@ Nguyên tắc chung, không nhắc lại từng ô:
 - **Công thức (backend):**
   - `nhịp hiện tại = doanh thu kỳ ÷ số ngày làm việc ĐÃ QUA` (đã qua = tới hết hôm
     qua giờ VN; đầu tháng chưa có ngày làm việc nào ⇒ ô hiện `—` + `chưa đủ ngày để dự báo`).
+  - **‼ SÀN TIN CẬY — bổ sung 05/08 17:00 sau khi soi bản candidate đầu tiên.**
+    Bản đầu ra `~135,1% target` khi mới đi qua **2/21 ngày làm việc** (T08.2026: 01/08
+    là T7, 02/08 CN, nên tới hết 04/08 chỉ có 03 và 04/08). Phép tính đúng nhưng **con
+    số vô nghĩa** — chưa tới 10% tháng, một đơn lớn rơi vào hai ngày đó là dự báo bay
+    lên 130%+, CEO liếc qua tưởng chắc chắn vượt đích. Ô KPI được đọc trong một giây,
+    ghi chú nhỏ không cứu được.
+    ⇒ **Chưa đủ 5 ngày làm việc đã qua thì KHÔNG hiện số dự báo.** Thay bằng
+    `— · đã qua N/21 ngày làm việc, chưa đủ để dự báo`. Từ ngày làm việc thứ 5 trở đi
+    mới hiện %; từ thứ 5 đến thứ 9 kèm nhãn `ước lượng sớm`.
+    Sàn 5 (≈¼ tháng) là con số Claude chọn — CEO muốn nới/siết thì sửa ở đây, đừng
+    rải hằng số vào code.
   - `dự báo = nhịp × tổng ngày làm việc trong tháng`.
   - `cần/ngày = (target − doanh thu hiện tại) ÷ ngày làm việc CÒN LẠI` (còn lại = từ
     hôm nay tới hết tháng; hôm nay là ngày nghỉ thì không tính hôm nay).
