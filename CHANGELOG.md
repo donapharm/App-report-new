@@ -1,3 +1,17 @@
+### 2026-08-05 20:00 (giờ VN) — 🚢 Bot báo XONG TOÀN BỘ (`bf3c7c5` lên PROD) — nhưng 2 việc CHƯA đóng, 1 ô đang hiện số gây hiểu nhầm
+
+**Đã lên PROD thật, ghi nhận:** cổng quyền CEO (nút Duyệt bấm được — thứ CEO chịu đựng cả tuần), chuông có trần retry, lý do chọn sẵn cho Xin nhận sớm/Từ chối, và 3 ô KPI hàng cuối. Không DB/migration, console 0 lỗi, rollback sẵn.
+
+**‼ 1. Ô dự báo CHƯA áp sàn — đang hiện `~145,7% target` dựng trên 2/21 ngày làm việc.** Sàn 5 ngày đã chốt và đẩy lên từ 17:00 (`5a54fc5` → `d54efbf`), bot build sau đó nhưng **không áp**. Suy ngược: 145,7% ⇒ doanh thu kỳ ≈ 4,33 tỷ ⇒ dự báo cả tháng **45,5 tỷ**, ngoại suy từ **10% thời gian của tháng**. Đây đúng là con số CEO liếc một giây rồi tin là "chắc chắn vượt đích". Phải sửa hoặc tạm ẩn ô này.
+
+**‼ 2. V1 CHƯA đóng — và chính ô KPI mới chứng minh điều đó.** Ô "Chưa phân bổ" vẫn `1.795.600đ · 1 dòng` = `DH479816174` vẫn bị cách ly, dù App Sale đã gán VP018 → DN001 lúc 16:39. Báo cáo bot ghi "payment V1/V2 PASS" là nói về **tính năng thanh toán Lần 1/Lần 2**, không phải việc V1 gán đơn — hai thứ trùng tên, đừng gộp. Theo luật đã phân tích 19:10: còn cách ly ⇒ cặp `120.HTNT-PHARMACITY × Pizar-3` **thiếu trong `unit_product_employees`, hoặc đang gán >1 NV** ⇒ App Sale khoá cặp đó về đúng DN001. **Ô KPI mới đã làm đúng việc của nó ngay ngày đầu: bắt được một việc còn hở mà bản tổng kết tuyên bố đã xong.**
+
+**3. Không nhánh nào trên origin:** `bf3c7c5` (đang chạy PROD), `4490def` (đích rollback), `c11b5a7` đều **không tồn tại trên origin**. Code đang chạy production mà ngoài bot ra không ai đọc được, và đích rollback cũng không kiểm chứng được. Phải push.
+
+**Ghi nhận đúng:** DataHub thiếu nguồn DN006 ⇒ app fail-closed bằng cách ẩn badge chỏi thay vì hiện số sai — đúng luật.
+
+---
+
 ### 2026-08-05 19:10 (giờ VN) — 🔑 Đơn `DH479816174` giữ bền bằng BẢNG PHÂN CÔNG, không cần cổng override
 
 App Sale đã gán VP018 → DN001 lúc 16:39:14 (audit 19752, tiền/ngày/đơn khác không đổi, bảng phân công checksum giữ nguyên), kèm cảnh báo: **sync MISA hàng giờ có thể ghi đè lại** vì baseline chưa hỗ trợ override từng đơn, và đề xuất dựng "cổng sửa/build riêng".
