@@ -1,3 +1,120 @@
+### 2026-08-05 12:30 (giờ VN) — ✅ SỬA cổng quyền CEO: nhận theo DANH TÍNH, admin khác vẫn bị chặn
+
+**Chặn đã gỡ:** bot xác nhận phiên CEO trên PROD là `emp_code = CEO` · `role = admin`. Đúng như giả thiết, nên cách sửa theo danh tính đứng vững.
+
+**Đã làm** (Claude viết code đợt này vì bot báo "chưa sửa code" — tránh hai bên viết hai bản khác nhau; bot lo nghiệm thu + deploy):
+- `auth.js`: thêm `CEO_EMP_CODES` (đọc từ `process.env.CEO_EMP_CODES`, mặc định `CEO`) và **`isCeoActor(session)`** = role `ceo` **hoặc** `emp_code` nằm trong danh sách. `requireCeo` dùng hàm này.
+- Xoá **toàn bộ bản chép tay**. Tra kỹ ra **bảy** chỗ tự xét "ai là CEO", nhiều hơn con số bốn báo lúc 11:00: `auth.isCeo` · `requireCeoDelivery` (bản này còn **quên `.toUpperCase()`**) · `requireCeoQlnb` · **`requireCeoPenaltyFormula`** · **`canEdit` công thức phạt** · `routes.js:3028` · và 4 chỗ frontend. Hai chỗ in đậm chưa từng được nhắc tới trong review trước — nghĩa là **nút sửa công thức phạt cũng đang khoá nhầm CEO**.
+- `/me` trả thêm **`is_ceo`** do backend tính. Bốn chỗ frontend (`App.jsx` · `CeoNotificationBell.jsx` · `DormantReports.jsx` · `PaymentSchedule.jsx`) nay chỉ đọc cờ đó, **không tự đoán từ chuỗi role** — đúng nguyên tắc "quyền quyết ở backend".
+- Giữ nguyên `row.emp_code === 'CEO'` ở `routes.js:2207`: đó là **tìm dòng dữ liệu** của CEO trong bảng map Telegram, không phải xét quyền. Test phân biệt rõ hai việc, không cấm nhầm.
+
+**Lệnh CEO 04/08 không suy suyển:** `{role:admin, emp_code:VP002}` **vẫn trượt**. Có test khẳng định bằng hành vi (`isCeoActor !== isAdmin`), không chỉ bằng chữ, và test cấm `isCeoActor` gọi `isAdmin`.
+
+**Test:** thêm `server/test/ceoIdentityGate.test.js` (9 ca). Sửa 3 test cũ đang ghim đúng những dòng gây lỗi — ghi rõ lý do sửa ngay trong file, **không xoá ý nghĩa cũ**. Server **910/916** (vẫn đúng 6 lỗi môi trường `pdfinfo`) · web **166/166** · `npm run build` PASS.
+
+**Chưa làm, để bot:** sửa vòng gọi lại của chuông (401/403 phải DỪNG hẳn) — bot đang cầm `CeoNotificationBell.jsx` cho bản `b01a182` làm lại. Và **nghiệm thu trên PROD + xin duyệt deploy**.
+
+---
+
+### 2026-08-05 11:55 (giờ VN) — 🔧 Bảng V2 CẮT CỤT mã hàng/mã đơn vị — mã cụt tra MISA không ra đơn nào
+
+**Lỗi:** `pad()` dùng `.slice(0, width)`, cột mã hàng rộng 22 ⇒ mã thật `G1.GE.QĐ139.1487.N3.691` (23 ký tự) in ra thành `G1.GE.QĐ139.1487.N3.69`; mã đơn vị `186.BVĐK AN PHÚ CNIII-PKĐK AN PHÚ` thành `186.BVĐK AN PHÚ CNIII-PK`. Lộ ra khi đối chiếu bảng với dòng "MẶT HÀNG" ở cuối bản in thật — hai chỗ ghi hai mã khác nhau cho cùng một dòng.
+
+Kế toán cầm mã cụt đi tra MISA thì **không ra đơn nào** — đúng kiểu sai mà cả bộ này sinh ra để chặn. **Sửa:** không bao giờ cắt, bề rộng cột **tự tính theo dữ liệu thật** (cả bảng chi tiết lẫn bảng phân nhóm trạng thái). Thà bảng rộng còn hơn bảng sai. Test khoá bằng chính hai chuỗi thật ở trên. Server **901/907**.
+
+---
+
+### 2026-08-05 11:30 (giờ VN) — ⛔ Đóng hẳn bản chặn bộ nhớ (RSS thật 851 MiB) · ✅ V1 chốt · 🔧 sửa lỗi bản in V2
+
+**① Bản chặn bộ nhớ — ĐÓNG, không sửa nữa.** Bot dán RSS thật của `app-report` lúc 11:05:44 giờ VN: **851,47 MiB**. Chạy thẳng vào chính module của bản ứng viên:
+
+```
+ngưỡng NHẬN VIỆC : 576 MiB   ← 768 − 192 dự phòng
+trần CỨNG        : 768 MiB
+RSS thật         : 851 MiB
+=> CHẶN: 503 EMPLOYEE_COST_ALL_MEMORY_PRESSURE
+```
+
+Máy đang chạy **cao hơn cả trần cứng 83 MiB**. Deploy bản đó là màn "Tất cả NV" — màn mặc định của CEO — **trả 503 ở 100% lượt mở**, không phải "thỉnh thoảng thiếu vài NV". Ngưỡng được chọn mà **chưa ai đo máy thật**. Không xin sửa lại nữa: bỏ hẳn cổng 503, giữ mỗi phần rút ngắn TTL kết quả lỗi (2 phút) — phần đó tốt, không tranh cãi. Muốn thật sự giảm RAM thì phải bắt đầu bằng **đo**, và mở việc riêng.
+
+**② V1 — có đề xuất, độ chắc cao nhất.** `propose_quarantine_owner.js` chạy trên PROD, thoát **0**:
+`DH479816174` → **DN001 (Đặng Xuân Trung)**. Căn cứ: danh mục phân công **143/143 cặp mã hàng** của `120.HTNT-PHARMACITY` đều thuộc DN001; lịch sử T06–T08 **109 dòng · 50 đơn · 582.140.315đ · 100%** một người. Hai nguồn không mâu thuẫn ⇒ không rơi vào nhánh "cấm đoán". Đọc 116 dòng, 109 gán được ⇒ 7 dòng còn lại là phần đang cách ly, khớp với bài toán. **Đã báo CEO rằng DN001 chính là mã của CEO** — người duyệt và người nhận là một, phải biết trước khi gật.
+
+**③ V2 — bản in đầu NÓI SAI một câu, đã sửa.** Bảng thật trên PROD dán nhãn *"Bucket ngoài official/pending"* cho 18 dòng có `revenue_bucket = 'pending'` — tức đang nằm **TRONG**. Nguyên nhân: `reasonOf` **tự viết lại** một luật đã có ở `syncExceptionClassifier.classifyMisa` — đúng cái tội "nhiều định nghĩa cho một luật" vừa phê bình ở review `b01a182` sáng nay. Nay gọi thẳng bản gốc, xoá bản chép.
+
+Sửa kèm, đều từ dữ liệu thật:
+- **Tách dòng 0đ khỏi câu hỏi của kế toán.** Bảng thật là 18 dòng · 11 đơn nhưng **17 dòng bằng 0đ**; toàn bộ 3.995.000đ nằm ở **đúng một đơn `DH479816093`** (29/07 · 186.BVĐK AN PHÚ CNIII · DN001). Bản cũ bắt kế toán quyết **11 lần** cho **1 câu hỏi** — kiểu bảng đó người ta trả lời bừa hoặc bỏ đấy tới hết hạn. Nay in **1 câu**. 17 dòng 0đ **không biến mất**, xuống khối riêng với mã `MISA_TIEN_BANG_0` và ghi rõ chủ xử lý là App Sale/MISA, không phải kế toán.
+- **Cảnh báo kỳ đã khoá sổ.** T07 đã ghim 30.917.892.673đ, và bucket `pending` **đang được tính** vào doanh thu kỳ. Nên **GHI** = số không đổi (an toàn), **HUỶ** = doanh thu T07 **giảm 3.995.000đ** so với số đã dùng tính thưởng/phạt **đã trả**. Bản in nay nói thẳng: trả lời HUỶ thì **báo CEO trước**, không tự sửa (`SPEC_REVENUE_DELIVERY_PERIOD`: không hồi tố). Trước đây bản in coi hai lựa chọn như nhau.
+
+**Trạng thái test:** server **900/906** (+3 test mới khoá đúng ba lỗi trên; vẫn đúng 6 lỗi môi trường `pdfinfo`).
+
+---
+
+### 2026-08-05 11:00 (giờ VN) — ⛔ Review `b01a182`: cổng quyền CEO hỏng SẴN trên PROD, cấm sửa bằng cách nới cho admin
+
+**Bối cảnh.** Bot deploy `b01a182` (thông báo thanh toán trong app), nghiệm thu bằng trình duyệt thật phát hiện tab Thanh toán trả **403 `PAYMENT_NOTIFICATION_SCOPE_REQUIRED`** và chuông gọi lại lặp vô hạn. Bot **tự rollback về `b49e585`**, kèm backup + SHA-256 + xác nhận T06/T07 lệch 0 + notify vẫn tắt. **Rollback đúng, bằng chứng đủ.**
+
+**‼ Nhưng nguyên nhân sâu hơn báo cáo.** Báo cáo ghi "API mới chỉ nhận `ceo`" — thực ra **API cũ cũng chỉ nhận `ceo`**. `b01a182` không tạo ra lỗi, nó chỉ **làm lỗi lộ ra** (chuông có vòng gọi lại nên 403 hiện lên màn). Claude chạy thử trên chính code đang chạy PROD:
+
+```
+{"role":"admin","emp_code":"CEO"}   → requireCeo: 403 CEO_ONLY     ← tài khoản CEO thật
+{"role":"ceo","emp_code":"CEO"}     → ĐI QUA
+```
+
+`auth.requireCeo` đang gác **6 route tiền** (`approve`/`reject`/`unlock`/`second`/`record`/`undo`) ⇒ **tài khoản CEO thật trên PROD chưa từng duyệt được khoản nào**. Không ai kêu vì `PaymentSchedule.jsx:177` để `canRecord={role === 'ceo'}` nên **nút Duyệt/Từ chối/Mở khoá bị giấu** — nút giấu che mất cổng khoá. **Lỗi này của Claude**, không phải của `b01a182`.
+
+**Gốc rễ:** repo đang có **4 định nghĩa "ai là CEO"** — `auth.isCeo` (chỉ role, sai), `requireCeoQlnb` + `routes.js:3028` + 3 chỗ frontend (role **hoặc** `emp_code==='CEO'`, đúng), và `PaymentSchedule.jsx:177` (chỉ role, sai). Bốn bản sao thì kiểu gì cũng lệch.
+
+**⛔ Cấm cách sửa hiển nhiên.** Nới cho `admin` đi qua sẽ: (1) trao quyền duyệt tiền cho **mọi** tài khoản admin, trái lệnh CEO 04/08 *"chỉ duy nhất CEO được phép ghi thôi — admin cũng không"*; (2) làm đỏ chính test ghi lại lệnh đó (`paymentLedgerRoutes.test.js`); (3) **lộ số tiền của toàn bộ NV** vì feed chỉ chiếu `amount` vào vai CEO — phạm nguyên tắc "KHÔNG để lộ số người khác/tổng payout".
+
+**✅ Cách sửa đã duyệt:** phân quyền theo **danh tính**, không theo chuỗi role — một hàm duy nhất `auth.isCeoActor(session)` (role `ceo` **hoặc** `emp_code` nằm trong `CEO_EMP_CODES` đọc từ config), thay cho cả 4 bản sao; `/me` trả `is_ceo` để **frontend thôi tự đoán quyền**. Admin khác (vd `VP002`) **vẫn bị chặn**. Kèm sửa riêng: chuông gặp **401/403 phải DỪNG hẳn**, chỉ 5xx/lỗi mạng mới thử lại và phải giãn dần.
+
+**Chặn trước khi code:** bot phải dán `emp_code` + `role` của phiên CEO trên PROD — cách sửa chỉ đứng được nếu `emp_code = 'CEO'`.
+
+Chi tiết đầy đủ + 5 test bắt buộc + mẫu câu xin duyệt deploy: **`DIRECTIVE_CEO_IDENTITY_FIX.md`**. Claude **không sửa code app** đợt này (đúng mô hình phối hợp: bot cầm code, tránh đụng repo) — chỉ ra spec và bằng chứng.
+
+**V3 (bật notify) lùi lại sau việc này** — bật tin tiền trong lúc CEO chưa duyệt được gì chỉ tổ gây hoang mang.
+
+---
+
+### 2026-08-05 09:40 (giờ VN) — ✅ V1 · V2: biến "bot đi tra đi" thành hai lệnh chạy được
+
+**Việc đã làm.** V1 và V2 trước nay là hai câu giao việc mơ hồ: tra bằng tay, mỗi người ra một kiểu, không ai kiểm lại được. Nay có **hai công cụ**, luật quyết định chốt trong code và **khoá bằng 32 test**.
+
+Kiến trúc theo đúng lối `syncExceptionClassifier`: tách **phần quyết định** (hàm thuần, test offline được) khỏi **phần lấy dữ liệu** (cần DB thật). Lý do rất cụ thể: Claude **không có đường vào DB App Sale** (proxy chặn `report.donapharm.asia`, cổng 5432 không mở), nhưng phần khó — luật gán chủ, luật chọn nhóm — vẫn phải chốt được ngay và không để ai sửa lén.
+
+**Mới:**
+- `server/src/quarantineOwnerProposal.js` + `server/scripts/propose_quarantine_owner.js` — **V1**: tra hai nguồn (bảng phân công `unit_product_employees` · lịch sử doanh thu của đơn vị) rồi in **một tên đề xuất kèm căn cứ**. VP018 bị loại khỏi mọi ứng viên. **Hai nguồn chỏi nhau, hoặc chia đều không ai áp đảo ⇒ KHÔNG đề xuất ai**, đúng lệnh CEO "cấm đoán" — nhưng vẫn in đủ cả hai bảng số để CEO tự quyết. Có ngưỡng áp đảo 80% cho trường hợp nhiều NV cùng bán, đánh dấu độ chắc **"yếu"** chứ không giả vờ chắc. Mã thoát `0` có đề xuất · `1` cần người quyết · `2` **chưa đọc được dữ liệu** — ‼ `1` và `2` cố ý tách nhau, gộp lại là báo nhầm "đã tra rồi, chịu".
+- `server/src/misaPendingLedger.js` + `server/scripts/misa_pending_detail.js` — **V2**: in bảng để kế toán chỉ điền **GHI/HUỶ**. Không ai biết chắc "Đề nghị ghi" nằm ở cột `revenue_bucket`/`revenue_status`/`mapping_status` nên script **không đoán tên trạng thái**: gom theo bộ ba trạng thái rồi **tìm nhóm cộng đúng 3.995.000đ**. Không khớp, hoặc **hai** nhóm cùng khớp ⇒ in cả bảng phân nhóm và **dừng**, không tự chọn nhóm gần giống. Khớp tới **từng đồng** — "gần đúng" chính là cách dán nhầm bảng rồi ghi nhầm doanh thu vào kỳ sắp khoá sổ. Bất biến: tổng bảng in ra = số đối chiếu, lệch là bản in hét lên "không gửi bảng này đi".
+- Cố ý **không** lọc `revenue_bucket <> 'excluded'` như bản mirror doanh thu — lọc là mất đúng những dòng cần đem đi hỏi. Đã có test khoá.
+- Cả hai script **CHỈ ĐỌC**, có test cấm `UPDATE/INSERT/DELETE/ALTER/DROP`. Việc gán thật do App Sale làm sau khi CEO gật; ghi/huỷ do kế toán làm trong MISA.
+
+**Trạng thái test:** server **897/903** (thêm 32 test mới, vẫn đúng 6 lỗi môi trường `pdfinfo` đã biết — không phát sinh lỗi mới; nền cũ 865/871). Đã chạy thử hai script không có DB: thoát đúng mã **2** kèm câu "CHƯA kết luận được gì", không im lặng, không kết luận bừa.
+
+**Còn lại của V1/V2:** phần **chạy trên máy chủ** là của bot server — dán nguyên văn output + mã thoát. Hạn **08/08** (giờ VN).
+
+---
+
+### 2026-08-05 08:50 (giờ VN) — ⛔ KHÔNG duyệt bản "chặn bộ nhớ" · ✅ duyệt bật nhắc tin (V3)
+
+**Việc đã làm:** Claude fetch hai nhánh ứng viên vừa được đẩy lên origin và **đọc diff thật**, không kết luận theo báo cáo miệng.
+`origin/candidate/viec4-appreport-1ba8f44-20260802-214655` = `aa5e1b4` · `origin/review/viec4-assertion-only-54365b0` = `54365b0`; hai nhánh **chỉ khác 1 dòng** trong `server/test/employeeCostAllDeadline.test.js`. Commit `b238a9e` **không có object ở đâu cả** — bỏ khỏi mọi kế hoạch.
+
+**⛔ Không duyệt bản chặn bộ nhớ**, 5 căn cứ:
+1. Số đo của chính bot: luồng **2** ⇒ 6/21 NV xong, **15 NV bị cắt**; luồng **6** ⇒ 18/21 xong, 3 bị cắt. 15 NV hiện "chưa lấy được số" **đúng là sự cố 01/08** vừa đi chữa cả tuần.
+2. `buildConcurrency()` = `boundedInteger(value, 2, 1, 2)` ⇒ trần cứng **2**, `.env` chỉ hạ được chứ **không nâng được**. Ra PROD thấy đau là không có nút nào vặn.
+3. `assertMemoryBudget` chạy trước catalog fan-out, ngưỡng **576 MiB** (768 − 192), vượt là ném **503 cho cả request** ⇒ màn "Tất cả NV" (màn mặc định của CEO) chuyển từ "thiếu vài NV kèm nhãn" sang **trắng bảng kèm lỗi đỏ**. Đã yêu cầu bot dán **RSS thật của PROD** trước khi bàn tiếp.
+4. `54365b0` không phải "chỉ đổi tên": assertion `EMPLOYEE_COST_ALL_CONCURRENCY >= 4` nay chỉ còn canh fan-out nạp ứng lần 1 (`routes.js:1168`), còn luồng dựng bảng 21 NV dùng constant khác **bằng 2**. Claude chạy thử trên nhánh đó: **22/22 xanh** — xanh trong khi thứ nó bảo vệ đã biến mất.
+5. Rác kèm theo: `let memoGeneration = 0` khai không dùng; trường `generation` ghi vào mọi entry memo nhưng không ai đọc.
+
+Đã ghi rõ **3 đường được duyệt** (nâng trần luồng lên 6 · giữ luồng 2 nhưng nâng hạn chót ≤ 40s kèm số đo mới · chặn RAM cách khác) kèm 3 điều kiện chung — chi tiết ở `LENH_05082026.md`. Ghi nhận thêm: `memoGet` bị **viết lại** trong cùng commit (`hit.ttl` → `hit.ttlMs`, `staleMs` theo entry, dời mốc `t`); Claude tra thì không còn chỗ nào đọc `.ttl` cũ nên **không gãy**, nhưng đó là sửa lõi cache — lần sau tách commit riêng.
+
+**✅ Duyệt V3:** danh sách diễn tập đã sạch (**13 NV · 251.801.312đ**, không còn DN004/DN005/DN012/DN017 là các tin 0đ, mốc ngày in ra 05/08). Cho bật `EMP_COST_NOTIFY`/`BONUS_NOTIFY` ngay, thứ tự bắt buộc: dọn config drift → bật → **dán lại số tin đã gửi và ai không nhận được**. DN012 vẫn để ngoài danh sách cho tới khi chính chị ấy bấm Start — **cấm đoán Telegram ID**.
+
+**Trạng thái test:** server 865/871 (6 lỗi môi trường `pdfinfo` đã biết) · web 166/166 — không đổi, đợt này chỉ sửa tài liệu điều phối.
+
+---
+
 ### 2026-08-05 — ✅ ĐÓNG rủi ro DataHub: khoá đã tự nhả, kỳ khoá sổ không suy suyển
 
 **Rủi ro tiền — đóng.** Trong 2.600 event tồn: **0 event ghi/sửa** dữ liệu T06/T07. 1.481 event có nhắc T07 nhưng **toàn bộ là đọc** (`employee_cost.read`), tổng số thao tác ghi = **0**.

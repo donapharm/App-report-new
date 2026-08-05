@@ -31,9 +31,14 @@ test('requireCeo chặn đúng: admin/sale bị 403, chỉ ceo đi qua', () => {
     return { status, body, passed };
   };
   assert.equal(run('ceo').passed, true);
+  // ‼ SỬA 05/08 — bản cũ để `run('admin')` (không kèm emp_code) và kết luận "admin bị
+  // chặn". Đúng chữ nhưng SAI đời thật: tài khoản CEO trên PROD là
+  // `emp_code='CEO' · role='admin'`, nên chính CEO cũng bị chặn ở cả 6 cửa tiền suốt
+  // từ lúc dựng luồng duyệt. Lệnh 04/08 của CEO vẫn giữ nguyên và vẫn được khoá —
+  // chỉ là nay xét theo DANH TÍNH: admin KHÁC vẫn trượt, xem `ceoIdentityGate.test.js`.
   for (const role of ['admin', 'sale', '', undefined, 'CEO_FAKE']) {
     const result = run(role);
-    assert.equal(result.passed, false, `role ${role} không được đi qua`);
+    assert.equal(result.passed, false, `role ${role} (không phải tài khoản CEO) không được đi qua`);
     assert.equal(result.status, 403);
     assert.equal(result.body.code, 'CEO_ONLY');
   }

@@ -50,7 +50,12 @@ test('trang riêng dùng LẠI panel của trang Chi phí, không dựng bản t
 });
 
 test('‼ chỉ CEO mới ghi được đã trả — trang riêng không được nới lỏng', () => {
-  assert.match(page, /canRecord=\{String\(me\?\.role \|\| ''\)\.toLowerCase\(\) === 'ceo'\}/);
+  // ‼ SỬA 05/08 — bản cũ ghim đúng dòng ĐÃ GÂY RA SỰ CỐ: xét `me.role === 'ceo'`.
+  // Tài khoản CEO trên PROD có role 'admin' ⇒ nút Duyệt/Từ chối/Mở khoá KHÔNG hiện,
+  // che luôn việc backend cũng đang trả 403 cho chính CEO ở 6 cửa tiền.
+  // Nay backend chốt (`/me` trả `is_ceo`), frontend chỉ đọc lại — không tự đoán.
+  assert.match(page, /canRecord=\{!!me\?\.is_ceo\}/);
+  assert.doesNotMatch(page, /me\?\.role/, 'đoán quyền từ chuỗi role là đúng lỗi 05/08');
 });
 
 test('tháng mặc định lấy theo giờ Việt Nam, không lấy giờ máy', () => {

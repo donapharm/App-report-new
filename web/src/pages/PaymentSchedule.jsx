@@ -206,7 +206,7 @@ export default function PaymentSchedule({ me, desktop }) {
     </div>}
 
     {periodEnded && <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
-      canRecord={String(me?.role || '').toLowerCase() === 'ceo'}
+      canRecord={!!me?.is_ceo}
       empCode={admin ? selectedEmp : String(me?.emp_code || '')}
       focusKey={focusKey}
       onChanged={() => setTick((current) => current + 1)} />}
