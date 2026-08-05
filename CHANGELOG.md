@@ -1,3 +1,17 @@
+### 2026-08-05 15:45 (giờ VN) — ✅ CEO duyệt 3 ô KPI hàng cuối · SPEC đã viết, giao bot làm
+
+**CEO chốt** đề xuất 3 ô KPI lấp hàng cuối màn "Chi phí của tôi": **CP/DT hiệu quả chi phí** · **Doanh thu chưa phân bổ NV** · **Dự báo đạt target cuối tháng**, kèm một yêu cầu thêm: dự báo phải tính theo **ngày làm việc** — trừ **T7, CN, ngày lễ lớn và nghỉ bù** theo pháp luật VN, "để sau này không phải tính lại".
+
+**Spec:** `SPEC_KPI_HEALTH_ROW.md`. Điểm đáng ghi:
+- **Dùng LẠI** `server/data/holidays.json` + `holidayFor()` của `dailySales.js` — file đã có đủ 2026 kể cả nghỉ bù (Tết 14–22/02 · bù Giỗ Tổ 27/04 · 01–02/09). **Cấm tạo lịch thứ hai.** Sang năm chưa nạp lịch ⇒ vẫn trừ T7/CN nhưng ô đeo nhãn ⚠, không im lặng.
+- Số ngày làm việc khoá cứng trong test, Claude đếm tay: **T08.2026 = 21 · T09.2026 = 20 · T02.2026 = 15**; 27/04/2026 (bù, thứ Hai) không phải ngày làm việc.
+- Ghi chú tương thích: màn "nhịp ngày" (`dailySales`) coi **T7 là ngày làm việc** (ca sáng) — GIỮ NGUYÊN; lệnh trừ T7 chỉ áp cho ô dự báo. Ghi thẳng vào code để không ai "đồng bộ" nhầm hai quy ước.
+- CP/DT bắt buộc **cùng một snapshot** (banner "hai snapshot" trên màn là lý do); ô chưa phân bổ mang bất biến tổng cân theo `SPEC_REVENUE_SYNC_EXCEPTIONS`; mọi ô fail-closed `—`, cấm 0 giả sạch; test quét cấm frontend tự nhân chia.
+
+Đúng mô hình phối hợp: Claude viết spec + số đối chiếu, **bot server code**. Trạng thái test không đổi (chỉ thêm tài liệu).
+
+---
+
 ### 2026-08-05 15:03 (giờ VN) — ✅ CEO DUYỆT DEPLOY `5ba27ab` (cổng quyền CEO + chuông có trần retry)
 
 **Người duyệt:** CEO, trực tiếp, sau khi đọc bằng chứng. **Trạng thái lúc duyệt:** PROD `b49e585`, chưa đổi.
