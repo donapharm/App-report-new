@@ -1,3 +1,22 @@
+### 2026-08-05 21:15 (giờ VN) — ✅ Claude DUYỆT Cổng 1 cho `3eac0a9` (sàn tin cậy ô dự báo) — tự chạy lại, không tin báo cáo suông
+
+**Lần đầu trong ngày bot đẩy đủ SHA lên origin trước khi xin duyệt** — `3eac0a9` và `bf3c7c5` đều fetch được, review được. Giữ nếp này.
+
+**Claude tự kiểm, không nhận báo cáo suông:**
+- Diff `bf3c7c5..3eac0a9` **gọn đúng phạm vi**: chỉ `employeeCostHealthKpis.js` + test + 2 file tài liệu. Không đụng gì khác.
+- Sàn cài đúng spec: **một hằng số có tên** `MIN_FORECAST_ELAPSED_WORKING_DAYS = 5` và `EARLY_FORECAST_MAX_ELAPSED_WORKING_DAYS = 9`, không rải số 5 khắp nơi. Dưới 5 ngày ⇒ thẻ `unavailable` ghi `đã qua N/21 ngày làm việc, chưa đủ để dự báo`, **vẫn giữ đủ 4 đầu vào trong `raw`** để audit. Ngày 5–9 ⇒ nhãn `ước lượng sớm`.
+- Claude **chạy lại test trên chính candidate**: `employeeCostHealthKpis.test.js` **11/11 PASS**, phủ đúng ba mốc 2 · 5 · 10 ngày, cộng các ca fail-closed (thiếu vế, lệch snapshot, không target, năm chưa nạp lịch).
+- Toàn bộ server trên candidate: **947 bài · 941 PASS · 6 lỗi `pdfinfo` môi trường** (máy Claude không có `pdfinfo`) — khớp con số 947/947 bot báo trên máy có `pdfinfo`.
+
+**Lịch hiện số của ô dự báo trong T08.2026** (ngày làm việc: 3,4,5,6,7,10,11,…,31):
+- tới hết 07/08 ⇒ **không hiện số**, chỉ ghi đã qua mấy ngày;
+- từ **10/08** ⇒ hiện số kèm nhãn `ước lượng sớm`;
+- từ **17/08** ⇒ hiện số bình thường.
+
+**Kết luận Cổng 1: PASS.** Chờ CEO duyệt Cổng 2 để deploy. Lùi được: về `bf3c7c5`.
+
+---
+
 ### 2026-08-05 20:50 (giờ VN) — ✅ Đối chiếu lỗi "ô gộp đọc thành 0" của App Sale: **App Report KHÔNG dính**
 
 Bot App Sale báo NO-GO cho bản của họ, trong đó có P1: file Excel hợp lệ có ô gộp dọc bị đọc âm thầm thành `qty=0, amount=0`. App Report cũng parse .xlsx (`upload.js`) nên Claude kiểm chéo ngay.
