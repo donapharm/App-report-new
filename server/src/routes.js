@@ -1082,7 +1082,9 @@ function employeeCostTableOptions(req, { paginate = false, allEmployees = false 
   };
 }
 
-async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view_all', suppressAudit = false } = {}) {
+async function employeeCostAllPayload(req, {
+  paginate = true, auditEvent = 'view_all', suppressAudit = false, includePaymentSchedules = false,
+} = {}) {
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
@@ -1217,6 +1219,8 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
         readSnapshot: (emp, period) => salaryAdvance.snapshot.read(emp, period),
         readLedger: (emp, period) => paymentLedgerStore.readEntry(emp, period),
         today: employeeCost.vnToday(),
+        // Chỉ worker nội bộ yêu cầu schedule đầy đủ; HTTP/UI mặc định không đổi.
+        includeSchedules: includePaymentSchedules,
       });
     } catch (error) {
       merged.paymentTeam = null;
@@ -5286,6 +5290,49 @@ async function employeeBonusSummaryForNotify(empCode, ky) {
   return { empCode: code, ky, bonus: summary?.month || {}, sourceAvailable: monthPriority.sourceAvailable !== false };
 }
 
-router.notifyServices = { employeeCostSummaryForNotify, employeeBonusSummaryForNotify };
+function paymentNoticePeriods(today = employeeCost.vnToday()) {
+  const now = /^\d{4}-\d{2}-\d{2}$/.test(String(today || '')) ? new Date(`${today}T00:00:00Z`) : null;
+  if (!now) return [];
+  return store.listPeriods().map((item) => monthInputForKy(item.ky)).filter(Boolean).filter((period) => {
+    const [year, month] = period.split('-').map(Number);
+    const end = new Date(Date.UTC(year, month, 0));
+    const age = Math.floor((now - end) / 86_400_000);
+    // Lần 2 từ +45 ngày; lần 3 +60/+15. Cho phép 30 ngày catch-up,
+    // nhưng không quét vô hạn các kỳ lịch sử.
+    return age >= 45 && age <= 105;
+  });
+}
+
+async function paymentSchedulesForNotify({ today = employeeCost.vnToday() } = {}) {
+  const ceo = store.findUserByCode('CEO');
+  const session = ceo ? auth.sessionForUser(ceo) : null;
+  if (!session || !auth.isCeoActor(session)) {
+    throw Object.assign(new Error('Không dựng được phiên CEO cho lịch nhắc thanh toán'), { code: 'PAYMENT_NOTICE_CEO_SESSION_REQUIRED' });
+  }
+  const schedules = [];
+  for (const period of paymentNoticePeriods(today)) {
+    const req = { session, query: { emp: 'ALL', from: period, to: period, page: '1', pageSize: '20' } };
+    const payload = await employeeCostAllPayload(req, {
+      paginate: false, auditEvent: 'payment_notice', suppressAudit: true, includePaymentSchedules: true,
+    });
+    const team = payload?.paymentTeam;
+    if (!team || team.invariantOk !== true || (team.excluded || []).length) {
+      const error = new Error(`Sổ thanh toán kỳ ${period} thiếu nguồn hoặc không cân`);
+      error.code = 'PAYMENT_NOTICE_SCHEDULE_UNRELIABLE';
+      error.period = period;
+      error.excluded = (team?.excluded || []).map((row) => row.empCode);
+      throw error;
+    }
+    schedules.push(...(team.schedules || []));
+  }
+  return schedules;
+}
+
+router.notifyServices = {
+  employeeCostSummaryForNotify,
+  employeeBonusSummaryForNotify,
+  paymentSchedulesForNotify,
+  paymentNoticePeriods,
+};
 
 module.exports = router;

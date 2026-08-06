@@ -17,15 +17,13 @@
  * của scheduledJobs ⇒ restart không chạy lại lần hai.
  *
  * Handler hiện có:
- *   - target_proposal: CHƯA có handler thật (đợt sau). Ở đây chỉ GHI LOG rồi đánh dấu
- *     đã chạy — TUYỆT ĐỐI KHÔNG tự áp target (luật CEO: target là tiền, CEO bấm mới ghi).
- *   - payment_notice: CỐ Ý không cắm handler ⇒ việc hiện lại mỗi lần chạy dưới nhãn
- *     "chờ handler" và KHÔNG bị đánh dấu đã chạy. Đánh dấu một việc chưa làm gì là
- *     giấu mất sự thật "chưa ai nhắc thanh toán"; để nó lộ ra cho đến khi có handler
- *     thật (cần sổ thanh toán từng NV + notifyChannels — làm ở đợt sau, có duyệt).
+ *   - target_proposal: chỉ ghi log, tuyệt đối không tự áp target.
+ *   - payment_notice: dựng sổ bằng backend App Report, gửi NV + CEO qua
+ *     notifyChannels. Thiếu nguồn/mapping/gửi lỗi ⇒ không mark job, retry.
  */
 const persist = require('../src/persist');
 const { dueJobs, runDueJobs, readState } = require('../src/scheduledJobs');
+const { createPaymentNoticeHandler } = require('../src/paymentNoticeHandler');
 
 const DRY = process.argv.includes('--dry-run');
 
@@ -34,7 +32,10 @@ const stamp = () => new Intl.DateTimeFormat('vi-VN', {
   hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
 }).format(new Date());
 
-async function main() {
+async function main({
+  services = require('../src/routes').notifyServices,
+  paymentHandlerFactory = createPaymentNoticeHandler,
+} = {}) {
   const now = new Date();
   if (DRY) {
     const jobs = dueJobs(now, readState(persist));
@@ -45,6 +46,7 @@ async function main() {
     return;
   }
 
+  const paymentNotice = paymentHandlerFactory({ loadSchedules: services.paymentSchedulesForNotify });
   const result = await runDueJobs({
     now,
     handlers: {
@@ -52,6 +54,7 @@ async function main() {
         // Đợt sau mới có handler thật. KHÔNG tự áp target — chỉ ghi log để lại dấu vết.
         console.log(`[${stamp()}] target_proposal ${job.stage} cho kỳ ${job.targetKy} (neo ${job.anchorKy}, closed=${job.closed}) — handler chưa làm, CHỈ GHI LOG, không áp target.`);
       },
+      payment_notice: paymentNotice,
     },
   });
 
@@ -64,4 +67,8 @@ async function main() {
   if (result.failed.length) process.exitCode = 1;
 }
 
-main().catch((error) => { console.error(`⛔ ${error.stack || error.message}`); process.exit(1); });
+if (require.main === module) {
+  main().catch((error) => { console.error(`⛔ ${error.stack || error.message}`); process.exit(1); });
+}
+
+module.exports = { main };

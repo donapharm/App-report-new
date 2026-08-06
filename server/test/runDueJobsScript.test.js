@@ -11,8 +11,9 @@ test('runner tôn trọng hai luật cứng của V-D', () => {
   // 1. TUYỆT ĐỐI không tự áp target — handler target_proposal chỉ ghi log.
   assert.match(SOURCE, /không áp target/i);
   assert.doesNotMatch(SOURCE, /targetAdmin|saveTarget|applyTarget/);
-  // 2. payment_notice cố ý KHÔNG có handler ⇒ không bị đánh dấu "đã chạy" khi chưa làm gì.
-  assert.doesNotMatch(SOURCE, /payment_notice:\s*async/);
+  // 2. payment_notice có handler thật, dựng qua factory tiêm dependency.
+  assert.match(SOURCE, /payment_notice:\s*paymentNotice/);
+  assert.match(SOURCE, /createPaymentNoticeHandler/);
 });
 
 test('--dry-run liệt kê việc, không ghi state', () => {
