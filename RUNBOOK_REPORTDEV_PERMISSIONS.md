@@ -29,8 +29,15 @@ allowlist chỉ `read/write`. Mở phiên mới là hết.
 4. `/new` vẫn chỉ read/write ⇒ quyền bị giới hạn từ **launcher/phần mềm tạo phiên**:
    - Mở Control UI `http://127.0.0.1:18789/` → **Chat** → chọn agent `reportdev` → **New Chat**.
    - KHÔNG chọn profile/allowlist chỉ gồm `read, write`; manifest phải có đủ **`exec` và `process`**.
+   - Có thể ép rõ trong Control UI → Config, khối `tools` của agent `reportdev`
+     (quanh dòng 378–419): thêm `"alsoAllow": ["exec", "process"]`, GIỮ NGUYÊN
+     `deny`, rồi Apply + Restart + New Chat.
    - Vẫn bị ⇒ operator phải bỏ allowlist read/write hoặc thêm `exec`+`process`
-     vào tool manifest của launcher — không phải sửa `openclaw.json`.
+     vào tool manifest của launcher — sửa `openclaw.json` KHÔNG chèn thêm tool
+     được vào một phiên đã tạo sẵn.
+
+Ghi chú thao tác Telegram: cấu hình `native: false` ⇒ các lệnh `/tools`, `/new`,
+`/exec` KHÔNG hiện trong menu gợi ý — phải **gõ tay nguyên văn**, mỗi lệnh một tin nhắn riêng.
 
 ## Hai điều rút ra (đã áp dụng)
 
