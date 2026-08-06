@@ -1,3 +1,17 @@
+### 2026-08-06 — ✅ V2 có quyết định: kế toán trả lời **GHI** cho `DH479816093` (3.995.000đ)
+
+CEO chuyển bảng, kế toán trả lời **GHI**. Đây là nhánh **an toàn**: khoản 3.995.000đ vốn đã được tính vào doanh thu T07 (bucket `pending` vẫn nằm trong doanh thu), nên ghi chính thức **không làm đổi con số**. Kỳ T07 giữ nguyên ghim **30.917.892.673đ**, thưởng/phạt đã trả **không phải tính lại**, không có chuyện hồi tố.
+
+**‼ Nhưng "trả lời GHI" chưa phải là "đã ghi".** Kế toán còn phải **thao tác thật trên MISA** (chuyển trạng thái `pending` → `official`) trước **08/08**. Trả lời miệng mà quên bấm thì tới hạn khoá sổ vẫn treo nguyên.
+
+**Nghiệm thu khi bot có lại quyền chạy** (không gấp, vì số không đổi dù ghi hay chưa):
+1. `node server/scripts/misa_pending_detail.js` → đơn `DH479816093` phải **rơi khỏi** nhóm "Đề nghị ghi"; nhóm đó về **0đ** hoặc mất hẳn.
+2. `node server/scripts/verify_frozen_periods.js` → vẫn **exit 0**. Ghi chính thức không đổi tổng, nên lệch là có thứ khác bị đụng.
+
+**Hai việc hạn 08/08 giờ đã có quyết định cho cả hai:** V1 đóng (App Sale thêm cặp lúc 06:44, sync run 365 xác nhận không ghi đè) · V2 kế toán chốt GHI, chờ họ bấm.
+
+---
+
 ### 2026-08-06 06:44 (giờ VN) — ✅✅ V1 ĐÓNG: App Sale đã thêm cặp, và **sync tự động KHÔNG ghi đè**
 
 App Sale thêm cặp `120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162` → **DN001**, đúng 1 NV, lúc **06:44:28** (audit `19790`), qua cổng preview/duyệt DB của họ. Không sửa tay dòng MISA, không đổi tiền, không đụng đơn khác.
