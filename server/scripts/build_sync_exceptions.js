@@ -195,7 +195,13 @@ async function main() {
       process.exit(2);
     }
     if (latest && String(latest.id) !== String(run.id)) {
-      console.log(`⚠ Nguồn đã có run mới #${latest.id} SAU khi slot dựng (#${run.id}). Phân loại theo đúng run #${run.id} của slot — kỳ đã khoá sổ thì KHÔNG hồi tố, kỳ đang chạy thì lần materialize kế sẽ tự bắt run mới.`);
+      // Chốt sau 2 lần chạy thật 06/08 (T07 run #299 còn 4 dòng, T08 run #378 còn 1 dòng):
+      // App Sale CHỈ giữ dòng thô của run MỚI NHẤT — run cũ bị đè gần như ngay.
+      // Slot khác run nguồn ⇒ không còn universe để đối chiếu ⇒ BỎ QUA (exit 2),
+      // KHÔNG phải lỗi cân. Chạy lại ngay sau lần dựng slot kế (slot dựng 30 phút/lần
+      // trong khung 08:00–17:30), hoặc cắm cron chạy sát sau lịch dựng.
+      console.error(`⏭  Slot dựng từ run #${run.id} nhưng nguồn đã sang run #${latest.id} và không giữ dòng run cũ — ngoài "cửa sổ tươi", không đối chiếu được lúc này. Chạy lại ngay sau lần dựng slot kế. (Đây là BỎ QUA, không phải lệch số.)`);
+      process.exit(2);
     }
     const catalog = await resolveCatalogVersion(pool);
     [misaRows, webRows] = await Promise.all([

@@ -23,12 +23,14 @@ test('universe đối tác đọc line_calc (kể cả đơn huỷ), không đò
   assert.doesNotMatch(finalSelect, /WHERE/);
 });
 
-test('universe neo theo RUN CỦA SLOT, không đòi run mới nhất (kỳ khoá sổ không hồi tố)', () => {
-  // Vụ T07 06/08: slot dựng từ run #299, nguồn đã có #301 — bản đầu chặn oan và
-  // khuyên materialize lại kỳ ĐÃ KHOÁ SỔ. Luật đúng: phân loại theo run của slot,
-  // run mới chỉ là cảnh báo.
+test('chỉ đối chiếu trong CỬA SỔ TƯƠI: slot khác run nguồn ⇒ BỎ QUA exit 2, không phải lệch số', () => {
+  // Chốt sau 2 lần chạy thật 06/08: App Sale chỉ giữ dòng thô của run MỚI NHẤT
+  // (T07 run #299 còn 4/2016 dòng, T08 run #378 còn 1/513). Slot khác run nguồn
+  // ⇒ universe không còn ⇒ bỏ qua chờ lần dựng slot kế — KHÔNG báo "không cân",
+  // KHÔNG khuyên materialize lại kỳ khoá sổ.
   assert.match(RUN_BY_ID_SQL, /WHERE id = \$1::bigint AND status='success'/);
   assert.match(scriptSource, /RUN_BY_ID_SQL, \[slotRunId\]/);
+  assert.match(scriptSource, /ngoài "cửa sổ tươi"[\s\S]*?process\.exit\(2\)/);
   assert.doesNotMatch(scriptSource, /chạy lại materialize trước rồi mới phân loại/);
 });
 
