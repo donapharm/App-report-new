@@ -14,6 +14,9 @@ test('runner tôn trọng hai luật cứng của V-D', () => {
   // 2. payment_notice có handler thật, dựng qua factory tiêm dependency.
   assert.match(SOURCE, /payment_notice:\s*paymentNotice/);
   assert.match(SOURCE, /createPaymentNoticeHandler/);
+  // 3. Mọi run thật tự bọc flock; không phụ thuộc người cắm cron nhớ thêm lock.
+  assert.match(SOURCE, /runLockedProcess/);
+  assert.match(SOURCE, /APP_REPORT_DUE_JOBS_LOCKED/);
 });
 
 test('--dry-run liệt kê việc, không ghi state', () => {

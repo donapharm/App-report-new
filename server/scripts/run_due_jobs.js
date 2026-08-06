@@ -24,6 +24,8 @@
 const persist = require('../src/persist');
 const { dueJobs, runDueJobs, readState } = require('../src/scheduledJobs');
 const { createPaymentNoticeHandler } = require('../src/paymentNoticeHandler');
+const { runLockedProcess } = require('../src/processLockRunner');
+const path = require('node:path');
 
 const DRY = process.argv.includes('--dry-run');
 
@@ -67,8 +69,24 @@ async function main({
   if (result.failed.length) process.exitCode = 1;
 }
 
-if (require.main === module) {
-  main().catch((error) => { console.error(`⛔ ${error.stack || error.message}`); process.exit(1); });
+async function cli() {
+  // Dry-run tuyệt đối read-only. Run thật luôn tự bọc `flock`: hai cron/manual
+  // chồng nhau thì chỉ một process được gửi; kernel tự nhả lock kể cả crash.
+  if (DRY || process.env.APP_REPORT_DUE_JOBS_LOCKED === '1') return main();
+  const lockFile = path.join(persist.DIR, 'run_due_jobs.lock');
+  const result = runLockedProcess({
+    lockFile, command: process.execPath, args: [__filename, ...process.argv.slice(2)],
+    env: { ...process.env, APP_REPORT_DUE_JOBS_LOCKED: '1' },
+  });
+  if (result.contended) {
+    console.log(`[${stamp()}] Bỏ qua: một lượt run_due_jobs khác đang giữ lock.`);
+    return;
+  }
+  if (result.status) process.exitCode = result.status;
 }
 
-module.exports = { main };
+if (require.main === module) {
+  cli().catch((error) => { console.error(`⛔ ${error.stack || error.message}`); process.exit(1); });
+}
+
+module.exports = { main, cli };
