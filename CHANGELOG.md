@@ -1,3 +1,11 @@
+### 2026-08-06 — ✅ CEO DUYỆT dự án "Cột % chi phí trong Danh mục QL" — `SPEC_CATALOG_COST_COLUMNS.md`
+
+CEO duyệt trọn phương án: **số % từ DataHub (SSOT, App Report chỉ hiển thị, không cho sửa % kể cả CEO)** · **menu phân quyền CHỈ CEO điều khiển** (`isCeoActor`, admin thường không sửa được, API ghi grant trả 403 `CEO_ONLY`) · phân quyền theo **từng NV × từng cột (C36/C41/C43/C44/C45…) × phạm vi đơn vị mình phụ trách**, có thao tác nhóm/toàn phòng · **mặc định TẮT** (fail-closed), hai lớp với `employeeCostVisibility`, con mắt ẩn số phủ trên cùng, export theo đúng grant.
+
+**Xếp hàng: đứng đầu hàng đợi kế** — ngay sau khi REPORTDEV đóng đợt deploy V-A→V-D, trước việc đọc Excel thật. Giao bot làm theo spec khi đợt deploy hiện tại nghiệm thu xong.
+
+---
+
 ### 2026-08-06 — ✅ LÀM XONG CẢ 4 VIỆC của `LENH_06082026.md` (Claude code trực tiếp — bot REPORTDEV đang mất quyền exec)
 
 Bot báo runtime chỉ còn read/write (mất exec/edit/apply_patch) nên không nhận lệnh được; CEO đã duyệt gói 4 việc và muốn "làm xong luôn" ⇒ Claude làm thẳng trên `claude/new-session-eifd44`, mỗi việc một commit riêng để lùi từng việc được.
