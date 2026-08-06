@@ -56,6 +56,11 @@ test('che SỐ giữ CẤU TRÚC: tiền/%/Xu bị che, ngày và đếm số l�
     assert.equal(short(1_250_000_000), MASK_TEXT);
     assert.equal(pct(87.5), MASK_TEXT);
     assert.equal(formatEmployeeCostCell(1200000, { kind: 'money' }), MASK_TEXT);
+    // CEO chốt 06/08: % chi phí là công thức hoa hồng ⇒ che như tiền.
+    assert.equal(formatEmployeeCostCell(13, { key: 'c43', kind: 'percent' }), MASK_TEXT);
+    // Ngoại lệ CEO 06/08: giá trúng thầu (công khai) + thành tiền xuất bán KHÔNG che.
+    assert.equal(formatEmployeeCostCell(150000, { key: 'bidPrice', kind: 'money' }), '150.000đ');
+    assert.equal(formatEmployeeCostCell(2500000, { key: 'revenueBeforeVat', kind: 'money' }), '2.500.000đ');
     // Thiếu dữ liệu vẫn phải là '—' — không được lẫn "che" với "không có số".
     assert.equal(money(null), '—');
     assert.equal(pct(undefined), '—');

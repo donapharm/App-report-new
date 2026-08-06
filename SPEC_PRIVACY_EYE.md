@@ -49,8 +49,14 @@ app hỏng.
 `3.995.000đ` → `•••••••` (giữ nguyên độ rộng cột để bảng không nhảy). Nhãn, tên nhân
 viên, ngày, trạng thái, nút bấm **giữ nguyên** — vẫn thao tác được, chỉ không đọc được số.
 
-Che cả: tiền · phần trăm target · số Xu · số dòng có kèm tiền. **Không che:** mã đơn,
-mã đơn vị, mã hàng, ngày — mấy thứ đó không phải tiền và cần để tra cứu.
+Che cả: tiền · phần trăm target · **% chi phí C33–C46 (công thức hoa hồng — CEO chốt
+06/08)** · số Xu · số dòng có kèm tiền. **Không che:** mã đơn, mã đơn vị, mã hàng,
+ngày — mấy thứ đó không phải tiền và cần để tra cứu.
+
+**Ngoại lệ CEO chốt 06/08/2026 — hai cột trong bảng chi phí KHÔNG che:**
+- **Giá trúng thầu** (`bidPrice`) — số công khai của gói thầu.
+- **Thành tiền xuất bán (trước VAT)** (`revenueBeforeVat`) — cần nhìn để làm việc với bảng.
+Chỉ áp cho đúng hai cột đó theo `key`; các ô KPI tổng doanh thu vẫn che như thường.
 
 ### 6. ‼ ĐANG ẨN THÌ **KHOÁ NÚT GHI TIỀN**
 Đây là phần đáng giá nhất, và nó biến tính năng trang trí thành **kiểm soát thật**:
