@@ -1,3 +1,11 @@
+### 2026-08-06 23:17 (giờ VN) — 🔍 V-C chạy thật T07: KHÔNG CÂN (−20,2 tỷ) — và đó là PHÁT HIỆN, không phải lỗi script
+
+Bot chạy `build_sync_exceptions.js` (bản `851b92b`) cho T07, fail-closed dừng đúng: nguồn chỉ còn **4 dòng MISA** cho run #299 trong khi slot T07 giữ **2.016 dòng** — tức **App Sale không lưu dòng snapshot của run cũ** (run mới đè, dòng cũ bị dọn). Lệch −20.262.343.523đ là **lệch giả do nguồn đã trôi**, không phải doanh thu sai: T07 vẫn ghim đúng 30.917.892.673đ/2.016 dòng.
+
+**Quyết định vận hành (Claude chốt, chờ CEO xác nhận nếu cần):** kỳ ĐÃ KHOÁ SỔ **không phân loại hồi tố** — nguồn tại thời điểm khoá không còn tồn tại để so. Màn "Chưa đồng bộ" **sống từ kỳ ĐANG CHẠY (T08) trở đi**, chạy sát thời điểm dựng slot (slot tự dựng 30 phút/lần nên universe luôn tươi). Script bổ sung chẩn đoán tự động cho ca này (`1bea2d6`). T07 không ghi store — màn sẽ ghi rõ "chưa chạy phân loại" thay vì số sai.
+
+---
+
 ### 2026-08-06 20:45 (giờ VN) — 🚢✅ V-A + V-B LÊN PROD `2ca7e45` — Claude đối chiếu từng byte, DUYỆT
 
 Bot deploy candidate `va-vb-combined-636f9fc-20260806-202523` = nền PROD `636f9fc` + đúng 2 commit V-A (`a6e8722`) + V-B (`2ca7e45`). Claude diff xác nhận **code web + test giống hệt bản đã review** trên `claude/new-session-eifd44`; không lẫn V-C/V-D.
