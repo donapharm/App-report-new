@@ -1,3 +1,19 @@
+### 2026-08-06 08:50 (giờ VN) — 📋 Rà soát sổ nợ toàn app: **3 thứ đã xây xong nhưng CHƯA NỐI DÂY**
+
+CEO yêu cầu rà việc còn nợ để đóng dứt app. Claude quét bằng lệnh (`TODO(LIVE)` · người gọi từng module · route ↔ nơi ghi dữ liệu · `SPEC_*` chưa hiện thực · mục "chưa làm" trong changelog), **không nhớ theo trí nhớ**. Kết quả: **`NO_CON_LAI.md`**.
+
+**Phát hiện đáng nói nhất — ba module đã làm xong nhưng không ai gọi:**
+
+1. **Màn "Chưa đồng bộ" luôn rỗng.** Có đủ `syncExceptionClassifier` + catalog 14 mã + store + report + route `routes.js:2424` + `api.syncExceptions()` + 14 test — nhưng **không dòng nào gọi `classifySyncExceptions()` rồi `syncExceptionStore.write()`** trong luồng chạy thật (grep toàn `server/src` và `server/scripts`: chỉ có trong file định nghĩa và trong comment ví dụ). ⇒ `SPEC_REVENUE_SYNC_EXCEPTIONS` — thứ sinh ra để *"không dòng nào biến mất lặng lẽ"* — **chưa chạy ngày nào**.
+2. **`runDueJobs()` không ai gọi.** `scheduledJobs.js` đủ cả, nhưng **0 nơi gọi** kể cả `index.js`; không `setInterval`, không cron. ⇒ mọi việc theo lịch **của App Report** chưa từng chạy. ‼ Phân biệt: lịch gửi tin chi phí/thưởng do **`app-report-tgbot` chạy riêng** và **đang hoạt động** — hai bộ lịch khác nhau.
+3. **Handler `target_proposal`** chưa hiện thực; mà có làm cũng chưa chạy vì §2.
+
+**Còn lại:** đọc file Excel thật (`SPEC_UPLOAD_REAL_FILE`, CEO đã chốt CÓ) · khối cảnh báo bộ lọc chưa tách ra ngoài panel · 4 dây `TODO(LIVE)` (login demo → OTP/SSO là cái còn thật sự cần) · và mấy việc chờ người (DN012 bấm Start, 3 NV stale, nghiệm thu đóng V1/V2).
+
+**Thứ tự đề xuất:** ưu tiên thứ **đã trả tiền rồi mà chưa dùng được** — bộ lọc (vài dòng) → cắm classifier → cắm cron → file Excel → handler target → login OTP/SSO.
+
+---
+
 ### 2026-08-06 — ✅✅ V2 ĐÓNG: kế toán đã bấm ghi chính thức · **CẢ HAI việc hạn 08/08 xong trước hạn 2 ngày**
 
 Kế toán đã **thao tác thật trên MISA** cho đơn `DH479816093` (3.995.000đ · 29/07 · 186.BVĐK An Phú CNIII · Agimoti). Không chỉ trả lời GHI mà đã bấm.
