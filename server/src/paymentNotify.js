@@ -119,7 +119,8 @@ async function runPaymentNotices(schedules = [], { send, store = persist, now, d
   const delivered = [];
   for (const notice of planned) {
     try {
-      await send(notice.text, notice.empCode, notice.kind);
+      // Giữ object notice ở tham số thứ tư cho adapter bền vững theo audience.
+      await send(notice.text, notice.empCode, notice.kind, notice);
       delivered.push(notice.key);
     } catch (error) {
       // Gửi hỏng thì KHÔNG đánh dấu đã gửi ⇒ lần sau nhắc lại, không nuốt mất tin.

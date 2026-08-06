@@ -58,9 +58,11 @@ function noneReasonOf(advance) {
 
 function buildPaymentTeamSummary({
   period, subtotals = [], readSnapshot, readLedger, today = '', splitThresholdVnd, secondRatio,
+  includeSchedules = false,
 } = {}) {
   const rows = [];
   const excluded = [];
+  const schedules = [];
 
   for (const subtotal of Array.isArray(subtotals) ? subtotals : []) {
     const empCode = String(subtotal?.employeeCode || '').trim().toUpperCase();
@@ -104,6 +106,8 @@ function buildPaymentTeamSummary({
       return item && Number.isSafeInteger(item.amount) ? item.amount : 0;
     };
     const firstItem = book.installments.find((item) => item.key === 'advance');
+    if (includeSchedules) schedules.push({ empCode, employeeName, schedule: book });
+
     rows.push({
       empCode,
       employeeName,
@@ -136,6 +140,7 @@ function buildPaymentTeamSummary({
     period: String(period || ''),
     rows,
     excluded,
+    ...(includeSchedules ? { schedules } : {}),
     totals: {
       employees: rows.length,
       total: sum('total'),

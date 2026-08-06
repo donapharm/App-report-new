@@ -123,3 +123,21 @@ test('Lần 1 không bao giờ làm NV bị đếm là quá hạn', () => {
   assert.equal(team.rows[0].received, 50_000_000);
   assert.match(team.rows[0].nextLabel, /Lần 2/);
 });
+
+test('schedule đầy đủ chỉ lộ khi worker nội bộ yêu cầu', () => {
+  const input = {
+    period: '2026-07',
+    subtotals: [{ employeeCode: 'DN006', employeeName: 'F', monthlyTotal: 100_000_000 }],
+    readSnapshot: () => advance(20_000_000),
+    readLedger: () => null,
+    today: '2026-09-14',
+  };
+  const publicSummary = buildPaymentTeamSummary(input);
+  assert.equal(Object.hasOwn(publicSummary, 'schedules'), false, 'HTTP/UI mặc định không được lộ schedule nội bộ');
+
+  const workerSummary = buildPaymentTeamSummary({ ...input, includeSchedules: true });
+  assert.equal(workerSummary.schedules.length, 1);
+  assert.equal(workerSummary.schedules[0].empCode, 'DN006');
+  assert.equal(workerSummary.schedules[0].schedule.invariantOk, true);
+  assert.equal(workerSummary.schedules[0].schedule.installments[1].key, 'second');
+});
