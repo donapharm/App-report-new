@@ -1,3 +1,17 @@
+### 2026-08-06 06:44 (giờ VN) — ✅✅ V1 ĐÓNG: App Sale đã thêm cặp, và **sync tự động KHÔNG ghi đè**
+
+App Sale thêm cặp `120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162` → **DN001**, đúng 1 NV, lúc **06:44:28** (audit `19790`), qua cổng preview/duyệt DB của họ. Không sửa tay dòng MISA, không đổi tiền, không đụng đơn khác.
+
+**‼ Chi tiết đáng giá nhất trong cả vụ:** live-check cho thấy **sync tự động đã chạy tiếp lên run 365**, và dòng đó nay là **DN001** — không quay về VP018.
+
+Đây là **bằng chứng thực địa** cho quyết định tối 05/08: App Sale cảnh báo *"sync MISA hàng giờ có thể ghi đè, cần dựng cổng override từng đơn"*, Claude **chặn lại** sau khi đọc `CRM_ROWS_SQL` — bảng phân công thắng `employee_code` của dòng, và sync không đụng bảng phân công. Nay run 365 xác nhận: **không cần cổng override nào cả**. Nếu làm theo hướng kia, hệ thống đã có thêm **một nguồn phân công thứ hai** phải bảo trì — đúng loại nợ kỹ thuật đã trả giá hai lần trong tuần (7 bản chép luật "ai là CEO", suýt có 2 lịch nghỉ lễ).
+
+**Còn lại đúng một bước, do CEO tự làm:** mở màn Chi phí, ô **"Doanh thu chưa phân bổ"** phải từ `1.795.600đ` về **0đ**. Nếu còn hiện số cũ thì bấm **Làm mới** và đợi ~1 phút (luật cache nguội đã chốt sáng nay), rồi mới kết luận.
+
+**Nhìn lại cả vụ `DH479816174`:** khởi đầu là một đơn 1.795.600đ gán nhầm cho telesaler. Đi qua: công cụ tra chủ + 25 test · **3 lỗi trong công cụ, cả 3 của Claude, cả 3 do bot đối chiếu chéo mới lộ** · một lần chặn App Sale khỏi dựng hệ thống thừa · và một ô KPI mới ("Doanh thu chưa phân bổ") nay đứng canh thường trực để lần sau không ai phải đi tìm bằng tay.
+
+---
+
 ### 2026-08-06 — ✅ V1 phía App Report ĐÓNG: chốt đúng một cặp cần sửa, bàn giao App Sale
 
 REPORTDEV nhận handoff mới, chạy lại và chốt — **khớp hoàn toàn** với phần Claude tra độc lập, không điểm nào lệch:
