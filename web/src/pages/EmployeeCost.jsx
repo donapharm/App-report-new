@@ -15,6 +15,8 @@ import { dataQualityTypeLabel, employeeCostDataQualityView } from '../employeeCo
 import { employeeVatKhoanDeduction, employeeVatKhoanViewModel } from '../employeeVatKhoanModel.js';
 import { createLatestRequestGate } from '../requestCoordinator.js';
 import { composePaymentRequestNote, paymentReasonDetailMaxLength } from '../paymentRequestReasons.js';
+import { ExportRealNumbersNote, useMoneyWriteLock } from '../privacy.jsx';
+import { maskMoneyInText, maskNumberText } from '../privacyMask.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -720,6 +722,9 @@ function PaymentRequestComposer({ mode, item, period, busy, reasons, reasonsErro
 }
 
 export function PaymentSchedulePanel({ schedule, earlyQuota, allEmployees, loading, canRecord, empCode, focusKey = '', requestReasons, requestReasonsError = '', onChanged }) {
+  // Đang che số thì KHOÁ mọi nút ghi tiền: không ai được duyệt tiền khi không nhìn thấy số.
+  // Backend vẫn chặn độc lập (requireCeo/paymentFlow) — khoá nút không phải lớp bảo vệ.
+  const { locked: moneyLocked, lockTitle: moneyLockTitle } = useMoneyWriteLock();
   const [busy, setBusy] = React.useState('');
   const [error, setError] = React.useState('');
   const [draft, setDraft] = React.useState({ key: '', amount: '', paidAt: '' });
@@ -848,19 +853,19 @@ export function PaymentSchedulePanel({ schedule, earlyQuota, allEmployees, loadi
                 {!canRecord && item.flowState !== 'paid' && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'other', item })}>
                   Nội dung khác
                 </button>}
-                {canRecord && item.flowState === 'unlock_requested' && <button type="button" disabled={!!busy}
+                {canRecord && item.flowState === 'unlock_requested' && <button type="button" disabled={!!busy || moneyLocked} title={moneyLockTitle}
                   onClick={() => run(`grant:${item.key}`, () => api.paymentFlow('unlock', {
                     emp: empCode, period: schedule.period, key: item.key, requestId: paymentRequestId('grant', schedule.period, item.key),
                   }))}>
                   Mở khoá
                 </button>}
-                {canRecord && item.flowState === 'requested' && <button type="button" disabled={!!busy}
+                {canRecord && item.flowState === 'requested' && <button type="button" disabled={!!busy || moneyLocked} title={moneyLockTitle}
                   onClick={() => run(`approve:${item.key}`, () => api.paymentFlow('approve', {
                     emp: empCode, period: schedule.period, key: item.key, requestId: paymentRequestId('approve', schedule.period, item.key),
                   }))}>
                   Duyệt
                 </button>}
-                {canRecord && ['requested', 'unlock_requested', 'unlocked', 'approved'].includes(item.flowState) && <button type="button" disabled={!!busy} onClick={() => setComposer({ mode: 'reject', item })}>
+                {canRecord && ['requested', 'unlock_requested', 'unlocked', 'approved'].includes(item.flowState) && <button type="button" disabled={!!busy || moneyLocked} title={moneyLockTitle} onClick={() => setComposer({ mode: 'reject', item })}>
                   Từ chối
                 </button>}
               </div>
@@ -897,12 +902,12 @@ export function PaymentSchedulePanel({ schedule, earlyQuota, allEmployees, loadi
           onChange={(event) => setDraft((current) => ({ ...current, paidAt: event.target.value }))} />
       </label>
       <div className="employee-cost-export-actions">
-        <button type="button" className="btn" disabled={!!busy || !draft.key || !draft.amount || !draft.paidAt}
+        <button type="button" className="btn" disabled={!!busy || moneyLocked || !draft.key || !draft.amount || !draft.paidAt} title={moneyLockTitle}
           onClick={() => run('pay', () => api.paymentRecord({
             emp_code: empCode, period: schedule.period, key: draft.key,
             amount: Number(String(draft.amount).replace(/[^\d]/g, '')), paid_at: draft.paidAt,
           }))}>{busy === 'pay' ? 'Đang ghi…' : '✓ Ghi nhận đã trả'}</button>
-        <button type="button" className="btn secondary" disabled={!!busy || !draft.key}
+        <button type="button" className="btn secondary" disabled={!!busy || moneyLocked || !draft.key} title={moneyLockTitle}
           onClick={() => run('undo', () => api.paymentUndo({ emp_code: empCode, period: schedule.period, key: draft.key }))}>
           {busy === 'undo' ? 'Đang gỡ…' : '↩ Gỡ ghi nhận'}
         </button>
@@ -1145,7 +1150,8 @@ function BonusDetailModal({ bonus, employeeLabel, onClose }) {
 
 function diemXuNumber(value) {
   const number = Number(value);
-  return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 2 }) : '—';
+  // Xu quy được ra tiền thưởng nên cũng đi qua rèm che (SPEC_PRIVACY_EYE.md).
+  return Number.isFinite(number) ? maskNumberText(number.toLocaleString('vi-VN', { maximumFractionDigits: 2 })) : '—';
 }
 
 function KhoanPointKpi({ khoan, loading }) {
@@ -1318,6 +1324,7 @@ function EmployeeGapPanel({ payload, loading, error, range }) {
         {!!view.pairs.length && <button type="button" className="btn secondary" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>{expanded ? 'Ẩn danh sách' : 'Xem danh sách'}</button>}
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Excel'}</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'PDF'}</button>
+        <ExportRealNumbersNote />
       </div>
     </div>
     {!!view.unavailable?.count && <div className="employee-cost-match-warning" role="alert">
@@ -1393,6 +1400,7 @@ function AdminGapPanel({ payload, loading, error, range }) {
         <button type="button" className="btn" title={syncBlockReason} disabled={loading || !!syncing || !syncCodeCount || !!syncBlockReason} onClick={() => { setSyncError(''); setSyncMessage(''); setSyncConfirm(true); }}>📤 Đồng bộ sang DataHub</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
+        <ExportRealNumbersNote />
       </div>
     </div>
     {syncBlockReason && <p className="employee-cost-gap-note">DataHub chưa cấu hình — nút Đồng bộ tạm khoá; dùng Xuất Excel/PDF.</p>}
@@ -1468,6 +1476,7 @@ function DataQualityPanel({ payload, loading, error, range, admin, onOpenRow }) 
       <div className="employee-cost-export-actions">
         <button type="button" className="btn" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
+        <ExportRealNumbersNote />
       </div>
     </div>
     <div className="kpi-grid employee-cost-dq-kpis">
@@ -1979,6 +1988,7 @@ export default function EmployeeCost({ me, onNavigate }) {
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('xlsx')}>{costExporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
           <button type="button" className="btn secondary" disabled={loading || !!costExporting || (admin && !selectedEmp)} onClick={() => exportCost('pdf')}>{costExporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
           {admin && <button type="button" className="btn secondary" disabled={loading || provinceWorklistExporting} onClick={exportProvinceWorklist}>{provinceWorklistExporting ? 'Đang xuất ĐV…' : 'Xuất ĐV chưa gán tỉnh'}</button>}
+          <ExportRealNumbersNote />
         </div>}
         {rangeInvalid && <small role="alert">Từ tháng không được sau Đến tháng.</small>}
       </form>
@@ -1993,12 +2003,12 @@ export default function EmployeeCost({ me, onNavigate }) {
       <button type="button" role="tab" aria-selected={view === 'gaps'} className={view === 'gaps' ? 'active' : ''} onClick={() => setView('gaps')}>
         Mặt hàng thiếu %{!gapConsistency.ready && gapBadge.loading && <span className="employee-cost-tab-badge loading" title="Đang đếm…">…</span>}{gapConsistency.ready && <span
           className={`employee-cost-tab-badge${gapMismatch || gapBadge.codeCount ? ' warn' : ' ok'}`}
-          title={gapMismatch ? `Dữ liệu KPI và tab chưa cùng snapshot. ${gapMismatchSource}` : gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp · ${gapBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không còn mã thiếu %'}>
+          title={gapMismatch ? `Dữ liệu KPI và tab chưa cùng snapshot. ${gapMismatchSource}` : gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp · ${maskNumberText(gapBadge.revenueAffected.toLocaleString('vi-VN') + 'đ')} doanh thu ảnh hưởng` : 'Không còn mã thiếu %'}>
           {gapMismatch ? '⚠ chưa đồng nhất' : gapBadge.codeCount ? `${gapBadge.codeCount} mã · ${gapBadge.pairCount} cặp` : '0'}
         </span>}
       </button>
       <button type="button" role="tab" aria-selected={view === 'dq'} className={view === 'dq' ? 'active' : ''} onClick={() => setView('dq')}>
-        Kiểm soát dữ liệu{!dqBadge.loaded && dqBadge.loading && <span className="employee-cost-tab-badge loading" title="Đang đếm…">…</span>}{dqBadge.loaded && <span className={`employee-cost-tab-badge${dqBadge.count ? ' warn' : ' ok'}`} title={dqBadge.count ? `${dqBadge.count} exception · ${dqBadge.revenueAffected.toLocaleString('vi-VN')}đ doanh thu ảnh hưởng` : 'Không có exception'}>{dqBadge.count ? `${dqBadge.count} exception` : '0'}</span>}
+        Kiểm soát dữ liệu{!dqBadge.loaded && dqBadge.loading && <span className="employee-cost-tab-badge loading" title="Đang đếm…">…</span>}{dqBadge.loaded && <span className={`employee-cost-tab-badge${dqBadge.count ? ' warn' : ' ok'}`} title={dqBadge.count ? `${dqBadge.count} exception · ${maskNumberText(dqBadge.revenueAffected.toLocaleString('vi-VN') + 'đ')} doanh thu ảnh hưởng` : 'Không có exception'}>{dqBadge.count ? `${dqBadge.count} exception` : '0'}</span>}
       </button>
     </div>}
 
@@ -2114,8 +2124,8 @@ export default function EmployeeCost({ me, onNavigate }) {
       {allEmployees && model.healthKpis.cards.map((card) => <Kpi
         key={card.key}
         label={card.label}
-        value={card.value}
-        sub={card.sub}
+        value={maskMoneyInText(card.value)}
+        sub={maskMoneyInText(card.sub)}
         tone={card.tone}
         onClick={card.action === 'open_data_quality' ? () => setView('dq') : undefined}
       />)}

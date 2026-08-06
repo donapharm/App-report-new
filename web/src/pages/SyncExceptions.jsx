@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
+import { maskNumberText } from '../privacyMask.js';
 
 // MÀN "CHƯA ĐỒNG BỘ" (SPEC_REVENUE_SYNC_EXCEPTIONS.md)
 // CEO 29/07: *"có một màn riêng lọc ra những mã đơn hàng / mặt hàng / nhà thầu chưa
 // đồng bộ được, kèm lý do — để xử lý tại chỗ, tránh chạy lòng vòng."*
 // Chỉ ĐỌC. Mọi số do backend tính và đã kiểm bất biến; màn này không cộng trừ lại.
-const money = (value) => (value == null ? '—' : `${Number(value).toLocaleString('vi-VN')}đ`);
+const money = (value) => (value == null ? '—' : maskNumberText(`${Number(value).toLocaleString('vi-VN')}đ`));
 const GROUP_LABEL = {
   excluded: { text: 'Bị loại — KHÔNG tính tiền', tone: 'warn' },
   incomplete: { text: 'Vào đủ tiền nhưng THIẾU THÔNG TIN', tone: 'warn' },

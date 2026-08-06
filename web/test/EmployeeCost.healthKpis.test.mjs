@@ -42,8 +42,9 @@ test('JSX ba KPI chỉ truyền card.value/card.sub từ payload, không có cô
   const end = source.indexOf('</div>', start);
   assert.ok(start >= 0 && end > start, 'không tìm thấy block KPI sức khoẻ');
   const block = source.slice(start, end);
-  assert.match(block, /value=\{card\.value\}/);
-  assert.match(block, /sub=\{card\.sub\}/);
+  // Cho phép DUY NHẤT rèm che trình bày (maskMoneyInText) bọc ngoài; vẫn cấm mọi công thức.
+  assert.match(block, /value=\{maskMoneyInText\(card\.value\)\}/);
+  assert.match(block, /sub=\{maskMoneyInText\(card\.sub\)\}/);
   assert.doesNotMatch(block, /card\.(?:value|sub)\s*[*/+-]/);
   assert.doesNotMatch(block, /(?:Math\.|Number\(|parseFloat\(|parseInt\()/);
 });
