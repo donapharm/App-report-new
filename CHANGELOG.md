@@ -1,3 +1,22 @@
+### 2026-08-06 — 📋 CEO duyệt gói 4 việc nhỏ · **Claude đính chính: việc "cắm bộ phân loại" KHÔNG phải chỉ nối dây**
+
+CEO duyệt làm một đợt: khối cảnh báo bộ lọc · con mắt ẩn số · bật sống màn "Chưa đồng bộ" · cắm lịch chạy. Lệnh đầy đủ: **`LENH_06082026.md`**.
+
+**‼ Đính chính của Claude.** Lúc rà soát 08:50 Claude xếp việc cắm classifier là *"nhỏ — luật và test đã xong, chỉ nối"*. Tra kỹ `materialize_july_revenue.js` thì **sai**:
+
+- Dòng 378 `const sourceRows = [...misa, ...partner]` là **dòng ĐƯỢC NHẬN**, không phải nguồn đầy đủ.
+- `fetchCrmMirror` đã lọc sẵn `revenue_bucket <> 'excluded'`; `partnerPartition.includedRows` cũng chỉ là phần được nhận.
+
+⇒ **Materializer không bao giờ thấy dòng bị loại**, mà classifier cần đúng phần đó. Không thể "gọi thêm một hàm".
+
+**Quyết định kiến trúc:** dựng **script riêng `build_sync_exceptions.js`** (chỉ đọc nguồn, chỉ ghi `syncExceptionStore`) thay vì sửa materializer. Lý do: materializer là **script an toàn nhất repo** — canh kỳ khoá sổ, ba lớp bất biến, ghim doanh thu T06/T07. Thêm truy vấn vào đó để phục vụ **một màn báo cáo** là đánh đổi rủi ro lấy tiện lợi; script riêng đạt cùng kết quả mà **không thể làm hỏng doanh thu**. Bất biến giữ nguyên: `Σ(đưa vào) + Σ(loại) == Σ(nguồn)`, lệch ⇒ **DỪNG, không ghi store**.
+
+**Chốt thêm cho V-D:** phân biệt rõ hai bộ lịch — lịch **gửi tin** do `app-report-tgbot` chạy (**đang hoạt động, không đụng**) và `runDueJobs()` của App Report (**chưa từng chạy**). Ưu tiên **cron ngoài** hơn `setInterval` trong tiến trình vì restart là mất. Job `target_proposal` chưa có handler ⇒ **không làm gì + ghi log**, cấm tự áp target.
+
+**V-A** yêu cầu assert **phải FAIL được với code hiện tại** — viết xong chạy thử trên code cũ, không đỏ thì viết lại. **V-B** theo `SPEC_PRIVACY_EYE.md`, điểm cốt lõi là **đang ẩn thì khoá nút duyệt tiền**.
+
+---
+
 ### 2026-08-06 — 💡 CEO đề xuất "con mắt" ẩn/hiện số tiền — `SPEC_PRIVACY_EYE.md`
 
 CEO đề xuất nút con mắt ở màn Chi phí / Thanh toán CP vì *"hai tab này khá nhạy cảm, liên quan đến tiền bạc"*. Claude kiểm: **chưa có gì che số**, và `employeeCostVisibility` sẵn có là **thứ khác hẳn** (khoá quyền ở backend, có audit) — không thay thế nhau.
