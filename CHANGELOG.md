@@ -1,3 +1,20 @@
+### 2026-08-06 — 💡 CEO đề xuất "con mắt" ẩn/hiện số tiền — `SPEC_PRIVACY_EYE.md`
+
+CEO đề xuất nút con mắt ở màn Chi phí / Thanh toán CP vì *"hai tab này khá nhạy cảm, liên quan đến tiền bạc"*. Claude kiểm: **chưa có gì che số**, và `employeeCostVisibility` sẵn có là **thứ khác hẳn** (khoá quyền ở backend, có audit) — không thay thế nhau.
+
+**Nói thẳng ngay đầu spec:** đây là **rèm che, không phải khoá**. Số vẫn nằm trong bộ nhớ trình duyệt và phản hồi mạng; ai mở F12 là thấy. Chống được: người đứng sau lưng · chiếu màn hình họp · để máy mở khi rời bàn. **Không** chống được: người cầm máy · ảnh chụp lúc đang hiện. Bắt buộc ghi tooltip *"không phải khoá bảo mật"* — người dùng tin nhầm còn nguy hiểm hơn không có tính năng.
+
+**Bảy điểm thiết kế**, trong đó ba điểm là chỗ khác biệt giữa làm cho có và làm cho dùng được:
+- **Một công tắc cho cả app**, đặt ở thanh tiêu đề — không phải từng trang. Lúc chia sẻ màn hình không ai nhớ bật từng chỗ.
+- **Mặc định ẩn** và **không nhớ trạng thái "đang hiện"** (F5 ⇒ về ẩn). Khoảnh khắc rủi ro nhất là lúc vừa mở trang trước mặt người khác.
+- **Tự ẩn lại** sau 60s không thao tác, và ngay khi cửa sổ mất tiêu điểm — dùng lại đúng `visibilitychange` mà chuông đang dùng, không dựng cơ chế thứ hai.
+
+**‼ Điểm đáng giá nhất — biến tính năng trang trí thành kiểm soát thật:** đang ẩn số thì **khoá luôn các nút Duyệt · Từ chối · Mở khoá · Ghi đã trả · Gỡ ghi nhận**. *Không ai được duyệt tiền khi đang không nhìn thấy số tiền.* Backend vẫn chặn độc lập — ẩn nút không phải lớp bảo vệ.
+
+**Cố ý KHÔNG làm:** mã PIN (an tâm giả, thêm phiền — muốn khoá thật thì dùng `employeeCostVisibility`) và che theo từng ô (phức tạp, dễ sót).
+
+---
+
 ### 2026-08-06 08:50 (giờ VN) — 📋 Rà soát sổ nợ toàn app: **3 thứ đã xây xong nhưng CHƯA NỐI DÂY**
 
 CEO yêu cầu rà việc còn nợ để đóng dứt app. Claude quét bằng lệnh (`TODO(LIVE)` · người gọi từng module · route ↔ nơi ghi dữ liệu · `SPEC_*` chưa hiện thực · mục "chưa làm" trong changelog), **không nhớ theo trí nhớ**. Kết quả: **`NO_CON_LAI.md`**.
