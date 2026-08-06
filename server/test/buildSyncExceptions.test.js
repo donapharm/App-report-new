@@ -1,7 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { MISA_UNIVERSE_SQL, PARTNER_UNIVERSE_SQL, buildExceptionPayload } = require('../scripts/build_sync_exceptions');
+const { MISA_UNIVERSE_SQL, PARTNER_UNIVERSE_SQL, RUN_BY_ID_SQL, buildExceptionPayload } = require('../scripts/build_sync_exceptions');
+const scriptSource = require('node:fs').readFileSync(require.resolve('../scripts/build_sync_exceptions.js'), 'utf8');
 
 // ── Universe SQL: điểm mấu chốt của V-C là KHÔNG LỌC ─────────────────────────
 
@@ -20,6 +21,15 @@ test('universe đối tác đọc line_calc (kể cả đơn huỷ), không đò
   assert.doesNotMatch(finalSelect, /delivered_amount\s*>\s*0/);
   assert.doesNotMatch(finalSelect, /is_cancelled\s*(?:=|IS)/);
   assert.doesNotMatch(finalSelect, /WHERE/);
+});
+
+test('universe neo theo RUN CỦA SLOT, không đòi run mới nhất (kỳ khoá sổ không hồi tố)', () => {
+  // Vụ T07 06/08: slot dựng từ run #299, nguồn đã có #301 — bản đầu chặn oan và
+  // khuyên materialize lại kỳ ĐÃ KHOÁ SỔ. Luật đúng: phân loại theo run của slot,
+  // run mới chỉ là cảnh báo.
+  assert.match(RUN_BY_ID_SQL, /WHERE id = \$1::bigint AND status='success'/);
+  assert.match(scriptSource, /RUN_BY_ID_SQL, \[slotRunId\]/);
+  assert.doesNotMatch(scriptSource, /chạy lại materialize trước rồi mới phân loại/);
 });
 
 // ── Phép cân trên fixture nhỏ ────────────────────────────────────────────────
