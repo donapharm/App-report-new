@@ -18,6 +18,11 @@
  *     thoát mã 1, KHÔNG ghi store.
  *  5. Mã lý do CHỈ lấy từ `syncExceptionCatalog` qua classifier — script không đặt
  *     mã mới. Dòng không khớp luật nào ra `KHONG_RO` (cố ý lộ ra, không giấu).
+ *  6. Kỳ ĐÃ KHOÁ SỔ: universe MISA neo theo run của slot (không hồi tố). Riêng phía
+ *     ĐỐI TÁC truy vấn sống — nếu sau khoá sổ có phản hồi giao hàng mới thì tổng
+ *     có thể lệch với slot ⇒ script DỪNG không ghi. Đó là script nói thật "nguồn
+ *     đã trôi sau khoá sổ", không phải bug; kỳ đang chạy không gặp vì slot dựng
+ *     lại mỗi 30 phút.
  *     Ghi chú: đơn đối tác BỊ HUỶ nhưng từng giao hàng sẽ ra `KHONG_RO` vì catalog
  *     chưa có mã "đơn huỷ" — đó là quyết định catalog/CEO, script không tự chế.
  *
@@ -72,6 +77,12 @@ const MISA_UNIVERSE_SQL = `SELECT l.id, l.sale_order_no, l.sale_order_date::text
   FROM misa_revenue_snapshot_lines l
  WHERE l.run_id = $1
  ORDER BY l.sale_order_date NULLS FIRST, l.sale_order_no, l.id`;
+
+// Lấy run theo id (run mà slot đã dùng) — vẫn đòi status='success' cho chắc.
+const RUN_BY_ID_SQL = `SELECT id, run_key, period_month::text, from_date::text, to_date::text,
+       total_records, started_at, finished_at
+  FROM misa_revenue_sync_runs
+ WHERE id = $1::bigint AND status='success' LIMIT 1`;
 
 // Universe đối tác: line_calc = MỌI dòng đơn PARTNER tạo trong kỳ, kể cả đơn huỷ
 // (materializer chỉ thấy active_lines có delivered_amount>0). Các điều kiện cấu trúc
@@ -160,12 +171,31 @@ async function main() {
     database: process.env.APPSALE_PGDATABASE || process.env.PGDATABASE,
   });
 
-  let run; let misaRows; let webRows;
+  // ‼ Universe MISA lấy theo ĐÚNG RUN slot đã dùng, KHÔNG phải run mới nhất.
+  // Mã dòng `MISA:<id>` thuộc từng run — so slot run cũ với nguồn run mới là so hai
+  // bộ mã khác nhau, kiểu gì cũng "lệch" giả. Với kỳ ĐÃ KHOÁ SỔ (vd T07 ghim từ run
+  // #299, sau đó nguồn có #300/#301) tuyệt đối KHÔNG materialize lại (không hồi tố);
+  // run mới chỉ in cảnh báo để biết, không phải lý do dừng. (Sửa 06/08 sau khi bot
+  // chạy T07 bị chặn oan bởi bản đầu đòi "run mới nhất".)
+  const slotRunId = String(slotData.slot.sourceRunId || slotData.slot.meta?.sourceRunId || '');
+  let run; let latest; let misaRows; let webRows;
   try {
-    run = (await pool.query(LATEST_MISA_RUN_SQL, [from, to])).rows[0];
+    latest = (await pool.query(LATEST_MISA_RUN_SQL, [from, to])).rows[0];
+    if (slotRunId) {
+      run = (await pool.query(RUN_BY_ID_SQL, [slotRunId])).rows[0];
+      if (!run) {
+        console.error(`⛔ Slot ghi dựng từ run #${slotRunId} nhưng run này không còn/không success trong nguồn — không đối chiếu được. DỪNG.`);
+        process.exit(1);
+      }
+    } else {
+      run = latest;
+    }
     if (!run) {
       console.error(`⏭  Kỳ ${PERIOD} chưa có lần đồng bộ MISA thành công nào.`);
       process.exit(2);
+    }
+    if (latest && String(latest.id) !== String(run.id)) {
+      console.log(`⚠ Nguồn đã có run mới #${latest.id} SAU khi slot dựng (#${run.id}). Phân loại theo đúng run #${run.id} của slot — kỳ đã khoá sổ thì KHÔNG hồi tố, kỳ đang chạy thì lần materialize kế sẽ tự bắt run mới.`);
     }
     const catalog = await resolveCatalogVersion(pool);
     [misaRows, webRows] = await Promise.all([
@@ -174,13 +204,6 @@ async function main() {
     ]);
   } finally {
     await pool.end().catch(() => {});
-  }
-
-  // Slot phải được dựng từ đúng run này — dựng từ run cũ thì đối chiếu vô nghĩa.
-  const slotRunId = String(slotData.slot.sourceRunId || slotData.slot.meta?.sourceRunId || '');
-  if (slotRunId && slotRunId !== String(run.id)) {
-    console.error(`⛔ Slot dựng từ run #${slotRunId} nhưng run mới nhất là #${run.id} — chạy lại materialize trước rồi mới phân loại. DỪNG.`);
-    process.exit(1);
   }
 
   // Map về đúng các trường classifier đọc; source_line_id trùng format slot ('MISA:<id>' / 'WEB:<item>').
@@ -253,4 +276,4 @@ if (require.main === module) {
   main().catch((error) => { console.error(`⛔ ${error.stack || error.message}`); process.exit(1); });
 }
 
-module.exports = { MISA_UNIVERSE_SQL, PARTNER_UNIVERSE_SQL, activeSlotOf, buildExceptionPayload };
+module.exports = { MISA_UNIVERSE_SQL, PARTNER_UNIVERSE_SQL, RUN_BY_ID_SQL, activeSlotOf, buildExceptionPayload };
