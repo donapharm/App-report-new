@@ -153,12 +153,13 @@ function OverviewFilters({ me, filters, setFilters, options, busy }) {
           <label><span>Nhóm đơn vị</span><ComboSelect value={filters.unitGroup} onChange={(value) => setF('unitGroup', value)} options={options?.unitGroups} all="Tất cả nhóm đơn vị" placeholder="Gõ 033 hoặc 033.…" acceptTrailingDot /></label>
           <label><span>Đơn vị trong nhóm</span><ComboSelect value={filters.unit} onChange={(value) => setF('unit', value)} options={options?.units} all="Tất cả đơn vị trong nhóm" placeholder="Chọn tiếp một đơn vị…" /></label>
         </div>
-        {activeCount > 0 && <div className="overview-filter-note">
-          {filters.unitGroup && <span>Nhóm ĐV <b>{filters.unitGroup}</b></span>}
-          {filters.companyGroup && <span><b>{options?.companyGroups?.find((x) => x.key === filters.companyGroup)?.label || filters.companyGroup}</b></span>}
-          {(filters.route || filters.companyGroup || filters.unitGroup || filters.unit) && <em>Target không phân bổ theo lát cắt này nên App không tính % target sai.</em>}
-        </div>}
       </div>
+      {/* Chip + câu cảnh báo target nằm NGOÀI panel: thu gọn vẫn phải thấy đang lọc gì. */}
+      {activeCount > 0 && <div className="overview-filter-note">
+        {filters.unitGroup && <span>Nhóm ĐV <b>{filters.unitGroup}</b></span>}
+        {filters.companyGroup && <span><b>{options?.companyGroups?.find((x) => x.key === filters.companyGroup)?.label || filters.companyGroup}</b></span>}
+        {(filters.route || filters.companyGroup || filters.unitGroup || filters.unit) && <em>Target không phân bổ theo lát cắt này nên App không tính % target sai.</em>}
+      </div>}
     </div>
   );
 }

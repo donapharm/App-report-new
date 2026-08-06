@@ -23,3 +23,22 @@ test('collapsed filter header stays compact while active-filter count and clear 
   assert.match(CSS, /\.overview-filter-head\.expanded \{ margin-bottom: 9px; \}/);
   assert.match(CSS, /@media \(max-width: 700px\)[\s\S]*\.overview-filter-head \{[^}]*flex-wrap: wrap;/);
 });
+
+// Khối chip + câu "Target không phân bổ theo lát cắt này" phải nằm NGOÀI panel thu gọn,
+// nếu không thì bấm "Thu gọn" là mất cảnh báo trong lúc bộ lọc vẫn đang áp dụng.
+function indexOfPanelClose(source) {
+  const open = source.indexOf('<div id="overview-filter-panel"');
+  if (open < 0) throw new Error('không tìm thấy panel bộ lọc');
+  let depth = 0;
+  const tag = /<div\b|<\/div>/g;
+  tag.lastIndex = open;
+  for (let m = tag.exec(source); m; m = tag.exec(source)) {
+    depth += m[0] === '</div>' ? -1 : 1;
+    if (depth === 0) return m.index;
+  }
+  throw new Error('panel bộ lọc không có thẻ đóng cân bằng');
+}
+
+test('active-filter note stays visible when the panel is collapsed', () => {
+  assert.ok(PAGE.indexOf('overview-filter-note') > indexOfPanelClose(PAGE));
+});
