@@ -260,6 +260,14 @@ async function main() {
 
   if (report.balanced !== true) {
     console.error(`\n⛔ KHÔNG CÂN: lệch tiền ${vn(report.totals.amountDiff)}đ · lệch dòng ${vn(report.totals.rowDiff)}. Có dòng rơi ở chỗ chưa khai báo — DỪNG, KHÔNG ghi store.`);
+    // Chẩn đoán hay gặp nhất (phát hiện thật ở T07, 06/08): App Sale KHÔNG giữ dòng
+    // snapshot của run cũ — run mới đè, dòng run cũ bị dọn. Khi đó universe teo lại
+    // còn vài dòng trong khi slot giữ đủ ⇒ lệch âm khổng lồ. Kỳ ĐÃ KHOÁ SỔ vì thế
+    // KHÔNG phân loại hồi tố được; màn "Chưa đồng bộ" sống từ kỳ ĐANG CHẠY trở đi.
+    const slotMisaCount = slotRows.filter((r) => String(r.source_line_id || '').startsWith('MISA:')).length;
+    if (misaRows.length < slotMisaCount / 2) {
+      console.error(`   Chẩn đoán: nguồn chỉ còn ${vn(misaRows.length)} dòng MISA cho run #${run.id} trong khi slot giữ ${vn(slotMisaCount)} dòng — App Sale đã dọn dòng snapshot của run cũ. Kỳ đã khoá sổ không đối chiếu hồi tố được; chạy cho KỲ ĐANG CHẠY (slot dựng 30 phút/lần) thay vì kỳ cũ.`);
+    }
     process.exit(1);
   }
   console.log(`\n✅ CÂN: Σ(đưa vào) + Σ(loại) == Σ(nguồn) — cả tiền lẫn số dòng.`);
