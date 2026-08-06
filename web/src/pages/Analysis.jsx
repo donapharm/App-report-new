@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, downloadExport } from '../api.js';
 import { money, pct } from '../util.js';
+import { maskNumberText } from '../privacyMask.js';
 import { Spinner, Kpi, DailySalesKpi, useCollapse, TargetKpiStrip, UnitLabel, Pager, usePager } from '../components.jsx';
 import { ComboSelect, emptyRevenueFilters, MultiSelect, Select } from './revenueFilters.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams } from './PeriodFilter.jsx';
@@ -127,7 +128,7 @@ function CstUntouchedBlock({ rows, productCount }) {
                     : 'Chưa có thông tin phụ trách';
                   const bidPrice = Number(r.bid_price || 0);
                   const bidPriceText = bidPrice > 0
-                    ? `${bidPrice.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}đ`
+                    ? maskNumberText(`${bidPrice.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}đ`)
                     : 'Chưa có dữ liệu';
                   return (
                     <div className="cst-untouched-row" key={r.key || absoluteIndex}>

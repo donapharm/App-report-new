@@ -1,11 +1,15 @@
+import { maskNumberText } from './privacyMask.js';
+
 // Chuẩn hiển thị kế toán Việt Nam: dấu chấm hàng nghìn, tiền nguyên đồng + đ.
+// `num` KHÔNG che: nó còn dùng cho số lượng đơn, số dòng, số nhân viên — không phải tiền.
 export function num(n) {
   if (n == null || Number.isNaN(Number(n))) return '—';
   return Math.round(Number(n)).toLocaleString('vi-VN');
 }
+// money/short/pct đi qua rèm che (SPEC_PRIVACY_EYE.md): thiếu dữ liệu vẫn ra '—'.
 export function money(n) {
   if (n == null || Number.isNaN(Number(n))) return '—';
-  return num(n) + 'đ';
+  return maskNumberText(num(n) + 'đ');
 }
 // Rút gọn chỉ dùng cho trục chart/không gian rất hẹp; thập phân dùng dấu phẩy VN.
 export function short(n) {
@@ -13,14 +17,14 @@ export function short(n) {
   const v = Number(n);
   const a = Math.abs(v);
   const fmt = (x, d = 1) => x.toLocaleString('vi-VN', { maximumFractionDigits: d });
-  if (a >= 1e9) return fmt(v / 1e9, 2) + ' tỷ';
-  if (a >= 1e6) return fmt(v / 1e6, 0) + ' tr';
-  if (a >= 1e3) return fmt(v / 1e3, 0) + ' nghìn';
-  return num(v);
+  if (a >= 1e9) return maskNumberText(fmt(v / 1e9, 2) + ' tỷ');
+  if (a >= 1e6) return maskNumberText(fmt(v / 1e6, 0) + ' tr');
+  if (a >= 1e3) return maskNumberText(fmt(v / 1e3, 0) + ' nghìn');
+  return maskNumberText(num(v));
 }
 export function pct(n, digits = 1) {
   if (n == null || Number.isNaN(Number(n))) return '—';
-  return Number(n).toLocaleString('vi-VN', { maximumFractionDigits: digits }) + '%';
+  return maskNumberText(Number(n).toLocaleString('vi-VN', { maximumFractionDigits: digits }) + '%');
 }
 
 // Chuẩn ngày toàn App Report: giao diện dd/mm/yy, dữ liệu/API vẫn ISO yyyy-mm-dd.

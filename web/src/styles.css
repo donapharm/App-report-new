@@ -70,6 +70,28 @@ body {
 .refresh-button:disabled { opacity: .82; cursor: wait; }
 .refresh-button-ic { font-size: 15px; line-height: 1; }
 .refresh-button.is-loading .refresh-button-ic { animation: refresh-spin .85s linear infinite; }
+/* Con mắt ẩn/hiện số tiền — rèm che màn hình, không phải khoá (SPEC_PRIVACY_EYE.md) */
+.privacy-eye-wrap { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
+.privacy-eye {
+  min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 0 12px; border: 1px solid rgba(255,255,255,.38); border-radius: 999px;
+  background: rgba(255,255,255,.18); color: #fff; font-size: 12px; font-weight: 800; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(3,30,58,.16); transition: background .14s ease, transform .14s ease;
+}
+.privacy-eye:hover { background: rgba(255,255,255,.28); transform: translateY(-1px); }
+.privacy-eye:focus-visible { outline: 3px solid rgba(255,210,90,.95); outline-offset: 2px; }
+.privacy-eye.is-shown { background: rgba(255,210,90,.32); border-color: rgba(255,210,90,.75); }
+.privacy-eye-ic { font-size: 14px; line-height: 1; }
+.privacy-eye-notice {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; white-space: nowrap;
+  background: #16324f; color: #fff; font-size: 11px; padding: 4px 9px; border-radius: 8px;
+  box-shadow: 0 6px 16px rgba(3,30,58,.28);
+}
+.privacy-export-note { font-size: 11.5px; color: #9a6800; font-weight: 700; align-self: center; }
+@media (max-width: 700px) {
+  .privacy-eye { padding: 0 9px; }
+  .privacy-eye-label { display: none; }
+}
 .home-button {
   width: 34px; height: 34px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
   padding: 0; border: 1px solid rgba(255,255,255,.35); border-radius: 9px;

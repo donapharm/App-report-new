@@ -7,6 +7,7 @@ import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
 import DormantGate from './DormantGate.jsx';
 import CeoNotificationBell from './CeoNotificationBell.jsx';
+import { PrivacyEyeButton } from './privacy.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
 import Revenue from './pages/Revenue.jsx';
@@ -357,6 +358,7 @@ export default function App() {
             </div>
             <div className="topbar-actions">
               <CeoNotificationBell me={me} onNavigate={navigate} />
+              <PrivacyEyeButton />
               <RefreshButton loading={headerReloadBusy} onClick={triggerHeaderReload} />
               <HomeButton />
               <Clock />
@@ -390,6 +392,7 @@ export default function App() {
         <div className="hdr-r2">
           <Clock />
           <div className="hdr-actions">
+            <PrivacyEyeButton />
             <RefreshButton loading={headerReloadBusy} onClick={triggerHeaderReload} />
             <HomeButton />
             <button className="logout" onClick={logout}>Đăng xuất</button>

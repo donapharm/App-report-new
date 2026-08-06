@@ -1,3 +1,5 @@
+import { maskNumberText } from './privacyMask.js';
+
 export const EMPLOYEE_COST_DIMENSIONS = Object.freeze([
   { key: 'date', label: 'Ngày', kind: 'dimension' },
   { key: 'orderCode', label: 'Mã đơn hàng', kind: 'dimension' },
@@ -136,8 +138,8 @@ export function employeeCostDelta(current, previous) {
 export function formatDeltaLabel(delta) {
   if (!delta) return '';
   const arrow = delta.diff > 0 ? '▲' : delta.diff < 0 ? '▼' : '=';
-  const pct = delta.pct == null ? '' : ` ${Math.abs(delta.pct).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
-  return `${arrow}${pct} (${delta.diff > 0 ? '+' : ''}${delta.diff.toLocaleString('vi-VN')}đ) so kỳ trước`;
+  const pct = delta.pct == null ? '' : ` ${maskNumberText(Math.abs(delta.pct).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + '%')}`;
+  return `${arrow}${pct} (${maskNumberText((delta.diff > 0 ? '+' : '') + delta.diff.toLocaleString('vi-VN') + 'đ')}) so kỳ trước`;
 }
 
 export function formatMonthLabel(value) {
@@ -194,7 +196,7 @@ export function formatEmployeeCostCell(value, column = {}) {
   if (column.key === 'date') return String(value).split('-').reverse().join('/');
   const number = Number(value);
   if (column.format === 'money' || column.kind === 'money') {
-    return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ' : String(value);
+    return Number.isFinite(number) ? maskNumberText(number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ') : String(value);
   }
   if (column.format === 'number') {
     return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 4 }) : String(value);
@@ -211,7 +213,7 @@ export function formatEmployeeCostCell(value, column = {}) {
 export function formatMatchRate(match = {}) {
   if (match.rate == null || match.rate === '') return '—';
   const rate = Number(match.rate);
-  return Number.isFinite(rate) ? rate.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—';
+  return Number.isFinite(rate) ? maskNumberText(rate.toLocaleString('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%') : '—';
 }
 
 export function employeeCostKpiMatch(model = {}) {
