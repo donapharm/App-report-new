@@ -1,3 +1,13 @@
+### 2026-08-06 20:45 (giờ VN) — 🚢✅ V-A + V-B LÊN PROD `2ca7e45` — Claude đối chiếu từng byte, DUYỆT
+
+Bot deploy candidate `va-vb-combined-636f9fc-20260806-202523` = nền PROD `636f9fc` + đúng 2 commit V-A (`a6e8722`) + V-B (`2ca7e45`). Claude diff xác nhận **code web + test giống hệt bản đã review** trên `claude/new-session-eifd44`; không lẫn V-C/V-D.
+
+Nghiệm thu trình duyệt PASS đủ: thu gọn bộ lọc vẫn hiện chip + cảnh báo target · số mặc định ẨN, F5/timeout 62s/mất focus đều ẩn lại · ô thiếu dữ liệu giữ `—` · nút ghi tiền khoá khi ẩn. Health/version/auth/frozen T06–T07 PASS, console 0 lỗi. Chỉ reload `app-report` (PID 4007825/85); `app-report-tgbot` không đụng (969789/29). Lùi được về `636f9fc`. Bằng chứng: `artifacts/deploy-va-vb-2ca7e45-20260806-204555`. Ghi chú: một lần re-verify manifest hậu kiểm bị gián đoạn (wrapper/timeout) nhưng gate bắt buộc trước cutover PASS và checksum hậu kiểm khớp exact.
+
+Còn lại của LENH_06082026: **V-C** (chạy `build_sync_exceptions.js` cho T07) và **V-D** (dry-run + crontab) — duyệt riêng từng bước.
+
+---
+
 ### 2026-08-06 — ✅ CEO DUYỆT dự án "Cột % chi phí trong Danh mục QL" — `SPEC_CATALOG_COST_COLUMNS.md`
 
 CEO duyệt trọn phương án: **số % từ DataHub (SSOT, App Report chỉ hiển thị, không cho sửa % kể cả CEO)** · **menu phân quyền CHỈ CEO điều khiển** (`isCeoActor`, admin thường không sửa được, API ghi grant trả 403 `CEO_ONLY`) · phân quyền theo **từng NV × từng cột (C36/C41/C43/C44/C45…) × phạm vi đơn vị mình phụ trách**, có thao tác nhóm/toàn phòng · **mặc định TẮT** (fail-closed), hai lớp với `employeeCostVisibility`, con mắt ẩn số phủ trên cùng, export theo đúng grant.
