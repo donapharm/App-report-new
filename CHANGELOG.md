@@ -1,3 +1,26 @@
+### 2026-08-06 — ✅✅ V2 ĐÓNG: kế toán đã bấm ghi chính thức · **CẢ HAI việc hạn 08/08 xong trước hạn 2 ngày**
+
+Kế toán đã **thao tác thật trên MISA** cho đơn `DH479816093` (3.995.000đ · 29/07 · 186.BVĐK An Phú CNIII · Agimoti). Không chỉ trả lời GHI mà đã bấm.
+
+**Ảnh hưởng tới số liệu: KHÔNG CÓ.** Bucket `pending` vốn đã nằm trong doanh thu, ghi chính thức chỉ đổi trạng thái. T07 giữ nguyên **30.917.892.673đ**, thưởng/phạt đã trả không phải tính lại.
+
+---
+
+## Chốt hai việc có hạn 08/08 — cả hai xong ngày 06/08
+
+| | Việc | Kết quả |
+|---|---|---|
+| **V1** | Đơn `DH479816174` · 1.795.600đ gán nhầm telesaler | App Sale thêm cặp phân công 06:44 (audit `19790`); **sync run 365 xác nhận không bị ghi đè** |
+| **V2** | Đơn `DH479816093` · 3.995.000đ treo "Đề nghị ghi" | Kế toán **đã ghi chính thức**; doanh thu không đổi |
+
+**Nghiệm thu còn lại — không gấp, số không đổi dù chạy hay chưa:**
+1. Ô "Doanh thu chưa phân bổ" (màn Chi phí) phải về **0đ** — CEO tự nhìn được.
+2. Khi bot có lại exec: `misa_pending_detail.js` → `DH479816093` rơi khỏi nhóm "Đề nghị ghi"; `verify_frozen_periods.js` → vẫn **exit 0**.
+
+**Nhìn lại:** hai khoản tổng **5.790.600đ** — nhỏ so với doanh thu tháng, nhưng nếu để quá 08/08 thì **khoá sổ và không sửa được nữa**, và một nhân viên mất doanh số oan. Thứ đọng lại sau vụ này không phải hai con số, mà là **ô KPI "Doanh thu chưa phân bổ"** nay đứng canh thường trực: lần sau kiểu lỗi này **tự hiện lên màn hình**, không ai phải đi tìm bằng tay nữa.
+
+---
+
 ### 2026-08-06 — ✅ V2 có quyết định: kế toán trả lời **GHI** cho `DH479816093` (3.995.000đ)
 
 CEO chuyển bảng, kế toán trả lời **GHI**. Đây là nhánh **an toàn**: khoản 3.995.000đ vốn đã được tính vào doanh thu T07 (bucket `pending` vẫn nằm trong doanh thu), nên ghi chính thức **không làm đổi con số**. Kỳ T07 giữ nguyên ghim **30.917.892.673đ**, thưởng/phạt đã trả **không phải tính lại**, không có chuyện hồi tố.
