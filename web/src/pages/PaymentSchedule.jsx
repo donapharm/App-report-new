@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { Kpi, Spinner } from '../components.jsx';
 import { currentMonthValueVN, lastEndedMonthVN, paymentStartMonth, writePaymentPrefs, quickMonths, employeeCostViewModel, formatEmployeeCostCell, formatMonthLabel } from '../employeeCostModel.js';
 import { PaymentSchedulePanel, PaymentTeamPanel, employeeOptionLabel } from './EmployeeCost.jsx';
+import { normalizePaymentRequestReasons } from '../paymentRequestReasons.js';
 
 const moneyColumn = { kind: 'money' };
 
@@ -51,6 +52,25 @@ export default function PaymentSchedule({ me, desktop }) {
   const [rangeSummary, setRangeSummary] = useState(null);
   const [rangeLoading, setRangeLoading] = useState(false);
   const [rangeError, setRangeError] = useState('');
+  const [requestReasons, setRequestReasons] = useState({ schemaVersion: 0, early: [], reject: [] });
+  const [requestReasonsError, setRequestReasonsError] = useState('');
+
+  useEffect(() => {
+    const request = new AbortController();
+    api.paymentRequestReasons({ signal: request.signal })
+      .then((data) => {
+        const normalized = normalizePaymentRequestReasons(data);
+        if (!normalized.early.length || !normalized.reject.length) throw new Error('Danh sách lý do không hợp lệ');
+        setRequestReasons(normalized);
+        setRequestReasonsError('');
+      })
+      .catch((requestError) => {
+        if (request.signal.aborted) return;
+        setRequestReasons({ schemaVersion: 0, early: [], reject: [] });
+        setRequestReasonsError(requestError.message || 'Không tải được danh sách lý do');
+      });
+    return () => request.abort();
+  }, []);
 
   useEffect(() => {
     const navigate = (event) => {
@@ -205,10 +225,12 @@ export default function PaymentSchedule({ me, desktop }) {
       </>}
     </div>}
 
-    {periodEnded && <PaymentSchedulePanel schedule={model.paymentSchedule} allEmployees={allEmployees} loading={loading}
+    {periodEnded && <PaymentSchedulePanel schedule={model.paymentSchedule} earlyQuota={model.earlyQuota} allEmployees={allEmployees} loading={loading}
       canRecord={!!me?.is_ceo}
       empCode={admin ? selectedEmp : String(me?.emp_code || '')}
       focusKey={focusKey}
+      requestReasons={requestReasons}
+      requestReasonsError={requestReasonsError}
       onChanged={() => setTick((current) => current + 1)} />}
     {periodEnded && <PaymentTeamPanel team={model.paymentTeam} allEmployees={allEmployees} loading={loading} />}
   </div>;

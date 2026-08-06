@@ -118,6 +118,7 @@ const EMPTY_OVERVIEW_FILTERS = { emp: '', route: '', companyGroup: '', unitGroup
 const activeOverviewFilters = (filters) => Object.fromEntries(Object.entries(filters || {}).filter(([, value]) => value));
 
 function OverviewFilters({ me, filters, setFilters, options, busy }) {
+  const [expanded, setExpanded] = useState(false);
   const setF = (key, value) => setFilters((current) => {
     const next = { ...current, [key]: value };
     // Đổi nhóm đơn vị thì bỏ lựa chọn đơn vị con cũ; API facet sẽ nạp lại đúng danh sách con.
@@ -127,25 +128,37 @@ function OverviewFilters({ me, filters, setFilters, options, busy }) {
   const activeCount = Object.values(filters).filter(Boolean).length;
   return (
     <div className="card overview-filter-card">
-      <div className="overview-filter-head">
-        <div><b>🔎 Bộ lọc điều hành</b><span>Lọc đồng bộ KPI, biểu đồ, Top 20 và cảnh báo doanh thu</span></div>
+      <div className={`overview-filter-head${expanded ? ' expanded' : ''}`}>
+        <div><b>🔎 Bộ lọc điều hành</b>{expanded && <span>Lọc đồng bộ KPI, biểu đồ, Top 20 và cảnh báo doanh thu</span>}</div>
         <div className="overview-filter-actions">
           {busy && <span>⟳ Đang lọc…</span>}
+          {activeCount > 0 && <span className="overview-filter-active-count" title="Mở bộ lọc để xem chi tiết">Đang áp dụng {activeCount} bộ lọc</span>}
           {activeCount > 0 && <button type="button" className="btn ghost" onClick={() => setFilters({ ...EMPTY_OVERVIEW_FILTERS })}>Xoá lọc ({activeCount})</button>}
+          <button
+            type="button"
+            className="btn ghost overview-filter-toggle"
+            aria-expanded={expanded}
+            aria-controls="overview-filter-panel"
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {expanded ? 'Thu gọn' : 'Mở bộ lọc'} <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+          </button>
         </div>
       </div>
-      <div className="overview-filter-grid">
-        {me.isAdmin && <label><span>Nhân viên</span><MultiSelect value={filters.emp} onChange={(value) => setF('emp', value)} options={options?.employees} all="Tất cả nhân viên" unit="NV" /></label>}
-        <label><span>Tuyến</span><MultiSelect value={filters.route} onChange={(value) => setF('route', value)} options={options?.routes} all="Tất cả tuyến" unit="tuyến" /></label>
-        <label><span>Nhóm công ty</span><Select value={filters.companyGroup} onChange={(value) => setF('companyGroup', value)} options={options?.companyGroups} all="Tất cả Group" /></label>
-        <label><span>Nhóm đơn vị</span><ComboSelect value={filters.unitGroup} onChange={(value) => setF('unitGroup', value)} options={options?.unitGroups} all="Tất cả nhóm đơn vị" placeholder="Gõ 033 hoặc 033.…" acceptTrailingDot /></label>
-        <label><span>Đơn vị trong nhóm</span><ComboSelect value={filters.unit} onChange={(value) => setF('unit', value)} options={options?.units} all="Tất cả đơn vị trong nhóm" placeholder="Chọn tiếp một đơn vị…" /></label>
+      <div id="overview-filter-panel" hidden={!expanded}>
+        <div className="overview-filter-grid">
+          {me.isAdmin && <label><span>Nhân viên</span><MultiSelect value={filters.emp} onChange={(value) => setF('emp', value)} options={options?.employees} all="Tất cả nhân viên" unit="NV" /></label>}
+          <label><span>Tuyến</span><MultiSelect value={filters.route} onChange={(value) => setF('route', value)} options={options?.routes} all="Tất cả tuyến" unit="tuyến" /></label>
+          <label><span>Nhóm công ty</span><Select value={filters.companyGroup} onChange={(value) => setF('companyGroup', value)} options={options?.companyGroups} all="Tất cả Group" /></label>
+          <label><span>Nhóm đơn vị</span><ComboSelect value={filters.unitGroup} onChange={(value) => setF('unitGroup', value)} options={options?.unitGroups} all="Tất cả nhóm đơn vị" placeholder="Gõ 033 hoặc 033.…" acceptTrailingDot /></label>
+          <label><span>Đơn vị trong nhóm</span><ComboSelect value={filters.unit} onChange={(value) => setF('unit', value)} options={options?.units} all="Tất cả đơn vị trong nhóm" placeholder="Chọn tiếp một đơn vị…" /></label>
+        </div>
+        {activeCount > 0 && <div className="overview-filter-note">
+          {filters.unitGroup && <span>Nhóm ĐV <b>{filters.unitGroup}</b></span>}
+          {filters.companyGroup && <span><b>{options?.companyGroups?.find((x) => x.key === filters.companyGroup)?.label || filters.companyGroup}</b></span>}
+          {(filters.route || filters.companyGroup || filters.unitGroup || filters.unit) && <em>Target không phân bổ theo lát cắt này nên App không tính % target sai.</em>}
+        </div>}
       </div>
-      {activeCount > 0 && <div className="overview-filter-note">
-        {filters.unitGroup && <span>Nhóm ĐV <b>{filters.unitGroup}</b></span>}
-        {filters.companyGroup && <span><b>{options?.companyGroups?.find((x) => x.key === filters.companyGroup)?.label || filters.companyGroup}</b></span>}
-        {(filters.route || filters.companyGroup || filters.unitGroup || filters.unit) && <em>Target không phân bổ theo lát cắt này nên App không tính % target sai.</em>}
-      </div>}
     </div>
   );
 }

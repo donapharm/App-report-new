@@ -294,6 +294,29 @@ function normalizedColumnTotals(rawTotals, costColumns) {
   }));
 }
 
+const HEALTH_KPI_KEYS = new Set(['costRevenueRatio', 'unallocatedRevenue', 'targetForecast']);
+const HEALTH_KPI_TONES = new Set([
+  'employee-cost-tone-neutral', 'employee-cost-tone-base', 'employee-cost-tone-penalty-soft',
+  'employee-cost-tone-target',
+]);
+function normalizedHealthKpis(raw = {}) {
+  return {
+    period: String(raw.period || ''),
+    today: String(raw.today || ''),
+    backendOwned: raw.backendOwned === true,
+    cards: (Array.isArray(raw.cards) ? raw.cards : []).filter((card) => HEALTH_KPI_KEYS.has(String(card?.key || '')))
+      .map((card) => ({
+        key: String(card.key),
+        label: String(card.label || ''),
+        available: card.available === true,
+        value: String(card.value || '—'),
+        sub: String(card.sub || ''),
+        tone: HEALTH_KPI_TONES.has(String(card.tone || '')) ? String(card.tone) : 'employee-cost-tone-neutral',
+        action: card.action === 'open_data_quality' ? 'open_data_quality' : '',
+      })),
+  };
+}
+
 function normalizedFilterFacet(raw = {}, fallbackAvailable = true) {
   return {
     available: raw.available == null ? fallbackAvailable : !!raw.available,
@@ -691,6 +714,9 @@ export function employeeCostViewModel(payload = {}) {
       totalRows: Number(payload.search?.totalRows ?? rows.length),
     },
     target: employeeTargetViewModel(payload.target),
+    // Ba KPI hàng cuối đã được backend tính và format hoàn chỉnh. Projection này
+    // chỉ allowlist chuỗi hiển thị; không nhân/chia/cộng lại bất kỳ số nào.
+    healthKpis: normalizedHealthKpis(payload.healthKpis),
     bonus: employeeBonusViewModel(payload.bonus),
     penalty: employeePenaltyViewModel(payload.penalty),
     // Projection App Salary đã được backend self-scope + allowlist. Frontend chỉ
@@ -753,6 +779,17 @@ export function employeeCostViewModel(payload = {}) {
         employeeName: String(item?.employeeName || ''),
         reason: String(item?.reason || ''),
       })),
+    } : null,
+    // Trạng thái xin nhận sớm do backend/policy quyết. Frontend chỉ allowlist chuỗi
+    // để đeo nhãn nút; không tự tính ngày, quý hoặc lượt đã dùng.
+    earlyQuota: payload.earlyQuota && typeof payload.earlyQuota === 'object' ? {
+      allowed: payload.earlyQuota.allowed === true,
+      code: String(payload.earlyQuota.code || ''),
+      message: String(payload.earlyQuota.message || ''),
+      earliestDate: String(payload.earlyQuota.earliestDate || ''),
+      quarter: String(payload.earlyQuota.quarter || ''),
+      usedPeriod: String(payload.earlyQuota.usedPeriod || ''),
+      tableButtonLabel: String(payload.earlyQuota.tableButtonLabel || 'Xin nhận sớm'),
     } : null,
     // SỔ "Thanh toán CP của tôi" — backend tính hết, frontend CHỈ hiển thị.
     // Không tự cộng trừ lại: mọi số ở đây phải là số backend đã kiểm bất biến.

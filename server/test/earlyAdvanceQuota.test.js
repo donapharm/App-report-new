@@ -104,7 +104,7 @@ test('‼ backend phải CHẶN THẲNG, không chỉ ẩn nút trên màn', () 
   const at = source.indexOf("/employee-cost/payment/request-unlock'");
   const block = source.slice(at, at + 900);
   assert.match(block, /earlyAdvanceQuota\.check\(empCode, period, employeeCost\.vnToday\(\)\)/);
-  assert.match(block, /return res\.status\(409\)/, 'hết lượt phải trả lỗi, không im lặng cho qua');
+  assert.match(block, /return res\.status\(422\)/, 'hết lượt phải trả lỗi nghiệp vụ, không im lặng cho qua');
 });
 
 test('‼ lượt TIÊU lúc CEO mở khoá, KHÔNG tiêu lúc NV bấm xin', () => {

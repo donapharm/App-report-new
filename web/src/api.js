@@ -327,10 +327,16 @@ export const api = {
     if (to) params.set('to', to);
     return req('GET', `/employee-cost/payment/range?${params.toString()}`, undefined, requestOptions);
   },
+  // Preview xin nhận sớm là READ-ONLY nhưng dùng POST để luôn lấy trạng thái quota
+  // mới nhất; frontend chỉ gửi kỳ + lần, tuyệt đối không gửi/tự tính số tiền.
+  paymentEarlyPreview: ({ emp, period, key } = {}) => req('POST', '/employee-cost/payment/request-unlock-preview', {
+    ...(emp ? { emp_code: emp } : {}), period, key,
+  }),
   // Quy trình đề nghị nhận Lần 2/Lần 3. NV KHÔNG gửi số tiền — chỉ gửi kỳ + lần.
   paymentFlow: (action, { emp, period, key, note, requestId } = {}) => req('POST', `/employee-cost/payment/${action}`, {
     ...(emp ? { emp_code: emp } : {}), period, key, ...(note ? { note } : {}), ...(requestId ? { request_id: requestId } : {}),
   }),
+  paymentRequestReasons: (requestOptions = {}) => req('GET', '/employee-cost/payment/request-reasons', undefined, requestOptions),
   paymentNotifications: () => req('GET', '/employee-cost/payment/notifications'),
   paymentNotificationsRead: (payload = {}) => req('POST', '/employee-cost/payment/notifications/read', payload),
   employeeCostEmployees: () => req('GET', '/employee-cost/employees'),

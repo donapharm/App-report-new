@@ -46,6 +46,7 @@ const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
+const employeeCostHealthKpis = require('./employeeCostHealthKpis');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
@@ -59,7 +60,9 @@ const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
 const paymentFlowNotify = require('./paymentFlowNotify');
+const paymentRequestReasons = require('./paymentRequestReasons');
 const earlyAdvanceQuota = require('./earlyAdvanceQuota');
+const earlyAdvancePreview = require('./earlyAdvancePreview');
 const revenueReportExport = require('./revenueReportExport');
 const ceoDeckReport = require('./report/deckReport');
 const productSearch = require('./productSearch');
@@ -280,6 +283,9 @@ function employeeCostAllCacheKey(req, phase) {
     : { from: range.from, to: range.to };
   return [
     'employee-cost-all', phase, routeDataSignature('employee-cost-all'), 'ADMIN_ALL',
+    // Forecast phụ thuộc "hôm nay" theo GMT+7. Không để base cache 6 giờ từ
+    // ngày hôm trước giữ sai elapsed/remaining working days sau nửa đêm.
+    `vn-day=${employeeCost.vnToday()}`,
     JSON.stringify(stableCacheValue(view)),
   ].join(':');
 }
@@ -1013,7 +1019,9 @@ async function employeeCostPayload(req, {
     // Trạng thái quyền ưu tiên ứng sớm — để màn hình nói trước, đừng để NV bấm rồi
     // mới báo "hết lượt".
     const resolvedEarlyQuota = empCode
-      ? earlyAdvanceQuota.check(empCode, range.to, employeeCost.vnToday()) : null;
+      ? earlyAdvancePreview.decorateQuotaForTable(
+        earlyAdvanceQuota.check(empCode, range.to, employeeCost.vnToday()),
+      ) : null;
 
     return {
       ...payload,
@@ -1099,6 +1107,21 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
     }
   }));
   const buildMerged = async () => {
+    // Chụp đúng một snapshot nguồn doanh thu cho ba KPI. Nếu slot đổi trong lúc
+    // fan-out 21 NV, toàn bộ KPI phụ thuộc nguồn này phải fail closed thay vì trộn
+    // hai bản. Rows được copy mảng ngay tại đây để phép cân không đọc lại store.
+    const healthSnapshotBefore = store.activeDataSignature();
+    const healthUiPeriod = employeeCost.toUiMonth(range.to);
+    const healthSourceRows = [...store.getRows({ ky: healthUiPeriod, scope: {} })];
+    const healthSourceAvailable = healthSourceRows.length > 0
+      || store.listPeriods().some((item) => String(item.ky) === healthUiPeriod);
+    const healthSyncEntry = syncExceptionStore.read(range.to);
+    const healthSyncReport = healthSyncEntry ? syncExceptionReport.buildSyncExceptionReport({
+      period: range.to,
+      source: healthSyncEntry.source,
+      included: healthSyncEntry.included,
+      exceptions: healthSyncEntry.exceptions,
+    }) : null;
     const deadlineAt = Date.now() + EMPLOYEE_COST_ALL_DEADLINE_MS;
     const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => employeeCostPayload(req, {
       requestedEmp: employee.emp_code,
@@ -1127,6 +1150,23 @@ async function employeeCostAllPayload(req, { paginate = true, auditEvent = 'view
       },
     });
     const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+    const healthSnapshotAfter = store.activeDataSignature();
+    const healthCurrentPeriod = (merged.periods || []).find((item) => String(item.period) === String(range.to)) || null;
+    const healthPreviousKey = employeeCostHealthKpis.previousMonth(range.to);
+    const healthPreviousPeriod = (merged.periods || []).find((item) => String(item.period) === healthPreviousKey) || null;
+    const healthTarget = targetKpiSummary(healthUiPeriod, {}, roster.map((employee) => employee.emp_code)).month?.target;
+    merged.healthKpis = employeeCostHealthKpis.buildEmployeeCostHealthKpis({
+      period: range.to,
+      today: employeeCost.vnToday(),
+      currentPeriod: healthCurrentPeriod,
+      previousPeriod: healthPreviousPeriod,
+      penalty: merged.penalty,
+      sourceRows: healthSourceRows,
+      syncReport: healthSyncReport,
+      sourceAvailable: healthSourceAvailable,
+      snapshotConsistent: healthSnapshotBefore === healthSnapshotAfter,
+      target: healthTarget,
+    });
     // ‼ NẠP KHO SỐ ỨNG LẦN 1 CHO NHỮNG NV CHƯA CÓ (CEO báo 04/08 19:30: bảng toàn
     // đội trống trơn trong khi xem từng người thì vẫn ra số).
     //
@@ -2168,6 +2208,13 @@ router.get('/employee-cost/payment/range', auth.requireAuth, asyncJsonRoute(asyn
   return res.json({ emp_code: empCode, from, to, today, range: paymentSchedule.buildPaymentRangeSummary(books) });
 }));
 
+// Danh sách do backend/config sở hữu. Frontend chỉ render và gửi nguyên văn `note`;
+// đổi câu chữ trong config có hiệu lực mà không phải build lại web.
+router.get('/employee-cost/payment/request-reasons', auth.requireAuth, asyncJsonRoute(async (_req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  return res.json(paymentRequestReasons.readFromFile());
+}));
+
 /* ---------- Sổ "Thanh toán CP của tôi" — GHI NHẬN (GĐ2) ----------
    Đây là TIỀN THẬT: **CHỈ CEO** được ghi (CEO chốt 04/08 — admin cũng KHÔNG được),
    NV chỉ xem. Mọi thao tác có nhật ký ai · khi nào · số cũ → số mới (SPEC §8). */
@@ -2305,6 +2352,34 @@ router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(a
   return res.json({ ok: true, duplicate, emp_code: empCode, period, key, flow: entry.flow[key] || null, notify: flowNotifyReach('ceo', empCode) });
 }));
 
+// Preview READ-ONLY khi mở hộp "Xin nhận sớm". Frontend chỉ gửi kỳ + lần;
+// backend tự resolve self-scope, dựng lại đúng sổ và ghép số tiền với policy hiện hành.
+// Không ghi audit/quota/ledger và không nhận amount từ client.
+router.post('/employee-cost/payment/request-unlock-preview', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const { empCode, period, key } = selfPaymentTarget(req);
+  if (!earlyAdvancePreview.INSTALLMENT_KEYS.has(key)) {
+    return res.status(400).json({ error: 'Lần nhận sớm không hợp lệ', code: 'EARLY_INSTALLMENT_INVALID' });
+  }
+  const quota = earlyAdvanceQuota.check(empCode, period, employeeCost.vnToday());
+  // A/B đã bị policy chặn thì không kéo DataHub/App Salary chỉ để lấy một số tiền
+  // không được phép gửi. C vẫn dựng sổ backend để lấy đúng tiền của chính lần đó.
+  let installment = { key };
+  if (quota.allowed === true) {
+    const payload = await employeeCostPayload(req, {
+      requestedEmp: empCode,
+      auditEvent: 'payment_early_preview',
+      suppressAudit: true,
+      rangeOverride: employeeCost.parseMonthRange({ from: period, to: period }),
+    });
+    installment = payload?.paymentSchedule?.available === true
+      ? payload.paymentSchedule.installments.find((item) => item.key === key)
+      : null;
+  }
+  const preview = earlyAdvancePreview.buildEarlyAdvancePreview({ period, key, installment, quota });
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ preview });
+}));
+
 // NV xin mở khoá để đề nghị SỚM hơn mốc — CEO chốt: phải có đường gửi yêu cầu.
 // ‼ Có HẠN MỨC: 1 lượt/quý, và không sớm hơn 30 ngày sau khi hết tháng bán hàng.
 // Hết lượt hoặc chưa tới ngày ⇒ CHẶN THẲNG ở backend, không chỉ ẩn nút.
@@ -2319,7 +2394,7 @@ router.post('/employee-cost/payment/request-unlock', auth.requireAuth, asyncJson
   const quota = earlyAdvanceQuota.check(empCode, period, employeeCost.vnToday());
   if (!quota.allowed) {
     res.set('Cache-Control', 'private, no-store');
-    return res.status(409).json({ error: quota.message, code: quota.code, quota });
+    return res.status(422).json({ error: quota.message, code: quota.code, quota });
   }
   const before = paymentLedgerStore.readEntry(empCode, period).flow[key]?.state || 'plan';
   const entry = paymentLedgerStore.requestUnlock(empCode, period, key, { actor, note, requestId });
