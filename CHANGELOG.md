@@ -1,3 +1,26 @@
+### 2026-08-06 — ✅ V1 phía App Report ĐÓNG: chốt đúng một cặp cần sửa, bàn giao App Sale
+
+REPORTDEV nhận handoff mới, chạy lại và chốt — **khớp hoàn toàn** với phần Claude tra độc lập, không điểm nào lệch:
+
+| | |
+|---|---|
+| Đơn | `DH479816174` · đơn vị `120.HTNT-PHARMACITY` |
+| Cặp thiếu | `120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162` |
+| Bảng | `unit_product_employees` |
+| NV đề xuất | **DN001 — Đặng Xuân Trung** |
+| Số tiền thật | **1.795.600đ** (run 364, mã NV nguồn `VP018`) |
+| Cặp KHÔNG đụng | `G3.ĐY.QĐ141.201.N3.101` — đã đúng |
+
+`3.591.200đ` báo trước đó **đã được xác nhận là cộng trùng** snapshot run 331 + 364, không phải doanh thu thật cần phân bổ. Con số đúng bằng ô KPI: **1.795.600đ**.
+
+**Đường đi của lỗi, ghi lại vì đáng nhớ:** gán tay dòng MISA (05/08 16:39) **không ăn** vì `CRM_ROWS_SQL` ưu tiên bảng phân công hơn `employee_code` của dòng. Phải sửa **cặp trong bảng phân công** mới bền — và sync MISA hàng giờ không đụng bảng đó, nên không cần cổng override như App Sale từng đề xuất.
+
+**Còn lại:** App Sale thêm cặp qua cổng preview/duyệt DB của họ. **Nghiệm thu do CEO tự nhìn**: ô "Doanh thu chưa phân bổ" phải từ **1.795.600đ về 0đ**. Không cần bot chạy lệnh, không cần Claude vào PROD.
+
+**Ba lỗi trong công cụ V1 đã sửa hết trong hôm nay**, cả ba đều của Claude và **cả ba đều do bot đối chiếu chéo mới lộ ra**: ① gán tiền cả đơn cho một cặp · ② SQL không lọc `run_id` · ③ (trước đó) tiêu chí nghiệm thu ghim số cứng. Không có vòng soi chéo thì App Sale đã sửa phân công theo số gấp đôi.
+
+---
+
 ### 2026-08-06 09:45 (giờ VN) — ✅ V1 KHÔNG cần chờ bot chạy lại: kết luận đã đủ vững để App Sale làm ngay
 
 Bot báo runtime hiện chỉ có read/write, **không có exec** ⇒ không fetch được `79deae5`, không chạy lại V1, không kiểm aggregate. Báo thẳng và **không suy diễn từ output cũ** — đúng.
