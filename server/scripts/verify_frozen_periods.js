@@ -17,15 +17,25 @@
  * Mã thoát: 0 = khớp · 1 = LỆCH (phải dừng, đi tìm nguyên nhân) · 2 = không đọc được số.
  */
 
-const { APPROVED_RULE_TRANSITIONS } = require('../src/revenueMaterializeGuard');
+const fs = require('fs');
+const path = require('path');
+const {
+  CURRENT_FROZEN_PERIOD_BASELINE_ID,
+  CURRENT_FROZEN_PERIOD_PINS,
+} = require('../src/revenueMaterializeGuard');
+const { frozenPeriodFingerprints } = require('../src/revenueTransitionSafety');
 
 const money = (value) => Number(value || 0).toLocaleString('vi-VN');
 
 /** Gom tất cả kỳ bị ghim từ mọi bản chuyển đổi đã duyệt. Cùng kỳ khai nhiều nơi
  *  mà số khác nhau ⇒ chính bản ghim đã mâu thuẫn, phải báo ngay. */
-function collectPins(transitions = APPROVED_RULE_TRANSITIONS) {
+function collectPins(source = CURRENT_FROZEN_PERIOD_PINS) {
   const pins = new Map();
   const conflicts = [];
+  const directPins = Object.values(source || {}).every((pin) => pin && pin.frozenPeriods === undefined);
+  const transitions = directPins
+    ? { [CURRENT_FROZEN_PERIOD_BASELINE_ID]: { id: CURRENT_FROZEN_PERIOD_BASELINE_ID, frozenPeriods: source } }
+    : source;
   for (const transition of Object.values(transitions || {})) {
     for (const [ky, pin] of Object.entries(transition?.frozenPeriods || {})) {
       const seen = pins.get(ky);
@@ -40,6 +50,22 @@ function collectPins(transitions = APPROVED_RULE_TRANSITIONS) {
 }
 
 /** So số ghim với số sống. `actualOf(ky)` trả `{ totalRows, totalRevenue }` hoặc null. */
+function exactPinMap(pins) {
+  return Object.fromEntries((pins || []).map(({ ky, from, ...pin }) => [ky, pin]));
+}
+
+function verifyExactPins(pins, {
+  slotsPath = path.join(__dirname, '..', 'data', 'upload_slots.json'),
+  uploadsDir = path.join(__dirname, '..', 'data', 'uploads'),
+} = {}) {
+  try {
+    const slots = JSON.parse(fs.readFileSync(slotsPath, 'utf8'));
+    return { ok: true, fingerprints: frozenPeriodFingerprints(slots, exactPinMap(pins), uploadsDir), error: null };
+  } catch (error) {
+    return { ok: false, fingerprints: null, error: String(error?.message || error) };
+  }
+}
+
 function comparePins(pins, actualByKy) {
   return pins.map((pin) => {
     const actual = actualByKy[pin.ky];
@@ -119,9 +145,15 @@ function main() {
   const { pins, conflicts } = collectPins();
   if (!pins.length) { console.error('Không có kỳ nào được ghim — kiểm lại revenueMaterializeGuard.'); process.exit(2); }
 
-  const actuals = readActuals(pins.map((pin) => pin.ky));
-  const results = comparePins(pins, actuals);
-  if (asJson) { console.log(JSON.stringify({ conflicts, results }, null, 2)); }
+  const exact = verifyExactPins(pins);
+  if (!exact.ok) {
+    if (asJson) console.log(JSON.stringify({ conflicts, results: [], exact }, null, 2));
+    else console.error(`⛔ Không xác minh được exact frozen pin: ${exact.error}`);
+    const isDrift = /(?:PIN_MISMATCH|METADATA_MISMATCH|ACTIVE_SLOT_INVALID)/.test(exact.error);
+    process.exit(isDrift ? 1 : 2);
+  }
+  const results = comparePins(pins, exact.fingerprints);
+  if (asJson) { console.log(JSON.stringify({ baselineId: CURRENT_FROZEN_PERIOD_BASELINE_ID, conflicts, results, exact }, null, 2)); }
   else {
     console.log('KIỂM KỲ ĐÃ KHOÁ SỔ (số ghim lấy từ revenueMaterializeGuard)\n');
     for (const row of results) {
@@ -140,7 +172,7 @@ function main() {
   process.exit(0);
 }
 
-module.exports = { collectPins, comparePins, readActuals, onSampleData };
+module.exports = { collectPins, exactPinMap, verifyExactPins, comparePins, readActuals, onSampleData };
 if (require.main === module) {
   try { main(); } catch (error) { console.error(error.message); process.exit(2); }
 }

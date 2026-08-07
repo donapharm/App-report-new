@@ -136,7 +136,7 @@ test('T06/T07 frozen fingerprints bind exact pins and resolve payload by slot.id
   fs.writeFileSync(path.join(uploadsDir, 'july.json'), '[{"revenue":30917892673}]\n');
   const slots = [
     { id: 'june', ky: '06.2026', active: true, totalRows: 1, totalRevenue: 28403136096, filename: 'wrong-legacy-name.json' },
-    { id: 'july', ky: '07.2026', active: true, totalRows: 1, totalRevenue: 30917892673, filename: 'wrong-current-name.json' },
+    { id: 'july', ky: '07.2026', active: true, sourceRunId: '301', totalRows: 1, totalRevenue: 30917892673, filename: 'wrong-current-name.json' },
   ];
   const pin = (slot, ky) => ({
     activeSlotId: slot.id,
@@ -145,9 +145,22 @@ test('T06/T07 frozen fingerprints bind exact pins and resolve payload by slot.id
     totalRevenue: slot.totalRevenue,
     payloadSha256: createHash('sha256').update(fs.readFileSync(path.join(uploadsDir, `${slot.id}.json`))).digest('hex'),
   });
-  const expected = { '06.2026': pin(slots[0], '06.2026'), '07.2026': pin(slots[1], '07.2026') };
+  const expected = { '06.2026': pin(slots[0], '06.2026'), '07.2026': { ...pin(slots[1], '07.2026'), sourceRunId: '301' } };
   const before = frozenPeriodFingerprints(slots, expected, uploadsDir);
   assert.deepEqual(before, expected);
+
+  slots[1].sourceRunId = '302';
+  const sourceRunTampered = {
+    ...expected,
+    '07.2026': {
+      ...expected['07.2026'],
+      manifestSha256: createHash('sha256').update(periodSlotsSnapshot(slots, '07.2026')).digest('hex'),
+    },
+  };
+  assert.throws(() => frozenPeriodFingerprints(slots, sourceRunTampered, uploadsDir),
+    /FROZEN_PERIOD_PIN_MISMATCH:07\.2026:sourceRunId:302:301/,
+    'sourceRunId pin must reject drift even if the changed slot metadata hash was separately blessed');
+  slots[1].sourceRunId = '301';
 
   fs.appendFileSync(path.join(uploadsDir, 'july.json'), ' ');
   assert.throws(() => frozenPeriodFingerprints(slots, expected, uploadsDir),

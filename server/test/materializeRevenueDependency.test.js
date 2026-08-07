@@ -143,6 +143,16 @@ test('approved SQL-mirror transition is explicit, one-shot and before any slot w
   assert.match(transitionSafetySource, /REVENUE_RULE_TRANSITION_ID_ALREADY_CONSUMED/);
 });
 
+test('frozen periods use the current baseline and are blocked before any source read', () => {
+  const guardAt = source.indexOf('assertPeriodOpenForMaterialization(PERIOD.ky)');
+  const sourceReadAt = source.indexOf('await readSourceSnapshot()');
+  assert.ok(guardAt >= 0 && sourceReadAt > guardAt, 'frozen-period guard must run before App Sale source reads');
+  assert.match(source, /CURRENT_FROZEN_PERIOD_PINS/);
+  assert.match(source, /frozenPeriodFingerprints\(\s*baselineSlots,\s*CURRENT_FROZEN_PERIOD_PINS/s);
+  assert.match(source, /frozenPeriodFingerprints\(commitSlots, CURRENT_FROZEN_PERIOD_PINS/);
+  assert.match(source, /frozenPeriodFingerprints\(\s*preClaimSlots,\s*CURRENT_FROZEN_PERIOD_PINS/s);
+});
+
 test('attribution quarantine is total-preserving and does not alter source KPI proof', () => {
   assert.match(source, /const sourceRows = \[\.\.\.misa, \.\.\.partner\]/);
   assert.match(source, /quarantineRosterConflicts\(sourceRows, roster/);

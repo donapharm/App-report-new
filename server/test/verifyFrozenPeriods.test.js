@@ -6,17 +6,44 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { collectPins, comparePins } = require('../scripts/verify_frozen_periods');
+const { collectPins, exactPinMap, verifyExactPins, comparePins } = require('../scripts/verify_frozen_periods');
+const { APPROVED_RULE_TRANSITIONS } = require('../src/revenueMaterializeGuard');
 
-test('‼ đọc đúng số ghim T06/T07 từ revenueMaterializeGuard, không chép tay', () => {
+test('‼ đọc baseline HIỆN HÀNH T06/T07, tách khỏi transition evidence lịch sử', () => {
   const { pins, conflicts } = collectPins();
   assert.deepEqual(conflicts, [], 'bản ghim tự mâu thuẫn thì phải lộ ra');
   const june = pins.find((pin) => pin.ky === '06.2026');
   const july = pins.find((pin) => pin.ky === '07.2026');
   assert.equal(june.totalRevenue, 28_403_136_096);
   assert.equal(june.totalRows, 2_001);
-  assert.equal(july.totalRevenue, 30_917_892_673);
-  assert.equal(july.totalRows, 2_016);
+  assert.equal(july.activeSlotId, 'vc-run301-approved_4173542_4eac9cd8-693f-44a1-9e95-a477c42b73b8');
+  assert.equal(july.sourceRunId, '301');
+  assert.equal(july.totalRevenue, 30_982_248_913);
+  assert.equal(july.totalRows, 2_091);
+  assert.equal(july.payloadSha256, '7da701578c7429b58ae5a2eee9454b799a5eb8112b0da2859b2c472fba9d6771');
+  assert.equal(july.manifestSha256, '0791122a97c1b0395539e944e702687a5d69924ad28cd6907a972080b817206c');
+
+  const historical = APPROVED_RULE_TRANSITIONS.VIEC0D_T08_2026_APP_SALE_SQL_MIRROR_V1.frozenPeriods['07.2026'];
+  assert.equal(historical.totalRevenue, 30_917_892_673, 'không được viết lại transition evidence cũ');
+  assert.equal(historical.totalRows, 2_016, 'không được viết lại transition evidence cũ');
+});
+
+test('exact pin map keeps current slot, manifest, payload and source run identity', () => {
+  const { pins } = collectPins();
+  const exact = exactPinMap(pins)['07.2026'];
+  assert.equal(exact.activeSlotId, 'vc-run301-approved_4173542_4eac9cd8-693f-44a1-9e95-a477c42b73b8');
+  assert.equal(exact.sourceRunId, '301');
+  assert.match(exact.manifestSha256, /^[a-f0-9]{64}$/);
+  assert.match(exact.payloadSha256, /^[a-f0-9]{64}$/);
+});
+
+test('exact verifier fails closed when manifest/payload cannot be read', () => {
+  const result = verifyExactPins([{ ky: '07.2026', totalRows: 1, totalRevenue: 1 }], {
+    slotsPath: '/definitely/missing/upload_slots.json',
+    uploadsDir: '/definitely/missing/uploads',
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.error, /ENOENT/);
 });
 
 test('‼ lệch MỘT ĐỒNG cũng phải báo, không làm tròn cho qua', () => {

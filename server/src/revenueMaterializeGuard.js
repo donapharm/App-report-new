@@ -96,6 +96,27 @@ const APPROVED_RULE_TRANSITIONS = Object.freeze({
     }),
   }),
 });
+// Current production frozen baseline. Keep this separate from the historical
+// transition records above: transition evidence is immutable, while a later
+// CEO-approved close can advance the currently enforced baseline.
+const CURRENT_FROZEN_PERIOD_BASELINE_ID = 'APP_REPORT_FROZEN_BASELINE_RUN301_20260807';
+const CURRENT_FROZEN_PERIOD_PINS = Object.freeze({
+  '06.2026': Object.freeze({
+    activeSlotId: 'legacy_062026_mr26j8nb',
+    manifestSha256: 'e3c532333693c944984b7521906fb9e3f55843b391676fe99e27db70ab40d45e',
+    totalRows: 2001,
+    totalRevenue: 28403136096,
+    payloadSha256: '39d5f22b894f09aa95ea1ee1794dc8bf4dc9d16f07114653c1e3c0be758532ae',
+  }),
+  '07.2026': Object.freeze({
+    activeSlotId: 'vc-run301-approved_4173542_4eac9cd8-693f-44a1-9e95-a477c42b73b8',
+    manifestSha256: '0791122a97c1b0395539e944e702687a5d69924ad28cd6907a972080b817206c',
+    sourceRunId: '301',
+    totalRows: 2091,
+    totalRevenue: 30982248913,
+    payloadSha256: '7da701578c7429b58ae5a2eee9454b799a5eb8112b0da2859b2c472fba9d6771',
+  }),
+});
 const EXCLUDED_ROW_KEYS = [
   'date', 'employeeCode', 'orderCode', 'productCode',
   'reason', 'revenue', 'sourceLineId', 'unitCode',
@@ -138,6 +159,17 @@ function resolveApprovedRuleTransition(id, effectiveFrom) {
     throw new Error(`REVENUE_RULE_TRANSITION_EFFECTIVE_PERIOD_MISMATCH:${transitionId}`);
   }
   return transition;
+}
+
+function assertPeriodOpenForMaterialization(ky, frozenPeriods = CURRENT_FROZEN_PERIOD_PINS) {
+  const period = String(ky || '').trim();
+  if (frozenPeriods?.[period]) {
+    // There is deliberately no environment-variable bypass. Reopening a
+    // frozen period requires a reviewed code-level one-shot override with its
+    // own evidence/claim contract; arbitrary runtime input must never suffice.
+    throw new Error(`FROZEN_PERIOD_REMATERIALIZATION_REQUIRES_APPROVED_CODE_CHANGE:${period}`);
+  }
+  return true;
 }
 
 function partitionStat(value) {
@@ -739,6 +771,8 @@ module.exports = {
   // Xuất ra để `scripts/verify_frozen_periods.js` đọc thẳng số ghim kỳ đã khoá sổ,
   // KHÔNG phải chép tay sang chỗ khác (chép tay là có ngày hai nơi lệch rồi cãi nhau).
   APPROVED_RULE_TRANSITIONS,
+  CURRENT_FROZEN_PERIOD_BASELINE_ID,
+  CURRENT_FROZEN_PERIOD_PINS,
   DEFAULT_MIN_TOTAL_RATIO,
   REQUIRED_SOURCES,
   evaluateRevenueCandidate,
@@ -749,6 +783,7 @@ module.exports = {
   selectCanonicalPeriodSlots,
   periodSlotsSnapshot,
   resolveApprovedRuleTransition,
+  assertPeriodOpenForMaterialization,
   excludedRowsDigest,
   partnerEvidenceDigest,
 };

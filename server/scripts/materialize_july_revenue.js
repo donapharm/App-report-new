@@ -21,6 +21,8 @@ const {
   selectCanonicalPeriodSlots,
   periodSlotsSnapshot,
   resolveApprovedRuleTransition,
+  assertPeriodOpenForMaterialization,
+  CURRENT_FROZEN_PERIOD_PINS,
 } = require('../src/revenueMaterializeGuard');
 const { REVENUE_SEMANTIC_VERSION, equivalentToActiveSlot } = require('../src/revenuePayloadIdentity');
 const {
@@ -337,6 +339,7 @@ async function main() {
     process.env.REVENUE_RULE_TRANSITION_ID,
     process.env.REVENUE_RULE_EFFECTIVE_FROM,
   );
+  assertPeriodOpenForMaterialization(PERIOD.ky);
   const baselineSlots = readJson(slotsPath, []);
   // Snapshot and verify every active period before the slow App Sale read.
   // Preserve verification errors until the normal rejection-artifact path so
@@ -354,9 +357,11 @@ async function main() {
   }
   const baselinePeriodSlots = selectCanonicalPeriodSlots(baselineSlots, PERIOD.ky);
   const baselinePeriodSnapshot = periodSlotsSnapshot(baselineSlots, PERIOD.ky);
-  const frozenPeriodsBaseline = approvedRuleTransition
-    ? frozenPeriodFingerprints(baselineSlots, approvedRuleTransition.frozenPeriods, UP_DIR)
-    : null;
+  const frozenPeriodsBaseline = frozenPeriodFingerprints(
+    baselineSlots,
+    CURRENT_FROZEN_PERIOD_PINS,
+    UP_DIR,
+  );
   const baselineActiveSlots = baselinePeriodSlots.filter((s) => s.active);
   const baselineActiveIds = baselineActiveSlots.map((s) => String(s.id)).sort();
   const previousSlot = baselineActiveSlots.at(-1) || null;
@@ -486,21 +491,19 @@ async function main() {
     });
   }
   const commitPeriodSlots = commitSlots.filter((s) => s.ky === PERIOD.ky);
-  if (approvedRuleTransition) {
-    try {
-      const frozenPeriodsCommit = frozenPeriodFingerprints(commitSlots, approvedRuleTransition.frozenPeriods, UP_DIR);
-      if (JSON.stringify(frozenPeriodsCommit) !== JSON.stringify(frozenPeriodsBaseline)) {
-        materializeGuard.ok = false;
-        materializeGuard.reasons.push({
-          code: 'FROZEN_PERIOD_CHANGED_DURING_MATERIALIZE',
-          baseline: frozenPeriodsBaseline,
-          latest: frozenPeriodsCommit,
-        });
-      }
-    } catch (error) {
+  try {
+    const frozenPeriodsCommit = frozenPeriodFingerprints(commitSlots, CURRENT_FROZEN_PERIOD_PINS, UP_DIR);
+    if (JSON.stringify(frozenPeriodsCommit) !== JSON.stringify(frozenPeriodsBaseline)) {
       materializeGuard.ok = false;
-      materializeGuard.reasons.push({ code: 'FROZEN_PERIOD_RECHECK_FAILED', message: String(error.message || error) });
+      materializeGuard.reasons.push({
+        code: 'FROZEN_PERIOD_CHANGED_DURING_MATERIALIZE',
+        baseline: frozenPeriodsBaseline,
+        latest: frozenPeriodsCommit,
+      });
     }
+  } catch (error) {
+    materializeGuard.ok = false;
+    materializeGuard.reasons.push({ code: 'FROZEN_PERIOD_RECHECK_FAILED', message: String(error.message || error) });
   }
   if (periodSlotsSnapshot(commitSlots, PERIOD.ky) !== baselinePeriodSnapshot) {
     materializeGuard.ok = false;
@@ -600,7 +603,7 @@ async function main() {
     }
     const frozenPeriodsPreClaim = frozenPeriodFingerprints(
       preClaimSlots,
-      approvedRuleTransition.frozenPeriods,
+      CURRENT_FROZEN_PERIOD_PINS,
       UP_DIR,
     );
     if (JSON.stringify(frozenPeriodsPreClaim) !== JSON.stringify(frozenPeriodsBaseline)) {

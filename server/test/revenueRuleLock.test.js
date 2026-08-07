@@ -12,6 +12,10 @@ const MIRROR_FILE = path.join(ROOT, 'src', 'appSaleRevenueMirror.js');
 const LOCK_FILE = path.join(ROOT, 'config', 'revenue_rule_lock.json');
 const materializer = fs.readFileSync(MATERIALIZER_FILE, 'utf8');
 const mirror = fs.readFileSync(MIRROR_FILE, 'utf8');
+const {
+  assertPeriodOpenForMaterialization,
+  CURRENT_FROZEN_PERIOD_PINS,
+} = require('../src/revenueMaterializeGuard');
 
 function normalizedRegion(source, startMarker, endMarker, label) {
   const start = source.indexOf(startMarker);
@@ -104,4 +108,14 @@ test('kỳ tự nhảy theo tháng lịch Việt Nam, không ghi cứng kỳ', (
   const fn = materializer.slice(materializer.indexOf('function defaultKy()'), materializer.indexOf('function defaultKy()') + 450);
   assert.match(fn, /Asia\/Bangkok/);
   assert.doesNotMatch(ruleBody(), /['"`]\d{2}\.20\d{2}['"`]/);
+});
+
+test('kỳ đã khoá không thể được mở lại bằng biến môi trường tuỳ ý', () => {
+  assert.equal(assertPeriodOpenForMaterialization('08.2026'), true);
+  for (const ky of Object.keys(CURRENT_FROZEN_PERIOD_PINS)) {
+    assert.throws(
+      () => assertPeriodOpenForMaterialization(ky),
+      new RegExp(`FROZEN_PERIOD_REMATERIALIZATION_REQUIRES_APPROVED_CODE_CHANGE:${ky.replace('.', '\\.')}`),
+    );
+  }
 });

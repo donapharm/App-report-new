@@ -153,7 +153,9 @@ function frozenPeriodPin(period = '', transitions = null) {
   const month = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(text(period));
   if (!month) return null;
   const ky = `${month[2]}.${month[1]}`;
-  const source = transitions || require('./revenueMaterializeGuard').APPROVED_RULE_TRANSITIONS;
+  const source = transitions || require('./revenueMaterializeGuard').CURRENT_FROZEN_PERIOD_PINS;
+  const direct = source?.[ky];
+  if (direct && direct.frozenPeriods === undefined) return { ky, ...direct };
   for (const transition of Object.values(source || {})) {
     const pin = (transition?.frozenPeriods || {})[ky];
     if (pin) return { ky, ...pin };

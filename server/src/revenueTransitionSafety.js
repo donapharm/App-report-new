@@ -68,7 +68,12 @@ function frozenPeriodFingerprints(slots, expectedPins, uploadsDir) {
       totalRevenue: number(slot.totalRevenue),
       payloadSha256: payload.payloadSha256,
     };
-    for (const key of ['activeSlotId', 'manifestSha256', 'totalRows', 'totalRevenue', 'payloadSha256']) {
+    const pinKeys = ['activeSlotId', 'manifestSha256', 'totalRows', 'totalRevenue', 'payloadSha256'];
+    if (Object.prototype.hasOwnProperty.call(expected || {}, 'sourceRunId')) {
+      actual.sourceRunId = String(slot.sourceRunId || '');
+      pinKeys.push('sourceRunId');
+    }
+    for (const key of pinKeys) {
       if (actual[key] !== expected?.[key]) {
         throw new Error(`FROZEN_PERIOD_PIN_MISMATCH:${ky}:${key}:${actual[key]}:${expected?.[key]}`);
       }
