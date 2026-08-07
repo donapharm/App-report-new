@@ -1,5 +1,6 @@
 // api.js — gọi backend, tự đính token. Frontend KHÔNG tự quyết quyền.
 import { RequestCoordinator, requestScopeKey } from './requestCoordinator.js';
+import { syncExceptionsRequestPath } from './syncExceptionsRequest.js';
 const TOKEN_KEY = 'rpt_token';
 const OTP_AUTH_TIMEOUT_MS = 12000;
 const ME_TIMEOUT_MS = 8000;
@@ -206,7 +207,12 @@ export async function trustedDeviceLogin(phone) {
 
 export const api = {
   // Màn "Chưa đồng bộ" — chỉ đọc, danh mục dòng bị loại + lý do.
-  syncExceptions: (ky) => req('GET', `/revenue/sync-exceptions?ky=${encodeURIComponent(ky)}`),
+  syncExceptions: (ky, { freshKey = null } = {}) => req(
+    'GET',
+    syncExceptionsRequestPath(ky, freshKey),
+    undefined,
+    freshKey == null ? {} : { cacheMs: 0 },
+  ),
   // Sổ "Thanh toán CP của tôi" — GHI NHẬN. Backend chỉ cho CEO; frontend chỉ ẩn nút
   // cho gọn mắt, KHÔNG được coi việc ẩn nút là bảo vệ.
   paymentSetSecond: (payload) => req('POST', '/employee-cost/payment/second', payload),

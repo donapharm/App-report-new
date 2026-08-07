@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { isTabAllowed } from '../src/tabAccess.js';
 
 const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
 const drillNav = fs.readFileSync(new URL('../src/drillNav.jsx', import.meta.url), 'utf8');
@@ -17,10 +18,14 @@ test('mobile bottom bar keeps 4 common tabs and a menu sheet', () => {
 });
 
 test('authorized tab filtering and current-tab highlighting stay intact', () => {
+  assert.match(app, /const tabs = TABS\.filter\(\(item\) => isTabAllowed\(item, me\)\)/);
   assert.match(app, /const visibleTabs = tabs\.filter\(\(t\) => !t\.hidden\);/);
-  assert.match(app, /\(!t\.adminOnly \|\| me\.isAdmin\)/);
-  assert.match(app, /\(!t\.ceoEmployeeOnly \|\| canonicalCeo \|\| !me\.isAdmin\)/);
-  assert.match(app, /\(!t\.employeeCostControlled \|\| me\.isAdmin \|\| !me\.employeeCostDisabled\)/);
+  assert.equal(isTabAllowed({ adminOnly: true }, { isAdmin: false }), false);
+  assert.equal(isTabAllowed({ adminOnly: true }, { isAdmin: true }), true);
+  assert.equal(isTabAllowed({ ceoEmployeeOnly: true }, { isAdmin: true, is_ceo: false }), false);
+  assert.equal(isTabAllowed({ ceoEmployeeOnly: true }, { isAdmin: true, is_ceo: true }), true);
+  assert.equal(isTabAllowed({ employeeCostControlled: true }, { isAdmin: false, employeeCostDisabled: true }), false);
+  assert.equal(isTabAllowed({ employeeCostControlled: true }, { isAdmin: true, employeeCostDisabled: true }), true);
   assert.match(app, /className=\{`mobile-nav-tile\$\{tab === t\.key \? ' active' : ''\}`\}/);
 });
 

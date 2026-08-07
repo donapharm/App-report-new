@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api, forgetLastPhone, getLastPhone, getToken, rememberLastPhone, setToken } from './api.js';
 import { roleLabel } from './util.js';
+import { isTabAllowed, resolveAllowedTab } from './tabAccess.js';
 import { useIsDesktop } from './hooks.js';
 import { Spinner, ScrollTopButton, Clock, UpdateBanner, ZaloSidebar, ZaloMobileAccess } from './components.jsx';
 import { NavCtx } from './drillNav.jsx';
@@ -20,6 +21,7 @@ import Target from './pages/Target.jsx';
 import EmployeeCost from './pages/EmployeeCost.jsx';
 import PaymentSchedule from './pages/PaymentSchedule.jsx';
 import CatalogManagement from './pages/CatalogManagement.jsx';
+import SyncExceptions from './pages/SyncExceptions.jsx';
 import DormantReports from './pages/DormantReports.jsx';
 import AiChat from './pages/AiChat.jsx';
 import Upload from './pages/Upload.jsx';
@@ -36,6 +38,7 @@ const TABS = [
   { key: 'employeeCost', label: 'Chi phí của tôi', ic: '🧾', C: EmployeeCost, employeeCostControlled: true },
   { key: 'paymentSchedule', label: 'Thanh toán CP', full: 'Thanh toán CP của tôi', ic: '💵', C: PaymentSchedule, employeeCostControlled: true },
   { key: 'catalogManagement', label: 'Danh mục QL', full: 'Danh mục quản lý', ic: '🗂️', C: CatalogManagement },
+  { key: 'syncExceptions', label: 'Chưa đồng bộ', full: 'Dòng doanh thu chưa đồng bộ', ic: '↔️', C: SyncExceptions, adminOnly: true },
   { key: 'dormantReports', label: 'B/c QLNB', full: 'Báo cáo QLNB', ic: '📑', C: DormantReports, ceoEmployeeOnly: true },
   { key: 'ai', label: 'Hỏi nhanh', ic: '🤖', C: AiChat },
   { key: 'upload', label: 'Upload', ic: '⬆️', C: Upload, adminOnly: true },
@@ -91,7 +94,8 @@ export default function App() {
     try {
       const linked = new URLSearchParams(window.location.search).get('tab');
       if (TABS.some((item) => item.key === linked)) return linked;
-      return localStorage.getItem('rpt_tab') || 'overview';
+      const stored = localStorage.getItem('rpt_tab');
+      return TABS.some((item) => item.key === stored) ? stored : 'overview';
     } catch { return 'overview'; }
   });
   const [tabStack, setTabStack] = useState([]); // các tab đã đi qua, để nút "Quay lại" lùi về
@@ -158,11 +162,33 @@ export default function App() {
 
   useEffect(() => {
     if (!me) return;
-    window.history.replaceState({ ...(window.history.state || {}), appTab: tab }, '', window.location.href);
-    const onPop = (e) => { if (e.state?.appTab) { setTab(e.state.appTab); setTabStack((s) => s.slice(0, -1)); try { localStorage.setItem('rpt_tab', e.state.appTab); } catch { /* ignore */ } } };
+    const initialTab = resolveAllowedTab(TABS, tab, me);
+    window.history.replaceState({ ...(window.history.state || {}), appTab: initialTab }, '', window.location.href);
+    const onPop = (event) => {
+      if (!event.state?.appTab) return;
+      const targetTab = resolveAllowedTab(TABS, event.state.appTab, me);
+      setTab(targetTab);
+      setTabStack((stack) => stack.slice(0, -1));
+      try { localStorage.setItem('rpt_tab', targetTab); } catch { /* ignore */ }
+      if (targetTab !== event.state.appTab) {
+        window.history.replaceState({ ...(event.state || {}), appTab: targetTab }, '', window.location.href);
+      }
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!me) return;
+    const allowedTab = resolveAllowedTab(TABS, tab, me);
+    if (allowedTab === tab) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('tab') === tab) url.searchParams.delete('tab');
+    try { localStorage.setItem('rpt_tab', allowedTab); } catch { /* ignore */ }
+    setTabStack([]);
+    setTab(allowedTab);
+    window.history.replaceState({ ...(window.history.state || {}), appTab: allowedTab }, '', url);
+  }, [me, tab]);
 
   useEffect(() => {
     if (!me) return;
@@ -271,10 +297,7 @@ export default function App() {
   const logout = () => { setToken(null); forgetLastPhone(); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
   // Backend chốt ai là CEO (`/me` trả `is_ceo`). Frontend KHÔNG tự đoán từ chuỗi role:
   // tài khoản CEO thật trên PROD có role 'admin', đoán bằng role là giấu mất chức năng.
-  const canonicalCeo = !!me.is_ceo;
-  const tabs = TABS.filter((t) => (!t.adminOnly || me.isAdmin)
-    && (!t.ceoEmployeeOnly || canonicalCeo || !me.isAdmin)
-    && (!t.employeeCostControlled || me.isAdmin || !me.employeeCostDisabled)).map((t) => (
+  const tabs = TABS.filter((item) => isTabAllowed(item, me)).map((t) => (
     t.key === 'catalogManagement' && !me.isAdmin
       ? { ...t, label: 'Danh mục bán hàng của tôi', full: 'Danh mục bán hàng của tôi' }
       : t

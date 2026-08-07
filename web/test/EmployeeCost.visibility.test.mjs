@@ -5,6 +5,7 @@ import {
   normalizeVisibilityPanel, readVisibilityCollapsed, updateVisibilitySetting, visibilityCollapseStorageKey,
   visibilityEffectiveLabel, visibilitySavePayload, visibilitySourceLabel, writeVisibilityCollapsed,
 } from '../src/employeeCostVisibilityModel.js';
+import { isTabAllowed } from '../src/tabAccess.js';
 
 const source = {
   department: { setting: 'on', effective: 'on', source: 'department' },
@@ -45,7 +46,10 @@ test('save payload sends only backend settings, including inherit removal reques
 test('App hides employee cost tab only from backend /me disabled flag and admin bypasses', () => {
   const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
   assert.match(app, /employeeCostControlled: true/);
-  assert.match(app, /!t\.employeeCostControlled \|\| me\.isAdmin \|\| !me\.employeeCostDisabled/);
+  const controlledTab = { employeeCostControlled: true };
+  assert.equal(isTabAllowed(controlledTab, { isAdmin: false, employeeCostDisabled: true }), false);
+  assert.equal(isTabAllowed(controlledTab, { isAdmin: false, employeeCostDisabled: false }), true);
+  assert.equal(isTabAllowed(controlledTab, { isAdmin: true, employeeCostDisabled: true }), true);
   assert.match(app, /me\.employeeCostDisabled[\s\S]*?tab !== 'employeeCost'/);
   assert.doesNotMatch(app, /group_key\s*===\s*['"]ctv/);
 });

@@ -2293,6 +2293,11 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-gap-coverage-head { display:flex; justify-content:space-between; gap:15px; color:#245c49; font-size:12px; }
 .employee-cost-gap-progress { height:10px; overflow:hidden; border-radius:999px; background:#d4e9e1; }
 .employee-cost-gap-progress span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#0b7a54,#23a977); transition:width .2s ease; }
+.sync-exceptions-toolbar { display:flex; align-items:end; gap:10px; flex-wrap:wrap; margin-top:10px; }
+.sync-exceptions-toolbar label { display:grid; flex:1 1 240px; gap:5px; min-width:0; }
+.sync-exceptions-toolbar label span { color:var(--muted); font-size:10px; font-weight:900; text-transform:uppercase; }
+.sync-exceptions-toolbar input,.sync-exceptions-toolbar select { width:100%; min-height:40px; }
+.sync-exceptions-empty { padding:18px; color:var(--muted); text-align:center; font-weight:800; }
 .employee-cost-gap-table { width:100%; min-width:900px; border-collapse:collapse; font-size:12px; }
 .employee-cost-gap-table th { padding:10px; background:#075d9b; color:#fff; text-align:left; white-space:nowrap; }
 .employee-cost-gap-table td { max-width:420px; padding:10px; border-top:1px solid var(--line); vertical-align:top; }
@@ -2325,6 +2330,9 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 @media (max-width: 1100px) {
   .employee-cost-visibility-grid, .employee-cost-visibility-employees { grid-template-columns:1fr; }
   .employee-cost-gap-filters, .employee-cost-dq-filters { grid-template-columns:1fr 1fr; }
+  .sync-exceptions-toolbar { align-items:stretch; }
+  .sync-exceptions-toolbar label { flex-basis:100%; }
+  .sync-exceptions-toolbar .btn { flex:1 1 180px; }
   .employee-cost-dq-kpis { grid-template-columns:1fr 1fr; }
 }
 @media (max-width: 767px) {
@@ -2345,6 +2353,8 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   .employee-cost-effective { grid-column:auto; }
   .employee-cost-tabs, .employee-cost-gap-title, .employee-cost-gap-coverage-head { align-items:stretch; flex-direction:column; }
   .employee-cost-gap-filters, .employee-cost-dq-filters, .employee-cost-dq-kpis { grid-template-columns:1fr; }
+  .sync-exceptions-toolbar { display:grid; grid-template-columns:1fr; }
+  .sync-exceptions-toolbar .btn { width:100%; }
   .employee-cost-gap-title .btn { width:100%; }
   .employee-cost-export-actions { width:100%; display:grid; grid-template-columns:1fr 1fr; }
   .employee-cost-export-actions .btn { width:100%; }
