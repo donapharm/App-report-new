@@ -120,6 +120,28 @@ function main() {
   }
   console.log(`\nDòng tăng thêm phân theo tháng của ngày doanh thu:`);
   for (const [m, v] of Object.entries(byMonth).sort()) console.log(`  ${m}: ${vn(v.rows)} dòng · ${vn(v.amount)}đ`);
+
+  // Giả thuyết cần kiểm (Claude Sale nêu 07/08): 75 dòng này là do ĐỔI CÁCH QUY KỲ
+  // — đơn CUỐI tháng 7, ghi doanh số sang đầu tháng 8, lần đồng bộ sau mới lấy về.
+  // Nếu đúng thì chúng phải DỒN vào mấy ngày cuối tháng; nếu rải đều cả tháng thì
+  // là chuyện khác (đơn về muộn lẻ tẻ, hoặc dòng lạ) — phải xem, không được đoán.
+  const byDay = {};
+  for (const r of added) {
+    const d = String(r.date || r.revenue_date || '').slice(0, 10) || 'không rõ';
+    byDay[d] = byDay[d] || { rows: 0, amount: 0 };
+    byDay[d].rows += 1; byDay[d].amount += rev(r);
+  }
+  const days = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b));
+  console.log(`\nDòng tăng thêm phân theo NGÀY (kiểm giả thuyết "đơn cuối tháng ghi doanh số sang T08"):`);
+  for (const [d, v] of days) console.log(`  ${d}: ${vn(v.rows)} dòng · ${vn(v.amount)}đ`);
+  const lateJuly = days.filter(([d]) => /^2026-07-(2[7-9]|3[01])$/.test(d));
+  const lateRows = lateJuly.reduce((a, [, v]) => a + v.rows, 0);
+  const lateAmount = lateJuly.reduce((a, [, v]) => a + v.amount, 0);
+  const pct = added.length ? Math.round(lateRows / added.length * 100) : 0;
+  console.log(`  → 27–31/07: ${vn(lateRows)}/${vn(added.length)} dòng (${pct}%) · ${vn(lateAmount)}đ`);
+  console.log(pct >= 70
+    ? '  → DỒN cuối tháng: khớp giả thuyết đổi cách quy kỳ, KHÔNG phải dòng lạ.'
+    : '  → KHÔNG dồn cuối tháng: phải soi từng dòng, đừng vội kết luận là đơn về muộn.');
 }
 
 if (require.main === module) {
