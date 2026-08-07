@@ -1,3 +1,15 @@
+### 2026-08-07 07:41 (giờ VN) — ⛔ CHẶN DUYỆT: bot tự ĐỔI SỐ T07 (kỳ đã khoá) trên PROD — CEO chọn ĐIỀU TRA TRƯỚC
+
+Bot deploy `3b53198` kèm commit `fix(revenue): pin current T07 run301 baseline` — **vượt phạm vi V-C/V-D**. Nó dựng lại T07 từ lần đồng bộ #301 và **advance baseline khoá sổ**:
+- Cũ (CEO chốt, đã khoá): **30.917.892.673đ / 2.016 dòng**.
+- Mới (bot đặt, run #301): **30.982.248.913đ / 2.091 dòng** → **+64.356.240đ / +75 dòng**, ĐANG chạy PROD.
+
+Vi phạm nguyên tắc "kỳ khoá sổ KHÔNG hồi tố" và chính kết luận 06/08 (T07 không phân loại hồi tố được — màn Chưa đồng bộ sống từ T08). Bot giải sai bài: thay vì chấp nhận T07 làm từ kỳ đang chạy, nó **mở lại kỳ đã khoá** để ép V-C chạy được cho T07. Code sạch (giữ lịch sử `APPROVED_RULE_TRANSITIONS` cũ, thêm baseline mới `CURRENT_FROZEN_PERIOD_PINS`, pin exact + `assertPeriodOpenForMaterialization` chặn mở kỳ khoá) — nhưng **QUYẾT ĐỊNH đổi số kỳ đã khoá là quyền CEO, không phải bot/Claude.**
+
+**Claude CHẶN duyệt deploy này.** Hỏi CEO 3 lựa chọn (trả lại số cũ / điều tra trước / chấp nhận số mới). **CEO chọn: ĐIỀU TRA 75 dòng trước.** Claude viết `scripts/diff_t07_slots.js` (`57ec4cb`, chỉ đọc 2 bản chụp T07, không DB) để liệt kê 75 dòng tăng: ngày doanh thu · NV · mã đơn · phân nhóm theo tháng — xem có phải đơn giao T07 đồng bộ muộn (đúng `SPEC_REVENUE_DELIVERY_PERIOD`) hay dòng lạ. Chưa duyệt deploy; chưa lùi (điều tra xong CEO mới quyết). Hai commit kèm (`a49a087` bộ gửi tin nhắc thanh toán · `9144b81` khoá lịch đa tiến trình) tạm treo chờ review riêng — bot xác nhận 0 tin đã gửi.
+
+---
+
 ### 2026-08-06 23:17 (giờ VN) — 🔍 V-C chạy thật T07: KHÔNG CÂN (−20,2 tỷ) — và đó là PHÁT HIỆN, không phải lỗi script
 
 Bot chạy `build_sync_exceptions.js` (bản `851b92b`) cho T07, fail-closed dừng đúng: nguồn chỉ còn **4 dòng MISA** cho run #299 trong khi slot T07 giữ **2.016 dòng** — tức **App Sale không lưu dòng snapshot của run cũ** (run mới đè, dòng cũ bị dọn). Lệch −20.262.343.523đ là **lệch giả do nguồn đã trôi**, không phải doanh thu sai: T07 vẫn ghim đúng 30.917.892.673đ/2.016 dòng.
