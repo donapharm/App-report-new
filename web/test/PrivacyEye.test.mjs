@@ -56,6 +56,11 @@ test('che SỐ giữ CẤU TRÚC: tiền/%/Xu bị che, ngày và đếm số l�
     assert.equal(short(1_250_000_000), MASK_TEXT);
     assert.equal(pct(87.5), MASK_TEXT);
     assert.equal(formatEmployeeCostCell(1200000, { kind: 'money' }), MASK_TEXT);
+    // CEO chốt 06/08: % chi phí là công thức hoa hồng ⇒ che như tiền.
+    assert.equal(formatEmployeeCostCell(13, { key: 'c43', kind: 'percent' }), MASK_TEXT);
+    // Ngoại lệ CEO 06/08: giá trúng thầu (công khai) + thành tiền xuất bán KHÔNG che.
+    assert.equal(formatEmployeeCostCell(150000, { key: 'bidPrice', kind: 'money' }), '150.000đ');
+    assert.equal(formatEmployeeCostCell(2500000, { key: 'revenueBeforeVat', kind: 'money' }), '2.500.000đ');
     // Thiếu dữ liệu vẫn phải là '—' — không được lẫn "che" với "không có số".
     assert.equal(money(null), '—');
     assert.equal(pct(undefined), '—');
@@ -68,6 +73,27 @@ test('che SỐ giữ CẤU TRÚC: tiền/%/Xu bị che, ngày và đếm số l�
     assert.equal(maskMoneyInText('30.917.892.673đ · đạt 87,5% · thiếu 12 Xu'), `${MASK_TEXT} · đạt ${MASK_TEXT} · thiếu ${MASK_TEXT}`);
     setMasked(false);
     assert.equal(money(3995000), '3.995.000đ');
+  } finally { setMasked(false); }
+});
+
+test('policy cột Chi phí: mở đúng 2 cột làm việc, che toàn bộ % C33–C46 theo nút mắt', () => {
+  try {
+    setMasked(true);
+    for (let index = 33; index <= 46; index += 1) {
+      assert.equal(
+        formatEmployeeCostCell(0.5, { key: `c${index}`, kind: 'percent' }),
+        MASK_TEXT,
+        `C${index} phải bị che khi nút mắt đang ẩn`,
+      );
+    }
+    assert.equal(formatEmployeeCostCell(150000, { key: 'bidPrice', kind: 'money' }), '150.000đ');
+    assert.equal(formatEmployeeCostCell(2500000, { key: 'revenueBeforeVat', kind: 'money' }), '2.500.000đ');
+    assert.equal(formatEmployeeCostCell(2500000, { key: 'rowMonthlyTotal', kind: 'money' }), MASK_TEXT);
+    assert.equal(formatEmployeeCostCell(150000, { key: 'BidPrice', kind: 'money' }), MASK_TEXT, 'ngoại lệ phải khớp exact key');
+
+    setMasked(false);
+    assert.equal(formatEmployeeCostCell(0.5, { key: 'c36', kind: 'percent' }), '0.5');
+    assert.equal(formatEmployeeCostCell(2500000, { key: 'rowMonthlyTotal', kind: 'money' }), '2.500.000đ');
   } finally { setMasked(false); }
 });
 

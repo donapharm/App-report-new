@@ -191,12 +191,23 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
   return result;
 }
 
+// Ngoại lệ con mắt (CEO chốt 06/08/2026): "Giá trúng thầu" là số công khai của gói
+// thầu, "Thành tiền xuất bán (trước VAT)" cần nhìn để làm việc với bảng — KHÔNG che.
+// Ngược lại % chi phí (C33–C46) là công thức hoa hồng ⇒ PHẢI che như tiền.
+const PRIVACY_EXEMPT_KEYS = new Set(['bidPrice', 'revenueBeforeVat']);
+
 export function formatEmployeeCostCell(value, column = {}) {
   if (value == null || value === '') return '—';
   if (column.key === 'date') return String(value).split('-').reverse().join('/');
   const number = Number(value);
+  const exempt = PRIVACY_EXEMPT_KEYS.has(String(column.key || ''));
   if (column.format === 'money' || column.kind === 'money') {
-    return Number.isFinite(number) ? maskNumberText(number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ') : String(value);
+    const text = Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 0 }) + 'đ' : String(value);
+    return exempt || !Number.isFinite(number) ? text : maskNumberText(text);
+  }
+  if (column.kind === 'percent' || column.format === 'percent') {
+    if (!Number.isFinite(number)) return String(value);
+    return maskNumberText(number.toLocaleString('en-US', { useGrouping: false, minimumFractionDigits: 1, maximumFractionDigits: 4 }));
   }
   if (column.format === 'number') {
     return Number.isFinite(number) ? number.toLocaleString('vi-VN', { maximumFractionDigits: 4 }) : String(value);
