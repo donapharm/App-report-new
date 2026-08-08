@@ -117,14 +117,25 @@ function vnMonth() {
 
   console.log('\nBước tiếp theo:');
   if (alive.length === results.length) {
-    console.log('  → Cửa chi phí ĐANG SỐNG. CEO bấm "Đồng bộ % chi phí" (Danh mục QL) một lần để kho có bản đầu.');
+    console.log('  → Cửa chi phí ĐANG SỐNG và CÓ SỐ. CEO bấm "Đồng bộ % chi phí" (Danh mục QL) một lần để kho có bản đầu.');
   } else if (alive.length) {
-    console.log('  → Sống MỘT PHẦN. Nút Đồng bộ là all-or-nothing nên sẽ BÁO LỖI và giữ nguyên bản cũ.');
-    console.log('     Chạy lại với --all để biết chính xác ai hỏng, rồi báo DataHub đúng danh sách đó.');
+    console.log('  → Có số MỘT PHẦN. Nút Đồng bộ là all-or-nothing nên sẽ BÁO LỖI và giữ nguyên bản cũ.');
+    console.log('     Báo DataHub đúng danh sách NV chưa có số ở trên.');
+  } else if (dead.length) {
+    console.log('  → Cửa chi phí KHÔNG PHẢN HỒI. Huy hiệu xanh trên Danh mục QL là cửa DANH MỤC, không phải cửa này.');
   } else {
-    console.log('  → Cửa chi phí VẪN CHẾT. Huy hiệu xanh trên Danh mục QL là cửa DANH MỤC, không phải cửa này.');
+    console.log('  → Nguồn TRẢ LỜI BÌNH THƯỜNG nhưng KHÔNG NV nào có dòng cho kỳ này.');
+    console.log('     Đây KHÔNG phải lỗi kết nối. Hai khả năng, phải phân biệt trước khi báo lỗi DataHub:');
+    console.log(`       ① Kỳ ${period} bên DataHub CHƯA lập bảng % (bình thường với kỳ đang chạy).`);
+    console.log('       ② Bảng % có nhưng không trả sang được (lỗi thật bên nguồn).');
+    console.log('     ⇒ Chạy lại với kỳ TRƯỚC để phân biệt:  --all --period <kỳ trước>');
+    console.log('       Kỳ trước CÓ số ⇒ ① (chờ DataHub lập bảng kỳ này). Kỳ trước cũng rỗng ⇒ ②.');
   }
-  process.exit(dead.length ? 1 : 0);
+  // ‼ Mã thoát nói về DỮ LIỆU DÙNG ĐƯỢC, không phải "gọi được hay không".
+  // Bản đầu trả 0 khi mọi NV `ok` nhưng rỗng — đọc nhầm thành "đã khoẻ" (bot bắt được 08/08).
+  //   0 = mọi NV có số · 1 = có NV không phản hồi · 2 = gọi được nhưng KHÔNG NV nào có số
+  if (dead.length) process.exit(1);
+  process.exit(alive.length === results.length ? 0 : 2);
 })().catch((error) => {
   console.error('Lỗi chạy script:', String(error?.message || error));
   process.exit(3);
