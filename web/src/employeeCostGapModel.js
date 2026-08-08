@@ -54,12 +54,14 @@ function aggregate(pairs) {
     const current = map.get(pair.productCode) || {
       productCode: pair.productCode,
       productName: pair.productName,
-      unitLabels: new Set(), employeeCodes: new Set(), suggestedCatalogCodes: new Set(),
+      unitLabels: new Set(), employeeCodes: new Set(), suggestedCatalogCodes: new Set(), orderCodes: new Set(),
       revenueAffected: 0, pairCount: 0, orderLineCount: 0, reason: 'missing',
     };
     current.unitLabels.add(pair.unitLabel);
     current.employeeCodes.add(pair.employeeCode);
     if (pair.suggestedCatalogCode) current.suggestedCatalogCodes.add(pair.suggestedCatalogCode);
+    // Mã đơn hàng để kế toán/NV tra thẳng vào nguồn (CEO 06/08) — mã tra cứu, không phải tiền.
+    for (const code of pair.orderCodes || []) current.orderCodes.add(code);
     if (pair.reason === 'qd_mismatch') current.reason = 'qd_mismatch';
     current.revenueAffected += pair.revenueAffected;
     current.pairCount += 1;
@@ -71,6 +73,7 @@ function aggregate(pairs) {
     unitLabels: [...item.unitLabels].sort((a, b) => a.localeCompare(b, 'vi')),
     employeeCodes: [...item.employeeCodes].sort(),
     suggestedCatalogCodes: [...item.suggestedCatalogCodes].sort((a, b) => a.localeCompare(b, 'vi')),
+    orderCodes: [...item.orderCodes].sort((a, b) => a.localeCompare(b, 'vi')),
     unitCount: item.unitLabels.size,
     employeeCount: item.employeeCodes.size,
   })).sort((a, b) => b.revenueAffected - a.revenueAffected || a.productCode.localeCompare(b.productCode, 'vi'));
