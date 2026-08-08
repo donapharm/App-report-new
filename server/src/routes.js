@@ -5290,10 +5290,25 @@ async function employeeBonusSummaryForNotify(empCode, ky) {
   return { empCode: code, ky, bonus: summary?.month || {}, sourceAvailable: monthPriority.sourceAvailable !== false };
 }
 
-function paymentNoticePeriods(today = employeeCost.vnToday()) {
+// ‼ SÀN KỲ NHẮC THANH TOÁN — CEO chốt 08/08/2026.
+// CEO: *"bỏ qua T05 và T06 vì hai tháng này mình chưa xây bài bản, không có số
+// liệu lấy từ App Sale qua mà chỉ có số liệu Lumos chuyển vào."*
+// Kỳ đầu tiên có dữ liệu App Sale dựng bài bản là **T07.2026** (slot App Sale
+// mirror; T06 trở về trước là slot `legacy_*` nhập từ Lumos). Sổ thanh toán của
+// các kỳ legacy chưa từng được ghi nhận trong app ⇒ app tưởng "chưa trả" và sẽ
+// bắn tin "QUÁ HẠN" SAI cho toàn đội. Nhắc tiền sai là không rút lại được.
+const PAYMENT_NOTICE_FIRST_PERIOD = '2026-07';
+// Công tắc chủ: mặc định TẮT. Handler gửi tin ra ngoài phải do CEO bật tường minh,
+// không được sống dậy chỉ vì code lên PROD (bài học 07/08: handler cắm thẳng vào
+// lịch, chỉ "may" không gửi vì nguồn chi phí đang thiếu).
+const paymentNoticeEnabled = () => /^(1|true|yes|on)$/i.test(String(process.env.PAYMENT_NOTICE_ENABLED || ''));
+
+function paymentNoticePeriods(today = employeeCost.vnToday(), { firstPeriod = PAYMENT_NOTICE_FIRST_PERIOD } = {}) {
   const now = /^\d{4}-\d{2}-\d{2}$/.test(String(today || '')) ? new Date(`${today}T00:00:00Z`) : null;
   if (!now) return [];
   return store.listPeriods().map((item) => monthInputForKy(item.ky)).filter(Boolean).filter((period) => {
+    // Sàn kỳ chặn TRƯỚC mọi tính toán tuổi kỳ — kỳ legacy không bao giờ được nhắc.
+    if (String(period) < String(firstPeriod)) return false;
     const [year, month] = period.split('-').map(Number);
     const end = new Date(Date.UTC(year, month, 0));
     const age = Math.floor((now - end) / 86_400_000);
@@ -5304,6 +5319,10 @@ function paymentNoticePeriods(today = employeeCost.vnToday()) {
 }
 
 async function paymentSchedulesForNotify({ today = employeeCost.vnToday() } = {}) {
+  // Công tắc chủ chặn ở ĐÂY, trước mọi thứ khác: chưa bật thì không dựng sổ, không
+  // gọi nguồn, không có gì để gửi. Trả rỗng (không ném) để lịch chạy vẫn xanh —
+  // "chưa bật" là trạng thái bình thường, không phải sự cố.
+  if (!paymentNoticeEnabled()) return [];
   const ceo = store.findUserByCode('CEO');
   const session = ceo ? auth.sessionForUser(ceo) : null;
   if (!session || !auth.isCeoActor(session)) {
@@ -5333,6 +5352,8 @@ router.notifyServices = {
   employeeBonusSummaryForNotify,
   paymentSchedulesForNotify,
   paymentNoticePeriods,
+  paymentNoticeEnabled,
+  PAYMENT_NOTICE_FIRST_PERIOD,
 };
 
 module.exports = router;
