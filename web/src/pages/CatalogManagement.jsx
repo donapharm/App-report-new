@@ -654,12 +654,17 @@ function CostRatesTablePanel({ period }) {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [exporting, setExporting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Cùng luật với bảng danh mục: đổi kỳ thì GIỮ bảng cũ, không đập về vòng quay.
   useEffect(() => {
-    if (!open) return;
-    setData(null); setError('');
+    if (!open) return undefined;
+    let alive = true;
+    setBusy(true); setError('');
     api.catalogCostRatesTable({ period: uiToHub(period) })
-      .then(setData)
-      .catch((e) => setError(e.message));
+      .then((result) => { if (alive) setData(result); })
+      .catch((e) => { if (alive) setError(e.message); })
+      .finally(() => { if (alive) setBusy(false); });
+    return () => { alive = false; };
   }, [open, period]);
 
   const rows = useMemo(() => {
@@ -681,7 +686,13 @@ function CostRatesTablePanel({ period }) {
     </div>
     {open && <div className="catalog-rates-body">
       {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
-      {!error && !data && <Spinner />}
+      {busy && !!data && <div className="catalog-loading-strip" role="status" aria-live="polite">
+        <i className="catalog-loading-dot" aria-hidden="true" />
+        <span>Đang tải bảng % kỳ <b>{period}</b>… bảng dưới vẫn là bản vừa xem.</span>
+      </div>}
+      {!error && !data && <div className="catalog-first-load" role="status" aria-live="polite">
+        <Spinner /><b>Đang mở bảng % kỳ {period}…</b>
+      </div>}
       {data && !data.available && <div className="catalog-alert error" role="status">
         {data.reason === 'CHUA_DONG_BO'
           ? `Kho cục bộ chưa có kỳ ${period} — CEO bấm "Đồng bộ % chi phí" một lần khi DataHub đang sống.`
@@ -851,6 +862,8 @@ export default function CatalogManagement({ me }) {
   const [period, setPeriod] = useState(currentKy());
   const [periods, setPeriods] = useState([]);
   const [data, setData] = useState(null);
+  // Kỳ ĐANG tải (rỗng = không tải gì). Giữ riêng khỏi `data` để bảng cũ ở lại trên màn.
+  const [loadingPeriod, setLoadingPeriod] = useState('');
   const [history, setHistory] = useState([]);
   const [diagnostics, setDiagnostics] = useState(null);
   const [error, setError] = useState('');
@@ -859,6 +872,9 @@ export default function CatalogManagement({ me }) {
   // admin thường không được đụng phân quyền cột % (CEO chốt 06/08).
   const isCeo = !!me?.is_ceo;
   const costRates = useCostRates(period);
+  // Kỳ của BẢNG ĐANG HIỂN THỊ — có thể khác kỳ đang tải. Phải nói rõ, không để
+  // anh/chị tưởng số trên màn đã là kỳ vừa chọn.
+  const shownPeriod = data ? (data.period_ui || hubToUi(data.period)) : '';
   const employeeOptions = useMemo(() => {
     const seen = new Map();
     for (const row of data?.rows || []) {
@@ -867,15 +883,22 @@ export default function CatalogManagement({ me }) {
     }
     return [...seen.values()].sort((a, b) => a.code.localeCompare(b.code));
   }, [data]);
+  // ‼ KHÔNG xoá dữ liệu cũ trước khi tải (CEO 08/08: *"mỗi lần kéo dữ liệu mà quay
+  // như vậy thì rất kẹt"*). Bản cũ `setData(null)` làm cả trang trắng thành một vòng
+  // quay mỗi lần đổi kỳ — trong khi danh mục ~27.700 dòng nên chờ khá lâu. Nay giữ
+  // bảng cũ trên màn, chỉ gắn dải "đang tải" + nói rõ đang xem kỳ nào / chờ kỳ nào.
   async function load(selected = period) {
-    setError(''); setData(null);
+    setError(''); setLoadingPeriod(selected);
     try {
       const p = uiToHub(selected); const result = await api.catalogManagement(p); setData(result);
       if (isAdmin) {
         const [h, d] = await Promise.allSettled([api.adminCatalogManagementHistory(p), api.adminCatalogManagementDiagnostics()]);
         setHistory(h.status === 'fulfilled' ? (h.value.history || []) : []); setDiagnostics(d.status === 'fulfilled' ? d.value : null);
       }
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      // Tải hỏng thì GIỮ bảng cũ + báo lỗi, không đập màn hình về trắng.
+      setError(e.message);
+    } finally { setLoadingPeriod(''); }
   }
   useEffect(() => { api.periods().then((p) => { const list = (p.periods || p || []).map((x) => x.ky || x).filter((x) => /^\d{2}\.\d{4}$/.test(x)); setPeriods(list); if (list.length && !list.includes(period)) setPeriod(list.at(-1)); }).catch(() => {}); }, []);
   useEffect(() => { load(period); }, [period, isAdmin]);
@@ -892,7 +915,20 @@ export default function CatalogManagement({ me }) {
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
       ⚠ Nguồn tỷ lệ chi phí đang kẹt — cột % đang dùng bảng tỷ lệ lấy được gần nhất.{costRates.note ? ` ${costRates.note}` : ''}
     </div>}
-    {!data && !error ? <Spinner /> : data && (isAdmin
+    {/* Đang tải MÀ ĐÃ CÓ bảng cũ ⇒ chỉ một dải mảnh, bảng ở lại cho anh/chị đọc tiếp. */}
+    {!!loadingPeriod && !!data && <div className="card catalog-loading-strip" role="status" aria-live="polite">
+      <i className="catalog-loading-dot" aria-hidden="true" />
+      <span>Đang tải danh mục kỳ <b>{loadingPeriod}</b> từ Data Hub…{shownPeriod && shownPeriod !== loadingPeriod
+        ? <> Bảng dưới vẫn là <b>kỳ {shownPeriod}</b> cho tới khi có dữ liệu mới.</>
+        : ' Bảng dưới là bản vừa xem, đang được làm mới.'}</span>
+    </div>}
+    {/* Lần đầu chưa có gì để giữ ⇒ khung chờ CÓ NÓI đang chờ cái gì, thay vì vòng quay trơ. */}
+    {!data && !error && <div className="card catalog-first-load" role="status" aria-live="polite">
+      <Spinner />
+      <b>Đang tải danh mục kỳ {loadingPeriod || period} từ Data Hub…</b>
+      <p>Danh mục toàn công ty khoảng <b>27.700 cặp</b> đơn vị – mã QLNB nên lần tải đầu mất một lúc. Các phần phía trên dùng được ngay.</p>
+    </div>}
+    {data && (isAdmin
       ? <AdminView data={data} period={uiToHub(period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}
         costColumns={costRates.columns} rateOf={costRates.rateOf} />
       : <EmployeeSections data={data} costColumns={costRates.columns} rateOf={costRates.rateOf} />)}
