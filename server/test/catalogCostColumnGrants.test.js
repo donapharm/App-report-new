@@ -125,55 +125,69 @@ test('whitelist server khớp đúng luật isAllowedCostColumn bên web', () =>
 
 /* ── V2: MA TRẬN CỘT × NHÓM ĐƠN VỊ (CEO chốt 08/08/2026) ─────────────────────── */
 
-test('V2: mỗi cột một phạm vi NHÓM riêng — C41 mọi nhóm, C43 chỉ nhóm BV', () => {
+test('V2: mỗi cột một phạm vi NHÓM riêng — C41 mọi nhóm, C43 chỉ nhóm 001', () => {
   const store = memStore();
-  grants.setGrant('DN002', { columns: { c41: ['*'], c43: ['BV'] } }, { actor: 'CEO', store });
-  // C41 phủ mọi nhóm ⇒ thấy ở cả BVĐK lẫn TTYT.
+  grants.setGrant('DN002', { columns: { c41: ['*'], c43: ['001'] } }, { actor: 'CEO', store });
   assert.equal(grants.canSee(sale('DN002'), { unitCode: '001.BVĐK ĐỒNG NAI', column: 'c41' }, { store }), true);
   assert.equal(grants.canSee(sale('DN002'), { unitCode: '021.TTYT LONG THÀNH', column: 'c41' }, { store }), true);
-  // C43 chỉ nhóm BV ⇒ BVĐK thấy, TTYT không.
   assert.equal(grants.canSee(sale('DN002'), { unitCode: '001.BVĐK ĐỒNG NAI', column: 'c43' }, { store }), true);
   assert.equal(grants.canSee(sale('DN002'), { unitCode: '021.TTYT LONG THÀNH', column: 'c43' }, { store }), false);
+});
+
+test('‼ NHÓM = MÃ đơn vị, không phải LOẠI: 001.NT-BVĐK đi cùng bệnh viện 001 của nó', () => {
+  // CEO đính chính 08/08: gộp theo loại thì 001.NT-… rơi sang nhóm "NT", tách khỏi
+  // chính bệnh viện của nó — sai hẳn ý nghiệp vụ.
+  assert.equal(grants.groupOf('001.BVĐK Đồng Nai'), '001');
+  assert.equal(grants.groupOf('001.BVĐK Đồng Nai-Khu C'), '001');
+  assert.equal(grants.groupOf('001.NT-BVĐK Đồng Nai'), '001');
+  assert.equal(grants.groupOf('033.PKĐK An Long Thành'), '033');
+  assert.equal(grants.groupOf('033.PKĐK Long Khánh'), '033');
+  const store = memStore();
+  grants.setGrant('DN002', { columns: { c41: ['001'] } }, { actor: 'CEO', store });
+  for (const unit of ['001.BVĐK Đồng Nai', '001.BVĐK Đồng Nai-Khu C', '001.NT-BVĐK Đồng Nai']) {
+    assert.equal(grants.canSee(sale('DN002'), { unitCode: unit, column: 'c41' }, { store }), true, unit);
+  }
+  assert.equal(grants.canSee(sale('DN002'), { unitCode: '033.PKĐK Long Khánh', column: 'c41' }, { store }), false);
 });
 
 test('V2 · luật CEO nguyên văn: hai đơn vị CÙNG NHÓM không bao giờ lệch nhau', () => {
   // CEO 08/08: "không có chuyện DN008 chỉ xem được C41 ở 033.PKĐK An Long Khánh
   // mà ở 003.PKĐK An Long Thành lại không xem được".
   const store = memStore();
-  grants.setGrant('DN008', { columns: { c41: ['PKĐK'] } }, { actor: 'CEO', store });
-  const khanh = grants.canSee(sale('DN008'), { unitCode: '033.PKĐK AN LONG KHÁNH', column: 'c41' }, { store });
-  const thanh = grants.canSee(sale('DN008'), { unitCode: '003.PKĐK AN LONG THÀNH', column: 'c41' }, { store });
+  grants.setGrant('DN008', { columns: { c41: ['033'] } }, { actor: 'CEO', store });
+  const khanh = grants.canSee(sale('DN008'), { unitCode: '033.PKĐK LONG KHÁNH', column: 'c41' }, { store });
+  const thanh = grants.canSee(sale('DN008'), { unitCode: '033.PKĐK AN LONG THÀNH', column: 'c41' }, { store });
   assert.equal(khanh, true);
-  assert.equal(thanh, true, 'cùng nhóm PKĐK thì phải cùng thấy — cấp theo nhóm là cấp CẢ nhóm');
+  assert.equal(thanh, true, 'cùng nhóm 033 thì phải cùng thấy — cấp theo nhóm là cấp CẢ nhóm');
 });
 
 test('V2: đơn vị không phân giải được nhóm ⇒ fail-closed, chỉ "*" mới phủ tới', () => {
   const store = memStore();
-  grants.setGrant('DN001', { columns: { c41: ['BV'] } }, { actor: 'CEO', store });
-  assert.equal(grants.canSee(sale('DN001'), { unitCode: '999', column: 'c41' }, { store }), false,
+  grants.setGrant('DN001', { columns: { c41: ['001'] } }, { actor: 'CEO', store });
+  assert.equal(grants.canSee(sale('DN001'), { unitCode: 'KHONGSO', column: 'c41' }, { store }), false,
     'mã không tách được nhóm không được suy vào nhóm nào');
   grants.setGrant('DN001', { columns: { c41: ['*'] } }, { actor: 'CEO', store });
-  assert.equal(grants.canSee(sale('DN001'), { unitCode: '999', column: 'c41' }, { store }), true);
+  assert.equal(grants.canSee(sale('DN001'), { unitCode: 'KHONGSO', column: 'c41' }, { store }), true);
 });
 
 test('V2: bản ghi v1 cũ (units mã lẻ) tự NỚI LÊN BIÊN NHÓM khi đọc — đúng luật "đi theo nhóm"', () => {
   const store = memStore();
   // Ghi thẳng bản v1 vào kho như dữ liệu để lại từ trước.
-  store.save(grants.FILE, { grants: { DN003: { columns: ['c41'], units: ['033.PKĐK AN LONG KHÁNH'], updatedAt: 'x', updatedBy: 'CEO' } }, audit: [] });
+  store.save(grants.FILE, { grants: { DN003: { columns: ['c41'], units: ['033.PKĐK LONG KHÁNH'], updatedAt: 'x', updatedBy: 'CEO' } }, audit: [] });
   const grant = grants.readFor('DN003', { store });
-  assert.deepEqual(grant.columns, { c41: ['PKĐK'] }, 'mã lẻ phải nở thành nhóm chứa nó');
-  // Nhờ đó đơn vị PKĐK khác cũng thấy — không còn lệch trong cùng nhóm.
-  assert.equal(grants.canSee(sale('DN003'), { unitCode: '003.PKĐK AN LONG THÀNH', column: 'c41' }, { store }), true);
+  assert.deepEqual(grant.columns, { c41: ['033'] }, 'mã lẻ phải nở thành nhóm chứa nó');
+  // Nhờ đó đơn vị 033 khác cũng thấy — không còn lệch trong cùng nhóm.
+  assert.equal(grants.canSee(sale('DN003'), { unitCode: '033.PKĐK AN LONG THÀNH', column: 'c41' }, { store }), true);
 });
 
 test('V2: unitInScope = có ÍT NHẤT một cột phủ tới — dùng để bỏ nguyên dòng', () => {
   const store = memStore();
-  grants.setGrant('DN002', { columns: { c41: ['BV'], c43: ['TTYT'] } }, { actor: 'CEO', store });
+  grants.setGrant('DN002', { columns: { c41: ['001'], c43: ['021'] } }, { actor: 'CEO', store });
   const grant = grants.readFor('DN002', { store });
   assert.equal(grants.unitInScope(grant, '001.BVĐK ĐỒNG NAI'), true);
   assert.equal(grants.unitInScope(grant, '021.TTYT LONG THÀNH'), true);
-  assert.equal(grants.unitInScope(grant, '120.HTNT XYZ'), false, 'không cột nào phủ HTNT');
-  // Nhưng từng Ô vẫn bị che đúng cột: BVĐK chỉ thấy C41, không thấy C43.
+  assert.equal(grants.unitInScope(grant, '120.HTNT XYZ'), false, 'không cột nào phủ nhóm 120');
+  // Nhưng từng Ô vẫn bị che đúng cột: nhóm 001 chỉ thấy C41, không thấy C43.
   assert.equal(grants.columnScopeAllows(grant, 'c43', '001.BVĐK ĐỒNG NAI'), false);
 });
 

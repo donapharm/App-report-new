@@ -107,9 +107,18 @@ chiều**, và đổi đơn vị phạm vi từ MÃ LẺ sang **NHÓM**:
 DN002: { c41: ['*'], c43: ['PKĐK', 'BV'], c36: ['BV'] }
 ```
 
-- **Nhóm = một nguồn duy nhất:** `employeeCostUnitGroups.resolve` — đúng bộ nhóm màn
-  "Chi phí của tôi" đang dùng (BV · TTYT · PKĐK · NT · TYT · TTKSBT, cấu hình tại
-  `config/employee_cost_unit_groups.json`). KHÔNG chế bộ nhóm thứ hai.
+- **‼ NHÓM = MÃ đơn vị (001, 033, 120…), KHÔNG phải LOẠI đơn vị.** Bản đầu Claude
+  hiểu sai, dùng nhóm theo loại (BV · TTYT · PKĐK · NT). CEO đính chính bằng ví dụ thật:
+  `001.BVĐK Đồng Nai` · `001.BVĐK Đồng Nai-Khu C` · `001.NT-BVĐK Đồng Nai` là **một
+  nhóm** (một bệnh viện, các khu/nhà thuốc trực thuộc) — gộp theo loại thì `001.NT-…`
+  rơi sang nhóm "NT", **tách khỏi chính bệnh viện của nó**. Và `033.PKĐK An Long Thành`
+  + `033.PKĐK Long Khánh` là một nhóm 033, tick một cái xong cả cụm. Dùng cùng luật
+  `unitGroupOf` (tiền tố số) mà toàn app đang gộp đơn vị.
+- **Cấp nhóm chỉ phủ đơn vị NV THỰC SỰ phụ trách.** Ví dụ CEO: DN002 chỉ phụ trách
+  `001.BVĐK Đồng Nai`, không phụ trách Khu C / NT — nên cấp nhóm 001 cho DN002 cũng
+  không mở gì thêm. Nhờ đó vừa tick nhanh theo nhóm, vừa không lỡ tay nới quyền.
+- **Menu liệt kê các mã bên trong từng nhóm** để CEO thấy tick nhóm 001 là mở đúng
+  những đơn vị nào — đúng ý "vừa nhóm mã đơn vị vừa mã đơn vị".
 - **Cấp theo nhóm là cấp CẢ nhóm** — hai đơn vị cùng nhóm không bao giờ lệch nhau
   (test khoá đúng ví dụ nguyên văn 033.PKĐK/003.PKĐK của CEO).
 - **Che TỪNG Ô:** route `/cost-rates` và bảng kho cục bộ (`costRatesTable`) che theo

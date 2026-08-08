@@ -26,7 +26,6 @@
  */
 
 const persist = require('./persist');
-const unitGroups = require('./employeeCostUnitGroups');
 
 const FILE = 'catalog_cost_column_grants';
 const AUDIT_LIMIT = 500;
@@ -46,9 +45,23 @@ function isAllowedColumn(value) {
   return ALLOWED_COLUMN.test(key) && !PERMANENTLY_BLOCKED.includes(key);
 }
 
-/** Nhóm của một mã đơn vị — MỘT nguồn duy nhất, chung với màn Chi phí của tôi. */
+/**
+ * NHÓM MÃ ĐƠN VỊ = tiền tố số của mã (001, 033, 120…) — cùng luật `unitGroupOf`
+ * mà toàn app đang dùng để gộp đơn vị.
+ *
+ * ‼ CEO đính chính 08/08 (bản đầu Claude làm SAI): nhóm KHÔNG phải là LOẠI đơn vị
+ * (BV · TTYT · PKĐK · NT). CEO nói rõ bằng ví dụ:
+ *   · `001.BVĐK Đồng Nai` · `001.BVĐK Đồng Nai-Khu C` · `001.NT-BVĐK Đồng Nai`
+ *     là MỘT nhóm — cùng một bệnh viện, các khu/nhà thuốc trực thuộc.
+ *     Gộp theo LOẠI thì `001.NT-…` rơi sang nhóm "NT", tách khỏi chính bệnh viện của nó.
+ *   · `033.PKĐK An Long Thành` + `033.PKĐK Long Khánh` là MỘT nhóm 033 — tick một
+ *     cái là xong cả cụm, đúng lời CEO.
+ *
+ * Cấp theo nhóm chỉ bao trùm ĐƠN VỊ NV THỰC SỰ PHỤ TRÁCH: NV không phụ trách
+ * `001.…-Khu C` thì cấp nhóm 001 cũng không mở gì thêm cho họ.
+ */
 function groupOf(unitCode) {
-  return unitGroups.resolve(unitCode).key || '';
+  return String(unitCode ?? '').trim().match(/^(\d{1,4})\s*[.\-]/)?.[1] || '';
 }
 
 function normalizeGroups(list) {
@@ -56,7 +69,7 @@ function normalizeGroups(list) {
   if (raw.some((item) => text(item?.key ?? item) === ALL_UNITS)) return [ALL_UNITS];
   const out = [];
   for (const item of raw) {
-    const key = unitGroups.normalizePrefix(item?.key ?? item);
+    const key = upper(item?.key ?? item);
     if (key && !out.includes(key)) out.push(key);
   }
   return out.sort();

@@ -1,3 +1,17 @@
+### 2026-08-09 00:20 (giờ VN) — ‼ SỬA HIỂU SAI GỐC: "nhóm mã đơn vị" là MÃ (001/033), không phải LOẠI (BV/PKĐK)
+
+CEO đính chính bằng hai ví dụ thật, và Claude đã hiểu sai từ đầu:
+- `001.BVĐK Đồng Nai` · `001.BVĐK Đồng Nai-Khu C` · `001.NT-BVĐK Đồng Nai` là **MỘT nhóm** — một bệnh viện với các khu/nhà thuốc trực thuộc. Gộp theo LOẠI thì `001.NT-…` rơi sang nhóm "NT", **tách khỏi chính bệnh viện của nó** — sai hẳn ý nghiệp vụ.
+- `033.PKĐK An Long Thành` + `033.PKĐK Long Khánh` là **một nhóm 033**, tick một cái là xong cả cụm.
+
+**Đã sửa:** `catalogCostColumnGrants.groupOf` chuyển từ `employeeCostUnitGroups` (loại) sang **tiền tố số** — cùng luật `unitGroupOf` toàn app đang dùng. Endpoint trả nhãn dễ đọc `001 · BVĐK Đồng Nai`. Menu **liệt kê các mã bên trong từng nhóm** (đúng ý "vừa nhóm vừa mã đơn vị"): tick ở cấp nhóm như CEO chốt, nhưng nhìn thấy rõ mở những đơn vị nào.
+
+**Chốt lại nỗi lo của CEO:** cấp nhóm **chỉ phủ đơn vị NV thực sự phụ trách** — DN002 không phụ trách Khu C/NT thì cấp nhóm 001 cũng không mở gì thêm. Vừa tick nhanh, vừa không lỡ tay nới quyền.
+
+Test khoá đúng hai ví dụ nguyên văn của CEO. Server 1043/1050 (7 fail cố hữu) · web 279/279 · build sạch.
+
+---
+
 ### 2026-08-08 23:40 (giờ VN) — ✅ DataHub mở T08 đúng 7 cột + nghỉ nhịp giữa các lượt đồng bộ
 
 **DataHub đã xong:** snapshot T08 (27.719 dòng, catalog v10); allowlist **đúng 7 cột** App Report đề nghị — `C36 · C38 · C41 · C42 · C43 · C44 · C45` (KHÔNG mở cả dải C33–C46, theo khuyến nghị hạn chế dữ liệu). Kiểm 3 NV (DN006/DN018/DN022) 6/6 HTTP 200; **không lộ C32/C47 hay cột ngoài allowlist**; snapshot T07 không đổi; audit không conflict, outbox/lock đều 0.

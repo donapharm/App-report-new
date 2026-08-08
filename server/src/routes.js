@@ -32,7 +32,6 @@ const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
-const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 const employeeBonus = require('./employeeBonus');
 const employeePenalty = require('./employeePenalty');
 // Đặt tên khác 'penaltyDisplay' vì trong file đã có biến cục bộ cùng tên ở phần Xu.
@@ -3143,12 +3142,21 @@ router.get('/catalog-management/cost-columns/my-grant', auth.requireAuth, (req, 
 router.post('/catalog-management/cost-columns/unit-groups', auth.requireAuth, auth.requireCeo, (req, res) => {
   const units = [...new Set((Array.isArray(req.body?.units) ? req.body.units : [])
     .map((item) => String(item ?? '').trim()).filter(Boolean))].slice(0, 2000);
+  // Nhãn nhóm lấy tên đơn vị NGẮN NHẤT trong cụm — "001 · BVĐK Đồng Nai" dễ đọc hơn
+  // mã trần "001", và đúng là cái tên CEO gọi cụm đó.
+  const nameOf = new Map();
+  for (const unit of units) {
+    const group = catalogCostColumnGrants.groupOf(unit);
+    if (!group) continue;
+    const name = unit.replace(/^\s*\d{1,4}\s*[.\-]\s*/, '').trim();
+    const current = nameOf.get(group);
+    if (!current || name.length < current.length) nameOf.set(group, name);
+  }
   const byUnit = {};
   for (const unit of units) {
     const group = catalogCostColumnGrants.groupOf(unit);
-    const resolved = group ? employeeCostUnitGroups.resolve(unit) : null;
-    // Không phân giải được nhóm ⇒ nói thẳng — đơn vị này chỉ '*' mới phủ tới.
-    byUnit[unit] = resolved ? { key: resolved.key, label: resolved.label } : null;
+    // Không phân giải được nhóm ⇒ nói thẳng (null) — đơn vị này chỉ '*' mới phủ tới.
+    byUnit[unit] = group ? { key: group, label: `${group} · ${nameOf.get(group) || group}` } : null;
   }
   return res.json({ byUnit, allUnits: catalogCostColumnGrants.ALL_UNITS });
 });
