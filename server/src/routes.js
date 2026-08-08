@@ -32,7 +32,6 @@ const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
-const employeeCostTemplates = require('./employeeCostTemplates');
 const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 const employeeBonus = require('./employeeBonus');
 const employeePenalty = require('./employeePenalty');

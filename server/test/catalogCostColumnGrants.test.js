@@ -32,7 +32,8 @@ test('VP018 mặc định không có grant % chi phí và không thấy C32–C4
   const store = memStore();
   const grant = grants.readFor('VP018', { store });
   assert.equal(grant.granted, false);
-  assert.deepEqual(grant.columns, []);
+  assert.deepEqual(grant.columns, {}, 'v2: ma trận cột→nhóm rỗng');
+  assert.deepEqual(grant.columnKeys, []);
   assert.deepEqual(grants.visibleColumns(sale('VP018'), ['c32', 'c33', 'c41', 'c46', 'c47'], { store }), []);
   for (const column of ['c32', 'c33', 'c41', 'c46', 'c47']) {
     assert.equal(grants.canSee(sale('VP018'), { unitCode: '120.X', column }, { store }), false, column);

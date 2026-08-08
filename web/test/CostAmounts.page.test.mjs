@@ -9,9 +9,11 @@ const routes = fs.readFileSync(new URL('../../server/src/routes.js', import.meta
 
 test('tab riêng, KHÔNG gộp vào màn nào có sẵn — đúng lệnh CEO tách C32/C47 ra', () => {
   assert.match(app, /key: 'costAmounts'.*C: CostAmounts, costAmountsOnly: true/);
-  // Ẩn/hiện theo cờ backend, không tự suy từ role ở frontend.
-  assert.match(app, /!t\.costAmountsOnly \|\| me\.costAmountsEnabled/);
-  assert.doesNotMatch(app, /costAmountsOnly.*me\.isAdmin/);
+  // Ẩn/hiện theo cờ backend, không tự suy từ role ở frontend. Luật nằm trong
+  // `tabAccess.isTabAllowed` — MỘT chỗ duy nhất quyết tab nào hiện.
+  const tabAccess = fs.readFileSync(new URL('../src/tabAccess.js', import.meta.url), 'utf8');
+  assert.match(tabAccess, /!tab\.costAmountsOnly \|\| !!me\.costAmountsEnabled/);
+  assert.doesNotMatch(tabAccess, /costAmountsOnly[^\n]*isAdmin/);
 });
 
 test('cờ costAmountsEnabled do BACKEND chốt (CEO hoặc công tắc), frontend chỉ đọc', () => {

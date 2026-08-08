@@ -26,9 +26,10 @@ test('DANH SÁCH CỘT lấy từ hợp đồng tại máy, KHÔNG hỏi DataHub
   // Lỗi CEO bắt được 08/08: bản đầu hỏi DataHub theo mã đang đăng nhập ⇒ tài khoản
   // CEO không có sổ chi phí nên luôn `not_configured`, menu phân quyền vĩnh viễn
   // báo "chưa lấy được cột" dù nguồn khoẻ.
-  assert.match(BODY, /employeeCostTemplates\.resolveTemplate\(empCode \|\| ''\)/);
-  assert.match(BODY, /template\.costColumns/);
-  const columnsAt = BODY.indexOf('const sourceColumns');
+  // V2: danh mục = cột tính tiền + cột chỉ-để-xem (C38/C42), vẫn là hợp đồng CỤC BỘ.
+  assert.match(BODY, /employeeCostTemplates\.grantableColumnCatalog\(empCode \|\| ''\)/);
+  assert.doesNotMatch(BODY, /getForSession[^\n]*\n[^\n]*grantableColumnCatalog/, 'cột không được phụ thuộc lần gọi nguồn');
+  const columnsAt = BODY.indexOf('const catalogColumns');
   const fetchAt = BODY.indexOf('employeeCost.getForSession');
   assert.ok(columnsAt >= 0 && fetchAt > columnsAt, 'cột phải dựng TRƯỚC khi gọi nguồn chi phí');
 });
