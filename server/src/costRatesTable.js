@@ -39,15 +39,25 @@ function buildTable({ period, session, store = persist } = {}) {
   // Nhãn cột lấy từ hợp đồng cục bộ, gồm cả cột chỉ-để-xem (C38/C42 — CEO chốt 08/08).
   const labelOf = (key) => template.costLabels?.[key] || template.viewOnlyLabels?.[key] || key.toUpperCase();
 
-  // Cột = whitelist ∩ (CEO: mọi cột có trong kho · NV: cột được cấp).
+  // Cột = whitelist ∩ HỢP ĐỒNG CỤC BỘ ∩ (CEO: mọi cột có trong kho · NV: cột được cấp).
+  //
+  // ‼ Vì sao phải giao thêm với hợp đồng cục bộ: nguồn có thể mở thêm cột bất cứ lúc
+  // nào (08/08 DataHub đề xuất mở đủ C33–C46 thay vì 5 cột). Nếu chỉ lọc theo dải
+  // C33–C46 thì cột mới TỰ HIỆN ra bảng, nhãn trơ "C34", CEO chưa từng duyệt — và
+  // lệch với menu phân quyền vốn chỉ liệt kê cột trong hợp đồng. Số liệu lương thưởng
+  // không được tự xuất hiện: muốn thêm cột thì khai vào hợp đồng trước.
+  const contracted = new Set();
+  const raw = store.load(costRatesSync.FILE, {})[text(period)] || {};
+  for (const empCode of Object.keys(raw.employees || {})) {
+    for (const column of employeeCostTemplates.grantableColumnCatalog(empCode)) contracted.add(column.key);
+  }
   const columnSet = new Set();
   const pairMap = new Map();
-  const raw = store.load(costRatesSync.FILE, {})[text(period)] || {};
   for (const empCode of Object.keys(raw.employees || {}).sort()) {
     const kept = raw.employees[empCode];
     for (const column of kept.columns || []) {
       const key = lower(column?.key ?? column);
-      if (catalogCostColumnGrants.isAllowedColumn(key)) columnSet.add(key);
+      if (catalogCostColumnGrants.isAllowedColumn(key) && contracted.has(key)) columnSet.add(key);
     }
     for (const row of kept.rows || []) {
       const unit = upper(row.unit_code ?? row.c7);

@@ -114,3 +114,24 @@ test('V2: hai cột hai phạm vi nhóm khác nhau ⇒ che TỪNG Ô, không l�
   // c43 của G1.B vốn thiếu % ở nguồn ⇒ vẫn null, và NV không phân biệt được với ô bị che.
   assert.equal(ttyt.rates.c43, null);
 });
+
+test('nguồn mở thêm cột ngoài HỢP ĐỒNG ⇒ KHÔNG tự hiện ra bảng (CEO chưa duyệt)', async () => {
+  const store = memStore();
+  // DataHub trả thêm c34/c39 — nằm trong dải C33–C46 nhưng KHÔNG có trong hợp đồng.
+  await sync.syncPeriod({
+    period: '2026-08', empCodes: ['DN001'], actor: 'CEO',
+    fetchImpl: async () => ({
+      outcome: 'ok',
+      payload: { periods: [{
+        period: '2026-08',
+        columns: [{ key: 'c41' }, { key: 'c34' }, { key: 'c39' }],
+        rows: [row('120.HTNT', 'G1.A', { c41: 1, c34: 7, c39: 8 })],
+      }] },
+    }),
+    store, now: () => '2026-08-08T16:00:00.000+07:00',
+  });
+  const result = table.buildTable({ period: '2026-08', session: CEO, store });
+  assert.deepEqual(result.columns.map((c) => c.key), ['c41'],
+    'c34/c39 chưa khai hợp đồng thì không được tự xuất hiện dù nguồn có trả');
+  assert.equal(result.rows[0].rates.c34, undefined);
+});
