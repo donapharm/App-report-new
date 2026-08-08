@@ -5,6 +5,7 @@ import { api, downloadCostRatesTable, downloadFilteredEmployeeReport, downloadFi
 import { Spinner } from '../components.jsx';
 import { bangkokToday } from '../revenueCoverage.js';
 import { formatDateTime } from '../util.js';
+import { createLatestRequestGate } from '../requestCoordinator.js';
 import {
   ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
   grantSavePayload, grantSummary, ratesLookup, setColumnGroups, toggleColumn,
@@ -867,6 +868,8 @@ export default function CatalogManagement({ me }) {
   const [history, setHistory] = useState([]);
   const [diagnostics, setDiagnostics] = useState(null);
   const [error, setError] = useState('');
+  const loadGateRef = useRef(null);
+  if (!loadGateRef.current) loadGateRef.current = createLatestRequestGate();
   const isAdmin = !!me?.isAdmin;
   // Danh tính CEO do backend cấp (`/me` trả `is_ceo`), KHÔNG suy từ vai admin —
   // admin thường không được đụng phân quyền cột % (CEO chốt 06/08).
@@ -888,18 +891,26 @@ export default function CatalogManagement({ me }) {
   // quay mỗi lần đổi kỳ — trong khi danh mục ~27.700 dòng nên chờ khá lâu. Nay giữ
   // bảng cũ trên màn, chỉ gắn dải "đang tải" + nói rõ đang xem kỳ nào / chờ kỳ nào.
   async function load(selected = period) {
+    const request = loadGateRef.current.next();
     setError(''); setLoadingPeriod(selected);
     try {
-      const p = uiToHub(selected); const result = await api.catalogManagement(p); setData(result);
+      const p = uiToHub(selected);
+      const result = await api.catalogManagement(p);
+      if (!request.isLatest()) return;
+      setData(result);
       if (isAdmin) {
         const [h, d] = await Promise.allSettled([api.adminCatalogManagementHistory(p), api.adminCatalogManagementDiagnostics()]);
+        if (!request.isLatest()) return;
         setHistory(h.status === 'fulfilled' ? (h.value.history || []) : []); setDiagnostics(d.status === 'fulfilled' ? d.value : null);
       }
     } catch (e) {
       // Tải hỏng thì GIỮ bảng cũ + báo lỗi, không đập màn hình về trắng.
-      setError(e.message);
-    } finally { setLoadingPeriod(''); }
+      if (request.isLatest()) setError(e.message);
+    } finally {
+      if (request.isLatest()) setLoadingPeriod('');
+    }
   }
+  useEffect(() => () => { loadGateRef.current?.cancel(); }, []);
   useEffect(() => { api.periods().then((p) => { const list = (p.periods || p || []).map((x) => x.ky || x).filter((x) => /^\d{2}\.\d{4}$/.test(x)); setPeriods(list); if (list.length && !list.includes(period)) setPeriod(list.at(-1)); }).catch(() => {}); }, []);
   useEffect(() => { load(period); }, [period, isAdmin]);
   return <div className="catalog-management">

@@ -14,10 +14,18 @@ test('KHÔNG khai bề rộng theo VỊ TRÍ cột cho bảng danh mục (số c
   assert.deepEqual(employeePositional, [], 'bảng NV cũng vậy — nó lệch một cột so với bảng CEO');
 });
 
-test('bảng tự giãn theo nội dung, không bị ép vừa 100% màn', () => {
-  assert.match(css, /\.catalog-table-products \{ min-width:max-content; table-layout:auto; \}/);
+test('cascade cuối cùng vẫn là auto/max-content — không có rule phía sau ghi đè về fixed', () => {
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const declarations = [...withoutComments.matchAll(/\.catalog-table-products\s*\{([^}]*)\}/g)].map((match) => match[1]);
+  assert.ok(declarations.length > 0, 'phải có rule layout cho bảng danh mục');
+  assert.match(declarations.at(-1), /min-width\s*:\s*max-content/);
+  assert.match(declarations.at(-1), /table-layout\s*:\s*auto/);
+  for (const declaration of declarations) {
+    assert.doesNotMatch(declaration, /table-layout\s*:\s*fixed/, 'không rule nào được ghi đè về fixed');
+    assert.doesNotMatch(declaration, /min-width\s*:\s*1320px/, 'không giữ min-width cứng của layout 13 cột cũ');
+  }
   // Ép width:100% + min-width:0 chính là thứ bóp dẹp cột cuối trên laptop.
-  assert.doesNotMatch(css, /\.catalog-table-products \{ width:100%; min-width:0; \}/);
+  assert.doesNotMatch(withoutComments, /\.catalog-table-products\s*\{[^}]*width\s*:\s*100%[^}]*min-width\s*:\s*0/);
 });
 
 test('cột số/tiền/% đủ rộng cho tiêu đề "C36 (%)"', () => {

@@ -2411,11 +2411,10 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .catalog-c10 { display:inline-block; padding:1px 7px; border-radius:999px; font-weight:800; font-size:11.5px; background:#e8f3ff; color:#0b5aa6; }
 .catalog-c10.is-missing { background:#ffe9e9; color:#a12020; }
 
-/* ── Layout cột bảng danh mục (CEO 27/07: cột chật mà trang dư chỗ) ──
-   Bảng dùng table-layout:fixed + % bề ngang → tận dụng hết khung 1600px,
-   không còn cảnh tiêu đề bị cắt ("Đơn giá trún", "CST còn l") trong khi
-   bên phải bỏ trống. Cột dài (tên thuốc, hoạt chất) được ưu tiên chỗ. */
-.catalog-table-products { min-width:1320px; table-layout:fixed; }
+/* ── Layout cột bảng danh mục ──
+   Luật fixed/1320px ngày 27/07 đã bị thay thế bởi layout theo nội dung phía trên:
+   số cột % thay đổi theo quyền nên không được ghi đè lại `table-layout:auto` ở
+   cuối stylesheet. Giữ các luật trình bày ô bên dưới, không ép layout của bảng. */
 .catalog-table-products th { white-space:normal; line-height:1.25; vertical-align:bottom; }
 .catalog-table-products td { overflow-wrap:anywhere; }
 .catalog-table-products .catalog-money { text-align:right; white-space:nowrap; }
