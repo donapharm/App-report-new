@@ -89,3 +89,43 @@ grant cột của menu này — thiếu một trong hai là không thấy.
 **CEO duyệt hướng + duyệt menu phân quyền: 06/08/2026.** Làm **ngay sau** khi đóng đợt
 V-A→V-D đang deploy (đứng đầu hàng đợi kế). Ước lượng: vừa (backend nối rate theo
 scope + store grant + route CEO-only + menu; nguồn số và khung quyền đều có sẵn).
+
+---
+
+## V2 — MA TRẬN NV × CỘT × NHÓM ĐƠN VỊ (CEO nâng chi tiết tối 08/08/2026)
+
+> CEO: *"phải có phân quyền chi tiết cho mỗi NV được hiển thị chi tiết cho loại cột
+> 'C' nào, cho loại mã đơn vị nào... Ghi chú là phân quyền sẽ đi theo NHÓM mã đơn
+> vị... chứ không có chuyện NV DN008 chỉ xem được cột C41 ở 033.PKĐK An Long Khánh
+> mà ở 003.PKĐK An Long Thành lại không xem được."*
+
+Bản v1 (một phạm vi đơn vị chung cho mọi cột) không tả được thực tế: DN002 xem C41
+ở mọi nơi nhưng C36 chỉ ở vài loại đơn vị. V2 đổi mô hình quyền thành **ma trận ba
+chiều**, và đổi đơn vị phạm vi từ MÃ LẺ sang **NHÓM**:
+
+```
+DN002: { c41: ['*'], c43: ['PKĐK', 'BV'], c36: ['BV'] }
+```
+
+- **Nhóm = một nguồn duy nhất:** `employeeCostUnitGroups.resolve` — đúng bộ nhóm màn
+  "Chi phí của tôi" đang dùng (BV · TTYT · PKĐK · NT · TYT · TTKSBT, cấu hình tại
+  `config/employee_cost_unit_groups.json`). KHÔNG chế bộ nhóm thứ hai.
+- **Cấp theo nhóm là cấp CẢ nhóm** — hai đơn vị cùng nhóm không bao giờ lệch nhau
+  (test khoá đúng ví dụ nguyên văn 033.PKĐK/003.PKĐK của CEO).
+- **Che TỪNG Ô:** route `/cost-rates` và bảng kho cục bộ (`costRatesTable`) che theo
+  (cột × đơn vị). Ô bị che trả `null` y như thiếu % — NV không phân biệt được "bị
+  che" với "chưa có", không lộ cả sự tồn tại của số.
+- **Fail-closed nhóm:** đơn vị không phân giải được nhóm thì CHỈ phạm vi `'*'` (mọi
+  nhóm đang phụ trách) mới phủ tới; danh sách nhóm lẻ không bao giờ suy. Menu liệt kê
+  rõ "N đơn vị chưa nhận diện được nhóm" cho CEO thấy.
+- **Bản ghi v1 tự nâng khi đọc:** cột nhận phạm vi cũ; mã đơn vị lẻ **nở lên biên
+  nhóm chứa nó** (đúng luật "đi theo nhóm"). Không cần bước chuyển đổi tay.
+- **UI:** tick cột = mặc định "mọi nhóm"; nhãn nhỏ dưới checkbox mở bộ chọn nhóm
+  RIÊNG CỦA CỘT ĐÓ (danh sách chỉ gồm nhóm NV phụ trách, kèm số đơn vị mỗi nhóm).
+  Bảng tra "đơn vị → nhóm" hỏi backend (`POST /cost-columns/unit-groups`, CEO-only)
+  — không chép luật tách nhóm sang frontend.
+
+**Ranh giới giữ nguyên:** đây vẫn là quyền **XEM**. Cột nào ĐƯỢC TÍNH vào tiền ở đơn
+vị nào do bảng % của DataHub quyết (có %/không có %) — App Report không bao giờ cắt
+một cột khỏi phép tính tiền vì lý do phân quyền hiển thị; muốn ngừng TÍNH ở đâu thì
+sửa bảng % bên DataHub (SSOT).

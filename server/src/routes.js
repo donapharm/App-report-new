@@ -31,6 +31,7 @@ const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
 const employeeCostTemplates = require('./employeeCostTemplates');
+const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 const employeeBonus = require('./employeeBonus');
 const employeePenalty = require('./employeePenalty');
 // Đặt tên khác 'penaltyDisplay' vì trong file đã có biến cục bộ cùng tên ở phần Xu.
@@ -2971,7 +2972,7 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
   const isCeo = auth.isCeoActor(req.session);
   const grant = catalogCostColumnGrants.readFor(req.session.emp_code);
   // Chưa được cấp gì thì dừng ngay: không gọi DataHub, không tốn một truy vấn nào.
-  if (!isCeo && !grant.columns.length) {
+  if (!isCeo && !grant.columnKeys.length) {
     return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NOT_GRANTED' });
   }
   // Danh mục cột = hợp đồng CỤC BỘ (cột tính tiền + cột chỉ-để-xem C38/C42).
@@ -3013,9 +3014,17 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
   const pairs = [];
   for (const [key, source] of lookup) {
     const [unitCode, productCode] = key.split('\u001f');
+    // Bỏ nguyên dòng khi KHÔNG cột nào được cấp phủ tới đơn vị này.
     if (!isCeo && !catalogCostColumnGrants.unitInScope(grant, unitCode)) continue;
     const rates = {};
     for (const column of columns) {
+      // V2 (CEO chốt ngày 08.08): quyền là ma trận CỘT × NHÓM ĐƠN VỊ ⇒ che TỪNG Ô.
+      // Ô ngoài phạm vi nhóm của cột đó trả null y như thiếu % — NV không phân biệt
+      // được "bị che" với "chưa có", đúng chủ đích không lộ cả sự tồn tại của số.
+      if (!isCeo && !catalogCostColumnGrants.columnScopeAllows(grant, column.key, unitCode)) {
+        rates[column.key] = null;
+        continue;
+      }
       const raw = source?.[column.key];
       // Thiếu % ⇒ null (màn hình ra '—' + chỉ đường sang tab "Mặt hàng thiếu %").
       // TUYỆT ĐỐI không suy 0% — `Number(null) === 0` là cái bẫy đã cắn nhiều lần.
@@ -3098,7 +3107,23 @@ router.get('/catalog-management/cost-rates/table.xlsx', auth.requireAuth, asyncJ
 router.get('/catalog-management/cost-columns/my-grant', auth.requireAuth, (req, res) => {
   const isCeo = auth.isCeoActor(req.session);
   const grant = catalogCostColumnGrants.readFor(req.session.emp_code);
-  return res.json({ isCeo, grant: isCeo ? { ...grant, columns: 'all', units: [catalogCostColumnGrants.ALL_UNITS] } : grant });
+  return res.json({ isCeo, grant: isCeo ? { ...grant, columns: 'all', columnKeys: 'all' } : grant });
+});
+
+/* Bảng tra "mã đơn vị → nhóm" cho menu phân quyền v2 — CHỈ CEO cần (vẽ ma trận
+   cột × nhóm). Phân giải Ở BACKEND bằng đúng bộ employeeCostUnitGroups đang dùng
+   cho màn Chi phí — không chép luật tách nhóm sang frontend để khỏi lệch hai nơi. */
+router.post('/catalog-management/cost-columns/unit-groups', auth.requireAuth, auth.requireCeo, (req, res) => {
+  const units = [...new Set((Array.isArray(req.body?.units) ? req.body.units : [])
+    .map((item) => String(item ?? '').trim()).filter(Boolean))].slice(0, 2000);
+  const byUnit = {};
+  for (const unit of units) {
+    const group = catalogCostColumnGrants.groupOf(unit);
+    const resolved = group ? employeeCostUnitGroups.resolve(unit) : null;
+    // Không phân giải được nhóm ⇒ nói thẳng — đơn vị này chỉ '*' mới phủ tới.
+    byUnit[unit] = resolved ? { key: resolved.key, label: resolved.label } : null;
+  }
+  return res.json({ byUnit, allUnits: catalogCostColumnGrants.ALL_UNITS });
 });
 
 /**

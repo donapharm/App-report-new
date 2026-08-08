@@ -1,9 +1,14 @@
-// LÕI LOGIC MENU PHÂN QUYỀN CỘT % (SPEC_CATALOG_COST_COLUMNS.md · CEO chốt 06/08/2026)
+// LÕI LOGIC MENU PHÂN QUYỀN CỘT % — BẢN V2 THEO NHÓM ĐƠN VỊ
+// (SPEC_CATALOG_COST_COLUMNS.md · CEO chốt 06/08, nâng chi tiết 08/08/2026)
 // Tách khỏi JSX để test được bằng node:test và để màn hình chỉ còn việc vẽ.
 //
+// CEO 08/08: quyền là ma trận NV × CỘT × NHÓM ĐƠN VỊ — mỗi cột một phạm vi nhóm
+// riêng; cấp theo nhóm là cấp CẢ nhóm (hai đơn vị cùng nhóm không bao giờ lệch).
+// Bảng "mã đơn vị → nhóm" do BACKEND phân giải (endpoint unit-groups) — frontend
+// không chép luật tách nhóm để khỏi lệch hai nơi.
+//
 // ‼ Đây CHỈ là tầng trình bày. Quyền thật do backend quyết (`auth.requireCeo` +
-// `catalogCostColumnGrants`). Sửa gì ở đây cũng không nới được quyền — đúng nguyên
-// tắc số 1 của repo: frontend không tự lọc quyền.
+// `catalogCostColumnGrants`). Sửa gì ở đây cũng không nới được quyền.
 
 export const ALL_UNITS = '*';
 
@@ -11,8 +16,7 @@ const text = (value) => String(value ?? '').trim();
 const upper = (value) => text(value).toUpperCase();
 const lower = (value) => text(value).toLowerCase();
 
-// Cùng luật whitelist với server (`catalogCostColumnGrants.isAllowedColumn`) và với
-// `isAllowedCostColumn` của bảng chi phí: C33–C46.
+// Cùng luật whitelist với server (`catalogCostColumnGrants.isAllowedColumn`): C33–C46.
 export function isGrantableColumn(key) {
   const match = /^c(\d+)$/.exec(lower(key?.key ?? key));
   if (!match) return false;
@@ -32,8 +36,7 @@ export function grantableColumns(columns = []) {
   return out;
 }
 
-/** Đơn vị mỗi NV đang phụ trách — suy từ chính bảng phân công đang hiển thị.
- *  CEO không thể cấp đơn vị nằm ngoài danh sách này: phạm vi chỉ THU HẸP. */
+/** Đơn vị mỗi NV đang phụ trách — suy từ chính bảng phân công đang hiển thị. */
 export function unitsByEmployee(catalogRows = []) {
   const map = new Map();
   for (const row of Array.isArray(catalogRows) ? catalogRows : []) {
@@ -47,8 +50,51 @@ export function unitsByEmployee(catalogRows = []) {
   return new Map([...map].map(([emp, set]) => [emp, [...set].sort()]));
 }
 
-/** Dựng bảng cho menu: mỗi NV một dòng, kèm quyền hiện tại và đơn vị họ phụ trách. */
-export function buildGrantPanel({ grants = [], columns = [], catalogRows = [], employees = [] } = {}) {
+/** Nhóm mỗi NV đang phụ trách, tính từ đơn vị của họ + bảng tra backend.
+ *  Đơn vị không phân giải được nhóm gom vào `ungroupedUnits` — NÓI RA, không giấu:
+ *  các đơn vị đó chỉ '*' mới phủ tới (fail-closed phía backend). */
+export function groupsForUnits(units = [], groupsByUnit = {}) {
+  const groups = new Map();
+  const ungroupedUnits = [];
+  for (const unit of units) {
+    const resolved = groupsByUnit?.[unit] || groupsByUnit?.[upper(unit)] || null;
+    if (!resolved?.key) { ungroupedUnits.push(unit); continue; }
+    const key = upper(resolved.key);
+    const current = groups.get(key) || { key, label: text(resolved.label) || key, unitCount: 0 };
+    current.unitCount += 1;
+    groups.set(key, current);
+  }
+  return {
+    groups: [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, 'vi')),
+    ungroupedUnits: ungroupedUnits.sort(),
+  };
+}
+
+function normalizeScopes(columnsValue) {
+  const scopes = {};
+  if (!columnsValue || typeof columnsValue !== 'object') return scopes;
+  // v1 cũ (mảng cột) hết đường vào đây: backend đã tự nâng khi đọc. Vẫn đỡ nhẹ
+  // để panel không vỡ nếu gặp bản ghi chưa nâng.
+  if (Array.isArray(columnsValue)) {
+    for (const item of columnsValue) {
+      const key = lower(item?.key ?? item);
+      if (isGrantableColumn(key)) scopes[key] = [ALL_UNITS];
+    }
+    return scopes;
+  }
+  for (const [rawKey, rawScope] of Object.entries(columnsValue)) {
+    const key = lower(rawKey);
+    if (!isGrantableColumn(key)) continue;
+    const list = Array.isArray(rawScope) ? rawScope : [];
+    if (list.some((item) => text(item) === ALL_UNITS)) { scopes[key] = [ALL_UNITS]; continue; }
+    const groups = [...new Set(list.map(upper).filter(Boolean))].sort();
+    if (groups.length) scopes[key] = groups;
+  }
+  return scopes;
+}
+
+/** Dựng bảng cho menu: mỗi NV một dòng, kèm ma trận cột→nhóm hiện tại + nhóm họ phụ trách. */
+export function buildGrantPanel({ grants = [], columns = [], catalogRows = [], employees = [], groupsByUnit = {} } = {}) {
   const cols = grantableColumns(columns);
   const units = unitsByEmployee(catalogRows);
   const byEmp = new Map((Array.isArray(grants) ? grants : []).map((item) => [upper(item?.empCode), item]));
@@ -62,14 +108,15 @@ export function buildGrantPanel({ grants = [], columns = [], catalogRows = [], e
     columns: cols,
     rows: codes.map((code) => {
       const grant = byEmp.get(code) || null;
-      const granted = grantableColumns(grant?.columns || []).map((item) => item.key);
-      const scope = Array.isArray(grant?.units) ? grant.units.map(upper) : [];
+      const availableUnits = units.get(code) || [];
+      const { groups, ungroupedUnits } = groupsForUnits(availableUnits, groupsByUnit);
       return {
         empCode: code,
         name: nameOf.get(code) || '',
-        availableUnits: units.get(code) || [],
-        columns: granted,
-        units: scope.includes(ALL_UNITS) ? [ALL_UNITS] : scope,
+        availableUnits,
+        availableGroups: groups,
+        ungroupedUnits,
+        columns: normalizeScopes(grant?.columns),
         updatedAt: grant?.updatedAt || null,
         updatedBy: grant?.updatedBy || null,
         dirty: false,
@@ -83,52 +130,59 @@ const replaceRow = (panel, empCode, patch) => ({
   rows: panel.rows.map((row) => (row.empCode === upper(empCode) ? { ...row, ...patch, dirty: true } : row)),
 });
 
+/** Tick/bỏ tick một cột. Tick mới ⇒ mặc định '*' (mọi nhóm đang phụ trách). */
 export function toggleColumn(panel, empCode, columnKey) {
   const key = lower(columnKey);
   if (!isGrantableColumn(key)) return panel;
   const row = panel.rows.find((item) => item.empCode === upper(empCode));
   if (!row) return panel;
-  const columns = row.columns.includes(key)
-    ? row.columns.filter((item) => item !== key)
-    : [...row.columns, key].sort();
-  // Bỏ hết cột ⇒ dọn luôn phạm vi, không để quyền treo lơ lửng (khớp luật backend).
-  return replaceRow(panel, empCode, { columns, units: columns.length ? row.units : [] });
+  const columns = { ...row.columns };
+  if (columns[key]) delete columns[key];
+  else columns[key] = [ALL_UNITS];
+  return replaceRow(panel, empCode, { columns });
 }
 
-export function setUnits(panel, empCode, units) {
+/** Đặt phạm vi NHÓM cho MỘT cột. Chỉ nhận nhóm NV thực sự phụ trách (chặn ngay
+ *  trên giao diện cho CEO thấy rõ; backend vẫn fail-closed độc lập). Chọn rỗng ⇒
+ *  cột tắt luôn — "cấp cột mà không nhóm nào" không tồn tại. */
+export function setColumnGroups(panel, empCode, columnKey, groups) {
+  const key = lower(columnKey);
   const row = panel.rows.find((item) => item.empCode === upper(empCode));
-  if (!row) return panel;
-  const list = Array.isArray(units) ? units.map(upper) : [];
-  if (list.includes(ALL_UNITS)) return replaceRow(panel, empCode, { units: [ALL_UNITS] });
-  // Chỉ giữ đơn vị NV thực sự phụ trách — chặn ngay trên giao diện cho CEO thấy rõ,
-  // backend vẫn chặn độc lập.
-  const allowed = list.filter((unit) => row.availableUnits.includes(unit));
-  return replaceRow(panel, empCode, { units: [...new Set(allowed)].sort() });
+  if (!row || !isGrantableColumn(key)) return panel;
+  const list = Array.isArray(groups) ? groups.map(upper) : [];
+  const columns = { ...row.columns };
+  if (list.includes(ALL_UNITS)) columns[key] = [ALL_UNITS];
+  else {
+    const allowed = new Set(row.availableGroups.map((group) => group.key));
+    const kept = [...new Set(list.filter((item) => allowed.has(item)))].sort();
+    if (kept.length) columns[key] = kept;
+    else delete columns[key];
+  }
+  return replaceRow(panel, empCode, { columns });
 }
 
-/** Thao tác hàng loạt: áp đúng bộ cột này cho danh sách NV, phạm vi để mặc định "*". */
+/** Thao tác hàng loạt: áp đúng bộ cột này cho danh sách NV, phạm vi mặc định '*'. */
 export function applyColumnsToMany(panel, empCodes, columnKeys) {
   const codes = new Set((Array.isArray(empCodes) ? empCodes : []).map(upper));
-  const columns = [...new Set((Array.isArray(columnKeys) ? columnKeys : []).map(lower).filter(isGrantableColumn))].sort();
+  const keys = [...new Set((Array.isArray(columnKeys) ? columnKeys : []).map(lower).filter(isGrantableColumn))].sort();
   return {
     ...panel,
     rows: panel.rows.map((row) => (codes.has(row.empCode)
-      ? { ...row, columns, units: columns.length ? (row.units.length ? row.units : [ALL_UNITS]) : [], dirty: true }
+      ? { ...row, columns: Object.fromEntries(keys.map((key) => [key, [ALL_UNITS]])), dirty: true }
       : row)),
   };
 }
 
-/** Payload gửi backend cho MỘT nhân viên. Không gửi gì thừa. */
+/** Payload gửi backend cho MỘT nhân viên — đúng ma trận cột→nhóm, không gửi gì thừa. */
 export function grantSavePayload(row) {
-  const columns = [...new Set((row?.columns || []).map(lower).filter(isGrantableColumn))].sort();
-  return { columns, units: columns.length ? (row?.units?.length ? row.units.map(upper) : [ALL_UNITS]) : [] };
+  return { columns: normalizeScopes(row?.columns) };
 }
 
 export const dirtyRows = (panel) => (panel?.rows || []).filter((row) => row.dirty);
 
 /** Tra cứu % theo cặp (đơn vị × mã hàng) cho bảng danh mục.
- *  Trả về hàm tra; cặp không có trong kết quả backend nghĩa là KHÔNG ĐƯỢC XEM
- *  hoặc CHƯA CÓ % — cả hai đều ra `null` và màn hình hiện '—'. Không suy 0%. */
+ *  Cặp/ô không có trong kết quả backend nghĩa là KHÔNG ĐƯỢC XEM hoặc CHƯA CÓ % —
+ *  cả hai đều ra `null` và màn hình hiện '—'. Không suy 0%. */
 export function ratesLookup(pairs = []) {
   const index = new Map();
   for (const pair of Array.isArray(pairs) ? pairs : []) {
@@ -142,12 +196,23 @@ export function ratesLookup(pairs = []) {
   };
 }
 
-/** Câu mô tả quyền cho CEO đọc lướt — phải nói rõ "không thấy gì" chứ đừng để trống. */
+/** Nhãn phạm vi một cột cho CEO đọc lướt. */
+export function columnScopeLabel(row, columnKey) {
+  const scope = row?.columns?.[lower(columnKey)];
+  if (!Array.isArray(scope) || !scope.length) return '';
+  if (scope.includes(ALL_UNITS)) return 'mọi nhóm';
+  return `${scope.length} nhóm`;
+}
+
+/** Câu mô tả quyền cho CEO đọc lướt — nói rõ từng cột thấy ở nhóm nào. */
 export function grantSummary(row) {
-  const columns = (row?.columns || []).map((key) => key.toUpperCase());
-  if (!columns.length) return 'Không thấy cột % nào';
-  const scope = !row.units.length || row.units.includes(ALL_UNITS)
-    ? 'mọi đơn vị đang phụ trách'
-    : `${row.units.length} đơn vị`;
-  return `${columns.join(' · ')} — ${scope}`;
+  const entries = Object.entries(row?.columns || {}).sort(([a], [b]) => a.localeCompare(b));
+  if (!entries.length) return 'Không thấy cột % nào';
+  const labelOf = new Map((row?.availableGroups || []).map((group) => [group.key, group.label]));
+  return entries.map(([key, scope]) => {
+    const scopeText = scope.includes(ALL_UNITS)
+      ? 'mọi nhóm'
+      : scope.map((item) => labelOf.get(item) || item).join(', ');
+    return `${key.toUpperCase()}: ${scopeText}`;
+  }).join(' · ');
 }

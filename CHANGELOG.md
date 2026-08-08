@@ -1,3 +1,18 @@
+### 2026-08-08 21:00 (giờ VN) — 🔐 PHÂN QUYỀN V2: ma trận NV × CỘT × NHÓM ĐƠN VỊ (CEO nâng chi tiết tối 08/08)
+
+CEO xem bản phân quyền v1 và chốt yêu cầu chi tiết hơn: *"mỗi NV được hiển thị chi tiết cho loại cột C nào, cho loại mã đơn vị nào... phân quyền đi theo NHÓM mã đơn vị — không có chuyện DN008 xem được C41 ở 033.PKĐK An Long Khánh mà 003.PKĐK An Long Thành lại không."* Spec: mục V2 trong `SPEC_CATALOG_COST_COLUMNS.md`.
+
+- **Mô hình mới:** mỗi cột một phạm vi NHÓM riêng — `DN002: { c41: ['*'], c43: ['PKĐK','BV'] }`. Nhóm dùng đúng bộ `employeeCostUnitGroups` màn Chi phí đang dùng (BV · TTYT · PKĐK · NT…), MỘT nguồn, không chế bộ nhóm thứ hai.
+- **Cấp theo nhóm là cấp CẢ nhóm** — test khoá đúng ví dụ nguyên văn 033.PKĐK/003.PKĐK của CEO. Đơn vị không nhận diện được nhóm ⇒ fail-closed, chỉ `'*'` phủ tới, menu nói rõ số đơn vị chưa có nhóm.
+- **Che TỪNG Ô** ở cả route `/cost-rates` lẫn bảng % kho cục bộ: ô ngoài phạm vi trả null y như thiếu % — không lộ cả sự tồn tại của số.
+- **Bản ghi v1 tự nâng khi đọc** (mã lẻ nở lên biên nhóm), setGrant nhận cả payload cũ — không cần chuyển đổi tay, không vỡ dữ liệu đã lưu.
+- **UI:** tick cột = mặc định "mọi nhóm"; nhãn nhỏ dưới checkbox mở bộ chọn nhóm riêng của cột đó. Bỏ cột "Phạm vi đơn vị" chung + bộ chọn đơn vị lẻ (mới viết chiều nay, chưa deploy — thay luôn trước khi kịp thành nợ). Bảng tra đơn vị→nhóm hỏi backend (`POST /cost-columns/unit-groups`, CEO-only).
+- **Ranh giới giữ nguyên:** đây là quyền XEM; cột nào được TÍNH vào tiền ở đơn vị nào vẫn do bảng % DataHub (SSOT) quyết — App Report không cắt cột khỏi phép tính tiền vì phân quyền hiển thị.
+
+Test: server **1032/1038** (6 fail cố hữu `pdfinfo`; +6 test v2 grants, +1 test che-ô buildTable), web **249/249** (viết lại bộ test model/menu theo ma trận), build sạch. Chưa deploy — gộp vào Gói ② của bot.
+
+---
+
 ### 2026-08-08 18:00 (giờ VN) — ✅ ĐỢT 3: menu riêng "Thành tiền C32/C47" + C38/C42 vào phân quyền + ô đơn vị chọn nhiều
 
 CEO chốt *"em làm luôn rồi nghiệm thu một lần luôn nào"* — đóng trọn dự án `SPEC_COST_RATES_LOCAL_SYNC` (Đợt 1+2+3).

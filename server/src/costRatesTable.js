@@ -80,7 +80,7 @@ function buildTable({ period, session, store = persist } = {}) {
   const rows = [];
   for (const pair of pairMap.values()) {
     if (!isCeo) {
-      // NV: chỉ dòng CÓ MÌNH phụ trách và đơn vị trong phạm vi được cấp.
+      // NV: chỉ dòng CÓ MÌNH phụ trách và đơn vị có ÍT NHẤT một cột được cấp phủ tới.
       if (!pair.employees.has(upper(session?.emp_code))) continue;
       if (!catalogCostColumnGrants.unitInScope(grant, pair.unitCode)) continue;
     }
@@ -89,8 +89,13 @@ function buildTable({ period, session, store = persist } = {}) {
       productCode: pair.productCode,
       productName: pair.productName,
       employees: [...pair.employees].sort(),
-      // Thiếu % ⇒ null ⇒ '—' trên màn. Không suy 0.
-      rates: Object.fromEntries(columns.map(({ key }) => [key, pair.rates[key] ?? null])),
+      // V2 (CEO 08/08): quyền theo ma trận CỘT × NHÓM ĐƠN VỊ ⇒ che TỪNG Ô. Ô ngoài
+      // phạm vi trả null y như thiếu % — không lộ cả sự tồn tại của số.
+      // Thiếu % thật cũng ⇒ null ⇒ '—' trên màn. Không suy 0.
+      rates: Object.fromEntries(columns.map(({ key }) => [
+        key,
+        !isCeo && !catalogCostColumnGrants.columnScopeAllows(grant, key, pair.unitCode) ? null : pair.rates[key] ?? null,
+      ])),
     });
   }
   rows.sort((a, b) => a.unitCode.localeCompare(b.unitCode, 'vi') || a.productCode.localeCompare(b.productCode, 'vi'));

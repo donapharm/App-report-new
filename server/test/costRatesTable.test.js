@@ -97,3 +97,20 @@ test('mũi dò tự giãn ≥ khoảng tối thiểu — mở màn hình liên t
   await table.probeSource(opts);
   assert.equal(calls, 2);
 });
+
+test('V2: hai cột hai phạm vi nhóm khác nhau ⇒ che TỪNG Ô, không lộ ô ngoài nhóm', async () => {
+  const store = memStore();
+  await seed(store);
+  // DN001 có 120.HTNT (nhóm HTNT) và 021.TTYT (nhóm TTYT).
+  // c41 chỉ nhóm HTNT · c43 chỉ nhóm TTYT ⇒ mỗi dòng chỉ hở đúng một ô.
+  grants.setGrant('DN001', { columns: { c41: ['HTNT'], c43: ['TTYT'] } }, { actor: 'CEO', store });
+  const result = table.buildTable({ period: '2026-08', session: { emp_code: 'DN001', isCeo: false }, store });
+  assert.deepEqual(result.columns.map((c) => c.key), ['c41', 'c43']);
+  const htnt = result.rows.find((r) => r.unitCode === '120.HTNT');
+  const ttyt = result.rows.find((r) => r.unitCode === '021.TTYT');
+  assert.equal(htnt.rates.c41, 1, 'HTNT được cấp c41 nên thấy số');
+  assert.equal(htnt.rates.c43, null, 'HTNT KHÔNG được cấp c43 — ô phải bị che');
+  assert.equal(ttyt.rates.c41, null, 'TTYT KHÔNG được cấp c41 — ô phải bị che');
+  // c43 của G1.B vốn thiếu % ở nguồn ⇒ vẫn null, và NV không phân biệt được với ô bị che.
+  assert.equal(ttyt.rates.c43, null);
+});

@@ -30,25 +30,28 @@ test('chỉ lưu những dòng CEO thực sự đổi; lưu hỏng thì giữ ng
   assert.match(page, /các dòng chưa lưu vẫn còn nguyên/);
 });
 
-test('phạm vi đơn vị chỉ chọn trong đơn vị NV đang phụ trách', () => {
-  const picker = page.slice(page.indexOf('function UnitScopePicker'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
-  // Danh sách tick chỉ dựng từ availableUnits (đơn vị NV thực sự phụ trách) — không
-  // có đường gõ tay một mã lạ vào.
-  assert.match(picker, /row\.availableUnits\.filter\(\(unit\) => unit\.includes\(q\)\)/);
-  assert.match(picker, /matches\.map\(\(unit\)/);
-  assert.match(picker, /Mọi đơn vị đang phụ trách/);
-  // Chưa cấp cột nào thì ô phạm vi phải khoá — tránh đặt phạm vi cho quyền không tồn tại.
-  assert.match(picker, /const disabled = !row\.columns\.length/);
-  assert.match(picker, /disabled=\{disabled\}/);
+test('phạm vi theo NHÓM: chỉ chọn trong nhóm NV đang phụ trách, cột chưa tick thì không có gì để chọn', () => {
+  const picker = page.slice(page.indexOf('function ColumnGroupScope'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  // Danh sách tick chỉ dựng từ availableGroups (nhóm suy từ đơn vị NV thực sự phụ
+  // trách + bảng tra backend) — không có đường gõ tay một nhóm lạ vào.
+  assert.match(picker, /row\.availableGroups\.map\(\(group\)/);
+  assert.match(picker, /Mọi nhóm đang phụ trách/);
+  // Cột chưa tick ⇒ không render bộ chọn — không đặt phạm vi cho quyền không tồn tại.
+  assert.match(picker, /if \(!scope\) return null/);
+  // Đơn vị chưa nhận diện được nhóm phải được NÓI RA, kèm cảnh báo chỉ '*' phủ tới.
+  assert.match(picker, /ungroupedUnits/);
+  assert.match(picker, /chỉ "Mọi nhóm" mới phủ tới/);
 });
 
-test('CEO chọn được NHIỀU đơn vị, không còn kẹt "tất cả hoặc đúng một" (CEO hỏi 08/08)', () => {
-  const picker = page.slice(page.indexOf('function UnitScopePicker'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
-  // Tick thêm/bớt từng đơn vị vào danh sách hiện có ⇒ nhiều đơn vị cùng lúc.
-  assert.match(picker, /current\.includes\(unit\) \? current\.filter\(\(item\) => item !== unit\) : \[\.\.\.current, unit\]/);
-  // Có ô tìm kiếm vì NV có thể phụ trách hàng trăm đơn vị.
-  assert.match(picker, /Tìm mã đơn vị/);
-  assert.match(picker, /\d+ đơn vị được chọn|đơn vị được chọn/);
+test('ma trận NV × CỘT × NHÓM: mỗi ô cột có bộ chọn nhóm RIÊNG (CEO chốt 08/08)', () => {
+  const picker = page.slice(page.indexOf('function ColumnGroupScope'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  // Tick thêm/bớt từng nhóm vào danh sách hiện có ⇒ nhiều nhóm cùng lúc cho MỘT cột.
+  assert.match(picker, /current\.includes\(groupKey\) \? current\.filter\(\(item\) => item !== groupKey\) : \[\.\.\.current, groupKey\]/);
+  // Bộ chọn gắn vào TỪNG Ô cột trong bảng, nhận đúng columnKey của ô đó.
+  assert.match(page, /<ColumnGroupScope row=\{row\} columnKey=\{column\.key\}/);
+  assert.match(page, /setColumnGroups\(cur, row\.empCode, column\.key, groups\)/);
+  // Bảng tra đơn vị→nhóm hỏi BACKEND, không chép luật tách nhóm sang frontend.
+  assert.match(page, /api\.catalogCostUnitGroups\(distinctUnits\)/);
 });
 
 test('cột chỉ-để-xem (C38/C42) được đánh dấu rõ để CEO không hiểu nhầm là cột tính tiền', () => {
