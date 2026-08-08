@@ -1,3 +1,13 @@
+### 2026-08-08 20:05 (giờ VN) — Reconcile UI desktop rộng và Danh mục QL từ `dcd84b5`
+
+- Reconcile riêng delta UI lên exact PROD `d0bc608`, không mang theo lịch sử nhánh cũ của `dcd84b5`.
+- `.page-desktop` dùng 96% chiều ngang trên PC/laptop; mobile giữ nguyên.
+- Danh mục QL giảm từ 200 xuống 50 dòng/trang cho cả CEO và NV.
+- Màn từ 1500px dùng thanh kéo ngang riêng trong bảng, không cắt cụt các cột % chi phí; header bảng không sticky trong vùng cuộn ngang.
+- Regression test khóa 96% / 50 dòng / thanh kéo ngang; audit phát hiện và đã loại lớp `.page-desktop` lồng ở Thanh toán CP để tránh co 96% hai lần. Full server `1020/1020`, web `245/245`, Vite `657 modules` và browser Catalog/Chi phí/Thanh toán/mobile đều PASS.
+
+---
+
 ### 2026-08-05 20:42 (giờ VN) — Hộp Xin nhận sớm chặn trước thao tác chắc chắn hỏng
 
 - Khi mở hộp, frontend gọi đúng một preview read-only; backend dùng nguyên policy quota/ngày hiện hành và tự lấy số tiền của đúng Lần 2/Lần 3.

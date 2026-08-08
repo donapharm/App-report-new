@@ -84,7 +84,7 @@ const drugQlnbCounts = (rows) => {
   return new Map([...grouped].map(([key, codes]) => [key, codes.size]));
 };
 const ROUTES = ['CL', 'NCL', 'NT'];
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 50; // CEO chốt 08/08/2026: tối đa 50 dòng/trang cho đỡ dài
 
 function CatalogTableCard({ id, tableId, children }) {
   const { rootRef } = useDonaTableCellTools({

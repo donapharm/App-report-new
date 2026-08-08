@@ -869,9 +869,10 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 
 /* ===== Desktop: layout ĐỒNG BỘ mọi trang =====
    Quy tắc: KHÔNG dùng lưới tự chia trên .page-desktop (dễ bể khi thêm trang mới).
-   Mọi trang chảy dọc full-width trong khung 1600px; phần nào cần nhiều cột thì
+   Mọi trang chảy dọc trong khung 96% chiều ngang; phần nào cần nhiều cột thì
    khai báo TƯỜNG MINH bằng class: .kpi-grid (KPI), .alerts-grid (cảnh báo). */
-.page-desktop { padding: 22px 32px 40px; max-width: 1600px; width: 100%; margin: 0 auto; }
+/* CEO chốt 08/08/2026: PC/laptop dùng ~96% chiều ngang (thay khung 1600px cũ — bị chê hẹp). */
+.page-desktop { padding: 22px 32px 40px; max-width: 96%; width: 100%; margin: 0 auto; }
 .page-desktop .kpi-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .page-desktop .analysis-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .page-desktop .overview-kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1548,8 +1549,17 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-table-employee th:nth-child(11) { width:5%; }
   .catalog-table-employee th:nth-child(12) { width:9%; }
 }
+/* CEO 08/08/2026: có thêm cột % chi phí nên bảng có thể rộng hơn màn — PHẢI có
+   thanh kéo ngang trong bảng, CẤM overflow clip cắt cụt cột lặng lẽ. */
 @media (min-width:1500px) {
-  .catalog-table-card .table-scroll { overflow-x:clip; overflow-y:visible; }
+  .catalog-table-card .table-scroll {
+    max-width:100%; overflow-x:auto; overflow-y:hidden;
+    scrollbar-gutter:stable; scrollbar-width:auto; scrollbar-color:#94a3b8 #eef2f7;
+  }
+  .catalog-table-card .table-scroll::-webkit-scrollbar { height:12px; }
+  .catalog-table-card .table-scroll::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
+  .catalog-table-card .table-scroll::-webkit-scrollbar-thumb { background:#94a3b8; border:2px solid #eef2f7; border-radius:999px; }
+  .catalog-table-products thead th { position:static; }
 }
 .catalog-pager { padding:6px 8px; border:0; background:transparent; }
 .catalog-pager.is-top {

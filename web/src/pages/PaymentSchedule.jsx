@@ -31,7 +31,7 @@ function paymentStartStorage(link) {
  * Trang này KHÔNG tính lại gì cả — dùng đúng hai khối của trang Chi phí (một bản
  * dựng duy nhất), tránh vụ hai nơi hiển thị lệch nhau như KPI/badge hồi 03/08.
  */
-export default function PaymentSchedule({ me, desktop }) {
+export default function PaymentSchedule({ me }) {
   const admin = !!me?.isAdmin;
   // ‼ F5 thì quay lại ĐÚNG THÁNG ĐANG XEM; chưa xem gì thì lấy tháng liền trước.
   // Tuyệt đối không trỏ vào tháng đang chạy — nó không bao giờ có sổ.
@@ -139,7 +139,7 @@ export default function PaymentSchedule({ me, desktop }) {
     return () => request.abort();
   }, [rangeOn, allEmployees, admin, selectedEmp, rangeFrom, month, tick]);
 
-  return <div className={desktop ? 'page-desktop' : ''}>
+  return <div className="payment-schedule-page">
     <div className="card">
       <div className="section-head">Thanh toán CP của tôi <small>· kỳ {formatMonthLabel(month)}</small></div>
       <div className="employee-cost-month-quick" role="group" aria-label="Chọn tháng nhanh">
