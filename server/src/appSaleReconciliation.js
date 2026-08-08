@@ -78,6 +78,13 @@ function positiveInteger(value, field, { optional = false } = {}) {
   return number;
 }
 
+function responsePositiveInteger(value, field) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw reconError(`Invalid App Sale reconciliation ${field}.`, 'APP_SALE_RECON_CONTRACT_INVALID', 502);
+  }
+  return value;
+}
+
 function offsetInteger(value = 0) {
   const text = String(value ?? '').trim();
   if (!/^(0|[1-9]\d*)$/.test(text)) throw reconError('Invalid offset.', 'APP_SALE_RECON_INPUT_INVALID', 400);
@@ -149,7 +156,7 @@ function validatePayload(payload, expected) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !exactKeys(payload, TOP_LEVEL_KEYS)) {
     throw reconError('Invalid App Sale reconciliation response.', 'APP_SALE_RECON_CONTRACT_INVALID');
   }
-  const version = positiveInteger(payload.phien_ban, 'response phien_ban');
+  const version = responsePositiveInteger(payload.phien_ban, 'phien_ban');
   const rows = Array.isArray(payload.rows) ? payload.rows.map(normalizeRow) : null;
   if (!rows) throw reconError('Invalid App Sale reconciliation rows.', 'APP_SALE_RECON_CONTRACT_INVALID');
   const checksum = String(payload.rows_checksum ?? '');
@@ -254,6 +261,9 @@ async function fetchReconciliation(input = {}) {
       }
       if (response.status === 404) {
         throw reconError('App Sale reconciliation was not found.', 'APP_SALE_RECON_NOT_FOUND', 404);
+      }
+      if (response.status === 429) {
+        throw reconError('App Sale reconciliation is rate limited.', 'APP_SALE_RECON_RATE_LIMITED', 429);
       }
       if (response.status >= 300 && response.status < 400) {
         throw reconError('App Sale reconciliation redirect is forbidden.', 'APP_SALE_RECON_REDIRECT', 502);

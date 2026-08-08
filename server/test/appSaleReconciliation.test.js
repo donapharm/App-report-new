@@ -10,6 +10,7 @@ const SENTINEL_KEY = 'unit-test-recon-secret-sentinel-20260809';
 const originalFetch = global.fetch;
 const ENV_KEYS = [
   'APP_SALE_RECON_BASE_URL', 'APP_SALE_RECON_KEY', 'APP_SALE_RECON_TIMEOUT_MS',
+  'APP_SALE_CONTRACT_PATH',
 ];
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
@@ -66,6 +67,18 @@ function jsonResponse(payload, status = 200) {
 
 function input(overrides = {}) {
   return { ky: '2026-08', maNhaThau: 'NCC_01', phienBan: 7, offset: 5, ...overrides };
+}
+
+function canonicalContractPath() {
+  if (process.env.APP_SALE_CONTRACT_PATH) return path.resolve(process.env.APP_SALE_CONTRACT_PATH);
+  let cursor = __dirname;
+  while (path.dirname(cursor) !== cursor) {
+    if (path.basename(cursor) === '.openclaw') {
+      return path.join(cursor, 'workspace-main', 'artifacts', 'appsale-report-recon-e2e-20260808', 'APP_SALE_CONTRACT.json');
+    }
+    cursor = path.dirname(cursor);
+  }
+  throw new Error('APP_SALE_CONTRACT_PATH is unset and the canonical shared .openclaw workspace could not be located');
 }
 
 test('uses exact live URL, x-datahub-key header, query, one GET and validates success schema', async () => {
@@ -128,6 +141,22 @@ test('404 is sanitized, preserves not-found semantics and never retries', async 
   assert.equal(calls, 1);
 });
 
+test('429 retains sanitized rate-limit semantics and never retries', async () => {
+  configure();
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    return jsonResponse({ error: `rate bucket detail ${SENTINEL_KEY}`, code: 's2s_rate_limited' }, 429);
+  };
+  await assert.rejects(client.fetchReconciliation(input()), (error) => (
+    error.code === 'APP_SALE_RECON_RATE_LIMITED'
+      && error.status === 429
+      && !error.message.includes(SENTINEL_KEY)
+      && !error.message.includes('bucket')
+  ));
+  assert.equal(calls, 1);
+});
+
 test('timeout is bounded across headers/body and performs no retry', async () => {
   configure({ APP_SALE_RECON_TIMEOUT_MS: '250' });
   let calls = 0;
@@ -168,7 +197,26 @@ test('malformed JSON and malformed success schema fail closed without retry', as
     let calls = 0;
     global.fetch = async () => { calls += 1; return response(); };
     await assert.rejects(client.fetchReconciliation(input()), (error) => (
-      error.code === 'APP_SALE_RECON_CONTRACT_INVALID' && !error.message.includes(SENTINEL_KEY)
+      error.code === 'APP_SALE_RECON_CONTRACT_INVALID' && error.status === 502
+        && !error.message.includes(SENTINEL_KEY)
+    ));
+    assert.equal(calls, 1);
+  }
+});
+
+test('missing or malformed upstream phien_ban is a sanitized 502 contract failure, never client 400', async () => {
+  configure();
+  for (const phienBan of [undefined, null, 0, -1, '7', 1.5]) {
+    let calls = 0;
+    global.fetch = async () => {
+      calls += 1;
+      return jsonResponse(validPayload({ phien_ban: phienBan }));
+    };
+    await assert.rejects(client.fetchReconciliation(input()), (error) => (
+      error.code === 'APP_SALE_RECON_CONTRACT_INVALID'
+        && error.status === 502
+        && error.code !== 'APP_SALE_RECON_INPUT_INVALID'
+        && !error.message.includes(SENTINEL_KEY)
     ));
     assert.equal(calls, 1);
   }
@@ -242,8 +290,9 @@ test('route remains inside existing authenticated admin reconciliation area and 
   }
 });
 
-test('shared App Sale contract matches the exact live transport and success schema', { skip: !process.env.APP_SALE_CONTRACT_PATH }, () => {
-  const contractPath = path.resolve(process.env.APP_SALE_CONTRACT_PATH);
+test('shared App Sale contract matches the exact live transport and success schema', () => {
+  const contractPath = canonicalContractPath();
+  assert.ok(fs.existsSync(contractPath), `authoritative App Sale contract is required but missing: ${contractPath}`);
   const contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
   const serialized = JSON.stringify(contract);
   assert.match(serialized, /GET/);
