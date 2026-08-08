@@ -71,14 +71,7 @@ function input(overrides = {}) {
 
 function canonicalContractPath() {
   if (process.env.APP_SALE_CONTRACT_PATH) return path.resolve(process.env.APP_SALE_CONTRACT_PATH);
-  let cursor = __dirname;
-  while (path.dirname(cursor) !== cursor) {
-    if (path.basename(cursor) === '.openclaw') {
-      return path.join(cursor, 'workspace-main', 'artifacts', 'appsale-report-recon-e2e-20260808', 'APP_SALE_CONTRACT.json');
-    }
-    cursor = path.dirname(cursor);
-  }
-  throw new Error('APP_SALE_CONTRACT_PATH is unset and the canonical shared .openclaw workspace could not be located');
+  return path.resolve(__dirname, '../../contracts/app-sale-reconciliation-v2.json');
 }
 
 test('uses exact live URL, x-datahub-key header, query, one GET and validates success schema', async () => {

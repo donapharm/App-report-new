@@ -8,6 +8,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "seed": "node seed.js",
+    "test": "node --test test/*.test.js",
+    "test:app-sale-contract": "node --test test/appSaleReconciliation.test.js",
     "deck:v4:build": "node src/report/deckReportV4.js",
     "deck:v4:test": "node scripts/test_ceo_deck_v4.js",
     "deck:v4:test-build": "node scripts/test_ceo_deck_v4_build.js",

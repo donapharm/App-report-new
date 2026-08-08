@@ -7,7 +7,8 @@
     "setup": "npm --prefix server install && npm --prefix web install && npm run seed",
     "seed": "node server/seed.js",
     "dev": "concurrently -n API,WEB -c blue,magenta \"npm --prefix server run dev\" \"npm --prefix web run dev\"",
-    "build": "npm --prefix web run build",
+    "test": "npm --prefix server test && node --test web/test/*.test.mjs",
+    "build": "npm --prefix server run test:app-sale-contract && npm --prefix web run build",
     "start": "npm --prefix server start"
   },
   "devDependencies": {

@@ -1,0 +1,146 @@
+{
+  "contract": "app-sale-reconciliation-v2",
+  "status": "CANDIDATE_SOURCE_ONLY_NOT_DEPLOYED",
+  "owner": "App Sale",
+  "consumer": "App Report server",
+  "transport": {
+    "method": "GET",
+    "path_template": "/api/reconciliation/{ky}/{ma_nha_thau}",
+    "header": "x-datahub-key",
+    "authorization_header_used": false,
+    "browser_exposed": false,
+    "cache_control_on_success": "private, no-store"
+  },
+  "authentication": {
+    "digest": "SHA-256(UTF-8('app-sale-reconciliation-v2:' + presented_key))",
+    "stored_values": [
+      {
+        "environment": "DATAHUB_KEY_V2_HASH",
+        "purpose": "existing DataHub consumer; behavior preserved"
+      },
+      {
+        "environment": "APP_REPORT_RECON_KEY_HASH",
+        "purpose": "secondary App Report consumer"
+      }
+    ],
+    "stored_format": "lowercase 64-character SHA-256 hex only",
+    "acceptance": "presented digest equals either configured authorized digest",
+    "constant_time": "every configured authorized digest is compared with timingSafeEqual; matching does not short-circuit remaining comparisons",
+    "missing_or_wrong": {
+      "status": 401,
+      "body": {
+        "error": "Unauthorized",
+        "code": "s2s_unauthorized"
+      },
+      "before_rate_accounting": true,
+      "before_database_query": true
+    },
+    "all_hashes_missing": {
+      "status": 503,
+      "code": "s2s_not_configured"
+    }
+  },
+  "path_parameters": {
+    "ky": {
+      "type": "string",
+      "format": "YYYY-MM"
+    },
+    "ma_nha_thau": {
+      "type": "string",
+      "path_segment": true
+    }
+  },
+  "query_parameters": {
+    "phien_ban": {
+      "required": false,
+      "type": "positive integer",
+      "meaning": "exact immutable version; omitted selects the latest effective version"
+    },
+    "offset": {
+      "required": false,
+      "type": "non-negative integer",
+      "default": 0
+    }
+  },
+  "success": {
+    "status": 200,
+    "content_type": "application/json; charset=utf-8",
+    "response_semantics_changed_by_candidate": false,
+    "schema": {
+      "ky": "string",
+      "ma_nha_thau": "string",
+      "ten_nha_thau": "string|null",
+      "trang_thai": "string",
+      "phien_ban": "positive integer",
+      "rows_checksum": "lowercase SHA-256 hex for the complete normalized rows array",
+      "rows": [
+        {
+          "ma_don_vi": "string",
+          "ma_qlnb": "string",
+          "ten_hang": "string|null",
+          "dvt": "string|null",
+          "so_luong": "number",
+          "don_gia": "number",
+          "thanh_tien": "number"
+        }
+      ],
+      "offset": "non-negative integer; pagination only",
+      "con_nua": "boolean; pagination only",
+      "tong_dong": "non-negative integer; pagination only"
+    },
+    "row_key_order_for_checksum": [
+      "ma_don_vi",
+      "ma_qlnb",
+      "ten_hang",
+      "dvt",
+      "so_luong",
+      "don_gia",
+      "thanh_tien"
+    ],
+    "maximum_serialized_page_bytes": 1048576
+  },
+  "errors": [
+    {
+      "status": 400,
+      "code": "SALES_RECON_PERIOD_INVALID"
+    },
+    {
+      "status": 401,
+      "code": "s2s_unauthorized"
+    },
+    {
+      "status": 404,
+      "code": "SALES_RECON_VERSION_GONE",
+      "meaning": "authorized key with nonexistent contractor/version"
+    },
+    {
+      "status": 429,
+      "code": "s2s_rate_limited"
+    },
+    {
+      "status": 500,
+      "code": "SALES_RECON_ROW_TOO_LARGE"
+    },
+    {
+      "status": 500,
+      "code": "recon_v2_error"
+    },
+    {
+      "status": 503,
+      "code": "s2s_not_configured"
+    }
+  ],
+  "rate_limit": {
+    "environment": "DATAHUB_KEY_V2_RATE_LIMIT_PER_MINUTE",
+    "default_per_minute": 120,
+    "bucket_semantics_changed_by_candidate": false,
+    "counted_after_successful_authentication": true
+  },
+  "data_source": "existing immutable App Sale reconciliation v2 read path",
+  "database_write": false,
+  "database_migration_required": false,
+  "web_change": false,
+  "new_endpoint": false,
+  "credential_or_payload_logging_added": false,
+  "secret_material_in_this_artifact": false
+}
