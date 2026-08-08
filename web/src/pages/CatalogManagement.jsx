@@ -777,7 +777,7 @@ function CostRatesSyncCard({ period }) {
   </div>;
 }
 
-function AdminView({ data, period, onReload, history, diagnostics, costColumns = [], rateOf = () => null }) {
+function AdminView({ data, period, onReload, history, diagnostics, costColumns = [], rateOf = () => null, interactionsDisabled = false }) {
   const [mode, setMode] = useState('view');
   const [query, setQuery] = useState('');
   const [emp, setEmp] = useState('');
@@ -797,6 +797,11 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
   const safePage = Math.min(page, pageCount);
   const visibleRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [period, query, emp, province, route, unit]);
+  useEffect(() => { if (interactionsDisabled) setMode('view'); }, [interactionsDisabled]);
+  // Khi đang giữ bảng kỳ cũ để CEO tiếp tục đọc, tuyệt đối không cho subtree cũ
+  // đi vào báo cáo/điều chuyển với kỳ vừa chọn. `effectiveMode` khóa ngay trong
+  // render đầu tiên; effect phía trên chỉ đồng bộ state sau đó.
+  const effectiveMode = interactionsDisabled ? 'view' : mode;
   const goPage = (next) => { setPage(Math.max(1, Math.min(pageCount, next))); requestAnimationFrame(() => document.getElementById('catalog-table-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   return <>
     <details className="card catalog-help-compact">
@@ -804,12 +809,12 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
       <div><p>Màn hình quản lý theo từng tháng: nhân viên nào đang phụ trách từng cặp <b>đơn vị + mã QLNB</b>.</p><ol><li>Chọn kỳ</li><li>Chọn tuyến/NV hoặc nhập mã cần tìm</li><li>Nếu cần, mở tab Điều chuyển nhân viên</li></ol></div>
     </details>
     <div className="catalog-mode-tabs" role="tablist" aria-label="Chức năng danh mục quản lý">
-      <button role="tab" aria-selected={mode === 'view'} className={mode === 'view' ? 'active' : ''} onClick={() => setMode('view')}>🔎 Xem phân công</button>
-      <button role="tab" aria-selected={mode === 'report'} className={mode === 'report' ? 'active' : ''} onClick={() => setMode('report')}>📊 Lập báo cáo NV</button>
-      <button role="tab" aria-selected={mode === 'transfer'} className={mode === 'transfer' ? 'active' : ''} onClick={() => setMode('transfer')}>⇄ Điều chuyển nhân viên</button>
+      <button role="tab" aria-selected={effectiveMode === 'view'} className={effectiveMode === 'view' ? 'active' : ''} onClick={() => setMode('view')}>🔎 Xem phân công</button>
+      <button role="tab" aria-selected={effectiveMode === 'report'} className={effectiveMode === 'report' ? 'active' : ''} disabled={interactionsDisabled} onClick={() => setMode('report')} title={interactionsDisabled ? 'Chờ tải xong đúng kỳ trước khi lập báo cáo' : ''}>📊 Lập báo cáo NV</button>
+      <button role="tab" aria-selected={effectiveMode === 'transfer'} className={effectiveMode === 'transfer' ? 'active' : ''} disabled={interactionsDisabled} onClick={() => setMode('transfer')} title={interactionsDisabled ? 'Chờ tải xong đúng kỳ trước khi điều chuyển' : ''}>⇄ Điều chuyển nhân viên</button>
     </div>
 
-    {mode === 'view' ? <>
+    {effectiveMode === 'view' ? <>
       <div className="card catalog-controls-compact">
         <div className="catalog-filter-row">
           <CatalogSearch value={query} onChange={setQuery} />
@@ -847,7 +852,7 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
         })}</tbody></table></div>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
       </CatalogTableCard>
-    </> : mode === 'report' ? <ReportPanel period={period} rows={currentRows} /> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
+    </> : effectiveMode === 'report' ? <ReportPanel period={period} rows={currentRows} /> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
 
     <details className="card catalog-advanced">
       <summary>Quản trị nâng cao: lịch sử và trạng thái hệ thống</summary>
@@ -878,6 +883,10 @@ export default function CatalogManagement({ me }) {
   // Kỳ của BẢNG ĐANG HIỂN THỊ — có thể khác kỳ đang tải. Phải nói rõ, không để
   // anh/chị tưởng số trên màn đã là kỳ vừa chọn.
   const shownPeriod = data ? (data.period_ui || hubToUi(data.period)) : '';
+  const periodMismatch = !!data && !!shownPeriod && shownPeriod !== period;
+  // Mọi thao tác ghi/report/export bị khóa trong lúc tải hoặc khi đang giữ bảng
+  // của kỳ khác. Bảng cũ chỉ còn là bản đọc; không thể tạo payload trộn kỳ.
+  const actionsLocked = !!loadingPeriod || periodMismatch;
   const employeeOptions = useMemo(() => {
     const seen = new Map();
     for (const row of data?.rows || []) {
@@ -920,9 +929,9 @@ export default function CatalogManagement({ me }) {
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
-    {isCeo && <CostRatesSyncCard period={period} />}
+    {isCeo && !actionsLocked && <CostRatesSyncCard period={period} />}
     <CostRatesTablePanel period={period} />
-    {isCeo && data && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
+    {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
       ⚠ Nguồn tỷ lệ chi phí đang kẹt — cột % đang dùng bảng tỷ lệ lấy được gần nhất.{costRates.note ? ` ${costRates.note}` : ''}
     </div>}
@@ -933,6 +942,9 @@ export default function CatalogManagement({ me }) {
         ? <> Bảng dưới vẫn là <b>kỳ {shownPeriod}</b> cho tới khi có dữ liệu mới.</>
         : ' Bảng dưới là bản vừa xem, đang được làm mới.'}</span>
     </div>}
+    {periodMismatch && !loadingPeriod && <div className="card catalog-alert error" role="status">
+      ⚠ Chưa tải được danh mục kỳ <b>{period}</b>. Bảng kỳ <b>{shownPeriod}</b> bên dưới chỉ để đọc; báo cáo, cấp quyền và điều chuyển đang khóa để không trộn kỳ.
+    </div>}
     {/* Lần đầu chưa có gì để giữ ⇒ khung chờ CÓ NÓI đang chờ cái gì, thay vì vòng quay trơ. */}
     {!data && !error && <div className="card catalog-first-load" role="status" aria-live="polite">
       <Spinner />
@@ -940,8 +952,8 @@ export default function CatalogManagement({ me }) {
       <p>Danh mục toàn công ty khoảng <b>27.700 cặp</b> đơn vị – mã QLNB nên lần tải đầu mất một lúc. Các phần phía trên dùng được ngay.</p>
     </div>}
     {data && (isAdmin
-      ? <AdminView data={data} period={uiToHub(period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}
-        costColumns={costRates.columns} rateOf={costRates.rateOf} />
+      ? <AdminView data={data} period={uiToHub(shownPeriod || period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}
+        costColumns={costRates.columns} rateOf={costRates.rateOf} interactionsDisabled={actionsLocked} />
       : <EmployeeSections data={data} costColumns={costRates.columns} rateOf={costRates.rateOf} />)}
   </div>;
 }

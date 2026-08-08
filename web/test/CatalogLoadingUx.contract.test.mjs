@@ -76,3 +76,20 @@ test('bảng % kho cục bộ theo cùng luật: đổi kỳ giữ bảng cũ', 
   assert.match(panel, /let alive = true/);
   assert.match(panel, /if \(alive\) setData\(result\)/);
 });
+
+test('bảng giữ lại của kỳ cũ chỉ được đọc — không thể report/điều chuyển/cấp quyền dưới kỳ mới', () => {
+  assert.match(page, /const periodMismatch = !!data && !!shownPeriod && shownPeriod !== period/);
+  assert.match(page, /const actionsLocked = !!loadingPeriod \|\| periodMismatch/);
+  assert.match(page, /period=\{uiToHub\(shownPeriod \|\| period\)\}/,
+    'lọc dòng của bảng giữ lại phải dùng kỳ thuộc chính bảng đó');
+  assert.match(page, /interactionsDisabled=\{actionsLocked\}/);
+  assert.match(page, /const effectiveMode = interactionsDisabled \? 'view' : mode/,
+    'khóa ngay trong render, không chờ effect mới thoát tab ghi');
+  assert.match(page, /disabled=\{interactionsDisabled\}[\s\S]*setMode\('report'\)/);
+  assert.match(page, /disabled=\{interactionsDisabled\}[\s\S]*setMode\('transfer'\)/);
+  assert.match(page, /isCeo && !actionsLocked && <CostRatesSyncCard/);
+  assert.match(page, /isCeo && data && !actionsLocked && <CostColumnGrantsPanel/);
+  assert.match(page, /Bảng kỳ <b>\{shownPeriod\}<\/b> bên dưới chỉ để đọc/);
+  assert.doesNotMatch(page, /<AdminView data=\{data\} period=\{uiToHub\(period\)\}/,
+    'cấm truyền kỳ vừa chọn vào subtree đang chứa dữ liệu kỳ cũ');
+});
