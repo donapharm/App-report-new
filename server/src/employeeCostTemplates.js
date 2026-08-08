@@ -153,11 +153,41 @@ function normalizedConfig(config = loadConfig(), derivedBaseValue = process.env.
   return { defaultGroup, groups, employeeGroups, templates, derivedBases };
 }
 
+/**
+ * Cột CHỈ-ĐỂ-XEM (CEO chốt 08/08/2026: thêm C38, C42 vào menu phân quyền).
+ *
+ * ‼ Ranh giới sống còn: đây KHÔNG phải cột tính tiền. `costColumns` mới là các cột
+ * cộng thành `rowMonthlyTotal`/C47/thưởng/phạt — đụng vào đó là đổi công thức tiền,
+ * phải nâng `FORMULA_VERSION` (CLAUDE.md luật 5). Cột ở đây chỉ hiển thị % để tra
+ * cứu và để CEO cấp/thu quyền xem, không bao giờ cộng vào tiền của ai.
+ */
+function normalizeViewOnlyColumns(value, costColumns = []) {
+  const labels = {};
+  if (value == null) return labels;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw invalidConfig('Cấu hình cột chỉ-để-xem không hợp lệ.', 'EMPLOYEE_COST_VIEW_ONLY_INVALID');
+  }
+  for (const [rawKey, rawLabel] of Object.entries(value)) {
+    const key = String(rawKey || '').trim().toLowerCase();
+    if (!isCostColumn(key)) {
+      throw invalidConfig(`Cột chỉ-để-xem ${key || '(trống)'} không hợp lệ.`, 'EMPLOYEE_COST_VIEW_ONLY_INVALID');
+    }
+    // Trùng cột tính tiền là lỗi cấu hình: một cột không thể vừa "chỉ xem" vừa
+    // được cộng vào tiền — để lọt sẽ thành cãi nhau số liệu về sau.
+    if (costColumns.includes(key)) {
+      throw invalidConfig(`Cột ${key} đã là cột tính tiền, không được khai lại làm cột chỉ-để-xem.`, 'EMPLOYEE_COST_VIEW_ONLY_CONFLICT');
+    }
+    labels[key] = String(rawLabel || key).trim().slice(0, 160) || key;
+  }
+  return labels;
+}
+
 function resolveTemplate(empCode, config = loadConfig(), derivedBaseValue = process.env.EMPLOYEE_COST_DERIVED_BASE) {
   const normalized = normalizedConfig(config, derivedBaseValue);
   const calculationGroup = normalized.employeeGroups.get(normEmp(empCode)) || normalized.defaultGroup;
   const group = normalized.groups.get(calculationGroup);
   const template = normalized.templates.get(group.templateKey);
+  const viewOnlyLabels = normalizeViewOnlyColumns(config?.viewOnlyCostColumns, group.costColumns);
   return {
     key: template.key,
     label: template.label,
@@ -166,7 +196,23 @@ function resolveTemplate(empCode, config = loadConfig(), derivedBaseValue = proc
     columns: [...template.columns],
     costLabels: { ...template.costLabels },
     derivedBases: Object.fromEntries([...normalized.derivedBases].filter(([target]) => group.costColumns.includes(target))),
+    viewOnlyColumns: Object.keys(viewOnlyLabels).sort(),
+    viewOnlyLabels,
   };
+}
+
+/**
+ * Danh mục cột CEO có thể cấp quyền xem = cột tính tiền + cột chỉ-để-xem.
+ * Đây là HỢP ĐỒNG CỤC BỘ (không hỏi DataHub) — chính là bài học 08/08: hỏi nguồn
+ * theo mã người đăng nhập thì tài khoản CEO (không có sổ chi phí) luôn ra rỗng và
+ * menu phân quyền chết cứng. Tên cột lấy ở đây; SỐ % mới là của DataHub.
+ */
+function grantableColumnCatalog(empCode, config = loadConfig(), derivedBaseValue = process.env.EMPLOYEE_COST_DERIVED_BASE) {
+  const template = resolveTemplate(empCode, config, derivedBaseValue);
+  return [
+    ...template.costColumns.map((key) => ({ key, label: template.costLabels[key] || key.toUpperCase(), viewOnly: false })),
+    ...template.viewOnlyColumns.map((key) => ({ key, label: template.viewOnlyLabels[key] || key.toUpperCase(), viewOnly: true })),
+  ].sort((a, b) => Number(a.key.slice(1)) - Number(b.key.slice(1)));
 }
 
 module.exports = {
@@ -178,5 +224,7 @@ module.exports = {
   normalizeDerivedBases,
   configuredDerivedBases,
   normalizedConfig,
+  normalizeViewOnlyColumns,
   resolveTemplate,
+  grantableColumnCatalog,
 };

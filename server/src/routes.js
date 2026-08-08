@@ -25,10 +25,12 @@ const catalogManagement = require('./catalogManagement');
 const catalogCostColumnGrants = require('./catalogCostColumnGrants');
 const costRatesSync = require('./costRatesSync');
 const costRatesTable = require('./costRatesTable');
+const costAmounts = require('./costAmounts');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
+const employeeCostTemplates = require('./employeeCostTemplates');
 const employeeBonus = require('./employeeBonus');
 const employeePenalty = require('./employeePenalty');
 // Đặt tên khác 'penaltyDisplay' vì trong file đã có biến cục bộ cùng tên ở phần Xu.
@@ -810,7 +812,11 @@ router.get('/me', auth.requireAuth, (req, res) => {
   // ‼ BACKEND nói cho frontend biết ai là CEO — frontend KHÔNG được tự đoán từ chuỗi
   // role. Đúng nguyên tắc "quyền quyết ở backend" trong CLAUDE.md, và đây chính là
   // chỗ hôm 05/08 làm nút Duyệt biến mất khỏi màn hình CEO.
-  res.json({ ...req.session, isAdmin, is_ceo: auth.isCeoActor(req.session), employeeCostDisabled: !visibility.enabled });
+  // Tab "Thành tiền C32/C47": mặc định chỉ CEO; NV cần công tắc riêng bật. Cờ này chỉ
+  // để frontend ẨN/HIỆN tab cho gọn — route dữ liệu tự chặn độc lập, không tin cờ.
+  const costAmountsEnabled = auth.isCeoActor(req.session)
+    || costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows()).enabled;
+  res.json({ ...req.session, isAdmin, is_ceo: auth.isCeoActor(req.session), employeeCostDisabled: !visibility.enabled, costAmountsEnabled });
 });
 
 async function employeeCostPayload(req, {
@@ -2968,7 +2974,22 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
   if (!isCeo && !grant.columns.length) {
     return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NOT_GRANTED' });
   }
-  if (!empCode) return res.json({ period: uiPeriod, empCode: '', columns: [], pairs: [], grant, reason: 'NO_EMPLOYEE' });
+  // Danh mục cột = hợp đồng CỤC BỘ (cột tính tiền + cột chỉ-để-xem C38/C42).
+  const catalogColumns = employeeCostTemplates.grantableColumnCatalog(empCode || '')
+    .filter((column) => catalogCostColumnGrants.isAllowedColumn(column.key));
+  const grantedKeys = catalogCostColumnGrants.visibleColumns(
+    { emp_code: req.session.emp_code, isCeo }, catalogColumns.map((column) => column.key),
+  );
+  const columns = catalogColumns.filter((column) => grantedKeys.includes(String(column.key).toLowerCase()));
+  // ‼ CEO là tài khoản QUẢN TRỊ, không có sổ chi phí ⇒ không có emp scope. Vẫn PHẢI
+  // trả đủ TÊN CỘT, nếu không menu phân quyền chết cứng "chưa lấy được cột" (lỗi
+  // 08/08 CEO bắt được). Chỉ phần SỐ % là rỗng vì không có sổ nào để hỏi.
+  if (!empCode) {
+    return res.json({ period: uiPeriod, empCode: '', columns, pairs: [], grant, reason: 'NO_EMPLOYEE_SCOPE' });
+  }
+  if (!columns.length) {
+    return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NO_COLUMN_GRANTED' });
+  }
 
   const hubPeriod = catalogManagement.toHubPeriod(uiPeriod);
   let catalogRows = [];
@@ -2982,17 +3003,13 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
     { from: month, to: month, auditEvent: 'catalog_cost_rates' },
   );
   const period = Array.isArray(payload?.periods) ? payload.periods.find((item) => item.period === month) : null;
-  const sourceColumns = (period?.columns || payload?.columns || []).filter((column) => catalogCostColumnGrants.isAllowedColumn(column?.key));
-  const visibleKeys = catalogCostColumnGrants.visibleColumns(
-    { emp_code: req.session.emp_code, isCeo }, sourceColumns.map((column) => column.key),
-  );
-  const columns = sourceColumns.filter((column) => visibleKeys.includes(String(column.key).toLowerCase()));
-  if (!columns.length) {
-    return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NO_COLUMN_GRANTED' });
-  }
 
   const catalogIndex = employeeCost.buildProductCatalogIndex(catalogRows);
-  const lookup = employeeCost.buildCostLookup(period?.rows || payload?.rows || [], columns, catalogIndex);
+  // Khớp cặp CHỈ theo cột TÍNH TIỀN — giữ nguyên hành vi cũ. Cột chỉ-để-xem
+  // (C38/C42) mà đưa vào phép khớp thì nguồn thiếu chúng sẽ kéo tụt cả cặp, làm
+  // mất luôn các cột đang chạy tốt. Giá trị của chúng đọc thẳng từ dòng nguồn.
+  const matchColumns = columns.filter((column) => !column.viewOnly);
+  const lookup = employeeCost.buildCostLookup(period?.rows || payload?.rows || [], matchColumns.length ? matchColumns : columns, catalogIndex);
   const pairs = [];
   for (const [key, source] of lookup) {
     const [unitCode, productCode] = key.split('\u001f');
@@ -3009,7 +3026,7 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
   pairs.sort((a, b) => a.unitCode.localeCompare(b.unitCode) || a.productCode.localeCompare(b.productCode));
   return res.json({
     period: uiPeriod, empCode, grant,
-    columns: columns.map((column) => ({ key: column.key, label: column.label, annual: !!column.annual })),
+    columns: columns.map((column) => ({ key: column.key, label: column.label, annual: !!column.annual, viewOnly: !!column.viewOnly })),
     pairs,
     rateStale: period?.rateStale === true,
     rateStaleNote: period?.rateStaleNote || '',
@@ -3082,6 +3099,79 @@ router.get('/catalog-management/cost-columns/my-grant', auth.requireAuth, (req, 
   const isCeo = auth.isCeoActor(req.session);
   const grant = catalogCostColumnGrants.readFor(req.session.emp_code);
   return res.json({ isCeo, grant: isCeo ? { ...grant, columns: 'all', units: [catalogCostColumnGrants.ALL_UNITS] } : grant });
+});
+
+/**
+ * MENU RIÊNG "THÀNH TIỀN C32/C47" (Đợt 3 — SPEC_COST_RATES_LOCAL_SYNC).
+ * CEO tách riêng để giảm rủi ro lộ lọt: mặc định CHỈ CEO thấy; NV phải được bật
+ * công tắc riêng (`cost_amounts_visibility`) và chỉ thấy ĐÚNG hàng của mình.
+ * Không nhận tham số emp — không có đường hỏi tiền của người khác.
+ * Tiền TỰ TÍNH từ kho % cục bộ × doanh thu slot — KHÔNG gọi DataHub, và C32/C47
+ * vẫn bị `CATALOG_PERMANENT_FIELD_BLOCKED` cấm trong payload danh mục như cũ.
+ */
+router.get('/catalog-management/cost-amounts', auth.requireAuth, (req, res) => {
+  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy()));
+  const isCeo = auth.isCeoActor(req.session);
+  if (!isCeo) {
+    const decision = costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows());
+    if (!decision.enabled) {
+      return res.status(403).json({ error: 'Menu Thành tiền C32/C47 chưa được bật cho tài khoản này.', code: 'COST_AMOUNTS_DISABLED' });
+    }
+  }
+  const result = costAmounts.buildAmounts({
+    period: monthInputForKy(uiPeriod),
+    session: { emp_code: req.session.emp_code, isCeo },
+    revenueRowsOf: (empCode) => store.getRows({ ky: uiPeriod, scope: { empCode } }),
+  });
+  return res.json({ ...result, periodUi: uiPeriod });
+});
+router.get('/catalog-management/cost-amounts.xlsx', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy()));
+  const isCeo = auth.isCeoActor(req.session);
+  if (!isCeo) {
+    const decision = costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows());
+    if (!decision.enabled) {
+      return res.status(403).json({ error: 'Menu Thành tiền C32/C47 chưa được bật cho tài khoản này.', code: 'COST_AMOUNTS_DISABLED' });
+    }
+  }
+  const result = costAmounts.buildAmounts({
+    period: monthInputForKy(uiPeriod),
+    session: { emp_code: req.session.emp_code, isCeo },
+    revenueRowsOf: (empCode) => store.getRows({ ky: uiPeriod, scope: { empCode } }),
+  });
+  if (!result.available) return res.status(409).json({ error: 'Kho % cục bộ chưa có kỳ này — bấm "Đồng bộ % chi phí" trước', code: result.reason });
+  // Export qua backend theo ĐÚNG phạm vi người tải; file luôn ghi căn cước bản số.
+  const ExcelJS = require('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(`Thanh tien ${uiPeriod}`);
+  sheet.addRow([`THÀNH TIỀN C32/C47 KỲ ${uiPeriod} — tự tính từ % đồng bộ ${result.fetchedAt} bởi ${result.fetchedBy} × doanh thu slot`]);
+  sheet.addRow(['NV', 'Đơn vị', 'Mã hàng', 'Tên hàng', ...result.columns.map((column) => column.label), 'Ghi chú']);
+  for (const rowItem of result.rows) {
+    sheet.addRow([
+      rowItem.empCode, rowItem.unitCode, rowItem.productCode, rowItem.productName,
+      ...result.columns.map((column) => (rowItem[column.key] == null ? '—' : rowItem[column.key])),
+      rowItem.c47Reason === 'XUNG_DOT' ? 'XUNG ĐỘT %' : rowItem.c47Reason === 'THIEU_PHAN_TRAM' ? `Thiếu %: ${(rowItem.c47Missing || []).join(', ')}` : '',
+    ]);
+  }
+  sheet.addRow([]);
+  for (const item of result.employees) {
+    sheet.addRow([`TỔNG ${item.empCode}`, '', '', `${item.pairCount} cặp${item.missingPairs ? ` · ${item.missingPairs} cặp thiếu %` : ''}`,
+      item.c32NoVat, item.c32WithVat, item.c47NoVat == null ? '—' : item.c47NoVat, item.c47WithVat == null ? '—' : item.c47WithVat, '']);
+  }
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="thanh-tien-c32-c47-${monthInputForKy(uiPeriod)}.xlsx"`);
+  return res.send(buffer);
+}));
+/* Công tắc menu Thành tiền — CHỈ CEO đặt (requireCeo, KHÔNG requireAdmin: CEO thật
+   mang role admin nên cổng admin sẽ để lọt admin thường). Actor lấy từ session. */
+router.get('/catalog-management/cost-amounts/visibility', auth.requireAuth, auth.requireCeo, (req, res) => {
+  res.json({ panel: costAmounts.visibilityPanel(employeeCostRosterRows()) });
+});
+router.put('/catalog-management/cost-amounts/visibility', auth.requireAuth, auth.requireCeo, (req, res) => {
+  try {
+    res.json({ panel: costAmounts.visibilitySave(req.body || {}, { actor: req.session.emp_code, roster: employeeCostRosterRows() }) });
+  } catch (e) { res.status(e.status || 400).json({ error: e.message, code: e.code }); }
 });
 
 router.get('/admin/catalog-management/history', auth.requireAuth, auth.requireAdmin, async (req, res) => {

@@ -462,6 +462,60 @@ function ReportPanel({ period, rows }) {
 }
 
 /**
+ * Ô "PHẠM VI ĐƠN VỊ" — chọn NHIỀU đơn vị (CEO hỏi 08/08: *"chỗ các đơn vị anh chưa
+ * hiểu em sẽ cho chọn như thế nào đây"*).
+ *
+ * Trước đây là một ô select: chỉ chọn được HOẶC tất cả HOẶC đúng MỘT đơn vị — với
+ * NV phụ trách 164 đơn vị thì vừa khó hiểu vừa không dùng được. Nay:
+ *  · mặc định "Mọi đơn vị đang phụ trách" (theo bảng phân công của chính NV đó);
+ *  · muốn hẹp lại thì mở bảng, tick từng đơn vị, có ô tìm kiếm;
+ *  · CHỈ hiện đơn vị NV thực sự phụ trách — phạm vi chỉ THU HẸP, không nới ra được
+ *    (model `setUnits` lọc, backend chặn độc lập lần nữa).
+ */
+function UnitScopePicker({ row, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const disabled = !row.columns.length;
+  const all = row.units.includes(ALL_UNITS) || !row.units.length;
+  const matches = useMemo(() => {
+    const q = query.trim().toUpperCase();
+    return q ? row.availableUnits.filter((unit) => unit.includes(q)) : row.availableUnits;
+  }, [row.availableUnits, query]);
+  const summary = all ? `Mọi đơn vị đang phụ trách (${row.availableUnits.length})` : `${row.units.length} đơn vị được chọn`;
+  const toggle = (unit) => {
+    const current = all ? [] : row.units;
+    onChange(current.includes(unit) ? current.filter((item) => item !== unit) : [...current, unit]);
+  };
+  return <div className="catalog-unit-picker">
+    <button type="button" className="catalog-unit-summary" disabled={disabled}
+      aria-expanded={open} aria-label={`Phạm vi đơn vị của ${row.empCode}`}
+      onClick={() => setOpen((value) => !value)}>
+      <span>{disabled ? 'Bật cột % trước đã' : summary}</span><i aria-hidden="true">▾</i>
+    </button>
+    {open && !disabled && <div className="catalog-unit-pop">
+      <label className="catalog-unit-all">
+        <input type="checkbox" checked={all} onChange={() => onChange(all ? [] : [ALL_UNITS])} />
+        <b>Mọi đơn vị đang phụ trách ({row.availableUnits.length})</b>
+      </label>
+      <p className="catalog-unit-hint">Bỏ tick ở trên rồi chọn từng đơn vị nếu muốn cho xem hẹp hơn.</p>
+      <input className="catalog-unit-search" value={query} onChange={(e) => setQuery(e.target.value)}
+        placeholder="Tìm mã đơn vị…" aria-label={`Tìm đơn vị của ${row.empCode}`} />
+      <div className="catalog-unit-list">
+        {matches.map((unit) => <label key={unit}>
+          <input type="checkbox" checked={!all && row.units.includes(unit)} onChange={() => toggle(unit)} />
+          {unit}
+        </label>)}
+        {!matches.length && <div className="muted">Không có đơn vị nào khớp.</div>}
+      </div>
+      <div className="catalog-unit-actions">
+        <button type="button" className="btn ghost" onClick={() => onChange([ALL_UNITS])}>Chọn tất cả</button>
+        <button type="button" className="btn" onClick={() => setOpen(false)}>Xong</button>
+      </div>
+    </div>}
+  </div>;
+}
+
+/**
  * MENU PHÂN QUYỀN CỘT % CHI PHÍ — CHỈ CEO (SPEC_CATALOG_COST_COLUMNS.md)
  * CEO chốt 06/08/2026: *"chỉ CEO mới quản lý ai được xem cột nào… không ai khác."*
  * Nút này chỉ hiện với tài khoản CEO; backend vẫn chặn độc lập bằng `requireCeo`
@@ -540,7 +594,10 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
           <div className="table-scroll"><table className="catalog-table catalog-table-simple">
             <thead><tr>
               <th>Nhân viên</th>
-              {panel.columns.map((column) => <th key={column.key} title={column.label}>{column.key.toUpperCase()}</th>)}
+              {panel.columns.map((column) => <th key={column.key}
+                title={column.viewOnly ? `${column.label} — cột CHỈ ĐỂ XEM, không cộng vào tiền của ai` : column.label}>
+                {column.key.toUpperCase()}{column.viewOnly && <small className="catalog-col-viewonly">chỉ xem</small>}
+              </th>)}
               <th>Phạm vi đơn vị</th><th>Đang cấp</th>
             </tr></thead>
             <tbody>{panel.rows.map((row) => <tr key={row.empCode} className={row.dirty ? 'is-dirty' : ''}>
@@ -551,13 +608,8 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
                   onChange={() => setPanel((cur) => toggleColumn(cur, row.empCode, column.key))} />
               </td>)}
               <td>
-                <select value={row.units.includes(ALL_UNITS) || !row.units.length ? ALL_UNITS : row.units[0]}
-                  disabled={!row.columns.length}
-                  aria-label={`Phạm vi đơn vị của ${row.empCode}`}
-                  onChange={(e) => setPanel((cur) => setUnits(cur, row.empCode, e.target.value === ALL_UNITS ? [ALL_UNITS] : [e.target.value]))}>
-                  <option value={ALL_UNITS}>Mọi đơn vị đang phụ trách ({row.availableUnits.length})</option>
-                  {row.availableUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
-                </select>
+                <UnitScopePicker row={row}
+                  onChange={(units) => setPanel((cur) => setUnits(cur, row.empCode, units))} />
               </td>
               <td><small>{grantSummary(row)}</small></td>
             </tr>)}</tbody>

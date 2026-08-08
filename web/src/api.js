@@ -411,6 +411,10 @@ export const api = {
   catalogCostRatesSync: (period) => req('POST', '/catalog-management/cost-rates/sync', { period }),
   catalogCostRatesLocalStatus: (params = {}) => req('GET', '/catalog-management/cost-rates/local-status?' + new URLSearchParams(params).toString()),
   catalogCostRatesTable: (params = {}) => req('GET', '/catalog-management/cost-rates/table?' + new URLSearchParams(params).toString()),
+  // Menu riêng "Thành tiền C32/C47" — backend tự chặn (mặc định chỉ CEO; NV cần công tắc).
+  costAmounts: (params = {}) => req('GET', '/catalog-management/cost-amounts?' + new URLSearchParams(params).toString()),
+  costAmountsVisibility: () => req('GET', '/catalog-management/cost-amounts/visibility'),
+  costAmountsVisibilitySave: (patch) => req('PUT', '/catalog-management/cost-amounts/visibility', patch),
   adminCatalogManagementHistory: (period) => req('GET', '/admin/catalog-management/history?' + new URLSearchParams(period ? { period } : {}).toString()),
   adminCatalogManagementDiagnostics: () => req('GET', '/admin/catalog-management/diagnostics'),
   adminCatalogManagementReportPreview: (payload) => req('POST', '/admin/catalog-management/report/preview', payload),
@@ -521,6 +525,22 @@ export async function downloadCostRatesTable(params = {}) {
   const a = document.createElement('a');
   a.href = href;
   a.download = filenameFromDisposition(res.headers.get('content-disposition'), 'ty-le-chi-phi.xlsx');
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
+}
+
+// Thành tiền C32/C47 — export theo ĐÚNG phạm vi quyền của người tải (backend lọc).
+export async function downloadCostAmounts(params = {}) {
+  const url = '/api/catalog-management/cost-amounts.xlsx?' + new URLSearchParams(params).toString();
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Không xuất được bảng thành tiền C32/C47');
+  }
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filenameFromDisposition(res.headers.get('content-disposition'), 'thanh-tien-c32-c47.xlsx');
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
 }
 

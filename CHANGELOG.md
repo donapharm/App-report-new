@@ -1,3 +1,26 @@
+### 2026-08-08 18:00 (giờ VN) — ✅ ĐỢT 3: menu riêng "Thành tiền C32/C47" + C38/C42 vào phân quyền + ô đơn vị chọn nhiều
+
+CEO chốt *"em làm luôn rồi nghiệm thu một lần luôn nào"* — đóng trọn dự án `SPEC_COST_RATES_LOCAL_SYNC` (Đợt 1+2+3).
+
+**Menu riêng "Thành tiền CP" (tab mới, `costAmounts.js` + `CostAmounts.jsx`)** — đúng lệnh CEO tách hai cột tiền tổng khỏi mọi màn có sẵn *"giảm rủi ro lộ lọt, lỡ lỗ hổng bảo mật/code đến tài khoản NV"*:
+- 4 cột: **C32 chưa/có VAT · C47 chưa/có VAT**, theo cặp đơn vị × mã hàng + tổng theo NV + tổng cộng (CEO).
+- Tiền **TỰ TÍNH** tại App Report = % kho cục bộ × doanh thu slot, dùng lại `employeeCost.calculateAmount` và `VAT_DIVISOR` sẵn có (không hardcode 1,05 chỗ mới). Cột phái sinh C44 vẫn tính trên **tiền C43** đúng luật màn Chi phí — test đối chiếu tay: doanh thu 1.050.000 ⇒ C47 chưa VAT = 210.000đ, có VAT = 220.500đ.
+- **KHÔNG kéo C32/C47 từ DataHub** — luật `CATALOG_PERMANENT_FIELD_BLOCKED` giữ nguyên; module tính tiền không có một lệnh gọi nguồn nào.
+- Fail-closed: thiếu % cột nào ⇒ `—` + nói thiếu cột gì; hai dòng cùng cặp lệch % ⇒ `XUNG_DOT`; **tổng C47 chỉ chốt khi đủ mọi cặp**, hụt cặp nào thì tổng thành `—` chứ không đưa "tổng thiếu" ra như tổng thật.
+- Route không nhận tham số `emp` ⇒ **không có đường hỏi tiền người khác**; NV chỉ thấy đúng hàng của mình; ô tiền qua rèm che ẩn số; export qua backend theo quyền người tải.
+
+**Công tắc ba tầng** (CEO: *"giống như ở hai tab Chi phí của tôi và Thanh toán CP"*): dùng lại **đúng** bộ máy `employeeCostVisibility` (thêm tham số `storeFile`) — toàn phòng → nhóm → cá nhân, audit đủ trước/sau. Kho **riêng** `cost_amounts_visibility`, mặc định TẮT toàn phòng ⇒ chỉ CEO thấy tới khi CEO tự tay bật. Đặt bằng `requireCeo` (KHÔNG `requireAdmin`).
+
+**Thêm C38 · C42 vào menu phân quyền** (CEO yêu cầu chiều 08/08) — kèm **ranh giới sống còn** được khoá bằng test: hai cột này vào diện **CHỈ-ĐỂ-XEM** (`viewOnlyCostColumns`), **KHÔNG** lọt vào `costColumns`. `costColumns` là cột tính tiền (rowMonthlyTotal/C47/thưởng/phạt) — thêm vào đó là đổi công thức tiền, phải nâng `FORMULA_VERSION` (CLAUDE.md luật 5). Cấu hình khai trùng hoặc khai C32/C47 ⇒ ném lỗi. Menu hiện nhãn "chỉ xem" dưới tên cột. Phép khớp cặp vẫn chỉ dùng cột tính tiền để nguồn thiếu C38/C42 không kéo tụt cả cặp.
+
+**Ô "Phạm vi đơn vị" nay chọn được NHIỀU đơn vị** (CEO: *"chỗ các đơn vị anh chưa hiểu"*): thiết kế cũ là một ô select chỉ chọn được **tất cả** hoặc đúng **một** đơn vị — NV phụ trách 164 đơn vị thì không dùng được. Nay là bảng tick có ô tìm mã; chỉ hiện đơn vị NV thực sự phụ trách (phạm vi chỉ THU HẸP); chưa cấp cột thì ô khoá.
+
+**Mang bản vá PROD `03b3468` về nhánh làm việc:** route `/cost-rates` trên nhánh này vẫn lấy tên cột từ payload DataHub (bản cũ) ⇒ nay lấy từ hợp đồng cục bộ như PROD, và **trả đủ tên cột cả khi tài khoản không có sổ chi phí** (`NO_EMPLOYEE_SCOPE`) — chính là lỗi làm menu chết cứng hôm 08/08. Tránh xung đột khi bot cherry-pick lên base PROD.
+
+Test: server **1025/1031** (6 fail cố hữu do container thiếu `pdfinfo`, không phát sinh mới — trước là 1011/1017), web **246/246**, build sạch. Chưa deploy.
+
+---
+
 ### 2026-08-08 17:00 (giờ VN) — 🖥️ CEO chốt chuẩn hiển thị PC mới: khung 96% + bảng 50 dòng/trang + trả lại thanh kéo ngang
 
 Ba yêu cầu CEO (kèm 2 ảnh chụp màn "Chi phí của tôi" và "Danh mục QL") gộp một đợt:

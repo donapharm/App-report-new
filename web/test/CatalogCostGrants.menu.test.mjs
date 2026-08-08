@@ -31,10 +31,29 @@ test('chỉ lưu những dòng CEO thực sự đổi; lưu hỏng thì giữ ng
 });
 
 test('phạm vi đơn vị chỉ chọn trong đơn vị NV đang phụ trách', () => {
-  assert.match(page, /row\.availableUnits\.map\(\(unit\)/);
-  assert.match(page, /Mọi đơn vị đang phụ trách/);
+  const picker = page.slice(page.indexOf('function UnitScopePicker'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  // Danh sách tick chỉ dựng từ availableUnits (đơn vị NV thực sự phụ trách) — không
+  // có đường gõ tay một mã lạ vào.
+  assert.match(picker, /row\.availableUnits\.filter\(\(unit\) => unit\.includes\(q\)\)/);
+  assert.match(picker, /matches\.map\(\(unit\)/);
+  assert.match(picker, /Mọi đơn vị đang phụ trách/);
   // Chưa cấp cột nào thì ô phạm vi phải khoá — tránh đặt phạm vi cho quyền không tồn tại.
-  assert.match(page, /disabled=\{!row\.columns\.length\}/);
+  assert.match(picker, /const disabled = !row\.columns\.length/);
+  assert.match(picker, /disabled=\{disabled\}/);
+});
+
+test('CEO chọn được NHIỀU đơn vị, không còn kẹt "tất cả hoặc đúng một" (CEO hỏi 08/08)', () => {
+  const picker = page.slice(page.indexOf('function UnitScopePicker'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  // Tick thêm/bớt từng đơn vị vào danh sách hiện có ⇒ nhiều đơn vị cùng lúc.
+  assert.match(picker, /current\.includes\(unit\) \? current\.filter\(\(item\) => item !== unit\) : \[\.\.\.current, unit\]/);
+  // Có ô tìm kiếm vì NV có thể phụ trách hàng trăm đơn vị.
+  assert.match(picker, /Tìm mã đơn vị/);
+  assert.match(picker, /\d+ đơn vị được chọn|đơn vị được chọn/);
+});
+
+test('cột chỉ-để-xem (C38/C42) được đánh dấu rõ để CEO không hiểu nhầm là cột tính tiền', () => {
+  assert.match(page, /column\.viewOnly && <small className="catalog-col-viewonly">chỉ xem<\/small>/);
+  assert.match(page, /cột CHỈ ĐỂ XEM, không cộng vào tiền của ai/);
 });
 
 test('không lấy được danh sách cột thì NÓI RA, không hiện bảng rỗng như thể đã cấu hình xong', () => {

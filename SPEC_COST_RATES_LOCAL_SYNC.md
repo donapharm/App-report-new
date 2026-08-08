@@ -102,7 +102,43 @@ màn hình và audit đều đọc từ đây, một nguồn.
 3. NV bị tắt công tắc ⇒ không thấy cột tương ứng; C32/C47 mặc định chỉ CEO.
 4. Số C47 = Σ(% × doanh thu) khớp đối chiếu tay 3 dòng bất kỳ; VAT chia đúng 1,05.
 
+## Bổ sung CEO chốt 08/08 (chiều)
+
+### Thêm C38 · C42 vào menu phân quyền
+> CEO: *"anh muốn em cho thêm 2 cột là C38 và C42 vào phân quyền luôn nào em"*
+
+Làm được ngay vì cả hai đã nằm trong whitelist C33–C46. Nhưng phải giữ **ranh giới sống còn**:
+
+- `costColumns` = cột **TÍNH TIỀN** (cộng vào `rowMonthlyTotal`, C47, thưởng/phạt).
+  Thêm cột vào đây là **đổi công thức tiền** ⇒ phải nâng `FORMULA_VERSION` (CLAUDE.md luật 5).
+- C38/C42 vào diện **CHỈ-ĐỂ-XEM** (`viewOnlyCostColumns` trong `employee_cost_templates.json`):
+  cấp/thu quyền xem như cột thường, hiện % để tra cứu, **không cộng vào tiền của ai**.
+- Cấu hình chặn cứng: khai một cột vừa "chỉ xem" vừa "tính tiền" ⇒ ném lỗi
+  `EMPLOYEE_COST_VIEW_ONLY_CONFLICT`; khai C32/C47 ⇒ ném lỗi. Test khoá ý định này.
+- Menu hiện nhãn **"chỉ xem"** dưới tên cột để CEO không hiểu nhầm.
+- Phép khớp cặp vẫn chỉ dùng cột tính tiền — nếu đưa cột chỉ-để-xem vào phép khớp,
+  nguồn thiếu chúng sẽ kéo tụt cả cặp, làm mất luôn các cột đang chạy tốt.
+
+### Ô "Phạm vi đơn vị" — chọn NHIỀU đơn vị
+> CEO: *"chỗ các đơn vị anh chưa hiểu em sẽ cho chọn như thế nào đây"*
+
+Thiết kế cũ là một ô select: chỉ chọn được **tất cả** hoặc đúng **một** đơn vị — với NV
+phụ trách 164 đơn vị thì vừa khó hiểu vừa không dùng được. Nay là bảng tick nhiều lựa chọn:
+mặc định "Mọi đơn vị đang phụ trách (N)"; bỏ tick để chọn từng đơn vị; có ô tìm mã.
+Danh sách **chỉ gồm đơn vị NV thực sự phụ trách** — phạm vi chỉ THU HẸP, không nới ra
+được (model lọc, backend chặn độc lập lần nữa). Chưa cấp cột nào thì ô khoá.
+
+### Công tắc menu Thành tiền — ba tầng
+> CEO: *"tất cả các cột từ C32–C47 đều làm dạng chế độ tắt/mở… giống như ở hai tab
+> Chi phí của tôi và Thanh toán CP"*
+
+Dùng lại **đúng bộ máy** `employeeCostVisibility` (thêm tham số `storeFile`), ba tầng
+**toàn phòng → nhóm → cá nhân**, cá nhân đè nhóm, nhóm đè toàn phòng, có audit đủ
+trước/sau. Khác một điểm: **kho riêng** `cost_amounts_visibility`, mặc định TẮT toàn
+phòng ⇒ không NV nào thấy tiền tổng cho tới khi CEO tự tay bật. Bật cho ai thì người đó
+chỉ thấy **đúng hàng của chính mình**, không thấy tổng công ty hay số người khác.
+
 ## Lộ trình
-- **Đợt 1 (~1 ngày):** kho cục bộ + nút đồng bộ + vá lỗ hổng restore. → hết cảnh trắng %.
-- **Đợt 2 (~1 ngày):** menu danh mục đủ cột C33–C46 (xem/lọc/xuất).
-- **Đợt 3 (~1 ngày):** menu riêng C32/C47 bốn cột VAT + công tắc riêng.
+- **Đợt 1 (~1 ngày):** kho cục bộ + nút đồng bộ + vá lỗ hổng restore. → hết cảnh trắng %. ✅
+- **Đợt 2 (~1 ngày):** menu danh mục đủ cột C33–C46 (xem/lọc/xuất). ✅
+- **Đợt 3 (~1 ngày):** menu riêng C32/C47 bốn cột VAT + công tắc riêng. ✅ (kèm C38/C42 + ô đơn vị)

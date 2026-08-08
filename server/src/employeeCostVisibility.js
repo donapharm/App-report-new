@@ -181,12 +181,15 @@ function panelData(roster = [], config = {}) {
   };
 }
 
-function createService({ persistence = defaultPersist, now = () => new Date(), logger = console } = {}) {
-  const load = () => normalizeRecord(persistence.load(STORE_FILE, null));
+// `storeFile` cho phép dựng công tắc thứ hai trên kho riêng (menu Thành tiền
+// C32/C47 — SPEC_COST_RATES_LOCAL_SYNC) mà dùng lại nguyên bộ máy validate/audit
+// đã chạy ổn ở đây, thay vì chép một bản gần giống.
+function createService({ persistence = defaultPersist, now = () => new Date(), logger = console, storeFile = STORE_FILE } = {}) {
+  const load = () => normalizeRecord(persistence.load(storeFile, null));
   const appendAudit = (record, entry) => {
     const next = normalizeRecord(record);
     next.audit = [...next.audit, { at: now().toISOString(), ...entry }].slice(-AUDIT_LIMIT);
-    persistence.save(STORE_FILE, next);
+    persistence.save(storeFile, next);
     return next;
   };
 
