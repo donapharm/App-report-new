@@ -1123,7 +1123,12 @@ async function fetchEmployeeCost(empCode, options = {}) {
   // lấy được thì nhớ lại, kẹt thì dùng bản gần nhất và NÓI RA là số cũ.
   if (hasRange && result.outcome === 'ok') {
     try { rateSnapshot.remember(empCode, result.payload, snapshotOptions); } catch { /* kho hỏng không làm hỏng màn */ }
-  } else if (hasRange && result.outcome !== 'not_configured') {
+  } else if (hasRange) {
+    // SPEC_COST_RATES_LOCAL_SYNC (CEO 08/08): kẹt KIỂU GÌ cũng rơi về bản đã lưu
+    // trước khi fail-closed — kể cả `not_configured`. Bản đầu loại trừ nhánh đó,
+    // nghĩa là một lần deploy hỏng cấu hình làm màn trắng NGAY dù kho còn số tốt.
+    // Restore luôn gắn nhãn `rateStale` + mốc giờ nên không giấu gì: cấu hình hỏng
+    // vẫn lộ qua cảnh báo nguồn, chỉ là NV không mất số oan trong lúc chờ sửa.
     try {
       if (rateSnapshot.restore(empCode, result.payload, snapshotOptions) > 0) result.outcome = 'ok_stale_rates';
     } catch { /* kho hỏng thì giữ nguyên fail-closed như cũ */ }
