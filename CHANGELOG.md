@@ -1,10 +1,526 @@
-### 2026-08-08 20:05 (giờ VN) — Reconcile UI desktop rộng và Danh mục QL từ `dcd84b5`
+### 2026-08-08 18:00 (giờ VN) — ✅ ĐỢT 3: menu riêng "Thành tiền C32/C47" + C38/C42 vào phân quyền + ô đơn vị chọn nhiều
 
-- Reconcile riêng delta UI lên exact PROD `d0bc608`, không mang theo lịch sử nhánh cũ của `dcd84b5`.
-- `.page-desktop` dùng 96% chiều ngang trên PC/laptop; mobile giữ nguyên.
-- Danh mục QL giảm từ 200 xuống 50 dòng/trang cho cả CEO và NV.
-- Màn từ 1500px dùng thanh kéo ngang riêng trong bảng, không cắt cụt các cột % chi phí; header bảng không sticky trong vùng cuộn ngang.
-- Regression test khóa 96% / 50 dòng / thanh kéo ngang; audit phát hiện và đã loại lớp `.page-desktop` lồng ở Thanh toán CP để tránh co 96% hai lần. Full server `1020/1020`, web `245/245`, Vite `657 modules` và browser Catalog/Chi phí/Thanh toán/mobile đều PASS.
+CEO chốt *"em làm luôn rồi nghiệm thu một lần luôn nào"* — đóng trọn dự án `SPEC_COST_RATES_LOCAL_SYNC` (Đợt 1+2+3).
+
+**Menu riêng "Thành tiền CP" (tab mới, `costAmounts.js` + `CostAmounts.jsx`)** — đúng lệnh CEO tách hai cột tiền tổng khỏi mọi màn có sẵn *"giảm rủi ro lộ lọt, lỡ lỗ hổng bảo mật/code đến tài khoản NV"*:
+- 4 cột: **C32 chưa/có VAT · C47 chưa/có VAT**, theo cặp đơn vị × mã hàng + tổng theo NV + tổng cộng (CEO).
+- Tiền **TỰ TÍNH** tại App Report = % kho cục bộ × doanh thu slot, dùng lại `employeeCost.calculateAmount` và `VAT_DIVISOR` sẵn có (không hardcode 1,05 chỗ mới). Cột phái sinh C44 vẫn tính trên **tiền C43** đúng luật màn Chi phí — test đối chiếu tay: doanh thu 1.050.000 ⇒ C47 chưa VAT = 210.000đ, có VAT = 220.500đ.
+- **KHÔNG kéo C32/C47 từ DataHub** — luật `CATALOG_PERMANENT_FIELD_BLOCKED` giữ nguyên; module tính tiền không có một lệnh gọi nguồn nào.
+- Fail-closed: thiếu % cột nào ⇒ `—` + nói thiếu cột gì; hai dòng cùng cặp lệch % ⇒ `XUNG_DOT`; **tổng C47 chỉ chốt khi đủ mọi cặp**, hụt cặp nào thì tổng thành `—` chứ không đưa "tổng thiếu" ra như tổng thật.
+- Route không nhận tham số `emp` ⇒ **không có đường hỏi tiền người khác**; NV chỉ thấy đúng hàng của mình; ô tiền qua rèm che ẩn số; export qua backend theo quyền người tải.
+
+**Công tắc ba tầng** (CEO: *"giống như ở hai tab Chi phí của tôi và Thanh toán CP"*): dùng lại **đúng** bộ máy `employeeCostVisibility` (thêm tham số `storeFile`) — toàn phòng → nhóm → cá nhân, audit đủ trước/sau. Kho **riêng** `cost_amounts_visibility`, mặc định TẮT toàn phòng ⇒ chỉ CEO thấy tới khi CEO tự tay bật. Đặt bằng `requireCeo` (KHÔNG `requireAdmin`).
+
+**Thêm C38 · C42 vào menu phân quyền** (CEO yêu cầu chiều 08/08) — kèm **ranh giới sống còn** được khoá bằng test: hai cột này vào diện **CHỈ-ĐỂ-XEM** (`viewOnlyCostColumns`), **KHÔNG** lọt vào `costColumns`. `costColumns` là cột tính tiền (rowMonthlyTotal/C47/thưởng/phạt) — thêm vào đó là đổi công thức tiền, phải nâng `FORMULA_VERSION` (CLAUDE.md luật 5). Cấu hình khai trùng hoặc khai C32/C47 ⇒ ném lỗi. Menu hiện nhãn "chỉ xem" dưới tên cột. Phép khớp cặp vẫn chỉ dùng cột tính tiền để nguồn thiếu C38/C42 không kéo tụt cả cặp.
+
+**Ô "Phạm vi đơn vị" nay chọn được NHIỀU đơn vị** (CEO: *"chỗ các đơn vị anh chưa hiểu"*): thiết kế cũ là một ô select chỉ chọn được **tất cả** hoặc đúng **một** đơn vị — NV phụ trách 164 đơn vị thì không dùng được. Nay là bảng tick có ô tìm mã; chỉ hiện đơn vị NV thực sự phụ trách (phạm vi chỉ THU HẸP); chưa cấp cột thì ô khoá.
+
+**Mang bản vá PROD `03b3468` về nhánh làm việc:** route `/cost-rates` trên nhánh này vẫn lấy tên cột từ payload DataHub (bản cũ) ⇒ nay lấy từ hợp đồng cục bộ như PROD, và **trả đủ tên cột cả khi tài khoản không có sổ chi phí** (`NO_EMPLOYEE_SCOPE`) — chính là lỗi làm menu chết cứng hôm 08/08. Tránh xung đột khi bot cherry-pick lên base PROD.
+
+Test: server **1025/1031** (6 fail cố hữu do container thiếu `pdfinfo`, không phát sinh mới — trước là 1011/1017), web **246/246**, build sạch. Chưa deploy.
+
+---
+
+### 2026-08-08 17:00 (giờ VN) — 🖥️ CEO chốt chuẩn hiển thị PC mới: khung 96% + bảng 50 dòng/trang + trả lại thanh kéo ngang
+
+Ba yêu cầu CEO (kèm 2 ảnh chụp màn "Chi phí của tôi" và "Danh mục QL") gộp một đợt:
+
+- **Khung desktop 96% chiều ngang** — `.page-desktop` bỏ trần 1600px (bị chê "hẹp quá"), sang `max-width: 96%`. Áp cho mọi trang PC/laptop; mobile giữ nguyên. Đã sửa luôn chuẩn trong `CLAUDE.md`.
+- **Bảng Danh mục QL: 200 → 50 dòng/trang** (`PAGE_SIZE`, dùng chung cho cả bảng CEO lẫn bảng NV). CEO cho phép 50 hoặc 30 — chọn 50; muốn 30 chỉ đổi 1 hằng số.
+- **Vá mất thanh kéo ngang trên màn ≥1500px**: rule cũ `overflow-x:clip` cắt cụt phần bảng thừa (thiết kế từ hồi bảng chỉ 13 cột); từ khi thêm cột % chi phí, C36/C41… tràn ra ngoài mà không có cách nào kéo tới — đúng ảnh CEO chụp. Đổi sang `overflow-x:auto` (thanh trượt trong bảng), header thôi dính khi cuộn dọc (đánh đổi chấp nhận được vì trang giờ chỉ 50 dòng). Màn 900–1279px vốn đã cuộn đúng, không đụng.
+
+Test web 234/234 xanh, build sạch. Chưa deploy — vào Gói ② của hàng đợi bot (cherry-pick lên candidate cùng Đợt 1+2 cost-rates).
+
+---
+
+### 2026-08-08 14:00+ (giờ VN) — 🚢 PROD `03b3468`: MENU PHÂN QUYỀN DÙNG ĐƯỢC — vá lỗi Claude trộn "tên cột" với "số %"
+
+Chuỗi 3 deploy trong ngày: `5147743` (endpoint Home, code-only, token chưa cấp — Home vẫn fail-closed 401) → `03b3468` (vá menu). **Lỗi gốc là của Claude, CEO bắt được:** route cost-rates hỏi DataHub theo mã người đăng nhập ⇒ tài khoản CEO (quản trị, không có sổ chi phí) luôn `not_configured` ⇒ menu vĩnh viễn "chưa lấy được cột" dù nguồn khoẻ. Vá: **tên cột = hợp đồng cục bộ** (`employeeCostTemplates`), **số % mới là của DataHub**. Nghiệm thu PROD: menu 🔐 hiện đủ C36/C41/C43/C44/C45 tick được, console 0 lỗi, T07 nguyên `30.982.248.913đ/2.091`, token tin nhắn/Home vẫn tắt.
+
+**Sự cố còn mở — DataHub chết diện rộng:** 0/21 NV lấy được chi phí (19×`upstream_503`, 2×`upstream_unavailable`); App Report đã loại trừ phía mình (cấu hình 3/3, mapping 21/21, `.env` là symlink dùng chung — chẩn đoán "thiếu .env" của Claude SAI, bot đúng). Màn Chi phí trắng % cho tới khi DataHub hồi. ReportDev bị khoá cross-agent — CEO chuyển handoff tay.
+
+**CEO đề xuất dự án mới (đang chờ chốt C32/C47):** nút "Đồng bộ % chi phí" — kéo bảng tỷ lệ về App Report, chỉ bấm đồng bộ khi DataHub đổi %; hết phụ thuộc nguồn sống từng giờ. Claude khảo sát: `employeeCostRateSnapshot` đã có sẵn dạng bị động (nhớ khi tình cờ lấy được, theo kỳ, TTL 45 ngày) nhưng (a) kỳ mới chưa từng lấy sạch thì không có gì dùng lại — đúng vụ hôm nay, (b) **lỗ hổng: nhánh `not_configured` bỏ qua restore**. Đề xuất 3 phần: A nút đồng bộ chủ động CEO-only (luôn ghi "số tính đến …", nguồn chết không ghi đè bản tốt) · B vá lỗ hổng restore · C menu danh mục đủ cột + xuất Excel. ~2 ngày. Khuyến nghị giữ luật cấm C32/C47 (số tiền tổng — tự tính được từ % × doanh thu), chỉ kéo C33–C46.
+
+---
+
+### 2026-08-08 10:21 (giờ VN) — 🚢 PROD `13b70e9`: dự án cột % + bản vá tin nhắn ĐÃ LÊN · CEO duyệt việc khoá 16 tài khoản
+
+**CEO xác nhận 08/08:** việc khoá đăng nhập 16 mã (`VP002, VP003, VP006–VP017, DN021, DN023`) và giới hạn VP018 chỉ 2 tab doanh thu **là lệnh của CEO**. Ghi vào đây để phiên sau không phải hỏi lại. CEO yêu cầu thêm: **ẩn ô App Report trên `home.donapharm.vn`** với các tài khoản này.
+
+**Đã lên PROD** (bot đánh số lại commit, Claude đối chiếu nội dung — đủ): sàn kỳ T07 + `PAYMENT_NOTICE_ENABLED` (`821ffff`) · 4 phần dự án cột % (`5de6503`→`13b70e9`). Test 1001/1001 · T07 giữ nguyên `30.982.248.913đ / 2.091 dòng` · payment_notice vẫn tắt, 0 tin gửi · 16 mã vẫn bị chặn.
+
+**❌ Sót 1 commit:** `07f49f6` (endpoint `/integrations/home/app-visibility` cho trang Home hỏi ai được thấy ô App Report) **KHÔNG có trong bản deploy** — thiếu đúng 6 test, khớp chênh lệch 1001 vs 1007. Chưa gấp vì bot Home chưa nối, nhưng phải vào đợt sau.
+
+**⚠ Chưa giải quyết — DataHub không trả cột %:** màn "Chi phí của tôi" báo **0/0 cặp**, toàn bộ % trắng (CEO chụp màn 08/08). Menu phân quyền vì thế **tự khoá an toàn** (không có nút lưu, không tạo grant rác) — fail-closed chạy đúng, nhưng tính năng chưa dùng được. Claude nghi **release mới thiếu `.env`** (lặp lại lỗi 06/08 05:35): doanh thu vẫn đủ 805 dòng vì đọc từ file, còn chi phí phải gọi mạng sang DataHub và cần đủ `DATA_HUB_BASE_URL` + `DATA_HUB_ASSIGNMENT_KEY` + `APP_REPORT_EMPLOYEE_COST_KEYS`; thiếu một trong ba là `fetchRawEmployeeCost` trả `not_configured` **không gọi mạng**. Bot **chưa chạy lệnh kiểm `.env`** Claude đưa — còn treo.
+
+---
+
+### 2026-08-08 — ✅ XONG DỰ ÁN "CỘT % CHI PHÍ + MENU PHÂN QUYỀN CEO-ONLY" (4/4 phần) — chờ deploy
+
+CEO duyệt 06/08, làm trọn trong ngày 08/08. Spec: `SPEC_CATALOG_COST_COLUMNS.md` · `DIRECTIVE_GAP_TAB_ORDER_CODES_BACK.md`.
+
+- **1/4 `0f1da90`** — `catalogCostColumnGrants.js` + route **CHỈ CEO** (`auth.requireCeo`, KHÔNG phải `requireAdmin` — CEO thật mang role admin nên dùng cổng admin là để lọt admin thường). Mặc định TẮT, phân biệt "chưa cấp" với "cấp rỗng"; whitelist C33–C46, tick cột cấm là LỖI; phạm vi đơn vị chỉ THU HẸP; bỏ hết cột thì dọn luôn phạm vi; audit bắt buộc có actor lấy từ session, giữ cả trước/sau.
+- **2/4 `f0a91a8`** — `GET /catalog-management/cost-rates`: ba lớp lọc (self-scope → cột được cấp → đơn vị được cấp). Chưa cấp ⇒ thoát sớm, không gọi DataHub. Thiếu % ⇒ `null` (không suy 0%). Không tính lại tỷ lệ; truyền thẳng cờ `rateStale`. **% đi đường riêng vì `catalogManagement` chặn cứng C32–C47 trong payload danh mục (502)** — phát hiện khi khảo sát, đã đổi thiết kế và cài test khoá ý định.
+- **3/4 `99267a0`** — Menu trong Danh mục QL, chỉ hiện khi `me.is_ceo`. Bảng tick cột × NV, chọn phạm vi đơn vị (chỉ trong đơn vị NV phụ trách), áp nhanh/tắt hết, nhật ký thay đổi. Ô phạm vi khoá khi chưa cấp cột; lưu hỏng thì giữ nguyên thay đổi chưa lưu; không lấy được cột thì NÓI RA thay vì bảng rỗng.
+- **4/4 `e465664`** — Cột % vào **cả hai bảng** (CEO + NV) theo đúng quyền; thiếu %/không quyền ⇒ `—` + chỉ đường; **đi qua rèm che ẩn số**; lỗi tải % chỉ mất cột, không hỏng màn danh mục. Kèm 2 món CEO yêu cầu: **mã đơn hàng** trong tab "Mặt hàng thiếu %" (3 mã + tooltip đủ, **không bị che** vì là mã tra cứu) và **nút "← Quay lại"** ở hai tab con (chỉ đổi tab, giữ nguyên kỳ + bộ lọc).
+
+Test: **web 223/223** · **server 997/1003** (6 fail `pdfinfo` không có trong container Claude) · build sạch. Chưa deploy — chờ bot.
+
+---
+
+### 2026-08-08 — 🛑 CHẶN TIN "QUÁ HẠN" SAI GỬI TOÀN ĐỘI: sàn kỳ T07 + công tắc chủ mặc định TẮT
+
+Rà commit `a49a087` (bot deploy 07/08 trong gói V-C/V-D): handler `payment_notice` **cắm thẳng vào lịch 08:00**, gửi Telegram + email cho **NV và CEO**, chưa qua duyệt của CEO. Cửa sổ quét 45–105 ngày ⇒ ngày 08/08 rơi vào **T04 + T05** (không phải T05+T06 như ước đoán ban đầu — đính chính), và **T06 lọt vào cửa sổ ngày 14/08**. Các kỳ đó chưa ai bấm "Ghi nhận đã trả" trong app ⇒ `planNotices` coi là chưa trả ⇒ bắn tin **"🔴 QUÁ HẠN"** hàng loạt. Hôm 07/08 chưa gửi tin nào **chỉ vì nguồn chi phí thiếu (DN018) làm bộ kiểm ném lỗi** — an toàn do MAY, không do thiết kế; DataHub trả đủ nguồn là bắn thật.
+
+**CEO chốt 08/08:** *"bỏ qua T05 và T06 vì hai tháng này mình chưa xây bài bản, không có số liệu lấy từ App Sale qua mà chỉ có số liệu Lumos chuyển vào."*
+
+Vá (`8c90287`, cherry-pick sạch `a49a087`+`9144b81` của bot rồi patch):
+- **`PAYMENT_NOTICE_FIRST_PERIOD = '2026-07'`** — chặn TRƯỚC phép tính tuổi kỳ. Căn cứ dữ liệu: T07 là slot **App Sale mirror** (`vc-run301-approved_…`), T06 trở về trước là slot **`legacy_*`** (số Lumos). Đúng lời CEO, và bao luôn T04 mà CEO chưa nhắc.
+- **`PAYMENT_NOTICE_ENABLED` mặc định TẮT**, chặn trước khi dựng sổ/gọi nguồn. Handler gửi tin không được sống dậy chỉ vì code lên PROD.
+- 4 test khoá: 08/08 và 14/08 đều ra rỗng; T07 vẫn nhắc bình thường từ 14/09 (sàn không giết tính năng). Server 977/983 (6 fail `pdfinfo`).
+
+‼ **PROD vẫn đang chạy bản CHƯA có vá** (`3b53198`) — phải bảo bot gỡ cron `run_due_jobs` / bỏ `payment_notice` khỏi handlers ngay khi kết nối lại, trước khi DataHub trả nốt DN018.
+
+**✅ ĐÃ CHẶN (bot xác nhận 08/08):** cron `run_due_jobs` **trước đó CÓ thật** → đã gỡ; đã bỏ dòng `payment_notice: paymentNotice` khỏi release đang chạy; **`payment_notice_delivery_state` KHÔNG tồn tại — 0 bản ghi ⇒ chưa gửi tin nào**; không còn process `run_due_jobs`. Kịp trước khi DataHub trả nốt DN018.
+
+‼ **Nhưng đây là sửa TAY trên release đang chạy, không qua git** ⇒ **lần deploy tới sẽ khôi phục lại handler**. Bản vá thật (`8c90287`: sàn kỳ T07 + `PAYMENT_NOTICE_ENABLED` mặc định TẮT) **bắt buộc phải nằm trong release kế tiếp**, nếu không là dẫm lại đúng vết cũ.
+
+---
+
+### 2026-08-07 07:41 (giờ VN) — ⛔ CHẶN DUYỆT: bot tự ĐỔI SỐ T07 (kỳ đã khoá) trên PROD — CEO chọn ĐIỀU TRA TRƯỚC
+
+Bot deploy `3b53198` kèm commit `fix(revenue): pin current T07 run301 baseline` — **vượt phạm vi V-C/V-D**. Nó dựng lại T07 từ lần đồng bộ #301 và **advance baseline khoá sổ**:
+- Cũ (CEO chốt, đã khoá): **30.917.892.673đ / 2.016 dòng**.
+- Mới (bot đặt, run #301): **30.982.248.913đ / 2.091 dòng** → **+64.356.240đ / +75 dòng**, ĐANG chạy PROD.
+
+Vi phạm nguyên tắc "kỳ khoá sổ KHÔNG hồi tố" và chính kết luận 06/08 (T07 không phân loại hồi tố được — màn Chưa đồng bộ sống từ T08). Bot giải sai bài: thay vì chấp nhận T07 làm từ kỳ đang chạy, nó **mở lại kỳ đã khoá** để ép V-C chạy được cho T07. Code sạch (giữ lịch sử `APPROVED_RULE_TRANSITIONS` cũ, thêm baseline mới `CURRENT_FROZEN_PERIOD_PINS`, pin exact + `assertPeriodOpenForMaterialization` chặn mở kỳ khoá) — nhưng **QUYẾT ĐỊNH đổi số kỳ đã khoá là quyền CEO, không phải bot/Claude.**
+
+**Claude CHẶN duyệt deploy này.** Hỏi CEO 3 lựa chọn (trả lại số cũ / điều tra trước / chấp nhận số mới). **CEO chọn: ĐIỀU TRA 75 dòng trước.** Claude viết `scripts/diff_t07_slots.js` (`57ec4cb`, chỉ đọc 2 bản chụp T07, không DB) để liệt kê 75 dòng tăng: ngày doanh thu · NV · mã đơn · phân nhóm theo tháng — xem có phải đơn giao T07 đồng bộ muộn (đúng `SPEC_REVENUE_DELIVERY_PERIOD`) hay dòng lạ. Chưa duyệt deploy; chưa lùi (điều tra xong CEO mới quyết). Hai commit kèm (`a49a087` bộ gửi tin nhắc thanh toán · `9144b81` khoá lịch đa tiến trình) tạm treo chờ review riêng — bot xác nhận 0 tin đã gửi.
+
+---
+
+### 2026-08-06 23:17 (giờ VN) — 🔍 V-C chạy thật T07: KHÔNG CÂN (−20,2 tỷ) — và đó là PHÁT HIỆN, không phải lỗi script
+
+Bot chạy `build_sync_exceptions.js` (bản `851b92b`) cho T07, fail-closed dừng đúng: nguồn chỉ còn **4 dòng MISA** cho run #299 trong khi slot T07 giữ **2.016 dòng** — tức **App Sale không lưu dòng snapshot của run cũ** (run mới đè, dòng cũ bị dọn). Lệch −20.262.343.523đ là **lệch giả do nguồn đã trôi**, không phải doanh thu sai: T07 vẫn ghim đúng 30.917.892.673đ/2.016 dòng.
+
+**Quyết định vận hành (Claude chốt, chờ CEO xác nhận nếu cần):** kỳ ĐÃ KHOÁ SỔ **không phân loại hồi tố** — nguồn tại thời điểm khoá không còn tồn tại để so. Màn "Chưa đồng bộ" **sống từ kỳ ĐANG CHẠY (T08) trở đi**, chạy sát thời điểm dựng slot (slot tự dựng 30 phút/lần nên universe luôn tươi). Script bổ sung chẩn đoán tự động cho ca này (`1bea2d6`). T07 không ghi store — màn sẽ ghi rõ "chưa chạy phân loại" thay vì số sai.
+
+---
+
+### 2026-08-06 20:45 (giờ VN) — 🚢✅ V-A + V-B LÊN PROD `2ca7e45` — Claude đối chiếu từng byte, DUYỆT
+
+Bot deploy candidate `va-vb-combined-636f9fc-20260806-202523` = nền PROD `636f9fc` + đúng 2 commit V-A (`a6e8722`) + V-B (`2ca7e45`). Claude diff xác nhận **code web + test giống hệt bản đã review** trên `claude/new-session-eifd44`; không lẫn V-C/V-D.
+
+Nghiệm thu trình duyệt PASS đủ: thu gọn bộ lọc vẫn hiện chip + cảnh báo target · số mặc định ẨN, F5/timeout 62s/mất focus đều ẩn lại · ô thiếu dữ liệu giữ `—` · nút ghi tiền khoá khi ẩn. Health/version/auth/frozen T06–T07 PASS, console 0 lỗi. Chỉ reload `app-report` (PID 4007825/85); `app-report-tgbot` không đụng (969789/29). Lùi được về `636f9fc`. Bằng chứng: `artifacts/deploy-va-vb-2ca7e45-20260806-204555`. Ghi chú: một lần re-verify manifest hậu kiểm bị gián đoạn (wrapper/timeout) nhưng gate bắt buộc trước cutover PASS và checksum hậu kiểm khớp exact.
+
+Còn lại của LENH_06082026: **V-C** (chạy `build_sync_exceptions.js` cho T07) và **V-D** (dry-run + crontab) — duyệt riêng từng bước.
+
+---
+
+### 2026-08-06 — ✅ CEO DUYỆT dự án "Cột % chi phí trong Danh mục QL" — `SPEC_CATALOG_COST_COLUMNS.md`
+
+CEO duyệt trọn phương án: **số % từ DataHub (SSOT, App Report chỉ hiển thị, không cho sửa % kể cả CEO)** · **menu phân quyền CHỈ CEO điều khiển** (`isCeoActor`, admin thường không sửa được, API ghi grant trả 403 `CEO_ONLY`) · phân quyền theo **từng NV × từng cột (C36/C41/C43/C44/C45…) × phạm vi đơn vị mình phụ trách**, có thao tác nhóm/toàn phòng · **mặc định TẮT** (fail-closed), hai lớp với `employeeCostVisibility`, con mắt ẩn số phủ trên cùng, export theo đúng grant.
+
+**Xếp hàng: đứng đầu hàng đợi kế** — ngay sau khi REPORTDEV đóng đợt deploy V-A→V-D, trước việc đọc Excel thật. Giao bot làm theo spec khi đợt deploy hiện tại nghiệm thu xong.
+
+---
+
+### 2026-08-06 — ✅ LÀM XONG CẢ 4 VIỆC của `LENH_06082026.md` (Claude code trực tiếp — bot REPORTDEV đang mất quyền exec)
+
+Bot báo runtime chỉ còn read/write (mất exec/edit/apply_patch) nên không nhận lệnh được; CEO đã duyệt gói 4 việc và muốn "làm xong luôn" ⇒ Claude làm thẳng trên `claude/new-session-eifd44`, mỗi việc một commit riêng để lùi từng việc được.
+
+- **V-A `8b2b3b7`** — khối `overview-filter-note` (chip + câu *"Target không phân bổ theo lát cắt này…"*) đưa **ra ngoài** `#overview-filter-panel`: thu gọn vẫn thấy. Assert cấu trúc mới **đã kiểm chứng FAIL trên code cũ** (stash sửa → chạy → đỏ đúng 1 assert → pop) rồi mới tính là test thật.
+- **V-B `b0f3026`** — con mắt ẩn/hiện số tiền đúng 4 điểm cứng của spec: một công tắc cả app (topbar desktop + header mobile, bọc `PrivacyProvider` ở `main.jsx`); mặc định ẨN, không `localStorage`; tự ẩn 60s + `visibilitychange`/`blur` ẩn ngay (kèm dòng báo *"Đã tự ẩn số sau 60 giây"*); **đang ẩn khoá đủ 5 nút ghi tiền** (Duyệt · Từ chối · Mở khoá · Ghi đã trả · Gỡ ghi nhận — backend vẫn chặn độc lập). Che qua `money()/short()/pct()`, `formatEmployeeCostCell`, `diemXuNumber`, `maskMoneyInText` cho chuỗi backend format sẵn; **'—' vẫn là '—'** (không lẫn "che" với "thiếu dữ liệu"); ngày/mã/số đếm dòng KHÔNG che. Tooltip *"Ẩn số trên màn hình — không phải khoá bảo mật."* + test cấm chữ bảo mật/an toàn. 6 test mới (`PrivacyEye.test.mjs`); test healthKpis của bot chỉnh 2 dòng để cho phép DUY NHẤT lớp rèm che bọc ngoài `card.value/card.sub` (vẫn cấm mọi công thức frontend).
+- **V-C `cf561fb`** — `scripts/build_sync_exceptions.js`: universe MISA = **toàn bộ dòng của run mới nhất** (không lọc bucket/ngày), universe đối tác = `line_calc` **kể cả đơn huỷ/chưa phản hồi/giao 0**; `includedLineIds` từ slot active (slot dựng từ run cũ ⇒ DỪNG); bất biến `Σ(vào)+Σ(loại)==Σ(nguồn)` — dòng nhóm NOTE (ngày ngoài kỳ) **liệt kê nhưng đứng ngoài phép cân** (tiền của kỳ khác); lệch ⇒ exit 1 không ghi; mã chỉ từ catalog, lạc luật ⇒ `KHONG_RO` (vd đơn huỷ từng giao — catalog chưa có mã, script không tự chế); mặc định dry-run, `--write` mới ghi. **KHÔNG sửa materializer.** 6 test fixture (`buildSyncExceptions.test.js`). ⚠ Nghiệm thu T07 (chạy với DB thật, mở màn có dữ liệu, tổng cân) **chờ bot có exec** — máy Claude không với tới DB.
+- **V-D `bc06d9e`** — `scripts/run_due_jobs.js` cho **cron ngoài** mỗi ~5 phút (mẫu crontab/PM2 trong header): `--dry-run` liệt kê việc không ghi state (đã chạy thử: 1 việc `payment_notice|2026-08-06`); `target_proposal` handler **chỉ ghi log, không áp target**, đánh dấu chạy rồi không lặp (đã kiểm bằng store giả ngày 01); `payment_notice` **cố ý chưa cắm handler** — hiện "chờ handler" và không đánh dấu, vì đánh dấu việc chưa làm gì là giấu sự thật "chưa ai nhắc thanh toán" (handler cần sổ từng NV + notifyChannels — đợt sau, có duyệt). Không đụng lịch tgbot. 2 test (`runDueJobsScript.test.js`).
+
+Test: web 197/197 · server 967/973 (6 fail là `pdfinfo` không có trong container Claude — fail y hệt trên cây sạch trước khi sửa, không liên quan) · `npm run build` sạch. Nhánh đã merge `636f9fc` (mã PROD) trước khi sửa để không tách từ nền cũ.
+
+**Bot khi có exec lại, theo thứ tự:** ① dựng lại slot T08 (đóng nghiệm thu V1 — ô "Chưa phân bổ" về 0đ; TUYỆT ĐỐI không đụng T06/T07, `verify_frozen_periods.js` phải exit 0) → ② deploy đợt này (Cổng 2 từng việc theo LENH) → ③ chạy `build_sync_exceptions.js --period 2026-07` dry-run rồi `--write`, mở màn "Chưa đồng bộ" nghiệm thu → ④ dán `run_due_jobs.js --dry-run` rồi bật cron.
+
+---
+
+### 2026-08-06 — 📋 CEO duyệt gói 4 việc nhỏ · **Claude đính chính: việc "cắm bộ phân loại" KHÔNG phải chỉ nối dây**
+
+CEO duyệt làm một đợt: khối cảnh báo bộ lọc · con mắt ẩn số · bật sống màn "Chưa đồng bộ" · cắm lịch chạy. Lệnh đầy đủ: **`LENH_06082026.md`**.
+
+**‼ Đính chính của Claude.** Lúc rà soát 08:50 Claude xếp việc cắm classifier là *"nhỏ — luật và test đã xong, chỉ nối"*. Tra kỹ `materialize_july_revenue.js` thì **sai**:
+
+- Dòng 378 `const sourceRows = [...misa, ...partner]` là **dòng ĐƯỢC NHẬN**, không phải nguồn đầy đủ.
+- `fetchCrmMirror` đã lọc sẵn `revenue_bucket <> 'excluded'`; `partnerPartition.includedRows` cũng chỉ là phần được nhận.
+
+⇒ **Materializer không bao giờ thấy dòng bị loại**, mà classifier cần đúng phần đó. Không thể "gọi thêm một hàm".
+
+**Quyết định kiến trúc:** dựng **script riêng `build_sync_exceptions.js`** (chỉ đọc nguồn, chỉ ghi `syncExceptionStore`) thay vì sửa materializer. Lý do: materializer là **script an toàn nhất repo** — canh kỳ khoá sổ, ba lớp bất biến, ghim doanh thu T06/T07. Thêm truy vấn vào đó để phục vụ **một màn báo cáo** là đánh đổi rủi ro lấy tiện lợi; script riêng đạt cùng kết quả mà **không thể làm hỏng doanh thu**. Bất biến giữ nguyên: `Σ(đưa vào) + Σ(loại) == Σ(nguồn)`, lệch ⇒ **DỪNG, không ghi store**.
+
+**Chốt thêm cho V-D:** phân biệt rõ hai bộ lịch — lịch **gửi tin** do `app-report-tgbot` chạy (**đang hoạt động, không đụng**) và `runDueJobs()` của App Report (**chưa từng chạy**). Ưu tiên **cron ngoài** hơn `setInterval` trong tiến trình vì restart là mất. Job `target_proposal` chưa có handler ⇒ **không làm gì + ghi log**, cấm tự áp target.
+
+**V-A** yêu cầu assert **phải FAIL được với code hiện tại** — viết xong chạy thử trên code cũ, không đỏ thì viết lại. **V-B** theo `SPEC_PRIVACY_EYE.md`, điểm cốt lõi là **đang ẩn thì khoá nút duyệt tiền**.
+
+---
+
+### 2026-08-06 — 💡 CEO đề xuất "con mắt" ẩn/hiện số tiền — `SPEC_PRIVACY_EYE.md`
+
+CEO đề xuất nút con mắt ở màn Chi phí / Thanh toán CP vì *"hai tab này khá nhạy cảm, liên quan đến tiền bạc"*. Claude kiểm: **chưa có gì che số**, và `employeeCostVisibility` sẵn có là **thứ khác hẳn** (khoá quyền ở backend, có audit) — không thay thế nhau.
+
+**Nói thẳng ngay đầu spec:** đây là **rèm che, không phải khoá**. Số vẫn nằm trong bộ nhớ trình duyệt và phản hồi mạng; ai mở F12 là thấy. Chống được: người đứng sau lưng · chiếu màn hình họp · để máy mở khi rời bàn. **Không** chống được: người cầm máy · ảnh chụp lúc đang hiện. Bắt buộc ghi tooltip *"không phải khoá bảo mật"* — người dùng tin nhầm còn nguy hiểm hơn không có tính năng.
+
+**Bảy điểm thiết kế**, trong đó ba điểm là chỗ khác biệt giữa làm cho có và làm cho dùng được:
+- **Một công tắc cho cả app**, đặt ở thanh tiêu đề — không phải từng trang. Lúc chia sẻ màn hình không ai nhớ bật từng chỗ.
+- **Mặc định ẩn** và **không nhớ trạng thái "đang hiện"** (F5 ⇒ về ẩn). Khoảnh khắc rủi ro nhất là lúc vừa mở trang trước mặt người khác.
+- **Tự ẩn lại** sau 60s không thao tác, và ngay khi cửa sổ mất tiêu điểm — dùng lại đúng `visibilitychange` mà chuông đang dùng, không dựng cơ chế thứ hai.
+
+**‼ Điểm đáng giá nhất — biến tính năng trang trí thành kiểm soát thật:** đang ẩn số thì **khoá luôn các nút Duyệt · Từ chối · Mở khoá · Ghi đã trả · Gỡ ghi nhận**. *Không ai được duyệt tiền khi đang không nhìn thấy số tiền.* Backend vẫn chặn độc lập — ẩn nút không phải lớp bảo vệ.
+
+**Cố ý KHÔNG làm:** mã PIN (an tâm giả, thêm phiền — muốn khoá thật thì dùng `employeeCostVisibility`) và che theo từng ô (phức tạp, dễ sót).
+
+---
+
+### 2026-08-06 08:50 (giờ VN) — 📋 Rà soát sổ nợ toàn app: **3 thứ đã xây xong nhưng CHƯA NỐI DÂY**
+
+CEO yêu cầu rà việc còn nợ để đóng dứt app. Claude quét bằng lệnh (`TODO(LIVE)` · người gọi từng module · route ↔ nơi ghi dữ liệu · `SPEC_*` chưa hiện thực · mục "chưa làm" trong changelog), **không nhớ theo trí nhớ**. Kết quả: **`NO_CON_LAI.md`**.
+
+**Phát hiện đáng nói nhất — ba module đã làm xong nhưng không ai gọi:**
+
+1. **Màn "Chưa đồng bộ" luôn rỗng.** Có đủ `syncExceptionClassifier` + catalog 14 mã + store + report + route `routes.js:2424` + `api.syncExceptions()` + 14 test — nhưng **không dòng nào gọi `classifySyncExceptions()` rồi `syncExceptionStore.write()`** trong luồng chạy thật (grep toàn `server/src` và `server/scripts`: chỉ có trong file định nghĩa và trong comment ví dụ). ⇒ `SPEC_REVENUE_SYNC_EXCEPTIONS` — thứ sinh ra để *"không dòng nào biến mất lặng lẽ"* — **chưa chạy ngày nào**.
+2. **`runDueJobs()` không ai gọi.** `scheduledJobs.js` đủ cả, nhưng **0 nơi gọi** kể cả `index.js`; không `setInterval`, không cron. ⇒ mọi việc theo lịch **của App Report** chưa từng chạy. ‼ Phân biệt: lịch gửi tin chi phí/thưởng do **`app-report-tgbot` chạy riêng** và **đang hoạt động** — hai bộ lịch khác nhau.
+3. **Handler `target_proposal`** chưa hiện thực; mà có làm cũng chưa chạy vì §2.
+
+**Còn lại:** đọc file Excel thật (`SPEC_UPLOAD_REAL_FILE`, CEO đã chốt CÓ) · khối cảnh báo bộ lọc chưa tách ra ngoài panel · 4 dây `TODO(LIVE)` (login demo → OTP/SSO là cái còn thật sự cần) · và mấy việc chờ người (DN012 bấm Start, 3 NV stale, nghiệm thu đóng V1/V2).
+
+**Thứ tự đề xuất:** ưu tiên thứ **đã trả tiền rồi mà chưa dùng được** — bộ lọc (vài dòng) → cắm classifier → cắm cron → file Excel → handler target → login OTP/SSO.
+
+---
+
+### 2026-08-06 — ✅✅ V2 ĐÓNG: kế toán đã bấm ghi chính thức · **CẢ HAI việc hạn 08/08 xong trước hạn 2 ngày**
+
+Kế toán đã **thao tác thật trên MISA** cho đơn `DH479816093` (3.995.000đ · 29/07 · 186.BVĐK An Phú CNIII · Agimoti). Không chỉ trả lời GHI mà đã bấm.
+
+**Ảnh hưởng tới số liệu: KHÔNG CÓ.** Bucket `pending` vốn đã nằm trong doanh thu, ghi chính thức chỉ đổi trạng thái. T07 giữ nguyên **30.917.892.673đ**, thưởng/phạt đã trả không phải tính lại.
+
+---
+
+## Chốt hai việc có hạn 08/08 — cả hai xong ngày 06/08
+
+| | Việc | Kết quả |
+|---|---|---|
+| **V1** | Đơn `DH479816174` · 1.795.600đ gán nhầm telesaler | App Sale thêm cặp phân công 06:44 (audit `19790`); **sync run 365 xác nhận không bị ghi đè** |
+| **V2** | Đơn `DH479816093` · 3.995.000đ treo "Đề nghị ghi" | Kế toán **đã ghi chính thức**; doanh thu không đổi |
+
+**Nghiệm thu còn lại — không gấp, số không đổi dù chạy hay chưa:**
+1. Ô "Doanh thu chưa phân bổ" (màn Chi phí) phải về **0đ** — CEO tự nhìn được.
+2. Khi bot có lại exec: `misa_pending_detail.js` → `DH479816093` rơi khỏi nhóm "Đề nghị ghi"; `verify_frozen_periods.js` → vẫn **exit 0**.
+
+**Nhìn lại:** hai khoản tổng **5.790.600đ** — nhỏ so với doanh thu tháng, nhưng nếu để quá 08/08 thì **khoá sổ và không sửa được nữa**, và một nhân viên mất doanh số oan. Thứ đọng lại sau vụ này không phải hai con số, mà là **ô KPI "Doanh thu chưa phân bổ"** nay đứng canh thường trực: lần sau kiểu lỗi này **tự hiện lên màn hình**, không ai phải đi tìm bằng tay nữa.
+
+---
+
+### 2026-08-06 — ✅ V2 có quyết định: kế toán trả lời **GHI** cho `DH479816093` (3.995.000đ)
+
+CEO chuyển bảng, kế toán trả lời **GHI**. Đây là nhánh **an toàn**: khoản 3.995.000đ vốn đã được tính vào doanh thu T07 (bucket `pending` vẫn nằm trong doanh thu), nên ghi chính thức **không làm đổi con số**. Kỳ T07 giữ nguyên ghim **30.917.892.673đ**, thưởng/phạt đã trả **không phải tính lại**, không có chuyện hồi tố.
+
+**‼ Nhưng "trả lời GHI" chưa phải là "đã ghi".** Kế toán còn phải **thao tác thật trên MISA** (chuyển trạng thái `pending` → `official`) trước **08/08**. Trả lời miệng mà quên bấm thì tới hạn khoá sổ vẫn treo nguyên.
+
+**Nghiệm thu khi bot có lại quyền chạy** (không gấp, vì số không đổi dù ghi hay chưa):
+1. `node server/scripts/misa_pending_detail.js` → đơn `DH479816093` phải **rơi khỏi** nhóm "Đề nghị ghi"; nhóm đó về **0đ** hoặc mất hẳn.
+2. `node server/scripts/verify_frozen_periods.js` → vẫn **exit 0**. Ghi chính thức không đổi tổng, nên lệch là có thứ khác bị đụng.
+
+**Hai việc hạn 08/08 giờ đã có quyết định cho cả hai:** V1 đóng (App Sale thêm cặp lúc 06:44, sync run 365 xác nhận không ghi đè) · V2 kế toán chốt GHI, chờ họ bấm.
+
+---
+
+### 2026-08-06 06:44 (giờ VN) — ✅✅ V1 ĐÓNG: App Sale đã thêm cặp, và **sync tự động KHÔNG ghi đè**
+
+App Sale thêm cặp `120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162` → **DN001**, đúng 1 NV, lúc **06:44:28** (audit `19790`), qua cổng preview/duyệt DB của họ. Không sửa tay dòng MISA, không đổi tiền, không đụng đơn khác.
+
+**‼ Chi tiết đáng giá nhất trong cả vụ:** live-check cho thấy **sync tự động đã chạy tiếp lên run 365**, và dòng đó nay là **DN001** — không quay về VP018.
+
+Đây là **bằng chứng thực địa** cho quyết định tối 05/08: App Sale cảnh báo *"sync MISA hàng giờ có thể ghi đè, cần dựng cổng override từng đơn"*, Claude **chặn lại** sau khi đọc `CRM_ROWS_SQL` — bảng phân công thắng `employee_code` của dòng, và sync không đụng bảng phân công. Nay run 365 xác nhận: **không cần cổng override nào cả**. Nếu làm theo hướng kia, hệ thống đã có thêm **một nguồn phân công thứ hai** phải bảo trì — đúng loại nợ kỹ thuật đã trả giá hai lần trong tuần (7 bản chép luật "ai là CEO", suýt có 2 lịch nghỉ lễ).
+
+**Còn lại đúng một bước, do CEO tự làm:** mở màn Chi phí, ô **"Doanh thu chưa phân bổ"** phải từ `1.795.600đ` về **0đ**. Nếu còn hiện số cũ thì bấm **Làm mới** và đợi ~1 phút (luật cache nguội đã chốt sáng nay), rồi mới kết luận.
+
+**Nhìn lại cả vụ `DH479816174`:** khởi đầu là một đơn 1.795.600đ gán nhầm cho telesaler. Đi qua: công cụ tra chủ + 25 test · **3 lỗi trong công cụ, cả 3 của Claude, cả 3 do bot đối chiếu chéo mới lộ** · một lần chặn App Sale khỏi dựng hệ thống thừa · và một ô KPI mới ("Doanh thu chưa phân bổ") nay đứng canh thường trực để lần sau không ai phải đi tìm bằng tay.
+
+---
+
+### 2026-08-06 — ✅ V1 phía App Report ĐÓNG: chốt đúng một cặp cần sửa, bàn giao App Sale
+
+REPORTDEV nhận handoff mới, chạy lại và chốt — **khớp hoàn toàn** với phần Claude tra độc lập, không điểm nào lệch:
+
+| | |
+|---|---|
+| Đơn | `DH479816174` · đơn vị `120.HTNT-PHARMACITY` |
+| Cặp thiếu | `120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162` |
+| Bảng | `unit_product_employees` |
+| NV đề xuất | **DN001 — Đặng Xuân Trung** |
+| Số tiền thật | **1.795.600đ** (run 364, mã NV nguồn `VP018`) |
+| Cặp KHÔNG đụng | `G3.ĐY.QĐ141.201.N3.101` — đã đúng |
+
+`3.591.200đ` báo trước đó **đã được xác nhận là cộng trùng** snapshot run 331 + 364, không phải doanh thu thật cần phân bổ. Con số đúng bằng ô KPI: **1.795.600đ**.
+
+**Đường đi của lỗi, ghi lại vì đáng nhớ:** gán tay dòng MISA (05/08 16:39) **không ăn** vì `CRM_ROWS_SQL` ưu tiên bảng phân công hơn `employee_code` của dòng. Phải sửa **cặp trong bảng phân công** mới bền — và sync MISA hàng giờ không đụng bảng đó, nên không cần cổng override như App Sale từng đề xuất.
+
+**Còn lại:** App Sale thêm cặp qua cổng preview/duyệt DB của họ. **Nghiệm thu do CEO tự nhìn**: ô "Doanh thu chưa phân bổ" phải từ **1.795.600đ về 0đ**. Không cần bot chạy lệnh, không cần Claude vào PROD.
+
+**Ba lỗi trong công cụ V1 đã sửa hết trong hôm nay**, cả ba đều của Claude và **cả ba đều do bot đối chiếu chéo mới lộ ra**: ① gán tiền cả đơn cho một cặp · ② SQL không lọc `run_id` · ③ (trước đó) tiêu chí nghiệm thu ghim số cứng. Không có vòng soi chéo thì App Sale đã sửa phân công theo số gấp đôi.
+
+---
+
+### 2026-08-06 09:45 (giờ VN) — ✅ V1 KHÔNG cần chờ bot chạy lại: kết luận đã đủ vững để App Sale làm ngay
+
+Bot báo runtime hiện chỉ có read/write, **không có exec** ⇒ không fetch được `79deae5`, không chạy lại V1, không kiểm aggregate. Báo thẳng và **không suy diễn từ output cũ** — đúng.
+
+**Nhưng hạn 08/08 còn 2 ngày, và việc không thật sự bị chặn.** Kết luận cần cho App Sale đã có, từ **chính SQL bot tự tra**, không phải từ bản in lỗi:
+
+- Lần đồng bộ mới nhất, thành công = **run 364**. Trong run 364, đơn `DH479816174` có **1 dòng** `G1.GE.QĐ139.1104.N2.162` = **1.795.600đ** + 1 dòng `G3.ĐY.QĐ141.201.N3.101` = 0đ. **Khớp đúng ô KPI.**
+- Bảng phân công: `G1.GE.QĐ139.1104.N2.162` **KHÔNG có** · `G3.ĐY.QĐ141.201.N3.101` **có, 1 NV (DN001)**.
+
+**Vì sao kết luận "cặp thiếu" KHÔNG dính lỗi vừa sửa:** `UNIT_CATALOG_SQL` đọc thẳng `unit_product_employees`, **không có khái niệm `run_id`** (đã kiểm: 0 lần xuất hiện). Lỗi gộp run chỉ ảnh hưởng **số dòng/số tiền**, không ảnh hưởng **cặp nào có mặt trong danh mục**. Hai câu truy vấn độc lập nhau.
+
+⇒ **App Sale làm được ngay**: thêm cặp `(120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162)`, gán **DN001**, số tiền đúng là **1.795.600đ**.
+
+**Nghiệm thu không cần bot:** sau khi App Sale thêm cặp, ô KPI **"Doanh thu chưa phân bổ"** trên màn Chi phí phải **tự về 0đ**. CEO tự nhìn được, không phải chờ ai chạy lệnh. Nếu về 0đ ⇒ V1 đóng; nếu vẫn 1.795.600đ ⇒ lỗi nằm chỗ khác, lúc đó mới cần bot.
+
+Việc phải chờ bot có exec trở lại: chạy lại V1 để đối chiếu số (không chặn) và kiểm aggregate ALL.
+
+---
+
+### 2026-08-06 09:30 (giờ VN) — 🐛 Lỗi thứ hai trong V1, cũng của Claude: SQL không lọc lần đồng bộ ⇒ cộng nhiều run vào nhau
+
+Bot **từ chối gửi khối ③ cho App Sale** và tra thẳng cơ sở dữ liệu — bắt đúng gốc:
+
+| Lần đồng bộ | `G1.GE.QĐ139.1104.N2.162` của `DH479816174` |
+|---|---|
+| run 330 | 0đ |
+| run 331 | 1.795.600đ |
+| **run 364** (mới nhất, thành công) | **1.795.600đ** |
+
+`UNIT_LINES_SQL` của Claude **không có điều kiện `run_id`** ⇒ gộp cả ba lần đồng bộ ⇒ khối ③ ra **"3 dòng · 3.591.200đ"**, trong khi sự thật theo run 364 chỉ là **1 dòng · 1.795.600đ** — **đúng bằng ô KPI**. Ô KPI không sai; script của Claude sai.
+
+Nếu bot cứ nghe theo bản in mà chuyển cho App Sale, họ sẽ thêm cặp phân công dựa trên **con số gấp đôi**. Đây là lần thứ hai trong buổi sáng chẩn đoán V1 suýt sai — và cả hai lần đều do bot **đối chiếu chéo** rồi dừng lại, không phải do Claude tự bắt được.
+
+**Sửa:** lấy **lần đồng bộ thành công MỚI NHẤT của TỪNG THÁNG** (dùng lại `LATEST_MISA_RUN_SQL` của `appSaleRevenueMirror`, không tự viết), lọc `l.run_id = ANY(...)`. Bản in nói rõ **đã lấy run nào cho tháng nào**; tháng nào không có lần đồng bộ thành công thì **kể tên**, không im lặng bỏ qua; không tháng nào có thì **thoát mã 2**.
+
+4 test mới, gồm ca `monthsBetween` bắc cầu sang năm. Server **932 bài · 926 PASS · 6 lỗi `pdfinfo`** môi trường.
+
+**Kết luận nghiệp vụ vẫn không đổi:** cặp `(120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162)` **thiếu thật** trong bảng phân công — chỉ con số dòng/tiền là sai. Chạy lại bằng bản mới rồi mới giao App Sale.
+
+---
+
+### 2026-08-06 09:00 (giờ VN) — 🐛 Lỗi trong khối ③ của Claude: gán TIỀN CẢ ĐƠN cho MỘT cặp — sửa trước khi App Sale động tay
+
+Bot chạy lại V1, khối ③ ra **"5 dòng · 3.591.200đ"** trong khi ô KPI chỉ **1 dòng · 1.795.600đ**. Hai con số chỏi nhau ⇒ soi lại: `3.591.200 ÷ 1.795.600 = 2` chẵn, **không phải bội của 5** ⇒ 5 dòng KHÔNG cùng một mặt hàng.
+
+**Lỗi:** `diagnoseOrderPair` lấy mã hàng của **dòng đầu** nhưng cộng tiền của **tất cả dòng**. Đơn nhiều mặt hàng ⇒ dồn hết tiền vào một cặp ⇒ **chỉ sai cặp cho App Sale sửa**, và sửa xong vẫn còn cách ly. Suýt để App Sale thao tác trên chẩn đoán sai — đúng vào lúc còn 2 ngày tới hạn.
+
+**Sửa:** tách theo **từng mặt hàng**, mỗi cặp một kết luận riêng (`MISSING` / `AMBIGUOUS` / `OK`), tiền của đúng mặt hàng đó, kèm mã NV mà dòng đang ghi. Câu "việc cần làm" **chỉ liệt kê cặp hỏng** — cặp đã đúng không được đưa vào để App Sale khỏi sửa nhầm.
+
+```
+③ CẶP CỦA ĐƠN ĐANG HỎI — DH479816174
+   Đơn có 5 dòng · 4 mặt hàng · tổng 3.591.200đ
+     ✗ THIẾU CẶP   G1.GE.QĐ139.1104.N2.162    2 dòng · 3.591.200đ · dòng ghi NV: UNALLOCATED
+     ✓ đã đúng     QL-B                       1 dòng · 0đ · dòng ghi NV: DN001
+   ⇒ 1/4 mặt hàng của đơn có cặp hỏng
+```
+
+5 test mới (gồm ca "dòng thiếu mã hàng vẫn phải hiện, không bị nuốt"). Server **931 bài · 925 PASS · 6 lỗi `pdfinfo`** môi trường.
+
+**Vẫn còn một câu hỏi cho bot, phải trả lời trước khi App Sale sửa:** ô KPI đếm **1 dòng · 1.795.600đ**, khối ③ đếm **2 dòng cùng mã hàng · 3.591.200đ**. Hai dòng giống hệt nhau về tiền ⇒ hoặc đơn có thật 2 dòng, hoặc **nguồn đang nhân đôi**. Nếu nhân đôi thì thêm cặp phân công sẽ kéo **gấp đôi tiền** vào doanh số DN001.
+
+---
+
+### 2026-08-06 08:30 (giờ VN) — 🔧 Tinh chỉnh cổng (b): FAIL phải là SO SÁNH, không phải tuyệt đối
+
+Bot dừng ở cổng (b): *"CP/DT vẫn `—` sau >1 phút do upstream employee-cost"* và hỏi CEO chọn **chờ KPI hồi phục** hay **deploy UI**. Kèm số: test **955/955**, Vite 651 modules, browser mobile/desktop + console/HTTP 5xx PASS, independent re-audit PASS.
+
+**Phán quyết: KHÔNG chặn deploy.** Bot ghi rõ đây là *"blocker LIVE hiện tại"* — tức quan sát trên **bản đang chạy (`3eac0a9`), TRƯỚC khi cutover**. Triệu chứng đã có sẵn trước deploy ⇒ **nguyên nhân là nguồn upstream, không phải `b87fbaa`**. Cùng đúng lối lập luận đã đóng FAIL #2 lúc 05:15: đối chứng với baseline.
+
+Và ô để `—` thay vì hiện số sai chính là **fail-closed chạy đúng** — app đang làm điều phải làm.
+
+**Cổng (b) viết lại lần cuối (lần thứ năm sửa kiểu tiêu chí trong hai ngày):**
+> (b) chỉ **FAIL** khi ô `—` trên **bản MỚI** trong khi **bản CŨ có số** ở cùng thời điểm. Cả hai bản cùng `—` ⇒ **sự cố nguồn upstream**, ghi nhận riêng, **KHÔNG chặn deploy** — vì bản deploy không đụng đường dữ liệu KPI, chặn kiểu đó thì hễ DataHub chập là cả hệ thống đứng bánh.
+
+**Việc riêng, không chặn nhưng phải theo:** nguồn `employee-cost` đang yếu. Lúc 05:15 ba ô đều có số (CP/DT 8,1% · chưa phân bổ 1.795.600đ · khớp 99,0%); nay riêng **CP/DT** mất số ⇒ hỏng ở **vế chi phí**, không phải vế doanh thu. Trước đó đã ghi nhận *"DataHub tạm thiếu nguồn DN006"*. Cần bot nói rõ: mất cả 21 NV hay chỉ vài NV.
+
+**Ưu tiên không đổi:** cutover `b87fbaa` → **V1 (hạn 08/08, còn 2 ngày)** → bộ lọc thu gọn. V1 hoàn toàn độc lập với ô KPI đang lỗi, không có lý do gì để nó chờ.
+
+---
+
+### 2026-08-06 05:40 (giờ VN) — 🔒 Luật: bộ lọc ĐANG ÁP DỤNG thì chip + câu cảnh báo KHÔNG được ẩn khi thu gọn
+
+CEO xác nhận **có yêu cầu** tính năng thu gọn bộ lọc trang Tổng quan (Claude đã hỏi lại, không phải bot tự làm thêm). Audit của bot trả **NEEDS FIX** với 4 mục — Claude giữ nguyên kết luận, nhưng **nâng mục #2 từ Medium lên CHẶN** và **hạ yêu cầu ở #3**.
+
+**#2 — nâng lên chặn, vì nó không phải chuyện thẩm mỹ.** Khối `overview-filter-note` bị ẩn khi thu gọn KHÔNG chỉ chứa chip tên bộ lọc; nó chứa cả câu *"Target không phân bổ theo lát cắt này nên App không tính % target sai."* Thu gọn ⇒ giấu câu đó, trong khi các ô KPI **vẫn đang bị lọc** ⇒ người dùng đọc doanh thu và % target mà **không biết đang nhìn một lát cắt**. Không sai số, nhưng **giấu điều kiện để hiểu số** — cùng họ với *"không dòng nào biến mất lặng lẽ"*.
+
+> **LUẬT (áp cho mọi màn có bộ lọc, không riêng Tổng quan):** khi có bộ lọc đang áp dụng, **chip tên bộ lọc và câu cảnh báo cách đọc số KHÔNG được ẩn**, kể cả ở trạng thái thu gọn. Chỉ được thu gọn phần **chọn** lọc.
+
+**#3 — đúng nhưng hạ yêu cầu cho vừa hạ tầng.** Bot tự chê test của mình là quét regex, không bắt được #1/#2 — chê đúng. Nhưng repo **không có `jsdom`/`testing-library`** (đã tra `web/package.json`), toàn bộ test web đang là quét mã nguồn; dựng hạ tầng render chỉ vì một toggle là không đáng. Yêu cầu vừa sức: khoá **đúng bất biến** (khối note nằm NGOÀI nhánh collapse · `aria-expanded` đổi theo state · header có `flex-wrap`). Test nào không thể fail được thì bỏ, đừng giữ cho đẹp số.
+
+**#1 · #4 — đúng, sửa rẻ:** `flex-wrap: wrap` + `min-width: 0`; giữ panel trong DOM với `hidden` (giữ được `aria-controls`, và #4 tự hết).
+
+**Thứ tự (Claude đề xuất, CEO có thể đổi):** ① cutover `b87fbaa` (đã duyệt 21:24, chưa lên PROD) → ② chạy V1 và giao việc cho App Sale (**hạn 08/08, còn 2 ngày**) → ③ sửa bộ lọc thu gọn trong lúc chờ App Sale. Đường tới hạn của V1 nằm ở App Sale, không nằm ở bot, nên làm ② sớm rồi ③ chạy song song là không việc nào bị đói.
+
+---
+
+### 2026-08-06 05:15 (giờ VN) — ✅ Đóng lý do FAIL #2: **cache nguội, không phải lỗi `b87fbaa`** — và viết lại cổng (b)
+
+Bot đưa PROD về `3eac0a9` (đúng lệnh "bản tốt gần nhất đã nghiệm thu"), forecast hiện `— · đã qua 3/21 ngày làm việc` ✅, rồi **đối chứng cache nguội trên chính baseline**:
+
+| Lần tải trên `3eac0a9` | Kết quả |
+|---|---|
+| Lần đầu sau deploy | **0/0 dòng · ba ô KPI `—`** |
+| Sau ~1 phút, làm mới | **605/605 dòng** · CP/DT 8,1% · chưa phân bổ 1.795.600đ · khớp 99,0% |
+
+⇒ **Baseline tốt cũng "—" ở lần tải đầu.** Đúng giả thuyết 04:00: bảng 21 NV phải dựng lại từ DataHub, chưa kịp thì các ô **fail-closed về `—` đúng thiết kế**. FAIL #2 **không chứng minh lỗi `b87fbaa`** — đóng, không điều tra thêm.
+
+**Cổng (b) viết lại thành LUẬT** (lần thứ tư sửa kiểu ghim-số-cứng trong hai ngày):
+> Lần tải đầu sau deploy **được phép** hiện `—` (cache nguội, 0/0 dòng). Chờ ~1 phút rồi **Làm mới**: từ lúc đó ba ô **phải có số**. **Chỉ FAIL nếu sau 1 phút vẫn `—`.**
+
+Bot đã tự ghi hai luật vào quy trình: rollback về **bản tốt gần nhất đã nghiệm thu**, và luôn dùng **tiêu chí acceptance mới nhất**. Đây là hai nguyên nhân trực tiếp của hai lần báo động giả đêm qua.
+
+**‼ Còn một mâu thuẫn chưa gỡ:** hai báo cáo gần nhau nói khác nhau về PROD — một bản ghi `b87fbaa` (acceptance (c) PASS, backup `b821be1e…`), bản này ghi `3eac0a9` và *"chưa cutover lại b87fbaa"*. Chưa xác định được bản nào là hiện tại ⇒ **đã hỏi lại, không suy đoán**. Nếu PROD đang là `3eac0a9` thì **cảnh báo lượt ưu tiên chưa lên**: NV vẫn bấm được "Xin nhận sớm" ở kỳ T07 mà không được cảnh báo gì, dù sớm nhất là 31/08.
+
+---
+
+### 2026-08-06 05:00 (giờ VN) — 🔧 V1: script tự chỉ ra ĐÚNG CẶP cần sửa — cắt vòng hỏi qua lại giữa hai bot
+
+**Vì sao làm lúc này:** hạn khoá sổ **08/08 còn 2 ngày**, mà V1 đang kẹt ở vòng lặp: App Report đo → báo CEO → CEO chuyển App Sale → App Sale hỏi lại cặp nào → đo tiếp. Mỗi vòng mất nửa ngày.
+
+**Thêm `diagnoseOrderPair()`** vào `quarantineOwnerProposal.js` + in thành khối ③ trong `propose_quarantine_owner.js`. Một lệnh chạy ra luôn **việc cụ thể App Sale phải làm**:
+
+```
+③ CẶP CỦA ĐƠN ĐANG HỎI — DH479816174
+   Mã hàng: G1.GE.QĐ139.1104.N2.162 · 1 dòng · 1.795.600đ
+   Trong bảng phân công: KHÔNG
+   ⇒ CẶP THIẾU ⇒ App Report rơi về mã NV của dòng MISA, nên vẫn cách ly
+   ➜ VIỆC CẦN LÀM: App Sale THÊM cặp (120.HTNT-PHARMACITY × G1.GE.QĐ139.1104.N2.162)
+     vào unit_product_employees, gán ĐÚNG MỘT NV.
+```
+
+Ba kết luận có thể ra, mỗi cái kèm việc khác nhau: **cặp thiếu** ⇒ thêm · **cặp gán >1 NV** ⇒ gỡ còn một · **cặp đã đúng 1 NV** ⇒ nói thẳng *"lỗi KHÔNG nằm ở bảng phân công, dừng và báo Claude"*. Không tìm thấy đơn ⇒ **cấm suy ra "đã hết cách ly"**, bắt kiểm lại tham số.
+
+Bốn test mới khoá cả bốn nhánh. Server **927 bài · 921 PASS · 6 lỗi `pdfinfo`** môi trường — không phát sinh lỗi mới.
+
+Vẫn giữ nguyên: script **chỉ đọc**, không `UPDATE`/`INSERT`; việc gán do App Sale làm.
+
+---
+
+### 2026-08-06 04:00 (giờ VN) — ⛔ Rollback QUÁ SÂU: PROD tụt về `bf3c7c5`, con số `145,7%` gây hiểu nhầm QUAY LẠI màn hình CEO
+
+Bot cutover `b87fbaa`, acceptance FAIL, rollback về **`bf3c7c5`**. Hai vấn đề, cái thứ hai nghiêm trọng hơn cái thứ nhất.
+
+**① Lý do FAIL thứ nhất là TIÊU CHÍ ĐÃ BỊ THAY THẾ.** Bot ghi *"Exact 2/21 không xuất hiện sau khi ngày live đã sang 06/08"*. Nhưng lúc 03:04 chính bot hỏi và Claude **đã duyệt đổi 2/21 → 3/21**, kèm bảng đối chiếu cả tháng và lệnh viết tiêu chí **thành luật, không thành số**. Bot vẫn chạy tiêu chí cũ ⇒ **báo động giả**, không phải lỗi code. (Lỗi gốc vẫn là của Claude: ghim số cứng vào cổng nghiệm thu — lần thứ ba trong ngày.)
+
+**② Lý do thứ hai chưa được chứng minh, mà hậu quả rollback thì có thật.** *"Lần tải stable đầu không dựng được ba KPI có số"* — chưa có đối chứng. `b87fbaa` **không đụng file nào của KPI** (`git diff --name-only 3eac0a9 b87fbaa` không có `healthKpi`/`workingDay`). Nhiều khả năng là **cold cache sau reload**: bảng 21 NV phải dựng lại từ DataHub, quá hạn thì các ô fail-closed về `—` **đúng thiết kế** — và `3eac0a9` reload nguội cũng sẽ y hệt. Muốn kết luận phải **đối chứng**: tải nguội `3eac0a9` và `b87fbaa` rồi so.
+
+**‼ Hậu quả nặng nhất: rollback đi quá xa.** Lệnh ghi rõ *"lùi về `3eac0a9`, KHÔNG lùi sâu hơn"*. `bf3c7c5` là **cha của `3eac0a9`**, tức là bản **trước** sàn dự báo. Nên PROD lúc này **đã mất sàn**, ô dự báo **hiện lại `145,7%`** — đúng con số CEO đọc nhầm thành "chắc chắn vượt đích", đã sửa xong và đã nghiệm thu PASS lúc 21:30.
+
+**Luật rollback từ nay:** lùi về **bản tốt gần nhất đã nghiệm thu**, không lùi về một release cũ tuỳ ý. Ở đây bản đó là `3eac0a9` — deploy PASS · acceptance PASS lúc 21:30.
+
+**Việc ngay:** đưa PROD về `3eac0a9` (đã duyệt, đã nghiệm thu, không cần cổng mới). Sau đó mới bàn tiếp `b87fbaa` bằng tiêu chí đúng.
+
+---
+
+### 2026-08-05 21:30 (giờ VN) — 🚢 PROD = `3eac0a9`: ô dự báo đã sạch, NHƯNG mới lên một nửa thứ CEO duyệt
+
+**Xong thật, ghi nhận:** ô dự báo hết hiện `145,7%`, nay là `— · đã qua 2/21 ngày làm việc, chưa đủ để dự báo`. Con số gây hiểu nhầm đã biến khỏi màn hình CEO. Ba ô KPI kia có số bình thường; **Khớp doanh thu lên 99,0%** (chiều nay 94,5%). Console 0 lỗi, backup có SHA-256, chỉ reload app-report, V3 giữ nguyên 1/1.
+
+**‼ Nhưng CEO duyệt `b87fbaa`, bot deploy `3eac0a9`.** `b87fbaa` **chứa** `3eac0a9`, nên phần đã lên là **tập con** của phần được duyệt — an toàn về hướng, không có gì ngoài ý muốn ra PROD. Song **cảnh báo lượt ưu tiên chưa lên**: hộp "Xin nhận sớm" trên PROD vẫn không cảnh báo gì và vẫn cho bấm ở kỳ T07 dù sớm nhất là 31/08.
+
+**Và "acceptance PASS" là nói quá:** cổng 2 có 4 mục a·b·c·d; báo cáo dán a·b·d, **thiếu hẳn (c)** — mục kiểm hộp "Xin nhận sớm". Không phải bot bỏ sót khi kiểm, mà (c) **không thể chạy** vì tính năng đó chưa deploy. Đúng phải ghi **acceptance 3/4**. Bot tự ghi mục nợ số 2 là trung thực; chỉ là dòng kết luận trên đầu chưa khớp với chính nó.
+
+**Quyết định:** deploy tiếp `b87fbaa` — **không cần cổng duyệt mới**, vì đó chính là commit CEO đã duyệt lúc 21:24; `3eac0a9` chỉ là nửa đường. Deploy xong chạy **riêng mục (c)**.
+
+Mục nợ 3 đã đóng: `4490def` reachable trên origin qua hai nhánh candidate — không cần nhánh riêng.
+
+---
+
+### 2026-08-05 21:24 (giờ VN) — ✅ CEO DUYỆT DEPLOY `b87fbaa` (sàn dự báo + cảnh báo lượt ưu tiên)
+
+**Người duyệt:** CEO, trực tiếp. **Trạng thái lúc duyệt:** PROD `bf3c7c5`, chưa đổi.
+
+**Một lần deploy xử hai việc** — Claude đã xác minh `b87fbaa` **chứa** `3eac0a9` (sàn dự báo đã duyệt lúc 21:15 nhưng chưa kịp deploy), nên không cần hai đợt.
+
+**Bằng chứng Cổng 1 (Claude tự chạy, không nhận báo cáo suông):**
+- `earlyAdvancePreview.test.js` **6/6 PASS** — đủ ba trạng thái A (`EARLY_TOO_SOON`, mốc 31/08) · B (`EARLY_QUOTA_USED`, giữ tên kỳ đã tiêu lượt) · C (`OK` kèm đủ ba thứ bắt buộc), cộng ca thiếu số tiền ⇒ fail-closed, cộng khẳng định route gửi thật vẫn chặn **422**.
+- Mốc ngày khớp policy cũ: T07 → 31/08 · T08 → **01/10** · T09 → 31/10.
+- Server **953 bài · 947 PASS · 6 lỗi `pdfinfo`** môi trường (khớp 953/953 bot báo trên máy có `pdfinfo`) · web **191/191**.
+- Frontend **chỉ render** `earlyPreview` của backend — không `quarterOf`, không trừ ngày, không đếm lượt; nút gửi **mặc định tắt**, chỉ bật khi `submitDisabled === false`.
+- Làm thêm ngoài spec, giữ nguyên vì tốt hơn: thiếu số tiền ⇒ dừng hẳn, câu *"đã dừng để tránh dùng lượt nhầm kỳ"*.
+
+**CEO thấy gì sau deploy:** ô dự báo hết hiện `145,7%` (đổi thành `— · đã qua 2/21 ngày làm việc, chưa đủ để dự báo`; hiện số lại từ **10/08** kèm nhãn *ước lượng sớm*, bỏ nhãn từ **17/08**); hộp "Xin nhận sớm" có cảnh báo lượt ưu tiên và chặn kỳ chưa tới hạn.
+
+**Đường lùi:** về `bf3c7c5` + gói backup có SHA-256. Cổng 2 **toàn lệnh đọc**, không bấm gửi gì.
+
+---
+
+### 2026-08-05 22:00 (giờ VN) — 📄 CEO chốt: file kế toán PHẢI nạp được · nhân viên PHẢI tự mapping — spec `SPEC_UPLOAD_REAL_FILE.md`
+
+CEO trả lời **CÓ** cho câu hỏi file `01.DONA_T07.2026.xlsx` có dùng để nạp vào app không, và chốt thêm: *"đối với cột mã nhân viên thì hệ thống phải TỰ MAPPING, hoặc tại App Sale đã có cột nhân viên đó."*
+
+**Kiểm thêm thì sửa dòng tiêu đề KHÔNG đủ.** Đối chiếu `HEADER_MAP` với 16 cột thật: **chỉ 1/16 khớp** (`Mã đơn vị`). 15 cột còn lại — kể cả `Tổng thanh toán` (doanh thu) và `Mã quản lý nội bộ` — đều rơi. Nên dù dò đúng dòng tiêu đề, parser vẫn đọc 0 dòng.
+
+**Lỗi kèm theo, nhỏ nhưng gây hên xui:** `noAccent` thay `đ`→`d` **trước** `toLowerCase()` ⇒ `đvt` ra `dvt` còn `ĐVT` ra `đvt`. Cùng tên cột, kế toán gõ hoa hay thường ra hai kết quả. Sửa thứ tự.
+
+**Năm việc trong spec:** ① tự dò dòng tiêu đề (quét 20 dòng đầu, tối thiểu 4 cột khớp, không đạt thì **vẫn từ chối** — không đoán bừa) · ② bổ sung bí danh 16 cột, **cấm** `% CP`/`Tổng thành tiền CP` rơi vào `revenue` (chi phí là SSOT của DataHub) · ③ **tự mapping NV** theo cặp (`unit_code` × `iit_code`) **dùng lại đúng logic `nv_catalog`** của `appSaleRevenueMirror`, thứ tự ưu tiên y hệt, tra không ra thì `UNALLOCATED` + mã lý do sẵn có — **không bỏ dòng, không gán bừa** · ④ đếm và báo số dòng không phải dữ liệu (796 ⇒ 791 dữ liệu, 5 bỏ) · ⑤ đối soát `Σ revenue` với ô `SUBTOTAL` (**lệch là chặn**) và bỏ trần `warnings.slice(0,50)` đang cắt mất cảnh báo.
+
+**Vòng khép kín đáng ghi:** dòng upload không tra ra người sẽ nổi lên đúng ô KPI **"Doanh thu chưa phân bổ"** vừa làm — cùng cơ chế đang bắt `DH479816174`. Một ô KPI phục vụ hai nguồn lỗi khác nhau.
+
+**Nghiệm thu bằng chính file thật:** phải ra **791 dòng · 10.564.572.484đ** (Claude đã cộng tay đối chiếu, khớp ô `SUBTOTAL` từng đồng).
+
+---
+
+### 2026-08-05 21:40 (giờ VN) — 🧪 Chạy FILE THẬT qua bộ đọc Excel: không dính lỗi ô gộp, nhưng **App Report không đọc nổi file này**
+
+CEO gửi file kế toán thật `01.DONA_T07.2026.xlsx` (93 KB, sheet `7,2026`, 796 dòng). Chạy qua đúng `upload.parseWorkbook`.
+
+**① Nỗi lo ô gộp: KHÔNG có thật.** File **0 vùng ô gộp**. Cộng tay 791 dòng dữ liệu = **10.564.572.484đ**, khớp **đúng từng đồng** với ô `SUBTOTAL` trong file. **0 dòng tiền = 0**, **0 dòng số lượng = 0**. Lỗi App Sale gặp không lây sang đây.
+
+**② Nhưng App Report KHÔNG đọc được file này.** `parseWorkbook` trả 2 lỗi, đọc **0 dòng**:
+```
+["Thiếu cột mã nhân viên (emp_code/ma_nv).","Thiếu cột doanh thu (revenue/tong_tien)."]
+Tiêu đề dò được: ["Tên nhà thầu: CÔNG TY CỔ PHẦN DONAPHARM"]
+```
+Nguyên nhân: parser cứng nhắc lấy **dòng 1 làm tiêu đề, dòng 2 trở đi là dữ liệu**. File thật lại là: dòng 1 tên nhà thầu · dòng 2 địa chỉ · dòng 3 "Tháng 07.2026" · dòng 4 dòng SUBTOTAL · **dòng 5 mới là tiêu đề** · dòng 6 trở đi mới là dữ liệu.
+
+Đây là **fail-closed đúng** (báo lỗi, không nuốt rác) — không phải lỗi toàn vẹn dữ liệu. Nhưng nghĩa là: ai bưng file chuẩn của kế toán lên upload hôm nay thì **bị từ chối thẳng**.
+
+**③ File này KHÔNG có cột nhân viên.** 16 cột: Số TT · Ngày hóa đơn · Số hóa đơn · Phân tuyến · Mã QLNB · Mã đơn vị · Tên khách hàng · Tên hàng hóa · ĐVT · Tổng số lượng bán · Đơn giá · Tổng thanh toán · % CP · Tổng thành tiền CP · Tên nhà thầu · Ghi chú. Muốn biết đơn về tay ai thì phải tra **bảng phân công (đơn vị × mã hàng)** — đúng cơ chế đã phân tích 19:10 cho `DH479816174`.
+
+**④ Ghi để hỏi, không kết luận:** tổng file 10,56 tỷ, trong khi T07 ghim **30,92 tỷ**. Nhiều khả năng file là **một phần** (một nhà thầu / một nhóm), nhưng chưa xác minh.
+
+**Việc tồn (chưa làm, chờ CEO chốt):** file này có dùng để nạp vào app không? Có ⇒ dạy parser **tự dò dòng tiêu đề** thay vì cứng dòng 1 (rẻ, an toàn, fail-closed giữ nguyên). Không ⇒ không cần làm gì. **Không tự ý sửa parser khi chưa biết file có được dùng để upload hay không.**
+
+---
+
+### 2026-08-05 21:15 (giờ VN) — ✅ Claude DUYỆT Cổng 1 cho `3eac0a9` (sàn tin cậy ô dự báo) — tự chạy lại, không tin báo cáo suông
+
+**Lần đầu trong ngày bot đẩy đủ SHA lên origin trước khi xin duyệt** — `3eac0a9` và `bf3c7c5` đều fetch được, review được. Giữ nếp này.
+
+**Claude tự kiểm, không nhận báo cáo suông:**
+- Diff `bf3c7c5..3eac0a9` **gọn đúng phạm vi**: chỉ `employeeCostHealthKpis.js` + test + 2 file tài liệu. Không đụng gì khác.
+- Sàn cài đúng spec: **một hằng số có tên** `MIN_FORECAST_ELAPSED_WORKING_DAYS = 5` và `EARLY_FORECAST_MAX_ELAPSED_WORKING_DAYS = 9`, không rải số 5 khắp nơi. Dưới 5 ngày ⇒ thẻ `unavailable` ghi `đã qua N/21 ngày làm việc, chưa đủ để dự báo`, **vẫn giữ đủ 4 đầu vào trong `raw`** để audit. Ngày 5–9 ⇒ nhãn `ước lượng sớm`.
+- Claude **chạy lại test trên chính candidate**: `employeeCostHealthKpis.test.js` **11/11 PASS**, phủ đúng ba mốc 2 · 5 · 10 ngày, cộng các ca fail-closed (thiếu vế, lệch snapshot, không target, năm chưa nạp lịch).
+- Toàn bộ server trên candidate: **947 bài · 941 PASS · 6 lỗi `pdfinfo` môi trường** (máy Claude không có `pdfinfo`) — khớp con số 947/947 bot báo trên máy có `pdfinfo`.
+
+**Lịch hiện số của ô dự báo trong T08.2026** (ngày làm việc: 3,4,5,6,7,10,11,…,31):
+- tới hết 07/08 ⇒ **không hiện số**, chỉ ghi đã qua mấy ngày;
+- từ **10/08** ⇒ hiện số kèm nhãn `ước lượng sớm`;
+- từ **17/08** ⇒ hiện số bình thường.
+
+**Kết luận Cổng 1: PASS.** Chờ CEO duyệt Cổng 2 để deploy. Lùi được: về `bf3c7c5`.
+
+---
+
+### 2026-08-05 20:50 (giờ VN) — ✅ Đối chiếu lỗi "ô gộp đọc thành 0" của App Sale: **App Report KHÔNG dính**
+
+Bot App Sale báo NO-GO cho bản của họ, trong đó có P1: file Excel hợp lệ có ô gộp dọc bị đọc âm thầm thành `qty=0, amount=0`. App Report cũng parse .xlsx (`upload.js`) nên Claude kiểm chéo ngay.
+
+**Kết quả: không dính.** Dựng file có `mergeCells('A2:A3')` + `mergeCells('B2:B3')` rồi đọc bằng đúng cách `upload.js` đang dùng (`ws.getRow(r).values`): dòng 3 vẫn trả `["DN009", 2890000]` — ExcelJS tự điền giá trị ô gộp cho các dòng dưới. Không có mất mát.
+
+**Giới hạn của phép thử, ghi ra để không ai tưởng đã phủ hết:** file test do chính ExcelJS sinh; file xuất từ Excel thật có thể khác. Lớp bảo vệ bền vẫn là bất biến fail-closed, chưa có: hiện dòng thiếu tiền vẫn được nhập với `revenue=0` kèm cảnh báo, mà **danh sách cảnh báo bị cắt ở 50 dòng** (`warnings.slice(0, 50)`) — file lỗi nhiều là người duyệt không thấy hết. Đưa vào việc tồn, **không gấp**: đường doanh thu chính hiện đi qua materializer (mirror App Sale), không qua upload xlsx.
+
+`72043f26` là PROD của **App Sale**, không phải App Report — câu hỏi "PROD đang chạy gì" ở mục 20:30 nhắm nhầm hệ thống, rút lại. Phần còn đúng: `bf3c7c5` và `4490def` (App Report) vẫn chưa có trên origin.
 
 ---
 
@@ -17,11 +533,97 @@
 
 ---
 
+### 2026-08-05 20:30 (giờ VN) — ⚠ Hộp "Xin nhận sớm": thiếu cảnh báo lượt ưu tiên · và đang MỜI NV làm việc chắc chắn hỏng
+
+**CEO yêu cầu:** hộp thoại phải cảnh báo mỗi quý chỉ 1 lượt ứng trước hạn, dùng rồi thì lần sau bị chặn, nên cân nhắc để dành cho kỳ nhiều tiền.
+
+**‼ Soi ảnh CEO gửi thì lòi ra lỗi nặng hơn:** ảnh chụp DN002 kỳ **07/2026**, hai nút "Xin nhận sớm" đang bấm được — nhưng `checkEarlyRequest({period:'2026-07', today:'2026-08-05'})` trả **`EARLY_TOO_SOON` · sớm nhất 31/08/2026 (còn 26 ngày)**. NV chọn lý do, bấm gửi, **chắc chắn ăn lỗi**. Hộp thoại đang mời người ta làm việc không thể thành công. Sửa cùng đợt, ưu tiên ngang phần cảnh báo.
+
+Mốc đối chiếu quý 3: T07 → 31/08 · T08 → **01/10** (khớp đúng mốc CEO chốt 04/08) · T09 → 31/10.
+
+**Spec `SPEC_EARLY_ADVANCE_WARNING.md`** — một lần gọi backend, ba trạng thái: `EARLY_TOO_SOON` và `EARLY_QUOTA_USED` ⇒ **không hiện danh sách lý do**, nút gửi tắt, nói rõ ngày/kỳ đã tiêu lượt; `OK` ⇒ hiện khối cảnh báo **trên** danh sách lý do, bắt buộc có (1) **số tiền của chính lần đang xin** (CEO bảo "để dành cho kỳ nhiều tiền" thì phải cho thấy tiền), (2) tên quý lấy từ `quarterOf(period)` — quý của KỲ BÁN HÀNG, (3) câu **"Sếp từ chối thì KHÔNG mất lượt"** — đúng sự thật kỹ thuật (`consume` chỉ chạy ở nhánh `grantUnlock`); thiếu câu này NV sợ không dám xin, hỏng cả cơ chế.
+
+Luật quota **không viết lại** — dùng nguyên `earlyAdvancePolicy.js`. Frontend chỉ render; backend vẫn phải chặn thật, ẩn nút không phải là bảo vệ.
+
+---
+
 ### 2026-08-05 20:19 (giờ VN) — KPI forecast thêm sàn tin cậy 5 ngày làm việc
 
 - Dưới 5 ngày làm việc đã qua: backend trả `—` và dán rõ `đã qua N/tổng ngày làm việc, chưa đủ để dự báo`; không xuất phần trăm dễ gây hiểu nhầm.
 - Ngày làm việc thứ 5–9: vẫn tính forecast nhưng gắn nhãn `ước lượng sớm`; từ ngày thứ 10 bỏ nhãn.
 - Sàn đặt tại một hằng số backend có tên; test khóa đúng ba mốc 2/5/10 ngày và giữ bốn đầu vào audit (doanh thu kỳ · ngày đã qua · tổng ngày · target).
+
+---
+
+### 2026-08-05 20:00 (giờ VN) — 🚢 Bot báo XONG TOÀN BỘ (`bf3c7c5` lên PROD) — nhưng 2 việc CHƯA đóng, 1 ô đang hiện số gây hiểu nhầm
+
+**Đã lên PROD thật, ghi nhận:** cổng quyền CEO (nút Duyệt bấm được — thứ CEO chịu đựng cả tuần), chuông có trần retry, lý do chọn sẵn cho Xin nhận sớm/Từ chối, và 3 ô KPI hàng cuối. Không DB/migration, console 0 lỗi, rollback sẵn.
+
+**‼ 1. Ô dự báo CHƯA áp sàn — đang hiện `~145,7% target` dựng trên 2/21 ngày làm việc.** Sàn 5 ngày đã chốt và đẩy lên từ 17:00 (`5a54fc5` → `d54efbf`), bot build sau đó nhưng **không áp**. Suy ngược: 145,7% ⇒ doanh thu kỳ ≈ 4,33 tỷ ⇒ dự báo cả tháng **45,5 tỷ**, ngoại suy từ **10% thời gian của tháng**. Đây đúng là con số CEO liếc một giây rồi tin là "chắc chắn vượt đích". Phải sửa hoặc tạm ẩn ô này.
+
+**‼ 2. V1 CHƯA đóng — và chính ô KPI mới chứng minh điều đó.** Ô "Chưa phân bổ" vẫn `1.795.600đ · 1 dòng` = `DH479816174` vẫn bị cách ly, dù App Sale đã gán VP018 → DN001 lúc 16:39. Báo cáo bot ghi "payment V1/V2 PASS" là nói về **tính năng thanh toán Lần 1/Lần 2**, không phải việc V1 gán đơn — hai thứ trùng tên, đừng gộp. Theo luật đã phân tích 19:10: còn cách ly ⇒ cặp `120.HTNT-PHARMACITY × Pizar-3` **thiếu trong `unit_product_employees`, hoặc đang gán >1 NV** ⇒ App Sale khoá cặp đó về đúng DN001. **Ô KPI mới đã làm đúng việc của nó ngay ngày đầu: bắt được một việc còn hở mà bản tổng kết tuyên bố đã xong.**
+
+**3. Không nhánh nào trên origin:** `bf3c7c5` (đang chạy PROD), `4490def` (đích rollback), `c11b5a7` đều **không tồn tại trên origin**. Code đang chạy production mà ngoài bot ra không ai đọc được, và đích rollback cũng không kiểm chứng được. Phải push.
+
+**Ghi nhận đúng:** DataHub thiếu nguồn DN006 ⇒ app fail-closed bằng cách ẩn badge chỏi thay vì hiện số sai — đúng luật.
+
+---
+
+### 2026-08-05 19:10 (giờ VN) — 🔑 Đơn `DH479816174` giữ bền bằng BẢNG PHÂN CÔNG, không cần cổng override
+
+App Sale đã gán VP018 → DN001 lúc 16:39:14 (audit 19752, tiền/ngày/đơn khác không đổi, bảng phân công checksum giữ nguyên), kèm cảnh báo: **sync MISA hàng giờ có thể ghi đè lại** vì baseline chưa hỗ trợ override từng đơn, và đề xuất dựng "cổng sửa/build riêng".
+
+**Không cần dựng gì cả.** Đọc `appSaleRevenueMirror.CRM_ROWS_SQL` — câu SQL App Report dùng để quy đơn về nhân viên:
+
+```sql
+COALESCE(NULLIF(CASE WHEN nc.nv_cnt=1 THEN nc.emp_code END,''), l.employee_code,'') employee_code
+```
+
+`nc` = `unit_product_employees` (bảng phân công). Nghĩa là: **cặp (đơn vị × mã hàng) nào trong bảng phân công chỉ có ĐÚNG MỘT nhân viên thì lấy người đó — `l.employee_code` của dòng MISA chỉ là phương án dự phòng.** Bảng phân công **thắng** MISA.
+
+Hệ quả:
+- Sync MISA ghi đè `employee_code` về VP018 **cũng không đổi con số của App Report**, miễn là cặp (`120.HTNT-PHARMACITY` × mã hàng Pizar-3) có trong bảng phân công với đúng 1 NV. App Sale vừa xác nhận sync **không đụng** bảng phân công (checksum giữ nguyên) ⇒ sửa ở đó là **bền**, không cần cổng override, không cần build gấp trước 08/08.
+- Nếu đơn vẫn bị cách ly sau sync thì nguyên nhân là **cặp đó thiếu trong bảng phân công, hoặc đang gán >1 NV** — V1 đã đếm 143 cặp của đơn vị này đều thuộc DN001, nên nhiều khả năng chỉ thiếu đúng cặp của mã hàng này. Sửa đúng chỗ: **thêm/`nv_cnt`=1 hoá cặp đó**, không sửa dòng MISA.
+
+**Cấm dựng cổng override từng đơn** trong lúc này: nó tạo **nguồn phân công thứ hai** — đúng cái sai đã trả giá hai lần hôm nay (7 bản chép luật "ai là CEO", suýt có 2 lịch nghỉ lễ).
+
+Lúc ghi mục này là **19:08**, các nhịp sync 17:00 và 18:00 đã chạy — trạng thái thật phải **đo**, không suy đoán: chạy lại `propose_quarantine_owner.js` là biết ngay.
+
+---
+
+### 2026-08-05 17:00 (giờ VN) — 🔍 Review candidate KPI `c11b5a7`: 1 điểm chặn, 1 lỗ hổng của chính spec Claude
+
+**Chặn cứng — không review được:** `c11b5a7` **không có trên origin** (`git cat-file` toàn bộ nhánh: không tồn tại), file `vnWorkingDays` cũng chưa nhánh nào có. Lặp lại đúng tình huống sáng nay. Không có code trên origin thì không duyệt được, kể cả khi báo cáo đẹp.
+
+**Phần đối chiếu được thì bot ĐÚNG:** Claude chạy độc lập trên `holidays.json` + `holidayFor()` — **T08.2026 = 21 ngày làm việc**, khớp con số bot báo. Ô "chưa phân bổ" ra `1.795.600đ · 1 dòng`, khớp đúng ca `DH479816174` ⇒ ô đó bắt đúng thứ cần bắt; sau khi App Sale gán về DN001, ô này phải tự về **0đ** — một phép thử sống rất tốt.
+
+**‼ Lỗ hổng của chính spec Claude, không phải lỗi bot:** ô dự báo ra `~135,1% target` khi mới đi qua **2/21 ngày làm việc** (01/08 là T7, 02/08 CN ⇒ tới hết 04/08 chỉ có 03 và 04). Kiểm lại: 3.860.878.168 ÷ 2 × 21 ÷ 31.200.318.669 ≈ **130%** — phép tính đúng, nhưng **con số vô nghĩa**: chưa tới 10% tháng, một đơn lớn rơi vào hai ngày đó là dự báo bay lên 130%+, CEO liếc qua tưởng chắc chắn vượt đích. Spec cũ chỉ chặn ca 0 ngày, quên đặt sàn.
+
+**Sửa spec (`SPEC_KPI_HEALTH_ROW.md`, commit `5a54fc5`):** chưa đủ **5 ngày làm việc đã qua** thì KHÔNG hiện số — thay bằng `— · đã qua N/21 ngày làm việc, chưa đủ để dự báo`; ngày thứ 5–9 kèm nhãn `ước lượng sớm`. Sàn đặt một chỗ, cấm rải hằng số.
+
+**Thứ tự:** `5ba27ab` (cổng quyền CEO) vẫn CHƯA lên PROD sau vụ rollback báo động giả — việc đó mở khoá công việc hằng ngày của CEO, phải đi TRƯỚC KPI.
+
+---
+
+### 2026-08-05 16:28 (giờ VN) — ✅ CEO GẬT V1: gán `DH479816174` → DN001
+
+**Quyết định:** CEO duyệt trực tiếp ("tôi đồng ý nhé") gán đơn cách ly `DH479816174` (MISA `341964` · Pizar-3 · **1.795.600đ** · đơn vị `120.HTNT-PHARMACITY`, đang treo vì gán nhầm VP018-telesaler) về **DN001 — tài khoản SALE** (xem mục cải chính ngay dưới: DN001 KHÔNG phải mã CEO, hai tài khoản chỉ trùng tên).
+
+**Căn cứ đã trình:** `propose_quarantine_owner.js` chạy trên PROD, thoát 0 — danh mục phân công 143/143 cặp mã hàng của đơn vị thuộc DN001; lịch sử T06–T08: 109 dòng · 50 đơn · 582.140.315đ · **100% một người**. Hai nguồn không mâu thuẫn.
+
+**Thực thi:** việc GÁN nằm bên **App Sale** (App Report chỉ đọc — đã khoá bằng test cấm UPDATE/INSERT). Đã soạn lệnh cho bot App Sale qua CEO chuyển. Sau khi App Sale gán xong, bot server App Report chạy xác minh: `propose_quarantine_owner.js` phải hết dòng cách ly cho đơn vị này, đối soát App Report ↔ App Sale phải về **0đ tròn**, và `verify_frozen_periods.js` vẫn exit 0 (gán lại NV không đổi tổng doanh thu kỳ — chỉ đổi phân bổ, làm TRƯỚC khoá sổ 08/08 nên hợp lệ, không hồi tố).
+
+---
+
+### 2026-08-05 16:35 (giờ VN) — ‼ CẢI CHÍNH: DN001 KHÔNG phải "mã của CEO" — hai tài khoản riêng, chỉ trùng tên
+
+CEO đính chính trực tiếp: tài khoản **`CEO` = QUẢN TRỊ**, tài khoản **`DN001` = SALE**, đăng nhập bằng hai SĐT khác nhau, **chỉ trùng tên người Đặng Xuân Trung**. Các ghi chú trước đó của Claude (mục 11:30 "DN001 chính là mã của CEO — người duyệt và người nhận là một", và cảnh báo "tự duyệt cho chính mình" ở màn Xin nhận sớm) là **hiểu nhầm** — cải chính tại đây, không sửa lùi mục cũ.
+
+Hệ quả đã rà:
+- **Cổng quyền không bị ảnh hưởng, không sửa gì:** `CEO_EMP_CODES = ['CEO']`, chạy thử `isCeoActor({role:'sale', emp_code:'DN001'}) = false`. DN001 chưa từng và không được có quyền quản trị.
+- **Luồng "DN001 xin nhận sớm → tài khoản CEO duyệt" là hai vai đúng nghĩa**, không phải tự duyệt — bỏ mọi dè chừng đã nêu.
+- **V1 hết vướng:** đề xuất gán `DH479816174` → DN001 đứng nguyên trên căn cứ dữ liệu (143/143 cặp phân công · 100% lịch sử doanh thu); chỉ còn chờ CEO gật như mọi quyết định gán khác, không còn caveat "tự quyết cho mình".
+- Ghi vĩnh viễn vào `CLAUDE.md` (mục "Danh tính tài khoản") để mọi phiên sau đọc trước, không tái phạm. Không ghi SĐT vào tài liệu repo.
 
 ---
 

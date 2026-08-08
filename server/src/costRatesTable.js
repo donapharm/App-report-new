@@ -36,7 +36,8 @@ function buildTable({ period, session, store = persist } = {}) {
   const isCeo = !!session?.isCeo;
   const grant = catalogCostColumnGrants.readFor(session?.emp_code, { store });
   const template = employeeCostTemplates.resolveTemplate(session?.emp_code || '');
-  const labelOf = (key) => template.costLabels?.[key] || key.toUpperCase();
+  // Nhãn cột lấy từ hợp đồng cục bộ, gồm cả cột chỉ-để-xem (C38/C42 — CEO chốt 08/08).
+  const labelOf = (key) => template.costLabels?.[key] || template.viewOnlyLabels?.[key] || key.toUpperCase();
 
   // Cột = whitelist ∩ (CEO: mọi cột có trong kho · NV: cột được cấp).
   const columnSet = new Set();

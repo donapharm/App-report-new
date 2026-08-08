@@ -25,7 +25,9 @@ export function grantableColumns(columns = []) {
   for (const raw of Array.isArray(columns) ? columns : []) {
     const key = lower(raw?.key ?? raw);
     if (!isGrantableColumn(key) || out.some((item) => item.key === key)) continue;
-    out.push({ key, label: text(raw?.label) || key.toUpperCase(), annual: !!raw?.annual });
+    // `viewOnly`: cột chỉ-để-xem (C38/C42) — cấp quyền xem như cột khác, nhưng KHÔNG
+    // nằm trong công thức tính tiền. Giữ cờ để menu nói rõ cho CEO khỏi hiểu nhầm.
+    out.push({ key, label: text(raw?.label) || key.toUpperCase(), annual: !!raw?.annual, viewOnly: !!raw?.viewOnly });
   }
   return out;
 }

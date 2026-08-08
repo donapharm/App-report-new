@@ -4,6 +4,17 @@
   "derivedBases": {
     "c44": "c43"
   },
+  "//viewOnlyCostColumns": [
+    "CEO chốt 08/08/2026: cho C38 và C42 vào MENU PHÂN QUYỀN để xem %.",
+    "‼ ĐÂY LÀ CỘT CHỈ-ĐỂ-XEM: KHÔNG được đưa vào costColumns của bất kỳ nhóm nào.",
+    "costColumns là các cột TÍNH TIỀN (rowMonthlyTotal, C47, thưởng/phạt).",
+    "Thêm cột vào đó = đổi công thức tiền ⇒ phải nâng FORMULA_VERSION (CLAUDE.md luật 5).",
+    "Cột ở đây chỉ hiện % để tra cứu, tuyệt đối không cộng vào tiền của ai."
+  ],
+  "viewOnlyCostColumns": {
+    "c38": "C38 (%) — chỉ xem",
+    "c42": "C42 (%) — chỉ xem"
+  },
   "calculationGroups": [
     {
       "key": "fulltime",

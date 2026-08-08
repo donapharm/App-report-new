@@ -5,6 +5,9 @@ export function isTabAllowed(tab, me) {
   const canonicalCeo = !!me.is_ceo;
   return (!tab.adminOnly || !!me.isAdmin)
     && (!tab.ceoEmployeeOnly || canonicalCeo || !me.isAdmin)
+    // Tab Thành tiền C32/C47: backend đã chốt trong `costAmountsEnabled` (CEO, hoặc
+    // NV được bật công tắc riêng). Frontend chỉ ẩn cho gọn — route vẫn tự chặn 403.
+    && (!tab.costAmountsOnly || !!me.costAmountsEnabled)
     && (!tab.employeeCostControlled || !!me.isAdmin || !me.employeeCostDisabled);
 }
 
