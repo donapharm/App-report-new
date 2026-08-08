@@ -11,6 +11,10 @@ Vá (`8c90287`, cherry-pick sạch `a49a087`+`9144b81` của bot rồi patch):
 
 ‼ **PROD vẫn đang chạy bản CHƯA có vá** (`3b53198`) — phải bảo bot gỡ cron `run_due_jobs` / bỏ `payment_notice` khỏi handlers ngay khi kết nối lại, trước khi DataHub trả nốt DN018.
 
+**✅ ĐÃ CHẶN (bot xác nhận 08/08):** cron `run_due_jobs` **trước đó CÓ thật** → đã gỡ; đã bỏ dòng `payment_notice: paymentNotice` khỏi release đang chạy; **`payment_notice_delivery_state` KHÔNG tồn tại — 0 bản ghi ⇒ chưa gửi tin nào**; không còn process `run_due_jobs`. Kịp trước khi DataHub trả nốt DN018.
+
+‼ **Nhưng đây là sửa TAY trên release đang chạy, không qua git** ⇒ **lần deploy tới sẽ khôi phục lại handler**. Bản vá thật (`8c90287`: sàn kỳ T07 + `PAYMENT_NOTICE_ENABLED` mặc định TẮT) **bắt buộc phải nằm trong release kế tiếp**, nếu không là dẫm lại đúng vết cũ.
+
 ---
 
 ### 2026-08-07 07:41 (giờ VN) — ⛔ CHẶN DUYỆT: bot tự ĐỔI SỐ T07 (kỳ đã khoá) trên PROD — CEO chọn ĐIỀU TRA TRƯỚC
