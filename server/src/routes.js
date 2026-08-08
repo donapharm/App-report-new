@@ -2738,7 +2738,7 @@ router.get('/admin/reconcile', auth.requireAuth, auth.requireAdmin, (req, res) =
 
 // Read-only App Sale source contract for the already-authorized reconciliation area.
 // The shared key remains inside the server process and is never accepted from the browser.
-router.get('/admin/reconcile/app-sale/:ky/:maNhaThau', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+router.get('/admin/reconcile/app-sale/:ky/:maNhaThau', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   res.json(await appSaleReconciliation.fetchReconciliation({
     ky: req.params.ky,

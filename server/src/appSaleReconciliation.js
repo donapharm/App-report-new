@@ -26,6 +26,12 @@ function boundedTimeout(value) {
     : DEFAULT_TIMEOUT_MS;
 }
 
+function requireEnabled() {
+  if (String(process.env.APP_SALE_RECON_ENABLED ?? '').trim() !== '1') {
+    throw reconError('App Sale reconciliation is disabled.', 'APP_SALE_RECON_DISABLED', 503);
+  }
+}
+
 function cleanKey() {
   const key = String(process.env.APP_SALE_RECON_KEY ?? '').trim();
   if (!key) throw reconError('App Sale reconciliation is disabled.', 'APP_SALE_RECON_DISABLED', 503);
@@ -75,6 +81,15 @@ function positiveInteger(value, field, { optional = false } = {}) {
   if (!/^[1-9]\d*$/.test(text)) throw reconError(`Invalid ${field}.`, 'APP_SALE_RECON_INPUT_INVALID', 400);
   const number = Number(text);
   if (!Number.isSafeInteger(number)) throw reconError(`Invalid ${field}.`, 'APP_SALE_RECON_INPUT_INVALID', 400);
+  return number;
+}
+
+function responsePositiveInteger(value, field) {
+  const text = String(value ?? '').trim();
+  const number = Number(text);
+  if (!/^[1-9]\d*$/.test(text) || !Number.isSafeInteger(number)) {
+    throw reconError(`Invalid App Sale reconciliation ${field}.`, 'APP_SALE_RECON_CONTRACT_INVALID');
+  }
   return number;
 }
 
@@ -149,7 +164,7 @@ function validatePayload(payload, expected) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !exactKeys(payload, TOP_LEVEL_KEYS)) {
     throw reconError('Invalid App Sale reconciliation response.', 'APP_SALE_RECON_CONTRACT_INVALID');
   }
-  const version = positiveInteger(payload.phien_ban, 'response phien_ban');
+  const version = responsePositiveInteger(payload.phien_ban, 'phien_ban');
   const rows = Array.isArray(payload.rows) ? payload.rows.map(normalizeRow) : null;
   if (!rows) throw reconError('Invalid App Sale reconciliation rows.', 'APP_SALE_RECON_CONTRACT_INVALID');
   const checksum = String(payload.rows_checksum ?? '');
@@ -168,10 +183,19 @@ function validatePayload(payload, expected) {
   }
   let pagination = {};
   if (paginationCount) {
+    const pageEnd = payload.offset + rows.length;
     if (!Number.isSafeInteger(payload.offset) || payload.offset < 0 || payload.offset !== expected.offset
       || typeof payload.con_nua !== 'boolean'
-      || !Number.isSafeInteger(payload.tong_dong) || payload.tong_dong < payload.offset + rows.length) {
+      || !Number.isSafeInteger(payload.tong_dong) || payload.tong_dong < pageEnd
+      || (payload.con_nua ? pageEnd >= payload.tong_dong : pageEnd !== payload.tong_dong)) {
       throw reconError('Invalid App Sale reconciliation pagination.', 'APP_SALE_RECON_CONTRACT_INVALID');
+    }
+    // The upstream checksum covers the complete normalized result, not an
+    // individual partial page. Verify it whenever page zero is the complete
+    // result; otherwise preserve it as opaque pagination provenance.
+    if (payload.offset === 0 && payload.con_nua === false
+      && rowsChecksum(rows) !== checksum) {
+      throw reconError('Invalid App Sale reconciliation checksum.', 'APP_SALE_RECON_CONTRACT_INVALID');
     }
     pagination = { offset: payload.offset, con_nua: payload.con_nua, tong_dong: payload.tong_dong };
   } else if (expected.offset !== 0 || rowsChecksum(rows) !== checksum) {
@@ -229,6 +253,7 @@ async function readBoundedJson(response, controller) {
 async function fetchReconciliation(input = {}) {
   let key = '';
   try {
+    requireEnabled();
     key = cleanKey();
     const { url, normalized } = buildRequest(input);
     const timeoutMs = boundedTimeout(process.env.APP_SALE_RECON_TIMEOUT_MS);
@@ -254,6 +279,9 @@ async function fetchReconciliation(input = {}) {
       }
       if (response.status === 404) {
         throw reconError('App Sale reconciliation was not found.', 'APP_SALE_RECON_NOT_FOUND', 404);
+      }
+      if (response.status === 429) {
+        throw reconError('App Sale reconciliation is rate limited.', 'APP_SALE_RECON_RATE_LIMITED', 429);
       }
       if (response.status >= 300 && response.status < 400) {
         throw reconError('App Sale reconciliation redirect is forbidden.', 'APP_SALE_RECON_REDIRECT', 502);

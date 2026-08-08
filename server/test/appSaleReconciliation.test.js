@@ -9,7 +9,8 @@ const client = require('../src/appSaleReconciliation');
 const SENTINEL_KEY = 'unit-test-recon-secret-sentinel-20260809';
 const originalFetch = global.fetch;
 const ENV_KEYS = [
-  'APP_SALE_RECON_BASE_URL', 'APP_SALE_RECON_KEY', 'APP_SALE_RECON_TIMEOUT_MS',
+  'APP_SALE_RECON_ENABLED', 'APP_SALE_RECON_BASE_URL', 'APP_SALE_RECON_KEY',
+  'APP_SALE_RECON_TIMEOUT_MS',
 ];
 const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
@@ -22,6 +23,7 @@ test.afterEach(() => {
 });
 
 function configure(overrides = {}) {
+  process.env.APP_SALE_RECON_ENABLED = '1';
   process.env.APP_SALE_RECON_BASE_URL = 'http://127.0.0.1:3980';
   process.env.APP_SALE_RECON_KEY = SENTINEL_KEY;
   process.env.APP_SALE_RECON_TIMEOUT_MS = '100';
@@ -160,6 +162,8 @@ test('malformed JSON and malformed success schema fail closed without retry', as
   const cases = [
     () => new Response('{', { status: 200, headers: { 'content-type': 'application/json' } }),
     () => jsonResponse(validPayload({ ky: '2026-07' })),
+    () => jsonResponse(validPayload({ phien_ban: null })),
+    () => jsonResponse(validPayload({ phien_ban: 0 })),
     () => jsonResponse(validPayload({ rows_checksum: SENTINEL_KEY })),
     () => jsonResponse(validPayload({ rows: [{ ...sampleRows()[0], unexpected: 1 }] })),
     () => jsonResponse(validPayload({ con_nua: undefined })),
@@ -174,38 +178,88 @@ test('malformed JSON and malformed success schema fail closed without retry', as
   }
 });
 
-test('missing URL/key disables before fetch; invalid inputs and unsafe origins fail closed', async () => {
+test('disabled or missing URL/key fails closed before fetch; invalid inputs and unsafe origins fail closed', async () => {
   let calls = 0;
   global.fetch = async () => { calls += 1; throw new Error('must not fetch'); };
+  delete process.env.APP_SALE_RECON_ENABLED;
   delete process.env.APP_SALE_RECON_BASE_URL;
   delete process.env.APP_SALE_RECON_KEY;
   await assert.rejects(client.fetchReconciliation(input()), (error) => error.code === 'APP_SALE_RECON_DISABLED' && error.status === 503);
 
+  process.env.APP_SALE_RECON_ENABLED = '0';
+  process.env.APP_SALE_RECON_BASE_URL = 'http://127.0.0.1:3980';
   process.env.APP_SALE_RECON_KEY = SENTINEL_KEY;
+  await assert.rejects(client.fetchReconciliation(input()), (error) => error.code === 'APP_SALE_RECON_DISABLED');
+
+  process.env.APP_SALE_RECON_ENABLED = '1';
+  delete process.env.APP_SALE_RECON_BASE_URL;
   await assert.rejects(client.fetchReconciliation(input()), (error) => error.code === 'APP_SALE_RECON_DISABLED');
 
   configure({ APP_SALE_RECON_BASE_URL: 'http://sale.example' });
   await assert.rejects(client.fetchReconciliation(input()), (error) => error.code === 'APP_SALE_RECON_CONFIG_INVALID');
   configure();
   for (const bad of [
-    { ky: '08-2026' }, { maNhaThau: '../admin' }, { phienBan: '' }, { phienBan: 0 }, { offset: -1 }, { offset: client.MAX_OFFSET + 1 },
+    { ky: '08-2026' }, { maNhaThau: '../admin' }, { phienBan: 0 }, { phienBan: '' },
+    { offset: -1 }, { offset: client.MAX_OFFSET + 1 },
   ]) {
     await assert.rejects(client.fetchReconciliation(input(bad)), (error) => error.code === 'APP_SALE_RECON_INPUT_INVALID');
   }
   assert.equal(calls, 0);
 });
 
-test('500 and oversized responses are sanitized and never retried', async () => {
+test('verifies complete-result checksum and preserves checksum provenance on partial pages', () => {
+  const completeRows = sampleRows();
+  const complete = validPayload({
+    offset: 0,
+    con_nua: false,
+    tong_dong: completeRows.length,
+    rows: completeRows,
+    rows_checksum: client.rowsChecksum(completeRows),
+  });
+  assert.deepEqual(client.validatePayload(complete, {
+    ky: '2026-08', maNhaThau: 'NCC_01', phienBan: 7, offset: 0,
+  }), complete);
+  assert.throws(() => client.validatePayload({ ...complete, rows_checksum: '0'.repeat(64) }, {
+    ky: '2026-08', maNhaThau: 'NCC_01', phienBan: 7, offset: 0,
+  }), (error) => error.code === 'APP_SALE_RECON_CONTRACT_INVALID');
+  assert.throws(() => client.validatePayload({ ...complete, tong_dong: completeRows.length + 1 }, {
+    ky: '2026-08', maNhaThau: 'NCC_01', phienBan: 7, offset: 0,
+  }), (error) => error.code === 'APP_SALE_RECON_CONTRACT_INVALID');
+  assert.throws(() => client.validatePayload({ ...complete, con_nua: true }, {
+    ky: '2026-08', maNhaThau: 'NCC_01', phienBan: 7, offset: 0,
+  }), (error) => error.code === 'APP_SALE_RECON_CONTRACT_INVALID');
+
+  const partial = validPayload();
+  assert.equal(client.validatePayload(partial, {
+    ky: '2026-08', maNhaThau: 'NCC_01', phienBan: 7, offset: 5,
+  }).rows_checksum, partial.rows_checksum);
+});
+
+test('429, 500 and oversized responses are sanitized and never retried', async () => {
   configure();
   let calls = 0;
   global.fetch = async () => {
     calls += 1;
-    return jsonResponse({ error: `${SENTINEL_KEY} database stack` }, 500);
+    return jsonResponse({ error: `${SENTINEL_KEY} upstream stack` }, 429);
   };
   await assert.rejects(client.fetchReconciliation(input()), (error) => (
-    error.code === 'APP_SALE_RECON_UPSTREAM' && !error.message.includes(SENTINEL_KEY)
+    error.code === 'APP_SALE_RECON_RATE_LIMITED' && error.status === 429
+      && !error.message.includes(SENTINEL_KEY)
   ));
   assert.equal(calls, 1);
+
+  for (const status of [500, 503]) {
+    calls = 0;
+    global.fetch = async () => {
+      calls += 1;
+      return jsonResponse({ error: `${SENTINEL_KEY} upstream stack` }, status);
+    };
+    await assert.rejects(client.fetchReconciliation(input()), (error) => (
+      error.code === 'APP_SALE_RECON_UPSTREAM' && error.status === 502
+        && !error.message.includes(SENTINEL_KEY)
+    ));
+    assert.equal(calls, 1);
+  }
 
   calls = 0;
   global.fetch = async () => {
@@ -219,9 +273,10 @@ test('500 and oversized responses are sanitized and never retried', async () => 
   assert.equal(calls, 1);
 });
 
-test('route remains inside existing authenticated admin reconciliation area and browser has no secret/env access', () => {
+test('route remains CEO-only inside the existing reconciliation area and browser has no secret/env access', () => {
   const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
-  assert.match(routes, /router\.get\('\/admin\/reconcile\/app-sale\/:ky\/:maNhaThau', auth\.requireAuth, auth\.requireAdmin/);
+  assert.match(routes, /router\.get\('\/admin\/reconcile\/app-sale\/:ky\/:maNhaThau', auth\.requireAuth, auth\.requireCeo/);
+  assert.doesNotMatch(routes, /router\.get\('\/admin\/reconcile\/app-sale\/:ky\/:maNhaThau', auth\.requireAuth, auth\.requireAdmin/);
   assert.doesNotMatch(routes, /router\.(?:post|put|patch|delete)\('\/admin\/reconcile\/app-sale/);
   assert.match(routes, /Cache-Control', 'private, no-store'/);
 
@@ -242,18 +297,45 @@ test('route remains inside existing authenticated admin reconciliation area and 
   }
 });
 
-test('shared App Sale contract matches the exact live transport and success schema', { skip: !process.env.APP_SALE_CONTRACT_PATH }, () => {
-  const contractPath = path.resolve(process.env.APP_SALE_CONTRACT_PATH);
+test('shared App Sale contract matches the exact live transport and success schema', () => {
+  const contractPath = path.resolve(process.env.APP_SALE_CONTRACT_PATH
+    || '/home/osboxes/.openclaw/workspace-main/artifacts/appsale-report-recon-e2e-20260808/APP_SALE_CONTRACT.json');
+  assert.equal(fs.existsSync(contractPath), true, `authoritative App Sale contract missing: ${contractPath}`);
   const contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
-  const serialized = JSON.stringify(contract);
-  assert.match(serialized, /GET/);
-  assert.match(serialized, /\/api\/reconciliation\/\{ky\}\/\{ma_nha_thau\}/);
-  assert.match(serialized, /x-datahub-key/);
-  assert.doesNotMatch(serialized, /x-app-sale-recon-key|Bearer <server-side APP_SALE_RECON_KEY>/);
-  for (const field of ['ky', 'ma_nha_thau', 'ten_nha_thau', 'trang_thai', 'phien_ban', 'rows_checksum', 'rows']) {
-    assert.match(serialized, new RegExp(`\\"${field}\\"`), `shared contract must define ${field}`);
-  }
-  for (const field of client.ROW_KEYS) {
-    assert.match(serialized, new RegExp(`\\"${field}\\"`), `shared contract must define row.${field}`);
-  }
+  assert.equal(contract.contract, 'app-sale-reconciliation-v2');
+  assert.deepEqual(contract.transport, {
+    method: 'GET',
+    path_template: '/api/reconciliation/{ky}/{ma_nha_thau}',
+    header: 'x-datahub-key',
+    authorization_header_used: false,
+    browser_exposed: false,
+    cache_control_on_success: 'private, no-store',
+  });
+  assert.deepEqual(contract.query_parameters.phien_ban, {
+    required: false,
+    type: 'positive integer',
+    meaning: 'exact immutable version; omitted selects the latest effective version',
+  });
+  assert.deepEqual(contract.query_parameters.offset, {
+    required: false,
+    type: 'non-negative integer',
+    default: 0,
+  });
+  assert.deepEqual(Object.keys(contract.success.schema), [
+    'ky', 'ma_nha_thau', 'ten_nha_thau', 'trang_thai', 'phien_ban', 'rows_checksum',
+    'rows', 'offset', 'con_nua', 'tong_dong',
+  ]);
+  assert.equal(Array.isArray(contract.success.schema.rows), true);
+  assert.equal(contract.success.schema.rows.length, 1);
+  assert.deepEqual(Object.keys(contract.success.schema.rows[0]), client.ROW_KEYS);
+  assert.deepEqual(contract.success.row_key_order_for_checksum, client.ROW_KEYS);
+  assert.equal(contract.success.maximum_serialized_page_bytes, client.MAX_RESPONSE_BYTES);
+  assert.equal(contract.status, 'CANDIDATE_SOURCE_ONLY_NOT_DEPLOYED');
+  assert.equal(contract.data_source, 'existing immutable App Sale reconciliation v2 read path');
+  assert.equal(contract.database_write, false);
+  assert.equal(contract.database_migration_required, false);
+  assert.equal(contract.web_change, false);
+  assert.equal(contract.new_endpoint, false);
+  assert.equal(contract.credential_or_payload_logging_added, false);
+  assert.equal(contract.secret_material_in_this_artifact, false);
 });
