@@ -29,9 +29,12 @@ export function grantableColumns(columns = []) {
   for (const raw of Array.isArray(columns) ? columns : []) {
     const key = lower(raw?.key ?? raw);
     if (!isGrantableColumn(key) || out.some((item) => item.key === key)) continue;
-    // `viewOnly`: cột chỉ-để-xem (C38/C42) — cấp quyền xem như cột khác, nhưng KHÔNG
-    // nằm trong công thức tính tiền. Giữ cờ để menu nói rõ cho CEO khỏi hiểu nhầm.
-    out.push({ key, label: text(raw?.label) || key.toUpperCase(), annual: !!raw?.annual, viewOnly: !!raw?.viewOnly });
+    // CEO 08/08: *"bản chất các cột này chức năng đều giống nhau, phân quyền cột nào
+    // thì sẽ thấy đúng mục của cột đó thôi"* — ĐÚNG với menu này. Nhãn "chỉ xem" trước
+    // đây là rò rỉ một phân biệt NỘI BỘ (C38/C42 không nằm trong công thức tính tiền)
+    // vào đúng chỗ nó không liên quan. Phân biệt đó vẫn được giữ ở tầng cấu hình +
+    // test (`viewOnlyCostColumns`); menu phân quyền thì mọi cột như nhau.
+    out.push({ key, label: text(raw?.label) || key.toUpperCase(), annual: !!raw?.annual });
   }
   return out;
 }
@@ -56,8 +59,13 @@ export function unitsByEmployee(catalogRows = []) {
 export function groupsForUnits(units = [], groupsByUnit = {}) {
   const groups = new Map();
   const ungroupedUnits = [];
+  // ‼ Backend trả bảng tra theo mã ĐƠN VỊ GỐC ('001.BVĐK Đồng Nai'), còn panel giữ
+  // mã đã viết hoa ('001.BVĐK ĐỒNG NAI') ⇒ tra thẳng là trượt, báo nhầm 28 đơn vị
+  // "chưa nhận diện được nhóm" trong khi chúng phân giải ra BV bình thường
+  // (CEO chụp màn 08/08). Chuẩn hoá khoá một lần rồi mới tra.
+  const index = new Map(Object.entries(groupsByUnit || {}).map(([key, value]) => [upper(key), value]));
   for (const unit of units) {
-    const resolved = groupsByUnit?.[unit] || groupsByUnit?.[upper(unit)] || null;
+    const resolved = index.get(upper(unit)) || null;
     if (!resolved?.key) { ungroupedUnits.push(unit); continue; }
     const key = upper(resolved.key);
     const current = groups.get(key) || { key, label: text(resolved.label) || key, unitCount: 0 };

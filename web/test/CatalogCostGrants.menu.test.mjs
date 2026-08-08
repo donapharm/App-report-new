@@ -54,9 +54,13 @@ test('ma trận NV × CỘT × NHÓM: mỗi ô cột có bộ chọn nhóm RIÊN
   assert.match(page, /api\.catalogCostUnitGroups\(distinctUnits\)/);
 });
 
-test('cột chỉ-để-xem (C38/C42) được đánh dấu rõ để CEO không hiểu nhầm là cột tính tiền', () => {
-  assert.match(page, /column\.viewOnly && <small className="catalog-col-viewonly">chỉ xem<\/small>/);
-  assert.match(page, /cột CHỈ ĐỂ XEM, không cộng vào tiền của ai/);
+test('menu phân quyền KHÔNG phân biệt cột nào — cấp cột nào thấy cột đó (CEO 08/08)', () => {
+  // Nhãn "chỉ xem" cũ là rò rỉ phân biệt NỘI BỘ (C38/C42 không nằm trong công thức
+  // tính tiền) vào đúng chỗ nó không liên quan. CEO: "bản chất các cột này chức năng
+  // đều giống nhau". Phân biệt đó vẫn giữ ở tầng cấu hình + test phía server.
+  assert.doesNotMatch(page, /chỉ xem/);
+  assert.doesNotMatch(page, /catalog-col-viewonly/);
+  assert.match(page, /panel\.columns\.map\(\(column\) => <th key=\{column\.key\} title=\{column\.label\}>/);
 });
 
 test('không lấy được danh sách cột thì NÓI RA, không hiện bảng rỗng như thể đã cấu hình xong', () => {
