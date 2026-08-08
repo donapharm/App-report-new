@@ -1,3 +1,15 @@
+### 2026-08-08 10:21 (giờ VN) — 🚢 PROD `13b70e9`: dự án cột % + bản vá tin nhắn ĐÃ LÊN · CEO duyệt việc khoá 16 tài khoản
+
+**CEO xác nhận 08/08:** việc khoá đăng nhập 16 mã (`VP002, VP003, VP006–VP017, DN021, DN023`) và giới hạn VP018 chỉ 2 tab doanh thu **là lệnh của CEO**. Ghi vào đây để phiên sau không phải hỏi lại. CEO yêu cầu thêm: **ẩn ô App Report trên `home.donapharm.vn`** với các tài khoản này.
+
+**Đã lên PROD** (bot đánh số lại commit, Claude đối chiếu nội dung — đủ): sàn kỳ T07 + `PAYMENT_NOTICE_ENABLED` (`821ffff`) · 4 phần dự án cột % (`5de6503`→`13b70e9`). Test 1001/1001 · T07 giữ nguyên `30.982.248.913đ / 2.091 dòng` · payment_notice vẫn tắt, 0 tin gửi · 16 mã vẫn bị chặn.
+
+**❌ Sót 1 commit:** `07f49f6` (endpoint `/integrations/home/app-visibility` cho trang Home hỏi ai được thấy ô App Report) **KHÔNG có trong bản deploy** — thiếu đúng 6 test, khớp chênh lệch 1001 vs 1007. Chưa gấp vì bot Home chưa nối, nhưng phải vào đợt sau.
+
+**⚠ Chưa giải quyết — DataHub không trả cột %:** màn "Chi phí của tôi" báo **0/0 cặp**, toàn bộ % trắng (CEO chụp màn 08/08). Menu phân quyền vì thế **tự khoá an toàn** (không có nút lưu, không tạo grant rác) — fail-closed chạy đúng, nhưng tính năng chưa dùng được. Claude nghi **release mới thiếu `.env`** (lặp lại lỗi 06/08 05:35): doanh thu vẫn đủ 805 dòng vì đọc từ file, còn chi phí phải gọi mạng sang DataHub và cần đủ `DATA_HUB_BASE_URL` + `DATA_HUB_ASSIGNMENT_KEY` + `APP_REPORT_EMPLOYEE_COST_KEYS`; thiếu một trong ba là `fetchRawEmployeeCost` trả `not_configured` **không gọi mạng**. Bot **chưa chạy lệnh kiểm `.env`** Claude đưa — còn treo.
+
+---
+
 ### 2026-08-08 — ✅ XONG DỰ ÁN "CỘT % CHI PHÍ + MENU PHÂN QUYỀN CEO-ONLY" (4/4 phần) — chờ deploy
 
 CEO duyệt 06/08, làm trọn trong ngày 08/08. Spec: `SPEC_CATALOG_COST_COLUMNS.md` · `DIRECTIVE_GAP_TAB_ORDER_CODES_BACK.md`.
