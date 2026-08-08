@@ -501,9 +501,14 @@ function ColumnGroupScope({ row, columnKey, onChange }) {
         Mọi nhóm đang phụ trách ({row.availableGroups.length})
       </label>
       <div className="catalog-scope-list">
-        {row.availableGroups.map((group) => <label key={group.key}>
+        {/* Tick ở cấp NHÓM (CEO chốt), nhưng liệt kê luôn các mã bên trong để thấy rõ
+            tick nhóm 001 là mở đúng những đơn vị nào. */}
+        {row.availableGroups.map((group) => <label key={group.key} className="catalog-scope-group">
           <input type="checkbox" checked={all || scope.includes(group.key)} onChange={() => toggleGroup(group.key)} />
-          {group.label} <small>({group.unitCount} đơn vị)</small>
+          <span>
+            <b>{group.label}</b> <small>({group.unitCount} đơn vị)</small>
+            <em>{group.units.join(' · ')}</em>
+          </span>
         </label>)}
       </div>
       {!!row.ungroupedUnits.length && <p className="catalog-scope-warn">

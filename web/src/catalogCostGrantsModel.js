@@ -68,12 +68,16 @@ export function groupsForUnits(units = [], groupsByUnit = {}) {
     const resolved = index.get(upper(unit)) || null;
     if (!resolved?.key) { ungroupedUnits.push(unit); continue; }
     const key = upper(resolved.key);
-    const current = groups.get(key) || { key, label: text(resolved.label) || key, unitCount: 0 };
-    current.unitCount += 1;
+    // Giữ DANH SÁCH ĐƠN VỊ trong nhóm, không chỉ đếm: CEO cần nhìn thấy tick nhóm
+    // 001 là mở đúng những mã nào (001.BVĐK Đồng Nai · Khu C · NT-BVĐK…).
+    const current = groups.get(key) || { key, label: text(resolved.label) || key, units: [] };
+    current.units.push(unit);
     groups.set(key, current);
   }
   return {
-    groups: [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, 'vi')),
+    groups: [...groups.values()]
+      .map((group) => ({ ...group, units: group.units.sort(), unitCount: group.units.length }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'vi')),
     ungroupedUnits: ungroupedUnits.sort(),
   };
 }

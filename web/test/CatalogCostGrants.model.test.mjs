@@ -11,6 +11,21 @@ const CATALOG = [
   { emp_code: 'DN001', unit_code: '021.TTYT' },
   { emp_code: 'DN002', unit_code: '033.BVĐK' },
 ];
+// Ví dụ nguyên văn CEO nêu 08/08 để khoá đúng cách gộp nhóm.
+const CEO_CATALOG = [
+  { emp_code: 'DN002', unit_code: '001.BVĐK Đồng Nai' },
+  { emp_code: 'DN002', unit_code: '001.BVĐK Đồng Nai-Khu C' },
+  { emp_code: 'DN002', unit_code: '001.NT-BVĐK Đồng Nai' },
+  { emp_code: 'DN008', unit_code: '033.PKĐK An Long Thành' },
+  { emp_code: 'DN008', unit_code: '033.PKĐK Long Khánh' },
+];
+const CEO_GROUPS = {
+  '001.BVĐK Đồng Nai': { key: '001', label: '001 · BVĐK Đồng Nai' },
+  '001.BVĐK Đồng Nai-Khu C': { key: '001', label: '001 · BVĐK Đồng Nai' },
+  '001.NT-BVĐK Đồng Nai': { key: '001', label: '001 · BVĐK Đồng Nai' },
+  '033.PKĐK An Long Thành': { key: '033', label: '033 · PKĐK An Long Thành' },
+  '033.PKĐK Long Khánh': { key: '033', label: '033 · PKĐK An Long Thành' },
+};
 const COLUMNS = [
   { key: 'c36', label: 'C36 CP ctv/khác' }, { key: 'c41', label: 'C41 CP đặt hàng' },
   { key: 'c43', label: 'C43 CP bs/td' }, { key: 'c47', label: 'C47 Tổng thành tiền CP' },
@@ -124,4 +139,33 @@ test('tra nhóm KHÔNG phân biệt hoa/thường — đơn vị có nhóm khôn
   );
   assert.deepEqual(ungroupedUnits, [], 'không được báo nhầm là chưa có nhóm');
   assert.deepEqual(groups.map((g) => g.key), ['BV']);
+});
+
+test('NHÓM = mã đơn vị (001, 033), KHÔNG phải loại đơn vị (CEO đính chính 08/08)', () => {
+  const { groups } = groupsForUnits(
+    ['001.BVĐK Đồng Nai', '001.BVĐK Đồng Nai-Khu C', '001.NT-BVĐK Đồng Nai'],
+    CEO_GROUPS,
+  );
+  // Gộp theo LOẠI thì '001.NT-…' rơi sang nhóm NT, tách khỏi chính bệnh viện của nó.
+  assert.equal(groups.length, 1, 'ba mã 001.* phải là MỘT nhóm');
+  assert.equal(groups[0].key, '001');
+  assert.equal(groups[0].unitCount, 3);
+});
+
+test('mỗi nhóm mang theo DANH SÁCH đơn vị bên trong — CEO thấy tick nhóm là mở mã nào', () => {
+  const { groups } = groupsForUnits(['033.PKĐK An Long Thành', '033.PKĐK Long Khánh'], CEO_GROUPS);
+  assert.deepEqual(groups[0].units, ['033.PKĐK An Long Thành', '033.PKĐK Long Khánh']);
+});
+
+test('cấp nhóm CHỈ phủ đơn vị NV thực sự phụ trách — không mở thêm mã lạ cùng nhóm', () => {
+  // DN002 chỉ phụ trách 001.BVĐK Đồng Nai (không có Khu C / NT).
+  const panel = buildGrantPanel({
+    grants: [], columns: COLUMNS, groupsByUnit: CEO_GROUPS,
+    catalogRows: [{ emp_code: 'DN002', unit_code: '001.BVĐK Đồng Nai' }],
+    employees: [{ code: 'DN002', name: 'NV Hai' }],
+  });
+  const row = panel.rows.find((item) => item.empCode === 'DN002');
+  assert.deepEqual(row.availableGroups.map((g) => g.key), ['001']);
+  assert.deepEqual(row.availableGroups[0].units, ['001.BVĐK ĐỒNG NAI'],
+    'chỉ đúng mã họ phụ trách, dù nhóm 001 ngoài đời còn Khu C và NT');
 });
