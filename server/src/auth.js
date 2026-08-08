@@ -33,6 +33,12 @@ const SERVICE_TOKEN_SHA256 = String(process.env.APP_REPORT_SERVICE_TOKEN_SHA256 
 const SERVICE_TOKEN_PLAINTEXT = String(process.env.APP_REPORT_SERVICE_TOKEN || '').trim();
 const SERVICE_TOKEN_HASH = SERVICE_TOKEN_SHA256 || (SERVICE_TOKEN_PLAINTEXT ? sha(SERVICE_TOKEN_PLAINTEXT) : '');
 
+// Credential riêng cho Home DONAPHARM hỏi quyết định có hiện ô App Report hay
+// không. Tuyệt đối không tái dùng token DataHub ở trên: mỗi bên gọi chỉ được vào
+// đúng allowlist endpoint của mình. App Report chỉ giữ SHA-256, không giữ token
+// plaintext trong env/source.
+const HOME_SERVICE_TOKEN_HASH = String(process.env.APP_REPORT_HOME_SERVICE_TOKEN_SHA256 || '').trim().toLowerCase();
+
 function safeEqualHex(a, b) {
   if (!a || !b || a.length !== b.length) return false;
   try { return crypto.timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex')); }
@@ -55,6 +61,25 @@ function serviceSessionFromRequest(req) {
     issued_at: now(),
     expires_at: now() + SESSION_IDLE_MS,
     service: 'datahub',
+  };
+}
+
+function homeServiceSessionFromRequest(req) {
+  if (!/^[a-f0-9]{64}$/.test(HOME_SERVICE_TOKEN_HASH)) return null;
+  // Cấu hình nhầm cùng token DataHub cũng phải fail-closed, không âm thầm dùng chung.
+  if (HOME_SERVICE_TOKEN_HASH === SERVICE_TOKEN_HASH) return null;
+  const bearer = /^Bearer ([^\s]+)$/i.exec(String(req.headers.authorization || '').trim());
+  if (!bearer || !safeEqualHex(sha(bearer[1]), HOME_SERVICE_TOKEN_HASH)) return null;
+  return {
+    emp_code: 'HOME_SERVICE',
+    role: 'service',
+    name: 'Home DONAPHARM Service',
+    phone: null,
+    deviceId: sha('service:home'),
+    method: 'service-token',
+    issued_at: now(),
+    expires_at: now() + SESSION_IDLE_MS,
+    service: 'home',
   };
 }
 
@@ -652,6 +677,19 @@ function requireDataHubService(req, res, next) {
   req.session = svc;
   next();
 }
+
+// Home chỉ được hỏi quyết định hiển thị ô App Report. User session, cookie và
+// token DataHub không thay thế được credential riêng này.
+function requireHomeService(req, res, next) {
+  // Kể cả lỗi auth cũng không được cache quyết định/quyền truy cập.
+  res.set('Cache-Control', 'no-store');
+  const svc = homeServiceSessionFromRequest(req);
+  if (!svc || svc.service !== 'home') {
+    return res.status(401).json({ error: 'Home service token không hợp lệ.', code: 'HOME_SERVICE_AUTH_REQUIRED' });
+  }
+  req.session = svc;
+  next();
+}
 const isAdmin = (role) => role === 'ceo' || role === 'admin';
 function scopeOf(session) {
   return { empCode: isAdmin(session.role) ? null : session.emp_code };
@@ -702,7 +740,7 @@ function requireCeo(req, res, next) {
 }
 
 module.exports = {
-  mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, sessionForUser, getSession,
+  mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   accessProfileFor: accessPolicy.accessProfileFor,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,

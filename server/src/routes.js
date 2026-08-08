@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 const auth = require('./auth');
+const homeAppReportVisibility = require('./homeAppReportVisibility');
 const A = require('./analytics');
 const cstSequence = require('./cstSequence');
 const smart = require('./smart');
@@ -768,6 +769,15 @@ router.get('/admin/devices', auth.requireAuth, auth.requireAdmin, (req, res) => 
 });
 router.delete('/admin/devices/:id', auth.requireAuth, auth.requireAdmin, (req, res) => {
   res.json({ ok: auth.removeDevice(req.params.id) });
+});
+
+/* ---------- Home DONAPHARM: hỏi App Report có hiện ô ứng dụng không ----------
+   Home chỉ nhận quyết định cho một empCode; không nhận denylist để tránh drift. */
+router.get('/integrations/home/app-report-visibility', auth.requireHomeService, (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(homeAppReportVisibility.decide(req.query.empCode, {
+    findUserByCode: store.findUserByCode,
+  }));
 });
 
 function employeeCostRosterRows() {
