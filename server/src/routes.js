@@ -23,6 +23,7 @@ const { summarizeAssignedQuarter } = require('./targetKpi');
 const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const catalogCostColumnGrants = require('./catalogCostColumnGrants');
+const accessPolicy = require('./accessPolicy');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
@@ -1698,6 +1699,37 @@ router.get('/admin/employee-point/notifications/preview', auth.requireAuth, auth
 
 // DataHub đọc đúng một NV/quý để CEO duyệt cấn trừ tại DataHub. Route này chỉ
 // đọc, không có body ghi, không gọi payroll và không sửa dữ liệu DataHub.
+/**
+ * TRANG HOME HỎI: nhân viên này có được thấy ô "App Report" không?
+ * CEO chốt 08/08/2026: *"các tài khoản này không can thiệp và không vào được App
+ * Report. Không cho hiển thị thấy trên home.donapharm.vn."*
+ *
+ * ‼ Vì sao là endpoint chứ không đưa danh sách cho Home tự giữ: chép 16 mã sang app
+ * thứ hai là có ngày hai nơi lệch — Home vẫn hiện ô trong khi App Report đã chặn,
+ * hoặc ngược lại. Nguồn sự thật DUY NHẤT là `accessPolicy` ở đây.
+ *
+ * Fail-closed: mã rỗng/không đọc được ⇒ `visible:false`. Thà ẩn nhầm một ô còn hơn
+ * mời người đã bị chặn bấm vào rồi ăn 401.
+ * Không trả gì ngoài quyết định: không tên, không SĐT, không danh sách người bị chặn.
+ */
+router.get('/integrations/home/app-visibility', auth.requireDataHubService, (req, res) => {
+  const empCode = String(req.query.emp || req.query.emp_code || '').trim().toUpperCase();
+  if (!/^(DN|VP)\d{3}$/.test(empCode)) {
+    return res.json({ empCode: '', visible: false, reason: 'EMP_CODE_INVALID' });
+  }
+  if (accessPolicy.isLoginBlocked(empCode)) {
+    return res.json({ empCode, visible: false, reason: 'LOGIN_BLOCKED' });
+  }
+  const user = store.findUserByCode(empCode);
+  if (!user) return res.json({ empCode, visible: false, reason: 'NOT_IN_DIRECTORY' });
+  return res.json({
+    empCode,
+    visible: true,
+    // Home dùng nhãn này để hiện đúng kỳ vọng: VP018 vào chỉ có 2 tab doanh thu.
+    accessProfile: accessPolicy.accessProfileFor(empCode),
+  });
+});
+
 router.get('/integrations/datahub/employee-quarter-penalty', auth.requireDataHubService, asyncJsonRoute(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   const requested = String(req.query.emp || '').trim().toUpperCase();
