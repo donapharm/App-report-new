@@ -23,6 +23,7 @@ const { summarizeAssignedQuarter } = require('./targetKpi');
 const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const catalogCostColumnGrants = require('./catalogCostColumnGrants');
+const employeeCostTemplates = require('./employeeCostTemplates');
 const accessPolicy = require('./accessPolicy');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
@@ -3005,7 +3006,27 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
   if (!isCeo && !grant.columns.length) {
     return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NOT_GRANTED' });
   }
-  if (!empCode) return res.json({ period: uiPeriod, empCode: '', columns: [], pairs: [], grant, reason: 'NO_EMPLOYEE' });
+  // ‼ DANH SÁCH CỘT lấy từ HỢP ĐỒNG CHI PHÍ TẠI MÁY (`employeeCostTemplates`), KHÔNG
+  // hỏi DataHub. Bản đầu hỏi DataHub theo mã người đang đăng nhập ⇒ CEO (tài khoản
+  // quản trị, không có sổ chi phí) luôn ra `not_configured` ⇒ menu phân quyền vĩnh
+  // viễn báo "chưa lấy được cột" dù nguồn khoẻ. Lỗi thật, CEO bắt được 08/08.
+  // Tách bạch: TÊN CỘT là hợp đồng cục bộ · SỐ % mới là của DataHub.
+  const template = employeeCostTemplates.resolveTemplate(empCode || '');
+  const sourceColumns = (template.costColumns || [])
+    .filter((key) => catalogCostColumnGrants.isAllowedColumn(key))
+    .map((key) => ({ key, label: template.costLabels?.[key] || key.toUpperCase(), annual: false }));
+  const visibleKeys = catalogCostColumnGrants.visibleColumns(
+    { emp_code: req.session.emp_code, isCeo }, sourceColumns.map((column) => column.key),
+  );
+  const columns = sourceColumns.filter((column) => visibleKeys.includes(String(column.key).toLowerCase()));
+  if (!columns.length) {
+    return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NO_COLUMN_GRANTED' });
+  }
+  // Không có nhân viên cụ thể (CEO mở menu phân quyền) ⇒ trả CỘT để cấp quyền được
+  // ngay, còn số % thì chưa có gì để tra. Menu dùng được kể cả khi DataHub đang chết.
+  if (!empCode || empCode === 'CEO') {
+    return res.json({ period: uiPeriod, empCode: '', columns, pairs: [], grant, reason: 'NO_EMPLOYEE_SCOPE' });
+  }
 
   const hubPeriod = catalogManagement.toHubPeriod(uiPeriod);
   let catalogRows = [];
@@ -3019,14 +3040,6 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
     { from: month, to: month, auditEvent: 'catalog_cost_rates' },
   );
   const period = Array.isArray(payload?.periods) ? payload.periods.find((item) => item.period === month) : null;
-  const sourceColumns = (period?.columns || payload?.columns || []).filter((column) => catalogCostColumnGrants.isAllowedColumn(column?.key));
-  const visibleKeys = catalogCostColumnGrants.visibleColumns(
-    { emp_code: req.session.emp_code, isCeo }, sourceColumns.map((column) => column.key),
-  );
-  const columns = sourceColumns.filter((column) => visibleKeys.includes(String(column.key).toLowerCase()));
-  if (!columns.length) {
-    return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NO_COLUMN_GRANTED' });
-  }
 
   const catalogIndex = employeeCost.buildProductCatalogIndex(catalogRows);
   const lookup = employeeCost.buildCostLookup(period?.rows || payload?.rows || [], columns, catalogIndex);

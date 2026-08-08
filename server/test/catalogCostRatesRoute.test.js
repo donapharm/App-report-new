@@ -22,6 +22,25 @@ test('lớp ②: chỉ trả cột CEO đã cấp, và chỉ trong whitelist h�
   assert.match(BODY, /reason: 'NO_COLUMN_GRANTED'/);
 });
 
+test('DANH SÁCH CỘT lấy từ hợp đồng tại máy, KHÔNG hỏi DataHub theo mã người đăng nhập', () => {
+  // Lỗi CEO bắt được 08/08: bản đầu hỏi DataHub theo mã đang đăng nhập ⇒ tài khoản
+  // CEO không có sổ chi phí nên luôn `not_configured`, menu phân quyền vĩnh viễn
+  // báo "chưa lấy được cột" dù nguồn khoẻ.
+  assert.match(BODY, /employeeCostTemplates\.resolveTemplate\(empCode \|\| ''\)/);
+  assert.match(BODY, /template\.costColumns/);
+  const columnsAt = BODY.indexOf('const sourceColumns');
+  const fetchAt = BODY.indexOf('employeeCost.getForSession');
+  assert.ok(columnsAt >= 0 && fetchAt > columnsAt, 'cột phải dựng TRƯỚC khi gọi nguồn chi phí');
+});
+
+test('CEO mở menu vẫn nhận đủ cột để cấp quyền dù nguồn chi phí đang chết', () => {
+  assert.match(BODY, /if \(!empCode \|\| empCode === 'CEO'\)/);
+  assert.match(BODY, /reason: 'NO_EMPLOYEE_SCOPE'/);
+  const guardAt = BODY.indexOf("empCode === 'CEO'");
+  const fetchAt = BODY.indexOf('employeeCost.getForSession');
+  assert.ok(guardAt >= 0 && fetchAt > guardAt, 'phải thoát trước khi gọi nguồn cho mã không có sổ chi phí');
+});
+
 test('lớp ③: đơn vị ngoài phạm vi bị loại khỏi kết quả', () => {
   assert.match(BODY, /!isCeo && !catalogCostColumnGrants\.unitInScope\(grant, unitCode\)/);
 });
