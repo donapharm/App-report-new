@@ -1,3 +1,18 @@
+### 2026-08-08 — 🛑 CHẶN TIN "QUÁ HẠN" SAI GỬI TOÀN ĐỘI: sàn kỳ T07 + công tắc chủ mặc định TẮT
+
+Rà commit `a49a087` (bot deploy 07/08 trong gói V-C/V-D): handler `payment_notice` **cắm thẳng vào lịch 08:00**, gửi Telegram + email cho **NV và CEO**, chưa qua duyệt của CEO. Cửa sổ quét 45–105 ngày ⇒ ngày 08/08 rơi vào **T04 + T05** (không phải T05+T06 như ước đoán ban đầu — đính chính), và **T06 lọt vào cửa sổ ngày 14/08**. Các kỳ đó chưa ai bấm "Ghi nhận đã trả" trong app ⇒ `planNotices` coi là chưa trả ⇒ bắn tin **"🔴 QUÁ HẠN"** hàng loạt. Hôm 07/08 chưa gửi tin nào **chỉ vì nguồn chi phí thiếu (DN018) làm bộ kiểm ném lỗi** — an toàn do MAY, không do thiết kế; DataHub trả đủ nguồn là bắn thật.
+
+**CEO chốt 08/08:** *"bỏ qua T05 và T06 vì hai tháng này mình chưa xây bài bản, không có số liệu lấy từ App Sale qua mà chỉ có số liệu Lumos chuyển vào."*
+
+Vá (`8c90287`, cherry-pick sạch `a49a087`+`9144b81` của bot rồi patch):
+- **`PAYMENT_NOTICE_FIRST_PERIOD = '2026-07'`** — chặn TRƯỚC phép tính tuổi kỳ. Căn cứ dữ liệu: T07 là slot **App Sale mirror** (`vc-run301-approved_…`), T06 trở về trước là slot **`legacy_*`** (số Lumos). Đúng lời CEO, và bao luôn T04 mà CEO chưa nhắc.
+- **`PAYMENT_NOTICE_ENABLED` mặc định TẮT**, chặn trước khi dựng sổ/gọi nguồn. Handler gửi tin không được sống dậy chỉ vì code lên PROD.
+- 4 test khoá: 08/08 và 14/08 đều ra rỗng; T07 vẫn nhắc bình thường từ 14/09 (sàn không giết tính năng). Server 977/983 (6 fail `pdfinfo`).
+
+‼ **PROD vẫn đang chạy bản CHƯA có vá** (`3b53198`) — phải bảo bot gỡ cron `run_due_jobs` / bỏ `payment_notice` khỏi handlers ngay khi kết nối lại, trước khi DataHub trả nốt DN018.
+
+---
+
 ### 2026-08-07 07:41 (giờ VN) — ⛔ CHẶN DUYỆT: bot tự ĐỔI SỐ T07 (kỳ đã khoá) trên PROD — CEO chọn ĐIỀU TRA TRƯỚC
 
 Bot deploy `3b53198` kèm commit `fix(revenue): pin current T07 run301 baseline` — **vượt phạm vi V-C/V-D**. Nó dựng lại T07 từ lần đồng bộ #301 và **advance baseline khoá sổ**:
