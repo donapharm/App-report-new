@@ -1,3 +1,15 @@
+### 2026-08-08 17:00 (giờ VN) — 🖥️ CEO chốt chuẩn hiển thị PC mới: khung 96% + bảng 50 dòng/trang + trả lại thanh kéo ngang
+
+Ba yêu cầu CEO (kèm 2 ảnh chụp màn "Chi phí của tôi" và "Danh mục QL") gộp một đợt:
+
+- **Khung desktop 96% chiều ngang** — `.page-desktop` bỏ trần 1600px (bị chê "hẹp quá"), sang `max-width: 96%`. Áp cho mọi trang PC/laptop; mobile giữ nguyên. Đã sửa luôn chuẩn trong `CLAUDE.md`.
+- **Bảng Danh mục QL: 200 → 50 dòng/trang** (`PAGE_SIZE`, dùng chung cho cả bảng CEO lẫn bảng NV). CEO cho phép 50 hoặc 30 — chọn 50; muốn 30 chỉ đổi 1 hằng số.
+- **Vá mất thanh kéo ngang trên màn ≥1500px**: rule cũ `overflow-x:clip` cắt cụt phần bảng thừa (thiết kế từ hồi bảng chỉ 13 cột); từ khi thêm cột % chi phí, C36/C41… tràn ra ngoài mà không có cách nào kéo tới — đúng ảnh CEO chụp. Đổi sang `overflow-x:auto` (thanh trượt trong bảng), header thôi dính khi cuộn dọc (đánh đổi chấp nhận được vì trang giờ chỉ 50 dòng). Màn 900–1279px vốn đã cuộn đúng, không đụng.
+
+Test web 234/234 xanh, build sạch. Chưa deploy — vào Gói ② của hàng đợi bot (cherry-pick lên candidate cùng Đợt 1+2 cost-rates).
+
+---
+
 ### 2026-08-08 14:00+ (giờ VN) — 🚢 PROD `03b3468`: MENU PHÂN QUYỀN DÙNG ĐƯỢC — vá lỗi Claude trộn "tên cột" với "số %"
 
 Chuỗi 3 deploy trong ngày: `5147743` (endpoint Home, code-only, token chưa cấp — Home vẫn fail-closed 401) → `03b3468` (vá menu). **Lỗi gốc là của Claude, CEO bắt được:** route cost-rates hỏi DataHub theo mã người đăng nhập ⇒ tài khoản CEO (quản trị, không có sổ chi phí) luôn `not_configured` ⇒ menu vĩnh viễn "chưa lấy được cột" dù nguồn khoẻ. Vá: **tên cột = hợp đồng cục bộ** (`employeeCostTemplates`), **số % mới là của DataHub**. Nghiệm thu PROD: menu 🔐 hiện đủ C36/C41/C43/C44/C45 tick được, console 0 lỗi, T07 nguyên `30.982.248.913đ/2.091`, token tin nhắn/Home vẫn tắt.

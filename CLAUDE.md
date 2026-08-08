@@ -68,7 +68,8 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
 3. `.env` → `ANTHROPIC_API_KEY` để bật AI diễn giải.
 
 ## Chuẩn UI desktop (CEO chốt 2026-07-02)
-- **Trang "Phân tích" là CHUẨN MẪU bố cục PC:** hàng thẻ KPI ngang trên cùng → các panel nhiều cột (2–3 cột) tận dụng chiều ngang, trong khung `.page-desktop` 1600px căn giữa.
+- **Trang "Phân tích" là CHUẨN MẪU bố cục PC:** hàng thẻ KPI ngang trên cùng → các panel nhiều cột (2–3 cột) tận dụng chiều ngang, trong khung `.page-desktop` **~96% chiều ngang** căn giữa (CEO chốt 08/08/2026 — thay khung 1600px cũ vì "hẹp quá").
+- **Bảng dài: tối đa 50 dòng/trang** (CEO chốt 08/08/2026); bảng rộng hơn màn PHẢI có thanh kéo ngang trong bảng — CẤM `overflow` clip cắt cụt cột lặng lẽ.
 - KHÔNG dùng lưới tự chia trên `.page-desktop` (đã bỏ). Trang tự quản lý layout nội bộ bằng class tường minh (vd `.mini-columns`, `.kpi-grid`, `.alerts-grid`).
 - Trang mới/duyệt lại trang cũ trên PC: theo mẫu Phân tích; mobile giữ 1 cột dọc.
 
