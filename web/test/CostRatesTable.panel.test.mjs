@@ -47,3 +47,9 @@ test('bảng hiện tối đa 300 dòng + chỉ đường lấy đủ — không
   assert.match(page, /rows\.slice\(0, 300\)/);
   assert.match(page, /Hiện 300\/\{rows\.length/);
 });
+
+test('hai NV trùng đơn vị × sản phẩm vẫn có React key riêng theo employeeCode', () => {
+  assert.match(page, /key=\{`\$\{row\.employeeCode\}\|\$\{row\.unitCode\}\|\$\{row\.productCode\}`\}/);
+  assert.doesNotMatch(page, /key=\{`\$\{row\.unitCode\}\|\$\{row\.productCode\}`\}/,
+    'key thiếu employeeCode sẽ làm hai dòng CEO va nhau khi cùng cặp');
+});

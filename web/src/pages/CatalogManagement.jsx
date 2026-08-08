@@ -700,7 +700,7 @@ function CostRatesTablePanel({ period }) {
           <thead><tr><th>Đơn vị</th><th>Mã QLNB</th><th>Tên hàng</th><th>NV</th>
             {data.columns.map((column) => <th key={column.key} className="catalog-money" title={column.label}>{column.key.toUpperCase()} (%)</th>)}
           </tr></thead>
-          <tbody>{rows.slice(0, 300).map((row) => <tr key={`${row.unitCode}|${row.productCode}`}>
+          <tbody>{rows.slice(0, 300).map((row) => <tr key={`${row.employeeCode}|${row.unitCode}|${row.productCode}`}>
             <td>{row.unitCode}</td>
             <td><b>{row.productCode}</b></td>
             <td>{row.productName}</td>
