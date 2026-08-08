@@ -154,14 +154,6 @@ async function syncPeriod({
   for (const stale of keys.slice(0, Math.max(0, keys.length - MAX_PERIODS))) delete rows[stale];
   store.save(FILE, rows);
 
-  // Cầu nối: nạp luôn vào kho bị động sẵn có để đường fallback hiện hành hưởng ngay,
-  // không phải chờ bước chuyển 2 của tầng đọc.
-  for (const empCode of codes) {
-    try {
-      rateSnapshot.write(empCode, period, { ...employees[empCode], period }, { store });
-    } catch { /* kho phụ hỏng không làm hỏng kết quả đồng bộ */ }
-  }
-
   const summary = {
     ok: true, period, requested: codes.length, fetched: codes.length, written: true,
     fetchedAt: at, pairCount: Object.keys(signatures).length, diff, failures: [],

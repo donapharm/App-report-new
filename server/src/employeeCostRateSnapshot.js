@@ -21,6 +21,9 @@
 const persist = require('./persist');
 
 const FILE = 'employee_cost_rate_snapshot';
+// Kho do CEO chủ động đồng bộ theo kỳ. Không require `costRatesSync` tại đây vì
+// module đó cần `employeeCost`, sẽ tạo vòng phụ thuộc ngay trên đường đọc chính.
+const LOCAL_SYNC_FILE = 'cost_rates_local';
 const MAX_RECORDS = 800;
 // Quá cũ thì thà không có còn hơn: tỷ lệ đổi mà vẫn dùng bản cách hàng tháng là sai.
 const MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
@@ -29,6 +32,15 @@ const keyOf = (empCode, period) => `${String(empCode || '').trim().toUpperCase()
 
 function readAll(store) { const rows = store.load(FILE, {}); return rows && typeof rows === 'object' && !Array.isArray(rows) ? rows : {}; }
 
+function readLocalSync(empCode, period, { store = persist } = {}) {
+  const rows = store.load(LOCAL_SYNC_FILE, {});
+  const entry = rows && typeof rows === 'object' && !Array.isArray(rows) ? rows[String(period || '').trim()] : null;
+  const kept = entry?.employees?.[String(empCode || '').trim().toUpperCase()];
+  const payload = kept ? { columns: kept.columns, rows: kept.rows, period: String(period || '').trim() } : null;
+  if (!isStorable(payload)) return null;
+  return { payload, fetchedAt: String(entry.fetchedAt || ''), source: 'local_sync' };
+}
+
 // Chỉ đáng lưu khi thực sự CÓ bảng tỷ lệ. Payload rỗng thì đừng đóng băng cái rỗng.
 function isStorable(periodPayload) {
   return !!periodPayload && Array.isArray(periodPayload.rows) && periodPayload.rows.length > 0
@@ -36,6 +48,11 @@ function isStorable(periodPayload) {
 }
 
 function read(empCode, period, { store = persist, now = Date.now } = {}) {
+  // Kho chủ động đã được ghi ALL-OR-NOTHING cho cả đội và là bản sao bền vững
+  // theo kỳ. Nó phải thắng snapshot bị động và không hết hạn sau 45 ngày: chỉ
+  // lần đồng bộ chủ động tiếp theo mới thay bản này.
+  const local = readLocalSync(empCode, period, { store });
+  if (local) return local;
   const row = readAll(store)[keyOf(empCode, period)];
   if (!row || !isStorable(row.payload)) return null;
   const at = Date.parse(row.fetchedAt || '');
@@ -101,4 +118,7 @@ function covers(empCode, months = [], options = {}) {
   return list.length > 0 && list.every((month) => !!read(empCode, month, options));
 }
 
-module.exports = { FILE, MAX_RECORDS, MAX_AGE_MS, keyOf, isStorable, read, write, remember, restore, covers };
+module.exports = {
+  FILE, LOCAL_SYNC_FILE, MAX_RECORDS, MAX_AGE_MS,
+  keyOf, isStorable, readLocalSync, read, write, remember, restore, covers,
+};

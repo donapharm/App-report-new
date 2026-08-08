@@ -34,6 +34,28 @@ test('‼ nguồn kẹt mà đã có bản lưu ⇒ VẪN CÓ SỐ, gắn nhãn 
   assert.match(stalled.payload.rateStaleNote, /Nguồn chi phí đang kẹt/);
 });
 
+test('kho chủ động all-or-nothing là đường đọc thật và không hết hạn sau 45 ngày', async () => {
+  const store = memStore();
+  store.data[snap.LOCAL_SYNC_FILE] = {
+    '2026-07': {
+      period: '2026-07',
+      fetchedAt: '2025-01-01T00:00:00.000Z',
+      fetchedBy: 'CEO',
+      employees: { DN001: { columns: COLUMNS, rows: ROWS } },
+    },
+  };
+
+  const stalled = await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-07', to: '2026-07', ...credentials, rateSnapshotStore: store,
+    fetchImpl: async () => { throw Object.assign(new Error('timeout'), { name: 'AbortError' }); },
+    awaitBackgroundRefresh: true,
+  });
+  assert.equal(stalled.outcome, 'ok_stale_rates');
+  assert.equal(stalled.payload.periods[0].rows.length, 1);
+  assert.equal(stalled.payload.periods[0].rateFetchedAt, '2025-01-01T00:00:00.000Z');
+  assert.equal(store.data[snap.FILE], undefined, 'không cần bridge từng NV sang snapshot phụ');
+});
+
 test('‼ chưa từng có bản lưu ⇒ vẫn fail-closed như cũ, KHÔNG bịa số', async () => {
   const stalled = await employeeCost.fetchEmployeeCost('DN404', {
     from: '2026-07', to: '2026-07', baseUrl: 'http://hub.test', assignmentKey: 'assignment-key-1234',

@@ -6,6 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const sync = require('../src/costRatesSync');
+const rateSnapshot = require('../src/employeeCostRateSnapshot');
 
 const memStore = () => {
   const data = {};
@@ -25,22 +26,43 @@ const TEAM = {
   DN002: [row('033.BVDK', 'G1.C', { c41: 0.5, c43: 4 })],
 };
 
-test('kéo đủ cả đội ⇒ ghi kho + căn cước đầy đủ + nạp cầu nối sang kho bị động', async () => {
+test('kéo đủ cả đội ⇒ một lần ghi atomic; reader dùng thẳng kho chủ động kể cả sau 45 ngày', async () => {
   const store = memStore();
+  let passiveWrites = 0;
+  const save = store.save;
+  store.save = (name, value) => {
+    if (name === rateSnapshot.FILE) {
+      passiveWrites += 1;
+      throw new Error('không được bridge từng NV sang kho phụ');
+    }
+    save(name, value);
+  };
+
   const result = await sync.syncPeriod({ period: '2026-08', empCodes: ['DN001', 'DN002'], actor: 'CEO', fetchImpl: okFetch(TEAM), store, now: NOW });
   assert.equal(result.ok, true);
   assert.equal(result.written, true);
   assert.equal(result.pairCount, 3);
+  assert.equal(passiveWrites, 0);
   const status = sync.statusOf('2026-08', { store });
   assert.equal(status.fetchedAt, NOW());
   assert.equal(status.fetchedBy, 'CEO');
   assert.equal(status.employeeCount, 2);
-  // Cầu nối: kho bị động (employee_cost_rate_snapshot) cũng có luôn bản này.
-  assert.ok(store.data.employee_cost_rate_snapshot, 'phải nạp sang kho bị động để fallback hiện hành hưởng ngay');
-  // Đọc lại được cho tầng đọc.
-  const kept = sync.readEmployee('2026-08', 'dn001', { store });
-  assert.equal(kept.rows.length, 2);
+
+  // Đường production reader đọc trực tiếp bản all-or-nothing, không phụ thuộc
+  // bridge từng NV và không làm mất số sau TTL 45 ngày của snapshot bị động.
+  const kept = rateSnapshot.read('dn001', '2026-08', {
+    store,
+    now: () => Date.parse('2027-08-08T15:00:00.000+07:00'),
+  });
+  assert.equal(kept.source, 'local_sync');
+  assert.equal(kept.payload.rows.length, 2);
   assert.equal(kept.fetchedAt, NOW());
+  assert.equal(rateSnapshot.covers('DN002', ['2026-08'], { store }), true);
+
+  const payload = { periods: [{ period: '2026-08', columns: [], rows: [] }] };
+  assert.equal(rateSnapshot.restore('DN001', payload, { store }), 1);
+  assert.equal(payload.periods[0].rows.length, 2);
+  assert.equal(payload.periods[0].rateFetchedAt, NOW());
 });
 
 test('ALL-OR-NOTHING: hụt MỘT người ⇒ không ghi gì, bản tốt đang có còn nguyên', async () => {
