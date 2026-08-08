@@ -403,6 +403,11 @@ export const api = {
   salesCatalog: (params = {}) => req('GET', '/catalog/sales?' + new URLSearchParams(params).toString()),
   myAssignments: (params = {}) => req('GET', '/assignments/mine?' + new URLSearchParams(params).toString()),
   catalogManagement: (period) => req('GET', '/catalog-management?' + new URLSearchParams(period ? { period } : {}).toString()),
+  // Phân quyền cột % (SPEC_CATALOG_COST_COLUMNS.md) — backend chặn CHỈ CEO được ghi.
+  catalogCostGrants: () => req('GET', '/catalog-management/cost-columns/grants'),
+  catalogCostGrantSave: (empCode, payload) => req('PUT', `/catalog-management/cost-columns/grants/${encodeURIComponent(empCode)}`, payload),
+  catalogCostMyGrant: () => req('GET', '/catalog-management/cost-columns/my-grant'),
+  catalogCostRates: (params = {}) => req('GET', '/catalog-management/cost-rates?' + new URLSearchParams(params).toString()),
   adminCatalogManagementHistory: (period) => req('GET', '/admin/catalog-management/history?' + new URLSearchParams(period ? { period } : {}).toString()),
   adminCatalogManagementDiagnostics: () => req('GET', '/admin/catalog-management/diagnostics'),
   adminCatalogManagementReportPreview: (payload) => req('POST', '/admin/catalog-management/report/preview', payload),
