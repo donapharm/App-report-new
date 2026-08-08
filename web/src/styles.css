@@ -2472,3 +2472,11 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 /* Badge đang tính — hiện "…" thay vì BIẾN MẤT (CEO 27/07: cứ deploy xong là badge
    mất một lúc vì cache bị xoá, nhìn tưởng hỏng mất tính năng). */
 .employee-cost-tab-badge.loading { background:#eef2f7; color:#64748b; letter-spacing:1px; }
+/* Nút quay lại trong tab "Mặt hàng thiếu %" / "Kiểm soát dữ liệu" (CEO 06/08/2026):
+   trước đây vào tab con phải đi vòng menu chung mới ra được. */
+.employee-cost-back { margin-bottom: 6px; padding: 3px 10px; font-size: 12px; }
+.employee-cost-order-codes { font-size: 11.5px; line-height: 1.4; }
+.employee-cost-order-codes small { display: block; color: var(--muted); }
+/* Cột % chi phí trong Danh mục QL — số căn phải, thiếu % thì nhạt đi cho dễ quét mắt. */
+.catalog-rate { white-space: nowrap; }
+.catalog-rate.is-missing { color: var(--muted); }

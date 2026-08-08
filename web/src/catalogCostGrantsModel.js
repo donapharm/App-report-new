@@ -124,6 +124,22 @@ export function grantSavePayload(row) {
 
 export const dirtyRows = (panel) => (panel?.rows || []).filter((row) => row.dirty);
 
+/** Tra cứu % theo cặp (đơn vị × mã hàng) cho bảng danh mục.
+ *  Trả về hàm tra; cặp không có trong kết quả backend nghĩa là KHÔNG ĐƯỢC XEM
+ *  hoặc CHƯA CÓ % — cả hai đều ra `null` và màn hình hiện '—'. Không suy 0%. */
+export function ratesLookup(pairs = []) {
+  const index = new Map();
+  for (const pair of Array.isArray(pairs) ? pairs : []) {
+    index.set(`${upper(pair?.unitCode)}\u001f${upper(pair?.productCode)}`, pair?.rates || {});
+  }
+  return (unitCode, productCode, columnKey) => {
+    const rates = index.get(`${upper(unitCode)}\u001f${upper(productCode)}`);
+    if (!rates) return null;
+    const value = rates[lower(columnKey)];
+    return value == null || !Number.isFinite(Number(value)) ? null : Number(value);
+  };
+}
+
 /** Câu mô tả quyền cho CEO đọc lướt — phải nói rõ "không thấy gì" chứ đừng để trống. */
 export function grantSummary(row) {
   const columns = (row?.columns || []).map((key) => key.toUpperCase());

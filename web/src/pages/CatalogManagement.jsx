@@ -7,8 +7,19 @@ import { bangkokToday } from '../revenueCoverage.js';
 import { formatDateTime } from '../util.js';
 import {
   ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
-  grantSavePayload, grantSummary, setUnits, toggleColumn,
+  grantSavePayload, grantSummary, ratesLookup, setUnits, toggleColumn,
 } from '../catalogCostGrantsModel.js';
+import { pct } from '../util.js';
+
+/** Ô % trong bảng danh mục. Không có quyền HOẶC chưa có % ⇒ '—' + chỉ đường.
+ *  `pct` đi qua rèm che nên đang ẩn số thì ô này cũng bị che (SPEC_PRIVACY_EYE). */
+function CostRateCell({ value }) {
+  if (value == null) {
+    return <td className="catalog-money catalog-rate is-missing" data-sensitive=""
+      title="Chưa có % cho cặp này — xem tab “Mặt hàng thiếu %” ở màn Chi phí">—</td>;
+  }
+  return <td className="catalog-money catalog-rate" data-sensitive="">{pct(value, 2)}</td>;
+}
 
 const uiToHub = (ky) => { const m = String(ky || '').match(/^(\d{2})\.(\d{4})$/); return m ? `${m[2]}-${m[1]}` : ky; };
 const hubToUi = (period) => { const m = String(period || '').match(/^(\d{4})-(\d{2})$/); return m ? `${m[2]}.${m[1]}` : period; };
@@ -108,7 +119,29 @@ function CatalogSearch({ value, onChange, employee = false }) {
   return <label className="catalog-search-label"><span>{employee ? 'Tìm thông minh trong danh mục của tôi' : 'Tìm thông minh toàn danh mục'}</span><div className="catalog-search-wrap"><input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Tên thuốc, QLNB, đơn vị, nhà thầu…" aria-label="Tìm kiếm thông minh danh mục" />{value && <button type="button" onClick={() => onChange('')} aria-label="Xóa nội dung tìm kiếm" title="Xóa tìm kiếm">×</button>}</div></label>;
 }
 
-function EmployeeSections({ data }) {
+/** Nạp % chi phí theo phạm vi backend cấp. Lỗi/không quyền ⇒ không cột nào, bảng
+ *  giữ nguyên như trước — tính năng này không bao giờ được làm hỏng màn danh mục. */
+function useCostRates(period) {
+  const [state, setState] = useState({ columns: [], rateOf: () => null, stale: false, note: '' });
+  useEffect(() => {
+    let alive = true;
+    api.catalogCostRates(period ? { period } : {})
+      .then((data) => {
+        if (!alive) return;
+        setState({
+          columns: data.columns || [],
+          rateOf: ratesLookup(data.pairs || []),
+          stale: data.rateStale === true,
+          note: data.rateStaleNote || '',
+        });
+      })
+      .catch(() => { if (alive) setState({ columns: [], rateOf: () => null, stale: false, note: '' }); });
+    return () => { alive = false; };
+  }, [period]);
+  return state;
+}
+
+function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
   const [query, setQuery] = useState('');
   const [province, setProvince] = useState('');
   const [route, setRoute] = useState('');
@@ -140,7 +173,7 @@ function EmployeeSections({ data }) {
     </div>
     <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog">
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
         const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
         const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
         const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -157,6 +190,7 @@ function EmployeeSections({ data }) {
           <td className="catalog-money" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
           <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
           <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
+          {costColumns.map((c) => <CostRateCell key={c.key} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
           <PreviewCell value={hubToUi(r.effective_from)} />
           <PreviewCell value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
         </tr>;
@@ -548,7 +582,7 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
   </div>;
 }
 
-function AdminView({ data, period, onReload, history, diagnostics }) {
+function AdminView({ data, period, onReload, history, diagnostics, costColumns = [], rateOf = () => null }) {
   const [mode, setMode] = useState('view');
   const [query, setQuery] = useState('');
   const [emp, setEmp] = useState('');
@@ -593,7 +627,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
       </div>
       <CatalogTableCard id="catalog-table-top" tableId="admin-catalog">
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th><th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
           const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
           const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
           const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -611,6 +645,7 @@ function AdminView({ data, period, onReload, history, diagnostics }) {
             <td className="catalog-money" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
             <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
             <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
+            {costColumns.map((c) => <CostRateCell key={c.key} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
             <PreviewCell value={hubToUi(r.effective_from)} />
             <PreviewCell value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
           </tr>;
@@ -640,6 +675,7 @@ export default function CatalogManagement({ me }) {
   // Danh tính CEO do backend cấp (`/me` trả `is_ceo`), KHÔNG suy từ vai admin —
   // admin thường không được đụng phân quyền cột % (CEO chốt 06/08).
   const isCeo = !!me?.is_ceo;
+  const costRates = useCostRates(period);
   const employeeOptions = useMemo(() => {
     const seen = new Map();
     for (const row of data?.rows || []) {
@@ -668,6 +704,12 @@ export default function CatalogManagement({ me }) {
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
     {isCeo && data && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
-    {!data && !error ? <Spinner /> : data && (isAdmin ? <AdminView data={data} period={uiToHub(period)} history={history} diagnostics={diagnostics} onReload={() => load(period)} /> : <EmployeeSections data={data} />)}
+    {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
+      ⚠ Nguồn tỷ lệ chi phí đang kẹt — cột % đang dùng bảng tỷ lệ lấy được gần nhất.{costRates.note ? ` ${costRates.note}` : ''}
+    </div>}
+    {!data && !error ? <Spinner /> : data && (isAdmin
+      ? <AdminView data={data} period={uiToHub(period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}
+        costColumns={costRates.columns} rateOf={costRates.rateOf} />
+      : <EmployeeSections data={data} costColumns={costRates.columns} rateOf={costRates.rateOf} />)}
   </div>;
 }
