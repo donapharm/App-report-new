@@ -28,7 +28,7 @@ test('kết quả nói thật cả hai chiều: thành công kèm diff; thất b
 
 test('client API trỏ đúng hai endpoint sync + local-status', () => {
   assert.match(api, /catalogCostRatesSync: \(period\) => req\('POST', '\/catalog-management\/cost-rates\/sync', \{ period \}\)/);
-  assert.match(api, /catalogCostRatesLocalStatus: \(\) => req\('GET', '\/catalog-management\/cost-rates\/local-status'\)/);
+  assert.match(api, /catalogCostRatesLocalStatus: \(params = \{\}\) => req\('GET', '\/catalog-management\/cost-rates\/local-status\?'/);
 });
 
 test('actor lấy từ session ở backend — không có đường giả mạo người bấm', () => {
