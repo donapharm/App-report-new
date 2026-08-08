@@ -1349,13 +1349,9 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-table thead { display:none; }
   .catalog-table tr { display:grid; gap:3px; padding:9px; margin:7px; border:1px solid var(--line); border-radius:10px; }
   .catalog-table td { display:block; padding:0; border:0; overflow-wrap:anywhere; }
-  .catalog-table td:nth-child(1)::before { content:'NV: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(2)::before { content:'Tuyến: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(3)::before { content:'Loại: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(4)::before { content:'Danh mục: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(5)::before { content:'Từ kỳ: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(6)::before { content:'Đến kỳ: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(7)::before { content:'Nguồn: '; color:var(--muted); font-weight:700; }
+  /* Nhãn mobile đi cùng chính ô dữ liệu; số cột % thay đổi theo quyền nên tuyệt đối
+     không suy nhãn bằng nth-child. */
+  .catalog-table td[data-label]::before { content:attr(data-label) ': '; color:var(--muted); font-weight:700; }
 }
 @media (max-width:520px) {
   .catalog-heading { align-items:stretch; flex-direction:column; }
@@ -1457,13 +1453,6 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-result-count { grid-column:1/-1; border-left:0; border-top:1px solid var(--line); padding-top:6px; }
   .catalog-help-compact > div { align-items:flex-start; flex-direction:column; }
   .catalog-help-compact ol { flex-wrap:wrap; gap:5px 20px; white-space:normal; }
-  .catalog-table td:nth-child(3)::before { content:'Mã đơn vị: '; }
-  .catalog-table td:nth-child(4)::before { content:'Mã QLNB: '; }
-  .catalog-table td:nth-child(5)::before { content:'Tên thuốc: '; }
-  .catalog-table td:nth-child(6)::before { content:'ĐVT: '; }
-  .catalog-table td:nth-child(7)::before { content:'Đơn giá: '; }
-  .catalog-table td:nth-child(8)::before { content:'Từ kỳ: '; }
-  .catalog-table td:nth-child(9)::before { content:'Đến kỳ: '; }
   .catalog-table-products { min-width:0; }
   .catalog-table-products .catalog-drug-name { max-width:none; }
   .catalog-table-products .catalog-money { text-align:left; }
@@ -1648,41 +1637,10 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-pager-capsule > span { min-height:34px; padding:5px 8px; gap:3px; }
   .catalog-pager-capsule > span b { font-size:11.5px; }
   .catalog-pager-capsule > span i { font-size:10.5px; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(1)::before { content:'NV: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(2)::before { content:'Tuyến: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(3)::before { content:'Mã nhà thầu: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(4)::before { content:'Mã đơn vị: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(5)::before { content:'Mã QLNB: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(6)::before { content:'Tên thuốc: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(7)::before { content:'Hoạt chất + Hàm lượng: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(8)::before { content:'ĐVT: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(9)::before { content:'Đơn giá: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(10)::before { content:'CST ban đầu: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(11)::before { content:'CST còn lại: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(12)::before { content:'Từ kỳ: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(13)::before { content:'Đến kỳ: '; }
   .catalog-two-lines { display:block; max-height:none; overflow:visible; }
   .catalog-table-products tr { grid-template-columns:1fr 1fr; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(4),
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(5),
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(6),
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(7) { grid-column:1/-1; }
+  .catalog-table-products td.catalog-mobile-wide { grid-column:1/-1; }
   .catalog-table-products.catalog-table-employee { min-width:0; }
-  .catalog-table-employee td:nth-child(1)::before { content:'Tuyến: '; }
-  .catalog-table-employee td:nth-child(2)::before { content:'Mã nhà thầu: '; }
-  .catalog-table-employee td:nth-child(3)::before { content:'Mã đơn vị: '; }
-  .catalog-table-employee td:nth-child(4)::before { content:'Mã QLNB: '; }
-  .catalog-table-employee td:nth-child(5)::before { content:'Tên thuốc: '; }
-  .catalog-table-employee td:nth-child(6)::before { content:'Hoạt chất + Hàm lượng: '; }
-  .catalog-table-employee td:nth-child(7)::before { content:'ĐVT: '; }
-  .catalog-table-employee td:nth-child(8)::before { content:'Đơn giá trúng thầu: '; }
-  .catalog-table-employee td:nth-child(9)::before { content:'CST ban đầu: '; }
-  .catalog-table-employee td:nth-child(10)::before { content:'CST còn lại: '; }
-  .catalog-table-employee td:nth-child(11)::before { content:'Từ kỳ: '; }
-  .catalog-table-employee td:nth-child(12)::before { content:'Đến kỳ: '; }
-  .catalog-table-employee td:nth-child(3), .catalog-table-employee td:nth-child(4),
-  .catalog-table-employee td:nth-child(5), .catalog-table-employee td:nth-child(6) { grid-column:1/-1; }
-  .catalog-table-employee td:nth-child(7) { grid-column:auto; }
 }
 @media (max-width:520px) {
   .catalog-filter-row { grid-template-columns:1fr; }

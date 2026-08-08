@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', import.meta.url), 'utf8');
 
 test('KHÔNG khai bề rộng theo VỊ TRÍ cột cho bảng danh mục (số cột đổi theo quyền)', () => {
   // Lỗi CEO chụp 08/08: khai cứng width cho đúng 13 cột, cộng vừa khít min-width
@@ -26,6 +27,27 @@ test('cascade cuối cùng vẫn là auto/max-content — không có rule phía 
   }
   // Ép width:100% + min-width:0 chính là thứ bóp dẹp cột cuối trên laptop.
   assert.doesNotMatch(withoutComments, /\.catalog-table-products\s*\{[^}]*width\s*:\s*100%[^}]*min-width\s*:\s*0/);
+});
+
+test('mobile dùng data-label theo ngữ nghĩa, không suy nhãn hoặc độ rộng bằng vị trí cột', () => {
+  const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(withoutComments, /\.catalog-table[^\{]*td:nth-child\(/, 'mọi bảng Catalog phải bỏ positional coupling');
+  assert.match(withoutComments, /\.catalog-table td\[data-label\]::before\s*\{\s*content:attr\(data-label\) ': '/);
+  assert.match(page, /function PreviewCell\(\{ value, children, className, label \}\)/);
+  assert.match(page, /data-full-value=\{visibleValue\} data-label=\{label\}/);
+  assert.match(page, /function CostRateCell\(\{ value, label \}\)/);
+  assert.ok((page.match(/data-label=\{label\}/g) || []).length >= 3, 'cả PreviewCell và hai nhánh CostRateCell đều mang nhãn');
+});
+
+test('admin và employee giữ đúng nhãn khi có 0 hoặc nhiều cột % động', () => {
+  const dynamicProductCell = '<CostRateCell key={c.key} label={`${c.key.toUpperCase()} (%)`}';
+  assert.equal(page.split(dynamicProductCell).length - 1, 2, 'cả hai bảng sản phẩm gắn nhãn vào chính từng cột %');
+  for (const label of ['C10', 'Tên thuốc', 'Hoạt chất + Hàm lượng', 'Từ kỳ', 'Đến kỳ']) {
+    assert.equal(page.split(`label="${label}"`).length - 1, 2, `${label} phải có nhãn riêng ở admin và employee`);
+  }
+  assert.match(page, /className="catalog-mobile-wide" value=\{r\.unit_code/);
+  assert.match(page, /className="catalog-mobile-wide" value=\{ingredientText\}/);
+  assert.match(css, /\.catalog-table-products td\.catalog-mobile-wide \{ grid-column:1\/-1; \}/);
 });
 
 test('cột số/tiền/% đủ rộng cho tiêu đề "C36 (%)"', () => {

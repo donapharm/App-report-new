@@ -37,7 +37,7 @@ test('mỗi bảng đều mang căn cước bản số: đồng bộ lúc nào, 
 test('ô % dùng CostRateCell ⇒ đi qua rèm che; export qua backend theo quyền người tải', () => {
   const panelAt = page.indexOf('function CostRatesTablePanel');
   const panel = page.slice(panelAt, page.indexOf('function CostRatesSyncCard'));
-  assert.match(panel, /<CostRateCell key=\{column\.key\} value=\{row\.rates\[column\.key\]\} \/>/);
+  assert.match(panel, /<CostRateCell key=\{column\.key\} label=\{`\$\{column\.key\.toUpperCase\(\)\} \(%\)`\} value=\{row\.rates\[column\.key\]\} \/>/);
   assert.match(api, /downloadCostRatesTable/);
   const xlsxLine = routes.slice(routes.indexOf("router.get('/catalog-management/cost-rates/table.xlsx'"));
   assert.match(xlsxLine.slice(0, 120), /auth\.requireAuth/);

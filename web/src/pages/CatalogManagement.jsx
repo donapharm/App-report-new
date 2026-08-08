@@ -14,12 +14,12 @@ import { pct } from '../util.js';
 
 /** Ô % trong bảng danh mục. Không có quyền HOẶC chưa có % ⇒ '—' + chỉ đường.
  *  `pct` đi qua rèm che nên đang ẩn số thì ô này cũng bị che (SPEC_PRIVACY_EYE). */
-function CostRateCell({ value }) {
+function CostRateCell({ value, label }) {
   if (value == null) {
-    return <td className="catalog-money catalog-rate is-missing" data-sensitive=""
+    return <td className="catalog-money catalog-rate is-missing" data-sensitive="" data-label={label}
       title="Chưa có % cho cặp này — xem tab “Mặt hàng thiếu %” ở màn Chi phí">—</td>;
   }
-  return <td className="catalog-money catalog-rate" data-sensitive="">{pct(value, 2)}</td>;
+  return <td className="catalog-money catalog-rate" data-sensitive="" data-label={label}>{pct(value, 2)}</td>;
 }
 
 const uiToHub = (ky) => { const m = String(ky || '').match(/^(\d{2})\.(\d{4})$/); return m ? `${m[2]}-${m[1]}` : ky; };
@@ -96,9 +96,9 @@ function CatalogTableCard({ id, tableId, children }) {
   return <div ref={rootRef} id={id} className="card table-card catalog-table-card" data-app-id="app-report" data-table-id={tableId}>{children}</div>;
 }
 
-function PreviewCell({ value, children, className }) {
+function PreviewCell({ value, children, className, label }) {
   const visibleValue = String(value ?? '');
-  return <td className={className} data-full-value={visibleValue}><span className="dona-cell-value">{children ?? visibleValue}</span></td>;
+  return <td className={className} data-full-value={visibleValue} data-label={label}><span className="dona-cell-value">{children ?? visibleValue}</span></td>;
 }
 
 function DrugName({ row, counts }) {
@@ -180,20 +180,20 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
         const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
         const effectiveToText = r.effective_to ? hubToUi(r.effective_to) : 'Đang phụ trách';
         return <tr key={r.id}>
-          <PreviewCell value={routeOf(r) || '—'} />
-          <PreviewCell value={r.contractor_code || '—'} />
-          <PreviewCell value={r.unit_code || '—'} />
-          <PreviewCell value={r.qlnb_code || '—'} />
-          <PreviewCell value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
-          <PreviewCell value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
-          <PreviewCell value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
-          <PreviewCell value={r.uom || '—'} />
-          <td className="catalog-money" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
-          <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
-          <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
-          {costColumns.map((c) => <CostRateCell key={c.key} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
-          <PreviewCell value={hubToUi(r.effective_from)} />
-          <PreviewCell value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
+          <PreviewCell label="Tuyến" value={routeOf(r) || '—'} />
+          <PreviewCell label="Mã nhà thầu" value={r.contractor_code || '—'} />
+          <PreviewCell label="Mã đơn vị" className="catalog-mobile-wide" value={r.unit_code || '—'} />
+          <PreviewCell label="Mã QLNB" className="catalog-mobile-wide" value={r.qlnb_code || '—'} />
+          <PreviewCell label="C10" value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
+          <PreviewCell label="Tên thuốc" className="catalog-mobile-wide" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
+          <PreviewCell label="Hoạt chất + Hàm lượng" className="catalog-mobile-wide" value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
+          <PreviewCell label="ĐVT" value={r.uom || '—'} />
+          <td className="catalog-money" data-sensitive="" data-label="Đơn giá trúng thầu"><b>{moneyText(r.bid_price)}</b></td>
+          <td className="catalog-money" data-sensitive="" data-label="CST ban đầu">{quantityText(r.cst_initial)}</td>
+          <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive="" data-label="CST còn lại"><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
+          {costColumns.map((c) => <CostRateCell key={c.key} label={`${c.key.toUpperCase()} (%)`} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
+          <PreviewCell label="Từ kỳ" value={hubToUi(r.effective_from)} />
+          <PreviewCell label="Đến kỳ" value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
         </tr>;
       })}</tbody></table></div>
       {rows.length === 0 && <div className="muted catalog-empty">Chưa có danh mục trong phạm vi đang lọc.</div>}
@@ -609,10 +609,10 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
               <th>Đang cấp</th>
             </tr></thead>
             <tbody>{panel.rows.map((row) => <tr key={row.empCode} className={row.dirty ? 'is-dirty' : ''}>
-              <td><b>{row.empCode}</b>{row.name ? <small>{row.name}</small> : null}
+              <td data-label="Nhân viên"><b>{row.empCode}</b>{row.name ? <small>{row.name}</small> : null}
                 {!!row.ungroupedUnits.length && <small className="catalog-scope-warn" title={row.ungroupedUnits.join(', ')}>⚠ {row.ungroupedUnits.length} ĐV chưa có nhóm</small>}
               </td>
-              {panel.columns.map((column) => <td key={column.key} className="catalog-grants-cell">
+              {panel.columns.map((column) => <td key={column.key} className="catalog-grants-cell" data-label={`${column.key.toUpperCase()} (%)`}>
                 {/* Tick cột ⇒ mặc định mọi nhóm; nhãn dưới checkbox mở bộ chọn nhóm
                     RIÊNG CỦA CỘT NÀY (ma trận NV × cột × nhóm — CEO chốt 08/08). */}
                 <input type="checkbox" aria-label={`${column.key.toUpperCase()} cho ${row.empCode}`}
@@ -621,7 +621,7 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
                 <ColumnGroupScope row={row} columnKey={column.key}
                   onChange={(groups) => setPanel((cur) => setColumnGroups(cur, row.empCode, column.key, groups))} />
               </td>)}
-              <td><small>{grantSummary(row)}</small></td>
+              <td data-label="Đang cấp"><small>{grantSummary(row)}</small></td>
             </tr>)}</tbody>
           </table></div>
           <div className="catalog-grants-actions">
@@ -713,11 +713,11 @@ function CostRatesTablePanel({ period }) {
             {data.columns.map((column) => <th key={column.key} className="catalog-money" title={column.label}>{column.key.toUpperCase()} (%)</th>)}
           </tr></thead>
           <tbody>{rows.slice(0, 300).map((row) => <tr key={`${row.employeeCode}|${row.unitCode}|${row.productCode}`}>
-            <td>{row.unitCode}</td>
-            <td><b>{row.productCode}</b></td>
-            <td>{row.productName}</td>
-            <td><small>{row.employees.join(', ')}</small></td>
-            {data.columns.map((column) => <CostRateCell key={column.key} value={row.rates[column.key]} />)}
+            <td data-label="Đơn vị">{row.unitCode}</td>
+            <td data-label="Mã QLNB"><b>{row.productCode}</b></td>
+            <td data-label="Tên hàng">{row.productName}</td>
+            <td data-label="NV"><small>{row.employees.join(', ')}</small></td>
+            {data.columns.map((column) => <CostRateCell key={column.key} label={`${column.key.toUpperCase()} (%)`} value={row.rates[column.key]} />)}
           </tr>)}</tbody>
         </table></div>
         {rows.length > 300 && <small className="muted">Hiện 300/{rows.length.toLocaleString('vi-VN')} dòng — dùng ô tìm để thu hẹp, hoặc Xuất Excel lấy đủ.</small>}
@@ -828,21 +828,21 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
           const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
           const effectiveToText = r.effective_to ? hubToUi(r.effective_to) : 'Đang phụ trách';
           return <tr key={r.id}>
-            <td data-sensitive=""><b>{r.emp_code}</b><small>{r.emp_name}</small></td>
-            <PreviewCell value={routeOf(r) || '—'} />
-            <PreviewCell value={r.contractor_code || '—'} />
-            <PreviewCell value={r.unit_code || '—'} />
-            <PreviewCell value={r.qlnb_code || '—'} />
-          <PreviewCell value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
-            <PreviewCell value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
-            <PreviewCell value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
-            <PreviewCell value={r.uom || '—'} />
-            <td className="catalog-money" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
-            <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
-            <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
-            {costColumns.map((c) => <CostRateCell key={c.key} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
-            <PreviewCell value={hubToUi(r.effective_from)} />
-            <PreviewCell value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
+            <td data-sensitive="" data-label="Nhân viên"><b>{r.emp_code}</b><small>{r.emp_name}</small></td>
+            <PreviewCell label="Tuyến" value={routeOf(r) || '—'} />
+            <PreviewCell label="Mã nhà thầu" value={r.contractor_code || '—'} />
+            <PreviewCell label="Mã đơn vị" className="catalog-mobile-wide" value={r.unit_code || '—'} />
+            <PreviewCell label="Mã QLNB" className="catalog-mobile-wide" value={r.qlnb_code || '—'} />
+            <PreviewCell label="C10" value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
+            <PreviewCell label="Tên thuốc" className="catalog-mobile-wide" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
+            <PreviewCell label="Hoạt chất + Hàm lượng" className="catalog-mobile-wide" value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
+            <PreviewCell label="ĐVT" value={r.uom || '—'} />
+            <td className="catalog-money" data-sensitive="" data-label="Đơn giá trúng thầu"><b>{moneyText(r.bid_price)}</b></td>
+            <td className="catalog-money" data-sensitive="" data-label="CST ban đầu">{quantityText(r.cst_initial)}</td>
+            <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive="" data-label="CST còn lại"><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
+            {costColumns.map((c) => <CostRateCell key={c.key} label={`${c.key.toUpperCase()} (%)`} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
+            <PreviewCell label="Từ kỳ" value={hubToUi(r.effective_from)} />
+            <PreviewCell label="Đến kỳ" value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
           </tr>;
         })}</tbody></table></div>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
