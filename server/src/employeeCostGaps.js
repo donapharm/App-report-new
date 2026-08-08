@@ -111,9 +111,15 @@ function groupGapRows(periodPayload = {}, context = {}) {
       productName: safeText(row.c16 || code, 300),
       revenueAffected: 0,
       orderLineCount: 0,
+      // CEO 06/08/2026: *"bổ sung mã đơn hàng để biết mã đơn hàng, yêu cầu kế toán/
+      // DN007/VP018 kiểm tra đúng mã đơn hàng và chỉnh sửa lại, hoặc ngăn đồng bộ."*
+      // Mã đơn là mã TRA CỨU, không phải tiền — không bị rèm che ẩn số.
+      orderCodes: [],
     };
     current.revenueAffected += Number.isFinite(Number(row.revenue)) ? Number(row.revenue) : 0;
     current.orderLineCount += 1;
+    const orderCode = safeText(row.orderCode ?? row.order_code ?? row.source_order, 80);
+    if (orderCode && !current.orderCodes.includes(orderCode)) current.orderCodes.push(orderCode);
     map.set(key, current);
   }
   return [...map.values()].map((pair) => {
@@ -139,6 +145,7 @@ function aggregatePairs(pairs = []) {
       employeeCodes: new Set(),
       periods: new Set(),
       suggestedCatalogCodes: new Set(),
+      orderCodes: new Set(),
       revenueAffected: 0,
       pairCount: 0,
       orderLineCount: 0,
@@ -149,6 +156,7 @@ function aggregatePairs(pairs = []) {
     current.employeeCodes.add(pair.employeeCode);
     current.periods.add(pair.period);
     if (pair.suggestedCatalogCode) current.suggestedCatalogCodes.add(pair.suggestedCatalogCode);
+    for (const code of pair.orderCodes || []) current.orderCodes.add(code);
     if (pair.reason === REASON_QD_MISMATCH) current.reason = REASON_QD_MISMATCH;
     current.revenueAffected += Number(pair.revenueAffected || 0);
     current.pairCount += 1;
@@ -160,12 +168,15 @@ function aggregatePairs(pairs = []) {
     const unitLabels = [...item.unitLabels].sort((a, b) => a.localeCompare(b, 'vi'));
     const employeeCodes = [...item.employeeCodes].sort();
     const suggestedCatalogCodes = [...item.suggestedCatalogCodes].sort((a, b) => a.localeCompare(b, 'vi'));
+    const orderCodes = [...item.orderCodes].sort((a, b) => a.localeCompare(b, 'vi'));
     return {
       productCode: item.productCode,
       productName: item.productName,
       unitCodes,
       unitLabels,
       unitCount: unitCodes.length,
+      orderCodes,
+      orderCodeCount: orderCodes.length,
       employeeCodes,
       employeeCount: employeeCodes.length,
       periods: [...item.periods].sort(),
