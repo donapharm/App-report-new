@@ -111,6 +111,13 @@ async function syncPeriod({
   fetchImpl = employeeCost.fetchRawEmployeeCost,
   store = persist,
   now = () => new Date().toISOString(),
+  // Nghỉ giữa hai lượt gọi. Bằng chứng 08/08: DataHub tự restart vì RSS 951,8 MB
+  // vượt ngưỡng 900 MiB khi bị đọc dồn. Gọi tuần tự thôi là chưa đủ — 21 lượt liên
+  // tiếp không cho nguồn kịp thu hồi bộ nhớ giữa các lượt. Nghỉ một nhịp ngắn đổi
+  // lấy việc đồng bộ chạy trót lọt: all-or-nothing nên nguồn ngã giữa chừng là hỏng
+  // cả lượt, phải bấm lại từ đầu.
+  pauseMs = Number(process.env.COST_SYNC_PAUSE_MS ?? 250),
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
   if (!isPeriod(period)) {
     throw Object.assign(new Error('Kỳ không hợp lệ'), { status: 400, code: 'COST_SYNC_PERIOD_INVALID' });
@@ -124,8 +131,13 @@ async function syncPeriod({
 
   const employees = {};
   const failures = [];
-  // Gọi TUẦN TỰ — DataHub từng kẹt vì dồn tải; 21 lượt tuần tự vẫn xong trong ~1 phút.
+  // Gọi TUẦN TỰ + nghỉ một nhịp giữa các lượt — DataHub từng kẹt vì dồn tải, và
+  // 08/08 còn tự restart vì hết bộ nhớ khi bị đọc dồn. 21 lượt vẫn xong trong ~1 phút.
+  const wait = Number.isFinite(pauseMs) && pauseMs > 0 ? pauseMs : 0;
+  let first = true;
   for (const empCode of codes) {
+    if (!first && wait) await sleep(wait);
+    first = false;
     let result;
     try { result = await fetchImpl(empCode, { from: period, to: period }); }
     catch (error) { failures.push({ empCode, outcome: 'exception', message: String(error?.message || error) }); continue; }
