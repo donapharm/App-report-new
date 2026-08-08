@@ -1318,6 +1318,22 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-alert { margin-top:8px; padding:9px 10px; border-radius:9px; }
 .catalog-alert.error { color:var(--hi); background:#fff2f2; border:1px solid #f1c0c0; }
 .catalog-alert.success { color:var(--ok); background:#effaf5; border:1px solid #b9ddce; }
+.catalog-alert.ok { color:var(--ok); background:#effaf5; border:1px solid #b9ddce; }
+/* Menu phân quyền cột % — CHỈ CEO (SPEC_CATALOG_COST_COLUMNS.md) */
+.catalog-grants-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.catalog-grants-head p { margin:3px 0 0; font-size:12px; color:var(--muted); max-width:70ch; }
+.catalog-grants-body { margin-top:10px; }
+.catalog-grants-bulk { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 10px; margin-bottom:9px;
+  background:#f4f8fd; border:1px solid var(--line); border-radius:9px; font-size:12px; }
+.catalog-grants-bulk label { display:inline-flex; align-items:center; gap:4px; font-weight:700; }
+.catalog-grants-cell { text-align:center; }
+.catalog-grants td small { display:block; color:var(--muted); font-size:11px; }
+.catalog-grants tr.is-dirty { background:#fffbe9; }
+.catalog-grants-actions { display:flex; gap:8px; margin-top:10px; }
+.catalog-grants-audit { margin-top:14px; padding-top:10px; border-top:1px dashed var(--line); font-size:11.5px; color:var(--muted); }
+.catalog-grants-audit h4 { margin:0 0 6px; font-size:12px; color:var(--ink); }
+.catalog-grants-audit div { padding:2px 0; }
+@media (max-width: 700px) { .catalog-grants-bulk { font-size:11.5px; } }
 .catalog-history { display:flex; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); }
 .catalog-history span { color:var(--muted); font-size:12px; text-align:right; }
 .catalog-diag { display:grid; grid-template-columns:1fr auto; gap:7px 12px; margin:0; }

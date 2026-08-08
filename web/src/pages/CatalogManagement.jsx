@@ -4,6 +4,11 @@ import '@donapharm/dona-table-cell-tools/css';
 import { api, downloadFilteredEmployeeReport, downloadFilteredEmployeeSummary } from '../api.js';
 import { Spinner } from '../components.jsx';
 import { bangkokToday } from '../revenueCoverage.js';
+import { formatDateTime } from '../util.js';
+import {
+  ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
+  grantSavePayload, grantSummary, setUnits, toggleColumn,
+} from '../catalogCostGrantsModel.js';
 
 const uiToHub = (ky) => { const m = String(ky || '').match(/^(\d{2})\.(\d{4})$/); return m ? `${m[2]}-${m[1]}` : ky; };
 const hubToUi = (period) => { const m = String(period || '').match(/^(\d{4})-(\d{2})$/); return m ? `${m[2]}.${m[1]}` : period; };
@@ -422,6 +427,127 @@ function ReportPanel({ period, rows }) {
   </div>;
 }
 
+/**
+ * MENU PHÂN QUYỀN CỘT % CHI PHÍ — CHỈ CEO (SPEC_CATALOG_COST_COLUMNS.md)
+ * CEO chốt 06/08/2026: *"chỉ CEO mới quản lý ai được xem cột nào… không ai khác."*
+ * Nút này chỉ hiện với tài khoản CEO; backend vẫn chặn độc lập bằng `requireCeo`
+ * — ẩn nút KHÔNG phải lớp bảo vệ.
+ */
+function CostColumnGrantsPanel({ catalogRows, employees }) {
+  const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState(null);
+  const [audit, setAudit] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+  const [bulk, setBulk] = useState([]);
+
+  const load = async () => {
+    setLoading(true); setError(''); setMessage('');
+    try {
+      const [grants, rates] = await Promise.allSettled([api.catalogCostGrants(), api.catalogCostRates()]);
+      if (grants.status !== 'fulfilled') throw new Error(grants.reason?.message || 'Không tải được phân quyền');
+      const columns = rates.status === 'fulfilled' ? (rates.value.columns || []) : [];
+      setPanel(buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees }));
+      setAudit(grants.value.audit || []);
+    } catch (e) { setError(e.message); setPanel(null); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { if (open && !panel && !loading) load(); }, [open]);
+
+  const save = async () => {
+    if (!panel) return;
+    setSaving(true); setError(''); setMessage('');
+    const pending = dirtyRows(panel);
+    try {
+      for (const row of pending) await api.catalogCostGrantSave(row.empCode, grantSavePayload(row));
+      setMessage(`Đã lưu quyền cho ${pending.length} nhân viên.`);
+      await load();
+    } catch (e) { setError(`${e.message} — các dòng chưa lưu vẫn còn nguyên, bấm Lưu lại sau khi xử lý.`); }
+    finally { setSaving(false); }
+  };
+
+  const pending = panel ? dirtyRows(panel).length : 0;
+  return <div className="card catalog-grants">
+    <div className="catalog-grants-head">
+      <div>
+        <div className="section-head">🔐 Phân quyền cột % chi phí</div>
+        <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo đơn vị họ phụ trách.</p>
+      </div>
+      <button type="button" className="btn secondary" aria-expanded={open} aria-controls="catalog-grants-body" onClick={() => setOpen((v) => !v)}>
+        {open ? 'Thu gọn' : 'Mở phân quyền'}
+      </button>
+    </div>
+    {open && <div className="catalog-grants-body" id="catalog-grants-body">
+      {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
+      {message && <div className="catalog-alert ok" role="status">{message}</div>}
+      {loading || !panel ? <Spinner /> : <>
+        {!panel.columns.length && <div className="catalog-alert error" role="alert">
+          Chưa lấy được danh sách cột % từ nguồn chi phí — chưa cấp quyền được. Kiểm tra nguồn DataHub rồi mở lại.
+        </div>}
+        {!!panel.columns.length && <>
+          <div className="catalog-grants-bulk">
+            <span>Áp nhanh cho nhiều người:</span>
+            {panel.columns.map((column) => <label key={column.key}>
+              <input type="checkbox" checked={bulk.includes(column.key)}
+                onChange={() => setBulk((cur) => (cur.includes(column.key) ? cur.filter((k) => k !== column.key) : [...cur, column.key]))} />
+              {column.key.toUpperCase()}
+            </label>)}
+            <button type="button" className="btn ghost" disabled={saving}
+              onClick={() => setPanel((cur) => applyColumnsToMany(cur, cur.rows.map((r) => r.empCode), bulk))}>
+              Áp cho tất cả {panel.rows.length} NV
+            </button>
+            <button type="button" className="btn ghost" disabled={saving}
+              onClick={() => setPanel((cur) => applyColumnsToMany(cur, cur.rows.map((r) => r.empCode), []))}>
+              Tắt hết
+            </button>
+          </div>
+          <div className="table-scroll"><table className="catalog-table catalog-table-simple">
+            <thead><tr>
+              <th>Nhân viên</th>
+              {panel.columns.map((column) => <th key={column.key} title={column.label}>{column.key.toUpperCase()}</th>)}
+              <th>Phạm vi đơn vị</th><th>Đang cấp</th>
+            </tr></thead>
+            <tbody>{panel.rows.map((row) => <tr key={row.empCode} className={row.dirty ? 'is-dirty' : ''}>
+              <td><b>{row.empCode}</b>{row.name ? <small>{row.name}</small> : null}</td>
+              {panel.columns.map((column) => <td key={column.key} className="catalog-grants-cell">
+                <input type="checkbox" aria-label={`${column.key.toUpperCase()} cho ${row.empCode}`}
+                  checked={row.columns.includes(column.key)}
+                  onChange={() => setPanel((cur) => toggleColumn(cur, row.empCode, column.key))} />
+              </td>)}
+              <td>
+                <select value={row.units.includes(ALL_UNITS) || !row.units.length ? ALL_UNITS : row.units[0]}
+                  disabled={!row.columns.length}
+                  aria-label={`Phạm vi đơn vị của ${row.empCode}`}
+                  onChange={(e) => setPanel((cur) => setUnits(cur, row.empCode, e.target.value === ALL_UNITS ? [ALL_UNITS] : [e.target.value]))}>
+                  <option value={ALL_UNITS}>Mọi đơn vị đang phụ trách ({row.availableUnits.length})</option>
+                  {row.availableUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+                </select>
+              </td>
+              <td><small>{grantSummary(row)}</small></td>
+            </tr>)}</tbody>
+          </table></div>
+          <div className="catalog-grants-actions">
+            <button type="button" className="btn" disabled={saving || !pending} onClick={save}>
+              {saving ? 'Đang lưu…' : pending ? `Lưu ${pending} thay đổi` : 'Chưa có thay đổi'}
+            </button>
+            <button type="button" className="btn ghost" disabled={saving || !pending} onClick={load}>Huỷ thay đổi</button>
+          </div>
+        </>}
+        {!!audit.length && <div className="catalog-grants-audit">
+          <h4>Nhật ký thay đổi</h4>
+          {audit.slice(0, 10).map((item, index) => <div key={`${item.at}-${index}`}>
+            <span>{formatDateTime(item.at)}</span> · <b>{item.actor}</b> đổi cho <b>{item.empCode}</b>:
+            {' '}{(item.before?.columns || []).map((c) => c.toUpperCase()).join('+') || '(không thấy gì)'}
+            {' → '}{(item.after?.columns || []).map((c) => c.toUpperCase()).join('+') || '(không thấy gì)'}
+          </div>)}
+        </div>}
+      </>}
+    </div>}
+  </div>;
+}
+
 function AdminView({ data, period, onReload, history, diagnostics }) {
   const [mode, setMode] = useState('view');
   const [query, setQuery] = useState('');
@@ -511,6 +637,17 @@ export default function CatalogManagement({ me }) {
   const [diagnostics, setDiagnostics] = useState(null);
   const [error, setError] = useState('');
   const isAdmin = !!me?.isAdmin;
+  // Danh tính CEO do backend cấp (`/me` trả `is_ceo`), KHÔNG suy từ vai admin —
+  // admin thường không được đụng phân quyền cột % (CEO chốt 06/08).
+  const isCeo = !!me?.is_ceo;
+  const employeeOptions = useMemo(() => {
+    const seen = new Map();
+    for (const row of data?.rows || []) {
+      const code = String(row?.emp_code || '').trim().toUpperCase();
+      if (code && !seen.has(code)) seen.set(code, { code, name: String(row?.emp_name || '').trim() });
+    }
+    return [...seen.values()].sort((a, b) => a.code.localeCompare(b.code));
+  }, [data]);
   async function load(selected = period) {
     setError(''); setData(null);
     try {
@@ -529,6 +666,8 @@ export default function CatalogManagement({ me }) {
       <div className="catalog-heading-actions">{data?.meta && <SourceStatus meta={data.meta} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
+    {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
+    {isCeo && data && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
     {!data && !error ? <Spinner /> : data && (isAdmin ? <AdminView data={data} period={uiToHub(period)} history={history} diagnostics={diagnostics} onReload={() => load(period)} /> : <EmployeeSections data={data} />)}
   </div>;
 }
