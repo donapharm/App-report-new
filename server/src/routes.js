@@ -25,6 +25,7 @@ const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const catalogCostColumnGrants = require('./catalogCostColumnGrants');
 const employeeCostTemplates = require('./employeeCostTemplates');
+const costRatesSync = require('./costRatesSync');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
@@ -3043,6 +3044,24 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
     rateStaleNote: period?.rateStaleNote || '',
   });
 }));
+
+/**
+ * NÚT "🔄 ĐỒNG BỘ % CHI PHÍ" (SPEC_COST_RATES_LOCAL_SYNC · CEO chốt 08/08).
+ * CHỈ CEO bấm. Kéo bảng tỷ lệ của kỳ cho toàn đội về kho cục bộ — từ đó DataHub
+ * chết cũng không mất số; all-or-nothing, hụt một người là giữ nguyên bản cũ.
+ */
+router.post('/catalog-management/cost-rates/sync', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.body?.period || req.query.period || store.latestKy()));
+  const result = await costRatesSync.syncPeriod({
+    period: monthInputForKy(uiPeriod),
+    empCodes: costRatesSync.rosterFromEnv(),
+    actor: req.session.emp_code,
+  });
+  return res.status(result.ok ? 200 : 502).json(result);
+}));
+router.get('/catalog-management/cost-rates/local-status', auth.requireAuth, auth.requireCeo, (req, res) => {
+  return res.json({ periods: costRatesSync.listStatus(), audit: costRatesSync.listAudit({ limit: 10 }) });
+});
 
 /* Ai cũng gọi được, nhưng CHỈ nhận phần của chính mình — không nhận tham số emp,
    nên không có đường hỏi quyền của người khác. */

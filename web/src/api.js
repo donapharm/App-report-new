@@ -414,6 +414,8 @@ export const api = {
   catalogCostGrantSave: (empCode, payload) => req('PUT', `/catalog-management/cost-columns/grants/${encodeURIComponent(empCode)}`, payload),
   catalogCostMyGrant: () => req('GET', '/catalog-management/cost-columns/my-grant'),
   catalogCostRates: (params = {}) => req('GET', '/catalog-management/cost-rates?' + new URLSearchParams(params).toString()),
+  catalogCostRatesSync: (period) => req('POST', '/catalog-management/cost-rates/sync', { period }),
+  catalogCostRatesLocalStatus: () => req('GET', '/catalog-management/cost-rates/local-status'),
   adminCatalogManagementHistory: (period) => req('GET', '/admin/catalog-management/history?' + new URLSearchParams(period ? { period } : {}).toString()),
   adminCatalogManagementDiagnostics: () => req('GET', '/admin/catalog-management/diagnostics'),
   adminCatalogManagementReportPreview: (payload) => req('POST', '/admin/catalog-management/report/preview', payload),
