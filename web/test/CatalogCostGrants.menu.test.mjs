@@ -6,9 +6,11 @@ const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', impor
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
 const routes = fs.readFileSync(new URL('../../server/src/routes.js', import.meta.url), 'utf8');
 
-test('menu CHỈ hiện với tài khoản CEO, lấy danh tính từ backend chứ không suy từ vai admin', () => {
+test('menu CHỈ hiện với CEO khi dữ liệu đúng kỳ, lấy danh tính từ backend chứ không suy từ vai admin', () => {
   assert.match(page, /const isCeo = !!me\?\.is_ceo;/);
-  assert.match(page, /\{isCeo && data && <CostColumnGrantsPanel/);
+  assert.match(page, /\{isCeo && data && !actionsLocked && <CostColumnGrantsPanel/);
+  assert.match(page, /const actionsLocked = !!loadingPeriod \|\| periodMismatch/,
+    'khi đang tải/giữ bảng kỳ cũ phải ẩn thao tác cấp quyền để không trộn kỳ');
   // Suy từ role/isAdmin là sai: CEO thật trên PROD mang role 'admin', và admin
   // thường KHÔNG được sửa phân quyền này.
   assert.doesNotMatch(page, /isCeo\s*=\s*[^;]*isAdmin/);

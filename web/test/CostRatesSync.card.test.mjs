@@ -6,8 +6,10 @@ const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', impor
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
 const routes = fs.readFileSync(new URL('../../server/src/routes.js', import.meta.url), 'utf8');
 
-test('nút Đồng bộ chỉ hiện với CEO; backend chặn độc lập bằng requireCeo', () => {
-  assert.match(page, /\{isCeo && <CostRatesSyncCard period=\{period\} \/>\}/);
+test('nút Đồng bộ chỉ hiện với CEO khi dữ liệu đúng kỳ; backend chặn độc lập bằng requireCeo', () => {
+  assert.match(page, /\{isCeo && !actionsLocked && <CostRatesSyncCard period=\{period\} \/>\}/);
+  assert.match(page, /const actionsLocked = !!loadingPeriod \|\| periodMismatch/,
+    'khi đang tải/giữ bảng kỳ cũ phải ẩn thao tác đồng bộ để không trộn kỳ');
   const at = routes.indexOf("router.post('/catalog-management/cost-rates/sync'");
   assert.ok(at >= 0, 'thiếu route sync');
   assert.match(routes.slice(at, routes.indexOf('\n', at)), /auth\.requireCeo/);
