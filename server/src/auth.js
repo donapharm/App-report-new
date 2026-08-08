@@ -624,6 +624,30 @@ function telegramConfirm({ login_code, telegram_id, secret_bot }) {
 }
 
 /* ===================== MIDDLEWARE + SCOPE ===================== */
+function revenueOnlyDenied(res) {
+  return res.status(403).json({
+    error: 'Tài khoản này chỉ được xem Doanh thu và Doanh thu đầy đủ.',
+    code: 'REVENUE_ONLY_ACCESS',
+    allowed_tabs: ['revenue', 'revenueFull'],
+  });
+}
+
+// Chốt policy ở cấp router, kể cả method/path không khớp một route cụ thể.
+// Nhờ đó VP018 luôn nhận 403 cho mọi POST/PUT/PATCH/DELETE và mọi API ngoài
+// allowlist (kể cả /employee-cost* chưa/không còn tồn tại), thay vì rơi qua 404.
+// Chỉ peek phiên trong RAM, không gia hạn/ghi sessions; requireAuth của route hợp
+// lệ vẫn là nơi xác thực đầy đủ và rolling session đúng một lần.
+function enforceAccessPolicyBoundary(req, res, next) {
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (!token) return next();
+  const sess = sessions.find((item) => item.th === sha(token) && item.expires_at > now());
+  if (!sess || accessPolicy.isRequestAllowed(sess, {
+    method: req.method,
+    path: req.originalUrl || `${req.baseUrl || ''}${req.path || req.url || ''}`,
+  })) return next();
+  return revenueOnlyDenied(res);
+}
+
 function requireAuth(req, res, next) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   const sess = getSession(token, {
@@ -647,13 +671,7 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: 'Phiên đã hết hiệu lực do thay đổi tài khoản. Vui lòng đăng nhập lại.' });
   }
   const requestPath = req.originalUrl || `${req.baseUrl || ''}${req.path || req.url || ''}`;
-  if (!accessPolicy.isRequestAllowed(sess, { method: req.method, path: requestPath })) {
-    return res.status(403).json({
-      error: 'Tài khoản này chỉ được xem Doanh thu và Doanh thu đầy đủ.',
-      code: 'REVENUE_ONLY_ACCESS',
-      allowed_tabs: ['revenue', 'revenueFull'],
-    });
-  }
+  if (!accessPolicy.isRequestAllowed(sess, { method: req.method, path: requestPath })) return revenueOnlyDenied(res);
   req.session = sess;
   next();
 }
@@ -693,6 +711,12 @@ function requireHomeService(req, res, next) {
 const isAdmin = (role) => role === 'ceo' || role === 'admin';
 function scopeOf(session) {
   return { empCode: isAdmin(session.role) ? null : session.emp_code };
+}
+// VP018 là người kiểm tra doanh thu thay CEO: chỉ các route doanh thu gọi helper
+// này mới nhận company scope. `scopeOf` chung vẫn self-scope để một allowlist sai
+// trong tương lai không tự biến thành quyền đọc toàn công ty ngoài hai tab.
+function revenueScopeOf(session) {
+  return { empCode: accessPolicy.canReadAllRevenue(session) ? null : scopeOf(session).empCode };
 }
 function sessionForUser(user) {
   if (!user) return null;
@@ -740,9 +764,10 @@ function requireCeo(req, res, next) {
 }
 
 module.exports = {
-  mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, sessionForUser, getSession,
+  mockLogin, enforceAccessPolicyBoundary, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, revenueScopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   accessProfileFor: accessPolicy.accessProfileFor,
+  canReadAllRevenue: accessPolicy.canReadAllRevenue,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),

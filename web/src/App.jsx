@@ -8,7 +8,7 @@ import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
 import DormantGate from './DormantGate.jsx';
 import CeoNotificationBell from './CeoNotificationBell.jsx';
-import { PrivacyEyeButton } from './privacy.jsx';
+import { PrivacyEyeButton, usePrivacy } from './privacy.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
 import Revenue from './pages/Revenue.jsx';
@@ -109,6 +109,15 @@ export default function App() {
   const headerReloadBusyRef = useRef(false);
   const headerReloadStartedRef = useRef(false);
   const mobileMenuSearchRef = useRef(null);
+  const { setHidden: setPrivacyHidden } = usePrivacy();
+
+  // VP018 chỉ có hai tab doanh thu và không có công tắc privacy. Hiện số thật
+  // trong đúng phiên revenue-only; khi rời phiên phải khôi phục mặc định che số.
+  useEffect(() => {
+    if (me?.access_profile !== 'revenue_only') return undefined;
+    setPrivacyHidden(false);
+    return () => setPrivacyHidden(true);
+  }, [me?.access_profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let alive = true;
@@ -385,7 +394,7 @@ export default function App() {
             </div>
             <div className="topbar-actions">
               {!revenueOnly && <CeoNotificationBell me={me} onNavigate={navigate} />}
-              <PrivacyEyeButton />
+              {!revenueOnly && <PrivacyEyeButton />}
               <RefreshButton loading={headerReloadBusy} onClick={triggerHeaderReload} />
               <HomeButton />
               <Clock />
@@ -419,7 +428,7 @@ export default function App() {
         <div className="hdr-r2">
           <Clock />
           <div className="hdr-actions">
-            <PrivacyEyeButton />
+            {!revenueOnly && <PrivacyEyeButton />}
             <RefreshButton loading={headerReloadBusy} onClick={triggerHeaderReload} />
             <HomeButton />
             <button className="logout" onClick={logout}>Đăng xuất</button>

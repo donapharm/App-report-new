@@ -19,6 +19,11 @@ const REVENUE_ONLY_GET_PATHS = new Set([
   '/filters',
   '/revenue',
   '/revenue/full',
+  // Export của đúng hai tab doanh thu. Liệt kê exact path, không wildcard;
+  // CSV/PPTX và mọi export khác vẫn fail-closed.
+  '/export/revenue.xlsx',
+  '/export/revenue_report.xlsx',
+  '/export/revenue_report.pdf',
 ]);
 
 function normalizeEmpCode(value) {
@@ -36,11 +41,18 @@ function accessProfileFor(sessionOrCode) {
   return REVENUE_ONLY_EMP_CODES.has(normalizeEmpCode(code)) ? 'revenue_only' : 'standard';
 }
 
+function canReadAllRevenue(sessionOrCode) {
+  return accessProfileFor(sessionOrCode) === 'revenue_only';
+}
+
 function normalizeApiPath(value) {
   const raw = String(value || '').trim();
   if (!raw) return '/';
-  let pathname = raw;
-  try { pathname = new URL(raw, 'http://app-report.local').pathname; } catch { /* fail closed below */ }
+  // req.originalUrl luôn là path tương đối. Không dùng URL() để canonicalize vì
+  // nó biến /api/../me hoặc dấu gạch chéo ngược thành path allowlisted. Với
+  // policy exact-path, mọi biểu diễn khác byte/path chuẩn phải fail-closed.
+  if (!raw.startsWith('/') || raw.includes('\\') || raw.includes('#')) return '/__invalid_revenue_only_path__';
+  const pathname = raw.split('?', 1)[0];
   if (pathname === '/api') return '/';
   return pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
 }
@@ -59,5 +71,6 @@ module.exports = {
   normalizeApiPath,
   isLoginBlocked,
   accessProfileFor,
+  canReadAllRevenue,
   isRequestAllowed,
 };

@@ -21,13 +21,18 @@ test('VP018 chỉ thấy Doanh thu và DT đầy đủ; deep link trái phép qu
   assert.equal(resolveAllowedTab(tabs, 'overview', vp018), 'revenue');
 });
 
-test('frontend khóa đường vòng và không hiện export/notification cho revenue-only', () => {
+test('frontend khóa đường vòng, mở đúng export và giấu privacy eye cho revenue-only', () => {
   assert.match(app, /const revenueOnly = me\.access_profile === 'revenue_only'/);
   assert.match(app, /resolveAllowedTab\(TABS, targetTab, me, revenueOnly \? 'revenue' : 'overview'\)/);
+  assert.match(app, /me\?\.access_profile !== 'revenue_only'.*setPrivacyHidden\(false\)/s);
+  assert.equal((app.match(/!revenueOnly && <PrivacyEyeButton/g) || []).length, 2, 'desktop + mobile đều giấu eye');
   assert.match(app, /!revenueOnly && <CeoNotificationBell/);
   assert.match(app, /!revenueOnly && <DormantGate/);
-  assert.match(revenue, /me\.access_profile !== 'revenue_only'.*doExport/);
-  assert.match(revenueFull, /me\.access_profile !== 'revenue_only'.*revenue-export-tools/);
+  assert.match(revenue, /const companyRevenue = me\.isAdmin \|\| me\.access_profile === 'revenue_only'/);
+  assert.match(revenue, /<button className="btn ghost" disabled=\{busy\} onClick=\{doExport\}>⬇ Excel<\/button>/);
+  assert.match(revenueFull, /<div className="revenue-export-tools">/);
+  assert.match(revenueFull, /me\.access_profile !== 'revenue_only' && <option value="csv"/);
+  assert.match(revenueFull, /me\.access_profile !== 'revenue_only' && <option value="pptx"/);
 });
 
 test('tài khoản chuẩn giữ nguyên quyền tab hiện hữu', () => {

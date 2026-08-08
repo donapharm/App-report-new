@@ -20,15 +20,33 @@ test('denylist khớp đúng 16 tài khoản CEO chỉ định', () => {
   for (const code of ['CEO', 'DN001', 'DN006', 'VP004', 'VP018']) assert.equal(policy.isLoginBlocked(code), false, code);
 });
 
-test('VP018 chỉ được GET đúng API tối thiểu của hai tab doanh thu', () => {
+test('VP018 chỉ được GET hai tab doanh thu và đúng ba export tường minh', () => {
   const session = { emp_code: 'VP018', role: 'sale' };
-  for (const route of ['/api/me', '/api/periods', '/api/filters?ky=08.2026', '/api/revenue?dimension=unit', '/api/revenue/full?ky=08.2026']) {
-    assert.equal(policy.isRequestAllowed(session, { method: 'GET', path: route }), true, route);
+  const allowed = [
+    '/api/me', '/api/periods', '/api/filters?ky=08.2026',
+    '/api/revenue?dimension=unit', '/api/revenue/full?ky=08.2026',
+    '/api/export/revenue.xlsx?ky=08.2026',
+    '/api/export/revenue_report.xlsx?ky=08.2026',
+    '/api/export/revenue_report.pdf?ky=08.2026',
+  ];
+  assert.equal(policy.REVENUE_ONLY_GET_PATHS.size, 8, 'allowlist phải exact, không nở ngoài 8 path');
+  for (const route of allowed) assert.equal(policy.isRequestAllowed(session, { method: 'GET', path: route }), true, route);
+
+  const forbidden = [
+    '/api/overview', '/api/products', '/api/analysis', '/api/employee-cost', '/api/employee-cost/all',
+    '/api/targets', '/api/catalog-management', '/api/catalog-cost-column-grants',
+    '/api/export/revenue_full.xlsx', '/api/export/revenue_report.csv', '/api/export/revenue_report.pptx',
+    '/api/export/overview.xlsx', '/api/dormant/gate',
+    // Exact-path hardening: không canonicalize một biến thể thành allowlisted.
+    '/api/revenue/', '/api//revenue', '/api/../me', '/api\\revenue',
+    '/api/%72evenue', '/api/revenue#fragment', 'http://app-report.local/api/revenue',
+  ];
+  for (const route of forbidden) assert.equal(policy.isRequestAllowed(session, { method: 'GET', path: route }), false, route);
+  for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
+    for (const route of ['/api/revenue', '/api/export/revenue.xlsx', '/api/catalog-cost-column-grants/VP018']) {
+      assert.equal(policy.isRequestAllowed(session, { method, path: route }), false, `${method} ${route}`);
+    }
   }
-  for (const route of ['/api/overview', '/api/products', '/api/analysis', '/api/employee-cost', '/api/targets', '/api/export/revenue_report.xlsx', '/api/dormant/gate']) {
-    assert.equal(policy.isRequestAllowed(session, { method: 'GET', path: route }), false, route);
-  }
-  assert.equal(policy.isRequestAllowed(session, { method: 'POST', path: '/api/revenue' }), false);
   assert.equal(policy.isRequestAllowed({ emp_code: 'DN006' }, { method: 'GET', path: '/api/overview' }), true);
 });
 
@@ -57,21 +75,38 @@ test('auth từ chối phát token cho denylist và chặn route ngoài doanh th
     }
 
     const token = auth.issueToken({ emp_code: 'VP018', name: 'Nguyễn Thị Kim Ngọc', role: 'sale' }, { method: 'qa-strict-access' });
-    const invoke = (url, method = 'GET') => {
+    const invokeMiddleware = (middleware, url, method = 'GET') => {
       let statusCode = 200; let body = null; let nextCalled = false;
-      auth.requireAuth({ method, originalUrl: url, headers: { authorization: `Bearer ${token}` } }, {
+      middleware({ method, originalUrl: url, headers: { authorization: `Bearer ${token}` } }, {
         status(code) { statusCode = code; return this; },
         json(payload) { body = payload; return this; },
       }, () => { nextCalled = true; });
       return { statusCode, body, nextCalled };
     };
+    const invoke = (url, method = 'GET') => invokeMiddleware(auth.requireAuth, url, method);
+    const invokeBoundary = (url, method = 'GET') => invokeMiddleware(auth.enforceAccessPolicyBoundary, url, method);
     assert.equal(invoke('/api/revenue?ky=08.2026').nextCalled, true);
     assert.equal(invoke('/api/revenue/full?ky=08.2026').nextCalled, true);
+    assert.equal(invoke('/api/export/revenue.xlsx?ky=08.2026').nextCalled, true);
+    assert.equal(invoke('/api/export/revenue_report.xlsx?ky=08.2026').nextCalled, true);
+    assert.equal(invoke('/api/export/revenue_report.pdf?ky=08.2026').nextCalled, true);
     assert.equal(invoke('/api/me').nextCalled, true);
-    const forbidden = invoke('/api/employee-cost?ky=08.2026');
-    assert.equal(forbidden.statusCode, 403);
-    assert.equal(forbidden.body.code, 'REVENUE_ONLY_ACCESS');
-    assert.equal(invoke('/api/revenue', 'POST').statusCode, 403);
+    assert.deepEqual(auth.scopeOf({ emp_code: 'VP018', role: 'sale' }), { empCode: 'VP018' }, 'scope chung vẫn self-only');
+    assert.deepEqual(auth.revenueScopeOf({ emp_code: 'VP018', role: 'sale' }), { empCode: null }, 'chỉ revenue scope mới đọc toàn công ty');
+    assert.deepEqual(auth.revenueScopeOf({ emp_code: 'DN006', role: 'sale' }), { empCode: 'DN006' }, 'NON_SALES_ROLE/scope chuẩn không đổi');
+    for (const route of ['/api/employee-cost?ky=08.2026', '/api/catalog-management', '/api/export/revenue_report.csv']) {
+      const forbidden = invoke(route);
+      assert.equal(forbidden.statusCode, 403, route);
+      assert.equal(forbidden.body.code, 'REVENUE_ONLY_ACCESS', route);
+    }
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
+      assert.equal(invoke('/api/revenue', method).statusCode, 403, method);
+      assert.equal(invokeBoundary('/api/revenue', method).statusCode, 403, `router boundary ${method}`);
+    }
+    for (const route of ['/api/employee-cost/not-a-real-subroute', '/api/revenue/', '/api//revenue', '/api/../me', '/api\\revenue', '/api/%72evenue']) {
+      assert.equal(invokeBoundary(route).statusCode, 403, `${route} không rơi qua 404/canonicalization`);
+    }
+    assert.equal(invokeBoundary('/api/export/revenue_report.pdf?ky=08.2026').nextCalled, true, 'GET allowlist đi tiếp tới route');
   } finally {
     if (oldDir === undefined) delete process.env.AUTH_DATA_DIR;
     else process.env.AUTH_DATA_DIR = oldDir;

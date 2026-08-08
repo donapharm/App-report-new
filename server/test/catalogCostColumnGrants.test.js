@@ -28,6 +28,17 @@ test('MẶC ĐỊNH TẮT: chưa cấp thì không thấy cột nào, và không
   assert.equal(grants.canSee(sale('DN001'), { unitCode: '120.X', column: 'c41' }, { store }), false);
 });
 
+test('VP018 mặc định không có grant % chi phí và không thấy C32–C47', () => {
+  const store = memStore();
+  const grant = grants.readFor('VP018', { store });
+  assert.equal(grant.granted, false);
+  assert.deepEqual(grant.columns, []);
+  assert.deepEqual(grants.visibleColumns(sale('VP018'), ['c32', 'c33', 'c41', 'c46', 'c47'], { store }), []);
+  for (const column of ['c32', 'c33', 'c41', 'c46', 'c47']) {
+    assert.equal(grants.canSee(sale('VP018'), { unitCode: '120.X', column }, { store }), false, column);
+  }
+});
+
 test('CEO thấy mọi cột nguồn có, không cần tự cấp cho mình', () => {
   const store = memStore();
   assert.deepEqual(grants.visibleColumns(ceo, ['c45', 'c41', 'c36'], { store }), ['c36', 'c41', 'c45']);

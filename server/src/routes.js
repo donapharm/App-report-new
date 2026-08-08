@@ -82,6 +82,9 @@ const { createFilteredEmployeeReportService } = require('./filteredEmployeeRepor
 const { createFilteredEmployeeDeliveryService } = require('./filteredEmployeeDelivery');
 
 const router = express.Router();
+// Boundary trước toàn bộ route: VP018 fail-closed cả với path/method không có
+// handler, không để Express trả 404 thay cho quyết định quyền 403.
+router.use(auth.enforceAccessPolicyBoundary);
 const asyncJsonRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch((error) => {
   if (res.headersSent) return next(error);
   return res.status(error.status || 500).json({ error: error.message || 'Lỗi hệ thống', code: error.code });
@@ -2745,7 +2748,7 @@ router.use(async (req, res, next) => {
 });
 
 router.get('/filters', auth.requireAuth, memoJson('filters', 30 * 1000), asyncJsonRoute(async (req, res) => {
-  const scope = auth.scopeOf(req.session);
+  const scope = auth.revenueScopeOf(req.session);
   const pc = periodCtx(req.query);
   const uniq = (arr, key, label = key) => {
     const m = new Map();
@@ -2800,9 +2803,11 @@ router.get('/filters', auth.requireAuth, memoJson('filters', 30 * 1000), asyncJs
   const bidRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route', 'priority', 'contractor']);
   const contractorLookup = contractorLookupFor(scope, allRows.concat(cst));
   const selectedEmployees = A.selectedEmployeeCodes(filters);
-  const sessionIsAdmin = auth.isAdmin(req.session.role);
+  // VP018 được company-scope chỉ trong hai màn doanh thu, nhưng không trở thành
+  // admin và không được đi qua bất kỳ route ghi/quản trị nào.
+  const sessionCanReadAllRevenue = auth.isAdmin(req.session.role) || auth.canReadAllRevenue(req.session);
   const ownEmployee = String(req.session.emp_code || '').trim().toUpperCase();
-  const restrictCanonicalUnits = !sessionIsAdmin || selectedEmployees.length > 0;
+  const restrictCanonicalUnits = !sessionCanReadAllRevenue || selectedEmployees.length > 0;
   let accessibleUnitCodes = null;
   if (restrictCanonicalUnits) {
     accessibleUnitCodes = new Set(A.applyFilters(allRows, only(['emp']))
@@ -2811,7 +2816,7 @@ router.get('/filters', auth.requireAuth, memoJson('filters', 30 * 1000), asyncJs
     // assignment enrichment. A request that selects only another employee must
     // stay empty instead of revealing that employee's canonical units.
     const allowedEmployees = new Set(dataHubUnitGroups.facetEmployeeCodes({
-      isAdmin: sessionIsAdmin,
+      isAdmin: sessionCanReadAllRevenue,
       ownEmployee,
       selectedEmployees,
     }));
@@ -3418,7 +3423,7 @@ router.post('/dormant/feedback/:id/ack', auth.requireAuth, (req, res) => {
 
 /* ---------- Revenue drill-down ---------- */
 router.get('/revenue', auth.requireAuth, memoJson('revenue'), (req, res) => {
-  const scope = auth.scopeOf(req.session);
+  const scope = auth.revenueScopeOf(req.session);
   const pc = periodCtx(req.query);
   const dimension = ['emp', 'unit', 'product'].includes(req.query.dimension) ? req.query.dimension : 'emp';
   // Dùng cùng một bộ lọc chuẩn với Tổng quan/Phân tích/Cảnh báo để Top 20 và
@@ -3811,7 +3816,7 @@ function groupRevenueCards(rows) {
 
 /* ---------- Doanh thu đầy đủ: bảng chi tiết từng dòng bán hàng ---------- */
 router.get('/revenue/full', auth.requireAuth, (req, res) => {
-  const scope = auth.scopeOf(req.session);
+  const scope = auth.revenueScopeOf(req.session);
   const pc = periodCtx(req.query);
   const contractorLookup = contractorLookupFor(scope);
   const metaMap = productMetaLookupFor(scope, contractorLookup);
@@ -4986,7 +4991,7 @@ router.get('/export/revenue_report.:format', auth.requireAuth, async (req, res) 
   const format = String(req.params.format || '').toLowerCase();
   if (!['xlsx', 'csv', 'pdf', 'pptx'].includes(format)) return res.status(400).json({ error: 'Định dạng export không hợp lệ' });
   try {
-    const scope = auth.scopeOf(req.session);
+    const scope = auth.revenueScopeOf(req.session);
     const report = await buildRevenueReportForQuery(req.query, scope);
     const buffer = await revenueReportBuffer(report, format);
     const kySafe = safeFilePart(report.ky || 'report');
@@ -5067,9 +5072,11 @@ router.post('/report/revenue-send/send', auth.requireAuth, auth.requireAdmin, as
 });
 
 router.get('/export/:kind.xlsx', auth.requireAuth, async (req, res) => {
-  const scope = auth.scopeOf(req.session);
   const ky = req.query.ky || store.latestKy();
   const kind = req.params.kind;
+  const scope = ['revenue', 'revenue_full'].includes(kind)
+    ? auth.revenueScopeOf(req.session)
+    : auth.scopeOf(req.session);
   const wb = new ExcelJS.Workbook();
   wb.creator = 'App Report';
   const ws = wb.addWorksheet('Report');

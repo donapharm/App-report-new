@@ -43,13 +43,14 @@ function EmployeeRevenueBars({ row, maxRevenue, totalRevenue, pacing }) {
 }
 
 export default function Revenue({ me }) {
-  const [dim, setDim] = useState(me.isAdmin ? 'emp' : 'unit');
+  const companyRevenue = me.isAdmin || me.access_profile === 'revenue_only';
+  const [dim, setDim] = useState(companyRevenue ? 'emp' : 'unit');
   const { periods, ky, setKy, filters, setFilters, options, queryFilters, filterBusy, filterNotice, filtersReady } = usePeriodsAndFilters(api);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const { reloadTick, reload } = useReloadTick();
   const applyDrill = React.useCallback((s) => { if (!s) return; setDim(s.dim); setFilters(s.filters || {}); }, [setFilters]);
-  const drillNav = useDrillStack({ key: 'revenue', root: { label: 'Doanh thu', dim: me.isAdmin ? 'emp' : 'unit', filters: {} }, apply: applyDrill });
+  const drillNav = useDrillStack({ key: 'revenue', root: { label: 'Doanh thu', dim: companyRevenue ? 'emp' : 'unit', filters: {} }, apply: applyDrill });
 
   useEffect(() => {
     try {
@@ -117,7 +118,7 @@ export default function Revenue({ me }) {
         right={(
           <div className="seg compact seg-inline">
             {Object.entries(DIMS).map(([k, v]) => {
-              if (k === 'emp' && !me.isAdmin) return null;
+              if (k === 'emp' && !companyRevenue) return null;
               return <button key={k} className={dim === k ? 'active' : ''} onClick={() => pickDim(k)}>{v}</button>;
             })}
           </div>
@@ -130,7 +131,7 @@ export default function Revenue({ me }) {
           <div className="meta muted">Tổng {DIMS[dim].toLowerCase()} · kỳ {ky} · {data?.rows?.length || 0} dòng nhóm</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}><MoneyBig value={total} /></div>
         </div>
-        {me.access_profile !== 'revenue_only' && <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>}
+        <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>
       </div>
 
       {!data ? <SkeletonCards count={6} /> : data.rows.length === 0 ? (
