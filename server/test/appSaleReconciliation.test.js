@@ -2,11 +2,14 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const client = require('../src/appSaleReconciliation');
 const SENTINEL_KEY = 'unit-test-recon-secret-sentinel-20260809';
+const AUTHORITATIVE_CONTRACT_SHA256 = 'eeaeb549968e1aaee56d75fd9347ebb8077cfb02f566144261d7b31aa26e4a58';
 const originalFetch = global.fetch;
 const ENV_KEYS = [
   'APP_SALE_RECON_BASE_URL', 'APP_SALE_RECON_KEY', 'APP_SALE_RECON_TIMEOUT_MS',
@@ -72,6 +75,18 @@ function input(overrides = {}) {
 function canonicalContractPath() {
   if (process.env.APP_SALE_CONTRACT_PATH) return path.resolve(process.env.APP_SALE_CONTRACT_PATH);
   return path.resolve(__dirname, '../../contracts/app-sale-reconciliation-v2.json');
+}
+
+function loadAuthoritativeContract() {
+  const contractPath = canonicalContractPath();
+  assert.ok(fs.existsSync(contractPath), `authoritative App Sale contract is required but missing: ${contractPath}`);
+  const raw = fs.readFileSync(contractPath);
+  assert.equal(
+    crypto.createHash('sha256').update(raw).digest('hex'),
+    AUTHORITATIVE_CONTRACT_SHA256,
+    `authoritative App Sale contract bytes drifted: ${contractPath}`,
+  );
+  return JSON.parse(raw.toString('utf8'));
 }
 
 test('uses exact live URL, x-datahub-key header, query, one GET and validates success schema', async () => {
@@ -283,19 +298,59 @@ test('route remains inside existing authenticated admin reconciliation area and 
   }
 });
 
-test('shared App Sale contract matches the exact live transport and success schema', () => {
-  const contractPath = canonicalContractPath();
-  assert.ok(fs.existsSync(contractPath), `authoritative App Sale contract is required but missing: ${contractPath}`);
-  const contract = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
-  const serialized = JSON.stringify(contract);
-  assert.match(serialized, /GET/);
-  assert.match(serialized, /\/api\/reconciliation\/\{ky\}\/\{ma_nha_thau\}/);
-  assert.match(serialized, /x-datahub-key/);
-  assert.doesNotMatch(serialized, /x-app-sale-recon-key|Bearer <server-side APP_SALE_RECON_KEY>/);
-  for (const field of ['ky', 'ma_nha_thau', 'ten_nha_thau', 'trang_thai', 'phien_ban', 'rows_checksum', 'rows']) {
-    assert.match(serialized, new RegExp(`\\"${field}\\"`), `shared contract must define ${field}`);
-  }
-  for (const field of client.ROW_KEYS) {
-    assert.match(serialized, new RegExp(`\\"${field}\\"`), `shared contract must define row.${field}`);
+test('shared App Sale contract matches the exact live transport, auth, errors and success schema', () => {
+  const contract = loadAuthoritativeContract();
+  assert.equal(contract.contract, 'app-sale-reconciliation-v2');
+  assert.deepEqual(contract.transport, {
+    method: 'GET',
+    path_template: '/api/reconciliation/{ky}/{ma_nha_thau}',
+    header: 'x-datahub-key',
+    authorization_header_used: false,
+    browser_exposed: false,
+    cache_control_on_success: 'private, no-store',
+  });
+  assert.deepEqual(contract.query_parameters, {
+    phien_ban: {
+      required: false,
+      type: 'positive integer',
+      meaning: 'exact immutable version; omitted selects the latest effective version',
+    },
+    offset: { required: false, type: 'non-negative integer', default: 0 },
+  });
+  assert.equal(contract.authentication.missing_or_wrong.status, 401);
+  assert.equal(contract.authentication.missing_or_wrong.body.code, 's2s_unauthorized');
+  assert.equal(contract.authentication.all_hashes_missing.status, 503);
+  assert.equal(contract.authentication.all_hashes_missing.code, 's2s_not_configured');
+  assert.deepEqual(contract.errors.map(({ status, code }) => ({ status, code })), [
+    { status: 400, code: 'SALES_RECON_PERIOD_INVALID' },
+    { status: 401, code: 's2s_unauthorized' },
+    { status: 404, code: 'SALES_RECON_VERSION_GONE' },
+    { status: 429, code: 's2s_rate_limited' },
+    { status: 500, code: 'SALES_RECON_ROW_TOO_LARGE' },
+    { status: 500, code: 'recon_v2_error' },
+    { status: 503, code: 's2s_not_configured' },
+  ]);
+  assert.equal(contract.rate_limit.default_per_minute, 120);
+  assert.equal(contract.success.maximum_serialized_page_bytes, 1048576);
+  assert.deepEqual(contract.success.row_key_order_for_checksum, client.ROW_KEYS);
+  assert.deepEqual(Object.keys(contract.success.schema), [
+    'ky', 'ma_nha_thau', 'ten_nha_thau', 'trang_thai', 'phien_ban',
+    'rows_checksum', 'rows', 'offset', 'con_nua', 'tong_dong',
+  ]);
+  assert.deepEqual(Object.keys(contract.success.schema.rows[0]), client.ROW_KEYS);
+});
+
+test('authoritative contract env override is exercised and fails clearly when missing', () => {
+  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'app-sale-contract-'));
+  try {
+    const overridePath = path.join(temporaryDirectory, 'APP_SALE_CONTRACT.json');
+    fs.copyFileSync(path.resolve(__dirname, '../../contracts/app-sale-reconciliation-v2.json'), overridePath);
+    process.env.APP_SALE_CONTRACT_PATH = overridePath;
+    assert.equal(canonicalContractPath(), overridePath);
+    assert.equal(loadAuthoritativeContract().contract, 'app-sale-reconciliation-v2');
+    process.env.APP_SALE_CONTRACT_PATH = path.join(temporaryDirectory, 'missing.json');
+    assert.throws(loadAuthoritativeContract, /authoritative App Sale contract is required but missing/);
+  } finally {
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
   }
 });
