@@ -1,3 +1,15 @@
+### 2026-08-08 23:40 (giờ VN) — ✅ DataHub mở T08 đúng 7 cột + nghỉ nhịp giữa các lượt đồng bộ
+
+**DataHub đã xong:** snapshot T08 (27.719 dòng, catalog v10); allowlist **đúng 7 cột** App Report đề nghị — `C36 · C38 · C41 · C42 · C43 · C44 · C45` (KHÔNG mở cả dải C33–C46, theo khuyến nghị hạn chế dữ liệu). Kiểm 3 NV (DN006/DN018/DN022) 6/6 HTTP 200; **không lộ C32/C47 hay cột ngoài allowlist**; snapshot T07 không đổi; audit không conflict, outbox/lock đều 0.
+
+⚠️ **Bằng chứng mới đáng lưu:** đọc dồn làm DataHub **tự restart (8 → 9) vì RSS 951,8 MB vượt ngưỡng 900 MiB**. Họ tự chặn candidate `6d102ef` vì chưa sửa gốc audit-memory — xử lý đúng.
+
+**App Report vá theo (`costRatesSync`):** thêm **nhịp nghỉ 250ms giữa hai lượt gọi** (`COST_SYNC_PAUSE_MS`). Gọi tuần tự thôi là chưa đủ: 21 lượt liên tiếp không cho nguồn kịp thu hồi bộ nhớ. Nút Đồng bộ là all-or-nothing nên nguồn ngã giữa chừng là hỏng cả lượt, phải bấm lại từ đầu — nghỉ ~5 giây tổng cộng đổi lấy việc chạy trót lọt là đáng. `pauseMs: 0` giữ đường chạy nhanh cho test. 2 test khoá (dùng đồng hồ giả, không chờ thật).
+
+Test server 1042/1049 (7 fail cố hữu) · web 275/275.
+
+---
+
 ### 2026-08-08 23:10 (giờ VN) — 📐 CỘT % BỊ BÓP DẸP, CHỮ TIÊU ĐỀ CHỒNG NHAU — bỏ hết bề rộng theo VỊ TRÍ cột
 
 CEO gửi ảnh: cột C36/C41 dẹp sát mép phải, tiêu đề chồng lên nhau ("…trúng thầu**CST** ban đầu").

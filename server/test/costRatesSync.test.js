@@ -130,3 +130,37 @@ test('giữ tối đa 12 kỳ — kỳ cổ nhất tự rụng, không phình v�
   }
   assert.equal(sync.listStatus({ store }).length, 12);
 });
+
+test('nghỉ một nhịp giữa các lượt gọi — nguồn kịp thu hồi bộ nhớ (DataHub OOM 08/08)', async () => {
+  const store = memStore();
+  const gaps = [];
+  let last = 0;
+  let clock = 0;
+  const result = await sync.syncPeriod({
+    period: '2026-08', empCodes: ['DN001', 'DN002', 'DN003'], actor: 'CEO',
+    store, now: () => '2026-08-08T23:00:00.000+07:00',
+    pauseMs: 250,
+    // Đồng hồ giả: mỗi lần "ngủ" cộng thẳng vào clock, không chờ thật.
+    sleep: async (ms) => { clock += ms; },
+    fetchImpl: async () => {
+      gaps.push(clock - last); last = clock;
+      return { outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c41: 1 }] }] } };
+    },
+  });
+  assert.equal(result.ok, true);
+  // Lượt đầu không phải chờ; hai lượt sau mỗi lượt cách nhau đúng một nhịp nghỉ.
+  assert.deepEqual(gaps, [0, 250, 250]);
+});
+
+test('pauseMs = 0 thì không nghỉ — giữ đường chạy nhanh cho test và cho nguồn khoẻ', async () => {
+  const store = memStore();
+  let slept = 0;
+  await sync.syncPeriod({
+    period: '2026-08', empCodes: ['DN001'], actor: 'CEO', store,
+    now: () => '2026-08-08T23:00:00.000+07:00',
+    pauseMs: 0,
+    sleep: async () => { slept += 1; },
+    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c41: 1 }] }] } }),
+  });
+  assert.equal(slept, 0);
+});
