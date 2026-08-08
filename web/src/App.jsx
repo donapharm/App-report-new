@@ -194,6 +194,7 @@ export default function App() {
     if (!me) return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('tab') !== 'dormantReports' || !params.get('focus_key')) return;
+    if (!isTabAllowed(TABS.find((item) => item.key === 'dormantReports'), me)) return;
     const payload = { tab: 'dormantReports', focus_key: params.get('focus_key'), unit_code: params.get('unit_code') || '', ts: Date.now() };
     try { sessionStorage.setItem('app_nav_payload', JSON.stringify(payload)); localStorage.setItem('rpt_tab', 'dormantReports'); } catch { /* ignore */ }
     setTab('dormantReports');
@@ -302,6 +303,7 @@ export default function App() {
       ? { ...t, label: 'Danh mục bán hàng của tôi', full: 'Danh mục bán hàng của tôi' }
       : t
   ));
+  const revenueOnly = me.access_profile === 'revenue_only';
   const visibleTabs = tabs.filter((t) => !t.hidden);
   const mobilePrimaryTabs = MOBILE_PRIMARY_TAB_KEYS.map((key) => visibleTabs.find((t) => t.key === key)).filter(Boolean);
   const normalizedMenuQuery = normalizeMenuSearch(mobileMenuQuery);
@@ -315,13 +317,15 @@ export default function App() {
     setMobileMenuQuery('');
   };
   const switchTab = (targetTab, payload = {}, mode = 'push') => {
-    try { sessionStorage.setItem('app_nav_payload', JSON.stringify({ tab: targetTab, ...payload, ts: Date.now() })); } catch { /* ignore */ }
-    window.dispatchEvent(new CustomEvent('app:navigate', { detail: { tab: targetTab, ...payload } }));
-    try { localStorage.setItem('rpt_tab', targetTab); } catch { /* ignore */ }
-    if (mode === 'push' && targetTab !== tab) setTabStack((s) => [...s, tab]);
-    setTab(targetTab);
-    if (mode === 'push') window.history.pushState({ appTab: targetTab, appPayload: payload }, '', window.location.href);
-    else window.history.replaceState({ ...(window.history.state || {}), appTab: targetTab, appPayload: payload }, '', window.location.href);
+    const allowedTarget = resolveAllowedTab(TABS, targetTab, me, revenueOnly ? 'revenue' : 'overview');
+    const allowedPayload = allowedTarget === targetTab ? payload : {};
+    try { sessionStorage.setItem('app_nav_payload', JSON.stringify({ tab: allowedTarget, ...allowedPayload, ts: Date.now() })); } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('app:navigate', { detail: { tab: allowedTarget, ...allowedPayload } }));
+    try { localStorage.setItem('rpt_tab', allowedTarget); } catch { /* ignore */ }
+    if (mode === 'push' && allowedTarget !== tab) setTabStack((s) => [...s, tab]);
+    setTab(allowedTarget);
+    if (mode === 'push') window.history.pushState({ appTab: allowedTarget, appPayload: allowedPayload }, '', window.location.href);
+    else window.history.replaceState({ ...(window.history.state || {}), appTab: allowedTarget, appPayload: allowedPayload }, '', window.location.href);
   };
   const navigate = (targetTab, payload = {}) => switchTab(targetTab, payload, 'push');
   const navBack = { back: () => window.history.back(), canBack: tabStack.length > 0 };
@@ -363,7 +367,7 @@ export default function App() {
               </button>
             ))}
           </nav>
-          <ZaloSidebar />
+          {!revenueOnly && <ZaloSidebar />}
           <div className="side-user">
             <div className="avatar">{me.name?.[0] || '?'}</div>
             <div style={{ minWidth: 0 }}>
@@ -380,7 +384,7 @@ export default function App() {
               <div className="sub">DONAPHARM · Báo cáo doanh thu thông minh</div>
             </div>
             <div className="topbar-actions">
-              <CeoNotificationBell me={me} onNavigate={navigate} />
+              {!revenueOnly && <CeoNotificationBell me={me} onNavigate={navigate} />}
               <PrivacyEyeButton />
               <RefreshButton loading={headerReloadBusy} onClick={triggerHeaderReload} />
               <HomeButton />
@@ -392,7 +396,7 @@ export default function App() {
           </main>
           <ScrollTopButton />
           <UpdateBanner />
-          <DormantGate me={me} tab={tab} />
+          {!revenueOnly && <DormantGate me={me} tab={tab} />}
         </div>
       </div>
     );
@@ -409,7 +413,7 @@ export default function App() {
               <div className="who-name">{me.name}</div>
               <div className="who-role">{roleLabel(me.role)}</div>
             </div>
-            <CeoNotificationBell me={me} onNavigate={navigate} />
+            {!revenueOnly && <CeoNotificationBell me={me} onNavigate={navigate} />}
           </div>
         </div>
         <div className="hdr-r2">
@@ -427,8 +431,8 @@ export default function App() {
       </main>
       <ScrollTopButton />
       <UpdateBanner />
-      <DormantGate me={me} tab={tab} />
-      {!['catalogManagement', 'dailySales', 'products', 'dormantReports', 'employeeCost'].includes(tab) && <ZaloMobileAccess />}
+      {!revenueOnly && <DormantGate me={me} tab={tab} />}
+      {!revenueOnly && !['catalogManagement', 'dailySales', 'products', 'dormantReports', 'employeeCost'].includes(tab) && <ZaloMobileAccess />}
       {mobileMenuOpen && <div
         className="mobile-nav-sheet-backdrop"
         onClick={(event) => { if (event.target === event.currentTarget) closeMobileMenu(); }}

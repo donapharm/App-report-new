@@ -130,7 +130,7 @@ export default function Revenue({ me }) {
           <div className="meta muted">Tổng {DIMS[dim].toLowerCase()} · kỳ {ky} · {data?.rows?.length || 0} dòng nhóm</div>
           <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--brand)' }}><MoneyBig value={total} /></div>
         </div>
-        <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>
+        {me.access_profile !== 'revenue_only' && <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>}
       </div>
 
       {!data ? <SkeletonCards count={6} /> : data.rows.length === 0 ? (

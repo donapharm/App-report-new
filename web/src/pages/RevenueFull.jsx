@@ -135,7 +135,7 @@ export default function RevenueFull({ me }) {
           <span><b>{(data?.totalQuantity || 0).toLocaleString('vi-VN')}</b><em>Tổng số lượng</em></span>
         </div>
         <div className="revenue-summary-tools">
-          <div className="revenue-export-tools">
+          {me.access_profile !== 'revenue_only' && <div className="revenue-export-tools">
             <select className="input revenue-export-format" value={exportFormat} onChange={(e) => setExportFormat(e.target.value)} aria-label="Định dạng báo cáo">
               <option value="xlsx">Excel đầy đủ (.xlsx)</option>
               <option value="csv">CSV dữ liệu thô (.csv)</option>
@@ -144,7 +144,7 @@ export default function RevenueFull({ me }) {
             </select>
             <button className="btn ghost" disabled={busy} onClick={doExport}>{busy ? 'Đang tạo…' : '⬇ Xuất báo cáo'}</button>
             {me.isAdmin && <button className="btn" disabled={busy || sendBusy} onClick={openSendModal}>📤 Gửi Telegram/Email</button>}
-          </div>
+          </div>}
           <details className="revenue-summary-note">
             <summary>ⓘ Xem ghi chú</summary>
             <div className="revenue-summary-note-popover">

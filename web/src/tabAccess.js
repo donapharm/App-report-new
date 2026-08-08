@@ -1,6 +1,7 @@
 // Frontend navigation policy only improves UX. Backend authorization remains authoritative.
 export function isTabAllowed(tab, me) {
   if (!tab || !me) return false;
+  if (me.access_profile === 'revenue_only') return ['revenue', 'revenueFull'].includes(tab.key);
   const canonicalCeo = !!me.is_ceo;
   return (!tab.adminOnly || !!me.isAdmin)
     && (!tab.ceoEmployeeOnly || canonicalCeo || !me.isAdmin)

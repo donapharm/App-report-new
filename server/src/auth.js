@@ -11,6 +11,7 @@
 const crypto = require('crypto');
 const store = require('./store');
 const persist = require('./persist');
+const accessPolicy = require('./accessPolicy');
 const { deviceIdHash, deviceFingerprint } = require('./trustedDevice');
 const trustedDeviceSso = require('./trustedDeviceSso');
 
@@ -60,7 +61,15 @@ function serviceSessionFromRequest(req) {
 /* ===================== SESSION (lưu bền) ===================== */
 // Bản ghi: { th:<hash token>, emp_code, role, name, phone, deviceId, method, issued_at, expires_at }
 let sessions = persist.load('sessions', []);
+const revokedSessionsAtStartup = sessions.filter((s) => accessPolicy.isLoginBlocked(s.emp_code)).length;
+if (revokedSessionsAtStartup) {
+  sessions = sessions.filter((s) => !accessPolicy.isLoginBlocked(s.emp_code));
+}
 const saveSessions = () => persist.save('sessions', sessions);
+if (revokedSessionsAtStartup) {
+  saveSessions();
+  console.warn(`[auth] revoked ${revokedSessionsAtStartup} blocked App Report session(s) at startup`);
+}
 function pruneSessions() {
   const t = now();
   const before = sessions.length;
@@ -74,7 +83,15 @@ pruneSessions();
 // { id, device_id_hash, emp_code, phone, first_seen, last_seen, ua,
 //   trusted_fingerprint, trusted_login_count, is_trusted, trusted_at, last_otp_at }
 let devices = persist.load('devices', []);
+const revokedDevicesAtStartup = devices.filter((d) => accessPolicy.isLoginBlocked(d.emp_code)).length;
+if (revokedDevicesAtStartup) {
+  devices = devices.filter((d) => !accessPolicy.isLoginBlocked(d.emp_code));
+}
 const saveDevices = () => persist.save('devices', devices);
+if (revokedDevicesAtStartup) {
+  saveDevices();
+  console.warn(`[auth] revoked ${revokedDevicesAtStartup} blocked App Report device(s) at startup`);
+}
 
 const isStoredDeviceId = (value) => /^[a-f0-9]{64}$/i.test(String(value || ''));
 const migrateDeviceId = (value) => isStoredDeviceId(value) ? String(value) : deviceIdHash(value);
@@ -238,6 +255,12 @@ function markOtpTrustedDevice(user, opts = {}) {
 }
 
 function issueToken(user, opts = {}) {
+  if (accessPolicy.isLoginBlocked(user?.emp_code)) {
+    const e = new Error('Tài khoản không được cấp quyền truy cập App Report.');
+    e.status = 403;
+    e.code = 'APP_REPORT_ACCESS_REVOKED';
+    throw e;
+  }
   pruneSessions();
   const token = crypto.randomBytes(24).toString('hex');
   const t = now();
@@ -316,6 +339,7 @@ if (process.env.NODE_ENV === 'production' && demoAllowed()) {
 }
 function mockLogin(empCode, opts = {}) {
   if (!demoAllowed()) return null;
+  if (accessPolicy.isLoginBlocked(empCode)) return null;
   const user = store.findUserByCode(empCode);
   if (!user) return null;
   return { token: issueToken(user, { ...opts, method: 'demo' }), user };
@@ -398,7 +422,8 @@ async function verifyOtp(phone, code, opts = {}) {
   }, opts);
   if (!response.ok || !data.ok) return null;
 
-  const accounts = (Array.isArray(data.accounts) ? data.accounts : []).map(mapAcc).filter((a) => a.emp_code);
+  const accounts = (Array.isArray(data.accounts) ? data.accounts : []).map(mapAcc)
+    .filter((a) => a.emp_code && !accessPolicy.isLoginBlocked(a.emp_code));
   if (data.requireAccountChoice && accounts.length > 1) {
     verifiedPhones.set(normPhone(phone), { accounts, at: now(), opts });
     return { accounts };
@@ -438,7 +463,7 @@ function loginByTrustedDevice(phone, opts = {}) {
   // Một SĐT có thể có nhiều mã NV trong App Report. Nếu nhiều tài khoản cùng đủ
   // điều kiện thì fail closed và yêu cầu OTP/chọn tài khoản, không tự đoán.
   const valid = candidates.map((d) => ({ d, user: store.findUserByCode(d.emp_code) }))
-    .filter(({ user }) => user && normPhone(user.phone) === normalizedPhone);
+    .filter(({ user }) => user && !accessPolicy.isLoginBlocked(user.emp_code) && normPhone(user.phone) === normalizedPhone);
   if (valid.length !== 1) {
     logAudit('device_login_rejected', { phone: normalizedPhone, device: hash, matches: valid.length });
     return null;
@@ -475,6 +500,7 @@ async function verifySso(ssoToken, opts = {}) {
   const data = await r.json();
   if (!data.ok) return null;
   const empCode = String(data.emp_code || data.user?.code || '').trim().toUpperCase();
+  if (accessPolicy.isLoginBlocked(empCode)) return null;
   const user = store.findUserByCode(empCode);
   return user ? { token: issueToken(user, { ...opts, method: 'sso' }), user } : null;
 }
@@ -559,6 +585,12 @@ function telegramConfirm({ login_code, telegram_id, secret_bot }) {
   if (!m) { const e = new Error('unmapped'); e.status = 404; e.code = 'UNMAPPED'; throw e; }
   const user = store.findUserByCode(m.emp_code);
   if (!user) { const e = new Error('Mã NV không còn trong danh bạ'); e.status = 404; throw e; }
+  if (accessPolicy.isLoginBlocked(user.emp_code)) {
+    const e = new Error('Tài khoản không được cấp quyền truy cập App Report.');
+    e.status = 403;
+    e.code = 'APP_REPORT_ACCESS_REVOKED';
+    throw e;
+  }
   entry.status = 'confirmed';
   entry.telegram_id = String(telegram_id);
   entry.user = { emp_code: user.emp_code, name: user.name, role: normRole(user.role), phone: user.phone };
@@ -574,6 +606,13 @@ function requireAuth(req, res, next) {
     ua: (req.headers['user-agent'] || '').toString().slice(0, 200),
   });
   if (!sess) return res.status(401).json({ error: 'Chưa đăng nhập' });
+  if (accessPolicy.isLoginBlocked(sess.emp_code)) {
+    purgeUser(sess.emp_code, 'app_report_access_revoked');
+    return res.status(403).json({
+      error: 'Tài khoản không được cấp quyền truy cập App Report.',
+      code: 'APP_REPORT_ACCESS_REVOKED',
+    });
+  }
   // Tự hủy phiên khi NV đổi mã NV/quyền/SĐT hoặc bị xoá khỏi danh bạ.
   const u = store.findUserByCode(sess.emp_code);
   const roleChanged = u && normRole(u.role) !== sess.role;
@@ -581,6 +620,14 @@ function requireAuth(req, res, next) {
   if (!u || roleChanged || phoneChanged) {
     purgeUser(sess.emp_code, !u ? 'removed_from_directory' : roleChanged ? 'role_changed' : 'phone_changed');
     return res.status(401).json({ error: 'Phiên đã hết hiệu lực do thay đổi tài khoản. Vui lòng đăng nhập lại.' });
+  }
+  const requestPath = req.originalUrl || `${req.baseUrl || ''}${req.path || req.url || ''}`;
+  if (!accessPolicy.isRequestAllowed(sess, { method: req.method, path: requestPath })) {
+    return res.status(403).json({
+      error: 'Tài khoản này chỉ được xem Doanh thu và Doanh thu đầy đủ.',
+      code: 'REVENUE_ONLY_ACCESS',
+      allowed_tabs: ['revenue', 'revenueFull'],
+    });
   }
   req.session = sess;
   next();
@@ -657,6 +704,7 @@ function requireCeo(req, res, next) {
 module.exports = {
   mockLogin, requireAuth, requireTargetAuth, requireDataHubService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
+  accessProfileFor: accessPolicy.accessProfileFor,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),

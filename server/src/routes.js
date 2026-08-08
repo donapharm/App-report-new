@@ -807,7 +807,14 @@ router.get('/me', auth.requireAuth, (req, res) => {
   // ‼ BACKEND nói cho frontend biết ai là CEO — frontend KHÔNG được tự đoán từ chuỗi
   // role. Đúng nguyên tắc "quyền quyết ở backend" trong CLAUDE.md, và đây chính là
   // chỗ hôm 05/08 làm nút Duyệt biến mất khỏi màn hình CEO.
-  res.json({ ...req.session, isAdmin, is_ceo: auth.isCeoActor(req.session), employeeCostDisabled: !visibility.enabled });
+  res.json({
+    ...req.session,
+    isAdmin,
+    is_ceo: auth.isCeoActor(req.session),
+    employeeCostDisabled: !visibility.enabled,
+    access_profile: auth.accessProfileFor(req.session),
+    allowed_tabs: auth.accessProfileFor(req.session) === 'revenue_only' ? ['revenue', 'revenueFull'] : null,
+  });
 });
 
 async function employeeCostPayload(req, {

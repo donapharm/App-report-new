@@ -11,8 +11,8 @@ test('runner tôn trọng hai luật cứng của V-D', () => {
   // 1. TUYỆT ĐỐI không tự áp target — handler target_proposal chỉ ghi log.
   assert.match(SOURCE, /không áp target/i);
   assert.doesNotMatch(SOURCE, /targetAdmin|saveTarget|applyTarget/);
-  // 2. payment_notice có handler thật, dựng qua factory tiêm dependency.
-  assert.match(SOURCE, /payment_notice:\s*paymentNotice/);
+  // 2. CEO đã khóa payment_notice: factory còn nguyên nhưng tuyệt đối không đăng ký handler chạy thật.
+  assert.doesNotMatch(SOURCE, /payment_notice:\s*paymentNotice/);
   assert.match(SOURCE, /createPaymentNoticeHandler/);
   // 3. Mọi run thật tự bọc flock; không phụ thuộc người cắm cron nhớ thêm lock.
   assert.match(SOURCE, /runLockedProcess/);

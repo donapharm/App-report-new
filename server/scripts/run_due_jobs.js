@@ -56,7 +56,6 @@ async function main({
         // Đợt sau mới có handler thật. KHÔNG tự áp target — chỉ ghi log để lại dấu vết.
         console.log(`[${stamp()}] target_proposal ${job.stage} cho kỳ ${job.targetKy} (neo ${job.anchorKy}, closed=${job.closed}) — handler chưa làm, CHỈ GHI LOG, không áp target.`);
       },
-      payment_notice: paymentNotice,
     },
   });
 
