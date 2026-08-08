@@ -18,6 +18,7 @@ const revenueRefresh = require('./revenueRefresh');
 const dailySales = require('./dailySales');
 const dailySalesOrders = require('./dailySalesOrders');
 const reconcile = require('./reconcile');
+const appSaleReconciliation = require('./appSaleReconciliation');
 const targetAdmin = require('./targetAdmin');
 const { buildTargetKpiDetail } = require('./targetKpiDetail');
 const { summarizeAssignedQuarter } = require('./targetKpi');
@@ -2734,6 +2735,18 @@ router.get('/admin/reconcile', auth.requireAuth, auth.requireAdmin, (req, res) =
     res.status(500).json({ error: String(e?.message || e) });
   }
 });
+
+// Read-only App Sale source contract for the already-authorized reconciliation area.
+// The shared key remains inside the server process and is never accepted from the browser.
+router.get('/admin/reconcile/app-sale/:ky/:maNhaThau', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  res.set('Cache-Control', 'private, no-store');
+  res.json(await appSaleReconciliation.fetchReconciliation({
+    ky: req.params.ky,
+    maNhaThau: req.params.maNhaThau,
+    phienBan: req.query.phien_ban,
+    offset: req.query.offset ?? 0,
+  }));
+}));
 
 // Resolve canonical membership once per request before any KPI/drill-down uses
 // unitGroup. Unknown groups safely receive an empty member list; unavailable
