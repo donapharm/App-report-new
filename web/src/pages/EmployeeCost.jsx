@@ -1338,7 +1338,7 @@ function EmployeeGapPanel({ payload, loading, error, range }) {
   </div>;
 }
 
-function AdminGapPanel({ payload, loading, error, range }) {
+function AdminGapPanel({ payload, loading, error, range, onBack }) {
   const [filters, setFilters] = useState({ q: '', employee: '', unit: '', reason: '' });
   const [exporting, setExporting] = useState('');
   const [exportError, setExportError] = useState('');
@@ -1395,7 +1395,7 @@ function AdminGapPanel({ payload, loading, error, range }) {
   };
   return <div className="card employee-cost-gap-admin">
     <div className="employee-cost-gap-title">
-      <div><div className="section-head">Gộp theo mã QLNB</div><p>Ưu tiên từ trên xuống theo doanh thu bị ảnh hưởng. Tỷ lệ và ánh xạ vẫn do DataHub cập nhật.</p></div>
+      <div>{onBack && <button type="button" className="btn ghost employee-cost-back" onClick={onBack}>← Quay lại</button>}<div className="section-head">Gộp theo mã QLNB</div><p>Ưu tiên từ trên xuống theo doanh thu bị ảnh hưởng. Tỷ lệ và ánh xạ vẫn do DataHub cập nhật.</p></div>
       <div className="employee-cost-export-actions">
         <button type="button" className="btn" title={syncBlockReason} disabled={loading || !!syncing || !syncCodeCount || !!syncBlockReason} onClick={() => { setSyncError(''); setSyncMessage(''); setSyncConfirm(true); }}>📤 Đồng bộ sang DataHub</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
@@ -1438,12 +1438,21 @@ function AdminGapPanel({ payload, loading, error, range }) {
       <EmployeeCostPager pagination={pager.pagination} onPage={pager.setPage} onPageSize={pager.setPageSize} location="top" unit="mã" />
       <div className="employee-cost-table-wrap">
       <table className="employee-cost-gap-table admin">
-        <thead><tr><th>STT</th><th>Mã QLNB · tên hàng</th><th>Đơn vị ảnh hưởng</th><th>NV</th><th>Số cặp thiếu</th><th>Doanh thu ảnh hưởng</th><th>Lý do/gợi ý</th></tr></thead>
+        <thead><tr><th>STT</th><th>Mã QLNB · tên hàng</th><th>Đơn vị ảnh hưởng</th><th>NV</th><th>Mã đơn hàng</th><th>Số cặp thiếu</th><th>Doanh thu ảnh hưởng</th><th>Lý do/gợi ý</th></tr></thead>
         <tbody>{pager.rows.map((item, index) => <tr key={item.productCode}>
           <td className="employee-cost-number">{pager.start + index + 1}</td>
           <td><b>{item.productCode}</b><small>{item.productName}</small></td>
           <td><b>{item.unitCount.toLocaleString('vi-VN')} đơn vị</b><small>{item.unitLabels.join('; ')}</small></td>
           <td>{item.employeeCodes.join(', ')}</td>
+          {/* Mã đơn hàng để kế toán/NV tra thẳng vào nguồn rồi sửa mã hoặc quyết ngăn
+              đồng bộ (CEO 06/08). Mã tra cứu ⇒ KHÔNG bị rèm che ẩn số. Hiện 3 mã đầu,
+              còn lại nằm trong tooltip + file xuất có đủ. */}
+          <td className="employee-cost-order-codes">{item.orderCodes?.length
+            ? <span title={item.orderCodes.join('; ')}>
+              {item.orderCodes.slice(0, 3).join(', ')}
+              {item.orderCodes.length > 3 && <small>+{item.orderCodes.length - 3} mã nữa</small>}
+            </span>
+            : '—'}</td>
           {/* Cộng cột này qua các mã = đúng số cặp thiếu ở KPI "Khớp doanh thu". */}
           <td className="employee-cost-number"><b>{item.pairCount.toLocaleString('vi-VN')}</b></td>
           <td className="employee-cost-number"><b>{formatEmployeeCostCell(item.revenueAffected, moneyColumn)}</b></td>
@@ -1457,7 +1466,7 @@ function AdminGapPanel({ payload, loading, error, range }) {
   </div>;
 }
 
-function DataQualityPanel({ payload, loading, error, range, admin, onOpenRow }) {
+function DataQualityPanel({ payload, loading, error, range, admin, onOpenRow, onBack }) {
   const [filters, setFilters] = useState({ q: '', type: '', severity: '', employee: '', unit: '', route: '', repairSource: '' });
   const [exporting, setExporting] = useState('');
   const [exportError, setExportError] = useState('');
@@ -1472,7 +1481,7 @@ function DataQualityPanel({ payload, loading, error, range, admin, onOpenRow }) 
   };
   return <div className="card employee-cost-dq-panel">
     <div className="employee-cost-gap-title">
-      <div><div className="section-head">Trung tâm Kiểm soát Dữ liệu</div><p>App Report chỉ phát hiện, giải thích và chỉ đúng nguồn sửa; không tự sửa hay tự đoán số.</p></div>
+      <div>{onBack && <button type="button" className="btn ghost employee-cost-back" onClick={onBack}>← Quay lại</button>}<div className="section-head">Trung tâm Kiểm soát Dữ liệu</div><p>App Report chỉ phát hiện, giải thích và chỉ đúng nguồn sửa; không tự sửa hay tự đoán số.</p></div>
       <div className="employee-cost-export-actions">
         <button type="button" className="btn" disabled={loading || !!exporting} onClick={() => exportFile('xlsx')}>{exporting === 'xlsx' ? 'Đang xuất…' : 'Xuất Excel'}</button>
         <button type="button" className="btn secondary" disabled={loading || !!exporting} onClick={() => exportFile('pdf')}>{exporting === 'pdf' ? 'Đang xuất…' : 'Xuất PDF'}</button>
@@ -2016,7 +2025,7 @@ export default function EmployeeCost({ me, onNavigate }) {
       <b>⛔ Dữ liệu chưa đồng nhất.</b> KPI và tab "Mặt hàng thiếu %" chưa cùng một snapshot. {gapMismatchSource} Số badge chỏi đã được ẩn; hãy làm mới sau khi nguồn phục hồi.
     </div>}
 
-    {admin && view === 'dq' ? <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin onOpenRow={openDqRow} /> : admin && view === 'gaps' ? <AdminGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} /> : <>
+    {admin && view === 'dq' ? <DataQualityPanel payload={dqPayload} loading={dqLoading} error={dqError} range={range} admin onOpenRow={openDqRow} onBack={() => setView('cost')} /> : admin && view === 'gaps' ? <AdminGapPanel payload={gapPayload} loading={gapLoading} error={gapError} range={range} onBack={() => setView('cost')} /> : <>
     {admin && <VisibilityPanel
       adminCode={me?.emp_code || me?.username || 'admin'}
       panel={visibilityPanel}
