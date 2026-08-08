@@ -18,6 +18,10 @@ function ZaloOA() {
 
 const cardStyle = { background: 'rgba(255,255,255,.12)', border: 'none', color: '#fff' };
 
+// Tạm ẩn đường OTP Zalo khi dịch vụ đang lỗi. Giữ nguyên toàn bộ flow bên dưới để
+// bật lại bằng đúng một thay đổi UI, không đụng backend/token/config.
+const SHOW_ZALO_OTP_UI = false;
+
 export default function Login({ onLogin }) {
   const [mode, setMode] = useState(null);        // { live, demo, telegram }
   const [demoUsers, setDemoUsers] = useState([]);
@@ -155,7 +159,7 @@ export default function Login({ onLogin }) {
   const ceo = demoUsers.filter((u) => u.role !== 'sale');
   const sale = demoUsers.filter((u) => u.role === 'sale');
   const showTelegram = mode && mode.telegram;
-  const showOtpFlow = mode && mode.live;
+  const showOtpFlow = SHOW_ZALO_OTP_UI && mode && mode.live;
 
   return (
     <div className="login">
@@ -172,6 +176,9 @@ export default function Login({ onLogin }) {
                 <>
                   <div style={{ fontSize: 13, opacity: .92, marginBottom: 10 }}>
                     Đăng nhập nhanh & an toàn qua <b>Telegram</b>.
+                  </div>
+                  <div style={{ fontSize: 12.5, opacity: .9, lineHeight: 1.55, marginBottom: 10 }}>
+                    1. Mở Report Bot → 2. Gửi mã đăng nhập → 3. Bấm ✅ xác nhận.
                   </div>
                   <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={startTelegram}>
                     {busy ? 'Đang tạo mã…' : '✈️  Đăng nhập bằng Telegram'}
