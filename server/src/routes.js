@@ -22,6 +22,7 @@ const { buildTargetKpiDetail } = require('./targetKpiDetail');
 const { summarizeAssignedQuarter } = require('./targetKpi');
 const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
+const catalogCostColumnGrants = require('./catalogCostColumnGrants');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
@@ -2925,6 +2926,36 @@ router.get('/catalog-management', auth.requireAuth, async (req, res) => {
     return res.json(catalogManagement.employeeView(viewSnapshot, req.session.emp_code, period));
   } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
 });
+/* ---------- Phân quyền cột % chi phí trong Danh mục QL (SPEC_CATALOG_COST_COLUMNS.md) ----------
+   ‼ CEO chốt 06/08/2026: "chỉ CEO mới quản lý ai được xem cột nào… không ai khác."
+   Vì thế dùng `auth.requireCeo` (danh tính CEO) chứ KHÔNG phải `requireAdmin` —
+   admin thường đọc được trạng thái nhưng tuyệt đối không ghi được. */
+router.get('/catalog-management/cost-columns/grants', auth.requireAuth, auth.requireCeo, (req, res) => {
+  try {
+    return res.json({
+      grants: catalogCostColumnGrants.list(),
+      audit: catalogCostColumnGrants.listAudit({ limit: 50 }),
+      allUnits: catalogCostColumnGrants.ALL_UNITS,
+    });
+  } catch (e) { return res.status(e.status || 500).json({ error: e.message, code: e.code }); }
+});
+router.put('/catalog-management/cost-columns/grants/:empCode', auth.requireAuth, auth.requireCeo, (req, res) => {
+  try {
+    const saved = catalogCostColumnGrants.setGrant(req.params.empCode, {
+      columns: req.body?.columns,
+      units: req.body?.units,
+    }, { actor: req.session.emp_code });
+    return res.json({ grant: saved });
+  } catch (e) { return res.status(e.status || 400).json({ error: e.message, code: e.code }); }
+});
+/* Ai cũng gọi được, nhưng CHỈ nhận phần của chính mình — không nhận tham số emp,
+   nên không có đường hỏi quyền của người khác. */
+router.get('/catalog-management/cost-columns/my-grant', auth.requireAuth, (req, res) => {
+  const isCeo = auth.isCeoActor(req.session);
+  const grant = catalogCostColumnGrants.readFor(req.session.emp_code);
+  return res.json({ isCeo, grant: isCeo ? { ...grant, columns: 'all', units: [catalogCostColumnGrants.ALL_UNITS] } : grant });
+});
+
 router.get('/admin/catalog-management/history', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {
     const period = catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy());
