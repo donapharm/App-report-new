@@ -409,7 +409,8 @@ export const api = {
   catalogCostMyGrant: () => req('GET', '/catalog-management/cost-columns/my-grant'),
   catalogCostRates: (params = {}) => req('GET', '/catalog-management/cost-rates?' + new URLSearchParams(params).toString()),
   catalogCostRatesSync: (period) => req('POST', '/catalog-management/cost-rates/sync', { period }),
-  catalogCostRatesLocalStatus: () => req('GET', '/catalog-management/cost-rates/local-status'),
+  catalogCostRatesLocalStatus: (params = {}) => req('GET', '/catalog-management/cost-rates/local-status?' + new URLSearchParams(params).toString()),
+  catalogCostRatesTable: (params = {}) => req('GET', '/catalog-management/cost-rates/table?' + new URLSearchParams(params).toString()),
   adminCatalogManagementHistory: (period) => req('GET', '/admin/catalog-management/history?' + new URLSearchParams(period ? { period } : {}).toString()),
   adminCatalogManagementDiagnostics: () => req('GET', '/admin/catalog-management/diagnostics'),
   adminCatalogManagementReportPreview: (payload) => req('POST', '/admin/catalog-management/report/preview', payload),
@@ -505,6 +506,22 @@ export async function downloadEmployeeCostDataQuality(format = 'xlsx', params = 
 
 export async function downloadEmployeeCostProvinceWorklist(params = {}) {
   return downloadEmployeeCostFile('employee-cost/province-worklist', 'xlsx', params, 'employee-cost-province-worklist');
+}
+
+// Bảng % kho cục bộ — export theo ĐÚNG phạm vi quyền của người tải (backend lọc).
+export async function downloadCostRatesTable(params = {}) {
+  const url = '/api/catalog-management/cost-rates/table.xlsx?' + new URLSearchParams(params).toString();
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Không xuất được bảng % chi phí');
+  }
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filenameFromDisposition(res.headers.get('content-disposition'), 'ty-le-chi-phi.xlsx');
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
 }
 
 export async function downloadDormantReport(format, snapshotId) {

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDonaTableCellTools } from '@donapharm/dona-table-cell-tools/react';
 import '@donapharm/dona-table-cell-tools/css';
-import { api, downloadFilteredEmployeeReport, downloadFilteredEmployeeSummary } from '../api.js';
+import { api, downloadCostRatesTable, downloadFilteredEmployeeReport, downloadFilteredEmployeeSummary } from '../api.js';
 import { Spinner } from '../components.jsx';
 import { bangkokToday } from '../revenueCoverage.js';
 import { formatDateTime } from '../util.js';
@@ -583,6 +583,77 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
 }
 
 /**
+ * BẢNG % ĐẦY ĐỦ TỪ KHO CỤC BỘ (Đợt 2 — SPEC_COST_RATES_LOCAL_SYNC).
+ * Backend tự lọc theo quyền: CEO thấy hết; NV chỉ cột được cấp × đơn vị trong
+ * phạm vi × dòng có mình. DataHub chết vẫn xem được — đó là cả mục đích.
+ */
+function CostRatesTablePanel({ period }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const [exporting, setExporting] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    setData(null); setError('');
+    api.catalogCostRatesTable({ period: uiToHub(period) })
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }, [open, period]);
+
+  const rows = useMemo(() => {
+    if (!data?.rows) return [];
+    const q = normalizeSearch(query);
+    if (!q) return data.rows;
+    return data.rows.filter((row) => normalizeSearch(`${row.unitCode} ${row.productCode} ${row.productName} ${row.employees.join(' ')}`).includes(q));
+  }, [data, query]);
+
+  return <div className="card catalog-rates-panel">
+    <div className="catalog-grants-head">
+      <div>
+        <div className="section-head">📊 Bảng % chi phí (kho cục bộ)</div>
+        <p>Đọc từ bản đã đồng bộ — DataHub có sự cố vẫn xem được. Số % che/mở theo con mắt.</p>
+      </div>
+      <button type="button" className="btn secondary" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {open ? 'Thu gọn' : 'Mở bảng %'}
+      </button>
+    </div>
+    {open && <div className="catalog-rates-body">
+      {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
+      {!error && !data && <Spinner />}
+      {data && !data.available && <div className="catalog-alert error" role="status">
+        {data.reason === 'CHUA_DONG_BO'
+          ? `Kho cục bộ chưa có kỳ ${period} — CEO bấm "Đồng bộ % chi phí" một lần khi DataHub đang sống.`
+          : 'Bạn chưa được cấp cột % nào — CEO cấp trong menu 🔐 Phân quyền cột % chi phí.'}
+      </div>}
+      {data?.available && <>
+        <div className="catalog-rates-meta">
+          <span>Bản đồng bộ <b>{formatDateTime(data.fetchedAt)}</b> bởi <b>{data.fetchedBy}</b> · {data.pairCount.toLocaleString('vi-VN')} cặp</span>
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm đơn vị, mã QLNB, tên hàng, NV…" aria-label="Tìm trong bảng %" />
+          <button type="button" className="btn secondary" disabled={exporting}
+            onClick={async () => { setExporting(true); try { await downloadCostRatesTable({ period: uiToHub(period) }); } catch (e) { setError(e.message); } finally { setExporting(false); } }}>
+            {exporting ? 'Đang xuất…' : 'Xuất Excel'}
+          </button>
+        </div>
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple">
+          <thead><tr><th>Đơn vị</th><th>Mã QLNB</th><th>Tên hàng</th><th>NV</th>
+            {data.columns.map((column) => <th key={column.key} className="catalog-money" title={column.label}>{column.key.toUpperCase()} (%)</th>)}
+          </tr></thead>
+          <tbody>{rows.slice(0, 300).map((row) => <tr key={`${row.unitCode}|${row.productCode}`}>
+            <td>{row.unitCode}</td>
+            <td><b>{row.productCode}</b></td>
+            <td>{row.productName}</td>
+            <td><small>{row.employees.join(', ')}</small></td>
+            {data.columns.map((column) => <CostRateCell key={column.key} value={row.rates[column.key]} />)}
+          </tr>)}</tbody>
+        </table></div>
+        {rows.length > 300 && <small className="muted">Hiện 300/{rows.length.toLocaleString('vi-VN')} dòng — dùng ô tìm để thu hẹp, hoặc Xuất Excel lấy đủ.</small>}
+      </>}
+    </div>}
+  </div>;
+}
+
+/**
  * NÚT ĐỒNG BỘ % CHI PHÍ — CHỈ CEO (SPEC_COST_RATES_LOCAL_SYNC · CEO chốt 08/08).
  * Kéo bảng tỷ lệ của kỳ về kho cục bộ: từ đó DataHub chết cũng không mất số.
  * All-or-nothing: hụt một NV là backend giữ nguyên bản cũ và nói rõ ai hỏng.
@@ -755,6 +826,7 @@ export default function CatalogManagement({ me }) {
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
     {isCeo && <CostRatesSyncCard period={period} />}
+    <CostRatesTablePanel period={period} />
     {isCeo && data && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
       ⚠ Nguồn tỷ lệ chi phí đang kẹt — cột % đang dùng bảng tỷ lệ lấy được gần nhất.{costRates.note ? ` ${costRates.note}` : ''}

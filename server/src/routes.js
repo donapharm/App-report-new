@@ -24,6 +24,7 @@ const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const catalogCostColumnGrants = require('./catalogCostColumnGrants');
 const costRatesSync = require('./costRatesSync');
+const costRatesTable = require('./costRatesTable');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
@@ -3029,9 +3030,51 @@ router.post('/catalog-management/cost-rates/sync', auth.requireAuth, auth.requir
   });
   return res.status(result.ok ? 200 : 502).json(result);
 }));
-router.get('/catalog-management/cost-rates/local-status', auth.requireAuth, auth.requireCeo, (req, res) => {
-  return res.json({ periods: costRatesSync.listStatus(), audit: costRatesSync.listAudit({ limit: 10 }) });
+router.get('/catalog-management/cost-rates/local-status', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  // Mũi dò chạy NHÂN TIỆN lúc có người nhìn (tự giãn ≥30 phút) — không cần scheduler.
+  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || store.latestKy()));
+  const probe = await costRatesTable.probeSource({ period: monthInputForKy(uiPeriod), empCodes: costRatesSync.rosterFromEnv() });
+  return res.json({ periods: costRatesSync.listStatus(), audit: costRatesSync.listAudit({ limit: 10 }), probe });
+}));
+
+/**
+ * BẢNG % ĐẦY ĐỦ TỪ KHO CỤC BỘ (Đợt 2). Ai đăng nhập cũng gọi được nhưng
+ * `buildTable` tự lọc: CEO thấy hết; NV chỉ cột được cấp × đơn vị trong phạm vi ×
+ * dòng có mình. DataHub chết vẫn xem được — đó là cả mục đích.
+ */
+router.get('/catalog-management/cost-rates/table', auth.requireAuth, (req, res) => {
+  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy()));
+  const result = costRatesTable.buildTable({
+    period: monthInputForKy(uiPeriod),
+    session: { emp_code: req.session.emp_code, isCeo: auth.isCeoActor(req.session) },
+  });
+  return res.json({ ...result, periodUi: uiPeriod });
 });
+router.get('/catalog-management/cost-rates/table.xlsx', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy()));
+  const result = costRatesTable.buildTable({
+    period: monthInputForKy(uiPeriod),
+    session: { emp_code: req.session.emp_code, isCeo: auth.isCeoActor(req.session) },
+  });
+  if (!result.available) return res.status(409).json({ error: 'Kho cục bộ chưa có kỳ này hoặc chưa được cấp cột nào', code: result.reason });
+  // Export qua backend + theo ĐÚNG phạm vi người tải — file không chứa cột/dòng
+  // ngoài quyền. File luôn ghi rõ căn cước bản số.
+  const ExcelJS = require('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet(`Ty le ${uiPeriod}`);
+  sheet.addRow([`BẢNG % CHI PHÍ KỲ ${uiPeriod} — bản kho cục bộ, đồng bộ ${result.fetchedAt} bởi ${result.fetchedBy}`]);
+  sheet.addRow(['Đơn vị', 'Mã QLNB', 'Tên hàng', 'NV phụ trách', ...result.columns.map((column) => column.label)]);
+  for (const rowItem of result.rows) {
+    sheet.addRow([
+      rowItem.unitCode, rowItem.productCode, rowItem.productName, rowItem.employees.join(', '),
+      ...result.columns.map((column) => (rowItem.rates[column.key] == null ? '—' : rowItem.rates[column.key])),
+    ]);
+  }
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="ty-le-chi-phi-${monthInputForKy(uiPeriod)}.xlsx"`);
+  return res.send(buffer);
+}));
 
 /* Ai cũng gọi được, nhưng CHỈ nhận phần của chính mình — không nhận tham số emp,
    nên không có đường hỏi quyền của người khác. */
