@@ -54,6 +54,41 @@ cứu được vì kỳ mới chưa từng lấy sạch + lỗ hổng nhánh `no
   có endpoint riêng + quyền riêng, không đi qua catalog).
 - Con mắt ẩn số phủ; export qua backend + kiểm quyền.
 
+## Chuyển nguồn đọc (CEO hỏi 08/08: "xây xong thì chuyển qua lấy thẳng bên này thế nào?")
+
+Không "gạt công tắc" một phát — **đảo thứ tự đọc**, làm 2 bước để không có ngày nào rủi ro:
+
+- **Bước chuyển 1 (an toàn):** giữ nguyên cách cũ (hỏi nguồn sống trước), kho cục bộ chỉ
+  là lưới đỡ khi nguồn kẹt. Chạy vài ngày để kho có số và được đối chiếu.
+- **Bước chuyển 2 (đích):** đảo lại — **màn hình đọc THẲNG kho cục bộ** (tức thì, hết
+  cảnh chờ nguồn 6,5–45 giây), DataHub chỉ còn bị đụng tới ở đúng 2 chỗ:
+  ① nút Đồng bộ, ② mũi dò phiên bản (dưới). Mỗi màn luôn ghi *"Số bản V31.4 ·
+  đồng bộ lúc HH:MM dd/mm"*. Lợi phụ: màn Chi phí nhanh hơn hẳn vì không còn
+  gọi mạng theo từng kỳ.
+
+## Tín hiệu "DataHub có bản mới" (CEO yêu cầu 08/08 — đang V31.4)
+
+Nói thẳng một giới hạn vật lý: *biết bên kia có bản mới* thì phải hỏi bên kia một câu.
+Cái tách được là: **hỏi thật rẻ, hỏng thì im lặng bỏ qua** — app không bao giờ *cần*
+DataHub, chỉ *nghe ngóng* khi nó sống:
+
+1. **Mũi dò phiên bản (mặc định, không cần DataHub làm gì thêm nếu hợp đồng có sẵn
+   version; chưa có thì xin thêm 1 trường):** mỗi ~30 phút hỏi đúng một câu "bản mấy?"
+   (vài byte). DataHub chết ⇒ bỏ qua trong im lặng, app chạy tiếp bằng kho.
+   DataHub sống + bản khác bản kho ⇒ **huy hiệu trên nút Đồng bộ**:
+   *"🔔 DataHub có bản V31.5 — đang dùng V31.4. Bấm Đồng bộ khi sẵn sàng."*
+   + đẩy vào chuông thông báo CEO (kênh chuông sẵn có, không dựng kênh mới).
+   KHÔNG tự đồng bộ — CEO bấm mới kéo (đúng lệnh "chỉ đề xuất, người bấm là CEO").
+2. **Nâng cấp sau (xin DataHub, không bắt buộc):** DataHub chủ động bắn tín hiệu sang
+   App Report ngay khi phát hành bản mới (service token như chiều ngược lại).
+   Có thì tín hiệu tức thời; không có thì mũi dò 30 phút vẫn đủ dùng.
+3. **Lưới cuối:** mỗi lần bấm Đồng bộ, App Report tự so bản vừa kéo với bản đang giữ
+   và báo *"thay đổi N cặp"* — kể cả khi số hiệu bản không đổi mà % bị sửa lén,
+   phép so từng cặp vẫn lộ ra.
+
+Kho luôn ghi kèm: `sourceVersion` (V31.4…), `fetchedAt`, `fetchedBy`, `pairsHash` —
+màn hình và audit đều đọc từ đây, một nguồn.
+
 ## Không làm (cố ý)
 - Không UI nhập/sửa % tại App Report — hai nguồn số là bệnh cũ.
 - Không tự động đồng bộ nền theo lịch (đợt này): CEO chủ động bấm; cân nhắc lịch sau
