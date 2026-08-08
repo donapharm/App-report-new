@@ -1,3 +1,17 @@
+### 2026-08-08 22:40 (giờ VN) — 🌀 BỎ CẢNH "CẢ TRANG THÀNH VÒNG QUAY" + CEO chốt phương án A cho tốc độ
+
+CEO gửi ảnh màn Danh mục QL trắng trơn chỉ còn vòng quay: *"mỗi lần kéo dữ liệu mà quay như vậy thì rất kẹt"*.
+
+**Nguyên nhân (lỗi thiết kế của Claude):** `load()` gọi `setData(null)` ngay đầu ⇒ đổi kỳ là đập sạch bảng đang xem, cả trang còn mỗi spinner, trong khi danh mục ~27.700 cặp nên chờ lâu. Tải hỏng còn mất luôn bảng cũ, chỉ còn dòng lỗi.
+
+**Đã sửa (`71ebc70`):** giữ bảng cũ trên màn + state `loadingPeriod` riêng; chỉ hiện dải mảnh "đang tải". **Nói rõ bảng dưới đang là kỳ nào** khi khác kỳ đang tải — giữ số cũ mà không nói là mời người đọc nhầm. Tải hỏng ⇒ giữ bảng + báo lỗi. Lần đầu chưa có gì để giữ ⇒ khung chờ nói đang chờ gì và vì sao lâu. Áp cùng luật cho bảng % kho cục bộ, kèm cờ `alive` chống kết quả kỳ cũ ghi đè kỳ mới. 5 test khoá + tôn trọng `prefers-reduced-motion`.
+
+**‼ Claude nói SAI một điều, đã đính chính với CEO:** đề xuất "nhớ lại bản vừa tải cho nhanh" là thừa — `catalogManagement.getSnapshot` **đã cache sẵn 2 phút** (`SNAPSHOT_CACHE_TTL_MS`), nên vòng gọi DataHub không phải chỗ nghẽn. Nghẽn thật là **truyền + dựng 27.700 dòng xuống trình duyệt**.
+
+**CEO chốt phương án A:** dùng `71ebc70` vài ngày xem đã đủ dễ chịu chưa, chưa làm gì thêm. Nếu vẫn thấy chờ lâu thì làm **B — phân trang phía máy chủ** (chỉ gửi phần đang xem; đổi lại tìm kiếm/lọc chậm hơn một nhịp vì phải hỏi máy chủ; ~1 ngày). **Phương án C (cache dữ liệu ở trình duyệt) đã LOẠI**: lưu dữ liệu nhân viên trên máy người dùng + rủi ro nhìn số cũ mà quyết.
+
+---
+
 ### 2026-08-08 21:00 (giờ VN) — 🔐 PHÂN QUYỀN V2: ma trận NV × CỘT × NHÓM ĐƠN VỊ (CEO nâng chi tiết tối 08/08)
 
 CEO xem bản phân quyền v1 và chốt yêu cầu chi tiết hơn: *"mỗi NV được hiển thị chi tiết cho loại cột C nào, cho loại mã đơn vị nào... phân quyền đi theo NHÓM mã đơn vị — không có chuyện DN008 xem được C41 ở 033.PKĐK An Long Khánh mà 003.PKĐK An Long Thành lại không."* Spec: mục V2 trong `SPEC_CATALOG_COST_COLUMNS.md`.
