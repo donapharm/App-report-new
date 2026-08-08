@@ -10,6 +10,7 @@ const path = require('path');
 const store = require('./store');
 const auth = require('./auth');
 const homeAppReportVisibility = require('./homeAppReportVisibility');
+const appSaleReconciliation = require('./appSaleReconciliation');
 const A = require('./analytics');
 const cstSequence = require('./cstSequence');
 const smart = require('./smart');
@@ -787,6 +788,13 @@ router.get('/integrations/home/app-report-visibility', auth.requireHomeService, 
     findUserByCode: store.findUserByCode,
   }));
 });
+
+// Read-only CEO diagnostic. App Sale remains the source of truth; this route
+// only validates and relays its signed S2S reconciliation snapshot.
+router.get('/admin/app-sale-reconciliation', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await appSaleReconciliation.fetchReconciliation({ from: req.query.from, to: req.query.to }));
+}));
 
 function employeeCostRosterRows() {
   // Nguồn duy nhất cho picker và công tắc: roster Sale 21 người + metadata

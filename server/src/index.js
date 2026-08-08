@@ -23,6 +23,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const routes = require('./routes');
+const appSaleReconciliation = require('./appSaleReconciliation');
 const revenueRefresh = require('./revenueRefresh');
 const deckScheduler = require('./report/deckScheduler');
 
@@ -58,7 +59,12 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '2mb' }));
 
-app.get('/api/health', (req, res) => res.json({ ok: true, service: 'app-report', ts: Date.now() }));
+app.get('/api/health', (req, res) => res.json({
+  ok: true,
+  service: 'app-report',
+  ts: Date.now(),
+  optional: { appSaleReconciliation: appSaleReconciliation.diagnostics() },
+}));
 app.use('/api', routes);
 
 // Phục vụ frontend đã build (web/dist) nếu có — cho phép chạy 1 cổng ở production.
