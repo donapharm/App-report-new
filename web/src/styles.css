@@ -2470,3 +2470,7 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 /* Cột % chi phí trong Danh mục QL — số căn phải, thiếu % thì nhạt đi cho dễ quét mắt. */
 .catalog-rate { white-space: nowrap; }
 .catalog-rate.is-missing { color: var(--muted); }
+/* Thẻ đồng bộ % chi phí — CHỈ CEO (SPEC_COST_RATES_LOCAL_SYNC) */
+.catalog-sync-card { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.catalog-sync-card > div:first-child small { display:block; color:var(--muted); margin-top:3px; font-size:11.5px; }
+.catalog-sync-card .catalog-alert { flex-basis:100%; margin-top:2px; }

@@ -582,6 +582,57 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
   </div>;
 }
 
+/**
+ * NÚT ĐỒNG BỘ % CHI PHÍ — CHỈ CEO (SPEC_COST_RATES_LOCAL_SYNC · CEO chốt 08/08).
+ * Kéo bảng tỷ lệ của kỳ về kho cục bộ: từ đó DataHub chết cũng không mất số.
+ * All-or-nothing: hụt một NV là backend giữ nguyên bản cũ và nói rõ ai hỏng.
+ */
+function CostRatesSyncCard({ period }) {
+  const hubPeriod = uiToHub(period);
+  const [status, setStatus] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  const loadStatus = () => api.catalogCostRatesLocalStatus()
+    .then((data) => setStatus((data.periods || []).find((item) => item.period === hubPeriod) || null))
+    .catch(() => setStatus(null));
+  useEffect(() => { setResult(null); setError(''); loadStatus(); }, [hubPeriod]);
+
+  const run = async () => {
+    setSyncing(true); setError(''); setResult(null);
+    try {
+      const summary = await api.catalogCostRatesSync(hubPeriod);
+      setResult(summary);
+      await loadStatus();
+    } catch (e) { setError(e.message); }
+    finally { setSyncing(false); }
+  };
+
+  return <div className="card catalog-sync-card">
+    <div>
+      <b>🔄 Đồng bộ % chi phí kỳ {period}</b>
+      <small>{status?.fetchedAt
+        ? `Kho cục bộ: ${status.pairCount.toLocaleString('vi-VN')} cặp · đồng bộ ${formatDateTime(status.fetchedAt)} bởi ${status.fetchedBy}`
+        : 'Kho cục bộ CHƯA có kỳ này — bấm đồng bộ lần đầu khi DataHub đang sống.'}</small>
+    </div>
+    <div className="catalog-sync-actions">
+      <button type="button" className="btn" disabled={syncing} onClick={run}>
+        {syncing ? 'Đang kéo toàn đội…' : 'Đồng bộ từ DataHub'}
+      </button>
+    </div>
+    {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
+    {result && (result.ok
+      ? <div className="catalog-alert ok" role="status">
+        ✅ Đã đồng bộ {result.fetched}/{result.requested} NV · {result.pairCount.toLocaleString('vi-VN')} cặp
+        · thay đổi {result.diff.changed} · thêm {result.diff.added} · bớt {result.diff.removed} so bản trước.
+      </div>
+      : <div className="catalog-alert error" role="alert">
+        ⛔ Nguồn hỏng ở {result.failures.length}/{result.requested} NV ({result.failures.slice(0, 5).map((f) => f.empCode).join(', ')}{result.failures.length > 5 ? '…' : ''}) —
+        <b> bản cũ giữ nguyên, chưa ghi gì</b>. Chờ DataHub khoẻ rồi bấm lại.
+      </div>)}
+  </div>;
+}
+
 function AdminView({ data, period, onReload, history, diagnostics, costColumns = [], rateOf = () => null }) {
   const [mode, setMode] = useState('view');
   const [query, setQuery] = useState('');
@@ -703,6 +754,7 @@ export default function CatalogManagement({ me }) {
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
+    {isCeo && <CostRatesSyncCard period={period} />}
     {isCeo && data && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
       ⚠ Nguồn tỷ lệ chi phí đang kẹt — cột % đang dùng bảng tỷ lệ lấy được gần nhất.{costRates.note ? ` ${costRates.note}` : ''}
