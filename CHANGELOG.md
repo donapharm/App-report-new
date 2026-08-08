@@ -1,3 +1,13 @@
+### 2026-08-08 14:00+ (giờ VN) — 🚢 PROD `03b3468`: MENU PHÂN QUYỀN DÙNG ĐƯỢC — vá lỗi Claude trộn "tên cột" với "số %"
+
+Chuỗi 3 deploy trong ngày: `5147743` (endpoint Home, code-only, token chưa cấp — Home vẫn fail-closed 401) → `03b3468` (vá menu). **Lỗi gốc là của Claude, CEO bắt được:** route cost-rates hỏi DataHub theo mã người đăng nhập ⇒ tài khoản CEO (quản trị, không có sổ chi phí) luôn `not_configured` ⇒ menu vĩnh viễn "chưa lấy được cột" dù nguồn khoẻ. Vá: **tên cột = hợp đồng cục bộ** (`employeeCostTemplates`), **số % mới là của DataHub**. Nghiệm thu PROD: menu 🔐 hiện đủ C36/C41/C43/C44/C45 tick được, console 0 lỗi, T07 nguyên `30.982.248.913đ/2.091`, token tin nhắn/Home vẫn tắt.
+
+**Sự cố còn mở — DataHub chết diện rộng:** 0/21 NV lấy được chi phí (19×`upstream_503`, 2×`upstream_unavailable`); App Report đã loại trừ phía mình (cấu hình 3/3, mapping 21/21, `.env` là symlink dùng chung — chẩn đoán "thiếu .env" của Claude SAI, bot đúng). Màn Chi phí trắng % cho tới khi DataHub hồi. ReportDev bị khoá cross-agent — CEO chuyển handoff tay.
+
+**CEO đề xuất dự án mới (đang chờ chốt C32/C47):** nút "Đồng bộ % chi phí" — kéo bảng tỷ lệ về App Report, chỉ bấm đồng bộ khi DataHub đổi %; hết phụ thuộc nguồn sống từng giờ. Claude khảo sát: `employeeCostRateSnapshot` đã có sẵn dạng bị động (nhớ khi tình cờ lấy được, theo kỳ, TTL 45 ngày) nhưng (a) kỳ mới chưa từng lấy sạch thì không có gì dùng lại — đúng vụ hôm nay, (b) **lỗ hổng: nhánh `not_configured` bỏ qua restore**. Đề xuất 3 phần: A nút đồng bộ chủ động CEO-only (luôn ghi "số tính đến …", nguồn chết không ghi đè bản tốt) · B vá lỗ hổng restore · C menu danh mục đủ cột + xuất Excel. ~2 ngày. Khuyến nghị giữ luật cấm C32/C47 (số tiền tổng — tự tính được từ % × doanh thu), chỉ kéo C33–C46.
+
+---
+
 ### 2026-08-08 10:21 (giờ VN) — 🚢 PROD `13b70e9`: dự án cột % + bản vá tin nhắn ĐÃ LÊN · CEO duyệt việc khoá 16 tài khoản
 
 **CEO xác nhận 08/08:** việc khoá đăng nhập 16 mã (`VP002, VP003, VP006–VP017, DN021, DN023`) và giới hạn VP018 chỉ 2 tab doanh thu **là lệnh của CEO**. Ghi vào đây để phiên sau không phải hỏi lại. CEO yêu cầu thêm: **ẩn ô App Report trên `home.donapharm.vn`** với các tài khoản này.
