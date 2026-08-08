@@ -1,3 +1,19 @@
+### 2026-08-08 23:10 (giờ VN) — 📐 CỘT % BỊ BÓP DẸP, CHỮ TIÊU ĐỀ CHỒNG NHAU — bỏ hết bề rộng theo VỊ TRÍ cột
+
+CEO gửi ảnh: cột C36/C41 dẹp sát mép phải, tiêu đề chồng lên nhau ("…trúng thầu**CST** ban đầu").
+
+**Nguyên nhân:** bảng dùng `table-layout:fixed` + khai cứng bề rộng cho **đúng 13 cột**, cộng lại vừa khít `min-width:1306px` (88+50+95+135+135+130+180+48+100+85+85+65+110 = 1306). Từ khi thêm cột % chi phí, bảng có tới **~19 cột** — sáu cột thêm KHÔNG còn px nào để chia nên bị ép về gần 0, chữ tràn ra đè lên nhau. Ba khối CSS cùng bệnh: px cho bảng CEO, px cho bảng NV, và khối chia theo % cho "14 cột/13 cột". **Chú thích trong khối % đã sai sẵn** — ghi cột 12 là "Từ kỳ" nhưng thực tế cột 12 giờ là cột %, tức là đang gán nhầm bề rộng cho nhầm cột.
+
+**Sai lầm gốc: đánh số cột theo VỊ TRÍ.** Số cột thay đổi theo quyền từng người (0–7 cột %), và bảng CEO có thêm cột "Nhân viên" nên lệch một nhịp so với bảng NV. Mọi luật `nth-child` vì thế đều sai sớm hay muộn.
+
+**Đã sửa:** bỏ toàn bộ bề rộng theo vị trí; `min-width:max-content` + `table-layout:auto` để trình duyệt tự chia theo nội dung; cột số/tiền/% có `min-width:82px` cho vừa tiêu đề "C36 (%)". Laptop 1280–1499 trước đây ép bảng vừa 100% màn (`width:100%; min-width:0`) — chính là thứ bóp dẹp cột cuối — nay cũng cuộn ngang như màn lớn, chỉ thu nhỏ chữ/đệm. **Cả ba dải màn desktop giờ đều cuộn ngang được**, không dải nào cắt cụt.
+
+4 test khoá, trong đó có test cấm khai lại `width` theo `nth-child` cho hai bảng này.
+
+Test server 1040/1047 (7 fail cố hữu) · web 275/275 · build sạch.
+
+---
+
 ### 2026-08-08 22:40 (giờ VN) — 🌀 BỎ CẢNH "CẢ TRANG THÀNH VÒNG QUAY" + CEO chốt phương án A cho tốc độ
 
 CEO gửi ảnh màn Danh mục QL trắng trơn chỉ còn vòng quay: *"mỗi lần kéo dữ liệu mà quay như vậy thì rất kẹt"*.
