@@ -1,3 +1,16 @@
+### 2026-08-08 — ✅ XONG DỰ ÁN "CỘT % CHI PHÍ + MENU PHÂN QUYỀN CEO-ONLY" (4/4 phần) — chờ deploy
+
+CEO duyệt 06/08, làm trọn trong ngày 08/08. Spec: `SPEC_CATALOG_COST_COLUMNS.md` · `DIRECTIVE_GAP_TAB_ORDER_CODES_BACK.md`.
+
+- **1/4 `0f1da90`** — `catalogCostColumnGrants.js` + route **CHỈ CEO** (`auth.requireCeo`, KHÔNG phải `requireAdmin` — CEO thật mang role admin nên dùng cổng admin là để lọt admin thường). Mặc định TẮT, phân biệt "chưa cấp" với "cấp rỗng"; whitelist C33–C46, tick cột cấm là LỖI; phạm vi đơn vị chỉ THU HẸP; bỏ hết cột thì dọn luôn phạm vi; audit bắt buộc có actor lấy từ session, giữ cả trước/sau.
+- **2/4 `f0a91a8`** — `GET /catalog-management/cost-rates`: ba lớp lọc (self-scope → cột được cấp → đơn vị được cấp). Chưa cấp ⇒ thoát sớm, không gọi DataHub. Thiếu % ⇒ `null` (không suy 0%). Không tính lại tỷ lệ; truyền thẳng cờ `rateStale`. **% đi đường riêng vì `catalogManagement` chặn cứng C32–C47 trong payload danh mục (502)** — phát hiện khi khảo sát, đã đổi thiết kế và cài test khoá ý định.
+- **3/4 `99267a0`** — Menu trong Danh mục QL, chỉ hiện khi `me.is_ceo`. Bảng tick cột × NV, chọn phạm vi đơn vị (chỉ trong đơn vị NV phụ trách), áp nhanh/tắt hết, nhật ký thay đổi. Ô phạm vi khoá khi chưa cấp cột; lưu hỏng thì giữ nguyên thay đổi chưa lưu; không lấy được cột thì NÓI RA thay vì bảng rỗng.
+- **4/4 `e465664`** — Cột % vào **cả hai bảng** (CEO + NV) theo đúng quyền; thiếu %/không quyền ⇒ `—` + chỉ đường; **đi qua rèm che ẩn số**; lỗi tải % chỉ mất cột, không hỏng màn danh mục. Kèm 2 món CEO yêu cầu: **mã đơn hàng** trong tab "Mặt hàng thiếu %" (3 mã + tooltip đủ, **không bị che** vì là mã tra cứu) và **nút "← Quay lại"** ở hai tab con (chỉ đổi tab, giữ nguyên kỳ + bộ lọc).
+
+Test: **web 223/223** · **server 997/1003** (6 fail `pdfinfo` không có trong container Claude) · build sạch. Chưa deploy — chờ bot.
+
+---
+
 ### 2026-08-08 — 🛑 CHẶN TIN "QUÁ HẠN" SAI GỬI TOÀN ĐỘI: sàn kỳ T07 + công tắc chủ mặc định TẮT
 
 Rà commit `a49a087` (bot deploy 07/08 trong gói V-C/V-D): handler `payment_notice` **cắm thẳng vào lịch 08:00**, gửi Telegram + email cho **NV và CEO**, chưa qua duyệt của CEO. Cửa sổ quét 45–105 ngày ⇒ ngày 08/08 rơi vào **T04 + T05** (không phải T05+T06 như ước đoán ban đầu — đính chính), và **T06 lọt vào cửa sổ ngày 14/08**. Các kỳ đó chưa ai bấm "Ghi nhận đã trả" trong app ⇒ `planNotices` coi là chưa trả ⇒ bắn tin **"🔴 QUÁ HẠN"** hàng loạt. Hôm 07/08 chưa gửi tin nào **chỉ vì nguồn chi phí thiếu (DN018) làm bộ kiểm ném lỗi** — an toàn do MAY, không do thiết kế; DataHub trả đủ nguồn là bắn thật.
