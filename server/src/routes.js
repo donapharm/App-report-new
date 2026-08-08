@@ -2941,6 +2941,79 @@ router.put('/catalog-management/cost-columns/grants/:empCode', auth.requireAuth,
     return res.json({ grant: saved });
   } catch (e) { return res.status(e.status || 400).json({ error: e.message, code: e.code }); }
 });
+/**
+ * % chi phí theo cặp (đơn vị × mã hàng) cho màn Danh mục QL.
+ *
+ * ‼ Vì sao là endpoint RIÊNG chứ không gắn vào `/catalog-management`:
+ * `catalogManagement` chặn cứng mọi trường C32–C47 trong payload danh mục (ném 502).
+ * Tách ra vừa tôn trọng luật đó, vừa gom kiểm quyền về đúng MỘT chỗ.
+ *
+ * Ba lớp lọc, thiếu lớp nào cũng không ra số:
+ *   ① `resolveScopedEmployee` — NV chỉ hỏi được sổ của chính mình (luật nền của repo).
+ *   ② cột: chỉ cột CEO đã cấp (CEO thì toàn bộ cột nguồn có).
+ *   ③ đơn vị: chỉ đơn vị trong phạm vi CEO cấp.
+ * Số % vẫn do DataHub tính — route này KHÔNG tính lại, không suy, thiếu thì trả null.
+ */
+router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy()));
+  const month = monthInputForKy(uiPeriod);
+  const empCode = employeeCost.resolveScopedEmployee({
+    session: req.session, scope: auth.scopeOf(req.session), requestedEmp: req.query.emp,
+  });
+  const isCeo = auth.isCeoActor(req.session);
+  const grant = catalogCostColumnGrants.readFor(req.session.emp_code);
+  // Chưa được cấp gì thì dừng ngay: không gọi DataHub, không tốn một truy vấn nào.
+  if (!isCeo && !grant.columns.length) {
+    return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NOT_GRANTED' });
+  }
+  if (!empCode) return res.json({ period: uiPeriod, empCode: '', columns: [], pairs: [], grant, reason: 'NO_EMPLOYEE' });
+
+  const hubPeriod = catalogManagement.toHubPeriod(uiPeriod);
+  let catalogRows = [];
+  try {
+    const snapshot = await catalogManagement.getSnapshot(hubPeriod);
+    catalogRows = snapshot.catalog || snapshot.rows || [];
+  } catch { catalogRows = []; }
+
+  const payload = await employeeCost.getForSession(
+    { session: req.session, scope: auth.scopeOf(req.session), requestedEmp: empCode },
+    { from: month, to: month, auditEvent: 'catalog_cost_rates' },
+  );
+  const period = Array.isArray(payload?.periods) ? payload.periods.find((item) => item.period === month) : null;
+  const sourceColumns = (period?.columns || payload?.columns || []).filter((column) => catalogCostColumnGrants.isAllowedColumn(column?.key));
+  const visibleKeys = catalogCostColumnGrants.visibleColumns(
+    { emp_code: req.session.emp_code, isCeo }, sourceColumns.map((column) => column.key),
+  );
+  const columns = sourceColumns.filter((column) => visibleKeys.includes(String(column.key).toLowerCase()));
+  if (!columns.length) {
+    return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NO_COLUMN_GRANTED' });
+  }
+
+  const catalogIndex = employeeCost.buildProductCatalogIndex(catalogRows);
+  const lookup = employeeCost.buildCostLookup(period?.rows || payload?.rows || [], columns, catalogIndex);
+  const pairs = [];
+  for (const [key, source] of lookup) {
+    const [unitCode, productCode] = key.split('\u001f');
+    if (!isCeo && !catalogCostColumnGrants.unitInScope(grant, unitCode)) continue;
+    const rates = {};
+    for (const column of columns) {
+      const raw = source?.[column.key];
+      // Thiếu % ⇒ null (màn hình ra '—' + chỉ đường sang tab "Mặt hàng thiếu %").
+      // TUYỆT ĐỐI không suy 0% — `Number(null) === 0` là cái bẫy đã cắn nhiều lần.
+      rates[column.key] = raw == null || raw === '' || !Number.isFinite(Number(raw)) ? null : Number(raw);
+    }
+    pairs.push({ unitCode, productCode, rates });
+  }
+  pairs.sort((a, b) => a.unitCode.localeCompare(b.unitCode) || a.productCode.localeCompare(b.productCode));
+  return res.json({
+    period: uiPeriod, empCode, grant,
+    columns: columns.map((column) => ({ key: column.key, label: column.label, annual: !!column.annual })),
+    pairs,
+    rateStale: period?.rateStale === true,
+    rateStaleNote: period?.rateStaleNote || '',
+  });
+}));
+
 /* Ai cũng gọi được, nhưng CHỈ nhận phần của chính mình — không nhận tham số emp,
    nên không có đường hỏi quyền của người khác. */
 router.get('/catalog-management/cost-columns/my-grant', auth.requireAuth, (req, res) => {
