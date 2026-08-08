@@ -602,10 +602,7 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
           <div className="table-scroll"><table className="catalog-table catalog-table-simple">
             <thead><tr>
               <th>Nhân viên</th>
-              {panel.columns.map((column) => <th key={column.key}
-                title={column.viewOnly ? `${column.label} — cột CHỈ ĐỂ XEM, không cộng vào tiền của ai` : column.label}>
-                {column.key.toUpperCase()}{column.viewOnly && <small className="catalog-col-viewonly">chỉ xem</small>}
-              </th>)}
+              {panel.columns.map((column) => <th key={column.key} title={column.label}>{column.key.toUpperCase()}</th>)}
               <th>Đang cấp</th>
             </tr></thead>
             <tbody>{panel.rows.map((row) => <tr key={row.empCode} className={row.dirty ? 'is-dirty' : ''}>

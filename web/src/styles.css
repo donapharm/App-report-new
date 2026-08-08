@@ -2423,7 +2423,6 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .catalog-scope-list label { display:flex; align-items:center; gap:8px; }
 .catalog-scope-warn { display:block; color:#b4520f; font-size:11px; margin-top:6px; }
 .catalog-scope-actions { display:flex; justify-content:flex-end; margin-top:8px; }
-.catalog-col-viewonly { display:block; font-size:9px; font-weight:600; opacity:.85; }
 
 /* ── Menu riêng "Thành tiền C32/C47" (Đợt 3) ───────────────────────────────── */
 .cost-amounts-page { display:grid; gap:12px; }

@@ -113,3 +113,15 @@ test('bản ghi v1 cũ (mảng cột) vẫn đọc được — mỗi cột nh�
   const panel = panelOf([{ empCode: 'DN001', columns: ['c41', 'c43'], units: ['120.HTNT'] }]);
   assert.deepEqual(rowOf(panel, 'DN001').columns, { c41: [ALL_UNITS], c43: [ALL_UNITS] });
 });
+
+test('tra nhóm KHÔNG phân biệt hoa/thường — đơn vị có nhóm không bị báo nhầm "chưa có nhóm"', () => {
+  // Lỗi CEO chụp 08/08: backend trả bảng tra theo mã gốc ('001.BVĐK Đồng Nai'),
+  // panel giữ mã đã viết hoa ⇒ tra trượt, báo 28 đơn vị "chưa nhận diện được nhóm"
+  // trong khi chúng phân giải ra BV bình thường.
+  const { groups, ungroupedUnits } = groupsForUnits(
+    ['001.BVĐK ĐỒNG NAI'],
+    { '001.BVĐK Đồng Nai': { key: 'BV', label: 'BV · Bệnh viện' } },
+  );
+  assert.deepEqual(ungroupedUnits, [], 'không được báo nhầm là chưa có nhóm');
+  assert.deepEqual(groups.map((g) => g.key), ['BV']);
+});
