@@ -4,7 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 
 const client = require('../src/appSaleReconciliation');
@@ -340,17 +339,11 @@ test('shared App Sale contract matches the exact live transport, auth, errors an
   assert.deepEqual(Object.keys(contract.success.schema.rows[0]), client.ROW_KEYS);
 });
 
-test('authoritative contract env override is exercised and fails clearly when missing', () => {
-  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'app-sale-contract-'));
-  try {
-    const overridePath = path.join(temporaryDirectory, 'APP_SALE_CONTRACT.json');
-    fs.copyFileSync(path.resolve(__dirname, '../../contracts/app-sale-reconciliation-v2.json'), overridePath);
-    process.env.APP_SALE_CONTRACT_PATH = overridePath;
-    assert.equal(canonicalContractPath(), overridePath);
-    assert.equal(loadAuthoritativeContract().contract, 'app-sale-reconciliation-v2');
-    process.env.APP_SALE_CONTRACT_PATH = path.join(temporaryDirectory, 'missing.json');
-    assert.throws(loadAuthoritativeContract, /authoritative App Sale contract is required but missing/);
-  } finally {
-    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
-  }
+test('authoritative contract env override is exercised read-only and fails clearly when missing', () => {
+  const overridePath = path.resolve(__dirname, '../../contracts/app-sale-reconciliation-v2.json');
+  process.env.APP_SALE_CONTRACT_PATH = overridePath;
+  assert.equal(canonicalContractPath(), overridePath);
+  assert.equal(loadAuthoritativeContract().contract, 'app-sale-reconciliation-v2');
+  process.env.APP_SALE_CONTRACT_PATH = path.resolve(__dirname, '../../contracts/missing-app-sale-contract.json');
+  assert.throws(loadAuthoritativeContract, /authoritative App Sale contract is required but missing/);
 });
