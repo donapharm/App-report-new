@@ -65,6 +65,38 @@ test('NV chỉ thấy: cột được cấp × đơn vị trong phạm vi × dò
   assert.deepEqual(result.rows.map((r) => r.unitCode), ['120.HTNT'], 'đơn vị ngoài phạm vi và dòng của DN002 phải biến mất');
 });
 
+test('hai NV trùng đơn vị × sản phẩm không ghi đè/lộ tỷ lệ hoặc mã NV qua API/XLSX builder', async () => {
+  const store = memStore();
+  await sync.syncPeriod({
+    period: '2026-08', empCodes: ['DN001', 'DN002'], actor: 'CEO',
+    fetchImpl: async (emp) => ({
+      outcome: 'ok',
+      payload: { periods: [{
+        period: '2026-08', columns: COLS,
+        rows: [row('120.HTNT', 'G1.TRUNG', { c41: emp === 'DN001' ? 1 : 9, c43: 3 })],
+      }] },
+    }),
+    store, now: () => '2026-08-08T16:00:00.000+07:00',
+  });
+  grants.setGrant('DN001', { columns: { c41: ['HTNT'] } }, { actor: 'CEO', store });
+  grants.setGrant('DN002', { columns: { c41: ['HTNT'] } }, { actor: 'CEO', store });
+
+  const dn001 = table.buildTable({ period: '2026-08', session: { emp_code: 'DN001', isCeo: false }, store });
+  assert.equal(dn001.rows.length, 1);
+  assert.equal(dn001.rows[0].rates.c41, 1, 'DN001 phải giữ tỷ lệ của chính DN001, không bị DN002 ghi đè');
+  assert.equal(dn001.rows[0].employeeCode, 'DN001');
+  assert.deepEqual(dn001.rows[0].employees, ['DN001'], 'payload NV chỉ được trả chính mã đang đăng nhập');
+
+  const dn002 = table.buildTable({ period: '2026-08', session: { emp_code: 'DN002', isCeo: false }, store });
+  assert.equal(dn002.rows.length, 1);
+  assert.equal(dn002.rows[0].rates.c41, 9);
+  assert.deepEqual(dn002.rows[0].employees, ['DN002']);
+
+  const ceo = table.buildTable({ period: '2026-08', session: CEO, store });
+  assert.equal(ceo.rows.length, 2, 'CEO thấy hai partition NV riêng, không gộp mơ hồ một cặp');
+  assert.deepEqual(ceo.rows.map((item) => [item.employeeCode, item.rates.c41]), [['DN001', 1], ['DN002', 9]]);
+});
+
 test('mũi dò: nguồn đổi % ⇒ differs=true; nguồn chết ⇒ GIỮ kết luận cũ, không xoá huy hiệu', async () => {
   const store = memStore();
   await seed(store);

@@ -34,6 +34,7 @@ function buildTable({ period, session, store = persist } = {}) {
   if (!entry) return { period, available: false, reason: 'CHUA_DONG_BO', columns: [], rows: [], fetchedAt: null };
 
   const isCeo = !!session?.isCeo;
+  const sessionEmpCode = upper(session?.emp_code);
   const grant = catalogCostColumnGrants.readFor(session?.emp_code, { store });
   const template = employeeCostTemplates.resolveTemplate(session?.emp_code || '');
   // Nhãn cột lấy từ hợp đồng cục bộ, gồm cả cột chỉ-để-xem (C38/C42 — CEO chốt 08/08).
@@ -53,8 +54,12 @@ function buildTable({ period, session, store = persist } = {}) {
   }
   const columnSet = new Set();
   const pairMap = new Map();
-  for (const empCode of Object.keys(raw.employees || {}).sort()) {
-    const kept = raw.employees[empCode];
+  for (const rawEmpCode of Object.keys(raw.employees || {}).sort()) {
+    const empCode = upper(rawEmpCode);
+    // Dựng view NV từ đúng partition của chính họ ngay từ đầu. Không gộp rồi mới
+    // lọc vì hai NV có thể cùng phụ trách một cặp nhưng mang tỷ lệ khác nhau.
+    if (!isCeo && empCode !== sessionEmpCode) continue;
+    const kept = raw.employees[rawEmpCode];
     for (const column of kept.columns || []) {
       const key = lower(column?.key ?? column);
       if (catalogCostColumnGrants.isAllowedColumn(key) && contracted.has(key)) columnSet.add(key);
@@ -63,8 +68,11 @@ function buildTable({ period, session, store = persist } = {}) {
       const unit = upper(row.unit_code ?? row.c7);
       const product = upper(row.c5 ?? row.product_code);
       if (!unit || !product) continue;
-      const key = `${unit}\u001f${product}`;
+      // Giữ chiều NV trong căn cước dòng. Nếu bỏ chiều này, tỷ lệ của NV xử lý sau
+      // sẽ ghi đè NV trước khi họ trùng đơn vị × sản phẩm.
+      const key = `${empCode}\u001f${unit}\u001f${product}`;
       const current = pairMap.get(key) || {
+        employeeCode: empCode,
         unitCode: unit,
         productCode: product,
         productName: text(row.c16 ?? row.product_name) || product,
@@ -98,7 +106,10 @@ function buildTable({ period, session, store = persist } = {}) {
       unitCode: pair.unitCode,
       productCode: pair.productCode,
       productName: pair.productName,
-      employees: [...pair.employees].sort(),
+      employeeCode: pair.employeeCode,
+      // Giữ field mảng để tương thích UI/XLSX, nhưng một dòng chỉ được mang đúng
+      // một NV. Với session NV, payload vì thế không thể lộ mã đồng phụ trách.
+      employees: [pair.employeeCode],
       // V2 (CEO 08/08): quyền theo ma trận CỘT × NHÓM ĐƠN VỊ ⇒ che TỪNG Ô. Ô ngoài
       // phạm vi trả null y như thiếu % — không lộ cả sự tồn tại của số.
       // Thiếu % thật cũng ⇒ null ⇒ '—' trên màn. Không suy 0.
@@ -108,7 +119,9 @@ function buildTable({ period, session, store = persist } = {}) {
       ])),
     });
   }
-  rows.sort((a, b) => a.unitCode.localeCompare(b.unitCode, 'vi') || a.productCode.localeCompare(b.productCode, 'vi'));
+  rows.sort((a, b) => a.unitCode.localeCompare(b.unitCode, 'vi')
+    || a.productCode.localeCompare(b.productCode, 'vi')
+    || a.employeeCode.localeCompare(b.employeeCode, 'vi'));
   return { period, available: true, columns, rows, fetchedAt: entry.fetchedAt, fetchedBy: entry.fetchedBy, pairCount: rows.length };
 }
 
