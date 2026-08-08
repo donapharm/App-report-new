@@ -7,7 +7,7 @@ import { bangkokToday } from '../revenueCoverage.js';
 import { formatDateTime } from '../util.js';
 import {
   ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
-  grantSavePayload, grantSummary, ratesLookup, setUnits, toggleColumn,
+  grantSavePayload, grantSummary, ratesLookup, setColumnGroups, toggleColumn,
 } from '../catalogCostGrantsModel.js';
 import { pct } from '../util.js';
 
@@ -461,54 +461,55 @@ function ReportPanel({ period, rows }) {
   </div>;
 }
 
+/** Nhật ký: quyền cũ (mảng cột) lẫn quyền mới (ma trận cột→nhóm) đều đọc được. */
+function auditColumnsText(value) {
+  if (Array.isArray(value)) return value.map((c) => String(c).toUpperCase()).join('+') || '(không thấy gì)';
+  const entries = Object.entries(value || {}).sort(([a], [b]) => a.localeCompare(b));
+  if (!entries.length) return '(không thấy gì)';
+  return entries.map(([key, scope]) => `${key.toUpperCase()}(${Array.isArray(scope) && scope.includes(ALL_UNITS) ? 'mọi nhóm' : (scope || []).join(',')})`).join(' + ');
+}
+
 /**
- * Ô "PHẠM VI ĐƠN VỊ" — chọn NHIỀU đơn vị (CEO hỏi 08/08: *"chỗ các đơn vị anh chưa
- * hiểu em sẽ cho chọn như thế nào đây"*).
+ * Ô PHẠM VI NHÓM CỦA MỘT CỘT (CEO chốt 08/08: *"phải có phân quyền chi tiết cho mỗi
+ * NV được hiển thị chi tiết cho loại cột C nào, cho loại mã đơn vị nào... phân quyền
+ * sẽ đi theo NHÓM mã đơn vị"*).
  *
- * Trước đây là một ô select: chỉ chọn được HOẶC tất cả HOẶC đúng MỘT đơn vị — với
- * NV phụ trách 164 đơn vị thì vừa khó hiểu vừa không dùng được. Nay:
- *  · mặc định "Mọi đơn vị đang phụ trách" (theo bảng phân công của chính NV đó);
- *  · muốn hẹp lại thì mở bảng, tick từng đơn vị, có ô tìm kiếm;
- *  · CHỈ hiện đơn vị NV thực sự phụ trách — phạm vi chỉ THU HẸP, không nới ra được
- *    (model `setUnits` lọc, backend chặn độc lập lần nữa).
+ * Mỗi Ô CỘT của mỗi NV có bộ chọn nhóm RIÊNG: tick cột ⇒ mặc định "mọi nhóm";
+ * bấm nhãn dưới checkbox để thu hẹp theo nhóm (BV · TTYT · PKĐK · NT...). Cấp theo
+ * nhóm là cấp CẢ nhóm — hai đơn vị cùng nhóm không bao giờ lệch nhau, đúng ghi chú
+ * của CEO. Danh sách chỉ gồm nhóm NV thực sự phụ trách (model lọc, backend chặn lại).
  */
-function UnitScopePicker({ row, onChange }) {
+function ColumnGroupScope({ row, columnKey, onChange }) {
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const disabled = !row.columns.length;
-  const all = row.units.includes(ALL_UNITS) || !row.units.length;
-  const matches = useMemo(() => {
-    const q = query.trim().toUpperCase();
-    return q ? row.availableUnits.filter((unit) => unit.includes(q)) : row.availableUnits;
-  }, [row.availableUnits, query]);
-  const summary = all ? `Mọi đơn vị đang phụ trách (${row.availableUnits.length})` : `${row.units.length} đơn vị được chọn`;
-  const toggle = (unit) => {
-    const current = all ? [] : row.units;
-    onChange(current.includes(unit) ? current.filter((item) => item !== unit) : [...current, unit]);
+  const scope = row.columns[columnKey];
+  if (!scope) return null; // cột chưa tick ⇒ không có gì để chọn
+  const all = scope.includes(ALL_UNITS);
+  const toggleGroup = (groupKey) => {
+    const current = all ? row.availableGroups.map((group) => group.key) : scope;
+    onChange(current.includes(groupKey) ? current.filter((item) => item !== groupKey) : [...current, groupKey]);
   };
-  return <div className="catalog-unit-picker">
-    <button type="button" className="catalog-unit-summary" disabled={disabled}
-      aria-expanded={open} aria-label={`Phạm vi đơn vị của ${row.empCode}`}
+  return <div className="catalog-scope">
+    <button type="button" className="catalog-scope-summary" aria-expanded={open}
+      aria-label={`Phạm vi nhóm của cột ${columnKey.toUpperCase()} cho ${row.empCode}`}
       onClick={() => setOpen((value) => !value)}>
-      <span>{disabled ? 'Bật cột % trước đã' : summary}</span><i aria-hidden="true">▾</i>
+      {all ? 'mọi nhóm' : `${scope.length} nhóm`}
     </button>
-    {open && !disabled && <div className="catalog-unit-pop">
-      <label className="catalog-unit-all">
+    {open && <div className="catalog-scope-pop">
+      <b>{columnKey.toUpperCase()} của {row.empCode} — thấy ở nhóm nào?</b>
+      <label className="catalog-scope-all">
         <input type="checkbox" checked={all} onChange={() => onChange(all ? [] : [ALL_UNITS])} />
-        <b>Mọi đơn vị đang phụ trách ({row.availableUnits.length})</b>
+        Mọi nhóm đang phụ trách ({row.availableGroups.length})
       </label>
-      <p className="catalog-unit-hint">Bỏ tick ở trên rồi chọn từng đơn vị nếu muốn cho xem hẹp hơn.</p>
-      <input className="catalog-unit-search" value={query} onChange={(e) => setQuery(e.target.value)}
-        placeholder="Tìm mã đơn vị…" aria-label={`Tìm đơn vị của ${row.empCode}`} />
-      <div className="catalog-unit-list">
-        {matches.map((unit) => <label key={unit}>
-          <input type="checkbox" checked={!all && row.units.includes(unit)} onChange={() => toggle(unit)} />
-          {unit}
+      <div className="catalog-scope-list">
+        {row.availableGroups.map((group) => <label key={group.key}>
+          <input type="checkbox" checked={all || scope.includes(group.key)} onChange={() => toggleGroup(group.key)} />
+          {group.label} <small>({group.unitCount} đơn vị)</small>
         </label>)}
-        {!matches.length && <div className="muted">Không có đơn vị nào khớp.</div>}
       </div>
-      <div className="catalog-unit-actions">
-        <button type="button" className="btn ghost" onClick={() => onChange([ALL_UNITS])}>Chọn tất cả</button>
+      {!!row.ungroupedUnits.length && <p className="catalog-scope-warn">
+        ⚠ {row.ungroupedUnits.length} đơn vị chưa nhận diện được nhóm ({row.ungroupedUnits.slice(0, 3).join(', ')}{row.ungroupedUnits.length > 3 ? '…' : ''}) — chỉ "Mọi nhóm" mới phủ tới.
+      </p>}
+      <div className="catalog-scope-actions">
         <button type="button" className="btn" onClick={() => setOpen(false)}>Xong</button>
       </div>
     </div>}
@@ -534,10 +535,16 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
   const load = async () => {
     setLoading(true); setError(''); setMessage('');
     try {
-      const [grants, rates] = await Promise.allSettled([api.catalogCostGrants(), api.catalogCostRates()]);
+      // Bảng "đơn vị → nhóm" hỏi backend MỘT lần cho các mã distinct — cùng bộ
+      // nhóm màn Chi phí đang dùng, không chép luật tách nhóm sang frontend.
+      const distinctUnits = [...new Set((catalogRows || []).map((row) => String(row?.unit_code || '').trim()).filter(Boolean))];
+      const [grants, rates, unitGroups] = await Promise.allSettled([
+        api.catalogCostGrants(), api.catalogCostRates(), api.catalogCostUnitGroups(distinctUnits),
+      ]);
       if (grants.status !== 'fulfilled') throw new Error(grants.reason?.message || 'Không tải được phân quyền');
       const columns = rates.status === 'fulfilled' ? (rates.value.columns || []) : [];
-      setPanel(buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees }));
+      const groupsByUnit = unitGroups.status === 'fulfilled' ? (unitGroups.value.byUnit || {}) : {};
+      setPanel(buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees, groupsByUnit }));
       setAudit(grants.value.audit || []);
     } catch (e) { setError(e.message); setPanel(null); }
     finally { setLoading(false); }
@@ -561,7 +568,7 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
     <div className="catalog-grants-head">
       <div>
         <div className="section-head">🔐 Phân quyền cột % chi phí</div>
-        <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo đơn vị họ phụ trách.</p>
+        <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo <b>NHÓM đơn vị</b> (BV · TTYT · PKĐK · NT…) — mỗi cột một phạm vi nhóm riêng, cấp cho nhóm nào là cả nhóm đó cùng thấy.</p>
       </div>
       <button type="button" className="btn secondary" aria-expanded={open} aria-controls="catalog-grants-body" onClick={() => setOpen((v) => !v)}>
         {open ? 'Thu gọn' : 'Mở phân quyền'}
@@ -598,19 +605,21 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
                 title={column.viewOnly ? `${column.label} — cột CHỈ ĐỂ XEM, không cộng vào tiền của ai` : column.label}>
                 {column.key.toUpperCase()}{column.viewOnly && <small className="catalog-col-viewonly">chỉ xem</small>}
               </th>)}
-              <th>Phạm vi đơn vị</th><th>Đang cấp</th>
+              <th>Đang cấp</th>
             </tr></thead>
             <tbody>{panel.rows.map((row) => <tr key={row.empCode} className={row.dirty ? 'is-dirty' : ''}>
-              <td><b>{row.empCode}</b>{row.name ? <small>{row.name}</small> : null}</td>
-              {panel.columns.map((column) => <td key={column.key} className="catalog-grants-cell">
-                <input type="checkbox" aria-label={`${column.key.toUpperCase()} cho ${row.empCode}`}
-                  checked={row.columns.includes(column.key)}
-                  onChange={() => setPanel((cur) => toggleColumn(cur, row.empCode, column.key))} />
-              </td>)}
-              <td>
-                <UnitScopePicker row={row}
-                  onChange={(units) => setPanel((cur) => setUnits(cur, row.empCode, units))} />
+              <td><b>{row.empCode}</b>{row.name ? <small>{row.name}</small> : null}
+                {!!row.ungroupedUnits.length && <small className="catalog-scope-warn" title={row.ungroupedUnits.join(', ')}>⚠ {row.ungroupedUnits.length} ĐV chưa có nhóm</small>}
               </td>
+              {panel.columns.map((column) => <td key={column.key} className="catalog-grants-cell">
+                {/* Tick cột ⇒ mặc định mọi nhóm; nhãn dưới checkbox mở bộ chọn nhóm
+                    RIÊNG CỦA CỘT NÀY (ma trận NV × cột × nhóm — CEO chốt 08/08). */}
+                <input type="checkbox" aria-label={`${column.key.toUpperCase()} cho ${row.empCode}`}
+                  checked={!!row.columns[column.key]}
+                  onChange={() => setPanel((cur) => toggleColumn(cur, row.empCode, column.key))} />
+                <ColumnGroupScope row={row} columnKey={column.key}
+                  onChange={(groups) => setPanel((cur) => setColumnGroups(cur, row.empCode, column.key, groups))} />
+              </td>)}
               <td><small>{grantSummary(row)}</small></td>
             </tr>)}</tbody>
           </table></div>
@@ -625,8 +634,8 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
           <h4>Nhật ký thay đổi</h4>
           {audit.slice(0, 10).map((item, index) => <div key={`${item.at}-${index}`}>
             <span>{formatDateTime(item.at)}</span> · <b>{item.actor}</b> đổi cho <b>{item.empCode}</b>:
-            {' '}{(item.before?.columns || []).map((c) => c.toUpperCase()).join('+') || '(không thấy gì)'}
-            {' → '}{(item.after?.columns || []).map((c) => c.toUpperCase()).join('+') || '(không thấy gì)'}
+            {' '}{auditColumnsText(item.before?.columns)}
+            {' → '}{auditColumnsText(item.after?.columns)}
           </div>)}
         </div>}
       </>}

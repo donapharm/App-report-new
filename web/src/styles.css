@@ -2499,25 +2499,24 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .catalog-rates-meta { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; font-size:12px; color:var(--muted); }
 .catalog-rates-meta input { flex:1 1 240px; min-width:200px; padding:6px 10px; border:1px solid var(--line); border-radius:8px; }
 
-/* ── Ô "Phạm vi đơn vị" nhiều lựa chọn (CEO hỏi 08/08) ─────────────────────── */
-.catalog-unit-picker { position:relative; }
-.catalog-unit-summary {
-  display:flex; align-items:center; justify-content:space-between; gap:8px;
-  width:100%; min-width:180px; padding:6px 10px; text-align:left;
-  border:1px solid var(--line); border-radius:8px; background:#fff; cursor:pointer; font-size:12px;
+/* ── Phạm vi NHÓM theo TỪNG CỘT trong menu phân quyền v2 (CEO chốt 08/08) ───── */
+.catalog-grants-cell { text-align:center; vertical-align:top; }
+.catalog-scope { position:relative; margin-top:2px; }
+.catalog-scope-summary {
+  border:1px solid var(--line); border-radius:999px; background:#f4f8fd; cursor:pointer;
+  font-size:10px; padding:1px 8px; color:#0d5c96; white-space:nowrap;
 }
-.catalog-unit-summary:disabled { background:#f2f5f9; color:var(--muted); cursor:not-allowed; }
-.catalog-unit-pop {
-  position:absolute; z-index:40; top:calc(100% + 4px); left:0; width:min(320px,80vw);
-  padding:10px; border:1px solid #b9c9da; border-radius:10px; background:#fff;
-  box-shadow:0 8px 24px rgba(11,61,112,.18);
+.catalog-scope-pop {
+  position:absolute; z-index:40; top:calc(100% + 4px); left:50%; transform:translateX(-50%);
+  width:min(300px,80vw); padding:10px; border:1px solid #b9c9da; border-radius:10px;
+  background:#fff; box-shadow:0 8px 24px rgba(11,61,112,.18); text-align:left; font-size:12px;
 }
-.catalog-unit-all { display:flex; align-items:center; gap:8px; font-size:12px; }
-.catalog-unit-hint { margin:6px 0; font-size:11px; color:var(--muted); }
-.catalog-unit-search { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:8px; font-size:12px; }
-.catalog-unit-list { max-height:220px; overflow-y:auto; margin:8px 0; display:grid; gap:4px; }
-.catalog-unit-list label { display:flex; align-items:center; gap:8px; font-size:12px; padding:2px 0; }
-.catalog-unit-actions { display:flex; justify-content:space-between; gap:8px; }
+.catalog-scope-pop > b { display:block; margin-bottom:6px; }
+.catalog-scope-all { display:flex; align-items:center; gap:8px; font-weight:700; margin-bottom:6px; }
+.catalog-scope-list { display:grid; gap:4px; max-height:200px; overflow-y:auto; }
+.catalog-scope-list label { display:flex; align-items:center; gap:8px; }
+.catalog-scope-warn { display:block; color:#b4520f; font-size:11px; margin-top:6px; }
+.catalog-scope-actions { display:flex; justify-content:flex-end; margin-top:8px; }
 .catalog-col-viewonly { display:block; font-size:9px; font-weight:600; opacity:.85; }
 
 /* ── Menu riêng "Thành tiền C32/C47" (Đợt 3) ───────────────────────────────── */

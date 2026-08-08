@@ -52,7 +52,8 @@ test('CEO cấp được C38/C42 cho nhân viên như cột thường', () => {
   const data = {};
   const store = { load: (n, d) => data[n] ?? d, save: (n, v) => { data[n] = v; } };
   const saved = grants.setGrant('DN001', { columns: ['c38', 'c42'], units: ['*'] }, { actor: 'CEO', store });
-  assert.deepEqual(saved.columns, ['c38', 'c42']);
+  assert.deepEqual(saved.columnKeys, ['c38', 'c42']);
+  assert.deepEqual(saved.columns, { c38: ['*'], c42: ['*'] });
   assert.deepEqual(
     grants.visibleColumns({ emp_code: 'DN001', isCeo: false }, ['c36', 'c38', 'c42'], { store }),
     ['c38', 'c42'],

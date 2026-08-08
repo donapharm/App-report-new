@@ -417,6 +417,8 @@ export const api = {
   catalogCostRatesSync: (period) => req('POST', '/catalog-management/cost-rates/sync', { period }),
   catalogCostRatesLocalStatus: (params = {}) => req('GET', '/catalog-management/cost-rates/local-status?' + new URLSearchParams(params).toString()),
   catalogCostRatesTable: (params = {}) => req('GET', '/catalog-management/cost-rates/table?' + new URLSearchParams(params).toString()),
+  // Bảng tra "mã đơn vị → nhóm" cho menu phân quyền v2 — backend phân giải, CEO-only.
+  catalogCostUnitGroups: (units) => req('POST', '/catalog-management/cost-columns/unit-groups', { units }),
   // Menu riêng "Thành tiền C32/C47" — backend tự chặn (mặc định chỉ CEO; NV cần công tắc).
   costAmounts: (params = {}) => req('GET', '/catalog-management/cost-amounts?' + new URLSearchParams(params).toString()),
   costAmountsVisibility: () => req('GET', '/catalog-management/cost-amounts/visibility'),
