@@ -585,9 +585,25 @@ function EmployeeGrantDetail({ row, columns, onBack, onChange }) {
     {!row.availableGroups.length ? <div className="catalog-alert error" role="alert">
       Nhân viên này chưa có đơn vị nào nhận diện được nhóm — chưa cấp theo nhóm được.
     </div> : <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-grant-grid">
+      {/* Mỗi cột có nút bật/tắt CẢ CỘT, cân đối với nút "Chọn hết" ở cuối mỗi hàng.
+          CEO 09/08/2026: "cho chọn hết tất cả theo cột, ví dụ DN001 chọn hết tất cả
+          cột C41, thay vì phải đi tích từng dòng một."
+          ‼ Việc này vốn đã làm được bằng ô tích ở hàng "Mọi nhóm", nhưng nhãn đó
+          không đọc ra thành thao tác nên không ai thấy. Nút này CHÍNH LÀ ô tích đó
+          (cùng gọi `setColumnAllGroups`), chỉ là nói bằng tiếng người. */}
       <thead><tr>
         <th>Nhóm mã đơn vị</th>
-        {columns.map((column) => <th key={column.key} title={column.label}>{column.key.toUpperCase()}</th>)}
+        {columns.map((column) => {
+          const columnOn = isColumnAllGroups(row, column.key);
+          return <th key={column.key} title={column.label} className="catalog-grant-colhead">
+            <span>{column.key.toUpperCase()}</span>
+            <button type="button" className="btn ghost catalog-grant-colbtn"
+              title={columnOn ? `Bỏ ${column.key.toUpperCase()} ở mọi nhóm` : `Cấp ${column.key.toUpperCase()} ở mọi nhóm, gồm cả nhóm mới sau này`}
+              onClick={() => set((cur) => setColumnAllGroups(cur, row.empCode, column.key, !columnOn))}>
+              {columnOn ? 'Bỏ cả cột' : 'Chọn cả cột'}
+            </button>
+          </th>;
+        })}
         <th>Cả hàng</th>
       </tr></thead>
       <tbody>

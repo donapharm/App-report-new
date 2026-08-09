@@ -89,6 +89,23 @@ test('thao tác nhanh: hàng "Mọi nhóm" bật cả cột, nút cuối hàng b
   assert.match(detail, /Tắt hết cho NV này/);
 });
 
+test('thao tác nhanh: mỗi CỘT có nút bật/tắt cả cột ngay dưới tên cột (CEO 09/08)', () => {
+  // CEO: "cho chọn hết tất cả theo cột, ví dụ DN001 chọn hết tất cả cột C41, thay vì
+  // phải đi tích từng dòng một." Việc này vốn làm được bằng ô tích hàng "Mọi nhóm",
+  // nhưng nhãn đó không đọc ra thành thao tác nên không ai thấy.
+  const detail = page.slice(page.indexOf('function EmployeeGrantDetail'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  assert.match(detail, /catalog-grant-colbtn/);
+  assert.match(detail, /columnOn \? 'Bỏ cả cột' : 'Chọn cả cột'/);
+  // Dùng LẠI đúng hàm của ô tích "Mọi nhóm" — hai lối vào, một nguồn sự thật.
+  assert.match(detail, /setColumnAllGroups\(cur, row\.empCode, column\.key, !columnOn\)/);
+  assert.match(detail, /const columnOn = isColumnAllGroups\(row, column\.key\)/);
+});
+
+test('nút cả cột nói rõ nó phủ cả nhóm mới sau này — không để CEO tưởng chỉ 114 nhóm hiện có', () => {
+  const detail = page.slice(page.indexOf('function EmployeeGrantDetail'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  assert.match(detail, /gồm cả nhóm mới sau này`/);
+});
+
 test('đơn vị chưa nhận diện được nhóm vẫn được NÓI RA trong màn chi tiết', () => {
   const detail = page.slice(page.indexOf('function EmployeeGrantDetail'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
   assert.match(detail, /row\.ungroupedUnits\.length/);

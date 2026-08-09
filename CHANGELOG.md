@@ -1,3 +1,17 @@
+### 2026-08-09 10:47 (giờ VN) — 🔘 Nút "Chọn cả cột" trong màn phân quyền
+
+CEO: *"thêm cho tôi chọn hết tất cả theo cột, ví dụ NV DN001 chọn hết tất cả cột C41, thay vì phải đi tích từng dòng một."*
+
+**Việc này màn hình ĐÃ LÀM ĐƯỢC** — chính là ô tích ở hàng **"Mọi nhóm"** trên cùng. **Nhưng CEO không nhận ra, và đó là lỗi thiết kế chứ không phải lỗi người dùng:** nhãn "Mọi nhóm" mô tả một *phạm vi*, không đọc ra thành một *thao tác*. Trong khi cuối mỗi hàng lại có nút chữ rõ ràng "Chọn hết" — bảng cân đối cho hàng mà bỏ trống cho cột, nên mắt không tìm sang.
+
+**Đã thêm nút "Chọn cả cột / Bỏ cả cột" ngay dưới tên mỗi cột**, cân đối với nút cuối hàng. Nút gọi **đúng cùng một hàm** `setColumnAllGroups` với ô tích "Mọi nhóm" — hai lối vào, một nguồn sự thật, không có đường thứ hai để lệch trạng thái.
+
+**Giữ nguyên ngữ nghĩa `'*'`:** cấp cả cột nghĩa là **mọi nhóm, kể cả nhóm mới phát sinh sau này** — không phải "114 nhóm đang có". Chọn vậy vì đúng ý CEO ("DN001 xem C41 ở mọi nơi"): nếu lưu thành danh sách 114 nhóm cứng thì bệnh viện mới mở, DN001 lại mất quyền mà không ai biết. Nhãn gợi ý trên nút nói thẳng điều này.
+
+Web 310/310 (+2) · build sạch.
+
+---
+
 ### 2026-08-09 10:32 (giờ VN) — 🏷️ Huy hiệu Data Hub hiện SỐ HIỆU BẢN + ngày · thêm nút "Đồng bộ lại"
 
 CEO: *"đề nghị chỗ 'Data Hub đã kết nối' thêm vào đó bản Version bao nhiêu, kèm ngày tháng năm, ví dụ hiện tại đang bản V31.4 để nhìn vào biết ngay"* + *"có thêm nút nhấn đồng bộ lại từ app DataHub"*.
