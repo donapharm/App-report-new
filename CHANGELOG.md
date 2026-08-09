@@ -1,3 +1,25 @@
+### 2026-08-09 09:14 (giờ VN) — 📐 Nguyên tắc bề rộng cột + chọn 1/2/3 dòng/ô; vá hồi quy `max-content`
+
+CEO chụp màn 09/08, bốn điểm:
+
+**① Ô "Hoạt chất + Hàm lượng" kéo dài gần hết màn — HỒI QUY do Claude gây ra hôm qua.** Bản vá "bỏ bề rộng theo vị trí" dùng `min-width:max-content`, nghĩa là *"bảng rộng bằng dòng chữ dài nhất, không xuống dòng"* ⇒ cột hoạt chất nở ra ôm trọn câu dài nhất. Bỏ hẳn `max-content`.
+
+**④ Nguyên tắc bề rộng (CEO: "cột thì dư quá, cột thì thiếu quá"):** ba loại cột, gắn theo **LOẠI NỘI DUNG bằng class** (không đánh số vị trí — số cột đổi theo quyền từng người):
+- cột chữ dài (tên thuốc · hoạt chất) `.catalog-col-text`: **150–260px**, tràn thì xuống dòng rồi cắt
+- cột số/tiền/% `.catalog-money`: **82–120px**, không xuống dòng
+- cột mã/nhãn ngắn: **64–150px**
+Bảng có nền **1400px** rồi cuộn ngang, không ép vừa màn cũng không nở theo chữ.
+
+**① (tiếp) Chọn số dòng/ô:** thêm ô **"Dòng/ô: 1 · 2 · 3"** ở thanh lọc của **cả hai bảng**, truyền xuống bằng biến CSS `--catalog-cell-lines`, **nhớ lựa chọn** trong trình duyệt.
+
+**③ "Từ kỳ" gây hiểu nhầm** (CEO thấy 07.2026 khi đang xem kỳ 08.2026): đổi nhãn thành **"Phụ trách từ kỳ"** + tooltip *"kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem"*. Dữ liệu vốn đúng: cặp hiệu lực từ 07.2026 và còn "Đang phụ trách" thì vẫn nằm trong kỳ 08.
+
+**② Cột C chưa có %** — không phải lỗi: kho cục bộ chưa có kỳ T08 vì **chưa ai bấm "Đồng bộ % chi phí"**. Huy hiệu nguồn đang vàng *"bản tốt gần nhất · Chỉ đọc"* nên chờ DataHub khoẻ rồi bấm.
+
+5 test khoá. Server 1043/1050 (7 fail cố hữu) · web 293/293 · build sạch.
+
+---
+
 ### 2026-08-09 08:23 (giờ VN) — 🖥️ MÀN PHÂN QUYỀN RIÊNG TỪNG NV: chọn người → lưới nhóm × cột
 
 CEO 09/08: *"tích vào từng cột như vậy và chỉ hiển thị mục rất nhỏ và tóm gọn không thể phân quyền chi tiết và đúng hết được đâu. Cách tốt nhất là chọn theo nhân viên rồi có màn hình phụ cho liệt kê các đơn vị, các cột để tích."*

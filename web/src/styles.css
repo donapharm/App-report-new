@@ -1480,10 +1480,29 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
    Đánh số cột theo vị trí là sai gốc: số cột thay đổi theo quyền từng người
    (0–7 cột %), và bảng CEO có thêm cột "Nhân viên" nên lệch một nhịp so với bảng NV.
    Nay để trình duyệt tự chia theo nội dung; khung bảng đã có thanh kéo ngang riêng. */
-.catalog-table-products { min-width:max-content; table-layout:auto; }
-.catalog-table-products th { min-width:64px; }
-/* Cột số/tiền/% cần đủ rộng cho tiêu đề "C36 (%)" và số có dấu phân cách. */
-.catalog-table-products th.catalog-money { min-width:82px; }
+/* ‼ NGUYÊN TẮC BỀ RỘNG CỘT (CEO chốt 09/08: "cột thì dư quá, cột thì thiếu quá").
+   Ba loại cột, mỗi loại một khoảng rộng — KHÔNG đánh số theo vị trí (số cột đổi
+   theo quyền từng người), mà gắn theo LOẠI NỘI DUNG bằng class:
+     · cột chữ dài  (tên thuốc, hoạt chất): 150–260px, tràn thì XUỐNG DÒNG rồi cắt
+     · cột số/tiền/%                       : 82–120px, không xuống dòng
+     · cột mã/nhãn ngắn                    : 64–150px
+   Bản trước dùng `min-width:max-content` ⇒ bảng nở bằng dòng chữ DÀI NHẤT, ô hoạt
+   chất kéo ngang gần hết màn (CEO chụp màn 09/08). Bỏ hẳn max-content. */
+.catalog-table-products { min-width:1400px; table-layout:auto; }
+.catalog-table-products th, .catalog-table-products td { min-width:64px; max-width:150px; }
+.catalog-table-products th.catalog-money, .catalog-table-products td.catalog-money {
+  min-width:82px; max-width:120px; white-space:nowrap;
+}
+.catalog-table-products th.catalog-col-text, .catalog-table-products td.catalog-col-text {
+  min-width:150px; max-width:260px;
+}
+
+/* Số dòng tối đa trong MỘT ô — CEO chọn 1/2/3 ở thanh điều khiển. */
+.catalog-table-products td.catalog-col-text > * {
+  display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden;
+  -webkit-line-clamp:var(--catalog-cell-lines,3); line-clamp:var(--catalog-cell-lines,3);
+  overflow-wrap:anywhere;
+}
 .catalog-table-products th { white-space:normal; line-height:1.15; }
 .catalog-table-products thead th {
   top:calc(var(--desktop-topbar-h) + 51px);
@@ -1606,7 +1625,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-filter-row-employee { grid-template-columns:minmax(260px,1fr) minmax(125px,155px) minmax(95px,115px) minmax(180px,250px) auto; }
 /* Bảng danh mục CỦA TÔI: cũng bỏ bề rộng theo vị trí — cột % chi phí chen vào
    giữa "CST còn lại" và "Từ kỳ" nên mọi số thứ tự sau đó đều lệch. */
-.catalog-table-products.catalog-table-employee { min-width:max-content; }
+.catalog-table-products.catalog-table-employee { min-width:1330px; }
 @media (min-width:900px) and (max-width:1250px) {
   .catalog-filter-row { grid-template-columns:minmax(220px,1fr) repeat(3,minmax(105px,140px)) minmax(180px,1fr); }
   .catalog-filter-row-employee { grid-template-columns:minmax(220px,1fr) minmax(120px,150px) minmax(105px,140px) minmax(180px,1fr); }
@@ -2500,3 +2519,5 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 @media (max-width:900px) {
   .catalog-grant-item { grid-template-columns:1fr; gap:4px; }
 }
+.catalog-cell-lines { display:grid; gap:4px; font-size:12px; }
+.catalog-cell-lines select { padding:6px 8px; border:1px solid var(--line); border-radius:8px; }

@@ -88,13 +88,35 @@ const drugQlnbCounts = (rows) => {
 const ROUTES = ['CL', 'NCL', 'NT'];
 const PAGE_SIZE = 50; // CEO chốt 08/08/2026: tối đa 50 dòng/trang cho đỡ dài
 
-function CatalogTableCard({ id, tableId, children }) {
+function CatalogTableCard({ id, tableId, children, cellLines = 3 }) {
   const { rootRef } = useDonaTableCellTools({
     appId: 'app-report',
     tableId,
     cellSelector: 'td[data-full-value]'
   });
-  return <div ref={rootRef} id={id} className="card table-card catalog-table-card" data-app-id="app-report" data-table-id={tableId}>{children}</div>;
+  return <div ref={rootRef} id={id} className="card table-card catalog-table-card" data-app-id="app-report" data-table-id={tableId}
+    style={{ '--catalog-cell-lines': cellLines }}>{children}</div>;
+}
+
+/** Chọn số dòng tối đa hiện trong MỘT ô (CEO yêu cầu 09/08: "chọn 1/2/3 dòng tuỳ
+ *  theo mong muốn"). Ghi nhớ trong trình duyệt để lần sau mở lại vẫn như cũ. */
+const CELL_LINES_KEY = 'rpt_catalog_cell_lines';
+function useCellLines() {
+  const [lines, setLines] = useState(() => {
+    try { const v = Number(localStorage.getItem(CELL_LINES_KEY)); return [1, 2, 3].includes(v) ? v : 3; } catch { return 3; }
+  });
+  useEffect(() => { try { localStorage.setItem(CELL_LINES_KEY, String(lines)); } catch { /* ignore */ } }, [lines]);
+  return [lines, setLines];
+}
+function CellLinesPicker({ lines, onChange }) {
+  return <label className="catalog-cell-lines">
+    <span>Dòng/ô</span>
+    <select value={lines} onChange={(e) => onChange(Number(e.target.value))} aria-label="Số dòng tối đa hiển thị trong một ô">
+      <option value={1}>1 dòng</option>
+      <option value={2}>2 dòng</option>
+      <option value={3}>3 dòng</option>
+    </select>
+  </label>;
 }
 
 function PreviewCell({ value, children, className, label }) {
@@ -149,6 +171,7 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
   const [route, setRoute] = useState('');
   const [unit, setUnit] = useState('');
   const [page, setPage] = useState(1);
+  const [cellLines, setCellLines] = useCellLines();
   const currentRows = useMemo(() => data?.sections?.current || [], [data]);
   const qlnbCounts = useMemo(() => drugQlnbCounts(currentRows), [currentRows]);
   const provinceOptions = useMemo(() => [...new Set(currentRows.map(provinceOf).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows]);
@@ -170,12 +193,13 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
         <label><span>Vùng/Tỉnh</span><select value={province} onChange={(e) => { setProvince(e.target.value); setRoute(''); setUnit(''); }}><option value="">Tất cả vùng</option>{provinceOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
         <label><span>Tuyến</span><select value={route} onChange={(e) => { setRoute(e.target.value); setUnit(''); }}><option value="">Tất cả tuyến</option>{routeOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
         <label><span>Đơn vị</span><select value={unit} onChange={(e) => setUnit(e.target.value)}><option value="">Tất cả đơn vị</option>{unitOptions.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
+        <CellLinesPicker lines={cellLines} onChange={setCellLines} />
         <div className="catalog-result-count"><span>Đang phụ trách</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
       </div>
     </div>
-    <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog">
+    <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog" cellLines={cellLines}>
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
         const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
         const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
         const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -186,8 +210,8 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
           <PreviewCell label="Mã đơn vị" className="catalog-mobile-wide" value={r.unit_code || '—'} />
           <PreviewCell label="Mã QLNB" className="catalog-mobile-wide" value={r.qlnb_code || '—'} />
           <PreviewCell label="C10" value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
-          <PreviewCell label="Tên thuốc" className="catalog-mobile-wide" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
-          <PreviewCell label="Hoạt chất + Hàm lượng" className="catalog-mobile-wide" value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
+          <PreviewCell label="Tên thuốc" className="catalog-col-text catalog-mobile-wide" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
+          <PreviewCell label="Hoạt chất + Hàm lượng" className="catalog-col-text catalog-mobile-wide" value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
           <PreviewCell label="ĐVT" value={r.uom || '—'} />
           <td className="catalog-money" data-sensitive="" data-label="Đơn giá trúng thầu"><b>{moneyText(r.bid_price)}</b></td>
           <td className="catalog-money" data-sensitive="" data-label="CST ban đầu">{quantityText(r.cst_initial)}</td>
@@ -820,6 +844,7 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
   const [route, setRoute] = useState('');
   const [unit, setUnit] = useState('');
   const [page, setPage] = useState(1);
+  const [cellLines, setCellLines] = useCellLines();
   const currentRows = useMemo(() => (data?.rows || []).filter((row) => activeInPeriod(row, period)), [data, period]);
   const qlnbCounts = useMemo(() => drugQlnbCounts(currentRows), [currentRows]);
   const provinceOptions = useMemo(() => [...new Set(currentRows.filter((row) => !emp || row.emp_code === emp).map(provinceOf).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi')), [currentRows, emp]);
@@ -857,12 +882,13 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
           <label><span>Nhân viên</span><select value={emp} onChange={(e) => { setEmp(e.target.value); setProvince(''); setRoute(''); setUnit(''); }}><option value="">Tất cả nhân viên</option>{[...new Set(currentRows.map((r) => r.emp_code).filter(Boolean))].sort().map((x) => <option key={x}>{x}</option>)}</select></label>
           <label><span>Tuyến</span><select value={route} onChange={(e) => { setRoute(e.target.value); setUnit(''); }}><option value="">Tất cả tuyến</option>{routeOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
           <label><span>Đơn vị</span><select value={unit} onChange={(e) => setUnit(e.target.value)}><option value="">Tất cả đơn vị</option>{unitOptions.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
+          <CellLinesPicker lines={cellLines} onChange={setCellLines} />
           <div className="catalog-result-count"><span>Kết quả</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
         </div>
       </div>
-      <CatalogTableCard id="catalog-table-top" tableId="admin-catalog">
+      <CatalogTableCard id="catalog-table-top" tableId="admin-catalog" cellLines={cellLines}>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th>Tên thuốc</th><th>Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th>Từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
           const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
           const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
           const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -874,8 +900,8 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
             <PreviewCell label="Mã đơn vị" className="catalog-mobile-wide" value={r.unit_code || '—'} />
             <PreviewCell label="Mã QLNB" className="catalog-mobile-wide" value={r.qlnb_code || '—'} />
             <PreviewCell label="C10" value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
-            <PreviewCell label="Tên thuốc" className="catalog-mobile-wide" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
-            <PreviewCell label="Hoạt chất + Hàm lượng" className="catalog-mobile-wide" value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
+            <PreviewCell label="Tên thuốc" className="catalog-col-text catalog-mobile-wide" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
+            <PreviewCell label="Hoạt chất + Hàm lượng" className="catalog-col-text catalog-mobile-wide" value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
             <PreviewCell label="ĐVT" value={r.uom || '—'} />
             <td className="catalog-money" data-sensitive="" data-label="Đơn giá trúng thầu"><b>{moneyText(r.bid_price)}</b></td>
             <td className="catalog-money" data-sensitive="" data-label="CST ban đầu">{quantityText(r.cst_initial)}</td>
