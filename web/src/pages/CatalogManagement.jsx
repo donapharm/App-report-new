@@ -10,7 +10,7 @@ import {
   ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
   grantSavePayload, grantSummary, ratesLookup,
   grantCounts, isColumnAllGroups, isGroupChecked, setColumnAllGroups, toggleColumnGroup, toggleGroupAllColumns,
-  reviewGrants, applySuggestion,
+  reviewGrants, applySuggestion, verifySavedGrants,
 } from '../catalogCostGrantsModel.js';
 import { pct } from '../util.js';
 
@@ -763,6 +763,7 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
   // Mã NV đang mở màn chi tiết; rỗng = đang ở danh sách.
   const [selected, setSelected] = useState('');
 
+  // Trả về panel vừa dựng để nơi gọi KIỂM LẠI được (xem `save`).
   const load = async () => {
     setLoading(true); setError(''); setMessage('');
     try {
@@ -784,21 +785,46 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
         ? (unitGroups.value.truncated ? `Danh mục có ${unitGroups.value.total} mã đơn vị, vượt trần ${unitGroups.value.resolved} — phần vượt đang hiện "0 nhóm" oan, báo Claude nâng trần` : '')
         : (unitGroups.reason?.message || 'Không hỏi được bảng "mã đơn vị → nhóm"'));
       const groupsByUnit = unitGroups.status === 'fulfilled' ? (unitGroups.value.byUnit || {}) : {};
-      setPanel(buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees, groupsByUnit }));
+      const built = buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees, groupsByUnit });
+      setPanel(built);
       setAudit(grants.value.audit || []);
-    } catch (e) { setError(e.message); setPanel(null); }
+      return built;
+    } catch (e) { setError(e.message); setPanel(null); return null; }
     finally { setLoading(false); }
   };
   useEffect(() => { if (open && !panel && !loading) load(); }, [open]);
 
+  /**
+   * Lưu rồi ĐỌC LẠI TỪ MÁY CHỦ để KIỂM (CEO lo 09/08/2026: *"tôi sợ phân quyền xong
+   * vẫn bị lủng, không đúng mã đơn vị, không đúng cột thì nguy to"*).
+   *
+   * ‼ Lệnh ghi không ném lỗi KHÔNG có nghĩa là đã ghi đúng: backend chuẩn hoá lại
+   * (loại nhóm không hợp lệ, bỏ cột không được phép) vẫn trả 200. Tin vào 200 là
+   * tin vào lời hứa; đọc lại rồi so mới là bằng chứng.
+   *
+   * Khớp ⇒ báo hoàn thành + QUAY VỀ DANH SÁCH NV để CEO làm tiếp người kế (CEO:
+   * *"đáng lẽ phải báo đã xác nhận hoàn thành và màn hình quay về trạng thái lúc
+   * vào phân quyền để tiếp tục phân quyền nhân viên khác"*). Lệch ⇒ Ở LẠI màn đó,
+   * nêu đích danh lệch ở đâu — không đưa người dùng đi khi số chưa đúng.
+   */
   const save = async () => {
     if (!panel) return;
     setSaving(true); setError(''); setMessage('');
     const pending = dirtyRows(panel);
+    const expected = new Map(pending.map((row) => [row.empCode, grantSavePayload(row).columns]));
     try {
       for (const row of pending) await api.catalogCostGrantSave(row.empCode, grantSavePayload(row));
-      setMessage(`Đã lưu quyền cho ${pending.length} nhân viên.`);
-      await load();
+      const fresh = await load();
+      const check = verifySavedGrants(fresh, expected);
+      if (!check.ok) {
+        setError(`⛔ ĐÃ LƯU NHƯNG KIỂM LẠI THẤY LỆCH ${check.mismatches.length}/${check.checked} nhân viên — `
+          + check.mismatches.map((item) => `${item.empCode}: cần "${item.wanted}" nhưng máy chủ đang giữ "${item.got}"`).join(' · ')
+          + '. KHÔNG dùng phân quyền này cho tới khi sửa xong.');
+        return;
+      }
+      const who = [...expected.keys()].join(', ');
+      setMessage(`✅ Đã lưu và KIỂM LẠI TỪ MÁY CHỦ: đúng ${check.checked} nhân viên (${who}). Đang ở danh sách nhân viên — chọn người tiếp theo để cấp quyền.`);
+      setSelected('');
     } catch (e) { setError(`${e.message} — các dòng chưa lưu vẫn còn nguyên, bấm Lưu lại sau khi xử lý.`); }
     finally { setSaving(false); }
   };

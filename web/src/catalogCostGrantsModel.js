@@ -411,3 +411,37 @@ export function applySuggestion(panel, empCode, groupKey, columnKeys = []) {
   }
   return next;
 }
+
+/* ── KIỂM LẠI SAU KHI LƯU (CEO lo 09/08/2026) ────────────────────────────────
+ * CEO: *"tôi sợ phân quyền xong vẫn bị lủng, không đúng mã đơn vị, không đúng cột
+ * thì nguy to."*
+ *
+ * Lo đúng chỗ. Trước đây màn chỉ báo "đã lưu" dựa vào việc lệnh ghi KHÔNG NÉM LỖI —
+ * đó là tin vào lời hứa, không phải bằng chứng. Một bản ghi bị backend chuẩn hoá
+ * khác đi (nhóm không hợp lệ bị loại, cột không được phép bị bỏ) vẫn trả 200, và
+ * CEO tưởng đã cấp xong trong khi thực tế cấp thiếu.
+ *
+ * Nay: lưu xong ĐỌC LẠI TỪ MÁY CHỦ rồi so từng cột, từng nhóm với đúng thứ CEO tick.
+ * Khớp thì mới dám nói "hoàn thành"; lệch thì nêu ĐÍCH DANH lệch ở đâu.
+ */
+const scopeKey = (scope) => (Array.isArray(scope) ? [...scope].sort().join('+') : '');
+const columnsKey = (columns) => Object.entries(columns || {})
+  .map(([key, scope]) => `${lower(key)}=${scopeKey(scope)}`)
+  .sort()
+  .join('|');
+
+export function verifySavedGrants(panel, expected) {
+  const rows = new Map((panel?.rows || []).map((row) => [upper(row.empCode), row]));
+  const mismatches = [];
+  for (const [empCode, wantedColumns] of expected instanceof Map ? expected : Object.entries(expected || {})) {
+    const code = upper(empCode);
+    const row = rows.get(code);
+    // Không tìm thấy NV sau khi đọc lại = KHÔNG kiểm được ⇒ coi là lệch, không bỏ qua.
+    if (!row) { mismatches.push({ empCode: code, wanted: columnsKey(wantedColumns), got: '(không đọc lại được)' }); continue; }
+    const got = normalizeScopes(row.columns);
+    if (columnsKey(got) !== columnsKey(wantedColumns)) {
+      mismatches.push({ empCode: code, wanted: grantSummary({ ...row, columns: normalizeScopes(wantedColumns) }), got: grantSummary(row) });
+    }
+  }
+  return { ok: mismatches.length === 0, mismatches, checked: expected instanceof Map ? expected.size : Object.keys(expected || {}).length };
+}

@@ -5,6 +5,7 @@ import {
   ALL_UNITS, isGrantableColumn, grantableColumns, unitsByEmployee, groupsForUnits, buildGrantPanel,
   toggleColumn, setColumnGroups, applyColumnsToMany, grantSavePayload, dirtyRows, grantSummary, columnScopeLabel,
   isGroupChecked, isColumnAllGroups, toggleColumnGroup, setColumnAllGroups, toggleGroupAllColumns, grantCounts,
+  verifySavedGrants,
 } from '../src/catalogCostGrantsModel.js';
 
 const CATALOG = [
@@ -250,4 +251,44 @@ test('NV chỉ phụ trách MỘT nhóm: tick nhóm đó = mọi nhóm, tự gom
   panel = toggleColumnGroup(panel, 'DN008', 'c41', '033');
   // DN008 chỉ có nhóm 033 ⇒ tick nó là đã phủ hết, gom '*' cho nhóm mới sau này cũng được phủ.
   assert.deepEqual(rowOf(panel, 'DN008').columns.c41, [ALL_UNITS]);
+});
+
+/* ── verifySavedGrants: bằng chứng, không phải lời hứa (CEO lo 09/08/2026) ───── */
+
+test('khớp đúng thì ok, dù thứ tự nhóm/cột khác nhau', () => {
+  const panel = { rows: [{ empCode: 'DN004', columns: { c43: ['018', '015'], c41: ['*'] }, availableGroups: [] }] };
+  const expected = new Map([['DN004', { c41: ['*'], c43: ['015', '018'] }]]);
+  const result = verifySavedGrants(panel, expected);
+  assert.equal(result.ok, true);
+  assert.equal(result.checked, 1);
+});
+
+test('‼ máy chủ giữ ÍT hơn thứ đã tick ⇒ báo lệch, nêu cả hai bên', () => {
+  // Đúng nỗi lo của CEO: backend chuẩn hoá bỏ bớt nhóm/cột mà vẫn trả 200.
+  const panel = { rows: [{ empCode: 'DN004', columns: { c41: ['*'] }, availableGroups: [] }] };
+  const expected = new Map([['DN004', { c41: ['*'], c43: ['*'] }]]);
+  const result = verifySavedGrants(panel, expected);
+  assert.equal(result.ok, false);
+  assert.equal(result.mismatches.length, 1);
+  assert.equal(result.mismatches[0].empCode, 'DN004');
+  assert.match(result.mismatches[0].wanted, /C43/);
+  assert.doesNotMatch(result.mismatches[0].got, /C43/);
+});
+
+test('‼ máy chủ giữ NHIỀU hơn (quyền thừa) cũng là lệch — không chỉ soi thiếu', () => {
+  const panel = { rows: [{ empCode: 'DN004', columns: { c41: ['*'], c45: ['*'] }, availableGroups: [] }] };
+  const expected = new Map([['DN004', { c41: ['*'] }]]);
+  assert.equal(verifySavedGrants(panel, expected).ok, false);
+});
+
+test('sai NHÓM (đúng cột, khác mã đơn vị) vẫn bị bắt', () => {
+  const panel = { rows: [{ empCode: 'DN004', columns: { c43: ['021'] }, availableGroups: [] }] };
+  const expected = new Map([['DN004', { c43: ['015'] }]]);
+  assert.equal(verifySavedGrants(panel, expected).ok, false);
+});
+
+test('không đọc lại được NV ⇒ LỆCH, không coi như xong', () => {
+  const result = verifySavedGrants({ rows: [] }, new Map([['DN004', { c41: ['*'] }]]));
+  assert.equal(result.ok, false);
+  assert.match(result.mismatches[0].got, /không đọc lại được/);
 });

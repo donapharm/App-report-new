@@ -1,3 +1,22 @@
+### 2026-08-09 21:55 (giờ VN) — ✅ Phân quyền: lưu xong phải KIỂM LẠI TỪ MÁY CHỦ rồi mới dám nói "hoàn thành"
+
+CEO nêu hai việc về màn Phân quyền:
+> *"Khi nhấn phân quyền cho một NV xong nó vẫn cứ kẹt lại. Đáng lẽ phải báo đã xác nhận phân quyền hoàn thành và màn hình quay về trạng thái lúc vào phân quyền để tiếp tục phân quyền NV khác."*
+> *"Tôi sợ phân quyền xong vẫn bị lủng, không đúng mã đơn vị, không đúng cột thì nguy to."*
+
+**Nỗi lo thứ hai đúng chỗ hơn cả nỗi lo thứ nhất.** Bản cũ báo "Đã lưu" chỉ vì lệnh ghi **không ném lỗi** — đó là tin vào lời hứa, không phải bằng chứng. Backend chuẩn hoá lại bản ghi (loại nhóm không hợp lệ, bỏ cột không được phép) **vẫn trả 200**, và CEO tưởng đã cấp xong trong khi thực tế cấp thiếu. Loại sai này không báo gì, chỉ lặng lẽ để một NV không thấy cột đáng ra phải thấy — hoặc thấy cột đáng ra không được thấy.
+
+**Nay:** lưu xong **đọc lại từ máy chủ** rồi so **từng cột × từng nhóm** với đúng thứ CEO đã tick (`verifySavedGrants`).
+- **Khớp** ⇒ báo *"✅ Đã lưu và KIỂM LẠI TỪ MÁY CHỦ: đúng N nhân viên (DN004…)"* và **quay về danh sách NV** để cấp tiếp người kế — đúng điều CEO xin.
+- **Lệch** ⇒ **Ở LẠI** màn đó, nêu **đích danh**: *"DN004: cần C41: mọi nhóm · C43: mọi nhóm, nhưng máy chủ đang giữ C41: mọi nhóm"* + câu *"KHÔNG dùng phân quyền này cho tới khi sửa xong"*. Không bao giờ đưa người dùng đi tiếp khi số chưa đúng.
+- **Không đọc lại được NV nào** ⇒ tính là **LỆCH**, không lặng lẽ bỏ qua.
+
+So sánh **không phụ thuộc thứ tự** cột/nhóm, và bắt **cả hai chiều**: máy chủ giữ THIẾU hơn hay THỪA hơn thứ đã tick đều là lệch (quyền thừa cũng nguy hiểm như quyền thiếu).
+
+Test: web **383/383** (5 test model + 5 test màn) · server 1154/7 fail cố hữu · build sạch.
+
+---
+
 ### 2026-08-09 21:30 (giờ VN) — 🛑 Bot chặn Gate 1: hai lỗi thật của Claude + một điểm phạm vi
 
 Bot HOLD `15e6590` trước Gate 1, nêu 3 điểm. **Soi lại: bot đúng ở cả ba, hai điểm là lỗi thật.**
