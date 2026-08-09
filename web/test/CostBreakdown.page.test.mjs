@@ -67,3 +67,42 @@ test('menu Thành tiền C32·C47 VẪN RIÊNG — trang mới không thay thế
   assert.match(app, /key: 'costBreakdown'/);
   assert.doesNotMatch(page, /c32NoVat|c47NoVat/, 'trang tổng hợp không nhúng số C32/C47 của menu kia');
 });
+
+/* ── Ba công cụ quản trị (Claude tư vấn 09/08, CEO chốt "làm tiếp") ──────────── */
+
+test('cột "Chi/Doanh thu" — chỉ số so được NV bán nhiều với NV bán ít', () => {
+  assert.match(page, /Chi\/Doanh thu/);
+  assert.match(page, /pctText\(row\.costRatio\)/);
+  assert.match(page, /pctText\(data\.totals\.costRatio\)/);
+});
+
+test('‼ tỷ lệ null hiện "—", KHÔNG hiện 0% (0% đọc thành "không tốn đồng nào")', () => {
+  assert.match(page, /const pctText = \(value\) => \(value == null \? '—'/);
+  assert.match(page, /"0%" đọc thành "không tốn đồng nào", sai nguy hiểm/);
+});
+
+test('dòng tỷ trọng: cột nào ăn phần lớn nhất trong tiền đã chi', () => {
+  assert.match(page, /cost-breakdown-share/);
+  assert.match(page, /Tỷ trọng trên tổng chi/);
+  assert.match(page, /pctText\(data\.totals\.share\?\.\[column\.key\]\)/);
+});
+
+test('khối "So với kỳ trước" xếp theo TIỀN TUYỆT ĐỐI, nói rõ vì sao không xếp theo %', () => {
+  assert.match(page, /So với kỳ trước/);
+  assert.match(page, /Xếp theo <b>tiền tuyệt đối<\/b>, không theo %/);
+  assert.match(page, /cột lớn tăng ít vẫn đứng trên cột nhỏ tăng nhiều/i);
+  assert.match(page, /signedMoney\(item\.delta\)/);
+});
+
+test('kỳ trước chưa đồng bộ ⇒ NÓI RA, không so nửa vời', () => {
+  assert.match(page, /KY_TRUOC_CHUA_DONG_BO/);
+  assert.match(page, /chưa đồng bộ %/);
+  assert.match(page, /<b>không<\/b> so nửa vời/);
+});
+
+test('con mắt phủ luôn số so sánh — chênh lệch cũng là tiền', () => {
+  const compareBlock = page.slice(page.indexOf('So với kỳ trước'));
+  const cells = compareBlock.match(/<td className="catalog-money"[^>]*>/g) || [];
+  assert.ok(cells.length >= 4);
+  for (const cell of cells) assert.match(cell, /data-sensitive/);
+});

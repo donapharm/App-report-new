@@ -187,6 +187,7 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
       spentTowardC47NoVat: activeColumns.filter((c) => !c.outsideC47).reduce((sum, c) => sum + bucket.columns[c.key].noVat, 0),
       spentTowardC47WithVat: activeColumns.filter((c) => !c.outsideC47).reduce((sum, c) => sum + bucket.columns[c.key].withVat, 0),
     }))
+    .map((row) => ({ ...row, costRatio: costRatio(row.spentWithC44NoVat, row.revenueNoVat) }))
     .sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi'));
 
   const totals = rows.reduce((sum, row) => {
@@ -210,6 +211,12 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
     columns: Object.fromEntries(activeColumns.map((column) => [column.key, emptyCell()])),
   });
 
+  totals.costRatio = costRatio(totals.spentWithC44NoVat, totals.revenueNoVat);
+  // Tỷ trọng tính trên TỔNG CHI CÓ C44 — cùng mẫu số với con số người đọc đang nhìn.
+  totals.share = Object.fromEntries(activeColumns.map((column) => [
+    column.key, shareOf(totals.columns[column.key].noVat, totals.spentWithC44NoVat),
+  ]));
+
   return {
     groupBy: dimension,
     periods: periods.map(text),
@@ -219,6 +226,97 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
     rows,
     totals,
     c44Note: 'C44 được TÍNH vào "Tổng chi có C44" nhưng nằm NGOÀI công thức C47 (file CP_TOTAL V29.9). Chênh lệch hai dòng tổng = chính tiền C44.',
+  };
+}
+
+/* ── BA CÔNG CỤ QUẢN TRỊ (Claude tư vấn 09/08, CEO chốt "làm tiếp") ───────────
+ * Bảng tiền suông không quản được tiền. Ba con số dưới đây trả lời ba câu CEO
+ * thực sự hỏi khi nhìn bảng chi phí:
+ *   1. `costRatio`  — "chi bao nhiêu trên mỗi đồng doanh thu?" Đây là chỉ số DUY
+ *      NHẤT so sánh được giữa NV bán 10 tỷ và NV bán 1 tỷ. Nhìn số tiền tuyệt đối
+ *      thì người bán nhiều luôn "tốn nhiều", chẳng nói lên điều gì.
+ *   2. `share`      — "cột nào ăn phần lớn nhất trong tiền đã chi?" Biết C43 tốn
+ *      1,2 tỷ thì chưa rõ nhiều hay ít; biết C43 chiếm 34% tổng chi thì rõ ngay.
+ *   3. `delta`      — "so kỳ trước, cột nào phình ra?" Xếp theo TIỀN TUYỆT ĐỐI chứ
+ *      không theo %: cột tăng 200% từ 5 triệu lên 15 triệu không đáng lo bằng cột
+ *      tăng 12% từ 2 tỷ lên 2,24 tỷ.
+ *
+ * ‼ Fail-closed như mọi chỗ khác: không đủ dữ liệu để tính thì trả `null` ⇒ màn
+ *   hiện '—'. Doanh thu 0 KHÔNG được cho ra tỷ lệ 0% (chia cho 0 là vô nghĩa, còn
+ *   0% đọc thành "không tốn đồng nào" — sai nguy hiểm).
+ */
+
+const roundPct = (value) => Math.round(value * 10000) / 10000;
+
+/** Chi trên mỗi đồng doanh thu, theo %. Doanh thu <= 0 ⇒ null, KHÔNG phải 0. */
+function costRatio(spent, revenue) {
+  const base = Number(revenue);
+  if (!Number.isFinite(base) || base <= 0) return null;
+  const value = Number(spent);
+  if (!Number.isFinite(value)) return null;
+  return roundPct(value / base * 100);
+}
+
+/** Tỷ trọng một phần trong tổng. Tổng <= 0 ⇒ null (không có gì để chia phần). */
+function shareOf(part, total) {
+  const base = Number(total);
+  if (!Number.isFinite(base) || base <= 0) return null;
+  const value = Number(part);
+  if (!Number.isFinite(value)) return null;
+  return roundPct(value / base * 100);
+}
+
+/**
+ * Dải kỳ LIỀN TRƯỚC, cùng độ dài — để so "kỳ này với kỳ trước" cho công bằng.
+ * Chọn T05→T08 (4 kỳ) thì kỳ so là T01→T04, không phải mỗi T04.
+ */
+function previousRange(periods = []) {
+  const list = (Array.isArray(periods) ? periods : []).map(text).filter((p) => /^\d{4}-\d{2}$/.test(p)).sort();
+  if (!list.length) return [];
+  const [y, m] = list[0].split('-').map(Number);
+  let ey = y; let em = m - 1;
+  if (em < 1) { em = 12; ey -= 1; }
+  let sy = ey; let sm = em - (list.length - 1);
+  while (sm < 1) { sm += 12; sy -= 1; }
+  return periodRange(`${sy}-${String(sm).padStart(2, '0')}`, `${ey}-${String(em).padStart(2, '0')}`);
+}
+
+/**
+ * Ghép bảng kỳ này với bảng kỳ trước → chênh lệch theo TỪNG CỘT, xếp theo TIỀN
+ * TUYỆT ĐỐI giảm dần. Cột chỉ có ở một bên vẫn được liệt kê (bên kia coi như 0),
+ * vì "kỳ trước không tốn đồng nào, kỳ này tốn 300 triệu" chính là thứ cần thấy nhất.
+ *
+ * Kỳ trước chưa đồng bộ đủ ⇒ `comparable: false` + nêu kỳ thiếu; KHÔNG so nửa vời
+ * rồi đưa ra một con số chênh lệch vô nghĩa.
+ */
+function compareBreakdowns(current, previous) {
+  if (!current || !previous) return { comparable: false, reason: 'THIEU_BANG', columns: [], missingPeriods: [] };
+  if (previous.missingPeriods?.length) {
+    return { comparable: false, reason: 'KY_TRUOC_CHUA_DONG_BO', columns: [], missingPeriods: [...previous.missingPeriods] };
+  }
+  const keys = [...new Set([
+    ...(current.columns || []).map((c) => c.key),
+    ...(previous.columns || []).map((c) => c.key),
+  ])];
+  const columns = keys.map((key) => {
+    const now = Number(current.totals?.columns?.[key]?.noVat || 0);
+    const before = Number(previous.totals?.columns?.[key]?.noVat || 0);
+    return {
+      key,
+      label: (current.columns || []).find((c) => c.key === key)?.label || key.toUpperCase(),
+      now, before, delta: now - before,
+      deltaPct: shareOf(now - before, before),
+    };
+  }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  return {
+    comparable: true,
+    periods: previous.periods,
+    columns,
+    spentDelta: Number(current.totals?.spentWithC44NoVat || 0) - Number(previous.totals?.spentWithC44NoVat || 0),
+    revenueDelta: Number(current.totals?.revenueNoVat || 0) - Number(previous.totals?.revenueNoVat || 0),
+    costRatioNow: current.totals?.costRatio ?? null,
+    costRatioBefore: previous.totals?.costRatio ?? null,
+    missingPeriods: [],
   };
 }
 
@@ -236,4 +334,7 @@ function periodRange(from, to) {
   return out;
 }
 
-module.exports = { BREAKDOWN_COLUMNS, COLUMN_KEYS, GROUP_BYS, normalizeFilters, buildBreakdown, periodRange };
+module.exports = {
+  BREAKDOWN_COLUMNS, COLUMN_KEYS, GROUP_BYS, normalizeFilters, buildBreakdown,
+  periodRange, previousRange, costRatio, shareOf, compareBreakdowns,
+};

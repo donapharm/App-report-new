@@ -166,3 +166,97 @@ test('periodRange dựng dải kỳ đúng, kể cả vắt qua năm, chặn tr�
   assert.equal(breakdown.periodRange('2020-01', '2030-01').length, 24);
   assert.deepEqual(breakdown.periodRange('xx', '2026-08'), []);
 });
+
+/* ── BA CÔNG CỤ QUẢN TRỊ (Claude tư vấn 09/08, CEO chốt "làm tiếp") ──────────── */
+
+test('chi trên mỗi đồng doanh thu — chỉ số DUY NHẤT so được NV to với NV nhỏ', async () => {
+  const store = memStore();
+  await seed(store, '2026-08', {
+    DN001: [rateRow('001.BVĐK ĐỒNG NAI', 'G1.A')],
+    DN002: [rateRow('033.PKĐK LONG KHÁNH', 'G1.B')],
+  });
+  const result = breakdown.buildBreakdown({
+    periods: ['2026-08'], store, groupBy: 'employee',
+    // DN001 bán GẤP 10 LẦN DN002 nhưng cùng bộ %, nên tỷ lệ chi phải BẰNG NHAU.
+    revenueRowsOf: (emp) => (emp === 'DN001'
+      ? [revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 1_050_000_000)]
+      : [revRow('DN002', '033.PKĐK LONG KHÁNH', 'G1.B', 105_000_000)]),
+  });
+  const [dn001, dn002] = result.rows;
+  assert.equal(dn001.costRatio, SPENT_ALL, 'tỷ lệ chi = tổng % đã chia');
+  assert.equal(dn002.costRatio, SPENT_ALL);
+  assert.equal(dn001.costRatio, dn002.costRatio, 'người bán nhiều/ít phải so sánh được với nhau');
+  assert.equal(result.totals.costRatio, SPENT_ALL);
+});
+
+test('‼ doanh thu 0 ⇒ tỷ lệ null, KHÔNG phải 0% (0% đọc thành "không tốn đồng nào")', () => {
+  assert.equal(breakdown.costRatio(8_000_000, 0), null);
+  assert.equal(breakdown.costRatio(8_000_000, null), null);
+  assert.equal(breakdown.shareOf(2, 0), null);
+  // Có số thật thì vẫn phải tính đúng.
+  assert.equal(breakdown.costRatio(8_000_000, 100_000_000), 8);
+  assert.equal(breakdown.shareOf(2, 8), 25);
+});
+
+test('tỷ trọng từng cột trên tổng chi — biết cột nào ăn phần lớn nhất', async () => {
+  const store = memStore();
+  await seed(store, '2026-08', { DN001: [rateRow('001.BVĐK ĐỒNG NAI', 'G1.A')] });
+  const result = breakdown.buildBreakdown({
+    periods: ['2026-08'], store, groupBy: 'employee',
+    revenueRowsOf: () => [revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 105_000_000)],
+  });
+  // c44 = 0,5% trong tổng 8,5% ⇒ chiếm 5,882…%
+  assert.equal(result.totals.share.c44, breakdown.shareOf(RATES.c44, SPENT_ALL));
+  // Cộng mọi tỷ trọng phải ra 100%.
+  const sum = Object.values(result.totals.share).reduce((a, b) => a + b, 0);
+  assert.ok(Math.abs(sum - 100) < 0.01, `tổng tỷ trọng phải là 100%, đang là ${sum}`);
+});
+
+test('dải kỳ liền trước cùng ĐỘ DÀI — chọn 4 kỳ thì so với 4 kỳ, không phải 1 kỳ', () => {
+  assert.deepEqual(breakdown.previousRange(['2026-05', '2026-06', '2026-07', '2026-08']),
+    ['2026-01', '2026-02', '2026-03', '2026-04']);
+  assert.deepEqual(breakdown.previousRange(['2026-01']), ['2025-12']);
+  assert.deepEqual(breakdown.previousRange(['2026-02', '2026-03']), ['2025-12', '2026-01']);
+  assert.deepEqual(breakdown.previousRange([]), []);
+});
+
+test('so kỳ trước xếp theo TIỀN TUYỆT ĐỐI, không theo % — cột to tăng ít vẫn lên đầu', () => {
+  const bandOf = (columns, totals) => ({ columns, totals, periods: ['2026-07'], missingPeriods: [] });
+  const cols = [{ key: 'c43', label: 'C43' }, { key: 'c36', label: 'C36' }];
+  const current = bandOf(cols, {
+    columns: { c43: { noVat: 2_240_000_000 }, c36: { noVat: 15_000_000 } },
+    spentWithC44NoVat: 2_255_000_000, revenueNoVat: 30_000_000_000, costRatio: 7.5,
+  });
+  const previous = bandOf(cols, {
+    columns: { c43: { noVat: 2_000_000_000 }, c36: { noVat: 5_000_000 } },
+    spentWithC44NoVat: 2_005_000_000, revenueNoVat: 28_000_000_000, costRatio: 7.16,
+  });
+  const compare = breakdown.compareBreakdowns(current, previous);
+  assert.equal(compare.comparable, true);
+  // C43 +240tr (12%) phải đứng TRƯỚC C36 +10tr (200%).
+  assert.deepEqual(compare.columns.map((c) => c.key), ['c43', 'c36']);
+  assert.equal(compare.columns[0].delta, 240_000_000);
+  assert.equal(compare.columns[1].deltaPct, 200);
+  assert.equal(compare.spentDelta, 250_000_000);
+});
+
+test('kỳ trước chưa đồng bộ ⇒ KHÔNG so nửa vời, nói rõ thiếu kỳ nào', () => {
+  const compare = breakdown.compareBreakdowns(
+    { columns: [], totals: {}, periods: ['2026-08'], missingPeriods: [] },
+    { columns: [], totals: {}, periods: ['2026-07'], missingPeriods: ['2026-07'] },
+  );
+  assert.equal(compare.comparable, false);
+  assert.equal(compare.reason, 'KY_TRUOC_CHUA_DONG_BO');
+  assert.deepEqual(compare.missingPeriods, ['2026-07']);
+});
+
+test('cột chỉ có ở MỘT kỳ vẫn được liệt kê — "kỳ trước 0đ, kỳ này 300tr" là thứ cần thấy nhất', () => {
+  const compare = breakdown.compareBreakdowns(
+    { columns: [{ key: 'c39', label: 'C39' }], totals: { columns: { c39: { noVat: 300_000_000 } }, spentWithC44NoVat: 300_000_000, revenueNoVat: 1 }, periods: ['2026-08'], missingPeriods: [] },
+    { columns: [], totals: { columns: {}, spentWithC44NoVat: 0, revenueNoVat: 1 }, periods: ['2026-07'], missingPeriods: [] },
+  );
+  assert.equal(compare.columns[0].key, 'c39');
+  assert.equal(compare.columns[0].before, 0);
+  assert.equal(compare.columns[0].delta, 300_000_000);
+  assert.equal(compare.columns[0].deltaPct, null, 'chia cho 0 ⇒ null, không bịa %');
+});

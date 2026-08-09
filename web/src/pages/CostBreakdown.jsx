@@ -16,6 +16,14 @@ import { Spinner } from '../components.jsx';
 
 const money = (value) => (value == null ? '—' : `${Math.round(Number(value)).toLocaleString('vi-VN')}đ`);
 const hubToUi = (period) => { const m = String(period || '').match(/^(\d{4})-(\d{2})$/); return m ? `${m[2]}.${m[1]}` : period; };
+// ‼ null ≠ 0. Doanh thu 0 thì tỷ lệ là KHÔNG TÍNH ĐƯỢC ('—'), không phải "0%" —
+// "0%" đọc thành "không tốn đồng nào", sai nguy hiểm.
+const pctText = (value) => (value == null ? '—' : `${Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 2 })}%`);
+const signedMoney = (value) => {
+  if (value == null) return '—';
+  const n = Math.round(Number(value));
+  return `${n > 0 ? '+' : ''}${n.toLocaleString('vi-VN')}đ`;
+};
 
 const GROUP_LABELS = {
   employee: 'Nhân viên', unit: 'Mã đơn vị', group: 'Nhóm mã đơn vị',
@@ -146,6 +154,7 @@ export default function CostBreakdown({ me }) {
         </th>)}
         <th className="catalog-money">Tổng chi CÓ C44</th>
         <th className="catalog-money">Trừ vào C47 (không C44)</th>
+        <th className="catalog-money" title="Chi bao nhiêu trên mỗi đồng doanh thu — chỉ số so sánh được giữa NV bán nhiều và NV bán ít">Chi/Doanh thu</th>
       </tr></thead><tbody>
         {data.rows.map((row) => <tr key={row.key}>
           <td><b>{row.key}</b></td>
@@ -160,6 +169,7 @@ export default function CostBreakdown({ me }) {
           })}
           <td className="catalog-money" data-sensitive=""><b>{money(withVat ? row.spentWithC44WithVat : row.spentWithC44NoVat)}</b></td>
           <td className="catalog-money" data-sensitive=""><b>{money(withVat ? row.spentTowardC47WithVat : row.spentTowardC47NoVat)}</b></td>
+          <td className="catalog-money" data-sensitive="">{pctText(row.costRatio)}</td>
         </tr>)}
         <tr className="cost-amounts-grand">
           <td><b>TỔNG CỘNG</b></td>
@@ -168,9 +178,51 @@ export default function CostBreakdown({ me }) {
           {data.columns.map((column) => <td key={column.key} className="catalog-money" data-sensitive=""><b>{money(totalsCell(column.key))}</b></td>)}
           <td className="catalog-money" data-sensitive=""><b>{money(withVat ? data.totals.spentWithC44WithVat : data.totals.spentWithC44NoVat)}</b></td>
           <td className="catalog-money" data-sensitive=""><b>{money(withVat ? data.totals.spentTowardC47WithVat : data.totals.spentTowardC47NoVat)}</b></td>
+          <td className="catalog-money" data-sensitive=""><b>{pctText(data.totals.costRatio)}</b></td>
+        </tr>
+        {/* Tỷ trọng: cột nào ăn phần lớn nhất trong tiền đã chi. */}
+        <tr className="cost-breakdown-share">
+          <td colSpan={3}><small>Tỷ trọng trên tổng chi</small></td>
+          {data.columns.map((column) => <td key={column.key} className="catalog-money" data-sensitive="">
+            <small>{pctText(data.totals.share?.[column.key])}</small>
+          </td>)}
+          <td colSpan={3}><small>100%</small></td>
         </tr>
       </tbody></table></div>
       <small className="muted cost-breakdown-note">* {data.c44Note}</small>
+    </div>}
+
+    {/* SO VỚI KỲ TRƯỚC — xếp theo TIỀN TUYỆT ĐỐI, không theo %. Cột 2 tỷ tăng 12%
+        đáng lo hơn cột 5 triệu tăng 200%; xếp theo % thì cái nhỏ luôn nhảy lên đầu. */}
+    {data?.compare && <div className="card table-card">
+      {!data.compare.comparable
+        ? <div className="catalog-alert error" role="status">
+          {data.compare.reason === 'KY_TRUOC_CHUA_DONG_BO'
+            ? <>Chưa so được với kỳ trước — kỳ <b>{(data.compare.missingPeriods || []).map(hubToUi).join(' · ')}</b> chưa đồng bộ %.
+              Đồng bộ kỳ đó rồi quay lại, <b>không</b> so nửa vời để khỏi ra con số chênh lệch vô nghĩa.</>
+            : <>Chưa so được với kỳ trước{data.compare.message ? ` (${data.compare.message})` : ''}.</>}
+        </div>
+        : <>
+          <div className="cost-amounts-identity">
+            <b>So với kỳ trước</b> ({(data.compare.periods || []).map(hubToUi).join(' → ')})
+            · tổng chi <b data-sensitive="">{signedMoney(data.compare.spentDelta)}</b>
+            · doanh thu <b data-sensitive="">{signedMoney(data.compare.revenueDelta)}</b>
+            · tỷ lệ chi <b data-sensitive="">{pctText(data.compare.costRatioBefore)} → {pctText(data.compare.costRatioNow)}</b>
+          </div>
+          <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
+            <th>Cột</th><th className="catalog-money">Kỳ trước</th><th className="catalog-money">Kỳ này</th>
+            <th className="catalog-money">Chênh lệch</th><th className="catalog-money">%</th>
+          </tr></thead><tbody>
+            {data.compare.columns.map((item) => <tr key={item.key} className={item.delta > 0 ? 'cost-breakdown-up' : item.delta < 0 ? 'cost-breakdown-down' : ''}>
+              <td><b>{item.key.toUpperCase()}</b> <small className="muted">{item.label}</small></td>
+              <td className="catalog-money" data-sensitive="">{money(item.before)}</td>
+              <td className="catalog-money" data-sensitive="">{money(item.now)}</td>
+              <td className="catalog-money" data-sensitive=""><b>{signedMoney(item.delta)}</b></td>
+              <td className="catalog-money" data-sensitive="">{item.deltaPct == null ? '—' : `${item.deltaPct > 0 ? '+' : ''}${pctText(item.deltaPct)}`}</td>
+            </tr>)}
+          </tbody></table></div>
+          <small className="muted cost-breakdown-note">Xếp theo <b>tiền tuyệt đối</b>, không theo %. Cột lớn tăng ít vẫn đứng trên cột nhỏ tăng nhiều — vì đó mới là chỗ tiền thật sự đi.</small>
+        </>}
     </div>}
   </div>;
 }

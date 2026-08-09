@@ -1,3 +1,24 @@
+### 2026-08-09 17:40 (giờ VN) — 🧠 BA CÔNG CỤ QUẢN TRỊ cho menu Tổng hợp chi phí
+
+CEO: *"làm tiếp đi"* — dựng nốt ba thứ Claude đã tư vấn nhưng chưa làm. Bảng tiền suông không quản được tiền; ba con số này trả lời ba câu CEO thực sự hỏi khi nhìn bảng chi phí.
+
+**1. Chi trên mỗi đồng doanh thu (`costRatio`)** — cột mới "Chi/Doanh thu" ở từng dòng và dòng tổng. Đây là chỉ số **duy nhất so sánh được** giữa NV bán 10 tỷ và NV bán 1 tỷ: nhìn tiền tuyệt đối thì người bán nhiều luôn "tốn nhiều", chẳng nói lên gì; nhìn tỷ lệ thì NV bán 1 tỷ mà tốn 14% lộ ra ngay.
+
+**2. Tỷ trọng từng cột (`share`)** — dòng phụ dưới TỔNG CỘNG: mỗi cột chiếm bao nhiêu % tiền đã chi. Biết "C43 tốn 1,2 tỷ" chưa rõ nhiều hay ít; biết "C43 ăn 34% tổng chi" thì rõ ngay. Cộng mọi tỷ trọng ra đúng 100% (có test).
+
+**3. So với kỳ trước (`compare`)** — khối riêng, tự lấy **dải kỳ liền trước CÙNG ĐỘ DÀI** (`previousRange`: chọn T05→T08 thì so với T01→T04, không phải mỗi T04). Xếp theo **TIỀN TUYỆT ĐỐI**, không theo %: cột tăng 200% từ 5 triệu lên 15 triệu không đáng lo bằng cột tăng 12% từ 2 tỷ lên 2,24 tỷ — xếp theo % thì cái nhỏ luôn nhảy lên đầu và che mất chỗ tiền thật sự đi. Có test khoá đúng cảnh này.
+
+**Fail-closed xuyên suốt:**
+- **Doanh thu 0 ⇒ tỷ lệ `null` ('—'), KHÔNG phải 0%.** "0%" đọc thành *"không tốn đồng nào"* — sai nguy hiểm hơn để trống.
+- Kỳ trước chưa đồng bộ ⇒ `comparable: false` + nêu đích danh kỳ thiếu, **không so nửa vời** rồi đưa ra con số chênh lệch vô nghĩa.
+- Cột chỉ có ở một kỳ vẫn liệt kê (bên kia = 0) — *"kỳ trước 0đ, kỳ này 300 triệu"* chính là thứ cần thấy nhất; nhưng `deltaPct` để `null` vì chia cho 0 là bịa.
+- Tính so sánh hỏng **không được làm hỏng bảng chính** — bọc try/catch, bảng tiền vẫn ra.
+- Con mắt che số phủ luôn mọi ô so sánh (có test quét).
+
+Server 1081/1088 (7 fail cố hữu) · web 353/353 (+13) · build sạch.
+
+---
+
 ### 2026-08-09 16:55 (giờ VN) — 🩹 Màn phân quyền NÓI SAI NGUYÊN NHÂN khi không hỏi được bảng nhóm
 
 CEO chụp màn: DN001 hiện **"0 nhóm · 164 đơn vị"** kèm *"164 đơn vị chưa nhận diện được nhóm"*. **Câu đó SAI.** Các mã trong ảnh (`001.BVĐK ĐỒNG NAI`, `002.BVĐK THỐNG NHẤT ĐN`…) phân giải nhóm hoàn hảo — kiểm `groupOf` cho ra `001`, `002` đúng.

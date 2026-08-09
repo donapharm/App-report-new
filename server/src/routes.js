@@ -3259,10 +3259,10 @@ router.get('/catalog-management/cost-amounts.xlsx', auth.requireAuth, asyncJsonR
    nhóm mã, NV, tuyến; xuất Excel nhiều kỳ, chọn thứ cần." CHỈ CEO — số tiền
    chi tiết toàn công ty, nặng hơn cả menu Thành tiền. Con mắt che số phủ ở
    frontend (data-sensitive); backend cứ trả số thật cho đúng người. */
-async function costBreakdownFor(req) {
+async function costBreakdownFor(req, periodsOverride) {
   const from = catalogManagement.toHubPeriod(req.query.from || req.query.period || store.latestKy());
   const to = catalogManagement.toHubPeriod(req.query.to || req.query.period || store.latestKy());
-  const periods = costBreakdown.periodRange(from, to);
+  const periods = periodsOverride || costBreakdown.periodRange(from, to);
   if (!periods.length) throw Object.assign(new Error('Khoảng kỳ không hợp lệ — cần from/to dạng MM.YYYY hoặc YYYY-MM.'), { status: 400 });
   const listParam = (name) => String(req.query[name] || '').split(',').map((v) => v.trim()).filter(Boolean);
   // Thuộc tính lọc (nhà thầu · tuyến · ưu tiên C10) nằm ở danh mục — tra theo kỳ.
@@ -3293,8 +3293,23 @@ async function costBreakdownFor(req) {
     catalogAttrsOf: (period) => attrsByPeriod.get(period) || new Map(),
   });
 }
+/* So kỳ trước: tính thêm MỘT bảng cho dải kỳ liền trước rồi ghép chênh lệch.
+   Kỳ trước chưa đồng bộ thì `compare.comparable=false` + nêu kỳ thiếu — KHÔNG so
+   nửa vời rồi đưa ra con số chênh lệch vô nghĩa. Tắt bằng `?compare=0` cho nhẹ. */
+async function withComparison(req, current) {
+  if (String(req.query.compare || '1') === '0') return { ...current, compare: null };
+  try {
+    const previousPeriods = costBreakdown.previousRange(current.periods);
+    if (!previousPeriods.length) return { ...current, compare: null };
+    const previous = await costBreakdownFor(req, previousPeriods);
+    return { ...current, compare: costBreakdown.compareBreakdowns(current, previous) };
+  } catch (error) {
+    // So sánh hỏng KHÔNG được làm hỏng bảng chính — bảng tiền vẫn phải ra.
+    return { ...current, compare: { comparable: false, reason: 'LOI_TINH', message: error.message, columns: [], missingPeriods: [] } };
+  }
+}
 router.get('/catalog-management/cost-breakdown', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
-  return res.json(await costBreakdownFor(req));
+  return res.json(await withComparison(req, await costBreakdownFor(req)));
 }));
 router.get('/catalog-management/cost-breakdown.xlsx', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
   const result = await costBreakdownFor(req);
