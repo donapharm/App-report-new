@@ -23,6 +23,7 @@ const employeeCost = require('./employeeCost');
 const employeeCostTemplates = require('./employeeCostTemplates');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const costRatesSync = require('./costRatesSync');
+const costFilters = require('./costFilters');
 
 const VISIBILITY_FILE = 'cost_amounts_visibility';
 // Đúng 4 cột CEO chốt — không thêm cột nào khác vào menu này.
@@ -141,98 +142,163 @@ function c32Of(rate, baseRevenue) {
 }
 
 /**
- * Dựng bảng thành tiền theo cặp cho một kỳ. LỌC QUYỀN tại đây:
- * CEO thấy mọi NV có trong kho; NV (route đã kiểm công tắc) chỉ thấy chính mình.
- * Không nhận danh sách emp từ ngoài — không có đường hỏi tiền người khác.
+ * Dựng bảng thành tiền theo cặp cho MỘT hoặc NHIỀU kỳ.
+ *
+ * LỌC QUYỀN tại đây: CEO thấy mọi NV có trong kho; NV (route đã kiểm công tắc) chỉ
+ * thấy chính mình. Không nhận danh sách emp từ ngoài — không có đường hỏi tiền người
+ * khác. Bộ lọc của người dùng chạy SAU hàng rào quyền, nên lọc rộng cỡ nào cũng
+ * không mở thêm được một dòng nào ngoài phạm vi.
+ *
+ * ‼ NHIỀU KỲ = NHIỀU DÒNG, KHÔNG CỘNG DỒN (CEO xin "xuất từ kỳ đến kỳ" 09/08/2026).
+ * Mỗi kỳ có bản % riêng, cộng doanh thu hai kỳ rồi nhân MỘT bản % là bịa số cho kỳ
+ * kia. Vì thế mỗi cặp × mỗi kỳ là một dòng, có cột "Kỳ"; phần tổng theo NV mới cộng
+ * lại. Kỳ nào chưa đồng bộ % ⇒ nằm trong `missingPeriods` và KHÔNG lặng lẽ biến mất.
+ *
+ * `catalogAttrsOf(period)` → Map `UNIT@QLNB` → { contractor, contractorName, route,
+ * priority } (danh mục là SSOT); tra không ra thì lấy dự phòng từ chính dòng doanh
+ * thu, vẫn không ra thì để RỖNG chứ không đoán.
  */
-function buildAmounts({ period, session, store = persist, revenueRowsOf } = {}) {
-  const entry = store.load(costRatesSync.FILE, {})[text(period)];
-  if (!entry) {
-    return { period, available: false, reason: 'CHUA_DONG_BO', columns: [...COLUMNS], rows: [], employees: [], fetchedAt: null };
-  }
+function buildAmounts({ period, periods, session, store = persist, revenueRowsOf, catalogAttrsOf = () => new Map(), filters: rawFilters = {} } = {}) {
+  const filters = costFilters.normalizeFilters(rawFilters);
+  const periodList = [...new Set((Array.isArray(periods) && periods.length ? periods : [period]).map(text).filter(Boolean))].sort();
+  const warehouse = store.load(costRatesSync.FILE, {});
+  const availablePeriods = periodList.filter((item) => warehouse[item]);
+  const missingPeriods = periodList.filter((item) => !warehouse[item]);
+  const seen = costFilters.collector();
+  const emptyResult = (reason) => ({
+    period: periodList[0] || '', periods: periodList, missingPeriods,
+    available: false, reason, columns: [...COLUMNS], rows: [], employees: [],
+    filters, filterOptions: seen.result(), partnerGroups: costFilters.PARTNER_GROUPS.map((item) => ({ ...item })),
+    groupQueryNote: costFilters.groupQueryNote(filters.groupQuery), sources: [], fetchedAt: null,
+  });
+  if (!availablePeriods.length) return emptyResult('CHUA_DONG_BO');
+
   const isCeo = !!session?.isCeo;
-  const scopeCodes = isCeo
-    ? Object.keys(entry.employees || {}).sort()
-    : [upper(session?.emp_code)].filter((code) => entry.employees?.[code]);
-  if (!scopeCodes.length) {
-    return { period, available: false, reason: 'KHONG_CO_TRONG_KHO', columns: [...COLUMNS], rows: [], employees: [], fetchedAt: entry.fetchedAt || null };
-  }
+  const ownCode = upper(session?.emp_code);
+  const scopeCodes = [...new Set(availablePeriods.flatMap((item) => Object.keys(warehouse[item].employees || {})))]
+    .map(upper)
+    .filter((code) => isCeo || code === ownCode)
+    .sort();
+  if (!scopeCodes.length) return emptyResult('KHONG_CO_TRONG_KHO');
 
   const rows = [];
-  const employees = [];
-  for (const empCode of scopeCodes) {
-    // ‼ Đọc % theo TẬP CỘT CỦA CÔNG THỨC C47, không theo cột NV được nhận. Hai tập
-    // này khác nhau và lẫn chúng chính là lỗi đã mắc ở bản đầu.
-    const rates = pairRates(entry.employees[empCode], C47_REQUIRED);
-    const lines = employeeCost.buildRevenueLines(revenueRowsOf(empCode), empCode, period);
-
-    // Gộp doanh thu theo cặp; giữ tên hàng đầu tiên gặp làm nhãn dự phòng.
-    const revenueByPair = new Map();
-    for (const line of lines) {
-      const key = `${line.unit}\u001f${line.product}`;
-      const agg = revenueByPair.get(key) || { withVat: 0, noVat: 0, productName: '' };
-      agg.withVat += line.revenue;
-      agg.noVat += line.revenueBeforeVat;
-      if (!agg.productName) agg.productName = text(line.source?.product_name ?? line.source?.c16);
-      revenueByPair.set(key, agg);
+  const filtersActive = costFilters.isActive(filters);
+  // Tổng theo NV cộng qua MỌI kỳ đang xem — khoá theo mã NV, không theo kỳ.
+  const byEmployee = new Map();
+  const totalsOf = (empCode) => {
+    if (!byEmployee.has(empCode)) {
+      byEmployee.set(empCode, { empCode, periods: new Set(), pairCount: 0, missingPairs: 0, missingC32Pairs: 0,
+        negativePairs: 0, revenueNoVat: 0, revenueWithVat: 0, c32NoVat: 0, c32WithVat: 0, c47NoVat: 0, c47WithVat: 0 });
     }
+    return byEmployee.get(empCode);
+  };
 
-    const totals = { revenueNoVat: 0, revenueWithVat: 0, c32NoVat: 0, c32WithVat: 0, c47NoVat: 0, c47WithVat: 0,
-      pairCount: 0, missingPairs: 0, missingC32Pairs: 0, negativePairs: 0 };
-    for (const key of [...revenueByPair.keys()].sort((a, b) => a.localeCompare(b, 'vi'))) {
-      const agg = revenueByPair.get(key);
-      const [unitCode, productCode] = key.split('\u001f');
-      const rate = rates.get(key);
-      const c32NoVat = c32Of(rate, agg.noVat);
-      const c32WithVat = c32Of(rate, agg.withVat);
-      const noVat = c47Of(rate, agg.noVat);
-      const withVat = c47Of(rate, agg.withVat);
-      const row = {
-        empCode,
-        unitCode,
-        productCode,
-        productName: rate?.productName || agg.productName || productCode,
-        // Doanh thu giữ lại làm CƠ SỞ ĐỐI CHIẾU — nhưng KHÔNG phải là C32.
-        revenueNoVat: Math.round(agg.noVat),
-        revenueWithVat: Math.round(agg.withVat),
-        c32NoVat: c32NoVat.amount,
-        c32WithVat: c32WithVat.amount,
-        c32Percent: c32NoVat.percent,
-        c32Reason: c32NoVat.reason,
-        c47NoVat: noVat.amount,
-        c47WithVat: withVat.amount,
-        c47Percent: noVat.percent,
-        c47Reason: noVat.reason,
-        c47Missing: noVat.missing,
-        // C47 âm = đã chia vượt quá ngân sách C32. Nêu ra, không hiển thị lặng lẽ.
-        c47Negative: noVat.negative,
-      };
-      rows.push(row);
-      totals.pairCount += 1;
-      totals.revenueNoVat += row.revenueNoVat;
-      totals.revenueWithVat += row.revenueWithVat;
-      if (row.c32NoVat == null) totals.missingC32Pairs += 1;
-      else { totals.c32NoVat += row.c32NoVat; totals.c32WithVat += row.c32WithVat; }
-      if (row.c47Negative) totals.negativePairs += 1;
-      if (row.c47NoVat == null) totals.missingPairs += 1;
-      else { totals.c47NoVat += row.c47NoVat; totals.c47WithVat += row.c47WithVat; }
+  for (const item of availablePeriods) {
+    const entry = warehouse[item];
+    const attrs = catalogAttrsOf(item) || new Map();
+    for (const empCode of scopeCodes) {
+      const kept = entry.employees?.[empCode];
+      if (!kept) continue;
+      // KHÔNG lọc ⇒ NV nào có % trong kho đều phải xuất hiện ở bảng tổng, kể cả khi
+      // kỳ đó không có doanh thu nào (pairCount 0). "Có % mà không có doanh thu" là
+      // tin cần thấy; để dòng đó biến mất là giấu chuyện. Đang lọc thì mới được giấu
+      // NV không còn dòng nào — nếu không, lọc một đơn vị vẫn hiện đủ mấy chục NV rỗng.
+      if (!filtersActive) totalsOf(empCode).periods.add(item);
+      // ‼ Đọc % theo TẬP CỘT CỦA CÔNG THỨC C47, không theo cột NV được nhận. Hai tập
+      // này khác nhau và lẫn chúng chính là lỗi đã mắc ở bản đầu.
+      const rates = pairRates(kept, C47_REQUIRED);
+      const lines = employeeCost.buildRevenueLines(revenueRowsOf(empCode, item), empCode, item);
+
+      // Gộp doanh thu theo cặp; giữ tên hàng đầu tiên gặp làm nhãn dự phòng.
+      const revenueByPair = new Map();
+      for (const line of lines) {
+        const key = `${line.unit}\u001f${line.product}`;
+        const agg = revenueByPair.get(key) || { withVat: 0, noVat: 0, productName: '', dims: null };
+        agg.withVat += line.revenue;
+        agg.noVat += line.revenueBeforeVat;
+        if (!agg.productName) agg.productName = text(line.source?.product_name ?? line.source?.c16);
+        if (!agg.dims) agg.dims = costFilters.dimsOfRevenueRow(line.source);
+        revenueByPair.set(key, agg);
+      }
+
+      for (const key of [...revenueByPair.keys()].sort((a, b) => a.localeCompare(b, 'vi'))) {
+        const agg = revenueByPair.get(key);
+        const [unitCode, productCode] = key.split('\u001f');
+        const attr = attrs.get(key) || {};
+        const dims = agg.dims || {};
+        const meta = {
+          empCode,
+          unitCode,
+          productCode,
+          group: costFilters.groupOf(unitCode),
+          contractorCode: upper(attr.contractor || dims.contractorCode),
+          contractorName: text(attr.contractorName || dims.contractorName),
+          route: upper(attr.route || dims.route),
+          priority: upper(attr.priority || dims.priority),
+        };
+        // Thu lựa chọn TRƯỚC khi lọc — bỏ lọc phải còn đường quay lại.
+        seen.add({ ...meta, productName: agg.productName });
+        if (!costFilters.passes({ ...meta, productName: agg.productName }, filters)) continue;
+
+        const rate = rates.get(key);
+        const c32NoVat = c32Of(rate, agg.noVat);
+        const c32WithVat = c32Of(rate, agg.withVat);
+        const noVat = c47Of(rate, agg.noVat);
+        const withVat = c47Of(rate, agg.withVat);
+        const row = {
+          period: item,
+          ...meta,
+          productName: rate?.productName || agg.productName || productCode,
+          partnerGroup: costFilters.partnerGroupOf(meta.contractorCode),
+          // Doanh thu giữ lại làm CƠ SỞ ĐỐI CHIẾU — nhưng KHÔNG phải là C32.
+          revenueNoVat: Math.round(agg.noVat),
+          revenueWithVat: Math.round(agg.withVat),
+          c32NoVat: c32NoVat.amount,
+          c32WithVat: c32WithVat.amount,
+          c32Percent: c32NoVat.percent,
+          c32Reason: c32NoVat.reason,
+          c47NoVat: noVat.amount,
+          c47WithVat: withVat.amount,
+          c47Percent: noVat.percent,
+          c47Reason: noVat.reason,
+          c47Missing: noVat.missing,
+          // C47 âm = đã chia vượt quá ngân sách C32. Nêu ra, không hiển thị lặng lẽ.
+          c47Negative: noVat.negative,
+        };
+        rows.push(row);
+
+        const totals = totalsOf(empCode);
+        totals.periods.add(item);
+        totals.pairCount += 1;
+        totals.revenueNoVat += row.revenueNoVat;
+        totals.revenueWithVat += row.revenueWithVat;
+        if (row.c32NoVat == null) totals.missingC32Pairs += 1;
+        else { totals.c32NoVat += row.c32NoVat; totals.c32WithVat += row.c32WithVat; }
+        if (row.c47Negative) totals.negativePairs += 1;
+        if (row.c47NoVat == null) totals.missingPairs += 1;
+        else { totals.c47NoVat += row.c47NoVat; totals.c47WithVat += row.c47WithVat; }
+      }
     }
-    // Tổng C47 chỉ chốt khi ĐỦ mọi cặp — hụt cặp nào là tổng thành null + nói rõ hụt
-    // bao nhiêu, không đưa "tổng thiếu" ra như tổng thật.
-    employees.push({
-      empCode,
-      pairCount: totals.pairCount,
-      missingPairs: totals.missingPairs,
-      missingC32Pairs: totals.missingC32Pairs,
-      negativePairs: totals.negativePairs,
-      revenueNoVat: totals.revenueNoVat,
-      revenueWithVat: totals.revenueWithVat,
-      c32NoVat: totals.missingC32Pairs ? null : totals.c32NoVat,
-      c32WithVat: totals.missingC32Pairs ? null : totals.c32WithVat,
-      c47NoVat: totals.missingPairs ? null : totals.c47NoVat,
-      c47WithVat: totals.missingPairs ? null : totals.c47WithVat,
-    });
   }
+
+  // Tổng C47 chỉ chốt khi ĐỦ mọi cặp — hụt cặp nào là tổng thành null + nói rõ hụt
+  // bao nhiêu, không đưa "tổng thiếu" ra như tổng thật.
+  const employees = [...byEmployee.values()]
+    .sort((a, b) => a.empCode.localeCompare(b.empCode, 'vi'))
+    .map((item) => ({
+      empCode: item.empCode,
+      periodCount: item.periods.size,
+      pairCount: item.pairCount,
+      missingPairs: item.missingPairs,
+      missingC32Pairs: item.missingC32Pairs,
+      negativePairs: item.negativePairs,
+      revenueNoVat: item.revenueNoVat,
+      revenueWithVat: item.revenueWithVat,
+      c32NoVat: item.missingC32Pairs ? null : item.c32NoVat,
+      c32WithVat: item.missingC32Pairs ? null : item.c32WithVat,
+      c47NoVat: item.missingPairs ? null : item.c47NoVat,
+      c47WithVat: item.missingPairs ? null : item.c47WithVat,
+    }));
 
   // Tổng cộng (chỉ có nghĩa với CEO — NV chỉ có chính mình nên trùng dòng NV).
   const grand = employees.reduce((sum, item) => ({
@@ -249,16 +315,30 @@ function buildAmounts({ period, session, store = persist, revenueRowsOf } = {}) 
   }), { pairCount: 0, missingPairs: 0, missingC32Pairs: 0, negativePairs: 0,
     revenueNoVat: 0, revenueWithVat: 0, c32NoVat: 0, c32WithVat: 0, c47NoVat: 0, c47WithVat: 0 });
 
+  // Căn cước bản số của TỪNG kỳ — nhiều kỳ thì mỗi kỳ một lần đồng bộ khác nhau,
+  // gộp thành một mốc là nói dối về nguồn.
+  const sources = availablePeriods.map((item) => ({
+    period: item, fetchedAt: warehouse[item].fetchedAt || null, fetchedBy: warehouse[item].fetchedBy || null,
+  }));
+  const last = sources.at(-1) || {};
+
   return {
-    period,
+    period: periodList[0] || '',
+    periods: periodList,
+    availablePeriods,
+    missingPeriods,
     available: true,
     columns: [...COLUMNS],
-    // C47 = tổng thành tiền TẤT CẢ cột chi phí của NV đó (full-time: C36+C41+C43+C44+C45).
     rows,
     employees,
     grand,
-    fetchedAt: entry.fetchedAt || null,
-    fetchedBy: entry.fetchedBy || null,
+    filters,
+    filterOptions: seen.result(),
+    partnerGroups: costFilters.PARTNER_GROUPS.map((item) => ({ ...item })),
+    groupQueryNote: costFilters.groupQueryNote(filters.groupQuery),
+    sources,
+    fetchedAt: last.fetchedAt || null,
+    fetchedBy: last.fetchedBy || null,
   };
 }
 

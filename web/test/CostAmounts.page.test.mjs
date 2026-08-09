@@ -22,13 +22,20 @@ test('cờ costAmountsEnabled do BACKEND chốt (CEO hoặc công tắc), fronte
 });
 
 test('route dữ liệu tự chặn độc lập — ẩn tab không phải hàng rào quyền', () => {
-  const at = routes.indexOf("router.get('/catalog-management/cost-amounts'");
-  assert.ok(at >= 0, 'thiếu route cost-amounts');
-  const body = routes.slice(at, routes.indexOf("router.get('/catalog-management/cost-amounts.xlsx'", at));
-  assert.match(body, /COST_AMOUNTS_DISABLED/);
-  assert.match(body, /res\.status\(403\)/);
-  // Không nhận tham số emp ⇒ không có đường hỏi tiền của người khác.
-  assert.doesNotMatch(body, /req\.query\.emp\b/);
+  // Cổng nằm ở MỘT hàm dùng chung, và CẢ HAI route (xem màn + tải file) đều phải đi
+  // qua nó. Một cổng khoá, một cổng mở thì coi như không khoá gì cả.
+  const gate = routes.slice(routes.indexOf('function costAmountsGate('), routes.indexOf("router.get('/catalog-management/cost-amounts'"));
+  assert.match(gate, /COST_AMOUNTS_DISABLED/);
+  assert.match(gate, /res\.status\(403\)/);
+  assert.match(gate, /auth\.isCeoActor\(req\.session\)/);
+  for (const route of ["router.get('/catalog-management/cost-amounts'", "router.get('/catalog-management/cost-amounts.xlsx'"]) {
+    const at = routes.indexOf(route);
+    assert.ok(at >= 0, `thiếu route ${route}`);
+    const body = routes.slice(at, at + 400);
+    assert.match(body, /if \(!costAmountsGate\(req, res\)\) return undefined;/, `${route} phải qua cổng`);
+    // Không nhận tham số emp ⇒ không có đường hỏi tiền của người khác.
+    assert.doesNotMatch(body, /req\.query\.emp\b/);
+  }
 });
 
 test('công tắc CHỈ CEO đặt (requireCeo, không phải requireAdmin)', () => {

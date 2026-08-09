@@ -3,6 +3,8 @@ import { api, downloadCostAmounts } from '../api.js';
 import { Spinner } from '../components.jsx';
 import { bangkokToday } from '../revenueCoverage.js';
 import { formatDateTime } from '../util.js';
+// Bộ lọc nâng cao dùng CHUNG với menu Tổng hợp chi phí — một luật lọc cho cả hai màn.
+import { CostFilterPanel, EMPTY_COST_FILTERS, costFilterParams, countCostFilters } from '../costFilterPanel.jsx';
 
 /**
  * MENU RIÊNG "THÀNH TIỀN C32/C47" (Đợt 3 — SPEC_COST_RATES_LOCAL_SYNC · CEO chốt 08/08/2026).
@@ -136,41 +138,57 @@ function VisibilityPanel() {
 }
 
 export default function CostAmounts({ me }) {
-  const [period, setPeriod] = useState(currentKy());
-  const [periods, setPeriods] = useState([]);
+  // CEO xin "xuất từ kỳ đến kỳ" (09/08/2026): kỳ trở thành MỘT DẢI. Mặc định vẫn là
+  // đúng một kỳ mới nhất — thêm tính năng không được đổi thói quen đang dùng.
+  const [periodList, setPeriodList] = useState([]);
+  const [from, setFrom] = useState(currentKy());
+  const [to, setTo] = useState(currentKy());
+  const [filters, setFilters] = useState({ ...EMPTY_COST_FILTERS });
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
   const isCeo = !!me?.is_ceo;
 
-  useEffect(() => { api.periods().then((p) => { const list = (p.periods || p || []).map((x) => x.ky || x).filter((x) => /^\d{2}\.\d{4}$/.test(x)); setPeriods(list); if (list.length && !list.includes(period)) setPeriod(list.at(-1)); }).catch(() => {}); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    api.periods().then((p) => {
+      const list = (p.periods || p || []).map((x) => x.ky || x).filter((x) => /^\d{2}\.\d{4}$/.test(x));
+      setPeriodList(list);
+      if (list.length) { setFrom(list.at(-1)); setTo(list.at(-1)); }
+    }).catch(() => {});
+  }, []);
+
+  // Tham số gửi backend — DÙNG CHUNG cho cả xem màn lẫn xuất Excel, để file tải về
+  // không bao giờ khác cái đang nhìn.
+  const params = useMemo(() => ({ from, to, ...costFilterParams(filters) }), [from, to, filters]);
+  const paramsKey = JSON.stringify(params);
+
   useEffect(() => {
     let alive = true;
-    setLoading(true); setError('');
-    api.costAmounts({ period })
-      .then((r) => { if (alive) setData(r); })
-      .catch((e) => { if (alive) { setData(null); setError(e.message); } })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [period]);
-  useEffect(() => { setPage(1); }, [period, query]);
+    // Gõ ô tìm/nhóm mã thì đợi 300ms mới hỏi backend — mỗi phím một lượt gọi là
+    // vừa nặng máy chủ vừa nhấp nháy bảng.
+    const timer = setTimeout(() => {
+      setLoading(true); setError('');
+      api.costAmounts(params)
+        .then((r) => { if (alive) setData(r); })
+        .catch((e) => { if (alive) { setData(null); setError(e.message); } })
+        .finally(() => { if (alive) setLoading(false); });
+    }, 300);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [paramsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(1); }, [paramsKey]);
 
-  const rows = useMemo(() => {
-    const all = data?.rows || [];
-    const q = query.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((r) => `${r.empCode} ${r.unitCode} ${r.productCode} ${r.productName}`.toLowerCase().includes(q));
-  }, [data, query]);
+  // ‼ KHÔNG lọc lại ở frontend. Backend đã lọc bằng luật dùng chung; lọc thêm một
+  // lớp nữa ở đây là hai bộ luật, và bảng sẽ lệch với file Excel xuất ra.
+  const rows = data?.rows || [];
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount);
   const visibleRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   async function exportXlsx() {
     setExporting(true); setError('');
-    try { await downloadCostAmounts({ period }); } catch (e) { setError(e.message); }
+    try { await downloadCostAmounts(params); } catch (e) { setError(e.message); }
     setExporting(false);
   }
 
@@ -185,35 +203,63 @@ export default function CostAmounts({ me }) {
         Thiếu % của bất kỳ cột nào trong 14 cột ⇒ ô để <b>—</b> kèm tên cột thiếu, không suy 0 rồi trừ nửa vời.</p>
     </div>
     <div className="card cost-amounts-controls">
-      <label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
-      <label><span>Tìm nhanh</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="NV, đơn vị, mã hàng, tên hàng…" /></label>
-      {data?.available && <button className="btn" disabled={exporting} onClick={exportXlsx}>{exporting ? 'Đang xuất…' : '⬇ Xuất Excel'}</button>}
+      <label><span>Từ kỳ</span><select value={from} onChange={(e) => setFrom(e.target.value)}>{(periodList.length ? periodList : [from]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
+      <label><span>Đến kỳ</span><select value={to} onChange={(e) => setTo(e.target.value)}>{(periodList.length ? periodList : [to]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
+      {data?.available && <button className="btn" disabled={exporting} onClick={exportXlsx}>{exporting ? 'Đang xuất…' : '⬇ Xuất Excel (đúng bộ lọc đang chọn)'}</button>}
     </div>
+
+    {/* CEO 09/08: "khi cần lọc thì mở bảng và chọn tính năng" — bộ lọc gọn sau MỘT
+        nút, mở ra mới hiện. Giá trị chọn lấy từ chính dữ liệu đang xem. */}
+    <CostFilterPanel options={data?.filterOptions} partnerGroups={data?.partnerGroups}
+      value={filters} onChange={setFilters} note={data?.groupQueryNote} />
+
+    {/* ‼ Kỳ nào chưa đồng bộ % thì NÓI RA — không lặng lẽ xuất thiếu tháng rồi để
+        CEO tưởng tháng đó không tốn đồng nào. */}
+    {!!data?.missingPeriods?.length && <div className="card catalog-alert error" role="alert">
+      <b>‼ Kỳ {data.missingPeriods.map(hubToUi).join(' · ')} CHƯA đồng bộ % chi phí</b>
+      {data.rows?.length ? <> — bảng dưới <b>KHÔNG</b> gồm các kỳ đó.</> : <> nên <b>bảng trống hoàn toàn</b>, không phải kỳ đó không tốn tiền.</>}
+      <div className="cost-breakdown-todo">
+        <b>Cần làm:</b> vào <b>Danh mục QL</b> → chọn kỳ <b>{data.missingPeriods.map(hubToUi).join(' / ')}</b>
+        → bấm <b>"Đồng bộ % chi phí"</b> → quay lại đây. Mỗi kỳ phải đồng bộ một lần.
+      </div>
+    </div>}
 
     {loading && <Spinner />}
     {!loading && error && <div className="catalog-alert error" role="alert">⛔ {error}</div>}
     {!loading && !error && data && !data.available && <div className="card">
       {data.reason === 'CHUA_DONG_BO'
-        ? <p>Kho % cục bộ <b>CHƯA có kỳ {period}</b> — {isCeo ? <>vào <b>Danh mục QL</b> bấm <b>"Đồng bộ % chi phí"</b> một lần khi DataHub đang sống, rồi quay lại đây.</> : 'chờ CEO bấm "Đồng bộ % chi phí" cho kỳ này.'}</p>
-        : <p>Kỳ {period} không có dữ liệu của Anh/Chị trong kho % cục bộ.</p>}
+        ? <p>Kho % cục bộ <b>CHƯA có kỳ {from === to ? from : `${from} → ${to}`}</b> — {isCeo ? <>vào <b>Danh mục QL</b> bấm <b>"Đồng bộ % chi phí"</b> một lần khi DataHub đang sống, rồi quay lại đây.</> : 'chờ CEO bấm "Đồng bộ % chi phí" cho kỳ này.'}</p>
+        : <p>Kỳ {from === to ? from : `${from} → ${to}`} không có dữ liệu của Anh/Chị trong kho % cục bộ.</p>}
     </div>}
 
     {!loading && !error && data?.available && <>
       <div className="card table-card">
-        <div className="cost-amounts-identity">Bản % đồng bộ <b>{formatDateTime(data.fetchedAt)}</b> bởi <b>{data.fetchedBy}</b> · doanh thu slot kỳ <b>{hubToUi(data.period)}</b> · {rows.length.toLocaleString('vi-VN')} cặp{rows.length > PAGE_SIZE && <> · Hiện trang {safePage}/{pageCount} ({PAGE_SIZE} dòng/trang)</>}</div>
+        <div className="cost-amounts-identity">
+          Kỳ <b>{(data.availablePeriods || [data.period]).map(hubToUi).join(' → ')}</b>
+          {' · '}bản % đồng bộ gần nhất <b>{formatDateTime(data.fetchedAt)}</b> bởi <b>{data.fetchedBy}</b>
+          {' · '}{rows.length.toLocaleString('vi-VN')} dòng
+          {countCostFilters(filters) ? <> · <b>đang lọc {countCostFilters(filters)} điều kiện</b></> : null}
+          {rows.length > PAGE_SIZE && <> · Hiện trang {safePage}/{pageCount} ({PAGE_SIZE} dòng/trang)</>}
+        </div>
         <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
-          <th>NV</th><th>Đơn vị</th><th>Mã hàng</th><th>Tên hàng</th>
+          <th>Kỳ</th><th>NV</th><th>Đơn vị</th><th>Mã hàng</th><th>Tên hàng</th>
+          <th>Nhà thầu</th><th>Tuyến · Ưu tiên</th>
           <th className="catalog-money">Doanh thu chưa VAT</th>
           <th className="catalog-money">C32 %</th>
           {(data.columns || []).slice(0, 2).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
           <th className="catalog-money">C47 %</th>
           {(data.columns || []).slice(2).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
         </tr></thead><tbody>
-          {visibleRows.map((r) => <tr key={`${r.empCode}-${r.unitCode}-${r.productCode}`}>
+          {visibleRows.map((r) => <tr key={`${r.period}-${r.empCode}-${r.unitCode}-${r.productCode}`}>
+            <td>{hubToUi(r.period)}</td>
             <td><b>{r.empCode}</b></td>
             <td>{r.unitCode}</td>
             <td>{r.productCode}</td>
             <td>{r.productName}</td>
+            {/* Hiện đúng ba chiều CEO xin lọc — nhìn là kiểm được bộ lọc có ăn không.
+                Thiếu dữ liệu thì '—', không lấy mã thay tên. */}
+            <td>{r.contractorCode || '—'}{r.contractorName ? <small className="muted"> · {r.contractorName}</small> : null}</td>
+            <td>{r.route || '—'}{r.priority ? <small className="muted"> · {r.priority}</small> : null}</td>
             <td className="catalog-money" data-sensitive="">{money(r.revenueNoVat)}</td>
             <PercentCell value={r.c32Percent} />
             <MoneyCell value={r.c32NoVat} reason={r.c32Reason} missing={[]} />
@@ -223,7 +269,11 @@ export default function CostAmounts({ me }) {
             <MoneyCell value={r.c47WithVat} reason={r.c47Reason} missing={r.c47Missing} negative={r.c47Negative} />
           </tr>)}
         </tbody></table></div>
-        {rows.length === 0 && <div className="muted catalog-empty">Không có cặp nào trong phạm vi đang lọc.</div>}
+        {rows.length === 0 && <div className="muted catalog-empty">
+          {countCostFilters(filters)
+            ? <>Không cặp nào khớp <b>{countCostFilters(filters)} điều kiện lọc</b> đang bật — bấm <b>"Xoá hết bộ lọc"</b> ở bảng lọc để xem lại toàn bộ.</>
+            : 'Không có cặp nào trong phạm vi được phép xem.'}
+        </div>}
         {pageCount > 1 && <div className="cost-amounts-pager">
           <button className="btn" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>‹ Trước</button>
           <span>Trang {safePage}/{pageCount} · {rows.length.toLocaleString('vi-VN')} dòng</span>
@@ -234,12 +284,13 @@ export default function CostAmounts({ me }) {
       <div className="card table-card">
         <div className="cost-amounts-identity"><b>Tổng theo NV</b> — tổng C47 chỉ chốt khi đủ % mọi cặp; hụt cặp nào thì ghi rõ, không đưa "tổng thiếu" ra như tổng thật.</div>
         <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
-          <th>NV</th><th>Số cặp</th><th>Cặp thiếu %</th><th>Cặp C47 âm</th>
+          <th>NV</th><th>Số kỳ</th><th>Số cặp</th><th>Cặp thiếu %</th><th>Cặp C47 âm</th>
           <th className="catalog-money">Doanh thu chưa VAT</th>
           {(data.columns || []).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
         </tr></thead><tbody>
           {(data.employees || []).map((item) => <tr key={item.empCode}>
             <td><b>{item.empCode}</b></td>
+            <td>{item.periodCount}</td>
             <td>{item.pairCount}</td>
             <td>{item.missingPairs ? <b className="cost-amounts-warn">{item.missingPairs}</b> : 0}</td>
             <td title="Số cặp đã chi vượt quá C32 được cấp">{item.negativePairs ? <b className="cost-amounts-warn">{item.negativePairs}</b> : 0}</td>
@@ -251,6 +302,7 @@ export default function CostAmounts({ me }) {
           </tr>)}
           {isCeo && data.grand && <tr className="cost-amounts-grand">
             <td><b>TỔNG CỘNG</b></td>
+            <td>{(data.availablePeriods || []).length}</td>
             <td><b>{data.grand.pairCount}</b></td>
             <td>{data.grand.missingPairs ? <b className="cost-amounts-warn">{data.grand.missingPairs}</b> : 0}</td>
             <td>{data.grand.negativePairs ? <b className="cost-amounts-warn">{data.grand.negativePairs}</b> : 0}</td>

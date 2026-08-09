@@ -20,6 +20,22 @@ const DEFAULT_BACKOFF_MS = Object.freeze([2000, 4000]);
 const FAST_TIMEOUT_MS = 2000;
 const VERIFIED_PREFETCH_MAX_AGE_MS = 2 * 60 * 1000;
 const backgroundRefreshInFlight = new Map();
+/* ‼ NGUỒN KẸT NHƯNG CÒN BẢN % ĐÃ LƯU ⇒ SỐ VẪN DÙNG ĐƯỢC (CEO 09/08/2026).
+ *
+ * `ok_stale_rates` sinh ra ở `fetchEmployeeCost` khi cửa chi phí DataHub trễ/đứt mà
+ * kho `rateSnapshot` còn bản % gần nhất — đúng luật SPEC_COST_RATES_LOCAL_SYNC: *"kẹt
+ * thì dùng bản gần nhất và NÓI RA là số cũ"*. Nhưng mọi nơi đọc kết quả đều viết
+ * `outcome !== 'ok'`, nên bản cũ vừa khôi phục xong lập tức bị tuyên là "chưa lấy
+ * được dữ liệu" — lưới an toàn coi như KHÔNG TỒN TẠI. Đó chính là lý do màn chi phí
+ * "khi thì đủ, khi thì thiếu" và bot nhắn tin báo thiếu cho NV mỗi lần nguồn chớp.
+ *
+ * Một danh sách duy nhất ở đây, mọi nơi hỏi qua `isUsableOutcome`. RIÊNG việc suy ra
+ * "kỳ hiệu lực chính xác" (`rateEffectiveFrom`) VẪN đòi `ok` thật — số cũ dùng để
+ * hiển thị được, nhưng không được đóng dấu là chính sách của kỳ này.
+ */
+const USABLE_OUTCOMES = Object.freeze(['ok', 'ok_stale_rates']);
+const isUsableOutcome = (outcome) => USABLE_OUTCOMES.includes(String(outcome || ''));
+
 const AUDIT_FILE = 'employee_cost_audit';
 const AUDIT_LIMIT = 5000;
 const DEFAULT_ANNUAL_COLUMN_KEYS = Object.freeze(['c44']);
@@ -1342,6 +1358,8 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
 }
 
 module.exports = {
+  USABLE_OUTCOMES,
+  isUsableOutcome,
   CONTRACT_PATH,
   DIMENSION_KEYS,
   DEFAULT_NOTE,

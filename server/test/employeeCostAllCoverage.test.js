@@ -40,3 +40,44 @@ test('mọi NV lấy được nguồn thì coverage đầy đủ và tổng đư
   assert.equal(match.unavailableEmployeeCount, 0);
   assert.equal(merged.periods[0].summary.reliable, true);
 });
+
+/* ── Bản % cũ (`ok_stale_rates`) là SỐ DÙNG ĐƯỢC, không phải "chưa lấy được" ──
+ * CEO 09/08/2026: "phần chi phí của các ô KPI khi thì kết nối đủ, khi thì báo
+ * thiếu… bot cứ nhắn NV là chưa đủ dữ liệu." Gốc: lưới an toàn khôi phục bản %
+ * đã lưu (`ok_stale_rates`) nhưng tầng gộp so `!== 'ok'` nên NV vừa được cứu số
+ * xong vẫn bị tuyên "chưa lấy được" — màn chớp thiếu/đủ theo từng lượt gọi.   */
+
+test('‼ ok_stale_rates được tính là CÓ SỐ — không rơi vào danh sách "chưa lấy được"', () => {
+  const merged = employeeCostTable.mergeEmployeeReports([
+    report('DN001', 600, 610, 'ok'),
+    report('DN002', 649, 656, 'ok_stale_rates'),
+  ], roster);
+  const match = merged.periods[0].match;
+  // NV xài bản cũ vẫn đóng góp coverage như thường.
+  assert.equal(match.matchedRows, 1249);
+  assert.equal(match.totalRows, 1266);
+  assert.equal(match.unavailableEmployeeCount, 0, 'không được tuyên "chưa lấy được"');
+  // Nhưng phải NÓI RA là số cũ — dùng được không có nghĩa là giấu.
+  assert.deepEqual(match.staleEmployees, ['DN002']);
+  assert.equal(match.staleEmployeeCount, 1);
+  assert.equal(merged.periods[0].summary.reliable, true);
+});
+
+test('bản cũ KHÔNG được đóng dấu là chính sách hiệu lực của kỳ này', () => {
+  const merged = employeeCostTable.mergeEmployeeReports([
+    report('DN001', 600, 610, 'ok_stale_rates'),
+  ], roster);
+  // rateEffectiveFrom suy từ snapshot exact chỉ nhận outcome 'ok' thật.
+  assert.equal(merged.periods[0].rateEffectiveFrom, '');
+});
+
+test('danh sách kết quả dùng được có ĐÚNG MỘT nơi định nghĩa (employeeCost.USABLE_OUTCOMES)', () => {
+  const employeeCost = require('../src/employeeCost');
+  assert.deepEqual([...employeeCost.USABLE_OUTCOMES], ['ok', 'ok_stale_rates']);
+  assert.equal(employeeCost.isUsableOutcome('ok_stale_rates'), true);
+  assert.equal(employeeCost.isUsableOutcome('upstream_unavailable'), false);
+  // Tầng gộp phải hỏi qua hàm này, không tự so chuỗi.
+  const fs = require('fs');
+  const source = fs.readFileSync(require.resolve('../src/employeeCostTable'), 'utf8');
+  assert.match(source, /employeeCost\.isUsableOutcome/);
+});

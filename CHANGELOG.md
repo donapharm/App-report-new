@@ -1,3 +1,42 @@
+### 2026-08-09 20:20 (giờ VN) — 🔍 Truy gốc "KPI khi đủ khi thiếu" + bộ lọc nâng cao hai menu chi phí
+
+#### ‼ SỬA GỐC vụ CEO bực: chi phí "khi thì kết nối đủ, khi thì báo thiếu", bot nhắn NV "chưa đủ dữ liệu"
+
+CEO (09/08, kèm ảnh màn + ảnh tin bot): *"phần chi phí của các ô KPI khi thì kết nối đủ, khi thì báo thiếu… bot loginreportdonapharm cứ báo tin cho các NV là chưa có đủ dữ liệu. Anh rất bực."* Và tin bot tự thú: *"danh sách này ĐANG ĐỔI LIÊN TỤC giữa các lần kiểm — dấu hiệu nguồn chập chờn."*
+
+**Gốc tìm ra ở App Report, không phải chỉ tại DataHub.** Hệ thống ĐÃ CÓ lưới an toàn: nguồn chi phí DataHub kẹt thì khôi phục bản % đã lưu gần nhất và đánh dấu `ok_stale_rates` ("số cũ nhưng dùng được"). Nhưng **mọi tầng phía trên so `outcome !== 'ok'`**, nên NV vừa được lưới cứu số xong **vẫn bị tuyên "chưa lấy được dữ liệu"**:
+- Tầng gộp ALL (`employeeCostTable`) đếm họ vào `unavailableEmployees` ⇒ KPI báo thiếu;
+- Màn "Mặt hàng thiếu %" (`employeeCostGaps`) loại họ khỏi danh sách ⇒ hai tab đá nhau;
+- Bộ cảnh báo nguồn đọc đúng danh sách đó ⇒ **bot nhắn NV báo thiếu oan**, và vì kết quả đổi theo từng lượt gọi (lượt này kịp, lượt sau trễ) nên danh sách "đổi liên tục" — đúng triệu chứng bot mô tả.
+
+**Sửa:** danh sách "kết quả nguồn còn dùng được" định nghĩa ĐÚNG MỘT chỗ — `employeeCost.USABLE_OUTCOMES = ['ok', 'ok_stale_rates']` + `isUsableOutcome()`; tầng gộp, màn gaps, `sourceAvailable` của tin nhắn đều hỏi qua đó. Kèm hai chốt:
+1. **Không giấu:** NV đang xài bản % cũ được liệt kê riêng (`match.staleEmployees`) + khối tin màu xanh trên màn *"Đang hiển thị BẢN TỶ LỆ % CŨ cho …"* — dùng được ≠ im lặng.
+2. **Không đóng dấu bừa:** suy `rateEffectiveFrom` (chính sách hiệu lực của kỳ) **vẫn đòi `ok` thật** — số cũ hiển thị được nhưng không được nhận là chính sách kỳ này.
+
+Test mới trong `employeeCostAllCoverage.test.js`: stale được tính CÓ SỐ, không rơi vào "chưa lấy được"; stale không sinh `rateEffectiveFrom`; và test khoá danh sách một-nơi-định-nghĩa.
+
+#### 🧭 Thêm công cụ điều tra cho câu "rốt cuộc bị ẩn, hay không kéo được từ App Sale?"
+
+`server/scripts/diagnose_cost_source.js` (CHỈ ĐỌC, không gọi mạng, không in PII/token) trả lời tách bạch ba nghi vấn của CEO:
+- ① đếm dòng doanh thu từng kỳ trong kho slot ⇒ đường **App Sale → App Report** có đứt không;
+- ② đọc nhật ký `employee_cost_audit` ⇒ cửa **chi phí DataHub** hỏng kiểu gì (kèm bảng dịch nghĩa từng mã `outcome` sang tiếng người);
+- ③ liệt kê kho % cục bộ đã đồng bộ kỳ nào.
+Con mắt che số KHÔNG liên quan: nó chỉ đổi chữ số thành "•••", không bao giờ sinh chữ "chưa đủ dữ liệu".
+
+#### 🎛 Bộ lọc nâng cao cho tab "Thành tiền C32·C47" (yêu cầu CEO 09/08)
+
+- **Xuất/xem TỪ KỲ ĐẾN KỲ:** mỗi cặp × mỗi kỳ một dòng có cột "Kỳ" — KHÔNG cộng doanh thu hai kỳ rồi nhân một bản % (mỗi kỳ % riêng). Kỳ chưa đồng bộ ⇒ nêu tên + hướng dẫn, không lặng lẽ thiếu tháng.
+- **8 chiều lọc:** mã nhà thầu · **tên nhà thầu** · **Group-DONA/Group-đối tác** (suy từ mã nhà thầu, mẫu nhận diện đổi được qua `COST_DONA_CONTRACTOR_PATTERN`; không có mã ⇒ để trống, không đoán bừa) · NV · tuyến · mã đơn vị · nhóm mã · ưu tiên H.A*; thêm ô **gõ nhóm mã "033."** và tìm tự do.
+- **‼ Luật dấu chấm đúng lời CEO:** gõ `033.` mới lọc nhóm; gõ `033` thì KHÔNG lọc **và nói ra lý do** (001 sẽ nuốt 0011) — có test khoá.
+- **Một bộ luật cho hai menu:** `server/src/costFilters.js` + `web/src/costFilterPanel.jsx` dùng chung cho cả Tổng hợp C33–C46 (menu kia chuyển sang dùng chung, `groupOf` lấy đúng hàm gốc `catalogCostColumnGrants`). Hai màn không bao giờ lọc lệch nhau.
+- **"Khi cần lọc thì mở bảng":** bộ lọc gói sau MỘT nút "⚙ Bộ lọc nâng cao", mở ra mới hiện; điều kiện đang bật hiện thành chip bấm-là-bỏ; ô chọn giữ 3 đường thoát (bấm ngoài/Esc/Xong) + ô tìm trong danh sách dài.
+- **Màn = file:** một hàm `costAmountsFor` dựng bảng cho cả route xem lẫn route Excel; file ghi kèm kỳ thiếu + bộ lọc đang áp + mốc đồng bộ TỪNG kỳ; cổng quyền `costAmountsGate` chặn ở CẢ HAI route. Bảng chi tiết thêm cột Kỳ/Nhà thầu/Tuyến·Ưu tiên; backend không đổi hành vi khi không truyền from/to.
+- Frontend **bỏ lọc lại phía client** (một luật duy nhất ở backend), debounce 300ms khi gõ.
+
+Test: server **1127** pass / 7 fail cố hữu (6 PDF thiếu `pdfinfo` + VP018 denylist — không liên quan) · web **364/364** · build sạch. Test mới: `costFilters.test.js` (15), coverage stale (3).
+
+---
+
 ### 2026-08-09 19:05 (giờ VN) — 🏷️ Tiêu đề cột đủ tên + mỗi cột hiện CẢ % LẪN TIỀN
 
 CEO: *"tôi muốn các mục thanh tiêu đề của các cột hiển thị đủ tên thanh tiêu đề kèm với cột C bao nhiêu. Tôi muốn hiển thị mỗi cột là tỷ lệ % và thành tiền."*

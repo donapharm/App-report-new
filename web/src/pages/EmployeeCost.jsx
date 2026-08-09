@@ -1764,6 +1764,9 @@ export default function EmployeeCost({ me, onNavigate }) {
   const unavailableEmpCodes = Array.isArray(kpiMatch.unavailableEmployees) ? kpiMatch.unavailableEmployees : [];
   const unavailableEmps = Number(kpiMatch.unavailableEmployeeCount || 0);
   const unavailableEmpLabel = unavailableEmpCodes.length ? unavailableEmpCodes.join(', ') : `${unavailableEmps} NV`;
+  // NV đang xài BẢN % CŨ vì nguồn tươi kẹt: có số nên KHÔNG nằm trong danh sách
+  // "chưa lấy được", nhưng phải nói ra là số cũ — dùng được không có nghĩa là giấu.
+  const staleEmpCodes = Array.isArray(kpiMatch.staleEmployees) ? kpiMatch.staleEmployees : [];
   const gapConsistency = employeeCostGapConsistency(model, gapBadge);
   const gapMismatch = allEmployees && !loading && gapConsistency.mismatch;
   const gapMismatchEmployees = [...new Set([
@@ -2049,6 +2052,12 @@ export default function EmployeeCost({ me, onNavigate }) {
     {!!unavailableEmps && <div className="employee-cost-match-warning" role="alert">
       <b>⚠ Dữ liệu chưa đầy đủ — số đang là TẠM TÍNH.</b> Chưa lấy được dữ liệu chi phí của <b>{unavailableEmpLabel}</b> ({unavailablePairs.toLocaleString('vi-VN')} cặp, kỳ {formatMonthLabel(model.from)}{model.from === model.to ? '' : ` → ${formatMonthLabel(model.to)}`}).
       Phần này <b>không</b> phải "thiếu % catalog" mà là <b>nguồn chi phí DataHub chưa trả dữ liệu</b> — báo DataHub kiểm tra. Tỷ lệ khớp phía dưới đã loại phần này ra để không báo sai.
+    </div>}
+
+    {!!staleEmpCodes.length && <div className="employee-cost-match-warning is-stale" role="status">
+      <b>🕒 Đang hiển thị BẢN TỶ LỆ % CŨ cho {staleEmpCodes.join(', ')}.</b> Cửa chi phí DataHub trả chậm/không trả
+      ở lượt này, App Report dùng bản % đã lưu gần nhất để số không biến mất. Số vẫn tính ra được, nhưng
+      <b> nếu DataHub vừa đổi tỷ lệ thì phần này chưa cập nhật</b> — làm mới lại sau khi nguồn khoẻ.
     </div>}
 
     <div className="kpi-grid employee-cost-kpis">

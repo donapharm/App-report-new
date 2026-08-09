@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const page = fs.readFileSync(new URL('../src/pages/CostBreakdown.jsx', import.meta.url), 'utf8');
+// Ô lọc đã tách ra dùng CHUNG với menu Thành tiền C32·C47 — soi ở file chung.
+const pick = fs.readFileSync(new URL('../src/costFilterPanel.jsx', import.meta.url), 'utf8');
 const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
 const access = fs.readFileSync(new URL('../src/tabAccess.js', import.meta.url), 'utf8');
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
@@ -110,10 +112,10 @@ test('con mắt phủ luôn số so sánh — chênh lệch cũng là tiền', (
 /* ── Ô lọc KHÔNG được kẹt (CEO báo 09/08: "tích vào ô chọn xuất, nó dính luôn") ── */
 
 test('‼ ba đường thoát khỏi ô lọc: bấm ra ngoài · phím Esc · nút "Xong"', () => {
-  assert.match(page, /if \(!boxRef\.current\?\.contains\(event\.target\)\) onToggle\(false\)/, 'bấm ra ngoài phải đóng');
-  assert.match(page, /if \(event\.key === 'Escape'\) onToggle\(false\)/, 'Esc phải đóng');
-  assert.match(page, /onClick=\{\(\) => onToggle\(false\)\}>Xong</, 'phải có nút Xong');
-  assert.match(page, /Bấm ra ngoài hoặc phím Esc để đóng/);
+  assert.match(pick, /if \(!boxRef\.current\?\.contains\(event\.target\)\) onToggle\(false\)/, 'bấm ra ngoài phải đóng');
+  assert.match(pick, /if \(event\.key === 'Escape'\) onToggle\(false\)/, 'Esc phải đóng');
+  assert.match(pick, /onClick=\{\(\) => onToggle\(false\)\}>Xong</, 'phải có nút Xong');
+  assert.match(pick, /Bấm ra ngoài hoặc phím Esc để đóng/);
 });
 
 test('CHỈ MỘT ô lọc mở tại một thời điểm — trạng thái do CHA giữ, không chồng nhau', () => {
@@ -123,11 +125,11 @@ test('CHỈ MỘT ô lọc mở tại một thời điểm — trạng thái do 
   const picks = page.match(/<MultiPick label="[^"]+" open=\{openPick === "[^"]+"\} onToggle=/g) || [];
   assert.equal(picks.length, 7, 'cả 7 ô lọc phải dùng chung trạng thái của cha');
   // Không được quay lại kiểu mỗi ô tự giữ state.
-  assert.doesNotMatch(page, /function MultiPick\([^)]*\) \{\s*const \[open, setOpen\] = useState\(false\)/);
+  assert.doesNotMatch(pick, /export function MultiPick\([^)]*\) \{\s*const \[open, setOpen\] = useState\(false\)/);
 });
 
 test('dọn sự kiện khi đóng — không để lại trình nghe treo', () => {
-  assert.match(page, /removeEventListener\('mousedown', onDocDown\); document\.removeEventListener\('keydown', onKey\)/);
+  assert.match(pick, /removeEventListener\('mousedown', onDocDown\); document\.removeEventListener\('keydown', onKey\)/);
 });
 
 /* ── Bảng rỗng vì chưa đồng bộ: phải NÓI TO + chỉ việc cần làm ─────────────── */

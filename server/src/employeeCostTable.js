@@ -1,6 +1,8 @@
 'use strict';
 
 const employeeBonus = require('./employeeBonus');
+// Danh sách "kết quả nguồn còn dùng được" chỉ có MỘT nơi định nghĩa.
+const employeeCost = require('./employeeCost');
 const employeePenaltyAggregate = require('./employeePenaltyAggregate');
 
 const BLOCKED = new Set(['c32', 'c47']);
@@ -361,8 +363,15 @@ function mergeEmployeeReports(reports = [], roster = []) {
     //   b) NV KHÔNG lấy được nguồn tỷ lệ (sourceOutcome != 'ok') → mọi dòng của NV
     //      đó hiện như chưa khớp, nhưng KHÔNG phải catalog thiếu; đây là lỗi tạm
     //      thời/nguồn. Đưa vào coverage sẽ báo sai và làm số trôi mỗi lần cache.
-    const available = blocks.filter(({ report }) => String(report.sourceOutcome || 'ok') === 'ok');
-    const unavailable = blocks.filter(({ report }) => String(report.sourceOutcome || 'ok') !== 'ok');
+    // ‼ `ok_stale_rates` = nguồn tươi kẹt nhưng App Report còn bản % đã lưu ⇒ NV đó
+    // CÓ SỐ, chỉ là số cũ. Xếp họ vào "không lấy được" là vứt bỏ chính lưới an toàn
+    // đã dựng, và là gốc của cảnh "khi đủ khi thiếu" + bot nhắn tin báo thiếu oan.
+    const available = blocks.filter(({ report }) => employeeCost.isUsableOutcome(report.sourceOutcome || 'ok'));
+    const unavailable = blocks.filter(({ report }) => !employeeCost.isUsableOutcome(report.sourceOutcome || 'ok'));
+    // Vẫn phải NÓI RA là số cũ — dùng được không có nghĩa là giấu.
+    const staleEmployees = blocks
+      .filter(({ report }) => String(report.sourceOutcome || '') === 'ok_stale_rates')
+      .map(({ report }) => String(report.empCode || '').toUpperCase()).filter(Boolean);
     const matchedRows = available.reduce((sum, item) => sum + numeric(item.period.match?.matchedRows), 0);
     const totalRows = available.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const unavailablePairs = unavailable.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
@@ -378,6 +387,8 @@ function mergeEmployeeReports(reports = [], roster = []) {
         // At ALL merge time, infer "exact this period" only when the upstream was
         // healthy and supplied policy columns; revenue-only fail-closed rows must
         // never be mislabeled as an exact policy.
+        // ‼ CỐ Ý đòi 'ok' THẬT (không nhận số cũ): bản % cũ hiển thị được nhưng
+        // KHÔNG được đóng dấu là chính sách hiệu lực của kỳ này.
         const exact = report.sourceOutcome === 'ok'
           && Array.isArray(period.columns) && period.columns.length > 0
           ? period.period : '';
@@ -401,6 +412,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
       match: {
         matchedRows, totalRows, rate, threshold, low,
         unavailablePairs, unavailableEmployees, unavailableEmployeeCount: unavailableEmployees.length,
+        staleEmployees, staleEmployeeCount: staleEmployees.length,
       },
       // Còn NV chưa lấy được nguồn ⇒ tổng chưa đầy đủ ⇒ vẫn để "tạm tính".
       summary: { reliable: !low && unavailableEmployees.length === 0 },

@@ -295,7 +295,9 @@ async function buildForSession({
     // 1 NV lỗi là mất sạch danh sách, người dùng không hiểu vì sao). Bỏ NV đó ra
     // khỏi worklist — tuyệt đối không suy ra "thiếu %" cho họ — và trả về danh
     // sách ĐÍCH DANH để UI nói rõ danh sách đang chưa đủ vì ai.
-    if (result.outcome !== 'ok') {
+    // ‼ Nhận cả `ok_stale_rates`: nguồn tươi kẹt nhưng còn bản % đã lưu thì NV vẫn
+    // có số, chỉ là số cũ. Loại họ ra ở đây là dựng lưới an toàn rồi tự cắt lưới.
+    if (!employeeCost.isUsableOutcome(result.outcome)) {
       return { empCode, employeeName: rosterMap.get(empCode)?.name || empCode, outcome: result.outcome, unavailable: true, pairs: [], coverage: coverageSummary([]) };
     }
     const revenueRowsByPeriod = {};

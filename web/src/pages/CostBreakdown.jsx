@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadCostBreakdown } from '../api.js';
 import { Spinner } from '../components.jsx';
+// Ô lọc dùng CHUNG với menu Thành tiền C32·C47 — một luật lọc, một cách thao tác.
+import { MultiPick } from '../costFilterPanel.jsx';
 
 /**
  * TỔNG HỢP CHI PHÍ C33–C46 — CHỈ CEO (CEO yêu cầu 09/08/2026).
@@ -29,52 +31,6 @@ const GROUP_LABELS = {
   employee: 'Nhân viên', unit: 'Mã đơn vị', group: 'Nhóm mã đơn vị',
   route: 'Tuyến', contractor: 'Mã nhà thầu', priority: 'Ưu tiên (H.A*…)',
 };
-
-/**
- * Ô chọn nhiều giá trị: nút mở danh sách tick. Danh sách trống = không lọc.
- *
- * ‼ BA ĐƯỜNG THOÁT (CEO báo kẹt 09/08: "tích vào ô chọn xuất theo cột, nó dính
- * luôn không thoát ra được"). Bản đầu mỗi ô tự giữ trạng thái mở nên MỞ ĐƯỢC
- * NHIỀU Ô CÙNG LÚC, chồng lên nhau che mất bảng, mà cách đóng duy nhất là bấm
- * lại đúng cái nút đã bị menu khác che. Nay:
- *   1. Bấm ra ngoài  → đóng
- *   2. Bấm phím Esc  → đóng
- *   3. Nút "Xong"    → đóng
- * và trạng thái mở do CHA giữ ⇒ mở ô này thì ô kia tự đóng, không bao giờ chồng.
- */
-function MultiPick({ label, options, values, onChange, open, onToggle }) {
-  const boxRef = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDocDown = (event) => { if (!boxRef.current?.contains(event.target)) onToggle(false); };
-    const onKey = (event) => { if (event.key === 'Escape') onToggle(false); };
-    document.addEventListener('mousedown', onDocDown);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDocDown); document.removeEventListener('keydown', onKey); };
-  }, [open, onToggle]);
-
-  return <div className="cost-breakdown-pick" ref={boxRef}>
-    <button type="button" className={`btn secondary${values.length ? ' is-active' : ''}`} aria-expanded={open}
-      onClick={() => onToggle(!open)}>
-      {label}{values.length ? ` (${values.length})` : ''}
-    </button>
-    {open && <div className="cost-breakdown-pick-menu">
-      <div className="cost-breakdown-pick-head">
-        <button type="button" className="btn ghost" onClick={() => onChange([])}>Bỏ lọc</button>
-        <button type="button" className="btn" onClick={() => onToggle(false)}>Xong</button>
-      </div>
-      <div className="cost-breakdown-pick-list">
-        {options.map((option) => <label key={option}>
-          <input type="checkbox" checked={values.includes(option)}
-            onChange={() => onChange(values.includes(option) ? values.filter((v) => v !== option) : [...values, option])} />
-          {option}
-        </label>)}
-        {!options.length && <small className="muted">Chưa có giá trị nào trong dữ liệu đang xem.</small>}
-      </div>
-      <small className="muted cost-breakdown-pick-hint">Bấm ra ngoài hoặc phím Esc để đóng.</small>
-    </div>}
-  </div>;
-}
 
 export default function CostBreakdown({ me }) {
   const [periods, setPeriods] = useState([]);

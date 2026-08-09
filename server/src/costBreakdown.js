@@ -28,6 +28,7 @@ const employeeCost = require('./employeeCost');
 const costRatesSync = require('./costRatesSync');
 const costAmounts = require('./costAmounts');
 const employeeCostTemplates = require('./employeeCostTemplates');
+const costFilters = require('./costFilters');
 const { groupOf } = require('./catalogCostColumnGrants');
 
 const text = (value) => String(value ?? '').trim();
@@ -58,35 +59,29 @@ const GROUP_BYS = Object.freeze(['employee', 'unit', 'group', 'route', 'contract
 
 const normList = (value) => [...new Set((Array.isArray(value) ? value : []).map(upper).filter(Boolean))];
 
-/** Bộ lọc 6 chiều. Danh sách rỗng = không lọc chiều đó. */
+/**
+ * Bộ lọc. Danh sách rỗng = không lọc chiều đó.
+ *
+ * ‼ Luật lọc nằm ở `costFilters` — DÙNG CHUNG với menu "Thành tiền C32·C47". Hai màn
+ * lọc bằng hai bộ luật khác nhau thì cùng một câu hỏi ra hai con số, và không ai biết
+ * màn nào đúng. Ở đây chỉ thêm `columns` (chọn cột xuất) vì đó là chuyện riêng của
+ * bảng tổng hợp, không phải một chiều lọc dữ liệu.
+ */
 function normalizeFilters(filters = {}) {
   return {
-    contractors: normList(filters.contractors),
-    units: normList(filters.units),
-    groups: normList(filters.groups),
-    employees: normList(filters.employees),
-    routes: normList(filters.routes),
-    priorities: normList(filters.priorities),
+    ...costFilters.normalizeFilters(filters),
     columns: normList(filters.columns).map((k) => k.toLowerCase()).filter((k) => COLUMN_KEYS.includes(k)),
   };
 }
 
-function pairPasses(meta, filters) {
-  if (filters.contractors.length && !filters.contractors.includes(meta.contractor)) return false;
-  if (filters.units.length && !filters.units.includes(meta.unitCode)) return false;
-  if (filters.groups.length && !filters.groups.includes(meta.group)) return false;
-  if (filters.employees.length && !filters.employees.includes(meta.empCode)) return false;
-  if (filters.routes.length && !filters.routes.includes(meta.route)) return false;
-  if (filters.priorities.length && !filters.priorities.includes(meta.priority)) return false;
-  return true;
-}
+const pairPasses = (meta, filters) => costFilters.passes(meta, filters);
 
 function keyOfDimension(meta, groupBy) {
   switch (groupBy) {
     case 'unit': return meta.unitCode;
     case 'group': return meta.group || 'KHÔNG NHÓM';
     case 'route': return meta.route || '—';
-    case 'contractor': return meta.contractor || '—';
+    case 'contractor': return meta.contractorCode || '—';
     case 'priority': return meta.priority || '—';
     default: return meta.empCode;
   }
@@ -112,7 +107,7 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
   // Giá trị từng chiều lọc, thu thập TRƯỚC khi lọc — CEO bỏ lọc còn đường quay lại;
   // thu sau lọc thì chọn một giá trị xong là các lựa chọn khác biến mất.
   const derivedBaseOfColumn = {};
-  const seen = { contractors: new Set(), units: new Set(), groups: new Set(), employees: new Set(), routes: new Set(), priorities: new Set() };
+  const seen = costFilters.collector();
   // `baseNoVat/baseWithVat` = tổng NỀN đã dùng để nhân ra tiền cột đó. Giữ lại để
   // suy ngược ra % hiệu dụng ĐÚNG BẢN CHẤT TỪNG CỘT (CEO xin hiện cả % lẫn tiền):
   //   · cột thường  → nền là doanh thu  ⇒ % là "mấy % doanh thu"
@@ -152,29 +147,30 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
       const revenueByPair = new Map();
       for (const line of lines) {
         const key = `${line.unit}\u001f${line.product}`;
-        const agg = revenueByPair.get(key) || { withVat: 0, noVat: 0 };
+        const agg = revenueByPair.get(key) || { withVat: 0, noVat: 0, dims: null };
         agg.withVat += line.revenue;
         agg.noVat += line.revenueBeforeVat;
+        // Nhà thầu/tên nhà thầu/tuyến/ưu tiên đọc từ chính dòng doanh thu — nguồn
+        // DỰ PHÒNG khi danh mục kỳ đó tra không ra cặp này.
+        if (!agg.dims) agg.dims = costFilters.dimsOfRevenueRow(line.source);
         revenueByPair.set(key, agg);
       }
       for (const [pairKey, agg] of revenueByPair) {
         const [unitCode, productCode] = pairKey.split('\u001f');
         const attr = attrs.get(pairKey) || {};
+        const dims = agg.dims || {};
+        // Danh mục là SSOT; dòng doanh thu chỉ đỡ khi danh mục không tra ra cặp.
         const meta = {
           empCode: upper(empCode),
           unitCode,
           productCode,
           group: groupOf(unitCode),
-          contractor: upper(attr.contractor),
-          route: upper(attr.route),
-          priority: upper(attr.priority),
+          contractorCode: upper(attr.contractor || dims.contractorCode),
+          contractorName: text(attr.contractorName || dims.contractorName),
+          route: upper(attr.route || dims.route),
+          priority: upper(attr.priority || dims.priority),
         };
-        seen.employees.add(meta.empCode);
-        seen.units.add(meta.unitCode);
-        if (meta.group) seen.groups.add(meta.group);
-        if (meta.contractor) seen.contractors.add(meta.contractor);
-        if (meta.route) seen.routes.add(meta.route);
-        if (meta.priority) seen.priorities.add(meta.priority);
+        seen.add(meta);
         if (!pairPasses(meta, filters)) continue;
         const rate = rates.get(pairKey);
         const bucket = bucketOf(keyOfDimension(meta, dimension));
@@ -263,7 +259,10 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
     groupBy: dimension,
     periods: periods.map(text),
     missingPeriods,
-    filterOptions: Object.fromEntries(Object.entries(seen).map(([key, set]) => [key, [...set].sort((a, b) => a.localeCompare(b, 'vi'))])),
+    filterOptions: seen.result(),
+    partnerGroups: costFilters.PARTNER_GROUPS.map((item) => ({ ...item })),
+    // Ô gõ nhóm thiếu dấu chấm ⇒ NÓI RA. Lặng lẽ bỏ qua thì CEO tưởng đã lọc.
+    groupQueryNote: costFilters.groupQueryNote(filters.groupQuery),
     columns: activeColumns.map((column) => ({
       ...column,
       // Nói thẳng % của cột này là % CỦA CÁI GÌ — không để người đọc tự đoán.

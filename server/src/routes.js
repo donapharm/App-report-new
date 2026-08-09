@@ -3420,60 +3420,100 @@ router.post('/catalog-management/cost-columns/unit-groups', auth.requireAuth, au
  * Tiền TỰ TÍNH từ kho % cục bộ × doanh thu slot — KHÔNG gọi DataHub, và C32/C47
  * vẫn bị `CATALOG_PERMANENT_FIELD_BLOCKED` cấm trong payload danh mục như cũ.
  */
-router.get('/catalog-management/cost-amounts', auth.requireAuth, (req, res) => {
-  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy()));
+/* Một chỗ dựng bảng cho cả màn lẫn file xuất — màn và file PHẢI ra cùng con số,
+   cùng bộ lọc. Hai đường tính riêng là hai bảng lệch nhau chờ ngày xảy ra. */
+async function costAmountsFor(req) {
+  const periods = costPeriodRange(req);
+  const attrsByPeriod = await catalogAttrsByPeriod(periods);
   const isCeo = auth.isCeoActor(req.session);
-  if (!isCeo) {
-    const decision = costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows());
-    if (!decision.enabled) {
-      return res.status(403).json({ error: 'Menu Thành tiền C32/C47 chưa được bật cho tài khoản này.', code: 'COST_AMOUNTS_DISABLED' });
-    }
-  }
-  const result = costAmounts.buildAmounts({
-    period: monthInputForKy(uiPeriod),
+  return costAmounts.buildAmounts({
+    periods,
     session: { emp_code: req.session.emp_code, isCeo },
-    revenueRowsOf: (empCode) => store.getRows({ ky: uiPeriod, scope: { empCode } }),
+    filters: costFilterParams(req),
+    revenueRowsOf: (empCode, period) => store.getRows({ ky: catalogManagement.toUiPeriod(period), scope: { empCode } }),
+    catalogAttrsOf: (period) => attrsByPeriod.get(period) || new Map(),
   });
-  return res.json({ ...result, periodUi: uiPeriod });
-});
+}
+/* Công tắc menu Thành tiền: CEO luôn được; NV phải được CEO bật riêng. Chặn ở CẢ HAI
+   route (màn và file) — một cổng khoá, một cổng mở là không khoá gì cả. */
+function costAmountsGate(req, res) {
+  if (auth.isCeoActor(req.session)) return true;
+  if (costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows()).enabled) return true;
+  res.status(403).json({ error: 'Menu Thành tiền C32/C47 chưa được bật cho tài khoản này.', code: 'COST_AMOUNTS_DISABLED' });
+  return false;
+}
+router.get('/catalog-management/cost-amounts', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  if (!costAmountsGate(req, res)) return undefined;
+  const result = await costAmountsFor(req);
+  return res.json({ ...result, periodUi: catalogManagement.toUiPeriod(result.period) });
+}));
 router.get('/catalog-management/cost-amounts.xlsx', auth.requireAuth, asyncJsonRoute(async (req, res) => {
-  const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy()));
-  const isCeo = auth.isCeoActor(req.session);
-  if (!isCeo) {
-    const decision = costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows());
-    if (!decision.enabled) {
-      return res.status(403).json({ error: 'Menu Thành tiền C32/C47 chưa được bật cho tài khoản này.', code: 'COST_AMOUNTS_DISABLED' });
-    }
-  }
-  const result = costAmounts.buildAmounts({
-    period: monthInputForKy(uiPeriod),
-    session: { emp_code: req.session.emp_code, isCeo },
-    revenueRowsOf: (empCode) => store.getRows({ ky: uiPeriod, scope: { empCode } }),
-  });
-  if (!result.available) return res.status(409).json({ error: 'Kho % cục bộ chưa có kỳ này — bấm "Đồng bộ % chi phí" trước', code: result.reason });
+  if (!costAmountsGate(req, res)) return undefined;
+  const result = await costAmountsFor(req);
+  if (!result.available) return res.status(409).json({ error: 'Kho % cục bộ chưa có kỳ nào trong khoảng này — bấm "Đồng bộ % chi phí" trước', code: result.reason });
   // Export qua backend theo ĐÚNG phạm vi người tải; file luôn ghi căn cước bản số.
   const ExcelJS = require('exceljs');
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet(`Thanh tien ${uiPeriod}`);
-  sheet.addRow([`THÀNH TIỀN C32/C47 KỲ ${uiPeriod} — tự tính từ % đồng bộ ${result.fetchedAt} bởi ${result.fetchedBy} × doanh thu slot`]);
-  sheet.addRow(['NV', 'Đơn vị', 'Mã hàng', 'Tên hàng', ...result.columns.map((column) => column.label), 'Ghi chú']);
+  const label = result.availablePeriods.length > 1
+    ? `${catalogManagement.toUiPeriod(result.availablePeriods[0])} đến ${catalogManagement.toUiPeriod(result.availablePeriods.at(-1))}`
+    : catalogManagement.toUiPeriod(result.availablePeriods[0]);
+  const sheet = workbook.addWorksheet('Thanh tien C32-C47');
+  sheet.addRow([`THÀNH TIỀN C32/C47 · kỳ ${label} — tự tính từ % kho cục bộ × doanh thu slot`]);
+  // Mỗi kỳ một mốc đồng bộ riêng: ghi đủ, không gộp thành một mốc chung.
+  for (const source of result.sources) {
+    sheet.addRow([`Kỳ ${catalogManagement.toUiPeriod(source.period)}: % đồng bộ ${source.fetchedAt || '—'} bởi ${source.fetchedBy || '—'}`]);
+  }
+  // ‼ Kỳ thiếu và bộ lọc đang dùng phải NẰM TRONG FILE. File rời khỏi màn hình là
+  // mất ngữ cảnh; người mở sau không biết nó đã bị cắt bớt những gì.
+  if (result.missingPeriods.length) {
+    sheet.addRow([`‼ THIẾU KỲ CHƯA ĐỒNG BỘ: ${result.missingPeriods.map(catalogManagement.toUiPeriod).join(', ')} — file này KHÔNG gồm các kỳ đó`]);
+  }
+  const filterNote = costAmountsFilterNote(result.filters);
+  if (filterNote) sheet.addRow([`Bộ lọc đang áp dụng: ${filterNote}`]);
+  if (result.groupQueryNote) sheet.addRow([`‼ ${result.groupQueryNote}`]);
+  sheet.addRow([]);
+  sheet.addRow(['Kỳ', 'NV', 'Đơn vị', 'Nhóm mã', 'Mã hàng', 'Tên hàng', 'Mã nhà thầu', 'Tên nhà thầu', 'Group', 'Tuyến', 'Ưu tiên',
+    'Doanh thu chưa VAT', 'C32 (%)', ...result.columns.map((column) => column.label), 'C47 (%)', 'Ghi chú']);
   for (const rowItem of result.rows) {
     sheet.addRow([
-      rowItem.empCode, rowItem.unitCode, rowItem.productCode, rowItem.productName,
+      catalogManagement.toUiPeriod(rowItem.period), rowItem.empCode, rowItem.unitCode, rowItem.group || '—',
+      rowItem.productCode, rowItem.productName, rowItem.contractorCode || '—', rowItem.contractorName || '—',
+      rowItem.partnerGroup || '—', rowItem.route || '—', rowItem.priority || '—',
+      rowItem.revenueNoVat,
+      rowItem.c32Percent == null ? '—' : rowItem.c32Percent,
       ...result.columns.map((column) => (rowItem[column.key] == null ? '—' : rowItem[column.key])),
-      rowItem.c47Reason === 'XUNG_DOT' ? 'XUNG ĐỘT %' : rowItem.c47Reason === 'THIEU_PHAN_TRAM' ? `Thiếu %: ${(rowItem.c47Missing || []).join(', ')}` : '',
+      rowItem.c47Percent == null ? '—' : rowItem.c47Percent,
+      rowItem.c47Reason === 'XUNG_DOT' ? 'XUNG ĐỘT %' : rowItem.c47Reason === 'THIEU_PHAN_TRAM' ? `Thiếu %: ${(rowItem.c47Missing || []).join(', ')}` : rowItem.c47Negative ? 'C47 ÂM — đã chi vượt C32' : '',
     ]);
   }
   sheet.addRow([]);
   for (const item of result.employees) {
-    sheet.addRow([`TỔNG ${item.empCode}`, '', '', `${item.pairCount} cặp${item.missingPairs ? ` · ${item.missingPairs} cặp thiếu %` : ''}`,
-      item.c32NoVat, item.c32WithVat, item.c47NoVat == null ? '—' : item.c47NoVat, item.c47WithVat == null ? '—' : item.c47WithVat, '']);
+    sheet.addRow(['TỔNG', item.empCode, '', '', '', `${item.pairCount} cặp${item.missingPairs ? ` · ${item.missingPairs} cặp thiếu %` : ''}`,
+      '', '', '', '', '', item.revenueNoVat, '',
+      item.c32NoVat == null ? '—' : item.c32NoVat, item.c32WithVat == null ? '—' : item.c32WithVat,
+      item.c47NoVat == null ? '—' : item.c47NoVat, item.c47WithVat == null ? '—' : item.c47WithVat, '', '']);
   }
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="thanh-tien-c32-c47-${monthInputForKy(uiPeriod)}.xlsx"`);
+  res.setHeader('Content-Disposition', `attachment; filename="thanh-tien-c32-c47-${result.availablePeriods[0]}_${result.availablePeriods.at(-1)}.xlsx"`);
   return res.send(buffer);
 }));
+/* Kể lại bộ lọc bằng tiếng người để ghi vào file Excel. */
+function costAmountsFilterNote(filters = {}) {
+  const parts = [];
+  const add = (label, list) => { if ((list || []).length) parts.push(`${label}: ${list.join(', ')}`); };
+  add('Mã nhà thầu', filters.contractors);
+  add('Tên nhà thầu', filters.contractorNames);
+  add('Group', filters.partnerGroups);
+  add('Nhân viên', filters.employees);
+  add('Tuyến', filters.routes);
+  add('Mã đơn vị', filters.units);
+  add('Nhóm mã', filters.groups);
+  add('Ưu tiên', filters.priorities);
+  if (filters.groupQuery) parts.push(`Gõ nhóm: "${filters.groupQuery}"`);
+  if (filters.search) parts.push(`Tìm: "${filters.search}"`);
+  return parts.join(' · ');
+}
 /* Công tắc menu Thành tiền — CHỈ CEO đặt (requireCeo, KHÔNG requireAdmin: CEO thật
    mang role admin nên cổng admin sẽ để lọt admin thường). Actor lấy từ session. */
 /* ---------- Tổng hợp chi phí C33–C46 (CEO yêu cầu 09/08/2026) ----------
@@ -3481,14 +3521,18 @@ router.get('/catalog-management/cost-amounts.xlsx', auth.requireAuth, asyncJsonR
    nhóm mã, NV, tuyến; xuất Excel nhiều kỳ, chọn thứ cần." CHỈ CEO — số tiền
    chi tiết toàn công ty, nặng hơn cả menu Thành tiền. Con mắt che số phủ ở
    frontend (data-sensitive); backend cứ trả số thật cho đúng người. */
-async function costBreakdownFor(req, periodsOverride) {
-  const from = catalogManagement.toHubPeriod(req.query.from || req.query.period || store.latestKy());
-  const to = catalogManagement.toHubPeriod(req.query.to || req.query.period || store.latestKy());
-  const periods = periodsOverride || costBreakdown.periodRange(from, to);
+/* Dải kỳ từ..đến cho hai menu chi phí. Không có from/to thì lấy đúng MỘT kỳ như cũ
+   — thêm tính năng nhiều kỳ không được đổi hành vi mặc định của màn đang chạy. */
+function costPeriodRange(req) {
+  const from = catalogManagement.toHubPeriod(req.query.from || req.query.period || req.query.ky || store.latestKy());
+  const to = catalogManagement.toHubPeriod(req.query.to || req.query.period || req.query.ky || store.latestKy());
+  const periods = costBreakdown.periodRange(from, to);
   if (!periods.length) throw Object.assign(new Error('Khoảng kỳ không hợp lệ — cần from/to dạng MM.YYYY hoặc YYYY-MM.'), { status: 400 });
-  const listParam = (name) => String(req.query[name] || '').split(',').map((v) => v.trim()).filter(Boolean);
-  // Thuộc tính lọc (nhà thầu · tuyến · ưu tiên C10) nằm ở danh mục — tra theo kỳ.
-  // Danh mục kỳ nào hỏng thì kỳ đó lọc bằng '—' chứ KHÔNG chặn cả bảng tiền.
+  return periods;
+}
+/* Thuộc tính lọc (nhà thầu · tuyến · ưu tiên C10) nằm ở danh mục — tra theo kỳ.
+   Danh mục kỳ nào hỏng thì kỳ đó lọc bằng '—' chứ KHÔNG chặn cả bảng tiền. */
+async function catalogAttrsByPeriod(periods) {
   const attrsByPeriod = new Map();
   for (const period of periods) {
     try {
@@ -3498,19 +3542,35 @@ async function costBreakdownFor(req, periodsOverride) {
         if (!row.unit_code || !row.qlnb_code) continue;
         map.set(`${String(row.unit_code).toUpperCase()}\u001f${String(row.qlnb_code).toUpperCase()}`, {
           contractor: row.contractor_code || '', route: row.route || '', priority: row.c10 || '',
+          // Danh mục KHÔNG có tên nhà thầu — để trống, dòng doanh thu sẽ đỡ. Không
+          // lấy mã thay tên: hai chiều lọc khác nhau thì phải là hai giá trị khác nhau.
+          contractorName: row.contractor_name || '',
         });
       }
       attrsByPeriod.set(period, map);
     } catch { attrsByPeriod.set(period, new Map()); }
   }
+  return attrsByPeriod;
+}
+/* Bộ lọc DÙNG CHUNG cho hai menu chi phí — đọc từ query, luật chuẩn hoá nằm ở
+   `costFilters`. `groupQuery` là ô gõ nhóm mã ("033." — bắt buộc có dấu chấm). */
+function costFilterParams(req) {
+  const listParam = (name) => String(req.query[name] || '').split(',').map((v) => v.trim()).filter(Boolean);
+  return {
+    contractors: listParam('contractors'), contractorNames: listParam('contractorNames'),
+    units: listParam('units'), groups: listParam('groups'), employees: listParam('employees'),
+    routes: listParam('routes'), priorities: listParam('priorities'), partnerGroups: listParam('partnerGroups'),
+    groupQuery: String(req.query.groupQuery || ''), search: String(req.query.search || ''),
+  };
+}
+async function costBreakdownFor(req, periodsOverride) {
+  const periods = periodsOverride || costPeriodRange(req);
+  const listParam = (name) => String(req.query[name] || '').split(',').map((v) => v.trim()).filter(Boolean);
+  const attrsByPeriod = await catalogAttrsByPeriod(periods);
   return costBreakdown.buildBreakdown({
     periods,
     groupBy: String(req.query.groupBy || 'employee'),
-    filters: {
-      contractors: listParam('contractors'), units: listParam('units'), groups: listParam('groups'),
-      employees: listParam('employees'), routes: listParam('routes'), priorities: listParam('priorities'),
-      columns: listParam('columns'),
-    },
+    filters: { ...costFilterParams(req), columns: listParam('columns') },
     revenueRowsOf: (empCode, period) => store.getRows({ ky: catalogManagement.toUiPeriod(period), scope: { empCode } }),
     catalogAttrsOf: (period) => attrsByPeriod.get(period) || new Map(),
   });
@@ -5929,7 +5989,8 @@ async function employeeCostSummaryForNotify(empCode, { from, to } = {}) {
     // thích C45. Worker chỉ dựng chữ, tuyệt đối không tính lại tiền.
     penalty: view.penalty || payload.penalty || null,
     match: payload.match || {},
-    sourceAvailable: payload.sourceOutcome ? payload.sourceOutcome === 'ok' : true,
+    // Bản % cũ vẫn là số dùng được — xem `employeeCost.USABLE_OUTCOMES`.
+    sourceAvailable: payload.sourceOutcome ? employeeCost.isUsableOutcome(payload.sourceOutcome) : true,
   };
 }
 
