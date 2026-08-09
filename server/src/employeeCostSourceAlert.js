@@ -27,6 +27,36 @@ const store = require('./store');
 const STATE_FILE = 'employee_cost_source_alert_state';
 const REMIND_MS = 6 * 60 * 60 * 1000; // còn lỗi thì nhắc lại mỗi 6 giờ
 
+/* ── CHỐNG RUNG + CHỐNG SPAM (CEO báo gấp 09/08/2026) ─────────────────────────
+ * CEO: *"phần chi phí của các ô KPI khi thì kết nối đủ, khi thì báo thiếu… nên bot
+ * cứ báo tin nhắn về cho các NV là chưa có đủ dữ liệu. Anh rất bực."*
+ *
+ * Bằng chứng từ chính hai tin bot gửi đêm 09/08:
+ *   00:32 — 13 NV: DN002 DN008 DN009 DN010 DN011 DN012 DN017 DN018 DN019 DN021 DN023 DN024 VP004
+ *   02:03 — 15 NV: DN001 DN002 DN003 DN004 DN008 DN009 DN010 DN011 DN012 DN016 DN018 DN019 DN021 DN022 VP004
+ * Hai danh sách KHÁC NHAU ⇒ `changed` luôn đúng ⇒ dedup theo chữ ký vô hiệu ⇒ gửi
+ * mỗi vòng warm. Tệ hơn: mỗi lần đổi, `newlyAffected` lại có người "mới" (lượt 2 là
+ * DN001 DN003 DN004 DN016 DN022) nên CHÍNH NV bị nhắn lặp đi lặp lại — rồi khi danh
+ * sách xoay lại, nhóm kia lại thành "mới" và lại bị nhắn.
+ *
+ * Gốc rễ (fast-path 2s vứt kết quả self-heal) do bot sửa ở Cổng 1. Nhưng dedup theo
+ * "danh sách có đổi không" là SAI NGAY CẢ KHI nguồn lành: nguồn mạng luôn chập chờn
+ * ở rìa. Ba lớp chặn dưới đây độc lập với lỗi kia.
+ */
+// 1) Phải thấy lỗi ở HAI vòng kiểm liên tiếp mới coi là lỗi thật (và hai vòng sạch
+//    liên tiếp mới coi là đã khôi phục). Một cú timeout lẻ không đủ để đi báo người.
+const CONFIRM_ROUNDS = 2;
+// 2) Tin cho CEO/ADMIN: tối thiểu cách nhau ngần này, KỂ CẢ khi danh sách đổi.
+const MIN_ALERT_GAP_MS = 60 * 60 * 1000;
+// 3) Tin mềm cho CHÍNH NV: mỗi người tối đa 1 lần trong ngần này, bất kể danh sách
+//    xoay vòng ra sao. Đây là lớp chặn spam quan trọng nhất — NV không phải người đi
+//    sửa lỗi nguồn, nhắn nhiều lần chỉ gây hoang mang.
+const EMPLOYEE_QUIET_MS = 24 * 60 * 60 * 1000;
+// Cửa sổ xét "nguồn đang chập chờn" để NÓI RA trong tin, thay vì liệt kê danh sách
+// như thể đó là sự thật cố định.
+const FLAP_WINDOW_MS = 2 * 60 * 60 * 1000;
+const FLAP_MIN_CHANGES = 3;
+
 function adminRecipients() {
   // Chỉ CEO/ADMIN đã liên kết Telegram. NV thường không nhận cảnh báo vận hành này.
   const admins = new Set();
@@ -53,7 +83,7 @@ function signatureOf(employees = []) {
   return [...employees].map((code) => String(code).toUpperCase()).sort().join(',');
 }
 
-function buildMessage({ employees, pairs, ky, recovered }) {
+function buildMessage({ employees, pairs, ky, recovered, flapping = false }) {
   if (recovered) {
     return [
       '✅ App Report — nguồn chi phí đã khôi phục',
@@ -61,7 +91,7 @@ function buildMessage({ employees, pairs, ky, recovered }) {
       'Các số "tạm tính" trên màn "Chi phí của tôi" giờ đã đầy đủ.',
     ].join('\n');
   }
-  return [
+  const lines = [
     '⚠️ App Report — THIẾU DỮ LIỆU CHI PHÍ',
     `Kỳ ${ky}: chưa lấy được dữ liệu chi phí của ${employees.length} nhân viên: ${employees.join(', ')}`,
     `Ảnh hưởng ${Number(pairs || 0).toLocaleString('vi-VN')} cặp (đơn vị × mặt hàng).`,
@@ -69,7 +99,19 @@ function buildMessage({ employees, pairs, ky, recovered }) {
     'Hệ quả: tổng chi phí trên app đang là TẠM TÍNH (thiếu phần của các NV này).',
     'Đây KHÔNG phải "mã thiếu % catalog" — mà là nguồn chi phí DataHub chưa trả dữ liệu.',
     'Đề nghị báo DataHub kiểm tra endpoint employee-cost cho các mã NV trên.',
-  ].join('\n');
+  ];
+  // ‼ Danh sách đổi xoành xoạch là MỘT TRIỆU CHỨNG KHÁC HẲN "13 NV hỏng cố định":
+  // nó nói nguồn lúc được lúc không, chứ không phải mấy mã đó thiếu dữ liệu. Không
+  // nói ra thì người đọc đi truy nhầm hướng — đúng việc đã xảy ra đêm 09/08.
+  if (flapping) {
+    lines.push(
+      '',
+      '🔁 LƯU Ý: danh sách này ĐANG ĐỔI LIÊN TỤC giữa các lần kiểm — dấu hiệu nguồn',
+      'chập chờn (timeout/khôi phục xen kẽ), KHÔNG phải đúng các mã trên thiếu dữ liệu.',
+      'Truy theo hướng độ trễ/timeout của nguồn trước, đừng truy từng mã NV.',
+    );
+  }
+  return lines.join('\n');
 }
 
 // Bản đồ mã NV → chatId Telegram (mọi vai đã liên kết). Dùng để nhắn CHÍNH NV.
@@ -150,36 +192,65 @@ async function checkAndNotifyInner(payload = {}, ky = '', { now = Date.now(), se
       Array.isArray(period?.match?.unavailableEmployees) ? period.match.unavailableEmployees.map(String) : []
     )))].sort();
     const pairs = periods.reduce((sum, period) => sum + Number(period?.match?.unavailablePairs || 0), 0);
-    const signature = signatureOf(employees);
     const state = readState();
     const previous = state[ky] || { signature: '', at: 0 };
-    // Danh sách NV lần trước suy trực tiếp từ signature (đã sort, nối ',').
-    const prevEmployees = previous.signature ? previous.signature.split(',') : [];
+    const prevSeen = Array.isArray(previous.lastSeen) ? previous.lastSeen : [];
+    // NV đã THỰC SỰ nhận tin mềm (mã → lúc gửi). Recovered chỉ báo cho đúng những
+    // người này, không báo cho người chưa từng bị làm phiền.
+    const notified = (previous.notified && typeof previous.notified === 'object') ? { ...previous.notified } : {};
 
-    if (!employees.length) {
-      // Đã khôi phục: chỉ báo nếu lần trước đang có lỗi.
-      if (!previous.signature) return { skipped: 'no_issue' };
+    // Nguồn chập chờn: đếm số lần danh sách THÔ đổi trong cửa sổ gần đây.
+    const rawChanged = signatureOf(employees) !== signatureOf(prevSeen);
+    const flaps = [...(Array.isArray(previous.flaps) ? previous.flaps : []), ...(rawChanged ? [now] : [])]
+      .filter((at) => now - Number(at || 0) < FLAP_WINDOW_MS);
+    const flapping = flaps.length >= FLAP_MIN_CHANGES;
+    // Nền state luôn được ghi lại kể cả khi không gửi gì — nếu không thì vòng sau
+    // mất mốc so sánh và cơ chế xác nhận hai vòng không bao giờ chốt được.
+    const carry = (patch) => persist.save(STATE_FILE, {
+      ...state, [ky]: { signature: previous.signature || '', at: Number(previous.at || 0), lastSeen: employees, notified, flaps, ...patch },
+    });
+
+    // ‼ XÁC NHẬN HAI VÒNG: chỉ tính là lỗi thật khi NV đó hỏng ở CẢ lần này lẫn lần
+    // trước. Một cú timeout lẻ (fast-path 2s) không đủ để đi báo người.
+    const confirmed = CONFIRM_ROUNDS <= 1 ? employees : employees.filter((code) => prevSeen.includes(code));
+    const signature = signatureOf(confirmed);
+
+    if (!confirmed.length) {
+      // Chỉ coi là khôi phục khi HAI vòng liên tiếp đều sạch — tránh cảnh "đã đủ /
+      // lại thiếu" nhấp nháy mà CEO và NV phải đọc suốt đêm.
+      const twoCleanRounds = !employees.length && !prevSeen.length;
+      if (!previous.signature || !twoCleanRounds) {
+        carry();
+        return { skipped: previous.signature ? 'awaiting_confirm' : 'no_issue', flapping };
+      }
       const result = await sendImpl(buildMessage({ employees, pairs, ky, recovered: true }));
-      // Báo cho CHÍNH các NV trước đó bị ảnh hưởng rằng số đã cập nhật đủ.
-      const employeeNotified = await notifyAffectedEmployees(prevEmployees, { ky, recovered: true }, sendEmployeeImpl);
-      persist.save(STATE_FILE, { ...state, [ky]: { signature: '', at: now } });
+      const employeeNotified = await notifyAffectedEmployees(Object.keys(notified), { ky, recovered: true }, sendEmployeeImpl);
+      persist.save(STATE_FILE, { ...state, [ky]: { signature: '', at: now, lastSeen: [], notified: {}, flaps } });
       return { recovered: true, employeeNotified, ...result };
     }
 
     const changed = previous.signature !== signature;
     const stale = now - Number(previous.at || 0) >= REMIND_MS;
-    if (!changed && !stale) return { skipped: 'deduped' };
-
-    const result = await sendImpl(buildMessage({ employees, pairs, ky, recovered: false }));
-    // Tin mềm cho NV: CHỈ khi danh sách ĐỔI (NV MỚI bị ảnh hưởng) — không spam mỗi
-    // 6h khi nhắc lại. NV đã báo lần trước thì không nhắc lại tin mềm.
-    let employeeNotified = { targeted: 0, sent: 0 };
-    if (changed) {
-      const newlyAffected = employees.filter((code) => !prevEmployees.includes(code));
-      employeeNotified = await notifyAffectedEmployees(newlyAffected, { ky, recovered: false }, sendEmployeeImpl);
+    // Giới hạn nhịp: danh sách đổi mấy lần cũng không được gửi dày hơn MIN_ALERT_GAP_MS.
+    // Không có chốt này thì nguồn chập chờn = một tin mỗi vòng warm.
+    const tooSoon = now - Number(previous.at || 0) < MIN_ALERT_GAP_MS;
+    if ((!changed && !stale) || (changed && !stale && tooSoon)) {
+      carry();
+      return { skipped: changed ? 'rate_limited' : 'deduped', flapping };
     }
-    persist.save(STATE_FILE, { ...state, [ky]: { signature, at: now } });
-    return { alerted: true, employees, pairs, employeeNotified, ...result };
+
+    const result = await sendImpl(buildMessage({ employees: confirmed, pairs, ky, recovered: false, flapping }));
+    // ‼ Tin mềm cho NV tính theo TỪNG NGƯỜI, không theo "danh sách có đổi không".
+    // Cách cũ: danh sách xoay vòng ⇒ cùng một người liên tục bị coi là "mới bị ảnh
+    // hưởng" ⇒ nhắn lặp. Nay mỗi người tối đa 1 tin trong EMPLOYEE_QUIET_MS.
+    const dueEmployees = confirmed.filter((code) => {
+      const at = Number(notified[String(code).toUpperCase()] || 0);
+      return !at || now - at >= EMPLOYEE_QUIET_MS;
+    });
+    const employeeNotified = await notifyAffectedEmployees(dueEmployees, { ky, recovered: false }, sendEmployeeImpl);
+    for (const code of dueEmployees) notified[String(code).toUpperCase()] = now;
+    persist.save(STATE_FILE, { ...state, [ky]: { signature, at: now, lastSeen: employees, notified, flaps } });
+    return { alerted: true, employees: confirmed, pairs, employeeNotified, flapping, ...result };
   } catch (error) {
     // Cảnh báo hỏng KHÔNG được làm hỏng luồng warm/nghiệp vụ.
     console.warn('[employee-cost-alert] check thất bại', { message: error.message });
@@ -204,6 +275,7 @@ function checkAndNotify(payload = {}, ky = '', opts = {}) {
 }
 
 module.exports = {
-  STATE_FILE, REMIND_MS, checkAndNotify, checkAndNotifyInner, buildMessage, signatureOf, adminRecipients,
+  STATE_FILE, REMIND_MS, CONFIRM_ROUNDS, MIN_ALERT_GAP_MS, EMPLOYEE_QUIET_MS, FLAP_WINDOW_MS, FLAP_MIN_CHANGES,
+  checkAndNotify, checkAndNotifyInner, buildMessage, signatureOf, adminRecipients,
   buildEmployeeMessage, notifyAffectedEmployees, employeeTelegramMap,
 };

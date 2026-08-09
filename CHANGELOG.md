@@ -1,3 +1,43 @@
+### 2026-08-09 11:40 (giờ VN) — 🔕 GẤP: chặn spam cảnh báo "thiếu dữ liệu chi phí" gửi nhân viên
+
+CEO: *"phần chi phí của các ô KPI khi thì kết nối đủ, khi thì báo thiếu… nên con bot cứ báo tin nhắn về cho các NV là chưa có đủ dữ liệu, này nọ và không báo doanh thu ngày hôm nay bao nhiêu. Anh rất bực và khó chịu, không biết lỗi nguyên nhân."*
+
+#### Nguyên nhân — hai lỗi CHỒNG nhau
+
+**Lỗi 1 (gốc, bot đang sửa ở Cổng 1):** fast-path 2 giây hết giờ → NV bị xếp `unavailable`; self-heal 15 giây khôi phục được rồi lại bị rebuild 2 giây vứt đi. Kết quả: **danh sách NV "thiếu dữ liệu" đổi mỗi vòng** chứ không phải mấy mã đó thật sự thiếu.
+
+**Lỗi 2 (ở App Report, bản này sửa):** `employeeCostSourceAlert` dedup theo *"danh sách lần này có khác lần trước không"*. Nguồn chập chờn ⇒ **lần nào cũng khác** ⇒ dedup vô hiệu ⇒ bắn tin mỗi vòng warm. Tệ hơn, tin mềm gửi NV tính theo `newlyAffected` = "có trong danh sách lần này mà không có lần trước" ⇒ một người rơi ra rồi quay lại là **lại bị coi là mới bị ảnh hưởng** ⇒ nhắn lặp.
+
+Bằng chứng từ chính hai tin bot đêm 09/08:
+- **00:32** — 13 NV: DN002 DN008 DN009 DN010 DN011 DN012 DN017 DN018 DN019 DN021 DN023 DN024 VP004
+- **02:03** — 15 NV: DN001 DN002 DN003 DN004 DN008 DN009 DN010 DN011 DN012 DN016 DN018 DN019 DN021 DN022 VP004
+
+Hai danh sách khác nhau; lượt hai có 5 người "mới" (DN001 DN003 DN004 DN016 DN022) nên 5 người đó bị nhắn — và khi danh sách xoay lại, nhóm DN017/DN023/DN024 sẽ tới lượt.
+
+**Lỗi 2 sai NGAY CẢ KHI nguồn lành**, vì nguồn mạng luôn chập chờn ở rìa. Nên phải sửa riêng, không chờ Cổng 1.
+
+#### Ba lớp chặn đã thêm
+
+1. **Xác nhận hai vòng** (`CONFIRM_ROUNDS = 2`): chỉ tính là lỗi thật khi NV hỏng ở **cả lần này lẫn lần trước**; chỉ báo khôi phục khi **hai vòng liên tiếp sạch**. Một cú timeout lẻ không đủ để đi báo người. Đánh đổi: tin đầu tiên chậm một vòng warm — chấp nhận, đổi lại không còn kêu oan.
+2. **Giới hạn nhịp tin cho CEO/ADMIN** (`MIN_ALERT_GAP_MS = 1 giờ`): danh sách đổi mấy lần cũng không gửi dày hơn 1 tin/giờ. Vẫn giữ nhắc lại 6 giờ khi lỗi kéo dài.
+3. **Tin mềm cho NV tính theo TỪNG NGƯỜI** (`EMPLOYEE_QUIET_MS = 24 giờ`): mỗi người tối đa 1 tin/ngày bất kể danh sách xoay vòng ra sao. Khôi phục **chỉ báo cho người đã thực sự nhận tin lỗi**, không làm phiền người chưa từng bị nhắn.
+
+#### Thêm: tin cảnh báo tự nhận diện "nguồn chập chờn"
+
+Danh sách đổi ≥3 lần trong 2 giờ ⇒ tin gắn thêm:
+
+> 🔁 LƯU Ý: danh sách này ĐANG ĐỔI LIÊN TỤC giữa các lần kiểm — dấu hiệu nguồn chập chờn (timeout/khôi phục xen kẽ), KHÔNG phải đúng các mã trên thiếu dữ liệu. Truy theo hướng độ trễ/timeout của nguồn trước, đừng truy từng mã NV.
+
+Đây chính là câu lẽ ra phải xuất hiện đêm qua để khỏi mất một đêm truy nhầm hướng từng mã NV.
+
+#### Ghi chú phạm vi
+
+Tin **doanh thu hằng ngày** (hôm nay/tuần/tháng) **KHÔNG do App Report gửi** — App Report chỉ có hai việc hẹn giờ (`payment_notice`, `target_proposal`). Việc bot không báo doanh thu phải truy ở bot gửi tin, và nhiều khả năng cùng gốc Lỗi 1: API trả fail-closed nên bot không có số để gửi.
+
+Server 1056/1063 (7 fail cố hữu) · test cũ đã viết lại theo hành vi mới (+8 luật, gồm luật khoá đúng cảnh xoay vòng đêm 09/08).
+
+---
+
 ### 2026-08-09 11:20 (giờ VN) — 🕳️ VÁ LỖ HỔNG: không có chỗ nào để rà lại phân quyền khi danh mục đổi
 
 CEO nêu: *"hôm sau nhóm 033 họ mở thêm một đơn vị mới… hôm sau xuất hiện thêm mã đơn vị mới giao cho DN001/DN002… hôm sau anh thay đổi NV phụ trách mã QLNB của mã đơn vị này cho NV khác… vậy vào đâu để bấm cập nhật phân quyền thêm / phân quyền lại? Chỗ này đúng là lỗ hổng."*
