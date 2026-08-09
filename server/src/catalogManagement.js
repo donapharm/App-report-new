@@ -616,11 +616,20 @@ async function remoteSnapshot(period) {
   const rows = enrichRowsFromCatalog(assignmentRows, catalog);
   const history = arrayOf(payload, ['history', 'audit', 'events']);
   const version = String(payload.version || payload.meta?.version || 'unknown');
+  /* ‼ HAI HỆ ĐÁNH SỐ KHÁC NHAU — nguồn gốc của hiểu lầm kéo dài (CEO hỏi lại 09/08):
+   *   · `version`       = số hiệu CỬA DANH MỤC của DataHub (đang là "3.10");
+   *   · `sourceVersion` = số hiệu FILE CP_TOTAL sinh ra dữ liệu (CEO đang chờ "V31.4").
+   * DataHub xác nhận 27.719 dòng hiện tại CHÍNH LÀ CP_TOTAL V31.4, nhưng chưa gửi số
+   * hiệu đó sang. App Report chép nguyên cái nguồn gửi và KHÔNG BAO GIỜ tự đặt số —
+   * bịa một số hiệu lên màn là loại nói dối tệ nhất trong app này. Trường dưới đây
+   * chờ sẵn: ngày DataHub gửi là huy hiệu tự hiện đúng, không phải sửa code. */
+  const sourceVersion = String(payload.sourceVersion || payload.source_version
+    || payload.meta?.sourceVersion || payload.meta?.source_version || '').trim();
   const upstreamChecksum = payload.checksum || payload.meta?.checksum;
   const syncedAt = new Date().toISOString();
   const snapshot = {
     rows, catalog, history, period, readOnly: false,
-    meta: { source: 'data-hub', version, checksum: String(upstreamChecksum || checksum({ rows, catalog })), updatedAt: payload.updatedAt || syncedAt, lastSyncAt: syncedAt, stale: false, readOnly: false, message: 'Đã đồng bộ Data Hub.' },
+    meta: { source: 'data-hub', version, sourceVersion, checksum: String(upstreamChecksum || checksum({ rows, catalog })), updatedAt: payload.updatedAt || syncedAt, lastSyncAt: syncedAt, stale: false, readOnly: false, message: 'Đã đồng bộ Data Hub.' },
   };
   writeCacheAtomic(snapshot);
   return snapshot;

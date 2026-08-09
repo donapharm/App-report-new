@@ -1426,6 +1426,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-source-inline.is-stale .catalog-source-version { background:#a86a00; }
 /* Không có số hiệu thì nói thẳng "chưa rõ" — nhạt màu để không bị đọc nhầm là một bản. */
 .catalog-source-version.is-unknown { background:transparent; border:1px dashed #b9b9b9; color:var(--muted); font-weight:700; }
+/* Số hiệu CỬA danh mục (không phải số file CP_TOTAL) — khác màu để không đọc nhầm. */
+.catalog-source-version.is-gate { background:#5b6b7a; }
 .catalog-source-sync { opacity:.85; }
 .catalog-source-refresh { min-height:30px; padding:3px 10px; font-size:11.5px; white-space:nowrap; }
 .catalog-source-error { flex-basis:100%; color:#b3261e; font-weight:700; }

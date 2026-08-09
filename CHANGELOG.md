@@ -1,3 +1,22 @@
+### 2026-08-09 22:25 (giờ VN) — 🔢 "V3.10" là số hiệu CỬA DANH MỤC, không phải số file CP_TOTAL V31.4
+
+CEO hỏi lại lần thứ ba: *"tại sao nó vẫn ghi bản version là V3.10 mà chưa thay đổi vậy?"* — hỏi ba lần cùng một chuyện nghĩa là **màn hình đang trình bày sai**, không phải người đọc chậm hiểu.
+
+**Sự thật:** App Report **chép nguyên** con số Data Hub gửi trong `payload.version` — hiện là `"3.10"`. Đó là **số hiệu cửa danh mục của Data Hub**, một hệ đánh số hoàn toàn khác với **số hiệu file CP_TOTAL** (V31.4) mà CEO đang trông. Data Hub đã xác nhận 27.719 dòng hiện tại **chính là CP_TOTAL V31.4** nhưng **chưa gửi số hiệu đó sang**. App Report **không bao giờ tự đặt số hiệu** — bịa một con số lên màn là loại nói dối tệ nhất trong app này.
+
+**Sửa cách trình bày để không ai phải hỏi lần thứ tư:**
+- Backend chuyển tiếp `sourceVersion` (nhận cả `sourceVersion`/`source_version`, ở gốc payload lẫn trong `meta`). Data Hub gửi ngày nào là huy hiệu tự hiện đúng ngày đó, **không phải sửa code**.
+- Huy hiệu ưu tiên **số file nguồn**; chưa có thì hiện số cửa kèm nhãn **"(cửa)"** và đổi màu (xám xanh thay vì xanh lá) để không đọc nhầm là số file.
+- Rê chuột: *"3.10 là số hiệu CỬA DANH MỤC của Data Hub, KHÔNG phải số hiệu file CP_TOTAL. Data Hub chưa gửi số hiệu file."*
+
+Test khoá: cấm mọi chỗ gán cứng một số hiệu; huy hiệu phải nói rõ số đang hiện là số của cái gì.
+
+**Việc còn lại nằm ở Data Hub** (đã nêu từ 09/08): bổ sung `sourceVersion` = số hiệu file CP_TOTAL vào payload danh mục. Trước khi có, huy hiệu sẽ tiếp tục ghi **"V3.10 (cửa)"** — và đó là **đúng**, không phải lỗi.
+
+Test: server 1157 / 7 fail cố hữu · web **391/391** · build sạch.
+
+---
+
 ### 2026-08-09 22:15 (giờ VN) — 🗣 Câu chờ nói dối: "đang tải từ Data Hub" trong khi đang đọc bản trên máy
 
 CEO (ảnh 22:07): *"tại sao vẫn cứ báo là đang đồng bộ từ DataHub, trong khi hiện tại đã kéo đủ danh mục 27.719 dòng về rồi. Nhìn vào bực mình."*

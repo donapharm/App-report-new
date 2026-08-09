@@ -181,7 +181,11 @@ function SourceStatus({ meta, canRefresh = false, onRefresh }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   if (!meta) return null;
-  const version = catalogVersionLabel(meta.version);
+  // ‼ Ưu tiên SỐ HIỆU FILE NGUỒN (CP_TOTAL) nếu DataHub gửi; không có thì hiện số
+  // hiệu CỬA DANH MỤC và NÓI RÕ đó là số của cửa, không phải số file.
+  const sourceVersion = catalogVersionLabel(meta.sourceVersion);
+  const gateVersion = catalogVersionLabel(meta.version);
+  const version = sourceVersion || gateVersion;
   const state = meta.stale ? 'Bản tốt gần nhất' : (meta.readOnly ? 'Chỉ đọc' : 'Đã kết nối');
   const run = async () => {
     setBusy(true); setError('');
@@ -190,13 +194,18 @@ function SourceStatus({ meta, canRefresh = false, onRefresh }) {
     finally { setBusy(false); }
   };
   return <div className={`catalog-source-inline ${meta.stale ? 'is-stale' : 'is-fresh'}`}
-    title={`${sourceLabel(meta.source)} · bản ${version || 'chưa rõ'} · đóng bản ${dateText(meta.updatedAt)} · kéo về ${dateText(meta.lastSyncAt)}${meta.message ? ` · ${meta.message}` : ''}`}>
+    title={`${sourceLabel(meta.source)} · ${sourceVersion ? `file nguồn ${sourceVersion}` : `cửa danh mục ${gateVersion || 'chưa rõ'} — Data Hub CHƯA gửi số hiệu file CP_TOTAL`} · đóng bản ${dateText(meta.updatedAt)} · kéo về ${dateText(meta.lastSyncAt)}${meta.message ? ` · ${meta.message}` : ''}`}>
     <i aria-hidden="true" />
     <div className="catalog-source-text">
       <b>
         {sourceLabel(meta.source)}
         {version
-          ? <span className="catalog-source-version">{version}</span>
+          ? <span className={`catalog-source-version${sourceVersion ? '' : ' is-gate'}`}
+              title={sourceVersion
+                ? `Số hiệu FILE NGUỒN (CP_TOTAL) do Data Hub gửi: ${sourceVersion}`
+                : `${gateVersion} là số hiệu CỬA DANH MỤC của Data Hub, KHÔNG phải số hiệu file CP_TOTAL. Data Hub chưa gửi số hiệu file.`}>
+              {version}{sourceVersion ? '' : ' (cửa)'}
+            </span>
           : <span className="catalog-source-version is-unknown" title="Data Hub chưa gửi số hiệu bản cho kỳ này">bản: chưa rõ</span>}
       </b>
       <small>{meta.servedFrom === 'local' ? 'Đọc từ máy — không gọi Data Hub' : state} · bản ngày {dateText(meta.updatedAt)}</small>
