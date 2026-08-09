@@ -22,7 +22,10 @@ test('tải hỏng thì GIỮ bảng cũ + báo lỗi, không về màn trắng'
 
 test('đang tải mà đã có bảng ⇒ chỉ dải mảnh, và NÓI RÕ bảng dưới là kỳ nào', () => {
   assert.match(page, /catalog-loading-strip/);
-  assert.match(page, /Đang tải danh mục kỳ <b>\{loadingPeriod\}<\/b>/);
+  // ‼ Câu chờ phải nói ĐÚNG đang làm gì: lượt xem thường đọc bản trên máy, chỉ
+  // "Đồng bộ lại" mới hỏi Data Hub (CEO bực 09/08 22:07 vì câu chờ nói sai).
+  assert.match(page, /Đang mở danh mục kỳ <b>\{loadingPeriod\}<\/b> — <b>đọc bản đã có trên máy<\/b>, không gọi Data Hub/);
+  assert.match(page, /askingHub\s*\?\s*<>Đang <b>hỏi lại Data Hub<\/b>/);
   // Không được để người đọc tưởng số trên màn đã là kỳ vừa chọn.
   assert.match(page, /shownPeriod && shownPeriod !== loadingPeriod/);
   assert.match(page, /Bảng dưới vẫn là <b>kỳ \{shownPeriod\}<\/b>/);
@@ -30,7 +33,8 @@ test('đang tải mà đã có bảng ⇒ chỉ dải mảnh, và NÓI RÕ bản
 
 test('lần đầu chưa có gì để giữ ⇒ khung chờ NÓI đang chờ cái gì, không phải vòng quay trơ', () => {
   assert.match(page, /catalog-first-load/);
-  assert.match(page, /Đang tải danh mục kỳ \{loadingPeriod \|\| period\} từ Data Hub/);
+  assert.match(page, /Đang mở danh mục kỳ \$\{loadingPeriod \|\| period\}…/);
+  assert.match(page, /Đang hỏi lại Data Hub cho kỳ \$\{loadingPeriod \|\| period\}…/);
   assert.match(page, /27\.700 cặp/, 'nói rõ vì sao lâu');
 });
 
@@ -106,4 +110,27 @@ test('‼ CẤM bịa số trong chữ giao diện — mọi con số trên màn
   const literals = renderedSource.match(/>\s*[^<>{}]*\b2[0-9][.,][0-9]{3}\b[^<>{}]*</g) || [];
   assert.deepEqual(literals, [], 'không được viết cứng số dòng/cặp vào chữ giao diện');
   assert.doesNotMatch(renderedSource, /khoảng <b>[\d.,]+/);
+});
+
+/* ── CÂU CHỜ KHÔNG ĐƯỢC NÓI DỐI (CEO bực 09/08 22:07) ────────────────────────
+ * CEO: *"tại sao vẫn cứ báo là đang đồng bộ từ DataHub, trong khi hiện tại đã kéo
+ * đủ danh mục 27.719 dòng về rồi. Nhìn vào bực mình."* Đúng: từ khi đổi sang
+ * đọc-bản-trên-máy, lượt xem thường KHÔNG gọi DataHub nữa. Chờ vài giây thì chịu
+ * được; chờ mà bị nói sai đang chờ cái gì thì mất tin vào cả màn hình.          */
+
+test('‼ chỉ "Đồng bộ lại" mới được nói là hỏi Data Hub — cờ do chính nút đó bật', () => {
+  assert.match(page, /const \[askingHub, setAskingHub\] = useState\(false\)/);
+  assert.match(page, /setAskingHub\(true\);/);
+  assert.match(page, /finally \{ setAskingHub\(false\); \}/);
+});
+
+test('lượt xem thường KHÔNG còn câu "từ Data Hub" nào trong khung chờ', () => {
+  const waiting = page.slice(page.indexOf('catalog-loading-strip'), page.indexOf('catalog-first-load') + 1400);
+  const claims = waiting.match(/từ Data Hub/g) || [];
+  assert.equal(claims.length, 0, 'khung chờ không được khẳng định đang lấy từ Data Hub');
+});
+
+test('nói rõ vì sao vẫn phải chờ vài giây dù đọc từ máy — không để người dùng tự đoán', () => {
+  assert.match(page, /Ưu tiên bản đã lưu TRÊN MÁY; chỉ gọi Data Hub khi máy chưa có kỳ này/);
+  assert.match(page, /vẫn mất vài giây để bày ra bảng/);
 });

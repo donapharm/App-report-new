@@ -54,7 +54,7 @@ test('‼ thẻ đồng bộ % LUÔN hiện với CEO, không bị ẩn theo tr�
 
 test('đang tải thì KHOÁ NÚT KÈM LÝ DO và tự mở lại — không khoá câm', () => {
   assert.match(page, /disabled=\{syncing \|\| catalogLoading\}/);
-  assert.match(page, /Đang tải danh mục kỳ này — nút tự mở lại ngay khi tải xong/);
+  assert.match(page, /Đang mở danh mục kỳ này — nút tự mở lại ngay khi xong/);
   // Lý do không cho bấm chồng phải nói ra: DataHub từng tự restart vì dồn tải.
   assert.match(page, /để DataHub khỏi quá tải/);
 });

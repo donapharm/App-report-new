@@ -1063,7 +1063,7 @@ function CostRatesSyncCard({ period, catalogLoading = false }) {
         tìm không ra, tưởng app hỏng. Khoá kèm lời giải thích + tự mở lại thì người
         dùng biết mình đang chờ cái gì; giấu đi thì không. Vẫn không cho bấm chồng
         vì DataHub từng tự restart do dồn tải (951,8 MB RSS, 08/08). */}
-    {catalogLoading && <small className="muted">⏳ Đang tải danh mục kỳ này — nút tự mở lại ngay khi tải xong (không bấm chồng để DataHub khỏi quá tải).</small>}
+    {catalogLoading && <small className="muted">⏳ Đang mở danh mục kỳ này — nút tự mở lại ngay khi xong (không bấm chồng để DataHub khỏi quá tải).</small>}
     {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
     {result && (result.ok
       ? <div className="catalog-alert ok" role="status">
@@ -1189,6 +1189,13 @@ export default function CatalogManagement({ me }) {
   // Mọi thao tác ghi/report/export bị khóa trong lúc tải hoặc khi đang giữ bảng
   // của kỳ khác. Bảng cũ chỉ còn là bản đọc; không thể tạo payload trộn kỳ.
   const actionsLocked = !!loadingPeriod || periodMismatch;
+  // ‼ CÂU CHỜ PHẢI NÓI ĐÚNG ĐANG LÀM GÌ (CEO bực 09/08 22:07: *"tại sao vẫn cứ báo
+  // là đang đồng bộ từ DataHub, trong khi đã kéo đủ 27.719 dòng về rồi"*).
+  // CEO đúng: từ khi đổi sang đọc-bản-trên-máy, lượt xem thường KHÔNG gọi DataHub
+  // nữa — nhưng câu chờ vẫn ghi "từ Data Hub" như cũ. Chờ vài giây thì chịu được;
+  // chờ mà bị nói sai mình đang chờ cái gì thì mất tin tưởng vào cả màn hình.
+  // Chỉ có bấm "Đồng bộ lại" mới thực sự hỏi DataHub.
+  const [askingHub, setAskingHub] = useState(false);
   const employeeOptions = useMemo(() => {
     const seen = new Map();
     for (const row of data?.rows || []) {
@@ -1228,7 +1235,11 @@ export default function CatalogManagement({ me }) {
     <div className="card catalog-heading catalog-heading-compact">
       <div><div className="section-head">🗂️ {isAdmin ? 'Phân công danh mục bán hàng' : 'Danh mục bán hàng của tôi'}</div><div className="meta muted">{isAdmin ? 'Theo cặp đơn vị + mã QLNB và từng kỳ' : 'Chỉ hiển thị phạm vi Anh/Chị đang phụ trách'}</div></div>
       <div className="catalog-heading-actions">{data?.meta && <SourceStatus meta={data.meta} canRefresh={isAdmin}
-        onRefresh={async () => { await api.catalogManagementRefresh(uiToHub(period)); await load(period); }} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
+        onRefresh={async () => {
+          setAskingHub(true);
+          try { await api.catalogManagementRefresh(uiToHub(period)); await load(period); }
+          finally { setAskingHub(false); }
+        }} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
@@ -1243,9 +1254,12 @@ export default function CatalogManagement({ me }) {
     {/* Đang tải MÀ ĐÃ CÓ bảng cũ ⇒ chỉ một dải mảnh, bảng ở lại cho anh/chị đọc tiếp. */}
     {!!loadingPeriod && !!data && <div className="card catalog-loading-strip" role="status" aria-live="polite">
       <i className="catalog-loading-dot" aria-hidden="true" />
-      <span>Đang tải danh mục kỳ <b>{loadingPeriod}</b> từ Data Hub…{shownPeriod && shownPeriod !== loadingPeriod
-        ? <> Bảng dưới vẫn là <b>kỳ {shownPeriod}</b> cho tới khi có dữ liệu mới.</>
-        : ' Bảng dưới là bản vừa xem, đang được làm mới.'}</span>
+      <span>{askingHub
+        ? <>Đang <b>hỏi lại Data Hub</b> cho kỳ <b>{loadingPeriod}</b>…</>
+        : <>Đang mở danh mục kỳ <b>{loadingPeriod}</b> — <b>đọc bản đã có trên máy</b>, không gọi Data Hub.</>}
+        {shownPeriod && shownPeriod !== loadingPeriod
+          ? <> Bảng dưới vẫn là <b>kỳ {shownPeriod}</b> cho tới khi có dữ liệu mới.</>
+          : ' Bảng dưới là bản vừa xem, đang được làm mới.'}</span>
     </div>}
     {periodMismatch && !loadingPeriod && <div className="card catalog-alert error" role="status">
       ⚠ Chưa tải được danh mục kỳ <b>{period}</b>. Bảng kỳ <b>{shownPeriod}</b> bên dưới chỉ để đọc; báo cáo, cấp quyền và điều chuyển đang khóa để không trộn kỳ.
@@ -1253,12 +1267,17 @@ export default function CatalogManagement({ me }) {
     {/* Lần đầu chưa có gì để giữ ⇒ khung chờ CÓ NÓI đang chờ cái gì, thay vì vòng quay trơ. */}
     {!data && !error && <div className="card catalog-first-load" role="status" aria-live="polite">
       <Spinner />
-      <b>Đang tải danh mục kỳ {loadingPeriod || period} từ Data Hub…</b>
+      <b>{askingHub
+        ? `Đang hỏi lại Data Hub cho kỳ ${loadingPeriod || period}…`
+        : `Đang mở danh mục kỳ ${loadingPeriod || period}…`}</b>
       {/* ‼ KHÔNG ghi con số ước lượng ở đây. Bản đầu viết cứng "khoảng 27.700 cặp" —
           CEO đọc thành số liệu thật rồi hỏi vì sao lệch 19 dòng so với 27.719 (09/08).
           Trong app này mọi con số trên màn đều phải là số THẬT, có nguồn. Câu chờ chỉ
           mô tả tình trạng, không mang số. */}
-      <p>Danh mục toàn công ty khá lớn nên lần tải đầu mất một lúc. Các phần phía trên dùng được ngay.</p>
+      <p>{askingHub
+        ? 'Đang hỏi Data Hub để lấy bản mới nhất — chỗ này mới thật sự phụ thuộc mạng.'
+        : 'Ưu tiên bản đã lưu TRÊN MÁY; chỉ gọi Data Hub khi máy chưa có kỳ này. Danh mục toàn công ty khá lớn nên vẫn mất vài giây để bày ra bảng.'}
+        {' '}Các phần phía trên dùng được ngay.</p>
     </div>}
     {data && (isAdmin
       ? <AdminView data={data} period={uiToHub(shownPeriod || period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}

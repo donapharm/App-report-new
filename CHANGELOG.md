@@ -1,3 +1,22 @@
+### 2026-08-09 22:15 (giờ VN) — 🗣 Câu chờ nói dối: "đang tải từ Data Hub" trong khi đang đọc bản trên máy
+
+CEO (ảnh 22:07): *"tại sao vẫn cứ báo là đang đồng bộ từ DataHub, trong khi hiện tại đã kéo đủ danh mục 27.719 dòng về rồi. Nhìn vào bực mình."*
+
+**CEO đúng.** Từ khi đổi sang đọc-bản-trên-máy (`bbb1917`), lượt xem thường **KHÔNG còn gọi DataHub** — nhưng câu chờ vẫn ghi nguyên *"Đang tải danh mục kỳ 08.2026 **từ Data Hub**…"*. Chờ vài giây thì chịu được; **chờ mà bị nói sai mình đang chờ cái gì** thì mất tin tưởng vào cả màn hình — và đúng là làm người ta tưởng bản sửa chưa có tác dụng.
+
+**Sửa:** cờ `askingHub` do **chính nút "Đồng bộ lại"** bật, nên chỉ lượt đó mới được nói là hỏi DataHub.
+- Lượt xem thường: *"Đang mở danh mục kỳ 08.2026 — **đọc bản đã có trên máy**, không gọi Data Hub."*
+- Bấm Đồng bộ lại: *"Đang **hỏi lại Data Hub** cho kỳ 08.2026…"*
+- Khung chờ lần đầu nói luôn **vì sao vẫn phải chờ vài giây** dù đọc từ máy: *"Ưu tiên bản đã lưu TRÊN MÁY; chỉ gọi Data Hub khi máy chưa có kỳ này. Danh mục toàn công ty khá lớn nên vẫn mất vài giây để bày ra bảng."* — không để người dùng tự đoán.
+
+Có test cấm khung chờ chứa bất kỳ câu *"từ Data Hub"* nào ngoài nhánh bấm nút.
+
+**Cách tự kiểm sau khi tải xong:** nhìn huy hiệu góc phải — ghi **"Data Hub · bản trên máy"** + *"Đọc từ máy — không gọi Data Hub"* nghĩa là đọc từ đĩa; ghi trơ **"Data Hub"** nghĩa là lượt đó thật sự đi hỏi nguồn.
+
+Test: web **388/388** · build sạch.
+
+---
+
 ### 2026-08-09 22:10 (giờ VN) — 🩺 Phân biệt "DataHub thiếu %" với "lệch định dạng mã" — cái bẫy đã ngốn cả tối nay
 
 Claude tự thêm sau khi mất gần trọn buổi tối đổ tội nhầm cho DataHub. **Hai cảnh hiện ra màn Y HỆT NHAU** — mọi ô là `—` kèm chữ *"thiếu %"* — nhưng cách xử lý **ngược nhau hoàn toàn**:
