@@ -141,6 +141,75 @@ function c32Of(rate, baseRevenue) {
   return { amount: employeeCost.calculateAmount(baseRevenue, percent), percent, reason: null, missing: [] };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════════
+   CHI TIẾT TỪNG DÒNG ĐƠN HÀNG (CEO chốt 09/08/2026: *"tôi muốn lấy thêm các cột
+   khác về để làm báo cáo luôn — là các cột bên tab Chi phí của tôi"*, và khi hỏi
+   xem-trên-màn hay chỉ-xuất-Excel thì CEO trả lời *"tôi muốn cả hai"*).
+
+   ‼ NHÃN CỘT CHÉP ĐÚNG tab "Chi phí của tôi" (`employeeCostExport.costColumns`) —
+   cùng một thứ mà hai màn gọi hai tên là người đọc phải tự dịch, rồi tự nghi ngờ
+   có phải hai số khác nhau không.
+
+   Mức chi tiết là ADDITIVE: `rows`/`employees`/`grand` (mức cặp) GIỮ NGUYÊN, chi
+   tiết nằm ở `orderRows` riêng. Nhờ vậy bật/tắt chi tiết KHÔNG bao giờ làm đổi
+   con số tổng — thứ CEO đọc để ra quyết định.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+const DETAIL_COLUMNS = Object.freeze([
+  { key: 'date', label: 'Ngày' },
+  { key: 'orderCode', label: 'Mã đơn' },
+  { key: 'route', label: 'Tuyến' },
+  { key: 'unitCode', label: 'Đơn vị' },
+  { key: 'contractorName', label: 'Nhà thầu' },
+  { key: 'productCode', label: 'Mã QLNB' },
+  { key: 'productName', label: 'Tên hàng' },
+  { key: 'strength', label: 'Hàm lượng' },
+  { key: 'uom', label: 'ĐVT' },
+  { key: 'bidPrice', label: 'Giá trúng thầu', money: true },
+  { key: 'quantity', label: 'SL', number: true },
+  { key: 'revenueNoVat', label: 'Thành tiền trước VAT', money: true },
+]);
+// Trần dòng chi tiết. Một kỳ × 21 NV có thể ra hàng chục nghìn dòng đơn — trả hết
+// là treo trình duyệt. Cắt thì PHẢI NÓI RA (`orderRowsTruncated` + tổng thật), vì
+// bảng bị cắt lặng lẽ đọc y như bảng đầy đủ.
+const ORDER_ROW_LIMIT = Math.max(200, Number(process.env.COST_AMOUNTS_ORDER_LIMIT || 5000) || 5000);
+
+const numberOrNull = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+/**
+ * Một dòng đơn hàng. Tiền C32/C47 tính trên doanh thu CỦA CHÍNH DÒNG ĐÓ bằng đúng
+ * % của cặp — cộng lại đúng bằng số ở mức cặp, không phải một cách tính thứ hai.
+ * Thiếu thuộc tính nào để RỖNG; danh mục là SSOT, dòng doanh thu chỉ đỡ khi danh
+ * mục tra không ra cặp.
+ */
+function orderLineOf(line, meta, attr, rate) {
+  const source = line.source || {};
+  const pick = (...keys) => { for (const key of keys) { const v = text(source[key]); if (v) return v; } return ''; };
+  const noVat = line.revenueBeforeVat;
+  const withVat = line.revenue;
+  const c32 = c32Of(rate, noVat);
+  const c47 = c47Of(rate, noVat);
+  return {
+    ...meta,
+    // Ngày chỉ hiện khi nguồn thực sự theo ngày (`dateReliable`) — slot kỳ cũ gán
+    // ngày kỹ thuật, in ra là bịa ngày giao dịch.
+    date: line.dateReliable ? line.date : '',
+    orderCode: line.orderCode || '',
+    productName: rate?.productName || pick('product_name', 'c16') || meta.productCode,
+    strength: text(attr.strength) || pick('strength', 'ham_luong', 'c17'),
+    uom: text(attr.uom) || pick('uom', 'c25'),
+    bidPrice: attr.bidPrice ?? numberOrNull(source.bid_price ?? source.c31),
+    quantity: numberOrNull(line.quantity),
+    revenueNoVat: noVat == null ? null : Math.round(noVat),
+    revenueWithVat: Math.round(withVat),
+    c32NoVat: c32.amount, c32Percent: c32.percent, c32Reason: c32.reason,
+    c47NoVat: c47.amount, c47Percent: c47.percent, c47Reason: c47.reason,
+    c47Missing: c47.missing, c47Negative: c47.negative,
+  };
+}
+
 /**
  * Dựng bảng thành tiền theo cặp cho MỘT hoặc NHIỀU kỳ.
  *
@@ -158,7 +227,8 @@ function c32Of(rate, baseRevenue) {
  * priority } (danh mục là SSOT); tra không ra thì lấy dự phòng từ chính dòng doanh
  * thu, vẫn không ra thì để RỖNG chứ không đoán.
  */
-function buildAmounts({ period, periods, session, store = persist, revenueRowsOf, catalogAttrsOf = () => new Map(), filters: rawFilters = {} } = {}) {
+function buildAmounts({ period, periods, session, store = persist, revenueRowsOf, catalogAttrsOf = () => new Map(), filters: rawFilters = {}, level = 'pair' } = {}) {
+  const wantOrders = String(level) === 'order';
   const filters = costFilters.normalizeFilters(rawFilters);
   const periodList = [...new Set((Array.isArray(periods) && periods.length ? periods : [period]).map(text).filter(Boolean))].sort();
   const warehouse = store.load(costRatesSync.FILE, {});
@@ -170,6 +240,8 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
     available: false, reason, columns: [...COLUMNS], rows: [], employees: [],
     filters, filterOptions: seen.result(), partnerGroups: costFilters.PARTNER_GROUPS.map((item) => ({ ...item })),
     groupQueryNote: costFilters.groupQueryNote(filters.groupQuery), sources: [], fetchedAt: null,
+    level: wantOrders ? 'order' : 'pair', detailColumns: [...DETAIL_COLUMNS],
+    orderRows: [], orderRowsTotal: 0, orderRowsTruncated: false, orderRowLimit: ORDER_ROW_LIMIT,
   });
   if (!availablePeriods.length) return emptyResult('CHUA_DONG_BO');
 
@@ -182,6 +254,8 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
   if (!scopeCodes.length) return emptyResult('KHONG_CO_TRONG_KHO');
 
   const rows = [];
+  const orderRows = [];
+  let orderRowsTotal = 0;
   const filtersActive = costFilters.isActive(filters);
   // Tổng theo NV cộng qua MỌI kỳ đang xem — khoá theo mã NV, không theo kỳ.
   const byEmployee = new Map();
@@ -213,11 +287,13 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
       const revenueByPair = new Map();
       for (const line of lines) {
         const key = `${line.unit}\u001f${line.product}`;
-        const agg = revenueByPair.get(key) || { withVat: 0, noVat: 0, productName: '', dims: null };
+        const agg = revenueByPair.get(key) || { withVat: 0, noVat: 0, productName: '', dims: null, lines: [] };
         agg.withVat += line.revenue;
         agg.noVat += line.revenueBeforeVat;
         if (!agg.productName) agg.productName = text(line.source?.product_name ?? line.source?.c16);
         if (!agg.dims) agg.dims = costFilters.dimsOfRevenueRow(line.source);
+        // Giữ dòng gốc CHỈ khi có người hỏi chi tiết — mặc định không ôm thêm bộ nhớ.
+        if (wantOrders) agg.lines.push(line);
         revenueByPair.set(key, agg);
       }
 
@@ -266,6 +342,15 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
           c47Negative: noVat.negative,
         };
         rows.push(row);
+        if (wantOrders) {
+          orderRowsTotal += agg.lines.length;
+          for (const line of agg.lines) {
+            // Đếm TỔNG trước, cắt sau — con số tổng phải là số thật, không phải
+            // số còn lại sau khi cắt.
+            if (orderRows.length >= ORDER_ROW_LIMIT) continue;
+            orderRows.push({ period: item, ...orderLineOf(line, meta, attr, rate) });
+          }
+        }
 
         const totals = totalsOf(empCode);
         totals.periods.add(item);
@@ -336,6 +421,12 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
     filterOptions: seen.result(),
     partnerGroups: costFilters.PARTNER_GROUPS.map((item) => ({ ...item })),
     groupQueryNote: costFilters.groupQueryNote(filters.groupQuery),
+    level: wantOrders ? 'order' : 'pair',
+    detailColumns: [...DETAIL_COLUMNS],
+    orderRows,
+    orderRowsTotal,
+    orderRowsTruncated: orderRowsTotal > orderRows.length,
+    orderRowLimit: ORDER_ROW_LIMIT,
     sources,
     fetchedAt: last.fetchedAt || null,
     fetchedBy: last.fetchedBy || null,
@@ -345,6 +436,9 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
 module.exports = {
   VISIBILITY_FILE,
   COLUMNS,
+  DETAIL_COLUMNS,
+  ORDER_ROW_LIMIT,
+  orderLineOf,
   C47_SUBTRACTED,
   C47_EXCLUDED,
   C47_BUDGET,

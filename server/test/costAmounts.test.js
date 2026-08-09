@@ -175,3 +175,102 @@ test('công tắc dùng kho RIÊNG, mặc định TẮT — không dính công t
 test('đúng 4 cột CEO chốt, không hơn không kém', () => {
   assert.deepEqual(costAmounts.COLUMNS.map((c) => c.key), ['c32NoVat', 'c32WithVat', 'c47NoVat', 'c47WithVat']);
 });
+
+/* ── CHI TIẾT TỪNG DÒNG ĐƠN HÀNG (CEO 09/08: "tôi muốn CẢ HAI" — màn + Excel) ──
+ * CEO xin thêm "các cột bên tab Chi phí của tôi" vào menu Thành tiền. Nguyên tắc:
+ * chi tiết là ADDITIVE — bật hay tắt thì mọi con số tổng phải Y HỆT, vì đó là số
+ * CEO đọc để ra quyết định.                                                     */
+
+const twoOrders = () => [
+  { emp_code: 'DN001', unit_code: '120.HTNT', c5: 'G1.A', product_name: 'Hàng G1.A', date: '2026-08-05',
+    revenue: 630_000, source_order: 'DH1', source_line_id: 'L1', quantity: 3, route: 'TUYẾN A', contractor_code: '01.DONA' },
+  { emp_code: 'DN001', unit_code: '120.HTNT', c5: 'G1.A', product_name: 'Hàng G1.A', date: '2026-08-07',
+    revenue: 420_000, source_order: 'DH2', source_line_id: 'L2', quantity: 2, route: 'TUYẾN A', contractor_code: '01.DONA' },
+];
+
+test('mức mặc định là CẶP — không tốn công gom dòng gốc khi không ai hỏi', async () => {
+  const store = memStore();
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, revenueRowsOf: () => twoOrders(),
+  });
+  assert.equal(result.level, 'pair');
+  assert.deepEqual(result.orderRows, []);
+  assert.equal(result.rows.length, 1, 'hai đơn cùng cặp vẫn gộp thành MỘT dòng cặp');
+});
+
+test('‼ bật chi tiết KHÔNG làm đổi bất kỳ con số tổng nào', async () => {
+  const store = memStore();
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const args = { period: '2026-08', session: CEO, store, revenueRowsOf: () => twoOrders() };
+  const pair = costAmounts.buildAmounts(args);
+  const order = costAmounts.buildAmounts({ ...args, level: 'order' });
+  assert.deepEqual(order.rows, pair.rows, 'bảng mức cặp phải y hệt');
+  assert.deepEqual(order.employees, pair.employees);
+  assert.deepEqual(order.grand, pair.grand);
+});
+
+test('chi tiết có ĐỦ cột như tab "Chi phí của tôi", nhãn chép đúng', () => {
+  assert.deepEqual(costAmounts.DETAIL_COLUMNS.map((c) => c.label), [
+    'Ngày', 'Mã đơn', 'Tuyến', 'Đơn vị', 'Nhà thầu', 'Mã QLNB', 'Tên hàng',
+    'Hàm lượng', 'ĐVT', 'Giá trúng thầu', 'SL', 'Thành tiền trước VAT',
+  ]);
+});
+
+test('mỗi đơn một dòng, tiền C32/C47 tính trên doanh thu CỦA CHÍNH DÒNG đó', async () => {
+  const store = memStore();
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, level: 'order', revenueRowsOf: () => twoOrders(),
+  });
+  assert.equal(result.orderRows.length, 2);
+  const [dh1, dh2] = result.orderRows.sort((a, b) => a.orderCode.localeCompare(b.orderCode));
+  assert.equal(dh1.orderCode, 'DH1');
+  assert.equal(dh1.quantity, 3);
+  assert.equal(dh1.revenueNoVat, 600_000, '630.000 ÷ 1,05');
+  assert.equal(dh1.c32NoVat, 60_000, 'C32 10% của 600.000');
+  assert.equal(dh2.revenueNoVat, 400_000);
+  assert.equal(dh2.c32NoVat, 40_000);
+  // ‼ Cộng chi tiết phải RA ĐÚNG số mức cặp — không phải một cách tính thứ hai.
+  assert.equal(dh1.c32NoVat + dh2.c32NoVat, result.rows[0].c32NoVat);
+  assert.equal(dh1.revenueNoVat + dh2.revenueNoVat, result.rows[0].revenueNoVat);
+});
+
+test('chi tiết thừa hưởng ĐÚNG bộ lọc — không có đường lách xem dòng ngoài phạm vi', async () => {
+  const store = memStore();
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, level: 'order',
+    filters: { routes: ['TUYẾN KHÔNG CÓ'] },
+    revenueRowsOf: () => twoOrders(),
+  });
+  assert.equal(result.rows.length, 0);
+  assert.equal(result.orderRows.length, 0, 'cặp bị lọc ra thì dòng đơn của nó cũng phải mất');
+});
+
+test('‼ cắt bớt vì quá nhiều dòng thì NÓI RA, và tổng vẫn là số THẬT', async () => {
+  const store = memStore();
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const many = Array.from({ length: costAmounts.ORDER_ROW_LIMIT + 25 }, (_, i) => ({
+    emp_code: 'DN001', unit_code: '120.HTNT', c5: 'G1.A', date: '2026-08-05',
+    revenue: 1_050, source_order: `DH${i}`, source_line_id: `L${i}`, quantity: 1,
+  }));
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, level: 'order', revenueRowsOf: () => many,
+  });
+  assert.equal(result.orderRows.length, costAmounts.ORDER_ROW_LIMIT);
+  assert.equal(result.orderRowsTotal, costAmounts.ORDER_ROW_LIMIT + 25, 'tổng phải là số THẬT, không phải số còn lại sau khi cắt');
+  assert.equal(result.orderRowsTruncated, true);
+});
+
+test('ngày không đáng tin ⇒ để trống, không bịa ngày giao dịch', async () => {
+  const store = memStore();
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, level: 'order',
+    // Slot kỳ cũ gắn ngày kỹ thuật + đánh dấu grain là 'period'.
+    revenueRowsOf: () => [{ emp_code: 'DN001', unit_code: '120.HTNT', c5: 'G1.A', date: '2026-08-01',
+      date_granularity: 'period', revenue: 1_050_000, source_order: 'DH9', source_line_id: 'L9' }],
+  });
+  assert.equal(result.orderRows[0].date, '');
+});

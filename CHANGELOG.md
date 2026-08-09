@@ -1,3 +1,22 @@
+### 2026-08-09 22:30 (giờ VN) — 📄 Chi tiết TỪNG DÒNG ĐƠN HÀNG trong menu Thành tiền — xem trên màn VÀ xuất Excel
+
+CEO hỏi lại: *"các cột chi tiết đơn hàng — chỉ xuất Excel hay xem cả trên màn?"* → **"tôi muốn cả hai nhé."** Làm đúng cả hai.
+
+**Bộ cột chép Y NGUYÊN tab "Chi phí của tôi"** (`employeeCostExport.costColumns`): Ngày · Mã đơn · Tuyến · Đơn vị · Nhà thầu · Mã QLNB · Tên hàng · Hàm lượng · ĐVT · Giá trúng thầu · SL · Thành tiền trước VAT — kèm C32/C47 (% và tiền) của chính dòng đó. Nhãn do backend cấp (`DETAIL_COLUMNS`), frontend và Excel cùng đọc một chỗ: cùng một thứ mà hai màn gọi hai tên thì người đọc phải tự dịch rồi tự nghi ngờ có phải hai số khác nhau không.
+
+**‼ Chi tiết là ADDITIVE — bật/tắt KHÔNG đổi bất kỳ con số tổng nào.** `rows` (mức cặp), `employees`, `grand` giữ nguyên; chi tiết nằm ở `orderRows` riêng. Có test so sánh nguyên khối hai kết quả. Tiền từng dòng tính bằng đúng % của cặp trên doanh thu của chính dòng đó ⇒ **cộng chi tiết ra đúng số mức cặp**, không phải một cách tính thứ hai.
+
+Ba chốt an toàn:
+1. **Thừa hưởng đúng bộ lọc + hàng rào quyền** — cặp bị lọc ra thì dòng đơn của nó cũng mất; không có đường lách xem dòng ngoài phạm vi.
+2. **Cắt bớt thì nói to.** Trần 5.000 dòng (`COST_AMOUNTS_ORDER_LIMIT`); vượt thì màn + file đều ghi **tổng THẬT** (đếm trước, cắt sau) kèm cách lấy đủ. Bảng bị cắt lặng lẽ đọc y như bảng đủ.
+3. **Ngày không đáng tin ⇒ để trống** (slot kỳ cũ gắn ngày kỹ thuật) — không bịa ngày giao dịch. Tiền/giá vẫn nằm dưới con mắt che số.
+
+Excel: **sheet riêng "Chi tiet don hang"** đứng sau sheet tổng — ai cần con số mở sheet đầu, ai cần truy từng đơn sang sheet sau. Hàm lượng · ĐVT · giá trúng thầu lấy từ danh mục (SSOT), thiếu thì lấy dòng doanh thu đỡ, vẫn thiếu thì để "—".
+
+Test: server **1138** pass / 7 fail cố hữu · web **368/368** · build sạch. Test mới: 7 ở `costAmounts.test.js` (mặc định mức cặp, bật chi tiết không đổi tổng, cộng chi tiết = mức cặp, lọc thừa hưởng, cắt-thì-nói, ngày fail-closed, nhãn cột) + 4 ở `CostAmounts.page.test.mjs`.
+
+---
+
 ### 2026-08-09 21:50 (giờ VN) — 🎛 Menu Tổng hợp C33–C46 dùng CHUNG bảng lọc nâng cao với menu Thành tiền
 
 Nối nốt việc dở: backend của Tổng hợp đã nhận đủ 8 chiều lọc mới từ đợt trước nhưng màn vẫn hiện bộ 6 ô cũ. Nay cả hai menu chi phí dùng **một** `CostFilterPanel`: 8 chiều (thêm **tên nhà thầu** + **Group-DONA/đối tác**) + ô gõ nhóm "033." (thiếu dấu chấm là nói ra) + tìm tự do + chip bấm-là-bỏ. Ô "Cột xuất" giữ riêng cạnh thanh điều khiển (chọn cột là chuyện của bảng, không phải chiều lọc dữ liệu). Debounce 300ms khi gõ.

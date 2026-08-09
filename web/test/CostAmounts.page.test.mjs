@@ -87,3 +87,36 @@ test('bảng dài chia 50 dòng/trang theo lệnh CEO 08/08', () => {
   assert.match(page, /const PAGE_SIZE = 50/);
   assert.match(page, /rows\.slice\(\(safePage - 1\) \* PAGE_SIZE, safePage \* PAGE_SIZE\)/);
 });
+
+/* ── CHI TIẾT TỪNG DÒNG ĐƠN HÀNG: CEO chốt "tôi muốn CẢ HAI" (màn + Excel) ───── */
+
+test('xem chi tiết NGAY TRÊN MÀN — có công tắc và bảng riêng', () => {
+  assert.match(page, /const \[level, setLevel\] = useState\('pair'\)/);
+  assert.match(page, /Xem chi tiết từng đơn hàng/);
+  assert.match(page, /level === 'order' && <div className="card table-card">/);
+  assert.match(page, /<b>Chi tiết từng dòng đơn hàng<\/b>/);
+  // Cột lấy từ backend, không chép tay nhãn sang frontend.
+  assert.match(page, /\(data\.detailColumns \|\| \[\]\)\.map\(\(column\) => <th/);
+});
+
+test('xuất Excel cũng có sheet chi tiết — "cả hai" nghĩa là cả hai', () => {
+  assert.match(routes, /if \(result\.level === 'order'\) \{/);
+  assert.match(routes, /addWorksheet\('Chi tiet don hang'\)/);
+  assert.match(routes, /result\.detailColumns\.map\(\(column\) => column\.label\)/);
+  // Màn và file dùng CHUNG params ⇒ file không bao giờ khác cái đang nhìn.
+  assert.match(page, /downloadCostAmounts\(params\)/);
+  assert.match(page, /const params = useMemo\(\(\) => \(\{ from, to, level, \.\.\.costFilterParams\(filters\) \}\)/);
+});
+
+test('‼ tiền/giá trong bảng chi tiết vẫn nằm dưới con mắt che số', () => {
+  const detail = page.slice(page.indexOf("level === 'order' && <div"), page.indexOf('<b>Tổng theo NV</b>'));
+  const cells = detail.match(/<td key=\{column\.key\} className="catalog-money"[^>]*>/g) || [];
+  assert.ok(cells.length >= 1, 'phải có ô tiền trong bảng chi tiết');
+  for (const cell of cells) assert.match(cell, /data-sensitive/);
+});
+
+test('cắt bớt dòng thì NÓI TO kèm cách lấy đủ, không cắt lặng lẽ', () => {
+  assert.match(page, /orderRowsTruncated && <div className="catalog-alert error"/);
+  assert.match(page, /Lọc hẹp lại \(một nhân viên · một kỳ · một nhóm mã\)/);
+  assert.match(routes, /‼ CẮT BỚT: tổng \$\{result\.orderRowsTotal/);
+});

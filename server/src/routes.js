@@ -3436,6 +3436,9 @@ async function costAmountsFor(req) {
     periods,
     session: { emp_code: req.session.emp_code, isCeo },
     filters: costFilterParams(req),
+    // CEO 09/08 chốt "cả hai": chi tiết từng dòng đơn hàng xem được TRÊN MÀN lẫn
+    // xuất Excel. Mặc định 'pair' — bật chi tiết mới tốn công gom dòng gốc.
+    level: String(req.query.level || 'pair'),
     revenueRowsOf: (empCode, period) => store.getRows({ ky: catalogManagement.toUiPeriod(period), scope: { empCode } }),
     catalogAttrsOf: (period) => attrsByPeriod.get(period) || new Map(),
   });
@@ -3499,6 +3502,35 @@ router.get('/catalog-management/cost-amounts.xlsx', auth.requireAuth, asyncJsonR
       item.c32NoVat == null ? '—' : item.c32NoVat, item.c32WithVat == null ? '—' : item.c32WithVat,
       item.c47NoVat == null ? '—' : item.c47NoVat, item.c47WithVat == null ? '—' : item.c47WithVat, '', '']);
   }
+  /* ‼ SHEET CHI TIẾT TỪNG DÒNG ĐƠN HÀNG (CEO 09/08: xin thêm "các cột bên tab Chi
+     phí của tôi", và chốt muốn "CẢ HAI" — xem trên màn lẫn xuất Excel).
+     Sheet RIÊNG, đứng sau sheet tổng: người cần con số thì mở sheet đầu, người cần
+     truy từng đơn thì sang sheet sau — không nhồi hai mức chi tiết vào một bảng. */
+  if (result.level === 'order') {
+    const detail = workbook.addWorksheet('Chi tiet don hang');
+    detail.addRow([`CHI TIẾT TỪNG DÒNG ĐƠN HÀNG · kỳ ${label}`]);
+    if (result.orderRowsTruncated) {
+      detail.addRow([`‼ CẮT BỚT: tổng ${result.orderRowsTotal.toLocaleString('vi-VN')} dòng, file này chỉ có ${result.orderRows.length.toLocaleString('vi-VN')} dòng đầu (trần ${result.orderRowLimit}). Lọc hẹp lại (nhân viên/kỳ/nhóm mã) rồi xuất lại để có đủ.`]);
+    }
+    if (filterNote) detail.addRow([`Bộ lọc đang áp dụng: ${filterNote}`]);
+    detail.addRow([]);
+    // Nhãn cột lấy từ backend (`DETAIL_COLUMNS`) — chép tay sang đây là mở đường
+    // cho file Excel và màn hình gọi cùng một cột bằng hai tên khác nhau.
+    detail.addRow(['Kỳ', 'NV', ...result.detailColumns.map((column) => column.label),
+      'Nhóm mã', 'Mã nhà thầu', 'Ưu tiên', 'C32 (%)', 'Thành tiền C32 chưa VAT', 'C47 (%)', 'Thành tiền C47 chưa VAT', 'Ghi chú']);
+    for (const line of result.orderRows) {
+      detail.addRow([
+        catalogManagement.toUiPeriod(line.period), line.empCode,
+        ...result.detailColumns.map((column) => (line[column.key] == null || line[column.key] === '' ? '—' : line[column.key])),
+        line.group || '—', line.contractorCode || '—', line.priority || '—',
+        line.c32Percent == null ? '—' : line.c32Percent,
+        line.c32NoVat == null ? '—' : line.c32NoVat,
+        line.c47Percent == null ? '—' : line.c47Percent,
+        line.c47NoVat == null ? '—' : line.c47NoVat,
+        line.c47Reason === 'XUNG_DOT' ? 'XUNG ĐỘT %' : line.c47Reason === 'THIEU_PHAN_TRAM' ? `Thiếu %: ${(line.c47Missing || []).join(', ')}` : line.c47Negative ? 'C47 ÂM — đã chi vượt C32' : '',
+      ]);
+    }
+  }
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="thanh-tien-c32-c47-${result.availablePeriods[0]}_${result.availablePeriods.at(-1)}.xlsx"`);
@@ -3551,6 +3583,10 @@ async function catalogAttrsByPeriod(periods) {
           // Danh mục KHÔNG có tên nhà thầu — để trống, dòng doanh thu sẽ đỡ. Không
           // lấy mã thay tên: hai chiều lọc khác nhau thì phải là hai giá trị khác nhau.
           contractorName: row.contractor_name || '',
+          // Hàm lượng · ĐVT · giá trúng thầu cho bảng CHI TIẾT ĐƠN HÀNG (CEO xin
+          // "các cột bên tab Chi phí của tôi"). Danh mục là SSOT của ba thứ này.
+          strength: row.strength || '', uom: row.uom || '',
+          bidPrice: row.bid_price == null ? null : Number(row.bid_price),
         });
       }
       attrsByPeriod.set(period, map);

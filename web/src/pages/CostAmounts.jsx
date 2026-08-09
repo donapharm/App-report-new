@@ -144,6 +144,9 @@ export default function CostAmounts({ me }) {
   const [from, setFrom] = useState(currentKy());
   const [to, setTo] = useState(currentKy());
   const [filters, setFilters] = useState({ ...EMPTY_COST_FILTERS });
+  // CEO 09/08 chốt "cả hai": xem chi tiết từng dòng đơn hàng NGAY TRÊN MÀN, và file
+  // Excel cũng có sheet đó. Mặc định mức cặp — bật mới kéo dòng gốc về.
+  const [level, setLevel] = useState('pair');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -161,7 +164,7 @@ export default function CostAmounts({ me }) {
 
   // Tham số gửi backend — DÙNG CHUNG cho cả xem màn lẫn xuất Excel, để file tải về
   // không bao giờ khác cái đang nhìn.
-  const params = useMemo(() => ({ from, to, ...costFilterParams(filters) }), [from, to, filters]);
+  const params = useMemo(() => ({ from, to, level, ...costFilterParams(filters) }), [from, to, level, filters]);
   const paramsKey = JSON.stringify(params);
 
   useEffect(() => {
@@ -205,6 +208,10 @@ export default function CostAmounts({ me }) {
     <div className="card cost-amounts-controls">
       <label><span>Từ kỳ</span><select value={from} onChange={(e) => setFrom(e.target.value)}>{(periodList.length ? periodList : [from]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
       <label><span>Đến kỳ</span><select value={to} onChange={(e) => setTo(e.target.value)}>{(periodList.length ? periodList : [to]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
+      <label className="cost-breakdown-vat" title="Mở thêm bảng từng dòng đơn hàng với đủ cột như tab Chi phí của tôi">
+        <input type="checkbox" checked={level === 'order'} onChange={(e) => setLevel(e.target.checked ? 'order' : 'pair')} />
+        Xem chi tiết từng đơn hàng
+      </label>
       {data?.available && <button className="btn" disabled={exporting} onClick={exportXlsx}>{exporting ? 'Đang xuất…' : '⬇ Xuất Excel (đúng bộ lọc đang chọn)'}</button>}
     </div>
 
@@ -280,6 +287,45 @@ export default function CostAmounts({ me }) {
           <button className="btn" disabled={safePage >= pageCount} onClick={() => setPage(safePage + 1)}>Sau ›</button>
         </div>}
       </div>
+
+      {/* ‼ CHI TIẾT TỪNG DÒNG ĐƠN HÀNG — đủ cột như tab "Chi phí của tôi" (CEO xin
+          09/08). Bảng này ADDITIVE: mọi con số tổng phía trên GIỮ NGUYÊN dù bật hay
+          tắt chi tiết, nên không bao giờ có chuyện bật chi tiết ra số khác. */}
+      {level === 'order' && <div className="card table-card">
+        <div className="cost-amounts-identity">
+          <b>Chi tiết từng dòng đơn hàng</b> — {Number(data.orderRowsTotal || 0).toLocaleString('vi-VN')} dòng
+          {data.orderRowsTruncated && <> · <b className="cost-amounts-warn">đang hiện {Number(data.orderRows?.length || 0).toLocaleString('vi-VN')} dòng đầu</b></>}
+        </div>
+        {/* Cắt bớt thì NÓI TO kèm cách lấy đủ — bảng bị cắt lặng lẽ đọc y như bảng đủ. */}
+        {data.orderRowsTruncated && <div className="catalog-alert error" role="alert">
+          ‼ Quá nhiều dòng ({Number(data.orderRowsTotal).toLocaleString('vi-VN')}), màn chỉ hiện <b>{Number(data.orderRows.length).toLocaleString('vi-VN')}</b> dòng đầu.
+          Lọc hẹp lại (một nhân viên · một kỳ · một nhóm mã) rồi xem lại, hoặc bấm <b>Xuất Excel</b> — file cũng theo trần này nên vẫn nên lọc hẹp.
+        </div>}
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
+          <th>Kỳ</th><th>NV</th>
+          {(data.detailColumns || []).map((column) => <th key={column.key} className={column.money || column.number ? 'catalog-money' : ''}>{column.label}</th>)}
+          <th className="catalog-money">C32 %</th><th className="catalog-money">Thành tiền C32</th>
+          <th className="catalog-money">C47 %</th><th className="catalog-money">Thành tiền C47</th>
+        </tr></thead><tbody>
+          {(data.orderRows || []).slice(0, PAGE_SIZE * 4).map((line, index) => <tr key={`${line.period}-${line.empCode}-${line.unitCode}-${line.productCode}-${line.orderCode}-${index}`}>
+            <td>{hubToUi(line.period)}</td>
+            <td><b>{line.empCode}</b></td>
+            {(data.detailColumns || []).map((column) => (column.money
+              // Tiền và giá là số nhạy cảm ⇒ phải nằm dưới con mắt che số.
+              ? <td key={column.key} className="catalog-money" data-sensitive="">{money(line[column.key])}</td>
+              : <td key={column.key} className={column.number ? 'catalog-money' : ''}>
+                {line[column.key] == null || line[column.key] === '' ? '—' : (column.number ? Number(line[column.key]).toLocaleString('vi-VN') : line[column.key])}
+              </td>))}
+            <PercentCell value={line.c32Percent} />
+            <MoneyCell value={line.c32NoVat} reason={line.c32Reason} missing={[]} />
+            <PercentCell value={line.c47Percent} negative={line.c47Negative} />
+            <MoneyCell value={line.c47NoVat} reason={line.c47Reason} missing={line.c47Missing} negative={line.c47Negative} />
+          </tr>)}
+        </tbody></table></div>
+        {(data.orderRows || []).length > PAGE_SIZE * 4 && <small className="muted cost-breakdown-note">
+          Màn hiện {(PAGE_SIZE * 4).toLocaleString('vi-VN')} dòng đầu cho nhẹ máy — bấm <b>Xuất Excel</b> để lấy trọn phần đang lọc.
+        </small>}
+      </div>}
 
       <div className="card table-card">
         <div className="cost-amounts-identity"><b>Tổng theo NV</b> — tổng C47 chỉ chốt khi đủ % mọi cặp; hụt cặp nào thì ghi rõ, không đưa "tổng thiếu" ra như tổng thật.</div>
