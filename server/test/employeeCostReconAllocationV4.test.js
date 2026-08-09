@@ -168,6 +168,14 @@ test('dedicated configuration, version pins, cache scope and unavailable fallbac
   assert.equal(ambiguous.get('2026-07\x1f20.HĐS'), null);
   assert.equal(ambiguousCalls, 0);
   assert.equal(allocationV4.configOf({ baseUrl: 'https://sale.invalid', key: 'dedicated-reconciliation-key', allocationVersion: 'bad' }).allocationVersion, 0);
+  const previousAllocationVersion = process.env.APP_SALE_RECON_ALLOCATION_V4_VERSION;
+  delete process.env.APP_SALE_RECON_ALLOCATION_V4_VERSION;
+  try {
+    assert.equal(allocationV4.configOf({ baseUrl: 'https://sale.invalid', key: 'dedicated-reconciliation-key' }).allocationVersion, 4);
+  } finally {
+    if (previousAllocationVersion === undefined) delete process.env.APP_SALE_RECON_ALLOCATION_V4_VERSION;
+    else process.env.APP_SALE_RECON_ALLOCATION_V4_VERSION = previousAllocationVersion;
+  }
 });
 
 test('EmployeeCost integration keeps all financial outputs identical and excludes synthetic rows from exports', async () => {

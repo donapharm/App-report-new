@@ -48,7 +48,7 @@ function configOf(options = {}) {
     baseUrl: clean(options.baseUrl ?? process.env.APP_SALE_RECON_ALLOCATION_V4_BASE_URL ?? process.env.APP_SALE_RECON_BASE_URL).replace(/\/$/, ''),
     key: clean(options.key ?? process.env.APP_SALE_RECON_ALLOCATION_V4_KEY ?? process.env.APP_SALE_RECON_KEY),
     reconciliationVersion: versionPin(options.reconciliationVersion ?? process.env.APP_SALE_RECON_ALLOCATION_V4_RECONCILIATION_VERSION, 0),
-    allocationVersion: versionPin(options.allocationVersion ?? process.env.APP_SALE_RECON_ALLOCATION_V4_VERSION, 1),
+    allocationVersion: versionPin(options.allocationVersion ?? process.env.APP_SALE_RECON_ALLOCATION_V4_VERSION, 4),
     timeoutMs: bounded(options.timeoutMs ?? process.env.APP_SALE_RECON_ALLOCATION_V4_TIMEOUT_MS ?? process.env.APP_SALE_RECON_TIMEOUT_MS, 1500, 250, 10000),
     cacheTtlMs: bounded(options.cacheTtlMs ?? process.env.APP_SALE_RECON_ALLOCATION_V4_CACHE_TTL_MS ?? process.env.APP_SALE_RECON_CACHE_TTL_MS, 60000, 1000, 3600000),
     errorTtlMs: bounded(options.errorTtlMs, 5000, 100, 60000),
