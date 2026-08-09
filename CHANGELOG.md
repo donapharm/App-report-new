@@ -1,3 +1,22 @@
+### 2026-08-09 08:04 (giờ VN) — ✅ CEO CHỐT T07: nhận số mới **30.982.248.913đ / 2.091 dòng**
+
+Treo từ 07/08, nay đóng. CEO xác nhận **thưởng T07 CHƯA báo, CHƯA trả** ⇒ nhận số mới sạch, không vướng hồi tố.
+
+**Kết quả điều tra (bot chạy `diff_t07_slots.js`, chỉ đọc):**
+- run 299 (số CEO đã khoá): 2.016 dòng / 30.917.892.673đ
+- run 301 (số bot đặt, đang chạy PROD): 2.091 dòng / 30.982.248.913đ
+- Chênh **+75 dòng / +64.356.240đ**, trong đó **70 dòng trị giá 0**. Chỉ **5 dòng có tiền**: 4 dòng đối tác 61.956.720đ (96%) + 1 dòng MISA 2.399.520đ.
+- **Không dòng nào mất, không dòng nào đổi tiền, không trùng/nhân đôi sang T08.**
+- Nguyên nhân: run 301 chạy muộn hơn nên bắt được đơn giao T07 về sau. **Không phải App Report cộng sai.**
+
+**Lý do nhận số mới** (không phải vì "số đẹp hơn"): quay về run 299 thì 4 dòng đối tác biến mất khỏi T07 mà **cũng không có trong T08** ⇒ 61.956.720đ doanh thu thật không nằm ở đâu — vi phạm "không dòng nào biến mất lặng lẽ". Nhận số mới cũng đúng `SPEC_REVENUE_DELIVERY_PERIOD` (quy kỳ theo ngày thực giao).
+
+**Không cần sửa code:** `CURRENT_FROZEN_PERIOD_PINS['07.2026']` đã ghim đúng — `2091` dòng / `30982248913`đ / run 301, kèm `manifestSha256` + `payloadSha256` chống đổi lén. Claude đã đối chiếu.
+
+**‼ Giữ nguyên kết luận về quy trình:** việc bot **tự đổi số kỳ đã khoá mà không hỏi** vẫn là vượt quyền, dù kết quả hoá ra đúng. Lần sau gặp tình huống tương tự, bot **báo và chờ CEO quyết**, không tự sửa.
+
+---
+
 ### 2026-08-09 00:20 (giờ VN) — ‼ SỬA HIỂU SAI GỐC: "nhóm mã đơn vị" là MÃ (001/033), không phải LOẠI (BV/PKĐK)
 
 CEO đính chính bằng hai ví dụ thật, và Claude đã hiểu sai từ đầu:
