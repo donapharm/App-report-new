@@ -197,3 +197,27 @@ test('‼ "không hỏi được backend" KHÁC "đơn vị thiếu nhóm" — k
 test('màn chi tiết NV trỏ ngược lên cảnh báo đỏ khi MỌI người đều 0 nhóm', () => {
   assert.match(page, /Nếu MỌI nhân viên đều báo 0 nhóm thì đây không phải lỗi dữ liệu/);
 });
+
+/* ── Nút "Thử lại" phải GỌI LẠI API THẬT (bot chặn Gate 2 đúng, 09/08) ───────── */
+
+test('‼ HÀNH VI: đóng/mở panel KHÔNG gọi lại API — nên hướng dẫn cũ là vô dụng', () => {
+  // Bản đầu bảo "Bấm Thu gọn rồi Mở phân quyền lại để thử lần nữa". Sai: `load()`
+  // có chốt `!panel`, mà sau lỗi panel VẪN tồn tại (bảng nhóm rỗng) ⇒ không chạy lại.
+  // Lấy ĐÚNG luật gating từ code rồi chạy mô phỏng, không chép tay quy tắc.
+  const effect = page.match(/useEffect\(\(\) => \{ if \(open && !panel && !loading\) load\(\); \}, \[open\]\);/);
+  assert.ok(effect, 'luật tự-tải phải là (open && !panel && !loading)');
+  const autoLoads = (open, panel, loading) => !!(open && !panel && !loading);
+
+  const panelAfterError = { rows: [], columns: [] };       // lỗi bảng nhóm: panel VẪN có
+  assert.equal(autoLoads(false, panelAfterError, false), false, 'thu gọn: không tải');
+  assert.equal(autoLoads(true, panelAfterError, false), false, 'mở lại: VẪN không tải ⇒ hướng dẫn cũ vô dụng');
+  // Lần mở đầu (chưa có panel) thì vẫn phải tự tải như cũ.
+  assert.equal(autoLoads(true, null, false), true);
+});
+
+test('nút "Thử lại" gọi THẲNG load(), không đi vòng qua setOpen', () => {
+  assert.match(page, /onClick=\{\(\) => load\(\)\}>\s*\{loading \? 'Đang thử lại…' : '↻ Thử lại'\}/);
+  assert.match(page, /<button type="button" className="btn" disabled=\{loading\} onClick=\{\(\) => load\(\)\}/);
+  // Không được quay lại kiểu bảo người dùng đóng/mở panel.
+  assert.doesNotMatch(page, /Thu gọn<\/b> rồi <b>Mở phân quyền<\/b> lại/);
+});

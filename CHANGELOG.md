@@ -1,3 +1,19 @@
+### 2026-08-09 18:10 (giờ VN) — 🔁 Nút "Thử lại" THẬT — bot chặn Gate 2 đúng
+
+Bot BLOCK `197f1fc` với lý do chính xác: dải đỏ mới bảo *"Bấm Thu gọn rồi Mở phân quyền lại để thử lần nữa"*, nhưng thao tác đó **không gọi lại API** — `useEffect` tự tải có chốt `(open && !panel && !loading)`, mà sau lỗi bảng nhóm **panel VẪN tồn tại** (chỉ rỗng nhóm). Người làm theo vẫn thấy 0 nhóm.
+
+**Chỉ dẫn sai còn tệ hơn không chỉ dẫn:** người ta làm theo, thất bại, rồi tin là app hỏng nặng hơn thực tế. Đúng họ lỗi cùng loại với "164 đơn vị chưa nhận diện được nhóm" mà chính bản vá này định chữa — Claude vá một chỗ nói sai rồi đẻ ra chỗ nói sai thứ hai.
+
+**Đã sửa:** dải đỏ có **nút "↻ Thử lại"** gọi thẳng `load()`, khoá khi đang tải; bỏ hẳn câu hướng dẫn đóng/mở.
+
+**Test HÀNH VI, không chỉ câu chữ** (bot nêu đúng điểm yếu của test cũ): trích **đúng luật gating từ code** rồi chạy mô phỏng — khẳng định `autoLoads(true, panelAfterError, false) === false`, tức đóng/mở thật sự vô dụng; đồng thời lần mở đầu (`panel = null`) vẫn tự tải như cũ. Repo không có hạ tầng render DOM nên đây là mức kiểm hành vi chặt nhất làm được mà không dựng thêm bộ khung test.
+
+**Kết quả dò C1a của bot** (ghi nhận): cùng session CEO, `GET .../grants` 200 (77ms), `POST .../unit-groups` 200 (236ms), 198 khoá hợp lệ, 0 null, body 5,7 KB. Bốn nghi vấn đều loại: không phải body limit, không phải auth, không phải timeout/proxy, không phải route bị che. ⇒ Lỗi trong ảnh CEO là **một request bị từ chối nhất thời**; code cũ nuốt lỗi nên không truy ngược được nguyên nhân lịch sử. Từ bản này trở đi lỗi được giữ lại và nói ra.
+
+Web 355/355 (+2 hành vi) · build sạch · server không đụng.
+
+---
+
 ### 2026-08-09 17:40 (giờ VN) — 🧠 BA CÔNG CỤ QUẢN TRỊ cho menu Tổng hợp chi phí
 
 CEO: *"làm tiếp đi"* — dựng nốt ba thứ Claude đã tư vấn nhưng chưa làm. Bảng tiền suông không quản được tiền; ba con số này trả lời ba câu CEO thực sự hỏi khi nhìn bảng chi phí.

@@ -2595,3 +2595,4 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .cost-breakdown-share td { background:#f7f9fc; color:var(--muted); border-top:2px solid #d7e0ea; }
 .cost-breakdown-up td:nth-child(4) { color:#b3261e; font-weight:800; }
 .cost-breakdown-down td:nth-child(4) { color:#0f7b53; font-weight:800; }
+.catalog-groups-error { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }

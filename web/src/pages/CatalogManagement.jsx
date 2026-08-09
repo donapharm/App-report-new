@@ -816,11 +816,20 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
     {open && <div className="catalog-grants-body" id="catalog-grants-body">
       {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
       {message && <div className="catalog-alert ok" role="status">{message}</div>}
-      {!!groupsError && <div className="catalog-alert error" role="alert">
-        ⛔ <b>Không hỏi được bảng "mã đơn vị → nhóm"</b> ({groupsError}). Vì thế mọi NV đang hiện
-        <b> 0 nhóm</b> — <b>KHÔNG</b> phải đơn vị thiếu nhóm, mà là chưa hỏi được máy chủ.
-        Bấm <b>Thu gọn</b> rồi <b>Mở phân quyền</b> lại để thử lần nữa; còn lỗi thì báo bot kiểm endpoint
-        <code> POST /catalog-management/cost-columns/unit-groups</code>.
+      {/* ‼ Nút này gọi THẲNG `load()`. Bản đầu bảo người dùng "Thu gọn rồi Mở lại" —
+          thao tác đó CHỈ đổi cờ `open`, còn `load()` có chốt `!panel` nên không chạy
+          lại: hướng dẫn vô dụng, người làm theo vẫn thấy 0 nhóm (bot chặn Gate 2
+          đúng, 09/08). Chỉ dẫn sai còn tệ hơn không chỉ dẫn — người ta làm theo,
+          thất bại, rồi tin là app hỏng nặng hơn thực tế. */}
+      {!!groupsError && <div className="catalog-alert error catalog-groups-error" role="alert">
+        <div>
+          ⛔ <b>Không hỏi được bảng "mã đơn vị → nhóm"</b> ({groupsError}). Vì thế mọi NV đang hiện
+          <b> 0 nhóm</b> — <b>KHÔNG</b> phải đơn vị thiếu nhóm, mà là chưa hỏi được máy chủ.
+          Còn lỗi sau khi thử lại thì báo bot kiểm <code>POST /catalog-management/cost-columns/unit-groups</code>.
+        </div>
+        <button type="button" className="btn" disabled={loading} onClick={() => load()}>
+          {loading ? 'Đang thử lại…' : '↻ Thử lại'}
+        </button>
       </div>}
       {loading || !panel ? <Spinner /> : <>
         {!panel.columns.length && <div className="catalog-alert error" role="alert">
