@@ -1,3 +1,42 @@
+### 2026-08-09 11:20 (giờ VN) — 🕳️ VÁ LỖ HỔNG: không có chỗ nào để rà lại phân quyền khi danh mục đổi
+
+CEO nêu: *"hôm sau nhóm 033 họ mở thêm một đơn vị mới… hôm sau xuất hiện thêm mã đơn vị mới giao cho DN001/DN002… hôm sau anh thay đổi NV phụ trách mã QLNB của mã đơn vị này cho NV khác… vậy vào đâu để bấm cập nhật phân quyền thêm / phân quyền lại? Chỗ này đúng là lỗ hổng."*
+
+**CEO đúng. Câu trả lời trung thực trước bản này là: KHÔNG CÓ CHỖ NÀO.** Phần cấp quyền đã làm, nhưng phần *duy trì* quyền khi danh mục sống động thì bỏ trống.
+
+#### Soi lại cơ chế — cái gì tự chạy, cái gì không
+
+| Tình huống | Có tự động? | Vì sao |
+|---|---|---|
+| Nhóm 033 mở thêm `033.PKĐK Xuân Lộc` | ✅ **Tự động** | Quyền lưu theo NHÓM, nhóm được tra **ngay lúc hiển thị**; mã mới bắt đầu bằng `033` rơi đúng nhóm sẵn có |
+| Cột đang để "Mọi nhóm" (`*`), nhóm mới xuất hiện | ✅ **Tự động** | `*` phủ cả nhóm phát sinh sau |
+| Nhóm mã **hoàn toàn mới** khi cột cấp tường minh | ❌ | Nhóm không nằm trong danh sách ⇒ ô để "—" |
+| Chuyển mã QLNB/đơn vị từ DN001 → DN002 | ❌ | Bảng lọc theo phụ trách nên DN002 **thấy dòng**, nhưng quyền cột là của riêng DN002 |
+| Đổi phụ trách theo tuyến | ❌ | Như trên |
+
+**Ba dòng ❌ đều fail-closed nên KHÔNG ra số sai** — nhưng chúng **im lặng**, mà im lặng chính là thứ app này cấm. CEO chỉ biết khi có NV kêu "sao em không thấy cột C41".
+
+#### Đã vá: khối "Cần rà phân quyền"
+
+Nằm ngay đầu menu phân quyền, tự tính mỗi lần mở bằng cách so **danh mục đang chạy** với **ma trận quyền**. Số việc hiện thành **huy hiệu đỏ trên tiêu đề** để CEO nhìn màn Danh mục là thấy, khỏi phải đi tìm.
+
+1. **Chưa được cấp** — NV đang phụ trách một nhóm mà nhóm đó không có cột nào. Kèm nút **"Cấp giống DN00x (C41, C43)"** lấy đúng bộ cột của NV khác đang phụ trách cùng nhóm — chính là thao tác cần khi chuyển phụ trách.
+2. **Nhóm mới** — không có ai để lấy mẫu thì ghi thẳng *"nhóm mới, chưa có mẫu"*, không bịa ra một gợi ý.
+3. **Quyền thừa** — NV còn cấp ở nhóm không còn phụ trách. Ghi rõ **không lộ số** (bảng vẫn lọc theo phụ trách) để CEO khỏi hoảng, chỉ là nên dọn.
+
+#### ‼ CEO chốt hai điểm nguyên tắc (09/08)
+
+- **App CHỈ BÁO, KHÔNG TỰ CẤP.** Nút "Cấp giống DN00x" chỉ điền sẵn vào bảng đang sửa; vẫn phải bấm "Lưu thay đổi" như mọi thao tác khác. **Không có đường nào để quyền xem số chi phí tự mở mà CEO không bấm** — kể cả khi app biết chắc NV cũ có quyền gì. Tự cấp dựa trên phân công do hệ khác đẩy sang là điều app này không được phép làm.
+- **Nhóm mã hoàn toàn mới ⇒ NV không thấy**, app báo để CEO quyết. Giữ nguyên luật "chưa cấp là không thấy".
+
+#### Một quyết định chống nhiễu
+
+Khối rà **chỉ tính cho NV đã từng được cấu hình** (có ít nhất một cột ở đâu đó). NV chưa cấp gì là **mặc định đúng**, không phải lệch — đếm riêng, không kêu. Không có luật này thì hôm nay bật lên đã hơn hai nghìn dòng cảnh báo, đọc thành nhiễu rồi bỏ qua hết, cảnh báo mất tác dụng đúng lúc cần nhất. Danh sách dài quá 25 dòng thì **nói rõ đã cắt bao nhiêu**, không im lặng.
+
+Logic tách riêng (`reviewGrants` · `applySuggestion`) để test được: web **331/331** (+21) · build sạch.
+
+---
+
 ### 2026-08-09 10:47 (giờ VN) — 🔘 Nút "Chọn cả cột" trong màn phân quyền
 
 CEO: *"thêm cho tôi chọn hết tất cả theo cột, ví dụ NV DN001 chọn hết tất cả cột C41, thay vì phải đi tích từng dòng một."*

@@ -9,6 +9,7 @@ import {
   ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
   grantSavePayload, grantSummary, ratesLookup,
   grantCounts, isColumnAllGroups, isGroupChecked, setColumnAllGroups, toggleColumnGroup, toggleGroupAllColumns,
+  reviewGrants, applySuggestion,
 } from '../catalogCostGrantsModel.js';
 import { pct } from '../util.js';
 
@@ -653,6 +654,88 @@ function EmployeeGrantDetail({ row, columns, onBack, onChange }) {
  * Nút này chỉ hiện với tài khoản CEO; backend vẫn chặn độc lập bằng `requireCeo`
  * — ẩn nút KHÔNG phải lớp bảo vệ.
  */
+/**
+ * KHỐI "CẦN RÀ PHÂN QUYỀN" — vá lỗ hổng CEO chỉ ra 09/08/2026.
+ *
+ * CEO: *"hôm sau xuất hiện thêm mã đơn vị mới giao cho DN001/DN002… hôm sau anh
+ * chuyển NV phụ trách mã QLNB của mã đơn vị này cho NV khác… vậy vào đâu để bấm
+ * cập nhật phân quyền?"* — Trước bản này: KHÔNG CÓ CHỖ NÀO. Quyền lệch âm thầm,
+ * NV chỉ thấy ô '—' và CEO chỉ biết khi có người kêu.
+ *
+ * ‼ CEO chốt: app CHỈ BÁO, KHÔNG TỰ CẤP. Nút "Cấp giống DN00x" chỉ điền sẵn vào
+ * bảng đang sửa; vẫn phải bấm "Lưu thay đổi" như mọi thao tác khác. Không có
+ * đường nào để quyền xem số chi phí tự mở mà CEO không bấm.
+ */
+const REVIEW_LIMIT = 25;
+function GrantReviewBoard({ review, onOpen, onApply }) {
+  const { needsGrant, staleGrant, neverConfigured, counts } = review;
+  if (!counts.needsGrant && !counts.staleGrant) {
+    return <div className="catalog-review is-clean" role="status">
+      ✅ Phân quyền đang khớp với danh mục hiện hành — không có chỗ nào lệch.
+      {!!counts.neverConfigured && <small> {counts.neverConfigured} NV chưa cấp cột nào (đúng mặc định "không thấy cột % nào").</small>}
+    </div>;
+  }
+  return <div className="catalog-review" role="status">
+    <div className="catalog-review-head">
+      <b>⚠ Cần rà phân quyền</b>
+      <small>
+        Danh mục đã đổi so với lúc cấp quyền. Đây là chỗ để bấm cập nhật —
+        app <b>không tự cấp</b> gì, mọi thay đổi vẫn phải bấm “Lưu thay đổi”.
+      </small>
+    </div>
+
+    {!!counts.needsGrant && <div className="catalog-review-group">
+      <div className="catalog-review-title">
+        {counts.needsGrant} chỗ NV đang phụ trách mà <b>chưa được cấp cột nào</b>
+        {!!counts.newGroups && <em> · trong đó {counts.newGroups} nhóm mã hoàn toàn mới</em>}
+      </div>
+      <ul>
+        {needsGrant.slice(0, REVIEW_LIMIT).map((item) => <li key={`${item.empCode}|${item.groupKey}`}>
+          <span className="catalog-review-what">
+            <b>{item.empCode}</b>{item.name ? ` · ${item.name}` : ''} — nhóm <b>{item.groupLabel}</b>
+            <small>{item.unitCount} đơn vị: {item.units.join(' · ')}</small>
+          </span>
+          <span className="catalog-review-act">
+            {item.isNewGroup
+              ? <em title="Cả công ty chưa ai được cấp ở nhóm này — không có ai để lấy mẫu">nhóm mới, chưa có mẫu</em>
+              : item.suggestions.slice(0, 2).map((suggestion) => <button type="button" key={suggestion.empCode}
+                className="btn ghost catalog-review-btn"
+                title={`Cấp cho ${item.empCode} đúng ${suggestion.columns.map((c) => c.toUpperCase()).join(', ')} mà ${suggestion.empCode} đang có ở nhóm ${item.groupKey} — vẫn phải bấm Lưu`}
+                onClick={() => onApply(item, suggestion)}>
+                Cấp giống {suggestion.empCode} ({suggestion.columns.map((c) => c.toUpperCase()).join(', ')})
+              </button>)}
+            <button type="button" className="btn ghost catalog-review-btn" onClick={() => onOpen(item.empCode)}>Mở NV này ›</button>
+          </span>
+        </li>)}
+      </ul>
+      {needsGrant.length > REVIEW_LIMIT && <small className="muted">Hiện {REVIEW_LIMIT}/{needsGrant.length} chỗ — xử lý xong lượt này sẽ hiện tiếp.</small>}
+    </div>}
+
+    {!!counts.staleGrant && <div className="catalog-review-group">
+      <div className="catalog-review-title">
+        {counts.staleGrant} chỗ <b>quyền thừa</b> — NV không còn phụ trách nhóm này nữa
+        <em> · không lộ số (bảng vẫn lọc theo phụ trách), nhưng nên dọn</em>
+      </div>
+      <ul>
+        {staleGrant.slice(0, REVIEW_LIMIT).map((item) => <li key={`${item.empCode}|${item.groupKey}`}>
+          <span className="catalog-review-what">
+            <b>{item.empCode}</b>{item.name ? ` · ${item.name}` : ''} — còn {item.columns.map((c) => c.toUpperCase()).join(', ')} ở nhóm <b>{item.groupKey}</b>
+          </span>
+          <span className="catalog-review-act">
+            <button type="button" className="btn ghost catalog-review-btn" onClick={() => onOpen(item.empCode)}>Mở NV này ›</button>
+          </span>
+        </li>)}
+      </ul>
+      {staleGrant.length > REVIEW_LIMIT && <small className="muted">Hiện {REVIEW_LIMIT}/{staleGrant.length} chỗ.</small>}
+    </div>}
+
+    {!!counts.neverConfigured && <small className="catalog-review-foot">
+      Ngoài ra {counts.neverConfigured} NV chưa cấp cột nào ({neverConfigured.slice(0, 6).map((item) => item.empCode).join(' · ')}
+      {neverConfigured.length > 6 ? '…' : ''}) — đây là <b>mặc định đúng</b>, không phải lệch, nên không tính vào số việc trên.
+    </small>}
+  </div>;
+}
+
 function CostColumnGrantsPanel({ catalogRows, employees }) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState(null);
@@ -697,10 +780,16 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
   };
 
   const pending = panel ? dirtyRows(panel).length : 0;
+  const review = useMemo(() => reviewGrants(panel), [panel]);
+  const todo = review.counts.needsGrant + review.counts.staleGrant;
   return <div className="card catalog-grants">
     <div className="catalog-grants-head">
       <div>
-        <div className="section-head">🔐 Phân quyền cột % chi phí</div>
+        <div className="section-head">🔐 Phân quyền cột % chi phí
+          {/* Số việc phải rà hiện NGAY trên đầu mục: danh mục đổi thì quyền lệch âm
+              thầm, CEO không có cách nào biết nếu phải tự mở từng NV ra dò. */}
+          {!!todo && <span className="catalog-grants-badge" title="Số chỗ phân quyền đang lệch so với danh mục hiện hành">{todo}</span>}
+        </div>
         <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo <b>NHÓM đơn vị</b> (BV · TTYT · PKĐK · NT…) — mỗi cột một phạm vi nhóm riêng, cấp cho nhóm nào là cả nhóm đó cùng thấy.</p>
       </div>
       <button type="button" className="btn secondary" aria-expanded={open} aria-controls="catalog-grants-body" onClick={() => setOpen((v) => !v)}>
@@ -719,6 +808,8 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
               vị, các cột để tích"*. Bảng ma trận 21 NV × 7 cột nhét vào ô nhỏ là không
               làm chi tiết được — nay tách hai bước: chọn người → mở lưới đầy đủ. */}
           {!selected ? <>
+            <GrantReviewBoard review={review} onOpen={setSelected}
+              onApply={(item, suggestion) => setPanel((cur) => applySuggestion(cur, item.empCode, item.groupKey, suggestion.columns))} />
             <div className="catalog-grants-bulk">
               <span>Áp nhanh cho nhiều người:</span>
               {panel.columns.map((column) => <label key={column.key}>

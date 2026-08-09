@@ -296,3 +296,118 @@ export function grantCounts(row) {
     groupCount,
   };
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   RÀ PHÂN QUYỀN KHI DANH MỤC ĐỔI (CEO nêu 09/08/2026)
+
+   CEO: *"hôm sau nhóm 033 họ mở thêm một đơn vị mới… hôm sau xuất hiện thêm mã đơn
+   vị mới giao cho DN001/DN002… hôm sau anh chuyển NV phụ trách mã QLNB từ đơn vị này
+   sang đơn vị khác… vậy vào đâu để bấm cập nhật phân quyền?"*
+
+   Trả lời theo đúng cơ chế đang chạy:
+   · Thêm đơn vị vào nhóm ĐÃ CẤP ⇒ TỰ ĐỘNG. Quyền lưu theo nhóm và nhóm được tra
+     ngay lúc hiển thị, nên `033.PKĐK Xuân Lộc` mới mở rơi đúng nhóm 033 sẵn có.
+   · Nhóm mã HOÀN TOÀN MỚI, hoặc NV mới nhận phụ trách ở nhóm chưa được cấp ⇒ KHÔNG
+     tự động. App fail-closed nên không ra số sai (ô để '—'), nhưng **im lặng** —
+     và im lặng là thứ app này cấm. Đó là lỗ hổng CEO chỉ ra.
+
+   Hàm này là phần vá: soi lệch giữa DANH MỤC ĐANG CHẠY và MA TRẬN QUYỀN, rồi nói ra.
+
+   ‼ CEO chốt 09/08: app **CHỈ BÁO, KHÔNG TỰ CẤP**. Kể cả khi biết chắc NV cũ đang có
+   quyền gì ở nhóm đó, app cũng chỉ *gợi ý* để CEO bấm. Tự cấp quyền xem số chi phí
+   dựa trên một phân công do hệ khác đẩy sang là điều app này không được phép làm.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/** Các cột NV đang thực sự được xem ở đúng nhóm này. */
+function grantedColumnsAt(row, groupKey) {
+  return Object.keys(row?.columns || {}).filter((key) => isGroupChecked(row, key, groupKey)).sort();
+}
+
+/**
+ * So danh mục hiện hành với ma trận quyền, trả về ba nhóm việc.
+ *
+ * `needsGrant` — NV phụ trách một nhóm mà nhóm đó KHÔNG được cấp cột nào.
+ *   ‼ Chỉ tính cho NV **đã từng được cấu hình** (có ít nhất một cột ở đâu đó). NV chưa
+ *   cấp gì là đúng mặc định "không thấy cột % nào", không phải lỗi — đưa vào đây thì
+ *   ngày đầu bật máy đã có hơn hai nghìn dòng cảnh báo, đọc thành nhiễu rồi bỏ qua hết.
+ *   `suggestions` = NV khác cũng phụ trách nhóm đó và ĐANG có quyền — dùng cho nút
+ *   "Cấp giống DN00x" khi CEO chuyển phụ trách. Không có ai gợi ý được ⇒ `isNewGroup`:
+ *   cả công ty chưa ai được cấp ở nhóm này, tức nhóm vừa xuất hiện.
+ *
+ * `staleGrant` — NV còn được cấp ở nhóm mà nay không còn phụ trách đơn vị nào. Không
+ *   lộ số (bảng vẫn lọc theo phụ trách) nhưng làm ma trận bẩn dần; gợi ý dọn.
+ *
+ * `neverConfigured` — NV có phụ trách nhưng chưa cấp gì. Đếm để CEO biết, không kêu.
+ */
+export function reviewGrants(panel) {
+  const rows = Array.isArray(panel?.rows) ? panel.rows : [];
+  const isConfigured = (row) => Object.keys(row?.columns || {}).length > 0;
+
+  // Ai đang có quyền ở nhóm nào — nguồn cho gợi ý "cấp giống người đang làm".
+  const holdersOf = new Map();
+  for (const row of rows) {
+    for (const group of row.availableGroups || []) {
+      const columns = grantedColumnsAt(row, group.key);
+      if (!columns.length) continue;
+      if (!holdersOf.has(group.key)) holdersOf.set(group.key, []);
+      holdersOf.get(group.key).push({ empCode: row.empCode, name: row.name, columns });
+    }
+  }
+
+  const needsGrant = [];
+  const staleGrant = [];
+  const neverConfigured = [];
+  for (const row of rows) {
+    const groups = row.availableGroups || [];
+    if (!isConfigured(row)) {
+      if (groups.length) neverConfigured.push({ empCode: row.empCode, name: row.name, groupCount: groups.length });
+      continue;
+    }
+    for (const group of groups) {
+      if (grantedColumnsAt(row, group.key).length) continue;
+      const suggestions = (holdersOf.get(group.key) || []).filter((item) => item.empCode !== row.empCode);
+      needsGrant.push({
+        empCode: row.empCode, name: row.name,
+        groupKey: group.key, groupLabel: group.label,
+        unitCount: group.unitCount, units: group.units || [],
+        suggestions, isNewGroup: !suggestions.length,
+      });
+    }
+    // Nhóm ghi tường minh trong phạm vi mà NV không còn phụ trách. '*' không bao giờ thừa.
+    const owned = new Set(groups.map((group) => group.key));
+    const dangling = new Map();
+    for (const [column, scope] of Object.entries(row.columns || {})) {
+      for (const key of scope) {
+        if (key === ALL_UNITS || owned.has(key)) continue;
+        if (!dangling.has(key)) dangling.set(key, []);
+        dangling.get(key).push(column);
+      }
+    }
+    for (const [groupKey, columns] of dangling) {
+      staleGrant.push({ empCode: row.empCode, name: row.name, groupKey, columns: columns.sort() });
+    }
+  }
+
+  const sortKey = (item) => `${item.empCode}|${item.groupKey}`;
+  needsGrant.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  staleGrant.sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  return {
+    needsGrant, staleGrant, neverConfigured,
+    counts: {
+      needsGrant: needsGrant.length,
+      staleGrant: staleGrant.length,
+      newGroups: new Set(needsGrant.filter((item) => item.isNewGroup).map((item) => item.groupKey)).size,
+      neverConfigured: neverConfigured.length,
+    },
+  };
+}
+
+/** Áp đúng bộ cột của NV đang phụ trách sang NV này, CHỈ ở một nhóm. CEO bấm mới chạy. */
+export function applySuggestion(panel, empCode, groupKey, columnKeys = []) {
+  let next = panel;
+  for (const columnKey of columnKeys) {
+    const row = next.rows.find((item) => item.empCode === upper(empCode));
+    if (!isGroupChecked(row, columnKey, groupKey)) next = toggleColumnGroup(next, empCode, columnKey, groupKey);
+  }
+  return next;
+}
