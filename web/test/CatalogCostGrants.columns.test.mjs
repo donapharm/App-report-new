@@ -7,6 +7,7 @@ import { setMasked, MASK_TEXT } from '../src/privacyMask.js';
 import { pct } from '../src/util.js';
 
 const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', import.meta.url), 'utf8');
+const model = fs.readFileSync(new URL('../src/catalogCostGrantsModel.js', import.meta.url), 'utf8');
 const cost = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
 const gapModel = fs.readFileSync(new URL('../src/employeeCostGapModel.js', import.meta.url), 'utf8');
 
@@ -63,4 +64,41 @@ test('mã đơn hàng vào tab "Mặt hàng thiếu %": hiện 3 mã + tooltip �
 test('nút Quay lại có ở cả hai tab con và chỉ đổi tab, giữ nguyên kỳ + bộ lọc', () => {
   assert.equal((cost.match(/employee-cost-back/g) || []).length, 2);
   assert.equal((cost.match(/onBack=\{\(\) => setView\('cost'\)\}/g) || []).length, 2);
+});
+
+/* ── LƯU XONG PHẢI KIỂM LẠI + QUAY VỀ DANH SÁCH (CEO 09/08/2026) ──────────────
+ * CEO: *"khi nhấn phân quyền cho một NV xong nó vẫn cứ kẹt lại… đáng lẽ phải báo đã
+ * xác nhận hoàn thành và màn hình quay về trạng thái lúc vào phân quyền để tiếp tục
+ * phân quyền NV khác"* và *"tôi sợ phân quyền xong vẫn bị lủng, không đúng mã đơn vị,
+ * không đúng cột thì nguy to."*                                                    */
+
+test('‼ lưu xong ĐỌC LẠI TỪ MÁY CHỦ rồi so — không tin vào việc lệnh ghi không ném lỗi', () => {
+  assert.match(page, /const fresh = await load\(\);/);
+  assert.match(page, /const check = verifySavedGrants\(fresh, expected\);/);
+  assert.match(page, /const expected = new Map\(pending\.map\(\(row\) => \[row\.empCode, grantSavePayload\(row\)\.columns\]\)\)/);
+});
+
+test('khớp ⇒ báo hoàn thành + QUAY VỀ danh sách NV để cấp tiếp', () => {
+  assert.match(page, /Đã lưu và KIỂM LẠI TỪ MÁY CHỦ: đúng \$\{check\.checked\} nhân viên/);
+  assert.match(page, /chọn người tiếp theo để cấp quyền/);
+  assert.match(page, /setSelected\(''\);/);
+});
+
+test('‼ lệch ⇒ Ở LẠI màn đó, nêu ĐÍCH DANH lệch ở đâu, cấm dùng phân quyền đó', () => {
+  assert.match(page, /ĐÃ LƯU NHƯNG KIỂM LẠI THẤY LỆCH/);
+  assert.match(page, /cần "\$\{item\.wanted\}" nhưng máy chủ đang giữ "\$\{item\.got\}"/);
+  assert.match(page, /KHÔNG dùng phân quyền này cho tới khi sửa xong/);
+  // Lệch thì KHÔNG được quay về danh sách như thể xong việc.
+  const saveBody = page.slice(page.indexOf('const save = async ()'), page.indexOf('const pending = panel ?'));
+  const mismatchBranch = saveBody.slice(saveBody.indexOf('if (!check.ok)'), saveBody.indexOf('const who ='));
+  assert.doesNotMatch(mismatchBranch, /setSelected\(''\)/);
+});
+
+test('không đọc lại được NV nào ⇒ coi là LỆCH, không lặng lẽ bỏ qua', () => {
+  assert.match(model, /if \(!row\) \{ mismatches\.push\(\{ empCode: code, wanted: columnsKey\(wantedColumns\), got: '\(không đọc lại được\)' \}\); continue; \}/);
+});
+
+test('so sánh KHÔNG phụ thuộc thứ tự cột/nhóm — sắp xếp trước khi so', () => {
+  assert.match(model, /const scopeKey = \(scope\) => \(Array\.isArray\(scope\) \? \[\.\.\.scope\]\.sort\(\)\.join\('\+'\) : ''\)/);
+  assert.match(model, /\.sort\(\)\s*\n\s*\.join\('\|'\)/);
 });

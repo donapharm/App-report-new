@@ -616,11 +616,20 @@ async function remoteSnapshot(period) {
   const rows = enrichRowsFromCatalog(assignmentRows, catalog);
   const history = arrayOf(payload, ['history', 'audit', 'events']);
   const version = String(payload.version || payload.meta?.version || 'unknown');
+  /* ‼ HAI HỆ ĐÁNH SỐ KHÁC NHAU — nguồn gốc của hiểu lầm kéo dài (CEO hỏi lại 09/08):
+   *   · `version`       = số hiệu CỬA DANH MỤC của DataHub (đang là "3.10");
+   *   · `sourceVersion` = số hiệu FILE CP_TOTAL sinh ra dữ liệu (CEO đang chờ "V31.4").
+   * DataHub xác nhận 27.719 dòng hiện tại CHÍNH LÀ CP_TOTAL V31.4, nhưng chưa gửi số
+   * hiệu đó sang. App Report chép nguyên cái nguồn gửi và KHÔNG BAO GIỜ tự đặt số —
+   * bịa một số hiệu lên màn là loại nói dối tệ nhất trong app này. Trường dưới đây
+   * chờ sẵn: ngày DataHub gửi là huy hiệu tự hiện đúng, không phải sửa code. */
+  const sourceVersion = String(payload.sourceVersion || payload.source_version
+    || payload.meta?.sourceVersion || payload.meta?.source_version || '').trim();
   const upstreamChecksum = payload.checksum || payload.meta?.checksum;
   const syncedAt = new Date().toISOString();
   const snapshot = {
     rows, catalog, history, period, readOnly: false,
-    meta: { source: 'data-hub', version, checksum: String(upstreamChecksum || checksum({ rows, catalog })), updatedAt: payload.updatedAt || syncedAt, lastSyncAt: syncedAt, stale: false, readOnly: false, message: 'Đã đồng bộ Data Hub.' },
+    meta: { source: 'data-hub', version, sourceVersion, checksum: String(upstreamChecksum || checksum({ rows, catalog })), updatedAt: payload.updatedAt || syncedAt, lastSyncAt: syncedAt, stale: false, readOnly: false, message: 'Đã đồng bộ Data Hub.' },
   };
   writeCacheAtomic(snapshot);
   return snapshot;
@@ -691,6 +700,31 @@ async function loadSnapshot(period, { forceRemote = false } = {}) {
  * Lượt đang bay (in-flight) cứ để chạy nốt; nó ghi vào ô nhớ mới, không ghi đè
  * lại ô vừa xoá vì `rememberSnapshot` luôn ghi bản mới nhất.
  */
+/**
+ * Căn cước bản ĐANG NẰM TRÊN ĐĨA, đọc trực tiếp, KHÔNG gọi mạng.
+ *
+ * ‼ Dùng để trả lời câu hỏi quan trọng nhất sau khi bấm "Đồng bộ lại": *nội dung có
+ * thật sự đổi không?* CEO chỉnh đúng 09/08/2026: *"số dòng thì đúng rồi, nhưng tao
+ * đã sửa nhiều đợt trong đó, nên nó mới nâng lên bản V31.4"* — tức **đếm dòng KHÔNG
+ * chứng minh được nội dung mới**; sửa hàng trăm dòng bên trong thì tổng vẫn y nguyên.
+ * Thứ phân biệt được là `checksum` (băm toàn bộ nội dung) — đổi một ô là đổi băm.
+ */
+function cachedMeta(periodInput) {
+  const period = toHubPeriod(periodInput);
+  const snapshot = readCache(period);
+  if (!snapshot) return null;
+  return {
+    period,
+    version: String(snapshot.meta?.version || ''),
+    sourceVersion: String(snapshot.meta?.sourceVersion || ''),
+    checksum: String(snapshot.meta?.checksum || ''),
+    updatedAt: snapshot.meta?.updatedAt || null,
+    lastSyncAt: snapshot.meta?.lastSyncAt || null,
+    rows: (snapshot.rows || []).length,
+    catalog: (snapshot.catalog || []).length,
+  };
+}
+
 function invalidateSnapshot(periodInput) {
   const period = toHubPeriod(periodInput);
   const had = snapshotCache.delete(period);
@@ -791,4 +825,4 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };
+module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };

@@ -109,11 +109,10 @@ export default function CostBreakdown({ me }) {
     {/* Bộ lọc nâng cao dùng CHUNG với menu Thành tiền (CEO 09/08: "khi cần lọc thì
         mở bảng và chọn tính năng") — giá trị chọn backend thu TRƯỚC khi lọc. */}
     <CostFilterPanel options={data?.filterOptions} partnerGroups={data?.partnerGroups}
-      value={filters} onChange={setFilters} note={data?.groupQueryNote} />
-    <div className="card cost-breakdown-filters">
-      <MultiPick label="Cột xuất" open={openPick === "Cột xuất"} onToggle={(v) => setOpenPick(v ? "Cột xuất" : "")} options={(data?.columns || []).map((column) => column.key.toUpperCase())} values={columns.map((k) => k.toUpperCase())}
-        onChange={(list) => setColumns(list.map((k) => k.toLowerCase()))} />
-    </div>
+      value={filters} onChange={setFilters} note={data?.groupQueryNote}
+      extra={<MultiPick label="Cột hiển thị" open={openPick === "Cột xuất"} onToggle={(v) => setOpenPick(v ? "Cột xuất" : "")}
+        options={(data?.columns || []).map((column) => column.key.toUpperCase())} values={columns.map((k) => k.toUpperCase())}
+        onChange={(list) => setColumns(list.map((k) => k.toLowerCase()))} />} />
 
     {error && <div className="card catalog-alert error" role="alert">⚠ {error}</div>}
     {loading && !data && <div className="card catalog-first-load"><Spinner /><b>Đang tổng hợp chi phí…</b></div>}
@@ -149,8 +148,13 @@ export default function CostBreakdown({ me }) {
           <small>{column.label.replace(/^C\d+\s*/, '')}</small>
           <em>% của {column.pctBaseLabel}</em>
         </th>)}
-        <th className="catalog-money">Tổng chi CÓ C44</th>
-        <th className="catalog-money">Trừ vào C47 (không C44)</th>
+        {/* ‼ HAI CỘT NÀY LÀ TỔNG CỦA C33–C46 BÊN TRÁI, KHÔNG PHẢI TIỀN C47.
+            CEO hỏi 09/08: *"cột C47 sao có tiền ở đây là sao?"* — tên cũ "Trừ vào
+            C47" khiến người đọc tưởng đây là tiền C47, trong khi CEO đã chốt tiền
+            C47 nằm ở MENU RIÊNG. Bỏ chữ C47 khỏi tên cột; quan hệ với công thức
+            C47 đưa xuống chú thích dưới bảng. */}
+        <th className="catalog-money" title="Tổng tiền của TẤT CẢ cột C33–C46 bên trái, gồm cả C44">Tổng chi CÓ C44</th>
+        <th className="catalog-money" title="Tổng tiền của 13 cột C33–C46 nhưng KHÔNG cộng C44. Đây chính là phần bị trừ trong công thức C47 — nhưng vẫn KHÔNG phải tiền C47.">Tổng chi KHÔNG C44</th>
         <th className="catalog-money" title="Chi bao nhiêu trên mỗi đồng doanh thu — chỉ số so sánh được giữa NV bán nhiều và NV bán ít">Chi/Doanh thu</th>
       </tr></thead><tbody>
         {data.rows.map((row) => <tr key={row.key}>
@@ -192,6 +196,15 @@ export default function CostBreakdown({ me }) {
         </tr>
       </tbody></table></div>
       <small className="muted cost-breakdown-note">* {data.c44Note}</small>
+      <small className="muted cost-breakdown-note">
+        <b>Hai cột tổng bên phải là TỔNG CỦA CÁC CỘT C33–C46 ở bên trái — KHÔNG phải tiền C47.</b>{' '}
+        Tiền C47 (phần còn lại sau khi chi) nằm ở menu riêng <b>“Thành tiền C32 · C47”</b> đúng như đã chốt.
+        Cột <b>“Tổng chi KHÔNG C44”</b> chỉ trùng với <i>phần bị trừ</i> trong công thức C47, nên để cạnh nhau cho dễ đối chiếu.
+      </small>
+      <small className="muted cost-breakdown-note">
+        <b>Về dòng % dưới mỗi ô tiền:</b> đó là <b>bình quân có trọng số</b> của các cặp đang gộp, không phải tỷ lệ cố định của một cặp.
+        Ví dụ C44 danh nghĩa 5% của tiền C43, nhưng nếu trong nhóm có cặp chưa được cấp % C44 thì số bình quân sẽ <b>thấp hơn 5%</b> — đó là số thật, không phải tính sai.
+      </small>
     </div>}
 
     {/* SO VỚI KỲ TRƯỚC — xếp theo TIỀN TUYỆT ĐỐI, không theo %. Cột 2 tỷ tăng 12%

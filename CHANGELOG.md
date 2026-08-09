@@ -1,3 +1,179 @@
+### 2026-08-09 23:35 (giờ VN) — 🚧 GỠ NÚT THẮT: 502 cửa danh mục đang KHOÁ CHẾT nút đồng bộ % · đổi màn hết quay vòng
+
+CEO gửi ảnh kỳ 07.2026 lúc 23:24 — ba dữ kiện trong một ảnh chỉ ra đúng chuỗi nhân quả:
+1. Huy hiệu ghi *"Đọc từ máy — không gọi Data Hub"* ⇒ local-first **đang chạy đúng** cho kỳ 08.
+2. *"⚠ Lỗi máy chủ (HTTP 502)"* + *"Chưa tải được danh mục kỳ 07.2026"* ⇒ kỳ 07 **chưa có trên máy**, phải đi hỏi DataHub, và **cửa danh mục trả 502**.
+3. Nút **"Đồng bộ từ DataHub" bị khoá xám** ⇒ CEO **không tài nào** đồng bộ được T07.
+
+#### ‼ Điểm 3 là lỗi Claude gây ra — và nó chặn đúng đường thoát duy nhất
+
+Bản `aab53e2` khoá nút đồng bộ % theo `actionsLocked` = `loadingPeriod || periodMismatch`. Danh mục kỳ 07 trả 502 ⇒ `periodMismatch` đúng **vĩnh viễn** ⇒ nút khoá **vĩnh viễn**, kèm câu *"nút tự mở lại ngay khi tải xong"* — một lời hứa không bao giờ tới. Mà **đồng bộ % KHÔNG đụng danh mục**: nó gọi **cửa chi phí**, cửa đang sống (probe 21/21 ok cả T07). Khoá nó đúng lúc cần nhất là tự bịt lối ra.
+
+**Sửa:** chỉ khoá khi **đang tải thật** (`!!loadingPeriod`). Danh mục hỏng thì nút vẫn bấm được — đó chính là lúc phải bấm.
+
+#### 🕒 "Đổi màn nó quay như thế này thì có bực không" — đã hết
+
+Local-first bỏ được cú gọi DataHub, nhưng **mỗi lần vào lại trang trình duyệt vẫn tải lại 27.719 dòng từ máy chủ**. Nay nhớ ngay trong bộ nhớ trang (tối đa 3 kỳ): đổi màn qua lại trong cùng phiên **hiện tức thì**. Bộ nhớ này nằm **trong trình duyệt** — không đụng máy chủ, không đụng DataHub, nên không vi phạm luật "đường đọc không có tác dụng phụ". Bấm **"Đồng bộ lại"** thì bỏ bản nhớ để lấy số mới.
+
+#### 🗣 Câu lỗi 502 nói rõ hỏng ở CỬA NÀO
+
+*"Lỗi máy chủ (HTTP 502)"* trơ khiến CEO tưởng chết cả hệ. Nay: *"…đây là **CỬA DANH MỤC** của Data Hub, không phải cửa chi phí. Nút **Đồng bộ % chi phí kỳ 07.2026** phía dưới **VẪN DÙNG ĐƯỢC** bình thường."*
+
+**Việc còn lại của Data Hub:** cửa danh mục `assignments/catalog-management?ky=2026-07` đang trả **502** — cần dựng lại. Cửa chi phí không liên quan và vẫn tốt.
+
+Test: server 1169 / 7 fail cố hữu · web **406/406** · build sạch.
+
+---
+
+### 2026-08-09 23:20 (giờ VN) — 🧊 FIX TRIỆT ĐỂ "lambada": KỲ ĐÃ CHỐT SỔ = ĐÓNG BĂNG, không hỏi DataHub nữa
+
+CEO (lần 2 trong 2 tiếng, kèm ảnh T07): *"T07.2026 đã chốt sổ rồi mà số liệu nó vẫn chạy tùm lum… vẫn báo dữ liệu chưa đồng nhất, target không đúng, tổng doanh thu thấp hơn rất nhiều. Yêu cầu giải thích và tìm giải pháp fix triệt để. Mệt lắm rồi."*
+
+**GIẢI THÍCH — vì sao kỳ ĐÃ CHỐT mà số vẫn nhảy:** kỳ chốt sổ nhưng App Report **vẫn hỏi DataHub trực tiếp mỗi lần mở màn** cho kỳ đó. Nguồn chập chờn ⇒ lượt này 21/21 NV có số, lượt sau 3/21 ⇒ danh sách "chưa lấy được" đổi liên tục, còn **target (3/3 NV = 110,5%) và tổng doanh thu co giãn theo số NV lấy được nguồn** — nhìn y như "dữ liệu nhảy lambada". Lưới stale (aa327e6) chỉ **đỡ đòn** khi có bản lưu; nó không **hết đòn**, vì bản chất vẫn là đi hỏi một nguồn chập chờn.
+
+**FIX TRIỆT ĐỂ:** kỳ nằm TRỌN sau ngày khoá sổ (hết ngày 5 tháng sau — SPEC_REVENUE_DELIVERY_PERIOD) **và** kho cục bộ (nút "Đồng bộ % chi phí", all-or-nothing 21/21) có bản kỳ đó ⇒ `fetchEmployeeCost` **trả thẳng từ kho, KHÔNG gọi mạng**. Số kỳ chốt vì thế **BẤT BIẾN**: mở hôm nay, mai, tháng sau đều y hệt — DataHub sống hay chết kệ nó. Đây đúng nghĩa "chốt sổ".
+
+Ba chốt để không thành con dao khác:
+1. **Kỳ ĐANG CHẠY không bao giờ bị ghim** — vẫn hỏi nguồn tươi (T08 đã có trong kho cũng KHÔNG ghim). Dải kỳ trộn (chốt + đang chạy) không ghim — không trộn hai chế độ trong một payload.
+2. **Kho thiếu kỳ/NV nào ⇒ rơi về đường cũ** (hỏi nguồn + lưới stale), không chặn ai.
+3. Bản ghim mang nhãn **`rateSource: 'local_pinned'` + mốc đồng bộ** — nói rõ số từ đâu, không giả làm số vừa kéo.
+
+Một test cũ ("kho chủ động là đường đọc thật, không hết hạn 45 ngày") được cập nhật vì chủ đích của nó nay thoả **mạnh hơn**: kỳ chốt trả `ok` thẳng từ kho với **0 lần gọi mạng**, khỏi cần rơi qua `ok_stale_rates`.
+
+**‼ ĐIỀU KIỆN VẬN HÀNH — T07 hết lambada NGAY khi CEO bấm MỘT nút:** kho cục bộ trên PROD hiện **chỉ có kỳ 08.2026**. Vào **Danh mục QL → Kỳ: 07.2026 → "Đồng bộ từ DataHub"** (nguồn đang sống — probe 21/21 ok). Xong lượt đó, T07 bị đóng băng vĩnh viễn.
+
+Test mới `employeeCostPinnedClosed.test.js` (6): ghim đúng kỳ chốt · bất biến qua hai lượt đọc · 0 lần gọi mạng kể cả nguồn chết · kỳ đang chạy không ghim · dải trộn không ghim · NV thiếu trong kho rơi về đường cũ.
+
+Test: server **1169** pass / 7 fail cố hữu · web **402/402** · build sạch.
+
+---
+
+### 2026-08-09 23:05 (giờ VN) — 🎨 Bộ lọc "như dân nghiệp dư" · cột tổng bị hiểu nhầm là tiền C47
+
+CEO xem màn Tổng hợp và nêu ba việc. **Cả ba đều đúng.**
+
+#### ① Bộ lọc vỡ giao diện — Claude quên viết CSS
+
+CEO: *"thiết kế bộ lọc kiểu này thì như dân nghiệp dư quá."* Đúng, và nguyên nhân thô sơ hơn cả "thiết kế xấu": Claude đẻ ra **8 lớp giao diện mới** (`cost-filter-panel`, `cost-filter-picks`…) mà **KHÔNG viết một dòng CSS nào**. Không có CSS thì trình duyệt xếp mọi nút thành **khối dọc** và menu thả xuống **đè lên ô nhập** — đúng cảnh trong ảnh.
+
+Đã viết đủ: các ô chọn nằm **ngang, tự xuống dòng**; chip điều kiện bo tròn bấm-là-bỏ; ô nhập chia lưới tự co; ô tìm trong danh sách dài; điện thoại thì mỗi hàng 2 ô. **Test mới quét MỌI lớp `cost-filter*`/`cost-breakdown-pick*` trong file JSX và bắt buộc phải có CSS tương ứng** — quên lần nữa là đỏ ngay.
+
+#### ② "Cột C47 sao có tiền ở đây?" — tên cột gây hiểu nhầm
+
+CEO đã chốt **tiền C47 nằm ở menu riêng**, nên thấy cột *"Trừ vào C47 (không C44)"* có tiền là hỏi ngay — hỏi đúng. Thực chất hai cột đó là **tổng của các cột C33–C46 bên trái**, không phải tiền C47; chỉ là cột "không C44" **trùng với phần bị trừ** trong công thức C47.
+
+Sửa: bỏ chữ "C47" khỏi **tên cột** → **"Tổng chi CÓ C44"** và **"Tổng chi KHÔNG C44"**. Quan hệ với công thức C47 đưa xuống chú thích, kèm câu khẳng định *"tiền C47 nằm ở menu riêng 'Thành tiền C32 · C47' đúng như đã chốt"*. Có test cấm đặt lại tên cũ.
+
+#### ③ "C44 sao số tiền đó là sao" — 3,99% trong khi danh nghĩa là 5%
+
+Số **đúng**, nhưng màn không nói đủ: dòng % dưới mỗi ô là **bình quân có trọng số** của các cặp đang gộp. Nhóm nào có cặp chưa được cấp % C44 thì bình quân **thấp hơn 5%** — số thật, không phải tính sai. Đã ghi thẳng chú thích này dưới bảng.
+
+#### ④ "Màn hình lùng nhùng"
+
+Gộp thẻ **"Cột xuất"** vào chung thẻ bộ lọc (đổi tên **"Cột hiển thị"**) — bớt một thẻ rời chồng lên nhau.
+
+Test: server 1163 / 7 fail cố hữu · web **399/399** · build sạch.
+
+---
+
+### 2026-08-09 22:45 (giờ VN) — 🔬 Probe PROD lộ ra: nguồn KHÔNG có C32 · và "đếm dòng" không phải bằng chứng
+
+#### ‼ CEO chỉnh Claude — và chỉnh đúng
+
+Claude viết: *"dữ liệu của anh KHÔNG cũ, 27.719 dòng chính là CP_TOTAL V31.4"*. CEO đáp: *"số dòng thì đúng rồi, **nhưng tao đã sửa nhiều đợt trong đó**, nên nó mới nâng lên bản V31.4."*
+
+**CEO đúng, Claude đã lấy bằng chứng yếu để kết luận mạnh.** Sửa hàng trăm ô bên trong mà không thêm bớt dòng nào thì tổng **vẫn là 27.719** — đếm dòng KHÔNG chứng minh được nội dung mới. Thứ phân biệt được là **checksum** (băm toàn bộ nội dung): đổi một ô là đổi băm.
+
+**Sửa:** nút "Đồng bộ lại" nay trả lời đúng câu người bấm muốn biết — *nội dung có thật sự đổi không*:
+- **Đổi** ⇒ *"✅ NỘI DUNG CÓ ĐỔI"* (kèm số dòng trước→sau, hoặc ghi rõ *"số dòng như cũ, nội dung bên trong khác"*).
+- **Không đổi** ⇒ *"⚠ NỘI DUNG KHÔNG ĐỔI (băm y hệt bản cũ). Nếu vừa sửa file CP_TOTAL thì **bản sửa CHƯA sang tới đây** — báo Data Hub nạp lại file nguồn; bấm nút này thêm lần nữa cũng ra kết quả này."*
+- **Chưa có bản cũ để so** ⇒ nói **KHÔNG BIẾT**, cấm suy thành "không đổi".
+Ảnh "trước" đọc thẳng từ đĩa (`cachedMeta`), không gọi mạng.
+
+#### ‼ Probe PROD: DataHub trả ĐỦ C33–C46 nhưng KHÔNG có C32
+
+21/21 NV sống, 14 cột `c33…c46` đầy đủ, **không có `c32`**. Mà công thức C47 cần **đủ 14 cột `C32 + C33→C46 (trừ C44)`** ⇒ **toàn bộ menu "Thành tiền C32·C47" sẽ là "—"** dù đồng bộ thành công 27.719 cặp. Menu **Tổng hợp C33–C46 KHÔNG cần C32** nên vẫn chạy bình thường.
+
+Trước đây màn chỉ ghi "thiếu %" chung chung — đọc xong đi đòi cả 14 cột. Nay đếm riêng từng cột: cột nào thiếu ở **TOÀN BỘ** cặp thì kết luận **"nguồn chưa mở cột đó"**, gọi đích danh, kèm việc phải làm và nói luôn menu nào **không** bị ảnh hưởng. Thiếu ở **một số** cặp thôi thì **không** kết luận như vậy — vài dòng lẻ sót % là chuyện khác hẳn.
+
+Test: server **1163** pass / 7 fail cố hữu · web **396/396** · build sạch.
+
+---
+
+### 2026-08-09 22:25 (giờ VN) — 🔢 "V3.10" là số hiệu CỬA DANH MỤC, không phải số file CP_TOTAL V31.4
+
+CEO hỏi lại lần thứ ba: *"tại sao nó vẫn ghi bản version là V3.10 mà chưa thay đổi vậy?"* — hỏi ba lần cùng một chuyện nghĩa là **màn hình đang trình bày sai**, không phải người đọc chậm hiểu.
+
+**Sự thật:** App Report **chép nguyên** con số Data Hub gửi trong `payload.version` — hiện là `"3.10"`. Đó là **số hiệu cửa danh mục của Data Hub**, một hệ đánh số hoàn toàn khác với **số hiệu file CP_TOTAL** (V31.4) mà CEO đang trông. Data Hub đã xác nhận 27.719 dòng hiện tại **chính là CP_TOTAL V31.4** nhưng **chưa gửi số hiệu đó sang**. App Report **không bao giờ tự đặt số hiệu** — bịa một con số lên màn là loại nói dối tệ nhất trong app này.
+
+**Sửa cách trình bày để không ai phải hỏi lần thứ tư:**
+- Backend chuyển tiếp `sourceVersion` (nhận cả `sourceVersion`/`source_version`, ở gốc payload lẫn trong `meta`). Data Hub gửi ngày nào là huy hiệu tự hiện đúng ngày đó, **không phải sửa code**.
+- Huy hiệu ưu tiên **số file nguồn**; chưa có thì hiện số cửa kèm nhãn **"(cửa)"** và đổi màu (xám xanh thay vì xanh lá) để không đọc nhầm là số file.
+- Rê chuột: *"3.10 là số hiệu CỬA DANH MỤC của Data Hub, KHÔNG phải số hiệu file CP_TOTAL. Data Hub chưa gửi số hiệu file."*
+
+Test khoá: cấm mọi chỗ gán cứng một số hiệu; huy hiệu phải nói rõ số đang hiện là số của cái gì.
+
+**Việc còn lại nằm ở Data Hub** (đã nêu từ 09/08): bổ sung `sourceVersion` = số hiệu file CP_TOTAL vào payload danh mục. Trước khi có, huy hiệu sẽ tiếp tục ghi **"V3.10 (cửa)"** — và đó là **đúng**, không phải lỗi.
+
+Test: server 1157 / 7 fail cố hữu · web **391/391** · build sạch.
+
+---
+
+### 2026-08-09 22:15 (giờ VN) — 🗣 Câu chờ nói dối: "đang tải từ Data Hub" trong khi đang đọc bản trên máy
+
+CEO (ảnh 22:07): *"tại sao vẫn cứ báo là đang đồng bộ từ DataHub, trong khi hiện tại đã kéo đủ danh mục 27.719 dòng về rồi. Nhìn vào bực mình."*
+
+**CEO đúng.** Từ khi đổi sang đọc-bản-trên-máy (`bbb1917`), lượt xem thường **KHÔNG còn gọi DataHub** — nhưng câu chờ vẫn ghi nguyên *"Đang tải danh mục kỳ 08.2026 **từ Data Hub**…"*. Chờ vài giây thì chịu được; **chờ mà bị nói sai mình đang chờ cái gì** thì mất tin tưởng vào cả màn hình — và đúng là làm người ta tưởng bản sửa chưa có tác dụng.
+
+**Sửa:** cờ `askingHub` do **chính nút "Đồng bộ lại"** bật, nên chỉ lượt đó mới được nói là hỏi DataHub.
+- Lượt xem thường: *"Đang mở danh mục kỳ 08.2026 — **đọc bản đã có trên máy**, không gọi Data Hub."*
+- Bấm Đồng bộ lại: *"Đang **hỏi lại Data Hub** cho kỳ 08.2026…"*
+- Khung chờ lần đầu nói luôn **vì sao vẫn phải chờ vài giây** dù đọc từ máy: *"Ưu tiên bản đã lưu TRÊN MÁY; chỉ gọi Data Hub khi máy chưa có kỳ này. Danh mục toàn công ty khá lớn nên vẫn mất vài giây để bày ra bảng."* — không để người dùng tự đoán.
+
+Có test cấm khung chờ chứa bất kỳ câu *"từ Data Hub"* nào ngoài nhánh bấm nút.
+
+**Cách tự kiểm sau khi tải xong:** nhìn huy hiệu góc phải — ghi **"Data Hub · bản trên máy"** + *"Đọc từ máy — không gọi Data Hub"* nghĩa là đọc từ đĩa; ghi trơ **"Data Hub"** nghĩa là lượt đó thật sự đi hỏi nguồn.
+
+Test: web **388/388** · build sạch.
+
+---
+
+### 2026-08-09 22:10 (giờ VN) — 🩺 Phân biệt "DataHub thiếu %" với "lệch định dạng mã" — cái bẫy đã ngốn cả tối nay
+
+Claude tự thêm sau khi mất gần trọn buổi tối đổ tội nhầm cho DataHub. **Hai cảnh hiện ra màn Y HỆT NHAU** — mọi ô là `—` kèm chữ *"thiếu %"* — nhưng cách xử lý **ngược nhau hoàn toàn**:
+- DataHub thiếu % thật ⇒ đi đòi DataHub bổ sung số;
+- hai bên ghi **mã đơn vị / mã hàng khác định dạng** (kho % ghi `120.HTNT`, doanh thu ghi `120`) ⇒ lỗi **ghép khoá của chính App Report**, đòi DataHub cũng vô ích.
+
+Nay `buildAmounts` đếm sức khoẻ phép ghép (`joinHealth`): bao nhiêu cặp bên kho %, bao nhiêu cặp bên doanh thu, ghép được bao nhiêu, kèm **mẫu mã thật của cả hai bên**. Màn hiện:
+- **Giao nhau BẰNG KHÔNG mà hai bên đều có số** ⇒ nói thẳng *"đây KHÔNG phải DataHub thiếu %"*, in mẫu mã hai bên để sửa ngay, không phải đi mò.
+- **Ghép được một phần** ⇒ *"chỉ ghép được N/M cặp… số tổng là tổng của phần ghép được, không phải toàn bộ"*. Tổng thiếu không được giả làm tổng thật.
+- **Một bên rỗng** ⇒ **KHÔNG** kết luận gì (không suy ra được gì về định dạng mã) — chỉ kết luận khi bằng chứng không thể hiểu cách khác.
+
+Kiểm luôn hai màn CEO sắp mở: **"Mở bảng %"** (`costRatesTable.buildTable`) **KHÔNG dính** lỗi CEO-mù (nó duyệt mọi NV khi `isCeo`), dùng được ngay trên bản đang chạy.
+
+Test: server **1157** pass / 7 fail cố hữu · web **385/385** · build sạch.
+
+---
+
+### 2026-08-09 21:55 (giờ VN) — ✅ Phân quyền: lưu xong phải KIỂM LẠI TỪ MÁY CHỦ rồi mới dám nói "hoàn thành"
+
+CEO nêu hai việc về màn Phân quyền:
+> *"Khi nhấn phân quyền cho một NV xong nó vẫn cứ kẹt lại. Đáng lẽ phải báo đã xác nhận phân quyền hoàn thành và màn hình quay về trạng thái lúc vào phân quyền để tiếp tục phân quyền NV khác."*
+> *"Tôi sợ phân quyền xong vẫn bị lủng, không đúng mã đơn vị, không đúng cột thì nguy to."*
+
+**Nỗi lo thứ hai đúng chỗ hơn cả nỗi lo thứ nhất.** Bản cũ báo "Đã lưu" chỉ vì lệnh ghi **không ném lỗi** — đó là tin vào lời hứa, không phải bằng chứng. Backend chuẩn hoá lại bản ghi (loại nhóm không hợp lệ, bỏ cột không được phép) **vẫn trả 200**, và CEO tưởng đã cấp xong trong khi thực tế cấp thiếu. Loại sai này không báo gì, chỉ lặng lẽ để một NV không thấy cột đáng ra phải thấy — hoặc thấy cột đáng ra không được thấy.
+
+**Nay:** lưu xong **đọc lại từ máy chủ** rồi so **từng cột × từng nhóm** với đúng thứ CEO đã tick (`verifySavedGrants`).
+- **Khớp** ⇒ báo *"✅ Đã lưu và KIỂM LẠI TỪ MÁY CHỦ: đúng N nhân viên (DN004…)"* và **quay về danh sách NV** để cấp tiếp người kế — đúng điều CEO xin.
+- **Lệch** ⇒ **Ở LẠI** màn đó, nêu **đích danh**: *"DN004: cần C41: mọi nhóm · C43: mọi nhóm, nhưng máy chủ đang giữ C41: mọi nhóm"* + câu *"KHÔNG dùng phân quyền này cho tới khi sửa xong"*. Không bao giờ đưa người dùng đi tiếp khi số chưa đúng.
+- **Không đọc lại được NV nào** ⇒ tính là **LỆCH**, không lặng lẽ bỏ qua.
+
+So sánh **không phụ thuộc thứ tự** cột/nhóm, và bắt **cả hai chiều**: máy chủ giữ THIẾU hơn hay THỪA hơn thứ đã tick đều là lệch (quyền thừa cũng nguy hiểm như quyền thiếu).
+
+Test: web **383/383** (5 test model + 5 test màn) · server 1154/7 fail cố hữu · build sạch.
+
+---
+
 ### 2026-08-09 21:30 (giờ VN) — 🛑 Bot chặn Gate 1: hai lỗi thật của Claude + một điểm phạm vi
 
 Bot HOLD `15e6590` trước Gate 1, nêu 3 điểm. **Soi lại: bot đúng ở cả ba, hai điểm là lỗi thật.**

@@ -22,8 +22,10 @@ const codeOnly = page
 
 test('version hiện RA MẶT huy hiệu, không chỉ nằm trong tooltip', () => {
   // Bản cũ chỉ có `title={... Version ...}`: phải rê chuột mới thấy, điện thoại chịu.
-  assert.match(badge, /const version = catalogVersionLabel\(meta\.version\)/);
-  assert.match(badge, /<span className="catalog-source-version">\{version\}<\/span>/);
+  // Nay số hiện ra mặt là `sourceVersion || gateVersion` (xem test hai-hệ-đánh-số).
+  assert.match(badge, /const gateVersion = catalogVersionLabel\(meta\.version\)/);
+  assert.match(badge, /const version = sourceVersion \|\| gateVersion/);
+  assert.match(badge, /className=\{`catalog-source-version\$\{sourceVersion \? '' : ' is-gate'\}`\}/);
 });
 
 test('Data Hub không gửi version thì NÓI "chưa rõ" — cấm bịa số hiệu bản', () => {
@@ -67,7 +69,13 @@ test('nút "Đồng bộ lại" có trên huy hiệu, khoá lại khi đang ch�
 });
 
 test('bấm xong PHẢI tải lại danh mục, không chỉ đổi mỗi huy hiệu', () => {
-  assert.match(page, /await api\.catalogManagementRefresh\(uiToHub\(period\)\); await load\(period\);/);
+  assert.match(page, /const result = await api\.catalogManagementRefresh\(uiToHub\(period\)\);/);
+  assert.match(page, /await load\(period, \{ fresh: true \}\);/);
+  // Bấm "Đồng bộ lại" phải BỎ bản nhớ trong phiên, nếu không vẫn thấy bản cũ.
+  assert.match(page, /catalogSessionCache\.delete\(uiToHub\(period\)\)/);
+  // Gọi refresh trước, tải lại sau — đổi thứ tự là bảng vẫn là bản cũ.
+  const at = page.indexOf('catalogManagementRefresh(uiToHub(period))');
+  assert.ok(at > 0 && page.indexOf('await load(period, { fresh: true });', at) > at);
 });
 
 test('đồng bộ lại hỏng thì báo tại chỗ, không nuốt lỗi', () => {
@@ -98,4 +106,55 @@ test('trên điện thoại vẫn thấy số hiệu bản — chỉ giấu dòn
 test('nhãn version có màu riêng cho bản cũ, và kiểu nhạt cho "chưa rõ"', () => {
   assert.match(css, /\.catalog-source-inline\.is-stale \.catalog-source-version/);
   assert.match(css, /\.catalog-source-version\.is-unknown/);
+});
+
+/* ── HAI HỆ ĐÁNH SỐ: "V3.10" (cửa danh mục) ≠ "V31.4" (file CP_TOTAL) ─────────
+ * CEO hỏi đi hỏi lại vì huy hiệu ghi V3.10 trong khi file nguồn đã là V31.4.
+ * App Report chép nguyên số nguồn gửi và KHÔNG BAO GIỜ tự đặt số — nhưng phải
+ * NÓI RÕ con số đang hiện là số của cái gì, nếu không người đọc tự suy sai.   */
+
+test('có sourceVersion thì hiện SỐ FILE NGUỒN; không có thì hiện số CỬA + gắn nhãn "(cửa)"', () => {
+  assert.match(page, /const sourceVersion = catalogVersionLabel\(meta\.sourceVersion\)/);
+  assert.match(page, /const gateVersion = catalogVersionLabel\(meta\.version\)/);
+  assert.match(page, /const version = sourceVersion \|\| gateVersion/);
+  assert.match(page, /\{version\}\{sourceVersion \? '' : ' \(cửa\)'\}/);
+});
+
+test('‼ nói thẳng số cửa KHÔNG phải số file CP_TOTAL — không để người đọc tự suy', () => {
+  assert.match(page, /là số hiệu CỬA DANH MỤC của Data Hub, KHÔNG phải số hiệu file CP_TOTAL/);
+  assert.match(page, /Data Hub CHƯA gửi số hiệu file CP_TOTAL/);
+});
+
+test('backend chuyển tiếp sourceVersion nếu nguồn gửi, KHÔNG tự bịa số', () => {
+  const server = fs.readFileSync(new URL('../../server/src/catalogManagement.js', import.meta.url), 'utf8');
+  assert.match(server, /payload\.sourceVersion \|\| payload\.source_version/);
+  assert.match(server, /meta: \{ source: 'data-hub', version, sourceVersion,/);
+  // Không có chỗ nào gán cứng một số hiệu.
+  assert.doesNotMatch(server, /sourceVersion = '31\.4'|version = '31\.4'/);
+});
+
+/* ── Bấm "Đồng bộ lại" phải nói NỘI DUNG CÓ ĐỔI KHÔNG (CEO chỉnh 09/08/2026) ─── */
+
+test('‼ nội dung KHÔNG đổi ⇒ nói thẳng "bản sửa CHƯA sang tới đây", chỉ đúng việc phải làm', () => {
+  // Đây là câu trả lời cho đúng nỗi nghi của CEO: đã sửa file mà app vẫn số cũ.
+  assert.match(badge, /NỘI DUNG KHÔNG ĐỔI<\/b> \(băm nội dung y hệt bản cũ\)/);
+  assert.match(badge, /<b>bản sửa CHƯA sang tới đây<\/b>/);
+  assert.match(badge, /báo Data Hub nạp lại file nguồn/);
+  assert.match(badge, /bấm nút này thêm lần nữa cũng ra kết quả này/);
+});
+
+test('nội dung CÓ đổi mà số dòng y nguyên vẫn phải nói rõ — không im lặng', () => {
+  assert.match(badge, /NỘI DUNG CÓ ĐỔI<\/b>/);
+  assert.match(badge, /số dòng như cũ, nội dung bên trong khác/);
+});
+
+test('‼ chưa có bản cũ để so ⇒ NÓI KHÔNG BIẾT, cấm suy thành "không đổi"', () => {
+  assert.match(badge, /máy chưa có bản cũ để so/);
+  assert.match(badge, /refreshed\.changed === false/);
+  assert.match(badge, /refreshed\.changed === true/);
+});
+
+test('nút trả kết quả về cho huy hiệu hiển thị — không nuốt mất', () => {
+  assert.match(page, /return result; \/\/ huy hiệu cần kết quả này để nói nội dung có đổi không/);
+  assert.match(badge, /setRefreshed\(await onRefresh\?\.\(\) \?\? null\)/);
 });

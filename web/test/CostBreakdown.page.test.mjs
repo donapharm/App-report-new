@@ -29,14 +29,20 @@ test('bộ lọc DÙNG CHUNG với menu Thành tiền — đủ 8 chiều CEO ch
   for (const label of ['Mã nhà thầu', 'Tên nhà thầu', 'Group DONA/đối tác', 'Nhân viên', 'Tuyến', 'Mã đơn vị', 'Nhóm mã đơn vị', 'Ưu tiên (H.A*…)']) {
     assert.ok(pick.includes(`label: '${label}'`), `thiếu chiều lọc ${label}`);
   }
-  assert.match(page, /label="Cột xuất"/, 'phải chọn được cột cần xuất');
+  // "Cột hiển thị" nay nằm CÙNG thẻ bộ lọc (bớt một thẻ rời — CEO chê "lùng nhùng").
+  assert.match(page, /extra=\{<MultiPick label="Cột hiển thị"/, 'phải chọn được cột cần hiện/xuất');
 });
 
 test('C44 vẫn tính nhưng NÊU RÕ: cột đánh dấu *, chú thích NGOÀI C47, hai dòng tổng tách bạch', () => {
   assert.match(page, /column\.outsideC47 \? '\*' : ''/);
   assert.match(page, /cost-breakdown-outside/);
   assert.match(page, /Tổng chi CÓ C44/);
-  assert.match(page, /Trừ vào C47 \(không C44\)/);
+  // ‼ Bỏ chữ "C47" khỏi TÊN CỘT (CEO hỏi 09/08: "cột C47 sao có tiền ở đây?").
+  // Hai cột này là tổng của C33–C46, KHÔNG phải tiền C47 — tiền C47 ở menu riêng.
+  assert.match(page, /Tổng chi KHÔNG C44/);
+  assert.doesNotMatch(page, /<th className="catalog-money"[^>]*>Trừ vào C47/);
+  assert.match(page, /KHÔNG phải tiền C47/);
+  assert.match(page, /nằm ở menu riêng <b>“Thành tiền C32 · C47”<\/b>/);
   assert.match(page, /\{data\.c44Note\}/);
 });
 
@@ -128,7 +134,7 @@ test('CHỈ MỘT ô lọc mở tại một thời điểm — trạng thái do 
   assert.match(pick, /const \[openPick, setOpenPick\] = useState\(''\)/);
   assert.match(pick, /open=\{openPick === dim\.key\} onToggle=\{\(v\) => setOpenPick\(v \? dim\.key : ''\)\}/);
   assert.match(page, /const \[openPick, setOpenPick\] = useState\(''\)/);
-  assert.match(page, /<MultiPick label="Cột xuất" open=\{openPick === "Cột xuất"\}/);
+  assert.match(page, /<MultiPick label="Cột hiển thị" open=\{openPick === "Cột xuất"\}/);
   // Không được quay lại kiểu mỗi ô tự giữ state.
   assert.doesNotMatch(pick, /export function MultiPick\([^)]*\) \{\s*const \[open, setOpen\] = useState\(false\)/);
 });
@@ -176,4 +182,32 @@ test('Excel xuất HAI cột cho mỗi khoản: "% của …" rồi "thành ti�
   assert.match(routes, /const cellsOf = \(columnsData, pct\)/);
   // Thiếu % thì cả hai ô đều '—', không để tiền trống mà % vẫn có số.
   assert.match(routes, /return \[empty \? '—' : \(pct\?\.\[column\.key\] \?\? '—'\), empty \? '—' : cell\.noVat\]/);
+});
+
+/* ── CEO chê 09/08 22:52: bộ lọc "như dân nghiệp dư" · màn "lùng nhùng" ──────── */
+
+test('‼ MỌI lớp giao diện của bảng lọc PHẢI có CSS — không có là trình duyệt xếp dọc, menu đè nhau', () => {
+  // Claude đẻ ra 8 lớp mà quên viết CSS ⇒ nút xếp thành cột, menu thả xuống đè lên
+  // ô nhập. Lỗi thuần trình bày, nhưng nhìn vào thì không ai tin phần tính toán nữa.
+  const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const classes = [...new Set([...pick.matchAll(/className="([^"{}]+)"/g)]
+    .flatMap((m) => m[1].split(/\s+/))
+    .filter((name) => name.startsWith('cost-filter') || name.startsWith('cost-breakdown-pick')))];
+  assert.ok(classes.length >= 8, 'phải soi được các lớp của bảng lọc');
+  for (const name of classes) {
+    assert.ok(new RegExp(`\\.${name}[\\s,{:.]`).test(css), `lớp .${name} chưa có CSS`);
+  }
+});
+
+test('ô chọn nằm NGANG và tự xuống dòng — không xếp thành cột dọc', () => {
+  const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const rule = css.slice(css.indexOf('.cost-filter-picks'), css.indexOf('.cost-filter-inputs'));
+  assert.match(rule, /display:flex/);
+  assert.match(rule, /flex-wrap:wrap/);
+});
+
+test('% dưới ô tiền là BÌNH QUÂN CÓ TRỌNG SỐ — nói ra để không ai đọc thành tỷ lệ cố định', () => {
+  // CEO: "cột C44 sao số tiền đó là sao, chưa hiểu" khi thấy 3,99% thay vì 5%.
+  assert.match(page, /bình quân có trọng số<\/b> của các cặp đang gộp/);
+  assert.match(page, /số bình quân sẽ <b>thấp hơn 5%<\/b> — đó là số thật, không phải tính sai/);
 });

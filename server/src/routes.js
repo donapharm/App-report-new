@@ -3203,11 +3203,31 @@ router.post('/catalog-management/refresh', auth.requireAuth, auth.requireAdmin, 
     catalogRefreshLastAt.set(period, Date.now());
     // Giữ đúng số kỳ đã bấm gần đây, không để map phình theo mọi kỳ người dùng gõ.
     while (catalogRefreshLastAt.size > 12) catalogRefreshLastAt.delete(catalogRefreshLastAt.keys().next().value);
+    // Chụp căn cước bản ĐANG CÓ TRƯỚC khi hỏi lại — không có ảnh "trước" thì không
+    // trả lời được câu duy nhất người bấm nút muốn biết: nội dung có đổi không.
+    const before = catalogManagement.cachedMeta(period);
     catalogManagement.invalidateSnapshot(period);
     // ‼ forceRemote: nút "Đồng bộ lại" là chỗ DUY NHẤT chủ động kéo DataHub —
     // đường xem thường đọc bản đã kéo về máy (CEO bắt lỗi thiết kế 09/08).
     const snapshot = await catalogManagement.getSnapshot(period, { forceRemote: true });
-    return res.json({ ok: true, period, period_ui: catalogManagement.toUiPeriod(period), meta: snapshot.meta });
+    const after = {
+      version: String(snapshot.meta?.version || ''),
+      sourceVersion: String(snapshot.meta?.sourceVersion || ''),
+      checksum: String(snapshot.meta?.checksum || ''),
+      updatedAt: snapshot.meta?.updatedAt || null,
+      rows: (snapshot.rows || []).length,
+      catalog: (snapshot.catalog || []).length,
+    };
+    /* ‼ SO BẰNG CHECKSUM, KHÔNG BẰNG SỐ DÒNG (CEO chỉnh 09/08/2026).
+       CEO: *"số dòng thì đúng rồi, nhưng tao đã sửa nhiều đợt trong đó."* Đúng —
+       sửa hàng trăm ô mà không thêm bớt dòng nào thì tổng vẫn 27.719. Checksum băm
+       toàn bộ nội dung nên đổi một ô là đổi băm; đó mới là bằng chứng.
+       Chưa có bản trước ⇒ `changed: null` = KHÔNG BIẾT, không phải "không đổi". */
+    const changed = before ? (before.checksum !== after.checksum
+      || before.version !== after.version
+      || before.rows !== after.rows
+      || before.catalog !== after.catalog) : null;
+    return res.json({ ok: true, period, period_ui: catalogManagement.toUiPeriod(period), meta: snapshot.meta, before, after, changed });
   } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
 });
 /* ---------- Phân quyền cột % chi phí trong Danh mục QL (SPEC_CATALOG_COST_COLUMNS.md) ----------

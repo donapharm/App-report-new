@@ -246,6 +246,8 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
     filters, filterOptions: seen.result(), partnerGroups: costFilters.PARTNER_GROUPS.map((item) => ({ ...item })),
     groupQueryNote: costFilters.groupQueryNote(filters.groupQuery), sources: [], fetchedAt: null,
     level: wantOrders ? 'order' : 'pair', detailColumns: [...DETAIL_COLUMNS],
+    joinHealth: { revenuePairs: 0, matchedPairs: 0, ratePairs: 0, sampleRevenueKeys: [], sampleRateKeys: [],
+      keyFormatMismatch: false, pairsWithRate: 0, missingByColumn: {}, columnsMissingEverywhere: [] },
     orderRows: [], orderRowsTotal: 0, orderRowsTruncated: false, orderRowLimit: ORDER_ROW_LIMIT,
   });
   if (!availablePeriods.length) return emptyResult('CHUA_DONG_BO');
@@ -261,6 +263,18 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
   const rows = [];
   const orderRows = [];
   let orderRowsTotal = 0;
+  /* ‼ SỨC KHOẺ PHÉP KHỚP CẶP — phân biệt "DataHub thiếu %" với "hai bên ghi mã
+     đơn vị khác định dạng" (Claude tự thêm sau khi mất cả tối 09/08 vì đổ tội nhầm).
+     Hai cảnh này hiện ra màn Y HỆT NHAU: mọi ô là "—" kèm chữ "thiếu %". Nhưng cách
+     xử lý ngược nhau hoàn toàn — một bên đi đòi DataHub bổ sung số, một bên là lỗi
+     ghép khoá của chính App Report và đòi DataHub cũng vô ích.
+     Dấu hiệu KHÔNG THỂ NHẦM: cả hai bên ĐỀU CÓ dữ liệu mà giao nhau BẰNG KHÔNG. */
+  const joinHealth = { revenuePairs: 0, matchedPairs: 0, ratePairs: 0, sampleRevenueKeys: [], sampleRateKeys: [],
+    // ‼ ĐẾM RIÊNG TỪNG CỘT THIẾU (probe 09/08 22:30: DataHub trả ĐỦ c33–c46 nhưng
+    // KHÔNG có c32). Thiếu MỘT cột trong 14 cột là cả bảng C32/C47 thành "—".
+    // Nói "thiếu %" chung chung thì CEO đi đòi cả 14 cột; nói đúng "thiếu C32 ở
+    // TOÀN BỘ cặp" thì biết ngay phải xin nguồn mở đúng một cột.
+    pairsWithRate: 0, missingByColumn: {} };
   const filtersActive = costFilters.isActive(filters);
   // Tổng theo NV cộng qua MỌI kỳ đang xem — khoá theo mã NV, không theo kỳ.
   const byEmployee = new Map();
@@ -286,6 +300,11 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
       // ‼ Đọc % theo TẬP CỘT CỦA CÔNG THỨC C47, không theo cột NV được nhận. Hai tập
       // này khác nhau và lẫn chúng chính là lỗi đã mắc ở bản đầu.
       const rates = pairRates(kept, C47_REQUIRED);
+      joinHealth.ratePairs += rates.size;
+      for (const key of rates.keys()) {
+        if (joinHealth.sampleRateKeys.length >= 3) break;
+        joinHealth.sampleRateKeys.push(key.replace('\u001f', ' × '));
+      }
       const lines = employeeCost.buildRevenueLines(revenueRowsOf(empCode, item), empCode, item);
 
       // Gộp doanh thu theo cặp; giữ tên hàng đầu tiên gặp làm nhãn dự phòng.
@@ -322,6 +341,21 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
         if (!costFilters.passes({ ...meta, productName: agg.productName }, filters)) continue;
 
         const rate = rates.get(key);
+        joinHealth.revenuePairs += 1;
+        if (rate) {
+          joinHealth.matchedPairs += 1;
+          // Chỉ đếm trên cặp ĐÃ ghép được — tách bạch "nguồn không mở cột" với
+          // "không ghép được cặp"; trộn hai thứ là lại chẩn đoán sai như tối nay.
+          if (!rate.conflict) {
+            joinHealth.pairsWithRate += 1;
+            for (const columnKey of C47_REQUIRED) {
+              if (rate.percents[columnKey] == null) {
+                joinHealth.missingByColumn[columnKey] = (joinHealth.missingByColumn[columnKey] || 0) + 1;
+              }
+            }
+          }
+        }
+        else if (joinHealth.sampleRevenueKeys.length < 3) joinHealth.sampleRevenueKeys.push(key.replace('\u001f', ' × '));
         const c32NoVat = c32Of(rate, agg.noVat);
         const c32WithVat = c32Of(rate, agg.withVat);
         const noVat = c47Of(rate, agg.noVat);
@@ -428,6 +462,16 @@ function buildAmounts({ period, periods, session, store = persist, revenueRowsOf
     groupQueryNote: costFilters.groupQueryNote(filters.groupQuery),
     level: wantOrders ? 'order' : 'pair',
     detailColumns: [...DETAIL_COLUMNS],
+    joinHealth: {
+      ...joinHealth,
+      // Cả hai bên có số mà không khớp được CẶP NÀO ⇒ chắc chắn là lệch khoá,
+      // không phải thiếu %. Chỉ kết luận khi bằng chứng không thể hiểu cách khác.
+      keyFormatMismatch: joinHealth.matchedPairs === 0 && joinHealth.revenuePairs > 0 && joinHealth.ratePairs > 0,
+      // Cột thiếu ở TOÀN BỘ cặp ⇒ nguồn chưa mở cột đó, không phải vài dòng lẻ sót.
+      columnsMissingEverywhere: joinHealth.pairsWithRate > 0
+        ? C47_REQUIRED.filter((key) => (joinHealth.missingByColumn[key] || 0) === joinHealth.pairsWithRate)
+        : [],
+    },
     orderRows,
     orderRowsTotal,
     orderRowsTruncated: orderRowsTotal > orderRows.length,

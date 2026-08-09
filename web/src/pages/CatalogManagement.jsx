@@ -10,7 +10,7 @@ import {
   ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
   grantSavePayload, grantSummary, ratesLookup,
   grantCounts, isColumnAllGroups, isGroupChecked, setColumnAllGroups, toggleColumnGroup, toggleGroupAllColumns,
-  reviewGrants, applySuggestion,
+  reviewGrants, applySuggestion, verifySavedGrants,
 } from '../catalogCostGrantsModel.js';
 import { pct } from '../util.js';
 
@@ -180,23 +180,41 @@ function DrugName({ row, counts }) {
 function SourceStatus({ meta, canRefresh = false, onRefresh }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Kết quả lần bấm gần nhất: nội dung có ĐỔI không (xem khối `run` bên dưới).
+  const [refreshed, setRefreshed] = useState(null);
   if (!meta) return null;
-  const version = catalogVersionLabel(meta.version);
+  // ‼ Ưu tiên SỐ HIỆU FILE NGUỒN (CP_TOTAL) nếu DataHub gửi; không có thì hiện số
+  // hiệu CỬA DANH MỤC và NÓI RÕ đó là số của cửa, không phải số file.
+  const sourceVersion = catalogVersionLabel(meta.sourceVersion);
+  const gateVersion = catalogVersionLabel(meta.version);
+  const version = sourceVersion || gateVersion;
   const state = meta.stale ? 'Bản tốt gần nhất' : (meta.readOnly ? 'Chỉ đọc' : 'Đã kết nối');
+  /**
+   * ‼ Bấm "Đồng bộ lại" xong phải trả lời được câu DUY NHẤT người bấm muốn biết:
+   * **nội dung có thật sự đổi không?** (CEO chỉnh 09/08/2026: *"số dòng thì đúng
+   * rồi, nhưng tao đã sửa nhiều đợt trong đó, nên nó mới nâng lên bản V31.4"*).
+   * Đếm dòng KHÔNG trả lời được — sửa hàng trăm ô mà tổng vẫn 27.719. So bằng
+   * checksum (băm toàn bộ nội dung) mới là bằng chứng.
+   */
   const run = async () => {
-    setBusy(true); setError('');
-    try { await onRefresh?.(); }
+    setBusy(true); setError(''); setRefreshed(null);
+    try { setRefreshed(await onRefresh?.() ?? null); }
     catch (e) { setError(e.message || 'Đồng bộ lại không thành công'); }
     finally { setBusy(false); }
   };
   return <div className={`catalog-source-inline ${meta.stale ? 'is-stale' : 'is-fresh'}`}
-    title={`${sourceLabel(meta.source)} · bản ${version || 'chưa rõ'} · đóng bản ${dateText(meta.updatedAt)} · kéo về ${dateText(meta.lastSyncAt)}${meta.message ? ` · ${meta.message}` : ''}`}>
+    title={`${sourceLabel(meta.source)} · ${sourceVersion ? `file nguồn ${sourceVersion}` : `cửa danh mục ${gateVersion || 'chưa rõ'} — Data Hub CHƯA gửi số hiệu file CP_TOTAL`} · đóng bản ${dateText(meta.updatedAt)} · kéo về ${dateText(meta.lastSyncAt)}${meta.message ? ` · ${meta.message}` : ''}`}>
     <i aria-hidden="true" />
     <div className="catalog-source-text">
       <b>
         {sourceLabel(meta.source)}
         {version
-          ? <span className="catalog-source-version">{version}</span>
+          ? <span className={`catalog-source-version${sourceVersion ? '' : ' is-gate'}`}
+              title={sourceVersion
+                ? `Số hiệu FILE NGUỒN (CP_TOTAL) do Data Hub gửi: ${sourceVersion}`
+                : `${gateVersion} là số hiệu CỬA DANH MỤC của Data Hub, KHÔNG phải số hiệu file CP_TOTAL. Data Hub chưa gửi số hiệu file.`}>
+              {version}{sourceVersion ? '' : ' (cửa)'}
+            </span>
           : <span className="catalog-source-version is-unknown" title="Data Hub chưa gửi số hiệu bản cho kỳ này">bản: chưa rõ</span>}
       </b>
       <small>{meta.servedFrom === 'local' ? 'Đọc từ máy — không gọi Data Hub' : state} · bản ngày {dateText(meta.updatedAt)}</small>
@@ -207,7 +225,40 @@ function SourceStatus({ meta, canRefresh = false, onRefresh }) {
       {busy ? 'Đang hỏi lại…' : '⟳ Đồng bộ lại'}
     </button>}
     {error && <small className="catalog-source-error" role="alert">⚠ {error}</small>}
+    {refreshed && (refreshed.changed === true
+      ? <small className="catalog-source-changed" role="status">
+          ✅ Đã hỏi lại Data Hub — <b>NỘI DUNG CÓ ĐỔI</b>
+          {refreshed.before && refreshed.after && refreshed.before.rows !== refreshed.after.rows
+            ? <> ({refreshed.before.rows.toLocaleString('vi-VN')} → {refreshed.after.rows.toLocaleString('vi-VN')} dòng)</>
+            : ' (số dòng như cũ, nội dung bên trong khác)'}.
+        </small>
+      : refreshed.changed === false
+        ? <small className="catalog-source-error" role="alert">
+            ⚠ Đã hỏi lại Data Hub — <b>NỘI DUNG KHÔNG ĐỔI</b> (băm nội dung y hệt bản cũ).
+            Nếu Anh/Chị vừa sửa file CP_TOTAL thì <b>bản sửa CHƯA sang tới đây</b> — báo Data Hub nạp lại file nguồn,
+            bấm nút này thêm lần nữa cũng ra kết quả này.
+          </small>
+        : <small className="catalog-source-changed" role="status">✅ Đã hỏi lại Data Hub (máy chưa có bản cũ để so).</small>)}
   </div>;
+}
+
+/* ══ NHỚ DANH MỤC TRONG PHIÊN LÀM VIỆC ═══════════════════════════════════════
+   CEO 09/08 23:22: *"mỗi lần tao đổi màn xem nó quay như thế này thì có bực không
+   cơ chứ."* Đúng. Local-first đã bỏ được cú gọi DataHub, nhưng **mỗi lần vào lại
+   trang là trình duyệt tải lại 27.719 dòng từ máy chủ** — vài giây quay vòng, lần
+   nào cũng vậy, dù dữ liệu y hệt lần trước.
+
+   Nhớ ngay trong bộ nhớ trang (không phải đĩa, không hạn mức): đổi màn qua lại
+   trong cùng phiên là hiện NGAY. Đây là bộ nhớ CỦA TRÌNH DUYỆT, không đụng máy chủ
+   và không đụng DataHub — không phải "tác dụng phụ trên đường đọc".
+
+   Xoá bản nhớ khi: bấm "Đồng bộ lại" (muốn số mới) hoặc tải lại trang. */
+const catalogSessionCache = new Map();
+const CATALOG_SESSION_MAX = 3;
+function rememberCatalog(period, value) {
+  catalogSessionCache.delete(period);
+  catalogSessionCache.set(period, value);
+  while (catalogSessionCache.size > CATALOG_SESSION_MAX) catalogSessionCache.delete(catalogSessionCache.keys().next().value);
 }
 
 function CatalogSearch({ value, onChange, employee = false }) {
@@ -763,6 +814,7 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
   // Mã NV đang mở màn chi tiết; rỗng = đang ở danh sách.
   const [selected, setSelected] = useState('');
 
+  // Trả về panel vừa dựng để nơi gọi KIỂM LẠI được (xem `save`).
   const load = async () => {
     setLoading(true); setError(''); setMessage('');
     try {
@@ -784,21 +836,46 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
         ? (unitGroups.value.truncated ? `Danh mục có ${unitGroups.value.total} mã đơn vị, vượt trần ${unitGroups.value.resolved} — phần vượt đang hiện "0 nhóm" oan, báo Claude nâng trần` : '')
         : (unitGroups.reason?.message || 'Không hỏi được bảng "mã đơn vị → nhóm"'));
       const groupsByUnit = unitGroups.status === 'fulfilled' ? (unitGroups.value.byUnit || {}) : {};
-      setPanel(buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees, groupsByUnit }));
+      const built = buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees, groupsByUnit });
+      setPanel(built);
       setAudit(grants.value.audit || []);
-    } catch (e) { setError(e.message); setPanel(null); }
+      return built;
+    } catch (e) { setError(e.message); setPanel(null); return null; }
     finally { setLoading(false); }
   };
   useEffect(() => { if (open && !panel && !loading) load(); }, [open]);
 
+  /**
+   * Lưu rồi ĐỌC LẠI TỪ MÁY CHỦ để KIỂM (CEO lo 09/08/2026: *"tôi sợ phân quyền xong
+   * vẫn bị lủng, không đúng mã đơn vị, không đúng cột thì nguy to"*).
+   *
+   * ‼ Lệnh ghi không ném lỗi KHÔNG có nghĩa là đã ghi đúng: backend chuẩn hoá lại
+   * (loại nhóm không hợp lệ, bỏ cột không được phép) vẫn trả 200. Tin vào 200 là
+   * tin vào lời hứa; đọc lại rồi so mới là bằng chứng.
+   *
+   * Khớp ⇒ báo hoàn thành + QUAY VỀ DANH SÁCH NV để CEO làm tiếp người kế (CEO:
+   * *"đáng lẽ phải báo đã xác nhận hoàn thành và màn hình quay về trạng thái lúc
+   * vào phân quyền để tiếp tục phân quyền nhân viên khác"*). Lệch ⇒ Ở LẠI màn đó,
+   * nêu đích danh lệch ở đâu — không đưa người dùng đi khi số chưa đúng.
+   */
   const save = async () => {
     if (!panel) return;
     setSaving(true); setError(''); setMessage('');
     const pending = dirtyRows(panel);
+    const expected = new Map(pending.map((row) => [row.empCode, grantSavePayload(row).columns]));
     try {
       for (const row of pending) await api.catalogCostGrantSave(row.empCode, grantSavePayload(row));
-      setMessage(`Đã lưu quyền cho ${pending.length} nhân viên.`);
-      await load();
+      const fresh = await load();
+      const check = verifySavedGrants(fresh, expected);
+      if (!check.ok) {
+        setError(`⛔ ĐÃ LƯU NHƯNG KIỂM LẠI THẤY LỆCH ${check.mismatches.length}/${check.checked} nhân viên — `
+          + check.mismatches.map((item) => `${item.empCode}: cần "${item.wanted}" nhưng máy chủ đang giữ "${item.got}"`).join(' · ')
+          + '. KHÔNG dùng phân quyền này cho tới khi sửa xong.');
+        return;
+      }
+      const who = [...expected.keys()].join(', ');
+      setMessage(`✅ Đã lưu và KIỂM LẠI TỪ MÁY CHỦ: đúng ${check.checked} nhân viên (${who}). Đang ở danh sách nhân viên — chọn người tiếp theo để cấp quyền.`);
+      setSelected('');
     } catch (e) { setError(`${e.message} — các dòng chưa lưu vẫn còn nguyên, bấm Lưu lại sau khi xử lý.`); }
     finally { setSaving(false); }
   };
@@ -1037,7 +1114,7 @@ function CostRatesSyncCard({ period, catalogLoading = false }) {
         tìm không ra, tưởng app hỏng. Khoá kèm lời giải thích + tự mở lại thì người
         dùng biết mình đang chờ cái gì; giấu đi thì không. Vẫn không cho bấm chồng
         vì DataHub từng tự restart do dồn tải (951,8 MB RSS, 08/08). */}
-    {catalogLoading && <small className="muted">⏳ Đang tải danh mục kỳ này — nút tự mở lại ngay khi tải xong (không bấm chồng để DataHub khỏi quá tải).</small>}
+    {catalogLoading && <small className="muted">⏳ Đang mở danh mục kỳ này — nút tự mở lại ngay khi xong (không bấm chồng để DataHub khỏi quá tải).</small>}
     {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
     {result && (result.ok
       ? <div className="catalog-alert ok" role="status">
@@ -1163,6 +1240,13 @@ export default function CatalogManagement({ me }) {
   // Mọi thao tác ghi/report/export bị khóa trong lúc tải hoặc khi đang giữ bảng
   // của kỳ khác. Bảng cũ chỉ còn là bản đọc; không thể tạo payload trộn kỳ.
   const actionsLocked = !!loadingPeriod || periodMismatch;
+  // ‼ CÂU CHỜ PHẢI NÓI ĐÚNG ĐANG LÀM GÌ (CEO bực 09/08 22:07: *"tại sao vẫn cứ báo
+  // là đang đồng bộ từ DataHub, trong khi đã kéo đủ 27.719 dòng về rồi"*).
+  // CEO đúng: từ khi đổi sang đọc-bản-trên-máy, lượt xem thường KHÔNG gọi DataHub
+  // nữa — nhưng câu chờ vẫn ghi "từ Data Hub" như cũ. Chờ vài giây thì chịu được;
+  // chờ mà bị nói sai mình đang chờ cái gì thì mất tin tưởng vào cả màn hình.
+  // Chỉ có bấm "Đồng bộ lại" mới thực sự hỏi DataHub.
+  const [askingHub, setAskingHub] = useState(false);
   const employeeOptions = useMemo(() => {
     const seen = new Map();
     for (const row of data?.rows || []) {
@@ -1175,13 +1259,21 @@ export default function CatalogManagement({ me }) {
   // như vậy thì rất kẹt"*). Bản cũ `setData(null)` làm cả trang trắng thành một vòng
   // quay mỗi lần đổi kỳ — trong khi danh mục rất nhiều dòng nên chờ khá lâu. Nay giữ
   // bảng cũ trên màn, chỉ gắn dải "đang tải" + nói rõ đang xem kỳ nào / chờ kỳ nào.
-  async function load(selected = period) {
+  async function load(selected = period, { fresh = false } = {}) {
     const request = loadGateRef.current.next();
+    const hub = uiToHub(selected);
+    // Đã xem kỳ này trong phiên ⇒ hiện NGAY, không quay vòng, không tải lại 27.719
+    // dòng. Bấm "Đồng bộ lại" thì `fresh` bật để bỏ qua bản nhớ.
+    if (!fresh && catalogSessionCache.has(hub)) {
+      setError(''); setData(catalogSessionCache.get(hub)); setLoadingPeriod('');
+      return catalogSessionCache.get(hub);
+    }
     setError(''); setLoadingPeriod(selected);
     try {
-      const p = uiToHub(selected);
+      const p = hub;
       const result = await api.catalogManagement(p);
-      if (!request.isLatest()) return;
+      if (!request.isLatest()) return undefined;
+      rememberCatalog(p, result);
       setData(result);
       if (isAdmin) {
         const [h, d] = await Promise.allSettled([api.adminCatalogManagementHistory(p), api.adminCatalogManagementDiagnostics()]);
@@ -1190,10 +1282,16 @@ export default function CatalogManagement({ me }) {
       }
     } catch (e) {
       // Tải hỏng thì GIỮ bảng cũ + báo lỗi, không đập màn hình về trắng.
-      if (request.isLatest()) setError(e.message);
+      // ‼ Nói rõ HỎNG Ở CỬA NÀO và cái gì VẪN LÀM ĐƯỢC — 502 ở cửa danh mục không
+      // liên quan gì tới cửa chi phí, mà CEO đọc "Lỗi máy chủ" thì tưởng chết cả hệ.
+      if (request.isLatest()) {
+        setError(`${e.message} — đây là CỬA DANH MỤC của Data Hub, không phải cửa chi phí. `
+          + `Nút "Đồng bộ % chi phí kỳ ${selected}" phía dưới VẪN DÙNG ĐƯỢC bình thường.`);
+      }
     } finally {
       if (request.isLatest()) setLoadingPeriod('');
     }
+    return undefined;
   }
   useEffect(() => () => { loadGateRef.current?.cancel(); }, []);
   useEffect(() => { api.periods().then((p) => { const list = (p.periods || p || []).map((x) => x.ky || x).filter((x) => /^\d{2}\.\d{4}$/.test(x)); setPeriods(list); if (list.length && !list.includes(period)) setPeriod(list.at(-1)); }).catch(() => {}); }, []);
@@ -1202,13 +1300,27 @@ export default function CatalogManagement({ me }) {
     <div className="card catalog-heading catalog-heading-compact">
       <div><div className="section-head">🗂️ {isAdmin ? 'Phân công danh mục bán hàng' : 'Danh mục bán hàng của tôi'}</div><div className="meta muted">{isAdmin ? 'Theo cặp đơn vị + mã QLNB và từng kỳ' : 'Chỉ hiển thị phạm vi Anh/Chị đang phụ trách'}</div></div>
       <div className="catalog-heading-actions">{data?.meta && <SourceStatus meta={data.meta} canRefresh={isAdmin}
-        onRefresh={async () => { await api.catalogManagementRefresh(uiToHub(period)); await load(period); }} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
+        onRefresh={async () => {
+          setAskingHub(true);
+          try {
+            const result = await api.catalogManagementRefresh(uiToHub(period));
+            catalogSessionCache.delete(uiToHub(period)); // muốn số mới thì bỏ bản nhớ
+            await load(period, { fresh: true });
+            return result; // huy hiệu cần kết quả này để nói nội dung có đổi không
+          } finally { setAskingHub(false); }
+        }} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
     {/* Thẻ đồng bộ % KHÔNG phụ thuộc danh mục (nó đọc trạng thái riêng, nhắm đúng
         kỳ đang chọn) nên LUÔN hiện — chỉ khoá nút kèm lý do khi đang tải. */}
-    {isCeo && <CostRatesSyncCard period={period} catalogLoading={actionsLocked} />}
+    {/* ‼ CHỈ khoá khi ĐANG TẢI, KHÔNG khoá khi danh mục HỎNG (CEO chặn cứng 09/08
+        23:24). Bản trước dùng `actionsLocked` (gồm cả `periodMismatch`): danh mục
+        kỳ 07 trả 502 ⇒ mismatch VĨNH VIỄN ⇒ nút đồng bộ % khoá VĨNH VIỄN ⇒ CEO
+        không tài nào đóng băng được T07. Mà đồng bộ % KHÔNG đụng danh mục — nó gọi
+        cửa chi phí, cửa đang sống (probe 21/21). Khoá nó đúng lúc cần nhất là tự
+        chặn đường thoát duy nhất. */}
+    {isCeo && <CostRatesSyncCard period={period} catalogLoading={!!loadingPeriod} />}
     <CostRatesTablePanel period={period} />
     {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
@@ -1217,9 +1329,12 @@ export default function CatalogManagement({ me }) {
     {/* Đang tải MÀ ĐÃ CÓ bảng cũ ⇒ chỉ một dải mảnh, bảng ở lại cho anh/chị đọc tiếp. */}
     {!!loadingPeriod && !!data && <div className="card catalog-loading-strip" role="status" aria-live="polite">
       <i className="catalog-loading-dot" aria-hidden="true" />
-      <span>Đang tải danh mục kỳ <b>{loadingPeriod}</b> từ Data Hub…{shownPeriod && shownPeriod !== loadingPeriod
-        ? <> Bảng dưới vẫn là <b>kỳ {shownPeriod}</b> cho tới khi có dữ liệu mới.</>
-        : ' Bảng dưới là bản vừa xem, đang được làm mới.'}</span>
+      <span>{askingHub
+        ? <>Đang <b>hỏi lại Data Hub</b> cho kỳ <b>{loadingPeriod}</b>…</>
+        : <>Đang mở danh mục kỳ <b>{loadingPeriod}</b> — <b>đọc bản đã có trên máy</b>, không gọi Data Hub.</>}
+        {shownPeriod && shownPeriod !== loadingPeriod
+          ? <> Bảng dưới vẫn là <b>kỳ {shownPeriod}</b> cho tới khi có dữ liệu mới.</>
+          : ' Bảng dưới là bản vừa xem, đang được làm mới.'}</span>
     </div>}
     {periodMismatch && !loadingPeriod && <div className="card catalog-alert error" role="status">
       ⚠ Chưa tải được danh mục kỳ <b>{period}</b>. Bảng kỳ <b>{shownPeriod}</b> bên dưới chỉ để đọc; báo cáo, cấp quyền và điều chuyển đang khóa để không trộn kỳ.
@@ -1227,12 +1342,17 @@ export default function CatalogManagement({ me }) {
     {/* Lần đầu chưa có gì để giữ ⇒ khung chờ CÓ NÓI đang chờ cái gì, thay vì vòng quay trơ. */}
     {!data && !error && <div className="card catalog-first-load" role="status" aria-live="polite">
       <Spinner />
-      <b>Đang tải danh mục kỳ {loadingPeriod || period} từ Data Hub…</b>
+      <b>{askingHub
+        ? `Đang hỏi lại Data Hub cho kỳ ${loadingPeriod || period}…`
+        : `Đang mở danh mục kỳ ${loadingPeriod || period}…`}</b>
       {/* ‼ KHÔNG ghi con số ước lượng ở đây. Bản đầu viết cứng "khoảng 27.700 cặp" —
           CEO đọc thành số liệu thật rồi hỏi vì sao lệch 19 dòng so với 27.719 (09/08).
           Trong app này mọi con số trên màn đều phải là số THẬT, có nguồn. Câu chờ chỉ
           mô tả tình trạng, không mang số. */}
-      <p>Danh mục toàn công ty khá lớn nên lần tải đầu mất một lúc. Các phần phía trên dùng được ngay.</p>
+      <p>{askingHub
+        ? 'Đang hỏi Data Hub để lấy bản mới nhất — chỗ này mới thật sự phụ thuộc mạng.'
+        : 'Ưu tiên bản đã lưu TRÊN MÁY; chỉ gọi Data Hub khi máy chưa có kỳ này. Danh mục toàn công ty khá lớn nên vẫn mất vài giây để bày ra bảng.'}
+        {' '}Các phần phía trên dùng được ngay.</p>
     </div>}
     {data && (isAdmin
       ? <AdminView data={data} period={uiToHub(shownPeriod || period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}
