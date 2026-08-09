@@ -1,3 +1,17 @@
+### 2026-08-09 10:01 (giờ VN) — ‼ BỎ SỐ BỊA TRONG CHỮ GIAO DIỆN ("khoảng 27.700 cặp")
+
+CEO hỏi: *"danh mục bản V31.4 hiện có 27.719 dòng, sao ở bản đồng bộ T08 kéo qua chỉ có 27.700 dòng?"*
+
+**Không có 19 dòng nào mất cả.** `27.700` là **con số Claude viết cứng** vào câu chờ màn hình hôm qua — một ước lượng, **không phải số liệu**. `27.719` mới là số thật đếm từ dữ liệu.
+
+**Nhưng đây là lỗi nghiêm trọng về nguyên tắc, không phải lỗi vặt.** Cả hệ thống này dựng trên luật *"không dòng nào được biến mất lặng lẽ"*, và CEO đã được rèn để soi từng con số — nên CEO đọc mọi số trên màn là số thật, và phản ứng đúng như phải thế. Một con số bịa trong câu chờ làm hỏng lòng tin vào **mọi** con số khác.
+
+**Đã sửa:** bỏ hẳn số khỏi câu chờ, chỉ mô tả tình trạng. **Thêm test cấm viết cứng số dòng/cặp vào chữ giao diện** — quét cả file JSX, ai đặt lại là test đỏ.
+
+Server 1043/1050 (7 fail cố hữu) · web 295/295 · build sạch.
+
+---
+
 ### 2026-08-09 09:44 (giờ VN) — 📏 Khoá bề rộng cột bằng `table-layout:fixed` + thêm lựa chọn "Tất cả" dòng
 
 CEO chụp màn lần 2: bề rộng vẫn sai — hoạt chất còn rộng quá, mã đơn vị chật, đơn giá dư.
