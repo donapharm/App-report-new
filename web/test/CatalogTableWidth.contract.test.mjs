@@ -66,8 +66,11 @@ test('bề rộng gắn theo LOẠI NỘI DUNG bằng class — mỗi loại m�
   // CEO: "các cột nên có nguyên tắc về độ rộng để tránh cột dư quá, cột thiếu quá".
   assert.match(css, /th\.catalog-col-text, \.catalog-table-products td\.catalog-col-text \{ width:230px; \}/);
   assert.match(css, /th\.catalog-col-unit, \.catalog-table-products td\.catalog-col-unit \{ width:160px; \}/, 'mã đơn vị bị chật');
-  assert.match(css, /th\.catalog-col-price, \.catalog-table-products td\.catalog-col-price \{ width:104px; \}/, 'đơn giá: 7 chữ số + đ');
-  assert.match(css, /th\.catalog-money, \.catalog-table-products td\.catalog-money \{ width:96px; white-space:nowrap; \}/);
+  const moneyRule = '.catalog-table-products th.catalog-money, .catalog-table-products td.catalog-money { width:96px; white-space:nowrap; }';
+  const priceRule = '.catalog-table-products th.catalog-col-price, .catalog-table-products td.catalog-col-price { width:104px; }';
+  assert.ok(css.includes(moneyRule), 'số và % phải đúng 96px');
+  assert.ok(css.includes(priceRule), 'đơn giá phải đúng 104px');
+  assert.ok(css.indexOf(priceRule) > css.indexOf(moneyRule), 'đơn giá mang cả class money: luật 104px phải đứng sau để thắng cascade 96px');
 });
 
 test('"Tất cả" (0) bỏ cắt dòng — CEO chọn 1/2/3/Tất cả', () => {

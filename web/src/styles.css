@@ -1496,10 +1496,11 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-table-products th.catalog-col-text, .catalog-table-products td.catalog-col-text { width:230px; }
 /* Mã đơn vị: "001.BVĐK Đồng Nai" — CEO báo hơi chật. */
 .catalog-table-products th.catalog-col-unit, .catalog-table-products td.catalog-col-unit { width:160px; }
-/* Đơn giá trúng thầu: tối đa 7 chữ số + "đ" ⇒ "9.999.999 đ" là đủ (CEO đo giúp). */
-.catalog-table-products th.catalog-col-price, .catalog-table-products td.catalog-col-price { width:104px; }
 /* Số/tiền/%: không xuống dòng, vừa tiêu đề "C36 (%)". */
 .catalog-table-products th.catalog-money, .catalog-table-products td.catalog-money { width:96px; white-space:nowrap; }
+/* Đơn giá cũng mang class catalog-money; luật 104px PHẢI đứng sau luật 96px để
+   thắng cascade, nếu không trình duyệt lại co đơn giá về 96px. */
+.catalog-table-products th.catalog-col-price, .catalog-table-products td.catalog-col-price { width:104px; }
 .catalog-table-products th:first-child, .catalog-table-products td:first-child { width:112px; }
 
 /* Số dòng tối đa trong MỘT ô — CEO chọn 1/2/3/Tất cả ở thanh điều khiển.
