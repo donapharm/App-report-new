@@ -1,3 +1,28 @@
+### 2026-08-09 20:40 (giờ VN) — 🔐 Thêm KÊNH THỨ HAI xác nhận đăng nhập (bot Report)
+
+CEO: *"otp đang trả về cho bot loginreportdonapharm mà không có thêm kênh gửi về cho tin nhắn bot report — khắc phục ngay cho tôi thêm cách gửi này."*
+
+**Nguyên tắc: thêm ĐƯỜNG ĐI, KHÔNG thêm DANH TÍNH.** Telegram cấp **một user id dùng chung mọi bot**, nên bot nào chuyển mã về thì `resolveTelegram(telegram_id)` vẫn ra đúng một nhân viên. Nhờ đó thêm kênh mà **không nới một hàng rào nào**:
+- mã vẫn **120 giây, dùng một lần**, hủy ngay sau khi xác nhận;
+- vẫn phải là **telegram_id đã map** sang mã NV; tài khoản bị khoá vẫn chặn;
+- trình duyệt vẫn poll bằng `poll_secret` (biết mã cũng không rút được token);
+- cảnh báo chống lừa đảo giữ nguyên.
+
+**Làm gì:** `telegramConfirm` nhận secret của **bất kỳ bot nào đã cấu hình đủ**; `telegramStart` trả `bots: [{ key, label, link }]` và màn login hiện **một nút cho mỗi bot**, kèm câu *"gửi cho bất kỳ bot nào ở trên đều được — bot này kẹt thì dùng bot kia"*.
+
+Ba chốt an toàn:
+1. **Bot thiếu username HOẶC secret ⇒ không hiện nút, không nhận confirm.** Mời người dùng vào một cửa chết còn tệ hơn không có cửa.
+2. **So secret theo kiểu hằng-thời-gian** (`crypto.timingSafeEqual`), secret rỗng không bao giờ khớp — thay cho phép so chuỗi thẳng trước đây.
+3. **Audit ghi `via` = bot nào đã xác nhận.** Có hai đường thì phải truy được đường nào đã dùng. Nhật ký **không bao giờ chứa giá trị secret**.
+
+Cấu hình: bot ② dùng biến RIÊNG `TELEGRAM_BOT2_USERNAME` + `TELEGRAM_BOT2_SECRET` (+ `TELEGRAM_BOT2_LABEL`). Chưa cấu hình ⇒ mọi thứ chạy y như trước, không có nút thứ hai.
+
+**‼ CÒN MỘT VIỆC PHÍA BOT ②:** bot Report phải xử lý `/start RP-XXXXXX` giống bot ① (hỏi lại bằng nút "✅ Xác nhận…" rồi mới gọi `/api/auth/telegram/confirm` với secret của chính nó). App Report đã sẵn sàng nhận; chưa làm bước bot thì nút thứ hai mở được bot nhưng bot chưa biết trả lời. Hợp đồng ghi trong `SPEC_LOGIN_V2.md`.
+
+Test: server **1151** pass / 7 fail cố hữu · web **373/373** · build sạch. Test mới: `telegramLoginChannels.test.js` (8) + 3 ở `Login.telegramOnly.test.mjs`.
+
+---
+
 ### 2026-08-09 20:15 (giờ VN) — ‼ CEO là NGƯỜI DUY NHẤT thấy toàn dấu "—" ở cột % trong bảng danh mục
 
 CEO bấm Đồng bộ % chi phí, kết quả **✅ 21/21 NV · 27.719 cặp** — nhưng mở bảng danh mục thì **mọi ô C36/C38/C41/C42/C43/C44/C45 vẫn là "—"**: *"tôi đã bấm đồng bộ rồi, vậy tại sao các ô chi phí % nó đang ở đâu đâu là sao?"*

@@ -534,6 +534,47 @@ async function verifySso(ssoToken, opts = {}) {
 const TG_SECRET = process.env.TELEGRAM_BOT_SECRET || '';
 const TG_BOT = process.env.TELEGRAM_BOT_USERNAME || '';
 const TG_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   KÊNH THỨ HAI ĐỂ XÁC NHẬN ĐĂNG NHẬP (CEO yêu cầu 09/08/2026)
+
+   CEO: *"otp đang trả về cho bot loginreportdonapharm mà không có thêm kênh gửi về
+   cho tin nhắn bot report — khắc phục ngay cho tôi thêm cách gửi này."*
+
+   ‼ Vì sao thêm kênh KHÔNG làm yếu đăng nhập: mã đăng nhập không đổi, cách xác thực
+   không đổi. Telegram cấp **một user id duy nhất cho mỗi người, dùng chung mọi bot**,
+   nên bot nào chuyển mã về thì `resolveTelegram(telegram_id)` vẫn ra ĐÚNG một nhân
+   viên đó. Thêm bot = thêm ĐƯỜNG ĐI, không phải thêm danh tính:
+     · vẫn phải có mã hiển thị trên trình duyệt (mã 120s, dùng một lần);
+     · vẫn phải là telegram_id ĐÃ được map sang mã NV;
+     · vẫn chặn tài khoản bị khoá; vẫn ghi audit — thêm cả BOT NÀO đã xác nhận.
+
+   ‼ Bot nào KHÔNG có secret riêng thì KHÔNG được nhận — secret rỗng không bao giờ
+   khớp. So sánh theo kiểu hằng-thời-gian để không rò rỉ độ dài/nội dung secret qua
+   thời gian phản hồi.
+
+   Cấu hình: bot 1 giữ nguyên biến cũ; bot 2 dùng `TELEGRAM_BOT2_USERNAME` +
+   `TELEGRAM_BOT2_SECRET` (+ `TELEGRAM_BOT2_LABEL` để đặt tên nút trên màn login).
+   Chưa cấu hình bot 2 ⇒ mọi thứ chạy y như trước, không có nút thứ hai.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+const TG_BOT2_SECRET = process.env.TELEGRAM_BOT2_SECRET || '';
+const TG_BOT2 = process.env.TELEGRAM_BOT2_USERNAME || '';
+const TG_BOT2_LABEL = process.env.TELEGRAM_BOT2_LABEL || 'Bot Report (tin nhắn)';
+
+function loginBots() {
+  return [
+    { key: 'login', label: process.env.TELEGRAM_BOT_LABEL || 'Report Bot (đăng nhập)', username: TG_BOT, secret: TG_SECRET },
+    { key: 'report', label: TG_BOT2_LABEL, username: TG_BOT2, secret: TG_BOT2_SECRET },
+  ];
+}
+
+/** So sánh secret không rò rỉ thời gian. Rỗng/khác độ dài ⇒ sai, không so tiếp. */
+function secretMatches(given, expected) {
+  const a = Buffer.from(String(given || ''), 'utf8');
+  const b = Buffer.from(String(expected || ''), 'utf8');
+  if (!b.length || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
 // Bản ghi mã (ephemeral, không cần lưu bền vì TTL 120s): login_code -> {...}
 const loginCodes = new Map();
 // Rate-limit
@@ -568,8 +609,13 @@ function telegramStart({ deviceId, ip, ua } = {}) {
     created_at: now(), expires_at: now() + TG_CODE_TTL_MS,
     status: 'pending', user: null, telegram_id: null,
   });
+  // Mỗi bot ĐÃ CẤU HÌNH ĐỦ (có username + secret) là một đường gửi mã. `bot_link`
+  // giữ lại cho bản web cũ, luôn trỏ bot thứ nhất.
+  const bots = loginBots()
+    .filter((bot) => bot.username && bot.secret)
+    .map((bot) => ({ key: bot.key, label: bot.label, link: `https://t.me/${bot.username}?start=${code}` }));
   const bot_link = TG_BOT ? `https://t.me/${TG_BOT}?start=${code}` : null;
-  return { login_code: code, poll_secret, expires_in: Math.floor(TG_CODE_TTL_MS / 1000), bot_link };
+  return { login_code: code, poll_secret, expires_in: Math.floor(TG_CODE_TTL_MS / 1000), bot_link, bots };
 }
 
 // Trình duyệt poll bằng poll_secret (KHÔNG phải mã hiển thị).
@@ -595,10 +641,13 @@ function telegramStatus(poll_secret) {
   return { status: 'confirmed', token, user: pub(user) };
 }
 
-// CHỈ bot Telegram nội bộ gọi (dùng secret_bot = TELEGRAM_BOT_SECRET).
+// CHỈ bot Telegram nội bộ gọi. Nhận secret của BẤT KỲ bot nào đã cấu hình (bot đăng
+// nhập hoặc bot Report) — cùng một luật xác thực, chỉ khác đường đi.
 function telegramConfirm({ login_code, telegram_id, secret_bot }) {
   pruneCodes();
-  if (!TG_SECRET || secret_bot !== TG_SECRET) {
+  const via = loginBots().find((bot) => secretMatches(secret_bot, bot.secret));
+  if (!via) {
+    // KHÔNG ghi secret vào audit — chỉ ghi có ai đó gõ sai.
     logAudit('telegram_confirm_bad_secret', { telegram_id, login_code });
     const e = new Error('secret_bot không hợp lệ'); e.status = 403; throw e;
   }
@@ -618,9 +667,11 @@ function telegramConfirm({ login_code, telegram_id, secret_bot }) {
   }
   entry.status = 'confirmed';
   entry.telegram_id = String(telegram_id);
+  entry.via = via.key;
   entry.user = { emp_code: user.emp_code, name: user.name, role: normRole(user.role), phone: user.phone };
-  logAudit('telegram_confirm', { emp_code: user.emp_code, telegram_id: String(telegram_id) });
-  return { ok: true, emp_code: user.emp_code, name: user.name };
+  // Ghi rõ BOT NÀO đã xác nhận — có hai đường thì phải truy được đường nào đã dùng.
+  logAudit('telegram_confirm', { emp_code: user.emp_code, telegram_id: String(telegram_id), via: via.key });
+  return { ok: true, emp_code: user.emp_code, name: user.name, via: via.key };
 }
 
 /* ===================== MIDDLEWARE + SCOPE ===================== */
@@ -770,7 +821,11 @@ module.exports = {
   canReadAllRevenue: accessPolicy.canReadAllRevenue,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
   // Telegram
-  telegramStart, telegramStatus, telegramConfirm, telegramConfigured: () => !!(TG_SECRET && TG_BOT && TG_TOKEN),
+  telegramStart, telegramStatus, telegramConfirm,
+  // Đủ điều kiện khi CÓ ÍT NHẤT MỘT bot cấu hình đủ (username + secret) và app có
+  // token để nói chuyện với Telegram.
+  telegramConfigured: () => !!TG_TOKEN && loginBots().some((bot) => bot.username && bot.secret),
+  telegramLoginBots: () => loginBots().filter((bot) => bot.username && bot.secret).map(({ key, label, username }) => ({ key, label, username })),
   // Mapping + thiết bị + hủy phiên
   listTelegramMap, addTelegramMap, removeTelegramMap, resolveTelegram,
   listDevices, removeDevice, purgeUser, invalidateUserSessions, invalidateUserDevices,

@@ -178,7 +178,7 @@ export default function Login({ onLogin }) {
                     Đăng nhập nhanh & an toàn qua <b>Telegram</b>.
                   </div>
                   <div style={{ fontSize: 12.5, opacity: .9, lineHeight: 1.55, marginBottom: 10 }}>
-                    1. Mở Report Bot → 2. Gửi mã đăng nhập → 3. Bấm ✅ xác nhận.
+                    1. Mở <b>một trong các bot</b> bên dưới → 2. Gửi mã đăng nhập → 3. Bấm ✅ xác nhận.
                   </div>
                   <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={startTelegram}>
                     {busy ? 'Đang tạo mã…' : '✈️  Đăng nhập bằng Telegram'}
@@ -186,16 +186,26 @@ export default function Login({ onLogin }) {
                 </>
               ) : (
                 <>
-                  <div style={{ fontSize: 13, opacity: .92, marginBottom: 8 }}>Gửi mã này cho Report Bot trên Telegram rồi bấm ✅ xác nhận:</div>
+                  <div style={{ fontSize: 13, opacity: .92, marginBottom: 8 }}>Gửi mã này cho <b>một trong các bot</b> dưới đây trên Telegram rồi bấm ✅ xác nhận:</div>
                   <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 3, textAlign: 'center',
                                 background: 'rgba(255,255,255,.16)', borderRadius: 10, padding: '10px 0', marginBottom: 8 }}>
                     {tg.login_code}
                   </div>
-                  {tg.bot_link && (
-                    <a href={tg.bot_link} target="_blank" rel="noreferrer"
-                       className="btn" style={{ width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none', marginBottom: 8 }}>
-                      Mở Report Bot ›
-                    </a>
+                  {/* ‼ MỘT NÚT CHO MỖI BOT ĐANG BẬT (CEO xin thêm kênh 09/08/2026).
+                      Danh sách do BACKEND cấp — bot nào chưa cấu hình đủ thì không
+                      hiện, để không bao giờ mời người dùng đi vào một cửa chết.
+                      Bản web cũ chỉ có `bot_link`; giữ lại làm đường lui. */}
+                  {(tg.bots && tg.bots.length ? tg.bots : (tg.bot_link ? [{ key: 'login', label: 'Report Bot', link: tg.bot_link }] : []))
+                    .map((bot) => (
+                      <a key={bot.key} href={bot.link} target="_blank" rel="noreferrer"
+                         className="btn" style={{ width: '100%', display: 'block', textAlign: 'center', textDecoration: 'none', marginBottom: 8 }}>
+                        Mở {bot.label} ›
+                      </a>
+                    ))}
+                  {tg.bots && tg.bots.length > 1 && (
+                    <div style={{ fontSize: 11.5, opacity: .85, textAlign: 'center', marginBottom: 8 }}>
+                      Gửi cho <b>bất kỳ bot nào</b> ở trên đều được — bot này kẹt thì dùng bot kia.
+                    </div>
                   )}
                   <div style={{ fontSize: 12, opacity: .85, textAlign: 'center' }}>
                     {tgLeft > 0 ? `Mã hết hạn sau ${tgLeft}s · đang chờ xác nhận…` : 'Mã đã hết hạn.'}

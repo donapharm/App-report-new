@@ -26,8 +26,37 @@ POST /api/auth/telegram/status   body: { poll_secret }
 
 POST /api/auth/telegram/confirm  (chỉ bot Telegram gọi, nội bộ server)
   body: { login_code, telegram_id, secret_bot }
-  → gắn user (từ mapping) vào phiên chờ; secret_bot lấy từ env TELEGRAM_BOT_SECRET
+  → gắn user (từ mapping) vào phiên chờ; secret_bot là secret của MỘT TRONG CÁC BOT
+    đã cấu hình (xem "Hai kênh xác nhận" bên dưới)
 ```
+
+## Hai kênh xác nhận đăng nhập (CEO yêu cầu 09/08/2026)
+
+CEO: *"otp đang trả về cho bot loginreportdonapharm mà không có thêm kênh gửi về cho
+tin nhắn bot report — khắc phục ngay cho tôi thêm cách gửi này."*
+
+**Nguyên tắc: thêm ĐƯỜNG ĐI, không thêm DANH TÍNH.** Telegram cấp một user id dùng
+chung mọi bot, nên bot nào chuyển mã về thì `resolveTelegram(telegram_id)` vẫn ra đúng
+một nhân viên. Mọi hàng rào giữ nguyên: mã 120s dùng một lần, phải là telegram_id đã
+map, tài khoản bị khoá vẫn chặn, trình duyệt vẫn poll bằng `poll_secret`.
+
+| Bot | Username | Secret | Nhãn nút |
+|---|---|---|---|
+| ① đăng nhập (có sẵn) | `TELEGRAM_BOT_USERNAME` | `TELEGRAM_BOT_SECRET` | `TELEGRAM_BOT_LABEL` (mặc định "Report Bot (đăng nhập)") |
+| ② Report/tin nhắn (mới) | `TELEGRAM_BOT2_USERNAME` | `TELEGRAM_BOT2_SECRET` | `TELEGRAM_BOT2_LABEL` (mặc định "Bot Report (tin nhắn)") |
+
+- Bot nào **thiếu username HOẶC secret** ⇒ không hiện nút, không nhận confirm. Không
+  mời người dùng đi vào cửa chết.
+- **Hai bot phải dùng hai secret KHÁC NHAU.** Secret so theo kiểu hằng-thời-gian; secret
+  rỗng không bao giờ khớp.
+- Audit `telegram_confirm` ghi thêm `via` = bot nào đã xác nhận.
+- `GET /api/auth/telegram/start` trả thêm `bots: [{ key, label, link }]`; `bot_link` giữ
+  lại cho bản web cũ.
+
+**‼ Việc phía bot ②:** bot Report phải xử lý `/start RP-XXXXXX` (và tin nhắn chứa mã)
+y như bot ①: hỏi lại bằng nút *"✅ Xác nhận đăng nhập App Report lúc HH:MM"* rồi mới gọi
+`POST /api/auth/telegram/confirm` với `secret_bot` = `TELEGRAM_BOT2_SECRET`. Chưa làm
+bước này thì nút thứ hai bấm vào sẽ mở bot nhưng bot không phản hồi mã.
 
 **BẮT BUỘC chống device-code phishing:**
 1. Bot Telegram nhận mã → **hỏi lại bằng nút** *"✅ Xác nhận đăng nhập App Report lúc HH:MM"* — chỉ khi NV bấm mới gọi `confirm`. Kèm cảnh báo: *"Không gửi mã này theo yêu cầu của người khác."*
