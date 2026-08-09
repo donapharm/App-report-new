@@ -1,3 +1,25 @@
+### 2026-08-09 21:00 (giờ VN) — 🔎 Chẩn đoán CHỐT VỤ ÁN + script tự nói thật đang đọc ở đâu
+
+Bot chạy 3 lệnh chẩn đoán trên PROD `aa327e6`. **Kết quả chốt được nguyên nhân:**
+
+| Kỳ | ✅ ok | 🟡 ok_stale_rates | ⛔ upstream_* | Lần lỗi gần nhất |
+|---|---|---|---|---|
+| 2026-08 | 228 lượt · 21 NV | **367 lượt · 21 NV** | 503/unavailable | **08/08** (hôm trước) |
+| 2026-07 | 197 lượt · 21 NV | **574 lượt · 21 NV** | không có | — |
+
+1. **KHÔNG có `invalid_period_payload` nào** ⇒ nghi phạm "lỗi contract `ky`" **được loại**.
+2. **Hôm nay (09/08) T07/T08 không có lỗi `upstream_*` nào** ⇒ cửa chi phí DataHub **đang sống**.
+3. **`ok_stale_rates` NHIỀU HƠN `ok`** (574/197 ở T07, 367/228 ở T08) ⇒ quá nửa số lượt mở màn, nguồn tươi trả chậm hơn hạn 2 giây nên App Report rơi về bản % đã lưu. Bản cũ đó **có số**, nhưng bản cũ của app **tuyên là "chưa lấy được"** — đúng bug đã sửa ở `aa327e6` (nay đã lên PROD). **Đây là thủ phạm chính của "khi đủ khi thiếu" và của việc bot nhắn NV báo thiếu oan.**
+4. Kho % cục bộ: **2026-08 đã có** (21 NV · 27.719 dòng, CEO đồng bộ 20:06) — **2026-07 CHƯA có** ⇒ menu tiền kỳ T07 vẫn báo chưa đồng bộ cho tới khi bấm đồng bộ cho đúng kỳ đó.
+
+**Sửa kèm — script chẩn đoán từng tự nói dối:** hai lệnh probe thoát mã `2` với *"THIẾU CẤU HÌNH · roster 0 NV"*, dễ đọc nhầm thành "DataHub hỏng". Thật ra bản release đặt `.env` ở **thư mục gốc** còn script chỉ đọc `server/.env`. Nay:
+- probe dò `.env` ở **4 vị trí** thường gặp, **IN RA đã đọc được ở đâu**, và khi thiếu thì nói thẳng *"ĐÂY KHÔNG PHẢI KẾT LUẬN VỀ DATAHUB"* kèm danh sách chỗ đã dò + cách chạy lại với `--env-file`;
+- `diagnose_cost_source.js` in **thư mục dữ liệu đang đọc**, báo ngay nếu thư mục không tồn tại.
+
+Chỉ in **đường dẫn**, không bao giờ in nội dung `.env`.
+
+---
+
 ### 2026-08-09 20:40 (giờ VN) — 🔐 Thêm KÊNH THỨ HAI xác nhận đăng nhập (bot Report)
 
 CEO: *"otp đang trả về cho bot loginreportdonapharm mà không có thêm kênh gửi về cho tin nhắn bot report — khắc phục ngay cho tôi thêm cách gửi này."*

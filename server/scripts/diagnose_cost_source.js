@@ -53,7 +53,10 @@ const hoursFlag = argv.indexOf('--hours');
 const HOURS = hoursFlag >= 0 ? Math.max(1, Number(argv[hoursFlag + 1]) || 24) : 24;
 
 console.log('=== CHẨN ĐOÁN NGUỒN CHI PHÍ (chỉ đọc, không gọi mạng) ===');
-console.log(`Cửa sổ soi   : ${HOURS} giờ gần nhất · mọi mốc giờ dưới đây là GMT+7\n`);
+console.log(`Cửa sổ soi   : ${HOURS} giờ gần nhất · mọi mốc giờ dưới đây là GMT+7`);
+// ‼ In ĐANG ĐỌC Ở ĐÂU. Bản release đặt file khác chỗ script đoán là ra bảng rỗng
+// mà không ai biết vì sao — chẩn đoán tự nói dối thì tệ hơn không chẩn đoán.
+console.log(`Thư mục dữ liệu: ${AUTH_DIR}${fs.existsSync(AUTH_DIR) ? '' : '  ⛔ KHÔNG TỒN TẠI — đặt AUTH_DATA_DIR trỏ đúng chỗ rồi chạy lại'}\n`);
 
 /* ── ① DOANH THU: App Sale → App Report có đứt không ───────────────────────── */
 let store = null;

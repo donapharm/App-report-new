@@ -33,7 +33,18 @@ function loadEnv(file) {
   }
   return true;
 }
-loadEnv(path.join(SERVER_ROOT, '.env'));
+/* ‼ .env NẰM Ở ĐÂU TUỲ CÁCH DỰNG BẢN (bot báo 09/08/2026): bản release đặt `.env`
+   ở THƯ MỤC GỐC, còn script chỉ đọc `server/.env` ⇒ probe báo "THIẾU CẤU HÌNH ·
+   roster 0 NV" và thoát mã 2, đọc nhầm thành "DataHub hỏng". Nay dò đủ các chỗ có
+   thể có và IN RA đã đọc được ở đâu — chẩn đoán mà tự nó nói dối thì vô dụng.
+   KHÔNG in nội dung file, chỉ in đường dẫn. */
+const ENV_CANDIDATES = [
+  path.join(SERVER_ROOT, '.env'),
+  path.join(SERVER_ROOT, '..', '.env'),
+  path.join(process.cwd(), '.env'),
+  path.join(process.cwd(), 'server', '.env'),
+];
+const ENV_LOADED = [...new Set(ENV_CANDIDATES.map((file) => path.resolve(file)))].filter(loadEnv);
 
 const employeeCost = require(path.join(SERVER_ROOT, 'src', 'employeeCost'));
 const employeeCostTemplates = require(path.join(SERVER_ROOT, 'src', 'employeeCostTemplates'));
@@ -57,9 +68,14 @@ function vnMonth() {
 
   console.log('=== DÒ CỬA CHI PHÍ DATAHUB (chỉ đọc) ===');
   console.log(`Kỳ dò          : ${period}  (giờ VN, GMT+7)`);
+  console.log(`Đọc .env từ    : ${ENV_LOADED.length ? ENV_LOADED.join(' · ') : '(KHÔNG tìm thấy file .env nào)'}`);
   console.log(`Cấu hình nguồn : baseUrl ${baseUrl ? 'CÓ' : 'THIẾU'} · assignment key ${process.env.DATA_HUB_ASSIGNMENT_KEY ? 'CÓ' : 'THIẾU'} · roster ${roster.length} NV`);
   if (!baseUrl || !roster.length) {
-    console.log('\n⛔ THIẾU CẤU HÌNH — không phải lỗi DataHub. Kiểm .env (KHÔNG dán nội dung ra ngoài).');
+    console.log('\n⛔ THIẾU CẤU HÌNH — ĐÂY KHÔNG PHẢI KẾT LUẬN VỀ DATAHUB.');
+    console.log(`   Đã dò .env ở: ${ENV_CANDIDATES.map((file) => path.resolve(file)).join(' · ')}`);
+    console.log('   Nếu bản chạy đặt .env chỗ khác, chạy lại kèm đường dẫn:');
+    console.log('     node --env-file=/duong/dan/.env server/scripts/probe_datahub_cost.js --all --period 2026-08');
+    console.log('   (KHÔNG dán nội dung .env ra ngoài — chỉ cần đường dẫn.)');
     process.exit(2);
   }
 
