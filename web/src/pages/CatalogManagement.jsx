@@ -218,7 +218,7 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
           <td className="catalog-money" data-sensitive="" data-label="CST ban đầu">{quantityText(r.cst_initial)}</td>
           <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive="" data-label="CST còn lại"><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
           {costColumns.map((c) => <CostRateCell key={c.key} label={`${c.key.toUpperCase()} (%)`} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
-          <PreviewCell label="Từ kỳ" value={hubToUi(r.effective_from)} />
+          <PreviewCell label="Phụ trách từ kỳ" value={hubToUi(r.effective_from)} />
           <PreviewCell label="Đến kỳ" value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
         </tr>;
       })}</tbody></table></div>
@@ -908,7 +908,7 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
             <td className="catalog-money" data-sensitive="" data-label="CST ban đầu">{quantityText(r.cst_initial)}</td>
             <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive="" data-label="CST còn lại"><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
             {costColumns.map((c) => <CostRateCell key={c.key} label={`${c.key.toUpperCase()} (%)`} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
-            <PreviewCell label="Từ kỳ" value={hubToUi(r.effective_from)} />
+            <PreviewCell label="Phụ trách từ kỳ" value={hubToUi(r.effective_from)} />
             <PreviewCell label="Đến kỳ" value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
           </tr>;
         })}</tbody></table></div>

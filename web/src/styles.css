@@ -1511,7 +1511,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   overflow-wrap:anywhere;
 }
 .catalog-table-card[style*="--catalog-cell-lines: 0"] .catalog-table-products td.catalog-col-text > * {
-  display:block; -webkit-line-clamp:none; line-clamp:none; overflow:visible;
+  display:block; max-height:none; -webkit-line-clamp:none; line-clamp:none; overflow:visible;
 }
 .catalog-table-products th { white-space:normal; line-height:1.15; }
 .catalog-table-products thead th {

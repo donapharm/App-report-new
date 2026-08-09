@@ -36,7 +36,7 @@ test('mobile dùng data-label theo ngữ nghĩa, không suy nhãn hoặc độ r
 test('admin và employee giữ đúng nhãn khi có 0 hoặc nhiều cột % động', () => {
   const dynamicProductCell = '<CostRateCell key={c.key} label={`${c.key.toUpperCase()} (%)`}';
   assert.equal(page.split(dynamicProductCell).length - 1, 2, 'cả hai bảng sản phẩm gắn nhãn vào chính từng cột %');
-  for (const label of ['C10', 'Tên thuốc', 'Hoạt chất + Hàm lượng', 'Từ kỳ', 'Đến kỳ']) {
+  for (const label of ['C10', 'Tên thuốc', 'Hoạt chất + Hàm lượng', 'Phụ trách từ kỳ', 'Đến kỳ']) {
     assert.equal(page.split(`label="${label}"`).length - 1, 2, `${label} phải có nhãn riêng ở admin và employee`);
   }
   assert.match(page, /className="[^"]*catalog-mobile-wide[^"]*" value=\{r\.unit_code/);
@@ -73,8 +73,14 @@ test('bề rộng gắn theo LOẠI NỘI DUNG bằng class — mỗi loại m�
   assert.ok(css.indexOf(priceRule) > css.indexOf(moneyRule), 'đơn giá mang cả class money: luật 104px phải đứng sau để thắng cascade 96px');
 });
 
-test('"Tất cả" (0) bỏ cắt dòng — CEO chọn 1/2/3/Tất cả', () => {
-  assert.match(css, /--catalog-cell-lines: 0"\] \.catalog-table-products td\.catalog-col-text > \* \{\s*\n?\s*display:block; -webkit-line-clamp:none/);
+test('"Tất cả" (0) bỏ MỌI giới hạn dòng/kích thước — CEO chọn 1/2/3/Tất cả', () => {
+  const start = css.indexOf('.catalog-table-card[style*="--catalog-cell-lines: 0"]');
+  const rule = css.slice(start, css.indexOf('}', start) + 1);
+  assert.ok(start >= 0, 'phải có luật riêng cho Tất cả');
+  assert.match(rule, /display:block/);
+  assert.match(rule, /max-height:none/, 'phải thắng max-height:3.8em ở cuối stylesheet');
+  assert.match(rule, /-webkit-line-clamp:none/);
+  assert.match(rule, /overflow:visible/);
   assert.match(page, /<option value=\{0\}>Tất cả<\/option>/);
 });
 
@@ -96,7 +102,7 @@ test('CEO chọn được 1/2/3 dòng trong một ô, và app nhớ lựa chọn
   assert.equal((page.match(/<CellLinesPicker lines=\{cellLines\}/g) || []).length, 2);
 });
 
-test('nhãn "Từ kỳ" nói rõ là kỳ BẮT ĐẦU phụ trách — CEO tưởng là kỳ đang xem', () => {
+test('nhãn mobile nói rõ "Phụ trách từ kỳ" — không để hiểu là kỳ đang xem', () => {
   assert.match(page, /Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem/);
-  assert.match(page, /Phụ trách từ kỳ/);
+  assert.equal((page.match(/label="Phụ trách từ kỳ"/g) || []).length, 2, 'cả bảng CEO và NV phải có nhãn semantic đầy đủ');
 });

@@ -99,7 +99,8 @@ test('‼ CẤM bịa số trong chữ giao diện — mọi con số trên màn
   // liệu thật rồi hỏi vì sao lệch 19 dòng so với 27.719 thực tế. Trong app mà nguyên
   // tắc là "không dòng nào biến mất lặng lẽ", một con số bịa làm hỏng lòng tin vào
   // MỌI con số khác.
-  const literals = page.match(/>\s*[^<>{}]*\b2[0-9][.,][0-9]{3}\b[^<>{}]*</g) || [];
+  const renderedSource = page.replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+  const literals = renderedSource.match(/>\s*[^<>{}]*\b2[0-9][.,][0-9]{3}\b[^<>{}]*</g) || [];
   assert.deepEqual(literals, [], 'không được viết cứng số dòng/cặp vào chữ giao diện');
-  assert.doesNotMatch(page, /khoảng <b>[\d.,]+/);
+  assert.doesNotMatch(renderedSource, /khoảng <b>[\d.,]+/);
 });
