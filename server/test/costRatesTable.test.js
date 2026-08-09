@@ -78,8 +78,9 @@ test('hai NV trùng đơn vị × sản phẩm không ghi đè/lộ tỷ lệ ho
     }),
     store, now: () => '2026-08-08T16:00:00.000+07:00',
   });
-  grants.setGrant('DN001', { columns: { c41: ['HTNT'] } }, { actor: 'CEO', store });
-  grants.setGrant('DN002', { columns: { c41: ['HTNT'] } }, { actor: 'CEO', store });
+  // Nhóm quyền dùng tiền tố mã đơn vị; 120.HTNT thuộc nhóm 120.
+  grants.setGrant('DN001', { columns: { c41: ['120'] } }, { actor: 'CEO', store });
+  grants.setGrant('DN002', { columns: { c41: ['120'] } }, { actor: 'CEO', store });
 
   const dn001 = table.buildTable({ period: '2026-08', session: { emp_code: 'DN001', isCeo: false }, store });
   assert.equal(dn001.rows.length, 1);
