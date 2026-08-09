@@ -1,3 +1,36 @@
+### 2026-08-09 10:32 (giờ VN) — 🏷️ Huy hiệu Data Hub hiện SỐ HIỆU BẢN + ngày · thêm nút "Đồng bộ lại"
+
+CEO: *"đề nghị chỗ 'Data Hub đã kết nối' thêm vào đó bản Version bao nhiêu, kèm ngày tháng năm, ví dụ hiện tại đang bản V31.4 để nhìn vào biết ngay"* + *"có thêm nút nhấn đồng bộ lại từ app DataHub"*.
+
+**1) Số hiệu bản ra mặt huy hiệu.** Số hiệu bản (`meta.version`) và ngày vốn ĐÃ có trong dữ liệu backend trả về, nhưng chỉ nằm trong tooltip — phải rê chuột mới thấy, trên điện thoại thì chịu. Nay huy hiệu trả lời thẳng ba câu:
+
+| Hiện gì | Trả lời câu hỏi | Nguồn |
+|---|---|---|
+| `Data Hub` + nhãn `V31.4` | đang xem bản nào | `meta.version` do Data Hub gửi |
+| `Đã kết nối · bản ngày 09/08/26 …` | bản đóng ngày nào | `meta.updatedAt` |
+| `Kéo về máy: 09/08/26 …` | mình kéo về lúc nào | `meta.lastSyncAt` |
+
+Tách hai mốc thời gian là có chủ ý: **"bản cũ"** và **"chưa kéo về"** là hai chuyện khác nhau, gộp lại thì không truy được lỗi ở đâu.
+
+**‼ Fail-closed, cấm bịa số hiệu.** Data Hub không gửi version thì `remoteSnapshot` điền `'unknown'`; lúc đó huy hiệu ghi **"bản: chưa rõ"** (viền đứt, màu nhạt) chứ tuyệt đối không suy số từ ngày tháng hay đoán bản kế tiếp. Có test cấm viết cứng bất kỳ số hiệu bản nào vào code — **đúng bài học "27.700" sáng nay**.
+
+Nguồn đang là bản dự phòng thì huy hiệu ghi **"Bản tốt gần nhất"** thay vì "Đã kết nối" — không để chữ "đã kết nối" đứng cạnh số liệu cũ.
+
+**2) Nút "⟳ Đồng bộ lại".** Snapshot danh mục được nhớ tạm 2 phút cho nhẹ máy; Data Hub vừa ra bản mới thì bấm F5 vẫn thấy bản cũ, người dùng tưởng đồng bộ hỏng. Nút mới vứt bản nhớ tạm của **đúng kỳ đang xem** rồi hỏi lại nguồn ngay, xong tự tải lại bảng.
+
+- Backend: `POST /catalog-management/refresh`, chặn bằng **`requireAdmin`** — ẩn nút không phải lớp bảo vệ.
+- **Chỉ xoá bộ nhớ tạm trong tiến trình, KHÔNG đụng bản LKG trên đĩa.** Mất LKG là Data Hub chết kéo theo màn danh mục trắng — đúng thứ LKG sinh ra để chặn. Có test cấm route này gọi `unlink`/`rmSync`/`writeCacheAtomic`.
+- **Khoảng nghỉ 20 giây/kỳ** (`CATALOG_REFRESH_COOLDOWN_MS`): mỗi lần bấm là một lượt gọi thật sang Data Hub, không để một người bấm liên tục thành đòn nện. Từ chối thì nói rõ **còn phải chờ bao nhiêu giây**.
+- Data Hub chết thì route trả **nguyên** `meta` — huy hiệu chuyển vàng "Bản tốt gần nhất", không che.
+
+**3) Sửa kèm một lỗi GMT+7 thật.** `dateText` trong màn danh mục đang dùng `new Date(iso).toLocaleString('vi-VN')` = lấy **múi giờ máy người dùng**; máy để lệch hoặc mở app từ nước khác là ngày đồng bộ hiện sai. Đã chuyển sang `formatDateTime` (đã ghim `Asia/Bangkok`), có test cấm quay lại cách cũ.
+
+Trên điện thoại: luật CSS cũ ẩn nguyên dòng `<b>` để tiết kiệm chỗ — làm mất luôn số hiệu bản vừa thêm. Nay chỉ giấu dòng "Kéo về máy".
+
+Server 1051/1058 (7 fail cố hữu: 6 PDF thiếu `pdfinfo` trong container + VP018 denylist đỏ sẵn trên nền PROD sạch) · web **308/308** (+13 test mới) · build sạch.
+
+---
+
 ### 2026-08-09 10:01 (giờ VN) — ‼ BỎ SỐ BỊA TRONG CHỮ GIAO DIỆN ("khoảng 27.700 cặp")
 
 CEO hỏi: *"danh mục bản V31.4 hiện có 27.719 dòng, sao ở bản đồng bộ T08 kéo qua chỉ có 27.700 dòng?"*

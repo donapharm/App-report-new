@@ -28,7 +28,29 @@ const hubToUi = (period) => { const m = String(period || '').match(/^(\d{4})-(\d
 // máy để lệch múi giờ (hoặc mở app từ nước khác) sẽ ra sai tháng, nhất là ngày đầu/cuối tháng.
 const currentKy = () => { const [y, m] = bangkokToday().split('-'); return `${m}.${y}`; };
 const sourceLabel = (source) => ({ 'data-hub': 'Data Hub', 'data-hub-lkg': 'Data Hub · bản tốt gần nhất' }[source] || source || '—');
-const dateText = (iso) => iso ? new Date(iso).toLocaleString('vi-VN') : 'Chưa đồng bộ';
+// ‼ GMT+7. Bản cũ dùng `new Date(iso).toLocaleString('vi-VN')` = múi giờ MÁY người
+// dùng; máy để lệch (hoặc mở từ nước khác) là ngày đồng bộ hiện sai. `formatDateTime`
+// đã ghim 'Asia/Bangkok'.
+const dateText = (iso) => formatDateTime(iso, 'Chưa đồng bộ');
+
+/**
+ * Số hiệu bản danh mục để CEO nhìn phát biết ngay đang xem bản nào (yêu cầu 09/08/2026).
+ * Số này do Data Hub gửi sang (`meta.version`), App Report chỉ chép lại.
+ *
+ * ‼ KHÔNG BAO GIỜ BỊA. Data Hub không gửi version thì `remoteSnapshot` điền 'unknown';
+ * lúc đó phải nói "chưa rõ", tuyệt đối không suy ra số từ ngày tháng hay đoán bản kế
+ * tiếp. Bài học 09/08: một con số viết cứng cho "đẹp màn hình" bị đọc thành số liệu
+ * thật rồi thành nghi ngờ mất dữ liệu.
+ */
+const CATALOG_VERSION_UNKNOWN = new Set(['', 'unknown', 'null', 'undefined', 'n/a', '—', '-']);
+function catalogVersionLabel(raw) {
+  const value = String(raw ?? '').trim();
+  if (CATALOG_VERSION_UNKNOWN.has(value.toLowerCase())) return '';
+  // '31.4' → 'V31.4'; 'V31.4' giữ nguyên; dạng lạ (checksum…) hiện y như nguồn gửi.
+  if (/^\d+(\.\d+)*$/.test(value)) return `V${value}`;
+  if (/^v\d/i.test(value)) return `V${value.slice(1)}`;
+  return value;
+}
 const moneyText = (value) => {
   if (value == null || value === '') return '—';
   const amount = Number(String(value).replace(/[,\s]/g, ''));
@@ -132,10 +154,48 @@ function DrugName({ row, counts }) {
   return <b className={`catalog-two-lines${needsAttention ? ' catalog-drug-multi-qlnb' : ''}`} title={title}>{name}</b>;
 }
 
-function SourceStatus({ meta }) {
+/**
+ * Huy hiệu nguồn danh mục + nút đồng bộ lại (CEO yêu cầu 09/08/2026).
+ *
+ * CEO: "chỗ 'Data Hub đã kết nối' thêm vào đó bản Version bao nhiêu, kèm ngày tháng
+ * năm… để nhìn vào biết ngay" — trước đây version chỉ nằm trong tooltip, phải rê chuột
+ * mới thấy, mà trên điện thoại thì không rê được.
+ *
+ * Ba mẩu tin, mỗi mẩu trả lời đúng một câu hỏi:
+ *   • bản nào  → V31.4 (Data Hub gửi; không có thì "bản: chưa rõ", KHÔNG đoán)
+ *   • bản ngày nào → ngày Data Hub đóng bản (`updatedAt`)
+ *   • mình kéo về lúc nào → `lastSyncAt`, để phân biệt "bản cũ" với "chưa kéo về"
+ */
+function SourceStatus({ meta, canRefresh = false, onRefresh }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   if (!meta) return null;
-  return <div className={`catalog-source-inline ${meta.stale ? 'is-stale' : 'is-fresh'}`} title={`Đồng bộ ${dateText(meta.lastSyncAt || meta.updatedAt)} · Version ${meta.version || '—'}`}>
-    <i aria-hidden="true" /><div><b>{sourceLabel(meta.source)}</b><small>{meta.readOnly ? 'Chỉ đọc' : 'Đã kết nối'}</small></div>
+  const version = catalogVersionLabel(meta.version);
+  const state = meta.stale ? 'Bản tốt gần nhất' : (meta.readOnly ? 'Chỉ đọc' : 'Đã kết nối');
+  const run = async () => {
+    setBusy(true); setError('');
+    try { await onRefresh?.(); }
+    catch (e) { setError(e.message || 'Đồng bộ lại không thành công'); }
+    finally { setBusy(false); }
+  };
+  return <div className={`catalog-source-inline ${meta.stale ? 'is-stale' : 'is-fresh'}`}
+    title={`${sourceLabel(meta.source)} · bản ${version || 'chưa rõ'} · đóng bản ${dateText(meta.updatedAt)} · kéo về ${dateText(meta.lastSyncAt)}${meta.message ? ` · ${meta.message}` : ''}`}>
+    <i aria-hidden="true" />
+    <div className="catalog-source-text">
+      <b>
+        {sourceLabel(meta.source)}
+        {version
+          ? <span className="catalog-source-version">{version}</span>
+          : <span className="catalog-source-version is-unknown" title="Data Hub chưa gửi số hiệu bản cho kỳ này">bản: chưa rõ</span>}
+      </b>
+      <small>{state} · bản ngày {dateText(meta.updatedAt)}</small>
+      <small className="catalog-source-sync">Kéo về máy: {dateText(meta.lastSyncAt)}</small>
+    </div>
+    {canRefresh && <button type="button" className="btn secondary catalog-source-refresh" disabled={busy} onClick={run}
+      title="Bỏ bản đang nhớ tạm và hỏi lại Data Hub ngay">
+      {busy ? 'Đang hỏi lại…' : '⟳ Đồng bộ lại'}
+    </button>}
+    {error && <small className="catalog-source-error" role="alert">⚠ {error}</small>}
   </div>;
 }
 
@@ -969,7 +1029,8 @@ export default function CatalogManagement({ me }) {
   return <div className="catalog-management">
     <div className="card catalog-heading catalog-heading-compact">
       <div><div className="section-head">🗂️ {isAdmin ? 'Phân công danh mục bán hàng' : 'Danh mục bán hàng của tôi'}</div><div className="meta muted">{isAdmin ? 'Theo cặp đơn vị + mã QLNB và từng kỳ' : 'Chỉ hiển thị phạm vi Anh/Chị đang phụ trách'}</div></div>
-      <div className="catalog-heading-actions">{data?.meta && <SourceStatus meta={data.meta} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
+      <div className="catalog-heading-actions">{data?.meta && <SourceStatus meta={data.meta} canRefresh={isAdmin}
+        onRefresh={async () => { await api.catalogManagementRefresh(uiToHub(period)); await load(period); }} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}

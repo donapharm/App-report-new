@@ -1,0 +1,101 @@
+/**
+ * Huy hiệu nguồn danh mục: SỐ HIỆU BẢN + NGÀY hiện thẳng ra mặt, kèm nút đồng bộ lại.
+ * CEO 09/08/2026: "chỗ 'Data Hub đã kết nối' thêm vào đó bản Version bao nhiêu, kèm
+ * ngày tháng năm… để nhìn vào biết ngay" + "có thêm nút nhấn đồng bộ lại từ app datahub".
+ */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', import.meta.url), 'utf8');
+const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
+const routes = fs.readFileSync(new URL('../../server/src/routes.js', import.meta.url), 'utf8');
+const badge = page.slice(page.indexOf('function SourceStatus'), page.indexOf('function CatalogSearch'));
+// Vài luật dưới đây soi thứ CHẠY THẬT, nên phải bỏ chú thích trước khi soi — bản thân
+// chú thích có quyền nhắc "V31.4" hay tên cách viết cũ để giải thích vì sao cấm.
+const codeOnly = page
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .split('\n').map((line) => line.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
+
+/* ── Số hiệu bản ─────────────────────────────────────────────────────────────── */
+
+test('version hiện RA MẶT huy hiệu, không chỉ nằm trong tooltip', () => {
+  // Bản cũ chỉ có `title={... Version ...}`: phải rê chuột mới thấy, điện thoại chịu.
+  assert.match(badge, /const version = catalogVersionLabel\(meta\.version\)/);
+  assert.match(badge, /<span className="catalog-source-version">\{version\}<\/span>/);
+});
+
+test('Data Hub không gửi version thì NÓI "chưa rõ" — cấm bịa số hiệu bản', () => {
+  // remoteSnapshot điền 'unknown' khi payload thiếu version. Suy ra một số cho đẹp
+  // màn hình là dựng số liệu giả, đúng thứ đã gây nghi ngờ mất dữ liệu hôm 09/08.
+  assert.match(badge, /is-unknown[^>]*>bản: chưa rõ</);
+  assert.match(page, /CATALOG_VERSION_UNKNOWN = new Set\(\['', 'unknown', 'null', 'undefined', 'n\/a', '—', '-'\]\)/);
+  assert.doesNotMatch(codeOnly, /V3\d\.\d/, 'không được viết cứng số hiệu bản nào vào code');
+});
+
+test('chuẩn hoá số hiệu: "31.4" → V31.4, "v31.4" → V31.4, dạng lạ giữ nguyên', () => {
+  const at = page.indexOf('function catalogVersionLabel');
+  const fn = page.slice(at, page.indexOf('\n}', at));
+  assert.match(fn, /if \(\/\^\\d\+\(\\\.\\d\+\)\*\$\/\.test\(value\)\) return `V\$\{value\}`;/);
+  assert.match(fn, /if \(\/\^v\\d\/i\.test\(value\)\) return `V\$\{value\.slice\(1\)\}`;/);
+  assert.match(fn, /return value;/);
+});
+
+test('ngày tháng năm đi kèm — và phân biệt "bản ngày nào" với "kéo về lúc nào"', () => {
+  assert.match(badge, /bản ngày \{dateText\(meta\.updatedAt\)\}/);
+  assert.match(badge, /Kéo về máy: \{dateText\(meta\.lastSyncAt\)\}/);
+});
+
+test('‼ ngày giờ theo GMT+7, KHÔNG theo múi giờ máy người dùng', () => {
+  // Bản cũ: new Date(iso).toLocaleString('vi-VN') → lấy múi giờ MÁY.
+  assert.match(page, /const dateText = \(iso\) => formatDateTime\(iso, 'Chưa đồng bộ'\)/);
+  // Chỉ cấm với NGÀY GIỜ; số lượng/tiền dùng toLocaleString('vi-VN') là đúng.
+  assert.doesNotMatch(codeOnly, /new Date\([^)]*\)\.toLocaleString/);
+});
+
+test('nguồn đang là bản tốt gần nhất thì nói thẳng, không đề "Đã kết nối"', () => {
+  assert.match(badge, /meta\.stale \? 'Bản tốt gần nhất'/);
+});
+
+/* ── Nút đồng bộ lại ─────────────────────────────────────────────────────────── */
+
+test('nút "Đồng bộ lại" có trên huy hiệu, khoá lại khi đang chạy', () => {
+  assert.match(badge, /catalog-source-refresh/);
+  assert.match(badge, /disabled=\{busy\}/);
+  assert.match(badge, /busy \? 'Đang hỏi lại…' : '⟳ Đồng bộ lại'/);
+});
+
+test('bấm xong PHẢI tải lại danh mục, không chỉ đổi mỗi huy hiệu', () => {
+  assert.match(page, /await api\.catalogManagementRefresh\(uiToHub\(period\)\); await load\(period\);/);
+});
+
+test('đồng bộ lại hỏng thì báo tại chỗ, không nuốt lỗi', () => {
+  assert.match(badge, /catch \(e\) \{ setError\(e\.message \|\| 'Đồng bộ lại không thành công'\); \}/);
+  assert.match(badge, /catalog-source-error/);
+});
+
+test('nút chỉ hiện với admin/CEO — và backend chặn độc lập bằng requireAdmin', () => {
+  assert.match(page, /canRefresh=\{isAdmin\}/);
+  assert.match(badge, /\{canRefresh && <button/);
+  const at = routes.indexOf("router.post('/catalog-management/refresh'");
+  assert.ok(at > 0, 'phải có endpoint /catalog-management/refresh');
+  assert.match(routes.slice(at, routes.indexOf('\n', at)), /auth\.requireAuth, auth\.requireAdmin/);
+});
+
+test('client API trỏ đúng endpoint đồng bộ lại', () => {
+  assert.match(api, /catalogManagementRefresh: \(period\) => req\('POST', '\/catalog-management\/refresh'/);
+});
+
+/* ── Trình bày ───────────────────────────────────────────────────────────────── */
+
+test('trên điện thoại vẫn thấy số hiệu bản — chỉ giấu dòng "kéo về máy"', () => {
+  // Luật cũ ẩn nguyên dòng <b> trên mobile, làm mất luôn số hiệu bản mới thêm.
+  assert.doesNotMatch(css, /\.catalog-source-inline b \{ display:none; \}/);
+  assert.match(css, /\.catalog-source-inline \.catalog-source-sync \{ display:none; \}/);
+});
+
+test('nhãn version có màu riêng cho bản cũ, và kiểu nhạt cho "chưa rõ"', () => {
+  assert.match(css, /\.catalog-source-inline\.is-stale \.catalog-source-version/);
+  assert.match(css, /\.catalog-source-version\.is-unknown/);
+});

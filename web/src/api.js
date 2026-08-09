@@ -409,6 +409,8 @@ export const api = {
   salesCatalog: (params = {}) => req('GET', '/catalog/sales?' + new URLSearchParams(params).toString()),
   myAssignments: (params = {}) => req('GET', '/assignments/mine?' + new URLSearchParams(params).toString()),
   catalogManagement: (period) => req('GET', '/catalog-management?' + new URLSearchParams(period ? { period } : {}).toString()),
+  // Nút "Đồng bộ lại": vứt bản nhớ tạm 2 phút rồi hỏi lại Data Hub ngay (admin/CEO).
+  catalogManagementRefresh: (period) => req('POST', '/catalog-management/refresh', period ? { period } : {}),
   // Phân quyền cột % (SPEC_CATALOG_COST_COLUMNS.md) — backend chặn CHỈ CEO được ghi.
   catalogCostGrants: () => req('GET', '/catalog-management/cost-columns/grants'),
   catalogCostGrantSave: (empCode, payload) => req('PUT', `/catalog-management/cost-columns/grants/${encodeURIComponent(empCode)}`, payload),

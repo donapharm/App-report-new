@@ -2950,6 +2950,34 @@ router.get('/catalog-management', auth.requireAuth, async (req, res) => {
     return res.json(catalogManagement.employeeView(viewSnapshot, req.session.emp_code, period));
   } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
 });
+/* ---------- Nút "Đồng bộ lại" danh mục từ Data Hub (CEO yêu cầu 09/08/2026) ----------
+   Snapshot danh mục được nhớ tạm 2 phút cho nhẹ máy. Khi Data Hub vừa ra bản mới,
+   người dùng bấm F5 vẫn thấy bản cũ và tưởng đồng bộ hỏng. Nút này vứt bản nhớ tạm
+   của đúng kỳ đang xem rồi hỏi lại Data Hub ngay.
+
+   ‼ Chỉ ADMIN/CEO — mỗi lần bấm là một lượt gọi thật sang Data Hub. Có khoảng nghỉ
+   tối thiểu để một người bấm liên tục không thành đòn nện vào Data Hub.
+   ‼ Data Hub chết thì `getSnapshot` tự lùi về bản tốt gần nhất và trả `stale: true`;
+   route này KHÔNG được che chuyện đó — trả nguyên meta để màn hình nói thật. */
+const CATALOG_REFRESH_COOLDOWN_MS = Math.max(0, Number(process.env.CATALOG_REFRESH_COOLDOWN_MS ?? 20000) || 0);
+const catalogRefreshLastAt = new Map();
+router.post('/catalog-management/refresh', auth.requireAuth, auth.requireAdmin, async (req, res) => {
+  try {
+    const period = catalogManagement.toHubPeriod(req.body?.period || req.query.period || req.query.ky || store.latestKy());
+    const last = catalogRefreshLastAt.get(period) || 0;
+    const waited = Date.now() - last;
+    if (waited < CATALOG_REFRESH_COOLDOWN_MS) {
+      const seconds = Math.ceil((CATALOG_REFRESH_COOLDOWN_MS - waited) / 1000);
+      return res.status(429).json({ error: `Vừa đồng bộ xong — chờ thêm ${seconds} giây rồi bấm lại.`, retryAfterSeconds: seconds });
+    }
+    catalogRefreshLastAt.set(period, Date.now());
+    // Giữ đúng số kỳ đã bấm gần đây, không để map phình theo mọi kỳ người dùng gõ.
+    while (catalogRefreshLastAt.size > 12) catalogRefreshLastAt.delete(catalogRefreshLastAt.keys().next().value);
+    catalogManagement.invalidateSnapshot(period);
+    const snapshot = await catalogManagement.getSnapshot(period);
+    return res.json({ ok: true, period, period_ui: catalogManagement.toUiPeriod(period), meta: snapshot.meta });
+  } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
+});
 /* ---------- Phân quyền cột % chi phí trong Danh mục QL (SPEC_CATALOG_COST_COLUMNS.md) ----------
    ‼ CEO chốt 06/08/2026: "chỉ CEO mới quản lý ai được xem cột nào… không ai khác."
    Vì thế dùng `auth.requireCeo` (danh tính CEO) chứ KHÔNG phải `requireAdmin` —

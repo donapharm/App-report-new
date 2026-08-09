@@ -652,6 +652,21 @@ async function loadSnapshot(period) {
     throw Object.assign(new Error(`Data Hub tạm lỗi và chưa có bản đồng bộ tốt gần nhất: ${error.message}`), { status: 503 });
   }
 }
+/**
+ * Vứt bản nhớ tạm của MỘT kỳ để lượt đọc kế tiếp buộc phải hỏi lại Data Hub.
+ * Dùng cho nút "Đồng bộ lại" (CEO yêu cầu 09/08/2026): số ở Data Hub vừa đổi mà
+ * App Report còn giữ bản cũ tới 2 phút thì người dùng tưởng đồng bộ hỏng.
+ *
+ * ‼ CHỈ xoá bộ nhớ tạm trong tiến trình. KHÔNG đụng bản LKG trên đĩa — mất bản đó
+ * là Data Hub chết kéo theo màn danh mục trắng, đúng thứ LKG sinh ra để chặn.
+ * Lượt đang bay (in-flight) cứ để chạy nốt; nó ghi vào ô nhớ mới, không ghi đè
+ * lại ô vừa xoá vì `rememberSnapshot` luôn ghi bản mới nhất.
+ */
+function invalidateSnapshot(periodInput) {
+  const period = toHubPeriod(periodInput);
+  const had = snapshotCache.delete(period);
+  return { period, had };
+}
 async function getSnapshot(periodInput) {
   const period = toHubPeriod(periodInput);
   const hit = snapshotCache.get(period);
@@ -745,4 +760,4 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };
+module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };
