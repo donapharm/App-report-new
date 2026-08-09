@@ -145,7 +145,10 @@ async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '', sig
       setToken(null);
       throw requestError(data.error || 'Phiên đăng nhập hết hạn', res, data);
     }
-    if (!res.ok) throw requestError(data.error || 'Lỗi máy chủ', res, data);
+    // Kèm mã HTTP khi backend không gửi lời giải thích — "Lỗi máy chủ" trần khiến
+    // người ta không phân biệt nổi 404 (thiếu route/bản cũ) với 502/504 (nghẽn/proxy).
+    // Đúng vụ 09/08: bảng "đơn vị → nhóm" báo "Lỗi máy chủ" mà không ai biết lỗi gì.
+    if (!res.ok) throw requestError(data.error || `Lỗi máy chủ (HTTP ${res.status})`, res, data);
     // Any successful mutation may alter settings/permissions that are not part
     // of the file-backed data signature. Never reuse a pre-mutation response.
     if (method !== 'GET') requestCoordinator.invalidateCache();

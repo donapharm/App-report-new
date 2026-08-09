@@ -29,7 +29,10 @@ const hubToUi = (period) => { const m = String(period || '').match(/^(\d{4})-(\d
 // GIỜ VIỆT NAM (GMT+7). Trước đây lấy `new Date().getMonth()` = giờ MÁY NGƯỜI DÙNG:
 // máy để lệch múi giờ (hoặc mở app từ nước khác) sẽ ra sai tháng, nhất là ngày đầu/cuối tháng.
 const currentKy = () => { const [y, m] = bangkokToday().split('-'); return `${m}.${y}`; };
-const sourceLabel = (source) => ({ 'data-hub': 'Data Hub', 'data-hub-lkg': 'Data Hub · bản tốt gần nhất' }[source] || source || '—');
+// 'data-hub-local' = đường đọc THƯỜNG NGÀY: bản sao y đã kéo về máy, không phải
+// hàng dự phòng lúc hỏng ('data-hub-lkg'). CEO bắt lỗi 09/08: xem danh mục không
+// được đi gọi DataHub mỗi lần — muốn bản mới thì bấm "Đồng bộ lại".
+const sourceLabel = (source) => ({ 'data-hub': 'Data Hub', 'data-hub-local': 'Data Hub · bản trên máy', 'data-hub-lkg': 'Data Hub · bản tốt gần nhất' }[source] || source || '—');
 // ‼ GMT+7. Bản cũ dùng `new Date(iso).toLocaleString('vi-VN')` = múi giờ MÁY người
 // dùng; máy để lệch (hoặc mở từ nước khác) là ngày đồng bộ hiện sai. `formatDateTime`
 // đã ghim 'Asia/Bangkok'.
@@ -196,7 +199,7 @@ function SourceStatus({ meta, canRefresh = false, onRefresh }) {
           ? <span className="catalog-source-version">{version}</span>
           : <span className="catalog-source-version is-unknown" title="Data Hub chưa gửi số hiệu bản cho kỳ này">bản: chưa rõ</span>}
       </b>
-      <small>{state} · bản ngày {dateText(meta.updatedAt)}</small>
+      <small>{meta.servedFrom === 'local' ? 'Đọc từ máy — không gọi Data Hub' : state} · bản ngày {dateText(meta.updatedAt)}</small>
       <small className="catalog-source-sync">Kéo về máy: {dateText(meta.lastSyncAt)}</small>
     </div>
     {canRefresh && <button type="button" className="btn secondary catalog-source-refresh" disabled={busy} onClick={run}
@@ -775,7 +778,9 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
       // Bản cũ nuốt lỗi thành `{}` nên cả hai đều hiện "164 đơn vị chưa nhận diện
       // được nhóm" — đổ tội cho dữ liệu trong khi thật ra là chưa hỏi được ai.
       // Nói sai nguyên nhân còn tệ hơn không nói: CEO đi sửa nhầm chỗ.
-      setGroupsError(unitGroups.status === 'fulfilled' ? '' : (unitGroups.reason?.message || 'Không hỏi được bảng "mã đơn vị → nhóm"'));
+      setGroupsError(unitGroups.status === 'fulfilled'
+        ? (unitGroups.value.truncated ? `Danh mục có ${unitGroups.value.total} mã đơn vị, vượt trần ${unitGroups.value.resolved} — phần vượt đang hiện "0 nhóm" oan, báo Claude nâng trần` : '')
+        : (unitGroups.reason?.message || 'Không hỏi được bảng "mã đơn vị → nhóm"'));
       const groupsByUnit = unitGroups.status === 'fulfilled' ? (unitGroups.value.byUnit || {}) : {};
       setPanel(buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees, groupsByUnit }));
       setAudit(grants.value.audit || []);

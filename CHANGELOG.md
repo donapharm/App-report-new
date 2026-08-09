@@ -1,3 +1,23 @@
+### 2026-08-09 21:10 (giờ VN) — 🏗 SỬA LỖI THIẾT KẾ CEO BẮT: danh mục ĐỌC TỪ MÁY, không gọi DataHub mỗi lần mở màn
+
+CEO (kèm ảnh lỗi đỏ ở Phân quyền): *"danh mục và % chi phí đã kéo từ DataHub về hẳn bên App Report rồi, vậy tại sao mỗi lần tao refresh nó cứ báo đang đồng bộ và gọi từ DataHub? Tao nghĩ mày đang thiết kế sai."*
+
+**CEO đúng.** Thiết kế cũ: snapshot danh mục chỉ nhớ trong RAM **2 phút**; quá hạn/refresh/restart là **kéo lại nguyên bộ 27.719 dòng từ DataHub**, bản đã lưu trên đĩa (LKG) chỉ dùng khi DataHub chết hẳn. Hệ quả kép: (a) màn nào cũng ngồi chờ mạng dù dữ liệu y hệt đã nằm trên máy; (b) cú kéo nặng làm nghẽn máy chủ, các request nhỏ bên cạnh chết oan — đúng vụ bảng **"mã đơn vị → nhóm"** (vốn tính tại chỗ, không đụng DataHub) trả "Lỗi máy chủ" ⇒ mọi NV hiện **0 nhóm** trong màn Phân quyền.
+
+**Thiết kế mới (local-first):** RAM → **bản trên đĩa** → chỉ khi máy CHƯA có kỳ đó mới gọi DataHub. Muốn bản mới thì bấm **"Đồng bộ lại"** (`forceRemote: true` — chỗ DUY NHẤT được ép gọi nguồn, có test cấm chỗ khác lén ép). Kèm lượt làm tươi **ngầm có tiết chế** (mặc định 10 phút/kỳ, chạy nền, lỗi thì im — bản local vẫn phục vụ) để số tự mới dần mà không ai phải chờ. Huy hiệu nói thật: *"Data Hub · bản trên máy — Đọc từ máy, không gọi Data Hub"*, vẫn đủ 3 dòng bản nào/đóng bản ngày nào/kéo về lúc nào.
+
+Bản local KHÔNG dán nhãn stale/readOnly oan — nó là bản sao y của lần đồng bộ thành công gần nhất, khác hẳn trạng thái "bản tốt gần nhất lúc nguồn hỏng" (giữ nguyên nhánh đó cho lúc DataHub chết mà máy chưa có kỳ).
+
+Vá thêm quanh vụ "0 nhóm":
+- `api.js`: lỗi không kèm lời giải thích giờ hiện **"Lỗi máy chủ (HTTP xxx)"** — phân biệt được 404 (thiếu route/bản cũ) với 502/504 (nghẽn/proxy) ngay trên màn.
+- Route `unit-groups`: vượt trần 2000 mã thì **nói ra** (`truncated/total/resolved`) thay vì cắt lặng lẽ làm phần đuôi hiện "0 nhóm" oan; frontend hiện đúng câu đó.
+
+Mọi đường đọc snapshot (danh mục, DQ, cost-breakdown, employee view) tự hưởng local-first — không sửa từng chỗ.
+
+Test: server **1131** pass / 7 fail cố hữu · web **364/364** · build sạch. Test mới trong `catalogRefreshRoute.test.js` (4): local-first đứng trước remote, chỉ nút Đồng bộ lại được forceRemote, làm tươi nền có khoảng nghỉ ≥1 phút, unit-groups nói ra khi cắt trần.
+
+---
+
 ### 2026-08-09 20:20 (giờ VN) — 🔍 Truy gốc "KPI khi đủ khi thiếu" + bộ lọc nâng cao hai menu chi phí
 
 #### ‼ SỬA GỐC vụ CEO bực: chi phí "khi thì kết nối đủ, khi thì báo thiếu", bot nhắn NV "chưa đủ dữ liệu"

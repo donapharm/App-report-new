@@ -636,10 +636,45 @@ function rememberSnapshot(period, value) {
   while (snapshotCache.size > SNAPSHOT_CACHE_MAX) snapshotCache.delete(snapshotCache.keys().next().value);
   return value;
 }
-async function loadSnapshot(period) {
+/* ‼ ĐỌC BẢN ĐÃ KÉO VỀ MÁY TRƯỚC — KHÔNG gọi DataHub mỗi lần mở màn (CEO bắt lỗi
+ * thiết kế 09/08/2026: "danh mục đã kéo về hẳn bên App Report rồi, sao mỗi lần
+ * refresh nó cứ báo đang đồng bộ và gọi từ DataHub — tao nghĩ mày đang thiết kế sai").
+ *
+ * CEO ĐÚNG. Bản cũ chỉ nhớ snapshot trong RAM 2 phút; quá hạn hoặc restart là đi
+ * kéo lại NGUYÊN bộ danh mục (27.719 dòng) từ DataHub dù trên đĩa đã có bản y hệt.
+ * Hệ quả kép: màn nào cũng chờ mạng, và cú kéo nặng làm nghẽn luôn các request nhỏ
+ * bên cạnh (bảng "đơn vị → nhóm" chết oan thành "Lỗi máy chủ").
+ *
+ * Thứ tự mới: RAM → BẢN TRÊN ĐĨA (LKG) → chỉ khi đĩa không có kỳ đó mới gọi DataHub.
+ * Muốn số mới thì bấm "Đồng bộ lại" (forceRemote) — đúng nghĩa cái nút. Kèm một
+ * lượt làm tươi NGẦM có tiết chế (mặc định 10 phút/kỳ, chạy nền, lỗi thì thôi) để
+ * số vẫn tự mới dần mà không ai phải ngồi chờ mạng.
+ */
+const BACKGROUND_REFRESH_MS = Math.max(60 * 1000, Number(process.env.CATALOG_BACKGROUND_REFRESH_MS || 10 * 60 * 1000) || 10 * 60 * 1000);
+const backgroundRefreshLastAt = new Map();
+function scheduleBackgroundRefresh(period) {
+  if (!configured()) return;
+  const last = backgroundRefreshLastAt.get(period) || 0;
+  if (Date.now() - last < BACKGROUND_REFRESH_MS) return;
+  backgroundRefreshLastAt.set(period, Date.now());
+  while (backgroundRefreshLastAt.size > 12) backgroundRefreshLastAt.delete(backgroundRefreshLastAt.keys().next().value);
+  // Chạy nền: xong thì RAM + LKG tự có bản mới; lỗi thì im — bản local vẫn phục vụ.
+  remoteSnapshot(period).then((fresh) => rememberSnapshot(period, fresh)).catch(() => {});
+}
+async function loadSnapshot(period, { forceRemote = false } = {}) {
   // Data Hub is the only source of truth. Never present the legacy 1,808-row
-  // local seed as the managed sales catalog. If configuration is temporarily
-  // unavailable, only a previously validated Data Hub snapshot may be shown.
+  // local seed as the managed sales catalog — only a previously validated Data Hub
+  // snapshot (LKG) or a fresh pull may be shown.
+  if (!forceRemote) {
+    const cached = readCache(period);
+    if (cached) {
+      scheduleBackgroundRefresh(period);
+      // Bản local là BẢN SAO Y của lần đồng bộ thành công gần nhất — không phải
+      // "hàng dự phòng lúc hỏng", nên KHÔNG gắn stale/readOnly. Ghi rõ nguồn để
+      // huy hiệu nói thật "đang đọc từ máy, đồng bộ lúc nào".
+      return { ...cached, period, meta: { ...cached.meta, source: 'data-hub-local', servedFrom: 'local', message: 'Đọc từ bản đã kéo về máy. Bấm "Đồng bộ lại" khi cần bản mới nhất từ Data Hub.' } };
+    }
+  }
   if (!configured()) {
     const cached = readCache(period);
     if (cached) return { ...cached, period, readOnly: true, meta: { ...cached.meta, source: 'data-hub-lkg', stale: true, readOnly: true, message: 'Data Hub chưa được cấu hình; đang giữ bản đồng bộ tốt gần nhất ở chế độ chỉ đọc.' } };
@@ -667,16 +702,18 @@ function invalidateSnapshot(periodInput) {
   const had = snapshotCache.delete(period);
   return { period, had };
 }
-async function getSnapshot(periodInput) {
+async function getSnapshot(periodInput, { forceRemote = false } = {}) {
   const period = toHubPeriod(periodInput);
-  const hit = snapshotCache.get(period);
-  if (hit && Date.now() - hit.at < SNAPSHOT_CACHE_TTL_MS) {
-    // LRU touch without cloning the giant snapshot.
-    snapshotCache.delete(period);
-    snapshotCache.set(period, hit);
-    return hit.value;
+  if (!forceRemote) {
+    const hit = snapshotCache.get(period);
+    if (hit && Date.now() - hit.at < SNAPSHOT_CACHE_TTL_MS) {
+      // LRU touch without cloning the giant snapshot.
+      snapshotCache.delete(period);
+      snapshotCache.set(period, hit);
+      return hit.value;
+    }
+    if (snapshotInFlight.has(period)) return snapshotInFlight.get(period);
   }
-  if (snapshotInFlight.has(period)) return snapshotInFlight.get(period);
   // Same-period callers always share one promise. Fail closed rather than
   // launching untracked duplicate fetches if arbitrary periods fill the cap.
   if (snapshotInFlight.size >= SNAPSHOT_IN_FLIGHT_MAX) {
@@ -685,7 +722,7 @@ async function getSnapshot(periodInput) {
       code: 'CATALOG_SNAPSHOT_IN_FLIGHT_LIMIT',
     });
   }
-  const task = loadSnapshot(period)
+  const task = loadSnapshot(period, { forceRemote })
     .then((value) => rememberSnapshot(period, value))
     .finally(() => { if (snapshotInFlight.get(period) === task) snapshotInFlight.delete(period); });
   snapshotInFlight.set(period, task);

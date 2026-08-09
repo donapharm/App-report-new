@@ -60,6 +60,46 @@ test('trả nguyên meta — Data Hub chết thì màn hình PHẢI thấy stale
 
 test('xoá bộ nhớ tạm TRƯỚC khi đọc lại, nếu không thì bấm nút chỉ trả lại bản cũ', () => {
   const invalidateAt = block.indexOf('catalogManagement.invalidateSnapshot(period)');
-  const getAt = block.indexOf('catalogManagement.getSnapshot(period)');
+  const getAt = block.indexOf('catalogManagement.getSnapshot(period, { forceRemote: true })');
   assert.ok(invalidateAt > 0 && getAt > invalidateAt, 'invalidateSnapshot phải chạy trước getSnapshot');
+});
+
+/* ── ĐỌC BẢN TRÊN MÁY TRƯỚC — không gọi DataHub mỗi lần mở màn (CEO 09/08) ──────
+ * CEO: "danh mục đã kéo về hẳn bên App Report rồi, sao mỗi lần refresh nó cứ báo
+ * đang đồng bộ và gọi từ DataHub — tao nghĩ mày đang thiết kế sai." Đúng: bản cũ
+ * remote-first, LKG chỉ là dự phòng lúc hỏng. Nay local-first, remote chỉ khi
+ * forceRemote (nút Đồng bộ lại) hoặc máy chưa có kỳ đó.                        */
+
+const cmSource = fs.readFileSync(path.join(__dirname, '../src/catalogManagement.js'), 'utf8');
+
+test('‼ loadSnapshot đọc LKG TRƯỚC khi nghĩ đến DataHub (trừ khi forceRemote)', () => {
+  const fn = cmSource.slice(cmSource.indexOf('async function loadSnapshot'), cmSource.indexOf('function invalidateSnapshot'));
+  const localFirst = fn.indexOf('if (!forceRemote)');
+  const remoteCall = fn.indexOf('await remoteSnapshot(period)');
+  assert.ok(localFirst >= 0, 'phải có nhánh local-first');
+  assert.ok(remoteCall > localFirst, 'đọc local phải ĐỨNG TRƯỚC lệnh gọi DataHub');
+  // Bản local là bản sao y thường ngày — không được dán nhãn stale/readOnly oan.
+  assert.match(fn, /source: 'data-hub-local', servedFrom: 'local'/);
+});
+
+test('nút "Đồng bộ lại" là chỗ duy nhất forceRemote — đúng nghĩa cái nút', () => {
+  assert.match(block, /getSnapshot\(period, \{ forceRemote: true \}\)/);
+  // Các đường đọc khác không được lén forceRemote.
+  const others = routes.replace(block, '');
+  assert.equal(/forceRemote: true/.test(others), false, 'ngoài nút Đồng bộ lại không ai được ép gọi DataHub');
+});
+
+test('làm tươi ngầm có TIẾT CHẾ — không thành đòn nện DataHub kiểu mới', () => {
+  const fn = cmSource.slice(cmSource.indexOf('function scheduleBackgroundRefresh'), cmSource.indexOf('async function loadSnapshot'));
+  assert.match(fn, /BACKGROUND_REFRESH_MS/, 'phải có khoảng nghỉ giữa hai lượt nền');
+  assert.match(fn, /\.catch\(\(\) => \{\}\)/, 'lỗi nền phải im — bản local vẫn phục vụ');
+  // Tối thiểu 1 phút kể cả khi cấu hình ghi số nhỏ hơn.
+  assert.match(cmSource, /Math\.max\(60 \* 1000, Number\(process\.env\.CATALOG_BACKGROUND_REFRESH_MS/);
+});
+
+test('bảng "đơn vị → nhóm" nói ra khi bị cắt trần, không để phần đuôi "0 nhóm" oan', () => {
+  const at = routes.indexOf("router.post('/catalog-management/cost-columns/unit-groups'");
+  const body = routes.slice(at, at + 1600);
+  assert.match(body, /const truncated = distinct\.length > units\.length/);
+  assert.match(body, /truncated, total: distinct\.length, resolved: units\.length/);
 });

@@ -3197,7 +3197,9 @@ router.post('/catalog-management/refresh', auth.requireAuth, auth.requireAdmin, 
     // Giữ đúng số kỳ đã bấm gần đây, không để map phình theo mọi kỳ người dùng gõ.
     while (catalogRefreshLastAt.size > 12) catalogRefreshLastAt.delete(catalogRefreshLastAt.keys().next().value);
     catalogManagement.invalidateSnapshot(period);
-    const snapshot = await catalogManagement.getSnapshot(period);
+    // ‼ forceRemote: nút "Đồng bộ lại" là chỗ DUY NHẤT chủ động kéo DataHub —
+    // đường xem thường đọc bản đã kéo về máy (CEO bắt lỗi thiết kế 09/08).
+    const snapshot = await catalogManagement.getSnapshot(period, { forceRemote: true });
     return res.json({ ok: true, period, period_ui: catalogManagement.toUiPeriod(period), meta: snapshot.meta });
   } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
 });
@@ -3391,8 +3393,12 @@ router.get('/catalog-management/cost-columns/my-grant', auth.requireAuth, (req, 
    cột × nhóm). Phân giải Ở BACKEND bằng đúng bộ employeeCostUnitGroups đang dùng
    cho màn Chi phí — không chép luật tách nhóm sang frontend để khỏi lệch hai nơi. */
 router.post('/catalog-management/cost-columns/unit-groups', auth.requireAuth, auth.requireCeo, (req, res) => {
-  const units = [...new Set((Array.isArray(req.body?.units) ? req.body.units : [])
-    .map((item) => String(item ?? '').trim()).filter(Boolean))].slice(0, 2000);
+  const distinct = [...new Set((Array.isArray(req.body?.units) ? req.body.units : [])
+    .map((item) => String(item ?? '').trim()).filter(Boolean))];
+  const units = distinct.slice(0, 2000);
+  // Vượt trần thì NÓI RA — cắt lặng lẽ làm phần đuôi hiện "0 nhóm" mà không ai
+  // hiểu vì sao (luật chung: không dòng nào biến mất lặng lẽ).
+  const truncated = distinct.length > units.length;
   // Nhãn nhóm lấy tên đơn vị NGẮN NHẤT trong cụm — "001 · BVĐK Đồng Nai" dễ đọc hơn
   // mã trần "001", và đúng là cái tên CEO gọi cụm đó.
   const nameOf = new Map();
@@ -3409,7 +3415,7 @@ router.post('/catalog-management/cost-columns/unit-groups', auth.requireAuth, au
     // Không phân giải được nhóm ⇒ nói thẳng (null) — đơn vị này chỉ '*' mới phủ tới.
     byUnit[unit] = group ? { key: group, label: `${group} · ${nameOf.get(group) || group}` } : null;
   }
-  return res.json({ byUnit, allUnits: catalogCostColumnGrants.ALL_UNITS });
+  return res.json({ byUnit, allUnits: catalogCostColumnGrants.ALL_UNITS, truncated, total: distinct.length, resolved: units.length });
 });
 
 /**

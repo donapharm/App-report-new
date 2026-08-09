@@ -187,7 +187,11 @@ test('‼ "không hỏi được backend" KHÁC "đơn vị thiếu nhóm" — k
   // Bản cũ nuốt lỗi thành {} nên 403/timeout cũng hiện "164 đơn vị chưa nhận diện
   // được nhóm". CEO đọc xong đi tìm lỗi dữ liệu, trong khi thật ra chưa hỏi được ai.
   assert.match(page, /const \[groupsError, setGroupsError\] = useState\(''\)/);
-  assert.match(page, /setGroupsError\(unitGroups\.status === 'fulfilled' \? '' : \(unitGroups\.reason\?\.message/);
+  // Fulfilled nhưng bị cắt trần cũng phải nói (truncated) — còn lỗi hệ thống thì
+  // lấy đúng message của reason như cũ.
+  assert.match(page, /setGroupsError\(unitGroups\.status === 'fulfilled'/);
+  assert.match(page, /unitGroups\.value\.truncated/);
+  assert.match(page, /unitGroups\.reason\?\.message/);
   assert.match(page, /Không hỏi được bảng "mã đơn vị → nhóm"/);
   assert.match(page, /<b>KHÔNG<\/b> phải đơn vị thiếu nhóm, mà là chưa hỏi được máy chủ/);
   // Phải chỉ đúng endpoint để bot khỏi đi dò mò.
