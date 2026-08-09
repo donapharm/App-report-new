@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { normalizeContractorCode } = require('./appSaleReconShadowV3');
 
 const CONTRACT = 'app-sale-reconciliation-allocation-v4';
+const REQUIRED_CONFIRMER = 'VP018';
 const PATH_PREFIX = '/api/integrations/app-report/reconciliation-allocation/v4';
 const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MAX_PAGE_GROUPS = 250;
@@ -45,6 +46,12 @@ function exactObject(value, keys) {
   if (actual.length !== keys.length || !keys.every((key) => Object.hasOwn(value, key))) fail();
 }
 function required(value) { const out = clean(value); if (!out) fail(); return out; }
+function canonicalTimestamp(value) {
+  if (typeof value !== 'string') fail();
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime()) || date.toISOString() !== value) fail();
+  return value;
+}
 function canonicalDecimal(value, scale = 3) {
   const raw = clean(value);
   if (!/^-?\d+(?:\.\d+)?$/.test(raw)) fail();
@@ -144,6 +151,7 @@ function canonicalGroup(input, expected = {}) {
     || new Set(documentCodes).size !== documentCodes.length
     || new Set(orderItemIds).size !== orderItemIds.length
     || core.order_count !== new Set(childOrderIds).size
+    || childOrderIds.length !== new Set(childOrderIds).size
     || children.length !== orderItemIds.length
     || children.some((child, index) => child.order_item_id !== orderItemIds[index])
     || JSON.stringify(candidateDocuments) !== JSON.stringify(documentCodes)
@@ -172,13 +180,19 @@ function canonicalPage(input, expected = {}) {
     || typeof input.has_more !== 'boolean'
     || (input.next_offset !== null && (!Number.isSafeInteger(input.next_offset) || input.next_offset < 0))
     || !Array.isArray(input.groups) || input.groups.length > MAX_PAGE_GROUPS) fail();
-  const confirmedAt = new Date(input.confirmed_at);
-  if (!Number.isFinite(confirmedAt.getTime())) fail();
+  const confirmedAt = canonicalTimestamp(input.confirmed_at);
+  if (input.confirmed_by !== REQUIRED_CONFIRMER) fail();
   const contractorCode = required(input.contractor_code);
   const period = required(input.period);
-  const confirmedBy = required(input.confirmed_by);
   const groups = input.groups.map((group) => canonicalGroup(group, { period, contractorCode }));
-  const out = { ...input, period, contractor_code: contractorCode, confirmed_by: confirmedBy, groups };
+  const out = {
+    ...input,
+    period,
+    contractor_code: contractorCode,
+    confirmed_by: REQUIRED_CONFIRMER,
+    confirmed_at: confirmedAt,
+    groups,
+  };
   if (checksum(groups) !== out.page_checksum
     || (expected.period && period !== expected.period)
     || (expected.contractorCode && contractorCode !== expected.contractorCode)
@@ -196,8 +210,10 @@ function combinePages(pages, expected = {}) {
     first.confirmed_by, new Date(first.confirmed_at).toISOString(),
   ]);
   const groups = [];
-  const groupIds = new Set();
-  const childIds = new Set();
+  const confirmedLineIds = new Set();
+  const partnerLineIds = new Set();
+  const rowOrdinals = new Set();
+  const orderItemIds = new Set();
   let offset = 0;
   for (let index = 0; index < normalized.length; index += 1) {
     const page = normalized[index];
@@ -210,13 +226,15 @@ function combinePages(pages, expected = {}) {
       || (index < normalized.length - 1 && page.has_more !== true)
       || (page.has_more && page.groups.length !== MAX_PAGE_GROUPS)) fail();
     for (const group of page.groups) {
-      const groupId = `${group.confirmed_line_id}\x1f${group.partner_reconciliation_line_id}\x1f${group.row_ordinal}`;
-      if (groupIds.has(groupId)) fail();
-      groupIds.add(groupId);
+      if (confirmedLineIds.has(group.confirmed_line_id)
+        || partnerLineIds.has(group.partner_reconciliation_line_id)
+        || rowOrdinals.has(group.row_ordinal)) fail();
+      confirmedLineIds.add(group.confirmed_line_id);
+      partnerLineIds.add(group.partner_reconciliation_line_id);
+      rowOrdinals.add(group.row_ordinal);
       for (const child of group.children) {
-        const childId = `${child.order_id}\x1f${child.order_item_id}\x1f${child.employee_id}`;
-        if (childIds.has(childId)) fail();
-        childIds.add(childId);
+        if (orderItemIds.has(child.order_item_id)) fail();
+        orderItemIds.add(child.order_item_id);
       }
       groups.push(group);
     }
@@ -275,6 +293,6 @@ async function loadSnapshot({ period, contractorCode, reconciliationVersion, all
 }
 
 module.exports = {
-  CONTRACT, PATH_PREFIX, MAX_PAGE_GROUPS, PAGE_KEYS, GROUP_KEYS, CHILD_KEYS, VARIANCE_KEYS,
+  CONTRACT, REQUIRED_CONFIRMER, PATH_PREFIX, MAX_PAGE_GROUPS, PAGE_KEYS, GROUP_KEYS, CHILD_KEYS, VARIANCE_KEYS,
   checksum, canonicalChild, canonicalGroup, canonicalPage, combinePages, loadSnapshot,
 };

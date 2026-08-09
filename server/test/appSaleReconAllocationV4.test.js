@@ -26,6 +26,18 @@ function child(index, overrides = {}) {
     ...overrides,
   };
 }
+function rehashedChild(index, overrides = {}) {
+  const item = child(index, overrides);
+  const identity = {
+    order_id: item.order_id,
+    order_code: item.order_code,
+    order_item_id: item.order_item_id,
+    employee_id: item.employee_id,
+    employee_code: item.employee_code,
+    base_quantity: item.base_quantity,
+  };
+  return { ...item, immutable_identity_checksum: sha(identity) };
+}
 function group(index = 1, overrides = {}) {
   const children = overrides.children || [child(1), child(2)];
   const ordered = children.reduce((sum, item) => sum + Number(item.base_quantity), 0);
@@ -132,9 +144,31 @@ test('combinePages rejects contract drift, private fields, duplicate identities 
     { page_checksum: 'b'.repeat(64) },
     { groups: [{ ...group(), c32: 'private' }] },
     { shadow_only: false },
+    { confirmed_by: 'DN005' },
+    { confirmed_by: 'vp018' },
+    { confirmed_at: '2026-08-09T00:00:00Z' },
   ]) assert.throws(() => combinePages([{ ...base, ...drift }]));
   const duplicateChildren = [child(1), child(1)];
   assert.throws(() => combinePages([page([group(1, { children: duplicateChildren })])]));
+  const uniqueSecondChildren = [
+    rehashedChild(1, { order_id: 'order-3', order_code: 'DT-3-C', order_item_id: '3503' }),
+    rehashedChild(2, { order_id: 'order-4', order_code: 'DT-4-D', order_item_id: '3504' }),
+  ];
+  const second = group(2, { children: uniqueSecondChildren });
+  assert.throws(() => combinePages([page([group(), group(2, { children: uniqueSecondChildren, confirmed_line_id: '1' })])]));
+  assert.throws(() => combinePages([page([group(), group(2, { children: uniqueSecondChildren, partner_reconciliation_line_id: '256' })])]));
+  assert.throws(() => combinePages([page([group(), group(2, { children: uniqueSecondChildren, row_ordinal: 1 })])]));
+  const repeatedItemChildren = [
+    rehashedChild(1, { order_id: 'order-3', order_code: 'DT-3-C', order_item_id: '2501' }),
+    uniqueSecondChildren[1],
+  ];
+  assert.throws(() => combinePages([page([group(), group(2, { children: repeatedItemChildren })])]));
+  const repeatedOrderChildren = [
+    rehashedChild(1, { order_id: 'same-order', order_code: 'DT-SAME', order_item_id: '4501' }),
+    rehashedChild(2, { order_id: 'same-order', order_code: 'DT-SAME', order_item_id: '4502' }),
+  ];
+  assert.throws(() => combinePages([page([group(2, { children: repeatedOrderChildren })])]));
+  assert.equal(combinePages([page([group(), second])]).groups.length, 2);
   assert.throws(() => combinePages([{ ...base, has_more: true, next_offset: 1 }]));
   assert.throws(() => combinePages([{ ...base, offset: 1 }]));
 });
