@@ -87,6 +87,12 @@ const drugQlnbCounts = (rows) => {
 };
 const ROUTES = ['CL', 'NCL', 'NT'];
 const PAGE_SIZE = 50; // CEO chốt 08/08/2026: tối đa 50 dòng/trang cho đỡ dài
+// Tổng width phải khớp CHÍNH XÁC tổng các cột đang render. Nếu giữ min-width của
+// trường hợp đủ 7 cột %, table-layout:fixed sẽ kéo giãn mọi cột khi NV được cấp ít cột.
+const catalogTableWidth = (admin, costColumnCount) => {
+  const safeCount = Math.max(0, Math.min(7, Number(costColumnCount) || 0));
+  return `${(admin ? 1658 : 1546) + safeCount * 96}px`;
+};
 
 function CatalogTableCard({ id, tableId, children, cellLines = 3 }) {
   const { rootRef } = useDonaTableCellTools({
@@ -200,7 +206,7 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
     </div>
     <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog" cellLines={cellLines}>
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee" data-cost-column-count={costColumns.length} style={{ '--catalog-table-width': catalogTableWidth(false, costColumns.length) }}><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
         const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
         const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
         const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -889,13 +895,13 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
       </div>
       <CatalogTableCard id="catalog-table-top" tableId="admin-catalog" cellLines={cellLines}>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products" data-cost-column-count={costColumns.length} style={{ '--catalog-table-width': catalogTableWidth(true, costColumns.length) }}><thead><tr><th className="catalog-col-employee">Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
           const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
           const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
           const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
           const effectiveToText = r.effective_to ? hubToUi(r.effective_to) : 'Đang phụ trách';
           return <tr key={r.id}>
-            <td data-sensitive="" data-label="Nhân viên"><b>{r.emp_code}</b><small>{r.emp_name}</small></td>
+            <td className="catalog-col-employee" data-sensitive="" data-label="Nhân viên"><b>{r.emp_code}</b><small>{r.emp_name}</small></td>
             <PreviewCell label="Tuyến" value={routeOf(r) || '—'} />
             <PreviewCell label="Mã nhà thầu" value={r.contractor_code || '—'} />
             <PreviewCell label="Mã đơn vị" className="catalog-col-unit catalog-mobile-wide" value={r.unit_code || '—'} />

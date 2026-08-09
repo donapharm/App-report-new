@@ -13,14 +13,14 @@ test('KHÔNG khai bề rộng theo VỊ TRÍ cột cho bảng danh mục (số c
   assert.deepEqual(positional, [], 'không được khai width theo nth-child nữa');
   const employeePositional = css.match(/\.catalog-table-employee th:nth-child\(\d+\)[^{]*\{[^}]*(?<![-\w])width:/g) || [];
   assert.deepEqual(employeePositional, [], 'bảng NV cũng vậy — nó lệch một cột so với bảng CEO');
+  assert.doesNotMatch(css, /\.catalog-table-products th:first-child[^}]*width:/, 'cột Nhân viên phải dùng class semantic, không first-child');
 });
 
-test('bảng dùng table-layout:FIXED — auto + max-width không khoá được bề rộng', () => {
-  // CEO chụp màn lần 2 (09/08): để `auto`, `max-width` chỉ là gợi ý, trình duyệt vẫn
-  // dồn chỗ thừa cho cột chữ dài nhất nên ô "Hoạt chất" vẫn kéo gần hết màn.
-  assert.match(css, /\.catalog-table-products \{ min-width:2330px; table-layout:fixed; \}/);
-  // Ép width:100% + min-width:0 chính là thứ bóp dẹp cột cuối trên laptop.
-  assert.doesNotMatch(css, /\.catalog-table-products\s*\{[^}]*width\s*:\s*100%[^}]*min-width\s*:\s*0/);
+test('desktop dùng FIXED với tổng width đúng số cột động; mobile trả về card layout', () => {
+  assert.match(css, /\.catalog-table-products \{ width:var\(--catalog-table-width\); min-width:var\(--catalog-table-width\); table-layout:fixed; \}/);
+  assert.match(page, /\(admin \? 1658 : 1546\) \+ safeCount \* 96/);
+  assert.equal((page.match(/'--catalog-table-width': catalogTableWidth\(/g) || []).length, 2, 'cả admin và NV phải truyền tổng width thực tế');
+  assert.match(css, /@media \(max-width:899px\)[\s\S]*?\.catalog-table-products \{ width:100%; min-width:0; table-layout:auto; \}/);
 });
 
 test('mobile dùng data-label theo ngữ nghĩa, không suy nhãn hoặc độ rộng bằng vị trí cột', () => {
@@ -71,6 +71,8 @@ test('bề rộng gắn theo LOẠI NỘI DUNG bằng class — mỗi loại m�
   assert.ok(css.includes(moneyRule), 'số và % phải đúng 96px');
   assert.ok(css.includes(priceRule), 'đơn giá phải đúng 104px');
   assert.ok(css.indexOf(priceRule) > css.indexOf(moneyRule), 'đơn giá mang cả class money: luật 104px phải đứng sau để thắng cascade 96px');
+  assert.match(css, /th\.catalog-col-employee, \.catalog-table-products td\.catalog-col-employee \{ width:112px; \}/);
+  assert.match(page, /<th className="catalog-col-employee">Nhân viên<\/th>/);
 });
 
 test('"Tất cả" (0) bỏ MỌI giới hạn dòng/kích thước — CEO chọn 1/2/3/Tất cả', () => {
