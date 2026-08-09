@@ -851,8 +851,25 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
         }
         throw lastError;
       };
+      /* Chia nhỏ danh sách mã: một lượt gọi ôm cả nghìn mã mà trượt là mất TOÀN BỘ
+         bảng tra. Từng mẻ 400 mã, mẻ nào cũng có 3 lượt thử. Chỉ cần một mẻ hỏng hẳn
+         thì coi như hỏng cả (fail-closed) — ghép nửa bảng tra sẽ khiến phần thiếu bị
+         gán oan là "chưa có nhóm", đúng cái sai đang phải sửa. */
+      const fetchUnitGroups = async (units) => {
+        const CHUNK = 400;
+        const batches = [];
+        for (let at = 0; at < units.length; at += CHUNK) batches.push(units.slice(at, at + CHUNK));
+        if (!batches.length) return { byUnit: {} };
+        const parts = await Promise.all(batches.map((batch) => withRetry(() => api.catalogCostUnitGroups(batch))));
+        return {
+          byUnit: Object.assign({}, ...parts.map((part) => part.byUnit || {})),
+          truncated: parts.some((part) => part.truncated),
+          total: parts.reduce((sum, part) => sum + Number(part.total || 0), 0),
+          resolved: parts.reduce((sum, part) => sum + Number(part.resolved || 0), 0),
+        };
+      };
       const [grants, rates, unitGroups] = await Promise.allSettled([
-        api.catalogCostGrants(), api.catalogCostRates(), withRetry(() => api.catalogCostUnitGroups(distinctUnits)),
+        api.catalogCostGrants(), api.catalogCostRates(), fetchUnitGroups(distinctUnits),
       ]);
       if (grants.status !== 'fulfilled') throw new Error(grants.reason?.message || 'Không tải được phân quyền');
       const columns = rates.status === 'fulfilled' ? (rates.value.columns || []) : [];
@@ -954,8 +971,19 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
               vị, các cột để tích"*. Bảng ma trận 21 NV × 7 cột nhét vào ô nhỏ là không
               làm chi tiết được — nay tách hai bước: chọn người → mở lưới đầy đủ. */}
           {!selected ? <>
-            <GrantReviewBoard review={review} onOpen={setSelected}
-              onApply={(item, suggestion) => setPanel((cur) => applySuggestion(cur, item.empCode, item.groupKey, suggestion.columns))} />
+            {/* ‼ BẢNG "VIỆC CẦN RÀ" PHẢI TẮT KHI BẢNG TRA NHÓM HỎNG (CEO bắt 10/08 00:02).
+                Nó so quyền đã cấp với nhóm NV đang phụ trách. Bảng tra rỗng ⇒ mọi NV
+                "0 nhóm" ⇒ nó kết luận TOÀN BỘ quyền đang cấp là "quyền thừa" và mời
+                CEO đi dọn — dọn xong là mất sạch quyền ĐÚNG. Khuyên sai còn nguy hơn
+                không khuyên gì. */}
+            {groupsError
+              ? <div className="catalog-alert error" role="alert">
+                ⛔ <b>Tạm ẩn bảng "việc cần rà"</b> vì chưa hỏi được bảng "mã đơn vị → nhóm".
+                {' '}Không có bảng tra thì mọi NV hiện <b>0 nhóm</b>, và mục này sẽ kết luận <b>SAI</b> rằng
+                quyền đang cấp là "quyền thừa" — dọn theo là mất quyền đúng. Bấm <b>Thử lại</b> ở trên rồi xem lại.
+              </div>
+              : <GrantReviewBoard review={review} onOpen={setSelected}
+              onApply={(item, suggestion) => setPanel((cur) => applySuggestion(cur, item.empCode, item.groupKey, suggestion.columns))} />}
             <div className="catalog-grants-bulk">
               <span>Áp nhanh cho nhiều người:</span>
               {panel.columns.map((column) => <label key={column.key}>
@@ -983,7 +1011,12 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
                   </span>
                   <span className="catalog-grant-scope">
                     <i>{row.availableGroups.length} nhóm · {row.availableUnits.length} đơn vị</i>
-                    {!!row.ungroupedUnits.length && <em className="catalog-scope-warn" title={row.ungroupedUnits.join(', ')}>⚠ {row.ungroupedUnits.length} ĐV chưa có nhóm</em>}
+                    {/* Bảng tra hỏng ⇒ MỌI đơn vị đều "chưa có nhóm", kể cả 036.PKĐK
+                        SÀI GÒN TÂM TRÍ vốn thuộc nhóm 036 rõ ràng. Im lặng ở đây và
+                        nói MỘT LẦN ở cảnh báo đầu menu, thay vì lặp lại lời buộc tội
+                        sai trên từng dòng (CEO bắt 10/08 00:02). */}
+                    {!!row.ungroupedUnits.length && !groupsError && <em className="catalog-scope-warn" title={row.ungroupedUnits.join(', ')}>⚠ {row.ungroupedUnits.length} ĐV chưa có nhóm</em>}
+                    {!!groupsError && <em className="catalog-scope-warn">⚠ chưa tra được nhóm</em>}
                   </span>
                   <span className={`catalog-grant-state${counts.columnCount ? ' is-on' : ''}`}>
                     {counts.columnCount ? grantSummary(row) : 'Không thấy cột % nào'}

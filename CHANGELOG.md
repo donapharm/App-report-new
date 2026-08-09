@@ -1,3 +1,25 @@
+### 2026-08-10 00:20 (giờ VN) — ‼ Bảng tra nhóm hỏng làm CẢ MENU PHÂN QUYỀN mù — và nó đang khuyên xoá quyền ĐÚNG
+
+CEO: *"DN002 chỉ phụ trách 4 mã, trong đó có **036.PKĐK SÀI GÒN TÂM TRÍ / 036.NT-PKĐK SÀI GÒN TÂM TRÍ** — chả phải **036.** là một nhóm sao? Vậy tại sao vẫn liệt kê 5 đơn vị chưa phân nhóm?"*
+
+**CEO đúng, và ảnh còn cho thấy chuyện lớn hơn:** DN001 164 ĐV · DN002 5 ĐV · DN003 16 ĐV · DN004 3 ĐV — **TẤT CẢ đều "0 nhóm"**. Đó là **chữ ký của bảng tra rỗng**, không phải của dữ liệu hỏng. Bằng chứng nằm ngay trong nhật ký cùng màn: *"DN003: C43: **007, 008, 015, 017, 019, 021, 042**"* — nhóm đã từng tra ra bình thường lúc 23:51.
+
+#### Chỗ nguy nhất: mục "việc cần rà" đang mời CEO xoá quyền đúng
+
+Mục đó so quyền đã cấp với nhóm NV đang phụ trách. Bảng tra rỗng ⇒ mọi NV "0 nhóm" ⇒ nó kết luận **toàn bộ 11 quyền của DN003 là "quyền thừa"** và mời đi dọn. **Dọn theo là mất sạch quyền đúng.** Khuyên sai còn nguy hơn không khuyên gì.
+
+**Sửa:** bảng tra hỏng ⇒ **TẮT hẳn** mục "việc cần rà", thay bằng câu nói rõ vì sao và cảnh báo *"dọn theo là mất quyền đúng"*. Dòng *"N ĐV chưa có nhóm"* trên từng dòng NV cũng tắt — thay bằng câu trung tính *"⚠ chưa tra được nhóm"*, nói **một lần** ở cảnh báo đầu menu thay vì lặp lời buộc tội sai trên mọi dòng.
+
+#### Chặn gốc: chia mẻ + tự thử lại
+
+Bản cũ hỏi **một lượt cho toàn bộ mã đơn vị** — trượt một cái là mất **toàn bộ** bảng tra. Nay chia **mẻ 400 mã**, mỗi mẻ tự thử **3 lượt** (nghỉ 0,4s → 0,8s). Một mẻ hỏng hẳn thì coi như hỏng cả (**fail-closed**) — ghép nửa bảng tra sẽ gán oan "chưa có nhóm" cho phần thiếu, đúng cái sai đang phải sửa.
+
+**Trả lời thẳng câu CEO hỏi:** không, CEO **không phải** gõ "036." hay "033." cho từng mã. Việc tách nhóm là **tự động** theo tiền tố trước dấu chấm, máy làm hết. Ô gõ "033." là của **hai menu chi phí** (lọc nhanh), không liên quan menu phân quyền.
+
+Test: server 1169 / 7 fail cố hữu · web **413/413** · build sạch.
+
+---
+
 ### 2026-08-10 00:10 (giờ VN) — 🧩 Hai khung đỏ ở màn Phân quyền: CÙNG MỘT GỐC, và cái thứ hai đổ tội nhầm
 
 CEO: *"chỗ phân quyền này tôi chưa hiểu, nó báo lỗi nọ kia là sao."* Xem ảnh thì thấy **hai khung đỏ nói hai chuyện khác nhau về cùng một sự cố** — đọc xong không ai hiểu nổi:

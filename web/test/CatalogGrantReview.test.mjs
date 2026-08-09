@@ -251,9 +251,37 @@ test('màn chi tiết có nút Thử lại tại chỗ — không bắt quay ra 
 
 test('‼ hụt mạng nhất thời TỰ THỬ LẠI — không đẩy việc của máy sang cho người', () => {
   assert.match(page, /const withRetry = async \(call, tries = 3\)/);
-  assert.match(page, /withRetry\(\(\) => api\.catalogCostUnitGroups\(distinctUnits\)\)/);
+  assert.match(page, /withRetry\(\(\) => api\.catalogCostUnitGroups\(batch\)\)/);
   // Nghỉ tăng dần giữa các lượt, không nện liên tiếp.
   assert.match(page, /setTimeout\(done, 400 \* \(attempt \+ 1\)\)/);
   // Hai lời gọi kia KHÔNG bọc retry — chúng hỏng thì đã có đường báo lỗi riêng.
-  assert.match(page, /api\.catalogCostGrants\(\), api\.catalogCostRates\(\), withRetry/);
+  assert.match(page, /api\.catalogCostGrants\(\), api\.catalogCostRates\(\), fetchUnitGroups/);
+});
+
+/* ── BẢNG TRA NHÓM HỎNG ⇒ CẢ MENU MÙ, KHÔNG ĐƯỢC KẾT LUẬN GÌ (CEO 10/08 00:02) ──
+ * CEO: *"DN002 chỉ phụ trách 4 mã, trong đó có 036.PKĐK SÀI GÒN TÂM TRÍ / 036.NT-…
+ * — chả phải 036. là một nhóm sao, vậy tại sao vẫn liệt kê 5 đơn vị chưa phân nhóm?"*
+ * Đúng. Ảnh cho thấy DN001 164 ĐV, DN002 5 ĐV, DN003 16 ĐV, DN004 3 ĐV — TẤT CẢ đều
+ * "0 nhóm". Đó là chữ ký của BẢNG TRA RỖNG, không phải của dữ liệu hỏng.          */
+
+test('‼ bảng tra hỏng ⇒ TẮT bảng "việc cần rà" — nó đang khuyên xoá quyền ĐÚNG', () => {
+  // Nguy nhất trong cả sự cố: mục này so quyền đã cấp với nhóm đang phụ trách;
+  // bảng tra rỗng ⇒ kết luận TOÀN BỘ quyền là "quyền thừa" và mời CEO đi dọn.
+  assert.match(page, /Tạm ẩn bảng "việc cần rà"<\/b> vì chưa hỏi được bảng "mã đơn vị → nhóm"/);
+  assert.match(page, /sẽ kết luận <b>SAI<\/b> rằng/);
+  assert.match(page, /dọn theo là mất quyền đúng/);
+  assert.match(page, /groupsError\s*\n?\s*\?\s*<div className="catalog-alert error"/);
+});
+
+test('danh sách NV không lặp lại lời buộc tội sai trên từng dòng', () => {
+  assert.match(page, /\{!!row\.ungroupedUnits\.length && !groupsError && <em className="catalog-scope-warn"/);
+  // Thay bằng câu trung tính, nói đúng trạng thái.
+  assert.match(page, /\{!!groupsError && <em className="catalog-scope-warn">⚠ chưa tra được nhóm<\/em>\}/);
+});
+
+test('‼ chia mẻ 400 mã — một cú trượt không làm mất TOÀN BỘ bảng tra', () => {
+  assert.match(page, /const CHUNK = 400/);
+  assert.match(page, /batches\.map\(\(batch\) => withRetry\(\(\) => api\.catalogCostUnitGroups\(batch\)\)\)/);
+  // Ghép nửa bảng tra là gán oan "chưa có nhóm" cho phần thiếu ⇒ fail-closed.
+  assert.match(page, /fail-closed/);
 });
