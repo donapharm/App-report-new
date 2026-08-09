@@ -89,17 +89,24 @@ test('nút "Đồng bộ lại" là chỗ duy nhất forceRemote — đúng ngh�
   assert.equal(/forceRemote: true/.test(others), false, 'ngoài nút Đồng bộ lại không ai được ép gọi DataHub');
 });
 
-test('làm tươi ngầm có TIẾT CHẾ — không thành đòn nện DataHub kiểu mới', () => {
-  const fn = cmSource.slice(cmSource.indexOf('function scheduleBackgroundRefresh'), cmSource.indexOf('async function loadSnapshot'));
-  assert.match(fn, /BACKGROUND_REFRESH_MS/, 'phải có khoảng nghỉ giữa hai lượt nền');
-  assert.match(fn, /\.catch\(\(\) => \{\}\)/, 'lỗi nền phải im — bản local vẫn phục vụ');
-  // Tối thiểu 1 phút kể cả khi cấu hình ghi số nhỏ hơn.
-  assert.match(cmSource, /Math\.max\(60 \* 1000, Number\(process\.env\.CATALOG_BACKGROUND_REFRESH_MS/);
-});
+/* Test cũ ở đây đòi PHẢI CÓ lượt làm tươi ngầm (có tiết chế). Bot chặn Gate 1 đúng:
+   đường đọc không được có tác dụng phụ, dù có tiết chế đi nữa. Luật mới nằm ở test
+   "ĐƯỜNG ĐỌC KHÔNG CÓ TÁC DỤNG PHỤ" phía dưới — cấm hẳn, không còn tiết chế nữa. */
 
 test('bảng "đơn vị → nhóm" nói ra khi bị cắt trần, không để phần đuôi "0 nhóm" oan', () => {
   const at = routes.indexOf("router.post('/catalog-management/cost-columns/unit-groups'");
   const body = routes.slice(at, at + 1600);
   assert.match(body, /const truncated = distinct\.length > units\.length/);
   assert.match(body, /truncated, total: distinct\.length, resolved: units\.length/);
+});
+
+test('‼ ĐƯỜNG ĐỌC KHÔNG CÓ TÁC DỤNG PHỤ: GET không được lén gọi DataHub/ghi cache', () => {
+  // Bot chặn Gate 1 đúng (09/08): "GET thường đang âm thầm kéo DataHub và ghi cache
+  // nền". CEO bảo đừng gọi DataHub khi xem — gọi ngầm vẫn là gọi, chỉ khác là không
+  // ai thấy; mà DataHub từng tự restart vì bị đọc dồn.
+  assert.equal(cmSource.includes('scheduleBackgroundRefresh'), false, 'không được có lượt làm tươi ngầm');
+  assert.equal(cmSource.includes('CATALOG_BACKGROUND_REFRESH_MS'), false);
+  const fn = cmSource.slice(cmSource.indexOf('async function loadSnapshot'), cmSource.indexOf('function invalidateSnapshot'));
+  const localBranch = fn.slice(fn.indexOf('if (!forceRemote)'), fn.indexOf('if (!configured())'));
+  assert.equal(localBranch.includes('remoteSnapshot'), false, 'nhánh đọc bản local tuyệt đối không gọi nguồn');
 });

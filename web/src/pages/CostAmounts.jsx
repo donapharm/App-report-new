@@ -208,10 +208,12 @@ export default function CostAmounts({ me }) {
     <div className="card cost-amounts-controls">
       <label><span>Từ kỳ</span><select value={from} onChange={(e) => setFrom(e.target.value)}>{(periodList.length ? periodList : [from]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
       <label><span>Đến kỳ</span><select value={to} onChange={(e) => setTo(e.target.value)}>{(periodList.length ? periodList : [to]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
-      <label className="cost-breakdown-vat" title="Mở thêm bảng từng dòng đơn hàng với đủ cột như tab Chi phí của tôi">
+      {/* Chi tiết từng đơn CHỈ CEO — backend chốt độc lập trong `buildAmounts`,
+          ẩn công tắc ở đây chỉ để gọn mắt, không phải hàng rào quyền. */}
+      {isCeo && <label className="cost-breakdown-vat" title="Mở thêm bảng từng dòng đơn hàng với đủ cột như tab Chi phí của tôi">
         <input type="checkbox" checked={level === 'order'} onChange={(e) => setLevel(e.target.checked ? 'order' : 'pair')} />
         Xem chi tiết từng đơn hàng
-      </label>
+      </label>}
       {data?.available && <button className="btn" disabled={exporting} onClick={exportXlsx}>{exporting ? 'Đang xuất…' : '⬇ Xuất Excel (đúng bộ lọc đang chọn)'}</button>}
     </div>
 

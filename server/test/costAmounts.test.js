@@ -274,3 +274,25 @@ test('ngày không đáng tin ⇒ để trống, không bịa ngày giao dịch'
   });
   assert.equal(result.orderRows[0].date, '');
 });
+
+test('‼ chi tiết từng đơn CHỈ CEO — NV bật cờ level=order vẫn không được mở', async () => {
+  // Bot chặn Gate 1 (09/08): "level=order mở chi tiết đơn/giá/số lượng/doanh thu cho
+  // mọi NV có menu Thành tiền". CEO xin bảng chi tiết để TỰ làm báo cáo, không hề nói
+  // mở cho NV — mà menu này vốn sinh ra để giảm rủi ro lộ lọt.
+  const store = memStore();
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const asEmp = costAmounts.buildAmounts({
+    period: '2026-08', session: { emp_code: 'DN001', isCeo: false }, store, level: 'order',
+    revenueRowsOf: () => twoOrders(),
+  });
+  assert.equal(asEmp.level, 'pair', 'NV ép level=order vẫn phải rơi về mức cặp');
+  assert.deepEqual(asEmp.orderRows, []);
+  // NV vẫn xem được mức cặp của chính mình như cũ — không cắt mất thứ đang có.
+  assert.equal(asEmp.rows.length, 1);
+  // CEO thì mở được.
+  const asCeo = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, level: 'order', revenueRowsOf: () => twoOrders(),
+  });
+  assert.equal(asCeo.level, 'order');
+  assert.equal(asCeo.orderRows.length, 2);
+});

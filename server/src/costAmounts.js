@@ -228,7 +228,12 @@ function orderLineOf(line, meta, attr, rate) {
  * thu, vẫn không ra thì để RỖNG chứ không đoán.
  */
 function buildAmounts({ period, periods, session, store = persist, revenueRowsOf, catalogAttrsOf = () => new Map(), filters: rawFilters = {}, level = 'pair' } = {}) {
-  const wantOrders = String(level) === 'order';
+  // ‼ CHI TIẾT ĐƠN HÀNG CHỈ DÀNH CHO CEO (bot chặn Gate 1 đúng, 09/08/2026).
+  // CEO xin bảng chi tiết để TỰ làm báo cáo ("để tao biết"), không hề nói mở cho NV.
+  // Menu Thành tiền vốn sinh ra để "giảm rủi ro lộ lọt", nên mở thêm một mức chi tiết
+  // cho NV phải là quyết định RIÊNG của CEO, không phải hệ quả phụ của một tính năng.
+  // Chốt ngay tại đây — nơi duy nhất dựng bảng — để không route nào lách được.
+  const wantOrders = String(level) === 'order' && !!session?.isCeo;
   const filters = costFilters.normalizeFilters(rawFilters);
   const periodList = [...new Set((Array.isArray(periods) && periods.length ? periods : [period]).map(text).filter(Boolean))].sort();
   const warehouse = store.load(costRatesSync.FILE, {});

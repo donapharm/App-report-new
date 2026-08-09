@@ -646,21 +646,16 @@ function rememberSnapshot(period, value) {
  * bên cạnh (bảng "đơn vị → nhóm" chết oan thành "Lỗi máy chủ").
  *
  * Thứ tự mới: RAM → BẢN TRÊN ĐĨA (LKG) → chỉ khi đĩa không có kỳ đó mới gọi DataHub.
- * Muốn số mới thì bấm "Đồng bộ lại" (forceRemote) — đúng nghĩa cái nút. Kèm một
- * lượt làm tươi NGẦM có tiết chế (mặc định 10 phút/kỳ, chạy nền, lỗi thì thôi) để
- * số vẫn tự mới dần mà không ai phải ngồi chờ mạng.
+ * Muốn số mới thì bấm "Đồng bộ lại" (forceRemote) — đúng nghĩa cái nút.
+ *
+ * ‼ ĐƯỜNG ĐỌC KHÔNG ĐƯỢC CÓ TÁC DỤNG PHỤ (bot chặn Gate 1 đúng, 09/08/2026).
+ * Bản đầu có thêm một lượt "làm tươi ngầm" 10 phút/kỳ ngay trong `loadSnapshot`:
+ * một lượt GET bình thường lại lặng lẽ gọi DataHub và GHI ĐÈ cache trên đĩa. Sai hai
+ * nhẽ: (a) CEO bảo đừng gọi DataHub khi xem — gọi ngầm vẫn là gọi, chỉ khác là không
+ * ai thấy; (b) DataHub từng tự restart vì bị đọc dồn (951,8 MB RSS, 08/08), thêm một
+ * nguồn tải vô hình là thêm một thứ không ai truy được. Muốn bản mới thì có ĐÚNG MỘT
+ * đường: bấm "Đồng bộ lại". Bản trên máy cũ tới đâu thì huy hiệu ghi rõ tới đó.
  */
-const BACKGROUND_REFRESH_MS = Math.max(60 * 1000, Number(process.env.CATALOG_BACKGROUND_REFRESH_MS || 10 * 60 * 1000) || 10 * 60 * 1000);
-const backgroundRefreshLastAt = new Map();
-function scheduleBackgroundRefresh(period) {
-  if (!configured()) return;
-  const last = backgroundRefreshLastAt.get(period) || 0;
-  if (Date.now() - last < BACKGROUND_REFRESH_MS) return;
-  backgroundRefreshLastAt.set(period, Date.now());
-  while (backgroundRefreshLastAt.size > 12) backgroundRefreshLastAt.delete(backgroundRefreshLastAt.keys().next().value);
-  // Chạy nền: xong thì RAM + LKG tự có bản mới; lỗi thì im — bản local vẫn phục vụ.
-  remoteSnapshot(period).then((fresh) => rememberSnapshot(period, fresh)).catch(() => {});
-}
 async function loadSnapshot(period, { forceRemote = false } = {}) {
   // Data Hub is the only source of truth. Never present the legacy 1,808-row
   // local seed as the managed sales catalog — only a previously validated Data Hub
@@ -668,7 +663,6 @@ async function loadSnapshot(period, { forceRemote = false } = {}) {
   if (!forceRemote) {
     const cached = readCache(period);
     if (cached) {
-      scheduleBackgroundRefresh(period);
       // Bản local là BẢN SAO Y của lần đồng bộ thành công gần nhất — không phải
       // "hàng dự phòng lúc hỏng", nên KHÔNG gắn stale/readOnly. Ghi rõ nguồn để
       // huy hiệu nói thật "đang đọc từ máy, đồng bộ lúc nào".

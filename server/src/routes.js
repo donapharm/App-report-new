@@ -3259,14 +3259,24 @@ function localTeamRatePairs(month, columnKeys) {
   const merged = new Map();
   for (const empCode of Object.keys(entry.employees || {})) {
     for (const [key, rate] of costAmounts.pairRates(entry.employees[empCode], columnKeys)) {
-      const current = merged.get(key);
-      if (!current) { merged.set(key, { percents: { ...rate.percents }, conflict: rate.conflict }); continue; }
+      let current = merged.get(key);
+      if (!current) { current = { percents: {}, conflicted: new Set(), conflict: false }; merged.set(key, current); }
       if (rate.conflict) current.conflict = true;
       for (const columnKey of columnKeys) {
+        // ‼ XUNG ĐỘT LÀ VĨNH VIỄN, KHÔNG ĐƯỢC HỒI SINH (bot chặn Gate 1 đúng, 09/08).
+        // Bản đầu đánh dấu xung đột bằng cách gán null, rồi lại coi null là "chưa
+        // thấy" ⇒ NV thứ ba ghi đè số của mình lên chỗ đã xung đột, và kết quả phụ
+        // thuộc THỨ TỰ duyệt nhân viên. Nhớ riêng danh sách cột đã xung đột thì
+        // "null vì chưa thấy" và "null vì cãi nhau" không bao giờ lẫn nữa.
+        if (current.conflicted.has(columnKey)) continue;
         const incoming = rate.percents[columnKey];
         if (incoming == null) continue;
-        if (current.percents[columnKey] == null) { current.percents[columnKey] = incoming; continue; }
-        if (current.percents[columnKey] !== incoming) current.percents[columnKey] = null;
+        // Dùng `in` chứ không so null: một giá trị null đã ghi vẫn là ĐÃ THẤY.
+        if (!(columnKey in current.percents)) { current.percents[columnKey] = incoming; continue; }
+        if (current.percents[columnKey] !== incoming) {
+          current.conflicted.add(columnKey);
+          current.percents[columnKey] = null;
+        }
       }
     }
   }

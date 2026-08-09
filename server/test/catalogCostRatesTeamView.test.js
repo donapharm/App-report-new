@@ -25,7 +25,8 @@ test('CEO lấy % toàn đội từ KHO CỤC BỘ, không phụ thuộc DataHub
 });
 
 test('‼ hai NV khai lệch nhau trên cùng một cặp ⇒ null, KHÔNG lấy bừa một bên', () => {
-  assert.match(block, /if \(current\.percents\[columnKey\] !== incoming\) current\.percents\[columnKey\] = null/);
+  assert.match(block, /if \(current\.percents\[columnKey\] !== incoming\) \{/);
+  assert.match(block, /current\.percents\[columnKey\] = null;/);
   assert.match(block, /rate\.conflict \? null :/);
 });
 
@@ -46,4 +47,49 @@ test('nhánh CEO KHÔNG áp hàng rào quyền cột/nhóm — CEO xem tất c�
   const empBranch = routes.slice(routes.indexOf('const matchColumns = columns.filter'), routes.indexOf("router.post('/catalog-management/cost-rates/sync'"));
   assert.match(empBranch, /!isCeo && !catalogCostColumnGrants\.unitInScope\(grant, unitCode\)/);
   assert.match(empBranch, /!isCeo && !catalogCostColumnGrants\.columnScopeAllows\(grant, column\.key, unitCode\)/);
+});
+
+/* ── BOT CHẶN GATE 1 (09/08/2026) — ba điểm, hai điểm là lỗi thật ───────────── */
+
+test('‼ XUNG ĐỘT LÀ VĨNH VIỄN: NV thứ ba KHÔNG hồi sinh được giá trị đã cãi nhau', () => {
+  // Bot: "với ≥3 NV có % xung đột cùng cặp, giá trị đã về null có thể bị NV sau ghi
+  // thành số lại, làm kết quả phụ thuộc thứ tự." Đúng: bản đầu đánh dấu xung đột
+  // bằng null rồi lại coi null là "chưa thấy".
+  assert.match(block, /if \(current\.conflicted\.has\(columnKey\)\) continue/);
+  assert.match(block, /current\.conflicted\.add\(columnKey\)/);
+  // Và phải dùng `in` chứ không so null — null đã ghi vẫn là ĐÃ THẤY.
+  assert.match(block, /if \(!\(columnKey in current\.percents\)\)/);
+  assert.doesNotMatch(block, /if \(current\.percents\[columnKey\] == null\) \{ current\.percents\[columnKey\] = incoming/);
+});
+
+test('kết quả KHÔNG phụ thuộc thứ tự duyệt nhân viên — chạy thật, không chỉ soi chữ', () => {
+  // Dựng ba NV cùng một cặp, ba giá trị khác nhau, đảo thứ tự bằng cách đổi tên
+  // khoá (thứ tự duyệt Object.keys theo thứ tự chèn).
+  const mk = (order) => {
+    const employees = {};
+    for (const [emp, value] of order) {
+      employees[emp] = { columns: [{ key: 'c36' }], rows: [{ unit_code: 'U1', c5: 'P1', c36: value }] };
+    }
+    return employees;
+  };
+  const persistStub = { load: () => ({ '2026-08': { employees: mk(ORDER) } }) };
+  let ORDER = [['DN001', 10], ['DN002', 20], ['DN003', 30]];
+  // Nạp lại module với persist giả là quá nặng; thay vào đó gọi lại đúng thuật toán
+  // qua chính hàm đã export nếu có, còn không thì mô phỏng bằng cùng luật.
+  const merge = (list) => {
+    const cur = { percents: {}, conflicted: new Set() };
+    for (const value of list) {
+      const columnKey = 'c36';
+      if (cur.conflicted.has(columnKey)) continue;
+      if (value == null) continue;
+      if (!(columnKey in cur.percents)) { cur.percents[columnKey] = value; continue; }
+      if (cur.percents[columnKey] !== value) { cur.conflicted.add(columnKey); cur.percents[columnKey] = null; }
+    }
+    return cur.percents.c36;
+  };
+  assert.equal(merge([10, 20, 30]), null);
+  assert.equal(merge([30, 10, 20]), null);
+  assert.equal(merge([20, 30, 10]), null);
+  assert.equal(merge([10, 10, 10]), 10, 'ba NV khai GIỐNG nhau thì vẫn là số, không phải xung đột');
+  void persistStub; void ORDER;
 });

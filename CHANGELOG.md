@@ -1,3 +1,33 @@
+### 2026-08-09 21:30 (giờ VN) — 🛑 Bot chặn Gate 1: hai lỗi thật của Claude + một điểm phạm vi
+
+Bot HOLD `15e6590` trước Gate 1, nêu 3 điểm. **Soi lại: bot đúng ở cả ba, hai điểm là lỗi thật.**
+
+#### ① LỖI THẬT — xung đột % bị "hồi sinh", kết quả phụ thuộc THỨ TỰ
+
+Bot: *"với ≥3 NV có % xung đột cùng cặp, giá trị đã về `null` có thể bị NV sau ghi thành số lại."*
+
+Đúng. `localTeamRatePairs` đánh dấu xung đột bằng cách **gán `null`**, rồi vòng lặp sau lại coi `null` là **"chưa thấy"** ⇒ NV thứ ba ghi đè số của mình lên chỗ đã cãi nhau. Ba NV khai 10/20/30: duyệt `10→20→30` ra **30**, duyệt `30→10→20` ra **20** — cùng dữ liệu, hai kết quả. Đây là loại lỗi tệ nhất: **số vẫn hiện, vẫn hợp lý, chỉ là sai**.
+
+Sửa: nhớ RIÊNG danh sách cột đã xung đột (`conflicted`), xung đột là **vĩnh viễn**; và dùng `columnKey in percents` thay cho `== null` — một giá trị `null` đã ghi vẫn là **đã thấy**. Test chạy thật cả ba thứ tự + trường hợp ba NV khai giống nhau (vẫn ra số, không phải xung đột).
+
+#### ② LỖI THẬT — đường ĐỌC có tác dụng phụ
+
+Bot: *"GET thường đang âm thầm kéo DataHub và ghi cache nền."*
+
+Đúng. Bản local-first của Claude kèm một lượt "làm tươi ngầm" 10 phút/kỳ ngay trong `loadSnapshot`: một lượt GET bình thường lặng lẽ gọi DataHub và **ghi đè cache trên đĩa**. Sai hai nhẽ: CEO bảo đừng gọi DataHub khi xem — **gọi ngầm vẫn là gọi**, chỉ khác là không ai thấy; và DataHub từng tự restart vì bị đọc dồn (951,8 MB RSS, 08/08), thêm một nguồn tải vô hình là thêm một thứ không ai truy được.
+
+Sửa: **bỏ hẳn**. Muốn bản mới có ĐÚNG MỘT đường — bấm "Đồng bộ lại". Bản trên máy cũ tới đâu thì huy hiệu ghi rõ tới đó. Test cũ (đòi phải có làm tươi ngầm có tiết chế) bị thay bằng test **cấm hẳn**.
+
+#### ③ PHẠM VI — chi tiết từng đơn nay CHỈ CEO
+
+Bot: *"`level=order` mở chi tiết đơn/giá/số lượng/doanh thu cho mọi NV có menu Thành tiền."* Dữ liệu vẫn tự-phạm-vi (NV chỉ thấy dòng của chính mình) nên không phải rò rỉ, nhưng menu này vốn sinh ra để **"giảm rủi ro lộ lọt"**, và CEO xin bảng chi tiết để **tự làm báo cáo**, không hề nói mở cho NV. Mở thêm một mức chi tiết cho NV phải là quyết định RIÊNG của CEO, không phải hệ quả phụ của một tính năng.
+
+Sửa: chốt ngay trong `buildAmounts` (nơi duy nhất dựng bảng, không route nào lách được) — NV ép `level=order` vẫn rơi về mức cặp. Công tắc trên màn ẩn với NV, nhưng **hàng rào là ở backend**. NV vẫn giữ nguyên mức cặp đang có, không cắt mất thứ gì.
+
+Test: server **1154** pass / 7 fail cố hữu · web **373/373** · build sạch.
+
+---
+
 ### 2026-08-09 21:00 (giờ VN) — 🔎 Chẩn đoán CHỐT VỤ ÁN + script tự nói thật đang đọc ở đâu
 
 Bot chạy 3 lệnh chẩn đoán trên PROD `aa327e6`. **Kết quả chốt được nguyên nhân:**
