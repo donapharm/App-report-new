@@ -1198,9 +1198,67 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
 // 20/20) trong khi badge "thiếu %" chỉ đọc đúng T08 (báo thiếu 20/20). Hai màn ra
 // hai con số, UI phải fail-closed và CEO không xem được gì.
 // Từ nay MỌI nơi lấy chi phí đều qua hàm này; không ai còn đường vòng.
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ‼ KỲ ĐÃ CHỐT SỔ = ĐÓNG BĂNG — KHÔNG HỎI DATAHUB NỮA (CEO yêu cầu lần 2, 09/08/2026)
+
+   CEO: *"T07.2026 đã chốt sổ rồi mà số liệu nó vẫn chạy tùm lum… cứ chạy quanh với
+   đống dữ liệu nhảy lambada mệt lắm rồi."*
+
+   GỐC của "lambada": kỳ ĐÃ CHỐT nhưng mỗi lần mở màn App Report vẫn đi hỏi DataHub
+   TRỰC TIẾP. Nguồn chập chờn ⇒ lượt này 21/21 NV có số, lượt sau 3/21 ⇒ danh sách
+   "chưa lấy được" đổi liên tục, target/tổng co giãn theo. Lưới stale chỉ đỡ được khi
+   có bản lưu; nó vẫn là "đỡ đòn", không phải "hết đòn".
+
+   LUẬT MỚI: kỳ nằm TRỌN sau ngày khoá sổ (hết ngày 5 tháng sau — SPEC_REVENUE_
+   DELIVERY_PERIOD) VÀ kho cục bộ (CEO bấm "Đồng bộ % chi phí", all-or-nothing) có
+   bản kỳ đó cho NV này ⇒ phục vụ THẲNG từ kho, KHÔNG gọi mạng. Số kỳ chốt vì thế
+   BẤT BIẾN: hôm nay, mai, tháng sau mở ra đều y hệt — DataHub sống hay chết kệ nó.
+
+   Ba chốt để không thành con dao khác:
+   · Kỳ ĐANG CHẠY không bao giờ bị ghim — vẫn hỏi nguồn tươi như cũ.
+   · Kho THIẾU kỳ/NV nào ⇒ rơi về đường cũ (hỏi nguồn + lưới stale), không chặn.
+   · Bản ghim mang nhãn `rateSource: 'local_pinned'` + mốc đồng bộ — nói rõ số từ
+     đâu ra, không giả làm số vừa kéo.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function pinnedClosedPayload(empCode, options = {}) {
+  let range;
+  try { range = parseMonthRange(options); } catch { return null; }
+  if (!range || !Array.isArray(range.months) || !range.months.length) return null;
+  const today = vnToday();
+  const snapshotOptions = options.rateSnapshotStore ? { store: options.rateSnapshotStore } : {};
+  const periods = [];
+  let fetchedAt = '';
+  for (const month of range.months) {
+    if (!isPeriodClosed(month, today)) return null;
+    const local = rateSnapshot.readLocalSync(empCode, month, snapshotOptions);
+    if (!local) return null;
+    periods.push({ ...emptyPayload(empCode, DEFAULT_NOTE), period: month, columns: local.payload.columns, rows: local.payload.rows });
+    if (!fetchedAt || String(local.fetchedAt) > fetchedAt) fetchedAt = String(local.fetchedAt || '');
+  }
+  return {
+    empCode: normEmp(empCode),
+    from: range.from,
+    to: range.to,
+    periods,
+    note: DEFAULT_NOTE,
+    rateSource: 'local_pinned',
+    ratePinnedAt: fetchedAt || null,
+  };
+}
+
 async function fetchEmployeeCost(empCode, options = {}) {
   const hasRange = options.from != null || options.to != null;
   const snapshotOptions = options.rateSnapshotStore ? { store: options.rateSnapshotStore } : {};
+
+  // Kỳ đã chốt + kho có bản ⇒ trả thẳng, khỏi ra mạng. Đặt TRƯỚC mọi đường khác.
+  if (hasRange) {
+    const pinned = pinnedClosedPayload(empCode, options);
+    if (pinned) {
+      const result = { payload: pinned, outcome: 'ok', attempts: 0, pinned: true };
+      result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchRawEmployeeCost);
+      return result;
+    }
+  }
 
   // Đã có bản lưu cho mọi kỳ đang hỏi ⇒ KHÔNG tiêu ngân sách chờ 25 giây nữa.
   let fastPath = false;
@@ -1358,6 +1416,7 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
 }
 
 module.exports = {
+  pinnedClosedPayload,
   USABLE_OUTCOMES,
   isUsableOutcome,
   CONTRACT_PATH,

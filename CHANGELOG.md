@@ -1,3 +1,26 @@
+### 2026-08-09 23:20 (giờ VN) — 🧊 FIX TRIỆT ĐỂ "lambada": KỲ ĐÃ CHỐT SỔ = ĐÓNG BĂNG, không hỏi DataHub nữa
+
+CEO (lần 2 trong 2 tiếng, kèm ảnh T07): *"T07.2026 đã chốt sổ rồi mà số liệu nó vẫn chạy tùm lum… vẫn báo dữ liệu chưa đồng nhất, target không đúng, tổng doanh thu thấp hơn rất nhiều. Yêu cầu giải thích và tìm giải pháp fix triệt để. Mệt lắm rồi."*
+
+**GIẢI THÍCH — vì sao kỳ ĐÃ CHỐT mà số vẫn nhảy:** kỳ chốt sổ nhưng App Report **vẫn hỏi DataHub trực tiếp mỗi lần mở màn** cho kỳ đó. Nguồn chập chờn ⇒ lượt này 21/21 NV có số, lượt sau 3/21 ⇒ danh sách "chưa lấy được" đổi liên tục, còn **target (3/3 NV = 110,5%) và tổng doanh thu co giãn theo số NV lấy được nguồn** — nhìn y như "dữ liệu nhảy lambada". Lưới stale (aa327e6) chỉ **đỡ đòn** khi có bản lưu; nó không **hết đòn**, vì bản chất vẫn là đi hỏi một nguồn chập chờn.
+
+**FIX TRIỆT ĐỂ:** kỳ nằm TRỌN sau ngày khoá sổ (hết ngày 5 tháng sau — SPEC_REVENUE_DELIVERY_PERIOD) **và** kho cục bộ (nút "Đồng bộ % chi phí", all-or-nothing 21/21) có bản kỳ đó ⇒ `fetchEmployeeCost` **trả thẳng từ kho, KHÔNG gọi mạng**. Số kỳ chốt vì thế **BẤT BIẾN**: mở hôm nay, mai, tháng sau đều y hệt — DataHub sống hay chết kệ nó. Đây đúng nghĩa "chốt sổ".
+
+Ba chốt để không thành con dao khác:
+1. **Kỳ ĐANG CHẠY không bao giờ bị ghim** — vẫn hỏi nguồn tươi (T08 đã có trong kho cũng KHÔNG ghim). Dải kỳ trộn (chốt + đang chạy) không ghim — không trộn hai chế độ trong một payload.
+2. **Kho thiếu kỳ/NV nào ⇒ rơi về đường cũ** (hỏi nguồn + lưới stale), không chặn ai.
+3. Bản ghim mang nhãn **`rateSource: 'local_pinned'` + mốc đồng bộ** — nói rõ số từ đâu, không giả làm số vừa kéo.
+
+Một test cũ ("kho chủ động là đường đọc thật, không hết hạn 45 ngày") được cập nhật vì chủ đích của nó nay thoả **mạnh hơn**: kỳ chốt trả `ok` thẳng từ kho với **0 lần gọi mạng**, khỏi cần rơi qua `ok_stale_rates`.
+
+**‼ ĐIỀU KIỆN VẬN HÀNH — T07 hết lambada NGAY khi CEO bấm MỘT nút:** kho cục bộ trên PROD hiện **chỉ có kỳ 08.2026**. Vào **Danh mục QL → Kỳ: 07.2026 → "Đồng bộ từ DataHub"** (nguồn đang sống — probe 21/21 ok). Xong lượt đó, T07 bị đóng băng vĩnh viễn.
+
+Test mới `employeeCostPinnedClosed.test.js` (6): ghim đúng kỳ chốt · bất biến qua hai lượt đọc · 0 lần gọi mạng kể cả nguồn chết · kỳ đang chạy không ghim · dải trộn không ghim · NV thiếu trong kho rơi về đường cũ.
+
+Test: server **1169** pass / 7 fail cố hữu · web **402/402** · build sạch.
+
+---
+
 ### 2026-08-09 23:05 (giờ VN) — 🎨 Bộ lọc "như dân nghiệp dư" · cột tổng bị hiểu nhầm là tiền C47
 
 CEO xem màn Tổng hợp và nêu ba việc. **Cả ba đều đúng.**

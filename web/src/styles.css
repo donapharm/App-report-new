@@ -2481,6 +2481,12 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .cost-amounts-pager { display:flex; align-items:center; justify-content:center; gap:12px; padding:8px; font-size:12px; }
 .cost-amounts-warn { color:#b4520f; }
 .cost-amounts-grand td { background:#f4f8fd; border-top:2px solid #b9c9da; }
+/* Hai khối tiêu đề C32 (đầu vào) / C47 (còn lại) — CEO chê bản cũ rải 6 cột ngang
+   hàng nhau, đọc xong không biết đâu là đầu vào đâu là phần còn lại. */
+.cost-amounts-group { text-align:center !important; font-size:11px; letter-spacing:.2px; border-bottom:2px solid rgba(255,255,255,.35); }
+.cost-amounts-group.is-in { background:#0b5ea8; }
+.cost-amounts-group.is-out { background:#0f7b53; }
+.cost-amounts-visibility { padding:12px 14px; }
 .cost-amounts-visibility-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
 .cost-amounts-visibility-body { margin-top:10px; display:grid; gap:10px; }
 .cost-amounts-switch-section h4 { margin:6px 0; font-size:13px; }

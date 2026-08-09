@@ -143,3 +143,32 @@ test('‼ nguồn chưa mở cột ⇒ gọi ĐÍCH DANH cột + chỉ đúng vi
   // Phải nói luôn menu nào KHÔNG bị ảnh hưởng, để CEO còn việc làm ngay.
   assert.match(page, /Menu <b>Tổng hợp C33–C46<\/b> KHÔNG cần cột này nên vẫn dùng được bình thường/);
 });
+
+/* ── CEO 09/08 22:5x: "cả bên tab Thành tiền CP cũng phải sửa lại" ───────────── */
+
+test('‼ MỌI lớp giao diện của trang PHẢI có CSS — cùng luật với màn Tổng hợp', () => {
+  // Bệnh đã mắc ở màn Tổng hợp: đẻ lớp mới mà quên viết CSS ⇒ trình duyệt xếp dọc,
+  // menu đè nhau, nhìn như hàng nghiệp dư. Quét cả trang này để không tái diễn.
+  const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  const names = [...new Set([...page.matchAll(/className="([^"{}]+)"/g)].flatMap((m) => m[1].split(/\s+/)))]
+    .filter((name) => name.startsWith('cost-amounts') || name.startsWith('cost-filter') || name.startsWith('cost-breakdown'));
+  assert.ok(names.length >= 5);
+  for (const name of names) {
+    assert.ok(new RegExp(`\\.${name}[\\s,{:.]`).test(css), `lớp .${name} chưa có CSS`);
+  }
+});
+
+test('cột gom thành HAI KHỐI C32 (đầu vào) / C47 (còn lại), mỗi khối % · chưa VAT · có VAT', () => {
+  assert.match(page, /colSpan=\{3\} className="catalog-money cost-amounts-group is-in">C32 · ĐẦU VÀO — được cấp/);
+  assert.match(page, /colSpan=\{3\} className="catalog-money cost-amounts-group is-out">C47 · ĐẦU RA — còn lại sau khi chi/);
+  // Bảng tổng theo NV gom y hệt để hai bảng đọc cùng một kiểu.
+  assert.match(page, /colSpan=\{2\} className="catalog-money cost-amounts-group is-in">C32 · ĐẦU VÀO/);
+  assert.match(page, /colSpan=\{2\} className="catalog-money cost-amounts-group is-out">C47 · CÒN LẠI/);
+  // Không được quay lại kiểu rải cột bằng slice.
+  assert.doesNotMatch(page, /\(data\.columns \|\| \[\]\)\.slice\(/);
+});
+
+test('cột nhận diện dùng rowSpan để không bị đẩy lệch khi có hàng tiêu đề thứ hai', () => {
+  assert.match(page, /<th rowSpan=\{2\}>Kỳ<\/th>/);
+  assert.match(page, /<th rowSpan=\{2\} className="catalog-money">Doanh thu<br \/>chưa VAT<\/th>/);
+});

@@ -198,12 +198,10 @@ export default function CostAmounts({ me }) {
   return <div className="cost-amounts-page">
     <div className="card catalog-help">
       <b>💼 Thành tiền C32 · C47 — chi ra bao nhiêu, còn lại bao nhiêu</b>
-      <p><b>C32 là ĐẦU VÀO</b> — tổng % chi phí được cấp cho cặp đơn vị × mã hàng đó.
-        <b>C47 là ĐẦU RA</b> — phần <b>CÒN LẠI</b> sau khi 13 cột chi phí (C33→C46, <b>trừ C44</b>) đã lấy đi.</p>
-      <p className="cost-amounts-example">Ví dụ: doanh thu <b>100 triệu</b> (chưa VAT), C32 <b>10%</b> = 10 triệu được cấp;
-        chi hết <b>8%</b> = 8 triệu ⇒ C47 còn <b>2%</b> = <b>2 triệu</b> thu về. Mỗi cột có bản chưa VAT và có VAT (÷1,05).</p>
-      <p className="muted">Tiền do App Report tự nhân % × doanh thu — không kéo tiền tổng từ DataHub.
-        Thiếu % của bất kỳ cột nào trong 14 cột ⇒ ô để <b>—</b> kèm tên cột thiếu, không suy 0 rồi trừ nửa vời.</p>
+      <p className="cost-amounts-example">Doanh thu <b>100 triệu</b> (chưa VAT) · <b>C32 = 10%</b> được cấp ⇒ 10 triệu ·
+        chi hết <b>8%</b> ⇒ <b>C47 còn 2%</b> = <b>2 triệu</b> thu về. C47 = C32 trừ 13 cột C33→C46 (<b>không trừ C44</b>).</p>
+      <p className="muted">Tiền do App Report tự nhân % × doanh thu, không kéo tiền tổng từ DataHub.
+        Thiếu % của bất kỳ cột nào trong 14 cột ⇒ ô để <b>—</b> kèm tên cột thiếu — không suy 0 rồi trừ nửa vời.</p>
     </div>
     <div className="card cost-amounts-controls">
       <label><span>Từ kỳ</span><select value={from} onChange={(e) => setFrom(e.target.value)}>{(periodList.length ? periodList : [from]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
@@ -285,15 +283,24 @@ export default function CostAmounts({ me }) {
           {countCostFilters(filters) ? <> · <b>đang lọc {countCostFilters(filters)} điều kiện</b></> : null}
           {rows.length > PAGE_SIZE && <> · Hiện trang {safePage}/{pageCount} ({PAGE_SIZE} dòng/trang)</>}
         </div>
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
-          <th>Kỳ</th><th>NV</th><th>Đơn vị</th><th>Mã hàng</th><th>Tên hàng</th>
-          <th>Nhà thầu</th><th>Tuyến · Ưu tiên</th>
-          <th className="catalog-money">Doanh thu chưa VAT</th>
-          <th className="catalog-money">C32 %</th>
-          {(data.columns || []).slice(0, 2).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
-          <th className="catalog-money">C47 %</th>
-          {(data.columns || []).slice(2).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
-        </tr></thead><tbody>
+        {/* ‼ GOM THÀNH HAI KHỐI (CEO chê "lùng nhùng" 09/08 22:52). Bản cũ rải 6 cột
+            tiền/% ngang hàng nhau, mỗi tiêu đề lặp lại chữ "Thành tiền C32/C47" —
+            đọc xong không biết đâu là đầu vào, đâu là phần còn lại. Nay hai khối
+            tách bạch, mỗi khối đúng ba ô: % · chưa VAT · có VAT. */}
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead>
+          <tr>
+            <th rowSpan={2}>Kỳ</th><th rowSpan={2}>NV</th><th rowSpan={2}>Đơn vị</th>
+            <th rowSpan={2}>Mã hàng</th><th rowSpan={2}>Tên hàng</th>
+            <th rowSpan={2}>Nhà thầu</th><th rowSpan={2}>Tuyến · Ưu tiên</th>
+            <th rowSpan={2} className="catalog-money">Doanh thu<br />chưa VAT</th>
+            <th colSpan={3} className="catalog-money cost-amounts-group is-in">C32 · ĐẦU VÀO — được cấp</th>
+            <th colSpan={3} className="catalog-money cost-amounts-group is-out">C47 · ĐẦU RA — còn lại sau khi chi</th>
+          </tr>
+          <tr>
+            <th className="catalog-money">%</th><th className="catalog-money">Chưa VAT</th><th className="catalog-money">Có VAT</th>
+            <th className="catalog-money">%</th><th className="catalog-money">Chưa VAT</th><th className="catalog-money">Có VAT</th>
+          </tr>
+        </thead><tbody>
           {visibleRows.map((r) => <tr key={`${r.period}-${r.empCode}-${r.unitCode}-${r.productCode}`}>
             <td>{hubToUi(r.period)}</td>
             <td><b>{r.empCode}</b></td>
@@ -366,11 +373,19 @@ export default function CostAmounts({ me }) {
 
       <div className="card table-card">
         <div className="cost-amounts-identity"><b>Tổng theo NV</b> — tổng C47 chỉ chốt khi đủ % mọi cặp; hụt cặp nào thì ghi rõ, không đưa "tổng thiếu" ra như tổng thật.</div>
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
-          <th>NV</th><th>Số kỳ</th><th>Số cặp</th><th>Cặp thiếu %</th><th>Cặp C47 âm</th>
-          <th className="catalog-money">Doanh thu chưa VAT</th>
-          {(data.columns || []).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
-        </tr></thead><tbody>
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead>
+          <tr>
+            <th rowSpan={2}>NV</th><th rowSpan={2}>Số kỳ</th><th rowSpan={2}>Số cặp</th>
+            <th rowSpan={2}>Cặp thiếu %</th><th rowSpan={2}>Cặp C47 âm</th>
+            <th rowSpan={2} className="catalog-money">Doanh thu<br />chưa VAT</th>
+            <th colSpan={2} className="catalog-money cost-amounts-group is-in">C32 · ĐẦU VÀO</th>
+            <th colSpan={2} className="catalog-money cost-amounts-group is-out">C47 · CÒN LẠI</th>
+          </tr>
+          <tr>
+            <th className="catalog-money">Chưa VAT</th><th className="catalog-money">Có VAT</th>
+            <th className="catalog-money">Chưa VAT</th><th className="catalog-money">Có VAT</th>
+          </tr>
+        </thead><tbody>
           {(data.employees || []).map((item) => <tr key={item.empCode}>
             <td><b>{item.empCode}</b></td>
             <td>{item.periodCount}</td>

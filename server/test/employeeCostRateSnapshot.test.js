@@ -45,14 +45,20 @@ test('kho chủ động all-or-nothing là đường đọc thật và không h�
     },
   };
 
+  let networkCalls = 0;
   const stalled = await employeeCost.fetchEmployeeCost('DN001', {
     from: '2026-07', to: '2026-07', ...credentials, rateSnapshotStore: store,
-    fetchImpl: async () => { throw Object.assign(new Error('timeout'), { name: 'AbortError' }); },
+    fetchImpl: async () => { networkCalls += 1; throw Object.assign(new Error('timeout'), { name: 'AbortError' }); },
     awaitBackgroundRefresh: true,
   });
-  assert.equal(stalled.outcome, 'ok_stale_rates');
+  // 2026-07 là KỲ ĐÃ CHỐT SỔ ⇒ từ 09/08 kho chủ động được GHIM: trả 'ok' thẳng từ
+  // kho và KHÔNG gọi nguồn — mạnh hơn cả 'ok_stale_rates' mà test này từng đòi
+  // (chủ đích "kho chủ động là đường đọc thật, không hết hạn" được thoả tuyệt đối).
+  assert.equal(stalled.outcome, 'ok');
+  assert.equal(stalled.pinned, true);
+  assert.equal(networkCalls, 0, 'kỳ chốt không đụng mạng — nguồn chết cũng kệ');
   assert.equal(stalled.payload.periods[0].rows.length, 1);
-  assert.equal(stalled.payload.periods[0].rateFetchedAt, '2025-01-01T00:00:00.000Z');
+  assert.equal(stalled.payload.rateSource, 'local_pinned');
   assert.equal(store.data[snap.FILE], undefined, 'không cần bridge từng NV sang snapshot phụ');
 });
 
