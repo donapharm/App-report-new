@@ -1,3 +1,19 @@
+### 2026-08-09 20:20 (giờ VN) — ‼ Nút "Đồng bộ % chi phí" BIẾN MẤT lúc danh mục đang tải
+
+CEO chụp màn 20:04: màn Danh mục QL đứng ở *"Đang tải danh mục kỳ 08.2026 từ Data Hub…"*, và thẻ **"Đồng bộ % chi phí kỳ 08.2026"** — đúng cái nút Claude vừa hướng dẫn bấm — **không có ở đó**.
+
+**Hai lỗi chồng nhau:**
+1. **Gốc:** bản đang chạy trên PROD vẫn là thiết kế remote-first (mỗi lần vào màn kéo lại nguyên bộ danh mục từ DataHub). Bản sửa local-first đã xong nhưng **chưa deploy**.
+2. **Vá ngay ở đây:** `{isCeo && !actionsLocked && <CostRatesSyncCard/>}` **ẩn nguyên thẻ** trong lúc tải. Danh mục tải lâu ⇒ nút biến mất **không dấu vết**, người dùng tưởng app hỏng. Trong khi thẻ này **không đụng dữ liệu danh mục**: nó tự đọc trạng thái kho %, nhắm đúng kỳ đang chọn.
+
+**Sửa:** thẻ **LUÔN hiện** với CEO; lúc đang tải thì **khoá NÚT kèm lý do** *"⏳ Đang tải danh mục kỳ này — nút tự mở lại ngay khi tải xong (không bấm chồng để DataHub khỏi quá tải)"*. Vẫn giữ việc không cho bấm chồng vì DataHub từng tự restart do dồn tải (951,8 MB RSS, 08/08) — nhưng **khoá có lý do ≠ giấu đi**. Khoá câm và biến mất là hai mức độ tệ khác hẳn nhau: cái đầu người dùng biết mình đang chờ gì, cái sau thì không.
+
+Câu chờ *"Các phần phía trên dùng được ngay"* nhờ đó thành đúng sự thật.
+
+Test: web **370/370** (2 test mới khoá hành vi: thẻ không được ẩn theo `actionsLocked`; khoá nút phải kèm lý do) · build sạch.
+
+---
+
 ### 2026-08-09 22:30 (giờ VN) — 📄 Chi tiết TỪNG DÒNG ĐƠN HÀNG trong menu Thành tiền — xem trên màn VÀ xuất Excel
 
 CEO hỏi lại: *"các cột chi tiết đơn hàng — chỉ xuất Excel hay xem cả trên màn?"* → **"tôi muốn cả hai nhé."** Làm đúng cả hai.

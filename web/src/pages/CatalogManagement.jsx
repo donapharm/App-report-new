@@ -996,7 +996,7 @@ function CostRatesTablePanel({ period }) {
  * Kéo bảng tỷ lệ của kỳ về kho cục bộ: từ đó DataHub chết cũng không mất số.
  * All-or-nothing: hụt một NV là backend giữ nguyên bản cũ và nói rõ ai hỏng.
  */
-function CostRatesSyncCard({ period }) {
+function CostRatesSyncCard({ period, catalogLoading = false }) {
   const hubPeriod = uiToHub(period);
   const [status, setStatus] = useState(null);
   const [syncing, setSyncing] = useState(false);
@@ -1025,10 +1025,17 @@ function CostRatesSyncCard({ period }) {
         : 'Kho cục bộ CHƯA có kỳ này — bấm đồng bộ lần đầu khi DataHub đang sống.'}</small>
     </div>
     <div className="catalog-sync-actions">
-      <button type="button" className="btn" disabled={syncing} onClick={run}>
+      <button type="button" className="btn" disabled={syncing || catalogLoading} onClick={run}>
         {syncing ? 'Đang kéo toàn đội…' : 'Đồng bộ từ DataHub'}
       </button>
     </div>
+    {/* ‼ ĐANG TẢI DANH MỤC THÌ KHOÁ CÓ LÝ DO, KHÔNG GIẤU THẺ (CEO 09/08 20:04).
+        Bản cũ ẩn nguyên thẻ này trong lúc tải (`actionsLocked`), nên khi danh mục
+        tải lâu thì nút biến mất không dấu vết — CEO được bảo "bấm nút đồng bộ" mà
+        tìm không ra, tưởng app hỏng. Khoá kèm lời giải thích + tự mở lại thì người
+        dùng biết mình đang chờ cái gì; giấu đi thì không. Vẫn không cho bấm chồng
+        vì DataHub từng tự restart do dồn tải (951,8 MB RSS, 08/08). */}
+    {catalogLoading && <small className="muted">⏳ Đang tải danh mục kỳ này — nút tự mở lại ngay khi tải xong (không bấm chồng để DataHub khỏi quá tải).</small>}
     {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
     {result && (result.ok
       ? <div className="catalog-alert ok" role="status">
@@ -1197,7 +1204,9 @@ export default function CatalogManagement({ me }) {
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
-    {isCeo && !actionsLocked && <CostRatesSyncCard period={period} />}
+    {/* Thẻ đồng bộ % KHÔNG phụ thuộc danh mục (nó đọc trạng thái riêng, nhắm đúng
+        kỳ đang chọn) nên LUÔN hiện — chỉ khoá nút kèm lý do khi đang tải. */}
+    {isCeo && <CostRatesSyncCard period={period} catalogLoading={actionsLocked} />}
     <CostRatesTablePanel period={period} />
     {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">

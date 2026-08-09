@@ -6,10 +6,12 @@ const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', impor
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
 const routes = fs.readFileSync(new URL('../../server/src/routes.js', import.meta.url), 'utf8');
 
-test('nút Đồng bộ chỉ hiện với CEO khi dữ liệu đúng kỳ; backend chặn độc lập bằng requireCeo', () => {
-  assert.match(page, /\{isCeo && !actionsLocked && <CostRatesSyncCard period=\{period\} \/>\}/);
+test('thẻ Đồng bộ chỉ dành cho CEO; backend chặn độc lập bằng requireCeo', () => {
+  // Thẻ LUÔN hiện với CEO (xem test "không được biến mất" phía dưới); lúc danh mục
+  // đang tải thì chỉ KHOÁ NÚT kèm lý do, không ẩn thẻ.
+  assert.match(page, /\{isCeo && <CostRatesSyncCard period=\{period\} catalogLoading=\{actionsLocked\} \/>\}/);
   assert.match(page, /const actionsLocked = !!loadingPeriod \|\| periodMismatch/,
-    'khi đang tải/giữ bảng kỳ cũ phải ẩn thao tác đồng bộ để không trộn kỳ');
+    'vẫn phải biết lúc nào đang tải/giữ bảng kỳ cũ để khoá thao tác trộn kỳ');
   const at = routes.indexOf("router.post('/catalog-management/cost-rates/sync'");
   assert.ok(at >= 0, 'thiếu route sync');
   assert.match(routes.slice(at, routes.indexOf('\n', at)), /auth\.requireCeo/);
@@ -38,4 +40,21 @@ test('actor lấy từ session ở backend — không có đường giả mạo 
   const body = routes.slice(at, routes.indexOf('}));', at));
   assert.match(body, /actor: req\.session\.emp_code/);
   assert.doesNotMatch(body, /actor:\s*req\.body/);
+});
+
+/* ── Thẻ đồng bộ % KHÔNG được biến mất lúc danh mục đang tải (CEO 09/08 20:04) ──
+ * CEO được hướng dẫn "bấm Đồng bộ từ DataHub" nhưng vào màn thì thẻ không có ở đó:
+ * bản cũ ẩn nguyên thẻ theo `actionsLocked`, mà danh mục kỳ 08 tải rất lâu. Nút
+ * biến mất không dấu vết còn tệ hơn nút bị khoá — người dùng tưởng app hỏng.     */
+
+test('‼ thẻ đồng bộ % LUÔN hiện với CEO, không bị ẩn theo trạng thái tải danh mục', () => {
+  assert.match(page, /\{isCeo && <CostRatesSyncCard period=\{period\} catalogLoading=\{actionsLocked\} \/>\}/);
+  assert.doesNotMatch(page, /isCeo && !actionsLocked && <CostRatesSyncCard/, 'không được quay lại kiểu ẩn thẻ');
+});
+
+test('đang tải thì KHOÁ NÚT KÈM LÝ DO và tự mở lại — không khoá câm', () => {
+  assert.match(page, /disabled=\{syncing \|\| catalogLoading\}/);
+  assert.match(page, /Đang tải danh mục kỳ này — nút tự mở lại ngay khi tải xong/);
+  // Lý do không cho bấm chồng phải nói ra: DataHub từng tự restart vì dồn tải.
+  assert.match(page, /để DataHub khỏi quá tải/);
 });

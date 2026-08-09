@@ -87,7 +87,10 @@ test('bảng giữ lại của kỳ cũ chỉ được đọc — không thể r
     'khóa ngay trong render, không chờ effect mới thoát tab ghi');
   assert.match(page, /disabled=\{interactionsDisabled\}[\s\S]*setMode\('report'\)/);
   assert.match(page, /disabled=\{interactionsDisabled\}[\s\S]*setMode\('transfer'\)/);
-  assert.match(page, /isCeo && !actionsLocked && <CostRatesSyncCard/);
+  // Thẻ đồng bộ % không đụng dữ liệu danh mục nên KHÔNG ẩn theo actionsLocked —
+  // nó tự khoá NÚT kèm lý do (xem CostRatesSync.card.test.mjs). Ẩn nguyên thẻ từng
+  // làm CEO tìm không ra nút được hướng dẫn bấm (09/08 20:04).
+  assert.match(page, /isCeo && <CostRatesSyncCard period=\{period\} catalogLoading=\{actionsLocked\}/);
   assert.match(page, /isCeo && data && !actionsLocked && <CostColumnGrantsPanel/);
   assert.match(page, /Bảng kỳ <b>\{shownPeriod\}<\/b> bên dưới chỉ để đọc/);
   assert.doesNotMatch(page, /<AdminView data=\{data\} period=\{uiToHub\(period\)\}/,
