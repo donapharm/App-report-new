@@ -959,7 +959,7 @@ export default function CatalogManagement({ me }) {
   }, [data]);
   // ‼ KHÔNG xoá dữ liệu cũ trước khi tải (CEO 08/08: *"mỗi lần kéo dữ liệu mà quay
   // như vậy thì rất kẹt"*). Bản cũ `setData(null)` làm cả trang trắng thành một vòng
-  // quay mỗi lần đổi kỳ — trong khi danh mục ~27.700 dòng nên chờ khá lâu. Nay giữ
+  // quay mỗi lần đổi kỳ — trong khi danh mục rất nhiều dòng nên chờ khá lâu. Nay giữ
   // bảng cũ trên màn, chỉ gắn dải "đang tải" + nói rõ đang xem kỳ nào / chờ kỳ nào.
   async function load(selected = period) {
     const request = loadGateRef.current.next();
@@ -1011,7 +1011,11 @@ export default function CatalogManagement({ me }) {
     {!data && !error && <div className="card catalog-first-load" role="status" aria-live="polite">
       <Spinner />
       <b>Đang tải danh mục kỳ {loadingPeriod || period} từ Data Hub…</b>
-      <p>Danh mục toàn công ty khoảng <b>27.700 cặp</b> đơn vị – mã QLNB nên lần tải đầu mất một lúc. Các phần phía trên dùng được ngay.</p>
+      {/* ‼ KHÔNG ghi con số ước lượng ở đây. Bản đầu viết cứng "khoảng 27.700 cặp" —
+          CEO đọc thành số liệu thật rồi hỏi vì sao lệch 19 dòng so với 27.719 (09/08).
+          Trong app này mọi con số trên màn đều phải là số THẬT, có nguồn. Câu chờ chỉ
+          mô tả tình trạng, không mang số. */}
+      <p>Danh mục toàn công ty khá lớn nên lần tải đầu mất một lúc. Các phần phía trên dùng được ngay.</p>
     </div>}
     {data && (isAdmin
       ? <AdminView data={data} period={uiToHub(shownPeriod || period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}

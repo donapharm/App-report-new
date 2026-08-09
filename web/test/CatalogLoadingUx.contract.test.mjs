@@ -93,3 +93,13 @@ test('bảng giữ lại của kỳ cũ chỉ được đọc — không thể r
   assert.doesNotMatch(page, /<AdminView data=\{data\} period=\{uiToHub\(period\)\}/,
     'cấm truyền kỳ vừa chọn vào subtree đang chứa dữ liệu kỳ cũ');
 });
+
+test('‼ CẤM bịa số trong chữ giao diện — mọi con số trên màn phải là số THẬT', () => {
+  // CEO 09/08: câu chờ ghi "khoảng 27.700 cặp" (Claude viết cứng), CEO đọc thành số
+  // liệu thật rồi hỏi vì sao lệch 19 dòng so với 27.719 thực tế. Trong app mà nguyên
+  // tắc là "không dòng nào biến mất lặng lẽ", một con số bịa làm hỏng lòng tin vào
+  // MỌI con số khác.
+  const literals = page.match(/>\s*[^<>{}]*\b2[0-9][.,][0-9]{3}\b[^<>{}]*</g) || [];
+  assert.deepEqual(literals, [], 'không được viết cứng số dòng/cặp vào chữ giao diện');
+  assert.doesNotMatch(page, /khoảng <b>[\d.,]+/);
+});
