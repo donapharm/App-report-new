@@ -1,0 +1,24 @@
+{
+  "contract": "app-sale-reconciliation-allocation-v4",
+  "candidate": "candidate/recon-allocation-engine-6420-20260809",
+  "mode": "shadow-only-build-only",
+  "effective_values_changed": false,
+  "endpoint": "/api/integrations/app-report/reconciliation-allocation/v4/{YYYY-MM}/{contractor}?phien_ban={v2}&allocation_version={v4}&offset={offset}",
+  "auth": "dedicated App Report reconciliation key; fail closed before SQL",
+  "page_size": 250,
+  "response_cap_bytes": 1048576,
+  "preview": {
+    "period": "2026-07",
+    "contractor_code": "20.HĐS",
+    "children": [
+      {"order_item_id":"2524","order_code":"DT-260708-0176","employee_code":"DN005","base_quantity":"2400","reconciled_quantity":"2400","quantity_delta":"0"},
+      {"order_item_id":"2783","order_code":"DT-260723-0346","employee_code":"DN005","base_quantity":"4000","reconciled_quantity":"4000","quantity_delta":"0"}
+    ],
+    "variance": {"kind":"EMPLOYEE_GROUP_VARIANCE","employee_code":"DN005","quantity":"20","order_id":null,"order_item_id":null},
+    "totals": {"ordered_quantity":"6400","reconciled_quantity":"6420","quantity_delta":"20"}
+  },
+  "mixed_employee_policy": "UNALLOCATED_MIXED_EMPLOYEE; null employee/order identities",
+  "materialization": "explicit bounded serializable admin operation; no backfill",
+  "v2_v3_changed": false,
+  "production_applied": false
+}

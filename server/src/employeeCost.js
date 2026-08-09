@@ -6,6 +6,7 @@ const employeeCostTemplates = require('./employeeCostTemplates');
 const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 const rateSnapshot = require('./employeeCostRateSnapshot');
 const reconciliationShadow = require('./employeeCostReconciliationShadow');
+const reconciliationAllocationV4 = require('./employeeCostReconAllocationV4');
 
 const CONTRACT_PATH = '/api/integrations/app-report/employee-cost';
 const DIMENSION_KEYS = Object.freeze(['c5', 'c7', 'c16', 'c25']);
@@ -919,6 +920,7 @@ function enrichRangePayload(payload, options = {}) {
 
 async function applyReconciliationShadow(payload, empCode, options = {}) {
   const shadowOptions = options.reconciliationShadow || {};
+  const allocationOptions = options.reconciliationAllocationV4 || {};
   const periods = Array.isArray(payload?.periods) ? payload.periods : (payload?.rows ? [payload] : []);
   const scopes = [];
   const plans = new Map();
@@ -948,7 +950,10 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
     });
     plans.set(periodPayload, rowPlans);
   }
-  const snapshots = await reconciliationShadow.loadScopes(scopes, shadowOptions);
+  const [snapshots, allocationSnapshots] = await Promise.all([
+    reconciliationShadow.loadScopes(scopes, shadowOptions),
+    reconciliationAllocationV4.loadScopes(scopes, allocationOptions),
+  ]);
   for (const periodPayload of periods) {
     const period = normalizeMonth(periodPayload.period || options.period);
     const rowPlans = plans.get(periodPayload) || [];
@@ -966,13 +971,32 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
     const projected = (periodPayload.rows || []).map((row) => ({
       ...row, shadowReconciledQuantity: null, shadowQuantityDelta: null,
     }));
+    const syntheticRows = [];
+    const allocationTotals = [];
     for (const [contractorCode, group] of grouped) {
-      const snapshot = snapshots.get(`${period}\u001f${contractorCode}`);
-      if (!snapshot) continue;
-      const rows = reconciliationShadow.projectEmployeeCostRows(group.map((item) => item.row), snapshot, { employeeCode: empCode });
-      rows.forEach((row, offset) => { projected[group[offset].index] = row; });
+      const scopeKey = `${period}\u001f${contractorCode}`;
+      const snapshot = snapshots.get(scopeKey);
+      const rows = snapshot
+        ? reconciliationShadow.projectEmployeeCostRows(group.map((item) => item.row), snapshot, { employeeCode: empCode })
+        : group.map((item) => ({ ...item.row }));
+      const allocationSnapshot = allocationSnapshots.get(scopeKey);
+      const result = reconciliationAllocationV4.projectEmployeeCostRows(rows, allocationSnapshot, {
+        employeeCode: empCode,
+        includeSynthetic: !String(options.auditEvent || '').startsWith('export_'),
+      });
+      result.rows.slice(0, group.length).forEach((row, offset) => { projected[group[offset].index] = row; });
+      syntheticRows.push(...result.rows.slice(group.length));
+      if (result.totals) allocationTotals.push(result.totals);
     }
-    periodPayload.rows = projected;
+    periodPayload.rows = [...projected, ...syntheticRows];
+    if (allocationTotals.length) periodPayload.shadowReconciliationTotals = {
+      orderedQuantity: allocationTotals.reduce((sum, item) => sum + item.orderedQuantity, 0),
+      reconciledQuantity: allocationTotals.reduce((sum, item) => sum + item.reconciledQuantity, 0),
+      quantityDelta: allocationTotals.reduce((sum, item) => sum + item.quantityDelta, 0),
+      employeeVarianceRows: allocationTotals.reduce((sum, item) => sum + item.employeeVarianceRows, 0),
+      // Count only; no mixed-employee identity is projected into an employee row.
+      mixedEmployeeVarianceCount: allocationTotals.reduce((sum, item) => sum + item.mixedEmployeeVarianceCount, 0),
+    };
   }
   return payload;
 }

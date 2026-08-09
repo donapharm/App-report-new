@@ -570,6 +570,8 @@ function periodViewModel(payload = {}) {
       sourceLineId: String(source?.sourceLineId || `line-${rowIndex + 1}`),
       employeeCode: String(source?.employeeCode || ''),
       employeeName: String(source?.employeeName || ''),
+      shadowRowLabel: String(source?.shadowRowLabel || ''),
+      reconciliationSynthetic: source?.reconciliationSynthetic === true,
       dailyAmounts: source?.dailyAmounts || null,
       dayRevenueMatched: !!source?.dayRevenueMatched,
       rowMonthlyTotal: source?.rowMonthlyTotal ?? null,
@@ -648,6 +650,13 @@ function periodViewModel(payload = {}) {
       totalRows: Number(payload.pagination?.totalRows ?? rows.length),
     },
     employeeSubtotals: Array.isArray(payload.employeeSubtotals) ? payload.employeeSubtotals : [],
+    shadowReconciliationTotals: payload.shadowReconciliationTotals && typeof payload.shadowReconciliationTotals === 'object' ? {
+      orderedQuantity: numberOrNull(payload.shadowReconciliationTotals.orderedQuantity),
+      reconciledQuantity: numberOrNull(payload.shadowReconciliationTotals.reconciledQuantity),
+      quantityDelta: numberOrNull(payload.shadowReconciliationTotals.quantityDelta),
+      employeeVarianceRows: Number(payload.shadowReconciliationTotals.employeeVarianceRows || 0),
+      mixedEmployeeVarianceCount: Number(payload.shadowReconciliationTotals.mixedEmployeeVarianceCount || 0),
+    } : null,
   };
 }
 
