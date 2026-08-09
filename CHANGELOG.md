@@ -1,3 +1,31 @@
+### 2026-08-09 23:05 (giờ VN) — 🎨 Bộ lọc "như dân nghiệp dư" · cột tổng bị hiểu nhầm là tiền C47
+
+CEO xem màn Tổng hợp và nêu ba việc. **Cả ba đều đúng.**
+
+#### ① Bộ lọc vỡ giao diện — Claude quên viết CSS
+
+CEO: *"thiết kế bộ lọc kiểu này thì như dân nghiệp dư quá."* Đúng, và nguyên nhân thô sơ hơn cả "thiết kế xấu": Claude đẻ ra **8 lớp giao diện mới** (`cost-filter-panel`, `cost-filter-picks`…) mà **KHÔNG viết một dòng CSS nào**. Không có CSS thì trình duyệt xếp mọi nút thành **khối dọc** và menu thả xuống **đè lên ô nhập** — đúng cảnh trong ảnh.
+
+Đã viết đủ: các ô chọn nằm **ngang, tự xuống dòng**; chip điều kiện bo tròn bấm-là-bỏ; ô nhập chia lưới tự co; ô tìm trong danh sách dài; điện thoại thì mỗi hàng 2 ô. **Test mới quét MỌI lớp `cost-filter*`/`cost-breakdown-pick*` trong file JSX và bắt buộc phải có CSS tương ứng** — quên lần nữa là đỏ ngay.
+
+#### ② "Cột C47 sao có tiền ở đây?" — tên cột gây hiểu nhầm
+
+CEO đã chốt **tiền C47 nằm ở menu riêng**, nên thấy cột *"Trừ vào C47 (không C44)"* có tiền là hỏi ngay — hỏi đúng. Thực chất hai cột đó là **tổng của các cột C33–C46 bên trái**, không phải tiền C47; chỉ là cột "không C44" **trùng với phần bị trừ** trong công thức C47.
+
+Sửa: bỏ chữ "C47" khỏi **tên cột** → **"Tổng chi CÓ C44"** và **"Tổng chi KHÔNG C44"**. Quan hệ với công thức C47 đưa xuống chú thích, kèm câu khẳng định *"tiền C47 nằm ở menu riêng 'Thành tiền C32 · C47' đúng như đã chốt"*. Có test cấm đặt lại tên cũ.
+
+#### ③ "C44 sao số tiền đó là sao" — 3,99% trong khi danh nghĩa là 5%
+
+Số **đúng**, nhưng màn không nói đủ: dòng % dưới mỗi ô là **bình quân có trọng số** của các cặp đang gộp. Nhóm nào có cặp chưa được cấp % C44 thì bình quân **thấp hơn 5%** — số thật, không phải tính sai. Đã ghi thẳng chú thích này dưới bảng.
+
+#### ④ "Màn hình lùng nhùng"
+
+Gộp thẻ **"Cột xuất"** vào chung thẻ bộ lọc (đổi tên **"Cột hiển thị"**) — bớt một thẻ rời chồng lên nhau.
+
+Test: server 1163 / 7 fail cố hữu · web **399/399** · build sạch.
+
+---
+
 ### 2026-08-09 22:45 (giờ VN) — 🔬 Probe PROD lộ ra: nguồn KHÔNG có C32 · và "đếm dòng" không phải bằng chứng
 
 #### ‼ CEO chỉnh Claude — và chỉnh đúng

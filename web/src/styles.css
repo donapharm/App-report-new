@@ -2605,6 +2605,36 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .cost-breakdown-pick-list { display:grid; gap:4px; max-height:220px; overflow:auto; padding:6px 0; }
 .cost-breakdown-pick-hint { display:block; padding-top:4px; border-top:1px solid var(--line); font-size:10.5px; }
 .cost-breakdown-pick .btn.is-active { border-color:var(--brand); background:#eaf4ff; color:var(--brand-ink); }
+
+/* ══ BẢNG LỌC NÂNG CAO — dùng chung hai menu chi phí ═════════════════════════
+   ‼ Claude đẻ ra 8 lớp này mà QUÊN VIẾT CSS (CEO 09/08: *"thiết kế bộ lọc kiểu
+   này thì như dân nghiệp dư quá"*). Không CSS ⇒ trình duyệt xếp mọi nút thành
+   khối dọc và menu thả xuống đè lên ô nhập bên dưới. Lỗi thuần trình bày, không
+   phải lỗi tính năng — nhưng nhìn vào thì không ai tin phần tính toán nữa. */
+.cost-filter-panel { padding:10px 12px; display:grid; gap:8px; }
+.cost-filter-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.cost-filter-head small { line-height:1.4; }
+/* Chip điều kiện đang bật: bấm là bỏ, nên phải nhìn ra ngay là bấm được. */
+.cost-filter-chips { display:flex; gap:6px; flex-wrap:wrap; }
+.cost-filter-chip {
+  border:1px solid #bcd6f0; background:#eaf4ff; color:var(--brand-ink);
+  border-radius:999px; padding:3px 9px; font-size:11.5px; font-weight:700; cursor:pointer; line-height:1.5;
+}
+.cost-filter-chip:hover { background:#d8ebff; border-color:var(--brand); }
+.cost-filter-body { display:grid; gap:10px; padding-top:8px; border-top:1px solid var(--line); }
+/* ‼ Các ô chọn nằm NGANG và tự xuống dòng — đây là chỗ bản cũ vỡ. */
+.cost-filter-picks { display:flex; gap:8px; flex-wrap:wrap; align-items:start; }
+.cost-filter-inputs { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:10px; }
+.cost-filter-inputs label { display:grid; gap:3px; }
+.cost-filter-inputs label span { color:var(--muted); font-size:11px; font-weight:700; }
+.cost-filter-inputs input { width:100%; }
+.cost-filter-hint { display:block; line-height:1.5; }
+.cost-filter-note { margin:0; }
+.cost-breakdown-pick-search { width:100%; margin:6px 0 2px; font-size:12px; }
+@media (max-width: 720px) {
+  .cost-filter-picks .cost-breakdown-pick { flex:1 1 46%; }
+  .cost-filter-picks .cost-breakdown-pick .btn { width:100%; }
+}
 .cost-breakdown-empty-warn { border-width:2px; }
 .cost-breakdown-todo { margin-top:6px; padding-top:6px; border-top:1px dashed currentColor; font-size:12.5px; }
 /* Tiêu đề cột: mã + tên đầy đủ + nền tính % (CEO 09/08). */

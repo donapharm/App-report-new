@@ -116,7 +116,7 @@ export function MultiPick({ label, options = [], values = [], onChange, open, on
  * `options` là các giá trị CÓ THẬT trong dữ liệu đang xem, backend thu TRƯỚC khi lọc
  * nên bỏ lọc luôn còn đường quay lại.
  */
-export function CostFilterPanel({ options = {}, partnerGroups = [], value = EMPTY_COST_FILTERS, onChange, note = '' }) {
+export function CostFilterPanel({ options = {}, partnerGroups = [], value = EMPTY_COST_FILTERS, onChange, note = '', extra = null }) {
   const [open, setOpen] = useState(false);
   const [openPick, setOpenPick] = useState('');
   const active = countCostFilters(value);
@@ -150,6 +150,9 @@ export function CostFilterPanel({ options = {}, partnerGroups = [], value = EMPT
 
     {open && <div className="cost-filter-body">
       <div className="cost-filter-picks">
+        {/* Ô riêng của từng màn (vd "Cột hiển thị" của menu Tổng hợp) đứng cùng hàng
+            với các chiều lọc — một thẻ thay vì hai thẻ rời chồng lên nhau. */}
+        {extra}
         {COST_FILTER_DIMENSIONS.map((dim) => <MultiPick key={dim.key} label={dim.label}
           open={openPick === dim.key} onToggle={(v) => setOpenPick(v ? dim.key : '')}
           options={optionsOf(dim.key)} values={value[dim.key] || []}
