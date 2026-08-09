@@ -1,3 +1,34 @@
+### 2026-08-10 00:45 (giờ VN) — ‼ THÔI HỎI DATAHUB VỀ % CHI PHÍ: kỳ đang chạy cũng đọc kho đã đồng bộ
+
+CEO ra lệnh **lần thứ hai**, rất bực: *"Tao đã yêu cầu lấy bên này không lấy bên DataHub về % chi phí nữa để không bị lỗi. Yêu cầu mày xử lý cả số liệu nạp trở lại đủ cho tao T07.2026."*
+
+#### Bằng chứng CEO đưa ra chỉ đúng gốc bệnh
+
+Cùng kỳ **T07.2026**, hai lần chụp màn cách nhau hơn một tiếng:
+- **23:05** — *"Hiện **359/359** dòng"*, 16 NV báo chưa lấy được chi phí;
+- **00:20** — *"Hiện **1.332/1.332** dòng"*, doanh thu **20.035.615.366đ**, còn 10 NV.
+
+**Doanh thu nhảy vì màn ALL chỉ dựng được dòng của những NV lấy được % từ DataHub.** Doanh thu là dữ liệu **của App Report**, luôn đủ — nhưng nguồn % chập chờn vài NV là doanh thu tụt theo. Đây chính là "dữ liệu nhảy lambada".
+
+#### Sửa: kho có kỳ nào thì dùng kỳ đó
+
+Bản cũ **chỉ** đọc kho khi kỳ **đã khoá sổ** (`isPeriodClosed`); kỳ đang chạy vẫn ra mạng **mỗi lượt xem** ⇒ vẫn nhảy. Nay **kho có kỳ nào thì phục vụ kỳ đó**, đóng hay mở sổ đều vậy.
+
+Kho do **chính CEO** bấm "Đồng bộ % chi phí" nạp vào (all-or-nothing 21/21, có mốc giờ + tên người bấm) ⇒ bản số **ổn định và truy được**, khác hẳn việc mỗi lượt xem lại rút một bản khác nhau về.
+
+Ba chốt giữ cho khỏi hứa quá:
+1. **Nhãn phân biệt hai nghĩa:** `local_pinned` = kỳ đã chốt, đóng băng vĩnh viễn · `local_sync` = kỳ đang chạy, số của lần đồng bộ gần nhất. Dải kỳ **trộn** lấy nhãn **yếu hơn** (`local_sync`).
+2. **Kho thiếu MỘT kỳ trong dải ⇒ không phục vụ nửa vời**, vẫn ra nguồn như cũ.
+3. **Đường lui:** `APP_REPORT_COST_LOCAL_FIRST=0` đưa hành vi về đúng như trước (chỉ kỳ đã chốt mới đọc kho).
+
+#### Để T07 đủ số, cần đúng một thao tác của CEO
+
+Kho hiện **mới có T08** (CEO bấm lúc 20:06). **T07 chưa có** vì nút bị khoá bởi lỗi 502 của cửa danh mục — đã gỡ ở `d77eaef`. Sau khi deploy: chọn **Kỳ 07.2026** → bấm **"Đồng bộ % chi phí"** một lần. Từ đó T07 **đứng yên vĩnh viễn**, DataHub sống chết cũng không đổi số.
+
+Test: server **1172** pass / 7 fail cố hữu · web **416/416** · build sạch.
+
+---
+
 ### 2026-08-10 00:30 (giờ VN) — 🔧 BỎ HẲN lượt gọi gây lỗi: bảng tra nhóm đi KÈM danh mục
 
 CEO kẹt **lần thứ ba** ở cùng một chỗ: *"bây giờ tao vào phân quyền cho NV khác cũng vướng lỗi tùm lum, méo hiểu làm như nào đây."* Hai lần trước Claude **vá thông báo** (nói đúng nguyên nhân, thêm nút Thử lại, tự thử lại 3 lượt). Vá lời thì lỗi vẫn còn — lần này bỏ hẳn **cái gây ra lỗi**.
