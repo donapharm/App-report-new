@@ -228,3 +228,71 @@ export function grantSummary(row) {
     return `${key.toUpperCase()}: ${scopeText}`;
   }).join(' · ');
 }
+
+/* ── MÀN CHI TIẾT MỘT NHÂN VIÊN (CEO yêu cầu 09/08/2026) ──────────────────────
+ * CEO: *"chọn theo nhân viên rồi có màn hình phụ cho liệt kê các đơn vị, các cột
+ * để tích theo cột, theo nhóm mã đơn vị… thì sẽ rõ và làm nhanh hơn."*
+ *
+ * Màn chi tiết là một LƯỚI: hàng = nhóm mã đơn vị (001, 033…), cột = C36…C45.
+ * Tick ở cấp NHÓM (CEO chốt phương án A), mỗi hàng liệt kê các mã bên trong.
+ * Không đổi cách lưu: vẫn đúng ma trận `{ c41: ['*'], c43: ['033'] }` như cũ.
+ */
+
+/** Ô (cột × nhóm) này đang được cấp chưa. '*' nghĩa là mọi nhóm ⇒ ô nào cũng bật. */
+export function isGroupChecked(row, columnKey, groupKey) {
+  const scope = row?.columns?.[lower(columnKey)];
+  if (!Array.isArray(scope) || !scope.length) return false;
+  return scope.includes(ALL_UNITS) || scope.includes(upper(groupKey));
+}
+
+/** Cột này có đang cấp cho MỌI nhóm không (lưu dạng '*'). */
+export const isColumnAllGroups = (row, columnKey) =>
+  (row?.columns?.[lower(columnKey)] || []).includes(ALL_UNITS);
+
+/**
+ * Bật/tắt MỘT ô (cột × nhóm). Đang là '*' mà bỏ tick một nhóm ⇒ nở '*' ra danh sách
+ * tường minh rồi bớt nhóm đó — giữ đúng những nhóm còn lại, không mất quyền oan.
+ */
+export function toggleColumnGroup(panel, empCode, columnKey, groupKey) {
+  const key = lower(columnKey);
+  const group = upper(groupKey);
+  const row = panel.rows.find((item) => item.empCode === upper(empCode));
+  if (!row || !isGrantableColumn(key)) return panel;
+  const every = row.availableGroups.map((item) => item.key);
+  const scope = row.columns[key] || [];
+  const current = scope.includes(ALL_UNITS) ? [...every] : [...scope];
+  const next = current.includes(group) ? current.filter((item) => item !== group) : [...current, group];
+  // Tick đủ mọi nhóm ⇒ gom về '*' cho gọn, và để nhóm mới sau này cũng được phủ.
+  if (next.length && every.length && every.every((item) => next.includes(item))) {
+    return setColumnGroups(panel, empCode, key, [ALL_UNITS]);
+  }
+  return setColumnGroups(panel, empCode, key, next);
+}
+
+/** Bật/tắt CẢ CỘT cho mọi nhóm — hàng "Mọi nhóm" trên đầu lưới. */
+export function setColumnAllGroups(panel, empCode, columnKey, on) {
+  return setColumnGroups(panel, empCode, columnKey, on ? [ALL_UNITS] : []);
+}
+
+/** Bật/tắt CẢ HÀNG: một nhóm, mọi cột — cho thao tác nhanh theo cụm đơn vị. */
+export function toggleGroupAllColumns(panel, empCode, groupKey, columnKeys, on) {
+  let next = panel;
+  for (const columnKey of columnKeys) {
+    const row = next.rows.find((item) => item.empCode === upper(empCode));
+    if (isGroupChecked(row, columnKey, groupKey) !== !!on) {
+      next = toggleColumnGroup(next, empCode, columnKey, groupKey);
+    }
+  }
+  return next;
+}
+
+/** Tóm tắt cho dòng danh sách: mấy cột đang cấp, trên mấy nhóm. */
+export function grantCounts(row) {
+  const entries = Object.entries(row?.columns || {});
+  const groupCount = new Set(entries.flatMap(([, scope]) => scope)).size;
+  return {
+    columnCount: entries.length,
+    allGroups: entries.some(([, scope]) => scope.includes(ALL_UNITS)),
+    groupCount,
+  };
+}
