@@ -122,7 +122,7 @@ test('dynamic columns follow approved order, keep bid price before quantity, and
   ]);
   assert.deepEqual(columns.map((column) => column.key), [
     'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25',
-    'bidPrice', 'quantity', 'revenueBeforeVat', 'c36', 'c43', 'rowMonthlyTotal', 'note',
+    'bidPrice', 'quantity', 'shadowReconciledQuantity', 'shadowQuantityDelta', 'revenueBeforeVat', 'c36', 'c43', 'rowMonthlyTotal', 'note',
   ]);
 });
 
@@ -151,14 +151,18 @@ test('ALL revenue-match KPI reads merged period match instead of empty top-level
   assert.equal(formatMatchRate(employeeCostKpiMatch(model)), '98,7%');
 });
 
-test('full-time and part-time template metadata produce exactly 20 and 16 columns', () => {
+test('full-time and part-time template metadata add exactly two Phase-1 shadow columns', () => {
   const base = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'revenueBeforeVat'];
   const suffix = ['rowMonthlyTotal', 'note'];
   const costs = ['c36', 'c41', 'c43', 'c44', 'c45'].map((key) => ({ key, label: key, annual: key === 'c44' }));
   const fulltime = buildEmployeeCostColumns(costs, { columns: [...base, 'c36', 'c41', 'c43', 'c44', 'c45', ...suffix] });
   const parttime = buildEmployeeCostColumns(costs.slice(0, 1), { columns: [...base, 'c36', ...suffix] });
-  assert.equal(fulltime.length, 20);
-  assert.equal(parttime.length, 16);
+  assert.equal(fulltime.length, 22);
+  assert.equal(parttime.length, 18);
+  assert.deepEqual(fulltime.filter((column) => column.shadowOnly).map((column) => [column.key, column.label]), [
+    ['shadowReconciledQuantity', 'SL đã đối soát MISA'],
+    ['shadowQuantityDelta', 'Chênh lệch SL'],
+  ]);
   assert.equal(fulltime.at(-1).key, 'note');
   assert.ok(fulltime.findIndex((column) => column.key === 'bidPrice') < fulltime.findIndex((column) => column.key === 'quantity'));
 });
