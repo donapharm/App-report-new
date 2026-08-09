@@ -1,3 +1,41 @@
+### 2026-08-09 12:40 (giờ VN) — ‼ SỬA SAI NẶNG: C47 là phần CÒN LẠI, không phải tổng cộng lại
+
+CEO đính chính: *"ý anh là tính xem sau khi các cột từ C33–C46 lấy đi số % rồi thì C47 còn bao nhiêu tiền thu được, cũng giống như đầu vào của C32 vậy… tao có 10%, sau khi chi hết các cột từ C33 đến C46 (bỏ qua C44) thì còn 2%. Như vậy tao biết phải chi ra 8%, còn 2% là thu về lợi nhuận ròng."*
+
+**CEO đúng. Bản đầu Claude làm sai hoàn toàn** — sai bốn tầng, không phải một chi tiết:
+
+| | Bản sai | Đúng (file CP_TOTAL V29.9 cột AU) |
+|---|---|---|
+| **Hướng** | C47 = **CỘNG** các cột chi phí | C47 = **TRỪ** — phần còn lại |
+| **Tập cột** | C36+C41+C43+C44+C45 (cột NV *nhận*) | 13 cột C33→C46 |
+| **C44** | **Cộng vào** | **LOẠI** khỏi công thức |
+| **C32** | Hiểu là **doanh thu** | Là **tổng % chi phí gốc được cấp** |
+
+Công thức chuẩn: `C47 = C32 −C33 −C34 −C35 −C36 −C37 −C38 −C39 −C40 −C41 −C42 −C43 −C45 −C46` (Excel `=AF-AG-AH-AI-AJ-AK-AL-AM-AN-AO-AP-AQ-AS-AT`, **không có AR**).
+
+**Gốc của sai lầm:** Claude lấy `template.costColumns` — tập cột NV **được nhận tiền** ở màn "Chi phí của tôi" — rồi dùng luôn làm công thức C47. Hai tập này khác hẳn nhau: một cái là *NV nhận gì*, một cái là *dòng dữ liệu còn lại bao nhiêu*. Lẫn chúng làm con số mất hết ý nghĩa quản trị: CEO cần biết **còn lại bao nhiêu**, bản cũ lại đưa **đã chia bao nhiêu**.
+
+#### Đã sửa
+
+- `C47_SUBTRACTED` (13 cột) · `C47_EXCLUDED` (khai tường minh C44 nằm ngoài, để người sau không "thấy thiếu" rồi thêm vào) · `C47_BUDGET` (c32) · `C47_REQUIRED` (14 cột).
+- Tính **trên % trước, quy ra tiền một lần** — đúng như file gốc. Quy tiền từng cột rồi mới trừ sẽ lệch do làm tròn 13 lần.
+- Làm tròn % 6 chữ số: `10 − (0,3+0,3+0,4+1+0,5+0,5+1+0,5+1+0,5+1,5+0,5+0)` ra `1,9999999999999982` chứ không phải `2` — tiền không lệch nhưng % hiện thẳng lên màn cho CEO đọc.
+- **C47 âm** (chi vượt ngân sách C32) được **đánh dấu đỏ + đếm riêng** `negativePairs`. File gốc có sẵn dấu audit `CẢNH_BÁO_C47_ÂM` nên đây là chuyện có thật, không được hiển thị lặng lẽ.
+- Bảng thêm cột **Doanh thu chưa VAT · C32 % · C47 %** để đối chiếu tay được từng dòng. Doanh thu tách riêng, **không còn bị gọi nhầm là C32**.
+- Fail-closed giữ nguyên và chặt hơn: thiếu **bất kỳ** cột nào trong 14 cột ⇒ "—" kèm tên cột thiếu.
+
+Kiểm bằng đúng ví dụ CEO: doanh thu 100 triệu chưa VAT · C32 10% = 10 triệu · chi 8% ⇒ **C47 = 2% = 2 triệu**, có VAT 2,1 triệu. Khớp từng đồng.
+
+#### ‼ Việc còn treo — kho % hiện KHÔNG đủ cột
+
+Kho cục bộ đang đồng bộ theo allowlist 7 cột nên **thiếu C32, C33, C34, C35, C37, C39, C40, C46**. Cho tới khi DataHub mở đủ, màn sẽ hiện **"—" kèm danh sách cột thiếu** — đúng luật, không bịa. Đã đưa yêu cầu mở cột vào khối gửi bot.
+
+Ranh giới giữ nguyên: `PERMANENTLY_BLOCKED_CATALOG_FIELDS = ['c32','c47']` chỉ chặn **cửa danh mục**; xin **% qua cửa chi phí** không phá luật đó. **Thành tiền** vẫn do App Report tự nhân, không truyền qua đường nào.
+
+Server 1064/1071 (7 fail cố hữu) · web 331/331 · build sạch · test cũ viết lại theo công thức đúng (+3 luật khoá: C44 nằm ngoài, cấm dùng costColumns làm công thức, C47 âm phải đánh dấu).
+
+---
+
 ### 2026-08-09 12:05 (giờ VN) — 🔒 Rà người nhận tin: mã KHOÁ ĐĂNG NHẬP và mã OPT-OUT vẫn đang nhận tin cảnh báo chi phí
 
 CEO yêu cầu rà: *"ngoài 16 tài khoản bị khoá thì DN021/DN023/DN004/VP004 có bị gửi tin nhắn telegram/email không, riêng DN022/DN002 thì gửi như thế nào?"*

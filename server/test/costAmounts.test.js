@@ -12,10 +12,16 @@ const memStore = () => {
   return { data, load: (n, d) => data[n] ?? d, save: (n, v) => { data[n] = v; } };
 };
 
-// DN001 full-time: c36/c41/c43/c44/c45 (c44 phái sinh từ c43).
+// ‼ C47 = C32 − 13 cột (LOẠI C44) — công thức gốc file CP_TOTAL V29.9 cột AU.
+// CEO đính chính 09/08/2026: C47 là phần CÒN LẠI, không phải tổng cộng lại.
 const rateRow = (unit, c5, rates) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, ...rates });
-const FULL = { c36: 1, c41: 2, c43: 10, c44: 50, c45: 3 };
-const COLS = [{ key: 'c36' }, { key: 'c41' }, { key: 'c43' }, { key: 'c44' }, { key: 'c45' }];
+// Ngân sách C32 = 10%; đã chia: c36 1 + c41 2 + c43 3 + c45 0,5 = 6,5 ⇒ C47 còn 3,5%.
+// c44 = 50 cố tình để RẤT LỚN: nếu ai đó lỡ đưa C44 vào công thức thì test vỡ ngay.
+const FULL = {
+  c32: 10, c33: 0, c34: 0, c35: 0, c36: 1, c37: 0, c38: 0, c39: 0,
+  c40: 0, c41: 2, c42: 0, c43: 3, c44: 50, c45: 0.5, c46: 0,
+};
+const COLS = Object.keys(FULL).map((key) => ({ key }));
 
 const seed = async (store, rows) => sync.syncPeriod({
   period: '2026-08', empCodes: ['DN001'], actor: 'CEO',
@@ -37,7 +43,7 @@ test('chưa đồng bộ % ⇒ nói CHUA_DONG_BO, không bịa bảng tiền r�
   assert.equal(result.reason, 'CHUA_DONG_BO');
 });
 
-test('C32 = doanh thu (có VAT = gốc, chưa VAT = ÷1,05); C47 = Σ(% × doanh thu) khớp luật màn Chi phí', async () => {
+test('‼ C47 là PHẦN CÒN LẠI = C32 trừ 13 cột, KHÔNG phải tổng cộng lại (CEO 09/08)', async () => {
   const store = memStore();
   await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
   const result = costAmounts.buildAmounts({
@@ -45,18 +51,57 @@ test('C32 = doanh thu (có VAT = gốc, chưa VAT = ÷1,05); C47 = Σ(% × doanh
   });
   assert.equal(result.available, true);
   const row = result.rows[0];
-  // C32: 1.050.000 có VAT ⇒ 1.000.000 chưa VAT.
-  assert.equal(row.c32WithVat, 1_050_000);
-  assert.equal(row.c32NoVat, 1_000_000);
-  // C47 chưa VAT trên nền 1.000.000:
-  //   c36 1% = 10.000 · c41 2% = 20.000 · c43 10% = 100.000
-  //   c44 50% CỦA C43 (phái sinh) = 50.000 · c45 3% = 30.000  ⇒ tổng 210.000
-  assert.equal(row.c47NoVat, 210_000);
-  // Cùng công thức trên nền có VAT (1.050.000) ⇒ 220.500.
-  assert.equal(row.c47WithVat, 220_500);
+  // Doanh thu giữ riêng làm cơ sở đối chiếu — KHÔNG phải là C32.
+  assert.equal(row.revenueWithVat, 1_050_000);
+  assert.equal(row.revenueNoVat, 1_000_000);
+  // C32 = 10% ngân sách × doanh thu.
+  assert.equal(row.c32Percent, 10);
+  assert.equal(row.c32NoVat, 100_000);
+  assert.equal(row.c32WithVat, 105_000);
+  // C47% = 10 − (1 + 2 + 3 + 0,5) = 3,5  ⇒ CÒN LẠI, không phải 6,5 đã chia.
+  assert.equal(row.c47Percent, 3.5);
+  assert.equal(row.c47NoVat, 35_000);
+  assert.equal(row.c47WithVat, 36_750);
+  assert.equal(row.c47Negative, false);
 });
 
-test('thiếu % một cột ⇒ C47 = null + nói thiếu cột nào; TUYỆT ĐỐI không suy 0 rồi cộng nửa tổng', async () => {
+test('C44 nằm NGOÀI công thức C47 — đúng file gốc (=AF-…-AS-AT, không có AR)', () => {
+  assert.equal(costAmounts.C47_SUBTRACTED.includes('c44'), false);
+  assert.deepEqual([...costAmounts.C47_EXCLUDED], ['c44']);
+  // Đúng 13 cột bị trừ, đúng thứ tự file gốc.
+  assert.deepEqual([...costAmounts.C47_SUBTRACTED], [
+    'c33', 'c34', 'c35', 'c36', 'c37', 'c38', 'c39', 'c40', 'c41', 'c42', 'c43', 'c45', 'c46',
+  ]);
+  assert.equal(costAmounts.C47_BUDGET, 'c32');
+  assert.equal(costAmounts.C47_REQUIRED.length, 14);
+});
+
+test('KHÔNG được dùng costColumns của NV (C36+C41+C43+C44+C45) làm công thức C47', () => {
+  // Đó là tập cột NV ĐƯỢC NHẬN ở màn "Chi phí của tôi" — khác hẳn công thức C47 của
+  // dòng dữ liệu. Lẫn hai tập này chính là lỗi bản đầu.
+  const templates = require('../src/employeeCostTemplates');
+  const fulltime = templates.resolveTemplate('DN001').costColumns;
+  assert.notDeepEqual([...costAmounts.C47_SUBTRACTED], [...fulltime]);
+  for (const key of fulltime) {
+    if (key === 'c44') continue;
+    assert.ok(costAmounts.C47_SUBTRACTED.includes(key), `${key} phải nằm trong công thức C47`);
+  }
+});
+
+test('chia vượt ngân sách ⇒ C47 ÂM và được ĐÁNH DẤU, không hiển thị lặng lẽ', async () => {
+  const store = memStore();
+  // Ngân sách 1% nhưng đã chia 6,5% ⇒ C47 = −5,5%.
+  await seed(store, [rateRow('120.HTNT', 'G1.A', { ...FULL, c32: 1 })]);
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, revenueRowsOf: () => revenueRows(1_050_000),
+  });
+  const row = result.rows[0];
+  assert.equal(row.c47Percent, -5.5);
+  assert.equal(row.c47Negative, true);
+  assert.equal(result.employees[0].negativePairs, 1);
+});
+
+test('thiếu % một cột ⇒ C47 = null + nói thiếu cột nào; TUYỆT ĐỐI không suy 0 rồi trừ nửa vời', async () => {
   const store = memStore();
   await seed(store, [rateRow('120.HTNT', 'G1.A', { ...FULL, c45: null })]);
   const result = costAmounts.buildAmounts({
@@ -66,8 +111,8 @@ test('thiếu % một cột ⇒ C47 = null + nói thiếu cột nào; TUYỆT Đ
   assert.equal(row.c47NoVat, null);
   assert.equal(row.c47Reason, 'THIEU_PHAN_TRAM');
   assert.deepEqual(row.c47Missing, ['c45']);
-  // C32 vẫn có (doanh thu không phụ thuộc %), nhưng tổng C47 của NV phải là null.
-  assert.equal(row.c32NoVat, 1_000_000);
+  // C32 vẫn tính được (chỉ cần % ngân sách), nhưng tổng C47 của NV phải là null.
+  assert.equal(row.c32NoVat, 100_000);
   assert.equal(result.employees[0].c47NoVat, null);
   assert.equal(result.employees[0].missingPairs, 1);
 });

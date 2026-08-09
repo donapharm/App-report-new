@@ -19,14 +19,24 @@ const PAGE_SIZE = 50; // CEO chốt 08/08/2026: tối đa 50 dòng/trang
 const money = (value) => (value == null ? '—' : `${Number(value).toLocaleString('vi-VN')} đ`);
 
 /** Ô tiền: đi qua rèm che ẩn số (data-sensitive); thiếu %/xung đột ⇒ '—' + lý do. */
-function MoneyCell({ value, reason, missing }) {
+function MoneyCell({ value, reason, missing, negative = false }) {
   if (value == null) {
     const title = reason === 'XUNG_DOT'
       ? 'Hai dòng cùng cặp trong kho % có tỷ lệ khác nhau — cần DataHub soát lại, không lấy bừa một bên'
       : `Thiếu % ở cột: ${(missing || []).map((k) => k.toUpperCase()).join(', ') || '—'} — bấm "Đồng bộ % chi phí" sau khi DataHub bổ sung`;
     return <td className="catalog-money is-missing" data-sensitive="" title={title}>—</td>;
   }
-  return <td className="catalog-money" data-sensitive="">{money(value)}</td>;
+  return <td className={`catalog-money${negative ? ' is-negative' : ''}`} data-sensitive=""
+    title={negative ? 'C47 ÂM — đã chi vượt quá số C32 được cấp cho cặp này' : undefined}>{money(value)}</td>;
+}
+
+/** Ô %. C47 âm nghĩa là chi vượt ngân sách C32 — phải NHÌN THẤY, không lẫn vào bảng. */
+function PercentCell({ value, negative = false }) {
+  if (value == null) return <td className="catalog-money is-missing" data-sensitive="" title="Chưa đủ % để tính">—</td>;
+  return <td className={`catalog-money${negative ? ' is-negative' : ''}`} data-sensitive=""
+    title={negative ? 'ÂM — đã chi vượt quá số C32 được cấp' : undefined}>
+    {negative && '⚠ '}{Number(value).toLocaleString('vi-VN', { maximumFractionDigits: 4 })}%
+  </td>;
 }
 
 const EFFECTIVE_LABEL = (value) => (value === 'on' ? 'Đang BẬT' : 'Đang TẮT');
@@ -166,10 +176,13 @@ export default function CostAmounts({ me }) {
 
   return <div className="cost-amounts-page">
     <div className="card catalog-help">
-      <b>💼 Thành tiền C32 · C47</b>
-      <p>Bốn cột tiền: <b>C32 chưa VAT · C32 có VAT · C47 chưa VAT · C47 có VAT</b>, theo cặp đơn vị × mã hàng.
-        Tiền <b>tự tính tại App Report</b> = % trong kho cục bộ × doanh thu kỳ (VAT chia theo hằng số chung ÷1,05);
-        C47 = tổng thành tiền tất cả cột chi phí của từng NV (full-time: C36+C41+C43+C44+C45). Không kéo tiền tổng từ DataHub.</p>
+      <b>💼 Thành tiền C32 · C47 — chi ra bao nhiêu, còn lại bao nhiêu</b>
+      <p><b>C32 là ĐẦU VÀO</b> — tổng % chi phí được cấp cho cặp đơn vị × mã hàng đó.
+        <b>C47 là ĐẦU RA</b> — phần <b>CÒN LẠI</b> sau khi 13 cột chi phí (C33→C46, <b>trừ C44</b>) đã lấy đi.</p>
+      <p className="cost-amounts-example">Ví dụ: doanh thu <b>100 triệu</b> (chưa VAT), C32 <b>10%</b> = 10 triệu được cấp;
+        chi hết <b>8%</b> = 8 triệu ⇒ C47 còn <b>2%</b> = <b>2 triệu</b> thu về. Mỗi cột có bản chưa VAT và có VAT (÷1,05).</p>
+      <p className="muted">Tiền do App Report tự nhân % × doanh thu — không kéo tiền tổng từ DataHub.
+        Thiếu % của bất kỳ cột nào trong 14 cột ⇒ ô để <b>—</b> kèm tên cột thiếu, không suy 0 rồi trừ nửa vời.</p>
     </div>
     <div className="card cost-amounts-controls">
       <label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
@@ -190,17 +203,24 @@ export default function CostAmounts({ me }) {
         <div className="cost-amounts-identity">Bản % đồng bộ <b>{formatDateTime(data.fetchedAt)}</b> bởi <b>{data.fetchedBy}</b> · doanh thu slot kỳ <b>{hubToUi(data.period)}</b> · {rows.length.toLocaleString('vi-VN')} cặp{rows.length > PAGE_SIZE && <> · Hiện trang {safePage}/{pageCount} ({PAGE_SIZE} dòng/trang)</>}</div>
         <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
           <th>NV</th><th>Đơn vị</th><th>Mã hàng</th><th>Tên hàng</th>
-          {(data.columns || []).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
+          <th className="catalog-money">Doanh thu chưa VAT</th>
+          <th className="catalog-money">C32 %</th>
+          {(data.columns || []).slice(0, 2).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
+          <th className="catalog-money">C47 %</th>
+          {(data.columns || []).slice(2).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
         </tr></thead><tbody>
           {visibleRows.map((r) => <tr key={`${r.empCode}-${r.unitCode}-${r.productCode}`}>
             <td><b>{r.empCode}</b></td>
             <td>{r.unitCode}</td>
             <td>{r.productCode}</td>
             <td>{r.productName}</td>
-            <td className="catalog-money" data-sensitive="">{money(r.c32NoVat)}</td>
-            <td className="catalog-money" data-sensitive="">{money(r.c32WithVat)}</td>
-            <MoneyCell value={r.c47NoVat} reason={r.c47Reason} missing={r.c47Missing} />
-            <MoneyCell value={r.c47WithVat} reason={r.c47Reason} missing={r.c47Missing} />
+            <td className="catalog-money" data-sensitive="">{money(r.revenueNoVat)}</td>
+            <PercentCell value={r.c32Percent} />
+            <MoneyCell value={r.c32NoVat} reason={r.c32Reason} missing={[]} />
+            <MoneyCell value={r.c32WithVat} reason={r.c32Reason} missing={[]} />
+            <PercentCell value={r.c47Percent} negative={r.c47Negative} />
+            <MoneyCell value={r.c47NoVat} reason={r.c47Reason} missing={r.c47Missing} negative={r.c47Negative} />
+            <MoneyCell value={r.c47WithVat} reason={r.c47Reason} missing={r.c47Missing} negative={r.c47Negative} />
           </tr>)}
         </tbody></table></div>
         {rows.length === 0 && <div className="muted catalog-empty">Không có cặp nào trong phạm vi đang lọc.</div>}
@@ -214,26 +234,31 @@ export default function CostAmounts({ me }) {
       <div className="card table-card">
         <div className="cost-amounts-identity"><b>Tổng theo NV</b> — tổng C47 chỉ chốt khi đủ % mọi cặp; hụt cặp nào thì ghi rõ, không đưa "tổng thiếu" ra như tổng thật.</div>
         <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
-          <th>NV</th><th>Số cặp</th><th>Cặp thiếu %</th>
+          <th>NV</th><th>Số cặp</th><th>Cặp thiếu %</th><th>Cặp C47 âm</th>
+          <th className="catalog-money">Doanh thu chưa VAT</th>
           {(data.columns || []).map((column) => <th key={column.key} className="catalog-money">{column.label}</th>)}
         </tr></thead><tbody>
           {(data.employees || []).map((item) => <tr key={item.empCode}>
             <td><b>{item.empCode}</b></td>
             <td>{item.pairCount}</td>
             <td>{item.missingPairs ? <b className="cost-amounts-warn">{item.missingPairs}</b> : 0}</td>
-            <td className="catalog-money" data-sensitive="">{money(item.c32NoVat)}</td>
-            <td className="catalog-money" data-sensitive="">{money(item.c32WithVat)}</td>
-            <td className="catalog-money" data-sensitive="">{money(item.c47NoVat)}</td>
-            <td className="catalog-money" data-sensitive="">{money(item.c47WithVat)}</td>
+            <td title="Số cặp đã chi vượt quá C32 được cấp">{item.negativePairs ? <b className="cost-amounts-warn">{item.negativePairs}</b> : 0}</td>
+            <td className="catalog-money" data-sensitive="">{money(item.revenueNoVat)}</td>
+            <MoneyCell value={item.c32NoVat} reason="THIEU_PHAN_TRAM" missing={['C32']} />
+            <MoneyCell value={item.c32WithVat} reason="THIEU_PHAN_TRAM" missing={['C32']} />
+            <MoneyCell value={item.c47NoVat} reason="THIEU_PHAN_TRAM" missing={[]} />
+            <MoneyCell value={item.c47WithVat} reason="THIEU_PHAN_TRAM" missing={[]} />
           </tr>)}
           {isCeo && data.grand && <tr className="cost-amounts-grand">
             <td><b>TỔNG CỘNG</b></td>
             <td><b>{data.grand.pairCount}</b></td>
             <td>{data.grand.missingPairs ? <b className="cost-amounts-warn">{data.grand.missingPairs}</b> : 0}</td>
-            <td className="catalog-money" data-sensitive=""><b>{money(data.grand.c32NoVat)}</b></td>
-            <td className="catalog-money" data-sensitive=""><b>{money(data.grand.c32WithVat)}</b></td>
-            <td className="catalog-money" data-sensitive=""><b>{money(data.grand.c47NoVat)}</b></td>
-            <td className="catalog-money" data-sensitive=""><b>{money(data.grand.c47WithVat)}</b></td>
+            <td>{data.grand.negativePairs ? <b className="cost-amounts-warn">{data.grand.negativePairs}</b> : 0}</td>
+            <td className="catalog-money" data-sensitive=""><b>{money(data.grand.revenueNoVat)}</b></td>
+            <MoneyCell value={data.grand.c32NoVat} reason="THIEU_PHAN_TRAM" missing={['C32']} />
+            <MoneyCell value={data.grand.c32WithVat} reason="THIEU_PHAN_TRAM" missing={['C32']} />
+            <MoneyCell value={data.grand.c47NoVat} reason="THIEU_PHAN_TRAM" missing={[]} />
+            <MoneyCell value={data.grand.c47WithVat} reason="THIEU_PHAN_TRAM" missing={[]} />
           </tr>}
         </tbody></table></div>
       </div>
