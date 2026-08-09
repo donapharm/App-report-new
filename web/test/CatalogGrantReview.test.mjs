@@ -225,3 +225,35 @@ test('nút "Thử lại" gọi THẲNG load(), không đi vòng qua setOpen', ()
   // Không được quay lại kiểu bảo người dùng đóng/mở panel.
   assert.doesNotMatch(page, /Thu gọn<\/b> rồi <b>Mở phân quyền<\/b> lại/);
 });
+
+/* ── HAI KHUNG ĐỎ CÙNG MỘT GỐC — và cái thứ hai đổ tội nhầm (CEO 09/08 23:59) ──
+ * Ảnh CEO: banner đỏ "Không hỏi được bảng mã đơn vị → nhóm (Failed to fetch)" VÀ
+ * dòng "16 đơn vị chưa nhận diện được nhóm (007.BVĐK…, 008.BVĐK…, 015.TTYT…)".
+ * Nhưng 007/008/015 RÕ RÀNG có nhóm — chúng chỉ "không nhận diện được" vì bảng tra
+ * chưa tải về. Đổ tội cho dữ liệu khiến CEO đi sửa nhầm chỗ và nghi ngờ chính số
+ * liệu của mình.                                                                */
+
+test('‼ chưa hỏi được máy chủ ⇒ màn chi tiết NÓI ĐÚNG lý do, KHÔNG bảo NV thiếu nhóm', () => {
+  assert.match(page, /Chưa hỏi được máy chủ bảng "mã đơn vị → nhóm"<\/b> \(\{groupsError\}\)/);
+  assert.match(page, /<b>KHÔNG phải \{row\.empCode\} thiếu nhóm<\/b>/);
+  // Và phải chặn tay CEO lại: lưới nhóm trống thì cấp quyền là cấp mù.
+  assert.match(page, /đừng cấp quyền<\/b> vì lưới nhóm đang trống/);
+});
+
+test('dòng "N đơn vị chưa nhận diện được nhóm" bị TẮT khi lỗi là do chưa hỏi được', () => {
+  assert.match(page, /\{!!row\.ungroupedUnits\.length && !groupsError &&/);
+});
+
+test('màn chi tiết có nút Thử lại tại chỗ — không bắt quay ra đầu menu', () => {
+  assert.match(page, /onRetryGroups=\{\(\) => load\(\)\}/);
+  assert.match(page, /onRetryGroups && <div className="catalog-grant-retry">/);
+});
+
+test('‼ hụt mạng nhất thời TỰ THỬ LẠI — không đẩy việc của máy sang cho người', () => {
+  assert.match(page, /const withRetry = async \(call, tries = 3\)/);
+  assert.match(page, /withRetry\(\(\) => api\.catalogCostUnitGroups\(distinctUnits\)\)/);
+  // Nghỉ tăng dần giữa các lượt, không nện liên tiếp.
+  assert.match(page, /setTimeout\(done, 400 \* \(attempt \+ 1\)\)/);
+  // Hai lời gọi kia KHÔNG bọc retry — chúng hỏng thì đã có đường báo lỗi riêng.
+  assert.match(page, /api\.catalogCostGrants\(\), api\.catalogCostRates\(\), withRetry/);
+});

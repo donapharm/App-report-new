@@ -1,3 +1,20 @@
+### 2026-08-10 00:10 (giờ VN) — 🧩 Hai khung đỏ ở màn Phân quyền: CÙNG MỘT GỐC, và cái thứ hai đổ tội nhầm
+
+CEO: *"chỗ phân quyền này tôi chưa hiểu, nó báo lỗi nọ kia là sao."* Xem ảnh thì thấy **hai khung đỏ nói hai chuyện khác nhau về cùng một sự cố** — đọc xong không ai hiểu nổi:
+
+1. *"Không hỏi được bảng 'mã đơn vị → nhóm' (**Failed to fetch**)"* — đúng nguyên nhân.
+2. *"**16 đơn vị chưa nhận diện được nhóm** (007.BVĐK KV ĐỊNH QUÁN, 008.BVĐK KV LONG KHÁNH, 015.TTYT H. CẨM MỸ…)"* — **đổ tội cho dữ liệu**.
+
+**Khung 2 sai.** Các mã `007.` `008.` `015.` **rõ ràng có nhóm** — bằng chứng ngay dòng dưới: *"Đang cấp: C36: 140, 147, 149, 151 · C43: 007, 008, 015, 017, 019, 021, 042"*. Chúng chỉ "không nhận diện được" vì **bảng tra chưa tải về**. Nói sai nguyên nhân khiến CEO đi sửa nhầm chỗ và ngồi nghi ngờ chính dữ liệu của mình — đúng thứ đã ngốn cả tối nay ở chỗ khác.
+
+**Sửa:** khi lỗi là *chưa hỏi được máy chủ*, màn chi tiết nói đúng như vậy, kèm **nút Thử lại tại chỗ** và câu chặn tay: *"lưới nhóm đang trống thì **đừng cấp quyền**"* — cấp lúc này là cấp mù. Dòng "N đơn vị chưa nhận diện được nhóm" **bị tắt** trong tình huống đó.
+
+**Chặn gốc:** *"Failed to fetch"* là **hụt mạng nhất thời**. Bắt CEO tự bấm "Thử lại" cho một cú trượt mạng là đẩy việc của máy sang cho người. Nay tự thử **3 lượt, nghỉ tăng dần (0,4s → 0,8s)**; vẫn hỏng mới báo — lúc đó là hỏng thật.
+
+Test: server 1169 / 7 fail cố hữu · web **410/410** · build sạch.
+
+---
+
 ### 2026-08-09 23:35 (giờ VN) — 🚧 GỠ NÚT THẮT: 502 cửa danh mục đang KHOÁ CHẾT nút đồng bộ % · đổi màn hết quay vòng
 
 CEO gửi ảnh kỳ 07.2026 lúc 23:24 — ba dữ kiện trong một ảnh chỉ ra đúng chuỗi nhân quả:

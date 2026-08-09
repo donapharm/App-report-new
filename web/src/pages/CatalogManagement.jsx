@@ -629,7 +629,7 @@ function auditColumnsText(value) {
  * mã số (không phải loại đơn vị), mỗi hàng liệt kê các mã bên trong để thấy rõ đang
  * mở cho đơn vị nào. Hàng "Mọi nhóm" trên đầu bật/tắt cả cột; nút cuối mỗi hàng bật/tắt cả hàng.
  */
-function EmployeeGrantDetail({ row, columns, onBack, onChange }) {
+function EmployeeGrantDetail({ row, columns, onBack, onChange, groupsError = '', onRetryGroups }) {
   if (!row) return null;
   const keys = columns.map((column) => column.key);
   const set = (fn) => onChange((cur) => fn(cur));
@@ -646,10 +646,24 @@ function EmployeeGrantDetail({ row, columns, onBack, onChange }) {
       </button>
     </div>
 
-    {!row.availableGroups.length ? <div className="catalog-alert error" role="alert">
-      Nhân viên này chưa có đơn vị nào nhận diện được nhóm — chưa cấp theo nhóm được.
-      {' '}Nếu MỌI nhân viên đều báo 0 nhóm thì đây không phải lỗi dữ liệu: xem cảnh báo đỏ ở đầu menu.
-    </div> : <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-grant-grid">
+    {/* ‼ CHƯA HỎI ĐƯỢC MÁY CHỦ ≠ ĐƠN VỊ THIẾU NHÓM (CEO không hiểu nổi hai khung đỏ,
+        09/08 23:59). Bảng "mã đơn vị → nhóm" tải hỏng ⇒ mọi NV hiện 0 nhóm; bản cũ
+        vẫn ghi "chưa có đơn vị nào nhận diện được nhóm" — đổ tội cho DỮ LIỆU trong
+        khi mã 007/008/015 rõ ràng có nhóm. Nói sai nguyên nhân thì CEO đi sửa nhầm
+        chỗ, và ngồi nghi ngờ chính dữ liệu của mình. */}
+    {!row.availableGroups.length ? (groupsError
+      ? <div className="catalog-alert error" role="alert">
+        ⛔ <b>Chưa hỏi được máy chủ bảng "mã đơn vị → nhóm"</b> ({groupsError}) — nên màn này hiện <b>0 nhóm</b>.
+        {' '}<b>KHÔNG phải {row.empCode} thiếu nhóm</b>: các mã như {row.availableUnits.slice(0, 2).join(', ') || '007.…'} vốn có nhóm.
+        {' '}Bấm <b>Thử lại</b> rồi mở lại nhân viên này; chưa thử lại được thì <b>đừng cấp quyền</b> vì lưới nhóm đang trống.
+        {onRetryGroups && <div className="catalog-grant-retry">
+          <button type="button" className="btn" onClick={onRetryGroups}>↻ Thử lại</button>
+        </div>}
+      </div>
+      : <div className="catalog-alert error" role="alert">
+        Nhân viên này chưa có đơn vị nào nhận diện được nhóm — chưa cấp theo nhóm được.
+        {' '}Nếu MỌI nhân viên đều báo 0 nhóm thì đây không phải lỗi dữ liệu: xem cảnh báo đỏ ở đầu menu.
+      </div>) : <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-grant-grid">
       {/* Mỗi cột có nút bật/tắt CẢ CỘT, cân đối với nút "Chọn hết" ở cuối mỗi hàng.
           CEO 09/08/2026: "cho chọn hết tất cả theo cột, ví dụ DN001 chọn hết tất cả
           cột C41, thay vì phải đi tích từng dòng một."
@@ -705,7 +719,7 @@ function EmployeeGrantDetail({ row, columns, onBack, onChange }) {
       </tbody>
     </table></div>}
 
-    {!!row.ungroupedUnits.length && <div className="catalog-alert error" role="status">
+    {!!row.ungroupedUnits.length && !groupsError && <div className="catalog-alert error" role="status">
       ⚠ {row.ungroupedUnits.length} đơn vị chưa nhận diện được nhóm ({row.ungroupedUnits.slice(0, 5).join(', ')}{row.ungroupedUnits.length > 5 ? '…' : ''}) — chỉ hàng <b>"Mọi nhóm"</b> mới phủ tới các đơn vị này.
     </div>}
     <div className="catalog-grant-detail-foot"><b>Đang cấp:</b> {grantSummary(row)}</div>
@@ -821,8 +835,24 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
       // Bảng "đơn vị → nhóm" hỏi backend MỘT lần cho các mã distinct — cùng bộ
       // nhóm màn Chi phí đang dùng, không chép luật tách nhóm sang frontend.
       const distinctUnits = [...new Set((catalogRows || []).map((row) => String(row?.unit_code || '').trim()).filter(Boolean))];
+      /* ‼ TỰ THỬ LẠI — "Failed to fetch" là hụt mạng nhất thời (CEO gặp 09/08 23:59).
+         Bảng "mã đơn vị → nhóm" hỏng MỘT lượt là cả menu phân quyền hiện 0 nhóm và
+         CEO không cấp được gì. Bắt người dùng tự bấm "Thử lại" cho một cú trượt mạng
+         là đẩy việc của máy sang cho người. Thử 3 lượt, nghỉ tăng dần; vẫn hỏng thì
+         mới báo — lúc đó là hỏng thật, có nút bấm tay. */
+      const withRetry = async (call, tries = 3) => {
+        let lastError;
+        for (let attempt = 0; attempt < tries; attempt += 1) {
+          try { return await call(); }
+          catch (error) {
+            lastError = error;
+            if (attempt < tries - 1) await new Promise((done) => setTimeout(done, 400 * (attempt + 1)));
+          }
+        }
+        throw lastError;
+      };
       const [grants, rates, unitGroups] = await Promise.allSettled([
-        api.catalogCostGrants(), api.catalogCostRates(), api.catalogCostUnitGroups(distinctUnits),
+        api.catalogCostGrants(), api.catalogCostRates(), withRetry(() => api.catalogCostUnitGroups(distinctUnits)),
       ]);
       if (grants.status !== 'fulfilled') throw new Error(grants.reason?.message || 'Không tải được phân quyền');
       const columns = rates.status === 'fulfilled' ? (rates.value.columns || []) : [];
@@ -967,6 +997,8 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
             columns={panel.columns}
             onBack={() => setSelected('')}
             onChange={(fn) => setPanel(fn)}
+            groupsError={groupsError}
+            onRetryGroups={() => load()}
           />}
           <div className="catalog-grants-actions">
             <button type="button" className="btn" disabled={saving || !pending} onClick={save}>
