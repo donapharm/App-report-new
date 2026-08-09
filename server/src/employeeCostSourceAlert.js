@@ -22,6 +22,8 @@
 const persist = require('./persist');
 const notifyChannels = require('./notifyChannels');
 const auth = require('./auth');
+const accessPolicy = require('./accessPolicy');
+const targetNotify = require('./targetNotify');
 const store = require('./store');
 
 const STATE_FILE = 'employee_cost_source_alert_state';
@@ -145,11 +147,38 @@ function buildEmployeeMessage({ ky, recovered }) {
 
 // Gửi tin mềm cho các NV chỉ định (chỉ NV có Telegram; NV không liên kết thì bỏ qua,
 // không ép). Không bao giờ ném lỗi ra ngoài.
+/**
+ * ‼ AI KHÔNG ĐƯỢC NHẬN TIN MỀM NÀY (phát hiện 09/08/2026 khi CEO hỏi rà DN021/
+ * DN023/DN004/VP004/DN022/DN002).
+ *
+ * Bộ này trước đây gửi cho MỌI mã có liên kết Telegram, không lọc gì. Hai hậu quả:
+ *  1. **Mã bị khoá đăng nhập** (DN021 · DN023 nằm trong 16 mã `accessPolicy`) vẫn
+ *     nhận tin bảo "số trên màn Chi phí của tôi tạm thời chưa đầy đủ" — trong khi
+ *     họ còn không mở được app để xem. Vô nghĩa với người nhận, và là rò rỉ tín
+ *     hiệu vận hành ra ngoài phạm vi đã đóng.
+ *  2. **Mã trong `config/notify_optout.json`** (DN021 · DN023 · VP004 · VP018) vẫn
+ *     nhận, dù chính file đó ghi phạm vi chặn gồm "tổng chi phí".
+ *
+ * Cảnh báo gửi CEO/ADMIN thì KHÔNG lọc — người xử lý phải thấy đủ mọi mã thiếu dữ
+ * liệu, kể cả mã đã khoá. Chỉ lọc ở tin gửi CHÍNH NV.
+ *
+ * KHÔNG dùng `isMonetaryNotifyBlocked` ở đây: đó là luật cho tin THƯỞNG/PHẠT BẰNG
+ * TIỀN. Tin này không có tiền, và DN002/DN004/DN022 vẫn cần biết số của họ đang
+ * tạm tính. Lấy danh sách của việc khác dùng cho việc này đúng là lỗi đã dính 28/07.
+ */
+function employeeNoticeBlocked(empCode) {
+  const code = String(empCode || '').trim().toUpperCase();
+  if (!code) return true;
+  try { if (accessPolicy.isLoginBlocked(code)) return true; } catch { /* thiếu policy thì xét tiếp */ }
+  try { return targetNotify.isMuted(code); } catch { return false; }
+}
+
 async function notifyAffectedEmployees(empCodes = [], { ky, recovered }, sender) {
   const map = employeeTelegramMap();
   const text = buildEmployeeMessage({ ky, recovered });
-  let targeted = 0; let sent = 0;
+  let targeted = 0; let sent = 0; let blocked = 0;
   for (const code of empCodes) {
+    if (employeeNoticeBlocked(code)) { blocked += 1; continue; }
     const chatId = map.get(String(code).toUpperCase());
     if (!chatId) continue;
     targeted += 1;
@@ -160,7 +189,7 @@ async function notifyAffectedEmployees(empCodes = [], { ky, recovered }, sender)
       console.warn('[employee-cost-alert] gửi tin NV thất bại', { empCode: code, message: error.message });
     }
   }
-  return { targeted, sent };
+  return { targeted, sent, blocked };
 }
 
 async function send(text) {
@@ -277,5 +306,5 @@ function checkAndNotify(payload = {}, ky = '', opts = {}) {
 module.exports = {
   STATE_FILE, REMIND_MS, CONFIRM_ROUNDS, MIN_ALERT_GAP_MS, EMPLOYEE_QUIET_MS, FLAP_WINDOW_MS, FLAP_MIN_CHANGES,
   checkAndNotify, checkAndNotifyInner, buildMessage, signatureOf, adminRecipients,
-  buildEmployeeMessage, notifyAffectedEmployees, employeeTelegramMap,
+  buildEmployeeMessage, notifyAffectedEmployees, employeeTelegramMap, employeeNoticeBlocked,
 };

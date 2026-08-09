@@ -1,3 +1,35 @@
+### 2026-08-09 12:05 (giờ VN) — 🔒 Rà người nhận tin: mã KHOÁ ĐĂNG NHẬP và mã OPT-OUT vẫn đang nhận tin cảnh báo chi phí
+
+CEO yêu cầu rà: *"ngoài 16 tài khoản bị khoá thì DN021/DN023/DN004/VP004 có bị gửi tin nhắn telegram/email không, riêng DN022/DN002 thì gửi như thế nào?"*
+
+**Rà xong phát hiện một lỗ hổng thật.** `employeeCostSourceAlert.notifyAffectedEmployees` gửi tin mềm cho **mọi mã có liên kết Telegram, không lọc gì cả**:
+
+- **DN021 · DN023** nằm trong 16 mã `accessPolicy.BLOCKED_LOGIN_EMP_CODES` — bị khoá đăng nhập, **vẫn nhận** tin bảo *"số trên màn Chi phí của tôi tạm thời chưa đầy đủ"*. Vô nghĩa với người nhận vì họ không mở được app, và là rò rỉ tín hiệu vận hành ra ngoài phạm vi đã đóng.
+- **VP004 · VP018** nằm trong `config/notify_optout.json` — **vẫn nhận**, dù chính file đó ghi phạm vi chặn gồm "tổng chi phí".
+
+Đã thêm `employeeNoticeBlocked()`: chặn theo `accessPolicy.isLoginBlocked` **+** `targetNotify.isMuted` (= notify_optout + cờ `no_auto_notify`). Mã rỗng/rác cũng fail-closed.
+
+**Hai ranh giới cố tình KHÔNG động tới:**
+1. **Cảnh báo gửi CEO/ADMIN vẫn liệt kê đủ mọi mã**, kể cả mã đã khoá — người xử lý phải thấy toàn cảnh dữ liệu thiếu. Chỉ lọc ở tin gửi CHÍNH NV. Số bị chặn được đếm riêng (`blocked`), không cộng vào số đã gửi.
+2. **KHÔNG dùng `employeeIncentivePolicy.isMonetaryNotifyBlocked` ở đây.** Đó là luật cho tin **thưởng/phạt bằng tiền**; tin này không có tiền, và DN002/DN004/DN022 vẫn cần biết số của họ đang tạm tính. *Lấy danh sách của việc khác dùng cho việc này đúng là lỗi đã dính 28/07.*
+
+#### Bảng trả lời CEO (theo LUẬT TRONG CODE)
+
+| Mã | Khoá đăng nhập | Tin hiệu suất (target · mốc thưởng · tổng chi phí · báo cáo DT) | Tin thưởng/phạt bằng TIỀN | Tin "chi phí đang tạm tính" |
+|---|---|---|---|---|
+| DN021 · DN023 | **Có** (trong 16) | Không | Không | **Không** (trước bản này: CÓ ⚠) |
+| VP004 | Không | Không (optout) | Không | **Không** (trước: CÓ ⚠) |
+| DN004 · DN002 | Không | **Có — nhận đủ** | **Không** | Có |
+| DN022 | Không | **Có** | **Không** | Có |
+
+**DN022 còn một luật riêng:** `SEPARATE_FORMULA_EMP_CODES` — không đi qua công thức thưởng P1/P2 và không bị phạt theo target/C45, chờ công thức riêng CEO ban hành. **DN002 · DN004 · DN022 vẫn nằm trong `XU_PENALTY_EMP_CODES`** nên vẫn được tính phạt thiếu Xu.
+
+**‼ Giới hạn của kết luận này:** máy dựng chạy dữ liệu MẪU, không phải danh bạ thật. Đã kiểm chứng được **luật lọc trong code**; **chưa** kiểm chứng được mã nào hiện còn liên kết Telegram/email trên máy chủ thật. Muốn biết ai thực sự nhận thì phải hỏi bot chạy PROD.
+
+Server 1061/1068 (7 fail cố hữu) · +5 test khoá người nhận.
+
+---
+
 ### 2026-08-09 11:40 (giờ VN) — 🔕 GẤP: chặn spam cảnh báo "thiếu dữ liệu chi phí" gửi nhân viên
 
 CEO: *"phần chi phí của các ô KPI khi thì kết nối đủ, khi thì báo thiếu… nên con bot cứ báo tin nhắn về cho các NV là chưa có đủ dữ liệu, này nọ và không báo doanh thu ngày hôm nay bao nhiêu. Anh rất bực và khó chịu, không biết lỗi nguyên nhân."*

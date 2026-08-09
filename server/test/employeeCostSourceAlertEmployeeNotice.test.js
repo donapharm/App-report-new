@@ -146,3 +146,57 @@ test('khôi phục CHỈ báo cho NV đã thực sự nhận tin lỗi, không l
     assert.deepEqual(empSends, ['111'], 'chỉ người từng bị làm phiền mới được báo đã xong');
   });
 });
+
+/* ── AI KHÔNG ĐƯỢC NHẬN TIN MỀM (CEO hỏi rà 09/08/2026) ────────────────────── */
+
+const accessPolicy = require('../src/accessPolicy');
+
+test('mã bị KHOÁ ĐĂNG NHẬP không nhận tin — họ còn không mở được app để xem', () => {
+  // DN021 · DN023 nằm trong 16 mã accessPolicy chặn đăng nhập. Nhắn họ "số trên màn
+  // Chi phí của tôi tạm thời chưa đầy đủ" là vô nghĩa với người nhận.
+  for (const code of ['DN021', 'DN023']) {
+    assert.equal(accessPolicy.isLoginBlocked(code), true, `${code} phải nằm trong danh sách khoá`);
+    assert.equal(alert.employeeNoticeBlocked(code), true, `${code} không được nhận tin mềm`);
+  }
+});
+
+test('mã trong notify_optout không nhận tin — file đó ghi rõ phạm vi gồm "tổng chi phí"', () => {
+  for (const code of ['VP004', 'VP018']) {
+    assert.equal(alert.employeeNoticeBlocked(code), true, `${code} nằm trong notify_optout`);
+  }
+});
+
+test('‼ KHÔNG lấy nhầm luật tin TIỀN: DN002 · DN004 · DN022 VẪN nhận tin này', () => {
+  // employeeIncentivePolicy.MONETARY_NOTIFY_BLOCKED chặn ba mã này khỏi tin THƯỞNG/
+  // PHẠT BẰNG TIỀN. Tin đây không có tiền, và họ vẫn cần biết số của mình đang tạm
+  // tính. Lấy danh sách của việc khác dùng cho việc này đúng là lỗi đã dính 28/07.
+  const incentive = require('../src/employeeIncentivePolicy');
+  for (const code of ['DN002', 'DN004', 'DN022']) {
+    assert.equal(incentive.isMonetaryNotifyBlocked(code), true, `${code} bị chặn tin TIỀN`);
+    assert.equal(alert.employeeNoticeBlocked(code), false, `${code} vẫn phải nhận tin chi phí tạm tính`);
+  }
+});
+
+test('mã rỗng/rác thì fail-closed, không gửi bừa', () => {
+  for (const code of ['', null, undefined, '   ']) assert.equal(alert.employeeNoticeBlocked(code), true);
+});
+
+test('người bị chặn được ĐẾM RIÊNG, không lẫn vào số đã gửi', async () => {
+  await withTelegramMap([
+    { emp_code: 'DN021', telegram_id: '999' },   // khoá đăng nhập, vẫn còn link Telegram
+    { emp_code: 'DN008', telegram_id: '333' },
+  ], async () => {
+    const empSends = [];
+    const sendEmployeeImpl = async (chatId) => { empSends.push(chatId); return { ok: true }; };
+    const sendImpl = async () => ({ sent: 1 });
+    const now = Date.now();
+    const list = ['DN021', 'DN008'];
+    await alert.checkAndNotify(payloadWith(list, 80), 'B1.2026', { now, sendImpl, sendEmployeeImpl });
+    const res = await alert.checkAndNotify(payloadWith(list, 80), 'B1.2026', { now: now + 1000, sendImpl, sendEmployeeImpl });
+    assert.deepEqual(empSends, ['333'], 'chỉ DN008 nhận, DN021 bị chặn dù còn link');
+    assert.equal(res.employeeNotified.blocked, 1);
+    assert.equal(res.employeeNotified.sent, 1);
+    // Nhưng CEO/ADMIN VẪN phải thấy DN021 trong danh sách thiếu dữ liệu.
+    assert.ok(res.employees.includes('DN021'), 'cảnh báo cho người xử lý không được giấu mã đã khoá');
+  });
+});
