@@ -1,3 +1,20 @@
+### 2026-08-09 22:10 (giờ VN) — 🩺 Phân biệt "DataHub thiếu %" với "lệch định dạng mã" — cái bẫy đã ngốn cả tối nay
+
+Claude tự thêm sau khi mất gần trọn buổi tối đổ tội nhầm cho DataHub. **Hai cảnh hiện ra màn Y HỆT NHAU** — mọi ô là `—` kèm chữ *"thiếu %"* — nhưng cách xử lý **ngược nhau hoàn toàn**:
+- DataHub thiếu % thật ⇒ đi đòi DataHub bổ sung số;
+- hai bên ghi **mã đơn vị / mã hàng khác định dạng** (kho % ghi `120.HTNT`, doanh thu ghi `120`) ⇒ lỗi **ghép khoá của chính App Report**, đòi DataHub cũng vô ích.
+
+Nay `buildAmounts` đếm sức khoẻ phép ghép (`joinHealth`): bao nhiêu cặp bên kho %, bao nhiêu cặp bên doanh thu, ghép được bao nhiêu, kèm **mẫu mã thật của cả hai bên**. Màn hiện:
+- **Giao nhau BẰNG KHÔNG mà hai bên đều có số** ⇒ nói thẳng *"đây KHÔNG phải DataHub thiếu %"*, in mẫu mã hai bên để sửa ngay, không phải đi mò.
+- **Ghép được một phần** ⇒ *"chỉ ghép được N/M cặp… số tổng là tổng của phần ghép được, không phải toàn bộ"*. Tổng thiếu không được giả làm tổng thật.
+- **Một bên rỗng** ⇒ **KHÔNG** kết luận gì (không suy ra được gì về định dạng mã) — chỉ kết luận khi bằng chứng không thể hiểu cách khác.
+
+Kiểm luôn hai màn CEO sắp mở: **"Mở bảng %"** (`costRatesTable.buildTable`) **KHÔNG dính** lỗi CEO-mù (nó duyệt mọi NV khi `isCeo`), dùng được ngay trên bản đang chạy.
+
+Test: server **1157** pass / 7 fail cố hữu · web **385/385** · build sạch.
+
+---
+
 ### 2026-08-09 21:55 (giờ VN) — ✅ Phân quyền: lưu xong phải KIỂM LẠI TỪ MÁY CHỦ rồi mới dám nói "hoàn thành"
 
 CEO nêu hai việc về màn Phân quyền:

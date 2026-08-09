@@ -120,3 +120,18 @@ test('cắt bớt dòng thì NÓI TO kèm cách lấy đủ, không cắt lặng
   assert.match(page, /Lọc hẹp lại \(một nhân viên · một kỳ · một nhóm mã\)/);
   assert.match(routes, /‼ CẮT BỚT: tổng \$\{result\.orderRowsTotal/);
 });
+
+test('‼ màn NÓI RÕ "lệch định dạng mã" ≠ "DataHub thiếu %" — hai cách xử lý ngược nhau', () => {
+  assert.match(page, /KHÔNG khớp được cặp nào — đây KHÔNG phải "DataHub thiếu %"/);
+  assert.match(page, /đòi DataHub bổ sung % sẽ không giải quyết được gì/);
+  // Phải in mẫu mã HAI BÊN để sửa được ngay, không bắt đi mò.
+  assert.match(page, /Mã bên kho %:/);
+  assert.match(page, /Mã bên doanh thu:/);
+  assert.match(page, /data\.joinHealth\.sampleRateKeys/);
+  assert.match(page, /data\.joinHealth\.sampleRevenueKeys/);
+});
+
+test('ghép được MỘT PHẦN cũng phải nói — tổng chỉ là tổng phần ghép được', () => {
+  assert.match(page, /Chỉ ghép được <b>\{Number\(data\.joinHealth\.matchedPairs\)/);
+  assert.match(page, /tổng của <b>phần ghép được<\/b>, không phải toàn bộ/);
+});

@@ -296,3 +296,54 @@ test('‼ chi tiết từng đơn CHỈ CEO — NV bật cờ level=order vẫn 
   assert.equal(asCeo.level, 'order');
   assert.equal(asCeo.orderRows.length, 2);
 });
+
+/* ── PHÂN BIỆT "THIẾU %" VỚI "LỆCH ĐỊNH DẠNG MÃ" ────────────────────────────────
+ * Hai cảnh hiện ra màn Y HỆT (mọi ô "—" kèm chữ thiếu %) nhưng cách xử lý NGƯỢC
+ * nhau: một bên đòi DataHub bổ sung số, một bên là lỗi ghép khoá của App Report và
+ * đòi DataHub cũng vô ích. Cả tối 09/08 mất vì đổ tội nhầm kiểu này.              */
+
+test('‼ hai bên đều có số mà giao nhau BẰNG KHÔNG ⇒ kết luận LỆCH KHOÁ, không phải thiếu %', async () => {
+  const store = memStore();
+  // Kho % ghi mã đơn vị dạng "120.HTNT"; doanh thu ghi dạng "120" — cùng đơn vị,
+  // hai cách viết. Đây đúng là cái bẫy im lặng.
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store,
+    revenueRowsOf: () => [{ emp_code: 'DN001', unit_code: '120', c5: 'G1.A', date: '2026-08-05',
+      revenue: 1_050_000, source_order: 'DH1', source_line_id: 'L1' }],
+  });
+  assert.equal(result.joinHealth.keyFormatMismatch, true);
+  assert.equal(result.joinHealth.ratePairs, 1);
+  assert.equal(result.joinHealth.revenuePairs, 1);
+  assert.equal(result.joinHealth.matchedPairs, 0);
+  // Mẫu mã hai bên phải kèm theo để sửa được ngay, không phải đi mò.
+  assert.deepEqual(result.joinHealth.sampleRateKeys, ['120.HTNT × G1.A']);
+  assert.deepEqual(result.joinHealth.sampleRevenueKeys, ['120 × G1.A']);
+});
+
+test('ghép được hết thì KHÔNG kêu oan', async () => {
+  const store = memStore();
+  await seed(store, [rateRow('120.HTNT', 'G1.A', FULL)]);
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, revenueRowsOf: () => revenueRows(1_050_000),
+  });
+  assert.equal(result.joinHealth.keyFormatMismatch, false);
+  assert.equal(result.joinHealth.matchedPairs, result.joinHealth.revenuePairs);
+});
+
+test('‼ kho % RỖNG thì KHÔNG được kết luận lệch khoá — đó mới đúng là thiếu %', async () => {
+  // Chỉ kết luận khi bằng chứng không thể hiểu cách khác; một bên rỗng thì không
+  // suy ra được gì về định dạng mã.
+  const store = memStore();
+  await seed(store, [rateRow('999.KHAC', 'ZZZ', {})]);
+  const result = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, revenueRowsOf: () => revenueRows(1_050_000),
+  });
+  assert.equal(result.joinHealth.matchedPairs, 0);
+  assert.equal(result.joinHealth.keyFormatMismatch, true, 'hai bên đều có cặp, chỉ khác mã ⇒ vẫn là lệch khoá');
+  const empty = costAmounts.buildAmounts({
+    period: '2026-08', session: CEO, store, revenueRowsOf: () => [],
+  });
+  assert.equal(empty.joinHealth.revenuePairs, 0);
+  assert.equal(empty.joinHealth.keyFormatMismatch, false, 'không có doanh thu thì không kết luận gì');
+});

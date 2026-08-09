@@ -241,6 +241,28 @@ export default function CostAmounts({ me }) {
         : <p>Kỳ {from === to ? from : `${from} → ${to}`} không có dữ liệu của Anh/Chị trong kho % cục bộ.</p>}
     </div>}
 
+    {/* ‼ PHÂN BIỆT HAI CẢNH GIỐNG HỆT NHAU TRÊN MÀN, XỬ LÝ NGƯỢC NHAU HOÀN TOÀN:
+        · DataHub thiếu % thật  → đi đòi DataHub bổ sung số;
+        · hai bên ghi mã đơn vị khác định dạng → lỗi ghép của App Report, đòi DataHub
+          cũng vô ích. Cả hai đều hiện "—" kèm chữ "thiếu %", nên phải NÓI RA khi
+          bằng chứng đã rõ: cả hai bên có số mà giao nhau BẰNG KHÔNG. */}
+    {!loading && !error && data?.joinHealth?.keyFormatMismatch && <div className="card catalog-alert error" role="alert">
+      <b>‼ KHÔNG khớp được cặp nào — đây KHÔNG phải "DataHub thiếu %"</b>
+      <div>Kho % có <b>{Number(data.joinHealth.ratePairs).toLocaleString('vi-VN')}</b> cặp, doanh thu có <b>{Number(data.joinHealth.revenuePairs).toLocaleString('vi-VN')}</b> cặp,
+        nhưng <b>không cặp nào ghép được</b>. Hai bên đang ghi <b>mã đơn vị / mã hàng khác định dạng</b> — đòi DataHub bổ sung % sẽ không giải quyết được gì.</div>
+      <div className="cost-breakdown-todo">
+        <b>Mã bên kho %:</b> {(data.joinHealth.sampleRateKeys || []).join(' · ') || '—'}<br />
+        <b>Mã bên doanh thu:</b> {(data.joinHealth.sampleRevenueKeys || []).join(' · ') || '—'}<br />
+        Gửi đúng hai dòng này cho Claude để sửa phép ghép.
+      </div>
+    </div>}
+    {/* Khớp được một phần cũng phải nói — tổng chỉ là tổng của phần ghép được. */}
+    {!loading && !error && data?.available && !data.joinHealth?.keyFormatMismatch
+      && data.joinHealth?.revenuePairs > 0 && data.joinHealth.matchedPairs < data.joinHealth.revenuePairs && <div className="card catalog-alert error" role="status">
+      ⚠ Chỉ ghép được <b>{Number(data.joinHealth.matchedPairs).toLocaleString('vi-VN')}/{Number(data.joinHealth.revenuePairs).toLocaleString('vi-VN')}</b> cặp doanh thu với kho %.
+      Các cặp còn lại hiện <b>—</b>; số tổng phía dưới là tổng của <b>phần ghép được</b>, không phải toàn bộ.
+    </div>}
+
     {!loading && !error && data?.available && <>
       <div className="card table-card">
         <div className="cost-amounts-identity">
