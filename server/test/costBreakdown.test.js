@@ -20,8 +20,12 @@ const RATES = {
   c33: 0.3, c34: 0.3, c35: 0.4, c36: 1, c37: 0.5, c38: 0.5, c39: 1,
   c40: 0.5, c41: 1, c42: 0.5, c43: 1.5, c44: 0.5, c45: 0.5, c46: 0,
 };
-const SPENT_ALL = Object.values(RATES).reduce((a, b) => a + b, 0);           // 8,5 (có C44)
-const SPENT_C47 = SPENT_ALL - RATES.c44;                                     // 8,0 (không C44)
+// ‼ C44 là cột PHÁI SINH: tiền C44 = %C44 × TIỀN C43, không phải × doanh thu
+// (CEO 09/08). Nên "tổng chi có C44" KHÔNG còn là một % thuần của doanh thu.
+const SPENT_C47_PCT = Object.values(RATES).reduce((a, b) => a + b, 0) - RATES.c44;  // 8,0 — 13 cột
+const c44MoneyOf = (revenueNoVat) => revenueNoVat * RATES.c43 / 100 * RATES.c44 / 100;
+const spentC47Of = (revenueNoVat) => SPENT_C47_PCT / 100 * revenueNoVat;
+const spentAllOf = (revenueNoVat) => spentC47Of(revenueNoVat) + c44MoneyOf(revenueNoVat);
 
 const rateRow = (unit, c5, rates = RATES) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, ...rates });
 const COLS = Object.keys(RATES).map((key) => ({ key }));
@@ -47,8 +51,8 @@ test('ví dụ CEO nguyên văn: chi 8% (không C44) từ 100 triệu = 8 triệ
   const row = result.rows[0];
   assert.equal(row.key, 'DN001');
   assert.equal(row.revenueNoVat, 100_000_000);
-  assert.equal(row.spentTowardC47NoVat, SPENT_C47 / 100 * 100_000_000);  // 8.000.000
-  assert.equal(row.spentWithC44NoVat, SPENT_ALL / 100 * 100_000_000);    // 8.500.000
+  assert.equal(row.spentTowardC47NoVat, spentC47Of(100_000_000));  // 8.000.000 = 8% doanh thu
+  assert.equal(row.spentWithC44NoVat, spentAllOf(100_000_000));    // 8.000.000 + C44 (tính trên C43)
   // Chênh lệch hai tổng = chính tiền C44.
   assert.equal(row.spentWithC44NoVat - row.spentTowardC47NoVat, row.columns.c44.noVat);
   assert.match(result.c44Note, /NGOÀI công thức C47/);
@@ -116,8 +120,9 @@ test('chọn CỘT cần xuất: chỉ cột được chọn xuất hiện, hai 
   });
   assert.deepEqual(result.columns.map((column) => column.key), ['c41', 'c43', 'c44']);
   const row = result.rows[0];
-  assert.equal(row.spentWithC44NoVat, (1 + 1.5 + 0.5) / 100 * 100_000_000);
-  assert.equal(row.spentTowardC47NoVat, (1 + 1.5) / 100 * 100_000_000);
+  assert.equal(row.spentTowardC47NoVat, (1 + 1.5) / 100 * 100_000_000, 'c41 + c43 trên doanh thu');
+  // c44 = 0,5% CỦA tiền c43 (1,5% × 100tr = 1.500.000) ⇒ 7.500đ, không phải 500.000đ.
+  assert.equal(row.spentWithC44NoVat, (1 + 1.5) / 100 * 100_000_000 + c44MoneyOf(100_000_000));
 });
 
 test('thiếu % cột nào ở cặp nào ⇒ cặp đó KHÔNG góp vào cột đó và bị ĐẾM, không suy 0', async () => {
@@ -183,10 +188,11 @@ test('chi trên mỗi đồng doanh thu — chỉ số DUY NHẤT so được NV
       : [revRow('DN002', '033.PKĐK LONG KHÁNH', 'G1.B', 105_000_000)]),
   });
   const [dn001, dn002] = result.rows;
-  assert.equal(dn001.costRatio, SPENT_ALL, 'tỷ lệ chi = tổng % đã chia');
-  assert.equal(dn002.costRatio, SPENT_ALL);
+  const expected = breakdown.costRatio(spentAllOf(1_000_000_000), 1_000_000_000);
+  assert.equal(dn001.costRatio, expected, 'tỷ lệ chi trên doanh thu');
+  assert.equal(dn002.costRatio, expected);
   assert.equal(dn001.costRatio, dn002.costRatio, 'người bán nhiều/ít phải so sánh được với nhau');
-  assert.equal(result.totals.costRatio, SPENT_ALL);
+  assert.equal(result.totals.costRatio, expected);
 });
 
 test('‼ doanh thu 0 ⇒ tỷ lệ null, KHÔNG phải 0% (0% đọc thành "không tốn đồng nào")', () => {
@@ -205,8 +211,9 @@ test('tỷ trọng từng cột trên tổng chi — biết cột nào ăn phầ
     periods: ['2026-08'], store, groupBy: 'employee',
     revenueRowsOf: () => [revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 105_000_000)],
   });
-  // c44 = 0,5% trong tổng 8,5% ⇒ chiếm 5,882…%
-  assert.equal(result.totals.share.c44, breakdown.shareOf(RATES.c44, SPENT_ALL));
+  // c44 = tiền của c44 chia tổng chi có c44 (c44 tính trên TIỀN c43).
+  assert.equal(result.totals.share.c44,
+    breakdown.shareOf(c44MoneyOf(100_000_000), spentAllOf(100_000_000)));
   // Cộng mọi tỷ trọng phải ra 100%.
   const sum = Object.values(result.totals.share).reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(sum - 100) < 0.01, `tổng tỷ trọng phải là 100%, đang là ${sum}`);
@@ -259,4 +266,61 @@ test('cột chỉ có ở MỘT kỳ vẫn được liệt kê — "kỳ trướ
   assert.equal(compare.columns[0].before, 0);
   assert.equal(compare.columns[0].delta, 300_000_000);
   assert.equal(compare.columns[0].deltaPct, null, 'chia cho 0 ⇒ null, không bịa %');
+});
+
+/* ── ‼ C44 tính trên TIỀN của C43, KHÔNG phải trên doanh thu (CEO 09/08) ─────── */
+
+test('ví dụ CEO nguyên văn: C43 ra 100.000đ thì C44 = 100.000 × 5% = 5.000đ', async () => {
+  // CEO: "cột C44 chỉ lấy phần tiền của cột C43 để tính × 5%… chứ không phải cột
+  // C44 lấy doanh thu × 5% là sai bét." Luật này có sẵn ở derivedBases {c44:'c43'}
+  // và màn "Chi phí của tôi" vẫn dùng đúng; menu này bản đầu quên áp.
+  const store = memStore();
+  // Doanh thu chưa VAT 1.000.000đ · C43 = 10% ⇒ 100.000đ · C44 = 5% CỦA C43 ⇒ 5.000đ.
+  const rates = { ...RATES, c43: 10, c44: 5 };
+  await seed(store, '2026-08', { DN001: [rateRow('001.BVĐK ĐỒNG NAI', 'G1.A', rates)] });
+  const result = breakdown.buildBreakdown({
+    periods: ['2026-08'], store, groupBy: 'employee',
+    revenueRowsOf: () => [revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 1_050_000)],
+  });
+  const row = result.rows[0];
+  assert.equal(row.revenueNoVat, 1_000_000);
+  assert.equal(row.columns.c43.noVat, 100_000, 'C43 = 10% doanh thu');
+  assert.equal(row.columns.c44.noVat, 5_000, 'C44 = 5% CỦA C43, không phải 5% doanh thu');
+  // Nếu tính sai (5% doanh thu) sẽ ra 50.000đ — gấp 10 lần.
+  assert.notEqual(row.columns.c44.noVat, 50_000);
+});
+
+test('C44 vẫn phải tính đúng khi CEO KHÔNG chọn hiển thị cột C43', async () => {
+  // Cột gốc phải được tính ngầm để làm nền, dù không hiện trong bảng.
+  const store = memStore();
+  const rates = { ...RATES, c43: 10, c44: 5 };
+  await seed(store, '2026-08', { DN001: [rateRow('001.BVĐK ĐỒNG NAI', 'G1.A', rates)] });
+  const result = breakdown.buildBreakdown({
+    periods: ['2026-08'], store, groupBy: 'employee', filters: { columns: ['c44'] },
+    revenueRowsOf: () => [revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 1_050_000)],
+  });
+  assert.deepEqual(result.columns.map((c) => c.key), ['c44']);
+  assert.equal(result.rows[0].columns.c44.noVat, 5_000, 'vẫn phải là 5% của C43, không rơi về 5% doanh thu');
+});
+
+test('thiếu % cột GỐC ⇒ cột phái sinh cũng không tính được, bị đếm thiếu', async () => {
+  const store = memStore();
+  await seed(store, '2026-08', { DN001: [rateRow('001.BVĐK ĐỒNG NAI', 'G1.A', { ...RATES, c43: null, c44: 5 })] });
+  const result = breakdown.buildBreakdown({
+    periods: ['2026-08'], store, groupBy: 'employee',
+    revenueRowsOf: () => [revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 1_050_000)],
+  });
+  const row = result.rows[0];
+  assert.equal(row.columns.c43.missingPairs, 1);
+  assert.equal(row.columns.c44.missingPairs, 1, 'mất nền thì KHÔNG được suy về doanh thu');
+  assert.equal(row.columns.c44.noVat, 0);
+});
+
+test('luật phái sinh lấy TỪ TEMPLATE, không chép tay vào menu này', () => {
+  const source = require('fs').readFileSync(require('path').join(__dirname, '../src/costBreakdown.js'), 'utf8');
+  assert.match(source, /employeeCostTemplates\.resolveTemplate\(empCode\)\.derivedBases/);
+  // Không được viết cứng cặp c44→c43 trong file này.
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').split('\n')
+    .map((line) => line.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
+  assert.doesNotMatch(code, /c44['"]?\s*:\s*['"]c43/, 'không viết cứng cặp phái sinh vào file này');
 });

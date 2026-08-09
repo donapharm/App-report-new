@@ -27,6 +27,7 @@ const persist = require('./persist');
 const employeeCost = require('./employeeCost');
 const costRatesSync = require('./costRatesSync');
 const costAmounts = require('./costAmounts');
+const employeeCostTemplates = require('./employeeCostTemplates');
 const { groupOf } = require('./catalogCostColumnGrants');
 
 const text = (value) => String(value ?? '').trim();
@@ -132,6 +133,13 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
     for (const empCode of Object.keys(entry.employees || {}).sort()) {
       if (filters.employees.length && !filters.employees.includes(upper(empCode))) continue;
       const rates = costAmounts.pairRates(entry.employees[empCode], COLUMN_KEYS);
+      // ‼ CỘT PHÁI SINH: C44 tính trên TIỀN của C43, KHÔNG phải trên doanh thu.
+      // CEO 09/08: "cột C43 thành tiền 100.000đ thì C44 = 100.000 × 5%. Chứ không
+      // phải C44 lấy doanh thu × 5% là sai bét." Luật này đã có sẵn ở
+      // `config/employee_cost_templates.json` (`derivedBases: { c44: 'c43' }`) và màn
+      // "Chi phí của tôi" vẫn dùng đúng — bản đầu của menu này quên áp, nên C44 bị
+      // thổi lên gấp nhiều lần. Lấy luật từ template, KHÔNG chép tay sang đây.
+      const derivedBases = employeeCostTemplates.resolveTemplate(empCode).derivedBases || {};
       const lines = employeeCost.buildRevenueLines(revenueRowsOf(empCode, text(period)), empCode, text(period));
       const revenueByPair = new Map();
       for (const line of lines) {
@@ -165,12 +173,23 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
         bucket.pairCount += 1;
         bucket.revenueNoVat += agg.noVat;
         bucket.revenueWithVat += agg.withVat;
+        // Tính tiền MỌI cột theo thứ tự C33→C46 (cột gốc luôn đứng trước cột phái
+        // sinh của nó), kể cả cột CEO không chọn hiển thị — vì cột phái sinh cần
+        // tiền của cột gốc làm nền. Chỉ cộng vào bảng những cột đang hiển thị.
+        const amountsNoVat = {};
+        const amountsWithVat = {};
+        for (const key of COLUMN_KEYS) {
+          const percent = rate && !rate.conflict ? rate.percents[key] : null;
+          const baseNoVat = derivedBases[key] ? amountsNoVat[derivedBases[key]] : agg.noVat;
+          const baseWithVat = derivedBases[key] ? amountsWithVat[derivedBases[key]] : agg.withVat;
+          amountsNoVat[key] = percent == null || baseNoVat == null ? null : employeeCost.calculateAmount(baseNoVat, percent);
+          amountsWithVat[key] = percent == null || baseWithVat == null ? null : employeeCost.calculateAmount(baseWithVat, percent);
+        }
         for (const column of activeColumns) {
           const cell = bucket.columns[column.key];
-          const percent = rate && !rate.conflict ? rate.percents[column.key] : null;
-          if (percent == null) { cell.missingPairs += 1; continue; }
-          cell.noVat += employeeCost.calculateAmount(agg.noVat, percent);
-          cell.withVat += employeeCost.calculateAmount(agg.withVat, percent);
+          if (amountsNoVat[column.key] == null) { cell.missingPairs += 1; continue; }
+          cell.noVat += amountsNoVat[column.key];
+          cell.withVat += amountsWithVat[column.key];
         }
       }
     }

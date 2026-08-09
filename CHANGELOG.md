@@ -1,3 +1,22 @@
+### 2026-08-09 18:45 (giờ VN) — ‼ SỬA SAI NẶNG: C44 tính trên TIỀN C43, không phải trên doanh thu
+
+CEO bắt lỗi: *"cột C44 chỉ lấy phần tiền của cột C43 để tính × 5%. Ví dụ cột C43 thành tiền là 100.000đ thì C44 = 100.000 × 5%. Chứ không phải cột C44 lấy doanh thu × 5% là sai bét."*
+
+**CEO đúng, và đây là lỗi nặng.** Luật này **ĐÃ CÓ SẴN** trong hệ thống — `config/employee_cost_templates.json` khai `derivedBases: { c44: 'c43' }`, và màn "Chi phí của tôi" vẫn dùng đúng suốt. Khi dựng menu Tổng hợp chi phí, Claude nhân **mọi cột** với doanh thu cho nhanh mà không tra lại luật cũ ⇒ **C44 bị thổi lên gấp nhiều lần**. Với ví dụ CEO: đúng là **5.000đ**, bản sai ra **50.000đ** — gấp 10 lần. Con số đó sẽ đi thẳng vào file Excel gửi kế toán nếu CEO không bắt.
+
+**Đã sửa:** tính tiền **mọi cột C33→C46 theo thứ tự** (cột gốc luôn trước cột phái sinh), cột phái sinh lấy **tiền cột gốc** làm nền thay vì doanh thu.
+
+Ba chốt kèm theo:
+1. Luật phái sinh **lấy từ `employeeCostTemplates.resolveTemplate()`**, kèm test **cấm viết cứng** cặp `c44→c43` vào file này — đổi luật một chỗ thì mọi màn theo.
+2. Chọn hiển thị **mỗi C44 mà bỏ C43** vẫn đúng: cột gốc được tính ngầm làm nền.
+3. **Thiếu % của C43 ⇒ C44 cũng "—"** và bị đếm thiếu, không âm thầm rơi về lấy doanh thu làm nền.
+
+Test cũ đang khoá **đúng công thức sai** nên phải viết lại: thay hằng số `SPENT_ALL` (giả định mọi cột × doanh thu) bằng `spentC47Of()` + `c44MoneyOf()` tính từ chính luật phái sinh. +4 test mới, trong đó một test chạy **nguyên văn ví dụ CEO**.
+
+Server 1105/1112 (7 fail cố hữu) · web 360/360.
+
+---
+
 ### 2026-08-09 18:25 (giờ VN) — 🔀 Ghép lên nền PROD `8873676` (C2 self-heal) — merge SẠCH, không xung đột
 
 Bot đẩy nền theo E1: `prod/8873676-20260809`, commit `88736763c8bfc14e8576facaa8188b6243a579f9`, tree `c010e8fc…`. Claude fetch về ghép.
