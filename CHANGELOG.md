@@ -1,3 +1,21 @@
+### 2026-08-09 13:15 (giờ VN) — 📊 MENU MỚI "Tổng hợp chi phí C33–C46" (CEO-only)
+
+CEO: *"tổng hợp các khoản chi theo từng cột từ C33 đến C46 (vẫn tính C44, nhưng nêu rõ) để tao biết tháng này tao chi hết 8% là bao nhiêu tiền, chi tiết ở mỗi cột, mỗi mã đơn vị, nhóm mã đơn vị, mỗi nhân viên, mỗi tuyến. Xuất Excel từ tháng này đến tháng này, chỉ chọn các cột/mã/NV cần xuất — một phát quản lý ăn ngay."* Bổ sung: *"tất cả đều có con mắt mở/đóng các con số"* + *"tất cả đều có bộ lọc: nhà thầu, đơn vị, nhóm mã, NV, tuyến, ưu tiên (H.A*/H.A…)"* + *"menu C32·C47 vẫn làm riêng."*
+
+**Đã dựng trọn:**
+- `server/src/costBreakdown.js` — lõi tổng hợp: tiền từng cột = % kho cục bộ × doanh thu kỳ, gộp theo 6 chiều (NV · đơn vị · nhóm mã · tuyến · nhà thầu · ưu tiên C10). Nhà thầu/tuyến/ưu tiên tra từ danh mục theo kỳ; cặp không tra được vẫn HIỆN với "—", không biến mất.
+- **Hai dòng tổng TÁCH BẠCH:** "Tổng chi CÓ C44" và "Phần trừ vào C47 (không C44)" — chênh lệch đúng bằng tiền C44. C44 vẫn là một cột trong bảng, đánh dấu `*` nền cam + chú thích "NGOÀI công thức C47". Không gộp hai nghĩa vào một số.
+- **Bộ lọc 6 chiều + chọn cột xuất**, giá trị lọc thu thập TRƯỚC khi lọc (bỏ lọc còn đường quay lại). Xuất Excel mang **đúng bộ lọc đang chọn**, 2 sheet (chưa VAT + có VAT), kỳ từ–đến (`periodRange`, trần 24 kỳ).
+- **Fail-closed ba tầng:** kỳ chưa đồng bộ ⇒ `missingPeriods` nêu trên màn + trong file ("file này KHÔNG gồm các kỳ đó"); cặp thiếu % cột nào ⇒ không góp tiền vào cột đó + đếm ⚠ theo cột ("tổng THIẾU" không giả làm tổng thật); % xung đột ⇒ cặp không góp.
+- **Quyền:** route `requireCeo` cả JSON lẫn xlsx; tab ẩn với mọi người trừ CEO (`ceoOnly` + `canonicalCeo`). **Mọi ô tiền mang `data-sensitive`** — con mắt che số phủ toàn màn, có test quét từng `<td>`.
+- Menu "Thành tiền C32·C47" **giữ nguyên, riêng biệt** — trang mới không nhúng số của menu kia (có test).
+
+Server 1073/1080 (7 fail cố hữu) · web 339/339 (+17: 9 lõi + 8 trang) · build sạch.
+
+**Phụ thuộc dữ liệu (đã nêu trong khối gửi bot):** cần DataHub mở đủ 14 cột % qua cửa chi phí; hiện allowlist 7 cột nên nhiều cột sẽ ⚠ thiếu % cho tới khi mở. Xuất nhiều kỳ cần đồng bộ % từng kỳ trước.
+
+---
+
 ### 2026-08-09 12:40 (giờ VN) — ‼ SỬA SAI NẶNG: C47 là phần CÒN LẠI, không phải tổng cộng lại
 
 CEO đính chính: *"ý anh là tính xem sau khi các cột từ C33–C46 lấy đi số % rồi thì C47 còn bao nhiêu tiền thu được, cũng giống như đầu vào của C32 vậy… tao có 10%, sau khi chi hết các cột từ C33 đến C46 (bỏ qua C44) thì còn 2%. Như vậy tao biết phải chi ra 8%, còn 2% là thu về lợi nhuận ròng."*

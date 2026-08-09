@@ -411,6 +411,7 @@ export const api = {
   catalogManagement: (period) => req('GET', '/catalog-management?' + new URLSearchParams(period ? { period } : {}).toString()),
   // Nút "Đồng bộ lại": vứt bản nhớ tạm 2 phút rồi hỏi lại Data Hub ngay (admin/CEO).
   catalogManagementRefresh: (period) => req('POST', '/catalog-management/refresh', period ? { period } : {}),
+  costBreakdown: (params = {}) => req('GET', '/catalog-management/cost-breakdown?' + new URLSearchParams(params).toString()),
   // Phân quyền cột % (SPEC_CATALOG_COST_COLUMNS.md) — backend chặn CHỈ CEO được ghi.
   catalogCostGrants: () => req('GET', '/catalog-management/cost-columns/grants'),
   catalogCostGrantSave: (empCode, payload) => req('PUT', `/catalog-management/cost-columns/grants/${encodeURIComponent(empCode)}`, payload),
@@ -535,6 +536,22 @@ export async function downloadCostRatesTable(params = {}) {
   const a = document.createElement('a');
   a.href = href;
   a.download = filenameFromDisposition(res.headers.get('content-disposition'), 'ty-le-chi-phi.xlsx');
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
+}
+
+// Tổng hợp chi phí C33–C46 — CHỈ CEO (backend requireCeo).
+export async function downloadCostBreakdown(params = {}) {
+  const url = '/api/catalog-management/cost-breakdown.xlsx?' + new URLSearchParams(params).toString();
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Không xuất được bảng tổng hợp chi phí');
+  }
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = href;
+  a.download = filenameFromDisposition(res.headers.get('content-disposition'), 'tong-hop-chi-phi.xlsx');
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(href);
 }
 

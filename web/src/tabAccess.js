@@ -8,6 +8,9 @@ export function isTabAllowed(tab, me) {
     // Tab Thành tiền C32/C47: backend đã chốt trong `costAmountsEnabled` (CEO, hoặc
     // NV được bật công tắc riêng). Frontend chỉ ẩn cho gọn — route vẫn tự chặn 403.
     && (!tab.costAmountsOnly || !!me.costAmountsEnabled)
+    // Tab Tổng hợp chi phí: chi tiết tiền toàn công ty — CHỈ CEO. Backend chặn
+    // độc lập bằng requireCeo; ẩn tab chỉ là cho gọn menu.
+    && (!tab.ceoOnly || canonicalCeo)
     && (!tab.employeeCostControlled || !!me.isAdmin || !me.employeeCostDisabled);
 }
 

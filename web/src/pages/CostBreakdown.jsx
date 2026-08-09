@@ -1,0 +1,176 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { api, downloadCostBreakdown } from '../api.js';
+import { Spinner } from '../components.jsx';
+
+/**
+ * TỔNG HỢP CHI PHÍ C33–C46 — CHỈ CEO (CEO yêu cầu 09/08/2026).
+ *
+ * "Tháng này tao chi hết 8% là bao nhiêu tiền — chi tiết mỗi cột, mỗi đơn vị,
+ *  nhóm mã, NV, tuyến; xuất Excel nhiều kỳ, chọn thứ cần."
+ *
+ * ‼ MỌI ô tiền và % mang `data-sensitive` — con mắt che số phủ toàn màn
+ *   (SPEC_PRIVACY_EYE). Số ở đây là chi tiết chi phí toàn công ty, nhạy nhất app.
+ * ‼ Hai dòng tổng TÁCH BẠCH: "Tổng chi CÓ C44" ≠ "Phần trừ vào C47 (không C44)".
+ *   Chênh lệch = chính tiền C44 — không gộp để khỏi lẫn hai nghĩa.
+ */
+
+const money = (value) => (value == null ? '—' : `${Math.round(Number(value)).toLocaleString('vi-VN')}đ`);
+const hubToUi = (period) => { const m = String(period || '').match(/^(\d{4})-(\d{2})$/); return m ? `${m[2]}.${m[1]}` : period; };
+
+const GROUP_LABELS = {
+  employee: 'Nhân viên', unit: 'Mã đơn vị', group: 'Nhóm mã đơn vị',
+  route: 'Tuyến', contractor: 'Mã nhà thầu', priority: 'Ưu tiên (H.A*…)',
+};
+
+/** Ô chọn nhiều giá trị gọn: nút mở danh sách tick. Danh sách trống = không lọc. */
+function MultiPick({ label, options, values, onChange }) {
+  const [open, setOpen] = useState(false);
+  return <div className="cost-breakdown-pick">
+    <button type="button" className="btn secondary" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+      {label}{values.length ? ` (${values.length})` : ''}
+    </button>
+    {open && <div className="cost-breakdown-pick-menu">
+      <button type="button" className="btn ghost" onClick={() => onChange([])}>Bỏ lọc {label.toLowerCase()}</button>
+      {options.map((option) => <label key={option}>
+        <input type="checkbox" checked={values.includes(option)}
+          onChange={() => onChange(values.includes(option) ? values.filter((v) => v !== option) : [...values, option])} />
+        {option}
+      </label>)}
+      {!options.length && <small className="muted">Chưa có giá trị nào trong dữ liệu đang xem.</small>}
+    </div>}
+  </div>;
+}
+
+export default function CostBreakdown({ me }) {
+  const [periods, setPeriods] = useState([]);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [groupBy, setGroupBy] = useState('employee');
+  const [filters, setFilters] = useState({ contractors: [], units: [], groups: [], employees: [], routes: [], priorities: [], columns: [] });
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [exporting, setExporting] = useState(false);
+  const [withVat, setWithVat] = useState(false);
+
+  useEffect(() => {
+    api.periods().then((p) => {
+      const list = (p.periods || p || []).map((x) => x.ky || x).filter((x) => /^\d{2}\.\d{4}$/.test(x))
+        .map((ky) => { const [m, y] = ky.split('.'); return `${y}-${m}`; }).sort();
+      setPeriods(list);
+      if (list.length) { setFrom(list.at(-1)); setTo(list.at(-1)); }
+    }).catch(() => {});
+  }, []);
+
+  const params = useMemo(() => ({
+    from, to, groupBy,
+    ...Object.fromEntries(Object.entries(filters).filter(([, list]) => list.length).map(([k, list]) => [k, list.join(',')])),
+  }), [from, to, groupBy, filters]);
+
+  const load = () => {
+    if (!from || !to) return;
+    setLoading(true); setError('');
+    api.costBreakdown(params)
+      // Giữ bảng cũ khi tải hỏng — không đập màn về trắng.
+      .then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false));
+  };
+  useEffect(load, [params]);
+
+  // Giá trị cho bộ lọc lấy từ chính dữ liệu đang xem (backend là nguồn quyền).
+  const filterOptions = useMemo(() => {
+    if (!data) return { contractors: [], units: [], groups: [], employees: [], routes: [], priorities: [] };
+    const collect = (key) => [...new Set((data.filterOptions?.[key] || []))];
+    return {
+      contractors: collect('contractors'), units: collect('units'), groups: collect('groups'),
+      employees: collect('employees'), routes: collect('routes'), priorities: collect('priorities'),
+    };
+  }, [data]);
+
+  const v = (row, key) => (withVat ? row.columns[key].withVat : row.columns[key].noVat);
+  const totalsCell = (key) => (withVat ? data.totals.columns[key].withVat : data.totals.columns[key].noVat);
+
+  if (!me?.is_ceo) return <div className="card"><p>Menu này chỉ dành cho tài khoản CEO.</p></div>;
+
+  return <div className="cost-breakdown-page">
+    <div className="card catalog-help">
+      <b>📊 Tổng hợp chi phí C33–C46 — chi hết bao nhiêu tiền, ở đâu</b>
+      <p>Tiền từng cột chi phí = % kho cục bộ × doanh thu kỳ, gộp theo chiều anh chọn.
+        <b> C44 vẫn được tính</b> nhưng đánh dấu <b>NGOÀI C47</b> — hai dòng tổng tách bạch, chênh lệch đúng bằng tiền C44.</p>
+    </div>
+
+    <div className="card cost-breakdown-controls">
+      <label><span>Từ kỳ</span><select value={from} onChange={(e) => setFrom(e.target.value)}>{periods.map((p) => <option key={p} value={p}>{hubToUi(p)}</option>)}</select></label>
+      <label><span>Đến kỳ</span><select value={to} onChange={(e) => setTo(e.target.value)}>{periods.map((p) => <option key={p} value={p}>{hubToUi(p)}</option>)}</select></label>
+      <label><span>Gộp theo</span><select value={groupBy} onChange={(e) => setGroupBy(e.target.value)}>
+        {Object.entries(GROUP_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select></label>
+      <label className="cost-breakdown-vat"><input type="checkbox" checked={withVat} onChange={(e) => setWithVat(e.target.checked)} /> Xem số CÓ VAT</label>
+      <button type="button" className="btn" disabled={exporting || !data}
+        onClick={async () => { setExporting(true); try { await downloadCostBreakdown(params); } catch (e) { setError(e.message); } finally { setExporting(false); } }}>
+        {exporting ? 'Đang xuất…' : '⬇ Xuất Excel (đúng bộ lọc đang chọn)'}
+      </button>
+    </div>
+
+    {/* Bộ lọc 6 chiều CEO chốt 09/08 — trống = không lọc chiều đó. */}
+    <div className="card cost-breakdown-filters">
+      <MultiPick label="Nhà thầu" options={filterOptions.contractors} values={filters.contractors} onChange={(list) => setFilters((f) => ({ ...f, contractors: list }))} />
+      <MultiPick label="Mã đơn vị" options={filterOptions.units} values={filters.units} onChange={(list) => setFilters((f) => ({ ...f, units: list }))} />
+      <MultiPick label="Nhóm mã" options={filterOptions.groups} values={filters.groups} onChange={(list) => setFilters((f) => ({ ...f, groups: list }))} />
+      <MultiPick label="Nhân viên" options={filterOptions.employees} values={filters.employees} onChange={(list) => setFilters((f) => ({ ...f, employees: list }))} />
+      <MultiPick label="Tuyến" options={filterOptions.routes} values={filters.routes} onChange={(list) => setFilters((f) => ({ ...f, routes: list }))} />
+      <MultiPick label="Ưu tiên" options={filterOptions.priorities} values={filters.priorities} onChange={(list) => setFilters((f) => ({ ...f, priorities: list }))} />
+      <MultiPick label="Cột xuất" options={(data?.columns || []).map((column) => column.key.toUpperCase())} values={filters.columns.map((k) => k.toUpperCase())}
+        onChange={(list) => setFilters((f) => ({ ...f, columns: list.map((k) => k.toLowerCase()) }))} />
+    </div>
+
+    {error && <div className="card catalog-alert error" role="alert">⚠ {error}</div>}
+    {loading && !data && <div className="card catalog-first-load"><Spinner /><b>Đang tổng hợp chi phí…</b></div>}
+    {loading && data && <div className="card catalog-loading-strip" role="status"><i className="catalog-loading-dot" aria-hidden="true" /><span>Đang tính lại… bảng dưới là bản vừa xem.</span></div>}
+
+    {data && !!data.missingPeriods?.length && <div className="card catalog-alert error" role="alert">
+      ‼ Kỳ <b>{data.missingPeriods.map(hubToUi).join(' · ')}</b> CHƯA đồng bộ % — bảng dưới <b>KHÔNG</b> gồm các kỳ đó.
+      Vào Danh mục QL bấm "Đồng bộ % chi phí" cho từng kỳ trước.
+    </div>}
+
+    {data && <div className="card table-card">
+      <div className="cost-amounts-identity">
+        Kỳ <b>{data.periods.map(hubToUi).join(' → ')}</b> · gộp theo <b>{GROUP_LABELS[data.groupBy]}</b>
+        · {data.rows.length.toLocaleString('vi-VN')} dòng · số {withVat ? 'CÓ VAT' : 'CHƯA VAT'}
+      </div>
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
+        <th>{GROUP_LABELS[data.groupBy]}</th><th>Số cặp</th>
+        <th className="catalog-money">Doanh thu</th>
+        {data.columns.map((column) => <th key={column.key} className={`catalog-money${column.outsideC47 ? ' cost-breakdown-outside' : ''}`}
+          title={column.outsideC47 ? `${column.label} — NGOÀI công thức C47` : column.label}>
+          {column.key.toUpperCase()}{column.outsideC47 ? '*' : ''}
+        </th>)}
+        <th className="catalog-money">Tổng chi CÓ C44</th>
+        <th className="catalog-money">Trừ vào C47 (không C44)</th>
+      </tr></thead><tbody>
+        {data.rows.map((row) => <tr key={row.key}>
+          <td><b>{row.key}</b></td>
+          <td>{row.pairCount.toLocaleString('vi-VN')}</td>
+          <td className="catalog-money" data-sensitive="">{money(withVat ? row.revenueWithVat : row.revenueNoVat)}</td>
+          {data.columns.map((column) => {
+            const cell = row.columns[column.key];
+            return <td key={column.key} className="catalog-money" data-sensitive=""
+              title={cell.missingPairs ? `${cell.missingPairs} cặp thiếu % cột này — số dưới là tổng THIẾU` : undefined}>
+              {money(v(row, column.key))}{cell.missingPairs ? <small className="cost-amounts-warn"> ⚠{cell.missingPairs}</small> : null}
+            </td>;
+          })}
+          <td className="catalog-money" data-sensitive=""><b>{money(withVat ? row.spentWithC44WithVat : row.spentWithC44NoVat)}</b></td>
+          <td className="catalog-money" data-sensitive=""><b>{money(withVat ? row.spentTowardC47WithVat : row.spentTowardC47NoVat)}</b></td>
+        </tr>)}
+        <tr className="cost-amounts-grand">
+          <td><b>TỔNG CỘNG</b></td>
+          <td><b>{data.totals.pairCount.toLocaleString('vi-VN')}</b></td>
+          <td className="catalog-money" data-sensitive=""><b>{money(withVat ? data.totals.revenueWithVat : data.totals.revenueNoVat)}</b></td>
+          {data.columns.map((column) => <td key={column.key} className="catalog-money" data-sensitive=""><b>{money(totalsCell(column.key))}</b></td>)}
+          <td className="catalog-money" data-sensitive=""><b>{money(withVat ? data.totals.spentWithC44WithVat : data.totals.spentWithC44NoVat)}</b></td>
+          <td className="catalog-money" data-sensitive=""><b>{money(withVat ? data.totals.spentTowardC47WithVat : data.totals.spentTowardC47NoVat)}</b></td>
+        </tr>
+      </tbody></table></div>
+      <small className="muted cost-breakdown-note">* {data.c44Note}</small>
+    </div>}
+  </div>;
+}

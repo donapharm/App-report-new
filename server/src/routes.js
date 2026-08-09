@@ -28,6 +28,7 @@ const employeeCostTemplates = require('./employeeCostTemplates');
 const costRatesSync = require('./costRatesSync');
 const costRatesTable = require('./costRatesTable');
 const costAmounts = require('./costAmounts');
+const costBreakdown = require('./costBreakdown');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
@@ -3253,6 +3254,82 @@ router.get('/catalog-management/cost-amounts.xlsx', auth.requireAuth, asyncJsonR
 }));
 /* Công tắc menu Thành tiền — CHỈ CEO đặt (requireCeo, KHÔNG requireAdmin: CEO thật
    mang role admin nên cổng admin sẽ để lọt admin thường). Actor lấy từ session. */
+/* ---------- Tổng hợp chi phí C33–C46 (CEO yêu cầu 09/08/2026) ----------
+   "Tháng này tao chi hết 8% là bao nhiêu tiền — chi tiết mỗi cột, mỗi đơn vị,
+   nhóm mã, NV, tuyến; xuất Excel nhiều kỳ, chọn thứ cần." CHỈ CEO — số tiền
+   chi tiết toàn công ty, nặng hơn cả menu Thành tiền. Con mắt che số phủ ở
+   frontend (data-sensitive); backend cứ trả số thật cho đúng người. */
+async function costBreakdownFor(req) {
+  const from = catalogManagement.toHubPeriod(req.query.from || req.query.period || store.latestKy());
+  const to = catalogManagement.toHubPeriod(req.query.to || req.query.period || store.latestKy());
+  const periods = costBreakdown.periodRange(from, to);
+  if (!periods.length) throw Object.assign(new Error('Khoảng kỳ không hợp lệ — cần from/to dạng MM.YYYY hoặc YYYY-MM.'), { status: 400 });
+  const listParam = (name) => String(req.query[name] || '').split(',').map((v) => v.trim()).filter(Boolean);
+  // Thuộc tính lọc (nhà thầu · tuyến · ưu tiên C10) nằm ở danh mục — tra theo kỳ.
+  // Danh mục kỳ nào hỏng thì kỳ đó lọc bằng '—' chứ KHÔNG chặn cả bảng tiền.
+  const attrsByPeriod = new Map();
+  for (const period of periods) {
+    try {
+      const snapshot = await catalogManagement.getSnapshot(period);
+      const map = new Map();
+      for (const row of snapshot.rows || []) {
+        if (!row.unit_code || !row.qlnb_code) continue;
+        map.set(`${String(row.unit_code).toUpperCase()}\u001f${String(row.qlnb_code).toUpperCase()}`, {
+          contractor: row.contractor_code || '', route: row.route || '', priority: row.c10 || '',
+        });
+      }
+      attrsByPeriod.set(period, map);
+    } catch { attrsByPeriod.set(period, new Map()); }
+  }
+  return costBreakdown.buildBreakdown({
+    periods,
+    groupBy: String(req.query.groupBy || 'employee'),
+    filters: {
+      contractors: listParam('contractors'), units: listParam('units'), groups: listParam('groups'),
+      employees: listParam('employees'), routes: listParam('routes'), priorities: listParam('priorities'),
+      columns: listParam('columns'),
+    },
+    revenueRowsOf: (empCode, period) => store.getRows({ ky: catalogManagement.toUiPeriod(period), scope: { empCode } }),
+    catalogAttrsOf: (period) => attrsByPeriod.get(period) || new Map(),
+  });
+}
+router.get('/catalog-management/cost-breakdown', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  return res.json(await costBreakdownFor(req));
+}));
+router.get('/catalog-management/cost-breakdown.xlsx', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  const result = await costBreakdownFor(req);
+  const ExcelJS = require('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  const label = result.periods.length > 1 ? `${result.periods[0]} đến ${result.periods.at(-1)}` : result.periods[0];
+  // Sheet TỔNG trước, chi tiết sau — gửi kế toán không phải cắt lại.
+  const sum = workbook.addWorksheet('Tong hop');
+  sum.addRow([`TỔNG HỢP CHI PHÍ C33–C46 · kỳ ${label} · gộp theo ${result.groupBy}`]);
+  if (result.missingPeriods.length) sum.addRow([`‼ THIẾU KỲ CHƯA ĐỒNG BỘ: ${result.missingPeriods.join(', ')} — file này KHÔNG gồm các kỳ đó`]);
+  sum.addRow([result.c44Note]);
+  sum.addRow([]);
+  const head = ['Nhóm gộp', 'Số cặp', 'Doanh thu chưa VAT', ...result.columns.map((column) => `${column.label}${column.outsideC47 ? ' (NGOÀI C47)' : ''}`), 'Tổng chi CÓ C44', 'Phần trừ vào C47 (không C44)'];
+  sum.addRow(head);
+  const bodyRow = (row) => [row.key, row.pairCount, row.revenueNoVat,
+    ...result.columns.map((column) => row.columns[column.key].missingPairs && !row.columns[column.key].noVat ? '—' : row.columns[column.key].noVat),
+    row.spentWithC44NoVat, row.spentTowardC47NoVat];
+  for (const row of result.rows) sum.addRow(bodyRow(row));
+  sum.addRow(['TỔNG CỘNG', result.totals.pairCount, result.totals.revenueNoVat,
+    ...result.columns.map((column) => result.totals.columns[column.key].noVat),
+    result.totals.spentWithC44NoVat, result.totals.spentTowardC47NoVat]);
+  const missing = result.columns.filter((column) => result.totals.columns[column.key].missingPairs);
+  if (missing.length) {
+    sum.addRow([]);
+    sum.addRow([`‼ Cột còn cặp thiếu %: ${missing.map((column) => `${column.key.toUpperCase()} (${result.totals.columns[column.key].missingPairs} cặp)`).join(' · ')} — các cặp đó KHÔNG góp tiền vào cột, tổng là tổng THIẾU`]);
+  }
+  const detail = workbook.addWorksheet('Co VAT');
+  detail.addRow(head);
+  for (const row of result.rows) detail.addRow([row.key, row.pairCount, row.revenueWithVat,
+    ...result.columns.map((column) => row.columns[column.key].withVat), row.spentWithC44WithVat, row.spentTowardC47WithVat]);
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="tong-hop-chi-phi-${result.periods[0]}_${result.periods.at(-1)}.xlsx"`);
+  return res.send(buffer);
+}));
 router.get('/catalog-management/cost-amounts/visibility', auth.requireAuth, auth.requireCeo, (req, res) => {
   res.json({ panel: costAmounts.visibilityPanel(employeeCostRosterRows()) });
 });

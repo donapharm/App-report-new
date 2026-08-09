@@ -23,6 +23,7 @@ import PaymentSchedule from './pages/PaymentSchedule.jsx';
 import CatalogManagement from './pages/CatalogManagement.jsx';
 import SyncExceptions from './pages/SyncExceptions.jsx';
 import CostAmounts from './pages/CostAmounts.jsx';
+import CostBreakdown from './pages/CostBreakdown.jsx';
 import DormantReports from './pages/DormantReports.jsx';
 import AiChat from './pages/AiChat.jsx';
 import Upload from './pages/Upload.jsx';
@@ -43,6 +44,7 @@ const TABS = [
   // Menu RIÊNG cho hai cột tiền tổng C32/C47 (CEO chốt 08/08: tách khỏi mọi màn có
   // sẵn để giảm rủi ro lộ lọt). Mặc định chỉ CEO; NV phải được bật công tắc riêng.
   { key: 'costAmounts', label: 'Thành tiền CP', full: 'Thành tiền chi phí C32 · C47', ic: '💼', C: CostAmounts, costAmountsOnly: true },
+  { key: 'costBreakdown', label: 'Tổng hợp CP', full: 'Tổng hợp chi phí C33 · C46', ic: '📊', C: CostBreakdown, ceoOnly: true },
   { key: 'dormantReports', label: 'B/c QLNB', full: 'Báo cáo QLNB', ic: '📑', C: DormantReports, ceoEmployeeOnly: true },
   { key: 'ai', label: 'Hỏi nhanh', ic: '🤖', C: AiChat },
   { key: 'upload', label: 'Upload', ic: '⬆️', C: Upload, adminOnly: true },
