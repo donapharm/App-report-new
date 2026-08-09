@@ -69,7 +69,11 @@ test('nút "Đồng bộ lại" có trên huy hiệu, khoá lại khi đang ch�
 });
 
 test('bấm xong PHẢI tải lại danh mục, không chỉ đổi mỗi huy hiệu', () => {
-  assert.match(page, /await api\.catalogManagementRefresh\(uiToHub\(period\)\); await load\(period\);/);
+  assert.match(page, /const result = await api\.catalogManagementRefresh\(uiToHub\(period\)\);/);
+  assert.match(page, /await load\(period\);/);
+  // Gọi refresh trước, tải lại sau — đổi thứ tự là bảng vẫn là bản cũ.
+  const at = page.indexOf('catalogManagementRefresh(uiToHub(period))');
+  assert.ok(at > 0 && page.indexOf('await load(period);', at) > at);
 });
 
 test('đồng bộ lại hỏng thì báo tại chỗ, không nuốt lỗi', () => {
@@ -125,4 +129,30 @@ test('backend chuyển tiếp sourceVersion nếu nguồn gửi, KHÔNG tự b�
   assert.match(server, /meta: \{ source: 'data-hub', version, sourceVersion,/);
   // Không có chỗ nào gán cứng một số hiệu.
   assert.doesNotMatch(server, /sourceVersion = '31\.4'|version = '31\.4'/);
+});
+
+/* ── Bấm "Đồng bộ lại" phải nói NỘI DUNG CÓ ĐỔI KHÔNG (CEO chỉnh 09/08/2026) ─── */
+
+test('‼ nội dung KHÔNG đổi ⇒ nói thẳng "bản sửa CHƯA sang tới đây", chỉ đúng việc phải làm', () => {
+  // Đây là câu trả lời cho đúng nỗi nghi của CEO: đã sửa file mà app vẫn số cũ.
+  assert.match(badge, /NỘI DUNG KHÔNG ĐỔI<\/b> \(băm nội dung y hệt bản cũ\)/);
+  assert.match(badge, /<b>bản sửa CHƯA sang tới đây<\/b>/);
+  assert.match(badge, /báo Data Hub nạp lại file nguồn/);
+  assert.match(badge, /bấm nút này thêm lần nữa cũng ra kết quả này/);
+});
+
+test('nội dung CÓ đổi mà số dòng y nguyên vẫn phải nói rõ — không im lặng', () => {
+  assert.match(badge, /NỘI DUNG CÓ ĐỔI<\/b>/);
+  assert.match(badge, /số dòng như cũ, nội dung bên trong khác/);
+});
+
+test('‼ chưa có bản cũ để so ⇒ NÓI KHÔNG BIẾT, cấm suy thành "không đổi"', () => {
+  assert.match(badge, /máy chưa có bản cũ để so/);
+  assert.match(badge, /refreshed\.changed === false/);
+  assert.match(badge, /refreshed\.changed === true/);
+});
+
+test('nút trả kết quả về cho huy hiệu hiển thị — không nuốt mất', () => {
+  assert.match(page, /return result; \/\/ huy hiệu cần kết quả này để nói nội dung có đổi không/);
+  assert.match(badge, /setRefreshed\(await onRefresh\?\.\(\) \?\? null\)/);
 });

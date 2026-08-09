@@ -135,3 +135,11 @@ test('ghép được MỘT PHẦN cũng phải nói — tổng chỉ là tổng 
   assert.match(page, /Chỉ ghép được <b>\{Number\(data\.joinHealth\.matchedPairs\)/);
   assert.match(page, /tổng của <b>phần ghép được<\/b>, không phải toàn bộ/);
 });
+
+test('‼ nguồn chưa mở cột ⇒ gọi ĐÍCH DANH cột + chỉ đúng việc phải làm', () => {
+  assert.match(page, /Nguồn CHƯA MỞ cột \{data\.joinHealth\.columnsMissingEverywhere/);
+  assert.match(page, /đây là <b>nguồn chưa mở cột<\/b>,\s*\n?\s*không phải vài dòng lẻ sót %/);
+  assert.match(page, /báo DataHub mở đúng cột/);
+  // Phải nói luôn menu nào KHÔNG bị ảnh hưởng, để CEO còn việc làm ngay.
+  assert.match(page, /Menu <b>Tổng hợp C33–C46<\/b> KHÔNG cần cột này nên vẫn dùng được bình thường/);
+});

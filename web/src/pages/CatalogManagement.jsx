@@ -180,6 +180,8 @@ function DrugName({ row, counts }) {
 function SourceStatus({ meta, canRefresh = false, onRefresh }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  // Kết quả lần bấm gần nhất: nội dung có ĐỔI không (xem khối `run` bên dưới).
+  const [refreshed, setRefreshed] = useState(null);
   if (!meta) return null;
   // ‼ Ưu tiên SỐ HIỆU FILE NGUỒN (CP_TOTAL) nếu DataHub gửi; không có thì hiện số
   // hiệu CỬA DANH MỤC và NÓI RÕ đó là số của cửa, không phải số file.
@@ -187,9 +189,16 @@ function SourceStatus({ meta, canRefresh = false, onRefresh }) {
   const gateVersion = catalogVersionLabel(meta.version);
   const version = sourceVersion || gateVersion;
   const state = meta.stale ? 'Bản tốt gần nhất' : (meta.readOnly ? 'Chỉ đọc' : 'Đã kết nối');
+  /**
+   * ‼ Bấm "Đồng bộ lại" xong phải trả lời được câu DUY NHẤT người bấm muốn biết:
+   * **nội dung có thật sự đổi không?** (CEO chỉnh 09/08/2026: *"số dòng thì đúng
+   * rồi, nhưng tao đã sửa nhiều đợt trong đó, nên nó mới nâng lên bản V31.4"*).
+   * Đếm dòng KHÔNG trả lời được — sửa hàng trăm ô mà tổng vẫn 27.719. So bằng
+   * checksum (băm toàn bộ nội dung) mới là bằng chứng.
+   */
   const run = async () => {
-    setBusy(true); setError('');
-    try { await onRefresh?.(); }
+    setBusy(true); setError(''); setRefreshed(null);
+    try { setRefreshed(await onRefresh?.() ?? null); }
     catch (e) { setError(e.message || 'Đồng bộ lại không thành công'); }
     finally { setBusy(false); }
   };
@@ -216,6 +225,20 @@ function SourceStatus({ meta, canRefresh = false, onRefresh }) {
       {busy ? 'Đang hỏi lại…' : '⟳ Đồng bộ lại'}
     </button>}
     {error && <small className="catalog-source-error" role="alert">⚠ {error}</small>}
+    {refreshed && (refreshed.changed === true
+      ? <small className="catalog-source-changed" role="status">
+          ✅ Đã hỏi lại Data Hub — <b>NỘI DUNG CÓ ĐỔI</b>
+          {refreshed.before && refreshed.after && refreshed.before.rows !== refreshed.after.rows
+            ? <> ({refreshed.before.rows.toLocaleString('vi-VN')} → {refreshed.after.rows.toLocaleString('vi-VN')} dòng)</>
+            : ' (số dòng như cũ, nội dung bên trong khác)'}.
+        </small>
+      : refreshed.changed === false
+        ? <small className="catalog-source-error" role="alert">
+            ⚠ Đã hỏi lại Data Hub — <b>NỘI DUNG KHÔNG ĐỔI</b> (băm nội dung y hệt bản cũ).
+            Nếu Anh/Chị vừa sửa file CP_TOTAL thì <b>bản sửa CHƯA sang tới đây</b> — báo Data Hub nạp lại file nguồn,
+            bấm nút này thêm lần nữa cũng ra kết quả này.
+          </small>
+        : <small className="catalog-source-changed" role="status">✅ Đã hỏi lại Data Hub (máy chưa có bản cũ để so).</small>)}
   </div>;
 }
 
@@ -1246,8 +1269,11 @@ export default function CatalogManagement({ me }) {
       <div className="catalog-heading-actions">{data?.meta && <SourceStatus meta={data.meta} canRefresh={isAdmin}
         onRefresh={async () => {
           setAskingHub(true);
-          try { await api.catalogManagementRefresh(uiToHub(period)); await load(period); }
-          finally { setAskingHub(false); }
+          try {
+            const result = await api.catalogManagementRefresh(uiToHub(period));
+            await load(period);
+            return result; // huy hiệu cần kết quả này để nói nội dung có đổi không
+          } finally { setAskingHub(false); }
         }} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}

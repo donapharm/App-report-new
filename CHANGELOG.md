@@ -1,3 +1,27 @@
+### 2026-08-09 22:45 (giờ VN) — 🔬 Probe PROD lộ ra: nguồn KHÔNG có C32 · và "đếm dòng" không phải bằng chứng
+
+#### ‼ CEO chỉnh Claude — và chỉnh đúng
+
+Claude viết: *"dữ liệu của anh KHÔNG cũ, 27.719 dòng chính là CP_TOTAL V31.4"*. CEO đáp: *"số dòng thì đúng rồi, **nhưng tao đã sửa nhiều đợt trong đó**, nên nó mới nâng lên bản V31.4."*
+
+**CEO đúng, Claude đã lấy bằng chứng yếu để kết luận mạnh.** Sửa hàng trăm ô bên trong mà không thêm bớt dòng nào thì tổng **vẫn là 27.719** — đếm dòng KHÔNG chứng minh được nội dung mới. Thứ phân biệt được là **checksum** (băm toàn bộ nội dung): đổi một ô là đổi băm.
+
+**Sửa:** nút "Đồng bộ lại" nay trả lời đúng câu người bấm muốn biết — *nội dung có thật sự đổi không*:
+- **Đổi** ⇒ *"✅ NỘI DUNG CÓ ĐỔI"* (kèm số dòng trước→sau, hoặc ghi rõ *"số dòng như cũ, nội dung bên trong khác"*).
+- **Không đổi** ⇒ *"⚠ NỘI DUNG KHÔNG ĐỔI (băm y hệt bản cũ). Nếu vừa sửa file CP_TOTAL thì **bản sửa CHƯA sang tới đây** — báo Data Hub nạp lại file nguồn; bấm nút này thêm lần nữa cũng ra kết quả này."*
+- **Chưa có bản cũ để so** ⇒ nói **KHÔNG BIẾT**, cấm suy thành "không đổi".
+Ảnh "trước" đọc thẳng từ đĩa (`cachedMeta`), không gọi mạng.
+
+#### ‼ Probe PROD: DataHub trả ĐỦ C33–C46 nhưng KHÔNG có C32
+
+21/21 NV sống, 14 cột `c33…c46` đầy đủ, **không có `c32`**. Mà công thức C47 cần **đủ 14 cột `C32 + C33→C46 (trừ C44)`** ⇒ **toàn bộ menu "Thành tiền C32·C47" sẽ là "—"** dù đồng bộ thành công 27.719 cặp. Menu **Tổng hợp C33–C46 KHÔNG cần C32** nên vẫn chạy bình thường.
+
+Trước đây màn chỉ ghi "thiếu %" chung chung — đọc xong đi đòi cả 14 cột. Nay đếm riêng từng cột: cột nào thiếu ở **TOÀN BỘ** cặp thì kết luận **"nguồn chưa mở cột đó"**, gọi đích danh, kèm việc phải làm và nói luôn menu nào **không** bị ảnh hưởng. Thiếu ở **một số** cặp thôi thì **không** kết luận như vậy — vài dòng lẻ sót % là chuyện khác hẳn.
+
+Test: server **1163** pass / 7 fail cố hữu · web **396/396** · build sạch.
+
+---
+
 ### 2026-08-09 22:25 (giờ VN) — 🔢 "V3.10" là số hiệu CỬA DANH MỤC, không phải số file CP_TOTAL V31.4
 
 CEO hỏi lại lần thứ ba: *"tại sao nó vẫn ghi bản version là V3.10 mà chưa thay đổi vậy?"* — hỏi ba lần cùng một chuyện nghĩa là **màn hình đang trình bày sai**, không phải người đọc chậm hiểu.

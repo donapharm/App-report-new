@@ -110,3 +110,32 @@ test('‼ ĐƯỜNG ĐỌC KHÔNG CÓ TÁC DỤNG PHỤ: GET không được lé
   const localBranch = fn.slice(fn.indexOf('if (!forceRemote)'), fn.indexOf('if (!configured())'));
   assert.equal(localBranch.includes('remoteSnapshot'), false, 'nhánh đọc bản local tuyệt đối không gọi nguồn');
 });
+
+/* ── "ĐỒNG BỘ LẠI" PHẢI NÓI NỘI DUNG CÓ ĐỔI KHÔNG (CEO chỉnh 09/08/2026) ──────
+ * CEO: *"số dòng thì đúng rồi, nhưng tao đã sửa nhiều đợt trong đó, nên nó mới nâng
+ * lên bản V31.4."* Đúng — đếm dòng KHÔNG chứng minh được nội dung mới; sửa hàng trăm
+ * ô mà không thêm bớt dòng nào thì tổng vẫn 27.719. Claude đã lấy bằng chứng yếu
+ * (số dòng khớp) để kết luận mạnh ("dữ liệu không cũ") — sai.                     */
+
+test('‼ so bằng CHECKSUM, không phải bằng số dòng', () => {
+  assert.match(block, /before\.checksum !== after\.checksum/);
+  // Số dòng vẫn được so THÊM, nhưng không được là căn cứ duy nhất.
+  assert.match(block, /before\.rows !== after\.rows/);
+  assert.match(block, /SO BẰNG CHECKSUM, KHÔNG BẰNG SỐ DÒNG/);
+});
+
+test('chụp ảnh "trước" TỪ ĐĨA, không gọi mạng — nếu không thì không có gì để so', () => {
+  assert.match(block, /const before = catalogManagement\.cachedMeta\(period\)/);
+  // Phải chụp TRƯỚC khi vứt bộ nhớ tạm và hỏi lại nguồn.
+  const beforeAt = block.indexOf('cachedMeta(period)');
+  const invalidateAt = block.indexOf('invalidateSnapshot(period)');
+  assert.ok(beforeAt >= 0 && invalidateAt > beforeAt, 'phải chụp ảnh trước rồi mới hỏi lại');
+  const fn = cmSource.slice(cmSource.indexOf('function cachedMeta('), cmSource.indexOf('function invalidateSnapshot'));
+  assert.equal(fn.includes('remoteSnapshot'), false, 'cachedMeta tuyệt đối không gọi mạng');
+});
+
+test('‼ chưa có bản cũ ⇒ changed = null = KHÔNG BIẾT, không được nói "không đổi"', () => {
+  assert.match(block, /const changed = before \? \(/);
+  assert.match(block, /: null;/);
+  assert.match(block, /`changed: null` = KHÔNG BIẾT, không phải "không đổi"/);
+});

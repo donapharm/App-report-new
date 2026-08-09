@@ -256,6 +256,19 @@ export default function CostAmounts({ me }) {
         Gửi đúng hai dòng này cho Claude để sửa phép ghép.
       </div>
     </div>}
+    {/* ‼ CỘT THIẾU Ở TOÀN BỘ CẶP = NGUỒN CHƯA MỞ CỘT ĐÓ, không phải vài dòng sót.
+        Probe 09/08 22:30: DataHub trả đủ C33–C46 nhưng KHÔNG có C32 — mà thiếu một
+        cột trong 14 cột là cả bảng C32/C47 thành "—". Nói "thiếu %" chung chung thì
+        đi đòi cả 14 cột; nói đúng tên cột thì xin nguồn mở đúng một cột. */}
+    {!loading && !error && data?.joinHealth?.columnsMissingEverywhere?.length > 0 && <div className="card catalog-alert error" role="alert">
+      <b>‼ Nguồn CHƯA MỞ cột {data.joinHealth.columnsMissingEverywhere.map((k) => k.toUpperCase()).join(', ')}</b>
+      <div>Thiếu ở <b>toàn bộ {Number(data.joinHealth.pairsWithRate).toLocaleString('vi-VN')} cặp</b> — đây là <b>nguồn chưa mở cột</b>,
+        không phải vài dòng lẻ sót %. Công thức C47 cần đủ <b>14 cột (C32 + C33→C46 trừ C44)</b>, thiếu một cột là cả bảng để <b>—</b>.</div>
+      <div className="cost-breakdown-todo">
+        <b>Cần làm:</b> báo DataHub mở đúng cột <b>{data.joinHealth.columnsMissingEverywhere.map((k) => k.toUpperCase()).join(', ')}</b> trong cửa chi phí,
+        rồi bấm <b>"Đồng bộ % chi phí"</b> lại. Menu <b>Tổng hợp C33–C46</b> KHÔNG cần cột này nên vẫn dùng được bình thường.
+      </div>
+    </div>}
     {/* Khớp được một phần cũng phải nói — tổng chỉ là tổng của phần ghép được. */}
     {!loading && !error && data?.available && !data.joinHealth?.keyFormatMismatch
       && data.joinHealth?.revenuePairs > 0 && data.joinHealth.matchedPairs < data.joinHealth.revenuePairs && <div className="card catalog-alert error" role="status">
