@@ -5,6 +5,7 @@ import { api, downloadCostRatesTable, downloadFilteredEmployeeReport, downloadFi
 import { Spinner } from '../components.jsx';
 import { bangkokToday } from '../revenueCoverage.js';
 import { formatDateTime } from '../util.js';
+import { createLatestRequestGate } from '../requestCoordinator.js';
 import {
   ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
   grantSavePayload, grantSummary, ratesLookup,
@@ -15,12 +16,12 @@ import { pct } from '../util.js';
 
 /** Ô % trong bảng danh mục. Không có quyền HOẶC chưa có % ⇒ '—' + chỉ đường.
  *  `pct` đi qua rèm che nên đang ẩn số thì ô này cũng bị che (SPEC_PRIVACY_EYE). */
-function CostRateCell({ value }) {
+function CostRateCell({ value, label }) {
   if (value == null) {
-    return <td className="catalog-money catalog-rate is-missing" data-sensitive=""
+    return <td className="catalog-money catalog-rate is-missing" data-sensitive="" data-label={label}
       title="Chưa có % cho cặp này — xem tab “Mặt hàng thiếu %” ở màn Chi phí">—</td>;
   }
-  return <td className="catalog-money catalog-rate" data-sensitive="">{pct(value, 2)}</td>;
+  return <td className="catalog-money catalog-rate" data-sensitive="" data-label={label}>{pct(value, 2)}</td>;
 }
 
 const uiToHub = (ky) => { const m = String(ky || '').match(/^(\d{2})\.(\d{4})$/); return m ? `${m[2]}-${m[1]}` : ky; };
@@ -109,6 +110,12 @@ const drugQlnbCounts = (rows) => {
 };
 const ROUTES = ['CL', 'NCL', 'NT'];
 const PAGE_SIZE = 50; // CEO chốt 08/08/2026: tối đa 50 dòng/trang cho đỡ dài
+// Tổng width phải khớp CHÍNH XÁC tổng các cột đang render. Nếu giữ min-width của
+// trường hợp đủ 7 cột %, table-layout:fixed sẽ kéo giãn mọi cột khi NV được cấp ít cột.
+const catalogTableWidth = (admin, costColumnCount) => {
+  const safeCount = Math.max(0, Math.min(7, Number(costColumnCount) || 0));
+  return `${(admin ? 1658 : 1546) + safeCount * 96}px`;
+};
 
 function CatalogTableCard({ id, tableId, children, cellLines = 3 }) {
   const { rootRef } = useDonaTableCellTools({
@@ -142,9 +149,9 @@ function CellLinesPicker({ lines, onChange }) {
   </label>;
 }
 
-function PreviewCell({ value, children, className }) {
+function PreviewCell({ value, children, className, label }) {
   const visibleValue = String(value ?? '');
-  return <td className={className} data-full-value={visibleValue}><span className="dona-cell-value">{children ?? visibleValue}</span></td>;
+  return <td className={className} data-full-value={visibleValue} data-label={label}><span className="dona-cell-value">{children ?? visibleValue}</span></td>;
 }
 
 function DrugName({ row, counts }) {
@@ -260,26 +267,26 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
     </div>
     <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog" cellLines={cellLines}>
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee" data-cost-column-count={costColumns.length} style={{ '--catalog-table-width': catalogTableWidth(false, costColumns.length) }}><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
         const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
         const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
         const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
         const effectiveToText = r.effective_to ? hubToUi(r.effective_to) : 'Đang phụ trách';
         return <tr key={r.id}>
-          <PreviewCell value={routeOf(r) || '—'} />
-          <PreviewCell value={r.contractor_code || '—'} />
-          <PreviewCell className="catalog-col-unit" value={r.unit_code || '—'} />
-          <PreviewCell value={r.qlnb_code || '—'} />
-          <PreviewCell value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
-          <PreviewCell className="catalog-col-text" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
-          <PreviewCell className="catalog-col-text" value={ingredientText}><span title={ingredientText}>{ingredientText}</span></PreviewCell>
-          <PreviewCell value={r.uom || '—'} />
-          <td className="catalog-money catalog-col-price" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
-          <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
-          <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
-          {costColumns.map((c) => <CostRateCell key={c.key} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
-          <PreviewCell value={hubToUi(r.effective_from)} />
-          <PreviewCell value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
+          <PreviewCell label="Tuyến" value={routeOf(r) || '—'} />
+          <PreviewCell label="Mã nhà thầu" value={r.contractor_code || '—'} />
+          <PreviewCell label="Mã đơn vị" className="catalog-col-unit catalog-mobile-wide" value={r.unit_code || '—'} />
+          <PreviewCell label="Mã QLNB" className="catalog-mobile-wide" value={r.qlnb_code || '—'} />
+          <PreviewCell label="C10" value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
+          <PreviewCell label="Tên thuốc" className="catalog-col-text catalog-mobile-wide" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
+          <PreviewCell label="Hoạt chất + Hàm lượng" className="catalog-col-text catalog-mobile-wide" value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
+          <PreviewCell label="ĐVT" value={r.uom || '—'} />
+          <td className="catalog-money catalog-col-price" data-sensitive="" data-label="Đơn giá trúng thầu"><b>{moneyText(r.bid_price)}</b></td>
+          <td className="catalog-money" data-sensitive="" data-label="CST ban đầu">{quantityText(r.cst_initial)}</td>
+          <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive="" data-label="CST còn lại"><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
+          {costColumns.map((c) => <CostRateCell key={c.key} label={`${c.key.toUpperCase()} (%)`} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
+          <PreviewCell label="Phụ trách từ kỳ" value={hubToUi(r.effective_from)} />
+          <PreviewCell label="Đến kỳ" value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
         </tr>;
       })}</tbody></table></div>
       {rows.length === 0 && <div className="muted catalog-empty">Chưa có danh mục trong phạm vi đang lọc.</div>}
@@ -562,9 +569,9 @@ function auditColumnsText(value) {
  * CEO: *"chọn theo nhân viên rồi có màn hình phụ cho liệt kê các đơn vị, các cột để
  * tích theo cột, theo nhóm mã đơn vị… thì sẽ rõ và làm nhanh hơn."*
  *
- * Lưới: HÀNG = nhóm mã đơn vị (001 · 033…), CỘT = C36…C45. Tick ở cấp NHÓM (CEO chốt
- * phương án A), mỗi hàng liệt kê luôn các mã bên trong để thấy rõ đang mở cho ai.
- * Hàng "Mọi nhóm" trên đầu bật/tắt cả cột; nút đầu mỗi hàng bật/tắt cả hàng.
+ * Lưới: HÀNG = nhóm mã đơn vị (001 · 033 · 120…), CỘT = C36…C45. Tick ở cấp NHÓM
+ * mã số (không phải loại đơn vị), mỗi hàng liệt kê các mã bên trong để thấy rõ đang
+ * mở cho đơn vị nào. Hàng "Mọi nhóm" trên đầu bật/tắt cả cột; nút cuối mỗi hàng bật/tắt cả hàng.
  */
 function EmployeeGrantDetail({ row, columns, onBack, onChange }) {
   if (!row) return null;
@@ -790,7 +797,7 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
               thầm, CEO không có cách nào biết nếu phải tự mở từng NV ra dò. */}
           {!!todo && <span className="catalog-grants-badge" title="Số chỗ phân quyền đang lệch so với danh mục hiện hành">{todo}</span>}
         </div>
-        <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo <b>NHÓM đơn vị</b> (BV · TTYT · PKĐK · NT…) — mỗi cột một phạm vi nhóm riêng, cấp cho nhóm nào là cả nhóm đó cùng thấy.</p>
+        <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo <b>NHÓM MÃ đơn vị</b> (001 · 033 · 120…) — mỗi cột một phạm vi nhóm riêng, cấp nhóm nào thì các mã NV phụ trách trong nhóm đó cùng thấy.</p>
       </div>
       <button type="button" className="btn secondary" aria-expanded={open} aria-controls="catalog-grants-body" onClick={() => setOpen((v) => !v)}>
         {open ? 'Thu gọn' : 'Mở phân quyền'}
@@ -940,12 +947,12 @@ function CostRatesTablePanel({ period }) {
           <thead><tr><th>Đơn vị</th><th>Mã QLNB</th><th>Tên hàng</th><th>NV</th>
             {data.columns.map((column) => <th key={column.key} className="catalog-money" title={column.label}>{column.key.toUpperCase()} (%)</th>)}
           </tr></thead>
-          <tbody>{rows.slice(0, 300).map((row) => <tr key={`${row.unitCode}|${row.productCode}`}>
-            <td>{row.unitCode}</td>
-            <td><b>{row.productCode}</b></td>
-            <td>{row.productName}</td>
-            <td><small>{row.employees.join(', ')}</small></td>
-            {data.columns.map((column) => <CostRateCell key={column.key} value={row.rates[column.key]} />)}
+          <tbody>{rows.slice(0, 300).map((row) => <tr key={`${row.employeeCode}|${row.unitCode}|${row.productCode}`}>
+            <td data-label="Đơn vị">{row.unitCode}</td>
+            <td data-label="Mã QLNB"><b>{row.productCode}</b></td>
+            <td data-label="Tên hàng">{row.productName}</td>
+            <td data-label="NV"><small>{row.employees.join(', ')}</small></td>
+            {data.columns.map((column) => <CostRateCell key={column.key} label={`${column.key.toUpperCase()} (%)`} value={row.rates[column.key]} />)}
           </tr>)}</tbody>
         </table></div>
         {rows.length > 300 && <small className="muted">Hiện 300/{rows.length.toLocaleString('vi-VN')} dòng — dùng ô tìm để thu hẹp, hoặc Xuất Excel lấy đủ.</small>}
@@ -1005,7 +1012,7 @@ function CostRatesSyncCard({ period }) {
   </div>;
 }
 
-function AdminView({ data, period, onReload, history, diagnostics, costColumns = [], rateOf = () => null }) {
+function AdminView({ data, period, onReload, history, diagnostics, costColumns = [], rateOf = () => null, interactionsDisabled = false }) {
   const [mode, setMode] = useState('view');
   const [query, setQuery] = useState('');
   const [emp, setEmp] = useState('');
@@ -1026,6 +1033,11 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
   const safePage = Math.min(page, pageCount);
   const visibleRows = rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
   useEffect(() => { setPage(1); }, [period, query, emp, province, route, unit]);
+  useEffect(() => { if (interactionsDisabled) setMode('view'); }, [interactionsDisabled]);
+  // Khi đang giữ bảng kỳ cũ để CEO tiếp tục đọc, tuyệt đối không cho subtree cũ
+  // đi vào báo cáo/điều chuyển với kỳ vừa chọn. `effectiveMode` khóa ngay trong
+  // render đầu tiên; effect phía trên chỉ đồng bộ state sau đó.
+  const effectiveMode = interactionsDisabled ? 'view' : mode;
   const goPage = (next) => { setPage(Math.max(1, Math.min(pageCount, next))); requestAnimationFrame(() => document.getElementById('catalog-table-top')?.scrollIntoView({ behavior: 'smooth', block: 'start' })); };
   return <>
     <details className="card catalog-help-compact">
@@ -1033,12 +1045,12 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
       <div><p>Màn hình quản lý theo từng tháng: nhân viên nào đang phụ trách từng cặp <b>đơn vị + mã QLNB</b>.</p><ol><li>Chọn kỳ</li><li>Chọn tuyến/NV hoặc nhập mã cần tìm</li><li>Nếu cần, mở tab Điều chuyển nhân viên</li></ol></div>
     </details>
     <div className="catalog-mode-tabs" role="tablist" aria-label="Chức năng danh mục quản lý">
-      <button role="tab" aria-selected={mode === 'view'} className={mode === 'view' ? 'active' : ''} onClick={() => setMode('view')}>🔎 Xem phân công</button>
-      <button role="tab" aria-selected={mode === 'report'} className={mode === 'report' ? 'active' : ''} onClick={() => setMode('report')}>📊 Lập báo cáo NV</button>
-      <button role="tab" aria-selected={mode === 'transfer'} className={mode === 'transfer' ? 'active' : ''} onClick={() => setMode('transfer')}>⇄ Điều chuyển nhân viên</button>
+      <button role="tab" aria-selected={effectiveMode === 'view'} className={effectiveMode === 'view' ? 'active' : ''} onClick={() => setMode('view')}>🔎 Xem phân công</button>
+      <button role="tab" aria-selected={effectiveMode === 'report'} className={effectiveMode === 'report' ? 'active' : ''} disabled={interactionsDisabled} onClick={() => setMode('report')} title={interactionsDisabled ? 'Chờ tải xong đúng kỳ trước khi lập báo cáo' : ''}>📊 Lập báo cáo NV</button>
+      <button role="tab" aria-selected={effectiveMode === 'transfer'} className={effectiveMode === 'transfer' ? 'active' : ''} disabled={interactionsDisabled} onClick={() => setMode('transfer')} title={interactionsDisabled ? 'Chờ tải xong đúng kỳ trước khi điều chuyển' : ''}>⇄ Điều chuyển nhân viên</button>
     </div>
 
-    {mode === 'view' ? <>
+    {effectiveMode === 'view' ? <>
       <div className="card catalog-controls-compact">
         <div className="catalog-filter-row">
           <CatalogSearch value={query} onChange={setQuery} />
@@ -1052,32 +1064,32 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
       </div>
       <CatalogTableCard id="catalog-table-top" tableId="admin-catalog" cellLines={cellLines}>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products" data-cost-column-count={costColumns.length} style={{ '--catalog-table-width': catalogTableWidth(true, costColumns.length) }}><thead><tr><th className="catalog-col-employee">Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
           const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
           const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
           const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
           const effectiveToText = r.effective_to ? hubToUi(r.effective_to) : 'Đang phụ trách';
           return <tr key={r.id}>
-            <td data-sensitive=""><b>{r.emp_code}</b><small>{r.emp_name}</small></td>
-            <PreviewCell value={routeOf(r) || '—'} />
-            <PreviewCell value={r.contractor_code || '—'} />
-            <PreviewCell className="catalog-col-unit" value={r.unit_code || '—'} />
-            <PreviewCell value={r.qlnb_code || '—'} />
-          <PreviewCell value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
-            <PreviewCell className="catalog-col-text" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
-            <PreviewCell className="catalog-col-text" value={ingredientText}><span title={ingredientText}>{ingredientText}</span></PreviewCell>
-            <PreviewCell value={r.uom || '—'} />
-            <td className="catalog-money catalog-col-price" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
-            <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
-            <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
-            {costColumns.map((c) => <CostRateCell key={c.key} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
-            <PreviewCell value={hubToUi(r.effective_from)} />
-            <PreviewCell value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
+            <td className="catalog-col-employee" data-sensitive="" data-label="Nhân viên"><b>{r.emp_code}</b><small>{r.emp_name}</small></td>
+            <PreviewCell label="Tuyến" value={routeOf(r) || '—'} />
+            <PreviewCell label="Mã nhà thầu" value={r.contractor_code || '—'} />
+            <PreviewCell label="Mã đơn vị" className="catalog-col-unit catalog-mobile-wide" value={r.unit_code || '—'} />
+            <PreviewCell label="Mã QLNB" className="catalog-mobile-wide" value={r.qlnb_code || '—'} />
+            <PreviewCell label="C10" value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
+            <PreviewCell label="Tên thuốc" className="catalog-col-text catalog-mobile-wide" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
+            <PreviewCell label="Hoạt chất + Hàm lượng" className="catalog-col-text catalog-mobile-wide" value={ingredientText}><span className="catalog-two-lines" title={ingredientText}>{ingredientText}</span></PreviewCell>
+            <PreviewCell label="ĐVT" value={r.uom || '—'} />
+            <td className="catalog-money catalog-col-price" data-sensitive="" data-label="Đơn giá trúng thầu"><b>{moneyText(r.bid_price)}</b></td>
+            <td className="catalog-money" data-sensitive="" data-label="CST ban đầu">{quantityText(r.cst_initial)}</td>
+            <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive="" data-label="CST còn lại"><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
+            {costColumns.map((c) => <CostRateCell key={c.key} label={`${c.key.toUpperCase()} (%)`} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
+            <PreviewCell label="Phụ trách từ kỳ" value={hubToUi(r.effective_from)} />
+            <PreviewCell label="Đến kỳ" value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
           </tr>;
         })}</tbody></table></div>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
       </CatalogTableCard>
-    </> : mode === 'report' ? <ReportPanel period={period} rows={currentRows} /> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
+    </> : effectiveMode === 'report' ? <ReportPanel period={period} rows={currentRows} /> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
 
     <details className="card catalog-advanced">
       <summary>Quản trị nâng cao: lịch sử và trạng thái hệ thống</summary>
@@ -1098,6 +1110,8 @@ export default function CatalogManagement({ me }) {
   const [history, setHistory] = useState([]);
   const [diagnostics, setDiagnostics] = useState(null);
   const [error, setError] = useState('');
+  const loadGateRef = useRef(null);
+  if (!loadGateRef.current) loadGateRef.current = createLatestRequestGate();
   const isAdmin = !!me?.isAdmin;
   // Danh tính CEO do backend cấp (`/me` trả `is_ceo`), KHÔNG suy từ vai admin —
   // admin thường không được đụng phân quyền cột % (CEO chốt 06/08).
@@ -1106,6 +1120,10 @@ export default function CatalogManagement({ me }) {
   // Kỳ của BẢNG ĐANG HIỂN THỊ — có thể khác kỳ đang tải. Phải nói rõ, không để
   // anh/chị tưởng số trên màn đã là kỳ vừa chọn.
   const shownPeriod = data ? (data.period_ui || hubToUi(data.period)) : '';
+  const periodMismatch = !!data && !!shownPeriod && shownPeriod !== period;
+  // Mọi thao tác ghi/report/export bị khóa trong lúc tải hoặc khi đang giữ bảng
+  // của kỳ khác. Bảng cũ chỉ còn là bản đọc; không thể tạo payload trộn kỳ.
+  const actionsLocked = !!loadingPeriod || periodMismatch;
   const employeeOptions = useMemo(() => {
     const seen = new Map();
     for (const row of data?.rows || []) {
@@ -1119,18 +1137,26 @@ export default function CatalogManagement({ me }) {
   // quay mỗi lần đổi kỳ — trong khi danh mục rất nhiều dòng nên chờ khá lâu. Nay giữ
   // bảng cũ trên màn, chỉ gắn dải "đang tải" + nói rõ đang xem kỳ nào / chờ kỳ nào.
   async function load(selected = period) {
+    const request = loadGateRef.current.next();
     setError(''); setLoadingPeriod(selected);
     try {
-      const p = uiToHub(selected); const result = await api.catalogManagement(p); setData(result);
+      const p = uiToHub(selected);
+      const result = await api.catalogManagement(p);
+      if (!request.isLatest()) return;
+      setData(result);
       if (isAdmin) {
         const [h, d] = await Promise.allSettled([api.adminCatalogManagementHistory(p), api.adminCatalogManagementDiagnostics()]);
+        if (!request.isLatest()) return;
         setHistory(h.status === 'fulfilled' ? (h.value.history || []) : []); setDiagnostics(d.status === 'fulfilled' ? d.value : null);
       }
     } catch (e) {
       // Tải hỏng thì GIỮ bảng cũ + báo lỗi, không đập màn hình về trắng.
-      setError(e.message);
-    } finally { setLoadingPeriod(''); }
+      if (request.isLatest()) setError(e.message);
+    } finally {
+      if (request.isLatest()) setLoadingPeriod('');
+    }
   }
+  useEffect(() => () => { loadGateRef.current?.cancel(); }, []);
   useEffect(() => { api.periods().then((p) => { const list = (p.periods || p || []).map((x) => x.ky || x).filter((x) => /^\d{2}\.\d{4}$/.test(x)); setPeriods(list); if (list.length && !list.includes(period)) setPeriod(list.at(-1)); }).catch(() => {}); }, []);
   useEffect(() => { load(period); }, [period, isAdmin]);
   return <div className="catalog-management">
@@ -1141,9 +1167,9 @@ export default function CatalogManagement({ me }) {
     </div>
     {error && <div className="card catalog-alert error">⚠ {error}</div>}
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
-    {isCeo && <CostRatesSyncCard period={period} />}
+    {isCeo && !actionsLocked && <CostRatesSyncCard period={period} />}
     <CostRatesTablePanel period={period} />
-    {isCeo && data && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
+    {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
       ⚠ Nguồn tỷ lệ chi phí đang kẹt — cột % đang dùng bảng tỷ lệ lấy được gần nhất.{costRates.note ? ` ${costRates.note}` : ''}
     </div>}
@@ -1153,6 +1179,9 @@ export default function CatalogManagement({ me }) {
       <span>Đang tải danh mục kỳ <b>{loadingPeriod}</b> từ Data Hub…{shownPeriod && shownPeriod !== loadingPeriod
         ? <> Bảng dưới vẫn là <b>kỳ {shownPeriod}</b> cho tới khi có dữ liệu mới.</>
         : ' Bảng dưới là bản vừa xem, đang được làm mới.'}</span>
+    </div>}
+    {periodMismatch && !loadingPeriod && <div className="card catalog-alert error" role="status">
+      ⚠ Chưa tải được danh mục kỳ <b>{period}</b>. Bảng kỳ <b>{shownPeriod}</b> bên dưới chỉ để đọc; báo cáo, cấp quyền và điều chuyển đang khóa để không trộn kỳ.
     </div>}
     {/* Lần đầu chưa có gì để giữ ⇒ khung chờ CÓ NÓI đang chờ cái gì, thay vì vòng quay trơ. */}
     {!data && !error && <div className="card catalog-first-load" role="status" aria-live="polite">
@@ -1165,8 +1194,8 @@ export default function CatalogManagement({ me }) {
       <p>Danh mục toàn công ty khá lớn nên lần tải đầu mất một lúc. Các phần phía trên dùng được ngay.</p>
     </div>}
     {data && (isAdmin
-      ? <AdminView data={data} period={uiToHub(period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}
-        costColumns={costRates.columns} rateOf={costRates.rateOf} />
+      ? <AdminView data={data} period={uiToHub(shownPeriod || period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}
+        costColumns={costRates.columns} rateOf={costRates.rateOf} interactionsDisabled={actionsLocked} />
       : <EmployeeSections data={data} costColumns={costRates.columns} rateOf={costRates.rateOf} />)}
   </div>;
 }

@@ -37,7 +37,7 @@ test('mỗi bảng đều mang căn cước bản số: đồng bộ lúc nào, 
 test('ô % dùng CostRateCell ⇒ đi qua rèm che; export qua backend theo quyền người tải', () => {
   const panelAt = page.indexOf('function CostRatesTablePanel');
   const panel = page.slice(panelAt, page.indexOf('function CostRatesSyncCard'));
-  assert.match(panel, /<CostRateCell key=\{column\.key\} value=\{row\.rates\[column\.key\]\} \/>/);
+  assert.match(panel, /<CostRateCell key=\{column\.key\} label=\{`\$\{column\.key\.toUpperCase\(\)\} \(%\)`\} value=\{row\.rates\[column\.key\]\} \/>/);
   assert.match(api, /downloadCostRatesTable/);
   const xlsxLine = routes.slice(routes.indexOf("router.get('/catalog-management/cost-rates/table.xlsx'"));
   assert.match(xlsxLine.slice(0, 120), /auth\.requireAuth/);
@@ -46,4 +46,10 @@ test('ô % dùng CostRateCell ⇒ đi qua rèm che; export qua backend theo quy�
 test('bảng hiện tối đa 300 dòng + chỉ đường lấy đủ — không âm thầm cắt', () => {
   assert.match(page, /rows\.slice\(0, 300\)/);
   assert.match(page, /Hiện 300\/\{rows\.length/);
+});
+
+test('hai NV trùng đơn vị × sản phẩm vẫn có React key riêng theo employeeCode', () => {
+  assert.match(page, /key=\{`\$\{row\.employeeCode\}\|\$\{row\.unitCode\}\|\$\{row\.productCode\}`\}/);
+  assert.doesNotMatch(page, /key=\{`\$\{row\.unitCode\}\|\$\{row\.productCode\}`\}/,
+    'key thiếu employeeCode sẽ làm hai dòng CEO va nhau khi cùng cặp');
 });

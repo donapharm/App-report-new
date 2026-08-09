@@ -1,3 +1,21 @@
+### 2026-08-09 15:05 (giờ VN) — 🔀 HOÀ GIẢI HAI NHÁNH: nền PROD `a437afc` + 8 việc mới, Claude tự merge
+
+KIỂM 1 của bot FAIL: `a437afc` (PROD) và nhánh Claude lệch 12 file ngoài CHANGELOG — hậu quả dồn của việc đánh số lại commit nhiều đợt. Cherry-pick lên nền lệch là trộn mù, nên đổi cách: **bot đẩy đúng commit PROD lên GitHub** (`prod/a437afc-20260809`, tree khớp `28f3a5c…`), **Claude merge hai bên** với đầy đủ ngữ cảnh cả hai phía.
+
+**Giữ từ phía bot (PROD)** — các bản vá thật nhánh Claude thiếu:
+- `costRatesTable.js`: **cô lập dòng theo NV** — khoá cặp thêm chiều `empCode`, hai NV trùng đơn vị × sản phẩm không ghi đè/lộ tỷ lệ của nhau; session NV lọc ngay từ partition. Kèm test.
+- Bề rộng bảng **tính động theo số cột %** (`--catalog-table-width`, admin 1658px / NV 1546px + 96px/cột) thay cho `min-width` cứng 2330px — NV được cấp ít cột thì bảng không bị kéo giãn. Luật cascade đơn giá 104px đặt SAU luật 96px.
+- `data-label` trên từng ô cho mobile; cổng chống đua request (`createLatestRequestGate`, chỉ nhận kết quả lượt mới nhất); `periodMismatch` khoá thao tác ghi/report khi đang giữ bảng kỳ khác; render theo `shownPeriod`.
+- Chú thích/mô tả đã cập nhật "NHÓM MÃ đơn vị (001 · 033 · 120…)".
+
+**Giữ từ phía Claude** — 8 việc hôm nay: huy hiệu Version + nút Đồng bộ lại (`de6aaff`) · nút "Chọn cả cột" (`49febab`) · khối "Cần rà phân quyền" (`b77162d`) · chặn spam cảnh báo chi phí (`6b3a259`) · chặn tin gửi mã khoá/optout (`d8277d8`) · sửa công thức C47 (`3a80821`) · menu "Tổng hợp chi phí C33–C46" (`45228e9`) · bộ chọn Dòng/ô (khử trùng lặp sau merge — bot đã chép sẵn một bản).
+
+**Ghép tay:** đầu mục phân quyền = huy hiệu số đỏ (Claude) + câu mô tả NHÓM MÃ (bot). CHANGELOG giữ cả hai dòng lịch sử, 8 mục Claude nằm trên.
+
+Kiểm sau merge: build sạch · web **345/345** (gồm contract test của bot) · server **1074/1081** (7 fail cố hữu) · quét toàn repo không còn dấu xung đột.
+
+---
+
 ### 2026-08-09 13:15 (giờ VN) — 📊 MENU MỚI "Tổng hợp chi phí C33–C46" (CEO-only)
 
 CEO: *"tổng hợp các khoản chi theo từng cột từ C33 đến C46 (vẫn tính C44, nhưng nêu rõ) để tao biết tháng này tao chi hết 8% là bao nhiêu tiền, chi tiết ở mỗi cột, mỗi mã đơn vị, nhóm mã đơn vị, mỗi nhân viên, mỗi tuyến. Xuất Excel từ tháng này đến tháng này, chỉ chọn các cột/mã/NV cần xuất — một phát quản lý ăn ngay."* Bổ sung: *"tất cả đều có con mắt mở/đóng các con số"* + *"tất cả đều có bộ lọc: nhà thầu, đơn vị, nhóm mã, NV, tuyến, ưu tiên (H.A*/H.A…)"* + *"menu C32·C47 vẫn làm riêng."*
@@ -212,6 +230,7 @@ Server 1051/1058 (7 fail cố hữu: 6 PDF thiếu `pdfinfo` trong container + V
 
 ---
 
+---
 ### 2026-08-09 10:01 (giờ VN) — ‼ BỎ SỐ BỊA TRONG CHỮ GIAO DIỆN ("khoảng 27.700 cặp")
 
 CEO hỏi: *"danh mục bản V31.4 hiện có 27.719 dòng, sao ở bản đồng bộ T08 kéo qua chỉ có 27.700 dòng?"*

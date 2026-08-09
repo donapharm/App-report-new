@@ -6,9 +6,11 @@ const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', impor
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
 const routes = fs.readFileSync(new URL('../../server/src/routes.js', import.meta.url), 'utf8');
 
-test('menu CHỈ hiện với tài khoản CEO, lấy danh tính từ backend chứ không suy từ vai admin', () => {
+test('menu CHỈ hiện với CEO khi dữ liệu đúng kỳ, lấy danh tính từ backend chứ không suy từ vai admin', () => {
   assert.match(page, /const isCeo = !!me\?\.is_ceo;/);
-  assert.match(page, /\{isCeo && data && <CostColumnGrantsPanel/);
+  assert.match(page, /\{isCeo && data && !actionsLocked && <CostColumnGrantsPanel/);
+  assert.match(page, /const actionsLocked = !!loadingPeriod \|\| periodMismatch/,
+    'khi đang tải/giữ bảng kỳ cũ phải ẩn thao tác cấp quyền để không trộn kỳ');
   // Suy từ role/isAdmin là sai: CEO thật trên PROD mang role 'admin', và admin
   // thường KHÔNG được sửa phân quyền này.
   assert.doesNotMatch(page, /isCeo\s*=\s*[^;]*isAdmin/);
@@ -20,8 +22,10 @@ test('ẩn nút không phải lớp bảo vệ — backend vẫn chặn độc l
   assert.match(routes.slice(at, routes.indexOf('\n', at)), /auth\.requireCeo/);
 });
 
-test('menu nói rõ mặc định là KHÔNG THẤY GÌ, không để CEO tự đoán', () => {
+test('menu nói rõ mặc định TẮT và nhóm theo MÃ số, không để CEO hiểu nhầm theo loại đơn vị', () => {
   assert.match(page, /không thấy cột % nào/i);
+  assert.match(page, /NHÓM MÃ đơn vị.*001 · 033 · 120/s);
+  assert.doesNotMatch(page, /NHÓM đơn vị<\/b> \(BV · TTYT · PKĐK/);
 });
 
 test('chỉ lưu những dòng CEO thực sự đổi; lưu hỏng thì giữ nguyên thay đổi chưa lưu', () => {

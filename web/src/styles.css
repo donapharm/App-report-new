@@ -1349,13 +1349,9 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-table thead { display:none; }
   .catalog-table tr { display:grid; gap:3px; padding:9px; margin:7px; border:1px solid var(--line); border-radius:10px; }
   .catalog-table td { display:block; padding:0; border:0; overflow-wrap:anywhere; }
-  .catalog-table td:nth-child(1)::before { content:'NV: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(2)::before { content:'Tuyến: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(3)::before { content:'Loại: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(4)::before { content:'Danh mục: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(5)::before { content:'Từ kỳ: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(6)::before { content:'Đến kỳ: '; color:var(--muted); font-weight:700; }
-  .catalog-table td:nth-child(7)::before { content:'Nguồn: '; color:var(--muted); font-weight:700; }
+  /* Nhãn mobile đi cùng chính ô dữ liệu; số cột % thay đổi theo quyền nên tuyệt đối
+     không suy nhãn bằng nth-child. */
+  .catalog-table td[data-label]::before { content:attr(data-label) ': '; color:var(--muted); font-weight:700; }
 }
 @media (max-width:520px) {
   .catalog-heading { align-items:stretch; flex-direction:column; }
@@ -1467,13 +1463,6 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-result-count { grid-column:1/-1; border-left:0; border-top:1px solid var(--line); padding-top:6px; }
   .catalog-help-compact > div { align-items:flex-start; flex-direction:column; }
   .catalog-help-compact ol { flex-wrap:wrap; gap:5px 20px; white-space:normal; }
-  .catalog-table td:nth-child(3)::before { content:'Mã đơn vị: '; }
-  .catalog-table td:nth-child(4)::before { content:'Mã QLNB: '; }
-  .catalog-table td:nth-child(5)::before { content:'Tên thuốc: '; }
-  .catalog-table td:nth-child(6)::before { content:'ĐVT: '; }
-  .catalog-table td:nth-child(7)::before { content:'Đơn giá: '; }
-  .catalog-table td:nth-child(8)::before { content:'Từ kỳ: '; }
-  .catalog-table td:nth-child(9)::before { content:'Đến kỳ: '; }
   .catalog-table-products { min-width:0; }
   .catalog-table-products .catalog-drug-name { max-width:none; }
   .catalog-table-products .catalog-money { text-align:left; }
@@ -1511,17 +1500,18 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
  * Bề rộng gắn theo LOẠI NỘI DUNG bằng class — KHÔNG theo vị trí cột, vì số cột đổi
  * theo quyền từng người (0–7 cột %) và bảng CEO lệch một cột so với bảng NV.
  */
-.catalog-table-products { min-width:2330px; table-layout:fixed; }
+.catalog-table-products { width:var(--catalog-table-width); min-width:var(--catalog-table-width); table-layout:fixed; }
 .catalog-table-products th, .catalog-table-products td { width:90px; }
 /* Chữ dài: đủ rộng để đọc, tràn thì xuống dòng rồi cắt theo số dòng CEO chọn. */
 .catalog-table-products th.catalog-col-text, .catalog-table-products td.catalog-col-text { width:230px; }
 /* Mã đơn vị: "001.BVĐK Đồng Nai" — CEO báo hơi chật. */
 .catalog-table-products th.catalog-col-unit, .catalog-table-products td.catalog-col-unit { width:160px; }
-/* Đơn giá trúng thầu: tối đa 7 chữ số + "đ" ⇒ "9.999.999 đ" là đủ (CEO đo giúp). */
-.catalog-table-products th.catalog-col-price, .catalog-table-products td.catalog-col-price { width:104px; }
 /* Số/tiền/%: không xuống dòng, vừa tiêu đề "C36 (%)". */
 .catalog-table-products th.catalog-money, .catalog-table-products td.catalog-money { width:96px; white-space:nowrap; }
-.catalog-table-products th:first-child, .catalog-table-products td:first-child { width:112px; }
+/* Đơn giá cũng mang class catalog-money; luật 104px PHẢI đứng sau luật 96px để
+   thắng cascade, nếu không trình duyệt lại co đơn giá về 96px. */
+.catalog-table-products th.catalog-col-price, .catalog-table-products td.catalog-col-price { width:104px; }
+.catalog-table-products th.catalog-col-employee, .catalog-table-products td.catalog-col-employee { width:112px; }
 
 /* Số dòng tối đa trong MỘT ô — CEO chọn 1/2/3/Tất cả ở thanh điều khiển.
    0 = Tất cả ⇒ bỏ cắt dòng, ô cao bao nhiêu cũng được. */
@@ -1531,7 +1521,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   overflow-wrap:anywhere;
 }
 .catalog-table-card[style*="--catalog-cell-lines: 0"] .catalog-table-products td.catalog-col-text > * {
-  display:block; -webkit-line-clamp:none; line-clamp:none; overflow:visible;
+  display:block; max-height:none; -webkit-line-clamp:none; line-clamp:none; overflow:visible;
 }
 .catalog-table-products th { white-space:normal; line-height:1.15; }
 .catalog-table-products thead th {
@@ -1655,8 +1645,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-filter-row-employee { grid-template-columns:minmax(260px,1fr) minmax(125px,155px) minmax(95px,115px) minmax(180px,250px) auto; }
 /* Bảng danh mục CỦA TÔI: cũng bỏ bề rộng theo vị trí — cột % chi phí chen vào
    giữa "CST còn lại" và "Từ kỳ" nên mọi số thứ tự sau đó đều lệch. */
-/* Bảng NV thiếu cột 'Nhân viên' ⇒ hẹp hơn đúng một cột. */
-.catalog-table-products.catalog-table-employee { min-width:2218px; }
+/* Tổng width desktop được tính theo số cột % thực tế trong JSX: admin base 1658px,
+   NV base 1546px, mỗi cột động thêm đúng 96px. Không giữ min-width đủ 7 cột. */
 @media (min-width:900px) and (max-width:1250px) {
   .catalog-filter-row { grid-template-columns:minmax(220px,1fr) repeat(3,minmax(105px,140px)) minmax(180px,1fr); }
   .catalog-filter-row-employee { grid-template-columns:minmax(220px,1fr) minmax(120px,150px) minmax(105px,140px) minmax(180px,1fr); }
@@ -1676,6 +1666,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 }
 @media (max-width:899px) {
   :root.catalog-mode { --hdr-h:74px; }
+  .catalog-table-products { width:100%; min-width:0; table-layout:auto; }
   .catalog-mode .hdr { min-height:0; padding-top:calc(4px + env(safe-area-inset-top)); padding-bottom:4px; }
   .catalog-mode .hdr .official-logo img { width:58px !important; }
   .catalog-mode .hdr .who-role { display:none; }
@@ -1687,41 +1678,10 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-pager-capsule > span { min-height:34px; padding:5px 8px; gap:3px; }
   .catalog-pager-capsule > span b { font-size:11.5px; }
   .catalog-pager-capsule > span i { font-size:10.5px; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(1)::before { content:'NV: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(2)::before { content:'Tuyến: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(3)::before { content:'Mã nhà thầu: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(4)::before { content:'Mã đơn vị: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(5)::before { content:'Mã QLNB: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(6)::before { content:'Tên thuốc: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(7)::before { content:'Hoạt chất + Hàm lượng: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(8)::before { content:'ĐVT: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(9)::before { content:'Đơn giá: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(10)::before { content:'CST ban đầu: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(11)::before { content:'CST còn lại: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(12)::before { content:'Từ kỳ: '; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(13)::before { content:'Đến kỳ: '; }
   .catalog-two-lines { display:block; max-height:none; overflow:visible; }
   .catalog-table-products tr { grid-template-columns:1fr 1fr; }
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(4),
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(5),
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(6),
-  .catalog-table-products:not(.catalog-table-employee) td:nth-child(7) { grid-column:1/-1; }
+  .catalog-table-products td.catalog-mobile-wide { grid-column:1/-1; }
   .catalog-table-products.catalog-table-employee { min-width:0; }
-  .catalog-table-employee td:nth-child(1)::before { content:'Tuyến: '; }
-  .catalog-table-employee td:nth-child(2)::before { content:'Mã nhà thầu: '; }
-  .catalog-table-employee td:nth-child(3)::before { content:'Mã đơn vị: '; }
-  .catalog-table-employee td:nth-child(4)::before { content:'Mã QLNB: '; }
-  .catalog-table-employee td:nth-child(5)::before { content:'Tên thuốc: '; }
-  .catalog-table-employee td:nth-child(6)::before { content:'Hoạt chất + Hàm lượng: '; }
-  .catalog-table-employee td:nth-child(7)::before { content:'ĐVT: '; }
-  .catalog-table-employee td:nth-child(8)::before { content:'Đơn giá trúng thầu: '; }
-  .catalog-table-employee td:nth-child(9)::before { content:'CST ban đầu: '; }
-  .catalog-table-employee td:nth-child(10)::before { content:'CST còn lại: '; }
-  .catalog-table-employee td:nth-child(11)::before { content:'Từ kỳ: '; }
-  .catalog-table-employee td:nth-child(12)::before { content:'Đến kỳ: '; }
-  .catalog-table-employee td:nth-child(3), .catalog-table-employee td:nth-child(4),
-  .catalog-table-employee td:nth-child(5), .catalog-table-employee td:nth-child(6) { grid-column:1/-1; }
-  .catalog-table-employee td:nth-child(7) { grid-column:auto; }
 }
 @media (max-width:520px) {
   .catalog-filter-row { grid-template-columns:1fr; }
@@ -2450,11 +2410,10 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .catalog-c10 { display:inline-block; padding:1px 7px; border-radius:999px; font-weight:800; font-size:11.5px; background:#e8f3ff; color:#0b5aa6; }
 .catalog-c10.is-missing { background:#ffe9e9; color:#a12020; }
 
-/* ── Layout cột bảng danh mục (CEO 27/07: cột chật mà trang dư chỗ) ──
-   Bảng dùng table-layout:fixed + % bề ngang → tận dụng hết khung 1600px,
-   không còn cảnh tiêu đề bị cắt ("Đơn giá trún", "CST còn l") trong khi
-   bên phải bỏ trống. Cột dài (tên thuốc, hoạt chất) được ưu tiên chỗ. */
-.catalog-table-products { min-width:1320px; table-layout:fixed; }
+/* ── Layout cột bảng danh mục ──
+   Luật fixed/1320px ngày 27/07 đã bị thay thế bởi layout theo nội dung phía trên:
+   số cột % thay đổi theo quyền nên không được ghi đè lại `table-layout:auto` ở
+   cuối stylesheet. Giữ các luật trình bày ô bên dưới, không ép layout của bảng. */
 .catalog-table-products th { white-space:normal; line-height:1.25; vertical-align:bottom; }
 .catalog-table-products td { overflow-wrap:anywhere; }
 .catalog-table-products .catalog-money { text-align:right; white-space:nowrap; }

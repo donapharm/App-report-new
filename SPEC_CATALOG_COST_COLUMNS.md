@@ -100,11 +100,11 @@ scope + store grant + route CEO-only + menu; nguồn số và khung quyền đ�
 > mà ở 003.PKĐK An Long Thành lại không xem được."*
 
 Bản v1 (một phạm vi đơn vị chung cho mọi cột) không tả được thực tế: DN002 xem C41
-ở mọi nơi nhưng C36 chỉ ở vài loại đơn vị. V2 đổi mô hình quyền thành **ma trận ba
-chiều**, và đổi đơn vị phạm vi từ MÃ LẺ sang **NHÓM**:
+ở mọi nơi nhưng C36 chỉ ở vài nhóm mã đơn vị. V2 đổi mô hình quyền thành **ma trận ba
+chiều**, và đổi đơn vị phạm vi từ MÃ LẺ sang **NHÓM MÃ**:
 
 ```
-DN002: { c41: ['*'], c43: ['PKĐK', 'BV'], c36: ['BV'] }
+DN002: { c41: ['*'], c43: ['001', '033'], c36: ['001'] }
 ```
 
 - **‼ NHÓM = MÃ đơn vị (001, 033, 120…), KHÔNG phải LOẠI đơn vị.** Bản đầu Claude
