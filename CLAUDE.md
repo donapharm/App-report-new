@@ -67,6 +67,27 @@ web/                         Frontend React (Vite) — chỉ render dữ liệu 
 - KHÔNG dùng lưới tự chia trên `.page-desktop` (đã bỏ). Trang tự quản lý layout nội bộ bằng class tường minh (vd `.mini-columns`, `.kpi-grid`, `.alerts-grid`).
 - Trang mới/duyệt lại trang cũ trên PC: theo mẫu Phân tích; mobile giữ 1 cột dọc.
 
+## ‼ CÁCH GỬI LỆNH CHO BOT — MỖI TIN ĐÚNG MỘT KHỐI (CEO chốt 09/08/2026)
+
+> CEO: *"tin trùng trùng điệp điệp. Tao gửi tin sau thì sợ hụt tin trước, mà gửi tin
+> trước thì tin sau có nguy cơ trôi… cứ như vậy tin gần nhất coi như trôi luôn."*
+
+Vòng lặp thực tế: Claude ra lệnh → CEO chép sang bot → bot trả kết quả → CEO chép về
+cho Claude soi → Claude ra lệnh MỚI. Lệnh cũ lập tức hết hạn (commit đã tiến, rollback
+đã đổi). CEO là người chép tay giữa hai bên nên **lỗi này phải chặn ở phía Claude**.
+
+**Luật bắt buộc cho mọi tin Claude gửi CEO:**
+1. **Đúng MỘT khối để chuyển cho bot**, đặt ở CUỐI tin, trong khung trích dẫn. Không
+   rải lệnh giữa bài, không để hai khối trong cùng một tin.
+2. **Khối luôn ghi ĐỦ**: nhánh + commit + rollback. **CẤM** viết "như tin trước",
+   "giữ nguyên rollback" — CEO không phải ghép từ nhiều tin.
+3. **Không có việc gì cho bot thì NÓI THẲNG** "lần này không có gì gửi bot", để CEO
+   khỏi đi tìm.
+4. **CEO chỉ chép tin gần nhất.** Tin cũ coi như huỷ. Vì vậy mỗi tin phải tự đứng
+   được một mình.
+5. Commit đã tiến thì **nhắc lại khối mới** ngay trong tin kế, kèm một dòng nói rõ
+   khối cũ bỏ đi.
+
 ## Quy trình ghi log (BẮT BUỘC)
 - **Mọi thay đổi app phải ghi 1 mục vào `CHANGELOG.md`** (mới nhất trên cùng): ngày, việc đã làm, lý do, trạng thái test.
 - Đọc repo lần đầu: mở `CHANGELOG.md` trước để nắm toàn cảnh + tiến trình hiện tại.
