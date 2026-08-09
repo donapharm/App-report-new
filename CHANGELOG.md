@@ -1,3 +1,21 @@
+### 2026-08-09 18:25 (giờ VN) — 🔀 Ghép lên nền PROD `8873676` (C2 self-heal) — merge SẠCH, không xung đột
+
+Bot đẩy nền theo E1: `prod/8873676-20260809`, commit `88736763c8bfc14e8576facaa8188b6243a579f9`, tree `c010e8fc…`. Claude fetch về ghép.
+
+**Lần này merge sạch tuyệt đối, không một xung đột** — khác hẳn lần `a437afc` sáng nay (12 file lệch, 15 khối xung đột). Lý do: hai bên **cùng mọc từ `50eb233`** mà `50eb233` đã nằm trong lịch sử nhánh Claude, nên git tự ghép được. Đây chính là lợi ích của luật E2 mà bot vừa chốt: nền PROD lên kho chung thì lần sau không bao giờ phải giải xung đột tay nữa.
+
+**Giữ nguyên của bot (C2):** `employeeCostReconciliationShadow.js` · `appSaleReconShadowV3.js` · `selfHealUnavailableCostSources` trong `routes.js` · `applyReconciliationShadow` trong `employeeCost.js` · 3 bộ test mới. Đã kiểm từng mục còn nguyên sau merge.
+
+**Giữ nguyên của Claude:** dải đỏ nói đúng nguyên nhân + nút "↻ Thử lại" · ba công cụ quản trị (Chi/Doanh thu · tỷ trọng · So kỳ trước) · sửa ô lọc bị kẹt (ba đường thoát, chỉ một ô mở) · cảnh báo bảng rỗng kèm ba bước cần làm.
+
+Diff so với nền PROD **chỉ còn đúng phần Claude thêm** (7 file, +565/−27) — không đụng file nào của C2.
+
+Kiểm: hậu duệ trực tiếp `8873676` (git xác nhận) · build sạch · **web 360/360** · **server 1101/1108** (7 fail cố hữu) · quét toàn repo không còn dấu xung đột.
+
+**Luật E2 bot chốt — Claude đồng ý toàn bộ 6 điểm.** Bổ sung: nhánh `prod/*` chỉ đẩy sau khi acceptance PASS, trỏ đúng exact commit, cấm force-push, candidate bị rollback không đặt dưới `prod/`. Quyền push nhánh PROD ghi luôn trong Gate 2 để CEO duyệt cùng ngữ cảnh.
+
+---
+
 ### 2026-08-09 17:55 (giờ VN) — 🔓 Ô lọc bị KẸT + bảng rỗng không giải thích (CEO chụp màn)
 
 **Lỗi 1 — ô lọc mở ra không thoát được.** CEO: *"tích vào ô chọn xuất theo cột, nó dính luôn không thoát ra được."* Ảnh cho thấy **bốn menu mở chồng lên nhau**, che cả bảng lẫn chính cái nút phải bấm để đóng.
