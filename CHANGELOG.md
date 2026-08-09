@@ -1,3 +1,21 @@
+### 2026-08-09 17:55 (giờ VN) — 🔓 Ô lọc bị KẸT + bảng rỗng không giải thích (CEO chụp màn)
+
+**Lỗi 1 — ô lọc mở ra không thoát được.** CEO: *"tích vào ô chọn xuất theo cột, nó dính luôn không thoát ra được."* Ảnh cho thấy **bốn menu mở chồng lên nhau**, che cả bảng lẫn chính cái nút phải bấm để đóng.
+
+Nguyên nhân: mỗi `MultiPick` **tự giữ trạng thái mở** ⇒ mở được nhiều ô cùng lúc, và cách đóng duy nhất là bấm lại đúng nút đã bị menu khác che. Không có Esc, không có bấm-ra-ngoài, không có nút đóng. Đây là lỗi thiết kế cơ bản của Claude.
+
+**Đã sửa — ba đường thoát:** ① bấm ra ngoài ② phím **Esc** ③ nút **"Xong"**. Trạng thái mở chuyển lên **component cha** (`openPick`) ⇒ mở ô này thì ô kia tự đóng, không bao giờ chồng nhau. Dọn trình nghe sự kiện khi đóng. Nút có tick hiện viền xanh để thấy đang lọc gì.
+
+**Lỗi 2 — chọn T07.2026 ra 0 dòng, không hiểu vì sao.** CEO: *"tôi chọn T07.2026 đáng lẽ phải ra số, hay vẫn còn chờ đồng bộ % từ DataHub?"*
+
+Màn CÓ báo "kỳ 07.2026 chưa đồng bộ %" nhưng câu đó **bị menu kẹt che mất**, và khi bảng rỗng hoàn toàn thì câu chữ cũ vẫn nói giọng "bảng dưới không gồm kỳ đó" — nghe như bảng vẫn có gì đó.
+
+**Đã sửa:** bảng rỗng hoàn toàn thì cảnh báo đổi giọng — *"nên **bảng trống hoàn toàn**, không phải kỳ đó không tốn tiền"* — viền dày hơn, kèm khối **"Cần làm"** ghi đúng ba bước: vào Danh mục QL → chọn đúng kỳ ở ô "Kỳ" → bấm "Đồng bộ từ DataHub" → quay lại. **Báo lỗi mà không chỉ việc phải làm là bỏ mặc người dùng tự đoán.**
+
+Web 360/360 (+7) · build sạch · không đụng server.
+
+---
+
 ### 2026-08-09 18:10 (giờ VN) — 🔁 Nút "Thử lại" THẬT — bot chặn Gate 2 đúng
 
 Bot BLOCK `197f1fc` với lý do chính xác: dải đỏ mới bảo *"Bấm Thu gọn rồi Mở phân quyền lại để thử lần nữa"*, nhưng thao tác đó **không gọi lại API** — `useEffect` tự tải có chốt `(open && !panel && !loading)`, mà sau lỗi bảng nhóm **panel VẪN tồn tại** (chỉ rỗng nhóm). Người làm theo vẫn thấy 0 nhóm.

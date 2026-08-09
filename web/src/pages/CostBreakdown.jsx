@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadCostBreakdown } from '../api.js';
 import { Spinner } from '../components.jsx';
 
@@ -30,21 +30,48 @@ const GROUP_LABELS = {
   route: 'Tuyến', contractor: 'Mã nhà thầu', priority: 'Ưu tiên (H.A*…)',
 };
 
-/** Ô chọn nhiều giá trị gọn: nút mở danh sách tick. Danh sách trống = không lọc. */
-function MultiPick({ label, options, values, onChange }) {
-  const [open, setOpen] = useState(false);
-  return <div className="cost-breakdown-pick">
-    <button type="button" className="btn secondary" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+/**
+ * Ô chọn nhiều giá trị: nút mở danh sách tick. Danh sách trống = không lọc.
+ *
+ * ‼ BA ĐƯỜNG THOÁT (CEO báo kẹt 09/08: "tích vào ô chọn xuất theo cột, nó dính
+ * luôn không thoát ra được"). Bản đầu mỗi ô tự giữ trạng thái mở nên MỞ ĐƯỢC
+ * NHIỀU Ô CÙNG LÚC, chồng lên nhau che mất bảng, mà cách đóng duy nhất là bấm
+ * lại đúng cái nút đã bị menu khác che. Nay:
+ *   1. Bấm ra ngoài  → đóng
+ *   2. Bấm phím Esc  → đóng
+ *   3. Nút "Xong"    → đóng
+ * và trạng thái mở do CHA giữ ⇒ mở ô này thì ô kia tự đóng, không bao giờ chồng.
+ */
+function MultiPick({ label, options, values, onChange, open, onToggle }) {
+  const boxRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocDown = (event) => { if (!boxRef.current?.contains(event.target)) onToggle(false); };
+    const onKey = (event) => { if (event.key === 'Escape') onToggle(false); };
+    document.addEventListener('mousedown', onDocDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDocDown); document.removeEventListener('keydown', onKey); };
+  }, [open, onToggle]);
+
+  return <div className="cost-breakdown-pick" ref={boxRef}>
+    <button type="button" className={`btn secondary${values.length ? ' is-active' : ''}`} aria-expanded={open}
+      onClick={() => onToggle(!open)}>
       {label}{values.length ? ` (${values.length})` : ''}
     </button>
     {open && <div className="cost-breakdown-pick-menu">
-      <button type="button" className="btn ghost" onClick={() => onChange([])}>Bỏ lọc {label.toLowerCase()}</button>
-      {options.map((option) => <label key={option}>
-        <input type="checkbox" checked={values.includes(option)}
-          onChange={() => onChange(values.includes(option) ? values.filter((v) => v !== option) : [...values, option])} />
-        {option}
-      </label>)}
-      {!options.length && <small className="muted">Chưa có giá trị nào trong dữ liệu đang xem.</small>}
+      <div className="cost-breakdown-pick-head">
+        <button type="button" className="btn ghost" onClick={() => onChange([])}>Bỏ lọc</button>
+        <button type="button" className="btn" onClick={() => onToggle(false)}>Xong</button>
+      </div>
+      <div className="cost-breakdown-pick-list">
+        {options.map((option) => <label key={option}>
+          <input type="checkbox" checked={values.includes(option)}
+            onChange={() => onChange(values.includes(option) ? values.filter((v) => v !== option) : [...values, option])} />
+          {option}
+        </label>)}
+        {!options.length && <small className="muted">Chưa có giá trị nào trong dữ liệu đang xem.</small>}
+      </div>
+      <small className="muted cost-breakdown-pick-hint">Bấm ra ngoài hoặc phím Esc để đóng.</small>
     </div>}
   </div>;
 }
@@ -60,6 +87,8 @@ export default function CostBreakdown({ me }) {
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [withVat, setWithVat] = useState(false);
+  // Ô lọc nào đang mở — CHA giữ, nên mở ô này là ô kia tự đóng (không chồng nhau).
+  const [openPick, setOpenPick] = useState('');
 
   useEffect(() => {
     api.periods().then((p) => {
@@ -121,13 +150,13 @@ export default function CostBreakdown({ me }) {
 
     {/* Bộ lọc 6 chiều CEO chốt 09/08 — trống = không lọc chiều đó. */}
     <div className="card cost-breakdown-filters">
-      <MultiPick label="Nhà thầu" options={filterOptions.contractors} values={filters.contractors} onChange={(list) => setFilters((f) => ({ ...f, contractors: list }))} />
-      <MultiPick label="Mã đơn vị" options={filterOptions.units} values={filters.units} onChange={(list) => setFilters((f) => ({ ...f, units: list }))} />
-      <MultiPick label="Nhóm mã" options={filterOptions.groups} values={filters.groups} onChange={(list) => setFilters((f) => ({ ...f, groups: list }))} />
-      <MultiPick label="Nhân viên" options={filterOptions.employees} values={filters.employees} onChange={(list) => setFilters((f) => ({ ...f, employees: list }))} />
-      <MultiPick label="Tuyến" options={filterOptions.routes} values={filters.routes} onChange={(list) => setFilters((f) => ({ ...f, routes: list }))} />
-      <MultiPick label="Ưu tiên" options={filterOptions.priorities} values={filters.priorities} onChange={(list) => setFilters((f) => ({ ...f, priorities: list }))} />
-      <MultiPick label="Cột xuất" options={(data?.columns || []).map((column) => column.key.toUpperCase())} values={filters.columns.map((k) => k.toUpperCase())}
+      <MultiPick label="Nhà thầu" open={openPick === "Nhà thầu"} onToggle={(v) => setOpenPick(v ? "Nhà thầu" : "")} options={filterOptions.contractors} values={filters.contractors} onChange={(list) => setFilters((f) => ({ ...f, contractors: list }))} />
+      <MultiPick label="Mã đơn vị" open={openPick === "Mã đơn vị"} onToggle={(v) => setOpenPick(v ? "Mã đơn vị" : "")} options={filterOptions.units} values={filters.units} onChange={(list) => setFilters((f) => ({ ...f, units: list }))} />
+      <MultiPick label="Nhóm mã" open={openPick === "Nhóm mã"} onToggle={(v) => setOpenPick(v ? "Nhóm mã" : "")} options={filterOptions.groups} values={filters.groups} onChange={(list) => setFilters((f) => ({ ...f, groups: list }))} />
+      <MultiPick label="Nhân viên" open={openPick === "Nhân viên"} onToggle={(v) => setOpenPick(v ? "Nhân viên" : "")} options={filterOptions.employees} values={filters.employees} onChange={(list) => setFilters((f) => ({ ...f, employees: list }))} />
+      <MultiPick label="Tuyến" open={openPick === "Tuyến"} onToggle={(v) => setOpenPick(v ? "Tuyến" : "")} options={filterOptions.routes} values={filters.routes} onChange={(list) => setFilters((f) => ({ ...f, routes: list }))} />
+      <MultiPick label="Ưu tiên" open={openPick === "Ưu tiên"} onToggle={(v) => setOpenPick(v ? "Ưu tiên" : "")} options={filterOptions.priorities} values={filters.priorities} onChange={(list) => setFilters((f) => ({ ...f, priorities: list }))} />
+      <MultiPick label="Cột xuất" open={openPick === "Cột xuất"} onToggle={(v) => setOpenPick(v ? "Cột xuất" : "")} options={(data?.columns || []).map((column) => column.key.toUpperCase())} values={filters.columns.map((k) => k.toUpperCase())}
         onChange={(list) => setFilters((f) => ({ ...f, columns: list.map((k) => k.toLowerCase()) }))} />
     </div>
 
@@ -135,9 +164,18 @@ export default function CostBreakdown({ me }) {
     {loading && !data && <div className="card catalog-first-load"><Spinner /><b>Đang tổng hợp chi phí…</b></div>}
     {loading && data && <div className="card catalog-loading-strip" role="status"><i className="catalog-loading-dot" aria-hidden="true" /><span>Đang tính lại… bảng dưới là bản vừa xem.</span></div>}
 
-    {data && !!data.missingPeriods?.length && <div className="card catalog-alert error" role="alert">
-      ‼ Kỳ <b>{data.missingPeriods.map(hubToUi).join(' · ')}</b> CHƯA đồng bộ % — bảng dưới <b>KHÔNG</b> gồm các kỳ đó.
-      Vào Danh mục QL bấm "Đồng bộ % chi phí" cho từng kỳ trước.
+    {/* ‼ Kỳ chưa đồng bộ mà KHÔNG có kỳ nào có số ⇒ bảng rỗng hoàn toàn. Phải nói to
+        ngay chỗ này, kèm việc cần làm — CEO chọn T07 thấy 0 dòng rồi hỏi "đáng lẽ
+        phải ra số" (09/08). Bảng 0 dòng mà không giải thích là bỏ mặc người dùng. */}
+    {data && !!data.missingPeriods?.length && <div className={`card catalog-alert error${data.rows.length ? '' : ' cost-breakdown-empty-warn'}`} role="alert">
+      <b>‼ Kỳ {data.missingPeriods.map(hubToUi).join(' · ')} CHƯA đồng bộ % chi phí</b>
+      {data.rows.length
+        ? <> — bảng dưới <b>KHÔNG</b> gồm các kỳ đó.</>
+        : <> nên <b>bảng trống hoàn toàn</b>, không phải kỳ đó không tốn tiền.</>}
+      <div className="cost-breakdown-todo">
+        <b>Cần làm:</b> vào <b>Danh mục QL</b> → chọn đúng kỳ <b>{data.missingPeriods.map(hubToUi).join(' / ')}</b> ở ô "Kỳ"
+        → bấm <b>"Đồng bộ từ DataHub"</b> → quay lại đây. Mỗi kỳ phải đồng bộ một lần.
+      </div>
     </div>}
 
     {data && <div className="card table-card">

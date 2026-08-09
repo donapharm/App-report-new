@@ -106,3 +106,41 @@ test('con mắt phủ luôn số so sánh — chênh lệch cũng là tiền', (
   assert.ok(cells.length >= 4);
   for (const cell of cells) assert.match(cell, /data-sensitive/);
 });
+
+/* ── Ô lọc KHÔNG được kẹt (CEO báo 09/08: "tích vào ô chọn xuất, nó dính luôn") ── */
+
+test('‼ ba đường thoát khỏi ô lọc: bấm ra ngoài · phím Esc · nút "Xong"', () => {
+  assert.match(page, /if \(!boxRef\.current\?\.contains\(event\.target\)\) onToggle\(false\)/, 'bấm ra ngoài phải đóng');
+  assert.match(page, /if \(event\.key === 'Escape'\) onToggle\(false\)/, 'Esc phải đóng');
+  assert.match(page, /onClick=\{\(\) => onToggle\(false\)\}>Xong</, 'phải có nút Xong');
+  assert.match(page, /Bấm ra ngoài hoặc phím Esc để đóng/);
+});
+
+test('CHỈ MỘT ô lọc mở tại một thời điểm — trạng thái do CHA giữ, không chồng nhau', () => {
+  // Bản đầu mỗi ô tự giữ `open` nên 4 menu mở chồng lên nhau, che mất cả bảng lẫn
+  // chính cái nút phải bấm để đóng.
+  assert.match(page, /const \[openPick, setOpenPick\] = useState\(''\)/);
+  const picks = page.match(/<MultiPick label="[^"]+" open=\{openPick === "[^"]+"\} onToggle=/g) || [];
+  assert.equal(picks.length, 7, 'cả 7 ô lọc phải dùng chung trạng thái của cha');
+  // Không được quay lại kiểu mỗi ô tự giữ state.
+  assert.doesNotMatch(page, /function MultiPick\([^)]*\) \{\s*const \[open, setOpen\] = useState\(false\)/);
+});
+
+test('dọn sự kiện khi đóng — không để lại trình nghe treo', () => {
+  assert.match(page, /removeEventListener\('mousedown', onDocDown\); document\.removeEventListener\('keydown', onKey\)/);
+});
+
+/* ── Bảng rỗng vì chưa đồng bộ: phải NÓI TO + chỉ việc cần làm ─────────────── */
+
+test('‼ chưa đồng bộ mà bảng rỗng hoàn toàn ⇒ nói rõ "không phải kỳ đó không tốn tiền"', () => {
+  // CEO chọn T07 thấy 0 dòng rồi hỏi "đáng lẽ phải ra số". Bảng 0 dòng mà không
+  // giải thích là bỏ mặc người dùng tự đoán.
+  assert.match(page, /bảng trống hoàn toàn<\/b>, không phải kỳ đó không tốn tiền/);
+  assert.match(page, /cost-breakdown-empty-warn/);
+});
+
+test('cảnh báo kèm ĐÚNG CÁC BƯỚC phải làm, không chỉ báo lỗi rồi bỏ đó', () => {
+  assert.match(page, /<b>Cần làm:<\/b> vào <b>Danh mục QL<\/b>/);
+  assert.match(page, /bấm <b>"Đồng bộ từ DataHub"<\/b> → quay lại đây/);
+  assert.match(page, /Mỗi kỳ phải đồng bộ một lần/);
+});

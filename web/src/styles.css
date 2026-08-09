@@ -2596,3 +2596,9 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .cost-breakdown-up td:nth-child(4) { color:#b3261e; font-weight:800; }
 .cost-breakdown-down td:nth-child(4) { color:#0f7b53; font-weight:800; }
 .catalog-groups-error { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.cost-breakdown-pick-head { display:flex; gap:6px; justify-content:space-between; padding-bottom:6px; border-bottom:1px solid var(--line); }
+.cost-breakdown-pick-list { display:grid; gap:4px; max-height:220px; overflow:auto; padding:6px 0; }
+.cost-breakdown-pick-hint { display:block; padding-top:4px; border-top:1px solid var(--line); font-size:10.5px; }
+.cost-breakdown-pick .btn.is-active { border-color:var(--brand); background:#eaf4ff; color:var(--brand-ink); }
+.cost-breakdown-empty-warn { border-width:2px; }
+.cost-breakdown-todo { margin-top:6px; padding-top:6px; border-top:1px dashed currentColor; font-size:12.5px; }
