@@ -1,3 +1,27 @@
+### 2026-08-10 01:00 (giờ VN) — 💰 "Doanh thu chạy đi đâu mất" — phép cân hiện thẳng lên màn
+
+CEO: *"Doanh thu thực tế của T07.2026 đâu phải số này, tại sao nó cứ nhảy như điên vậy, và giờ nó đang nằm ở đâu? Mất mẹ nó doanh thu chạy đi đâu mất không còn đủ."*
+
+**Câu hỏi đúng, và trước nay màn KHÔNG trả lời được.** Nguyên nhân: màn "Tất cả nhân viên" dựng bảng bằng cách **ghép sổ chi phí của TỪNG nhân viên**. NV nào chưa lấy được % thì **toàn bộ dòng doanh thu của họ không lên bảng**. Doanh thu là dữ liệu **của App Report** và luôn đủ — nhưng con số hiển thị lại **phụ thuộc nguồn %**, nên nguồn chập chờn vài người là tổng tụt theo, và tụt khác nhau mỗi lượt xem (359 dòng lúc 23:05 → 1.332 dòng lúc 00:20).
+
+**Nay có phép cân, hiện ngay dưới cảnh báo, áp đúng luật "không dòng nào biến mất lặng lẽ" cho TIỀN:**
+
+```
+Tổng doanh thu kỳ (kho App Report)   ← số thật, không phụ thuộc nguồn %
+  − Đang hiện trên bảng
+  − Của NV chưa lấy được %           ← kèm ĐÍCH DANH mã NV, xếp số lớn trước
+  − Dòng chưa gán được nhân viên     ← tách riêng, KHÁC hẳn nguyên nhân trên
+  = 0  (lệch ⇒ nói thẳng "cân vẫn lệch X đồng, báo Claude")
+```
+
+Mỗi nguyên nhân kèm **đúng việc phải làm**: thiếu % ⇒ bấm "Đồng bộ % chi phí" cho kỳ đó; dòng chưa gán NV ⇒ vào tab "Kiểm soát dữ liệu" (việc gán người, không phải lỗi %). Hai nguyên nhân, hai cách sửa — trộn lại là đi sửa nhầm chỗ.
+
+Đối soát hỏng **không được làm hỏng báo cáo**, nhưng phải nói là chưa soát được. Mọi số tiền nằm dưới con mắt che số.
+
+Test: server **1178** pass / 7 fail cố hữu · web **420/420** · build sạch. Test mới: `employeeCostRevenueRecon.test.js` (6) + 4 test màn.
+
+---
+
 ### 2026-08-10 00:45 (giờ VN) — ‼ THÔI HỎI DATAHUB VỀ % CHI PHÍ: kỳ đang chạy cũng đọc kho đã đồng bộ
 
 CEO ra lệnh **lần thứ hai**, rất bực: *"Tao đã yêu cầu lấy bên này không lấy bên DataHub về % chi phí nữa để không bị lỗi. Yêu cầu mày xử lý cả số liệu nạp trở lại đủ cho tao T07.2026."*

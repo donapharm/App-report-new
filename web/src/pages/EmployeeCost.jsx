@@ -2054,6 +2054,34 @@ export default function EmployeeCost({ me, onNavigate }) {
       Phần này <b>không</b> phải "thiếu % catalog" mà là <b>nguồn chi phí DataHub chưa trả dữ liệu</b> — báo DataHub kiểm tra. Tỷ lệ khớp phía dưới đã loại phần này ra để không báo sai.
     </div>}
 
+    {/* ‼ TIỀN CHẠY ĐI ĐÂU — phép cân hiện thẳng lên màn (CEO 10/08: *"doanh thu thực
+        tế T07 đâu phải số này… giờ nó đang nằm ở đâu?"*). Màn ALL ghép sổ chi phí
+        TỪNG NV, nên NV nào chưa lấy được % thì toàn bộ doanh thu của họ không lên
+        bảng — tổng tụt, và tụt khác nhau mỗi lượt xem. Không sửa số nào; chỉ nói rõ
+        phần chênh nằm ở đâu. */}
+    {model?.revenueRecon && !model.revenueRecon.unavailable && model.revenueRecon.shown != null
+      && (model.revenueRecon.missingByUnavailable > 0 || model.revenueRecon.missingUnassigned > 0 || model.revenueRecon.balanced === false)
+      && <div className="employee-cost-match-warning" role="alert">
+        <b>💰 Doanh thu kỳ này KHÔNG lên bảng đủ — đây là chỗ phần thiếu đang nằm:</b>
+        <div className="employee-cost-recon">
+          <div>Tổng doanh thu kỳ (kho App Report): <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.total, moneyColumn)}</b> · {Number(model.revenueRecon.rowCount).toLocaleString('vi-VN')} dòng</div>
+          <div>— Đang hiện trên bảng: <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.shown, moneyColumn)}</b></div>
+          {model.revenueRecon.missingByUnavailable > 0 && <div>
+            — Của NV <b>chưa lấy được %</b>: <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.missingByUnavailable, moneyColumn)}</b>
+            {' '}({model.revenueRecon.unavailableEmployees.slice(0, 6).map((item) => item.empCode).join(', ')}
+            {model.revenueRecon.unavailableEmployees.length > 6 ? '…' : ''})
+            {' — '}<b>cách sửa:</b> vào Danh mục QL bấm <b>"Đồng bộ % chi phí"</b> cho kỳ này, số sẽ đủ và đứng yên.
+          </div>}
+          {model.revenueRecon.missingUnassigned > 0 && <div>
+            — Dòng <b>chưa gán được nhân viên</b>: <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.missingUnassigned, moneyColumn)}</b>
+            {' — '}xem tab <b>"Kiểm soát dữ liệu"</b>, đây là việc gán NV cho dòng, không phải lỗi %.
+          </div>}
+          {model.revenueRecon.balanced === false && <div className="cost-amounts-warn">
+            ‼ Cân vẫn lệch <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.gap, moneyColumn)}</b> — chưa giải thích được bằng hai nguyên nhân trên, báo Claude.
+          </div>}
+        </div>
+      </div>}
+
     {!!staleEmpCodes.length && <div className="employee-cost-match-warning is-stale" role="status">
       <b>🕒 Đang hiển thị BẢN TỶ LỆ % CŨ cho {staleEmpCodes.join(', ')}.</b> Cửa chi phí DataHub trả chậm/không trả
       ở lượt này, App Report dùng bản % đã lưu gần nhất để số không biến mất. Số vẫn tính ra được, nhưng

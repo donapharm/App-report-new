@@ -48,3 +48,34 @@ test('JSX ba KPI chỉ truyền card.value/card.sub từ payload, không có cô
   assert.doesNotMatch(block, /card\.(?:value|sub)\s*[*/+-]/);
   assert.doesNotMatch(block, /(?:Math\.|Number\(|parseFloat\(|parseInt\()/);
 });
+
+const page = fs.readFileSync(path.join(here, '../src/pages/EmployeeCost.jsx'), 'utf8');
+
+/* ── TIỀN CHẠY ĐI ĐÂU: phép cân doanh thu hiện thẳng lên màn (CEO 10/08/2026) ──
+ * CEO: *"doanh thu thực tế của T07.2026 đâu phải số này… giờ nó đang nằm ở đâu?
+ * Mất mẹ nó doanh thu chạy đi đâu mất không còn đủ."*                            */
+
+test('‼ màn nói rõ tổng kỳ · đang hiện · thiếu vì đâu — không bắt CEO tự đoán', () => {
+  assert.match(page, /Doanh thu kỳ này KHÔNG lên bảng đủ — đây là chỗ phần thiếu đang nằm/);
+  assert.match(page, /Tổng doanh thu kỳ \(kho App Report\)/);
+  assert.match(page, /Đang hiện trên bảng/);
+  assert.match(page, /Của NV <b>chưa lấy được %<\/b>/);
+  assert.match(page, /Dòng <b>chưa gán được nhân viên<\/b>/);
+});
+
+test('mỗi nguyên nhân kèm ĐÚNG cách sửa — hai nguyên nhân, hai việc khác nhau', () => {
+  assert.match(page, /vào Danh mục QL bấm <b>"Đồng bộ % chi phí"<\/b> cho kỳ này/);
+  assert.match(page, /xem tab <b>"Kiểm soát dữ liệu"<\/b>, đây là việc gán NV cho dòng, không phải lỗi %/);
+});
+
+test('‼ cân vẫn lệch thì NÓI RA, không im lặng làm tròn', () => {
+  assert.match(page, /Cân vẫn lệch <b data-sensitive="">/);
+  assert.match(page, /chưa giải thích được bằng hai nguyên nhân trên, báo Claude/);
+});
+
+test('mọi số tiền trong phép cân nằm dưới con mắt che số', () => {
+  const block = page.slice(page.indexOf('Doanh thu kỳ này KHÔNG lên bảng đủ'), page.indexOf('staleEmpCodes.length'));
+  const bolds = block.match(/<b data-sensitive="">/g) || [];
+  assert.ok(bolds.length >= 4, 'tiền phải nằm dưới con mắt');
+  assert.doesNotMatch(block, /<b>\{formatEmployeeCostCell/, 'không được để số tiền trần');
+});

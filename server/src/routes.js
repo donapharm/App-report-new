@@ -29,6 +29,7 @@ const costRatesSync = require('./costRatesSync');
 const costRatesTable = require('./costRatesTable');
 const costAmounts = require('./costAmounts');
 const costBreakdown = require('./costBreakdown');
+const employeeCostRevenueRecon = require('./employeeCostRevenueRecon');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
@@ -1240,6 +1241,24 @@ async function employeeCostAllPayload(req, {
       sourceReportSink.push(...reports);
     }
     const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+    /* ‼ ĐỐI SOÁT DOANH THU — trả lời "tiền chạy đi đâu" (CEO 10/08/2026).
+       Màn ALL ghép sổ chi phí TỪNG NV; NV nào chưa lấy được % thì toàn bộ dòng doanh
+       thu của họ không lên bảng ⇒ tổng hiển thị tụt, và tụt khác nhau mỗi lượt xem.
+       Không sửa con số nào — chỉ nói rõ phần chênh nằm ở đâu, đúng tinh thần "không
+       dòng nào biến mất lặng lẽ" nhưng áp cho TIỀN. */
+    try {
+      const unavailableAll = [...new Set((merged.periods || [])
+        .flatMap((item) => (Array.isArray(item?.match?.unavailableEmployees) ? item.match.unavailableEmployees : [])))];
+      merged.revenueRecon = employeeCostRevenueRecon.buildRevenueRecon({
+        periods: range.months,
+        revenueRowsOf: (period) => store.getRows({ ky: employeeCost.toUiMonth(period), scope: {} }),
+        unavailable: unavailableAll,
+        shownRevenue: merged.summary?.revenueTotal ?? null,
+      });
+    } catch (error) {
+      // Đối soát hỏng KHÔNG được làm hỏng cả báo cáo — nhưng phải nói là chưa soát được.
+      merged.revenueRecon = { unavailable: true, reason: String(error?.message || error).slice(0, 160) };
+    }
     const healthSnapshotAfter = store.activeDataSignature();
     const healthCurrentPeriod = (merged.periods || []).find((item) => String(item.period) === String(range.to)) || null;
     const healthPreviousKey = employeeCostHealthKpis.previousMonth(range.to);
