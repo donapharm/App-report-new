@@ -8,11 +8,11 @@
  * mã đơn vị... chứ không có chuyện NV DN008 chỉ xem được cột C41 ở 033.PKĐK An Long
  * Khánh mà ở 003.PKĐK An Long Thành lại không xem được."*
  *
- * ⇒ Mô hình v2: quyền là ma trận  NV × CỘT × NHÓM ĐƠN VỊ.
- *    { c41: ['*'], c43: ['PKĐK', 'BV'] }  — mỗi cột một danh sách nhóm riêng.
- *    Nhóm lấy từ `employeeCostUnitGroups.resolve` (BV/TTYT/PKĐK/NT/TYT/TTKSBT...)
- *    — cùng bộ nhóm màn "Chi phí của tôi" đang dùng, một nguồn duy nhất.
- *    Cấp theo nhóm là cấp CẢ nhóm: hai đơn vị cùng nhóm không bao giờ lệch nhau.
+ * ⇒ Mô hình v2: quyền là ma trận  NV × CỘT × NHÓM MÃ ĐƠN VỊ.
+ *    { c41: ['*'], c43: ['001', '033'] }  — mỗi cột một danh sách nhóm riêng.
+ *    Nhóm là tiền tố số của mã đơn vị (001/033/120…), KHÔNG phải loại đơn vị
+ *    (BV/TTYT/PKĐK/NT). Cấp theo nhóm là cấp CẢ nhóm mã: hai đơn vị cùng tiền tố
+ *    không bao giờ lệch nhau, nhưng vẫn chỉ phủ các đơn vị NV thực sự phụ trách.
  *
  * ‼ Ba luật KHÔNG ĐỔI từ v1:
  *  1. **MẶC ĐỊNH TẮT.** Chưa cấp ⇒ không thấy gì; đơn vị không phân giải được nhóm
@@ -89,7 +89,7 @@ function resolveUnitsToGroups(units = []) {
 
 /**
  * Chuẩn hoá ma trận cột→nhóm. Nhận cả hai kiểu đầu vào:
- *  v2: { c41: ['*'], c43: ['PKĐK'] }
+ *  v2: { c41: ['*'], c43: ['001', '033'] }
  *  v1: columns=['c41','c43'] + units=['*'|mã lẻ] — một phạm vi chung, tự nâng.
  * Cột ngoài whitelist là LỖI (không im lặng bỏ — CEO tick nhầm phải biết ngay).
  * Cột có phạm vi rỗng bị loại: "cấp cột mà không nhóm nào" = không cấp.

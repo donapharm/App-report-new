@@ -476,8 +476,8 @@ function auditColumnsText(value) {
  * sẽ đi theo NHÓM mã đơn vị"*).
  *
  * Mỗi Ô CỘT của mỗi NV có bộ chọn nhóm RIÊNG: tick cột ⇒ mặc định "mọi nhóm";
- * bấm nhãn dưới checkbox để thu hẹp theo nhóm (BV · TTYT · PKĐK · NT...). Cấp theo
- * nhóm là cấp CẢ nhóm — hai đơn vị cùng nhóm không bao giờ lệch nhau, đúng ghi chú
+ * bấm nhãn dưới checkbox để thu hẹp theo nhóm mã (001 · 033 · 120...). Cấp theo
+ * nhóm là cấp CẢ nhóm mã — hai đơn vị cùng tiền tố không bao giờ lệch nhau, đúng ghi chú
  * của CEO. Danh sách chỉ gồm nhóm NV thực sự phụ trách (model lọc, backend chặn lại).
  */
 function ColumnGroupScope({ row, columnKey, onChange }) {
@@ -574,7 +574,7 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
     <div className="catalog-grants-head">
       <div>
         <div className="section-head">🔐 Phân quyền cột % chi phí</div>
-        <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo <b>NHÓM đơn vị</b> (BV · TTYT · PKĐK · NT…) — mỗi cột một phạm vi nhóm riêng, cấp cho nhóm nào là cả nhóm đó cùng thấy.</p>
+        <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo <b>NHÓM MÃ đơn vị</b> (001 · 033 · 120…) — mỗi cột một phạm vi nhóm riêng, cấp nhóm nào thì các mã NV phụ trách trong nhóm đó cùng thấy.</p>
       </div>
       <button type="button" className="btn secondary" aria-expanded={open} aria-controls="catalog-grants-body" onClick={() => setOpen((v) => !v)}>
         {open ? 'Thu gọn' : 'Mở phân quyền'}
