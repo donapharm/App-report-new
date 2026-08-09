@@ -30,37 +30,18 @@ test('chỉ lưu những dòng CEO thực sự đổi; lưu hỏng thì giữ ng
   assert.match(page, /các dòng chưa lưu vẫn còn nguyên/);
 });
 
-test('phạm vi theo NHÓM: chỉ chọn trong nhóm NV đang phụ trách, cột chưa tick thì không có gì để chọn', () => {
-  const picker = page.slice(page.indexOf('function ColumnGroupScope'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
-  // Danh sách tick chỉ dựng từ availableGroups (nhóm suy từ đơn vị NV thực sự phụ
-  // trách + bảng tra backend) — không có đường gõ tay một nhóm lạ vào.
-  assert.match(picker, /row\.availableGroups\.map\(\(group\)/);
-  assert.match(picker, /Mọi nhóm đang phụ trách/);
-  // Cột chưa tick ⇒ không render bộ chọn — không đặt phạm vi cho quyền không tồn tại.
-  assert.match(picker, /if \(!scope\) return null/);
-  // Đơn vị chưa nhận diện được nhóm phải được NÓI RA, kèm cảnh báo chỉ '*' phủ tới.
-  assert.match(picker, /ungroupedUnits/);
-  assert.match(picker, /chỉ "Mọi nhóm" mới phủ tới/);
-});
-
-test('ma trận NV × CỘT × NHÓM: mỗi ô cột có bộ chọn nhóm RIÊNG (CEO chốt 08/08)', () => {
-  const picker = page.slice(page.indexOf('function ColumnGroupScope'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
-  // Tick thêm/bớt từng nhóm vào danh sách hiện có ⇒ nhiều nhóm cùng lúc cho MỘT cột.
-  assert.match(picker, /current\.includes\(groupKey\) \? current\.filter\(\(item\) => item !== groupKey\) : \[\.\.\.current, groupKey\]/);
-  // Bộ chọn gắn vào TỪNG Ô cột trong bảng, nhận đúng columnKey của ô đó.
-  assert.match(page, /<ColumnGroupScope row=\{row\} columnKey=\{column\.key\}/);
-  assert.match(page, /setColumnGroups\(cur, row\.empCode, column\.key, groups\)/);
-  // Bảng tra đơn vị→nhóm hỏi BACKEND, không chép luật tách nhóm sang frontend.
-  assert.match(page, /api\.catalogCostUnitGroups\(distinctUnits\)/);
-});
-
 test('menu phân quyền KHÔNG phân biệt cột nào — cấp cột nào thấy cột đó (CEO 08/08)', () => {
   // Nhãn "chỉ xem" cũ là rò rỉ phân biệt NỘI BỘ (C38/C42 không nằm trong công thức
-  // tính tiền) vào đúng chỗ nó không liên quan. CEO: "bản chất các cột này chức năng
-  // đều giống nhau". Phân biệt đó vẫn giữ ở tầng cấu hình + test phía server.
+  // tính tiền) vào chỗ nó không liên quan. CEO: "bản chất các cột này chức năng đều
+  // giống nhau". Phân biệt đó vẫn giữ ở tầng cấu hình + test phía server.
   assert.doesNotMatch(page, /chỉ xem/);
   assert.doesNotMatch(page, /catalog-col-viewonly/);
-  assert.match(page, /panel\.columns\.map\(\(column\) => <th key=\{column\.key\} title=\{column\.label\}>/);
+});
+
+test('bảng ma trận nhét-trong-ô đã BỎ — không quay lại thiết kế cũ (CEO 09/08)', () => {
+  // CEO: "tích vào từng cột như vậy và chỉ hiển thị mục rất nhỏ và tóm gọn không thể
+  // phân quyền chi tiết và đúng hết được đâu."
+  assert.doesNotMatch(page, /ColumnGroupScope/, 'popup nhỏ trong ô bảng đã bỏ hẳn');
 });
 
 test('không lấy được danh sách cột thì NÓI RA, không hiện bảng rỗng như thể đã cấu hình xong', () => {
@@ -78,4 +59,40 @@ test('nhật ký thay đổi hiện ngay trong menu — ai đổi gì cho ai', (
   assert.match(page, /Nhật ký thay đổi/);
   assert.match(page, /item\.actor/);
   assert.match(page, /item\.empCode/);
+});
+
+/* ── Màn chi tiết theo từng NV (CEO yêu cầu 09/08) ─────────────────────────── */
+
+test('hai bước: danh sách NV → chọn người mới mở lưới chi tiết', () => {
+  // CEO 09/08: bảng ma trận 21 NV × 7 cột nhét vào ô nhỏ không làm chi tiết được.
+  assert.match(page, /const \[selected, setSelected\] = useState\(''\)/);
+  assert.match(page, /\{!selected \? <>/);
+  assert.match(page, /<EmployeeGrantDetail/);
+  assert.match(page, /onClick=\{\(\) => setSelected\(row\.empCode\)\}/);
+  assert.match(page, /onBack=\{\(\) => setSelected\(''\)\}/);
+});
+
+test('lưới chi tiết: HÀNG = nhóm mã đơn vị, CỘT = C36…C45, tick ở cấp nhóm', () => {
+  const detail = page.slice(page.indexOf('function EmployeeGrantDetail'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  assert.match(detail, /<th>Nhóm mã đơn vị<\/th>/);
+  assert.match(detail, /row\.availableGroups\.map\(\(group\)/);
+  assert.match(detail, /toggleColumnGroup\(cur, row\.empCode, column\.key, group\.key\)/);
+  // Mỗi hàng liệt kê các mã bên trong — CEO nhìn thấy đang mở cho đơn vị nào.
+  assert.match(detail, /group\.units\.join\(' · '\)/);
+});
+
+test('thao tác nhanh: hàng "Mọi nhóm" bật cả cột, nút cuối hàng bật cả hàng', () => {
+  const detail = page.slice(page.indexOf('function EmployeeGrantDetail'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  assert.match(detail, /Mọi nhóm<\/b><small>gồm cả nhóm mới sau này<\/small>/);
+  assert.match(detail, /setColumnAllGroups\(cur, row\.empCode, column\.key, e\.target\.checked\)/);
+  assert.match(detail, /toggleGroupAllColumns\(cur, row\.empCode, group\.key, keys, !rowOn\)/);
+  assert.match(detail, /Tắt hết cho NV này/);
+});
+
+test('đơn vị chưa nhận diện được nhóm vẫn được NÓI RA trong màn chi tiết', () => {
+  const detail = page.slice(page.indexOf('function EmployeeGrantDetail'), page.indexOf('MENU PHÂN QUYỀN CỘT % CHI PHÍ'));
+  assert.match(detail, /row\.ungroupedUnits\.length/);
+  assert.match(detail, /chỉ hàng <b>"Mọi nhóm"<\/b> mới phủ tới/);
+  // NV không có nhóm nào thì nói thẳng, không hiện lưới rỗng khó hiểu.
+  assert.match(detail, /chưa có đơn vị nào nhận diện được nhóm/);
 });

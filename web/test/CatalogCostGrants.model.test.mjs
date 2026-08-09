@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   ALL_UNITS, isGrantableColumn, grantableColumns, unitsByEmployee, groupsForUnits, buildGrantPanel,
   toggleColumn, setColumnGroups, applyColumnsToMany, grantSavePayload, dirtyRows, grantSummary, columnScopeLabel,
+  isGroupChecked, isColumnAllGroups, toggleColumnGroup, setColumnAllGroups, toggleGroupAllColumns, grantCounts,
 } from '../src/catalogCostGrantsModel.js';
 
 const CATALOG = [
@@ -168,4 +169,85 @@ test('cấp nhóm CHỈ phủ đơn vị NV thực sự phụ trách — không 
   assert.deepEqual(row.availableGroups.map((g) => g.key), ['001']);
   assert.deepEqual(row.availableGroups[0].units, ['001.BVĐK ĐỒNG NAI'],
     'chỉ đúng mã họ phụ trách, dù nhóm 001 ngoài đời còn Khu C và NT');
+});
+
+/* ── Màn chi tiết một NV (CEO yêu cầu 09/08) ───────────────────────────────── */
+
+const detailPanel = () => buildGrantPanel({
+  grants: [], columns: COLUMNS, groupsByUnit: CEO_GROUPS, catalogRows: CEO_CATALOG,
+  employees: [{ code: 'DN002', name: 'NV Hai' }, { code: 'DN008', name: 'NV Tám' }],
+});
+
+test('lưới chi tiết: tick MỘT ô (cột × nhóm), không đụng ô khác', () => {
+  let panel = detailPanel();
+  panel = toggleColumnGroup(panel, 'DN008', 'c41', '033');
+  const row = rowOf(panel, 'DN008');
+  assert.equal(isGroupChecked(row, 'c41', '033'), true);
+  assert.equal(isGroupChecked(row, 'c43', '033'), false, 'cột khác không bị đụng');
+});
+
+test('tick đủ MỌI nhóm ⇒ tự gom về "*" để nhóm mới sau này cũng được phủ', () => {
+  let panel = detailPanel();
+  // DN002 chỉ có đúng một nhóm 001 ⇒ tick nó là đủ mọi nhóm.
+  panel = toggleColumnGroup(panel, 'DN002', 'c41', '001');
+  assert.deepEqual(rowOf(panel, 'DN002').columns.c41, [ALL_UNITS]);
+  assert.equal(isColumnAllGroups(rowOf(panel, 'DN002'), 'c41'), true);
+});
+
+test('đang "*" mà bỏ tick một nhóm ⇒ nở ra danh sách tường minh, giữ nhóm còn lại', () => {
+  let panel = buildGrantPanel({
+    grants: [], columns: COLUMNS, groupsByUnit: CEO_GROUPS,
+    catalogRows: [
+      { emp_code: 'DN009', unit_code: '001.BVĐK Đồng Nai' },
+      { emp_code: 'DN009', unit_code: '033.PKĐK Long Khánh' },
+    ],
+    employees: [{ code: 'DN009', name: 'NV Chín' }],
+  });
+  panel = setColumnAllGroups(panel, 'DN009', 'c41', true);
+  assert.deepEqual(rowOf(panel, 'DN009').columns.c41, [ALL_UNITS]);
+  panel = toggleColumnGroup(panel, 'DN009', 'c41', '001');
+  assert.deepEqual(rowOf(panel, 'DN009').columns.c41, ['033'], 'phải giữ nhóm 033, không mất oan');
+});
+
+test('hàng "Mọi nhóm" bật/tắt cả cột', () => {
+  let panel = detailPanel();
+  panel = setColumnAllGroups(panel, 'DN008', 'c43', true);
+  assert.deepEqual(rowOf(panel, 'DN008').columns.c43, [ALL_UNITS]);
+  panel = setColumnAllGroups(panel, 'DN008', 'c43', false);
+  assert.equal(rowOf(panel, 'DN008').columns.c43, undefined, 'tắt cả cột = không cấp cột đó');
+});
+
+test('bật cả HÀNG: một nhóm, mọi cột — thao tác nhanh theo cụm đơn vị', () => {
+  let panel = detailPanel();
+  const keys = ['c36', 'c41', 'c43'];
+  panel = toggleGroupAllColumns(panel, 'DN008', '033', keys, true);
+  const row = rowOf(panel, 'DN008');
+  for (const key of keys) assert.equal(isGroupChecked(row, key, '033'), true, key);
+  panel = toggleGroupAllColumns(panel, 'DN008', '033', keys, false);
+  assert.deepEqual(rowOf(panel, 'DN008').columns, {}, 'tắt hết hàng ⇒ không còn cấp gì');
+});
+
+test('tóm tắt cho dòng danh sách: mấy cột, mấy nhóm', () => {
+  // NV có HAI nhóm để phân biệt được "một nhóm" với "mọi nhóm".
+  let panel = buildGrantPanel({
+    grants: [], columns: COLUMNS, groupsByUnit: CEO_GROUPS,
+    catalogRows: [
+      { emp_code: 'DN009', unit_code: '001.BVĐK Đồng Nai' },
+      { emp_code: 'DN009', unit_code: '033.PKĐK Long Khánh' },
+    ],
+    employees: [{ code: 'DN009', name: 'NV Chín' }],
+  });
+  assert.deepEqual(grantCounts(rowOf(panel, 'DN009')), { columnCount: 0, allGroups: false, groupCount: 0 });
+  panel = toggleColumnGroup(panel, 'DN009', 'c41', '033');
+  assert.deepEqual(grantCounts(rowOf(panel, 'DN009')), { columnCount: 1, allGroups: false, groupCount: 1 });
+  // Tick nốt nhóm còn lại ⇒ tự gom thành '*'.
+  panel = toggleColumnGroup(panel, 'DN009', 'c41', '001');
+  assert.equal(grantCounts(rowOf(panel, 'DN009')).allGroups, true);
+});
+
+test('NV chỉ phụ trách MỘT nhóm: tick nhóm đó = mọi nhóm, tự gom về "*"', () => {
+  let panel = detailPanel();
+  panel = toggleColumnGroup(panel, 'DN008', 'c41', '033');
+  // DN008 chỉ có nhóm 033 ⇒ tick nó là đã phủ hết, gom '*' cho nhóm mới sau này cũng được phủ.
+  assert.deepEqual(rowOf(panel, 'DN008').columns.c41, [ALL_UNITS]);
 });
