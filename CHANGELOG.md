@@ -1,3 +1,21 @@
+### 2026-08-09 16:55 (giờ VN) — 🩹 Màn phân quyền NÓI SAI NGUYÊN NHÂN khi không hỏi được bảng nhóm
+
+CEO chụp màn: DN001 hiện **"0 nhóm · 164 đơn vị"** kèm *"164 đơn vị chưa nhận diện được nhóm"*. **Câu đó SAI.** Các mã trong ảnh (`001.BVĐK ĐỒNG NAI`, `002.BVĐK THỐNG NHẤT ĐN`…) phân giải nhóm hoàn hảo — kiểm `groupOf` cho ra `001`, `002` đúng.
+
+**Nguyên nhân thật:** `load()` của menu phân quyền gọi 3 API bằng `Promise.allSettled`, và lượt hỏi bảng "mã đơn vị → nhóm" hỏng thì bị **nuốt im lặng** thành `{}` — thành ra mọi đơn vị rơi vào "chưa nhận diện được nhóm". Hai chuyện khác hẳn nhau bị gộp làm một:
+- backend trả lời nhưng đơn vị không phân giải được → lỗi **DỮ LIỆU**
+- **không hỏi được** backend (403/timeout/mạng) → lỗi **HỆ THỐNG**
+
+Nói sai nguyên nhân còn tệ hơn không nói: CEO đọc xong đi tìm lỗi dữ liệu, trong khi thật ra chưa hỏi được ai. Đây đúng là thứ luật "không dòng nào biến mất lặng lẽ" cấm, và là lỗi thiết kế của Claude từ đầu.
+
+**Đã sửa:** thêm trạng thái `groupsError`; hỏi hỏng thì hiện dải đỏ ở đầu menu — *"Không hỏi được bảng mã đơn vị → nhóm … KHÔNG phải đơn vị thiếu nhóm, mà là chưa hỏi được máy chủ"* — kèm cách thử lại và **tên đúng endpoint** (`POST /catalog-management/cost-columns/unit-groups`) để bot khỏi dò mò. Màn chi tiết NV trỏ ngược lên dải đỏ khi mọi người đều 0 nhóm. +2 test khoá.
+
+Web 347/347 · build sạch.
+
+**Ghi nhận song song (bot dò read-only sau bản DataHub `c6c66c6`):** cửa `employee-cost` vẫn chỉ trả **7 cột** (`c36 c38 c41 c42 c43 c44 c45`); **thiếu 8 cột** `c32 c33 c34 c35 c37 c39 c40 c46`. Tripwire thành tiền C32/C47 **PASS phía nhận** — payload chỉ có khoá %, đúng ranh giới. ⇒ **CEO CHƯA bấm "Đồng bộ % chi phí"**, hai tab tiền còn fail-closed cho tới khi DataHub mở đủ cột.
+
+---
+
 ### 2026-08-09 15:45 (giờ VN) — 🚀 PROD = `50eb233` (bản hoà giải) — ĐỢT 8 VIỆC 09/08 ĐÃ LÊN SÓNG
 
 Bot deploy đúng SHA Claude đưa, so khớp tuyệt đối: PROD `50eb2333a8a851e8b75923d9c08894a95f245e1d`, tree `b0b3c408…`, version `50eb233-20260809-153952-981`, manifest 5.186 mục pre/post verify PASS.

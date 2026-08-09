@@ -180,3 +180,20 @@ test('danh sách dài bị cắt thì NÓI RA đã cắt, không im lặng hiệ
   assert.match(board, /Hiện \{REVIEW_LIMIT\}\/\{needsGrant\.length\} chỗ/);
   assert.match(board, /Hiện \{REVIEW_LIMIT\}\/\{staleGrant\.length\} chỗ/);
 });
+
+/* ── Nói ĐÚNG nguyên nhân khi không hỏi được bảng nhóm (CEO chụp màn 09/08) ──── */
+
+test('‼ "không hỏi được backend" KHÁC "đơn vị thiếu nhóm" — không đổ tội cho dữ liệu', () => {
+  // Bản cũ nuốt lỗi thành {} nên 403/timeout cũng hiện "164 đơn vị chưa nhận diện
+  // được nhóm". CEO đọc xong đi tìm lỗi dữ liệu, trong khi thật ra chưa hỏi được ai.
+  assert.match(page, /const \[groupsError, setGroupsError\] = useState\(''\)/);
+  assert.match(page, /setGroupsError\(unitGroups\.status === 'fulfilled' \? '' : \(unitGroups\.reason\?\.message/);
+  assert.match(page, /Không hỏi được bảng "mã đơn vị → nhóm"/);
+  assert.match(page, /<b>KHÔNG<\/b> phải đơn vị thiếu nhóm, mà là chưa hỏi được máy chủ/);
+  // Phải chỉ đúng endpoint để bot khỏi đi dò mò.
+  assert.match(page, /POST \/catalog-management\/cost-columns\/unit-groups/);
+});
+
+test('màn chi tiết NV trỏ ngược lên cảnh báo đỏ khi MỌI người đều 0 nhóm', () => {
+  assert.match(page, /Nếu MỌI nhân viên đều báo 0 nhóm thì đây không phải lỗi dữ liệu/);
+});

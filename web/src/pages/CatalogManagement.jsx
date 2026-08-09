@@ -592,6 +592,7 @@ function EmployeeGrantDetail({ row, columns, onBack, onChange }) {
 
     {!row.availableGroups.length ? <div className="catalog-alert error" role="alert">
       Nhân viên này chưa có đơn vị nào nhận diện được nhóm — chưa cấp theo nhóm được.
+      {' '}Nếu MỌI nhân viên đều báo 0 nhóm thì đây không phải lỗi dữ liệu: xem cảnh báo đỏ ở đầu menu.
     </div> : <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-grant-grid">
       {/* Mỗi cột có nút bật/tắt CẢ CỘT, cân đối với nút "Chọn hết" ở cuối mỗi hàng.
           CEO 09/08/2026: "cho chọn hết tất cả theo cột, ví dụ DN001 chọn hết tất cả
@@ -752,6 +753,8 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [bulk, setBulk] = useState([]);
+  // Rỗng = hỏi được bảng nhóm bình thường; có chữ = KHÔNG hỏi được (xem chú thích ở load).
+  const [groupsError, setGroupsError] = useState('');
   // Mã NV đang mở màn chi tiết; rỗng = đang ở danh sách.
   const [selected, setSelected] = useState('');
 
@@ -766,6 +769,13 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
       ]);
       if (grants.status !== 'fulfilled') throw new Error(grants.reason?.message || 'Không tải được phân quyền');
       const columns = rates.status === 'fulfilled' ? (rates.value.columns || []) : [];
+      // ‼ PHÂN BIỆT HAI CHUYỆN KHÁC HẲN NHAU (CEO chụp màn 09/08, bản cũ nói dối):
+      //   · backend trả bảng nhưng đơn vị không phân giải được nhóm  → lỗi DỮ LIỆU
+      //   · KHÔNG HỎI ĐƯỢC backend (403/timeout/lỗi mạng)            → lỗi HỆ THỐNG
+      // Bản cũ nuốt lỗi thành `{}` nên cả hai đều hiện "164 đơn vị chưa nhận diện
+      // được nhóm" — đổ tội cho dữ liệu trong khi thật ra là chưa hỏi được ai.
+      // Nói sai nguyên nhân còn tệ hơn không nói: CEO đi sửa nhầm chỗ.
+      setGroupsError(unitGroups.status === 'fulfilled' ? '' : (unitGroups.reason?.message || 'Không hỏi được bảng "mã đơn vị → nhóm"'));
       const groupsByUnit = unitGroups.status === 'fulfilled' ? (unitGroups.value.byUnit || {}) : {};
       setPanel(buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees, groupsByUnit }));
       setAudit(grants.value.audit || []);
@@ -806,6 +816,12 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
     {open && <div className="catalog-grants-body" id="catalog-grants-body">
       {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
       {message && <div className="catalog-alert ok" role="status">{message}</div>}
+      {!!groupsError && <div className="catalog-alert error" role="alert">
+        ⛔ <b>Không hỏi được bảng "mã đơn vị → nhóm"</b> ({groupsError}). Vì thế mọi NV đang hiện
+        <b> 0 nhóm</b> — <b>KHÔNG</b> phải đơn vị thiếu nhóm, mà là chưa hỏi được máy chủ.
+        Bấm <b>Thu gọn</b> rồi <b>Mở phân quyền</b> lại để thử lần nữa; còn lỗi thì báo bot kiểm endpoint
+        <code> POST /catalog-management/cost-columns/unit-groups</code>.
+      </div>}
       {loading || !panel ? <Spinner /> : <>
         {!panel.columns.length && <div className="catalog-alert error" role="alert">
           Chưa lấy được danh sách cột % từ nguồn chi phí — chưa cấp quyền được. Kiểm tra nguồn DataHub rồi mở lại.
