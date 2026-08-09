@@ -22,9 +22,12 @@ test('‼ CON MẮT che số phủ MỌI ô tiền: mọi ô .catalog-money đ�
   for (const cell of tdMoney) assert.match(cell, /data-sensitive/, `td tiền thiếu con mắt: ${cell}`);
 });
 
-test('bộ lọc đủ 6 chiều CEO chốt: nhà thầu · đơn vị · nhóm mã · NV · tuyến · ưu tiên', () => {
-  for (const label of ['Nhà thầu', 'Mã đơn vị', 'Nhóm mã', 'Nhân viên', 'Tuyến', 'Ưu tiên']) {
-    assert.match(page, new RegExp(`label="${label}"`), `thiếu bộ lọc ${label}`);
+test('bộ lọc DÙNG CHUNG với menu Thành tiền — đủ 8 chiều CEO chốt, một luật cho hai màn', () => {
+  // Trang dùng CostFilterPanel chung; 8 chiều nằm ở COST_FILTER_DIMENSIONS.
+  assert.match(page, /<CostFilterPanel options=\{data\?\.filterOptions\} partnerGroups=\{data\?\.partnerGroups\}/);
+  assert.match(page, /note=\{data\?\.groupQueryNote\}/, 'thiếu dấu chấm phải nói ra trên màn');
+  for (const label of ['Mã nhà thầu', 'Tên nhà thầu', 'Group DONA/đối tác', 'Nhân viên', 'Tuyến', 'Mã đơn vị', 'Nhóm mã đơn vị', 'Ưu tiên (H.A*…)']) {
+    assert.ok(pick.includes(`label: '${label}'`), `thiếu chiều lọc ${label}`);
   }
   assert.match(page, /label="Cột xuất"/, 'phải chọn được cột cần xuất');
 });
@@ -120,10 +123,12 @@ test('‼ ba đường thoát khỏi ô lọc: bấm ra ngoài · phím Esc · n
 
 test('CHỈ MỘT ô lọc mở tại một thời điểm — trạng thái do CHA giữ, không chồng nhau', () => {
   // Bản đầu mỗi ô tự giữ `open` nên 4 menu mở chồng lên nhau, che mất cả bảng lẫn
-  // chính cái nút phải bấm để đóng.
+  // chính cái nút phải bấm để đóng. Nay 8 chiều nằm trong CostFilterPanel (cha giữ
+  // `openPick` bên trong panel); trang chỉ còn ô "Cột xuất" cũng theo cùng kiểu.
+  assert.match(pick, /const \[openPick, setOpenPick\] = useState\(''\)/);
+  assert.match(pick, /open=\{openPick === dim\.key\} onToggle=\{\(v\) => setOpenPick\(v \? dim\.key : ''\)\}/);
   assert.match(page, /const \[openPick, setOpenPick\] = useState\(''\)/);
-  const picks = page.match(/<MultiPick label="[^"]+" open=\{openPick === "[^"]+"\} onToggle=/g) || [];
-  assert.equal(picks.length, 7, 'cả 7 ô lọc phải dùng chung trạng thái của cha');
+  assert.match(page, /<MultiPick label="Cột xuất" open=\{openPick === "Cột xuất"\}/);
   // Không được quay lại kiểu mỗi ô tự giữ state.
   assert.doesNotMatch(pick, /export function MultiPick\([^)]*\) \{\s*const \[open, setOpen\] = useState\(false\)/);
 });

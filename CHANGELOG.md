@@ -1,3 +1,13 @@
+### 2026-08-09 21:50 (giờ VN) — 🎛 Menu Tổng hợp C33–C46 dùng CHUNG bảng lọc nâng cao với menu Thành tiền
+
+Nối nốt việc dở: backend của Tổng hợp đã nhận đủ 8 chiều lọc mới từ đợt trước nhưng màn vẫn hiện bộ 6 ô cũ. Nay cả hai menu chi phí dùng **một** `CostFilterPanel`: 8 chiều (thêm **tên nhà thầu** + **Group-DONA/đối tác**) + ô gõ nhóm "033." (thiếu dấu chấm là nói ra) + tìm tự do + chip bấm-là-bỏ. Ô "Cột xuất" giữ riêng cạnh thanh điều khiển (chọn cột là chuyện của bảng, không phải chiều lọc dữ liệu). Debounce 300ms khi gõ.
+
+File Excel Tổng hợp giờ cũng ghi **bộ lọc đang áp** + ghi chú thiếu dấu chấm vào đầu file — như file Thành tiền, file rời màn hình không được mất ngữ cảnh.
+
+Cập nhật test trang theo cấu trúc mới (8 chiều ở panel chung, cha giữ trạng thái mở). Server **1131**/7 fail cố hữu · web **364/364** · build sạch.
+
+---
+
 ### 2026-08-09 21:10 (giờ VN) — 🏗 SỬA LỖI THIẾT KẾ CEO BẮT: danh mục ĐỌC TỪ MÁY, không gọi DataHub mỗi lần mở màn
 
 CEO (kèm ảnh lỗi đỏ ở Phân quyền): *"danh mục và % chi phí đã kéo từ DataHub về hẳn bên App Report rồi, vậy tại sao mỗi lần tao refresh nó cứ báo đang đồng bộ và gọi từ DataHub? Tao nghĩ mày đang thiết kế sai."*

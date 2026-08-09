@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api, downloadCostBreakdown } from '../api.js';
 import { Spinner } from '../components.jsx';
-// Ô lọc dùng CHUNG với menu Thành tiền C32·C47 — một luật lọc, một cách thao tác.
-import { MultiPick } from '../costFilterPanel.jsx';
+// Bộ lọc dùng CHUNG với menu Thành tiền C32·C47 — một luật lọc, một cách thao tác.
+import { CostFilterPanel, EMPTY_COST_FILTERS, MultiPick, costFilterParams } from '../costFilterPanel.jsx';
 
 /**
  * TỔNG HỢP CHI PHÍ C33–C46 — CHỈ CEO (CEO yêu cầu 09/08/2026).
@@ -37,13 +37,16 @@ export default function CostBreakdown({ me }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [groupBy, setGroupBy] = useState('employee');
-  const [filters, setFilters] = useState({ contractors: [], units: [], groups: [], employees: [], routes: [], priorities: [], columns: [] });
+  // Bộ lọc dữ liệu dùng CHUNG với menu Thành tiền (8 chiều + gõ nhóm + tìm tự do);
+  // `columns` (chọn cột xuất) là chuyện riêng của bảng này nên để state riêng.
+  const [filters, setFilters] = useState({ ...EMPTY_COST_FILTERS });
+  const [columns, setColumns] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [withVat, setWithVat] = useState(false);
-  // Ô lọc nào đang mở — CHA giữ, nên mở ô này là ô kia tự đóng (không chồng nhau).
+  // Ô "Cột xuất" đứng ngoài panel — vẫn cần cờ mở/đóng của cha.
   const [openPick, setOpenPick] = useState('');
 
   useEffect(() => {
@@ -57,27 +60,26 @@ export default function CostBreakdown({ me }) {
 
   const params = useMemo(() => ({
     from, to, groupBy,
-    ...Object.fromEntries(Object.entries(filters).filter(([, list]) => list.length).map(([k, list]) => [k, list.join(',')])),
-  }), [from, to, groupBy, filters]);
+    ...costFilterParams(filters),
+    ...(columns.length ? { columns: columns.join(',') } : {}),
+  }), [from, to, groupBy, filters, columns]);
+  const paramsKey = JSON.stringify(params);
 
-  const load = () => {
-    if (!from || !to) return;
-    setLoading(true); setError('');
-    api.costBreakdown(params)
-      // Giữ bảng cũ khi tải hỏng — không đập màn về trắng.
-      .then(setData).catch((e) => setError(e.message)).finally(() => setLoading(false));
-  };
-  useEffect(load, [params]);
-
-  // Giá trị cho bộ lọc lấy từ chính dữ liệu đang xem (backend là nguồn quyền).
-  const filterOptions = useMemo(() => {
-    if (!data) return { contractors: [], units: [], groups: [], employees: [], routes: [], priorities: [] };
-    const collect = (key) => [...new Set((data.filterOptions?.[key] || []))];
-    return {
-      contractors: collect('contractors'), units: collect('units'), groups: collect('groups'),
-      employees: collect('employees'), routes: collect('routes'), priorities: collect('priorities'),
-    };
-  }, [data]);
+  useEffect(() => {
+    if (!from || !to) return undefined;
+    let alive = true;
+    // Gõ ô tìm/nhóm mã thì đợi 300ms mới hỏi backend — mỗi phím một lượt gọi là
+    // vừa nặng máy chủ vừa nhấp nháy bảng.
+    const timer = setTimeout(() => {
+      setLoading(true); setError('');
+      api.costBreakdown(params)
+        // Giữ bảng cũ khi tải hỏng — không đập màn về trắng.
+        .then((r) => { if (alive) setData(r); })
+        .catch((e) => { if (alive) setError(e.message); })
+        .finally(() => { if (alive) setLoading(false); });
+    }, 300);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [paramsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const v = (row, key) => (withVat ? row.columns[key].withVat : row.columns[key].noVat);
   const totalsCell = (key) => (withVat ? data.totals.columns[key].withVat : data.totals.columns[key].noVat);
@@ -104,16 +106,13 @@ export default function CostBreakdown({ me }) {
       </button>
     </div>
 
-    {/* Bộ lọc 6 chiều CEO chốt 09/08 — trống = không lọc chiều đó. */}
+    {/* Bộ lọc nâng cao dùng CHUNG với menu Thành tiền (CEO 09/08: "khi cần lọc thì
+        mở bảng và chọn tính năng") — giá trị chọn backend thu TRƯỚC khi lọc. */}
+    <CostFilterPanel options={data?.filterOptions} partnerGroups={data?.partnerGroups}
+      value={filters} onChange={setFilters} note={data?.groupQueryNote} />
     <div className="card cost-breakdown-filters">
-      <MultiPick label="Nhà thầu" open={openPick === "Nhà thầu"} onToggle={(v) => setOpenPick(v ? "Nhà thầu" : "")} options={filterOptions.contractors} values={filters.contractors} onChange={(list) => setFilters((f) => ({ ...f, contractors: list }))} />
-      <MultiPick label="Mã đơn vị" open={openPick === "Mã đơn vị"} onToggle={(v) => setOpenPick(v ? "Mã đơn vị" : "")} options={filterOptions.units} values={filters.units} onChange={(list) => setFilters((f) => ({ ...f, units: list }))} />
-      <MultiPick label="Nhóm mã" open={openPick === "Nhóm mã"} onToggle={(v) => setOpenPick(v ? "Nhóm mã" : "")} options={filterOptions.groups} values={filters.groups} onChange={(list) => setFilters((f) => ({ ...f, groups: list }))} />
-      <MultiPick label="Nhân viên" open={openPick === "Nhân viên"} onToggle={(v) => setOpenPick(v ? "Nhân viên" : "")} options={filterOptions.employees} values={filters.employees} onChange={(list) => setFilters((f) => ({ ...f, employees: list }))} />
-      <MultiPick label="Tuyến" open={openPick === "Tuyến"} onToggle={(v) => setOpenPick(v ? "Tuyến" : "")} options={filterOptions.routes} values={filters.routes} onChange={(list) => setFilters((f) => ({ ...f, routes: list }))} />
-      <MultiPick label="Ưu tiên" open={openPick === "Ưu tiên"} onToggle={(v) => setOpenPick(v ? "Ưu tiên" : "")} options={filterOptions.priorities} values={filters.priorities} onChange={(list) => setFilters((f) => ({ ...f, priorities: list }))} />
-      <MultiPick label="Cột xuất" open={openPick === "Cột xuất"} onToggle={(v) => setOpenPick(v ? "Cột xuất" : "")} options={(data?.columns || []).map((column) => column.key.toUpperCase())} values={filters.columns.map((k) => k.toUpperCase())}
-        onChange={(list) => setFilters((f) => ({ ...f, columns: list.map((k) => k.toLowerCase()) }))} />
+      <MultiPick label="Cột xuất" open={openPick === "Cột xuất"} onToggle={(v) => setOpenPick(v ? "Cột xuất" : "")} options={(data?.columns || []).map((column) => column.key.toUpperCase())} values={columns.map((k) => k.toUpperCase())}
+        onChange={(list) => setColumns(list.map((k) => k.toLowerCase()))} />
     </div>
 
     {error && <div className="card catalog-alert error" role="alert">⚠ {error}</div>}

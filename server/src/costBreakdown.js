@@ -259,6 +259,7 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
     groupBy: dimension,
     periods: periods.map(text),
     missingPeriods,
+    filters,
     filterOptions: seen.result(),
     partnerGroups: costFilters.PARTNER_GROUPS.map((item) => ({ ...item })),
     // Ô gõ nhóm thiếu dấu chấm ⇒ NÓI RA. Lặng lẽ bỏ qua thì CEO tưởng đã lọc.

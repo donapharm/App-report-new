@@ -3609,6 +3609,11 @@ router.get('/catalog-management/cost-breakdown.xlsx', auth.requireAuth, auth.req
   sum.addRow([`TỔNG HỢP CHI PHÍ C33–C46 · kỳ ${label} · gộp theo ${result.groupBy}`]);
   if (result.missingPeriods.length) sum.addRow([`‼ THIẾU KỲ CHƯA ĐỒNG BỘ: ${result.missingPeriods.join(', ')} — file này KHÔNG gồm các kỳ đó`]);
   sum.addRow([result.c44Note]);
+  // Bộ lọc đang áp phải NẰM TRONG file — file rời màn hình là mất ngữ cảnh,
+  // người mở sau không biết bảng đã bị cắt theo điều kiện gì.
+  const breakdownFilterNote = costAmountsFilterNote(result.filters);
+  if (breakdownFilterNote) sum.addRow([`Bộ lọc đang áp dụng: ${breakdownFilterNote}`]);
+  if (result.groupQueryNote) sum.addRow([`‼ ${result.groupQueryNote}`]);
   sum.addRow([]);
   // CEO 09/08: tiêu đề ĐỦ TÊN kèm mã cột, và mỗi cột có CẢ % LẪN TIỀN. Mỗi cột
   // chi phí vì thế chiếm HAI cột trong file: "(%)" rồi "(đ)".
