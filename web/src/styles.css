@@ -2602,3 +2602,12 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .cost-breakdown-pick .btn.is-active { border-color:var(--brand); background:#eaf4ff; color:var(--brand-ink); }
 .cost-breakdown-empty-warn { border-width:2px; }
 .cost-breakdown-todo { margin-top:6px; padding-top:6px; border-top:1px dashed currentColor; font-size:12.5px; }
+/* Tiêu đề cột: mã + tên đầy đủ + nền tính % (CEO 09/08). */
+.cost-breakdown-colhead { vertical-align:top; min-width:118px; }
+.cost-breakdown-colhead b { display:block; font-size:12px; }
+.cost-breakdown-colhead small { display:block; font-weight:600; font-size:10.5px; color:var(--muted); line-height:1.2; white-space:normal; }
+.cost-breakdown-colhead em { display:block; font-style:normal; font-size:9.5px; color:var(--muted); opacity:.85; }
+/* Ô dữ liệu: tiền ở trên, % ở dưới. */
+.cost-breakdown-cell b { display:block; }
+.cost-breakdown-cell small { display:block; font-size:10.5px; color:var(--muted); font-weight:700; }
+.cost-breakdown-cell em { display:block; font-style:normal; font-size:9.5px; }

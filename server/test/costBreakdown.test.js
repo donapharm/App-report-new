@@ -324,3 +324,52 @@ test('luật phái sinh lấy TỪ TEMPLATE, không chép tay vào menu này', (
     .map((line) => line.replace(/(^|[^:'"`])\/\/.*$/, '$1')).join('\n');
   assert.doesNotMatch(code, /c44['"]?\s*:\s*['"]c43/, 'không viết cứng cặp phái sinh vào file này');
 });
+
+/* ── Mỗi cột hiện CẢ % LẪN TIỀN (CEO xin 09/08) ─────────────────────────────── */
+
+test('‼ % của C44 là % CỦA TIỀN C43 (5%), không phải % doanh thu (0,075%)', async () => {
+  // Chia trên doanh thu cho cả hai loại cột thì C44 ra 0,075% — đọc thành "C44 gần
+  // như bằng 0", sai hẳn nghĩa. Mỗi cột phải chia trên NỀN của chính nó.
+  const store = memStore();
+  const rates = { ...RATES, c43: 10, c44: 5 };
+  await seed(store, '2026-08', { DN001: [rateRow('001.BVĐK ĐỒNG NAI', 'G1.A', rates)] });
+  const result = breakdown.buildBreakdown({
+    periods: ['2026-08'], store, groupBy: 'employee',
+    revenueRowsOf: () => [revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 1_050_000)],
+  });
+  const row = result.rows[0];
+  assert.equal(row.pct.c43, 10, 'C43 = 10% doanh thu');
+  assert.equal(row.pct.c44, 5, 'C44 = 5% CỦA C43');
+  assert.notEqual(row.pct.c44, 0.5, 'không được chia trên doanh thu');
+  assert.equal(result.totals.pct.c44, 5);
+});
+
+test('nhãn nền nói rõ "% của cái gì", lấy từ derivedBases THẬT', async () => {
+  const store = memStore();
+  await seed(store, '2026-08', { DN001: [rateRow('001.BVĐK ĐỒNG NAI', 'G1.A')] });
+  const result = breakdown.buildBreakdown({
+    periods: ['2026-08'], store, groupBy: 'employee',
+    revenueRowsOf: () => [revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 1_050_000)],
+  });
+  const byKey = Object.fromEntries(result.columns.map((c) => [c.key, c.pctBaseLabel]));
+  assert.equal(byKey.c43, 'doanh thu');
+  assert.equal(byKey.c44, 'tiền C43');
+  assert.equal(byKey.c41, 'doanh thu');
+});
+
+test('% hiệu dụng là bình quân CÓ TRỌNG SỐ khi gộp nhiều cặp lệch %', async () => {
+  const store = memStore();
+  await seed(store, '2026-08', { DN001: [
+    rateRow('001.BVĐK ĐỒNG NAI', 'G1.A', { ...RATES, c41: 2 }),
+    rateRow('001.BVĐK ĐỒNG NAI', 'G1.B', { ...RATES, c41: 4 }),
+  ] });
+  const result = breakdown.buildBreakdown({
+    periods: ['2026-08'], store, groupBy: 'employee',
+    revenueRowsOf: () => [
+      revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.A', 1_050_000),   // 1tr chưa VAT, 2%
+      revRow('DN001', '001.BVĐK ĐỒNG NAI', 'G1.B', 3_150_000),   // 3tr chưa VAT, 4%
+    ],
+  });
+  // (1tr×2% + 3tr×4%) / 4tr = (20.000 + 120.000)/4.000.000 = 3,5%
+  assert.equal(result.rows[0].pct.c41, 3.5);
+});

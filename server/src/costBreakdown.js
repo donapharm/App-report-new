@@ -111,8 +111,15 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
   const buckets = new Map();
   // Giá trị từng chiều lọc, thu thập TRƯỚC khi lọc — CEO bỏ lọc còn đường quay lại;
   // thu sau lọc thì chọn một giá trị xong là các lựa chọn khác biến mất.
+  const derivedBaseOfColumn = {};
   const seen = { contractors: new Set(), units: new Set(), groups: new Set(), employees: new Set(), routes: new Set(), priorities: new Set() };
-  const emptyCell = () => ({ noVat: 0, withVat: 0, missingPairs: 0 });
+  // `baseNoVat/baseWithVat` = tổng NỀN đã dùng để nhân ra tiền cột đó. Giữ lại để
+  // suy ngược ra % hiệu dụng ĐÚNG BẢN CHẤT TỪNG CỘT (CEO xin hiện cả % lẫn tiền):
+  //   · cột thường  → nền là doanh thu  ⇒ % là "mấy % doanh thu"
+  //   · C44 phái sinh → nền là TIỀN C43 ⇒ % là "5% của C43", không phải 0,075% doanh thu
+  // Chia trên doanh thu cho cả hai loại sẽ ra 0,075% cho C44 — đọc thành "C44 gần
+  // như bằng 0", sai hẳn nghĩa CEO đang cần.
+  const emptyCell = () => ({ noVat: 0, withVat: 0, baseNoVat: 0, baseWithVat: 0, missingPairs: 0 });
   const bucketOf = (key) => {
     if (!buckets.has(key)) {
       buckets.set(key, {
@@ -140,6 +147,7 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
       // "Chi phí của tôi" vẫn dùng đúng — bản đầu của menu này quên áp, nên C44 bị
       // thổi lên gấp nhiều lần. Lấy luật từ template, KHÔNG chép tay sang đây.
       const derivedBases = employeeCostTemplates.resolveTemplate(empCode).derivedBases || {};
+      Object.assign(derivedBaseOfColumn, derivedBases);
       const lines = employeeCost.buildRevenueLines(revenueRowsOf(empCode, text(period)), empCode, text(period));
       const revenueByPair = new Map();
       for (const line of lines) {
@@ -190,6 +198,9 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
           if (amountsNoVat[column.key] == null) { cell.missingPairs += 1; continue; }
           cell.noVat += amountsNoVat[column.key];
           cell.withVat += amountsWithVat[column.key];
+          // Nền của chính cột này ở cặp này (doanh thu, hoặc tiền cột gốc nếu phái sinh).
+          cell.baseNoVat += derivedBases[column.key] ? (amountsNoVat[derivedBases[column.key]] || 0) : agg.noVat;
+          cell.baseWithVat += derivedBases[column.key] ? (amountsWithVat[derivedBases[column.key]] || 0) : agg.withVat;
         }
       }
     }
@@ -206,7 +217,14 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
       spentTowardC47NoVat: activeColumns.filter((c) => !c.outsideC47).reduce((sum, c) => sum + bucket.columns[c.key].noVat, 0),
       spentTowardC47WithVat: activeColumns.filter((c) => !c.outsideC47).reduce((sum, c) => sum + bucket.columns[c.key].withVat, 0),
     }))
-    .map((row) => ({ ...row, costRatio: costRatio(row.spentWithC44NoVat, row.revenueNoVat) }))
+    .map((row) => ({
+      ...row,
+      costRatio: costRatio(row.spentWithC44NoVat, row.revenueNoVat),
+      // % hiệu dụng từng cột — tính trên NỀN của chính cột đó (xem chú thích emptyCell).
+      pct: Object.fromEntries(activeColumns.map((column) => [
+        column.key, costRatio(row.columns[column.key].noVat, row.columns[column.key].baseNoVat),
+      ])),
+    }))
     .sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi'));
 
   const totals = rows.reduce((sum, row) => {
@@ -221,6 +239,8 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
       const cell = sum.columns[column.key];
       cell.noVat += row.columns[column.key].noVat;
       cell.withVat += row.columns[column.key].withVat;
+      cell.baseNoVat += row.columns[column.key].baseNoVat;
+      cell.baseWithVat += row.columns[column.key].baseWithVat;
       cell.missingPairs += row.columns[column.key].missingPairs;
     }
     return sum;
@@ -231,6 +251,9 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
   });
 
   totals.costRatio = costRatio(totals.spentWithC44NoVat, totals.revenueNoVat);
+  totals.pct = Object.fromEntries(activeColumns.map((column) => [
+    column.key, costRatio(totals.columns[column.key].noVat, totals.columns[column.key].baseNoVat),
+  ]));
   // Tỷ trọng tính trên TỔNG CHI CÓ C44 — cùng mẫu số với con số người đọc đang nhìn.
   totals.share = Object.fromEntries(activeColumns.map((column) => [
     column.key, shareOf(totals.columns[column.key].noVat, totals.spentWithC44NoVat),
@@ -241,7 +264,14 @@ function buildBreakdown({ periods = [], filters: rawFilters = {}, groupBy = 'emp
     periods: periods.map(text),
     missingPeriods,
     filterOptions: Object.fromEntries(Object.entries(seen).map(([key, set]) => [key, [...set].sort((a, b) => a.localeCompare(b, 'vi'))])),
-    columns: activeColumns,
+    columns: activeColumns.map((column) => ({
+      ...column,
+      // Nói thẳng % của cột này là % CỦA CÁI GÌ — không để người đọc tự đoán.
+      // Lấy từ derivedBases THẬT (template), không suy theo cờ outsideC47.
+      pctBaseLabel: derivedBaseOfColumn[column.key]
+        ? `tiền ${derivedBaseOfColumn[column.key].toUpperCase()}`
+        : 'doanh thu',
+    })),
     rows,
     totals,
     c44Note: 'C44 được TÍNH vào "Tổng chi có C44" nhưng nằm NGOÀI công thức C47 (file CP_TOTAL V29.9). Chênh lệch hai dòng tổng = chính tiền C44.',

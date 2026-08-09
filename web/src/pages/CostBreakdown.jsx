@@ -186,9 +186,13 @@ export default function CostBreakdown({ me }) {
       <div className="table-scroll"><table className="catalog-table catalog-table-simple"><thead><tr>
         <th>{GROUP_LABELS[data.groupBy]}</th><th>Số cặp</th>
         <th className="catalog-money">Doanh thu</th>
-        {data.columns.map((column) => <th key={column.key} className={`catalog-money${column.outsideC47 ? ' cost-breakdown-outside' : ''}`}
+        {/* CEO 09/08: "tiêu đề hiển thị ĐỦ TÊN kèm với cột C bao nhiêu". Trước chỉ
+            có mã trần "C43" — nhìn không biết là chi phí gì. */}
+        {data.columns.map((column) => <th key={column.key} className={`catalog-money cost-breakdown-colhead${column.outsideC47 ? ' cost-breakdown-outside' : ''}`}
           title={column.outsideC47 ? `${column.label} — NGOÀI công thức C47` : column.label}>
-          {column.key.toUpperCase()}{column.outsideC47 ? '*' : ''}
+          <b>{column.key.toUpperCase()}{column.outsideC47 ? '*' : ''}</b>
+          <small>{column.label.replace(/^C\d+\s*/, '')}</small>
+          <em>% của {column.pctBaseLabel}</em>
         </th>)}
         <th className="catalog-money">Tổng chi CÓ C44</th>
         <th className="catalog-money">Trừ vào C47 (không C44)</th>
@@ -200,9 +204,11 @@ export default function CostBreakdown({ me }) {
           <td className="catalog-money" data-sensitive="">{money(withVat ? row.revenueWithVat : row.revenueNoVat)}</td>
           {data.columns.map((column) => {
             const cell = row.columns[column.key];
-            return <td key={column.key} className="catalog-money" data-sensitive=""
-              title={cell.missingPairs ? `${cell.missingPairs} cặp thiếu % cột này — số dưới là tổng THIẾU` : undefined}>
-              {money(v(row, column.key))}{cell.missingPairs ? <small className="cost-amounts-warn"> ⚠{cell.missingPairs}</small> : null}
+            return <td key={column.key} className="catalog-money cost-breakdown-cell" data-sensitive=""
+              title={cell.missingPairs ? `${cell.missingPairs} cặp thiếu % cột này — số dưới là tổng THIẾU` : `${column.label} · % của ${column.pctBaseLabel}`}>
+              <b>{money(v(row, column.key))}</b>
+              <small>{pctText(row.pct?.[column.key])}</small>
+              {cell.missingPairs ? <em className="cost-amounts-warn">⚠ {cell.missingPairs} cặp thiếu %</em> : null}
             </td>;
           })}
           <td className="catalog-money" data-sensitive=""><b>{money(withVat ? row.spentWithC44WithVat : row.spentWithC44NoVat)}</b></td>
@@ -213,7 +219,10 @@ export default function CostBreakdown({ me }) {
           <td><b>TỔNG CỘNG</b></td>
           <td><b>{data.totals.pairCount.toLocaleString('vi-VN')}</b></td>
           <td className="catalog-money" data-sensitive=""><b>{money(withVat ? data.totals.revenueWithVat : data.totals.revenueNoVat)}</b></td>
-          {data.columns.map((column) => <td key={column.key} className="catalog-money" data-sensitive=""><b>{money(totalsCell(column.key))}</b></td>)}
+          {data.columns.map((column) => <td key={column.key} className="catalog-money cost-breakdown-cell" data-sensitive="">
+            <b>{money(totalsCell(column.key))}</b>
+            <small>{pctText(data.totals.pct?.[column.key])}</small>
+          </td>)}
           <td className="catalog-money" data-sensitive=""><b>{money(withVat ? data.totals.spentWithC44WithVat : data.totals.spentWithC44NoVat)}</b></td>
           <td className="catalog-money" data-sensitive=""><b>{money(withVat ? data.totals.spentTowardC47WithVat : data.totals.spentTowardC47NoVat)}</b></td>
           <td className="catalog-money" data-sensitive=""><b>{pctText(data.totals.costRatio)}</b></td>

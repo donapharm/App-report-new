@@ -1,3 +1,25 @@
+### 2026-08-09 19:05 (giờ VN) — 🏷️ Tiêu đề cột đủ tên + mỗi cột hiện CẢ % LẪN TIỀN
+
+CEO: *"tôi muốn các mục thanh tiêu đề của các cột hiển thị đủ tên thanh tiêu đề kèm với cột C bao nhiêu. Tôi muốn hiển thị mỗi cột là tỷ lệ % và thành tiền."*
+
+**Tiêu đề ba tầng:** mã cột (`C43`) → tên đầy đủ (`CP bs/td`) → nền tính % (`% của doanh thu`). Trước chỉ có mã trần "C43", nhìn không biết là chi phí gì.
+
+**Mỗi ô hai dòng:** thành tiền ở trên, **% hiệu dụng** ở dưới. Áp cho cả dòng dữ liệu lẫn dòng TỔNG CỘNG.
+
+#### ‼ Điểm khó nhất: % của C44 là % CỦA CÁI GÌ
+
+Nếu chia mọi cột trên doanh thu cho tiện thì C44 ra **0,075%** — đọc thành *"C44 gần như bằng 0"*, sai hẳn nghĩa. Trong khi bản chất C44 là **5% của tiền C43**.
+
+Nên mỗi cột chia trên **NỀN của chính nó**: cột thường lấy doanh thu, cột phái sinh lấy **tiền cột gốc**. `baseNoVat/baseWithVat` cộng dồn ngay lúc tính tiền nên không phải suy ngược. Nhãn `pctBaseLabel` lấy từ `derivedBases` **thật của template** (không suy theo cờ `outsideC47`), hiện ngay dưới tiêu đề để không ai phải đoán.
+
+Gộp nhiều cặp lệch % thì con số hiện ra là **bình quân có trọng số** — có test khoá: 1tr×2% + 3tr×4% ⇒ **3,5%**, không phải trung bình cộng 3%.
+
+**Excel theo cùng luật:** mỗi khoản chiếm **hai cột** — *"… — % của doanh thu"* rồi *"… — thành tiền"*. Thiếu % thì **cả hai ô đều "—"**, không để tiền trống mà % vẫn có số.
+
+Server 1108/1115 (7 fail cố hữu) · web 364/364 · build sạch.
+
+---
+
 ### 2026-08-09 18:40 (giờ VN) — ‼ SỬA SAI NẶNG: C44 tính trên TIỀN của C43, không phải trên doanh thu
 
 CEO bắt lỗi: *"cột C44 chỉ lấy phần tiền của cột C43 để tính × 5%. Ví dụ cột C43 thành tiền là 100.000đ thì C44 = 100.000 × 5%. Chứ không phải cột C44 lấy doanh thu × 5% là sai bét."*

@@ -49,7 +49,7 @@ test('kỳ chưa đồng bộ được NÓI RA trên màn — không lặng lẽ
 
 test('cột thiếu % hiện cảnh báo ⚠ kèm số cặp — tổng thiếu không giả làm tổng thật', () => {
   assert.match(page, /cặp thiếu % cột này — số dưới là tổng THIẾU/);
-  assert.match(page, /⚠\{cell\.missingPairs\}/);
+  assert.match(page, /⚠ \{cell\.missingPairs\} cặp thiếu %/);
 });
 
 test('tab CHỈ CEO: cờ ceoOnly ở App + tabAccess, backend chặn độc lập bằng requireCeo', () => {
@@ -143,4 +143,30 @@ test('cảnh báo kèm ĐÚNG CÁC BƯỚC phải làm, không chỉ báo lỗi 
   assert.match(page, /<b>Cần làm:<\/b> vào <b>Danh mục QL<\/b>/);
   assert.match(page, /bấm <b>"Đồng bộ từ DataHub"<\/b> → quay lại đây/);
   assert.match(page, /Mỗi kỳ phải đồng bộ một lần/);
+});
+
+/* ── Tiêu đề đủ tên + mỗi cột hiện CẢ % LẪN TIỀN (CEO xin 09/08) ─────────────── */
+
+test('tiêu đề cột: mã C-bao-nhiêu + TÊN ĐẦY ĐỦ + nền tính %', () => {
+  // CEO: "các mục thanh tiêu đề của các cột hiển thị đủ tên thanh tiêu đề kèm với
+  // cột C bao nhiêu". Trước chỉ có mã trần "C43" — nhìn không biết chi phí gì.
+  assert.match(page, /<b>\{column\.key\.toUpperCase\(\)\}\{column\.outsideC47 \? '\*' : ''\}<\/b>/);
+  assert.match(page, /<small>\{column\.label\.replace\(\/\^C\\d\+\\s\*\/, ''\)\}<\/small>/);
+  assert.match(page, /<em>% của \{column\.pctBaseLabel\}<\/em>/);
+});
+
+test('mỗi ô hiện CẢ tiền LẪN %, không phải chỉ tiền', () => {
+  assert.match(page, /<b>\{money\(v\(row, column\.key\)\)\}<\/b>\s*<small>\{pctText\(row\.pct\?\.\[column\.key\]\)\}<\/small>/);
+  assert.match(page, /<b>\{money\(totalsCell\(column\.key\)\)\}<\/b>\s*<small>\{pctText\(data\.totals\.pct\?\.\[column\.key\]\)\}<\/small>/);
+});
+
+test('ô vẫn giữ con mắt che số khi thêm dòng %', () => {
+  assert.match(page, /className="catalog-money cost-breakdown-cell" data-sensitive=""/);
+});
+
+test('Excel xuất HAI cột cho mỗi khoản: "% của …" rồi "thành tiền"', () => {
+  assert.match(routes, /head\.push\(`\$\{name\} — % của \$\{column\.pctBaseLabel\}`, `\$\{name\} — thành tiền`\)/);
+  assert.match(routes, /const cellsOf = \(columnsData, pct\)/);
+  // Thiếu % thì cả hai ô đều '—', không để tiền trống mà % vẫn có số.
+  assert.match(routes, /return \[empty \? '—' : \(pct\?\.\[column\.key\] \?\? '—'\), empty \? '—' : cell\.noVat\]/);
 });

@@ -3544,14 +3544,26 @@ router.get('/catalog-management/cost-breakdown.xlsx', auth.requireAuth, auth.req
   if (result.missingPeriods.length) sum.addRow([`‼ THIẾU KỲ CHƯA ĐỒNG BỘ: ${result.missingPeriods.join(', ')} — file này KHÔNG gồm các kỳ đó`]);
   sum.addRow([result.c44Note]);
   sum.addRow([]);
-  const head = ['Nhóm gộp', 'Số cặp', 'Doanh thu chưa VAT', ...result.columns.map((column) => `${column.label}${column.outsideC47 ? ' (NGOÀI C47)' : ''}`), 'Tổng chi CÓ C44', 'Phần trừ vào C47 (không C44)'];
+  // CEO 09/08: tiêu đề ĐỦ TÊN kèm mã cột, và mỗi cột có CẢ % LẪN TIỀN. Mỗi cột
+  // chi phí vì thế chiếm HAI cột trong file: "(%)" rồi "(đ)".
+  const head = ['Nhóm gộp', 'Số cặp', 'Doanh thu chưa VAT'];
+  for (const column of result.columns) {
+    const name = `${column.label}${column.outsideC47 ? ' (NGOÀI C47)' : ''}`;
+    head.push(`${name} — % của ${column.pctBaseLabel}`, `${name} — thành tiền`);
+  }
+  head.push('Tổng chi CÓ C44', 'Phần trừ vào C47 (không C44)');
   sum.addRow(head);
-  const bodyRow = (row) => [row.key, row.pairCount, row.revenueNoVat,
-    ...result.columns.map((column) => row.columns[column.key].missingPairs && !row.columns[column.key].noVat ? '—' : row.columns[column.key].noVat),
-    row.spentWithC44NoVat, row.spentTowardC47NoVat];
-  for (const row of result.rows) sum.addRow(bodyRow(row));
+  const cellsOf = (columnsData, pct) => result.columns.flatMap((column) => {
+    const cell = columnsData[column.key];
+    const empty = cell.missingPairs && !cell.noVat;
+    return [empty ? '—' : (pct?.[column.key] ?? '—'), empty ? '—' : cell.noVat];
+  });
+  for (const row of result.rows) {
+    sum.addRow([row.key, row.pairCount, row.revenueNoVat, ...cellsOf(row.columns, row.pct),
+      row.spentWithC44NoVat, row.spentTowardC47NoVat]);
+  }
   sum.addRow(['TỔNG CỘNG', result.totals.pairCount, result.totals.revenueNoVat,
-    ...result.columns.map((column) => result.totals.columns[column.key].noVat),
+    ...cellsOf(result.totals.columns, result.totals.pct),
     result.totals.spentWithC44NoVat, result.totals.spentTowardC47NoVat]);
   const missing = result.columns.filter((column) => result.totals.columns[column.key].missingPairs);
   if (missing.length) {
@@ -3560,8 +3572,11 @@ router.get('/catalog-management/cost-breakdown.xlsx', auth.requireAuth, auth.req
   }
   const detail = workbook.addWorksheet('Co VAT');
   detail.addRow(head);
-  for (const row of result.rows) detail.addRow([row.key, row.pairCount, row.revenueWithVat,
-    ...result.columns.map((column) => row.columns[column.key].withVat), row.spentWithC44WithVat, row.spentTowardC47WithVat]);
+  for (const row of result.rows) {
+    detail.addRow([row.key, row.pairCount, row.revenueWithVat,
+      ...result.columns.flatMap((column) => [row.pct?.[column.key] ?? '—', row.columns[column.key].withVat]),
+      row.spentWithC44WithVat, row.spentTowardC47WithVat]);
+  }
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="tong-hop-chi-phi-${result.periods[0]}_${result.periods.at(-1)}.xlsx"`);
