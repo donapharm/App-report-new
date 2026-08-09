@@ -13,13 +13,15 @@ export const EMPLOYEE_COST_DIMENSIONS = Object.freeze([
   { key: 'c25', label: 'ĐVT', kind: 'dimension' },
   { key: 'bidPrice', label: 'Giá trúng thầu', kind: 'money' },
   { key: 'quantity', label: 'Số lượng', kind: 'dimension', format: 'number' },
+  { key: 'shadowReconciledQuantity', label: 'SL đã đối soát MISA', kind: 'dimension', format: 'number', shadowOnly: true },
+  { key: 'shadowQuantityDelta', label: 'Chênh lệch SL', kind: 'dimension', format: 'number', shadowOnly: true },
   { key: 'revenueBeforeVat', label: 'Thành tiền xuất bán (trước VAT)', kind: 'money' },
   { key: 'rowMonthlyTotal', label: 'Thành tiền tháng', kind: 'money' },
   { key: 'note', label: 'Ghi chú', kind: 'dimension' },
 ]);
 
 const FIELD_BY_KEY = new Map(EMPLOYEE_COST_DIMENSIONS.map((column) => [column.key, column]));
-const DEFAULT_PREFIX = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'revenueBeforeVat'];
+const DEFAULT_PREFIX = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'shadowReconciledQuantity', 'shadowQuantityDelta', 'revenueBeforeVat'];
 const DEFAULT_SUFFIX = ['rowMonthlyTotal', 'note'];
 const BLOCKED = new Set(['c32', 'c47']);
 const EMPTY_NOTE = 'chưa có dữ liệu chi phí kỳ này';
@@ -176,6 +178,15 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
   if (requestedLayout.length && !requestedLayout.includes('c10')) {
     const at = requestedLayout.indexOf('c5');
     if (at >= 0) requestedLayout.splice(at + 1, 0, 'c10');
+  }
+  // Phase 1 always exposes exactly the two approved shadow quantity columns,
+  // including for templates that predate this additive contract.
+  if (requestedLayout.length) {
+    const quantityAt = requestedLayout.indexOf('quantity');
+    if (quantityAt >= 0) {
+      const shadowColumns = ['shadowReconciledQuantity', 'shadowQuantityDelta'];
+      requestedLayout.splice(quantityAt + 1, 0, ...shadowColumns.filter((key) => !requestedLayout.includes(key)));
+    }
   }
   const layout = requestedLayout.length ? requestedLayout : [...DEFAULT_PREFIX, ...costs.keys(), ...DEFAULT_SUFFIX];
   const seen = new Set();

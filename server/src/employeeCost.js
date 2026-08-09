@@ -5,6 +5,7 @@ const { VAT_DIVISOR } = require('./analytics');
 const employeeCostTemplates = require('./employeeCostTemplates');
 const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 const rateSnapshot = require('./employeeCostRateSnapshot');
+const reconciliationShadow = require('./employeeCostReconciliationShadow');
 
 const CONTRACT_PATH = '/api/integrations/app-report/employee-cost';
 const DIMENSION_KEYS = Object.freeze(['c5', 'c7', 'c16', 'c25']);
@@ -17,6 +18,8 @@ const DEFAULT_BACKOFF_MS = Object.freeze([2000, 4000]);
 // CEO gọi là "kẹt". Khi ĐÃ CÓ bản lưu tỷ lệ thì không có lý do gì phải chờ như vậy:
 // hỏi nhanh, không hỏi lại; quá hạn thì trả số cũ NGAY rồi làm tươi ngầm phía sau.
 const FAST_TIMEOUT_MS = 2000;
+const VERIFIED_PREFETCH_MAX_AGE_MS = 2 * 60 * 1000;
+const backgroundRefreshInFlight = new Map();
 const AUDIT_FILE = 'employee_cost_audit';
 const AUDIT_LIMIT = 5000;
 const DEFAULT_ANNUAL_COLUMN_KEYS = Object.freeze(['c44']);
@@ -524,8 +527,12 @@ function revenueOrderOf(row = {}) {
   ]) || '').trim();
 }
 
+function revenueImmutableLineIdOf(row = {}) {
+  return String(displayValue(row, ['source_line_id', 'line_id', 'SOURCE_LINE_ID', 'LINE_ID']) || '').trim();
+}
+
 function revenueLineIdOf(row = {}, index = 0) {
-  return String(displayValue(row, ['source_line_id', 'line_id', 'SOURCE_LINE_ID', 'LINE_ID']) || `line-${index + 1}`).trim();
+  return revenueImmutableLineIdOf(row) || `line-${index + 1}`;
 }
 
 function revenueQuantityOf(row = {}) {
@@ -533,6 +540,12 @@ function revenueQuantityOf(row = {}) {
   if (raw == null || raw === '') return null;
   const value = Number(raw);
   return Number.isFinite(value) ? value : null;
+}
+
+function contractorCodeOf(row = {}) {
+  return reconciliationShadow.normalizeContractorCode(
+    displayValue(row, ['contractor_code', 'contractorCode', 'contractor', 'CONTRACTOR_CODE']),
+  );
 }
 
 function buildRevenueIndex(revenueRows = [], expectedEmp = '') {
@@ -726,6 +739,10 @@ function enrichWithRevenue(payload, options = {}) {
       sourceLineId: line.sourceLineId,
       date: line.date || null,
       quantity: line.quantity,
+      // Additive display-only metadata. These shadow fields never participate
+      // in cost formulas, summaries, KPI, exports, or notifications.
+      shadowReconciledQuantity: line.source?.shadowReconciledQuantity ?? null,
+      shadowQuantityDelta: line.source?.shadowQuantityDelta ?? null,
       revenue: line.revenue,
       revenueBeforeVat: line.revenueBeforeVat,
       note: safeText(source?.[NOTE_KEY]),
@@ -883,6 +900,67 @@ function enrichRangePayload(payload, options = {}) {
   };
 }
 
+
+async function applyReconciliationShadow(payload, empCode, options = {}) {
+  const shadowOptions = options.reconciliationShadow || {};
+  const periods = Array.isArray(payload?.periods) ? payload.periods : (payload?.rows ? [payload] : []);
+  const scopes = [];
+  const plans = new Map();
+  for (const periodPayload of periods) {
+    const period = normalizeMonth(periodPayload.period || options.period);
+    const revenueRows = options.revenueRowsByPeriod?.[period]
+      ?? (normalizeMonth(options.period) === period ? options.revenueRows : []);
+    const sourceContractors = new Map();
+    for (const line of buildRevenueLines(revenueRows, empCode, period)) {
+      // The display path synthesizes a line id when the source lacks one. Never
+      // use that convenience fallback as immutable reconciliation identity.
+      const identity = reconciliationShadow.exactIdentity({
+        sourceLineId: revenueImmutableLineIdOf(line.source), orderCode: line.orderCode, employeeCode: empCode,
+      });
+      const contractorCode = contractorCodeOf(line.source);
+      if (!identity || !contractorCode) continue;
+      const candidates = sourceContractors.get(identity) || new Set();
+      candidates.add(contractorCode);
+      sourceContractors.set(identity, candidates);
+    }
+    const rowPlans = (periodPayload.rows || []).map((row) => {
+      const identity = reconciliationShadow.exactIdentity(row, empCode);
+      const candidates = sourceContractors.get(identity);
+      const contractorCode = candidates?.size === 1 ? [...candidates][0] : '';
+      if (contractorCode) scopes.push({ period, contractorCode });
+      return contractorCode;
+    });
+    plans.set(periodPayload, rowPlans);
+  }
+  const snapshots = await reconciliationShadow.loadScopes(scopes, shadowOptions);
+  for (const periodPayload of periods) {
+    const period = normalizeMonth(periodPayload.period || options.period);
+    const rowPlans = plans.get(periodPayload) || [];
+    // A cost-policy payload with no revenue identities is not a reconciliation
+    // target; leave its existing shape byte-for-byte unchanged.
+    if (!rowPlans.some(Boolean)) continue;
+    const grouped = new Map();
+    (periodPayload.rows || []).forEach((row, index) => {
+      const contractorCode = rowPlans[index];
+      if (!contractorCode) return;
+      const group = grouped.get(contractorCode) || [];
+      group.push({ row, index });
+      grouped.set(contractorCode, group);
+    });
+    const projected = (periodPayload.rows || []).map((row) => ({
+      ...row, shadowReconciledQuantity: null, shadowQuantityDelta: null,
+    }));
+    for (const [contractorCode, group] of grouped) {
+      const snapshot = snapshots.get(`${period}\u001f${contractorCode}`);
+      if (!snapshot) continue;
+      const rows = reconciliationShadow.projectEmployeeCostRows(group.map((item) => item.row), snapshot, { employeeCode: empCode });
+      rows.forEach((row, offset) => { projected[group[offset].index] = row; });
+    }
+    periodPayload.rows = projected;
+  }
+  return payload;
+}
+
 function isTransient(error) {
   return error?.name === 'AbortError'
     || error?.name === 'TimeoutError'
@@ -908,10 +986,16 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
   const employeeCostKeys = parseEmployeeCostKeys(options.employeeCostKeys ?? process.env.APP_REPORT_EMPLOYEE_COST_KEYS);
   const employeeCostKey = employeeCostKeys.get(normEmp(empCode)) || '';
   const fetchImpl = options.fetchImpl || global.fetch;
-  const timeoutMs = Math.max(100, Number(options.timeoutMs ?? process.env.APP_REPORT_COST_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
+  const configuredTimeoutMs = Math.max(100, Number(options.timeoutMs ?? process.env.APP_REPORT_COST_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS);
+  const deadlineAt = Number(options.deadlineAt || 0);
   const backoffMs = options.backoffMs || DEFAULT_BACKOFF_MS;
   const sleepImpl = options.sleepImpl || sleep;
   const range = options.from != null || options.to != null ? parseMonthRange(options) : null;
+  const unavailable = (attempts = 0) => ({
+    payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE),
+    outcome: 'upstream_unavailable', attempts,
+  });
+  if (deadlineAt > 0 && deadlineAt <= Date.now()) return unavailable(0);
 
   // Cost reads require both independent server-side credentials. A missing,
   // malformed, duplicated or reused key fails before any network request.
@@ -927,10 +1011,13 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
   const url = `${baseUrl}${CONTRACT_PATH}?${params.toString()}`;
   let attempts = 0;
   for (;;) {
+    const remainingMs = deadlineAt > 0 ? deadlineAt - Date.now() : configuredTimeoutMs;
+    if (deadlineAt > 0 && remainingMs <= 0) return unavailable(attempts);
+    const attemptTimeoutMs = Math.max(1, Math.min(configuredTimeoutMs, remainingMs));
     attempts += 1;
     try {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const timer = setTimeout(() => controller.abort(), attemptTimeoutMs);
       let response;
       try {
         response = await fetchImpl(url, {
@@ -972,7 +1059,11 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
     } catch (error) {
       const retryIndex = attempts - 1;
       if (isTransient(error) && retryIndex < backoffMs.length) {
-        await sleepImpl(backoffMs[retryIndex]);
+        const delayMs = Math.max(0, Number(backoffMs[retryIndex]) || 0);
+        // A common deadline includes retry sleep as well as fetch time. Never start
+        // a retry that cannot fit its backoff inside the remaining cycle budget.
+        if (deadlineAt > 0 && Date.now() + delayMs >= deadlineAt) return unavailable(attempts);
+        await sleepImpl(delayMs);
         continue;
       }
       const unauthorized = error?.status === 401;
@@ -1109,13 +1200,23 @@ async function fetchEmployeeCost(empCode, options = {}) {
 
   // Đường nhanh mà nguồn không kịp trả ⇒ dùng số cũ ngay, đồng thời làm tươi NGẦM
   // bằng ngân sách đầy đủ để lần sau có số mới. Lỗi nền không được nổi lên màn.
-  if (fastPath && result.outcome !== 'ok') {
-    const background = fetchRawEmployeeCost(empCode, options)
-      .then((fresh) => {
-        if (fresh.outcome === 'ok') rateSnapshot.remember(empCode, fresh.payload, snapshotOptions);
-        return fresh;
-      })
-      .catch(() => null);
+  if (fastPath && result.outcome !== 'ok' && options.backgroundRefresh !== false) {
+    let refreshKey = normEmp(empCode);
+    try {
+      const range = parseMonthRange(options);
+      refreshKey = `${refreshKey}:${range.from}:${range.to}`;
+    } catch { /* un-ranged calls retain employee-only identity */ }
+    let background = backgroundRefreshInFlight.get(refreshKey);
+    if (!background) {
+      background = fetchRawEmployeeCost(empCode, options)
+        .then((fresh) => {
+          if (fresh.outcome === 'ok') rateSnapshot.remember(empCode, fresh.payload, snapshotOptions);
+          return fresh;
+        })
+        .catch(() => null)
+        .finally(() => { if (backgroundRefreshInFlight.get(refreshKey) === background) backgroundRefreshInFlight.delete(refreshKey); });
+      backgroundRefreshInFlight.set(refreshKey, background);
+    }
     if (options.awaitBackgroundRefresh === true) await background;
   }
   // ‼ Nguồn DataHub kẹt (khoá mồ côi `vault-audit.lock`) từng làm 21 NV hiện 0đ.
@@ -1145,6 +1246,46 @@ async function fetchEmployeeCost(empCode, options = {}) {
   return result;
 }
 
+// Probe evidence is deliberately local to one warm cycle. It binds the exact
+// employee/range, source provenance and a short-lived verification timestamp; a raw
+// `ok` result or an old/global object is never sufficient for promotion.
+function verifiedPrefetchEvidence(result, empCode, options = {}) {
+  let range;
+  try { range = parseMonthRange(options); } catch { return null; }
+  const verifiedAt = Number(options.verifiedAt ?? Date.now());
+  if (!Number.isFinite(verifiedAt) || verifiedAt <= 0) return null;
+  const evidence = { empCode: normEmp(empCode), from: range.from, to: range.to, verifiedAt, result };
+  return exactPrefetchedResult(evidence, empCode, { ...options, now: verifiedAt }) ? evidence : null;
+}
+
+function exactPrefetchedResult(evidence, empCode, options = {}) {
+  if (!evidence || typeof evidence !== 'object') return null;
+  let range;
+  try { range = parseMonthRange(options); } catch { return null; }
+  const now = Number(options.now ?? Date.now());
+  const maxAgeMs = Math.max(1, Number(options.maxAgeMs ?? VERIFIED_PREFETCH_MAX_AGE_MS) || VERIFIED_PREFETCH_MAX_AGE_MS);
+  const verifiedAt = Number(evidence.verifiedAt);
+  if (!Number.isFinite(now) || !Number.isFinite(verifiedAt)
+    || verifiedAt > now + 1000 || now - verifiedAt > maxAgeMs) return null;
+  if (normEmp(evidence.empCode) !== normEmp(empCode)
+    || evidence.from !== range.from || evidence.to !== range.to) return null;
+  const result = evidence.result;
+  if (!result || result.outcome !== 'ok') return null;
+  const payload = result.payload;
+  if (normEmp(payload?.empCode) !== normEmp(empCode)
+    || normalizeMonth(payload?.from) !== range.from || normalizeMonth(payload?.to) !== range.to) return null;
+  if (normalizeMonth(result.sourceRange?.from) !== range.from
+    || normalizeMonth(result.sourceRange?.to) !== range.to) return null;
+  const periods = Array.isArray(payload?.periods) ? payload.periods : [];
+  const byMonth = new Map(periods.map((period) => [normalizeMonth(period?.period), period]));
+  if (!range.months.every((month) => {
+    const period = byMonth.get(month);
+    return period && Array.isArray(period.columns) && period.columns.length > 0
+      && Array.isArray(period.rows) && period.rows.length > 0;
+  })) return null;
+  return { ...result, payload: { ...payload, periods: periods.map((period) => ({ ...period })) } };
+}
+
 async function getForSession({ session, scope, requestedEmp }, options = {}) {
   const audit = (entry) => {
     try { (options.auditImpl || writeAudit)(entry); }
@@ -1157,7 +1298,8 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
     audit({ actor: session?.emp_code, role: session?.role, empCode, event: options.auditEvent || 'view', outcome: result.outcome, attempts: result.attempts, range, filters: options.auditFilters });
     return result.payload;
   }
-  const result = await fetchEmployeeCost(empCode, options);
+  const result = exactPrefetchedResult(options.prefetchedResult, empCode, options)
+    || await fetchEmployeeCost(empCode, options);
   // Revenue belongs to App Report and must stay useful even while the DataHub
   // cost timeline is unavailable/not configured. In that state enrichment
   // preserves every order-line and leaves percentages/amounts as null (—).
@@ -1166,6 +1308,9 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
   } else if (Array.isArray(options.revenueRows) && Array.isArray(options.catalogRows)) {
     result.payload = enrichWithRevenue(result.payload, options);
   }
+  // This connector runs only after all current financial outputs are final.
+  // Every failure mode leaves exactly two additive display fields null.
+  result.payload = await applyReconciliationShadow(result.payload, empCode, options);
   audit({
     actor: session?.emp_code,
     role: session?.role,
@@ -1234,7 +1379,12 @@ module.exports = {
   calculateDailyAmounts,
   enrichWithRevenue,
   enrichRangePayload,
+  applyReconciliationShadow,
   fetchEmployeeCost,
+  exactPrefetchedResult,
+  verifiedPrefetchEvidence,
+  VERIFIED_PREFETCH_MAX_AGE_MS,
+  backgroundRefreshInFlight,
   fetchRawEmployeeCost,
   rateSnapshot,
   FAST_TIMEOUT_MS,

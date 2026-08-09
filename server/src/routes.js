@@ -201,7 +201,9 @@ function memoGet(key, ttlMs, build, ttlFor, { staleMs = 0 } = {}) {
     hit.refreshing = true;
     Promise.resolve().then(build).then((fresh) => {
       const entry = { t: Date.now(), v: fresh, ttl: typeof ttlFor === 'function' ? (Number(ttlFor(fresh)) || ttlMs) : ttlMs };
-      memo.set(key, entry);
+      // Entry có thể đã bị self-heal invalidate/rebuild trong lúc build nền chạy.
+      // Chỉ publisher sở hữu đúng `hit` hiện tại mới được ghi; không hồi sinh số cũ.
+      memoPublishIfOwner(key, hit, entry);
     }).catch((error) => {
       // Dựng ngầm hỏng thì GIỮ bản cũ và cho phép thử lại — không xoá trắng.
       hit.refreshing = false;
@@ -222,6 +224,26 @@ function memoGet(key, ttlMs, build, ttlFor, { staleMs = 0 } = {}) {
   }
   if (memo.size > 500) memo.delete(memo.keys().next().value);
   return v;
+}
+
+function memoPublishIfOwner(key, owner, entry) {
+  if (memo.get(key) !== owner) return false;
+  memo.set(key, entry);
+  return true;
+}
+
+function memoReplaceResolved(entries, { remove = null } = {}) {
+  const publishedAt = Date.now();
+  const replacementKeys = new Set(entries.map(({ key }) => key));
+  // One synchronous turn: purge every stale view for this range and publish the
+  // healthy base/current view without yielding, so requests cannot observe a gap.
+  if (typeof remove === 'function') {
+    for (const key of memo.keys()) {
+      if (!replacementKeys.has(key) && remove(key)) memo.delete(key);
+    }
+  }
+  for (const { key, value, ttlMs } of entries) memo.set(key, { t: publishedAt, v: value, ttl: ttlMs });
+  while (memo.size > 500) memo.delete(memo.keys().next().value);
 }
 
 function stableCacheValue(value) {
@@ -852,6 +874,8 @@ async function employeeCostPayload(req, {
   includeSalaryAdvance = true,
   rangeOverride = null,
   suppressAudit = false,
+  costFetchOptions = null,
+  prefetchedCostResult = null,
 } = {}) {
   const s = auth.scopeOf(req.session);
   const admin = auth.isAdmin(req.session.role);
@@ -909,8 +933,10 @@ async function employeeCostPayload(req, {
       scope: s,
       requestedEmp,
     }, {
+      ...(costFetchOptions && typeof costFetchOptions === 'object' ? costFetchOptions : {}),
       from: range.from,
       to: range.to,
+      ...(prefetchedCostResult ? { prefetchedResult: prefetchedCostResult } : {}),
       revenueRowsByPeriod,
       catalogRowsByPeriod,
       auditEvent,
@@ -1115,11 +1141,15 @@ function employeeCostTableOptions(req, { paginate = false, allEmployees = false 
 
 async function employeeCostAllPayload(req, {
   paginate = true, auditEvent = 'view_all', suppressAudit = false, includePaymentSchedules = false,
+  sourceReportSink = null, rosterSink = null, prefetchedReportsByEmployee = null, prefetchedCostResultsByEmployee = null,
+  costFetchOptions = null, expectedDataSignature = null, prepareMemoReplace = false,
+  dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null,
 } = {}) {
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
   const roster = employeeCostRosterRows();
+  if (Array.isArray(rosterSink)) { rosterSink.length = 0; rosterSink.push(...roster); }
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   const sharedCatalogRowsByPeriod = {};
   const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
@@ -1139,6 +1169,13 @@ async function employeeCostAllPayload(req, {
       console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
     }
   }));
+  const buildDataSignature = store.employeeCostDataSignature();
+  if (dataSignatureSink && typeof dataSignatureSink === 'object') dataSignatureSink.value = buildDataSignature;
+  if (expectedDataSignature && buildDataSignature !== expectedDataSignature) {
+    throw Object.assign(new Error('Nguồn doanh thu/catalog đổi generation trong chu kỳ self-heal.'), {
+      code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
+    });
+  }
   const buildMerged = async () => {
     // Chụp đúng một snapshot nguồn doanh thu cho ba KPI. Nếu slot đổi trong lúc
     // fan-out 21 NV, toàn bộ KPI phụ thuộc nguồn này phải fail closed thay vì trộn
@@ -1155,15 +1192,31 @@ async function employeeCostAllPayload(req, {
       included: healthSyncEntry.included,
       exceptions: healthSyncEntry.exceptions,
     }) : null;
-    const deadlineAt = Date.now() + EMPLOYEE_COST_ALL_DEADLINE_MS;
-    const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => employeeCostPayload(req, {
-      requestedEmp: employee.emp_code,
-      auditEvent,
-      roster,
-      sharedCatalogRowsByPeriod,
-      includeSalaryAdvance: false,
-      suppressAudit,
-    }), {
+    const deadlineAt = Number(suppliedDeadlineAt) > 0
+      ? Number(suppliedDeadlineAt) : Date.now() + EMPLOYEE_COST_ALL_DEADLINE_MS;
+    const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => {
+      const empCode = String(employee.emp_code || '').trim().toUpperCase();
+      const prefetchedResult = prefetchedCostResultsByEmployee instanceof Map
+        ? prefetchedCostResultsByEmployee.get(empCode) : null;
+      const reusableReport = prefetchedReportsByEmployee instanceof Map
+        ? prefetchedReportsByEmployee.get(empCode) : null;
+      // Every exact report from this same build cycle is reusable. Healthy reports
+      // avoid another fetch; failed reports preserve their explicit unavailable
+      // status instead of being re-routed through a fresh 2s/default request.
+      if (!prefetchedResult && sameCycleEmployeeCostReport(reusableReport, empCode, range)) {
+        return Promise.resolve(reusableReport);
+      }
+      return employeeCostPayload(req, {
+        requestedEmp: employee.emp_code,
+        auditEvent,
+        roster,
+        sharedCatalogRowsByPeriod,
+        includeSalaryAdvance: false,
+        suppressAudit,
+        costFetchOptions: { ...(costFetchOptions || {}), deadlineAt },
+        prefetchedCostResult: prefetchedResult,
+      });
+    }, {
       deadlineAt,
       // NV chưa kịp ⇒ vào đúng luồng "thiếu nguồn" đã có, hiện tên trên băng đỏ.
       // Tuyệt đối KHÔNG trả 0 đồng thay cho "chưa lấy được".
@@ -1182,6 +1235,10 @@ async function employeeCostAllPayload(req, {
         return stub;
       },
     });
+    if (Array.isArray(sourceReportSink)) {
+      sourceReportSink.length = 0;
+      sourceReportSink.push(...reports);
+    }
     const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
     const healthSnapshotAfter = store.activeDataSignature();
     const healthCurrentPeriod = (merged.periods || []).find((item) => String(item.period) === String(range.to)) || null;
@@ -1217,7 +1274,7 @@ async function employeeCostAllPayload(req, {
       await mapWithDeadline(advanceMissing, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => (
         salaryAdvance.safeGetFirstAdvance(range.to, employee.emp_code, salaryAdvance.getFirstAdvance)
       ), {
-        deadlineAt: Date.now() + SALARY_ADVANCE_WARM_DEADLINE_MS,
+        deadlineAt: Math.min(deadlineAt, Date.now() + SALARY_ADVANCE_WARM_DEADLINE_MS),
         // Nạp không kịp thì thôi, KHÔNG chặn bảng đội — NV đó hiện ở phần
         // "chưa dựng được sổ" kèm lý do, đúng luồng sẵn có.
         onSkip: () => null,
@@ -1257,8 +1314,36 @@ async function employeeCostAllPayload(req, {
       merged.paymentTeam = null;
       console.warn('[payment-team] không dựng được bảng toàn đội', { message: error.message });
     }
+    const boundDataSignature = expectedDataSignature || (dataSignatureSink ? buildDataSignature : null);
+    if (boundDataSignature && store.employeeCostDataSignature() !== boundDataSignature) {
+      throw Object.assign(new Error('Nguồn Employee Cost đổi generation trong lúc fan-out.'), {
+        code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
+      });
+    }
     return merged;
   };
+  // Self-heal dựng TÁCH khỏi memo cũ. Chỉ sau khi build hoàn tất + generation còn
+  // nguyên mới trả closure commit đồng bộ để publish bản lành.
+  if (paginate && prepareMemoReplace) {
+    const merged = await buildMerged();
+    const transformed = employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }));
+    const baseKey = employeeCostAllCacheKey(req, 'base');
+    const viewKey = employeeCostAllCacheKey(req, 'view');
+    return {
+      payload: transformed,
+      commit: () => {
+        if (expectedDataSignature && store.employeeCostDataSignature() !== expectedDataSignature) {
+          throw Object.assign(new Error('Nguồn Employee Cost đổi generation trước publish.'), {
+            code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
+          });
+        }
+        memoReplaceResolved([
+          { key: baseKey, value: merged, ttlMs: employeeCostAllDegraded(merged) ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS : EMPLOYEE_COST_ALL_BASE_TTL_MS },
+          { key: viewKey, value: transformed, ttlMs: EMPLOYEE_COST_ALL_VIEW_TTL_MS },
+        ], { remove: (key) => employeeCostAllKeyMatchesRange(key, range) });
+      },
+    };
+  }
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
   // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
   // không chứa actor/session nên mọi admin hợp lệ dùng chung đúng một bản.
@@ -1285,7 +1370,43 @@ function monthInputForKy(ky) {
 const EMPLOYEE_COST_WARM_TIMEOUT_MS = Math.max(
   100, Number(process.env.APP_REPORT_COST_WARM_TIMEOUT_MS || 15000) || 15000,
 );
-const EMPLOYEE_COST_WARM_BACKOFF = Object.freeze([2000, 4000, 8000]);
+// Một probe warm có tối đa đúng 15 giây. Retry 2+4+8 giây cũ làm MỖI NV có thể giữ
+// payload/in-flight hơn một phút rồi nhân với cả roster. Chu kỳ 30 phút kế tiếp tự là
+// retry; trong một chu kỳ chỉ hỏi một lần để có trần thời gian/RSS rõ ràng.
+const EMPLOYEE_COST_WARM_BACKOFF = Object.freeze([]);
+const EMPLOYEE_COST_SELF_HEAL_CONCURRENCY = Math.max(1, Math.min(12,
+  Number(process.env.APP_REPORT_COST_SELF_HEAL_CONCURRENCY || 6) || 6));
+const EMPLOYEE_COST_BACKGROUND_DEADLINE_MS = Math.max(30000, Math.min(180000,
+  Number(process.env.APP_REPORT_COST_BACKGROUND_DEADLINE_MS || 120000) || 120000));
+
+function sameCycleEmployeeCostReport(report, empCode, range) {
+  if (!report || !String(report.sourceOutcome || '')) return false;
+  if (String(report.empCode || '').trim().toUpperCase() !== String(empCode || '').trim().toUpperCase()) return false;
+  if (String(report.from || '') !== String(range?.from || '') || String(report.to || '') !== String(range?.to || '')) return false;
+  const periods = Array.isArray(report.periods) ? report.periods : [];
+  return Array.isArray(range?.months) && range.months.every((month) => periods.some((period) => (
+    String(period?.period || '') === month && Array.isArray(period.columns)
+  )));
+}
+function reusableEmployeeCostReport(report, empCode, range) {
+  return String(report?.sourceOutcome || '') === 'ok' && sameCycleEmployeeCostReport(report, empCode, range)
+    && report.periods.every((period) => period.columns.length > 0);
+}
+
+async function mapBounded(items, limit, worker) {
+  const list = Array.isArray(items) ? items : [];
+  const results = new Array(list.length);
+  let cursor = 0;
+  async function run() {
+    for (;;) {
+      const index = cursor++;
+      if (index >= list.length) return;
+      results[index] = await worker(list[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(list.length, Math.max(1, Number(limit) || 1)) }, run));
+  return results;
+}
 
 // Blocker#1 (bot review): key ALL có chứa view JSON với "from"/"to" (stableCacheValue
 // giữ nguyên value). Khớp ĐÚNG kỳ đang self-heal để KHÔNG xoá cache kỳ khác oan.
@@ -1330,47 +1451,137 @@ function collectUnavailableEmployees(payload = {}) {
 // nguồn tươi; NV nào hồi (outcome==='ok') → invalidate cache ALL → rebuild sạch.
 // FAIL-CLOSED: chỉ coi là hồi khi nguồn trả 'ok'; lỗi/timeout/scope_mismatch ⇒ giữ
 // tạm tính, KHÔNG suy số. Không có NV hồi → trả nguyên payload cũ (0 tác dụng phụ).
-async function selfHealUnavailableCostSources({ payload, probe, invalidate, rebuild }) {
+async function selfHealUnavailableCostSources({
+  payload, probe, invalidate, rebuild, probeEmployees = null,
+  probeConcurrency = EMPLOYEE_COST_SELF_HEAL_CONCURRENCY,
+  acceptProbeResult = (result) => result?.outcome === 'ok',
+  requireAllProbesForRebuild = false,
+  canRebuild = () => true,
+}) {
   const unavailable = collectUnavailableEmployees(payload);
   if (!unavailable.length) return { payload, unavailable: [], recovered: [] };
-  const recovered = [];
-  for (const emp of unavailable) {
-    let outcome = 'probe_error';
-    try { const r = await probe(emp); outcome = r && r.outcome; } catch { outcome = 'probe_error'; }
-    if (outcome === 'ok') recovered.push(emp);
+  const targets = [...new Set((Array.isArray(probeEmployees) ? probeEmployees : unavailable)
+    .map((emp) => String(emp || '').trim().toUpperCase()).filter(Boolean))].sort();
+  const verifiedResults = new Map();
+  await mapBounded(targets, probeConcurrency, async (emp) => {
+    try {
+      const result = await probe(emp);
+      if (acceptProbeResult(result, emp) === true) verifiedResults.set(emp, result);
+    } catch { /* probe lỗi giữ fail-closed */ }
+  });
+  const recovered = unavailable.filter((emp) => verifiedResults.has(emp));
+  if (!recovered.length
+    || (requireAllProbesForRebuild && verifiedResults.size !== targets.length)
+    || canRebuild() !== true) {
+    verifiedResults.clear();
+    return { payload, unavailable, recovered: [] };
   }
-  if (!recovered.length) return { payload, unavailable, recovered: [] };
-  invalidate();
-  const fresh = await rebuild();
-  return { payload: fresh, unavailable, recovered };
+  try {
+    const prepared = await rebuild(verifiedResults);
+    if (canRebuild() !== true) return { payload, unavailable, recovered: [] };
+    const fresh = prepared && typeof prepared.commit === 'function' ? prepared.payload : prepared;
+    // Prepared replacement publishes over the old entries in one synchronous turn.
+    // A failed build/drift therefore leaves the prior cache untouched.
+    if (prepared && typeof prepared.commit === 'function') prepared.commit();
+    else if (typeof invalidate === 'function') invalidate(); // legacy pure-test caller only
+    return { payload: fresh, unavailable, recovered };
+  } catch {
+    // Build/commit/drift failure is not recovery. The old memo/payload remains the
+    // only publishable truth and the next warm cycle may retry.
+    return { payload, unavailable, recovered: [] };
+  } finally {
+    // Bỏ tham chiếu raw payload lớn ngay sau rebuild; không biến thành cache toàn cục.
+    verifiedResults.clear();
+  }
 }
 
+let employeeCostWarmActive = false;
 async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
   const month = monthInputForKy(ky);
   if (!month) return false;
+  // Không queue: một warm toàn cục tối đa. Event khác trong lúc đang chạy bỏ qua và
+  // chu kỳ 30 phút/revenue event sau sẽ thử lại; RSS không nhân theo số kỳ đồng thời.
+  if (employeeCostWarmActive) return false;
+  employeeCostWarmActive = true;
+  try {
   const startedAt = Date.now();
+  // User requests retain FAST_TIMEOUT_MS=2s when a snapshot exists. Detached warm
+  // gets a wider but globally bounded budget because large DataHub payloads can
+  // legitimately need 15s; it must not restart that budget per employee/stage.
+  const deadlineAt = startedAt + EMPLOYEE_COST_BACKGROUND_DEADLINE_MS;
   const warmReq = {
     session: { emp_code: 'CACHE_WARMER', role: 'admin' },
     query: { emp: 'ALL', from: month, to: month, page: '1', pageSize: '20', sortDir: 'asc' },
   };
-  let payload = await employeeCostAllPayload(warmReq, { paginate: true, auditEvent: `warm_all:${reason}`, suppressAudit: true });
+  const sourceReports = [];
+  const warmRoster = [];
+  const sourceGeneration = {};
+  let payload = await employeeCostAllPayload(warmReq, {
+    paginate: true, auditEvent: `warm_all:${reason}`, suppressAudit: true,
+    sourceReportSink: sourceReports,
+    rosterSink: warmRoster,
+    dataSignatureSink: sourceGeneration,
+    // Dedicated warm sẽ tự probe bounded ở dưới; không phóng thêm 21 background
+    // refresh sau fast-timeout rồi giữ nhiều payload lớn sống đồng thời.
+    costFetchOptions: { backgroundRefresh: false },
+    deadlineAt,
+  });
+
+  // Bind recovery to the complete Employee Cost generation only after catalog
+  // stabilization/initial read; activeDataSignature alone omits policies/LKG/VAT.
+  const sourceDataSignature = sourceGeneration.value;
+  if (!sourceDataSignature || store.employeeCostDataSignature() !== sourceDataSignature) {
+    throw Object.assign(new Error('Nguồn Employee Cost đổi generation sau lần dựng đầu.'), {
+      code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
+    });
+  }
 
   // SELF-HEAL: nếu có NV nguồn-fail, re-probe riêng bằng nguồn tươi (bỏ qua cache
   // ALL 6h). NV hồi → xoá cache ALL, rebuild sạch NGAY → UI hết "tạm tính" và
   // recovery Telegram bắn kịp, không kẹt tới 6h. Lỗi self-heal KHÔNG được hỏng warm.
   try {
     const range = employeeCost.parseMonthRange({ from: month, to: month });
+    const reusableReports = new Map(sourceReports
+      .filter((report) => sameCycleEmployeeCostReport(report, report?.empCode, range))
+      .map((report) => [String(report.empCode).toUpperCase(), report]));
+    // Nếu initial payload đến từ memo hit thì sourceReportSink rỗng. Khi đó probe cả
+    // roster để rebuild vẫn có đủ 21 kết quả cùng chu kỳ, không để 4 NV từng `ok` bị
+    // gọi lại fast-path rồi vô tình chuyển thành unavailable.
+    const probeEmployees = sourceReports.length
+      ? null
+      : warmRoster.map((employee) => employee.emp_code);
     // Single-flight theo KỲ: warm + revenue-refresh chồng nhau chỉ chạy 1 chu kỳ
     // self-heal cho cùng kỳ (Blocker#2). Invalidate CHỈ kỳ này (Blocker#1).
-    const healed = await singleFlight(employeeCostSelfHealInFlight, ky, () => selfHealUnavailableCostSources({
+    let healed;
+    try {
+      healed = await singleFlight(employeeCostSelfHealInFlight, ky, () => selfHealUnavailableCostSources({
       payload,
-      probe: (emp) => employeeCost.fetchEmployeeCost(emp, {
-        from: range.from, to: range.to,
-        timeoutMs: EMPLOYEE_COST_WARM_TIMEOUT_MS, backoffMs: EMPLOYEE_COST_WARM_BACKOFF,
-      }),
+      probeEmployees,
+      requireAllProbesForRebuild: sourceReports.length === 0,
+      canRebuild: () => store.employeeCostDataSignature() === sourceDataSignature,
+      acceptProbeResult: (evidence, emp) => !!employeeCost.exactPrefetchedResult(evidence, emp, range),
+      probe: async (emp) => {
+        const result = await employeeCost.fetchEmployeeCost(emp, {
+          from: range.from, to: range.to,
+          timeoutMs: EMPLOYEE_COST_WARM_TIMEOUT_MS, deadlineAt, backoffMs: EMPLOYEE_COST_WARM_BACKOFF,
+          backgroundRefresh: false,
+        });
+        return employeeCost.verifiedPrefetchEvidence(result, emp, { ...range, verifiedAt: Date.now() });
+      },
       invalidate: () => invalidateEmployeeCostAll(range),
-      rebuild: () => employeeCostAllPayload(warmReq, { paginate: true, auditEvent: 'warm_all:selfheal', suppressAudit: true }),
-    }));
+      rebuild: (verifiedResults) => employeeCostAllPayload(warmReq, {
+        paginate: true, auditEvent: 'warm_all:selfheal', suppressAudit: true,
+        prefetchedReportsByEmployee: reusableReports,
+        prefetchedCostResultsByEmployee: verifiedResults,
+        costFetchOptions: { backgroundRefresh: false },
+        expectedDataSignature: sourceDataSignature,
+        prepareMemoReplace: true,
+        deadlineAt,
+      }),
+      }));
+    } finally {
+      reusableReports.clear();
+    }
     payload = healed.payload;
     if (healed.recovered.length) {
       console.log('[employee-cost] self-heal', { ky, recovered: healed.recovered, wasUnavailable: healed.unavailable });
@@ -1386,6 +1597,9 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
     console.warn('[employee-cost] alert check failed', { ky, message: error.message });
   });
   return true;
+  } finally {
+    employeeCostWarmActive = false;
+  }
 }
 
 function scheduleEmployeeCostAllWarm(ky, reason) {
@@ -1433,6 +1647,14 @@ router.collectUnavailableEmployees = collectUnavailableEmployees;
 router.invalidateEmployeeCostAll = invalidateEmployeeCostAll;
 router.employeeCostAllKeyMatchesRange = employeeCostAllKeyMatchesRange;
 router.singleFlight = singleFlight;
+router.mapBounded = mapBounded;
+router.reusableEmployeeCostReport = reusableEmployeeCostReport;
+router.sameCycleEmployeeCostReport = sameCycleEmployeeCostReport;
+router.employeeCostWarmIsActive = () => employeeCostWarmActive;
+router.employeeCostRosterRows = employeeCostRosterRows;
+router.memoPublishIfOwner = memoPublishIfOwner;
+router.memoReplaceResolved = memoReplaceResolved;
+router.memoPeek = (key) => memo.get(key);
 // Hook nội bộ cho HTTP integration test của preview một lần; không phải route API.
 router.penaltyPolicyPreviews = penaltyPolicyPreviews;
 
