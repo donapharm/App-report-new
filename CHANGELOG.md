@@ -1,3 +1,27 @@
+### 2026-08-09 09:44 (giờ VN) — 📏 Khoá bề rộng cột bằng `table-layout:fixed` + thêm lựa chọn "Tất cả" dòng
+
+CEO chụp màn lần 2: bề rộng vẫn sai — hoạt chất còn rộng quá, mã đơn vị chật, đơn giá dư.
+
+**Vì sao bản vá trước chưa ăn:** để `table-layout:auto`, thuộc tính `max-width` trên ô bảng **chỉ là GỢI Ý** — trình duyệt vẫn dồn chỗ thừa cho cột có chữ dài nhất. Nay chuyển sang **`table-layout:fixed`**, ở chế độ này `width` được tôn trọng đúng như khai báo.
+
+**Bề rộng theo LOẠI NỘI DUNG** (class, không theo vị trí — số cột đổi theo quyền từng người):
+| Loại cột | Rộng | Căn cứ |
+|---|---|---|
+| Chữ dài (tên thuốc · hoạt chất) | **230px** | đủ đọc, tràn thì xuống dòng rồi cắt |
+| Mã đơn vị | **160px** | CEO báo chật — "001.BVĐK Đồng Nai" |
+| Đơn giá trúng thầu | **104px** | CEO đo giúp: tối đa 7 chữ số + "đ" |
+| Số/tiền/% | **96px** | vừa tiêu đề "C36 (%)", không xuống dòng |
+| Cột đầu (Nhân viên) | **112px** | mã + tên xuống dòng |
+| Còn lại | **90px** | |
+
+Tổng 2.330px (bảng CEO) · 2.218px (bảng NV) rồi cuộn ngang — khớp đúng `min-width` khai báo.
+
+**Thêm lựa chọn "Tất cả"** vào ô Dòng/ô (giờ là **1 · 2 · 3 · Tất cả**) — chọn Tất cả thì bỏ cắt dòng, ô cao bao nhiêu cũng hiện đủ.
+
+Server 1043/1050 (7 fail cố hữu) · web 294/294 · build sạch.
+
+---
+
 ### 2026-08-09 09:14 (giờ VN) — 📐 Nguyên tắc bề rộng cột + chọn 1/2/3 dòng/ô; vá hồi quy `max-content`
 
 CEO chụp màn 09/08, bốn điểm:

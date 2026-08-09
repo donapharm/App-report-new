@@ -14,8 +14,10 @@ test('KHÔNG khai bề rộng theo VỊ TRÍ cột cho bảng danh mục (số c
   assert.deepEqual(employeePositional, [], 'bảng NV cũng vậy — nó lệch một cột so với bảng CEO');
 });
 
-test('bảng có bề rộng nền cố định rồi cuộn — không ép vừa 100% màn, cũng không nở theo chữ', () => {
-  assert.match(css, /\.catalog-table-products \{ min-width:1400px; table-layout:auto; \}/);
+test('bảng dùng table-layout:FIXED — auto + max-width không khoá được bề rộng', () => {
+  // CEO chụp màn lần 2 (09/08): để `auto`, `max-width` chỉ là gợi ý, trình duyệt vẫn
+  // dồn chỗ thừa cho cột chữ dài nhất nên ô "Hoạt chất" vẫn kéo gần hết màn.
+  assert.match(css, /\.catalog-table-products \{ min-width:2330px; table-layout:fixed; \}/);
   // Ép width:100% + min-width:0 chính là thứ bóp dẹp cột cuối trên laptop.
   assert.doesNotMatch(css, /\.catalog-table-products \{ width:100%; min-width:0; \}/);
 });
@@ -40,11 +42,17 @@ test('KHÔNG dùng max-content — chính nó làm ô hoạt chất kéo dài g�
   assert.doesNotMatch(css, /\.catalog-table-products[^{]*\{[^}]*min-width:max-content/);
 });
 
-test('bề rộng gắn theo LOẠI NỘI DUNG bằng class, mỗi loại có min VÀ max', () => {
+test('bề rộng gắn theo LOẠI NỘI DUNG bằng class — mỗi loại một con số dứt khoát', () => {
   // CEO: "các cột nên có nguyên tắc về độ rộng để tránh cột dư quá, cột thiếu quá".
-  assert.match(css, /\.catalog-table-products th\.catalog-col-text[^{]*\{ *\n? *min-width:150px; max-width:260px/);
-  assert.match(css, /th\.catalog-money[^{]*\{\s*\n?\s*min-width:82px; max-width:120px; white-space:nowrap/);
-  assert.match(css, /\.catalog-table-products th, \.catalog-table-products td \{ min-width:64px; max-width:150px; \}/);
+  assert.match(css, /th\.catalog-col-text, \.catalog-table-products td\.catalog-col-text \{ width:230px; \}/);
+  assert.match(css, /th\.catalog-col-unit, \.catalog-table-products td\.catalog-col-unit \{ width:160px; \}/, 'mã đơn vị bị chật');
+  assert.match(css, /th\.catalog-col-price, \.catalog-table-products td\.catalog-col-price \{ width:104px; \}/, 'đơn giá: 7 chữ số + đ');
+  assert.match(css, /th\.catalog-money, \.catalog-table-products td\.catalog-money \{ width:96px; white-space:nowrap; \}/);
+});
+
+test('"Tất cả" (0) bỏ cắt dòng — CEO chọn 1/2/3/Tất cả', () => {
+  assert.match(css, /--catalog-cell-lines: 0"\] \.catalog-table-products td\.catalog-col-text > \* \{\s*\n?\s*display:block; -webkit-line-clamp:none/);
+  assert.match(page, /<option value=\{0\}>Tất cả<\/option>/);
 });
 
 test('cột chữ dài tràn thì XUỐNG DÒNG rồi cắt, không kéo ngang bảng', () => {

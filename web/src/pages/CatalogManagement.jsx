@@ -102,7 +102,7 @@ function CatalogTableCard({ id, tableId, children, cellLines = 3 }) {
 const CELL_LINES_KEY = 'rpt_catalog_cell_lines';
 function useCellLines() {
   const [lines, setLines] = useState(() => {
-    try { const v = Number(localStorage.getItem(CELL_LINES_KEY)); return [1, 2, 3].includes(v) ? v : 3; } catch { return 3; }
+    try { const v = Number(localStorage.getItem(CELL_LINES_KEY)); return [0, 1, 2, 3].includes(v) ? v : 3; } catch { return 3; }
   });
   useEffect(() => { try { localStorage.setItem(CELL_LINES_KEY, String(lines)); } catch { /* ignore */ } }, [lines]);
   return [lines, setLines];
@@ -114,6 +114,7 @@ function CellLinesPicker({ lines, onChange }) {
       <option value={1}>1 dòng</option>
       <option value={2}>2 dòng</option>
       <option value={3}>3 dòng</option>
+      <option value={0}>Tất cả</option>
     </select>
   </label>;
 }
@@ -198,7 +199,7 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
     </div>
     <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog" cellLines={cellLines}>
       <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee"><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
         const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
         const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
         const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -206,13 +207,13 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
         return <tr key={r.id}>
           <PreviewCell value={routeOf(r) || '—'} />
           <PreviewCell value={r.contractor_code || '—'} />
-          <PreviewCell value={r.unit_code || '—'} />
+          <PreviewCell className="catalog-col-unit" value={r.unit_code || '—'} />
           <PreviewCell value={r.qlnb_code || '—'} />
           <PreviewCell value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
           <PreviewCell className="catalog-col-text" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
           <PreviewCell className="catalog-col-text" value={ingredientText}><span title={ingredientText}>{ingredientText}</span></PreviewCell>
           <PreviewCell value={r.uom || '—'} />
-          <td className="catalog-money" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
+          <td className="catalog-money catalog-col-price" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
           <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
           <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
           {costColumns.map((c) => <CostRateCell key={c.key} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}
@@ -884,7 +885,7 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
       </div>
       <CatalogTableCard id="catalog-table-top" tableId="admin-catalog" cellLines={cellLines}>
         <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th>Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products"><thead><tr><th>Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
           const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
           const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
           const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -893,13 +894,13 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
             <td data-sensitive=""><b>{r.emp_code}</b><small>{r.emp_name}</small></td>
             <PreviewCell value={routeOf(r) || '—'} />
             <PreviewCell value={r.contractor_code || '—'} />
-            <PreviewCell value={r.unit_code || '—'} />
+            <PreviewCell className="catalog-col-unit" value={r.unit_code || '—'} />
             <PreviewCell value={r.qlnb_code || '—'} />
           <PreviewCell value={r.c10 || '—'}><span className={r.c10 ? 'catalog-c10' : 'catalog-c10 is-missing'} title={r.c10 ? `Nhóm ưu tiên C10: ${r.c10}` : 'Chưa có C10 — cần bổ sung để tính thưởng P2'}>{r.c10 || '—'}</span></PreviewCell>
             <PreviewCell className="catalog-col-text" value={r.product_name || '—'}><DrugName row={r} counts={qlnbCounts} /></PreviewCell>
             <PreviewCell className="catalog-col-text" value={ingredientText}><span title={ingredientText}>{ingredientText}</span></PreviewCell>
             <PreviewCell value={r.uom || '—'} />
-            <td className="catalog-money" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
+            <td className="catalog-money catalog-col-price" data-sensitive=""><b>{moneyText(r.bid_price)}</b></td>
             <td className="catalog-money" data-sensitive="">{quantityText(r.cst_initial)}</td>
             <td className={`catalog-money catalog-cst${pctClass}`} data-sensitive=""><b>{quantityText(r.cst_remaining)}</b>{pct != null && <small>{pct.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</small>}</td>
             {costColumns.map((c) => <CostRateCell key={c.key} value={rateOf(r.unit_code, r.qlnb_code, c.key)} />)}

@@ -1492,27 +1492,36 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
    (0–7 cột %), và bảng CEO có thêm cột "Nhân viên" nên lệch một nhịp so với bảng NV.
    Nay để trình duyệt tự chia theo nội dung; khung bảng đã có thanh kéo ngang riêng. */
 /* ‼ NGUYÊN TẮC BỀ RỘNG CỘT (CEO chốt 09/08: "cột thì dư quá, cột thì thiếu quá").
-   Ba loại cột, mỗi loại một khoảng rộng — KHÔNG đánh số theo vị trí (số cột đổi
-   theo quyền từng người), mà gắn theo LOẠI NỘI DUNG bằng class:
-     · cột chữ dài  (tên thuốc, hoạt chất): 150–260px, tràn thì XUỐNG DÒNG rồi cắt
-     · cột số/tiền/%                       : 82–120px, không xuống dòng
-     · cột mã/nhãn ngắn                    : 64–150px
-   Bản trước dùng `min-width:max-content` ⇒ bảng nở bằng dòng chữ DÀI NHẤT, ô hoạt
-   chất kéo ngang gần hết màn (CEO chụp màn 09/08). Bỏ hẳn max-content. */
-.catalog-table-products { min-width:1400px; table-layout:auto; }
-.catalog-table-products th, .catalog-table-products td { min-width:64px; max-width:150px; }
-.catalog-table-products th.catalog-money, .catalog-table-products td.catalog-money {
-  min-width:82px; max-width:120px; white-space:nowrap;
-}
-.catalog-table-products th.catalog-col-text, .catalog-table-products td.catalog-col-text {
-  min-width:150px; max-width:260px;
-}
+ *
+ * PHẢI dùng `table-layout:fixed`. Bản trước để `auto` + `max-width` trên ô — nhưng
+ * ở chế độ auto, `max-width` chỉ là GỢI Ý: trình duyệt vẫn dồn chỗ thừa cho cột có
+ * chữ dài nhất, nên ô "Hoạt chất" vẫn kéo gần hết màn (CEO chụp màn lần 2, 09/08).
+ * Ở chế độ fixed, `width` được tôn trọng đúng như khai báo.
+ *
+ * Bề rộng gắn theo LOẠI NỘI DUNG bằng class — KHÔNG theo vị trí cột, vì số cột đổi
+ * theo quyền từng người (0–7 cột %) và bảng CEO lệch một cột so với bảng NV.
+ */
+.catalog-table-products { min-width:2330px; table-layout:fixed; }
+.catalog-table-products th, .catalog-table-products td { width:90px; }
+/* Chữ dài: đủ rộng để đọc, tràn thì xuống dòng rồi cắt theo số dòng CEO chọn. */
+.catalog-table-products th.catalog-col-text, .catalog-table-products td.catalog-col-text { width:230px; }
+/* Mã đơn vị: "001.BVĐK Đồng Nai" — CEO báo hơi chật. */
+.catalog-table-products th.catalog-col-unit, .catalog-table-products td.catalog-col-unit { width:160px; }
+/* Đơn giá trúng thầu: tối đa 7 chữ số + "đ" ⇒ "9.999.999 đ" là đủ (CEO đo giúp). */
+.catalog-table-products th.catalog-col-price, .catalog-table-products td.catalog-col-price { width:104px; }
+/* Số/tiền/%: không xuống dòng, vừa tiêu đề "C36 (%)". */
+.catalog-table-products th.catalog-money, .catalog-table-products td.catalog-money { width:96px; white-space:nowrap; }
+.catalog-table-products th:first-child, .catalog-table-products td:first-child { width:112px; }
 
-/* Số dòng tối đa trong MỘT ô — CEO chọn 1/2/3 ở thanh điều khiển. */
+/* Số dòng tối đa trong MỘT ô — CEO chọn 1/2/3/Tất cả ở thanh điều khiển.
+   0 = Tất cả ⇒ bỏ cắt dòng, ô cao bao nhiêu cũng được. */
 .catalog-table-products td.catalog-col-text > * {
   display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden;
   -webkit-line-clamp:var(--catalog-cell-lines,3); line-clamp:var(--catalog-cell-lines,3);
   overflow-wrap:anywhere;
+}
+.catalog-table-card[style*="--catalog-cell-lines: 0"] .catalog-table-products td.catalog-col-text > * {
+  display:block; -webkit-line-clamp:none; line-clamp:none; overflow:visible;
 }
 .catalog-table-products th { white-space:normal; line-height:1.15; }
 .catalog-table-products thead th {
@@ -1636,7 +1645,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-filter-row-employee { grid-template-columns:minmax(260px,1fr) minmax(125px,155px) minmax(95px,115px) minmax(180px,250px) auto; }
 /* Bảng danh mục CỦA TÔI: cũng bỏ bề rộng theo vị trí — cột % chi phí chen vào
    giữa "CST còn lại" và "Từ kỳ" nên mọi số thứ tự sau đó đều lệch. */
-.catalog-table-products.catalog-table-employee { min-width:1330px; }
+/* Bảng NV thiếu cột 'Nhân viên' ⇒ hẹp hơn đúng một cột. */
+.catalog-table-products.catalog-table-employee { min-width:2218px; }
 @media (min-width:900px) and (max-width:1250px) {
   .catalog-filter-row { grid-template-columns:minmax(220px,1fr) repeat(3,minmax(105px,140px)) minmax(180px,1fr); }
   .catalog-filter-row-employee { grid-template-columns:minmax(220px,1fr) minmax(120px,150px) minmax(105px,140px) minmax(180px,1fr); }
