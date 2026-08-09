@@ -1,3 +1,28 @@
+### 2026-08-09 18:40 (giờ VN) — ‼ SỬA SAI NẶNG: C44 tính trên TIỀN của C43, không phải trên doanh thu
+
+CEO bắt lỗi: *"cột C44 chỉ lấy phần tiền của cột C43 để tính × 5%. Ví dụ cột C43 thành tiền là 100.000đ thì C44 = 100.000 × 5%. Chứ không phải cột C44 lấy doanh thu × 5% là sai bét."*
+
+**CEO đúng, và lỗi này nặng.** Luật cột phái sinh **đã có sẵn** trong hệ thống (`config/employee_cost_templates.json` → `derivedBases: { c44: 'c43' }`), và màn "Chi phí của tôi" vẫn dùng đúng suốt từ đầu. Khi dựng menu Tổng hợp mới, Claude nhân **mọi** cột với doanh thu cho nhanh mà không tra lại luật cũ ⇒ **C44 bị thổi lên gấp nhiều lần**.
+
+Đo bằng chính ví dụ CEO: doanh thu 1.000.000đ · C43 10% ⇒ 100.000đ · C44 5%.
+- Đúng: `100.000 × 5% = 5.000đ`
+- Bản sai: `1.000.000 × 5% = 50.000đ` — **gấp 10 lần**
+
+Con số này nếu không bị bắt sẽ đi thẳng vào file Excel gửi kế toán.
+
+**Đã sửa:** lấy `derivedBases` **từ template**, tính tiền mọi cột theo thứ tự C33→C46 (cột gốc luôn trước cột phái sinh), cột phái sinh dùng **tiền cột gốc** làm nền.
+
+Ba chốt chống tái diễn:
+1. **Luật lấy từ template, có test CẤM viết cứng** cặp C44→C43 vào file này — sau này đổi luật một chỗ là mọi màn theo.
+2. Chọn hiển thị **mỗi C44 mà bỏ C43** vẫn đúng — cột gốc được tính ngầm làm nền.
+3. **Thiếu % của C43 ⇒ C44 cũng "—"** và bị đếm thiếu, không âm thầm rơi về lấy doanh thu làm nền.
+
+Test cũ đang khoá **đúng công thức sai** nên đã viết lại theo luật đúng (`c44MoneyOf`/`spentC47Of`/`spentAllOf` tính từ RATES thay vì hằng số cứng). C47 **không đổi** vì C44 vốn nằm ngoài công thức đó.
+
+Server 1105/1112 (7 fail cố hữu) · +4 test khoá luật phái sinh.
+
+---
+
 ### 2026-08-09 18:45 (giờ VN) — ‼ SỬA SAI NẶNG: C44 tính trên TIỀN C43, không phải trên doanh thu
 
 CEO bắt lỗi: *"cột C44 chỉ lấy phần tiền của cột C43 để tính × 5%. Ví dụ cột C43 thành tiền là 100.000đ thì C44 = 100.000 × 5%. Chứ không phải cột C44 lấy doanh thu × 5% là sai bét."*
