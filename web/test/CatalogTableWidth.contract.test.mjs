@@ -20,7 +20,7 @@ test('bảng dùng table-layout:FIXED — auto + max-width không khoá được
   // dồn chỗ thừa cho cột chữ dài nhất nên ô "Hoạt chất" vẫn kéo gần hết màn.
   assert.match(css, /\.catalog-table-products \{ min-width:2330px; table-layout:fixed; \}/);
   // Ép width:100% + min-width:0 chính là thứ bóp dẹp cột cuối trên laptop.
-  assert.doesNotMatch(withoutComments, /\.catalog-table-products\s*\{[^}]*width\s*:\s*100%[^}]*min-width\s*:\s*0/);
+  assert.doesNotMatch(css, /\.catalog-table-products\s*\{[^}]*width\s*:\s*100%[^}]*min-width\s*:\s*0/);
 });
 
 test('mobile dùng data-label theo ngữ nghĩa, không suy nhãn hoặc độ rộng bằng vị trí cột', () => {
@@ -39,8 +39,8 @@ test('admin và employee giữ đúng nhãn khi có 0 hoặc nhiều cột % đ�
   for (const label of ['C10', 'Tên thuốc', 'Hoạt chất + Hàm lượng', 'Từ kỳ', 'Đến kỳ']) {
     assert.equal(page.split(`label="${label}"`).length - 1, 2, `${label} phải có nhãn riêng ở admin và employee`);
   }
-  assert.match(page, /className="catalog-mobile-wide" value=\{r\.unit_code/);
-  assert.match(page, /className="catalog-mobile-wide" value=\{ingredientText\}/);
+  assert.match(page, /className="[^"]*catalog-mobile-wide[^"]*" value=\{r\.unit_code/);
+  assert.match(page, /className="[^"]*catalog-mobile-wide[^"]*" value=\{ingredientText\}/);
   assert.match(css, /\.catalog-table-products td\.catalog-mobile-wide \{ grid-column:1\/-1; \}/);
 });
 
@@ -55,8 +55,6 @@ test('mọi cỡ màn desktop đều có thanh kéo ngang — cấm cắt cụt 
 });
 
 /* ── Nguyên tắc bề rộng cột + số dòng/ô (CEO chốt 09/08) ──────────────────── */
-
-const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', import.meta.url), 'utf8');
 
 test('KHÔNG dùng max-content — chính nó làm ô hoạt chất kéo dài gần hết màn', () => {
   // CEO chụp màn 09/08: cột "Hoạt chất + Hàm lượng" chiếm gần hết chiều ngang vì
@@ -82,7 +80,7 @@ test('cột chữ dài tràn thì XUỐNG DÒNG rồi cắt, không kéo ngang b
   assert.match(css, /overflow-wrap:anywhere/);
   // Hai cột chữ dài phải được gắn class ở CẢ th lẫn td, CẢ hai bảng.
   assert.match(page, /<th className="catalog-col-text">Tên thuốc<\/th><th className="catalog-col-text">Hoạt chất \+ Hàm lượng<\/th>/);
-  assert.match(page, /<PreviewCell className="catalog-col-text" value=\{ingredientText\}/);
+  assert.match(page, /<PreviewCell[^>]*className="[^"]*catalog-col-text[^"]*"[^>]*value=\{ingredientText\}/);
 });
 
 test('CEO chọn được 1/2/3 dòng trong một ô, và app nhớ lựa chọn', () => {
