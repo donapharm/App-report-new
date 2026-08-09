@@ -220,7 +220,9 @@ function useCostRates(period) {
   const [state, setState] = useState({ columns: [], rateOf: () => null, stale: false, note: '' });
   useEffect(() => {
     let alive = true;
-    api.catalogCostRates(period ? { period } : {})
+    // ‼ `pairs: 1` = "màn này cần SỐ, không chỉ tên cột". Menu phân quyền gọi cùng
+    // endpoint nhưng KHÔNG gửi cờ này nên không phải tải hàng vạn cặp cho nặng.
+    api.catalogCostRates(period ? { period, pairs: 1 } : { pairs: 1 })
       .then((data) => {
         if (!alive) return;
         setState({

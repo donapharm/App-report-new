@@ -36,7 +36,9 @@ test('DANH SÁCH CỘT lấy từ hợp đồng tại máy, KHÔNG hỏi DataHub
 
 test('CEO mở menu vẫn nhận đủ cột để cấp quyền dù nguồn chi phí đang chết', () => {
   assert.match(BODY, /if \(!empCode \|\| empCode === 'CEO'\)/);
-  assert.match(BODY, /reason: 'NO_EMPLOYEE_SCOPE'/);
+  // Menu phân quyền (không gửi pairs=1) vẫn thoát sớm với đúng lý do cũ; nhánh
+  // bảng danh mục của CEO thì đọc kho cục bộ — xem catalogCostRatesTeamView.test.js.
+  assert.match(BODY, /'LOCAL_RATES_EMPTY' : 'NO_EMPLOYEE_SCOPE'/);
   const guardAt = BODY.indexOf("empCode === 'CEO'");
   const fetchAt = BODY.indexOf('employeeCost.getForSession');
   assert.ok(guardAt >= 0 && fetchAt > guardAt, 'phải thoát trước khi gọi nguồn cho mã không có sổ chi phí');
@@ -58,9 +60,14 @@ test('thiếu % ⇒ null, TUYỆT ĐỐI không suy 0%', () => {
 });
 
 test('route KHÔNG tự tính lại %; cờ nguồn kẹt được truyền thẳng ra màn hình', () => {
-  // Không có phép nhân/chia nào trên giá trị % — số là của DataHub.
-  const rateBlock = BODY.slice(BODY.indexOf('const rates = {}'), BODY.indexOf('pairs.push'));
-  assert.doesNotMatch(rateBlock, /[*/]\s*\d|\d\s*[*/]/, 'không được nhân/chia lại tỷ lệ');
+  // Không có phép nhân/chia nào trên GIÁ TRỊ %. Soi đúng hai dòng gán tỷ lệ (một
+  // của nhánh CEO đọc kho, một của nhánh NV), không soi cả vùng — vùng rộng nuốt
+  // luôn chữ "C38/C42" trong chú thích rồi báo động giả.
+  const assignments = BODY.match(/rates\[column\.key\] = [^;]+;/g) || [];
+  assert.ok(assignments.length >= 2, 'phải có cả nhánh CEO lẫn nhánh NV');
+  for (const line of assignments) {
+    assert.doesNotMatch(line, /[*/]\s*\d|\d\s*[*/]/, `không được nhân/chia lại tỷ lệ: ${line}`);
+  }
   assert.match(BODY, /rateStale/);
 });
 

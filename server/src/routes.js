@@ -3238,6 +3238,40 @@ router.put('/catalog-management/cost-columns/grants/:empCode', auth.requireAuth,
  *   ③ đơn vị: chỉ đơn vị trong phạm vi CEO cấp.
  * Số % vẫn do DataHub tính — route này KHÔNG tính lại, không suy, thiếu thì trả null.
  */
+/* ═══════════════════════════════════════════════════════════════════════════════
+   % CỦA TOÀN ĐỘI ĐỌC TỪ KHO CỤC BỘ — dành cho CEO xem bảng danh mục.
+
+   ‼ Vì sao phải có: đường % của bảng danh mục gọi `employeeCost.getForSession` theo
+   MÃ NGƯỜI ĐANG ĐĂNG NHẬP. CEO là tài khoản quản trị, KHÔNG có sổ chi phí riêng, nên
+   `resolveScopedEmployee` trả 'CEO'/'' ⇒ route thoát sớm với `pairs: []`. Kết quả:
+   **đúng người được phép xem tất cả lại là người duy nhất thấy toàn dấu "—"** — CEO
+   bắt được 09/08 ngay sau khi bấm đồng bộ thành công 21/21 NV · 27.719 cặp.
+
+   Đọc từ kho cục bộ (thứ nút "Đồng bộ % chi phí" vừa ghi) cũng đúng lời hứa của
+   SPEC_COST_RATES_LOCAL_SYNC: *"DataHub chết vẫn xem được"*.
+
+   Hai NV cùng một cặp mà khai % khác nhau ⇒ trả null (fail-closed) chứ KHÔNG lấy bừa
+   một bên — cùng luật với menu Thành tiền.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+function localTeamRatePairs(month, columnKeys) {
+  const entry = persist.load(costRatesSync.FILE, {})[String(month)];
+  if (!entry) return null;
+  const merged = new Map();
+  for (const empCode of Object.keys(entry.employees || {})) {
+    for (const [key, rate] of costAmounts.pairRates(entry.employees[empCode], columnKeys)) {
+      const current = merged.get(key);
+      if (!current) { merged.set(key, { percents: { ...rate.percents }, conflict: rate.conflict }); continue; }
+      if (rate.conflict) current.conflict = true;
+      for (const columnKey of columnKeys) {
+        const incoming = rate.percents[columnKey];
+        if (incoming == null) continue;
+        if (current.percents[columnKey] == null) { current.percents[columnKey] = incoming; continue; }
+        if (current.percents[columnKey] !== incoming) current.percents[columnKey] = null;
+      }
+    }
+  }
+  return merged;
+}
 router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const uiPeriod = catalogManagement.toUiPeriod(catalogManagement.toHubPeriod(req.query.period || req.query.ky || store.latestKy()));
   const month = monthInputForKy(uiPeriod);
@@ -3265,7 +3299,31 @@ router.get('/catalog-management/cost-rates', auth.requireAuth, asyncJsonRoute(as
   // Không có nhân viên cụ thể (CEO mở menu phân quyền) ⇒ trả CỘT để cấp quyền được
   // ngay, còn số % thì chưa có gì để tra. Menu dùng được kể cả khi DataHub đang chết.
   if (!empCode || empCode === 'CEO') {
-    return res.json({ period: uiPeriod, empCode: '', columns, pairs: [], grant, reason: 'NO_EMPLOYEE_SCOPE' });
+    // Menu phân quyền chỉ cần DANH SÁCH CỘT — không kéo hàng vạn cặp cho nặng.
+    // Bảng danh mục thì gửi `pairs=1` vì nó phải hiện SỐ trên từng dòng.
+    const wantPairs = String(req.query.pairs || '') === '1';
+    const teamRates = wantPairs && isCeo ? localTeamRatePairs(month, columns.map((column) => column.key)) : null;
+    if (!teamRates) {
+      return res.json({
+        period: uiPeriod, empCode: '', columns, pairs: [], grant,
+        // Nói rõ VÌ SAO rỗng: chưa đồng bộ kho ≠ menu phân quyền không cần số.
+        reason: wantPairs && isCeo ? 'LOCAL_RATES_EMPTY' : 'NO_EMPLOYEE_SCOPE',
+      });
+    }
+    const teamPairs = [];
+    for (const [key, rate] of teamRates) {
+      const [unitCode, productCode] = key.split('\u001f');
+      const rates = {};
+      // CEO thấy mọi cột, mọi nhóm — hàng rào quyền chỉ áp cho tài khoản NV.
+      for (const column of columns) rates[column.key] = rate.conflict ? null : (rate.percents[column.key] ?? null);
+      teamPairs.push({ unitCode, productCode, rates });
+    }
+    teamPairs.sort((a, b) => a.unitCode.localeCompare(b.unitCode) || a.productCode.localeCompare(b.productCode));
+    return res.json({
+      period: uiPeriod, empCode: '', grant, reason: 'LOCAL_TEAM_RATES',
+      columns: columns.map((column) => ({ key: column.key, label: column.label, annual: !!column.annual, viewOnly: !!column.viewOnly })),
+      pairs: teamPairs,
+    });
   }
   if (!columns.length) {
     return res.json({ period: uiPeriod, empCode, columns: [], pairs: [], grant, reason: 'NO_COLUMN_GRANTED' });

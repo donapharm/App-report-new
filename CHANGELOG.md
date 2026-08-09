@@ -1,3 +1,22 @@
+### 2026-08-09 20:15 (giờ VN) — ‼ CEO là NGƯỜI DUY NHẤT thấy toàn dấu "—" ở cột % trong bảng danh mục
+
+CEO bấm Đồng bộ % chi phí, kết quả **✅ 21/21 NV · 27.719 cặp** — nhưng mở bảng danh mục thì **mọi ô C36/C38/C41/C42/C43/C44/C45 vẫn là "—"**: *"tôi đã bấm đồng bộ rồi, vậy tại sao các ô chi phí % nó đang ở đâu đâu là sao?"*
+
+**Gốc — lỗi thật, và trớ trêu là chỉ CEO dính.** Route `/catalog-management/cost-rates` lấy % bằng `employeeCost.getForSession` **theo mã người đang đăng nhập**. CEO là tài khoản quản trị, **không có sổ chi phí riêng**, nên `resolveScopedEmployee` trả `'CEO'`/rỗng ⇒ route **thoát sớm với `pairs: []`**. Cột vẫn hiện (tên cột lấy từ hợp đồng cục bộ) nhưng **không có số nào** ⇒ toàn "—". Đúng người được phép xem tất cả lại là người duy nhất không thấy gì.
+
+**Sửa:** CEO đọc % toàn đội từ **KHO CỤC BỘ** — đúng thứ nút "Đồng bộ % chi phí" vừa ghi, và đúng lời hứa của `SPEC_COST_RATES_LOCAL_SYNC`: *"DataHub chết vẫn xem được"*. Ba chốt:
+1. **Hai NV khai lệch nhau trên cùng một cặp ⇒ null**, không lấy bừa một bên (cùng luật với menu Thành tiền).
+2. **Kho chưa đồng bộ ⇒ `LOCAL_RATES_EMPTY`**, phân biệt rõ với `NO_EMPLOYEE_SCOPE` (menu phân quyền vốn không cần số) — hai cảnh rỗng khác nhau phải có hai lý do khác nhau.
+3. **Chỉ màn cần SỐ mới gửi `pairs=1`.** Menu phân quyền gọi cùng endpoint nhưng không gửi cờ nên không phải tải hàng vạn cặp.
+
+Nhánh nhân viên **giữ nguyên không đụng**: vẫn đủ hai lớp chặn `unitInScope` + `columnScopeAllows` (có test khoá lại cả hai).
+
+Sửa kèm một test cũ soi hớ: nó cắt vùng "không được nhân/chia lại %" quá rộng nên nuốt luôn chữ `C38/C42` trong chú thích và báo động giả — nay soi ĐÚNG hai dòng gán tỷ lệ (nhánh CEO + nhánh NV).
+
+Test: server **1143** pass / 7 fail cố hữu · web **370/370** · build sạch. Test mới `catalogCostRatesTeamView.test.js` (5).
+
+---
+
 ### 2026-08-09 20:20 (giờ VN) — ‼ Nút "Đồng bộ % chi phí" BIẾN MẤT lúc danh mục đang tải
 
 CEO chụp màn 20:04: màn Danh mục QL đứng ở *"Đang tải danh mục kỳ 08.2026 từ Data Hub…"*, và thẻ **"Đồng bộ % chi phí kỳ 08.2026"** — đúng cái nút Claude vừa hướng dẫn bấm — **không có ở đó**.
