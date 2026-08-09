@@ -1,3 +1,25 @@
+### 2026-08-10 00:30 (giờ VN) — 🔧 BỎ HẲN lượt gọi gây lỗi: bảng tra nhóm đi KÈM danh mục
+
+CEO kẹt **lần thứ ba** ở cùng một chỗ: *"bây giờ tao vào phân quyền cho NV khác cũng vướng lỗi tùm lum, méo hiểu làm như nào đây."* Hai lần trước Claude **vá thông báo** (nói đúng nguyên nhân, thêm nút Thử lại, tự thử lại 3 lượt). Vá lời thì lỗi vẫn còn — lần này bỏ hẳn **cái gây ra lỗi**.
+
+#### Thiết kế sai từ gốc
+
+Nhóm mã đơn vị chỉ là **tiền tố số trước dấu chấm** (`036.PKĐK SÀI GÒN TÂM TRÍ` → **036**). Máy chủ **đã cầm sẵn toàn bộ mã đơn vị** khi trả danh mục. Vậy mà Claude bắt trình duyệt **gom cả nghìn mã gửi ngược lên** chỉ để nhận lại tiền tố — tự dựng thêm một lượt gọi mạng **có thể trượt**. Và nó trượt thật (*"Failed to fetch"*), làm **cả menu phân quyền mù**, tới mức mục "việc cần rà" khuyên CEO xoá quyền đúng.
+
+#### Sửa: gửi kèm, không hỏi lại
+
+`GET /catalog-management` nay trả kèm **`unitGroups`** — bảng tra `mã đơn vị → {nhóm, nhãn}` dựng ngay ở máy chủ bằng đúng `catalogCostColumnGrants.groupOf`. Kết quả:
+- **0 lượt gọi thêm** ⇒ **không còn đường nào để hỏng**;
+- **luật tách nhóm vẫn nằm nguyên ở máy chủ**, frontend chỉ đọc kết quả (không chép luật — có test cấm);
+- gửi theo **đơn vị riêng** (vài trăm mục) chứ không gắn vào từng dòng (27.719 dòng) — cùng thông tin, nhẹ hơn hai bậc;
+- lượt gọi POST cũ **giữ lại làm đường lui** cho máy chủ bản cũ, không xoá.
+
+**Trả lời câu CEO hỏi:** `036.` đúng là một nhóm, và máy **tự nhận ra** — CEO không phải gõ "036." hay "033." cho bất kỳ mã nào. Việc đó là của máy, và từ bản này nó không còn cửa nào để làm sai.
+
+Test: server 1168/1176 (7 fail cố hữu + 1 test hẹn-giờ chập chờn khi chạy cả bộ, chạy riêng 7/7 đạt) · web **416/416** · build sạch.
+
+---
+
 ### 2026-08-10 00:20 (giờ VN) — ‼ Bảng tra nhóm hỏng làm CẢ MENU PHÂN QUYỀN mù — và nó đang khuyên xoá quyền ĐÚNG
 
 CEO: *"DN002 chỉ phụ trách 4 mã, trong đó có **036.PKĐK SÀI GÒN TÂM TRÍ / 036.NT-PKĐK SÀI GÒN TÂM TRÍ** — chả phải **036.** là một nhóm sao? Vậy tại sao vẫn liệt kê 5 đơn vị chưa phân nhóm?"*

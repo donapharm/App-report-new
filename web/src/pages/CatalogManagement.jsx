@@ -814,7 +814,7 @@ function GrantReviewBoard({ review, onOpen, onApply }) {
   </div>;
 }
 
-function CostColumnGrantsPanel({ catalogRows, employees }) {
+function CostColumnGrantsPanel({ catalogRows, employees, unitGroups = null }) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState(null);
   const [audit, setAudit] = useState([]);
@@ -835,6 +835,12 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
       // Bảng "đơn vị → nhóm" hỏi backend MỘT lần cho các mã distinct — cùng bộ
       // nhóm màn Chi phí đang dùng, không chép luật tách nhóm sang frontend.
       const distinctUnits = [...new Set((catalogRows || []).map((row) => String(row?.unit_code || '').trim()).filter(Boolean))];
+      /* ‼ BẢNG TRA NHÓM ĐI KÈM DANH MỤC ⇒ KHÔNG GỌI MẠNG NỮA (CEO kẹt 3 lần 09–10/08).
+         Máy chủ đã cầm sẵn mọi mã đơn vị khi trả danh mục, và nhóm chỉ là tiền tố
+         trước dấu chấm — bắt trình duyệt gửi ngược cả nghìn mã lên để hỏi lại là tự
+         dựng thêm một lượt gọi có thể trượt. Nó trượt thật ("Failed to fetch") và
+         làm cả menu mù. Lượt gọi cũ chỉ còn là ĐƯỜNG LUI cho máy chủ bản cũ. */
+      const inlineGroups = unitGroups && Object.keys(unitGroups).length ? unitGroups : null;
       /* ‼ TỰ THỬ LẠI — "Failed to fetch" là hụt mạng nhất thời (CEO gặp 09/08 23:59).
          Bảng "mã đơn vị → nhóm" hỏng MỘT lượt là cả menu phân quyền hiện 0 nhóm và
          CEO không cấp được gì. Bắt người dùng tự bấm "Thử lại" cho một cú trượt mạng
@@ -868,8 +874,9 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
           resolved: parts.reduce((sum, part) => sum + Number(part.resolved || 0), 0),
         };
       };
-      const [grants, rates, unitGroups] = await Promise.allSettled([
-        api.catalogCostGrants(), api.catalogCostRates(), fetchUnitGroups(distinctUnits),
+      const [grants, rates, fetchedGroups] = await Promise.allSettled([
+        api.catalogCostGrants(), api.catalogCostRates(),
+        inlineGroups ? Promise.resolve({ byUnit: inlineGroups }) : fetchUnitGroups(distinctUnits),
       ]);
       if (grants.status !== 'fulfilled') throw new Error(grants.reason?.message || 'Không tải được phân quyền');
       const columns = rates.status === 'fulfilled' ? (rates.value.columns || []) : [];
@@ -879,10 +886,10 @@ function CostColumnGrantsPanel({ catalogRows, employees }) {
       // Bản cũ nuốt lỗi thành `{}` nên cả hai đều hiện "164 đơn vị chưa nhận diện
       // được nhóm" — đổ tội cho dữ liệu trong khi thật ra là chưa hỏi được ai.
       // Nói sai nguyên nhân còn tệ hơn không nói: CEO đi sửa nhầm chỗ.
-      setGroupsError(unitGroups.status === 'fulfilled'
-        ? (unitGroups.value.truncated ? `Danh mục có ${unitGroups.value.total} mã đơn vị, vượt trần ${unitGroups.value.resolved} — phần vượt đang hiện "0 nhóm" oan, báo Claude nâng trần` : '')
-        : (unitGroups.reason?.message || 'Không hỏi được bảng "mã đơn vị → nhóm"'));
-      const groupsByUnit = unitGroups.status === 'fulfilled' ? (unitGroups.value.byUnit || {}) : {};
+      setGroupsError(fetchedGroups.status === 'fulfilled'
+        ? (fetchedGroups.value.truncated ? `Danh mục có ${fetchedGroups.value.total} mã đơn vị, vượt trần ${fetchedGroups.value.resolved} — phần vượt đang hiện "0 nhóm" oan, báo Claude nâng trần` : '')
+        : (fetchedGroups.reason?.message || 'Không hỏi được bảng "mã đơn vị → nhóm"'));
+      const groupsByUnit = fetchedGroups.status === 'fulfilled' ? (fetchedGroups.value.byUnit || {}) : {};
       const built = buildGrantPanel({ grants: grants.value.grants || [], columns, catalogRows, employees, groupsByUnit });
       setPanel(built);
       setAudit(grants.value.audit || []);
@@ -1387,7 +1394,7 @@ export default function CatalogManagement({ me }) {
         chặn đường thoát duy nhất. */}
     {isCeo && <CostRatesSyncCard period={period} catalogLoading={!!loadingPeriod} />}
     <CostRatesTablePanel period={period} />
-    {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
+    {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} unitGroups={data.unitGroups || null} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
       ⚠ Nguồn tỷ lệ chi phí đang kẹt — cột % đang dùng bảng tỷ lệ lấy được gần nhất.{costRates.note ? ` ${costRates.note}` : ''}
     </div>}

@@ -189,9 +189,9 @@ test('‼ "không hỏi được backend" KHÁC "đơn vị thiếu nhóm" — k
   assert.match(page, /const \[groupsError, setGroupsError\] = useState\(''\)/);
   // Fulfilled nhưng bị cắt trần cũng phải nói (truncated) — còn lỗi hệ thống thì
   // lấy đúng message của reason như cũ.
-  assert.match(page, /setGroupsError\(unitGroups\.status === 'fulfilled'/);
-  assert.match(page, /unitGroups\.value\.truncated/);
-  assert.match(page, /unitGroups\.reason\?\.message/);
+  assert.match(page, /setGroupsError\(fetchedGroups\.status === 'fulfilled'/);
+  assert.match(page, /fetchedGroups\.value\.truncated/);
+  assert.match(page, /fetchedGroups\.reason\?\.message/);
   assert.match(page, /Không hỏi được bảng "mã đơn vị → nhóm"/);
   assert.match(page, /<b>KHÔNG<\/b> phải đơn vị thiếu nhóm, mà là chưa hỏi được máy chủ/);
   // Phải chỉ đúng endpoint để bot khỏi đi dò mò.
@@ -255,7 +255,7 @@ test('‼ hụt mạng nhất thời TỰ THỬ LẠI — không đẩy việc c
   // Nghỉ tăng dần giữa các lượt, không nện liên tiếp.
   assert.match(page, /setTimeout\(done, 400 \* \(attempt \+ 1\)\)/);
   // Hai lời gọi kia KHÔNG bọc retry — chúng hỏng thì đã có đường báo lỗi riêng.
-  assert.match(page, /api\.catalogCostGrants\(\), api\.catalogCostRates\(\), fetchUnitGroups/);
+  assert.match(page, /inlineGroups \? Promise\.resolve\(\{ byUnit: inlineGroups \}\) : fetchUnitGroups\(distinctUnits\)/);
 });
 
 /* ── BẢNG TRA NHÓM HỎNG ⇒ CẢ MENU MÙ, KHÔNG ĐƯỢC KẾT LUẬN GÌ (CEO 10/08 00:02) ──
@@ -284,4 +284,29 @@ test('‼ chia mẻ 400 mã — một cú trượt không làm mất TOÀN BỘ 
   assert.match(page, /batches\.map\(\(batch\) => withRetry\(\(\) => api\.catalogCostUnitGroups\(batch\)\)\)/);
   // Ghép nửa bảng tra là gán oan "chưa có nhóm" cho phần thiếu ⇒ fail-closed.
   assert.match(page, /fail-closed/);
+});
+
+/* ── BỎ HẲN LƯỢT GỌI HAY TRƯỢT (CEO kẹt lần thứ 3, 10/08 00:08) ──────────────
+ * Nhóm chỉ là tiền tố trước dấu chấm, và máy chủ đã cầm sẵn mọi mã đơn vị khi trả
+ * danh mục. Bắt trình duyệt gửi ngược cả nghìn mã lên để hỏi lại là TỰ DỰNG THÊM
+ * một lượt gọi mạng có thể trượt — và nó trượt thật, làm cả menu phân quyền mù.  */
+
+test('‼ bảng tra nhóm đi KÈM danh mục — đường thường KHÔNG gọi mạng nữa', () => {
+  assert.match(page, /const inlineGroups = unitGroups && Object\.keys\(unitGroups\)\.length \? unitGroups : null/);
+  assert.match(page, /inlineGroups \? Promise\.resolve\(\{ byUnit: inlineGroups \}\) : fetchUnitGroups\(distinctUnits\)/);
+  assert.match(page, /unitGroups=\{data\.unitGroups \|\| null\}/);
+});
+
+test('luật tách nhóm vẫn Ở MÁY CHỦ — frontend chỉ đọc kết quả, không chép luật', () => {
+  const server = fs.readFileSync(new URL('../../server/src/catalogManagement.js', import.meta.url), 'utf8');
+  assert.match(server, /function unitGroupMap\(rows = \[\]\)/);
+  assert.match(server, /catalogCostColumnGrants\.groupOf\(unit\)/);
+  assert.match(server, /unitGroups: unitGroupMap\(rows\)/);
+  // Frontend tuyệt đối không tự tách tiền tố nhóm.
+  assert.doesNotMatch(page, /match\(\/\^\(\\d\{1,4\}\)/);
+});
+
+test('lượt gọi cũ giữ lại làm ĐƯỜNG LUI cho máy chủ bản cũ, không xoá', () => {
+  assert.match(page, /ĐƯỜNG LUI cho máy chủ bản cũ/);
+  assert.match(page, /const fetchUnitGroups = async \(units\)/);
 });
