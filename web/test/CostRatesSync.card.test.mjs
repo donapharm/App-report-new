@@ -9,7 +9,7 @@ const routes = fs.readFileSync(new URL('../../server/src/routes.js', import.meta
 test('thẻ Đồng bộ chỉ dành cho CEO; backend chặn độc lập bằng requireCeo', () => {
   // Thẻ LUÔN hiện với CEO (xem test "không được biến mất" phía dưới); lúc danh mục
   // đang tải thì chỉ KHOÁ NÚT kèm lý do, không ẩn thẻ.
-  assert.match(page, /\{isCeo && <CostRatesSyncCard period=\{period\} catalogLoading=\{actionsLocked\} \/>\}/);
+  assert.match(page, /\{isCeo && <CostRatesSyncCard period=\{period\} catalogLoading=\{!!loadingPeriod\} \/>\}/);
   assert.match(page, /const actionsLocked = !!loadingPeriod \|\| periodMismatch/,
     'vẫn phải biết lúc nào đang tải/giữ bảng kỳ cũ để khoá thao tác trộn kỳ');
   const at = routes.indexOf("router.post('/catalog-management/cost-rates/sync'");
@@ -48,8 +48,11 @@ test('actor lấy từ session ở backend — không có đường giả mạo 
  * biến mất không dấu vết còn tệ hơn nút bị khoá — người dùng tưởng app hỏng.     */
 
 test('‼ thẻ đồng bộ % LUÔN hiện với CEO, không bị ẩn theo trạng thái tải danh mục', () => {
-  assert.match(page, /\{isCeo && <CostRatesSyncCard period=\{period\} catalogLoading=\{actionsLocked\} \/>\}/);
+  assert.match(page, /\{isCeo && <CostRatesSyncCard period=\{period\} catalogLoading=\{!!loadingPeriod\} \/>\}/);
   assert.doesNotMatch(page, /isCeo && !actionsLocked && <CostRatesSyncCard/, 'không được quay lại kiểu ẩn thẻ');
+  // ‼ Và KHÔNG được khoá theo `actionsLocked`: danh mục 502 ⇒ mismatch vĩnh viễn ⇒
+  // nút đồng bộ % khoá vĩnh viễn, chặn đúng đường thoát duy nhất (CEO 09/08 23:24).
+  assert.doesNotMatch(page, /catalogLoading=\{actionsLocked\}/, 'không khoá nút đồng bộ % vì danh mục hỏng');
 });
 
 test('đang tải thì KHOÁ NÚT KÈM LÝ DO và tự mở lại — không khoá câm', () => {

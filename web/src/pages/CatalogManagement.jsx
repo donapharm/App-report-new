@@ -242,6 +242,25 @@ function SourceStatus({ meta, canRefresh = false, onRefresh }) {
   </div>;
 }
 
+/* ══ NHỚ DANH MỤC TRONG PHIÊN LÀM VIỆC ═══════════════════════════════════════
+   CEO 09/08 23:22: *"mỗi lần tao đổi màn xem nó quay như thế này thì có bực không
+   cơ chứ."* Đúng. Local-first đã bỏ được cú gọi DataHub, nhưng **mỗi lần vào lại
+   trang là trình duyệt tải lại 27.719 dòng từ máy chủ** — vài giây quay vòng, lần
+   nào cũng vậy, dù dữ liệu y hệt lần trước.
+
+   Nhớ ngay trong bộ nhớ trang (không phải đĩa, không hạn mức): đổi màn qua lại
+   trong cùng phiên là hiện NGAY. Đây là bộ nhớ CỦA TRÌNH DUYỆT, không đụng máy chủ
+   và không đụng DataHub — không phải "tác dụng phụ trên đường đọc".
+
+   Xoá bản nhớ khi: bấm "Đồng bộ lại" (muốn số mới) hoặc tải lại trang. */
+const catalogSessionCache = new Map();
+const CATALOG_SESSION_MAX = 3;
+function rememberCatalog(period, value) {
+  catalogSessionCache.delete(period);
+  catalogSessionCache.set(period, value);
+  while (catalogSessionCache.size > CATALOG_SESSION_MAX) catalogSessionCache.delete(catalogSessionCache.keys().next().value);
+}
+
 function CatalogSearch({ value, onChange, employee = false }) {
   return <label className="catalog-search-label"><span>{employee ? 'Tìm thông minh trong danh mục của tôi' : 'Tìm thông minh toàn danh mục'}</span><div className="catalog-search-wrap"><input value={value} onChange={(e) => onChange(e.target.value)} placeholder="Tên thuốc, QLNB, đơn vị, nhà thầu…" aria-label="Tìm kiếm thông minh danh mục" />{value && <button type="button" onClick={() => onChange('')} aria-label="Xóa nội dung tìm kiếm" title="Xóa tìm kiếm">×</button>}</div></label>;
 }
@@ -1240,13 +1259,21 @@ export default function CatalogManagement({ me }) {
   // như vậy thì rất kẹt"*). Bản cũ `setData(null)` làm cả trang trắng thành một vòng
   // quay mỗi lần đổi kỳ — trong khi danh mục rất nhiều dòng nên chờ khá lâu. Nay giữ
   // bảng cũ trên màn, chỉ gắn dải "đang tải" + nói rõ đang xem kỳ nào / chờ kỳ nào.
-  async function load(selected = period) {
+  async function load(selected = period, { fresh = false } = {}) {
     const request = loadGateRef.current.next();
+    const hub = uiToHub(selected);
+    // Đã xem kỳ này trong phiên ⇒ hiện NGAY, không quay vòng, không tải lại 27.719
+    // dòng. Bấm "Đồng bộ lại" thì `fresh` bật để bỏ qua bản nhớ.
+    if (!fresh && catalogSessionCache.has(hub)) {
+      setError(''); setData(catalogSessionCache.get(hub)); setLoadingPeriod('');
+      return catalogSessionCache.get(hub);
+    }
     setError(''); setLoadingPeriod(selected);
     try {
-      const p = uiToHub(selected);
+      const p = hub;
       const result = await api.catalogManagement(p);
-      if (!request.isLatest()) return;
+      if (!request.isLatest()) return undefined;
+      rememberCatalog(p, result);
       setData(result);
       if (isAdmin) {
         const [h, d] = await Promise.allSettled([api.adminCatalogManagementHistory(p), api.adminCatalogManagementDiagnostics()]);
@@ -1255,10 +1282,16 @@ export default function CatalogManagement({ me }) {
       }
     } catch (e) {
       // Tải hỏng thì GIỮ bảng cũ + báo lỗi, không đập màn hình về trắng.
-      if (request.isLatest()) setError(e.message);
+      // ‼ Nói rõ HỎNG Ở CỬA NÀO và cái gì VẪN LÀM ĐƯỢC — 502 ở cửa danh mục không
+      // liên quan gì tới cửa chi phí, mà CEO đọc "Lỗi máy chủ" thì tưởng chết cả hệ.
+      if (request.isLatest()) {
+        setError(`${e.message} — đây là CỬA DANH MỤC của Data Hub, không phải cửa chi phí. `
+          + `Nút "Đồng bộ % chi phí kỳ ${selected}" phía dưới VẪN DÙNG ĐƯỢC bình thường.`);
+      }
     } finally {
       if (request.isLatest()) setLoadingPeriod('');
     }
+    return undefined;
   }
   useEffect(() => () => { loadGateRef.current?.cancel(); }, []);
   useEffect(() => { api.periods().then((p) => { const list = (p.periods || p || []).map((x) => x.ky || x).filter((x) => /^\d{2}\.\d{4}$/.test(x)); setPeriods(list); if (list.length && !list.includes(period)) setPeriod(list.at(-1)); }).catch(() => {}); }, []);
@@ -1271,7 +1304,8 @@ export default function CatalogManagement({ me }) {
           setAskingHub(true);
           try {
             const result = await api.catalogManagementRefresh(uiToHub(period));
-            await load(period);
+            catalogSessionCache.delete(uiToHub(period)); // muốn số mới thì bỏ bản nhớ
+            await load(period, { fresh: true });
             return result; // huy hiệu cần kết quả này để nói nội dung có đổi không
           } finally { setAskingHub(false); }
         }} />}<label><span>Kỳ</span><select value={period} onChange={(e) => setPeriod(e.target.value)}>{(periods.length ? periods : [period]).map((x) => <option key={x}>{x}</option>)}</select></label></div>
@@ -1280,7 +1314,13 @@ export default function CatalogManagement({ me }) {
     {/* Menu phân quyền cột % — CHỈ tài khoản CEO. Backend chặn độc lập bằng requireCeo. */}
     {/* Thẻ đồng bộ % KHÔNG phụ thuộc danh mục (nó đọc trạng thái riêng, nhắm đúng
         kỳ đang chọn) nên LUÔN hiện — chỉ khoá nút kèm lý do khi đang tải. */}
-    {isCeo && <CostRatesSyncCard period={period} catalogLoading={actionsLocked} />}
+    {/* ‼ CHỈ khoá khi ĐANG TẢI, KHÔNG khoá khi danh mục HỎNG (CEO chặn cứng 09/08
+        23:24). Bản trước dùng `actionsLocked` (gồm cả `periodMismatch`): danh mục
+        kỳ 07 trả 502 ⇒ mismatch VĨNH VIỄN ⇒ nút đồng bộ % khoá VĨNH VIỄN ⇒ CEO
+        không tài nào đóng băng được T07. Mà đồng bộ % KHÔNG đụng danh mục — nó gọi
+        cửa chi phí, cửa đang sống (probe 21/21). Khoá nó đúng lúc cần nhất là tự
+        chặn đường thoát duy nhất. */}
+    {isCeo && <CostRatesSyncCard period={period} catalogLoading={!!loadingPeriod} />}
     <CostRatesTablePanel period={period} />
     {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">

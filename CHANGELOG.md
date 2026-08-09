@@ -1,3 +1,30 @@
+### 2026-08-09 23:35 (giờ VN) — 🚧 GỠ NÚT THẮT: 502 cửa danh mục đang KHOÁ CHẾT nút đồng bộ % · đổi màn hết quay vòng
+
+CEO gửi ảnh kỳ 07.2026 lúc 23:24 — ba dữ kiện trong một ảnh chỉ ra đúng chuỗi nhân quả:
+1. Huy hiệu ghi *"Đọc từ máy — không gọi Data Hub"* ⇒ local-first **đang chạy đúng** cho kỳ 08.
+2. *"⚠ Lỗi máy chủ (HTTP 502)"* + *"Chưa tải được danh mục kỳ 07.2026"* ⇒ kỳ 07 **chưa có trên máy**, phải đi hỏi DataHub, và **cửa danh mục trả 502**.
+3. Nút **"Đồng bộ từ DataHub" bị khoá xám** ⇒ CEO **không tài nào** đồng bộ được T07.
+
+#### ‼ Điểm 3 là lỗi Claude gây ra — và nó chặn đúng đường thoát duy nhất
+
+Bản `aab53e2` khoá nút đồng bộ % theo `actionsLocked` = `loadingPeriod || periodMismatch`. Danh mục kỳ 07 trả 502 ⇒ `periodMismatch` đúng **vĩnh viễn** ⇒ nút khoá **vĩnh viễn**, kèm câu *"nút tự mở lại ngay khi tải xong"* — một lời hứa không bao giờ tới. Mà **đồng bộ % KHÔNG đụng danh mục**: nó gọi **cửa chi phí**, cửa đang sống (probe 21/21 ok cả T07). Khoá nó đúng lúc cần nhất là tự bịt lối ra.
+
+**Sửa:** chỉ khoá khi **đang tải thật** (`!!loadingPeriod`). Danh mục hỏng thì nút vẫn bấm được — đó chính là lúc phải bấm.
+
+#### 🕒 "Đổi màn nó quay như thế này thì có bực không" — đã hết
+
+Local-first bỏ được cú gọi DataHub, nhưng **mỗi lần vào lại trang trình duyệt vẫn tải lại 27.719 dòng từ máy chủ**. Nay nhớ ngay trong bộ nhớ trang (tối đa 3 kỳ): đổi màn qua lại trong cùng phiên **hiện tức thì**. Bộ nhớ này nằm **trong trình duyệt** — không đụng máy chủ, không đụng DataHub, nên không vi phạm luật "đường đọc không có tác dụng phụ". Bấm **"Đồng bộ lại"** thì bỏ bản nhớ để lấy số mới.
+
+#### 🗣 Câu lỗi 502 nói rõ hỏng ở CỬA NÀO
+
+*"Lỗi máy chủ (HTTP 502)"* trơ khiến CEO tưởng chết cả hệ. Nay: *"…đây là **CỬA DANH MỤC** của Data Hub, không phải cửa chi phí. Nút **Đồng bộ % chi phí kỳ 07.2026** phía dưới **VẪN DÙNG ĐƯỢC** bình thường."*
+
+**Việc còn lại của Data Hub:** cửa danh mục `assignments/catalog-management?ky=2026-07` đang trả **502** — cần dựng lại. Cửa chi phí không liên quan và vẫn tốt.
+
+Test: server 1169 / 7 fail cố hữu · web **406/406** · build sạch.
+
+---
+
 ### 2026-08-09 23:20 (giờ VN) — 🧊 FIX TRIỆT ĐỂ "lambada": KỲ ĐÃ CHỐT SỔ = ĐÓNG BĂNG, không hỏi DataHub nữa
 
 CEO (lần 2 trong 2 tiếng, kèm ảnh T07): *"T07.2026 đã chốt sổ rồi mà số liệu nó vẫn chạy tùm lum… vẫn báo dữ liệu chưa đồng nhất, target không đúng, tổng doanh thu thấp hơn rất nhiều. Yêu cầu giải thích và tìm giải pháp fix triệt để. Mệt lắm rồi."*
