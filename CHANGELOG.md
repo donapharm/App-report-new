@@ -1,3 +1,15 @@
+### 2026-08-09 15:45 (giờ VN) — 🚀 PROD = `50eb233` (bản hoà giải) — ĐỢT 8 VIỆC 09/08 ĐÃ LÊN SÓNG
+
+Bot deploy đúng SHA Claude đưa, so khớp tuyệt đối: PROD `50eb2333a8a851e8b75923d9c08894a95f245e1d`, tree `b0b3c408…`, version `50eb233-20260809-153952-981`, manifest 5.186 mục pre/post verify PASS.
+
+Test trên máy chủ thật: **server 1080/1081** (chỉ còn VP018 denylist cố hữu — 6 test PDF pass vì máy chủ có `pdfinfo`, khớp dự đoán) · **web 345/345** · safety 51/51 · browser check CEO PASS. Rollback ghim `a437afc`, backup restore-verified.
+
+**Đang chạy thật từ giờ:** huy hiệu Data Hub hiện Version+ngày + nút Đồng bộ lại · nút Chọn cả cột · khối Cần rà phân quyền · chặn spam cảnh báo chi phí + chặn tin gửi mã khoá/optout · công thức C47 đúng (phần còn lại, loại C44) · menu Tổng hợp chi phí C33–C46 · bề rộng bảng động + data-label + request gate (phần bot).
+
+**Còn chờ:** A2 (DataHub mở 14 cột %) · B (self-heal, làm lại với ràng buộc generation) · điều tra người nhận tin + tin doanh thu hằng ngày. Hai tab tiền hiện fail-closed "—" cho tới khi có đủ cột % và CEO bấm đồng bộ kỳ.
+
+---
+
 ### 2026-08-09 15:05 (giờ VN) — 🔀 HOÀ GIẢI HAI NHÁNH: nền PROD `a437afc` + 8 việc mới, Claude tự merge
 
 KIỂM 1 của bot FAIL: `a437afc` (PROD) và nhánh Claude lệch 12 file ngoài CHANGELOG — hậu quả dồn của việc đánh số lại commit nhiều đợt. Cherry-pick lên nền lệch là trộn mù, nên đổi cách: **bot đẩy đúng commit PROD lên GitHub** (`prod/a437afc-20260809`, tree khớp `28f3a5c…`), **Claude merge hai bên** với đầy đủ ngữ cảnh cả hai phía.
