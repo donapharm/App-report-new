@@ -54,6 +54,7 @@ const employeeCostProvinceWorklist = require('./employeeCostProvinceWorklist');
 const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
+const closedSeal = require('./employeeCostClosedSeal');
 const employeeCostHealthKpis = require('./employeeCostHealthKpis');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
@@ -1376,15 +1377,49 @@ async function employeeCostAllPayload(req, {
       },
     };
   }
+  /* ── ĐÓNG DẤU KỲ ĐÃ KHOÁ SỔ (CEO đòi dứt điểm 10/08/2026) ──────────────────
+     Tổng của màn ALL = cộng sổ từng NV. NV nào không kịp trong hạn thì toàn bộ
+     dòng của họ không lên bảng ⇒ **tổng đổi theo số người kịp về** (5 người ra
+     499 dòng, 9 người ra 1.191 dòng, 0 người ra 0 dòng). Vá tốc độ làm chuyện
+     này hiếm đi nhưng KHÔNG dứt: chỉ cần một người trễ là tổng lại nhảy.
+
+     Kỳ đã khoá sổ thì con số phải BẤT BIẾN. Nên: dựng được bản ĐỦ CẢ ĐỘI một lần
+     ⇒ đóng dấu xuống đĩa ⇒ từ đó phục vụ nguyên bản, khỏi dựng lại, khỏi hỏi
+     DataHub. Bản THIẾU người thì TUYỆT ĐỐI không đóng dấu — biến lỗi tạm thời
+     thành số sai vĩnh viễn còn tệ hơn bệnh đang chữa. Nguồn đổi ⇒ chữ ký đổi ⇒
+     dấu hết hiệu lực, tự dựng lại. */
+  const rangeClosed = range.months.every((month) => employeeCost.isPeriodClosed(month, employeeCost.vnToday()));
+  const sealKey = closedSeal.keyFor({
+    from: range.from, to: range.to, months: range.months,
+    closed: rangeClosed, dataSignature: buildDataSignature,
+  });
+  const buildMergedSealed = async () => {
+    if (sealKey) {
+      const sealed = closedSeal.read(sealKey);
+      if (sealed) return sealed;
+    }
+    const built = await buildMerged();
+    if (sealKey && !employeeCostAllDegraded(built)) {
+      try {
+        closedSeal.write(sealKey, built, { complete: true });
+        console.info('[employee-cost] đã đóng dấu kỳ khoá sổ', { key: sealKey });
+      } catch (error) {
+        // Đóng dấu hỏng không được làm hỏng màn — cùng lắm là lần sau dựng lại.
+        console.warn('[employee-cost] đóng dấu thất bại', { message: error?.message });
+      }
+    }
+    return built;
+  };
+
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
   // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
   // không chứa actor/session nên mọi admin hợp lệ dùng chung đúng một bản.
   if (!paginate) {
-    const merged = await buildMerged();
+    const merged = await buildMergedSealed();
     return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: false, allEmployees: true }));
   }
   // Giữ 6 giờ chỉ khi bản gộp SẠCH; có NV lỗi nguồn thì chỉ giữ 2 phút.
-  const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMerged,
+  const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMergedSealed,
     (value) => (employeeCostAllDegraded(value) ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS : EMPLOYEE_COST_ALL_BASE_TTL_MS),
     { staleMs: EMPLOYEE_COST_ALL_STALE_MS });
   return memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (

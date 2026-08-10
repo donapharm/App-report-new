@@ -1,3 +1,47 @@
+### 2026-08-10 23:55 (giờ VN) — 🔐 DỨT ĐIỂM T07: đóng dấu chi phí kỳ đã khoá sổ
+
+CEO: *"tao cần mày fix cho dữ liệu T07.2026 không nhảy loạn xạ nữa. Mấy ngày rồi mà
+sửa hoài nội dung này chưa ra. Tao yêu cầu mày có giải pháp dứt điểm."*
+
+#### Nhận sai: tôi mới sửa TỐC ĐỘ, chưa sửa cái làm SỐ NHẢY
+
+Hai bệnh khác nhau, tôi gộp làm một:
+
+- **Chậm** — `persist.load()` phân tích lại 17,9 MB cho từng NV. Đã vá (`462030d` +
+  `141a36a`), đo trên kho thật: **25 giây → 621 ms**.
+- **Nhảy** — màn ALL **công bố tổng tính từ nhóm CHƯA ĐỦ NGƯỜI**. NV nào không kịp
+  trong hạn thì toàn bộ dòng của họ không lên bảng, nên tổng đổi theo số người kịp về:
+  5 người → 499 dòng · 7.103.965.427đ · 9 người → 1.191 dòng · 0 người → 0 dòng.
+
+Vá tốc độ làm bệnh thứ hai **hiếm đi chứ không hết**: chỉ cần một người trễ là tổng
+lại nhảy. Đó là lý do CEO vẫn thấy số loạn sau khi tôi báo "đã vá".
+
+#### Chữa dứt điểm: chi phí có cơ chế ghim như doanh thu
+
+Doanh thu đã có `revenueMaterializeGuard` ghim kỳ khoá sổ nên bất biến tuyệt đối
+(T07 = 2.091 dòng / 30.982.248.913đ, kiểm bao lần cũng lệch 0). **Chi phí chưa có
+cơ chế tương đương** — đó chính là lỗ hổng ba ngày. Nay có:
+
+> Kỳ **ĐÃ KHOÁ SỔ** + dựng được bản **ĐỦ CẢ ĐỘI** ⇒ đóng dấu, lưu xuống đĩa.
+> Từ đó về sau ⇒ phục vụ **nguyên bản đã đóng dấu**, không dựng lại, không hỏi DataHub.
+
+T07 chỉ cần **một lần** dựng đủ là **đứng yên vĩnh viễn** — F5 bao nhiêu lần cũng đúng
+một con số, không phụ thuộc mạng, không phụ thuộc hạn chót 25 giây.
+
+#### Ba hàng rào (mỗi cái một ca test)
+1. **KHÔNG BAO GIỜ đóng dấu bản thiếu người.** Đóng nhầm bản thiếu = biến lỗi tạm
+   thời thành số sai vĩnh viễn, tệ hơn hẳn bệnh đang chữa. Điều kiện đóng dấu nối
+   thẳng vào `employeeCostAllDegraded` sẵn có.
+2. **Nguồn đổi ⇒ dấu hết hiệu lực.** Khoá gồm chữ ký dữ liệu doanh thu/catalog.
+3. **Chỉ kỳ đã khoá sổ.** Kỳ đang chạy doanh thu còn về, đóng băng là sai.
+
+Thêm: giữ tối đa 8 kỳ, bỏ dấu cũ nhất; đóng dấu hỏng thì nuốt lỗi, cùng lắm dựng lại.
+
+#### Test
+`employeeCostClosedSeal.test.js` **8/8 đạt** (gồm ca khoá `routes.js` phải nối đúng
+điều kiện `!employeeCostAllDegraded`). `server` **1222/1229** — đúng 7 ca nền cũ.
+Build đạt.
+
 ### 2026-08-10 23:10 (giờ VN) — 🔒 SIẾT BẢN NHỚ: tách hai cửa đọc (bot audit đúng cả 3)
 
 Bot audit chặn `462030d` với 3 lỗi correctness ở bản nhớ. **Đúng cả ba.** Điểm ② là
