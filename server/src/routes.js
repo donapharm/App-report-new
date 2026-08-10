@@ -35,6 +35,8 @@ const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
 const employeeBonus = require('./employeeBonus');
+// Phiên bản app vào chữ ký dấu: đổi code cách tính là dấu cũ phải hết hiệu lực.
+const APP_BUILD_VERSION = String(require('../package.json').version || '0');
 const employeePenalty = require('./employeePenalty');
 // Đặt tên khác 'penaltyDisplay' vì trong file đã có biến cục bộ cùng tên ở phần Xu.
 const penaltyExplain = require('./penaltyDisplay');
@@ -1156,6 +1158,45 @@ async function employeeCostAllPayload(req, {
   const roster = employeeCostRosterRows();
   if (Array.isArray(rosterSink)) { rosterSink.length = 0; rosterSink.push(...roster); }
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  /* ── ĐÓNG DẤU KỲ ĐÃ KHOÁ SỔ (CEO đòi dứt điểm 10/08/2026) ──────────────────
+     Tổng màn ALL = cộng sổ từng NV; ai không kịp trong hạn thì dòng của họ không
+     lên bảng ⇒ tổng đổi theo số người kịp về. Kỳ đã khoá sổ thì con số phải BẤT
+     BIẾN: dựng được bản ĐỦ CẢ ĐỘI một lần ⇒ đóng dấu ⇒ từ đó phục vụ nguyên bản.
+
+     ‼ TRA DẤU ĐẶT TRƯỚC MỌI VIỆC NẶNG (bot audit: sau restart, có dấu rồi mà vẫn
+     dựng catalog nên mất 29,8 giây). Chữ ký lấy TRƯỚC khi catalog kịp làm mới — nguồn
+     vừa đổi thì chữ ký lệch ⇒ TRẬT dấu ⇒ đi tiếp đường đầy đủ. Trật thì chỉ chậm,
+     không bao giờ sai: fail-safe đúng chiều. */
+  const rangeClosed = range.months.every((month) => employeeCost.isPeriodClosed(month, employeeCost.vnToday()));
+  const sealKey = closedSeal.keyFor({
+    from: range.from, to: range.to, months: range.months,
+    closed: rangeClosed,
+    // Đủ MỌI nguồn đã tham gia tính. Thiếu một cái là dấu sống sót qua lần nguồn đó
+    // đổi rồi phục vụ số cũ — đúng lỗi bot chỉ ra.
+    sources: {
+      data: store.employeeCostDataSignature(),
+      rates: closedSeal.rateStoreFingerprint(),
+      formula: employeeBonus.FORMULA_VERSION,
+      app: APP_BUILD_VERSION,
+    },
+  });
+  if (sealKey && paginate) {
+    const sealedEarly = closedSeal.read(sealKey);
+    if (sealedEarly) {
+      /* Có dấu thì KHÔNG chờ catalog — nhưng cũng KHÔNG được bỏ luôn việc làm mới nó:
+         các màn khác vẫn xài catalog, để nó ôi là hại chỗ khác. Nên vẫn châm ngòi làm
+         mới Ở NỀN, không await. Nhanh cho người đang xem, mà không bỏ đói ai. */
+      for (const period of quarterMetaOf(employeeCost.toUiMonth(range.to)).kys
+        .map((ky) => catalogManagement.toHubPeriod(ky))
+        .concat(range.months)) {
+        Promise.resolve().then(() => canonicalAssignmentSnapshot(period)).catch(() => {});
+      }
+      return memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
+        employeeCostTable.transformReport(sealedEarly, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
+      ));
+    }
+  }
+
   const sharedCatalogRowsByPeriod = {};
   const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
   const catalogPeriods = [...new Set([...range.months, ...bonusQuarter.kys.map((ky) => catalogManagement.toHubPeriod(ky))])];
@@ -1377,34 +1418,19 @@ async function employeeCostAllPayload(req, {
       },
     };
   }
-  /* ── ĐÓNG DẤU KỲ ĐÃ KHOÁ SỔ (CEO đòi dứt điểm 10/08/2026) ──────────────────
-     Tổng của màn ALL = cộng sổ từng NV. NV nào không kịp trong hạn thì toàn bộ
-     dòng của họ không lên bảng ⇒ **tổng đổi theo số người kịp về** (5 người ra
-     499 dòng, 9 người ra 1.191 dòng, 0 người ra 0 dòng). Vá tốc độ làm chuyện
-     này hiếm đi nhưng KHÔNG dứt: chỉ cần một người trễ là tổng lại nhảy.
-
-     Kỳ đã khoá sổ thì con số phải BẤT BIẾN. Nên: dựng được bản ĐỦ CẢ ĐỘI một lần
-     ⇒ đóng dấu xuống đĩa ⇒ từ đó phục vụ nguyên bản, khỏi dựng lại, khỏi hỏi
-     DataHub. Bản THIẾU người thì TUYỆT ĐỐI không đóng dấu — biến lỗi tạm thời
-     thành số sai vĩnh viễn còn tệ hơn bệnh đang chữa. Nguồn đổi ⇒ chữ ký đổi ⇒
-     dấu hết hiệu lực, tự dựng lại. */
-  const rangeClosed = range.months.every((month) => employeeCost.isPeriodClosed(month, employeeCost.vnToday()));
-  const sealKey = closedSeal.keyFor({
-    from: range.from, to: range.to, months: range.months,
-    closed: rangeClosed, dataSignature: buildDataSignature,
-  });
   const buildMergedSealed = async () => {
     if (sealKey) {
       const sealed = closedSeal.read(sealKey);
       if (sealed) return sealed;
     }
     const built = await buildMerged();
-    if (sealKey && !employeeCostAllDegraded(built)) {
+    // Chặt hơn `employeeCostAllDegraded`: đòi ĐỦ CẢ ĐỘI và MỌI NV `ok` đúng nghĩa —
+    // không nhận `ok_stale_rates` (đóng băng số tạm là đóng băng cái sai).
+    if (sealKey && closedSeal.isSealable(built, roster)) {
       try {
-        closedSeal.write(sealKey, built, { complete: true });
+        await closedSeal.write(sealKey, built, { complete: true });
         console.info('[employee-cost] đã đóng dấu kỳ khoá sổ', { key: sealKey });
       } catch (error) {
-        // Đóng dấu hỏng không được làm hỏng màn — cùng lắm là lần sau dựng lại.
         console.warn('[employee-cost] đóng dấu thất bại', { message: error?.message });
       }
     }

@@ -1,3 +1,29 @@
+### 2026-08-11 01:20 (giờ VN) — 🛡 SIẾT ĐÓNG DẤU: 5 điểm audit của bot, đúng cả 5
+
+Bot audit `59ee22d` nêu 6 điểm. Điểm 1 (hai blocker cache) **đã vá ở `52acfec`** mà bot
+chưa kiểm tới. **Năm điểm còn lại đúng hết**, và đều là lỗi thật của phần đóng dấu.
+
+| # | Bot nêu | Đã sửa |
+|---|---|---|
+| 2 | Bản xài **tỷ lệ cũ** (`ok_stale_rates`) vẫn có thể bị đóng dấu | Thêm `isSealable()` **chặt hơn hẳn** `employeeCostAllDegraded`: đòi **đủ mặt cả đội** theo roster **VÀ mọi NV `sourceOutcome === 'ok'` đúng nghĩa** — không nhận `ok_stale_rates`, `before_go_live`, `deadline`. Không biết đội gồm ai cũng không dám đóng |
+| 3 | Chữ ký thiếu **nguồn tỷ lệ chi phí, công thức, phiên bản code** | Khoá nay gồm **4 nguồn bắt buộc**: `data` (doanh thu/catalog) · `rates` (vân tay `cost_rates_local`) · `formula` (`employeeBonus.FORMULA_VERSION`) · `app` (phiên bản package). **Thiếu bất kỳ cái nào ⇒ `keyFor` trả `null` ⇒ không đóng dấu**, không đoán |
+| 4 | Sau restart, có dấu rồi vẫn dựng catalog — mất **29,8 giây** | Chuyển việc **tra dấu lên TRƯỚC** khối catalog. Có dấu ⇒ trả ngay. Vẫn **châm ngòi làm mới catalog Ở NỀN** (không await) để không bỏ đói các màn khác — ca SWR sẵn có vẫn xanh |
+| 5 | Dấu dùng object chung có thể bị sửa; ghi đồng thời mất dấu | Đọc qua `loadShared` (**đã đóng băng sâu** từ `52acfec`). Ghi **xếp hàng tuần tự**, đọc lại ngay trước khi ghi ⇒ bắn 5 lượt cùng lúc không mất dấu nào |
+| 6 | File tài chính quyền `0664`/`0775`, chưa có kiểm toàn vẹn | Ghi xong **`chmod 0600`** file, **`0700`** thư mục. Mỗi dấu kèm **checksum SHA-256**; đọc mà **lệch checksum ⇒ coi như KHÔNG có dấu**, dựng lại (fail closed) |
+
+Thêm `SEAL_FORMAT = 'v2'` trong khoá: sau này đổi cách đóng dấu thì dấu cũ tự hết
+hiệu lực, khỏi phải đi dọn tay.
+
+#### Ghi nhận về quy trình
+Bot đã chặn **ba lượt liên tiếp, đúng cả ba**, và mỗi lượt đều bắt được thứ tôi bỏ sót
+— trong đó **hai lần là rủi ro tôi ĐÃ BIẾT mà vẫn cho qua** (`slice()` chép nông; "sửa
+xong nhớ `save()`" chống bằng chú thích). Đây là lỗi thái độ, không phải lỗi kỹ thuật.
+
+#### Test
+`employeeCostClosedSeal.test.js` **11/11 đạt** (thêm 3 ca cho điểm 2, 5, 6 + ca khoá
+thứ tự "tra dấu trước catalog" và ca khoá "chữ ký phải gồm 4 nguồn").
+`persistCache.test.js` **14/14**. `server` **1228/1235** — đúng 7 ca nền cũ. Build đạt.
+
 ### 2026-08-11 00:30 (giờ VN) — 🧊 SIẾT BẢN NHỚ ĐỢT 2: đóng băng sâu + đọc trên fd đã mở
 
 Bot audit đợt 2 chặn `141a36a` với 2 lỗi. **Đúng cả hai**, và điểm ④ là chỗ tôi **biết
