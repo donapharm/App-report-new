@@ -189,9 +189,9 @@ test('‼ "không hỏi được backend" KHÁC "đơn vị thiếu nhóm" — k
   assert.match(page, /const \[groupsError, setGroupsError\] = useState\(''\)/);
   // Fulfilled nhưng bị cắt trần cũng phải nói (truncated) — còn lỗi hệ thống thì
   // lấy đúng message của reason như cũ.
-  assert.match(page, /setGroupsError\(unitGroups\.status === 'fulfilled'/);
-  assert.match(page, /unitGroups\.value\.truncated/);
-  assert.match(page, /unitGroups\.reason\?\.message/);
+  assert.match(page, /setGroupsError\(fetchedGroups\.status === 'fulfilled'/);
+  assert.match(page, /fetchedGroups\.value\.truncated/);
+  assert.match(page, /fetchedGroups\.reason\?\.message/);
   assert.match(page, /Không hỏi được bảng "mã đơn vị → nhóm"/);
   assert.match(page, /<b>KHÔNG<\/b> phải đơn vị thiếu nhóm, mà là chưa hỏi được máy chủ/);
   // Phải chỉ đúng endpoint để bot khỏi đi dò mò.
@@ -224,4 +224,89 @@ test('nút "Thử lại" gọi THẲNG load(), không đi vòng qua setOpen', ()
   assert.match(page, /<button type="button" className="btn" disabled=\{loading\} onClick=\{\(\) => load\(\)\}/);
   // Không được quay lại kiểu bảo người dùng đóng/mở panel.
   assert.doesNotMatch(page, /Thu gọn<\/b> rồi <b>Mở phân quyền<\/b> lại/);
+});
+
+/* ── HAI KHUNG ĐỎ CÙNG MỘT GỐC — và cái thứ hai đổ tội nhầm (CEO 09/08 23:59) ──
+ * Ảnh CEO: banner đỏ "Không hỏi được bảng mã đơn vị → nhóm (Failed to fetch)" VÀ
+ * dòng "16 đơn vị chưa nhận diện được nhóm (007.BVĐK…, 008.BVĐK…, 015.TTYT…)".
+ * Nhưng 007/008/015 RÕ RÀNG có nhóm — chúng chỉ "không nhận diện được" vì bảng tra
+ * chưa tải về. Đổ tội cho dữ liệu khiến CEO đi sửa nhầm chỗ và nghi ngờ chính số
+ * liệu của mình.                                                                */
+
+test('‼ chưa hỏi được máy chủ ⇒ màn chi tiết NÓI ĐÚNG lý do, KHÔNG bảo NV thiếu nhóm', () => {
+  assert.match(page, /Chưa hỏi được máy chủ bảng "mã đơn vị → nhóm"<\/b> \(\{groupsError\}\)/);
+  assert.match(page, /<b>KHÔNG phải \{row\.empCode\} thiếu nhóm<\/b>/);
+  // Và phải chặn tay CEO lại: lưới nhóm trống thì cấp quyền là cấp mù.
+  assert.match(page, /đừng cấp quyền<\/b> vì lưới nhóm đang trống/);
+});
+
+test('dòng "N đơn vị chưa nhận diện được nhóm" bị TẮT khi lỗi là do chưa hỏi được', () => {
+  assert.match(page, /\{!!row\.ungroupedUnits\.length && !groupsError &&/);
+});
+
+test('màn chi tiết có nút Thử lại tại chỗ — không bắt quay ra đầu menu', () => {
+  assert.match(page, /onRetryGroups=\{\(\) => load\(\)\}/);
+  assert.match(page, /onRetryGroups && <div className="catalog-grant-retry">/);
+});
+
+test('‼ hụt mạng nhất thời TỰ THỬ LẠI — không đẩy việc của máy sang cho người', () => {
+  assert.match(page, /const withRetry = async \(call, tries = 3\)/);
+  assert.match(page, /withRetry\(\(\) => api\.catalogCostUnitGroups\(batch\)\)/);
+  // Nghỉ tăng dần giữa các lượt, không nện liên tiếp.
+  assert.match(page, /setTimeout\(done, 400 \* \(attempt \+ 1\)\)/);
+  // Hai lời gọi kia KHÔNG bọc retry — chúng hỏng thì đã có đường báo lỗi riêng.
+  assert.match(page, /inlineGroups \? Promise\.resolve\(\{ byUnit: inlineGroups \}\) : fetchUnitGroups\(distinctUnits\)/);
+});
+
+/* ── BẢNG TRA NHÓM HỎNG ⇒ CẢ MENU MÙ, KHÔNG ĐƯỢC KẾT LUẬN GÌ (CEO 10/08 00:02) ──
+ * CEO: *"DN002 chỉ phụ trách 4 mã, trong đó có 036.PKĐK SÀI GÒN TÂM TRÍ / 036.NT-…
+ * — chả phải 036. là một nhóm sao, vậy tại sao vẫn liệt kê 5 đơn vị chưa phân nhóm?"*
+ * Đúng. Ảnh cho thấy DN001 164 ĐV, DN002 5 ĐV, DN003 16 ĐV, DN004 3 ĐV — TẤT CẢ đều
+ * "0 nhóm". Đó là chữ ký của BẢNG TRA RỖNG, không phải của dữ liệu hỏng.          */
+
+test('‼ bảng tra hỏng ⇒ TẮT bảng "việc cần rà" — nó đang khuyên xoá quyền ĐÚNG', () => {
+  // Nguy nhất trong cả sự cố: mục này so quyền đã cấp với nhóm đang phụ trách;
+  // bảng tra rỗng ⇒ kết luận TOÀN BỘ quyền là "quyền thừa" và mời CEO đi dọn.
+  assert.match(page, /Tạm ẩn bảng "việc cần rà"<\/b> vì chưa hỏi được bảng "mã đơn vị → nhóm"/);
+  assert.match(page, /sẽ kết luận <b>SAI<\/b> rằng/);
+  assert.match(page, /dọn theo là mất quyền đúng/);
+  assert.match(page, /groupsError\s*\n?\s*\?\s*<div className="catalog-alert error"/);
+});
+
+test('danh sách NV không lặp lại lời buộc tội sai trên từng dòng', () => {
+  assert.match(page, /\{!!row\.ungroupedUnits\.length && !groupsError && <em className="catalog-scope-warn"/);
+  // Thay bằng câu trung tính, nói đúng trạng thái.
+  assert.match(page, /\{!!groupsError && <em className="catalog-scope-warn">⚠ chưa tra được nhóm<\/em>\}/);
+});
+
+test('‼ chia mẻ 400 mã — một cú trượt không làm mất TOÀN BỘ bảng tra', () => {
+  assert.match(page, /const CHUNK = 400/);
+  assert.match(page, /batches\.map\(\(batch\) => withRetry\(\(\) => api\.catalogCostUnitGroups\(batch\)\)\)/);
+  // Ghép nửa bảng tra là gán oan "chưa có nhóm" cho phần thiếu ⇒ fail-closed.
+  assert.match(page, /fail-closed/);
+});
+
+/* ── BỎ HẲN LƯỢT GỌI HAY TRƯỢT (CEO kẹt lần thứ 3, 10/08 00:08) ──────────────
+ * Nhóm chỉ là tiền tố trước dấu chấm, và máy chủ đã cầm sẵn mọi mã đơn vị khi trả
+ * danh mục. Bắt trình duyệt gửi ngược cả nghìn mã lên để hỏi lại là TỰ DỰNG THÊM
+ * một lượt gọi mạng có thể trượt — và nó trượt thật, làm cả menu phân quyền mù.  */
+
+test('‼ bảng tra nhóm đi KÈM danh mục — đường thường KHÔNG gọi mạng nữa', () => {
+  assert.match(page, /const inlineGroups = unitGroups && Object\.keys\(unitGroups\)\.length \? unitGroups : null/);
+  assert.match(page, /inlineGroups \? Promise\.resolve\(\{ byUnit: inlineGroups \}\) : fetchUnitGroups\(distinctUnits\)/);
+  assert.match(page, /unitGroups=\{data\.unitGroups \|\| null\}/);
+});
+
+test('luật tách nhóm vẫn Ở MÁY CHỦ — frontend chỉ đọc kết quả, không chép luật', () => {
+  const server = fs.readFileSync(new URL('../../server/src/catalogManagement.js', import.meta.url), 'utf8');
+  assert.match(server, /function unitGroupMap\(rows = \[\]\)/);
+  assert.match(server, /catalogCostColumnGrants\.groupOf\(unit\)/);
+  assert.match(server, /unitGroups: unitGroupMap\(rows\)/);
+  // Frontend tuyệt đối không tự tách tiền tố nhóm.
+  assert.doesNotMatch(page, /match\(\/\^\(\\d\{1,4\}\)/);
+});
+
+test('lượt gọi cũ giữ lại làm ĐƯỜNG LUI cho máy chủ bản cũ, không xoá', () => {
+  assert.match(page, /ĐƯỜNG LUI cho máy chủ bản cũ/);
+  assert.match(page, /const fetchUnitGroups = async \(units\)/);
 });

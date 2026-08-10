@@ -61,20 +61,53 @@ test('kho KHÔNG có kỳ chốt ⇒ rơi về đường cũ (vẫn hỏi nguồ
   assert.notEqual(result.pinned, true);
 });
 
-test('‼ kỳ ĐANG CHẠY không bao giờ bị ghim — vẫn hỏi nguồn tươi', () => {
-  // pinnedClosedPayload là cửa duy nhất quyết định ghim; kỳ chưa chốt phải trả null
-  // kể cả khi kho có bản (T08 đã đồng bộ nhưng vẫn là kỳ đang chạy).
+/* ‼ LUẬT ĐỔI 10/08/2026 — CEO ra lệnh lần thứ hai: *"Tao đã yêu cầu lấy bên này
+ * không lấy bên DataHub về % chi phí nữa để không bị lỗi."* Bằng chứng CEO đưa:
+ * cùng kỳ T07, 23:05 màn hiện 359/359 dòng, 00:20 hiện 1.332/1.332 dòng — doanh thu
+ * nhảy vì màn ALL chỉ dựng được dòng của NV lấy được % từ DataHub. Nên kỳ ĐANG CHẠY
+ * cũng phải đọc kho đã đồng bộ, không hỏi nguồn tươi mỗi lượt xem.               */
+
+test('‼ kỳ ĐANG CHẠY cũng đọc KHO đã đồng bộ — không hỏi DataHub mỗi lượt xem', async () => {
   const store = memStore();
-  return seed(store, '2026-08').then(() => {
-    const pinned = employeeCost.pinnedClosedPayload('DN001', { from: '2026-08', to: '2026-08', rateSnapshotStore: store });
-    assert.equal(pinned, null);
-  });
+  await seed(store, '2026-08');
+  const pinned = employeeCost.pinnedClosedPayload('DN001', { from: '2026-08', to: '2026-08', rateSnapshotStore: store });
+  assert.ok(pinned, 'kho có kỳ này thì phải phục vụ từ kho');
+  // Nhãn phân biệt hai nghĩa: kỳ đang chạy là "bản đồng bộ gần nhất", KHÔNG phải
+  // "đã chốt đóng băng vĩnh viễn".
+  assert.equal(pinned.rateSource, 'local_sync');
+  assert.equal(pinned.periods.length, 1);
+  assert.ok(pinned.ratePinnedAt, 'phải kèm mốc giờ lần đồng bộ để truy được');
 });
 
-test('dải kỳ TRỘN (chốt + đang chạy) ⇒ không ghim — không trộn hai chế độ trong một payload', async () => {
+test('kho CHƯA có kỳ đang chạy ⇒ vẫn phải ra nguồn, không bịa bản rỗng', async () => {
+  const store = memStore();
+  await seed(store, CLOSED);
+  const pinned = employeeCost.pinnedClosedPayload('DN001', { from: '2026-08', to: '2026-08', rateSnapshotStore: store });
+  assert.equal(pinned, null);
+});
+
+test('cờ APP_REPORT_COST_LOCAL_FIRST=0 đưa hành vi về như cũ (chỉ kỳ đã chốt)', () => {
+  // Đường lui để đối chiếu với nguồn khi cần; mặc định là BẬT.
+  const source = require('fs').readFileSync(require.resolve('../src/employeeCost'), 'utf8');
+  assert.match(source, /const COST_LOCAL_FIRST = String\(process\.env\.APP_REPORT_COST_LOCAL_FIRST \?\? '1'\) !== '0'/);
+  assert.match(source, /if \(!closed && !COST_LOCAL_FIRST\) return null;/);
+});
+
+test('dải kỳ TRỘN (chốt + đang chạy) ⇒ nhãn lấy mức YẾU HƠN, không hứa quá', async () => {
+  // Cả hai kỳ đều có trong kho nên phục vụ được, nhưng KHÔNG được gắn nhãn
+  // 'local_pinned' cho cả dải — trong đó có kỳ chưa chốt, số vẫn đổi khi đồng bộ lại.
   const store = memStore();
   await seed(store, CLOSED);
   await seed(store, '2026-08');
+  const mixed = employeeCost.pinnedClosedPayload('DN001', { from: CLOSED, to: '2026-08', rateSnapshotStore: store });
+  assert.ok(mixed);
+  assert.equal(mixed.rateSource, 'local_sync');
+  assert.equal(mixed.periods.length, 2);
+});
+
+test('kho thiếu MỘT kỳ trong dải ⇒ không phục vụ nửa vời', async () => {
+  const store = memStore();
+  await seed(store, CLOSED);
   const pinned = employeeCost.pinnedClosedPayload('DN001', { from: CLOSED, to: '2026-08', rateSnapshotStore: store });
   assert.equal(pinned, null);
 });

@@ -789,13 +789,47 @@ function employeeView(snapshot, empCode, periodInput) {
   assertEmployeeSafe(response);
   return response;
 }
+/* ‼ GỬI KÈM BẢNG "MÃ ĐƠN VỊ → NHÓM" NGAY TRONG DANH MỤC (CEO kẹt 3 lần, 10/08/2026).
+ *
+ * Thiết kế cũ của Claude: trình duyệt gom cả nghìn mã đơn vị rồi POST lên hỏi nhóm.
+ * Sai từ gốc — nhóm chỉ là **tiền tố số trước dấu chấm**, máy chủ đã cầm sẵn toàn bộ
+ * mã trong chính danh mục vừa trả. Bắt gửi ngược cả nghìn mã lên chỉ để nhận lại tiền
+ * tố là tự dựng thêm một lượt gọi mạng có thể trượt — và nó trượt thật ("Failed to
+ * fetch"), làm CẢ menu phân quyền mù, tới mức mục "việc cần rà" khuyên xoá quyền đúng.
+ *
+ * Nay bảng tra đi KÈM danh mục: 0 lượt gọi thêm ⇒ không còn đường nào để hỏng.
+ * Luật tách nhóm vẫn nằm NGUYÊN ở máy chủ (`catalogCostColumnGrants.groupOf`) —
+ * frontend chỉ đọc kết quả, không chép luật.
+ *
+ * Gửi theo ĐƠN VỊ RIÊNG (vài trăm mục), không gắn vào từng dòng (27.719 dòng) — cùng
+ * một thông tin nhưng nhẹ hơn hai bậc.
+ */
+function unitGroupMap(rows = []) {
+  const catalogCostColumnGrants = require('./catalogCostColumnGrants');
+  const units = [...new Set(rows.map((row) => String(row?.unit_code || '').trim()).filter(Boolean))];
+  const nameOf = new Map();
+  for (const unit of units) {
+    const group = catalogCostColumnGrants.groupOf(unit);
+    if (!group) continue;
+    const name = unit.replace(/^\s*\d{1,4}\s*[.\-]\s*/, '').trim();
+    const current = nameOf.get(group);
+    if (!current || name.length < current.length) nameOf.set(group, name);
+  }
+  const byUnit = {};
+  for (const unit of units) {
+    const group = catalogCostColumnGrants.groupOf(unit);
+    // Không phân giải được ⇒ null (nói thẳng), đúng như route POST cũ.
+    byUnit[unit] = group ? { key: group, label: `${group} · ${nameOf.get(group) || group}` } : null;
+  }
+  return byUnit;
+}
 function adminView(snapshot) {
   assertCatalogFieldPolicy(snapshot, 'adminCatalogSnapshot');
   // The browser only needs the resolved unit+QLNB timeline. Keep the full
   // restricted catalog server-side in the versioned LKG snapshot to avoid
   // sending a duplicate ~6 MB payload on every CEO page load.
   const rows = snapshot.rows.map((row) => row.province ? row : { ...row, province: provinceOf(row.unit_code, row.unit_code) });
-  return { period: snapshot.period, period_ui: toUiPeriod(snapshot.period), rows, catalog_total: Array.isArray(snapshot.catalog) ? snapshot.catalog.length : 0, history: snapshot.history || [], meta: snapshot.meta };
+  return { period: snapshot.period, period_ui: toUiPeriod(snapshot.period), rows, catalog_total: Array.isArray(snapshot.catalog) ? snapshot.catalog.length : 0, history: snapshot.history || [], meta: snapshot.meta, unitGroups: unitGroupMap(rows) };
 }
 async function getHistory() {
   if (!configured()) return { history: [], source: 'unavailable' };
@@ -825,4 +859,4 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };
+module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };

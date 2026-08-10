@@ -2229,6 +2229,8 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-match-warning.employee-cost-data-mismatch { border-color:#f1aeb5; border-left-color:#b42318; background:#fff1f2; color:#8f1d1d; }
 /* Đang xài bản % cũ: là TIN, không phải LỖI — màu xanh dịu, không đỏ/vàng gắt. */
 .employee-cost-match-warning.is-stale { border-color:#9ec5e8; border-left-color:#1f6fb2; background:#f2f8fd; color:#154c7c; }
+/* Phép cân doanh thu: mỗi dòng một khoản, đọc từ trên xuống là ra chỗ tiền nằm. */
+.employee-cost-recon { display:grid; gap:3px; margin-top:6px; line-height:1.55; }
 .employee-cost-summary-row { display:flex; align-items:center; justify-content:flex-end; gap:18px; padding:11px 13px; border:1px solid var(--line); border-top:0; background:#f4f9fc; font-size:12px; }
 .employee-cost-summary-row span { font-weight:800; }
 .employee-cost-summary-row b { min-width:140px; color:#075d9b; text-align:right; font-size:14px; font-variant-numeric:tabular-nums; }
@@ -2607,6 +2609,7 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .cost-breakdown-up td:nth-child(4) { color:#b3261e; font-weight:800; }
 .cost-breakdown-down td:nth-child(4) { color:#0f7b53; font-weight:800; }
 .catalog-groups-error { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.catalog-grant-retry { margin-top:8px; }
 .cost-breakdown-pick-head { display:flex; gap:6px; justify-content:space-between; padding-bottom:6px; border-bottom:1px solid var(--line); }
 .cost-breakdown-pick-list { display:grid; gap:4px; max-height:220px; overflow:auto; padding:6px 0; }
 .cost-breakdown-pick-hint { display:block; padding-top:4px; border-top:1px solid var(--line); font-size:10.5px; }

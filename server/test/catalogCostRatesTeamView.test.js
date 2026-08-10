@@ -38,7 +38,11 @@ test('chỉ màn cần SỐ mới gửi pairs=1 — menu phân quyền không t�
   assert.match(block, /const wantPairs = String\(req\.query\.pairs \|\| ''\) === '1'/);
   assert.match(page, /api\.catalogCostRates\(period \? \{ period, pairs: 1 \} : \{ pairs: 1 \}\)/);
   // Menu phân quyền gọi không cờ.
-  assert.match(page, /api\.catalogCostGrants\(\), api\.catalogCostRates\(\), api\.catalogCostUnitGroups\(distinctUnits\)/);
+  // Bảng tra nhóm nay đi KÈM danh mục nên đường thường không gọi mạng; lượt gọi cũ
+  // chỉ còn là đường lui. Điều cần khoá vẫn là: menu phân quyền gọi `catalogCostRates()`
+  // KHÔNG kèm `pairs=1` ⇒ không tải hàng vạn cặp.
+  assert.match(page, /api\.catalogCostGrants\(\), api\.catalogCostRates\(\),/);
+  assert.match(page, /inlineGroups \? Promise\.resolve\(\{ byUnit: inlineGroups \}\) : fetchUnitGroups\(distinctUnits\)/);
 });
 
 test('nhánh CEO KHÔNG áp hàng rào quyền cột/nhóm — CEO xem tất cả', () => {

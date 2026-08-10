@@ -1,3 +1,119 @@
+### 2026-08-10 01:00 (giờ VN) — 💰 "Doanh thu chạy đi đâu mất" — phép cân hiện thẳng lên màn
+
+CEO: *"Doanh thu thực tế của T07.2026 đâu phải số này, tại sao nó cứ nhảy như điên vậy, và giờ nó đang nằm ở đâu? Mất mẹ nó doanh thu chạy đi đâu mất không còn đủ."*
+
+**Câu hỏi đúng, và trước nay màn KHÔNG trả lời được.** Nguyên nhân: màn "Tất cả nhân viên" dựng bảng bằng cách **ghép sổ chi phí của TỪNG nhân viên**. NV nào chưa lấy được % thì **toàn bộ dòng doanh thu của họ không lên bảng**. Doanh thu là dữ liệu **của App Report** và luôn đủ — nhưng con số hiển thị lại **phụ thuộc nguồn %**, nên nguồn chập chờn vài người là tổng tụt theo, và tụt khác nhau mỗi lượt xem (359 dòng lúc 23:05 → 1.332 dòng lúc 00:20).
+
+**Nay có phép cân, hiện ngay dưới cảnh báo, áp đúng luật "không dòng nào biến mất lặng lẽ" cho TIỀN:**
+
+```
+Tổng doanh thu kỳ (kho App Report)   ← số thật, không phụ thuộc nguồn %
+  − Đang hiện trên bảng
+  − Của NV chưa lấy được %           ← kèm ĐÍCH DANH mã NV, xếp số lớn trước
+  − Dòng chưa gán được nhân viên     ← tách riêng, KHÁC hẳn nguyên nhân trên
+  = 0  (lệch ⇒ nói thẳng "cân vẫn lệch X đồng, báo Claude")
+```
+
+Mỗi nguyên nhân kèm **đúng việc phải làm**: thiếu % ⇒ bấm "Đồng bộ % chi phí" cho kỳ đó; dòng chưa gán NV ⇒ vào tab "Kiểm soát dữ liệu" (việc gán người, không phải lỗi %). Hai nguyên nhân, hai cách sửa — trộn lại là đi sửa nhầm chỗ.
+
+Đối soát hỏng **không được làm hỏng báo cáo**, nhưng phải nói là chưa soát được. Mọi số tiền nằm dưới con mắt che số.
+
+Test: server **1178** pass / 7 fail cố hữu · web **420/420** · build sạch. Test mới: `employeeCostRevenueRecon.test.js` (6) + 4 test màn.
+
+---
+
+### 2026-08-10 00:45 (giờ VN) — ‼ THÔI HỎI DATAHUB VỀ % CHI PHÍ: kỳ đang chạy cũng đọc kho đã đồng bộ
+
+CEO ra lệnh **lần thứ hai**, rất bực: *"Tao đã yêu cầu lấy bên này không lấy bên DataHub về % chi phí nữa để không bị lỗi. Yêu cầu mày xử lý cả số liệu nạp trở lại đủ cho tao T07.2026."*
+
+#### Bằng chứng CEO đưa ra chỉ đúng gốc bệnh
+
+Cùng kỳ **T07.2026**, hai lần chụp màn cách nhau hơn một tiếng:
+- **23:05** — *"Hiện **359/359** dòng"*, 16 NV báo chưa lấy được chi phí;
+- **00:20** — *"Hiện **1.332/1.332** dòng"*, doanh thu **20.035.615.366đ**, còn 10 NV.
+
+**Doanh thu nhảy vì màn ALL chỉ dựng được dòng của những NV lấy được % từ DataHub.** Doanh thu là dữ liệu **của App Report**, luôn đủ — nhưng nguồn % chập chờn vài NV là doanh thu tụt theo. Đây chính là "dữ liệu nhảy lambada".
+
+#### Sửa: kho có kỳ nào thì dùng kỳ đó
+
+Bản cũ **chỉ** đọc kho khi kỳ **đã khoá sổ** (`isPeriodClosed`); kỳ đang chạy vẫn ra mạng **mỗi lượt xem** ⇒ vẫn nhảy. Nay **kho có kỳ nào thì phục vụ kỳ đó**, đóng hay mở sổ đều vậy.
+
+Kho do **chính CEO** bấm "Đồng bộ % chi phí" nạp vào (all-or-nothing 21/21, có mốc giờ + tên người bấm) ⇒ bản số **ổn định và truy được**, khác hẳn việc mỗi lượt xem lại rút một bản khác nhau về.
+
+Ba chốt giữ cho khỏi hứa quá:
+1. **Nhãn phân biệt hai nghĩa:** `local_pinned` = kỳ đã chốt, đóng băng vĩnh viễn · `local_sync` = kỳ đang chạy, số của lần đồng bộ gần nhất. Dải kỳ **trộn** lấy nhãn **yếu hơn** (`local_sync`).
+2. **Kho thiếu MỘT kỳ trong dải ⇒ không phục vụ nửa vời**, vẫn ra nguồn như cũ.
+3. **Đường lui:** `APP_REPORT_COST_LOCAL_FIRST=0` đưa hành vi về đúng như trước (chỉ kỳ đã chốt mới đọc kho).
+
+#### Để T07 đủ số, cần đúng một thao tác của CEO
+
+Kho hiện **mới có T08** (CEO bấm lúc 20:06). **T07 chưa có** vì nút bị khoá bởi lỗi 502 của cửa danh mục — đã gỡ ở `d77eaef`. Sau khi deploy: chọn **Kỳ 07.2026** → bấm **"Đồng bộ % chi phí"** một lần. Từ đó T07 **đứng yên vĩnh viễn**, DataHub sống chết cũng không đổi số.
+
+Test: server **1172** pass / 7 fail cố hữu · web **416/416** · build sạch.
+
+---
+
+### 2026-08-10 00:30 (giờ VN) — 🔧 BỎ HẲN lượt gọi gây lỗi: bảng tra nhóm đi KÈM danh mục
+
+CEO kẹt **lần thứ ba** ở cùng một chỗ: *"bây giờ tao vào phân quyền cho NV khác cũng vướng lỗi tùm lum, méo hiểu làm như nào đây."* Hai lần trước Claude **vá thông báo** (nói đúng nguyên nhân, thêm nút Thử lại, tự thử lại 3 lượt). Vá lời thì lỗi vẫn còn — lần này bỏ hẳn **cái gây ra lỗi**.
+
+#### Thiết kế sai từ gốc
+
+Nhóm mã đơn vị chỉ là **tiền tố số trước dấu chấm** (`036.PKĐK SÀI GÒN TÂM TRÍ` → **036**). Máy chủ **đã cầm sẵn toàn bộ mã đơn vị** khi trả danh mục. Vậy mà Claude bắt trình duyệt **gom cả nghìn mã gửi ngược lên** chỉ để nhận lại tiền tố — tự dựng thêm một lượt gọi mạng **có thể trượt**. Và nó trượt thật (*"Failed to fetch"*), làm **cả menu phân quyền mù**, tới mức mục "việc cần rà" khuyên CEO xoá quyền đúng.
+
+#### Sửa: gửi kèm, không hỏi lại
+
+`GET /catalog-management` nay trả kèm **`unitGroups`** — bảng tra `mã đơn vị → {nhóm, nhãn}` dựng ngay ở máy chủ bằng đúng `catalogCostColumnGrants.groupOf`. Kết quả:
+- **0 lượt gọi thêm** ⇒ **không còn đường nào để hỏng**;
+- **luật tách nhóm vẫn nằm nguyên ở máy chủ**, frontend chỉ đọc kết quả (không chép luật — có test cấm);
+- gửi theo **đơn vị riêng** (vài trăm mục) chứ không gắn vào từng dòng (27.719 dòng) — cùng thông tin, nhẹ hơn hai bậc;
+- lượt gọi POST cũ **giữ lại làm đường lui** cho máy chủ bản cũ, không xoá.
+
+**Trả lời câu CEO hỏi:** `036.` đúng là một nhóm, và máy **tự nhận ra** — CEO không phải gõ "036." hay "033." cho bất kỳ mã nào. Việc đó là của máy, và từ bản này nó không còn cửa nào để làm sai.
+
+Test: server 1168/1176 (7 fail cố hữu + 1 test hẹn-giờ chập chờn khi chạy cả bộ, chạy riêng 7/7 đạt) · web **416/416** · build sạch.
+
+---
+
+### 2026-08-10 00:20 (giờ VN) — ‼ Bảng tra nhóm hỏng làm CẢ MENU PHÂN QUYỀN mù — và nó đang khuyên xoá quyền ĐÚNG
+
+CEO: *"DN002 chỉ phụ trách 4 mã, trong đó có **036.PKĐK SÀI GÒN TÂM TRÍ / 036.NT-PKĐK SÀI GÒN TÂM TRÍ** — chả phải **036.** là một nhóm sao? Vậy tại sao vẫn liệt kê 5 đơn vị chưa phân nhóm?"*
+
+**CEO đúng, và ảnh còn cho thấy chuyện lớn hơn:** DN001 164 ĐV · DN002 5 ĐV · DN003 16 ĐV · DN004 3 ĐV — **TẤT CẢ đều "0 nhóm"**. Đó là **chữ ký của bảng tra rỗng**, không phải của dữ liệu hỏng. Bằng chứng nằm ngay trong nhật ký cùng màn: *"DN003: C43: **007, 008, 015, 017, 019, 021, 042**"* — nhóm đã từng tra ra bình thường lúc 23:51.
+
+#### Chỗ nguy nhất: mục "việc cần rà" đang mời CEO xoá quyền đúng
+
+Mục đó so quyền đã cấp với nhóm NV đang phụ trách. Bảng tra rỗng ⇒ mọi NV "0 nhóm" ⇒ nó kết luận **toàn bộ 11 quyền của DN003 là "quyền thừa"** và mời đi dọn. **Dọn theo là mất sạch quyền đúng.** Khuyên sai còn nguy hơn không khuyên gì.
+
+**Sửa:** bảng tra hỏng ⇒ **TẮT hẳn** mục "việc cần rà", thay bằng câu nói rõ vì sao và cảnh báo *"dọn theo là mất quyền đúng"*. Dòng *"N ĐV chưa có nhóm"* trên từng dòng NV cũng tắt — thay bằng câu trung tính *"⚠ chưa tra được nhóm"*, nói **một lần** ở cảnh báo đầu menu thay vì lặp lời buộc tội sai trên mọi dòng.
+
+#### Chặn gốc: chia mẻ + tự thử lại
+
+Bản cũ hỏi **một lượt cho toàn bộ mã đơn vị** — trượt một cái là mất **toàn bộ** bảng tra. Nay chia **mẻ 400 mã**, mỗi mẻ tự thử **3 lượt** (nghỉ 0,4s → 0,8s). Một mẻ hỏng hẳn thì coi như hỏng cả (**fail-closed**) — ghép nửa bảng tra sẽ gán oan "chưa có nhóm" cho phần thiếu, đúng cái sai đang phải sửa.
+
+**Trả lời thẳng câu CEO hỏi:** không, CEO **không phải** gõ "036." hay "033." cho từng mã. Việc tách nhóm là **tự động** theo tiền tố trước dấu chấm, máy làm hết. Ô gõ "033." là của **hai menu chi phí** (lọc nhanh), không liên quan menu phân quyền.
+
+Test: server 1169 / 7 fail cố hữu · web **413/413** · build sạch.
+
+---
+
+### 2026-08-10 00:10 (giờ VN) — 🧩 Hai khung đỏ ở màn Phân quyền: CÙNG MỘT GỐC, và cái thứ hai đổ tội nhầm
+
+CEO: *"chỗ phân quyền này tôi chưa hiểu, nó báo lỗi nọ kia là sao."* Xem ảnh thì thấy **hai khung đỏ nói hai chuyện khác nhau về cùng một sự cố** — đọc xong không ai hiểu nổi:
+
+1. *"Không hỏi được bảng 'mã đơn vị → nhóm' (**Failed to fetch**)"* — đúng nguyên nhân.
+2. *"**16 đơn vị chưa nhận diện được nhóm** (007.BVĐK KV ĐỊNH QUÁN, 008.BVĐK KV LONG KHÁNH, 015.TTYT H. CẨM MỸ…)"* — **đổ tội cho dữ liệu**.
+
+**Khung 2 sai.** Các mã `007.` `008.` `015.` **rõ ràng có nhóm** — bằng chứng ngay dòng dưới: *"Đang cấp: C36: 140, 147, 149, 151 · C43: 007, 008, 015, 017, 019, 021, 042"*. Chúng chỉ "không nhận diện được" vì **bảng tra chưa tải về**. Nói sai nguyên nhân khiến CEO đi sửa nhầm chỗ và ngồi nghi ngờ chính dữ liệu của mình — đúng thứ đã ngốn cả tối nay ở chỗ khác.
+
+**Sửa:** khi lỗi là *chưa hỏi được máy chủ*, màn chi tiết nói đúng như vậy, kèm **nút Thử lại tại chỗ** và câu chặn tay: *"lưới nhóm đang trống thì **đừng cấp quyền**"* — cấp lúc này là cấp mù. Dòng "N đơn vị chưa nhận diện được nhóm" **bị tắt** trong tình huống đó.
+
+**Chặn gốc:** *"Failed to fetch"* là **hụt mạng nhất thời**. Bắt CEO tự bấm "Thử lại" cho một cú trượt mạng là đẩy việc của máy sang cho người. Nay tự thử **3 lượt, nghỉ tăng dần (0,4s → 0,8s)**; vẫn hỏng mới báo — lúc đó là hỏng thật.
+
+Test: server 1169 / 7 fail cố hữu · web **410/410** · build sạch.
+
+---
+
 ### 2026-08-09 23:35 (giờ VN) — 🚧 GỠ NÚT THẮT: 502 cửa danh mục đang KHOÁ CHẾT nút đồng bộ % · đổi màn hết quay vòng
 
 CEO gửi ảnh kỳ 07.2026 lúc 23:24 — ba dữ kiện trong một ảnh chỉ ra đúng chuỗi nhân quả:

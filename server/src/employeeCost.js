@@ -1277,6 +1277,28 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
    · Bản ghim mang nhãn `rateSource: 'local_pinned'` + mốc đồng bộ — nói rõ số từ
      đâu ra, không giả làm số vừa kéo.
    ═══════════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ‼ ƯU TIÊN KHO % ĐÃ ĐỒNG BỘ, KHÔNG HỎI DATAHUB NỮA (CEO ra lệnh 2 lần, 10/08/2026)
+
+   CEO: *"Tao đã yêu cầu lấy bên này không lấy bên DataHub về % chi phí nữa để không
+   bị lỗi. Yêu cầu mày xử lý cả số liệu nạp trở lại đủ cho tao T07.2026."*
+
+   Vì sao lệnh này đúng — bằng chứng từ chính màn của CEO: 23:05 hiện **359/359 dòng**,
+   00:20 hiện **1.332/1.332 dòng**, cùng kỳ T07. Doanh thu "nhảy" vì màn ALL chỉ dựng
+   được dòng của những NV **lấy được % từ DataHub**; DataHub trả chậm/đứt vài NV là
+   doanh thu tụt theo — dù doanh thu là dữ liệu CỦA App Report, luôn đủ.
+
+   Bản cũ chỉ dùng kho khi kỳ **đã khoá sổ** (`isPeriodClosed`). Kỳ đang chạy vẫn ra
+   mạng mỗi lượt xem ⇒ vẫn nhảy. Nay: **kho có kỳ nào thì dùng kỳ đó**, đóng hay mở
+   sổ đều vậy. Kho do CHÍNH CEO bấm "Đồng bộ % chi phí" nạp vào (all-or-nothing 21/21),
+   có mốc giờ + tên người bấm, nên đây là bản số ỔN ĐỊNH và TRUY ĐƯỢC — khác hẳn việc
+   mỗi lượt xem lại rút một bản khác nhau về.
+
+   Muốn số mới ⇒ bấm "Đồng bộ % chi phí" lần nữa. Tắt hẳn cơ chế này bằng
+   `APP_REPORT_COST_LOCAL_FIRST=0` (chỉ dùng khi cần đối chiếu với nguồn).
+   ═══════════════════════════════════════════════════════════════════════════════ */
+const COST_LOCAL_FIRST = String(process.env.APP_REPORT_COST_LOCAL_FIRST ?? '1') !== '0';
+
 function pinnedClosedPayload(empCode, options = {}) {
   let range;
   try { range = parseMonthRange(options); } catch { return null; }
@@ -1285,8 +1307,13 @@ function pinnedClosedPayload(empCode, options = {}) {
   const snapshotOptions = options.rateSnapshotStore ? { store: options.rateSnapshotStore } : {};
   const periods = [];
   let fetchedAt = '';
+  let allClosed = true;
   for (const month of range.months) {
-    if (!isPeriodClosed(month, today)) return null;
+    const closed = isPeriodClosed(month, today);
+    // Kỳ CHƯA khoá sổ vẫn được dùng kho — nhưng chỉ khi bật local-first. Tắt cờ thì
+    // hành vi trở lại y như cũ (chỉ kỳ đã chốt mới đọc kho).
+    if (!closed && !COST_LOCAL_FIRST) return null;
+    if (!closed) allClosed = false;
     const local = rateSnapshot.readLocalSync(empCode, month, snapshotOptions);
     if (!local) return null;
     periods.push({ ...emptyPayload(empCode, DEFAULT_NOTE), period: month, columns: local.payload.columns, rows: local.payload.rows });
@@ -1298,7 +1325,9 @@ function pinnedClosedPayload(empCode, options = {}) {
     to: range.to,
     periods,
     note: DEFAULT_NOTE,
-    rateSource: 'local_pinned',
+    // Phân biệt hai nghĩa: 'local_pinned' = kỳ đã chốt, số đóng băng vĩnh viễn;
+    // 'local_sync' = kỳ đang chạy, số lấy từ lần CEO bấm đồng bộ gần nhất.
+    rateSource: allClosed ? 'local_pinned' : 'local_sync',
     ratePinnedAt: fetchedAt || null,
   };
 }
