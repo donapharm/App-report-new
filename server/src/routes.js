@@ -688,6 +688,9 @@ router.get('/auth/demo-users', (req, res) => {
 // Cho frontend biết chế độ đăng nhập: có OTP/SSO thật không, còn cho demo không.
 router.get('/auth/mode', (req, res) => res.json({
   live: auth.liveAuthEnabled(),
+  // ‼ Kênh "SĐT + OTP" bật/tắt Ở ĐÂY, không phải bằng hằng viết cứng trong bundle web
+  // (CEO 10/08/2026: màn login "bỏ qua bước nhập số điện thoại", mặc định nhảy vào bot).
+  otp: auth.otpLoginEnabled(),
   demo: auth.demoAllowed(),
   telegram: auth.telegramConfigured(),
   trustedDeviceSso: auth.trustedDeviceSsoConfigured(),

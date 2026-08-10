@@ -377,6 +377,20 @@ const OTP_BACKEND_TIMEOUT_MS = Number.isFinite(otpBackendTimeoutEnv)
   ? Math.min(60000, Math.max(250, otpBackendTimeoutEnv))
   : 10000;
 const liveAuthEnabled = () => !!(OTP_URL || SSO_URL);
+/**
+ * ‼ CÔNG TẮC KÊNH "SĐT + OTP" NẰM Ở BACKEND, KHÔNG VIẾT CỨNG TRONG WEB
+ * (CEO bực 10/08/2026: *"nó bỏ qua bước nhập số điện thoại là sao, vậy nó mặc định
+ * nhảy vào bot devreport làm tao phát điên."*)
+ *
+ * Trước đây web có hằng `SHOW_ZALO_OTP_UI = false` viết cứng để tạm giấu đường OTP
+ * lúc dịch vụ Zalo lỗi. Hệ quả: ô nhập SĐT **biến mất khỏi màn login**, và muốn bật
+ * lại phải SỬA CODE + BUILD + DEPLOY. Công tắc vận hành mà nằm trong bundle thì
+ * không ai bật/tắt được lúc cần — đó là lỗi thiết kế, không phải lỗi tạm.
+ *
+ * Nay: bật/tắt bằng `LOGIN_OTP_ENABLED` (mặc định BẬT khi đã cấu hình OTP_BACKEND_URL).
+ * Đặt `LOGIN_OTP_ENABLED=0` là tắt ngay, không cần build lại.
+ */
+const otpLoginEnabled = () => !!OTP_URL && String(process.env.LOGIN_OTP_ENABLED ?? '1') !== '0';
 function normPhone(v) {
   let s = String(v || '').replace(/[^\d]/g, '');
   if (s.startsWith('84')) s = '0' + s.slice(2);
@@ -816,7 +830,7 @@ function requireCeo(req, res, next) {
 
 module.exports = {
   mockLogin, enforceAccessPolicyBoundary, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, revenueScopeOf, sessionForUser, getSession,
-  issueToken, liveAuthEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
+  issueToken, liveAuthEnabled, otpLoginEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   accessProfileFor: accessPolicy.accessProfileFor,
   canReadAllRevenue: accessPolicy.canReadAllRevenue,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,

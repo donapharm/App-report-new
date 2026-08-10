@@ -1,3 +1,26 @@
+### 2026-08-10 10:15 (giờ VN) — 🔑 TRẢ LẠI Ô NHẬP SỐ ĐIỆN THOẠI Ở MÀN ĐĂNG NHẬP
+
+CEO: *"Tao đã yêu cầu có nhiều cách đăng nhập… nhưng quan trọng là phải nhập số điện thoại muốn đăng nhập vào. Hiện tại tao muốn đăng nhập vào tài khoản khác để kiểm tra thì tao phải nhập đúng số điện thoại của tài khoản đó để trả OTP về. Nhưng ở đây nó bỏ qua bước nhập số điện thoại là sao — vậy nó mặc định nhảy vào bot devreport."*
+
+#### Nguyên nhân: công tắc vận hành bị viết cứng trong bundle web
+
+`web/src/pages/Login.jsx` có hằng **`SHOW_ZALO_OTP_UI = false`** — đặt để *tạm* giấu đường OTP lúc dịch vụ Zalo lỗi. Giấu xong thì trên màn **chỉ còn MỘT cửa là Telegram**, nên nhìn như hệ thống tự nhảy vào bot. Tệ hơn: muốn bật lại phải **sửa code + build + deploy**. Công tắc vận hành mà nằm trong bundle thì không ai bật/tắt được đúng lúc cần — đó là lỗi thiết kế, không phải lỗi tạm.
+
+#### Đã làm
+
+- **Bỏ hằng viết cứng.** Kênh SĐT+OTP nay bật/tắt bằng biến môi trường **`LOGIN_OTP_ENABLED`** (mặc định BẬT khi đã có `OTP_BACKEND_URL`). `/auth/mode` trả thêm cờ `otp`; web chỉ bày ra chứ không tự đoán. Backend bản cũ chưa có cờ vẫn chạy (rơi về `live`).
+- **Hàng chọn cách đăng nhập** khi có từ hai cửa: `📱 Số điện thoại` · `✈️ Telegram`. **Mặc định là SĐT** — đó là đường DUY NHẤT chọn được tài khoản nào đăng nhập.
+- **Cửa SĐT có ô nhập thật**: *"Số điện thoại của tài khoản cần vào"* → Gửi mã OTP → nhập mã → (nếu 1 SĐT có nhiều mã NV thì chọn tài khoản).
+- **Nói trước ranh giới an ninh**: mã OTP luôn về **đúng máy của số đó** (Zalo/SMS), không gửi sang máy khác. Muốn kiểm tra tài khoản NV thì nhập SĐT của họ và nhờ họ đọc mã. Gửi được sang máy khác thì ai biết SĐT cũng vào được — cấm tuyệt đối.
+- **Cửa Telegram giải thích vì sao không có ô SĐT**: Telegram nhận diện theo chính tài khoản Telegram đang mở.
+- **Chỉ còn Telegram thì nói rõ vì sao** (`LOGIN_OTP_ENABLED` đang tắt / chưa cấu hình `OTP_BACKEND_URL`), không im lặng bỏ trống.
+- **OTP lỗi ⇒ có ngay nút thoát** sang Telegram — đúng tình huống từng khiến cả cửa SĐT bị giấu đi.
+- **Đổi cửa thì dọn sạch cửa cũ** (`stopTelegram` + xoá mã) để mã Telegram cũ không âm thầm đếm ngược/poll phía sau ô nhập SĐT rồi đăng nhập nhầm tài khoản.
+
+Trạng thái test: web **438/438 pass** (13 test trong `Login.telegramOnly.test.mjs`, viết lại theo hành vi mới), build sạch; server **1180 pass / 7 fail cố hữu**.
+
+**Còn chờ vận hành:** PROD phải có `OTP_BACKEND_URL` trỏ đúng cửa OTP (port 3848) thì ô SĐT mới hiện. Chưa có thì màn sẽ nói thẳng là đang tắt.
+
 ### 2026-08-10 09:45 (giờ VN) — 📅 BẢNG DANH MỤC TỰ KHAI KỲ CỦA NÓ
 
 CEO: *"Đáng lẽ khi chọn kỳ phụ trách ở trên là T07.2026 thì ở dưới bảng danh mục cột phụ trách từ kỳ nó cũng phải nhảy theo, hoặc làm sao để nhìn thấy bảng dưới chính xác là của T07.2026, còn chuyển kỳ thì nó cho biết bảng của tháng mấy chứ."*

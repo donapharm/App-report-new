@@ -18,16 +18,40 @@ function ZaloOA() {
 
 const cardStyle = { background: 'rgba(255,255,255,.12)', border: 'none', color: '#fff' };
 
-// Tạm ẩn đường OTP Zalo khi dịch vụ đang lỗi. Giữ nguyên toàn bộ flow bên dưới để
-// bật lại bằng đúng một thay đổi UI, không đụng backend/token/config.
-const SHOW_ZALO_OTP_UI = false;
+/* ═══════════════════════════════════════════════════════════════════════════════
+   MÀN LOGIN PHẢI CHO CHỌN CÁCH ĐĂNG NHẬP — VÀ ĐƯỜNG SĐT PHẢI CÓ Ô NHẬP SĐT
+   (CEO bực 10/08/2026)
+
+   CEO: *"Tao đã yêu cầu có nhiều cách đăng nhập… nhưng quan trọng là phải nhập số
+   điện thoại muốn đăng nhập vào. Hiện tại tao muốn đăng nhập vào tài khoản khác để
+   kiểm tra thì tao phải nhập đúng số điện thoại của tài khoản đó để trả OTP về.
+   Nhưng ở đây nó bỏ qua bước nhập số điện thoại là sao — vậy nó mặc định nhảy vào
+   bot devreport."*
+
+   Nguyên nhân: bản trước có hằng `SHOW_ZALO_OTP_UI = false` **viết cứng trong web**
+   để tạm giấu đường OTP lúc dịch vụ Zalo lỗi. Giấu xong thì trên màn chỉ còn MỘT
+   cửa — Telegram — nên nhìn như hệ thống "tự nhảy vào bot". Công tắc vận hành mà
+   nằm trong bundle thì phải sửa code + build + deploy mới bật lại được.
+
+   Nay: **backend nói kênh nào đang bật** (`mode.otp`, `mode.telegram`), web chỉ bày
+   ra. Có từ hai kênh thì hiện hàng chọn; **ưu tiên mặc định là SĐT + OTP** vì đó là
+   đường duy nhất chọn được TÀI KHOẢN NÀO đăng nhập.
+
+   ‼ RANH GIỚI AN NINH GIỮ NGUYÊN: nhập SĐT của người khác thì OTP vẫn **về máy của
+   người đó**, không về máy người đang gõ. Đây là chủ ý — màn hình phải NÓI RÕ điều
+   này thay vì để người dùng tưởng nhập số là vào được.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/** Kênh SĐT+OTP có dùng được không — do BACKEND quyết, web không tự đoán.
+ *  `otp` là cờ mới; `live` giữ lại làm đường lui cho backend bản cũ chưa có cờ. */
+const otpAvailable = (mode) => !!mode && (mode.otp === undefined ? !!mode.live : !!mode.otp);
 
 export default function Login({ onLogin }) {
-  const [mode, setMode] = useState(null);        // { live, demo, telegram }
+  const [mode, setMode] = useState(null);        // { live, otp, demo, telegram }
   const [demoUsers, setDemoUsers] = useState([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [showOtp, setShowOtp] = useState(false); // mở form SĐT/OTP (dự phòng)
+  const [channel, setChannel] = useState('');    // 'phone' | 'telegram' — cách đang chọn
 
   // Telegram flow
   const [tg, setTg] = useState(null);            // { login_code, poll_secret, bot_link }
@@ -69,9 +93,12 @@ export default function Login({ onLogin }) {
         const m = await api.mode();
         if (cancelled) return;
         setMode(m);
+        // Ưu tiên SĐT vì chỉ đường này mới CHỌN ĐƯỢC tài khoản muốn vào. Telegram
+        // luôn nhận diện theo chính tài khoản Telegram đang mở, không đổi được.
+        setChannel(otpAvailable(m) ? 'phone' : (m.telegram ? 'telegram' : ''));
         if (m.demo) api.demoUsers().then((x) => !cancelled && setDemoUsers(x)).catch(() => {});
       } catch {
-        if (!cancelled) setMode({ live: false, demo: false, telegram: true });
+        if (!cancelled) { setMode({ live: false, otp: false, demo: false, telegram: true }); setChannel('telegram'); }
       }
     }
     initLogin();
@@ -158,8 +185,17 @@ export default function Login({ onLogin }) {
 
   const ceo = demoUsers.filter((u) => u.role !== 'sale');
   const sale = demoUsers.filter((u) => u.role === 'sale');
-  const showTelegram = mode && mode.telegram;
-  const showOtpFlow = SHOW_ZALO_OTP_UI && mode && mode.live;
+  const showTelegram = !!(mode && mode.telegram);
+  const showOtpFlow = otpAvailable(mode);
+  const bothChannels = showTelegram && showOtpFlow;
+  // Đổi cách đăng nhập thì dọn sạch dấu vết cách cũ — không để mã Telegram còn đếm
+  // ngược phía sau ô nhập SĐT, cũng không để lỗi của cách này bám sang cách kia.
+  const pickChannel = (next) => {
+    if (next === channel) return;
+    stopTelegram(); setTg(null); setTgErr(''); setErr('');
+    if (next === 'phone') { setStep('phone'); setCode(''); }
+    setChannel(next);
+  };
 
   return (
     <div className="login">
@@ -169,13 +205,41 @@ export default function Login({ onLogin }) {
 
       {!mode ? null : (
         <>
-          {/* (1) ĐĂNG NHẬP TELEGRAM — CHÍNH */}
-          {showTelegram && (
+          {/* (0) CHỌN CÁCH ĐĂNG NHẬP — có từ hai cửa thì phải thấy cả hai.
+                 Bản trước chỉ còn một cửa nên nhìn như hệ thống tự nhảy vào bot. */}
+          {bothChannels && (
+            <div className="login-channels" role="group" aria-label="Chọn cách đăng nhập">
+              <button type="button" className={`login-channel${channel === 'phone' ? ' is-active' : ''}`}
+                      aria-pressed={channel === 'phone'} onClick={() => pickChannel('phone')}>
+                <b>📱 Số điện thoại</b><small>Nhập SĐT của tài khoản cần vào · OTP về Zalo/SMS</small>
+              </button>
+              <button type="button" className={`login-channel${channel === 'telegram' ? ' is-active' : ''}`}
+                      aria-pressed={channel === 'telegram'} onClick={() => pickChannel('telegram')}>
+                <b>✈️ Telegram</b><small>Vào bằng chính tài khoản Telegram đang mở</small>
+              </button>
+            </div>
+          )}
+
+          {/* Chỉ còn Telegram ⇒ NÓI RÕ VÌ SAO không có ô nhập SĐT, thay vì để trống. */}
+          {showTelegram && !showOtpFlow && (
+            <div className="card" style={{ ...cardStyle, fontSize: 12.5, lineHeight: 1.5 }}>
+              ⓘ Đường <b>SĐT + OTP</b> đang <b>tắt trên máy chủ</b> (biến <code>LOGIN_OTP_ENABLED</code>), nên màn này chỉ còn Telegram.
+              Bật lại được ngay bằng cấu hình, không cần sửa code.
+            </div>
+          )}
+
+          {/* (1) ĐĂNG NHẬP TELEGRAM */}
+          {showTelegram && channel === 'telegram' && (
             <div className="card" style={cardStyle}>
               {!tg ? (
                 <>
                   <div style={{ fontSize: 13, opacity: .92, marginBottom: 10 }}>
                     Đăng nhập nhanh & an toàn qua <b>Telegram</b>.
+                  </div>
+                  {/* ‼ Trả lời thẳng câu CEO hỏi: vì sao cửa này KHÔNG có ô nhập SĐT. */}
+                  <div style={{ fontSize: 12, opacity: .85, lineHeight: 1.5, marginBottom: 10 }}>
+                    Cửa này <b>không có ô nhập số điện thoại</b>: Telegram nhận diện theo chính tài khoản Telegram đang mở,
+                    nên luôn vào đúng tài khoản của bạn. Muốn vào <b>tài khoản khác</b> thì chọn <b>📱 Số điện thoại</b>.
                   </div>
                   <div style={{ fontSize: 12.5, opacity: .9, lineHeight: 1.55, marginBottom: 10 }}>
                     1. Mở <b>một trong các bot</b> bên dưới → 2. Gửi mã đăng nhập → 3. Bấm ✅ xác nhận.
@@ -223,24 +287,28 @@ export default function Login({ onLogin }) {
             </div>
           )}
 
-          {/* (2) ĐĂNG NHẬP SĐT / OTP ZALO — DỰ PHÒNG */}
-          {showOtpFlow && (
+          {/* (2) ĐĂNG NHẬP BẰNG SỐ ĐIỆN THOẠI + OTP — đường DUY NHẤT chọn được tài khoản */}
+          {showOtpFlow && channel === 'phone' && (
             <div className="card" style={cardStyle}>
-              {!showOtp && showTelegram ? (
-                <button className="btn ghost" style={{ width: '100%' }} onClick={() => setShowOtp(true)}>
-                  Hoặc đăng nhập bằng SĐT (OTP Zalo)
-                </button>
-              ) : (
+              {(
                 <>
                   {step === 'phone' && (
                     <>
-                      <div style={{ fontSize: 13, opacity: .9, marginBottom: 8 }}>Đăng nhập bằng số điện thoại</div>
-                      <input type="tel" inputMode="numeric" placeholder="Số điện thoại"
+                      <div style={{ fontSize: 13, opacity: .92, marginBottom: 8 }}>Đăng nhập bằng <b>số điện thoại</b></div>
+                      <input type="tel" inputMode="numeric" placeholder="Số điện thoại của tài khoản cần vào"
+                             aria-label="Số điện thoại của tài khoản cần đăng nhập"
                              value={phone} onChange={(e) => setPhone(e.target.value)}
                              onKeyDown={(e) => e.key === 'Enter' && !busy && sendOtp()} style={{ marginBottom: 10 }} />
                       <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={sendOtp}>
                         {busy ? 'Đang gửi…' : 'Gửi mã OTP'}
                       </button>
+                      {/* ‼ RANH GIỚI AN NINH — nói trước, đừng để người dùng gõ số xong mới ngã ngửa.
+                          Nhập SĐT người khác thì OTP về MÁY CỦA HỌ, không về máy đang gõ. Đây là
+                          chủ ý: nếu gửi được sang máy khác thì bất kỳ ai biết SĐT đều vào được. */}
+                      <div style={{ fontSize: 11.5, opacity: .82, marginTop: 10, lineHeight: 1.45 }}>
+                        ⚠ Mã OTP luôn gửi về <b>đúng máy của số này</b> (Zalo/SMS), không gửi sang máy khác.
+                        Muốn kiểm tra tài khoản của nhân viên thì nhập SĐT của họ và <b>nhờ họ đọc mã</b>.
+                      </div>
                     </>
                   )}
                   {step === 'code' && (
@@ -270,6 +338,13 @@ export default function Login({ onLogin }) {
                     </>
                   )}
                   {err && <div style={{ color: '#ffd7d7', fontSize: 13, marginTop: 10 }}>{err}</div>}
+                  {/* Dịch vụ OTP chết thì đưa NGAY đường thoát, đừng bắt người dùng
+                      tự mò lên đầu trang. Đây chính là tình huống từng khiến cả cửa
+                      SĐT bị giấu đi bằng hằng viết cứng. */}
+                  {!!err && showTelegram && (
+                    <button className="btn ghost" style={{ width: '100%', marginTop: 8 }}
+                            onClick={() => pickChannel('telegram')}>Thử cách khác: ✈️ Telegram ›</button>
+                  )}
                 </>
               )}
             </div>
@@ -279,9 +354,9 @@ export default function Login({ onLogin }) {
           {mode.demo && (
             <div className="card" style={cardStyle}>
               <div style={{ fontSize: 13, opacity: .9, marginBottom: 4 }}>
-                {mode.live || showTelegram ? 'Hoặc xem thử (demo):' : 'Bản demo — chọn tài khoản để xem:'}
+                {showOtpFlow || showTelegram ? 'Hoặc xem thử (demo):' : 'Bản demo — chọn tài khoản để xem:'}
               </div>
-              {!mode.live && !showTelegram && err && <div style={{ color: '#ffd7d7', fontSize: 13 }}>{err}</div>}
+              {!showOtpFlow && !showTelegram && err && <div style={{ color: '#ffd7d7', fontSize: 13 }}>{err}</div>}
               <div className="demo-list">
                 {ceo.map((u) => (
                   <div key={u.emp_code} className="demo-item" onClick={() => !busy && doDemoLogin(u.emp_code)}>
@@ -311,7 +386,7 @@ export default function Login({ onLogin }) {
       <ZaloOA />
 
       <p style={{ fontSize: 12, marginTop: 18, opacity: .7, textAlign: 'center' }}>
-        {mode && (mode.live || showTelegram) ? 'Đăng nhập theo tài khoản nhân viên · dữ liệu bảo mật theo phân quyền.'
+        {mode && (showOtpFlow || showTelegram) ? 'Đăng nhập theo tài khoản nhân viên · dữ liệu bảo mật theo phân quyền.'
           : 'Dữ liệu mẫu đã ẩn danh — không có PII/số liệu thật.'}
       </p>
       <p style={{ fontSize: 11, marginTop: 6, opacity: .5, textAlign: 'center' }}>
