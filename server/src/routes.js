@@ -1222,6 +1222,8 @@ async function employeeCostAllPayload(req, {
       code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
     });
   }
+  // Bằng chứng đóng dấu: báo cáo GỐC từng NV, gán trong buildMerged.
+  let sealEvidenceReports = null;
   const buildMerged = async () => {
     // Chụp đúng một snapshot nguồn doanh thu cho ba KPI. Nếu slot đổi trong lúc
     // fan-out 21 NV, toàn bộ KPI phụ thuộc nguồn này phải fail closed thay vì trộn
@@ -1285,6 +1287,10 @@ async function employeeCostAllPayload(req, {
       sourceReportSink.length = 0;
       sourceReportSink.push(...reports);
     }
+    // Giữ lại BÁO CÁO GỐC từng NV làm bằng chứng đóng dấu. Không được suy từ bản gộp:
+    // `mergeEmployeeReports` dựng `merged.employees` TỪ ROSTER nên đối chiếu với roster
+    // là vòng tròn tự chứng minh — thiếu hẳn một người vẫn "đủ".
+    sealEvidenceReports = reports;
     const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
     /* ‼ ĐỐI SOÁT DOANH THU — trả lời "tiền chạy đi đâu" (CEO 10/08/2026).
        Màn ALL ghép sổ chi phí TỪNG NV; NV nào chưa lấy được % thì toàn bộ dòng doanh
@@ -1426,7 +1432,7 @@ async function employeeCostAllPayload(req, {
     const built = await buildMerged();
     // Chặt hơn `employeeCostAllDegraded`: đòi ĐỦ CẢ ĐỘI và MỌI NV `ok` đúng nghĩa —
     // không nhận `ok_stale_rates` (đóng băng số tạm là đóng băng cái sai).
-    if (sealKey && closedSeal.isSealable(built, roster)) {
+    if (sealKey && closedSeal.isSealable(built, roster, sealEvidenceReports)) {
       try {
         await closedSeal.write(sealKey, built, { complete: true });
         console.info('[employee-cost] đã đóng dấu kỳ khoá sổ', { key: sealKey });

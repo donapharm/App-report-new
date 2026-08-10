@@ -78,7 +78,17 @@ function keyFor({ from, to, months, closed, sources }) {
  * Bản gộp có ĐỦ ĐIỀU KIỆN đóng dấu không?
  * Chặt hơn `employeeCostAllDegraded`: đòi MỌI NV có kết quả `ok` đúng nghĩa.
  */
-function isSealable(merged, roster) {
+/**
+ * Bản gộp có ĐỦ ĐIỀU KIỆN đóng dấu không?
+ *
+ * ‼ PHẢI truyền `reports` — BÁO CÁO GỐC của từng NV. Không được suy từ `merged`:
+ * `mergeEmployeeReports(reports, roster)` dựng `merged.employees` **TỪ CHÍNH ROSTER**,
+ * nên đối chiếu `merged.employees` với roster là **vòng tròn tự chứng minh** — luôn
+ * đúng, kể cả khi thiếu hẳn báo cáo của một người. Bot audit bắt đúng, và bản test cũ
+ * của tôi còn **sửa tay trường đó để che lỗi**. Bằng chứng "ai thật sự có số" chỉ nằm
+ * ở `reports`.
+ */
+function isSealable(merged, roster, reports) {
   if (!merged || typeof merged !== 'object') return false;
   if (merged.rateStale === true) return false;
 
@@ -91,31 +101,33 @@ function isSealable(merged, roster) {
   );
   if (!expected.size) return false; // không biết đội gồm ai thì không dám đóng
 
-  /* ‼ TÊN TRƯỜNG PHẢI ĐÚNG BẢN THẬT của `employeeCostTable.mergeEmployeeReports`.
-   * Bản đầu tôi kiểm `period.employees` (KHÔNG TỒN TẠI) và `staleRateEmployees`
-   * (tên thật là `staleEmployees`) ⇒ vòng lặp không chạy lần nào ⇒ guard LUÔN trả
-   * true ⇒ sẵn sàng đóng dấu vĩnh viễn một con số thiếu người. Bot audit bắt đúng.
-   * Bài học: test phải dựng dữ liệu bằng CHÍNH hàm gộp thật, không tự bịa hình dạng. */
+  // Không có báo cáo gốc ⇒ không có cách nào chứng minh đủ người ⇒ fail closed.
+  if (!Array.isArray(reports) || !reports.length) return false;
+
+  /* Tên trường lấy đúng bản THẬT của `mergeEmployeeReports`
+   * (`period.employees` KHÔNG tồn tại; stale là `staleEmployees`). */
   for (const period of periods) {
     const match = period?.match;
-    // Không có khối `match` thì không có cách nào biết đủ hay thiếu ⇒ không đóng.
     if (!match || typeof match !== 'object') return false;
     if (Number(match.unavailableEmployeeCount || 0) > 0) return false;
     if (Array.isArray(match.unavailableEmployees) && match.unavailableEmployees.length) return false;
     // Xài tỷ lệ CŨ là số TẠM — đóng băng số tạm là đóng băng cái sai.
     if (Number(match.staleEmployeeCount || 0) > 0) return false;
     if (Array.isArray(match.staleEmployees) && match.staleEmployees.length) return false;
-    // Phải nói được đã đối chiếu bao nhiêu cặp; thiếu thông tin thì fail closed.
     if (!Number.isFinite(Number(match.totalRows))) return false;
   }
 
-  // Danh sách NV của bản gộp phải PHỦ ĐÚNG đội hình, không thiếu ai.
-  const listed = new Set(
-    (Array.isArray(merged.employees) ? merged.employees : [])
-      .map((row) => text(row?.empCode).toUpperCase()).filter(Boolean),
-  );
-  if (listed.size !== expected.size) return false;
-  for (const code of expected) if (!listed.has(code)) return false;
+  // BẰNG CHỨNG THẬT: mỗi người trong đội phải có ĐÚNG MỘT báo cáo, kết quả `ok` đúng nghĩa.
+  const daCo = new Set();
+  for (const report of reports) {
+    const code = text(report?.empCode).toUpperCase();
+    if (!code) return false;
+    if (daCo.has(code)) return false;                       // trùng NV ⇒ không rõ lấy bản nào
+    if (text(report?.sourceOutcome || 'ok') !== 'ok') return false; // chỉ `ok` thật
+    daCo.add(code);
+  }
+  if (daCo.size !== expected.size) return false;
+  for (const code of expected) if (!daCo.has(code)) return false;
 
   return true;
 }

@@ -169,8 +169,13 @@ function loadShared(name, def, retriesLeft = 2) {
     /* Hết lượt mà file vẫn bị ghi liên tục: KHÔNG nhớ, và cũng KHÔNG trả bản vừa đọc
      * (đó là bản cũ so với file hiện tại). Đọc lại một phát bằng cửa thường để lấy
      * đúng bản đang có trên đĩa — chậm hơn, nhưng không bao giờ phục vụ bản lạc hậu. */
-    console.warn('[persist] file đang bị ghi liên tục — đọc lại bản hiện tại, KHÔNG nhớ', { name });
-    return load(name, def);
+    /* Hết lượt mà file VẪN đang bị ghi: KHÔNG trả bản vừa đọc (nó là generation cũ so
+     * với file hiện tại), và cũng KHÔNG đọc liều một phát nữa — bản đó cũng không có gì
+     * ràng buộc. FAIL CLOSED: trả mặc định. Người gọi sẽ coi như "chưa có dữ liệu" ⇒
+     * NV rơi vào luồng thiếu nguồn ⇒ KHÔNG đủ điều kiện đóng dấu. Thà chưa có số còn
+     * hơn đóng dấu vĩnh viễn một con số tính trên bản không rõ đời nào. */
+    console.warn('[persist] file bị ghi liên tục — FAIL CLOSED, coi như chưa đọc được', { name });
+    return def;
   } catch {
     forget(name);
     return def;

@@ -1,3 +1,56 @@
+### 2026-08-11 04:15 (giờ VN) — 🧨 TEST CỦA TÔI ĐANG CHE LỖI: bằng chứng đóng dấu phải lấy từ BÁO CÁO GỐC
+
+Bot audit `bd7fbd0` bắt được lỗi tinh vi nhất — và nặng hơn cả lượt trước.
+
+#### Sự thật
+
+`mergeEmployeeReports(reports, roster)` dựng `merged.employees` **TỪ CHÍNH ROSTER**:
+
+```js
+employees: roster.map((e) => ({ empCode: e.emp_code, employeeName: e.name }))
+```
+
+Nên phép kiểm "danh sách NV của bản gộp có phủ đủ roster không" là **vòng tròn tự
+chứng minh** — **luôn đúng**, kể cả khi **thiếu hẳn báo cáo của một người**. Guard vẫn
+cho đóng dấu một bản thiếu người, vĩnh viễn.
+
+**Tệ hơn:** test của tôi có dòng
+
+```js
+const chiCoMotNguoi = { ...thieuNguoi, employees: [{ empCode: 'DN001' }] };
+```
+
+tức là **tự tay sửa trường đó cho nó đỏ**. Test không phát hiện lỗi — test **che lỗi**.
+Bot nói thẳng "Test mới che lỗi bằng cách sửa tay trường này", và đúng.
+
+#### Chữa
+
+Bằng chứng "ai thật sự có số" **chỉ nằm ở `reports`** — báo cáo GỐC từng NV. Nay:
+
+- `isSealable(merged, roster, reports)` — **bắt buộc** có `reports`; không có ⇒ fail closed.
+- Mỗi NV trong đội phải có **đúng một** báo cáo, `sourceOutcome === 'ok'` đúng nghĩa.
+  Trùng mã ⇒ không đóng (không rõ lấy bản nào).
+- `routes.js` giữ lại `reports` gốc (`sealEvidenceReports`) và truyền vào.
+- Test mới **không sửa tay gì cả**: dựng bản gộp thật từ 1 báo cáo, khẳng định
+  `merged.employees.length === 2` (đúng cái bẫy) rồi đòi `isSealable === false`.
+
+#### Kèm: retry cạn lượt (bot điểm A2)
+
+Trước đây hết lượt thì đọc lại một phát bằng cửa thường — bản đó **cũng không có gì
+ràng buộc**, có thể là generation cũ so với file hiện tại. Nay **FAIL CLOSED: trả mặc
+định**. Người gọi coi như "chưa đọc được" ⇒ NV rơi vào luồng thiếu nguồn ⇒ **không đủ
+điều kiện đóng dấu**. Thà chưa có số còn hơn đóng dấu vĩnh viễn một con số tính trên
+bản không rõ đời nào.
+
+#### Bot xác nhận đã đạt ở lượt trước
+`staleEmployees` nhận diện đúng · retry JSON ghi dở đúng · **seal hit sau restart:
+24,591 s → 218 ms** · ALL T07 bốn lượt giống hệt (2.091 dòng · 30.982.248.913đ · 21 NV
+· unavailable/stale/gap = 0).
+
+#### Test
+`employeeCostClosedSeal` **14/14** · `persistCache` **15/15** · `server` **1232/1239**
+— đúng 7 ca nền cũ. Build đạt.
+
 ### 2026-08-11 03:10 (giờ VN) — 🚨 LỖI TỆ NHẤT TRONG NGÀY: guard đóng dấu kiểm SAI TÊN TRƯỜNG
 
 Bot audit TIP `85f5f36` bắt được thứ nguy hiểm nhất từ đầu tới giờ, và **đúng ngay chỗ
