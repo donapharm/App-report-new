@@ -114,10 +114,23 @@ elif [ -n "$LOCAL" ] && [ -n "$REMOTE" ]; then
       if git branch "$RESCUE" "$LOCAL" 2>/dev/null; then
         ok "   Đã cất $ahead commit vào nhánh **$RESCUE** (còn nguyên, lấy lại được bất cứ lúc nào)."
         say "   Đẩy lên GitHub để không mất khi máy hỏng:  git push -u origin $RESCUE"
-        if git reset --hard "origin/$BRANCH" --quiet; then
+        # ‼ VỪA DIVERGED VỪA DIRTY (bot audit tái hiện được 10/08/2026): nhánh cứu hộ chỉ
+        # cứu COMMIT, còn `reset --hard` xoá sạch SỬA CHƯA COMMIT. Khối stash nằm mãi phía
+        # dưới nên chạy sau khi đã mất. Phải cất TẠI ĐÂY, trước reset. Cất không được thì
+        # KHÔNG reset — thà kẹt thêm một lượt còn hơn mất việc của người ta.
+        RESET_OK=1
+        if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
+          if git stash push -m "deploy_doctor pre-reset $(vn_now)" >/dev/null 2>&1; then
+            ok "   Có sửa chưa commit ⇒ đã cất vào stash TRƯỚC khi reset (lấy về: git stash pop)."
+          else
+            warn "   Có sửa chưa commit mà git stash LỖI ⇒ DỪNG, tuyệt đối không reset."
+            RESET_OK=0
+          fi
+        fi
+        if [ $RESET_OK = 1 ] && git reset --hard "origin/$BRANCH" --quiet; then
           ok "   Đã đưa server về đúng origin/$BRANCH (${REMOTE:0:7}). Lượt cron kế tiếp sẽ build + restart."
           BLOCKERS=$((BLOCKERS-1))
-        else
+        elif [ $RESET_OK = 1 ]; then
           warn "   reset --hard LỖI — dừng lại, không làm gì thêm."
         fi
       else

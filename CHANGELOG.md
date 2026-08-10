@@ -1,3 +1,52 @@
+### 2026-08-10 16:55 (giờ VN) — 🛡 XỬ 3 ĐIỂM BOT AUDIT CHẶN ỨNG VIÊN d61f7e2
+
+Bot audit BLOCK bản gộp với 3 điểm. **Điểm 1 bot đúng và là lỗi nặng của Claude.**
+
+#### ① `deploy_doctor.sh --fix` làm MẤT SỬA CHƯA COMMIT — bot đúng, đã vá
+
+Ca "vừa diverged vừa dirty": khối xử lý nhánh đi trước (`reset --hard`) nằm **TRƯỚC**
+khối stash cả trăm dòng. Nhánh cứu hộ chỉ cứu **COMMIT**; `reset --hard` xoá sạch
+**sửa chưa commit**, và khối stash chạy sau thì đã mất rồi. Tôi từng khoe "--fix không
+bao giờ mất commit" — đúng chữ *commit*, nhưng **sót mất việc đang làm dở**.
+
+Đã vá: cất stash **ngay trước** `reset --hard`, ngay trong nhánh diverged. **Cất không
+được thì KHÔNG reset** (`RESET_OK=0`) — thà kẹt thêm một lượt còn hơn mất việc của người ta.
+
+Thêm **ca diễn tập ⑥** khoá lại. Kiểm ngược trên bản CHƯA vá (`82dc2b3`): **2 hỏng**;
+trên bản đã vá: **12/12 đạt**. Test có thật sự bắt được lỗi, không phải test cho có.
+
+#### ② Privacy trái RUNBOOK — bot đúng là trái, nhưng RUNBOOK mới là chỗ phải sửa
+
+Ba hành vi bot nêu (nhớ qua F5 · bỏ che khi blur · 5 phút) đều là **quyết định của CEO
+ngày 10/08/2026**, không phải sai sót cài đặt. Gốc rễ: code trỏ tới `SPEC_PRIVACY_EYE.md`
+nhưng **file đó chưa từng tồn tại trong repo** ⇒ không có nguồn nào để đối chiếu, runbook
+vận hành giữ luật cũ là đúng theo thứ nó có.
+
+Đã viết `SPEC_PRIVACY_EYE.md`: nguyên văn lời CEO, bảng luật hiện hành, lý do bỏ `blur`
+(công cụ chụp màn hình cướp tiêu điểm), và mục 5 nhắc thẳng runbook nào còn ghi "60 giây /
+ẩn khi mất tiêu điểm / F5 là về ẩn" thì đã lỗi thời.
+
+Bổ sung quan trọng bot chưa thấy: mở số nay **gắn với khoá ngữ cảnh** (trang · NV · đơn vị
+· tỉnh · tuyến · ngày · kỳ) — đổi bất kỳ thứ nào là **ẩn NGAY**. Nới ở chỗ chụp hình nhưng
+**siết** ở chỗ đổi màn, đúng lo ngại trình chiếu màn LED của CEO.
+
+#### ③ VP018 fail 2/3 — gần như chắc là ĐO LỆCH KHO, không phải lỗi mới
+
+Diff toàn bộ mặt quyền giữa `7870f10` (PROD) và ứng viên: **chỉ `server/src/auth.js` khác**,
+và khác đúng **một dòng bị xoá** — dòng `module.exports` cũ, thay bằng chính nó cộng thêm
+tên `otpLoginEnabled`. `accessPolicy.js`, `store.js`, `strictAccessPolicy.test.js`: **giống
+hệt từng byte**. Không có đường nào để hành vi quyền đổi.
+
+Test này đòi **VP018 có thật trong danh bạ**; thiếu là `store.findUserByCode` trả undefined
+⇒ `requireAuth` huỷ phiên ⇒ 401 (`seed.js` chỉ sinh CEO/ADMIN/DN001–DN012, không có VP018).
+Nên kết quả phụ thuộc **kho dữ liệu lúc chạy**, không phụ thuộc code. Hôm nay bot đã đo
+nhầm kho **hai lần** (chạy script từ bản đóng băng, rồi tự phát hiện "không phải kho của
+máy đang chạy"). Cần chạy lại **cả hai bản trên CÙNG một `AUTH_DATA_DIR`** rồi mới kết luận.
+
+#### Test sau khi vá
+`server` 1203/1210 · `web` 449/449 · build đạt · **diễn tập bác sĩ deploy 12/12**
+(trước khi thêm ca ⑥ là 9/9 — ca mới là ca bot tìm ra).
+
 ### 2026-08-10 15:45 (giờ VN) — 🔀 GỘP HAI NHÁNH: một bản ứng viên duy nhất (cf1fa9b)
 
 Cả ngày 10/08 hai bên làm song song trên hai nhánh tách từ `3248cd4`, không bên nào

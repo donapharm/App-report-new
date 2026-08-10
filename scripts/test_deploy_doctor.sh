@@ -63,6 +63,33 @@ rm -f "$TMP/srv/.auto-deploy.disabled"; echo dirty >> "$TMP/srv/f.txt"
 out="$(run_doctor)"
 case "$out" in *"DIRTY"*) ok "báo rõ working tree dirty";; *) bad "không báo dirty";; esac
 
+echo "⑥ VỪA DIVERGED VỪA DIRTY — sửa chưa commit KHÔNG được biến mất"
+# Bot audit 10/08/2026 tái hiện được: `reset --hard` (nhánh diverged) chạy TRƯỚC khối
+# stash (nhánh dirty) ⇒ xoá sạch sửa chưa commit. Nhánh cứu hộ chỉ cứu COMMIT, không
+# cứu sửa đang dở. Ca này khoá lại: phải cất được rồi mới được reset.
+rm -rf "$TMP/srv2"; git clone -q "$TMP/origin.git" "$TMP/srv2" 2>/dev/null
+cd "$TMP/srv2"; git checkout -q main
+# (a) tạo commit local chưa đẩy  -> diverged
+echo local-only >> f.txt && git commit -qam "commit chỉ có trên server"
+LOCAL2="$(git rev-parse HEAD)"
+# (b) đồng thời có sửa chưa commit -> dirty
+echo "VIỆC ĐANG LÀM DỞ, CHƯA COMMIT" > dangdolam.txt && git add dangdolam.txt
+# (c) origin tiến lên để chắc chắn là diverged thật
+git -C "$TMP/srv" checkout -q main 2>/dev/null
+out="$(REPO_DIR="$TMP/srv2" BRANCH=main HEALTH_URL="http://127.0.0.1:1/none" \
+       LAST_FILE="$TMP/srv2/.auto-deploy.last" bash "$DOCTOR" --fix 2>&1)"
+cd "$TMP/srv2"
+if git stash list 2>/dev/null | grep -q "deploy_doctor"; then
+  ok "‼ sửa chưa commit đã được CẤT VÀO STASH trước khi reset"
+else
+  bad "‼ sửa chưa commit KHÔNG được cất — đúng lỗi bot audit chỉ ra"
+fi
+recovered=0
+if git stash show -p 2>/dev/null | grep -q "VIỆC ĐANG LÀM DỞ"; then recovered=1; fi
+check "‼ lấy lại được nguyên nội dung đang làm dở" "$recovered" "1"
+rescue2="$(git branch --list 'rescue/*' | tr -d ' *' | head -1)"
+check "commit local vẫn còn trong nhánh cứu hộ" "$(git rev-parse "${rescue2:-HEAD}")" "$LOCAL2"
+
 echo ""
 echo "Kết quả: $PASS đạt · $FAIL hỏng"
 [ "$FAIL" -eq 0 ]
