@@ -134,30 +134,66 @@ test('routes.js phải nối đúng: chỉ đóng dấu bản KHÔNG degraded', 
     'đường bảng UI phải đi qua bản có đóng dấu');
 });
 
-/* ── BỐN CA AUDIT BỔ SUNG CỦA BOT (10/08/2026) ───────────────────────────── */
+/* ── DỰNG DỮ LIỆU BẰNG CHÍNH HÀM GỘP THẬT ────────────────────────────────────
+ * Bản test đầu tôi TỰ BỊA hình dạng (`period.employees`, `staleRateEmployees`) nên
+ * nó xanh trong khi production sai: guard đọc trường không tồn tại ⇒ vòng lặp không
+ * chạy ⇒ LUÔN trả true ⇒ sẵn sàng đóng dấu vĩnh viễn một con số thiếu người.
+ * Bot audit bắt đúng. Nay mọi dữ liệu thử đi qua `mergeEmployeeReports` THẬT, nên
+ * hình dạng có đổi là test đỏ ngay. */
+const employeeCostTable = require('../src/employeeCostTable');
 
-// ④ Bản xài TỶ LỆ CŨ là số TẠM — đóng băng số tạm là đóng băng cái sai.
-test('④ KHÔNG đóng dấu bản xài tỷ lệ cũ (ok_stale_rates) hay thiếu người', () => {
-  const { seal } = freshSeal();
-  const stale = {
+const ROSTER_2 = [{ emp_code: 'DN001', name: 'A' }, { emp_code: 'DN002', name: 'B' }];
+
+function baoCao(empCode, { outcome = 'ok', rows = 1 } = {}) {
+  return {
+    empCode, employeeName: empCode, from: '2026-07', to: '2026-07',
+    sourceOutcome: outcome,
     periods: [{
-      period: '2026-07', match: { unavailableEmployeeCount: 0 },
-      employees: [okEmp('DN001'), { empCode: 'DN002', sourceOutcome: 'ok_stale_rates' }],
+      period: '2026-07',
+      columns: [{ key: 'c41', label: 'CP đặt hàng', kind: 'percent' }],
+      rows: Array.from({ length: rows }, (_, i) => ({ c16: `SP${i}`, unitCode: 'DV1', c41: 0.01 })),
+      summary: {}, match: {}, daily: { dates: [], totals: [] },
     }],
   };
-  assert.equal(seal.isSealable(stale, ROSTER), false, 'tỷ lệ cũ ⇒ không đóng dấu');
+}
 
-  const cotRateStale = { rateStale: true, periods: [{ period: '2026-07', match: {}, employees: [okEmp('DN001'), okEmp('DN002')] }] };
-  assert.equal(seal.isSealable(cotRateStale, ROSTER), false, 'cờ rateStale ⇒ không đóng dấu');
+const gopThat = (reports, roster = ROSTER_2) => employeeCostTable.mergeEmployeeReports(reports, roster);
 
-  const thieuNguoi = { periods: [{ period: '2026-07', match: {}, employees: [okEmp('DN001')] }] };
-  assert.equal(seal.isSealable(thieuNguoi, ROSTER), false, 'thiếu DN002 ⇒ không đóng dấu');
+test('★ HÌNH DẠNG THẬT: bản gộp ĐỦ ĐỘI + mọi NV ok ⇒ mới được đóng dấu', () => {
+  const { seal } = freshSeal();
+  const du = gopThat([baoCao('DN001'), baoCao('DN002')]);
+  assert.equal(seal.isSealable(du, ROSTER_2), true, 'đủ đội, mọi NV ok ⇒ đóng dấu được');
+});
 
-  const treHan = { periods: [{ period: '2026-07', match: {}, employees: [okEmp('DN001'), { empCode: 'DN002', sourceOutcome: 'deadline' }] }] };
-  assert.equal(seal.isSealable(treHan, ROSTER), false, 'ai trễ hạn ⇒ không đóng dấu');
+test('★ HÌNH DẠNG THẬT: thiếu NV / trễ hạn / tỷ lệ cũ ⇒ TUYỆT ĐỐI không đóng dấu', () => {
+  const { seal } = freshSeal();
 
-  assert.equal(seal.isSealable(banDu, ROSTER), true, 'đủ cả đội + mọi NV ok ⇒ mới đóng');
-  assert.equal(seal.isSealable(banDu, []), false, 'không biết đội gồm ai ⇒ không dám đóng');
+  // Đây chính là ca mà guard cũ trả nhầm `true`.
+  const treHan = gopThat([baoCao('DN001'), baoCao('DN002', { outcome: 'deadline' })]);
+  assert.equal(seal.isSealable(treHan, ROSTER_2), false, 'có NV trễ hạn ⇒ KHÔNG đóng dấu');
+
+  const nguonLoi = gopThat([baoCao('DN001'), baoCao('DN002', { outcome: 'upstream_unavailable' })]);
+  assert.equal(seal.isSealable(nguonLoi, ROSTER_2), false, 'có NV lỗi nguồn ⇒ KHÔNG đóng dấu');
+
+  const tyLeCu = gopThat([baoCao('DN001'), baoCao('DN002', { outcome: 'ok_stale_rates' })]);
+  assert.equal(seal.isSealable(tyLeCu, ROSTER_2), false, 'có NV xài tỷ lệ CŨ ⇒ KHÔNG đóng dấu');
+
+  // Thiếu hẳn báo cáo của một người.
+  const thieuNguoi = employeeCostTable.mergeEmployeeReports([baoCao('DN001')], ROSTER_2);
+  const chiCoMotNguoi = { ...thieuNguoi, employees: [{ empCode: 'DN001' }] };
+  assert.equal(seal.isSealable(chiCoMotNguoi, ROSTER_2), false, 'danh sách NV không phủ hết đội ⇒ KHÔNG đóng dấu');
+
+  assert.equal(seal.isSealable(gopThat([baoCao('DN001'), baoCao('DN002')]), []), false,
+    'không biết đội gồm ai ⇒ không dám đóng');
+});
+
+test('★ thiếu khối match hoặc thiếu periods ⇒ fail closed', () => {
+  const { seal } = freshSeal();
+  const du = gopThat([baoCao('DN001'), baoCao('DN002')]);
+  const khongMatch = { ...du, periods: du.periods.map((p) => ({ ...p, match: undefined })) };
+  assert.equal(seal.isSealable(khongMatch, ROSTER_2), false, 'không có match ⇒ không biết đủ hay thiếu ⇒ không đóng');
+  assert.equal(seal.isSealable({ ...du, periods: [] }, ROSTER_2), false, 'không có kỳ nào ⇒ không đóng');
+  assert.equal(seal.isSealable({ ...du, rateStale: true }, ROSTER_2), false, 'cờ rateStale ⇒ không đóng');
 });
 
 // ⑤ Ghi đồng thời: đọc-sửa-ghi chồng nhau thì lượt sau ghi đè mất dấu lượt trước.

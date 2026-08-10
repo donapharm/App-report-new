@@ -1,3 +1,46 @@
+### 2026-08-11 03:10 (giờ VN) — 🚨 LỖI TỆ NHẤT TRONG NGÀY: guard đóng dấu kiểm SAI TÊN TRƯỜNG
+
+Bot audit TIP `85f5f36` bắt được thứ nguy hiểm nhất từ đầu tới giờ, và **đúng ngay chỗ
+tôi tự tin nhất**.
+
+#### Sự thật
+
+`isSealable()` của tôi kiểm `period.employees` và `match.staleRateEmployees`. Đối chiếu
+`employeeCostTable.mergeEmployeeReports` — bản gộp THẬT:
+
+- **`period.employees` KHÔNG TỒN TẠI** (danh sách NV nằm ở `merged.employees`, gốc)
+- **`staleRateEmployees` sai tên** — tên thật là **`staleEmployees` / `staleEmployeeCount`**
+
+Hệ quả: vòng lặp không chạy lần nào ⇒ `seen` rỗng ⇒ khối kiểm roster bị bỏ qua ⇒
+**guard LUÔN trả `true`**. Tức là cơ chế tôi dựng ra để "không bao giờ đóng dấu bản
+thiếu người" thì **sẵn sàng đóng dấu VĨNH VIỄN một con số thiếu người** — đúng thảm hoạ
+tôi viết ba lần cảnh báo ngay trong file đó.
+
+#### Vì sao test không bắt được — bài học đắt
+
+Tôi viết test bằng **dữ liệu tự bịa theo hình dạng tôi TƯỞNG**, nên nó xanh trong khi
+production sai. Test tự bịa hình dạng thì chỉ kiểm chứng chính niềm tin của người viết.
+
+Nay: **mọi dữ liệu thử đi qua `mergeEmployeeReports` THẬT**. Hình dạng đổi là test đỏ ngay.
+Ba ca `★ HÌNH DẠNG THẬT` dựng bản gộp thật với NV trễ hạn / lỗi nguồn / tỷ lệ cũ / thiếu
+người — tất cả phải ra `false`.
+
+#### Vá kèm
+
+- **`isSealable` viết lại theo hình dạng thật**: `match.unavailableEmployees(+Count)` ·
+  `match.staleEmployees(+Count)` · `merged.employees` phải **phủ đúng đội hình** ·
+  thiếu khối `match` hoặc thiếu `totalRows` ⇒ **fail closed**.
+- **Đọc trúng JSON đang ghi dở** (bot nêu): trước đây vỡ JSON là trả mặc định ngay. Nay
+  nếu vân tay cho thấy file **đang đổi** thì **thử lại**; hết lượt mà file vẫn bị ghi
+  liên tục thì **đọc lại bản hiện tại bằng cửa thường và KHÔNG nhớ** — không bao giờ
+  phục vụ bản lạc hậu.
+- **24,591 giây sau restart** (bot đo): nguyên nhân là **roster được dựng TRƯỚC bước tra
+  dấu**. Đã chuyển thứ tự: `range` → **tra dấu (trả sớm nếu có)** → `roster` → catalog.
+
+#### Test
+`employeeCostClosedSeal` **13/13** (thêm 3 ca hình dạng thật) · `persistCache` **15/15** ·
+`server` **1231/1238** — đúng 7 ca nền cũ. Build đạt.
+
 ### 2026-08-11 02:00 (giờ VN) — 🔁 VÁ NỐT ĐUA GHI ĐÈ TẠI CHỖ + ghi nhận T07 ĐÃ ĐỨNG SỐ
 
 #### Kết quả quan trọng nhất: T07 đã đứng yên

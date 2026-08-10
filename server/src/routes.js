@@ -1155,8 +1155,6 @@ async function employeeCostAllPayload(req, {
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
-  const roster = employeeCostRosterRows();
-  if (Array.isArray(rosterSink)) { rosterSink.length = 0; rosterSink.push(...roster); }
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   /* ── ĐÓNG DẤU KỲ ĐÃ KHOÁ SỔ (CEO đòi dứt điểm 10/08/2026) ──────────────────
      Tổng màn ALL = cộng sổ từng NV; ai không kịp trong hạn thì dòng của họ không
@@ -1197,6 +1195,8 @@ async function employeeCostAllPayload(req, {
     }
   }
 
+  const roster = employeeCostRosterRows();
+  if (Array.isArray(rosterSink)) { rosterSink.length = 0; rosterSink.push(...roster); }
   const sharedCatalogRowsByPeriod = {};
   const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
   const catalogPeriods = [...new Set([...range.months, ...bonusQuarter.kys.map((ky) => catalogManagement.toHubPeriod(ky))])];

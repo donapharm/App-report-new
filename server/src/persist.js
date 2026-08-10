@@ -138,18 +138,39 @@ function loadShared(name, def, retriesLeft = 2) {
      * thà chậm còn hơn nhớ một bản không biết mình là ai. */
     const raw = fs.readFileSync(fd, 'utf8');
     const after = fingerprint(fs.fstatSync(fd));
-    const value = deepFreeze(JSON.parse(raw));
-    if (sameFile(before, after)) {
-      remember(name, { print: after, value, bytes: after.size });
-    } else {
-      forget(name);
-      if (retriesLeft > 0) {
+    const stable = sameFile(before, after);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      /* Đọc trúng lúc file đang ghi dở thì JSON vỡ. File ĐANG đổi ⇒ thử lại, đừng
+       * vội trả mặc định (bot audit: "file đã ổn định rồi mà vẫn trả default"). */
+      if (!stable && retriesLeft > 0) {
         fs.closeSync(fd); fd = null;
         return loadShared(name, def, retriesLeft - 1);
       }
-      console.warn('[persist] file đang bị ghi liên tục — trả số đúng nhưng KHÔNG nhớ', { name });
+      forget(name);
+      return def;
     }
-    return value;
+
+    if (stable) {
+      const value = deepFreeze(parsed);
+      remember(name, { print: after, value, bytes: after.size });
+      return value;
+    }
+
+    // File đổi giữa chừng: thử lại để lấy bản yên.
+    forget(name);
+    if (retriesLeft > 0) {
+      fs.closeSync(fd); fd = null;
+      return loadShared(name, def, retriesLeft - 1);
+    }
+    /* Hết lượt mà file vẫn bị ghi liên tục: KHÔNG nhớ, và cũng KHÔNG trả bản vừa đọc
+     * (đó là bản cũ so với file hiện tại). Đọc lại một phát bằng cửa thường để lấy
+     * đúng bản đang có trên đĩa — chậm hơn, nhưng không bao giờ phục vụ bản lạc hậu. */
+    console.warn('[persist] file đang bị ghi liên tục — đọc lại bản hiện tại, KHÔNG nhớ', { name });
+    return load(name, def);
   } catch {
     forget(name);
     return def;

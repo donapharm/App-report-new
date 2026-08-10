@@ -81,8 +81,9 @@ function keyFor({ from, to, months, closed, sources }) {
 function isSealable(merged, roster) {
   if (!merged || typeof merged !== 'object') return false;
   if (merged.rateStale === true) return false;
-  const periods = Array.isArray(merged.periods) ? merged.periods : [merged];
-  if (!periods.length) return false;
+
+  const periods = Array.isArray(merged.periods) ? merged.periods : null;
+  if (!periods || !periods.length) return false;
 
   const expected = new Set(
     (Array.isArray(roster) ? roster : [])
@@ -90,26 +91,32 @@ function isSealable(merged, roster) {
   );
   if (!expected.size) return false; // không biết đội gồm ai thì không dám đóng
 
+  /* ‼ TÊN TRƯỜNG PHẢI ĐÚNG BẢN THẬT của `employeeCostTable.mergeEmployeeReports`.
+   * Bản đầu tôi kiểm `period.employees` (KHÔNG TỒN TẠI) và `staleRateEmployees`
+   * (tên thật là `staleEmployees`) ⇒ vòng lặp không chạy lần nào ⇒ guard LUÔN trả
+   * true ⇒ sẵn sàng đóng dấu vĩnh viễn một con số thiếu người. Bot audit bắt đúng.
+   * Bài học: test phải dựng dữ liệu bằng CHÍNH hàm gộp thật, không tự bịa hình dạng. */
   for (const period of periods) {
-    const match = period?.match || {};
+    const match = period?.match;
+    // Không có khối `match` thì không có cách nào biết đủ hay thiếu ⇒ không đóng.
+    if (!match || typeof match !== 'object') return false;
     if (Number(match.unavailableEmployeeCount || 0) > 0) return false;
     if (Array.isArray(match.unavailableEmployees) && match.unavailableEmployees.length) return false;
-    // Xài tỷ lệ cũ là số TẠM — đóng băng số tạm là đóng băng cái sai.
-    if (Number(match.staleRateEmployeeCount || 0) > 0) return false;
-    if (Array.isArray(match.staleRateEmployees) && match.staleRateEmployees.length) return false;
-
-    const seen = new Set();
-    for (const report of Array.isArray(period?.employees) ? period.employees : []) {
-      const code = text(report?.empCode).toUpperCase();
-      if (!code) return false;
-      // CHỈ `ok` đúng nghĩa. `ok_stale_rates`/`before_go_live`/`deadline` đều không đủ.
-      if (text(report?.sourceOutcome || 'ok') !== 'ok') return false;
-      seen.add(code);
-    }
-    if (seen.size) {
-      for (const code of expected) if (!seen.has(code)) return false;
-    }
+    // Xài tỷ lệ CŨ là số TẠM — đóng băng số tạm là đóng băng cái sai.
+    if (Number(match.staleEmployeeCount || 0) > 0) return false;
+    if (Array.isArray(match.staleEmployees) && match.staleEmployees.length) return false;
+    // Phải nói được đã đối chiếu bao nhiêu cặp; thiếu thông tin thì fail closed.
+    if (!Number.isFinite(Number(match.totalRows))) return false;
   }
+
+  // Danh sách NV của bản gộp phải PHỦ ĐÚNG đội hình, không thiếu ai.
+  const listed = new Set(
+    (Array.isArray(merged.employees) ? merged.employees : [])
+      .map((row) => text(row?.empCode).toUpperCase()).filter(Boolean),
+  );
+  if (listed.size !== expected.size) return false;
+  for (const code of expected) if (!listed.has(code)) return false;
+
   return true;
 }
 
