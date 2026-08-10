@@ -1,3 +1,26 @@
+### 2026-08-10 11:40 (giờ VN) — 🩺 BÁC SĨ DEPLOY: site không lên bản mới thì phải NÓI, không im
+
+CEO: *"Con bot của tao nó đang bị lỗi, nên mày tìm cách vá cho tao đi nào."*
+
+#### Sự thật đầu tiên: deploy KHÔNG cần bot
+
+Server có cron chạy `scripts/auto-deploy.sh` mỗi phút: `main` có commit mới là tự build + tráo `dist` + restart. **Bot hỏng không đồng nghĩa deploy chết.** Nhưng auto-deploy có mấy trạng thái **bỏ qua IM LẶNG**, mỗi phút ghi một dòng vào file log không ai đọc — nên nhìn từ ngoài thì y hệt "bot hỏng".
+
+#### Lỗi thật: "bỏ qua im lặng vĩnh viễn" bị nhầm là "an toàn"
+
+Khi HEAD trên server **đi trước** `origin/main` (server có commit local chưa đẩy), script `exit 0` để không đè việc bot — nhưng **không có cửa thoát nào**, kẹt là kẹt mãi. Nhánh dirty-tree ngay bên dưới đã có cửa thoát 15 phút; nhánh này thì không. Khớp đúng hiện tượng: PROD đứng ở bản **`7870f10`** — commit **không tồn tại trên GitHub**.
+
+#### Đã làm
+
+- **`scripts/deploy_doctor.sh`** (MỚI) — một lệnh, chạy được không cần bot, **mặc định chỉ đọc**: soi ① công tắc tắt ② cron còn sống ③ trạng thái git (liệt kê **đích danh** commit đang kẹt) ④ backend health ⑤ 12 dòng log cuối, rồi kết luận bằng tiếng Việt. `--fix` gỡ kẹt.
+- **`--fix` KHÔNG BAO GIỜ mất commit**: cất commit local vào nhánh `rescue/local-<sha7>-<ngày>` **trước** khi fast-forward; sửa chưa commit thì `git stash`. Còn đường lấy lại.
+- **Vá `auto-deploy.sh`**: ca "đi trước origin" nay ghi dấu vết **nhìn thấy được** (`.auto-deploy.stuck`) thay vì chỉ ghi log, và sau `STUCK_SECS` (mặc định 6 giờ) thì tự gỡ — vẫn cất nhánh cứu hộ trước, không tạo được nhánh thì DỪNG.
+- **`scripts/test_deploy_doctor.sh`** (MỚI) — diễn tập trên repo giả: **9/9 đạt**, trong đó ca chốt là *"commit local CÒN NGUYÊN trong nhánh cứu hộ"*.
+
+Trạng thái test: diễn tập bác sĩ **9/9**, diễn tập an toàn release cũ **52/52** (không hỏng cái nào), cú pháp cả hai script sạch.
+
+**Lưu ý phạm vi:** auto-deploy chỉ theo dõi nhánh `main`. Các commit đang nằm trên `claude/reconcile-8873676-20260809` **chưa lên PROD được** cho tới khi gộp vào `main` — việc gộp chờ CEO quyết.
+
 ### 2026-08-10 10:15 (giờ VN) — 🔑 TRẢ LẠI Ô NHẬP SỐ ĐIỆN THOẠI Ở MÀN ĐĂNG NHẬP
 
 CEO: *"Tao đã yêu cầu có nhiều cách đăng nhập… nhưng quan trọng là phải nhập số điện thoại muốn đăng nhập vào. Hiện tại tao muốn đăng nhập vào tài khoản khác để kiểm tra thì tao phải nhập đúng số điện thoại của tài khoản đó để trả OTP về. Nhưng ở đây nó bỏ qua bước nhập số điện thoại là sao — vậy nó mặc định nhảy vào bot devreport."*

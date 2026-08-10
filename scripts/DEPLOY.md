@@ -11,6 +11,26 @@ pm2 restart`. **Không cần deploy tay.**
   tail -n 30 ~/.openclaw/workspace-report/App-report/auto-deploy.log
   ```
 
+## ‼ Site không lên bản mới? Chạy BÁC SĨ DEPLOY trước khi đổ tại bot
+
+```
+bash scripts/deploy_doctor.sh          # chẩn đoán, KHÔNG sửa gì
+bash scripts/deploy_doctor.sh --fix    # gỡ kẹt, KHÔNG mất commit nào
+```
+
+Nó soi đúng những thứ `auto-deploy.sh` soi rồi nói thẳng đang vướng cái nào:
+công tắc tắt · cron chết · **server có commit local chưa đẩy** · tree dirty ·
+backend chết. Ca hay gặp nhất là commit local: bản cũ gặp ca này thì `exit 0`
+mỗi phút và **im lặng vĩnh viễn**, site đứng yên hàng tiếng mà không ai biết
+(PROD từng kẹt ở `7870f10` — commit không có trên GitHub).
+
+Nay `auto-deploy.sh` cũng không im nữa: ghi file dấu vết `.auto-deploy.stuck`,
+và sau `STUCK_SECS` (mặc định **6 giờ**) thì tự gỡ — nhưng **cất commit local
+vào nhánh `rescue/local-<sha7>-<ngày>` trước**, không bao giờ đánh mất việc của
+bot. Lấy lại: `git checkout rescue/local-…`.
+
+Diễn tập: `bash scripts/test_deploy_doctor.sh` (repo giả, không đụng production).
+
 ## An toàn (đã tính sẵn trong script)
 - **flock**: không chạy chồng.
 - Chỉ deploy khi **fast-forward** được → không đè commit local chưa push của bot.

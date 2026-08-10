@@ -61,9 +61,39 @@ REMOTE=$(git rev-parse "origin/$BRANCH")
 [ "$LOCAL" = "$REMOTE" ] && exit 0   # không có gì mới -> im lặng thoát
 
 # --- An toàn: chỉ đi tiếp khi fast-forward được (không mất commit local) ---
+# ‼ SỬA 10/08/2026 — BỎ QUA IM LẶNG VĨNH VIỄN LÀ MỘT LỖI, KHÔNG PHẢI SỰ AN TOÀN.
+# Bản cũ gặp commit local là `exit 0` mỗi phút, chỉ ghi một dòng vào file log không
+# ai đọc. Hệ quả thật: PROD đứng ở bản `7870f10` (commit KHÔNG có trên GitHub) hàng
+# tiếng, CEO nhìn site không đổi và kết luận "con bot bị lỗi". Nhánh dirty-tree phía
+# dưới đã có cửa thoát 15 phút; nhánh này thì KHÔNG có cửa nào — kẹt là kẹt mãi.
+# Nay: (1) để lại DẤU VẾT NHÌN THẤY ĐƯỢC ngoài log; (2) sau STUCK_SECS thì tự gỡ,
+# nhưng CẤT COMMIT VÀO NHÁNH CỨU HỘ TRƯỚC — không bao giờ đánh mất việc của bot.
+STUCK_FILE="${STUCK_FILE:-$REPO_DIR/.auto-deploy.stuck}"
+STUCK_MARK="$REPO_DIR/.auto-deploy.ahead-since"
+STUCK_SECS="${STUCK_SECS:-21600}"   # 6 giờ: commit local là việc có chủ đích, cho rộng cửa hơn dirty-tree
 if ! git merge-base --is-ancestor "$LOCAL" "$REMOTE"; then
-  log "BỎ QUA: HEAD (${LOCAL:0:7}) không phải tổ tiên của origin/$BRANCH — có commit local chưa push?"
-  exit 0
+  AHEAD=$(git rev-list --count "$REMOTE..$LOCAL" 2>/dev/null || echo '?')
+  now=$(date +%s); since=$now
+  [ -f "$STUCK_MARK" ] && since=$(cat "$STUCK_MARK" 2>/dev/null || echo "$now")
+  case "$since" in ''|*[!0-9]*) since=$now ;; esac
+  [ -f "$STUCK_MARK" ] || echo "$now" > "$STUCK_MARK"
+  age=$(( now - since ))
+  # Dấu vết đọc được từ ngoài (bác sĩ deploy + người trực đọc file này, không phải log).
+  echo "stuck=ahead_of_origin since=$(date '+%F %T') age_s=$age head=${LOCAL:0:7} remote=${REMOTE:0:7} ahead=$AHEAD" > "$STUCK_FILE" 2>/dev/null || true
+  if [ "$age" -lt "$STUCK_SECS" ]; then
+    log "BỎ QUA (${age}s/${STUCK_SECS}s): HEAD ${LOCAL:0:7} đi TRƯỚC origin/$BRANCH $AHEAD commit — chờ bot đẩy lên. Soi: bash scripts/deploy_doctor.sh"
+    exit 0
+  fi
+  RESCUE="rescue/local-${LOCAL:0:7}-$(date '+%Y%m%d-%H%M')"
+  if git branch "$RESCUE" "$LOCAL" >> "$LOG" 2>&1; then
+    log "KẸT ${age}s: đã CẤT $AHEAD commit local vào nhánh $RESCUE (khôi phục: git checkout $RESCUE) rồi đi tiếp."
+    rm -f "$STUCK_MARK"
+  else
+    log "KHÔNG tạo được nhánh cứu hộ -> DỪNG. Tuyệt đối không bỏ commit local khi chưa cất được."
+    exit 0
+  fi
+else
+  rm -f "$STUCK_MARK" "$STUCK_FILE" 2>/dev/null || true
 fi
 
 # --- An toàn: không đè thay đổi tracked chưa commit ---
