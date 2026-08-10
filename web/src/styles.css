@@ -88,9 +88,22 @@ body {
   box-shadow: 0 6px 16px rgba(3,30,58,.28);
 }
 .privacy-export-note { font-size: 11.5px; color: #9a6800; font-weight: 700; align-self: center; }
+/* Công tắc Trình chiếu — cùng khuôn với con mắt, nhưng BẬT thì đỏ để nhìn phát biết. */
+.privacy-present {
+  min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  margin-left: 6px; padding: 0 12px; border: 1px solid rgba(255,255,255,.38); border-radius: 999px;
+  background: rgba(255,255,255,.12); color: #fff; font-size: 12px; font-weight: 800; white-space: nowrap;
+  transition: background .14s ease, transform .14s ease;
+}
+.privacy-present:hover { background: rgba(255,255,255,.24); transform: translateY(-1px); }
+.privacy-present:focus-visible { outline: 3px solid rgba(255,210,90,.95); outline-offset: 2px; }
+.privacy-present.is-on { background: rgba(214,45,45,.9); border-color: rgba(255,255,255,.85); }
+.privacy-present-ic { font-size: 14px; line-height: 1; }
 @media (max-width: 700px) {
   .privacy-eye { padding: 0 9px; }
   .privacy-eye-label { display: none; }
+  .privacy-present { padding: 0 9px; margin-left: 4px; }
+  .privacy-present-label { display: none; }
 }
 .home-button {
   width: 34px; height: 34px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;

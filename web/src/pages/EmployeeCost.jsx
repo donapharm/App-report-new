@@ -15,7 +15,7 @@ import { dataQualityTypeLabel, employeeCostDataQualityView } from '../employeeCo
 import { employeeVatKhoanDeduction, employeeVatKhoanViewModel } from '../employeeVatKhoanModel.js';
 import { createLatestRequestGate } from '../requestCoordinator.js';
 import { composePaymentRequestNote, paymentReasonDetailMaxLength } from '../paymentRequestReasons.js';
-import { ExportRealNumbersNote, useMoneyWriteLock } from '../privacy.jsx';
+import { ExportRealNumbersNote, useMoneyWriteLock, useRevealContext } from '../privacy.jsx';
 import { maskMoneyInText, maskNumberText } from '../privacyMask.js';
 
 const month = currentMonthValue();
@@ -1591,6 +1591,13 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [tablePage, setTablePage] = useState(1);
   const [tablePageSize, setTablePageSize] = useState(20);
   const [tableFilters, setTableFilters] = useState({ province: '', unitGroup: '', route: '', date: '' });
+  // Đây là màn nhiều tiền nhất app: KPI tổng, % C33–C46, tổng chi phí từng NV.
+  // Đổi NV / đơn vị / tỉnh / tuyến / kỳ là số MỚI nhảy ra ⇒ ẩn ngay, bấm mắt lại
+  // mới hiện (CEO 10/08/2026, tình huống trình chiếu màn LED).
+  useRevealContext([
+    selectedEmp, range.from, range.to,
+    tableFilters.unitGroup, tableFilters.province, tableFilters.route, tableFilters.date,
+  ].join('·'));
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [bonusModalOpen, setBonusModalOpen] = useState(false);
   const [penaltyModalOpen, setPenaltyModalOpen] = useState(false);

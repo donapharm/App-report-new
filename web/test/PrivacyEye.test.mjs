@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import {
-  AUTO_HIDE_MS, MASK_TEXT, clearRevealDeadline, createAutoHide, isMasked,
-  maskMoneyInText, maskNumberText, readRevealDeadline, setMasked, writeRevealDeadline,
+  AUTO_HIDE_MS, MASK_TEXT, PRESENT_HIDE_MS, autoHideMsFor, clearRevealDeadline, createAutoHide,
+  isMasked, maskMoneyInText, maskNumberText, readPresenting, readRevealDeadline, setMasked,
+  writePresenting, writeRevealDeadline,
 } from '../src/privacyMask.js';
 
 // sessionStorage giả — đủ đúng hợp đồng getItem/setItem/removeItem để test không cần DOM.
@@ -26,9 +27,9 @@ const mainSource = fs.readFileSync(new URL('../src/main.jsx', import.meta.url), 
 const employeeCostSource = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
 
 test('mặc định ẨN, và chỉ nhớ trong TAB — cấm localStorage', () => {
-  // Khởi động che sẵn khi không có mốc còn hạn (F5 quá 5 phút, hoặc mở tab mới).
-  assert.equal(readRevealDeadline(null), 0, 'không có kho thì coi như không có mốc');
-  assert.match(privacySource, /readRevealDeadline\(revealStore\(\)\) <= 0/);
+  // Provider LUÔN khởi động ở trạng thái ẩn; khôi phục (nếu có) do lớp ngữ cảnh quyết.
+  assert.match(privacySource, /useState\(true\)/);
+  assert.equal(readRevealDeadline(null, { contextKey: 'x' }), 0, 'không có kho ⇒ không có mốc');
   // Cấm GỌI localStorage (nhắc trong chú thích thì được): đóng trình duyệt phải mất sạch.
   assert.doesNotMatch(privacySource, /localStorage\s*[.[]/);
   assert.doesNotMatch(maskSource, /localStorage\s*[.[]/);
@@ -36,26 +37,76 @@ test('mặc định ẨN, và chỉ nhớ trong TAB — cấm localStorage', () 
 });
 
 // CEO 10/08/2026: "F5 lại thì chưa ẩn vội con mắt."
-test('F5 giữ mắt mở trong hạn — nhưng KHÔNG gia hạn thêm', () => {
+test('F5 ĐÚNG màn cũ thì giữ mở — nhưng KHÔNG gia hạn thêm', () => {
   const store = memoryStore();
   const now = 1_000_000;
-  writeRevealDeadline(store, now + 120_000); // còn 2 phút
-  assert.equal(readRevealDeadline(store, now), now + 120_000, 'còn hạn ⇒ F5 mở lại');
+  const ctx = 'tab:cost|DN006·2026-07·2026-07····';
+  writeRevealDeadline(store, now + 120_000, ctx); // còn 2 phút
 
+  assert.equal(readRevealDeadline(store, { contextKey: ctx, nowTs: now }), now + 120_000, 'còn hạn + đúng màn ⇒ F5 mở lại');
   // Tải lại 10 lần cũng không dài thêm: mốc là thời điểm cố định, không phải "cộng 5 phút".
-  for (let i = 0; i < 10; i += 1) assert.equal(readRevealDeadline(store, now), now + 120_000);
-
-  // Quá hạn ⇒ ẩn.
-  assert.equal(readRevealDeadline(store, now + 120_001), 0, 'hết hạn ⇒ F5 ra ẩn');
+  for (let i = 0; i < 10; i += 1) {
+    assert.equal(readRevealDeadline(store, { contextKey: ctx, nowTs: now }), now + 120_000);
+  }
+  assert.equal(readRevealDeadline(store, { contextKey: ctx, nowTs: now + 120_001 }), 0, 'hết hạn ⇒ ẩn');
 
   // Mốc rác / đồng hồ máy bị chỉnh vẫn không mở quá một chu kỳ.
-  writeRevealDeadline(store, now + 999 * 60_000);
-  assert.equal(readRevealDeadline(store, now), now + AUTO_HIDE_MS, 'trần đúng bằng AUTO_HIDE_MS');
+  writeRevealDeadline(store, now + 999 * 60_000, ctx);
+  assert.equal(readRevealDeadline(store, { contextKey: ctx, nowTs: now }), now + AUTO_HIDE_MS, 'trần đúng một chu kỳ');
 
-  // Ẩn (hết giờ / chuyển tab / tự bấm) thì xoá mốc ⇒ F5 sau đó ra ẩn.
   clearRevealDeadline(store);
-  assert.equal(readRevealDeadline(store, now), 0);
+  assert.equal(readRevealDeadline(store, { contextKey: ctx, nowTs: now }), 0);
   assert.match(privacySource, /if \(hidden\) \{ clearRevealDeadline/);
+});
+
+// CEO 10/08/2026: "đang trình chiếu trên màn hình LED mà vô tình lọt các con số %
+// và tổng tiền các ô thì rất là lỗ hổng… chuyển từ NV này qua NV khác, hoặc chuyển
+// từ đơn vị này qua đơn vị khác."
+test('đổi trang / NV / đơn vị / kỳ là mốc mất hiệu lực NGAY, không chờ hết giờ', () => {
+  const store = memoryStore();
+  const now = 1_000_000;
+  const base = 'tab:cost|DN006·2026-07·2026-07·NHOM01···';
+  writeRevealDeadline(store, now + 300_000, base);
+
+  const stillOpen = (ctx) => readRevealDeadline(store, { contextKey: ctx, nowTs: now }) > 0;
+  assert.equal(stillOpen(base), true, 'đứng yên thì vẫn mở');
+  assert.equal(stillOpen('tab:overview|DN006·2026-07·2026-07·NHOM01···'), false, 'đổi TRANG ⇒ ẩn');
+  assert.equal(stillOpen('tab:cost|DN007·2026-07·2026-07·NHOM01···'), false, 'đổi NHÂN VIÊN ⇒ ẩn');
+  assert.equal(stillOpen('tab:cost|DN006·2026-07·2026-07·NHOM02···'), false, 'đổi ĐƠN VỊ ⇒ ẩn');
+  assert.equal(stillOpen('tab:cost|DN006·2026-06·2026-06·NHOM01···'), false, 'đổi KỲ ⇒ ẩn');
+  assert.equal(stillOpen(''), false, 'không rõ đang xem gì ⇒ ẩn');
+
+  // Cha (tab) và con (NV/đơn vị) phải nằm ở HAI ô riêng, nếu chung một ô thì effect
+  // của cha chạy sau sẽ ghi đè con và mất luôn lớp chặn đổi NV.
+  assert.match(privacySource, /const \[scope, setScopeState\]/);
+  assert.match(privacySource, /const \[detail, setDetailState\]/);
+  assert.match(appSource, /useRevealScope\(`tab:\$\{tab\}`\)/);
+  assert.match(employeeCostSource, /useRevealContext\(\[/);
+});
+
+test('Trình chiếu: F5 không nhớ gì, tự ẩn rút còn 1 phút, bật lên là ẩn ngay', () => {
+  const store = memoryStore();
+  const now = 1_000_000;
+  const ctx = 'tab:cost|DN006····';
+  writeRevealDeadline(store, now + 300_000, ctx);
+
+  assert.equal(readRevealDeadline(store, { contextKey: ctx, nowTs: now, presenting: false }), now + 300_000);
+  assert.equal(readRevealDeadline(store, { contextKey: ctx, nowTs: now, presenting: true }), 0, 'trình chiếu ⇒ F5 luôn ra ẩn');
+
+  assert.equal(autoHideMsFor(false), AUTO_HIDE_MS);
+  assert.equal(autoHideMsFor(true), PRESENT_HIDE_MS);
+  assert.equal(PRESENT_HIDE_MS, 60_000);
+
+  // Công tắc thì nhớ qua F5 (không bắt CEO bật lại giữa buổi họp)…
+  assert.equal(readPresenting(store), false);
+  writePresenting(store, true);
+  assert.equal(readPresenting(store), true);
+  writePresenting(store, false);
+  assert.equal(readPresenting(store), false, 'tắt là xoá hẳn, không để lại vết');
+
+  // …nhưng bật lên thì phải ẩn ngay và xoá mốc, và không ghi mốc mới khi đang bật.
+  assert.match(privacySource, /if \(value\) \{\s*\n\s*clearRevealDeadline/);
+  assert.match(privacySource, /if \(presenting\) return;/);
 });
 
 test('kho hỏng (chặn cookie / hết quota) thì rèm vẫn chạy, chỉ mất phần nhớ qua F5', () => {
@@ -64,9 +115,18 @@ test('kho hỏng (chặn cookie / hết quota) thì rèm vẫn chạy, chỉ m�
     setItem() { throw new Error('blocked'); },
     removeItem() { throw new Error('blocked'); },
   };
-  assert.equal(readRevealDeadline(broken, 1_000), 0);
-  assert.doesNotThrow(() => writeRevealDeadline(broken, 2_000));
+  assert.equal(readRevealDeadline(broken, { contextKey: 'x', nowTs: 1_000 }), 0);
+  assert.equal(readPresenting(broken), false);
+  assert.doesNotThrow(() => writeRevealDeadline(broken, 2_000, 'x'));
   assert.doesNotThrow(() => clearRevealDeadline(broken));
+  assert.doesNotThrow(() => writePresenting(broken, true));
+});
+
+test('mốc hỏng/rác trong kho không được coi là "đang mở"', () => {
+  const store = memoryStore({ 'appReport.privacy.reveal': 'không-phải-json' });
+  assert.equal(readRevealDeadline(store, { contextKey: 'x', nowTs: 1_000 }), 0, 'JSON hỏng ⇒ ẩn');
+  const noCtx = memoryStore({ 'appReport.privacy.reveal': JSON.stringify({ until: 9e15 }) });
+  assert.equal(readRevealDeadline(noCtx, { contextKey: 'x', nowTs: 1_000 }), 0, 'thiếu khoá ngữ cảnh ⇒ ẩn');
 });
 
 test('một công tắc cho CẢ APP: bọc ở main, nút mắt ở cả header desktop lẫn mobile', () => {

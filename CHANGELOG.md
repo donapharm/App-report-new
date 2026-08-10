@@ -1,3 +1,49 @@
+### 2026-08-10 13:25 (giờ VN) — 📽 CON MẮT v2: mở số gắn với MÀN ĐANG XEM + công tắc Trình chiếu
+
+CEO: *"phải tính toán kỹ vì nó liên quan đến các con số % nữa, và các con số liên quan
+đến tổng tiền ở các ô KPI… Ví dụ tôi đang trình chiếu trên màn hình LED mà vô tình lọt
+các con số % và tổng tiền các ô thì rất là lỗ hổng. Đặc biệt là khi F5 lại hoặc sang
+trang khác, hoặc chuyển từ NV này qua NV khác, hoặc chuyển từ đơn vị này qua đơn vị khác."*
+
+CEO chốt phương án **"thêm công tắc Trình chiếu"**.
+
+#### Nhận định: nguy hiểm nằm ở NỘI DUNG ĐỔI, không nằm ở thời gian
+
+Bản 12:40 sáng nay (`d8e9c4c`) chỉ nới đồng hồ — đúng cho việc chụp hình nhưng **hở
+đúng chỗ CEO chỉ**: số CEO chủ động mở ra thì CEO biết nó đang hiện, nhưng đổi
+trang/NV/đơn vị/kỳ thì **số MỚI tự nhảy ra** khi chưa ai quyết định. Đó mới là lúc lọt
+lên màn LED. Nới đồng hồ càng lâu thì cửa sổ hở càng rộng.
+
+#### Đã làm
+
+**1. Mở số gắn với khoá ngữ cảnh (trang · NV · đơn vị · tỉnh · tuyến · ngày · kỳ)**
+- `sessionStorage` lưu `{until, ctx}` thay vì chỉ mốc thời gian. Khoá lệch ⇒ coi như
+  chưa mở, **ẩn ngay, không chờ hết giờ**, kèm câu "Đã ẩn số vì màn hình vừa đổi".
+- Nhờ vậy **F5 đúng màn cũ vẫn giữ mở** (CEO xin sáng nay) mà **rời màn đó là ẩn tức thì**.
+- Ngữ cảnh chia **HAI tầng**: `scope` do App khai (tab), `detail` do trang khai
+  (NV/đơn vị/kỳ). Lý do phải tách: effect của **con chạy TRƯỚC cha**, để chung một ô
+  thì cha luôn ghi đè con và mất sạch lớp chặn đổi NV. Có test khoá điều này.
+- Nối: `App.jsx` → `useRevealScope('tab:'+tab)`; `EmployeeCost.jsx` → `useRevealContext`
+  gồm `selectedEmp`, `range.from/to`, `tableFilters.unitGroup/province/route/date`.
+
+**2. Công tắc "📽 Trình chiếu"** cạnh con mắt (đỏ khi bật)
+- Bật ⇒ **ẩn ngay lập tức** và xoá mốc (chính lúc cắm máy chiếu là lúc dễ lọt nhất).
+- Đang bật ⇒ **không ghi mốc nào cả** ⇒ F5 chắc chắn ra ẩn; tự ẩn rút **5 phút → 1 phút**.
+- Tắt ⇒ **không tự mở lại**, vẫn phải bấm con mắt.
+- **Công tắc thì nhớ qua F5** (không bắt CEO bật lại giữa buổi họp), nhưng **trạng thái
+  mở số thì tuyệt đối không nhớ** — đó mới là thứ gây lọt số.
+
+**3. Giữ nguyên từ bản sáng:** không nghe `blur` (chụp màn hình ra số thật), tự ẩn 5
+phút khi không trình chiếu, không đụng `localStorage`, đóng tab là mất sạch.
+
+#### Chặn sẵn mấy đường vòng
+Mốc rác/JSON hỏng ⇒ ẩn · thiếu khoá ngữ cảnh ⇒ ẩn · đồng hồ máy bị chỉnh ⇒ trần đúng
+một chu kỳ · kho bị chặn (tắt cookie/hết quota) ⇒ nuốt lỗi, rèm vẫn chạy.
+
+#### Test
+`web` **444/444 đạt** (thêm 3 ca: đổi trang/NV/đơn vị/kỳ · Trình chiếu · mốc rác), build đạt.
+Chưa deploy — chờ bot lên sóng `81da127` trước.
+
 ### 2026-08-10 12:40 (giờ VN) — 👁 CON MẮT: chụp màn hình ra số thật, F5 không ẩn vội
 
 CEO: *"tao phải dùng điện thoại để chụp hình kèm chụp hình máy tính, vì khi bấm chụp

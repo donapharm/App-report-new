@@ -8,7 +8,7 @@ import { NavCtx } from './drillNav.jsx';
 import Logo from './logo.jsx';
 import DormantGate from './DormantGate.jsx';
 import CeoNotificationBell from './CeoNotificationBell.jsx';
-import { PrivacyEyeButton, usePrivacy } from './privacy.jsx';
+import { PrivacyEyeButton, usePrivacy, useRevealScope } from './privacy.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
 import Revenue from './pages/Revenue.jsx';
@@ -116,6 +116,9 @@ export default function App() {
   const headerReloadStartedRef = useRef(false);
   const mobileMenuSearchRef = useRef(null);
   const { setHidden: setPrivacyHidden } = usePrivacy();
+  // Đổi tab = màn hình đổi hẳn nội dung ⇒ số phải ẩn ngay, không chờ hết giờ
+  // (CEO 10/08/2026: đang trình chiếu mà sang trang khác là lọt số lên màn LED).
+  useRevealScope(`tab:${tab}`);
 
   // VP018 chỉ có hai tab doanh thu và không có công tắc privacy. Hiện số thật
   // trong đúng phiên revenue-only; khi rời phiên phải khôi phục mặc định che số.
