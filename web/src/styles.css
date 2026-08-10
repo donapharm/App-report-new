@@ -1597,7 +1597,8 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   border-radius:999px;
   background:#fff;
   box-shadow:0 3px 9px rgba(11,61,112,.14);
-  width:min(100%,460px);
+  /* Rộng thêm để chứa huy hiệu KỲ mà không cắt cụt chữ (CEO 10/08/2026). */
+  width:min(100%,560px);
   margin:0 auto;
 }
 .catalog-pager-capsule button {
@@ -1628,6 +1629,11 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-pager-capsule > span b { font-size:12px; }
 .catalog-pager-capsule > span i { color:var(--muted); font-size:11px; font-style:normal; }
 .catalog-capsule-mark { flex:0 0 auto; width:34px; height:18px; filter:drop-shadow(0 1px 1px rgba(11,61,112,.18)); }
+/* Huy hiệu KỲ trong thanh trang dính đầu màn (CEO yêu cầu 10/08/2026). */
+.catalog-pager-period {
+  flex:0 0 auto; padding:2px 8px; border-radius:999px; background:#e7f0fa;
+  color:var(--brand-ink); font-size:11px; font-style:normal; font-weight:800; letter-spacing:.2px;
+}
 .catalog-two-lines { display:-webkit-box; overflow:hidden; -webkit-box-orient:vertical; -webkit-line-clamp:2; line-clamp:2; max-height:2.55em; white-space:normal; overflow-wrap:anywhere; line-height:1.25; }
 .catalog-drug-multi-qlnb {
   max-height:calc(2.55em + 6px);
@@ -1676,7 +1682,9 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-filter-row { grid-template-columns:1fr 1fr; }
   .catalog-filter-row > label:first-child { grid-column:1/-1; }
   .catalog-pager.is-top { top:calc(var(--hdr-h) + env(safe-area-inset-top)); z-index:35; min-height:44px; padding:4px; }
-  .catalog-pager-capsule { grid-template-columns:auto minmax(130px,1fr) auto; width:min(100%,390px); }
+  .catalog-pager-capsule { grid-template-columns:auto minmax(130px,1fr) auto; width:min(100%,430px); }
+  /* Điện thoại hẹp: giữ huy hiệu KỲ, bỏ hình trang trí — chữ quan trọng hơn logo. */
+  .catalog-pager-period + .catalog-capsule-mark { display:none; }
   .catalog-pager-capsule button { min-width:72px; min-height:34px; padding:6px 10px; }
   .catalog-pager-capsule > span { min-height:34px; padding:5px 8px; gap:3px; }
   .catalog-pager-capsule > span b { font-size:11.5px; }
@@ -2516,6 +2524,20 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
   animation:catalogPulse 1s ease-in-out infinite;
 }
 @keyframes catalogPulse { 0%,100% { opacity:.25; } 50% { opacity:1; } }
+/* Nhãn kỳ dán trên bảng danh mục (CEO yêu cầu 10/08/2026): cuộn xuống bảng vẫn
+   biết đang đọc kỳ nào, và biết cột "Phụ trách từ kỳ" mang nghĩa khác. */
+.catalog-period-banner {
+  display:flex; align-items:baseline; flex-wrap:wrap; gap:6px 12px;
+  padding:7px 14px; border-bottom:1px solid var(--line); background:#f4f8fd;
+  border-left:4px solid #1676bd; font-size:12.5px;
+}
+.catalog-period-banner b { color:var(--brand-ink); font-size:13.5px; }
+.catalog-period-banner-count { color:var(--brand-ink); font-weight:800; }
+.catalog-period-banner em { flex:1 1 260px; color:var(--muted); font-style:normal; font-size:11.5px; line-height:1.35; }
+.catalog-period-banner.is-mismatch { background:#fff6ed; border-left-color:#c2410c; }
+.catalog-period-banner.is-mismatch em { color:#9a3412; font-weight:700; }
+/* Tiêu đề hai dòng: dòng dưới giải nghĩa để không ai đọc thành "kỳ của bảng". */
+.catalog-col-since small { display:block; color:var(--muted); font-size:10px; font-weight:600; line-height:1.2; white-space:nowrap; }
 .catalog-first-load { display:grid; justify-items:center; gap:6px; padding:28px 18px; text-align:center; }
 .catalog-first-load p { margin:0; max-width:520px; color:var(--muted); font-size:12.5px; }
 @media (prefers-reduced-motion: reduce) { .catalog-loading-dot { animation:none; opacity:.8; } }

@@ -1,3 +1,23 @@
+### 2026-08-10 09:45 (giờ VN) — 📅 BẢNG DANH MỤC TỰ KHAI KỲ CỦA NÓ
+
+CEO: *"Đáng lẽ khi chọn kỳ phụ trách ở trên là T07.2026 thì ở dưới bảng danh mục cột phụ trách từ kỳ nó cũng phải nhảy theo, hoặc làm sao để nhìn thấy bảng dưới chính xác là của T07.2026, còn chuyển kỳ thì nó cho biết bảng của tháng mấy chứ."*
+
+#### Hai chuyện bị lẫn vào nhau
+
+1. **Ô "Kỳ" nằm tít đầu màn** — cuộn xuống bảng là mất hút, trên bảng không có gì nhắc lại. Nhìn 27.719 dòng mà không biết đang đọc tháng mấy.
+2. **Cột "Phụ trách từ kỳ" KHÔNG phải kỳ của bảng.** Nó là kỳ nhân viên **BẮT ĐẦU** nhận cặp đó — chọn kỳ 07 mà cột ghi 05.2026 là **ĐÚNG** (nhận từ tháng 5, vẫn còn phụ trách trong tháng 7). Nó **không nhảy theo** ô "Kỳ", và đó là chủ ý; trước đây chỉ có tooltip nên phải rê chuột mới biết.
+
+#### Đã làm
+
+- **Nhãn kỳ dán ngay đầu bảng**: *"📅 Bảng danh mục KỲ 07.2026 · 27.719 cặp"*, kèm câu giải nghĩa cột "Phụ trách từ kỳ".
+- **Bảng đang giữ kỳ cũ thì nói thẳng**: nhãn đổi màu cảnh báo — *"Ô Kỳ phía trên đang chọn 08.2026 nhưng bảng dưới VẪN là kỳ 07.2026 — chưa tải được kỳ 08.2026."* Nhãn lấy kỳ **của chính bảng**, không lấy kỳ vừa bấm.
+- **Huy hiệu KỲ trong thanh trang** — thanh này dính đầu màn khi cuộn nên là chỗ duy nhất luôn nhìn thấy.
+- **Tiêu đề cột hai dòng**: "Phụ trách từ kỳ" + dòng nhỏ *"kỳ NV bắt đầu nhận"*.
+- Ô "Kết quả" trong hàng lọc cũng ghi kèm kỳ.
+- Áp cho **cả hai** bảng: màn CEO/admin và màn nhân viên.
+
+Trạng thái test: web **430/430 pass** (thêm `CatalogPeriodLabel.contract.test.mjs`, 6 test mới), build sạch; server **1180 pass / 7 fail cố hữu** (không đụng backend).
+
 ### 2026-08-10 09:30 (giờ VN) — 🔓 BỎ "ALL-OR-NOTHING": nút Đồng bộ gom dần, và giải nghĩa dòng "thay đổi 0"
 
 CEO: *"tao đã bấm đi bấm lại đồng bộ T07.2026 rồi mà nó méo thay đổi là sao."*

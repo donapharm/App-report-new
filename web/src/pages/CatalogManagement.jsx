@@ -130,6 +130,34 @@ function CatalogTableCard({ id, tableId, children, cellLines = 3 }) {
     style={{ '--catalog-cell-lines': cellLines }}>{children}</div>;
 }
 
+/**
+ * NHÃN KỲ CỦA BẢNG — dán ngay trên bảng danh mục (CEO yêu cầu 10/08/2026).
+ *
+ * CEO: *"Đáng lẽ khi chọn kỳ phụ trách ở trên là T07.2026 thì ở dưới bảng danh mục
+ * cột phụ trách từ kỳ nó cũng phải nhảy theo, hoặc làm sao để nhìn thấy bảng dưới
+ * chính xác là của T07.2026, còn chuyển kỳ thì nó cho biết bảng của tháng mấy chứ."*
+ *
+ * Hai chuyện khác hẳn nhau mà trước đây màn không nói ra chỗ nào:
+ *  1. **Bảng thuộc kỳ nào** — ô "Kỳ" nằm tít trên đầu màn, cuộn xuống bảng là mất
+ *     hút; không có gì trên bảng nhắc lại. Nay in thẳng "Bảng danh mục KỲ 07.2026".
+ *  2. **Cột "Phụ trách từ kỳ" KHÔNG phải kỳ của bảng** — nó là kỳ NV BẮT ĐẦU nhận
+ *     cặp đó, nên chọn kỳ 07 mà cột ghi 05.2026 là ĐÚNG (nhận từ tháng 5, vẫn còn
+ *     phụ trách trong tháng 7). Nó không "nhảy theo" ô Kỳ, và đó là chủ ý.
+ *
+ * Khi bảng đang là kỳ CŨ (kỳ mới tải hỏng/đang tải) thì nhãn đổi màu cảnh báo và
+ * nói rõ đang lệch — không để ai đọc số kỳ này tưởng là kỳ kia.
+ */
+function CatalogPeriodBanner({ tablePeriod, selectedPeriod = '', count = 0, countLabel = 'cặp' }) {
+  const mismatch = !!selectedPeriod && !!tablePeriod && selectedPeriod !== tablePeriod;
+  return <div className={`catalog-period-banner${mismatch ? ' is-mismatch' : ''}`} role="status" aria-live="polite">
+    <b>📅 Bảng danh mục KỲ {tablePeriod || '—'}</b>
+    <span className="catalog-period-banner-count">{Number(count || 0).toLocaleString('vi-VN')} {countLabel}</span>
+    <em>{mismatch
+      ? `⚠ Ô "Kỳ" phía trên đang chọn ${selectedPeriod} nhưng bảng dưới VẪN là kỳ ${tablePeriod} — chưa tải được kỳ ${selectedPeriod}.`
+      : `Cột "Phụ trách từ kỳ" là kỳ nhân viên BẮT ĐẦU nhận cặp (có thể sớm hơn ${tablePeriod}), không phải kỳ của bảng.`}</em>
+  </div>;
+}
+
 /** Chọn số dòng tối đa hiện trong MỘT ô (CEO yêu cầu 09/08: "chọn 1/2/3 dòng tuỳ
  *  theo mong muốn"). Ghi nhớ trong trình duyệt để lần sau mở lại vẫn như cũ. */
 const CELL_LINES_KEY = 'rpt_catalog_cell_lines';
@@ -318,12 +346,13 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
         <label><span>Tuyến</span><select value={route} onChange={(e) => { setRoute(e.target.value); setUnit(''); }}><option value="">Tất cả tuyến</option>{routeOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
         <label><span>Đơn vị</span><select value={unit} onChange={(e) => setUnit(e.target.value)}><option value="">Tất cả đơn vị</option>{unitOptions.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
         <CellLinesPicker lines={cellLines} onChange={setCellLines} />
-        <div className="catalog-result-count"><span>Đang phụ trách</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
+        <div className="catalog-result-count"><span>Đang phụ trách kỳ {data?.period_ui || hubToUi(data?.period)}</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
       </div>
     </div>
     <CatalogTableCard id="employee-catalog-table-top" tableId="employee-catalog" cellLines={cellLines}>
-      <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee" data-cost-column-count={costColumns.length} style={{ '--catalog-table-width': catalogTableWidth(false, costColumns.length) }}><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+      <CatalogPeriodBanner tablePeriod={data?.period_ui || hubToUi(data?.period)} count={rows.length} />
+      <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} period={data?.period_ui || hubToUi(data?.period)} location="top" />
+      <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products catalog-table-employee" data-cost-column-count={costColumns.length} style={{ '--catalog-table-width': catalogTableWidth(false, costColumns.length) }}><thead><tr><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th className="catalog-col-since" title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ<small>kỳ NV bắt đầu nhận</small></th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
         const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
         const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
         const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -346,16 +375,19 @@ function EmployeeSections({ data, costColumns = [], rateOf = () => null }) {
         </tr>;
       })}</tbody></table></div>
       {rows.length === 0 && <div className="muted catalog-empty">Chưa có danh mục trong phạm vi đang lọc.</div>}
-      <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
+      <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} period={data?.period_ui || hubToUi(data?.period)} location="bottom" />
     </CatalogTableCard>
   </>;
 }
 
-function Pager({ page, pageCount, total, onPage, location }) {
+function Pager({ page, pageCount, total, onPage, location, period = '' }) {
   return <div className={`catalog-pager ${location === 'top' ? 'is-top' : 'is-bottom'}`}>
-    <div className="catalog-pager-capsule" role="group" aria-label={`Chuyển trang, trang ${page} trên ${pageCount}`}>
+    <div className="catalog-pager-capsule" role="group" aria-label={`Danh mục kỳ ${period || '—'}, chuyển trang, trang ${page} trên ${pageCount}`}>
       <button className="catalog-pager-prev" disabled={page <= 1} onClick={() => onPage(page - 1)}>‹ Trước</button>
-      <span><svg className="catalog-capsule-mark" viewBox="0 0 42 22" aria-hidden="true"><path d="M11 1h10v20H11A10 10 0 0 1 11 1Z" fill="#1676bd"/><path d="M21 1h10a10 10 0 0 1 0 20H21Z" fill="#f29313"/><path d="M8 5c6-4 20-4 27 0" fill="none" stroke="#fff" strokeOpacity=".62" strokeWidth="2" strokeLinecap="round"/><path d="M21 1v20" stroke="#fff" strokeOpacity=".82"/></svg><b>Trang {page.toLocaleString('vi-VN')}/{pageCount.toLocaleString('vi-VN')}</b><i>· {total.toLocaleString('vi-VN')} dòng</i></span>
+      {/* ‼ Kỳ đi kèm ngay trong thanh trang: thanh này DÍNH ĐẦU MÀN khi cuộn, nên đây
+          là chỗ duy nhất luôn nhìn thấy. Ô "Kỳ" ở đầu trang cuộn một cái là mất hút,
+          đúng điều CEO phàn nàn 10/08. */}
+      <span>{!!period && <em className="catalog-pager-period" title="Kỳ của bảng đang xem">KỲ {period}</em>}<svg className="catalog-capsule-mark" viewBox="0 0 42 22" aria-hidden="true"><path d="M11 1h10v20H11A10 10 0 0 1 11 1Z" fill="#1676bd"/><path d="M21 1h10a10 10 0 0 1 0 20H21Z" fill="#f29313"/><path d="M8 5c6-4 20-4 27 0" fill="none" stroke="#fff" strokeOpacity=".62" strokeWidth="2" strokeLinecap="round"/><path d="M21 1v20" stroke="#fff" strokeOpacity=".82"/></svg><b>Trang {page.toLocaleString('vi-VN')}/{pageCount.toLocaleString('vi-VN')}</b><i>· {total.toLocaleString('vi-VN')} dòng</i></span>
       <button className="catalog-pager-next" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>Sau ›</button>
     </div>
   </div>;
@@ -1219,7 +1251,7 @@ function CostRatesSyncCard({ period, catalogLoading = false }) {
   </div>;
 }
 
-function AdminView({ data, period, onReload, history, diagnostics, costColumns = [], rateOf = () => null, interactionsDisabled = false }) {
+function AdminView({ data, period, selectedPeriod = '', onReload, history, diagnostics, costColumns = [], rateOf = () => null, interactionsDisabled = false }) {
   const [mode, setMode] = useState('view');
   const [query, setQuery] = useState('');
   const [emp, setEmp] = useState('');
@@ -1266,12 +1298,13 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
           <label><span>Tuyến</span><select value={route} onChange={(e) => { setRoute(e.target.value); setUnit(''); }}><option value="">Tất cả tuyến</option>{routeOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
           <label><span>Đơn vị</span><select value={unit} onChange={(e) => setUnit(e.target.value)}><option value="">Tất cả đơn vị</option>{unitOptions.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
           <CellLinesPicker lines={cellLines} onChange={setCellLines} />
-          <div className="catalog-result-count"><span>Kết quả</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
+          <div className="catalog-result-count"><span>Kết quả kỳ {hubToUi(period)}</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
         </div>
       </div>
       <CatalogTableCard id="catalog-table-top" tableId="admin-catalog" cellLines={cellLines}>
-        <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="top" />
-        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products" data-cost-column-count={costColumns.length} style={{ '--catalog-table-width': catalogTableWidth(true, costColumns.length) }}><thead><tr><th className="catalog-col-employee">Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ</th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
+        <CatalogPeriodBanner tablePeriod={hubToUi(period)} selectedPeriod={selectedPeriod} count={rows.length} />
+        <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} period={hubToUi(period)} location="top" />
+        <div className="table-scroll"><table className="catalog-table catalog-table-simple catalog-table-products" data-cost-column-count={costColumns.length} style={{ '--catalog-table-width': catalogTableWidth(true, costColumns.length) }}><thead><tr><th className="catalog-col-employee">Nhân viên</th><th>Tuyến</th><th>Mã nhà thầu</th><th className="catalog-col-unit">Mã đơn vị</th><th>Mã QLNB</th><th>C10</th><th className="catalog-col-text">Tên thuốc</th><th className="catalog-col-text">Hoạt chất + Hàm lượng</th><th>ĐVT</th><th className="catalog-money catalog-col-price">Đơn giá trúng thầu</th><th className="catalog-money">CST ban đầu</th><th className="catalog-money">CST còn lại</th>{costColumns.map((c) => <th key={c.key} className="catalog-money" title={c.label}>{c.key.toUpperCase()} (%)</th>)}<th className="catalog-col-since" title="Kỳ nhân viên BẮT ĐẦU phụ trách cặp này — không phải kỳ đang xem">Phụ trách từ kỳ<small>kỳ NV bắt đầu nhận</small></th><th>Đến kỳ</th></tr></thead><tbody>{visibleRows.map((r) => {
           const pct = Number(r.cst_initial) > 0 && r.cst_remaining != null ? (Number(r.cst_remaining) / Number(r.cst_initial)) * 100 : null;
           const pctClass = pct == null ? '' : pct <= 10 ? ' is-low' : pct <= 30 ? ' is-warning' : ' is-ok';
           const ingredientText = [r.active_ingredient, r.strength].filter(Boolean).join(' · ') || '—';
@@ -1294,7 +1327,7 @@ function AdminView({ data, period, onReload, history, diagnostics, costColumns =
             <PreviewCell label="Đến kỳ" value={effectiveToText}>{r.effective_to ? effectiveToText : <span className="catalog-active-label">{effectiveToText}</span>}</PreviewCell>
           </tr>;
         })}</tbody></table></div>
-        <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} location="bottom" />
+        <Pager page={safePage} pageCount={pageCount} total={rows.length} onPage={goPage} period={hubToUi(period)} location="bottom" />
       </CatalogTableCard>
     </> : effectiveMode === 'report' ? <ReportPanel period={period} rows={currentRows} /> : <TransferPanel period={period} rows={currentRows} meta={data?.meta} onDone={onReload} />}
 
@@ -1446,7 +1479,7 @@ export default function CatalogManagement({ me }) {
         {' '}Các phần phía trên dùng được ngay.</p>
     </div>}
     {data && (isAdmin
-      ? <AdminView data={data} period={uiToHub(shownPeriod || period)} history={history} diagnostics={diagnostics} onReload={() => load(period)}
+      ? <AdminView data={data} period={uiToHub(shownPeriod || period)} selectedPeriod={period} history={history} diagnostics={diagnostics} onReload={() => load(period)}
         costColumns={costRates.columns} rateOf={costRates.rateOf} interactionsDisabled={actionsLocked} />
       : <EmployeeSections data={data} costColumns={costRates.columns} rateOf={costRates.rateOf} />)}
   </div>;
