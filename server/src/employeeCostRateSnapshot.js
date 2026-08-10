@@ -30,13 +30,31 @@ const MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 
 const keyOf = (empCode, period) => `${String(empCode || '').trim().toUpperCase()}|${String(period || '').trim()}`;
 
-function readAll(store) { const rows = store.load(FILE, {}); return rows && typeof rows === 'object' && !Array.isArray(rows) ? rows : {}; }
+/* `shared: true` chỉ dành cho đường ĐỌC THUẦN — dùng bản nhớ của persist, không
+ * phân tích lại file. Đường ĐỌC-RỒI-GHI (`write`) phải để `shared: false` để lấy
+ * bản tươi của riêng nó mà sửa, không đụng vào bản dùng chung. */
+function readAll(store, { shared = false } = {}) {
+  const read = shared && typeof store.loadShared === 'function' ? store.loadShared : store.load;
+  const rows = read.call(store, FILE, {});
+  return rows && typeof rows === 'object' && !Array.isArray(rows) ? rows : {};
+}
 
+/* ĐƯỜNG NÓNG NHẤT CỦA APP: gọi một lần cho MỖI nhân viên (21 lượt mỗi lần mở màn
+ * "Tất cả nhân viên"), trên file 17,9 MB. Đây là chỗ `load()` cũ đốt hết hạn 25 giây.
+ * Nay đọc qua bản nhớ dùng chung.
+ *
+ * ‼ `loadShared` trả ĐỐI TƯỢNG DÙNG CHUNG. Nên `columns`/`rows` phải `slice()` trước
+ * khi giao ra ngoài: tầng trên có sắp xếp/cắt trang, mà sắp xếp tại chỗ trên mảng
+ * dùng chung là **hỏng kho trong bộ nhớ của cả tiến trình**. `slice()` chỉ chép danh
+ * sách tham chiếu — vài chục micro giây, so với 17,9 MB phân tích lại thì không đáng kể. */
 function readLocalSync(empCode, period, { store = persist } = {}) {
-  const rows = store.load(LOCAL_SYNC_FILE, {});
+  const read = typeof store.loadShared === 'function' ? store.loadShared : store.load;
+  const rows = read.call(store, LOCAL_SYNC_FILE, {});
   const entry = rows && typeof rows === 'object' && !Array.isArray(rows) ? rows[String(period || '').trim()] : null;
   const kept = entry?.employees?.[String(empCode || '').trim().toUpperCase()];
-  const payload = kept ? { columns: kept.columns, rows: kept.rows, period: String(period || '').trim() } : null;
+  const payload = kept && Array.isArray(kept.rows) && Array.isArray(kept.columns)
+    ? { columns: kept.columns.slice(), rows: kept.rows.slice(), period: String(period || '').trim() }
+    : null;
   if (!isStorable(payload)) return null;
   return { payload, fetchedAt: String(entry.fetchedAt || ''), source: 'local_sync' };
 }
@@ -53,11 +71,16 @@ function read(empCode, period, { store = persist, now = Date.now } = {}) {
   // lần đồng bộ chủ động tiếp theo mới thay bản này.
   const local = readLocalSync(empCode, period, { store });
   if (local) return local;
-  const row = readAll(store)[keyOf(empCode, period)];
+  // Đọc thuần ⇒ dùng bản nhớ (file này cũng 12,7 MB, cũng bị gọi mỗi nhân viên).
+  const row = readAll(store, { shared: true })[keyOf(empCode, period)];
   if (!row || !isStorable(row.payload)) return null;
   const at = Date.parse(row.fetchedAt || '');
   if (!Number.isFinite(at) || now() - at > MAX_AGE_MS) return null;
-  return { payload: row.payload, fetchedAt: String(row.fetchedAt) };
+  // Cắt bản sao danh sách trước khi giao ra: bản gốc là của chung, không ai được sửa.
+  return {
+    payload: { ...row.payload, columns: row.payload.columns.slice(), rows: row.payload.rows.slice() },
+    fetchedAt: String(row.fetchedAt),
+  };
 }
 
 function write(empCode, period, periodPayload, { store = persist, now = Date.now } = {}) {

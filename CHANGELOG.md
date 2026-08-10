@@ -1,3 +1,34 @@
+### 2026-08-10 23:10 (giờ VN) — 🔒 SIẾT BẢN NHỚ: tách hai cửa đọc (bot audit đúng cả 3)
+
+Bot audit chặn `462030d` với 3 lỗi correctness ở bản nhớ. **Đúng cả ba.** Điểm ② là
+điểm tôi đã **tự bào chữa bằng chú thích** ("sửa xong nhớ save()") thay vì sửa —
+chú thích không phải hàng rào, và đường tiền không sống bằng lời dặn.
+
+| # | Bot nêu | Đã sửa |
+|---|---|---|
+| ① | Thay file **cùng cỡ** rồi trả lại `mtime` ⇒ vẫn trả bản nhớ cũ | Vân tay file thêm **`ino` + `ctime`**. Đặt lại `mtime` vẫn làm `ctime` nhảy (hệ điều hành không cho lùi `ctime`), tráo file bằng rename thì `ino` đổi ⇒ bản nhớ tự hết hiệu lực |
+| ② | Sửa kết quả `load()` mà không `save()` ⇒ rò sang lượt đọc sau | **Tách hai cửa.** `load()` giữ **nguyên hành vi gốc** (đọc lại mỗi lần) nên mọi chỗ đang dùng không đổi ngữ nghĩa, không rủi ro mới. Chỉ `loadShared()` có nhớ, và **chỉ đường đọc thuần** được gọi |
+| ③ | Trần đếm độ dài chuỗi, không phải byte thật | Đếm **`stat.size`** (byte thật). Hạ trần 96 → **48 MB nguồn**, kèm ghi chú: đối tượng sau khi phân tích chiếm gấp mấy lần cỡ file |
+
+Thêm hai lớp bảo vệ bot chưa nêu nhưng cùng họ:
+- `save()` **quên hẳn** bản nhớ thay vì nhớ đối tượng vừa ghi — người gọi có thể còn
+  giữ tham chiếu và sửa tiếp. Đọc lại một lần sau khi ghi là rẻ; phục vụ số sai thì không.
+- `readLocalSync`/`read` **`slice()` `columns` và `rows`** trước khi giao ra ngoài.
+  Tầng trên có sắp xếp/cắt trang tại chỗ — sắp xếp trên mảng dùng chung là **hỏng kho
+  trong bộ nhớ của cả tiến trình**. `slice()` chỉ chép danh sách tham chiếu, vài chục
+  micro giây, so với 17,9 MB phân tích lại thì không đáng kể.
+
+Phạm vi dùng bản nhớ nay chỉ còn **hai điểm gọi**, đều là đọc thuần và đều là đường
+nóng nhất (gọi một lần cho MỖI nhân viên): `readLocalSync` (`cost_rates_local`,
+17,9 MB) và nhánh tra bị động của `read` (`employee_cost_rate_snapshot`, 12,7 MB).
+Đường đọc-rồi-ghi (`write`, `costRatesSync`) vẫn dùng `load()` cũ, lấy bản tươi riêng.
+
+#### Test
+`persistCache.test.js` **11/11 đạt**, gồm **đúng ba ca bot tái hiện** + ca đo thật +
+ca khoá "không giao mảng dùng chung ra ngoài". `server` **1214/1221** — đúng 7 ca nền
+cũ (6 ca thiếu `pdfinfo`, 1 ca VP018 vắng trong `seed.js`; trên dữ liệu PROD thật bot
+đã đo 3/3 đạt). Benchmark kho thật của bot ở bản trước: **21 lượt = 621 ms**.
+
 ### 2026-08-10 18:20 (giờ VN) — 🐢 GỐC RỄ 3 NGÀY: `persist.load()` phân tích lại 17,9 MB cho TỪNG nhân viên
 
 CEO: *"ngày này là ngày thứ ba rồi tao vẫn luẩn quẩn với câu hỏi dữ liệu T07.2026 của
