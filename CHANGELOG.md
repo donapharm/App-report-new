@@ -1,3 +1,29 @@
+### 2026-08-10 09:30 (giờ VN) — 🔓 BỎ "ALL-OR-NOTHING": nút Đồng bộ gom dần, và giải nghĩa dòng "thay đổi 0"
+
+CEO: *"tao đã bấm đi bấm lại đồng bộ T07.2026 rồi mà nó méo thay đổi là sao."*
+
+#### ① Vì sao 30 phút trước bấm mà không ăn — lỗi thiết kế của Claude
+
+`syncPeriod` chạy luật **all-or-nothing**: hụt **một** người là **không ghi gì**. Lúc CEO bấm, cửa chi phí đang hỏng **19/21 NV** ⇒ lượt đó ghi **0 byte** rồi báo đỏ. Nguồn chập chờn thì CEO **không bao giờ** gom đủ 21/21 trong một lượt ⇒ kho **vĩnh viễn rỗng** ⇒ kỳ T07 đã chốt vẫn phải hỏi DataHub mỗi lượt xem ⇒ số nhảy. **Luật đặt ra để bảo vệ số liệu lại thành cái khoá chặn đường sửa.**
+
+Thứ thật sự cần bảo vệ **không phải** "ghi tất cả hoặc không ghi gì", mà là **không bao giờ trình bày phần thiếu như thể đã đủ**. Nay:
+- lấy được ai thì **ghi người đó**, cộng dồn với những người đã có;
+- luôn kèm **`stored/requested`** và **danh sách còn thiếu đích danh**;
+- `complete` chỉ true khi đủ 21/21 — mọi màn đọc cờ này, không tự suy;
+- lượt **không lấy được ai** thì **không đụng kho**, và nói rõ kho đang có bao nhiêu.
+
+Màn hình có **ba** trạng thái thay vì hai: **đủ** · **góp thêm được N NV, còn thiếu ai** · **lượt này trắng tay**.
+
+#### ② Dòng "thay đổi 0 · thêm 0 · bớt 0" khiến CEO đọc thành "không làm gì"
+
+Ảnh 09:17 cho thấy sync **THÀNH CÔNG 21/21 NV · 27.719 cặp**, nhưng dòng dưới ghi *"thay đổi 0 · thêm 0 · bớt 0"* — CEO đọc thành "nút không chạy" nên bấm đi bấm lại. Nay câu chốt là **"KHO ĐÃ ĐỦ 21/21 NV cho kỳ 07.2026 — từ nay đọc thẳng từ kho, không hỏi DataHub nữa"**, còn ba số 0 hạ xuống dòng phụ kèm giải nghĩa: *"toàn số 0 nghĩa là % lần này GIỐNG HỆT lần trước (kho đã đủ từ trước), KHÔNG phải nút không chạy."*
+
+Thẻ trạng thái cũng hiện **số NV** chứ không chỉ số cặp: *"Kho cục bộ: 21 NV · 27.719 cặp"*.
+
+Test: server **1180** pass / 7 fail cố hữu · web **424/424** · build sạch.
+
+---
+
 ### 2026-08-10 09:15 (giờ VN) — 🛑 DOANH THU THÔI PHỤ THUỘC NGUỒN CHI PHÍ (gốc của "số nhảy như điên")
 
 CEO, kiệt sức: *"T07.2026 của tao đã chốt rồi, thì tại sao sửa cái gì bây giờ số liệu nó tụt mất đi đâu… tao đã yêu cầu chuyển lấy nguồn chính trong App Report, sao lại vẫn cứ phụ thuộc DataHub."*

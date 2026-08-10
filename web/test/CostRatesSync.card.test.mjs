@@ -24,9 +24,15 @@ test('số có căn cước: hiện "đồng bộ lúc nào, bởi ai, bao nhiê
   assert.match(page, /Kho cục bộ CHƯA có kỳ này/);
 });
 
-test('kết quả nói thật cả hai chiều: thành công kèm diff; thất bại nêu ai hỏng + bản cũ giữ nguyên', () => {
+test('kết quả nói thật BA chiều: đủ · góp thêm một phần · không lấy được ai', () => {
+  // Luật cũ all-or-nothing chỉ có "đủ" hoặc "hỏng"; nguồn chập chờn thì CEO không
+  // bao giờ ra khỏi ô "hỏng" (10/08). Nay có trạng thái GIỮA.
   assert.match(page, /thay đổi \{result\.diff\.changed\}/);
-  assert.match(page, /bản cũ giữ nguyên, chưa ghi gì/);
+  assert.match(page, /result\.ok && result\.complete/);
+  assert.match(page, /Đã góp thêm <b>\{result\.gained\}<\/b> NV/);
+  assert.match(page, /Còn thiếu:<\/b> \{result\.missing\.slice\(0, 8\)/);
+  assert.match(page, /phần đã gom KHÔNG mất/);
+  assert.match(page, /không lấy được NV nào<\/b>/);
   assert.match(page, /result\.failures\.slice\(0, 5\)/);
 });
 

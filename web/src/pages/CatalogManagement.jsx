@@ -1172,7 +1172,7 @@ function CostRatesSyncCard({ period, catalogLoading = false }) {
     <div>
       <b>🔄 Đồng bộ % chi phí kỳ {period}</b>
       <small>{status?.fetchedAt
-        ? `Kho cục bộ: ${status.pairCount.toLocaleString('vi-VN')} cặp · đồng bộ ${formatDateTime(status.fetchedAt)} bởi ${status.fetchedBy}`
+        ? `Kho cục bộ: ${(status.employees?.length ?? status.employeeCount ?? 0)} NV · ${status.pairCount.toLocaleString('vi-VN')} cặp · đồng bộ ${formatDateTime(status.fetchedAt)} bởi ${status.fetchedBy}`
         : 'Kho cục bộ CHƯA có kỳ này — bấm đồng bộ lần đầu khi DataHub đang sống.'}</small>
     </div>
     <div className="catalog-sync-actions">
@@ -1188,15 +1188,34 @@ function CostRatesSyncCard({ period, catalogLoading = false }) {
         vì DataHub từng tự restart do dồn tải (951,8 MB RSS, 08/08). */}
     {catalogLoading && <small className="muted">⏳ Đang mở danh mục kỳ này — nút tự mở lại ngay khi xong (không bấm chồng để DataHub khỏi quá tải).</small>}
     {error && <div className="catalog-alert error" role="alert">⚠ {error}</div>}
-    {result && (result.ok
+    {/* ‼ BA TRẠNG THÁI, KHÔNG PHẢI HAI (CEO bế tắc 10/08: bấm đồng bộ T07 mà "méo lấy
+        kết quả"). Luật cũ all-or-nothing chỉ có "đủ" hoặc "hỏng"; nguồn chập chờn thì
+        CEO không bao giờ ra khỏi ô "hỏng". Nay có trạng thái GIỮA: góp được thêm bao
+        nhiêu, kho đang có bao nhiêu, còn thiếu ĐÍCH DANH ai. */}
+    {result && (result.ok && result.complete
       ? <div className="catalog-alert ok" role="status">
-        ✅ Đã đồng bộ {result.fetched}/{result.requested} NV · {result.pairCount.toLocaleString('vi-VN')} cặp
-        · thay đổi {result.diff.changed} · thêm {result.diff.added} · bớt {result.diff.removed} so bản trước.
+        ✅ <b>KHO ĐÃ ĐỦ {result.stored}/{result.requested} NV</b> cho kỳ {period} · {result.pairCount.toLocaleString('vi-VN')} cặp.
+        {' '}Kỳ này từ nay <b>đọc thẳng từ kho</b>, không hỏi DataHub nữa.
+        {/* ‼ "thay đổi 0 · thêm 0 · bớt 0" từng làm CEO đọc thành "không làm gì cả"
+            rồi bấm đi bấm lại (10/08 09:17). Nói rõ số 0 nghĩa là GIỐNG HỆT lần
+            trước — tức đã có đủ từ trước, không phải nút hỏng. */}
+        <div className="muted">
+          So bản trước: thay đổi {result.diff.changed} · thêm {result.diff.added} · bớt {result.diff.removed}
+          {result.diff.changed === 0 && result.diff.added === 0 && result.diff.removed === 0
+            ? ' — toàn số 0 nghĩa là % lần này GIỐNG HỆT lần trước (kho đã đủ từ trước), KHÔNG phải nút không chạy.'
+            : ''}
+        </div>
       </div>
-      : <div className="catalog-alert error" role="alert">
-        ⛔ Nguồn hỏng ở {result.failures.length}/{result.requested} NV ({result.failures.slice(0, 5).map((f) => f.empCode).join(', ')}{result.failures.length > 5 ? '…' : ''}) —
-        <b> bản cũ giữ nguyên, chưa ghi gì</b>. Chờ DataHub khoẻ rồi bấm lại.
-      </div>)}
+      : result.ok
+        ? <div className="catalog-alert error" role="status">
+          🟡 Đã góp thêm <b>{result.gained}</b> NV — kho hiện có <b>{result.stored}/{result.requested}</b> NV
+          · {result.pairCount.toLocaleString('vi-VN')} cặp. <b>Còn thiếu:</b> {result.missing.slice(0, 8).join(', ')}{result.missing.length > 8 ? `… (${result.missing.length} NV)` : ''}.
+          {' '}<b>Bấm lại nút này</b> khi nguồn khoẻ để gom tiếp — phần đã gom KHÔNG mất.
+        </div>
+        : <div className="catalog-alert error" role="alert">
+          ⛔ Lượt này <b>không lấy được NV nào</b> ({result.failures.slice(0, 5).map((f) => f.empCode).join(', ')}{result.failures.length > 5 ? '…' : ''}).
+          {' '}Kho giữ nguyên <b>{result.stored}/{result.requested}</b> NV. Chờ nguồn khoẻ rồi bấm lại.
+        </div>)}
   </div>;
 }
 

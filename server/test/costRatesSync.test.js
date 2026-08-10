@@ -65,23 +65,65 @@ test('kéo đủ cả đội ⇒ một lần ghi atomic; reader dùng thẳng kh
   assert.equal(payload.periods[0].rateFetchedAt, NOW());
 });
 
-test('ALL-OR-NOTHING: hụt MỘT người ⇒ không ghi gì, bản tốt đang có còn nguyên', async () => {
+test('‼ GÓP DẦN: hụt vài người thì GHI phần lấy được, nêu đích danh ai còn thiếu', async () => {
+  /* Luật cũ all-or-nothing khoá CEO lại: cửa chi phí hỏng 19/21 NV nên mọi lượt bấm
+     đều ghi 0 byte, kho vĩnh viễn rỗng, kỳ đã chốt vẫn phải hỏi DataHub mỗi lượt xem.
+     Thứ cần bảo vệ không phải "ghi tất cả hoặc không gì" mà là KHÔNG trình bày phần
+     thiếu như đã đủ. */
   const store = memStore();
-  await sync.syncPeriod({ period: '2026-08', empCodes: ['DN001', 'DN002'], actor: 'CEO', fetchImpl: okFetch(TEAM), store, now: NOW });
-  const broken = { DN001: TEAM.DN001 }; // DN002 chết nguồn
   const result = await sync.syncPeriod({
-    period: '2026-08', empCodes: ['DN001', 'DN002'], actor: 'CEO',
-    fetchImpl: okFetch(broken), store, now: () => '2026-08-09T09:00:00.000+07:00',
+    period: '2026-07', empCodes: ['DN001', 'DN002', 'DN003'], actor: 'CEO', store,
+    now: () => '2026-08-10T09:30:00.000+07:00',
+    fetchImpl: async (emp) => (emp === 'DN003'
+      ? { outcome: 'upstream_unavailable', payload: null }
+      : { outcome: 'ok', payload: { periods: [{ period: '2026-07', columns: COLS, rows: [row('120.HTNT', 'G1.A', { c41: 1, c43: 3 })] }] } }),
   });
-  assert.equal(result.ok, false);
-  assert.equal(result.written, false);
-  assert.deepEqual(result.failures, [{ empCode: 'DN002', outcome: 'upstream_503' }]);
-  // Bản cũ còn nguyên, mốc giờ KHÔNG đổi.
-  assert.equal(sync.statusOf('2026-08', { store }).fetchedAt, NOW());
-  // Lần thất bại vẫn vào audit — thất bại không được biến mất lặng lẽ.
-  const audit = sync.listAudit({ store });
-  assert.equal(audit[0].ok, false);
-  assert.equal(audit[1].ok, true);
+  assert.equal(result.ok, true, 'lấy được ai thì phải ghi người đó');
+  assert.equal(result.written, true);
+  assert.equal(result.fetched, 2);
+  assert.equal(result.stored, 2);
+  assert.deepEqual(result.missing, ['DN003'], 'phải nêu ĐÍCH DANH người còn thiếu');
+  assert.equal(result.complete, false, 'chưa đủ thì KHÔNG được báo đủ');
+  // Kho có đúng hai người, không có DN003 — không bịa bản rỗng cho họ.
+  assert.deepEqual(sync.statusOf('2026-07', { store }).employees, ['DN001', 'DN002']);
+});
+
+test('bấm lượt sau gom TIẾP người còn thiếu, không xoá người đã có', async () => {
+  const store = memStore();
+  const base = { outcome: 'ok', payload: { periods: [{ period: '2026-07', columns: COLS, rows: [row('120.HTNT', 'G1.A', { c41: 1, c43: 3 })] }] } };
+  await sync.syncPeriod({
+    period: '2026-07', empCodes: ['DN001', 'DN002', 'DN003'], actor: 'CEO', store,
+    now: () => '2026-08-10T09:30:00.000+07:00',
+    fetchImpl: async (emp) => (emp === 'DN003' ? { outcome: 'upstream_unavailable', payload: null } : base),
+  });
+  // Lượt hai: nguồn khoẻ lại, chỉ DN003 là mới.
+  const second = await sync.syncPeriod({
+    period: '2026-07', empCodes: ['DN001', 'DN002', 'DN003'], actor: 'CEO', store,
+    now: () => '2026-08-10T09:40:00.000+07:00',
+    fetchImpl: async () => base,
+  });
+  assert.equal(second.complete, true, 'gom đủ thì mới được báo đủ');
+  assert.deepEqual(second.missing, []);
+  assert.equal(second.stored, 3);
+  assert.equal(second.gained, 1, 'đếm đúng số người MỚI góp được lượt này');
+});
+
+test('‼ lượt không lấy được AI thì KHÔNG đụng kho — giữ nguyên bản đang có', async () => {
+  const store = memStore();
+  const base = { outcome: 'ok', payload: { periods: [{ period: '2026-07', columns: COLS, rows: [row('120.HTNT', 'G1.A', { c41: 1, c43: 3 })] }] } };
+  await sync.syncPeriod({
+    period: '2026-07', empCodes: ['DN001'], actor: 'CEO', store,
+    now: () => '2026-08-10T09:30:00.000+07:00', fetchImpl: async () => base,
+  });
+  const dead = await sync.syncPeriod({
+    period: '2026-07', empCodes: ['DN001', 'DN002'], actor: 'CEO', store,
+    now: () => '2026-08-10T09:50:00.000+07:00',
+    fetchImpl: async () => ({ outcome: 'upstream_unavailable', payload: null }),
+  });
+  assert.equal(dead.ok, false);
+  assert.equal(dead.written, false);
+  assert.equal(dead.stored, 1, 'kho cũ còn nguyên');
+  assert.deepEqual(sync.statusOf('2026-07', { store }).employees, ['DN001']);
 });
 
 test('đếm đúng "đổi bao nhiêu cặp" giữa hai lần đồng bộ — kể cả khi bản số không đổi tên', async () => {

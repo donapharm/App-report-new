@@ -44,6 +44,9 @@ function statusOf(period, { store = persist } = {}) {
     fetchedBy: entry.fetchedBy || null,
     sourceVersion: entry.sourceVersion || null,
     employeeCount: Object.keys(entry.employees || {}).length,
+    // Danh sách NV kho ĐANG CÓ — để màn nói được "có S/21, thiếu ai", thay vì chỉ
+    // một con số đếm không truy được.
+    employees: Object.keys(entry.employees || {}).sort(),
     pairCount: Object.keys(entry.pairSignatures || {}).length,
   };
 }
@@ -150,27 +153,58 @@ async function syncPeriod({
   }
 
   const at = now();
-  // ① ALL-OR-NOTHING: hụt người nào là KHÔNG ghi gì, giữ nguyên bản tốt đang có.
-  if (failures.length) {
-    writeAudit({ at, actor: who, period, ok: false, requested: codes.length, fetched: Object.keys(employees).length, failures }, { store });
-    return { ok: false, period, requested: codes.length, fetched: Object.keys(employees).length, failures, written: false };
+  const rows = readAll(store);
+  const previous = rows[period];
+
+  /* ═══════════════════════════════════════════════════════════════════════════
+     ‼ GÓP DẦN — BỎ LUẬT "ALL-OR-NOTHING" (CEO bế tắc 10/08/2026)
+
+     CEO: *"tại sao lúc cách đây gần 30 phút tao đã bấm đồng bộ T07.2026 rồi mà nó
+     méo lấy kết quả mới là như nào."*
+
+     Vì luật cũ: hụt MỘT người là **không ghi gì**. Lúc CEO bấm, cửa chi phí đang
+     hỏng 19/21 NV ⇒ lượt bấm đó **ghi số 0 byte** rồi báo đỏ. Nguồn chập chờn thì
+     CEO **không bao giờ** gom đủ 21/21 trong một lượt ⇒ kho **vĩnh viễn rỗng** ⇒
+     kỳ T07 đã chốt vẫn phải đi hỏi DataHub mỗi lượt xem ⇒ số nhảy. **Luật đặt ra
+     để bảo vệ số liệu lại thành cái khoá chặn đường sửa.**
+
+     Điều thật sự cần bảo vệ KHÔNG PHẢI "ghi tất cả hoặc không ghi gì" — mà là
+     **không bao giờ trình bày phần thiếu như thể đã đủ**. Nay:
+       · lấy được ai thì GHI người đó, cộng dồn với những người đã có từ trước;
+       · LUÔN kèm `stored/requested` và **danh sách còn thiếu đích danh**;
+       · `complete` chỉ true khi đủ 21/21 — mọi màn đọc cờ này, không tự suy.
+     Bấm nhiều lượt là gom dần đến đủ, thay vì mãi mãi số không.
+     ═══════════════════════════════════════════════════════════════════════════ */
+  const mergedEmployees = { ...(previous?.employees || {}), ...employees };
+  const storedCodes = Object.keys(mergedEmployees).sort();
+  const missing = codes.filter((code) => !mergedEmployees[code]);
+  const gained = Object.keys(employees).filter((code) => !previous?.employees?.[code]);
+
+  // Lượt này không lấy được ai ⇒ không đụng vào kho, nói rõ kho đang có bao nhiêu.
+  if (!Object.keys(employees).length) {
+    writeAudit({ at, actor: who, period, ok: false, requested: codes.length, fetched: 0, failures }, { store });
+    return {
+      ok: false, period, requested: codes.length, fetched: 0, written: false,
+      stored: storedCodes.length, missing, complete: missing.length === 0, gained: 0, failures,
+    };
   }
 
   const template = employeeCostTemplates.resolveTemplate(codes[0]);
-  const signatures = pairSignatures(employees, template.costColumns || []);
-  const rows = readAll(store);
-  const diff = diffSignatures(rows[period]?.pairSignatures, signatures);
+  const signatures = pairSignatures(mergedEmployees, template.costColumns || []);
+  const diff = diffSignatures(previous?.pairSignatures, signatures);
 
-  rows[period] = { period, fetchedAt: at, fetchedBy: who, sourceVersion: null, employees, pairSignatures: signatures };
+  rows[period] = { period, fetchedAt: at, fetchedBy: who, sourceVersion: null, employees: mergedEmployees, pairSignatures: signatures };
   const keys = Object.keys(rows).sort();
   for (const stale of keys.slice(0, Math.max(0, keys.length - MAX_PERIODS))) delete rows[stale];
   store.save(FILE, rows);
 
   const summary = {
-    ok: true, period, requested: codes.length, fetched: codes.length, written: true,
-    fetchedAt: at, pairCount: Object.keys(signatures).length, diff, failures: [],
+    ok: true, period, requested: codes.length, fetched: Object.keys(employees).length, written: true,
+    stored: storedCodes.length, missing, complete: missing.length === 0, gained: gained.length,
+    fetchedAt: at, pairCount: Object.keys(signatures).length, diff, failures,
   };
-  writeAudit({ at, actor: who, period, ok: true, requested: codes.length, fetched: codes.length, pairCount: summary.pairCount, diff }, { store });
+  writeAudit({ at, actor: who, period, ok: true, requested: codes.length, fetched: summary.fetched,
+    stored: summary.stored, missing, complete: summary.complete, pairCount: summary.pairCount, diff, failures }, { store });
   return summary;
 }
 
