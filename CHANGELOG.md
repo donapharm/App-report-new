@@ -1,3 +1,29 @@
+### 2026-08-10 09:15 (giờ VN) — 🛑 DOANH THU THÔI PHỤ THUỘC NGUỒN CHI PHÍ (gốc của "số nhảy như điên")
+
+CEO, kiệt sức: *"T07.2026 của tao đã chốt rồi, thì tại sao sửa cái gì bây giờ số liệu nó tụt mất đi đâu… tao đã yêu cầu chuyển lấy nguồn chính trong App Report, sao lại vẫn cứ phụ thuộc DataHub."*
+
+**Bằng chứng ba lần chụp, CÙNG kỳ T07 ĐÃ CHỐT SỔ:**
+
+| Lúc | Số NV lấy được % | Dòng | Doanh thu chưa VAT |
+|---|---|---|---|
+| 09/08 23:05 | 5/21 | 359 | (ẩn) |
+| 10/08 00:20 | 11/21 | 1.332 | **20.035.615.366đ** |
+| 10/08 09:00 | **2/21** | 313 | **3.286.695.166đ** |
+
+**Doanh thu bám đúng theo số NV lấy được % — không phải bám theo dữ liệu bán hàng.** Đó là toàn bộ căn bệnh.
+
+#### Gốc: ô doanh thu lấy tổng từ BẢNG CHI PHÍ
+
+Màn ALL ghép sổ chi phí từng NV; NV nào chưa lấy được % thì **toàn bộ dòng doanh thu của họ không lên bảng**, và ô KPI cộng từ chính cái bảng đó. Doanh thu là **dữ liệu của App Report, luôn đủ** — không đời nào doanh thu một kỳ **đã chốt** lại đổi vì DataHub trả chậm.
+
+**Sửa:** ô doanh thu nay lấy **TỔNG KỲ thẳng từ kho doanh thu App Report** (`revenueRecon.total`, backend cộng từ `store`), **không đi qua bảng chi phí**. Nhãn đổi thành **"Doanh thu chưa VAT · TỔNG KỲ"** kèm câu *"KHÔNG đổi theo nguồn chi phí"*; phần "đang hiện trên bảng" hạ xuống dòng phụ để vẫn đối chiếu được. Kho doanh thu chưa soát được ⇒ lùi về cách cũ **và đổi nhãn** để không ai nhận nhầm hai loại số.
+
+Từ đây: **doanh thu đứng yên**, dù DataHub sống hay chết, dù 21/21 hay 2/21 NV lấy được %. Phần chi phí vẫn ghi rõ "TẠM TÍNH" như cũ — chỉ chi phí mới phụ thuộc nguồn %, đúng bản chất.
+
+Test: server 1178 / 7 fail cố hữu · web **424/424** · build sạch.
+
+---
+
 ### 2026-08-10 01:00 (giờ VN) — 💰 "Doanh thu chạy đi đâu mất" — phép cân hiện thẳng lên màn
 
 CEO: *"Doanh thu thực tế của T07.2026 đâu phải số này, tại sao nó cứ nhảy như điên vậy, và giờ nó đang nằm ở đâu? Mất mẹ nó doanh thu chạy đi đâu mất không còn đủ."*

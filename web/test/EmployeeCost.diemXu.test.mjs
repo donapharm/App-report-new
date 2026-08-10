@@ -130,7 +130,9 @@ test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction,
     'tổng gốc null phải hiện chữ "Chưa đủ dữ liệu chi phí", không được suy ra số');
   assert.doesNotMatch(page, /if \(baseTotal == null\) return null;/,
     'không được ẩn ô bằng return null');
-  assert.match(kpiGrid, /label="Nhân viên"[\s\S]*label="Doanh thu chưa VAT · đã phân bổ"[\s\S]*<KhoanPointKpi[\s\S]*Tổng chi phí tháng \(chi phí gốc\)/);
+  // Nhãn ô doanh thu nay đổi theo nguồn số: "TỔNG KỲ" khi đọc được kho doanh thu,
+  // "đã phân bổ" khi phải lùi về tổng của bảng (CEO 10/08). Thứ tự các ô giữ nguyên.
+  assert.match(kpiGrid, /label="Nhân viên"[\s\S]*'Doanh thu chưa VAT · TỔNG KỲ' : 'Doanh thu chưa VAT · đã phân bổ'[\s\S]*<KhoanPointKpi[\s\S]*Tổng chi phí tháng \(chi phí gốc\)/);
   assert.match(kpiGrid, /Tổng chi phí tháng \(chi phí gốc\)[\s\S]*tone="employee-cost-tone-base"[\s\S]*<BonusKpi/);
   assert.equal((page.match(/Tổng chi phí tháng \(chi phí gốc\)/g) || []).length, 1);
   assert.doesNotMatch(equation, /<small>Chi phí gốc<\/small>/);

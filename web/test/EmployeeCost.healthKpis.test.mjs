@@ -79,3 +79,28 @@ test('mọi số tiền trong phép cân nằm dưới con mắt che số', () =
   assert.ok(bolds.length >= 4, 'tiền phải nằm dưới con mắt');
   assert.doesNotMatch(block, /<b>\{formatEmployeeCostCell/, 'không được để số tiền trần');
 });
+
+/* ── DOANH THU KHÔNG ĐƯỢC PHỤ THUỘC NGUỒN CHI PHÍ (CEO 10/08 09:00) ───────────
+ * Cùng kỳ T07 ĐÃ CHỐT SỔ, doanh thu tụt 20,03 tỷ → 3,28 tỷ chỉ vì số NV lấy được %
+ * giảm từ 11 xuống 2. Doanh thu là dữ liệu CỦA App Report và luôn đủ — không đời
+ * nào doanh thu một kỳ đã chốt lại đổi vì DataHub trả chậm.                      */
+
+test('‼ ô doanh thu lấy TỔNG KỲ từ kho doanh thu, không lấy tổng của bảng chi phí', () => {
+  assert.match(page, /const reconTotalBeforeVat = model\?\.revenueRecon && !model\.revenueRecon\.unavailable/);
+  assert.match(page, /value=\{formatEmployeeCostCell\(reconTotalBeforeVat \?\? model\.summary\.revenueBeforeVatTotal, moneyColumn\)\}/);
+  assert.match(page, /KHÔNG đổi theo nguồn chi phí/);
+});
+
+test('nhãn ô đổi theo nguồn số — "TỔNG KỲ" khác "đã phân bổ", không nhận nhầm', () => {
+  assert.match(page, /reconTotalBeforeVat != null \? 'Doanh thu chưa VAT · TỔNG KỲ' : 'Doanh thu chưa VAT · đã phân bổ'/);
+});
+
+test('vẫn đối chiếu được: phần đang hiện trên bảng nằm ở dòng phụ khi hai số khác nhau', () => {
+  assert.match(page, /đang hiện trên bảng: \$\{formatEmployeeCostCell\(model\.revenueRecon\.shown \/ VAT_DIVISOR, moneyColumn\)\}/);
+  assert.match(page, /model\.revenueRecon\.shown !== model\.revenueRecon\.total/);
+});
+
+test('chưa soát được kho doanh thu ⇒ lùi về số cũ, KHÔNG bịa tổng kỳ', () => {
+  assert.match(page, /Number\.isFinite\(Number\(model\.revenueRecon\.total\)\) && Number\(model\.revenueRecon\.total\) > 0/);
+  assert.match(page, /\? Number\(model\.revenueRecon\.total\) \/ VAT_DIVISOR\s*\n\s*: null;/);
+});

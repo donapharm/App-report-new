@@ -1767,6 +1767,14 @@ export default function EmployeeCost({ me, onNavigate }) {
   // NV đang xài BẢN % CŨ vì nguồn tươi kẹt: có số nên KHÔNG nằm trong danh sách
   // "chưa lấy được", nhưng phải nói ra là số cũ — dùng được không có nghĩa là giấu.
   const staleEmpCodes = Array.isArray(kpiMatch.staleEmployees) ? kpiMatch.staleEmployees : [];
+  /* Tổng doanh thu THẬT của kỳ, backend cộng thẳng từ kho doanh thu App Report —
+     không đi qua bảng chi phí nên không tụt khi nguồn % hụt. Chưa soát được thì để
+     null và ô KPI tự lùi về cách hiển thị cũ (có nhãn khác để không nhận nhầm). */
+  const VAT_DIVISOR = 1.05;
+  const reconTotalBeforeVat = model?.revenueRecon && !model.revenueRecon.unavailable
+    && Number.isFinite(Number(model.revenueRecon.total)) && Number(model.revenueRecon.total) > 0
+    ? Number(model.revenueRecon.total) / VAT_DIVISOR
+    : null;
   const gapConsistency = employeeCostGapConsistency(model, gapBadge);
   const gapMismatch = allEmployees && !loading && gapConsistency.mismatch;
   const gapMismatchEmployees = [...new Set([
@@ -2092,10 +2100,27 @@ export default function EmployeeCost({ me, onNavigate }) {
       <Kpi label="Nhân viên" value={employeeLabel} sub={`Hiện ${filteredCount.toLocaleString('vi-VN')}/${totalTableRows.toLocaleString('vi-VN')} dòng`} />
       {/* Chi phí tính trên số TRƯỚC VAT nên số đó đứng trên, to. Số ĐÃ gồm VAT đặt
           ngay dưới, nhỏ hơn, để đối chiếu nhanh với App Sale mà không phải đổi màn. */}
-      <Kpi label="Doanh thu chưa VAT · đã phân bổ"
-        value={formatEmployeeCostCell(model.summary.revenueBeforeVatTotal, moneyColumn)}
+      {/* ‼ DOANH THU KHÔNG ĐƯỢC PHỤ THUỘC NGUỒN CHI PHÍ (CEO ra lệnh nhiều lần, đỉnh
+          điểm 10/08 09:00: cùng kỳ T07 ĐÃ CHỐT, doanh thu tụt từ 20,03 tỷ xuống
+          3,28 tỷ chỉ vì số NV lấy được % giảm từ 11 xuống 2).
+
+          Gốc: ô này lấy tổng từ BẢNG chi phí, mà bảng chỉ có dòng của NV lấy được %.
+          Doanh thu là dữ liệu CỦA App Report, luôn đủ — không đời nào doanh thu một
+          kỳ đã chốt lại đổi vì DataHub trả chậm. Nay lấy thẳng TỔNG KỲ từ kho doanh
+          thu (`revenueRecon.total`, backend cộng từ kho App Report); phần "đang hiện
+          trên bảng" hạ xuống dòng phụ để vẫn đối chiếu được.
+
+          Kho doanh thu chưa soát được ⇒ mới lùi về số cũ, và nói rõ đó là số của
+          bảng chứ không phải tổng kỳ. */}
+      <Kpi label={reconTotalBeforeVat != null ? 'Doanh thu chưa VAT · TỔNG KỲ' : 'Doanh thu chưa VAT · đã phân bổ'}
+        value={formatEmployeeCostCell(reconTotalBeforeVat ?? model.summary.revenueBeforeVatTotal, moneyColumn)}
         sub={[
-          model.summary.revenueTotal == null ? '' : `Đã gồm VAT: ${formatEmployeeCostCell(model.summary.revenueTotal, moneyColumn)}`,
+          reconTotalBeforeVat != null
+            ? `Đã gồm VAT: ${formatEmployeeCostCell(model.revenueRecon.total, moneyColumn)} · KHÔNG đổi theo nguồn chi phí`
+            : (model.summary.revenueTotal == null ? '' : `Đã gồm VAT: ${formatEmployeeCostCell(model.summary.revenueTotal, moneyColumn)}`),
+          reconTotalBeforeVat != null && model.revenueRecon.shown != null && model.revenueRecon.shown !== model.revenueRecon.total
+            ? `đang hiện trên bảng: ${formatEmployeeCostCell(model.revenueRecon.shown / VAT_DIVISOR, moneyColumn)}`
+            : '',
           // ‼ Dòng chưa gán được NV KHÔNG nằm trong tổng ở đây nhưng VẪN nằm trong
           // doanh thu App Sale — đó là lý do hai app lệch (CEO bắt được 23:21, lệch
           // 1.795.600đ). Nhan đề ô đã ghi "đã phân bổ" nên câu này chỉ chỉ đường,
