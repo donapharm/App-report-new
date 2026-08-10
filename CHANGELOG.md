@@ -1,3 +1,63 @@
+### 2026-08-10 18:20 (giờ VN) — 🐢 GỐC RỄ 3 NGÀY: `persist.load()` phân tích lại 17,9 MB cho TỪNG nhân viên
+
+CEO: *"ngày này là ngày thứ ba rồi tao vẫn luẩn quẩn với câu hỏi dữ liệu T07.2026 của
+tao nó nhảy loạn xạ là thế nào đây. F5 lại thì rùa bò."*
+
+#### Năm giả thuyết trước đều SAI — ghi lại để không ai đi lại đường cụt
+
+| # | Giả thuyết | Bằng chứng bác bỏ |
+|---|---|---|
+| 1 | Lượt chạy 12:30 ghi đè T07 | `verify_frozen_periods` PASS, lệch 0 |
+| 2 | Kho thiếu tỷ lệ 17 NV | kho đủ 21 mã, 27.719 dòng |
+| 3 | `LOCAL_FIRST` bị tắt | ba biến đều chưa đặt ⇒ mặc định BẬT |
+| 4 | Kho nằm nhầm thư mục bản đóng băng | `data/auth` là symlink về kho chung |
+| 5 | Thiếu `columns` nên `isStorable` loại | cả 21 mã đều `columns=14` |
+
+#### Manh mối quyết định
+
+Ảnh 14:52 và 17:03 **giống hệt nhau từng đồng** (499 dòng · 7.103.965.427đ ·
+535.648.841đ · 96,2% · cùng 16 mã trên băng đỏ). Chạy đua mạng thì mỗi lượt phải ra
+nhóm khác nhau; **giống hệt lặp lại = tất định**. Và 5 mã chạy được là **DN001, DN002,
+DN003, DN004, DN007** — đúng **5 mã ĐẦU danh sách**. Không phải "ai có dữ liệu", mà là
+**ai tới lượt trước**.
+
+#### Gốc rễ
+
+`persist.load()` đọc đĩa + `JSON.parse` **nguyên file, mỗi lần gọi, không nhớ gì**.
+Chú thích đầu file ghi rõ giả định: *"quy mô nhỏ (≤ vài trăm bản ghi) nên đọc/ghi cả
+file là đủ"*. Giả định đó đã vỡ:
+
+- `cost_rates_local.json` — **17,9 MB**
+- `employee_cost_rate_snapshot.json` — **12,7 MB**
+
+Mà `readLocalSync(empCode, kỳ)` gọi `load()` **một lần cho MỖI nhân viên**. Màn "Tất
+cả nhân viên" 21 người ⇒ mỗi lần mở màn phân tích lại **hàng trăm MB**. Và
+`readFileSync`/`JSON.parse` **đồng bộ** ⇒ khoá cứng vòng lặp sự kiện ⇒ "6 luồng song
+song" chỉ là trên giấy, thực tế xếp hàng. Hạn 25 giây hết sau ~5 người; 16 người còn
+lại bị `onSkip` đóng dấu *"Chưa lấy kịp trong hạn"* — đúng chữ trên băng đỏ.
+
+**Không phải DataHub hỏng. Không phải kho thiếu. Không phải quyền.** Kho hoàn hảo từ
+đầu; app không kịp đọc nó.
+
+Đo thử tại chỗ: file 9,3 MB × 21 lượt = **1,1 giây** trên máy dựng nhanh. File thật
+gần gấp đôi, chạy trên máy ảo, cạnh nó còn file 12,7 MB cũng đọc cùng kiểu, cộng áp
+lực dọn rác — thừa sức ăn hết 25 giây.
+
+#### Đã làm
+
+`persist.js` nhớ bản đã phân tích trong bộ nhớ, chỉ đọc lại khi file **thật sự đổi**
+(so `mtime` + `size`). 21 lượt thành 1 lượt.
+
+An toàn: tiến trình khác ghi đè ⇒ `mtime`/`size` đổi ⇒ tự đọc lại · `save()` cập nhật
+luôn bản nhớ nên lối `đọc → sửa → ghi` vẫn đúng · file hỏng/bị xoá ⇒ **quên ngay**,
+không phục vụ số cũ · có trần bộ nhớ 96 MB, vượt thì bỏ bản lâu không dùng nhất
+(`APP_REPORT_PERSIST_CACHE_BYTES`).
+
+#### Test
+Thêm `persistCache.test.js` **7/7 đạt**, gồm ca **đo thật** 21 lượt trên file >5 MB
+phải nhanh hơn ≥3 lần. `server` **1210/1217** — đúng 7 ca nền cũ (6 ca thiếu `pdfinfo`,
+1 ca VP018 vắng trong `seed.js`; bot đã chứng minh trên dữ liệu PROD thật là 3/3 đạt).
+
 ### 2026-08-10 16:55 (giờ VN) — 🛡 XỬ 3 ĐIỂM BOT AUDIT CHẶN ỨNG VIÊN d61f7e2
 
 Bot audit BLOCK bản gộp với 3 điểm. **Điểm 1 bot đúng và là lỗi nặng của Claude.**
