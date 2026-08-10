@@ -1,3 +1,45 @@
+### 2026-08-10 12:40 (giờ VN) — 👁 CON MẮT: chụp màn hình ra số thật, F5 không ẩn vội
+
+CEO: *"tao phải dùng điện thoại để chụp hình kèm chụp hình máy tính, vì khi bấm chụp
+hình máy tính thì con mắt nó che mất số"* — và *"tao vẫn muốn khi F5 lại thì chưa ẩn
+vội con mắt."*
+
+#### Nguyên nhân: HAI cái, CEO mới thấy một
+
+1. **60 giây không thao tác thì tự ẩn** (`AUTO_HIDE_MS`) — cái CEO đoán.
+2. **Cửa sổ mất tiêu điểm là ẩn NGAY** (`window.addEventListener('blur', … hideNow)`).
+   Đây mới là thủ phạm vụ chụp hình: công cụ cắt màn hình của Windows **cướp tiêu điểm**
+   khỏi trình duyệt ⇒ `blur` bắn ⇒ số bị che **đúng khoảnh khắc bấm chụp**. Nên chờ 2 hay
+   5 phút cũng vô ích. Hai ảnh CEO gửi khớp y hệt: ảnh điện thoại 12:16:28 nút ghi "Ẩn số"
+   (đang hiện số), ảnh chụp máy 12:17:12 nút ghi "Hiện số" (đã bị che).
+
+#### Đã làm (phạm vi A+B CEO chốt)
+
+- **A — bỏ `blur`**, chỉ giữ `visibilitychange`: ẩn khi **chuyển hẳn** sang tab khác /
+  thu nhỏ cửa sổ. Bấm công cụ chụp không còn che số. Có test cấm nối lại `blur`.
+- **B — 60 giây → 5 phút** (`AUTO_HIDE_MS = 5 * 60_000`), đổi luôn câu thông báo.
+- **F5 giữ mắt mở**: ghi **MỐC HẾT HẠN** vào `sessionStorage` (không phải cờ "đang mở").
+  - `sessionStorage` chứ **không** `localStorage`: đóng tab/đóng trình duyệt là mất sạch,
+    không để vết trên máy dùng chung. Test cũ cấm gọi `localStorage` vẫn giữ nguyên.
+  - Ghi mốc nên **F5 không gia hạn**: tải lại 10 lần đồng hồ vẫn chạy tiếp từ thao tác
+    cuối. Nhịp đầu sau F5 đếm nốt phần **còn lại** (`activity(overrideMs)`).
+  - **Ẩn vì bất kỳ lý do gì đều xoá mốc** ⇒ F5 sau đó ra ẩn, không hồi sinh trạng thái mở.
+  - Mốc rác / đồng hồ máy bị chỉnh: chặn trần đúng `AUTO_HIDE_MS`.
+  - Kho bị chặn (cookie tắt / hết quota): nuốt lỗi, rèm vẫn chạy, chỉ mất phần nhớ qua F5.
+  - Ghi thưa (chỉ khi mốc mới xa mốc đã ghi > 5 giây) để `mousemove` không đập kho liên tục.
+
+#### Vì sao nới ra không hở dữ liệu
+
+Con mắt là **rèm che mắt người đứng sau lưng**, không phải khoá bảo mật — số vẫn nằm
+trong bộ nhớ trình duyệt, mở F12 là đọc được. Khoá thật là `employeeCostVisibility`
+(backend, có audit) và `auth.scopeOf`. Tooltip vẫn nói thẳng điều này; test cấm mô tả
+tính năng này là "bảo mật/an toàn" vẫn xanh.
+
+#### Test
+
+`web` **441/441 đạt** (thêm 3 ca mới: F5 trong hạn / cấm `blur` / kho hỏng), build đạt.
+Chưa deploy — chờ bot lên sóng `81da127` trước.
+
 ### 2026-08-10 11:40 (giờ VN) — 🩺 BÁC SĨ DEPLOY: site không lên bản mới thì phải NÓI, không im
 
 CEO: *"Con bot của tao nó đang bị lỗi, nên mày tìm cách vá cho tao đi nào."*

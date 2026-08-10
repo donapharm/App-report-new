@@ -2,7 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { MASK_TEXT, createAutoHide, isMasked, maskMoneyInText, maskNumberText, setMasked } from '../src/privacyMask.js';
+import {
+  AUTO_HIDE_MS, MASK_TEXT, clearRevealDeadline, createAutoHide, isMasked,
+  maskMoneyInText, maskNumberText, readRevealDeadline, setMasked, writeRevealDeadline,
+} from '../src/privacyMask.js';
+
+// sessionStorage giả — đủ đúng hợp đồng getItem/setItem/removeItem để test không cần DOM.
+function memoryStore(initial = {}) {
+  const data = new Map(Object.entries(initial));
+  return {
+    getItem: (k) => (data.has(k) ? data.get(k) : null),
+    setItem: (k, v) => { data.set(k, String(v)); },
+    removeItem: (k) => { data.delete(k); },
+  };
+}
 import { money, num, pct, short, formatDate } from '../src/util.js';
 import { formatEmployeeCostCell } from '../src/employeeCostModel.js';
 
@@ -12,12 +25,48 @@ const appSource = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'u
 const mainSource = fs.readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const employeeCostSource = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
 
-test('mặc định ẨN và không nhớ trạng thái: không đọc/ghi localStorage', () => {
-  // UI khởi động che sẵn; F5 quay về che vì không có chỗ nào lưu "đang hiện".
-  assert.match(privacySource, /useState\(true\)/);
-  // Cấm GỌI localStorage (nhắc trong chú thích thì được).
+test('mặc định ẨN, và chỉ nhớ trong TAB — cấm localStorage', () => {
+  // Khởi động che sẵn khi không có mốc còn hạn (F5 quá 5 phút, hoặc mở tab mới).
+  assert.equal(readRevealDeadline(null), 0, 'không có kho thì coi như không có mốc');
+  assert.match(privacySource, /readRevealDeadline\(revealStore\(\)\) <= 0/);
+  // Cấm GỌI localStorage (nhắc trong chú thích thì được): đóng trình duyệt phải mất sạch.
   assert.doesNotMatch(privacySource, /localStorage\s*[.[]/);
   assert.doesNotMatch(maskSource, /localStorage\s*[.[]/);
+  assert.match(privacySource, /sessionStorage/);
+});
+
+// CEO 10/08/2026: "F5 lại thì chưa ẩn vội con mắt."
+test('F5 giữ mắt mở trong hạn — nhưng KHÔNG gia hạn thêm', () => {
+  const store = memoryStore();
+  const now = 1_000_000;
+  writeRevealDeadline(store, now + 120_000); // còn 2 phút
+  assert.equal(readRevealDeadline(store, now), now + 120_000, 'còn hạn ⇒ F5 mở lại');
+
+  // Tải lại 10 lần cũng không dài thêm: mốc là thời điểm cố định, không phải "cộng 5 phút".
+  for (let i = 0; i < 10; i += 1) assert.equal(readRevealDeadline(store, now), now + 120_000);
+
+  // Quá hạn ⇒ ẩn.
+  assert.equal(readRevealDeadline(store, now + 120_001), 0, 'hết hạn ⇒ F5 ra ẩn');
+
+  // Mốc rác / đồng hồ máy bị chỉnh vẫn không mở quá một chu kỳ.
+  writeRevealDeadline(store, now + 999 * 60_000);
+  assert.equal(readRevealDeadline(store, now), now + AUTO_HIDE_MS, 'trần đúng bằng AUTO_HIDE_MS');
+
+  // Ẩn (hết giờ / chuyển tab / tự bấm) thì xoá mốc ⇒ F5 sau đó ra ẩn.
+  clearRevealDeadline(store);
+  assert.equal(readRevealDeadline(store, now), 0);
+  assert.match(privacySource, /if \(hidden\) \{ clearRevealDeadline/);
+});
+
+test('kho hỏng (chặn cookie / hết quota) thì rèm vẫn chạy, chỉ mất phần nhớ qua F5', () => {
+  const broken = {
+    getItem() { throw new Error('blocked'); },
+    setItem() { throw new Error('blocked'); },
+    removeItem() { throw new Error('blocked'); },
+  };
+  assert.equal(readRevealDeadline(broken, 1_000), 0);
+  assert.doesNotThrow(() => writeRevealDeadline(broken, 2_000));
+  assert.doesNotThrow(() => clearRevealDeadline(broken));
 });
 
 test('một công tắc cho CẢ APP: bọc ở main, nút mắt ở cả header desktop lẫn mobile', () => {
@@ -26,26 +75,41 @@ test('một công tắc cho CẢ APP: bọc ở main, nút mắt ở cả header
   assert.equal(eyeButtons.length, 2, 'phải có nút mắt ở topbar desktop VÀ header mobile');
 });
 
-test('tự ẩn sau 60s không thao tác, và ẩn NGAY khi mất tiêu điểm', () => {
+test('tự ẩn sau 5 phút không thao tác, và ẩn NGAY khi chuyển hẳn sang tab khác', () => {
+  assert.equal(AUTO_HIDE_MS, 300_000, 'CEO chốt 5 phút, không phải 60 giây');
   const fired = [];
   const timers = [];
   const auto = createAutoHide({
-    delayMs: 60_000,
+    delayMs: AUTO_HIDE_MS,
     onHide: (cause) => fired.push(cause),
     schedule: (fn, ms) => { timers.push({ fn, ms }); return timers.length - 1; },
     cancel: (handle) => { timers[handle] = null; },
   });
   auto.activity();
   assert.equal(timers.filter(Boolean).length, 1);
-  assert.equal(timers[0].ms, 60_000);
-  timers[0].fn(); // hết 60 giây
+  assert.equal(timers[0].ms, AUTO_HIDE_MS);
+  timers[0].fn(); // hết 5 phút
   assert.deepEqual(fired, ['idle']);
+
+  // Nhịp đầu sau F5 đếm nốt phần CÒN LẠI, không cấp chu kỳ mới.
+  auto.activity(90_000);
+  assert.equal(timers.at(-1).ms, 90_000);
+  // Thao tác tiếp thì mới về đủ 5 phút (đúng nghĩa "5 phút không thao tác").
   auto.activity();
-  auto.hideNow(); // visibilitychange/blur — không chờ
+  assert.equal(timers.at(-1).ms, AUTO_HIDE_MS);
+
+  auto.hideNow(); // chuyển tab — không chờ
   assert.deepEqual(fired, ['idle', 'visibility']);
   assert.equal(auto.pending, false, 'hideNow phải huỷ hẹn giờ đang chờ');
   // Provider phải nối đúng sự kiện visibilitychange mà chuông đang dùng.
   assert.match(privacySource, /visibilitychange/);
+});
+
+// CEO 10/08/2026: bấm công cụ cắt màn hình của Windows là cướp tiêu điểm khỏi trình
+// duyệt ⇒ `blur` bắn ⇒ số bị che đúng lúc chụp. Cấm nối lại sự kiện này.
+test('KHÔNG ẩn khi cửa sổ chỉ mất tiêu điểm — nếu không thì chụp màn hình luôn ra dấu chấm', () => {
+  assert.doesNotMatch(privacySource, /addEventListener\(\s*['"]blur['"]/);
+  assert.doesNotMatch(privacySource, /onBlur\s*=\s*\(\)\s*=>\s*autoHide\.hideNow/);
 });
 
 test('che SỐ giữ CẤU TRÚC: tiền/%/Xu bị che, ngày và đếm số lượng thì không', () => {
