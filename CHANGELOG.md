@@ -1,3 +1,37 @@
+### 2026-08-10 15:45 (giờ VN) — 🔀 GỘP HAI NHÁNH: một bản ứng viên duy nhất (cf1fa9b)
+
+Cả ngày 10/08 hai bên làm song song trên hai nhánh tách từ `3248cd4`, không bên nào
+có việc của bên kia — nên mỗi lượt deploy lại phải chọn bỏ một nửa:
+
+- **Bot (9 việc, tới `81da127`)**: đối soát/phân bổ doanh thu V4, chẩn đoán T07.
+- **Claude (8 việc, tới `70ae333`)**: mốc go-live chi phí, con mắt che số v2, màn
+  đăng nhập trả lại ô SĐT, bác sĩ deploy.
+
+`7870f10` (PROD đang chạy) là **tổ tiên** của `81da127`, nên bản gộp này chứa trọn
+PROD hiện tại + cả hai luồng việc. Merge **sạch, không xung đột**.
+
+#### Test trên bản gộp
+- `server` **1203/1210 đạt** — đúng 7 ca nền cũ (6 ca máy dựng thiếu `pdfinfo`,
+  1 ca VP018 không có trong `seed.js`), không phát sinh ca mới.
+- `web` **449/449 đạt**.
+- Build đạt.
+
+#### Trạng thái nghi vấn "màn Chi phí chậm"
+Bot đã xác nhận trên kho PROD: T07 **đủ 21 mã, 27.719 dòng tỷ lệ**, nhật ký toàn `ok`;
+ba biến `APP_REPORT_COST_LOCAL_FIRST` / `_ALL_DEADLINE_MS` / `_TIMEOUT_MS` đều **chưa
+đặt** ⇒ dùng mặc định, local-first **đang bật**. Vậy giả thuyết "thiếu tỷ lệ" và
+"local-first bị tắt" đều **loại bỏ**.
+
+Nghi phạm còn lại: nút **"↕ So kỳ trước"** đang BẬT (thấy dấu ✓ trong ảnh CEO gửi
+14:51 và 14:53) ⇒ mỗi lần mở màn T07 app gọi thêm **một lượt cho T06** — kỳ chưa lên
+app, không có gì trong kho ⇒ ra mạng hỏi cả 21 NV ⇒ ăn trọn 25 giây và dội tải vào
+DataHub, làm chính lượt T07 bị đói và chạm hạn chót, rồi ai chưa kịp thì bị đóng dấu
+"thiếu nguồn (0 cặp)". Khớp với hiện tượng danh sách NV thiếu **đổi giữa hai lần
+chụp** (16 NV lúc 14:52:22 → 12 NV lúc 14:53:07) và số dòng nhảy 499 → 1.191.
+
+Mốc go-live (`70ae333`) chính là bản vá cho đường này — nhưng **chưa deploy nên chưa
+có tác dụng**. Chưa có việc nào của Claude trong ngày 10/08 lên PROD.
+
 ### 2026-08-10 15:10 (giờ VN) — 🚦 MỐC GO-LIVE 01/07/2026: thôi đi hỏi kỳ chưa hề tồn tại
 
 CEO: *"T06.2026 chưa lên app nhé, nó chỉ chuyển dữ liệu từ Lumos qua thôi. Dữ liệu
