@@ -6,6 +6,7 @@ const employeeCostTemplates = require('./employeeCostTemplates');
 const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 const rateSnapshot = require('./employeeCostRateSnapshot');
 const reconciliationShadow = require('./employeeCostReconciliationShadow');
+const reconciliationAllocationV4 = require('./employeeCostReconAllocationV4');
 
 const CONTRACT_PATH = '/api/integrations/app-report/employee-cost';
 const DIMENSION_KEYS = Object.freeze(['c5', 'c7', 'c16', 'c25']);
@@ -952,6 +953,13 @@ function enrichRangePayload(payload, options = {}) {
 
 async function applyReconciliationShadow(payload, empCode, options = {}) {
   const shadowOptions = options.reconciliationShadow || {};
+  const allocationOptions = options.reconciliationAllocationV4 || {};
+  const auditEvent = String(options.auditEvent || 'view');
+  // Synthetic variance is a display-only explanation row. Keep it out of every
+  // calculation/send/export path; warm_all builds the same base cache used by
+  // the interactive all-employee view, so it intentionally retains the row.
+  const includeAllocationSynthetic = auditEvent === 'view' || auditEvent === 'view_all'
+    || auditEvent.startsWith('warm_all:');
   const periods = Array.isArray(payload?.periods) ? payload.periods : (payload?.rows ? [payload] : []);
   const scopes = [];
   const plans = new Map();
@@ -982,6 +990,27 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
     plans.set(periodPayload, rowPlans);
   }
   const snapshots = await reconciliationShadow.loadScopes(scopes, shadowOptions);
+  // V4 may only consume the exact VP018-confirmed v3 version/checksum already
+  // accepted for this scope. This avoids a second unpinned "latest" read and
+  // lets the existing App Sale URL/key configuration remain unchanged.
+  const allocationScopes = [];
+  for (const [scopeKey, snapshot] of snapshots) {
+    const confirmedAt = typeof snapshot?.confirmed_at === 'string' ? snapshot.confirmed_at : '';
+    if (snapshot?.confirmed_by !== 'VP018'
+      || !Number.isSafeInteger(snapshot?.reconciliation_version)
+      || !/^[a-f0-9]{64}$/.test(String(snapshot?.reconciliation_rows_checksum_v2 || ''))
+      || !Number.isFinite(Date.parse(confirmedAt))
+      || new Date(confirmedAt).toISOString() !== confirmedAt) continue;
+    const [period, contractorCode] = scopeKey.split('\u001f');
+    allocationScopes.push({
+      period,
+      contractorCode,
+      reconciliationVersion: snapshot.reconciliation_version,
+      reconciliationRowsChecksumV2: snapshot.reconciliation_rows_checksum_v2,
+      reconciliationConfirmedAt: confirmedAt,
+    });
+  }
+  const allocationSnapshots = await reconciliationAllocationV4.loadScopes(allocationScopes, allocationOptions);
   for (const periodPayload of periods) {
     const period = normalizeMonth(periodPayload.period || options.period);
     const rowPlans = plans.get(periodPayload) || [];
@@ -999,13 +1028,41 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
     const projected = (periodPayload.rows || []).map((row) => ({
       ...row, shadowReconciledQuantity: null, shadowQuantityDelta: null,
     }));
+    const syntheticRows = [];
+    const allocationTotals = [];
     for (const [contractorCode, group] of grouped) {
-      const snapshot = snapshots.get(`${period}\u001f${contractorCode}`);
+      const scopeKey = `${period}\u001f${contractorCode}`;
+      const snapshot = snapshots.get(scopeKey);
+      // Preserve the v3 fail-closed baseline: without an accepted v3 snapshot,
+      // leave the pre-initialized shadow fields null and never let V4 restore
+      // stale/input values for this group.
       if (!snapshot) continue;
       const rows = reconciliationShadow.projectEmployeeCostRows(group.map((item) => item.row), snapshot, { employeeCode: empCode });
-      rows.forEach((row, offset) => { projected[group[offset].index] = row; });
+      const allocationSnapshot = allocationSnapshots.get(scopeKey);
+      const result = reconciliationAllocationV4.projectEmployeeCostRows(rows, allocationSnapshot, {
+        employeeCode: empCode,
+        expected: snapshot ? {
+          period,
+          contractorCode,
+          reconciliationVersion: snapshot.reconciliation_version,
+          reconciliationRowsChecksumV2: snapshot.reconciliation_rows_checksum_v2,
+          reconciliationConfirmedAt: snapshot.confirmed_at,
+        } : {},
+        includeSynthetic: includeAllocationSynthetic,
+      });
+      result.rows.slice(0, group.length).forEach((row, offset) => { projected[group[offset].index] = row; });
+      syntheticRows.push(...result.rows.slice(group.length));
+      if (result.totals) allocationTotals.push(result.totals);
     }
-    periodPayload.rows = projected;
+    periodPayload.rows = [...projected, ...syntheticRows];
+    if (allocationTotals.length) periodPayload.shadowReconciliationTotals = {
+      orderedQuantity: allocationTotals.reduce((sum, item) => sum + item.orderedQuantity, 0),
+      reconciledQuantity: allocationTotals.reduce((sum, item) => sum + item.reconciledQuantity, 0),
+      quantityDelta: allocationTotals.reduce((sum, item) => sum + item.quantityDelta, 0),
+      employeeVarianceRows: allocationTotals.reduce((sum, item) => sum + item.employeeVarianceRows, 0),
+      // Count only; no mixed-employee identity is projected into an employee row.
+      mixedEmployeeVarianceCount: allocationTotals.reduce((sum, item) => sum + item.mixedEmployeeVarianceCount, 0),
+    };
   }
   return payload;
 }

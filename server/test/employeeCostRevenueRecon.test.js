@@ -7,9 +7,63 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const recon = require('../src/employeeCostRevenueRecon');
 
 const row = (emp, revenue) => ({ emp_code: emp, revenue });
+
+test('tổng đang hiện lấy từ chính toàn bộ dòng ALL trước phân trang', () => {
+  assert.equal(recon.sumShownRevenue([
+    { period: '2026-06', rows: [row('DN001', 100), { empCode: 'DN002', TONG_TIEN: 250 }] },
+    { period: '2026-07', rows: [{ emp_code: 'DN003', tong_tien: 650 }] },
+  ]), 1000);
+  assert.equal(recon.sumShownRevenue([]), 0);
+});
+
+test('route không được đọc merged.summary trước transform — summary chưa tồn tại ở bước đó', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/routes.js'), 'utf8');
+  assert.match(source, /shownRevenue: employeeCostRevenueRecon\.sumShownRevenue\(merged\.periods\)/);
+  assert.match(source, /shownRows: employeeCostRevenueRecon\.shownRowsOf\(merged\.periods\)/);
+  assert.doesNotMatch(source, /shownRevenue: merged\.summary\?\.revenueTotal/);
+});
+
+test('Allocation V4 giữ dòng NV thiếu nguồn ⇒ không cộng doanh thu của NV đó lần hai', () => {
+  const rows = [row('DN001', 1000), row('DN003', 300)];
+  const result = recon.buildRevenueRecon({
+    periods: ['2026-07'], revenueRowsOf: () => rows, unavailable: ['DN003'],
+    shownRevenue: 1300,
+    shownRows: [{ employeeCode: 'DN001', revenue: 1000 }, { employeeCode: 'DN003', revenue: 300 }],
+  });
+  assert.equal(result.missingByUnavailable, 0);
+  assert.deepEqual(result.unavailableEmployees, []);
+  assert.equal(result.gap, 0);
+  assert.equal(result.balanced, true);
+});
+
+test('NV thiếu nguồn chỉ thiếu MỘT PHẦN trên bảng ⇒ phép cân lấy đúng phần còn thiếu', () => {
+  const result = recon.buildRevenueRecon({
+    periods: ['2026-07'],
+    revenueRowsOf: () => [row('DN001', 1000), row('DN003', 300), row('DN003', 200)],
+    unavailable: ['DN003'], shownRevenue: 1200,
+    shownRows: [{ employeeCode: 'DN001', revenue: 1000 }, { employeeCode: 'DN003', revenue: 200 }],
+  });
+  assert.equal(result.missingByUnavailable, 300);
+  assert.deepEqual(result.unavailableEmployees, [{ empCode: 'DN003', revenue: 300 }]);
+  assert.equal(result.gap, 0);
+  assert.equal(result.balanced, true);
+});
+
+test('dòng chưa gán nhưng V4 đã giữ trên bảng cũng không được cộng lần hai', () => {
+  const rows = [row('DN001', 1000), row('', 200)];
+  const result = recon.buildRevenueRecon({
+    periods: ['2026-07'], revenueRowsOf: () => rows, unavailable: [],
+    shownRevenue: 1200, shownRows: rows,
+  });
+  assert.equal(result.missingUnassigned, 0);
+  assert.equal(result.gap, 0);
+  assert.equal(result.balanced, true);
+});
 
 test('‼ phép cân ĐÚNG: tổng kỳ = đang hiện + NV thiếu % + dòng chưa gán', () => {
   const rows = [row('DN001', 1000), row('DN002', 500), row('DN003', 300), row('', 200)];

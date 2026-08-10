@@ -1,0 +1,31 @@
+{
+  "contract": "app-sale-reconciliation-allocation-v4-fixture",
+  "sanitized": true,
+  "shadow_only": true,
+  "effective_values_changed": false,
+  "confirmed": {
+    "confirmation_id": "1",
+    "confirmed_line_id": "1",
+    "confirmed_by": "VP018",
+    "period": "2026-07",
+    "contractor_code": "20.HĐS",
+    "unit_code": "002.NT-BVĐK Thống Nhất ĐN",
+    "qlnb_code": "G1.GE.QĐ110.G0723.26",
+    "quantity": "6420",
+    "document_codes": ["DT-260708-0176", "DT-260723-0346"]
+  },
+  "persisted_bridge": {
+    "partner_reconciliation_line_id": "256",
+    "order_item_ids": ["2524", "2783"],
+    "ordered_quantity": "6400",
+    "order_count": 2
+  },
+  "expected": {
+    "children": [
+      {"order_code": "DT-260708-0176", "order_item_id": "2524", "employee_code": "DN005", "base_quantity": "2400", "reconciled_quantity": "2400", "quantity_delta": "0"},
+      {"order_code": "DT-260723-0346", "order_item_id": "2783", "employee_code": "DN005", "base_quantity": "4000", "reconciled_quantity": "4000", "quantity_delta": "0"}
+    ],
+    "variance": {"kind": "EMPLOYEE_GROUP_VARIANCE", "employee_code": "DN005", "quantity": "20", "quantity_delta": "20", "order_id": null, "order_item_id": null},
+    "totals": {"ordered_quantity": "6400", "reconciled_quantity": "6420", "quantity_delta": "20"}
+  }
+}

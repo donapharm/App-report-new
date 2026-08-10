@@ -201,6 +201,38 @@ test('view model renders percent without percent sign and reads pre-VAT sale fie
   assert.equal(formatEmployeeCostCell(null, { kind: 'money' }), '—');
 });
 
+test('view model keeps synthetic reconciliation variance rows non-financial and label-driven', () => {
+  const model = employeeCostViewModel({
+    empCode: 'DN005',
+    period: '07.2026',
+    template: { key: 'fulltime', label: 'FULL-TIME', columns: ['c16', 'quantity', 'shadowReconciledQuantity', 'shadowQuantityDelta', 'rowMonthlyTotal', 'note'] },
+    columns: [],
+    rows: [{
+      sourceLineId: 'shadow-v4:1:DN005',
+      c16: 'Chênh lệch chưa phân bổ theo đơn',
+      quantity: 20,
+      shadowReconciledQuantity: 20,
+      shadowQuantityDelta: 20,
+      rowMonthlyTotal: null,
+      note: null,
+    }],
+    summary: { reliable: true, monthlyTotal: 640000, annualTotal: 0, revenueBeforeVatTotal: 6400, columnTotals: {} },
+  });
+  assert.equal(model.rows[0].c16, 'Chênh lệch chưa phân bổ theo đơn');
+  assert.equal(model.rows[0].quantity, 20);
+  assert.equal(model.rows[0].shadowReconciledQuantity, 20);
+  assert.equal(model.rows[0].shadowQuantityDelta, 20);
+  assert.equal(model.rows[0].rowMonthlyTotal, null);
+  assert.equal(model.summary.monthlyTotal, 640000);
+});
+
+test('employee cost page keeps month summary on backend payload instead of row recomputation', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /period\.summary\.monthlyTotal/);
+  assert.match(page, /period\.summary\.annualTotal/);
+  assert.doesNotMatch(page, /rows\.reduce\(\(sum, row\) => sum \+ \(row\.rowMonthlyTotal/);
+});
+
 test('view model preserves only the backend-owned self-scoped first-advance projection', () => {
   const model = employeeCostViewModel({
     empCode: 'DN009', periods: [],

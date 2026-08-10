@@ -570,6 +570,8 @@ function periodViewModel(payload = {}) {
       sourceLineId: String(source?.sourceLineId || `line-${rowIndex + 1}`),
       employeeCode: String(source?.employeeCode || ''),
       employeeName: String(source?.employeeName || ''),
+      shadowRowLabel: String(source?.shadowRowLabel || ''),
+      reconciliationSynthetic: source?.reconciliationSynthetic === true,
       dailyAmounts: source?.dailyAmounts || null,
       dayRevenueMatched: !!source?.dayRevenueMatched,
       rowMonthlyTotal: source?.rowMonthlyTotal ?? null,
@@ -648,6 +650,13 @@ function periodViewModel(payload = {}) {
       totalRows: Number(payload.pagination?.totalRows ?? rows.length),
     },
     employeeSubtotals: Array.isArray(payload.employeeSubtotals) ? payload.employeeSubtotals : [],
+    shadowReconciliationTotals: payload.shadowReconciliationTotals && typeof payload.shadowReconciliationTotals === 'object' ? {
+      orderedQuantity: numberOrNull(payload.shadowReconciliationTotals.orderedQuantity),
+      reconciledQuantity: numberOrNull(payload.shadowReconciliationTotals.reconciledQuantity),
+      quantityDelta: numberOrNull(payload.shadowReconciliationTotals.quantityDelta),
+      employeeVarianceRows: Number(payload.shadowReconciliationTotals.employeeVarianceRows || 0),
+      mixedEmployeeVarianceCount: Number(payload.shadowReconciliationTotals.mixedEmployeeVarianceCount || 0),
+    } : null,
   };
 }
 
@@ -737,6 +746,23 @@ export function employeeCostViewModel(payload = {}) {
       filteredRows: Number(payload.search?.filteredRows ?? rows.length),
       totalRows: Number(payload.search?.totalRows ?? rows.length),
     },
+    revenueRecon: payload.revenueRecon && typeof payload.revenueRecon === 'object' ? {
+      unavailable: payload.revenueRecon.unavailable === true,
+      reason: String(payload.revenueRecon.reason || ''),
+      total: numberOrNull(payload.revenueRecon.total),
+      shown: numberOrNull(payload.revenueRecon.shown),
+      missingByUnavailable: numberOrNull(payload.revenueRecon.missingByUnavailable),
+      missingUnassigned: numberOrNull(payload.revenueRecon.missingUnassigned),
+      gap: numberOrNull(payload.revenueRecon.gap),
+      balanced: payload.revenueRecon.balanced === true ? true
+        : payload.revenueRecon.balanced === false ? false : null,
+      rowCount: Number(payload.revenueRecon.rowCount || 0),
+      unavailableEmployees: (Array.isArray(payload.revenueRecon.unavailableEmployees)
+        ? payload.revenueRecon.unavailableEmployees : []).map((item) => ({
+        empCode: String(item?.empCode || ''),
+        revenue: numberOrNull(item?.revenue),
+      })).filter((item) => item.empCode),
+    } : null,
     target: employeeTargetViewModel(payload.target),
     // Ba KPI hàng cuối đã được backend tính và format hoàn chỉnh. Projection này
     // chỉ allowlist chuỗi hiển thị; không nhân/chia/cộng lại bất kỳ số nào.

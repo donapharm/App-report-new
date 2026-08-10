@@ -25,9 +25,11 @@ test('‼ KHÔNG được đọc merged.employeeSubtotals — trường đó ch�
     'đọc trường chưa tồn tại ⇒ bảng đội rỗng tuyệt đối, đúng lỗi bd4ceb4');
 });
 
-test('‼ subtotals phải tính từ rows CHƯA LỌC, không lấy từ transformReport', () => {
-  assert.match(block, /employeeCostTable\.employeeSubtotals\(teamPeriod\.rows/,
+test('‼ subtotals phải tính từ rows nghiệp vụ CHƯA LỌC, không lấy từ transformReport', () => {
+  assert.match(block, /employeeCostTable\.employeeSubtotals\([\s\S]{0,200}teamPeriod\.rows/,
     'phải tự tính tại chỗ từ rows chưa lọc');
+  assert.match(block, /reconciliationSynthetic\s*!==\s*true/,
+    'hàng chênh lệch shadow chỉ để hiển thị, không được lọt vào sổ thanh toán');
   // Nếu ai đó dời xuống sau transformReport thì `numbered` (đã lọc) sẽ lọt vào.
   assert.doesNotMatch(block, /transformReport[\s\S]{0,200}paymentTeam/,
     'dựng bảng đội sau transformReport ⇒ bảng co theo bộ lọc của người xem');
@@ -55,6 +57,18 @@ test('‼ dựng subtotals từ rows chưa lọc ra ĐỦ người, lọc rồi 
   );
   assert.equal(afterFilter.length, 2, 'chứng minh bẫy có thật: lọc xong mất 1 NV');
   assert.notDeepEqual(full.map((item) => item.employeeCode), afterFilter.map((item) => item.employeeCode));
+});
+
+test('hàng reconciliation shadow không đổi rowCount hay tổng của bảng thanh toán', () => {
+  const columns = [{ key: 'c41', kind: 'money' }];
+  const rows = [
+    { employeeCode: 'DN005', employeeName: 'A', c41: 100, rowMonthlyTotal: 100 },
+    { employeeCode: 'DN005', employeeName: 'A', c41: null, quantity: 20, reconciliationSynthetic: true },
+  ];
+  const paymentRows = rows.filter((row) => row?.reconciliationSynthetic !== true);
+  const subtotals = employeeCostTable.employeeSubtotals(paymentRows, columns, {});
+  assert.equal(subtotals[0].rowCount, 1);
+  assert.equal(subtotals[0].monthlyTotal, 100);
 });
 
 test('subtotals sinh ra phải đúng khoá mà bảng thanh toán cần đọc', () => {

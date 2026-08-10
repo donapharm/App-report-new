@@ -1256,7 +1256,10 @@ async function employeeCostAllPayload(req, {
         periods: range.months,
         revenueRowsOf: (period) => store.getRows({ ky: employeeCost.toUiMonth(period), scope: {} }),
         unavailable: unavailableAll,
-        shownRevenue: merged.summary?.revenueTotal ?? null,
+        // `mergeEmployeeReports()` chưa có top-level summary ở bước này; lấy đúng
+        // tổng từ toàn bộ dòng bảng ALL trước khi transform/phân trang.
+        shownRevenue: employeeCostRevenueRecon.sumShownRevenue(merged.periods),
+        shownRows: employeeCostRevenueRecon.shownRowsOf(merged.periods),
       });
     } catch (error) {
       // Đối soát hỏng KHÔNG được làm hỏng cả báo cáo — nhưng phải nói là chưa soát được.
@@ -1319,8 +1322,15 @@ async function employeeCostAllPayload(req, {
     // helper `employeeSubtotals` mà bảng dùng — một công thức, không dựng bản thứ hai.
     const teamPeriod = (merged.periods || []).find((item) => String(item.period) === String(range.to))
       || (merged.periods || [])[merged.periods.length - 1] || null;
+    // V4 reconciliation variance rows are display-only. A warm_all build retains
+    // them for the interactive table, but payment summaries must not even count
+    // those rows (including rowCount), regardless of their null financial fields.
     const teamSubtotals = teamPeriod
-      ? employeeCostTable.employeeSubtotals(teamPeriod.rows || [], teamPeriod.columns || [], teamPeriod.employeePenalties)
+      ? employeeCostTable.employeeSubtotals(
+        (teamPeriod.rows || []).filter((row) => row?.reconciliationSynthetic !== true),
+        teamPeriod.columns || [],
+        teamPeriod.employeePenalties,
+      )
       : [];
     try {
       merged.paymentTeam = paymentTeamSummary.buildPaymentTeamSummary({

@@ -91,6 +91,9 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
   const columnCount = period.columns.length + 1 + (allEmployees ? 1 : 0);
   const totalsByDate = new Map((period.daily.totals || []).map((total) => [total.date, total]));
   const renderCell = (row, column) => {
+    if (row.reconciliationSynthetic && row.shadowRowLabel && (column.key === 'c16' || column.key === 'orderCode')) {
+      return <span className="employee-cost-shadow-variance-label">{row.shadowRowLabel}</span>;
+    }
     const text = formatEmployeeCostCell(row[column.key], column);
     if (column.tooltip && text !== '—') return <button type="button" className="employee-cost-ellipsis" title={text} onClick={() => setTooltip(text)}>{text}</button>;
     if (column.key === 'c7' || column.key === 'contractorName') return <span className="employee-cost-clamp-2" title={text}><Highlight value={text} query={query} /></span>;
@@ -123,7 +126,7 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
             {totalsByDate.get(row.date)?.afterPenaltyTotal != null && <span>· sau phạt: {formatEmployeeCostCell(totalsByDate.get(row.date).afterPenaltyTotal, moneyColumn)}</span>}
           </td>
         </tr>}
-        <tr>
+        <tr className={row.reconciliationSynthetic ? 'employee-cost-shadow-variance-row' : ''}>
           <td className="employee-cost-sticky-stt employee-cost-number">{row.stt || rowIndex + 1}</td>
           {allEmployees && <td className="employee-cost-employee"><b><Highlight value={row.employeeCode} query={query} /></b><small title={row.employeeName}><Highlight value={row.employeeName} query={query} /></small></td>}
           {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}${column.kind === 'percent' ? ' employee-cost-percent' : ''}${column.key === 'c16' ? ' employee-cost-sticky-product' : ''} employee-cost-col-${column.key}`}>
