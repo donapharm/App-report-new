@@ -1253,7 +1253,9 @@ async function employeeCostAllPayload(req, {
         periods: range.months,
         revenueRowsOf: (period) => store.getRows({ ky: employeeCost.toUiMonth(period), scope: {} }),
         unavailable: unavailableAll,
-        shownRevenue: merged.summary?.revenueTotal ?? null,
+        // `mergeEmployeeReports()` chưa có top-level summary ở bước này; lấy đúng
+        // tổng từ toàn bộ dòng bảng ALL trước khi transform/phân trang.
+        shownRevenue: employeeCostRevenueRecon.sumShownRevenue(merged.periods),
       });
     } catch (error) {
       // Đối soát hỏng KHÔNG được làm hỏng cả báo cáo — nhưng phải nói là chưa soát được.

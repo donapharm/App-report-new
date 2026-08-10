@@ -33,6 +33,13 @@ const upper = (value) => String(value ?? '').trim().toUpperCase();
 const empOf = (row = {}) => upper(row.emp_code ?? row.empCode ?? row.EMP_NUMBER ?? row.MA_NV);
 const revenueOf = (row = {}) => num(row.revenue ?? row.tong_tien ?? row.REVENUE ?? row.TONG_TIEN);
 
+/** Tổng doanh thu thực sự đang nằm trong các dòng bảng ALL trước phân trang/lọc. */
+function sumShownRevenue(periods = []) {
+  return (Array.isArray(periods) ? periods : []).reduce((periodSum, period) => (
+    periodSum + (Array.isArray(period?.rows) ? period.rows : []).reduce((rowSum, row) => rowSum + revenueOf(row), 0)
+  ), 0);
+}
+
 /**
  * @param periods        danh sách kỳ (YYYY-MM) đang xem
  * @param revenueRowsOf  (period) → mọi dòng doanh thu của kỳ, KHÔNG lọc quyền
@@ -82,4 +89,4 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], show
   };
 }
 
-module.exports = { buildRevenueRecon };
+module.exports = { buildRevenueRecon, sumShownRevenue };

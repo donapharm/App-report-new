@@ -7,9 +7,25 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
 const recon = require('../src/employeeCostRevenueRecon');
 
 const row = (emp, revenue) => ({ emp_code: emp, revenue });
+
+test('tổng đang hiện lấy từ chính toàn bộ dòng ALL trước phân trang', () => {
+  assert.equal(recon.sumShownRevenue([
+    { period: '2026-06', rows: [row('DN001', 100), { empCode: 'DN002', TONG_TIEN: 250 }] },
+    { period: '2026-07', rows: [{ emp_code: 'DN003', tong_tien: 650 }] },
+  ]), 1000);
+  assert.equal(recon.sumShownRevenue([]), 0);
+});
+
+test('route không được đọc merged.summary trước transform — summary chưa tồn tại ở bước đó', () => {
+  const source = fs.readFileSync(path.join(__dirname, '../src/routes.js'), 'utf8');
+  assert.match(source, /shownRevenue: employeeCostRevenueRecon\.sumShownRevenue\(merged\.periods\)/);
+  assert.doesNotMatch(source, /shownRevenue: merged\.summary\?\.revenueTotal/);
+});
 
 test('‼ phép cân ĐÚNG: tổng kỳ = đang hiện + NV thiếu % + dòng chưa gán', () => {
   const rows = [row('DN001', 1000), row('DN002', 500), row('DN003', 300), row('', 200)];
