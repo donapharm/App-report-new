@@ -32,7 +32,8 @@ test('Allocation V4 giữ dòng NV thiếu nguồn ⇒ không cộng doanh thu c
   const rows = [row('DN001', 1000), row('DN003', 300)];
   const result = recon.buildRevenueRecon({
     periods: ['2026-07'], revenueRowsOf: () => rows, unavailable: ['DN003'],
-    shownRevenue: 1300, shownRows: rows,
+    shownRevenue: 1300,
+    shownRows: [{ employeeCode: 'DN001', revenue: 1000 }, { employeeCode: 'DN003', revenue: 300 }],
   });
   assert.equal(result.missingByUnavailable, 0);
   assert.deepEqual(result.unavailableEmployees, []);
@@ -45,7 +46,7 @@ test('NV thiếu nguồn chỉ thiếu MỘT PHẦN trên bảng ⇒ phép cân 
     periods: ['2026-07'],
     revenueRowsOf: () => [row('DN001', 1000), row('DN003', 300), row('DN003', 200)],
     unavailable: ['DN003'], shownRevenue: 1200,
-    shownRows: [row('DN001', 1000), row('DN003', 200)],
+    shownRows: [{ employeeCode: 'DN001', revenue: 1000 }, { employeeCode: 'DN003', revenue: 200 }],
   });
   assert.equal(result.missingByUnavailable, 300);
   assert.deepEqual(result.unavailableEmployees, [{ empCode: 'DN003', revenue: 300 }]);

@@ -30,7 +30,9 @@ const num = (value) => {
   return Number.isFinite(amount) ? amount : 0;
 };
 const upper = (value) => String(value ?? '').trim().toUpperCase();
-const empOf = (row = {}) => upper(row.emp_code ?? row.empCode ?? row.EMP_NUMBER ?? row.MA_NV);
+const empOf = (row = {}) => upper(
+  row.emp_code ?? row.empCode ?? row.employeeCode ?? row.EMP_NUMBER ?? row.MA_NV,
+);
 const revenueOf = (row = {}) => num(row.revenue ?? row.tong_tien ?? row.REVENUE ?? row.TONG_TIEN);
 const shownRowsOf = (periods = []) => (Array.isArray(periods) ? periods : [])
   .flatMap((period) => (Array.isArray(period?.rows) ? period.rows : []));
