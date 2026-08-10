@@ -36,6 +36,38 @@ test('projection loại card/tone/action ngoài hợp đồng backend', () => {
   assert.equal(model.healthKpis.cards[0].action, '');
 });
 
+test('projection giữ phép cân doanh thu để khối cảnh báo có thể render', () => {
+  const model = employeeCostViewModel({
+    empCode: 'ALL', allEmployees: true, from: '2026-07', to: '2026-07', periods: [],
+    revenueRecon: {
+      total: 1000, shown: 700, missingByUnavailable: 200, missingUnassigned: 100,
+      gap: 0, balanced: true, rowCount: 9,
+      unavailableEmployees: [{ empCode: 'NV01', revenue: 200 }, { empCode: '', revenue: 999 }],
+    },
+  });
+  assert.deepEqual(model.revenueRecon, {
+    unavailable: false,
+    reason: '',
+    total: 1000,
+    shown: 700,
+    missingByUnavailable: 200,
+    missingUnassigned: 100,
+    gap: 0,
+    balanced: true,
+    rowCount: 9,
+    unavailableEmployees: [{ empCode: 'NV01', revenue: 200 }],
+  });
+});
+
+test('projection fail-closed khi phép cân không có hoặc báo unavailable', () => {
+  assert.equal(employeeCostViewModel({ periods: [] }).revenueRecon, null);
+  const model = employeeCostViewModel({ periods: [], revenueRecon: { unavailable: true, reason: 'source unavailable' } });
+  assert.equal(model.revenueRecon.unavailable, true);
+  assert.equal(model.revenueRecon.reason, 'source unavailable');
+  assert.equal(model.revenueRecon.total, null);
+  assert.equal(model.revenueRecon.balanced, null);
+});
+
 test('JSX ba KPI chỉ truyền card.value/card.sub từ payload, không có công thức frontend', () => {
   const source = fs.readFileSync(path.join(here, '../src/pages/EmployeeCost.jsx'), 'utf8');
   const start = source.indexOf('{/* Hàng sức khoẻ chỉ dành cho ALL/CEO.');

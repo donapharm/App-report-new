@@ -746,6 +746,23 @@ export function employeeCostViewModel(payload = {}) {
       filteredRows: Number(payload.search?.filteredRows ?? rows.length),
       totalRows: Number(payload.search?.totalRows ?? rows.length),
     },
+    revenueRecon: payload.revenueRecon && typeof payload.revenueRecon === 'object' ? {
+      unavailable: payload.revenueRecon.unavailable === true,
+      reason: String(payload.revenueRecon.reason || ''),
+      total: numberOrNull(payload.revenueRecon.total),
+      shown: numberOrNull(payload.revenueRecon.shown),
+      missingByUnavailable: numberOrNull(payload.revenueRecon.missingByUnavailable),
+      missingUnassigned: numberOrNull(payload.revenueRecon.missingUnassigned),
+      gap: numberOrNull(payload.revenueRecon.gap),
+      balanced: payload.revenueRecon.balanced === true ? true
+        : payload.revenueRecon.balanced === false ? false : null,
+      rowCount: Number(payload.revenueRecon.rowCount || 0),
+      unavailableEmployees: (Array.isArray(payload.revenueRecon.unavailableEmployees)
+        ? payload.revenueRecon.unavailableEmployees : []).map((item) => ({
+        empCode: String(item?.empCode || ''),
+        revenue: numberOrNull(item?.revenue),
+      })).filter((item) => item.empCode),
+    } : null,
     target: employeeTargetViewModel(payload.target),
     // Ba KPI hàng cuối đã được backend tính và format hoàn chỉnh. Projection này
     // chỉ allowlist chuỗi hiển thị; không nhân/chia/cộng lại bất kỳ số nào.
