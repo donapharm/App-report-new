@@ -33,7 +33,40 @@ const backgroundRefreshInFlight = new Map();
  * "kỳ hiệu lực chính xác" (`rateEffectiveFrom`) VẪN đòi `ok` thật — số cũ dùng để
  * hiển thị được, nhưng không được đóng dấu là chính sách của kỳ này.
  */
-const USABLE_OUTCOMES = Object.freeze(['ok', 'ok_stale_rates']);
+/* ── MỐC GO-LIVE: 01/07/2026 (CEO xác nhận 10/08/2026) ────────────────────────
+ * CEO: *"T06.2026 chưa lên app nhé, nó chỉ chuyển dữ liệu từ Lumos qua thôi.
+ * Dữ liệu bắt đầu có Go-live từ 01/07/2026."*
+ *
+ * Trước mốc này KHÔNG có bảng % chi phí, và sẽ KHÔNG BAO GIỜ có. Nhưng app vẫn
+ * coi đó là "nguồn đang hỏng" nên cứ mỗi lần mở màn lại đi hỏi DataHub về T06:
+ * 6,5s × 3 lần thử + 2s + 4s nghỉ cho MỖI nhân viên, đụng trần 25 giây cả màn.
+ * Rồi vì kết quả có "NV thiếu nguồn" nên bộ nhớ đệm chỉ giữ 2 phút thay vì 6 giờ
+ * ⇒ lần mở sau lại chờ 25 giây nữa. Kèm theo là bôi đỏ đích danh 17 nhân viên
+ * như thể họ có vấn đề — báo động giả, đúng người vô can.
+ *
+ * Cách chữa: kỳ trước go-live thì TRẢ LỜI NGAY, không ra mạng, và nói thẳng là
+ * "chưa lên app" chứ KHÔNG phải "nguồn hỏng". Đây là hai chuyện khác hẳn nhau:
+ * một cái cần đi đòi DataHub, một cái không ai phải làm gì cả.
+ *
+ * Đổi mốc bằng `APP_REPORT_COST_GO_LIVE_MONTH` (YYYY-MM) khi có kỳ nạp bổ sung.
+ */
+const DEFAULT_COST_GO_LIVE_MONTH = '2026-07';
+function costGoLiveMonth() {
+  const raw = String(process.env.APP_REPORT_COST_GO_LIVE_MONTH ?? DEFAULT_COST_GO_LIVE_MONTH).trim();
+  return /^\d{4}-\d{2}$/.test(raw) ? raw : DEFAULT_COST_GO_LIVE_MONTH;
+}
+// So sánh chuỗi 'YYYY-MM' là so sánh đúng thứ tự thời gian, khỏi dựng Date (và khỏi
+// dính bẫy UTC — mốc này là mốc nghiệp vụ theo giờ VN, không phải mốc tức thời).
+function isBeforeCostGoLive(month, goLive = costGoLiveMonth()) {
+  const value = normalizeMonth(month);
+  return !!value && value < goLive;
+}
+const BEFORE_GO_LIVE_NOTE = 'Kỳ này chưa lên App Report (dữ liệu bắt đầu từ 07/2026) — không phải lỗi nguồn.';
+
+/* `before_go_live` được coi là DÙNG ĐƯỢC: nó là câu trả lời đầy đủ và đúng, không
+ * phải sự cố. Nhờ vậy nhân viên không bị bôi đỏ oan, và bản gộp không bị đánh dấu
+ * "degraded" nên bộ nhớ đệm giữ đủ 6 giờ thay vì 2 phút. */
+const USABLE_OUTCOMES = Object.freeze(['ok', 'ok_stale_rates', 'before_go_live']);
 const isUsableOutcome = (outcome) => USABLE_OUTCOMES.includes(String(outcome || ''));
 
 const AUDIT_FILE = 'employee_cost_audit';
@@ -1011,6 +1044,12 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
     payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE),
     outcome: 'upstream_unavailable', attempts,
   });
+  // Chốt chặn thứ hai (costRatesSync gọi thẳng vào đây, không qua fetchEmployeeCost):
+  // kỳ trọn trước go-live thì không được phép chạm mạng.
+  if (range) {
+    const beforeGoLive = beforeGoLivePayload(empCode, options);
+    if (beforeGoLive) return { payload: beforeGoLive, outcome: 'before_go_live', attempts: 0 };
+  }
   if (deadlineAt > 0 && deadlineAt <= Date.now()) return unavailable(0);
 
   // Cost reads require both independent server-side credentials. A missing,
@@ -1242,6 +1281,27 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
    ═══════════════════════════════════════════════════════════════════════════════ */
 const COST_LOCAL_FIRST = String(process.env.APP_REPORT_COST_LOCAL_FIRST ?? '1') !== '0';
 
+/**
+ * Kỳ hỏi nằm TRỌN trước go-live ⇒ trả bản rỗng có chú thích đúng nghĩa, không ra mạng.
+ * Khoảng vắt qua mốc (vd 06→07) thì KHÔNG chặn ở đây: phần từ 07 trở đi vẫn phải đi lấy.
+ */
+function beforeGoLivePayload(empCode, options = {}) {
+  let range;
+  try { range = parseMonthRange(options); } catch { return null; }
+  if (!range || !Array.isArray(range.months) || !range.months.length) return null;
+  const goLive = costGoLiveMonth();
+  if (!range.months.every((month) => isBeforeCostGoLive(month, goLive))) return null;
+  const payload = emptyRangePayload(empCode, range);
+  payload.note = BEFORE_GO_LIVE_NOTE;
+  for (const period of Array.isArray(payload.periods) ? payload.periods : []) {
+    period.note = BEFORE_GO_LIVE_NOTE;
+    period.rateSource = 'before_go_live';
+  }
+  payload.rateSource = 'before_go_live';
+  payload.ratePolicy = { state: 'before_go_live', lookupOutcome: 'before_go_live', goLiveMonth: goLive };
+  return payload;
+}
+
 function pinnedClosedPayload(empCode, options = {}) {
   let range;
   try { range = parseMonthRange(options); } catch { return null; }
@@ -1278,6 +1338,13 @@ function pinnedClosedPayload(empCode, options = {}) {
 async function fetchEmployeeCost(empCode, options = {}) {
   const hasRange = options.from != null || options.to != null;
   const snapshotOptions = options.rateSnapshotStore ? { store: options.rateSnapshotStore } : {};
+
+  // ‼ TRƯỚC MỌI ĐƯỜNG KHÁC: kỳ nằm TRỌN trước go-live thì trả lời ngay, không ra
+  // mạng, không đọc kho. Không có gì để lấy thì đi hỏi là phí 25 giây của người dùng.
+  if (hasRange) {
+    const beforeGoLive = beforeGoLivePayload(empCode, options);
+    if (beforeGoLive) return { payload: beforeGoLive, outcome: 'before_go_live', attempts: 0 };
+  }
 
   // Kỳ đã chốt + kho có bản ⇒ trả thẳng, khỏi ra mạng. Đặt TRƯỚC mọi đường khác.
   if (hasRange) {
@@ -1448,6 +1515,10 @@ module.exports = {
   pinnedClosedPayload,
   USABLE_OUTCOMES,
   isUsableOutcome,
+  costGoLiveMonth,
+  isBeforeCostGoLive,
+  BEFORE_GO_LIVE_NOTE,
+  DEFAULT_COST_GO_LIVE_MONTH,
   CONTRACT_PATH,
   DIMENSION_KEYS,
   DEFAULT_NOTE,

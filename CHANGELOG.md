@@ -1,3 +1,56 @@
+### 2026-08-10 15:10 (giờ VN) — 🚦 MỐC GO-LIVE 01/07/2026: thôi đi hỏi kỳ chưa hề tồn tại
+
+CEO: *"T06.2026 chưa lên app nhé, nó chỉ chuyển dữ liệu từ Lumos qua thôi. Dữ liệu
+bắt đầu có Go-live từ 01/07/2026."*
+
+Một câu này gỡ trọn nút thắt cả buổi — vụ **màn Chi phí chậm 25 giây** và vụ **17 NV
+bị bôi đỏ "thiếu nguồn"** hoá ra là **cùng một nguyên nhân**, và nguyên nhân đó là
+một **báo động giả**.
+
+#### Chuỗi nhân quả (đo bằng hằng số trong code)
+
+T06 **không có** bảng % chi phí và **sẽ không bao giờ có**. Nhưng app không biết điều
+đó, nên coi T06 như "nguồn đang hỏng" và cứ mỗi lần mở màn lại đi hỏi lại:
+
+1. `pinnedClosedPayload` không thấy bản cục bộ T06 ⇒ rơi xuống đường mạng.
+2. Mỗi NV hỏng: `6,5s × 3 lần thử + 2s + 4s nghỉ` = **25,5 giây** (`DEFAULT_TIMEOUT_MS`,
+   `DEFAULT_BACKOFF_MS`), đụng trần `EMPLOYEE_COST_ALL_DEADLINE_MS` = **25 giây**.
+3. Kết quả có "NV thiếu nguồn" ⇒ `employeeCostAllDegraded` = true ⇒ bộ nhớ đệm rớt từ
+   **6 giờ xuống 2 phút** (`EMPLOYEE_COST_ALL_DEGRADED_TTL_MS`).
+4. ⇒ Lần mở sau **lại chờ 25 giây nữa**. Đúng lời CEO: *"nó đã xảy ra liên tục."*
+5. Kèm theo: bôi đỏ đích danh 17 NV như thể họ có vấn đề — **đúng người vô can**.
+
+Nút **"↕ So kỳ trước"** làm nặng thêm: đứng ở T07 mà bật nút đó là app gọi thêm một
+lượt cho **T06** — đúng kỳ không tồn tại — mỗi lần mở màn.
+
+#### Đã làm
+
+- **`costGoLiveMonth()` = `2026-07`**, đổi được bằng `APP_REPORT_COST_GO_LIVE_MONTH`
+  (dùng khi có kỳ nạp bổ sung). So sánh chuỗi `'YYYY-MM'` — không dựng `Date`, khỏi
+  dính bẫy UTC vì đây là mốc nghiệp vụ theo giờ VN.
+- **Kỳ nằm TRỌN trước mốc ⇒ trả lời NGAY**, không ra mạng, không đọc kho, `attempts: 0`.
+  Chặn ở **hai cửa**: `fetchEmployeeCost` (đặt trước cả đường kho) và `fetchRawEmployeeCost`
+  (vì `costRatesSync` gọi thẳng vào đây, không đi qua cửa trên).
+- **Khoảng VẮT QUA mốc (vd 06→07) thì KHÔNG chặn** — phần từ 07 trở đi vẫn phải đi lấy.
+- **`before_go_live` là kết quả DÙNG ĐƯỢC** (`USABLE_OUTCOMES`): nó là câu trả lời đúng
+  và đủ, không phải sự cố. Nhờ vậy NV hết bị bôi đỏ oan, bản gộp hết bị đánh dấu
+  "degraded", và bộ nhớ đệm **giữ lại đủ 6 giờ**.
+- Nói thẳng bằng tiếng người: *"Kỳ này chưa lên App Report (dữ liệu bắt đầu từ 07/2026)
+  — không phải lỗi nguồn."* Phân biệt rạch ròi **"chưa lên app"** với **"nguồn hỏng"**:
+  một cái cần đi đòi DataHub, một cái không ai phải làm gì cả.
+
+#### Không đụng vào
+
+Số của T07 trở đi **không đổi một đồng**. Doanh thu T06 (2.001 dòng / 28.403.136.096đ,
+nhập từ Lumos) vẫn nguyên — mốc này chỉ chặn đường hỏi **% chi phí**, không chạm doanh thu.
+Lỗi nguồn THẬT (`upstream_unavailable`, `not_configured`, `invalid_period_payload`) vẫn
+bị coi là hỏng y như cũ; có test đối chứng.
+
+#### Test
+`server` **1185/1192 đạt** — đúng 7 ca nền cũ (6 ca thiếu `pdfinfo` trong máy dựng,
+1 ca VP018 không có trong `seed.js`), không phát sinh ca mới. Thêm 5 ca cho mốc go-live.
+Chưa deploy.
+
 ### 2026-08-10 13:25 (giờ VN) — 📽 CON MẮT v2: mở số gắn với MÀN ĐANG XEM + công tắc Trình chiếu
 
 CEO: *"phải tính toán kỹ vì nó liên quan đến các con số % nữa, và các con số liên quan

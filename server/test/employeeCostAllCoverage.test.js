@@ -73,8 +73,12 @@ test('bản cũ KHÔNG được đóng dấu là chính sách hiệu lực của
 
 test('danh sách kết quả dùng được có ĐÚNG MỘT nơi định nghĩa (employeeCost.USABLE_OUTCOMES)', () => {
   const employeeCost = require('../src/employeeCost');
-  assert.deepEqual([...employeeCost.USABLE_OUTCOMES], ['ok', 'ok_stale_rates']);
+  // `before_go_live` vào danh sách 10/08/2026: kỳ trước 07/2026 chưa lên App Report,
+  // đó là câu trả lời ĐÚNG VÀ ĐỦ chứ không phải sự cố — không được bôi đỏ NV vô can,
+  // và không được kéo bộ nhớ đệm từ 6 giờ xuống 2 phút.
+  assert.deepEqual([...employeeCost.USABLE_OUTCOMES], ['ok', 'ok_stale_rates', 'before_go_live']);
   assert.equal(employeeCost.isUsableOutcome('ok_stale_rates'), true);
+  assert.equal(employeeCost.isUsableOutcome('before_go_live'), true);
   assert.equal(employeeCost.isUsableOutcome('upstream_unavailable'), false);
   // Tầng gộp phải hỏi qua hàm này, không tự so chuỗi.
   const fs = require('fs');
