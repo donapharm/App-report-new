@@ -112,7 +112,7 @@ function deepFreeze(node) {
  * File đổi (nội dung, cỡ, hay bị tráo) ⇒ tự đọc lại. Hỏng/bị xoá ⇒ quên ngay,
  * không bao giờ phục vụ số cũ.
  */
-function loadShared(name, def) {
+function loadShared(name, def, retriesLeft = 2) {
   let fd = null;
   try {
     const p = file(name);
@@ -122,17 +122,33 @@ function loadShared(name, def) {
      * dung lượng cho trần bộ nhớ. Đã mở fd thì `rename` không đổi được inode đang mở,
      * nên (vân tay, nội dung) chắc chắn là của cùng một file. */
     try { fd = fs.openSync(p, 'r'); } catch { forget(name); return def; }
-    const stat = fs.fstatSync(fd);
+    const before = fingerprint(fs.fstatSync(fd));
 
-    const print = fingerprint(stat);
     const hit = cache.get(name);
-    if (hit && sameFile(hit.print, print)) {
+    if (hit && sameFile(hit.print, before)) {
       cache.delete(name); cache.set(name, hit); // chạm vào để giữ hàng LRU
       return hit.value;
     }
 
-    const value = deepFreeze(JSON.parse(fs.readFileSync(fd, 'utf8')));
-    remember(name, { print, value, bytes: stat.size });
+    /* ‼ GHI ĐÈ TẠI CHỖ (bot audit đợt 3, đúng): mở fd chặn được cú `rename`, nhưng
+     * KHÔNG chặn được ai đó ghi thẳng vào CHÍNH inode đang mở giữa `fstat` và `read`.
+     * Khi đó nội dung là bản MỚI mà vân tay/dung lượng lại là bản CŨ ⇒ ghi sổ sai cỡ,
+     * lọt qua trần bộ nhớ. Nên: đọc xong `fstat` LẠI. Vân tay đổi ⇒ file còn đang bị
+     * ghi ⇒ đọc lại. Thử vài lượt vẫn không yên thì TRẢ SỐ ĐÚNG NHƯNG KHÔNG NHỚ —
+     * thà chậm còn hơn nhớ một bản không biết mình là ai. */
+    const raw = fs.readFileSync(fd, 'utf8');
+    const after = fingerprint(fs.fstatSync(fd));
+    const value = deepFreeze(JSON.parse(raw));
+    if (sameFile(before, after)) {
+      remember(name, { print: after, value, bytes: after.size });
+    } else {
+      forget(name);
+      if (retriesLeft > 0) {
+        fs.closeSync(fd); fd = null;
+        return loadShared(name, def, retriesLeft - 1);
+      }
+      console.warn('[persist] file đang bị ghi liên tục — trả số đúng nhưng KHÔNG nhớ', { name });
+    }
     return value;
   } catch {
     forget(name);

@@ -1,3 +1,38 @@
+### 2026-08-11 02:00 (giờ VN) — 🔁 VÁ NỐT ĐUA GHI ĐÈ TẠI CHỖ + ghi nhận T07 ĐÃ ĐỨNG SỐ
+
+#### Kết quả quan trọng nhất: T07 đã đứng yên
+
+Bot chạy màn ALL kỳ 07.2026 **ba lượt liên tiếp** trên bản sao dữ liệu cô lập:
+
+| Lượt | Thời gian | Kết quả |
+|---|---|---|
+| 1 (dựng lạnh) | 49.638 ms | 2.091 dòng · 30.982.248.913đ · 21 NV · `unavailable=0` · `gap=0` |
+| 2 | **103 ms** | **y hệt, cùng một digest** |
+| 3 | **108 ms** | **y hệt, cùng một digest** |
+
+Đây chính là thứ CEO đòi ba ngày: **cùng một tổng, cùng một số dòng, mọi lượt.**
+
+#### Vá thêm: đua GHI ĐÈ TẠI CHỖ (bot audit đợt 3, đúng)
+
+Mở fd chặn được cú `rename`, **nhưng không chặn được ai ghi thẳng vào chính inode
+đang mở** giữa `fstat()` và `readFileSync()`. Khi đó nội dung là bản MỚI mà vân
+tay/dung lượng lại là bản CŨ ⇒ ghi sổ sai cỡ, **object lớn lọt qua trần** (bot tái
+hiện: đọc 10.008 byte mà chỉ hạch toán 9 byte dưới trần 200 byte).
+
+Vá: **`fstat` LẠI sau khi đọc**. Vân tay đổi ⇒ file đang bị ghi ⇒ đọc lại (tối đa 2
+lượt). Vẫn không yên thì **trả số ĐÚNG nhưng KHÔNG NHỚ** — thà chậm còn hơn nhớ một
+bản không biết mình là ai. Ca test ⑥ tái hiện đúng kịch bản bot mô tả (chen ngang
+`readFileSync` để ghi đè tại chỗ).
+
+#### Về "bảy nhóm blocker seal còn nguyên"
+Bot audit `52acfec`; **`a04499d` mới là bản vá chúng** (roster attestation chặt, chữ ký
+4 nguồn, tra dấu trước catalog, ghi xếp hàng, `0600`/`0700`, checksum, `SEAL_FORMAT`).
+`52acfec` chỉ đụng `persist.js` nên đúng là seal không đổi byte nào ở bản đó.
+
+#### Test
+`persistCache.test.js` **15/15** · `employeeCostClosedSeal.test.js` **11/11** ·
+`server` **1229/1236** — đúng 7 ca nền cũ.
+
 ### 2026-08-11 01:20 (giờ VN) — 🛡 SIẾT ĐÓNG DẤU: 5 điểm audit của bot, đúng cả 5
 
 Bot audit `59ee22d` nêu 6 điểm. Điểm 1 (hai blocker cache) **đã vá ở `52acfec`** mà bot

@@ -286,3 +286,39 @@ test('readLocalSync dùng bản nhớ, và KHÔNG giao mảng dùng chung ra ngo
   assert.equal(b.payload.columns.length, 1, 'và còn nguyên cột');
   assert.equal(b.payload.rows[0].unit, 'DV1', 'và đúng thứ tự cũ');
 });
+
+// ⑥ Bot audit đợt 3: mở fd chặn được `rename`, nhưng KHÔNG chặn ghi đè TẠI CHỖ vào
+// chính inode đang mở. Khi đó nội dung là bản mới mà vân tay/dung lượng là bản cũ ⇒
+// object lớn lọt qua trần. Tái hiện đúng bằng cách ghi đè giữa fstat và read.
+test('⑥ ghi đè TẠI CHỖ cùng inode: không được hạch toán cỡ file cũ', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir, { APP_REPORT_PERSIST_CACHE_BYTES: '200' });
+  const p = path.join(dir, 'k.json');
+
+  fs.writeFileSync(p, JSON.stringify({ v: 1 })); // nhỏ xíu
+  const nhoBe = fs.statSync(p).size;
+
+  // Chen ngang: `readFileSync` bị thay để ghi đè TẠI CHỖ ngay trước khi đọc thật.
+  const goc = fs.readFileSync;
+  let chen = true;
+  fs.readFileSync = function patched(target, ...rest) {
+    if (chen && typeof target === 'number') {
+      chen = false;
+      fs.writeFileSync(p, JSON.stringify({ v: 'to'.repeat(5000) })); // cùng inode
+    }
+    return goc.call(fs, target, ...rest);
+  };
+  let value;
+  try { value = persist.loadShared('k', null); } finally { fs.readFileSync = goc; }
+
+  const thatSu = fs.statSync(p).size;
+  assert.ok(thatSu > nhoBe * 100, 'ca này chỉ có nghĩa khi file mới to hơn hẳn');
+  assert.match(String(value.v), /toto/, 'phải trả đúng NỘI DUNG đã đọc');
+
+  const stats = persist.cacheStats();
+  assert.ok(stats.bytes <= stats.maxBytes,
+    `không được hạch toán theo cỡ cũ để lọt trần (ghi sổ ${stats.bytes}, trần ${stats.maxBytes})`);
+  if (stats.entries > 0) {
+    assert.equal(stats.bytes, thatSu, 'đã nhớ thì phải nhớ ĐÚNG cỡ file thật');
+  }
+});
