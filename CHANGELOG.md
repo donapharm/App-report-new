@@ -1,3 +1,26 @@
+### 2026-08-11 00:30 (giờ VN) — 🧊 SIẾT BẢN NHỚ ĐỢT 2: đóng băng sâu + đọc trên fd đã mở
+
+Bot audit đợt 2 chặn `141a36a` với 2 lỗi. **Đúng cả hai**, và điểm ④ là chỗ tôi **biết
+`slice()` chỉ chép nông mà vẫn cho qua** — lần thứ hai trong ngày tôi để một rủi ro đã
+biết trôi vào ứng viên.
+
+| # | Bot nêu | Đã sửa |
+|---|---|---|
+| ④ | `slice()` chỉ tách MẢNG; đối tượng dòng/cột vẫn dùng chung ⇒ sửa `rows[0].c41` là bẩn kho trong bộ nhớ cả tiến trình trong khi đĩa còn nguyên | **Đóng băng sâu** bản dùng chung ngay lúc nạp. Sửa vào là **ném lỗi** (mã strict) hoặc không ăn thua (sloppy) — đằng nào kho cũng không bẩn được. Đo: **~87 ms cho 9,3 MB**, trả **một lần mỗi khi file đổi**, không phải mỗi lượt đọc |
+| ⑤ | Đua giữa `statSync()` và `readFileSync()`: `rename` chen vào giữa ⇒ vân tay file cũ + nội dung file mới ⇒ sai dấu, sai dung lượng, vượt trần | **Mở fd một lần** rồi `fstatSync(fd)` + `readFileSync(fd)`. `rename` không đổi được inode đang mở ⇒ (vân tay, nội dung) chắc chắn cùng một file |
+
+`load()` **vẫn giữ nguyên** ngữ nghĩa gốc và **không đóng băng** — mọi chỗ đang dùng
+không đổi gì, kể cả lối `đọc → sửa → ghi`.
+
+#### Test
+`persistCache.test.js` **14/14 đạt**, gồm **cả năm ca bot tái hiện** qua hai đợt audit:
+① cùng cỡ + trả lại `mtime` · ② sửa mà không ghi · ③ trần đếm sai đơn vị ·
+④ sửa field/field lồng sâu · ⑤ vân tay và nội dung phải cùng một file.
+`server` **1225/1232** — đúng 7 ca nền cũ (6 ca thiếu `pdfinfo`, 1 ca VP018 vắng trong
+`seed.js`; trên dữ liệu PROD bot đã đo 3/3 đạt).
+
+Benchmark bot đo trên kho thật 17,9 MB ở bản trước: **21 lượt = 562,9 ms**.
+
 ### 2026-08-10 23:55 (giờ VN) — 🔐 DỨT ĐIỂM T07: đóng dấu chi phí kỳ đã khoá sổ
 
 CEO: *"tao cần mày fix cho dữ liệu T07.2026 không nhảy loạn xạ nữa. Mấy ngày rồi mà

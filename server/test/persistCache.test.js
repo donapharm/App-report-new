@@ -128,7 +128,9 @@ test('save() xoá bản nhớ — người gọi còn giữ tham chiếu cũng k
   persist.save('kho', { n: 1 });
   const shared = persist.loadShared('kho', null);
   persist.save('kho', { n: 2 });
-  shared.n = 999; // người gọi cũ nghịch vào bản đã cũ
+  // Hai lớp chặn chồng nhau: (a) bản dùng chung đã đóng băng nên nghịch vào là NÉM
+  // LỖI ngay, (b) `save()` đã quên bản nhớ nên lượt sau đọc lại từ đĩa.
+  assert.throws(() => { shared.n = 999; }, TypeError, 'sửa bản dùng chung phải ném lỗi');
   assert.deepEqual(persist.loadShared('kho', null), { n: 2 }, 'phải đọc lại từ đĩa');
 });
 
@@ -155,6 +157,71 @@ test('vượt trần thì bỏ bản lâu không dùng nhất, và KHÔNG mất 
   assert.ok(stats.bytes <= stats.maxBytes, `giữ trong trần (${stats.bytes} ≤ ${stats.maxBytes})`);
   assert.ok(stats.entries < 4, 'phải có bản bị bỏ đi');
   assert.deepEqual(persist.loadShared('a', null), chunk(1200), 'bỏ khỏi bộ nhớ ≠ mất dữ liệu');
+});
+
+/* ── HAI CA AUDIT ĐỢT 2 CỦA BOT ──────────────────────────────────────────── */
+
+// ④ `slice()` chỉ tách MẢNG; đối tượng từng dòng vẫn dùng chung ⇒ sửa field là bẩn kho.
+test('④ sửa FIELD trong dòng/cột dùng chung KHÔNG được nhiễm sang lượt đọc sau', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir);
+  persist.save('rates', {
+    '2026-07': { employees: { DN001: { columns: [{ key: 'c41', label: 'CP đặt hàng' }], rows: [{ unit: 'DV1', c41: 0.012, sâu: { hơn: 1 } }] } } },
+  });
+
+  const a = persist.loadShared('rates', null);
+  const dòng = a['2026-07'].employees.DN001.rows[0];
+  try { dòng.c41 = 999; } catch { /* strict mode ném lỗi — càng tốt */ }
+  try { dòng.sâu.hơn = 999; } catch { /* nested cũng phải chặn */ }
+  try { a['2026-07'].employees.DN001.columns[0].label = 'BỊ SỬA'; } catch { /* như trên */ }
+
+  const b = persist.loadShared('rates', null);
+  assert.equal(b['2026-07'].employees.DN001.rows[0].c41, 0.012, 'tỷ lệ tiền không được đổi');
+  assert.equal(b['2026-07'].employees.DN001.rows[0].sâu.hơn, 1, 'field lồng sâu cũng không được đổi');
+  assert.equal(b['2026-07'].employees.DN001.columns[0].label, 'CP đặt hàng', 'nhãn cột không được đổi');
+
+  // Và đọc lại từ ĐĨA phải khớp — bản nhớ chưa từng lệch với file.
+  persist.invalidate();
+  assert.equal(persist.loadShared('rates', null)['2026-07'].employees.DN001.rows[0].c41, 0.012);
+});
+
+test('④b bản dùng chung đã ĐÓNG BĂNG SÂU, nhưng load() thường thì không', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir);
+  persist.save('kho', { a: { b: [{ c: 1 }] } });
+  const chung = persist.loadShared('kho', null);
+  assert.equal(Object.isFrozen(chung), true);
+  assert.equal(Object.isFrozen(chung.a.b), true);
+  assert.equal(Object.isFrozen(chung.a.b[0]), true, 'phải băng tới tận dòng lá');
+  // Cửa cũ giữ nguyên ngữ nghĩa: sửa thoải mái, không ảnh hưởng ai.
+  const riêng = persist.load('kho', null);
+  assert.equal(Object.isFrozen(riêng), false);
+  riêng.a.b[0].c = 999;
+  assert.equal(persist.load('kho', null).a.b[0].c, 1);
+});
+
+// ⑤ Đua giữa `stat` và `read`: rename chen vào giữa ⇒ vân tay của file cũ, nội dung file mới.
+test('⑤ vân tay và nội dung phải lấy từ CÙNG MỘT file (đọc trên fd đã mở)', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir);
+  const src = fs.readFileSync(require.resolve('../src/persist'), 'utf8');
+  const shared = src.slice(src.indexOf('function loadShared'), src.indexOf('function save'));
+  assert.match(shared, /fs\.openSync\(/, 'phải mở fd một lần');
+  assert.match(shared, /fs\.fstatSync\(fd\)/, 'vân tay phải lấy từ fd đó');
+  assert.match(shared, /fs\.readFileSync\(fd,/, 'và nội dung cũng đọc từ chính fd đó');
+  assert.doesNotMatch(shared, /fs\.statSync\(/, 'không được stat theo đường dẫn — đó là chỗ hở');
+
+  // Kiểm chức năng: dung lượng ghi sổ phải khớp đúng file vừa đọc, kể cả sau khi
+  // tráo file bằng rename (đúng thao tác mà save() dùng).
+  fs.writeFileSync(path.join(dir, 'k.json'), JSON.stringify({ v: 'nhỏ' }));
+  persist.loadShared('k', null);
+  const tmp = path.join(dir, 'k.json.tmp');
+  fs.writeFileSync(tmp, JSON.stringify({ v: 'to hơn hẳn'.repeat(500) }));
+  fs.renameSync(tmp, path.join(dir, 'k.json'));
+  const giaTri = persist.loadShared('k', null);
+  assert.match(giaTri.v, /to hơn hẳn/, 'phải đọc được nội dung mới');
+  assert.equal(persist.cacheStats().bytes, fs.statSync(path.join(dir, 'k.json')).size,
+    'dung lượng ghi sổ phải đúng file mới, không phải file nhỏ cũ');
 });
 
 /* ── ĐO THẬT ─────────────────────────────────────────────────────────────── */

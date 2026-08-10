@@ -90,16 +90,39 @@ function load(name, def) {
   }
 }
 
+/* ĐÓNG BĂNG SÂU bản dùng chung (bot audit đúng): `slice()` chỉ tách được MẢNG, còn
+ * ĐỐI TƯỢNG TỪNG DÒNG vẫn dùng chung — sửa `rows[0].c41` là bẩn kho trong bộ nhớ của
+ * cả tiến trình trong khi file trên đĩa còn nguyên. Đóng băng xong thì sửa vào là
+ * ném lỗi (mã strict) hoặc không ăn thua (mã sloppy) — đằng nào kho cũng KHÔNG bẩn được.
+ * Giá: đo trên cấu trúc cỡ thật ~87 ms cho 9,3 MB, và chỉ trả MỘT LẦN mỗi khi file
+ * đổi, không phải mỗi lượt đọc. So với 25 giây thì không đáng kể. */
+function deepFreeze(node) {
+  if (!node || typeof node !== 'object' || Object.isFrozen(node)) return node;
+  Object.freeze(node);
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i += 1) deepFreeze(node[i]);
+  } else {
+    for (const key of Object.keys(node)) deepFreeze(node[key]);
+  }
+  return node;
+}
+
 /**
- * CÓ NHỚ. Trả về đối tượng DÙNG CHUNG — người gọi TUYỆT ĐỐI KHÔNG được sửa.
+ * CÓ NHỚ. Trả về đối tượng DÙNG CHUNG, ĐÃ ĐÓNG BĂNG — không ai sửa được.
  * File đổi (nội dung, cỡ, hay bị tráo) ⇒ tự đọc lại. Hỏng/bị xoá ⇒ quên ngay,
  * không bao giờ phục vụ số cũ.
  */
 function loadShared(name, def) {
+  let fd = null;
   try {
     const p = file(name);
-    let stat;
-    try { stat = fs.statSync(p); } catch { forget(name); return def; }
+    /* ‼ MỞ MỘT LẦN rồi `fstat` + đọc TRÊN CHÍNH fd ĐÓ (bot audit đúng): nếu `stat`
+     * rồi mới `readFileSync(đường dẫn)` thì một cú `rename` chen vào giữa sẽ cho
+     * vân tay của file CŨ nhưng nội dung của file MỚI — vừa sai dấu, vừa tính sai
+     * dung lượng cho trần bộ nhớ. Đã mở fd thì `rename` không đổi được inode đang mở,
+     * nên (vân tay, nội dung) chắc chắn là của cùng một file. */
+    try { fd = fs.openSync(p, 'r'); } catch { forget(name); return def; }
+    const stat = fs.fstatSync(fd);
 
     const print = fingerprint(stat);
     const hit = cache.get(name);
@@ -108,12 +131,14 @@ function loadShared(name, def) {
       return hit.value;
     }
 
-    const value = JSON.parse(fs.readFileSync(p, 'utf8'));
+    const value = deepFreeze(JSON.parse(fs.readFileSync(fd, 'utf8')));
     remember(name, { print, value, bytes: stat.size });
     return value;
   } catch {
     forget(name);
     return def;
+  } finally {
+    if (fd !== null) { try { fs.closeSync(fd); } catch { /* đóng hụt cũng không sao */ } }
   }
 }
 
