@@ -1,3 +1,44 @@
+### 2026-08-11 09:30 (giờ VN) — 🔑 MỘT REQUEST, HAI CON DẤU CÓ CHỦ ĐÍCH (bot audit đợt 7)
+
+Ba điểm bot nêu **cùng một gốc**: vân tay nguồn bị **chụp ở nhiều thời điểm khác nhau**
+(khoá base, khoá view, khoá dấu, self-heal) ⇒ **đời A lọt vào khoá đời B**.
+
+| # | Bot nêu | Đã sửa |
+|---|---|---|
+| 1 | Khoá `base` và khoá `view` mỗi cái tự gọi `rateStoreFingerprint()` ⇒ kho đổi giữa hai lời gọi ⇒ số đời A cất dưới khoá hiển thị đời B | `employeeCostAllCacheKey(req, phase, **vanTay**)` — vân tay **truyền vào**, hàm **cấm tự lấy lại** |
+| 2 | `sealKey` chụp một lần lúc vào; lượt 1 trượt A→B, lượt 2 dựng đúng B **vẫn ghi bằng khoá A** ⇒ nguồn quay lại A thì app phục vụ số của B | Đóng dấu bằng `khoaDauTheoVanTay(truoc)` — **khoá của chính đời vừa được xác nhận đầu–cuối** |
+| 3 | Self-heal gọi thẳng `buildMerged()`, chỉ kiểm `employeeCostDataSignature` ⇒ bản trộn đời được cache dưới cả `base` lẫn `view` | Self-heal đi qua **đúng cổng kiểm** như đường thường, và kiểm **lần cuối ngay trước khi publish** |
+
+#### Chỗ tôi suýt làm hỏng, và ca test đã cứu
+
+Bản đầu tôi gộp tất cả vào **một con dấu duy nhất chụp TRƯỚC catalog**. Sai: khi
+`catalogManagement.getSnapshot` làm mới LKG thì **chữ ký nguồn đổi — đó là hành vi BÌNH
+THƯỜNG**, đã ghi sẵn trong code lẫn trong ca `warm-cache` (*"Warm must derive its key
+after this stabilization step"*). Cổng kiểm của tôi liền báo "lệch đời" trong tình huống
+hoàn toàn lành ⇒ **chặn luôn đường warm** ⇒ bộ nhớ đệm không bao giờ trúng ⇒ quay về
+đúng cảnh dựng lại từ đầu mỗi lần mở màn, tức là **bệnh vừa mất ba ngày để chữa**.
+
+Ca `warm-cache` bắt được ngay. **Lỗi ở cổng kiểm của tôi, không ở bài kiểm.**
+
+Nay **hai con dấu, có chủ đích**:
+- `vanTaySom` — chụp **trước** catalog, **chỉ** cho đường tắt tra dấu (cứu 24 giây sau
+  restart). Lạc hậu thì tra dấu **trượt** ⇒ đi tiếp đường đầy đủ ⇒ **chỉ chậm, không sai**.
+- `vanTayLucVao` — chụp **sau khi catalog đã ổn định**. Dùng cho **mọi khoá cache, cổng
+  kiểm lệch đời, và khoá đóng dấu**.
+
+#### Hai điều tự rút ra
+1. `salary_advance_snapshot` và `employee_cost_rate_snapshot` **là sản phẩm phụ do chính
+   lượt dựng ghi ra**, không phải đầu vào độc lập. Đưa vào vân tay là **mỗi lượt tự huỷ
+   khoá của mình**. Vân tay nay chỉ gồm **đầu vào thật**: `cost_rates_local`,
+   `payment_ledger`. **Việc còn nợ, không giấu:** nguồn lương đổi thật thì phải làm mới
+   bằng **xoá memo tường minh** ở đường ghi.
+2. Hai bài kiểm của tôi **bắt nhầm chữ nằm trong CHÚ THÍCH**. Test phải soi **code**,
+   không soi văn xuôi — đã lọc bỏ chú thích trước khi soi.
+
+#### Test
+`employeeCostClosedSeal` **22/22** · `persistCache` **15/15** · `server` **1240/1247**
+— đúng 7 ca nền cũ, **không còn ca nào do tôi làm vỡ**. Build đạt.
+
 ### 2026-08-11 08:00 (giờ VN) — 🧯 BỊT HAI ĐƯỜNG HIỂN THỊ SỐ SAI (bot audit đợt 6)
 
 Bot xác nhận **ba đường sai số đợt trước đã sạch**, và trả lời câu hỏi một dòng: **CÒN

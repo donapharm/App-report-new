@@ -206,11 +206,32 @@ function fileFingerprint(dir, fileName) {
  * Bot audit đúng: thiếu `salary_advance_snapshot` và `payment_ledger` thì hai kho đó
  * đổi mà khoá dấu KHÔNG đổi ⇒ app phục vụ lại số thanh toán CŨ. Đã tái hiện được. */
 const RATE_STORE_FILES = Object.freeze([
-  'cost_rates_local',            // tỷ lệ % chủ động (CEO bấm Đồng bộ)
-  'employee_cost_rate_snapshot', // snapshot bị động / fallback
-  'salary_advance_snapshot',     // số ứng lần 1
-  'payment_ledger',              // sổ thanh toán
+  'cost_rates_local', // tỷ lệ % chủ động — CEO bấm "Đồng bộ % chi phí"
+  'payment_ledger',   // sổ thanh toán
 ]);
+
+/* ‼ VÌ SAO CHỈ CÓ HAI FILE — VÀ ĐÂY LÀ MỘT BÀI HỌC ĐẮT
+ * Vân tay này phải gồm **ĐẦU VÀO ĐỘC LẬP**, không được gồm **SẢN PHẨM PHỤ do chính
+ * lượt dựng ghi ra**. `salary_advance_snapshot` và `employee_cost_rate_snapshot` đều
+ * do đường dựng tự ghi (`salaryAdvance` gọi `snapshot.write`). Đưa chúng vào thì mỗi
+ * lượt dựng **tự làm hỏng khoá của chính mình** ⇒ bộ nhớ đệm không bao giờ trúng, dấu
+ * không bao giờ đọc lại ⇒ quay về đúng cảnh dựng lại từ đầu mỗi lần mở màn, tức là
+ * bệnh vừa mất ba ngày để chữa. Ca `warm-cache` đỏ ngay khi tôi thêm chúng vào — may
+ * mà có test đó.
+ *
+ * VIỆC CÒN NỢ (nói thẳng, không giấu): "nguồn lương/snapshot đổi thật thì phải làm
+ * mới" cần giải bằng cho đường ghi **xoá memo tường minh**, không phải bằng vân tay file.
+ *
+ * VÌ SAO KHÔNG CÓ `salary_advance_snapshot` Ở ĐÂY
+ * Nó là **sản phẩm PHỤ do chính lượt dựng này ghi ra**, không phải đầu vào độc lập.
+ * Đưa nó vào vân tay thì mỗi lượt dựng lại tự làm hỏng khoá của chính mình ⇒ bộ nhớ
+ * đệm KHÔNG BAO GIỜ trúng, dấu không bao giờ đọc lại được, và màn hình quay về cảnh
+ * dựng lại từ đầu mỗi lần mở (đúng thứ vừa mất ba ngày để chữa). Đã đo: ca warm-cache
+ * hỏng ngay khi thêm nó vào.
+ * Việc "số lương ứng đổi ở NGUỒN thì phải làm mới" cần được giải bằng cách cho đường
+ * ghi salary **xoá memo tường minh**, không phải bằng vân tay file. Ghi lại đây làm
+ * việc còn nợ, không giấu. */
+const SALARY_SNAPSHOT_FILE = 'salary_advance_snapshot';
 
 function rateStoreFingerprint(store = persist, files = RATE_STORE_FILES) {
   const dir = (store && store.DIR) || persist.DIR;
@@ -233,5 +254,5 @@ function clear({ store = persist } = {}) {
 module.exports = {
   FILE, MAX_SEALS, SEAL_FORMAT,
   keyFor, isSealable, read, write, sealedAt, clear, checksumOf,
-  hardenPermissions, rateStoreFingerprint, RATE_STORE_FILES,
+  hardenPermissions, rateStoreFingerprint, RATE_STORE_FILES, SALARY_SNAPSHOT_FILE,
 };

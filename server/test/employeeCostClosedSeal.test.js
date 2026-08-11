@@ -123,15 +123,16 @@ test('routes.js phải nối đúng: chỉ đóng dấu bản KHÔNG degraded', 
   assert.match(src, /closedSeal\.keyFor\(/);
   assert.match(src, /closedSeal\.isSealable\(built, roster, sealEvidenceReports\)/,
     'điều kiện đóng dấu PHẢI chặt: đủ cả đội và mọi NV ok đúng nghĩa');
-  assert.match(src, /await closedSeal\.write\(sealKey, built, \{ complete: true \}\)/);
+  assert.match(src, /await closedSeal\.write\(khoaDung, built, \{ complete: true \}\)/,
+    'ghi dấu bằng khoá của ĐỜI VỪA DỰNG, không phải đời lúc vào request');
   // Tra dấu phải nằm TRƯỚC khối catalog nặng, nếu không thì có dấu vẫn mất 29,8 giây.
   assert.ok(src.indexOf('const sealedEarly = closedSeal.read(sealKey)') < src.indexOf('const sharedCatalogRowsByPeriod'),
     'tra dấu phải đặt TRƯỚC khi dựng catalog');
-  assert.match(src, /rates: closedSeal\.rateStoreFingerprint\(\)/, 'chữ ký phải gồm kho tỷ lệ');
-  assert.match(src, /formula: employeeBonus\.FORMULA_VERSION/, 'và số hiệu công thức');
-  assert.match(src, /app: APP_BUILD_VERSION/, 'và phiên bản app');
-  assert.match(src, /memoGet\(employeeCostAllCacheKey\(req, 'base'\), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMergedSealed,/,
-    'đường bảng UI phải đi qua bản có đóng dấu');
+  assert.match(src, /closedSeal\.rateStoreFingerprint\(\)/, 'vân tay phải gồm bốn kho tiền');
+  assert.match(src, /employeeBonus\.FORMULA_VERSION/, 'và số hiệu công thức');
+  assert.match(src, /APP_BUILD_VERSION/, 'và phiên bản app');
+  assert.match(src, /memoGet\(employeeCostAllCacheKey\(req, 'base', vanTayLucVao\), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMergedSealed,/,
+    'đường bảng UI phải đi qua bản có đóng dấu, dùng đúng con dấu của request');
 });
 
 /* ── DỰNG DỮ LIỆU BẰNG CHÍNH HÀM GỘP THẬT ────────────────────────────────────
@@ -259,10 +260,15 @@ test('⑦ báo cáo THIẾU sourceOutcome ⇒ KHÔNG được coi là ok', () =>
 });
 
 // (2) Kho lương/thanh toán đổi mà khoá dấu không đổi ⇒ phục vụ lại số cũ.
-test('⑧ chữ ký phải phủ ĐỦ mọi kho: tỷ lệ, snapshot bị động, lương ứng, sổ thanh toán', () => {
+test('⑧ vân tay phủ các kho ĐẦU VÀO; salary snapshot cố ý loại trừ, có lý do', () => {
   const { seal, dir } = freshSeal();
-  assert.deepEqual([...seal.RATE_STORE_FILES],
-    ['cost_rates_local', 'employee_cost_rate_snapshot', 'salary_advance_snapshot', 'payment_ledger']);
+  assert.deepEqual([...seal.RATE_STORE_FILES], ['cost_rates_local', 'payment_ledger']);
+  /* `salary_advance_snapshot` CỐ Ý không nằm trong vân tay: nó là sản phẩm phụ do
+   * chính lượt dựng ghi ra, đưa vào là mỗi lượt tự huỷ khoá của mình ⇒ cache không
+   * bao giờ trúng. Việc làm mới khi nguồn lương đổi phải giải bằng xoá memo tường
+   * minh — ghi nhận là việc còn nợ, không giấu. */
+  assert.equal(seal.SALARY_SNAPSHOT_FILE, 'salary_advance_snapshot');
+  assert.ok(!seal.RATE_STORE_FILES.includes(seal.SALARY_SNAPSHOT_FILE));
 
   const van = () => seal.rateStoreFingerprint({ DIR: dir });
   const truoc = van();
@@ -303,11 +309,12 @@ test('⑨ routes phải kiểm lại đời dữ liệu NGAY TRƯỚC khi đóng
 // (1) Bộ nhớ đệm base giữ tới 6 GIỜ mà khoá không phủ bốn kho tiền ⇒ phục vụ số cũ.
 test('⑩ khoá bộ nhớ đệm ALL phải phủ vân tay BỐN KHO TIỀN', () => {
   const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
-  const ham = src.slice(src.indexOf('function employeeCostAllCacheKey'), src.indexOf('function monthInputForKy'));
-  assert.match(ham, /kho=\$\{closedSeal\.rateStoreFingerprint\(\)\}/,
-    'khoá phải đổi khi kho tỷ lệ / snapshot / lương ứng / sổ thanh toán đổi');
-  assert.ok(ham.indexOf('rateStoreFingerprint') < ham.indexOf('vn-day'),
-    'vân tay kho nằm trong chính khoá, không phải chú thích rời');
+  const batDau = src.indexOf('function employeeCostAllCacheKey');
+  const ham = src.slice(batDau, src.indexOf('\n}', batDau));
+  assert.match(ham, /kho=\$\{String\(vanTay \?\? ''\)\}/,
+    'khoá phải gắn vân tay kho, và vân tay đó là do NGƯỜI GỌI truyền vào');
+  assert.doesNotMatch(ham, /closedSeal\.rateStoreFingerprint\(\)/,
+    'hàm khoá TUYỆT ĐỐI không tự đi lấy vân tay lần nữa — đó là chỗ sinh ra lệch đời A/B');
 });
 
 // (2) Lệch đời thì TRƯỚC ĐÂY vẫn `return built` ⇒ bản trộn đời lên màn + vào cache
@@ -320,13 +327,67 @@ test('⑪ lệch đời ⇒ DỰNG LẠI, không trả bản trộn; cạn lư�
     'phải chụp vân tay TRƯỚC và SAU khi dựng');
   assert.match(khoi, /if \(truoc !== sau\) \{[\s\S]{0,220}?continue;/,
     'lệch đời ⇒ dựng lại, TUYỆT ĐỐI không return bản trộn');
-  assert.doesNotMatch(khoi, /nguồn đổi[\s\S]{0,200}?return built;/,
+  assert.doesNotMatch(khoi, /sealKeySauKhiDung/,
     'cấm quay lại lối cũ: chặn đóng dấu mà vẫn trả bản trộn');
   assert.match(khoi, /EMPLOYEE_COST_SOURCE_DRIFT/,
     'cạn lượt ⇒ ném lỗi rõ ràng để memo vứt entry, không cache bản trộn');
 
-  // Kiểm đời KHÔNG được phụ thuộc sealKey — kỳ đang mở cũng phải được bảo vệ.
-  const truocSeal = khoi.slice(0, khoi.indexOf('if (truoc !== sau)'));
-  assert.doesNotMatch(truocSeal, /sealKey/,
+  /* Kiểm đời KHÔNG được phụ thuộc `sealKey` — kỳ ĐANG MỞ (sealKey = null) cũng phải
+   * được bảo vệ, mà đó mới là kỳ CEO xem hằng ngày. Soi đúng đoạn từ lúc chụp vân tay
+   * đầu tới lúc quyết định, không lẫn phần tra dấu phía trên. */
+  const batDauVong = khoi.indexOf('for (let lan = 1');
+  const doanKiemDoi = khoi.slice(batDauVong, khoi.indexOf('const khoaDung =', batDauVong))
+    // Bỏ chú thích rồi mới soi: lần trước bài kiểm bắt nhầm chữ `sealKey` nằm trong
+    // một dòng giải thích, chứ code thì đúng. Test phải soi CODE, không soi văn xuôi.
+    .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  assert.ok(doanKiemDoi.includes('if (truoc !== sau)'), 'phải tìm được đoạn kiểm đời');
+  assert.doesNotMatch(doanKiemDoi, /sealKey/,
     'nhánh kiểm đời phải chạy cho MỌI kỳ, kể cả kỳ đang mở (sealKey = null)');
+});
+
+/* ── BA CA AUDIT ĐỢT 7: MỘT REQUEST CHỈ ĐƯỢC CHỤP VÂN TAY MỘT LẦN ────────── */
+
+test('⑫ cả request dùng CHUNG một con dấu đời — không ai tự lấy lại', () => {
+  const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const than = src.slice(src.indexOf('const vanTayLucVao = vanTayNguon();'), src.indexOf('function monthInputForKy'));
+
+  // base và view PHẢI dùng đúng một giá trị đã chụp, không gọi lại hàm chụp.
+  assert.match(than, /employeeCostAllCacheKey\(req, 'base', vanTayLucVao\)/);
+  assert.match(than, /employeeCostAllCacheKey\(req, 'view', vanTayLucVao\)/);
+  assert.doesNotMatch(than, /employeeCostAllCacheKey\(req, '(base|view)'\)/,
+    'cấm gọi khoá mà không truyền con dấu — đó là chỗ đời A lọt vào khoá đời B');
+  /* HAI con dấu là CÓ CHỦ ĐÍCH: `vanTaySom` (trước catalog) chỉ cho đường tắt tra dấu
+   * — trượt thì chỉ chậm; `vanTayLucVao` (sau khi catalog ổn định) cho mọi khoá cache,
+   * cổng kiểm và khoá đóng dấu. Nhập hai cái làm một là chặn nhầm cả đường warm. */
+  const src2 = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  assert.ok(src2.indexOf('const vanTaySom = vanTayNguon();') < src2.indexOf('const sharedCatalogRowsByPeriod'),
+    'con dấu SỚM phải chụp trước khối catalog');
+  assert.ok(src2.indexOf('const vanTayLucVao = vanTayNguon();') > src2.indexOf('const sharedCatalogRowsByPeriod'),
+    'con dấu ỔN ĐỊNH phải chụp SAU khi catalog đã ổn định');
+});
+
+// Lượt 1 trượt A→B, lượt 2 dựng đúng B — mà ghi bằng khoá A thì khi nguồn quay lại A,
+// app đọc dấu A và phục vụ số của đời B. Sai vĩnh viễn.
+test('⑬ đóng dấu phải dùng khoá của CHÍNH đời vừa dựng, không phải đời lúc vào', () => {
+  const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const vong = src.slice(src.indexOf('for (let lan = 1; lan <= SO_LAN_DUNG_TOI_DA'), src.indexOf('EMPLOYEE_COST_SOURCE_DRIFT'));
+  assert.match(vong, /const khoaDung = khoaDauTheoVanTay\(truoc\);/,
+    'khoá đóng dấu sinh từ `truoc` — con dấu vừa được xác nhận đầu–cuối');
+  assert.match(vong, /closedSeal\.write\(khoaDung, built, \{ complete: true \}\)/);
+  assert.doesNotMatch(vong, /closedSeal\.write\(sealKey,/,
+    'cấm ghi bằng sealKey chụp lúc vào request — đó là khoá của đời cũ');
+});
+
+test('⑭ self-heal phải qua ĐÚNG cổng kiểm bốn kho như đường thường', () => {
+  const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const khoi = src.slice(src.indexOf('if (paginate && prepareMemoReplace)'), src.indexOf('const buildMergedSealed'));
+  assert.match(khoi, /const vanTayTruocSelfHeal = vanTayLucVao;/,
+    'mốc so sánh phải là con dấu ĐÃ ỔN ĐỊNH sau catalog, không phải con dấu sớm');
+  assert.match(khoi, /const vanTaySauSelfHeal = vanTayNguon\(\);/, 'chụp lại sau khi dựng');
+  assert.match(khoi, /vanTayTruocSelfHeal !== vanTaySauSelfHeal[\s\S]{0,220}?throw/,
+    'lệch đời ⇒ ném lỗi, KHÔNG publish bản trộn');
+  assert.match(khoi, /vanTayNguon\(\) !== vanTayTruocSelfHeal[\s\S]{0,240}?throw/,
+    'và kiểm lại lần cuối ngay trước khi publish');
+  assert.match(khoi, /employeeCostAllCacheKey\(req, 'base', vanTayTruocSelfHeal\)/,
+    'cache dưới đúng con dấu đã kiểm');
 });

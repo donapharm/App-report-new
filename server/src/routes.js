@@ -308,7 +308,12 @@ function readCacheKey(req, routeName, extra = {}) {
   ].join(':');
 }
 
-function employeeCostAllCacheKey(req, phase) {
+/* ‼ `vanTay` PHẢI được truyền vào, KHÔNG tự lấy lại trong hàm (bot audit đợt 7, đúng).
+ * Trước đây khoá `base` và khoá `view` mỗi cái tự gọi `rateStoreFingerprint()` một lần;
+ * kho đổi giữa hai lời gọi ⇒ số đời A bị cất dưới khoá hiển thị đời B ⇒ nguồn đang là
+ * 222 mà màn hình vẫn 111. Nguyên tắc: **một request chụp vân tay ĐÚNG MỘT LẦN**, rồi
+ * mọi khoá, mọi dấu, mọi cổng kiểm đều dùng chung đúng con dấu đó. */
+function employeeCostAllCacheKey(req, phase, vanTay) {
   // ALL is admin-only and contains the same company-wide payload for every
   // authorized admin. Deliberately omit actor/role so CEO/admin sessions share
   // one cache, while keeping the fixed ADMIN_ALL scope and data signature.
@@ -323,7 +328,7 @@ function employeeCostAllCacheKey(req, phase) {
      * chỉ phủ doanh thu/catalog. Kho tỷ lệ %, snapshot bị động, lương ứng và sổ thanh
      * toán đổi mà khoá KHÔNG đổi ⇒ bộ nhớ đệm base (giữ tới 6 GIỜ) phục vụ lại SỐ CŨ.
      * Đường thật bot chỉ ra: `salaryAdvance` ghi snapshot ở nền nhưng không xoá memo ALL. */
-    `kho=${closedSeal.rateStoreFingerprint()}`,
+    `kho=${String(vanTay ?? '')}`,
     // Forecast phụ thuộc "hôm nay" theo GMT+7. Không để base cache 6 giờ từ
     // ngày hôm trước giữ sai elapsed/remaining working days sau nửa đêm.
     `vn-day=${employeeCost.vnToday()}`,
@@ -1171,18 +1176,36 @@ async function employeeCostAllPayload(req, {
      vừa đổi thì chữ ký lệch ⇒ TRẬT dấu ⇒ đi tiếp đường đầy đủ. Trật thì chỉ chậm,
      không bao giờ sai: fail-safe đúng chiều. */
   const rangeClosed = range.months.every((month) => employeeCost.isPeriodClosed(month, employeeCost.vnToday()));
-  const sealKey = closedSeal.keyFor({
+  /* MỘT CON DẤU ĐỜI DỮ LIỆU CHO CẢ REQUEST. Mọi khoá cache, mọi dấu, mọi cổng kiểm
+   * đều dùng đúng giá trị này — không ai được tự đi lấy lại lúc khác. */
+  const vanTayNguon = () => [
+    store.employeeCostDataSignature(),
+    closedSeal.rateStoreFingerprint(),
+    employeeBonus.FORMULA_VERSION,
+    APP_BUILD_VERSION,
+  ].join('|');
+  const khoaDauTheoVanTay = (vt) => closedSeal.keyFor({
     from: range.from, to: range.to, months: range.months,
     closed: rangeClosed,
-    // Đủ MỌI nguồn đã tham gia tính. Thiếu một cái là dấu sống sót qua lần nguồn đó
-    // đổi rồi phục vụ số cũ — đúng lỗi bot chỉ ra.
-    sources: {
-      data: store.employeeCostDataSignature(),
-      rates: closedSeal.rateStoreFingerprint(),
-      formula: employeeBonus.FORMULA_VERSION,
-      app: APP_BUILD_VERSION,
-    },
+    sources: { data: vt, rates: 'gop-trong-vantay', formula: employeeBonus.FORMULA_VERSION, app: APP_BUILD_VERSION },
   });
+  /* ‼ HAI CON DẤU, CÓ CHỦ ĐÍCH — đừng nhầm lẫn chúng.
+   *
+   *   `vanTaySom`    chụp TRƯỚC khối catalog. CHỈ dùng cho việc tra dấu sớm (đường tắt
+   *                  cứu 24 giây sau restart). Nếu nó lạc hậu thì tra dấu đơn giản là
+   *                  TRƯỢT ⇒ đi tiếp đường đầy đủ ⇒ chỉ chậm, không bao giờ sai.
+   *
+   *   `vanTayOnDinh` chụp SAU khi catalog đã ổn định. Dùng cho MỌI khoá cache, cổng
+   *                  kiểm lệch đời, và khoá đóng dấu.
+   *
+   * Vì sao phải tách: `catalogManagement.getSnapshot` khi làm mới LKG sẽ **đổi chữ ký
+   * nguồn** — đó là hành vi BÌNH THƯỜNG, đã ghi sẵn trong code lẫn trong test warm-cache
+   * ("Warm must derive its key after this stabilization step"). Bản trước tôi chụp một
+   * dấu duy nhất TRƯỚC catalog rồi đem so đầu–cuối ⇒ cổng kiểm báo "lệch đời" trong
+   * tình huống hoàn toàn lành ⇒ chặn luôn cả đường warm, cache không bao giờ trúng.
+   * Chính ca warm-cache bắt được. Lỗi ở cổng kiểm của tôi, không ở bài kiểm. */
+  const vanTaySom = vanTayNguon();
+  const sealKey = khoaDauTheoVanTay(vanTaySom);
   if (sealKey && paginate) {
     const sealedEarly = closedSeal.read(sealKey);
     if (sealedEarly) {
@@ -1194,7 +1217,7 @@ async function employeeCostAllPayload(req, {
         .concat(range.months)) {
         Promise.resolve().then(() => canonicalAssignmentSnapshot(period)).catch(() => {});
       }
-      return memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
+      return memoGet(employeeCostAllCacheKey(req, 'view', vanTaySom), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
         employeeCostTable.transformReport(sealedEarly, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
       ));
     }
@@ -1220,6 +1243,8 @@ async function employeeCostAllPayload(req, {
       console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
     }
   }));
+  // Catalog đã ổn định ở đây ⇒ mới chốt con dấu dùng cho khoá cache/cổng kiểm/đóng dấu.
+  const vanTayLucVao = vanTayNguon();
   const buildDataSignature = store.employeeCostDataSignature();
   if (dataSignatureSink && typeof dataSignatureSink === 'object') dataSignatureSink.value = buildDataSignature;
   if (expectedDataSignature && buildDataSignature !== expectedDataSignature) {
@@ -1410,13 +1435,30 @@ async function employeeCostAllPayload(req, {
   // Self-heal dựng TÁCH khỏi memo cũ. Chỉ sau khi build hoàn tất + generation còn
   // nguyên mới trả closure commit đồng bộ để publish bản lành.
   if (paginate && prepareMemoReplace) {
+    /* ‼ SELF-HEAL PHẢI QUA ĐÚNG CỔNG KIỂM NHƯ ĐƯỜNG THƯỜNG (bot audit đợt 7, đúng):
+     * trước đây nhánh này gọi thẳng `buildMerged()` và chỉ so `employeeCostDataSignature`,
+     * bỏ qua ba kho tiền còn lại ⇒ bản TRỘN ĐỜI được cache dưới cả `base` lẫn `view`. */
+    /* Mốc so sánh phải là con dấu ĐÃ ỔN ĐỊNH (sau catalog), không phải con dấu sớm. */
+    const vanTayTruocSelfHeal = vanTayLucVao;
     const merged = await buildMerged();
+    const vanTaySauSelfHeal = vanTayNguon();
+    if (vanTayTruocSelfHeal !== vanTaySauSelfHeal) {
+      throw Object.assign(new Error('Nguồn đổi giữa lúc self-heal dựng — không publish bản trộn đời.'), {
+        code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
+      });
+    }
     const transformed = employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }));
-    const baseKey = employeeCostAllCacheKey(req, 'base');
-    const viewKey = employeeCostAllCacheKey(req, 'view');
+    const baseKey = employeeCostAllCacheKey(req, 'base', vanTayTruocSelfHeal);
+    const viewKey = employeeCostAllCacheKey(req, 'view', vanTayTruocSelfHeal);
     return {
       payload: transformed,
       commit: () => {
+        // Kiểm lại lần cuối NGAY TRƯỚC KHI PUBLISH: đủ bốn kho, không chỉ doanh thu.
+        if (vanTayNguon() !== vanTayTruocSelfHeal) {
+          throw Object.assign(new Error('Nguồn đổi trước lúc publish self-heal — huỷ.'), {
+            code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
+          });
+        }
         if (expectedDataSignature && store.employeeCostDataSignature() !== expectedDataSignature) {
           throw Object.assign(new Error('Nguồn Employee Cost đổi generation trước publish.'), {
             code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
@@ -1463,12 +1505,16 @@ async function employeeCostAllPayload(req, {
         console.warn('[employee-cost] nguồn đổi giữa lúc dựng — BỎ bản trộn đời, dựng lại', { lan });
         continue;
       }
-      // Chặt hơn `employeeCostAllDegraded`: đòi ĐỦ CẢ ĐỘI và MỌI NV `ok` đúng nghĩa —
-      // không nhận `ok_stale_rates` (đóng băng số tạm là đóng băng cái sai).
-      if (sealKey && closedSeal.isSealable(built, roster, sealEvidenceReports)) {
+      /* ‼ ĐÓNG DẤU BẰNG KHOÁ CỦA CHÍNH ĐỜI VỪA DỰNG (bot audit đợt 7, đúng).
+       * `sealKey` chụp lúc vào request là đời A. Nếu lượt 1 trượt A→B rồi lượt 2 dựng
+       * đúng đời B, mà vẫn ghi bằng khoá A thì: nguồn quay lại A ⇒ app đọc dấu A ⇒
+       * phục vụ số của đời B. Số sai, và sai vĩnh viễn. Khoá phải sinh từ `truoc` —
+       * đúng con dấu vừa được xác nhận đầu–cuối. */
+      const khoaDung = khoaDauTheoVanTay(truoc);
+      if (khoaDung && closedSeal.isSealable(built, roster, sealEvidenceReports)) {
         try {
-          await closedSeal.write(sealKey, built, { complete: true });
-          console.info('[employee-cost] đã đóng dấu kỳ khoá sổ', { key: sealKey });
+          await closedSeal.write(khoaDung, built, { complete: true });
+          console.info('[employee-cost] đã đóng dấu kỳ khoá sổ', { key: khoaDung, lan });
         } catch (error) {
           console.warn('[employee-cost] đóng dấu thất bại', { message: error?.message });
         }
@@ -1489,10 +1535,10 @@ async function employeeCostAllPayload(req, {
     return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: false, allEmployees: true }));
   }
   // Giữ 6 giờ chỉ khi bản gộp SẠCH; có NV lỗi nguồn thì chỉ giữ 2 phút.
-  const merged = memoGet(employeeCostAllCacheKey(req, 'base'), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMergedSealed,
+  const merged = memoGet(employeeCostAllCacheKey(req, 'base', vanTayLucVao), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMergedSealed,
     (value) => (employeeCostAllDegraded(value) ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS : EMPLOYEE_COST_ALL_BASE_TTL_MS),
     { staleMs: EMPLOYEE_COST_ALL_STALE_MS });
-  return memoGet(employeeCostAllCacheKey(req, 'view'), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
+  return memoGet(employeeCostAllCacheKey(req, 'view', vanTayLucVao), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
     employeeCostTable.transformReport(await merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
   ));
 }

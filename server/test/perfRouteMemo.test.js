@@ -210,8 +210,8 @@ test('all requested P0 routes are memoized after auth and cache keeps private/no
     assert.match(source, new RegExp(`router\\.get\\('${escaped}', auth\\.requireAuth, memoJson\\('${name}'`));
   }
   assert.match(source, /function employeeCostAllCacheKey[\s\S]*?'ADMIN_ALL'/);
-  assert.match(source, /employeeCostAllCacheKey\(req, 'base'\)[\s\S]*?EMPLOYEE_COST_ALL_BASE_TTL_MS/);
-  assert.match(source, /employeeCostAllCacheKey\(req, 'view'\)[\s\S]*?EMPLOYEE_COST_ALL_VIEW_TTL_MS/);
+  assert.match(source, /employeeCostAllCacheKey\(req, 'base', vanTayLucVao\)[\s\S]*?EMPLOYEE_COST_ALL_BASE_TTL_MS/);
+  assert.match(source, /employeeCostAllCacheKey\(req, 'view', vanTayLucVao\)[\s\S]*?EMPLOYEE_COST_ALL_VIEW_TTL_MS/);
   assert.match(source, /revenueRefresh\.onMaterialized\([\s\S]*?warmEmployeeCostAllCache/);
   assert.match(source, /scheduleEmployeeCostAllWarm\(slot\.ky, 'upload_commit'\)/);
   assert.match(source, /scheduleEmployeeCostAllWarm\(slot\.ky, 'upload_activate'\)/);
