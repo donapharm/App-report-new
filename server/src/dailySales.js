@@ -10,6 +10,12 @@ const FIXED_PUBLIC_HOLIDAYS = {
   '09-02': 'Quốc khánh',
 };
 
+// 'YYYY-MM-DD' -> 'DD/MM/YYYY' để nói với CEO bằng đúng cách viết ngày của mình.
+function dmy(date) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date || ''));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : String(date || '');
+}
+
 function vnParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: TZ,
@@ -84,6 +90,12 @@ function sourceFreshness({ now = new Date(), sourceUpdatedAt, refresh = {} } = {
 function buildDailySales({ rows = [], now = new Date(), sourceUpdatedAt = null, isAdmin = false, isFiltered = false, refresh = {}, holidays } = {}) {
   const parts = vnParts(now);
   const todayRows = rows.filter((r) => String(r?.date || '').slice(0, 10) === parts.date);
+  /* Ngày MỚI NHẤT thật sự có trong dữ liệu — bằng chứng nguồn đã chạm tới đâu.
+   * Lấy ngay từ `rows` đang có, không cần thêm đường truyền nào. */
+  const newestDataDate = rows.reduce((max, r) => {
+    const d = String(r?.date || '').slice(0, 10);
+    return d && d > max ? d : max;
+  }, '');
   const revenue = Math.round(todayRows.reduce((sum, r) => sum + Number(r?.revenue || 0), 0));
   const sunday = parts.dow === 7;
   const holiday = holidayFor(parts.date, holidays);
@@ -106,6 +118,22 @@ function buildDailySales({ rows = [], now = new Date(), sourceUpdatedAt = null, 
   } else if (freshness.stale) {
     status = 'stale';
     note = 'Dữ liệu đang chờ cập nhật; chưa thể kết luận hôm nay chưa có doanh số.';
+  } else if (newestDataDate && newestDataDate < parts.date) {
+    /* ‼ NGUỒN VỪA CẬP NHẬT ≠ NGUỒN ĐÃ CÓ SỐ CỦA HÔM NAY (CEO báo 11/08/2026).
+     *
+     * Ô này từng kết luận "hôm nay chưa phát sinh doanh số" chỉ vì `sourceUpdatedAt`
+     * còn tươi. Nhưng nguồn có thể vừa chạy lúc 08:45 mà **dòng dữ liệu mới nhất vẫn
+     * là ngày hôm qua** — đúng cảnh CEO chụp: băng phía trên ghi rõ "Dữ liệu tới
+     * 10/08/26" trong khi ô này khẳng định về ngày 11/08.
+     *
+     * Đó là lẫn **"chưa có dữ liệu"** với **"bằng 0"** — hai chuyện khác hẳn nhau:
+     * một cái là chờ nguồn, một cái là cả công ty không bán được đồng nào. Nói nhầm
+     * chuyện thứ hai lúc 8 giờ sáng là gây hoảng vô cớ.
+     *
+     * Nay: dữ liệu mới nhất chưa chạm ngày hôm nay ⇒ NÓI THẲNG là chưa có số, kèm
+     * ngày mà nguồn đang dừng lại. Không kết luận thay nguồn. */
+    status = 'no_data_today';
+    note = `Nguồn mới có dữ liệu tới ngày ${dmy(newestDataDate)} — chưa có số của hôm nay nên chưa thể kết luận.`;
   } else {
     status = 'no_sales';
     note = isAdmin
@@ -120,6 +148,7 @@ function buildDailySales({ rows = [], now = new Date(), sourceUpdatedAt = null, 
     ky: parts.ky,
     revenue,
     rowCount: todayRows.length,
+    newestDataDate: newestDataDate || null,
     sourceUpdatedAt,
     status,
     note,
@@ -130,4 +159,4 @@ function buildDailySales({ rows = [], now = new Date(), sourceUpdatedAt = null, 
   };
 }
 
-module.exports = { buildDailySales, holidayFor, sourceFreshness, vnParts, parseWindow };
+module.exports = { buildDailySales, holidayFor, sourceFreshness, vnParts, parseWindow, dmy };

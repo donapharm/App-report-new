@@ -1,3 +1,41 @@
+### 2026-08-11 09:55 (giờ VN) — 📅 Ô "Doanh số trong ngày": "chưa có dữ liệu" ≠ "bằng 0"
+
+CEO chụp màn 11/08 lúc 08:46: ô **"Doanh số trong ngày"** khẳng định *"Đến thời điểm
+này hôm nay, toàn công ty chưa phát sinh doanh số"* — trong khi **băng ngay phía trên
+cùng màn** ghi rõ *"Dữ liệu tới **10/08/26** · 10/31 ngày"*.
+
+#### Nguyên nhân
+
+`dailySales.buildDailySales` kết luận `no_sales` chỉ dựa vào **`sourceUpdatedAt` còn
+tươi hay không**. Nguồn vừa chạy lúc 08:45 ⇒ `freshness.stale = false` ⇒ tổng hôm nay
+bằng 0 ⇒ tuyên **"chưa phát sinh doanh số"**.
+
+Nhưng **"nguồn vừa cập nhật" KHÔNG có nghĩa "nguồn đã có số của hôm nay"**. Lượt chạy
+08:45 hoàn toàn có thể mang về một bản mà **dòng mới nhất vẫn là ngày hôm qua**. App
+**đã biết** sự thật đó (băng phía trên hiển thị đúng 10/08) nhưng ô KPI **không dùng**.
+
+Đây lại đúng lỗi **lẫn "chưa có dữ liệu" với "bằng 0"** — cùng họ với vụ mốc go-live
+T06. Hai chuyện khác hẳn nhau: một cái là **chờ nguồn**, một cái là **cả công ty không
+bán được đồng nào**. Nói nhầm chuyện thứ hai lúc 8 giờ sáng là **gây hoảng vô cớ** cho
+người đọc báo cáo.
+
+#### Đã sửa
+
+Thêm bằng chứng **`newestDataDate`** — ngày mới nhất THẬT SỰ có trong dữ liệu, lấy
+ngay từ `rows` đang cầm, không cần thêm đường truyền nào.
+
+> Dữ liệu mới nhất **chưa chạm ngày hôm nay** ⇒ trạng thái **`no_data_today`**:
+> *"Nguồn mới có dữ liệu tới ngày 10/08/2026 — chưa có số của hôm nay nên chưa thể kết luận."*
+
+Chỉ khi **dữ liệu đã chạm hôm nay mà tổng vẫn bằng 0** thì mới được nói *"chưa phát
+sinh doanh số"*. Trả thêm `newestDataDate` ra payload để giao diện dùng khi cần.
+
+#### Test
+`dailySales` **11/11** — thêm 4 ca: tái hiện **đúng cảnh CEO chụp** (nguồn tươi 08:45,
+dữ liệu tới 10/08) · dữ liệu đã chạm hôm nay mà 0đ thì **mới** được kết luận · có doanh
+số thì không đụng nhánh mới · kho rỗng thì giữ nguyên hành vi cũ, **không bịa ngày**.
+`server` **1244/1251** — đúng 7 ca nền cũ. Build đạt.
+
 ### 2026-08-11 09:30 (giờ VN) — 🔑 MỘT REQUEST, HAI CON DẤU CÓ CHỦ ĐÍCH (bot audit đợt 7)
 
 Ba điểm bot nêu **cùng một gốc**: vân tay nguồn bị **chụp ở nhiều thời điểm khác nhau**

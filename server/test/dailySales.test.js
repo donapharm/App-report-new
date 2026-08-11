@@ -95,3 +95,66 @@ test('freshness có 15 phút ân hạn cho slot đang chạy', () => {
     refresh,
   }).stale, true);
 });
+
+/* ── CEO báo 11/08/2026 08:46 ────────────────────────────────────────────────
+ * Ô "Doanh số trong ngày" khẳng định *"toàn công ty chưa phát sinh doanh số"* cho
+ * ngày 11/08, trong khi băng ngay phía trên ghi *"Dữ liệu tới 10/08/26"*.
+ * Nguyên nhân: ô này chỉ nhìn `sourceUpdatedAt` (nguồn vừa chạy lúc 08:45) mà KHÔNG
+ * nhìn dữ liệu có chạm tới hôm nay chưa. Lẫn "chưa có dữ liệu" với "bằng 0".
+ */
+test('nguồn vừa cập nhật NHƯNG dữ liệu mới tới hôm qua ⇒ KHÔNG được kết luận "chưa có doanh số"', () => {
+  const rows = [
+    { date: '2026-08-09', revenue: 3_000_000 },
+    { date: '2026-08-10', revenue: 5_000_000 },
+  ];
+  const out = buildDailySales({
+    rows,
+    now: new Date('2026-08-11T01:46:00Z'),          // 08:46 giờ VN, thứ Ba
+    sourceUpdatedAt: '2026-08-11T01:45:00Z',        // nguồn vừa chạy 08:45 — CÒN TƯƠI
+    isAdmin: true,
+  });
+  assert.equal(out.status, 'no_data_today');
+  assert.equal(out.newestDataDate, '2026-08-10');
+  assert.match(out.note, /tới ngày 10\/08\/2026/);
+  assert.match(out.note, /chưa thể kết luận/);
+  assert.doesNotMatch(out.note, /chưa phát sinh doanh số/,
+    'TUYỆT ĐỐI không được nói "chưa phát sinh doanh số" khi chỉ là chưa có dữ liệu');
+});
+
+test('dữ liệu ĐÃ chạm hôm nay mà tổng bằng 0 ⇒ mới được nói "chưa phát sinh doanh số"', () => {
+  const rows = [
+    { date: '2026-08-10', revenue: 5_000_000 },
+    { date: '2026-08-11', revenue: 0 },            // hôm nay CÓ dòng, nhưng 0đ
+  ];
+  const out = buildDailySales({
+    rows,
+    now: new Date('2026-08-11T01:46:00Z'),
+    sourceUpdatedAt: '2026-08-11T01:45:00Z',
+    isAdmin: true,
+  });
+  assert.equal(out.status, 'no_sales');
+  assert.match(out.note, /chưa phát sinh doanh số/);
+});
+
+test('có doanh số hôm nay thì vẫn báo bình thường, không đụng nhánh mới', () => {
+  const rows = [{ date: '2026-08-11', revenue: 12_000_000 }];
+  const out = buildDailySales({
+    rows,
+    now: new Date('2026-08-11T01:46:00Z'),
+    sourceUpdatedAt: '2026-08-11T01:45:00Z',
+    isAdmin: true,
+  });
+  assert.equal(out.status, 'has_sales');
+  assert.equal(out.revenue, 12_000_000);
+});
+
+test('kho rỗng hoàn toàn ⇒ giữ nguyên hành vi cũ, không bịa ngày', () => {
+  const out = buildDailySales({
+    rows: [],
+    now: new Date('2026-08-11T01:46:00Z'),
+    sourceUpdatedAt: '2026-08-11T01:45:00Z',
+    isAdmin: true,
+  });
+  assert.equal(out.newestDataDate, null);
+  assert.equal(out.status, 'no_sales');
+});
