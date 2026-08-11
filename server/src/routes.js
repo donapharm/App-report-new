@@ -1496,8 +1496,19 @@ async function employeeCostAllPayload(req, {
     };
   }
   const buildMergedSealed = async () => {
-    if (sealKey) {
-      const sealed = closedSeal.read(sealKey);
+    /* ‼ TRA DẤU BẰNG KHOÁ CỦA ĐỜI MÌNH ĐANG DỰNG, KHÔNG PHẢI KHOÁ LÚC VỪA VÀO
+     * (bot audit đợt 13, mục A2 — đúng).
+     *
+     * `sealKey` sinh từ `vanTaySom`, chụp TRƯỚC khối catalog. Mà `catalogManagement`
+     * làm mới LKG thì **đổi chữ ký nguồn** — đó là lý do có hai con dấu. Nếu giữa hai
+     * lần tra có ai đó đóng dấu cho đời A, thì request đang chạy ở đời B vẫn tra bằng
+     * khoá A, trúng, và trả nguyên bản của đời A — `builds=0`, không ai dựng gì, số
+     * của đời cũ lên thẳng màn.
+     *
+     * Từ đây trở xuống mọi thứ phải nhất quán ở ĐÚNG MỘT đời: `vanTayLucVao`. */
+    const khoaDauOnDinh = khoaDauTheoVanTay(vanTayLucVao);
+    if (khoaDauOnDinh) {
+      const sealed = closedSeal.read(khoaDauOnDinh);
       if (sealed) return sealed;
     }
     /* ‼ ĐỜI DỮ LIỆU PHẢI KHỚP ĐẦU–CUỐI, CHO MỌI KỲ (bot audit đúng, hai lần).
@@ -1522,6 +1533,23 @@ async function employeeCostAllPayload(req, {
        * sổ đời để làm CỔNG. Gộp chung một chuỗi là con đường dẫn thẳng tới lỗi vừa rồi. */
       const vanTayTruoc = vanTayNguon();
       const doiTruoc = soDoiKhoTien();
+      /* ‼ DỰNG ĐỜI NÀO THÌ PHẢI ĐƯỢC CẤT DƯỚI KHOÁ ĐỜI ĐÓ (bot audit đợt 13, mục A1 —
+       * đúng, và đây là lỗ nguy hiểm nhất còn lại).
+       *
+       * Khoá bộ nhớ đệm được chốt từ lúc vào request (`vanTayLucVao` = đời A) TRƯỚC khi
+       * hàm này chạy. Nếu lượt 1 gặp nguồn đổi rồi lượt 2 dựng đúng đời B, ta trả về bản
+       * B — nhưng người gọi cất nó dưới **khoá A**. Nguồn quay lại A ⇒ khoá A trúng ⇒
+       * app phục vụ số của đời B, không dựng lại, không ai hay. Bot tái hiện được.
+       *
+       * Sửa tận gốc: hàm này CHỈ được trả về bản dựng ở đúng `vanTayLucVao`. Nguồn đã
+       * rời khỏi đời đó thì DỪNG, báo 503 — lượt sau vào sẽ chốt khoá theo đời mới và
+       * cất đúng chỗ. Thà bảo CEO "thử lại" còn hơn cất nhầm ngăn rồi phục vụ mãi. */
+      if (vanTayTruoc !== vanTayLucVao) {
+        throw Object.assign(
+          new Error('Nguồn đã đổi so với lúc mở màn nên chưa dựng được bản nhất quán. Hãy thử lại sau ít phút.'),
+          { status: 503, code: 'EMPLOYEE_COST_SOURCE_DRIFT' },
+        );
+      }
       const built = await buildMerged();
       if (vanTayTruoc !== vanTayNguon() || doiTruoc !== soDoiKhoTien()) {
         console.warn('[employee-cost] nguồn đổi giữa lúc dựng — BỎ bản trộn đời, dựng lại', { lan });

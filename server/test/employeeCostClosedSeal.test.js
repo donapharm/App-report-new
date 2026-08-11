@@ -425,7 +425,10 @@ test('⑫ cả request dùng CHUNG một con dấu đời — không ai tự l�
 // app đọc dấu A và phục vụ số của đời B. Sai vĩnh viễn.
 test('⑬ đóng dấu phải dùng khoá của CHÍNH đời vừa dựng, không phải đời lúc vào', () => {
   const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
-  const vong = src.slice(src.indexOf('for (let lan = 1; lan <= SO_LAN_DUNG_TOI_DA'), src.indexOf('EMPLOYEE_COST_SOURCE_DRIFT'));
+  /* Cắt tới HẾT hàm dựng, không cắt tới `EMPLOYEE_COST_SOURCE_DRIFT`: mã lỗi đó nay
+   * còn xuất hiện ở chốt "dựng đời nào cất khoá đời đó" NGAY ĐẦU vòng lặp, nên lấy nó
+   * làm mốc cắt là cắt cụt mất đoạn đóng dấu — ca kiểm đỏ vì cắt sai, không vì code sai. */
+  const vong = src.slice(src.indexOf('for (let lan = 1; lan <= SO_LAN_DUNG_TOI_DA'), src.indexOf('// Export giữ nguyên đường audit'));
   assert.match(vong, /const khoaDung = khoaDauTheoVanTay\(vanTayTruoc\);/,
     'khoá đóng dấu sinh từ vân tay NỘI DUNG vừa được xác nhận đầu–cuối');
   assert.match(vong, /closedSeal\.write\(khoaDung, built, \{ complete: true \}\)/);

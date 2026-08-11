@@ -1,3 +1,46 @@
+### 2026-08-11 15:40 (giờ VN) — 🔑 CẤT ĐÚNG NGĂN: bịt hai đường "dựng đời B, cất khoá đời A"
+
+Bot audit đợt 13 xác nhận ba sửa chữa của đợt trước đều PASS, nhưng tìm thêm **hai lỗi
+đúng-sai số liệu**. Cả hai cùng một gốc: **bản dựng ở đời này bị cất/tra dưới khoá của
+đời khác.**
+
+**A1 — dựng đời B, cất dưới khoá đời A.**
+Khoá bộ nhớ đệm được chốt từ lúc vào request (`vanTayLucVao` = đời A). Nếu lượt dựng 1
+gặp nguồn đổi rồi lượt 2 dựng đúng đời B, hàm dựng trả bản B — nhưng người gọi cất nó
+dưới **khoá A**. Nguồn quay lại A ⇒ khoá A trúng ⇒ app phục vụ số của **đời B**, không
+dựng lại, không ai hay. Bot tái hiện: `afterFirst=2, afterSecond=2`.
+Vòng lặp "dựng lại khi lệch đời" của tôi chính là thứ tạo ra lỗ này: nó cố cứu request
+bằng cách dựng ở đời mới, mà quên rằng cái ngăn để cất đã chốt từ trước.
+→ Nay hàm dựng **chỉ được trả về bản dựng ở đúng `vanTayLucVao`**. Nguồn đã rời khỏi đời
+đó thì **DỪNG, báo 503** — lượt sau vào sẽ chốt khoá theo đời mới và cất đúng chỗ.
+
+**A2 — tra dấu lần hai vẫn dùng khoá sớm.**
+`sealKey` chụp TRƯỚC khối catalog (đời A); catalog làm mới LKG thì đổi chữ ký sang B.
+Lần tra dấu **thứ hai**, nằm trong thân hàm dựng, vẫn dùng khoá A. Nếu giữa hai lần tra
+có ai đó đóng dấu cho đời A, lần tra này trúng và trả nguyên bản đời A: `builds = 0`,
+không ai dựng gì, số đời cũ lên thẳng màn.
+→ Nay tra bằng khoá của **đời mình đang dựng** (`vanTayLucVao`). Từ chỗ đó trở xuống mọi
+thứ nhất quán ở đúng một đời.
+
+**Kiểm — lần này tự bắn thủng trước khi gửi**
+- Thêm hai ca vào `employeeCostSealKeyPurity.test.js`. Đã kiểm ngược **từng ca một**:
+  bỏ chốt A1 ⇒ ca A1 đỏ; trả lại tra bằng `sealKey` ⇒ ca A2 đỏ.
+- Ca A2 bản đầu **xanh vì lý do sai**: nó nhờ `catalogManagement.getSnapshot` đổi chữ ký,
+  nhưng catalog có bộ nhớ riêng theo kỳ — chạy chung file thì ca trước đã nạp sẵn kỳ
+  2026-07 nên stub không hề được gọi, hai khoá trùng nhau, ca "xanh" mà chẳng kiểm gì.
+  Chạy riêng xanh, chạy chung đỏ. Nay cửa sổ đổi đời được mở ngay trong ca, không nhờ
+  ai khác.
+- Ca ⑬ đỏ vì **cắt sai đoạn mã** chứ không phải code sai: nó cắt tới chuỗi
+  `EMPLOYEE_COST_SOURCE_DRIFT`, mà mã lỗi đó nay còn xuất hiện ở chốt A1 ngay đầu vòng
+  lặp ⇒ cắt cụt mất đoạn đóng dấu. Đã đổi mốc cắt.
+- Toàn bộ backend **1254/1261**: đúng 7 ca hỏng cố hữu của sandbox (6 thiếu `pdfinfo`,
+  1 thiếu VP018 trong dữ liệu mẫu — bot xác nhận tái hiện y nguyên trên baseline, không
+  phải regression). `npm run build` xanh.
+
+**Đánh đổi đã cân nhắc:** nguồn đổi ngay giữa lúc dựng thì CEO thấy "thử lại sau ít
+phút" thay vì thấy số. Đó là cố ý. Thà bảo thử lại còn hơn cất nhầm ngăn rồi phục vụ
+con số sai mãi mãi mà không ai biết.
+
 ### 2026-08-11 14:05 (giờ VN) — 📒 SỔ ĐỜI THEO TỪNG FILE: bỏ "đồng hồ toàn cục" vừa thêm
 
 Bot audit đợt 12 bắn thủng bản vá hôm qua ở **ba chỗ**, đúng cả ba. Ghi lại đủ vì

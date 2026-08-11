@@ -126,3 +126,125 @@ test('khoá TRA dấu và khoá GHI dấu phải TRÙNG NHAU — kể cả sau k
     closedSeal.isSealable = goc.isSealable;
   }
 });
+
+/* ── BOT AUDIT ĐỢT 13 ─────────────────────────────────────────────────────── */
+
+/* A1 — DỰNG ĐỜI B MÀ CẤT DƯỚI KHOÁ ĐỜI A.
+ * Khoá bộ nhớ đệm chốt từ lúc vào request (đời A). Nếu lượt dựng 1 gặp nguồn đổi rồi
+ * lượt 2 dựng đúng đời B, bản B vẫn được người gọi cất dưới khoá A. Nguồn quay lại A
+ * ⇒ khoá A trúng ⇒ app phục vụ số của đời B mãi mãi, không dựng lại, không ai hay. */
+test('A1 nguồn đổi giữa lúc dựng ⇒ KHÔNG được cất bản đời mới dưới khoá đời cũ', async () => {
+  const goc = {
+    employeeCostDataSignature: store.employeeCostDataSignature,
+    targetRoster: store.targetRoster,
+    getForSession: employeeCost.getForSession,
+    getSnapshot: catalogManagement.getSnapshot,
+    read: closedSeal.read,
+    write: closedSeal.write,
+  };
+
+  let chuKy = 'a1-doi-A';
+  let soLanDung = 0;
+  store.employeeCostDataSignature = () => chuKy;
+  store.targetRoster = () => [{ emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true }];
+  catalogManagement.getSnapshot = async () => ({ rows: [], catalog: [] });
+  employeeCost.getForSession = async ({ requestedEmp }, options) => {
+    soLanDung += 1;
+    chuKy = 'a1-doi-B'; // nguồn nhảy sang đời B NGAY GIỮA lúc fan-out
+    return employeeCost.emptyRangePayload(
+      requestedEmp,
+      employeeCost.parseMonthRange({ from: options.from, to: options.to }),
+    );
+  };
+  closedSeal.read = () => null;
+  closedSeal.write = async () => true;
+
+  const phien = { emp_code: 'ADMIN02', role: 'admin', name: 'Admin 2' };
+  const truyVan = { emp: 'ALL', from: '2026-07', to: '2026-07', page: '1', pageSize: '20', sortDir: 'asc' };
+
+  try {
+    let hong = null;
+    let ketQua = null;
+    try { ketQua = await invokeEmployeeCost(truyVan, phien); } catch (error) { hong = error; }
+    const chan = hong || (ketQua && ketQua.status >= 500);
+    assert.ok(chan, 'nguồn rời khỏi đời lúc vào request ⇒ phải DỪNG, không được trả bản lệch khoá');
+
+    // Nguồn quay lại đời A. Nếu bản B đã lỡ nằm dưới khoá A thì lượt này sẽ KHÔNG dựng.
+    chuKy = 'a1-doi-A';
+    const truocKhiDung = soLanDung;
+    let hong2 = null;
+    try { await invokeEmployeeCost(truyVan, phien); } catch (error) { hong2 = error; }
+    assert.ok(soLanDung > truocKhiDung || hong2,
+      'nguồn quay lại đời A mà app trả ngay không dựng ⇒ đúng là đang phục vụ bản đời B cất nhầm ngăn');
+  } finally {
+    store.employeeCostDataSignature = goc.employeeCostDataSignature;
+    store.targetRoster = goc.targetRoster;
+    employeeCost.getForSession = goc.getForSession;
+    catalogManagement.getSnapshot = goc.getSnapshot;
+    closedSeal.read = goc.read;
+    closedSeal.write = goc.write;
+  }
+});
+
+/* A2 — TRA DẤU LẦN HAI VẪN DÙNG KHOÁ SỚM.
+ * `sealKey` chụp TRƯỚC khối catalog; catalog làm mới LKG thì đổi chữ ký nguồn sang B.
+ * Nếu giữa hai lần tra có ai đó đóng dấu cho đời A, lần tra thứ hai (nằm trong thân
+ * hàm dựng) vẫn dùng khoá A, trúng, và trả nguyên bản đời A: `builds = 0`. */
+test('A2 sau khi catalog ổn định sang đời B, KHÔNG được tra dấu bằng khoá đời A', async () => {
+  const goc = {
+    employeeCostDataSignature: store.employeeCostDataSignature,
+    targetRoster: store.targetRoster,
+    getForSession: employeeCost.getForSession,
+    getSnapshot: catalogManagement.getSnapshot,
+    read: closedSeal.read,
+    write: closedSeal.write,
+  };
+
+  let chuKy = 'a2-doi-A';
+  let soLanDung = 0;
+  let khoaSom = null;
+  const DAU_DOI_A = { nguon: 'dau-doi-A', employees: [], rows: [] };
+
+  store.employeeCostDataSignature = () => chuKy;
+  store.targetRoster = () => [{ emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true }];
+  catalogManagement.getSnapshot = async () => ({ rows: [], catalog: [] });
+  employeeCost.getForSession = async ({ requestedEmp }, options) => {
+    soLanDung += 1;
+    return employeeCost.emptyRangePayload(
+      requestedEmp,
+      employeeCost.parseMonthRange({ from: options.from, to: options.to }),
+    );
+  };
+  /* Lần tra ĐẦU (đường tắt, khoá sớm = đời A): chưa có dấu. Ngay lúc đó nguồn nhảy
+   * sang đời B, rồi dấu của đời A "xuất hiện" — đúng cảnh bot dựng. Lần tra sau mà
+   * còn dùng khoá A là trúng ngay và trả nguyên số của đời cũ.
+   *
+   * ‼ Cửa sổ đổi đời phải mở NGAY TẠI ĐÂY, không được nhờ `catalogManagement.getSnapshot`.
+   * Bản đầu của ca này nhờ getSnapshot đổi chữ ký, nhưng catalog có bộ nhớ riêng theo
+   * kỳ: chạy chung file thì ca trước đã nạp sẵn kỳ 2026-07 nên stub KHÔNG hề được gọi,
+   * chữ ký không đổi, hai khoá trùng nhau — và ca kiểm "xanh" vì một lý do hoàn toàn
+   * khác với thứ nó định kiểm. Chạy riêng thì xanh, chạy chung thì đỏ. */
+  closedSeal.read = (key) => {
+    if (khoaSom === null) { khoaSom = key; chuKy = 'a2-doi-B'; return null; }
+    return key === khoaSom ? DAU_DOI_A : null;
+  };
+  closedSeal.write = async () => true;
+
+  const phien = { emp_code: 'ADMIN03', role: 'admin', name: 'Admin 3' };
+  const truyVan = { emp: 'ALL', from: '2026-07', to: '2026-07', page: '1', pageSize: '20', sortDir: 'asc' };
+
+  try {
+    let hong = null;
+    try { await invokeEmployeeCost(truyVan, phien); } catch (error) { hong = error; }
+    assert.equal(hong, null, 'đời B là đời hợp lệ của request này — không có lý do gì phải lỗi');
+    assert.ok(soLanDung > 0,
+      'phải DỰNG THẬT ở đời B; nếu builds = 0 nghĩa là đã trả nguyên con dấu của đời A');
+  } finally {
+    store.employeeCostDataSignature = goc.employeeCostDataSignature;
+    store.targetRoster = goc.targetRoster;
+    employeeCost.getForSession = goc.getForSession;
+    catalogManagement.getSnapshot = goc.getSnapshot;
+    closedSeal.read = goc.read;
+    closedSeal.write = goc.write;
+  }
+});
