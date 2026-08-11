@@ -127,8 +127,11 @@ async function loadScope(scope, options = {}) {
     reconciliationConfirmedAt, config.allocationVersion, period, contractorCode].join('\x1f');
   const now = Date.now();
   prune(config.cacheMax, now);
-  if (cache.get(cacheKey)?.expiresAt > now) return cache.get(cacheKey).snapshot;
-  if (inFlight.has(cacheKey)) return inFlight.get(cacheKey);
+  /* `boQuaBoNho`: đường SOI LẠI DẤU phải hỏi nguồn thật. Nếu đọc bản nhớ thì nó gặp đúng
+   * bản do lượt dựng trước ghi vào và tự gật "vẫn khớp" — bộ soi tự xác nhận chính mình.
+   * Xem chú thích dài ở `employeeCostReconciliationShadow.loadScope`. */
+  if (!options.boQuaBoNho && cache.get(cacheKey)?.expiresAt > now) return cache.get(cacheKey).snapshot;
+  if (!options.boQuaBoNho && inFlight.has(cacheKey)) return inFlight.get(cacheKey);
   const promise = (async () => {
     await acquire(config.concurrency);
     try {

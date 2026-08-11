@@ -117,6 +117,9 @@ function isSealable(merged, roster, reports) {
    * dùng gói từ xa nào ⇒ không có cách nào soi lại khi mở dấu. Mảng RỖNG thì hợp lệ:
    * nó nói rõ "không dùng gói từ xa nào", khác hẳn `undefined` là "không ai ghi". */
   if (!Array.isArray(merged.remoteProvenance)) return false;
+  /* ‼ Scope nào hỏi hụt gói thì lai lịch ghi `THIEU` — đóng dấu lúc đó là đóng băng một
+   * kỳ mà chính ta không biết đã dùng dữ liệu gì (bot audit vòng 4, mục A1). */
+  if (merged.remoteProvenance.some((dong) => String(dong).endsWith(':THIEU'))) return false;
 
   const expected = new Set(
     (Array.isArray(roster) ? roster : [])
@@ -367,10 +370,16 @@ async function remoteProvenanceStillValid(sealedPayload, { loadScopes, loadAlloc
     scopes.push({ period, contractorCode });
   }
 
+  // Có `THIEU` nghĩa là chính lúc đóng dấu ta đã không lấy được gói — dấu đó không đáng tin.
+  if (ghi.some((dong) => String(dong).endsWith(':THIEU'))) return false;
+
   let snapshots;
   let allocationSnapshots;
   try {
-    snapshots = await loadScopes(scopes);
+    /* ‼ `boQuaBoNho` — bắt buộc. Không có nó thì bộ soi đọc lại đúng bản mà lượt dựng
+     * trước đã ghi vào bộ nhớ, rồi tự gật "vẫn khớp": nó xác nhận chính nó, không hề
+     * hỏi nguồn (bot audit vòng 4, mục A3). */
+    snapshots = await loadScopes(scopes, { boQuaBoNho: true });
     const allocationScopes = [];
     for (const [scopeKey, snapshot] of snapshots) {
       const [period, contractorCode] = scopeKey.split('\u001f');
@@ -382,7 +391,7 @@ async function remoteProvenanceStillValid(sealedPayload, { loadScopes, loadAlloc
         reconciliationConfirmedAt: snapshot.confirmed_at,
       });
     }
-    allocationSnapshots = await loadAllocationScopes(allocationScopes);
+    allocationSnapshots = await loadAllocationScopes(allocationScopes, { boQuaBoNho: true });
   } catch {
     return false; // hỏi lại không được thì không kết luận là "vẫn đúng"
   }
@@ -390,14 +399,18 @@ async function remoteProvenanceStillValid(sealedPayload, { loadScopes, loadAlloc
   // Dựng lại chuỗi lai lịch theo ĐÚNG công thức của `employeeCost.js`, rồi so nguyên khối.
   const bayGio = [];
   for (const [scopeKey, snapshot] of snapshots) {
-    if (!snapshot) continue;
     const [period, contractorCode] = scopeKey.split('\u001f');
+    // Lúc đóng dấu lấy được, giờ hỏi lại không ra ⇒ KHÔNG kết luận "vẫn đúng".
+    if (!snapshot) return false;
     const allocationSnapshot = allocationSnapshots.get(scopeKey);
     bayGio.push([
       period, contractorCode,
       `rv=${snapshot.reconciliation_version}`,
       `rc=${snapshot.reconciliation_rows_checksum_v2}`,
       `ca=${snapshot.confirmed_at}`,
+      `sc=${snapshot.shadow_snapshot_checksum ?? 'khong-co'}`,
+      `iv=${snapshot.immutable_version ?? 'khong-co'}`,
+      `ic=${snapshot.immutable_checksum ?? 'khong-co'}`,
       allocationSnapshot ? `av=${allocationSnapshot.allocation_version}` : 'av=khong-co',
       allocationSnapshot ? `ac=${allocationSnapshot.allocation_checksum}` : 'ac=khong-co',
     ].join(':'));

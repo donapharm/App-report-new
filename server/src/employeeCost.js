@@ -1030,14 +1030,37 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
    *
    * Ghi ở đây thay vì moi lại lúc đóng dấu, vì đây là chỗ DUY NHẤT biết chắc gói nào đã
    * thực sự được dùng để tính. Thiếu lai lịch mà vẫn có dùng gói ⇒ `isSealable` chặn. */
+  /* ‼ VÒNG 4 — "KHÔNG BIẾT" BỊ TÔI GHI THÀNH "KHÔNG CÓ GÌ" (bot audit, mục A1).
+   *
+   * Bản trước `ghiLaiLich` mở đầu bằng `if (!snapshot) return;`. Mà `loadScope` trả
+   * `null` cho CẢ HAI cảnh: "không có gói nào cho scope này" và "hỏi nguồn thất bại".
+   * Nên gói lấy hụt ⇒ không ghi gì ⇒ lai lịch co lại thành `[]` ⇒ bộ soi thấy rỗng thì
+   * gật ngay, không hỏi ai. Bot dựng đúng cảnh đó: route trả nguyên dấu cũ 12,5,
+   * `builds=0`, **0 lượt hỏi metadata**.
+   *
+   * Đây đúng cái lỗi tôi lặp suốt đợt này: **vắng bằng chứng bị coi là bằng chứng vắng
+   * mặt**. Nay ghi CẢ HAI phía: scope nào ĐỊNH lấy, và lấy được gì. Hụt thì ghi thẳng
+   * chữ `THIEU`, và `isSealable` gặp `THIEU` là chặn. Rỗng chỉ còn đúng một nghĩa duy
+   * nhất: "kỳ này không có scope nào để lấy".
+   *
+   * ‼ Tuple còn phải mang `shadow_snapshot_checksum` và cặp `immutable_*` (bot mục A2):
+   * hai envelope đều HỢP LỆ có thể cho 12,5 và 9,5 mà `reconciliation_rows_checksum_v2`
+   * không đổi — thiếu mấy trường này thì bộ soi vẫn gật cho dấu cũ. */
   const laiLichRemote = [];
   const ghiLaiLich = (period, contractorCode, snapshot, allocationSnapshot) => {
-    if (!snapshot) return;
+    if (!snapshot) {
+      laiLichRemote.push(`${period}:${contractorCode}:THIEU`);
+      return;
+    }
     laiLichRemote.push([
       period, contractorCode,
       `rv=${snapshot.reconciliation_version}`,
       `rc=${snapshot.reconciliation_rows_checksum_v2}`,
       `ca=${snapshot.confirmed_at}`,
+      // Hai envelope hợp lệ có thể đổi 12,5 -> 9,5 mà `rc` y nguyên. Phải ghim cả ba.
+      `sc=${snapshot.shadow_snapshot_checksum ?? 'khong-co'}`,
+      `iv=${snapshot.immutable_version ?? 'khong-co'}`,
+      `ic=${snapshot.immutable_checksum ?? 'khong-co'}`,
       // Gói phân bổ có thể vắng (v3 chấp nhận được) — ghi rõ VẮNG, đừng bỏ trống
       // để hai cảnh "có gói A" và "không có gói nào" không trùng chuỗi.
       allocationSnapshot ? `av=${allocationSnapshot.allocation_version}` : 'av=khong-co',
@@ -1070,7 +1093,9 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
       // Preserve the v3 fail-closed baseline: without an accepted v3 snapshot,
       // leave the pre-initialized shadow fields null and never let V4 restore
       // stale/input values for this group.
-      if (!snapshot) continue;
+      // ‼ Ghi lai lịch TRƯỚC khi bỏ qua: scope hụt gói phải để lại dấu vết `THIEU`,
+      // nếu không thì nó biến mất lặng lẽ và lai lịch rỗng trông như "sạch".
+      if (!snapshot) { ghiLaiLich(period, contractorCode, null, null); continue; }
       const rows = reconciliationShadow.projectEmployeeCostRows(group.map((item) => item.row), snapshot, { employeeCode: empCode });
       const allocationSnapshot = allocationSnapshots.get(scopeKey);
       ghiLaiLich(period, contractorCode, snapshot, allocationSnapshot);

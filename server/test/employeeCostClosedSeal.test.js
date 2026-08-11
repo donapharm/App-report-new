@@ -532,8 +532,12 @@ test('A10 gói từ xa đổi ⇒ soi lai lịch phải trả false ⇒ dựng l
     confirmed_at: '2026-08-01T00:00:00.000Z',
   }]]);
   const goiPhanBo = new Map([[khoa, { allocation_version: 4, allocation_checksum: 'b'.repeat(64) }]]);
+  /* Tuple đã dài thêm ba trường ở vòng 4 (`sc`/`iv`/`ic`): hai envelope đều HỢP LỆ có
+   * thể cho 12,5 và 9,5 mà `rc` y nguyên, nên chỉ ghim `rc` là chưa đủ. Fixture phải
+   * theo bản thật, không thì ca này xanh trong khi hàng rào đã đổi hình. */
   const dau = {
-    remoteProvenance: [`${KY}:${NHA}:rv=3:rc=${'a'.repeat(64)}:ca=2026-08-01T00:00:00.000Z:av=4:ac=${'b'.repeat(64)}`],
+    remoteProvenance: [`${KY}:${NHA}:rv=3:rc=${'a'.repeat(64)}:ca=2026-08-01T00:00:00.000Z`
+      + `:sc=khong-co:iv=khong-co:ic=khong-co:av=4:ac=${'b'.repeat(64)}`],
   };
   const cua = (checksum) => ({
     loadScopes: async () => goi(checksum),

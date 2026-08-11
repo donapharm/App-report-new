@@ -1,3 +1,46 @@
+### 2026-08-12 00:40 (giờ VN) — 🔍 Bốn lỗ cùng một gốc: "không biết" bị tôi ghi thành "không có gì"
+
+Bot soi `8b75412` (chưa lấy `12bd6eb`, nên lỗ UI thứ 5 họ nêu **đã vá rồi** — web
+455 vs 460 xác nhận điều đó). Bốn lỗ backend là thật, và tất cả cùng một gốc:
+**vắng bằng chứng bị coi là bằng chứng vắng mặt.**
+
+**① Scope hỏi hụt gói bị co thành lai lịch rỗng.** `loadScope` trả `null` cho CẢ HAI
+cảnh: "không có gói cho scope này" và "hỏi nguồn thất bại". Tôi bỏ qua cả hai ⇒ lai
+lịch thành `[]` ⇒ bộ soi thấy rỗng thì gật ngay, **không hỏi ai một câu nào**. Bot đo:
+route trả nguyên dấu cũ 12,5 · `builds=0` · **0 lượt hỏi metadata**. Nghĩa là cái "bộ
+soi" tôi khoe hôm qua, ở đúng cảnh cần nó nhất, **không chạy**.
+→ Nay hụt gói thì ghi thẳng chữ `THIEU`, và `isSealable` gặp `THIEU` là chặn. Rỗng chỉ
+còn đúng một nghĩa: "kỳ này không có scope nào để lấy".
+
+**② `rc` không đủ phân biệt hai envelope hợp lệ.** Hai gói đều hợp lệ cho ra 12,5 và
+9,5 mà `reconciliation_rows_checksum_v2` y nguyên. → Tuple ghim thêm
+`shadow_snapshot_checksum` và cặp `immutable_version`/`immutable_checksum`.
+
+**③ Bộ soi đọc bản nhớ, tức tự xác nhận chính mình.** Nó đi qua đúng `loadScope` mà
+lượt dựng trước vừa ghi cache. Nguồn đã sang B, bộ soi đọc lại A trong bộ nhớ rồi gật.
+→ Thêm cờ `boQuaBoNho`, chỉ bật ở đường soi dấu; đường dựng vẫn xài bộ nhớ.
+
+**④ Đường tắt không hậu kiểm nguồn local sau khi chờ mạng.** Lượt soi là một `await` đi
+ra ngoài mạng; trong khoảng đó nguồn local có thể đã sang đời khác, mà cờ kiểm thì chụp
+từ TRƯỚC lúc chờ. Kiểm trước rồi chờ thì cái đã kiểm hết hạn ngay lúc chờ.
+
+**Về con số hiệu năng bot đo:** trúng dấu 148–218 ms, median 174 ms, 0/20 vượt 500 ms —
+**nhưng** họ nói thẳng: dấu có `remoteProvenance=[]` nên thực tế **hỏi 0 scope, 0 ms**.
+Tức phép đo đó chưa đo cái cần đo. Sau bản vá này lai lịch mới thật sự có nội dung, nên
+**phải đo lại** — đã ghi vào khối lệnh gửi bot.
+
+**Lỗi phụ tự bắt được khi viết ca kiểm:** ca A13/A15 của tôi ghép khoá scope bằng hằng
+số `SEP`. Nếu `SEP` sai thì mọi phép so đều lệch ⇒ mọi ca "phải vứt dấu" đều xanh —
+**xanh vì luôn khác nhau**, không phải vì hàng rào chạy đúng. Đã thêm **A17** neo cả hai
+chiều (đúng dấu ⇒ phải KHỚP; sai dấu ⇒ phải KHÔNG khớp), và đổi ký tự điều khiển vô
+hình trong mã sang dạng thoát đọc được. Đây là lần thứ **ba** trong ngày dính kiểu "ca
+kiểm xanh vì lý do sai" (A6c xoá cache, PeriodBlock cắt ngược, nay là dấu phân cách).
+
+**Kiểm:** thêm 7 ca (A12, A12b, A13, A14, A15, A16, A17) trong file mới
+`employeeCostSealRemoteProvenance.test.js`. A10 hôm qua phải cập nhật fixture vì tuple
+đã đổi hình — đúng ra nó phải đỏ, và nó đã đỏ. Server **1279/1286** (đúng 7 ca hỏng cố
+hữu của sandbox), `npm run build` xanh.
+
 ### 2026-08-11 23:55 (giờ VN) — 🕳 Ca kiểm xanh trong khi lỗ còn nguyên; đổi từ "liệt kê chỗ" sang "quét cả file"
 
 **Bot bắt:** ở `076a4b9` tôi chặn bốn ô KPI đầu màn rồi tuyên bố "không ô tổng nào hiện

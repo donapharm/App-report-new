@@ -158,9 +158,14 @@ async function loadScope(scope, options = {}) {
   const cacheKey = `${config.baseUrl}\u001f${credentialPin}\u001f${period}\u001f${contractorCode}`;
   const now = Date.now();
   pruneCache(config.cacheMax, now);
-  const cached = snapshotCache.get(cacheKey);
+  /* ‼ SOI LẠI DẤU THÌ PHẢI HỎI NGUỒN THẬT, KHÔNG ĐƯỢC HỎI BẢN NHỚ (bot audit đợt 17
+   * vòng 4, mục A3 — đúng). Bộ soi lai lịch đi qua đúng hàm này, nên nó gặp bản nhớ do
+   * CHÍNH lượt dựng trước đó ghi vào. Kết quả: nguồn đã sang B, mà bộ soi đọc lại A
+   * trong bộ nhớ rồi tự gật "vẫn khớp". Nó tự xác nhận chính mình.
+   * `boQuaBoNho` chỉ bật ở đường soi dấu; đường dựng bình thường vẫn xài bộ nhớ. */
+  const cached = options.boQuaBoNho ? null : snapshotCache.get(cacheKey);
   if (cached?.expiresAt > now) return cached.snapshot;
-  if (inFlight.has(cacheKey)) return inFlight.get(cacheKey);
+  if (!options.boQuaBoNho && inFlight.has(cacheKey)) return inFlight.get(cacheKey);
   const pending = (async () => {
     await acquire(config.concurrency);
     try {
@@ -181,6 +186,7 @@ async function loadScope(scope, options = {}) {
   try { return await pending; }
   finally { inFlight.delete(cacheKey); }
 }
+// `options.boQuaBoNho` xuyên xuống `loadScope` — xem lý do ở đó.
 async function loadScopes(scopes = [], options = {}) {
   const unique = new Map();
   for (const scope of scopes) {

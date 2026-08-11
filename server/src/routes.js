@@ -1302,10 +1302,19 @@ async function employeeCostAllPayload(req, {
     /* Nguồn trên đĩa còn nguyên CHƯA ĐỦ — gói từ xa có thể đã đổi 12,5 → 9,5 mà không
      * file nào nhúc nhích. Soi luôn lai lịch trước khi dám xài đường tắt. */
     const laiLichSomConDung = sealedEarly && nguonConNguyen ? await laiLichConDung(sealedEarly) : false;
+    /* ‼ HẬU KIỂM SAU KHI CHỜ MẠNG (bot audit vòng 4, mục A4 — đúng).
+     * Lượt soi lai lịch là một `await` đi ra ngoài mạng, mất hàng trăm mili giây. Trong
+     * khoảng đó nguồn LOCAL có thể đã sang đời khác — mà `nguonConNguyen` thì chụp từ
+     * TRƯỚC lúc chờ. Kiểm trước rồi chờ thì cái đã kiểm hết hạn ngay lúc chờ. Phải soi
+     * lại sau khi tỉnh dậy, đúng cùng một luật đã áp cho đường dựng đầy đủ. */
+    const nguonConNguyenSauCho = vanTayNguon() === vanTaySom && soDoiKhoTien() === doiSom;
     if (sealedEarly && nguonConNguyen && !laiLichSomConDung) {
       console.warn('[employee-cost] gói dữ liệu từ xa đã đổi — BỎ dấu cũ, dựng đầy đủ');
     }
-    if (sealedEarly && nguonConNguyen && laiLichSomConDung) {
+    if (sealedEarly && nguonConNguyen && laiLichSomConDung && !nguonConNguyenSauCho) {
+      console.warn('[employee-cost] nguồn local đổi trong lúc soi lai lịch — BỎ đường tắt');
+    }
+    if (sealedEarly && nguonConNguyen && laiLichSomConDung && nguonConNguyenSauCho) {
       /* Có dấu thì KHÔNG chờ catalog — nhưng cũng KHÔNG được bỏ luôn việc làm mới nó:
          các màn khác vẫn xài catalog, để nó ôi là hại chỗ khác. Nên vẫn châm ngòi làm
          mới Ở NỀN, không await. Nhanh cho người đang xem, mà không bỏ đói ai. */
@@ -1601,6 +1610,8 @@ async function employeeCostAllPayload(req, {
       const sealed = closedSeal.read(khoaDauOnDinh);
       // Cùng lý do như đường tắt: file trên đĩa còn nguyên không chứng minh được gói
       // từ xa còn nguyên. Lệch ⇒ coi như không có dấu, đi tiếp đường dựng đầy đủ.
+      // `await` bên dưới là một lượt đi mạng; hậu kiểm nguồn local nằm NGAY SAU nó,
+      // nên khoảng chờ đó cũng được phủ — xem chú thích ở đường tắt phía trên.
       if (sealed && await laiLichConDung(sealed)) {
         if (vanTayNguon() !== vanTayLucVao || soDoiKhoTien() !== doiTruocTra) {
           throw Object.assign(
