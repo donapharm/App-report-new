@@ -82,7 +82,7 @@ function Highlight({ value, query }) {
     : <React.Fragment key={`${part.text}-${index}`}>{part.text}</React.Fragment>);
 }
 
-function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEmployees = false, onPage, onPageSize, c45Dropped = false }) {
+function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEmployees = false, onPage, onPageSize, c45Dropped = false, thieuNguoi = false }) {
   const [tooltip, setTooltip] = useState('');
   const sourceRows = daily ? period.daily.rows : period.rows;
   // Search/filter/sort/STT are resolved by the backend for both self and ALL
@@ -122,8 +122,8 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
         {daily && row.date !== rows[rowIndex - 1]?.date && <tr className="employee-cost-day-group">
           <td colSpan={columnCount}>
             <b>Ngày {formatEmployeeCostCell(row.date, { key: 'date', kind: 'dimension' })}</b>
-            <span>Σ ngày: {formatEmployeeCostCell(totalsByDate.get(row.date)?.monthlyTotal, moneyColumn)} (chưa gồm cuối năm)</span>
-            {totalsByDate.get(row.date)?.afterPenaltyTotal != null && <span>· sau phạt: {formatEmployeeCostCell(totalsByDate.get(row.date).afterPenaltyTotal, moneyColumn)}</span>}
+            <span>Σ ngày: {tongToanDoi(totalsByDate.get(row.date)?.monthlyTotal, thieuNguoi)} (chưa gồm cuối năm)</span>
+            {!thieuNguoi && totalsByDate.get(row.date)?.afterPenaltyTotal != null && <span>· sau phạt: {formatEmployeeCostCell(totalsByDate.get(row.date).afterPenaltyTotal, moneyColumn)}</span>}
           </td>
         </tr>}
         <tr className={row.reconciliationSynthetic ? 'employee-cost-shadow-variance-row' : ''}>
@@ -146,7 +146,32 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
   </>;
 }
 
-function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmployees, onPage, onPageSize, penalty }) {
+/* ‼ CỬA DUY NHẤT ĐỂ IN MỘT CON SỐ TỔNG TOÀN ĐỘI.
+ *
+ * Thiếu một người thì mọi tổng toàn đội đều vô nghĩa — không phải "tạm tính", mà là
+ * KHÔNG CÓ SỐ. Mọi chỗ hiển thị tổng phải đi qua đây; ca kiểm
+ * `EmployeeCost.thieuNguoiKhongTrungTong` quét cả file và đỏ nếu có chỗ nào đọc thẳng
+ * `monthlyTotal` / `periodTotal` / `afterPenaltyTotal` / `annualTotal` / `baseTotal`.
+ *
+ * Bài học đã phải trả ba lần: hàng rào nào cần người ta NHỚ cập nhật thì không phải
+ * hàng rào. Một cửa + một máy quét thì không có gì để mà quên. */
+function tongToanDoi(value, thieuNguoi) {
+  if (thieuNguoi) return 'Chưa đủ dữ liệu';
+  return formatEmployeeCostCell(value, moneyColumn);
+}
+
+/* ‼ BOT AUDIT ĐỢT 17 VÒNG 3 — BẮT ĐÚNG, VÀ ĐAU Ở CHỖ CA KIỂM VẪN XANH.
+ *
+ * Bản trước tôi chặn bốn ô KPI trên đầu màn rồi tuyên bố "không ô tổng nào hiện số".
+ * Nhưng ba dòng tổng NGAY DƯỚI BẢNG ở đây — `monthlyTotal`, `afterPenaltyTotal`,
+ * `annualTotal` — không hề nhận cờ, nên vẫn in số của phần đội. Màn hình lúc đó tự mâu
+ * thuẫn: trên ghi "Chưa đủ dữ liệu", dưới in một con số.
+ *
+ * Vì sao ca kiểm không bắt: tôi kiểm ĐÚNG BỐN CHỖ TÔI VỪA SỬA, không kiểm cái LUẬT.
+ * Danh sách chỗ cần nhớ lại là danh sách quên được — đúng cái bẫy đã sập ba lần ở
+ * `formulaIdentity`. Nay mọi số tổng toàn đội phải đi qua `tongToanDoi()`, và ca kiểm
+ * quét CẢ FILE bắt bất kỳ chỗ nào đọc thẳng, kể cả chỗ viết sau này. */
+function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmployees, onPage, onPageSize, penalty, thieuNguoi = false, thieuNguoiNote = '' }) {
   const annualNote = period.summary.annualLabels.join(', ');
   const filteredCount = period.search.filteredRows;
   const totalCount = period.search.totalRows;
@@ -171,20 +196,22 @@ function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmplo
     {!period.rows.length ? <div className="center">{period.note || 'Không có dòng phù hợp bộ lọc.'}</div> : <>
       {allEmployees && !!period.employeeSubtotals.length && <details className="employee-cost-subtotals">
         <summary>Tổng phụ theo nhân viên ({period.employeeSubtotals.length})</summary>
-        <div>{period.employeeSubtotals.map((item) => <span key={item.employeeCode}><b>{item.employeeCode} · {item.employeeName}</b><small>{item.rowCount.toLocaleString('vi-VN')} dòng · {formatEmployeeCostCell(item.monthlyTotal, moneyColumn)}</small></span>)}</div>
+              {/* tong-1-nguoi: tổng phụ của CHÍNH một NV, số thật của người đó — thiếu người khác
+          không làm số này sai. Giấu đi mới là giấu dữ liệu đang có. */}
+<div>{period.employeeSubtotals.map((item) => <span key={item.employeeCode}><b>{item.employeeCode} · {item.employeeName}</b><small>{item.rowCount.toLocaleString('vi-VN')} dòng · {formatEmployeeCostCell(item.monthlyTotal, moneyColumn)}</small></span>)}</div>
       </details>}
-      <CostTable period={period} query={query} sort={sort} onSort={onSort} allEmployees={allEmployees} onPage={onPage} onPageSize={onPageSize} c45Dropped={penalty?.c45Dropped} />
+      <CostTable period={period} query={query} sort={sort} onSort={onSort} allEmployees={allEmployees} onPage={onPage} onPageSize={onPageSize} c45Dropped={penalty?.c45Dropped} thieuNguoi={thieuNguoi} />
       <div className="employee-cost-summary-row">
         <span>{query ? 'Tổng các dòng đang lọc' : 'Tổng chi phí tháng'} (chưa gồm khoản cuối năm)</span>
-        <b>{formatEmployeeCostCell(period.summary.monthlyTotal, moneyColumn)}</b>
+        <b>{tongToanDoi(period.summary.monthlyTotal, thieuNguoi)}</b>
       </div>
-      {penalty?.afterPenaltyTotal != null && <div className="employee-cost-summary-row employee-cost-after-penalty-total">
-        <span>Tổng chi phí tháng sau phạt <small>· {penalty?.label || 'Dự kiến/tham khảo — chưa trừ lương'}</small></span>
-        <b>{formatEmployeeCostCell(penalty.afterPenaltyTotal, moneyColumn)}</b>
+      {(thieuNguoi || penalty?.afterPenaltyTotal != null) && <div className="employee-cost-summary-row employee-cost-after-penalty-total">
+        <span>Tổng chi phí tháng sau phạt <small>· {thieuNguoi ? thieuNguoiNote : (penalty?.label || 'Dự kiến/tham khảo — chưa trừ lương')}</small></span>
+        <b>{tongToanDoi(penalty?.afterPenaltyTotal, thieuNguoi)}</b>
       </div>}
       {!!period.summary.annualLabels.length && <div className="employee-cost-summary-row employee-cost-annual-total">
         <span>Khoản cuối năm (tạm tính · chi trả T12)</span>
-        <b>{formatEmployeeCostCell(period.summary.annualTotal, moneyColumn)}</b>
+        <b>{tongToanDoi(period.summary.annualTotal, thieuNguoi)}</b>
       </div>}
     </>}
 
@@ -193,7 +220,7 @@ function PeriodBlock({ period, expanded, onToggle, query, sort, onSort, allEmplo
       {!period.daily.reliable
         ? <div className="employee-cost-match-warning" role="alert">Không thể tách theo ngày: {period.daily.reason || 'dữ liệu ngày chưa đủ để đối chiếu tổng tháng'}.</div>
         : !period.daily.rows.length ? <div className="center">Chưa có doanh thu theo ngày.</div>
-          : <CostTable period={period} daily query={query} sort={sort} onSort={onSort} c45Dropped={penalty?.c45Dropped} />}
+          : <CostTable period={period} daily query={query} sort={sort} onSort={onSort} c45Dropped={penalty?.c45Dropped} thieuNguoi={thieuNguoi} />}
     </div>}
 
     {!!period.rows.length && <div className="employee-cost-source-note">
@@ -472,6 +499,8 @@ function AfterPenaltyKpi({ penalty, baseTotal, multiple }) {
         : 'Tỷ lệ khớp doanh thu chưa đạt ngưỡng nên tổng gốc bị khoá — không suy ra số sau phạt từ số chưa chắc'}
       tone="employee-cost-tone-after-penalty" />;
   }
+  /* tong-1-nguoi: đọc để kiểm null, không phải để in. Thiếu người thì chỗ gọi đã truyền
+   * `baseTotal={null}` nên hàm này thoát ở nhánh trên, không tới đây. */
   if (penalty.aggregate && penalty.afterPenaltyTotal == null) {
     return <Kpi label={multiple ? 'Tổng cả kỳ sau phạt' : 'Tổng chi phí tháng sau phạt'}
       value="Chưa đủ dữ liệu phạt"
@@ -955,6 +984,8 @@ function RemainingAfterAdvanceKpi({ remainingAfterAdvance, loading, allEmployees
       sub={`${periodText} · Chưa đủ dữ liệu, không coi là 0`} tone="employee-cost-tone-after-penalty" />;
   }
   const statusText = projection.locked ? 'Đã chốt' : 'Dự kiến · chưa chốt';
+  /* tong-1-nguoi: ô "Còn lại sau ứng lần 1" chỉ hiện khi chọn ĐÚNG một NV; ở chế độ toàn
+   * đội nó ghi "Chọn 1 NV" và không gọi App Salary. */
   const formulaText = Number.isSafeInteger(projection.afterPenaltyTotal) && Number.isSafeInteger(projection.salaryAdvanceAmount)
     ? `${projection.afterPenaltyTotal.toLocaleString('vi-VN')} − ${projection.salaryAdvanceAmount.toLocaleString('vi-VN')} ₫`
     : 'Tổng sau phạt − ứng lần 1';
@@ -2206,6 +2237,8 @@ export default function EmployeeCost({ me, onNavigate }) {
           noMatch ? '' : model.periodClose.note,
           // Chênh lệch so kỳ trước — chỉ hiện khi CEO bật VÀ cả hai kỳ đều có số.
           // Thiếu một đầu thì im lặng, không hiện "0%" giả.
+          /* tong-da-chan: cả khối `sub` này nằm trong nhánh `thieuNguoi ? … : […]`, chỉ dựng
+           * khi đã đủ người. Máy quét nhìn ±3 dòng nên không thấy chỗ chặn ở trên. */
           compareOn ? formatDeltaLabel(employeeCostDelta(
             noMatch ? null : (provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal),
             compareModel?.summary?.periodTotal ?? compareModel?.summary?.provisionalPeriodTotal ?? null,
@@ -2220,7 +2253,7 @@ export default function EmployeeCost({ me, onNavigate }) {
           frontend chỉ hiển thị, tuyệt đối không reduce/tính lại từ subtotals. */}
       <AfterPenaltyKpi
         penalty={model.penalty}
-        baseTotal={allEmployees ? model.penalty.baseTotal : model.summary.periodTotal}
+        baseTotal={thieuNguoi ? null : (allEmployees ? model.penalty.baseTotal : model.summary.periodTotal)}
         multiple={multiple} />
       {SALARY_ADVANCE_UI && <SalaryAdvanceKpi salaryAdvance={model.salaryAdvance} loading={loading}
         allEmployees={allEmployees} period={range.to} />}
@@ -2277,6 +2310,8 @@ export default function EmployeeCost({ me, onNavigate }) {
 
     {/* Cảnh báo xu + phép cấn trừ thiếu xu là theo TỪNG NGƯỜI — ẩn ở "Tất cả NV". */}
     {!allEmployees && <KhoanWarning khoan={khoan} />}
+      {/* tong-1-nguoi: `!allEmployees` — chỉ chạy khi chọn một NV, mà cờ thiếu người thì
+          đòi đang xem toàn đội, nên hai cảnh loại trừ nhau. */}
     {!allEmployees && <KhoanDeduction khoan={khoan} baseCost={model.summary.periodTotal} multiMonth={multiple} loading={khoanLoading} />}
 
     {allEmployees && model.bonus.configured && !!model.bonus.employeeSubtotals.length && <details className="employee-cost-subtotals employee-cost-bonus-subtotals">
@@ -2287,6 +2322,7 @@ export default function EmployeeCost({ me, onNavigate }) {
           <b role="cell">{item.empCode} · {item.employeeName}</b>
           <small role="cell">{formatEmployeeCostCell(item.month.amount, moneyColumn)} · đạt {targetPctLabel(item.month.pct)}</small>
           <small role="cell">{item.penalty?.total > 0 ? `−${formatEmployeeCostCell(item.penalty.total, moneyColumn)}` : item.penalty ? 'Không bị phạt' : 'Chưa có dữ liệu'}</small>
+          {/* tong-1-nguoi: số phạt của TỪNG người trong danh sách, không phải tổng đội. */}
           <small role="cell">{item.penalty?.afterPenaltyTotal == null ? '—' : formatEmployeeCostCell(item.penalty.afterPenaltyTotal, moneyColumn)}</small>
         </span>)}
       </div>
@@ -2307,7 +2343,7 @@ export default function EmployeeCost({ me, onNavigate }) {
 
     {error && <div className="employee-cost-match-warning" role="alert">{error}</div>}
     {loading ? <div className="card"><Spinner /></div> : !model.periods.length ? <div className="card center">{model.note}</div> : <>
-      {model.periods.map((period) => <PeriodBlock
+      {model.periods.map((period) => <PeriodBlock thieuNguoi={thieuNguoi} thieuNguoiNote={thieuNguoiNote}
         key={period.period}
         period={period}
         expanded={!!expanded[period.period]}
@@ -2322,7 +2358,7 @@ export default function EmployeeCost({ me, onNavigate }) {
       />)}
       {multiple && <div className="card employee-cost-range-total">
         <span>Tổng cả kỳ (chưa gồm khoản cuối năm)</span>
-        <b>{formatEmployeeCostCell(model.summary.periodTotal, moneyColumn)}</b>
+        <b>{tongToanDoi(model.summary.periodTotal, thieuNguoi)}</b>
       </div>}
     </>}
     </>}

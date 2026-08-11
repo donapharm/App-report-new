@@ -108,8 +108,11 @@ test('Employee Cost UI keeps one base-cost KPI and reads Xu, penalty, deduction,
   assert.doesNotMatch(kpiGrid, /\{!allEmployees && <PenaltyKpi/, '4 ô phạt không được ẩn ở chế độ Tất cả NV');
   assert.doesNotMatch(kpiGrid, /label="Phạt dự kiến" value="Chọn 1 NV"/,
     'ALL đã có tổng phạt backend, không được giữ placeholder cũ');
-  assert.match(kpiGrid, /baseTotal=\{allEmployees \? model\.penalty\.baseTotal : model\.summary\.periodTotal\}/,
-    'tổng sau phạt ALL phải dùng baseTotal toàn đội từ backend');
+  /* Ý của ca này: ALL phải lấy tổng gốc TỪ BACKEND, không tự cộng lại từ bảng. Ý đó giữ
+   * nguyên. Chỉ thêm cửa chặn thiếu người ở ngoài (CEO chốt 11/08): thiếu một NV thì
+   * truyền `null` để ô tự nói "Chưa đủ dữ liệu chi phí" thay vì in tổng của phần đội. */
+  assert.match(kpiGrid, /baseTotal=\{thieuNguoi \? null : \(allEmployees \? model\.penalty\.baseTotal : model\.summary\.periodTotal\)\}/,
+    'tổng sau phạt ALL phải dùng baseTotal toàn đội từ backend, và phải qua cửa chặn thiếu người');
   assert.match(kpiGrid, /^\s*<PenaltyKpi penalty=\{model\.penalty\}/m,
     'ô Phạt dự kiến dùng top-level backend penalty ở mọi chế độ');
   assert.match(kpiGrid, /^\s*<XuPenaltyKpi penalty=\{model\.penalty\}/m,

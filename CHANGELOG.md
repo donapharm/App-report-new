@@ -1,3 +1,42 @@
+### 2026-08-11 23:55 (giờ VN) — 🕳 Ca kiểm xanh trong khi lỗ còn nguyên; đổi từ "liệt kê chỗ" sang "quét cả file"
+
+**Bot bắt:** ở `076a4b9` tôi chặn bốn ô KPI đầu màn rồi tuyên bố "không ô tổng nào hiện
+số" — trong khi **ba dòng tổng ngay dưới bảng** (`PeriodBlock`: `monthlyTotal`,
+`afterPenaltyTotal`, `annualTotal`) không hề nhận cờ, vẫn in số của phần đội. Màn hình
+lúc đó **tự mâu thuẫn**: trên ghi "Chưa đủ dữ liệu", dưới in một con số.
+
+**‼ Chỗ đau không phải cái lỗ, mà là CA KIỂM VẪN XANH.**
+Tôi kiểm đúng bốn chỗ tôi vừa sửa. Ca kiểm kiểu đó chỉ chứng minh "tôi đã sửa chỗ tôi
+nhớ" — mà chỗ nhớ được thì đâu cần ca kiểm; cần là chỗ **quên**. Đây là **lần thứ tư**
+cùng một cái bẫy trong đợt này: danh sách module viết tay → danh sách file → danh sách
+thư mục → nay là danh sách ô hiển thị. Mỗi lần tôi sửa cái danh sách thay vì bỏ mô hình
+danh sách đi.
+
+**Nay đổi hẳn cách:**
+- Mọi số tổng toàn đội đi qua **một cửa duy nhất** `tongToanDoi()`.
+- Ca kiểm **quét CẢ FILE** tìm mọi chỗ đọc `monthlyTotal` / `periodTotal` /
+  `provisionalPeriodTotal` / `annualTotal` / `afterPenaltyTotal` / `baseTotal`, đòi từng
+  chỗ hoặc qua cửa, hoặc mang **nhãn miễn trừ kèm lý do viết ra** (`tong-1-nguoi` /
+  `tong-da-chan`, phải có ≥40 ký tự giải thích — nhãn dán bừa để test xanh đúng là cách
+  hàng rào này chết). Viết ô mới ở bất kỳ đâu mà quên chặn ⇒ đỏ, không cần ai nhớ.
+
+**Máy quét lập tức bắt thêm HAI lỗ nữa mà cả tôi lẫn bot đều chưa thấy:**
+- `Σ ngày` trong bảng chi tiết theo ngày — ở chế độ toàn đội đó là tổng cả đội theo từng ngày.
+- `Tổng cả kỳ` ở cuối màn khi xem nhiều tháng.
+Cộng ba dòng bot chỉ ra là **năm** chỗ rò, trong khi tôi tưởng đã xong ở bốn ô.
+
+Sáu chỗ còn lại máy quét nêu đều **không phải** tổng đội (tổng phụ của từng NV, ô chỉ
+hiện khi chọn một NV, phép kiểm null) — đã gắn nhãn kèm lý do tại chỗ.
+
+**Lỗi phụ tự tìm ra:** ca kiểm `PeriodBlock` của tôi cắt thân hàm tới `CostTable`, mà
+`CostTable` khai **trước** `PeriodBlock` ⇒ cắt ngược ⇒ chuỗi rỗng ⇒ **ca kiểm xanh vì
+không tìm thấy gì để chê**. Đúng kiểu hỏng âm thầm như A6c hôm nay. Đã sửa và thêm chốt
+`than.length > 500`.
+
+**Kiểm:** web **460/460**, server **1272/1279** (đúng 7 ca hỏng cố hữu của sandbox),
+`npm run build` xanh. Ba ca kiểm cũ phải sửa theo vì biểu thức đổi — giữ nguyên **ý**
+của chúng (ALL chỉ đọc `baseTotal` backend, không tự cộng lại), chỉ thêm cửa chặn.
+
 ### 2026-08-11 23:20 (giờ VN) — 🔒 Ba lỗ đóng dấu cuối; và con số quan trọng nhất: bỏ dấu = 14 giây/lượt
 
 **Phép đo quyết định của bot — kết quả ngược với dự đoán của tôi.**

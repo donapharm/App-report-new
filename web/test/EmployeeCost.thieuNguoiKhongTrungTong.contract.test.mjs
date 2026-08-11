@@ -73,3 +73,100 @@ test('thiếu CẶP mã hàng vẫn cho tạm tính — không được gộp ha
   assert.ok(!/const thieuNguoi = .*missingPairs/.test(SOURCE),
     'thiếu cặp mã hàng KHÔNG được kéo theo chặn tổng');
 });
+
+
+/* ── BOT AUDIT ĐỢT 17 VÒNG 3 ──────────────────────────────────────────────────
+ *
+ * Bot bắt: bản trước tôi chặn bốn ô KPI đầu màn rồi tuyên bố "không ô tổng nào hiện
+ * số" — trong khi ba dòng tổng NGAY DƯỚI BẢNG (`PeriodBlock`) vẫn in số của phần đội.
+ * Màn hình tự mâu thuẫn: trên ghi "Chưa đủ dữ liệu", dưới in một con số.
+ *
+ * ‼ ĐAU NHẤT LÀ CA KIỂM VẪN XANH. Tôi kiểm đúng bốn chỗ tôi vừa sửa, không kiểm cái
+ * luật. Ca kiểm kiểu đó chỉ chứng minh "tôi đã sửa chỗ tôi nhớ" — mà chỗ nhớ được thì
+ * đâu cần ca kiểm; cần là chỗ QUÊN. Đúng cái bẫy đã sập ba lần bên `formulaIdentity`
+ * (danh sách module viết tay → danh sách file → danh sách thư mục).
+ *
+ * Nay đảo cách kiểm: KHÔNG liệt kê chỗ phải chặn nữa. Quét CẢ FILE tìm mọi chỗ đọc một
+ * trường tổng toàn đội, và đòi từng chỗ phải đi qua `tongToanDoi()` hoặc nằm trong tầm
+ * bảo vệ của cờ. Viết thêm ô mới ở bất kỳ đâu mà quên chặn ⇒ ca này đỏ, không cần ai
+ * nhớ quay lại sửa test.
+ */
+
+// Trường mang số TỔNG TOÀN ĐỘI. Thêm trường tổng mới thì thêm vào đây.
+const TRUONG_TONG = [
+  'monthlyTotal', 'periodTotal', 'provisionalPeriodTotal',
+  'annualTotal', 'afterPenaltyTotal', 'baseTotal',
+];
+
+test('MÁY QUÉT: mọi chỗ đọc số tổng toàn đội đều phải qua cửa chặn', () => {
+  const dong = SOURCE.split('\n');
+  const roRi = [];
+  dong.forEach((noiDung, i) => {
+    const ma = noiDung.split('//')[0];
+    if (ma.trimStart().startsWith('*')) return;      // chú thích
+    if (!TRUONG_TONG.some((truong) => ma.includes(`.${truong}`))) return;
+    // Định nghĩa cửa và khai báo tham số thì không phải nơi hiển thị.
+    if (/^\s*(function|const)\s/.test(ma) && !ma.includes('<')) return;
+    // Có chặn ngay trên dòng, hoặc trong 3 dòng quanh nó (biểu thức xuống dòng).
+    const quanh = dong.slice(Math.max(0, i - 3), i + 4).join('\n');
+    if (/tongToanDoi\(|thieuNguoi/.test(quanh)) return;
+    /* ‼ MIỄN TRỪ PHẢI CÓ NHÃN VÀ CÓ LÝ DO VIẾT RA. Không phải chỗ nào đọc mấy trường này
+     * cũng là tổng toàn đội: tổng phụ của TỪNG NV là số thật của người đó, giấu đi mới là
+     * giấu dữ liệu đang có. Nhưng miễn trừ phải NÓI RA vì sao, ngay tại chỗ:
+     *   · `tong-1-nguoi`  — số của đúng một NV, thiếu người khác không làm nó sai.
+     *   · `tong-da-chan`  — đã nằm trong nhánh có cờ, chỉ là ngoài tầm ±3 dòng.
+     * Nhãn suông không kèm chữ giải thích thì vẫn tính là rò — nhãn dán bừa để test xanh
+     * đúng là cách hàng rào này chết. */
+    const nhan = dong.slice(Math.max(0, i - 6), i + 1).join('\n');
+    const coNhan = /tong-1-nguoi|tong-da-chan/.test(nhan);
+    const duLyDo = coNhan && nhan.replace(/.*tong-(1-nguoi|da-chan):?/s, '').trim().length >= 40;
+    if (coNhan && duLyDo) return;
+    roRi.push(coNhan
+      ? `dòng ${i + 1}: có nhãn miễn trừ nhưng KHÔNG nêu lý do — ${noiDung.trim().slice(0, 80)}`
+      : `dòng ${i + 1}: ${noiDung.trim().slice(0, 110)}`);
+  });
+  assert.deepEqual(roRi, [],
+    'Còn chỗ in số tổng toàn đội mà không qua cửa chặn — đúng lỗ `PeriodBlock` bot bắt ở 076a4b9:\n'
+    + roRi.join('\n'));
+});
+
+test('cửa chặn `tongToanDoi` trả CHỮ, không trả số, khi thiếu người', () => {
+  const than = SOURCE.slice(SOURCE.indexOf('function tongToanDoi('));
+  assert.match(than.slice(0, 200), /if \(thieuNguoi\) return 'Chưa đủ dữ liệu';/,
+    'phải trả thẳng câu nói, không được trả 0 hay null rồi để chỗ khác tự diễn giải');
+});
+
+/* Ba dòng tổng dưới bảng — đúng chỗ bot bắt. Kiểm riêng vì đây là bằng chứng cụ thể,
+ * còn máy quét bên trên là lưới chung. */
+test('ba dòng tổng dưới bảng trong PeriodBlock đều đã qua cửa', () => {
+  /* `CostTable` được khai TRƯỚC `PeriodBlock` trong file, nên cắt tới đó là cắt ngược và
+   * ra chuỗi rỗng — ca kiểm khi ấy xanh vì không tìm thấy gì để chê. Đúng kiểu hỏng âm
+   * thầm đã dính ở A6c. Cắt tới component kế TIẾP theo thứ tự file. */
+  const dau = SOURCE.indexOf('function PeriodBlock(');
+  const cuoi = SOURCE.indexOf('function ', SOURCE.indexOf('function tongToanDoi(') > dau ? dau + 1 : dau + 1);
+  const than = SOURCE.slice(dau, SOURCE.indexOf('\nfunction ', dau + 1));
+  assert.ok(than.length > 500 && cuoi > 0, 'cắt trúng thân PeriodBlock, không được ra chuỗi rỗng');
+  for (const truong of ['period.summary.monthlyTotal', 'penalty?.afterPenaltyTotal', 'period.summary.annualTotal']) {
+    assert.ok(than.includes(`tongToanDoi(${truong}`),
+      `${truong} phải qua cửa — đây đúng ba dòng in số trong khi KPI trên đầu ghi "Chưa đủ dữ liệu"`);
+  }
+  assert.match(than, /thieuNguoi = false, thieuNguoiNote = ''/,
+    'PeriodBlock phải NHẬN cờ; không nhận thì mọi thứ bên trong nó mù');
+  assert.match(SOURCE, /<PeriodBlock thieuNguoi=\{thieuNguoi\}/,
+    'và chỗ gọi phải TRUYỀN cờ xuống — nhận mà không ai truyền thì cũng như không');
+});
+
+test('ô "sau phạt" trên đầu màn cũng không được nhận số khi thiếu người', () => {
+  assert.match(SOURCE, /baseTotal=\{thieuNguoi \? null :/,
+    'truyền null để AfterPenaltyKpi tự nói "Chưa đủ dữ liệu chi phí" — đường nó vốn đã làm đúng');
+});
+
+
+test('Σ ngày trong bảng chi tiết cũng phải qua cửa — ở chế độ toàn đội đó là tổng cả đội', () => {
+  const than = SOURCE.slice(SOURCE.indexOf('function CostTable('), SOURCE.indexOf('function CostColumnKpi('));
+  assert.match(than, /tongToanDoi\(totalsByDate\.get\(row\.date\)\?\.monthlyTotal, thieuNguoi\)/,
+    'dòng "Σ ngày" gộp cả đội theo từng ngày — thiếu người thì nó cũng sai như tổng tháng');
+  assert.match(than, /thieuNguoi = false/, 'CostTable phải NHẬN cờ');
+  assert.equal((SOURCE.match(/<CostTable[^>]*thieuNguoi=\{thieuNguoi\}/g) || []).length, 2,
+    'cả hai chỗ gọi CostTable (bảng thường và bảng theo ngày) đều phải truyền cờ');
+});

@@ -72,8 +72,11 @@ test('employee penalty UI keeps v3.4 KPI labels, adds remaining-after-advance, a
   // Fail-closed KHÔNG mất: chuyển vào trong component, hiện CHỮ thay vì ẩn ô.
   assert.doesNotMatch(PAGE, /model\.summary\.periodTotal != null && <AfterPenaltyKpi/,
     'ô "Tổng sau phạt" không được ẩn theo điều kiện ngoài');
-  assert.match(PAGE, /<AfterPenaltyKpi[\s\S]{0,220}?baseTotal=\{allEmployees \? model\.penalty\.baseTotal : model\.summary\.periodTotal\}/,
-    'mọi chế độ phải render ô "Tổng sau phạt"; ALL chỉ đọc baseTotal backend');
+  /* Ý giữ nguyên: ALL chỉ ĐỌC `baseTotal` backend, không tự cộng lại từ bảng. Thêm cửa
+   * chặn thiếu người ở ngoài (CEO chốt 11/08) — thiếu một NV thì truyền `null` để ô tự
+   * nói "Chưa đủ dữ liệu chi phí" thay vì in tổng của phần đội. */
+  assert.match(PAGE, /<AfterPenaltyKpi[\s\S]{0,260}?baseTotal=\{thieuNguoi \? null : \(allEmployees \? model\.penalty\.baseTotal : model\.summary\.periodTotal\)\}/,
+    'mọi chế độ phải render ô "Tổng sau phạt"; ALL chỉ đọc baseTotal backend, và phải qua cửa chặn thiếu người');
   assert.match(PAGE, /if \(penalty\.aggregate && penalty\.afterPenaltyTotal == null\) \{[\s\S]{0,350}?Chưa đủ dữ liệu phạt/,
     'ALL enforced thiếu số áp dụng phải fail-closed, không được dùng tổng gốc như tổng sau phạt');
   assert.doesNotMatch(PAGE, /label="Phạt dự kiến" value="Chọn 1 NV"/,
