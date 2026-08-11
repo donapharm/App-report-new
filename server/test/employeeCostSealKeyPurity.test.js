@@ -464,3 +464,82 @@ test('A5b biến môi trường MỚI cùng họ tự động được phủ, v�
     formulaIdentity.forgetCache();
   }
 });
+
+/* ── BOT AUDIT ĐỢT 16 ─────────────────────────────────────────────────────── */
+
+/* A6 — TÔI SỬA MÔ HÌNH Ở MỘT CHỖ RỒI ĐỂ NGUYÊN MÔ HÌNH SAI Ở CHỖ BÊN CẠNH.
+ *
+ * Đợt 15 tôi bỏ được danh sách module viết tay (băm cả `src/`). Nhưng với `data/` thì
+ * vẫn giữ đúng cái bẫy đó: chỉ nhặt hai file chính sách, viện cớ "thư mục có dữ liệu
+ * biến động". Bot tìm ra ngay `data/holidays.json` — đổi lịch nghỉ làm dự báo target
+ * đi từ 104,5% → 110,0% mà căn cước y hệt ⇒ dấu cũ tiếp tục phục vụ số cũ.
+ *
+ * Nay quét CẢ `data/`, chỉ loại trừ thư mục biến động có lý do. Ca này canh cả hai
+ * mặt, vì bỏ sót và churn hỏng theo hai kiểu khác hẳn nhau. */
+test('A6 đổi file dữ liệu tĩnh trong data/ (lịch nghỉ) ⇒ căn cước PHẢI đổi', () => {
+  const formulaIdentity = require('../src/employeeCostFormulaIdentity');
+  const p = path.join(__dirname, '..', 'data', 'holidays.json');
+  const cu = fs.existsSync(p) ? fs.readFileSync(p) : null;
+  try {
+    formulaIdentity.forgetCache();
+    const truoc = formulaIdentity.identity();
+
+    fs.writeFileSync(p, JSON.stringify({ dates: [{ date: '2026-09-02', name: 'Quốc khánh' }] }));
+    formulaIdentity.forgetCache();
+    assert.notEqual(formulaIdentity.identity(), truoc,
+      'lịch nghỉ đổi ⇒ dự báo target đổi ⇒ căn cước BẮT BUỘC phải đổi, nếu không dấu cũ phục vụ số cũ');
+
+    if (cu !== null) {
+      fs.writeFileSync(p, cu);
+      formulaIdentity.forgetCache();
+      assert.equal(formulaIdentity.identity(), truoc,
+        'trả lại nguyên trạng ⇒ căn cước phải quay về đúng như cũ (băm theo nội dung, không theo giờ sửa)');
+    }
+  } finally {
+    if (cu !== null) fs.writeFileSync(p, cu);
+    formulaIdentity.forgetCache();
+  }
+});
+
+/* A6b — MẶT NGƯỢC LẠI. Quét cả `data/` mà quên loại trừ thư mục biến động thì khoá đổi
+ * mỗi lượt bấm ⇒ dấu không bao giờ tra lại được ⇒ quay lại đúng bệnh "mở màn nào cũng
+ * dựng lại 24 giây". Đây là lý do phải loại trừ `AUTH_DATA_DIR` và `data/uploads`.
+ *
+ * ‼ BỐN KHO TIỀN nằm trong `AUTH_DATA_DIR` và CỐ Ý không băm ở đây: chúng đã được phủ
+ * bởi `closedSeal.rateStoreFingerprint()` theo NỘI DUNG SỐ (bỏ `fetchedAt`). Băm lại
+ * bằng byte thô là dựng lại đúng lỗi churn đã mất một vòng để gỡ. */
+test('A6b ghi file biến động (nhật ký đăng nhập) KHÔNG được làm căn cước đổi', () => {
+  const formulaIdentity = require('../src/employeeCostFormulaIdentity');
+  const thuMucAuth = process.env.AUTH_DATA_DIR || path.join(__dirname, '..', 'data', 'auth');
+  const p = path.join(thuMucAuth, 'audit_auth.json');
+  const daCo = fs.existsSync(p);
+  const cu = daCo ? fs.readFileSync(p) : null;
+  try {
+    fs.mkdirSync(thuMucAuth, { recursive: true });
+    formulaIdentity.forgetCache();
+    const truoc = formulaIdentity.identity();
+
+    for (let i = 0; i < 3; i += 1) {
+      fs.writeFileSync(p, JSON.stringify({ lan: i, ghiChu: 'mỗi lần đăng nhập là một lượt ghi' }));
+      formulaIdentity.forgetCache();
+      assert.equal(formulaIdentity.identity(), truoc,
+        'nhật ký đăng nhập làm đổi căn cước ⇒ khoá đổi mỗi lượt bấm ⇒ dấu vô dụng, dựng lại hoài');
+    }
+  } finally {
+    if (daCo) fs.writeFileSync(p, cu); else { try { fs.unlinkSync(p); } catch { /* chưa từng có */ } }
+    formulaIdentity.forgetCache();
+  }
+});
+
+/* A6c — CĂN CƯỚC PHẢI ỔN ĐỊNH GIỮA HAI LẦN KHỞI ĐỘNG. Nếu nó đổi mỗi lần nạp lại
+ * module thì con dấu không bao giờ tra lại được sau khi restart — đúng thứ cơ chế này
+ * sinh ra để tránh. */
+test('A6c không đụng gì thì nạp lại module bao nhiêu lần căn cước vẫn y nguyên', () => {
+  const duong = require.resolve('../src/employeeCostFormulaIdentity');
+  const lan = [];
+  for (let i = 0; i < 5; i += 1) {
+    delete require.cache[duong];
+    lan.push(require('../src/employeeCostFormulaIdentity').identity());
+  }
+  assert.equal(new Set(lan).size, 1, `căn cước phải giống hệt cả 5 lần nạp, đang ra: ${[...new Set(lan)].join(' | ')}`);
+});

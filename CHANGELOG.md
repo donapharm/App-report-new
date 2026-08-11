@@ -1,3 +1,40 @@
+### 2026-08-11 20:30 (giờ VN) — 📅 QUÉT CẢ `data/`: lấy hết rồi trừ ra, thay vì nhặt vào
+
+Bot audit đợt 16 tìm ra `server/data/holidays.json` nằm ngoài vùng băm: đổi lịch nghỉ
+làm **dự báo target đi từ 104,5% → 110,0%** mà căn cước y hệt ⇒ dấu cũ tiếp tục phục vụ
+số cũ.
+
+**Điều đáng nói không phải file bị sót, mà là tôi vừa sửa đúng lỗi này một vòng trước.**
+Đợt 15 tôi bỏ danh sách module viết tay, băm cả `src/`, và ghi hẳn vào CHANGELOG rằng
+"danh sách viết tay là mô hình sai". Rồi ngay trong cùng file đó, với `data/`, tôi
+**giữ nguyên mô hình sai**: chỉ nhặt hai file chính sách, viện cớ "thư mục có dữ liệu
+biến động". Sửa mô hình ở một chỗ rồi để nguyên ở chỗ bên cạnh.
+
+**Luật rút ra, ghi lại để lần sau khỏi tái phạm:**
+> **Danh sách CHO PHÉP hỏng âm thầm. Danh sách LOẠI TRỪ hỏng ồn ào.**
+> Quên THÊM vào danh sách cho phép ⇒ con số sai đóng dấu **vĩnh viễn, không ai hay**.
+> Quên LOẠI TRỪ một file biến động ⇒ khoá churn ⇒ dựng lại hoài ⇒ **lộ ra ngay** ở tốc
+> độ và số liệu đo. Ồn ào thì còn sửa; im lặng thì không.
+> Nên với thứ ảnh hưởng tới tiền: **lấy hết, rồi trừ ra vài thứ có lý do**.
+
+**Đã sửa**
+- Băm **cả `data/`**, chỉ loại trừ hai thư mục, mỗi thư mục nêu rõ lý do:
+  · `AUTH_DATA_DIR` (mặc định `data/auth`) — phiên, nhật ký, thiết bị: đổi mỗi lượt bấm.
+  · `data/uploads` — file xlsx đã tải; slot hiệu lực đã nằm trong `employeeCostDataSignature()`.
+- ‼ **BỐN KHO TIỀN nằm trong `AUTH_DATA_DIR` và CỐ Ý không băm ở đây**: đã được phủ bởi
+  `closedSeal.rateStoreFingerprint()` theo **nội dung số** (bỏ `fetchedAt`). Băm lại
+  bằng byte thô là dựng lại đúng lỗi churn đã mất một vòng để gỡ. Ghi rõ trong code để
+  không ai "bổ sung cho đủ".
+- Thêm `package.json` + `package-lock.json` (cả server lẫn gốc): nâng thư viện có thể
+  đổi cách làm tròn; lockfile ghi chính xác phiên bản đang dùng, rẻ hơn băm `node_modules`.
+
+**Kiểm**
+- Thêm 3 ca: **A6** lịch nghỉ đổi ⇒ căn cước đổi, trả lại nguyên trạng ⇒ căn cước quay
+  về như cũ; **A6b** ghi nhật ký đăng nhập 3 lượt ⇒ căn cước **đứng yên** (canh mặt
+  churn); **A6c** nạp lại module 5 lần không đụng gì ⇒ căn cước y nguyên.
+- Kiểm ngược: khôi phục bản trước ⇒ ca A6 đỏ.
+- Toàn bộ backend **1263/1270**: đúng 7 ca hỏng cố hữu của sandbox. `npm run build` xanh.
+
 ### 2026-08-11 19:05 (giờ VN) — 🚫 BỎ DANH SÁCH VIẾT TAY: băm cả `src/` và cả `config/`
 
 Bot audit đợt 15 xác nhận A3/A4 của đợt trước đều PASS (kể cả ca sentinel: giá trị biến

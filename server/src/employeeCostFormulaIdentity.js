@@ -47,9 +47,11 @@ const CONFIG_DIR = path.join(__dirname, '..', 'config');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 
 // Liệt kê đệ quy, sắp xếp cố định để thứ tự đọc thư mục không làm đổi băm.
-function liet(dir, loc = () => true) {
+function liet(dir, loc = () => true, boQua = []) {
   const ra = [];
+  const chan = boQua.map((p) => path.resolve(p));
   const di = (thuMuc) => {
+    if (chan.includes(path.resolve(thuMuc))) return;
     let muc;
     try { muc = fs.readdirSync(thuMuc, { withFileTypes: true }); } catch { return; }
     for (const e of muc) {
@@ -79,13 +81,45 @@ function digestNguon() {
   return bamNguon;
 }
 
-/* ② CẤU HÌNH — toàn bộ `config/`, cộng vài file chính sách nằm trong `data/` (thư mục
- * đó còn chứa dữ liệu biến động nên không quét cả). File cấu hình SỬA ĐƯỢC lúc app
- * đang chạy, nên phải soi lại mỗi lượt; nhớ theo vân tay `stat` để khỏi đọc lại file
- * không đổi. */
-const fileChinhSachTrongData = () => [
-  process.env.EMPLOYEE_BONUS_POLICY_FILE || path.join(DATA_DIR, 'employee_bonus_policies.json'),
-  process.env.EMPLOYEE_PENALTY_POLICY_FILE || path.join(DATA_DIR, 'employee_penalty_policies.json'),
+/* ② CẤU HÌNH & DỮ LIỆU TĨNH.
+ *
+ * ‼ BÀI HỌC ĐỢT 16 — DANH SÁCH CHO PHÉP HỎNG ÂM THẦM, DANH SÁCH LOẠI TRỪ HỎNG ỒN ÀO.
+ *
+ * Bản trước tôi bỏ được danh sách module viết tay (băm cả `src/`), nhưng với `data/`
+ * thì **vẫn giữ đúng cái bẫy cũ**: chỉ nhặt hai file chính sách, viện cớ "thư mục đó
+ * có dữ liệu biến động". Bot tìm ra ngay `data/holidays.json` — đổi lịch nghỉ làm dự
+ * báo target đi từ **104,5% → 110,0%** mà căn cước y hệt. Tôi sửa mô hình ở một chỗ
+ * rồi để nguyên mô hình sai ở chỗ bên cạnh.
+ *
+ * Nay đảo chiều: **quét CẢ `data/`, chỉ LOẠI TRỪ đúng những thư mục biến động**, và
+ * mỗi mục loại trừ phải nêu được lý do. Vì hai kiểu quên hỏng theo hai cách khác hẳn:
+ *   · Quên THÊM vào danh sách cho phép ⇒ con số sai được đóng dấu **vĩnh viễn, im lặng**.
+ *   · Quên LOẠI TRỪ một file biến động ⇒ khoá đổi liên tục ⇒ dựng lại hoài ⇒ **lộ ra
+ *     ngay** ở tốc độ và ở số liệu đo. Ồn ào thì còn sửa được; im lặng thì không.
+ * Nên chiều an toàn là "lấy hết, trừ ra vài thứ có lý do".
+ *
+ * Hai chỗ loại trừ, kèm lý do:
+ *   · `AUTH_DATA_DIR` (mặc định `data/auth`) — phiên đăng nhập, nhật ký, thiết bị: đổi
+ *     mỗi lượt bấm. BỐN KHO TIỀN cũng nằm trong đó, nhưng chúng **đã được phủ** bởi
+ *     `closedSeal.rateStoreFingerprint()` trong vân tay nguồn, và phủ theo **nội dung
+ *     số** (bỏ `fetchedAt`). Băm lại bằng byte thô ở đây là dựng lại đúng lỗi churn đã
+ *     mất một vòng để gỡ. ‼ ĐỪNG "bổ sung cho đủ" bốn file đó vào đây.
+ *   · `data/uploads` — file xlsx đã tải lên; slot đang hiệu lực đã nằm trong
+ *     `store.employeeCostDataSignature()`.
+ *
+ * Thêm `package.json` + `package-lock.json` (cả server lẫn gốc): nâng một thư viện có
+ * thể đổi cách làm tròn, mà lockfile là thứ ghi chính xác phiên bản đang dùng — rẻ hơn
+ * băm `node_modules` rất nhiều. */
+const thuMucBoQua = () => [
+  process.env.AUTH_DATA_DIR || path.join(DATA_DIR, 'auth'),
+  path.join(DATA_DIR, 'uploads'),
+];
+
+const filePhuThuoc = () => [
+  path.join(__dirname, '..', 'package.json'),
+  path.join(__dirname, '..', 'package-lock.json'),
+  path.join(__dirname, '..', '..', 'package.json'),
+  path.join(__dirname, '..', '..', 'package-lock.json'),
 ];
 
 // Đường dẫn cấu hình do biến môi trường trỏ tới — có thể nằm ngoài `config/`.
@@ -111,10 +145,11 @@ function digestMotFile(duongDan) {
 function digestCauHinh() {
   const danh = [
     ...liet(CONFIG_DIR),
-    ...fileChinhSachTrongData(),
+    ...liet(DATA_DIR, () => true, thuMucBoQua()),
+    ...filePhuThuoc(),
     ...fileCauHinhNgoai(),
   ];
-  const duyNhat = [...new Set(danh)].sort();
+  const duyNhat = [...new Set(danh.map((p) => path.resolve(p)))].sort();
   return ngan(duyNhat.map((p) => `${p}=${digestMotFile(p)}`).join('\n'));
 }
 
