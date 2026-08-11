@@ -1204,16 +1204,24 @@ async function employeeCostAllPayload(req, {
    * dấu duy nhất TRƯỚC catalog rồi đem so đầu–cuối ⇒ cổng kiểm báo "lệch đời" trong
    * tình huống hoàn toàn lành ⇒ chặn luôn cả đường warm, cache không bao giờ trúng.
    * Chính ca warm-cache bắt được. Lỗi ở cổng kiểm của tôi, không ở bài kiểm. */
-  /* ‼ MỐC ĐỜI DỮ LIỆU cho cổng kiểm — KHÁC với vân tay dùng làm khoá.
-   * Bot audit đợt 9 tái hiện **A → B → A**: nguồn 111 → 222 → 111 ngay trong lúc dựng.
-   * Vân tay đầu và cuối GIỐNG HỆT nhau nên phép so "đầu == cuối" mù hoàn toàn, app
-   * hiển thị và đóng dấu 222 trong khi nguồn hiện tại là 111. Băm nội dung cũng không
-   * cứu được vì nội dung thật sự đã quay về như cũ.
-   * Nên cổng kiểm phải kèm **đồng hồ chỉ tiến** của `persist`: A→B→A đi qua hai nhịp
-   * ghi/đọc ⇒ đồng hồ nhích ⇒ lộ ngay.
-   * Đồng hồ TUYỆT ĐỐI không được vào khoá cache/khoá dấu — hai thứ đó phải tái lập
-   * được ở lượt sau, nhét đồng hồ vào là mỗi lượt một khoá, cache chết. */
-  const mocDoi = () => `${vanTayNguon()}|gen=${persist.observedGeneration()}`;
+  /* ‼ HAI THỨ KHÁC NHAU, ĐỪNG TRỘN — bài học đắt nhất của đợt này.
+   *
+   *   KHOÁ  (cache + đóng dấu) = vân tay NỘI DUNG. Phải tái lập được ở lượt sau, ở
+   *         tiến trình sau, sau khi restart. Chỉ được là hàm của nội dung đầu vào.
+   *
+   *   CỔNG  (chống trôi giữa chừng) = vân tay nội dung **+ sổ đời** của bốn kho tiền.
+   *         Sổ đời bắt được cảnh A→B→A do tiến trình KHÁC gây ra, thứ mà so nội dung
+   *         hai đầu mù hoàn toàn (111 → 222 → 111 thì hai đầu y hệt nhau).
+   *
+   * Bản trước tôi viết đúng câu này trong chú thích rồi vẫn đem `mocDoi()` — thứ có
+   * chứa số đời — đi sinh khoá đóng dấu. Hậu quả bot đo được: dấu ghi bằng khoá lẫn
+   * số đời, còn lượt tra sau dùng khoá thuần nội dung ⇒ KHÔNG BAO GIỜ tra lại được,
+   * dấu mồ côi chất đống, và cơ chế chống-nhảy-số coi như không tồn tại.
+   * Chú thích không phải hàng rào. Hàng rào là ca kiểm ĐỘNG bên dưới: dựng thật rồi
+   * so khoá đã ghi với khoá mà đường tra dùng — lệch một ký tự là đỏ. */
+  const KHO_TIEN = closedSeal.RATE_STORE_FILES;
+  const soDoiKhoTien = () => persist.observedGeneration(KHO_TIEN);
+  const mocDoi = () => `${vanTayNguon()}|doi=${soDoiKhoTien()}`;
   const vanTaySom = vanTayNguon();
   const sealKey = khoaDauTheoVanTay(vanTaySom);
   if (sealKey && paginate) {
@@ -1505,28 +1513,26 @@ async function employeeCostAllPayload(req, {
      * hàng trộn. Dựng lại vẫn lệch ⇒ **báo lỗi rõ ràng**, để `memoGet` vứt luôn entry
      * (nó tự xoá khi promise reject) — thà bảo "thử lại" còn hơn đưa CEO một con số
      * không thuộc đời nào cả. */
-    const vanTayNguon = () => [
-      store.employeeCostDataSignature(),
-      closedSeal.rateStoreFingerprint(),
-      employeeBonus.FORMULA_VERSION,
-      APP_BUILD_VERSION,
-    ].join('|');
-
+    /* (Trước đây chỗ này khai lại y hệt `vanTayNguon` của phạm vi ngoài — bản trùng
+     * che mất bản gốc, sửa một bên quên bên kia là hai cổng kiểm lệch nhau lúc nào
+     * không biết. Bỏ hẳn, dùng chung đúng một định nghĩa ở trên.) */
     const SO_LAN_DUNG_TOI_DA = 2;
     for (let lan = 1; lan <= SO_LAN_DUNG_TOI_DA; lan += 1) {
-      const truoc = mocDoi();
+      /* Chụp RỜI hai thứ, đúng cùng một thời điểm: vân tay nội dung để làm KHOÁ,
+       * sổ đời để làm CỔNG. Gộp chung một chuỗi là con đường dẫn thẳng tới lỗi vừa rồi. */
+      const vanTayTruoc = vanTayNguon();
+      const doiTruoc = soDoiKhoTien();
       const built = await buildMerged();
-      const sau = mocDoi();
-      if (truoc !== sau) {
+      if (vanTayTruoc !== vanTayNguon() || doiTruoc !== soDoiKhoTien()) {
         console.warn('[employee-cost] nguồn đổi giữa lúc dựng — BỎ bản trộn đời, dựng lại', { lan });
         continue;
       }
       /* ‼ ĐÓNG DẤU BẰNG KHOÁ CỦA CHÍNH ĐỜI VỪA DỰNG (bot audit đợt 7, đúng).
        * `sealKey` chụp lúc vào request là đời A. Nếu lượt 1 trượt A→B rồi lượt 2 dựng
        * đúng đời B, mà vẫn ghi bằng khoá A thì: nguồn quay lại A ⇒ app đọc dấu A ⇒
-       * phục vụ số của đời B. Số sai, và sai vĩnh viễn. Khoá phải sinh từ `truoc` —
-       * đúng con dấu vừa được xác nhận đầu–cuối. */
-      const khoaDung = khoaDauTheoVanTay(truoc);
+       * phục vụ số của đời B. Số sai, và sai vĩnh viễn. Khoá phải sinh từ vân tay
+       * NỘI DUNG vừa được xác nhận đầu–cuối — và chỉ nội dung, không kèm số đời. */
+      const khoaDung = khoaDauTheoVanTay(vanTayTruoc);
       if (khoaDung && closedSeal.isSealable(built, roster, sealEvidenceReports)) {
         try {
           await closedSeal.write(khoaDung, built, { complete: true });

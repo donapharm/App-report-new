@@ -295,14 +295,56 @@ test('⑧ vân tay phủ ĐỦ BỐN kho, và nhận diện theo NỘI DUNG ch�
     'ghi lại CÙNG nội dung (dù giờ sửa nhảy) ⇒ vân tay PHẢI đứng yên, nếu không thì cache tự huỷ mỗi lượt');
 });
 
+/* Bot audit đợt 12, mục 5 — cái bẫy nằm sâu hơn "ghi lại y nguyên": kho tỷ lệ KHÔNG
+ * BAO GIỜ được ghi lại y nguyên. `employeeCostRateSnapshot.write()` đóng thêm
+ * `fetchedAt: <giờ hiện tại>` vào mỗi bản ghi, nên MỖI lượt dựng khoẻ mạnh — lấy được
+ * tỷ lệ ⇒ lưu lại — đều làm file đổi BYTE dù không một con số nào nhúc nhích.
+ * Băm cả file thì: khoá đổi mỗi lượt ⇒ dấu vừa đóng thành mồ côi ⇒ mở màn nào cũng
+ * dựng lại 24 giây; và cổng chống-trôi thấy "đầu ≠ cuối" nên kêu nguồn đang đổi cho
+ * một việc hoàn toàn lành. Tức là app tự bóp cổ mình. */
+test('⑧b kho tỷ lệ: đổi `fetchedAt` KHÔNG đổi vân tay, đổi CON SỐ thì phải đổi', () => {
+  const { seal, dir } = freshSeal();
+  const p = path.join(dir, 'employee_cost_rate_snapshot.json');
+  const van = () => seal.rateStoreFingerprint({ DIR: dir }, ['employee_cost_rate_snapshot']);
+  const ban = (fetchedAt, c41) => JSON.stringify({
+    'DN001|2026-07': { payload: { columns: ['c41'], rows: [[c41]], period: '2026-07' }, fetchedAt },
+  });
+
+  fs.writeFileSync(p, ban('2026-08-11T01:00:00.000Z', 10));
+  const goc = van();
+
+  fs.writeFileSync(p, ban('2026-08-11T09:30:00.000Z', 10)); // chỉ đổi GIỜ LẤY
+  assert.equal(van(), goc, 'đổi mỗi `fetchedAt` ⇒ vân tay phải đứng yên, nếu không dấu mồ côi mỗi lượt');
+
+  fs.writeFileSync(p, ban('2026-08-11T01:00:00.000Z', 11)); // đổi TỶ LỆ
+  assert.notEqual(van(), goc, 'đổi CON SỐ tỷ lệ ⇒ vân tay BẮT BUỘC phải đổi');
+
+  // File lệch khỏi hình dạng dự kiến vẫn phải nhạy — bỏ sót là fail-open, số đổi mà im.
+  fs.writeFileSync(p, JSON.stringify({ la: 111 }));
+  const la1 = van();
+  fs.writeFileSync(p, JSON.stringify({ la: 222 }));
+  assert.notEqual(van(), la1, 'cấu trúc lạ cũng phải băm — không được chỉ băm phần mình cho là quan trọng');
+
+  // Thứ tự ghi khoá không được làm đổi vân tay (file này bị đọc–sửa–ghi liên tục).
+  fs.writeFileSync(p, JSON.stringify({ a: { payload: 1 }, b: { payload: 2 } }));
+  const xuoi = van();
+  fs.writeFileSync(p, JSON.stringify({ b: { payload: 2 }, a: { payload: 1 } }));
+  assert.equal(van(), xuoi, 'đảo thứ tự khoá mà nội dung y nguyên ⇒ vân tay phải y nguyên');
+});
+
 // (3) Nguồn đổi GIỮA lúc fan-out ⇒ bản gộp trộn đời ⇒ cấm đóng dấu.
 test('⑨ routes phải kiểm lại đời dữ liệu NGAY TRƯỚC khi đóng dấu', () => {
   const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   assert.match(src, /const vanTayNguon = \(\) => \[/, 'phải có hàm chụp vân tay nguồn');
-  assert.ok(
-    src.indexOf('const sau = vanTayNguon();') < src.indexOf('closedSeal.isSealable(built, roster, sealEvidenceReports)'),
-    'phải kiểm đời TRƯỚC khi xét điều kiện đóng dấu',
-  );
+  /* ‼ Phải dùng mốc DƯƠNG rồi mới so thứ tự. Bản trước viết
+   *     indexOf('const sau = vanTayNguon();') < indexOf('closedSeal.isSealable(...)')
+   * và khi dòng `const sau` bị đổi tên thì `indexOf` trả −1 — nhỏ hơn mọi thứ — nên ca
+   * này XANH GIẢ, không còn kiểm gì nữa. Đúng kiểu bài kiểm tự bịt mắt mình. */
+  const viTriKiemDoi = src.indexOf('doiTruoc !== soDoiKhoTien()');
+  const viTriXetDau = src.indexOf('closedSeal.isSealable(built, roster, sealEvidenceReports)');
+  assert.ok(viTriKiemDoi > 0, 'phải tìm được đoạn kiểm đời');
+  assert.ok(viTriXetDau > 0, 'phải tìm được đoạn xét điều kiện đóng dấu');
+  assert.ok(viTriKiemDoi < viTriXetDau, 'phải kiểm đời TRƯỚC khi xét điều kiện đóng dấu');
   // Vân tay phải gồm ĐỦ bốn thành phần, không chỉ doanh thu.
   const ham = src.slice(src.indexOf('const vanTayNguon = () => ['), src.indexOf('const SO_LAN_DUNG_TOI_DA'));
   for (const phan of [
@@ -334,11 +376,11 @@ test('⑪ lệch đời ⇒ DỰNG LẠI, không trả bản trộn; cạn lư�
   const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   const khoi = src.slice(src.indexOf('const vanTayNguon = () =>'), src.indexOf('// Export giữ nguyên đường audit'));
 
-  assert.match(khoi, /const truoc = mocDoi\(\);[\s\S]*?const built = await buildMerged\(\);[\s\S]*?const sau = mocDoi\(\);/,
-    'phải chụp MỐC ĐỜI (vân tay + đồng hồ chỉ tiến) TRƯỚC và SAU khi dựng — vân tay đơn thuần mù với A→B→A');
-  assert.match(khoi, /persist\.observedGeneration\(\)/,
-    'mốc đời phải gồm đồng hồ chỉ tiến, nếu không thì A→B→A lọt');
-  assert.match(khoi, /if \(truoc !== sau\) \{[\s\S]{0,220}?continue;/,
+  assert.match(khoi, /const vanTayTruoc = vanTayNguon\(\);[\s\S]{0,200}?const doiTruoc = soDoiKhoTien\(\);[\s\S]*?const built = await buildMerged\(\);/,
+    'phải chụp CẢ HAI mốc (vân tay nội dung + sổ đời) TRƯỚC khi dựng — vân tay đơn thuần mù với A→B→A');
+  assert.match(khoi, /persist\.observedGeneration\(KHO_TIEN\)/,
+    'sổ đời phải hỏi ĐÚNG TÊN bốn kho tiền — hỏi trống là quay lại cái bẫy đếm toàn cục');
+  assert.match(khoi, /if \(vanTayTruoc !== vanTayNguon\(\) \|\| doiTruoc !== soDoiKhoTien\(\)\) \{[\s\S]{0,220}?continue;/,
     'lệch đời ⇒ dựng lại, TUYỆT ĐỐI không return bản trộn');
   assert.doesNotMatch(khoi, /sealKeySauKhiDung/,
     'cấm quay lại lối cũ: chặn đóng dấu mà vẫn trả bản trộn');
@@ -353,7 +395,7 @@ test('⑪ lệch đời ⇒ DỰNG LẠI, không trả bản trộn; cạn lư�
     // Bỏ chú thích rồi mới soi: lần trước bài kiểm bắt nhầm chữ `sealKey` nằm trong
     // một dòng giải thích, chứ code thì đúng. Test phải soi CODE, không soi văn xuôi.
     .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-  assert.ok(doanKiemDoi.includes('if (truoc !== sau)'), 'phải tìm được đoạn kiểm đời');
+  assert.ok(doanKiemDoi.includes('doiTruoc !== soDoiKhoTien()'), 'phải tìm được đoạn kiểm đời');
   assert.doesNotMatch(doanKiemDoi, /sealKey/,
     'nhánh kiểm đời phải chạy cho MỌI kỳ, kể cả kỳ đang mở (sealKey = null)');
 });
@@ -384,11 +426,18 @@ test('⑫ cả request dùng CHUNG một con dấu đời — không ai tự l�
 test('⑬ đóng dấu phải dùng khoá của CHÍNH đời vừa dựng, không phải đời lúc vào', () => {
   const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   const vong = src.slice(src.indexOf('for (let lan = 1; lan <= SO_LAN_DUNG_TOI_DA'), src.indexOf('EMPLOYEE_COST_SOURCE_DRIFT'));
-  assert.match(vong, /const khoaDung = khoaDauTheoVanTay\(truoc\);/,
-    'khoá đóng dấu sinh từ `truoc` — con dấu vừa được xác nhận đầu–cuối');
+  assert.match(vong, /const khoaDung = khoaDauTheoVanTay\(vanTayTruoc\);/,
+    'khoá đóng dấu sinh từ vân tay NỘI DUNG vừa được xác nhận đầu–cuối');
   assert.match(vong, /closedSeal\.write\(khoaDung, built, \{ complete: true \}\)/);
   assert.doesNotMatch(vong, /closedSeal\.write\(sealKey,/,
     'cấm ghi bằng sealKey chụp lúc vào request — đó là khoá của đời cũ');
+  /* ‼ Và khoá TUYỆT ĐỐI không được sinh từ `mocDoi()` (vân tay ĐÃ GỘP sổ đời). Đúng
+   * một dòng này là lỗ bot audit đợt 12 bắn thủng: dấu ghi bằng khoá có số đời, còn
+   * đường tra dùng khoá thuần nội dung ⇒ không bao giờ gặp nhau, dấu thành mồ côi.
+   * Chốt chặn THẬT nằm ở `employeeCostSealKeyPurity.test.js` — dựng thật rồi so khoá
+   * ghi với khoá tra; dòng dưới chỉ là rào phụ đọc-chữ. */
+  assert.doesNotMatch(vong, /khoaDauTheoVanTay\(\s*mocDoi\(\)\s*\)/,
+    'khoá đóng dấu phải THUẦN nội dung — gộp sổ đời vào là dấu mồ côi');
 });
 
 test('⑭ self-heal phải qua ĐÚNG cổng kiểm bốn kho như đường thường', () => {

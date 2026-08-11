@@ -224,6 +224,62 @@ const RATE_STORE_FILES = Object.freeze([
 ]);
 const SALARY_SNAPSHOT_FILE = 'salary_advance_snapshot';
 
+/* ‼ KHO TỶ LỆ PHẢI BĂM THEO SỐ, KHÔNG BĂM THEO BYTE (bot audit đợt 12, mục 5).
+ *
+ * `employeeCostRateSnapshot.write()` đóng thêm `fetchedAt: <giờ hiện tại>` vào mỗi bản
+ * ghi. Nghĩa là MỖI lượt dựng khoẻ mạnh — lấy được tỷ lệ ⇒ lưu lại — đều làm file này
+ * đổi BYTE dù không một con số tỷ lệ nào nhúc nhích.
+ *
+ * Băm cả file thì hậu quả dây chuyền: vân tay đổi ⇒ khoá đổi ⇒ dấu vừa đóng không bao
+ * giờ tra lại được ⇒ mỗi lần mở màn lại dựng từ đầu (24 giây) và lại đóng thêm một dấu
+ * mồ côi; đồng thời cổng chống-trôi thấy "nội dung đầu ≠ cuối" nên báo nguồn đang đổi
+ * cho một việc hoàn toàn lành. Toàn bộ cơ chế chống-nhảy-số coi như không có.
+ *
+ * Nên với riêng file này: băm phần THỰC SỰ vào công thức — cột + dòng tỷ lệ của từng
+ * (nhân viên, kỳ), sắp xếp cố định — và bỏ qua `fetchedAt`.
+ * Đánh đổi đã cân nhắc: hai trạng thái cùng tỷ lệ nhưng khác giờ lấy nay ra cùng một
+ * khoá. `fetchedAt` chỉ dùng để dán nhãn "số cũ" và tính hạn 45 ngày, không tham gia
+ * tính tiền; còn kỳ đã khoá sổ thì bản đóng dấu mới là bản có thẩm quyền. */
+const RATE_SNAPSHOT_FILE = 'employee_cost_rate_snapshot';
+const BO_QUA_KHOA = 'fetchedAt';
+
+/* Băm CẢ CẤU TRÚC, chỉ bỏ đúng một khoá sổ sách `fetchedAt`, và bỏ ở mọi độ sâu.
+ * Không được "chỉ băm phần mình cho là quan trọng": file lệch khỏi hình dạng dự kiến
+ * mà băm vẫn y nguyên thì mọi thay đổi trong đó thành TÀNG HÌNH — đúng kiểu fail-open
+ * đã hại nhiều lần. Khoá được sắp xếp để thứ tự ghi không làm đổi băm. Cập nhật thẳng
+ * vào hàm băm thay vì nối một chuỗi khổng lồ (file này 12,7 MB). */
+function canonicalInto(node, hash) {
+  if (Array.isArray(node)) {
+    hash.update('[');
+    for (const item of node) { canonicalInto(item, hash); hash.update(','); }
+    hash.update(']');
+    return;
+  }
+  if (node && typeof node === 'object') {
+    hash.update('{');
+    for (const key of Object.keys(node).sort()) {
+      if (key === BO_QUA_KHOA) continue;
+      hash.update(JSON.stringify(key));
+      hash.update(':');
+      canonicalInto(node[key], hash);
+      hash.update(',');
+    }
+    hash.update('}');
+    return;
+  }
+  hash.update(JSON.stringify(node === undefined ? null : node));
+}
+
+function rateSnapshotDigest(full, dir) {
+  // Dùng chung bản ĐÃ phân tích khi có thể — file này cũng chính là file 12,7 MB.
+  const rows = dir === persist.DIR
+    ? persist.loadShared(RATE_SNAPSHOT_FILE, null)
+    : JSON.parse(fs.readFileSync(full, 'utf8'));
+  const hash = crypto.createHash('sha256');
+  canonicalInto(rows === undefined ? null : rows, hash);
+  return hash.digest('hex');
+}
+
 function fileFingerprint(dir, fileName) {
   const full = path.join(dir, `${fileName}.json`);
   let stat;
@@ -232,7 +288,11 @@ function fileFingerprint(dir, fileName) {
   const hit = hashCache.get(fileName);
   if (hit && hit.print === print) return `${fileName}=${hit.hash}`;
   let hash;
-  try { hash = sha256(fs.readFileSync(full)); } catch { hashCache.delete(fileName); return `${fileName}=khong-doc-duoc`; }
+  try {
+    hash = fileName === RATE_SNAPSHOT_FILE
+      ? rateSnapshotDigest(full, dir)
+      : sha256(fs.readFileSync(full));
+  } catch { hashCache.delete(fileName); return `${fileName}=khong-doc-duoc`; }
   hashCache.set(fileName, { print, hash });
   return `${fileName}=${hash}`;
 }

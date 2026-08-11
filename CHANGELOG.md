@@ -1,3 +1,59 @@
+### 2026-08-11 14:05 (giờ VN) — 📒 SỔ ĐỜI THEO TỪNG FILE: bỏ "đồng hồ toàn cục" vừa thêm
+
+Bot audit đợt 12 bắn thủng bản vá hôm qua ở **ba chỗ**, đúng cả ba. Ghi lại đủ vì
+đây là lỗi của tôi, không phải của bot.
+
+**① Khoá đóng dấu bị lẫn số đời — dấu đóng xong là mồ côi.**
+Tôi viết rõ trong chú thích "số đời TUYỆT ĐỐI không được vào khoá", rồi ngay tại chỗ
+gọi lại làm đúng điều mình cấm: `khoaDauTheoVanTay(mocDoi())` — mà `mocDoi()` là vân
+tay nội dung **đã gộp** số đời. Đường **ghi** dấu dùng khoá bẩn, đường **tra** dấu ở
+đầu request dùng khoá thuần nội dung ⇒ hai khoá không bao giờ gặp nhau. Mỗi lần mở màn
+lại dựng từ đầu 24 giây rồi đóng thêm một dấu vô dụng nữa. Cơ chế chống-nhảy-số coi như
+không tồn tại — trong khi mọi chú thích đều nói ngược lại.
+Ca kiểm của tôi hôm qua chỉ **đọc chữ** hai file `routes.js` / `employeeCostClosedSeal.js`
+(cả hai đều sạch), nên không thấy gì. Nay tách rõ: `vanTayTruoc` (nội dung) làm KHOÁ,
+`doiTruoc` (sổ đời) làm CỔNG, chụp rời cùng một thời điểm.
+
+**② A→B→A do tiến trình KHÁC vẫn lọt.** Con đếm hôm qua chỉ nghe được những cú ghi
+trong chính tiến trình này, mà kho tạm ứng lại đọc qua cửa `load()` — cửa không ghi sổ
+gì cả. Đồng bộ/cron/tay người ghi 222 rồi trả về 111 là đồng hồ đứng im.
+
+**③ Ngược lại, con đếm quá RỘNG nên tự bóp cổ app.** Nó đếm mọi cú ghi của mọi file:
+ghi `audit_auth` (mỗi lần đăng nhập) cũng làm màn chi phí kêu "nguồn đang đổi". Nặng
+hơn: `employeeCostRateSnapshot.write()` đóng thêm `fetchedAt: <giờ hiện tại>` vào mỗi
+bản ghi, nên **mỗi lượt dựng khoẻ mạnh đều tự ghi lại kho tỷ lệ** ⇒ tự làm lệch đồng hồ
+của chính mình ⇒ **503 oan** cho một việc hoàn toàn lành.
+
+**Đã sửa**
+- `persist.js`: bỏ đồng hồ toàn cục, thay bằng **sổ quan sát theo TỪNG FILE**, ghi vào
+  lúc **đọc** — vì thứ cần biết không phải "ai đó có ghi không" mà là *"bản ta cầm còn
+  là bản trên đĩa không"*. Cả hai cửa `load()`/`loadShared()` đều ghi sổ. `save()` của
+  chính ta ghi nhận bản mới nhưng **không** tính là "nguồn đổi". `observedGeneration(names)`
+  bắt buộc nêu tên file, tự `stat` trước khi trả lời; gọi trống thì **ném lỗi** — không
+  còn cửa toàn cục để sập lại.
+- `routes.js`: cổng chống-trôi so **vân tay nội dung + sổ đời bốn kho tiền**; khoá đóng
+  dấu sinh từ **vân tay nội dung, và chỉ nội dung**. Bỏ bản `vanTayNguon` khai trùng bên
+  trong (bản trùng che bản gốc, sửa một bên quên bên kia là hai cổng lệch nhau).
+- `employeeCostClosedSeal.js`: kho tỷ lệ **băm theo SỐ, không theo BYTE** — bỏ đúng khoá
+  sổ sách `fetchedAt` ở mọi độ sâu, khoá sắp xếp cố định, băm cả cấu trúc (kể cả hình
+  dạng lạ — bỏ sót là fail-open). Đổi giờ lấy ⇒ vân tay đứng yên; đổi con số ⇒ vân tay đổi.
+
+**Kiểm**
+- `persistCache` 21/21 (thêm ⑦b cửa `load`, ⑦c ghi-của-chính-ta, ⑦d tính riêng từng file,
+  ⑦e cấm cửa toàn cục).
+- `employeeCostClosedSeal` 23/23 (thêm ⑧b `fetchedAt`); ca ⑨ trước đây **xanh giả** vì
+  `indexOf` trả −1 vẫn nhỏ hơn mọi thứ — đã sửa thành mốc dương rồi mới so thứ tự.
+- **Mới: `employeeCostSealKeyPurity.test.js`** — ca kiểm **ĐỘNG**: dựng thật qua route,
+  bắt khoá app dùng để **tra** và khoá app dùng để **ghi**, bắt bằng nhau, và bắt vẫn
+  bằng nhau **sau khi sổ đời đã nhích**. Đã kiểm ngược: khôi phục đúng dòng cũ
+  `khoaDauTheoVanTay(mocDoi())` thì ca này **đỏ** — đúng lỗi bot tìm ra.
+- Toàn bộ backend **1252/1259**: đúng 7 ca hỏng cố hữu của sandbox (6 thiếu `pdfinfo`,
+  1 thiếu VP018 trong dữ liệu mẫu). `npm run build` xanh.
+
+**Bài học ghi lại cho lần sau:** ca kiểm đọc-chữ không bắt được lỗi ở **chỗ gọi**. Cấm
+một việc bằng chú thích thì phải có ca kiểm **động** đứng canh, nếu không chú thích chỉ
+là lời hứa.
+
 ### 2026-08-11 11:20 (giờ VN) — ⏱ ĐỒNG HỒ CHỈ TIẾN: bịt lỗ A → B → A
 
 Bot audit đợt 9 tái hiện được **A → B → A**: nguồn đi **111 → 222 → 111** ngay trong

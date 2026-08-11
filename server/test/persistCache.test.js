@@ -329,36 +329,73 @@ test('⑥ ghi đè TẠI CHỖ cùng inode: không được hạch toán cỡ fi
  * nguồn hiện tại là 111. Băm nội dung KHÔNG cứu được vì nội dung thật sự đã quay về.
  * Chỉ một con đếm CHỈ TIẾN mới bắt được.
  */
-test('⑦ đồng hồ đời dữ liệu CHỈ TIẾN, bắt được A→B→A', () => {
+test('⑦ sổ đời bắt được A→B→A do TIẾN TRÌNH KHÁC gây ra (cửa có nhớ)', () => {
   const dir = tmpDir();
   const persist = freshPersist(dir);
   const p = path.join(dir, 'kho.json');
 
   fs.writeFileSync(p, JSON.stringify({ v: 111 }));
   persist.loadShared('kho', null);
-  const truoc = persist.observedGeneration();
+  const truoc = persist.observedGeneration(['kho']);
 
-  // A -> B -> A, đúng kịch bản bot dựng.
+  // A -> B -> A, đúng kịch bản bot dựng. Ghi thẳng bằng fs = tiến trình KHÁC ghi.
   fs.writeFileSync(p, JSON.stringify({ v: 222 }));
-  persist.loadShared('kho', null);
+  persist.loadShared('kho', null); // ta LỠ dùng bản 222
   fs.writeFileSync(p, JSON.stringify({ v: 111 }));
-  const cuoi = persist.loadShared('kho', null);
 
-  assert.deepEqual(cuoi, { v: 111 }, 'nội dung cuối đúng là bản đã quay về');
-  assert.ok(persist.observedGeneration() > truoc,
-    `đồng hồ PHẢI nhích dù nội dung quay về như cũ (${truoc} -> ${persist.observedGeneration()})`);
+  assert.deepEqual(persist.loadShared('kho', null), { v: 111 }, 'nội dung cuối là bản đã quay về');
+  assert.notEqual(persist.observedGeneration(['kho']), truoc,
+    'sổ đời PHẢI đổi dù nội dung quay về như cũ — nếu không, bản 222 lên màn mà không ai biết');
 });
 
-test('⑦b ghi là đồng hồ nhích, kể cả ghi lại y nguyên nội dung', () => {
+test('⑦b sổ đời cũng phải bắt A→B→A qua cửa KHÔNG NHỚ (`load`) — đường kho tạm ứng đi lối này', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir);
+  const p = path.join(dir, 'salary_advance_snapshot.json');
+
+  fs.writeFileSync(p, JSON.stringify({ v: 111 }));
+  const truoc = persist.observedGeneration(['salary_advance_snapshot']);
+  fs.writeFileSync(p, JSON.stringify({ v: 222 }));
+  persist.load('salary_advance_snapshot', null); // đúng cửa mà kho tạm ứng đang dùng
+  fs.writeFileSync(p, JSON.stringify({ v: 111 }));
+
+  assert.notEqual(persist.observedGeneration(['salary_advance_snapshot']), truoc,
+    'cửa nào không ghi sổ thì A→B→A đi qua cửa đó là lọt — `load` cũng phải ghi sổ');
+});
+
+test('⑦c GHI CỦA CHÍNH TA không được tính là "nguồn đổi" — kể cả nội dung có khác', () => {
   const dir = tmpDir();
   const persist = freshPersist(dir);
   persist.save('kho', { v: 1 });
-  const truoc = persist.observedGeneration();
-  persist.save('kho', { v: 1 });      // y nguyên
-  assert.ok(persist.observedGeneration() > truoc, 'có ghi là phải nhích');
+  const truoc = persist.observedGeneration(['kho']);
+  persist.save('kho', { v: 1 });                   // ghi lại y nguyên
+  persist.save('kho', { v: 2, fetchedAt: 'moi' }); // ghi bản khác — vẫn là ta ghi
+  assert.equal(persist.observedGeneration(['kho']), truoc,
+    'lượt dựng khoẻ mạnh luôn tự ghi lại kho tỷ lệ; tính đó là "nguồn đổi" thì app tự đá mình ra 503');
 });
 
-test('⑦c đồng hồ KHÔNG được lọt vào khoá cache — đứng yên thì cache vẫn trúng', () => {
+test('⑦d sổ đời tính RIÊNG TỪNG FILE — ghi `audit_auth` không được đụng tới màn chi phí', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir);
+  const KHO_TIEN = ['cost_rates_local', 'employee_cost_rate_snapshot'];
+  fs.writeFileSync(path.join(dir, 'cost_rates_local.json'), '{}');
+  fs.writeFileSync(path.join(dir, 'employee_cost_rate_snapshot.json'), '{}');
+  const truoc = persist.observedGeneration(KHO_TIEN);
+
+  for (let i = 0; i < 5; i += 1) persist.save('audit_auth', { lan: i });     // mỗi lần đăng nhập
+  fs.writeFileSync(path.join(dir, 'khong_lien_quan.json'), JSON.stringify({ x: 1 }));
+
+  assert.equal(persist.observedGeneration(KHO_TIEN), truoc,
+    'chuyện của file khác không được làm màn chi phí kêu "nguồn đang đổi"');
+});
+
+test('⑦e không có cửa "mốc đời toàn cục" — phải nêu đúng tên file', () => {
+  const persist = freshPersist(tmpDir());
+  assert.throws(() => persist.observedGeneration(), /danh sách tên file/,
+    'gọi trống là quay về đúng cái bẫy toàn cục vừa phải gỡ');
+});
+
+test('⑦f sổ đời KHÔNG được lọt vào khoá cache/khoá đóng dấu — đứng yên thì cache vẫn trúng', () => {
   const dir = tmpDir();
   const persist = freshPersist(dir);
   persist.save('kho', { v: 1 });
@@ -369,8 +406,12 @@ test('⑦c đồng hồ KHÔNG được lọt vào khoá cache — đứng yên 
   const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   const khoaHam = src.slice(src.indexOf('function employeeCostAllCacheKey'), src.indexOf('\n}', src.indexOf('function employeeCostAllCacheKey')));
   assert.doesNotMatch(khoaHam, /observedGeneration/,
-    'đồng hồ TUYỆT ĐỐI không được vào khoá cache — nhét vào là mỗi lượt một khoá, cache chết');
+    'sổ đời TUYỆT ĐỐI không được vào khoá cache — nhét vào là mỗi lượt một khoá, cache chết');
   const seal = fs.readFileSync(require.resolve('../src/employeeCostClosedSeal'), 'utf8');
   assert.doesNotMatch(seal, /observedGeneration/,
-    'và cũng không được vào khoá đóng dấu — dấu phải tái lập được ở lượt sau');
+    'và cũng không được vào khoá đóng dấu — dấu phải tra lại được ở lượt sau');
+  /* ‼ Ba dòng trên chỉ ĐỌC CHỮ, và chính vì tin vào đọc chữ mà bản trước để số đời rò
+   * vào khoá đóng dấu ngay tại chỗ GỌI (`khoaDauTheoVanTay(mocDoi())`) — hai file trên
+   * sạch bong mà khoá vẫn bẩn. Hàng rào thật nằm ở `employeeCostSealKeyPurity.test.js`:
+   * dựng THẬT rồi so khoá đã ghi với khoá mà đường tra dùng. */
 });

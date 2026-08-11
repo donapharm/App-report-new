@@ -48,23 +48,75 @@ const MAX_CACHE_BYTES = Math.max(
 const cache = new Map(); // name -> { ino, size, mtimeMs, ctimeMs, value, bytes }
 let cacheBytes = 0;
 
-/* ── ĐỒNG HỒ ĐỜI DỮ LIỆU: CHỈ TIẾN, KHÔNG BAO GIỜ LÙI ────────────────────────
- * Bot audit đợt 9 tái hiện được **A → B → A**: nguồn đổi 111 → 222 rồi quay lại 111
- * ngay trong lúc dựng. Chụp vân tay đầu và cuối thì **giống hệt nhau**, nên mọi phép
- * so "đầu == cuối" đều MÙ — app hiển thị và đóng dấu số 222 trong khi nguồn hiện tại
- * là 111. Băm nội dung cũng không cứu được, vì nội dung THẬT SỰ đã quay về như cũ.
+/* ── SỔ QUAN SÁT ĐỜI DỮ LIỆU: THEO TỪNG FILE, GHI VÀO LÚC ĐỌC ───────────────
+ * Việc cần làm: bắt cho được cảnh **A → B → A** (nguồn 111 → 222 → 111 ngay giữa
+ * lúc dựng). Chụp vân tay nội dung ở hai đầu là MÙ, vì nội dung thật sự đã quay về.
  *
- * Thứ duy nhất bắt được là một con đếm **chỉ tăng**: mỗi lần có file bị GHI, hoặc mỗi
- * lần đọc mà thấy file đã khác lần trước, thì tăng một nhịp. A → B → A đi qua hai nhịp
- * ⇒ đầu khác cuối ⇒ lộ ngay.
+ * Bản trước tôi đếm MỌI cú ghi của MỌI file vào MỘT con đếm chung. Bot audit đợt 12
+ * bắn thủng cả hai đầu, và đúng cả hai:
+ *   · Quá RỘNG — ghi `audit_auth` (mỗi lần đăng nhập cũng ghi) làm màn chi phí kêu
+ *     "nguồn đang đổi". Tệ hơn: chính lượt dựng khoẻ mạnh cũng tự ghi lại kho tỷ lệ
+ *     ⇒ tự làm lệch đồng hồ của mình ⇒ 503 oan cho việc hoàn toàn lành.
+ *   · Quá HẸP — con đếm chỉ nghe được những cú ghi trong CHÍNH tiến trình này. Tiến
+ *     trình khác (đồng bộ, cron, tay người) ghi 222 rồi trả lại 111 thì đồng hồ đứng
+ *     im ⇒ A→B→A vẫn lọt nguyên.
  *
- * ‼ Con đếm này CHỈ dùng cho cổng kiểm "có gì động đậy giữa chừng không".
- * TUYỆT ĐỐI không đưa vào khoá cache hay khoá đóng dấu — hai thứ đó phải là hàm của
- * NỘI DUNG để còn tái lập được ở lượt sau; nhét con đếm vào là mỗi lượt một khoá,
- * cache chết hẳn. */
-let observedGen = 0;
-const bumpGen = () => { observedGen += 1; };
-function observedGeneration() { return observedGen; }
+ * Nay ghi sổ theo TỪNG FILE, và mốc ghi là lúc ĐỌC — vì thứ ta cần biết không phải
+ * "ai đó có ghi gì không" mà là **"bản ta cầm trong tay có còn là bản trên đĩa không"**:
+ *   · Mỗi lượt đọc (CẢ HAI cửa) ⇒ đối chiếu vân tay với lần gần nhất ta biết về file
+ *     đó. Khác đi ⇒ +1 nhịp cho RIÊNG file đó. Đây mới là thứ nghe được tiến trình khác.
+ *   · Lần đầu thấy một file thì KHÔNG tính là đổi — chưa có gì để so.
+ *   · `save()` của chính ta ⇒ ghi nhận vân tay mới nhưng KHÔNG +1: ta cố ý ghi, và
+ *     số ta đang cầm chính là số vừa ghi. Ghi của mình mà tự tính là "nguồn đổi" thì
+ *     app tự bóp cổ mình.
+ *   · `observedGeneration(names)` tự `stat` đúng những file được hỏi TRƯỚC khi trả lời.
+ *     Nhờ vậy mốc ĐẦU của cổng kiểm luôn có sẵn "lần đầu thấy", còn mốc CUỐI luôn nhìn
+ *     vào đĩa ở hiện tại — A→B→A lộ ra ở đúng hai nhịp.
+ *
+ * ‼ Sổ này CHỈ dùng cho cổng kiểm "có gì động đậy giữa chừng không". TUYỆT ĐỐI không
+ * đưa vào khoá cache hay khoá đóng dấu — hai thứ đó phải là hàm của NỘI DUNG để còn
+ * tra lại được ở lượt sau. Bản trước tôi thề đúng câu này rồi vẫn để nó rò vào khoá
+ * đóng dấu ở `routes.js`; nay có bài kiểm ĐỘNG so khoá thật, không chỉ đọc chữ. */
+const seen = new Map(); // name -> { print, changes }
+
+function observe(name, print) {
+  const hit = seen.get(name);
+  if (!hit) { seen.set(name, { print, changes: 0 }); return; }
+  if (sameFile(hit.print, print)) return;
+  hit.print = print;
+  hit.changes += 1;
+}
+
+// Ta vừa tự ghi: biết mặt bản mới, nhưng không tính là "nguồn đổi dưới chân mình".
+function adopt(name, print) {
+  const hit = seen.get(name);
+  if (!hit) { seen.set(name, { print, changes: 0 }); return; }
+  hit.print = print;
+}
+
+// File biến mất cũng là một đời khác — trừ khi ta chưa từng thấy nó bao giờ.
+function markMissing(name) {
+  const hit = seen.get(name);
+  if (!hit) { seen.set(name, { print: null, changes: 0 }); return; }
+  if (hit.print === null) return;
+  hit.print = null;
+  hit.changes += 1;
+}
+
+/** Mốc đời của ĐÚNG những file được hỏi. Bắt buộc nêu tên — không có cửa "tất cả". */
+function observedGeneration(names) {
+  if (names === undefined || names === null) {
+    throw new Error('observedGeneration cần danh sách tên file — không có mốc đời toàn cục');
+  }
+  const list = Array.isArray(names) ? names : [names];
+  return list.map((name) => {
+    try { observe(name, fingerprint(fs.statSync(file(name)))); } catch { markMissing(name); }
+    return `${name}#${seen.get(name)?.changes ?? 0}`;
+  }).join(',');
+}
+
+// Chỉ dành cho test: xoá sổ quan sát để mỗi ca bắt đầu từ trang trắng.
+function forgetObservations() { seen.clear(); }
 
 function forget(name) {
   const hit = cache.get(name);
@@ -97,14 +149,23 @@ function sameFile(a, b) {
     && a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs;
 }
 
-// Đọc lại từ đĩa MỖI LẦN — hành vi gốc, giữ nguyên cho mọi chỗ đang dùng.
+/* Đọc lại từ đĩa MỖI LẦN — hành vi gốc, giữ nguyên cho mọi chỗ đang dùng.
+ * Chỉ thêm ĐÚNG một việc: ghi sổ vân tay của bản vừa đọc. Bắt buộc, vì có kho tiền
+ * đi bằng cửa này (`salary_advance_snapshot` đọc qua `load`, bot audit đợt 12 chỉ ra):
+ * cửa nào không ghi sổ thì A→B→A đi qua cửa đó là lọt.
+ * `open` rồi `fstat`+`read` trên CHÍNH fd đó, để vân tay và nội dung chắc chắn cùng
+ * một file — `existsSync` rồi mới đọc theo đường dẫn thì một cú `rename` chen vào
+ * giữa là ghi sổ nhầm mặt. */
 function load(name, def) {
+  let fd = null;
   try {
-    const p = file(name);
-    if (!fs.existsSync(p)) return def;
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
+    try { fd = fs.openSync(file(name), 'r'); } catch { markMissing(name); return def; }
+    observe(name, fingerprint(fs.fstatSync(fd)));
+    return JSON.parse(fs.readFileSync(fd, 'utf8'));
   } catch {
     return def;
+  } finally {
+    if (fd !== null) { try { fs.closeSync(fd); } catch { /* đóng hụt cũng không sao */ } }
   }
 }
 
@@ -139,11 +200,11 @@ function loadShared(name, def, retriesLeft = 2) {
      * vân tay của file CŨ nhưng nội dung của file MỚI — vừa sai dấu, vừa tính sai
      * dung lượng cho trần bộ nhớ. Đã mở fd thì `rename` không đổi được inode đang mở,
      * nên (vân tay, nội dung) chắc chắn là của cùng một file. */
-    try { fd = fs.openSync(p, 'r'); } catch { forget(name); return def; }
+    try { fd = fs.openSync(p, 'r'); } catch { markMissing(name); forget(name); return def; }
     const before = fingerprint(fs.fstatSync(fd));
+    observe(name, before); // ghi sổ ĐỜI của bản ta sắp dùng, kể cả khi trúng bản nhớ
 
     const hit = cache.get(name);
-    if (hit && !sameFile(hit.print, before)) bumpGen(); // file đã khác lần đọc trước
     if (hit && sameFile(hit.print, before)) {
       cache.delete(name); cache.set(name, hit); // chạm vào để giữ hàng LRU
       return hit.value;
@@ -208,7 +269,10 @@ function save(name, data) {
   const tmp = p + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data));
   fs.renameSync(tmp, p);
-  bumpGen(); // có ghi là đời dữ liệu đã nhích, kể cả ghi lại y nguyên nội dung
+  /* Ghi nhận mặt bản vừa ghi, nhưng KHÔNG tính là "nguồn đổi": chính ta ghi, và số ta
+   * đang cầm là số vừa ghi. Bản trước cộng nhịp ở đây nên lượt dựng khoẻ mạnh — vốn
+   * luôn ghi lại kho tỷ lệ (`fetchedAt` đổi mỗi lần lấy) — tự đá mình văng ra 503. */
+  try { adopt(name, fingerprint(fs.statSync(p))); } catch { /* stat hụt thì lượt đọc sau tự ghi sổ */ }
   // Quên hẳn thay vì nhớ đối tượng vừa ghi: người gọi có thể còn giữ tham chiếu và
   // sửa tiếp. Đọc lại một lần sau khi ghi là rẻ; phục vụ số sai thì không.
   forget(name);
@@ -224,4 +288,6 @@ function cacheStats() {
   return { entries: cache.size, bytes: cacheBytes, maxBytes: MAX_CACHE_BYTES };
 }
 
-module.exports = { load, loadShared, save, DIR, invalidate, cacheStats, observedGeneration };
+module.exports = {
+  load, loadShared, save, DIR, invalidate, cacheStats, observedGeneration, forgetObservations,
+};
