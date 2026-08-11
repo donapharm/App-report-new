@@ -660,6 +660,76 @@ function periodViewModel(payload = {}) {
   };
 }
 
+/* ═══ CHẶN Ở TẦNG DỮ LIỆU, KHÔNG PHẢI TẦNG HIỂN THỊ ═════════════════════════════
+ *
+ * Bot audit đợt 17 vòng 5 phá được máy quét của tôi bằng bốn đường: đặt biến trung
+ * gian (`const t = model.summary.periodTotal`), destructuring, truy cập ngoặc vuông
+ * (`model.summary['periodTotal']`), và dán nhãn miễn trừ không kèm giải thích.
+ *
+ * Họ đúng, và đúng ở chỗ căn bản: **quét chuỗi ở tầng hiển thị là sai tầng.** Một cái
+ * tên trường có vô số cách viết ra; tôi không bao giờ chặn hết được bằng cách đọc chữ.
+ * Đây là lần thứ năm trong đợt tôi vá cái danh sách thay vì bỏ mô hình danh sách đi.
+ *
+ * Nay chặn ở chỗ số được SINH RA: thiếu người thì mấy con số tổng đội **không tồn tại**
+ * trong model nữa. Alias không cứu được, destructuring không cứu được, ngoặc vuông
+ * không cứu được — không ai đọc ra được một giá trị đã không có ở đó. Máy quét ở tầng
+ * hiển thị vẫn giữ, nhưng từ nay nó là lưới thứ hai, không phải lưới duy nhất.
+ *
+ * ‼ Chỉ xoá số TỔNG TOÀN ĐỘI. Tổng phụ của TỪNG NV là số thật của người đó, thiếu người
+ * khác không làm nó sai — xoá đi là giấu dữ liệu đang có.
+ */
+function chanTongToanDoi(model) {
+  const match = employeeCostKpiMatch(model);
+  const thieuNguoi = !!model.allEmployees && (
+    Number(match.unavailableEmployeeCount || 0) > 0
+    || (Array.isArray(match.unavailableEmployees) && match.unavailableEmployees.length > 0)
+  );
+  if (!thieuNguoi) return { ...model, thieuNguoi: false };
+
+  const xoa = (doiTuong, truong) => {
+    if (!doiTuong || typeof doiTuong !== 'object') return doiTuong;
+    const ra = { ...doiTuong };
+    for (const ten of truong) if (ten in ra) ra[ten] = null;
+    return ra;
+  };
+  const TONG_KY = ['periodTotal', 'provisionalPeriodTotal', 'monthlyTotal',
+    'provisionalMonthlyTotal', 'annualTotal', 'afterPenaltyTotal'];
+  const TONG_PHAT = ['total', 'provisionalTotal', 'baseTotal', 'afterPenaltyTotal',
+    'appliedAmount', 'xuAmount', 'provisionalXuAmount'];
+  // Tiền/tỷ lệ nằm ở TẦNG TRONG của bonus và target.
+  const TIEN_KY = ['amount', 'target', 'achieved', 'pct', 'base', 'priority', 'excess'];
+  const xoaTang = (doiTuong, tang, truong) => {
+    if (!doiTuong || typeof doiTuong !== 'object') return doiTuong;
+    const ra = { ...doiTuong };
+    for (const ten of tang) if (ra[ten] && typeof ra[ten] === 'object') ra[ten] = xoa(ra[ten], truong);
+    return xoa(ra, truong);
+  };
+
+  return {
+    ...model,
+    thieuNguoi: true,
+    thieuNguoiCodes: Array.isArray(match.unavailableEmployees) ? match.unavailableEmployees : [],
+    summary: xoa(model.summary, TONG_KY),
+    penalty: xoa(model.penalty, TONG_PHAT),
+    /* `bonus`/`target` được chuẩn hoá thành hai tầng `month`/`quarter` — xoá ở tầng
+     * ngoài là xoá trường không tồn tại, tức là **không xoá gì cả** mà ca kiểm vẫn xanh.
+     * Phải xoá đúng tầng có số. */
+    bonus: xoaTang(model.bonus, ['month', 'quarter'], TIEN_KY),
+    /* Target tổng đội đổi theo số người góp số (bot: 21 → 20 làm giá trị ĐỔI mà ô vẫn
+     * hiện số). Số nào đổi theo số người góp thì nó là tổng toàn đội, dù nhãn không có
+     * chữ "tổng". */
+    target: xoaTang(model.target, ['month', 'quarter'], TIEN_KY),
+    periods: (Array.isArray(model.periods) ? model.periods : []).map((period) => ({
+      ...period,
+      summary: xoa(period.summary, TONG_KY),
+      // `employeeSubtotals` GIỮ NGUYÊN — số của từng người, không phải tổng đội.
+      daily: period.daily && typeof period.daily === 'object'
+        ? { ...period.daily, totals: [] }
+        : period.daily,
+    })),
+  };
+}
+
 export function employeeCostViewModel(payload = {}) {
   const hasPeriods = Array.isArray(payload.periods);
   const periods = (hasPeriods ? payload.periods : [payload]).map(periodViewModel);
@@ -691,7 +761,7 @@ export function employeeCostViewModel(payload = {}) {
     periodTotal: periods[0].summary.monthlyTotal,
     provisionalPeriodTotal: periods[0].summary.provisionalMonthlyTotal ?? null,
   };
-  return {
+  return chanTongToanDoi({
     empCode: String(payload.empCode || first.empCode || ''),
     from: String(payload.from || first.period || ''),
     to: String(payload.to || first.period || ''),
@@ -899,7 +969,7 @@ export function employeeCostViewModel(payload = {}) {
       reason: payload.remainingAfterAdvance.reason == null ? null : String(payload.remainingAfterAdvance.reason),
       note: String(payload.remainingAfterAdvance.note || ''),
     } : null,
-  };
+  });
 }
 
 export function normalizeEmployeeCostSearch(value) {

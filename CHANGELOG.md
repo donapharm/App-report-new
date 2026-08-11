@@ -1,3 +1,45 @@
+### 2026-08-12 01:30 (giờ VN) — 🧱 Bỏ máy quét chuỗi, chặn ở TẦNG DỮ LIỆU
+
+Bot soi `12bd6eb` (chưa lấy `ad7b132`, nên ba lỗ backend họ nêu lại **đã vá ở vòng
+trước**). Hai phát hiện UI là mới và đúng.
+
+**① Máy quét chuỗi của tôi bị phá bằng bốn đường:** biến trung gian
+(`const t = model.summary.periodTotal`), destructuring, truy cập ngoặc vuông
+(`model.summary['periodTotal']`), và nhãn miễn trừ không kèm giải thích.
+
+Bot đúng ở chỗ **căn bản**, không phải chỗ chi tiết: **quét chuỗi ở tầng hiển thị là sai
+tầng.** Một tên trường có vô số cách viết ra; đọc chữ không bao giờ chặn hết. Đây là lần
+thứ **NĂM** trong đợt này tôi vá cái danh sách thay vì bỏ mô hình danh sách đi:
+danh sách module → danh sách file → danh sách thư mục → danh sách ô hiển thị → nay là
+danh sách cách viết tên trường.
+
+**Nay chặn ở chỗ số được SINH RA.** `employeeCostViewModel` đi qua `chanTongToanDoi()`:
+thiếu người thì số tổng đội **không tồn tại** trong model nữa. Alias không cứu được,
+destructuring không cứu được, ngoặc vuông không cứu được — không ai đọc ra được một giá
+trị đã không có ở đó. Máy quét ở tầng hiển thị vẫn giữ, nhưng từ nay là **lưới thứ hai**.
+
+**② Ô "Target tổng đội" vẫn hiện số.** Bot chỉ ra: giảm người góp số 21 → 20 làm giá trị
+ĐỔI mà ô vẫn in số. Bài học đáng ghi: **số nào đổi theo số người góp thì nó là tổng toàn
+đội**, dù nhãn không có chữ "tổng". Tôi đã lọc theo tên trường (`...Total`) nên trượt
+đúng ô này.
+
+**Lỗi phụ tự bắt khi viết ca kiểm:** bản đầu tôi xoá `bonus.monthAmount` /
+`target.target` — nhưng model chuẩn hoá chúng thành hai tầng `month`/`quarter`, tiền nằm
+ở tầng TRONG. Tức là tôi **xoá trường không tồn tại**: không xoá gì cả, mà ca kiểm vẫn
+xanh nếu fixture cũng đoán sai y hệt. Phải dump hình thật của model ra mới thấy.
+
+**Ca kiểm nay chạy trên DỮ LIỆU THẬT, không đọc chuỗi mã nguồn nữa** — dựng model rồi
+đọc bằng đúng bốn đường bot đã phá. Kèm hai ranh giới: tổng phụ **từng NV** phải giữ
+nguyên (giấu đi là giấu dữ liệu đang có), và xem **một NV** thì không bị chặn.
+
+**Về hiệu năng, bot xác nhận điểm quan trọng:** 19/19 lượt trúng dấu nóng đạt
+**137–195 ms**, phần soi lai lịch tối đa **47 ms** — tức bộ soi KHÔNG phải thủ phạm.
+Nhưng lượt trúng dấu **nguội đầu tiên mất 29,999 giây**, nên mốc "mọi lượt < 500 ms" vẫn
+trượt. Cần tìm 30 giây đó tiêu ở đâu — đã hỏi bot.
+
+**Kiểm:** thêm 7 ca tầng dữ liệu. Web **467/467**, server **1279/1286** (đúng 7 ca hỏng
+cố hữu của sandbox), `npm run build` xanh.
+
 ### 2026-08-12 00:40 (giờ VN) — 🔍 Bốn lỗ cùng một gốc: "không biết" bị tôi ghi thành "không có gì"
 
 Bot soi `8b75412` (chưa lấy `12bd6eb`, nên lỗ UI thứ 5 họ nêu **đã vá rồi** — web
