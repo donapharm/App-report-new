@@ -248,3 +248,156 @@ test('A2 sau khi catalog ổn định sang đời B, KHÔNG được tra dấu b
     closedSeal.write = goc.write;
   }
 });
+
+/* ── BOT AUDIT ĐỢT 14 ─────────────────────────────────────────────────────── */
+
+// Khung dùng chung cho ba ca dưới: chỉ khác cách `closedSeal.read` cư xử.
+function dungKhung({ chuKyDau, read, write }) {
+  const goc = {
+    employeeCostDataSignature: store.employeeCostDataSignature,
+    targetRoster: store.targetRoster,
+    getForSession: employeeCost.getForSession,
+    getSnapshot: catalogManagement.getSnapshot,
+    read: closedSeal.read,
+    write: closedSeal.write,
+  };
+  const trangThai = { chuKy: chuKyDau, soLanDung: 0 };
+  store.employeeCostDataSignature = () => trangThai.chuKy;
+  store.targetRoster = () => [{ emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true }];
+  catalogManagement.getSnapshot = async () => ({ rows: [], catalog: [] });
+  employeeCost.getForSession = async ({ requestedEmp }, options) => {
+    trangThai.soLanDung += 1;
+    return employeeCost.emptyRangePayload(
+      requestedEmp,
+      employeeCost.parseMonthRange({ from: options.from, to: options.to }),
+    );
+  };
+  closedSeal.read = (key) => read(key, trangThai);
+  closedSeal.write = write || (async () => true);
+  trangThai.traLai = () => {
+    store.employeeCostDataSignature = goc.employeeCostDataSignature;
+    store.targetRoster = goc.targetRoster;
+    employeeCost.getForSession = goc.getForSession;
+    catalogManagement.getSnapshot = goc.getSnapshot;
+    closedSeal.read = goc.read;
+    closedSeal.write = goc.write;
+  };
+  return trangThai;
+}
+
+const PHIEN_ADMIN = { emp_code: 'ADMIN04', role: 'admin', name: 'Admin 4' };
+const TRUY_VAN_T07 = { emp: 'ALL', from: '2026-07', to: '2026-07', page: '1', pageSize: '20', sortDir: 'asc' };
+const DAU_DOI_CU = { nguon: 'dau-doi-cu', employees: [], rows: [] };
+
+/* A3a — KHE HỞ GIỮA "CHỐT KHOÁ" VÀ "ĐỌC XONG DẤU", ĐƯỜNG TẮT.
+ * Khoá chốt theo đời A rồi mới đi đọc. Nguồn nhảy sang B ngay trong lúc đọc ⇒ đọc
+ * trúng dấu A, app trả 200 với số đời A trong khi nguồn thật đã là B, builds = 0. */
+test('A3a nguồn đổi ngay lúc tra dấu SỚM ⇒ bỏ đường tắt, phải dựng thật', async () => {
+  let lanTra = 0;
+  const tt = dungKhung({
+    chuKyDau: 'a3a-doi-A',
+    read: (key, state) => {
+      lanTra += 1;
+      if (lanTra === 1) { state.chuKy = 'a3a-doi-B'; return DAU_DOI_CU; } // đổi đời NGAY trong lúc đọc
+      return null;
+    },
+  });
+  try {
+    let hong = null;
+    try { await invokeEmployeeCost(TRUY_VAN_T07, PHIEN_ADMIN); } catch (error) { hong = error; }
+    assert.equal(hong, null, 'đời B là đời hợp lệ — đường tắt bỏ đi thì vẫn phải dựng được');
+    assert.ok(tt.soLanDung > 0,
+      'builds = 0 nghĩa là đã phục vụ nguyên con dấu của đời A trong khi nguồn đã sang B');
+  } finally { tt.traLai(); }
+});
+
+/* A3b — CÙNG KHE HỞ, NHƯNG Ở LẦN TRA THỨ HAI (trong thân hàm dựng).
+ * Chỗ này khoá bộ nhớ đệm đã chốt theo `vanTayLucVao` nên không còn đường lui rẻ:
+ * nguồn đã đổi thì phải DỪNG, không được trả dấu của đời cũ. */
+test('A3b nguồn đổi ngay lúc tra dấu TRONG THÂN HÀM DỰNG ⇒ phải dừng, không trả dấu đời cũ', async () => {
+  let lanTra = 0;
+  const tt = dungKhung({
+    chuKyDau: 'a3b-doi-A',
+    read: (key, state) => {
+      lanTra += 1;
+      if (lanTra === 1) return null;              // đường tắt: chưa có dấu
+      state.chuKy = 'a3b-doi-B';                  // đổi đời NGAY trong lúc đọc lần hai
+      return DAU_DOI_CU;
+    },
+  });
+  try {
+    let hong = null;
+    let ketQua = null;
+    try { ketQua = await invokeEmployeeCost(TRUY_VAN_T07, PHIEN_ADMIN); } catch (error) { hong = error; }
+    const chan = hong || (ketQua && ketQua.status >= 500);
+    assert.ok(chan, 'nguồn đổi giữa lúc đọc dấu ⇒ phải dừng, TUYỆT ĐỐI không trả dấu của đời cũ');
+  } finally { tt.traLai(); }
+});
+
+/* A4 — ĐỔI CÁCH TÍNH TIỀN MÀ KHOÁ CON DẤU KHÔNG ĐỔI.
+ * `APP_BUILD_VERSION` là `package.json.version`, đứng yên hàng chục commit. Bot đổi
+ * `EMPLOYEE_COST_DERIVED_BASE` cho C44 phải ra 10.000 thay vì 6.000 mà khoá y hệt ⇒
+ * app đọc lại dấu cũ và trả 6.000. Ở kỳ đã khoá sổ thì sai vĩnh viễn. */
+test('A4 đổi cấu hình tính tiền ⇒ khoá con dấu BẮT BUỘC phải đổi', async () => {
+  const bienCu = process.env.EMPLOYEE_COST_DERIVED_BASE;
+  const khoaDaTra = [];
+  const tt = dungKhung({
+    chuKyDau: 'a4-chu-ky-co-dinh', // dữ liệu ĐỨNG YÊN; chỉ cấu hình tính tiền đổi
+    read: (key) => { khoaDaTra.push(key); return null; },
+  });
+  try {
+    delete process.env.EMPLOYEE_COST_DERIVED_BASE;
+    await invokeEmployeeCost(TRUY_VAN_T07, PHIEN_ADMIN);
+    const khoaTruoc = khoaDaTra[khoaDaTra.length - 1];
+
+    process.env.EMPLOYEE_COST_DERIVED_BASE = 'c44:c41';
+    await invokeEmployeeCost(TRUY_VAN_T07, PHIEN_ADMIN);
+    const khoaSau = khoaDaTra[khoaDaTra.length - 1];
+
+    assert.ok(khoaTruoc && khoaSau, 'phải bắt được khoá ở cả hai lượt');
+    assert.notEqual(khoaSau, khoaTruoc,
+      'đổi cấu hình tính tiền mà khoá y nguyên ⇒ app phục vụ lại con số tính bằng công thức đã bị thay');
+  } finally {
+    if (bienCu === undefined) delete process.env.EMPLOYEE_COST_DERIVED_BASE;
+    else process.env.EMPLOYEE_COST_DERIVED_BASE = bienCu;
+    tt.traLai();
+  }
+});
+
+/* Căn cước phải nhạy với CẢ BA nguồn đổi, và không được để lộ giá trị biến — trong
+ * đám biến đó có khoá API, mà khoá con dấu thì nằm trong file và trong log. */
+test('A4b căn cước công thức: nhạy với biến + file cấu hình, và KHÔNG lộ giá trị', () => {
+  const formulaIdentity = require('../src/employeeCostFormulaIdentity');
+  const bienCu = process.env.EMPLOYEE_COST_DERIVED_BASE;
+  try {
+    delete process.env.EMPLOYEE_COST_DERIVED_BASE;
+    const goc = formulaIdentity.identity();
+
+    process.env.EMPLOYEE_COST_DERIVED_BASE = 'c44:c41';
+    const sauDoiBien = formulaIdentity.identity();
+    assert.notEqual(sauDoiBien, goc, 'đổi biến điều khiển công thức ⇒ căn cước phải đổi');
+
+    const BI_MAT = 'sieu-bi-mat-khong-duoc-lo-12345';
+    process.env.EMPLOYEE_COST_DERIVED_BASE = BI_MAT;
+    const canCuoc = formulaIdentity.identity();
+    assert.ok(!canCuoc.includes(BI_MAT),
+      'căn cước CHỈ được chứa băm — trong nhóm biến này có khoá API, lộ vào khoá dấu là rò ra file và log');
+
+    // Sửa file cấu hình ⇒ căn cước phải đổi (bậc thưởng, mẫu cột… đều nằm ở đây).
+    delete process.env.EMPLOYEE_COST_DERIVED_BASE;
+    const tam = path.join(os.tmpdir(), `formula-identity-${process.pid}.json`);
+    fs.writeFileSync(tam, JSON.stringify({ v: 1 }));
+    process.env.EMPLOYEE_COST_TEMPLATE_CONFIG = tam;
+    formulaIdentity.forgetCache();
+    const voiFile1 = formulaIdentity.identity();
+    fs.writeFileSync(tam, JSON.stringify({ v: 2 }));
+    formulaIdentity.forgetCache();
+    assert.notEqual(formulaIdentity.identity(), voiFile1,
+      'sửa file cấu hình tính tiền ⇒ căn cước phải đổi');
+    delete process.env.EMPLOYEE_COST_TEMPLATE_CONFIG;
+    formulaIdentity.forgetCache();
+  } finally {
+    if (bienCu === undefined) delete process.env.EMPLOYEE_COST_DERIVED_BASE;
+    else process.env.EMPLOYEE_COST_DERIVED_BASE = bienCu;
+  }
+});

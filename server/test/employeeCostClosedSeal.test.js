@@ -351,10 +351,17 @@ test('⑨ routes phải kiểm lại đời dữ liệu NGAY TRƯỚC khi đóng
     'store.employeeCostDataSignature()',
     'closedSeal.rateStoreFingerprint()',
     'employeeBonus.FORMULA_VERSION',
-    'APP_BUILD_VERSION',
+    /* `APP_BUILD_VERSION` một mình là vô dụng — nó là `package.json.version`, đứng yên
+     * suốt hàng chục commit, nên khoá con dấu mù hẳn với cách tính tiền. Nay phải là
+     * căn cước đầy đủ: mã nguồn module tính tiền + file cấu hình + biến môi trường. */
+    'canCuocCongThuc()',
   ]) {
     assert.ok(ham.includes(phan), `vân tay nguồn phải gồm ${phan}`);
   }
+  assert.match(src, /const canCuocCongThuc = \(\) => `\$\{APP_BUILD_VERSION\}\+\$\{formulaIdentity\.identity\(\)\}`/,
+    'căn cước phải gồm CẢ phiên bản app lẫn băm cách tính tiền');
+  assert.doesNotMatch(src, /sources: \{ data: vt, rates: '[^']*', formula: [^,]+, app: APP_BUILD_VERSION \}/,
+    'khoá đóng dấu không được chỉ gắn APP_BUILD_VERSION — đó là lỗ đổi công thức mà số không đổi');
 });
 
 /* ── HAI CA AUDIT ĐỢT 6: ĐƯỜNG HIỂN THỊ SỐ SAI ───────────────────────────── */

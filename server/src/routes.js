@@ -57,6 +57,7 @@ const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
 const closedSeal = require('./employeeCostClosedSeal');
+const formulaIdentity = require('./employeeCostFormulaIdentity');
 const employeeCostHealthKpis = require('./employeeCostHealthKpis');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
@@ -1178,16 +1179,24 @@ async function employeeCostAllPayload(req, {
   const rangeClosed = range.months.every((month) => employeeCost.isPeriodClosed(month, employeeCost.vnToday()));
   /* MỘT CON DẤU ĐỜI DỮ LIỆU CHO CẢ REQUEST. Mọi khoá cache, mọi dấu, mọi cổng kiểm
    * đều dùng đúng giá trị này — không ai được tự đi lấy lại lúc khác. */
+  /* ‼ `APP_BUILD_VERSION` MỘT MÌNH LÀ VÔ DỤNG (bot audit đợt 14, mục A2 — đúng).
+   * Nó là `package.json.version` = `2.0.0`, đứng yên suốt hàng chục commit. Bot đổi
+   * `EMPLOYEE_COST_DERIVED_BASE` cho C44 phải ra 10.000 thay vì 6.000 — khoá con dấu
+   * y hệt ⇒ app đọc lại dấu cũ và trả 6.000. Đổi cách tính tiền mà con số không đổi,
+   * ở kỳ đã khoá sổ thì sai vĩnh viễn.
+   * Nay kèm CĂN CƯỚC CÁCH TÍNH TIỀN: băm mã nguồn các module tính tiền + file cấu
+   * hình + biến môi trường điều khiển công thức. Đổi bất cứ thứ nào là khoá đổi. */
+  const canCuocCongThuc = () => `${APP_BUILD_VERSION}+${formulaIdentity.identity()}`;
   const vanTayNguon = () => [
     store.employeeCostDataSignature(),
     closedSeal.rateStoreFingerprint(),
     employeeBonus.FORMULA_VERSION,
-    APP_BUILD_VERSION,
+    canCuocCongThuc(),
   ].join('|');
   const khoaDauTheoVanTay = (vt) => closedSeal.keyFor({
     from: range.from, to: range.to, months: range.months,
     closed: rangeClosed,
-    sources: { data: vt, rates: 'gop-trong-vantay', formula: employeeBonus.FORMULA_VERSION, app: APP_BUILD_VERSION },
+    sources: { data: vt, rates: 'gop-trong-vantay', formula: employeeBonus.FORMULA_VERSION, app: canCuocCongThuc() },
   });
   /* ‼ HAI CON DẤU, CÓ CHỦ ĐÍCH — đừng nhầm lẫn chúng.
    *
@@ -1223,10 +1232,27 @@ async function employeeCostAllPayload(req, {
   const soDoiKhoTien = () => persist.observedGeneration(KHO_TIEN);
   const mocDoi = () => `${vanTayNguon()}|doi=${soDoiKhoTien()}`;
   const vanTaySom = vanTayNguon();
+  const doiSom = soDoiKhoTien();
   const sealKey = khoaDauTheoVanTay(vanTaySom);
   if (sealKey && paginate) {
     const sealedEarly = closedSeal.read(sealKey);
-    if (sealedEarly) {
+    /* ‼ ĐỌC XONG PHẢI SOI LẠI NGUỒN (bot audit đợt 14, mục A1 — đúng).
+     *
+     * Chọn khoá rồi mới đi đọc dấu là có một khe hở giữa hai việc đó. Bot dựng đúng
+     * khe: nguồn đi A→B ngay trong lúc đọc; khoá đã chốt theo A nên đọc trúng dấu A,
+     * và app trả HTTP 200 với số của đời A trong khi nguồn thật đã là B. `builds=0`,
+     * không ai dựng gì, không ai hay. Đây là đường HIỂN THỊ SỐ CŨ, không phải chuyện
+     * chậm hay 503.
+     *
+     * Sửa: đọc xong thì soi lại vân tay + sổ đời. Còn nguyên thì mới được phục vụ;
+     * đã nhúc nhích thì BỎ đường tắt, đi tiếp đường dựng đầy đủ (ở dưới, nơi con dấu
+     * ổn định sau catalog mới được dùng). Bỏ đường tắt chỉ mất vài trăm mili giây;
+     * phục vụ số của đời cũ thì mất niềm tin. */
+    const nguonConNguyen = vanTayNguon() === vanTaySom && soDoiKhoTien() === doiSom;
+    if (sealedEarly && !nguonConNguyen) {
+      console.warn('[employee-cost] nguồn đổi ngay lúc tra dấu sớm — BỎ đường tắt, dựng đầy đủ');
+    }
+    if (sealedEarly && nguonConNguyen) {
       /* Có dấu thì KHÔNG chờ catalog — nhưng cũng KHÔNG được bỏ luôn việc làm mới nó:
          các màn khác vẫn xài catalog, để nó ôi là hại chỗ khác. Nên vẫn châm ngòi làm
          mới Ở NỀN, không await. Nhanh cho người đang xem, mà không bỏ đói ai. */
@@ -1508,8 +1534,21 @@ async function employeeCostAllPayload(req, {
      * Từ đây trở xuống mọi thứ phải nhất quán ở ĐÚNG MỘT đời: `vanTayLucVao`. */
     const khoaDauOnDinh = khoaDauTheoVanTay(vanTayLucVao);
     if (khoaDauOnDinh) {
+      /* Cùng khe hở như đường tắt phía trên: giữa lúc chốt khoá và lúc đọc xong, nguồn
+       * có thể đã sang đời khác. Ở đây không có "đường lui" nào rẻ hơn, mà khoá bộ nhớ
+       * đệm cũng đã chốt theo `vanTayLucVao`, nên nguồn đã đổi thì DỪNG hẳn — đúng
+       * cùng một luật với chốt "dựng đời nào cất khoá đời đó" bên dưới. */
+      const doiTruocTra = soDoiKhoTien();
       const sealed = closedSeal.read(khoaDauOnDinh);
-      if (sealed) return sealed;
+      if (sealed) {
+        if (vanTayNguon() !== vanTayLucVao || soDoiKhoTien() !== doiTruocTra) {
+          throw Object.assign(
+            new Error('Nguồn đổi ngay lúc tra dấu kỳ khoá sổ. Hãy thử lại sau ít phút.'),
+            { status: 503, code: 'EMPLOYEE_COST_SOURCE_DRIFT' },
+          );
+        }
+        return sealed;
+      }
     }
     /* ‼ ĐỜI DỮ LIỆU PHẢI KHỚP ĐẦU–CUỐI, CHO MỌI KỲ (bot audit đúng, hai lần).
      *

@@ -1,3 +1,43 @@
+### 2026-08-11 17:10 (giờ VN) — 🪪 CĂN CƯỚC CÁCH TÍNH TIỀN + bịt khe hở lúc đọc dấu
+
+Bot audit đợt 14 xác nhận hai sửa A1/A2 của đợt trước đều PASS, và tần suất 503 trên
+dữ liệu thật là **0/20** (mỗi lượt nóng 115–154 ms). Nhưng tìm thêm **hai lỗi đúng-sai
+số liệu**, trong đó lỗi thứ hai là lỗi đắt nhất từ đầu chuỗi tới giờ.
+
+**A3 — khe hở giữa "chốt khoá" và "đọc xong dấu" (TOCTOU), ở CẢ HAI chỗ đọc.**
+App chốt khoá theo đời A rồi mới đi đọc con dấu. Nguồn nhảy A→B **ngay trong lúc đọc**
+thì đọc trúng dấu A, và app trả **HTTP 200** với số của đời A trong khi nguồn thật đã
+là B — `builds = 0`, không ai dựng gì, không ai được báo. Đây là đường **hiển thị số
+cũ**, không phải chuyện chậm hay 503.
+→ Nay đọc xong phải **soi lại vân tay + sổ đời**. Đường tắt (tra dấu sớm) thì **bỏ tắt,
+đi đường dựng đầy đủ** — mất vài trăm mili giây, không mất gì khác. Đường trong thân hàm
+dựng thì **DỪNG hẳn (503)**, vì khoá bộ nhớ đệm đã chốt theo `vanTayLucVao`, cùng một
+luật với chốt "dựng đời nào cất khoá đời đó".
+
+**A4 — con dấu không hề gắn với CÁCH TÍNH TIỀN.**
+Khoá con dấu có bốn thành phần, thành phần "phiên bản app" là `package.json.version` =
+`2.0.0` — **đứng yên suốt hàng chục commit**. Nghĩa là khoá **mù hoàn toàn** với công
+thức. Bot bẻ được đúng chỗ đó: đổi `EMPLOYEE_COST_DERIVED_BASE` để C44 phải ra **10.000**
+thay vì **6.000**, khoá **y hệt** ⇒ app đọc lại dấu cũ và hiển thị **6.000**. Đổi cách
+tính tiền mà con số không đổi, ở kỳ đã khoá sổ thì **sai vĩnh viễn**.
+→ Thêm `src/employeeCostFormulaIdentity.js`: căn cước gồm **① băm mã nguồn 18 module
+tính tiền**, **② băm 9 file cấu hình tính tiền** (bậc thưởng, mẫu cột, nhóm đơn vị,
+policy thưởng/phạt…), **③ băm 13 biến môi trường điều khiển công thức**. Đổi bất cứ thứ
+nào ⇒ khoá đổi ⇒ dựng lại và đóng dấu mới.
+Nguyên tắc chọn danh sách: **thà thừa còn hơn thiếu** — thừa thì cùng lắm dựng lại một
+lần (vài trăm ms), thiếu thì đóng dấu vĩnh viễn một con số sai. Hai cái giá không cùng
+hạng nên không được "tối ưu" bằng cách bỏ bớt.
+**Biến môi trường chỉ vào căn cước dưới dạng BĂM**, không bao giờ ghi giá trị — trong
+nhóm đó có khoá API, mà khoá con dấu thì nằm trong file và trong log.
+
+**Kiểm — kiểm ngược từng miếng vá một**
+- Thêm 4 ca vào `employeeCostSealKeyPurity.test.js` (A3a đường tắt, A3b thân hàm dựng,
+  A4 khoá dấu đổi theo cấu hình, A4b căn cước nhạy với biến + file **và không lộ giá trị**).
+- Gỡ chốt A3a ⇒ ca A3a đỏ. Gỡ chốt A3b ⇒ ca A3b đỏ. Bỏ căn cước, để lại mỗi
+  `APP_BUILD_VERSION` ⇒ ca A4 đỏ. Không ca nào xanh nhờ may.
+- Toàn bộ backend **1258/1265**: đúng 7 ca hỏng cố hữu của sandbox (6 thiếu `pdfinfo`,
+  1 thiếu VP018 — bot xác nhận đã có trên baseline). `npm run build` xanh.
+
 ### 2026-08-11 15:40 (giờ VN) — 🔑 CẤT ĐÚNG NGĂN: bịt hai đường "dựng đời B, cất khoá đời A"
 
 Bot audit đợt 13 xác nhận ba sửa chữa của đợt trước đều PASS, nhưng tìm thêm **hai lỗi
