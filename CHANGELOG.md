@@ -1,3 +1,47 @@
+### 2026-08-11 22:30 (giờ VN) — 🔴 App in tổng của 6 người vào ô "tổng cả đội"; và 41 commit đang nằm im
+
+**Ảnh CEO chụp 22:00 ngày 11/08.** DataHub thiếu nguồn của **15/21 NV** (DN007, DN008,
+DN009, DN010, DN011, DN012, DN016, DN017, DN018, DN019, DN021, DN022, DN023, DN024,
+VP004). App vẫn in:
+- Tổng chi phí tháng: **1.444.932.127đ** (kỳ đủ dữ liệu là **30.982.248.913đ**)
+- Thưởng dự kiến: **31.812.041đ** · "Tổng 6 NV"
+- Phạt dự kiến: **−458.482đ** · "6/21 NV"
+- C36 CP ctv/khác: **123.136.637đ**
+
+Tất cả là số của **sáu** người, đặt vào đúng những ô mà người xem đọc là số của **cả
+đội**. Có nhãn "tạm tính" bên cạnh — nhưng thứ đập vào mắt là con số.
+
+Ô "Tổng chi phí tháng sau phạt" từ trước **đã làm đúng**: nói thẳng "Chưa đủ dữ liệu
+chi phí" thay vì suy một số. Lỗi của tôi là làm đúng ở một ô rồi để nguyên các ô bên cạnh.
+
+**Sửa:** thiếu **một** người thì mọi ô tổng toàn đội đều không hiện số, hiện
+"Chưa đủ dữ liệu" + thiếu ai. Chặn đặt ở **đầu** mỗi component, trước mọi phép cộng.
+Vẫn giữ ô lại (không ẩn) để người xem không tưởng mất tính năng.
+
+**Ngưỡng KHÔNG phải hằng số 21** — CEO hỏi thẳng: *"sang T09 tôi nhận thêm người, lên
+25 hay 30 NV, thì nó có đếm thêm không?"* Đã kiểm: không có chỗ nào ghi cứng 21. Ngưỡng
+đi từ `data/target_roster.json` → `store.targetRoster()`, thêm người vào danh sách là
+ngưỡng tự lên. Ca kiểm mới **cấm** ghi cứng số 21 cạnh chữ NV/employee/roster.
+
+**Còn một lỗ ở chiều ngược lại, chưa bịt:** tuyển người mới mà **quên** thêm vào
+`target_roster.json` thì danh sách vẫn 21, app vẫn báo "đủ", trong khi thiếu đúng người
+đó. Cần đối chiếu ngược: mã NV **có phát sinh doanh số** mà **không** có trong danh sách
+thì phải kêu lên (`SPEC_REVENUE_SYNC_EXCEPTIONS`: không dòng nào được biến mất lặng lẽ).
+
+**Phân biệt hai kiểu thiếu, đã giữ tách:**
+- thiếu **CẶP mã hàng** — thiếu vài dòng bên trong người đã có số ⇒ vẫn tạm tính, giữ nguyên.
+- thiếu **NGƯỜI** — mất trắng cả một nhân viên ⇒ tổng vô nghĩa, không hiện.
+
+**‼ VÀ ĐÂY MỚI LÀ CÁI SAI LỚN NHẤT: 41 commit chưa lên PROD.**
+PROD vẫn chạy `7870f10` từ 10/08. Bot đã đo trên TIP với dữ liệu thật:
+**T07.2026 = 2.091 dòng · 30.982.248.913đ · 21/21 NV · unavailable/stale/gap 0/0/0 ·
+141–211 ms/lượt · 0/20 lỗi**, bốn lượt giống tuyệt đối. Tức bản vá cho đúng cái CEO
+đang chửi (F5 quay mãi, số sai) **đã xong và đã được đo**, chỉ là tôi vòng nào cũng dặn
+bot "KHÔNG deploy" để chạy thêm một vòng audit con dấu. CEO ngồi nhìn app hỏng suốt
+trong lúc bản sửa nằm trong nhánh. Việc cần làm là **deploy**, không phải audit vòng bảy.
+
+**Kiểm:** web **455/455** PASS (thêm 6 ca mới), `npm run build` xanh.
+
 ### 2026-08-11 22:15 (giờ VN) — 🗓 `require` file dữ liệu = căn cước nói dối; và tôi đã đo trên kho MẪU
 
 Bot audit đợt 17 tìm ra **ba** thứ. Hai cái sửa được ngay ở đây; cái thứ ba là vấn đề

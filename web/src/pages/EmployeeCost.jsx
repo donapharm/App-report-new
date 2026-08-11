@@ -211,15 +211,17 @@ function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel =
   </select>;
 }
 
-function CostColumnKpi({ item, coverageNote = '' }) {
+function CostColumnKpi({ item, coverageNote = '', thieuNguoi = false, thieuNguoiNote = '' }) {
+  /* Thiếu người ⇒ mọi ô cột tiền cũng là tổng của phần đội, cũng không được hiện số.
+   * Ảnh 22:00 ngày 11/08: ô "C36 CP ctv/khác" in 123.136.637đ trong khi thiếu 15/21 NV. */
   return <div className={`kpi employee-cost-column-kpi${item.annual ? ' employee-cost-kpi-annual employee-cost-tone-c44' : ''}`}>
     <div className="label">
       <span>{item.label}</span>
       {item.annual && <span className="employee-cost-kpi-badge">CHI T12 · KHÔNG TRONG 3 LẦN</span>}
-      {item.provisional && <span className="employee-cost-kpi-badge">tạm tính</span>}
+      {!thieuNguoi && item.provisional && <span className="employee-cost-kpi-badge">tạm tính</span>}
     </div>
-    <div className="value small">{formatEmployeeCostCell(item.value, moneyColumn)}</div>
-    <div className="delta muted">{item.provisional
+    <div className="value small">{thieuNguoi ? 'Chưa đủ dữ liệu' : formatEmployeeCostCell(item.value, moneyColumn)}</div>
+    <div className="delta muted">{thieuNguoi ? thieuNguoiNote : item.provisional
       ? (coverageNote || 'Tổng phần đã khớp % · chưa gồm mã thiếu %')
       : (item.annual ? 'Khoản riêng · chi trả T12 · không nằm trong 3 lần' : 'Tổng thành tiền theo cột')}</div>
   </div>;
@@ -373,7 +375,11 @@ function TargetDetailModal({ target, employeeLabel, admin, onClose, onNavigate }
   </div>;
 }
 
-function BonusKpi({ bonus, onOpen }) {
+function BonusKpi({ bonus, thieuNguoi, thieuNguoiNote, onOpen }) {
+  /* Thiếu người ⇒ không dựng số. Chặn ở ĐẦU component, trước mọi phép cộng, để
+   * không có đường nào lọt ra một con số của phần đội. */
+  if (thieuNguoi) return <Kpi label="Thưởng dự kiến" value="Chưa đủ dữ liệu"
+    sub={thieuNguoiNote} tone="employee-cost-tone-reward" />;
   if (bonus.reason === 'employee_separate_formula_pending') return <Kpi label="Thưởng dự kiến" value="Chờ công thức riêng" sub={bonus.message || 'Nhân viên này chưa áp dụng công thức thưởng P1/P2 hiện tại'} title={bonus.message} tone="employee-cost-tone-reward" />;
   if (!bonus.configured) return <Kpi label="Thưởng dự kiến" value="Chưa cấu hình mức thưởng" sub="theo mức đạt target · tham khảo" title="App Report chỉ tính tham khảo; không gửi thưởng và không ghi payroll." tone="employee-cost-tone-reward" />;
   const month = bonus.month;
@@ -420,7 +426,11 @@ function penaltyNoAmountReason(penalty) {
   return penalty.formulaText || 'Không bị phạt';
 }
 
-function PenaltyKpi({ penalty, onOpen }) {
+function PenaltyKpi({ penalty, thieuNguoi, thieuNguoiNote, onOpen }) {
+  /* Thiếu người ⇒ không dựng số. Chặn ở ĐẦU component, trước mọi phép cộng, để
+   * không có đường nào lọt ra một con số của phần đội. */
+  if (thieuNguoi) return <Kpi label="Phạt dự kiến" value="Chưa đủ dữ liệu"
+    sub={thieuNguoiNote} tone="employee-cost-tone-penalty" />;
   const policyOff = penalty.aggregate && penalty.mode === 'off';
   const aggregateSubtotal = penalty.aggregate && penalty.contributors > 0 ? penalty.provisionalTotal : null;
   const displayTotal = penalty.total == null ? aggregateSubtotal : penalty.total;
@@ -1777,6 +1787,34 @@ export default function EmployeeCost({ me, onNavigate }) {
   // NV đang xài BẢN % CŨ vì nguồn tươi kẹt: có số nên KHÔNG nằm trong danh sách
   // "chưa lấy được", nhưng phải nói ra là số cũ — dùng được không có nghĩa là giấu.
   const staleEmpCodes = Array.isArray(kpiMatch.staleEmployees) ? kpiMatch.staleEmployees : [];
+
+  /* ‼ THIẾU NGƯỜI THÌ KHÔNG ĐƯỢC TRƯNG TỔNG (CEO chốt 11/08/2026).
+   *
+   * Ảnh chụp màn 22:00 ngày 11/08: DataHub thiếu nguồn của 15/21 NV, mà app vẫn in
+   * "Tổng chi phí tháng 1.444.932.127đ" và "Thưởng dự kiến 31.812.041đ" — số của SÁU
+   * người, đặt vào đúng ô mà người xem đọc là số của CẢ ĐỘI. Có chữ "tạm tính" bên
+   * cạnh, nhưng chữ nhỏ không cứu được: thứ đập vào mắt là con số, và con số đó hụt
+   * gần hai chục lần so với 30,98 tỷ của kỳ đủ.
+   *
+   * Ô "sau phạt" từ trước đã làm ĐÚNG — nói thẳng "Chưa đủ dữ liệu chi phí" thay vì
+   * suy một số từ phần có. Lỗi của tôi là làm đúng ở một ô rồi để nguyên các ô bên cạnh.
+   *
+   * Luật từ nay: thiếu MỘT người thì mọi ô TỔNG TOÀN ĐỘI đều không hiện số.
+   *
+   * ‼ Ngưỡng là DANH SÁCH NV CỦA KỲ, không phải hằng số 21. Nó đi từ
+   * `target_roster.json` qua `store.targetRoster()`; T09 nhận thêm người thì ngưỡng
+   * tự lên 25/30, không ai phải sửa code. Chiều ngược lại — có mã phát sinh số mà
+   * KHÔNG nằm trong danh sách — do `gapConsistency` bên dưới kêu lên.
+   *
+   * Phân biệt hai kiểu thiếu, đừng gộp làm một:
+   *   · thiếu CẶP mã hàng (`missingPairs`): thiếu vài dòng bên trong những người ĐÃ có
+   *     số ⇒ tổng vẫn có nghĩa, giữ nguyên lối "tạm tính" như cũ.
+   *   · thiếu NGƯỜI (`unavailableEmps`): mất trắng cả một nhân viên ⇒ tổng vô nghĩa. */
+  const soNvKy = Number(model.penalty?.employeeCount || 0)
+    || (unavailableEmps + Number(model.penalty?.contributors || 0)) || null;
+  const thieuNguoi = allEmployees && unavailableEmps > 0;
+  const thieuNguoiNote = `Thiếu ${unavailableEmps}/${soNvKy || '—'} NV: ${unavailableEmpLabel}`
+    + ' · DataHub chưa trả dữ liệu — KHÔNG suy tổng toàn đội từ phần đã có';
   /* Tổng doanh thu THẬT của kỳ, backend cộng thẳng từ kho doanh thu App Report —
      không đi qua bảng chi phí nên không tụt khi nguồn % hụt. Chưa soát được thì để
      null và ô KPI tự lùi về cách hiển thị cũ (có nhãn khác để không nhận nhầm). */
@@ -2159,9 +2197,11 @@ export default function EmployeeCost({ me, onNavigate }) {
           · "tạm tính" = danh mục còn mã chưa gán % → DataHub quản lý policy tỷ lệ.
           Một kỳ có thể vừa dự kiến vừa tạm tính; gộp một từ là mất thông tin. */}
       <Kpi
-        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${model.periodClose.closed ? '' : ' · dự kiến'}${noMatch ? ' · chưa có nguồn % hợp lệ' : (provisionalTotals ? ' · tạm tính' : '')}`}
-        value={formatEmployeeCostCell(noMatch ? null : (provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal), moneyColumn)}
-        sub={[
+        label={`${multiple ? 'Tổng cả kỳ (chi phí gốc)' : 'Tổng chi phí tháng (chi phí gốc)'}${model.periodClose.closed ? '' : ' · dự kiến'}${thieuNguoi ? ' · chưa đủ NV' : noMatch ? ' · chưa có nguồn % hợp lệ' : (provisionalTotals ? ' · tạm tính' : '')}`}
+        value={thieuNguoi
+          ? 'Chưa đủ dữ liệu chi phí'
+          : formatEmployeeCostCell(noMatch ? null : (provisionalTotals ? model.summary.provisionalPeriodTotal : model.summary.periodTotal), moneyColumn)}
+        sub={thieuNguoi ? `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)} · ${thieuNguoiNote}` : [
           `${formatMonthLabel(model.from)} → ${formatMonthLabel(model.to)}`,
           noMatch ? '' : model.periodClose.note,
           // Chênh lệch so kỳ trước — chỉ hiện khi CEO bật VÀ cả hai kỳ đều có số.
@@ -2186,10 +2226,13 @@ export default function EmployeeCost({ me, onNavigate }) {
         allEmployees={allEmployees} period={range.to} />}
       {SALARY_ADVANCE_UI && <RemainingAfterAdvanceKpi remainingAfterAdvance={model.remainingAfterAdvance}
         loading={loading} allEmployees={allEmployees} period={range.to} />}
-      <BonusKpi bonus={model.bonus} onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
-      <PenaltyKpi penalty={model.penalty} onOpen={() => setPenaltyModalOpen(true)} />
+      <BonusKpi bonus={model.bonus} thieuNguoi={thieuNguoi} thieuNguoiNote={thieuNguoiNote}
+        onOpen={model.bonus.configured ? () => setBonusModalOpen(true) : undefined} />
+      <PenaltyKpi penalty={model.penalty} thieuNguoi={thieuNguoi} thieuNguoiNote={thieuNguoiNote}
+        onOpen={() => setPenaltyModalOpen(true)} />
       <XuPenaltyKpi penalty={model.penalty} period={model.to} />
-      {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote} />)}
+      {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote}
+        thieuNguoi={thieuNguoi} thieuNguoiNote={thieuNguoiNote} />)}
       {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt
           hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng
           biệt nên số nhỏ hơn — không mâu thuẫn, khác thước đo. */}
