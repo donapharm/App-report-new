@@ -241,3 +241,52 @@ test('⑥ file dấu phải quyền 0600, thư mục 0700, và LỆCH CHECKSUM t
 
   assert.equal(seal.read(key), null, 'lệch checksum ⇒ coi như KHÔNG có dấu, dựng lại');
 });
+
+/* ── BA CA AUDIT ĐỢT 5 CỦA BOT ───────────────────────────────────────────── */
+
+// (1) Thiếu `sourceOutcome` từng bị coi là `ok` — fail-OPEN, sai chiều.
+test('⑦ báo cáo THIẾU sourceOutcome ⇒ KHÔNG được coi là ok', () => {
+  const { seal } = freshSeal();
+  const thieuTruong = baoCao('DN002');
+  delete thieuTruong.sourceOutcome;
+  const r = [baoCao('DN001'), thieuTruong];
+  assert.equal(seal.isSealable(gopThat(r), ROSTER_2, r), false,
+    'thiếu trường thì không có bằng chứng nào là ok ⇒ fail closed');
+
+  const rong = baoCao('DN002'); rong.sourceOutcome = '';
+  const r2 = [baoCao('DN001'), rong];
+  assert.equal(seal.isSealable(gopThat(r2), ROSTER_2, r2), false, 'rỗng cũng không phải ok');
+});
+
+// (2) Kho lương/thanh toán đổi mà khoá dấu không đổi ⇒ phục vụ lại số cũ.
+test('⑧ chữ ký phải phủ ĐỦ mọi kho: tỷ lệ, snapshot bị động, lương ứng, sổ thanh toán', () => {
+  const { seal, dir } = freshSeal();
+  assert.deepEqual([...seal.RATE_STORE_FILES],
+    ['cost_rates_local', 'employee_cost_rate_snapshot', 'salary_advance_snapshot', 'payment_ledger']);
+
+  const van = () => seal.rateStoreFingerprint({ DIR: dir });
+  const truoc = van();
+  for (const f of seal.RATE_STORE_FILES) {
+    fs.writeFileSync(path.join(dir, `${f}.json`), JSON.stringify({ v: 1 }));
+    const sau = van();
+    assert.notEqual(sau, truoc, `đổi ${f}.json là vân tay PHẢI đổi`);
+  }
+
+  // Và khoá dấu đổi theo.
+  const k1 = seal.keyFor({ ...T07, closed: true, sources: { ...NGUON, rates: 'A' } });
+  const k2 = seal.keyFor({ ...T07, closed: true, sources: { ...NGUON, rates: 'B' } });
+  assert.notEqual(k1, k2, 'kho đổi ⇒ khoá dấu đổi ⇒ dấu cũ hết hiệu lực');
+});
+
+// (3) Nguồn đổi GIỮA lúc fan-out ⇒ bản gộp trộn đời ⇒ cấm đóng dấu.
+test('⑨ routes phải kiểm lại đời dữ liệu NGAY TRƯỚC khi đóng dấu', () => {
+  const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  assert.match(src, /const sealKeySauKhiDung = closedSeal\.keyFor\(/,
+    'phải tính lại khoá SAU khi dựng xong');
+  assert.match(src, /if \(sealKey && sealKeySauKhiDung !== sealKey\) \{[\s\S]{0,240}?return built;/,
+    'lệch đời ⇒ trả số nhưng KHÔNG đóng dấu');
+  assert.ok(
+    src.indexOf('const sealKeySauKhiDung') < src.indexOf('closedSeal.isSealable(built, roster, sealEvidenceReports)'),
+    'phải kiểm đời TRƯỚC khi xét điều kiện đóng dấu',
+  );
+});

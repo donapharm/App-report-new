@@ -1,3 +1,31 @@
+### 2026-08-11 05:05 (giờ VN) — 🔐 BỊT NỐT BA ĐƯỜNG SAI SỐ CUỐI (bot audit đợt 5)
+
+Bot xác nhận A1 (bằng chứng báo cáo gốc) và A2 (fail-closed khi cạn retry) **đã sạch**,
+nêu tiếp **ba đường sai số**. Đúng cả ba.
+
+| # | Bot nêu | Đã sửa |
+|---|---|---|
+| 1 | Báo cáo **thiếu `sourceOutcome`** vẫn bị coi là `ok` | Đây là **fail-OPEN**: `report?.sourceOutcome \|\| 'ok'` biến "không biết" thành "tốt". Nay **bắt buộc có mặt** (`hasOwnProperty`) **và** đúng chữ `ok`; rỗng cũng không nhận |
+| 2 | **Lương ứng / sổ thanh toán đổi mà khoá dấu không đổi** ⇒ đọc lại số thanh toán cũ (bot đã tái hiện) | Vân tay nay phủ **cả bốn kho**: `cost_rates_local` · `employee_cost_rate_snapshot` · `salary_advance_snapshot` · `payment_ledger`. Kho nào đổi ⇒ vân tay đổi ⇒ khoá đổi ⇒ dấu cũ hết hiệu lực |
+| 3 | Đường HTTP thường **không kiểm đời cuối** ⇒ nguồn đổi giữa fan-out ⇒ đóng dấu bản **trộn đời** | Tính lại khoá **ngay sau khi dựng xong**; **lệch chữ ký đầu–cuối ⇒ trả số cho người xem nhưng TUYỆT ĐỐI không ghim** |
+
+#### Vì sao điểm 1 đáng sợ nhất trong ba
+Mặc định "không có thông tin thì coi như tốt" là sai chiều ở đường tiền. Một báo cáo
+dựng thiếu trường — do đổi code, do đường lỗi mới, do stub — sẽ **lọt qua guard và
+được đóng dấu vĩnh viễn**. Nguyên tắc phải là: **không chứng minh được là tốt thì coi
+như chưa tốt.**
+
+#### Test
+`employeeCostClosedSeal` **17/17** (thêm ca ⑦ thiếu/rỗng `sourceOutcome` · ⑧ vân tay
+phủ đủ bốn kho, đổi kho nào cũng phải đổi vân tay · ⑨ routes phải kiểm đời cuối trước
+khi đóng dấu). `persistCache` **15/15**. `server` **1235/1242** — đúng 7 ca nền cũ.
+Build đạt.
+
+#### Còn lại — nhóm (B) GIA CỐ, CHƯA làm
+Khoá ghi liên tiến trình (lock/CAS), `fsync` file+thư mục, temp file riêng, envelope
+có schema/xác thực, quyền file hiện là best-effort sau khi ghi. Đây là **siết ốc**, không
+phải đường làm sai số. Đề nghị CEO cân nhắc deploy trước, siết sau trên nền đã chạy.
+
 ### 2026-08-11 04:15 (giờ VN) — 🧨 TEST CỦA TÔI ĐANG CHE LỖI: bằng chứng đóng dấu phải lấy từ BÁO CÁO GỐC
 
 Bot audit `bd7fbd0` bắt được lỗi tinh vi nhất — và nặng hơn cả lượt trước.

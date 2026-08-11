@@ -1430,6 +1430,25 @@ async function employeeCostAllPayload(req, {
       if (sealed) return sealed;
     }
     const built = await buildMerged();
+    /* ‼ KIỂM LẠI ĐỜI DỮ LIỆU NGAY TRƯỚC KHI ĐÓNG DẤU (bot audit đúng): fan-out 21 NV
+     * kéo dài hàng chục giây; nguồn có thể thay bản GIỮA CHỪNG, khi đó bản gộp là hàng
+     * TRỘN ĐỜI — đóng dấu vào là đóng băng vĩnh viễn một con số không thuộc đời nào.
+     * Chữ ký cuối phải khớp chữ ký đầu; lệch thì vẫn trả số cho người xem, nhưng
+     * TUYỆT ĐỐI không ghim. */
+    const sealKeySauKhiDung = closedSeal.keyFor({
+      from: range.from, to: range.to, months: range.months,
+      closed: rangeClosed,
+      sources: {
+        data: store.employeeCostDataSignature(),
+        rates: closedSeal.rateStoreFingerprint(),
+        formula: employeeBonus.FORMULA_VERSION,
+        app: APP_BUILD_VERSION,
+      },
+    });
+    if (sealKey && sealKeySauKhiDung !== sealKey) {
+      console.warn('[employee-cost] nguồn đổi giữa lúc dựng — KHÔNG đóng dấu bản trộn đời');
+      return built;
+    }
     // Chặt hơn `employeeCostAllDegraded`: đòi ĐỦ CẢ ĐỘI và MỌI NV `ok` đúng nghĩa —
     // không nhận `ok_stale_rates` (đóng băng số tạm là đóng băng cái sai).
     if (sealKey && closedSeal.isSealable(built, roster, sealEvidenceReports)) {

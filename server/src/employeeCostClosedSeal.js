@@ -122,8 +122,12 @@ function isSealable(merged, roster, reports) {
   for (const report of reports) {
     const code = text(report?.empCode).toUpperCase();
     if (!code) return false;
-    if (daCo.has(code)) return false;                       // trùng NV ⇒ không rõ lấy bản nào
-    if (text(report?.sourceOutcome || 'ok') !== 'ok') return false; // chỉ `ok` thật
+    if (daCo.has(code)) return false; // trùng NV ⇒ không rõ lấy bản nào
+    /* ‼ THIẾU `sourceOutcome` KHÔNG ĐƯỢC COI LÀ `ok` (bot audit đúng). Mặc định
+     * "coi như ok" là fail-OPEN: một báo cáo dựng thiếu trường sẽ lọt qua và được
+     * đóng dấu vĩnh viễn. Phải có mặt, và phải đúng chữ `ok`. */
+    if (!Object.prototype.hasOwnProperty.call(report, 'sourceOutcome')) return false;
+    if (text(report.sourceOutcome) !== 'ok') return false;
     daCo.add(code);
   }
   if (daCo.size !== expected.size) return false;
@@ -189,14 +193,29 @@ function write(key, payload, { complete, store = persist } = {}) {
  * CEO bấm "Đồng bộ % chi phí" là file này đổi ⇒ dấu cũ phải hết hiệu lực ngay.
  * Chỉ `stat`, không đọc nội dung: rẻ, gọi được ở đầu mọi request.
  */
-function rateStoreFingerprint(store = persist, fileName = 'cost_rates_local') {
-  const dir = (store && store.DIR) || persist.DIR;
+function fileFingerprint(dir, fileName) {
   try {
     const stat = fs.statSync(path.join(dir, `${fileName}.json`));
-    return `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+    return `${fileName}=${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
   } catch {
-    return 'khong-co-kho-ty-le';
+    return `${fileName}=khong-co`;
   }
+}
+
+/* MỌI KHO đã tham gia dựng con số, gộp thành một vân tay.
+ * Bot audit đúng: thiếu `salary_advance_snapshot` và `payment_ledger` thì hai kho đó
+ * đổi mà khoá dấu KHÔNG đổi ⇒ app phục vụ lại số thanh toán CŨ. Đã tái hiện được. */
+const RATE_STORE_FILES = Object.freeze([
+  'cost_rates_local',            // tỷ lệ % chủ động (CEO bấm Đồng bộ)
+  'employee_cost_rate_snapshot', // snapshot bị động / fallback
+  'salary_advance_snapshot',     // số ứng lần 1
+  'payment_ledger',              // sổ thanh toán
+]);
+
+function rateStoreFingerprint(store = persist, files = RATE_STORE_FILES) {
+  const dir = (store && store.DIR) || persist.DIR;
+  const list = Array.isArray(files) ? files : [files];
+  return list.map((name) => fileFingerprint(dir, name)).join('|');
 }
 
 /** Đây là file TÀI CHÍNH: chỉ chủ tiến trình được đọc/ghi. */
@@ -214,5 +233,5 @@ function clear({ store = persist } = {}) {
 module.exports = {
   FILE, MAX_SEALS, SEAL_FORMAT,
   keyFor, isSealable, read, write, sealedAt, clear, checksumOf,
-  hardenPermissions, rateStoreFingerprint,
+  hardenPermissions, rateStoreFingerprint, RATE_STORE_FILES,
 };
