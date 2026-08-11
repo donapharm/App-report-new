@@ -101,8 +101,20 @@ test('real employee-cost path deduplicates each scope, projects exact matches an
   });
   assert.equal(calls, 1, 'two report rows in one period+contractor use one pinned snapshot');
   assert.deepEqual(actual.rows.map((row) => [row.shadowReconciledQuantity, row.shadowQuantityDelta]), [[12.5, -0.5], [20, 0]]);
-  const withoutShadow = (payload) => JSON.parse(JSON.stringify(payload), (key, value) => key.startsWith('shadow') ? undefined : value);
-  assert.deepEqual(withoutShadow(actual), withoutShadow(baseline), 'connector cannot mutate costs, summaries, KPI or revenue');
+  /* `remoteProvenance` là LAI LỊCH của gói lấy qua mạng (bot audit đợt 17), không phải
+   * số tiền: nó ghi version/checksum/confirmed_at của đúng những gói đã dùng để tính, để
+   * lượt mở con dấu sau soi lại được. Nguồn đổi 12,5 → 9,5 mà không file nào trên đĩa
+   * nhúc nhích thì đây là thứ DUY NHẤT phát hiện ra. Loại khỏi phép so "không được sửa
+   * số", rồi kiểm riêng ngay bên dưới — bỏ qua im lặng mới là nới lỏng. */
+  const boSieuDuLieu = (payload) => JSON.parse(JSON.stringify(payload), (key, value) => (
+    key.startsWith('shadow') || key === 'remoteProvenance' ? undefined : value));
+  assert.deepEqual(boSieuDuLieu(actual), boSieuDuLieu(baseline), 'connector cannot mutate costs, summaries, KPI or revenue');
+  assert.ok(Array.isArray(actual.remoteProvenance),
+    'phải GHI LẠI lai lịch gói từ xa — thiếu trường này thì `isSealable` fail-closed và không kỳ nào đóng dấu được');
+  for (const dong of actual.remoteProvenance) {
+    assert.match(String(dong), /^[^:]+:[^:]+:rv=\d+:rc=[a-f0-9]{64}:ca=\S+:av=(\d+|khong-co):ac=([a-f0-9]{64}|khong-co)$/,
+      `lai lịch phải đủ version + checksum + confirmed_at để so lại được, đang là: ${dong}`);
+  }
 });
 
 test('real path leaves nulls on upstream failure and ambiguous identity without breaking the report', async () => {

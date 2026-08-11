@@ -1,3 +1,54 @@
+### 2026-08-11 23:20 (giờ VN) — 🔒 Ba lỗ đóng dấu cuối; và con số quan trọng nhất: bỏ dấu = 14 giây/lượt
+
+**Phép đo quyết định của bot — kết quả ngược với dự đoán của tôi.**
+Tôi định bỏ hẳn con dấu, thay bằng bất biến "đủ người mới trưng tổng". Bot đo thật với
+dấu TẮT hoàn toàn: số **ổn định tuyệt đối** (20/20 lượt, kể cả sau restart, đều ra
+2.091 dòng · 30.982.248.913đ · 21 NV · 0/0/0) — **nhưng nguội 50,4 giây, nóng 14,3
+giây mỗi lượt**, vì mỗi request dựng lại 21 báo cáo.
+⇒ **Con dấu là thứ chịu lực về tốc độ, không bỏ được.** Và đây cũng là lời giải cho
+"bấm F5 quay mãi" CEO chụp lúc 21:59: đó chính là một lượt **trượt dấu**. Mỗi lần khoá
+đổi vì cớ vớ vẩn (churn), người mở màn tiếp theo trả giá 14–50 giây. Nên churn không
+phải chuyện sạch sẽ — nó là nguyên nhân trực tiếp của cái màn hình quay.
+
+**Ba lỗ bot chỉ, sửa cả ba:**
+
+**① Nguồn qua mạng đổi 12,5 → 9,5 mà vẫn phục vụ dấu cũ.**
+Băm file không bao giờ với tới thứ đến từ mạng — sáu vòng nới vùng quét cũng không tới.
+Lối ra nằm ở chỗ khác: **chính gói dữ liệu đã mang sẵn căn cước của nó**
+(`reconciliation_version`, `reconciliation_rows_checksum_v2`, `allocation_version`,
+`allocation_checksum`, `confirmed_at`). Nay `employeeCost.js` **ghi lại** lai lịch các
+gói đã thực sự dùng, đóng vào **thân dấu**.
+‼ Lai lịch **KHÔNG** vào khoá — đã thử và bỏ: khoá phải tính được TRƯỚC khi dựng, còn
+lai lịch chỉ biết SAU khi dựng. Nhét vào khoá là đường tra sớm luôn rỗng ⇒ mỗi lượt xem
+dựng lại 21 báo cáo ⇒ đúng 14,3 giây đó. Nên **soi lúc MỞ dấu**: hỏi lại đúng những gói
+dấu ghi là đã dùng, so checksum, lệch thì vứt dấu. Một lượt metadata nhẹ đổi lấy việc
+khỏi dựng 21 báo cáo.
+
+**② Doanh thu ngoài danh sách: nguồn 250, hiển thị 200, lệch 50, `balanced=false` mà vẫn đóng dấu.**
+Đây **đúng là lỗ tôi đã báo trước cho CEO chiều nay rồi không bịt** — doanh thu của mã
+NV không nằm trong `target_roster.json` thì không ai kêu. `buildRevenueRecon` đã tính
+sẵn `balanced` từ lâu, chỉ là chưa ai hỏi nó trước khi đóng dấu. Nay `isSealable`
+fail-closed cả ba đường: lệch thật, chưa đo được (`null`), và đối soát hỏng.
+
+**③ Chốt làm rồi quên cắm dây.** Tôi thêm hạn mức 200 file / 32 MB và viết hẳn
+`dangTinCay()` để vượt thì ngừng đóng dấu — rồi **không gọi nó ở đâu cả**. Bot ép căn
+cước sang trạng thái không đáng tin: app vẫn ghi dấu như thường. Một cái chốt không ai
+gọi thì không phải chốt, chỉ là chú thích dài.
+
+**Lỗi phụ tự tìm ra khi viết ca kiểm A11: một ca kiểm đang đặt mìn cho ca khác.**
+A6c xoá module khỏi `require.cache` 5 lần rồi bỏ đó, nên `routes.js` giữ bản CŨ còn
+cache cầm bản MỚI. Ca nào sau này thay hàm trên bản mới sẽ **không với tới** `routes` —
+và hỏng **âm thầm**: ca kiểm cứ xanh trong khi thứ nó tưởng đang kiểm thì không hề bị
+kiểm. Chính A11 dính bẫy này, mất một vòng mới thấy. Nay A6c trả module về chỗ cũ và
+tự kiểm điều đó.
+
+**Kiểm:** thêm 6 ca (A8, A8b, A9, A10, A10b, A11). Server **1272/1279** — đúng 7 ca hỏng
+cố hữu của sandbox, không phát sinh ca mới. `npm run build` xanh.
+
+**Còn nợ, chưa làm:** chốt ngược "có mã phát sinh doanh số mà KHÔNG có trong
+`target_roster.json` thì phải kêu lên". Hiện `balanced=false` đã chặn *đóng dấu*, nhưng
+chưa ai *chỉ tên* người lạ đó ra.
+
 ### 2026-08-11 22:30 (giờ VN) — 🔴 App in tổng của 6 người vào ô "tổng cả đội"; và 41 commit đang nằm im
 
 **Ảnh CEO chụp 22:00 ngày 11/08.** DataHub thiếu nguồn của **15/21 NV** (DN007, DN008,

@@ -95,6 +95,29 @@ function isSealable(merged, roster, reports) {
   const periods = Array.isArray(merged.periods) ? merged.periods : null;
   if (!periods || !periods.length) return false;
 
+  /* ‼ PHÉP CÂN KHÔNG CÂN THÌ KHÔNG ĐÓNG DẤU (bot audit đợt 17, mục A2).
+   *
+   * Bot dựng: nguồn 250, hiển thị 200, lệch 50, `balanced=false` — app vẫn đóng dấu,
+   * tức đóng băng vĩnh viễn một kỳ đang thiếu 50 đồng không giải thích được.
+   *
+   * Đây đúng là cái lỗ tôi đã BÁO TRƯỚC với CEO chiều nay rồi không bịt: doanh thu của
+   * mã NV **không nằm trong danh sách** thì không ai kêu. `buildRevenueRecon` đã tính
+   * sẵn phép cân này và đã trả `balanced` — chỉ là chưa ai hỏi nó trước khi đóng dấu.
+   * Đúng tinh thần `SPEC_REVENUE_SYNC_EXCEPTIONS`: Σ(đưa vào)+Σ(loại) == Σ(nguồn),
+   * lệch thì DỪNG.
+   *
+   * Fail-closed cả ba đường: chưa soát được (`unavailable`), không đo được
+   * (`balanced === null`, vì chưa có số hiển thị để so), và lệch thật (`false`). */
+  const recon = merged.revenueRecon;
+  if (!recon || typeof recon !== 'object') return false;
+  if (recon.unavailable === true) return false;
+  if (recon.balanced !== true) return false;
+
+  /* ‼ LAI LỊCH DỮ LIỆU QUA MẠNG PHẢI CÓ MẶT. Thiếu hẳn trường ⇒ không ai ghi lại đã
+   * dùng gói từ xa nào ⇒ không có cách nào soi lại khi mở dấu. Mảng RỖNG thì hợp lệ:
+   * nó nói rõ "không dùng gói từ xa nào", khác hẳn `undefined` là "không ai ghi". */
+  if (!Array.isArray(merged.remoteProvenance)) return false;
+
   const expected = new Set(
     (Array.isArray(roster) ? roster : [])
       .map((row) => text(row?.emp_code).toUpperCase()).filter(Boolean),
@@ -316,8 +339,76 @@ function clear({ store = persist } = {}) {
   save.call(store, FILE, {});
 }
 
+
+/* ‼ SOI LẠI LAI LỊCH DỮ LIỆU QUA MẠNG KHI MỞ DẤU (bot audit đợt 17, mục A1).
+ *
+ * Bot dựng: nguồn từ xa trả 12,5 rồi đổi thành 9,5. Không file nào trên đĩa đổi nên
+ * khoá dấu y nguyên ⇒ app mở lại dấu cũ và trả **12,5** vĩnh viễn. Băm file không bao
+ * giờ với tới thứ đến từ mạng, nới vùng quét bao nhiêu vòng cũng không tới.
+ *
+ * Lai lịch không nằm trong KHOÁ (khoá phải tính được trước khi dựng, lai lịch chỉ biết
+ * sau khi dựng — xem chú thích ở `routes.js`). Nó nằm trong THÂN DẤU, và được soi lại
+ * mỗi lần mở: hỏi đúng những gói mà dấu ghi là đã dùng, so checksum. Lệch ⇒ vứt dấu.
+ *
+ * Fail-closed ba đường: dấu không ghi lai lịch (dấu đời cũ), hỏi lại không được, hoặc
+ * checksum lệch — cả ba đều trả `false` để dựng lại. Chậm một lượt còn hơn sai vĩnh viễn.
+ */
+async function remoteProvenanceStillValid(sealedPayload, { loadScopes, loadAllocationScopes } = {}) {
+  const ghi = sealedPayload?.remoteProvenance;
+  if (!Array.isArray(ghi)) return false; // dấu đời cũ không có lai lịch ⇒ không tin
+  if (!ghi.length) return true;          // dấu ghi rõ "không dùng gói từ xa nào"
+  if (typeof loadScopes !== 'function' || typeof loadAllocationScopes !== 'function') return false;
+
+  // Dựng lại danh sách scope TỪ CHÍNH DẤU — chỉ hỏi đúng những gói đã dùng, không quét rộng.
+  const scopes = [];
+  for (const dong of ghi) {
+    const [period, contractorCode] = String(dong).split(':');
+    if (!period || !contractorCode) return false;
+    scopes.push({ period, contractorCode });
+  }
+
+  let snapshots;
+  let allocationSnapshots;
+  try {
+    snapshots = await loadScopes(scopes);
+    const allocationScopes = [];
+    for (const [scopeKey, snapshot] of snapshots) {
+      const [period, contractorCode] = scopeKey.split('\u001f');
+      if (!snapshot) continue;
+      allocationScopes.push({
+        period, contractorCode,
+        reconciliationVersion: snapshot.reconciliation_version,
+        reconciliationRowsChecksumV2: snapshot.reconciliation_rows_checksum_v2,
+        reconciliationConfirmedAt: snapshot.confirmed_at,
+      });
+    }
+    allocationSnapshots = await loadAllocationScopes(allocationScopes);
+  } catch {
+    return false; // hỏi lại không được thì không kết luận là "vẫn đúng"
+  }
+
+  // Dựng lại chuỗi lai lịch theo ĐÚNG công thức của `employeeCost.js`, rồi so nguyên khối.
+  const bayGio = [];
+  for (const [scopeKey, snapshot] of snapshots) {
+    if (!snapshot) continue;
+    const [period, contractorCode] = scopeKey.split('\u001f');
+    const allocationSnapshot = allocationSnapshots.get(scopeKey);
+    bayGio.push([
+      period, contractorCode,
+      `rv=${snapshot.reconciliation_version}`,
+      `rc=${snapshot.reconciliation_rows_checksum_v2}`,
+      `ca=${snapshot.confirmed_at}`,
+      allocationSnapshot ? `av=${allocationSnapshot.allocation_version}` : 'av=khong-co',
+      allocationSnapshot ? `ac=${allocationSnapshot.allocation_checksum}` : 'ac=khong-co',
+    ].join(':'));
+  }
+  const truoc = [...new Set(ghi.map(String))].sort().join('&');
+  const sau = [...new Set(bayGio)].sort().join('&');
+  return truoc === sau;
+}
+
 module.exports = {
   FILE, MAX_SEALS, SEAL_FORMAT,
-  keyFor, isSealable, read, write, sealedAt, clear, checksumOf,
+  keyFor, isSealable, read, write, sealedAt, clear, checksumOf, remoteProvenanceStillValid,
   hardenPermissions, rateStoreFingerprint, RATE_STORE_FILES, SALARY_SNAPSHOT_FILE,
 };

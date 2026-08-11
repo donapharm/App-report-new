@@ -536,12 +536,24 @@ test('A6b ghi file biến động (nhật ký đăng nhập) KHÔNG được là
  * sinh ra để tránh. */
 test('A6c không đụng gì thì nạp lại module bao nhiêu lần căn cước vẫn y nguyên', () => {
   const duong = require.resolve('../src/employeeCostFormulaIdentity');
+  /* ‼ PHẢI TRẢ MODULE VỀ CHỖ CŨ. Xoá cache rồi bỏ đó là để lại một quả mìn: `routes.js`
+   * đã giữ bản CŨ từ lúc nạp, còn cache thì cầm bản MỚI. Ca nào sau này thay hàm trên
+   * bản mới sẽ không với tới được `routes` — và nó hỏng ÂM THẦM, ca kiểm cứ xanh trong
+   * khi thứ nó tưởng đang kiểm thì không hề bị kiểm. Đã mất một vòng vì đúng chuyện này
+   * (ca A11 bên dưới). */
+  const banGoc = require.cache[duong];
   const lan = [];
-  for (let i = 0; i < 5; i += 1) {
-    delete require.cache[duong];
-    lan.push(require('../src/employeeCostFormulaIdentity').identity());
+  try {
+    for (let i = 0; i < 5; i += 1) {
+      delete require.cache[duong];
+      lan.push(require('../src/employeeCostFormulaIdentity').identity());
+    }
+  } finally {
+    require.cache[duong] = banGoc;
   }
   assert.equal(new Set(lan).size, 1, `căn cước phải giống hệt cả 5 lần nạp, đang ra: ${[...new Set(lan)].join(' | ')}`);
+  assert.equal(require('../src/employeeCostFormulaIdentity'), banGoc.exports,
+    'phải trả đúng bản module mà routes.js đang giữ, không để lại bản lạ trong cache');
 });
 
 /* ── BOT AUDIT ĐỢT 17 ─────────────────────────────────────────────────────── */
@@ -601,5 +613,61 @@ test('A7c file trạng thái do app tự ghi KHÔNG được làm căn cước �
   } finally {
     if (daCo) fs.writeFileSync(p, cu); else { try { fs.unlinkSync(p); } catch { /* chưa từng có */ } }
     formulaIdentity.forgetCache();
+  }
+});
+
+/* A11 — CHỐT LÀM RỒI PHẢI CẮM DÂY.
+ * Đợt 17 tôi thêm hạn mức vùng quét 200 file / 32 MB và viết hẳn `dangTinCay()` để khi
+ * vượt thì ngừng đóng dấu... rồi không gọi nó ở đâu cả. Bot ép căn cước sang trạng thái
+ * không đáng tin: app vẫn ghi dấu như thường. Một cái chốt không ai gọi thì không phải
+ * chốt, chỉ là chú thích dài — và chú thích thì không chặn được gì.
+ *
+ * Ca này kiểm ĐỘNG: ép `dangTinCay()` trả false rồi đòi khoá phải là null. Khoá null
+ * thì cả đường TRA lẫn đường GHI đều tắt, nên chỉ cần chặn một chỗ. */
+test('A11 căn cước không đáng tin ⇒ khoá đóng dấu phải là null (cả tra lẫn ghi)', async () => {
+  const formulaIdentity = require('../src/employeeCostFormulaIdentity');
+  const goc = {
+    dangTinCay: formulaIdentity.dangTinCay,
+    employeeCostDataSignature: store.employeeCostDataSignature,
+    targetRoster: store.targetRoster,
+    getForSession: employeeCost.getForSession,
+    getSnapshot: catalogManagement.getSnapshot,
+    read: closedSeal.read,
+    write: closedSeal.write,
+    isSealable: closedSeal.isSealable,
+  };
+  const khoaDaTra = [];
+  const khoaDaGhi = [];
+  store.employeeCostDataSignature = () => 'a11-co-dinh';
+  store.targetRoster = () => [{ emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true }];
+  catalogManagement.getSnapshot = async () => ({ rows: [], catalog: [] });
+  employeeCost.getForSession = async ({ requestedEmp }, options) => employeeCost.emptyRangePayload(
+    requestedEmp,
+    employeeCost.parseMonthRange({ from: options.from, to: options.to }),
+  );
+  closedSeal.read = (key) => { khoaDaTra.push(key); return null; };
+  closedSeal.write = async (key) => { khoaDaGhi.push(key); return true; };
+  closedSeal.isSealable = () => true;
+  // Vùng quét phình ra ngoài dự kiến ⇒ không ai giải thích nổi khoá này gồm những gì.
+  formulaIdentity.dangTinCay = () => ({ tinCay: false, vuotNguong: { soFile: 524, soByte: 1_036_645_241 } });
+
+  const phien = { emp_code: 'ADMIN02', role: 'admin', name: 'Admin 2' };
+  const truyVan = { emp: 'ALL', from: '2026-07', to: '2026-07', page: '1', pageSize: '20', sortDir: 'asc' };
+  try {
+    const ketQua = await invokeEmployeeCost(truyVan, phien);
+    assert.equal(ketQua.status, 200, 'không đáng tin thì mất đường tắt, KHÔNG được gãy cả màn');
+    assert.deepEqual(khoaDaGhi, [],
+      'căn cước không đáng tin mà vẫn ghi dấu ⇒ đóng băng vĩnh viễn một con số không ai truy được nguồn');
+    assert.ok(khoaDaTra.every((key) => key == null),
+      'đường tra cũng phải tắt — tra bằng khoá không đáng tin thì trúng dấu nào cũng không tin được');
+  } finally {
+    formulaIdentity.dangTinCay = goc.dangTinCay;
+    store.employeeCostDataSignature = goc.employeeCostDataSignature;
+    store.targetRoster = goc.targetRoster;
+    employeeCost.getForSession = goc.getForSession;
+    catalogManagement.getSnapshot = goc.getSnapshot;
+    closedSeal.read = goc.read;
+    closedSeal.write = goc.write;
+    closedSeal.isSealable = goc.isSealable;
   }
 });

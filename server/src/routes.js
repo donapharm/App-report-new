@@ -30,6 +30,9 @@ const costRatesTable = require('./costRatesTable');
 const costAmounts = require('./costAmounts');
 const costBreakdown = require('./costBreakdown');
 const employeeCostRevenueRecon = require('./employeeCostRevenueRecon');
+// Chỉ dùng để SOI LẠI lai lịch gói từ xa khi mở dấu — không dựng số ở đây.
+const reconciliationShadow = require('./employeeCostReconciliationShadow');
+const reconAllocationV4 = require('./employeeCostReconAllocationV4');
 const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
@@ -1193,11 +1196,49 @@ async function employeeCostAllPayload(req, {
     employeeBonus.FORMULA_VERSION,
     canCuocCongThuc(),
   ].join('|');
-  const khoaDauTheoVanTay = (vt) => closedSeal.keyFor({
-    from: range.from, to: range.to, months: range.months,
-    closed: rangeClosed,
-    sources: { data: vt, rates: 'gop-trong-vantay', formula: employeeBonus.FORMULA_VERSION, app: canCuocCongThuc() },
-  });
+  /* Lai lịch của mọi gói dữ liệu LẤY QUA MẠNG đã dùng để dựng các báo cáo này.
+   * Băm file không với tới được thứ đến từ mạng; checksum do chính nguồn phát ra thì
+   * có. `null` = chưa dựng báo cáo nào nên chưa biết ⇒ đường tra dấu sớm không dùng. */
+  const laiLichRemote = (reports) => {
+    if (!Array.isArray(reports)) return null;
+    const gop = [];
+    for (const report of reports) {
+      // Thiếu hẳn trường ⇒ trả null để `isSealable` fail-closed, KHÔNG coi như rỗng.
+      if (!Array.isArray(report?.remoteProvenance)) return null;
+      gop.push(...report.remoteProvenance);
+    }
+    return [...new Set(gop)].sort().join('&') || 'khong-dung-goi-tu-xa';
+  };
+  /* ‼ VÌ SAO LAI LỊCH REMOTE KHÔNG NẰM TRONG KHOÁ — đã thử và bỏ, đừng "sửa lại".
+   *
+   * Khoá phải tính được TRƯỚC khi dựng (cả mục đích của nó là để khỏi phải dựng).
+   * Lai lịch remote chỉ biết được SAU khi dựng xong. Nhét vào khoá là khoá luôn rỗng ở
+   * đường tra sớm ⇒ không bao giờ tra được dấu ⇒ mỗi lượt xem dựng lại 21 báo cáo.
+   * Bot vừa đo cái giá đó: **nguội 50,4 giây · nóng 14,3 giây** mỗi request. Đúng cảnh
+   * "bấm F5 quay mãi" CEO chụp màn 22:00.
+   *
+   * Nên: khoá vẫn theo file, còn lai lịch remote **soi lúc ĐỌC dấu**. Dấu ghi kèm lai
+   * lịch của các gói đã dùng; mở dấu ra thì hỏi lại đúng những gói đó xem checksum còn
+   * khớp không. Nguồn đổi 12,5 → 9,5 ⇒ checksum lệch ⇒ vứt dấu, dựng lại. Một lượt hỏi
+   * metadata nhẹ, đổi lấy việc khỏi dựng 21 báo cáo. */
+  const khoaDauTheoVanTay = (vt) => {
+    /* ‼ CHỐT TÔI LÀM RỒI QUÊN CẮM DÂY (bot audit đợt 17 — đúng, và xấu hổ).
+     * Tôi thêm hạn mức vùng quét 200 file / 32 MB và viết hẳn `dangTinCay()` để khi
+     * vượt thì ngừng đóng dấu... rồi không gọi nó ở đâu cả. Bot ép căn cước sang trạng
+     * thái không đáng tin: app vẫn ghi dấu như thường. Một cái chốt không ai gọi thì
+     * không phải chốt, chỉ là chú thích dài. */
+    if (!formulaIdentity.dangTinCay().tinCay) return null;
+    return closedSeal.keyFor({
+      from: range.from, to: range.to, months: range.months,
+      closed: rangeClosed,
+      sources: {
+        data: vt,
+        rates: 'gop-trong-vantay',
+        formula: employeeBonus.FORMULA_VERSION,
+        app: canCuocCongThuc(),
+      },
+    });
+  };
   /* ‼ HAI CON DẤU, CÓ CHỦ ĐÍCH — đừng nhầm lẫn chúng.
    *
    *   `vanTaySom`    chụp TRƯỚC khối catalog. CHỈ dùng cho việc tra dấu sớm (đường tắt
@@ -1233,6 +1274,12 @@ async function employeeCostAllPayload(req, {
   const mocDoi = () => `${vanTayNguon()}|doi=${soDoiKhoTien()}`;
   const vanTaySom = vanTayNguon();
   const doiSom = soDoiKhoTien();
+  /* Soi lại lai lịch gói từ xa mà dấu đã ghi. Hỏi ĐÚNG những gói đó, không quét rộng:
+   * một lượt metadata nhẹ, đổi lấy việc khỏi dựng 21 báo cáo (bot đo: nóng 14,3 giây). */
+  const laiLichConDung = (sealed) => closedSeal.remoteProvenanceStillValid(sealed, {
+    loadScopes: (scopes) => reconciliationShadow.loadScopes(scopes),
+    loadAllocationScopes: (scopes) => reconAllocationV4.loadScopes(scopes),
+  });
   const sealKey = khoaDauTheoVanTay(vanTaySom);
   if (sealKey && paginate) {
     const sealedEarly = closedSeal.read(sealKey);
@@ -1252,7 +1299,13 @@ async function employeeCostAllPayload(req, {
     if (sealedEarly && !nguonConNguyen) {
       console.warn('[employee-cost] nguồn đổi ngay lúc tra dấu sớm — BỎ đường tắt, dựng đầy đủ');
     }
-    if (sealedEarly && nguonConNguyen) {
+    /* Nguồn trên đĩa còn nguyên CHƯA ĐỦ — gói từ xa có thể đã đổi 12,5 → 9,5 mà không
+     * file nào nhúc nhích. Soi luôn lai lịch trước khi dám xài đường tắt. */
+    const laiLichSomConDung = sealedEarly && nguonConNguyen ? await laiLichConDung(sealedEarly) : false;
+    if (sealedEarly && nguonConNguyen && !laiLichSomConDung) {
+      console.warn('[employee-cost] gói dữ liệu từ xa đã đổi — BỎ dấu cũ, dựng đầy đủ');
+    }
+    if (sealedEarly && nguonConNguyen && laiLichSomConDung) {
       /* Có dấu thì KHÔNG chờ catalog — nhưng cũng KHÔNG được bỏ luôn việc làm mới nó:
          các màn khác vẫn xài catalog, để nó ôi là hại chỗ khác. Nên vẫn châm ngòi làm
          mới Ở NỀN, không await. Nhanh cho người đang xem, mà không bỏ đói ai. */
@@ -1387,6 +1440,12 @@ async function employeeCostAllPayload(req, {
       // Đối soát hỏng KHÔNG được làm hỏng cả báo cáo — nhưng phải nói là chưa soát được.
       merged.revenueRecon = { unavailable: true, reason: String(error?.message || error).slice(0, 160) };
     }
+    /* Lai lịch các gói từ xa đã dùng, gom từ CHÍNH các báo cáo vừa dựng. Đóng vào thân
+     * dấu để lượt mở sau soi lại được (xem `remoteProvenanceStillValid`). Thiếu ở bất kỳ
+     * báo cáo nào ⇒ để `undefined` cho `isSealable` fail-closed, KHÔNG hạ xuống rỗng. */
+    merged.remoteProvenance = reports.every((item) => Array.isArray(item?.remoteProvenance))
+      ? [...new Set(reports.flatMap((item) => item.remoteProvenance))].sort()
+      : undefined;
     const healthSnapshotAfter = store.activeDataSignature();
     const healthCurrentPeriod = (merged.periods || []).find((item) => String(item.period) === String(range.to)) || null;
     const healthPreviousKey = employeeCostHealthKpis.previousMonth(range.to);
@@ -1540,7 +1599,9 @@ async function employeeCostAllPayload(req, {
        * cùng một luật với chốt "dựng đời nào cất khoá đời đó" bên dưới. */
       const doiTruocTra = soDoiKhoTien();
       const sealed = closedSeal.read(khoaDauOnDinh);
-      if (sealed) {
+      // Cùng lý do như đường tắt: file trên đĩa còn nguyên không chứng minh được gói
+      // từ xa còn nguyên. Lệch ⇒ coi như không có dấu, đi tiếp đường dựng đầy đủ.
+      if (sealed && await laiLichConDung(sealed)) {
         if (vanTayNguon() !== vanTayLucVao || soDoiKhoTien() !== doiTruocTra) {
           throw Object.assign(
             new Error('Nguồn đổi ngay lúc tra dấu kỳ khoá sổ. Hãy thử lại sau ít phút.'),

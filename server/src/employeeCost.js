@@ -1011,6 +1011,40 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
     });
   }
   const allocationSnapshots = await reconciliationAllocationV4.loadScopes(allocationScopes, allocationOptions);
+
+  /* ‼ LAI LỊCH CỦA DỮ LIỆU LẤY QUA MẠNG (bot audit đợt 17, mục A1 — đúng, và là lỗ
+   * duy nhất mà băm file KHÔNG BAO GIỜ bịt được).
+   *
+   * Bot dựng: nguồn từ xa trả số lượng **12,5**, sau đổi thành **9,5**. Không file nào
+   * trên đĩa đổi, nên căn cước cách tính, vân tay nguồn và khoá đóng dấu đều y nguyên
+   * ⇒ app mở lại dấu cũ và trả **12,5** vĩnh viễn.
+   *
+   * Sáu vòng qua tôi cứ nới rộng vùng băm file cho "đủ đầu vào". Nhưng thứ đến từ mạng
+   * thì không có file nào để mà băm — nới bao nhiêu cũng không tới. Danh sách đầu vào
+   * theo lối đó là không có đáy.
+   *
+   * Lối ra không nằm ở phía ta: **chính gói dữ liệu từ xa đã mang sẵn căn cước của nó**
+   * — `reconciliation_version`, `reconciliation_rows_checksum_v2`, `allocation_version`,
+   * `allocation_checksum`, `confirmed_at` (xem `validSnapshot`). Nguồn đổi 12,5 → 9,5
+   * thì checksum đổi theo. Việc của ta chỉ là GHI LẠI và đem vào khoá.
+   *
+   * Ghi ở đây thay vì moi lại lúc đóng dấu, vì đây là chỗ DUY NHẤT biết chắc gói nào đã
+   * thực sự được dùng để tính. Thiếu lai lịch mà vẫn có dùng gói ⇒ `isSealable` chặn. */
+  const laiLichRemote = [];
+  const ghiLaiLich = (period, contractorCode, snapshot, allocationSnapshot) => {
+    if (!snapshot) return;
+    laiLichRemote.push([
+      period, contractorCode,
+      `rv=${snapshot.reconciliation_version}`,
+      `rc=${snapshot.reconciliation_rows_checksum_v2}`,
+      `ca=${snapshot.confirmed_at}`,
+      // Gói phân bổ có thể vắng (v3 chấp nhận được) — ghi rõ VẮNG, đừng bỏ trống
+      // để hai cảnh "có gói A" và "không có gói nào" không trùng chuỗi.
+      allocationSnapshot ? `av=${allocationSnapshot.allocation_version}` : 'av=khong-co',
+      allocationSnapshot ? `ac=${allocationSnapshot.allocation_checksum}` : 'ac=khong-co',
+    ].join(':'));
+  };
+
   for (const periodPayload of periods) {
     const period = normalizeMonth(periodPayload.period || options.period);
     const rowPlans = plans.get(periodPayload) || [];
@@ -1039,6 +1073,7 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
       if (!snapshot) continue;
       const rows = reconciliationShadow.projectEmployeeCostRows(group.map((item) => item.row), snapshot, { employeeCode: empCode });
       const allocationSnapshot = allocationSnapshots.get(scopeKey);
+      ghiLaiLich(period, contractorCode, snapshot, allocationSnapshot);
       const result = reconciliationAllocationV4.projectEmployeeCostRows(rows, allocationSnapshot, {
         employeeCode: empCode,
         expected: snapshot ? {
@@ -1064,6 +1099,10 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
       mixedEmployeeVarianceCount: allocationTotals.reduce((sum, item) => sum + item.mixedEmployeeVarianceCount, 0),
     };
   }
+  /* Sắp xếp cố định: thứ tự duyệt Map không được làm đổi khoá đóng dấu. Mảng RỖNG có
+   * nghĩa "không dùng gói từ xa nào" — khác hẳn `undefined` là "không ai ghi lại", và
+   * `isSealable` phân biệt đúng hai cảnh đó. */
+  payload.remoteProvenance = [...new Set(laiLichRemote)].sort();
   return payload;
 }
 

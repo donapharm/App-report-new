@@ -158,7 +158,19 @@ function baoCao(empCode, { outcome = 'ok', rows = 1 } = {}) {
   };
 }
 
-const gopThat = (reports, roster = ROSTER_2) => employeeCostTable.mergeEmployeeReports(reports, roster);
+/* Bản gộp THẬT, cộng hai bằng chứng mà `isSealable` đòi từ đợt 17:
+ *   · `revenueRecon.balanced` — phép cân doanh thu. Bot dựng: nguồn 250, hiển thị 200,
+ *     lệch 50, `balanced=false` mà vẫn đóng dấu ⇒ đóng băng vĩnh viễn một kỳ thiếu tiền.
+ *   · `remoteProvenance` — lai lịch gói lấy qua mạng, để lượt mở dấu sau soi lại được.
+ * Hàm này cho mặc định HỢP LỆ; các ca âm bên dưới tự bẻ từng cái một. */
+const gopThat = (reports, roster = ROSTER_2, { recon, remote } = {}) => {
+  const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+  merged.revenueRecon = recon === undefined
+    ? { total: 250, shown: 250, gap: 0, balanced: true }
+    : recon;
+  merged.remoteProvenance = remote === undefined ? [] : remote;
+  return merged;
+};
 
 test('★ HÌNH DẠNG THẬT: đủ đội + mọi NV ok ⇒ mới được đóng dấu', () => {
   const { seal } = freshSeal();
@@ -462,4 +474,90 @@ test('⑭ self-heal phải qua ĐÚNG cổng kiểm bốn kho như đường th�
     'và kiểm lại lần cuối ngay trước khi publish');
   assert.match(khoi, /employeeCostAllCacheKey\(req, 'base', vanTayTruocSelfHeal\)/,
     'cache dưới đúng con dấu đã kiểm');
+});
+
+
+/* ── BOT AUDIT ĐỢT 17 ─────────────────────────────────────────────────────── */
+
+/* A8 — PHÉP CÂN KHÔNG CÂN THÌ KHÔNG ĐÓNG DẤU.
+ * Bot dựng: nguồn 250, hiển thị 200, lệch 50, `balanced=false` — app vẫn đóng dấu.
+ * Đây đúng là lỗ "doanh thu của mã NV ngoài danh sách" đã báo trước rồi không bịt.
+ * `buildRevenueRecon` đã tính sẵn `balanced`, chỉ là chưa ai hỏi trước khi đóng dấu. */
+test('A8 lệch doanh thu chưa giải thích được ⇒ KHÔNG đóng dấu', () => {
+  const { seal } = freshSeal();
+  const reports = [baoCao('DN001'), baoCao('DN002')];
+  const lech = { total: 250, shown: 200, gap: 50, balanced: false };
+  assert.equal(seal.isSealable(gopThat(reports, ROSTER_2, { recon: lech }), ROSTER_2, reports), false,
+    'nguồn 250 mà hiển thị 200 thì 50 đồng đang ở đâu — đóng dấu là đóng băng câu hỏi đó vĩnh viễn');
+});
+
+test('A8b chưa đo được hoặc chưa soát được phép cân ⇒ cũng KHÔNG đóng dấu', () => {
+  const { seal } = freshSeal();
+  const reports = [baoCao('DN001'), baoCao('DN002')];
+  for (const [ten, recon] of [
+    ['chưa đo được (chưa có số hiển thị)', { total: 250, shown: null, gap: null, balanced: null }],
+    ['đối soát hỏng', { unavailable: true, reason: 'kho doanh thu không đọc được' }],
+    ['thiếu hẳn phép cân', null],
+  ]) {
+    assert.equal(seal.isSealable(gopThat(reports, ROSTER_2, { recon }), ROSTER_2, reports), false,
+      `${ten} ⇒ không có bằng chứng cân ⇒ fail-closed`);
+  }
+});
+
+/* A9 — LAI LỊCH GÓI TỪ XA PHẢI CÓ MẶT, và mảng RỖNG khác `undefined`.
+ * Rỗng = "đã ghi lại, và không dùng gói từ xa nào". Thiếu hẳn = "không ai ghi lại"
+ * ⇒ lượt mở dấu sau không có gì để soi ⇒ không được đóng. */
+test('A9 thiếu lai lịch gói từ xa ⇒ KHÔNG đóng dấu; rỗng thì được', () => {
+  const { seal } = freshSeal();
+  const reports = [baoCao('DN001'), baoCao('DN002')];
+  assert.equal(seal.isSealable(gopThat(reports, ROSTER_2, { remote: undefined }), ROSTER_2, reports), true,
+    'mảng rỗng = có ghi lại, không dùng gói từ xa nào ⇒ hợp lệ');
+  const thieu = employeeCostTable.mergeEmployeeReports(reports, ROSTER_2);
+  thieu.revenueRecon = { total: 250, shown: 250, gap: 0, balanced: true };
+  // KHÔNG gán remoteProvenance — đúng cảnh không ai ghi lại.
+  assert.equal(seal.isSealable(thieu, ROSTER_2, reports), false,
+    'không ai ghi lai lịch ⇒ mở dấu sau không soi lại được ⇒ fail-closed');
+});
+
+/* A10 — NGUỒN TỪ XA ĐỔI 12,5 → 9,5 THÌ DẤU CŨ PHẢI HẾT HIỆU LỰC.
+ * Không file nào trên đĩa đổi, nên khoá dấu y nguyên. Cái cứu là soi lại lai lịch lúc
+ * MỞ dấu: hỏi đúng những gói dấu ghi là đã dùng, so checksum. */
+test('A10 gói từ xa đổi ⇒ soi lai lịch phải trả false ⇒ dựng lại', async () => {
+  const { seal } = freshSeal();
+  const KY = '2026-07';
+  const NHA = 'CT01';
+  const khoa = `${KY}\u001f${NHA}`;
+  const goi = (checksum) => new Map([[khoa, {
+    reconciliation_version: 3, reconciliation_rows_checksum_v2: checksum,
+    confirmed_at: '2026-08-01T00:00:00.000Z',
+  }]]);
+  const goiPhanBo = new Map([[khoa, { allocation_version: 4, allocation_checksum: 'b'.repeat(64) }]]);
+  const dau = {
+    remoteProvenance: [`${KY}:${NHA}:rv=3:rc=${'a'.repeat(64)}:ca=2026-08-01T00:00:00.000Z:av=4:ac=${'b'.repeat(64)}`],
+  };
+  const cua = (checksum) => ({
+    loadScopes: async () => goi(checksum),
+    loadAllocationScopes: async () => goiPhanBo,
+  });
+
+  assert.equal(await seal.remoteProvenanceStillValid(dau, cua('a'.repeat(64))), true,
+    'nguồn y nguyên ⇒ dấu còn dùng được');
+  assert.equal(await seal.remoteProvenanceStillValid(dau, cua('c'.repeat(64))), false,
+    'nguồn đổi 12,5 → 9,5 ⇒ checksum đổi ⇒ PHẢI vứt dấu, không được trả số cũ');
+});
+
+test('A10b dấu đời cũ (không ghi lai lịch) và lúc hỏi lại hỏng ⇒ đều fail-closed', async () => {
+  const { seal } = freshSeal();
+  assert.equal(await seal.remoteProvenanceStillValid({}, {
+    loadScopes: async () => new Map(), loadAllocationScopes: async () => new Map(),
+  }), false, 'dấu không ghi lai lịch thì không có gì để soi ⇒ không tin');
+
+  const dau = { remoteProvenance: ['2026-07:CT01:rv=3:rc=x:ca=y:av=4:ac=z'] };
+  assert.equal(await seal.remoteProvenanceStillValid(dau, {
+    loadScopes: async () => { throw new Error('mạng chết'); },
+    loadAllocationScopes: async () => new Map(),
+  }), false, 'hỏi lại không được thì KHÔNG được kết luận là "vẫn đúng"');
+
+  assert.equal(await seal.remoteProvenanceStillValid({ remoteProvenance: [] }, {}), true,
+    'dấu ghi rõ "không dùng gói từ xa nào" ⇒ không cần hỏi ai');
 });
