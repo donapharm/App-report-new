@@ -1,3 +1,31 @@
+### 2026-08-11 08:00 (giờ VN) — 🧯 BỊT HAI ĐƯỜNG HIỂN THỊ SỐ SAI (bot audit đợt 6)
+
+Bot xác nhận **ba đường sai số đợt trước đã sạch**, và trả lời câu hỏi một dòng: **CÒN
+hai đường HIỂN THỊ số cũ/trộn đời; đường ĐÓNG DẤU thì không tái hiện được nữa.**
+
+| # | Bot nêu | Đã sửa |
+|---|---|---|
+| 1 | **Bộ nhớ đệm RAM giữ số cũ** khi kho tiền đã đổi. Khoá không chứa vân tay bốn kho; `salaryAdvance` ghi snapshot ở nền mà không xoá memo ALL; base memo giữ tới **6 giờ** | Đưa `kho=${closedSeal.rateStoreFingerprint()}` **vào chính khoá** memo. Kho nào trong bốn kho đổi ⇒ khoá đổi ⇒ dựng lại |
+| 2 | **Lệch đời vẫn `return built`** ⇒ bản trộn đời lên màn, vào cache, xuất Excel. Kỳ ĐANG MỞ còn yếu hơn: `sealKey = null` nên nhánh kiểm bị bỏ qua hẳn | Kiểm đời **không phụ thuộc `sealKey`** (mọi kỳ) · lệch ⇒ **DỰNG LẠI**, không trả hàng trộn · cạn lượt ⇒ **ném `EMPLOYEE_COST_SOURCE_DRIFT` (503)** để `memoGet` tự vứt entry |
+
+#### Chỗ tôi sai về tư duy, không chỉ về code
+Đợt trước tôi chặn **đóng dấu** bản trộn đời nhưng **vẫn trả nó ra màn hình**. Chặn nửa
+vời là **chưa chặn**: CEO vẫn nhìn thấy con số không thuộc đời nào, vẫn xuất ra Excel,
+vẫn dùng để quyết định. Đã bảo một con số là không đáng tin thì **không được đưa nó ra**
+— thà báo "nguồn đang đổi, thử lại sau ít phút".
+
+Và tôi chỉ bảo vệ kỳ đã khoá sổ, bỏ quên kỳ đang mở — trong khi **T08 đang chạy mới là
+kỳ CEO xem hằng ngày**.
+
+#### Test
+`employeeCostClosedSeal` **19/19** (thêm ⑩ khoá memo phủ bốn kho · ⑪ lệch đời phải dựng
+lại, cấm quay lại lối "chặn dấu nhưng vẫn trả", và nhánh kiểm không được phụ thuộc
+`sealKey`). `persistCache` **15/15**. `server` **1237/1244** — đúng 7 ca nền cũ. Build đạt.
+
+#### Nhóm (B) GIA CỐ — vẫn chưa làm, bot xác nhận không phải nguyên nhân blocker
+lock/CAS liên tiến trình · `fsync` file+thư mục · temp riêng · envelope có xác thực/schema
+· quyền file best-effort.
+
 ### 2026-08-11 05:05 (giờ VN) — 🔐 BỊT NỐT BA ĐƯỜNG SAI SỐ CUỐI (bot audit đợt 5)
 
 Bot xác nhận A1 (bằng chứng báo cáo gốc) và A2 (fail-closed khi cạn retry) **đã sạch**,

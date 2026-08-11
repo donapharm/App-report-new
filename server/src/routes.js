@@ -319,6 +319,11 @@ function employeeCostAllCacheKey(req, phase) {
     : { from: range.from, to: range.to };
   return [
     'employee-cost-all', phase, routeDataSignature('employee-cost-all'), 'ADMIN_ALL',
+    /* ‼ VÂN TAY BỐN KHO TIỀN PHẢI NẰM TRONG KHOÁ (bot audit đúng): `routeDataSignature`
+     * chỉ phủ doanh thu/catalog. Kho tỷ lệ %, snapshot bị động, lương ứng và sổ thanh
+     * toán đổi mà khoá KHÔNG đổi ⇒ bộ nhớ đệm base (giữ tới 6 GIỜ) phục vụ lại SỐ CŨ.
+     * Đường thật bot chỉ ra: `salaryAdvance` ghi snapshot ở nền nhưng không xoá memo ALL. */
+    `kho=${closedSeal.rateStoreFingerprint()}`,
     // Forecast phụ thuộc "hôm nay" theo GMT+7. Không để base cache 6 giờ từ
     // ngày hôm trước giữ sai elapsed/remaining working days sau nửa đêm.
     `vn-day=${employeeCost.vnToday()}`,
@@ -1429,37 +1434,51 @@ async function employeeCostAllPayload(req, {
       const sealed = closedSeal.read(sealKey);
       if (sealed) return sealed;
     }
-    const built = await buildMerged();
-    /* ‼ KIỂM LẠI ĐỜI DỮ LIỆU NGAY TRƯỚC KHI ĐÓNG DẤU (bot audit đúng): fan-out 21 NV
-     * kéo dài hàng chục giây; nguồn có thể thay bản GIỮA CHỪNG, khi đó bản gộp là hàng
-     * TRỘN ĐỜI — đóng dấu vào là đóng băng vĩnh viễn một con số không thuộc đời nào.
-     * Chữ ký cuối phải khớp chữ ký đầu; lệch thì vẫn trả số cho người xem, nhưng
-     * TUYỆT ĐỐI không ghim. */
-    const sealKeySauKhiDung = closedSeal.keyFor({
-      from: range.from, to: range.to, months: range.months,
-      closed: rangeClosed,
-      sources: {
-        data: store.employeeCostDataSignature(),
-        rates: closedSeal.rateStoreFingerprint(),
-        formula: employeeBonus.FORMULA_VERSION,
-        app: APP_BUILD_VERSION,
-      },
-    });
-    if (sealKey && sealKeySauKhiDung !== sealKey) {
-      console.warn('[employee-cost] nguồn đổi giữa lúc dựng — KHÔNG đóng dấu bản trộn đời');
+    /* ‼ ĐỜI DỮ LIỆU PHẢI KHỚP ĐẦU–CUỐI, CHO MỌI KỲ (bot audit đúng, hai lần).
+     *
+     * Fan-out 21 NV kéo dài hàng chục giây; nguồn có thể thay bản GIỮA CHỪNG ⇒ bản gộp
+     * là hàng TRỘN ĐỜI (NV này số đời cũ, NV kia số đời mới).
+     *
+     * Bản trước tôi mới chặn ĐÓNG DẤU mà **vẫn `return built`** ⇒ bản trộn đời vẫn lên
+     * màn, vẫn vào bộ nhớ đệm, vẫn xuất Excel. Chặn nửa vời là chưa chặn. Và kỳ ĐANG MỞ
+     * thì `sealKey` là `null` nên nhánh kiểm bị bỏ qua hoàn toàn — yếu hơn nữa.
+     *
+     * Nay: kiểm **không phụ thuộc `sealKey`**, và lệch đời thì **DỰNG LẠI**, không trả
+     * hàng trộn. Dựng lại vẫn lệch ⇒ **báo lỗi rõ ràng**, để `memoGet` vứt luôn entry
+     * (nó tự xoá khi promise reject) — thà bảo "thử lại" còn hơn đưa CEO một con số
+     * không thuộc đời nào cả. */
+    const vanTayNguon = () => [
+      store.employeeCostDataSignature(),
+      closedSeal.rateStoreFingerprint(),
+      employeeBonus.FORMULA_VERSION,
+      APP_BUILD_VERSION,
+    ].join('|');
+
+    const SO_LAN_DUNG_TOI_DA = 2;
+    for (let lan = 1; lan <= SO_LAN_DUNG_TOI_DA; lan += 1) {
+      const truoc = vanTayNguon();
+      const built = await buildMerged();
+      const sau = vanTayNguon();
+      if (truoc !== sau) {
+        console.warn('[employee-cost] nguồn đổi giữa lúc dựng — BỎ bản trộn đời, dựng lại', { lan });
+        continue;
+      }
+      // Chặt hơn `employeeCostAllDegraded`: đòi ĐỦ CẢ ĐỘI và MỌI NV `ok` đúng nghĩa —
+      // không nhận `ok_stale_rates` (đóng băng số tạm là đóng băng cái sai).
+      if (sealKey && closedSeal.isSealable(built, roster, sealEvidenceReports)) {
+        try {
+          await closedSeal.write(sealKey, built, { complete: true });
+          console.info('[employee-cost] đã đóng dấu kỳ khoá sổ', { key: sealKey });
+        } catch (error) {
+          console.warn('[employee-cost] đóng dấu thất bại', { message: error?.message });
+        }
+      }
       return built;
     }
-    // Chặt hơn `employeeCostAllDegraded`: đòi ĐỦ CẢ ĐỘI và MỌI NV `ok` đúng nghĩa —
-    // không nhận `ok_stale_rates` (đóng băng số tạm là đóng băng cái sai).
-    if (sealKey && closedSeal.isSealable(built, roster, sealEvidenceReports)) {
-      try {
-        await closedSeal.write(sealKey, built, { complete: true });
-        console.info('[employee-cost] đã đóng dấu kỳ khoá sổ', { key: sealKey });
-      } catch (error) {
-        console.warn('[employee-cost] đóng dấu thất bại', { message: error?.message });
-      }
-    }
-    return built;
+    throw Object.assign(
+      new Error('Nguồn dữ liệu đang thay đổi liên tục nên chưa dựng được bản nhất quán. Hãy thử lại sau ít phút.'),
+      { status: 503, code: 'EMPLOYEE_COST_SOURCE_DRIFT' },
+    );
   };
 
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:

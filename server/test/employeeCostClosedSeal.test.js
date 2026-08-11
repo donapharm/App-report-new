@@ -281,12 +281,52 @@ test('⑧ chữ ký phải phủ ĐỦ mọi kho: tỷ lệ, snapshot bị độ
 // (3) Nguồn đổi GIỮA lúc fan-out ⇒ bản gộp trộn đời ⇒ cấm đóng dấu.
 test('⑨ routes phải kiểm lại đời dữ liệu NGAY TRƯỚC khi đóng dấu', () => {
   const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
-  assert.match(src, /const sealKeySauKhiDung = closedSeal\.keyFor\(/,
-    'phải tính lại khoá SAU khi dựng xong');
-  assert.match(src, /if \(sealKey && sealKeySauKhiDung !== sealKey\) \{[\s\S]{0,240}?return built;/,
-    'lệch đời ⇒ trả số nhưng KHÔNG đóng dấu');
+  assert.match(src, /const vanTayNguon = \(\) => \[/, 'phải có hàm chụp vân tay nguồn');
   assert.ok(
-    src.indexOf('const sealKeySauKhiDung') < src.indexOf('closedSeal.isSealable(built, roster, sealEvidenceReports)'),
+    src.indexOf('const sau = vanTayNguon();') < src.indexOf('closedSeal.isSealable(built, roster, sealEvidenceReports)'),
     'phải kiểm đời TRƯỚC khi xét điều kiện đóng dấu',
   );
+  // Vân tay phải gồm ĐỦ bốn thành phần, không chỉ doanh thu.
+  const ham = src.slice(src.indexOf('const vanTayNguon = () => ['), src.indexOf('const SO_LAN_DUNG_TOI_DA'));
+  for (const phan of [
+    'store.employeeCostDataSignature()',
+    'closedSeal.rateStoreFingerprint()',
+    'employeeBonus.FORMULA_VERSION',
+    'APP_BUILD_VERSION',
+  ]) {
+    assert.ok(ham.includes(phan), `vân tay nguồn phải gồm ${phan}`);
+  }
+});
+
+/* ── HAI CA AUDIT ĐỢT 6: ĐƯỜNG HIỂN THỊ SỐ SAI ───────────────────────────── */
+
+// (1) Bộ nhớ đệm base giữ tới 6 GIỜ mà khoá không phủ bốn kho tiền ⇒ phục vụ số cũ.
+test('⑩ khoá bộ nhớ đệm ALL phải phủ vân tay BỐN KHO TIỀN', () => {
+  const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const ham = src.slice(src.indexOf('function employeeCostAllCacheKey'), src.indexOf('function monthInputForKy'));
+  assert.match(ham, /kho=\$\{closedSeal\.rateStoreFingerprint\(\)\}/,
+    'khoá phải đổi khi kho tỷ lệ / snapshot / lương ứng / sổ thanh toán đổi');
+  assert.ok(ham.indexOf('rateStoreFingerprint') < ham.indexOf('vn-day'),
+    'vân tay kho nằm trong chính khoá, không phải chú thích rời');
+});
+
+// (2) Lệch đời thì TRƯỚC ĐÂY vẫn `return built` ⇒ bản trộn đời lên màn + vào cache
+//     + xuất Excel. Và kỳ ĐANG MỞ có sealKey=null nên nhánh kiểm bị bỏ qua hẳn.
+test('⑪ lệch đời ⇒ DỰNG LẠI, không trả bản trộn; cạn lượt ⇒ báo lỗi, không cache', () => {
+  const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const khoi = src.slice(src.indexOf('const vanTayNguon = () =>'), src.indexOf('// Export giữ nguyên đường audit'));
+
+  assert.match(khoi, /const truoc = vanTayNguon\(\);[\s\S]*?const built = await buildMerged\(\);[\s\S]*?const sau = vanTayNguon\(\);/,
+    'phải chụp vân tay TRƯỚC và SAU khi dựng');
+  assert.match(khoi, /if \(truoc !== sau\) \{[\s\S]{0,220}?continue;/,
+    'lệch đời ⇒ dựng lại, TUYỆT ĐỐI không return bản trộn');
+  assert.doesNotMatch(khoi, /nguồn đổi[\s\S]{0,200}?return built;/,
+    'cấm quay lại lối cũ: chặn đóng dấu mà vẫn trả bản trộn');
+  assert.match(khoi, /EMPLOYEE_COST_SOURCE_DRIFT/,
+    'cạn lượt ⇒ ném lỗi rõ ràng để memo vứt entry, không cache bản trộn');
+
+  // Kiểm đời KHÔNG được phụ thuộc sealKey — kỳ đang mở cũng phải được bảo vệ.
+  const truocSeal = khoi.slice(0, khoi.indexOf('if (truoc !== sau)'));
+  assert.doesNotMatch(truocSeal, /sealKey/,
+    'nhánh kiểm đời phải chạy cho MỌI kỳ, kể cả kỳ đang mở (sealKey = null)');
 });
