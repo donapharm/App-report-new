@@ -48,6 +48,24 @@ const MAX_CACHE_BYTES = Math.max(
 const cache = new Map(); // name -> { ino, size, mtimeMs, ctimeMs, value, bytes }
 let cacheBytes = 0;
 
+/* ── ĐỒNG HỒ ĐỜI DỮ LIỆU: CHỈ TIẾN, KHÔNG BAO GIỜ LÙI ────────────────────────
+ * Bot audit đợt 9 tái hiện được **A → B → A**: nguồn đổi 111 → 222 rồi quay lại 111
+ * ngay trong lúc dựng. Chụp vân tay đầu và cuối thì **giống hệt nhau**, nên mọi phép
+ * so "đầu == cuối" đều MÙ — app hiển thị và đóng dấu số 222 trong khi nguồn hiện tại
+ * là 111. Băm nội dung cũng không cứu được, vì nội dung THẬT SỰ đã quay về như cũ.
+ *
+ * Thứ duy nhất bắt được là một con đếm **chỉ tăng**: mỗi lần có file bị GHI, hoặc mỗi
+ * lần đọc mà thấy file đã khác lần trước, thì tăng một nhịp. A → B → A đi qua hai nhịp
+ * ⇒ đầu khác cuối ⇒ lộ ngay.
+ *
+ * ‼ Con đếm này CHỈ dùng cho cổng kiểm "có gì động đậy giữa chừng không".
+ * TUYỆT ĐỐI không đưa vào khoá cache hay khoá đóng dấu — hai thứ đó phải là hàm của
+ * NỘI DUNG để còn tái lập được ở lượt sau; nhét con đếm vào là mỗi lượt một khoá,
+ * cache chết hẳn. */
+let observedGen = 0;
+const bumpGen = () => { observedGen += 1; };
+function observedGeneration() { return observedGen; }
+
 function forget(name) {
   const hit = cache.get(name);
   if (!hit) return;
@@ -125,6 +143,7 @@ function loadShared(name, def, retriesLeft = 2) {
     const before = fingerprint(fs.fstatSync(fd));
 
     const hit = cache.get(name);
+    if (hit && !sameFile(hit.print, before)) bumpGen(); // file đã khác lần đọc trước
     if (hit && sameFile(hit.print, before)) {
       cache.delete(name); cache.set(name, hit); // chạm vào để giữ hàng LRU
       return hit.value;
@@ -189,6 +208,7 @@ function save(name, data) {
   const tmp = p + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(data));
   fs.renameSync(tmp, p);
+  bumpGen(); // có ghi là đời dữ liệu đã nhích, kể cả ghi lại y nguyên nội dung
   // Quên hẳn thay vì nhớ đối tượng vừa ghi: người gọi có thể còn giữ tham chiếu và
   // sửa tiếp. Đọc lại một lần sau khi ghi là rẻ; phục vụ số sai thì không.
   forget(name);
@@ -204,4 +224,4 @@ function cacheStats() {
   return { entries: cache.size, bytes: cacheBytes, maxBytes: MAX_CACHE_BYTES };
 }
 
-module.exports = { load, loadShared, save, DIR, invalidate, cacheStats };
+module.exports = { load, loadShared, save, DIR, invalidate, cacheStats, observedGeneration };

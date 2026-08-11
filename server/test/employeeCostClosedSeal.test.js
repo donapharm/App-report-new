@@ -334,8 +334,10 @@ test('⑪ lệch đời ⇒ DỰNG LẠI, không trả bản trộn; cạn lư�
   const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   const khoi = src.slice(src.indexOf('const vanTayNguon = () =>'), src.indexOf('// Export giữ nguyên đường audit'));
 
-  assert.match(khoi, /const truoc = vanTayNguon\(\);[\s\S]*?const built = await buildMerged\(\);[\s\S]*?const sau = vanTayNguon\(\);/,
-    'phải chụp vân tay TRƯỚC và SAU khi dựng');
+  assert.match(khoi, /const truoc = mocDoi\(\);[\s\S]*?const built = await buildMerged\(\);[\s\S]*?const sau = mocDoi\(\);/,
+    'phải chụp MỐC ĐỜI (vân tay + đồng hồ chỉ tiến) TRƯỚC và SAU khi dựng — vân tay đơn thuần mù với A→B→A');
+  assert.match(khoi, /persist\.observedGeneration\(\)/,
+    'mốc đời phải gồm đồng hồ chỉ tiến, nếu không thì A→B→A lọt');
   assert.match(khoi, /if \(truoc !== sau\) \{[\s\S]{0,220}?continue;/,
     'lệch đời ⇒ dựng lại, TUYỆT ĐỐI không return bản trộn');
   assert.doesNotMatch(khoi, /sealKeySauKhiDung/,

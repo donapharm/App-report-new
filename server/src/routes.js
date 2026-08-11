@@ -1204,6 +1204,16 @@ async function employeeCostAllPayload(req, {
    * dấu duy nhất TRƯỚC catalog rồi đem so đầu–cuối ⇒ cổng kiểm báo "lệch đời" trong
    * tình huống hoàn toàn lành ⇒ chặn luôn cả đường warm, cache không bao giờ trúng.
    * Chính ca warm-cache bắt được. Lỗi ở cổng kiểm của tôi, không ở bài kiểm. */
+  /* ‼ MỐC ĐỜI DỮ LIỆU cho cổng kiểm — KHÁC với vân tay dùng làm khoá.
+   * Bot audit đợt 9 tái hiện **A → B → A**: nguồn 111 → 222 → 111 ngay trong lúc dựng.
+   * Vân tay đầu và cuối GIỐNG HỆT nhau nên phép so "đầu == cuối" mù hoàn toàn, app
+   * hiển thị và đóng dấu 222 trong khi nguồn hiện tại là 111. Băm nội dung cũng không
+   * cứu được vì nội dung thật sự đã quay về như cũ.
+   * Nên cổng kiểm phải kèm **đồng hồ chỉ tiến** của `persist`: A→B→A đi qua hai nhịp
+   * ghi/đọc ⇒ đồng hồ nhích ⇒ lộ ngay.
+   * Đồng hồ TUYỆT ĐỐI không được vào khoá cache/khoá dấu — hai thứ đó phải tái lập
+   * được ở lượt sau, nhét đồng hồ vào là mỗi lượt một khoá, cache chết. */
+  const mocDoi = () => `${vanTayNguon()}|gen=${persist.observedGeneration()}`;
   const vanTaySom = vanTayNguon();
   const sealKey = khoaDauTheoVanTay(vanTaySom);
   if (sealKey && paginate) {
@@ -1440,8 +1450,14 @@ async function employeeCostAllPayload(req, {
      * bỏ qua ba kho tiền còn lại ⇒ bản TRỘN ĐỜI được cache dưới cả `base` lẫn `view`. */
     /* Mốc so sánh phải là con dấu ĐÃ ỔN ĐỊNH (sau catalog), không phải con dấu sớm. */
     const vanTayTruocSelfHeal = vanTayLucVao;
+    const mocTruocSelfHeal = mocDoi();
     const merged = await buildMerged();
     const vanTaySauSelfHeal = vanTayNguon();
+    if (mocTruocSelfHeal !== mocDoi()) {
+      throw Object.assign(new Error('Nguồn động đậy giữa lúc self-heal dựng (kể cả A→B→A) — không publish.'), {
+        code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
+      });
+    }
     if (vanTayTruocSelfHeal !== vanTaySauSelfHeal) {
       throw Object.assign(new Error('Nguồn đổi giữa lúc self-heal dựng — không publish bản trộn đời.'), {
         code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
@@ -1454,7 +1470,7 @@ async function employeeCostAllPayload(req, {
       payload: transformed,
       commit: () => {
         // Kiểm lại lần cuối NGAY TRƯỚC KHI PUBLISH: đủ bốn kho, không chỉ doanh thu.
-        if (vanTayNguon() !== vanTayTruocSelfHeal) {
+        if (vanTayNguon() !== vanTayTruocSelfHeal || mocDoi() !== mocTruocSelfHeal) {
           throw Object.assign(new Error('Nguồn đổi trước lúc publish self-heal — huỷ.'), {
             code: 'EMPLOYEE_COST_SELF_HEAL_SOURCE_DRIFT',
           });
@@ -1498,9 +1514,9 @@ async function employeeCostAllPayload(req, {
 
     const SO_LAN_DUNG_TOI_DA = 2;
     for (let lan = 1; lan <= SO_LAN_DUNG_TOI_DA; lan += 1) {
-      const truoc = vanTayNguon();
+      const truoc = mocDoi();
       const built = await buildMerged();
-      const sau = vanTayNguon();
+      const sau = mocDoi();
       if (truoc !== sau) {
         console.warn('[employee-cost] nguồn đổi giữa lúc dựng — BỎ bản trộn đời, dựng lại', { lan });
         continue;

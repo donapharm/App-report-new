@@ -1,3 +1,33 @@
+### 2026-08-11 11:20 (giờ VN) — ⏱ ĐỒNG HỒ CHỈ TIẾN: bịt lỗ A → B → A
+
+Bot audit đợt 9 tái hiện được **A → B → A**: nguồn đi **111 → 222 → 111** ngay trong
+lúc dựng. Vân tay đầu và cuối **giống hệt nhau**, nên mọi phép so *"đầu == cuối"* của
+tôi **mù hoàn toàn** — app hiển thị và đóng dấu **222** trong khi nguồn hiện tại là 111.
+
+Đây là lỗi ABA kinh điển, và **băm nội dung không cứu được** — vì nội dung **thật sự**
+đã quay về như cũ. Ba lỗi 111→222 đợt trước đều đã PASS; lỗ này nằm ở chỗ khác hẳn.
+
+#### Cách chữa: thêm một thứ CHỈ TIẾN, KHÔNG BAO GIỜ LÙI
+
+`persist` nay giữ một **đồng hồ đời dữ liệu**: mỗi lần **có file bị ghi**, hoặc mỗi lần
+**đọc mà thấy file đã khác lần trước**, đồng hồ nhích một nhịp. A→B→A đi qua **hai
+nhịp** ⇒ đầu khác cuối ⇒ lộ ngay, dù nội dung có quay về y hệt.
+
+#### Ranh giới quan trọng — đặt sai chỗ là hỏng hết
+
+| Dùng ở đâu | Gồm gì | Vì sao |
+|---|---|---|
+| **Khoá cache · khoá đóng dấu** | **CHỈ nội dung** | Phải **tái lập được** ở lượt sau. Nhét đồng hồ vào là mỗi lượt một khoá ⇒ cache chết hẳn ⇒ quay lại bệnh "mở màn nào cũng dựng lại từ đầu" |
+| **Cổng kiểm lệch đời** | nội dung **+ đồng hồ** | Câu hỏi ở đây là *"có gì động đậy giữa chừng không"*, chứ không phải *"nội dung có giống nhau không"* |
+
+Nối vào cả **đường thường** lẫn **self-heal**, và kiểm **lần cuối ngay trước khi publish**.
+
+#### Test
+`persistCache` **18/18** — thêm ⑦ **dựng đúng A→B→A** và đòi đồng hồ phải nhích dù nội
+dung quay về · ⑦b ghi lại y nguyên vẫn phải nhích · ⑦c **đồng hồ TUYỆT ĐỐI không được
+lọt vào khoá cache/khoá dấu**, và không ai đụng file thì cache vẫn phải trúng.
+`server` **1247/1254** — đúng 7 ca nền cũ. Build đạt.
+
 ### 2026-08-11 10:40 (giờ VN) — 🧬 VÂN TAY THEO NỘI DUNG: bot bẻ đúng lập luận của tôi
 
 Bot audit đợt 8 xác nhận **ba lỗi đợt 7 đã vá đúng**, và chặn lại đúng chỗ tôi **tự

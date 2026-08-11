@@ -322,3 +322,55 @@ test('⑥ ghi đè TẠI CHỖ cùng inode: không được hạch toán cỡ fi
     assert.equal(stats.bytes, thatSu, 'đã nhớ thì phải nhớ ĐÚNG cỡ file thật');
   }
 });
+
+/* ── ĐỢT 9: A → B → A (ABA) ──────────────────────────────────────────────────
+ * Bot tái hiện: nguồn 111 → 222 → 111 ngay trong lúc dựng. Vân tay đầu và cuối GIỐNG
+ * HỆT nhau nên mọi phép so "đầu == cuối" đều mù — app hiển thị/đóng dấu 222 trong khi
+ * nguồn hiện tại là 111. Băm nội dung KHÔNG cứu được vì nội dung thật sự đã quay về.
+ * Chỉ một con đếm CHỈ TIẾN mới bắt được.
+ */
+test('⑦ đồng hồ đời dữ liệu CHỈ TIẾN, bắt được A→B→A', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir);
+  const p = path.join(dir, 'kho.json');
+
+  fs.writeFileSync(p, JSON.stringify({ v: 111 }));
+  persist.loadShared('kho', null);
+  const truoc = persist.observedGeneration();
+
+  // A -> B -> A, đúng kịch bản bot dựng.
+  fs.writeFileSync(p, JSON.stringify({ v: 222 }));
+  persist.loadShared('kho', null);
+  fs.writeFileSync(p, JSON.stringify({ v: 111 }));
+  const cuoi = persist.loadShared('kho', null);
+
+  assert.deepEqual(cuoi, { v: 111 }, 'nội dung cuối đúng là bản đã quay về');
+  assert.ok(persist.observedGeneration() > truoc,
+    `đồng hồ PHẢI nhích dù nội dung quay về như cũ (${truoc} -> ${persist.observedGeneration()})`);
+});
+
+test('⑦b ghi là đồng hồ nhích, kể cả ghi lại y nguyên nội dung', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir);
+  persist.save('kho', { v: 1 });
+  const truoc = persist.observedGeneration();
+  persist.save('kho', { v: 1 });      // y nguyên
+  assert.ok(persist.observedGeneration() > truoc, 'có ghi là phải nhích');
+});
+
+test('⑦c đồng hồ KHÔNG được lọt vào khoá cache — đứng yên thì cache vẫn trúng', () => {
+  const dir = tmpDir();
+  const persist = freshPersist(dir);
+  persist.save('kho', { v: 1 });
+  const a = persist.loadShared('kho', null);
+  const b = persist.loadShared('kho', null);
+  assert.equal(a, b, 'không ai đụng file thì vẫn phải trúng bản nhớ');
+
+  const src = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
+  const khoaHam = src.slice(src.indexOf('function employeeCostAllCacheKey'), src.indexOf('\n}', src.indexOf('function employeeCostAllCacheKey')));
+  assert.doesNotMatch(khoaHam, /observedGeneration/,
+    'đồng hồ TUYỆT ĐỐI không được vào khoá cache — nhét vào là mỗi lượt một khoá, cache chết');
+  const seal = fs.readFileSync(require.resolve('../src/employeeCostClosedSeal'), 'utf8');
+  assert.doesNotMatch(seal, /observedGeneration/,
+    'và cũng không được vào khoá đóng dấu — dấu phải tái lập được ở lượt sau');
+});
