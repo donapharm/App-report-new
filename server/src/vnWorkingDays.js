@@ -10,8 +10,20 @@
  * Nguồn lịch duy nhất là server/data/holidays.json và helper holidayFor() đang
  * dùng bởi dailySales. Cấm tạo lịch thứ hai.
  */
-const holidayCalendar = require('../data/holidays.json');
-const { holidayFor, vnParts } = require('./dailySales');
+/* ‼ CẤM `require()` FILE DỮ LIỆU (bot audit đợt 17, mục A2 — đúng, và tinh vi).
+ *
+ * Trước đây dòng này là `require('../data/holidays.json')`. `require` nhớ kết quả VĨNH
+ * VIỄN trong vòng đời tiến trình, nên sửa lịch nghỉ trên đĩa thì:
+ *   · căn cước và khoá con dấu chuyển sang đời B (vì băm theo file trên đĩa),
+ *   · nhưng tiến trình đang chạy vẫn tính bằng lịch đời A còn kẹt trong bộ nhớ.
+ * Bot đo được: cùng một khoá B mà hai tiến trình cho hai con số khác nhau —
+ * **104,5%** ở tiến trình cũ, **110,0%** ở tiến trình mới. Căn cước lúc đó nói dối:
+ * nó mô tả file trên đĩa chứ không mô tả thứ đang thực sự được dùng để tính.
+ *
+ * Nay đọc tại thời điểm gọi, qua đúng một cửa chung với `dailySales` (file này vốn đã
+ * ghi "nguồn lịch duy nhất… cấm tạo lịch thứ hai"). File 1,4 KB nên đọc mỗi lượt là rẻ. */
+const { holidayFor, vnParts, readHolidayDates } = require('./dailySales');
+const holidayCalendar = { get dates() { return readHolidayDates(); } };
 
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;

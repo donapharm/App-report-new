@@ -23,8 +23,8 @@
  * thì không có gì kêu lên, chỉ có một con số sai được đóng dấu vĩnh viễn. Hàng rào nào
  * phải nhờ trí nhớ thì không phải hàng rào.
  *
- * Nay: **băm TOÀN BỘ `src/**.js` và TOÀN BỘ `config/`**, không chọn lọc. Không còn câu
- * hỏi "đã liệt kê đủ chưa" vì không còn danh sách nào để thiếu.
+ * Nay: **băm TOÀN BỘ `src/**.js`**, toàn bộ `config/`, và các file ĐẦU VÀO ở tầng trên
+ * cùng của `data/`. Không còn câu hỏi "đã liệt kê đủ module chưa".
  *
  * Giá phải trả, đã cân: đổi một module chẳng liên quan gì tới tiền cũng làm khoá đổi ⇒
  * sau mỗi lần deploy, kỳ đã khoá sổ phải dựng lại **đúng một lần** rồi đóng dấu mới
@@ -83,37 +83,39 @@ function digestNguon() {
 
 /* ② CẤU HÌNH & DỮ LIỆU TĨNH.
  *
- * ‼ BÀI HỌC ĐỢT 16 — DANH SÁCH CHO PHÉP HỎNG ÂM THẦM, DANH SÁCH LOẠI TRỪ HỎNG ỒN ÀO.
+ * Quy tắc: lấy hết rồi trừ ra — nhưng trừ theo AI GHI RA FILE, không trừ theo thư mục.
+ * File do NGƯỜI đặt vào (lịch nghỉ, mẫu cột, bậc thưởng) là ĐẦU VÀO của phép tính, phải
+ * nằm trong khoá. File do CHÍNH APP ghi ra (trạng thái, LKG, nhật ký, sao lưu) là ĐẦU RA,
+ * đưa vào khoá là tự quay vòng: app ghi -> khoá đổi -> dựng lại -> app ghi tiếp.
  *
- * Bản trước tôi bỏ được danh sách module viết tay (băm cả `src/`), nhưng với `data/`
- * thì **vẫn giữ đúng cái bẫy cũ**: chỉ nhặt hai file chính sách, viện cớ "thư mục đó
- * có dữ liệu biến động". Bot tìm ra ngay `data/holidays.json` — đổi lịch nghỉ làm dự
- * báo target đi từ **104,5% → 110,0%** mà căn cước y hệt. Tôi sửa mô hình ở một chỗ
- * rồi để nguyên mô hình sai ở chỗ bên cạnh.
+ * ‼ BỐN KHO TIỀN nằm trong `AUTH_DATA_DIR` và CỐ Ý không băm ở đây: đã được phủ bởi
+ * `closedSeal.rateStoreFingerprint()` theo NỘI DUNG SỐ (bỏ `fetchedAt`). Băm lại bằng
+ * byte thô là dựng lại đúng lỗi churn đã mất một vòng để gỡ. ĐỪNG "bổ sung cho đủ".
  *
- * Nay đảo chiều: **quét CẢ `data/`, chỉ LOẠI TRỪ đúng những thư mục biến động**, và
- * mỗi mục loại trừ phải nêu được lý do. Vì hai kiểu quên hỏng theo hai cách khác hẳn:
- *   · Quên THÊM vào danh sách cho phép ⇒ con số sai được đóng dấu **vĩnh viễn, im lặng**.
- *   · Quên LOẠI TRỪ một file biến động ⇒ khoá đổi liên tục ⇒ dựng lại hoài ⇒ **lộ ra
- *     ngay** ở tốc độ và ở số liệu đo. Ồn ào thì còn sửa được; im lặng thì không.
- * Nên chiều an toàn là "lấy hết, trừ ra vài thứ có lý do".
+ * Thêm `package.json` + `package-lock.json` (server và gốc): nâng một thư viện có thể
+ * đổi cách làm tròn; lockfile ghi chính xác phiên bản đang dùng, rẻ hơn băm `node_modules`.
+ */
+/* ‼ ĐO TRÊN KHO THẬT, ĐỪNG ĐO TRÊN KHO MẪU (bot audit đợt 17 — lỗi của tôi).
  *
- * Hai chỗ loại trừ, kèm lý do:
- *   · `AUTH_DATA_DIR` (mặc định `data/auth`) — phiên đăng nhập, nhật ký, thiết bị: đổi
- *     mỗi lượt bấm. BỐN KHO TIỀN cũng nằm trong đó, nhưng chúng **đã được phủ** bởi
- *     `closedSeal.rateStoreFingerprint()` trong vân tay nguồn, và phủ theo **nội dung
- *     số** (bỏ `fetchedAt`). Băm lại bằng byte thô ở đây là dựng lại đúng lỗi churn đã
- *     mất một vòng để gỡ. ‼ ĐỪNG "bổ sung cho đủ" bốn file đó vào đây.
- *   · `data/uploads` — file xlsx đã tải lên; slot đang hiệu lực đã nằm trong
- *     `store.employeeCostDataSignature()`.
+ * Tôi đo `data/` trong repo: 20 file / 276 KB, quét vèo cái xong, rồi tuyên bố "quét cả
+ * `data/`". Trên PROD thư mục đó là **524 file / 1,03 GB** — LKG, trạng thái thông báo,
+ * nhật ký, bản sao lưu, và `uploads` lồng nhiều tầng. Bot đo: **cold 7.055 ms, hot
+ * 4.931 ms** mỗi lượt tính căn cước. Tệ hơn: chỉ cần `catalog_management_lkg.json` đổi
+ * mỗi trường `updatedAt`, hay `notif_cost_state.json` được ghi, là khoá đổi ⇒ dấu trượt
+ * ⇒ dựng lại — đúng cái bệnh cơ chế này sinh ra để chữa.
  *
- * Thêm `package.json` + `package-lock.json` (cả server lẫn gốc): nâng một thư viện có
- * thể đổi cách làm tròn, mà lockfile là thứ ghi chính xác phiên bản đang dùng — rẻ hơn
- * băm `node_modules` rất nhiều. */
-const thuMucBoQua = () => [
-  process.env.AUTH_DATA_DIR || path.join(DATA_DIR, 'auth'),
-  path.join(DATA_DIR, 'uploads'),
-];
+ * Sai ở đâu: tôi đúng khi nói "lấy hết rồi trừ ra", nhưng đã trừ theo **thư mục** trong
+ * khi thứ cần phân biệt là **ai ghi ra file đó**. File do NGƯỜI đặt vào (lịch nghỉ, mẫu
+ * cột, bậc thưởng) là ĐẦU VÀO của phép tính. File do CHÍNH APP ghi ra (trạng thái, LKG,
+ * nhật ký, sao lưu) là ĐẦU RA — đưa đầu ra vào khoá là tự quay vòng.
+ *
+ * Nay: `data/` chỉ quét TẦNG TRÊN CÙNG (đầu vào tĩnh nằm cả ở đó), bỏ mọi thư mục con,
+ * và loại thêm các đuôi file do app tự ghi. Kèm HẠN MỨC: vượt ngưỡng thì KHÔNG đóng dấu
+ * nữa — thà mất đường tắt còn hơn đóng dấu bằng một khoá không ai hiểu nổi. */
+const DUOI_APP_TU_GHI = /(_lkg|_state|_audit|_snapshot|_cache|_backup)\.json$|\.(log|bak|tmp|lock)$/i;
+
+const MAX_FILE_QUET = 200;
+const MAX_BYTE_QUET = 32 * 1024 * 1024;
 
 const filePhuThuoc = () => [
   path.join(__dirname, '..', 'package.json'),
@@ -142,15 +144,47 @@ function digestMotFile(duongDan) {
   return hash;
 }
 
+// `data/` chỉ tầng trên cùng, và bỏ những đuôi file do CHÍNH APP ghi ra.
+function fileDauVaoTrongData() {
+  let muc;
+  try { muc = fs.readdirSync(DATA_DIR, { withFileTypes: true }); } catch { return []; }
+  return muc
+    .filter((e) => e.isFile() && !DUOI_APP_TU_GHI.test(e.name))
+    .map((e) => path.join(DATA_DIR, e.name));
+}
+
+let vuotNguong = null; // { soFile, soByte } khi vùng quét phình ra ngoài dự kiến
+
 function digestCauHinh() {
   const danh = [
     ...liet(CONFIG_DIR),
-    ...liet(DATA_DIR, () => true, thuMucBoQua()),
+    ...fileDauVaoTrongData(),
     ...filePhuThuoc(),
     ...fileCauHinhNgoai(),
   ];
   const duyNhat = [...new Set(danh.map((p) => path.resolve(p)))].sort();
-  return ngan(duyNhat.map((p) => `${p}=${digestMotFile(p)}`).join('\n'));
+
+  /* HẠN MỨC: vùng quét phình ra là dấu hiệu có thứ ngoài dự kiến lọt vào. Khi đó
+   * KHÔNG đóng dấu nữa (xem `dangTinCay`), thay vì âm thầm tốn 7 giây mỗi lượt hoặc
+   * đóng dấu bằng một khoá không ai giải thích nổi. Hỏng thì hỏng ồn ào. */
+  let soByte = 0;
+  const phan = duyNhat.map((p) => {
+    try { soByte += fs.statSync(p).size; } catch { /* mất file thì digest tự ghi 'khong-co' */ }
+    return `${p}=${digestMotFile(p)}`;
+  });
+  vuotNguong = (duyNhat.length > MAX_FILE_QUET || soByte > MAX_BYTE_QUET)
+    ? { soFile: duyNhat.length, soByte }
+    : null;
+  if (vuotNguong) {
+    console.error('[formula-identity] vùng quét vượt hạn mức — TẠM NGỪNG đóng dấu kỳ khoá sổ', vuotNguong);
+  }
+  return ngan(phan.join('\n'));
+}
+
+/** Căn cước có đáng tin để đem đi ĐÓNG DẤU VĨNH VIỄN không. Sai thì thà đừng đóng. */
+function dangTinCay() {
+  if (vuotNguong === null) identity();
+  return { tinCay: vuotNguong === null, vuotNguong };
 }
 
 /* ③ BIẾN MÔI TRƯỜNG. Đây là chỗ DUY NHẤT còn phải chọn lọc — không thể băm cả
@@ -199,4 +233,4 @@ function identity() {
 // Cho test ép tính lại sau khi đổi biến / sửa file.
 function forgetCache() { bamNguon = null; nhoCauHinh.clear(); }
 
-module.exports = { identity, forgetCache, tenBienTinhTien, TIEN_TO_TINH_TIEN };
+module.exports = { identity, forgetCache, dangTinCay, tenBienTinhTien, TIEN_TO_TINH_TIEN };

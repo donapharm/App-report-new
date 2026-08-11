@@ -159,4 +159,9 @@ function buildDailySales({ rows = [], now = new Date(), sourceUpdatedAt = null, 
   };
 }
 
-module.exports = { buildDailySales, holidayFor, sourceFreshness, vnParts, parseWindow, dmy };
+/* `readHolidayDates` được xuất ra để `vnWorkingDays` dùng CHUNG một cửa đọc, thay cho
+ * `require('../data/holidays.json')` cũ — `require` nhớ vĩnh viễn nên tiến trình đang
+ * chạy vẫn tính bằng lịch cũ sau khi file đã đổi. Cấm tạo lịch thứ hai. */
+module.exports = {
+  buildDailySales, holidayFor, sourceFreshness, vnParts, parseWindow, dmy, readHolidayDates,
+};

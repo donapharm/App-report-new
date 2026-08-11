@@ -543,3 +543,63 @@ test('A6c không đụng gì thì nạp lại module bao nhiêu lần căn cư�
   }
   assert.equal(new Set(lan).size, 1, `căn cước phải giống hệt cả 5 lần nạp, đang ra: ${[...new Set(lan)].join(' | ')}`);
 });
+
+/* ── BOT AUDIT ĐỢT 17 ─────────────────────────────────────────────────────── */
+
+/* A7 — `require()` FILE DỮ LIỆU LÀ CĂN CƯỚC NÓI DỐI.
+ * `require` nhớ vĩnh viễn trong vòng đời tiến trình. Sửa `holidays.json` trên đĩa thì
+ * căn cước chuyển sang đời B, nhưng tiến trình đang chạy vẫn tính bằng lịch đời A còn
+ * kẹt trong bộ nhớ. Bot đo: cùng khoá B mà hai tiến trình cho 104,5% và 110,0%.
+ * Căn cước lúc đó mô tả file trên đĩa chứ không mô tả thứ đang thực sự được dùng. */
+test('A7 không module nào trong src/ được `require()` file dữ liệu/cấu hình', () => {
+  const srcDir = path.join(__dirname, '..', 'src');
+  const xau = [];
+  for (const ten of fs.readdirSync(srcDir)) {
+    if (!ten.endsWith('.js')) continue;
+    const noiDung = fs.readFileSync(path.join(srcDir, ten), 'utf8');
+    // Bỏ chú thích trước khi soi: file này có nhắc tới lối cũ trong phần giải thích.
+    const ma = noiDung.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    if (/require\(\s*['"][^'"]*\.\.\/(data|config)\/[^'"]*\.json['"]\s*\)/.test(ma)) xau.push(ten);
+  }
+  assert.deepEqual(xau, [],
+    `\`require\` nhớ vĩnh viễn ⇒ sửa file trên đĩa mà tiến trình vẫn tính bằng bản cũ, `
+    + `trong khi căn cước đã đổi. Đọc tại thời điểm gọi. File vi phạm: ${xau.join(', ')}`);
+});
+
+test('A7b tiến trình ĐANG CHẠY phải thấy lịch nghỉ vừa sửa, không cần khởi động lại', () => {
+  const vnWorkingDays = require('../src/vnWorkingDays');
+  const p = path.join(__dirname, '..', 'data', 'holidays.json');
+  const cu = fs.readFileSync(p);
+  try {
+    assert.equal(vnWorkingDays.calendarStatus(2029).calendarMissing, true, 'chưa có lịch 2029');
+    fs.writeFileSync(p, JSON.stringify({ dates: [{ date: '2029-01-01', name: 'Tết Dương lịch' }] }));
+    assert.equal(vnWorkingDays.calendarStatus(2029).calendarMissing, false,
+      'sửa lịch trên đĩa mà tiến trình vẫn nói "chưa có" ⇒ căn cước và phép tính đang lệch nhau');
+  } finally {
+    fs.writeFileSync(p, cu);
+  }
+});
+
+/* A7c — VÙNG QUÉT PHẢI ỔN ĐỊNH TRƯỚC FILE DO CHÍNH APP GHI RA.
+ * Trên PROD `data/` là 524 file / 1,03 GB; quét cả thư mục làm căn cước mất 7 giây và
+ * churn theo `*_lkg.json` / `*_state.json`. Nay chỉ lấy tầng trên cùng và bỏ đuôi file
+ * do app tự ghi. */
+test('A7c file trạng thái do app tự ghi KHÔNG được làm căn cước đổi', () => {
+  const formulaIdentity = require('../src/employeeCostFormulaIdentity');
+  const p = path.join(__dirname, '..', 'data', 'catalog_management_lkg.json');
+  const daCo = fs.existsSync(p);
+  const cu = daCo ? fs.readFileSync(p) : null;
+  try {
+    fs.writeFileSync(p, JSON.stringify({ updatedAt: '2026-08-11T10:00:00.000Z' }));
+    formulaIdentity.forgetCache();
+    const truoc = formulaIdentity.identity();
+    fs.writeFileSync(p, JSON.stringify({ updatedAt: '2026-08-11T20:00:00.000Z' }));
+    formulaIdentity.forgetCache();
+    assert.equal(formulaIdentity.identity(), truoc,
+      'app ghi trạng thái ⇒ khoá đổi ⇒ dấu trượt ⇒ dựng lại — đúng bệnh cơ chế này sinh ra để chữa');
+    assert.equal(formulaIdentity.dangTinCay().tinCay, true, 'vùng quét bình thường thì phải đáng tin');
+  } finally {
+    if (daCo) fs.writeFileSync(p, cu); else { try { fs.unlinkSync(p); } catch { /* chưa từng có */ } }
+    formulaIdentity.forgetCache();
+  }
+});

@@ -1,3 +1,62 @@
+### 2026-08-11 22:15 (giờ VN) — 🗓 `require` file dữ liệu = căn cước nói dối; và tôi đã đo trên kho MẪU
+
+Bot audit đợt 17 tìm ra **ba** thứ. Hai cái sửa được ngay ở đây; cái thứ ba là vấn đề
+kiến trúc, ghi riêng ở cuối.
+
+**① `require('../data/holidays.json')` — căn cước mô tả file, không mô tả thứ đang chạy.**
+`require` nhớ **vĩnh viễn** trong vòng đời tiến trình. Sửa lịch nghỉ trên đĩa thì căn
+cước chuyển sang đời B (vì băm theo file), nhưng tiến trình đang chạy vẫn tính bằng
+lịch đời A kẹt trong bộ nhớ. Bot đo: **cùng một khoá B mà hai tiến trình cho hai số
+khác nhau — 104,5% và 110,0%**. Đây là lỗi nặng về bản chất: căn cước nói dối.
+→ `vnWorkingDays` nay đọc qua đúng một cửa chung với `dailySales`, đọc tại thời điểm
+gọi. Thêm ca kiểm **quét cả `src/`**, cấm mọi module `require()` file JSON trong
+`data/`/`config/` — cả kho hiện chỉ có đúng một chỗ vi phạm, nay là không.
+
+**② Tôi đo `data/` trên kho MẪU rồi tuyên bố như thể đã đo kho thật.**
+Repo có 20 file / 276 KB. PROD có **524 file / 1,03 GB** — LKG, trạng thái thông báo,
+nhật ký, sao lưu, `uploads` lồng nhiều tầng. Bot đo căn cước **cold 7.055 ms, hot
+4.931 ms**. Và churn: chỉ cần `catalog_management_lkg.json` đổi mỗi `updatedAt` là khoá
+đổi ⇒ dấu trượt ⇒ dựng lại — đúng cái bệnh cơ chế này sinh ra để chữa.
+Sai ở đâu: "lấy hết rồi trừ ra" là đúng, nhưng tôi trừ theo **thư mục** trong khi thứ
+cần phân biệt là **ai ghi ra file đó**. File do NGƯỜI đặt vào (lịch nghỉ, mẫu cột, bậc
+thưởng) là **đầu vào**. File do CHÍNH APP ghi ra (trạng thái, LKG, nhật ký, sao lưu) là
+**đầu ra** — đưa đầu ra vào khoá là tự quay vòng: app ghi → khoá đổi → dựng lại → app ghi.
+→ `data/` nay chỉ quét **tầng trên cùng**, bỏ mọi thư mục con, loại thêm các đuôi file do
+app tự ghi (`*_lkg`, `*_state`, `*_audit`, `*_snapshot`, `*_cache`, `*_backup`, `.log`,
+`.bak`, `.tmp`, `.lock`). Thêm **hạn mức** (200 file / 32 MB): vượt là **ngừng đóng dấu**
+và ghi log lỗi, thay vì âm thầm tốn 7 giây hoặc đóng dấu bằng khoá không ai hiểu nổi.
+
+**③ CÒN LẠI — dữ liệu lấy qua mạng không nằm trong bất kỳ vùng băm nào.**
+Bot dựng: remote trả 12,5 rồi đổi thành 9,5; không file nào đổi nên căn cước, vân tay
+và khoá dấu đều y nguyên ⇒ app mở lại dấu cũ và trả **12,5**.
+Băm file **không bao giờ** phủ được thứ đến từ mạng. Đây không phải lỗ để vá thêm một
+vòng nữa — nó cho thấy giới hạn của cách "khoá theo băm mọi đầu vào": danh sách đầu vào
+không có đáy.
+**Lối ra có thật:** bản thân gói dữ liệu từ xa **đã mang sẵn** `reconciliation_version`,
+`allocation_version`, `reconciliation_rows_checksum_v2`, `allocation_checksum`,
+`confirmed_at` (xem `employeeCostReconAllocationV4.js` — hàm `validSnapshot`). Ghim đúng
+mấy giá trị đó vào khoá dấu là phủ được, và **thiếu chúng thì không đóng dấu** (fail-closed).
+Chưa làm ở commit này vì cần nối đường dẫn provenance qua `buildMerged` — ghi ra đây để
+không quên, và để CEO cân với phương án đơn giản hơn ở dưới.
+
+**Phương án CEO nêu (22:05) — và câu hỏi "sang T09 có đếm thêm người không".**
+CEO đề xuất bỏ hẳn chuyện "liệt kê mọi đầu vào trên đời", thay bằng bất biến:
+**đủ người mới trưng tổng; thiếu một người thì nói thẳng là chưa đủ.**
+Đã kiểm bằng code: **không có chỗ nào ghi cứng số 21**. Danh sách người lấy từ
+`store.targetRoster()` → `data/target_roster.json` (`allowed_codes`) giao với danh sách
+user thật. Thêm NV vào file đó thì T09 cần đủ 25/30 người, tự động.
+**Rủi ro thật KHÔNG nằm ở con số, mà ở chỗ ai cập nhật danh sách**: tuyển người mới mà
+quên thêm vào `target_roster.json` thì app vẫn báo "đủ" trong khi thiếu đúng người đó.
+Đề xuất kèm theo: đối chiếu ngược — mã NV **có phát sinh số** mà **không có** trong danh
+sách thì phải kêu lên, đúng tinh thần `SPEC_REVENUE_SYNC_EXCEPTIONS` ("không dòng nào
+được biến mất lặng lẽ").
+
+**Kiểm**
+- Thêm 3 ca: **A7** cấm `require()` file dữ liệu (quét cả `src/`); **A7b** tiến trình
+  đang chạy phải thấy lịch nghỉ vừa sửa; **A7c** file trạng thái app tự ghi không được
+  làm căn cước đổi, và vùng quét phải còn trong hạn mức.
+- Toàn bộ backend **1266/1273**: đúng 7 ca hỏng cố hữu của sandbox. `npm run build` xanh.
+
 ### 2026-08-11 20:30 (giờ VN) — 📅 QUÉT CẢ `data/`: lấy hết rồi trừ ra, thay vì nhặt vào
 
 Bot audit đợt 16 tìm ra `server/data/holidays.json` nằm ngoài vùng băm: đổi lịch nghỉ
