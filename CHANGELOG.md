@@ -1,3 +1,45 @@
+### 2026-08-11 19:05 (giờ VN) — 🚫 BỎ DANH SÁCH VIẾT TAY: băm cả `src/` và cả `config/`
+
+Bot audit đợt 15 xác nhận A3/A4 của đợt trước đều PASS (kể cả ca sentinel: giá trị biến
+môi trường **không** lộ ra căn cước, khoá, file dấu hay log). Nhưng bắn thủng đúng chỗ
+tôi đã tự nêu là "chỗ tôi dễ sót nhất" — và họ đúng.
+
+**Lỗi: danh sách 18 module "tính tiền" viết tay còn thiếu.**
+Bot sửa `paymentSchedule.js` cho tiền đợt 2 đổi **54.000.000đ → 45.000.000đ**: căn cước
+không đổi, khoá không đổi, app vẫn trả **54.000.000đ** (`wrongOldNumberServed=true`).
+Ngoài file đó còn thiếu `paymentTeamSummary.js`, `routes.js`, và các mắt xích target /
+tạm ứng lương / sổ thanh toán / analytics / chính sách thưởng / đối soát.
+
+**Gốc rễ không phải "liệt kê ẩu".** Danh sách viết tay đòi hỏi **mọi người sửa code về
+sau đều phải nhớ cập nhật nó**. Quên thì không có gì kêu lên — chỉ có một con số sai
+được đóng dấu vĩnh viễn. Hàng rào nào phải nhờ trí nhớ thì không phải hàng rào. Nếu tôi
+chỉ "bổ sung mấy file bot chỉ ra" thì vòng sau lại thiếu file khác.
+
+**Sửa: bỏ hẳn danh sách.**
+- Băm **toàn bộ `src/**.js`**, không chọn lọc (153 file / 2,3 MB / **5–11 ms**, tính một
+  lần mỗi tiến trình vì mã nguồn không đổi khi đang chạy).
+- Băm **toàn bộ `config/`**, cộng hai file chính sách trong `data/` và các đường dẫn
+  cấu hình do biến môi trường trỏ tới (có thể nằm ngoài `config/`).
+- Biến môi trường lọc theo **TIỀN TỐ** thay vì theo tên (`EMPLOYEE_`, `BONUS_`,
+  `PENALTY_`, `SALARY_`, `PAYMENT_`, `TARGET_`, `INCENTIVE_`, `APP_SALE_RECON`,
+  `DATA_HUB_`, `REVENUE_`, `COST_`, `XU_`…) ⇒ biến MỚI cùng họ tự được phủ. Vẫn **chỉ
+  băm, không ghi giá trị** — nhóm này có khoá API.
+- Không băm cả `process.env` vì trong đó có `PORT`/`PATH`/`PWD` đổi mỗi lần khởi động,
+  sẽ làm khoá churn vô cớ. Đây là chỗ duy nhất còn phải chọn lọc, và đã chọn theo họ
+  chứ không theo tên.
+
+**Giá phải trả, đã cân:** đổi một module chẳng liên quan tới tiền cũng làm khoá đổi ⇒
+sau mỗi lần deploy, kỳ đã khoá sổ phải dựng lại **đúng một lần** rồi đóng dấu mới
+(~200 ms nóng). Đổi lại: **không một dòng code nào ảnh hưởng tới tiền có thể lọt ra
+ngoài tầm phủ**. Hai cái giá đó không cùng hạng.
+
+**Kiểm**
+- Thêm 2 ca: **A5** — một file `.js` MỚI TINH trong `src/` (thứ không danh sách viết tay
+  nào biết trước) phải làm căn cước đổi, và sửa con số bên trong nó cũng phải đổi;
+  **A5b** — biến môi trường MỚI cùng họ tự được phủ, và vẫn không lộ giá trị.
+- Kiểm ngược: khôi phục bản danh sách-tay cũ ⇒ **cả hai ca đỏ**.
+- Toàn bộ backend **1260/1267**: đúng 7 ca hỏng cố hữu của sandbox. `npm run build` xanh.
+
 ### 2026-08-11 17:10 (giờ VN) — 🪪 CĂN CƯỚC CÁCH TÍNH TIỀN + bịt khe hở lúc đọc dấu
 
 Bot audit đợt 14 xác nhận hai sửa A1/A2 của đợt trước đều PASS, và tần suất 503 trên

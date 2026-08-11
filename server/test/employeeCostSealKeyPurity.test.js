@@ -401,3 +401,66 @@ test('A4b căn cước công thức: nhạy với biến + file cấu hình, và
     else process.env.EMPLOYEE_COST_DERIVED_BASE = bienCu;
   }
 });
+
+/* ── BOT AUDIT ĐỢT 15 ─────────────────────────────────────────────────────── */
+
+/* A5 — DANH SÁCH MODULE VIẾT TAY LÀ MÔ HÌNH SAI.
+ *
+ * Bản trước tôi liệt kê tay 18 module "tính tiền". Bot sửa `paymentSchedule.js` cho
+ * tiền đợt 2 đổi 54.000.000đ → 45.000.000đ: căn cước KHÔNG đổi, khoá KHÔNG đổi, app
+ * vẫn trả 54.000.000đ. Và còn thiếu `paymentTeamSummary.js`, `routes.js`, cùng các
+ * mắt xích target / tạm ứng lương / sổ thanh toán / analytics / đối soát.
+ *
+ * Vấn đề không nằm ở việc tôi liệt kê ẩu, mà ở chỗ danh sách tay đòi hỏi MỌI người sửa
+ * code về sau phải nhớ cập nhật nó — quên thì không có gì kêu lên, chỉ có một con số
+ * sai được đóng dấu vĩnh viễn. Nên nay băm TOÀN BỘ `src/**.js`.
+ *
+ * Ca này canh đúng tính chất đó: một file .js MỚI TINH trong `src/` — thứ mà không
+ * danh sách viết tay nào có thể biết trước — cũng phải làm căn cước đổi. */
+test('A5 file .js MỚI trong src/ cũng phải làm căn cước đổi — không còn danh sách để mà sót', () => {
+  const formulaIdentity = require('../src/employeeCostFormulaIdentity');
+  const fileTam = path.join(__dirname, '..', 'src', '__canCuocKiemTra.tmp.js');
+  try {
+    formulaIdentity.forgetCache();
+    const truoc = formulaIdentity.identity();
+
+    fs.writeFileSync(fileTam, 'module.exports = { tienDot2: () => 45000000 };\n');
+    formulaIdentity.forgetCache();
+    const sauThemFile = formulaIdentity.identity();
+    assert.notEqual(sauThemFile, truoc,
+      'thêm một module sinh ra tiền mà căn cước không đổi ⇒ đúng lỗ bot bẻ được với paymentSchedule.js');
+
+    fs.writeFileSync(fileTam, 'module.exports = { tienDot2: () => 54000000 };\n');
+    formulaIdentity.forgetCache();
+    assert.notEqual(formulaIdentity.identity(), sauThemFile,
+      'SỬA con số trong module đó cũng phải làm căn cước đổi');
+  } finally {
+    try { fs.unlinkSync(fileTam); } catch { /* đã xoá rồi thì thôi */ }
+    formulaIdentity.forgetCache();
+  }
+});
+
+/* Biến môi trường vẫn phải chọn lọc (không băm cả `process.env` vì có PORT/PATH/PWD
+ * đổi mỗi lần khởi động). Nhưng lọc theo TIỀN TỐ, không theo tên — biến MỚI cùng họ
+ * phải tự được phủ, không phải nhớ cập nhật file căn cước. */
+test('A5b biến môi trường MỚI cùng họ tự động được phủ, và vẫn không lộ giá trị', () => {
+  const formulaIdentity = require('../src/employeeCostFormulaIdentity');
+  const TEN_MOI = 'EMPLOYEE_COST_MOT_BIEN_CHUA_TUNG_CO';
+  const BI_MAT = 'gia-tri-bi-mat-khong-duoc-lo-98765';
+  try {
+    formulaIdentity.forgetCache();
+    const truoc = formulaIdentity.identity();
+
+    process.env[TEN_MOI] = 'x';
+    assert.notEqual(formulaIdentity.identity(), truoc,
+      'biến mới cùng họ phải tự được phủ — nếu phải khai tên thì lại quay về bẫy danh sách tay');
+
+    process.env[TEN_MOI] = BI_MAT;
+    const canCuoc = formulaIdentity.identity();
+    assert.ok(!canCuoc.includes(BI_MAT),
+      'căn cước CHỈ chứa băm — nhóm biến này có khoá API, lộ vào khoá dấu là rò ra file dấu và log');
+  } finally {
+    delete process.env[TEN_MOI];
+    formulaIdentity.forgetCache();
+  }
+});
