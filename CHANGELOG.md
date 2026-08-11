@@ -1,3 +1,46 @@
+### 2026-08-11 10:40 (giờ VN) — 🧬 VÂN TAY THEO NỘI DUNG: bot bẻ đúng lập luận của tôi
+
+Bot audit đợt 8 xác nhận **ba lỗi đợt 7 đã vá đúng**, và chặn lại đúng chỗ tôi **tự
+biện minh**.
+
+#### Tôi lập luận sai ở đâu
+
+Tôi đã **loại** `salary_advance_snapshot` và `employee_cost_rate_snapshot` khỏi vân tay
+với lý do *"chúng là sản phẩm phụ do chính lượt dựng ghi ra"*, và còn ghi hẳn lý do đó
+vào code như một quyết định có cân nhắc.
+
+Bot bẻ lại: **tuy do ta tự ghi, nhưng ở lượt đọc SAU chúng là ĐẦU VÀO TÀI CHÍNH.**
+Tái hiện 111→222 chứng minh dứt khoát: bỏ chúng ra thì khoá không đổi ⇒ **RAM memo vẫn
+111 · dấu đã ghi vẫn phục vụ lương 111 · rate snapshot cũng 111** trong khi nguồn đã là
+222. Đây là **(A) SAI SỐ**, không phải (B) gia cố. Bot đúng, tôi sai.
+
+#### Vì sao tôi loại chúng — và vì sao cả hai lý do đều có thật
+
+Đưa lại vào bằng `mtime` thì sập bẫy đã đo được: ghi lại **cùng nội dung** vẫn làm
+`mtime`/`ctime` nhảy ⇒ mỗi lượt dựng **tự huỷ khoá của chính mình** ⇒ cache không bao
+giờ trúng ⇒ quay về đúng bệnh "mở màn nào cũng dựng lại từ đầu". Ca `warm-cache` đỏ ngay.
+
+Tôi đã chọn hy sinh tính đúng để giữ tốc độ. **Đó là chọn sai** — lẽ ra phải tìm cách
+đạt cả hai.
+
+#### Cách đạt cả hai: nhận diện theo NỘI DUNG
+
+Vân tay nay **băm nội dung file**, không nhìn giờ sửa:
+- Ghi lại **y nguyên** ⇒ băm không đổi ⇒ **khoá đứng yên** ⇒ cache vẫn trúng.
+- Nội dung **đổi thật** ⇒ băm đổi ⇒ khoá đổi ⇒ dựng lại. Không còn phục vụ số cũ.
+
+Chi phí: **chỉ băm khi `stat` cho thấy file đã bị đụng vào**; không đụng thì dùng lại
+băm đã nhớ. Đường nóng **không** phải đọc lại 17,9 MB mỗi lượt xem.
+
+Vân tay trở lại **đủ bốn kho**: `cost_rates_local` · `employee_cost_rate_snapshot` ·
+`salary_advance_snapshot` · `payment_ledger`.
+
+#### Test
+Ca ⑧ viết lại, kiểm **cả hai chiều**: (a) đổi nội dung từng kho ⇒ vân tay **phải** đổi,
+trả lại nội dung cũ ⇒ vân tay **phải** quay về; (b) ghi lại **cùng nội dung** dù ép giờ
+sửa nhảy hẳn ⇒ vân tay **phải đứng yên**. `warm-cache` **ĐẠT**. `server` **1244/1251**
+— đúng 7 ca nền cũ. Build đạt.
+
 ### 2026-08-11 09:55 (giờ VN) — 📅 Ô "Doanh số trong ngày": "chưa có dữ liệu" ≠ "bằng 0"
 
 CEO chụp màn 11/08 lúc 08:46: ô **"Doanh số trong ngày"** khẳng định *"Đến thời điểm

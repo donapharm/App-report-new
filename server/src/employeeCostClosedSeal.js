@@ -193,46 +193,51 @@ function write(key, payload, { complete, store = persist } = {}) {
  * CEO bấm "Đồng bộ % chi phí" là file này đổi ⇒ dấu cũ phải hết hiệu lực ngay.
  * Chỉ `stat`, không đọc nội dung: rẻ, gọi được ở đầu mọi request.
  */
-function fileFingerprint(dir, fileName) {
-  try {
-    const stat = fs.statSync(path.join(dir, `${fileName}.json`));
-    return `${fileName}=${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
-  } catch {
-    return `${fileName}=khong-co`;
-  }
-}
+/* ── VÂN TAY THEO NỘI DUNG, KHÔNG THEO GIỜ SỬA ───────────────────────────────
+ * Bot audit đợt 8 bẻ đúng lập luận của tôi. Tôi từng loại `salary_advance_snapshot`
+ * và `employee_cost_rate_snapshot` ra khỏi vân tay với lý do "chúng là sản phẩm phụ
+ * do chính lượt dựng ghi ra". Sai: **ở lượt đọc SAU, chúng là ĐẦU VÀO TÀI CHÍNH**.
+ * Bot tái hiện 111→222: khoá không đổi ⇒ RAM memo vẫn 111, dấu vẫn phục vụ lương 111,
+ * rate snapshot cũng 111. Đó là (A) SAI SỐ, không phải (B) gia cố.
+ *
+ * Nhưng đưa lại vào bằng `mtime` thì sập bẫy cũ: ghi lại **cùng nội dung** vẫn làm
+ * `mtime`/`ctime` nhảy ⇒ mỗi lượt dựng tự huỷ khoá của mình ⇒ cache không bao giờ
+ * trúng (ca `warm-cache` đỏ).
+ *
+ * Lối thoát: **băm NỘI DUNG**. Ghi lại y nguyên ⇒ băm không đổi ⇒ khoá đứng yên.
+ * Nội dung đổi thật ⇒ băm đổi ⇒ khoá đổi ⇒ dựng lại. Đúng cả hai chiều.
+ *
+ * Giá: chỉ băm khi `stat` cho thấy file đã đụng vào; không đụng thì dùng lại băm cũ.
+ * Nên đường nóng KHÔNG phải đọc lại 17,9 MB mỗi lượt xem. */
+const hashCache = new Map(); // name -> { print, hash }
 
-/* MỌI KHO đã tham gia dựng con số, gộp thành một vân tay.
- * Bot audit đúng: thiếu `salary_advance_snapshot` và `payment_ledger` thì hai kho đó
- * đổi mà khoá dấu KHÔNG đổi ⇒ app phục vụ lại số thanh toán CŨ. Đã tái hiện được. */
+/* MỌI KHO ĐẦU VÀO TÀI CHÍNH đã tham gia dựng con số.
+ * `salary_advance_snapshot` và `employee_cost_rate_snapshot` TUY do chính lượt dựng
+ * ghi ra, NHƯNG ở lượt đọc SAU chúng là đầu vào thật — bot audit đợt 8 tái hiện
+ * 111→222 chứng minh: bỏ chúng ra là RAM memo, dấu đã ghi và snapshot đều phục vụ
+ * số CŨ. Nên phải có mặt đủ; chống tự-huỷ-khoá bằng cách băm NỘI DUNG (xem dưới). */
 const RATE_STORE_FILES = Object.freeze([
-  'cost_rates_local', // tỷ lệ % chủ động — CEO bấm "Đồng bộ % chi phí"
-  'payment_ledger',   // sổ thanh toán
+  'cost_rates_local',            // tỷ lệ % chủ động — CEO bấm "Đồng bộ % chi phí"
+  'employee_cost_rate_snapshot', // snapshot tỷ lệ bị động
+  'salary_advance_snapshot',     // số ứng lần 1
+  'payment_ledger',              // sổ thanh toán
 ]);
-
-/* ‼ VÌ SAO CHỈ CÓ HAI FILE — VÀ ĐÂY LÀ MỘT BÀI HỌC ĐẮT
- * Vân tay này phải gồm **ĐẦU VÀO ĐỘC LẬP**, không được gồm **SẢN PHẨM PHỤ do chính
- * lượt dựng ghi ra**. `salary_advance_snapshot` và `employee_cost_rate_snapshot` đều
- * do đường dựng tự ghi (`salaryAdvance` gọi `snapshot.write`). Đưa chúng vào thì mỗi
- * lượt dựng **tự làm hỏng khoá của chính mình** ⇒ bộ nhớ đệm không bao giờ trúng, dấu
- * không bao giờ đọc lại ⇒ quay về đúng cảnh dựng lại từ đầu mỗi lần mở màn, tức là
- * bệnh vừa mất ba ngày để chữa. Ca `warm-cache` đỏ ngay khi tôi thêm chúng vào — may
- * mà có test đó.
- *
- * VIỆC CÒN NỢ (nói thẳng, không giấu): "nguồn lương/snapshot đổi thật thì phải làm
- * mới" cần giải bằng cho đường ghi **xoá memo tường minh**, không phải bằng vân tay file.
- *
- * VÌ SAO KHÔNG CÓ `salary_advance_snapshot` Ở ĐÂY
- * Nó là **sản phẩm PHỤ do chính lượt dựng này ghi ra**, không phải đầu vào độc lập.
- * Đưa nó vào vân tay thì mỗi lượt dựng lại tự làm hỏng khoá của chính mình ⇒ bộ nhớ
- * đệm KHÔNG BAO GIỜ trúng, dấu không bao giờ đọc lại được, và màn hình quay về cảnh
- * dựng lại từ đầu mỗi lần mở (đúng thứ vừa mất ba ngày để chữa). Đã đo: ca warm-cache
- * hỏng ngay khi thêm nó vào.
- * Việc "số lương ứng đổi ở NGUỒN thì phải làm mới" cần được giải bằng cách cho đường
- * ghi salary **xoá memo tường minh**, không phải bằng vân tay file. Ghi lại đây làm
- * việc còn nợ, không giấu. */
 const SALARY_SNAPSHOT_FILE = 'salary_advance_snapshot';
 
+function fileFingerprint(dir, fileName) {
+  const full = path.join(dir, `${fileName}.json`);
+  let stat;
+  try { stat = fs.statSync(full); } catch { hashCache.delete(fileName); return `${fileName}=khong-co`; }
+  const print = `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+  const hit = hashCache.get(fileName);
+  if (hit && hit.print === print) return `${fileName}=${hit.hash}`;
+  let hash;
+  try { hash = sha256(fs.readFileSync(full)); } catch { hashCache.delete(fileName); return `${fileName}=khong-doc-duoc`; }
+  hashCache.set(fileName, { print, hash });
+  return `${fileName}=${hash}`;
+}
+
+/** Vân tay gộp của MỌI kho đầu vào tài chính. Kho nào đổi NỘI DUNG ⇒ vân tay đổi. */
 function rateStoreFingerprint(store = persist, files = RATE_STORE_FILES) {
   const dir = (store && store.DIR) || persist.DIR;
   const list = Array.isArray(files) ? files : [files];

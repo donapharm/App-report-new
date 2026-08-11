@@ -260,28 +260,39 @@ test('⑦ báo cáo THIẾU sourceOutcome ⇒ KHÔNG được coi là ok', () =>
 });
 
 // (2) Kho lương/thanh toán đổi mà khoá dấu không đổi ⇒ phục vụ lại số cũ.
-test('⑧ vân tay phủ các kho ĐẦU VÀO; salary snapshot cố ý loại trừ, có lý do', () => {
+test('⑧ vân tay phủ ĐỦ BỐN kho, và nhận diện theo NỘI DUNG chứ không theo giờ sửa', () => {
   const { seal, dir } = freshSeal();
-  assert.deepEqual([...seal.RATE_STORE_FILES], ['cost_rates_local', 'payment_ledger']);
-  /* `salary_advance_snapshot` CỐ Ý không nằm trong vân tay: nó là sản phẩm phụ do
-   * chính lượt dựng ghi ra, đưa vào là mỗi lượt tự huỷ khoá của mình ⇒ cache không
-   * bao giờ trúng. Việc làm mới khi nguồn lương đổi phải giải bằng xoá memo tường
-   * minh — ghi nhận là việc còn nợ, không giấu. */
-  assert.equal(seal.SALARY_SNAPSHOT_FILE, 'salary_advance_snapshot');
-  assert.ok(!seal.RATE_STORE_FILES.includes(seal.SALARY_SNAPSHOT_FILE));
+  assert.deepEqual([...seal.RATE_STORE_FILES],
+    ['cost_rates_local', 'employee_cost_rate_snapshot', 'salary_advance_snapshot', 'payment_ledger']);
 
   const van = () => seal.rateStoreFingerprint({ DIR: dir });
-  const truoc = van();
+  for (const f of seal.RATE_STORE_FILES) fs.writeFileSync(path.join(dir, `${f}.json`), JSON.stringify({ v: 111 }));
+  const goc = van();
+
+  /* (a) ĐỔI NỘI DUNG ⇒ vân tay PHẢI đổi. Đây là ca 111→222 bot tái hiện: bỏ hai file
+   *     snapshot ra khỏi vân tay thì RAM memo, dấu đã ghi và snapshot đều phục vụ 111
+   *     trong khi nguồn đã là 222. */
   for (const f of seal.RATE_STORE_FILES) {
-    fs.writeFileSync(path.join(dir, `${f}.json`), JSON.stringify({ v: 1 }));
-    const sau = van();
-    assert.notEqual(sau, truoc, `đổi ${f}.json là vân tay PHẢI đổi`);
+    fs.writeFileSync(path.join(dir, `${f}.json`), JSON.stringify({ v: 222 }));
+    assert.notEqual(van(), goc, `đổi NỘI DUNG ${f}.json ⇒ vân tay phải đổi`);
+    fs.writeFileSync(path.join(dir, `${f}.json`), JSON.stringify({ v: 111 }));
+    assert.equal(van(), goc, `trả lại nội dung cũ ⇒ vân tay phải quay về như cũ`);
   }
 
-  // Và khoá dấu đổi theo.
-  const k1 = seal.keyFor({ ...T07, closed: true, sources: { ...NGUON, rates: 'A' } });
-  const k2 = seal.keyFor({ ...T07, closed: true, sources: { ...NGUON, rates: 'B' } });
-  assert.notEqual(k1, k2, 'kho đổi ⇒ khoá dấu đổi ⇒ dấu cũ hết hiệu lực');
+  /* (b) GHI LẠI Y NGUYÊN nội dung ⇒ vân tay KHÔNG được đổi. Đây là bẫy tôi từng sập:
+   *     hai file snapshot do chính lượt dựng ghi ra; nếu nhận diện theo `mtime` thì mỗi
+   *     lượt dựng tự huỷ khoá của mình ⇒ bộ nhớ đệm không bao giờ trúng ⇒ quay lại đúng
+   *     bệnh "mở màn nào cũng dựng lại từ đầu". Ca warm-cache bắt được. */
+  const truoc = van();
+  for (const f of seal.RATE_STORE_FILES) {
+    const p2 = path.join(dir, `${f}.json`);
+    const noiDung = fs.readFileSync(p2, 'utf8');
+    const sau = Date.now() / 1000 + 30;
+    fs.writeFileSync(p2, noiDung);        // ghi lại y nguyên
+    fs.utimesSync(p2, sau, sau);          // và ép giờ sửa nhảy hẳn
+  }
+  assert.equal(van(), truoc,
+    'ghi lại CÙNG nội dung (dù giờ sửa nhảy) ⇒ vân tay PHẢI đứng yên, nếu không thì cache tự huỷ mỗi lượt');
 });
 
 // (3) Nguồn đổi GIỮA lúc fan-out ⇒ bản gộp trộn đời ⇒ cấm đóng dấu.
