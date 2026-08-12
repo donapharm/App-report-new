@@ -685,6 +685,63 @@ function periodViewModel(payload = {}) {
  * mới về sau, nó tự bắt.
  */
 
+/* ═══ NGỮ NGHĨA THEO ĐƯỜNG DẪN — THÔI ĐOÁN THEO TÊN VÀ THEO HÌNH DẠNG CHUỖI ══════
+ *
+ * Bot audit vòng 9 khuyên đúng chỗ tôi đang bí:
+ *   *"local semantic path schema first, then typed {value, kind, unit} values;
+ *     incrementally add DataHub metadata. Regex only as fallback."*
+ *
+ * Suốt chín vòng tôi đoán "cái gì là tiền" bằng **tên trường** (`…Total`, `…Count`) rồi
+ * bằng **hình dạng chuỗi** (`95%`, `₫1.000`). Cả hai đều là đoán, và vòng nào bot cũng
+ * tìm ra một cách viết tôi chưa nghĩ tới: `paymentTeam.totals.*` · `provisionalC45Amount`
+ * · `costRevenueRatio` · `₫1.000` · `VND 1.000` · `12 ngàn` · và `12.5` thì chịu hẳn.
+ *
+ * Đoán theo tên còn hỏng **hai chiều**: `aggregateMoneyCount` sẽ LỌT chỉ vì tận cùng
+ * bằng `Count`, còn `overdueEmployees` thì bị CHẶN OAN chỉ vì tận cùng bằng `Employees`.
+ *
+ * Nay KHAI BÁO thay vì đoán: mỗi đường dẫn nói rõ nó là **tiền · tỷ lệ · số đếm · chữ**.
+ * Khai báo thì đọc được, cãi được, và ca kiểm bắt được chỗ chưa khai.
+ *
+ * ‼ ĐƯỜNG CHƯA KHAI thì **coi như tiền** (chặn) — fail-closed. Quên khai một số đếm thì
+ * màn hình mất số, thấy ngay; quên khai một số tiền thì CEO đọc số sai, không ai biết.
+ *
+ * Đây là bước một. Bước hai là DataHub trả thẳng `{value, kind, unit}` cho từng trường,
+ * lúc đó bỏ được cả bảng này lẫn mọi mẫu chuỗi. Đã ghi vào CHANGELOG để đề xuất.
+ */
+const NGU_NGHIA = [
+  // ── SỐ ĐẾM và cấu trúc: giữ nguyên khi thiếu người ───────────────────────────
+  [/(^|\.)(unavailable|stale|xu)?[Ee]mployeeCount$/, 'dem'],
+  [/(^|\.)(employees|contributors|appliedContributors|xuContributors)$/, 'dem'],
+  [/(^|\.)(overdueEmployees|employeesWithoutFirstAdvance)$/, 'dem'],
+  [/(^|\.)(unavailableCount|unavailablePairs|staleEmployeeCount)$/, 'dem'],
+  [/(^|\.)(matchedRows|totalRows|filteredRows|rowCount|lineCount)$/, 'dem'],
+  [/(^|\.)(page|pageSize|pageCount|totalPages)$/, 'dem'],
+  [/(^|\.)(dynamicCount|exceptionCount|redCount|yellowCount)$/, 'dem'],
+  [/(^|\.)(threshold|rate|closeDay|schemaVersion|pos|carry)$/, 'dem'],
+  [/(^|\.)(appliedPeriods|unresolvedPeriods)$/, 'dem'],
+  // ── TIỀN và TỶ LỆ toàn đội: chặn khi thiếu người ─────────────────────────────
+  [/(^|\.)paymentTeam\.totals\./, 'tien'],
+  [/(^|\.)(monthlyTotal|periodTotal|annualTotal)$/, 'tien'],
+  [/(^|\.)provisional[A-Z]/, 'tien'],
+  [/(^|\.)(baseTotal|afterPenaltyTotal|appliedAmount|overdueAmount)$/, 'tien'],
+  [/(^|\.)columnTotals\./, 'tien'],
+  [/(^|\.)healthKpis\.cards\[\d+\]\.(value|sub)$/, 'tien'],
+  /* Mười lăm đường dưới đây do CHÍNH ca kiểm "KHAI BÁO" chỉ ra — tôi không tự nghĩ ra
+   * được đủ, và đó là lý do phải có ca kiểm bắt chỗ chưa khai thay vì tin trí nhớ. */
+  [/(^|\.)revenueRecon\.(total|shown|gap)$/, 'tien'],
+  [/(^|\.)target\.(month|quarter)\.(target|achieved|pct)$/, 'tien'],
+  [/(^|\.)bonus\.(month|quarter)\.(amount|base|priority|excess)$/, 'tien'],
+  [/(^|\.)penalty\.(total|c45Amount|targetAmount|xuAmount)$/, 'tien'],
+  [/(^|\.)daily\.totals\[\d+\]\./, 'tien'],
+  // Cờ trạng thái: không phải tiền, và màn hình cần chúng để nói "chưa đủ".
+  [/(^|\.)(complete|thieuNguoi|reliable|available|balanced|invariantOk)$/, 'dem'],
+];
+
+function nguNghiaCua(duong) {
+  for (const [mau, loai] of NGU_NGHIA) if (mau.test(duong)) return loai;
+  return null; // chưa khai ⇒ người gọi tự fail-closed
+}
+
 /* Số ĐẾM và số cấu trúc — PHẢI giữ. Chặn mấy số này mới là sai: màn hình cần nói được
  * "thiếu 1/21 người", cần số trang, cần ngưỡng. */
 const SO_CAU_TRUC = new Set([
@@ -736,10 +793,23 @@ const CO_CHU_SO = /\d/;
 const DAU_HIEU_TIEN = /(đ|₫|VND|%|tỷ|triệu|ngàn|nghìn)/i;
 const CHUOI_CO_SO = (giaTri) => CO_CHU_SO.test(giaTri) && DAU_HIEU_TIEN.test(giaTri);
 
-function chanSauTrongCay(nut, khoaCha = '') {
-  if (typeof nut === 'number') return Number.isFinite(nut) ? null : nut;
-  if (typeof nut === 'string') return CHUOI_CO_SO(nut) ? 'Chưa đủ dữ liệu' : nut;
-  if (Array.isArray(nut)) return nut.map((con) => chanSauTrongCay(con, khoaCha));
+/* Duyệt cây kèm ĐƯỜNG DẪN, để hỏi được bảng ngữ nghĩa. Thứ tự quyết định:
+ *   ① bảng khai báo (chắc chắn nhất)  →  ② mẫu tên  →  ③ mẫu chuỗi (lưới cuối).
+ * Chưa khai và không khớp mẫu nào ⇒ **chặn** (fail-closed). */
+function chanSauTrongCay(nut, duong = '$', khoaCha = '') {
+  const loai = nguNghiaCua(duong);
+  if (loai === 'dem') return nut;                       // khai rõ là số đếm ⇒ giữ
+
+  if (typeof nut === 'number') {
+    if (loai === 'tien') return Number.isFinite(nut) ? null : nut;
+    // Chưa khai: lùi về mẫu tên, rồi mới tới chặn.
+    return laSoCauTruc(khoaCha) ? nut : (Number.isFinite(nut) ? null : nut);
+  }
+  if (typeof nut === 'string') {
+    if (loai === 'tien') return CO_CHU_SO.test(nut) ? 'Chưa đủ dữ liệu' : nut;
+    return CHUOI_CO_SO(nut) ? 'Chưa đủ dữ liệu' : nut;
+  }
+  if (Array.isArray(nut)) return nut.map((con, i) => chanSauTrongCay(con, `${duong}[${i}]`, khoaCha));
   if (!nut || typeof nut !== 'object') return nut;
   const ra = {};
   for (const [khoa, con] of Object.entries(nut)) {
@@ -748,8 +818,7 @@ function chanSauTrongCay(nut, khoaCha = '') {
      * nhánh thì toàn bộ tiền trong đó thoát — chính ca kiểm phép đo bắt được.
      * Nên: tên cấu trúc chỉ bảo vệ SỐ LÁ; muốn giữ cả nhánh phải khai ở `VUNG_GIU`. */
     if (VUNG_GIU.has(khoa)) ra[khoa] = con;
-    else if (laSoCauTruc(khoa) && typeof con !== 'object') ra[khoa] = con;
-    else ra[khoa] = chanSauTrongCay(con, khoa);
+    else ra[khoa] = chanSauTrongCay(con, `${duong}.${khoa}`, khoa);
   }
   return ra;
 }
@@ -776,13 +845,13 @@ function chanTongToanDoi(model) {
     costColumns: model.costColumns,
     rows: model.rows,
   };
-  const daChan = chanSauTrongCay(model);
+  const daChan = chanSauTrongCay(model, '$');
   return {
     ...daChan,
     ...giuNguyen,
     // `periods` cần chặn tổng nhưng GIỮ `employeeSubtotals`, `rows`, `match` của từng kỳ.
     periods: (Array.isArray(model.periods) ? model.periods : []).map((period) => ({
-      ...chanSauTrongCay(period),
+      ...chanSauTrongCay(period, '$'),
       match: period.match,
       rows: period.rows,
       columns: period.columns,
@@ -801,6 +870,9 @@ function chanTongToanDoi(model) {
     thieuNguoiCodes: Array.isArray(match.unavailableEmployees) ? match.unavailableEmployees : [],
   };
 }
+
+// Xuất ra để ca kiểm buộc mọi đường đổi giá trị phải được KHAI BÁO, không để "chưa khai".
+export const nguNghiaCuaForTests = nguNghiaCua;
 
 export function employeeCostViewModel(payload = {}) {
   const hasPeriods = Array.isArray(payload.periods);

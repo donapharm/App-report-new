@@ -1,3 +1,45 @@
+### 2026-08-12 06:10 (giờ VN) — 📖 Thôi ĐOÁN, chuyển sang KHAI BÁO ngữ nghĩa theo đường dẫn
+
+**Bot xác nhận `e51b156` sạch ở ba mặt lớn:**
+- **Năm repro cache đều PASS** — TTL, xoá tay, và ca thay file liên tục khi đọc: 3 lần
+  thử đều thấy đời đổi và **fail-closed trả `null`**, không nhớ bản trộn đời.
+- **Màn hình PASS**: Trang 2/7, nút Sau bật, "Quá hạn 2 NV", "3 NV không có ứng lần 1",
+  không ô tổng tiền nào hiện số, **0 lỗi console**. **Chặn oan: hết.**
+- **0 đường tiền lọt** trên phép dò thật 21→20; chỉ còn `paymentTeam.totals.employees`
+  sống sót — mà đó là **số đếm**, đúng ra phải sống.
+
+**Còn lại đúng bốn dạng chuỗi, và bot đưa hướng đi thay vì chỉ báo lỗi:**
+> *"local semantic path schema first, then typed {value, kind, unit}; incrementally add
+> DataHub metadata. Regex only as fallback."*
+
+**Đã làm luôn — và đây là lối ra khỏi chín vòng vừa rồi.** Suốt chín vòng tôi đoán "cái
+gì là tiền" bằng **tên trường** rồi bằng **hình dạng chuỗi**. Cả hai đều là đoán, và
+đoán theo tên còn hỏng **hai chiều**: `aggregateMoneyCount` sẽ LỌT vì tận cùng `Count`,
+còn `overdueEmployees` bị CHẶN OAN vì tận cùng `Employees`.
+
+Nay **KHAI BÁO**: mỗi đường dẫn nói rõ nó là *tiền · tỷ lệ · số đếm*. Thứ tự quyết định:
+① bảng khai báo → ② mẫu tên → ③ mẫu chuỗi (lưới cuối). **Đường chưa khai ⇒ coi như
+tiền ⇒ chặn** (fail-closed).
+
+**Nhờ vậy `12.5` — thứ mẫu chuỗi chịu thua suốt hai vòng — nay chặn được**, vì đường
+`healthKpis.cards[].value` đã khai là tiền, bất kể hình dạng.
+
+**Ca kiểm mới buộc phải khai, không cho "quên":** nó dò mọi đường đổi giá trị khi giảm
+một NV và **đỏ nếu có đường nào chưa khai**. Bật lên là nó chỉ ngay **15 đường tôi chưa
+nghĩ tới** (`revenueRecon.*`, `target.month.*`, `bonus.*.amount`, `penalty.c45Amount`,
+`daily.totals[].*`…). Tôi **không tự nghĩ ra đủ** — đó chính là lý do phải có ca kiểm
+bắt chỗ chưa khai thay vì tin trí nhớ.
+
+**Lỗi phụ tự bắt — lần thứ BẢY cùng một kiểu:** fixture của tôi bịa khoá thẻ sức khoẻ,
+mà model lọc theo `HEALTH_KPI_KEYS` (chỉ nhận `costRevenueRatio`/`unallocatedRevenue`/
+`targetForecast`), nên toàn bộ thẻ bị vứt và ca kiểm so với **mảng rỗng**. Phải đọc hằng
+số thật ra rồi mới viết fixture.
+
+**Bước tiếp theo của hướng này (chưa làm):** DataHub trả thẳng `{value, kind, unit}` cho
+từng trường. Lúc đó bỏ được cả bảng khai báo lẫn mọi mẫu chuỗi — không còn gì để đoán.
+
+**Kiểm:** web **473/473**, server **1286/1293** (7 ca hỏng cố hữu sandbox), build xanh.
+
 ### 2026-08-12 05:20 (giờ VN) — 💱 Ký hiệu tiền đứng TRƯỚC số cũng là tiền
 
 Bot soi `37131fc`; năm bản vá cache nằm ở `e51b156` họ chưa lấy, nên phần "cache vẫn

@@ -116,30 +116,21 @@ function payload({ thieu = [] } = {}) {
     },
     healthKpis: {
       period: '2026-07', today: '2026-08-12', backendOwned: true,
+      /* ‼ KHOÁ THẺ PHẢI CÓ THẬT. Model lọc theo `HEALTH_KPI_KEYS` = costRevenueRatio ·
+       * unallocatedRevenue · targetForecast; khoá tôi bịa bị vứt sạch, và ca kiểm khi ấy
+       * so với mảng RỖNG — xanh mà chưa kiểm gì. Lần thứ BẢY trong đợt. Đọc hằng số
+       * thật ra rồi mới viết fixture. */
       cards: [{
         key: 'costRevenueRatio', label: 'Tỷ lệ chi phí/doanh thu',
-        value: `${(4.7 * heSo).toFixed(1)}%`,
-        sub: `trên ${gopSo} NV`, tone: heSo === 1 ? 'ok' : 'warn',
+        // Chuỗi TRẦN không đơn vị: mẫu chuỗi chịu thua, chỉ bảng khai báo cứu được.
+        value: `${(12.5 * heSo).toFixed(1)}`, sub: `trên ${gopSo} NV`, tone: 'employee-cost-tone-base',
       }, {
-        // Tiền/tỷ lệ dạng NGẮN — bot bắt "95%", "0%", "0 ₫" lọt qua regex `{2,}` cũ.
-        key: 'targetCoverage', label: 'Phủ target',
-        value: `${Math.round(95 * heSo)}%`, sub: '', tone: 'ok',
+        // Ký hiệu tiền đứng TRƯỚC số — bot bắt ở vòng 9.
+        key: 'unallocatedRevenue', label: 'Doanh thu chưa phân bổ',
+        value: `₫${tien(1_000)}`, sub: `${gopSo * 100} dòng`, tone: 'employee-cost-tone-base',
       }, {
-        key: 'conLai', label: 'Còn lại', value: `${thieu.length === 0 ? 0 : 9} ₫`, sub: '', tone: 'ok',
-      }, {
-        // Đúng chuỗi bot chụp được trên màn.
-        key: 'tongDong', label: 'Tổng', value: `${tien(1_000_000)}đ · ${gopSo * 100} dòng`, sub: '', tone: 'ok',
-      }, {
-        key: 'doanhSo', label: 'Doanh số', value: `${(30.9 * heSo).toFixed(1)} tỷ`, sub: '', tone: 'ok',
-      }, {
-        // Bốn dạng bot bắt ở vòng 9 — ký hiệu tiền đứng TRƯỚC số, và đơn vị "ngàn".
-        key: 'kyHieuTruoc', label: 'Ký hiệu trước', value: `₫${tien(1_000)}`, sub: '', tone: 'ok',
-      }, {
-        key: 'vndTruoc', label: 'VND trước', value: `VND ${tien(1_000)}`, sub: '', tone: 'ok',
-      }, {
-        key: 'vndSau', label: 'VND sau', value: `${tien(1_000)} VND`, sub: '', tone: 'ok',
-      }, {
-        key: 'ngan', label: 'Ngàn', value: `${tien(12)} ngàn`, sub: '', tone: 'ok',
+        key: 'targetForecast', label: 'Dự báo target',
+        value: `${Math.round(95 * heSo)}%`, sub: '', tone: 'employee-cost-tone-target',
       }],
     },
     revenueRecon: { total: tien(32_000_000_000), shown: tien(32_000_000_000), gap: 0, balanced: true },
@@ -189,7 +180,7 @@ test('RANH GIỚI: đủ người thì không số nào bị chặn oan', () => 
   assert.equal(model.thieuNguoi, false);
   assert.equal(model.summary.periodTotal, 30_982_248_913);
   assert.equal(model.paymentTeam.totals.total, 30_982_248_913);
-  assert.equal(model.healthKpis.cards[0].value, '4.7%');
+  assert.equal(model.healthKpis.cards[0].value, '12.5', 'đủ người thì thẻ sức khoẻ giữ nguyên số');
   assert.equal(model.bonus.month.amount, 31_812_041);
 });
 
@@ -218,4 +209,38 @@ test('RANH GIỚI: số của TỪNG NGƯỜI và số ĐẾM phải sống sót
   assert.equal(model.match.unavailableEmployeeCount, 1, 'phải đếm được thiếu mấy người');
   assert.deepEqual(model.match.unavailableEmployees, ['DN021'], 'và phải nói được thiếu AI');
   assert.equal(model.penalty.employeeCount, 21, 'ngưỡng của kỳ vẫn phải đọc được');
+});
+
+
+/* ‼ MỌI ĐƯỜNG ĐỔI GIÁ TRỊ PHẢI ĐƯỢC KHAI BÁO — không được để "chưa khai".
+ *
+ * Bot audit vòng 9 khuyên: khai ngữ nghĩa theo đường dẫn trước, mẫu chuỗi chỉ là lưới
+ * cuối. Ca này giữ đúng điều đó: nếu ai thêm một trường tổng mới mà quên khai, nó đỏ
+ * ngay — thay vì âm thầm rơi vào nhánh đoán rồi lọt như chín vòng vừa rồi.
+ */
+test('KHAI BÁO: không đường nào đổi giá trị mà còn nằm ngoài bảng ngữ nghĩa', async () => {
+  const { nguNghiaCuaForTests } = await import('../src/employeeCostModel.js');
+  assert.equal(typeof nguNghiaCuaForTests, 'function',
+    'phải xuất bảng ngữ nghĩa ra để kiểm — không xuất thì ca này không kiểm được gì');
+
+  const du = duyetLa(employeeCostViewModel(payload()));
+  const thieu = duyetLa(employeeCostViewModel(payload({ thieu: ['DN021'] })));
+  const chuaKhai = [];
+  for (const [duong, giaTriDu] of du) {
+    if (giaTriDu === thieu.get(duong)) continue;
+    if (laVungTungNguoi(duong)) continue;
+    const ten = duong.split('.').pop().replace(/\[\d+\]$/, '');
+    if (ten === 'length') continue;
+    if (!nguNghiaCuaForTests(duong)) chuaKhai.push(`${duong} (đủ=${giaTriDu})`);
+  }
+  assert.deepEqual(chuaKhai, [],
+    'Đường đổi giá trị mà chưa khai là tiền hay số đếm — khai vào `NGU_NGHIA`:\n'
+    + chuaKhai.join('\n'));
+});
+
+test('chuỗi TRẦN không đơn vị vẫn bị chặn nhờ bảng khai báo', () => {
+  const model = employeeCostViewModel(payload({ thieu: ['DN021'] }));
+  const the = model.healthKpis.cards.find((item) => item.key === 'costRevenueRatio');
+  assert.equal(the.value, 'Chưa đủ dữ liệu',
+    '"12.5" không có đơn vị nên mẫu chuỗi chịu thua — bảng khai báo phải gánh');
 });
