@@ -275,7 +275,9 @@ function docLkg() {
   const now = Date.now();
   const printTruoc = canCuocFile(CACHE_FILE);
   if (!printTruoc) return { print: null, value: null };
-  if (nhoLkg && nhoLkg.print === printTruoc && nhoLkg.hetHanLuc > now) return nhoLkg;
+  // Cùng khe hở như trên: trúng bản nhớ rồi vẫn phải soi lại trước khi dám trả.
+  if (nhoLkg && nhoLkg.print === printTruoc && nhoLkg.hetHanLuc > now
+    && canCuocFile(CACHE_FILE) === printTruoc) return nhoLkg;
 
   for (let lan = 0; lan < 3; lan += 1) {
     const truoc = canCuocFile(CACHE_FILE);
@@ -296,11 +298,19 @@ function readCache(period) {
   try {
     /* Snapshot từng kỳ giữ LÂU hơn bản phân tích: chúng nhỏ, và giữ chúng mới là thứ
      * cứu được 26 giây. Khoá có căn cước file nên file đổi là tự trượt. */
-    const printHienTai = canCuocFile(CACHE_FILE);
-    if (printHienTai) {
-      const khoaSom = `${printHienTai}|${period || ''}`;
+    /* ‼ TRÚNG BẢN NHỚ CŨNG PHẢI HẬU KIỂM (bot audit vòng 10 — đúng, và tôi đã bỏ sót).
+     * Tôi hậu kiểm ở đường ĐỌC ĐĨA rồi tự cho là xong, nhưng đường TRÚNG BẢN NHỚ vẫn
+     * giữ nguyên khe cũ: lấy căn cước → tra bản nhớ → trả về; giữa ba bước đó file có
+     * thể đã sang đời khác, và ta trả kết luận của đời cũ.
+     * Chữa cùng một cách: soi lại căn cước SAU khi lấy được bản nhớ; lệch thì bỏ đường
+     * tắt, đi đọc đĩa. Rẻ hơn nhiều so với phục vụ số của danh mục cũ. */
+    const printTruocTra = canCuocFile(CACHE_FILE);
+    if (printTruocTra) {
+      const khoaSom = `${printTruocTra}|${period || ''}`;
       const hit = nhoSnapshot.get(khoaSom);
-      if (hit && hit.hetHanLuc > Date.now()) return hit.value;
+      if (hit && hit.hetHanLuc > Date.now() && canCuocFile(CACHE_FILE) === printTruocTra) {
+        return hit.value;
+      }
     }
     const { print, value } = docLkg();
     if (!value) return null;

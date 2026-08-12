@@ -210,3 +210,40 @@ test('B4b `quenLkg()` huỷ luôn hẹn giờ — không để cái hẹn cũ xo
   assert.equal(catalogManagement.conGiuBanPhanTichForTests(), true,
     'đọc lại thì giữ lại — và hẹn giờ mới phải là hẹn của lần này, không phải lần trước');
 });
+
+
+/* B5 — TRÚNG BẢN NHỚ CŨNG PHẢI HẬU KIỂM (bot audit vòng 10).
+ * Tôi hậu kiểm ở đường ĐỌC ĐĨA rồi tưởng xong, nhưng đường TRÚNG BẢN NHỚ vẫn giữ nguyên
+ * khe cũ: lấy căn cước → tra bản nhớ → trả về. File đổi giữa ba bước đó thì ta trả kết
+ * luận của đời cũ. Sửa một chỗ rồi để nguyên chỗ song song — đúng cái bệnh của cả đợt.
+ */
+test('B5 file đổi ngay sau khi tra bản nhớ ⇒ không được trả bản cũ', () => {
+  ghiLkg(11);
+  catalogManagement.quenLkg();
+  assert.equal(docKy('07.2026').rows[0].c5, 'P11', 'nạp bản nhớ cho đời 11');
+
+  /* ‼ Bản đầu tôi viết chỗ này bằng `arguments.callee` trong hàm mũi tên — nó ném lỗi,
+   * `readCache` nuốt lỗi và trả `null`, rồi nhánh kiểm bị bỏ qua ⇒ ca kiểm XANH mà chưa
+   * kiểm gì. Lần thứ TÁM trong đợt. Nay dùng hàm có TÊN, và chốt `ketQua` khác `null`
+   * để không bao giờ xanh nhờ đường lỗi. */
+  const goc = fs.statSync;
+  let lanSoi = 0;
+  function soiCoChen(duongDan, opt) {
+    const ra = goc(duongDan, opt);
+    if (String(duongDan) === FILE_LKG) {
+      lanSoi += 1;
+      // Ngay sau lượt soi ĐẦU (lượt lấy khoá bản nhớ), đổi file sang đời 12.
+      if (lanSoi === 1) { fs.statSync = goc; ghiLkg(12); fs.statSync = soiCoChen; }
+    }
+    return ra;
+  }
+  fs.statSync = soiCoChen;
+  let ketQua;
+  try { ketQua = docKy('07.2026'); } finally { fs.statSync = goc; }
+
+  assert.ok(lanSoi >= 2, `phải soi căn cước ÍT NHẤT HAI lần (lấy khoá + hậu kiểm), đang soi ${lanSoi}`);
+  assert.notEqual(ketQua, null,
+    'trả null nghĩa là đường lỗi đã nuốt mất phép kiểm — ca này khi ấy xanh vì lý do sai');
+  assert.equal(ketQua.rows[0].c5, 'P12',
+    'trả bản cũ P11 sau khi đĩa đã sang P12 ⇒ CEO đọc danh mục cũ, sai im lặng');
+});

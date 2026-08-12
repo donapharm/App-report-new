@@ -1,3 +1,37 @@
+### 2026-08-12 08:00 (giờ VN) — 🔁 Sửa một chỗ rồi để nguyên chỗ song song
+
+Bot soi `2da41bd` (trước bảng khai báo `5c8d930` và bản thả chủ động `d0f4613`). Hai
+phát hiện mới, cả hai vẫn đúng với bản hiện tại — và cả hai đều **cùng một bệnh**.
+
+**① Trúng bản nhớ cũng phải hậu kiểm.** Tôi hậu kiểm ở đường **đọc đĩa** rồi tự cho là
+xong, nhưng đường **trúng bản nhớ** vẫn giữ nguyên khe cũ: lấy căn cước → tra bản nhớ →
+trả về; file đổi giữa ba bước đó thì ta trả kết luận của đời cũ. Bot dựng lại được ở cả
+`nhoSnapshot` lẫn `nhoLkg`. → Soi lại căn cước **sau** khi lấy được bản nhớ; lệch thì bỏ
+đường tắt, đi đọc đĩa.
+
+**② Viết tắt tiền dính liền số vẫn lọt:** `12k` · `12 K` · `12tr` · `12 tr`. Cay nhất là
+bản `2da41bd` **đã có** `tr\\b|k\\b`, rồi tôi **làm rơi mất** khi viết lại thành hai điều
+kiện — **sửa một chỗ làm hỏng chỗ đã đúng**. Nay tách riêng: `k`/`tr` phải **đi ngay sau
+một chữ số**, vì chúng là chữ cái thường gặp trong tên (`Vitamin K`, `Kho 3`).
+Kiểm cả hai chiều, đủ mười một dạng phải bắt và chín dạng không được bắt nhầm.
+
+**‼ CON SỐ TÔI CẦN, BOT ĐÃ CHO: trần PM2 là 900 MiB.**
+- Ổn định sau 60–75 giây: **659 MiB** — **dưới** trần, đạt.
+- **Đỉnh khi phân tích: 1,36 GiB — VƯỢT trần.**
+Đỉnh này là **cố hữu**: phân tích một file JSON 377 MB thì phải nắm cả cây trong RAM.
+Bản thả chủ động (`d0f4613`) chỉ chữa được phần **giữ lại**, không chữa được **đỉnh**.
+⇒ **Muốn qua trần thì phải tách file LKG theo kỳ.** Bot đã khảo sát sẵn và ghi trong
+`LKG-DESIGN.md` (đọc bằng streaming, không `JSON.parse` cả khối). Tách xong thì cold chỉ
+đọc đúng kỳ đang xem — giải **cùng lúc** cả đỉnh RAM lẫn 13 giây còn lại.
+
+**Lỗi phụ tự bắt — lần thứ TÁM:** ca kiểm B5 bản đầu tôi viết `arguments.callee` trong
+hàm mũi tên. Nó ném lỗi, `readCache` nuốt lỗi trả `null`, nhánh kiểm bị bỏ qua ⇒ **ca
+kiểm xanh mà chưa kiểm gì**. Nay dùng hàm có tên, chốt `ketQua !== null` và đòi soi căn
+cước **ít nhất hai lần** — không còn đường nào xanh nhờ lỗi.
+
+**Kiểm:** thêm B5. Web **473/473**, server **1289/1296** (7 ca hỏng cố hữu sandbox),
+build xanh.
+
 ### 2026-08-12 07:00 (giờ VN) — 🧹 Hạn giờ của tôi chỉ là hạn DÙNG LẠI, không phải hạn GIỮ
 
 **Bot đo tận nơi và chỉ đúng chỗ sai:**

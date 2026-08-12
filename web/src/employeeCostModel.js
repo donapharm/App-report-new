@@ -791,7 +791,14 @@ const VUNG_GIU = new Set([
  * đề xuất DataHub. Đoán bằng hình dạng chuỗi thì luôn còn kẽ. */
 const CO_CHU_SO = /\d/;
 const DAU_HIEU_TIEN = /(đ|₫|VND|%|tỷ|triệu|ngàn|nghìn)/i;
-const CHUOI_CO_SO = (giaTri) => CO_CHU_SO.test(giaTri) && DAU_HIEU_TIEN.test(giaTri);
+/* ‼ VIẾT TẮT DÍNH LIỀN SỐ: `12k` · `12 K` · `12tr` · `12 tr` (bot audit vòng 10).
+ * Không gộp `k`/`tr` vào danh sách trên được, vì chúng là chữ cái thường gặp trong mã
+ * và tên (`DN007`, `Vitamin K`); phải đòi chúng **đi ngay sau một chữ số** và kết thúc
+ * từ ở đó. Bản trước tôi có `tr\b|k\b` rồi **làm rơi mất** khi viết lại thành hai điều
+ * kiện — sửa một chỗ làm hỏng chỗ đã đúng, nên ca kiểm phải giữ đủ cả bảy dạng. */
+const VIET_TAT_TIEN = /\d\s*(k|tr)\b/i;
+const CHUOI_CO_SO = (giaTri) => CO_CHU_SO.test(giaTri)
+  && (DAU_HIEU_TIEN.test(giaTri) || VIET_TAT_TIEN.test(giaTri));
 
 /* Duyệt cây kèm ĐƯỜNG DẪN, để hỏi được bảng ngữ nghĩa. Thứ tự quyết định:
  *   ① bảng khai báo (chắc chắn nhất)  →  ② mẫu tên  →  ③ mẫu chuỗi (lưới cuối).
