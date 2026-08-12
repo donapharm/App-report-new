@@ -1,3 +1,52 @@
+### 2026-08-12 02:20 (giờ VN) — 📏 Bot đưa cho một PHÉP ĐO thay cho mọi danh sách
+
+**Đính chính của tôi ở vòng trước là SAI.** Tôi bảo bot "đang soi bản cũ" — họ soi đúng
+`91e4239` gồm cả `ad7b132`. Ghi nhận, và ghi luôn để nhớ: đừng vội cãi báo cáo kiểm.
+
+**Thứ quý nhất cả đợt, bot đưa ở vòng này — một ĐỊNH NGHĨA VẬN HÀNH:**
+
+> Số nào **đổi giá trị khi giảm một người góp số**, thì số đó là **tổng toàn đội**.
+
+Họ dò được **112 chỗ đổi, 85 chỗ vẫn còn số**. Danh sách tên trường tôi viết tay bắt
+được **27**. Chỗ trượt: `paymentTeam.totals.*` (8 đường), `penalty.provisionalC45Amount`,
+`provisionalAnnualTotal`, `provisionalColumnTotals.c36/c41/c43/c44/c45` (cả ở
+`summary` lẫn từng kỳ), và thẻ sức khoẻ `costRevenueRatio.value` — cái cuối là **chuỗi
+đã định dạng**, nên mọi cách chặn theo kiểu số đều trượt.
+
+**Đây là lần thứ SÁU trong đợt tôi vá cái danh sách thay vì bỏ mô hình danh sách đi:**
+module → file → thư mục → ô hiển thị → cách viết tên → tên trường.
+
+**Nay đảo hẳn, lần cuối:** `chanTongToanDoi` **chặn MỌI số** (và mọi chuỗi có định dạng
+tiền/%) trong cây model, rồi **giữ lại một danh sách SỐ CẤU TRÚC** (số đếm, số trang,
+ngưỡng) và **vùng số-của-từng-người**. Cùng lập luận đã dùng cho vùng băm:
+- Quên **chặn** một số tiền ⇒ CEO đọc số sai, **im lặng**.
+- Quên **giữ** một số đếm ⇒ mất số trang / mất "thiếu 1/21", **lộ ra ngay**.
+Hỏng ồn ào sửa được; hỏng im lặng thì không. Nên chiều an toàn là chặn hết rồi mở ra.
+
+**Ca kiểm mới là chính phép đo của bot**, không liệt kê gì: dựng model 21 người và 20
+người, **duyệt cả cây**, bắt mọi lá đổi giá trị mà chưa bị chặn. Thêm trường tổng mới ở
+bất kỳ đâu về sau, nó tự bắt.
+
+**Hai lỗi tự bắt được khi làm:**
+1. **Va tên** — `month`/`quarter` vừa là số (tháng mấy) vừa là **tên nhánh chứa tiền**
+   (`bonus.month.amount`, `target.month.target`). Tôi để tên cấu trúc bảo vệ cả nhánh
+   ⇒ toàn bộ tiền trong đó thoát. Nay tên cấu trúc chỉ bảo vệ **số lá**.
+2. **Fixture đoán sai tên trường** — tôi viết `paymentTeam.totals.gross`, bản thật là
+   `total`/`received`/`outstanding`/`firstAdvance`/`second`/`final`/`c44`. Model chuẩn
+   hoá về `undefined`, và ca kiểm sẽ **xanh vì không có gì để so**. Phải dump hình thật
+   ra mới thấy. Lần thứ tư trong đợt dính kiểu "xanh vì lý do sai".
+
+**Về 30 giây nguội — bot đã chỉ đúng thủ phạm, và KHÔNG phải bộ soi:**
+- Catalog LKG phân tích/kiểm đồng bộ: **26.119 ms**
+- Căn cước + khoá: **1.794 ms**
+- Soi lai lịch từ xa: **91,6 ms**
+Tức `catalogManagement.getSnapshot` mang tiếng "chạy nền" nhưng **vẫn chẹn event loop**.
+Đây mới là cái CEO gặp khi bấm F5 sau deploy. Chưa sửa ở commit này.
+
+**Kiểm:** thêm 3 ca phép đo. Web **470/470**, server **1279/1286** (7 ca hỏng cố hữu
+của sandbox — bot báo môi trường họ chỉ hỏng 1 ca VP018, tức 6 ca export là do sandbox
+ở đây), `npm run build` xanh.
+
 ### 2026-08-12 01:30 (giờ VN) — 🧱 Bỏ máy quét chuỗi, chặn ở TẦNG DỮ LIỆU
 
 Bot soi `12bd6eb` (chưa lấy `ad7b132`, nên ba lỗ backend họ nêu lại **đã vá ở vòng

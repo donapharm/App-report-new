@@ -660,24 +660,71 @@ function periodViewModel(payload = {}) {
   };
 }
 
-/* ═══ CHẶN Ở TẦNG DỮ LIỆU, KHÔNG PHẢI TẦNG HIỂN THỊ ═════════════════════════════
+/* ═══ CHẶN TỔNG ĐỘI — THEO PHÉP ĐO, KHÔNG THEO DANH SÁCH ══════════════════════
  *
- * Bot audit đợt 17 vòng 5 phá được máy quét của tôi bằng bốn đường: đặt biến trung
- * gian (`const t = model.summary.periodTotal`), destructuring, truy cập ngoặc vuông
- * (`model.summary['periodTotal']`), và dán nhãn miễn trừ không kèm giải thích.
+ * Bot audit đợt 17 vòng 6 đưa cho tôi định nghĩa vận hành, thay cho mọi danh sách:
  *
- * Họ đúng, và đúng ở chỗ căn bản: **quét chuỗi ở tầng hiển thị là sai tầng.** Một cái
- * tên trường có vô số cách viết ra; tôi không bao giờ chặn hết được bằng cách đọc chữ.
- * Đây là lần thứ năm trong đợt tôi vá cái danh sách thay vì bỏ mô hình danh sách đi.
+ *     Số nào ĐỔI GIÁ TRỊ khi giảm một người góp số, thì số đó là TỔNG TOÀN ĐỘI.
  *
- * Nay chặn ở chỗ số được SINH RA: thiếu người thì mấy con số tổng đội **không tồn tại**
- * trong model nữa. Alias không cứu được, destructuring không cứu được, ngoặc vuông
- * không cứu được — không ai đọc ra được một giá trị đã không có ở đó. Máy quét ở tầng
- * hiển thị vẫn giữ, nhưng từ nay nó là lưới thứ hai, không phải lưới duy nhất.
+ * Họ dò được **112 chỗ đổi, 85 chỗ vẫn còn số**. Danh sách tên trường tôi viết tay chỉ
+ * bắt được 27 — thiếu `paymentTeam.totals.*`, `provisionalColumnTotals.*`,
+ * `provisionalAnnualTotal`, `provisionalC45Amount`, và thẻ sức khoẻ `costRevenueRatio`.
  *
- * ‼ Chỉ xoá số TỔNG TOÀN ĐỘI. Tổng phụ của TỪNG NV là số thật của người đó, thiếu người
- * khác không làm nó sai — xoá đi là giấu dữ liệu đang có.
+ * Đây là lần thứ SÁU trong đợt này tôi vá cái danh sách thay vì bỏ mô hình danh sách:
+ * module → file → thư mục → ô hiển thị → cách viết tên → tên trường. Nên lần này đảo:
+ *
+ *   **CHẶN MỌI SỐ. Giữ lại một danh sách SỐ CẤU TRÚC.**
+ *
+ * Vì hai kiểu quên hỏng theo hai cách khác hẳn — cùng lập luận đã dùng cho vùng băm:
+ *   · Quên CHẶN một số tiền  ⇒ CEO đọc một con số sai, **im lặng**.
+ *   · Quên GIỮ một số đếm    ⇒ màn hình mất số trang / mất "thiếu 1/21", **lộ ra ngay**.
+ * Hỏng ồn ào thì sửa được; hỏng im lặng thì không.
+ *
+ * Ca kiểm `EmployeeCost.doTongDoiBangPhepDo` chạy đúng phép đo đó: dựng model 21 người
+ * và 20 người, duyệt cả cây, bắt mọi lá đổi giá trị mà chưa bị chặn. Thêm trường tổng
+ * mới về sau, nó tự bắt.
  */
+
+/* Số ĐẾM và số cấu trúc — PHẢI giữ. Chặn mấy số này mới là sai: màn hình cần nói được
+ * "thiếu 1/21 người", cần số trang, cần ngưỡng. */
+const SO_CAU_TRUC = new Set([
+  'unavailableEmployeeCount', 'unavailablePairs', 'staleEmployeeCount', 'employeeCount',
+  'contributors', 'appliedContributors', 'xuContributors', 'unavailableCount',
+  'xuEmployeeCount', 'matchedRows', 'totalRows', 'rowCount', 'filteredRows',
+  'dynamicCount', 'lineCount', 'exceptionCount', 'redCount', 'yellowCount',
+  'rate', 'threshold', 'page', 'pageSize', 'totalPages', 'closeDay', 'schemaVersion',
+  'appliedPeriods', 'unresolvedPeriods', 'pos', 'carry', 'quarter', 'month', 'year',
+]);
+
+/* Vùng số CỦA TỪNG NGƯỜI (và dữ liệu dòng) — giữ nguyên. Thiếu người khác không làm số
+ * của người này sai; giấu đi mới là giấu dữ liệu đang có. */
+const VUNG_GIU = new Set([
+  'employeeSubtotals', 'employees', 'rows', 'unavailableEmployees', 'staleEmployees',
+  'columns', 'dimensionColumns', 'costColumns', 'filterOptions', 'dates', 'annualLabels',
+  'thieuNguoiCodes', 'priorityRates', 'priorityTargets',
+]);
+
+// Chuỗi đã định dạng tiền/tỷ lệ: "1.444.932.127đ", "110,9%", "31.812.041 ₫"…
+const CHUOI_CO_SO = /\d[\d.,]{2,}\s*(đ|₫|%)/;
+
+function chanSauTrongCay(nut, khoaCha = '') {
+  if (typeof nut === 'number') return Number.isFinite(nut) ? null : nut;
+  if (typeof nut === 'string') return CHUOI_CO_SO.test(nut) ? 'Chưa đủ dữ liệu' : nut;
+  if (Array.isArray(nut)) return nut.map((con) => chanSauTrongCay(con, khoaCha));
+  if (!nut || typeof nut !== 'object') return nut;
+  const ra = {};
+  for (const [khoa, con] of Object.entries(nut)) {
+    /* ‼ VA TÊN: `month`/`quarter` vừa là SỐ (tháng mấy, quý mấy) vừa là TÊN NHÁNH chứa
+     * tiền (`bonus.month.amount`, `target.month.target`). Nếu tên cấu trúc bảo vệ cả
+     * nhánh thì toàn bộ tiền trong đó thoát — chính ca kiểm phép đo bắt được.
+     * Nên: tên cấu trúc chỉ bảo vệ SỐ LÁ; muốn giữ cả nhánh phải khai ở `VUNG_GIU`. */
+    if (VUNG_GIU.has(khoa)) ra[khoa] = con;
+    else if (SO_CAU_TRUC.has(khoa) && typeof con !== 'object') ra[khoa] = con;
+    else ra[khoa] = chanSauTrongCay(con, khoa);
+  }
+  return ra;
+}
+
 function chanTongToanDoi(model) {
   const match = employeeCostKpiMatch(model);
   const thieuNguoi = !!model.allEmployees && (
@@ -686,47 +733,43 @@ function chanTongToanDoi(model) {
   );
   if (!thieuNguoi) return { ...model, thieuNguoi: false };
 
-  const xoa = (doiTuong, truong) => {
-    if (!doiTuong || typeof doiTuong !== 'object') return doiTuong;
-    const ra = { ...doiTuong };
-    for (const ten of truong) if (ten in ra) ra[ten] = null;
-    return ra;
+  /* Những nhánh KHÔNG phải số tổng đội, giữ nguyên hoàn toàn: danh sách người/dòng, bộ
+   * lọc, trạng thái khoá sổ, và chính phép đếm "thiếu ai". */
+  const giuNguyen = {
+    match: model.match,
+    periodClose: model.periodClose,
+    filters: model.filters,
+    filterOptions: model.filterOptions,
+    search: model.search,
+    ratePolicy: model.ratePolicy,
+    columns: model.columns,
+    dimensionColumns: model.dimensionColumns,
+    costColumns: model.costColumns,
+    rows: model.rows,
   };
-  const TONG_KY = ['periodTotal', 'provisionalPeriodTotal', 'monthlyTotal',
-    'provisionalMonthlyTotal', 'annualTotal', 'afterPenaltyTotal'];
-  const TONG_PHAT = ['total', 'provisionalTotal', 'baseTotal', 'afterPenaltyTotal',
-    'appliedAmount', 'xuAmount', 'provisionalXuAmount'];
-  // Tiền/tỷ lệ nằm ở TẦNG TRONG của bonus và target.
-  const TIEN_KY = ['amount', 'target', 'achieved', 'pct', 'base', 'priority', 'excess'];
-  const xoaTang = (doiTuong, tang, truong) => {
-    if (!doiTuong || typeof doiTuong !== 'object') return doiTuong;
-    const ra = { ...doiTuong };
-    for (const ten of tang) if (ra[ten] && typeof ra[ten] === 'object') ra[ten] = xoa(ra[ten], truong);
-    return xoa(ra, truong);
-  };
-
+  const daChan = chanSauTrongCay(model);
   return {
-    ...model,
+    ...daChan,
+    ...giuNguyen,
+    // `periods` cần chặn tổng nhưng GIỮ `employeeSubtotals`, `rows`, `match` của từng kỳ.
+    periods: (Array.isArray(model.periods) ? model.periods : []).map((period) => ({
+      ...chanSauTrongCay(period),
+      match: period.match,
+      rows: period.rows,
+      columns: period.columns,
+      employeeSubtotals: period.employeeSubtotals,
+      // Σ ngày gộp cả đội theo từng ngày ⇒ thiếu người thì nó sai y như tổng tháng.
+      daily: period.daily && typeof period.daily === 'object'
+        ? { ...period.daily, totals: [] } : period.daily,
+    })),
+    empCode: model.empCode,
+    from: model.from,
+    to: model.to,
+    period: model.period,
+    allEmployees: model.allEmployees,
+    note: model.note,
     thieuNguoi: true,
     thieuNguoiCodes: Array.isArray(match.unavailableEmployees) ? match.unavailableEmployees : [],
-    summary: xoa(model.summary, TONG_KY),
-    penalty: xoa(model.penalty, TONG_PHAT),
-    /* `bonus`/`target` được chuẩn hoá thành hai tầng `month`/`quarter` — xoá ở tầng
-     * ngoài là xoá trường không tồn tại, tức là **không xoá gì cả** mà ca kiểm vẫn xanh.
-     * Phải xoá đúng tầng có số. */
-    bonus: xoaTang(model.bonus, ['month', 'quarter'], TIEN_KY),
-    /* Target tổng đội đổi theo số người góp số (bot: 21 → 20 làm giá trị ĐỔI mà ô vẫn
-     * hiện số). Số nào đổi theo số người góp thì nó là tổng toàn đội, dù nhãn không có
-     * chữ "tổng". */
-    target: xoaTang(model.target, ['month', 'quarter'], TIEN_KY),
-    periods: (Array.isArray(model.periods) ? model.periods : []).map((period) => ({
-      ...period,
-      summary: xoa(period.summary, TONG_KY),
-      // `employeeSubtotals` GIỮ NGUYÊN — số của từng người, không phải tổng đội.
-      daily: period.daily && typeof period.daily === 'object'
-        ? { ...period.daily, totals: [] }
-        : period.daily,
-    })),
   };
 }
 
