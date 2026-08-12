@@ -1,3 +1,35 @@
+### 2026-08-12 07:00 (giờ VN) — 🧹 Hạn giờ của tôi chỉ là hạn DÙNG LẠI, không phải hạn GIỮ
+
+**Bot đo tận nơi và chỉ đúng chỗ sai:**
+- Cold **13.163 ms** · warm **120–148 ms** (không tụt — snapshot từng kỳ vẫn giữ, đúng ý đồ).
+- Đỉnh RSS ~**1,36 GiB**, đỉnh heap ~**1,21 GiB**.
+- **Sau 30 giây rảnh: 3/6 tiến trình VẪN giữ 1,36 GiB**, 3/6 đã về ~659 MiB.
+- Phải tới **60–75 giây** mới ổn định ở **659 MiB / heap 523 MiB**.
+
+**Nguyên nhân là lỗi khái niệm của tôi, không phải lỗi con số.** Tôi gộp hai thứ khác
+nhau làm một:
+- **hạn DÙNG LẠI** — "bản này còn xài được không";
+- **hạn GIỮ** — "còn nắm bộ nhớ này tới bao giờ".
+
+Tôi chỉ kiểm hạn **lúc có người gọi**. Không ai gọi thì tham chiếu vào bản 377 MB vẫn
+còn, nên **GC không được phép thu**. Tức "hạn 10 giây" của tôi chỉ là hạn dùng lại; bộ
+nhớ nằm đó cho tới khi tình cờ có request kế tiếp. Đúng như bot đo.
+
+**Sửa:** thả **chủ động** bằng hẹn giờ — tới hạn là bỏ tham chiếu, không chờ ai gọi.
+`unref()` để cái hẹn không giữ tiến trình sống thêm, và `quenLkg()` huỷ luôn hẹn cũ để
+một cái hẹn quá đát không xoá nhầm bản vừa đọc.
+
+**Ca kiểm B4 chờ THẬT 11 giây rồi soi tham chiếu**, không gọi thêm gì — vì nếu phải gọi
+mới thả thì đúng là cái lỗi này. B4b chốt việc huỷ hẹn giờ khi quên tay.
+
+**Ghi lại một điều đáng nhớ:** đây là lần thứ ba trong đợt tôi làm đúng một kiểu —
+**viết ra một cơ chế rồi không nối nó vào chỗ cần** (`dangTinCay()` không ai gọi · nhãn
+miễn trừ không đòi lý do · nay là hạn giờ không ai thi hành). Cơ chế chỉ có giá trị khi
+có thứ **bắt buộc** nó chạy.
+
+**Kiểm:** thêm B4/B4b. Server **1288/1295** (7 ca hỏng cố hữu sandbox), build xanh.
+**Cần bot đo lại RSS sau 30 giây rảnh** — đó là con số quyết định deploy.
+
 ### 2026-08-12 06:10 (giờ VN) — 📖 Thôi ĐOÁN, chuyển sang KHAI BÁO ngữ nghĩa theo đường dẫn
 
 **Bot xác nhận `e51b156` sạch ở ba mặt lớn:**

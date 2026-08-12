@@ -236,10 +236,27 @@ function canCuocFile(duongDan) {
   } catch { return null; }
 }
 
+/* ‼ HẠN GIỜ THỤ ĐỘNG KHÔNG THẢ RAM (bot audit vòng 10 — đo tận nơi, đúng).
+ *
+ * Bản trước tôi chỉ kiểm `hetHanLuc` **lúc có người gọi**. Không ai gọi thì `nhoLkg.value`
+ * vẫn trỏ vào bản 377 MB đã phân tích, nên GC **không được phép** thu. Bot đo: sau 30
+ * giây rảnh, **3/6 tiến trình vẫn giữ 1,36 GiB**; phải tới 60–75 giây mới về 659 MiB.
+ * Tức "hạn 10 giây" của tôi chỉ là hạn **dùng lại**, không phải hạn **giữ**.
+ *
+ * Nay thả CHỦ ĐỘNG bằng hẹn giờ: tới hạn là bỏ tham chiếu, không chờ ai gọi. `unref()`
+ * để cái hẹn giờ này không giữ tiến trình sống thêm. */
+let henGioThaLkg = null;
+function henGioTha(sauBaoLau) {
+  if (henGioThaLkg) clearTimeout(henGioThaLkg);
+  henGioThaLkg = setTimeout(() => { nhoLkg = null; henGioThaLkg = null; }, sauBaoLau);
+  if (typeof henGioThaLkg.unref === 'function') henGioThaLkg.unref();
+}
+
 /** Xoá bản nhớ — GỌI SAU MỌI LƯỢT GHI LKG, nếu không lượt đọc sau ăn phải bản cũ. */
 function quenLkg() {
   nhoLkg = null;
   nhoSnapshot.clear();
+  if (henGioThaLkg) { clearTimeout(henGioThaLkg); henGioThaLkg = null; }
 }
 
 /* Đóng băng SÂU: bản trong RAM được nhiều lượt đọc dùng chung, nên phải cấm sửa. Không
@@ -269,6 +286,7 @@ function docLkg() {
     const value = JSON.parse(tho);
     if (!nhoLkg || nhoLkg.print !== truoc) nhoSnapshot.clear();
     nhoLkg = { print: truoc, value, hetHanLuc: Date.now() + HAN_BAN_PHAN_TICH_MS };
+    henGioTha(HAN_BAN_PHAN_TICH_MS); // thả chủ động, không chờ lượt gọi kế tiếp
     return nhoLkg;
   }
   return { print: null, value: null }; // đổi liên tục ⇒ không kết luận, để người gọi dựng lại
@@ -980,4 +998,6 @@ module.exports = {
    * fixture không thể sai hình — bốn ca kiểm vòng trước xanh giả vì tôi tự bịa fixture
    * rồi nó trượt kiểm hợp lệ và trả `null` (bot audit vòng 8). */
   readCacheForTests: readCache,
+  // Ca kiểm cần soi tham chiếu có được THẢ thật không, không chỉ có hết hạn không.
+  conGiuBanPhanTichForTests: () => nhoLkg !== null,
   writeCacheForTests: writeCacheAtomic, configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };

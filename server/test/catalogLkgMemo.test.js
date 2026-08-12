@@ -170,3 +170,43 @@ test('B3 file đổi NGAY TRONG LÚC đọc ⇒ không được nhớ bản tr�
     }
   } finally { fs.readFileSync = goc; }
 });
+
+
+/* B4 — HẠN GIỜ PHẢI THẢ RAM, KHÔNG CHỈ HẾT HIỆU LỰC.
+ *
+ * Bot audit vòng 10 đo tận nơi: sau **30 giây rảnh, 3/6 tiến trình vẫn giữ 1,36 GiB**;
+ * phải tới 60–75 giây mới về 659 MiB. Vì hạn giờ của tôi chỉ được kiểm **lúc có người
+ * gọi** — không ai gọi thì tham chiếu vào bản 377 MB vẫn còn, GC không được phép thu.
+ *
+ * Phân biệt hai thứ tôi từng gộp làm một:
+ *   · hạn DÙNG LẠI — "bản này còn xài được không";
+ *   · hạn GIỮ      — "còn nắm bộ nhớ này tới bao giờ".
+ * Cái thứ hai phải CHỦ ĐỘNG bỏ tham chiếu, nếu không RAM chỉ về khi tình cờ có người gọi.
+ */
+test('B4 tới hạn thì THẢ tham chiếu, không cần ai gọi', async () => {
+  assert.equal(typeof catalogManagement.conGiuBanPhanTichForTests, 'function',
+    'phải xuất hàm soi tham chiếu, nếu không ca này chỉ đoán');
+  catalogManagement.quenLkg();
+  ghiLkg(9);
+  assert.notEqual(docKy('07.2026'), null);
+  assert.equal(catalogManagement.conGiuBanPhanTichForTests(), true,
+    'vừa đọc xong thì đang giữ bản đã phân tích — đúng, đó là chỗ cứu 26 giây');
+
+  // KHÔNG gọi thêm gì cả. Chỉ chờ. Nếu phải gọi mới thả thì đó là hạn dùng lại, không
+  // phải hạn giữ — và RAM sẽ nằm đó cho tới lúc tình cờ có request.
+  await new Promise((xong) => { setTimeout(xong, 11_000); });
+  assert.equal(catalogManagement.conGiuBanPhanTichForTests(), false,
+    'quá hạn mà vẫn giữ tham chiếu ⇒ GC không thu được ⇒ 1,36 GiB nằm lại như bot đo');
+
+  // Thả rồi vẫn phải đọc lại được, không phải thả là hỏng.
+  assert.notEqual(docKy('07.2026'), null, 'thả xong lượt sau vẫn phải dựng lại được');
+});
+
+test('B4b `quenLkg()` huỷ luôn hẹn giờ — không để cái hẹn cũ xoá bản mới', () => {
+  ghiLkg(10);
+  catalogManagement.quenLkg();
+  assert.equal(catalogManagement.conGiuBanPhanTichForTests(), false, 'quên là sạch ngay');
+  assert.notEqual(docKy('07.2026'), null);
+  assert.equal(catalogManagement.conGiuBanPhanTichForTests(), true,
+    'đọc lại thì giữ lại — và hẹn giờ mới phải là hẹn của lần này, không phải lần trước');
+});
