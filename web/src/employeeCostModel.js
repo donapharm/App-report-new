@@ -718,14 +718,27 @@ const VUNG_GIU = new Set([
   'thieuNguoiCodes', 'priorityRates', 'priorityTargets',
 ]);
 
-/* Chuỗi đã định dạng tiền/tỷ lệ. ‼ KHÔNG đòi tối thiểu 3 chữ số: bot bắt được
- * "95%", "0%", "0 ₫" lọt qua bản trước vì tôi viết `{2,}`. Số ngắn cũng là số, và
- * "0 ₫" hiển thị khi thiếu người còn nguy hiểm hơn số dài — nó trông như đã chốt. */
-const CHUOI_CO_SO = /\d[\d.,]*\s*(đ|₫|%|tỷ|triệu|nghìn|tr\b|k\b)/i;
+/* Chuỗi đã định dạng tiền/tỷ lệ.
+ *
+ * ‼ KÝ HIỆU TIỀN ĐỨNG TRƯỚC HAY SAU ĐỀU ĐƯỢC (bot audit vòng 9). Bản trước tôi viết
+ * `số` rồi mới tới `đơn vị`, nên `₫1.000` và `VND 1.000` lọt sạch. Cũng lọt `12 ngàn`
+ * vì tôi chỉ liệt kê `nghìn`. Lại là kiểu sai cũ: tôi hình dung MỘT cách viết rồi coi
+ * đó là mọi cách viết.
+ *
+ * Nay tách hai điều kiện, không ràng buộc thứ tự:
+ *   ① chuỗi có chữ số, VÀ  ② chuỗi có dấu hiệu tiền/tỷ lệ ở bất kỳ đâu.
+ *
+ * ‼ GIỚI HẠN CÒN LẠI, nói thẳng: chuỗi trần như `"12.5"` KHÔNG chặn được, vì không có
+ * gì phân biệt nó với số phiên bản `3.4` hay mã kỳ `07.2026`. Cách hết hẳn là backend
+ * gắn nhãn đơn vị cho từng trường (`unit: 'VND' | 'count'`) — đã ghi vào CHANGELOG để
+ * đề xuất DataHub. Đoán bằng hình dạng chuỗi thì luôn còn kẽ. */
+const CO_CHU_SO = /\d/;
+const DAU_HIEU_TIEN = /(đ|₫|VND|%|tỷ|triệu|ngàn|nghìn)/i;
+const CHUOI_CO_SO = (giaTri) => CO_CHU_SO.test(giaTri) && DAU_HIEU_TIEN.test(giaTri);
 
 function chanSauTrongCay(nut, khoaCha = '') {
   if (typeof nut === 'number') return Number.isFinite(nut) ? null : nut;
-  if (typeof nut === 'string') return CHUOI_CO_SO.test(nut) ? 'Chưa đủ dữ liệu' : nut;
+  if (typeof nut === 'string') return CHUOI_CO_SO(nut) ? 'Chưa đủ dữ liệu' : nut;
   if (Array.isArray(nut)) return nut.map((con) => chanSauTrongCay(con, khoaCha));
   if (!nut || typeof nut !== 'object') return nut;
   const ra = {};

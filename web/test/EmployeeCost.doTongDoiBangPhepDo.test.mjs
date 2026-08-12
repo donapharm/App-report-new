@@ -58,7 +58,9 @@ function duyetLa(nut, duong = '$', ra = new Map()) {
 const soTien = (giaTri) => typeof giaTri === 'number' && Number.isFinite(giaTri);
 // Chuỗi có định dạng tiền/tỷ lệ: "1.444.932.127đ", "110,9%", "31.812.041 ₫"…
 // Số NGẮN cũng là số: bot bắt "95%", "0%", "0 ₫" lọt qua bản `{2,}` trước.
-const chuoiCoSo = (giaTri) => typeof giaTri === 'string' && /\d[\d.,]*\s*(đ|₫|%|tỷ|triệu|nghìn)/i.test(giaTri);
+// Ký hiệu tiền đứng TRƯỚC hay SAU đều được — bot bắt `₫1.000`, `VND 1.000`, `12 ngàn`.
+const chuoiCoSo = (giaTri) => typeof giaTri === 'string'
+  && /\d/.test(giaTri) && /(đ|₫|VND|%|tỷ|triệu|ngàn|nghìn)/i.test(giaTri);
 
 function payload({ thieu = [] } = {}) {
   const gopSo = 21 - thieu.length;
@@ -129,6 +131,15 @@ function payload({ thieu = [] } = {}) {
         key: 'tongDong', label: 'Tổng', value: `${tien(1_000_000)}đ · ${gopSo * 100} dòng`, sub: '', tone: 'ok',
       }, {
         key: 'doanhSo', label: 'Doanh số', value: `${(30.9 * heSo).toFixed(1)} tỷ`, sub: '', tone: 'ok',
+      }, {
+        // Bốn dạng bot bắt ở vòng 9 — ký hiệu tiền đứng TRƯỚC số, và đơn vị "ngàn".
+        key: 'kyHieuTruoc', label: 'Ký hiệu trước', value: `₫${tien(1_000)}`, sub: '', tone: 'ok',
+      }, {
+        key: 'vndTruoc', label: 'VND trước', value: `VND ${tien(1_000)}`, sub: '', tone: 'ok',
+      }, {
+        key: 'vndSau', label: 'VND sau', value: `${tien(1_000)} VND`, sub: '', tone: 'ok',
+      }, {
+        key: 'ngan', label: 'Ngàn', value: `${tien(12)} ngàn`, sub: '', tone: 'ok',
       }],
     },
     revenueRecon: { total: tien(32_000_000_000), shown: tien(32_000_000_000), gap: 0, balanced: true },

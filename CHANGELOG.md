@@ -1,3 +1,41 @@
+### 2026-08-12 05:20 (giờ VN) — 💱 Ký hiệu tiền đứng TRƯỚC số cũng là tiền
+
+Bot soi `37131fc`; năm bản vá cache nằm ở `e51b156` họ chưa lấy, nên phần "cache vẫn
+BLOCK" là nói về bản cũ. Phần **thật sự mới** là chuỗi tiền:
+
+**Lọt: `₫1.000`, `VND 1.000`, `12 ngàn`, và chuỗi trần `12.5`.**
+
+Bản trước tôi viết mẫu theo thứ tự **số rồi mới tới đơn vị**, nên mọi cách viết có ký
+hiệu **đứng trước** đều thoát. Và tôi liệt kê `nghìn` mà quên `ngàn`. Lại đúng kiểu sai
+cũ của cả đợt: **tôi hình dung MỘT cách viết rồi coi đó là mọi cách viết** — y như danh
+sách module, danh sách file, danh sách tên trường trước đó.
+
+**Nay tách hai điều kiện, bỏ ràng buộc thứ tự:** chuỗi có chữ số **và** có dấu hiệu
+tiền/tỷ lệ ở bất kỳ đâu. Kiểm cả hai chiều: bắt được `95%`, `0 ₫`, `1,5 triệu`, `12 ngàn`,
+`₫1.000`, `VND 1.000`, `1.000 VND`; **không** bắt nhầm `2026-07`, `v3.4`, `DN007`,
+`07.2026`, `2 NV quá hạn`, `trang 2/7`.
+
+**‼ GIỚI HẠN CÒN LẠI — nói thẳng, không giấu:** chuỗi trần `"12.5"` **không chặn được**.
+Không có gì phân biệt nó với số phiên bản `3.4` hay mã kỳ `07.2026`. Đoán bằng hình dạng
+chuỗi thì luôn còn kẽ.
+**Cách hết hẳn:** backend gắn **nhãn đơn vị** cho từng trường (`unit: 'VND' | 'count'`).
+Lúc đó không phải đoán nữa — đây mới là lời giải đúng cho cả họ vấn đề "cái gì là tiền",
+và cũng là câu trả lời cho cảnh báo của bot rằng `aggregateMoneyCount` sẽ lọt chỉ vì tên
+tận cùng bằng `Count`. **Đã hỏi bot ý kiến trước khi đề xuất DataHub.**
+
+**Số bot đo ở `37131fc`:**
+- Cold **13.930 ms** (từ 28.161), warm **124,8 ms** — mỗi tiến trình cold đọc file
+  377 MB **đúng 1 lần**, warm **0 lần**.
+- Bổ nhỏ: đọc 5.324 · parse 3.028 · kiểm 3.197 · căn cước 1.986 · mạng 62,7 ms.
+- **RSS giữ lại ~1,371 GiB · heap đỉnh ~1,203 GiB** — bot nói thẳng *"mức RAM này chưa
+  an toàn để deploy mặc định"*. Đo trên bản CHƯA có bản vá hạ hạn giữ xuống 10 giây
+  (`e51b156`); cần đo lại.
+- **Chặn oan: KHÔNG còn** trên toàn bộ danh mục cấu trúc. Màn hình giữ đúng trang 2/7,
+  "2 NV quá hạn", "3 NV không có ứng lần 1", không còn `null NV`.
+- Tổng tài chính: **0 đường lọt** trên phép dò thật 21→20.
+
+**Kiểm:** web **471/471**, server **1286/1293** (7 ca hỏng cố hữu sandbox), build xanh.
+
 ### 2026-08-12 04:40 (giờ VN) — 🪞 Bốn ca kiểm của tôi XANH GIẢ; và bốn lỗ của bản nhớ
 
 **Điều nặng nhất bot bắt được vòng này là về CA KIỂM CỦA TÔI, không phải về code:**
