@@ -1,3 +1,54 @@
+### 2026-08-12 04:40 (giờ VN) — 🪞 Bốn ca kiểm của tôi XANH GIẢ; và bốn lỗ của bản nhớ
+
+**Điều nặng nhất bot bắt được vòng này là về CA KIỂM CỦA TÔI, không phải về code:**
+bốn ca kiểm memo tôi viết vòng trước dùng **fixture không hợp lệ**, nên `readCache` ném
+lỗi và trả `null` — mà ca kiểm chỉ **đếm lượt đọc đĩa**, nên vẫn xanh. Chúng chứng minh
+đúng một điều vô nghĩa: *"không đọc đĩa hai lần khi không có gì để đọc"*.
+
+**Lần thứ SÁU trong đợt** tôi dính "xanh vì lý do sai" (A6c xoá cache · PeriodBlock cắt
+ngược · dấu phân cách · fixture paymentTeam · `?.` nuốt lượt gọi · nay là fixture LKG).
+
+**Cách chữa gốc, không phải chữa bốn ca đó:** fixture nay dựng bằng **CHÍNH đường ghi
+của app** (`writeCacheAtomic`), nên không thể sai hình. Và ngay khi đổi sang đường ghi
+thật, nó **từ chối liên tiếp bốn lần**: thiếu `c4`, thiếu `c15`, thiếu `c17/c31`, sai
+khoá cặp (đơn vị, QLNB). Tôi tự bịa fixture thì **không bao giờ biết mình thiếu gì**.
+Mọi ca nay đòi snapshot **khác `null`** và so **nội dung**, không chỉ đếm lượt đọc.
+
+**Bốn lỗ của bản nhớ, bot dựng được cả bằng hai tiến trình thật:**
+
+**① Dùng chung tham chiếu.** Bản trả ra chia sẻ `rows`/`catalog`/`history`; người gọi
+lỡ `push`/`sort` là làm bẩn bản trong RAM, mọi lượt sau ăn phải — và bẩn kiểu đó **im
+lặng**. → Đóng băng SÂU trước khi trả.
+
+**② `getSnapshot()` có ô nhớ riêng 2 phút KHÔNG gắn căn cước file.** Tiến trình khác
+(materializer) ghi bản MỚI xuống đĩa thì tiến trình đang chạy **không có cách nào biết**
+— đường đọc thẳng thấy bản mới, `getSnapshot()` vẫn trả bản cũ. **Hai đường trong cùng
+một app trả hai số khác nhau.** → Ô nhớ nay phải khớp cả căn cước file.
+
+**③ Căn cước thiếu `dev`, dùng mili giây.** Hai file khác thiết bị trùng inode là chuyện
+thường; hai lần ghi trong cùng một mili giây thì khoá **không đổi**. → Thêm `dev`, đổi
+sang **nano giây dạng bigint**.
+
+**④ Chỉ `stat` TRƯỚC khi đọc (TOCTOU).** File đổi ngay trong lúc đọc thì ta gắn nội dung
+mới vào căn cước cũ — tự tạo một bản nhớ nói dối. → Hậu kiểm `stat` lại sau khi đọc,
+lệch thì đọc lại (tối đa 3 lần).
+
+**⑤ RAM: bot đo RSS 1,37 GiB mỗi tiến trình.** Ghim cả bản 377 MB đã phân tích là quá
+đắt. → Bản phân tích nay chỉ sống **10 giây** (đủ gộp một chùm request), còn snapshot
+từng kỳ giữ 60 giây — chúng nhỏ hơn file gốc rất nhiều, và chính chúng mới là thứ cứu
+được 26 giây.
+
+**Kết quả hiệu năng bot đo ở `1f2e4f6`:** cold **28.161 → 13.596 ms (−52%)**, warm
+**120 ms**, mỗi request cold còn **đúng 1 lượt** đọc file 377 MB. Vẫn còn chẹn event
+loop khi phân tích — chưa xử lý ở vòng này.
+
+**Còn nợ, ghi để không quên:** chuỗi trần `"12.5"` (không đơn vị) vẫn lọt bộ chặn — chưa
+có cách phân biệt nó với số phiên bản. Và bot cảnh báo mẫu hậu tố có rủi ro ngược: một
+trường tương lai tên `aggregateMoneyCount` sẽ **lọt** chỉ vì tận cùng bằng `Count`.
+
+**Kiểm:** 7 ca memo nay chạy trên fixture THẬT (thêm B1/B2/B3). Web **471/471**, server
+**1286/1293** (7 ca hỏng cố hữu sandbox), build xanh.
+
 ### 2026-08-12 03:45 (giờ VN) — 🔧 Chặn oan bộ đếm và lọt tiền dạng ngắn — bot chỉ tận nơi trên MÀN
 
 Bot soi `891fa1f`, nêu hai lỗi **mới do chính bản vá của tôi sinh ra**. Tôi đã vá một

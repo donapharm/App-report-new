@@ -204,14 +204,35 @@ function dqSnapshotFingerprint(snapshot) {
  *
  * ‼ KHÔNG khoá theo đường dẫn suông: file bị ghi đè tại chỗ thì đường dẫn y nguyên mà
  * nội dung đã khác — đúng lỗi đã mất một vòng để gỡ bên `persist`. */
-const HAN_NHO_LKG_MS = 60_000;
-let nhoLkg = null;        // { print, value, hetHanLuc }
-const nhoSnapshot = new Map(); // `${print}|${period}` -> snapshot đã kiểm
+/* ‼ VÒNG 8 — BỐN CA KIỂM CỦA TÔI XANH GIẢ, VÀ BẢN NHỚ CÒN BỐN LỖ (bot audit, đúng cả).
+ *
+ * Nặng nhất: bốn ca kiểm memo tôi viết vòng trước dùng **fixture không hợp lệ**, nên
+ * `readCache` ném lỗi và trả `null` — mà ca kiểm chỉ ĐẾM LƯỢT ĐỌC ĐĨA, nên vẫn xanh.
+ * Chúng chứng minh đúng một điều: "không đọc đĩa hai lần khi không có gì để đọc".
+ * Lần thứ SÁU trong đợt dính "xanh vì lý do sai". Ca kiểm nay đòi snapshot KHÁC null.
+ *
+ * Bốn lỗ của bản nhớ:
+ *   ① Bản trả ra dùng CHUNG tham chiếu `rows`/`catalog`/`history` — người gọi sửa một
+ *      phần tử là làm bẩn luôn bản trong RAM, và mọi lượt đọc sau ăn phải bản bẩn.
+ *   ② Căn cước thiếu `dev`, dùng mili giây thay vì nano giây ⇒ hai file khác thiết bị
+ *      có thể trùng khoá, và file sửa trong cùng một mili giây thì khoá KHÔNG đổi.
+ *   ③ Chỉ `stat` TRƯỚC khi đọc. File đổi ngay trong lúc đọc thì ta gắn nội dung mới vào
+ *      căn cước cũ — đúng lỗi TOCTOU đã gặp bên `persist`.
+ *   ④ Ghim cả bản 377 MB đã phân tích ⇒ bot đo **RSS 1,37 GiB mỗi tiến trình**. Quá đắt.
+ *      Nay giữ bản phân tích rất ngắn (đủ gộp một chùm request), còn snapshot từng kỳ
+ *      thì giữ lâu hơn — chúng nhỏ hơn cả file gốc rất nhiều.
+ */
+const HAN_BAN_PHAN_TICH_MS = 10_000;  // đủ gộp một chùm request, không ghim 377 MB lâu
+const HAN_SNAPSHOT_MS = 60_000;
+let nhoLkg = null;             // { print, value, hetHanLuc } — bản phân tích, sống ngắn
+const nhoSnapshot = new Map(); // `${print}|${period}` -> snapshot đã kiểm, đã đóng băng
 
+/* Căn cước file: thêm `dev` (khác thiết bị thì inode trùng nhau là chuyện thường) và
+ * dùng nano giây dạng bigint — mili giây không phân biệt được hai lần ghi sát nhau. */
 function canCuocFile(duongDan) {
   try {
-    const stat = fs.statSync(duongDan);
-    return `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+    const st = fs.statSync(duongDan, { bigint: true });
+    return `${st.dev}:${st.ino}:${st.size}:${st.mtimeNs}:${st.ctimeNs}`;
   } catch { return null; }
 }
 
@@ -221,23 +242,51 @@ function quenLkg() {
   nhoSnapshot.clear();
 }
 
+/* Đóng băng SÂU: bản trong RAM được nhiều lượt đọc dùng chung, nên phải cấm sửa. Không
+ * đóng băng thì một người gọi lỡ tay `push`/`sort` là mọi lượt sau đọc phải bản bẩn —
+ * và bẩn kiểu đó không có gì kêu lên. */
+function dongBangSau(nut) {
+  if (!nut || typeof nut !== 'object' || Object.isFrozen(nut)) return nut;
+  Object.freeze(nut);
+  for (const con of Object.values(nut)) dongBangSau(con);
+  return nut;
+}
+
+/* Đọc kèm HẬU KIỂM: `stat` trước, đọc, rồi `stat` lại. Lệch nghĩa là file đổi ngay
+ * trong lúc đọc ⇒ nội dung ta cầm không thuộc căn cước nào cả ⇒ đọc lại. */
 function docLkg() {
-  const print = canCuocFile(CACHE_FILE);
-  if (!print) return { print: null, value: null };
   const now = Date.now();
-  if (nhoLkg && nhoLkg.print === print && nhoLkg.hetHanLuc > now) return nhoLkg;
-  const value = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
-  if (nhoLkg && nhoLkg.print !== print) nhoSnapshot.clear();
-  nhoLkg = { print, value, hetHanLuc: now + HAN_NHO_LKG_MS };
-  return nhoLkg;
+  const printTruoc = canCuocFile(CACHE_FILE);
+  if (!printTruoc) return { print: null, value: null };
+  if (nhoLkg && nhoLkg.print === printTruoc && nhoLkg.hetHanLuc > now) return nhoLkg;
+
+  for (let lan = 0; lan < 3; lan += 1) {
+    const truoc = canCuocFile(CACHE_FILE);
+    if (!truoc) return { print: null, value: null };
+    const tho = fs.readFileSync(CACHE_FILE, 'utf8');
+    const sau = canCuocFile(CACHE_FILE);
+    if (truoc !== sau) continue; // file đổi giữa chừng — bản vừa đọc là hàng trộn đời
+    const value = JSON.parse(tho);
+    if (!nhoLkg || nhoLkg.print !== truoc) nhoSnapshot.clear();
+    nhoLkg = { print: truoc, value, hetHanLuc: Date.now() + HAN_BAN_PHAN_TICH_MS };
+    return nhoLkg;
+  }
+  return { print: null, value: null }; // đổi liên tục ⇒ không kết luận, để người gọi dựng lại
 }
 
 function readCache(period) {
   try {
+    /* Snapshot từng kỳ giữ LÂU hơn bản phân tích: chúng nhỏ, và giữ chúng mới là thứ
+     * cứu được 26 giây. Khoá có căn cước file nên file đổi là tự trượt. */
+    const printHienTai = canCuocFile(CACHE_FILE);
+    if (printHienTai) {
+      const khoaSom = `${printHienTai}|${period || ''}`;
+      const hit = nhoSnapshot.get(khoaSom);
+      if (hit && hit.hetHanLuc > Date.now()) return hit.value;
+    }
     const { print, value } = docLkg();
     if (!value) return null;
     const khoaSnapshot = `${print}|${period || ''}`;
-    if (nhoSnapshot.has(khoaSnapshot)) return nhoSnapshot.get(khoaSnapshot);
     const snapshot = value?.snapshots && period
       ? value.snapshots[period] || null
       : value && Array.isArray(value.rows) && (!period || value.period === period) ? value : null;
@@ -248,8 +297,9 @@ function readCache(period) {
       assertCatalogSnapshotContract(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
     }
     // Nhớ cả `null`: "kỳ này không có trong LKG" cũng là kết luận, khỏi phân tích lại.
-    nhoSnapshot.set(khoaSnapshot, snapshot);
-    return snapshot;
+    const daDongBang = dongBangSau(snapshot);
+    nhoSnapshot.set(khoaSnapshot, { value: daDongBang, hetHanLuc: Date.now() + HAN_SNAPSHOT_MS });
+    return daDongBang;
   } catch { return null; }
 }
 function dataQualityProjection(snapshot, periodInput) {
@@ -697,7 +747,8 @@ const snapshotCache = new Map();
 const snapshotInFlight = new Map();
 function rememberSnapshot(period, value) {
   snapshotCache.delete(period);
-  snapshotCache.set(period, { at: Date.now(), value });
+  // Ghi kèm CĂN CƯỚC FILE lúc nhớ — xem lý do ở `getSnapshot`.
+  snapshotCache.set(period, { at: Date.now(), value, print: canCuocFile(CACHE_FILE) });
   while (snapshotCache.size > SNAPSHOT_CACHE_MAX) snapshotCache.delete(snapshotCache.keys().next().value);
   return value;
 }
@@ -790,12 +841,20 @@ async function getSnapshot(periodInput, { forceRemote = false } = {}) {
   const period = toHubPeriod(periodInput);
   if (!forceRemote) {
     const hit = snapshotCache.get(period);
-    if (hit && Date.now() - hit.at < SNAPSHOT_CACHE_TTL_MS) {
+    /* ‼ HẠN GIỜ KHÔNG THAY ĐƯỢC CĂN CƯỚC (bot audit vòng 8, dựng bằng HAI TIẾN TRÌNH
+     * THẬT). Ô nhớ này sống 2 phút và trước đây chỉ tính theo giờ. Một tiến trình khác
+     * (materializer) ghi bản MỚI xuống đĩa thì tiến trình đang chạy **không có cách nào
+     * biết** — `getSnapshot()` vẫn trả bản CŨ cho tới khi hết 2 phút.
+     * Đường đọc thẳng LKG thì đã thấy bản mới, nên hai đường trong cùng một app trả hai
+     * số khác nhau. Nay ô nhớ phải khớp CẢ căn cước file: file đổi ⇒ trượt ⇒ đọc lại. */
+    const printHienTai = canCuocFile(CACHE_FILE);
+    if (hit && Date.now() - hit.at < SNAPSHOT_CACHE_TTL_MS && hit.print === printHienTai) {
       // LRU touch without cloning the giant snapshot.
       snapshotCache.delete(period);
       snapshotCache.set(period, hit);
       return hit.value;
     }
+    if (hit && hit.print !== printHienTai) snapshotCache.delete(period);
     if (snapshotInFlight.has(period)) return snapshotInFlight.get(period);
   }
   // Same-period callers always share one promise. Fail closed rather than
@@ -917,5 +976,8 @@ function diagnostics() {
 
 module.exports = {
   quenLkg,
-  // Xuất ra để ca kiểm ĐẾM SỐ LƯỢT ĐỌC ĐĨA gọi thẳng, không phải gọi vòng qua route.
-  readCacheForTests: readCache, configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };
+  /* Xuất ra để ca kiểm gọi THẲNG. `writeCacheForTests` dùng chính đường ghi của app, nên
+   * fixture không thể sai hình — bốn ca kiểm vòng trước xanh giả vì tôi tự bịa fixture
+   * rồi nó trượt kiểm hợp lệ và trả `null` (bot audit vòng 8). */
+  readCacheForTests: readCache,
+  writeCacheForTests: writeCacheAtomic, configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };

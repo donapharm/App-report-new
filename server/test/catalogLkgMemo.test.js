@@ -23,20 +23,34 @@ const THU_MUC = fs.mkdtempSync(path.join(os.tmpdir(), 'catalog-lkg-memo-'));
 const FILE_LKG = path.join(THU_MUC, 'catalog_management_lkg.json');
 process.env.CATALOG_MANAGEMENT_CACHE_FILE = FILE_LKG;
 
-function ghiLkg(rows) {
-  fs.writeFileSync(FILE_LKG, JSON.stringify({
-    source: 'data-hub-lkg',
-    snapshots: {
-      '07.2026': {
-        period: '07.2026', rows, catalog: rows,
-        meta: { version: 1, checksum: 'x'.repeat(64) },
-      },
-    },
-  }));
-}
-ghiLkg([{ c5: 'P1', c7: 'U1', c16: 'Thuốc A' }]);
-
 const catalogManagement = require('../src/catalogManagement');
+
+/* ‼ FIXTURE PHẢI HỢP LỆ, NẾU KHÔNG CA KIỂM XANH GIẢ (bot audit vòng 8 — bắt đúng).
+ * Bốn ca kiểm bản trước dùng fixture không qua nổi `assertCatalogSnapshotContract`, nên
+ * `readCache` ném lỗi và trả `null` — mà ca kiểm chỉ ĐẾM LƯỢT ĐỌC ĐĨA nên vẫn xanh.
+ * Chúng chứng minh đúng một điều: "không đọc đĩa hai lần khi không có gì để đọc".
+ * Lần thứ SÁU trong đợt dính "xanh vì lý do sai". Nay: dựng fixture bằng CHÍNH đường
+ * ghi của app, và mọi ca đều đòi snapshot KHÁC `null`. */
+function ghiLkg(danhDau) {
+  /* `c4` (mã nhà thầu) là bắt buộc — đường ghi thật từ chối nếu thiếu. Chính chỗ này
+   * chứng minh vì sao phải dựng fixture bằng đường ghi của app: tôi tự bịa thì không
+   * bao giờ biết mình thiếu trường gì, và ca kiểm cứ xanh. Đường ghi thật đòi đủ
+   * `CRITICAL_CATALOG_SOURCE_FIELDS` = c4·c5·c7·c15·c16·c17·c25·c31. */
+  const rows = [{
+    c4: 'CT01', c5: `P${danhDau}`, c7: 'U1', c15: 'Hoạt chất', c16: `Thuốc ${danhDau}`,
+    c17: '500mg', c25: 'Hộp', c31: 10_000, c10: 'N1',
+    // Cặp (đơn vị, QLNB) phải có mặt trong catalog theo khoá `c7`+`c5`.
+    type: 'product', unit_code: 'U1', unit_name: 'Đơn vị 1', qlnb_code: `P${danhDau}`, label: `L${danhDau}`,
+  }];
+  catalogManagement.writeCacheForTests({
+    period: '07.2026', rows, catalog: rows,
+    meta: { version: danhDau, checksum: String(danhDau).repeat(64).slice(0, 64) },
+  });
+}
+ghiLkg(1);
+
+assert.notEqual(catalogManagement.readCacheForTests('07.2026'), null,
+  'fixture phải HỢP LỆ — trả null thì mọi ca dưới đây chỉ đang đếm lượt đọc của hư không');
 
 /* ‼ CẤM `?.` Ở ĐÂY. Nếu hàm không được xuất ra thì `?.` biến mọi lượt gọi thành không
  * làm gì, số lượt đọc bằng 0, và ca kiểm XANH trong khi nó chưa hề kiểm gì. Đã dính
@@ -60,19 +74,23 @@ function demLuotDoc(viec) {
 
 test('đọc LKG nhiều lượt trong cùng một request chỉ chạm đĩa MỘT lần', () => {
   catalogManagement.quenLkg();
+  let cuoi = null;
   const luot = demLuotDoc(() => {
-    for (let i = 0; i < 5; i += 1) docKy('07.2026');
+    for (let i = 0; i < 5; i += 1) cuoi = docKy('07.2026');
   });
+  assert.notEqual(cuoi, null, 'phải trả snapshot THẬT, không phải null');
   assert.ok(luot <= 1, `đọc đĩa ${luot} lượt — phải nhớ bản đã phân tích, đây là 26 giây của CEO`);
 });
 
 test('cùng một kỳ hỏi năm lần ⇒ một lượt đọc; ba kỳ khác nhau ⇒ vẫn một lượt đọc', () => {
   catalogManagement.quenLkg();
+  let coThat = 0;
   const luot = demLuotDoc(() => {
     for (const ky of ['07.2026', '06.2026', '05.2026', '07.2026', '07.2026']) {
-      docKy(ky);
+      if (docKy(ky)) coThat += 1;
     }
   });
+  assert.equal(coThat, 3, 'ba lượt hỏi 07.2026 phải ra snapshot thật, không phải null');
   assert.ok(luot <= 1,
     `ba kỳ khác nhau vẫn nằm trong CÙNG một file — đọc ${luot} lượt là đang nhai lại 377 MB`);
 });
@@ -82,17 +100,73 @@ test('cùng một kỳ hỏi năm lần ⇒ một lượt đọc; ba kỳ khác 
  * để gỡ bên `persist`. Khoá phải gồm inode + cỡ + mtime + ctime. */
 test('file LKG đổi ⇒ bản nhớ hết hiệu lực, lượt sau phải đọc lại', () => {
   catalogManagement.quenLkg();
-  demLuotDoc(() => docKy('07.2026'));
-  ghiLkg([{ c5: 'P2', c7: 'U2', c16: 'Thuốc B' }]);
-  const luotSauKhiDoi = demLuotDoc(() => docKy('07.2026'));
-  assert.equal(luotSauKhiDoi, 1,
-    'file đã đổi mà vẫn phục vụ bản nhớ cũ ⇒ CEO đọc số của danh mục cũ, sai im lặng');
+  const truoc = docKy('07.2026');
+  assert.equal(truoc.rows[0].c5, 'P1');
+  ghiLkg(2);
+  const sau = docKy('07.2026');
+  assert.notEqual(sau, null);
+  assert.equal(sau.rows[0].c5, 'P2',
+    'file đã đổi mà vẫn trả nội dung cũ ⇒ CEO đọc số của danh mục cũ, sai im lặng');
 });
 
 test('quenLkg() phải thật sự xoá bản nhớ — chốt làm rồi phải cắm dây', () => {
   catalogManagement.quenLkg();
-  demLuotDoc(() => docKy('07.2026'));
+  assert.notEqual(docKy('07.2026'), null);
   catalogManagement.quenLkg();
-  const luot = demLuotDoc(() => docKy('07.2026'));
+  const luot = demLuotDoc(() => {
+    assert.notEqual(docKy('07.2026'), null);
+  });
   assert.equal(luot, 1, 'gọi quên rồi mà lượt sau không đọc lại ⇒ hàm quên không làm gì cả');
+});
+
+
+/* ── BOT AUDIT VÒNG 8 — BA LỖ CÒN LẠI CỦA BẢN NHỚ ────────────────────────────── */
+
+/* B1 — BẢN TRẢ RA PHẢI ĐÓNG BĂNG. Nhiều lượt đọc dùng chung một object trong RAM; một
+ * người gọi lỡ `push`/`sort` là mọi lượt sau ăn phải bản bẩn, và bẩn kiểu đó im lặng. */
+test('B1 snapshot trả ra đã đóng băng SÂU — người gọi không làm bẩn được bản trong RAM', () => {
+  // Ca trước đã ghi bản 2/3 — dựng lại mốc riêng để ca này không phụ thuộc thứ tự chạy.
+  ghiLkg(7);
+  catalogManagement.quenLkg();
+  const snap = docKy('07.2026');
+  assert.notEqual(snap, null);
+  assert.ok(Object.isFrozen(snap), 'bản ngoài phải đóng băng');
+  assert.ok(Object.isFrozen(snap.rows), 'mảng `rows` cũng phải đóng băng');
+  assert.ok(Object.isFrozen(snap.rows[0]), 'từng dòng cũng phải — nông thì vẫn sửa được bên trong');
+  assert.throws(() => { snap.rows[0].c16 = 'BẨN'; }, TypeError,
+    'sửa được một dòng là làm bẩn bản dùng chung của mọi lượt đọc sau');
+  assert.equal(docKy('07.2026').rows[0].c16, 'Thuốc 7', 'bản trong RAM phải còn sạch');
+});
+
+/* B2 — CĂN CƯỚC PHẢI ĐỦ `dev` VÀ NANO GIÂY. Mili giây không phân biệt được hai lần ghi
+ * sát nhau; thiếu `dev` thì hai file khác thiết bị có thể trùng inode. */
+test('B2 căn cước file gồm dev và nano giây, không phải mili giây', () => {
+  const ma = fs.readFileSync(path.join(__dirname, '..', 'src', 'catalogManagement.js'), 'utf8');
+  const than = ma.slice(ma.indexOf('function canCuocFile('), ma.indexOf('function quenLkg('));
+  assert.match(than, /bigint: true/, 'phải dùng `stat` dạng bigint để có nano giây');
+  assert.match(than, /st\.dev/, 'thiếu `dev` thì inode trùng nhau giữa hai thiết bị là chuyện thường');
+  assert.match(than, /mtimeNs/, 'mili giây không phân biệt được hai lần ghi trong cùng một mili giây');
+  assert.doesNotMatch(than, /mtimeMs/, 'còn dùng mili giây là còn lỗ');
+});
+
+/* B3 — HẬU KIỂM SAU KHI ĐỌC. File đổi ngay trong lúc đọc thì nội dung ta cầm không
+ * thuộc căn cước nào cả; gắn nó vào căn cước cũ là tự tạo một bản nhớ nói dối. */
+test('B3 file đổi NGAY TRONG LÚC đọc ⇒ không được nhớ bản trộn đời', () => {
+  catalogManagement.quenLkg();
+  const goc = fs.readFileSync;
+  let daPha = false;
+  fs.readFileSync = (duongDan, ...rest) => {
+    const ra = goc(duongDan, ...rest);
+    // Đổi file NGAY SAU khi đọc xong, trước khi hàm kịp hậu kiểm.
+    if (String(duongDan) === FILE_LKG && !daPha) { daPha = true; fs.readFileSync = goc; ghiLkg(3); }
+    return ra;
+  };
+  try {
+    const snap = docKy('07.2026');
+    assert.ok(daPha, 'ca kiểm phải thật sự chen được vào giữa');
+    if (snap) {
+      assert.equal(snap.rows[0].c5, 'P3',
+        'nếu có trả bản nào thì phải là bản MỚI — trả bản cũ nghĩa là hậu kiểm không chạy');
+    }
+  } finally { fs.readFileSync = goc; }
 });
