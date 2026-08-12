@@ -694,6 +694,12 @@ const SO_CAU_TRUC = new Set([
   'dynamicCount', 'lineCount', 'exceptionCount', 'redCount', 'yellowCount',
   'rate', 'threshold', 'page', 'pageSize', 'pageCount', 'totalPages', 'closeDay',
   'schemaVersion', 'appliedPeriods', 'unresolvedPeriods', 'pos', 'carry',
+  /* Bot bắt tận nơi trên màn: trang thật **2/7 thành 2/1** và nút "Sang trang" bị khoá;
+   * hai bộ đếm **"2 NV quá hạn"** và **"3 NV chưa ứng"** biến mất. Mẫu tên không cứu
+   * được `employeesWithoutFirstAdvance` (tận cùng bằng "Advance"), nên phải khai tay.
+   * Thiếu một bộ đếm thì màn hình hỏng NHÌN THẤY — đó là chiều hỏng tôi đã chọn, và
+   * chính vì nó ồn ào nên bot phát hiện ngay. */
+  'employeesWithoutFirstAdvance', 'overdueEmployees', 'employees',
 ]);
 
 /* ‼ GIỮ THEO MẪU TÊN, ĐỪNG GIỮ THEO DANH SÁCH — bot bắt tôi chặn oan `pageCount` và
@@ -701,7 +707,7 @@ const SO_CAU_TRUC = new Set([
  * số trang, mất "thiếu 1/21". Danh sách tên bộ đếm cũng vô tận y như danh sách tên tổng,
  * nên bắt theo MẪU: mọi thứ tận cùng `Count`/`Rows`/`Pages` là số ĐẾM, không phải tiền.
  * Số đếm sai thì lộ ra ngay trên màn; đó là chiều hỏng chấp nhận được. */
-const MAU_SO_DEM = /(Count|Rows|Pages|Contributors)$/;
+const MAU_SO_DEM = /(Count|Rows|Pages|Contributors|Employees)$/;
 const laSoCauTruc = (khoa) => SO_CAU_TRUC.has(khoa) || MAU_SO_DEM.test(khoa);
 
 /* Vùng số CỦA TỪNG NGƯỜI (và dữ liệu dòng) — giữ nguyên. Thiếu người khác không làm số
@@ -715,7 +721,7 @@ const VUNG_GIU = new Set([
 /* Chuỗi đã định dạng tiền/tỷ lệ. ‼ KHÔNG đòi tối thiểu 3 chữ số: bot bắt được
  * "95%", "0%", "0 ₫" lọt qua bản trước vì tôi viết `{2,}`. Số ngắn cũng là số, và
  * "0 ₫" hiển thị khi thiếu người còn nguy hiểm hơn số dài — nó trông như đã chốt. */
-const CHUOI_CO_SO = /\d[\d.,]*\s*(đ|₫|%)/;
+const CHUOI_CO_SO = /\d[\d.,]*\s*(đ|₫|%|tỷ|triệu|nghìn|tr\b|k\b)/i;
 
 function chanSauTrongCay(nut, khoaCha = '') {
   if (typeof nut === 'number') return Number.isFinite(nut) ? null : nut;

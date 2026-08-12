@@ -58,7 +58,7 @@ function duyetLa(nut, duong = '$', ra = new Map()) {
 const soTien = (giaTri) => typeof giaTri === 'number' && Number.isFinite(giaTri);
 // Chuỗi có định dạng tiền/tỷ lệ: "1.444.932.127đ", "110,9%", "31.812.041 ₫"…
 // Số NGẮN cũng là số: bot bắt "95%", "0%", "0 ₫" lọt qua bản `{2,}` trước.
-const chuoiCoSo = (giaTri) => typeof giaTri === 'string' && /\d[\d.,]*\s*(đ|₫|%)/.test(giaTri);
+const chuoiCoSo = (giaTri) => typeof giaTri === 'string' && /\d[\d.,]*\s*(đ|₫|%|tỷ|triệu|nghìn)/i.test(giaTri);
 
 function payload({ thieu = [] } = {}) {
   const gopSo = 21 - thieu.length;
@@ -108,7 +108,7 @@ function payload({ thieu = [] } = {}) {
         total: tien(30_982_248_913), received: tien(30_500_000_000),
         outstanding: tien(400_000_000), firstAdvance: tien(300_000_000),
         second: tien(200_000_000), final: tien(100_000_000), c44: tien(6_000_000),
-        employeesWithoutFirstAdvance: 0, overdueEmployees: 0,
+        employeesWithoutFirstAdvance: 3, overdueEmployees: 2,
         overdueAmount: tien(50_000_000),
       },
     },
@@ -124,6 +124,11 @@ function payload({ thieu = [] } = {}) {
         value: `${Math.round(95 * heSo)}%`, sub: '', tone: 'ok',
       }, {
         key: 'conLai', label: 'Còn lại', value: `${thieu.length === 0 ? 0 : 9} ₫`, sub: '', tone: 'ok',
+      }, {
+        // Đúng chuỗi bot chụp được trên màn.
+        key: 'tongDong', label: 'Tổng', value: `${tien(1_000_000)}đ · ${gopSo * 100} dòng`, sub: '', tone: 'ok',
+      }, {
+        key: 'doanhSo', label: 'Doanh số', value: `${(30.9 * heSo).toFixed(1)} tỷ`, sub: '', tone: 'ok',
       }],
     },
     revenueRecon: { total: tien(32_000_000_000), shown: tien(32_000_000_000), gap: 0, balanced: true },
@@ -139,7 +144,7 @@ function payload({ thieu = [] } = {}) {
       /* Bộ đếm PHẢI sống sót — bot bắt bản trước chặn oan `pageCount` và bốn bộ đếm.
        * `pageCount` nằm ở `pagination` của TỪNG KỲ, không phải `search` — đã dump hình
        * thật ra để xem, không đoán. */
-      pagination: { page: 1, pageSize: 50, pageCount: 42, filteredRows: 2091, totalRows: 2091 },
+      pagination: { page: 2, pageSize: 50, pageCount: 7, filteredRows: 2091, totalRows: 2091 },
       daily: {
         reliable: true, dates: ['2026-07-01'],
         totals: [{ date: '2026-07-01', monthlyTotal: tien(9_000_000) }],
@@ -180,11 +185,18 @@ test('RANH GIỚI: đủ người thì không số nào bị chặn oan', () => 
 test('RANH GIỚI: bộ đếm và số trang KHÔNG được chặn oan khi thiếu người', () => {
   const model = employeeCostViewModel(payload({ thieu: ['DN021'] }));
   const trang = model.periods[0].pagination;
-  assert.equal(trang.pageCount, 42, 'mất số trang thì bảng dài không phân trang được');
+  // Bot chụp được: trang thật 2/7 biến thành 2/1 và nút "Sang trang" bị khoá.
+  assert.equal(trang.page, 2, 'đang ở trang 2 thì phải còn là trang 2');
+  assert.equal(trang.pageCount, 7, 'trang 2/7 thành 2/1 là khoá luôn nút Sang trang');
   assert.equal(trang.pageSize, 50, 'mất cỡ trang thì bảng vỡ');
   assert.equal(trang.totalRows, 2091, 'vẫn phải biết bảng có bao nhiêu dòng');
   assert.equal(model.search.totalRows, 2091, 'ô tìm kiếm cũng cần số dòng');
   assert.equal(model.match.unavailableEmployeeCount, 1, 'và vẫn phải nói được thiếu mấy người');
+  // Hai bộ đếm bot thấy biến mất trên màn: "2 NV quá hạn", "3 NV chưa ứng".
+  const tong = model.paymentTeam.totals;
+  assert.equal(tong.overdueEmployees, 2, '"2 NV quá hạn" không được biến mất');
+  assert.equal(tong.employeesWithoutFirstAdvance, 3, '"3 NV chưa ứng" không được biến mất');
+  assert.equal(tong.employees, 20, 'số người có số vẫn phải đọc được');
 });
 
 test('RANH GIỚI: số của TỪNG NGƯỜI và số ĐẾM phải sống sót khi thiếu người', () => {

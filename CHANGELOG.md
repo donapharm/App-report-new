@@ -1,3 +1,36 @@
+### 2026-08-12 03:45 (giờ VN) — 🔧 Chặn oan bộ đếm và lọt tiền dạng ngắn — bot chỉ tận nơi trên MÀN
+
+Bot soi `891fa1f`, nêu hai lỗi **mới do chính bản vá của tôi sinh ra**. Tôi đã vá một
+phần ở `1f2e4f6`, nhưng ví dụ cụ thể của họ chỉ ra bản vá đó **vẫn trượt**:
+
+**① Chặn oan số cấu trúc — hỏng NHÌN THẤY ĐƯỢC trên màn:**
+- Trang thật **2/7 thành 2/1**, nút "Sang trang" bị khoá.
+- Bộ đếm **"2 NV quá hạn"** và **"3 NV chưa ứng"** biến mất.
+
+Mẫu tên `…Count/…Rows/…Pages` của tôi không cứu được `employeesWithoutFirstAdvance`
+(tận cùng bằng "Advance") lẫn `overdueEmployees`. Đã thêm mẫu `…Employees` và khai tay
+ba tên còn lại.
+
+Đây đúng là **mặt trái đã lường** của lối "chặn hết rồi mở ra": sẽ có lúc quên mở. Nhưng
+quên mở thì hỏng **ồn ào** — bot nhìn màn là thấy ngay. Nếu chọn chiều ngược lại, quên
+chặn một số tiền thì CEO đọc số sai mà **không ai biết**. Vẫn giữ chiều này.
+
+**② Lọt chuỗi tổng dạng NGẮN:** `95%`, `0%`, `0 ₫`, `0đ · 0 dòng` — và tự kiểm thêm thì
+`1,5 triệu`, `1 tỷ`, `30.9 tỷ` cũng lọt. Đã mở rộng cả đơn vị tiếng Việt.
+Kiểm **cả hai chiều**: `2026-07`, `v3.4`, `DN007`, `07.2026`, `2 NV quá hạn`, `trang 2/7`
+đều KHÔNG bị bắt nhầm.
+
+**③ Ca kiểm xanh 470/470 mà bản vẫn hỏng** — bot nói thẳng: *"fixture chưa phủ đúng các
+ca trên"*. Đây là điều đáng ghi nhất vòng này: **con số ca kiểm không chứng minh được
+gì nếu fixture không chạm tới chỗ hỏng.** Nay fixture phủ đúng từng ví dụ bot chụp
+được: trang 2/7, "2 NV quá hạn", "3 NV chưa ứng", `95%`, `0 ₫`, `0đ · 0 dòng`, `30.9 tỷ`.
+
+**Kiểm:** web **471/471**, server **1283/1290** (7 ca hỏng cố hữu sandbox), build xanh.
+
+**Nhắc lại phần 26 giây đã sửa ở `1f2e4f6`** (bot xác nhận cùng con số): đọc file 14,1s ·
+parse 9,44s · kiểm 2,46s · mạng 0. Đã nhớ bản đã phân tích, khoá theo căn cước file.
+Bot chưa đo lại sau bản vá — cần con số mới.
+
 ### 2026-08-12 03:10 (giờ VN) — ⚡ Tìm ra 26 giây: đọc lại file 377 MB năm lần
 
 **Bot đo tận nơi, và đây là GỐC BỆNH của cả đợt:**
