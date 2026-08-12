@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { employeeCostViewModel } from '../src/employeeCostModel.js';
 
 /**
@@ -243,4 +244,33 @@ test('chuỗi TRẦN không đơn vị vẫn bị chặn nhờ bảng khai báo'
   const the = model.healthKpis.cards.find((item) => item.key === 'costRevenueRatio');
   assert.equal(the.value, 'Chưa đủ dữ liệu',
     '"12.5" không có đơn vị nên mẫu chuỗi chịu thua — bảng khai báo phải gánh');
+});
+
+
+/* ‼ BẪY TÊN — TIỀN NHƯNG TÊN NHƯ SỐ ĐẾM.
+ * Bot audit vòng 11 dựng đúng cái bẫy tôi tự cảnh báo ở vòng 9 rồi không bịt: tôi viết
+ * "chưa khai thì chặn" vào chú thích nhưng vẫn để nhánh đoán theo tên chạy bên dưới. */
+test('BẪY TÊN: `aggregateMoneyCount` là TIỀN dù tên tận cùng bằng Count ⇒ phải chặn', async () => {
+  const { chanSauTrongCayForTests } = await import('../src/employeeCostModel.js');
+  assert.equal(typeof chanSauTrongCayForTests, 'function',
+    'phải xuất bộ chặn ra, nếu không ca này không dựng được bẫy');
+
+  /* Model chuẩn hoá đã vứt mọi trường lạ nên không dựng bẫy qua payload được — gọi
+   * thẳng bộ chặn. Đường `$.la.aggregateMoneyCount` CHƯA khai, tên lại tận cùng bằng
+   * `Count`: đúng cảnh bot dựng, và bản trước in ra 20.000.000. */
+  const ra = chanSauTrongCayForTests({ aggregateMoneyCount: 20_000_000 }, '$.la', 'la');
+  assert.equal(ra.aggregateMoneyCount, null,
+    'chưa khai mà vẫn giữ số chỉ vì tên tận cùng bằng Count ⇒ đúng bẫy bot dựng ở vòng 11');
+
+  // Chiều ngược: đã KHAI là số đếm thì phải giữ, không được chặn oan.
+  const dem = chanSauTrongCayForTests({ overdueEmployees: 2 }, '$.paymentTeam.totals', 'totals');
+  assert.equal(dem.overdueEmployees, 2, 'đã khai là số đếm thì phải sống sót');
+});
+
+test('không còn đường ĐOÁN THEO TÊN nào trong bộ chặn số', () => {
+  const nguon = fs.readFileSync(new URL('../src/employeeCostModel.js', import.meta.url), 'utf8');
+  const than = nguon.slice(nguon.indexOf('function chanSauTrongCay('), nguon.indexOf('function chanTongToanDoi('));
+  const nhanhSo = than.slice(than.indexOf("typeof nut === 'number'"), than.indexOf("typeof nut === 'string'"));
+  assert.doesNotMatch(nhanhSo, /laSoCauTruc|MAU_SO_DEM|SO_CAU_TRUC/,
+    'nhánh xử lý SỐ không được hỏi mẫu tên — chưa khai thì chặn, chấm hết');
 });

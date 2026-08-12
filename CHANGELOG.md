@@ -1,3 +1,41 @@
+### 2026-08-12 08:50 (giờ VN) — 🪤 Bot dựng đúng cái bẫy CHÍNH TÔI đã cảnh báo rồi không bịt
+
+Bot soi `d0f4613`. Hai lỗi TOCTOU và `12k`/`12tr` đã vá ở `a8966d0` họ chưa lấy. Nhưng
+có **một phát hiện mới, và là cái đáng xấu hổ nhất đợt này**:
+
+> **`aggregateMoneyCount` vẫn hiện 20.000.000đ vì bị hiểu nhầm là số đếm.**
+
+Vòng 9 tôi **tự viết ra cảnh báo này** — "một trường tương lai tên `aggregateMoneyCount`
+sẽ lọt chỉ vì tận cùng bằng `Count`". Vòng 10 tôi viết luật vào chú thích: *"đường chưa
+khai ⇒ coi như tiền ⇒ chặn"*. **Rồi để nguyên nhánh đoán theo tên ngay bên dưới.**
+
+Tôi cảnh báo, tôi viết luật, tôi không thi hành luật. Bot chỉ việc dựng đúng cái bẫy tôi
+đã mô tả sẵn.
+
+**Đây là lần thứ CHÍN trong đợt cùng một kiểu — viết ra một cơ chế rồi không nối vào chỗ
+thi hành:** `dangTinCay()` không ai gọi · nhãn miễn trừ không đòi lý do · hạn giờ không
+ai thi hành · nay là "chưa khai thì chặn" nhưng vẫn còn đường đoán.
+
+**Sửa: bỏ hẳn nhánh đoán theo tên trong bộ chặn số.** Chưa khai thì chặn, chấm hết.
+Lý do không cân bằng nên không có chỗ cho đoán:
+- Mất một số đếm chưa khai ⇒ màn hình hụt số, **thấy ngay**, và ca kiểm "KHAI BÁO" buộc phải khai.
+- Lọt một số tiền ⇒ CEO đọc số sai, **không ai biết**.
+
+**Hai ca kiểm mới:** một gọi thẳng bộ chặn để dựng đúng bẫy (model chuẩn hoá đã vứt
+trường lạ nên không dựng qua payload được), một **soi mã nguồn** chốt rằng nhánh xử lý
+số **không được hỏi mẫu tên** — để không ai lặng lẽ nối lại đường đoán.
+
+**Tin tốt bot đo được ở `d0f4613`:**
+- Bản thả chủ động chạy đúng: RSS sau 60 giây **1.406 MiB → 373 MiB** (trước là 659).
+- Cold **12,64 giây**, warm **146 ms**.
+- Hẹn giờ: không rò, `unref()` đạt, mô phỏng 5 phút sạch.
+- Backend focused 48/48 · web focused 20/20 · full server 1294/1295 · full web 473/473 · build đạt.
+- **Thiết kế tách LKG theo kỳ: bot đã làm xong** — khuyến nghị manifest + file bất biến
+  theo kỳ, ước giảm I/O **gần 9 lần**. Đây là việc chính vòng sau, và nó giải luôn đỉnh
+  RAM 1,36 GiB (vượt trần PM2 900 MiB) lẫn 12 giây còn lại.
+
+**Kiểm:** web **475/475**, server **1289/1296** (7 ca hỏng cố hữu sandbox), build xanh.
+
 ### 2026-08-12 08:00 (giờ VN) — 🔁 Sửa một chỗ rồi để nguyên chỗ song song
 
 Bot soi `2da41bd` (trước bảng khai báo `5c8d930` và bản thả chủ động `d0f4613`). Hai

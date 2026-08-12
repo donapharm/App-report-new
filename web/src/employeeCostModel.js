@@ -808,12 +808,27 @@ function chanSauTrongCay(nut, duong = '$', khoaCha = '') {
   if (loai === 'dem') return nut;                       // khai rõ là số đếm ⇒ giữ
 
   if (typeof nut === 'number') {
-    if (loai === 'tien') return Number.isFinite(nut) ? null : nut;
-    // Chưa khai: lùi về mẫu tên, rồi mới tới chặn.
-    return laSoCauTruc(khoaCha) ? nut : (Number.isFinite(nut) ? null : nut);
+    /* ‼ CHƯA KHAI THÌ CHẶN, KHÔNG ĐƯỢC LÙI VỀ ĐOÁN THEO TÊN (bot audit vòng 11).
+     *
+     * Vòng trước tôi viết đúng luật này vào chú thích — *"đường chưa khai ⇒ coi như tiền
+     * ⇒ chặn"* — rồi **để nguyên nhánh đoán theo tên ngay bên dưới**. Bot dựng đúng cái
+     * bẫy mà CHÍNH TÔI đã cảnh báo hai vòng trước: trường `aggregateMoneyCount` là TIỀN
+     * nhưng tận cùng bằng `Count`, nên mẫu tên giữ lại và màn hình in **20.000.000đ**.
+     *
+     * Đây là lần thứ CHÍN trong đợt tôi viết ra một luật rồi không nối nó vào chỗ thi
+     * hành (`dangTinCay()` không ai gọi · nhãn miễn trừ không đòi lý do · hạn giờ không
+     * ai thi hành · nay là "chưa khai thì chặn" nhưng vẫn còn đường đoán).
+     *
+     * Nay bỏ hẳn nhánh đoán. Mất một số đếm chưa khai thì màn hình hụt số — **thấy ngay**,
+     * và ca kiểm "KHAI BÁO" buộc phải khai. Còn lọt một số tiền thì CEO đọc số sai —
+     * **không ai biết**. Không cân bằng, nên không có chỗ cho đoán. */
+    return Number.isFinite(nut) ? null : nut;
   }
   if (typeof nut === 'string') {
     if (loai === 'tien') return CO_CHU_SO.test(nut) ? 'Chưa đủ dữ liệu' : nut;
+    /* Chuỗi chưa khai: mẫu chuỗi là lưới CUỐI, không phải lưới chính. Nó vẫn còn vì
+     * chuỗi hiển thị tự do (nhãn, ghi chú) không thể khai hết đường dẫn; nhưng mọi
+     * chuỗi MANG SỐ ở đường đã khai thì đã bị chặn ở nhánh trên rồi. */
     return CHUOI_CO_SO(nut) ? 'Chưa đủ dữ liệu' : nut;
   }
   if (Array.isArray(nut)) return nut.map((con, i) => chanSauTrongCay(con, `${duong}[${i}]`, khoaCha));
@@ -880,6 +895,9 @@ function chanTongToanDoi(model) {
 
 // Xuất ra để ca kiểm buộc mọi đường đổi giá trị phải được KHAI BÁO, không để "chưa khai".
 export const nguNghiaCuaForTests = nguNghiaCua;
+/* Xuất bộ chặn để ca kiểm dựng được BẪY TÊN (`aggregateMoneyCount`) — model chuẩn hoá
+ * đã vứt trường lạ nên không dựng bẫy qua payload được, phải gọi thẳng. */
+export const chanSauTrongCayForTests = chanSauTrongCay;
 
 export function employeeCostViewModel(payload = {}) {
   const hasPeriods = Array.isArray(payload.periods);
