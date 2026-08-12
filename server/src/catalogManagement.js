@@ -122,6 +122,8 @@ function atomicJson(file, value) {
   const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(value), { mode: 0o600 });
   fs.renameSync(tmp, file);
+  // Ghi xong PHẢI quên bản nhớ, nếu không lượt đọc sau ăn phải bản cũ trong RAM.
+  if (path.resolve(file) === path.resolve(CACHE_FILE)) quenLkg();
 }
 function cacheFileUsable(file) {
   try { return fs.statSync(file).isFile() && fs.statSync(file).size > 2; }
@@ -182,9 +184,60 @@ function dqSnapshotFingerprint(snapshot) {
   }));
   return hash.digest('hex');
 }
+/* ‼ 26 GIÂY MÀN HÌNH QUAY NẰM Ở ĐÂY (bot audit đợt 17 vòng 7 — đo tận nơi).
+ *
+ * CEO chụp màn 21:59 ngày 11/08: bấm F5 quay mãi không ra. Bot bổ nhỏ 30 giây đó:
+ *   · đọc file LKG      **14.100 ms**
+ *   · JSON.parse        **9.443 ms**
+ *   · kiểm hợp lệ        **2.455 ms**
+ *   · gọi mạng               **0 ms**
+ * File LKG là **377.416.106 byte (377 MB)**, và `readCache()` cũ **đọc + phân tích lại
+ * TOÀN BỘ file cho MỖI lượt gọi**. Nó được gọi ở năm chỗ, nhân ba kỳ ⇒ cùng một file
+ * 377 MB bị nhai đi nhai lại. Không có lượt gọi mạng nào — chậm hoàn toàn do tự làm.
+ *
+ * Đây mới là **gốc bệnh của cả đợt này**. Toàn bộ cơ chế đóng dấu — và bảy vòng lỗi
+ * quanh nó — sinh ra chỉ vì dựng lại quá chậm. Chữa chỗ này thì con dấu bớt phải gánh.
+ *
+ * Cách chữa: nhớ bản ĐÃ PHÂN TÍCH trong RAM, khoá theo **căn cước file** (inode, cỡ,
+ * mtime, ctime) — file đổi thì căn cước đổi và bản nhớ tự hết hiệu lực. Kèm hạn giờ để
+ * không ghim 377 MB trong RAM mãi.
+ *
+ * ‼ KHÔNG khoá theo đường dẫn suông: file bị ghi đè tại chỗ thì đường dẫn y nguyên mà
+ * nội dung đã khác — đúng lỗi đã mất một vòng để gỡ bên `persist`. */
+const HAN_NHO_LKG_MS = 60_000;
+let nhoLkg = null;        // { print, value, hetHanLuc }
+const nhoSnapshot = new Map(); // `${print}|${period}` -> snapshot đã kiểm
+
+function canCuocFile(duongDan) {
+  try {
+    const stat = fs.statSync(duongDan);
+    return `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
+  } catch { return null; }
+}
+
+/** Xoá bản nhớ — GỌI SAU MỌI LƯỢT GHI LKG, nếu không lượt đọc sau ăn phải bản cũ. */
+function quenLkg() {
+  nhoLkg = null;
+  nhoSnapshot.clear();
+}
+
+function docLkg() {
+  const print = canCuocFile(CACHE_FILE);
+  if (!print) return { print: null, value: null };
+  const now = Date.now();
+  if (nhoLkg && nhoLkg.print === print && nhoLkg.hetHanLuc > now) return nhoLkg;
+  const value = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+  if (nhoLkg && nhoLkg.print !== print) nhoSnapshot.clear();
+  nhoLkg = { print, value, hetHanLuc: now + HAN_NHO_LKG_MS };
+  return nhoLkg;
+}
+
 function readCache(period) {
   try {
-    const value = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    const { print, value } = docLkg();
+    if (!value) return null;
+    const khoaSnapshot = `${print}|${period || ''}`;
+    if (nhoSnapshot.has(khoaSnapshot)) return nhoSnapshot.get(khoaSnapshot);
     const snapshot = value?.snapshots && period
       ? value.snapshots[period] || null
       : value && Array.isArray(value.rows) && (!period || value.period === period) ? value : null;
@@ -194,6 +247,8 @@ function readCache(period) {
       assertCatalogFieldPolicy(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
       assertCatalogSnapshotContract(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
     }
+    // Nhớ cả `null`: "kỳ này không có trong LKG" cũng là kết luận, khỏi phân tích lại.
+    nhoSnapshot.set(khoaSnapshot, snapshot);
     return snapshot;
   } catch { return null; }
 }
@@ -333,6 +388,7 @@ function writeCacheAtomic(snapshot) {
     const tmp = `${CACHE_FILE}.${process.pid}.${Date.now()}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, CACHE_FILE);
+    quenLkg(); // xem `atomicJson` — ghi xong là bản nhớ hết hiệu lực
     mainWritten = true;
   }
   // Materializers run out-of-process, so keep a small DQ-only projection ready
@@ -859,4 +915,7 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
 }
 
-module.exports = { configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };
+module.exports = {
+  quenLkg,
+  // Xuất ra để ca kiểm ĐẾM SỐ LƯỢT ĐỌC ĐĨA gọi thẳng, không phải gọi vòng qua route.
+  readCacheForTests: readCache, configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint };

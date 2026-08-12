@@ -1,3 +1,47 @@
+### 2026-08-12 03:10 (giờ VN) — ⚡ Tìm ra 26 giây: đọc lại file 377 MB năm lần
+
+**Bot đo tận nơi, và đây là GỐC BỆNH của cả đợt:**
+- đọc file LKG **14.100 ms** · `JSON.parse` **9.443 ms** · kiểm hợp lệ **2.455 ms** ·
+  gọi mạng **0 ms**
+- File LKG **377.416.106 byte (377 MB)**
+- `catalogManagement.readCache()` **đọc + phân tích lại TOÀN BỘ file cho MỖI lượt gọi**,
+  mà nó được gọi ở năm chỗ × ba kỳ.
+
+Không có lượt gọi mạng nào. **Chậm hoàn toàn do tự làm.** Đây đúng là màn hình quay CEO
+chụp lúc 21:59, và cũng là lý do tồn tại của cả cơ chế đóng dấu — dựng lại quá chậm nên
+mới phải đóng dấu, rồi bảy vòng lỗi mọc quanh con dấu đó.
+
+**Sửa:** nhớ bản ĐÃ PHÂN TÍCH trong RAM, khoá theo **căn cước file** (inode · cỡ ·
+mtime · ctime) kèm hạn 60 giây, và nhớ luôn snapshot đã kiểm theo từng kỳ. Ghi LKG xong
+thì `quenLkg()` — đặt ngay trong `atomicJson` và cạnh `renameSync`, để không ai phải nhớ.
+‼ Khoá theo đường dẫn suông là sai: file ghi đè tại chỗ thì đường dẫn y nguyên mà nội
+dung đã khác — đúng lỗi đã mất một vòng để gỡ bên `persist`.
+
+**Ca kiểm ĐẾM SỐ LƯỢT ĐỌC ĐĨA**, không đo giờ: đo giờ thì máy nhanh máy chậm ra kết quả
+khác nhau, còn số lượt đọc là bất biến của thiết kế. Năm lượt hỏi ⇒ **một** lượt chạm
+đĩa; ba kỳ khác nhau ⇒ vẫn **một**; file đổi ⇒ đọc lại.
+
+**Ba chỗ bot bắt ở bản vá "chặn tổng đội", sửa luôn:**
+1. **Chặn oan bộ đếm** — `pageCount` và bốn bộ đếm khác. Đây là mặt trái của "chặn hết
+   rồi mở ra". Nay giữ theo **MẪU TÊN** (`…Count`/`…Rows`/`…Pages`/`…Contributors`), vì
+   danh sách tên bộ đếm cũng vô tận y như danh sách tên tổng.
+2. **Regex lọt tiền dạng NGẮN** — `95%`, `0%`, `0 ₫` thoát vì tôi viết `{2,}` (đòi ≥3
+   chữ số). Số ngắn cũng là số, và `0 ₫` khi thiếu người còn nguy hiểm hơn số dài: nó
+   trông như đã chốt.
+3. **Fixture chưa phủ** nên ca kiểm xanh oan — đã bổ sung đúng ba thứ trên.
+
+**Lỗi phụ tự bắt:** tôi viết ca kiểm dùng `catalogManagement.readCacheForTests?.(…)`.
+Hàm chưa được xuất ra thì `?.` biến mọi lượt gọi thành **không làm gì**, số lượt đọc
+bằng 0, ca kiểm **xanh trong khi chưa kiểm gì**. Đã bỏ `?.`, chốt thẳng hàm phải tồn
+tại. Lần thứ **năm** trong đợt dính kiểu "xanh vì lý do sai". Tương tự, `pageCount` nằm
+ở `pagination` của từng kỳ chứ không phải `search` — phải dump hình thật ra mới biết.
+
+**Chưa làm:** dời việc làm mới catalog ra sau khi response đã trả (bot đề xuất). Và nếu
+một lần phân tích còn lại ~8–9 giây vẫn nghẽn thì tính đến worker thread.
+
+**Kiểm:** thêm 4 ca đếm lượt đọc + 1 ca ranh giới bộ đếm. Web **471/471**, server
+**1283/1290** (7 ca hỏng cố hữu của sandbox), `npm run build` xanh.
+
 ### 2026-08-12 02:20 (giờ VN) — 📏 Bot đưa cho một PHÉP ĐO thay cho mọi danh sách
 
 **Đính chính của tôi ở vòng trước là SAI.** Tôi bảo bot "đang soi bản cũ" — họ soi đúng

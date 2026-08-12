@@ -692,9 +692,17 @@ const SO_CAU_TRUC = new Set([
   'contributors', 'appliedContributors', 'xuContributors', 'unavailableCount',
   'xuEmployeeCount', 'matchedRows', 'totalRows', 'rowCount', 'filteredRows',
   'dynamicCount', 'lineCount', 'exceptionCount', 'redCount', 'yellowCount',
-  'rate', 'threshold', 'page', 'pageSize', 'totalPages', 'closeDay', 'schemaVersion',
-  'appliedPeriods', 'unresolvedPeriods', 'pos', 'carry', 'quarter', 'month', 'year',
+  'rate', 'threshold', 'page', 'pageSize', 'pageCount', 'totalPages', 'closeDay',
+  'schemaVersion', 'appliedPeriods', 'unresolvedPeriods', 'pos', 'carry',
 ]);
+
+/* ‼ GIỮ THEO MẪU TÊN, ĐỪNG GIỮ THEO DANH SÁCH — bot bắt tôi chặn oan `pageCount` và
+ * bốn bộ đếm khác. Đây là mặt trái của "chặn hết rồi mở ra": quên mở thì màn hình mất
+ * số trang, mất "thiếu 1/21". Danh sách tên bộ đếm cũng vô tận y như danh sách tên tổng,
+ * nên bắt theo MẪU: mọi thứ tận cùng `Count`/`Rows`/`Pages` là số ĐẾM, không phải tiền.
+ * Số đếm sai thì lộ ra ngay trên màn; đó là chiều hỏng chấp nhận được. */
+const MAU_SO_DEM = /(Count|Rows|Pages|Contributors)$/;
+const laSoCauTruc = (khoa) => SO_CAU_TRUC.has(khoa) || MAU_SO_DEM.test(khoa);
 
 /* Vùng số CỦA TỪNG NGƯỜI (và dữ liệu dòng) — giữ nguyên. Thiếu người khác không làm số
  * của người này sai; giấu đi mới là giấu dữ liệu đang có. */
@@ -704,8 +712,10 @@ const VUNG_GIU = new Set([
   'thieuNguoiCodes', 'priorityRates', 'priorityTargets',
 ]);
 
-// Chuỗi đã định dạng tiền/tỷ lệ: "1.444.932.127đ", "110,9%", "31.812.041 ₫"…
-const CHUOI_CO_SO = /\d[\d.,]{2,}\s*(đ|₫|%)/;
+/* Chuỗi đã định dạng tiền/tỷ lệ. ‼ KHÔNG đòi tối thiểu 3 chữ số: bot bắt được
+ * "95%", "0%", "0 ₫" lọt qua bản trước vì tôi viết `{2,}`. Số ngắn cũng là số, và
+ * "0 ₫" hiển thị khi thiếu người còn nguy hiểm hơn số dài — nó trông như đã chốt. */
+const CHUOI_CO_SO = /\d[\d.,]*\s*(đ|₫|%)/;
 
 function chanSauTrongCay(nut, khoaCha = '') {
   if (typeof nut === 'number') return Number.isFinite(nut) ? null : nut;
@@ -719,7 +729,7 @@ function chanSauTrongCay(nut, khoaCha = '') {
      * nhánh thì toàn bộ tiền trong đó thoát — chính ca kiểm phép đo bắt được.
      * Nên: tên cấu trúc chỉ bảo vệ SỐ LÁ; muốn giữ cả nhánh phải khai ở `VUNG_GIU`. */
     if (VUNG_GIU.has(khoa)) ra[khoa] = con;
-    else if (SO_CAU_TRUC.has(khoa) && typeof con !== 'object') ra[khoa] = con;
+    else if (laSoCauTruc(khoa) && typeof con !== 'object') ra[khoa] = con;
     else ra[khoa] = chanSauTrongCay(con, khoa);
   }
   return ra;

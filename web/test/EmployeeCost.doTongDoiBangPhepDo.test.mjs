@@ -38,6 +38,7 @@ const SO_DEM = new Set([
   'appliedContributors', 'xuContributors', 'unavailableCount', 'employeeCount',
   'xuEmployeeCount', 'matchedRows', 'totalRows', 'rowCount', 'filteredRows',
   'dynamicCount', 'lineCount', 'rate', 'threshold', 'complete', 'thieuNguoi',
+  'pageCount', 'page', 'pageSize', 'totalPages',
 ]);
 
 const laVungTungNguoi = (duong) => VUNG_TUNG_NGUOI.some((mau) => mau.test(duong));
@@ -56,7 +57,8 @@ function duyetLa(nut, duong = '$', ra = new Map()) {
 
 const soTien = (giaTri) => typeof giaTri === 'number' && Number.isFinite(giaTri);
 // Chuỗi có định dạng tiền/tỷ lệ: "1.444.932.127đ", "110,9%", "31.812.041 ₫"…
-const chuoiCoSo = (giaTri) => typeof giaTri === 'string' && /\d[\d.,]{2,}\s*(đ|₫|%)/.test(giaTri);
+// Số NGẮN cũng là số: bot bắt "95%", "0%", "0 ₫" lọt qua bản `{2,}` trước.
+const chuoiCoSo = (giaTri) => typeof giaTri === 'string' && /\d[\d.,]*\s*(đ|₫|%)/.test(giaTri);
 
 function payload({ thieu = [] } = {}) {
   const gopSo = 21 - thieu.length;
@@ -116,9 +118,16 @@ function payload({ thieu = [] } = {}) {
         key: 'costRevenueRatio', label: 'Tỷ lệ chi phí/doanh thu',
         value: `${(4.7 * heSo).toFixed(1)}%`,
         sub: `trên ${gopSo} NV`, tone: heSo === 1 ? 'ok' : 'warn',
+      }, {
+        // Tiền/tỷ lệ dạng NGẮN — bot bắt "95%", "0%", "0 ₫" lọt qua regex `{2,}` cũ.
+        key: 'targetCoverage', label: 'Phủ target',
+        value: `${Math.round(95 * heSo)}%`, sub: '', tone: 'ok',
+      }, {
+        key: 'conLai', label: 'Còn lại', value: `${thieu.length === 0 ? 0 : 9} ₫`, sub: '', tone: 'ok',
       }],
     },
     revenueRecon: { total: tien(32_000_000_000), shown: tien(32_000_000_000), gap: 0, balanced: true },
+    search: { query: '', filteredRows: 2091, totalRows: 2091 },
     periods: [{
       period: '2026-07', columns: [], rows: [],
       summary: tomTat(),
@@ -127,6 +136,10 @@ function payload({ thieu = [] } = {}) {
         employeeCode: `DN${String(i + 1).padStart(3, '0')}`, employeeName: `NV ${i + 1}`,
         rowCount: 1, monthlyTotal: 1_000_000,
       })),
+      /* Bộ đếm PHẢI sống sót — bot bắt bản trước chặn oan `pageCount` và bốn bộ đếm.
+       * `pageCount` nằm ở `pagination` của TỪNG KỲ, không phải `search` — đã dump hình
+       * thật ra để xem, không đoán. */
+      pagination: { page: 1, pageSize: 50, pageCount: 42, filteredRows: 2091, totalRows: 2091 },
       daily: {
         reliable: true, dates: ['2026-07-01'],
         totals: [{ date: '2026-07-01', monthlyTotal: tien(9_000_000) }],
@@ -162,6 +175,16 @@ test('RANH GIỚI: đủ người thì không số nào bị chặn oan', () => 
   assert.equal(model.paymentTeam.totals.total, 30_982_248_913);
   assert.equal(model.healthKpis.cards[0].value, '4.7%');
   assert.equal(model.bonus.month.amount, 31_812_041);
+});
+
+test('RANH GIỚI: bộ đếm và số trang KHÔNG được chặn oan khi thiếu người', () => {
+  const model = employeeCostViewModel(payload({ thieu: ['DN021'] }));
+  const trang = model.periods[0].pagination;
+  assert.equal(trang.pageCount, 42, 'mất số trang thì bảng dài không phân trang được');
+  assert.equal(trang.pageSize, 50, 'mất cỡ trang thì bảng vỡ');
+  assert.equal(trang.totalRows, 2091, 'vẫn phải biết bảng có bao nhiêu dòng');
+  assert.equal(model.search.totalRows, 2091, 'ô tìm kiếm cũng cần số dòng');
+  assert.equal(model.match.unavailableEmployeeCount, 1, 'và vẫn phải nói được thiếu mấy người');
 });
 
 test('RANH GIỚI: số của TỪNG NGƯỜI và số ĐẾM phải sống sót khi thiếu người', () => {
