@@ -122,7 +122,15 @@ test('overview single-flight coalesces ten identical requests and isolates actor
 test('overview single-flight evicts a failed build so the next request can retry', async () => {
   const analytics = require('../src/analytics');
   const originalOverview = analytics.overviewKpis;
+  const originalListPeriods = store.listPeriods;
+  const originalPeriodKys = store.periodKys;
+  const originalLatestKy = store.latestKy;
   let attempts = 0;
+  // Keep this test independent of whichever uploaded periods happen to exist on
+  // the machine running it (in particular, whether 06.2026 is already seeded).
+  store.listPeriods = () => [];
+  store.periodKys = () => [];
+  store.latestKy = () => '01.2000';
   analytics.overviewKpis = () => {
     attempts += 1;
     if (attempts === 1) throw new Error('overview transient');
@@ -137,6 +145,9 @@ test('overview single-flight evicts a failed build so the next request can retry
     assert.deepEqual(recovered.body, { ok: true, attempts: 2, emptyPeriod: true });
   } finally {
     analytics.overviewKpis = originalOverview;
+    store.listPeriods = originalListPeriods;
+    store.periodKys = originalPeriodKys;
+    store.latestKy = originalLatestKy;
   }
 });
 

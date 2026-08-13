@@ -377,7 +377,13 @@ function sharedCancellableFlight(map, key, req, build) {
     cleanup();
     entry.subscribers.delete(subscriber);
     if (aborted) rejectAbandoned(requestAbortedError());
-    if (entry.subscribers.size === 0 && !entry.settled && aborted) entry.controller.abort();
+    if (entry.subscribers.size === 0 && !entry.settled && aborted) {
+      // Evict before aborting: an abort-aware builder may still need time to
+      // settle. A request arriving in that gap must start a fresh flight instead
+      // of joining the already-cancelled controller and failing spuriously.
+      if (map.get(key) === entry) map.delete(key);
+      entry.controller.abort();
+    }
   };
   const onAbandoned = () => leave(true);
   if (typeof req?.once === 'function') {

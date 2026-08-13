@@ -74,6 +74,39 @@ test('shared flight aborts only after all subscribers leave, never publishes abo
   assert.equal(builds, 1, 'failed builder ran once; retry used a fresh independent builder');
 });
 
+test('all subscribers leaving evicts immediately so a same-key request starts a fresh flight', async () => {
+  const flights = new Map();
+  const abandonedReq = new EventEmitter();
+  const abandonedWork = pendingBuild();
+  let builds = 0;
+
+  const first = router.sharedCancellableFlight(flights, 'abort-gap', abandonedReq, (signal) => {
+    builds += 1;
+    assert.equal(signal.aborted, false);
+    return abandonedWork.promise; // deliberately ignores abort and stays pending
+  });
+  await tick();
+
+  abandonedReq.emit('close');
+  assert.equal(flights.has('abort-gap'), false, 'cancelled entry is removed synchronously before its task settles');
+  await assert.rejects(first, (error) => error.code === 'REQUEST_ABORTED');
+
+  const freshReq = new EventEmitter();
+  const fresh = router.sharedCancellableFlight(flights, 'abort-gap', freshReq, async (signal) => {
+    builds += 1;
+    assert.equal(signal.aborted, false, 'fresh request must own a fresh controller');
+    return { fresh: true, build: builds };
+  });
+  assert.deepEqual(await fresh, { fresh: true, build: 2 });
+
+  // Let the abandoned task finish only after the fresh flight has succeeded.
+  // Its finalizer must not delete or publish over a replacement entry.
+  abandonedWork.resolve({ stale: true });
+  await tick();
+  assert.equal(builds, 2);
+  assert.equal(flights.size, 0);
+});
+
 test('overview/trend cancellation wiring is explicit and does not claim synchronous CPU interruption', () => {
   const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   assert.match(source, /req\.once\('close', onAbandoned\)/);
