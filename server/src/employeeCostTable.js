@@ -382,7 +382,9 @@ function mergeEmployeeReports(reports = [], roster = []) {
       const outcome = String(report.sourceOutcome || '').toLowerCase();
       const reason = outcome === 'not_configured' ? 'not_configured'
         : outcome === 'deadline' ? 'deadline'
-          : outcome === 'source_error' ? 'source_error' : 'upstream_unavailable';
+          : outcome === 'source_error' ? 'source_error'
+            : outcome === 'upstream_rejected' || outcome === 'upstream_unauthorized' || /^upstream_4\d\d$/.test(outcome)
+              ? 'upstream_rejected' : 'upstream_unavailable';
       return [emp, reason];
     }).filter(([emp]) => emp));
     const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;

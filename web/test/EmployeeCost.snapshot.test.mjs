@@ -10,7 +10,7 @@ test('view model propagates sync status/period and allowlisted unavailableReason
       state: 'partial', syncing: true, complete: false, locked: false,
       fetchedAt: '2026-08-13T02:00:00.000Z', generationId: 'abc',
       rosterCount: 3, availableCount: 2,
-      unavailableReasons: { DN003: 'roster_added', DN004: 'https://secret/?key=abc' },
+      unavailableReasons: { DN003: 'roster_added', DN004: 'https://secret/?key=abc', DN005: 'upstream_rejected' },
     },
   });
   assert.equal(model.dongBoKy, '2026-07');
@@ -18,7 +18,7 @@ test('view model propagates sync status/period and allowlisted unavailableReason
     state: 'partial', syncing: true, complete: false, locked: false,
     fetchedAt: '2026-08-13T02:00:00.000Z', generationId: 'abc',
     rosterCount: 3, availableCount: 2,
-    unavailableReasons: { DN003: 'roster_added', DN004: 'upstream_unavailable' },
+    unavailableReasons: { DN003: 'roster_added', DN004: 'upstream_unavailable', DN005: 'upstream_rejected' },
     errorCode: '',
   });
   assert.doesNotMatch(JSON.stringify(model), /secret|key=abc/);
@@ -29,10 +29,10 @@ test('normalized match preserves only privacy-safe per-employee unavailable reas
     periods: [], allEmployees: true,
     match: {
       unavailableEmployees: ['DN001', 'DN002'], unavailableEmployeeCount: 2,
-      unavailableReasons: { DN001: 'not_configured', DN002: 'token=private' },
+      unavailableReasons: { DN001: 'not_configured', DN002: 'token=private', DN003: 'upstream_rejected' },
     },
   });
-  assert.deepEqual(model.match.unavailableReasons, { DN001: 'not_configured', DN002: 'upstream_unavailable' });
+  assert.deepEqual(model.match.unavailableReasons, { DN001: 'not_configured', DN002: 'upstream_unavailable', DN003: 'upstream_rejected' });
 });
 
 test('UI and API expose Đồng bộ lại as a background mutation with snapshot status', () => {

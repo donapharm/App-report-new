@@ -27,7 +27,8 @@ test('bootstrap tries trusted device before showing OTP and remembers phone only
   assert.match(app, /api\.trustedDeviceLogin\(phone\)/);
   assert.match(app, /current\?\.method === 'otp' && current\?\.phone/);
   assert.match(app, /rememberLastPhone\(current\.phone\)/);
-  assert.match(app, /error\?\.status === 401 \|\| error\?\.status === 403/);
+  assert.match(app, /recoverAfterMeRejection\(error, restoreTrustedDevice\)/);
+  assert.match(api, /status !== 401 && status !== 403/);
   assert.match(app, /forgetLastPhone\(\)/);
   assert.match(login, /useState\(\(\) => getLastPhone\(\)\)/);
 });

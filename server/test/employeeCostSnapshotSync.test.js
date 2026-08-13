@@ -70,6 +70,19 @@ test('source outage preserves every previous good employee and canonical model b
   assert.deepEqual(second.manifest.refreshUnavailableReasons, { DN001: 'deadline', DN002: 'deadline' });
 });
 
+test('4xx upstream rejection is allowlisted distinctly while 5xx/network stay unavailable', () => {
+  const { sourceFailureReason, usableResult } = require('../src/employeeCostSnapshotSync');
+  for (const outcome of ['upstream_rejected', 'upstream_400', 'upstream_401', 'upstream_409', 'upstream_499']) {
+    assert.equal(sourceFailureReason(null, { sourceOutcome: outcome }), 'upstream_rejected');
+    assert.equal(usableResult({ sourceOutcome: outcome }), false);
+  }
+  for (const outcome of ['upstream_500', 'upstream_502', 'upstream_503', 'upstream_unavailable']) {
+    assert.equal(sourceFailureReason(null, { sourceOutcome: outcome }), 'upstream_unavailable');
+    assert.equal(usableResult({ sourceOutcome: outcome }), false);
+  }
+  assert.equal(sourceFailureReason(Object.assign(new Error('secret payload'), { code: 'ECONNRESET' })), 'upstream_unavailable');
+});
+
 test('a failed employee never overwrites its LKG while a successful peer advances', async (t) => {
   let round = 0;
   const ctx = setup(t, { fetchEmployee: async (empCode) => {

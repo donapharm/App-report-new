@@ -1,7 +1,9 @@
 // api.js — gọi backend, tự đính token. Frontend KHÔNG tự quyết quyền.
 import { RequestCoordinator, requestScopeKey } from './requestCoordinator.js';
 import { syncExceptionsRequestPath } from './syncExceptionsRequest.js';
+import { clearSwrActor } from './swrCache.js';
 const TOKEN_KEY = 'rpt_token';
+const AUTH_ACTOR_KEY = 'rpt_auth_actor';
 const OTP_AUTH_TIMEOUT_MS = 12000;
 const ME_TIMEOUT_MS = 8000;
 // Chi phí/nhân viên gọi DataHub (nối tiếp, timeout 6.5s/kỳ ở backend) + tính bảng.
@@ -16,6 +18,62 @@ const requestCoordinator = new RequestCoordinator({ maxEntries: 12 });
 let backendDataSignature = 'boot';
 let observedToken;
 let authScopeGeneration = 0;
+let authenticatedActor = null;
+
+function availableStorage(storage) {
+  if (storage) return storage;
+  try { return globalThis.localStorage; } catch { return null; }
+}
+
+function actorCode(actor) {
+  return String(actor?.emp_code || actor?.empCode || actor?.id || '').trim().toUpperCase();
+}
+
+export function setAuthActor(actor, storage) {
+  authenticatedActor = actorCode(actor) ? actor : null;
+  const target = availableStorage(storage);
+  if (!target) return;
+  try {
+    if (authenticatedActor) target.setItem(AUTH_ACTOR_KEY, actorCode(authenticatedActor));
+    else target.removeItem(AUTH_ACTOR_KEY);
+  } catch { /* restricted storage */ }
+}
+
+// Clear the actor-scoped stale snapshot before invalidating the token/UI actor.
+// The persisted actor code covers an expired token found during cold bootstrap,
+// when React has not restored `me` yet. Never enumerate/delete another actor.
+export function clearExpiredAuth(storage) {
+  const target = availableStorage(storage);
+  let actor = authenticatedActor;
+  try { if (!actor && target) actor = { emp_code: target.getItem(AUTH_ACTOR_KEY) || '' }; } catch { /* restricted storage */ }
+  if (target) clearSwrActor(target, actor);
+  requestCoordinator.clear();
+  backendDataSignature = 'boot';
+  observedToken = '';
+  authScopeGeneration += 1;
+  try {
+    target?.removeItem(TOKEN_KEY);
+    target?.removeItem(AUTH_ACTOR_KEY);
+  } catch { /* restricted storage */ }
+  authenticatedActor = null;
+  try { globalThis.window?.dispatchEvent(new CustomEvent('app:auth-expired')); } catch { /* non-browser/test */ }
+}
+
+async function authenticatedFetch(...args) {
+  const response = await fetch(...args);
+  if (response.status === 401) clearExpiredAuth();
+  return response;
+}
+
+// `req()` already invalidates a 401 before throwing. A /me 403 is different:
+// invalidate it here, then (and only then) let App attempt trusted-device recovery.
+export async function recoverAfterMeRejection(error, restoreTrustedDevice, storage) {
+  const status = Number(error?.status || 0);
+  if (status !== 401 && status !== 403) return false;
+  if (status === 403) clearExpiredAuth(storage);
+  await restoreTrustedDevice();
+  return true;
+}
 function authScopeFor(token) {
   if (token !== observedToken) {
     observedToken = token;
@@ -142,7 +200,7 @@ async function req(method, path, body, { timeoutMs = 0, timeoutMessage = '', sig
       if (path === '/auth/otp/verify') {
         throw requestError(data.error || 'Mã OTP không đúng hoặc đã hết hạn', res, data);
       }
-      setToken(null);
+      clearExpiredAuth();
       throw requestError(data.error || 'Phiên đăng nhập hết hạn', res, data);
     }
     // Kèm mã HTTP khi backend không gửi lời giải thích — "Lỗi máy chủ" trần khiến
@@ -448,7 +506,7 @@ export const api = {
   adminAssignmentHistory: () => req('GET', '/admin/assignments/history'),
   adminAssignmentUpload: (file) => {
     const fd = new FormData(); fd.append('file', file);
-    return fetch('/api/admin/assignments/upload', { method: 'POST', headers: { 'X-Device-Id': getDeviceId(), ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}) }, body: fd }).then(async (res) => { const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || 'Lỗi upload phân công'); return data; });
+    return authenticatedFetch('/api/admin/assignments/upload', { method: 'POST', headers: { 'X-Device-Id': getDeviceId(), ...(getToken() ? { Authorization: 'Bearer ' + getToken() } : {}) }, body: fd }).then(async (res) => { const data = await res.json().catch(() => ({})); if (!res.ok) throw new Error(data.error || 'Lỗi upload phân công'); return data; });
   },
   targets: (params) => req('GET', '/targets' + (params ? `?${new URLSearchParams(typeof params === 'string' ? { ky: params } : params)}` : '')),
   targetKpi: (ky) => req('GET', '/targets/kpi' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
@@ -463,7 +521,7 @@ export const api = {
   uploadPreview: (file) => {
     const fd = new FormData();
     fd.append('file', file);
-    return fetch('/api/upload/preview', {
+    return authenticatedFetch('/api/upload/preview', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() },
       body: fd,
@@ -476,7 +534,7 @@ export const api = {
   targetUploadPreview: (file) => {
     const fd = new FormData();
     fd.append('file', file);
-    return fetch('/api/admin/targets/upload/preview', {
+    return authenticatedFetch('/api/admin/targets/upload/preview', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() },
       body: fd,
@@ -502,7 +560,7 @@ async function downloadEmployeeCostFile(path, format, params, fallback) {
   const url = `/api/${path}/export.${extension}?` + new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([, value]) => value !== '' && value != null)),
   ).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || 'Không xuất được báo cáo chi phí');
@@ -534,7 +592,7 @@ export async function downloadEmployeeCostProvinceWorklist(params = {}) {
 // Bảng % kho cục bộ — export theo ĐÚNG phạm vi quyền của người tải (backend lọc).
 export async function downloadCostRatesTable(params = {}) {
   const url = '/api/catalog-management/cost-rates/table.xlsx?' + new URLSearchParams(params).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || 'Không xuất được bảng % chi phí');
@@ -550,7 +608,7 @@ export async function downloadCostRatesTable(params = {}) {
 // Tổng hợp chi phí C33–C46 — CHỈ CEO (backend requireCeo).
 export async function downloadCostBreakdown(params = {}) {
   const url = '/api/catalog-management/cost-breakdown.xlsx?' + new URLSearchParams(params).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || 'Không xuất được bảng tổng hợp chi phí');
@@ -566,7 +624,7 @@ export async function downloadCostBreakdown(params = {}) {
 // Thành tiền C32/C47 — export theo ĐÚNG phạm vi quyền của người tải (backend lọc).
 export async function downloadCostAmounts(params = {}) {
   const url = '/api/catalog-management/cost-amounts.xlsx?' + new URLSearchParams(params).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || 'Không xuất được bảng thành tiền C32/C47');
@@ -582,7 +640,7 @@ export async function downloadCostAmounts(params = {}) {
 export async function downloadDormantReport(format, snapshotId) {
   const extension = format === 'pdf' ? 'pdf' : 'xlsx';
   const url = `/api/dormant/reports/export.${extension}?` + new URLSearchParams({ snapshot_id: snapshotId }).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || 'Không xuất được báo cáo QLNB');
@@ -598,7 +656,7 @@ export async function downloadDormantReport(format, snapshotId) {
 // Tải file export: fetch có token rồi kích hoạt download (an toàn hơn link trần).
 export async function downloadExport(kind, params = {}) {
   const url = `/api/export/${kind}.xlsx?` + new URLSearchParams(params).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken() } });
   if (!res.ok) throw new Error('Không xuất được file');
   const blob = await res.blob();
   const a = document.createElement('a');
@@ -614,7 +672,7 @@ export async function downloadExport(kind, params = {}) {
 export async function downloadRevenueReport(format = 'xlsx', params = {}) {
   const fmt = ['xlsx', 'csv', 'pdf', 'pptx'].includes(format) ? format : 'xlsx';
   const url = `/api/export/revenue_report.${fmt}?` + new URLSearchParams(params).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) {
     const d = await res.json().catch(() => ({}));
     throw new Error(d.error || 'Không xuất được báo cáo');
@@ -632,7 +690,7 @@ export async function downloadRevenueReport(format = 'xlsx', params = {}) {
 }
 
 async function downloadCatalogReport(url, payload, fallbackName) {
-  const res = await fetch(url, {
+  const res = await authenticatedFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() },
     body: JSON.stringify(payload || {}),
@@ -660,7 +718,7 @@ export async function downloadFilteredEmployeeSummary(payload) {
 
 export async function downloadAssignmentTemplate(ky) {
   const url = `/api/admin/assignments/template.xlsx?` + new URLSearchParams({ ky: ky || '' }).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) throw new Error('Không tải được mẫu phân công');
   const blob = await res.blob();
   const a = document.createElement('a');
@@ -674,7 +732,7 @@ export async function downloadAssignmentTemplate(ky) {
 
 export async function downloadTargetTemplate(ky, basis = 't06') {
   const url = `/api/admin/targets/template.xlsx?` + new URLSearchParams({ ky: ky || '', basis: basis || 't06' }).toString();
-  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
+  const res = await authenticatedFetch(url, { headers: { Authorization: 'Bearer ' + getToken(), 'X-Device-Id': getDeviceId() } });
   if (!res.ok) throw new Error('Không tải được template target');
   const blob = await res.blob();
   const a = document.createElement('a');

@@ -1242,11 +1242,13 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
         await sleepImpl(delayMs);
         continue;
       }
-      const unauthorized = error?.status === 401;
+      const upstreamStatus = Number(error?.status || 0);
+      const rejected = upstreamStatus >= 400 && upstreamStatus < 500;
       return {
-        // FE luôn nhận thông báo rỗng chung; nguyên nhân 401 chỉ nằm trong audit/log admin.
+        // 4xx is normalized to one privacy-safe code. Never expose the upstream
+        // body, credential state or request payload through snapshot/UI metadata.
         payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE),
-        outcome: unauthorized ? 'upstream_unauthorized' : (error?.status ? `upstream_${error.status}` : 'upstream_unavailable'),
+        outcome: rejected ? 'upstream_rejected' : (upstreamStatus ? `upstream_${upstreamStatus}` : 'upstream_unavailable'),
         attempts,
       };
     }

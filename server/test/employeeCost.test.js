@@ -145,6 +145,30 @@ test('502 retries with backoff then succeeds; 401 returns safe empty payload', a
     fetchImpl: async () => ({ ok: false, status: 401 }),
   });
   assert.deepEqual(denied.payload, { empCode: 'DN001', columns: [], rows: [], note: employeeCost.DEFAULT_NOTE });
+  assert.equal(denied.outcome, 'upstream_rejected');
+
+  for (const status of [400, 401, 409, 499]) {
+    const rejected = await employeeCost.fetchEmployeeCost('DN001', {
+      baseUrl: 'http://hub.test', ...credentials(), backoffMs: [],
+      fetchImpl: async () => ({ ok: false, status, json: async () => ({ credential: 'must-not-leak', body: `private-${status}` }) }),
+    });
+    assert.equal(rejected.outcome, 'upstream_rejected');
+    assert.doesNotMatch(JSON.stringify(rejected), /credential|must-not-leak|private-/);
+  }
+
+  for (const status of [500, 502]) {
+    const serverError = await employeeCost.fetchEmployeeCost('DN001', {
+      baseUrl: 'http://hub.test', ...credentials(), backoffMs: [],
+      fetchImpl: async () => ({ ok: false, status }),
+    });
+    assert.equal(serverError.outcome, `upstream_${status}`);
+  }
+  const networkError = await employeeCost.fetchEmployeeCost('DN001', {
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [],
+    fetchImpl: async () => { throw Object.assign(new Error('socket credential=must-not-leak'), { code: 'ECONNRESET' }); },
+  });
+  assert.equal(networkError.outcome, 'upstream_unavailable');
+  assert.doesNotMatch(JSON.stringify(networkError), /credential|must-not-leak|socket/);
 });
 
 test('maps C16 through catalog, joins revenue by unit + product code and calculates each amount', () => {

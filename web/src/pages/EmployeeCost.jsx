@@ -26,7 +26,7 @@ const EMPLOYEE_COST_PAGE_SIZES = [20, 50, 100];
 // ALL không fan-out/tổng hợp; cả hai ô đều yêu cầu chọn một nhân viên.
 const SALARY_ADVANCE_UI = true;
 const SNAPSHOT_REASON_LABELS = Object.freeze({
-  not_configured: 'chưa cấu hình nguồn', upstream_unavailable: 'nguồn tạm unavailable',
+  not_configured: 'chưa cấu hình nguồn', upstream_unavailable: 'nguồn tạm unavailable', upstream_rejected: 'nguồn từ chối yêu cầu',
   deadline: 'quá hạn lần đồng bộ', source_error: 'nguồn lỗi', missing: 'chưa có bản local',
   roster_added: 'mới thêm vào roster', roster_changed: 'roster đã đổi',
   corrupt_snapshot: 'snapshot hỏng', sync_failed: 'đồng bộ thất bại', locked: 'kỳ đã khoá',
