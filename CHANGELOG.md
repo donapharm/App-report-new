@@ -1,3 +1,33 @@
+### 2026-08-13 09:45 (giờ VN) — 📜 Nguyên tắc CEO thành luật: "Màn hình không bao giờ chờ"
+
+CEO chụp màn Tổng quan 09:23 quay vô hạn, càng F5 càng tệ: *"nguyên tắc dữ liệu nó phải
+luôn ở dạng lưu đệm chứ, chỉ làm tươi khi F5 hoặc tự cập nhật… coi chừng tao phải xoá
+bỏ làm lại từ đầu."*
+
+**CEO phát biểu đúng chuẩn stale-while-revalidate.** Ghi thành
+`DIRECTIVE_PHUC_VU_TU_BAN_DEM.md` — luật cho MỌI màn.
+
+**Chẩn đoán (kiểm bằng code):** `/overview` bản thân NHẸ và CÓ đệm (`overviewCache`,
+`analytics.js:147`). Nó quay vì **cả tiến trình nghẹt**: Node một luồng, request khác
+đang nhai catalog 377 MB ⇒ mọi thứ xếp hàng, kể cả request 1 ms. Và **F5 không huỷ việc
+cũ** — đã kiểm: KHÔNG chỗ nào bắt `req.on('close')` ⇒ trình duyệt bỏ đi, server vẫn
+nấu bản không ai nhận, F5 nộp thêm bản mới ⇒ càng F5 hàng càng dài. Cộng OOM restart
+(11/08) làm nguội lại liên tục. Một cái bếp tắc — ly nước lọc cũng phải chờ nồi hầm.
+
+**Bốn luật trong directive:** ① phục vụ bản đệm trước, làm tươi ở nền (vòng xoay chỉ
+được phép ở lần đầu tiên trong đời); ② việc nặng không chạy trên luồng phục vụ;
+③ single-flight mọi endpoint dựng tốn kém; ④ khách bỏ đi thì ngừng nấu
+(`req.on('close')`).
+
+**Ba việc CHƯA làm, giao bot cùng đợt snapshot:** single-flight `/overview`/`/trend` ·
+`req.on('close')` + huỷ việc bị bỏ rơi · web giữ bản gần nhất trong localStorage hiện
+ngay khi mở màn.
+
+**Về "xoá làm lại từ đầu":** bệnh nằm ở MỘT kiểu đường dữ liệu; phần đắt nhất là logic
+nghiệp vụ CEO đã chốt từng quyết định — phần đó đúng và giữ. Làm lại là vứt phần đúng
+để viết lại phần sai bằng đúng số tuần lộ trình hiện tại cần, thêm rủi ro sai lại logic
+tiền.
+
 ### 2026-08-13 08:50 (giờ VN) — 🧭 CEO yêu cầu sửa TRIỆT ĐỂ — chẩn đoán một cơ chế + spec đổi kiến trúc
 
 CEO chụp màn 08:23: nay thiếu **15 NV** (07:50 chỉ thiếu 2). *"dữ liệu cứ nhảy loạn
