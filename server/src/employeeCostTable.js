@@ -376,6 +376,15 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const totalRows = available.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const unavailablePairs = unavailable.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const unavailableEmployees = unavailable.map(({ report }) => String(report.empCode || '').toUpperCase()).filter(Boolean);
+    // Chỉ phát ra reason code allowlist; không đưa message upstream/key/payload vào UI.
+    const unavailableReasons = Object.fromEntries(unavailable.map(({ report }) => {
+      const emp = String(report.empCode || '').toUpperCase();
+      const outcome = String(report.sourceOutcome || '').toLowerCase();
+      const reason = outcome === 'not_configured' ? 'not_configured'
+        : outcome === 'deadline' ? 'deadline'
+          : outcome === 'source_error' ? 'source_error' : 'upstream_unavailable';
+      return [emp, reason];
+    }).filter(([emp]) => emp));
     const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
     const threshold = Number(blocks.find((item) => Number.isFinite(Number(item.period.match?.threshold)))?.period.match.threshold || 90);
     const low = rate != null && rate < threshold;
@@ -412,6 +421,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
       match: {
         matchedRows, totalRows, rate, threshold, low,
         unavailablePairs, unavailableEmployees, unavailableEmployeeCount: unavailableEmployees.length,
+        unavailableReasons,
         staleEmployees, staleEmployeeCount: staleEmployees.length,
       },
       // Còn NV chưa lấy được nguồn ⇒ tổng chưa đầy đủ ⇒ vẫn để "tạm tính".

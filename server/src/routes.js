@@ -62,6 +62,8 @@ const employeeCostTable = require('./employeeCostTable');
 const closedSeal = require('./employeeCostClosedSeal');
 const formulaIdentity = require('./employeeCostFormulaIdentity');
 const employeeCostHealthKpis = require('./employeeCostHealthKpis');
+const { createEmployeeCostSnapshotStore } = require('./employeeCostSnapshotStore');
+const { createEmployeeCostSnapshotSync } = require('./employeeCostSnapshotSync');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
@@ -106,6 +108,12 @@ const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreFo
 const dormantReport = createDormantReportService({ dormantService, persist });
 const filteredEmployeeReport = createFilteredEmployeeReportService({ store, catalogManagement, appSaleCst, persist });
 const filteredEmployeeDelivery = createFilteredEmployeeDeliveryService({ filteredEmployeeReport, store, listTelegramMap: auth.listTelegramMap, notifyChannels, persist });
+const employeeCostSnapshotStore = createEmployeeCostSnapshotStore();
+const employeeCostSnapshotEnabled = () => String(process.env.EMPLOYEE_COST_SERVE_FROM_SNAPSHOT || '') === '1';
+// Synchronization is an independent rollout switch. Serving remains strictly
+// off unless its own flag is enabled; snapshots may be prebuilt and inspected
+// without changing the legacy GET path.
+const employeeCostSnapshotSyncEnabled = () => String(process.env.EMPLOYEE_COST_LOCAL_SNAPSHOT_SYNC_ENABLED || '') === '1';
 // ‼ Ba cửa dưới đây từng có BA bản chép tay của cùng một luật "ai là CEO" — một bản
 // còn quên `.toUpperCase()`. Nay tất cả gọi `auth.isCeoActor`, bản duy nhất.
 const requireCeoDelivery = (req, res, next) => auth.isCeoActor(req.session) ? next() : res.status(403).json({ error: 'Chỉ CEO được quản lý luồng gửi báo cáo cá nhân.', code: 'FILTERED_DELIVERY_CEO_REQUIRED' });
@@ -837,6 +845,111 @@ function employeeCostRosterRows() {
   return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
 }
 
+
+function employeeCostSnapshotStatus(period, roster = employeeCostRosterRows()) {
+  return employeeCostSnapshotSync.trangThaiDongBo(period, roster);
+}
+
+function employeeCostSnapshotMeta(status) {
+  return {
+    state: String(status?.state || 'failed'),
+    syncing: status?.syncing === true,
+    complete: status?.complete === true,
+    locked: status?.locked === true,
+    fetchedAt: String(status?.fetchedAt || ''),
+    generationId: String(status?.generationId || ''),
+    rosterCount: Number(status?.rosterCount || 0),
+    availableCount: Number(status?.availableCount || 0),
+    unavailableReasons: employeeCostSnapshotStore.safeUnavailableReasons(status?.unavailableReasons),
+    errorCode: String(status?.errorCode || ''),
+  };
+}
+
+async function employeeCostSnapshotBuildModel({ period, roster, employees, unavailableReasons, dependencies }) {
+  const request = {
+    session: { emp_code: 'SNAPSHOT_SYNC', role: 'admin' },
+    query: { emp: 'ALL', from: period, to: period, page: '1', pageSize: '20', sortDir: 'asc' },
+  };
+  const reports = new Map([...employees.entries()].map(([code, record]) => [code, record.report]));
+  // Build is detached from GET. Every source result is pinned into this generation;
+  // the published final model is what later GET requests serve byte-for-byte.
+  const model = await employeeCostAllPayload(request, {
+    paginate: true, auditEvent: 'snapshot_sync', suppressAudit: true,
+    prefetchedReportsByEmployee: reports,
+    costFetchOptions: { backgroundRefresh: false },
+    snapshotBuild: true,
+  });
+  const safeReasons = employeeCostSnapshotStore.safeUnavailableReasons(unavailableReasons);
+  return {
+    ...model,
+    trangThaiDongBo: {
+      state: Object.keys(safeReasons).length ? 'partial' : 'ready',
+      syncing: false, complete: Object.keys(safeReasons).length === 0,
+      locked: employeeCost.isPeriodClosed(period), fetchedAt: '', generationId: '',
+      rosterCount: roster.length, availableCount: employees.size,
+      unavailableReasons: safeReasons,
+      dependencyIdentity: employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson(dependencies)),
+    },
+    dongBoKy: period,
+  };
+}
+
+const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
+  store: employeeCostSnapshotStore,
+  concurrency: Number(process.env.EMPLOYEE_COST_SNAPSHOT_CONCURRENCY || 4),
+  rosterProvider: () => employeeCostRosterRows(),
+  fetchEmployee: async (empCode, { period, roster }) => {
+    // Probe the authoritative cost source once, bind that exact result to this
+    // employee/range, then enrich from the verified evidence. A local pinned-rate
+    // fast path must never be promoted as a newly synchronized source result.
+    const fetchedAt = new Date().toISOString();
+    const raw = await employeeCost.fetchEmployeeCost(empCode, {
+      from: period, to: period, backgroundRefresh: false,
+    });
+    const evidence = employeeCost.verifiedPrefetchEvidence(raw, empCode, {
+      from: period, to: period, verifiedAt: Date.parse(fetchedAt),
+    });
+    if (!evidence) return { ok: false, sourceOutcome: raw?.outcome || 'upstream_unavailable' };
+    const request = { session: { emp_code: 'SNAPSHOT_SYNC', role: 'admin' }, query: { emp: empCode, from: period, to: period } };
+    const report = await employeeCostPayload(request, {
+      requestedEmp: empCode, auditEvent: 'snapshot_sync_employee', roster,
+      includeSalaryAdvance: false, suppressAudit: true,
+      costFetchOptions: { backgroundRefresh: false }, prefetchedCostResult: evidence,
+    });
+    return {
+      report, fetchedAt,
+      sourceRevision: employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson({
+        outcome: raw.outcome, sourceRange: raw.sourceRange || null, payload: raw.payload,
+      })),
+    };
+  },
+  buildModel: employeeCostSnapshotBuildModel,
+  dependencyIdentity: async (period) => ({
+    period,
+    data: store.employeeCostDataSignature(),
+    rates: closedSeal.rateStoreFingerprint(),
+    formula: formulaIdentity.identity(),
+    app: APP_BUILD_VERSION,
+  }),
+  isLocked: (period) => employeeCost.isPeriodClosed(period),
+});
+
+function readEmployeeCostSnapshotModel(req, range) {
+  if (range.months.length !== 1) throw Object.assign(new Error('Chế độ snapshot hiện chỉ phục vụ đúng một kỳ mỗi lượt xem.'), { status: 409, code: 'EMPLOYEE_COST_SNAPSHOT_SINGLE_PERIOD_REQUIRED' });
+  const period = range.months[0];
+  const roster = employeeCostRosterRows();
+  const result = employeeCostSnapshotStore.tryReadCurrent(period, { roster });
+  if (!result.ok) throw Object.assign(new Error('Chưa có snapshot chi phí hợp lệ cho kỳ này. Bấm Đồng bộ lại.'), { status: 503, code: result.error?.code || 'EMPLOYEE_COST_SNAPSHOT_UNAVAILABLE' });
+  const snapshot = result.snapshot;
+  const status = employeeCostSnapshotMeta(employeeCostSnapshotStatus(period, roster));
+  const projected = employeeCostTable.transformReport(snapshot.model, employeeCostTableOptions(req, { paginate: true, allEmployees: true }));
+  return {
+    ...projected,
+    trangThaiDongBo: { ...status, generationId: snapshot.manifest.generationId, fetchedAt: snapshot.manifest.fetchedAt, complete: snapshot.complete, unavailableReasons: snapshot.unavailableReasons },
+    dongBoKy: period,
+  };
+}
+
 async function employeeBonusPriorityForPeriods(empCode, uiPeriods, catalogRowsByPeriod, { average = false, employeeTargetsByPeriod = {} } = {}) {
   const items = [];
   for (const uiPeriod of uiPeriods || []) {
@@ -1164,12 +1277,13 @@ async function employeeCostAllPayload(req, {
   paginate = true, auditEvent = 'view_all', suppressAudit = false, includePaymentSchedules = false,
   sourceReportSink = null, rosterSink = null, prefetchedReportsByEmployee = null, prefetchedCostResultsByEmployee = null,
   costFetchOptions = null, expectedDataSignature = null, prepareMemoReplace = false,
-  dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null,
+  dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null, snapshotBuild = false,
 } = {}) {
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  if (employeeCostSnapshotEnabled() && !snapshotBuild && paginate) return readEmployeeCostSnapshotModel(req, range);
   /* ── ĐÓNG DẤU KỲ ĐÃ KHOÁ SỔ (CEO đòi dứt điểm 10/08/2026) ──────────────────
      Tổng màn ALL = cộng sổ từng NV; ai không kịp trong hạn thì dòng của họ không
      lên bảng ⇒ tổng đổi theo số người kịp về. Kỳ đã khoá sổ thì con số phải BẤT
@@ -1281,7 +1395,7 @@ async function employeeCostAllPayload(req, {
     loadAllocationScopes: (scopes) => reconAllocationV4.loadScopes(scopes),
   });
   const sealKey = khoaDauTheoVanTay(vanTaySom);
-  if (sealKey && paginate) {
+  if (!snapshotBuild && sealKey && paginate) {
     const sealedEarly = closedSeal.read(sealKey);
     /* ‼ ĐỌC XONG PHẢI SOI LẠI NGUỒN (bot audit đợt 14, mục A1 — đúng).
      *
@@ -1691,8 +1805,8 @@ async function employeeCostAllPayload(req, {
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
   // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
   // không chứa actor/session nên mọi admin hợp lệ dùng chung đúng một bản.
-  if (!paginate) {
-    const merged = await buildMergedSealed();
+  if (!paginate || snapshotBuild) {
+    const merged = snapshotBuild ? await buildMerged() : await buildMergedSealed();
     return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: false, allEmployees: true }));
   }
   // Giữ 6 giờ chỉ khi bản gộp SẠCH; có NV lỗi nguồn thì chỉ giữ 2 phút.
@@ -1841,6 +1955,7 @@ async function selfHealUnavailableCostSources({
 
 let employeeCostWarmActive = false;
 async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
+  if (employeeCostSnapshotEnabled()) return false;
   const month = monthInputForKy(ky);
   if (!month) return false;
   // Không queue: một warm toàn cục tối đa. Event khác trong lúc đang chạy bỏ qua và
@@ -1947,6 +2062,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
 }
 
 function scheduleEmployeeCostAllWarm(ky, reason) {
+  if (employeeCostSnapshotEnabled()) return;
   setImmediate(() => warmEmployeeCostAllCache(ky, reason).catch((error) => {
     // Upload/activate responses remain successful when optional warming fails.
     console.warn('[employee-cost] ALL cache warm failed', { ky, reason, message: error.message });
@@ -1967,8 +2083,34 @@ function currentWarmKy() {
     return byDate || store.latestKy();
   } catch { return store.latestKy(); }
 }
+const EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS || 30 * 60 * 1000) || 30 * 60 * 1000,
+);
 let employeeCostAllWarmTimer = null;
+let employeeCostSnapshotSyncTimer = null;
+function currentSnapshotPeriod() { return monthInputForKy(currentWarmKy()); }
+function scheduleEmployeeCostSnapshotSync(reason, { onlyIfMissing = false } = {}) {
+  if (!employeeCostSnapshotSyncEnabled()) return false;
+  const period = currentSnapshotPeriod();
+  if (!period) return false;
+  if (onlyIfMissing && employeeCostSnapshotStore.tryReadCurrent(period, { roster: employeeCostRosterRows() }).ok) return false;
+  setImmediate(() => employeeCostSnapshotSync.requestSync(period, { reason }));
+  return true;
+}
+function startEmployeeCostSnapshotSyncLoop() {
+  if (!employeeCostSnapshotSyncEnabled()) return null;
+  if (employeeCostSnapshotSyncTimer) return employeeCostSnapshotSyncTimer;
+  // Startup only fills a missing current period; the interval refreshes the open period.
+  scheduleEmployeeCostSnapshotSync('startup', { onlyIfMissing: true });
+  employeeCostSnapshotSyncTimer = setInterval(() => scheduleEmployeeCostSnapshotSync('interval'), EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS);
+  if (typeof employeeCostSnapshotSyncTimer.unref === 'function') employeeCostSnapshotSyncTimer.unref();
+  console.log('[employee-cost-snapshot] sync loop started', { intervalMs: EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS });
+  return employeeCostSnapshotSyncTimer;
+}
 function startEmployeeCostAllWarmLoop() {
+  if (employeeCostSnapshotSyncEnabled()) return startEmployeeCostSnapshotSyncLoop();
+  if (employeeCostSnapshotEnabled()) return null;
   if (employeeCostAllWarmTimer) return employeeCostAllWarmTimer;
   if (String(process.env.EMPLOYEE_COST_ALL_WARM_DISABLED || '') === '1') return null;
   scheduleEmployeeCostAllWarm(currentWarmKy(), 'startup');
@@ -1982,8 +2124,10 @@ function startEmployeeCostAllWarmLoop() {
 }
 function stopEmployeeCostAllWarmLoop() {
   if (employeeCostAllWarmTimer) { clearInterval(employeeCostAllWarmTimer); employeeCostAllWarmTimer = null; }
+  if (employeeCostSnapshotSyncTimer) { clearInterval(employeeCostSnapshotSyncTimer); employeeCostSnapshotSyncTimer = null; }
 }
 router.startEmployeeCostAllWarmLoop = startEmployeeCostAllWarmLoop;
+router.startEmployeeCostSnapshotSyncLoop = startEmployeeCostSnapshotSyncLoop;
 router.stopEmployeeCostAllWarmLoop = stopEmployeeCostAllWarmLoop;
 // Xuất cho test self-heal (SPEC_EMP_COST_SOURCE_SELFHEAL.md).
 router.selfHealUnavailableCostSources = selfHealUnavailableCostSources;
@@ -2004,7 +2148,10 @@ router.penaltyPolicyPreviews = penaltyPolicyPreviews;
 
 // revenueRefresh invokes listeners in a detached task after a successful
 // materialize, so this Promise cannot delay or roll back the source refresh.
-revenueRefresh.onMaterialized((run) => warmEmployeeCostAllCache(run?.ky, 'revenue_refresh'));
+revenueRefresh.onMaterialized((run) => {
+  if (employeeCostSnapshotSyncEnabled()) return scheduleEmployeeCostSnapshotSync('revenue_refresh');
+  return warmEmployeeCostAllCache(run?.ky, 'revenue_refresh');
+});
 
 // Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
 // chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
@@ -2018,6 +2165,28 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
     : employeeCostTable.transformReport(await employeeCostPayload(req), employeeCostTableOptions(req, { paginate: true }));
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
+}));
+
+router.get('/employee-cost/snapshot/status', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const period = employeeCostSnapshotStore.normalizePeriod(req.query.period);
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ enabled: employeeCostSnapshotEnabled(), dongBoKy: period, trangThaiDongBo: employeeCostSnapshotMeta(employeeCostSnapshotStatus(period)) });
+}));
+
+router.post('/employee-cost/snapshot/resync', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  if (!auth.isCeoActor(req.session)) return res.status(403).json({ error: 'Chỉ CEO được đồng bộ snapshot chi phí.', code: 'EMPLOYEE_COST_SNAPSHOT_CEO_REQUIRED' });
+  const period = employeeCostSnapshotStore.normalizePeriod(req.body?.period);
+  const current = employeeCostSnapshotStore.tryReadCurrent(period, { roster: employeeCostRosterRows() });
+  if (employeeCost.isPeriodClosed(period, employeeCost.vnToday()) && current.ok && current.snapshot.manifest.complete) {
+    return res.status(409).json({ error: `Kỳ ${period} đã khoá và có snapshot đầy đủ.`, code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
+  }
+  if (!employeeCostSnapshotSyncEnabled()) {
+    return res.status(409).json({ error: 'Đồng bộ snapshot chưa được bật.', code: 'EMPLOYEE_COST_SNAPSHOT_SYNC_DISABLED' });
+  }
+  const accepted = employeeCostSnapshotSync.requestSync(period, { reason: 'manual' });
+  console.info('[employee-cost-snapshot] manual resync', { period, actor: String(req.session?.emp_code || '').slice(0, 32), accepted: accepted.accepted === true });
+  if (accepted.rateLimited) return res.status(429).json({ error: 'Vui lòng chờ trước khi đồng bộ lại.', code: 'EMPLOYEE_COST_SNAPSHOT_RATE_LIMIT' });
+  return res.status(202).json({ accepted: true, dongBoKy: period, trangThaiDongBo: employeeCostSnapshotMeta(employeeCostSnapshotStatus(period)) });
 }));
 
 // Independent KPI projection: an unavailable Salary service must never fail the
