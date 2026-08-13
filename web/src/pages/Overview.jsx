@@ -6,6 +6,7 @@ import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from 
 import { ComboSelect, MultiSelect, Select } from './revenueFilters.jsx';
 import { DonutChart, RevenueTrendChart, TargetGauge, TopBarChart } from '../chartsLazy.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
+import { readSwrCache, swrTimeLabel, writeSwrCache } from '../swrCache.js';
 
 function CstOwnerLine({ item }) {
   const codes = [...new Set((item.employees || []).map((emp) => String(emp?.code || emp || '').trim().toUpperCase()).filter(Boolean))];
@@ -170,6 +171,7 @@ export default function Overview({ me, onNavigate }) {
   const [kpi, setKpi] = useState(null);
   const [alerts, setAlerts] = useState(null);
   const [trend, setTrend] = useState(null);
+  const [staleSnapshotAt, setStaleSnapshotAt] = useState(null);
   const [topDim, setTopDim] = useState('unit');
   const topLimit = 20;
   const [topRows, setTopRows] = useState(null);
@@ -252,13 +254,35 @@ export default function Overview({ me, onNavigate }) {
 
   useEffect(() => {
     if (!overviewParams) return;
-    setKpi(null);
-    api.overview(overviewParams).then(setKpi);
-    setTrend(null);
-    api.trend(overviewParams).then(setTrend);
+    let active = true;
+    const actor = { emp_code: me.emp_code || me.empCode || me.id };
+    const period = { ...overviewParams };
+    const overviewSpec = { actor, screen: 'overview', period };
+    const trendSpec = { actor, screen: 'trend', period };
+    const cachedOverview = readSwrCache(localStorage, overviewSpec);
+    const cachedTrend = readSwrCache(localStorage, trendSpec);
+    setKpi(cachedOverview?.value || null);
+    setTrend(cachedTrend?.value || null);
+    const cachedAt = Math.min(...[cachedOverview?.savedAt, cachedTrend?.savedAt].filter(Number.isFinite));
+    setStaleSnapshotAt(Number.isFinite(cachedAt) ? cachedAt : null);
+
+    // Có bản cũ thì render ngay; hai request này chỉ làm tươi nền. Spinner chỉ còn
+    // xuất hiện khi actor/screen/period này chưa từng có dữ liệu hợp lệ.
+    api.overview(overviewParams).then((value) => {
+      if (!active) return;
+      setKpi(value);
+      writeSwrCache(localStorage, overviewSpec, value);
+      setStaleSnapshotAt(null);
+    }).catch(() => {});
+    api.trend(overviewParams).then((value) => {
+      if (!active) return;
+      setTrend(value);
+      writeSwrCache(localStorage, trendSpec, value);
+    }).catch(() => {});
     setAlerts(null);
-    api.alerts({ ...overviewParams, compareMode: cmpMode }).then(setAlerts);
-  }, [overviewParams, reloadTick, cmpMode]);
+    api.alerts({ ...overviewParams, compareMode: cmpMode }).then((value) => { if (active) setAlerts(value); }).catch(() => {});
+    return () => { active = false; };
+  }, [overviewParams, reloadTick, cmpMode, me.emp_code, me.empCode, me.id]);
 
   useEffect(() => {
     if (!me.isAdmin) return;
@@ -372,9 +396,8 @@ export default function Overview({ me, onNavigate }) {
       await api.revenueRefreshRun(selectedKy);
       const p = await api.periods();
       setPeriods(p.periods);
-      setKpi(null);
+      // Giữ số hiện tại trong lúc refresh; không đưa màn về spinner khi đã có data.
       api.overview(overviewParams).then(setKpi);
-      setTrend(null);
       api.trend(overviewParams).then(setTrend);
       loadTopRows(overviewParams);
       setUnitRevenueRows(null);
@@ -404,6 +427,7 @@ export default function Overview({ me, onNavigate }) {
         </div>
       )}
 
+      {staleSnapshotAt && <div className="swr-stale-label" role="status">Đang làm tươi · {swrTimeLabel(staleSnapshotAt)}</div>}
       {!kpi ? <Spinner /> : (
         <>
           <div className="kpi-grid overview-kpi-grid">

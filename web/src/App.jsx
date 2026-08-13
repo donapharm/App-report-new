@@ -11,6 +11,7 @@ import CeoNotificationBell from './CeoNotificationBell.jsx';
 import { PrivacyEyeButton, usePrivacy, useRevealScope } from './privacy.jsx';
 import Login from './pages/Login.jsx';
 import Overview from './pages/Overview.jsx';
+import { clearSwrActor } from './swrCache.js';
 import Revenue from './pages/Revenue.jsx';
 import RevenueFull from './pages/RevenueFull.jsx';
 import Products from './pages/Products.jsx';
@@ -313,7 +314,11 @@ export default function App() {
   );
   if (!me) return <Login onLogin={setMe} />;
 
-  const logout = () => { setToken(null); forgetLastPhone(); setMe(null); setTab('overview'); setTabStack([]); try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ } };
+  const logout = () => {
+    clearSwrActor(localStorage, me);
+    setToken(null); forgetLastPhone(); setMe(null); setTab('overview'); setTabStack([]);
+    try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ }
+  };
   // Backend chốt ai là CEO (`/me` trả `is_ceo`). Frontend KHÔNG tự đoán từ chuỗi role:
   // tài khoản CEO thật trên PROD có role 'admin', đoán bằng role là giấu mất chức năng.
   const tabs = TABS.filter((item) => isTabAllowed(item, me)).map((t) => (

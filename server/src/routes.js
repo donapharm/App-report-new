@@ -300,7 +300,8 @@ router.use((req, res, next) => {
 function routeDataSignature(routeName) {
   if (routeName === 'filters') return store.unitGroupDataSignature();
   if (routeName === 'cst') return store.cstDataSignature();
-  if (routeName === 'alerts' || routeName === 'analysis') return store.dashboardDataSignature();
+  if (routeName === 'alerts' || routeName === 'analysis' || routeName === 'overview') return store.dashboardDataSignature();
+  if (routeName === 'trend') return store.targetDataSignature();
   if (routeName === 'employee-cost-all') return store.employeeCostDataSignature();
   return currentMemoDataSignature();
 }
@@ -325,6 +326,71 @@ function readCacheKey(req, routeName, extra = {}) {
  * kho đổi giữa hai lời gọi ⇒ số đời A bị cất dưới khoá hiển thị đời B ⇒ nguồn đang là
  * 222 mà màn hình vẫn 111. Nguyên tắc: **một request chụp vân tay ĐÚNG MỘT LẦN**, rồi
  * mọi khoá, mọi dấu, mọi cổng kiểm đều dùng chung đúng con dấu đó. */
+// Single-flight riêng cho các route dựng báo cáo. Key đi qua readCacheKey nên
+// luôn khóa theo generation + role + actor + scope + toàn bộ query; tuyệt đối
+// không dùng chung payload giữa hai danh tính dù câu hỏi giống nhau. Đây chỉ gộp
+// công việc async trùng nhau, không biến parse CPU đồng bộ thành công việc nền.
+const expensiveReadInFlight = new Map();
+function requestAbortedError() {
+  return Object.assign(new Error('Request đã đóng trước khi dựng xong.'), {
+    name: 'AbortError', code: 'REQUEST_ABORTED', status: 499,
+  });
+}
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw requestAbortedError();
+}
+
+// Một build có thể có nhiều người chờ. Mỗi request rời đi chỉ bỏ đúng subscriber
+// đó; controller chung chỉ abort khi KHÔNG còn ai cần kết quả. Listener luôn được
+// tháo khi subscriber hoàn tất để keep-alive request không bị giữ trong RAM.
+function sharedCancellableFlight(map, key, req, build) {
+  let entry = map.get(key);
+  if (!entry) {
+    const controller = new AbortController();
+    entry = { controller, subscribers: new Set(), settled: false, task: null };
+    entry.task = Promise.resolve()
+      .then(() => build(controller.signal))
+      .then((value) => { throwIfAborted(controller.signal); return value; })
+      .finally(() => {
+        entry.settled = true;
+        if (map.get(key) === entry) map.delete(key);
+      });
+    // The per-subscriber races below observe rejection. Keep this handler solely
+    // to prevent an all-abandoned flight from becoming an unhandled rejection.
+    entry.task.catch(() => {});
+    map.set(key, entry);
+  }
+
+  const subscriber = Symbol('request-subscriber');
+  entry.subscribers.add(subscriber);
+  let rejectAbandoned;
+  const abandoned = new Promise((resolve, reject) => { rejectAbandoned = reject; });
+  let left = false;
+  const cleanup = () => {
+    if (typeof req?.removeListener !== 'function') return;
+    req.removeListener('close', onAbandoned);
+    req.removeListener('aborted', onAbandoned);
+  };
+  const leave = (aborted) => {
+    if (left) return;
+    left = true;
+    cleanup();
+    entry.subscribers.delete(subscriber);
+    if (aborted) rejectAbandoned(requestAbortedError());
+    if (entry.subscribers.size === 0 && !entry.settled && aborted) entry.controller.abort();
+  };
+  const onAbandoned = () => leave(true);
+  if (typeof req?.once === 'function') {
+    req.once('close', onAbandoned);
+    req.once('aborted', onAbandoned);
+  }
+  if (req?.aborted === true) onAbandoned();
+  return Promise.race([entry.task, abandoned]).finally(() => leave(false));
+}
+function protectedRouteBuild(req, routeName, build, extra = {}) {
+  return sharedCancellableFlight(expensiveReadInFlight, readCacheKey(req, routeName, extra), req, build);
+}
+
 function employeeCostAllCacheKey(req, phase, vanTay) {
   // ALL is admin-only and contains the same company-wide payload for every
   // authorized admin. Deliberately omit actor/role so CEO/admin sessions share
@@ -2135,6 +2201,9 @@ router.collectUnavailableEmployees = collectUnavailableEmployees;
 router.invalidateEmployeeCostAll = invalidateEmployeeCostAll;
 router.employeeCostAllKeyMatchesRange = employeeCostAllKeyMatchesRange;
 router.singleFlight = singleFlight;
+router.sharedCancellableFlight = sharedCancellableFlight;
+router.throwIfAborted = throwIfAborted;
+router.expensiveReadInFlight = expensiveReadInFlight;
 router.mapBounded = mapBounded;
 router.reusableEmployeeCostReport = reusableEmployeeCostReport;
 router.sameCycleEmployeeCostReport = sameCycleEmployeeCostReport;
@@ -4456,39 +4525,55 @@ router.get('/admin/assignments/template.xlsx', auth.requireAuth, auth.requireAdm
 });
 
 /* ---------- Overview + Alerts ---------- */
-router.get('/overview', auth.requireAuth, (req, res) => {
-  const scope = auth.scopeOf(req.session);
-  const pc = periodCtx(req.query);
-  res.json({
-    ...A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }),
-    emptyPeriod: pc.emptyPeriod,
-  });
-});
-
-router.get('/trend', auth.requireAuth, (req, res) => {
-  const scope = auth.scopeOf(req.session);
-  const filters = revenueFiltersFromQuery(req.query);
-  const empFilter = new Set(A.selectedEmployeeCodes(filters));
-  const targetComparable = A.targetFiltersComparable(filters);
-  const cacheKey = `trend:${store.targetDataSignature()}:${scope.empCode || 'ALL'}:${JSON.stringify(filters)}`;
-  res.json(memoGet(cacheKey, 60 * 1000, () => store.listPeriods().map((p) => {
-    // Lightweight trend: không gọi overviewKpis vì hàm đó còn tính CST/target từng NV.
-    const rows = A.applyFilters(store.getRows({ ky: p.ky, scope }), filters);
-    const revenue = A.sum(rows, (r) => r.revenue);
-    const targetTotal = targetComparable
-      ? A.sum(store.getTargets({ ky: p.ky, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase())), (t) => t.target)
-      : null;
-    const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
+router.get('/overview', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await protectedRouteBuild(req, 'overview', (signal) => {
+    // overviewKpis hiện là CPU đồng bộ: signal ngăn publish sau khi request bỏ đi,
+    // nhưng KHÔNG được tuyên bố là có thể ngắt parse CPU giữa chừng.
+    throwIfAborted(signal);
+    const scope = auth.scopeOf(req.session);
+    const pc = periodCtx(req.query);
     return {
-      ky: p.ky,
-      revenue,
-      revenueBeforeVat,
-      targetTotal,
-      targetComparable,
-      pctTarget: targetComparable && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
+      ...A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }),
+      emptyPeriod: pc.emptyPeriod,
     };
-  })));
-});
+  });
+  res.json(payload);
+}));
+
+router.get('/trend', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const cacheKey = readCacheKey(req, 'trend');
+  const payload = await protectedRouteBuild(req, 'trend', (signal) => memoGet(cacheKey, 60 * 1000, async () => {
+    const scope = auth.scopeOf(req.session);
+    const filters = revenueFiltersFromQuery(req.query);
+    const empFilter = new Set(A.selectedEmployeeCodes(filters));
+    const targetComparable = A.targetFiltersComparable(filters);
+    const result = [];
+    for (const p of store.listPeriods()) {
+      throwIfAborted(signal);
+      // Yield between periods so close/aborted can be observed. This does not move
+      // synchronous parsing off the serving thread; that remains separate work.
+      await new Promise((resolve) => setImmediate(resolve));
+      throwIfAborted(signal);
+      const rows = A.applyFilters(store.getRows({ ky: p.ky, scope }), filters);
+      const revenue = A.sum(rows, (r) => r.revenue);
+      const targetTotal = targetComparable
+        ? A.sum(store.getTargets({ ky: p.ky, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase())), (t) => t.target)
+        : null;
+      const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
+      result.push({
+        ky: p.ky,
+        revenue,
+        revenueBeforeVat,
+        targetTotal,
+        targetComparable,
+        pctTarget: targetComparable && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
+      });
+    }
+    throwIfAborted(signal);
+    return result;
+  }));
+  res.json(payload);
+}));
 
 router.get('/alerts', auth.requireAuth, memoJson('alerts'), (req, res) => {
   res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session), compareMode: req.query.compareMode, filters: revenueFiltersFromQuery(req.query) }));

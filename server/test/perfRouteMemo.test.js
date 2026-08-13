@@ -91,6 +91,82 @@ test('heavy read memo key separates query, actor, role and employee scope and in
   }
 });
 
+
+test('overview single-flight coalesces ten identical requests and isolates actor, scope and query', async () => {
+  const analytics = require('../src/analytics');
+  const originalOverview = analytics.overviewKpis;
+  let builds = 0;
+  analytics.overviewKpis = ({ scope, filters }) => ({
+    build: ++builds,
+    actorScope: scope.empCode || 'ADMIN',
+    q: filters.q || null,
+  });
+  try {
+    const query = { ky: '07.2026', q: 'ten-f5' };
+    const same = await Promise.all(Array.from({ length: 10 }, () => invoke('/overview', query, admin)));
+    assert.equal(builds, 1, 'ten identical concurrent calls must run one overview builder');
+    assert.ok(same.every((result) => result.status === 200));
+    assert.ok(same.every((result) => result.body.build === 1));
+
+    await invoke('/overview', query, admin2);
+    assert.equal(builds, 2, 'different actor must not join the first actor flight');
+    await invoke('/overview', query, sale);
+    assert.equal(builds, 3, 'different employee scope must be isolated');
+    await invoke('/overview', { ...query, q: 'other-query' }, admin);
+    assert.equal(builds, 4, 'different query must be isolated');
+  } finally {
+    analytics.overviewKpis = originalOverview;
+  }
+});
+
+test('overview single-flight evicts a failed build so the next request can retry', async () => {
+  const analytics = require('../src/analytics');
+  const originalOverview = analytics.overviewKpis;
+  let attempts = 0;
+  analytics.overviewKpis = () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error('overview transient');
+    return { ok: true, attempts };
+  };
+  try {
+    const failed = await invoke('/overview', { ky: '06.2026', q: 'failure-evicts' }, admin);
+    assert.equal(failed.status, 500);
+    assert.equal(failed.body.error, 'overview transient');
+    const recovered = await invoke('/overview', { ky: '06.2026', q: 'failure-evicts' }, admin);
+    assert.equal(recovered.status, 200);
+    assert.deepEqual(recovered.body, { ok: true, attempts: 2, emptyPeriod: true });
+  } finally {
+    analytics.overviewKpis = originalOverview;
+  }
+});
+
+test('trend single-flight and memo coalesce ten identical builders with protected identity key', async () => {
+  const originalListPeriods = store.listPeriods;
+  const originalGetRows = store.getRows;
+  const originalGetTargets = store.getTargets;
+  const originalTargetSignature = store.targetDataSignature;
+  let builds = 0;
+  store.listPeriods = () => { builds += 1; return [{ ky: '07.2026' }]; };
+  store.getRows = () => [{ revenue: 120 }];
+  store.getTargets = () => [{ emp_code: 'DN001', target: 100 }];
+  store.targetDataSignature = () => 'trend-single-flight';
+  try {
+    const query = { ky: '07.2026', q: 'trend-ten-f5' };
+    const same = await Promise.all(Array.from({ length: 10 }, () => invoke('/trend', query, admin)));
+    assert.equal(builds, 1, 'ten identical concurrent calls must run one trend builder');
+    assert.ok(same.every((result) => result.status === 200));
+    await invoke('/trend', query, admin2);
+    await invoke('/trend', query, sale);
+    await invoke('/trend', { ...query, q: 'other-trend-query' }, admin);
+    assert.equal(builds, 4, 'actor, employee scope and query each require an isolated trend result');
+  } finally {
+    store.listPeriods = originalListPeriods;
+    store.getRows = originalGetRows;
+    store.getTargets = originalGetTargets;
+    store.targetDataSignature = originalTargetSignature;
+  }
+});
+
 test('employee-cost ALL shares one admin base across actors/pages/filters and invalidates on signature', async () => {
   const originalSignature = store.activeDataSignature;
   const originalEmployeeCostSignature = store.employeeCostDataSignature;
