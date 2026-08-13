@@ -376,19 +376,15 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const totalRows = available.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const unavailablePairs = unavailable.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const unavailableEmployees = unavailable.map(({ report }) => String(report.empCode || '').toUpperCase()).filter(Boolean);
-    /* ‼ NÓI ĐÚNG THỦ PHẠM, ĐỪNG ĐỔ HẾT CHO DATAHUB (CEO hỏi 13/08/2026:
-     * *"tại sao vẫn thấy lấy dữ liệu từ DataHub nên dữ liệu chưa trả đủ là thế nào"*).
-     *
-     * Màn hình đang ghi cứng "nguồn chi phí DataHub chưa trả dữ liệu — báo DataHub kiểm
-     * tra" cho MỌI trường hợp. Nhưng `fetchRawEmployeeCost` trả `not_configured` **trước
-     * khi chạm mạng** nếu NV đó **thiếu khoá** trong `APP_REPORT_EMPLOYEE_COST_KEYS`, hoặc
-     * khoá bị trùng/định dạng sai — lúc đó **lỗi nằm ở cấu hình BÊN MÌNH**, DataHub vô can.
-     * Báo sai chỗ thì CEO đi hỏi DataHub, DataHub bảo "không thấy gọi", và vòng đó lặp mãi.
-     *
-     * Nay gửi kèm LÝ DO từng người để màn hình nói đúng người đúng việc. */
-    const unavailableReasons = Object.fromEntries(unavailable
-      .map(({ report }) => [String(report.empCode || '').toUpperCase(), String(report.sourceOutcome || 'unknown')])
-      .filter(([code]) => code));
+    // Chỉ phát ra reason code allowlist; không đưa message upstream/key/payload vào UI.
+    const unavailableReasons = Object.fromEntries(unavailable.map(({ report }) => {
+      const emp = String(report.empCode || '').toUpperCase();
+      const outcome = String(report.sourceOutcome || '').toLowerCase();
+      const reason = outcome === 'not_configured' ? 'not_configured'
+        : outcome === 'deadline' ? 'deadline'
+          : outcome === 'source_error' ? 'source_error' : 'upstream_unavailable';
+      return [emp, reason];
+    }).filter(([emp]) => emp));
     const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
     const threshold = Number(blocks.find((item) => Number.isFinite(Number(item.period.match?.threshold)))?.period.match.threshold || 90);
     const low = rate != null && rate < threshold;

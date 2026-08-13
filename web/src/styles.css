@@ -2703,3 +2703,5 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .cost-breakdown-cell b { display:block; }
 .cost-breakdown-cell small { display:block; font-size:10.5px; color:var(--muted); font-weight:700; }
 .cost-breakdown-cell em { display:block; font-style:normal; font-size:9.5px; }
+
+.swr-stale-label { margin: 0 0 9px; color: var(--muted); font-size: 11.5px; font-weight: 700; }

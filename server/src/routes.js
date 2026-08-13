@@ -62,6 +62,8 @@ const employeeCostTable = require('./employeeCostTable');
 const closedSeal = require('./employeeCostClosedSeal');
 const formulaIdentity = require('./employeeCostFormulaIdentity');
 const employeeCostHealthKpis = require('./employeeCostHealthKpis');
+const { createEmployeeCostSnapshotStore } = require('./employeeCostSnapshotStore');
+const { createEmployeeCostSnapshotSync } = require('./employeeCostSnapshotSync');
 const salaryAdvance = require('./salaryAdvance');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
@@ -106,6 +108,12 @@ const dormantService = createDormantService({ store, scoreForEmp: diemXu.scoreFo
 const dormantReport = createDormantReportService({ dormantService, persist });
 const filteredEmployeeReport = createFilteredEmployeeReportService({ store, catalogManagement, appSaleCst, persist });
 const filteredEmployeeDelivery = createFilteredEmployeeDeliveryService({ filteredEmployeeReport, store, listTelegramMap: auth.listTelegramMap, notifyChannels, persist });
+const employeeCostSnapshotStore = createEmployeeCostSnapshotStore();
+const employeeCostSnapshotEnabled = () => String(process.env.EMPLOYEE_COST_SERVE_FROM_SNAPSHOT || '') === '1';
+// Synchronization is an independent rollout switch. Serving remains strictly
+// off unless its own flag is enabled; snapshots may be prebuilt and inspected
+// without changing the legacy GET path.
+const employeeCostSnapshotSyncEnabled = () => String(process.env.EMPLOYEE_COST_LOCAL_SNAPSHOT_SYNC_ENABLED || '') === '1';
 // ‼ Ba cửa dưới đây từng có BA bản chép tay của cùng một luật "ai là CEO" — một bản
 // còn quên `.toUpperCase()`. Nay tất cả gọi `auth.isCeoActor`, bản duy nhất.
 const requireCeoDelivery = (req, res, next) => auth.isCeoActor(req.session) ? next() : res.status(403).json({ error: 'Chỉ CEO được quản lý luồng gửi báo cáo cá nhân.', code: 'FILTERED_DELIVERY_CEO_REQUIRED' });
@@ -292,7 +300,8 @@ router.use((req, res, next) => {
 function routeDataSignature(routeName) {
   if (routeName === 'filters') return store.unitGroupDataSignature();
   if (routeName === 'cst') return store.cstDataSignature();
-  if (routeName === 'alerts' || routeName === 'analysis') return store.dashboardDataSignature();
+  if (routeName === 'alerts' || routeName === 'analysis' || routeName === 'overview') return store.dashboardDataSignature();
+  if (routeName === 'trend') return store.targetDataSignature();
   if (routeName === 'employee-cost-all') return store.employeeCostDataSignature();
   return currentMemoDataSignature();
 }
@@ -317,6 +326,71 @@ function readCacheKey(req, routeName, extra = {}) {
  * kho đổi giữa hai lời gọi ⇒ số đời A bị cất dưới khoá hiển thị đời B ⇒ nguồn đang là
  * 222 mà màn hình vẫn 111. Nguyên tắc: **một request chụp vân tay ĐÚNG MỘT LẦN**, rồi
  * mọi khoá, mọi dấu, mọi cổng kiểm đều dùng chung đúng con dấu đó. */
+// Single-flight riêng cho các route dựng báo cáo. Key đi qua readCacheKey nên
+// luôn khóa theo generation + role + actor + scope + toàn bộ query; tuyệt đối
+// không dùng chung payload giữa hai danh tính dù câu hỏi giống nhau. Đây chỉ gộp
+// công việc async trùng nhau, không biến parse CPU đồng bộ thành công việc nền.
+const expensiveReadInFlight = new Map();
+function requestAbortedError() {
+  return Object.assign(new Error('Request đã đóng trước khi dựng xong.'), {
+    name: 'AbortError', code: 'REQUEST_ABORTED', status: 499,
+  });
+}
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw requestAbortedError();
+}
+
+// Một build có thể có nhiều người chờ. Mỗi request rời đi chỉ bỏ đúng subscriber
+// đó; controller chung chỉ abort khi KHÔNG còn ai cần kết quả. Listener luôn được
+// tháo khi subscriber hoàn tất để keep-alive request không bị giữ trong RAM.
+function sharedCancellableFlight(map, key, req, build) {
+  let entry = map.get(key);
+  if (!entry) {
+    const controller = new AbortController();
+    entry = { controller, subscribers: new Set(), settled: false, task: null };
+    entry.task = Promise.resolve()
+      .then(() => build(controller.signal))
+      .then((value) => { throwIfAborted(controller.signal); return value; })
+      .finally(() => {
+        entry.settled = true;
+        if (map.get(key) === entry) map.delete(key);
+      });
+    // The per-subscriber races below observe rejection. Keep this handler solely
+    // to prevent an all-abandoned flight from becoming an unhandled rejection.
+    entry.task.catch(() => {});
+    map.set(key, entry);
+  }
+
+  const subscriber = Symbol('request-subscriber');
+  entry.subscribers.add(subscriber);
+  let rejectAbandoned;
+  const abandoned = new Promise((resolve, reject) => { rejectAbandoned = reject; });
+  let left = false;
+  const cleanup = () => {
+    if (typeof req?.removeListener !== 'function') return;
+    req.removeListener('close', onAbandoned);
+    req.removeListener('aborted', onAbandoned);
+  };
+  const leave = (aborted) => {
+    if (left) return;
+    left = true;
+    cleanup();
+    entry.subscribers.delete(subscriber);
+    if (aborted) rejectAbandoned(requestAbortedError());
+    if (entry.subscribers.size === 0 && !entry.settled && aborted) entry.controller.abort();
+  };
+  const onAbandoned = () => leave(true);
+  if (typeof req?.once === 'function') {
+    req.once('close', onAbandoned);
+    req.once('aborted', onAbandoned);
+  }
+  if (req?.aborted === true) onAbandoned();
+  return Promise.race([entry.task, abandoned]).finally(() => leave(false));
+}
+function protectedRouteBuild(req, routeName, build, extra = {}) {
+  return sharedCancellableFlight(expensiveReadInFlight, readCacheKey(req, routeName, extra), req, build);
+}
+
 function employeeCostAllCacheKey(req, phase, vanTay) {
   // ALL is admin-only and contains the same company-wide payload for every
   // authorized admin. Deliberately omit actor/role so CEO/admin sessions share
@@ -837,6 +911,111 @@ function employeeCostRosterRows() {
   return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
 }
 
+
+function employeeCostSnapshotStatus(period, roster = employeeCostRosterRows()) {
+  return employeeCostSnapshotSync.trangThaiDongBo(period, roster);
+}
+
+function employeeCostSnapshotMeta(status) {
+  return {
+    state: String(status?.state || 'failed'),
+    syncing: status?.syncing === true,
+    complete: status?.complete === true,
+    locked: status?.locked === true,
+    fetchedAt: String(status?.fetchedAt || ''),
+    generationId: String(status?.generationId || ''),
+    rosterCount: Number(status?.rosterCount || 0),
+    availableCount: Number(status?.availableCount || 0),
+    unavailableReasons: employeeCostSnapshotStore.safeUnavailableReasons(status?.unavailableReasons),
+    errorCode: String(status?.errorCode || ''),
+  };
+}
+
+async function employeeCostSnapshotBuildModel({ period, roster, employees, unavailableReasons, dependencies }) {
+  const request = {
+    session: { emp_code: 'SNAPSHOT_SYNC', role: 'admin' },
+    query: { emp: 'ALL', from: period, to: period, page: '1', pageSize: '20', sortDir: 'asc' },
+  };
+  const reports = new Map([...employees.entries()].map(([code, record]) => [code, record.report]));
+  // Build is detached from GET. Every source result is pinned into this generation;
+  // the published final model is what later GET requests serve byte-for-byte.
+  const model = await employeeCostAllPayload(request, {
+    paginate: true, auditEvent: 'snapshot_sync', suppressAudit: true,
+    prefetchedReportsByEmployee: reports,
+    costFetchOptions: { backgroundRefresh: false },
+    snapshotBuild: true,
+  });
+  const safeReasons = employeeCostSnapshotStore.safeUnavailableReasons(unavailableReasons);
+  return {
+    ...model,
+    trangThaiDongBo: {
+      state: Object.keys(safeReasons).length ? 'partial' : 'ready',
+      syncing: false, complete: Object.keys(safeReasons).length === 0,
+      locked: employeeCost.isPeriodClosed(period), fetchedAt: '', generationId: '',
+      rosterCount: roster.length, availableCount: employees.size,
+      unavailableReasons: safeReasons,
+      dependencyIdentity: employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson(dependencies)),
+    },
+    dongBoKy: period,
+  };
+}
+
+const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
+  store: employeeCostSnapshotStore,
+  concurrency: Number(process.env.EMPLOYEE_COST_SNAPSHOT_CONCURRENCY || 4),
+  rosterProvider: () => employeeCostRosterRows(),
+  fetchEmployee: async (empCode, { period, roster }) => {
+    // Probe the authoritative cost source once, bind that exact result to this
+    // employee/range, then enrich from the verified evidence. A local pinned-rate
+    // fast path must never be promoted as a newly synchronized source result.
+    const fetchedAt = new Date().toISOString();
+    const raw = await employeeCost.fetchEmployeeCost(empCode, {
+      from: period, to: period, backgroundRefresh: false,
+    });
+    const evidence = employeeCost.verifiedPrefetchEvidence(raw, empCode, {
+      from: period, to: period, verifiedAt: Date.parse(fetchedAt),
+    });
+    if (!evidence) return { ok: false, sourceOutcome: raw?.outcome || 'upstream_unavailable' };
+    const request = { session: { emp_code: 'SNAPSHOT_SYNC', role: 'admin' }, query: { emp: empCode, from: period, to: period } };
+    const report = await employeeCostPayload(request, {
+      requestedEmp: empCode, auditEvent: 'snapshot_sync_employee', roster,
+      includeSalaryAdvance: false, suppressAudit: true,
+      costFetchOptions: { backgroundRefresh: false }, prefetchedCostResult: evidence,
+    });
+    return {
+      report, fetchedAt,
+      sourceRevision: employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson({
+        outcome: raw.outcome, sourceRange: raw.sourceRange || null, payload: raw.payload,
+      })),
+    };
+  },
+  buildModel: employeeCostSnapshotBuildModel,
+  dependencyIdentity: async (period) => ({
+    period,
+    data: store.employeeCostDataSignature(),
+    rates: closedSeal.rateStoreFingerprint(),
+    formula: formulaIdentity.identity(),
+    app: APP_BUILD_VERSION,
+  }),
+  isLocked: (period) => employeeCost.isPeriodClosed(period),
+});
+
+function readEmployeeCostSnapshotModel(req, range) {
+  if (range.months.length !== 1) throw Object.assign(new Error('Chế độ snapshot hiện chỉ phục vụ đúng một kỳ mỗi lượt xem.'), { status: 409, code: 'EMPLOYEE_COST_SNAPSHOT_SINGLE_PERIOD_REQUIRED' });
+  const period = range.months[0];
+  const roster = employeeCostRosterRows();
+  const result = employeeCostSnapshotStore.tryReadCurrent(period, { roster });
+  if (!result.ok) throw Object.assign(new Error('Chưa có snapshot chi phí hợp lệ cho kỳ này. Bấm Đồng bộ lại.'), { status: 503, code: result.error?.code || 'EMPLOYEE_COST_SNAPSHOT_UNAVAILABLE' });
+  const snapshot = result.snapshot;
+  const status = employeeCostSnapshotMeta(employeeCostSnapshotStatus(period, roster));
+  const projected = employeeCostTable.transformReport(snapshot.model, employeeCostTableOptions(req, { paginate: true, allEmployees: true }));
+  return {
+    ...projected,
+    trangThaiDongBo: { ...status, generationId: snapshot.manifest.generationId, fetchedAt: snapshot.manifest.fetchedAt, complete: snapshot.complete, unavailableReasons: snapshot.unavailableReasons },
+    dongBoKy: period,
+  };
+}
+
 async function employeeBonusPriorityForPeriods(empCode, uiPeriods, catalogRowsByPeriod, { average = false, employeeTargetsByPeriod = {} } = {}) {
   const items = [];
   for (const uiPeriod of uiPeriods || []) {
@@ -1164,12 +1343,13 @@ async function employeeCostAllPayload(req, {
   paginate = true, auditEvent = 'view_all', suppressAudit = false, includePaymentSchedules = false,
   sourceReportSink = null, rosterSink = null, prefetchedReportsByEmployee = null, prefetchedCostResultsByEmployee = null,
   costFetchOptions = null, expectedDataSignature = null, prepareMemoReplace = false,
-  dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null,
+  dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null, snapshotBuild = false,
 } = {}) {
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  if (employeeCostSnapshotEnabled() && !snapshotBuild && paginate) return readEmployeeCostSnapshotModel(req, range);
   /* ── ĐÓNG DẤU KỲ ĐÃ KHOÁ SỔ (CEO đòi dứt điểm 10/08/2026) ──────────────────
      Tổng màn ALL = cộng sổ từng NV; ai không kịp trong hạn thì dòng của họ không
      lên bảng ⇒ tổng đổi theo số người kịp về. Kỳ đã khoá sổ thì con số phải BẤT
@@ -1281,7 +1461,7 @@ async function employeeCostAllPayload(req, {
     loadAllocationScopes: (scopes) => reconAllocationV4.loadScopes(scopes),
   });
   const sealKey = khoaDauTheoVanTay(vanTaySom);
-  if (sealKey && paginate) {
+  if (!snapshotBuild && sealKey && paginate) {
     const sealedEarly = closedSeal.read(sealKey);
     /* ‼ ĐỌC XONG PHẢI SOI LẠI NGUỒN (bot audit đợt 14, mục A1 — đúng).
      *
@@ -1691,8 +1871,8 @@ async function employeeCostAllPayload(req, {
   // Export giữ nguyên đường audit/build riêng. Bảng UI dùng hai tầng RAM memo:
   // base nặng theo kỳ+signature+ADMIN_ALL; view nhẹ theo filters/page. Vì base
   // không chứa actor/session nên mọi admin hợp lệ dùng chung đúng một bản.
-  if (!paginate) {
-    const merged = await buildMergedSealed();
+  if (!paginate || snapshotBuild) {
+    const merged = snapshotBuild ? await buildMerged() : await buildMergedSealed();
     return employeeCostTable.transformReport(merged, employeeCostTableOptions(req, { paginate: false, allEmployees: true }));
   }
   // Giữ 6 giờ chỉ khi bản gộp SẠCH; có NV lỗi nguồn thì chỉ giữ 2 phút.
@@ -1841,6 +2021,7 @@ async function selfHealUnavailableCostSources({
 
 let employeeCostWarmActive = false;
 async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
+  if (employeeCostSnapshotEnabled()) return false;
   const month = monthInputForKy(ky);
   if (!month) return false;
   // Không queue: một warm toàn cục tối đa. Event khác trong lúc đang chạy bỏ qua và
@@ -1947,6 +2128,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
 }
 
 function scheduleEmployeeCostAllWarm(ky, reason) {
+  if (employeeCostSnapshotEnabled()) return;
   setImmediate(() => warmEmployeeCostAllCache(ky, reason).catch((error) => {
     // Upload/activate responses remain successful when optional warming fails.
     console.warn('[employee-cost] ALL cache warm failed', { ky, reason, message: error.message });
@@ -1967,8 +2149,34 @@ function currentWarmKy() {
     return byDate || store.latestKy();
   } catch { return store.latestKy(); }
 }
+const EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS = Math.max(
+  60 * 1000,
+  Number(process.env.EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS || 30 * 60 * 1000) || 30 * 60 * 1000,
+);
 let employeeCostAllWarmTimer = null;
+let employeeCostSnapshotSyncTimer = null;
+function currentSnapshotPeriod() { return monthInputForKy(currentWarmKy()); }
+function scheduleEmployeeCostSnapshotSync(reason, { onlyIfMissing = false } = {}) {
+  if (!employeeCostSnapshotSyncEnabled()) return false;
+  const period = currentSnapshotPeriod();
+  if (!period) return false;
+  if (onlyIfMissing && employeeCostSnapshotStore.tryReadCurrent(period, { roster: employeeCostRosterRows() }).ok) return false;
+  setImmediate(() => employeeCostSnapshotSync.requestSync(period, { reason }));
+  return true;
+}
+function startEmployeeCostSnapshotSyncLoop() {
+  if (!employeeCostSnapshotSyncEnabled()) return null;
+  if (employeeCostSnapshotSyncTimer) return employeeCostSnapshotSyncTimer;
+  // Startup only fills a missing current period; the interval refreshes the open period.
+  scheduleEmployeeCostSnapshotSync('startup', { onlyIfMissing: true });
+  employeeCostSnapshotSyncTimer = setInterval(() => scheduleEmployeeCostSnapshotSync('interval'), EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS);
+  if (typeof employeeCostSnapshotSyncTimer.unref === 'function') employeeCostSnapshotSyncTimer.unref();
+  console.log('[employee-cost-snapshot] sync loop started', { intervalMs: EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS });
+  return employeeCostSnapshotSyncTimer;
+}
 function startEmployeeCostAllWarmLoop() {
+  if (employeeCostSnapshotSyncEnabled()) return startEmployeeCostSnapshotSyncLoop();
+  if (employeeCostSnapshotEnabled()) return null;
   if (employeeCostAllWarmTimer) return employeeCostAllWarmTimer;
   if (String(process.env.EMPLOYEE_COST_ALL_WARM_DISABLED || '') === '1') return null;
   scheduleEmployeeCostAllWarm(currentWarmKy(), 'startup');
@@ -1982,8 +2190,10 @@ function startEmployeeCostAllWarmLoop() {
 }
 function stopEmployeeCostAllWarmLoop() {
   if (employeeCostAllWarmTimer) { clearInterval(employeeCostAllWarmTimer); employeeCostAllWarmTimer = null; }
+  if (employeeCostSnapshotSyncTimer) { clearInterval(employeeCostSnapshotSyncTimer); employeeCostSnapshotSyncTimer = null; }
 }
 router.startEmployeeCostAllWarmLoop = startEmployeeCostAllWarmLoop;
+router.startEmployeeCostSnapshotSyncLoop = startEmployeeCostSnapshotSyncLoop;
 router.stopEmployeeCostAllWarmLoop = stopEmployeeCostAllWarmLoop;
 // Xuất cho test self-heal (SPEC_EMP_COST_SOURCE_SELFHEAL.md).
 router.selfHealUnavailableCostSources = selfHealUnavailableCostSources;
@@ -1991,6 +2201,9 @@ router.collectUnavailableEmployees = collectUnavailableEmployees;
 router.invalidateEmployeeCostAll = invalidateEmployeeCostAll;
 router.employeeCostAllKeyMatchesRange = employeeCostAllKeyMatchesRange;
 router.singleFlight = singleFlight;
+router.sharedCancellableFlight = sharedCancellableFlight;
+router.throwIfAborted = throwIfAborted;
+router.expensiveReadInFlight = expensiveReadInFlight;
 router.mapBounded = mapBounded;
 router.reusableEmployeeCostReport = reusableEmployeeCostReport;
 router.sameCycleEmployeeCostReport = sameCycleEmployeeCostReport;
@@ -2004,7 +2217,10 @@ router.penaltyPolicyPreviews = penaltyPolicyPreviews;
 
 // revenueRefresh invokes listeners in a detached task after a successful
 // materialize, so this Promise cannot delay or roll back the source refresh.
-revenueRefresh.onMaterialized((run) => warmEmployeeCostAllCache(run?.ky, 'revenue_refresh'));
+revenueRefresh.onMaterialized((run) => {
+  if (employeeCostSnapshotSyncEnabled()) return scheduleEmployeeCostSnapshotSync('revenue_refresh');
+  return warmEmployeeCostAllCache(run?.ky, 'revenue_refresh');
+});
 
 // Chi phí của tôi: quyền được khóa tại backend. NV luôn bị ép về mã của
 // chính phiên đăng nhập; chỉ CEO/admin mới có scope mở để chọn ?emp=.
@@ -2018,6 +2234,28 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
     : employeeCostTable.transformReport(await employeeCostPayload(req), employeeCostTableOptions(req, { paginate: true }));
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);
+}));
+
+router.get('/employee-cost/snapshot/status', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  const period = employeeCostSnapshotStore.normalizePeriod(req.query.period);
+  res.set('Cache-Control', 'private, no-store');
+  return res.json({ enabled: employeeCostSnapshotEnabled(), dongBoKy: period, trangThaiDongBo: employeeCostSnapshotMeta(employeeCostSnapshotStatus(period)) });
+}));
+
+router.post('/employee-cost/snapshot/resync', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
+  if (!auth.isCeoActor(req.session)) return res.status(403).json({ error: 'Chỉ CEO được đồng bộ snapshot chi phí.', code: 'EMPLOYEE_COST_SNAPSHOT_CEO_REQUIRED' });
+  const period = employeeCostSnapshotStore.normalizePeriod(req.body?.period);
+  const current = employeeCostSnapshotStore.tryReadCurrent(period, { roster: employeeCostRosterRows() });
+  if (employeeCost.isPeriodClosed(period, employeeCost.vnToday()) && current.ok && current.snapshot.manifest.complete) {
+    return res.status(409).json({ error: `Kỳ ${period} đã khoá và có snapshot đầy đủ.`, code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
+  }
+  if (!employeeCostSnapshotSyncEnabled()) {
+    return res.status(409).json({ error: 'Đồng bộ snapshot chưa được bật.', code: 'EMPLOYEE_COST_SNAPSHOT_SYNC_DISABLED' });
+  }
+  const accepted = employeeCostSnapshotSync.requestSync(period, { reason: 'manual' });
+  console.info('[employee-cost-snapshot] manual resync', { period, actor: String(req.session?.emp_code || '').slice(0, 32), accepted: accepted.accepted === true });
+  if (accepted.rateLimited) return res.status(429).json({ error: 'Vui lòng chờ trước khi đồng bộ lại.', code: 'EMPLOYEE_COST_SNAPSHOT_RATE_LIMIT' });
+  return res.status(202).json({ accepted: true, dongBoKy: period, trangThaiDongBo: employeeCostSnapshotMeta(employeeCostSnapshotStatus(period)) });
 }));
 
 // Independent KPI projection: an unavailable Salary service must never fail the
@@ -4287,39 +4525,55 @@ router.get('/admin/assignments/template.xlsx', auth.requireAuth, auth.requireAdm
 });
 
 /* ---------- Overview + Alerts ---------- */
-router.get('/overview', auth.requireAuth, (req, res) => {
-  const scope = auth.scopeOf(req.session);
-  const pc = periodCtx(req.query);
-  res.json({
-    ...A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }),
-    emptyPeriod: pc.emptyPeriod,
-  });
-});
-
-router.get('/trend', auth.requireAuth, (req, res) => {
-  const scope = auth.scopeOf(req.session);
-  const filters = revenueFiltersFromQuery(req.query);
-  const empFilter = new Set(A.selectedEmployeeCodes(filters));
-  const targetComparable = A.targetFiltersComparable(filters);
-  const cacheKey = `trend:${store.targetDataSignature()}:${scope.empCode || 'ALL'}:${JSON.stringify(filters)}`;
-  res.json(memoGet(cacheKey, 60 * 1000, () => store.listPeriods().map((p) => {
-    // Lightweight trend: không gọi overviewKpis vì hàm đó còn tính CST/target từng NV.
-    const rows = A.applyFilters(store.getRows({ ky: p.ky, scope }), filters);
-    const revenue = A.sum(rows, (r) => r.revenue);
-    const targetTotal = targetComparable
-      ? A.sum(store.getTargets({ ky: p.ky, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase())), (t) => t.target)
-      : null;
-    const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
+router.get('/overview', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await protectedRouteBuild(req, 'overview', (signal) => {
+    // overviewKpis hiện là CPU đồng bộ: signal ngăn publish sau khi request bỏ đi,
+    // nhưng KHÔNG được tuyên bố là có thể ngắt parse CPU giữa chừng.
+    throwIfAborted(signal);
+    const scope = auth.scopeOf(req.session);
+    const pc = periodCtx(req.query);
     return {
-      ky: p.ky,
-      revenue,
-      revenueBeforeVat,
-      targetTotal,
-      targetComparable,
-      pctTarget: targetComparable && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
+      ...A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }),
+      emptyPeriod: pc.emptyPeriod,
     };
-  })));
-});
+  });
+  res.json(payload);
+}));
+
+router.get('/trend', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const cacheKey = readCacheKey(req, 'trend');
+  const payload = await protectedRouteBuild(req, 'trend', (signal) => memoGet(cacheKey, 60 * 1000, async () => {
+    const scope = auth.scopeOf(req.session);
+    const filters = revenueFiltersFromQuery(req.query);
+    const empFilter = new Set(A.selectedEmployeeCodes(filters));
+    const targetComparable = A.targetFiltersComparable(filters);
+    const result = [];
+    for (const p of store.listPeriods()) {
+      throwIfAborted(signal);
+      // Yield between periods so close/aborted can be observed. This does not move
+      // synchronous parsing off the serving thread; that remains separate work.
+      await new Promise((resolve) => setImmediate(resolve));
+      throwIfAborted(signal);
+      const rows = A.applyFilters(store.getRows({ ky: p.ky, scope }), filters);
+      const revenue = A.sum(rows, (r) => r.revenue);
+      const targetTotal = targetComparable
+        ? A.sum(store.getTargets({ ky: p.ky, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase())), (t) => t.target)
+        : null;
+      const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
+      result.push({
+        ky: p.ky,
+        revenue,
+        revenueBeforeVat,
+        targetTotal,
+        targetComparable,
+        pctTarget: targetComparable && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
+      });
+    }
+    throwIfAborted(signal);
+    return result;
+  }));
+  res.json(payload);
+}));
 
 router.get('/alerts', auth.requireAuth, memoJson('alerts'), (req, res) => {
   res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session), compareMode: req.query.compareMode, filters: revenueFiltersFromQuery(req.query) }));

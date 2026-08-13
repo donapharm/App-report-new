@@ -263,6 +263,11 @@ export const api = {
       cacheMs: 20 * 1000, ...requestOptions,
     });
   },
+  employeeCostSnapshotStatus: (period, requestOptions = {}) => req('GET', '/employee-cost/snapshot/status?' + new URLSearchParams({ period }).toString(), undefined, { cacheMs: 0, ...requestOptions }),
+  employeeCostSnapshotResync: (period) => req('POST', '/employee-cost/snapshot/resync', { period }, {
+    timeoutMs: 8000,
+    timeoutMessage: 'Chưa gửi được yêu cầu đồng bộ. Vui lòng thử lại.',
+  }),
   employeeCostSalaryAdvance: (emp, period, requestOptions = {}) => {
     const params = new URLSearchParams();
     if (emp) params.set('emp', emp);
