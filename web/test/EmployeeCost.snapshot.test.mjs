@@ -35,6 +35,13 @@ test('normalized match preserves only privacy-safe per-employee unavailable reas
   assert.deepEqual(model.match.unavailableReasons, { DN001: 'not_configured', DN002: 'upstream_unavailable', DN003: 'upstream_rejected' });
 });
 
+test('UI explains upstream rejection as DataHub configuration, never as network or raw upstream detail', () => {
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /DataHub từ chối mã này — cần DataHub sửa cấu hình, không phải lỗi mạng/);
+  assert.match(page, /reasons\[empCode\] === 'upstream_rejected'/);
+  assert.doesNotMatch(page, /credential=must-not-leak|https:\/\/secret\/\?key=/);
+});
+
 test('UI and API expose Đồng bộ lại as a background mutation with snapshot status', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');

@@ -73,6 +73,22 @@ function safeUnavailableReasons(value) {
   return Object.fromEntries(Object.entries(result).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+function sealModelMatchesRoster(model, period, roster) {
+  if (!model || model.allEmployees !== true || model.from !== period || model.to !== period) return false;
+  let modelRoster;
+  try { modelRoster = normalizeRoster(model.employees); } catch { return false; }
+  if (canonicalJson(modelRoster) !== canonicalJson(roster)) return false;
+  if (!Array.isArray(model.periods) || !model.periods.length) return false;
+  if (!model.periods.every((item) => item?.period === period
+    && Number(item?.match?.unavailableEmployeeCount || 0) === 0
+    && (!Array.isArray(item?.match?.unavailableEmployees) || item.match.unavailableEmployees.length === 0)
+    && Number(item?.match?.staleEmployeeCount || 0) === 0
+    && (!Array.isArray(item?.match?.staleEmployees) || item.match.staleEmployees.length === 0))) return false;
+  if (!model.revenueRecon || model.revenueRecon.unavailable === true || model.revenueRecon.balanced !== true) return false;
+  return Array.isArray(model.remoteProvenance)
+    && !model.remoteProvenance.some((item) => String(item).endsWith(':THIEU'));
+}
+
 function tupleOf(record = {}) {
   return [
     String(record.fetchedAt || ''),
@@ -248,6 +264,15 @@ function createEmployeeCostSnapshotStore(options = {}) {
       || manifest.dependencyIdentity !== sha256(canonicalJson(manifest.dependencies || {}))) {
       throw Object.assign(new Error('Dependency/model snapshot không khớp manifest.'), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_INVALID' });
     }
+    const source = manifest.source == null ? 'network' : String(manifest.source);
+    if (!['network', 'seal'].includes(source)) {
+      throw Object.assign(new Error('Nguồn snapshot không hợp lệ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_SOURCE_INVALID' });
+    }
+    if (source === 'seal' && (!/^[a-f0-9]{64}$/.test(String(manifest.sealIdentity || ''))
+      || employees.size !== 0 || manifest.complete !== true || manifest.locked !== true
+      || !sealModelMatchesRoster(model, normalized, manifestRoster))) {
+      throw Object.assign(new Error('Snapshot từ dấu đóng không đủ bằng chứng.'), { code: 'EMPLOYEE_COST_SNAPSHOT_SEAL_INVALID' });
+    }
     const currentRoster = roster == null ? manifestRoster : normalizeRoster(roster);
     const added = currentRoster.filter((code) => !manifestRoster.includes(code));
     const removed = manifestRoster.filter((code) => !currentRoster.includes(code));
@@ -268,13 +293,27 @@ function createEmployeeCostSnapshotStore(options = {}) {
 
   function publishGeneration(period, input = {}) {
     const normalized = normalizePeriod(period);
+    const source = input.source == null ? 'network' : String(input.source);
+    if (!['network', 'seal'].includes(source)) {
+      throw Object.assign(new Error('Nguồn snapshot không hợp lệ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_SOURCE_INVALID' });
+    }
+    const sealIdentity = String(input.sealIdentity || '');
+    if (input.locked === true && source !== 'seal') {
+      throw Object.assign(new Error('Kỳ khoá chỉ được publish từ dấu đóng hợp lệ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_SEAL_INVALID' });
+    }
+    if (source === 'seal' && (!/^[a-f0-9]{64}$/.test(sealIdentity)
+      || input.periodLocked !== true || input.locked !== true)) {
+      throw Object.assign(new Error('Snapshot kỳ khoá thiếu căn cước dấu.'), { code: 'EMPLOYEE_COST_SNAPSHOT_SEAL_INVALID' });
+    }
     // Closed-period policy must be enforced by this persistence boundary too;
     // callers cannot bypass immutability by forgetting to set `locked`.
     if (input.periodLocked === true && input.locked !== true) {
       throw Object.assign(new Error('Kỳ đã khoá; chỉ được publish generation đầy đủ đã đóng dấu.'), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
     }
     const roster = normalizeRoster(input.roster);
-    const records = input.employees instanceof Map ? input.employees : new Map(Object.entries(input.employees || {}));
+    const records = source === 'seal'
+      ? new Map()
+      : input.employees instanceof Map ? input.employees : new Map(Object.entries(input.employees || {}));
     const previous = tryReadCurrent(normalized);
     if (previous.ok && previous.snapshot.manifest.locked && previous.snapshot.manifest.complete) {
       throw Object.assign(new Error('Kỳ đã khoá và có snapshot đầy đủ; không được thay đổi.'), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
@@ -282,7 +321,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
     const normalizedRecords = [];
     for (const code of roster) {
       const raw = records.get(code) || records.get(code.toLowerCase());
-      const old = previous.ok ? previous.snapshot.employees.get(code) : null;
+      const old = source === 'seal' ? null : previous.ok ? previous.snapshot.employees.get(code) : null;
       // A failed/missing fetch must never erase this employee's last-known-good.
       if (!raw) { if (old) normalizedRecords.push(old); continue; }
       const report = canonicalize(raw.report ?? raw.payload ?? raw);
@@ -300,12 +339,19 @@ function createEmployeeCostSnapshotStore(options = {}) {
     // LKG keeps the model stable during an outage. It remains available, but status
     // still reports that the newest refresh failed for that employee.
     const refreshUnavailableReasons = { ...attemptedReasons };
-    for (const code of roster) if (!normalizedRecords.some((record) => record.empCode === code)) unavailableReasons[code] = attemptedReasons[code] || 'missing';
-    const complete = roster.length > 0 && roster.every((code) => normalizedRecords.some((record) => record.empCode === code));
+    if (source === 'network') {
+      for (const code of roster) if (!normalizedRecords.some((record) => record.empCode === code)) unavailableReasons[code] = attemptedReasons[code] || 'missing';
+    }
+    const model = canonicalize(input.model || {});
+    const complete = source === 'seal'
+      ? roster.length > 0 && Object.keys(attemptedReasons).length === 0 && sealModelMatchesRoster(model, normalized, roster)
+      : roster.length > 0 && roster.every((code) => normalizedRecords.some((record) => record.empCode === code));
+    if (source === 'seal' && !complete) {
+      throw Object.assign(new Error('Model từ dấu không chứng minh đủ roster/kỳ khoá.'), { code: 'EMPLOYEE_COST_SNAPSHOT_SEAL_INVALID' });
+    }
     const fetchedAt = String(input.fetchedAt || now().toISOString());
     const dependencies = canonicalize(input.dependencies || {});
-    const model = canonicalize(input.model || {});
-    const generationSeed = { period: normalized, roster, employees: normalizedRecords.map((record) => ({ empCode: record.empCode, ...tupleOf(record) })), dependencies, model, fetchedAt, locked: input.locked === true && complete };
+    const generationSeed = { period: normalized, source, sealIdentity: source === 'seal' ? sealIdentity : '', roster, employees: normalizedRecords.map((record) => ({ empCode: record.empCode, ...tupleOf(record) })), dependencies, model, fetchedAt, locked: input.locked === true && complete };
     const generationId = sha256(canonicalJson(generationSeed));
     const generationDir = path.join(periodDir(normalized), 'generations', generationId);
     ensureDir(path.join(generationDir, 'employees'));
@@ -318,6 +364,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
     writeEnvelope(path.join(generationDir, 'model.json'), 'model', model, 'model');
     const manifest = {
       period: normalized, generationId, fetchedAt, roster, rosterIdentity: rosterIdentity(roster),
+      source, sealIdentity: source === 'seal' ? sealIdentity : '',
       dependencies, dependencyIdentity: sha256(canonicalJson(dependencies)),
       employees: employeeRefs, model: { file: 'model.json', checksum: sha256(canonicalJson(model)) },
       complete, unavailableReasons, refreshUnavailableReasons, locked: input.locked === true && complete,
@@ -328,7 +375,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
     writeEnvelope(currentFile(normalized), 'current', pointer, 'current');
     writeStatus(normalized, {
       state: manifest.locked ? 'locked' : complete ? 'ready' : 'partial', generationId, fetchedAt,
-      finishedAt: fetchedAt, rosterCount: roster.length, availableCount: normalizedRecords.length,
+      finishedAt: fetchedAt, rosterCount: roster.length, availableCount: source === 'seal' ? roster.length : normalizedRecords.length,
       complete, locked: manifest.locked, unavailableReasons: { ...unavailableReasons, ...refreshUnavailableReasons },
     });
     return readCurrent(normalized, { roster });
@@ -339,7 +386,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
     const status = readStatus(period);
     const result = tryReadCurrent(period, options);
     if (!result.ok) return { ...status, state: status.state === 'syncing' ? 'syncing' : 'failed', complete: false, errorCode: result.error?.code || 'EMPLOYEE_COST_SNAPSHOT_MISSING', unavailableReasons: { ...status.unavailableReasons, SNAPSHOT: 'corrupt_snapshot' } };
-    return { ...status, generationId: result.snapshot.manifest.generationId, fetchedAt: result.snapshot.manifest.fetchedAt, complete: result.snapshot.complete, locked: result.snapshot.manifest.locked, unavailableReasons: result.snapshot.unavailableReasons, rosterCount: (options.roster ? normalizeRoster(options.roster) : result.snapshot.manifest.roster).length, availableCount: result.snapshot.employees.size, state: result.snapshot.manifest.locked ? 'locked' : result.snapshot.complete ? 'ready' : 'partial' };
+    return { ...status, generationId: result.snapshot.manifest.generationId, fetchedAt: result.snapshot.manifest.fetchedAt, complete: result.snapshot.complete, locked: result.snapshot.manifest.locked, unavailableReasons: result.snapshot.unavailableReasons, rosterCount: (options.roster ? normalizeRoster(options.roster) : result.snapshot.manifest.roster).length, availableCount: result.snapshot.manifest.source === 'seal' ? result.snapshot.manifest.roster.length : result.snapshot.employees.size, state: result.snapshot.manifest.locked ? 'locked' : result.snapshot.complete ? 'ready' : 'partial' };
   }
 
   return {

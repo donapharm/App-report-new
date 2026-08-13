@@ -51,29 +51,72 @@ function createEmployeeCostSnapshotSync(options = {}) {
   }
   const dependencyIdentity = typeof options.dependencyIdentity === 'function' ? options.dependencyIdentity : async () => ({});
   const isLocked = typeof options.isLocked === 'function' ? options.isLocked : () => false;
+  const lockedSnapshotProvider = typeof options.lockedSnapshotProvider === 'function' ? options.lockedSnapshotProvider : null;
   const now = options.now || (() => new Date());
   const concurrency = Math.max(1, Math.min(12, Number(options.concurrency || process.env.EMPLOYEE_COST_SNAPSHOT_CONCURRENCY || 4)));
   const inFlight = new Map();
   const lastRequestedAt = new Map();
   const requestMinIntervalMs = Math.max(0, Number(options.requestMinIntervalMs ?? 10_000));
 
-  async function syncUnlocked(period, { onlyCodes = null, reason = 'manual' } = {}) {
-    const rosterRows = await rosterProvider(period);
-    const roster = store.normalizeRoster(rosterRows);
-    if (!roster.length) throw Object.assign(new Error('Roster kỳ này đang rỗng.'), { code: 'EMPLOYEE_COST_SNAPSHOT_EMPTY_ROSTER' });
-    const previousResult = store.tryReadCurrent(period, { roster });
+  function lockedError(code, message) {
+    return Object.assign(new Error(message), { code, snapshotReason: 'locked' });
+  }
+
+  function assertReadablePrevious(period, roster = null) {
+    const previousResult = store.tryReadCurrent(period, roster == null ? {} : { roster });
     const missingSnapshot = previousResult.error?.cause?.code === 'ENOENT';
-    if (!previousResult.ok && !missingSnapshot) {
-      // A corrupt current pointer/generation is never a licence to rebuild from an
-      // unverified partial state. Keep the last publication untouched and require
-      // operator repair/rollback of the dedicated snapshot store.
-      throw previousResult.error;
-    }
+    if (!previousResult.ok && !missingSnapshot) throw previousResult.error;
     const previous = previousResult.ok ? previousResult.snapshot : null;
     if (previous?.manifest.locked && previous.manifest.complete) {
       store.writeStatus(period, { ...store.readStatus(period), state: 'locked', locked: true, complete: true, errorCode: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
       throw Object.assign(new Error('Kỳ đã khoá và snapshot đầy đủ, không được đồng bộ lại.'), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
     }
+    return previous;
+  }
+
+  async function syncLockedPeriod(period, { reason = 'manual' } = {}) {
+    assertReadablePrevious(period);
+    const startedAt = iso(now());
+    store.writeStatus(period, {
+      state: 'syncing', startedAt, locked: true, complete: false,
+      unavailableReasons: { SNAPSHOT: 'locked' },
+    });
+    if (!lockedSnapshotProvider) {
+      throw lockedError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_MISSING', 'Kỳ đã khoá nhưng chưa có dấu đóng hợp lệ.');
+    }
+    let sealed;
+    try { sealed = await lockedSnapshotProvider(period, { reason }); }
+    catch (error) {
+      if (error?.code === 'EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_MISSING'
+        || error?.code === 'EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID') throw error;
+      throw lockedError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Không xác thực được dấu đóng của kỳ đã khoá.');
+    }
+    if (!sealed) throw lockedError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_MISSING', 'Kỳ đã khoá nhưng chưa có dấu đóng hợp lệ.');
+    if (isLocked(period) !== true) {
+      throw lockedError('EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT', 'Trạng thái khoá kỳ đổi trong lúc đọc dấu.');
+    }
+    const roster = store.normalizeRoster(sealed.roster || sealed.model?.employees);
+    if (!roster.length || !sealed.model || !/^[a-f0-9]{64}$/.test(String(sealed.sealIdentity || ''))) {
+      throw lockedError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Dấu đóng thiếu roster/model/căn cước hợp lệ.');
+    }
+    return store.publishGeneration(period, {
+      source: 'seal', sealIdentity: sealed.sealIdentity,
+      roster, employees: new Map(), model: sealed.model,
+      dependencies: sealed.dependencies || {}, fetchedAt: iso(sealed.fetchedAt || now()),
+      unavailableReasons: {}, periodLocked: true, locked: true,
+    });
+  }
+
+  async function syncUnlocked(period, { onlyCodes = null, reason = 'manual' } = {}) {
+    if (isLocked(period) === true) return syncLockedPeriod(period, { reason });
+    const rosterRows = await rosterProvider(period);
+    if (isLocked(period) === true) return syncLockedPeriod(period, { reason });
+    const roster = store.normalizeRoster(rosterRows);
+    if (!roster.length) throw Object.assign(new Error('Roster kỳ này đang rỗng.'), { code: 'EMPLOYEE_COST_SNAPSHOT_EMPTY_ROSTER' });
+    // A corrupt current pointer/generation is never a licence to rebuild from an
+    // unverified partial state. Keep the last publication untouched and require
+    // operator repair/rollback of the dedicated snapshot store.
+    const previous = assertReadablePrevious(period, roster);
     const startedAt = iso(now());
     const dependenciesBefore = await dependencyIdentity(period, { roster: rosterRows });
     store.writeStatus(period, {
@@ -85,6 +128,9 @@ function createEmployeeCostSnapshotSync(options = {}) {
     const selected = onlyCodes == null
       ? roster
       : [...new Set(onlyCodes.map((code) => store.normalizeEmployee(code)))].filter((code) => roster.includes(code));
+    // The period can close while we await local dependencies. Never begin employee
+    // fan-out once that happens; the closed path is seal-only.
+    if (isLocked(period) === true) return syncLockedPeriod(period, { reason });
     const results = await mapBounded(selected, concurrency, (empCode) => fetchEmployee(empCode, { period, roster: rosterRows, reason }));
     const records = new Map(previous?.employees || []);
     const unavailableReasons = {};
@@ -105,11 +151,13 @@ function createEmployeeCostSnapshotSync(options = {}) {
     });
     for (const empCode of roster) if (!records.has(empCode)) unavailableReasons[empCode] ||= 'missing';
     const periodLocked = isLocked(period) === true;
-    // A closed period may be published exactly once only from a fresh, successful
-    // full-roster run. LKG is still preserved for open periods, but stale employees
-    // must never become an immutable financial close.
-    if (periodLocked && (selected.length !== roster.length || successful !== roster.length || Object.keys(unavailableReasons).length)) {
-      throw Object.assign(new Error('Kỳ đã khoá chỉ được publish khi đồng bộ tươi đủ toàn bộ roster.'), { code: 'EMPLOYEE_COST_SNAPSHOT_CLOSED_INCOMPLETE' });
+    // A run that started while open must never publish fetched data after the period
+    // closes. A later sync will use only the independently verified closed seal.
+    if (periodLocked) {
+      throw lockedError('EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT', 'Kỳ đã khoá trong lúc fan-out; không publish dữ liệu mạng.');
+    }
+    if (isLocked(period) === true) {
+      throw lockedError('EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT', 'Kỳ đã khoá sau fan-out; không dựng model từ dữ liệu mạng.');
     }
     const dependencies = await dependencyIdentity(period, { roster: rosterRows });
     if (store.canonicalJson(dependencies) !== store.canonicalJson(dependenciesBefore)) {
@@ -123,14 +171,20 @@ function createEmployeeCostSnapshotSync(options = {}) {
       employees: new Map(roster.filter((code) => records.has(code)).map((code) => [code, records.get(code)])),
       unavailableReasons: { ...unavailableReasons }, dependencies, previousModel: previous?.model || null,
     });
+    if (isLocked(period) === true) {
+      throw lockedError('EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT', 'Kỳ đã khoá trong lúc dựng model; không publish dữ liệu mạng.');
+    }
     const dependenciesAfterBuild = await dependencyIdentity(period, { roster: rosterRows });
     if (store.canonicalJson(dependenciesAfterBuild) !== store.canonicalJson(dependenciesBefore)) {
       throw Object.assign(new Error('Nguồn phụ thuộc đổi trước publish; không publish generation trộn đời.'), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
     }
+    if (isLocked(period) === true) {
+      throw lockedError('EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT', 'Kỳ đã khoá trước publish; không publish dữ liệu mạng.');
+    }
     const fetchedAt = iso(now());
     return store.publishGeneration(period, {
-      roster, employees: records, model, dependencies, fetchedAt,
-      unavailableReasons, periodLocked, locked: periodLocked,
+      source: 'network', roster, employees: records, model, dependencies, fetchedAt,
+      unavailableReasons, periodLocked: false, locked: false,
     });
   }
 
@@ -141,10 +195,16 @@ function createEmployeeCostSnapshotSync(options = {}) {
     const promise = store.withPeriodLock(period, () => syncUnlocked(period, syncOptions))
       .catch((error) => {
         const current = store.readStatus(period);
-        if (error.code !== 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE') store.writeStatus(period, {
-          ...current, state: 'failed', finishedAt: iso(now()), complete: false,
-          errorCode: String(error.code || 'EMPLOYEE_COST_SNAPSHOT_SYNC_FAILED'),
-        });
+        if (error.code !== 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE') {
+          const lockedFailure = error?.snapshotReason === 'locked'
+            || String(error?.code || '').startsWith('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_')
+            || error?.code === 'EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT';
+          store.writeStatus(period, {
+            ...current, state: lockedFailure ? 'locked' : 'failed', finishedAt: iso(now()), complete: false,
+            locked: lockedFailure, unavailableReasons: lockedFailure ? { SNAPSHOT: 'locked' } : current.unavailableReasons,
+            errorCode: String(error.code || 'EMPLOYEE_COST_SNAPSHOT_SYNC_FAILED'),
+          });
+        }
         throw error;
       })
       .finally(() => { if (inFlight.get(period) === promise) inFlight.delete(period); });

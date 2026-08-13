@@ -31,6 +31,13 @@ const SNAPSHOT_REASON_LABELS = Object.freeze({
   roster_added: 'mới thêm vào roster', roster_changed: 'roster đã đổi',
   corrupt_snapshot: 'snapshot hỏng', sync_failed: 'đồng bộ thất bại', locked: 'kỳ đã khoá',
 });
+const UPSTREAM_REJECTED_NOTE = 'DataHub từ chối mã này — cần DataHub sửa cấu hình, không phải lỗi mạng';
+function nguyenNhanThieuNguoi(employeeCodes, unavailableReasons) {
+  const reasons = unavailableReasons && typeof unavailableReasons === 'object' ? unavailableReasons : {};
+  return employeeCodes.some((empCode) => reasons[empCode] === 'upstream_rejected')
+    ? UPSTREAM_REJECTED_NOTE
+    : 'DataHub chưa trả dữ liệu — KHÔNG suy tổng toàn đội từ phần đã có';
+}
 export const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 const browserStorage = () => {
   try { return globalThis.localStorage; } catch { return null; }
@@ -1852,6 +1859,7 @@ export default function EmployeeCost({ me, onNavigate }) {
   const snapshotStatus = snapshotControl || model.trangThaiDongBo;
   const snapshotReasonText = Object.entries(snapshotStatus?.unavailableReasons || {})
     .map(([emp, reason]) => `${emp}: ${SNAPSHOT_REASON_LABELS[reason] || 'nguồn tạm unavailable'}`).join(' · ');
+  const unavailableReasons = { ...(snapshotStatus?.unavailableReasons || {}), ...(kpiMatch.unavailableReasons || {}) };
 
   /* ‼ THIẾU NGƯỜI THÌ KHÔNG ĐƯỢC TRƯNG TỔNG (CEO chốt 11/08/2026).
    *
@@ -1879,7 +1887,7 @@ export default function EmployeeCost({ me, onNavigate }) {
     || (unavailableEmps + Number(model.penalty?.contributors || 0)) || null;
   const thieuNguoi = allEmployees && unavailableEmps > 0;
   const thieuNguoiNote = `Thiếu ${unavailableEmps}/${soNvKy || '—'} NV: ${unavailableEmpLabel}`
-    + ' · DataHub chưa trả dữ liệu — KHÔNG suy tổng toàn đội từ phần đã có';
+    + ` · ${nguyenNhanThieuNguoi(unavailableEmpCodes, unavailableReasons)}`;
   /* Tổng doanh thu THẬT của kỳ, backend cộng thẳng từ kho doanh thu App Report —
      không đi qua bảng chi phí nên không tụt khi nguồn % hụt. Chưa soát được thì để
      null và ô KPI tự lùi về cách hiển thị cũ (có nhãn khác để không nhận nhầm). */

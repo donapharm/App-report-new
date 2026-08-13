@@ -565,3 +565,22 @@ test('A10b dấu đời cũ (không ghi lai lịch) và lúc hỏi lại hỏng 
   assert.equal(await seal.remoteProvenanceStillValid({ remoteProvenance: [] }, {}), true,
     'dấu ghi rõ "không dùng gói từ xa nào" ⇒ không cần hỏi ai');
 });
+
+test('A10c kỳ khoá xác thực provenance đã ghi mà không gọi mạng', async () => {
+  const { seal } = freshSeal();
+  let networkCalls = 0;
+  const failIfCalled = async () => { networkCalls += 1; throw new Error('must not call DataHub'); };
+  const provenance = `2026-07:CT01:rv=3:rc=${'a'.repeat(64)}:ca=2026-08-01T00:00:00.000Z`
+    + `:sc=${'b'.repeat(64)}:iv=3:ic=${'b'.repeat(64)}:av=4:ac=${'c'.repeat(64)}`;
+  assert.equal(await seal.remoteProvenanceStillValid({ remoteProvenance: [provenance] }, {
+    revalidateRemote: false, loadScopes: failIfCalled, loadAllocationScopes: failIfCalled,
+  }), true);
+  assert.equal(networkCalls, 0, 'đồng bộ kỳ khoá phải có đúng 0 network call');
+  assert.equal(await seal.remoteProvenanceStillValid({ remoteProvenance: ['2026-07:CT01:THIEU'] }, {
+    revalidateRemote: false, loadScopes: failIfCalled, loadAllocationScopes: failIfCalled,
+  }), false, 'provenance THIEU vẫn fail-closed dù không hỏi mạng');
+  assert.equal(await seal.remoteProvenanceStillValid({ remoteProvenance: ['2026-07:CT01:not-a-provenance-tuple'] }, {
+    revalidateRemote: false, loadScopes: failIfCalled, loadAllocationScopes: failIfCalled,
+  }), false, 'chuỗi provenance méo không được checksum seal biến thành hợp lệ');
+  assert.equal(networkCalls, 0);
+});

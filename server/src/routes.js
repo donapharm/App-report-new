@@ -918,6 +918,82 @@ function employeeCostRosterRows() {
 }
 
 
+const EMPLOYEE_COST_SEAL_RATE_STORE_FILES = closedSeal.RATE_STORE_FILES;
+const employeeCostSealFormulaIdentity = () => `${APP_BUILD_VERSION}+${formulaIdentity.identity()}`;
+const employeeCostSealSourceFingerprint = () => [
+  store.employeeCostDataSignature(),
+  closedSeal.rateStoreFingerprint(),
+  employeeBonus.FORMULA_VERSION,
+  employeeCostSealFormulaIdentity(),
+].join('|');
+const employeeCostSealGeneration = () => persist.observedGeneration(EMPLOYEE_COST_SEAL_RATE_STORE_FILES);
+function employeeCostSealKey(range, sourceFingerprint) {
+  if (!formulaIdentity.dangTinCay().tinCay) return null;
+  const closed = range.months.every((month) => employeeCost.isPeriodClosed(month, employeeCost.vnToday()));
+  return closedSeal.keyFor({
+    from: range.from, to: range.to, months: range.months, closed,
+    sources: {
+      data: sourceFingerprint,
+      rates: 'gop-trong-vantay',
+      formula: employeeBonus.FORMULA_VERSION,
+      app: employeeCostSealFormulaIdentity(),
+    },
+  });
+}
+function employeeCostSealProvenanceValid(sealed, { allowNetwork = true } = {}) {
+  // Snapshot sync has a stricter contract than the interactive ALL route: a locked
+  // sync must make zero network calls. Its seal checksum authenticates the recorded
+  // provenance; the interactive route keeps revalidating that provenance remotely.
+  return closedSeal.remoteProvenanceStillValid(sealed, {
+    revalidateRemote: allowNetwork,
+    loadScopes: (scopes, options) => reconciliationShadow.loadScopes(scopes, options),
+    loadAllocationScopes: (scopes, options) => reconAllocationV4.loadScopes(scopes, options),
+  });
+}
+
+function employeeCostLockedSealError(code, message) {
+  return Object.assign(new Error(message), { code, snapshotReason: 'locked' });
+}
+
+async function employeeCostLockedSnapshotProvider(period) {
+  const range = employeeCost.parseMonthRange({ from: period, to: period });
+  const roster = employeeCostRosterRows();
+  const rosterIdentity = employeeCostSnapshotStore.rosterIdentity(roster);
+  const sourceFingerprint = employeeCostSealSourceFingerprint();
+  const sourceGeneration = employeeCostSealGeneration();
+  const key = employeeCostSealKey(range, sourceFingerprint);
+  if (!key) throw employeeCostLockedSealError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Không dựng được căn cước dấu đóng đáng tin cậy.');
+  const sealed = closedSeal.read(key);
+  if (!sealed) return null;
+  if (employeeCostSealSourceFingerprint() !== sourceFingerprint || employeeCostSealGeneration() !== sourceGeneration) {
+    throw employeeCostLockedSealError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Nguồn local đổi trong lúc đọc dấu đóng.');
+  }
+  if (!await employeeCostSealProvenanceValid(sealed, { allowNetwork: false })) {
+    throw employeeCostLockedSealError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Dấu đóng không có provenance xác thực được hoàn toàn cục bộ.');
+  }
+  if (employeeCostSealSourceFingerprint() !== sourceFingerprint || employeeCostSealGeneration() !== sourceGeneration
+    || employeeCostSnapshotStore.rosterIdentity(employeeCostRosterRows()) !== rosterIdentity) {
+    throw employeeCostLockedSealError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Nguồn local hoặc roster đổi trong lúc xác thực dấu đóng.');
+  }
+  // Re-read after provenance validation so replacement/pruning cannot publish a
+  // different payload under the identity checked above.
+  const sealedAgain = closedSeal.read(key);
+  if (!sealedAgain || closedSeal.checksumOf(sealedAgain) !== closedSeal.checksumOf(sealed)) {
+    throw employeeCostLockedSealError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Dấu đóng đổi trong lúc xác thực.');
+  }
+  const sealIdentity = employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson({
+    key, checksum: closedSeal.checksumOf(sealed), sourceFingerprint,
+  }));
+  return {
+    model: sealed, roster,
+    dependencies: {
+      period, data: sourceFingerprint, rates: closedSeal.rateStoreFingerprint(),
+      formula: formulaIdentity.identity(), app: APP_BUILD_VERSION, sealKey: key,
+    },
+    fetchedAt: closedSeal.sealedAt(key) || new Date().toISOString(), sealIdentity,
+  };
+}
+
 function employeeCostSnapshotStatus(period, roster = employeeCostRosterRows()) {
   return employeeCostSnapshotSync.trangThaiDongBo(period, roster);
 }
@@ -1004,6 +1080,7 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
     app: APP_BUILD_VERSION,
   }),
   isLocked: (period) => employeeCost.isPeriodClosed(period),
+  lockedSnapshotProvider: employeeCostLockedSnapshotProvider,
 });
 
 function readEmployeeCostSnapshotModel(req, range) {
@@ -1365,7 +1442,6 @@ async function employeeCostAllPayload(req, {
      dựng catalog nên mất 29,8 giây). Chữ ký lấy TRƯỚC khi catalog kịp làm mới — nguồn
      vừa đổi thì chữ ký lệch ⇒ TRẬT dấu ⇒ đi tiếp đường đầy đủ. Trật thì chỉ chậm,
      không bao giờ sai: fail-safe đúng chiều. */
-  const rangeClosed = range.months.every((month) => employeeCost.isPeriodClosed(month, employeeCost.vnToday()));
   /* MỘT CON DẤU ĐỜI DỮ LIỆU CHO CẢ REQUEST. Mọi khoá cache, mọi dấu, mọi cổng kiểm
    * đều dùng đúng giá trị này — không ai được tự đi lấy lại lúc khác. */
   /* ‼ `APP_BUILD_VERSION` MỘT MÌNH LÀ VÔ DỤNG (bot audit đợt 14, mục A2 — đúng).
@@ -1407,24 +1483,9 @@ async function employeeCostAllPayload(req, {
    * lịch của các gói đã dùng; mở dấu ra thì hỏi lại đúng những gói đó xem checksum còn
    * khớp không. Nguồn đổi 12,5 → 9,5 ⇒ checksum lệch ⇒ vứt dấu, dựng lại. Một lượt hỏi
    * metadata nhẹ, đổi lấy việc khỏi dựng 21 báo cáo. */
-  const khoaDauTheoVanTay = (vt) => {
-    /* ‼ CHỐT TÔI LÀM RỒI QUÊN CẮM DÂY (bot audit đợt 17 — đúng, và xấu hổ).
-     * Tôi thêm hạn mức vùng quét 200 file / 32 MB và viết hẳn `dangTinCay()` để khi
-     * vượt thì ngừng đóng dấu... rồi không gọi nó ở đâu cả. Bot ép căn cước sang trạng
-     * thái không đáng tin: app vẫn ghi dấu như thường. Một cái chốt không ai gọi thì
-     * không phải chốt, chỉ là chú thích dài. */
-    if (!formulaIdentity.dangTinCay().tinCay) return null;
-    return closedSeal.keyFor({
-      from: range.from, to: range.to, months: range.months,
-      closed: rangeClosed,
-      sources: {
-        data: vt,
-        rates: 'gop-trong-vantay',
-        formula: employeeBonus.FORMULA_VERSION,
-        app: canCuocCongThuc(),
-      },
-    });
-  };
+  /* Dùng đúng helper module-scope mà snapshot kỳ khoá cũng dùng; không được để hai
+   * đường tự phát minh hai seal key/provenance policy khác nhau. */
+  const khoaDauTheoVanTay = (vt) => employeeCostSealKey(range, vt);
   /* ‼ HAI CON DẤU, CÓ CHỦ ĐÍCH — đừng nhầm lẫn chúng.
    *
    *   `vanTaySom`    chụp TRƯỚC khối catalog. CHỈ dùng cho việc tra dấu sớm (đường tắt
@@ -1462,10 +1523,7 @@ async function employeeCostAllPayload(req, {
   const doiSom = soDoiKhoTien();
   /* Soi lại lai lịch gói từ xa mà dấu đã ghi. Hỏi ĐÚNG những gói đó, không quét rộng:
    * một lượt metadata nhẹ, đổi lấy việc khỏi dựng 21 báo cáo (bot đo: nóng 14,3 giây). */
-  const laiLichConDung = (sealed) => closedSeal.remoteProvenanceStillValid(sealed, {
-    loadScopes: (scopes) => reconciliationShadow.loadScopes(scopes),
-    loadAllocationScopes: (scopes) => reconAllocationV4.loadScopes(scopes),
-  });
+  const laiLichConDung = employeeCostSealProvenanceValid;
   const sealKey = khoaDauTheoVanTay(vanTaySom);
   if (!snapshotBuild && sealKey && paginate) {
     const sealedEarly = closedSeal.read(sealKey);

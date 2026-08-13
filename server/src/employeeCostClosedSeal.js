@@ -356,22 +356,34 @@ function clear({ store = persist } = {}) {
  * Fail-closed ba đường: dấu không ghi lai lịch (dấu đời cũ), hỏi lại không được, hoặc
  * checksum lệch — cả ba đều trả `false` để dựng lại. Chậm một lượt còn hơn sai vĩnh viễn.
  */
-async function remoteProvenanceStillValid(sealedPayload, { loadScopes, loadAllocationScopes } = {}) {
+async function remoteProvenanceStillValid(sealedPayload, {
+  loadScopes, loadAllocationScopes, revalidateRemote = true,
+} = {}) {
   const ghi = sealedPayload?.remoteProvenance;
   if (!Array.isArray(ghi)) return false; // dấu đời cũ không có lai lịch ⇒ không tin
   if (!ghi.length) return true;          // dấu ghi rõ "không dùng gói từ xa nào"
-  if (typeof loadScopes !== 'function' || typeof loadAllocationScopes !== 'function') return false;
-
-  // Dựng lại danh sách scope TỪ CHÍNH DẤU — chỉ hỏi đúng những gói đã dùng, không quét rộng.
-  const scopes = [];
-  for (const dong of ghi) {
-    const [period, contractorCode] = String(dong).split(':');
-    if (!period || !contractorCode) return false;
-    scopes.push({ period, contractorCode });
-  }
 
   // Có `THIEU` nghĩa là chính lúc đóng dấu ta đã không lấy được gói — dấu đó không đáng tin.
   if (ghi.some((dong) => String(dong).endsWith(':THIEU'))) return false;
+
+  // Dựng lại danh sách scope TỪ CHÍNH DẤU — chỉ hỏi đúng những gói đã dùng, không quét rộng.
+  // Đồng thời đòi đủ tuple chuẩn; ở đường local, checksum seal không được biến một chuỗi
+  // tùy ý thành "provenance hợp lệ" chỉ vì nó có hai đoạn đầu.
+  const scopes = [];
+  const provenancePattern = /^(\d{4}-(?:0[1-9]|1[0-2])):([^:]+):rv=([^:]+):rc=([^:]+):ca=(.+):sc=([^:]+):iv=([^:]+):ic=([^:]+):av=([^:]+):ac=([^:]+)$/;
+  for (const dong of ghi) {
+    const match = String(dong).match(provenancePattern);
+    if (!match) return false;
+    scopes.push({ period: match[1], contractorCode: match[2] });
+  }
+
+  /* Kỳ đã khoá phục vụ từ seal là một chính sách khác đường tương tác: không được hỏi
+   * DataHub lại chỉ để "xác nhận" một bản đã đóng. `revalidateRemote=false` vẫn đi qua
+   * cùng cổng lai lịch này, nhưng chỉ tin chứng cứ đã được checksum trong thân seal;
+   * thiếu/méo/THIEU đã bị loại ở trên. Nhờ vậy đồng bộ snapshot kỳ khoá có đúng 0
+   * network call, còn đường mở màn hiện hành vẫn revalidate nguồn thật như trước. */
+  if (revalidateRemote === false) return true;
+  if (typeof loadScopes !== 'function' || typeof loadAllocationScopes !== 'function') return false;
 
   let snapshots;
   let allocationSnapshots;

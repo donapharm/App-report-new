@@ -8,6 +8,20 @@ const path = require('path');
 const { createEmployeeCostSnapshotStore } = require('../src/employeeCostSnapshotStore');
 const { createEmployeeCostSnapshotSync } = require('../src/employeeCostSnapshotSync');
 
+function sealedModel(period = '2026-07', roster = ['DN001', 'DN002']) {
+  return {
+    allEmployees: true, from: period, to: period,
+    employees: roster.map((empCode) => ({ empCode, employeeName: empCode })),
+    remoteProvenance: [`${period}:CT01:rv=3:rc=${'a'.repeat(64)}:ca=2026-08-01T00:00:00.000Z`
+      + `:sc=${'b'.repeat(64)}:iv=3:ic=${'b'.repeat(64)}:av=4:ac=${'c'.repeat(64)}`],
+    revenueRecon: { total: 3, shown: 3, gap: 0, balanced: true },
+    periods: [{
+      period, columns: [], rows: [],
+      match: { totalRows: 0, unavailableEmployeeCount: 0, unavailableEmployees: [], staleEmployeeCount: 0, staleEmployees: [] },
+    }],
+  };
+}
+
 function setup(t, options = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'emp-cost-sync-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -16,11 +30,12 @@ function setup(t, options = {}) {
   let fetches = 0; let builds = 0;
   const sync = createEmployeeCostSnapshotSync({
     store, concurrency: options.concurrency || 2, requestMinIntervalMs: 0,
-    rosterProvider: async () => roster,
+    rosterProvider: options.rosterProvider || (async () => roster),
     fetchEmployee: options.fetchEmployee || (async (empCode) => { fetches += 1; return { report: { empCode, amount: empCode === 'DN001' ? 1 : 2 }, fetchedAt: `2026-08-13T01:00:0${fetches}.000Z` }; }),
     buildModel: options.buildModel || (async ({ employees, unavailableReasons }) => { builds += 1; return { allEmployees: true, amounts: [...employees.values()].map((entry) => entry.report.amount), unavailableReasons }; }),
     dependencyIdentity: options.dependencyIdentity || (async () => ({ formula: 'v1', data: 'd1' })),
     isLocked: options.isLocked || (() => false),
+    lockedSnapshotProvider: options.lockedSnapshotProvider,
     now: (() => { let second = 0; return () => new Date(`2026-08-13T02:00:${String(second++).padStart(2, '0')}.000Z`); })(),
   });
   return { store, sync, setRoster(value) { roster = value; }, counts: () => ({ fetches, builds }) };
@@ -38,6 +53,7 @@ test('sync uses bounded concurrency and publishes roster/dependency identity', a
   assert.equal(result.manifest.roster.length, 4);
   assert.equal(result.manifest.dependencies.formula, 'v1');
   assert.match(result.manifest.dependencyIdentity, /^[a-f0-9]{64}$/);
+  assert.equal(result.manifest.source, 'network');
 });
 
 test('corrupt current generation fails closed instead of rebuilding over it', async (t) => {
@@ -119,28 +135,110 @@ test('roster change reuses old employees and fetches new roster member', async (
   assert.equal(result.employees.size, 3);
 });
 
-test('closed period refuses an incomplete refresh instead of freezing LKG', async (t) => {
-  let fail = false;
+test('locked period publishes directly from a valid seal with source=seal and zero network/build calls', async (t) => {
+  let networkCalls = 0; let buildCalls = 0; let providerCalls = 0; let rosterCalls = 0;
+  const expectedModel = sealedModel('2026-07');
   const ctx = setup(t, {
     isLocked: () => true,
-    fetchEmployee: async (empCode) => fail && empCode === 'DN001'
-      ? { ok: false, sourceOutcome: 'deadline' }
-      : { report: { empCode }, fetchedAt: '2026-08-13T01:00:00.000Z' },
+    rosterProvider: async () => { rosterCalls += 1; throw new Error('locked path must not load roster'); },
+    fetchEmployee: async () => { networkCalls += 1; throw new Error('locked path must not fetch DataHub'); },
+    buildModel: async () => { buildCalls += 1; throw new Error('locked path must not rebuild model'); },
+    lockedSnapshotProvider: async (period) => {
+      providerCalls += 1;
+      return {
+        model: expectedModel, roster: ['DN001', 'DN002'],
+        dependencies: { sealKey: 'v2|2026-07|safe' },
+        sealIdentity: 'a'.repeat(64), fetchedAt: '2026-08-13T01:00:00.000Z',
+      };
+    },
   });
-  await ctx.sync.dongBoKy('2026-07');
-  // Use another closed period without a prior publication to exercise the fresh
-  // full-roster gate; a partial run must leave CURRENT absent.
-  fail = true;
-  await assert.rejects(ctx.sync.dongBoKy('2026-06'), { code: 'EMPLOYEE_COST_SNAPSHOT_CLOSED_INCOMPLETE' });
-  assert.equal(ctx.store.tryReadCurrent('2026-06').ok, false);
+  const result = await ctx.sync.dongBoKy('2026-07');
+  assert.equal(result.complete, true);
+  assert.equal(result.manifest.locked, true);
+  assert.equal(result.manifest.source, 'seal');
+  assert.equal(result.manifest.sealIdentity, 'a'.repeat(64));
+  assert.equal(result.employees.size, 0, 'seal generation is model-only; it must not forge employee blobs');
+  assert.deepEqual(result.model, expectedModel);
+  assert.deepEqual({ networkCalls, buildCalls, providerCalls, rosterCalls }, { networkCalls: 0, buildCalls: 0, providerCalls: 1, rosterCalls: 0 });
+});
+
+test('locked period with no seal fails closed as locked and makes zero network calls', async (t) => {
+  let networkCalls = 0;
+  const ctx = setup(t, {
+    isLocked: () => true,
+    fetchEmployee: async () => { networkCalls += 1; throw new Error('must not call network'); },
+    lockedSnapshotProvider: async () => null,
+  });
+  await assert.rejects(ctx.sync.dongBoKy('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_MISSING' });
+  assert.equal(networkCalls, 0);
+  assert.equal(ctx.store.tryReadCurrent('2026-07').ok, false);
+  const status = ctx.store.readStatus('2026-07');
+  assert.equal(status.state, 'locked');
+  assert.equal(status.locked, true);
+  assert.equal(status.complete, false);
+  assert.deepEqual(status.unavailableReasons, { SNAPSHOT: 'locked' });
+  assert.equal(status.errorCode, 'EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_MISSING');
+});
+
+test('locked period with invalid provenance fails closed and never falls back to network', async (t) => {
+  let networkCalls = 0;
+  const invalid = Object.assign(new Error('private upstream detail'), { code: 'EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', snapshotReason: 'locked' });
+  const ctx = setup(t, {
+    isLocked: () => true,
+    fetchEmployee: async () => { networkCalls += 1; throw new Error('must not call network'); },
+    lockedSnapshotProvider: async () => { throw invalid; },
+  });
+  await assert.rejects(ctx.sync.dongBoKy('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID' });
+  assert.equal(networkCalls, 0);
+  assert.equal(ctx.store.readStatus('2026-07').state, 'locked');
+  assert.equal(ctx.store.readStatus('2026-07').unavailableReasons.SNAPSHOT, 'locked');
+  assert.doesNotMatch(JSON.stringify(ctx.store.readStatus('2026-07')), /private|upstream detail/);
+});
+
+test('period becoming locked after fan-out never builds/publishes network data', async (t) => {
+  let lockChecks = 0; let networkCalls = 0; let buildCalls = 0;
+  const ctx = setup(t, {
+    isLocked: () => { lockChecks += 1; return lockChecks >= 4; },
+    fetchEmployee: async (empCode) => { networkCalls += 1; return { report: { empCode } }; },
+    buildModel: async () => { buildCalls += 1; throw new Error('must not build after close'); },
+  });
+  await assert.rejects(ctx.sync.dongBoKy('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT' });
+  assert.equal(networkCalls, 2);
+  assert.equal(buildCalls, 0);
+  assert.equal(ctx.store.tryReadCurrent('2026-07').ok, false);
+  assert.equal(ctx.store.readStatus('2026-07').state, 'locked');
+});
+
+test('period becoming locked while roster awaits switches to seal before employee fan-out', async (t) => {
+  let locked = false; let networkCalls = 0; let providerCalls = 0;
+  const ctx = setup(t, {
+    isLocked: () => locked,
+    rosterProvider: async () => { locked = true; return ['DN001', 'DN002']; },
+    fetchEmployee: async () => { networkCalls += 1; throw new Error('must not call network'); },
+    lockedSnapshotProvider: async (period) => {
+      providerCalls += 1;
+      return { model: sealedModel(period), roster: ['DN001', 'DN002'], dependencies: {}, sealIdentity: 'b'.repeat(64) };
+    },
+  });
+  const result = await ctx.sync.dongBoKy('2026-07');
+  assert.equal(result.manifest.source, 'seal');
+  assert.deepEqual({ networkCalls, providerCalls }, { networkCalls: 0, providerCalls: 1 });
 });
 
 test('locked complete generation rejects sync before any source fetch', async (t) => {
-  let calls = 0;
-  const ctx = setup(t, { isLocked: () => true, fetchEmployee: async (empCode) => { calls += 1; return { report: { empCode } }; } });
+  let calls = 0; let providerCalls = 0;
+  const ctx = setup(t, {
+    isLocked: () => true,
+    fetchEmployee: async () => { calls += 1; throw new Error('must not call network'); },
+    lockedSnapshotProvider: async (period) => {
+      providerCalls += 1;
+      return { model: sealedModel(period), roster: ['DN001', 'DN002'], dependencies: {}, sealIdentity: 'c'.repeat(64) };
+    },
+  });
   await ctx.sync.dongBoKy('2026-07');
   await assert.rejects(ctx.sync.dongBoKy('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
-  assert.equal(calls, 2);
+  assert.equal(calls, 0);
+  assert.equal(providerCalls, 1);
 });
 
 

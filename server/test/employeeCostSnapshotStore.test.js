@@ -11,6 +11,16 @@ const { createEmployeeCostSnapshotStore } = require('../src/employeeCostSnapshot
 const PERIOD = '2026-08';
 const ROSTER = [{ emp_code: 'DN001', name: 'A' }, { emp_code: 'DN002', name: 'B' }];
 const model = (marker = 'A') => ({ from: PERIOD, to: PERIOD, marker, periods: [{ period: PERIOD, columns: [], rows: [], match: { unavailableEmployees: [] } }] });
+const sealedModel = (marker = 'SEAL') => ({
+  allEmployees: true, from: PERIOD, to: PERIOD, marker,
+  employees: ROSTER.map((row) => ({ empCode: row.emp_code, employeeName: row.name })),
+  remoteProvenance: [],
+  revenueRecon: { total: 3, shown: 3, gap: 0, balanced: true },
+  periods: [{
+    period: PERIOD, columns: [], rows: [],
+    match: { totalRows: 0, unavailableEmployeeCount: 0, unavailableEmployees: [], staleEmployeeCount: 0, staleEmployees: [] },
+  }],
+});
 const employees = (a = 1, b = 2) => new Map([
   ['DN001', { payload: { empCode: 'DN001', value: a }, fetchedAt: '2026-08-13T01:00:00.000Z', sourceRevision: `r${a}` }],
   ['DN002', { payload: { empCode: 'DN002', value: b }, fetchedAt: '2026-08-13T01:00:00.000Z', sourceRevision: `r${b}` }],
@@ -97,10 +107,62 @@ test('persistence boundary rejects a closed-period publication not explicitly lo
   assert.equal(store.tryReadCurrent(PERIOD).ok, false);
 });
 
-test('locked complete period is immutable', () => {
+test('seal source round-trips as a model-only complete locked generation', () => {
   const { store } = fresh();
-  store.publishGeneration(PERIOD, { roster: ROSTER, employees: employees(), model: model(), locked: true });
-  assert.throws(() => store.publishGeneration(PERIOD, { roster: ROSTER, employees: employees(3, 4), model: model('mutate'), locked: true }), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
+  const snapshot = store.publishGeneration(PERIOD, {
+    source: 'seal', sealIdentity: 'a'.repeat(64), periodLocked: true, locked: true,
+    roster: ROSTER, employees: new Map(), model: sealedModel(), dependencies: { sealKey: 'safe' },
+  });
+  assert.equal(snapshot.manifest.source, 'seal');
+  assert.equal(snapshot.manifest.sealIdentity, 'a'.repeat(64));
+  assert.equal(snapshot.manifest.complete, true);
+  assert.equal(snapshot.manifest.locked, true);
+  assert.equal(snapshot.employees.size, 0);
+  assert.deepEqual(snapshot.model, sealedModel());
+});
+
+test('seal source rejects missing identity, forged employees and a model that cannot prove roster', () => {
+  const { store } = fresh();
+  assert.throws(() => store.publishGeneration(PERIOD, {
+    source: 'seal', periodLocked: true, locked: true, roster: ROSTER, model: sealedModel(),
+  }), { code: 'EMPLOYEE_COST_SNAPSHOT_SEAL_INVALID' });
+  assert.throws(() => store.publishGeneration(PERIOD, {
+    source: 'seal', sealIdentity: 'b'.repeat(64), periodLocked: true, locked: true,
+    roster: ROSTER, employees: employees(), model: { ...sealedModel(), employees: [{ empCode: 'DN001' }] },
+  }), { code: 'EMPLOYEE_COST_SNAPSHOT_SEAL_INVALID' });
+  assert.equal(store.tryReadCurrent(PERIOD).ok, false);
+
+  const snapshot = store.publishGeneration(PERIOD, {
+    source: 'seal', sealIdentity: 'e'.repeat(64), periodLocked: true, locked: true,
+    roster: ROSTER, employees: new Map(), model: sealedModel(),
+  });
+  const generationDir = path.join(store._test.periodDir(PERIOD), 'generations', snapshot.manifest.generationId);
+  const manifestFile = path.join(generationDir, 'manifest.json');
+  const pointerFile = store._test.currentFile(PERIOD);
+  const manifestEnvelope = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  manifestEnvelope.payload.source = 'other';
+  manifestEnvelope.checksum = store.sha256(store.canonicalJson(manifestEnvelope.payload));
+  fs.writeFileSync(manifestFile, `${JSON.stringify(manifestEnvelope, null, 2)}\n`);
+  const pointerEnvelope = JSON.parse(fs.readFileSync(pointerFile, 'utf8'));
+  pointerEnvelope.payload.manifestChecksum = store.sha256(store.canonicalJson(manifestEnvelope.payload));
+  pointerEnvelope.checksum = store.sha256(store.canonicalJson(pointerEnvelope.payload));
+  fs.writeFileSync(pointerFile, `${JSON.stringify(pointerEnvelope, null, 2)}\n`);
+  assert.equal(store.tryReadCurrent(PERIOD).error.code, 'EMPLOYEE_COST_SNAPSHOT_SOURCE_INVALID');
+});
+
+test('locked complete seal generation is immutable and network cannot claim locked', () => {
+  const { store } = fresh();
+  assert.throws(() => store.publishGeneration(PERIOD, {
+    source: 'network', roster: ROSTER, employees: employees(), model: model(), locked: true,
+  }), { code: 'EMPLOYEE_COST_SNAPSHOT_SEAL_INVALID' });
+  store.publishGeneration(PERIOD, {
+    source: 'seal', sealIdentity: 'c'.repeat(64), periodLocked: true, locked: true,
+    roster: ROSTER, employees: new Map(), model: sealedModel('A'),
+  });
+  assert.throws(() => store.publishGeneration(PERIOD, {
+    source: 'seal', sealIdentity: 'd'.repeat(64), periodLocked: true, locked: true,
+    roster: ROSTER, employees: new Map(), model: sealedModel('mutate'),
+  }), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
   assert.equal(store.readCurrent(PERIOD).model.marker, 'A');
 });
 
