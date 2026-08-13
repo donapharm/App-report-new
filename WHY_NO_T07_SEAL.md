@@ -69,8 +69,25 @@ Do đó:
 
 Hai cổng đều fail-closed nhưng không được nhập làm một.
 
+## Cùng cổng đối với T08 khi khoá sổ
+
+Generation T08 đầy đủ đã giữ lại có:
+
+- 21 employee files;
+- 21/21 `sourceOutcome=ok`;
+- revenue reconciliation balanced;
+- unavailable `0`, stale `0`;
+- nhưng 13/13 provenance entries kết thúc bằng `:THIEU`.
+
+Đánh giá trực tiếp bằng exact candidate `9014644`:
+
+- model T08 hiện tại: `isSealable=false`;
+- cùng model, chỉ thay provenance bằng mảng hợp lệ không có `:THIEU`: `isSealable=true`.
+
+Vì vậy snapshot completeness không đồng nghĩa closed-seal eligibility. **Cùng cổng provenance sẽ chặn T08 khi T08 thành kỳ khoá sổ nếu build lúc đó vẫn còn `:THIEU`.** Kết luận này có điều kiện: nếu remote reconciliation packages được bổ sung provenance canonical trước lần build kỳ khoá sổ thì cổng có thể PASS.
+
 ## Trạng thái vận hành sau OOM
 
-JavaScript heap OOM lúc khoảng 22:22 GMT+7 đã kích hoạt tiêu chí rollback độc lập. PROD đã rollback atomic về exact `7870f10e0d60b9b635bfe28d57b7a9f8ef63f5d4`; candidate `9014644` chưa cutover.
+JavaScript heap OOM xảy ra lúc `22:22:16 GMT+7`; hồ sơ read-only nằm tại `OOM_20260813_2222.md`. Một competing action đã rollback PROD về exact `7870f10e0d60b9b635bfe28d57b7a9f8ef63f5d4` lúc 23:09; candidate `9014644` chưa cutover. Theo quyết định kiến trúc mới của CEO, không dùng sự kiện OOM của bản đã chạy nhiều giờ làm tiêu chí rollback cho candidate chưa deploy, và rollback target sau cutover phải là `3a3a47d`, không phải `7870f10`.
 
-DataHub T07 lúc 23:20 vẫn `0/21`, `21 × upstream_409`, nên chưa thể dựng seal/snapshot nguồn tươi. Không dùng `employee_cost_rate_snapshot.json` thay closed seal và không dựng generation giả.
+DataHub T07 lúc `05:50 GMT+7` ngày 14/08 vẫn `0/21`, `21 × upstream_409`, nên chưa thể dựng seal/snapshot nguồn tươi. Không dùng `employee_cost_rate_snapshot.json` thay closed seal và không dựng generation giả.

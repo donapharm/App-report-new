@@ -7,9 +7,9 @@
 - Candidate code: `90146448895cd4d6b845e24925f40e603d8569fb`.
 - Candidate tree: `80ffc6937fb5ecb9389df7a9e0aefebbdeeebbfd`.
 - Branch tài liệu: `bot/candidate-fb616d1-on-1c7d6f5`.
-- PROD trước cutover: `3a3a47d8ac2634ffd0bdecfb46f71db24667a823`.
-- Release trước cutover: `release-app-report-3a3a47d-20260813-085826`.
-- PID baseline: `784273`.
+- Baseline kiến trúc được CEO chọn làm rollback target sau cutover: `3a3a47d8ac2634ffd0bdecfb46f71db24667a823` / `release-app-report-3a3a47d-20260813-085826`.
+- **Runtime drift cần reconcile trước Gate 2:** lúc kiểm tra `06:25 GMT+7` ngày 14/08/2026, `current` và public `/version.json` đang ở `7870f10e0d60b9b635bfe28d57b7a9f8ef63f5d4` do competing rollback lúc 23:09 ngày 13/08. Phiên tài liệu không tự đảo runtime.
+- PID trước OOM của `3a3a47d`: `784273`; PID PM2 dựng sau OOM: `2046520`; đây không còn là PID baseline hợp lệ cho pre-cutover hiện tại.
 - `EMPLOYEE_COST_SERVE_FROM_SNAPSHOT` phải giữ **OFF** toàn bộ kế hoạch.
 - Không publish/serve custody T07; không dùng `employee_cost_rate_snapshot.json` thay closed seal.
 - Snapshot T08 chỉ được tạo sau cutover bằng code `9014644`, vào snapshot root thật và chỉ được coi đạt khi cùng generation đủ 21/21.
@@ -19,7 +19,7 @@
 Chỉ bắt đầu khi tất cả PASS:
 
 1. CEO duyệt đúng release/artifact/manifest và thời điểm deploy; không tái dùng approval cũ.
-2. PROD vẫn đúng release/hash/PID baseline hoặc mọi drift đã được dừng để CEO xem lại.
+2. Drift hiện tại `7870f10` đã được CEO xem và có chỉ đạo riêng về cách đưa runtime về baseline/cutover; không được giả định PROD vẫn là `3a3a47d` và không được tự restart để “sửa drift”.
 3. Worktree build sạch, exact code delta `server web` so với `9014644` bằng 0.
 4. Guard RSS/PID còn chạy; RSS dưới ngưỡng cấm cutover; không có PID drift/restart bất thường.
 5. DataHub T07 monitor gần nhất được ghi. Nếu T07 hết 409, **dừng kế hoạch này** và ưu tiên seal/snapshot T07 từ nguồn tươi.
@@ -48,12 +48,12 @@ Chỉ bắt đầu khi tất cả PASS:
 
 1. Ghi lại symlink, release/hash/version, PM2 pid/restart count/RSS, health local/public và cờ snapshot.
 2. Tạo backup dữ liệu trước khi chạm service; verify archive và thử đọc/restore vào thư mục cô lập.
-3. Ghi rollback target pre-cutover chính xác là release `3a3a47d...`; giữ nguyên rollback khẩn cấp theo chỉ đạo CEO tại mục 8.
+3. Xác minh clean release/worktree rollback exact `3a3a47d...` còn nguyên vẹn và độc lập với symlink live hiện tại; rollback target sau cutover bắt buộc là release này, **không phải `7870f10`**.
 4. Verify manifest candidate lần cuối ngay sát cutover; nếu có file drift thì dừng.
 
 **Thành công:** backup restore-verified, manifest không drift, baseline runtime đầy đủ.
 
-**Điểm quay lui:** backup/verify/drift fail ⇒ dừng khi service vẫn ở `3a3a47d`, không reload/restart.
+**Điểm quay lui:** backup/verify/drift fail ⇒ dừng với service ở nguyên trạng thái pre-cutover đã xác minh, không reload/restart.
 
 ## 4. Atomic cutover (chỉ sau Gate 2)
 
@@ -117,11 +117,13 @@ Chỉ chạy sau khi mục 5 PASS:
 
 Chỉ kích hoạt khi có đúng một trong ba điều kiện CEO đã chốt:
 
-1. OOM hoặc restart bất thường;
-2. RSS `>1,8 GiB` liên tục hơn 10 phút;
+1. candidate `9014644` gây OOM hoặc restart bất thường **trong cửa sổ giám sát sau cutover**;
+2. RSS `>1,8 GiB` liên tục hơn 10 phút trong cửa sổ đó;
 3. số liệu lệch đối chứng.
 
-Hành động đã chỉ định: checkout exact `7870f10e0d60b9b635bfe28d57b7a9f8ef63f5d4` vào **clean rollback release/worktree** (không checkout/reset trực tiếp dirty `current`), atomically trỏ `current` sang release đó và restart PM2; sau đó health/version/auth/data smoke. Đây là thao tác runtime phá vỡ trạng thái hiện tại nên chỉ được thi hành khi tiêu chí thực sự xảy ra và phải lưu evidence trước/sau. Ngoài ba trường hợp: không restart, không rollback tự động.
+OOM `22:22` ngày 13/08 của bản `3a3a47d` đã chạy ổn định nhiều giờ không được dùng hồi tố làm điều kiện rollback candidate chưa deploy.
+
+Hành động đã chỉ định: dùng **clean release/worktree exact `3a3a47d8ac2634ffd0bdecfb46f71db24667a823`** (không checkout/reset trực tiếp dirty `current`), atomically trỏ `current` sang release đó và restart duy nhất process `app-report`; sau đó health/version/auth/data smoke và lưu evidence trước/sau. **Không rollback về `7870f10`.** Ngoài ba trường hợp: không restart, không rollback tự động.
 
 ## 9. Mất gì ở T07 khi restart
 
@@ -144,11 +146,14 @@ Nhãn giữ nguyên cả ba lượt:
 
 Evidence local: `/home/osboxes/.openclaw/workspace-report-dev/artifacts/t07-prod-readonly-3x10m-20260813.json`.
 
-Diễn giải dùng để quyết định giờ deploy:
+Diễn giải sau OOM:
 
-- Nếu cả ba mẫu còn `healthy_cached` 2.091 dòng/21 NV, restart có thể làm mất **toàn bộ lớp cache RAM khỏe này**, vì DataHub T07 vẫn 0/21 HTTP 409 và không có closed seal/generation đầy đủ để dựng lại.
-- Việc ô “sau phạt” đang bị chặn 18/21 là fail-closed riêng của dữ liệu phạt; không đồng nghĩa base T07 đã trống.
-- Vì vậy câu “màn đã trống thì restart không còn gì để mất” chỉ đúng nếu mẫu thực tế cho thấy base đã rơi hết. Nếu cache vẫn khỏe, deploy hiện tại vẫn có rủi ro hiển thị T07 rất lớn và CEO phải chọn thời điểm có chủ đích.
+- Ba mẫu trên chứng minh trước OOM T07 còn lớp RAM cache khỏe `2.091` dòng/21 NV.
+- PID `784273` chết lúc 22:22 nên toàn bộ RAM cache gắn với PID đó chắc chắn chết theo process.
+- Không có authenticated admin GET T07 được lưu trên PID mới `2046520` trước competing rollback lúc 23:09. Vì vậy số dòng/NV, nhãn thiếu và serving class sau restart exact `3a3a47d` là **[blocked — không thể xác nhận hồi tố]**; không dùng trạng thái `7870f10` để suy ngược.
+- Việc ô “sau phạt” bị chặn 18/21 trước OOM là fail-closed riêng của dữ liệu phạt; không đồng nghĩa base T07 đã trống.
+
+Hồ sơ đầy đủ: `OOM_20260813_2222.md`.
 
 ## 10. DataHub T07 ưu tiên vượt kế hoạch
 
