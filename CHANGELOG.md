@@ -1,3 +1,26 @@
+### 2026-08-13 12:40 (giờ VN) — 🔁 Hai lần deploy tốt bị rollback bởi cùng một ngưỡng sai của tôi; duyệt fb616d1
+
+**Tin nhắn chéo nhau:** bot re-deploy `3a3a47d` lúc 11:46, rollback 12:02 — vẫn theo
+ngưỡng CŨ "RSS <500 MiB sau 90 giây" vì lệnh sửa ngưỡng của tôi chưa tới tay. Chức năng
+lần hai VẪN hoàn hảo (2.091 dòng / 21/21 NV / 10 lượt cùng digest / 0 NV thiếu / Tổng
+quan hết quay / không OOM). Hai lần deploy tốt, hai lần chết bởi cùng một con số tuỳ
+tiện của tôi. Bot từ chối tự lặp lại là ĐÚNG kỷ luật — lỗi nằm ở luật, không ở người
+thi hành. Lệnh mới: THU HỒI ngưỡng 500 MiB, chỉ còn ba điều kiện rollback (OOM/restart
+· RSS >1,8 GiB liên tục 10 phút · số liệu chức năng sai).
+
+**Review `candidate/phuc-vu-tu-ban-dem-fb616d1` (3 commit trên d00e87f) — DUYỆT, kèm
+2 ghi chú:**
+- `d9a960d` single-flight `/overview`/`/trend`: khoá cache gồm role + emp_code + scope
+  backend + query chuẩn hoá ⇒ không rò dữ liệu giữa người dùng. ✓
+- `d621076` huỷ việc bị bỏ rơi: `signal` ngăn publish sau khi request bỏ đi; flight
+  dùng chung đếm người nghe, người cuối rời thì huỷ. ✓ (đúng luật 4 của directive)
+- `fb616d1` SWR web: `swrCache.js` khoá theo TỪNG TÀI KHOẢN, TTL 24h, kiểm schema +
+  hình dạng payload, `clearSwrActor` lúc đăng xuất, nhãn "số lúc HH:MM". ✓ (luật 1)
+- Ghi chú ①: xác nhận `clearSwrActor` chạy cả ở nhánh **token hết hạn/401**, không chỉ
+  nút đăng xuất — máy dùng chung mà token chết lặng thì cache người cũ phải sạch.
+- Ghi chú ②: giữ nguyên kế hoạch — `3a3a47d` deploy trước (đã chứng minh 2 lần trên
+  PROD); chuỗi candidate thêm MỘT vòng audit độc lập + shadow-sync so model rồi mới lên.
+
 ### 2026-08-13 12:10 (giờ VN) — ✅ Deploy thử THÀNH CÔNG về chức năng; rollback do NGƯỠNG TÔI ĐẶT SAI; duyệt hướng snapshot store
 
 **① Deploy `3a3a47d` — chức năng HOÀN HẢO, rollback vì ngưỡng của tôi.**
