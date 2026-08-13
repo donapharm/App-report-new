@@ -25,6 +25,12 @@ const EMPLOYEE_COST_PAGE_SIZES = [20, 50, 100];
 // CEO duyệt 01/08/2026: bật Ứng lần 1 và Còn lại sau ứng theo đúng một NV.
 // ALL không fan-out/tổng hợp; cả hai ô đều yêu cầu chọn một nhân viên.
 const SALARY_ADVANCE_UI = true;
+const SNAPSHOT_REASON_LABELS = Object.freeze({
+  not_configured: 'chưa cấu hình nguồn', upstream_unavailable: 'nguồn tạm unavailable',
+  deadline: 'quá hạn lần đồng bộ', source_error: 'nguồn lỗi', missing: 'chưa có bản local',
+  roster_added: 'mới thêm vào roster', roster_changed: 'roster đã đổi',
+  corrupt_snapshot: 'snapshot hỏng', sync_failed: 'đồng bộ thất bại', locked: 'kỳ đã khoá',
+});
 export const employeeOptionLabel = (employee) => `${employee.emp_code} · ${employee.name}${employee.group_key && employee.group_key !== 'sale' ? ` · ${employee.group_label}` : ''}`;
 const browserStorage = () => {
   try { return globalThis.localStorage; } catch { return null; }
@@ -236,44 +242,6 @@ function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel =
     <option value="on">Bật</option>
     <option value="off">Tắt</option>
   </select>;
-}
-
-/* ‼ NÓI ĐÚNG THỦ PHẠM (CEO hỏi 13/08/2026: *"tại sao vẫn thấy lấy dữ liệu từ DataHub
- * nên dữ liệu chưa trả đủ là thế nào"*).
- *
- * Trước đây màn hình ghi cứng "nguồn chi phí DataHub chưa trả dữ liệu — báo DataHub kiểm
- * tra" cho MỌI trường hợp. Nhưng backend trả `not_configured` **trước khi chạm mạng** nếu
- * NV đó **thiếu khoá** trong `APP_REPORT_EMPLOYEE_COST_KEYS`, hoặc khoá trùng/sai định
- * dạng. Lúc đó lỗi nằm ở **cấu hình bên mình**, DataHub vô can — mà CEO thì đang đi hỏi
- * DataHub, DataHub bảo "không thấy ai gọi", và vòng đó lặp mãi.
- *
- * Nay đọc lý do TỪNG NGƯỜI và nói đúng việc phải làm. */
-function nguyenNhanThieuNguoi(kpiMatch) {
-  const lyDo = kpiMatch?.unavailableReasons && typeof kpiMatch.unavailableReasons === 'object'
-    ? kpiMatch.unavailableReasons : {};
-  const nhom = new Map();
-  for (const [ma, ly] of Object.entries(lyDo)) {
-    if (!nhom.has(ly)) nhom.set(ly, []);
-    nhom.get(ly).push(ma);
-  }
-  if (!nhom.size) return 'Phần này KHÔNG phải "thiếu % catalog" mà là nguồn chi phí chưa trả dữ liệu.';
-
-  const cau = [];
-  for (const [ly, ma] of nhom) {
-    const ds = ma.sort().join(', ');
-    if (ly === 'not_configured') {
-      cau.push(`${ds}: CHƯA CÓ KHOÁ trong cấu hình App Report (hoặc khoá trùng/sai định dạng) — `
-        + 'App Report KHÔNG hề gọi DataHub cho những mã này. Đây là việc của App Report, không phải DataHub. '
-        + 'Cần bổ sung khoá vào APP_REPORT_EMPLOYEE_COST_KEYS rồi khởi động lại.');
-    } else if (ly === 'upstream_unavailable') {
-      cau.push(`${ds}: đã gọi DataHub nhưng không nhận được trả lời trong hạn — báo DataHub kiểm tra.`);
-    } else if (ly === 'before_go_live') {
-      cau.push(`${ds}: kỳ này nằm trước mốc go-live nên không có dữ liệu — đúng thiết kế, không phải lỗi.`);
-    } else {
-      cau.push(`${ds}: ${ly}.`);
-    }
-  }
-  return `Phần này KHÔNG phải "thiếu % catalog". Lý do từng mã: ${cau.join(' ')}`;
 }
 
 function CostColumnKpi({ item, coverageNote = '', thieuNguoi = false, thieuNguoiNote = '' }) {
@@ -1645,6 +1613,12 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [khoanLoading, setKhoanLoading] = useState(!admin);
   const [loading, setLoading] = useState(!admin);
   const [error, setError] = useState('');
+  const [snapshotSyncing, setSnapshotSyncing] = useState(false);
+  const [snapshotMessage, setSnapshotMessage] = useState('');
+  const [snapshotError, setSnapshotError] = useState('');
+  const [snapshotControl, setSnapshotControl] = useState(null);
+  const [snapshotPoll, setSnapshotPoll] = useState(false);
+  const [snapshotRevision, setSnapshotRevision] = useState(0);
   const [expanded, setExpanded] = useState({});
   const [visibilityPanel, setVisibilityPanel] = useState(null);
   const [visibilityLoading, setVisibilityLoading] = useState(admin);
@@ -1734,7 +1708,26 @@ export default function EmployeeCost({ me, onNavigate }) {
       })
       .finally(() => { if (request.isLatest()) setLoading(false); });
     return () => { if (request.isLatest()) costRequestGate.current.cancel(); };
-  }, [admin, selectedEmp, range, view, debouncedQuery, tableSort, tablePage, tablePageSize, tableFilters]);
+  }, [admin, selectedEmp, range, view, debouncedQuery, tableSort, tablePage, tablePageSize, tableFilters, snapshotRevision]);
+
+  useEffect(() => {
+    if (!admin || selectedEmp !== 'ALL' || view !== 'cost' || range.from !== range.to) { setSnapshotControl(null); return undefined; }
+    let alive = true;
+    let timer = null;
+    const inspect = () => api.employeeCostSnapshotStatus(range.to)
+      .then((data) => {
+        if (!alive) return;
+        setSnapshotControl(data?.enabled ? (data.trangThaiDongBo || null) : null);
+        if (snapshotPoll && data?.trangThaiDongBo?.syncing !== true) {
+          setSnapshotPoll(false);
+          setSnapshotRevision((value) => value + 1);
+        }
+      })
+      .catch(() => { /* status is optional while legacy flag is off */ });
+    inspect();
+    if (snapshotPoll) timer = window.setInterval(inspect, 2000);
+    return () => { alive = false; if (timer != null) window.clearInterval(timer); };
+  }, [admin, selectedEmp, view, range.from, range.to, snapshotPoll]);
 
   useEffect(() => {
     if (admin && view !== 'cost') return undefined;
@@ -1856,6 +1849,9 @@ export default function EmployeeCost({ me, onNavigate }) {
   // NV đang xài BẢN % CŨ vì nguồn tươi kẹt: có số nên KHÔNG nằm trong danh sách
   // "chưa lấy được", nhưng phải nói ra là số cũ — dùng được không có nghĩa là giấu.
   const staleEmpCodes = Array.isArray(kpiMatch.staleEmployees) ? kpiMatch.staleEmployees : [];
+  const snapshotStatus = snapshotControl || model.trangThaiDongBo;
+  const snapshotReasonText = Object.entries(snapshotStatus?.unavailableReasons || {})
+    .map(([emp, reason]) => `${emp}: ${SNAPSHOT_REASON_LABELS[reason] || 'nguồn tạm unavailable'}`).join(' · ');
 
   /* ‼ THIẾU NGƯỜI THÌ KHÔNG ĐƯỢC TRƯNG TỔNG (CEO chốt 11/08/2026).
    *
@@ -2018,6 +2014,17 @@ export default function EmployeeCost({ me, onNavigate }) {
     catch (requestError) { setCostExportError(requestError.message || 'Không xuất được danh sách đơn vị chưa gán tỉnh'); }
     finally { setProvinceWorklistExporting(false); }
   };
+  const resyncEmployeeCostSnapshot = async () => {
+    setSnapshotSyncing(true); setSnapshotMessage(''); setSnapshotError('');
+    try {
+      const result = await api.employeeCostSnapshotResync(range.to);
+      setSnapshotMessage(result?.accepted ? 'Đã nhận yêu cầu. Đồng bộ chạy nền; số hiện tại được giữ nguyên đến khi bản mới publish.' : 'Yêu cầu đang được xử lý.');
+      const syncing = { ...(result?.trangThaiDongBo || snapshotControl || model.trangThaiDongBo || {}), state: 'syncing', syncing: true };
+      setSnapshotControl(syncing);
+      setSnapshotPoll(true);
+    } catch (requestError) { setSnapshotError(requestError.message || 'Chưa gửi được yêu cầu đồng bộ.'); }
+    finally { setSnapshotSyncing(false); }
+  };
   const changeEmployee = (value) => {
     setTargetModalOpen(false);
     setBonusModalOpen(false);
@@ -2133,6 +2140,19 @@ export default function EmployeeCost({ me, onNavigate }) {
 
     {costExportError && view === 'cost' && <div className="employee-cost-match-warning" role="alert">{costExportError}</div>}
 
+
+    {admin && view === 'cost' && allEmployees && snapshotStatus && <div className="card employee-cost-snapshot-status" data-snapshot-state={snapshotStatus.state}>
+      <div><div className="section-head">Bản chi phí trên máy · kỳ {formatMonthLabel(model.dongBoKy || range.to)}</div>
+        <p>{snapshotStatus.fetchedAt ? `Số chốt lúc ${new Date(snapshotStatus.fetchedAt).toLocaleString('vi-VN')} · ` : ''}{snapshotStatus.complete ? `đủ ${snapshotStatus.availableCount}/${snapshotStatus.rosterCount} NV` : `đang có ${snapshotStatus.availableCount}/${snapshotStatus.rosterCount} NV`}{snapshotStatus.locked ? ' · kỳ đã khoá' : ''}.</p>
+        {!!snapshotReasonText && <small>{snapshotReasonText}</small>}
+        {!!snapshotMessage && <small role="status">{snapshotMessage}</small>}
+        {!!snapshotError && <small role="alert">{snapshotError}</small>}
+      </div>
+      <button type="button" className="btn" disabled={snapshotSyncing || snapshotStatus.syncing || snapshotStatus.locked} onClick={resyncEmployeeCostSnapshot}>
+        {snapshotSyncing || snapshotStatus.syncing ? 'Đang đồng bộ…' : 'Đồng bộ lại'}
+      </button>
+    </div>}
+
     {admin && <div className="employee-cost-tabs" role="tablist" aria-label="Chế độ xem chi phí">
       <button type="button" role="tab" aria-selected={view === 'cost'} className={view === 'cost' ? 'active' : ''} onClick={() => setView('cost')}>Chi phí theo nhân viên</button>
       {/* Badge số ngay trên tab: CEO nhìn phát thấy còn bao nhiêu mã/dòng đang
@@ -2176,7 +2196,8 @@ export default function EmployeeCost({ me, onNavigate }) {
         phải tự phát hiện số sai rồi đi truy nguồn. */}
     {!!unavailableEmps && <div className="employee-cost-match-warning" role="alert">
       <b>⚠ Dữ liệu chưa đầy đủ — số đang là TẠM TÍNH.</b> Chưa lấy được dữ liệu chi phí của <b>{unavailableEmpLabel}</b> ({unavailablePairs.toLocaleString('vi-VN')} cặp, kỳ {formatMonthLabel(model.from)}{model.from === model.to ? '' : ` → ${formatMonthLabel(model.to)}`}).
-      {nguyenNhanThieuNguoi(kpiMatch)} Tỷ lệ khớp phía dưới đã loại phần này ra để không báo sai.
+      Phần này <b>không</b> phải "thiếu % catalog" mà là <b>nguồn chi phí DataHub chưa trả dữ liệu</b> — báo DataHub kiểm tra. Tỷ lệ khớp phía dưới đã loại phần này ra để không báo sai.
+      {!!snapshotReasonText && <small> Lý do bản local: {snapshotReasonText}.</small>}
     </div>}
 
     {/* ‼ TIỀN CHẠY ĐI ĐÂU — phép cân hiện thẳng lên màn (CEO 10/08: *"doanh thu thực

@@ -295,6 +295,9 @@ export function employeeCostGapConsistency(model = {}, badge = {}) {
 }
 
 function normalizedMatch(rawMatch = {}, rowCount = 0) {
+  const safeReasons = Object.fromEntries(Object.entries(rawMatch.unavailableReasons || {})
+    .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'deadline', 'source_error', 'missing_snapshot'].includes(String(reason))
+      ? String(reason) : 'upstream_unavailable']));
   return {
     matchedRows: Number(rawMatch.matchedRows || 0),
     totalRows: Number(rawMatch.totalRows ?? rowCount),
@@ -306,6 +309,8 @@ function normalizedMatch(rawMatch = {}, rowCount = 0) {
     unavailablePairs: Number(rawMatch.unavailablePairs || 0),
     unavailableEmployeeCount: Number(rawMatch.unavailableEmployeeCount || 0),
     unavailableEmployees: Array.isArray(rawMatch.unavailableEmployees) ? rawMatch.unavailableEmployees.map(String) : [],
+    // Giữ nguyên shape legacy khi không có lý do; chỉ thêm field cho payload snapshot.
+    ...(Object.keys(safeReasons).length ? { unavailableReasons: safeReasons } : {}),
   };
 }
 
@@ -968,6 +973,21 @@ export function employeeCostViewModel(payload = {}) {
       label: String(payload.periodClose?.label || ''),
     },
     allEmployees: !!payload.allEmployees,
+    dongBoKy: String(payload.dongBoKy || ''),
+    trangThaiDongBo: payload.trangThaiDongBo && typeof payload.trangThaiDongBo === 'object' ? {
+      state: String(payload.trangThaiDongBo.state || ''),
+      syncing: payload.trangThaiDongBo.syncing === true,
+      complete: payload.trangThaiDongBo.complete === true,
+      locked: payload.trangThaiDongBo.locked === true,
+      fetchedAt: String(payload.trangThaiDongBo.fetchedAt || ''),
+      generationId: String(payload.trangThaiDongBo.generationId || ''),
+      rosterCount: Number(payload.trangThaiDongBo.rosterCount || 0),
+      availableCount: Number(payload.trangThaiDongBo.availableCount || 0),
+      unavailableReasons: Object.fromEntries(Object.entries(payload.trangThaiDongBo.unavailableReasons || {})
+        .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'deadline', 'source_error', 'missing', 'roster_added', 'roster_changed', 'corrupt_snapshot', 'sync_failed', 'locked'].includes(String(reason))
+          ? String(reason) : 'upstream_unavailable'])),
+      errorCode: String(payload.trangThaiDongBo.errorCode || ''),
+    } : null,
     filters: {
       province: String(payload.filters?.province || ''),
       unitGroup: String(payload.filters?.unitGroup || ''),
