@@ -300,7 +300,8 @@ router.use((req, res, next) => {
 function routeDataSignature(routeName) {
   if (routeName === 'filters') return store.unitGroupDataSignature();
   if (routeName === 'cst') return store.cstDataSignature();
-  if (routeName === 'alerts' || routeName === 'analysis') return store.dashboardDataSignature();
+  if (routeName === 'alerts' || routeName === 'analysis' || routeName === 'overview') return store.dashboardDataSignature();
+  if (routeName === 'trend') return store.targetDataSignature();
   if (routeName === 'employee-cost-all') return store.employeeCostDataSignature();
   return currentMemoDataSignature();
 }
@@ -325,6 +326,15 @@ function readCacheKey(req, routeName, extra = {}) {
  * kho đổi giữa hai lời gọi ⇒ số đời A bị cất dưới khoá hiển thị đời B ⇒ nguồn đang là
  * 222 mà màn hình vẫn 111. Nguyên tắc: **một request chụp vân tay ĐÚNG MỘT LẦN**, rồi
  * mọi khoá, mọi dấu, mọi cổng kiểm đều dùng chung đúng con dấu đó. */
+// Single-flight riêng cho các route dựng báo cáo. Key đi qua readCacheKey nên
+// luôn khóa theo generation + role + actor + scope + toàn bộ query; tuyệt đối
+// không dùng chung payload giữa hai danh tính dù câu hỏi giống nhau. Đây chỉ gộp
+// công việc async trùng nhau, không biến parse CPU đồng bộ thành công việc nền.
+const expensiveReadInFlight = new Map();
+function protectedRouteBuild(req, routeName, build, extra = {}) {
+  return singleFlight(expensiveReadInFlight, readCacheKey(req, routeName, extra), build);
+}
+
 function employeeCostAllCacheKey(req, phase, vanTay) {
   // ALL is admin-only and contains the same company-wide payload for every
   // authorized admin. Deliberately omit actor/role so CEO/admin sessions share
@@ -4456,39 +4466,45 @@ router.get('/admin/assignments/template.xlsx', auth.requireAuth, auth.requireAdm
 });
 
 /* ---------- Overview + Alerts ---------- */
-router.get('/overview', auth.requireAuth, (req, res) => {
-  const scope = auth.scopeOf(req.session);
-  const pc = periodCtx(req.query);
-  res.json({
-    ...A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }),
-    emptyPeriod: pc.emptyPeriod,
-  });
-});
-
-router.get('/trend', auth.requireAuth, (req, res) => {
-  const scope = auth.scopeOf(req.session);
-  const filters = revenueFiltersFromQuery(req.query);
-  const empFilter = new Set(A.selectedEmployeeCodes(filters));
-  const targetComparable = A.targetFiltersComparable(filters);
-  const cacheKey = `trend:${store.targetDataSignature()}:${scope.empCode || 'ALL'}:${JSON.stringify(filters)}`;
-  res.json(memoGet(cacheKey, 60 * 1000, () => store.listPeriods().map((p) => {
-    // Lightweight trend: không gọi overviewKpis vì hàm đó còn tính CST/target từng NV.
-    const rows = A.applyFilters(store.getRows({ ky: p.ky, scope }), filters);
-    const revenue = A.sum(rows, (r) => r.revenue);
-    const targetTotal = targetComparable
-      ? A.sum(store.getTargets({ ky: p.ky, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase())), (t) => t.target)
-      : null;
-    const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
+router.get('/overview', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const payload = await protectedRouteBuild(req, 'overview', () => {
+    const scope = auth.scopeOf(req.session);
+    const pc = periodCtx(req.query);
     return {
-      ky: p.ky,
-      revenue,
-      revenueBeforeVat,
-      targetTotal,
-      targetComparable,
-      pctTarget: targetComparable && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
+      ...A.overviewKpis({ ...pc, scope, filters: revenueFiltersFromQuery(req.query) }),
+      emptyPeriod: pc.emptyPeriod,
     };
-  })));
-});
+  });
+  res.json(payload);
+}));
+
+router.get('/trend', auth.requireAuth, asyncJsonRoute(async (req, res) => {
+  const cacheKey = readCacheKey(req, 'trend');
+  const payload = await memoGet(cacheKey, 60 * 1000, () => protectedRouteBuild(req, 'trend', () => {
+    const scope = auth.scopeOf(req.session);
+    const filters = revenueFiltersFromQuery(req.query);
+    const empFilter = new Set(A.selectedEmployeeCodes(filters));
+    const targetComparable = A.targetFiltersComparable(filters);
+    return store.listPeriods().map((p) => {
+      // Lightweight trend: không gọi overviewKpis vì hàm đó còn tính CST/target từng NV.
+      const rows = A.applyFilters(store.getRows({ ky: p.ky, scope }), filters);
+      const revenue = A.sum(rows, (r) => r.revenue);
+      const targetTotal = targetComparable
+        ? A.sum(store.getTargets({ ky: p.ky, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase())), (t) => t.target)
+        : null;
+      const revenueBeforeVat = Math.round(revenue / A.VAT_DIVISOR);
+      return {
+        ky: p.ky,
+        revenue,
+        revenueBeforeVat,
+        targetTotal,
+        targetComparable,
+        pctTarget: targetComparable && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null,
+      };
+    });
+  }));
+  res.json(payload);
+}));
 
 router.get('/alerts', auth.requireAuth, memoJson('alerts'), (req, res) => {
   res.json(smart.buildAlerts({ ...periodCtx(req.query), scope: auth.scopeOf(req.session), compareMode: req.query.compareMode, filters: revenueFiltersFromQuery(req.query) }));
