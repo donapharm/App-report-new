@@ -376,6 +376,19 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const totalRows = available.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const unavailablePairs = unavailable.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const unavailableEmployees = unavailable.map(({ report }) => String(report.empCode || '').toUpperCase()).filter(Boolean);
+    /* ‼ NÓI ĐÚNG THỦ PHẠM, ĐỪNG ĐỔ HẾT CHO DATAHUB (CEO hỏi 13/08/2026:
+     * *"tại sao vẫn thấy lấy dữ liệu từ DataHub nên dữ liệu chưa trả đủ là thế nào"*).
+     *
+     * Màn hình đang ghi cứng "nguồn chi phí DataHub chưa trả dữ liệu — báo DataHub kiểm
+     * tra" cho MỌI trường hợp. Nhưng `fetchRawEmployeeCost` trả `not_configured` **trước
+     * khi chạm mạng** nếu NV đó **thiếu khoá** trong `APP_REPORT_EMPLOYEE_COST_KEYS`, hoặc
+     * khoá bị trùng/định dạng sai — lúc đó **lỗi nằm ở cấu hình BÊN MÌNH**, DataHub vô can.
+     * Báo sai chỗ thì CEO đi hỏi DataHub, DataHub bảo "không thấy gọi", và vòng đó lặp mãi.
+     *
+     * Nay gửi kèm LÝ DO từng người để màn hình nói đúng người đúng việc. */
+    const unavailableReasons = Object.fromEntries(unavailable
+      .map(({ report }) => [String(report.empCode || '').toUpperCase(), String(report.sourceOutcome || 'unknown')])
+      .filter(([code]) => code));
     const rate = totalRows ? +(matchedRows / totalRows * 100).toFixed(1) : null;
     const threshold = Number(blocks.find((item) => Number.isFinite(Number(item.period.match?.threshold)))?.period.match.threshold || 90);
     const low = rate != null && rate < threshold;
@@ -412,6 +425,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
       match: {
         matchedRows, totalRows, rate, threshold, low,
         unavailablePairs, unavailableEmployees, unavailableEmployeeCount: unavailableEmployees.length,
+        unavailableReasons,
         staleEmployees, staleEmployeeCount: staleEmployees.length,
       },
       // Còn NV chưa lấy được nguồn ⇒ tổng chưa đầy đủ ⇒ vẫn để "tạm tính".

@@ -1,3 +1,47 @@
+### 2026-08-13 08:10 (giờ VN) — 🎯 Vì sao thiếu NV: nhiều khả năng THIẾU KHOÁ bên mình, không phải DataHub
+
+CEO chụp màn PROD 07:50 ngày 13/08 (`7870f10`), nêu 5 việc. Kiểm từng cái:
+
+**① Thiếu DN024, VP004 ⇒ ô Target và Doanh thu vẫn hiện số.** Trên PROD thì đúng vậy.
+Bản vá "thiếu người thì không trưng tổng" đã xong ở nhánh (`3a3a47d`), **chưa deploy**.
+
+**② "Tại sao vẫn thấy lấy dữ liệu từ DataHub nên dữ liệu chưa trả đủ?" — ĐÂY LÀ CÂU
+QUAN TRỌNG NHẤT, và app đang TRẢ LỜI SAI.**
+
+Đọc `fetchRawEmployeeCost` dòng 1178: nếu NV đó **không có khoá riêng** trong
+`APP_REPORT_EMPLOYEE_COST_KEYS`, hoặc khoá **trùng với NV khác**, hoặc **ngắn hơn 16 ký
+tự / sai định dạng**, thì hàm trả `not_configured` **TRƯỚC KHI CHẠM MẠNG**. Nghĩa là
+**App Report không hề gọi DataHub cho mã đó** — không phải DataHub im lặng.
+
+Tệ hơn: `parseEmployeeCostKeys` **lặng lẽ bỏ qua** dòng sai định dạng (`continue`) và
+**lặng lẽ xoá** những NV dùng khoá trùng nhau. Một dấu phẩy thừa hay một khoá copy-paste
+trùng là mất luôn NV đó, **vĩnh viễn, không báo gì**.
+
+Nhưng màn hình lại **ghi cứng**: *"nguồn chi phí DataHub chưa trả dữ liệu — báo DataHub
+kiểm tra."* Câu đó đúng cho `upstream_unavailable`, **sai hoàn toàn** cho
+`not_configured`. Hậu quả: CEO đi hỏi DataHub, DataHub bảo "không thấy ai gọi", và vòng
+đó lặp mãi — đúng như đang xảy ra.
+
+→ **Sửa:** backend gửi kèm **lý do từng người** (`unavailableReasons`); màn hình nói đúng
+việc phải làm cho từng nhóm:
+- `not_configured` → *"CHƯA CÓ KHOÁ trong cấu hình App Report — App Report KHÔNG hề gọi
+  DataHub cho những mã này. Việc của App Report, không phải DataHub. Bổ sung khoá vào
+  `APP_REPORT_EMPLOYEE_COST_KEYS` rồi khởi động lại."*
+- `upstream_unavailable` → *"đã gọi DataHub nhưng không nhận được trả lời trong hạn."*
+- `before_go_live` → *"kỳ trước mốc go-live, đúng thiết kế, không phải lỗi."*
+
+**③ F5 xong không che số** và **④ chụp màn hình lại bị che số** — hai cái này **đã sửa
+xong** ở `d8e9c4c` + `479bd00`, và tôi vừa kiểm bằng `git merge-base`: **CHƯA có trong
+PROD**. Chúng nằm trong nhánh chờ deploy.
+
+**⑤ Giải quyết dứt điểm** — nay đã tách được thành hai việc khác hẳn nhau:
+- Phần **hiển thị** (không trưng tổng khi thiếu người, che số, chụp màn hình): xong, chờ deploy.
+- Phần **lấy đủ dữ liệu**: cần kiểm `APP_REPORT_EMPLOYEE_COST_KEYS` trên PROD có đủ 21 mã
+  chưa. Đây là việc **một phút**, và nếu đúng là thiếu khoá thì mọi vòng vừa rồi đã đi
+  chữa triệu chứng trong khi nguyên nhân nằm ở một dòng cấu hình.
+
+**Kiểm:** web **475/475**, server 7 ca hỏng cố hữu sandbox, build xanh.
+
 ### 2026-08-12 08:50 (giờ VN) — 🪤 Bot dựng đúng cái bẫy CHÍNH TÔI đã cảnh báo rồi không bịt
 
 Bot soi `d0f4613`. Hai lỗi TOCTOU và `12k`/`12tr` đã vá ở `a8966d0` họ chưa lấy. Nhưng

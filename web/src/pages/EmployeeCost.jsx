@@ -238,6 +238,44 @@ function VisibilitySelect({ value, onChange, allowInherit = true, inheritLabel =
   </select>;
 }
 
+/* ‼ NÓI ĐÚNG THỦ PHẠM (CEO hỏi 13/08/2026: *"tại sao vẫn thấy lấy dữ liệu từ DataHub
+ * nên dữ liệu chưa trả đủ là thế nào"*).
+ *
+ * Trước đây màn hình ghi cứng "nguồn chi phí DataHub chưa trả dữ liệu — báo DataHub kiểm
+ * tra" cho MỌI trường hợp. Nhưng backend trả `not_configured` **trước khi chạm mạng** nếu
+ * NV đó **thiếu khoá** trong `APP_REPORT_EMPLOYEE_COST_KEYS`, hoặc khoá trùng/sai định
+ * dạng. Lúc đó lỗi nằm ở **cấu hình bên mình**, DataHub vô can — mà CEO thì đang đi hỏi
+ * DataHub, DataHub bảo "không thấy ai gọi", và vòng đó lặp mãi.
+ *
+ * Nay đọc lý do TỪNG NGƯỜI và nói đúng việc phải làm. */
+function nguyenNhanThieuNguoi(kpiMatch) {
+  const lyDo = kpiMatch?.unavailableReasons && typeof kpiMatch.unavailableReasons === 'object'
+    ? kpiMatch.unavailableReasons : {};
+  const nhom = new Map();
+  for (const [ma, ly] of Object.entries(lyDo)) {
+    if (!nhom.has(ly)) nhom.set(ly, []);
+    nhom.get(ly).push(ma);
+  }
+  if (!nhom.size) return 'Phần này KHÔNG phải "thiếu % catalog" mà là nguồn chi phí chưa trả dữ liệu.';
+
+  const cau = [];
+  for (const [ly, ma] of nhom) {
+    const ds = ma.sort().join(', ');
+    if (ly === 'not_configured') {
+      cau.push(`${ds}: CHƯA CÓ KHOÁ trong cấu hình App Report (hoặc khoá trùng/sai định dạng) — `
+        + 'App Report KHÔNG hề gọi DataHub cho những mã này. Đây là việc của App Report, không phải DataHub. '
+        + 'Cần bổ sung khoá vào APP_REPORT_EMPLOYEE_COST_KEYS rồi khởi động lại.');
+    } else if (ly === 'upstream_unavailable') {
+      cau.push(`${ds}: đã gọi DataHub nhưng không nhận được trả lời trong hạn — báo DataHub kiểm tra.`);
+    } else if (ly === 'before_go_live') {
+      cau.push(`${ds}: kỳ này nằm trước mốc go-live nên không có dữ liệu — đúng thiết kế, không phải lỗi.`);
+    } else {
+      cau.push(`${ds}: ${ly}.`);
+    }
+  }
+  return `Phần này KHÔNG phải "thiếu % catalog". Lý do từng mã: ${cau.join(' ')}`;
+}
+
 function CostColumnKpi({ item, coverageNote = '', thieuNguoi = false, thieuNguoiNote = '' }) {
   /* Thiếu người ⇒ mọi ô cột tiền cũng là tổng của phần đội, cũng không được hiện số.
    * Ảnh 22:00 ngày 11/08: ô "C36 CP ctv/khác" in 123.136.637đ trong khi thiếu 15/21 NV. */
@@ -2138,7 +2176,7 @@ export default function EmployeeCost({ me, onNavigate }) {
         phải tự phát hiện số sai rồi đi truy nguồn. */}
     {!!unavailableEmps && <div className="employee-cost-match-warning" role="alert">
       <b>⚠ Dữ liệu chưa đầy đủ — số đang là TẠM TÍNH.</b> Chưa lấy được dữ liệu chi phí của <b>{unavailableEmpLabel}</b> ({unavailablePairs.toLocaleString('vi-VN')} cặp, kỳ {formatMonthLabel(model.from)}{model.from === model.to ? '' : ` → ${formatMonthLabel(model.to)}`}).
-      Phần này <b>không</b> phải "thiếu % catalog" mà là <b>nguồn chi phí DataHub chưa trả dữ liệu</b> — báo DataHub kiểm tra. Tỷ lệ khớp phía dưới đã loại phần này ra để không báo sai.
+      {nguyenNhanThieuNguoi(kpiMatch)} Tỷ lệ khớp phía dưới đã loại phần này ra để không báo sai.
     </div>}
 
     {/* ‼ TIỀN CHẠY ĐI ĐÂU — phép cân hiện thẳng lên màn (CEO 10/08: *"doanh thu thực
