@@ -1,3 +1,28 @@
+### 2026-08-13 08:50 (giờ VN) — 🧭 CEO yêu cầu sửa TRIỆT ĐỂ — chẩn đoán một cơ chế + spec đổi kiến trúc
+
+CEO chụp màn 08:23: nay thiếu **15 NV** (07:50 chỉ thiếu 2). *"dữ liệu cứ nhảy loạn
+xạ… sửa triệt để, không theo lối cũ nữa."*
+
+**Chẩn đoán — một cơ chế, không phải 15 lỗi:** màn ALL là **cuộc đua 25 giây**
+(`EMPLOYEE_COST_ALL_DEADLINE_MS`, fan-out 21 NV × 6 luồng, chung một deadline; trễ ⇒
+`sourceOutcome:'deadline'` ⇒ rớt khỏi màn — `routes.js:1418`). PROD chẹn CPU **60 giây
+mỗi lượt nguội** (nhai file catalog 377 MB ×3) ⇒ deadline nổ khi CPU còn bận ⇒ rớt hàng
+loạt. Tiến trình còn **OOM restart** (log 11/08) ⇒ nguội lại liên tục.
+⇒ 08:23 nguội = thiếu 15 · 07:50 ấm = thiếu 2. Số "nhảy" = số người sống sót qua cuộc
+đua, mỗi lần một khác. DN024/VP004 thiếu trong MỌI ảnh ⇒ nghi thiếu khoá (việc kiểm 1 phút).
+
+**Sửa triệt để = đổi kiến trúc, không vá thêm:** viết
+`SPEC_EMPLOYEE_COST_LOCAL_SNAPSHOT.md` — *đồng bộ về máy rồi màn hình CHỈ đọc bản trên
+máy* (đúng nguyên tắc CEO chốt cho danh mục 09/08). Đồng bộ gom dần từng NV chạy nền,
+không deadline chung; màn không bao giờ gọi DataHub; bất biến số 1: **hai lần F5 liên
+tiếp ra cùng MỘT model byte-for-byte**. Sau cờ `EMPLOYEE_COST_SERVE_FROM_SNAPSHOT`,
+rollback một phút. Bot dựng (có dữ liệu thật), Claude review + ca kiểm bất biến.
+
+**Trong lúc đó:** bot đã PASS Gate 1 cho `3a3a47d` theo tiêu chí "không đỏ thêm so
+PROD" (PROD cold 60,3s / peak 2,42 GiB — bản mới 13,5s / 1,40 GiB; PROD từng OOM thật
+11/08). Deploy `3a3a47d` giảm ngay cảnh thua đua + thôi in số thiếu người + che số
+F5/chụp màn hình.
+
 ### 2026-08-13 08:10 (giờ VN) — 🎯 Vì sao thiếu NV: nhiều khả năng THIẾU KHOÁ bên mình, không phải DataHub
 
 CEO chụp màn PROD 07:50 ngày 13/08 (`7870f10`), nêu 5 việc. Kiểm từng cái:
