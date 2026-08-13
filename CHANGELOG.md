@@ -1,3 +1,43 @@
+### 2026-08-13 12:10 (giờ VN) — ✅ Deploy thử THÀNH CÔNG về chức năng; rollback do NGƯỠNG TÔI ĐẶT SAI; duyệt hướng snapshot store
+
+**① Deploy `3a3a47d` — chức năng HOÀN HẢO, rollback vì ngưỡng của tôi.**
+Trước rollback bot đo: T07 **2.091 dòng / 21/21 NV / 30.982.248.913đ** · 10 lượt API
+**cùng digest, 0 NV thiếu, không dao động** · Tổng quan **hết quay vô hạn** · không OOM.
+⇒ **Cơ chế "nhảy loạn xạ" đã chết trên chính PROD** — đúng chẩn đoán cuộc-đua-deadline.
+Nhưng bot rollback đúng lệnh: RSS sau 90 giây rảnh còn **738 MiB**, không xuống dưới
+**500 MiB** — con số 500 là do TÔI đặt, và đặt SAI: 738 MiB là khoẻ (trần 2 GiB, PROD
+cũ đỉnh 2,42 GiB còn OOM thật). Tôi bắt rollback một bản deploy tốt bằng một con số tuỳ
+tiện. Ngưỡng mới: OOM/restart · RSS duy trì >1,8 GiB quá 10 phút · sai số liệu chức
+năng. Bỏ ngưỡng idle tuỳ tiện.
+
+**② Giả thuyết khoá của tôi SAI.** `APP_REPORT_EMPLOYEE_COST_KEYS` đủ 21/21, DN024/
+VP004 có khoá hợp lệ. Gọi thử ra **`upstream_409`** — DataHub TỪ CHỐI hai mã này (409
+Conflict), không phải thiếu cấu hình bên mình. Việc chuyển sang sân DataHub, kèm bằng
+chứng. Ghi nhận: nghi ngờ cấu hình là hợp lý để kiểm, nhưng kiểm xong phải theo số liệu.
+
+**③ Review ứng viên `bot/candidate-d00e87f` (snapshot store) — DUYỆT hướng đi.**
+Rẽ đúng từ `3a3a47d`, +1.209 dòng, 3 file test mới. Soi theo bất biến trong spec:
+- Mỗi lần đồng bộ = một "đời" riêng: manifest + checksum TỪNG NV + con trỏ `current`
+  chỉ trỏ sang khi ghi xong (atomic write + fsync + rename). Đọc lại kiểm đủ chuỗi
+  checksum, lệch là từ chối có mã lỗi riêng. ✓
+- **Gom dần**: sync khởi đầu từ `previous.employees`, chỉ thay từng người lấy được ⇒
+  bản thiếu không đè bản đủ. ✓
+- **Kỳ khoá + đủ người ⇒ bất biến**, từ chối sync đè (`PERIOD_IMMUTABLE`) — về lâu dài
+  thay được cả cơ chế con dấu. ✓
+- Cờ `EMPLOYEE_COST_SERVE_FROM_SNAPSHOT` mặc định TẮT; đường phục vụ cắt TRƯỚC khối
+  seal/fan-out; sync route có `requireAdmin`; roster đổi tự thành thiếu (`roster_added`)
+  — trả lời đúng câu T09 của CEO. ✓
+- `unavailableReasons` bot làm theo **allowlist mã lý do** — TỐT HƠN bản `894e982` của
+  tôi (tôi truyền outcome thô). Khi gộp nhánh: **ưu tiên bản bot** ở
+  `employeeCostTable.js`/`EmployeeCost.jsx`, giữ docs của tôi.
+- Ghi chú nhỏ: allowlist gộp mọi outcome lạ về `upstream_unavailable` — `upstream_409`
+  sẽ hiện thành "DataHub không trả lời". Hướng đổ lỗi vẫn đúng (lỗi DataHub), nhưng nên
+  thêm mã `upstream_rejected` cho 4xx để đọc trạng thái chính xác hơn. Không chặn.
+
+**Kế hoạch:** re-deploy `3a3a47d` với ngưỡng sửa → chạy sync snapshot Ở NỀN trên PROD
+(cờ tắt — bot đã thiết kế cho phép dựng + soi trước khi bật) → so model snapshot với
+model live → gộp nhánh + audit → bật cờ.
+
 ### 2026-08-13 09:45 (giờ VN) — 📜 Nguyên tắc CEO thành luật: "Màn hình không bao giờ chờ"
 
 CEO chụp màn Tổng quan 09:23 quay vô hạn, càng F5 càng tệ: *"nguyên tắc dữ liệu nó phải
