@@ -296,7 +296,7 @@ export function employeeCostGapConsistency(model = {}, badge = {}) {
 
 function normalizedMatch(rawMatch = {}, rowCount = 0) {
   const safeReasons = Object.fromEntries(Object.entries(rawMatch.unavailableReasons || {})
-    .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'deadline', 'source_error', 'missing_snapshot'].includes(String(reason))
+    .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'upstream_rejected', 'deadline', 'source_error', 'missing_snapshot'].includes(String(reason))
       ? String(reason) : 'upstream_unavailable']));
   return {
     matchedRows: Number(rawMatch.matchedRows || 0),
@@ -984,7 +984,7 @@ export function employeeCostViewModel(payload = {}) {
       rosterCount: Number(payload.trangThaiDongBo.rosterCount || 0),
       availableCount: Number(payload.trangThaiDongBo.availableCount || 0),
       unavailableReasons: Object.fromEntries(Object.entries(payload.trangThaiDongBo.unavailableReasons || {})
-        .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'deadline', 'source_error', 'missing', 'roster_added', 'roster_changed', 'corrupt_snapshot', 'sync_failed', 'locked'].includes(String(reason))
+        .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'upstream_rejected', 'deadline', 'source_error', 'missing', 'roster_added', 'roster_changed', 'corrupt_snapshot', 'sync_failed', 'locked'].includes(String(reason))
           ? String(reason) : 'upstream_unavailable'])),
       errorCode: String(payload.trangThaiDongBo.errorCode || ''),
     } : null,

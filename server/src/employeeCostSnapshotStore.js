@@ -8,7 +8,7 @@ const SCHEMA_VERSION = 1;
 const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const EMP_RE = /^[A-Z0-9_-]{1,32}$/;
 const SAFE_REASONS = new Set([
-  'not_configured', 'upstream_unavailable', 'deadline', 'source_error', 'missing',
+  'not_configured', 'upstream_unavailable', 'upstream_rejected', 'deadline', 'source_error', 'missing',
   'roster_added', 'roster_changed', 'corrupt_snapshot', 'sync_failed', 'locked',
 ]);
 

@@ -27,13 +27,17 @@ function sourceFailureReason(error, result) {
   if (value.includes('not_configured') || value.includes('not configured')) return 'not_configured';
   if (value.includes('deadline') || value.includes('timeout')) return 'deadline';
   if (value.includes('source_error')) return 'source_error';
+  // DataHub understood the request but rejected it (for example HTTP 409).
+  // Keep only a generic allowlisted code; never propagate response body/keys.
+  if (value === 'upstream_rejected' || value === 'upstream_unauthorized' || /^upstream_4\d\d$/.test(value)) return 'upstream_rejected';
   return 'upstream_unavailable';
 }
 
 function usableResult(result) {
   if (!result || result.ok === false) return false;
   const outcome = String(result.sourceOutcome || result.report?.sourceOutcome || 'ok').toLowerCase();
-  return !['not_configured', 'upstream_unavailable', 'deadline', 'source_error', 'error', 'unavailable'].includes(outcome);
+  if (outcome.startsWith('upstream_')) return false;
+  return !['not_configured', 'deadline', 'source_error', 'error', 'unavailable'].includes(outcome);
 }
 
 function createEmployeeCostSnapshotSync(options = {}) {

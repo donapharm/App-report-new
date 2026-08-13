@@ -206,6 +206,26 @@ test('ALL merge giữ provenance policy carry-forward để UI không dùng tỷ
   assert.deepEqual(mixed.rateEffectiveFroms, ['2026-07', '2026-08']);
 });
 
+
+test('ALL merge maps only 4xx rejection outcomes to privacy-safe upstream_rejected', () => {
+  const outcomes = ['upstream_rejected', 'upstream_400', 'upstream_401', 'upstream_409', 'upstream_499', 'upstream_500', 'upstream_502', 'upstream_unavailable'];
+  const reports = outcomes.map((sourceOutcome, index) => {
+    const item = report([]);
+    item.empCode = `DN${String(index + 1).padStart(3, '0')}`;
+    item.sourceOutcome = sourceOutcome;
+    item.periods[0].match = { matchedRows: 0, totalRows: 0, rate: null };
+    return item;
+  });
+  const roster = reports.map((item) => ({ emp_code: item.empCode, name: item.empCode }));
+  const merged = table.mergeEmployeeReports(reports, roster);
+  assert.deepEqual(merged.periods[0].match.unavailableReasons, {
+    DN001: 'upstream_rejected', DN002: 'upstream_rejected', DN003: 'upstream_rejected',
+    DN004: 'upstream_rejected', DN005: 'upstream_rejected', DN006: 'upstream_unavailable',
+    DN007: 'upstream_unavailable', DN008: 'upstream_unavailable',
+  });
+  assert.doesNotMatch(JSON.stringify(merged.periods[0].match.unavailableReasons), /upstream_4|upstream_5|credential|body/);
+});
+
 test('routes hard-lock ALL to CEO/admin for view and export', () => {
   const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   assert.match(source, /wantsAll && !auth\.isAdmin\(req\.session\.role\)/);

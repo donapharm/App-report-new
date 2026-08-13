@@ -127,6 +127,23 @@ test('inter-process lock serializes cron/button and status is persisted', async 
   assert.equal(await store.withPeriodLock(PERIOD, async () => 3), 3);
 });
 
+
+test('snapshot reason allowlist preserves rejected but normalizes private/upstream 5xx text', () => {
+  const { store } = fresh();
+  const manifest = store.publishGeneration(PERIOD, {
+    roster: ROSTER, employees: new Map(), model: model('safe'),
+    unavailableReasons: {
+      DN001: 'upstream_rejected',
+      DN002: 'upstream_502 credential=must-not-leak',
+    },
+  });
+  assert.deepEqual(manifest.manifest.refreshUnavailableReasons, {
+    DN001: 'upstream_rejected',
+    DN002: 'upstream_unavailable',
+  });
+  assert.doesNotMatch(JSON.stringify(manifest.manifest), /credential|must-not-leak|upstream_502/);
+});
+
 test('privacy-safe persisted status excludes payload, key and monetary values', () => {
   const { root, store } = fresh();
   store.writeStatus(PERIOD, { state: 'failed', errorCode: 'UPSTREAM_FAILED', apiKey: 'SECRET', amount: 123456 });

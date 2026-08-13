@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, forgetLastPhone, getLastPhone, getToken, rememberLastPhone, setToken } from './api.js';
+import { api, forgetLastPhone, getLastPhone, getToken, recoverAfterMeRejection, rememberLastPhone, setAuthActor, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { isTabAllowed, resolveAllowedTab } from './tabAccess.js';
 import { useIsDesktop } from './hooks.js';
@@ -121,6 +121,15 @@ export default function App() {
   // (CEO 10/08/2026: đang trình chiếu mà sang trang khác là lọt số lên màn LED).
   useRevealScope(`tab:${tab}`);
 
+  // Keep the persisted actor through cold bootstrap so an expired /me can clear
+  // that actor's SWR namespace. Explicit logout/expiry owns the null transition.
+  useEffect(() => { if (me) setAuthActor(me); }, [me]);
+  useEffect(() => {
+    const onExpired = () => setMe(null);
+    window.addEventListener('app:auth-expired', onExpired);
+    return () => window.removeEventListener('app:auth-expired', onExpired);
+  }, []);
+
   // VP018 chỉ có hai tab doanh thu và không có công tắc privacy. Hiện số thật
   // trong đúng phiên revenue-only; khi rời phiên phải khôi phục mặc định che số.
   useEffect(() => {
@@ -163,10 +172,7 @@ export default function App() {
           if (current?.method === 'otp' && current?.phone) rememberLastPhone(current.phone);
           if (alive) setMe(current);
         } catch (error) {
-          if (error?.status === 401 || error?.status === 403) {
-            setToken(null);
-            await restoreTrustedDevice();
-          } else if (alive && getToken()) {
+          if (!await recoverAfterMeRejection(error, restoreTrustedDevice) && alive && getToken()) {
             // Lỗi mạng/5xx không được phá phiên rolling rồi ép người dùng nhập OTP.
             setBootError('App Report đang kết nối lại máy chủ. Phiên đăng nhập vẫn được giữ.');
           }
@@ -316,6 +322,7 @@ export default function App() {
 
   const logout = () => {
     clearSwrActor(localStorage, me);
+    setAuthActor(null);
     setToken(null); forgetLastPhone(); setMe(null); setTab('overview'); setTabStack([]);
     try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ }
   };
