@@ -1067,6 +1067,7 @@ async function fetchAuthoritativeEmployeeCost(empCode, { period, roster, buildRe
     return {
       ok: false, valid: false, sourceOutcome: raw?.outcome || 'upstream_unavailable',
       fetchedAt, sourceRange: raw?.sourceRange || null, ratePolicy: raw?.payload?.ratePolicy || null,
+      sourceGeneration: String(raw?.sourceGeneration || ''),
       sourceEffectiveAt: (raw?.payload?.periods || []).map((item) => item?.rateFetchedAt).filter(Boolean).sort().at(-1) || null,
       payload: raw?.payload || null,
     };
@@ -1075,6 +1076,7 @@ async function fetchAuthoritativeEmployeeCost(empCode, { period, roster, buildRe
     return {
       ok: true, valid: raw?.outcome === 'ok', sourceOutcome: raw?.outcome || 'ok',
       fetchedAt, sourceRange: raw?.sourceRange || null, ratePolicy: raw?.payload?.ratePolicy || null,
+      sourceGeneration: String(raw?.sourceGeneration || ''),
       sourceEffectiveAt: (raw?.payload?.periods || []).map((item) => item?.rateFetchedAt).filter(Boolean).sort().at(-1) || null,
       payload: raw?.payload || null,
     };
@@ -1087,6 +1089,7 @@ async function fetchAuthoritativeEmployeeCost(empCode, { period, roster, buildRe
   });
   return {
     ok: true, report, fetchedAt, sourceOutcome: raw?.outcome || 'ok',
+    sourceGeneration: String(raw?.sourceGeneration || ''),
     sourceRevision: employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson({
       outcome: raw.outcome, sourceRange: raw.sourceRange || null, payload: raw.payload,
     })),

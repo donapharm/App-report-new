@@ -35,6 +35,14 @@ test('provenance kỳ chỉ nhận from/to hợp lệ và không đảo chiều'
   assert.equal(employeeCost.sourcePeriodRangeOf({}), null);
 });
 
+test('source generation accepts only the source-declared v2 sourceVersion', () => {
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: 'batch-42' }), 'batch-42');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: '' }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: ' batch-42 ' }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'legacy', sourceVersion: 'batch-42' }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ sourceChecksum: 'not-a-generation' }), '');
+});
+
 test('T08 dùng policy mới nhất T07, giữ kỳ doanh thu và ghi provenance', async () => {
   let calls = 0;
   const payload = await employeeCost.applyEffectiveRates(

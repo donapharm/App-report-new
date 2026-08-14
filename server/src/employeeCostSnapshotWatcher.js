@@ -42,6 +42,7 @@ function evaluateProbe({ period = WATCH_PERIOD, roster = [], results = [], depen
   const unavailable = {};
   const observations = {};
   const generations = new Set();
+  const generationByCode = {};
   for (const code of codes) {
     const result = byCode.get(code) || {};
     const range = effectiveRange(result);
@@ -56,9 +57,27 @@ function evaluateProbe({ period = WATCH_PERIOD, roster = [], results = [], depen
       effectiveTo: range.to,
       sourceEffectiveAt: safeTimestamp(result.sourceEffectiveAt || result.effectiveAt || result.fetchedAt),
     };
-    const generation = String(result.sourceGeneration || result.generation || '');
-    if (valid && generation) generations.add(generation);
-    if (valid && !generation) unavailable[code] = 'upstream_unavailable';
+    const rawGeneration = typeof result.sourceGeneration === 'string' ? result.sourceGeneration : '';
+    const generation = rawGeneration && rawGeneration === rawGeneration.trim() && rawGeneration.length <= 160 ? rawGeneration : '';
+    if (valid && generation) {
+      generations.add(generation); generationByCode[code] = generation;
+    }
+    if (valid && !generation) {
+      unavailable[code] = 'source_generation_missing';
+      observations[code].reason = 'source_generation_missing';
+    }
+  }
+  const generationCounts = [...Object.values(generationByCode)].reduce((counts, value) => {
+    counts.set(value, (counts.get(value) || 0) + 1); return counts;
+  }, new Map());
+  const expectedGeneration = [...generationCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0] || '';
+  const generationMismatches = {};
+  if (generations.size > 1) for (const [code, generation] of Object.entries(generationByCode)) {
+    if (generation !== expectedGeneration) {
+      generationMismatches[code] = generation;
+      unavailable[code] = 'source_generation_mismatch';
+      observations[code].reason = 'source_generation_mismatch';
+    }
   }
   const dependencyStable = digest(dependencyStart || {}) === digest(dependencyEnd || {});
   const ready = codes.length === EXPECTED_ROSTER_COUNT
@@ -69,7 +88,7 @@ function evaluateProbe({ period = WATCH_PERIOD, roster = [], results = [], depen
   return {
     ready, period, rosterCount: codes.length, availableCount: ready ? codes.length : codes.length - Object.keys(unavailable).length,
     unavailableEmployees: Object.keys(unavailable).sort(), unavailableReasons: unavailable,
-    observations, sourceGeneration: generations.size === 1 ? [...generations][0] : '',
+    observations, sourceGeneration: generations.size === 1 ? [...generations][0] : '', generationMismatches,
     dependencyDigest: digest(dependencyStart || {}), dependencyStable,
     sameGeneration: generations.size === 1,
   };
@@ -155,9 +174,33 @@ function createSnapshotWatcher(options = {}) {
   const readCurrent = options.readCurrent;
   const cleanupFailedTarget = options.cleanupFailedTarget || (() => {});
   const outbox = options.outbox || { enqueue: () => ({ queued: false }) };
+  const afterNotificationEnqueue = options.afterNotificationEnqueue || (() => {});
   if (![rosterProvider, probeEmployee, dependencyIdentity].every((fn) => typeof fn === 'function')) throw new Error('watcher dependencies missing');
 
   function saveStatus(status) { if (statusFile) atomicJson(statusFile, status); return status; }
+  function notifyReady(state, extra = {}) {
+    const pending = { ...state, notificationState: 'pending', ...extra };
+    if (stateFile) atomicJson(stateFile, pending);
+    let queued = { queued: false, reason: 'enqueue_failed' };
+    try {
+      queued = outbox.enqueue({ type: 'snapshot_ready', ...pending });
+      afterNotificationEnqueue(queued, pending);
+    } catch { return pending; }
+    const queuedState = { ...pending, notificationQueued: queued?.queued === true || queued?.reason === 'duplicate' };
+    if (stateFile) atomicJson(stateFile, queuedState);
+    return queuedState;
+  }
+  function markNotified(successKey) {
+    if (!stateFile) return { marked: false, reason: 'state_disabled' };
+    let state = {};
+    try { state = JSON.parse(fs.readFileSync(stateFile, 'utf8')); } catch { return { marked: false, reason: 'state_missing' }; }
+    if (!successKey || state.successKey !== successKey || state.notificationState !== 'pending') {
+      return { marked: false, reason: 'state_mismatch' };
+    }
+    const notified = { ...state, notificationState: 'notified', notifiedAt: now().toISOString() };
+    atomicJson(stateFile, notified);
+    return { marked: true, state: notified };
+  }
   function waiting(code, detail = {}) {
     const status = { schemaVersion: 1, at: now().toISOString(), period, state: 'waiting', code, serveChanged: false, ...detail };
     saveStatus(status); outbox.enqueue({ type: 'snapshot_waiting', ...status }); return status;
@@ -176,16 +219,15 @@ function createSnapshotWatcher(options = {}) {
       catch { results.push({ empCode, ok: false, sourceOutcome: 'upstream_unavailable' }); }
     }
     const dependencyEnd = await dependencyIdentity(period);
-    const pinnedDependencyGeneration = digest(dependencyStart || {});
-    const pinnedResults = results.map((result) => ({
-      ...result, sourceGeneration: result.sourceGeneration || pinnedDependencyGeneration,
-    }));
-    const probe = evaluateProbe({ period, roster, results: pinnedResults, dependencyStart, dependencyEnd });
+    const probe = evaluateProbe({ period, roster, results, dependencyStart, dependencyEnd });
     if (!probe.ready) return waiting('WATCHER_SOURCE_NOT_READY', { probe });
     const successKey = digest({ period, sourceGeneration: probe.sourceGeneration, dependencyDigest: probe.dependencyDigest });
     let prior = {};
     try { prior = stateFile ? JSON.parse(fs.readFileSync(stateFile, 'utf8')) : {}; } catch { prior = {}; }
-    if (prior.successKey === successKey) return saveStatus({ schemaVersion: 1, at: now().toISOString(), period, state: 'ready', idempotent: true, successKey, serveChanged: false });
+    if (prior.successKey === successKey) {
+      const recovered = prior.notificationState === 'notified' ? prior : notifyReady(prior, { recoveredPendingNotification: true });
+      return saveStatus({ ...recovered, schemaVersion: 1, at: now().toISOString(), period, state: 'ready', idempotent: true, successKey, serveChanged: false });
+    }
     if (mode !== 'sync') return waiting('WATCHER_PROBE_READY_GATE2_REQUIRED', { probe, successKey });
     if (typeof syncOnce !== 'function' || typeof readCurrent !== 'function') return waiting('WATCHER_SYNC_ADAPTER_MISSING', { probe });
     // Crash-safe idempotency: publication is the durable truth. If the process died
@@ -197,14 +239,15 @@ function createSnapshotWatcher(options = {}) {
       if (existing?.complete === true && manifest.roster?.length === EXPECTED_ROSTER_COUNT
         && manifest.dependencyIdentity === probe.dependencyDigest
         && manifest.watcherSuccessKey === successKey
+        && manifest.sourceGeneration === probe.sourceGeneration
         && /^[a-f0-9]{64}$/.test(String(manifest.generationId || ''))) {
         const recovered = {
           schemaVersion: 1, period, successKey, sourceGeneration: probe.sourceGeneration,
           generationId: manifest.generationId, manifestDigest: digest(manifest),
           completedAt: now().toISOString(), recoveredFromPublication: true,
         };
-        if (stateFile) atomicJson(stateFile, recovered);
-        return saveStatus({ ...recovered, state: 'ready', idempotent: true, serveChanged: false });
+        const notified = notifyReady(recovered, { recoveredFromPublication: true });
+        return saveStatus({ ...notified, state: 'ready', idempotent: true, serveChanged: false });
       }
     } catch { /* no valid current: continue to the single real sync */ }
     const publicationState = typeof options.capturePublicationState === 'function'
@@ -213,20 +256,20 @@ function createSnapshotWatcher(options = {}) {
     try {
       published = await syncOnce(period, {
         reason: 'watcher', requireComplete: true, expectedDependencies: dependencyStart,
-        watcherSuccessKey: successKey, concurrency: 1,
+        watcherSuccessKey: successKey, sourceGeneration: probe.sourceGeneration, concurrency: 1,
       });
       const current = await readCurrent(period, roster);
       const manifest = current?.manifest || published?.manifest || {};
       const valid = current?.complete === true && manifest.roster?.length === EXPECTED_ROSTER_COUNT
         && manifest.dependencyIdentity === probe.dependencyDigest
         && manifest.watcherSuccessKey === successKey
+        && manifest.sourceGeneration === probe.sourceGeneration
         && /^[a-f0-9]{64}$/.test(String(manifest.generationId || ''))
         && /^[a-f0-9]{64}$/.test(String(manifest.model?.checksum || ''));
       if (!valid) throw Object.assign(new Error('post-publish verification failed'), { code: 'WATCHER_POST_PUBLISH_INVALID' });
       const state = { schemaVersion: 1, period, successKey, sourceGeneration: probe.sourceGeneration, generationId: manifest.generationId, manifestDigest: digest(manifest), completedAt: now().toISOString() };
-      if (stateFile) atomicJson(stateFile, state);
-      const status = saveStatus({ ...state, state: 'ready', idempotent: false, serveChanged: false });
-      outbox.enqueue({ type: 'snapshot_ready', ...status });
+      const notified = notifyReady(state);
+      const status = saveStatus({ ...notified, state: 'ready', idempotent: false, serveChanged: false });
       return status;
     } catch (error) {
       const failedGenerationId = String(published?.manifest?.generationId || '');
@@ -236,7 +279,7 @@ function createSnapshotWatcher(options = {}) {
       return waiting('WATCHER_SYNC_FAILED', { errorCode: String(error?.code || 'WATCHER_SYNC_FAILED').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80), probe });
     }
   }
-  return { run };
+  return { run, markNotified };
 }
 
 module.exports = { CEO_TELEGRAM_ID, WATCH_PERIOD, EXPECTED_ROSTER_COUNT, createSnapshotWatcher, createCeoOutbox, evaluateProbe, digest };

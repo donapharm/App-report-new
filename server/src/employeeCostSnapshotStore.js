@@ -359,7 +359,10 @@ function createEmployeeCostSnapshotStore(options = {}) {
     const dependencies = canonicalize(input.dependencies || {});
     const watcherSuccessKey = /^[a-f0-9]{64}$/.test(String(input.watcherSuccessKey || ''))
       ? String(input.watcherSuccessKey) : '';
-    const generationSeed = { period: normalized, source, sealIdentity: source === 'seal' ? sealIdentity : '', roster, employees: normalizedRecords.map((record) => ({ empCode: record.empCode, ...tupleOf(record) })), dependencies, model, fetchedAt, watcherSuccessKey, locked: input.locked === true && complete };
+    const sourceGeneration = typeof input.sourceGeneration === 'string' && input.sourceGeneration
+      && input.sourceGeneration === input.sourceGeneration.trim() && input.sourceGeneration.length <= 160
+      ? input.sourceGeneration : '';
+    const generationSeed = { period: normalized, source, sealIdentity: source === 'seal' ? sealIdentity : '', roster, employees: normalizedRecords.map((record) => ({ empCode: record.empCode, ...tupleOf(record) })), dependencies, model, fetchedAt, watcherSuccessKey, sourceGeneration, locked: input.locked === true && complete };
     const generationId = sha256(canonicalJson(generationSeed));
     const generationDir = path.join(periodDir(normalized), 'generations', generationId);
     ensureDir(path.join(generationDir, 'employees'));
@@ -372,7 +375,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
     writeEnvelope(path.join(generationDir, 'model.json'), 'model', model, 'model');
     const manifest = {
       period: normalized, generationId, fetchedAt, roster, rosterIdentity: rosterIdentity(roster),
-      source, sealIdentity: source === 'seal' ? sealIdentity : '', watcherSuccessKey,
+      source, sealIdentity: source === 'seal' ? sealIdentity : '', watcherSuccessKey, sourceGeneration,
       dependencies, dependencyIdentity: sha256(canonicalJson(dependencies)),
       employees: employeeRefs, model: { file: 'model.json', checksum: sha256(canonicalJson(model)) },
       complete, unavailableReasons, refreshUnavailableReasons, locked: input.locked === true && complete,

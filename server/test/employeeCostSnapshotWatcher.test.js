@@ -13,7 +13,7 @@ function temp(t) { const root = fs.mkdtempSync(path.join(os.tmpdir(), 'watcher-'
 function watcher(t, overrides = {}) {
   const root = temp(t); let syncs = 0; let cleanups = 0; let synced = false;
   const watcherSuccessKey = digest({ period: '2026-08', sourceGeneration: 'source-1', dependencyDigest: digest(deps) });
-  const manifest = { generationId: 'a'.repeat(64), roster, dependencyIdentity: digest(deps), watcherSuccessKey, model: { checksum: 'b'.repeat(64) } };
+  const manifest = { generationId: 'a'.repeat(64), roster, dependencyIdentity: digest(deps), watcherSuccessKey, sourceGeneration: 'source-1', model: { checksum: 'b'.repeat(64) } };
   const value = createSnapshotWatcher({
     period: '2026-08', statusFile: path.join(root, 'status.json'), stateFile: path.join(root, 'state.json'),
     rosterProvider: async () => roster, probeEmployee: async (code) => good(code), dependencyIdentity: async () => deps,
@@ -34,7 +34,16 @@ test('probe evaluation rejects 20/21, stale, mixed generation, and records exact
   assert.equal(stale.ready, false); assert.equal(stale.unavailableReasons.DN021, 'stale_rates');
   assert.deepEqual(stale.observations.DN021, { reason: 'stale_rates', effectiveFrom: '2026-07', effectiveTo: '2026-07', sourceEffectiveAt: '2026-08-14T01:06:53.654Z' });
   const mixed = roster.map((code, index) => good(code, index === 20 ? 'source-2' : 'source-1'));
-  assert.equal(evaluateProbe({ period: '2026-08', roster, results: mixed, dependencyStart: deps, dependencyEnd: deps }).ready, false);
+  const mixedProbe = evaluateProbe({ period: '2026-08', roster, results: mixed, dependencyStart: deps, dependencyEnd: deps });
+  assert.equal(mixedProbe.ready, false);
+  assert.deepEqual(mixedProbe.generationMismatches, { DN021: 'source-2' });
+  assert.equal(mixedProbe.unavailableReasons.DN021, 'source_generation_mismatch');
+  const missingGeneration = roster.map(good); delete missingGeneration[20].sourceGeneration;
+  const missingProbe = evaluateProbe({ period: '2026-08', roster, results: missingGeneration, dependencyStart: deps, dependencyEnd: deps });
+  assert.equal(missingProbe.ready, false);
+  assert.equal(missingProbe.unavailableReasons.DN021, 'source_generation_missing');
+  const blankGeneration = roster.map(good); blankGeneration[20].sourceGeneration = '   ';
+  assert.equal(evaluateProbe({ period: '2026-08', roster, results: blankGeneration, dependencyStart: deps, dependencyEnd: deps }).unavailableReasons.DN021, 'source_generation_missing');
 });
 
 test('active snapshot/cron/warm context refuses before source probe or sync', async (t) => {
@@ -76,7 +85,7 @@ test('sync error before publication remains no-serve and never restores/deletes 
 
 test('existing complete publication recovers idempotency after crash without a second sync', async (t) => {
   const watcherSuccessKey = digest({ period: '2026-08', sourceGeneration: 'source-1', dependencyDigest: digest(deps) });
-  const manifest = { generationId: 'c'.repeat(64), roster, dependencyIdentity: digest(deps), watcherSuccessKey, model: { checksum: 'd'.repeat(64) } };
+  const manifest = { generationId: 'c'.repeat(64), roster, dependencyIdentity: digest(deps), watcherSuccessKey, sourceGeneration: 'source-1', model: { checksum: 'd'.repeat(64) } };
   const ctx = watcher(t, { mode: 'sync', readCurrent: async () => ({ complete: true, manifest }) });
   const result = await ctx.value.run();
   assert.equal(result.idempotent, true); assert.equal(result.recoveredFromPublication, true); assert.equal(ctx.counts().syncs, 0);
@@ -87,6 +96,36 @@ test('post-publish mismatch restores captured publication state and remains no-s
   const ctx = watcher(t, { mode: 'sync', readCurrent: async () => ({ complete: false, manifest: {} }), cleanupFailedTarget: async (period, state) => { restored = { period, state }; } });
   const result = await ctx.value.run();
   assert.equal(result.code, 'WATCHER_SYNC_FAILED'); assert.equal(result.serveChanged, false); assert.deepEqual(restored, { period: '2026-08', state: { prior: true } });
+});
+
+test('published-but-unnotified state is recovered after restart without duplicate outbox event', async (t) => {
+  const root = temp(t);
+  const stateFile = path.join(root, 'state.json');
+  const outboxRoot = path.join(root, 'outbox');
+  const outbox = createCeoOutbox({ root: outboxRoot, enabled: true, now: () => new Date('2026-08-14T01:00:00.000Z') });
+  const watcherSuccessKey = digest({ period: '2026-08', sourceGeneration: 'source-1', dependencyDigest: digest(deps) });
+  const manifest = { generationId: 'e'.repeat(64), roster, dependencyIdentity: digest(deps), watcherSuccessKey, sourceGeneration: 'source-1', model: { checksum: 'f'.repeat(64) } };
+  let synced = false;
+  const common = {
+    period: '2026-08', stateFile, statusFile: path.join(root, 'status.json'), mode: 'sync',
+    rosterProvider: async () => roster, probeEmployee: async (code) => good(code), dependencyIdentity: async () => deps,
+    readActiveJobs: async () => [], outbox,
+    syncOnce: async () => { synced = true; return { manifest }; },
+    readCurrent: async () => { if (!synced) throw Object.assign(new Error('missing'), { code: 'ENOENT' }); return { complete: true, manifest }; },
+  };
+  const first = await createSnapshotWatcher({ ...common, afterNotificationEnqueue: () => { throw new Error('simulated crash'); } }).run();
+  assert.equal(first.notificationState, 'pending');
+  assert.equal(JSON.parse(fs.readFileSync(stateFile)).notificationState, 'pending');
+  assert.equal(fs.readdirSync(outboxRoot).filter((name) => /^\d.*\.json$/.test(name)).length, 1);
+  const second = await createSnapshotWatcher(common).run();
+  assert.equal(second.notificationState, 'pending');
+  assert.equal(second.idempotent, true);
+  assert.equal(fs.readdirSync(outboxRoot).filter((name) => /^\d.*\.json$/.test(name)).length, 1);
+  const restarted = createSnapshotWatcher(common);
+  assert.equal(restarted.markNotified(watcherSuccessKey).marked, true);
+  const third = await restarted.run();
+  assert.equal(third.notificationState, 'notified');
+  assert.equal(fs.readdirSync(outboxRoot).filter((name) => /^\d.*\.json$/.test(name)).length, 1);
 });
 
 test('CEO outbox is restricted, reports stale employee time and deduplicates unchanged status', (t) => {

@@ -114,6 +114,7 @@ function createEmployeeCostSnapshotSync(options = {}) {
     requireComplete = false,
     expectedDependencies = null,
     watcherSuccessKey = '',
+    sourceGeneration = '',
     concurrency: requestedConcurrency = concurrency,
   } = {}) {
     if (isLocked(period) === true) return syncLockedPeriod(period, { reason });
@@ -210,7 +211,7 @@ function createEmployeeCostSnapshotSync(options = {}) {
     const fetchedAt = iso(now());
     return store.publishGeneration(period, {
       source: 'network', roster, employees: records, model, dependencies, fetchedAt,
-      unavailableReasons, watcherSuccessKey, periodLocked: false, locked: false,
+      unavailableReasons, watcherSuccessKey, sourceGeneration, periodLocked: false, locked: false,
     });
   }
 

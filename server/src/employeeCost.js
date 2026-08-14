@@ -1148,6 +1148,16 @@ function sourcePeriodRangeOf(raw) {
   return from && to && from <= to ? { from, to } : null;
 }
 
+// DataHub contract app-report.employee-cost.v2 publishes the source batch as
+// `sourceVersion`.  This is an upstream declaration, not an App Report digest or
+// timestamp inference. Missing/blank values deliberately remain missing so the
+// snapshot watcher can fail closed.
+function sourceGenerationOf(raw) {
+  if (raw?.contract !== 'app-report.employee-cost.v2' || typeof raw?.sourceVersion !== 'string') return '';
+  const value = raw.sourceVersion;
+  return value && value === value.trim() && value.length <= 160 ? value : '';
+}
+
 // Gọi mạng thuần — KHÔNG kèm kế thừa tỷ lệ. Chỉ `applyEffectiveRates` được dùng
 // hàm này (nếu không sẽ đệ quy vô hạn). Mọi nơi khác phải dùng `fetchEmployeeCost`.
 async function fetchRawEmployeeCost(empCode, options = {}) {
@@ -1227,11 +1237,11 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
         // được coi là snapshot exact. Xóa toàn bộ payload và chuyển qua lookup
         // policy mới nhất; nhờ vậy T07 không thể bị gắn ngầm thành exact T08.
         if (!adapted || (hasPolicyRows && !provenanceMatchesRequest)) {
-          return { payload: emptyRangePayload(empCode, range), outcome: 'invalid_period_payload', attempts, sourceRange };
+          return { payload: emptyRangePayload(empCode, range), outcome: 'invalid_period_payload', attempts, sourceRange, sourceGeneration: sourceGenerationOf(raw) };
         }
-        return { payload: adapted, outcome: 'ok', attempts, sourceRange };
+        return { payload: adapted, outcome: 'ok', attempts, sourceRange, sourceGeneration: sourceGenerationOf(raw) };
       }
-      return { payload: sanitizePayload(raw, empCode), outcome: 'ok', attempts, sourceRange };
+      return { payload: sanitizePayload(raw, empCode), outcome: 'ok', attempts, sourceRange, sourceGeneration: sourceGenerationOf(raw) };
     } catch (error) {
       const retryIndex = attempts - 1;
       if (isTransient(error) && retryIndex < backoffMs.length) {
@@ -1663,6 +1673,7 @@ module.exports = {
   emptyRangePayload,
   adaptPeriodPayload,
   sourcePeriodRangeOf,
+  sourceGenerationOf,
   applyEffectiveRates,
   configuredAnnualColumnKeys,
   configuredMatchWarningPercent,

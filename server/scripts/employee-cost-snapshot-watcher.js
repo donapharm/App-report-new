@@ -112,6 +112,7 @@ async function main() {
   let notification = { delivered: false, reason: 'not_attempted' };
   try { notification = await deliverOneCeoNotification(outboxDir, CEO_TELEGRAM_ID); }
   catch { notification = { delivered: false, reason: 'delivery_failed' }; }
+  if (notification.delivered && status.successKey) watcher.markNotified(status.successKey);
   console.info(JSON.stringify({ state: status.state, code: status.code || '', period: status.period, availableCount: status.probe?.availableCount || status.rosterCount || 0, t07State: t07.state, notification: notification.delivered ? 'delivered' : notification.reason }));
   process.exitCode = status.state === 'ready' ? 0 : 20;
 }
