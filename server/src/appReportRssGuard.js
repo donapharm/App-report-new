@@ -64,21 +64,10 @@ function verifyReleaseManifest(release, manifest, fsImpl = fs) {
     expected.set(parts[1], parts);
   }
   if (!expected.size) throw new Error('Rollback manifest empty');
-  const actualPaths = [];
-  function walk(relative = '.') {
-    const dir = path.join(release, relative);
-    for (const name of fsImpl.readdirSync(dir).sort()) {
-      const child = relative === '.' ? `./${name}` : `${relative}/${name}`;
-      if (child === './release_manifest.sha256') continue;
-      actualPaths.push(child);
-      if (fsImpl.lstatSync(path.join(release, child)).isDirectory()) walk(child);
-    }
-  }
-  walk();
-  if (actualPaths.length !== expected.size) throw new Error('Rollback manifest path count mismatch');
-  for (const relative of actualPaths) {
-    const row = expected.get(relative);
-    if (!row) throw new Error(`Rollback manifest unexpected path: ${relative}`);
+  const expectedRoot = [...expected.keys()].filter((item) => !item.slice(2).includes('/')).map((item) => item.slice(2)).sort();
+  const actualRoot = fsImpl.readdirSync(release).filter((name) => name !== path.basename(manifest)).sort();
+  if (JSON.stringify(actualRoot) !== JSON.stringify(expectedRoot)) throw new Error('Rollback manifest root mismatch');
+  for (const [relative, row] of expected) {
     const file = path.join(release, relative);
     const stat = fsImpl.lstatSync(file);
     const type = stat.isSymbolicLink() ? 'l' : stat.isDirectory() ? 'd' : stat.isFile() ? 'f' : '?';
@@ -87,6 +76,16 @@ function verifyReleaseManifest(release, manifest, fsImpl = fs) {
     const identity = type === 'l' ? fsImpl.readlinkSync(file) : type === 'd' ? '-' : type === 'f' ? fileDigest(file, fsImpl) : '?';
     if (row[0] !== type || row[2] !== mode || row[3] !== owner || row[4] !== identity) {
       throw new Error(`Rollback manifest mismatch: ${relative}`);
+    }
+    const strictRuntimeRoots = ['./server/src', './server/scripts', './server/node_modules', './web/dist'];
+    if (type === 'd' && strictRuntimeRoots.some((root) => relative === root || relative.startsWith(`${root}/`))) {
+      const prefix = `${relative}/`;
+      const expectedChildren = [...expected.keys()].filter((item) => item.startsWith(prefix) && !item.slice(prefix.length).includes('/'))
+        .map((item) => item.slice(prefix.length)).sort();
+      const actualChildren = fsImpl.readdirSync(file).filter((name) => path.join(relative, name) !== './release_manifest.sha256').sort();
+      if (JSON.stringify(actualChildren) !== JSON.stringify(expectedChildren)) {
+        throw new Error(`Rollback manifest directory mismatch: ${relative}`);
+      }
     }
   }
   return { entries: expected.size };

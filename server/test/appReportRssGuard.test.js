@@ -67,9 +67,9 @@ test('custom release manifest verifies content, metadata, links and rejects drif
   const os = require('os'); const crypto = require('crypto');
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rollback-manifest-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  fs.mkdirSync(path.join(root, 'server')); fs.writeFileSync(path.join(root, 'server', 'app.js'), 'safe\n', { mode: 0o640 });
-  fs.symlinkSync('server/app.js', path.join(root, 'current-file'));
-  const rows = ['./current-file', './server', './server/app.js'].map((relative) => {
+  fs.mkdirSync(path.join(root, 'server', 'src'), { recursive: true }); fs.writeFileSync(path.join(root, 'server', 'src', 'app.js'), 'safe\n', { mode: 0o640 });
+  fs.symlinkSync('server/src/app.js', path.join(root, 'current-file'));
+  const rows = ['./current-file', './server', './server/src', './server/src/app.js'].map((relative) => {
     const stat = fs.lstatSync(path.join(root, relative));
     const type = stat.isSymbolicLink() ? 'l' : stat.isDirectory() ? 'd' : 'f';
     const identity = type === 'l' ? fs.readlinkSync(path.join(root, relative)) : type === 'd' ? '-'
@@ -77,9 +77,15 @@ test('custom release manifest verifies content, metadata, links and rejects drif
     return `${type}|${relative}|${(stat.mode & 0o7777).toString(8)}|${stat.uid}:${stat.gid}|${identity}`;
   });
   const manifest = path.join(root, 'release_manifest.sha256'); fs.writeFileSync(manifest, `${rows.join('\n')}\n`);
-  assert.equal(verifyReleaseManifest(root, manifest).entries, 3);
-  fs.appendFileSync(path.join(root, 'server', 'app.js'), 'drift');
+  assert.equal(verifyReleaseManifest(root, manifest).entries, 4);
+  fs.appendFileSync(path.join(root, 'server', 'src', 'app.js'), 'drift');
   assert.throws(() => verifyReleaseManifest(root, manifest), /mismatch/);
+  fs.writeFileSync(path.join(root, 'server', 'src', 'app.js'), 'safe\n', { mode: 0o640 });
+  fs.writeFileSync(path.join(root, 'server', 'src', 'evil.js'), 'extra');
+  assert.throws(() => verifyReleaseManifest(root, manifest), /directory mismatch/);
+  fs.unlinkSync(path.join(root, 'server', 'src', 'evil.js'));
+  fs.writeFileSync(path.join(root, 'evil-root.js'), 'extra');
+  assert.throws(() => verifyReleaseManifest(root, manifest), /root mismatch/);
 });
 
 test('runner distinguishes observe/execute triggers and resets restart baseline after rollback', () => {
