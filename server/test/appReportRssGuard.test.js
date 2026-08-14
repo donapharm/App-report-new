@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const {
   RSS_THRESHOLD_BYTES, RSS_TRIGGER_MS, ROLLBACK_COMMIT, ROLLBACK_RELEASE,
-  evaluateSample, validateRollbackRelease, executeRollback,
+  evaluateSample, validateRollbackRelease, verifyReleaseManifest, executeRollback,
 } = require('../src/appReportRssGuard');
 
 test('RSS must remain over 1.8 GiB continuously for more than ten minutes', () => {
@@ -57,10 +57,29 @@ test('rollback refuses nonexistent and manifest-dirty releases before pointer sw
     readFileSync: () => `${ROLLBACK_COMMIT}\n`,
     statSync: () => ({ isFile: () => true }),
   };
-  assert.throws(() => executeRollback({ execute: '1', fs: fakeFs, execFileSync: (command) => {
-    if (command === 'sha256sum') throw Object.assign(new Error('dirty release'), { code: 1 });
-    return '';
-  } }), /dirty release/);
+  assert.throws(() => executeRollback({
+    execute: '1', fs: fakeFs,
+    verifyManifest: () => { throw new Error('dirty release'); },
+  }), /dirty release/);
+});
+
+test('custom release manifest verifies content, metadata, links and rejects drift', (t) => {
+  const os = require('os'); const crypto = require('crypto');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rollback-manifest-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'server')); fs.writeFileSync(path.join(root, 'server', 'app.js'), 'safe\n', { mode: 0o640 });
+  fs.symlinkSync('server/app.js', path.join(root, 'current-file'));
+  const rows = ['./current-file', './server', './server/app.js'].map((relative) => {
+    const stat = fs.lstatSync(path.join(root, relative));
+    const type = stat.isSymbolicLink() ? 'l' : stat.isDirectory() ? 'd' : 'f';
+    const identity = type === 'l' ? fs.readlinkSync(path.join(root, relative)) : type === 'd' ? '-'
+      : crypto.createHash('sha256').update(fs.readFileSync(path.join(root, relative))).digest('hex');
+    return `${type}|${relative}|${(stat.mode & 0o7777).toString(8)}|${stat.uid}:${stat.gid}|${identity}`;
+  });
+  const manifest = path.join(root, 'release_manifest.sha256'); fs.writeFileSync(manifest, `${rows.join('\n')}\n`);
+  assert.equal(verifyReleaseManifest(root, manifest).entries, 3);
+  fs.appendFileSync(path.join(root, 'server', 'app.js'), 'drift');
+  assert.throws(() => verifyReleaseManifest(root, manifest), /mismatch/);
 });
 
 test('runner distinguishes observe/execute triggers and resets restart baseline after rollback', () => {
@@ -84,8 +103,10 @@ test('execute path verifies manifest, swaps atomically, restarts app only and sm
     symlinkSync: (target, file) => links.set(file, target),
     renameSync: (from, to) => { links.set(to, links.get(from)); links.delete(from); },
   };
+  let verified = false;
   const result = executeRollback({
     execute: '1', fs: fakeFs, repoRoot: '/repo',
+    verifyManifest: () => { verified = true; return { entries: 1 }; },
     execFileSync: (command, args) => {
       calls.push([command, args]);
       if (command === 'curl') return '{"status":"ok"}';
@@ -94,7 +115,7 @@ test('execute path verifies manifest, swaps atomically, restarts app only and sm
   });
   assert.equal(result.executed, true);
   assert.equal(links.get('/repo/current'), ROLLBACK_RELEASE);
-  assert.ok(calls.some(([cmd, args]) => cmd === 'sha256sum' && args[0] === '-c'));
+  assert.equal(verified, true);
   assert.ok(calls.some(([cmd, args]) => cmd === 'pm2' && args.join(' ') === 'restart app-report --update-env'));
   assert.ok(!calls.some(([, args]) => args.includes('app-report-tgbot')));
 });

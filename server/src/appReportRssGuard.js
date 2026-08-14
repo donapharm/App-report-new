@@ -40,6 +40,58 @@ function validateRollbackRelease(release = ROLLBACK_RELEASE, fsImpl = fs) {
   return { release: resolved, commit, manifest };
 }
 
+function fileDigest(file, fsImpl = fs) {
+  const hash = require('crypto').createHash('sha256');
+  const fd = fsImpl.openSync(file, 'r');
+  const buffer = Buffer.allocUnsafe(1024 * 1024);
+  try {
+    for (;;) {
+      const bytes = fsImpl.readSync(fd, buffer, 0, buffer.length, null);
+      if (!bytes) break;
+      hash.update(buffer.subarray(0, bytes));
+    }
+  } finally { fsImpl.closeSync(fd); }
+  return hash.digest('hex');
+}
+function verifyReleaseManifest(release, manifest, fsImpl = fs) {
+  const expected = new Map();
+  for (const line of fsImpl.readFileSync(manifest, 'utf8').split('\n').filter(Boolean)) {
+    const parts = line.split('|');
+    if (parts.length !== 5 || !/^\.\/[A-Za-z0-9._/@+-]+(?:\/[A-Za-z0-9._/@+-]+)*$/.test(parts[1]) || parts[1].includes('/../')) {
+      throw new Error('Rollback manifest format invalid');
+    }
+    if (expected.has(parts[1])) throw new Error('Rollback manifest duplicate path');
+    expected.set(parts[1], parts);
+  }
+  if (!expected.size) throw new Error('Rollback manifest empty');
+  const actualPaths = [];
+  function walk(relative = '.') {
+    const dir = path.join(release, relative);
+    for (const name of fsImpl.readdirSync(dir).sort()) {
+      const child = relative === '.' ? `./${name}` : `${relative}/${name}`;
+      if (child === './release_manifest.sha256') continue;
+      actualPaths.push(child);
+      if (fsImpl.lstatSync(path.join(release, child)).isDirectory()) walk(child);
+    }
+  }
+  walk();
+  if (actualPaths.length !== expected.size) throw new Error('Rollback manifest path count mismatch');
+  for (const relative of actualPaths) {
+    const row = expected.get(relative);
+    if (!row) throw new Error(`Rollback manifest unexpected path: ${relative}`);
+    const file = path.join(release, relative);
+    const stat = fsImpl.lstatSync(file);
+    const type = stat.isSymbolicLink() ? 'l' : stat.isDirectory() ? 'd' : stat.isFile() ? 'f' : '?';
+    const mode = (stat.mode & 0o7777).toString(8);
+    const owner = `${stat.uid}:${stat.gid}`;
+    const identity = type === 'l' ? fsImpl.readlinkSync(file) : type === 'd' ? '-' : type === 'f' ? fileDigest(file, fsImpl) : '?';
+    if (row[0] !== type || row[2] !== mode || row[3] !== owner || row[4] !== identity) {
+      throw new Error(`Rollback manifest mismatch: ${relative}`);
+    }
+  }
+  return { entries: expected.size };
+}
+
 function executeRollback(options = {}) {
   if (String(options.execute ?? process.env.APP_REPORT_RSS_GUARD_EXECUTE ?? '') !== '1') {
     return { executed: false, reason: 'EXECUTE_FLAG_OFF' };
@@ -49,7 +101,7 @@ function executeRollback(options = {}) {
   const repoRoot = options.repoRoot || '/home/osboxes/.openclaw/workspace-report/App-report';
   const current = path.join(repoRoot, 'current');
   const validated = validateRollbackRelease(options.release || ROLLBACK_RELEASE, fsImpl);
-  exec('sha256sum', ['-c', validated.manifest], { cwd: validated.release, stdio: 'ignore' });
+  (options.verifyManifest || verifyReleaseManifest)(validated.release, validated.manifest, fsImpl);
   const before = fsImpl.realpathSync(current);
   const temp = `${current}.rollback-${process.pid}-${Date.now()}`;
   fsImpl.symlinkSync(validated.release, temp);
@@ -68,5 +120,5 @@ function executeRollback(options = {}) {
 
 module.exports = {
   RSS_THRESHOLD_BYTES, RSS_TRIGGER_MS, ROLLBACK_COMMIT, FORBIDDEN_ROLLBACK, ROLLBACK_RELEASE,
-  evaluateSample, validateRollbackRelease, executeRollback,
+  evaluateSample, validateRollbackRelease, verifyReleaseManifest, executeRollback,
 };
