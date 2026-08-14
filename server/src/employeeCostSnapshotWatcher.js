@@ -116,12 +116,25 @@ function createCeoOutbox({ root, enabled = false, recipient = CEO_TELEGRAM_ID, n
     payload.text = notificationText(payload);
     const signature = digest({ ...payload, createdAt: undefined, text: undefined });
     const signatureFile = path.join(root, '.last-signatures.json');
+    const family = payload.event.startsWith('snapshot_') ? 'snapshot' : payload.event;
     let signatures = {};
     try { signatures = JSON.parse(fs.readFileSync(signatureFile, 'utf8')); } catch { signatures = {}; }
-    if (signatures[payload.event]?.signature === signature) return { queued: false, reason: 'duplicate' };
+    if (signatures[family]?.signature === signature) return { queued: false, reason: 'duplicate' };
+    // A newer snapshot state supersedes an unsent older snapshot state; never send
+    // "blocked" after a later "ready" notification. Preserve it under superseded/.
+    try {
+      const supersededDir = path.join(root, 'superseded');
+      for (const name of fs.readdirSync(root).filter((item) => /^\d.*\.json$/.test(item))) {
+        const queued = JSON.parse(fs.readFileSync(path.join(root, name), 'utf8'));
+        const queuedFamily = String(queued.event || '').startsWith('snapshot_') ? 'snapshot' : String(queued.event || '');
+        if (queuedFamily !== family) continue;
+        fs.mkdirSync(supersededDir, { recursive: true, mode: 0o700 });
+        fs.renameSync(path.join(root, name), path.join(supersededDir, name));
+      }
+    } catch { /* no prior queue */ }
     const id = `${payload.createdAt.replace(/[^0-9]/g, '')}-${signature.slice(0, 16)}.json`;
     atomicJson(path.join(root, id), payload);
-    signatures[payload.event] = { signature, queuedAt: payload.createdAt };
+    signatures[family] = { signature, queuedAt: payload.createdAt };
     atomicJson(signatureFile, signatures);
     return { queued: true, file: id };
   }

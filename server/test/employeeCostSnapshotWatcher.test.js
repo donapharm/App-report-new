@@ -107,5 +107,9 @@ test('CEO outbox is restricted, reports stale employee time and deduplicates unc
   assert.deepEqual(payload.staleSources, [{ empCode: 'DN021', effectiveFrom: '2026-08', effectiveTo: '2026-08', sourceEffectiveAt: '2026-08-13T17:12:33.680Z' }]);
   assert.match(payload.text, /DN021: bản tỷ lệ lưu .*14\/08\/2026/);
   assert.deepEqual(outbox.enqueue(event), { queued: false, reason: 'duplicate' });
+  const ready = outbox.enqueue({ type: 'snapshot_ready', state: 'ready', period: '2026-08', generationId: 'a'.repeat(64), manifestDigest: 'b'.repeat(64) });
+  assert.equal(ready.queued, true);
+  assert.equal(fs.existsSync(path.join(root, 'superseded', queued.file)), true);
+  assert.equal(fs.existsSync(path.join(root, queued.file)), false);
   assert.doesNotMatch(JSON.stringify(payload), /token|secret|amount/i);
 });
