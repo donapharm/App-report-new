@@ -74,6 +74,18 @@ DN021, DN022, DN023, DN024, VP004
 sourceOutcome=ok_stale_rates
 ```
 
+Bản T08 local mà năm mã phải rơi về (mốc `fetchedAt`, GMT+7):
+
+| NV | Bản tỷ lệ cũ được lưu lúc |
+|---|---|
+| DN021 | 14/08/2026 00:12:33 |
+| DN022 | 14/08/2026 06:42:55 |
+| DN023 | 14/08/2026 00:12:38 |
+| DN024 | 13/08/2026 10:49:51 |
+| VP004 | 13/08/2026 23:12:54 |
+
+Đây là thời điểm App Report lưu bản fallback T08, không phải thời điểm DataHub xác nhận bản tươi. Watcher phải tiếp tục yêu cầu `outcome=ok`; không được dùng các mốc này để hợp thức hóa `ok_stale_rates`.
+
 Không có dependency nào đổi giữa đầu/cuối lượt (`dependencyChanges=[]`); data/rates/formula/app fingerprints đều giữ nguyên. Vì vậy lỗi lượt này **không phải `EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT`** mà là năm nguồn fresh không đạt gate, phải rơi về local stale rates. Partial generation đã bị xóa, snapshot root được khôi phục về trạng thái absent và không được serve. Theo chỉ thị, không retry thêm.
 
 ## Bằng chứng
@@ -90,3 +102,17 @@ Evidence root trên host: `/home/osboxes/.openclaw/workspace-report-dev/`.
 ## Khuyến nghị kỹ thuật
 
 Giữ fail-closed. Bổ sung telemetry nội bộ có phân loại `http_404`, `http_4xx`, `timeout`, `network`, `invalid_envelope`, nhưng không đưa body/khóa vào payload người dùng. Chỉ khi v3/v4 đầy đủ và checksum/version khớp mới cho provenance sealable.
+
+## T08 controlled retry 14/08 — stale evidence consumed by watcher design
+
+Sanitized evidence: `artifacts/snapshot-t08-controlled-retry-20260814-080537/logs/one-shot.log` (outside the repo). The invocation requested exact `2026-08..2026-08` for the 21-person roster under one stable dependency identity. It ended `available=16`, `unavailable=5` with these exact source outcomes:
+
+| employee | requested effective period | outcome | sanitized observation window (UTC) | authoritative source effective range/timestamp |
+|---|---|---|---|---|
+| DN021 | 2026-08..2026-08 | `ok_stale_rates` | 2026-08-14T01:06:49.952Z–01:06:56.935Z | not present in source result/log |
+| DN022 | 2026-08..2026-08 | `ok_stale_rates` | 2026-08-14T01:06:49.952Z–01:06:56.935Z | not present in source result/log |
+| DN023 | 2026-08..2026-08 | `ok_stale_rates` | 2026-08-14T01:06:49.952Z–01:06:56.935Z | not present in source result/log |
+| DN024 | 2026-08..2026-08 | `ok_stale_rates` | 2026-08-14T01:06:49.952Z–01:06:56.935Z | not present in source result/log |
+| VP004 | 2026-08..2026-08 | `ok_stale_rates` | 2026-08-14T01:06:49.952Z–01:06:56.935Z | not present in source result/log |
+
+The missing source-effective range/timestamp is itself a fail-closed condition; this document does **not** infer T07 or any other effective period. The watcher records exact `effectiveFrom`, `effectiveTo`, and `sourceEffectiveAt` when supplied, and leaves them empty otherwise.

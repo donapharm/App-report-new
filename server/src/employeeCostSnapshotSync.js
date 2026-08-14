@@ -24,6 +24,7 @@ async function mapBounded(items, concurrency, worker) {
 
 function sourceFailureReason(error, result) {
   const value = String(result?.reason || result?.sourceOutcome || error?.code || '').toLowerCase();
+  if (value.includes('stale_rates')) return 'stale_rates';
   if (value.includes('not_configured') || value.includes('not configured')) return 'not_configured';
   if (value.includes('deadline') || value.includes('timeout')) return 'deadline';
   if (value.includes('source_error')) return 'source_error';
@@ -37,7 +38,7 @@ function usableResult(result) {
   if (!result || result.ok === false) return false;
   const outcome = String(result.sourceOutcome || result.report?.sourceOutcome || 'ok').toLowerCase();
   if (outcome.startsWith('upstream_')) return false;
-  return !['not_configured', 'deadline', 'source_error', 'error', 'unavailable'].includes(outcome);
+  return !['ok_stale_rates', 'not_configured', 'deadline', 'source_error', 'error', 'unavailable'].includes(outcome);
 }
 
 function createEmployeeCostSnapshotSync(options = {}) {
@@ -107,7 +108,14 @@ function createEmployeeCostSnapshotSync(options = {}) {
     });
   }
 
-  async function syncUnlocked(period, { onlyCodes = null, reason = 'manual' } = {}) {
+  async function syncUnlocked(period, {
+    onlyCodes = null,
+    reason = 'manual',
+    requireComplete = false,
+    expectedDependencies = null,
+    watcherSuccessKey = '',
+    concurrency: requestedConcurrency = concurrency,
+  } = {}) {
     if (isLocked(period) === true) return syncLockedPeriod(period, { reason });
     const rosterRows = await rosterProvider(period);
     if (isLocked(period) === true) return syncLockedPeriod(period, { reason });
@@ -119,6 +127,12 @@ function createEmployeeCostSnapshotSync(options = {}) {
     const previous = assertReadablePrevious(period, roster);
     const startedAt = iso(now());
     const dependenciesBefore = await dependencyIdentity(period, { roster: rosterRows });
+    if (expectedDependencies != null
+      && store.canonicalJson(dependenciesBefore) !== store.canonicalJson(expectedDependencies)) {
+      throw Object.assign(new Error('Generation nguồn đã đổi sau probe; không bắt đầu đồng bộ.'), {
+        code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT',
+      });
+    }
     store.writeStatus(period, {
       state: 'syncing', startedAt, rosterCount: roster.length,
       availableCount: previous?.employees.size || 0, complete: previous?.complete === true,
@@ -131,7 +145,8 @@ function createEmployeeCostSnapshotSync(options = {}) {
     // The period can close while we await local dependencies. Never begin employee
     // fan-out once that happens; the closed path is seal-only.
     if (isLocked(period) === true) return syncLockedPeriod(period, { reason });
-    const results = await mapBounded(selected, concurrency, (empCode) => fetchEmployee(empCode, { period, roster: rosterRows, reason }));
+    const cycleConcurrency = Math.max(1, Math.min(12, Number(requestedConcurrency) || 1));
+    const results = await mapBounded(selected, cycleConcurrency, (empCode) => fetchEmployee(empCode, { period, roster: rosterRows, reason }));
     const records = new Map(previous?.employees || []);
     const unavailableReasons = {};
     let successful = 0;
@@ -150,6 +165,17 @@ function createEmployeeCostSnapshotSync(options = {}) {
       } else unavailableReasons[empCode] = safeReason(sourceFailureReason(outcome?.error, outcome?.value));
     });
     for (const empCode of roster) if (!records.has(empCode)) unavailableReasons[empCode] ||= 'missing';
+    if (requireComplete) {
+      const fullRosterSelected = selected.length === roster.length && selected.every((code) => roster.includes(code));
+      const failedCodes = roster.filter((code) => unavailableReasons[code] || !records.has(code));
+      if (!fullRosterSelected || successful !== roster.length || failedCodes.length) {
+        throw Object.assign(new Error('Nguồn chưa đủ toàn bộ roster; không publish generation tạm.'), {
+          code: 'EMPLOYEE_COST_SNAPSHOT_INCOMPLETE',
+          unavailableEmployees: failedCodes,
+          unavailableReasons: { ...unavailableReasons },
+        });
+      }
+    }
     const periodLocked = isLocked(period) === true;
     // A run that started while open must never publish fetched data after the period
     // closes. A later sync will use only the independently verified closed seal.
@@ -184,7 +210,7 @@ function createEmployeeCostSnapshotSync(options = {}) {
     const fetchedAt = iso(now());
     return store.publishGeneration(period, {
       source: 'network', roster, employees: records, model, dependencies, fetchedAt,
-      unavailableReasons, periodLocked: false, locked: false,
+      unavailableReasons, watcherSuccessKey, periodLocked: false, locked: false,
     });
   }
 

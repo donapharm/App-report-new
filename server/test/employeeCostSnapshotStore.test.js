@@ -227,3 +227,36 @@ for (const boundary of ['afterWrite', 'afterFileFsync', 'afterRename', 'afterDir
     if (boundary === 'afterWrite' || boundary === 'afterFileFsync') assert.equal(marker, 'old');
   });
 }
+
+test('period busy observer sees an inter-process snapshot lock', async (t) => {
+  const { store } = fresh(t);
+  const release = await store.acquireLock('2026-08');
+  assert.equal(store.isPeriodBusy('2026-08'), true);
+  release();
+  assert.equal(store.isPeriodBusy('2026-08'), false);
+});
+
+test('publication capture/restore removes only failed invocation generation and restores prior current atomically', (t) => {
+  const { store } = fresh(t);
+  const period = '2026-08';
+  const roster = ['DN001'];
+  const one = store.publishGeneration(period, { roster, employees: new Map([['DN001', { report: { value: 1 }, fetchedAt: '2026-08-14T01:00:00.000Z' }]]), model: { value: 1 }, dependencies: { d: 1 }, fetchedAt: '2026-08-14T01:00:00.000Z' });
+  const captured = store.capturePublicationState(period);
+  const two = store.publishGeneration(period, { roster, employees: new Map([['DN001', { report: { value: 2 }, fetchedAt: '2026-08-14T02:00:00.000Z' }]]), model: { value: 2 }, dependencies: { d: 2 }, fetchedAt: '2026-08-14T02:00:00.000Z' });
+  assert.notEqual(two.manifest.generationId, one.manifest.generationId);
+  store.restorePublicationState(period, captured, two.manifest.generationId);
+  const restored = store.readCurrent(period, { roster });
+  assert.equal(restored.manifest.generationId, one.manifest.generationId);
+  assert.equal(fs.existsSync(path.join(store._test.periodDir(period), 'generations', two.manifest.generationId)), false);
+});
+
+test('publication restore refuses to overwrite a newer current generation', (t) => {
+  const { store } = fresh(t); const period = '2026-08'; const roster = ['DN001'];
+  const one = store.publishGeneration(period, { roster, employees: new Map([['DN001', { report: { value: 1 } }]]), model: { value: 1 }, dependencies: { d: 1 } });
+  const captured = store.capturePublicationState(period);
+  const two = store.publishGeneration(period, { roster, employees: new Map([['DN001', { report: { value: 2 } }]]), model: { value: 2 }, dependencies: { d: 2 } });
+  const three = store.publishGeneration(period, { roster, employees: new Map([['DN001', { report: { value: 3 } }]]), model: { value: 3 }, dependencies: { d: 3 } });
+  assert.throws(() => store.restorePublicationState(period, captured, two.manifest.generationId), { code: 'EMPLOYEE_COST_SNAPSHOT_RESTORE_DRIFT' });
+  assert.equal(store.readCurrent(period, { roster }).manifest.generationId, three.manifest.generationId);
+  assert.notEqual(one.manifest.generationId, three.manifest.generationId);
+});

@@ -9,7 +9,7 @@ const PERIOD_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const EMP_RE = /^[A-Z0-9_-]{1,32}$/;
 const SAFE_REASONS = new Set([
   'not_configured', 'upstream_unavailable', 'upstream_rejected', 'deadline', 'source_error', 'missing',
-  'roster_added', 'roster_changed', 'corrupt_snapshot', 'sync_failed', 'locked',
+  'stale_rates', 'roster_added', 'roster_changed', 'corrupt_snapshot', 'sync_failed', 'locked',
 ]);
 
 function normalizePeriod(value) {
@@ -194,6 +194,12 @@ function createEmployeeCostSnapshotStore(options = {}) {
     try { return await task(); } finally { release(); }
   }
 
+  function isPeriodBusy(period) {
+    const normalized = normalizePeriod(period);
+    try { if (fs.statSync(lockFile(normalized)).isFile()) return true; } catch (error) { if (error.code !== 'ENOENT') return true; }
+    return readStatus(normalized).state === 'syncing';
+  }
+
   function readStatus(period) {
     const normalized = normalizePeriod(period);
     try {
@@ -351,7 +357,9 @@ function createEmployeeCostSnapshotStore(options = {}) {
     }
     const fetchedAt = String(input.fetchedAt || now().toISOString());
     const dependencies = canonicalize(input.dependencies || {});
-    const generationSeed = { period: normalized, source, sealIdentity: source === 'seal' ? sealIdentity : '', roster, employees: normalizedRecords.map((record) => ({ empCode: record.empCode, ...tupleOf(record) })), dependencies, model, fetchedAt, locked: input.locked === true && complete };
+    const watcherSuccessKey = /^[a-f0-9]{64}$/.test(String(input.watcherSuccessKey || ''))
+      ? String(input.watcherSuccessKey) : '';
+    const generationSeed = { period: normalized, source, sealIdentity: source === 'seal' ? sealIdentity : '', roster, employees: normalizedRecords.map((record) => ({ empCode: record.empCode, ...tupleOf(record) })), dependencies, model, fetchedAt, watcherSuccessKey, locked: input.locked === true && complete };
     const generationId = sha256(canonicalJson(generationSeed));
     const generationDir = path.join(periodDir(normalized), 'generations', generationId);
     ensureDir(path.join(generationDir, 'employees'));
@@ -364,7 +372,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
     writeEnvelope(path.join(generationDir, 'model.json'), 'model', model, 'model');
     const manifest = {
       period: normalized, generationId, fetchedAt, roster, rosterIdentity: rosterIdentity(roster),
-      source, sealIdentity: source === 'seal' ? sealIdentity : '',
+      source, sealIdentity: source === 'seal' ? sealIdentity : '', watcherSuccessKey,
       dependencies, dependencyIdentity: sha256(canonicalJson(dependencies)),
       employees: employeeRefs, model: { file: 'model.json', checksum: sha256(canonicalJson(model)) },
       complete, unavailableReasons, refreshUnavailableReasons, locked: input.locked === true && complete,
@@ -381,6 +389,50 @@ function createEmployeeCostSnapshotStore(options = {}) {
     return readCurrent(normalized, { roster });
   }
 
+  function capturePublicationState(period) {
+    const normalized = normalizePeriod(period);
+    let pointer = null;
+    try { pointer = readEnvelope(currentFile(normalized), 'current'); } catch (error) {
+      if (error?.cause?.code !== 'ENOENT' && error?.code !== 'ENOENT') throw error;
+    }
+    const generationsDir = path.join(periodDir(normalized), 'generations');
+    let generations = [];
+    try { generations = fs.readdirSync(generationsDir).filter((name) => /^[a-f0-9]{64}$/.test(name)).sort(); } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    return { period: normalized, pointer, generations };
+  }
+
+  function restorePublicationState(period, captured = {}, failedGenerationId = '') {
+    const normalized = normalizePeriod(period);
+    const failed = String(failedGenerationId || '');
+    if (captured.period !== normalized || !Array.isArray(captured.generations)
+      || !/^[a-f0-9]{64}$/.test(failed) || captured.generations.includes(failed)) {
+      throw Object.assign(new Error('Trạng thái snapshot rollback không hợp lệ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_RESTORE_INVALID' });
+    }
+    // Never overwrite a newer publisher. Restoration is legal only while current
+    // still points to the exact failed generation created by this invocation.
+    const livePointer = readEnvelope(currentFile(normalized), 'current');
+    if (livePointer.generationId !== failed) {
+      throw Object.assign(new Error('Snapshot current đã đổi; từ chối rollback đè generation khác.'), { code: 'EMPLOYEE_COST_SNAPSHOT_RESTORE_DRIFT' });
+    }
+    if (captured.pointer) {
+      const generationDir = path.join(periodDir(normalized), 'generations', captured.pointer.generationId);
+      const manifest = readEnvelope(path.join(generationDir, 'manifest.json'), 'manifest');
+      if (captured.pointer.period !== normalized || manifest.generationId !== captured.pointer.generationId
+        || captured.pointer.manifestChecksum !== sha256(canonicalJson(manifest))) {
+        throw Object.assign(new Error('Snapshot rollback pointer không khớp manifest.'), { code: 'EMPLOYEE_COST_SNAPSHOT_RESTORE_INVALID' });
+      }
+      writeEnvelope(currentFile(normalized), 'current', captured.pointer, 'current');
+    } else {
+      try { fs.unlinkSync(currentFile(normalized)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    }
+    const generationsDir = path.join(periodDir(normalized), 'generations');
+    fs.rmSync(path.join(generationsDir, failed), { recursive: true, force: true });
+    fsyncDir(periodDir(normalized));
+    return true;
+  }
+
   function docSnapshot(period, options) { return readCurrent(period, options); }
   function trangThaiDongBo(period, options = {}) {
     const status = readStatus(period);
@@ -391,8 +443,9 @@ function createEmployeeCostSnapshotStore(options = {}) {
 
   return {
     root, normalizePeriod, normalizeEmployee, normalizeRoster, rosterIdentity, canonicalJson, sha256,
-    compareTuple, safeReason, safeUnavailableReasons, acquireLock, withPeriodLock,
-    readStatus, writeStatus, readCurrent, tryReadCurrent, publishGeneration, docSnapshot, trangThaiDongBo,
+    compareTuple, safeReason, safeUnavailableReasons, acquireLock, withPeriodLock, isPeriodBusy,
+    readStatus, writeStatus, readCurrent, tryReadCurrent, publishGeneration,
+    capturePublicationState, restorePublicationState, docSnapshot, trangThaiDongBo,
     _test: { envelope, validateEnvelope, atomicWrite, currentFile, statusFile, periodDir },
   };
 }

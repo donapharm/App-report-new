@@ -1042,43 +1042,64 @@ async function employeeCostSnapshotBuildModel({ period, roster, employees, unava
   };
 }
 
-const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
-  store: employeeCostSnapshotStore,
-  concurrency: Number(process.env.EMPLOYEE_COST_SNAPSHOT_CONCURRENCY || 4),
-  rosterProvider: () => employeeCostRosterRows(),
-  fetchEmployee: async (empCode, { period, roster }) => {
-    // Probe the authoritative cost source once, bind that exact result to this
-    // employee/range, then enrich from the verified evidence. A local pinned-rate
-    // fast path must never be promoted as a newly synchronized source result.
-    const fetchedAt = new Date().toISOString();
-    const raw = await employeeCost.fetchEmployeeCost(empCode, {
-      from: period, to: period, backgroundRefresh: false,
-    });
-    const evidence = employeeCost.verifiedPrefetchEvidence(raw, empCode, {
-      from: period, to: period, verifiedAt: Date.parse(fetchedAt),
-    });
-    if (!evidence) return { ok: false, sourceOutcome: raw?.outcome || 'upstream_unavailable' };
-    const request = { session: { emp_code: 'SNAPSHOT_SYNC', role: 'admin' }, query: { emp: empCode, from: period, to: period } };
-    const report = await employeeCostPayload(request, {
-      requestedEmp: empCode, auditEvent: 'snapshot_sync_employee', roster,
-      includeSalaryAdvance: false, suppressAudit: true,
-      costFetchOptions: { backgroundRefresh: false }, prefetchedCostResult: evidence,
-    });
-    return {
-      report, fetchedAt,
-      sourceRevision: employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson({
-        outcome: raw.outcome, sourceRange: raw.sourceRange || null, payload: raw.payload,
-      })),
-    };
-  },
-  buildModel: employeeCostSnapshotBuildModel,
-  dependencyIdentity: async (period) => ({
+async function employeeCostSnapshotDependencyIdentity(period) {
+  return {
     period,
     data: store.employeeCostDataSignature(),
     rates: closedSeal.rateStoreFingerprint(),
     formula: formulaIdentity.identity(),
     app: APP_BUILD_VERSION,
-  }),
+  };
+}
+
+async function fetchAuthoritativeEmployeeCost(empCode, { period, roster, buildReport = true }) {
+  // Probe the authoritative cost source once, bind that exact result to this
+  // employee/range, then enrich from the verified evidence. A local pinned-rate
+  // fast path must never be promoted as a newly synchronized source result.
+  const fetchedAt = new Date().toISOString();
+  const raw = await employeeCost.fetchEmployeeCost(empCode, {
+    from: period, to: period, backgroundRefresh: false,
+  });
+  const evidence = employeeCost.verifiedPrefetchEvidence(raw, empCode, {
+    from: period, to: period, verifiedAt: Date.parse(fetchedAt),
+  });
+  if (!evidence) {
+    return {
+      ok: false, valid: false, sourceOutcome: raw?.outcome || 'upstream_unavailable',
+      fetchedAt, sourceRange: raw?.sourceRange || null, ratePolicy: raw?.payload?.ratePolicy || null,
+      sourceEffectiveAt: (raw?.payload?.periods || []).map((item) => item?.rateFetchedAt).filter(Boolean).sort().at(-1) || null,
+      payload: raw?.payload || null,
+    };
+  }
+  if (!buildReport) {
+    return {
+      ok: true, valid: raw?.outcome === 'ok', sourceOutcome: raw?.outcome || 'ok',
+      fetchedAt, sourceRange: raw?.sourceRange || null, ratePolicy: raw?.payload?.ratePolicy || null,
+      sourceEffectiveAt: (raw?.payload?.periods || []).map((item) => item?.rateFetchedAt).filter(Boolean).sort().at(-1) || null,
+      payload: raw?.payload || null,
+    };
+  }
+  const request = { session: { emp_code: 'SNAPSHOT_SYNC', role: 'admin' }, query: { emp: empCode, from: period, to: period } };
+  const report = await employeeCostPayload(request, {
+    requestedEmp: empCode, auditEvent: 'snapshot_sync_employee', roster,
+    includeSalaryAdvance: false, suppressAudit: true,
+    costFetchOptions: { backgroundRefresh: false }, prefetchedCostResult: evidence,
+  });
+  return {
+    ok: true, report, fetchedAt, sourceOutcome: raw?.outcome || 'ok',
+    sourceRevision: employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson({
+      outcome: raw.outcome, sourceRange: raw.sourceRange || null, payload: raw.payload,
+    })),
+  };
+}
+
+const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
+  store: employeeCostSnapshotStore,
+  concurrency: Number(process.env.EMPLOYEE_COST_SNAPSHOT_CONCURRENCY || 4),
+  rosterProvider: () => employeeCostRosterRows(),
+  fetchEmployee: (empCode, options) => fetchAuthoritativeEmployeeCost(empCode, options),
+  buildModel: employeeCostSnapshotBuildModel,
+  dependencyIdentity: employeeCostSnapshotDependencyIdentity,
   isLocked: (period) => employeeCost.isPeriodClosed(period),
   lockedSnapshotProvider: employeeCostLockedSnapshotProvider,
 });
@@ -2259,6 +2280,15 @@ function stopEmployeeCostAllWarmLoop() {
 router.startEmployeeCostAllWarmLoop = startEmployeeCostAllWarmLoop;
 router.startEmployeeCostSnapshotSyncLoop = startEmployeeCostSnapshotSyncLoop;
 router.stopEmployeeCostAllWarmLoop = stopEmployeeCostAllWarmLoop;
+router.employeeCostSnapshotWatcherRuntime = {
+  store: employeeCostSnapshotStore,
+  sync: employeeCostSnapshotSync,
+  rosterProvider: () => employeeCostRosterRows(),
+  probeEmployee: (empCode, options) => fetchAuthoritativeEmployeeCost(empCode, {
+    ...options, roster: options?.roster || employeeCostRosterRows(), buildReport: false,
+  }),
+  dependencyIdentity: employeeCostSnapshotDependencyIdentity,
+};
 // Xuất cho test self-heal (SPEC_EMP_COST_SOURCE_SELFHEAL.md).
 router.selfHealUnavailableCostSources = selfHealUnavailableCostSources;
 router.collectUnavailableEmployees = collectUnavailableEmployees;

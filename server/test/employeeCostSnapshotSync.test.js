@@ -266,3 +266,63 @@ test('requestSync returns 202-friendly state immediately and status contains no 
   assert.doesNotMatch(statusText, /secretKey|999|amount/);
   release(); await ctx.sync.inFlight.get('2026-07');
 });
+
+test('ok_stale_rates is not a usable snapshot source', () => {
+  const { usableResult, sourceFailureReason } = require('../src/employeeCostSnapshotSync');
+  assert.equal(usableResult({ sourceOutcome: 'ok_stale_rates', report: {} }), false);
+  assert.equal(sourceFailureReason(null, { sourceOutcome: 'ok_stale_rates' }), 'stale_rates');
+});
+
+test('requireComplete rejects stale/partial before any generation is published', async (t) => {
+  const ctx = setup(t, {
+    fetchEmployee: async (empCode) => empCode === 'DN002'
+      ? { ok: false, sourceOutcome: 'ok_stale_rates' }
+      : { report: { empCode }, sourceOutcome: 'ok', fetchedAt: '2026-08-14T00:00:00.000Z' },
+  });
+  await assert.rejects(ctx.sync.dongBoKy('2026-07', { requireComplete: true, concurrency: 1 }), {
+    code: 'EMPLOYEE_COST_SNAPSHOT_INCOMPLETE',
+  });
+  assert.equal(ctx.store.tryReadCurrent('2026-07').ok, false);
+  assert.equal(ctx.store.readStatus('2026-07').state, 'failed');
+});
+
+test('expected dependency generation is checked before fan-out', async (t) => {
+  let fetches = 0;
+  const ctx = setup(t, {
+    fetchEmployee: async () => { fetches += 1; return { report: {} }; },
+    dependencyIdentity: async () => ({ revision: 'actual' }),
+  });
+  await assert.rejects(ctx.sync.dongBoKy('2026-07', {
+    requireComplete: true,
+    expectedDependencies: { revision: 'probe' },
+  }), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
+  assert.equal(fetches, 0);
+  assert.equal(ctx.store.tryReadCurrent('2026-07').ok, false);
+});
+
+test('requireComplete rejects stale 5/21 before model/pointer publication and preserves exact reasons', async (t) => {
+  const stale = new Set(['DN021', 'DN022', 'DN023', 'DN024', 'VP004']);
+  const roster21 = [...Array.from({ length: 16 }, (_, index) => `DN${String(index + 1).padStart(3, '0')}`), ...stale];
+  let builds = 0;
+  const ctx = setup(t, {
+    roster: roster21,
+    fetchEmployee: async (empCode) => stale.has(empCode)
+      ? { ok: true, sourceOutcome: 'ok_stale_rates', fetchedAt: '2026-08-14T01:06:53.654Z' }
+      : { ok: true, sourceOutcome: 'ok', report: { empCode }, fetchedAt: '2026-08-14T01:06:53.654Z' },
+    buildModel: async () => { builds += 1; return {}; },
+  });
+  await assert.rejects(ctx.sync.dongBoKy('2026-08', { requireComplete: true, concurrency: 1 }), (error) => {
+    assert.equal(error.code, 'EMPLOYEE_COST_SNAPSHOT_INCOMPLETE');
+    assert.deepEqual(error.unavailableEmployees, [...stale]);
+    assert.deepEqual(error.unavailableReasons, Object.fromEntries([...stale].map((code) => [code, 'stale_rates'])));
+    return true;
+  });
+  assert.equal(builds, 0); assert.equal(ctx.store.tryReadCurrent('2026-08').ok, false);
+});
+
+test('expected dependency generation drift refuses before employee fetch', async (t) => {
+  let fetches = 0;
+  const ctx = setup(t, { fetchEmployee: async () => { fetches += 1; return {}; } });
+  await assert.rejects(ctx.sync.dongBoKy('2026-08', { requireComplete: true, expectedDependencies: { formula: 'other' } }), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
+  assert.equal(fetches, 0); assert.equal(ctx.store.tryReadCurrent('2026-08').ok, false);
+});

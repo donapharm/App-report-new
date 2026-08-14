@@ -46,6 +46,23 @@ test('sync probes exact authoritative evidence once before enrichment', () => {
   assert.match(source, /prefetchedCostResult: evidence/);
 });
 
+test('watcher runtime is external-only; checked-in runner enforces lock/interlocks and CEO outbox', () => {
+  const source = routesSource();
+  const runner = fs.readFileSync(require.resolve('../scripts/employee-cost-snapshot-watcher'), 'utf8');
+  const watcher = fs.readFileSync(require.resolve('../src/employeeCostSnapshotWatcher'), 'utf8');
+  assert.match(source, /router\.employeeCostSnapshotWatcherRuntime/);
+  assert.doesNotMatch(source, /startEmployeeCostSnapshotWatchLoop|EMPLOYEE_COST_SNAPSHOT_WATCH_ENABLED/);
+  assert.match(runner, /runLockedProcess/);
+  assert.match(runner, /EMPLOYEE_COST_ALL_WARM_DISABLED/);
+  assert.match(runner, /EMPLOYEE_COST_LOCAL_SNAPSHOT_SYNC_ENABLED/);
+  assert.match(runner, /EMPLOYEE_COST_CRON_DISABLED/);
+  assert.match(runner, /isPeriodBusy\('2026-08'\)/);
+  assert.match(runner, /EMPLOYEE_COST_SERVE_FROM_SNAPSHOT/);
+  assert.match(watcher, /CEO_TELEGRAM_ID = '1748199545'/);
+  assert.match(watcher, /concurrency: 1/);
+  assert.doesNotMatch(source, /EMPLOYEE_COST_SERVE_FROM_SNAPSHOT\s*=\s*['"]1/);
+});
+
 test('manual sync audit/log is privacy-safe and never logs keys or monetary payload', () => {
   const source = routesSource();
   const start = source.indexOf("router.post('/employee-cost/snapshot/resync'");

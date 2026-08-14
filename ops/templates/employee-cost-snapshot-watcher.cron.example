@@ -1,0 +1,4 @@
+# GATE2 PREVIEW ONLY — DO NOT INSTALL DURING GATE1.
+# Exactly every 30 minutes; the runner itself also acquires nonblocking flock.
+# The root-readable env file is created during Gate2 and must never be committed.
+*/30 * * * * /bin/sh -c 'set -a; . /etc/app-report/employee-cost-snapshot-watcher.env; set +a; cd /ABSOLUTE/PINNED/RELEASE/server && exec /usr/bin/node scripts/employee-cost-snapshot-watcher.js' >> /VAR/LOG/app-report/snapshot-watcher.log 2>&1

@@ -1,0 +1,21 @@
+[Unit]
+Description=App Report RSS guard (Gate 2 template; DO NOT install during build)
+After=network-online.target
+
+[Service]
+Type=simple
+User=osboxes
+WorkingDirectory=/home/osboxes/.openclaw/workspace-report/App-report/current/server
+Environment=APP_REPORT_RSS_GUARD_EXECUTE=0
+Environment=APP_REPORT_RSS_GUARD_INTERVAL_MS=5000
+Environment=APP_REPORT_ACTIVITY_MARKER=/home/osboxes/.openclaw/workspace-report-dev/artifacts/app-report-current-activity.txt
+ExecStart=/usr/bin/node /home/osboxes/.openclaw/workspace-report/App-report/current/server/scripts/watch_app_report_rss.js --loop
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/osboxes/.openclaw/workspace-report/App-report /home/osboxes/.openclaw/workspace-report-dev/artifacts
+
+[Install]
+WantedBy=default.target
