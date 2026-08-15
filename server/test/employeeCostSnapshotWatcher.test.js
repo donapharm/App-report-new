@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createSnapshotWatcher, createCeoOutbox, evaluateProbe, digest, CEO_TELEGRAM_ID } = require('../src/employeeCostSnapshotWatcher');
+const { createSnapshotWatcher, createCeoOutbox, currentWatchPeriod, evaluateProbe, digest, CEO_TELEGRAM_ID } = require('../src/employeeCostSnapshotWatcher');
 
 const roster = Array.from({ length: 21 }, (_, index) => `DN${String(index + 1).padStart(3, '0')}`);
 const deps = { period: '2026-08', data: 'd1', rates: 'r1', formula: 'f1' };
@@ -44,6 +44,52 @@ test('probe evaluation rejects 20/21, stale, mixed generation, and records exact
   assert.equal(missingProbe.unavailableReasons.DN021, 'source_generation_missing');
   const blankGeneration = roster.map(good); blankGeneration[20].sourceGeneration = '   ';
   assert.equal(evaluateProbe({ period: '2026-08', roster, results: blankGeneration, dependencyStart: deps, dependencyEnd: deps }).unavailableReasons.DN021, 'source_generation_missing');
+});
+
+test('roster cardinality follows the real non-empty roster for 21 and 25 employees', () => {
+  const roster25 = Array.from({ length: 25 }, (_, index) => `DN${String(index + 1).padStart(3, '0')}`);
+  assert.equal(evaluateProbe({ period: '2026-08', roster, results: roster.map((code) => good(code)), dependencyStart: deps, dependencyEnd: deps }).ready, true);
+  const complete25 = evaluateProbe({ period: '2026-08', roster: roster25, results: roster25.map((code) => good(code)), dependencyStart: deps, dependencyEnd: deps });
+  assert.equal(complete25.ready, true); assert.equal(complete25.rosterCount, 25); assert.equal(complete25.availableCount, 25);
+  const partial25 = evaluateProbe({ period: '2026-08', roster: roster25, results: roster25.slice(0, 21).map((code) => good(code)), dependencyStart: deps, dependencyEnd: deps });
+  assert.equal(partial25.ready, false); assert.deepEqual(partial25.unavailableEmployees, ['DN022', 'DN023', 'DN024', 'DN025']);
+  assert.equal(evaluateProbe({ period: '2026-08', roster: [], results: [], dependencyStart: deps, dependencyEnd: deps }).ready, false);
+});
+
+test('25/25 publishes and verifies against the same real roster size', async (t) => {
+  const roster25 = Array.from({ length: 25 }, (_, index) => `DN${String(index + 1).padStart(3, '0')}`);
+  const successKey = digest({ period: '2026-08', sourceGeneration: 'source-1', dependencyDigest: digest(deps) });
+  const manifest = {
+    generationId: '1'.repeat(64), roster: roster25, dependencyIdentity: digest(deps),
+    watcherSuccessKey: successKey, sourceGeneration: 'source-1', model: { checksum: '2'.repeat(64) },
+  };
+  let published = false;
+  const ctx = watcher(t, {
+    mode: 'sync', rosterProvider: async () => roster25, probeEmployee: async (code) => good(code),
+    syncOnce: async () => { published = true; return { manifest }; },
+    readCurrent: async () => {
+      if (!published) throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      return { complete: true, manifest };
+    },
+  });
+  const result = await ctx.value.run();
+  assert.equal(result.state, 'ready'); assert.equal(result.rosterCount, 25); assert.equal(ctx.counts().syncs, 0);
+});
+
+test('watch period follows Vietnam date across month boundary unless explicitly overridden', async (t) => {
+  assert.equal(currentWatchPeriod(new Date('2026-08-31T16:59:59.000Z')), '2026-08');
+  assert.equal(currentWatchPeriod(new Date('2026-08-31T17:00:00.000Z')), '2026-09');
+  const periods = [];
+  const ctx = watcher(t, {
+    period: undefined, now: () => new Date('2026-08-31T17:00:00.000Z'),
+    rosterProvider: async (period) => { periods.push(period); return roster; },
+    dependencyIdentity: async (period) => { periods.push(period); return { ...deps, period }; },
+    probeEmployee: async (code, options) => ({ ...good(code), sourceRange: { from: options.period, to: options.period } }),
+  });
+  const result = await ctx.value.run();
+  assert.equal(result.period, '2026-09'); assert.equal(periods.every((period) => period === '2026-09'), true);
+  const override = watcher(t, { period: '2026-07' });
+  assert.equal((await override.value.run()).period, '2026-07');
 });
 
 test('active snapshot/cron/warm context refuses before source probe or sync', async (t) => {

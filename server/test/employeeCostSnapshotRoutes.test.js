@@ -56,7 +56,9 @@ test('watcher runtime is external-only; checked-in runner enforces lock/interloc
   assert.match(runner, /EMPLOYEE_COST_ALL_WARM_DISABLED/);
   assert.match(runner, /EMPLOYEE_COST_LOCAL_SNAPSHOT_SYNC_ENABLED/);
   assert.match(runner, /EMPLOYEE_COST_CRON_DISABLED/);
-  assert.match(runner, /isPeriodBusy\('2026-08'\)/);
+  assert.match(runner, /EMPLOYEE_COST_SNAPSHOT_WATCH_PERIOD/);
+  assert.match(runner, /currentWatchPeriod\(\)/);
+  assert.match(runner, /isPeriodBusy\(watchPeriod\)/);
   assert.match(runner, /EMPLOYEE_COST_SERVE_FROM_SNAPSHOT/);
   assert.match(watcher, /CEO_TELEGRAM_ID = '1748199545'/);
   assert.match(watcher, /concurrency: 1/);

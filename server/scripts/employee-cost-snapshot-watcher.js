@@ -61,7 +61,7 @@ async function deliverOneCeoNotification(outboxDir, recipient) {
 }
 
 async function main() {
-  const { createSnapshotWatcher, createCeoOutbox, CEO_TELEGRAM_ID } = require('../src/employeeCostSnapshotWatcher');
+  const { createSnapshotWatcher, createCeoOutbox, currentWatchPeriod, CEO_TELEGRAM_ID } = require('../src/employeeCostSnapshotWatcher');
   const { observeT07Availability } = require('../src/employeeCostT07Observer');
   const routes = require('../src/routes');
   const runtime = routes.employeeCostSnapshotWatcherRuntime;
@@ -71,7 +71,12 @@ async function main() {
   if (process.env.EMPLOYEE_COST_ALL_WARM_DISABLED !== '1') activeJobs.push('warm-loop-enabled');
   if (process.env.EMPLOYEE_COST_CRON_DISABLED !== '1') activeJobs.push('cron-not-confirmed-disabled');
   if (process.env.EMPLOYEE_COST_SERVE_FROM_SNAPSHOT === '1') activeJobs.push('snapshot-serve-enabled');
-  if (runtime.store.isPeriodBusy('2026-08')) activeJobs.push('snapshot-sync-active');
+  const periodOverride = String(process.env.EMPLOYEE_COST_SNAPSHOT_WATCH_PERIOD || '').trim();
+  if (periodOverride && !/^\d{4}-(0[1-9]|1[0-2])$/.test(periodOverride)) {
+    throw Object.assign(new Error('invalid watch period'), { code: 'WATCHER_PERIOD_INVALID' });
+  }
+  const watchPeriod = periodOverride || currentWatchPeriod();
+  if (runtime.store.isPeriodBusy(watchPeriod)) activeJobs.push('snapshot-sync-active');
   const outboxDir = path.join(stateDir, 'outbox');
   const outbox = createCeoOutbox({
     root: outboxDir,
@@ -79,9 +84,9 @@ async function main() {
     recipient: CEO_TELEGRAM_ID,
   });
   const watchMode = process.env.EMPLOYEE_COST_SNAPSHOT_WATCH_MODE === 'sync' ? 'sync' : 'probe';
-  markActivity(`employee-cost-snapshot:T08:${watchMode}`);
+  markActivity(`employee-cost-snapshot:${watchPeriod}:${watchMode}`);
   const watcher = createSnapshotWatcher({
-    period: '2026-08', mode: watchMode,
+    period: watchPeriod, mode: watchMode,
     statusFile: path.join(stateDir, 'status.json'), stateFile: path.join(stateDir, 'success.json'),
     rosterProvider: runtime.rosterProvider, probeEmployee: runtime.probeEmployee,
     dependencyIdentity: runtime.dependencyIdentity, readActiveJobs: () => activeJobs,

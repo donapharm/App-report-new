@@ -3,10 +3,13 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const employeeCost = require('./employeeCost');
 
 const CEO_TELEGRAM_ID = '1748199545';
-const WATCH_PERIOD = '2026-08';
-const EXPECTED_ROSTER_COUNT = 21;
+
+function currentWatchPeriod(now = new Date()) {
+  return employeeCost.vnToday(now).slice(0, 7);
+}
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -36,7 +39,7 @@ function outcomeReason(result = {}) {
   if (value.includes('deadline') || value.includes('timeout')) return 'deadline';
   return 'upstream_unavailable';
 }
-function evaluateProbe({ period = WATCH_PERIOD, roster = [], results = [], dependencyStart, dependencyEnd }) {
+function evaluateProbe({ period = currentWatchPeriod(), roster = [], results = [], dependencyStart, dependencyEnd }) {
   const codes = [...new Set(roster.map(safeCode).filter(Boolean))].sort();
   const byCode = new Map(results.map((entry) => [safeCode(entry.empCode), entry]));
   const unavailable = {};
@@ -80,8 +83,8 @@ function evaluateProbe({ period = WATCH_PERIOD, roster = [], results = [], depen
     }
   }
   const dependencyStable = digest(dependencyStart || {}) === digest(dependencyEnd || {});
-  const ready = codes.length === EXPECTED_ROSTER_COUNT
-    && byCode.size === EXPECTED_ROSTER_COUNT
+  const ready = codes.length > 0
+    && byCode.size === codes.length
     && Object.keys(unavailable).length === 0
     && generations.size === 1
     && dependencyStable;
@@ -104,10 +107,11 @@ function viTimestamp(value) {
 }
 function notificationText(payload) {
   if (payload.event === 't07_source_ready') return 'T07 exact-range đã mở đủ 21/21 cùng generation — ưu tiên tạo seal/snapshot nguồn tươi (chưa tự chạy).';
-  if (payload.state === 'ready') return `Snapshot T08 đã ghim đủ 21/21. generation=${payload.generationId}; digest=${payload.manifestDigest}`;
+  const total = payload.rosterCount || payload.availableCount || payload.unavailableEmployees.length;
+  if (payload.state === 'ready') return `Snapshot ${payload.period} đã ghim đủ ${total}/${total}. generation=${payload.generationId}; digest=${payload.manifestDigest}`;
   const stale = payload.staleSources.map((item) => `${item.empCode}: bản tỷ lệ lưu ${viTimestamp(item.sourceEffectiveAt) || 'chưa có mốc nguồn'}`);
   const missing = payload.unavailableEmployees.filter((code) => !payload.staleSources.some((item) => item.empCode === code));
-  return [`[BLOCKED — nguồn 3A3 thiếu ${payload.unavailableEmployees.length}/21]`, stale.length ? `Tỷ lệ cũ: ${stale.join('; ')}` : '', missing.length ? `Nguồn chưa hợp lệ: ${missing.join(', ')}` : ''].filter(Boolean).join('\n');
+  return [`[BLOCKED — nguồn 3A3 thiếu ${payload.unavailableEmployees.length}/${total}]`, stale.length ? `Tỷ lệ cũ: ${stale.join('; ')}` : '', missing.length ? `Nguồn chưa hợp lệ: ${missing.join(', ')}` : ''].filter(Boolean).join('\n');
 }
 function createCeoOutbox({ root, enabled = false, recipient = CEO_TELEGRAM_ID, now = () => new Date() } = {}) {
   function enqueue(event) {
@@ -130,6 +134,8 @@ function createCeoOutbox({ root, enabled = false, recipient = CEO_TELEGRAM_ID, n
       code: String(event.code || '').replace(/[^A-Z0-9_:-]/gi, '').slice(0, 80),
       generationId: String(event.generationId || '').replace(/[^a-f0-9]/g, '').slice(0, 64),
       manifestDigest: String(event.manifestDigest || '').replace(/[^a-f0-9]/g, '').slice(0, 64),
+      rosterCount: Number.isSafeInteger(probe.rosterCount) ? probe.rosterCount : 0,
+      availableCount: Number.isSafeInteger(probe.availableCount) ? probe.availableCount : 0,
       unavailableEmployees, staleSources,
     };
     payload.text = notificationText(payload);
@@ -161,8 +167,8 @@ function createCeoOutbox({ root, enabled = false, recipient = CEO_TELEGRAM_ID, n
 }
 
 function createSnapshotWatcher(options = {}) {
-  const period = options.period || WATCH_PERIOD;
   const now = options.now || (() => new Date());
+  const period = options.period || currentWatchPeriod(now());
   const mode = options.mode === 'sync' ? 'sync' : 'probe';
   const statusFile = options.statusFile;
   const stateFile = options.stateFile;
@@ -236,13 +242,14 @@ function createSnapshotWatcher(options = {}) {
     try {
       const existing = await readCurrent(period, roster);
       const manifest = existing?.manifest || {};
-      if (existing?.complete === true && manifest.roster?.length === EXPECTED_ROSTER_COUNT
+      if (existing?.complete === true && roster.length > 0 && manifest.roster?.length === roster.length
         && manifest.dependencyIdentity === probe.dependencyDigest
         && manifest.watcherSuccessKey === successKey
         && manifest.sourceGeneration === probe.sourceGeneration
         && /^[a-f0-9]{64}$/.test(String(manifest.generationId || ''))) {
         const recovered = {
           schemaVersion: 1, period, successKey, sourceGeneration: probe.sourceGeneration,
+          rosterCount: probe.rosterCount, availableCount: probe.availableCount,
           generationId: manifest.generationId, manifestDigest: digest(manifest),
           completedAt: now().toISOString(), recoveredFromPublication: true,
         };
@@ -260,14 +267,14 @@ function createSnapshotWatcher(options = {}) {
       });
       const current = await readCurrent(period, roster);
       const manifest = current?.manifest || published?.manifest || {};
-      const valid = current?.complete === true && manifest.roster?.length === EXPECTED_ROSTER_COUNT
+      const valid = current?.complete === true && roster.length > 0 && manifest.roster?.length === roster.length
         && manifest.dependencyIdentity === probe.dependencyDigest
         && manifest.watcherSuccessKey === successKey
         && manifest.sourceGeneration === probe.sourceGeneration
         && /^[a-f0-9]{64}$/.test(String(manifest.generationId || ''))
         && /^[a-f0-9]{64}$/.test(String(manifest.model?.checksum || ''));
       if (!valid) throw Object.assign(new Error('post-publish verification failed'), { code: 'WATCHER_POST_PUBLISH_INVALID' });
-      const state = { schemaVersion: 1, period, successKey, sourceGeneration: probe.sourceGeneration, generationId: manifest.generationId, manifestDigest: digest(manifest), completedAt: now().toISOString() };
+      const state = { schemaVersion: 1, period, successKey, sourceGeneration: probe.sourceGeneration, rosterCount: probe.rosterCount, availableCount: probe.availableCount, generationId: manifest.generationId, manifestDigest: digest(manifest), completedAt: now().toISOString() };
       const notified = notifyReady(state);
       const status = saveStatus({ ...notified, state: 'ready', idempotent: false, serveChanged: false });
       return status;
@@ -282,4 +289,4 @@ function createSnapshotWatcher(options = {}) {
   return { run, markNotified };
 }
 
-module.exports = { CEO_TELEGRAM_ID, WATCH_PERIOD, EXPECTED_ROSTER_COUNT, createSnapshotWatcher, createCeoOutbox, evaluateProbe, digest };
+module.exports = { CEO_TELEGRAM_ID, currentWatchPeriod, createSnapshotWatcher, createCeoOutbox, evaluateProbe, digest };
