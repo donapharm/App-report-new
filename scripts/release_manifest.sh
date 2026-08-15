@@ -19,6 +19,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/release_lib.sh"
 
 RELEASE_ROOT="${RELEASE_ROOT:?Thiếu RELEASE_ROOT (thư mục release sẽ chạy)}"
 MANIFEST="${MANIFEST:-${RELEASE_ROOT}/release_manifest.sha256}"
+TARGETS_FILE="${TARGETS_FILE:-${MANIFEST}.targets}"
 ACTION="${1:-}"
 
 # Phải gồm node_modules RUNTIME (server) — P1-2 nghiệm thu (d): sửa 1 file trong
@@ -30,6 +31,16 @@ DEFAULT_TARGETS=(
 )
 read -r -a EXTRA <<< "${MANIFEST_EXTRA:-}"
 TARGETS=("${DEFAULT_TARGETS[@]}" "${EXTRA[@]}")
+
+save_targets() {
+  printf '%s\n' "${TARGETS[@]}" > "$TARGETS_FILE"
+}
+
+load_targets() {
+  [ -f "$TARGETS_FILE" ] || die "Thiếu cấu hình target $TARGETS_FILE — không thể tái tạo đúng phạm vi manifest."
+  mapfile -t TARGETS < "$TARGETS_FILE"
+  [ "${#TARGETS[@]}" -gt 0 ] || die "Cấu hình target manifest rỗng."
+}
 
 # Gom các đích tồn tại vào 1 cây tạm rồi tính manifest — giữ nguyên quyền + symlink.
 stage_targets() {
@@ -52,12 +63,14 @@ case "$ACTION" in
     stage="$(mktemp -d)"; trap 'rm -rf "$stage"' EXIT
     stage_targets "$stage"
     manifest_create "$stage" "$MANIFEST"
+    save_targets
     ok "Đã tạo manifest: $MANIFEST ($(wc -l < "$MANIFEST") mục)"
     info "sha256 manifest: $(file_sha256 "$MANIFEST")"
     ;;
   verify)
     echo "=== KIỂM RELEASE MANIFEST (ngay trước khi chạy) — $(date '+%F %T') ==="
     [ -f "$MANIFEST" ] || die "Thiếu manifest $MANIFEST — DỪNG, không cutover."
+    load_targets
     stage="$(mktemp -d)"; trap 'rm -rf "$stage"' EXIT
     stage_targets "$stage"
     if ! manifest_verify "$stage" "$MANIFEST"; then
