@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const assignmentAdmin = require('./assignmentAdmin');
 const store = require('./store');
 const { provinceOf } = require('./province');
+const catalogPeriodLkg = require('./catalogPeriodLkg');
 
 const CACHE_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(__dirname, '..', 'data', 'catalog_management_lkg.json');
 const DQ_CACHE_FILE = process.env.EMPLOYEE_COST_DQ_CATALOG_CACHE_FILE
@@ -296,6 +297,19 @@ function docLkg() {
 
 function readCache(period) {
   try {
+    // Phase 1 dual-read is dark by default. A verified exact-period sidecar is
+    // accepted; every missing/corrupt case falls back to the existing monolith.
+    // This path never calls DataHub and reads at most one period fragment.
+    if (period) {
+      const sidecar = catalogPeriodLkg.tryReadPeriod(period, { validate: (payload) => {
+        assertCatalogFieldPolicy(payload.snapshot, `catalogPeriodLkg.${period}`);
+        assertCatalogSnapshotContract(payload.snapshot, `catalogPeriodLkg.${period}`);
+      } });
+      if (sidecar.used) {
+        const snapshot = sidecar.payload.snapshot;
+        return dongBangSau(snapshot);
+      }
+    }
     /* Snapshot từng kỳ giữ LÂU hơn bản phân tích: chúng nhỏ, và giữ chúng mới là thứ
      * cứu được 26 giây. Khoá có căn cước file nên file đổi là tự trượt. */
     /* ‼ TRÚNG BẢN NHỚ CŨNG PHẢI HẬU KIỂM (bot audit vòng 10 — đúng, và tôi đã bỏ sót).
@@ -999,7 +1013,7 @@ function diagnostics() {
   let cacheRoot = null;
   try { cacheRoot = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); assertCatalogFieldPolicy(cacheRoot, 'catalogLkg'); } catch { cacheRoot = null; }
   const count = cacheRoot?.snapshots ? Object.keys(cacheRoot.snapshots).length : (cacheRoot?.rows ? 1 : 0);
-  return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, phase1NoCutover: true };
+  return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, periodLkg: catalogPeriodLkg.diagnostics(), phase1NoCutover: true };
 }
 
 module.exports = {

@@ -1,3 +1,15 @@
+### 2026-08-15 15:25 (giờ VN) — 🧪 Giai đoạn 1 LKG candidate: dual-read sau cờ OFF
+
+- Thêm period sidecar reader chỉ đọc; cờ `CATALOG_PERIOD_LKG_READ_ENABLED` mặc định
+  OFF. Một request một kỳ chỉ mở đúng một fragment; index/checksum/envelope lỗi thì
+  fallback monolith, không gọi DataHub.
+- Tool materialize chỉ chạy offline, parse main/DQ bằng hai child cô lập và công bố
+  index sau cùng. Runtime không gọi tool, writer live không đổi.
+- Range helper đọc tuần tự, chặn cứng trên 6 kỳ. Đo thực: 3 kỳ `123.397.515` byte,
+  `3.594,17 ms`, peak RSS `480.571.392` byte; 6 kỳ `246.407.472` byte,
+  `6.455,82 ms`, peak RSS `520.794.112` byte.
+- Chưa deploy/chưa bật cờ/chưa ghi sidecar live. Xem `EVIDENCE_CATALOG_LKG_PHASE1.md`.
+
 ### 2026-08-15 14:54 (giờ VN) — ✅ Kế hoạch LKG được duyệt; Giai đoạn 0 benchmark/parity PASS
 
 - `PLAN_CATALOG_LKG_BY_PERIOD.md` được Claude duyệt về nguyên tắc; chỉ Giai đoạn 0
