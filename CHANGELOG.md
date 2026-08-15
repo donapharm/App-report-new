@@ -1,3 +1,16 @@
+### 2026-08-15 14:54 (giờ VN) — ✅ Kế hoạch LKG được duyệt; Giai đoạn 0 benchmark/parity PASS
+
+- `PLAN_CATALOG_LKG_BY_PERIOD.md` được Claude duyệt về nguyên tắc; chỉ Giai đoạn 0
+  được khởi động, chưa được sang Giai đoạn 1.
+- Benchmark offline/read-only trên LKG live: monolith `377.813.964` byte có peak RSS
+  thật `2.838.695.936` byte; riêng T08 `41.390.877` byte có peak RSS
+  `839.401.472` byte, giảm `70,43%`; cold parse `7.812,21 → 850,00 ms`.
+- Nạp cả 9 projection cùng lúc có peak RSS `3.192.729.600` byte, tệ hơn monolith.
+  Điều kiện cứng cho Giai đoạn 1: chỉ đọc đúng kỳ, không load-all shards và không dựng
+  projection trên request path.
+- Parity/checksum/crash-retention/permission/static no-runtime-import tests PASS. Xem
+  `EVIDENCE_CATALOG_LKG_PHASE0.md`. PROD/runtime chưa đổi.
+
 ### 2026-08-15 14:25 (giờ VN) — ✅ Duyệt SPEC pin trước khoá kỳ; T08 đã pin nhưng serve vẫn tắt
 
 - `SPEC_PIN_BEFORE_CLOSE.md` được duyệt: mục tiêu pin trước 23:00 ngày 03 tháng sau;
