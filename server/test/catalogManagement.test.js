@@ -41,6 +41,27 @@ test('ghép đúng tên thuốc, hoạt chất, hàm lượng, ĐVT và đơn gi
   );
 });
 
+test('khóa DataHub gồm nhà thầu: không lấy dòng catalog đầu tiên để phủ sai mặt hàng', () => {
+  const sep = '\u001f';
+  const rows = [
+    catalogManagement.normalizeRow({ type: 'unit_qlnb', value: ['002.NT', '03.TUE.N', 'QL01'].join(sep), emp_code: 'DN005' }),
+    catalogManagement.normalizeRow({ type: 'unit_qlnb', value: ['002.NT', '07.TRIEU.G', 'QL01'].join(sep), emp_code: 'DN005' }),
+  ];
+  const catalog = [
+    { c7: '002.NT', c4: '03.TUE.N', c5: 'QL01', c15: 'HC A', c16: 'Lycalci', c17: '1', c25: 'Hộp', c31: 86000 },
+    { c7: '002.NT', c4: '03.TUE.N', c5: 'QL01', c15: 'HC B', c16: 'Progoldkey', c17: '2', c25: 'Hộp', c31: 22900 },
+    { c7: '002.NT', c4: '07.TRIEU.G', c5: 'QL01', c15: 'HC C', c16: 'Vikamta', c17: '3', c25: 'Viên', c31: 10600 },
+  ];
+  const enriched = catalogManagement.enrichRowsFromCatalog(rows, catalog);
+  assert.equal(enriched[0].contractor_code, '03.TUE.N');
+  assert.equal(enriched[0].product_name, 'Lycalci');
+  assert.equal(enriched[0].catalog_line_count, 2);
+  assert.equal(enriched[1].product_name, 'Progoldkey');
+  assert.equal(enriched[2].contractor_code, '07.TRIEU.G');
+  assert.equal(enriched[2].product_name, 'Vikamta');
+  assert.equal(enriched.length, 3);
+});
+
 test('danh mục quản lý không suy tỉnh từ tên và chỉ giữ tỉnh chính thức trong response NV đã scope', () => {
   const unassigned = catalogManagement.normalizeRow({
     id: 'bp-1', emp_code: 'DN016', scope: 'unit_qlnb', code: `BVĐK Bình Phước\u001fQL01`,

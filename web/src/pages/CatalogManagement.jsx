@@ -1149,7 +1149,7 @@ function CostRatesTablePanel({ period }) {
       </div>}
       {data?.available && <>
         <div className="catalog-rates-meta">
-          <span>Bản đồng bộ <b>{formatDateTime(data.fetchedAt)}</b> bởi <b>{data.fetchedBy}</b> · {data.pairCount.toLocaleString('vi-VN')} cặp</span>
+          <span>Bản đồng bộ <b>{formatDateTime(data.fetchedAt)}</b> bởi <b>{data.fetchedBy}</b> · {(data.rowCount ?? data.pairCount).toLocaleString('vi-VN')} dòng danh mục</span>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm đơn vị, mã QLNB, tên hàng, NV…" aria-label="Tìm trong bảng %" />
           <button type="button" className="btn secondary" disabled={exporting}
             onClick={async () => { setExporting(true); try { await downloadCostRatesTable({ period: uiToHub(period) }); } catch (e) { setError(e.message); } finally { setExporting(false); } }}>
@@ -1204,7 +1204,7 @@ function CostRatesSyncCard({ period, catalogLoading = false }) {
     <div>
       <b>🔄 Đồng bộ % chi phí kỳ {period}</b>
       <small>{status?.fetchedAt
-        ? `Kho cục bộ: ${(status.employees?.length ?? status.employeeCount ?? 0)} NV · ${status.pairCount.toLocaleString('vi-VN')} cặp · đồng bộ ${formatDateTime(status.fetchedAt)} bởi ${status.fetchedBy}`
+        ? `Kho cục bộ: ${(status.employees?.length ?? status.employeeCount ?? 0)} NV · ${(status.rowCount ?? status.pairCount).toLocaleString('vi-VN')} dòng danh mục · đồng bộ ${formatDateTime(status.fetchedAt)} bởi ${status.fetchedBy}`
         : 'Kho cục bộ CHƯA có kỳ này — bấm đồng bộ lần đầu khi DataHub đang sống.'}</small>
     </div>
     <div className="catalog-sync-actions">
@@ -1226,7 +1226,7 @@ function CostRatesSyncCard({ period, catalogLoading = false }) {
         nhiêu, kho đang có bao nhiêu, còn thiếu ĐÍCH DANH ai. */}
     {result && (result.ok && result.complete
       ? <div className="catalog-alert ok" role="status">
-        ✅ <b>KHO ĐÃ ĐỦ {result.stored}/{result.requested} NV</b> cho kỳ {period} · {result.pairCount.toLocaleString('vi-VN')} cặp.
+        ✅ <b>KHO ĐÃ ĐỦ {result.stored}/{result.requested} NV</b> cho kỳ {period} · {(result.rowCount ?? result.pairCount).toLocaleString('vi-VN')} dòng danh mục.
         {' '}Kỳ này từ nay <b>đọc thẳng từ kho</b>, không hỏi DataHub nữa.
         {/* ‼ "thay đổi 0 · thêm 0 · bớt 0" từng làm CEO đọc thành "không làm gì cả"
             rồi bấm đi bấm lại (10/08 09:17). Nói rõ số 0 nghĩa là GIỐNG HỆT lần
@@ -1241,7 +1241,7 @@ function CostRatesSyncCard({ period, catalogLoading = false }) {
       : result.ok
         ? <div className="catalog-alert error" role="status">
           🟡 Đã góp thêm <b>{result.gained}</b> NV — kho hiện có <b>{result.stored}/{result.requested}</b> NV
-          · {result.pairCount.toLocaleString('vi-VN')} cặp. <b>Còn thiếu:</b> {result.missing.slice(0, 8).join(', ')}{result.missing.length > 8 ? `… (${result.missing.length} NV)` : ''}.
+          · {(result.rowCount ?? result.pairCount).toLocaleString('vi-VN')} dòng danh mục. <b>Còn thiếu:</b> {result.missing.slice(0, 8).join(', ')}{result.missing.length > 8 ? `… (${result.missing.length} NV)` : ''}.
           {' '}<b>Bấm lại nút này</b> khi nguồn khoẻ để gom tiếp — phần đã gom KHÔNG mất.
         </div>
         : <div className="catalog-alert error" role="alert">
@@ -1298,7 +1298,7 @@ function AdminView({ data, period, selectedPeriod = '', onReload, history, diagn
           <label><span>Tuyến</span><select value={route} onChange={(e) => { setRoute(e.target.value); setUnit(''); }}><option value="">Tất cả tuyến</option>{routeOptions.map((x) => <option key={x}>{x}</option>)}</select></label>
           <label><span>Đơn vị</span><select value={unit} onChange={(e) => setUnit(e.target.value)}><option value="">Tất cả đơn vị</option>{unitOptions.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
           <CellLinesPicker lines={cellLines} onChange={setCellLines} />
-          <div className="catalog-result-count"><span>Kết quả kỳ {hubToUi(period)}</span><b>{rows.length.toLocaleString('vi-VN')} cặp</b></div>
+          <div className="catalog-result-count"><span>Kết quả kỳ {hubToUi(period)}</span><b>{rows.length.toLocaleString('vi-VN')} dòng danh mục</b><small>{(data?.balance?.assignment_scopes || 0).toLocaleString('vi-VN')} phạm vi phân công DataHub</small></div>
         </div>
       </div>
       <CatalogTableCard id="catalog-table-top" tableId="admin-catalog" cellLines={cellLines}>

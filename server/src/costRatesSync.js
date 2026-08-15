@@ -11,7 +11,7 @@
  *  1. ALL-OR-NOTHING theo kỳ: kéo đủ MỌI NV mới ghi đè; hụt một người ⇒ giữ nguyên
  *     bản tốt đang có, báo rõ ai hỏng. Nửa đội số mới nửa đội số cũ là loại lệch
  *     không ai lần ra được.
- *  2. Số nào cũng có căn cước: fetchedAt · fetchedBy · đổi bao nhiêu cặp so bản trước.
+ *  2. Số nào cũng có căn cước: fetchedAt · fetchedBy · đổi bao nhiêu dòng danh mục so bản trước.
  *  3. App Report KHÔNG sửa %: kho chỉ chép, nguồn sự thật vẫn là DataHub.
  */
 
@@ -47,7 +47,8 @@ function statusOf(period, { store = persist } = {}) {
     // Danh sách NV kho ĐANG CÓ — để màn nói được "có S/21, thiếu ai", thay vì chỉ
     // một con số đếm không truy được.
     employees: Object.keys(entry.employees || {}).sort(),
-    pairCount: Object.keys(entry.pairSignatures || {}).length,
+    rowCount: Object.keys(entry.lineSignatures || entry.pairSignatures || {}).length,
+    pairCount: Object.keys(entry.lineSignatures || entry.pairSignatures || {}).length,
   };
 }
 
@@ -63,28 +64,35 @@ function readEmployee(period, empCode, { store = persist } = {}) {
   return { columns: kept.columns || [], rows: kept.rows, fetchedAt: entry.fetchedAt || null };
 }
 
-// Chữ ký %: mỗi cặp (đơn vị × mã hàng) → chuỗi giá trị các cột chi phí. Dùng để
-// đếm "đổi bao nhiêu cặp" giữa hai lần đồng bộ — kể cả khi số hiệu bản không đổi.
-function pairSignatures(employees, costColumns) {
+// Chữ ký % theo đúng grain dòng DataHub: đơn vị × QLNB × tên hàng × ĐVT.
+// Không được gộp các thuốc khác nhau chỉ vì dùng chung QLNB.
+function lineSignatures(employees, costColumns) {
   const signatures = {};
   for (const empCode of Object.keys(employees).sort()) {
     for (const row of employees[empCode].rows || []) {
       const unit = upper(row.unit_code ?? row.c7);
       const product = upper(row.c5 ?? row.product_code);
-      if (!unit || !product) continue;
+      const productName = upper(row.c16 ?? row.product_name);
+      const uom = upper(row.c25 ?? row.uom);
+      if (!unit || !product || !productName) {
+        throw Object.assign(new Error('DataHub có dòng chi phí thiếu định danh đơn vị/QLNB/tên hàng; từ chối ghi chữ ký không đầy đủ.'), {
+          status: 502, code: 'COST_SYNC_LINE_IDENTITY_MISSING', empCode,
+        });
+      }
       const values = costColumns.map((key) => {
         const raw = row?.[key];
         return raw == null || raw === '' || !Number.isFinite(Number(raw)) ? '—' : String(Number(raw));
       });
-      // Cùng cặp xuất hiện ở nhiều NV: giá trị phải như nhau; khác nhau thì ghi
+      // Cùng dòng xuất hiện ở nhiều NV: giá trị phải như nhau; khác nhau thì ghi
       // 'XUNG_DOT' để phép so lần sau lộ ra, không im lặng lấy bừa một bên.
-      const key = `${unit}\u001f${product}`;
+      const key = `${unit}\u001f${product}\u001f${productName}\u001f${uom}`;
       const signature = values.join('\u001f');
       signatures[key] = signatures[key] == null || signatures[key] === signature ? signature : 'XUNG_DOT';
     }
   }
   return signatures;
 }
+const pairSignatures = lineSignatures;
 
 function diffSignatures(before = {}, after = {}) {
   let changed = 0; let added = 0; let removed = 0;
@@ -190,10 +198,10 @@ async function syncPeriod({
   }
 
   const template = employeeCostTemplates.resolveTemplate(codes[0]);
-  const signatures = pairSignatures(mergedEmployees, template.costColumns || []);
-  const diff = diffSignatures(previous?.pairSignatures, signatures);
+  const signatures = lineSignatures(mergedEmployees, template.costColumns || []);
+  const diff = diffSignatures(previous?.lineSignatures || previous?.pairSignatures, signatures);
 
-  rows[period] = { period, fetchedAt: at, fetchedBy: who, sourceVersion: null, employees: mergedEmployees, pairSignatures: signatures };
+  rows[period] = { period, fetchedAt: at, fetchedBy: who, sourceVersion: null, employees: mergedEmployees, lineSignatures: signatures };
   const keys = Object.keys(rows).sort();
   for (const stale of keys.slice(0, Math.max(0, keys.length - MAX_PERIODS))) delete rows[stale];
   store.save(FILE, rows);
@@ -201,10 +209,10 @@ async function syncPeriod({
   const summary = {
     ok: true, period, requested: codes.length, fetched: Object.keys(employees).length, written: true,
     stored: storedCodes.length, missing, complete: missing.length === 0, gained: gained.length,
-    fetchedAt: at, pairCount: Object.keys(signatures).length, diff, failures,
+    fetchedAt: at, rowCount: Object.keys(signatures).length, pairCount: Object.keys(signatures).length, diff, failures,
   };
   writeAudit({ at, actor: who, period, ok: true, requested: codes.length, fetched: summary.fetched,
-    stored: summary.stored, missing, complete: summary.complete, pairCount: summary.pairCount, diff, failures }, { store });
+    stored: summary.stored, missing, complete: summary.complete, rowCount: summary.rowCount, diff, failures }, { store });
   return summary;
 }
 
@@ -220,6 +228,6 @@ function listAudit({ store = persist, limit = 20 } = {}) {
 
 module.exports = {
   FILE, AUDIT_FILE, MAX_PERIODS,
-  statusOf, listStatus, readEmployee, pairSignatures, diffSignatures,
+  statusOf, listStatus, readEmployee, lineSignatures, pairSignatures, diffSignatures,
   syncPeriod, rosterFromEnv, listAudit,
 };

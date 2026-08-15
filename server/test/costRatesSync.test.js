@@ -155,6 +155,16 @@ test('thiếu % trong dòng ⇒ chữ ký ghi "—", không suy 0', () => {
   assert.match(Object.values(signatures)[0], /^—/);
 });
 
+test('17 thuốc cùng đơn vị + QLNB vẫn là 17 dòng chữ ký DataHub, không bị gộp thành một', () => {
+  const employees = { DN005: { rows: Array.from({ length: 17 }, (_, index) => row('002.NT', 'QL01', { c16: `Thuốc ${index + 1}`, c25: 'Hộp', c41: index })) } };
+  assert.equal(Object.keys(sync.lineSignatures(employees, ['c41'])).length, 17);
+});
+
+test('dòng thiếu tên hàng fail-closed, không biến mất lặng lẽ khỏi chữ ký', () => {
+  assert.throws(() => sync.lineSignatures({ DN005: { rows: [{ c7: '002.NT', c5: 'QL01', c41: 1 }] } }, ['c41']),
+    (error) => error.code === 'COST_SYNC_LINE_IDENTITY_MISSING');
+});
+
 test('chặn đầu vào rác: kỳ sai, đội rỗng, thiếu người thao tác', async () => {
   const store = memStore();
   await assert.rejects(() => sync.syncPeriod({ period: '08.2026', empCodes: ['DN001'], actor: 'CEO', store }), /COST_SYNC_PERIOD_INVALID|Kỳ không hợp lệ/);
@@ -186,7 +196,7 @@ test('nghỉ một nhịp giữa các lượt gọi — nguồn kịp thu hồi 
     sleep: async (ms) => { clock += ms; },
     fetchImpl: async () => {
       gaps.push(clock - last); last = clock;
-      return { outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c41: 1 }] }] } };
+      return { outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c16: 'Thuốc 1', c41: 1 }] }] } };
     },
   });
   assert.equal(result.ok, true);
@@ -202,7 +212,7 @@ test('pauseMs = 0 thì không nghỉ — giữ đường chạy nhanh cho test v
     now: () => '2026-08-08T23:00:00.000+07:00',
     pauseMs: 0,
     sleep: async () => { slept += 1; },
-    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c41: 1 }] }] } }),
+    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c16: 'Thuốc 1', c41: 1 }] }] } }),
   });
   assert.equal(slept, 0);
 });

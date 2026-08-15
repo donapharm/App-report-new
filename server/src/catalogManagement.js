@@ -525,12 +525,35 @@ function arrayOf(value, names) {
   for (const name of names) if (Array.isArray(value?.[name])) return value[name];
   return [];
 }
+const KEY_SEP = '\u001f';
+function assignmentParts(row = {}) {
+  const value = String(row.value ?? row.code ?? row.category_key ?? row.assignment_value ?? '').trim();
+  const parts = value.split(KEY_SEP).map((part) => part.trim());
+  const canonicalTriple = parts.length >= 3 && parts[0] && parts[1] && parts[2];
+  return {
+    value,
+    unit: String(canonicalTriple ? parts[0] : (row.unit_code || parts[0] || '')).trim(),
+    contractor: String(canonicalTriple ? parts[1] : (row.contractor_code || row.c4 || '')).trim(),
+    qlnb: String(canonicalTriple ? parts[2] : (row.qlnb_code || parts[1] || '')).trim(),
+  };
+}
+function assignmentScopeKey(row = {}) {
+  const parts = assignmentParts(row);
+  return [parts.unit, parts.contractor, parts.qlnb].join(KEY_SEP);
+}
+function catalogScopeKey(row = {}) {
+  return [row.c7, row.c4, row.c5].map((value) => String(value || '').trim()).join(KEY_SEP);
+}
+function catalogLineKey(row = {}) {
+  return [row.c7, row.c5, row.c16, row.c25].map((value) => String(value || '').trim()).join(KEY_SEP);
+}
 function normalizeRow(row = {}) {
   const scope = String(row.scope || '').trim().toLowerCase();
   const type = String(row.type || row.category_type || row.assignment_type || ({ unit_qlnb: 'unit_qlnb', qlnb: 'iit', don_vi: 'unit', route: 'route', all: 'all' }[scope]) || '').trim().toLowerCase();
-  const value = String(row.value ?? row.code ?? row.category_key ?? row.assignment_value ?? '').trim();
+  const parts = assignmentParts(row);
+  const value = parts.value;
   const emp = String(row.emp_code || row.employee_code || row.owner_emp_code || '').trim().toUpperCase();
-  const unitCode = row.unit_code || null;
+  const unitCode = parts.unit || null;
   return {
     id: String(row.id || row.assignment_id || `${emp}:${type}:${value}`),
     emp_code: emp,
@@ -538,13 +561,13 @@ function normalizeRow(row = {}) {
     type,
     value,
     label: String(row.label || row.category_label || (type === 'unit_qlnb'
-      ? `${row.unit_code || value.split('\u001f')[0] || '—'} · ${row.qlnb_code || value.split('\u001f')[1] || '—'}`
+      ? `${parts.unit || '—'} · ${parts.contractor ? `${parts.contractor} · ` : ''}${parts.qlnb || '—'}`
       : `${TYPE_LABELS[type] || type}${value && value !== 'all' ? ` · ${value}` : ''}`)),
     unit_code: unitCode,
-    qlnb_code: row.qlnb_code || null,
+    qlnb_code: parts.qlnb || null,
     route: row.route || null,
     province: provinceOf(unitCode, row.unit_name || unitCode, row.province),
-    contractor_code: row.contractor_code || row.c4 || null,
+    contractor_code: parts.contractor || null,
     product_name: row.product_name || row.c16 || null,
     active_ingredient: row.active_ingredient || row.c15 || null,
     strength: row.strength || row.ham_luong || row.c17 || null,
@@ -561,17 +584,39 @@ function normalizeRow(row = {}) {
 }
 function enrichRowsFromCatalog(rows, catalog) {
   assertCatalogFieldPolicy(catalog, 'catalogProjection');
-  const byPair = new Map();
+  const byScope = new Map();
+  const scopesByPair = new Map();
   for (const row of catalog || []) {
-    const key = `${String(row.c7 || '').trim()}\u001f${String(row.c5 || '').trim()}`;
-    if (key !== '\u001f' && !byPair.has(key)) byPair.set(key, row);
+    const key = catalogScopeKey(row);
+    const items = byScope.get(key) || [];
+    items.push(row);
+    byScope.set(key, items);
+    const pair = [row.c7, row.c5].map((value) => String(value || '').trim()).join(KEY_SEP);
+    const scopes = scopesByPair.get(pair) || new Set();
+    scopes.add(key);
+    scopesByPair.set(pair, scopes);
   }
-  return rows.map((row) => {
-    const item = byPair.get(`${String(row.unit_code || '').trim()}\u001f${String(row.qlnb_code || '').trim()}`);
+  return rows.flatMap((row) => {
+    const parts = assignmentParts(row);
+    let scopeKey = assignmentScopeKey(row);
+    if (!parts.contractor) {
+      const scopes = scopesByPair.get([parts.unit, parts.qlnb].join(KEY_SEP));
+      if (scopes?.size === 1) scopeKey = [...scopes][0];
+    }
+    const items = byScope.get(scopeKey) || [];
+    // Một phạm vi phân công DataHub có thể chứa nhiều dòng thuốc: bung đủ từng
+    // dòng theo grain catalog, không lấy dòng đầu rồi làm biến mất các thuốc còn lại.
     // c10 = nhóm ưu tiên (SSOT cho Thưởng P2). Đưa xuống UI để CEO nhìn NGAY cạnh mã
     // QLNB, khỏi phải đi tra chỗ khác; thiếu c10 thì để trống (KHÔNG suy đoán, không
     // chặn danh mục) — chính chỗ trống đó là dấu hiệu cần bổ sung.
-    return item ? { ...row, contractor_code: item.c4 || null, product_name: item.c16 || null, active_ingredient: item.c15 || null, strength: item.c17 || null, uom: item.c25 || null, bid_price: item.c31 ?? null, c10: item.c10 || null } : row;
+    if (!items.length) return [{ ...row, catalog_line_count: 0 }];
+    return items.map((item) => ({ ...row,
+      id: `${row.id}${KEY_SEP}${catalogLineKey(item)}`,
+      contractor_code: assignmentParts(row).contractor || item.c4 || null,
+      product_name: item.c16 || null, active_ingredient: item.c15 || null,
+      strength: item.c17 || null, uom: item.c25 || null, bid_price: item.c31 ?? null,
+      c10: item.c10 || null, catalog_line_count: items.length,
+    }));
   });
 }
 function assertContractorCoverage(catalog = []) {
@@ -632,18 +677,31 @@ function assertCatalogSourceContract(catalog = [], rows = [], pathName = 'dataHu
       });
     }
   }
+  const scopesByPair = new Map();
+  for (const item of catalog) {
+    const pair = [item.c7, item.c5].map((value) => String(value || '').trim()).join(KEY_SEP);
+    const scopes = scopesByPair.get(pair) || new Set();
+    scopes.add(catalogScopeKey(item));
+    scopesByPair.set(pair, scopes);
+  }
+  const resolvedScopeKey = (row) => {
+    const parts = assignmentParts(row);
+    if (parts.contractor) return assignmentScopeKey(row);
+    const scopes = scopesByPair.get([parts.unit, parts.qlnb].join(KEY_SEP));
+    return scopes?.size === 1 ? [...scopes][0] : '';
+  };
   const invalidUnitQlnb = rows.filter((row) => row.type === 'unit_qlnb'
-    && (!String(row.unit_code || '').trim() || !String(row.qlnb_code || '').trim()));
+    && (!assignmentParts(row).unit || !assignmentParts(row).qlnb || !resolvedScopeKey(row)));
   if (invalidUnitQlnb.length) {
     throw Object.assign(new Error(`Data Hub có ${invalidUnitQlnb.length} phân công đơn vị + QLNB thiếu khóa; từ chối ghi đè cache tốt gần nhất.`), {
       status: 502, upstream: true, code: 'CATALOG_ASSIGNMENT_KEY_MISSING', details: { missing: invalidUnitQlnb.length, total: rows.length, pathName },
     });
   }
-  const catalogPairs = new Set(catalog.map((row) => `${String(row.c7 || '').trim()}\u001f${String(row.c5 || '').trim()}`));
-  const pairRows = rows.filter((row) => String(row.unit_code || '').trim() && String(row.qlnb_code || '').trim());
-  const missingPairs = pairRows.filter((row) => !catalogPairs.has(`${String(row.unit_code).trim()}\u001f${String(row.qlnb_code).trim()}`));
+  const catalogPairs = new Set(catalog.map(catalogScopeKey));
+  const pairRows = rows.filter((row) => assignmentParts(row).unit && assignmentParts(row).qlnb);
+  const missingPairs = pairRows.filter((row) => !catalogPairs.has(resolvedScopeKey(row)));
   if (missingPairs.length) {
-    throw Object.assign(new Error(`Data Hub thiếu catalog cho ${missingPairs.length}/${pairRows.length} cặp đơn vị + QLNB; từ chối ghi đè cache tốt gần nhất.`), {
+    throw Object.assign(new Error(`Data Hub thiếu catalog cho ${missingPairs.length}/${pairRows.length} phạm vi đơn vị + nhà thầu + QLNB; từ chối ghi đè cache tốt gần nhất.`), {
       status: 502, upstream: true, code: 'CATALOG_PAIR_COVERAGE_MISSING', details: { missing: missingPairs.length, total: pairRows.length, pathName },
     });
   }
@@ -1000,7 +1058,11 @@ function adminView(snapshot) {
   // restricted catalog server-side in the versioned LKG snapshot to avoid
   // sending a duplicate ~6 MB payload on every CEO page load.
   const rows = snapshot.rows.map((row) => row.province ? row : { ...row, province: provinceOf(row.unit_code, row.unit_code) });
-  return { period: snapshot.period, period_ui: toUiPeriod(snapshot.period), rows, catalog_total: Array.isArray(snapshot.catalog) ? snapshot.catalog.length : 0, history: snapshot.history || [], meta: snapshot.meta, unitGroups: unitGroupMap(rows) };
+  const catalog = Array.isArray(snapshot.catalog) ? snapshot.catalog : [];
+  return { period: snapshot.period, period_ui: toUiPeriod(snapshot.period), rows, catalog_total: catalog.length,
+    balance: { source_catalog_lines: catalog.length, unique_catalog_lines: new Set(catalog.map(catalogLineKey)).size,
+      assignment_scopes: new Set(rows.map(assignmentScopeKey)).size, assignment_key: 'unit+contractor+qlnb', catalog_line_key: 'unit+qlnb+product+uom' },
+    history: snapshot.history || [], meta: snapshot.meta, unitGroups: unitGroupMap(rows) };
 }
 async function getHistory() {
   if (!configured()) return { history: [], source: 'unavailable' };
@@ -1038,7 +1100,7 @@ module.exports = {
   readCacheForTests: readCache,
   // Ca kiểm cần soi tham chiếu có được THẢ thật không, không chỉ có hết hạn không.
   conGiuBanPhanTichForTests: () => nhoLkg !== null,
-  writeCacheForTests: writeCacheAtomic, configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint,
+  writeCacheForTests: writeCacheAtomic, configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, assignmentScopeKey, catalogScopeKey, catalogLineKey, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint,
   schedulePeriodLkgShadow: (response, period, snapshot) => catalogPeriodLkg.scheduleShadowAfterResponse(
     response, period, snapshot, dataQualityProjection(snapshot, period), { currentSource: currentCatalogSource },
   ),
