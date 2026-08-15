@@ -7529,3 +7529,10 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
   T01–T03 fail-closed `CATALOG_PERIOD_STALE` do monolith index không còn metadata.
 - Không bật cờ: `dedce8a` chưa có shadow compare độc lập, nên không thể chạy cửa sổ
   24h/200 lượt chỉ bằng toggle hiện tại. Cần Gate 1 bổ sung shadow mode trước.
+# 2026-08-15 — Catalog period LKG shadow comparison (Gate 1)
+
+- Add independent `CATALOG_PERIOD_LKG_SHADOW_ENABLED`; the existing read/cutover flag remains separate and defaults off.
+- Compare `rows`, `catalog`, `history`, catalog/source version, checksum and DQ semantics only after the HTTP response finishes.
+- Default sampling is 1/20 requests with a hard cap of 4 comparisons/minute.
+- Record sampled/skipped/matched/error/mismatch counters plus period and differing fields; auto-disable after one mismatch or three consecutive errors.
+- Shadow mode never returns a sidecar payload and never calls or writes DataHub.

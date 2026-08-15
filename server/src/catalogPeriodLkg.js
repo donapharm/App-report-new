@@ -11,14 +11,111 @@ const CACHE_MAX_ENTRIES = 2;
 const counters = { sidecarHit: 0, fallback: 0, invalid: 0, periodFilesRead: 0, cacheHit: 0 };
 const fallbackReasons = Object.create(null);
 const fragmentCache = new Map();
+const shadow = {
+  considered: 0, sampled: 0, matched: 0, mismatched: 0, errors: 0,
+  skippedSample: 0, skippedRate: 0, consecutiveErrors: 0, mismatchCount: 0,
+  minute: 0, minuteCount: 0, autoDisabled: false, disabledReason: null,
+  lastMismatch: null, lastError: null,
+};
 
 function enabled() {
   return TRUE_VALUES.has(String(process.env.CATALOG_PERIOD_LKG_READ_ENABLED || '').trim().toLowerCase());
+}
+function shadowConfigured() {
+  return TRUE_VALUES.has(String(process.env.CATALOG_PERIOD_LKG_SHADOW_ENABLED || '').trim().toLowerCase());
+}
+function shadowEnabled() { return shadowConfigured() && !shadow.autoDisabled; }
+function positiveInt(name, fallback, maximum = 10_000) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? Math.min(value, maximum) : fallback;
 }
 function rootDir() {
   return path.resolve(process.env.CATALOG_PERIOD_LKG_ROOT || path.join(__dirname, '..', 'data', 'catalog_lkg', 'v1'));
 }
 function hash(value) { return crypto.createHash('sha256').update(value).digest('hex'); }
+function semanticHash(value) {
+  const digest = crypto.createHash('sha256');
+  const visit = (item) => {
+    if (item === null || item === undefined) { digest.update('null;'); return; }
+    if (Array.isArray(item)) {
+      digest.update(`array:${item.length}[`);
+      for (const child of item) visit(child);
+      digest.update(']');
+      return;
+    }
+    if (typeof item === 'object') {
+      const keys = Object.keys(item).sort();
+      digest.update(`object:${keys.length}{`);
+      for (const key of keys) { digest.update(`${JSON.stringify(key)}:`); visit(item[key]); }
+      digest.update('}');
+      return;
+    }
+    digest.update(`${typeof item}:${JSON.stringify(item)};`);
+  };
+  visit(value);
+  return digest.digest('hex');
+}
+function semanticFields(snapshot, dqSnapshot) {
+  return {
+    rows: semanticHash(snapshot?.rows || []),
+    catalog: semanticHash(snapshot?.catalog || []),
+    history: semanticHash(snapshot?.history || []),
+    version: String(snapshot?.meta?.version || ''),
+    sourceVersion: String(snapshot?.meta?.sourceVersion || ''),
+    checksum: String(snapshot?.meta?.checksum || ''),
+    dq: semanticHash({ rows: dqSnapshot?.rows || [], catalog: dqSnapshot?.catalog || [], meta: dqSnapshot?.meta || {} }),
+  };
+}
+function disableShadow(reason, detail) {
+  shadow.autoDisabled = true;
+  shadow.disabledReason = reason;
+  console.error('[CATALOG_PERIOD_LKG_SHADOW_DISABLED]', JSON.stringify({ reason, detail }));
+}
+function shouldSample() {
+  shadow.considered += 1;
+  const every = positiveInt('CATALOG_PERIOD_LKG_SHADOW_SAMPLE_EVERY', 20);
+  if ((shadow.considered - 1) % every !== 0) { shadow.skippedSample += 1; return false; }
+  const minute = Math.floor(Date.now() / 60_000);
+  if (shadow.minute !== minute) { shadow.minute = minute; shadow.minuteCount = 0; }
+  const cap = positiveInt('CATALOG_PERIOD_LKG_SHADOW_MAX_PER_MINUTE', 4, 60);
+  if (shadow.minuteCount >= cap) { shadow.skippedRate += 1; return false; }
+  shadow.minuteCount += 1;
+  shadow.sampled += 1;
+  return true;
+}
+function compareShadow(period, monolithSnapshot, dqSnapshot, options = {}) {
+  if (!shadowEnabled() || !shouldSample()) return { scheduled: false };
+  try {
+    const payload = readPeriod(period, options);
+    const primary = semanticFields(monolithSnapshot, dqSnapshot);
+    const candidate = semanticFields(payload.snapshot, payload.dqSnapshot);
+    const fields = Object.keys(primary).filter((field) => primary[field] !== candidate[field]);
+    if (fields.length) {
+      shadow.mismatched += 1;
+      shadow.mismatchCount += 1;
+      shadow.consecutiveErrors = 0;
+      shadow.lastMismatch = { at: new Date().toISOString(), period, fields };
+      console.error('[CATALOG_PERIOD_LKG_SHADOW_MISMATCH]', JSON.stringify(shadow.lastMismatch));
+      if (shadow.mismatchCount >= positiveInt('CATALOG_PERIOD_LKG_SHADOW_MISMATCH_LIMIT', 1)) disableShadow('mismatch_limit', shadow.lastMismatch);
+      return { scheduled: true, matched: false, fields };
+    }
+    shadow.matched += 1;
+    shadow.consecutiveErrors = 0;
+    return { scheduled: true, matched: true, fields: [] };
+  } catch (error) {
+    shadow.errors += 1;
+    shadow.consecutiveErrors += 1;
+    shadow.lastError = { at: new Date().toISOString(), period, code: error.code || 'CATALOG_PERIOD_LKG_SHADOW_ERROR' };
+    console.error('[CATALOG_PERIOD_LKG_SHADOW_ERROR]', JSON.stringify(shadow.lastError));
+    if (shadow.consecutiveErrors >= positiveInt('CATALOG_PERIOD_LKG_SHADOW_ERROR_LIMIT', 3)) disableShadow('consecutive_errors', shadow.lastError);
+    return { scheduled: true, matched: false, error: shadow.lastError.code };
+  }
+}
+function scheduleShadowAfterResponse(response, period, monolithSnapshot, dqSnapshot, options = {}) {
+  if (!shadowEnabled() || !response || typeof response.once !== 'function') return false;
+  response.once('finish', () => setImmediate(() => compareShadow(period, monolithSnapshot, dqSnapshot, options)));
+  return true;
+}
 function validPeriod(value) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(value || '')); }
 function safePeriod(value) {
   const period = String(value || '');
@@ -146,11 +243,12 @@ async function readRangeSequential(periods, consume, { maxPeriods = 6, readFile 
   }
   return { periodsRead: unique.length };
 }
-function diagnostics() { return { enabled: enabled(), root: rootDir(), cachedFragments: fragmentCache.size, fallbackReasons: { ...fallbackReasons }, ...counters }; }
+function diagnostics() { return { enabled: enabled(), shadow: { configured: shadowConfigured(), enabled: shadowEnabled(), sampleEvery: positiveInt('CATALOG_PERIOD_LKG_SHADOW_SAMPLE_EVERY', 20), maxPerMinute: positiveInt('CATALOG_PERIOD_LKG_SHADOW_MAX_PER_MINUTE', 4, 60), ...shadow }, root: rootDir(), cachedFragments: fragmentCache.size, fallbackReasons: { ...fallbackReasons }, ...counters }; }
 function resetDiagnosticsForTests() {
   for (const file of [...fragmentCache.keys()]) releaseCachedFile(file);
   for (const key of Object.keys(counters)) counters[key] = 0;
   for (const key of Object.keys(fallbackReasons)) delete fallbackReasons[key];
+  Object.assign(shadow, { considered: 0, sampled: 0, matched: 0, mismatched: 0, errors: 0, skippedSample: 0, skippedRate: 0, consecutiveErrors: 0, mismatchCount: 0, minute: 0, minuteCount: 0, autoDisabled: false, disabledReason: null, lastMismatch: null, lastError: null });
 }
 
-module.exports = { SCHEMA_VERSION, enabled, rootDir, hash, readPeriod, tryReadPeriod, readRangeSequential, diagnostics, resetDiagnosticsForTests };
+module.exports = { SCHEMA_VERSION, enabled, shadowEnabled, rootDir, hash, readPeriod, tryReadPeriod, readRangeSequential, compareShadow, scheduleShadowAfterResponse, diagnostics, resetDiagnosticsForTests };

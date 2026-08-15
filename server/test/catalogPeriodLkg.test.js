@@ -10,6 +10,14 @@ const sidecar = require('../src/catalogPeriodLkg');
 const currentSource = () => ({ sourceVersion: 'V1', sourceChecksum: 'MONOLITH-1', sourceFileIdentity: 'MONOLITH-FILE-1' });
 
 test.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+test.afterEach(() => {
+  delete process.env.CATALOG_PERIOD_LKG_SHADOW_ENABLED;
+  delete process.env.CATALOG_PERIOD_LKG_SHADOW_SAMPLE_EVERY;
+  delete process.env.CATALOG_PERIOD_LKG_SHADOW_MAX_PER_MINUTE;
+  delete process.env.CATALOG_PERIOD_LKG_SHADOW_ERROR_LIMIT;
+  delete process.env.CATALOG_PERIOD_LKG_SHADOW_MISMATCH_LIMIT;
+  sidecar.resetDiagnosticsForTests();
+});
 
 function snapshot(period) {
   return { period, rows: [{ id: period }], catalog: [{ c5: 'Q', c7: 'D' }], history: [], meta: { version: 'V1', checksum: period } };
@@ -133,4 +141,60 @@ test('range reads index once and releases each fragment after consumption', asyn
   await sidecar.readRangeSequential(['2026-06', '2026-07', '2026-08'], async () => {}, { readFile, currentSource });
   assert.equal(indexReads, 1);
   assert.equal(sidecar.diagnostics().cachedFragments, 0);
+});
+
+test('shadow flag is independent from cutover and compares only after response finish', async () => {
+  install(['2026-08']);
+  delete process.env.CATALOG_PERIOD_LKG_READ_ENABLED;
+  process.env.CATALOG_PERIOD_LKG_SHADOW_ENABLED = 'true';
+  process.env.CATALOG_PERIOD_LKG_SHADOW_SAMPLE_EVERY = '1';
+  const listeners = {};
+  const response = { once: (event, callback) => { listeners[event] = callback; } };
+  const value = snapshot('2026-08');
+  const scheduled = sidecar.scheduleShadowAfterResponse(response, '2026-08', value, value, { currentSource });
+  assert.equal(scheduled, true);
+  assert.equal(sidecar.diagnostics().shadow.sampled, 0);
+  listeners.finish();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(sidecar.diagnostics().shadow.matched, 1);
+  assert.equal(sidecar.diagnostics().enabled, false);
+  assert.equal(sidecar.diagnostics().shadow.enabled, true);
+});
+
+test('one semantic mismatch records period and fields then auto-disables shadow', () => {
+  install(['2026-08']);
+  process.env.CATALOG_PERIOD_LKG_SHADOW_ENABLED = 'true';
+  process.env.CATALOG_PERIOD_LKG_SHADOW_SAMPLE_EVERY = '1';
+  const monolith = snapshot('2026-08');
+  monolith.rows = [{ id: 'different' }];
+  const result = sidecar.compareShadow('2026-08', monolith, snapshot('2026-08'), { currentSource });
+  assert.equal(result.matched, false);
+  assert.deepEqual(result.fields, ['rows']);
+  const status = sidecar.diagnostics().shadow;
+  assert.equal(status.autoDisabled, true);
+  assert.equal(status.disabledReason, 'mismatch_limit');
+  assert.deepEqual(status.lastMismatch.fields, ['rows']);
+  assert.equal(status.lastMismatch.period, '2026-08');
+});
+
+test('consecutive sidecar errors auto-disable shadow without changing read flag', () => {
+  install(['2026-08']);
+  process.env.CATALOG_PERIOD_LKG_SHADOW_ENABLED = 'true';
+  process.env.CATALOG_PERIOD_LKG_SHADOW_SAMPLE_EVERY = '1';
+  process.env.CATALOG_PERIOD_LKG_SHADOW_ERROR_LIMIT = '2';
+  const staleSource = () => ({ sourceVersion: 'V2', sourceChecksum: 'OTHER', sourceFileIdentity: 'OTHER' });
+  sidecar.compareShadow('2026-08', snapshot('2026-08'), snapshot('2026-08'), { currentSource: staleSource });
+  sidecar.compareShadow('2026-08', snapshot('2026-08'), snapshot('2026-08'), { currentSource: staleSource });
+  const status = sidecar.diagnostics().shadow;
+  assert.equal(status.errors, 2);
+  assert.equal(status.autoDisabled, true);
+  assert.equal(status.disabledReason, 'consecutive_errors');
+  assert.equal(sidecar.diagnostics().enabled, false);
+});
+
+test('catalog route wires the shadow comparison without changing the served snapshot', () => {
+  const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
+  const management = fs.readFileSync(path.join(__dirname, '..', 'src', 'catalogManagement.js'), 'utf8');
+  assert.match(routes, /schedulePeriodLkgShadow\(res, period, snapshot\);[\s\S]*?res\.json\(catalogManagement\.adminView\(viewSnapshot\)\)/);
+  assert.match(management, /schedulePeriodLkgShadow:[\s\S]*?scheduleShadowAfterResponse/);
 });

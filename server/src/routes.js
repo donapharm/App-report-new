@@ -3852,6 +3852,10 @@ router.get('/catalog-management', auth.requireAuth, async (req, res) => {
     // hiện là C30-only và tuyệt đối không được phủ lên CST ban đầu/còn lại.
     const rows = catalogManagement.buildCatalogRows(snapshot.rows, store.getCst({ scope: null }));
     const viewSnapshot = { ...snapshot, rows };
+    // Shadow comparison starts only after the HTTP response has finished. It
+    // compares the unmodified durable snapshot; the CST display overlay is not
+    // part of the catalog sidecar contract and never affects what is served.
+    catalogManagement.schedulePeriodLkgShadow(res, period, snapshot);
     if (auth.isAdmin(req.session.role)) return res.json(catalogManagement.adminView(viewSnapshot));
     return res.json(catalogManagement.employeeView(viewSnapshot, req.session.emp_code, period));
   } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
