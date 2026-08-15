@@ -626,6 +626,7 @@ function periodViewModel(payload = {}) {
     rateEffectiveFrom: String(payload.rateEffectiveFrom || ''),
     rateEffectiveFroms: Array.isArray(payload.rateEffectiveFroms) ? payload.rateEffectiveFroms.map(String).filter(Boolean) : [],
     rateSource: String(payload.rateSource || ''),
+    ratePinnedAt: String(payload.ratePinnedAt || ''),
     template,
     columns,
     dimensionColumns,
@@ -945,6 +946,8 @@ export function employeeCostViewModel(payload = {}) {
     rateEffectiveFroms: [...new Set((Array.isArray(payload.rateEffectiveFroms)
       ? payload.rateEffectiveFroms : [payload.rateEffectiveFrom, ...periods.flatMap((period) => period.rateEffectiveFroms || [period.rateEffectiveFrom])])
       .filter(Boolean).map(String))].sort(),
+    rateSource: String(payload.rateSource || first.rateSource || ''),
+    ratePinnedAt: String(payload.ratePinnedAt || first.ratePinnedAt || ''),
     ratePolicy: {
       state: String(payload.ratePolicy?.state || ''),
       lookupOutcome: String(payload.ratePolicy?.lookupOutcome || ''),

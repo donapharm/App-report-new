@@ -56,3 +56,22 @@ test('UI and API expose Đồng bộ lại as a background mutation with snapsho
   assert.match(api, /employeeCostSnapshotResync:/);
   assert.match(api, /'POST', '\/employee-cost\/snapshot\/resync'/);
 });
+
+test('pinned rate metadata is explicit while fresh payload has no pinned label', () => {
+  const pinned = employeeCostViewModel({
+    empCode: 'DN001', period: '2026-07', rateSource: 'local_pinned',
+    ratePinnedAt: '2026-08-05T02:03:00.000Z', rows: [], columns: [],
+  });
+  const fresh = employeeCostViewModel({ empCode: 'DN001', period: '2026-08', rateSource: 'datahub', rows: [], columns: [] });
+  assert.equal(pinned.rateSource, 'local_pinned');
+  assert.equal(pinned.ratePinnedAt, '2026-08-05T02:03:00.000Z');
+  assert.notEqual(fresh.rateSource, 'local_pinned');
+  assert.equal(fresh.ratePinnedAt, '');
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /Số chốt từ bản ghim lúc/);
+  assert.match(page, /kỳ đã khoá, không gọi nguồn/);
+  assert.match(page, /model\.rateSource === 'local_pinned'/);
+  assert.match(page, /hour: '2-digit', minute: '2-digit'/);
+  assert.match(page, /day: '2-digit', month: '2-digit'/);
+  assert.match(page, /timeZone: 'Asia\/Ho_Chi_Minh'/);
+});

@@ -41,9 +41,17 @@ test('snapshot status/resync routes are admin guarded and mutation is additional
 
 test('sync probes exact authoritative evidence once before enrichment', () => {
   const source = routesSource();
-  assert.match(source, /employeeCost\.fetchEmployeeCost\(empCode/);
+  const adapterStart = source.indexOf('async function fetchAuthoritativeEmployeeCost');
+  const adapterEnd = source.indexOf('\n}\n\nconst employeeCostSnapshotSync', adapterStart);
+  const adapter = source.slice(adapterStart, adapterEnd);
+  assert.match(adapter, /employeeCost\.fetchRawEmployeeCost\(empCode/);
+  assert.doesNotMatch(adapter, /employeeCost\.fetchEmployeeCost\(empCode/);
+  const rawCall = adapter.slice(adapter.indexOf('employeeCost.fetchRawEmployeeCost'), adapter.indexOf(');', adapter.indexOf('employeeCost.fetchRawEmployeeCost')) + 2);
+  assert.doesNotMatch(rawCall, /pinnedClosedPayload|rateSnapshot|backgroundRefresh|ok_stale_rates/);
   assert.match(source, /employeeCost\.verifiedPrefetchEvidence\(raw, empCode/);
   assert.match(source, /prefetchedCostResult: evidence/);
+  assert.match(source, /fetchEmployee: \(empCode, options\) => fetchAuthoritativeEmployeeCost\(empCode, options\)/);
+  assert.match(source, /probeEmployee: \(empCode, options\) => fetchAuthoritativeEmployeeCost\(empCode/);
 });
 
 test('watcher runtime is external-only; checked-in runner enforces lock/interlocks and CEO outbox', () => {

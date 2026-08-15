@@ -1057,8 +1057,12 @@ async function fetchAuthoritativeEmployeeCost(empCode, { period, roster, buildRe
   // employee/range, then enrich from the verified evidence. A local pinned-rate
   // fast path must never be promoted as a newly synchronized source result.
   const fetchedAt = new Date().toISOString();
-  const raw = await employeeCost.fetchEmployeeCost(empCode, {
-    from: period, to: period, backgroundRefresh: false,
+  // This adapter is the evidence boundary for BOTH watcher probes and the real
+  // snapshot sync. It must bypass every local-first/pinned/restore path: a local
+  // number is useful for display, but can never prove that DataHub is fresh.
+  // fetchRawEmployeeCost is network-only and does not remember/restore rates.
+  const raw = await employeeCost.fetchRawEmployeeCost(empCode, {
+    from: period, to: period,
   });
   const evidence = employeeCost.verifiedPrefetchEvidence(raw, empCode, {
     from: period, to: period, verifiedAt: Date.parse(fetchedAt),

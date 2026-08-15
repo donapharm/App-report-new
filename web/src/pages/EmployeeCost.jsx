@@ -1857,6 +1857,15 @@ export default function EmployeeCost({ me, onNavigate }) {
   // "chưa lấy được", nhưng phải nói ra là số cũ — dùng được không có nghĩa là giấu.
   const staleEmpCodes = Array.isArray(kpiMatch.staleEmployees) ? kpiMatch.staleEmployees : [];
   const snapshotStatus = snapshotControl || model.trangThaiDongBo;
+  const pinnedAtMs = Date.parse(model.ratePinnedAt || '');
+  const pinnedAt = new Date(pinnedAtMs);
+  const pinnedTime = Number.isFinite(pinnedAtMs)
+    ? pinnedAt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Ho_Chi_Minh' }) : '';
+  const pinnedDate = Number.isFinite(pinnedAtMs)
+    ? pinnedAt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' }) : '';
+  const pinnedRateNotice = model.rateSource === 'local_pinned' && Number.isFinite(pinnedAtMs)
+    ? `Số chốt từ bản ghim lúc ${pinnedTime} ${pinnedDate} — kỳ đã khoá, không gọi nguồn`
+    : '';
   const snapshotReasonText = Object.entries(snapshotStatus?.unavailableReasons || {})
     .map(([emp, reason]) => `${emp}: ${SNAPSHOT_REASON_LABELS[reason] || 'nguồn tạm unavailable'}`).join(' · ');
   const unavailableReasons = { ...(snapshotStatus?.unavailableReasons || {}), ...(kpiMatch.unavailableReasons || {}) };
@@ -2145,6 +2154,7 @@ export default function EmployeeCost({ me, onNavigate }) {
         {rangeInvalid && <small role="alert">Từ tháng không được sau Đến tháng.</small>}
       </form>
     </div>
+    {!!pinnedRateNotice && <div className="card employee-cost-pinned-notice" role="status" data-rate-source="local_pinned">{pinnedRateNotice}</div>}
 
     {costExportError && view === 'cost' && <div className="employee-cost-match-warning" role="alert">{costExportError}</div>}
 

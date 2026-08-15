@@ -206,6 +206,34 @@ test('ALL merge giữ provenance policy carry-forward để UI không dùng tỷ
   assert.deepEqual(mixed.rateEffectiveFroms, ['2026-07', '2026-08']);
 });
 
+test('ALL merge exposes a pinned timestamp only when every employee is from the same local pin', () => {
+  const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
+  const pinnedAt = '2026-08-15T02:15:00.000Z';
+  const first = report([rows[0]]);
+  const second = report([{ ...rows[1], sourceLineId: 'dn2' }]);
+  for (const [item, emp] of [[first, 'DN001'], [second, 'DN002']]) {
+    item.empCode = emp;
+    item.rateSource = 'local_pinned';
+    item.ratePinnedAt = pinnedAt;
+    item.periods[0].rateSource = 'local_pinned';
+    item.periods[0].ratePinnedAt = pinnedAt;
+  }
+
+  const pinned = table.mergeEmployeeReports([first, second], roster);
+  assert.equal(pinned.rateSource, 'local_pinned');
+  assert.equal(pinned.ratePinnedAt, pinnedAt);
+  assert.equal(pinned.periods[0].rateSource, 'local_pinned');
+  assert.equal(pinned.periods[0].ratePinnedAt, pinnedAt);
+
+  second.rateSource = 'remote_exact';
+  second.periods[0].rateSource = 'remote_exact';
+  const mixed = table.mergeEmployeeReports([first, second], roster);
+  assert.equal(mixed.rateSource, '');
+  assert.equal(mixed.ratePinnedAt, '');
+  assert.equal(mixed.periods[0].rateSource, '');
+  assert.equal(mixed.periods[0].ratePinnedAt, '');
+});
+
 
 test('ALL merge maps only 4xx rejection outcomes to privacy-safe upstream_rejected', () => {
   const outcomes = ['upstream_rejected', 'upstream_400', 'upstream_401', 'upstream_409', 'upstream_499', 'upstream_500', 'upstream_502', 'upstream_unavailable'];

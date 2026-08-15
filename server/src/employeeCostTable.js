@@ -406,10 +406,15 @@ function mergeEmployeeReports(reports = [], roster = []) {
         return String(exact || '');
       })
       .filter(Boolean))].sort();
+    const rateSources = [...new Set(blocks.map(({ period, report }) => String(period.rateSource || report.rateSource || '')).filter(Boolean))];
+    const pinnedAts = [...new Set(blocks.map(({ period, report }) => String(period.ratePinnedAt || report.ratePinnedAt || '')).filter(Boolean))];
+    const allPinned = blocks.length > 0 && rateSources.length === 1 && rateSources[0] === 'local_pinned';
     return {
       empCode: 'ALL', period: periodKey, columns, rows,
       rateEffectiveFrom: rateEffectiveFroms.length === 1 ? rateEffectiveFroms[0] : '',
       rateEffectiveFroms,
+      rateSource: allPinned ? 'local_pinned' : '',
+      ratePinnedAt: allPinned && pinnedAts.length === 1 ? pinnedAts[0] : '',
       // Only the report's selected/final month owns a PHẠT v3.4 summary.
       // Keeping the map in the merged backend payload lets filtered ALL
       // subtotals retain the server-calculated penalty without client math.
@@ -432,12 +437,17 @@ function mergeEmployeeReports(reports = [], roster = []) {
     };
   });
   const rateEffectiveFroms = [...new Set(periods.flatMap((period) => period.rateEffectiveFroms || []))].sort();
+  const pinnedPeriods = periods.filter((period) => period.rateSource === 'local_pinned');
+  const pinnedAts = [...new Set(pinnedPeriods.map((period) => period.ratePinnedAt).filter(Boolean))];
+  const allPinned = periods.length > 0 && pinnedPeriods.length === periods.length;
   return {
     empCode: 'ALL', employeeName: 'Tất cả nhân viên', allEmployees: true,
     template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: [] },
     from: source[0]?.from || periodKeys[0] || '', to: source[0]?.to || periodKeys.at(-1) || '',
     rateEffectiveFrom: rateEffectiveFroms.length === 1 ? rateEffectiveFroms[0] : '',
     rateEffectiveFroms,
+    rateSource: allPinned ? 'local_pinned' : '',
+    ratePinnedAt: allPinned && pinnedAts.length === 1 ? pinnedAts[0] : '',
     periods,
     employees: roster.map((employee) => ({ empCode: employee.emp_code, employeeName: employee.name })),
     bonus: employeeBonus.aggregateBonusSummaries(source, roster),
