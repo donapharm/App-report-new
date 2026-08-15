@@ -7512,3 +7512,11 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - **Sắp xếp lại UI “Chi phí của tôi” theo mockup v2 §3B.** Hàng trên bám đúng thứ tự `Nhân viên · Doanh thu chưa VAT · Điểm · Tổng chi phí tháng (chi phí gốc)`; số dòng gộp vào thẻ Nhân viên và không lặp `Chi phí gốc` trong khối cấn trừ. Chuyển `Phạt dự kiến` xuống cạnh `Xu tích lũy`, để hàng cấn trừ đọc liền `[Xu] [Phạt dự kiến] − [Cấn trừ thiếu xu] = [Còn lại]`; mobile tiếp tục một cột theo đúng thứ tự.
 - **Giữ nguyên logic số/quyền và fail-closed.** `Phạt dự kiến` và `Cấn trừ thiếu xu` dùng cùng số backend; chỉ mở khi parity exact-zero PASS, nếu chưa đạt vẫn `đang đối soát / —`. Không sửa công thức, quyền, API, DataHub/payroll hay luồng notification. Áp đúng mockup: Điểm `#4338ca→#4f46e5`, Thưởng `#047857→#059669`, Phạt `#b91c1c→#dc2626`, Xu `#eef2ff` và thẻ chi phí gốc `#fffbeb`.
 - **Production deploy sau CEO duyệt:** review `0729971` được merge vào `main` tại `2430f5d`; production version `2430f5d-20260724-144314-865`. Focused web `23/23`, full web `57/57`, targeted server regression `86/86`, build và `git diff --check` đều PASS. Public/local asset byte-parity PASS; triển khai frontend-only, PM2 PID/restart giữ nguyên, không restart backend.
+# 2026-08-15 — Catalog LKG Phase 1 review fixes (candidate only)
+
+- Sidecar period reader nay fail-closed `CATALOG_PERIOD_STALE` nếu
+  `sourceVersion/sourceChecksum` không khớp monolith hiện tại hoặc căn cước
+  monolith `dev:ino:size:mtimeNs:ctimeNs` khác thời điểm offline materialize.
+- Thêm fragment memo có hậu kiểm TOCTOU, TTL/chủ động thả RAM và cap 2 kỳ; range
+  tuần tự đọc index một lần rồi thả từng fragment. Benchmark fixture 41,94 MB:
+  cold 588,162 ms, hot 0,406 ms. Cờ vẫn mặc định OFF; chưa deploy/dựng live.

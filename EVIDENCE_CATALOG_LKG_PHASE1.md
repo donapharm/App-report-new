@@ -34,3 +34,27 @@ Peak tăng nhẹ từ 3 lên 6 kỳ (`~40,2 MB`), không tỷ lệ tuyến tính
 - Full web: `490/490` PASS; Vite build `661 modules` PASS; syntax và `git diff --check` PASS.
 - Chưa deploy, chưa dựng sidecar trong kho live, chưa bật cờ.
 - PROD vẫn dùng monolith. Bật cờ cần Gate 2 riêng sau review và acceptance parity.
+
+## Review fix — freshness và hot-cache (15/08/2026)
+
+- Reader chỉ tin `sourceVersion`/`sourceChecksum` của sidecar khi chúng khớp
+  metadata đúng kỳ trong index monolith hiện tại; index monolith chỉ được tin
+  khi `mainFile` còn khớp file thật. Đồng thời `sourceFileIdentity` mà offline
+  materializer đóng vào sidecar index phải khớp đủ
+  `dev:ino:size:mtimeNs:ctimeNs` của monolith hiện tại. Thiếu/lệch trả
+  `CATALOG_PERIOD_STALE`, tăng diagnostics và fallback monolith.
+- Regression khóa bệnh: sidecar còn nguyên checksum nhưng monolith đổi V1→V2
+  bắt buộc fallback; không phục vụ fragment cũ.
+- Fragment đã parse được memo tối đa 2 kỳ/30 giây theo căn cước file
+  `dev:ino:size:mtimeNs:ctimeNs`. Cả cold-read và cache-hit đều hậu kiểm căn cước;
+  file đổi trong/sau khi đọc trả `CATALOG_PERIOD_FILE_DRIFT` hoặc checksum invalid.
+  Timer `unref()` chủ động bỏ tham chiếu; range tuần tự bỏ từng fragment ngay sau
+  consumer, nên không giữ cả dải trong RAM.
+- `readRangeSequential` đọc sidecar `index.json` đúng một lần cho cả dải; test
+  đếm exact 1 và xác nhận cache fragment về 0 sau range.
+- Benchmark độc lập 41.943.395 byte: cold `588,162 ms`, hot lần 2 `0,406 ms`
+  (`~1.447,8x`), fragment disk-read `1`, cache-hit `1`. Đây là fixture cùng cỡ T08;
+  không ghi sidecar vào kho live.
+- Gate sau review fix: focused `30/30` PASS; full server `1397/1398`, duy nhất
+  VP018 strict-access baseline đã biết; full web `490/490` PASS; Vite build
+  `661 modules` PASS; syntax và `git diff --check` PASS.

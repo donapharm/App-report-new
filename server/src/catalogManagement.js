@@ -150,6 +150,20 @@ function readCacheIndex() {
       ? value : { schemaVersion: CACHE_SCHEMA_VERSION, periods: {} };
   } catch { return { schemaVersion: CACHE_SCHEMA_VERSION, periods: {} }; }
 }
+function currentCatalogSource(period) {
+  const index = readCacheIndex();
+  // The tiny metadata index is authoritative only while it still describes
+  // the exact monolith inode/generation on disk. This avoids parsing 377 MB on
+  // the request path without ever blessing stale sidecar metadata.
+  if (!sameCacheFile(CACHE_FILE, index.mainFile)) return null;
+  const entry = index.periods?.[period];
+  if (!entry) return null;
+  const sourceVersion = String(entry.version || '');
+  const sourceChecksum = String(entry.checksum || '');
+  const sourceFileIdentity = canCuocFile(CACHE_FILE);
+  return sourceVersion && sourceChecksum && sourceFileIdentity
+    ? { sourceVersion, sourceChecksum, sourceFileIdentity } : null;
+}
 function snapshotFingerprint(snapshot) {
   // Include actual durable content as well as Data Hub's version/checksum.
   // This catches an upstream payload change even if its metadata was not
@@ -301,7 +315,7 @@ function readCache(period) {
     // accepted; every missing/corrupt case falls back to the existing monolith.
     // This path never calls DataHub and reads at most one period fragment.
     if (period) {
-      const sidecar = catalogPeriodLkg.tryReadPeriod(period, { validate: (payload) => {
+      const sidecar = catalogPeriodLkg.tryReadPeriod(period, { currentSource: currentCatalogSource, validate: (payload) => {
         assertCatalogFieldPolicy(payload.snapshot, `catalogPeriodLkg.${period}`);
         assertCatalogSnapshotContract(payload.snapshot, `catalogPeriodLkg.${period}`);
       } });

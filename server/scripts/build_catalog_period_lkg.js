@@ -32,6 +32,10 @@ function extractIsolated(source, out) {
   if (child.status !== 0) throw new Error(child.stderr || `extract failed: ${source}`);
   return JSON.parse(child.stdout);
 }
+function sourceIdentity(file) {
+  const stat = fs.statSync(file, { bigint: true });
+  return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+}
 function main() {
   const mainFile = path.resolve(process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(__dirname, '..', 'data', 'catalog_management_lkg.json'));
   const dqFile = path.resolve(process.env.EMPLOYEE_COST_DQ_CATALOG_CACHE_FILE || path.join(__dirname, '..', 'data', 'employee_cost_dq_catalog_lkg.json'));
@@ -40,10 +44,14 @@ function main() {
   try {
     const mainOut = path.join(temp, 'main');
     const dqOut = path.join(temp, 'dq');
+    const sourceFileIdentity = sourceIdentity(mainFile);
     const mainPeriods = extractIsolated(mainFile, mainOut);
     const dqPeriods = new Set(extractIsolated(dqFile, dqOut));
+    if (sourceIdentity(mainFile) !== sourceFileIdentity) {
+      throw Object.assign(new Error('Catalog monolith changed while materializing'), { code: 'CATALOG_PERIOD_SOURCE_DRIFT' });
+    }
     const periods = mainPeriods.filter((period) => dqPeriods.has(period)).sort();
-    const index = { schemaVersion: 1, kind: 'catalog-period-lkg-index', createdAt: new Date().toISOString(), periods: {} };
+    const index = { schemaVersion: 1, kind: 'catalog-period-lkg-index', createdAt: new Date().toISOString(), sourceFileIdentity, periods: {} };
     for (const period of periods) {
       const snapshot = JSON.parse(fs.readFileSync(path.join(mainOut, `${period}.json`), 'utf8'));
       const dqSnapshot = JSON.parse(fs.readFileSync(path.join(dqOut, `${period}.json`), 'utf8'));
