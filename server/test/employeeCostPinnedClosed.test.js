@@ -19,7 +19,7 @@ const memStore = () => {
 const COLS = [{ key: 'c36', label: 'CP ctv/khác (%)' }];
 const seed = async (store, period) => sync.syncPeriod({
   period, empCodes: ['DN001'], actor: 'CEO',
-  fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period, columns: COLS, rows: [{ unit_code: '120.HTNT', c5: 'G1.A', c36: 1 }] }] } }),
+  fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period, columns: COLS, rows: [{ unit_code: '120.HTNT', c5: 'G1.A', c16: 'Thuốc A', c25: 'Viên', c36: 1 }] }] } }),
   store, now: () => '2026-08-09T20:06:00.000+07:00',
 });
 

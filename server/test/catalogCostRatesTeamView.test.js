@@ -72,7 +72,7 @@ test('kết quả KHÔNG phụ thuộc thứ tự duyệt nhân viên — chạy
   const mk = (order) => {
     const employees = {};
     for (const [emp, value] of order) {
-      employees[emp] = { columns: [{ key: 'c36' }], rows: [{ unit_code: 'U1', c5: 'P1', c36: value }] };
+      employees[emp] = { columns: [{ key: 'c36' }], rows: [{ unit_code: 'U1', c5: 'P1', c16: 'Thuốc 1', c25: 'Viên', c36: value }] };
     }
     return employees;
   };

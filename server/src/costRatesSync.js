@@ -24,6 +24,7 @@ const FILE = 'cost_rates_local';
 const AUDIT_FILE = 'cost_rates_sync_audit';
 const MAX_PERIODS = 12;
 const AUDIT_LIMIT = 300;
+const MAX_LINE_EXCLUSION_RATE = 0.01;
 
 const text = (value) => String(value ?? '').trim();
 const upper = (value) => text(value).toUpperCase();
@@ -66,18 +67,21 @@ function readEmployee(period, empCode, { store = persist } = {}) {
 
 // Chữ ký % theo đúng grain dòng DataHub: đơn vị × QLNB × tên hàng × ĐVT.
 // Không được gộp các thuốc khác nhau chỉ vì dùng chung QLNB.
-function lineSignatures(employees, costColumns) {
+function collectLineSignatures(employees, costColumns) {
   const signatures = {};
+  const exclusions = [];
+  let sourceRows = 0;
   for (const empCode of Object.keys(employees).sort()) {
-    for (const row of employees[empCode].rows || []) {
+    for (const [rowIndex, row] of (employees[empCode].rows || []).entries()) {
+      sourceRows += 1;
       const unit = upper(row.unit_code ?? row.c7);
       const product = upper(row.c5 ?? row.product_code);
       const productName = upper(row.c16 ?? row.product_name);
       const uom = upper(row.c25 ?? row.uom);
-      if (!unit || !product || !productName) {
-        throw Object.assign(new Error('DataHub có dòng chi phí thiếu định danh đơn vị/QLNB/tên hàng; từ chối ghi chữ ký không đầy đủ.'), {
-          status: 502, code: 'COST_SYNC_LINE_IDENTITY_MISSING', empCode,
-        });
+      const missingFields = [!unit && 'unit', !product && 'product', !productName && 'productName', !uom && 'uom'].filter(Boolean);
+      if (missingFields.length) {
+        exclusions.push({ code: 'COST_SYNC_LINE_IDENTITY_MISSING', reason: 'missing_line_identity', empCode, rowIndex, missingFields });
+        continue;
       }
       const values = costColumns.map((key) => {
         const raw = row?.[key];
@@ -90,7 +94,11 @@ function lineSignatures(employees, costColumns) {
       signatures[key] = signatures[key] == null || signatures[key] === signature ? signature : 'XUNG_DOT';
     }
   }
-  return signatures;
+  return { signatures, exclusions, sourceRows, includedRows: sourceRows - exclusions.length };
+}
+
+function lineSignatures(employees, costColumns) {
+  return collectLineSignatures(employees, costColumns).signatures;
 }
 const pairSignatures = lineSignatures;
 
@@ -198,7 +206,21 @@ async function syncPeriod({
   }
 
   const template = employeeCostTemplates.resolveTemplate(codes[0]);
-  const signatures = lineSignatures(mergedEmployees, template.costColumns || []);
+  const identity = collectLineSignatures(mergedEmployees, template.costColumns || []);
+  const { signatures, exclusions, sourceRows, includedRows } = identity;
+  const exclusionRate = sourceRows ? exclusions.length / sourceRows : 0;
+  if (!includedRows || exclusionRate > MAX_LINE_EXCLUSION_RATE) {
+    const code = !includedRows ? 'COST_SYNC_NO_IDENTIFIED_LINES' : 'COST_SYNC_LINE_EXCLUSION_RATE_EXCEEDED';
+    const failure = { code, sourceRows, includedRows, excludedRows: exclusions.length, exclusionRate, threshold: MAX_LINE_EXCLUSION_RATE };
+    writeAudit({ at, actor: who, period, ok: false, requested: codes.length,
+      fetched: Object.keys(employees).length, failures: [...failures, failure],
+      lineIdentity: { ...failure, exceptions: exclusions } }, { store });
+    throw Object.assign(new Error(!includedRows
+      ? 'Không có dòng chi phí nào đủ định danh để lập chữ ký; giữ nguyên kho hiện tại.'
+      : `Tỷ lệ dòng chi phí thiếu định danh ${(exclusionRate * 100).toFixed(2)}% vượt ngưỡng ${(MAX_LINE_EXCLUSION_RATE * 100).toFixed(2)}%; giữ nguyên kho hiện tại.`), {
+      status: 502, code, sourceRows, includedRows, exclusions, exclusionRate, threshold: MAX_LINE_EXCLUSION_RATE,
+    });
+  }
   const diff = diffSignatures(previous?.lineSignatures || previous?.pairSignatures, signatures);
 
   rows[period] = { period, fetchedAt: at, fetchedBy: who, sourceVersion: null, employees: mergedEmployees, lineSignatures: signatures };
@@ -210,9 +232,12 @@ async function syncPeriod({
     ok: true, period, requested: codes.length, fetched: Object.keys(employees).length, written: true,
     stored: storedCodes.length, missing, complete: missing.length === 0, gained: gained.length,
     fetchedAt: at, rowCount: Object.keys(signatures).length, pairCount: Object.keys(signatures).length, diff, failures,
+    lineIdentity: { sourceRows, includedRows, excludedRows: exclusions.length, exclusionRate,
+      threshold: MAX_LINE_EXCLUSION_RATE, exceptions: exclusions },
   };
   writeAudit({ at, actor: who, period, ok: true, requested: codes.length, fetched: summary.fetched,
-    stored: summary.stored, missing, complete: summary.complete, rowCount: summary.rowCount, diff, failures }, { store });
+    stored: summary.stored, missing, complete: summary.complete, rowCount: summary.rowCount, diff, failures,
+    lineIdentity: summary.lineIdentity }, { store });
   return summary;
 }
 
@@ -227,7 +252,7 @@ function listAudit({ store = persist, limit = 20 } = {}) {
 }
 
 module.exports = {
-  FILE, AUDIT_FILE, MAX_PERIODS,
-  statusOf, listStatus, readEmployee, lineSignatures, pairSignatures, diffSignatures,
+  FILE, AUDIT_FILE, MAX_PERIODS, MAX_LINE_EXCLUSION_RATE,
+  statusOf, listStatus, readEmployee, collectLineSignatures, lineSignatures, pairSignatures, diffSignatures,
   syncPeriod, rosterFromEnv, listAudit,
 };

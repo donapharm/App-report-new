@@ -13,7 +13,7 @@ const memStore = () => {
   return { data, load: (n, d) => data[n] ?? d, save: (n, v) => { data[n] = v; } };
 };
 const NOW = () => '2026-08-08T15:00:00.000+07:00';
-const row = (unit, c5, rates) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, ...rates });
+const row = (unit, c5, rates) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, c25: 'Viên', ...rates });
 const COLS = [{ key: 'c41', label: 'C41' }, { key: 'c43', label: 'C43' }];
 const okFetch = (byEmp) => async (empCode) => {
   const rows = byEmp[empCode];
@@ -160,9 +160,62 @@ test('17 thuốc cùng đơn vị + QLNB vẫn là 17 dòng chữ ký DataHub, k
   assert.equal(Object.keys(sync.lineSignatures(employees, ['c41'])).length, 17);
 });
 
-test('dòng thiếu tên hàng fail-closed, không biến mất lặng lẽ khỏi chữ ký', () => {
-  assert.throws(() => sync.lineSignatures({ DN005: { rows: [{ c7: '002.NT', c5: 'QL01', c41: 1 }] } }, ['c41']),
-    (error) => error.code === 'COST_SYNC_LINE_IDENTITY_MISSING');
+test('dòng thiếu định danh bị loại riêng và không biến mất lặng lẽ khỏi chữ ký', () => {
+  const result = sync.collectLineSignatures({ DN005: { rows: [
+    { c7: '002.NT', c5: 'QL01', c16: 'Đủ', c25: 'Viên', c41: 1 },
+    { c7: '002.NT', c5: 'QL02', c41: 2 },
+  ] } }, ['c41']);
+  assert.equal(Object.keys(result.signatures).length, 1);
+  assert.equal(result.sourceRows, 2);
+  assert.equal(result.includedRows, 1);
+  assert.deepEqual(result.exclusions, [{
+    code: 'COST_SYNC_LINE_IDENTITY_MISSING', reason: 'missing_line_identity', empCode: 'DN005', rowIndex: 1,
+    missingFields: ['productName', 'uom'],
+  }]);
+});
+
+test('sync loại riêng <=1% dòng hỏng, vẫn ghi kho và audit đủ nguồn = đưa vào + loại', async () => {
+  const store = memStore();
+  const rows = Array.from({ length: 101 }, (_, index) => row('120.HTNT', `G1.${index}`, {
+    c16: `Thuốc ${index}`, c25: 'Viên', c41: index,
+  }));
+  delete rows[100].c16;
+  const result = await sync.syncPeriod({
+    period: '2026-08', empCodes: ['DN001'], actor: 'CEO', store, pauseMs: 0,
+    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows }] } }),
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.lineIdentity.sourceRows, 101);
+  assert.equal(result.lineIdentity.includedRows, 100);
+  assert.equal(result.lineIdentity.excludedRows, 1);
+  assert.equal(result.lineIdentity.sourceRows, result.lineIdentity.includedRows + result.lineIdentity.excludedRows);
+  assert.equal(result.lineIdentity.exceptions[0].code, 'COST_SYNC_LINE_IDENTITY_MISSING');
+  assert.equal(store.data.cost_rates_sync_audit[0].lineIdentity.exceptions.length, 1);
+});
+
+test('sync fail-closed toàn lượt khi dòng hỏng vượt 1% và giữ nguyên kho', async () => {
+  const store = memStore();
+  const before = { '2026-08': { marker: 'GOOD' } };
+  store.data.cost_rates_local = before;
+  const rows = [
+    row('120.HTNT', 'G1.OK', { c16: 'Đủ', c25: 'Viên', c41: 1 }),
+    { c7: '120.HTNT', c5: 'G1.BAD', c41: 2 },
+  ];
+  await assert.rejects(() => sync.syncPeriod({
+    period: '2026-08', empCodes: ['DN001'], actor: 'CEO', store, pauseMs: 0,
+    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows }] } }),
+  }), (error) => error.code === 'COST_SYNC_LINE_EXCLUSION_RATE_EXCEEDED' && error.exclusionRate === 0.5);
+  assert.deepEqual(store.data.cost_rates_local, before);
+  assert.equal(store.data.cost_rates_sync_audit[0].ok, false);
+});
+
+test('sync fail-closed khi không còn dòng nào đủ định danh', async () => {
+  const store = memStore();
+  await assert.rejects(() => sync.syncPeriod({
+    period: '2026-08', empCodes: ['DN001'], actor: 'CEO', store, pauseMs: 0,
+    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ c7: '120.HTNT', c5: 'G1.BAD', c41: 2 }] }] } }),
+  }), (error) => error.code === 'COST_SYNC_NO_IDENTIFIED_LINES');
+  assert.equal(store.data.cost_rates_local, undefined);
 });
 
 test('chặn đầu vào rác: kỳ sai, đội rỗng, thiếu người thao tác', async () => {
@@ -196,7 +249,7 @@ test('nghỉ một nhịp giữa các lượt gọi — nguồn kịp thu hồi 
     sleep: async (ms) => { clock += ms; },
     fetchImpl: async () => {
       gaps.push(clock - last); last = clock;
-      return { outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c16: 'Thuốc 1', c41: 1 }] }] } };
+      return { outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c16: 'Thuốc 1', c25: 'Viên', c41: 1 }] }] } };
     },
   });
   assert.equal(result.ok, true);
@@ -212,7 +265,7 @@ test('pauseMs = 0 thì không nghỉ — giữ đường chạy nhanh cho test v
     now: () => '2026-08-08T23:00:00.000+07:00',
     pauseMs: 0,
     sleep: async () => { slept += 1; },
-    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c16: 'Thuốc 1', c41: 1 }] }] } }),
+    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-08', columns: [{ key: 'c41' }], rows: [{ unit_code: 'U1', c5: 'P1', c16: 'Thuốc 1', c25: 'Viên', c41: 1 }] }] } }),
   });
   assert.equal(slept, 0);
 });

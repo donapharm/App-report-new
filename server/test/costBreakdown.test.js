@@ -27,7 +27,7 @@ const c44MoneyOf = (revenueNoVat) => revenueNoVat * RATES.c43 / 100 * RATES.c44 
 const spentC47Of = (revenueNoVat) => SPENT_C47_PCT / 100 * revenueNoVat;
 const spentAllOf = (revenueNoVat) => spentC47Of(revenueNoVat) + c44MoneyOf(revenueNoVat);
 
-const rateRow = (unit, c5, rates = RATES) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, ...rates });
+const rateRow = (unit, c5, rates = RATES) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, c25: 'Viên', ...rates });
 const COLS = Object.keys(RATES).map((key) => ({ key }));
 const seed = async (store, period, byEmp) => sync.syncPeriod({
   period, empCodes: Object.keys(byEmp), actor: 'CEO',

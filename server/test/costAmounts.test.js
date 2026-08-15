@@ -14,7 +14,7 @@ const memStore = () => {
 
 // ‼ C47 = C32 − 13 cột (LOẠI C44) — công thức gốc file CP_TOTAL V29.9 cột AU.
 // CEO đính chính 09/08/2026: C47 là phần CÒN LẠI, không phải tổng cộng lại.
-const rateRow = (unit, c5, rates) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, ...rates });
+const rateRow = (unit, c5, rates) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, c25: 'Viên', ...rates });
 // Ngân sách C32 = 10%; đã chia: c36 1 + c41 2 + c43 3 + c45 0,5 = 6,5 ⇒ C47 còn 3,5%.
 // c44 = 50 cố tình để RẤT LỚN: nếu ai đó lỡ đưa C44 vào công thức thì test vỡ ngay.
 const FULL = {

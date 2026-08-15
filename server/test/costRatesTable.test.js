@@ -12,7 +12,7 @@ const memStore = () => {
   const data = {};
   return { data, load: (n, d) => data[n] ?? d, save: (n, v) => { data[n] = v; } };
 };
-const row = (unit, c5, rates) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, ...rates });
+const row = (unit, c5, rates) => ({ unit_code: unit, c5, c16: `Hàng ${c5}`, c25: 'Viên', ...rates });
 const COLS = [{ key: 'c41' }, { key: 'c43' }, { key: 'c47' }]; // c47 phải bị chặn
 const seed = async (store) => sync.syncPeriod({
   period: '2026-08', empCodes: ['DN001', 'DN002'], actor: 'CEO',
