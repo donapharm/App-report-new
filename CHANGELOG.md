@@ -1,3 +1,16 @@
+### 2026-08-15 14:25 (giờ VN) — ✅ Duyệt SPEC pin trước khoá kỳ; T08 đã pin nhưng serve vẫn tắt
+
+- `SPEC_PIN_BEFORE_CLOSE.md` được duyệt: mục tiêu pin trước 23:00 ngày 03 tháng sau;
+  báo động đỏ từ 00:00 ngày 04; timer chỉ probe, không tự pin; pin phải kèm success
+  key của probe; source generation đổi giữa chừng thì dừng fail-closed.
+- T08 đã pin 21/21 từ nguồn mạng, exact `2026-08`, cùng `V31.5`; serve snapshot vẫn
+  OFF. Việc pin lại sau sửa nguồn vẫn cần Gate 2 riêng.
+- Acceptance còn BLOCK cho serve vì `revenueRecon.balanced=false`, gap `1.795.600đ`.
+  Điều tra read-only tách rõ: 4 dòng DN021 thiếu tỷ lệ do lệch mã QLNB; gap là một
+  dòng `UNALLOCATED` khác có mã gốc `VP018`. Xem `T08_GAP_DN021.md`.
+- Kế hoạch tách LKG 377 MB theo kỳ chỉ ở mức proposal, chưa thi hành. Xem
+  `PLAN_CATALOG_LKG_BY_PERIOD.md`.
+
 ### 2026-08-13 12:40 (giờ VN) — 🔁 Hai lần deploy tốt bị rollback bởi cùng một ngưỡng sai của tôi; duyệt fb616d1
 
 **Tin nhắn chéo nhau:** bot re-deploy `3a3a47d` lúc 11:46, rollback 12:02 — vẫn theo
