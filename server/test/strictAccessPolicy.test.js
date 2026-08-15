@@ -53,6 +53,17 @@ test('VP018 chỉ được GET hai tab doanh thu và đúng ba export tường m
 test('auth từ chối phát token cho denylist và chặn route ngoài doanh thu của VP018', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reportnew-strict-access-'));
   const oldDir = process.env.AUTH_DATA_DIR;
+  // `requireAuth` deliberately revalidates every session against the employee
+  // directory. This test owns the auth files but used to inherit users.json from
+  // whichever worktree/release happened to run it: a PROD data symlink passed,
+  // while a clean Git worktree rejected VP018 as removed_from_directory. Pin the
+  // one directory record this policy test needs; production directory behaviour
+  // is covered separately by store/auth integration tests.
+  const employeeStore = require('../src/store');
+  const oldFindUserByCode = employeeStore.findUserByCode;
+  employeeStore.findUserByCode = (code) => String(code || '').toUpperCase() === 'VP018'
+    ? { emp_code: 'VP018', name: 'VP018', role: 'sale', phone: null }
+    : oldFindUserByCode(code);
   process.env.AUTH_DATA_DIR = dir;
   try {
     fs.writeFileSync(path.join(dir, 'sessions.json'), JSON.stringify([
@@ -108,6 +119,7 @@ test('auth từ chối phát token cho denylist và chặn route ngoài doanh th
     }
     assert.equal(invokeBoundary('/api/export/revenue_report.pdf?ky=08.2026').nextCalled, true, 'GET allowlist đi tiếp tới route');
   } finally {
+    employeeStore.findUserByCode = oldFindUserByCode;
     if (oldDir === undefined) delete process.env.AUTH_DATA_DIR;
     else process.env.AUTH_DATA_DIR = oldDir;
     fs.rmSync(dir, { recursive: true, force: true });
