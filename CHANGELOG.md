@@ -7520,3 +7520,12 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Thêm fragment memo có hậu kiểm TOCTOU, TTL/chủ động thả RAM và cap 2 kỳ; range
   tuần tự đọc index một lần rồi thả từng fragment. Benchmark fixture 41,94 MB:
   cold 588,162 ms, hot 0,406 ms. Cờ vẫn mặc định OFF; chưa deploy/dựng live.
+
+# 2026-08-15 — Catalog LKG Phase 1 live materialization, read flag still OFF
+
+- Dựng offline và công bố atomic 9 fragment T01–T09 dưới `catalog_lkg/v1`;
+  369.419.591 byte gồm index, index SHA-256 `801cfaabe1311eb08b3aee03bf39c093baef70b8bdc15202d5b4849106c15f35`.
+- Checksum/envelope/source identity/mode PASS. T04–T09 đủ metadata freshness;
+  T01–T03 fail-closed `CATALOG_PERIOD_STALE` do monolith index không còn metadata.
+- Không bật cờ: `dedce8a` chưa có shadow compare độc lập, nên không thể chạy cửa sổ
+  24h/200 lượt chỉ bằng toggle hiện tại. Cần Gate 1 bổ sung shadow mode trước.
