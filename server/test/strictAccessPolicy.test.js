@@ -55,6 +55,22 @@ test('VP018 chỉ được GET hai tab doanh thu, Cơ số thầu và đúng ba 
     'route CST phải dùng scope riêng; không được nới scope chung của VP018');
 });
 
+test('quyền đọc toàn công ty của doanh thu và CST được cấp độc lập', () => {
+  const revenueOnly = 'QA_REVENUE_ONLY';
+  const cstOnly = 'QA_CST_ONLY';
+  policy.COMPANY_REVENUE_READ_EMP_CODES.add(revenueOnly);
+  policy.COMPANY_CST_READ_EMP_CODES.add(cstOnly);
+  try {
+    assert.equal(policy.canReadAllRevenue(revenueOnly), true);
+    assert.equal(policy.canReadAllCst(revenueOnly), false, 'cấp doanh thu không được ngầm mở CST');
+    assert.equal(policy.canReadAllRevenue(cstOnly), false, 'cấp CST không được ngầm mở doanh thu');
+    assert.equal(policy.canReadAllCst(cstOnly), true);
+  } finally {
+    policy.COMPANY_REVENUE_READ_EMP_CODES.delete(revenueOnly);
+    policy.COMPANY_CST_READ_EMP_CODES.delete(cstOnly);
+  }
+});
+
 test('auth từ chối phát token cho denylist và chặn route ngoài doanh thu của VP018', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reportnew-strict-access-'));
   const oldDir = process.env.AUTH_DATA_DIR;

@@ -2122,7 +2122,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
   employeeCostWarmActive = true;
   try {
   const startedAt = Date.now();
-  // User requests retain FAST_TIMEOUT_MS=2s when a snapshot exists. Detached warm
+  // User requests use the bounded/configurable fast timeout when a snapshot exists. Detached warm
   // gets a wider but globally bounded budget because large DataHub payloads can
   // legitimately need 15s; it must not restart that budget per employee/stage.
   const deadlineAt = startedAt + EMPLOYEE_COST_BACKGROUND_DEADLINE_MS;

@@ -14,11 +14,12 @@ const credentials = {
   employeeCostKeys: 'DN001=employee-cost-key-1234', backoffMs: [],
 };
 
-test('timeout đường nhanh mặc định 6 giây, cấu hình chỉ nhận biên an toàn', () => {
-  assert.equal(employeeCost.DEFAULT_FAST_TIMEOUT_MS, 6000);
-  assert.equal(employeeCost.configuredFastTimeoutMs(undefined), 6000);
+test('timeout đường nhanh mặc định 3,5 giây, cấu hình chỉ nhận biên an toàn', () => {
+  assert.equal(employeeCost.DEFAULT_FAST_TIMEOUT_MS, 3500);
+  assert.equal(employeeCost.configuredFastTimeoutMs(undefined), 3500);
   assert.equal(employeeCost.configuredFastTimeoutMs('9000'), 9000);
-  for (const invalid of ['x', '2000', '15001', '6000.5']) assert.equal(employeeCost.configuredFastTimeoutMs(invalid), 6000);
+  assert.equal(employeeCost.configuredFastTimeoutMs('2000'), 2000, 'giữ được cấu hình cũ để rollback/đối chứng');
+  for (const invalid of ['x', '1000', '15001', '6000.5']) assert.equal(employeeCost.configuredFastTimeoutMs(invalid), 3500);
 });
 
 test('nguồn trả sau 1,9 giây vẫn nhận số tươi, không rơi về ok_stale_rates', async () => {
@@ -47,6 +48,7 @@ test('fallback ghi timing an toàn; refresh nền single-flight ghi snapshot m�
     fetchImpl: async () => {
       calls += 1;
       if (calls === 1) return { ok: false, status: 503, json: async () => ({}) };
+      await new Promise((resolve) => setTimeout(resolve, 1900));
       return { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-08', to: '2026-08', columns: COLUMNS, rows: ROWS }) };
     },
   });
@@ -59,6 +61,14 @@ test('fallback ghi timing an toàn; refresh nền single-flight ghi snapshot m�
     assert.deepEqual(entry.range, { from: '2026-08', to: '2026-08', months: ['2026-08'] });
     assert.equal(typeof entry.timing.elapsedMs, 'number'); assert.equal(Object.hasOwn(entry, 'payload'), false);
   }
+  assert.ok(audits[1].timing.elapsedMs >= 1850, `refresh nền phải chờ nguồn thật, đo ${audits[1].timing.elapsedMs}ms`);
+  const nextRead = await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-08', to: '2026-08', ...credentials, rateSnapshotStore: store,
+    backgroundRefresh: false,
+    fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }),
+  });
+  assert.equal(nextRead.outcome, 'ok_stale_rates');
+  assert.equal(nextRead.payload.periods[0].rows[0].c36, 8, 'lượt đọc kế tiếp phải thấy snapshot mới, không nằm lì ở số 7');
 });
 
 test('‼ nguồn kẹt mà đã có bản lưu ⇒ VẪN CÓ SỐ, gắn nhãn số cũ', async () => {

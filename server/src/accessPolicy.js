@@ -12,7 +12,11 @@ const BLOCKED_LOGIN_EMP_CODES = new Set([
 
 // VP018 chỉ được xem hai tab doanh thu và tab Cơ số thầu. Backend là cổng quyết định cuối cùng;
 // frontend chỉ dùng access profile để không hiện đường điều hướng sai quyền.
-const REVENUE_ONLY_EMP_CODES = new Set(['VP018']);
+const COMPANY_REVENUE_READ_EMP_CODES = new Set(['VP018']);
+const COMPANY_CST_READ_EMP_CODES = new Set(['VP018']);
+// Tên cũ chỉ còn đại diện hồ sơ điều hướng hạn chế; quyền đọc dữ liệu toàn công ty
+// phải kiểm từng allowlist riêng, không được suy CST từ quyền doanh thu.
+const REVENUE_ONLY_EMP_CODES = COMPANY_REVENUE_READ_EMP_CODES;
 const REVENUE_ONLY_GET_PATHS = new Set([
   '/me',
   '/periods',
@@ -44,11 +48,13 @@ function accessProfileFor(sessionOrCode) {
 }
 
 function canReadAllRevenue(sessionOrCode) {
-  return accessProfileFor(sessionOrCode) === 'revenue_only';
+  const code = typeof sessionOrCode === 'object' ? sessionOrCode?.emp_code : sessionOrCode;
+  return COMPANY_REVENUE_READ_EMP_CODES.has(normalizeEmpCode(code));
 }
 
 function canReadAllCst(sessionOrCode) {
-  return accessProfileFor(sessionOrCode) === 'revenue_only';
+  const code = typeof sessionOrCode === 'object' ? sessionOrCode?.emp_code : sessionOrCode;
+  return COMPANY_CST_READ_EMP_CODES.has(normalizeEmpCode(code));
 }
 
 function normalizeApiPath(value) {
@@ -71,6 +77,8 @@ function isRequestAllowed(session, { method, path } = {}) {
 
 module.exports = {
   BLOCKED_LOGIN_EMP_CODES,
+  COMPANY_REVENUE_READ_EMP_CODES,
+  COMPANY_CST_READ_EMP_CODES,
   REVENUE_ONLY_EMP_CODES,
   REVENUE_ONLY_GET_PATHS,
   normalizeEmpCode,

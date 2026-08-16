@@ -18,10 +18,10 @@ const DEFAULT_BACKOFF_MS = Object.freeze([2000, 4000]);
 // Nguồn kẹt là NV ngồi nhìn màn hình quay ngần ấy giây rồi mới thấy lỗi — đúng cái
 // CEO gọi là "kẹt". Khi ĐÃ CÓ bản lưu tỷ lệ thì không có lý do gì phải chờ như vậy:
 // hỏi nhanh, không hỏi lại; quá hạn thì trả số cũ NGAY rồi làm tươi ngầm phía sau.
-const DEFAULT_FAST_TIMEOUT_MS = 6000;
+const DEFAULT_FAST_TIMEOUT_MS = 3500;
 function configuredFastTimeoutMs(value = process.env.APP_REPORT_EMPLOYEE_COST_FAST_TIMEOUT_MS) {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 3000 && parsed <= 15000
+  return Number.isInteger(parsed) && parsed >= 1500 && parsed <= 15000
     ? parsed
     : DEFAULT_FAST_TIMEOUT_MS;
 }
