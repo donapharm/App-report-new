@@ -11,6 +11,7 @@ const DQ_CACHE_FILE = process.env.EMPLOYEE_COST_DQ_CATALOG_CACHE_FILE
   || (process.env.CATALOG_MANAGEMENT_CACHE_FILE ? `${CACHE_FILE}.dq.json` : path.join(__dirname, '..', 'data', 'employee_cost_dq_catalog_lkg.json'));
 const CACHE_INDEX_FILE = process.env.CATALOG_MANAGEMENT_CACHE_INDEX_FILE || `${CACHE_FILE}.index.json`;
 const CACHE_SCHEMA_VERSION = 2;
+const CATALOG_PROJECTION_VERSION = 2;
 const DQ_CACHE_SCHEMA_VERSION = 2;
 const DEFAULT_TIMEOUT_MS = 6500;
 const TYPE_LABELS = { unit_qlnb: 'Đơn vị + Mã QLNB', unit: 'Đơn vị', group: 'Nhóm ưu tiên', route: 'Tuyến', iit: 'Mã QLNB', special: 'Hàng cần đẩy', all: 'Toàn bộ' };
@@ -241,6 +242,7 @@ const HAN_BAN_PHAN_TICH_MS = 10_000;  // đủ gộp một chùm request, không
 const HAN_SNAPSHOT_MS = 60_000;
 let nhoLkg = null;             // { print, value, hetHanLuc } — bản phân tích, sống ngắn
 const nhoSnapshot = new Map(); // `${print}|${period}` -> snapshot đã kiểm, đã đóng băng
+let projectionBuildsForTests = 0;
 
 /* Căn cước file: thêm `dev` (khác thiết bị thì inode trùng nhau là chuyện thường) và
  * dùng nano giây dạng bigint — mili giây không phân biệt được hai lần ghi sát nhau. */
@@ -309,6 +311,21 @@ function docLkg() {
   return { print: null, value: null }; // đổi liên tục ⇒ không kết luận, để người gọi dựng lại
 }
 
+function projectLegacySnapshot(snapshot) {
+  const version = Number(snapshot?.projectionVersion || 0);
+  if (version >= CATALOG_PROJECTION_VERSION) return snapshot;
+  if (!snapshot || !Array.isArray(snapshot.rows) || !Array.isArray(snapshot.catalog)) return snapshot;
+  projectionBuildsForTests += 1;
+  const projected = {
+    ...snapshot,
+    rows: enrichRowsFromCatalog(snapshot.rows, snapshot.catalog),
+    projectionVersion: CATALOG_PROJECTION_VERSION,
+  };
+  assertCatalogFieldPolicy(projected, `catalogProjection.${snapshot.period || 'legacy'}`);
+  assertCatalogSnapshotContract(projected, `catalogProjection.${snapshot.period || 'legacy'}`);
+  return projected;
+}
+
 function readCache(period) {
   try {
     // Phase 1 dual-read is dark by default. A verified exact-period sidecar is
@@ -320,7 +337,7 @@ function readCache(period) {
         assertCatalogSnapshotContract(payload.snapshot, `catalogPeriodLkg.${period}`);
       } });
       if (sidecar.used) {
-        const snapshot = sidecar.payload.snapshot;
+        const snapshot = projectLegacySnapshot(sidecar.payload.snapshot);
         return dongBangSau(snapshot);
       }
     }
@@ -343,14 +360,19 @@ function readCache(period) {
     const { print, value } = docLkg();
     if (!value) return null;
     const khoaSnapshot = `${print}|${period || ''}`;
-    const snapshot = value?.snapshots && period
+    const storedSnapshot = value?.snapshots && period
       ? value.snapshots[period] || null
       : value && Array.isArray(value.rows) && (!period || value.period === period) ? value : null;
+    const snapshot = projectLegacySnapshot(storedSnapshot);
     if (snapshot) {
       // Validate only the requested snapshot. Scanning every retained month makes a
       // cold DQ request synchronously walk hundreds of MB and blocks even /health.
       assertCatalogFieldPolicy(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
       assertCatalogSnapshotContract(snapshot, `catalogLkg.${period || snapshot.period || 'legacy'}`);
+    }
+    if (canCuocFile(CACHE_FILE) !== print) {
+      quenLkg();
+      return null;
     }
     // Nhớ cả `null`: "kỳ này không có trong LKG" cũng là kết luận, khỏi phân tích lại.
     const daDongBang = dongBangSau(snapshot);
@@ -484,9 +506,10 @@ function writeCacheAtomic(snapshot) {
     // A reset/restore may bring back an old poisoned snapshot. Never carry it
     // into the next LKG: retain only snapshots that pass the current policy.
     const snapshots = safeRestoredSnapshots(restoredSnapshots);
-    snapshots[snapshot.period] = snapshot;
+    snapshots[snapshot.period] = { ...snapshot, projectionVersion: CATALOG_PROJECTION_VERSION };
     const periods = Object.keys(snapshots).sort().slice(-18);
     const value = {
+      projectionVersion: CATALOG_PROJECTION_VERSION,
       source: 'data-hub-lkg', version: snapshot.meta.version, checksum: snapshot.meta.checksum,
       updatedAt: snapshot.meta.updatedAt, snapshots: Object.fromEntries(periods.map((p) => [p, snapshots[p]])),
     };
@@ -848,7 +871,7 @@ async function remoteSnapshot(period) {
   const upstreamChecksum = payload.checksum || payload.meta?.checksum;
   const syncedAt = new Date().toISOString();
   const snapshot = {
-    rows, catalog, history, period, readOnly: false,
+    rows, catalog, history, period, readOnly: false, projectionVersion: CATALOG_PROJECTION_VERSION,
     meta: { source: 'data-hub', version, sourceVersion, checksum: String(upstreamChecksum || checksum({ rows, catalog })), updatedAt: payload.updatedAt || syncedAt, lastSyncAt: syncedAt, stale: false, readOnly: false, message: 'Đã đồng bộ Data Hub.' },
   };
   writeCacheAtomic(snapshot);
@@ -1100,7 +1123,10 @@ module.exports = {
   readCacheForTests: readCache,
   // Ca kiểm cần soi tham chiếu có được THẢ thật không, không chỉ có hết hạn không.
   conGiuBanPhanTichForTests: () => nhoLkg !== null,
+  projectionBuildsForTests: () => projectionBuildsForTests,
+  resetProjectionBuildsForTests: () => { projectionBuildsForTests = 0; },
   writeCacheForTests: writeCacheAtomic, configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, assignmentScopeKey, catalogScopeKey, catalogLineKey, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint,
+  CATALOG_PROJECTION_VERSION,
   schedulePeriodLkgShadow: (response, period, snapshot) => catalogPeriodLkg.scheduleShadowAfterResponse(
     response, period, snapshot, dataQualityProjection(snapshot, period), { currentSource: currentCatalogSource },
   ),
