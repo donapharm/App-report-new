@@ -79,7 +79,7 @@ function CstCard({ c, i, duplicateName }) {
       </div>
       <Bar value={Math.max(0, Math.min(100, pct))} max={100} tone={pct < 10 ? 'danger' : (pct < 30 || pct > 80 ? 'warn' : 'ok')} />
       <div className="progress-caption">Đã bán {fmtPct(Math.max(0, +(100 - pct).toFixed(1)))} · còn {fmtPct(pct)}</div>
-      <div className="detail-entity"><UnitLabel code={c.unit_code} name={c.unit_name} /><span>NV {c.emp_code || c.sales_emps || '—'}</span></div>
+      <div className="detail-entity"><UnitLabel code={c.unit_code} name={c.unit_name} /><span className="cst-employee-badge">NV {pairText(c.emp_code || c.sales_emps, c.emp_name)}</span></div>
       <div className="list-card-meta">
         <span className={'pill ' + pctTone(pct)}>Còn {c.remain_pct}%</span>
         <span className="pill muted-pill">Nhóm {groupOf(c.iit_code) || '—'}</span>
@@ -99,8 +99,8 @@ function CstCard({ c, i, duplicateName }) {
       <div className="cst-metrics">
         <span>Giá trúng thầu <b>{money(c.bid_price)}</b></span>
         <span>CST <b>{n(c.bid_qty_initial)}</b></span>
-        <span>SL còn <b>{n(c.remain_qty)}</b></span>
-        <span>% còn <b>{fmtPct(c.remain_pct)}</b></span>
+        <span className="cst-remaining-metric">CST còn lại <b>{n(c.remain_qty)}</b></span>
+        <span className={`cst-percent-metric ${pctTone(pct)}`}>% còn lại <b>{fmtPct(c.remain_pct)}</b></span>
         <span>SL bán <b>{n(c.sold_qty)}</b></span>
         <span>TT bán <b>{money(c.sold_amount)}</b></span>
         <span className="wide-metric">Nguồn <b>{sourceLabel(c)}</b></span>
@@ -194,7 +194,7 @@ export default function TenderQuota({ me }) {
           <input className="filter-quick" aria-label="Tìm kiếm thông minh đa chiều" value={filters.q} onChange={(e) => { const q = e.target.value; setFilter('q', q); if (q.trim()) setView('flat'); }} placeholder="Tìm thông minh: thuốc, QLNB, đơn vị, hoạt chất, NV, nhà thầu…" />
           <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn lọc' : '▾ Bộ lọc'}{activeCount ? ` (${activeCount})` : ''}</button>
           {activeCount > 0 && <button className="btn ghost" onClick={reset}>Xoá lọc</button>}
-          <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>
+          {me.access_profile !== 'revenue_only' && <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>}
         </div>
         {open && (
           <div className="filter-body">

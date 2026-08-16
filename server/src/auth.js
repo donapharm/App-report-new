@@ -691,9 +691,9 @@ function telegramConfirm({ login_code, telegram_id, secret_bot }) {
 /* ===================== MIDDLEWARE + SCOPE ===================== */
 function revenueOnlyDenied(res) {
   return res.status(403).json({
-    error: 'Tài khoản này chỉ được xem Doanh thu và Doanh thu đầy đủ.',
+    error: 'Tài khoản này chỉ được xem Doanh thu, Doanh thu đầy đủ và Cơ số thầu.',
     code: 'REVENUE_ONLY_ACCESS',
-    allowed_tabs: ['revenue', 'revenueFull'],
+    allowed_tabs: ['revenue', 'revenueFull', 'cst'],
   });
 }
 
@@ -779,9 +779,12 @@ function scopeOf(session) {
 }
 // VP018 là người kiểm tra doanh thu thay CEO: chỉ các route doanh thu gọi helper
 // này mới nhận company scope. `scopeOf` chung vẫn self-scope để một allowlist sai
-// trong tương lai không tự biến thành quyền đọc toàn công ty ngoài hai tab.
+// trong tương lai không tự biến thành quyền đọc toàn công ty ngoài route chuyên biệt.
 function revenueScopeOf(session) {
   return { empCode: accessPolicy.canReadAllRevenue(session) ? null : scopeOf(session).empCode };
+}
+function cstScopeOf(session) {
+  return { empCode: accessPolicy.canReadAllCst(session) ? null : scopeOf(session).empCode };
 }
 function sessionForUser(user) {
   if (!user) return null;
@@ -829,10 +832,11 @@ function requireCeo(req, res, next) {
 }
 
 module.exports = {
-  mockLogin, enforceAccessPolicyBoundary, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, revenueScopeOf, sessionForUser, getSession,
+  mockLogin, enforceAccessPolicyBoundary, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, revenueScopeOf, cstScopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, otpLoginEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   accessProfileFor: accessPolicy.accessProfileFor,
   canReadAllRevenue: accessPolicy.canReadAllRevenue,
+  canReadAllCst: accessPolicy.canReadAllCst,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm,

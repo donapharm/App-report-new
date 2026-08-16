@@ -10,7 +10,7 @@ const BLOCKED_LOGIN_EMP_CODES = new Set([
   'DN021', 'DN023',
 ]);
 
-// VP018 chỉ được xem hai tab doanh thu. Backend là cổng quyết định cuối cùng;
+// VP018 chỉ được xem hai tab doanh thu và tab Cơ số thầu. Backend là cổng quyết định cuối cùng;
 // frontend chỉ dùng access profile để không hiện đường điều hướng sai quyền.
 const REVENUE_ONLY_EMP_CODES = new Set(['VP018']);
 const REVENUE_ONLY_GET_PATHS = new Set([
@@ -19,7 +19,9 @@ const REVENUE_ONLY_GET_PATHS = new Set([
   '/filters',
   '/revenue',
   '/revenue/full',
-  // Export của đúng hai tab doanh thu. Liệt kê exact path, không wildcard;
+  '/cst',
+  // Export của đúng hai tab doanh thu. Tab CST chỉ đọc trên màn, không export.
+  // Liệt kê exact path, không wildcard;
   // CSV/PPTX và mọi export khác vẫn fail-closed.
   '/export/revenue.xlsx',
   '/export/revenue_report.xlsx',
@@ -42,6 +44,10 @@ function accessProfileFor(sessionOrCode) {
 }
 
 function canReadAllRevenue(sessionOrCode) {
+  return accessProfileFor(sessionOrCode) === 'revenue_only';
+}
+
+function canReadAllCst(sessionOrCode) {
   return accessProfileFor(sessionOrCode) === 'revenue_only';
 }
 
@@ -72,5 +78,6 @@ module.exports = {
   isLoginBlocked,
   accessProfileFor,
   canReadAllRevenue,
+  canReadAllCst,
   isRequestAllowed,
 };
