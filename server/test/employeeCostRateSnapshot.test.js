@@ -14,6 +14,53 @@ const credentials = {
   employeeCostKeys: 'DN001=employee-cost-key-1234', backoffMs: [],
 };
 
+test('timeout đường nhanh mặc định 6 giây, cấu hình chỉ nhận biên an toàn', () => {
+  assert.equal(employeeCost.DEFAULT_FAST_TIMEOUT_MS, 6000);
+  assert.equal(employeeCost.configuredFastTimeoutMs(undefined), 6000);
+  assert.equal(employeeCost.configuredFastTimeoutMs('9000'), 9000);
+  for (const invalid of ['x', '2000', '15001', '6000.5']) assert.equal(employeeCost.configuredFastTimeoutMs(invalid), 6000);
+});
+
+test('nguồn trả sau 1,9 giây vẫn nhận số tươi, không rơi về ok_stale_rates', async () => {
+  const store = memStore();
+  snap.write('DN001', '2026-08', { columns: COLUMNS, rows: [{ ...ROWS[0], c36: 7 }] }, { store });
+  const started = Date.now();
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-08', to: '2026-08', ...credentials, rateSnapshotStore: store,
+    fetchImpl: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1900));
+      return { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-08', to: '2026-08', columns: COLUMNS, rows: ROWS }) };
+    },
+  });
+  assert.equal(result.outcome, 'ok');
+  assert.equal(result.payload.periods[0].rows[0].c36, 8);
+  assert.ok(Date.now() - started >= 1850);
+});
+
+test('fallback ghi timing an toàn; refresh nền single-flight ghi snapshot mới', async () => {
+  const store = memStore(); const audits = [];
+  snap.write('DN001', '2026-08', { columns: COLUMNS, rows: [{ ...ROWS[0], c36: 7 }] }, { store });
+  let calls = 0;
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-08', to: '2026-08', ...credentials, rateSnapshotStore: store, awaitBackgroundRefresh: true,
+    fastPathAuditImpl: (entry) => audits.push(entry),
+    fetchImpl: async () => {
+      calls += 1;
+      if (calls === 1) return { ok: false, status: 503, json: async () => ({}) };
+      return { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-08', to: '2026-08', columns: COLUMNS, rows: ROWS }) };
+    },
+  });
+  assert.equal(result.outcome, 'ok_stale_rates');
+  assert.equal(calls, 2, 'một lượt nhanh + đúng một refresh nền');
+  assert.equal(snap.read('DN001', '2026-08', { store }).payload.rows[0].c36, 8, 'refresh nền phải thay snapshot cũ 7 bằng số mới 8');
+  assert.deepEqual(audits.map((x) => x.event), ['fast_path_fallback', 'background_refresh']);
+  for (const entry of audits) {
+    assert.equal(entry.empCode, 'DN001');
+    assert.deepEqual(entry.range, { from: '2026-08', to: '2026-08', months: ['2026-08'] });
+    assert.equal(typeof entry.timing.elapsedMs, 'number'); assert.equal(Object.hasOwn(entry, 'payload'), false);
+  }
+});
+
 test('‼ nguồn kẹt mà đã có bản lưu ⇒ VẪN CÓ SỐ, gắn nhãn số cũ', async () => {
   const store = memStore();
   const good = { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-07', to: '2026-07', columns: COLUMNS, rows: ROWS }) };
@@ -133,7 +180,10 @@ test('‼ đã có bản lưu ⇒ nguồn kẹt KHÔNG bắt người dùng ch�
   assert.equal(result.outcome, 'ok_stale_rates');
   assert.equal(waits.length, 1, 'chỉ hỏi MỘT lần, không hỏi lại 3 lần');
   assert.ok(waits[0] <= employeeCost.FAST_TIMEOUT_MS + 500, `chờ ${waits[0]}ms — phải cắt ở ${employeeCost.FAST_TIMEOUT_MS}ms`);
-  assert.ok(elapsed < 6000, `màn chờ ${elapsed}ms — phải nhanh hơn hẳn ngân sách 25 giây`);
+  assert.ok(
+    elapsed <= employeeCost.FAST_TIMEOUT_MS + 750,
+    `màn chờ ${elapsed}ms — phải nằm trong biên timeout nhanh đã cấu hình`,
+  );
 });
 
 test('chưa có bản lưu thì vẫn dùng ngân sách đầy đủ — không cắt ngắn cơ hội lấy số thật', async () => {

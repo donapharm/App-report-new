@@ -18,7 +18,14 @@ const DEFAULT_BACKOFF_MS = Object.freeze([2000, 4000]);
 // Nguồn kẹt là NV ngồi nhìn màn hình quay ngần ấy giây rồi mới thấy lỗi — đúng cái
 // CEO gọi là "kẹt". Khi ĐÃ CÓ bản lưu tỷ lệ thì không có lý do gì phải chờ như vậy:
 // hỏi nhanh, không hỏi lại; quá hạn thì trả số cũ NGAY rồi làm tươi ngầm phía sau.
-const FAST_TIMEOUT_MS = 2000;
+const DEFAULT_FAST_TIMEOUT_MS = 6000;
+function configuredFastTimeoutMs(value = process.env.APP_REPORT_EMPLOYEE_COST_FAST_TIMEOUT_MS) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 3000 && parsed <= 15000
+    ? parsed
+    : DEFAULT_FAST_TIMEOUT_MS;
+}
+const FAST_TIMEOUT_MS = configuredFastTimeoutMs();
 const VERIFIED_PREFETCH_MAX_AGE_MS = 2 * 60 * 1000;
 const backgroundRefreshInFlight = new Map();
 /* ‼ NGUỒN KẸT NHƯNG CÒN BẢN % ĐÃ LƯU ⇒ SỐ VẪN DÙNG ĐƯỢC (CEO 09/08/2026).
@@ -1278,7 +1285,7 @@ function auditFilters(value = {}) {
   return output;
 }
 
-function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, range, ratePolicy, event = 'view' }) {
+function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, range, ratePolicy, timing, event = 'view' }) {
   const rows = persist.load(AUDIT_FILE, []);
   const safeFilters = auditFilters(filters);
   const rangeFrom = normalizeMonth(range?.from);
@@ -1292,6 +1299,13 @@ function writeAudit({ actor, role, empCode, outcome, attempts, match, filters, r
     empCode: normEmp(empCode),
     outcome: String(outcome || 'unknown'),
     attempts: Number(attempts || 0),
+    ...(timing ? {
+      timing: {
+        elapsedMs: Math.max(0, Math.round(Number(timing.elapsedMs) || 0)),
+        timeoutMs: Math.max(0, Math.round(Number(timing.timeoutMs) || 0)),
+        phase: String(timing.phase || 'unknown').slice(0, 40),
+      },
+    } : {}),
     ...(rangeFrom && rangeTo ? { range: { from: rangeFrom, to: rangeTo } } : {}),
     ...(ratePolicy ? {
       ratePolicy: {
@@ -1497,13 +1511,21 @@ async function fetchEmployeeCost(empCode, options = {}) {
       fastPath = rateSnapshot.covers(empCode, months, snapshotOptions);
     } catch { fastPath = false; }
   }
-  const attemptOptions = fastPath ? { ...options, timeoutMs: FAST_TIMEOUT_MS, backoffMs: [] } : options;
+  const fastTimeout = configuredFastTimeoutMs(options.fastTimeoutMs);
+  const attemptOptions = fastPath ? { ...options, timeoutMs: fastTimeout, backoffMs: [] } : options;
 
+  const fastStartedAt = Date.now();
   const result = await fetchRawEmployeeCost(empCode, attemptOptions);
+  const fastElapsedMs = Date.now() - fastStartedAt;
 
   // Đường nhanh mà nguồn không kịp trả ⇒ dùng số cũ ngay, đồng thời làm tươi NGẦM
   // bằng ngân sách đầy đủ để lần sau có số mới. Lỗi nền không được nổi lên màn.
   if (fastPath && result.outcome !== 'ok' && options.backgroundRefresh !== false) {
+    const timingAudit = options.fastPathAuditImpl || writeAudit;
+    try {
+      timingAudit({ actor: 'SYSTEM', role: 'system', empCode, event: 'fast_path_fallback', outcome: result.outcome,
+        attempts: result.attempts, range: parseMonthRange(options), timing: { phase: 'fast_path', elapsedMs: fastElapsedMs, timeoutMs: fastTimeout } });
+    } catch { /* telemetry không được làm hỏng đường phục vụ */ }
     let refreshKey = normEmp(empCode);
     try {
       const range = parseMonthRange(options);
@@ -1511,12 +1533,23 @@ async function fetchEmployeeCost(empCode, options = {}) {
     } catch { /* un-ranged calls retain employee-only identity */ }
     let background = backgroundRefreshInFlight.get(refreshKey);
     if (!background) {
+      const backgroundStartedAt = Date.now();
       background = fetchRawEmployeeCost(empCode, options)
         .then((fresh) => {
           if (fresh.outcome === 'ok') rateSnapshot.remember(empCode, fresh.payload, snapshotOptions);
+          try {
+            timingAudit({ actor: 'SYSTEM', role: 'system', empCode, event: 'background_refresh', outcome: fresh.outcome,
+              attempts: fresh.attempts, range: parseMonthRange(options), timing: { phase: 'background_refresh', elapsedMs: Date.now() - backgroundStartedAt, timeoutMs: Number(options.timeoutMs || DEFAULT_TIMEOUT_MS) } });
+          } catch { /* telemetry không được làm hỏng refresh */ }
           return fresh;
         })
-        .catch(() => null)
+        .catch(() => {
+          try {
+            timingAudit({ actor: 'SYSTEM', role: 'system', empCode, event: 'background_refresh', outcome: 'error', attempts: 0,
+              range: parseMonthRange(options), timing: { phase: 'background_refresh', elapsedMs: Date.now() - backgroundStartedAt, timeoutMs: Number(options.timeoutMs || DEFAULT_TIMEOUT_MS) } });
+          } catch { /* telemetry không được làm hỏng refresh */ }
+          return null;
+        })
         .finally(() => { if (backgroundRefreshInFlight.get(refreshKey) === background) backgroundRefreshInFlight.delete(refreshKey); });
       backgroundRefreshInFlight.set(refreshKey, background);
     }
@@ -1699,6 +1732,8 @@ module.exports = {
   fetchRawEmployeeCost,
   rateSnapshot,
   FAST_TIMEOUT_MS,
+  DEFAULT_FAST_TIMEOUT_MS,
+  configuredFastTimeoutMs,
   resolveDataHubBaseUrl,
   getForSession,
 };
