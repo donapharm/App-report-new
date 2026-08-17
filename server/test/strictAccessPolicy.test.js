@@ -20,17 +20,16 @@ test('denylist khớp đúng 16 tài khoản CEO chỉ định', () => {
   for (const code of ['CEO', 'DN001', 'DN006', 'VP004', 'VP018']) assert.equal(policy.isLoginBlocked(code), false, code);
 });
 
-test('VP018 chỉ được GET hai tab doanh thu, Cơ số thầu và đúng ba export tường minh', () => {
+test('VP018 chỉ được GET hai tab doanh thu và đúng ba export tường minh', () => {
   const session = { emp_code: 'VP018', role: 'sale' };
   const allowed = [
     '/api/me', '/api/periods', '/api/filters?ky=08.2026',
     '/api/revenue?dimension=unit', '/api/revenue/full?ky=08.2026',
-    '/api/cst?remainMin=70',
     '/api/export/revenue.xlsx?ky=08.2026',
     '/api/export/revenue_report.xlsx?ky=08.2026',
     '/api/export/revenue_report.pdf?ky=08.2026',
   ];
-  assert.equal(policy.REVENUE_ONLY_GET_PATHS.size, 9, 'allowlist phải exact, không nở ngoài 9 path');
+  assert.equal(policy.REVENUE_ONLY_GET_PATHS.size, 8, 'allowlist phải exact, không nở ngoài 8 path');
   for (const route of allowed) assert.equal(policy.isRequestAllowed(session, { method: 'GET', path: route }), true, route);
 
   const forbidden = [
@@ -38,14 +37,13 @@ test('VP018 chỉ được GET hai tab doanh thu, Cơ số thầu và đúng ba 
     '/api/targets', '/api/catalog-management', '/api/catalog-cost-column-grants',
     '/api/export/revenue_full.xlsx', '/api/export/revenue_report.csv', '/api/export/revenue_report.pptx',
     '/api/export/overview.xlsx', '/api/dormant/gate',
-    '/api/cst/', '/api/cst/export', '/api/export/cst.xlsx',
     // Exact-path hardening: không canonicalize một biến thể thành allowlisted.
     '/api/revenue/', '/api//revenue', '/api/../me', '/api\\revenue',
     '/api/%72evenue', '/api/revenue#fragment', 'http://app-report.local/api/revenue',
   ];
   for (const route of forbidden) assert.equal(policy.isRequestAllowed(session, { method: 'GET', path: route }), false, route);
   for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
-    for (const route of ['/api/revenue', '/api/cst', '/api/export/revenue.xlsx', '/api/catalog-cost-column-grants/VP018']) {
+    for (const route of ['/api/revenue', '/api/export/revenue.xlsx', '/api/catalog-cost-column-grants/VP018']) {
       assert.equal(policy.isRequestAllowed(session, { method, path: route }), false, `${method} ${route}`);
     }
   }
@@ -55,36 +53,59 @@ test('VP018 chỉ được GET hai tab doanh thu, Cơ số thầu và đúng ba 
     'route CST phải dùng scope riêng; không được nới scope chung của VP018');
 });
 
-test('quyền đọc toàn công ty của doanh thu và CST được cấp độc lập', () => {
-  const revenueOnly = 'QA_REVENUE_ONLY';
-  const cstOnly = 'QA_CST_ONLY';
-  policy.COMPANY_REVENUE_READ_EMP_CODES.add(revenueOnly);
-  policy.COMPANY_CST_READ_EMP_CODES.add(cstOnly);
-  try {
-    assert.equal(policy.canReadAllRevenue(revenueOnly), true);
-    assert.equal(policy.canReadAllCst(revenueOnly), false, 'cấp doanh thu không được ngầm mở CST');
-    assert.equal(policy.canReadAllRevenue(cstOnly), false, 'cấp CST không được ngầm mở doanh thu');
-    assert.equal(policy.canReadAllCst(cstOnly), true);
-  } finally {
-    policy.COMPANY_REVENUE_READ_EMP_CODES.delete(revenueOnly);
-    policy.COMPANY_CST_READ_EMP_CODES.delete(cstOnly);
+test('quyền doanh thu và CST tạo hồ sơ hạn chế, hợp đúng path và luôn chỉ đọc', () => {
+  const isolated = policy.createAccessPolicy({
+    revenueCodes: ['QA_REVENUE_ONLY', 'QA_BOTH'],
+    cstCodes: ['QA_CST_ONLY', 'QA_BOTH'],
+  });
+  const revenueOnly = { emp_code: 'QA_REVENUE_ONLY' };
+  const cstOnly = { emp_code: 'QA_CST_ONLY' };
+  const both = { emp_code: 'QA_BOTH' };
+  const methods = ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+  for (const session of [revenueOnly, cstOnly, both]) {
+    assert.equal(isolated.accessProfileFor(session), 'revenue_only');
+    for (const method of methods) {
+      for (const route of ['/api/revenue', '/api/cst', '/api/export/revenue.xlsx', '/api/overview']) {
+        assert.equal(isolated.isRequestAllowed(session, { method, path: route }), false, `${session.emp_code} ${method} ${route}`);
+      }
+    }
+    assert.equal(isolated.isRequestAllowed(session, { method: 'GET', path: '/api/overview' }), false);
   }
+
+  assert.equal(isolated.isRequestAllowed(cstOnly, { method: 'GET', path: '/api/cst' }), true);
+  for (const route of ['/api/revenue', '/api/revenue/full', '/api/export/revenue.xlsx', '/api/export/revenue_report.xlsx', '/api/export/revenue_report.pdf', '/api/export/cst.xlsx']) {
+    assert.equal(isolated.isRequestAllowed(cstOnly, { method: 'GET', path: route }), false, `CST-only ${route}`);
+  }
+  assert.equal(isolated.canReadAllCst(cstOnly), true);
+  assert.equal(isolated.canReadAllRevenue(cstOnly), false);
+
+  assert.equal(isolated.isRequestAllowed(revenueOnly, { method: 'GET', path: '/api/revenue' }), true);
+  assert.equal(isolated.isRequestAllowed(revenueOnly, { method: 'GET', path: '/api/cst' }), false);
+  assert.equal(isolated.canReadAllRevenue(revenueOnly), true);
+  assert.equal(isolated.canReadAllCst(revenueOnly), false);
+
+  assert.equal(isolated.isRequestAllowed(both, { method: 'GET', path: '/api/revenue' }), true);
+  assert.equal(isolated.isRequestAllowed(both, { method: 'GET', path: '/api/cst' }), true);
+  assert.equal(isolated.isRequestAllowed(both, { method: 'GET', path: '/api/export/cst.xlsx' }), false);
+});
+
+test('hai allowlist là hai tập chỉ-đọc, không alias và không thể đột biến chéo', () => {
+  assert.notEqual(policy.COMPANY_REVENUE_READ_EMP_CODES, policy.COMPANY_CST_READ_EMP_CODES);
+  assert.throws(() => policy.COMPANY_REVENUE_READ_EMP_CODES.add('QA_ALIAS'), /read-only/);
+  assert.throws(() => policy.COMPANY_CST_READ_EMP_CODES.delete('VP018'), /read-only/);
+  policy.COMPANY_REVENUE_READ_EMP_CODES.forEach((_value, _key, exposedSet) => {
+    assert.equal(exposedSet, policy.COMPANY_REVENUE_READ_EMP_CODES, 'forEach không được rò Set mutable nội bộ');
+    assert.throws(() => exposedSet.clear(), /read-only/);
+  });
+  assert.equal(policy.COMPANY_REVENUE_READ_EMP_CODES.has('QA_ALIAS'), false);
+  assert.equal(policy.COMPANY_CST_READ_EMP_CODES.has('QA_ALIAS'), false);
+  assert.equal(policy.COMPANY_CST_READ_EMP_CODES.has('VP018'), true);
 });
 
 test('auth từ chối phát token cho denylist và chặn route ngoài doanh thu của VP018', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reportnew-strict-access-'));
   const oldDir = process.env.AUTH_DATA_DIR;
-  // `requireAuth` deliberately revalidates every session against the employee
-  // directory. This test owns the auth files but used to inherit users.json from
-  // whichever worktree/release happened to run it: a PROD data symlink passed,
-  // while a clean Git worktree rejected VP018 as removed_from_directory. Pin the
-  // one directory record this policy test needs; production directory behaviour
-  // is covered separately by store/auth integration tests.
-  const employeeStore = require('../src/store');
-  const oldFindUserByCode = employeeStore.findUserByCode;
-  employeeStore.findUserByCode = (code) => String(code || '').toUpperCase() === 'VP018'
-    ? { emp_code: 'VP018', name: 'VP018', role: 'sale', phone: null }
-    : oldFindUserByCode(code);
   process.env.AUTH_DATA_DIR = dir;
   try {
     fs.writeFileSync(path.join(dir, 'sessions.json'), JSON.stringify([
@@ -119,24 +140,20 @@ test('auth từ chối phát token cho denylist và chặn route ngoài doanh th
     const invokeBoundary = (url, method = 'GET') => invokeMiddleware(auth.enforceAccessPolicyBoundary, url, method);
     assert.equal(invoke('/api/revenue?ky=08.2026').nextCalled, true);
     assert.equal(invoke('/api/revenue/full?ky=08.2026').nextCalled, true);
-    assert.equal(invoke('/api/cst?remainMin=70').nextCalled, true);
     assert.equal(invoke('/api/export/revenue.xlsx?ky=08.2026').nextCalled, true);
     assert.equal(invoke('/api/export/revenue_report.xlsx?ky=08.2026').nextCalled, true);
     assert.equal(invoke('/api/export/revenue_report.pdf?ky=08.2026').nextCalled, true);
     assert.equal(invoke('/api/me').nextCalled, true);
     assert.deepEqual(auth.scopeOf({ emp_code: 'VP018', role: 'sale' }), { empCode: 'VP018' }, 'scope chung vẫn self-only');
     assert.deepEqual(auth.revenueScopeOf({ emp_code: 'VP018', role: 'sale' }), { empCode: null }, 'chỉ revenue scope mới đọc toàn công ty');
-    assert.deepEqual(auth.cstScopeOf({ emp_code: 'VP018', role: 'sale' }), { empCode: null }, 'chỉ CST scope mới đọc toàn công ty');
     assert.deepEqual(auth.revenueScopeOf({ emp_code: 'DN006', role: 'sale' }), { empCode: 'DN006' }, 'NON_SALES_ROLE/scope chuẩn không đổi');
-    assert.deepEqual(auth.cstScopeOf({ emp_code: 'DN006', role: 'sale' }), { empCode: 'DN006' }, 'NV chuẩn vẫn chỉ xem CST bản thân');
-    for (const route of ['/api/employee-cost?ky=08.2026', '/api/catalog-management', '/api/export/revenue_report.csv', '/api/export/cst.xlsx']) {
+    for (const route of ['/api/employee-cost?ky=08.2026', '/api/catalog-management', '/api/export/revenue_report.csv']) {
       const forbidden = invoke(route);
       assert.equal(forbidden.statusCode, 403, route);
       assert.equal(forbidden.body.code, 'REVENUE_ONLY_ACCESS', route);
     }
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
       assert.equal(invoke('/api/revenue', method).statusCode, 403, method);
-      assert.equal(invoke('/api/cst', method).statusCode, 403, `CST ${method}`);
       assert.equal(invokeBoundary('/api/revenue', method).statusCode, 403, `router boundary ${method}`);
     }
     for (const route of ['/api/employee-cost/not-a-real-subroute', '/api/revenue/', '/api//revenue', '/api/../me', '/api\\revenue', '/api/%72evenue']) {
@@ -144,7 +161,6 @@ test('auth từ chối phát token cho denylist và chặn route ngoài doanh th
     }
     assert.equal(invokeBoundary('/api/export/revenue_report.pdf?ky=08.2026').nextCalled, true, 'GET allowlist đi tiếp tới route');
   } finally {
-    employeeStore.findUserByCode = oldFindUserByCode;
     if (oldDir === undefined) delete process.env.AUTH_DATA_DIR;
     else process.env.AUTH_DATA_DIR = oldDir;
     fs.rmSync(dir, { recursive: true, force: true });
