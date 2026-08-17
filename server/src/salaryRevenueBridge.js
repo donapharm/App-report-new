@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const auditSupport = require('./salaryRevenueAudit');
 
 const TOKEN_HASH_ENV = 'SALARY_REVENUE_SERVICE_TOKEN_SHA256';
 const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -37,26 +38,41 @@ function aggregateByEmployee(rows = []) {
     .map(([ma, value]) => ({ ma, doanhSo: Math.round(value) }));
 }
 
-function createHandler({ store, tokenHashProvider = () => process.env[TOKEN_HASH_ENV] || '' }) {
+function createHandler({
+  store,
+  tokenHashProvider = () => process.env[TOKEN_HASH_ENV] || '',
+  auditor = auditSupport.createFileAuditor(),
+  limiter = auditSupport.createMinuteLimiter(),
+} = {}) {
   if (!store || typeof store.getRows !== 'function') throw new TypeError('store.getRows is required');
   return (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
+    const month = String(req.query?.thang || '');
+    const finish = (status, result, body, recordCount = 0) => {
+      try { auditor({ month, recordCount, status, result }); } catch (error) {
+        console.error('[salary-revenue] audit write failed', { code: error?.code || 'AUDIT_WRITE_FAILED' });
+        return res.status(503).json({ error: 'Salary revenue audit unavailable', code: 'SALARY_REVENUE_AUDIT_UNAVAILABLE' });
+      }
+      return res.status(status).json(body);
+    };
     const expectedHash = String(tokenHashProvider() || '').trim().toLowerCase();
-    if (!/^[a-f0-9]{64}$/.test(expectedHash)) return res.status(503).json({ error: 'Salary revenue service is not configured', code: 'SALARY_REVENUE_NOT_CONFIGURED' });
+    if (!/^[a-f0-9]{64}$/.test(expectedHash)) return finish(503, 'not_configured', { error: 'Salary revenue service is not configured', code: 'SALARY_REVENUE_NOT_CONFIGURED' });
 
     const actual = bearerToken(req.headers.authorization);
+    const clientKey = actual ? `token:${sha256(actual)}` : `ip:${String(req.ip || req.socket?.remoteAddress || 'unknown')}`;
+    if (!limiter.take(clientKey)) return finish(429, 'rate_limited', { error: 'Too many requests', code: 'SALARY_REVENUE_RATE_LIMITED' });
     if (!actual) {
       res.setHeader('WWW-Authenticate', 'Bearer');
-      return res.status(401).json({ error: 'Bearer token required', code: 'SALARY_REVENUE_AUTH_REQUIRED' });
+      return finish(401, 'auth_required', { error: 'Bearer token required', code: 'SALARY_REVENUE_AUTH_REQUIRED' });
     }
-    if (!sameHash(sha256(actual), expectedHash)) return res.status(403).json({ error: 'Forbidden', code: 'SALARY_REVENUE_FORBIDDEN' });
+    if (!sameHash(sha256(actual), expectedHash)) return finish(403, 'forbidden', { error: 'Forbidden', code: 'SALARY_REVENUE_FORBIDDEN' });
 
-    const month = String(req.query.thang || '');
     const ky = uiPeriod(month);
-    if (!ky) return res.status(400).json({ error: 'Tháng không hợp lệ (YYYY-MM)', code: 'SALARY_REVENUE_MONTH_INVALID' });
+    if (!ky) return finish(400, 'invalid_month', { error: 'Tháng không hợp lệ (YYYY-MM)', code: 'SALARY_REVENUE_MONTH_INVALID' });
 
     const rows = store.getRows({ ky, scope: {} });
-    return res.json({ thang: month, data: aggregateByEmployee(rows) });
+    const data = aggregateByEmployee(rows);
+    return finish(200, 'ok', { thang: month, data }, data.length);
   };
 }
 

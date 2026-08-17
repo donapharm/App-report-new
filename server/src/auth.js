@@ -783,6 +783,9 @@ function scopeOf(session) {
 function revenueScopeOf(session) {
   return { empCode: accessPolicy.canReadAllRevenue(session) ? null : scopeOf(session).empCode };
 }
+function cstScopeOf(session) {
+  return { empCode: accessPolicy.canReadAllCst(session) ? null : scopeOf(session).empCode };
+}
 function sessionForUser(user) {
   if (!user) return null;
   return { emp_code: user.emp_code, name: user.name, role: normRole(user.role), phone: user.phone || null };
@@ -829,10 +832,11 @@ function requireCeo(req, res, next) {
 }
 
 module.exports = {
-  mockLogin, enforceAccessPolicyBoundary, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, revenueScopeOf, sessionForUser, getSession,
+  mockLogin, enforceAccessPolicyBoundary, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, revenueScopeOf, cstScopeOf, sessionForUser, getSession,
   issueToken, liveAuthEnabled, otpLoginEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
   accessProfileFor: accessPolicy.accessProfileFor,
   canReadAllRevenue: accessPolicy.canReadAllRevenue,
+  canReadAllCst: accessPolicy.canReadAllCst,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm,

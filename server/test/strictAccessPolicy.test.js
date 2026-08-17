@@ -29,7 +29,7 @@ test('VP018 chỉ được GET hai tab doanh thu và đúng ba export tường m
     '/api/export/revenue_report.xlsx?ky=08.2026',
     '/api/export/revenue_report.pdf?ky=08.2026',
   ];
-  assert.equal(policy.REVENUE_ONLY_GET_PATHS.size, 8, 'allowlist phải exact, không nở ngoài 8 path');
+  assert.equal(policy.REVENUE_ONLY_GET_PATHS.size, 9, 'allowlist phải exact: 8 path doanh thu/chung + đúng /cst');
   for (const route of allowed) assert.equal(policy.isRequestAllowed(session, { method: 'GET', path: route }), true, route);
 
   const forbidden = [
@@ -106,6 +106,11 @@ test('hai allowlist là hai tập chỉ-đọc, không alias và không thể đ
 test('auth từ chối phát token cho denylist và chặn route ngoài doanh thu của VP018', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reportnew-strict-access-'));
   const oldDir = process.env.AUTH_DATA_DIR;
+  const employeeStore = require('../src/store');
+  const oldFindUserByCode = employeeStore.findUserByCode;
+  employeeStore.findUserByCode = (code) => String(code || '').toUpperCase() === 'VP018'
+    ? { emp_code: 'VP018', name: 'VP018', role: 'sale', phone: null }
+    : oldFindUserByCode(code);
   process.env.AUTH_DATA_DIR = dir;
   try {
     fs.writeFileSync(path.join(dir, 'sessions.json'), JSON.stringify([
@@ -161,6 +166,7 @@ test('auth từ chối phát token cho denylist và chặn route ngoài doanh th
     }
     assert.equal(invokeBoundary('/api/export/revenue_report.pdf?ky=08.2026').nextCalled, true, 'GET allowlist đi tiếp tới route');
   } finally {
+    employeeStore.findUserByCode = oldFindUserByCode;
     if (oldDir === undefined) delete process.env.AUTH_DATA_DIR;
     else process.env.AUTH_DATA_DIR = oldDir;
     fs.rmSync(dir, { recursive: true, force: true });

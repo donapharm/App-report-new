@@ -1148,7 +1148,7 @@ router.get('/me', auth.requireAuth, (req, res) => {
     employeeCostDisabled: !visibility.enabled,
     costAmountsEnabled,
     access_profile: auth.accessProfileFor(req.session),
-    allowed_tabs: auth.accessProfileFor(req.session) === 'revenue_only' ? ['revenue', 'revenueFull'] : null,
+    allowed_tabs: auth.accessProfileFor(req.session) === 'revenue_only' ? ['revenue', 'revenueFull', 'cst'] : null,
   });
 });
 
@@ -5531,7 +5531,7 @@ router.get('/analysis', auth.requireAuth, memoJson('analysis'), (req, res) => {
 
 /* ---------- Cơ số thầu ---------- */
 router.get('/cst', auth.requireAuth, memoJson('cst', 30 * 1000), async (req, res) => {
-  const scope = auth.scopeOf(req.session);
+  const scope = auth.cstScopeOf(req.session);
   const num = (v) => (v === undefined || v === '' ? null : Number(v));
   const contractorLookup = contractorLookupFor(scope);
   const baseRows = A.cstTable({

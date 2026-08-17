@@ -194,7 +194,7 @@ export default function TenderQuota({ me }) {
           <input className="filter-quick" aria-label="Tìm kiếm thông minh đa chiều" value={filters.q} onChange={(e) => { const q = e.target.value; setFilter('q', q); if (q.trim()) setView('flat'); }} placeholder="Tìm thông minh: thuốc, QLNB, đơn vị, hoạt chất, NV, nhà thầu…" />
           <button type="button" className="btn ghost filter-toggle" aria-expanded={open} onClick={toggle}>{open ? '▴ Thu gọn lọc' : '▾ Bộ lọc'}{activeCount ? ` (${activeCount})` : ''}</button>
           {activeCount > 0 && <button className="btn ghost" onClick={reset}>Xoá lọc</button>}
-          <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>
+          {me.access_profile !== 'revenue_only' && <button className="btn ghost" disabled={busy} onClick={doExport}>⬇ Excel</button>}
         </div>
         {open && (
           <div className="filter-body">

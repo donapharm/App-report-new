@@ -130,8 +130,8 @@ export default function App() {
     return () => window.removeEventListener('app:auth-expired', onExpired);
   }, []);
 
-  // VP018 chỉ có hai tab doanh thu và không có công tắc privacy. Hiện số thật
-  // trong đúng phiên revenue-only; khi rời phiên phải khôi phục mặc định che số.
+  // Hồ sơ hạn chế chỉ có các tab được backend cấp và không có công tắc privacy.
+  // Hiện số thật trong đúng phiên hạn chế; khi rời phiên khôi phục mặc định che số.
   useEffect(() => {
     if (me?.access_profile !== 'revenue_only') return undefined;
     setPrivacyHidden(false);
