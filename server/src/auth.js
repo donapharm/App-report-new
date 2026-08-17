@@ -343,6 +343,24 @@ function listDevices(empCode) {
       active_sessions: sessions.filter((s) => s.emp_code === d.emp_code && s.deviceId === d.id && s.expires_at > now()).length }))
     .sort((a, b) => b.last_seen - a.last_seen);
 }
+
+// Security boundary for the CEO Vault full-52 control plane.  Callers must not
+// trust a claim embedded in the session: revocation/eviction is observed from
+// the live device store on every request.  The helper intentionally returns no
+// device for QA or service sessions even when such a session carries role=ceo.
+function trustedHumanDeviceForSession(session, { maxAgeMs = 12 * 60 * 60 * 1000, at = now() } = {}) {
+  if (!session || session.service || session.method === 'service-token' || isQaMethod(session.method)) return null;
+  const empCode = String(session.emp_code || '').trim().toUpperCase();
+  const deviceId = String(session.deviceId || '').trim();
+  if (!empCode || !deviceId) return null;
+  const device = devices.find((item) => item.emp_code === empCode && item.id === deviceId);
+  if (!device || device.is_trusted !== true) return null;
+  const trustedAt = timeValue(device.trusted_at);
+  const lastOtpAt = timeValue(device.last_otp_at);
+  const reverifiedAt = Math.max(trustedAt, lastOtpAt);
+  if (!trustedAt || !lastOtpAt || !reverifiedAt || at - reverifiedAt > maxAgeMs || reverifiedAt > at + 60_000) return null;
+  return { id: device.id, emp_code: device.emp_code, trusted_at: trustedAt, last_otp_at: lastOtpAt, reverified_at: reverifiedAt };
+}
 function removeDevice(id) {
   const d = devices.find((x) => x.id === id);
   if (!d) return false;
@@ -847,4 +865,5 @@ module.exports = {
   // Mapping + thiết bị + hủy phiên
   listTelegramMap, addTelegramMap, removeTelegramMap, resolveTelegram,
   listDevices, removeDevice, purgeUser, invalidateUserSessions, invalidateUserDevices,
+  trustedHumanDeviceForSession,
 };
