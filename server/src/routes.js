@@ -65,6 +65,7 @@ const employeeCostHealthKpis = require('./employeeCostHealthKpis');
 const { createEmployeeCostSnapshotStore } = require('./employeeCostSnapshotStore');
 const { createEmployeeCostSnapshotSync } = require('./employeeCostSnapshotSync');
 const salaryAdvance = require('./salaryAdvance');
+const salaryRevenueBridge = require('./salaryRevenueBridge');
 const remainingAfterAdvance = require('./remainingAfterAdvance');
 const paymentSchedule = require('./paymentSchedule');
 const paymentLedgerStore = require('./paymentLedgerStore');
@@ -766,6 +767,11 @@ function cstSourceLabel(r = {}) {
 }
 
 /* ---------- Auth ---------- */
+// Service-to-service tối thiểu cho App Lương: chỉ trả tổng doanh thu theo mã NV
+// của đúng một tháng. Token ở backend, không dùng session người dùng và không trả
+// chi tiết đơn vị/khách hàng/sản phẩm/hóa đơn.
+router.get('/luong/doanhso', salaryRevenueBridge.createHandler({ store }));
+
 // Demo login (TODO(LIVE): thay bằng OTP/SSO). Body: { emp_code }
 router.post('/auth/login', (req, res) => {
   const r = auth.mockLogin((req.body.emp_code || '').trim().toUpperCase(), loginCtx(req));

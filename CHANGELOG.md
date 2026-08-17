@@ -1,3 +1,12 @@
+### 2026-08-17 22:40 (giờ VN) — Cầu nối doanh số App Report → App Lương
+
+- Thêm endpoint chỉ đọc `GET /api/luong/doanhso?thang=YYYY-MM`, xác thực Bearer; App
+  Report chỉ giữ SHA-256 trong `SALARY_REVENUE_SERVICE_TOKEN_SHA256`, không giữ token thô.
+- Payload chỉ có kỳ và tổng doanh thu theo mã NV; không trả chi tiết đơn vị, khách
+  hàng, sản phẩm hay hóa đơn. Nguồn số là đúng store doanh thu đang phục vụ App Report.
+- Thiếu token trả 401, token sai trả 403, tháng sai trả 400; response `no-store`.
+- Thêm test khóa hợp đồng auth, chuyển kỳ, tổng hợp và schema tối thiểu.
+
 ### 2026-08-15 15:25 (giờ VN) — 🧪 Giai đoạn 1 LKG candidate: dual-read sau cờ OFF
 
 - Thêm period sidecar reader chỉ đọc; cờ `CATALOG_PERIOD_LKG_READ_ENABLED` mặc định
