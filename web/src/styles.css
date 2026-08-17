@@ -1442,6 +1442,12 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 /* Danh mục quản lý — compact layout (CEO duyệt 15/07/2026 16:47). */
 .catalog-management { display:grid; gap:8px; width:100%; min-width:0; }
 .catalog-management > * { min-width:0; max-width:100%; }
+.catalog52-control-plane > summary { cursor:pointer; font-weight:800; }
+.catalog52-control-plane { display:grid; gap:10px; }
+.catalog52-meta, .catalog52-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.catalog52-meta span { padding:7px 10px; border-radius:8px; background:var(--soft, #eef5fb); }
+.catalog52-table { min-width:6800px; table-layout:fixed; }
+.catalog52-table th, .catalog52-table td { width:128px; max-width:128px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .catalog-heading-compact { min-height:0; padding:9px 12px; }
 .catalog-heading-compact .section-head { font-size:17px; line-height:1.2; }
 .catalog-heading-compact .meta { margin-top:2px; font-size:11.5px; }
