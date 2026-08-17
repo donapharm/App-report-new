@@ -314,6 +314,27 @@ function atomicJson(file, value) {
   fsyncDir(path.dirname(file));
 }
 
+function acquireShadowLock(dataDir, period) {
+  const file = shadowLockFile(dataDir, period);
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const token = crypto.randomBytes(24).toString('hex');
+  const owner = { schemaVersion: 1, token, pid: process.pid, host: require('node:os').hostname(), acquiredAt: new Date().toISOString() };
+  try {
+    const fd = fs.openSync(file, 'wx', 0o600);
+    try { fs.writeFileSync(fd, `${JSON.stringify(owner)}\n`); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+    fsyncDir(path.dirname(file));
+  } catch (error) {
+    if (error.code === 'EEXIST') fail('DEBTS_SHADOW_LOCKED', { period: normalizePeriod(period) });
+    throw error;
+  }
+  return () => {
+    let current;
+    try { current = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { fail('DEBTS_SHADOW_LOCK_OWNERSHIP_LOST'); }
+    if (current.token !== token) fail('DEBTS_SHADOW_LOCK_OWNERSHIP_LOST');
+    fs.unlinkSync(file); fsyncDir(path.dirname(file));
+  };
+}
+
 function publishShadow(result, { dataDir, allowWrite = false } = {}) {
   if (allowWrite !== true) fail('DEBTS_SHADOW_WRITE_DISABLED');
   const root = path.resolve(String(dataDir || ''));
@@ -322,26 +343,63 @@ function publishShadow(result, { dataDir, allowWrite = false } = {}) {
   const period = normalizePeriod(result?.receipt?.period);
   const snapshotId = text(result?.receipt?.snapshotId, 160);
   if (!/^[A-Za-z0-9._-]+$/.test(snapshotId)) fail('DEBTS_SNAPSHOT_PATH_INVALID');
-  const periodDir = path.join(root, period);
-  const target = path.join(periodDir, snapshotId);
-  fs.mkdirSync(periodDir, { recursive: true, mode: 0o700 });
-  fs.chmodSync(periodDir, 0o700);
-  if (fs.existsSync(target)) fail('DEBTS_SHADOW_IMMUTABLE_EXISTS');
-  const stage = fs.mkdtempSync(path.join(periodDir, `.stage-${process.pid}-`));
+  const releaseLock = acquireShadowLock(root, period);
   try {
-    fs.chmodSync(stage, 0o700);
-    atomicJson(path.join(stage, 'rows.json'), result.rows);
-    atomicJson(path.join(stage, 'quarantine.json'), result.quarantined);
-    atomicJson(path.join(stage, 'receipt.json'), result.receipt);
-    fs.renameSync(stage, target);
-    fsyncDir(periodDir);
-  } catch (error) {
-    try { fs.rmSync(stage, { recursive: true, force: true }); } catch { /* best effort */ }
-    throw error;
+    const periodDir = path.join(root, period);
+    const target = path.join(periodDir, snapshotId);
+    fs.mkdirSync(periodDir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(periodDir, 0o700);
+    if (fs.existsSync(target)) fail('DEBTS_SHADOW_IMMUTABLE_EXISTS');
+    const stage = fs.mkdtempSync(path.join(periodDir, `.stage-${process.pid}-`));
+    try {
+      fs.chmodSync(stage, 0o700);
+      atomicJson(path.join(stage, 'rows.json'), result.rows);
+      atomicJson(path.join(stage, 'quarantine.json'), result.quarantined);
+      atomicJson(path.join(stage, 'receipt.json'), result.receipt);
+      fs.renameSync(stage, target);
+      fsyncDir(periodDir);
+    } catch (error) {
+      try { fs.rmSync(stage, { recursive: true, force: true }); } catch { /* best effort */ }
+      throw error;
+    }
+    return target;
+  } finally {
+    releaseLock();
   }
-  return target;
 }
 
+async function fetchSnapshotPages({ endpoint, token, period, contractChecksum, pageSize = 500, fetchImpl = globalThis.fetch } = {}) {
+  const expectedPeriod = normalizePeriod(period);
+  let base;
+  try { base = new URL(String(endpoint || '')); } catch { fail('DEBTS_ENDPOINT_INVALID'); }
+  if (base.protocol !== 'https:' || base.pathname !== CONTRACT_PATH) fail('DEBTS_ENDPOINT_NOT_ALLOWLISTED');
+  if (!token || typeof fetchImpl !== 'function') fail('DEBTS_S2S_CONTRACT_UNAVAILABLE');
+  const pages = [];
+  let cursor = null;
+  const seen = new Set();
+  do {
+    const url = new URL(base);
+    url.searchParams.set('period', expectedPeriod);
+    url.searchParams.set('limit', String(Math.max(1, Math.min(1000, Number(pageSize) || 500))));
+    if (cursor) url.searchParams.set('cursor', cursor);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    let response;
+    try {
+      response = await fetchImpl(url, { headers: { authorization: `Bearer ${token}`, accept: 'application/json' }, signal: controller.signal });
+    } catch { fail('DEBTS_S2S_UNAVAILABLE'); }
+    finally { clearTimeout(timeout); }
+    if (!response?.ok) fail('DEBTS_S2S_UPSTREAM_ERROR', { status: Number(response?.status) || 502 });
+    let page;
+    try { page = await response.json(); } catch { fail('DEBTS_S2S_RESPONSE_INVALID'); }
+    pages.push(page);
+    cursor = page.nextCursor == null ? null : text(page.nextCursor, 500);
+    if (cursor && seen.has(cursor)) fail('DEBTS_CURSOR_INVALID');
+    if (cursor) seen.add(cursor);
+    if (pages.length > 1000) fail('DEBTS_PAGE_LIMIT_EXCEEDED');
+  } while (cursor);
+  return combineSnapshotPages(pages, { period: expectedPeriod, contractChecksum });
+}
 function shadowLockFile(dataDir, period) {
   const root = path.resolve(String(dataDir || ''));
   if (!root.endsWith(path.join('revenue-shadow', 'debts'))) fail('DEBTS_SHADOW_ROOT_INVALID');
@@ -352,5 +410,5 @@ module.exports = {
   SOURCE, SCHEMA_VERSION, CONTRACT_PATH, REVISION_MODE, REQUIRED_ROW_FIELDS, DebtsShadowError,
   stableValue, canonicalJson, parseDecimal, decimalAdd, decimalSubtract, decimalEqual, decimalString,
   snapshotRowsChecksum, combineSnapshotPages, mappingIndex, materializeShadow,
-  publishShadow, shadowLockFile,
+  publishShadow, shadowLockFile, acquireShadowLock, fetchSnapshotPages,
 };

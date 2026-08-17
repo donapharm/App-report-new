@@ -176,6 +176,36 @@ test('shadow writer is opt-in, immutable, private, atomic and confined to separa
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
+test('period shadow lock excludes a competing writer and is removed by its owner', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'debts-lock-'));
+  const root = path.join(tmp, 'revenue-shadow', 'debts');
+  try {
+    const release = shadow.acquireShadowLock(root, '2026-08');
+    assert.throws(() => shadow.acquireShadowLock(root, '2026-08'), { code: 'DEBTS_SHADOW_LOCKED' });
+    release();
+    assert.equal(fs.existsSync(shadow.shadowLockFile(root, '2026-08')), false);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('S2S adapter allowlists HTTPS contract path, pins pages and never sends token outside Authorization', async () => {
+  const rows = [sourceRow(), sourceRow({ invoice_line_id: 'line-2', invoice_number: '00000002', row_checksum: digest('line-2') })];
+  const pages = pagesFor(rows, 1);
+  const calls = [];
+  const combined = await shadow.fetchSnapshotPages({
+    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'SECRET-S2S', period: '2026-08', contractChecksum: CONTRACT_SHA,
+    fetchImpl: async (url, options) => {
+      calls.push({ url: String(url), headers: options.headers });
+      const page = calls.length === 1 ? pages[0] : pages[1];
+      return { ok: true, status: 200, json: async () => structuredClone(page) };
+    },
+  });
+  assert.equal(combined.rows.length, 2);
+  assert.equal(calls.length, 2);
+  assert.ok(calls[1].url.includes('cursor=cursor-1'));
+  assert.equal(calls.every((call) => !call.url.includes('SECRET-S2S') && call.headers.authorization === 'Bearer SECRET-S2S'), true);
+  await assert.rejects(() => shadow.fetchSnapshotPages({ endpoint: 'http://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08', contractChecksum: CONTRACT_SHA, fetchImpl: async () => ({}) }), { code: 'DEBTS_ENDPOINT_NOT_ALLOWLISTED' });
+});
+
 test('module is dark/add-only: no route, selector, active slot, WEB guard or frozen pin wiring', () => {
   const root = path.join(__dirname, '..');
   const routes = fs.readFileSync(path.join(root, 'src', 'routes.js'), 'utf8');
