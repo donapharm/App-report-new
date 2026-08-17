@@ -153,11 +153,15 @@ run "dùng lại token đã duyệt (cùng kho) → CHẶN" fail \
 
 echo
 echo "--- P1-2: bản chuẩn bị không được đổi giữa chừng ---"
-REL="$WORK/release"
-mkdir -p "$REL/server/src" "$REL/server/scripts" "$REL/web/dist"
+REL="$WORK/release-app-report-aaaaaaa-test"
+mkdir -p "$REL/server/src" "$REL/server/scripts" "$REL/web/dist" "$REL/scripts"
 echo "console.log(1)" > "$REL/server/src/index.js"
+cp "$HERE/../server/src/releaseIdentity.js" "$REL/server/src/releaseIdentity.js"
+cp "$HERE/verify_release_identity.js" "$REL/scripts/verify_release_identity.js"
 echo "{}" > "$REL/server/package.json"
 echo "<html></html>" > "$REL/web/dist/index.html"
+echo '{"version":"aaaaaaa-test","commit":"aaaaaaa"}' > "$REL/web/dist/version.json"
+echo '{"version":"aaaaaaa-test","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tree":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","builtAt":"test"}' > "$REL/RELEASE_IDENTITY.json"
 echo "module.exports={}" > "$REL/ecosystem.config.js"
 run "tạo manifest sau build" pass env RELEASE_ROOT="$REL" bash "$HERE/release_manifest.sh" create
 run "không đổi gì → verify ĐẠT" pass env RELEASE_ROOT="$REL" bash "$HERE/release_manifest.sh" verify
@@ -218,10 +222,14 @@ else
 fi
 
 # (3c) node_modules RUNTIME nằm TRONG phạm vi manifest: sửa 1 file trong đó → CHẶN.
-REL2="$WORK/release_nm"; mkdir -p "$REL2/server/src" "$REL2/server/node_modules/pkg" "$REL2/web/dist"
+REL2="$WORK/release-app-report-aaaaaaa-nm"; mkdir -p "$REL2/server/src" "$REL2/server/node_modules/pkg" "$REL2/web/dist" "$REL2/scripts"
 echo "console.log(1)" > "$REL2/server/src/index.js"
+cp "$HERE/../server/src/releaseIdentity.js" "$REL2/server/src/releaseIdentity.js"
+cp "$HERE/verify_release_identity.js" "$REL2/scripts/verify_release_identity.js"
 echo "module.exports=1" > "$REL2/server/node_modules/pkg/index.js"
 echo "<html></html>" > "$REL2/web/dist/index.html"
+echo '{"version":"aaaaaaa-test","commit":"aaaaaaa"}' > "$REL2/web/dist/version.json"
+echo '{"version":"aaaaaaa-test","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tree":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","builtAt":"test"}' > "$REL2/RELEASE_IDENTITY.json"
 run "(3c) tạo manifest có node_modules" pass env RELEASE_ROOT="$REL2" bash "$HERE/release_manifest.sh" create
 echo "// tiêm mã lạ" >> "$REL2/server/node_modules/pkg/index.js"
 run "(3c) sửa file trong node_modules sau prepare → CHẶN" fail env RELEASE_ROOT="$REL2" bash "$HERE/release_manifest.sh" verify
