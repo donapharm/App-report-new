@@ -2,6 +2,7 @@
 
 - Thêm `SPEC_APP_REPORT_CEO_VAULT_52_ONE_FLOW.md` để Claude review độc lập.
 - Vòng phản biện 1 đã được cập nhật vào spec: human/trusted-device gate, single active pointer, cross-process lock, Vault checksum bắt buộc, no-first-win mapping và regression tests.
+- Điều kiện vòng 2 đã được đóng: OTP enrollment/reverify, policy C32-C47 thống nhất với Phase-1, checksum nguồn tách identity hash và grep guard middleware.
 - Chỉ là hồ sơ kiến trúc; không đổi runtime, API, DB, config hoặc production.
 - Mọi implementation/merge/deploy cần phiếu và cổng duyệt riêng của CEO.
 

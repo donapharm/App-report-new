@@ -41,6 +41,8 @@ Tab con nằm trong `Danh mục quản lý`, chỉ CEO được thấy và gọi
 
 Đóng trình duyệt hoặc lỗi tab không được ảnh hưởng dữ liệu các tab khác. Backend snapshot/projection mới là data plane.
 
+Để tránh khóa cứng CEO, control plane phải có luồng enroll thiết bị rõ ràng: CEO đăng nhập session người, hoàn tất OTP reverify mới được server đánh dấu device `is_trusted` và lưu `last_otp_at/trusted_at`. Đăng nhập Telegram đơn thuần không tự tạo trust. Nếu OTP backend/enrollment chưa sẵn sàng, full-52 trả `503 control_plane_trust_unavailable` kèm diagnostics cho CEO và **không fail open**.
+
 ## 3. Mô hình lưu trữ
 
 Mỗi bản nhận được ghi bất biến theo `period + sourceVersion + checksum`, không ghi đè file đang active.
@@ -131,12 +133,19 @@ Trước implementation phải khóa bảng contract tối thiểu:
 ## 6. Bảo mật dữ liệu C32-C47
 
 - Full C1-C52: chỉ **CEO là người thật + trusted device/session**; kiểm quyền tại server cho mọi request bằng một gate chuẩn `requireCeoTrustedHuman`.
-- Gate này bắt buộc đồng thời: session người từ `requireAuth`; `role=ceo`; device ID đang `is_trusted` và còn trong cửa sổ reverify; không có `session.service`; không có `method=service-token`/QA. Full endpoint **cấm** dùng middleware chấp nhận DataHub service token như `requireTargetAuth`/`requireDataHubService`, dù service session đang mang `role=ceo`.
+- Gate này bắt buộc đồng thời: session người từ `requireAuth`; `role=ceo`; device ID đang `is_trusted`; `last_otp_at/trusted_at` còn trong cửa sổ reverify tối đa 12 giờ; không có `session.service`; không có `method=service-token`/QA. Gate phải đọc trust live từ device store ở mỗi request, không tin cờ nhúng sẵn trong token. Full endpoint **cấm** dùng middleware chấp nhận DataHub service token như `requireTargetAuth`/`requireDataHubService`, dù service session đang mang `role=ceo`.
 - Admin/NV gọi full endpoint phải trả `403`, kể cả biết URL hoặc sửa frontend.
 - C32-C47 phải **vắng mặt vật lý** trong file/payload `catalogSafe`, không chỉ bị ẩn cột UI.
 - C32-C47 và alias/giá trị mẫu nhạy cảm không được xuất hiện trong log, error body, diagnostics, health response, metrics label, browser cache, service worker hay export của NV.
 - Đợt đầu **không triển khai export full 52**. Khi có phiếu riêng, export phải audit actor, thời điểm, trusted device, version/checksum và phạm vi.
 - Encryption at rest/secrets/backup retention phải theo hạ tầng hiện hữu; tài liệu triển khai phải chứng minh quyền file và vị trí backup.
+
+Chính sách này **supersede** Phase-1 đối với `catalogSafe`: C33-C46 cũng không được mở bằng allowlist vào projection nhân viên/admin chung. Nếu CEO duyệt dùng một cột C33-C46 cho phép tính nội bộ, cột đó chỉ được nằm trong projection purpose-bound như `costRestricted`, không bao giờ đi vào `catalogSafe`.
+
+Checksum được tách hai loại, cấm nhập nhằng:
+
+- `sourceIntegrityChecksum`: verify đúng canonical representation/bytes theo contract CEO Vault công bố; App Report không tự re-serialize rồi gọi đó là checksum nguồn.
+- `internalIdentityHash`: App Report có thể tạo bằng canonical order-stable serializer để định danh artifact nội bộ; không thay thế integrity checksum.
 
 Ma trận tối thiểu:
 
@@ -171,9 +180,12 @@ Không cutover hàng loạt và không xóa adapter cũ trước khi qua ít nh�
 - 100% candidate rows được phân loại; duplicate/conflict/quarantine có danh sách rõ.
 - `catalogSafe` và response NV không chứa bất kỳ C32-C47/alias nhạy cảm nào, kiểm cả serialize đệ quy.
 - Cross-role test chứng minh admin/NV, service token mang `role=ceo`, QA session và CEO trên device chưa trusted đều nhận 403 từ full endpoint.
+- CEO session chỉ qua Telegram nhưng chưa OTP-enroll nhận diagnostics rõ và không truy cập full-52; OTP-enroll thành công mới đọc được.
+- Device trust bị revoke/evict hoặc quá 12 giờ từ `last_otp_at/trusted_at` thì request kế tiếp trả 403; gate đọc device store live.
 - Kiểm trực tiếp artifact `catalogSafe` trên đĩa, response, log, diagnostics, health, error và metrics: không chứa C32-C47, alias hoặc giá trị canary nhạy cảm.
 - Mapping canonical đạt threshold production, conflict = 0; denominator dùng đúng row grain, không so distinct pairs với raw rows một cách sai nghĩa.
 - Payload thiếu/sai checksum Vault fail closed và không activate; cấm self-hash fallback. Canonical hash phải ổn định trước thứ tự object keys.
+- Test phân biệt source integrity checksum với internal identity hash; đổi thứ tự key theo canonical contract không tạo pass/fail giả.
 - Kill process tại từng bước ghi/kích hoạt không làm mất active snapshot; reader luôn giải được trọn một manifest.
 - Chạy hai process cạnh tranh sync/rollback/retention: chỉ một writer thắng theo lock, kết quả deterministic và lock chủ chết được thu hồi an toàn.
 - Reader chậm đang ghim manifest không bị retention xóa file; sau grace/ref release mới được thu hồi.
@@ -181,6 +193,8 @@ Không cutover hàng loạt và không xóa adapter cũ trước khi qua ít nh�
 - Đặt, đo và biến thành regression guard ngân sách RSS, thời gian ingest, thời gian projection, p95 API và dung lượng retention trên 28.006 dòng × 52 cột; không chấp nhận số ước đoán.
 - Full endpoint chứng minh streaming/pagination và worker projection không làm phình RSS process API.
 - Client phát hiện active manifest đổi giữa hai tab và không dùng hai version trong cùng thao tác nghiệp vụ.
+- Static/grep guard fail nếu route full-52 tham chiếu `requireTargetAuth`, `requireDataHubService` hoặc middleware service-session tương đương.
+- Policy test dùng cùng fixtures cho Phase-1 và one-flow: `catalogSafe` không chứa C32-C47; cột C33-C46 được duyệt nội bộ chỉ xuất hiện trong projection purpose-bound.
 - Rollback drill trả lại đúng version/checksum và tất cả consumer đọc đồng nhất.
 
 ## 10. Câu hỏi bắt buộc cho Claude review
