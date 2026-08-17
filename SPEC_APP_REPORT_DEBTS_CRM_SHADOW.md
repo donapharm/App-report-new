@@ -47,6 +47,13 @@ App Report hiện hiển thị KPI `revenue` theo **sau VAT**. Vì vậy mapping
 | `vat_amount` | `Thuế GTGT` | VAT thực tế, cho phép âm |
 | `unit_price_before_vat` | `Đơn giá` | đơn giá trước VAT |
 
+Adapter phải giữ song song raw và canonical:
+
+| Nhóm | Field | Mục đích |
+|---|---|---|
+| Raw bất biến | `source_before_vat_raw`, `source_vat_raw`, `source_after_vat_raw` | receipt/đối chiếu đúng dữ liệu Debts nhận được |
+| Canonical | `revenue_before_vat`, `vat_amount`, `revenue_after_vat` | phép tính App Report sau validation/reconstruction |
+
 Invariant trên từng dòng và tổng nhóm:
 
 ```text
@@ -56,22 +63,25 @@ revenue_before_vat + vat_amount = revenue_after_vat
 - Ba field `revenue_before_vat`, `vat_amount`, `revenue_after_vat` phải được **persist end-to-end** từ adapter, shadow store, canonical row, API, export tới UI/AI/deck; không được chỉ lưu `revenue_after_vat` rồi dựng lại các field còn lại.
 - Không chia mặc định cho `1.05` khi nguồn có VAT thực tế.
 - VAT có thể khác 5%, bằng 0 hoặc âm.
-- Nếu `Doanh số` trống/không hợp lệ nhưng `Tổng TT` và VAT hợp lệ, adapter chỉ được tính `before = after - VAT` khi policy cho phép và phải gắn cờ `amount_reconstructed=true`; mặc định quarantine để đối chiếu.
+- Validation luôn kiểm `source_before_vat_raw + source_vat_raw = source_after_vat_raw`. Bất kỳ sai lệch nào, kể cả `Doanh số=0` nhưng VAT/Tổng TT khác 0, phải gắn `amount_inconsistent=true` và quarantine; không được coi 0 là hợp lệ chỉ vì field có mặt.
+- Khi VAT và Tổng TT raw hợp lệ, shadow có thể tạo canonical `revenue_before_vat = source_after_vat_raw - source_vat_raw`, giữ nguyên canonical VAT/after, gắn `amount_reconstructed=true` và lưu delta/reason. Reconstruction chỉ phục vụ phân tích/receipt; dòng vẫn quarantine và không vào active cho tới khi policy/CEO duyệt hoặc Debts sửa nguồn.
+- Invariant `revenue_before_vat + vat_amount = revenue_after_vat` áp dụng cho **canonical fields sau validation/reconstruction**. Receipt bảo toàn raw riêng, không ép raw before phải bằng canonical before.
 - Dòng âm/return/adjustment được giữ dấu và loại nghiệp vụ; không loại bằng điều kiện `amount > 0`.
 - Tổng phải đối chiếu trước VAT, VAT và sau VAT theo pháp nhân/ngày/hóa đơn/kỳ.
+
+Ví dụ `00002319`: raw before `0`, raw VAT `-825.190`, raw after `-17.329.000` ⇒ `amount_inconsistent=true`, quarantine; canonical before tái dựng `-16.503.810`, canonical VAT/after giữ nguyên. Receipt hiển thị cả raw triple, canonical triple và delta `-16.503.810`, nên vừa không mất dòng/tiền raw vừa không phá invariant canonical.
 
 ### 3.1 Chuyển mọi consumer khỏi phép chia VAT cố định
 
 Trước cutover phải kiểm kê và sửa tối thiểu các consumer hiện đang suy `before VAT = revenue / 1.05`:
 
-- `server/src/analytics.js`: `pctTarget`, `empTarget.achieved` và mọi aggregate target;
-- `server/src/routes.js`: route target/gap;
-- `server/src/targetNotify.js`: số đạt target gửi nhân viên;
-- `server/src/revenueReportExport.js`, `server/src/filteredEmployeeReport.js`;
-- `web/src/pages/Overview.jsx`, `web/src/pages/DailySalesOrders.jsx`;
+- `server/src/analytics.js`: site chia trực tiếp tạo `revenueBeforeVat`, `pctTarget`, `empTarget.achieved` và mọi aggregate target;
+- `server/src/routes.js`, `server/src/targetNotify.js`: consumer gián tiếp của số `analytics` cho route target/gap và thông báo NV;
+- `server/src/revenueReportExport.js`, đặc biệt `server/src/filteredEmployeeReport.js` site kết hợp `/1.05` với `Math.round`;
+- `web/src/pages/Overview.jsx`, `web/src/pages/DailySalesOrders.jsx`: nhãn/render phải nhận field theo source; không tự suy lại;
 - mọi consumer mới tìm thấy bằng static scan/test mutation.
 
-Các consumer target/bonus phải dùng cùng `revenue_before_vat` chính xác. Fallback `/1.05` chỉ được phép cho **nguồn lịch sử cũ đã ghim**, phải gắn provenance/`amount_reconstructed` và không áp dụng cho dòng Debts có ba field exact.
+Các consumer target/bonus phải dùng cùng `revenue_before_vat` chính xác. Phép `/1.05` phải rẽ nhánh **theo source ở backend**: chỉ giữ cho nguồn lịch sử/WEB App Sale chưa có exact before-VAT, gắn provenance/`amount_reconstructed`; tuyệt đối không áp dụng cho dòng Debts có ba field exact. Việc thêm shadow không được tước fallback lịch sử của WEB và không thay byte/golden output WEB.
 
 Đây là thay đổi luật kế toán/KPI: tỷ lệ đạt target và thông báo target có thể đổi khi VAT thực tế khác 5%. Cutover phải nâng revenue rule lock/fingerprint và được CEO duyệt riêng.
 
@@ -180,7 +190,7 @@ Phải xác nhận `legal_entity`/contractor của Debts ánh xạ đúng DONA/A
 
 Thêm source label `DEBTS_INVOICE_SHADOW`; đây là label add-only cho nhánh CRM, không bao giờ được chọn cho WEB/Partner và không ghi đè slot CRM hiện tại.
 
-1. Dùng lock và store riêng cho Debts shadow, không dùng `revenue_materialize.lock` và không có quyền ghi slot/frozen period production.
+1. Dùng lock `debts_invoice_shadow_<period>.lock` và store `server/data/revenue-shadow/debts/<period>/<snapshotId>/` riêng; không dùng `revenue_materialize.lock` và không có quyền ghi slot/frozen period production.
 2. Đọc toàn bộ một Debts snapshot.
 3. Xác minh manifest, pagination, checksum, row/invoice counts và totals.
 4. Normalize amount/date/status mà không mất precision.
@@ -204,7 +214,8 @@ Shadow provenance phải có Debts endpoint contract version/SHA, snapshot revis
 - không duplicate/lost line; import lại idempotent;
 - negative/return/adjustment khớp dấu và số tiền;
 - decimal precision giữ nguyên; từng dòng và từng group đạt `before + VAT = after` theo tolerance đã khóa;
-- bất biến cân quarantine: `count(mapped) + count(quarantined) = count(source)` và ba tổng tiền mapped + quarantined = source.
+- bất biến cân quarantine: `count(mapped) + count(quarantined) = count(source)`.
+- Receipt có hai hệ tổng không trộn: raw mapped + raw quarantined = raw source cho cả ba raw fields; canonical mapped + canonical quarantined = canonical total cho cả ba canonical fields. Chênh raw-before ↔ canonical-before do reconstruction được báo thành `reconstructionDelta`, không bị che hoặc dùng để tuyên bố raw delta = 0.
 
 ### Với App Report
 
@@ -220,8 +231,10 @@ Shadow provenance phải có Debts endpoint contract version/SHA, snapshot revis
 
 - chạy song song ít nhất một kỳ đầy đủ;
 - mapping deterministic hoặc quarantine được CEO duyệt = 100%; ambiguous = 0 trong phần active;
-- tất cả delta Debts raw ↔ shadow = 0 theo tolerance decimal đã định nghĩa; ambiguous = 0 trong phần active;
+- raw receipt copy phải có delta Debts raw ↔ shadow raw = 0 cho từng raw field; canonical totals phải tự cân invariant. `reconstructionDelta` là chênh được công khai giữa raw-before và canonical-before, không bị tính nhầm thành lỗi truyền dữ liệu; ambiguous = 0 trong phần active;
 - static scan/mutation test chứng minh không consumer Debts dùng `/1.05`, `Math.round` hoặc bỏ dòng âm ngoài policy đã khai báo;
+- golden source-branch test chứng minh cùng consumer: WEB/lịch sử vẫn dùng fallback có provenance và output không đổi; Debts dùng exact before/VAT/after, không `/1.05`/`Math.round`;
+- golden `00002319` chứng minh raw triple được bảo toàn, dòng bị quarantine vì amount inconsistency, canonical reconstruction đúng, receipt có reconstruction delta và dòng luôn xuất hiện trong shadow reconciliation; chưa được đưa vào active views cho tới khi policy/CEO duyệt;
 - Claude GO trên exact candidate SHA;
 - CEO duyệt cutover riêng sau khi xem báo cáo đối chiếu.
 
