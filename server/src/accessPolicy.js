@@ -10,21 +10,41 @@ const BLOCKED_LOGIN_EMP_CODES = new Set([
   'DN021', 'DN023',
 ]);
 
-// VP018 chỉ được xem hai tab doanh thu. Backend là cổng quyết định cuối cùng;
+// VP018 chỉ được xem hai tab doanh thu và tab Cơ số thầu. Backend là cổng quyết định cuối cùng;
 // frontend chỉ dùng access profile để không hiện đường điều hướng sai quyền.
-const REVENUE_ONLY_EMP_CODES = new Set(['VP018']);
-const REVENUE_ONLY_GET_PATHS = new Set([
+function readonlySet(values, label) {
+  const source = new Set(values);
+  const rejectMutation = () => { throw new TypeError(`${label} is read-only`); };
+  const facade = {
+    get size() { return source.size; },
+    has: source.has.bind(source),
+    values: source.values.bind(source),
+    keys: source.keys.bind(source),
+    entries: source.entries.bind(source),
+    forEach(callback, thisArg) {
+      for (const value of source) callback.call(thisArg, value, value, facade);
+    },
+    [Symbol.iterator]: source[Symbol.iterator].bind(source),
+    add: rejectMutation,
+    delete: rejectMutation,
+    clear: rejectMutation,
+  };
+  return Object.freeze(facade);
+}
+
+const COMMON_RESTRICTED_GET_PATHS = [
   '/me',
   '/periods',
   '/filters',
+];
+const REVENUE_GET_PATHS = [
   '/revenue',
   '/revenue/full',
-  // Export của đúng hai tab doanh thu. Liệt kê exact path, không wildcard;
-  // CSV/PPTX và mọi export khác vẫn fail-closed.
   '/export/revenue.xlsx',
   '/export/revenue_report.xlsx',
   '/export/revenue_report.pdf',
-]);
+];
+const CST_GET_PATHS = ['/cst'];
 
 function normalizeEmpCode(value) {
   return String(value || '').trim().toUpperCase();
@@ -32,17 +52,6 @@ function normalizeEmpCode(value) {
 
 function isLoginBlocked(empCode) {
   return BLOCKED_LOGIN_EMP_CODES.has(normalizeEmpCode(empCode));
-}
-
-function accessProfileFor(sessionOrCode) {
-  const code = typeof sessionOrCode === 'object'
-    ? sessionOrCode?.emp_code
-    : sessionOrCode;
-  return REVENUE_ONLY_EMP_CODES.has(normalizeEmpCode(code)) ? 'revenue_only' : 'standard';
-}
-
-function canReadAllRevenue(sessionOrCode) {
-  return accessProfileFor(sessionOrCode) === 'revenue_only';
 }
 
 function normalizeApiPath(value) {
@@ -57,20 +66,64 @@ function normalizeApiPath(value) {
   return pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
 }
 
-function isRequestAllowed(session, { method, path } = {}) {
-  if (accessProfileFor(session) !== 'revenue_only') return true;
-  if (String(method || '').toUpperCase() !== 'GET') return false;
-  return REVENUE_ONLY_GET_PATHS.has(normalizeApiPath(path));
+function createAccessPolicy({ revenueCodes = ['VP018'], cstCodes = ['VP018'] } = {}) {
+  const companyRevenueCodes = new Set(revenueCodes.map(normalizeEmpCode));
+  const companyCstCodes = new Set(cstCodes.map(normalizeEmpCode));
+  const restrictedCodes = new Set([...companyRevenueCodes, ...companyCstCodes]);
+  const COMPANY_REVENUE_READ_EMP_CODES = readonlySet(companyRevenueCodes, 'COMPANY_REVENUE_READ_EMP_CODES');
+  const COMPANY_CST_READ_EMP_CODES = readonlySet(companyCstCodes, 'COMPANY_CST_READ_EMP_CODES');
+  const REVENUE_ONLY_EMP_CODES = readonlySet(restrictedCodes, 'REVENUE_ONLY_EMP_CODES');
+  const REVENUE_ONLY_GET_PATHS = readonlySet([
+    ...COMMON_RESTRICTED_GET_PATHS,
+    ...REVENUE_GET_PATHS,
+    ...CST_GET_PATHS,
+  ], 'REVENUE_ONLY_GET_PATHS');
+
+  function codeOf(sessionOrCode) {
+    return normalizeEmpCode(typeof sessionOrCode === 'object' ? sessionOrCode?.emp_code : sessionOrCode);
+  }
+
+  function accessProfileFor(sessionOrCode) {
+    return restrictedCodes.has(codeOf(sessionOrCode)) ? 'revenue_only' : 'standard';
+  }
+
+  function canReadAllRevenue(sessionOrCode) {
+    return companyRevenueCodes.has(codeOf(sessionOrCode));
+  }
+
+  function canReadAllCst(sessionOrCode) {
+    return companyCstCodes.has(codeOf(sessionOrCode));
+  }
+
+  function isRequestAllowed(session, { method, path } = {}) {
+    if (accessProfileFor(session) !== 'revenue_only') return true;
+    if (String(method || '').toUpperCase() !== 'GET') return false;
+    const normalizedPath = normalizeApiPath(path);
+    if (COMMON_RESTRICTED_GET_PATHS.includes(normalizedPath)) return true;
+    if (companyRevenueCodes.has(codeOf(session)) && REVENUE_GET_PATHS.includes(normalizedPath)) return true;
+    if (companyCstCodes.has(codeOf(session)) && CST_GET_PATHS.includes(normalizedPath)) return true;
+    return false;
+  }
+
+  return {
+    COMPANY_REVENUE_READ_EMP_CODES,
+    COMPANY_CST_READ_EMP_CODES,
+    REVENUE_ONLY_EMP_CODES,
+    REVENUE_ONLY_GET_PATHS,
+    accessProfileFor,
+    canReadAllRevenue,
+    canReadAllCst,
+    isRequestAllowed,
+  };
 }
+
+const policy = createAccessPolicy();
 
 module.exports = {
   BLOCKED_LOGIN_EMP_CODES,
-  REVENUE_ONLY_EMP_CODES,
-  REVENUE_ONLY_GET_PATHS,
+  ...policy,
   normalizeEmpCode,
   normalizeApiPath,
   isLoginBlocked,
-  accessProfileFor,
-  canReadAllRevenue,
-  isRequestAllowed,
+  createAccessPolicy,
 };

@@ -48,6 +48,59 @@ test('VP018 chỉ được GET hai tab doanh thu và đúng ba export tường m
     }
   }
   assert.equal(policy.isRequestAllowed({ emp_code: 'DN006' }, { method: 'GET', path: '/api/overview' }), true);
+  const routes = fs.readFileSync(path.join(__dirname, '../src/routes.js'), 'utf8');
+  assert.match(routes, /router\.get\('\/cst',[\s\S]*?const scope = auth\.cstScopeOf\(req\.session\);/,
+    'route CST phải dùng scope riêng; không được nới scope chung của VP018');
+});
+
+test('quyền doanh thu và CST tạo hồ sơ hạn chế, hợp đúng path và luôn chỉ đọc', () => {
+  const isolated = policy.createAccessPolicy({
+    revenueCodes: ['QA_REVENUE_ONLY', 'QA_BOTH'],
+    cstCodes: ['QA_CST_ONLY', 'QA_BOTH'],
+  });
+  const revenueOnly = { emp_code: 'QA_REVENUE_ONLY' };
+  const cstOnly = { emp_code: 'QA_CST_ONLY' };
+  const both = { emp_code: 'QA_BOTH' };
+  const methods = ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+  for (const session of [revenueOnly, cstOnly, both]) {
+    assert.equal(isolated.accessProfileFor(session), 'revenue_only');
+    for (const method of methods) {
+      for (const route of ['/api/revenue', '/api/cst', '/api/export/revenue.xlsx', '/api/overview']) {
+        assert.equal(isolated.isRequestAllowed(session, { method, path: route }), false, `${session.emp_code} ${method} ${route}`);
+      }
+    }
+    assert.equal(isolated.isRequestAllowed(session, { method: 'GET', path: '/api/overview' }), false);
+  }
+
+  assert.equal(isolated.isRequestAllowed(cstOnly, { method: 'GET', path: '/api/cst' }), true);
+  for (const route of ['/api/revenue', '/api/revenue/full', '/api/export/revenue.xlsx', '/api/export/revenue_report.xlsx', '/api/export/revenue_report.pdf', '/api/export/cst.xlsx']) {
+    assert.equal(isolated.isRequestAllowed(cstOnly, { method: 'GET', path: route }), false, `CST-only ${route}`);
+  }
+  assert.equal(isolated.canReadAllCst(cstOnly), true);
+  assert.equal(isolated.canReadAllRevenue(cstOnly), false);
+
+  assert.equal(isolated.isRequestAllowed(revenueOnly, { method: 'GET', path: '/api/revenue' }), true);
+  assert.equal(isolated.isRequestAllowed(revenueOnly, { method: 'GET', path: '/api/cst' }), false);
+  assert.equal(isolated.canReadAllRevenue(revenueOnly), true);
+  assert.equal(isolated.canReadAllCst(revenueOnly), false);
+
+  assert.equal(isolated.isRequestAllowed(both, { method: 'GET', path: '/api/revenue' }), true);
+  assert.equal(isolated.isRequestAllowed(both, { method: 'GET', path: '/api/cst' }), true);
+  assert.equal(isolated.isRequestAllowed(both, { method: 'GET', path: '/api/export/cst.xlsx' }), false);
+});
+
+test('hai allowlist là hai tập chỉ-đọc, không alias và không thể đột biến chéo', () => {
+  assert.notEqual(policy.COMPANY_REVENUE_READ_EMP_CODES, policy.COMPANY_CST_READ_EMP_CODES);
+  assert.throws(() => policy.COMPANY_REVENUE_READ_EMP_CODES.add('QA_ALIAS'), /read-only/);
+  assert.throws(() => policy.COMPANY_CST_READ_EMP_CODES.delete('VP018'), /read-only/);
+  policy.COMPANY_REVENUE_READ_EMP_CODES.forEach((_value, _key, exposedSet) => {
+    assert.equal(exposedSet, policy.COMPANY_REVENUE_READ_EMP_CODES, 'forEach không được rò Set mutable nội bộ');
+    assert.throws(() => exposedSet.clear(), /read-only/);
+  });
+  assert.equal(policy.COMPANY_REVENUE_READ_EMP_CODES.has('QA_ALIAS'), false);
+  assert.equal(policy.COMPANY_CST_READ_EMP_CODES.has('QA_ALIAS'), false);
+  assert.equal(policy.COMPANY_CST_READ_EMP_CODES.has('VP018'), true);
 });
 
 test('auth từ chối phát token cho denylist và chặn route ngoài doanh thu của VP018', () => {
