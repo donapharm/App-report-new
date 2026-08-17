@@ -1,3 +1,9 @@
+### 2026-08-17 — Thiết kế (chưa triển khai): một luồng snapshot CEO Vault C1-C52
+
+- Thêm `SPEC_APP_REPORT_CEO_VAULT_52_ONE_FLOW.md` để Claude review độc lập.
+- Chỉ là hồ sơ kiến trúc; không đổi runtime, API, DB, config hoặc production.
+- Mọi implementation/merge/deploy cần phiếu và cổng duyệt riêng của CEO.
+
 ### 2026-08-05 — ✅ ĐÓNG rủi ro DataHub: khoá đã tự nhả, kỳ khoá sổ không suy suyển
 
 **Rủi ro tiền — đóng.** Trong 2.600 event tồn: **0 event ghi/sửa** dữ liệu T06/T07. 1.481 event có nhắc T07 nhưng **toàn bộ là đọc** (`employee_cost.read`), tổng số thao tác ghi = **0**.
