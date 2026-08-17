@@ -159,6 +159,21 @@ test('full API page reader is bounded and projection runs outside the serving pr
   const worker = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'catalog52_projection_worker.js'), 'utf8');
   assert.match(worker, /prepareCandidate/);
   assert.doesNotMatch(worker, /VAULT_READ_TOKEN|authorization/);
+  const activate = storeSource.slice(storeSource.indexOf('function activateUnlocked'), storeSource.indexOf('function activateManifest'));
+  assert.match(activate, /checksumFile\(file\)/);
+  assert.doesNotMatch(activate, /readFileSync/);
+});
+
+test('activation checksum verification streams bounded chunks and detects corruption', () => {
+  const { root, store } = temporaryStore();
+  try {
+    const manifest = store.prepareCandidate(sourceEnvelope([row('L1')]));
+    const object = path.join(root, 'objects', '2026-08', manifest.manifestId);
+    assert.equal(catalog52.checksumFile(path.join(object, 'full.jsonl')), manifest.artifacts.full.checksum);
+    fs.appendFileSync(path.join(object, 'full.jsonl'), '{}\n');
+    assert.throws(() => store.activateManifest('2026-08', manifest.manifestId), { code: 'CATALOG52_ARTIFACT_CHECKSUM_MISMATCH' });
+    assert.equal(store.readPointer('2026-08'), null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('trusted-human middleware denies NV, service, QA and untrusted CEO, then observes live trust success', () => {

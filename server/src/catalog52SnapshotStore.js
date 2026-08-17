@@ -191,6 +191,20 @@ function readJsonLinesPage(file, start, end) {
   } finally { fs.closeSync(fd); }
 }
 
+function checksumFile(file) {
+  const fd = fs.openSync(file, 'r');
+  const hash = crypto.createHash('sha256');
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  try {
+    while (true) {
+      const bytes = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (!bytes) break;
+      hash.update(buffer.subarray(0, bytes));
+    }
+    return `sha256:${hash.digest('hex')}`;
+  } finally { fs.closeSync(fd); }
+}
+
 function lockOwner(token) {
   return { schemaVersion: 1, token, pid: process.pid, host: os.hostname(), boot: cleanText(process.env.APP_REPORT_BOOT_ID || 'unknown', 120), heartbeatAt: Date.now() };
 }
@@ -338,8 +352,7 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
     const manifest = readManifest(period, manifestId);
     for (const artifact of Object.values(manifest.artifacts || {})) {
       const file = path.join(path.dirname(manifestPath(period, manifestId)), artifact.file);
-      const content = fs.readFileSync(file);
-      if (checksum(content) !== artifact.checksum) fail('CATALOG52_ARTIFACT_CHECKSUM_MISMATCH', { manifestId });
+      if (checksumFile(file) !== artifact.checksum) fail('CATALOG52_ARTIFACT_CHECKSUM_MISMATCH', { manifestId });
     }
     const current = readPointer(period);
     const activatedAt = new Date(now()).toISOString();
@@ -436,5 +449,5 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
 
 module.exports = {
   SCHEMA_VERSION, PROJECTION_VERSION, FULL_COLUMNS, SAFE_COLUMNS, SENSITIVE_COLUMNS, COST_COLUMNS,
-  Catalog52Error, stableValue, canonicalJson, checksum, normalizedRow, assertNoSensitive, projectRows, readJsonLinesPage, createStore,
+  Catalog52Error, stableValue, canonicalJson, checksum, checksumFile, normalizedRow, assertNoSensitive, projectRows, readJsonLinesPage, createStore,
 };
