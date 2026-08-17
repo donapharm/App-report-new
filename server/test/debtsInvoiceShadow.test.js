@@ -1,0 +1,204 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const shadow = require('../src/debtsInvoiceShadow');
+
+const digest = (value) => crypto.createHash('sha256').update(value).digest('hex');
+const CONTRACT_SHA = digest('debts-sales-ledger-contract-v1');
+const MAPPING_SHA = digest('vault-mapping-v9');
+
+function sourceRow(overrides = {}) {
+  const row = {
+    legal_entity: 'DONA', invoice_date: '2026-08-05', invoice_number: '00000001', invoice_line_id: 'line-1',
+    unit_code: '033.BV A', qlnb_code: 'G1.A', uom: 'HOP', quantity: '2.00', unit_price_before_vat: '100.00',
+    before_vat: '200.00', vat_amount: '10.00', after_vat: '210.00', row_type: 'SALE',
+    row_checksum: digest('line-1'),
+  };
+  return { ...row, ...overrides };
+}
+
+function mapping(rows = [
+  { legal_entity: 'DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', uom: 'HOP', emp_code: 'DN001' },
+]) { return { version: 'V31.7/9', checksum: MAPPING_SHA, rows }; }
+
+function pagesFor(rows, pageSize = rows.length) {
+  const totals = {
+    beforeVat: total(rows, 'before_vat'), vat: total(rows, 'vat_amount'), afterVat: total(rows, 'after_vat'),
+  };
+  const snapshot = {
+    snapshotId: 'debts-2026-08-r1', period: '2026-08', sourceRevision: 'r1', revisionMode: 'full_period_replacement', schemaVersion: 1,
+    rowCount: rows.length, invoiceCount: new Set(rows.map((r) => `${r.legal_entity}|${r.invoice_number}`)).size,
+    checksum: `sha256:${shadow.snapshotRowsChecksum(rows)}`, totals, createdAt: '2026-08-18T00:00:00.000Z',
+  };
+  const pages = [];
+  for (let at = 0; at < rows.length; at += pageSize) {
+    const pageNo = pages.length + 1;
+    const end = Math.min(rows.length, at + pageSize);
+    pages.push({ snapshot, rows: rows.slice(at, end), nextCursor: end < rows.length ? `cursor-${pageNo}` : null });
+  }
+  if (!rows.length) pages.push({ snapshot, rows: [], nextCursor: null });
+  return pages;
+}
+
+function total(rows, field) {
+  return shadow.decimalString(rows.map((row) => shadow.parseDecimal(row[field]))
+    .reduce(shadow.decimalAdd, { units: 0n, scale: 0 }));
+}
+
+function materialize(rows, map = mapping()) {
+  return shadow.materializeShadow(
+    shadow.combineSnapshotPages(pagesFor(rows, 1), { period: '2026-08', contractChecksum: CONTRACT_SHA }),
+    map,
+    { codeRevision: 'candidate-test' },
+  );
+}
+
+test('decimal strings keep exact scale/sign and reject float/exponent/thousand separators', () => {
+  assert.equal(shadow.decimalString(shadow.parseDecimal('-17329000')), '-17329000');
+  assert.equal(shadow.decimalString(shadow.decimalSubtract(shadow.parseDecimal('-17329000'), shadow.parseDecimal('-825190'))), '-16503810');
+  assert.equal(shadow.decimalEqual(shadow.parseDecimal('1.0'), shadow.parseDecimal('1.00')), true);
+  for (const bad of [1.1, '1e3', '1,000', '1.0000001', '+1', '01']) {
+    assert.throws(() => shadow.parseDecimal(bad), { code: 'DEBTS_DECIMAL_INVALID' });
+  }
+});
+
+test('multi-page snapshot pins one identity, checksum, row/invoice counts and final cursor', () => {
+  const rows = [sourceRow(), sourceRow({ invoice_line_id: 'line-2', qlnb_code: 'G1.B', invoice_number: '00000002', row_checksum: digest('line-2') })];
+  const pages = pagesFor(rows, 1);
+  const combined = shadow.combineSnapshotPages(pages, { period: '2026-08', contractChecksum: CONTRACT_SHA });
+  assert.equal(combined.rows.length, 2);
+  assert.equal(combined.contractChecksum, CONTRACT_SHA);
+
+  const drift = structuredClone(pages); drift[1].snapshot = { ...drift[1].snapshot, sourceRevision: 'r2' };
+  assert.throws(() => shadow.combineSnapshotPages(drift, { period: '2026-08', contractChecksum: CONTRACT_SHA }), { code: 'DEBTS_SNAPSHOT_DRIFT_BETWEEN_PAGES' });
+  const loop = structuredClone(pages); loop[1].nextCursor = 'cursor-1';
+  assert.throws(() => shadow.combineSnapshotPages(loop, { period: '2026-08', contractChecksum: CONTRACT_SHA }), { code: 'DEBTS_CURSOR_INVALID' });
+  const truncated = structuredClone(pages); truncated.pop(); truncated[0].nextCursor = null;
+  assert.throws(() => shadow.combineSnapshotPages(truncated, { period: '2026-08', contractChecksum: CONTRACT_SHA }), { code: 'DEBTS_ROW_COUNT_MISMATCH' });
+  const corrupted = structuredClone(pages); corrupted[0].rows[0].after_vat = '211.00';
+  assert.throws(() => shadow.combineSnapshotPages(corrupted, { period: '2026-08', contractChecksum: CONTRACT_SHA }), { code: 'DEBTS_SNAPSHOT_CHECKSUM_MISMATCH' });
+  const incremental = structuredClone(pages); incremental[0].snapshot = { ...incremental[0].snapshot, revisionMode: 'incremental' };
+  assert.throws(() => shadow.combineSnapshotPages(incremental, { period: '2026-08', contractChecksum: CONTRACT_SHA }), { code: 'DEBTS_REVISION_MODE_UNSUPPORTED' });
+});
+
+test('source checksum is order-stable but business-value sensitive', () => {
+  const a = sourceRow(); const b = sourceRow({ invoice_line_id: 'line-2', row_checksum: digest('line-2') });
+  assert.equal(shadow.snapshotRowsChecksum([a, b]), shadow.snapshotRowsChecksum([b, a]));
+  assert.notEqual(shadow.snapshotRowsChecksum([a]), shadow.snapshotRowsChecksum([{ ...a, after_vat: '211.00' }]));
+});
+
+test('normal mapped sale preserves raw/canonical triples and uses after-VAT as headline revenue', () => {
+  const result = materialize([sourceRow()]);
+  assert.equal(result.rows[0].source, 'DEBTS_INVOICE_SHADOW');
+  assert.equal(result.rows[0].source_before_vat_raw, '200.00');
+  assert.equal(result.rows[0].revenue_before_vat, '200.00');
+  assert.equal(result.rows[0].vat_amount, '10.00');
+  assert.equal(result.rows[0].revenue_after_vat, '210.00');
+  assert.equal(result.rows[0].revenue, '210.00');
+  assert.equal(result.rows[0].amount_reconstructed, false);
+  assert.equal(result.rows[0].mapping_status, 'mapped');
+  assert.equal(result.rows[0].emp_code, 'DN001');
+  assert.equal(result.mapped.length, 1);
+  assert.equal(result.receipt.selectorChanged, false);
+});
+
+test('golden 00002319 preserves raw negative triple, reconstructs canonical before and remains quarantined', () => {
+  const line = sourceRow({
+    invoice_number: '00002319', invoice_line_id: 'adjustment-2319', row_type: 'ADJUSTMENT',
+    quantity: '-1', unit_price_before_vat: '0', before_vat: '0', vat_amount: '-825190', after_vat: '-17329000',
+    row_checksum: digest('adjustment-2319'),
+  });
+  const result = materialize([line]); const row = result.rows[0];
+  assert.deepEqual([row.source_before_vat_raw, row.source_vat_raw, row.source_after_vat_raw], ['0', '-825190', '-17329000']);
+  assert.deepEqual([row.revenue_before_vat, row.vat_amount, row.revenue_after_vat], ['-16503810', '-825190', '-17329000']);
+  assert.equal(row.reconstruction_delta, '-16503810');
+  assert.equal(row.amount_inconsistent, true);
+  assert.equal(row.amount_reconstructed, true);
+  assert.equal(row.quarantine, true);
+  assert.deepEqual(row.quarantine_reasons, ['amount_inconsistent']);
+  assert.equal(result.mapped.length, 0);
+  assert.equal(result.quarantined.length, 1);
+  assert.equal(result.receipt.totals.raw.beforeVat, '0');
+  assert.equal(result.receipt.totals.canonical.beforeVat, '-16503810');
+  assert.equal(result.receipt.reconstructionDelta, '-16503810');
+});
+
+test('mapping is exact legal entity + unit + QLNB; ambiguity/UOM mismatch/unmapped never guesses', () => {
+  const base = sourceRow();
+  const ambiguous = mapping([
+    { legal_entity: 'DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', uom: 'HOP', emp_code: 'DN001' },
+    { legal_entity: 'DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', uom: 'HOP', emp_code: 'DN002' },
+  ]);
+  assert.equal(materialize([base], ambiguous).rows[0].mapping_status, 'ambiguous');
+  assert.equal(materialize([base], mapping([{ legal_entity: 'DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', uom: 'CHAI', emp_code: 'DN001' }])).rows[0].mapping_status, 'uom_mismatch');
+  assert.equal(materialize([base], mapping([])).rows[0].mapping_status, 'unmapped');
+  assert.equal(materialize([{ ...base, legal_entity: 'AFP' }]).rows[0].mapping_status, 'unmapped');
+});
+
+test('duplicate immutable line ID fails closed while two equal-value lines with distinct IDs survive', () => {
+  const first = sourceRow();
+  const second = sourceRow({ invoice_line_id: 'line-2', row_checksum: digest('line-2') });
+  assert.equal(materialize([first, second]).rows.length, 2);
+  assert.throws(() => materialize([first, { ...first }]), { code: 'DEBTS_DUPLICATE_LINE_ID' });
+});
+
+test('raw mapped + quarantined balances source independently from canonical reconstruction', () => {
+  const normal = sourceRow();
+  const bad = sourceRow({
+    invoice_line_id: 'bad-2', invoice_number: '00000002', before_vat: '0', vat_amount: '-5', after_vat: '-100', row_checksum: digest('bad-2'),
+  });
+  const result = materialize([normal, bad]);
+  assert.equal(result.receipt.rowCount, result.receipt.mappedCount + result.receipt.quarantinedCount);
+  assert.deepEqual(result.receipt.totals.raw, { beforeVat: '200.00', vat: '5.00', afterVat: '110.00' });
+  assert.deepEqual(result.receipt.totals.canonical, { beforeVat: '105.00', vat: '5.00', afterVat: '110.00' });
+  assert.equal(result.receipt.reconstructionDelta, '-95.00');
+});
+
+test('shadow writer is opt-in, immutable, private, atomic and confined to separate Debts root', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'debts-shadow-'));
+  const root = path.join(tmp, 'revenue-shadow', 'debts');
+  const result = materialize([sourceRow()]);
+  try {
+    assert.throws(() => shadow.publishShadow(result, { dataDir: root }), { code: 'DEBTS_SHADOW_WRITE_DISABLED' });
+    assert.throws(() => shadow.publishShadow(result, { dataDir: path.join(tmp, 'uploads'), allowWrite: true }), { code: 'DEBTS_SHADOW_ROOT_INVALID' });
+    const target = shadow.publishShadow(result, { dataDir: root, allowWrite: true });
+    assert.equal(target, path.join(root, '2026-08', 'debts-2026-08-r1'));
+    assert.deepEqual(fs.readdirSync(target).sort(), ['quarantine.json', 'receipt.json', 'rows.json']);
+    for (const file of fs.readdirSync(target)) assert.equal(fs.statSync(path.join(target, file)).mode & 0o777, 0o600);
+    assert.throws(() => shadow.publishShadow(result, { dataDir: root, allowWrite: true }), { code: 'DEBTS_SHADOW_IMMUTABLE_EXISTS' });
+    assert.equal(shadow.shadowLockFile(root, '2026-08'), path.join(root, 'debts_invoice_shadow_2026-08.lock'));
+    assert.equal(fs.existsSync(path.join(tmp, 'revenue_materialize.lock')), false);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('module is dark/add-only: no route, selector, active slot, WEB guard or frozen pin wiring', () => {
+  const root = path.join(__dirname, '..');
+  const routes = fs.readFileSync(path.join(root, 'src', 'routes.js'), 'utf8');
+  const upload = fs.readFileSync(path.join(root, 'src', 'upload.js'), 'utf8');
+  const webGuard = fs.readFileSync(path.join(root, 'src', 'revenueCrossPeriodWebGuard.js'), 'utf8');
+  const moduleSource = fs.readFileSync(path.join(root, 'src', 'debtsInvoiceShadow.js'), 'utf8');
+  assert.doesNotMatch(routes, /debtsInvoiceShadow|DEBTS_INVOICE_SHADOW/);
+  assert.doesNotMatch(upload, /debtsInvoiceShadow|DEBTS_INVOICE_SHADOW/);
+  assert.doesNotMatch(webGuard, /DEBTS_INVOICE_SHADOW/);
+  assert.doesNotMatch(moduleSource, /revenue_materialize\.lock|active\s*=|slots\.json|EMPLOYEE_COST/);
+  assert.doesNotMatch(moduleSource, /Math\.round|\/\s*1\.05|before_vat\s*>\s*0|after_vat\s*>\s*0/);
+  assert.match(moduleSource, /selectorChanged:\s*false/);
+});
+
+test('WEB/CRM production identities and revenue rule lock remain byte-identical to parent', () => {
+  const { execFileSync } = require('node:child_process');
+  const repo = path.join(__dirname, '..', '..');
+  for (const file of [
+    'server/src/revenuePayloadIdentity.js', 'server/src/revenueCrossPeriodWebGuard.js',
+    'server/src/appSaleRevenueMirror.js', 'server/config/revenue_rule_lock.json',
+  ]) {
+    const current = fs.readFileSync(path.join(repo, file));
+    const parent = execFileSync('git', ['show', `36e5fd116d6a413b8c39ee82f2519534b980c0ad:${file}`], { cwd: repo });
+    assert.equal(digest(current), digest(parent), file);
+  }
+});
