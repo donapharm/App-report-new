@@ -1,6 +1,7 @@
 ### 2026-08-17 — Thiết kế (chưa triển khai): một luồng snapshot CEO Vault C1-C52
 
 - Thêm `SPEC_APP_REPORT_CEO_VAULT_52_ONE_FLOW.md` để Claude review độc lập.
+- Vòng phản biện 1 đã được cập nhật vào spec: human/trusted-device gate, single active pointer, cross-process lock, Vault checksum bắt buộc, no-first-win mapping và regression tests.
 - Chỉ là hồ sơ kiến trúc; không đổi runtime, API, DB, config hoặc production.
 - Mọi implementation/merge/deploy cần phiếu và cổng duyệt riêng của CEO.
 
