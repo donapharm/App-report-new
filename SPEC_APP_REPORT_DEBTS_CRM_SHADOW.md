@@ -34,7 +34,7 @@ CEO Vault snapshot -> unit/product mapping ---+
 - Có dòng điều chỉnh âm T08, hóa đơn `00002319`: Doanh số = 0; VAT = -825.190; Tổng TT = -17.329.000. Không được bỏ hoặc ép về 0.
 - Debts hiện làm tròn một số trường tiền khi lưu; cần contract precision trước khi gọi là số hóa đơn chính xác 100%.
 
-Các số trên là evidence thiết kế, phải được đo lại read-only trên candidate trước implementation/cutover.
+Các số trên là evidence thiết kế, phải được đo lại trên candidate trong transaction `REPEATABLE READ READ ONLY`, kèm thời điểm, snapshot/checksum và exact query/API receipt trước implementation/cutover.
 
 ## 3. Ngữ nghĩa KPI và VAT — điều kiện bắt buộc
 
@@ -53,11 +53,38 @@ Invariant trên từng dòng và tổng nhóm:
 revenue_before_vat + vat_amount = revenue_after_vat
 ```
 
+- Ba field `revenue_before_vat`, `vat_amount`, `revenue_after_vat` phải được **persist end-to-end** từ adapter, shadow store, canonical row, API, export tới UI/AI/deck; không được chỉ lưu `revenue_after_vat` rồi dựng lại các field còn lại.
 - Không chia mặc định cho `1.05` khi nguồn có VAT thực tế.
 - VAT có thể khác 5%, bằng 0 hoặc âm.
 - Nếu `Doanh số` trống/không hợp lệ nhưng `Tổng TT` và VAT hợp lệ, adapter chỉ được tính `before = after - VAT` khi policy cho phép và phải gắn cờ `amount_reconstructed=true`; mặc định quarantine để đối chiếu.
 - Dòng âm/return/adjustment được giữ dấu và loại nghiệp vụ; không loại bằng điều kiện `amount > 0`.
 - Tổng phải đối chiếu trước VAT, VAT và sau VAT theo pháp nhân/ngày/hóa đơn/kỳ.
+
+### 3.1 Chuyển mọi consumer khỏi phép chia VAT cố định
+
+Trước cutover phải kiểm kê và sửa tối thiểu các consumer hiện đang suy `before VAT = revenue / 1.05`:
+
+- `server/src/analytics.js`: `pctTarget`, `empTarget.achieved` và mọi aggregate target;
+- `server/src/routes.js`: route target/gap;
+- `server/src/targetNotify.js`: số đạt target gửi nhân viên;
+- `server/src/revenueReportExport.js`, `server/src/filteredEmployeeReport.js`;
+- `web/src/pages/Overview.jsx`, `web/src/pages/DailySalesOrders.jsx`;
+- mọi consumer mới tìm thấy bằng static scan/test mutation.
+
+Các consumer target/bonus phải dùng cùng `revenue_before_vat` chính xác. Fallback `/1.05` chỉ được phép cho **nguồn lịch sử cũ đã ghim**, phải gắn provenance/`amount_reconstructed` và không áp dụng cho dòng Debts có ba field exact.
+
+Đây là thay đổi luật kế toán/KPI: tỷ lệ đạt target và thông báo target có thể đổi khi VAT thực tế khác 5%. Cutover phải nâng revenue rule lock/fingerprint và được CEO duyệt riêng.
+
+### 3.2 Dòng âm và filter dương
+
+Trước cutover phải kiểm kê toàn bộ filter `> 0`, `amount > 0` hoặc tương đương. Tối thiểu gồm:
+
+- `web/src/pages/Overview.jsx`, `web/src/charts.jsx`, `web/src/pages/Analysis.jsx`;
+- `server/src/smart.js`, `server/src/routes.js` phần trend;
+- `server/src/report/deckData.js`;
+- export, AI/top-N, chart/deck và consumer mới tìm thấy bằng static scan.
+
+Mặc định mọi tổng kế toán phải gồm sale/return/adjustment có dấu. Nếu một view cố ý chỉ hiển thị dương, nhãn và denominator phải nói rõ, đồng thời không được dùng tổng đó thay headline net. Acceptance bắt buộc chứng minh tổng net của từng view/consumer cộng ngược đúng canonical headline.
 
 ## 4. Contract API Debts read-only
 
@@ -106,22 +133,26 @@ Mỗi row cần ít nhất:
 Yêu cầu:
 
 - pagination ổn định trong cùng snapshot; không trộn dữ liệu thay đổi giữa các page;
-- tiền truyền decimal string theo precision gốc, không float và không làm tròn số nguyên;
+- tiền truyền decimal string theo precision gốc, không float và không làm tròn số nguyên. Adapter/store dùng decimal/fixed-point đã định nghĩa; cấm tái dùng đường `Math.round` hiện hữu;
 - checksum canonical có định nghĩa ordering/normalization công khai;
 - token chỉ đọc, giới hạn đúng endpoint/purpose, timeout/retry có idempotency;
+- token lưu server-side secret store, có rotation/revoke/audit; endpoint/token không được xuất hiện trong frontend bundle; egress chỉ allowlist host Debts;
 - snapshot receipt đủ để App Report chứng minh số dòng, hóa đơn và ba tổng tiền.
+
+Tolerance mặc định cho đối chiếu tiền là `0` khi hai nguồn cùng decimal scale. Nếu nguồn bắt buộc khác scale, tolerance phải được chốt theo từng field/scale trước code, không dùng một epsilon float chung.
 
 ## 5. Khóa dòng và chống trùng
 
-Ưu tiên source-provided immutable `invoice_line_id`. Canonical identity phải chứa pháp nhân vì số hóa đơn có thể trùng giữa pháp nhân.
+Debts phải cấp immutable `invoice_line_id`, gắn UUID/ID bền vững ngay lần import đầu và lưu lại qua mọi lần xuất/sắp xếp/re-import. Canonical identity phải chứa pháp nhân vì số hóa đơn có thể trùng giữa pháp nhân.
 
-Nếu Debts chưa có line ID ổn định, blocker cần sửa tại nguồn; không dùng hash mơ hồ làm khóa lâu dài. Hash tạm cho shadow phải gồm tối thiểu:
+`source_row_ordinal` không ổn định khi Excel chèn/sắp xếp dòng nên **không được dùng làm identity**, kể cả lâu dài. Nếu Debts chưa cấp line ID ổn định, shadow chỉ được chứng minh idempotent cho snapshot byte-identical và **không đủ điều kiện cutover**.
 
-```text
-legal_entity + invoice_no + invoice_date + source_row_ordinal/source_line_id
-```
+Mã hàng, ĐVT, số lượng và tiền có thể thay đổi khi điều chỉnh nên chỉ thuộc row checksum/version, không làm identity duy nhất. Mỗi source revision phải biểu diễn rõ một trong các mô hình được khóa trước code:
 
-Mã hàng, ĐVT, số lượng và tiền có thể thay đổi khi điều chỉnh nên chỉ thuộc row checksum/version, không nên tự động làm identity duy nhất. Re-import cùng snapshot phải idempotent; revision mới phải biểu diễn update/tombstone rõ, không nuốt các dòng hóa đơn giống nhau hợp lệ.
+- append/update/tombstone theo immutable line ID; hoặc
+- full-period replacement, trong đó revision mới thay toàn bộ revision cũ bằng atomic pointer và nêu rõ tombstone cho line ID biến mất.
+
+Hai dòng hóa đơn giống toàn bộ giá trị nghiệp vụ vẫn phải tồn tại nếu có hai immutable line IDs khác nhau.
 
 ## 6. Gán đơn vị và nhân viên
 
@@ -141,11 +172,15 @@ Mã ĐV + Mã QLNB -> Mã NV
 
 Crosswalk Mã KH/MST → Mã ĐV, nếu cần, phải là bảng tường minh có `legal_entity`, hiệu lực từ/đến, nguồn phê duyệt và conflict test.
 
+Debts lưu Mã ĐV chuẩn trên từng line là điều kiện ưu tiên và là gate cutover. Crosswalk versioned chỉ là phương án shadow tạm. Quarantine/diagnostics có thông tin KH/MST và candidate NV chỉ CEO/admin được đọc; NV chỉ thấy dòng `mapped` xác định thuộc chính mình.
+
+Phải xác nhận `legal_entity`/contractor của Debts ánh xạ đúng DONA/AFP; không tái dùng alias `companyGroupOf` của App Sale nếu chưa có contract và test tương đương.
+
 ## 7. Materializer shadow
 
-Thêm source label `DEBTS_INVOICE_SHADOW`; không ghi đè slot CRM hiện tại.
+Thêm source label `DEBTS_INVOICE_SHADOW`; đây là label add-only cho nhánh CRM, không bao giờ được chọn cho WEB/Partner và không ghi đè slot CRM hiện tại.
 
-1. Khóa materialize theo kỳ/source.
+1. Dùng lock và store riêng cho Debts shadow, không dùng `revenue_materialize.lock` và không có quyền ghi slot/frozen period production.
 2. Đọc toàn bộ một Debts snapshot.
 3. Xác minh manifest, pagination, checksum, row/invoice counts và totals.
 4. Normalize amount/date/status mà không mất precision.
@@ -157,29 +192,36 @@ Thêm source label `DEBTS_INVOICE_SHADOW`; không ghi đè slot CRM hiện tại
 
 Run phải ghi `debtsSnapshotId/checksum`, `catalogVersion/checksum`, code revision, counts theo trạng thái mapping và ba tổng tiền.
 
+Shadow provenance phải có Debts endpoint contract version/SHA, snapshot revision/checksum và revenue rule candidate version/hash. T06/T07 đã ghim phải byte-identical trước/sau mọi shadow run.
+
 ## 8. Đối chiếu và tiêu chí cutover
 
 ### Với Debts
 
 - row count, distinct stable line IDs và invoice count khớp;
-- tổng trước VAT, VAT, sau VAT khớp toàn kỳ và theo pháp nhân/ngày/hóa đơn;
+- tổng trước VAT, VAT, sau VAT khớp toàn kỳ và theo pháp nhân/ngày/hóa đơn/nhân viên đã map;
+- line count khớp theo hóa đơn và `hóa đơn × QLNB`; tổng số lượng khớp để bắt split/merge bù trừ tiền;
 - không duplicate/lost line; import lại idempotent;
 - negative/return/adjustment khớp dấu và số tiền;
-- decimal precision giữ nguyên.
+- decimal precision giữ nguyên; từng dòng và từng group đạt `before + VAT = after` theo tolerance đã khóa;
+- bất biến cân quarantine: `count(mapped) + count(quarantined) = count(source)` và ba tổng tiền mapped + quarantined = source.
 
 ### Với App Report
 
 - WEB source/data/totals không thay đổi byte-for-byte về contract hoặc bằng golden fixtures;
 - CRM shadow hiển thị KPI sau VAT từ `Tổng TT`;
 - mọi màn dùng cùng canonical field, không màn tự chia `1.05` khi exact before-VAT có sẵn;
+- KPI target, target notification và bonus dùng cùng exact `revenue_before_vat` cho Debts;
 - phân quyền nhân viên dựa mapping canonical, không lộ dòng người khác;
-- drilldown cộng ngược đúng totals.
+- drilldown, cơ cấu đơn vị, chart, AI top-N, trend, export và deck cộng ngược đúng net totals gồm dòng âm;
+- WEB/Partner payload, cache và UI aggregation byte-identical/golden-equal trước và sau khi thêm shadow, dùng guards `revenuePayloadIdentity`/`revenueCrossPeriodWebGuard` hoặc tương đương.
 
 ### Gate
 
 - chạy song song ít nhất một kỳ đầy đủ;
 - mapping deterministic hoặc quarantine được CEO duyệt = 100%; ambiguous = 0 trong phần active;
-- tất cả delta Debts raw ↔ shadow = 0 theo tolerance decimal đã định nghĩa;
+- tất cả delta Debts raw ↔ shadow = 0 theo tolerance decimal đã định nghĩa; ambiguous = 0 trong phần active;
+- static scan/mutation test chứng minh không consumer Debts dùng `/1.05`, `Math.round` hoặc bỏ dòng âm ngoài policy đã khai báo;
 - Claude GO trên exact candidate SHA;
 - CEO duyệt cutover riêng sau khi xem báo cáo đối chiếu.
 
@@ -187,7 +229,11 @@ Run phải ghi `debtsSnapshotId/checksum`, `catalogVersion/checksum`, code revis
 
 Cutover tương lai chỉ đổi source selector CRM bằng feature flag/versioned config; không xóa CRM cũ. Rollback trả selector về nguồn CRM hiện tại, giữ nguyên WEB. Snapshot shadow và receipts là bất biến để audit.
 
+Trước cutover phải nâng version/hash/provenance trong `server/config/revenue_rule_lock.json` và cập nhật `revenueRuleLock.test.js`/fingerprint mirror theo quy trình luật doanh thu bất biến. T06/T07 frozen pins không được thay đổi. Đổi cách tính target từ `/1.05` sang before-VAT exact là thay đổi được nêu rõ trong preview CEO, không được giấu trong refactor.
+
 Không cho phép fallback âm thầm giữa Debts và CRM cũ trong cùng một kỳ. Nguồn lỗi phải trả stale/error rõ, không tự trộn hai nguồn rồi báo tổng hợp.
+
+Acceptance rollback/no-blend phải gây lỗi Debts giữa run và chứng minh: selector không lật, không có tổng trộn, WEB không đổi, CRM cũ vẫn nguyên và shadow failed có receipt.
 
 ## 10. Câu hỏi bắt buộc cho Claude review
 

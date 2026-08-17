@@ -2,6 +2,7 @@
 
 - Thêm `SPEC_APP_REPORT_DEBTS_CRM_SHADOW.md` để Claude review độc lập.
 - Chốt rõ KPI `revenue` hiện là sau VAT; nguồn WEB App Sale giữ nguyên.
+- Vòng phản biện 1 đã được cập nhật vào spec: persist đủ before/VAT/after, bỏ phép chia `1.05` cho Debts, giữ dòng âm ở mọi consumer, immutable line ID, decimal exact và revenue-rule lock.
 - Chỉ là hồ sơ kiến trúc; không đổi runtime, API, DB, config hoặc production.
 
 ### 2026-08-05 — ✅ ĐÓNG rủi ro DataHub: khoá đã tự nhả, kỳ khoá sổ không suy suyển
