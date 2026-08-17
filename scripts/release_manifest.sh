@@ -26,6 +26,7 @@ ACTION="${1:-}"
 # node_modules SAU prepare phải bị chặn trước khi PM2 chạy. web build ra dist nên
 # node_modules của web không chạy ở runtime; chỉ manifest server/node_modules.
 DEFAULT_TARGETS=(
+  "RELEASE_IDENTITY.json"
   "server/src" "server/scripts" "server/package.json" "server/package-lock.json"
   "server/node_modules" "web/dist" "ecosystem.config.js" "ecosystem.config.cjs"
 )
@@ -64,6 +65,7 @@ case "$ACTION" in
     stage_targets "$stage"
     manifest_create "$stage" "$MANIFEST"
     save_targets
+    RELEASE_ROOT="$RELEASE_ROOT" node "$RELEASE_ROOT/scripts/verify_release_identity.js"
     ok "Đã tạo manifest: $MANIFEST ($(wc -l < "$MANIFEST") mục)"
     info "sha256 manifest: $(file_sha256 "$MANIFEST")"
     ;;
@@ -76,6 +78,7 @@ case "$ACTION" in
     if ! manifest_verify "$stage" "$MANIFEST"; then
       die "BẢN CHẠY ĐÃ BỊ THAY ĐỔI so với lúc chuẩn bị — DỪNG, KHÔNG khởi động."
     fi
+    RELEASE_ROOT="$RELEASE_ROOT" node "$RELEASE_ROOT/scripts/verify_release_identity.js"
     ok "Bản chạy khớp đúng bản đã chuẩn bị — được phép cutover."
     ;;
   *)
