@@ -651,6 +651,63 @@ function auditColumnsText(value) {
   return entries.map(([key, scope]) => `${key.toUpperCase()}(${Array.isArray(scope) && scope.includes(ALL_UNITS) ? 'mọi nhóm' : (scope || []).join(',')})`).join(' + ');
 }
 
+function Catalog52ControlPlane({ period }) {
+  const [status, setStatus] = useState(null);
+  const [candidate, setCandidate] = useState(null);
+  const [page, setPage] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const hubPeriod = uiToHub(period);
+  const load = async () => {
+    setBusy('load'); setError('');
+    try {
+      const next = await api.catalog52Status(hubPeriod);
+      setStatus(next);
+      if (next?.active?.manifestId) setPage(await api.catalog52Rows({ period: hubPeriod, manifestId: next.active.manifestId }));
+      else setPage(null);
+    } catch (loadError) { setError(loadError.message); }
+    finally { setBusy(''); }
+  };
+  useEffect(() => { load(); }, [hubPeriod]);
+  const syncPreview = async () => {
+    setBusy('sync'); setError('');
+    try { const result = await api.catalog52SyncPreview(hubPeriod); setCandidate(result.manifest); }
+    catch (syncError) { setError(syncError.message); }
+    finally { setBusy(''); }
+  };
+  const activate = async () => {
+    if (!candidate?.manifestId) return;
+    setBusy('activate'); setError('');
+    try { await api.catalog52Activate(hubPeriod, candidate.manifestId); setCandidate(null); await load(); }
+    catch (activateError) { setError(activateError.message); }
+    finally { setBusy(''); }
+  };
+  const rollback = async () => {
+    setBusy('rollback'); setError('');
+    try { await api.catalog52Rollback(hubPeriod); await load(); }
+    catch (rollbackError) { setError(rollbackError.message); }
+    finally { setBusy(''); }
+  };
+  const active = status?.active;
+  return <details className="card catalog52-control-plane">
+    <summary>🔐 CP Total 52 cột (CEO)</summary>
+    <p className="muted">Control plane chỉ đọc snapshot backend bất biến. Đóng tab không ảnh hưởng các màn khác; đợt này chưa có export full 52.</p>
+    {error && <div className="catalog-alert error">⚠ {error}</div>}
+    <div className="catalog52-meta">
+      <span>Kỳ <b>{hubPeriod}</b></span><span>Active <b>{active?.sourceVersion || 'Chưa có'}</b></span>
+      <span>Dòng <b>{Number(active?.rowCount || 0).toLocaleString('vi-VN')}</b></span>
+      <span>Manifest <b>{active?.manifestId || '—'}</b></span>
+    </div>
+    <div className="catalog52-actions">
+      <button type="button" className="btn" disabled={!!busy} onClick={syncPreview}>{busy === 'sync' ? 'Đang kiểm tra…' : 'Đồng bộ toàn bộ · tạo preview'}</button>
+      <button type="button" className="btn" disabled={!!busy || !candidate?.manifestId} onClick={activate}>Kích hoạt preview đã kiểm</button>
+      <button type="button" className="btn ghost" disabled={!!busy || !status?.lastKnownGoodManifestId || status.lastKnownGoodManifestId === active?.manifestId} onClick={rollback}>Rollback LKG</button>
+    </div>
+    {candidate && <div className="catalog-alert success">✓ Candidate {candidate.sourceVersion} · {candidate.rowCount.toLocaleString('vi-VN')} dòng · chưa kích hoạt · mapping conflict {candidate.mappingConflicts}</div>}
+    {page?.rows?.length > 0 && <div className="table-scroll"><table className="catalog-table catalog52-table"><thead><tr><th>Line ID</th>{Array.from({ length: 52 }, (_, index) => <th key={index}>C{index + 1}</th>)}</tr></thead><tbody>{page.rows.map((row) => <tr key={row.sourceLineId}><td>{row.sourceLineId}</td>{Array.from({ length: 52 }, (_, index) => <td key={index}>{String(row[`c${index + 1}`] ?? '—')}</td>)}</tr>)}</tbody></table></div>}
+  </details>;
+}
+
 /**
  * MÀN CHI TIẾT QUYỀN CỦA MỘT NHÂN VIÊN (CEO yêu cầu 09/08/2026)
  *
@@ -1445,6 +1502,7 @@ export default function CatalogManagement({ me }) {
         cửa chi phí, cửa đang sống (probe 21/21). Khoá nó đúng lúc cần nhất là tự
         chặn đường thoát duy nhất. */}
     {isCeo && <CostRatesSyncCard period={period} catalogLoading={!!loadingPeriod} />}
+    {isCeo && <Catalog52ControlPlane period={period} />}
     <CostRatesTablePanel period={period} />
     {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} unitGroups={data.unitGroups || null} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">

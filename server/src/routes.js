@@ -23,6 +23,7 @@ const { buildTargetKpiDetail } = require('./targetKpiDetail');
 const { summarizeAssignedQuarter } = require('./targetKpi');
 const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
+const catalog52ControlPlane = require('./catalog52ControlPlane');
 const catalogCostColumnGrants = require('./catalogCostColumnGrants');
 const employeeCostTemplates = require('./employeeCostTemplates');
 const costRatesSync = require('./costRatesSync');
@@ -4447,6 +4448,42 @@ router.get('/admin/catalog-management/history', auth.requireAuth, auth.requireAd
 });
 router.get('/admin/catalog-management/diagnostics', auth.requireAuth, auth.requireAdmin, (req, res) => {
   res.json(catalogManagement.diagnostics());
+});
+
+// Kho immutable C1-C52 là control plane CEO-only. Không route nào dưới đây dùng
+// requireTargetAuth/requireDataHubService; service session mang role=ceo vẫn bị
+// chặn bởi requireCeoTrustedHuman. Đồng bộ chỉ tạo candidate, không tự activate.
+router.get('/admin/catalog-management/cp-total-52/status', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.json(catalog52ControlPlane.store.status(req.query.period));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
+router.get('/admin/catalog-management/cp-total-52/rows', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.json(catalog52ControlPlane.store.readProjectionPage(req.query.period, 'full', {
+      page: req.query.page, pageSize: req.query.pageSize, manifestId: req.query.manifestId || null,
+    }));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
+router.post('/admin/catalog-management/cp-total-52/sync-preview', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, async (req, res) => {
+  try {
+    const manifest = await catalog52ControlPlane.syncFromVault(req.body?.period, req.session.emp_code);
+    return res.status(201).json({ manifest, activated: false });
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
+router.post('/admin/catalog-management/cp-total-52/activate', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.json(catalog52ControlPlane.store.activateManifest(req.body?.period, req.body?.manifestId, { actor: req.session.emp_code }));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
+router.post('/admin/catalog-management/cp-total-52/rollback', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.json(catalog52ControlPlane.store.rollback(req.body?.period, { actor: req.session.emp_code }));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
 });
 // Báo cáo cá nhân theo bộ lọc: admin-only, preview trước, tách từng NV.
 // Luồng delivery tạo file/manifest nhưng gửi thật mặc định khóa bằng env và cần CEO duyệt lần hai.
