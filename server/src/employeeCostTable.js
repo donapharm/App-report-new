@@ -11,7 +11,7 @@ const PAGE_SIZES = Object.freeze([20, 50, 100]);
 const MAX_PAGE_SIZE = 100;
 const UNASSIGNED_PROVINCE = 'Chưa gán tỉnh';
 const SEARCHABLE_BASE_KEYS = Object.freeze([
-  'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength', 'c25',
+  'date', 'orderCode', 'route', 'c7', 'unitCode', 'contractorName', 'c5', 'c16', 'strength', 'c25',
   'bidPrice', 'quantity', 'revenueBeforeVat', 'rowMonthlyTotal', 'note', 'employeeCode', 'employeeName',
   'province', 'unitGroup', 'unitGroupLabel',
 ]);

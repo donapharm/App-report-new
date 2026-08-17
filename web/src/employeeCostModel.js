@@ -5,6 +5,7 @@ export const EMPLOYEE_COST_DIMENSIONS = Object.freeze([
   { key: 'orderCode', label: 'Mã đơn hàng', kind: 'dimension' },
   { key: 'route', label: 'Tuyến', kind: 'dimension' },
   { key: 'c7', label: 'Đơn vị', kind: 'dimension' },
+  { key: 'unitCode', label: 'Mã đơn vị', kind: 'dimension' },
   { key: 'contractorName', label: 'Nhà thầu', kind: 'dimension' },
   { key: 'c5', label: 'Mã hàng (QLNB)', kind: 'dimension' },
   { key: 'c10', label: 'C10', kind: 'dimension' },
@@ -21,7 +22,7 @@ export const EMPLOYEE_COST_DIMENSIONS = Object.freeze([
 ]);
 
 const FIELD_BY_KEY = new Map(EMPLOYEE_COST_DIMENSIONS.map((column) => [column.key, column]));
-const DEFAULT_PREFIX = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'shadowReconciledQuantity', 'shadowQuantityDelta', 'revenueBeforeVat'];
+const DEFAULT_PREFIX = ['date', 'orderCode', 'route', 'c7', 'unitCode', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25', 'bidPrice', 'quantity', 'shadowReconciledQuantity', 'shadowQuantityDelta', 'revenueBeforeVat'];
 const DEFAULT_SUFFIX = ['rowMonthlyTotal', 'note'];
 const BLOCKED = new Set(['c32', 'c47']);
 const EMPTY_NOTE = 'chưa có dữ liệu chi phí kỳ này';
@@ -179,6 +180,12 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
     const at = requestedLayout.indexOf('c5');
     if (at >= 0) requestedLayout.splice(at + 1, 0, 'c10');
   }
+  // C7 canonical is a distinct source field from the human-facing unit name.
+  // Keep both visible and adjacent; never derive the code from the name.
+  if (requestedLayout.length && !requestedLayout.includes('unitCode')) {
+    const at = requestedLayout.indexOf('c7');
+    if (at >= 0) requestedLayout.splice(at + 1, 0, 'unitCode');
+  }
   // Phase 1 always exposes exactly the two approved shadow quantity columns,
   // including for templates that predate this additive contract.
   if (requestedLayout.length) {
@@ -208,6 +215,7 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
 const PRIVACY_EXEMPT_KEYS = new Set(['bidPrice', 'revenueBeforeVat']);
 
 export function formatEmployeeCostCell(value, column = {}) {
+  if (column.key === 'unitCode' && (value == null || value === '')) return '';
   if (value == null || value === '') return '—';
   if (column.key === 'date') return String(value).split('-').reverse().join('/');
   const number = Number(value);

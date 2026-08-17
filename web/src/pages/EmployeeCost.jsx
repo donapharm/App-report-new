@@ -109,7 +109,7 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
     }
     const text = formatEmployeeCostCell(row[column.key], column);
     if (column.tooltip && text !== '—') return <button type="button" className="employee-cost-ellipsis" title={text} onClick={() => setTooltip(text)}>{text}</button>;
-    if (column.key === 'c7' || column.key === 'contractorName') return <span className="employee-cost-clamp-2" title={text}><Highlight value={text} query={query} /></span>;
+    if (column.key === 'c7' || column.key === 'unitCode' || column.key === 'contractorName') return <span className="employee-cost-clamp-2" title={text}><Highlight value={text} query={query} /></span>;
     return <Highlight value={text} query={query} />;
   };
   const sortHeader = (column) => {

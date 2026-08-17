@@ -19,7 +19,7 @@ function costReport() {
         { key: 'c47', label: 'Cấm', annual: false },
       ],
       rows: [{
-        date: '2026-07-02', orderCode: 'DH001', route: 'ETC', c7: '001.BVĐK Đồng Nai', contractorName: 'Nhà thầu Ánh Dương',
+        date: '2026-07-02', orderCode: 'DH001', route: 'ETC', c7: 'BVĐK Đồng Nai', unitCode: '001.BVĐK ĐỒNG NAI', contractorName: 'Nhà thầu Ánh Dương',
         c5: 'G1.GE.QĐ139.1', c16: 'Thuốc tiếng Việt', strength: '500 mg', c25: 'Viên', bidPrice: 1234567.89,
         quantity: 10, revenueBeforeVat: 2278049356.19, c36: 5, c44: 5,
         amounts: { c36: 41144556, c44: 1210470 }, rowMonthlyTotal: 41144556, note: 'Đủ dấu tiếng Việt',
@@ -61,6 +61,8 @@ test('cost Excel is A4 landscape, numeric/formula capable, Vietnamese, and block
   assert.match(sheet.headerFooter.oddHeader, /3603611886/);
   const headers = sheet.getRow(7).values.slice(1);
   assert.equal(headers[0], 'STT');
+  assert.deepEqual(headers.slice(headers.indexOf('Đơn vị'), headers.indexOf('Đơn vị') + 2), ['Đơn vị', 'Mã đơn vị']);
+  assert.equal(sheet.getRow(8).getCell(headers.indexOf('Mã đơn vị') + 1).value, '001.BVĐK ĐỒNG NAI');
   assert.equal(sheet.getRow(8).getCell(1).value, 1);
   assert.ok(headers.includes('CP cộng tác viên (%)'));
   assert.ok(headers.includes('Thành tiền C36'));
@@ -75,6 +77,18 @@ test('cost Excel is A4 landscape, numeric/formula capable, Vietnamese, and block
   assert.equal(totalCell.value.result, 41144556);
   assert.match(sheet.getRow(11).getCell(1).value, /Bằng chữ: Bốn mươi mốt triệu/);
   assert.match(sheet.headerFooter.oddFooter, /Trang &P\/&N/);
+});
+
+test('cost Excel/PDF leaves a missing source C7 unit code blank', async () => {
+  const report = costReport();
+  report.periods[0].rows[0].unitCode = null;
+  const workbook = exportService.createCostWorkbook([report]);
+  const sheet = workbook.worksheets[0];
+  const headers = sheet.getRow(7).values.slice(1);
+  assert.equal(sheet.getRow(8).getCell(headers.indexOf('Mã đơn vị') + 1).value, '');
+  const pdf = inspectPdf(await exportService.costPdfBuffer([report]), 'cost-missing-unit-code');
+  assert.match(pdf.text, /Mã đơn vị/);
+  assert.doesNotMatch(pdf.text, /001\.BVĐK ĐỒNG NAI/);
 });
 
 test('part-time cost export keeps only C36 and does not invent C44', async () => {

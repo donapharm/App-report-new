@@ -194,7 +194,7 @@ function costColumns(period, report = {}) {
   const base = [
     ['stt', 'STT', 'number', 7],
     ...(report.allEmployees ? [['employee', 'Nhân viên', 'text', 24]] : []),
-    ['date', 'Ngày', 'date', 11], ['orderCode', 'Mã đơn', 'text', 15], ['route', 'Tuyến', 'text', 9], ['c7', 'Đơn vị', 'text', 26],
+    ['date', 'Ngày', 'date', 11], ['orderCode', 'Mã đơn', 'text', 15], ['route', 'Tuyến', 'text', 9], ['c7', 'Đơn vị', 'text', 26], ['unitCode', 'Mã đơn vị', 'text', 20],
     ['contractorName', 'Nhà thầu', 'text', 22], ['c5', 'Mã QLNB', 'text', 22], ['c16', 'Tên hàng', 'text', 25], ['strength', 'Hàm lượng', 'text', 18],
     ['c25', 'ĐVT', 'text', 8], ['bidPrice', 'Giá trúng thầu', 'money', 15], ['quantity', 'SL', 'number', 10], ['revenueBeforeVat', 'Thành tiền trước VAT', 'decimal', 18],
   ].map(([key, label, kind, width]) => ({

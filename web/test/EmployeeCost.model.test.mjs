@@ -121,7 +121,7 @@ test('dynamic columns follow approved order, keep bid price before quantity, and
     { key: 'c5', label: 'Không lặp' },
   ]);
   assert.deepEqual(columns.map((column) => column.key), [
-    'date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25',
+    'date', 'orderCode', 'route', 'c7', 'unitCode', 'contractorName', 'c5', 'c10', 'c16', 'strength', 'c25',
     'bidPrice', 'quantity', 'shadowReconciledQuantity', 'shadowQuantityDelta', 'revenueBeforeVat', 'c36', 'c43', 'rowMonthlyTotal', 'note',
   ]);
 });
@@ -157,8 +157,8 @@ test('full-time and part-time template metadata add exactly two Phase-1 shadow c
   const costs = ['c36', 'c41', 'c43', 'c44', 'c45'].map((key) => ({ key, label: key, annual: key === 'c44' }));
   const fulltime = buildEmployeeCostColumns(costs, { columns: [...base, 'c36', 'c41', 'c43', 'c44', 'c45', ...suffix] });
   const parttime = buildEmployeeCostColumns(costs.slice(0, 1), { columns: [...base, 'c36', ...suffix] });
-  assert.equal(fulltime.length, 22);
-  assert.equal(parttime.length, 18);
+  assert.equal(fulltime.length, 23);
+  assert.equal(parttime.length, 19);
   assert.deepEqual(fulltime.filter((column) => column.shadowOnly).map((column) => [column.key, column.label]), [
     ['shadowReconciledQuantity', 'SL đã đối soát MISA'],
     ['shadowQuantityDelta', 'Chênh lệch SL'],
@@ -476,6 +476,18 @@ test('smart table search is Vietnamese accent-insensitive, multi-token AND, stab
   assert.deepEqual(result.map((row) => [row.stt, row.sourceLineId]), [[1, 'a']]);
   assert.deepEqual(filterSortEmployeeCostRows(rows, columns, 'dviet').map((row) => row.sourceLineId), ['a', 'c']);
   assert.deepEqual(filterSortEmployeeCostRows(rows, columns, 'cerecaps', { key: 'revenueBeforeVat', dir: 'desc' }).map((row) => row.sourceLineId), ['b', 'a']);
+});
+
+test('C7 unit code is source-owned, adjacent to unit name, searchable, and blank when absent', () => {
+  const columns = buildEmployeeCostColumns([], { columns: ['date', 'c7', 'contractorName'] });
+  assert.deepEqual(columns.slice(1, 3).map((column) => column.key), ['c7', 'unitCode']);
+  const rows = [
+    { sourceLineId: 'with-c7', c7: 'BVĐK Đồng Nai', unitCode: '001.BVĐK ĐỒNG NAI' },
+    { sourceLineId: 'without-c7', c7: 'Đơn vị chưa có mã', unitCode: null },
+  ];
+  assert.deepEqual(filterSortEmployeeCostRows(rows, columns, '001.BVDK').map((row) => row.sourceLineId), ['with-c7']);
+  assert.equal(rows[1].unitCode, null);
+  assert.equal(formatEmployeeCostCell(rows[1].unitCode, columns[2]), '');
 });
 
 test('highlight maps accent-free query back to original Vietnamese text', () => {
