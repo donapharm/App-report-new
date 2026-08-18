@@ -142,6 +142,7 @@ test('routes.js phải nối đúng: chỉ đóng dấu bản KHÔNG degraded', 
  * Bot audit bắt đúng. Nay mọi dữ liệu thử đi qua `mergeEmployeeReports` THẬT, nên
  * hình dạng có đổi là test đỏ ngay. */
 const employeeCostTable = require('../src/employeeCostTable');
+const sealProvenance = require('../src/employeeCostSealProvenance');
 
 const ROSTER_2 = [{ emp_code: 'DN001', name: 'A' }, { emp_code: 'DN002', name: 'B' }];
 
@@ -169,6 +170,17 @@ const gopThat = (reports, roster = ROSTER_2, { recon, remote } = {}) => {
     ? { total: 250, shown: 250, gap: 0, balanced: true }
     : recon;
   merged.remoteProvenance = remote === undefined ? [] : remote;
+  merged.sealProvenance = {
+    c32SidecarRowsChecksum: 'fixture-rows-checksum',
+    c32SidecarRowCount: 1,
+    c32SidecarArtifactId: 'fixture-artifact',
+    c32SidecarProvenanceKind: 'fixture-kind',
+    c32SidecarAuditChainChecksum: 'fixture-audit-chain',
+    appReportResponseRowCount: 1,
+    appReportRawCaptureIndex: sealProvenance.APP_REPORT_RAW_CAPTURE_INDEX,
+    observedAtGmt7: '2026-08-18T12:00:00.000+07:00',
+    certaintyStatement: sealProvenance.CERTAINTY_STATEMENT,
+  };
   return merged;
 };
 
