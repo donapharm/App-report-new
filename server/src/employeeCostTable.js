@@ -304,7 +304,8 @@ function transformReport(report = {}, options = {}) {
   const filteredRows = periods.reduce((sum, period) => sum + period.search.filteredRows, 0);
   const totalRows = periods.reduce((sum, period) => sum + period.search.totalRows, 0);
   const reliable = periods.every((period) => period.summary.reliable);
-  const hasCompanyRevenue = periods.length > 0 && periods.every((period) => (
+  const allEmployees = !!options.allEmployees;
+  const hasCompanyRevenue = allEmployees && periods.length > 0 && periods.every((period) => (
     period.summary.revenueSource === 'app_report_company_store'
       && period.summary.revenueTotal != null
       && period.summary.revenueBeforeVatTotal != null
@@ -315,7 +316,7 @@ function transformReport(report = {}, options = {}) {
     ...report,
     periods,
     rows: undefined,
-    allEmployees: !!options.allEmployees,
+    allEmployees,
     filters: Object.fromEntries(FILTER_KEYS.map((key) => {
       const selected = requestedFilterValue(options, key);
       return [key, selected === '__INVALID_DATE__' ? '' : selected];
@@ -326,11 +327,20 @@ function transformReport(report = {}, options = {}) {
       reliable,
       periodTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.monthlyTotal), 0) : null,
       annualTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.annualTotal), 0) : null,
-      revenueTotal: hasCompanyRevenue ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0) : null,
-      revenueBeforeVatTotal: hasCompanyRevenue ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0) : null,
-      revenueAllocatedRowCount: hasCompanyRevenue ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueAllocatedRowCount), 0) : null,
-      revenueSource: hasCompanyRevenue ? 'app_report_company_store' : 'company_revenue_unavailable',
-      revenueUnavailableReason: hasCompanyRevenue ? '' : 'Chưa lấy được doanh thu toàn đội.',
+      // Fail-closed company snapshot is an ALL-only contract. A self report owns
+      // its already-scoped revenue rows and must not be rejected merely because
+      // it does not carry the company snapshot used by mergeEmployeeReports().
+      revenueTotal: !allEmployees || hasCompanyRevenue
+        ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0) : null,
+      revenueBeforeVatTotal: !allEmployees || hasCompanyRevenue
+        ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0) : null,
+      revenueAllocatedRowCount: allEmployees
+        ? (hasCompanyRevenue ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueAllocatedRowCount), 0) : null)
+        : null,
+      revenueSource: allEmployees
+        ? (hasCompanyRevenue ? 'app_report_company_store' : 'company_revenue_unavailable')
+        : String(report.summary?.revenueSource || 'app_report_employee_rows'),
+      revenueUnavailableReason: allEmployees && !hasCompanyRevenue ? 'Chưa lấy được doanh thu toàn đội.' : '',
       columnTotals: reliable ? Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.provisionalColumnTotals?.[key]), 0)])) : null,
       // Số "tạm tính" LUÔN có (tổng phần đã khớp %) để UI hiện kèm nhãn coverage,
       // thay vì bỏ trống. Không thay hành vi fail-closed của columnTotals ở trên.

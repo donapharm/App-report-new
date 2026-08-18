@@ -147,6 +147,14 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   assert.equal(byDate.summary.periodTotal, 20);
 });
 
+test('‼ self revenue stays scoped and available without an ALL company snapshot', () => {
+  const transformed = table.transformReport(report(), { paginate: false });
+  assert.equal(transformed.allEmployees, false);
+  assert.equal(transformed.summary.revenueBeforeVatTotal, 600);
+  assert.equal(transformed.summary.revenueSource, 'app_report_employee_rows');
+  assert.equal(transformed.summary.revenueUnavailableReason, '');
+});
+
 test('‼ ALL revenue contract: missing one cost report must not change company revenue totals', () => {
   const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }, { emp_code: 'DN024', name: 'NV lớn' }];
   const make = (empCode, revenue) => {
