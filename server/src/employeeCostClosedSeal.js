@@ -37,6 +37,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const persist = require('./persist');
+const sealProvenance = require('./employeeCostSealProvenance');
 
 const FILE = 'employee_cost_closed_seal';
 const MAX_SEALS = 8;
@@ -94,6 +95,9 @@ function isSealable(merged, roster, reports) {
 
   const periods = Array.isArray(merged.periods) ? merged.periods : null;
   if (!periods || !periods.length) return false;
+  const months = periods.map((period) => text(period?.period));
+  if (months.length === 1 && months[0] === '2026-07'
+    && !sealProvenance.validEnvelope(merged.sealProvenance)) return false;
 
   /* ‼ PHÉP CÂN KHÔNG CÂN THÌ KHÔNG ĐÓNG DẤU (bot audit đợt 17, mục A2).
    *

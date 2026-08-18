@@ -136,6 +136,26 @@ test('range có tỷ lệ nhưng provenance thiếu/sai kỳ bị xóa và fail-
   }
 });
 
+test('T07 exact response carries the five C32 declarations and App Report raw row count forward', async () => {
+  const raw = {
+    empCode: 'DN001', from: '2026-07', to: '2026-07', columns: COLUMNS, rows: ROWS,
+    c32SidecarRowsChecksum: 'rows-checksum', c32SidecarRowCount: ROWS.length,
+    c32SidecarArtifactId: 'artifact-id', c32SidecarProvenanceKind: 'locked-sidecar',
+    c32SidecarAuditChainChecksum: 'audit-chain', packageChecksum: null,
+  };
+  const result = await employeeCost.fetchRawEmployeeCost('DN001', {
+    from: '2026-07', to: '2026-07', baseUrl: 'http://hub.test', assignmentKey: 'assignment-key-1234',
+    employeeCostKeys: 'DN001=employee-cost-key-1234', backoffMs: [],
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => raw }),
+  });
+  assert.equal(result.outcome, 'ok');
+  assert.deepEqual(result.payload.c32SidecarProvenance, {
+    c32SidecarRowsChecksum: 'rows-checksum', c32SidecarRowCount: ROWS.length,
+    c32SidecarArtifactId: 'artifact-id', c32SidecarProvenanceKind: 'locked-sidecar',
+    c32SidecarAuditChainChecksum: 'audit-chain', appReportResponseRowCount: ROWS.length,
+  });
+});
+
 test('T08 gắn nhầm rows T07 không được coi exact; chỉ dùng lại qua latest có provenance', async () => {
   const urls = [];
   const wrongExactRows = [{ ...ROWS[0], c36: 99 }];

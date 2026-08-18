@@ -62,6 +62,7 @@ const employeeCostRoster = require('./employeeCostRoster');
 const employeeCostVisibility = require('./employeeCostVisibility');
 const employeeCostTable = require('./employeeCostTable');
 const closedSeal = require('./employeeCostClosedSeal');
+const employeeCostSealProvenance = require('./employeeCostSealProvenance');
 const formulaIdentity = require('./employeeCostFormulaIdentity');
 const employeeCostHealthKpis = require('./employeeCostHealthKpis');
 const { createEmployeeCostSnapshotStore } = require('./employeeCostSnapshotStore');
@@ -1814,6 +1815,14 @@ async function employeeCostAllPayload(req, {
     merged.remoteProvenance = reports.every((item) => Array.isArray(item?.remoteProvenance))
       ? [...new Set(reports.flatMap((item) => item.remoteProvenance))].sort()
       : undefined;
+    // T07 uses a locked snapshot + C32 sidecar, not a finalized package. Preserve
+    // DataHub's five declarations verbatim and independently compare the declared
+    // sidecar row count with the raw rows App Report actually received. A missing,
+    // blank, disagreeing or count-mismatched declaration yields null, and the seal
+    // gate below fails closed. packageChecksum is deliberately irrelevant here.
+    if (range.from === '2026-07' && range.to === '2026-07') {
+      merged.sealProvenance = employeeCostSealProvenance.buildEnvelope(reports);
+    }
     const healthSnapshotAfter = store.activeDataSignature();
     const healthCurrentPeriod = (merged.periods || []).find((item) => String(item.period) === String(range.to)) || null;
     const healthPreviousKey = employeeCostHealthKpis.previousMonth(range.to);

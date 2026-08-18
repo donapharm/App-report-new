@@ -92,6 +92,16 @@
 - Thêm hợp đồng kiểm thử full-time/part-time và tầng render để lần sửa sau không làm mất lại bộ ô đã chuẩn.
 - Sửa chuẩn nghiệm thu danh mục sau vá giữ line-grain: số chữ ký phạm vi phải bằng số dòng danh mục, hiện là `28.006`. Chuẩn cũ thấp hơn 15 vì 16 thuốc BVĐK Thống Nhất từng bị gộp thành 1; không còn dùng chuẩn cũ cho nghiệm thu hiện tại.
 
+### 2026-08-18 14:35 (giờ VN) — Candidate provenance cho con dấu T07
+
+- Mang nguyên xi năm khai báo sidecar C32 từ response DataHub vào envelope con dấu;
+  tự đếm raw response rows và fail-closed khi thiếu/rỗng, các NV khai khác artifact,
+  hoặc số khai không bằng số App Report đếm được.
+- Envelope ghi chỉ mục raw capture nội bộ, thời điểm GMT+7 và tuyên bố rõ App Report
+  không tự băm lại sidecar vì response không có `sourceRowId`.
+- `packageChecksum=null` của locked snapshot T07 là hợp lệ và không tham gia cổng chặn.
+- Đây mới là candidate code/test; chưa deploy và chưa đóng dấu T07.
+
 ### 2026-08-17 22:40 (giờ VN) — Cầu nối doanh số App Report → App Lương
 
 - Thêm endpoint chỉ đọc `GET /api/luong/doanhso?thang=YYYY-MM`, xác thực Bearer; App
