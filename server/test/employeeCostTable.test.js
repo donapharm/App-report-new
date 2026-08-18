@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const table = require('../src/employeeCostTable');
 const employeeCost = require('../src/employeeCost');
+const revenueRecon = require('../src/employeeCostRevenueRecon');
 
 const columns = [
   { key: 'c36', label: 'CP cộng tác viên (%)' },
@@ -173,6 +174,58 @@ test('‼ ALL revenue contract: missing one cost report must not change company 
   assert.equal(missingLargeEmployee.periods[0].summary.revenueTotal, 20_000_000,
     'tổng doanh thu phải lấy từ kho App Report, không phụ thuộc report chi phí nào về kịp');
   assert.equal(missingLargeEmployee.periods[0].summary.revenueSource, 'app_report_company_store');
+});
+
+test('‼ ALL healthy company revenue survives view-only columns, reconciliation and final transform', () => {
+  const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
+  const make = (empCode, revenue, c38, c42) => {
+    const item = report([{ ...rows[1], sourceLineId: empCode, revenue, revenueBeforeVat: revenue / 1.05,
+      c38, c42 }]);
+    item.empCode = empCode;
+    item.periods[0].template = {
+      columns: ['c36', 'c38', 'c42', 'rowMonthlyTotal'],
+      costLabels: { c36: 'CP cộng tác viên (%)' },
+      viewOnlyColumns: ['c38', 'c42'],
+      viewOnlyLabels: { c38: 'C38 chỉ xem', c42: 'C42 chỉ xem' },
+    };
+    item.periods[0].columns = [
+      ...columns,
+      { key: 'c38', label: 'C38 chỉ xem', viewOnly: true },
+      { key: 'c42', label: 'C42 chỉ xem', viewOnly: true },
+    ];
+    return item;
+  };
+  const reports = [make('DN001', 8_000_000, 12, 34), make('DN002', 12_000_000, 56, 78)];
+  const companyRows = reports.map((item) => ({
+    emp_code: item.empCode,
+    revenue: item.periods[0].rows[0].revenue,
+  }));
+  const merged = table.mergeEmployeeReports(reports, roster, {
+    companyRevenueRowsByPeriod: new Map([['2026-07', companyRows]]),
+  });
+  merged.revenueRecon = revenueRecon.buildRevenueRecon({
+    periods: ['2026-07'],
+    revenueRowsOf: () => companyRows,
+    unavailable: [],
+    shownRevenue: revenueRecon.sumShownRevenue(merged.periods),
+    shownRows: revenueRecon.shownRowsOf(merged.periods),
+  });
+  const transformed = table.transformReport(merged, { allEmployees: true, paginate: true });
+
+  assert.deepEqual(merged.periods[0].columns.filter((column) => column.viewOnly).map((column) => column.key), ['c38', 'c42']);
+  assert.deepEqual(merged.revenueRecon, {
+    periods: ['2026-07'], rowCount: 2, total: 20_000_000, shown: 20_000_000,
+    missingByUnavailable: 0, missingUnassigned: 0, unassignedRowCount: 0,
+    unavailableEmployees: [], gap: 0, balanced: true,
+  });
+  assert.equal(transformed.revenueRecon.total, 20_000_000);
+  assert.equal(transformed.revenueRecon.unavailable, undefined);
+  assert.equal(transformed.summary.revenueTotal, 20_000_000);
+  assert.equal(transformed.summary.revenueSource, 'app_report_company_store');
+  assert.equal(Object.hasOwn(transformed.summary.columnTotals, 'c38'), false,
+    'C38 chỉ để xem, không được lọt vào tổng tiền');
+  assert.equal(Object.hasOwn(transformed.summary.columnTotals, 'c42'), false,
+    'C42 chỉ để xem, không được lọt vào tổng tiền');
 });
 
 test('‼ ALL revenue contract: missing company snapshot must never fall back to partial cost reports', () => {

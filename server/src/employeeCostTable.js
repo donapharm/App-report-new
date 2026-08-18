@@ -162,6 +162,14 @@ function summarizeRows(rows = [], columns = [], baseSummary = null) {
   // provisional* = tổng phần ĐÃ khớp %, luôn tính để UI hiện kèm nhãn coverage.
   const provisionalMonthlyTotal = rows.reduce((sum, row) => sum + numeric(row.rowMonthlyTotal), 0);
   const provisionalAnnualTotal = rows.reduce((sum, row) => sum + numeric(row.rowAnnualTotal), 0);
+  // Màn ALL mang theo snapshot doanh thu TOÀN CÔNG TY từ mergeEmployeeReports().
+  // Không được tính lại hay làm rơi provenance này khi transform/filter:
+  // transformReport() dùng chính revenueSource để quyết định fail-closed. Bản cũ
+  // làm mất trường này rồi tự kết luận snapshot không tồn tại, dù merge
+  // vừa chụp đủ doanh thu. Self report không có contract này nên vẫn tính
+  // doanh thu từ các dòng đúng scope như trước.
+  const companyRevenueSource = baseSummary?.revenueSource === 'app_report_company_store'
+    || baseSummary?.revenueSource === 'company_revenue_unavailable';
   return {
     reliable,
     monthlyTotal: reliable ? provisionalMonthlyTotal : null,
@@ -169,9 +177,13 @@ function summarizeRows(rows = [], columns = [], baseSummary = null) {
     provisionalMonthlyTotal,
     provisionalAnnualTotal,
     provisionalColumnTotals: columnTotals,
-    revenueTotal: rows.reduce((sum, row) => sum + numeric(row.revenue), 0),
-    revenueBeforeVatTotal: rows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
-    revenueAllocatedRowCount: rows.length,
+    revenueTotal: companyRevenueSource ? numberOrNull(baseSummary?.revenueTotal)
+      : rows.reduce((sum, row) => sum + numeric(row.revenue), 0),
+    revenueBeforeVatTotal: companyRevenueSource ? numberOrNull(baseSummary?.revenueBeforeVatTotal)
+      : rows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
+    revenueAllocatedRowCount: companyRevenueSource ? numberOrNull(baseSummary?.revenueAllocatedRowCount) : rows.length,
+    revenueSource: companyRevenueSource ? baseSummary.revenueSource : undefined,
+    revenueUnavailableReason: companyRevenueSource ? String(baseSummary?.revenueUnavailableReason || '') : '',
     columnTotals: reliable ? columnTotals : null,
     annualColumnKeys: [...annualKeys],
     annualLabels: costColumns.filter((column) => annualKeys.has(String(column.key).toLowerCase())).map((column) => column.label),
