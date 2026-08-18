@@ -1645,6 +1645,13 @@ async function employeeCostAllPayload(req, {
     // fan-out 21 NV, toàn bộ KPI phụ thuộc nguồn này phải fail closed thay vì trộn
     // hai bản. Rows được copy mảng ngay tại đây để phép cân không đọc lại store.
     const healthSnapshotBefore = store.activeDataSignature();
+    // Chụp doanh thu TOÀN ĐỘI đúng một lần cho mỗi kỳ. Snapshot này
+    // sống độc lập với fan-out nguồn chi phí: NV hết hạn/nguồn lỗi
+    // không được làm doanh thu biến mất khỏi tổng.
+    const companyRevenueRowsByPeriod = new Map(range.months.map((period) => [
+      period,
+      [...store.getRows({ ky: employeeCost.toUiMonth(period), scope: {} })],
+    ]));
     const healthUiPeriod = employeeCost.toUiMonth(range.to);
     const healthSourceRows = [...store.getRows({ ky: healthUiPeriod, scope: {} })];
     const healthSourceAvailable = healthSourceRows.length > 0
@@ -1658,7 +1665,9 @@ async function employeeCostAllPayload(req, {
     }) : null;
     const deadlineAt = Number(suppliedDeadlineAt) > 0
       ? Number(suppliedDeadlineAt) : Date.now() + EMPLOYEE_COST_ALL_DEADLINE_MS;
-    const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => {
+    const fanoutStartedAt = Date.now();
+    const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, async (employee) => {
+      const sourceStartedAt = Date.now();
       const empCode = String(employee.emp_code || '').trim().toUpperCase();
       const prefetchedResult = prefetchedCostResultsByEmployee instanceof Map
         ? prefetchedCostResultsByEmployee.get(empCode) : null;
@@ -1668,9 +1677,9 @@ async function employeeCostAllPayload(req, {
       // avoid another fetch; failed reports preserve their explicit unavailable
       // status instead of being re-routed through a fresh 2s/default request.
       if (!prefetchedResult && sameCycleEmployeeCostReport(reusableReport, empCode, range)) {
-        return Promise.resolve(reusableReport);
+        return reusableReport;
       }
-      return employeeCostPayload(req, {
+      const report = await employeeCostPayload(req, {
         requestedEmp: employee.emp_code,
         auditEvent,
         roster,
@@ -1680,6 +1689,16 @@ async function employeeCostAllPayload(req, {
         costFetchOptions: { ...(costFetchOptions || {}), deadlineAt },
         prefetchedCostResult: prefetchedResult,
       });
+      const totalRows = (report?.periods || []).reduce((sum, period) => sum + Number(period?.match?.totalRows || 0), 0);
+      if (!employeeCost.isUsableOutcome(report?.sourceOutcome || '') || totalRows === 0) {
+        console.warn('[employee-cost] NV trả rỗng', {
+          empCode,
+          outcome: String(report?.sourceOutcome || 'upstream_unavailable'),
+          elapsedMs: Date.now() - sourceStartedAt,
+          deadline: String(report?.sourceOutcome || '') === 'deadline',
+        });
+      }
+      return report;
     }, {
       deadlineAt,
       // NV chưa kịp ⇒ vào đúng luồng "thiếu nguồn" đã có, hiện tên trên băng đỏ.
@@ -1696,6 +1715,12 @@ async function employeeCostAllPayload(req, {
         // bảng thay vì hiện tên trên băng đỏ. Test `perfRouteMemo` khoá lỗi này lại.
         const stub = employeeCost.emptyRangePayload(employee.emp_code, range, note);
         stub.sourceOutcome = reason === 'error' ? 'source_error' : 'deadline';
+        console.warn('[employee-cost] NV trả rỗng', {
+          empCode: String(employee.emp_code || '').trim().toUpperCase(),
+          outcome: stub.sourceOutcome,
+          elapsedMs: Math.max(0, Date.now() - fanoutStartedAt),
+          deadline: stub.sourceOutcome === 'deadline',
+        });
         return stub;
       },
     });
@@ -1707,7 +1732,7 @@ async function employeeCostAllPayload(req, {
     // `mergeEmployeeReports` dựng `merged.employees` TỪ ROSTER nên đối chiếu với roster
     // là vòng tròn tự chứng minh — thiếu hẳn một người vẫn "đủ".
     sealEvidenceReports = reports;
-    const merged = employeeCostTable.mergeEmployeeReports(reports, roster);
+    const merged = employeeCostTable.mergeEmployeeReports(reports, roster, { companyRevenueRowsByPeriod });
     /* ‼ ĐỐI SOÁT DOANH THU — trả lời "tiền chạy đi đâu" (CEO 10/08/2026).
        Màn ALL ghép sổ chi phí TỪNG NV; NV nào chưa lấy được % thì toàn bộ dòng doanh
        thu của họ không lên bảng ⇒ tổng hiển thị tụt, và tụt khác nhau mỗi lượt xem.
@@ -1718,7 +1743,7 @@ async function employeeCostAllPayload(req, {
         .flatMap((item) => (Array.isArray(item?.match?.unavailableEmployees) ? item.match.unavailableEmployees : [])))];
       merged.revenueRecon = employeeCostRevenueRecon.buildRevenueRecon({
         periods: range.months,
-        revenueRowsOf: (period) => store.getRows({ ky: employeeCost.toUiMonth(period), scope: {} }),
+        revenueRowsOf: (period) => companyRevenueRowsByPeriod.get(period) || [],
         unavailable: unavailableAll,
         // `mergeEmployeeReports()` chưa có top-level summary ở bước này; lấy đúng
         // tổng từ toàn bộ dòng bảng ALL trước khi transform/phân trang.

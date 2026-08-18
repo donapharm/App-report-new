@@ -1,3 +1,9 @@
+### 2026-08-18 16:20 — Khoá doanh thu ALL và chẩn đoán nguồn rỗng
+
+- Doanh thu màn Tất cả nhân viên nay lấy từ snapshot toàn đội của kho App Report theo kỳ; thiếu một report chi phí không còn làm tổng doanh thu tụt theo.
+- Khoá regression 3 NV: bỏ NV doanh thu lớn vẫn giữ nguyên tổng kho; không được lùi về tổng của các report chi phí đã về.
+- Log nguồn rỗng chỉ ghi mã NV, outcome, elapsedMs và cờ deadline; không ghi URL, token, khoá hay payload chi phí.
+
 ### 2026-08-18 — Khoá hợp đồng bộ ô KPI “Chi phí của tôi”
 
 - Bộ ô KPI chi phí nay lấy danh sách từ `employee_cost_templates.json`, không phụ thuộc việc nguồn ngoài có trả cột trong lượt hiện tại hay không.

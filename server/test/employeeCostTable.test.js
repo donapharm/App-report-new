@@ -143,6 +143,26 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   assert.equal(byDate.summary.periodTotal, 20);
 });
 
+test('‼ ALL revenue contract: missing one cost report must not change company revenue totals', () => {
+  const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }, { emp_code: 'DN024', name: 'NV lớn' }];
+  const make = (empCode, revenue) => {
+    const item = report([{ ...rows[1], sourceLineId: empCode, revenue, revenueBeforeVat: revenue / 1.05 }]);
+    item.empCode = empCode;
+    return item;
+  };
+  const reports = [make('DN001', 1_000_000), make('DN002', 3_000_000), make('DN024', 16_000_000)];
+  const companyRevenueRowsByPeriod = new Map([['2026-07', reports.map((item) => ({
+    emp_code: item.empCode,
+    revenue: item.periods[0].rows[0].revenue,
+  }))]]);
+  const full = table.mergeEmployeeReports(reports, roster, { companyRevenueRowsByPeriod });
+  const missingLargeEmployee = table.mergeEmployeeReports(reports.slice(0, 2), roster, { companyRevenueRowsByPeriod });
+  assert.equal(full.periods[0].summary.revenueTotal, 20_000_000);
+  assert.equal(missingLargeEmployee.periods[0].summary.revenueTotal, 20_000_000,
+    'tổng doanh thu phải lấy từ kho App Report, không phụ thuộc report chi phí nào về kịp');
+  assert.equal(missingLargeEmployee.periods[0].summary.revenueSource, 'app_report_company_store');
+});
+
 test('ALL payload preserves each backend-computed penalty in bonus and cost employeeSubtotals', () => {
   const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
   const first = report([rows[1]]);

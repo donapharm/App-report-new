@@ -341,7 +341,7 @@ function transformReport(report = {}, options = {}) {
   };
 }
 
-function mergeEmployeeReports(reports = [], roster = []) {
+function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByPeriod = null } = {}) {
   const employeeNames = new Map(roster.map((employee) => [String(employee.emp_code || '').toUpperCase(), String(employee.name || employee.emp_code || '')]));
   const source = reports.filter(Boolean);
   const periodKeys = [...new Set(source.flatMap((report) => (report.periods || []).map((period) => period.period)))].sort();
@@ -423,6 +423,21 @@ function mergeEmployeeReports(reports = [], roster = []) {
     const rateSources = [...new Set(blocks.map(({ period, report }) => String(period.rateSource || report.rateSource || '')).filter(Boolean))];
     const pinnedAts = [...new Set(blocks.map(({ period, report }) => String(period.ratePinnedAt || report.ratePinnedAt || '')).filter(Boolean))];
     const allPinned = blocks.length > 0 && rateSources.length === 1 && rateSources[0] === 'local_pinned';
+    const companyRevenueRows = companyRevenueRowsByPeriod instanceof Map
+      ? (companyRevenueRowsByPeriod.get(periodKey) || [])
+      : [];
+    const hasCompanyRevenueSnapshot = companyRevenueRowsByPeriod instanceof Map;
+    const companyRevenueTotal = companyRevenueRows.reduce((sum, row) => (
+      sum + numeric(row?.revenue ?? row?.tong_tien ?? row?.REVENUE ?? row?.TONG_TIEN)
+    ), 0);
+    const companyRevenueBeforeVatTotal = companyRevenueRows.reduce((sum, row) => {
+      const revenue = numeric(row?.revenue ?? row?.tong_tien ?? row?.REVENUE ?? row?.TONG_TIEN);
+      return sum + employeeCost.revenueBeforeVatOf(revenue);
+    }, 0);
+    const allocatedRevenueRowCount = companyRevenueRows.filter((row) => {
+      const code = String(row?.emp_code ?? row?.empCode ?? row?.employeeCode ?? '').trim().toUpperCase();
+      return code && code !== 'UNALLOCATED';
+    }).length;
     return {
       empCode: 'ALL', period: periodKey, columns, rows,
       rateEffectiveFrom: rateEffectiveFroms.length === 1 ? rateEffectiveFroms[0] : '',
@@ -450,9 +465,15 @@ function mergeEmployeeReports(reports = [], roster = []) {
       // Consumer không được phụ thuộc việc transform lại summary mới có số fallback.
       summary: {
         reliable: !low && unavailableEmployees.length === 0,
-        revenueTotal: rows.reduce((sum, row) => sum + numeric(row.revenue), 0),
-        revenueBeforeVatTotal: rows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
-        revenueAllocatedRowCount: rows.length,
+        // Doanh thu là snapshot TOÀN ĐỘI của kho App Report, không phụ thuộc
+        // report chi phí NV nào về kịp. Thiếu DN024 không được làm "tổng"
+        // tụt 80% như tai nạn 10/08.
+        revenueTotal: hasCompanyRevenueSnapshot
+          ? companyRevenueTotal : rows.reduce((sum, row) => sum + numeric(row.revenue), 0),
+        revenueBeforeVatTotal: hasCompanyRevenueSnapshot
+          ? companyRevenueBeforeVatTotal : rows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
+        revenueAllocatedRowCount: hasCompanyRevenueSnapshot ? allocatedRevenueRowCount : rows.length,
+        revenueSource: hasCompanyRevenueSnapshot ? 'app_report_company_store' : 'partial_cost_reports',
       },
       daily: { reliable: false, reason: 'Chế độ tất cả nhân viên dùng bảng tổng hợp phân trang.', dates: [], totals: [] },
     };

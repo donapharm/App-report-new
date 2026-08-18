@@ -83,3 +83,13 @@ test('‼ NV bị cắt phải HIỆN TÊN, không được biến mất khỏi 
   assert.match(source, /stub\.sourceOutcome = reason === 'error' \? 'source_error' : 'deadline'/);
   assert.match(source, /KHÔNG phải 0đ/, 'ghi chú phải nói rõ chưa có số ≠ 0 đồng');
 });
+
+test('NV trả rỗng phải log đúng allowlist, không log URL/token/payload', () => {
+  assert.match(source, /\[employee-cost\] NV trả rỗng/);
+  const blocks = [...source.matchAll(/console\.warn\('\[employee-cost\] NV trả rỗng',[\s\S]*?\n\s*}\);/g)].map((match) => match[0]);
+  assert.ok(blocks.length >= 2, 'phải log cả response rỗng và deadline\/error skip');
+  for (const block of blocks) {
+    assert.match(block, /empCode/); assert.match(block, /outcome/); assert.match(block, /elapsedMs/); assert.match(block, /deadline/);
+    assert.doesNotMatch(block, /token|assignmentKey|employeeCostKey|url|payload/i);
+  }
+});
