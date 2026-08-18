@@ -623,6 +623,7 @@ function periodViewModel(payload = {}) {
     revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
     // Doanh thu ĐÃ gồm VAT — backend tính, hiển thị kèm để đối chiếu với App Sale.
     revenueTotal: rawSummary.revenueTotal == null ? null : Number(rawSummary.revenueTotal),
+    revenueAllocatedRowCount: Number(rawSummary.revenueAllocatedRowCount || 0),
     columnTotals: normalizedColumnTotals(rawSummary.columnTotals, costColumns),
     provisionalMonthlyTotal: rawSummary.provisionalMonthlyTotal == null ? null : Number(rawSummary.provisionalMonthlyTotal),
     provisionalAnnualTotal: rawSummary.provisionalAnnualTotal == null ? null : Number(rawSummary.provisionalAnnualTotal),
@@ -749,6 +750,7 @@ const NGU_NGHIA = [
   [/(^|\.)(overdueEmployees|employeesWithoutFirstAdvance)$/, 'dem'],
   [/(^|\.)(unavailableCount|unavailablePairs|staleEmployeeCount)$/, 'dem'],
   [/(^|\.)(matchedRows|totalRows|filteredRows|rowCount|lineCount)$/, 'dem'],
+  [/(^|\.)(revenueAllocatedRowCount|unassignedRowCount)$/, 'dem'],
   [/(^|\.)(page|pageSize|pageCount|totalPages)$/, 'dem'],
   [/(^|\.)(dynamicCount|exceptionCount|redCount|yellowCount)$/, 'dem'],
   [/(^|\.)(threshold|rate|closeDay|schemaVersion|pos|carry)$/, 'dem'],
@@ -948,6 +950,7 @@ export function employeeCostViewModel(payload = {}) {
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
     revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
     revenueTotal: rawSummary.revenueTotal == null ? null : Number(rawSummary.revenueTotal),
+    revenueAllocatedRowCount: Number(rawSummary.revenueAllocatedRowCount || 0),
     columnTotals: normalizedColumnTotals(rawSummary.columnTotals, first.costColumns),
     // Số tạm tính (tổng phần đã khớp %) — dùng để hiển thị kèm nhãn coverage khi
     // chưa đạt ngưỡng, thay vì để trống làm người xem tưởng hỏng.
@@ -1044,6 +1047,7 @@ export function employeeCostViewModel(payload = {}) {
       shown: numberOrNull(payload.revenueRecon.shown),
       missingByUnavailable: numberOrNull(payload.revenueRecon.missingByUnavailable),
       missingUnassigned: numberOrNull(payload.revenueRecon.missingUnassigned),
+      unassignedRowCount: Number(payload.revenueRecon.unassignedRowCount || 0),
       gap: numberOrNull(payload.revenueRecon.gap),
       balanced: payload.revenueRecon.balanced === true ? true
         : payload.revenueRecon.balanced === false ? false : null,

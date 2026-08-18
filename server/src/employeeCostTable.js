@@ -171,6 +171,7 @@ function summarizeRows(rows = [], columns = [], baseSummary = null) {
     provisionalColumnTotals: columnTotals,
     revenueTotal: rows.reduce((sum, row) => sum + numeric(row.revenue), 0),
     revenueBeforeVatTotal: rows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
+    revenueAllocatedRowCount: rows.length,
     columnTotals: reliable ? columnTotals : null,
     annualColumnKeys: [...annualKeys],
     annualLabels: costColumns.filter((column) => annualKeys.has(String(column.key).toLowerCase())).map((column) => column.label),
@@ -322,6 +323,7 @@ function transformReport(report = {}, options = {}) {
       annualTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.annualTotal), 0) : null,
       revenueTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0),
       revenueBeforeVatTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0),
+      revenueAllocatedRowCount: periods.reduce((sum, period) => sum + numeric(period.summary.revenueAllocatedRowCount), 0),
       columnTotals: reliable ? Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.provisionalColumnTotals?.[key]), 0)])) : null,
       // Số "tạm tính" LUÔN có (tổng phần đã khớp %) để UI hiện kèm nhãn coverage,
       // thay vì bỏ trống. Không thay hành vi fail-closed của columnTotals ở trên.
@@ -444,7 +446,14 @@ function mergeEmployeeReports(reports = [], roster = []) {
         staleEmployees, staleEmployeeCount: staleEmployees.length,
       },
       // Còn NV chưa lấy được nguồn ⇒ tổng chưa đầy đủ ⇒ vẫn để "tạm tính".
-      summary: { reliable: !low && unavailableEmployees.length === 0 },
+      // ALL phải mang doanh thu của chính các dòng đã gộp ngay từ payload thô.
+      // Consumer không được phụ thuộc việc transform lại summary mới có số fallback.
+      summary: {
+        reliable: !low && unavailableEmployees.length === 0,
+        revenueTotal: rows.reduce((sum, row) => sum + numeric(row.revenue), 0),
+        revenueBeforeVatTotal: rows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
+        revenueAllocatedRowCount: rows.length,
+      },
       daily: { reliable: false, reason: 'Chế độ tất cả nhân viên dùng bảng tổng hợp phân trang.', dates: [], totals: [] },
     };
   });

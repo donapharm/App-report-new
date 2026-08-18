@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 const auth = require('./auth');
+const accessPolicy = require('./accessPolicy');
 const homeAppReportVisibility = require('./homeAppReportVisibility');
 const A = require('./analytics');
 const cstSequence = require('./cstSequence');
@@ -920,7 +921,8 @@ router.get('/integrations/home/app-report-visibility', auth.requireHomeService, 
 function employeeCostRosterRows() {
   // Nguồn duy nhất cho picker và công tắc: roster Sale 21 người + metadata
   // nhóm ở backend. Frontend không giữ danh sách/mapping nhóm riêng.
-  return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
+  return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }))
+    .filter((employee) => !accessPolicy.isLoginBlocked(employee.emp_code));
 }
 
 

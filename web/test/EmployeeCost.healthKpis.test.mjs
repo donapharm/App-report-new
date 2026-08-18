@@ -40,7 +40,7 @@ test('projection giữ phép cân doanh thu để khối cảnh báo có thể r
   const model = employeeCostViewModel({
     empCode: 'ALL', allEmployees: true, from: '2026-07', to: '2026-07', periods: [],
     revenueRecon: {
-      total: 1000, shown: 700, missingByUnavailable: 200, missingUnassigned: 100,
+      total: 1000, shown: 700, missingByUnavailable: 200, missingUnassigned: 100, unassignedRowCount: 2,
       gap: 0, balanced: true, rowCount: 9,
       unavailableEmployees: [{ empCode: 'NV01', revenue: 200 }, { empCode: '', revenue: 999 }],
     },
@@ -52,6 +52,7 @@ test('projection giữ phép cân doanh thu để khối cảnh báo có thể r
     shown: 700,
     missingByUnavailable: 200,
     missingUnassigned: 100,
+    unassignedRowCount: 2,
     gap: 0,
     balanced: true,
     rowCount: 9,
@@ -93,6 +94,15 @@ test('‼ màn nói rõ tổng kỳ · đang hiện · thiếu vì đâu — kh�
   assert.match(page, /Đang hiện trên bảng/);
   assert.match(page, /Của NV <b>chưa lấy được %<\/b>/);
   assert.match(page, /Dòng <b>chưa gán được nhân viên<\/b>/);
+});
+
+test('fallback ALL vẫn hiện số đã phân bổ và nói thật mẫu số toàn đội', () => {
+  assert.match(page, /model\.summary\.revenueBeforeVatTotal/);
+  assert.match(page, /revenueAllocatedRowCount/);
+  assert.match(page, /số dòng chưa gán: chưa đối soát được/);
+  assert.match(page, /NV có dữ liệu/);
+  assert.match(page, /NV chưa có nguồn/);
+  assert.doesNotMatch(page, /\$\{team\.assigned\}\/\$\{team\.total\} NV có target/);
 });
 
 test('mỗi nguyên nhân kèm ĐÚNG cách sửa — hai nguyên nhân, hai việc khác nhau', () => {

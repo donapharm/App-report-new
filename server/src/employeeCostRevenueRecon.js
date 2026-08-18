@@ -61,6 +61,7 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], show
   const shownByEmp = revenueByEmployee(shownRows);
   let total = 0;
   let sourceUnassigned = 0;
+  let unassignedRowCount = 0;
   let rowCount = 0;
   const sourceUnavailableByEmp = new Map();
 
@@ -72,7 +73,7 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], show
       const emp = empOf(row);
       // Dòng không gán được NV: nó KHÔNG thuộc sổ của ai nên không bao giờ lên bảng
       // ALL — phải tách riêng, không được trộn vào phần "NV chưa lấy được %".
-      if (!emp) { sourceUnassigned += amount; continue; }
+      if (!emp) { sourceUnassigned += amount; unassignedRowCount += 1; continue; }
       if (missingEmps.has(emp)) {
         sourceUnavailableByEmp.set(emp, (sourceUnavailableByEmp.get(emp) || 0) + amount);
       }
@@ -97,6 +98,7 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], show
     shown: shownRevenue == null ? null : Math.round(num(shownRevenue)),
     missingByUnavailable: Math.round(byUnavailable),
     missingUnassigned: Math.round(unassigned),
+    unassignedRowCount,
     unavailableEmployees: [...unavailableByEmp.entries()]
       .map(([empCode, amount]) => ({ empCode, revenue: Math.round(amount) }))
       .sort((a, b) => b.revenue - a.revenue),

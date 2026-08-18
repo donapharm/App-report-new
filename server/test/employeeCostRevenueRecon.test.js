@@ -117,6 +117,7 @@ test('dòng chưa gán NV tách RIÊNG, không trộn vào phần "NV thiếu %"
     shownRevenue: 0,
   });
   assert.equal(result.missingUnassigned, 700);
+  assert.equal(result.unassignedRowCount, 1);
   assert.equal(result.missingByUnavailable, 300);
 });
 

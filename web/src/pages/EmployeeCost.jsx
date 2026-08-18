@@ -290,7 +290,7 @@ function targetPctLabel(value) {
 
 // Target tổng đội (chế độ "Tất cả NV"): cộng target/đạt của từng NV từ dữ liệu thưởng
 // dự kiến đã tải sẵn — display-only/tham khảo, KHÔNG phát sinh nguồn số mới.
-function teamTargetSummary(subtotals = []) {
+function teamTargetSummary(subtotals = [], teamSize = 0) {
   const acc = { monthTarget: 0, monthAchieved: 0, quarterTarget: 0, assigned: 0, total: 0 };
   for (const item of Array.isArray(subtotals) ? subtotals : []) {
     acc.total += 1;
@@ -301,7 +301,7 @@ function teamTargetSummary(subtotals = []) {
   return {
     hasData: acc.monthTarget > 0,
     assigned: acc.assigned,
-    total: acc.total,
+    total: Math.max(acc.total, Number(teamSize) || 0),
     monthTarget: acc.monthTarget,
     monthPct: acc.monthTarget > 0 ? +(acc.monthAchieved / acc.monthTarget * 100).toFixed(1) : null,
     quarterTarget: acc.quarterTarget,
@@ -2283,7 +2283,11 @@ export default function EmployeeCost({ me, onNavigate }) {
           // 1.795.600đ). Nhan đề ô đã ghi "đã phân bổ" nên câu này chỉ chỉ đường,
           // KHÔNG nêu số: `dqBadge.count` là TỔNG mọi loại exception, không riêng
           // dòng cách ly — nêu số ở đây là báo sai (bot chặn đúng 04/08).
-          allEmployees ? 'dòng chưa gán được NV nằm ở tab "Kiểm soát dữ liệu"' : '',
+          allEmployees && model.revenueRecon && !model.revenueRecon.unavailable
+            ? `${Number(model.revenueRecon.unassignedRowCount || 0).toLocaleString('vi-VN')} dòng chưa gán được NV`
+            : allEmployees
+              ? `${Number(model.summary.revenueAllocatedRowCount || 0).toLocaleString('vi-VN')} dòng đã phân bổ · số dòng chưa gán: chưa đối soát được`
+              : '',
           'số tổng hợp từ backend',
         ].filter(Boolean).join(' · ')} />
       {/* Điểm/Target/Xu/Cấn trừ là chỉ số TỪNG NGƯỜI — không gộp được qua nhiều NV.
@@ -2291,9 +2295,13 @@ export default function EmployeeCost({ me, onNavigate }) {
       {!allEmployees && <KhoanPointKpi khoan={khoan} loading={khoanLoading} />}
       {!allEmployees && <TargetKpi target={model.target} onOpen={model.target.available ? () => setTargetModalOpen(true) : undefined} />}
       {allEmployees && (() => {
-        const team = teamTargetSummary(model.bonus.employeeSubtotals);
+        const teamSize = Number(model.penalty?.employeeCount || 0)
+          || (Number(model.bonus.employeeSubtotals.length || 0) + unavailableEmpCodes.length);
+        const team = teamTargetSummary(model.bonus.employeeSubtotals, teamSize);
+        const missingSource = unavailableEmpCodes.length
+          ? ` · ${unavailableEmpCodes.length} NV chưa có nguồn: ${unavailableEmpCodes.join(', ')}` : '';
         return team.hasData
-          ? <Kpi label="Target tổng đội (tham khảo)" value={`${formatEmployeeCostCell(team.monthTarget, moneyColumn)} · ${targetPctLabel(team.monthPct)}`} sub={`Tháng: Σ target · % đạt toàn đội (${team.assigned}/${team.total} NV có target) | Quý: ${formatEmployeeCostCell(team.quarterTarget, moneyColumn)} · từ thưởng dự kiến`} tone="employee-cost-tone-target" />
+          ? <Kpi label="Target tổng đội (tham khảo)" value={`${formatEmployeeCostCell(team.monthTarget, moneyColumn)} · ${targetPctLabel(team.monthPct)}`} sub={`Tháng: Σ target · % đạt trên phần có dữ liệu (${team.assigned}/${team.total} NV có dữ liệu${missingSource}) | Quý: ${formatEmployeeCostCell(team.quarterTarget, moneyColumn)} · từ thưởng dự kiến`} tone={team.assigned < team.total ? 'employee-cost-tone-warn' : 'employee-cost-tone-target'} />
           : <Kpi label="Target tổng đội" value="—" sub="Chưa đủ target giao cho đội trong kỳ này" tone="employee-cost-tone-target" />;
       })()}
       {allEmployees && <Kpi label="Điểm · Xu · Cấn trừ" value="Chọn 1 NV" sub="Các mục tính theo từng người — chọn đúng một nhân viên để xem" />}

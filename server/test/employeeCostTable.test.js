@@ -115,9 +115,14 @@ test('a scoped selected facet remains visible with zero count when another facet
 
 test('ALL merge adds employee identity, backend subtotals, grand total and keeps sort/search exact', () => {
   const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
-  const second = report([{ ...rows[1], sourceLineId: 'dn2', c16: 'Cerecaps DN2', rowMonthlyTotal: 40, amounts: { c36: 40, c44: 2 } }]);
+  const first = report();
+  first.periods[0].rows = first.periods[0].rows.map((item, index) => ({
+    ...item, revenue: 500 + index * 500, revenueBeforeVat: 400 + index * 400,
+  }));
+  const second = report([{ ...rows[1], sourceLineId: 'dn2', c16: 'Cerecaps DN2', rowMonthlyTotal: 40,
+    revenue: 1500, revenueBeforeVat: 1200, amounts: { c36: 40, c44: 2 } }]);
   second.empCode = 'DN002';
-  const merged = table.mergeEmployeeReports([report(), second], roster);
+  const merged = table.mergeEmployeeReports([first, second], roster);
   const transformed = table.transformReport(merged, { allEmployees: true, q: 'cerecaps', sortKey: 'employeeCode', sortDir: 'asc', paginate: false });
   const period = transformed.periods[0];
   assert.equal(transformed.empCode, 'ALL');
@@ -127,6 +132,10 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   assert.deepEqual(period.employeeSubtotals.map((item) => [item.employeeCode, item.rowCount, item.monthlyTotal]), [['DN001', 2, 50], ['DN002', 1, 40]]);
   assert.equal(period.summary.monthlyTotal, 90);
   assert.equal(transformed.summary.periodTotal, 90);
+  assert.equal(merged.periods[0].summary.revenueTotal, 4500, 'ALL raw payload phải mang doanh thu fallback');
+  assert.equal(merged.periods[0].summary.revenueBeforeVatTotal, 3600, 'fallback trước VAT cộng từ dòng đã gộp');
+  assert.equal(merged.periods[0].summary.revenueAllocatedRowCount, 4);
+  assert.equal(transformed.summary.revenueAllocatedRowCount, 3, 'view đã lọc chỉ nói số dòng đang phân bổ trong view');
 
   const byDate = table.transformReport(merged, { allEmployees: true, date: '2026-07-02', paginate: true });
   assert.deepEqual(byDate.periods[0].rows.map((row) => [row.stt, row.employeeCode, row.date]), [[1, 'DN001', '2026-07-02']]);
