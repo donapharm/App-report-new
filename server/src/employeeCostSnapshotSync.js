@@ -28,6 +28,7 @@ function sourceFailureReason(error, result) {
   if (value.includes('not_configured') || value.includes('not configured')) return 'not_configured';
   if (value.includes('deadline') || value.includes('timeout')) return 'deadline';
   if (value.includes('source_error')) return 'source_error';
+  if (value === 'upstream_busy') return 'upstream_busy';
   // DataHub understood the request but rejected it (for example HTTP 409).
   // Keep only a generic allowlisted code; never propagate response body/keys.
   if (value === 'upstream_rejected' || value === 'upstream_unauthorized' || /^upstream_4\d\d$/.test(value)) return 'upstream_rejected';

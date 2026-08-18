@@ -28,6 +28,7 @@ const EMPLOYEE_COST_PAGE_SIZES = [20, 50, 100];
 const SALARY_ADVANCE_UI = true;
 const SNAPSHOT_REASON_LABELS = Object.freeze({
   not_configured: 'chưa cấu hình nguồn', upstream_unavailable: 'nguồn tạm unavailable', upstream_rejected: 'nguồn từ chối yêu cầu',
+  upstream_busy: 'nguồn đang bận, thử lại',
   deadline: 'quá hạn lần đồng bộ', source_error: 'nguồn lỗi', missing: 'chưa có bản local',
   roster_added: 'mới thêm vào roster', roster_changed: 'roster đã đổi',
   corrupt_snapshot: 'snapshot hỏng', sync_failed: 'đồng bộ thất bại', locked: 'kỳ đã khoá',
@@ -35,6 +36,9 @@ const SNAPSHOT_REASON_LABELS = Object.freeze({
 const UPSTREAM_REJECTED_NOTE = 'DataHub từ chối mã này — cần DataHub sửa cấu hình, không phải lỗi mạng';
 function nguyenNhanThieuNguoi(employeeCodes, unavailableReasons) {
   const reasons = unavailableReasons && typeof unavailableReasons === 'object' ? unavailableReasons : {};
+  if (employeeCodes.some((empCode) => reasons[empCode] === 'upstream_busy')) {
+    return 'DataHub đang bận — thử lại; KHÔNG suy tổng toàn đội từ phần đã có';
+  }
   return employeeCodes.some((empCode) => reasons[empCode] === 'upstream_rejected')
     ? UPSTREAM_REJECTED_NOTE
     : 'DataHub chưa trả dữ liệu — KHÔNG suy tổng toàn đội từ phần đã có';
@@ -124,7 +128,7 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
       <thead>
         <tr>
           <th className="employee-cost-sticky-stt employee-cost-number">STT</th>
-          {allEmployees && <th className="employee-cost-employee"><button type="button" onClick={() => sortHeader({ key: 'employeeCode' })}>Nhân viên{sort.key === 'employeeCode' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>}
+          {allEmployees && <th className="employee-cost-employee employee-cost-sticky-employee"><button type="button" onClick={() => sortHeader({ key: 'employeeCode' })}>Nhân viên{sort.key === 'employeeCode' ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button></th>}
           {period.columns.map((column) => <th key={column.key} title={column.kind === 'percent' ? column.label : undefined} className={`${column.annual ? 'employee-cost-annual ' : ''}${column.kind === 'percent' ? 'employee-cost-percent ' : ''}${column.key === 'c16' ? 'employee-cost-sticky-product ' : ''}${column.key === 'c45' && c45Dropped ? 'employee-cost-c45-dropped ' : ''}employee-cost-col-${column.key}`}>
             <button type="button" onClick={() => sortHeader(column)}>{column.label}{sort.key === column.key ? (sort.dir === 'desc' ? ' ↓' : ' ↑') : ''}</button>
             {column.annual && <span className="employee-cost-annual-badge">cuối năm</span>}
@@ -142,7 +146,7 @@ function CostTable({ period, daily = false, query = '', sort = {}, onSort, allEm
         </tr>}
         <tr className={row.reconciliationSynthetic ? 'employee-cost-shadow-variance-row' : ''}>
           <td className="employee-cost-sticky-stt employee-cost-number">{row.stt || rowIndex + 1}</td>
-          {allEmployees && <td className="employee-cost-employee"><b><Highlight value={row.employeeCode} query={query} /></b><small title={row.employeeName}><Highlight value={row.employeeName} query={query} /></small></td>}
+          {allEmployees && <td className="employee-cost-employee employee-cost-sticky-employee"><b><Highlight value={row.employeeCode} query={query} /></b><small title={row.employeeName}><Highlight value={row.employeeName} query={query} /></small></td>}
           {period.columns.map((column) => <td key={column.key} className={`${column.kind === 'money' || column.kind === 'percent' || column.format === 'number' ? 'employee-cost-number' : ''}${column.annual ? ' employee-cost-annual' : ''}${column.kind === 'percent' ? ' employee-cost-percent' : ''}${column.key === 'c16' ? ' employee-cost-sticky-product' : ''} employee-cost-col-${column.key}`}>
             {renderCell(row, column)}
           </td>)}

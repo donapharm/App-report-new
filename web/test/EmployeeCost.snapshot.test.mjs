@@ -35,6 +35,17 @@ test('normalized match preserves only privacy-safe per-employee unavailable reas
   assert.deepEqual(model.match.unavailableReasons, { DN001: 'not_configured', DN002: 'upstream_unavailable', DN003: 'upstream_rejected' });
 });
 
+test('READ_BUSY stays a safe distinct reason and UI tells the user to retry', () => {
+  const model = employeeCostViewModel({
+    periods: [], allEmployees: true,
+    match: { unavailableEmployees: ['DN001'], unavailableReasons: { DN001: 'upstream_busy' } },
+  });
+  assert.deepEqual(model.match.unavailableReasons, { DN001: 'upstream_busy' });
+  const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  assert.match(page, /upstream_busy: 'nguồn đang bận, thử lại'/);
+  assert.match(page, /DataHub đang bận — thử lại/);
+});
+
 test('UI explains upstream rejection as DataHub configuration, never as network or raw upstream detail', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   assert.match(page, /DataHub từ chối mã này — cần DataHub sửa cấu hình, không phải lỗi mạng/);

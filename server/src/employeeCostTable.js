@@ -152,7 +152,7 @@ function numberOrNull(value) {
 
 function summarizeRows(rows = [], columns = [], baseSummary = null) {
   const costColumns = columns.filter((column) => /^c(?:3[3-9]|4[0-6])$/.test(String(column?.key || '').toLowerCase())
-    && !BLOCKED.has(String(column.key).toLowerCase()));
+    && !BLOCKED.has(String(column.key).toLowerCase()) && column?.viewOnly !== true);
   const annualKeys = new Set(costColumns.filter((column) => column.annual).map((column) => String(column.key).toLowerCase()));
   const columnTotals = Object.fromEntries(costColumns.map((column) => {
     const key = String(column.key).toLowerCase();
@@ -258,7 +258,7 @@ function buildFilterOptions(report = {}, options = {}) {
 function filteredDaily(daily = {}, rows = [], columns = []) {
   if (!daily?.reliable) return daily;
   const costColumns = columns.filter((column) => /^c(?:3[3-9]|4[0-6])$/.test(String(column?.key || '').toLowerCase())
-    && !BLOCKED.has(String(column.key).toLowerCase()));
+    && !BLOCKED.has(String(column.key).toLowerCase()) && column?.viewOnly !== true);
   const dates = [...new Set(rows.flatMap((row) => Object.keys(row.dailyAmounts || {})))].sort();
   const totals = dates.map((date) => {
     let monthlyTotal = 0;
@@ -310,7 +310,9 @@ function transformReport(report = {}, options = {}) {
       && period.summary.revenueTotal != null
       && period.summary.revenueBeforeVatTotal != null
   ));
-  const costKeys = [...new Set(periods.flatMap((period) => period.columns.map((column) => String(column.key || '').toLowerCase())
+  const costKeys = [...new Set(periods.flatMap((period) => period.columns
+    .filter((column) => column?.viewOnly !== true)
+    .map((column) => String(column.key || '').toLowerCase())
     .filter((key) => /^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key))))];
   return {
     ...report,
@@ -367,6 +369,8 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
     const columnsByKey = new Map();
     const fallbackCostLabels = {};
     const fallbackCostColumns = [];
+    const fallbackViewOnlyLabels = {};
+    const fallbackViewOnlyColumns = [];
     for (const { period } of blocks) for (const column of period.columns || []) {
       const key = String(column?.key || '').toLowerCase();
       if (!key || BLOCKED.has(key) || columnsByKey.has(key)) continue;
@@ -380,6 +384,14 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
       for (const [rawKey, label] of Object.entries(period.template?.costLabels || {})) {
         const key = String(rawKey || '').toLowerCase();
         if (/^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key) && !fallbackCostLabels[key]) fallbackCostLabels[key] = String(label || key);
+      }
+      for (const rawKey of Array.isArray(period.template?.viewOnlyColumns) ? period.template.viewOnlyColumns : []) {
+        const key = String(rawKey || '').toLowerCase();
+        if (/^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key) && !fallbackViewOnlyColumns.includes(key)) fallbackViewOnlyColumns.push(key);
+      }
+      for (const [rawKey, label] of Object.entries(period.template?.viewOnlyLabels || {})) {
+        const key = String(rawKey || '').toLowerCase();
+        if (/^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key) && !fallbackViewOnlyLabels[key]) fallbackViewOnlyLabels[key] = String(label || key);
       }
     }
     const columns = [...columnsByKey.values()].sort((a, b) => Number(String(a.key).slice(1)) - Number(String(b.key).slice(1)));
@@ -413,6 +425,7 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
       const outcome = String(report.sourceOutcome || '').toLowerCase();
       const reason = outcome === 'not_configured' ? 'not_configured'
         : outcome === 'deadline' ? 'deadline'
+          : outcome === 'upstream_busy' ? 'upstream_busy'
           : outcome === 'source_error' ? 'source_error'
             : outcome === 'upstream_rejected' || outcome === 'upstream_unauthorized' || /^upstream_4\d\d$/.test(outcome)
               ? 'upstream_rejected' : 'upstream_unavailable';
@@ -470,7 +483,10 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
           ? [[employeeCode, { ...report.penalty }]]
           : [];
       })),
-      template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: fallbackCostColumns, costLabels: fallbackCostLabels },
+      template: {
+        key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: fallbackCostColumns, costLabels: fallbackCostLabels,
+        viewOnlyColumns: fallbackViewOnlyColumns, viewOnlyLabels: fallbackViewOnlyLabels,
+      },
       match: {
         matchedRows, totalRows, rate, threshold, low,
         unavailablePairs, unavailableEmployees, unavailableEmployeeCount: unavailableEmployees.length,
@@ -507,9 +523,16 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
   const mergedCostLabels = Object.fromEntries(periods.flatMap((period) => (
     Object.entries(period.template?.costLabels || {})
   )).filter(([key], index, entries) => entries.findIndex(([candidate]) => candidate === key) === index));
+  const mergedViewOnlyColumns = [...new Set(periods.flatMap((period) => period.template?.viewOnlyColumns || []))];
+  const mergedViewOnlyLabels = Object.fromEntries(periods.flatMap((period) => (
+    Object.entries(period.template?.viewOnlyLabels || {})
+  )).filter(([key], index, entries) => entries.findIndex(([candidate]) => candidate === key) === index));
   return {
     empCode: 'ALL', employeeName: 'Tất cả nhân viên', allEmployees: true,
-    template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: mergedCostColumns, costLabels: mergedCostLabels },
+    template: {
+      key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: mergedCostColumns, costLabels: mergedCostLabels,
+      viewOnlyColumns: mergedViewOnlyColumns, viewOnlyLabels: mergedViewOnlyLabels,
+    },
     from: source[0]?.from || periodKeys[0] || '', to: source[0]?.to || periodKeys.at(-1) || '',
     rateEffectiveFrom: rateEffectiveFroms.length === 1 ? rateEffectiveFroms[0] : '',
     rateEffectiveFroms,

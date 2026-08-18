@@ -201,6 +201,35 @@ test('view model renders percent without percent sign and reads pre-VAT sale fie
   assert.equal(formatEmployeeCostCell(null, { kind: 'money' }), '—');
 });
 
+test('configured view-only columns render in detail but stay out of KPI/cost totals', () => {
+  const config = JSON.parse(fs.readFileSync(new URL('../../server/config/employee_cost_templates.json', import.meta.url), 'utf8'));
+  const viewOnlyEntries = Object.entries(config.viewOnlyCostColumns || {});
+  const viewOnlyKeys = viewOnlyEntries.map(([key]) => key);
+  const calculationKeys = config.calculationGroups.find((group) => group.key === config.defaultCalculationGroup).costColumns;
+  const row = Object.fromEntries(viewOnlyKeys.map((key, index) => [key, 10 + index]));
+  const model = employeeCostViewModel({
+    empCode: 'DN001', period: '2026-08',
+    template: {
+      key: 'fulltime', label: 'FULL-TIME',
+      columns: ['c16', ...calculationKeys, ...viewOnlyKeys, 'rowMonthlyTotal'],
+      costLabels: Object.fromEntries(calculationKeys.map((key) => [key, key])),
+      viewOnlyColumns: viewOnlyKeys,
+      viewOnlyLabels: config.viewOnlyCostColumns,
+    },
+    columns: [
+      ...calculationKeys.map((key) => ({ key, label: key })),
+      ...viewOnlyEntries.map(([key, label]) => ({ key, label, viewOnly: true })),
+    ],
+    rows: [{ c16: 'Thuốc', ...row, rowMonthlyTotal: 123 }],
+    summary: { reliable: true, monthlyTotal: 123, columnTotals: Object.fromEntries(calculationKeys.map((key) => [key, 0])) },
+  });
+  assert.deepEqual(model.columns.filter((column) => column.viewOnly).map((column) => column.key), viewOnlyKeys);
+  assert.deepEqual(model.columns.filter((column) => column.viewOnly).map((column) => column.label), viewOnlyEntries.map(([, label]) => label));
+  assert.deepEqual(model.costColumns.map((column) => column.key), calculationKeys);
+  assert.deepEqual(model.columns.filter((column) => column.viewOnly).map((column) => model.rows[0][column.key]), viewOnlyKeys.map((key) => row[key]));
+  assert.equal(model.rows[0].rowMonthlyTotal, 123);
+});
+
 test('view model keeps synthetic reconciliation variance rows non-financial and label-driven', () => {
   const model = employeeCostViewModel({
     empCode: 'DN005',
@@ -536,7 +565,9 @@ test('acceptance contract includes CEO-only ALL, compact full-label columns, sti
   assert.match(css, /\.employee-cost-table \.employee-cost-col-contractorName \{ width:235px; min-width:215px; max-width:270px; \}/);
   assert.match(css, /\.employee-cost-table th\.employee-cost-percent > button \{ line-height:1\.2; text-align:right; white-space:normal; \}/);
   assert.match(css, /\.employee-cost-employee \{ width:160px; min-width:160px; max-width:160px;/);
-  assert.doesNotMatch(css, /\.employee-cost-table\.is-all-employees \.employee-cost-sticky-product/);
+  assert.match(page, /employee-cost-employee employee-cost-sticky-employee/);
+  assert.match(css, /\.employee-cost-table\.is-all-employees \.employee-cost-sticky-employee \{ position:sticky !important; left:48px;/);
+  assert.match(css, /\.employee-cost-table\.is-all-employees \.employee-cost-sticky-product \{ left:208px; \}/);
   assert.match(css, /\.employee-cost-sticky-product \{ position:sticky !important; left:48px;/);
   assert.match(css, /\.employee-cost-pagination\.is-top \{ position:sticky/);
   assert.match(css, /\.employee-cost-page-numbers button\.active/);

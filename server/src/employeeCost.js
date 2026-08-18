@@ -744,6 +744,14 @@ function enrichWithRevenue(payload, options = {}) {
     annual: annualKeys.has(key),
     derivesFrom: template.derivedBases[key] || null,
   }));
+  const viewOnlyColumns = template.viewOnlyColumns.map((key) => ({
+    ...(upstreamColumns.get(key) || {}),
+    key,
+    label: template.viewOnlyLabels[key] || upstreamColumns.get(key)?.label || key,
+    type: 'percent',
+    annual: false,
+    viewOnly: true,
+  }));
   const catalogIndex = buildProductCatalogIndex(options.catalogRows);
   const revenueLines = buildRevenueLines(options.revenueRows, payload.empCode, options.period);
   const provinceByUnit = authoritativeProvinceByUnit(options.revenueRows);
@@ -761,6 +769,7 @@ function enrichWithRevenue(payload, options = {}) {
     const amounts = {};
     const dailyAmounts = {};
     const percentages = {};
+    const viewOnlyPercentages = {};
     let rowMonthlyTotal = 0;
     let rowAnnualTotal = 0;
     for (const column of columns) {
@@ -781,6 +790,11 @@ function enrichWithRevenue(payload, options = {}) {
         dailyAmounts[line.date][column.key] = amount;
         allDates.add(line.date);
       }
+    }
+    for (const column of viewOnlyColumns) {
+      const rawPercent = source?.[column.key];
+      viewOnlyPercentages[column.key] = rawPercent == null || rawPercent === '' || !Number.isFinite(Number(rawPercent))
+        ? null : Number(rawPercent);
     }
     // A configured dependency that cannot be resolved is a financial-data
     // mismatch, even when all percentages exist. Never mark it reliable or
@@ -804,6 +818,7 @@ function enrichWithRevenue(payload, options = {}) {
       revenueBeforeVat: line.revenueBeforeVat,
       note: safeText(source?.[NOTE_KEY]),
       ...percentages,
+      ...viewOnlyPercentages,
       amounts,
       revenueMatched: matched,
       dailyAmounts: rowDailyReliable ? dailyAmounts : null,
@@ -891,10 +906,17 @@ function enrichWithRevenue(payload, options = {}) {
       key: template.key,
       label: template.label,
       calculationGroup: template.calculationGroup,
-      columns: template.columns,
+      columns: (() => {
+        const layout = [...template.columns];
+        const before = layout.indexOf('rowMonthlyTotal');
+        layout.splice(before < 0 ? layout.length : before, 0, ...template.viewOnlyColumns.filter((key) => !layout.includes(key)));
+        return layout;
+      })(),
       costLabels: template.costLabels,
+      viewOnlyColumns: template.viewOnlyColumns,
+      viewOnlyLabels: template.viewOnlyLabels,
     },
-    columns,
+    columns: [...columns, ...viewOnlyColumns].sort((a, b) => Number(a.key.slice(1)) - Number(b.key.slice(1))),
     rows,
     match: { matchedRows, totalRows, rate, threshold, low },
     summary: {
@@ -931,7 +953,9 @@ function enrichRangePayload(payload, options = {}) {
   const totalRows = periods.reduce((sum, period) => sum + period.match.totalRows, 0);
   const matchedRows = periods.reduce((sum, period) => sum + period.match.matchedRows, 0);
   const reliable = periods.length > 0 && periods.every((period) => period.summary.reliable);
-  const columnKeys = [...new Set(periods.flatMap((period) => period.columns.map((column) => column.key)))];
+  const columnKeys = [...new Set(periods.flatMap((period) => period.columns
+    .filter((column) => column.viewOnly !== true)
+    .map((column) => column.key)))];
   return {
     ...payload,
     template: periods[0]?.template || null,
@@ -1230,6 +1254,14 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
       if (!response.ok) {
         const error = new Error('employee cost upstream failed');
         error.status = response.status;
+        // Preserve only DataHub's exact, privacy-safe bounded-queue signal.
+        // Never retain or forward the rest of the upstream error payload.
+        if (response.status === 503 && typeof response.json === 'function') {
+          try {
+            const failure = await response.json();
+            if (failure?.code === 'EMPLOYEE_COST_READ_BUSY') error.upstreamCode = 'EMPLOYEE_COST_READ_BUSY';
+          } catch { /* malformed/non-JSON 503 remains generic */ }
+        }
         throw error;
       }
       const raw = await response.json();
@@ -1266,7 +1298,9 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
         // 4xx is normalized to one privacy-safe code. Never expose the upstream
         // body, credential state or request payload through snapshot/UI metadata.
         payload: range ? emptyRangePayload(empCode, range) : emptyPayload(empCode, DEFAULT_NOTE),
-        outcome: rejected ? 'upstream_rejected' : (upstreamStatus ? `upstream_${upstreamStatus}` : 'upstream_unavailable'),
+        outcome: error?.upstreamCode === 'EMPLOYEE_COST_READ_BUSY'
+          ? 'upstream_busy'
+          : (rejected ? 'upstream_rejected' : (upstreamStatus ? `upstream_${upstreamStatus}` : 'upstream_unavailable')),
         attempts,
       };
     }

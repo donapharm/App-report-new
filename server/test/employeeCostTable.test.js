@@ -289,7 +289,7 @@ test('ALL merge exposes a pinned timestamp only when every employee is from the 
 
 
 test('ALL merge maps only 4xx rejection outcomes to privacy-safe upstream_rejected', () => {
-  const outcomes = ['upstream_rejected', 'upstream_400', 'upstream_401', 'upstream_409', 'upstream_499', 'upstream_500', 'upstream_502', 'upstream_unavailable'];
+  const outcomes = ['upstream_rejected', 'upstream_400', 'upstream_401', 'upstream_409', 'upstream_499', 'upstream_500', 'upstream_502', 'upstream_unavailable', 'upstream_busy'];
   const reports = outcomes.map((sourceOutcome, index) => {
     const item = report([]);
     item.empCode = `DN${String(index + 1).padStart(3, '0')}`;
@@ -302,7 +302,7 @@ test('ALL merge maps only 4xx rejection outcomes to privacy-safe upstream_reject
   assert.deepEqual(merged.periods[0].match.unavailableReasons, {
     DN001: 'upstream_rejected', DN002: 'upstream_rejected', DN003: 'upstream_rejected',
     DN004: 'upstream_rejected', DN005: 'upstream_rejected', DN006: 'upstream_unavailable',
-    DN007: 'upstream_unavailable', DN008: 'upstream_unavailable',
+    DN007: 'upstream_unavailable', DN008: 'upstream_unavailable', DN009: 'upstream_busy',
   });
   assert.doesNotMatch(JSON.stringify(merged.periods[0].match.unavailableReasons), /upstream_4|upstream_5|credential|body/);
 });
@@ -311,7 +311,14 @@ test('KPI tile metadata stays App Report-owned when the upstream has no columns'
   const enriched = employeeCost.enrichWithRevenue({ empCode: 'DN001', columns: [], rows: [] }, {
     period: '2026-08', revenueRows: [], catalogRows: [],
   });
-  assert.deepEqual(enriched.columns.map((column) => column.key), ['c36', 'c41', 'c43', 'c44', 'c45']);
+  assert.deepEqual(
+    enriched.columns.filter((column) => column.viewOnly !== true).map((column) => column.key),
+    ['c36', 'c41', 'c43', 'c44', 'c45'],
+  );
+  assert.deepEqual(
+    enriched.columns.filter((column) => column.viewOnly === true).map((column) => column.key),
+    enriched.template.viewOnlyColumns,
+  );
   assert.deepEqual(Object.keys(enriched.template.costLabels), ['c36', 'c41', 'c43', 'c44', 'c45']);
 
   const emptyReport = {
@@ -322,8 +329,13 @@ test('KPI tile metadata stays App Report-owned when the upstream has no columns'
     }],
   };
   const merged = table.mergeEmployeeReports([emptyReport], [{ emp_code: 'DN001', name: 'DN001' }]);
-  assert.deepEqual(merged.periods[0].template.columns, ['c36', 'c41', 'c43', 'c44', 'c45']);
+  assert.deepEqual(
+    merged.periods[0].template.columns,
+    [...Object.keys(enriched.template.costLabels), ...enriched.template.viewOnlyColumns],
+  );
   assert.deepEqual(merged.periods[0].template.costLabels, enriched.template.costLabels);
+  assert.deepEqual(merged.periods[0].template.viewOnlyColumns, enriched.template.viewOnlyColumns);
+  assert.deepEqual(merged.periods[0].template.viewOnlyLabels, enriched.template.viewOnlyLabels);
   assert.deepEqual(merged.template.columns, merged.periods[0].template.columns,
     'top-level ALL phải giữ cùng hợp đồng KPI với period');
   assert.deepEqual(merged.template.costLabels, merged.periods[0].template.costLabels);

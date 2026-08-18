@@ -171,6 +171,49 @@ test('502 retries with backoff then succeeds; 401 returns safe empty payload', a
   assert.doesNotMatch(JSON.stringify(networkError), /credential|must-not-leak|socket/);
 });
 
+test('503 EMPLOYEE_COST_READ_BUSY is preserved as one safe busy outcome without leaking its body', async () => {
+  const busy = await employeeCost.fetchEmployeeCost('DN001', {
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [],
+    fetchImpl: async () => ({
+      ok: false, status: 503,
+      json: async () => ({ code: 'EMPLOYEE_COST_READ_BUSY', token: 'must-not-leak', detail: 'private queue state' }),
+    }),
+  });
+  assert.equal(busy.outcome, 'upstream_busy');
+  assert.equal(busy.payload.rows.length, 0);
+  assert.doesNotMatch(JSON.stringify(busy), /EMPLOYEE_COST_READ_BUSY|must-not-leak|private queue state|token/);
+
+  const generic = await employeeCost.fetchEmployeeCost('DN001', {
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [],
+    fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({ code: 'SOMETHING_ELSE' }) }),
+  });
+  assert.equal(generic.outcome, 'upstream_503');
+});
+
+test('C38/C42 render as view-only percentages and never enter monetary amounts or totals', () => {
+  const viewTemplate = employeeCostTemplates.resolveTemplate('DN001');
+  const viewValues = Object.fromEntries(viewTemplate.viewOnlyColumns.map((key, index) => [key, 77 + index * 11]));
+  const payload = employeeCost.sanitizePayload({
+    empCode: 'DN001',
+    columns: [...fullColumns(), ...viewTemplate.viewOnlyColumns.map((key) => ({ key, pos: Number(key.slice(1)), label: 'upstream wrong label' }))],
+    rows: [fullRow({ c5: 'QL1', c7: 'U1', c16: 'Thuốc', c36: 10, ...viewValues })],
+  }, 'DN001');
+  const enriched = employeeCost.enrichWithRevenue(payload, {
+    period: '2026-08', catalogRows: [{ c5: 'QL1', c7: 'U1', c16: 'Thuốc' }],
+    revenueRows: [{ emp_code: 'DN001', unit_code: 'U1', iit_code: 'QL1', revenue: 1_050_000 }],
+  });
+  const displayedViewColumns = enriched.columns.filter((column) => column.viewOnly === true);
+  assert.deepEqual(displayedViewColumns.map((column) => column.key), viewTemplate.viewOnlyColumns);
+  assert.deepEqual(displayedViewColumns.map((column) => column.label), viewTemplate.viewOnlyColumns.map((key) => viewTemplate.viewOnlyLabels[key]));
+  for (const key of viewTemplate.viewOnlyColumns) {
+    assert.equal(enriched.rows[0][key], viewValues[key]);
+    assert.equal(enriched.rows[0].amounts[key], undefined);
+    assert.ok(enriched.template.columns.indexOf(key) < enriched.template.columns.indexOf('rowMonthlyTotal'));
+  }
+  assert.equal(enriched.rows[0].rowMonthlyTotal, 100_000);
+  assert.deepEqual(Object.keys(enriched.summary.columnTotals), ['c36', 'c41', 'c43', 'c44', 'c45']);
+});
+
 test('maps C16 through catalog, joins revenue by unit + product code and calculates each amount', () => {
   const payload = employeeCost.sanitizePayload({
     empCode: 'DN001',
@@ -838,7 +881,8 @@ test('part-time employees receive only C36 even when DataHub publishes full-time
     revenueRows: [{ emp_code: 'DN021', unit_code: 'U1', iit_code: 'QL1', revenue: 1_050_000 }],
   });
   assert.equal(enriched.template.key, 'parttime');
-  assert.deepEqual(enriched.columns.map((column) => column.key), ['c36']);
+  assert.deepEqual(enriched.columns.filter((column) => column.viewOnly !== true).map((column) => column.key), ['c36']);
+  assert.deepEqual(enriched.columns.filter((column) => column.viewOnly === true).map((column) => column.key), employeeCostTemplates.resolveTemplate('DN021').viewOnlyColumns);
   assert.deepEqual(enriched.rows[0].amounts, { c36: 100_000 });
   assert.equal(enriched.summary.monthlyTotal, 100_000);
 });

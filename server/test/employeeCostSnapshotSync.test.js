@@ -92,6 +92,7 @@ test('4xx upstream rejection is allowlisted distinctly while 5xx/network stay un
     assert.equal(sourceFailureReason(null, { sourceOutcome: outcome }), 'upstream_rejected');
     assert.equal(usableResult({ sourceOutcome: outcome }), false);
   }
+  assert.equal(sourceFailureReason(null, { sourceOutcome: 'upstream_busy' }), 'upstream_busy');
   for (const outcome of ['upstream_500', 'upstream_502', 'upstream_503', 'upstream_unavailable']) {
     assert.equal(sourceFailureReason(null, { sourceOutcome: outcome }), 'upstream_unavailable');
     assert.equal(usableResult({ sourceOutcome: outcome }), false);

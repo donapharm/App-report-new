@@ -169,6 +169,7 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
       shortLabel: key.toUpperCase(),
       kind: 'percent',
       annual: !!raw.annual,
+      viewOnly: raw.viewOnly === true,
     });
   }
   // Danh sách ô/cột chi phí là hợp đồng hiển thị của App Report. Nguồn ngoài
@@ -182,6 +183,18 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
       shortLabel: key.toUpperCase(),
       kind: 'percent',
       annual: false,
+    });
+  }
+  for (const [rawKey, rawLabel] of Object.entries(template?.viewOnlyLabels || {})) {
+    const key = String(rawKey || '').trim().toLowerCase();
+    if (!isAllowedCostColumn(key) || costs.has(key)) continue;
+    costs.set(key, {
+      key,
+      label: String(rawLabel || key),
+      shortLabel: key.toUpperCase(),
+      kind: 'percent',
+      annual: false,
+      viewOnly: true,
     });
   }
   const requestedLayout = Array.isArray(template?.columns) ? template.columns.map(String) : [];
@@ -317,7 +330,7 @@ export function employeeCostGapConsistency(model = {}, badge = {}) {
 
 function normalizedMatch(rawMatch = {}, rowCount = 0) {
   const safeReasons = Object.fromEntries(Object.entries(rawMatch.unavailableReasons || {})
-    .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'upstream_rejected', 'deadline', 'source_error', 'missing_snapshot'].includes(String(reason))
+    .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'upstream_rejected', 'upstream_busy', 'deadline', 'source_error', 'missing_snapshot'].includes(String(reason))
       ? String(reason) : 'upstream_unavailable']));
   return {
     matchedRows: Number(rawMatch.matchedRows || 0),
@@ -588,12 +601,16 @@ function periodViewModel(payload = {}) {
     costLabels: Object.fromEntries(Object.entries(payload.template?.costLabels || {})
       .filter(([key]) => isAllowedCostColumn(key))
       .map(([key, label]) => [String(key).toLowerCase(), String(label || key)])),
+    viewOnlyColumns: Array.isArray(payload.template?.viewOnlyColumns) ? payload.template.viewOnlyColumns.map(String) : [],
+    viewOnlyLabels: Object.fromEntries(Object.entries(payload.template?.viewOnlyLabels || {})
+      .filter(([key]) => isAllowedCostColumn(key))
+      .map(([key, label]) => [String(key).toLowerCase(), String(label || key)])),
   };
   const sourceCostColumns = (Array.isArray(payload.columns) ? payload.columns : [])
     .filter((column) => isAllowedCostColumn(column));
   const columns = buildEmployeeCostColumns(payload.columns, template);
   const dimensionColumns = columns.filter((column) => column.kind === 'dimension');
-  const costColumns = columns.filter((column) => column.kind === 'percent');
+  const costColumns = columns.filter((column) => column.kind === 'percent' && column.viewOnly !== true);
   const costColumnsFallback = sourceCostColumns.length === 0 && costColumns.length > 0;
   const rows = (Array.isArray(payload.rows) ? payload.rows : []).map((source, rowIndex) => {
     const row = {
@@ -1023,7 +1040,7 @@ export function employeeCostViewModel(payload = {}) {
       rosterCount: Number(payload.trangThaiDongBo.rosterCount || 0),
       availableCount: Number(payload.trangThaiDongBo.availableCount || 0),
       unavailableReasons: Object.fromEntries(Object.entries(payload.trangThaiDongBo.unavailableReasons || {})
-        .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'upstream_rejected', 'deadline', 'source_error', 'missing', 'roster_added', 'roster_changed', 'corrupt_snapshot', 'sync_failed', 'locked'].includes(String(reason))
+        .map(([emp, reason]) => [String(emp), ['not_configured', 'upstream_unavailable', 'upstream_rejected', 'upstream_busy', 'deadline', 'source_error', 'missing', 'roster_added', 'roster_changed', 'corrupt_snapshot', 'sync_failed', 'locked'].includes(String(reason))
           ? String(reason) : 'upstream_unavailable'])),
       errorCode: String(payload.trangThaiDongBo.errorCode || ''),
     } : null,
