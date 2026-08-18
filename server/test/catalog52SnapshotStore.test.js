@@ -18,6 +18,7 @@ function sourceEnvelope(rows, overrides = {}) {
   return {
     period: '2026-08', source: 'ceo-vault', sourceVersion: 'V31.7', sourceVersionNo: 9,
     rowCount: rows.length, canonicalBytes,
+    mappingContract: { unitCodeColumn: 'c7', qlnbColumn: 'c5', employeeColumn: 'c6', uomColumn: 'c25', uomMode: 'validation' },
     sourceIntegrityChecksum: `sha256:${crypto.createHash('sha256').update(canonicalBytes).digest('hex')}`,
     receivedAt: '2026-08-18T00:00:00.000Z', ...overrides,
   };
@@ -28,7 +29,7 @@ function temporaryStore(options = {}) {
 }
 
 test('projection physically excludes every C32-C47 from catalogSafe but retains purpose-bound cost fields', () => {
-  const result = catalog52.projectRows([row('L1')], { period: '2026-08', sourceVersion: 'V31.7', sourceVersionNo: 9 });
+  const result = catalog52.projectRows([row('L1')], { period: '2026-08', sourceVersion: 'V31.7', sourceVersionNo: 9, mappingContract: sourceEnvelope([row('X')]).mappingContract });
   for (const field of catalog52.SENSITIVE_COLUMNS) {
     assert.equal(Object.prototype.hasOwnProperty.call(result.catalogSafe[0], field), false, field);
     assert.equal(result.costRestricted[0][field], `L1-C${field.slice(1)}`, field);
@@ -40,11 +41,20 @@ test('projection physically excludes every C32-C47 from catalogSafe but retains 
 test('mapping keeps every C6 candidate and reports conflict instead of first-win', () => {
   const result = catalog52.projectRows([
     row('L1', { c6: 'DN001' }), row('L2', { c6: 'DN002' }), row('L3', { c6: 'DN001', c25: 'CHAI' }),
-  ], { period: '2026-08', sourceVersion: 'V31.7', sourceVersionNo: 9 });
+  ], { period: '2026-08', sourceVersion: 'V31.7', sourceVersionNo: 9, mappingContract: sourceEnvelope([row('X')]).mappingContract });
   assert.equal(result.employeeMapping.length, 1);
   assert.equal(result.employeeMapping[0].candidates.length, 3);
   assert.equal(result.employeeMapping[0].employeeConflict, true);
   assert.equal(result.employeeMapping[0].uomConflict, true);
+});
+
+test('canonical C7+C5 to C6 mapping requires a source-declared non-sensitive UOM validation column', () => {
+  const rows = [row('L1')];
+  const valid = sourceEnvelope(rows);
+  assert.equal(catalog52.normalizedMappingContract(valid.mappingContract).uomColumn, 'c25');
+  assert.throws(() => catalog52.projectRows(rows, { period: '2026-08' }), { code: 'CATALOG52_MAPPING_CONTRACT_REQUIRED' });
+  assert.throws(() => catalog52.projectRows(rows, { period: '2026-08', mappingContract: { ...valid.mappingContract, unitCodeColumn: 'c8' } }), { code: 'CATALOG52_CANONICAL_MAPPING_CONTRACT_INVALID' });
+  assert.throws(() => catalog52.projectRows(rows, { period: '2026-08', mappingContract: { ...valid.mappingContract, uomColumn: 'c32' } }), { code: 'CATALOG52_UOM_CONTRACT_INVALID' });
 });
 
 test('source integrity checksum verifies exact bytes and remains distinct from canonical internal identity', () => {
@@ -52,6 +62,16 @@ test('source integrity checksum verifies exact bytes and remains distinct from c
   const reordered = Buffer.from(JSON.stringify({ rows: [{ ...Object.fromEntries(Object.entries(row('L1')).reverse()) }] }), 'utf8');
   assert.notEqual(first.sourceIntegrityChecksum, `sha256:${crypto.createHash('sha256').update(reordered).digest('hex')}`);
   assert.equal(catalog52.checksum(catalog52.canonicalJson([catalog52.normalizedRow(row('L1'), 0)])), catalog52.checksum(catalog52.canonicalJson([catalog52.normalizedRow(JSON.parse(reordered).rows[0], 0)])));
+});
+
+test('source bounds reject oversized row counts and non-scalar or oversized cells before publication', () => {
+  const { root, store } = temporaryStore();
+  try {
+    assert.throws(() => store.prepareCandidate(sourceEnvelope([row('L1')], { rowCount: catalog52.MAX_ROWS + 1 })), { code: 'CATALOG52_ROW_COUNT_INVALID' });
+    assert.throws(() => store.prepareCandidate(sourceEnvelope([row('L1', { c1: { nested: 'forbidden' } })])), { code: 'CATALOG52_CELL_INVALID' });
+    assert.throws(() => store.prepareCandidate(sourceEnvelope([row('L1', { c1: 'x'.repeat(catalog52.MAX_CELL_BYTES + 1) })])), { code: 'CATALOG52_CELL_INVALID' });
+    assert.equal(store.readPointer('2026-08'), null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('candidate is immutable and inactive until a single atomic activation, then readers pin one manifest', () => {
@@ -108,9 +128,48 @@ test('activation and rollback deterministically rotate active/LKG under the same
     const b = store.prepareCandidate(sourceEnvelope([row('B')], { sourceVersion: 'V31.8', sourceVersionNo: 10 }), { activate: true });
     assert.equal(store.readPointer('2026-08').activeManifestId, b.manifestId);
     assert.equal(store.readPointer('2026-08').lastKnownGoodManifestId, a.manifestId);
+    const beforeNoop = store.readPointer('2026-08');
+    store.activateManifest('2026-08', b.manifestId, { actor: 'CEO' });
+    assert.deepEqual(store.readPointer('2026-08'), beforeNoop, 're-activating active manifest must not erase LKG');
     const rolled = store.rollback('2026-08', { actor: 'CEO' });
     assert.equal(rolled.pointer.activeManifestId, a.manifestId);
     assert.equal(rolled.pointer.lastKnownGoodManifestId, b.manifestId);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('pointer binds immutable manifest checksum and fails closed after manifest tampering', () => {
+  const { root, store } = temporaryStore();
+  try {
+    const active = store.prepareCandidate(sourceEnvelope([row('L1')]), { activate: true });
+    const pointer = store.readPointer('2026-08');
+    assert.match(pointer.activeManifestChecksum, /^sha256:[a-f0-9]{64}$/);
+    const manifestFile = path.join(root, 'objects', '2026-08', active.manifestId, 'manifest.json');
+    fs.appendFileSync(manifestFile, ' ');
+    assert.throws(() => store.status('2026-08'), { code: 'CATALOG52_MANIFEST_CHECKSUM_MISMATCH' });
+    assert.throws(() => store.readProjectionPage('2026-08', 'full', { pageSize: 1 }), { code: 'CATALOG52_MANIFEST_CHECKSUM_MISMATCH' });
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('retention cannot delete a manifest while a reader pin is registered under the period lock', () => {
+  let clock = Date.now();
+  const { root, store } = temporaryStore({ readerGraceMs: 1, now: () => clock });
+  try {
+    const manifests = [];
+    for (let index = 1; index <= 4; index += 1) {
+      manifests.push(store.prepareCandidate(sourceEnvelope([row(`L${index}`)], {
+        sourceVersion: `V${index}`, sourceVersionNo: index,
+      })));
+      clock += 10;
+    }
+    const oldest = manifests[0];
+    const pinned = store.pinForRead('2026-08', oldest.manifestId);
+    clock += 100;
+    const retained = store.retain('2026-08', { keep: 2 });
+    assert.equal(retained.deleted.includes(oldest.manifestId), false);
+    assert.equal(fs.existsSync(path.join(root, 'objects', '2026-08', oldest.manifestId)), true);
+    pinned.release();
+    const afterRelease = store.retain('2026-08', { keep: 2 });
+    assert.equal(afterRelease.deleted.includes(oldest.manifestId), true);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

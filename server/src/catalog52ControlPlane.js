@@ -8,7 +8,7 @@ const { pipeline } = require('node:stream/promises');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const auth = require('./auth');
-const { createStore, Catalog52Error } = require('./catalog52SnapshotStore');
+const { createStore, Catalog52Error, MAX_SOURCE_BYTES, MAX_ROWS, normalizedMappingContract } = require('./catalog52SnapshotStore');
 
 const TRUST_WINDOW_MS = 12 * 60 * 60 * 1000;
 const store = createStore({ root: process.env.CATALOG52_STORE_ROOT || path.join(__dirname, '..', 'data', 'catalog52-snapshots') });
@@ -56,26 +56,45 @@ async function syncFromVault(period, actor) {
   const sourceVersion = response.headers.get('x-source-version');
   const sourceVersionNo = Number(response.headers.get('x-source-version-no'));
   const rowCount = Number(response.headers.get('x-row-count'));
+  const mappingContractHeaders = {
+    unitCodeColumn: response.headers.get('x-catalog52-unit-code-column'),
+    qlnbColumn: response.headers.get('x-catalog52-qlnb-column'),
+    employeeColumn: response.headers.get('x-catalog52-employee-column'),
+    uomColumn: response.headers.get('x-catalog52-uom-column'),
+    uomMode: response.headers.get('x-catalog52-uom-mode'),
+  };
   if (!/^sha256:[a-f0-9]{64}$/i.test(String(sourceIntegrityChecksum || '')) || !sourceVersion
-    || !Number.isSafeInteger(sourceVersionNo) || !Number.isSafeInteger(rowCount)) {
+    || !Number.isSafeInteger(sourceVersionNo) || !Number.isSafeInteger(rowCount) || rowCount < 1 || rowCount > MAX_ROWS) {
     throw new Catalog52Error('CATALOG52_VAULT_RECEIPT_INCOMPLETE', { status: 502 });
+  }
+  let mappingContract;
+  try { mappingContract = normalizedMappingContract(mappingContractHeaders); }
+  catch { throw new Catalog52Error('CATALOG52_VAULT_MAPPING_CONTRACT_INVALID', { status: 502 }); }
+  const declaredBytes = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredBytes) && declaredBytes > MAX_SOURCE_BYTES) {
+    throw new Catalog52Error('CATALOG52_SOURCE_TOO_LARGE', { status: 413 });
   }
   const inbox = path.join(store.root, 'inbox');
   fs.mkdirSync(inbox, { recursive: true, mode: 0o700 }); fs.chmodSync(inbox, 0o700);
   const sourceFile = path.join(inbox, `${period}-${process.pid}-${crypto.randomBytes(12).toString('hex')}.json`);
   const hash = crypto.createHash('sha256');
-  const hasher = new Transform({ transform(chunk, _encoding, done) { hash.update(chunk); done(null, chunk); } });
+  let streamedBytes = 0;
+  const hasher = new Transform({ transform(chunk, _encoding, done) {
+    streamedBytes += chunk.length;
+    if (streamedBytes > MAX_SOURCE_BYTES) return done(new Catalog52Error('CATALOG52_SOURCE_TOO_LARGE', { status: 413 }));
+    hash.update(chunk); return done(null, chunk);
+  } });
   try {
     await pipeline(Readable.fromWeb(response.body), hasher, fs.createWriteStream(sourceFile, { flags: 'wx', mode: 0o600 }));
     if (`sha256:${hash.digest('hex')}` !== sourceIntegrityChecksum.toLowerCase()) throw new Catalog52Error('CATALOG52_SOURCE_CHECKSUM_MISMATCH');
     const metadata = JSON.stringify({
       root: store.root, period, source: 'ceo-vault', sourceVersion, sourceVersionNo, rowCount,
-      receivedAt: response.headers.get('x-received-at') || null, sourceIntegrityChecksum, sourceFile, actor,
+      receivedAt: response.headers.get('x-received-at') || null, sourceIntegrityChecksum, mappingContract, sourceFile, actor,
     });
     const worker = path.join(__dirname, '..', 'scripts', 'catalog52_projection_worker.js');
     const childEnv = { ...process.env };
     delete childEnv.CATALOG52_VAULT_READ_TOKEN; delete childEnv.CATALOG52_VAULT_URL;
-    const result = await promisify(execFile)(process.execPath, [worker, metadata], { env: childEnv, maxBuffer: 1024 * 1024, timeout: 10 * 60 * 1000 });
+    const result = await promisify(execFile)(process.execPath, ['--max-old-space-size=640', worker, metadata], { env: childEnv, maxBuffer: 1024 * 1024, timeout: 10 * 60 * 1000 });
     return JSON.parse(result.stdout);
   } catch (error) {
     if (error instanceof Catalog52Error) throw error;

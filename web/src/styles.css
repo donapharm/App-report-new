@@ -1444,7 +1444,7 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-management > * { min-width:0; max-width:100%; }
 .catalog52-control-plane > summary { cursor:pointer; font-weight:800; }
 .catalog52-control-plane { display:grid; gap:10px; }
-.catalog52-meta, .catalog52-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.catalog52-meta, .catalog52-actions, .catalog52-pagination { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .catalog52-meta span { padding:7px 10px; border-radius:8px; background:var(--soft, #eef5fb); }
 .catalog52-table { min-width:6800px; table-layout:fixed; }
 .catalog52-table th, .catalog52-table td { width:128px; max-width:128px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
