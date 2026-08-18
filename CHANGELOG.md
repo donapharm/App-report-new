@@ -7684,3 +7684,10 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Chuẩn hoá bước chuẩn bị release: `.env` và `server/data` phải là symlink tới kho runtime dùng chung; không được tạo thư mục `server/data` rồi đặt nhầm link thành `server/data/data`.
 - Trước cutover bắt buộc PASS 3/3: `users.json` đọc được từ release, `server/data` trỏ đúng/đọc được, và phép đọc nguội T08 có hơn 0 dòng. `AUTH_DATA_DIR` cũng phải đọc được; thiếu mục nào thì dừng trước khi đụng PM2/traffic.
 - Regression rehearsal khóa các ca: link lồng sai, thiếu `users.json`, T08 0 dòng và kho phiên không đọc được.
+## 2026-08-21 — App Debts receiver contract v1 (candidate, mặc định tắt)
+
+- Port module nhận shadow App Debts lên nền `claude/new-session-eifd44`; chưa nối route/runtime nên control plane tiếp tục tối và không thể nhận dữ liệu thật.
+- Ghim contract checksum `c505ff6e46a2ae0f862b15779e9ee8d24205e545297d29fd15d0546b741ba1bc`; từ chối checksum khác ở cả caller và header nguồn.
+- Fail-closed luật dấu (`SALE` không âm; `RETURN/CANCEL/ADJUSTMENT` không dương), tiền VND là chuỗi số nguyên đồng, header bắt buộc `legal_entity` và `currency: "VND"`, mọi dòng cùng pháp nhân.
+- Kỳ được suy ra và kiểm bằng `invoice_date`; chặn kỳ đã khóa và chặn cứng `2026-06`; kiểm lại `row_checksum` theo `sha256-canonical-json-v1`.
+- Phân trang chỉ hợp lệ khi trang cuối có `finalize: true`, đủ dòng và checksum tổng khớp. Các trang chỉ giữ trong bộ nhớ; không publish bất kỳ phần dở dang nào.
