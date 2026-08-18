@@ -58,12 +58,17 @@ test('‼ một NV hỏng KHÔNG được kéo sập cả bảng đội', async 
   assert.equal(results.filter((row) => row.sourceOutcome === 'ok').length, 7);
 });
 
-test('hết giờ thì KHÔNG bắt đầu thêm NV nào nữa — bắt đầu cũng không kịp trả', async () => {
+test('hết giờ thì KHÔNG bắt đầu thêm NV nào nữa — đồng hồ giả, tất định ở mọi mức tải', async () => {
   let started = 0;
-  await mapWithDeadline(roster, 1, () => { started += 1; return sleep(120, { sourceOutcome: 'ok' }); }, {
-    deadlineAt: Date.now() + 250, onSkip: skip,
+  let fakeNow = 0;
+  await mapWithDeadline(roster, 1, () => {
+    started += 1;
+    fakeNow += 120;
+    return Promise.resolve({ sourceOutcome: 'ok' });
+  }, {
+    deadlineAt: 250, onSkip: skip, now: () => fakeNow,
   });
-  assert.ok(started <= 3, `chỉ được khởi động số ít, thực tế ${started}`);
+  assert.equal(started, 3, 'sau ba lượt giả lập 120ms, deadline 250ms phải chặn mọi lượt còn lại');
 });
 
 test('‼ hạn chót phải nhỏ hơn ngưỡng trình duyệt/Cloudflare bỏ cuộc', () => {

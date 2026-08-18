@@ -1,3 +1,8 @@
+### 2026-08-18 16:55 — Doanh thu ALL fail-closed và deadline test tất định
+
+- Thiếu snapshot doanh thu toàn đội thì backend giữ `null` xuyên suốt, UI hiện “Chưa lấy được doanh thu toàn đội”; cấm lùi về cộng từ tập report chi phí có thể thiếu NV.
+- Ca kiểm hạn chót fan-out dùng clock giả tiêm vào `mapWithDeadline`, bỏ phụ thuộc `sleep(120)` và tải máy thật; không nới ngưỡng bảo vệ.
+
 ### 2026-08-18 16:20 — Khoá doanh thu ALL và chẩn đoán nguồn rỗng
 
 - Doanh thu màn Tất cả nhân viên nay lấy từ snapshot toàn đội của kho App Report theo kỳ; thiếu một report chi phí không còn làm tổng doanh thu tụt theo.

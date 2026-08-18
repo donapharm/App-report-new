@@ -623,7 +623,9 @@ function periodViewModel(payload = {}) {
     revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
     // Doanh thu ĐÃ gồm VAT — backend tính, hiển thị kèm để đối chiếu với App Sale.
     revenueTotal: rawSummary.revenueTotal == null ? null : Number(rawSummary.revenueTotal),
-    revenueAllocatedRowCount: Number(rawSummary.revenueAllocatedRowCount || 0),
+    revenueAllocatedRowCount: rawSummary.revenueAllocatedRowCount == null ? null : Number(rawSummary.revenueAllocatedRowCount),
+    revenueSource: String(rawSummary.revenueSource || ''),
+    revenueUnavailableReason: String(rawSummary.revenueUnavailableReason || ''),
     columnTotals: normalizedColumnTotals(rawSummary.columnTotals, costColumns),
     provisionalMonthlyTotal: rawSummary.provisionalMonthlyTotal == null ? null : Number(rawSummary.provisionalMonthlyTotal),
     provisionalAnnualTotal: rawSummary.provisionalAnnualTotal == null ? null : Number(rawSummary.provisionalAnnualTotal),
@@ -950,7 +952,9 @@ export function employeeCostViewModel(payload = {}) {
     annualTotal: rawSummary.annualTotal == null ? null : Number(rawSummary.annualTotal),
     revenueBeforeVatTotal: rawSummary.revenueBeforeVatTotal == null ? null : Number(rawSummary.revenueBeforeVatTotal),
     revenueTotal: rawSummary.revenueTotal == null ? null : Number(rawSummary.revenueTotal),
-    revenueAllocatedRowCount: Number(rawSummary.revenueAllocatedRowCount || 0),
+    revenueAllocatedRowCount: rawSummary.revenueAllocatedRowCount == null ? null : Number(rawSummary.revenueAllocatedRowCount),
+    revenueSource: String(rawSummary.revenueSource || ''),
+    revenueUnavailableReason: String(rawSummary.revenueUnavailableReason || ''),
     columnTotals: normalizedColumnTotals(rawSummary.columnTotals, first.costColumns),
     // Số tạm tính (tổng phần đã khớp %) — dùng để hiển thị kèm nhãn coverage khi
     // chưa đạt ngưỡng, thay vì để trống làm người xem tưởng hỏng.

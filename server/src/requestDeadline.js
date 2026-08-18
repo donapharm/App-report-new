@@ -21,10 +21,10 @@ const EMPLOYEE_COST_ALL_DEADLINE_MS = Math.max(
   5_000, Number(process.env.APP_REPORT_COST_ALL_DEADLINE_MS || 0) || 25_000,
 );
 
-async function mapWithDeadline(items, limit, worker, { deadlineAt, onSkip }) {
+async function mapWithDeadline(items, limit, worker, { deadlineAt, onSkip, now = () => Date.now() }) {
   const results = new Array(items.length);
   let cursor = 0;
-  const left = () => deadlineAt - Date.now();
+  const left = () => deadlineAt - now();
   async function run() {
     while (cursor < items.length) {
       const index = cursor++;

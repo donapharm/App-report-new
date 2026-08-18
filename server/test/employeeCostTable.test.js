@@ -132,10 +132,14 @@ test('ALL merge adds employee identity, backend subtotals, grand total and keeps
   assert.deepEqual(period.employeeSubtotals.map((item) => [item.employeeCode, item.rowCount, item.monthlyTotal]), [['DN001', 2, 50], ['DN002', 1, 40]]);
   assert.equal(period.summary.monthlyTotal, 90);
   assert.equal(transformed.summary.periodTotal, 90);
-  assert.equal(merged.periods[0].summary.revenueTotal, 4500, 'ALL raw payload phải mang doanh thu fallback');
-  assert.equal(merged.periods[0].summary.revenueBeforeVatTotal, 3600, 'fallback trước VAT cộng từ dòng đã gộp');
-  assert.equal(merged.periods[0].summary.revenueAllocatedRowCount, 4);
-  assert.equal(transformed.summary.revenueAllocatedRowCount, 3, 'view đã lọc chỉ nói số dòng đang phân bổ trong view');
+  assert.equal(merged.periods[0].summary.revenueTotal, null, 'thiếu snapshot toàn đội phải fail closed, không cộng report chi phí');
+  assert.equal(merged.periods[0].summary.revenueBeforeVatTotal, null, 'không được dựng before-VAT từ tập NV có thể thiếu');
+  assert.equal(merged.periods[0].summary.revenueAllocatedRowCount, null);
+  assert.equal(merged.periods[0].summary.revenueSource, 'company_revenue_unavailable');
+  assert.match(merged.periods[0].summary.revenueUnavailableReason, /Chưa lấy được doanh thu toàn đội/);
+  assert.equal(transformed.summary.revenueAllocatedRowCount, null, 'không có snapshot thì tầng transform cũng phải giữ fail-closed');
+  assert.equal(transformed.summary.revenueTotal, null);
+  assert.equal(transformed.summary.revenueSource, 'company_revenue_unavailable');
 
   const byDate = table.transformReport(merged, { allEmployees: true, date: '2026-07-02', paginate: true });
   assert.deepEqual(byDate.periods[0].rows.map((row) => [row.stt, row.employeeCode, row.date]), [[1, 'DN001', '2026-07-02']]);
@@ -161,6 +165,17 @@ test('‼ ALL revenue contract: missing one cost report must not change company 
   assert.equal(missingLargeEmployee.periods[0].summary.revenueTotal, 20_000_000,
     'tổng doanh thu phải lấy từ kho App Report, không phụ thuộc report chi phí nào về kịp');
   assert.equal(missingLargeEmployee.periods[0].summary.revenueSource, 'app_report_company_store');
+});
+
+test('‼ ALL revenue contract: missing company snapshot must never fall back to partial cost reports', () => {
+  const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN024', name: 'NV lớn' }];
+  const partial = report([{ ...rows[1], sourceLineId: 'dn001-only', revenue: 2_000_000, revenueBeforeVat: 1_900_000 }]);
+  partial.empCode = 'DN001';
+  const merged = table.mergeEmployeeReports([partial], roster);
+  assert.equal(merged.periods[0].summary.revenueTotal, null);
+  assert.equal(merged.periods[0].summary.revenueBeforeVatTotal, null);
+  assert.equal(merged.periods[0].summary.revenueSource, 'company_revenue_unavailable');
+  assert.match(merged.periods[0].summary.revenueUnavailableReason, /Chưa lấy được doanh thu toàn đội/);
 });
 
 test('ALL payload preserves each backend-computed penalty in bonus and cost employeeSubtotals', () => {

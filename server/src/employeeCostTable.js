@@ -304,6 +304,11 @@ function transformReport(report = {}, options = {}) {
   const filteredRows = periods.reduce((sum, period) => sum + period.search.filteredRows, 0);
   const totalRows = periods.reduce((sum, period) => sum + period.search.totalRows, 0);
   const reliable = periods.every((period) => period.summary.reliable);
+  const hasCompanyRevenue = periods.length > 0 && periods.every((period) => (
+    period.summary.revenueSource === 'app_report_company_store'
+      && period.summary.revenueTotal != null
+      && period.summary.revenueBeforeVatTotal != null
+  ));
   const costKeys = [...new Set(periods.flatMap((period) => period.columns.map((column) => String(column.key || '').toLowerCase())
     .filter((key) => /^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key))))];
   return {
@@ -321,9 +326,11 @@ function transformReport(report = {}, options = {}) {
       reliable,
       periodTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.monthlyTotal), 0) : null,
       annualTotal: reliable ? periods.reduce((sum, period) => sum + numeric(period.summary.annualTotal), 0) : null,
-      revenueTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0),
-      revenueBeforeVatTotal: periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0),
-      revenueAllocatedRowCount: periods.reduce((sum, period) => sum + numeric(period.summary.revenueAllocatedRowCount), 0),
+      revenueTotal: hasCompanyRevenue ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueTotal), 0) : null,
+      revenueBeforeVatTotal: hasCompanyRevenue ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueBeforeVatTotal), 0) : null,
+      revenueAllocatedRowCount: hasCompanyRevenue ? periods.reduce((sum, period) => sum + numeric(period.summary.revenueAllocatedRowCount), 0) : null,
+      revenueSource: hasCompanyRevenue ? 'app_report_company_store' : 'company_revenue_unavailable',
+      revenueUnavailableReason: hasCompanyRevenue ? '' : 'Chưa lấy được doanh thu toàn đội.',
       columnTotals: reliable ? Object.fromEntries(costKeys.map((key) => [key, periods.reduce((sum, period) => sum + numeric(period.summary.provisionalColumnTotals?.[key]), 0)])) : null,
       // Số "tạm tính" LUÔN có (tổng phần đã khớp %) để UI hiện kèm nhãn coverage,
       // thay vì bỏ trống. Không thay hành vi fail-closed của columnTotals ở trên.
@@ -468,12 +475,13 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
         // Doanh thu là snapshot TOÀN ĐỘI của kho App Report, không phụ thuộc
         // report chi phí NV nào về kịp. Thiếu DN024 không được làm "tổng"
         // tụt 80% như tai nạn 10/08.
-        revenueTotal: hasCompanyRevenueSnapshot
-          ? companyRevenueTotal : rows.reduce((sum, row) => sum + numeric(row.revenue), 0),
-        revenueBeforeVatTotal: hasCompanyRevenueSnapshot
-          ? companyRevenueBeforeVatTotal : rows.reduce((sum, row) => sum + numeric(row.revenueBeforeVat), 0),
-        revenueAllocatedRowCount: hasCompanyRevenueSnapshot ? allocatedRevenueRowCount : rows.length,
-        revenueSource: hasCompanyRevenueSnapshot ? 'app_report_company_store' : 'partial_cost_reports',
+        // Fail closed: tuyệt đối không dựng "tổng đội" từ tập report chi phí
+        // có thể thiếu NV. Một số thấp nhưng trông như đủ nguy hiểm hơn dấu —.
+        revenueTotal: hasCompanyRevenueSnapshot ? companyRevenueTotal : null,
+        revenueBeforeVatTotal: hasCompanyRevenueSnapshot ? companyRevenueBeforeVatTotal : null,
+        revenueAllocatedRowCount: hasCompanyRevenueSnapshot ? allocatedRevenueRowCount : null,
+        revenueSource: hasCompanyRevenueSnapshot ? 'app_report_company_store' : 'company_revenue_unavailable',
+        revenueUnavailableReason: hasCompanyRevenueSnapshot ? '' : 'Chưa lấy được doanh thu toàn đội.',
       },
       daily: { reliable: false, reason: 'Chế độ tất cả nhân viên dùng bảng tổng hợp phân trang.', dates: [], totals: [] },
     };

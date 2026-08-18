@@ -96,9 +96,12 @@ test('‼ màn nói rõ tổng kỳ · đang hiện · thiếu vì đâu — kh�
   assert.match(page, /Dòng <b>chưa gán được nhân viên<\/b>/);
 });
 
-test('fallback ALL vẫn hiện số đã phân bổ và nói thật mẫu số toàn đội', () => {
+test('fallback ALL fail-closed và nói thật mẫu số toàn đội', () => {
   assert.match(page, /model\.summary\.revenueBeforeVatTotal/);
+  assert.match(page, /model\.summary\.revenueUnavailableReason/);
+  assert.match(page, /Chưa lấy được doanh thu toàn đội/);
   assert.match(page, /revenueAllocatedRowCount/);
+  assert.match(page, /Số dòng phân bổ: chưa đối soát được/);
   assert.match(page, /số dòng chưa gán: chưa đối soát được/);
   assert.match(page, /NV có dữ liệu/);
   assert.match(page, /NV chưa có nguồn/);
@@ -142,7 +145,8 @@ test('vẫn đối chiếu được: phần đang hiện trên bảng nằm ở 
   assert.match(page, /model\.revenueRecon\.shown !== model\.revenueRecon\.total/);
 });
 
-test('chưa soát được kho doanh thu ⇒ lùi về số cũ, KHÔNG bịa tổng kỳ', () => {
+test('chưa soát được kho doanh thu ⇒ không bịa tổng kỳ', () => {
   assert.match(page, /Number\.isFinite\(Number\(model\.revenueRecon\.total\)\) && Number\(model\.revenueRecon\.total\) > 0/);
   assert.match(page, /\? Number\(model\.revenueRecon\.total\) \/ VAT_DIVISOR\s*\n\s*: null;/);
+  assert.match(page, /revenueUnavailableReason \|\| 'Chưa lấy được doanh thu toàn đội\.'/);
 });

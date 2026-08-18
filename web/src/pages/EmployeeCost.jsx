@@ -2267,14 +2267,16 @@ export default function EmployeeCost({ me, onNavigate }) {
           thu (`revenueRecon.total`, backend cộng từ kho App Report); phần "đang hiện
           trên bảng" hạ xuống dòng phụ để vẫn đối chiếu được.
 
-          Kho doanh thu chưa soát được ⇒ mới lùi về số cũ, và nói rõ đó là số của
-          bảng chứ không phải tổng kỳ. */}
+          Kho doanh thu chưa soát được ⇒ fail closed bằng dấu — và nói rõ chưa lấy
+          được doanh thu toàn đội; cấm lùi về số cộng từ report chi phí. */}
       <Kpi label={reconTotalBeforeVat != null ? 'Doanh thu chưa VAT · TỔNG KỲ' : 'Doanh thu chưa VAT · đã phân bổ'}
         value={formatEmployeeCostCell(reconTotalBeforeVat ?? model.summary.revenueBeforeVatTotal, moneyColumn)}
         sub={[
           reconTotalBeforeVat != null
             ? `Đã gồm VAT: ${formatEmployeeCostCell(model.revenueRecon.total, moneyColumn)} · KHÔNG đổi theo nguồn chi phí`
-            : (model.summary.revenueTotal == null ? '' : `Đã gồm VAT: ${formatEmployeeCostCell(model.summary.revenueTotal, moneyColumn)}`),
+            : (model.summary.revenueTotal == null
+              ? (model.summary.revenueUnavailableReason || 'Chưa lấy được doanh thu toàn đội.')
+              : `Đã gồm VAT: ${formatEmployeeCostCell(model.summary.revenueTotal, moneyColumn)}`),
           reconTotalBeforeVat != null && model.revenueRecon.shown != null && model.revenueRecon.shown !== model.revenueRecon.total
             ? `đang hiện trên bảng: ${formatEmployeeCostCell(model.revenueRecon.shown / VAT_DIVISOR, moneyColumn)}`
             : '',
@@ -2286,7 +2288,9 @@ export default function EmployeeCost({ me, onNavigate }) {
           allEmployees && model.revenueRecon && !model.revenueRecon.unavailable
             ? `${Number(model.revenueRecon.unassignedRowCount || 0).toLocaleString('vi-VN')} dòng chưa gán được NV`
             : allEmployees
-              ? `${Number(model.summary.revenueAllocatedRowCount || 0).toLocaleString('vi-VN')} dòng đã phân bổ · số dòng chưa gán: chưa đối soát được`
+              ? (model.summary.revenueAllocatedRowCount == null
+                ? 'Số dòng phân bổ: chưa đối soát được'
+                : `${Number(model.summary.revenueAllocatedRowCount).toLocaleString('vi-VN')} dòng đã phân bổ · số dòng chưa gán: chưa đối soát được`)
               : '',
           'số tổng hợp từ backend',
         ].filter(Boolean).join(' · ')} />
