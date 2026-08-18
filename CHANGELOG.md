@@ -3,6 +3,7 @@
 - Bộ ô KPI chi phí nay lấy danh sách từ `employee_cost_templates.json`, không phụ thuộc việc nguồn ngoài có trả cột trong lượt hiện tại hay không.
 - Khi thiếu tỷ lệ, ô vẫn hiện đúng nhãn với giá trị `—` và có giải thích dễ hiểu; không còn biến mất lặng lẽ hoặc biến `null` thành `0đ`.
 - Thêm hợp đồng kiểm thử full-time/part-time và tầng render để lần sửa sau không làm mất lại bộ ô đã chuẩn.
+- Sửa chuẩn nghiệm thu danh mục sau vá giữ line-grain: số chữ ký phạm vi phải bằng số dòng danh mục, hiện là `28.006`. Chuẩn cũ thấp hơn 15 vì 16 thuốc BVĐK Thống Nhất từng bị gộp thành 1; không còn dùng chuẩn cũ cho nghiệm thu hiện tại.
 
 ### 2026-08-17 22:40 (giờ VN) — Cầu nối doanh số App Report → App Lương
 
