@@ -17,6 +17,7 @@ import { createLatestRequestGate } from '../requestCoordinator.js';
 import { composePaymentRequestNote, paymentReasonDetailMaxLength } from '../paymentRequestReasons.js';
 import { ExportRealNumbersNote, useMoneyWriteLock, useRevealContext } from '../privacy.jsx';
 import { maskMoneyInText, maskNumberText } from '../privacyMask.js';
+import { EmployeeCostKpiTiles } from '../employeeCostKpiTiles.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -2341,8 +2342,9 @@ export default function EmployeeCost({ me, onNavigate }) {
       <PenaltyKpi penalty={model.penalty} thieuNguoi={thieuNguoi} thieuNguoiNote={thieuNguoiNote}
         onOpen={() => setPenaltyModalOpen(true)} />
       <XuPenaltyKpi penalty={model.penalty} period={model.to} />
-      {columnKpis.map((item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote}
-        thieuNguoi={thieuNguoi} thieuNguoiNote={thieuNguoiNote} />)}
+      <EmployeeCostKpiTiles items={columnKpis} fallback={model.costColumnsFallback}
+        renderTile={(item) => <CostColumnKpi key={item.key} item={item} coverageNote={coverageNote}
+          thieuNguoi={thieuNguoi} thieuNguoiNote={thieuNguoiNote} />} />
       {/* Mẫu số ghi TRUNG THỰC theo grain: ALL cộng dồn theo từng NV (cặp NV×đơn vị×mặt
           hàng), 1 NV thì là cặp đơn vị×mặt hàng. Tab "Mặt hàng thiếu %" gộp về mã riêng
           biệt nên số nhỏ hơn — không mâu thuẫn, khác thước đo. */}

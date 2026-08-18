@@ -171,6 +171,19 @@ export function buildEmployeeCostColumns(columns = [], template = {}) {
       annual: !!raw.annual,
     });
   }
+  // Danh sách ô/cột chi phí là hợp đồng hiển thị của App Report. Nguồn ngoài
+  // chỉ cấp SỐ; payload rỗng/legacy vẫn phải giữ bộ cột và để giá trị là null.
+  for (const [rawKey, rawLabel] of Object.entries(template?.costLabels || {})) {
+    const key = String(rawKey || '').trim().toLowerCase();
+    if (!isAllowedCostColumn(key) || costs.has(key)) continue;
+    costs.set(key, {
+      key,
+      label: String(rawLabel || key),
+      shortLabel: key.toUpperCase(),
+      kind: 'percent',
+      annual: false,
+    });
+  }
   const requestedLayout = Array.isArray(template?.columns) ? template.columns.map(String) : [];
   // Layout do template quy định sẽ GHI ĐÈ danh sách mặc định. Template hiện hành
   // (FULL-TIME/PART-TIME) chưa liệt kê 'c10' nên cột C10 không bao giờ hiện dù đã
@@ -572,10 +585,16 @@ function periodViewModel(payload = {}) {
     label: String(payload.template?.label || ''),
     calculationGroup: String(payload.template?.calculationGroup || ''),
     columns: Array.isArray(payload.template?.columns) ? payload.template.columns.map(String) : [],
+    costLabels: Object.fromEntries(Object.entries(payload.template?.costLabels || {})
+      .filter(([key]) => isAllowedCostColumn(key))
+      .map(([key, label]) => [String(key).toLowerCase(), String(label || key)])),
   };
+  const sourceCostColumns = (Array.isArray(payload.columns) ? payload.columns : [])
+    .filter((column) => isAllowedCostColumn(column));
   const columns = buildEmployeeCostColumns(payload.columns, template);
   const dimensionColumns = columns.filter((column) => column.kind === 'dimension');
   const costColumns = columns.filter((column) => column.kind === 'percent');
+  const costColumnsFallback = sourceCostColumns.length === 0 && costColumns.length > 0;
   const rows = (Array.isArray(payload.rows) ? payload.rows : []).map((source, rowIndex) => {
     const row = {
       rowIndex,
@@ -639,6 +658,7 @@ function periodViewModel(payload = {}) {
     columns,
     dimensionColumns,
     costColumns,
+    costColumnsFallback,
     rows,
     match,
     summary,
@@ -969,6 +989,7 @@ export function employeeCostViewModel(payload = {}) {
     columns: first.columns,
     dimensionColumns: first.dimensionColumns,
     costColumns: first.costColumns,
+    costColumnsFallback: periods.some((period) => period.costColumnsFallback),
     rows,
     match: aggregateMatch,
     summary,

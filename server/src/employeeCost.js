@@ -892,6 +892,7 @@ function enrichWithRevenue(payload, options = {}) {
       label: template.label,
       calculationGroup: template.calculationGroup,
       columns: template.columns,
+      costLabels: template.costLabels,
     },
     columns,
     rows,

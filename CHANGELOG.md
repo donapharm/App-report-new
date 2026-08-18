@@ -1,3 +1,9 @@
+### 2026-08-18 — Khoá hợp đồng bộ ô KPI “Chi phí của tôi”
+
+- Bộ ô KPI chi phí nay lấy danh sách từ `employee_cost_templates.json`, không phụ thuộc việc nguồn ngoài có trả cột trong lượt hiện tại hay không.
+- Khi thiếu tỷ lệ, ô vẫn hiện đúng nhãn với giá trị `—` và có giải thích dễ hiểu; không còn biến mất lặng lẽ hoặc biến `null` thành `0đ`.
+- Thêm hợp đồng kiểm thử full-time/part-time và tầng render để lần sửa sau không làm mất lại bộ ô đã chuẩn.
+
 ### 2026-08-17 22:40 (giờ VN) — Cầu nối doanh số App Report → App Lương
 
 - Thêm endpoint chỉ đọc `GET /api/luong/doanhso?thang=YYYY-MM`, xác thực Bearer; App

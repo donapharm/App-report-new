@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const table = require('../src/employeeCostTable');
+const employeeCost = require('../src/employeeCost');
 
 const columns = [
   { key: 'c36', label: 'CP cộng tác viên (%)' },
@@ -252,6 +253,25 @@ test('ALL merge maps only 4xx rejection outcomes to privacy-safe upstream_reject
     DN007: 'upstream_unavailable', DN008: 'upstream_unavailable',
   });
   assert.doesNotMatch(JSON.stringify(merged.periods[0].match.unavailableReasons), /upstream_4|upstream_5|credential|body/);
+});
+
+test('KPI tile metadata stays App Report-owned when the upstream has no columns', () => {
+  const enriched = employeeCost.enrichWithRevenue({ empCode: 'DN001', columns: [], rows: [] }, {
+    period: '2026-08', revenueRows: [], catalogRows: [],
+  });
+  assert.deepEqual(enriched.columns.map((column) => column.key), ['c36', 'c41', 'c43', 'c44', 'c45']);
+  assert.deepEqual(Object.keys(enriched.template.costLabels), ['c36', 'c41', 'c43', 'c44', 'c45']);
+
+  const emptyReport = {
+    empCode: 'DN001', sourceOutcome: 'upstream_unavailable', from: '2026-08', to: '2026-08',
+    periods: [{
+      period: '2026-08', columns: [], rows: [], template: enriched.template,
+      match: { matchedRows: 0, totalRows: 0, rate: null }, summary: { reliable: false },
+    }],
+  };
+  const merged = table.mergeEmployeeReports([emptyReport], [{ emp_code: 'DN001', name: 'DN001' }]);
+  assert.deepEqual(merged.periods[0].template.columns, ['c36', 'c41', 'c43', 'c44', 'c45']);
+  assert.deepEqual(merged.periods[0].template.costLabels, enriched.template.costLabels);
 });
 
 test('routes hard-lock ALL to CEO/admin for view and export', () => {

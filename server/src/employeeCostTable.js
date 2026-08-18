@@ -346,10 +346,22 @@ function mergeEmployeeReports(reports = [], roster = []) {
   const periods = periodKeys.map((periodKey) => {
     const blocks = source.map((report) => ({ report, period: (report.periods || []).find((item) => item.period === periodKey) })).filter((item) => item.period);
     const columnsByKey = new Map();
+    const fallbackCostLabels = {};
+    const fallbackCostColumns = [];
     for (const { period } of blocks) for (const column of period.columns || []) {
       const key = String(column?.key || '').toLowerCase();
       if (!key || BLOCKED.has(key) || columnsByKey.has(key)) continue;
       columnsByKey.set(key, column);
+    }
+    for (const { period } of blocks) {
+      for (const rawKey of Array.isArray(period.template?.columns) ? period.template.columns : []) {
+        const key = String(rawKey || '').toLowerCase();
+        if (/^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key) && !fallbackCostColumns.includes(key)) fallbackCostColumns.push(key);
+      }
+      for (const [rawKey, label] of Object.entries(period.template?.costLabels || {})) {
+        const key = String(rawKey || '').toLowerCase();
+        if (/^c(?:3[3-9]|4[0-6])$/.test(key) && !BLOCKED.has(key) && !fallbackCostLabels[key]) fallbackCostLabels[key] = String(label || key);
+      }
     }
     const columns = [...columnsByKey.values()].sort((a, b) => Number(String(a.key).slice(1)) - Number(String(b.key).slice(1)));
     const rows = blocks.flatMap(({ report, period }) => {
@@ -424,7 +436,7 @@ function mergeEmployeeReports(reports = [], roster = []) {
           ? [[employeeCode, { ...report.penalty }]]
           : [];
       })),
-      template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: [] },
+      template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: fallbackCostColumns, costLabels: fallbackCostLabels },
       match: {
         matchedRows, totalRows, rate, threshold, low,
         unavailablePairs, unavailableEmployees, unavailableEmployeeCount: unavailableEmployees.length,
