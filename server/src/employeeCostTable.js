@@ -452,9 +452,16 @@ function mergeEmployeeReports(reports = [], roster = []) {
   const pinnedPeriods = periods.filter((period) => period.rateSource === 'local_pinned');
   const pinnedAts = [...new Set(pinnedPeriods.map((period) => period.ratePinnedAt).filter(Boolean))];
   const allPinned = periods.length > 0 && pinnedPeriods.length === periods.length;
+  // Hợp đồng KPI thuộc App Report nên metadata tầng ngoài ALL phải nhất quán với
+  // từng period. Để `columns: []` ở đây là bẫy: consumer nào đọc top-level thay vì
+  // `periods[0]` sẽ làm mất toàn bộ ô khi nguồn không có cột.
+  const mergedCostColumns = [...new Set(periods.flatMap((period) => period.template?.columns || []))];
+  const mergedCostLabels = Object.fromEntries(periods.flatMap((period) => (
+    Object.entries(period.template?.costLabels || {})
+  )).filter(([key], index, entries) => entries.findIndex(([candidate]) => candidate === key) === index));
   return {
     empCode: 'ALL', employeeName: 'Tất cả nhân viên', allEmployees: true,
-    template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: [] },
+    template: { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: mergedCostColumns, costLabels: mergedCostLabels },
     from: source[0]?.from || periodKeys[0] || '', to: source[0]?.to || periodKeys.at(-1) || '',
     rateEffectiveFrom: rateEffectiveFroms.length === 1 ? rateEffectiveFroms[0] : '',
     rateEffectiveFroms,

@@ -272,6 +272,9 @@ test('KPI tile metadata stays App Report-owned when the upstream has no columns'
   const merged = table.mergeEmployeeReports([emptyReport], [{ emp_code: 'DN001', name: 'DN001' }]);
   assert.deepEqual(merged.periods[0].template.columns, ['c36', 'c41', 'c43', 'c44', 'c45']);
   assert.deepEqual(merged.periods[0].template.costLabels, enriched.template.costLabels);
+  assert.deepEqual(merged.template.columns, merged.periods[0].template.columns,
+    'top-level ALL phải giữ cùng hợp đồng KPI với period');
+  assert.deepEqual(merged.template.costLabels, merged.periods[0].template.costLabels);
 });
 
 test('routes hard-lock ALL to CEO/admin for view and export', () => {

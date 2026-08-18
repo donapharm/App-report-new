@@ -39,6 +39,12 @@ function emptySourceModel(key) {
   });
 }
 
+function allTemplateFromConfig() {
+  const templates = config.displayTemplates.filter((item) => ['fulltime', 'parttime'].includes(item.key));
+  const costLabels = Object.fromEntries(templates.flatMap((template) => Object.entries(template.costLabels || {})));
+  return { key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: Object.keys(costLabels), costLabels };
+}
+
 test('KPI tiles contract lock: nguồn chết vẫn giữ đúng bộ ô theo config và không bịa 0', () => {
   for (const key of ['fulltime', 'parttime']) {
     const expected = Object.keys(templateOf(key).costLabels);
@@ -63,4 +69,26 @@ test('KPI tiles render contract lock: cụm ô và lý do không được biến
   assert.match(html, /Chưa lấy được tỷ lệ chi phí ở lượt này/);
   assert.match(html, /Doanh thu và bảng vẫn đúng/);
   assert.match(page, /<EmployeeCostKpiTiles items=\{columnKpis\} fallback=\{model\.costColumnsFallback\}/);
+});
+
+test('KPI tiles ALL contract lock: merge rỗng cột vẫn giữ bộ ô gộp từ config và lý do', () => {
+  const template = allTemplateFromConfig();
+  const model = employeeCostViewModel({
+    empCode: 'ALL', allEmployees: true, from: '2026-08', to: '2026-08', template,
+    periods: [{
+      period: '2026-08', template, columns: [], rows: [],
+      summary: { reliable: false, columnTotals: null, provisionalColumnTotals: null, annualColumnKeys: [] },
+      match: { matchedRows: 0, totalRows: 0, rate: null },
+    }],
+  });
+  const items = employeeCostColumnKpis(model);
+  assert.deepEqual(items.map((item) => item.key), Object.keys(template.costLabels));
+  assert.ok(items.every((item) => item.value === null));
+  assert.equal(model.costColumnsFallback, true);
+  const html = renderToStaticMarkup(React.createElement(EmployeeCostKpiTiles, {
+    items, fallback: model.costColumnsFallback,
+    renderTile: (item) => React.createElement('article', { key: item.key, 'data-kpi-key': item.key }, item.value ?? '—'),
+  }));
+  assert.equal((html.match(/data-kpi-key=/g) || []).length, Object.keys(template.costLabels).length);
+  assert.match(html, /Chưa lấy được tỷ lệ chi phí ở lượt này/);
 });
