@@ -14,6 +14,9 @@ const FULL_COLUMNS = Object.freeze(Array.from({ length: 52 }, (_, index) => `c${
 const SAFE_COLUMNS = Object.freeze(FULL_COLUMNS.filter((column) => !SENSITIVE_SET.has(column)));
 const COST_COLUMNS = Object.freeze([...SENSITIVE_COLUMNS]);
 const DEFAULT_GRACE_MS = 15 * 60 * 1000;
+const MAX_SOURCE_BYTES = 64 * 1024 * 1024;
+const MAX_ROWS = 100_000;
+const MAX_CELL_BYTES = 16 * 1024;
 
 class Catalog52Error extends Error {
   constructor(code, details = {}) {
@@ -57,6 +60,18 @@ function safeSegment(value, code) {
   return segment;
 }
 
+function normalizedCell(value, index, column) {
+  if (value === null || typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) fail('CATALOG52_CELL_INVALID', { index, column });
+    return value;
+  }
+  if (typeof value !== 'string' || Buffer.byteLength(value, 'utf8') > MAX_CELL_BYTES) {
+    fail('CATALOG52_CELL_INVALID', { index, column });
+  }
+  return value.normalize('NFC');
+}
+
 function normalizedRow(source, index) {
   if (!source || typeof source !== 'object' || Array.isArray(source)) fail('CATALOG52_ROW_INVALID', { index });
   const sourceLineId = cleanText(source.sourceLineId ?? source.source_line_id ?? source.lineId, 240);
@@ -64,9 +79,27 @@ function normalizedRow(source, index) {
   const row = { sourceLineId };
   for (const column of FULL_COLUMNS) {
     if (!Object.prototype.hasOwnProperty.call(source, column)) fail('CATALOG52_COLUMN_MISSING', { index, column });
-    row[column] = source[column];
+    row[column] = normalizedCell(source[column], index, column);
   }
   return Object.freeze(row);
+}
+
+function normalizedMappingContract(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail('CATALOG52_MAPPING_CONTRACT_REQUIRED');
+  const contract = {
+    unitCodeColumn: cleanText(value.unitCodeColumn, 8).toLowerCase(),
+    qlnbColumn: cleanText(value.qlnbColumn, 8).toLowerCase(),
+    employeeColumn: cleanText(value.employeeColumn, 8).toLowerCase(),
+    uomColumn: cleanText(value.uomColumn, 8).toLowerCase(),
+    uomMode: cleanText(value.uomMode, 24).toLowerCase(),
+  };
+  if (contract.unitCodeColumn !== 'c7' || contract.qlnbColumn !== 'c5' || contract.employeeColumn !== 'c6') {
+    fail('CATALOG52_CANONICAL_MAPPING_CONTRACT_INVALID');
+  }
+  if (!FULL_COLUMNS.includes(contract.uomColumn) || SENSITIVE_SET.has(contract.uomColumn) || contract.uomMode !== 'validation') {
+    fail('CATALOG52_UOM_CONTRACT_INVALID');
+  }
+  return Object.freeze(contract);
 }
 
 function assertNoSensitive(value, location = 'catalogSafe') {
@@ -78,8 +111,9 @@ function assertNoSensitive(value, location = 'catalogSafe') {
   }
 }
 
-function projectRows(rows, { period, sourceVersion, sourceVersionNo } = {}) {
+function projectRows(rows, { period, sourceVersion, sourceVersionNo, mappingContract } = {}) {
   const canonicalPeriod = periodValue(period);
+  const contract = normalizedMappingContract(mappingContract);
   const safe = [];
   const mapping = [];
   const cost = [];
@@ -90,10 +124,10 @@ function projectRows(rows, { period, sourceVersion, sourceVersionNo } = {}) {
     if (seen.has(row.sourceLineId)) fail('CATALOG52_DUPLICATE_LINE_ID', { sourceLineId: row.sourceLineId });
     seen.add(row.sourceLineId);
     safe.push(Object.freeze(Object.fromEntries(['sourceLineId', ...SAFE_COLUMNS].map((key) => [key, row[key]]))));
-    const unitCode = upper(row.c7, 180);
-    const qlnbCode = upper(row.c5, 180);
-    const employeeCode = upper(row.c6, 80);
-    const uom = upper(row.c25, 100) || null;
+    const unitCode = upper(row[contract.unitCodeColumn], 180);
+    const qlnbCode = upper(row[contract.qlnbColumn], 180);
+    const employeeCode = upper(row[contract.employeeColumn], 80);
+    const uom = upper(row[contract.uomColumn], 100) || null;
     if (!unitCode || !qlnbCode || !employeeCode) fail('CATALOG52_MAPPING_REQUIRED_VALUE_MISSING', { sourceLineId: row.sourceLineId });
     const mappingKey = `${unitCode}\u001f${qlnbCode}`;
     const candidates = mappingCandidates.get(mappingKey) || new Map();
@@ -132,6 +166,7 @@ function projectRows(rows, { period, sourceVersion, sourceVersionNo } = {}) {
       catalogSafe: projectionMeta('catalogSafe', safe),
       employeeMapping: projectionMeta('employeeMapping', mapping),
       costRestricted: projectionMeta('costRestricted', cost),
+      mappingContract: contract,
     }),
   });
 }
@@ -234,14 +269,30 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
   }
   function pointerFile(period) { return path.join(pointersRoot, `${periodValue(period)}.json`); }
   function readPointer(period) {
-    try { return JSON.parse(fs.readFileSync(pointerFile(period), 'utf8')); }
+    try {
+      const value = JSON.parse(fs.readFileSync(pointerFile(period), 'utf8'));
+      if (value.schemaVersion !== 1 || value.period !== periodValue(period)
+        || !safeSegment(value.activeManifestId, 'CATALOG52_POINTER_INVALID')
+        || !safeSegment(value.lastKnownGoodManifestId, 'CATALOG52_POINTER_INVALID')
+        || !/^sha256:[a-f0-9]{64}$/.test(String(value.activeManifestChecksum || ''))
+        || !/^sha256:[a-f0-9]{64}$/.test(String(value.lastKnownGoodManifestChecksum || ''))) {
+        fail('CATALOG52_POINTER_INVALID', { period: periodValue(period) });
+      }
+      return value;
+    }
     catch (error) { if (error.code === 'ENOENT') return null; fail('CATALOG52_POINTER_INVALID', { period: periodValue(period) }); }
   }
   function manifestPath(period, manifestId) { return path.join(objectsRoot, periodValue(period), safeSegment(manifestId, 'CATALOG52_MANIFEST_ID_INVALID'), 'manifest.json'); }
-  function readManifest(period, manifestId) {
+  function readManifest(period, manifestId, expectedChecksum = null) {
     const file = manifestPath(period, manifestId);
     let value;
-    try { value = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { fail('CATALOG52_MANIFEST_INVALID', { period, manifestId }); }
+    try {
+      if (expectedChecksum && checksumFile(file) !== expectedChecksum) fail('CATALOG52_MANIFEST_CHECKSUM_MISMATCH', { period, manifestId });
+      value = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch (error) {
+      if (error instanceof Catalog52Error) throw error;
+      fail('CATALOG52_MANIFEST_INVALID', { period, manifestId });
+    }
     if (value.manifestId !== manifestId || value.period !== periodValue(period)) fail('CATALOG52_MANIFEST_IDENTITY_MISMATCH');
     return value;
   }
@@ -295,16 +346,20 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
       const source = cleanText(envelope?.source, 80);
       const sourceVersion = cleanText(envelope?.sourceVersion, 180);
       const sourceVersionNo = Number(envelope?.sourceVersionNo);
+      const declaredRowCount = Number(envelope?.rowCount);
       const expectedSourceDigest = digestValue(envelope?.sourceIntegrityChecksum, 'CATALOG52_SOURCE_CHECKSUM_REQUIRED');
       const bytes = Buffer.isBuffer(envelope?.canonicalBytes) ? envelope.canonicalBytes : Buffer.from(String(envelope?.canonicalBytes || ''), 'utf8');
-      if (!bytes.length || sha256(bytes) !== expectedSourceDigest) fail('CATALOG52_SOURCE_CHECKSUM_MISMATCH');
+      if (!bytes.length || bytes.length > MAX_SOURCE_BYTES) fail('CATALOG52_SOURCE_SIZE_INVALID');
+      if (!Number.isSafeInteger(declaredRowCount) || declaredRowCount < 1 || declaredRowCount > MAX_ROWS) fail('CATALOG52_ROW_COUNT_INVALID');
+      if (sha256(bytes) !== expectedSourceDigest) fail('CATALOG52_SOURCE_CHECKSUM_MISMATCH');
       if (source !== 'ceo-vault' || !sourceVersion || !Number.isSafeInteger(sourceVersionNo) || sourceVersionNo < 0) fail('CATALOG52_SOURCE_IDENTITY_INVALID');
       let sourceDocument;
       try { sourceDocument = JSON.parse(bytes.toString('utf8')); } catch { fail('CATALOG52_SOURCE_BYTES_INVALID'); }
       const rows = sourceDocument?.rows;
-      if (!Array.isArray(rows) || rows.length !== envelope.rowCount) fail('CATALOG52_ROW_COUNT_MISMATCH');
+      if (!Array.isArray(rows) || rows.length !== declaredRowCount) fail('CATALOG52_ROW_COUNT_MISMATCH');
       const normalized = rows.map(normalizedRow);
-      const projections = projectRows(normalized, { period, sourceVersion, sourceVersionNo });
+      const mappingContract = normalizedMappingContract(envelope?.mappingContract);
+      const projections = projectRows(normalized, { period, sourceVersion, sourceVersionNo, mappingContract });
       const internalIdentityHash = checksum(canonicalJson(normalized));
       const manifestId = `${sourceVersionNo}-${expectedSourceDigest.slice(0, 24)}-${internalIdentityHash.slice(7, 23)}`;
       const objectDirectory = path.join(objectsRoot, period, manifestId);
@@ -330,6 +385,7 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
           schemaVersion: SCHEMA_VERSION, projectionVersion: PROJECTION_VERSION, manifestId, period, source,
           sourceVersion, sourceVersionNo, rowCount: normalized.length,
           sourceIntegrityChecksum: `sha256:${expectedSourceDigest}`, internalIdentityHash,
+          mappingContract,
           receivedAt: cleanText(envelope.receivedAt, 80) || createdAt, validatedAt: createdAt, activatedAt: null,
           artifacts: artifactManifest, projections: projections.metadata,
           mappingConflicts: projections.employeeMapping.filter((row) => row.employeeConflict || row.uomConflict).length,
@@ -348,17 +404,25 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
     });
   }
 
-  function activateUnlocked(period, manifestId, actor) {
-    const manifest = readManifest(period, manifestId);
+  function activateUnlocked(period, manifestId, actor, expectedManifestChecksum = null) {
+    const manifest = readManifest(period, manifestId, expectedManifestChecksum);
+    const manifestChecksum = checksumFile(manifestPath(period, manifestId));
     for (const artifact of Object.values(manifest.artifacts || {})) {
       const file = path.join(path.dirname(manifestPath(period, manifestId)), artifact.file);
       if (checksumFile(file) !== artifact.checksum) fail('CATALOG52_ARTIFACT_CHECKSUM_MISMATCH', { manifestId });
     }
     const current = readPointer(period);
+    if (current?.activeManifestId === manifestId) {
+      if (current.activeManifestChecksum !== manifestChecksum) fail('CATALOG52_MANIFEST_CHECKSUM_MISMATCH', { period, manifestId });
+      writeAudit(period, 'activate_noop', { manifestId, actor: cleanText(actor, 80) });
+      return { ...manifest, activatedAt: current.activatedAt, state: 'active', pointer: current };
+    }
     const activatedAt = new Date(now()).toISOString();
     const pointer = {
       schemaVersion: 1, period: periodValue(period), activeManifestId: manifestId,
+      activeManifestChecksum: manifestChecksum,
       lastKnownGoodManifestId: current?.activeManifestId || current?.lastKnownGoodManifestId || manifestId,
+      lastKnownGoodManifestChecksum: current?.activeManifestChecksum || current?.lastKnownGoodManifestChecksum || manifestChecksum,
       activatedAt, actor: cleanText(actor, 80),
     };
     atomicJson(pointerFile(period), pointer);
@@ -374,27 +438,45 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
       if (!current?.lastKnownGoodManifestId) fail('CATALOG52_LKG_MISSING', { status: 409 });
       if (current.lastKnownGoodManifestId === current.activeManifestId) fail('CATALOG52_ROLLBACK_NO_PREVIOUS', { status: 409 });
       const previousActive = current.activeManifestId;
-      const result = activateUnlocked(periodValue(period), current.lastKnownGoodManifestId, actor);
-      const pointer = { ...result.pointer, lastKnownGoodManifestId: previousActive };
-      atomicJson(pointerFile(period), pointer);
-      writeAudit(period, 'rollback', { fromManifestId: previousActive, toManifestId: pointer.activeManifestId, actor: cleanText(actor, 80) });
-      return { ...result, pointer };
+      const result = activateUnlocked(periodValue(period), current.lastKnownGoodManifestId, actor, current.lastKnownGoodManifestChecksum);
+      writeAudit(period, 'rollback', { fromManifestId: previousActive, toManifestId: result.pointer.activeManifestId, actor: cleanText(actor, 80) });
+      return result;
     });
   }
   function pin(period, manifestId) {
     ensureRoots();
     const id = `${periodValue(period)}-${safeSegment(manifestId, 'CATALOG52_MANIFEST_ID_INVALID')}-${process.pid}-${crypto.randomBytes(8).toString('hex')}`;
     const file = path.join(pinsRoot, `${id}.json`);
-    atomicJson(file, { period, manifestId, pid: process.pid, host: os.hostname(), pinnedAt: now() });
-    return () => { try { fs.unlinkSync(file); fsyncDirectory(pinsRoot); } catch { /* best effort */ } };
+    const token = crypto.randomBytes(24).toString('hex');
+    atomicJson(file, { period, manifestId, pid: process.pid, host: os.hostname(), token, pinnedAt: now(), heartbeatAt: now() });
+    const heartbeat = setInterval(() => {
+      try {
+        const current = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (current.token === token) atomicJson(file, { ...current, heartbeatAt: now() });
+      } catch { /* retention remains fail-safe for live local owners */ }
+    }, Math.max(1000, Math.floor(readerGraceMs / 3)));
+    heartbeat.unref?.();
+    return () => {
+      clearInterval(heartbeat);
+      try { fs.unlinkSync(file); fsyncDirectory(pinsRoot); } catch { /* best effort */ }
+    };
+  }
+  function pinForRead(period, manifestId, expectedChecksum = null) {
+    return withLock(period, 'reader-pin', () => {
+      const manifest = readManifest(periodValue(period), manifestId, expectedChecksum);
+      return { manifest, release: pin(period, manifestId) };
+    });
   }
   function readProjectionPage(period, projection, { page = 1, pageSize = 100, manifestId = null } = {}) {
     const pointer = manifestId ? null : readPointer(period);
     const pinnedManifestId = safeSegment(manifestId || pointer?.activeManifestId, 'CATALOG52_ACTIVE_POINTER_MISSING');
-    const manifest = readManifest(periodValue(period), pinnedManifestId);
+    const pinned = pinForRead(period, pinnedManifestId, pointer?.activeManifestChecksum || null);
+    const manifest = pinned.manifest;
     const artifact = manifest.artifacts?.[projection];
-    if (!artifact || projection === 'costRestricted') fail('CATALOG52_PROJECTION_FORBIDDEN', { status: 403 });
-    const release = pin(period, pinnedManifestId);
+    if (!artifact || projection === 'costRestricted') {
+      pinned.release();
+      fail('CATALOG52_PROJECTION_FORBIDDEN', { status: 403 });
+    }
     try {
       const normalizedPage = Math.max(1, Number(page) || 1);
       const normalizedSize = Math.max(1, Math.min(500, Number(pageSize) || 100));
@@ -407,13 +489,14 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
         sourceIntegrityChecksum: manifest.sourceIntegrityChecksum, stale: false, page: normalizedPage,
         pageSize: normalizedSize, total: artifact.rowCount, rows,
       };
-    } finally { release(); }
+    } finally { pinned.release(); }
   }
   function status(period) {
     const pointer = readPointer(period);
     if (!pointer) return { period: periodValue(period), active: null, lastKnownGood: null };
-    const active = readManifest(periodValue(period), pointer.activeManifestId);
-    return { period: periodValue(period), active, lastKnownGoodManifestId: pointer.lastKnownGoodManifestId, pointer };
+    const pinned = pinForRead(period, pointer.activeManifestId, pointer.activeManifestChecksum);
+    try { return { period: periodValue(period), active: pinned.manifest, lastKnownGoodManifestId: pointer.lastKnownGoodManifestId, pointer }; }
+    finally { pinned.release(); }
   }
   function retain(period, { keep = 3 } = {}) {
     return withLock(period, 'retention', () => {
@@ -422,7 +505,11 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
       try {
         for (const file of fs.readdirSync(pinsRoot)) {
           const pinValue = JSON.parse(fs.readFileSync(path.join(pinsRoot, file), 'utf8'));
-          if (pinValue.period === key && now() - pinValue.pinnedAt <= readerGraceMs) protectedIds.add(pinValue.manifestId);
+          const liveLocalOwner = pinValue.host === os.hostname() && Number.isSafeInteger(pinValue.pid) && (() => {
+            try { process.kill(pinValue.pid, 0); return true; } catch { return false; }
+          })();
+          const heartbeatAt = Number(pinValue.heartbeatAt || pinValue.pinnedAt || 0);
+          if (pinValue.period === key && (liveLocalOwner || now() - heartbeatAt <= readerGraceMs)) protectedIds.add(pinValue.manifestId);
         }
       } catch { /* absent/invalid pins fail safe by retaining files */ return { deleted: [], skipped: ['pin_store_unavailable'] }; }
       const directory = path.join(objectsRoot, key);
@@ -443,11 +530,13 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
 
   return Object.freeze({
     root: storeRoot, prepareCandidate, activateManifest, rollback, status, readProjectionPage, retain,
-    readPointer, readManifest, acquireLock, writeAudit,
+    readPointer, readManifest, acquireLock, writeAudit, pinForRead,
   });
 }
 
 module.exports = {
   SCHEMA_VERSION, PROJECTION_VERSION, FULL_COLUMNS, SAFE_COLUMNS, SENSITIVE_COLUMNS, COST_COLUMNS,
-  Catalog52Error, stableValue, canonicalJson, checksum, checksumFile, normalizedRow, assertNoSensitive, projectRows, readJsonLinesPage, createStore,
+  MAX_SOURCE_BYTES, MAX_ROWS, MAX_CELL_BYTES,
+  Catalog52Error, stableValue, canonicalJson, checksum, checksumFile, normalizedRow, normalizedMappingContract,
+  assertNoSensitive, projectRows, readJsonLinesPage, createStore,
 };

@@ -655,6 +655,7 @@ function Catalog52ControlPlane({ period }) {
   const [status, setStatus] = useState(null);
   const [candidate, setCandidate] = useState(null);
   const [page, setPage] = useState(null);
+  const [pageNumber, setPageNumber] = useState(1);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const hubPeriod = uiToHub(period);
@@ -663,9 +664,21 @@ function Catalog52ControlPlane({ period }) {
     try {
       const next = await api.catalog52Status(hubPeriod);
       setStatus(next);
-      if (next?.active?.manifestId) setPage(await api.catalog52Rows({ period: hubPeriod, manifestId: next.active.manifestId }));
+      if (next?.active?.manifestId) {
+        setPageNumber(1);
+        setPage(await api.catalog52Rows({ period: hubPeriod, manifestId: next.active.manifestId, page: 1 }));
+      }
       else setPage(null);
     } catch (loadError) { setError(loadError.message); }
+    finally { setBusy(''); }
+  };
+  const loadPage = async (nextPage) => {
+    if (!status?.active?.manifestId || nextPage < 1) return;
+    setBusy('page'); setError('');
+    try {
+      const result = await api.catalog52Rows({ period: hubPeriod, manifestId: status.active.manifestId, page: nextPage });
+      setPage(result); setPageNumber(nextPage);
+    } catch (pageError) { setError(pageError.message); }
     finally { setBusy(''); }
   };
   useEffect(() => { load(); }, [hubPeriod]);
@@ -704,7 +717,14 @@ function Catalog52ControlPlane({ period }) {
       <button type="button" className="btn ghost" disabled={!!busy || !status?.lastKnownGoodManifestId || status.lastKnownGoodManifestId === active?.manifestId} onClick={rollback}>Rollback LKG</button>
     </div>
     {candidate && <div className="catalog-alert success">✓ Candidate {candidate.sourceVersion} · {candidate.rowCount.toLocaleString('vi-VN')} dòng · chưa kích hoạt · mapping conflict {candidate.mappingConflicts}</div>}
-    {page?.rows?.length > 0 && <div className="table-scroll"><table className="catalog-table catalog52-table"><thead><tr><th>Line ID</th>{Array.from({ length: 52 }, (_, index) => <th key={index}>C{index + 1}</th>)}</tr></thead><tbody>{page.rows.map((row) => <tr key={row.sourceLineId}><td>{row.sourceLineId}</td>{Array.from({ length: 52 }, (_, index) => <td key={index}>{String(row[`c${index + 1}`] ?? '—')}</td>)}</tr>)}</tbody></table></div>}
+    {page?.rows?.length > 0 && <>
+      <div className="catalog52-pagination">
+        <button type="button" className="btn ghost" disabled={!!busy || pageNumber <= 1} onClick={() => loadPage(pageNumber - 1)}>‹ Trang trước</button>
+        <span>Trang <b>{pageNumber.toLocaleString('vi-VN')}</b> / <b>{Math.max(1, Math.ceil(Number(page.total || 0) / Number(page.pageSize || 50))).toLocaleString('vi-VN')}</b></span>
+        <button type="button" className="btn ghost" disabled={!!busy || pageNumber * Number(page.pageSize || 50) >= Number(page.total || 0)} onClick={() => loadPage(pageNumber + 1)}>Trang sau ›</button>
+      </div>
+      <div className="table-scroll"><table className="catalog-table catalog52-table"><thead><tr><th>Line ID</th>{Array.from({ length: 52 }, (_, index) => <th key={index}>C{index + 1}</th>)}</tr></thead><tbody>{page.rows.map((row) => <tr key={row.sourceLineId}><td>{row.sourceLineId}</td>{Array.from({ length: 52 }, (_, index) => <td key={index}>{String(row[`c${index + 1}`] ?? '—')}</td>)}</tr>)}</tbody></table></div>
+    </>}
   </details>;
 }
 
