@@ -1,3 +1,13 @@
+### 2026-08-18 14:35 (giờ VN) — Candidate provenance cho con dấu T07
+
+- Mang nguyên xi năm khai báo sidecar C32 từ response DataHub vào envelope con dấu;
+  tự đếm raw response rows và fail-closed khi thiếu/rỗng, các NV khai khác artifact,
+  hoặc số khai không bằng số App Report đếm được.
+- Envelope ghi chỉ mục raw capture nội bộ, thời điểm GMT+7 và tuyên bố rõ App Report
+  không tự băm lại sidecar vì response không có `sourceRowId`.
+- `packageChecksum=null` của locked snapshot T07 là hợp lệ và không tham gia cổng chặn.
+- Đây mới là candidate code/test; chưa deploy và chưa đóng dấu T07.
+
 ### 2026-08-17 22:40 (giờ VN) — Cầu nối doanh số App Report → App Lương
 
 - Thêm endpoint chỉ đọc `GET /api/luong/doanhso?thang=YYYY-MM`, xác thực Bearer; App

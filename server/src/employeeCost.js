@@ -7,6 +7,7 @@ const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 const rateSnapshot = require('./employeeCostRateSnapshot');
 const reconciliationShadow = require('./employeeCostReconciliationShadow');
 const reconciliationAllocationV4 = require('./employeeCostReconAllocationV4');
+const sealProvenance = require('./employeeCostSealProvenance');
 
 const CONTRACT_PATH = '/api/integrations/app-report/employee-cost';
 const DIMENSION_KEYS = Object.freeze(['c5', 'c7', 'c16', 'c25']);
@@ -1246,6 +1247,7 @@ async function fetchRawEmployeeCost(empCode, options = {}) {
         if (!adapted || (hasPolicyRows && !provenanceMatchesRequest)) {
           return { payload: emptyRangePayload(empCode, range), outcome: 'invalid_period_payload', attempts, sourceRange, sourceGeneration: sourceGenerationOf(raw) };
         }
+        adapted.c32SidecarProvenance = sealProvenance.capture(raw);
         return { payload: adapted, outcome: 'ok', attempts, sourceRange, sourceGeneration: sourceGenerationOf(raw) };
       }
       return { payload: sanitizePayload(raw, empCode), outcome: 'ok', attempts, sourceRange, sourceGeneration: sourceGenerationOf(raw) };
