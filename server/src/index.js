@@ -5,6 +5,7 @@
 process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
 const fs = require('fs');
 const path = require('path');
+const { markLoadedEnvFile } = require('./runtimeDataDir');
 
 // Nạp .env cạnh repo (không thêm dependency dotenv). KHÔNG ghi đè biến đã có sẵn
 // trong môi trường (PM2/shell) — chỉ điền biến còn thiếu. Cần để TELEGRAM_BOT_SECRET
@@ -13,6 +14,7 @@ const path = require('path');
   try {
     const p = path.join(__dirname, '..', '..', '.env');
     if (!fs.existsSync(p)) return;
+    markLoadedEnvFile(p);
     for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
       if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');

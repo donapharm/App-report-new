@@ -23,12 +23,14 @@
 process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
 const fs = require('fs');
 const path = require('path');
+const { markLoadedEnvFile } = require('./src/runtimeDataDir');
 
 // Nạp .env cạnh repo (app không tự đọc dotenv; worker tự parse cho tiện chạy tay).
 (function loadEnv() {
   try {
     const p = path.join(__dirname, '..', '.env');
     if (!fs.existsSync(p)) return;
+    markLoadedEnvFile(p);
     for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
       const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
       if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
@@ -53,7 +55,7 @@ const syncAlert = require('./src/syncAlert');
 const employeeCost = require('./src/employeeCost');
 const employeeBonus = require('./src/employeeBonus');
 
-const PENDING_TG_GRANTS_FILE = path.join(__dirname, 'data', 'auth', 'telegram_pending_grants.json');
+const PENDING_TG_GRANTS_FILE = path.join(persist.DIR, 'telegram_pending_grants.json');
 function loadPendingTelegramGrants() {
   try {
     const v = JSON.parse(fs.readFileSync(PENDING_TG_GRANTS_FILE, 'utf8'));
