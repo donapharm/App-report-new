@@ -2283,9 +2283,22 @@ function currentWarmKy() {
 // NV ở cuối hàng, MỖI LẦN MỘT NGƯỜI KHÁC NHAU. Triệu chứng trông như dữ liệu lỗi
 // ngẫu nhiên nhưng gốc chỉ là cache nguội. Cách chữa đúng là HÂM SẴN kỳ đó, KHÔNG
 // phải nới trần thời gian (nới trần chỉ đổi rủi ro sang giữ request lâu hơn).
-const EMPLOYEE_COST_ALL_WARM_PREV_PERIODS = Math.max(0, Math.min(
-  3, Number(process.env.EMPLOYEE_COST_ALL_WARM_PREV_PERIODS ?? 1) || 0,
-));
+// ‼ BIẾN NÀY TỰ TẮT MÌNH KHI ĐẶT RỖNG — ĐÃ CẮN MỘT LẦN (19/08/2026).
+// Bản đầu viết `Number(env ?? 1) || 0`: `??` chỉ đỡ null/undefined, nên biến ĐƯỢC
+// ĐẶT nhưng RỖNG ('' hay ' ') cho Number('')===0 ⇒ warm lặng lẽ về đúng hành vi cũ
+// (chỉ hâm một kỳ) mà không ai biết vì sao. Nay: rỗng/không đọc được ⇒ coi như CHƯA
+// ĐẶT và dùng mặc định 1; chỉ số 0 VIẾT RÕ RÀNG mới tắt được.
+function resolveWarmPrevPeriods(raw) {
+  const text = String(raw ?? '').trim();
+  if (text === '') return { value: 1, source: 'default' };
+  const parsed = Number(text);
+  if (!Number.isFinite(parsed)) return { value: 1, source: 'default_invalid' };
+  return { value: Math.max(0, Math.min(3, Math.trunc(parsed))), source: 'env' };
+}
+const EMPLOYEE_COST_ALL_WARM_PREV_PERIODS_RESOLVED = resolveWarmPrevPeriods(
+  process.env.EMPLOYEE_COST_ALL_WARM_PREV_PERIODS,
+);
+const EMPLOYEE_COST_ALL_WARM_PREV_PERIODS = EMPLOYEE_COST_ALL_WARM_PREV_PERIODS_RESOLVED.value;
 // "MM.YYYY" -> YYYYMM để so sánh thứ tự kỳ. Thuần chuỗi/số, KHÔNG dựng Date nên
 // không dính bẫy múi giờ (CLAUDE.md: nghiệp vụ chạy GMT+7, cấm suy ngày kiểu UTC).
 function kyOrderValue(ky) {
@@ -2366,9 +2379,15 @@ function startEmployeeCostAllWarmLoop() {
   }, EMPLOYEE_COST_ALL_WARM_INTERVAL_MS);
   // unref: timer nền không giữ tiến trình sống (không cản shutdown/test runner).
   if (typeof employeeCostAllWarmTimer.unref === 'function') employeeCostAllWarmTimer.unref();
+  // Log ĐỦ LÝ DO, không chỉ kết quả: lượt 19/08 mất cả buổi vì log chỉ in
+  // periods: ['08.2026'] mà không nói vì sao thiếu kỳ trước — do biến môi trường hay
+  // do kho không có kỳ đó. Nay in cả ba, nhìn một dòng là biết.
   console.log('[employee-cost] ALL cache warm loop started', {
     intervalMs: EMPLOYEE_COST_ALL_WARM_INTERVAL_MS,
     periods: employeeCostWarmKyList(),
+    prevPeriods: EMPLOYEE_COST_ALL_WARM_PREV_PERIODS,
+    prevPeriodsSource: EMPLOYEE_COST_ALL_WARM_PREV_PERIODS_RESOLVED.source,
+    knownPeriods: (() => { try { return store.periodKys(); } catch { return null; } })(),
   });
   return employeeCostAllWarmTimer;
 }

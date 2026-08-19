@@ -1,3 +1,12 @@
+### 2026-08-19 — Biến tắt warm kỳ trước không được tự tắt khi đặt rỗng
+
+- Sự cố live: sau cutover `98c83ed`, log chỉ in `periods: ['08.2026']` — kỳ trước không hề được xếp vào danh sách hâm, nên T07 vẫn nguội và dự đoán "chờ ~70 giây sẽ thấy T07 warmed" bị bác.
+- Gốc trong code: `Number(process.env.EMPLOYEE_COST_ALL_WARM_PREV_PERIODS ?? 1) || 0`. Toán tử `??` chỉ đỡ `null`/`undefined`, nên biến ĐƯỢC ĐẶT nhưng RỖNG (`''`, `'   '`) cho `Number('') === 0`, và `|| 0` biến mọi giá trị lạ thành TẮT. Warm tự tắt phần kỳ trước mà không báo gì.
+- Nay tách hàm `resolveWarmPrevPeriods()`: rỗng/toàn khoảng trắng/không phải số ⇒ coi như CHƯA ĐẶT và dùng mặc định 1; chỉ số `0` viết rõ ràng mới tắt được. Vẫn chặn trần 3.
+- Log khởi động warm in ĐỦ LÝ DO thay vì chỉ kết quả: thêm `prevPeriods`, `prevPeriodsSource` (`default` · `default_invalid` · `env`) và `knownPeriods`. Lượt 19/08 mất cả buổi vì log chỉ nói "hâm kỳ nào" mà không nói "vì sao thiếu kỳ trước" — do biến môi trường hay do kho không có kỳ đó.
+- Test: khoá bảng giá trị đầy đủ (chưa đặt · rỗng · khoảng trắng · rác · `'0'` · `'2'` · `'99'`), cấm `|| 0` trong hàm đọc biến, và bắt log phải in đủ bốn trường. Chạy `node --test test/*.test.js`: 1433/1440 pass; 7 ca đỏ còn lại là export PDF thiếu `pdfinfo` (poppler-utils) trên máy chạy test, đỏ sẵn từ trước và không liên quan thay đổi này.
+- Chưa deploy. Dựng trên `98c83ed`.
+
 ### 2026-08-19 — Hâm sẵn cả kỳ liền trước cho màn "Tất cả nhân viên"
 
 - Vòng warm định kỳ trước đây chỉ phủ kỳ hiện tại, nên kỳ liền trước luôn nguội sau mỗi lần restart/deploy. Lần dựng lạnh màn ALL cho kỳ nguội đo được 25.272 ms và 27.658 ms, vượt trần `EMPLOYEE_COST_ALL_DEADLINE_MS` (25.000 ms) ⇒ hàng đợi bị cắt ⇒ rơi vài NV cuối hàng, mỗi lần một người khác nhau. Đây là gốc của hiện tượng "lúc thiếu lúc đủ nhân viên" mà trước đó bị quy nhầm cho DN024 chậm (đo lại: DN024 chỉ 381 ms và không phải NV chậm nhất).

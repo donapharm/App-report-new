@@ -126,3 +126,41 @@ test('vòng warm phải hâm TUẦN TỰ — chốt toàn cục bỏ lần gọi
   assert.doesNotMatch(loop.slice(0, 700), /scheduleEmployeeCostAllWarm\(currentWarmKy\(\)/,
     'vòng định kỳ không được quay lại kiểu hâm một kỳ');
 });
+
+
+test('EMPLOYEE_COST_ALL_WARM_PREV_PERIODS rỗng KHÔNG được tự tắt warm kỳ trước', () => {
+  // Sự cố 19/08/2026: biến đặt rỗng làm Number('')===0 ⇒ warm lặng lẽ chỉ còn một kỳ,
+  // log chỉ in periods:['08.2026'] nên mất cả buổi mới tìm ra. Khoá lại luật đọc biến.
+  const source = fs.readFileSync(require.resolve('../src/routes.js'), 'utf8');
+  const start = source.indexOf('function resolveWarmPrevPeriods');
+  assert.ok(start > 0, 'phải có hàm đọc biến tường minh, không nhét vào một biểu thức');
+  const fn = source.slice(start, source.indexOf('\n}', start));
+  assert.match(fn, /trim\(\)/, 'phải trim trước khi xét rỗng');
+  assert.match(fn, /=== ''/, 'rỗng phải rơi về mặc định, không rơi về 0');
+  assert.doesNotMatch(fn, /\|\|\s*0/, 'cấm dùng `|| 0`: nó biến mọi giá trị lạ thành TẮT');
+
+  const resolve = (raw) => {
+    const text = String(raw ?? '').trim();
+    if (text === '') return { value: 1, source: 'default' };
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) return { value: 1, source: 'default_invalid' };
+    return { value: Math.max(0, Math.min(3, Math.trunc(parsed))), source: 'env' };
+  };
+  assert.deepEqual(resolve(undefined), { value: 1, source: 'default' }, 'chưa đặt ⇒ 1');
+  assert.deepEqual(resolve(''), { value: 1, source: 'default' }, 'rỗng ⇒ 1, KHÔNG phải 0');
+  assert.deepEqual(resolve('   '), { value: 1, source: 'default' }, 'toàn khoảng trắng ⇒ 1');
+  assert.deepEqual(resolve('abc'), { value: 1, source: 'default_invalid' }, 'rác ⇒ 1');
+  assert.deepEqual(resolve('0'), { value: 0, source: 'env' }, 'chỉ số 0 VIẾT RÕ mới tắt được');
+  assert.deepEqual(resolve('2'), { value: 2, source: 'env' });
+  assert.deepEqual(resolve('99'), { value: 3, source: 'env' }, 'chặn trần 3');
+});
+
+test('log khởi động warm phải nói ĐỦ LÝ DO, không chỉ kết quả', () => {
+  const source = fs.readFileSync(require.resolve('../src/routes.js'), 'utf8');
+  const at = source.indexOf("ALL cache warm loop started");
+  assert.ok(at > 0);
+  const block = source.slice(at, at + 500);
+  for (const field of ['periods', 'prevPeriods', 'prevPeriodsSource', 'knownPeriods']) {
+    assert.match(block, new RegExp(field), `log phải in ${field} để chẩn được ngay tại chỗ`);
+  }
+});
