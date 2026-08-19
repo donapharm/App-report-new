@@ -21,7 +21,9 @@ const EMPLOYEE_COST_ALL_DEADLINE_MS = Math.max(
   5_000, Number(process.env.APP_REPORT_COST_ALL_DEADLINE_MS || 0) || 25_000,
 );
 
-async function mapWithDeadline(items, limit, worker, { deadlineAt, onSkip, now = () => Date.now() }) {
+async function mapWithDeadline(items, limit, worker, {
+  deadlineAt, onSkip, now = () => Date.now(), yieldBetween = false,
+}) {
   const results = new Array(items.length);
   let cursor = 0;
   const left = () => deadlineAt - now();
@@ -43,6 +45,9 @@ async function mapWithDeadline(items, limit, worker, { deadlineAt, onSkip, now =
       } finally {
         if (timer) clearTimeout(timer);
       }
+      // Mỗi NV có thể vừa reduce/sort hàng nghìn dòng. Nhả event loop giữa hai NV
+      // để /api/health và request nhẹ không bị nhốt sau cả chùm fan-out.
+      if (yieldBetween) await new Promise((resolve) => setImmediate(resolve));
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));

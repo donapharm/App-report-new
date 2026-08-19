@@ -1,3 +1,12 @@
+### 2026-08-19 — ALL lạnh không được chặn health hoặc kích watchdog restart
+
+- Baseline cô lập: request ALL T08 lạnh trả 503 sau 43,100 giây; `/api/health` trượt 20/23 lần. CPU profile xác định các khối đồng bộ lớn gồm đọc/parse/policy catalog 406 MB (~13,03 giây), active-slot doanh thu (~7,13 giây), snapshot tỷ lệ (~4,32 giây) và GC (~5,52 giây).
+- Chuyển việc đọc/parse/project catalog và enrich/reduce chi phí ALL sang hai `child_process` ưu tiên thấp. IPC được nén; main process nhả event loop giữa các khối 500 dòng và giữa các NV. Luồng self giữ nguyên.
+- Không đổi `EMPLOYEE_COST_ALL_DEADLINE_MS`, không đổi số luồng fan-out, không đổi watchdog. Log warm lúc khởi động nói rõ `warmDisabled`.
+- Nghiệm thu cô lập sau sửa: ALL T08 lạnh HTTP 200, 1.424 dòng/19 NV; health 38/38 HTTP 200 trong suốt lượt dựng, chậm nhất 2,127 giây; PID đứng nguyên. Tổng peak RSS cả cây tiến trình 2.279 MiB so với baseline 2.164 MiB (+115 MiB); RSS tiến trình cha giảm từ 2.164 MiB xuống 421 MiB.
+- Test khóa health vẫn tiến được khi worker enrich 12.000 dòng và khóa fan-out nhả event loop mà không đổi concurrency/deadline. Full server 1.450/1.450, web 497/497, Vite 662 modules.
+- Đây là sửa availability/liveness; thời gian trả payload đầy đủ vẫn khoảng 34–42 giây. Chưa đổi contract API/UI sang background/poll.
+
 ### 2026-08-19 — Bảng "Tất cả nhân viên" mất cột nhận dạng và cột doanh thu
 
 - CEO chụp màn hình T08.2026: bảng chi tiết chỉ còn `STT · Nhân viên · C36 · C41 · C43 · C44 · C45`, phụ đề ghi đúng "5 cột tỷ lệ". Mất sạch ngày, mã đơn hàng, tuyến, mã/tên đơn vị, mã QLNB, tên hàng, hàm lượng, giá thầu, số lượng, **và mất cột `revenueBeforeVat` — tức toàn bộ chi tiết doanh thu**.

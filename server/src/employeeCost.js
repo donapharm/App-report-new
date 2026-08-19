@@ -5,6 +5,7 @@ const { VAT_DIVISOR } = require('./analytics');
 const employeeCostTemplates = require('./employeeCostTemplates');
 const employeeCostUnitGroups = require('./employeeCostUnitGroups');
 const rateSnapshot = require('./employeeCostRateSnapshot');
+const employeeCostCpu = require('./employeeCostCpu');
 const reconciliationShadow = require('./employeeCostReconciliationShadow');
 const reconciliationAllocationV4 = require('./employeeCostReconAllocationV4');
 
@@ -1675,7 +1676,16 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
   // cost timeline is unavailable/not configured. In that state enrichment
   // preserves every order-line and leaves percentages/amounts as null (—).
   if (range && options.revenueRowsByPeriod && options.catalogRowsByPeriod) {
-    result.payload = enrichRangePayload(result.payload, options);
+    result.payload = options.offloadCpu === true
+      ? await employeeCostCpu.enrichRangePayload(result.payload, {
+        revenueRowsByPeriod: options.revenueRowsByPeriod,
+        catalogRowsByPeriod: options.catalogRowsByPeriod,
+        annualColumnKeys: options.annualColumnKeys,
+        matchWarningPercent: options.matchWarningPercent,
+        templateConfig: options.templateConfig,
+        derivedBaseConfig: options.derivedBaseConfig,
+      })
+      : enrichRangePayload(result.payload, options);
   } else if (Array.isArray(options.revenueRows) && Array.isArray(options.catalogRows)) {
     result.payload = enrichWithRevenue(result.payload, options);
   }

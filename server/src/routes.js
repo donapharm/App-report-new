@@ -38,6 +38,7 @@ const dataHubUnitGroups = require('./dataHubUnitGroups');
 const appSaleCst = require('./appSaleCst');
 const appSaleProductCrosswalk = require('./appSaleProductCrosswalk');
 const employeeCost = require('./employeeCost');
+const nativeEmployeeCostGetForSession = employeeCost.getForSession;
 const employeeBonus = require('./employeeBonus');
 // Phiên bản app vào chữ ký dấu: đổi code cách tính là dấu cũ phải hết hiệu lực.
 const APP_BUILD_VERSION = String(require('../package.json').version || '0');
@@ -153,6 +154,7 @@ const requireCeoPenaltyFormula = (req, res, next) => (
     : res.status(403).json({ error: 'Chỉ CEO được thay đổi công thức phạt.', code: 'PENALTY_POLICY_CEO_REQUIRED' })
 );
 const canonicalAssignmentSnapshots = new Map();
+const canonicalCatalogRowsSnapshots = new Map();
 const CANONICAL_ASSIGNMENT_TTL_MS = 15 * 60 * 1000;
 const CANONICAL_ASSIGNMENT_MAX = 6;
 function canonicalAssignmentFetch(key) {
@@ -185,6 +187,36 @@ async function canonicalAssignmentSnapshot(period) {
   }
   // Lạnh (chưa có bản nào) -> phải chờ lần lấy đầu tiên.
   return canonicalAssignmentFetch(key).value;
+}
+
+function canonicalCatalogRowsFetch(key) {
+  const value = Promise.resolve().then(() => catalogManagement.getCatalogRows(key));
+  const entry = { at: Date.now(), value, resolved: null, refreshing: false };
+  canonicalCatalogRowsSnapshots.set(key, entry);
+  value.then((rows) => { entry.resolved = rows; entry.at = Date.now(); })
+    .catch(() => { if (canonicalCatalogRowsSnapshots.get(key) === entry) canonicalCatalogRowsSnapshots.delete(key); });
+  while (canonicalCatalogRowsSnapshots.size > CANONICAL_ASSIGNMENT_MAX) {
+    canonicalCatalogRowsSnapshots.delete(canonicalCatalogRowsSnapshots.keys().next().value);
+  }
+  return entry;
+}
+
+async function canonicalCatalogRows(period) {
+  const key = catalogManagement.toHubPeriod(period);
+  const hit = canonicalCatalogRowsSnapshots.get(key);
+  if (hit && Date.now() - hit.at < CANONICAL_ASSIGNMENT_TTL_MS) return hit.value;
+  if (hit && hit.resolved) {
+    if (!hit.refreshing) {
+      hit.refreshing = true;
+      Promise.resolve().then(() => catalogManagement.getCatalogRows(key))
+        .then((rows) => canonicalCatalogRowsSnapshots.set(key, {
+          at: Date.now(), value: Promise.resolve(rows), resolved: rows, refreshing: false,
+        }))
+        .catch(() => { hit.refreshing = false; });
+    }
+    return hit.resolved;
+  }
+  return canonicalCatalogRowsFetch(key).value;
 }
 const REVENUE_SEND_DIR = path.join(__dirname, '..', '..', 'artifacts', 'sales-report', 'send-queue');
 const REVENUE_SEND_FORMATS = ['xlsx', 'csv', 'pdf', 'pptx'];
@@ -1220,6 +1252,9 @@ async function employeeCostPayload(req, {
     empCode,
     roster,
   }, async () => {
+    const yieldHealth = employeeCost.getForSession === nativeEmployeeCostGetForSession
+      ? () => new Promise((resolve) => setImmediate(resolve))
+      : () => Promise.resolve();
     const range = rangeOverride || employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
     // Bắt đầu gọi App Salary song song với phần dựng chi phí nhưng luôn cô lập lỗi:
     // field này thuộc đúng mã NV đã được backend resolve self-scope ở trên. Chế độ
@@ -1270,20 +1305,26 @@ async function employeeCostPayload(req, {
         sortDir: req.query.sortDir,
       },
     });
+    await yieldHealth();
     const ky = employeeCost.toUiMonth(range.to);
     const bonusKpi = empCode ? targetKpiSummary(ky, { empCode }, [empCode]) : { ky };
+    await yieldHealth();
     const quarterAssignedKys = bonusKpi.quarter?.assigned_kys || [];
-    const bonusPriority = empCode ? {
-      month: await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod, {
+    let bonusPriority = {};
+    if (empCode) {
+      const monthPriority = await employeeBonusPriorityForPeriods(empCode, [ky], catalogRowsByPeriod, {
         employeeTargetsByPeriod: { [catalogManagement.toHubPeriod(ky)]: bonusKpi.month.target },
-      }),
-      quarter: await employeeBonusPriorityForPeriods(empCode, quarterAssignedKys, catalogRowsByPeriod, {
+      });
+      await yieldHealth();
+      const quarterPriority = await employeeBonusPriorityForPeriods(empCode, quarterAssignedKys, catalogRowsByPeriod, {
         average: true,
         employeeTargetsByPeriod: Object.fromEntries((bonusKpi.quarter?.months || [])
           .filter((item) => item.assigned)
           .map((item) => [catalogManagement.toHubPeriod(item.ky), item.target])),
-      }),
-    } : {};
+      });
+      bonusPriority = { month: monthPriority, quarter: quarterPriority };
+      await yieldHealth();
+    }
     if (empCode) {
       const resolver = (segment = {}) => employeeBonusPolicy.resolve({
         period: segment.period || ky,
@@ -1308,6 +1349,7 @@ async function employeeCostPayload(req, {
     const currentPenaltyConfig = resolvedPenaltyPolicy?.config || resolvedBonusConfig;
     const activePenaltyConfig = penaltyConfig || currentPenaltyConfig;
     const bonus = employeeBonus.buildBonusSummary(bonusKpi, resolvedBonusConfig, bonusPriority);
+    await yieldHealth();
     const costPeriod = (payload.periods || []).find((item) => item.period === range.to) || null;
     // KHOÁ SỔ HẾT NGÀY 8 THÁNG SAU (CEO chốt 30/07). Trước đây so sánh tháng nên
     // 00:00 ngày 01 đã coi là ĐÃ CHỐT dù doanh thu còn về tới ngày 8.
@@ -1464,6 +1506,12 @@ async function employeeCostAllPayload(req, {
   costFetchOptions = null, expectedDataSignature = null, prepareMemoReplace = false,
   dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null, snapshotBuild = false,
 } = {}) {
+  const c2TraceStartedAt = Date.now();
+  const c2Trace = (stage, extra = {}) => {
+    if (process.env.EMPLOYEE_COST_C2_TRACE === '1') {
+      console.info('[employee-cost-c2]', { stage, elapsedMs: Date.now() - c2TraceStartedAt, ...extra });
+    }
+  };
   if (!auth.isAdmin(req.session.role)) {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
@@ -1556,6 +1604,7 @@ async function employeeCostAllPayload(req, {
   const soDoiKhoTien = () => persist.observedGeneration(KHO_TIEN);
   const mocDoi = () => `${vanTayNguon()}|doi=${soDoiKhoTien()}`;
   const vanTaySom = vanTayNguon();
+  c2Trace('early_identity_ready');
   const doiSom = soDoiKhoTien();
   /* Soi lại lai lịch gói từ xa mà dấu đã ghi. Hỏi ĐÚNG những gói đó, không quét rộng:
    * một lượt metadata nhẹ, đổi lấy việc khỏi dựng 21 báo cáo (bot đo: nóng 14,3 giây). */
@@ -1622,13 +1671,13 @@ async function employeeCostAllPayload(req, {
   // vẫn coalesce theo kỳ nên số lần gọi upstream không đổi; giữ cô lập lỗi từng kỳ.
   await Promise.all(catalogPeriods.map(async (period) => {
     try {
-      const snapshot = await canonicalAssignmentSnapshot(period);
-      sharedCatalogRowsByPeriod[period] = snapshot.catalog || snapshot.rows || [];
+      sharedCatalogRowsByPeriod[period] = await canonicalCatalogRows(period);
     } catch (error) {
       sharedCatalogRowsByPeriod[period] = [];
       console.warn('[employee-cost] catalog unavailable', { period, message: error.message });
     }
   }));
+  c2Trace('catalog_ready', { periods: catalogPeriods.length });
   // Catalog đã ổn định ở đây ⇒ mới chốt con dấu dùng cho khoá cache/cổng kiểm/đóng dấu.
   const vanTayLucVao = vanTayNguon();
   const buildDataSignature = store.employeeCostDataSignature();
@@ -1652,6 +1701,7 @@ async function employeeCostAllPayload(req, {
       period,
       [...store.getRows({ ky: employeeCost.toUiMonth(period), scope: {} })],
     ]));
+    c2Trace('company_revenue_ready');
     const healthUiPeriod = employeeCost.toUiMonth(range.to);
     const healthSourceRows = [...store.getRows({ ky: healthUiPeriod, scope: {} })];
     const healthSourceAvailable = healthSourceRows.length > 0
@@ -1686,7 +1736,7 @@ async function employeeCostAllPayload(req, {
         sharedCatalogRowsByPeriod,
         includeSalaryAdvance: false,
         suppressAudit,
-        costFetchOptions: { ...(costFetchOptions || {}), deadlineAt },
+        costFetchOptions: { ...(costFetchOptions || {}), deadlineAt, offloadCpu: true },
         prefetchedCostResult: prefetchedResult,
       });
       const totalRows = (report?.periods || []).reduce((sum, period) => sum + Number(period?.match?.totalRows || 0), 0);
@@ -1701,6 +1751,7 @@ async function employeeCostAllPayload(req, {
       return report;
     }, {
       deadlineAt,
+      yieldBetween: employeeCost.getForSession === nativeEmployeeCostGetForSession,
       // NV chưa kịp ⇒ vào đúng luồng "thiếu nguồn" đã có, hiện tên trên băng đỏ.
       // Tuyệt đối KHÔNG trả 0 đồng thay cho "chưa lấy được".
       onSkip: (employee, reason, error) => {
@@ -1724,6 +1775,7 @@ async function employeeCostAllPayload(req, {
         return stub;
       },
     });
+    c2Trace('fanout_ready', { reports: reports.length });
     if (Array.isArray(sourceReportSink)) {
       sourceReportSink.length = 0;
       sourceReportSink.push(...reports);
@@ -1733,6 +1785,7 @@ async function employeeCostAllPayload(req, {
     // là vòng tròn tự chứng minh — thiếu hẳn một người vẫn "đủ".
     sealEvidenceReports = reports;
     const merged = employeeCostTable.mergeEmployeeReports(reports, roster, { companyRevenueRowsByPeriod });
+    c2Trace('merge_ready');
     /* ‼ ĐỐI SOÁT DOANH THU — trả lời "tiền chạy đi đâu" (CEO 10/08/2026).
        Màn ALL ghép sổ chi phí TỪNG NV; NV nào chưa lấy được % thì toàn bộ dòng doanh
        thu của họ không lên bảng ⇒ tổng hiển thị tụt, và tụt khác nhau mỗi lượt xem.
@@ -2415,7 +2468,11 @@ function startEmployeeCostAllWarmLoop() {
   if (employeeCostSnapshotSyncEnabled()) return startEmployeeCostSnapshotSyncLoop();
   if (employeeCostSnapshotEnabled()) return null;
   if (employeeCostAllWarmTimer) return employeeCostAllWarmTimer;
-  if (String(process.env.EMPLOYEE_COST_ALL_WARM_DISABLED || '') === '1') return null;
+  const warmDisabledRaw = String(process.env.EMPLOYEE_COST_ALL_WARM_DISABLED || '');
+  if (warmDisabledRaw === '1') {
+    console.log('[employee-cost] ALL cache warm loop disabled', { warmDisabled: 1 });
+    return null;
+  }
   scheduleEmployeeCostAllWarmSweep('startup');
   employeeCostAllWarmTimer = setInterval(() => {
     scheduleEmployeeCostAllWarmSweep('interval');
@@ -2427,6 +2484,7 @@ function startEmployeeCostAllWarmLoop() {
   // do kho không có kỳ đó. Nay in cả ba, nhìn một dòng là biết.
   console.log('[employee-cost] ALL cache warm loop started', {
     intervalMs: EMPLOYEE_COST_ALL_WARM_INTERVAL_MS,
+    warmDisabled: 0,
     periods: employeeCostWarmKyList(),
     prevPeriods: EMPLOYEE_COST_ALL_WARM_PREV_PERIODS,
     prevPeriodsSource: EMPLOYEE_COST_ALL_WARM_PREV_PERIODS_RESOLVED.source,

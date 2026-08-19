@@ -5,6 +5,7 @@ const assignmentAdmin = require('./assignmentAdmin');
 const store = require('./store');
 const { provinceOf } = require('./province');
 const catalogPeriodLkg = require('./catalogPeriodLkg');
+const catalogLkgReader = require('./catalogLkgReader');
 
 const CACHE_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(__dirname, '..', 'data', 'catalog_management_lkg.json');
 const DQ_CACHE_FILE = process.env.EMPLOYEE_COST_DQ_CATALOG_CACHE_FILE
@@ -914,7 +915,10 @@ async function loadSnapshot(period, { forceRemote = false } = {}) {
   // local seed as the managed sales catalog — only a previously validated Data Hub
   // snapshot (LKG) or a fresh pull may be shown.
   if (!forceRemote) {
-    const cached = readCache(period);
+    // Monolith LKG production hơn 400 MB. Đọc + JSON.parse + kiểm hợp đồng trên
+    // main thread làm health im lặng và bị watchdog restart. Worker dùng chung
+    // giữ đúng đường kiểm hiện tại nhưng không chặn event loop phục vụ HTTP.
+    const cached = await catalogLkgReader.read(period);
     if (cached) {
       // Bản local là BẢN SAO Y của lần đồng bộ thành công gần nhất — không phải
       // "hàng dự phòng lúc hỏng", nên KHÔNG gắn stale/readOnly. Ghi rõ nguồn để
@@ -923,13 +927,13 @@ async function loadSnapshot(period, { forceRemote = false } = {}) {
     }
   }
   if (!configured()) {
-    const cached = readCache(period);
+    const cached = await catalogLkgReader.read(period);
     if (cached) return { ...cached, period, readOnly: true, meta: { ...cached.meta, source: 'data-hub-lkg', stale: true, readOnly: true, message: 'Data Hub chưa được cấu hình; đang giữ bản đồng bộ tốt gần nhất ở chế độ chỉ đọc.' } };
     throw Object.assign(new Error('Data Hub chưa được cấu hình và chưa có bản đồng bộ tốt gần nhất.'), { status: 503 });
   }
   try { return await remoteSnapshot(period); }
   catch (error) {
-    const cached = readCache(period);
+    const cached = await catalogLkgReader.read(period);
     if (cached) return { ...cached, period, readOnly: true, meta: { ...cached.meta, source: 'data-hub-lkg', stale: true, readOnly: true, message: `Data Hub tạm lỗi; giữ bản đồng bộ tốt gần nhất. ${error.message}` } };
     throw Object.assign(new Error(`Data Hub tạm lỗi và chưa có bản đồng bộ tốt gần nhất: ${error.message}`), { status: 503 });
   }
@@ -1007,6 +1011,23 @@ async function getSnapshot(periodInput, { forceRemote = false } = {}) {
     .finally(() => { if (snapshotInFlight.get(period) === task) snapshotInFlight.delete(period); });
   snapshotInFlight.set(period, task);
   return task;
+}
+
+// Employee-cost ALL chỉ cần catalog để enrich, không cần rows/history/meta của
+// màn quản trị. Chiếu ngay trong worker tránh deserialize cả snapshot 30+ MB
+// trên main thread. Cache không có thì giữ nguyên fallback nguồn của getSnapshot.
+async function getCatalogRows(periodInput) {
+  const period = toHubPeriod(periodInput);
+  // Không có LKG thì đi thẳng fallback. Tránh khởi động child chỉ để kết luận
+  // file vắng; đồng thời giữ đường nguồn được host/test thay thế có tính tức thời.
+  const cached = module.exports.getSnapshot === getSnapshot && canCuocFile(CACHE_FILE)
+    ? await catalogLkgReader.read(period, 'employee-cost-catalog')
+    : null;
+  if (Array.isArray(cached)) return cached;
+  // Qua export để integration test và embedding host có thể thay nguồn đọc có
+  // kiểm soát; production vẫn trỏ đúng getSnapshot bên dưới.
+  const snapshot = await module.exports.getSnapshot(period);
+  return snapshot.catalog || snapshot.rows || [];
 }
 function activeIn(row, period) {
   return row.active !== false && row.effective_from <= period && (!row.effective_to || row.effective_to >= period);
@@ -1125,7 +1146,7 @@ module.exports = {
   conGiuBanPhanTichForTests: () => nhoLkg !== null,
   projectionBuildsForTests: () => projectionBuildsForTests,
   resetProjectionBuildsForTests: () => { projectionBuildsForTests = 0; },
-  writeCacheForTests: writeCacheAtomic, configured, toHubPeriod, toUiPeriod, getSnapshot, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, assignmentScopeKey, catalogScopeKey, catalogLineKey, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint,
+  writeCacheForTests: writeCacheAtomic, configured, toHubPeriod, toUiPeriod, getSnapshot, getCatalogRows, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, assignmentScopeKey, catalogScopeKey, catalogLineKey, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint,
   CATALOG_PROJECTION_VERSION,
   schedulePeriodLkgShadow: (response, period, snapshot) => catalogPeriodLkg.scheduleShadowAfterResponse(
     response, period, snapshot, dataQualityProjection(snapshot, period), { currentSource: currentCatalogSource },
