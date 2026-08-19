@@ -7,6 +7,17 @@
 - Test khóa health vẫn tiến được khi worker enrich 12.000 dòng và khóa fan-out nhả event loop mà không đổi concurrency/deadline. Full server 1.450/1.450, web 497/497, Vite 662 modules.
 - Đây là sửa availability/liveness; thời gian trả payload đầy đủ vẫn khoảng 34–42 giây. Chưa đổi contract API/UI sang background/poll.
 
+### 2026-08-19 — Đồng hồ đo nghẽn vòng lặp sự kiện (thước đo cho C2)
+
+- Sự cố: request "Tất cả nhân viên" lúc cache lạnh chạy 34–43 giây, `/api/health` trên cổng 3873 không trả lời, cron watchdog tưởng app chết và restart — đếm được 11 lần.
+- Suy luận có căn cứ: `/api/health` (`index.js`) chỉ trả một object hằng, KHÔNG đọc kho, KHÔNG tính gì. Một endpoint rẻ như vậy mà không trả lời thì chỉ có thể là VÒNG LẶP SỰ KIỆN BỊ CHẶN, tức có việc ĐỒNG BỘ chạy dài — không phải chờ mạng.
+- Nhưng chặn ở ĐÂU thì chưa ai đo. Bản này KHÔNG sửa gì; nó chỉ dựng thước đo: `monitorEventLoopDelay` của lõi Node (histogram, chi phí gần bằng không), lấy mẫu 20 ms, chỉ log khi độ trễ vượt ngưỡng (mặc định 1.000 ms — mốc đủ để một lượt kiểm health trượt), tổng kết mỗi 30 giây và IM LẶNG khi khoẻ.
+- Bật ở `index.js` TRƯỚC vòng warm: cú chặn nguy hiểm nhất nằm ngay sau restart, bật sau là bỏ lỡ đúng khoảnh khắc cần đo.
+- Không ghi file, không chạm dữ liệu, không ảnh hưởng luồng phục vụ. Log chỉ có số mili-giây — không URL, không token, không payload, không mã nhân viên. Log im khi khoẻ vì chính rác log đã góp phần làm đầy đĩa sáng 19/08.
+- Đây vừa là công cụ chẩn cho C2, vừa là thước đo NGHIỆM THU C2: sửa xong thì độ trễ phải nằm dưới ngưỡng trong SUỐT một lượt dựng ALL lạnh, và số lần restart phải đứng yên.
+- Test: khoá việc bắt được cú chặn 400 ms; khoá việc im lặng khi khoẻ; khoá thứ tự bật trước vòng warm; khoá việc gọi hai lần không tạo hai đồng hồ. Chạy `node --test test/*.test.js`: 1441/1448 pass; 7 ca đỏ còn lại là export PDF thiếu `pdfinfo` trên máy chạy test, đỏ sẵn từ trước.
+- Chưa deploy. Dựng trên `ae94d3e`.
+
 ### 2026-08-19 — Bảng "Tất cả nhân viên" mất cột nhận dạng và cột doanh thu
 
 - CEO chụp màn hình T08.2026: bảng chi tiết chỉ còn `STT · Nhân viên · C36 · C41 · C43 · C44 · C45`, phụ đề ghi đúng "5 cột tỷ lệ". Mất sạch ngày, mã đơn hàng, tuyến, mã/tên đơn vị, mã QLNB, tên hàng, hàm lượng, giá thầu, số lượng, **và mất cột `revenueBeforeVat` — tức toàn bộ chi tiết doanh thu**.
