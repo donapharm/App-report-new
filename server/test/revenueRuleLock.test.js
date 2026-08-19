@@ -51,7 +51,7 @@ function ruleHash() {
 
 test('‼ đổi luật doanh thu phải nâng version + fingerprint', () => {
   const lock = JSON.parse(fs.readFileSync(LOCK_FILE, 'utf8'));
-  assert.equal(lock.version, 'revenue-v1.1-appsale-live-sql-mirror');
+  assert.equal(lock.version, 'revenue-v1.2-canonical-unit-qlnb-mapping');
   assert.equal(ruleHash(), lock.ruleHash, [
     '',
     'LUẬT TÍNH DOANH THU ĐÃ BỊ ĐỔI.',

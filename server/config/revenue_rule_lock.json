@@ -1,10 +1,10 @@
 {
-  "version": "revenue-v1.1-appsale-live-sql-mirror",
-  "ruleHash": "1e68748bbb107802d9ceade59d8b47d3e29f3f48f14b82ec5bbc915bf79262f7",
-  "lockedAt": "2026-08-03",
+  "version": "revenue-v1.2-canonical-unit-qlnb-mapping",
+  "ruleHash": "3af5a67e838777acb1e7684ec65cd972fc73392433060988db1b1c703edf84f2",
+  "lockedAt": "2026-08-19",
   "lockedBy": "CEO",
   "source": "src/appSaleRevenueMirror.js SQL + scripts/materialize_july_revenue.js projection",
-  "definition": "App Report mirrors exact live App Sale KPI SQL: CRM sale_order_date/invoice_export_amount/non-excluded + partner orders.created_at/delivered response/C31 pricing.",
+  "definition": "App Report mirrors live App Sale KPI calculations and resolves employee ownership from canonical unit_qlnb_employees; the catalog marker guard counts the same canonical (unit_id, normalized qlnb_code) pairs.",
   "appSaleRelease": "0e820022814ef8a7f24d47c082446f3e40b17ebe",
   "appSaleSourceSha256": "3b065456ed1e25b553c0554b97900a0ea2d89a17e9b487bfc5663fad14c220e0",
   "mirrorId": "APP_SALE_REVENUE_KPI_SQL_0E820022"

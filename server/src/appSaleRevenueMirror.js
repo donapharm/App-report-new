@@ -33,14 +33,13 @@ const CRM_KPI_SQL = `SELECT COUNT(*)::int rows,
    AND revenue_bucket <> 'excluded'`;
 
 const CRM_ROWS_SQL = `WITH nv_catalog AS (
-  SELECT u.code unit_code, p.qlnb_code,
+  SELECT u.code unit_code, UPPER(BTRIM(m.qlnb_code)) qlnb_code,
          MIN(e.code) emp_code, MIN(e.name) emp_name,
          COUNT(DISTINCT e.code)::int nv_cnt
-    FROM unit_product_employees upe
-    JOIN units u ON u.id=upe.unit_id
-    JOIN products p ON p.id=upe.product_id
-    JOIN employees e ON e.id=upe.employee_id
-   GROUP BY u.code,p.qlnb_code
+    FROM unit_qlnb_employees m
+    JOIN units u ON u.id=m.unit_id
+    JOIN employees e ON e.id=m.employee_id
+   GROUP BY u.code,UPPER(BTRIM(m.qlnb_code))
 )
 SELECT l.id, l.sale_order_no, l.sale_order_date, l.invoice_date,
        l.legal_entity_bucket, l.legal_entity_code, l.legal_entity_name,
@@ -98,13 +97,13 @@ const PARTNER_COMMON_CTES = `WITH catalog_price_source AS (
     FROM catalog_price_source WHERE price>0
    GROUP BY unit_code,qlnb_code
 ), nv_catalog AS (
-  SELECT u.code AS unit_code,p.qlnb_code,MIN(e.code) AS emp_code,MIN(e.name) AS emp_name,
+  SELECT u.code AS unit_code,UPPER(BTRIM(m.qlnb_code)) AS qlnb_code,
+         MIN(e.code) AS emp_code,MIN(e.name) AS emp_name,
          COUNT(DISTINCT e.code) AS nv_cnt
-    FROM unit_product_employees upe
-    JOIN units u ON u.id=upe.unit_id
-    JOIN products p ON p.id=upe.product_id
-    JOIN employees e ON e.id=upe.employee_id
-   GROUP BY u.code,p.qlnb_code
+    FROM unit_qlnb_employees m
+    JOIN units u ON u.id=m.unit_id
+    JOIN employees e ON e.id=m.employee_id
+   GROUP BY u.code,UPPER(BTRIM(m.qlnb_code))
 ), line_base AS (
   SELECT o.id order_id,o.code order_code,o.status order_status,oi.id order_item_id,
          COALESCE(oi.approved_qty,oi.qty,0)::numeric ordered_qty,
@@ -218,14 +217,14 @@ function safeNonNegativeInteger(value) {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function validateCatalogMarker({ state, marker, tablePairs }) {
+function validateCatalogMarker({ state, marker, canonicalPairs }) {
   if (state.versionNo == null || !state.signature || !marker || typeof marker !== 'object' || Array.isArray(marker)) return null;
   const versionNo = safeNonNegativeInteger(marker.versionNo);
   const pairs = safeNonNegativeInteger(marker.pairs);
   const sourceRows = safeNonNegativeInteger(marker.sourceRows);
   const unmappedRows = safeNonNegativeInteger(marker.unmappedRows);
   const conflictPairs = safeNonNegativeInteger(marker.conflictPairs);
-  const actualPairs = safeNonNegativeInteger(tablePairs);
+  const actualPairs = safeNonNegativeInteger(canonicalPairs);
   if ([versionNo,pairs,sourceRows,unmappedRows,conflictPairs,actualPairs].some((value) => value == null)) return null;
   if (versionNo !== state.versionNo || marker.signature !== state.signature) return null;
   if (pairs < UNIT_PRODUCT_EMP_MIN_PAIRS || sourceRows < UNIT_PRODUCT_EMP_MIN_PAIRS) return null;
@@ -247,8 +246,9 @@ async function resolveCatalogVersion(db) {
     signature: `${stateRow.version_no}:${stateRow.row_count}:${stateRow.max_updated_at}`,
   } : { versionNo: null,signature: null };
   const marker = (await db.query(`SELECT value FROM system_settings WHERE key=$1`, [UNIT_PRODUCT_EMP_SYNC_SETTING_KEY])).rows[0]?.value || null;
-  const tablePairs = Number((await db.query(`SELECT COUNT(*)::int pairs FROM unit_product_employees`)).rows[0]?.pairs || 0);
-  const valid = validateCatalogMarker({ state,marker,tablePairs });
+  const canonicalPairs = Number((await db.query(`SELECT COUNT(DISTINCT (unit_id,UPPER(BTRIM(qlnb_code))))::int pairs
+    FROM unit_qlnb_employees`)).rows[0]?.pairs || 0);
+  const valid = validateCatalogMarker({ state,marker,canonicalPairs });
   if (!valid) throw new Error('APP_SALE_CATALOG_SYNC_GUARD_FAILED');
   return { ...valid,signature: state.signature };
 }

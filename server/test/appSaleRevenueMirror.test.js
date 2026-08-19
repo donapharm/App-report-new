@@ -23,13 +23,13 @@ const {
 const EXPECTED_SQL_SHA256 = Object.freeze({
   latestMisaRun: '886111ffbc8f051b46505b4a87575c2e199a16dbeefc846a821caa59dcc6536e',
   crmKpi: 'cc7cc1b4770a042216b7ddaace096d117b8694816ce06abcd9f625db3e115d8e',
-  crmRows: '37e90ec4770253968be8ac607c1326495f200dcc88a22fa5a322ba919af888e5',
-  partnerCommon: '63933894cc84cc3713c59e90bed95e94491d401509c73a3b17ec5069aaa51e3e',
-  partnerKpi: 'fb7564348fcef05fad6f4581e0c9e6422f28b5bed676d3e377f804daa570097f',
-  partnerRows: '720a82d3fde1aec90727465b1e97ffd7c7d5b4673bb50648dd96a28584695e2d',
+  crmRows: 'be939cad6fa1b20ef2149696eedbd12d10a7a98975f315a3cf046e77d4840a9b',
+  partnerCommon: 'd6387498f6984fc0c3a3baa2f349b19462d3ddb2ae379157ea0e0c1f51426a52',
+  partnerKpi: '77afe29c4d7fb168322e3be3d4d85c05563848694b063e9f273bac8c94d554cc',
+  partnerRows: '1afda684e36320e43be9c7566596a1106a9fa5e4d8d9b0838bd34dbc3d3ba7ec',
 });
 
-test('App Sale PROD provenance and exact SQL digests are pinned', () => {
+test('App Sale calculation provenance and canonical App Report SQL digests are pinned', () => {
   assert.equal(APP_SALE_REVENUE_MIRROR_ID, 'APP_SALE_REVENUE_KPI_SQL_0E820022');
   assert.equal(APP_SALE_RELEASE, '0e820022814ef8a7f24d47c082446f3e40b17ebe');
   assert.equal(APP_SALE_SOURCE_SHA256, '3b065456ed1e25b553c0554b97900a0ea2d89a17e9b487bfc5663fad14c220e0');
@@ -87,17 +87,30 @@ test('partner KPI and row projection share one catalog version/date scope', asyn
 test('catalog marker validation is fail-closed for drift, ambiguity and low coverage', () => {
   const state = { versionNo: 31, signature: '31:5000:epoch' };
   const marker = { versionNo: 31, signature: state.signature, pairs: 2000, sourceRows: 2001, unmappedRows: 1, conflictPairs: 0 };
-  assert.deepEqual(validateCatalogMarker({ state, marker, tablePairs: 2000 }), {
+  assert.deepEqual(validateCatalogMarker({ state, marker, canonicalPairs: 2000 }), {
     versionNo: 31, pairs: 2000, sourceRows: 2001, unmappedRows: 1, conflictPairs: 0,
   });
   for (const bad of [
-    { marker: { ...marker, versionNo: 30 }, tablePairs: 2000 },
-    { marker: { ...marker, signature: 'tampered' }, tablePairs: 2000 },
-    { marker: { ...marker, pairs: 999, sourceRows: 999 }, tablePairs: 999 },
-    { marker: { ...marker, conflictPairs: 1 }, tablePairs: 2000 },
-    { marker: { ...marker, unmappedRows: 11 }, tablePairs: 2000 },
-    { marker, tablePairs: 1999 },
+    { marker: { ...marker, versionNo: 30 }, canonicalPairs: 2000 },
+    { marker: { ...marker, signature: 'tampered' }, canonicalPairs: 2000 },
+    { marker: { ...marker, pairs: 999, sourceRows: 999 }, canonicalPairs: 999 },
+    { marker: { ...marker, conflictPairs: 1 }, canonicalPairs: 2000 },
+    { marker: { ...marker, unmappedRows: 11 }, canonicalPairs: 2000 },
+    { marker, canonicalPairs: 1999 },
   ]) assert.equal(validateCatalogMarker({ state, ...bad }), null);
+});
+
+test('employee mapping and marker guard use canonical unit/QLNB ownership', () => {
+  for (const sql of [CRM_ROWS_SQL, PARTNER_KPI_SQL, PARTNER_ROWS_SQL]) {
+    assert.match(sql, /FROM unit_qlnb_employees m/);
+    assert.doesNotMatch(sql, /FROM unit_product_employees/);
+    const catalog = sql.match(/nv_catalog AS \(([\s\S]*?)\n\)/)?.[1] || '';
+    assert.match(catalog, /COUNT\(DISTINCT e\.code\)/);
+    assert.doesNotMatch(catalog, /JOIN products/);
+  }
+  const source = require('fs').readFileSync(require.resolve('../src/appSaleRevenueMirror'), 'utf8');
+  assert.match(source, /COUNT\(DISTINCT \(unit_id,UPPER\(BTRIM\(qlnb_code\)\)\)\)::int pairs[\s\S]*FROM unit_qlnb_employees/);
+  assert.doesNotMatch(source, /SELECT COUNT\(\*\)::int pairs FROM unit_product_employees/);
 });
 
 test('transition evidence digest binds App Sale provenance, SQL, date axes and full partner KPI', () => {

@@ -1,3 +1,9 @@
+### 2026-08-19 — Canonical unit/QLNB employee mapping for revenue
+
+- Revenue attribution now reads employee ownership directly from `unit_qlnb_employees`; it no longer projects through `products`, which silently omitted canonical unit/QLNB pairs without a product row.
+- The fail-closed catalog guard now counts distinct canonical `(unit_id, normalized qlnb_code)` pairs, matching the live marker definition. All existing marker signature, coverage, unmapped and conflict checks remain unchanged.
+- Read-only shadow comparison before the change proved the canonical set equals the legacy projection plus exactly 23 known pairs, with no legacy-only rows; no data, marker or sync operation was performed.
+
 ### 2026-08-18 16:55 — Doanh thu ALL fail-closed và deadline test tất định
 
 - Thiếu snapshot doanh thu toàn đội thì backend giữ `null` xuyên suốt, UI hiện “Chưa lấy được doanh thu toàn đội”; cấm lùi về cộng từ tập report chi phí có thể thiếu NV.
