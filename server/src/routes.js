@@ -798,6 +798,20 @@ router.get('/auth/mode', (req, res) => res.json({
   demo: auth.demoAllowed(),
   telegram: auth.telegramConfigured(),
   trustedDeviceSso: auth.trustedDeviceSsoConfigured(),
+  passkey: auth.passkeyStatus().available,
+}));
+
+router.post('/auth/passkey/register/options', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  res.json(await auth.passkeyRegistrationOptions(req.session, loginCtx(req)));
+}));
+router.post('/auth/passkey/register/verify', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  res.json(await auth.passkeyVerifyRegistration(req.session, req.body.response, loginCtx(req)));
+}));
+router.post('/auth/passkey/login/options', asyncJsonRoute(async (_req, res) => {
+  res.json(await auth.passkeyAuthenticationOptions());
+}));
+router.post('/auth/passkey/login/verify', asyncJsonRoute(async (req, res) => {
+  res.json(await auth.passkeyVerifyAuthentication(req.body.attemptId, req.body.response, loginCtx(req)));
 }));
 
 // --- Đăng nhập THẬT (chỉ chạy khi cấu hình env OTP/SSO) ---
