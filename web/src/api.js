@@ -266,7 +266,23 @@ export async function trustedDeviceLogin(phone) {
   });
 }
 
+export async function passkeyLogin() {
+  const pending = await req('POST', '/auth/passkey/login/options', {});
+  const { startAuthentication } = await import('@simplewebauthn/browser');
+  const response = await startAuthentication({ optionsJSON: pending.options });
+  return req('POST', '/auth/passkey/login/verify', { attemptId: pending.attemptId, response });
+}
+
+export async function registerPasskey() {
+  const options = await req('POST', '/auth/passkey/register/options', {});
+  const { startRegistration } = await import('@simplewebauthn/browser');
+  const response = await startRegistration({ optionsJSON: options });
+  return req('POST', '/auth/passkey/register/verify', { response });
+}
+
 export const api = {
+  passkeyLogin,
+  registerPasskey,
   // Màn "Chưa đồng bộ" — chỉ đọc, danh mục dòng bị loại + lý do.
   syncExceptions: (ky, { freshKey = null } = {}) => req(
     'GET',

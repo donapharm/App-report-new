@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, getLastPhone, setToken } from '../api.js';
+import { api, getLastPhone, passkeyLogin, setToken } from '../api.js';
 import { roleLabel } from '../util.js';
 import Logo from '../logo.jsx';
 import { OfficialZaloQr } from '../components.jsx';
@@ -146,6 +146,14 @@ export default function Login({ onLogin }) {
     catch (e) { setErr(e.message); setBusy(false); }
   }
 
+  async function doPasskeyLogin() {
+    setBusy(true); setErr('');
+    try { const r = await passkeyLogin(); await finish(r.token); }
+    catch (e) {
+      if (e?.name !== 'NotAllowedError') setErr(e.message || 'Không xác minh được Face ID/Passkey.');
+    } finally { setBusy(false); }
+  }
+
   /* ---------- OTP ---------- */
   async function sendOtp() {
     const p = phone.trim();
@@ -217,6 +225,18 @@ export default function Login({ onLogin }) {
                       aria-pressed={channel === 'telegram'} onClick={() => pickChannel('telegram')}>
                 <b>✈️ Telegram</b><small>Vào bằng chính tài khoản Telegram đang mở</small>
               </button>
+            </div>
+          )}
+
+          {mode.passkey && (
+            <div className="card" style={cardStyle}>
+              <div style={{ fontSize: 13, opacity: .92, marginBottom: 8 }}><b>Face ID / Passkey của CEO</b></div>
+              <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={doPasskeyLogin}>
+                {busy ? 'Đang xác minh…' : 'Đăng nhập bằng Face ID / Passkey'}
+              </button>
+              <div style={{ fontSize: 11.5, opacity: .82, marginTop: 9, lineHeight: 1.45 }}>
+                Chỉ Passkey đã đăng ký bởi CEO mới dùng được. OTP và Telegram vẫn là cách dự phòng.
+              </div>
             </div>
           )}
 

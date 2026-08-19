@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { api, forgetLastPhone, getLastPhone, getToken, recoverAfterMeRejection, rememberLastPhone, setAuthActor, setToken } from './api.js';
+import { api, forgetLastPhone, getLastPhone, getToken, recoverAfterMeRejection, registerPasskey, rememberLastPhone, setAuthActor, setToken } from './api.js';
 import { roleLabel } from './util.js';
 import { isTabAllowed, resolveAllowedTab } from './tabAccess.js';
 import { useIsDesktop } from './hooks.js';
@@ -110,6 +110,7 @@ export default function App() {
   const [mobileMenuQuery, setMobileMenuQuery] = useState('');
   const [headerReloadBusy, setHeaderReloadBusy] = useState(false);
   const [fallbackReloadTick, setFallbackReloadTick] = useState(0);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const desktop = useIsDesktop();
   const reloadNoRequestRef = useRef(null);
   const reloadMaxRef = useRef(null);
@@ -326,6 +327,15 @@ export default function App() {
     setToken(null); forgetLastPhone(); setMe(null); setTab('overview'); setTabStack([]);
     try { localStorage.removeItem('rpt_tab'); } catch { /* ignore */ }
   };
+  const enrollPasskey = async () => {
+    setPasskeyBusy(true);
+    try {
+      await registerPasskey();
+      window.alert('Đã đăng ký Face ID/Passkey cho CEO. OTP và Telegram vẫn được giữ làm dự phòng.');
+    } catch (error) {
+      if (error?.name !== 'NotAllowedError') window.alert(error?.message || 'Không đăng ký được Face ID/Passkey.');
+    } finally { setPasskeyBusy(false); }
+  };
   // Backend chốt ai là CEO (`/me` trả `is_ceo`). Frontend KHÔNG tự đoán từ chuỗi role:
   // tài khoản CEO thật trên PROD có role 'admin', đoán bằng role là giấu mất chức năng.
   const tabs = TABS.filter((item) => isTabAllowed(item, me)).map((t) => (
@@ -404,6 +414,7 @@ export default function App() {
               <div className="nm">{me.name}</div>
               <div className="rl">{roleLabel(me.role)}</div>
             </div>
+            {me.is_ceo && <button className="logout" disabled={passkeyBusy} onClick={enrollPasskey}>{passkeyBusy ? 'Đang tạo…' : 'Face ID'}</button>}
             <button className="logout" onClick={logout}>Thoát</button>
           </div>
         </aside>
@@ -452,6 +463,7 @@ export default function App() {
             {!revenueOnly && <PrivacyEyeButton />}
             <RefreshButton loading={headerReloadBusy} onClick={triggerHeaderReload} />
             <HomeButton />
+            {me.is_ceo && <button className="logout" disabled={passkeyBusy} onClick={enrollPasskey}>{passkeyBusy ? 'Đang tạo…' : 'Face ID'}</button>}
             <button className="logout" onClick={logout}>Đăng xuất</button>
           </div>
         </div>

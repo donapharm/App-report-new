@@ -14,6 +14,7 @@ const persist = require('./persist');
 const accessPolicy = require('./accessPolicy');
 const { deviceIdHash, deviceFingerprint } = require('./trustedDevice');
 const trustedDeviceSso = require('./trustedDeviceSso');
+const passkeyAuth = require('./passkeyAuth');
 
 const SESSION_IDLE_DAYS = Math.max(1, Number(process.env.SESSION_IDLE_DAYS || 7) || 7);
 const SESSION_IDLE_MS = SESSION_IDLE_DAYS * 24 * 60 * 60 * 1000; // rolling idle TTL
@@ -562,6 +563,31 @@ async function verifySso(ssoToken, opts = {}) {
   return user ? { token: issueToken(user, { ...opts, method: 'sso' }), user } : null;
 }
 
+async function passkeyRegistrationOptions(session, opts = {}) {
+  if (!isCeoActor(session)) throw Object.assign(new Error('Chỉ CEO được đăng ký Passkey.'), { status: 403, code: 'CEO_ONLY' });
+  return passkeyAuth.registrationOptions(session, opts);
+}
+
+async function passkeyVerifyRegistration(session, response, opts = {}) {
+  if (!isCeoActor(session)) throw Object.assign(new Error('Chỉ CEO được đăng ký Passkey.'), { status: 403, code: 'CEO_ONLY' });
+  const result = await passkeyAuth.verifyRegistration(session, response, opts);
+  logAudit('passkey_registered', { emp_code: 'CEO', device: opts.deviceId ? deviceIdHash(opts.deviceId) : null });
+  return result;
+}
+
+async function passkeyAuthenticationOptions() {
+  return passkeyAuth.authenticationOptions();
+}
+
+async function passkeyVerifyAuthentication(attemptId, response, opts = {}) {
+  const result = await passkeyAuth.verifyAuthentication(attemptId, response);
+  const user = store.findUserByCode(result.emp_code);
+  if (!user || !isCeoActor(user) || accessPolicy.isLoginBlocked(user.emp_code)) {
+    throw Object.assign(new Error('Tài khoản CEO không khả dụng.'), { status: 403, code: 'CEO_ACCESS_REVOKED' });
+  }
+  return { token: issueToken(user, { ...opts, method: 'passkey' }), user: pub(user) };
+}
+
 /* ===================== ĐĂNG NHẬP TELEGRAM (chính) ===================== */
 const TG_SECRET = process.env.TELEGRAM_BOT_SECRET || '';
 const TG_BOT = process.env.TELEGRAM_BOT_USERNAME || '';
@@ -856,6 +882,8 @@ module.exports = {
   canReadAllRevenue: accessPolicy.canReadAllRevenue,
   canReadAllCst: accessPolicy.canReadAllCst,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
+  passkeyRegistrationOptions, passkeyVerifyRegistration, passkeyAuthenticationOptions, passkeyVerifyAuthentication,
+  passkeyStatus: passkeyAuth.status,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm,
   // Đủ điều kiện khi CÓ ÍT NHẤT MỘT bot cấu hình đủ (username + secret) và app có

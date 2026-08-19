@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@donapharm/dona-table-cell-tools": "file:vendor/dona-table-cell-tools/1.0.1",
+    "@simplewebauthn/browser": "^13.2.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^3.9.1"
