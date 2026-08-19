@@ -164,3 +164,51 @@ test('log khởi động warm phải nói ĐỦ LÝ DO, không chỉ kết quả
     assert.match(block, new RegExp(field), `log phải in ${field} để chẩn được ngay tại chỗ`);
   }
 });
+
+
+test('kho rỗng lúc khởi động KHÔNG được làm mất kỳ liền trước', () => {
+  // Sự cố 19/08/2026 (lần 2): vòng warm chạy ngay khi tiến trình lên, store nạp lười nên
+  // periodKys() trả [] ⇒ danh sách warm chỉ còn kỳ hiện tại (suy từ đồng hồ) và T07 không
+  // bao giờ được hâm. Nay phải suy kỳ trước bằng số học thay vì bỏ trống.
+  const originalLatestKy = store.latestKy;
+  const originalCurrentKyByDate = store.currentKyByDate;
+  const originalPeriodKys = store.periodKys;
+  try {
+    store.latestKy = () => '08.2026';
+    store.currentKyByDate = () => '08.2026';
+
+    store.periodKys = () => [];
+    assert.deepEqual(router.employeeCostWarmKyList(), ['08.2026', '07.2026'],
+      'kho RỖNG ⇒ vẫn phải suy ra kỳ liền trước');
+
+    store.periodKys = () => { throw new Error('store chưa nạp'); };
+    assert.deepEqual(router.employeeCostWarmKyList(), ['08.2026', '07.2026'],
+      'đọc kho LỖI ⇒ vẫn phải suy ra kỳ liền trước, không nuốt im lặng rồi bỏ trống');
+
+    // Bắc cầu sang năm khi phải suy bằng số học.
+    store.currentKyByDate = () => '01.2026';
+    store.periodKys = () => [];
+    assert.deepEqual(router.employeeCostWarmKyList(), ['01.2026', '12.2025']);
+
+    // Kho CÓ dữ liệu thì ưu tiên kho, kể cả khi có tháng khuyết (07 không tồn tại).
+    store.currentKyByDate = () => '08.2026';
+    store.periodKys = () => ['05.2026', '06.2026', '08.2026'];
+    assert.deepEqual(router.employeeCostWarmKyList(), ['08.2026', '06.2026'],
+      'có kho thì theo kho, không nhảy vào tháng khuyết');
+  } finally {
+    store.latestKy = originalLatestKy;
+    store.currentKyByDate = originalCurrentKyByDate;
+    store.periodKys = originalPeriodKys;
+  }
+});
+
+test('log khởi động phải phân biệt kho RỖNG với đọc kho LỖI', () => {
+  const source = fs.readFileSync(require.resolve('../src/routes.js'), 'utf8');
+  const at = source.indexOf('ALL cache warm loop started');
+  const block = source.slice(at, at + 600);
+  assert.match(block, /knownPeriodsError/,
+    'phải in knownPeriodsError, nếu không thì kho rỗng và kho lỗi trông giống hệt nhau');
+  const helper = source.slice(source.indexOf('function employeeCostKnownPeriods'));
+  assert.match(helper.slice(0, 400), /catch \(error\)/,
+    'cấm nuốt lỗi bằng catch trống — lần trước mất cả buổi vì đúng chỗ này');
+});

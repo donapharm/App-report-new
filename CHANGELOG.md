@@ -1,3 +1,13 @@
+### 2026-08-19 — Kho rỗng lúc khởi động không được làm mất kỳ liền trước khỏi warm
+
+- Sự cố live (lần 2): sau khi vá biến môi trường, log đã đúng `prevPeriods=1, prevPeriodsSource=default`, nhưng `knownPeriods=[]` và danh sách warm vẫn chỉ `['08.2026']`. T07 tiếp tục nguội.
+- Gốc: vòng warm khởi động ngay khi tiến trình lên, còn `store` nạp danh mục/slot theo kiểu lười, nên `store.periodKys()` trả `[]` tại thời điểm đó. Kỳ hiện tại vẫn có vì nó suy từ ĐỒNG HỒ (`currentKyByDate`), còn kỳ liền trước lấy từ kho nên mất. Bản trước còn nuốt lỗi bằng `catch {}` nên không phân biệt được "kho rỗng" với "đọc kho lỗi".
+- Nay: kho trả rỗng (hoặc đọc lỗi) ⇒ suy kỳ liền trước bằng SỐ HỌC trên chuỗi `MM.YYYY` (`previousKyValue`, bắc cầu năm 01.2026→12.2025, không dựng `Date` nên không dính bẫy múi giờ). Kho trả có dữ liệu ⇒ tin kho tuyệt đối, không bịa kỳ không tồn tại, vẫn bỏ qua tháng khuyết như cũ.
+- Phân biệt được hai trạng thái vì kho đã nạp thì luôn có ít nhất một kỳ. Hâm nhầm một kỳ rỗng tốn ~0,1 giây; bỏ sót kỳ đang cần xem tốn cả ngày.
+- `employeeCostKnownPeriods()` tách riêng và trả kèm `error`; log khởi động thêm `knownPeriodsError` để lần sau nhìn một dòng là biết kho rỗng thật hay đọc kho hỏng.
+- Test: khoá cả bốn tình huống (kho rỗng · đọc kho ném lỗi · bắc cầu năm khi phải suy số học · kho có dữ liệu thì theo kho và không nhảy vào tháng khuyết), cấm `catch` trống trong hàm đọc kho, bắt log in `knownPeriodsError`. Chạy `node --test test/*.test.js`: 1435/1442 pass; 7 ca đỏ còn lại là export PDF thiếu `pdfinfo` trên máy chạy test, đỏ sẵn từ trước.
+- Chưa deploy. Dựng trên `e0f3935`.
+
 ### 2026-08-19 — Biến tắt warm kỳ trước không được tự tắt khi đặt rỗng
 
 - Sự cố live: sau cutover `98c83ed`, log chỉ in `periods: ['08.2026']` — kỳ trước không hề được xếp vào danh sách hâm, nên T07 vẫn nguội và dự đoán "chờ ~70 giây sẽ thấy T07 warmed" bị bác.

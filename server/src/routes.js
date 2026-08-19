@@ -2308,21 +2308,64 @@ function kyOrderValue(ky) {
 // Danh sách kỳ cần hâm: kỳ hiện tại + tối đa N kỳ CÓ THẬT liền trước.
 // Lấy kỳ trước từ store.periodKys() (kỳ có dữ liệu thật) thay vì trừ tháng số học,
 // để không đi hâm một kỳ rỗng khi công ty mới dùng app hoặc khi có tháng khuyết.
+// Kỳ liền trước, tính THUẦN TRÊN CHUỖI "MM.YYYY" — không dựng Date nên không dính
+// bẫy múi giờ (CLAUDE.md: nghiệp vụ chạy GMT+7). Bắc cầu năm: 01.2026 -> 12.2025.
+function previousKyValue(ky) {
+  const match = /^(\d{2})\.(\d{4})$/.exec(String(ky || '').trim());
+  if (!match) return '';
+  const month = Number(match[1]);
+  const year = Number(match[2]);
+  if (!(month >= 1 && month <= 12) || !(year > 0)) return '';
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  return `${String(prevMonth).padStart(2, '0')}.${prevYear}`;
+}
+
+// ‼ ĐỌC KHO CÓ THỂ RỖNG LÚC KHỞI ĐỘNG — ĐÃ CẮN LẦN THỨ HAI (19/08/2026).
+// Vòng warm chạy ngay khi tiến trình lên, còn store nạp danh mục/slot theo kiểu lười.
+// Bản trước lấy kỳ trước TỪ store.periodKys(): lúc khởi động nó trả [] nên danh sách warm
+// chỉ còn ['08.2026'] (kỳ hiện tại suy từ ĐỒNG HỒ nên vẫn có), kỳ T07 không bao giờ được
+// hâm, và log cũ chỉ nói "thiếu" chứ không nói "vì kho rỗng".
+// Nay: kho có dữ liệu thì DÙNG KHO (chính xác nhất, bỏ qua tháng khuyết); kho chưa sẵn
+// sàng thì SUY BẰNG SỐ HỌC thay vì bỏ trống. Hâm nhầm một kỳ rỗng chỉ tốn ~0,1 giây;
+// bỏ sót kỳ Sếp hay xem thì tốn cả ngày.
 function employeeCostWarmKyList() {
   const current = currentWarmKy();
   const list = current ? [current] : [];
   if (EMPLOYEE_COST_ALL_WARM_PREV_PERIODS <= 0) return list;
-  let known = [];
-  try { known = typeof store.periodKys === 'function' ? store.periodKys() : []; } catch { known = []; }
+  const limit = 1 + EMPLOYEE_COST_ALL_WARM_PREV_PERIODS;
+  const known = employeeCostKnownPeriods().periods;
+  // Kho trả RỖNG = chưa nạp xong (hoặc đọc lỗi) — KHÔNG phải "hệ thống chỉ có một kỳ".
+  // Phân biệt được vì kho đã nạp thì luôn có ít nhất một kỳ. Rỗng ⇒ suy bằng số học;
+  // có dữ liệu ⇒ tin kho tuyệt đối, không bịa thêm kỳ không tồn tại.
+  if (known.length === 0) {
+    let cursor = current;
+    while (list.length < limit) {
+      cursor = previousKyValue(cursor);
+      if (!cursor || list.includes(cursor)) break;
+      list.push(cursor);
+    }
+    return list;
+  }
   const currentOrder = kyOrderValue(current);
-  const older = (Array.isArray(known) ? known : [])
+  const older = known
     .filter((ky) => kyOrderValue(ky) > 0 && (!currentOrder || kyOrderValue(ky) < currentOrder))
     .sort((a, b) => kyOrderValue(b) - kyOrderValue(a));
   for (const ky of older) {
-    if (list.length >= 1 + EMPLOYEE_COST_ALL_WARM_PREV_PERIODS) break;
+    if (list.length >= limit) break;
     if (!list.includes(ky)) list.push(ky);
   }
   return list;
+}
+
+// Tách riêng để log nói được LÝ DO: kho rỗng thật, hay đọc kho bị lỗi.
+function employeeCostKnownPeriods() {
+  try {
+    const periods = typeof store.periodKys === 'function' ? store.periodKys() : [];
+    return { periods: Array.isArray(periods) ? periods : [], error: '' };
+  } catch (error) {
+    return { periods: [], error: String(error?.message || 'unknown') };
+  }
 }
 // ‼ PHẢI TUẦN TỰ, KHÔNG ĐƯỢC BẮN SONG SONG.
 // warmEmployeeCostAllCache() có chốt toàn cục employeeCostWarmActive và lần gọi thứ
@@ -2387,7 +2430,8 @@ function startEmployeeCostAllWarmLoop() {
     periods: employeeCostWarmKyList(),
     prevPeriods: EMPLOYEE_COST_ALL_WARM_PREV_PERIODS,
     prevPeriodsSource: EMPLOYEE_COST_ALL_WARM_PREV_PERIODS_RESOLVED.source,
-    knownPeriods: (() => { try { return store.periodKys(); } catch { return null; } })(),
+    knownPeriods: employeeCostKnownPeriods().periods,
+    knownPeriodsError: employeeCostKnownPeriods().error,
   });
   return employeeCostAllWarmTimer;
 }
