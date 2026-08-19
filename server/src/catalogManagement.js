@@ -1136,7 +1136,43 @@ function diagnostics() {
   return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, periodLkg: catalogPeriodLkg.diagnostics(), phase1NoCutover: true };
 }
 
+
+/* ── PHÉP CHIẾU CATALOG CHO EMPLOYEE-COST ─────────────────────────────────────
+ * ‼ MỘT NGUỒN DUY NHẤT cho danh sách trường được giữ khi chiếu catalog xuống
+ * worker. Sự cố 20/08/2026: worker tự chép tay danh sách {c5,c7,c10,c16} nên
+ * BỎ RƠI c25/uom — 29/2.087 dòng T07 mất đơn vị tính, và mọi chỉ báo vẫn xanh.
+ * enrichWithRevenue (employeeCost.js) còn đọc từ catalogRow cả route, nhà thầu,
+ * hàm lượng, giá thầu — tức lỗi tiềm ẩn RỘNG HƠN một cột C25: chỗ nào revenueRow
+ * không có giá trị là chỗ đó âm thầm trống theo.
+ * Luật: danh sách này phải PHỦ MỌI alias mà enrichWithRevenue đọc từ catalogRow.
+ * Ca kiểm employeeCostCatalogProjection.test.js quét employeeCost.js và đỏ nếu
+ * xuất hiện alias mới chưa có ở đây — thêm alias vào enrich thì PHẢI thêm vào đây. */
+const EMPLOYEE_COST_CATALOG_PROJECTION_KEYS = Object.freeze([
+  // khoá ghép (productCodeOf / unitCodeOf / productNameOf)
+  'iit_code', 'qlnb_code', 'product_code', 'c5', 'code', 'IIT_CODE', 'QLNB_CODE', 'PRODUCT_CODE',
+  'unit_code', 'c7', 'UNIT_CODE', 'C7', 'DONVI', 'donvi',
+  'product_name', 'c16', 'name', 'ITEM_NAME', 'IIT_NAME', 'PRODUCT_NAME', 'C16', 'NAME',
+  // trường hiển thị enrich đọc từ catalogRow
+  'uom', 'c25', 'UOM', 'C25',
+  'route', 'tuyen', 'ROUTE', 'TUYEN',
+  'contractor_name', 'contractorName', 'CONTRACTOR_NAME',
+  'contractor_code', 'contractor', 'c4', 'CONTRACTOR_CODE', 'C4',
+  'strength', 'ham_luong', 'c17', 'STRENGTH', 'HAM_LUONG', 'C17',
+  'bid_price', 'c31', 'BID_PRICE', 'C31',
+  'c10', 'C10',
+]);
+function projectEmployeeCostCatalogRow(row) {
+  const out = {};
+  if (!row || typeof row !== 'object') return out;
+  for (const key of EMPLOYEE_COST_CATALOG_PROJECTION_KEYS) {
+    if (row[key] !== undefined) out[key] = row[key];
+  }
+  return out;
+}
+
 module.exports = {
+  EMPLOYEE_COST_CATALOG_PROJECTION_KEYS,
+  projectEmployeeCostCatalogRow,
   quenLkg,
   /* Xuất ra để ca kiểm gọi THẲNG. `writeCacheForTests` dùng chính đường ghi của app, nên
    * fixture không thể sai hình — bốn ca kiểm vòng trước xanh giả vì tôi tự bịa fixture

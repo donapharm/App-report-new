@@ -1,3 +1,12 @@
+### 2026-08-20 — Phép chiếu catalog cho employee-cost bỏ rơi C25 và các trường hiển thị
+
+- Bot chẩn đúng trên candidate C2: 29/2.087 dòng T07 đổi duy nhất trường C25 (đơn vị tính), rải ở 6 NV. Gốc: `catalogLkgReaderWorker` chiếu tay `{c5,c7,c10,c16}` trong khi `enrichWithRevenue` đọc từ catalogRow cả `uom/c25`, và số dòng hai bản trùng tuyệt đối 2.087/2.087 — tức chỉ Ô bị trống, không dòng nào rơi. (Con số "568 dòng mất" lượt trước là đọc nhầm `match.totalRows` thành tổng dòng; không có dòng nào mất.)
+- Đối chiếu code cho thấy lỗi RỘNG HƠN một cột: enrich còn đọc từ catalogRow cả `route`, `contractor_name/contractor_code`, `strength`, `bid_price` — chỗ nào revenueRow không có giá trị là ô đó âm thầm trống theo. 29 dòng C25 chỉ là phần lộ ra.
+- Sửa: danh sách trường được chiếu nay sống MỘT nơi — `catalogManagement.EMPLOYEE_COST_CATALOG_PROJECTION_KEYS` + `projectEmployeeCostCatalogRow()` — phủ đủ mọi alias mà `productCodeOf`/`unitCodeOf`/`productNameOf` và enrich đọc. Worker gọi hàm chung, CẤM liệt trường bằng tay (có test khoá cấu trúc).
+- Test khoá 5 lớp: chiếu giữ đủ trường hiển thị và loại trường lạ · máy quét alias — thêm alias vào enrich mà quên thêm vào danh sách chiếu là đỏ ngay · khoá ghép sống sót qua chiếu · worker phải dùng hàm chung · tái hiện đúng vụ 29 dòng (revenueRow không có uom ⇒ C25 phải tới từ catalog đã chiếu, phải bằng catalog đầy đủ).
+- Chạy `node --test test/*.test.js`: 1452/1459 pass; 7 ca đỏ còn lại là export PDF thiếu `pdfinfo` trên máy chạy test, đỏ sẵn từ trước.
+- Chưa deploy. Dựng trên `8296012` (nhánh C2).
+
 ### 2026-08-19 — ALL lạnh không được chặn health hoặc kích watchdog restart
 
 - Baseline cô lập: request ALL T08 lạnh trả 503 sau 43,100 giây; `/api/health` trượt 20/23 lần. CPU profile xác định các khối đồng bộ lớn gồm đọc/parse/policy catalog 406 MB (~13,03 giây), active-slot doanh thu (~7,13 giây), snapshot tỷ lệ (~4,32 giây) và GC (~5,52 giây).

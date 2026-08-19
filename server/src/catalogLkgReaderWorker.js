@@ -11,13 +11,13 @@ try { os.setPriority(0, 19); } catch { /* best effort; correctness không phụ 
 process.on('message', ({ id, period, projection }) => {
   try {
     const snapshot = catalogManagement.readCacheForTests(period);
+    // ‼ KHÔNG chép tay danh sách trường ở đây. Bản trước tự liệt {c5,c7,c10,c16}
+    // nên bỏ rơi c25/uom — 29 dòng T07 mất đơn vị tính mà mọi chỉ báo vẫn xanh.
+    // Danh sách sống ở catalogManagement.EMPLOYEE_COST_CATALOG_PROJECTION_KEYS,
+    // có ca kiểm quét alias giữ đồng bộ với enrichWithRevenue.
     const value = projection === 'employee-cost-catalog'
-      ? (snapshot ? (snapshot.catalog || snapshot.rows || []).map((row) => ({
-        c5: row.c5,
-        c7: row.c7,
-        c10: row.c10,
-        c16: row.c16,
-      })) : null)
+      ? (snapshot ? (snapshot.catalog || snapshot.rows || [])
+        .map(catalogManagement.projectEmployeeCostCatalogRow) : null)
       : projection === 'catalog'
         ? (snapshot ? (snapshot.catalog || snapshot.rows || []) : null)
       : snapshot;
