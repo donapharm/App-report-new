@@ -23,6 +23,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const routes = require('./routes');
+const eventLoopMonitor = require('./eventLoopMonitor');
 const revenueRefresh = require('./revenueRefresh');
 const deckScheduler = require('./report/deckScheduler');
 const releaseIdentity = require('./releaseIdentity').runtimeIdentity();
@@ -89,5 +90,8 @@ app.listen(PORT, HOST, () => {
   deckScheduler.start();
   // Giữ cache "Chi phí · Tất cả NV" luôn nóng cho kỳ hiện tại (warm định kỳ),
   // để CEO/admin không trúng lần dựng lạnh sau restart/hết TTL.
+  // Đo nghẽn vòng lặp sự kiện. Bật TRƯỚC vòng warm để bắt được cả cú chặn lúc khởi
+  // động — đúng khoảng thời gian watchdog hay bắn app (sự cố 19/08/2026, 11 lần restart).
+  eventLoopMonitor.start();
   if (typeof routes.startEmployeeCostAllWarmLoop === 'function') routes.startEmployeeCostAllWarmLoop();
 });
