@@ -382,10 +382,15 @@ test('KPI tile metadata stays App Report-owned when the upstream has no columns'
     }],
   };
   const merged = table.mergeEmployeeReports([emptyReport], [{ emp_code: 'DN001', name: 'DN001' }]);
-  assert.deepEqual(
-    merged.periods[0].template.columns,
-    [...Object.keys(enriched.template.costLabels), ...enriched.template.viewOnlyColumns],
-  );
+  // Bố cục ALL = bố cục ĐẦY ĐỦ của NV, giữ nguyên thứ tự. Trước 19/08/2026 chỗ này chỉ
+  // nhận tập cột chi phí, nên bảng ALL rụng hết cột nhận dạng và cột doanh thu.
+  assert.deepEqual(merged.periods[0].template.columns, enriched.template.columns);
+  for (const key of [...Object.keys(enriched.template.costLabels), ...enriched.template.viewOnlyColumns]) {
+    assert.ok(merged.periods[0].template.columns.includes(key),
+      `hợp đồng ô KPI vẫn phải còn cột "${key}" trong bố cục ALL`);
+  }
+  assert.ok(merged.periods[0].template.columns.includes('revenueBeforeVat'),
+    'bố cục ALL phải còn cột doanh thu — đây là thứ đã mất và CEO phát hiện');
   assert.deepEqual(merged.periods[0].template.costLabels, enriched.template.costLabels);
   assert.deepEqual(merged.periods[0].template.viewOnlyColumns, enriched.template.viewOnlyColumns);
   assert.deepEqual(merged.periods[0].template.viewOnlyLabels, enriched.template.viewOnlyLabels);
@@ -406,4 +411,58 @@ test('routes hard-lock ALL to CEO/admin for view and export', () => {
   assert.match(source, /scope: \{ empCode \}/);
   assert.match(source, /resolveTargets: targetAdmin\.resolveTargets/);
   assert.match(source, /employeeBonus\.buildBonusSummary\(bonusKpi/);
+});
+
+
+test('bố cục màn ALL phải giữ ĐỦ cột nhận dạng và cột doanh thu, không chỉ cột tỷ lệ', () => {
+  // Sự cố 19/08/2026 (CEO chụp màn hình): bảng ALL chỉ còn STT · Nhân viên · C36 · C41 ·
+  // C43 · C44 · C45. Gốc: template.columns của ALL lấy từ danh sách đã lọc /c33-c46/ nên
+  // rụng hết date/orderCode/c7/c16/quantity và rụng luôn revenueBeforeVat — tức mất
+  // "chi tiết doanh thu". Web dùng template.columns làm BỐ CỤC và bố cục GHI ĐÈ mặc định.
+  const FULL = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength',
+    'c25', 'bidPrice', 'quantity', 'revenueBeforeVat', 'c36', 'c41', 'c43', 'c44', 'c45',
+    'rowMonthlyTotal', 'note'];
+  const PART = ['date', 'orderCode', 'route', 'c7', 'contractorName', 'c5', 'c16', 'strength',
+    'c25', 'bidPrice', 'quantity', 'revenueBeforeVat', 'c36', 'rowMonthlyTotal', 'note'];
+  const build = (empCode, layout, templateKey) => ({
+    empCode, sourceOutcome: 'ok', from: '2026-08', to: '2026-08',
+    periods: [{
+      period: '08.2026',
+      columns: layout.filter((key) => /^c\d+$/.test(key)).map((key) => ({ key, label: key.toUpperCase(), kind: 'percent' })),
+      rows: [{ c16: 'Thuốc A', c7: '001', revenueBeforeVat: 1000, c36: 1 }],
+      template: { key: templateKey, columns: layout, costLabels: {}, viewOnlyColumns: [], viewOnlyLabels: {} },
+      match: { matchedRows: 1, totalRows: 1, rate: 100, threshold: 90, low: false },
+      summary: {},
+    }],
+  });
+  // Cố tình để NV part-time đứng TRƯỚC: bố cục gốc phải là bố cục DÀI NHẤT, không phải
+  // bố cục của người đứng đầu danh sách.
+  const merged = table.mergeEmployeeReports(
+    [build('DN002', PART, 'parttime'), build('DN001', FULL, 'fulltime')],
+    [{ emp_code: 'DN001', name: 'A' }, { emp_code: 'DN002', name: 'B' }],
+    { companyRevenueRowsByPeriod: new Map([['08.2026', [{ emp_code: 'DN001', revenue: 1000 }]]]) },
+  );
+  const layout = merged.periods[0].template.columns;
+  for (const key of ['date', 'orderCode', 'c7', 'c5', 'c16', 'quantity', 'revenueBeforeVat']) {
+    assert.ok(layout.includes(key), `bố cục ALL phải còn cột "${key}"`);
+  }
+  assert.ok(layout.includes('c45'), 'vẫn phải giữ đủ các cột tỷ lệ');
+  assert.deepEqual(layout, FULL, 'giữ NGUYÊN thứ tự bố cục đầy đủ, tổng dòng và ghi chú ở cuối');
+  assert.ok(layout.length > 5, 'không được rơi về đúng 5 cột tỷ lệ như lúc hỏng');
+});
+
+test('không NV nào khai bố cục thì ALL mới lùi về tập cột chi phí', () => {
+  const build = (empCode) => ({
+    empCode, sourceOutcome: 'ok', from: '2026-08', to: '2026-08',
+    periods: [{
+      period: '08.2026',
+      columns: [{ key: 'c36', label: 'C36', kind: 'percent' }],
+      rows: [{ c36: 1 }],
+      template: { key: 'fulltime', columns: [], costLabels: { c36: 'C36' }, viewOnlyColumns: [], viewOnlyLabels: {} },
+      match: { matchedRows: 1, totalRows: 1, rate: 100, threshold: 90, low: false },
+      summary: {},
+    }],
+  });
+  const merged = table.mergeEmployeeReports([build('DN001')], [{ emp_code: 'DN001', name: 'A' }], {});
+  assert.deepEqual(merged.periods[0].template.columns, [], 'nguồn không khai bố cục thì không bịa ra bố cục');
 });

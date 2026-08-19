@@ -1,3 +1,14 @@
+### 2026-08-19 — Bảng "Tất cả nhân viên" mất cột nhận dạng và cột doanh thu
+
+- CEO chụp màn hình T08.2026: bảng chi tiết chỉ còn `STT · Nhân viên · C36 · C41 · C43 · C44 · C45`, phụ đề ghi đúng "5 cột tỷ lệ". Mất sạch ngày, mã đơn hàng, tuyến, mã/tên đơn vị, mã QLNB, tên hàng, hàm lượng, giá thầu, số lượng, **và mất cột `revenueBeforeVat` — tức toàn bộ chi tiết doanh thu**.
+- Gốc trong `employeeCostTable.mergeEmployeeReports`: bố cục cột của mẫu ALL lấy từ `fallbackCostColumns`, mà danh sách đó lọc bằng `/^c(?:3[3-9]|4[0-6])$/` nên chỉ giữ được C33–C46. Web lấy `template.columns` làm BỐ CỤC và bố cục này GHI ĐÈ danh sách mặc định (`requestedLayout.length ? requestedLayout : DEFAULT_PREFIX…`), nên bảng chỉ hiện đúng 5 cột tỷ lệ.
+- Đây là hệ quả còn sót của lần vá trước: chỗ đó vốn hardcode `columns: []`, được sửa thành `fallbackCostColumns` — đủ để bộ ô KPI hiện lại, nhưng vẫn thiếu cột nhận dạng và cột doanh thu.
+- Nay bố cục ALL dựng từ `template.columns` ĐẦY ĐỦ của từng NV: lấy bố cục DÀI NHẤT làm gốc (FULL-TIME phủ PART-TIME) và giữ nguyên thứ tự của nó; cột lạ của mẫu khác chèn vào TRƯỚC `rowMonthlyTotal` để tổng dòng và ghi chú vẫn nằm cuối. Chỉ lùi về tập cột chi phí khi không NV nào khai được bố cục.
+- `costLabels` · `viewOnlyColumns` · `viewOnlyLabels` giữ nguyên như cũ ⇒ hợp đồng bộ ô KPI không đổi.
+- Test: khoá bố cục ALL phải chứa `date · orderCode · c7 · c5 · c16 · quantity · revenueBeforeVat`, phải giữ đúng thứ tự đầy đủ, và không được rơi về 5 cột; khoá trường hợp NV part-time đứng trước vẫn phải lấy bố cục dài nhất; khoá trường hợp nguồn không khai bố cục thì không bịa ra. Ca kiểm hợp đồng ô KPI cũ được siết lại: nay đòi bố cục ALL trùng khớp bố cục NV VÀ vẫn chứa đủ khoá KPI VÀ còn `revenueBeforeVat`.
+- Chạy `node --test test/*.test.js`: 1437/1444 pass; 7 ca đỏ còn lại là export PDF thiếu `pdfinfo` trên máy chạy test, đỏ sẵn từ trước. Web: 497/497 pass.
+- Chưa deploy. Dựng trên `72f6521`.
+
 ### 2026-08-19 — Kho rỗng lúc khởi động không được làm mất kỳ liền trước khỏi warm
 
 - Sự cố live (lần 2): sau khi vá biến môi trường, log đã đúng `prevPeriods=1, prevPeriodsSource=default`, nhưng `knownPeriods=[]` và danh sách warm vẫn chỉ `['08.2026']`. T07 tiếp tục nguội.

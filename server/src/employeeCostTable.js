@@ -383,11 +383,37 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
     const fallbackCostColumns = [];
     const fallbackViewOnlyLabels = {};
     const fallbackViewOnlyColumns = [];
+    // ‼ BỐ CỤC CỘT CỦA MÀN "TẤT CẢ NHÂN VIÊN" PHẢI GIỮ ĐỦ CỘT NHẬN DẠNG + DOANH THU.
+    // Sự cố 19/08/2026: bản trước lấy template.columns của ALL từ `fallbackCostColumns`,
+    // mà danh sách đó lọc bằng /^c(3[3-9]|4[0-6])$/ nên CHỈ còn 5 cột tỷ lệ. Web dùng
+    // template.columns làm BỐ CỤC và bố cục này GHI ĐÈ danh sách mặc định, nên bảng chỉ
+    // hiện STT · Nhân viên · C36 · C41 · C43 · C44 · C45 — mất sạch ngày, mã đơn hàng,
+    // đơn vị, mã hàng, số lượng, và mất luôn cột `revenueBeforeVat` (chi tiết doanh thu).
+    // Bố cục phải là bố cục ĐẦY ĐỦ của từng NV, không phải tập con chi phí.
+    const fallbackLayoutColumns = [];
     for (const { period } of blocks) for (const column of period.columns || []) {
       const key = String(column?.key || '').toLowerCase();
       if (!key || BLOCKED.has(key) || columnsByKey.has(key)) continue;
       columnsByKey.set(key, column);
     }
+    // Lấy bố cục DÀI NHẤT làm gốc (FULL-TIME phủ PART-TIME), rồi bổ sung cột lạ của
+    // mẫu khác vào TRƯỚC 'rowMonthlyTotal' để tổng dòng và ghi chú luôn nằm cuối bảng.
+    const layoutCandidates = blocks
+      .map(({ period }) => (Array.isArray(period.template?.columns) ? period.template.columns : []).map(String))
+      .filter((layout) => layout.length > 0)
+      .sort((a, b) => b.length - a.length);
+    const normalizeLayoutKey = (rawKey) => (/^c\d+$/i.test(rawKey) ? rawKey.toLowerCase() : rawKey);
+    layoutCandidates.forEach((layout, index) => {
+      for (const rawKey of layout) {
+        const key = normalizeLayoutKey(rawKey);
+        if (!key || BLOCKED.has(key.toLowerCase()) || fallbackLayoutColumns.includes(key)) continue;
+        // Bố cục GỐC giữ NGUYÊN THỨ TỰ của nó. Chỉ cột lạ của mẫu khác mới chèn vào
+        // trước 'rowMonthlyTotal' để tổng dòng và ghi chú vẫn nằm cuối bảng.
+        const at = index === 0 ? -1 : fallbackLayoutColumns.indexOf('rowMonthlyTotal');
+        if (at < 0) fallbackLayoutColumns.push(key);
+        else fallbackLayoutColumns.splice(at, 0, key);
+      }
+    });
     for (const { period } of blocks) {
       for (const rawKey of Array.isArray(period.template?.columns) ? period.template.columns : []) {
         const key = String(rawKey || '').toLowerCase();
@@ -496,7 +522,11 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
           : [];
       })),
       template: {
-        key: 'all', label: 'TẤT CẢ NHÂN VIÊN', columns: fallbackCostColumns, costLabels: fallbackCostLabels,
+        key: 'all',
+        label: 'TẤT CẢ NHÂN VIÊN',
+        // Bố cục ĐẦY ĐỦ; chỉ lùi về tập chi phí khi không NV nào khai được bố cục.
+        columns: fallbackLayoutColumns.length ? fallbackLayoutColumns : fallbackCostColumns,
+        costLabels: fallbackCostLabels,
         viewOnlyColumns: fallbackViewOnlyColumns, viewOnlyLabels: fallbackViewOnlyLabels,
       },
       match: {
