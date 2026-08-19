@@ -20,21 +20,25 @@ test('employee-cost ALL warm loop warms current period on startup, is idempotent
   const originalEmployeeCostSignature = store.employeeCostDataSignature;
   const originalLatestKy = store.latestKy;
   const originalCurrentKyByDate = store.currentKyByDate;
+  const originalPeriodKys = store.periodKys;
   const originalTargetRoster = store.targetRoster;
   const originalGetForSession = employeeCost.getForSession;
   const originalSnapshot = catalogManagement.getSnapshot;
 
   let builds = 0;
   let warmedFrom = null;
+  const warmedMonths = [];
   store.activeDataSignature = () => 'warmloop-sig';
   store.employeeCostDataSignature = () => 'warmloop-sig';
   store.latestKy = () => '03.2026';
   store.currentKyByDate = () => '03.2026';
+  store.periodKys = () => ['01.2026', '02.2026', '03.2026'];
   store.targetRoster = () => [{ emp_code: 'DN001', name: 'NV 1', role: 'sale', has_target: true }];
   catalogManagement.getSnapshot = async () => ({ rows: [], catalog: [] });
   employeeCost.getForSession = async ({ requestedEmp }, options) => {
     builds += 1;
     warmedFrom = options.from;
+    if (!warmedMonths.includes(options.from)) warmedMonths.push(options.from);
     return employeeCost.emptyRangePayload(requestedEmp, employeeCost.parseMonthRange({ from: options.from, to: options.to }));
   };
   try {
@@ -46,7 +50,12 @@ test('employee-cost ALL warm loop warms current period on startup, is idempotent
     await flush();
     await flush();
     assert.ok(builds > 0, 'startup must warm the ALL cache for the current period');
-    assert.equal(warmedFrom, '2026-03', 'must warm the current active month resolved from latestKy');
+    // ‼ Sự cố 18-19/08/2026: warm chỉ phủ kỳ hiện tại nên kỳ liền trước luôn nguội,
+    // lần mở đầu tiên sau restart chạm trần deadline và rơi mất NV cuối hàng.
+    // Khoá lại: phải hâm CẢ kỳ hiện tại VÀ kỳ liền trước, ĐÚNG THỨ TỰ đó.
+    assert.deepEqual(warmedMonths, ['2026-03', '2026-02'],
+      'warm phải phủ kỳ hiện tại rồi tới kỳ liền trước, tuần tự');
+    assert.equal(warmedFrom, '2026-02', 'kỳ cuối được hâm là kỳ liền trước');
 
     // Idempotent: gọi lại trả cùng timer, không tạo vòng thứ hai.
     const again = router.startEmployeeCostAllWarmLoop();
@@ -64,8 +73,56 @@ test('employee-cost ALL warm loop warms current period on startup, is idempotent
     store.employeeCostDataSignature = originalEmployeeCostSignature;
     store.latestKy = originalLatestKy;
     store.currentKyByDate = originalCurrentKyByDate;
+    store.periodKys = originalPeriodKys;
     store.targetRoster = originalTargetRoster;
     employeeCost.getForSession = originalGetForSession;
     catalogManagement.getSnapshot = originalSnapshot;
   }
+});
+
+
+test('employeeCostWarmKyList: kỳ hiện tại + kỳ liền trước CÓ THẬT, không lấy kỳ rỗng', () => {
+  const originalLatestKy = store.latestKy;
+  const originalCurrentKyByDate = store.currentKyByDate;
+  const originalPeriodKys = store.periodKys;
+  try {
+    assert.equal(typeof router.employeeCostWarmKyList, 'function');
+
+    store.latestKy = () => '08.2026';
+    store.currentKyByDate = () => '08.2026';
+    store.periodKys = () => ['06.2026', '07.2026', '08.2026'];
+    assert.deepEqual(router.employeeCostWarmKyList(), ['08.2026', '07.2026'],
+      'mặc định: kỳ hiện tại + 1 kỳ liền trước');
+
+    // Sang tháng mới mà kỳ đó chưa có dữ liệu: vẫn giữ kỳ hiện tại (hành vi cũ)
+    // và lấy thêm kỳ CÓ THẬT gần nhất, không đi hâm một kỳ không tồn tại.
+    store.latestKy = () => '08.2026';
+    store.currentKyByDate = () => '09.2026';
+    store.periodKys = () => ['07.2026', '08.2026'];
+    assert.deepEqual(router.employeeCostWarmKyList(), ['09.2026', '08.2026']);
+
+    // Chỉ có đúng một kỳ: không bịa ra kỳ trước.
+    store.currentKyByDate = () => '08.2026';
+    store.periodKys = () => ['08.2026'];
+    assert.deepEqual(router.employeeCostWarmKyList(), ['08.2026']);
+
+    // Bắc cầu sang năm: 01.2026 -> 12.2025.
+    store.currentKyByDate = () => '01.2026';
+    store.periodKys = () => ['11.2025', '12.2025', '01.2026'];
+    assert.deepEqual(router.employeeCostWarmKyList(), ['01.2026', '12.2025']);
+  } finally {
+    store.latestKy = originalLatestKy;
+    store.currentKyByDate = originalCurrentKyByDate;
+    store.periodKys = originalPeriodKys;
+  }
+});
+
+test('vòng warm phải hâm TUẦN TỰ — chốt toàn cục bỏ lần gọi chồng, bắn song song là mất kỳ', () => {
+  const source = fs.readFileSync(require.resolve('../src/routes.js'), 'utf8');
+  const sweep = source.slice(source.indexOf('function scheduleEmployeeCostAllWarmSweep'));
+  assert.match(sweep.slice(0, 800), /for \(const ky of employeeCostWarmKyList\(\)\)[\s\S]*?await warmEmployeeCostAllCache\(ky, reason\)/,
+    'phải await từng kỳ trong vòng lặp, không Promise.all/không bắn nhiều setImmediate');
+  const loop = source.slice(source.indexOf('function startEmployeeCostAllWarmLoop'));
+  assert.doesNotMatch(loop.slice(0, 700), /scheduleEmployeeCostAllWarm\(currentWarmKy\(\)/,
+    'vòng định kỳ không được quay lại kiểu hâm một kỳ');
 });

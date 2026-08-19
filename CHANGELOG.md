@@ -1,3 +1,13 @@
+### 2026-08-19 — Hâm sẵn cả kỳ liền trước cho màn "Tất cả nhân viên"
+
+- Vòng warm định kỳ trước đây chỉ phủ kỳ hiện tại, nên kỳ liền trước luôn nguội sau mỗi lần restart/deploy. Lần dựng lạnh màn ALL cho kỳ nguội đo được 25.272 ms và 27.658 ms, vượt trần `EMPLOYEE_COST_ALL_DEADLINE_MS` (25.000 ms) ⇒ hàng đợi bị cắt ⇒ rơi vài NV cuối hàng, mỗi lần một người khác nhau. Đây là gốc của hiện tượng "lúc thiếu lúc đủ nhân viên" mà trước đó bị quy nhầm cho DN024 chậm (đo lại: DN024 chỉ 381 ms và không phải NV chậm nhất).
+- Nay warm phủ kỳ hiện tại + `EMPLOYEE_COST_ALL_WARM_PREV_PERIODS` kỳ liền trước (mặc định 1, chặn trong khoảng 0–3). Danh sách kỳ trước lấy từ `store.periodKys()` — chỉ kỳ CÓ dữ liệu thật, không hâm kỳ rỗng khi có tháng khuyết hoặc vừa sang tháng mới.
+- Warm chạy TUẦN TỰ (`await` từng kỳ). `warmEmployeeCostAllCache` có chốt toàn cục `employeeCostWarmActive` và lần gọi chồng bị BỎ chứ không xếp hàng; bắn hai `setImmediate` song song sẽ làm kỳ thứ hai rơi im lặng — đúng con bug đang chữa. Tuần tự cũng giữ RSS không nhân theo số kỳ vì mỗi lúc chỉ một payload lớn đang dựng.
+- KHÔNG nới trần deadline, KHÔNG tăng số luồng song song: nới trần chỉ đổi rủi ro sang giữ request lâu hơn chứ không chữa gốc.
+- So sánh thứ tự kỳ bằng chuỗi `MM.YYYY` → `YYYYMM`, không dựng `Date`, nên không dính bẫy múi giờ (GMT+7).
+- Test: khoá thứ tự hâm `['2026-03','2026-02']`, khoá danh sách kỳ ở 4 tình huống (bình thường · sang tháng mới chưa có dữ liệu · chỉ một kỳ · bắc cầu sang năm 01.2026→12.2025), và khoá cấu trúc vòng lặp phải `await` tuần tự. Chạy `node --test test/*.test.js`: 1431/1438 pass; 7 ca đỏ còn lại là export PDF thiếu `pdfinfo` (poppler-utils) trên máy chạy test, đỏ sẵn từ trước và không liên quan thay đổi này.
+- Chưa deploy. Bản này build trên `c65a792` và chờ `c65a792` lên PROD trước.
+
 ### 2026-08-19 — Canonical unit/QLNB employee mapping for revenue
 
 - Revenue attribution now reads employee ownership directly from `unit_qlnb_employees`; it no longer projects through `products`, which silently omitted canonical unit/QLNB pairs without a product row.

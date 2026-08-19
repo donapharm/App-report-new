@@ -2274,6 +2274,62 @@ function currentWarmKy() {
     return byDate || store.latestKy();
   } catch { return store.latestKy(); }
 }
+
+// ‼ VÌ SAO WARM PHẢI PHỦ NHIỀU KỲ (sự cố 18-19/08/2026 — "lúc thiếu lúc đủ NV")
+// Trước bản này vòng warm chỉ hâm ĐÚNG kỳ hiện tại. Kỳ liền trước — kỳ CEO mở
+// thường xuyên nhất để đối chiếu — vì thế LUÔN nguội sau mỗi lần restart/deploy.
+// Lần dựng lạnh của màn "Tất cả NV" cho kỳ nguội đã đo được 25.272 ms và 27.658 ms,
+// vượt trần EMPLOYEE_COST_ALL_DEADLINE_MS (25.000 ms) ⇒ hàng đợi bị cắt ⇒ rơi vài
+// NV ở cuối hàng, MỖI LẦN MỘT NGƯỜI KHÁC NHAU. Triệu chứng trông như dữ liệu lỗi
+// ngẫu nhiên nhưng gốc chỉ là cache nguội. Cách chữa đúng là HÂM SẴN kỳ đó, KHÔNG
+// phải nới trần thời gian (nới trần chỉ đổi rủi ro sang giữ request lâu hơn).
+const EMPLOYEE_COST_ALL_WARM_PREV_PERIODS = Math.max(0, Math.min(
+  3, Number(process.env.EMPLOYEE_COST_ALL_WARM_PREV_PERIODS ?? 1) || 0,
+));
+// "MM.YYYY" -> YYYYMM để so sánh thứ tự kỳ. Thuần chuỗi/số, KHÔNG dựng Date nên
+// không dính bẫy múi giờ (CLAUDE.md: nghiệp vụ chạy GMT+7, cấm suy ngày kiểu UTC).
+function kyOrderValue(ky) {
+  const match = /^(\d{2})\.(\d{4})$/.exec(String(ky || '').trim());
+  return match ? (Number(match[2]) * 100) + Number(match[1]) : 0;
+}
+// Danh sách kỳ cần hâm: kỳ hiện tại + tối đa N kỳ CÓ THẬT liền trước.
+// Lấy kỳ trước từ store.periodKys() (kỳ có dữ liệu thật) thay vì trừ tháng số học,
+// để không đi hâm một kỳ rỗng khi công ty mới dùng app hoặc khi có tháng khuyết.
+function employeeCostWarmKyList() {
+  const current = currentWarmKy();
+  const list = current ? [current] : [];
+  if (EMPLOYEE_COST_ALL_WARM_PREV_PERIODS <= 0) return list;
+  let known = [];
+  try { known = typeof store.periodKys === 'function' ? store.periodKys() : []; } catch { known = []; }
+  const currentOrder = kyOrderValue(current);
+  const older = (Array.isArray(known) ? known : [])
+    .filter((ky) => kyOrderValue(ky) > 0 && (!currentOrder || kyOrderValue(ky) < currentOrder))
+    .sort((a, b) => kyOrderValue(b) - kyOrderValue(a));
+  for (const ky of older) {
+    if (list.length >= 1 + EMPLOYEE_COST_ALL_WARM_PREV_PERIODS) break;
+    if (!list.includes(ky)) list.push(ky);
+  }
+  return list;
+}
+// ‼ PHẢI TUẦN TỰ, KHÔNG ĐƯỢC BẮN SONG SONG.
+// warmEmployeeCostAllCache() có chốt toàn cục employeeCostWarmActive và lần gọi thứ
+// hai khi đang bận thì BỊ BỎ (return false), KHÔNG xếp hàng. Nếu gọi hai lần bằng
+// scheduleEmployeeCostAllWarm() thì lần sau rơi im lặng và kỳ trước vẫn nguội —
+// đúng con bug đang chữa. Await từng kỳ nên chốt đã nhả trước khi vào kỳ kế; RSS
+// cũng không nhân lên vì mỗi lúc chỉ một payload lớn đang dựng.
+function scheduleEmployeeCostAllWarmSweep(reason) {
+  if (employeeCostSnapshotEnabled()) return;
+  setImmediate(async () => {
+    for (const ky of employeeCostWarmKyList()) {
+      try {
+        await warmEmployeeCostAllCache(ky, reason);
+      } catch (error) {
+        // Một kỳ hỏng không được chặn kỳ còn lại: log rồi hâm tiếp.
+        console.warn('[employee-cost] ALL cache warm failed', { ky, reason, message: error.message });
+      }
+    }
+  });
+}
 const EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS = Math.max(
   60 * 1000,
   Number(process.env.EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS || 30 * 60 * 1000) || 30 * 60 * 1000,
@@ -2304,19 +2360,23 @@ function startEmployeeCostAllWarmLoop() {
   if (employeeCostSnapshotEnabled()) return null;
   if (employeeCostAllWarmTimer) return employeeCostAllWarmTimer;
   if (String(process.env.EMPLOYEE_COST_ALL_WARM_DISABLED || '') === '1') return null;
-  scheduleEmployeeCostAllWarm(currentWarmKy(), 'startup');
+  scheduleEmployeeCostAllWarmSweep('startup');
   employeeCostAllWarmTimer = setInterval(() => {
-    scheduleEmployeeCostAllWarm(currentWarmKy(), 'interval');
+    scheduleEmployeeCostAllWarmSweep('interval');
   }, EMPLOYEE_COST_ALL_WARM_INTERVAL_MS);
   // unref: timer nền không giữ tiến trình sống (không cản shutdown/test runner).
   if (typeof employeeCostAllWarmTimer.unref === 'function') employeeCostAllWarmTimer.unref();
-  console.log('[employee-cost] ALL cache warm loop started', { intervalMs: EMPLOYEE_COST_ALL_WARM_INTERVAL_MS });
+  console.log('[employee-cost] ALL cache warm loop started', {
+    intervalMs: EMPLOYEE_COST_ALL_WARM_INTERVAL_MS,
+    periods: employeeCostWarmKyList(),
+  });
   return employeeCostAllWarmTimer;
 }
 function stopEmployeeCostAllWarmLoop() {
   if (employeeCostAllWarmTimer) { clearInterval(employeeCostAllWarmTimer); employeeCostAllWarmTimer = null; }
   if (employeeCostSnapshotSyncTimer) { clearInterval(employeeCostSnapshotSyncTimer); employeeCostSnapshotSyncTimer = null; }
 }
+router.employeeCostWarmKyList = employeeCostWarmKyList;
 router.startEmployeeCostAllWarmLoop = startEmployeeCostAllWarmLoop;
 router.startEmployeeCostSnapshotSyncLoop = startEmployeeCostSnapshotSyncLoop;
 router.stopEmployeeCostAllWarmLoop = stopEmployeeCostAllWarmLoop;
