@@ -71,6 +71,33 @@ test('quyền đọc toàn công ty của doanh thu và CST được cấp độ
   }
 });
 
+test('mã CST-only vẫn chịu allowlist điều hướng và mọi method ghi bị từ chối', () => {
+  const cstOnly = 'QA_CST_ONLY_NAV';
+  assert.deepEqual([...policy.RESTRICTED_NAV_EMP_CODES].sort(),
+    [...new Set([...policy.COMPANY_REVENUE_READ_EMP_CODES, ...policy.COMPANY_CST_READ_EMP_CODES])].sort(),
+    'restricted navigation phải phủ hợp của mọi allowlist đọc toàn công ty');
+  policy.COMPANY_CST_READ_EMP_CODES.add(cstOnly);
+  policy.RESTRICTED_NAV_EMP_CODES.add(cstOnly);
+  try {
+    assert.notEqual(policy.REVENUE_ONLY_EMP_CODES, policy.COMPANY_REVENUE_READ_EMP_CODES,
+      'tên tương thích không được là cùng object với allowlist quyền doanh thu');
+    assert.equal(policy.canReadAllRevenue(cstOnly), false);
+    assert.equal(policy.canReadAllCst(cstOnly), true);
+    assert.equal(policy.accessProfileFor(cstOnly), 'revenue_only');
+    assert.equal(policy.isRequestAllowed({ emp_code: cstOnly }, {
+      method: 'GET', path: '/api/employee-cost',
+    }), false);
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
+      assert.equal(policy.isRequestAllowed({ emp_code: cstOnly }, {
+        method, path: '/api/cst',
+      }), false, method);
+    }
+  } finally {
+    policy.COMPANY_CST_READ_EMP_CODES.delete(cstOnly);
+    policy.RESTRICTED_NAV_EMP_CODES.delete(cstOnly);
+  }
+});
+
 test('auth từ chối phát token cho denylist và chặn route ngoài doanh thu của VP018', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reportnew-strict-access-'));
   const oldDir = process.env.AUTH_DATA_DIR;
