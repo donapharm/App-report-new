@@ -25,6 +25,7 @@ const { markLoadedEnvFile } = require('./runtimeDataDir');
 const express = require('express');
 const cors = require('cors');
 const routes = require('./routes');
+const passkeyAuth = require('./passkeyAuth');
 const revenueRefresh = require('./revenueRefresh');
 const deckScheduler = require('./report/deckScheduler');
 const releaseIdentity = require('./releaseIdentity').runtimeIdentity();
@@ -87,6 +88,7 @@ app.get(/^(?!\/api).*/, (req, res, next) => {
 app.listen(PORT, HOST, () => {
   console.log(`✔ App Report API chạy tại http://${HOST}:${PORT}`);
   console.log(`  Health: http://${HOST}:${PORT}/api/health`);
+  console.log(passkeyAuth.startupLogLine());
   revenueRefresh.start();
   deckScheduler.start();
   // Giữ cache "Chi phí · Tất cả NV" luôn nóng cho kỳ hiện tại (warm định kỳ),

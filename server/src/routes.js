@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 const auth = require('./auth');
+const passkeyAuth = require('./passkeyAuth');
 const accessPolicy = require('./accessPolicy');
 const homeAppReportVisibility = require('./homeAppReportVisibility');
 const A = require('./analytics');
@@ -801,16 +802,16 @@ router.get('/auth/mode', (req, res) => res.json({
   passkey: auth.passkeyStatus().available,
 }));
 
-router.post('/auth/passkey/register/options', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+router.post('/auth/passkey/register/options', passkeyAuth.requireTrustedRequestContext, auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
   res.json(await auth.passkeyRegistrationOptions(req.session, loginCtx(req)));
 }));
-router.post('/auth/passkey/register/verify', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+router.post('/auth/passkey/register/verify', passkeyAuth.requireTrustedRequestContext, auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
   res.json(await auth.passkeyVerifyRegistration(req.session, req.body.response, loginCtx(req)));
 }));
-router.post('/auth/passkey/login/options', asyncJsonRoute(async (_req, res) => {
+router.post('/auth/passkey/login/options', passkeyAuth.requireTrustedRequestContext, asyncJsonRoute(async (_req, res) => {
   res.json(await auth.passkeyAuthenticationOptions());
 }));
-router.post('/auth/passkey/login/verify', asyncJsonRoute(async (req, res) => {
+router.post('/auth/passkey/login/verify', passkeyAuth.requireTrustedRequestContext, asyncJsonRoute(async (req, res) => {
   res.json(await auth.passkeyVerifyAuthentication(req.body.attemptId, req.body.response, loginCtx(req)));
 }));
 

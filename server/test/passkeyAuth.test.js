@@ -47,3 +47,46 @@ test('Passkey implementation bounds unauthenticated pending challenges', () => {
   assert.match(source, /MAX_PENDING_CHALLENGES\s*=\s*256/);
   assert.match(source, /while \(store\.size > MAX_PENDING_CHALLENGES\)/);
 });
+
+test('Passkey request context rejects a foreign Host and a foreign Origin', () => {
+  const { dir, passkey } = loadIsolated();
+  try {
+    const allowed = (host, origin) => passkey.requestContextAllowed({
+      headers: { host, origin },
+      get(name) { return this.headers[String(name).toLowerCase()]; },
+    });
+    assert.equal(allowed('report.donapharm.asia', 'https://report.donapharm.asia'), true);
+    assert.equal(allowed('evil.example', 'https://report.donapharm.asia'), false);
+    assert.equal(allowed('report.donapharm.asia', 'https://evil.example'), false);
+    assert.equal(allowed('report.donapharm.asia', ''), false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('Passkey middleware returns 403 before handling a foreign request context', () => {
+  const { dir, passkey } = loadIsolated();
+  try {
+    let nextCalled = false;
+    let responseStatus = 0;
+    let responseBody;
+    const req = {
+      headers: { host: 'foreign.example', origin: 'https://foreign.example' },
+      get(name) { return this.headers[String(name).toLowerCase()]; },
+    };
+    const res = {
+      status(value) { responseStatus = value; return this; },
+      json(value) { responseBody = value; return this; },
+    };
+    passkey.requireTrustedRequestContext(req, res, () => { nextCalled = true; });
+    assert.equal(responseStatus, 403);
+    assert.equal(responseBody.code, 'PASSKEY_REQUEST_ORIGIN_REJECTED');
+    assert.equal(nextCalled, false);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('Passkey startup log exposes only the configured RP domain', () => {
+  const { dir, passkey } = loadIsolated();
+  try {
+    assert.equal(passkey.startupLogLine(), '[passkey] RP domain: report.donapharm.asia');
+    assert.doesNotMatch(passkey.startupLogLine(), /token|secret|password|cookie|otp/i);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

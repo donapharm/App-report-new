@@ -12,6 +12,40 @@ const registrationChallenges = new Map();
 const authenticationChallenges = new Map();
 let webauthnModule;
 
+function normalizedHostname(value) {
+  try {
+    return new URL(`http://${String(value || '').trim()}`).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function requestContextAllowed(req) {
+  const requestHost = normalizedHostname(req?.get?.('host') || req?.headers?.host);
+  const requestOrigin = String(req?.get?.('origin') || req?.headers?.origin || '').trim();
+  return requestHost === RP_ID.toLowerCase() && requestOrigin === ORIGIN;
+}
+
+function requireTrustedRequestContext(req, res, next) {
+  if (requestContextAllowed(req)) return next();
+  return res.status(403).json({
+    error: 'Nguồn yêu cầu Passkey không hợp lệ.',
+    code: 'PASSKEY_REQUEST_ORIGIN_REJECTED',
+  });
+}
+
+function rpDomain() {
+  try {
+    return new URL(ORIGIN).hostname.toLowerCase();
+  } catch {
+    return RP_ID.toLowerCase();
+  }
+}
+
+function startupLogLine() {
+  return `[passkey] RP domain: ${rpDomain()}`;
+}
+
 function webauthn() {
   if (!webauthnModule) webauthnModule = import('@simplewebauthn/server');
   return webauthnModule;
@@ -152,4 +186,13 @@ function status() {
   return { available: loadCredentials().length > 0, credentials: loadCredentials().length };
 }
 
-module.exports = { registrationOptions, verifyRegistration, authenticationOptions, verifyAuthentication, status };
+module.exports = {
+  registrationOptions,
+  verifyRegistration,
+  authenticationOptions,
+  verifyAuthentication,
+  status,
+  requestContextAllowed,
+  requireTrustedRequestContext,
+  startupLogLine,
+};
