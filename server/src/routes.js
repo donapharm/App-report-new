@@ -1798,6 +1798,7 @@ async function employeeCostAllPayload(req, {
         periods: range.months,
         revenueRowsOf: (period) => companyRevenueRowsByPeriod.get(period) || [],
         unavailable: unavailableAll,
+        roster,
         // `mergeEmployeeReports()` chưa có top-level summary ở bước này; lấy đúng
         // tổng từ toàn bộ dòng bảng ALL trước khi transform/phân trang.
         shownRevenue: employeeCostRevenueRecon.sumShownRevenue(merged.periods),

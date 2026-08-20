@@ -19,6 +19,7 @@
  *     Doanh thu kỳ (kho App Report)
  *       = đang hiện trên bảng
  *       + của NV chưa lấy được %
+ *       + dòng của mã NV ngoài roster
  *       + dòng chưa gán được nhân viên
  *
  * Lệch ⇒ `balanced: false` và nêu số lệch. Một phép cân không cân được thì phải nói
@@ -55,13 +56,19 @@ function sumShownRevenue(periods = []) {
  * @param shownRows      toàn bộ dòng bảng trước phân trang; dùng để không cộng lại
  *                       doanh thu fail-closed của NV thiếu nguồn nhưng V4 vẫn giữ dòng
  */
-function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], shownRevenue = null, shownRows } = {}) {
+function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], roster = [], shownRevenue = null, shownRows } = {}) {
   const missingEmps = new Set((Array.isArray(unavailable) ? unavailable : []).map(upper).filter(Boolean));
+  const rosterEmps = new Set((Array.isArray(roster) ? roster : []).map((item) => (
+    upper(typeof item === 'string' ? item : item?.emp_code ?? item?.empCode ?? item?.employeeCode)
+  )).filter(Boolean));
   const shownKnown = Array.isArray(shownRows);
   const shownByEmp = revenueByEmployee(shownRows);
   let total = 0;
   let sourceUnassigned = 0;
   let unassignedRowCount = 0;
+  let outsideRosterAmount = 0;
+  let outsideRosterRows = 0;
+  const outsideRosterCodes = new Set();
   let rowCount = 0;
   const sourceUnavailableByEmp = new Map();
 
@@ -74,6 +81,12 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], show
       // Dòng không gán được NV: nó KHÔNG thuộc sổ của ai nên không bao giờ lên bảng
       // ALL — phải tách riêng, không được trộn vào phần "NV chưa lấy được %".
       if (!emp) { sourceUnassigned += amount; unassignedRowCount += 1; continue; }
+      if (rosterEmps.size > 0 && !rosterEmps.has(emp)) {
+        outsideRosterAmount += amount;
+        outsideRosterRows += 1;
+        outsideRosterCodes.add(emp);
+        continue;
+      }
       if (missingEmps.has(emp)) {
         sourceUnavailableByEmp.set(emp, (sourceUnavailableByEmp.get(emp) || 0) + amount);
       }
@@ -87,7 +100,7 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], show
   )).filter(([, amount]) => amount > 0));
   const byUnavailable = [...unavailableByEmp.values()].reduce((sum, amount) => sum + amount, 0);
   const unassigned = Math.max(0, sourceUnassigned - (shownKnown ? (shownByEmp.get('') || 0) : 0));
-  const accounted = num(shownRevenue) + byUnavailable + unassigned;
+  const accounted = num(shownRevenue) + byUnavailable + unassigned + outsideRosterAmount;
   // Sai số cho phép đúng 1 đồng/kỳ — chỉ để nuốt làm tròn, không phải để giấu lệch.
   const tolerance = Math.max(1, periods.length);
   const gap = shownRevenue == null ? null : Math.round(total - accounted);
@@ -99,6 +112,9 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], show
     missingByUnavailable: Math.round(byUnavailable),
     missingUnassigned: Math.round(unassigned),
     unassignedRowCount,
+    outsideRosterAmount: Math.round(outsideRosterAmount),
+    outsideRosterRows,
+    outsideRosterCodes: [...outsideRosterCodes].sort(),
     unavailableEmployees: [...unavailableByEmp.entries()]
       .map(([empCode, amount]) => ({ empCode, revenue: Math.round(amount) }))
       .sort((a, b) => b.revenue - a.revenue),

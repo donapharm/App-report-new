@@ -206,7 +206,7 @@ test('‼ ALL healthy company revenue survives view-only columns, reconciliation
   merged.revenueRecon = revenueRecon.buildRevenueRecon({
     periods: ['2026-07'],
     revenueRowsOf: () => companyRows,
-    unavailable: [],
+    unavailable: [], roster,
     shownRevenue: revenueRecon.sumShownRevenue(merged.periods),
     shownRows: revenueRecon.shownRowsOf(merged.periods),
   });
@@ -216,6 +216,7 @@ test('‼ ALL healthy company revenue survives view-only columns, reconciliation
   assert.deepEqual(merged.revenueRecon, {
     periods: ['2026-07'], rowCount: 2, total: 20_000_000, shown: 20_000_000,
     missingByUnavailable: 0, missingUnassigned: 0, unassignedRowCount: 0,
+    outsideRosterAmount: 0, outsideRosterRows: 0, outsideRosterCodes: [],
     unavailableEmployees: [], gap: 0, balanced: true,
   });
   assert.equal(transformed.revenueRecon.total, 20_000_000);

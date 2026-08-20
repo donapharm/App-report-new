@@ -7639,3 +7639,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Default sampling is 1/20 requests with a hard cap of 4 comparisons/minute.
 - Record sampled/skipped/matched/error/mismatch counters plus period and differing fields; auto-disable after one mismatch or three consecutive errors.
 - Shadow mode never returns a sidecar payload and never calls or writes DataHub.
+### 2026-08-20 — Doanh thu ngoài roster có vế cân và dòng hiển thị riêng
+
+- `revenueRecon` tách số tiền, số dòng và mã NV ngoài roster thành một vế có tên; bất biến là doanh thu đang hiện + ngoài roster + các vế thiếu đã biết bằng tổng nguồn chính thức.
+- Khoản ngoài roster không được gán cho bất kỳ NV nào, không đi vào `monthlyTotal`, `columnTotals` hoặc subtotal của NV; màn ALL chỉ hiện một dòng cảnh báo riêng cho CEO.
+- Test khóa cả trường hợp có/không có khoản ngoài roster và quét đường tổng để ngăn lần sửa sau cộng nhầm vào tổng của nhân viên.

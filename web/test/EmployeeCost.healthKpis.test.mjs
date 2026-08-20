@@ -42,6 +42,7 @@ test('projection giữ phép cân doanh thu để khối cảnh báo có thể r
     revenueRecon: {
       total: 1000, shown: 700, missingByUnavailable: 200, missingUnassigned: 100, unassignedRowCount: 2,
       gap: 0, balanced: true, rowCount: 9,
+      outsideRosterAmount: 0, outsideRosterRows: 0, outsideRosterCodes: [],
       unavailableEmployees: [{ empCode: 'NV01', revenue: 200 }, { empCode: '', revenue: 999 }],
     },
   });
@@ -55,6 +56,9 @@ test('projection giữ phép cân doanh thu để khối cảnh báo có thể r
     unassignedRowCount: 2,
     gap: 0,
     balanced: true,
+    outsideRosterAmount: 0,
+    outsideRosterRows: 0,
+    outsideRosterCodes: [],
     rowCount: 9,
     unavailableEmployees: [{ empCode: 'NV01', revenue: 200 }],
   });
@@ -108,14 +112,14 @@ test('fallback ALL fail-closed và nói thật mẫu số toàn đội', () => {
   assert.doesNotMatch(page, /\$\{team\.assigned\}\/\$\{team\.total\} NV có target/);
 });
 
-test('mỗi nguyên nhân kèm ĐÚNG cách sửa — hai nguyên nhân, hai việc khác nhau', () => {
+test('mỗi nguyên nhân kèm ĐÚNG cách sửa — ba nguyên nhân, không gán ngoài roster', () => {
   assert.match(page, /vào Danh mục QL bấm <b>"Đồng bộ % chi phí"<\/b> cho kỳ này/);
   assert.match(page, /xem tab <b>"Kiểm soát dữ liệu"<\/b>, đây là việc gán NV cho dòng, không phải lỗi %/);
 });
 
 test('‼ cân vẫn lệch thì NÓI RA, không im lặng làm tròn', () => {
   assert.match(page, /Cân vẫn lệch <b data-sensitive="">/);
-  assert.match(page, /chưa giải thích được bằng hai nguyên nhân trên, báo Claude/);
+  assert.match(page, /chưa giải thích được bằng ba nguyên nhân trên, báo kỹ thuật/);
 });
 
 test('mọi số tiền trong phép cân nằm dưới con mắt che số', () => {
