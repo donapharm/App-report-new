@@ -1,3 +1,9 @@
+### 2026-08-21 — Khóa identity khi cutover
+
+- Cổng cutover fail-closed nếu `APP_RELEASE_ROOT` không trỏ đúng release đích trước khi khởi động.
+- Sau cutover, `/api/health` bắt buộc xanh và `commit` phải khớp exact đích; lệch nhãn bị chặn ngay, không được tuyên bố hoàn tất.
+- Thêm diễn tập hồi quy cho cả đường release-root cũ và health trả exact cũ.
+
 ### 2026-08-21 — Catalog 52: cờ OFF tối hoàn toàn
 
 - `/me` chỉ trả `catalog52Enabled` cho phiên CEO, lấy trực tiếp từ `CATALOG52_CONTROL_PLANE_ENABLED`.

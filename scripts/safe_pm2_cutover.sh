@@ -37,6 +37,7 @@ PM2_APP="${PM2_APP:?Thiếu PM2_APP}"
 ARCHIVE="${ARCHIVE:?Thiếu ARCHIVE}"
 HEALTH_CMD="${HEALTH_CMD:-}"
 SMOKE_CMD="${SMOKE_CMD:-}"
+APP_RELEASE_ROOT="${APP_RELEASE_ROOT:?Thiếu APP_RELEASE_ROOT — phải trỏ release đang cutover}"
 # Lệnh đưa service về chạy — mặc định reload (không gián đoạn). Cho override.
 START_CMD="${START_CMD:-pm2 reload $PM2_APP --update-env}"
 
@@ -55,6 +56,13 @@ on_exit() {
 trap on_exit EXIT
 
 echo "=== CUTOVER AN TOÀN $PM2_APP — $(date '+%F %T') ==="
+
+# Identity path is part of the runtime contract. PM2 keeps its old environment
+# unless the caller explicitly updates it, so reject a stale release root before
+# touching the service.
+[ "$(readlink -f "$APP_RELEASE_ROOT")" = "$(readlink -f "$RELEASE_ROOT")" ] \
+  || die "APP_RELEASE_ROOT không trỏ release đang cutover — DỪNG trước khi khởi động."
+ok "APP_RELEASE_ROOT trỏ đúng release đang cutover"
 
 # ── 1. Duyệt hợp lệ (chưa động gì) ──
 PREPARE_FILE="${PREPARE_FILE:?Thiếu PREPARE_FILE}" \
@@ -99,7 +107,19 @@ cutover_fail() {
     bash "$HERE/safe_rollback.sh" || echo "❌ ROLLBACK cũng lỗi — CẦN CAN THIỆP TAY." >&2
   exit 1
 }
-if [ -n "$HEALTH_CMD" ]; then eval "$HEALTH_CMD" >/dev/null || cutover_fail "Health không PASS"; ok "Health PASS"; fi
+if [ -z "$HEALTH_CMD" ]; then cutover_fail "Thiếu HEALTH_CMD để kiểm exact sau cutover"; fi
+health_json="$(mktemp)"
+if ! eval "$HEALTH_CMD" >"$health_json"; then rm -f "$health_json"; cutover_fail "Health không PASS"; fi
+if ! node -e '
+  const fs = require("fs");
+  const body = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  if (body?.ok !== true || body?.commit !== process.argv[2]) process.exit(1);
+' "$health_json" "$EXPECT_COMMIT"; then
+  rm -f "$health_json"
+  cutover_fail "Health exact lệch commit đích"
+fi
+rm -f "$health_json"
+ok "PREFLIGHT 4/4 sau cutover: health xanh và exact khớp commit đích"
 if [ -n "$SMOKE_CMD" ]; then eval "$SMOKE_CMD" >/dev/null || cutover_fail "Smoke không PASS"; ok "Smoke PASS"; fi
 
 SERVICE_TOUCHED=0  # tới đây coi như ổn định, không cần trap cứu nữa

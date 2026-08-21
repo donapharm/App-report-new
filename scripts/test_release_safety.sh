@@ -205,11 +205,40 @@ mkdir -p "$WORK/rel2/server/src"; echo x > "$WORK/rel2/server/src/index.js"
 ln -s "$DATA" "$WORK/rel2/server/data"
 RELEASE_ROOT="$WORK/rel2" bash "$HERE/release_manifest.sh" create >/dev/null 2>&1
 out="$(RELEASE_ROOT="$WORK/rel2" DATA="$DATA" PM2_APP=x ARCHIVE="/proc/nonexistent/x.tgz" \
+  APP_RELEASE_ROOT="$WORK/rel2" \
   APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" COLD_T08_CMD="printf '{\"rowCount\":1}'" \
   PREPARE_FILE="$PREP2" USED_TOKENS_FILE="$WORK/tc" EXPECT_CALLBACK=OK EXPECT_BASE=/b EXPECT_COMMIT=c1 EXPECT_RELEASE=r1 \
   START_CMD="$WORK/fake_start.sh" HEALTH_CMD="true" bash "$HERE/safe_pm2_cutover.sh" 2>&1)"; rc=$?
 if [ $rc -ne 0 ]; then echo "  ✅ backup lỗi → cutover DỪNG (exit!=0)"; PASS=$((PASS+1)); else echo "  ❌ cutover không dừng khi backup lỗi"; FAIL=$((FAIL+1)); fi
 if [ ! -f "$CUT_MARK" ]; then echo "  ✅ service CHƯA bị đụng (backup lỗi trước khi động vào PM2)"; PASS=$((PASS+1)); else echo "  ❌ service đã bị đụng dù backup lỗi"; FAIL=$((FAIL+1)); fi
+
+echo
+echo "--- Cutover identity: release root trước start + health exact sau start ---"
+mkdir -p "$WORK/fakebin"
+cat > "$WORK/fakebin/pm2" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod +x "$WORK/fakebin/pm2"
+write_cutover_prep() {
+  printf 'status=PASS\ncallback=OK\nbase=/b\ncommit=c1\nrelease=r1\n' > "$1"
+}
+
+PREP_ROOT="$WORK/prep_root.txt"; write_cutover_prep "$PREP_ROOT"
+run "APP_RELEASE_ROOT lệch release đích → CHẶN trước start" fail \
+  env PATH="$WORK/fakebin:$PATH" RELEASE_ROOT="$WORK/rel2" APP_RELEASE_ROOT="$WORK/other-release" \
+  DATA="$DATA" PM2_APP=x ARCHIVE="$WORK/root-check.tgz" APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" \
+  COLD_T08_CMD="printf '{\"rowCount\":1}'" PREPARE_FILE="$PREP_ROOT" USED_TOKENS_DIR="$WORK/root-token" \
+  EXPECT_CALLBACK=OK EXPECT_BASE=/b EXPECT_COMMIT=c1 EXPECT_RELEASE=r1 START_CMD="$WORK/fake_start.sh" \
+  HEALTH_CMD="printf '{\"ok\":true,\"commit\":\"c1\"}'" bash "$HERE/safe_pm2_cutover.sh"
+
+PREP_HEALTH="$WORK/prep_health.txt"; write_cutover_prep "$PREP_HEALTH"
+run "health xanh nhưng exact cũ → CHẶN sau cutover" fail \
+  env PATH="$WORK/fakebin:$PATH" RELEASE_ROOT="$WORK/rel2" APP_RELEASE_ROOT="$WORK/rel2" \
+  DATA="$DATA" PM2_APP=x ARCHIVE="$WORK/health-check.tgz" APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" \
+  COLD_T08_CMD="printf '{\"rowCount\":1}'" PREPARE_FILE="$PREP_HEALTH" USED_TOKENS_DIR="$WORK/health-token" \
+  EXPECT_CALLBACK=OK EXPECT_BASE=/b EXPECT_COMMIT=c1 EXPECT_RELEASE=r1 START_CMD="$WORK/fake_start.sh" \
+  HEALTH_CMD="printf '{\"ok\":true,\"commit\":\"old\"}'" ROLLBACK_START_CMD="true" bash "$HERE/safe_pm2_cutover.sh"
 
 echo
 echo "--- Read-only review của bot (2026-07-26): 5 điểm cứng hoá ---"
