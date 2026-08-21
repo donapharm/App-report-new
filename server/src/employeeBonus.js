@@ -16,7 +16,7 @@ const BONUS_V3_EFFECTIVE_MONTH = '2026-07';
 // thoại sửa tay ghi v3.1 nên CEO không biết đang sửa bản nào (CEO chốt 29/07).
 // Quy tắc: SỬA CÁCH TÍNH THƯỞNG => nâng số hiệu này + cập nhật
 // config/bonus_formula_lock.json (test bonusFormulaVersion sẽ đỏ nếu quên).
-const FORMULA_VERSION = 'v3.8';
+const FORMULA_VERSION = 'v3.9';
 const UNCONFIGURED_MESSAGE = 'Chưa cấu hình mức thưởng';
 
 function finite(value) {
@@ -460,7 +460,14 @@ function periodBonus(period = {}, config = unconfigured(), priority = emptyPrior
 function buildBonusSummary(kpi = {}, config = loadConfig(), priority = {}) {
   const normalized = config?.configured == null ? validateConfig(config) : config;
   const empCode = employeeIncentivePolicy.normalizeEmpCode(kpi.emp_code || kpi.empCode);
-  if (employeeIncentivePolicy.requiresSeparateFormula(empCode)) {
+  const targetOnly = employeeIncentivePolicy.isTargetOnlyEmployee(empCode);
+  if (targetOnly || employeeIncentivePolicy.requiresSeparateFormula(empCode)) {
+    const reason = targetOnly
+      ? employeeIncentivePolicy.TARGET_ONLY_REASON
+      : employeeIncentivePolicy.SEPARATE_FORMULA_REASON;
+    const message = targetOnly
+      ? employeeIncentivePolicy.TARGET_ONLY_MESSAGE
+      : employeeIncentivePolicy.SEPARATE_FORMULA_MESSAGE;
     const excludedPeriod = (period = {}) => ({
       target: period.target == null ? null : Number(period.target),
       achieved: period.achieved == null ? null : Number(period.achieved),
@@ -472,19 +479,19 @@ function buildBonusSummary(kpi = {}, config = loadConfig(), priority = {}) {
       priorityEligible: false,
       priorityAmount: null,
       priorityGroups: [],
-      priorityStatus: employeeIncentivePolicy.SEPARATE_FORMULA_REASON,
+      priorityStatus: reason,
       priorityCoverage: emptyPriority(),
       uncappedAmount: null,
       capAmount: null,
       capped: false,
       amount: null,
       tier: null,
-      status: employeeIncentivePolicy.SEPARATE_FORMULA_REASON,
+      status: reason,
     });
     return {
       configured: false,
-      reason: employeeIncentivePolicy.SEPARATE_FORMULA_REASON,
-      message: employeeIncentivePolicy.SEPARATE_FORMULA_MESSAGE,
+      reason,
+      message,
       schemaVersion: SCHEMA_VERSION,
       version: normalized.version || '',
       effectiveFrom: normalized.effectiveFrom || '',
@@ -501,7 +508,7 @@ function buildBonusSummary(kpi = {}, config = loadConfig(), priority = {}) {
       month: excludedPeriod(kpi.month),
       quarter: excludedPeriod(kpi.quarter),
       employeeSubtotals: [],
-      disclaimer: employeeIncentivePolicy.SEPARATE_FORMULA_MESSAGE,
+      disclaimer: message,
     };
   }
   return {
@@ -530,10 +537,15 @@ function aggregateBonusSummaries(reports = [], roster = []) {
     // from the aggregate target/bonus values in the client.
     penalty: report.penalty && typeof report.penalty === 'object' ? { ...report.penalty } : null,
   }));
-  const first = reports.find((report) => report?.bonus)?.bonus;
+  const incentiveItems = items.filter((item) => (
+    item.month?.status !== employeeIncentivePolicy.TARGET_ONLY_REASON
+    && item.quarter?.status !== employeeIncentivePolicy.TARGET_ONLY_REASON
+  ));
+  const first = reports.find((report) => report?.bonus?.configured)?.bonus
+    || reports.find((report) => report?.bonus)?.bonus;
   if (!first?.configured) return { ...(first || buildBonusSummary()), employeeSubtotals: items, aggregate: true };
   const aggregatePeriod = (key) => {
-    const periods = items.map((item) => item[key] || {});
+    const periods = incentiveItems.map((item) => item[key] || {});
     const target = periods.reduce((sum, item) => sum + (finite(item.target) || 0), 0);
     const achieved = periods.reduce((sum, item) => sum + (finite(item.achieved) || 0), 0);
     const amounts = periods.filter((item) => item.amount != null && finite(item.amount) != null);

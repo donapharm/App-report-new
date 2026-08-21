@@ -11,6 +11,17 @@ test('DN022 chờ công thức thưởng/phạt riêng', () => {
   }
 });
 
+test('DN021 và DN023 chỉ tính target/doanh thu, không vào thưởng phạt', () => {
+  assert.deepEqual([...policy.TARGET_ONLY_EMP_CODES].sort(), ['DN021', 'DN023']);
+  for (const code of ['DN021', 'DN023']) {
+    assert.equal(policy.isTargetOnlyEmployee(code.toLowerCase()), true);
+    assert.equal(policy.requiresSeparateFormula(code), false);
+    assert.equal(policy.isXuPenaltyEmployee(code), false);
+  }
+  for (const code of ['DN001', 'DN022', 'VP018']) assert.equal(policy.isTargetOnlyEmployee(code), false);
+  assert.equal(policy.TARGET_ONLY_REASON, 'target_only_no_incentive');
+});
+
 test('phạt thiếu Xu chỉ áp dụng đúng DN002, DN004, DN022', () => {
   assert.deepEqual([...policy.XU_PENALTY_EMP_CODES].sort(), ['DN002', 'DN004', 'DN022']);
   for (const code of ['DN002', 'DN004', 'DN022']) assert.equal(policy.isXuPenaltyEmployee(code), true);

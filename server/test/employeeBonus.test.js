@@ -291,3 +291,39 @@ test('DN022 fail-closed khỏi cả thưởng tháng và quý trong khi chờ c�
   assert.equal(result.quarter.amount, null);
   assert.match(result.message, /DN022.*chờ công thức thưởng\/phạt riêng/i);
 });
+
+test('DN021/DN023 không bao giờ sinh thưởng dù nguồn đã có target và doanh thu', () => {
+  for (const empCode of ['DN021', 'DN023']) {
+    const result = bonus.buildBonusSummary({
+      emp_code: empCode, ky: '08.2026', quarter_label: 'Q3/2026',
+      month: { target: 200_000_000, achieved: 400_000_000, pct: 200 },
+      quarter: { target: 600_000_000, achieved: 900_000_000, pct: 150 },
+    }, v3Config, {
+      month: priority({ 'H.A*': 400_000_000 }, true, ['2026-08']),
+      quarter: priority({ 'H.A*': 900_000_000 }, true, ['2026-07', '2026-08']),
+    });
+    assert.equal(result.reason, 'target_only_no_incentive');
+    assert.equal(result.month.status, 'target_only_no_incentive');
+    assert.equal(result.quarter.status, 'target_only_no_incentive');
+    assert.equal(result.month.amount, null);
+    assert.equal(result.quarter.amount, null);
+    assert.equal(result.month.baseAmount, null);
+    assert.equal(result.month.priorityAmount, null);
+  }
+});
+
+test('target-only không làm hỏng tổng thưởng của các NV còn lại', () => {
+  const targetOnly = {
+    empCode: 'DN021',
+    bonus: bonus.buildBonusSummary({
+      emp_code: 'DN021', month: { target: 200, achieved: 400, pct: 200 },
+      quarter: { target: 600, achieved: 900, pct: 150 },
+    }, v3Config),
+  };
+  const normal = { empCode: 'DN001', bonus: summary(100, 100_000_000) };
+  const aggregate = bonus.aggregateBonusSummaries([targetOnly, normal]);
+  assert.equal(aggregate.configured, true);
+  assert.equal(aggregate.month.amount, 150_000);
+  assert.equal(aggregate.month.contributors, 1);
+  assert.equal(aggregate.employeeSubtotals.length, 2);
+});

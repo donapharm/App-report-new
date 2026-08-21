@@ -769,7 +769,7 @@ const NGU_NGHIA = [
   [/(^|\.)(overdueEmployees|employeesWithoutFirstAdvance)$/, 'dem'],
   [/(^|\.)(unavailableCount|unavailablePairs|staleEmployeeCount)$/, 'dem'],
   [/(^|\.)(matchedRows|totalRows|filteredRows|rowCount|lineCount)$/, 'dem'],
-  [/(^|\.)(revenueAllocatedRowCount|unassignedRowCount|outsideRosterRows)$/, 'dem'],
+  [/(^|\.)(revenueAllocatedRowCount|unassignedRowCount|targetOnlyRows|nonSalesRoleQuarantinedRows|outsideRosterRows)$/, 'dem'],
   [/(^|\.)(page|pageSize|pageCount|totalPages)$/, 'dem'],
   [/(^|\.)(dynamicCount|exceptionCount|redCount|yellowCount)$/, 'dem'],
   [/(^|\.)(threshold|rate|closeDay|schemaVersion|pos|carry)$/, 'dem'],
@@ -783,7 +783,7 @@ const NGU_NGHIA = [
   [/(^|\.)healthKpis\.cards\[\d+\]\.(value|sub)$/, 'tien'],
   /* Mười lăm đường dưới đây do CHÍNH ca kiểm "KHAI BÁO" chỉ ra — tôi không tự nghĩ ra
    * được đủ, và đó là lý do phải có ca kiểm bắt chỗ chưa khai thay vì tin trí nhớ. */
-  [/(^|\.)revenueRecon\.(total|shown|gap|outsideRosterAmount)$/, 'tien'],
+  [/(^|\.)revenueRecon\.(total|shown|gap|targetOnlyAmount|nonSalesRoleQuarantinedAmount|outsideRosterAmount)$/, 'tien'],
   [/(^|\.)target\.(month|quarter)\.(target|achieved|pct)$/, 'tien'],
   [/(^|\.)bonus\.(month|quarter)\.(amount|base|priority|excess)$/, 'tien'],
   [/(^|\.)penalty\.(total|c45Amount|targetAmount|xuAmount)$/, 'tien'],
@@ -1069,6 +1069,14 @@ export function employeeCostViewModel(payload = {}) {
       missingByUnavailable: numberOrNull(payload.revenueRecon.missingByUnavailable),
       missingUnassigned: numberOrNull(payload.revenueRecon.missingUnassigned),
       unassignedRowCount: Number(payload.revenueRecon.unassignedRowCount || 0),
+      targetOnlyAmount: numberOrNull(payload.revenueRecon.targetOnlyAmount),
+      targetOnlyRows: Number(payload.revenueRecon.targetOnlyRows || 0),
+      targetOnlyCodes: (Array.isArray(payload.revenueRecon.targetOnlyCodes)
+        ? payload.revenueRecon.targetOnlyCodes : []).map(String),
+      nonSalesRoleQuarantinedAmount: numberOrNull(payload.revenueRecon.nonSalesRoleQuarantinedAmount),
+      nonSalesRoleQuarantinedRows: Number(payload.revenueRecon.nonSalesRoleQuarantinedRows || 0),
+      nonSalesRoleQuarantinedCodes: (Array.isArray(payload.revenueRecon.nonSalesRoleQuarantinedCodes)
+        ? payload.revenueRecon.nonSalesRoleQuarantinedCodes : []).map(String),
       outsideRosterAmount: numberOrNull(payload.revenueRecon.outsideRosterAmount),
       outsideRosterRows: Number(payload.revenueRecon.outsideRosterRows || 0),
       outsideRosterCodes: (Array.isArray(payload.revenueRecon.outsideRosterCodes)

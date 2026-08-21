@@ -19,12 +19,16 @@
  *     Doanh thu kỳ (kho App Report)
  *       = đang hiện trên bảng
  *       + của NV chưa lấy được %
- *       + dòng của mã NV ngoài roster
+ *       + NV chỉ tính target — không thưởng/phạt
+ *       + telesale bị cách ly khỏi doanh thu sale
+ *       + dòng của mã NV thật sự ngoài roster
  *       + dòng chưa gán được nhân viên
  *
  * Lệch ⇒ `balanced: false` và nêu số lệch. Một phép cân không cân được thì phải nói
  * ra, chứ không được làm tròn cho đẹp.
  */
+
+const employeeIncentivePolicy = require('./employeeIncentivePolicy');
 
 const num = (value) => {
   const amount = Number(value);
@@ -34,12 +38,20 @@ const upper = (value) => String(value ?? '').trim().toUpperCase();
 const empOf = (row = {}) => upper(
   row.emp_code ?? row.empCode ?? row.employeeCode ?? row.EMP_NUMBER ?? row.MA_NV,
 );
+const rawEmpOf = (row = {}) => upper(
+  row.raw_emp_code ?? row.rawEmpCode ?? row.source_emp_code ?? row.sourceEmpCode,
+);
 const revenueOf = (row = {}) => num(row.revenue ?? row.tong_tien ?? row.REVENUE ?? row.TONG_TIEN);
 const shownRowsOf = (periods = []) => (Array.isArray(periods) ? periods : [])
   .flatMap((period) => (Array.isArray(period?.rows) ? period.rows : []));
 const revenueByEmployee = (rows = []) => (Array.isArray(rows) ? rows : []).reduce((totals, row) => {
   const emp = empOf(row);
   totals.set(emp, (totals.get(emp) || 0) + revenueOf(row));
+  return totals;
+}, new Map());
+const rowsByEmployee = (rows = []) => (Array.isArray(rows) ? rows : []).reduce((totals, row) => {
+  const emp = empOf(row);
+  totals.set(emp, (totals.get(emp) || 0) + 1);
   return totals;
 }, new Map());
 
@@ -63,12 +75,18 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], rost
   )).filter(Boolean));
   const shownKnown = Array.isArray(shownRows);
   const shownByEmp = revenueByEmployee(shownRows);
+  const shownRowCountByEmp = rowsByEmployee(shownRows);
   let total = 0;
   let sourceUnassigned = 0;
   let unassignedRowCount = 0;
   let outsideRosterAmount = 0;
   let outsideRosterRows = 0;
   const outsideRosterCodes = new Set();
+  const sourceTargetOnlyByEmp = new Map();
+  const sourceTargetOnlyRowsByEmp = new Map();
+  let sourceNonSalesRoleQuarantinedAmount = 0;
+  let sourceNonSalesRoleQuarantinedRows = 0;
+  const nonSalesRoleQuarantinedCodes = new Set();
   let rowCount = 0;
   const sourceUnavailableByEmp = new Map();
 
@@ -78,6 +96,18 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], rost
       total += amount;
       rowCount += 1;
       const emp = empOf(row);
+      const rawEmp = rawEmpOf(row);
+      if (employeeIncentivePolicy.isTargetOnlyEmployee(emp)) {
+        sourceTargetOnlyByEmp.set(emp, (sourceTargetOnlyByEmp.get(emp) || 0) + amount);
+        sourceTargetOnlyRowsByEmp.set(emp, (sourceTargetOnlyRowsByEmp.get(emp) || 0) + 1);
+        continue;
+      }
+      if (rawEmp === 'VP018' || upper(row.attribution_status ?? row.attributionStatus) === 'NON_SALES_ROLE_QUARANTINED') {
+        sourceNonSalesRoleQuarantinedAmount += amount;
+        sourceNonSalesRoleQuarantinedRows += 1;
+        nonSalesRoleQuarantinedCodes.add(rawEmp || emp || 'VP018');
+        continue;
+      }
       // Dòng không gán được NV: nó KHÔNG thuộc sổ của ai nên không bao giờ lên bảng
       // ALL — phải tách riêng, không được trộn vào phần "NV chưa lấy được %".
       if (!emp) { sourceUnassigned += amount; unassignedRowCount += 1; continue; }
@@ -99,8 +129,27 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], rost
     [emp, Math.max(0, sourceAmount - (shownKnown ? (shownByEmp.get(emp) || 0) : 0))]
   )).filter(([, amount]) => amount > 0));
   const byUnavailable = [...unavailableByEmp.values()].reduce((sum, amount) => sum + amount, 0);
+  const targetOnlyByEmp = new Map([...sourceTargetOnlyByEmp.entries()].map(([emp, sourceAmount]) => (
+    [emp, Math.max(0, sourceAmount - (shownKnown ? (shownByEmp.get(emp) || 0) : 0))]
+  )).filter(([, amount]) => amount > 0));
+  const targetOnlyAmount = [...targetOnlyByEmp.values()].reduce((sum, amount) => sum + amount, 0);
+  const targetOnlyRows = [...sourceTargetOnlyRowsByEmp.entries()].reduce((sum, [emp, sourceRows]) => (
+    sum + Math.max(0, sourceRows - (shownKnown ? (shownRowCountByEmp.get(emp) || 0) : 0))
+  ), 0);
+  const shownNonSalesAmount = shownKnown
+    ? (shownRows || []).filter((row) => rawEmpOf(row) === 'VP018'
+      || upper(row.attribution_status ?? row.attributionStatus) === 'NON_SALES_ROLE_QUARANTINED')
+      .reduce((sum, row) => sum + revenueOf(row), 0)
+    : 0;
+  const shownNonSalesRows = shownKnown
+    ? (shownRows || []).filter((row) => rawEmpOf(row) === 'VP018'
+      || upper(row.attribution_status ?? row.attributionStatus) === 'NON_SALES_ROLE_QUARANTINED').length
+    : 0;
+  const nonSalesRoleQuarantinedAmount = Math.max(0, sourceNonSalesRoleQuarantinedAmount - shownNonSalesAmount);
+  const nonSalesRoleQuarantinedRows = Math.max(0, sourceNonSalesRoleQuarantinedRows - shownNonSalesRows);
   const unassigned = Math.max(0, sourceUnassigned - (shownKnown ? (shownByEmp.get('') || 0) : 0));
-  const accounted = num(shownRevenue) + byUnavailable + unassigned + outsideRosterAmount;
+  const accounted = num(shownRevenue) + byUnavailable + unassigned + targetOnlyAmount
+    + nonSalesRoleQuarantinedAmount + outsideRosterAmount;
   // Sai số cho phép đúng 1 đồng/kỳ — chỉ để nuốt làm tròn, không phải để giấu lệch.
   const tolerance = Math.max(1, periods.length);
   const gap = shownRevenue == null ? null : Math.round(total - accounted);
@@ -112,6 +161,12 @@ function buildRevenueRecon({ periods = [], revenueRowsOf, unavailable = [], rost
     missingByUnavailable: Math.round(byUnavailable),
     missingUnassigned: Math.round(unassigned),
     unassignedRowCount,
+    targetOnlyAmount: Math.round(targetOnlyAmount),
+    targetOnlyRows,
+    targetOnlyCodes: [...targetOnlyByEmp.keys()].sort(),
+    nonSalesRoleQuarantinedAmount: Math.round(nonSalesRoleQuarantinedAmount),
+    nonSalesRoleQuarantinedRows,
+    nonSalesRoleQuarantinedCodes: [...nonSalesRoleQuarantinedCodes].sort(),
     outsideRosterAmount: Math.round(outsideRosterAmount),
     outsideRosterRows,
     outsideRosterCodes: [...outsideRosterCodes].sort(),

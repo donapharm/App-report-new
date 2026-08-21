@@ -21,44 +21,49 @@ function aggregatePenaltySummaries(reports = []) {
     afterPenaltyTotal: finite(report.summary?.afterPenaltyTotal),
   }));
   if (!items.length) return null;
+  const targetOnlyItems = items.filter((item) => item.penalty?.mode === 'target_only');
+  const policyItems = items.filter((item) => item.penalty?.mode !== 'target_only');
 
   const aggregateValues = (fieldValues) => {
     const known = fieldValues.filter((value) => value != null);
     return {
-      value: known.length === items.length ? known.reduce((sum, value) => sum + value, 0) : null,
+      value: policyItems.length > 0 && known.length === policyItems.length
+        ? known.reduce((sum, value) => sum + value, 0) : null,
       provisional: known.reduce((sum, value) => sum + value, 0),
       contributors: known.length,
     };
   };
-  const aggregateField = (key) => aggregateValues(items.map((item) => finite(item.penalty?.[key])));
+  const aggregateField = (key) => aggregateValues(policyItems.map((item) => finite(item.penalty?.[key])));
   const target = aggregateField('targetAmount');
   const total = aggregateField('total');
   // Khi Xu chưa chốt, penalty.total phải null nhưng phần target/C45 đã biết vẫn
   // nằm ở penalty.provisionalTotal. Chỉ đưa phần này ra field provisional rõ
   // ràng; không nâng nó thành total/applied chính thức.
-  const provisionalTotals = items.map((item) => finite(item.penalty?.total) ?? finite(item.penalty?.provisionalTotal));
+  const provisionalTotals = policyItems.map((item) => finite(item.penalty?.total) ?? finite(item.penalty?.provisionalTotal));
   const provisionalKnown = provisionalTotals.filter((value) => value != null);
   // buildPenalty intentionally returns appliedAmount=0 in warn-only periods even
   // when a potential amount is unavailable: zero is final because nothing may be
   // deducted in that mode. In enforced mode, however, total=null means the applied
   // amount is also unknown and must not be silently aggregated as zero.
-  const applied = aggregateValues(items.map((item) => {
+  const applied = aggregateValues(policyItems.map((item) => {
     if (!item.penalty || (item.penalty.mode === 'enforced' && finite(item.penalty.total) == null)) return null;
     return finite(item.penalty.appliedAmount);
   }));
   const c45 = aggregateField('c45Amount');
-  const baseValues = items.map((item) => item.baseTotal);
-  const afterValues = items.map((item) => item.afterPenaltyTotal);
+  const baseValues = policyItems.map((item) => item.baseTotal);
+  const afterValues = policyItems.map((item) => item.afterPenaltyTotal);
   const baseKnown = baseValues.filter((value) => value != null);
   const afterKnown = afterValues.filter((value) => value != null);
-  const baseTotal = baseKnown.length === items.length ? baseKnown.reduce((sum, value) => sum + value, 0) : null;
-  const afterPenaltyTotal = applied.contributors === items.length && afterKnown.length === items.length
+  const baseTotal = policyItems.length > 0 && baseKnown.length === policyItems.length
+    ? baseKnown.reduce((sum, value) => sum + value, 0) : null;
+  const afterPenaltyTotal = policyItems.length > 0 && applied.contributors === policyItems.length
+    && afterKnown.length === policyItems.length
     ? afterKnown.reduce((sum, value) => sum + value, 0)
     : null;
 
   // Xu may legitimately be null while disabled or while the quarter is still
   // open. Only numeric Xu values are summed; source failures remain explicit.
-  const xuRows = items.filter((item) => item.penalty?.xuStatus !== 'disabled');
+  const xuRows = policyItems.filter((item) => item.penalty?.xuStatus !== 'disabled');
   const xuKnown = xuRows.map((item) => finite(item.penalty?.xuAmount)).filter((value) => value != null);
   const xuMissingValues = xuRows.map((item) => finite(item.penalty?.xuMissing));
   const validXuStatuses = new Set(['quarter_pending', 'provisional', 'final', 'xu_source_unavailable', 'finance_reconciliation_pending']);
@@ -79,15 +84,15 @@ function aggregatePenaltySummaries(reports = []) {
         : xuRows.some((item) => item.penalty?.xuStatus === 'provisional') ? 'provisional'
           : 'final';
 
-  const unavailableEmployees = items
+  const unavailableEmployees = policyItems
     .filter((item) => !item.penalty || finite(item.penalty.total) == null)
     .map((item) => item.empCode).filter(Boolean);
-  const modes = new Set(items.map((item) => String(item.penalty?.mode || '')).filter(Boolean));
-  const effectiveFroms = new Set(items.map((item) => String(item.penalty?.effectiveFrom || '')).filter(Boolean));
-  const complete = total.contributors === items.length;
+  const modes = new Set(policyItems.map((item) => String(item.penalty?.mode || '')).filter(Boolean));
+  const effectiveFroms = new Set(policyItems.map((item) => String(item.penalty?.effectiveFrom || '')).filter(Boolean));
+  const complete = policyItems.length > 0 && total.contributors === policyItems.length;
   const formulaText = complete
-    ? `Cộng trực tiếp ${items.length}/${items.length} kết quả phạt từng nhân viên do backend tính; không tính lại target, bậc hoặc tỷ lệ ở frontend.`
-    : `Tạm cộng ${total.contributors}/${items.length} kết quả phạt từng nhân viên do backend tính; còn thiếu ${unavailableEmployees.join(', ') || `${items.length - total.contributors} nhân viên`}.`;
+    ? `Cộng trực tiếp ${policyItems.length}/${policyItems.length} kết quả phạt từng nhân viên thuộc chính sách do backend tính; không tính lại target, bậc hoặc tỷ lệ ở frontend.`
+    : `Tạm cộng ${total.contributors}/${policyItems.length} kết quả phạt từng nhân viên thuộc chính sách do backend tính; còn thiếu ${unavailableEmployees.join(', ') || `${policyItems.length - total.contributors} nhân viên`}.`;
   const disclaimer = 'Dự kiến/tham khảo — chưa trừ lương';
 
   return {
@@ -124,13 +129,16 @@ function aggregatePenaltySummaries(reports = []) {
     formulaText,
     label: complete
       ? `Tổng toàn đội từ backend · ${disclaimer}`
-      : `Tạm tính ${total.contributors}/${items.length} NV · ${disclaimer}`,
+      : `Tạm tính ${total.contributors}/${policyItems.length} NV thuộc chính sách · ${disclaimer}`,
     warning: null,
     baseTotal,
     afterPenaltyTotal,
     employeeCount: items.length,
+    policyEmployeeCount: policyItems.length,
+    targetOnlyCount: targetOnlyItems.length,
+    targetOnlyEmployees: targetOnlyItems.map((item) => item.empCode).filter(Boolean),
     contributors: total.contributors,
-    unavailableCount: items.length - total.contributors,
+    unavailableCount: policyItems.length - total.contributors,
     unavailableEmployees,
     complete,
   };

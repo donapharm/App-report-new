@@ -54,6 +54,12 @@ test('projection giữ phép cân doanh thu để khối cảnh báo có thể r
     missingByUnavailable: 200,
     missingUnassigned: 100,
     unassignedRowCount: 2,
+    targetOnlyAmount: null,
+    targetOnlyRows: 0,
+    targetOnlyCodes: [],
+    nonSalesRoleQuarantinedAmount: null,
+    nonSalesRoleQuarantinedRows: 0,
+    nonSalesRoleQuarantinedCodes: [],
     gap: 0,
     balanced: true,
     outsideRosterAmount: 0,
@@ -119,7 +125,7 @@ test('mỗi nguyên nhân kèm ĐÚNG cách sửa — ba nguyên nhân, không g
 
 test('‼ cân vẫn lệch thì NÓI RA, không im lặng làm tròn', () => {
   assert.match(page, /Cân vẫn lệch <b data-sensitive="">/);
-  assert.match(page, /chưa giải thích được bằng ba nguyên nhân trên, báo kỹ thuật/);
+  assert.match(page, /chưa giải thích được bằng các vế trên, báo kỹ thuật/);
 });
 
 test('mọi số tiền trong phép cân nằm dưới con mắt che số', () => {

@@ -327,6 +327,39 @@ test('DN022 bỏ toàn bộ phạt target/C45 nhưng vẫn giữ kết quả ph�
   assert.match(out.formulaText, /chờ công thức thưởng\/phạt riêng/i);
 });
 
+test('DN021/DN023 không bao giờ sinh phạt dù nguồn target, C45 và Xu đều có số', () => {
+  for (const empCode of ['DN021', 'DN023']) {
+    const out = build({
+      empCode, target: 1_000_000_000, achieved: 100_000_000,
+      c45Amount: 20_000_000, costTotal: 50_000_000,
+      xu: { amount: 9_000_000, status: 'final', missing: 30 },
+    });
+    assert.equal(out.mode, 'target_only');
+    assert.equal(out.enabled, false);
+    assert.equal(out.targetStatus, 'target_only_no_incentive');
+    assert.equal(out.penaltyStatus, 'target_only_no_incentive');
+    for (const key of ['targetAmount', 'xuAmount', 'total', 'provisionalTotal', 'appliedAmount', 'afterPenaltyTotal']) {
+      assert.equal(out[key], null, `${empCode}.${key} phải là unknown/not-applicable, không phải 0 giả`);
+    }
+    assert.equal(out.warning, null);
+  }
+});
+
+test('target-only không làm tổng phạt toàn đội thành thiếu dữ liệu', () => {
+  const normal = build({ empCode: 'DN001', period: '2026-08', achieved: 780_000_000 });
+  const targetOnly = build({ empCode: 'DN021', achieved: 1, c45Amount: 99_000_000 });
+  const aggregate = penaltyAggregate.aggregatePenaltySummaries([
+    { empCode: 'DN021', penalty: targetOnly, summary: { periodTotal: null, afterPenaltyTotal: null } },
+    { empCode: 'DN001', penalty: normal, summary: { periodTotal: 42_834_991, afterPenaltyTotal: 42_834_991 - normal.appliedAmount } },
+  ]);
+  assert.equal(aggregate.complete, true);
+  assert.equal(aggregate.total, normal.total);
+  assert.equal(aggregate.policyEmployeeCount, 1);
+  assert.equal(aggregate.targetOnlyCount, 1);
+  assert.deepEqual(aggregate.targetOnlyEmployees, ['DN021']);
+  assert.equal(aggregate.unavailableCount, 0);
+});
+
 test('employee-cost service route attaches backend penalty using self-scoped payload data', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
   const service = /async function employeeCostPayload[\s\S]*?\n}\n\nfunction employeeCostTableOptions/.exec(source)?.[0] || '';

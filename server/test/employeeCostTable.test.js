@@ -216,6 +216,9 @@ test('‼ ALL healthy company revenue survives view-only columns, reconciliation
   assert.deepEqual(merged.revenueRecon, {
     periods: ['2026-07'], rowCount: 2, total: 20_000_000, shown: 20_000_000,
     missingByUnavailable: 0, missingUnassigned: 0, unassignedRowCount: 0,
+    targetOnlyAmount: 0, targetOnlyRows: 0, targetOnlyCodes: [],
+    nonSalesRoleQuarantinedAmount: 0, nonSalesRoleQuarantinedRows: 0,
+    nonSalesRoleQuarantinedCodes: [],
     outsideRosterAmount: 0, outsideRosterRows: 0, outsideRosterCodes: [],
     unavailableEmployees: [], gap: 0, balanced: true,
   });

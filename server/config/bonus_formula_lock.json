@@ -1,7 +1,7 @@
 {
-  "version": "v3.8",
-  "sourceHash": "25c06edcad3bcd5af8a5e9c1d5ba8fb68e54e4e142f68e13f8044dbdf811530e",
-  "lockedAt": "2026-08-03",
+  "version": "v3.9",
+  "sourceHash": "ef5a2139cfce81ef47074baa559e145d11a188e57992b977fa361798517a09d1",
+  "lockedAt": "2026-08-21",
   "lockedBy": "CEO",
   "sources": [
     "src/employeeBonus.js",
@@ -14,5 +14,5 @@
     "config/employee_bonus_tiers.json (base, baseTiers, priorityThresholdPct, priorityRates, autoGroupTargets, totalCapPct, penaltyTiers, penaltyEffectiveFrom, penaltyWarnFrom, penaltyEnabled, xuPenalty)"
   ],
   "rule": "Đổi cách tính thưởng/phạt hoặc lịch áp dụng => nâng FORMULA_VERSION, cập nhật config+sourceHash+CHANGELOG. Test server/test/bonusFormulaVersion.test.js sẽ đỏ nếu quên.",
-  "note": "v3.7 = DN022 chờ công thức riêng nên loại khỏi P1/P2 và phạt target/C45 hiện tại; vẫn giữ phạt Xu. Phạt Xu chỉ cho DN002, DN004, DN022. Các mã khác giữ nguyên v3.6."
+  "note": "v3.9 = DN021/DN023 chỉ tính target và doanh thu; loại fail-closed khỏi mọi thưởng/phạt và tin tiền. DN022 cùng luồng phạt Xu giữ nguyên."
 }

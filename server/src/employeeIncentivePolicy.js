@@ -11,6 +11,9 @@
  * loại DN022 khỏi phép tính Xu.
  */
 const SEPARATE_FORMULA_EMP_CODES = new Set(['DN022']);
+// CEO chốt 21/08/2026: còn làm việc, CHỈ tính target và doanh thu,
+// KHÔNG qua công thức thưởng/phạt, KHÔNG nhận tin tiền.
+const TARGET_ONLY_EMP_CODES = new Set(['DN021', 'DN023']);
 const XU_PENALTY_EMP_CODES = new Set(['DN002', 'DN004', 'DN022']);
 // Chỉ áp dụng cho tin có nội dung thưởng/phạt bằng tiền. Không đưa các mã này
 // vào notify_optout chung vì họ vẫn có thể nhận target, doanh thu và cảnh báo
@@ -21,20 +24,27 @@ const MONETARY_NOTIFY_BLOCKED_EMP_CODES = new Set([
 
 const normalizeEmpCode = (value) => String(value || '').trim().toUpperCase();
 const requiresSeparateFormula = (empCode) => SEPARATE_FORMULA_EMP_CODES.has(normalizeEmpCode(empCode));
+const isTargetOnlyEmployee = (empCode) => TARGET_ONLY_EMP_CODES.has(normalizeEmpCode(empCode));
 const isXuPenaltyEmployee = (empCode) => XU_PENALTY_EMP_CODES.has(normalizeEmpCode(empCode));
 const isMonetaryNotifyBlocked = (empCode) => MONETARY_NOTIFY_BLOCKED_EMP_CODES.has(normalizeEmpCode(empCode));
 
 const SEPARATE_FORMULA_REASON = 'employee_separate_formula_pending';
 const SEPARATE_FORMULA_MESSAGE = 'DN022 đang chờ công thức thưởng/phạt riêng do CEO ban hành; hệ thống không áp dụng công thức P1/P2 hoặc phạt target/C45 hiện tại.';
+const TARGET_ONLY_REASON = 'target_only_no_incentive';
+const TARGET_ONLY_MESSAGE = 'NV chỉ tính target và doanh thu — không thưởng/phạt, không nhận tin tiền theo quyết định CEO 21/08/2026.';
 
 module.exports = {
   SEPARATE_FORMULA_EMP_CODES,
+  TARGET_ONLY_EMP_CODES,
   XU_PENALTY_EMP_CODES,
   MONETARY_NOTIFY_BLOCKED_EMP_CODES,
   SEPARATE_FORMULA_REASON,
   SEPARATE_FORMULA_MESSAGE,
+  TARGET_ONLY_REASON,
+  TARGET_ONLY_MESSAGE,
   normalizeEmpCode,
   requiresSeparateFormula,
+  isTargetOnlyEmployee,
   isXuPenaltyEmployee,
   isMonetaryNotifyBlocked,
 };

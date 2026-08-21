@@ -208,6 +208,37 @@ function buildXuPenalty({ config, empCode, asOf, scoreFn, priorBookedAdjustment 
 
 function buildPenalty({ empCode = '', period, target, achieved, c45Amount, costTotal, closed = false, closeLabel = '', config = {}, xu = null } = {}) {
   const normalized = normalizeConfig(config);
+  if (employeeIncentivePolicy.isTargetOnlyEmployee(empCode)) {
+    return {
+      mode: 'target_only',
+      closed: closed === true,
+      closeLabel: String(closeLabel || ''),
+      finalized: false,
+      effectiveFrom: '',
+      enabled: false,
+      targetPct: null,
+      tier: null,
+      ratePct: null,
+      c45Amount: null,
+      targetAmount: null,
+      targetStatus: employeeIncentivePolicy.TARGET_ONLY_REASON,
+      penaltyStatus: employeeIncentivePolicy.TARGET_ONLY_REASON,
+      c45Dropped: false,
+      c45WouldDrop: false,
+      xuAmount: null,
+      xuStatus: 'disabled',
+      xuMissing: null,
+      total: null,
+      provisionalTotal: null,
+      appliedAmount: null,
+      cappedByC45: false,
+      provisional: false,
+      formulaText: employeeIncentivePolicy.TARGET_ONLY_MESSAGE,
+      label: employeeIncentivePolicy.TARGET_ONLY_MESSAGE,
+      warning: null,
+      afterPenaltyTotal: null,
+    };
+  }
   if (employeeIncentivePolicy.requiresSeparateFormula(empCode)) {
     const xuAmount = finite(xu?.amount);
     const xuFinal = xu?.status === 'final' && xuAmount != null;

@@ -153,7 +153,7 @@ function BonusGroupPreview({ title, period }) {
 // Chỉ dùng trong lúc chờ API trả về. Số hiệu thật lấy từ backend
 // (employeeBonus.FORMULA_VERSION) để nhãn trên nút, tiêu đề hộp thoại và phần
 // mô tả công thức không bao giờ lệch nhau nữa.
-const BONUS_FORMULA_VERSION_FALLBACK = 'v3.8';
+const BONUS_FORMULA_VERSION_FALLBACK = 'v3.9';
 
 function BonusPolicyPanel({ ky, employees = [], onSaved }) {
   const [data, setData] = useState(null);

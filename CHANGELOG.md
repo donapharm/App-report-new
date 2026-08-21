@@ -1,3 +1,18 @@
+### 2026-08-21 — Chính sách target-only DN021/DN023 và đối soát doanh thu tường minh (v3.9)
+
+- Kiểm tra read-only trên nguồn thật xác nhận doanh thu DN021/DN023 vẫn vào màn Target ở T05–T08. T08: DN021 `63.360.000đ / 200.000.000đ = 31,7%`; DN023 `215.242.571đ / 200.000.000đ = 107,6%`. Không sửa nguồn hay target.
+- Khai báo `TARGET_ONLY_EMP_CODES = DN021, DN023` theo quyết định CEO 21/08/2026: vẫn tính target/doanh thu, nhưng fail-closed khỏi toàn bộ thưởng/phạt với trạng thái `target_only_no_incentive`; mọi số thưởng/phạt là `null`, không giả thành `0đ`. DN022 và luồng phạt Xu giữ nguyên.
+- Phép cân doanh thu ALL tách ba vế: target-only; VP018 telesale bị cách ly theo `NON_SALES_ROLE_QUARANTINED`; ngoài roster thật. UI ghi đúng nghĩa/người xử lý/việc cần làm và giữ vế ngoài roster cho mã lạ.
+- Test khóa số thật: T07 target-only `60.027.600đ`, T08 target-only `292.532.700đ`, VP018 `1.795.600đ`; các phép cân đều `balanced: true`. Target-only không làm hỏng tổng thưởng/phạt của NV còn lại.
+- Vì khóa vân tay công thức phát hiện thay đổi, nâng đủ `FORMULA_VERSION v3.8 → v3.9`, cập nhật config/note, lock hash `ef5a2139cfce81ef47074baa559e145d11a188e57992b977fa361798517a09d1` và fallback UI.
+- Gates PASS: focused server `76/76`, focused web `3/3`, full server `1.475/1.475`, full web `500/500`, Vite build `662 modules`, `git diff --check`. Chưa deploy; PROD giữ exact `011ac1e7fab6151a15e1463a2b1c55d2de86656b`.
+
+### 2026-08-21 — NHỊP 1 dời kho phiên PASS 4/4
+
+- Chỉ dời kho phiên qua `AUTH_DATA_DIR`; production giữ nguyên exact `011ac1e7fab6151a15e1463a2b1c55d2de86656b`. T08 trước/sau cutover cùng thời điểm đều `1.481 dòng / 19 NV`; T07 kỳ đóng `2.087 dòng / 19 NV`.
+- CEO đăng nhập OTP, `app-report` restart đúng một lần và trình duyệt vẫn còn phiên; kho phiên giữ `27 → 27`. Health local/public xanh, hai process online, log 5 phút không có lỗi mới.
+- Không rollback, không sửa/xóa dữ liệu, không đụng T06 và không chạy Face ID. Bản sao lưu trước cutover cùng release rollback `stack-ab-011ac1e` được giữ nguyên.
+
 ### 2026-08-20 — Phép chiếu catalog cho employee-cost bỏ rơi C25 và các trường hiển thị
 
 - Bot chẩn đúng trên candidate C2: 29/2.087 dòng T07 đổi duy nhất trường C25 (đơn vị tính), rải ở 6 NV. Gốc: `catalogLkgReaderWorker` chiếu tay `{c5,c7,c10,c16}` trong khi `enrichWithRevenue` đọc từ catalogRow cả `uom/c25`, và số dòng hai bản trùng tuyệt đối 2.087/2.087 — tức chỉ Ô bị trống, không dòng nào rơi. (Con số "568 dòng mất" lượt trước là đọc nhầm `match.totalRows` thành tổng dòng; không có dòng nào mất.)

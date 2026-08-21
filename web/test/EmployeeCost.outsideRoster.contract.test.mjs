@@ -12,6 +12,16 @@ test('ALL renders a named outside-roster line only from revenueRecon', () => {
   assert.match(model, /outsideRosterAmount: numberOrNull\(payload\.revenueRecon\.outsideRosterAmount\)/);
 });
 
+test('ALL separates target-only employees and VP018 from true outside-roster rows', () => {
+  assert.match(page, /data-testid="employee-cost-target-only"/);
+  assert.match(page, /NV chỉ tính target — không thưởng\/phạt/);
+  assert.match(page, /đúng chính sách CEO 21\/08\/2026, <b>không ai phải xử lý<\/b>/);
+  assert.match(page, /data-testid="employee-cost-non-sales-quarantined"/);
+  assert.match(page, /Telesale — không nhận doanh thu sale/);
+  assert.match(model, /targetOnlyAmount: numberOrNull\(payload\.revenueRecon\.targetOnlyAmount\)/);
+  assert.match(model, /nonSalesRoleQuarantinedAmount: numberOrNull\(payload\.revenueRecon\.nonSalesRoleQuarantinedAmount\)/);
+});
+
 test('outside-roster values cannot feed employee monthly or column totals', () => {
   const forbidden = [
     /monthlyTotal[^\n]{0,160}outsideRoster|outsideRoster[^\n]{0,160}monthlyTotal/,

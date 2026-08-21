@@ -2230,6 +2230,7 @@ export default function EmployeeCost({ me, onNavigate }) {
         phần chênh nằm ở đâu. */}
     {model?.revenueRecon && !model.revenueRecon.unavailable && model.revenueRecon.shown != null
       && (model.revenueRecon.missingByUnavailable > 0 || model.revenueRecon.missingUnassigned > 0
+        || model.revenueRecon.targetOnlyAmount > 0 || model.revenueRecon.nonSalesRoleQuarantinedAmount > 0
         || model.revenueRecon.outsideRosterAmount > 0 || model.revenueRecon.balanced === false)
       && <div className="employee-cost-match-warning" role="alert">
         <b>💰 Doanh thu kỳ này KHÔNG lên bảng đủ — đây là chỗ phần thiếu đang nằm:</b>
@@ -2246,13 +2247,25 @@ export default function EmployeeCost({ me, onNavigate }) {
             — Dòng <b>chưa gán được nhân viên</b>: <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.missingUnassigned, moneyColumn)}</b>
             {' — '}xem tab <b>"Kiểm soát dữ liệu"</b>, đây là việc gán NV cho dòng, không phải lỗi %.
           </div>}
+          {model.revenueRecon.targetOnlyAmount > 0 && <div data-testid="employee-cost-target-only">
+            — <b>NV chỉ tính target — không thưởng/phạt: {model.revenueRecon.targetOnlyCodes.join(', ')}</b>
+            {' — '}<b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.targetOnlyAmount, moneyColumn)}</b>
+            {' · '}{Number(model.revenueRecon.targetOnlyRows).toLocaleString('vi-VN')} dòng
+            {' — '}đúng chính sách CEO 21/08/2026, <b>không ai phải xử lý</b>.
+          </div>}
+          {model.revenueRecon.nonSalesRoleQuarantinedAmount > 0 && <div data-testid="employee-cost-non-sales-quarantined">
+            — <b>Telesale — không nhận doanh thu sale: {model.revenueRecon.nonSalesRoleQuarantinedCodes.join(', ')}</b>
+            {' — '}<b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.nonSalesRoleQuarantinedAmount, moneyColumn)}</b>
+            {' · '}{Number(model.revenueRecon.nonSalesRoleQuarantinedRows).toLocaleString('vi-VN')} dòng
+            {' — '}đúng quyết định CEO 31/07/2026, <b>không ai phải xử lý</b>.
+          </div>}
           {model.revenueRecon.outsideRosterAmount > 0 && <div className="cost-amounts-warn" data-testid="employee-cost-outside-roster">
             — <b>Ngoài đội hình: {model.revenueRecon.outsideRosterCodes.join(', ')}</b>
             {' — '}<b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.outsideRosterAmount, moneyColumn)}</b>
             {' · '}{Number(model.revenueRecon.outsideRosterRows).toLocaleString('vi-VN')} dòng
           </div>}
           {model.revenueRecon.balanced === false && <div className="cost-amounts-warn">
-            ‼ Cân vẫn lệch <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.gap, moneyColumn)}</b> — chưa giải thích được bằng ba nguyên nhân trên, báo kỹ thuật.
+            ‼ Cân vẫn lệch <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.gap, moneyColumn)}</b> — chưa giải thích được bằng các vế trên, báo kỹ thuật.
           </div>}
         </div>
       </div>}

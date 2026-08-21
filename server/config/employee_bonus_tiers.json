@@ -1,6 +1,6 @@
 {
   "schemaVersion": 3,
-  "version": "bonus-v3.8-timezone-gmt7-r1",
+  "version": "bonus-v3.9-target-only-r1",
   "effectiveFrom": "2026-07-01",
   "base": "revenue_before_vat",
   "currency": "VND",
@@ -48,7 +48,7 @@
   },
   "autoGroupTargets": true,
   "totalCapPct": null,
-  "note": "Thưởng/phạt v3.8: KHÔNG đổi một đồng nào so với v3.7 — chỉ sửa MÚI GIỜ. employeePenaltyPolicy lấy \"tháng hiện tại\" bằng giờ UTC nên từ 00:00–07:00 sáng giờ VN máy còn tưởng là tháng trước, chặn nhầm CEO không tạo được chính sách phạt kỳ mới (CEO nhắc 03/08: \"tao làm việc theo giờ GMT+7\"). Nay dùng Asia/Bangkok. Giữ nguyên cách tính P1/P2, bậc phạt, mốc %, tỷ lệ và quy tắc khoá sổ ngày 8 của v3.7. Dự kiến/tham khảo, không payroll.",
+  "note": "Thưởng/phạt v3.9: CEO chốt 21/08/2026 DN021 và DN023 còn làm việc, chỉ tính target và doanh thu; fail-closed khỏi toàn bộ công thức thưởng/phạt và không nhận tin tiền. Không đổi P1/P2, bậc phạt, mốc %, tỷ lệ, phạt Xu của các mã còn lại; DN022 tiếp tục công thức riêng đang chờ. Dự kiến/tham khảo, không payroll.",
   "penaltyTiers": [
     {
       "tier": "drop_c45",
