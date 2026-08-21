@@ -7724,3 +7724,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Fail-closed luật dấu (`SALE` không âm; `RETURN/CANCEL/ADJUSTMENT` không dương), tiền VND là chuỗi số nguyên đồng, header bắt buộc `legal_entity` và `currency: "VND"`, mọi dòng cùng pháp nhân.
 - Kỳ được suy ra và kiểm bằng `invoice_date`; chặn kỳ đã khóa và chặn cứng `2026-06`; kiểm lại `row_checksum` theo `sha256-canonical-json-v1`.
 - Phân trang chỉ hợp lệ khi trang cuối có `finalize: true`, đủ dòng và checksum tổng khớp. Các trang chỉ giữ trong bộ nhớ; không publish bất kỳ phần dở dang nào.
+### 2026-08-22 — Khóa hồi quy policy doanh thu/CST (test-only)
+
+- Thêm ma trận test bằng `createAccessPolicy`: mã chỉ-doanh-thu và chỉ-CST giữ đúng capability, chỉ được GET đúng path của mình, và mọi method ghi/HEAD/OPTIONS đều bị chặn.
+- Khóa bất biến cho đủ bốn facade Set xuất ra; các biến thể path `..`, gạch chéo ngược và fragment fail-closed. Query hợp lệ trên exact pathname tiếp tục được phép.
+- Không sửa `server/src/accessPolicy.js`, không mang code từ candidate `edfe786`, không deploy.

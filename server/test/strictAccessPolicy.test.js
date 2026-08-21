@@ -103,6 +103,52 @@ test('hai allowlist là hai tập chỉ-đọc, không alias và không thể đ
   assert.equal(policy.COMPANY_CST_READ_EMP_CODES.has('VP018'), true);
 });
 
+test('khóa đầy đủ ma trận policy doanh thu/CST, method, bất biến và path lách', () => {
+  const isolated = policy.createAccessPolicy({
+    revenueCodes: ['QA_REVENUE'],
+    cstCodes: ['QA_CST'],
+  });
+  const revenueOnly = { emp_code: 'QA_REVENUE' };
+  const cstOnly = { emp_code: 'QA_CST' };
+
+  assert.equal(isolated.accessProfileFor(revenueOnly), 'revenue_only');
+  assert.equal(isolated.canReadAllRevenue(revenueOnly), true);
+  assert.equal(isolated.canReadAllCst(revenueOnly), false);
+  assert.equal(isolated.isRequestAllowed(revenueOnly, { method: 'GET', path: '/api/revenue' }), true);
+  assert.equal(isolated.isRequestAllowed(revenueOnly, { method: 'GET', path: '/api/cst' }), false);
+
+  assert.equal(isolated.accessProfileFor(cstOnly), 'revenue_only');
+  assert.equal(isolated.canReadAllCst(cstOnly), true);
+  assert.equal(isolated.canReadAllRevenue(cstOnly), false);
+  assert.equal(isolated.isRequestAllowed(cstOnly, { method: 'GET', path: '/api/cst' }), true);
+  assert.equal(isolated.isRequestAllowed(cstOnly, { method: 'GET', path: '/api/revenue' }), false);
+
+  for (const session of [revenueOnly, cstOnly]) {
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']) {
+      for (const route of ['/api/me', '/api/revenue', '/api/cst']) {
+        assert.equal(isolated.isRequestAllowed(session, { method, path: route }), false, `${session.emp_code} ${method} ${route}`);
+      }
+    }
+    for (const route of ['/api/../me', '/api\\me', '/api/me#x']) {
+      assert.equal(isolated.isRequestAllowed(session, { method: 'GET', path: route }), false, route);
+    }
+    // Query là phần hợp lệ của request tới exact path; policy chỉ fail-closed
+    // với biến thể làm đổi/canonicalize pathname.
+    assert.equal(isolated.isRequestAllowed(session, { method: 'GET', path: '/api/me?x=1' }), true);
+  }
+
+  for (const [name, readonly] of Object.entries({
+    COMPANY_REVENUE_READ_EMP_CODES: isolated.COMPANY_REVENUE_READ_EMP_CODES,
+    COMPANY_CST_READ_EMP_CODES: isolated.COMPANY_CST_READ_EMP_CODES,
+    REVENUE_ONLY_EMP_CODES: isolated.REVENUE_ONLY_EMP_CODES,
+    REVENUE_ONLY_GET_PATHS: isolated.REVENUE_ONLY_GET_PATHS,
+  })) {
+    assert.throws(() => readonly.add('QA_MUTATE'), /read-only/, `${name}.add`);
+    assert.throws(() => readonly.delete('QA_MUTATE'), /read-only/, `${name}.delete`);
+    assert.throws(() => readonly.clear(), /read-only/, `${name}.clear`);
+  }
+});
+
 test('auth từ chối phát token cho denylist và chặn route ngoài doanh thu của VP018', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'reportnew-strict-access-'));
   const oldDir = process.env.AUTH_DATA_DIR;
