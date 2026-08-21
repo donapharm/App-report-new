@@ -52,13 +52,48 @@ test('‼ BẤT BIẾN: hai lượt đọc cách nhau ra Y HỆT nhau — hết 
   assert.equal(a.outcome, b.outcome);
 });
 
-test('kho KHÔNG có kỳ chốt ⇒ rơi về đường cũ (vẫn hỏi nguồn), không chặn', async () => {
+test('local-only TẮT: kho KHÔNG có kỳ chốt vẫn giữ hành vi cũ và hỏi nguồn', async () => {
   const store = memStore();
   const result = await employeeCost.fetchEmployeeCost('DN001', {
     from: CLOSED, to: CLOSED, rateSnapshotStore: store,
     fetchImpl: async () => ({ outcome: 'ok', payload: { empCode: 'DN001', from: CLOSED, to: CLOSED, periods: [{ period: CLOSED, columns: COLS, rows: [] }] } }),
   });
   assert.notEqual(result.pinned, true);
+});
+
+test('‼ local-only BẬT + kho thiếu ⇒ fail-closed đúng thông điệp và tuyệt đối không gọi mạng', async (t) => {
+  const before = process.env.APP_REPORT_COST_LOCAL_ONLY;
+  process.env.APP_REPORT_COST_LOCAL_ONLY = '1';
+  t.after(() => { if (before == null) delete process.env.APP_REPORT_COST_LOCAL_ONLY; else process.env.APP_REPORT_COST_LOCAL_ONLY = before; });
+  const store = memStore();
+  let networkCalls = 0;
+  const result = await employeeCost.fetchEmployeeCost('DN021', {
+    from: '2026-08', to: '2026-08', rateSnapshotStore: store,
+    fetchImpl: async () => { networkCalls += 1; throw new Error('không được ra mạng'); },
+  });
+  assert.equal(networkCalls, 0);
+  assert.equal(result.outcome, 'local_only_missing');
+  assert.equal(result.attempts, 0);
+  assert.equal(result.payload.rateSource, 'local_only_missing');
+  assert.equal(result.payload.note, employeeCost.LOCAL_ONLY_MISSING_NOTE);
+  assert.equal(result.payload.periods[0].note, 'Kỳ này chưa đồng bộ % chi phí — bấm Đồng bộ % chi phí');
+  assert.deepEqual(result.payload.periods[0].rows, []);
+});
+
+test('‼ local-only BẬT + kho đủ ⇒ dùng kho và tuyệt đối không gọi mạng', async (t) => {
+  const before = process.env.APP_REPORT_COST_LOCAL_ONLY;
+  process.env.APP_REPORT_COST_LOCAL_ONLY = '1';
+  t.after(() => { if (before == null) delete process.env.APP_REPORT_COST_LOCAL_ONLY; else process.env.APP_REPORT_COST_LOCAL_ONLY = before; });
+  const store = memStore();
+  await seed(store, '2026-08');
+  let networkCalls = 0;
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-08', to: '2026-08', rateSnapshotStore: store,
+    fetchImpl: async () => { networkCalls += 1; throw new Error('không được ra mạng'); },
+  });
+  assert.equal(networkCalls, 0);
+  assert.equal(result.outcome, 'ok');
+  assert.equal(result.payload.rateSource, 'local_sync');
 });
 
 /* ‼ LUẬT ĐỔI 10/08/2026 — CEO ra lệnh lần thứ hai: *"Tao đã yêu cầu lấy bên này

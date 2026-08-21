@@ -1,3 +1,11 @@
+### 2026-08-21 — Chế độ chỉ dùng kho % chi phí (candidate, chưa bật)
+
+- Thêm cờ opt-in `APP_REPORT_COST_LOCAL_ONLY`, mặc định tắt. Khi bật, đường xem báo cáo chỉ đọc kho `% chi phí`; thiếu kỳ/NV trả `local_only_missing` cùng thông điệp “Kỳ này chưa đồng bộ % chi phí — bấm Đồng bộ % chi phí”, không gọi DataHub và không bịa `0đ`.
+- Nút “Đồng bộ % chi phí” vẫn là cửa mạng duy nhất do CEO chủ động bấm và nay ghi atomic chỉ khi đủ toàn đội 21/21; hụt một NV giữ nguyên bản kho tốt trước đó.
+- Đo PROD read-only trước khi vá: kho T07 và T08 đều đủ 21/21; lần đồng bộ cuối T08 lúc 20:30:13 ngày 17/08/2026 GMT+7 bởi CEO; audit 24 giờ có `0` lần đường xem phải gọi DataHub. Cờ trên PROD vẫn tắt.
+- Gates PASS: local-only/sync trọng tâm `27/27`; toàn bộ server `1.477/1.477`; `git diff --check`.
+- Chưa deploy/restart, không bật cờ, không sửa dữ liệu/roster và không đụng C32/C47.
+
 ### 2026-08-21 — Chính sách target-only DN021/DN023 và đối soát doanh thu tường minh (v3.9)
 
 - Kiểm tra read-only trên nguồn thật xác nhận doanh thu DN021/DN023 vẫn vào màn Target ở T05–T08. T08: DN021 `63.360.000đ / 200.000.000đ = 31,7%`; DN023 `215.242.571đ / 200.000.000đ = 107,6%`. Không sửa nguồn hay target.

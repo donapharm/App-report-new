@@ -1465,6 +1465,8 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
    `APP_REPORT_COST_LOCAL_FIRST=0` (chỉ dùng khi cần đối chiếu với nguồn).
    ═══════════════════════════════════════════════════════════════════════════════ */
 const COST_LOCAL_FIRST = String(process.env.APP_REPORT_COST_LOCAL_FIRST ?? '1') !== '0';
+const COST_LOCAL_ONLY = () => String(process.env.APP_REPORT_COST_LOCAL_ONLY || '') === '1';
+const LOCAL_ONLY_MISSING_NOTE = 'Kỳ này chưa đồng bộ % chi phí — bấm Đồng bộ % chi phí';
 
 /**
  * Kỳ hỏi nằm TRỌN trước go-live ⇒ trả bản rỗng có chú thích đúng nghĩa, không ra mạng.
@@ -1539,6 +1541,21 @@ async function fetchEmployeeCost(empCode, options = {}) {
       result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchRawEmployeeCost);
       return result;
     }
+  }
+
+  // Cờ opt-in của CEO: đường XEM chỉ được đọc bản đã chủ động đồng bộ. Nút đồng
+  // bộ gọi fetchRawEmployeeCost trực tiếp nên vẫn là cửa mạng duy nhất. Thiếu dù
+  // chỉ một kỳ/NV thì trả trạng thái riêng, không rơi về DataHub và không bịa 0đ.
+  if (hasRange && COST_LOCAL_ONLY()) {
+    const range = parseMonthRange(options);
+    const payload = emptyRangePayload(empCode, range, LOCAL_ONLY_MISSING_NOTE);
+    payload.rateSource = 'local_only_missing';
+    payload.ratePolicy = { state: 'local_only_missing', lookupOutcome: 'local_only_missing' };
+    for (const period of payload.periods || []) {
+      period.note = LOCAL_ONLY_MISSING_NOTE;
+      period.rateSource = 'local_only_missing';
+    }
+    return { payload, outcome: 'local_only_missing', attempts: 0 };
   }
 
   // Đã có bản lưu cho mọi kỳ đang hỏi ⇒ KHÔNG tiêu ngân sách chờ 25 giây nữa.
@@ -1751,6 +1768,7 @@ module.exports = {
   sanitizePayload,
   emptyPayload,
   emptyRangePayload,
+  LOCAL_ONLY_MISSING_NOTE,
   adaptPeriodPayload,
   sourcePeriodRangeOf,
   sourceGenerationOf,
