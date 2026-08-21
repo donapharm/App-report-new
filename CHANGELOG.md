@@ -7677,3 +7677,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - `revenueRecon` tách số tiền, số dòng và mã NV ngoài roster thành một vế có tên; bất biến là doanh thu đang hiện + ngoài roster + các vế thiếu đã biết bằng tổng nguồn chính thức.
 - Khoản ngoài roster không được gán cho bất kỳ NV nào, không đi vào `monthlyTotal`, `columnTotals` hoặc subtotal của NV; màn ALL chỉ hiện một dòng cảnh báo riêng cho CEO.
 - Test khóa cả trường hợp có/không có khoản ngoài roster và quét đường tổng để ngăn lần sửa sau cộng nhầm vào tổng của nhân viên.
+# 2026-08-21 — Fail-closed release runtime preflight
+
+- Chuẩn hoá bước chuẩn bị release: `.env` và `server/data` phải là symlink tới kho runtime dùng chung; không được tạo thư mục `server/data` rồi đặt nhầm link thành `server/data/data`.
+- Trước cutover bắt buộc PASS 3/3: `users.json` đọc được từ release, `server/data` trỏ đúng/đọc được, và phép đọc nguội T08 có hơn 0 dòng. `AUTH_DATA_DIR` cũng phải đọc được; thiếu mục nào thì dừng trước khi đụng PM2/traffic.
+- Regression rehearsal khóa các ca: link lồng sai, thiếu `users.json`, T08 0 dòng và kho phiên không đọc được.

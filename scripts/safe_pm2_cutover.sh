@@ -30,6 +30,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 RELEASE_ROOT="${RELEASE_ROOT:?Thiếu RELEASE_ROOT}"
 DATA="${DATA:?Thiếu DATA}"
+APP_DATA_DIR="${APP_DATA_DIR:-$DATA}"
+AUTH_DATA_DIR="${AUTH_DATA_DIR:?Thiếu AUTH_DATA_DIR}"
+COLD_T08_CMD="${COLD_T08_CMD:?Thiếu COLD_T08_CMD}"
 PM2_APP="${PM2_APP:?Thiếu PM2_APP}"
 ARCHIVE="${ARCHIVE:?Thiếu ARCHIVE}"
 HEALTH_CMD="${HEALTH_CMD:-}"
@@ -61,6 +64,12 @@ EXPECT_COMMIT="${EXPECT_COMMIT:?}" EXPECT_RELEASE="${EXPECT_RELEASE:?}" \
 
 # ── 2. Bản chạy khớp bản đã chuẩn bị (chưa động service) ──
 RELEASE_ROOT="$RELEASE_ROOT" bash "$HERE/release_manifest.sh" verify || die "Bản chạy bị đổi sau prepare — DỪNG."
+
+# Runtime bindings and a real cold T08 read must pass before backup, pointer
+# change, PM2 reload, or any other production mutation.
+RELEASE_ROOT="$RELEASE_ROOT" APP_DATA_DIR="$APP_DATA_DIR" AUTH_DATA_DIR="$AUTH_DATA_DIR" \
+  COLD_T08_CMD="$COLD_T08_CMD" bash "$HERE/release_runtime_preflight.sh" \
+  || die "Runtime preflight không đạt — DỪNG, chưa đụng service."
 
 # ── 3. BACKUP TRƯỚC KHI ĐỘNG VÀO SERVICE (#3) — service vẫn đang chạy ──
 DATA="$DATA" ARCHIVE="$ARCHIVE" bash "$HERE/backup_data.sh" create || die "Tạo backup lỗi — DỪNG, chưa đụng service."

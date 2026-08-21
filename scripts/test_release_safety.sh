@@ -39,6 +39,23 @@ chmod 600 "$DATA/important.json"
 DATA_SHA="$(tree_sha "$DATA")"
 
 echo
+echo "--- Runtime bindings + preflight 3/3 trước cutover ---"
+RTP="$WORK/runtime-release"; mkdir -p "$RTP/server"
+AUTH="$WORK/auth"; mkdir -p "$AUTH"; echo '{}' > "$WORK/app.env"
+echo '{"users":[{"role":"CEO"}]}' > "$DATA/users.json"
+run "prepare tạo đúng symlink data + env" pass env RELEASE_ROOT="$RTP" APP_DATA_DIR="$DATA" APP_ENV_FILE="$WORK/app.env" AUTH_DATA_DIR="$AUTH" bash "$HERE/prepare_release_runtime.sh"
+run "preflight đủ 3 mục → PASS" pass env RELEASE_ROOT="$RTP" APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" COLD_T08_CMD="printf '{\"rowCount\":1}'" bash "$HERE/release_runtime_preflight.sh"
+
+BADRT="$WORK/bad-runtime-release"; mkdir -p "$BADRT/server/data"; ln -s "$DATA" "$BADRT/server/data/data"
+run "server/data là thư mục chứa link data/data → CHẶN" fail env RELEASE_ROOT="$BADRT" APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" COLD_T08_CMD="printf '{\"rowCount\":1}'" bash "$HERE/release_runtime_preflight.sh"
+mv "$DATA/users.json" "$DATA/users.json.hold"
+run "thiếu users.json → CHẶN" fail env RELEASE_ROOT="$RTP" APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" COLD_T08_CMD="printf '{\"rowCount\":1}'" bash "$HERE/release_runtime_preflight.sh"
+mv "$DATA/users.json.hold" "$DATA/users.json"
+run "T08 nguội 0 dòng → CHẶN" fail env RELEASE_ROOT="$RTP" APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" COLD_T08_CMD="printf '{\"rowCount\":0}'" bash "$HERE/release_runtime_preflight.sh"
+run "AUTH_DATA_DIR không đọc được → CHẶN" fail env RELEASE_ROOT="$RTP" APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$WORK/missing-auth" COLD_T08_CMD="printf '{\"rowCount\":1}'" bash "$HERE/release_runtime_preflight.sh"
+DATA_SHA="$(tree_sha "$DATA")"
+
+echo
 echo "--- P2: backup phải chứng minh được NỘI DUNG ---"
 ARCHIVE="$WORK/backups/data.tgz"
 run "tạo backup kèm manifest + checksum" pass \
@@ -185,8 +202,10 @@ EOF
 chmod +x "$WORK/fake_start.sh"
 PREP2="$WORK/prep_cut.txt"; printf 'status=PASS\ncallback=OK\nbase=/b\ncommit=c1\nrelease=r1\n' > "$PREP2"
 mkdir -p "$WORK/rel2/server/src"; echo x > "$WORK/rel2/server/src/index.js"
+ln -s "$DATA" "$WORK/rel2/server/data"
 RELEASE_ROOT="$WORK/rel2" bash "$HERE/release_manifest.sh" create >/dev/null 2>&1
 out="$(RELEASE_ROOT="$WORK/rel2" DATA="$DATA" PM2_APP=x ARCHIVE="/proc/nonexistent/x.tgz" \
+  APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" COLD_T08_CMD="printf '{\"rowCount\":1}'" \
   PREPARE_FILE="$PREP2" USED_TOKENS_FILE="$WORK/tc" EXPECT_CALLBACK=OK EXPECT_BASE=/b EXPECT_COMMIT=c1 EXPECT_RELEASE=r1 \
   START_CMD="$WORK/fake_start.sh" HEALTH_CMD="true" bash "$HERE/safe_pm2_cutover.sh" 2>&1)"; rc=$?
 if [ $rc -ne 0 ]; then echo "  ✅ backup lỗi → cutover DỪNG (exit!=0)"; PASS=$((PASS+1)); else echo "  ❌ cutover không dừng khi backup lỗi"; FAIL=$((FAIL+1)); fi
