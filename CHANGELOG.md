@@ -1,3 +1,11 @@
+### 2026-08-21 — Nghiệm thu target-only PROD và luật checksum kỳ mở
+
+- PROD exact `78c43d9ca9801f399a28dc446c869edb17df1bfa` PASS sau khi CEO đăng nhập OTP và `app-report` restart đúng một lần: phiên CEO còn sống, health/version đúng exact, `app-report-tgbot` không restart.
+- T07 kỳ đóng giữ đúng `2.087` dòng hiện bảng + `4` dòng target-only = `2.091 / 19 NV`; target-only `60.027.600đ`, `balanced:true`, checksum thưởng/phạt 19/19 khớp.
+- T08 kỳ mở tăng từ `1.498` dòng lúc khoảng 10:00 lên `1.527` dòng lúc 13:20. Phép phân xử read-only cùng dữ liệu trong 2 phút 17 giây cho `011ac1e` và PROD `78c43d9` khớp tuyệt đối 5 trường thưởng/phạt của DN003, DN009, DN016. Ba mã tăng tỷ lệ nhưng không đổi bậc 90/70/50%; target-only `292.532.700đ`, VP018 telesale `1.795.600đ`, `balanced:true`.
+- Luật nghiệm thu mới: checksum thưởng/phạt của kỳ **đang mở** phải chụp và so trong cùng cửa sổ không quá 10 phút; snapshot cũ hơn hết hạn và không được dùng để kết luận regression. Kỳ đóng tiếp tục dùng snapshot khóa.
+- Log 5 phút `13:23:13–13:28:32` GMT+7 không phát sinh byte mới; PID/restart đứng nguyên. Không deploy thêm, không bật cờ và không đụng T06/dữ liệu.
+
 ### 2026-08-21 — CP Total 52 dùng custody và lưu lịch sử bản niêm phong (candidate, cờ tắt)
 
 - Port control plane CP Total 52 lên đầu nhánh hiện hành; quyền truy cập vẫn chỉ CEO bằng phiên người thật có OTP trong 12 giờ gần nhất. `CATALOG52_CONTROL_PLANE_ENABLED` tiếp tục mặc định tắt và chỉ mở khi giá trị đúng bằng `1`.
