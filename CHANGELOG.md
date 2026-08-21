@@ -1,3 +1,9 @@
+### 2026-08-21 — Luật cổng log theo trạng thái warm
+
+- Cổng log 5 phút chỉ được chấm khi app đã chạy ấm ít nhất 15 phút sau lần restart cuối. Nếu cần đánh giá giai đoạn khởi động, phải so với bản cũ cũng vừa khởi động; cấm so máy vừa dựng đệm với máy đã ấm.
+- Quan sát khởi động b2b83c8: bốn lượt nghẽn event-loop đầu tiên trong cửa sổ sau reload có `maxMs` 1,85–2,14 giây; đây là mốc theo dõi startup, không tự kết luận regression.
+- Phép so tương đương 21/08: side-run `011ac1e` khi dựng đệm T08+T07 cũng ghi hai cảnh báo 3,764 giây và 1,315 giây. Tuy nhiên, sau khi side-run ấm trên 15 phút, cửa sổ 16:25:34–16:31:19 GMT+7 không có warning mới; trong khi PROD b2b83c8 đã ấm có 5 warning trong cửa sổ 16:03:58–16:09:17, gồm đỉnh 4,425 giây. Ghi nhận thành việc điều tra hiệu năng riêng; không rollback vì health, số liệu, phiên và quyền vẫn đúng.
+
 ### 2026-08-21 — Khóa identity khi cutover
 
 - Cổng cutover fail-closed nếu `APP_RELEASE_ROOT` không trỏ đúng release đích trước khi khởi động.
