@@ -96,6 +96,23 @@ test('‼ local-only BẬT + kho đủ ⇒ dùng kho và tuyệt đối không g
   assert.equal(result.payload.rateSource, 'local_sync');
 });
 
+test('‼ local-only BẬT: applyEffectiveRates gặp kỳ trống cũng zero-fetch và trả local_only_missing', async (t) => {
+  const before = process.env.APP_REPORT_COST_LOCAL_ONLY;
+  process.env.APP_REPORT_COST_LOCAL_ONLY = '1';
+  t.after(() => { if (before == null) delete process.env.APP_REPORT_COST_LOCAL_ONLY; else process.env.APP_REPORT_COST_LOCAL_ONLY = before; });
+  let fetchCalls = 0;
+  const payload = { periods: [{ period: '2026-08', columns: [], rows: [] }] };
+  const result = await employeeCost.applyEffectiveRates(payload, 'DN021', {}, async () => {
+    fetchCalls += 1;
+    return { outcome: 'ok', payload: { rows: [{ c41: 1 }] }, sourceRange: { from: '2026-07', to: '2026-07' } };
+  });
+  assert.equal(fetchCalls, 0, 'local-only cấm gọi fallback latest');
+  assert.equal(result.rateSource, 'local_only_missing');
+  assert.equal(result.ratePolicy.state, 'local_only_missing');
+  assert.equal(result.periods[0].rateSource, 'local_only_missing');
+  assert.equal(result.periods[0].note, employeeCost.LOCAL_ONLY_MISSING_NOTE);
+});
+
 /* ‼ LUẬT ĐỔI 10/08/2026 — CEO ra lệnh lần thứ hai: *"Tao đã yêu cầu lấy bên này
  * không lấy bên DataHub về % chi phí nữa để không bị lỗi."* Bằng chứng CEO đưa:
  * cùng kỳ T07, 23:05 màn hiện 359/359 dòng, 00:20 hiện 1.332/1.332 dòng — doanh thu

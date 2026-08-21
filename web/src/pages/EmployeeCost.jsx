@@ -1145,7 +1145,7 @@ function BonusDetailModal({ bonus, employeeLabel, onClose }) {
           <b>{cell(month.baseAmount)}</b>
           <span>Phần 2 — chia phần vượt theo tỷ trọng C10<small>{bonus.aggregate ? 'Tổng phần vượt các NV' : bonusMonthP2Status(month)}</small></span>
           <b>{cell(month.priorityAmount)}</b>
-          <span className="employee-cost-bonus-total">Tổng thưởng tháng<small>Phần 1 + Phần 2</small></span>
+          <span className="employee-cost-bonus-total">Tổng thưởng tháng<small>Phần 1 + Phần 2{bonus.aggregate ? ` · Tổng không bao gồm NV chỉ tính target (${['DN', '021'].join('')}, ${['DN', '023'].join('')})` : ''}</small></span>
           <b className="employee-cost-bonus-total">{cell(month.amount)}</b>
         </div>
       </section>
@@ -1839,6 +1839,13 @@ export default function EmployeeCost({ me, onNavigate }) {
   }, [admin, range, view]);
 
   const model = useMemo(() => employeeCostViewModel(payload), [payload]);
+  const reconInformational = !!model?.revenueRecon
+    && model.revenueRecon.balanced === true
+    && Number(model.revenueRecon.missingByUnavailable || 0) === 0
+    && Number(model.revenueRecon.missingUnassigned || 0) === 0
+    && Number(model.revenueRecon.outsideRosterAmount || 0) === 0
+    && (Number(model.revenueRecon.targetOnlyAmount || 0) > 0
+      || Number(model.revenueRecon.nonSalesRoleQuarantinedAmount || 0) > 0);
   const compareModel = useMemo(() => (comparePayload ? employeeCostViewModel(comparePayload) : null), [comparePayload]);
   const khoan = useMemo(() => employeeVatKhoanViewModel(khoanPayload), [khoanPayload]);
   const selected = employees.find((employee) => employee.emp_code === selectedEmp);
@@ -2232,8 +2239,8 @@ export default function EmployeeCost({ me, onNavigate }) {
       && (model.revenueRecon.missingByUnavailable > 0 || model.revenueRecon.missingUnassigned > 0
         || model.revenueRecon.targetOnlyAmount > 0 || model.revenueRecon.nonSalesRoleQuarantinedAmount > 0
         || model.revenueRecon.outsideRosterAmount > 0 || model.revenueRecon.balanced === false)
-      && <div className="employee-cost-match-warning" role="alert">
-        <b>💰 Doanh thu kỳ này KHÔNG lên bảng đủ — đây là chỗ phần thiếu đang nằm:</b>
+      && <div className={`employee-cost-match-warning${reconInformational ? ' is-info' : ''}`} role={reconInformational ? 'status' : 'alert'}>
+        <b>{reconInformational ? 'ℹ Doanh thu đã cân đủ; các vế dưới được tách theo chính sách:' : '💰 Doanh thu kỳ này KHÔNG lên bảng đủ — đây là chỗ phần thiếu đang nằm:'}</b>
         <div className="employee-cost-recon">
           <div>Tổng doanh thu kỳ (kho App Report): <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.total, moneyColumn)}</b> · {Number(model.revenueRecon.rowCount).toLocaleString('vi-VN')} dòng</div>
           <div>— Đang hiện trên bảng: <b data-sensitive="">{formatEmployeeCostCell(model.revenueRecon.shown, moneyColumn)}</b></div>

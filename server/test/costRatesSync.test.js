@@ -65,7 +65,7 @@ test('kéo đủ cả đội ⇒ một lần ghi atomic; reader dùng thẳng kh
   assert.equal(payload.periods[0].rateFetchedAt, NOW());
 });
 
-test('‼ ALL-OR-NOTHING: hụt một người thì không ghi và nêu đích danh ai thiếu', async () => {
+test('‼ GOM DẦN: hụt vài người thì ghi phần lấy được và nêu đích danh ai thiếu', async () => {
   const store = memStore();
   const result = await sync.syncPeriod({
     period: '2026-07', empCodes: ['DN001', 'DN002', 'DN003'], actor: 'CEO', store,
@@ -74,30 +74,25 @@ test('‼ ALL-OR-NOTHING: hụt một người thì không ghi và nêu đích d
       ? { outcome: 'upstream_unavailable', payload: null }
       : { outcome: 'ok', payload: { periods: [{ period: '2026-07', columns: COLS, rows: [row('120.HTNT', 'G1.A', { c41: 1, c43: 3 })] }] } }),
   });
-  assert.equal(result.ok, false);
-  assert.equal(result.written, false);
+  assert.equal(result.ok, true);
+  assert.equal(result.written, true);
   assert.equal(result.fetched, 2);
-  assert.equal(result.stored, 0);
+  assert.equal(result.stored, 2);
   assert.deepEqual(result.missing, ['DN003'], 'phải nêu ĐÍCH DANH người còn thiếu');
   assert.equal(result.complete, false, 'chưa đủ thì KHÔNG được báo đủ');
-  assert.equal(sync.statusOf('2026-07', { store }), null);
+  assert.deepEqual(sync.statusOf('2026-07', { store }).employees, ['DN001', 'DN002']);
 });
 
-test('lượt lỗi giữ nguyên bản tốt cũ; lượt đủ sau đó thay atomic cả đội', async () => {
+test('bấm lượt sau gom tiếp người còn thiếu, không xoá người đã có', async () => {
   const store = memStore();
   const base = { outcome: 'ok', payload: { periods: [{ period: '2026-07', columns: COLS, rows: [row('120.HTNT', 'G1.A', { c41: 1, c43: 3 })] }] } };
-  await sync.syncPeriod({
-    period: '2026-07', empCodes: ['DN001', 'DN002', 'DN003'], actor: 'CEO', store,
-    now: () => '2026-08-10T09:20:00.000+07:00', fetchImpl: async () => base,
-  });
-  const failed = await sync.syncPeriod({
+  const first = await sync.syncPeriod({
     period: '2026-07', empCodes: ['DN001', 'DN002', 'DN003'], actor: 'CEO', store,
     now: () => '2026-08-10T09:30:00.000+07:00',
     fetchImpl: async (emp) => (emp === 'DN003' ? { outcome: 'upstream_unavailable', payload: null } : base),
   });
-  assert.equal(failed.written, false);
-  assert.equal(failed.stored, 3);
-  assert.deepEqual(sync.statusOf('2026-07', { store }).employees, ['DN001', 'DN002', 'DN003']);
+  assert.equal(first.written, true);
+  assert.equal(first.stored, 2);
   const second = await sync.syncPeriod({
     period: '2026-07', empCodes: ['DN001', 'DN002', 'DN003'], actor: 'CEO', store,
     now: () => '2026-08-10T09:40:00.000+07:00',
@@ -106,7 +101,7 @@ test('lượt lỗi giữ nguyên bản tốt cũ; lượt đủ sau đó thay a
   assert.equal(second.complete, true, 'gom đủ thì mới được báo đủ');
   assert.deepEqual(second.missing, []);
   assert.equal(second.stored, 3);
-  assert.equal(second.gained, 0);
+  assert.equal(second.gained, 1);
 });
 
 test('‼ lượt không lấy được AI thì KHÔNG đụng kho — giữ nguyên bản đang có', async () => {

@@ -8,9 +8,8 @@
  * kho này là BẢN SAO CHỦ ĐỘNG theo KỲ — CEO bấm nút, kéo đủ cả đội một lượt.
  *
  * ‼ Ba luật không đổi:
- *  1. ALL-OR-NOTHING theo kỳ: kéo đủ MỌI NV mới ghi đè; hụt một người ⇒ giữ nguyên
- *     bản tốt đang có, báo rõ ai hỏng. Nửa đội số mới nửa đội số cũ là loại lệch
- *     không ai lần ra được.
+ *  1. GOM DẦN theo kỳ: lần này lấy được NV nào thì ghi NV đó, cộng với bản
+ *     đã có; chỉ báo `complete` khi kho đủ toàn bộ danh sách yêu cầu.
  *  2. Số nào cũng có căn cước: fetchedAt · fetchedBy · đổi bao nhiêu dòng danh mục so bản trước.
  *  3. App Report KHÔNG sửa %: kho chỉ chép, nguồn sự thật vẫn là DataHub.
  */
@@ -133,8 +132,7 @@ async function syncPeriod({
   // Nghỉ giữa hai lượt gọi. Bằng chứng 08/08: DataHub tự restart vì RSS 951,8 MB
   // vượt ngưỡng 900 MiB khi bị đọc dồn. Gọi tuần tự thôi là chưa đủ — 21 lượt liên
   // tiếp không cho nguồn kịp thu hồi bộ nhớ giữa các lượt. Nghỉ một nhịp ngắn đổi
-  // lấy việc đồng bộ chạy trót lọt: all-or-nothing nên nguồn ngã giữa chừng là hỏng
-  // cả lượt, phải bấm lại từ đầu.
+  // lấy việc đồng bộ chạy trót lọt; nếu nguồn chập chờn thì lần sau gom tiếp phần thiếu.
   pauseMs = Number(process.env.COST_SYNC_PAUSE_MS ?? 250),
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
@@ -171,23 +169,23 @@ async function syncPeriod({
   const at = now();
   const rows = readAll(store);
   const previous = rows[period];
-  const fetchedCodes = Object.keys(employees).sort();
-  const previousCodes = Object.keys(previous?.employees || {}).sort();
-  const missing = codes.filter((code) => !employees[code]);
+  const mergedEmployees = { ...(previous?.employees || {}), ...employees };
+  const storedCodes = Object.keys(mergedEmployees).sort();
+  const missing = codes.filter((code) => !mergedEmployees[code]);
+  const gained = Object.keys(employees).filter((code) => !previous?.employees?.[code]);
 
-  // CEO chốt 21/08/2026: nút đồng bộ là giao dịch 21/21. Hụt một NV thì giữ
-  // nguyên bản kho trước đó; tuyệt đối không công bố một kỳ trộn nhiều lần kéo.
-  if (missing.length) {
+  // Lượt này không lấy được ai thì không đụng kho; giữ nguyên phần đã gom.
+  if (!Object.keys(employees).length) {
     writeAudit({ at, actor: who, period, ok: false, requested: codes.length,
-      fetched: fetchedCodes.length, stored: previousCodes.length, missing, complete: false, failures }, { store });
+      fetched: 0, stored: storedCodes.length, missing, complete: missing.length === 0, failures }, { store });
     return {
-      ok: false, period, requested: codes.length, fetched: fetchedCodes.length, written: false,
-      stored: previousCodes.length, missing, complete: false, gained: 0, failures,
+      ok: false, period, requested: codes.length, fetched: 0, written: false,
+      stored: storedCodes.length, missing, complete: missing.length === 0, gained: 0, failures,
     };
   }
 
   const template = employeeCostTemplates.resolveTemplate(codes[0]);
-  const identity = collectLineSignatures(employees, template.costColumns || []);
+  const identity = collectLineSignatures(mergedEmployees, template.costColumns || []);
   const { signatures, exclusions, sourceRows, includedRows } = identity;
   const exclusionRate = sourceRows ? exclusions.length / sourceRows : 0;
   if (!includedRows || exclusionRate > MAX_LINE_EXCLUSION_RATE) {
@@ -204,14 +202,14 @@ async function syncPeriod({
   }
   const diff = diffSignatures(previous?.lineSignatures || previous?.pairSignatures, signatures);
 
-  rows[period] = { period, fetchedAt: at, fetchedBy: who, sourceVersion: null, employees, lineSignatures: signatures };
+  rows[period] = { period, fetchedAt: at, fetchedBy: who, sourceVersion: null, employees: mergedEmployees, lineSignatures: signatures };
   const keys = Object.keys(rows).sort();
   for (const stale of keys.slice(0, Math.max(0, keys.length - MAX_PERIODS))) delete rows[stale];
   store.save(FILE, rows);
 
   const summary = {
     ok: true, period, requested: codes.length, fetched: Object.keys(employees).length, written: true,
-    stored: fetchedCodes.length, missing: [], complete: true, gained: fetchedCodes.filter((code) => !previous?.employees?.[code]).length,
+    stored: storedCodes.length, missing, complete: missing.length === 0, gained: gained.length,
     fetchedAt: at, rowCount: Object.keys(signatures).length, pairCount: Object.keys(signatures).length, diff, failures,
     lineIdentity: { sourceRows, includedRows, excludedRows: exclusions.length, exclusionRate,
       threshold: MAX_LINE_EXCLUSION_RATE, exceptions: exclusions },

@@ -2273,6 +2273,7 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .employee-cost-annual-badge { display:inline-flex; margin-left:5px; padding:2px 6px; border:1px solid rgba(255,255,255,.35); border-radius:999px; color:#fff; font-size:9px; font-style:normal; font-weight:900; opacity:1; }
 .employee-cost-match-warning { padding:11px 13px; border:1px solid #e7b24d; border-left:4px solid #d68700; border-radius:10px; background:#fff8e8; color:#744700; font-size:12px; }
 .employee-cost-match-warning.employee-cost-data-mismatch { border-color:#f1aeb5; border-left-color:#b42318; background:#fff1f2; color:#8f1d1d; }
+.employee-cost-match-warning.is-info { border-color:#9ec5e8; border-left-color:#1f6fb2; background:#f2f8fd; color:#154c7c; }
 /* Đang xài bản % cũ: là TIN, không phải LỖI — màu xanh dịu, không đỏ/vàng gắt. */
 .employee-cost-match-warning.is-stale { border-color:#9ec5e8; border-left-color:#1f6fb2; background:#f2f8fd; color:#154c7c; }
 .employee-cost-kpi-source-note { grid-column:1 / -1; }

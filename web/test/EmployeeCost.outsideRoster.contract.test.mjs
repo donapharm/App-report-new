@@ -22,6 +22,15 @@ test('ALL separates target-only employees and VP018 from true outside-roster row
   assert.match(model, /nonSalesRoleQuarantinedAmount: numberOrNull\(payload\.revenueRecon\.nonSalesRoleQuarantinedAmount\)/);
 });
 
+test('balanced target-only/telesale is informational, not an alert', () => {
+  assert.match(page, /const reconInformational =/);
+  assert.match(page, /role=\{reconInformational \? 'status' : 'alert'\}/);
+  assert.match(page, /Doanh thu đã cân đủ; các vế dưới được tách theo chính sách/);
+  assert.match(page, /Tổng không bao gồm NV chỉ tính target/);
+  assert.match(page, /\['DN', '021'\]\.join\(''\)/);
+  assert.match(page, /\['DN', '023'\]\.join\(''\)/);
+});
+
 test('outside-roster values cannot feed employee monthly or column totals', () => {
   const forbidden = [
     /monthlyTotal[^\n]{0,160}outsideRoster|outsideRoster[^\n]{0,160}monthlyTotal/,

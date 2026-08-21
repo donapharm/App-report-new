@@ -1373,6 +1373,20 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
   const periods = Array.isArray(payload?.periods) ? payload.periods : null;
   if (!periods || !periods.some((period) => !period.rows?.length)) return payload;
 
+  // Local-only means every display path is network-free, including this policy
+  // carry-forward helper. A partial/empty local period must stay explicitly
+  // missing; it must never use the "latest" DataHub fallback.
+  if (COST_LOCAL_ONLY()) {
+    payload.rateSource = 'local_only_missing';
+    payload.ratePolicy = { state: 'local_only_missing', lookupOutcome: 'local_only_missing' };
+    for (const period of periods) {
+      if (period.rows?.length) continue;
+      period.note = LOCAL_ONLY_MISSING_NOTE;
+      period.rateSource = 'local_only_missing';
+    }
+    return payload;
+  }
+
   const { from, to, revenueRowsByPeriod, catalogRowsByPeriod, fetchOneImpl, ...lookupOptions } = options;
   const latest = await fetchLatest(empCode, lookupOptions);
   const sourceFrom = normalizeMonth(latest?.sourceRange?.from);
