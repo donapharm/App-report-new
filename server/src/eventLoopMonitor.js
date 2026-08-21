@@ -23,6 +23,7 @@
  */
 
 const { monitorEventLoopDelay } = require('node:perf_hooks');
+const { vnSecond } = require('./tickTelemetry');
 
 const MS = 1e6; // histogram của Node trả nano-giây
 
@@ -76,6 +77,7 @@ function start() {
     if (current.maxMs >= WARN_LAG_MS) {
       warnCount += 1;
       console.warn('[event-loop] NGHẼN — vòng lặp sự kiện bị chặn', {
+        at: vnSecond(),
         ...current,
         warnMs: WARN_LAG_MS,
         windowMs: REPORT_INTERVAL_MS,

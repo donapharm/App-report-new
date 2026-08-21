@@ -2,6 +2,7 @@
 
 process.env.TZ = process.env.TZ || 'Asia/Ho_Chi_Minh';
 const deckReport = require('./deckReport');
+const tickTelemetry = require('../tickTelemetry');
 
 const state = { timer: null, running: false };
 const truthy = (value) => /^(1|true|yes|on)$/i.test(String(value || '').trim());
@@ -49,13 +50,21 @@ async function runDue({ now = new Date(), env = process.env, report = deckReport
 }
 
 async function tick(options = {}) {
-  if (state.running) return { ok: true, skipped: 'already-running' };
+  const finish = tickTelemetry.startTick('report-deck-scheduler');
+  if (state.running) {
+    finish({ didWork: false, outcome: 'already-running' });
+    return { ok: true, skipped: 'already-running' };
+  }
   state.running = true;
   try {
     const result = await runDue(options);
     if (!result.ok) console.error('[report-deck-scheduler] run failed', JSON.stringify(result));
     else if (!result.skipped || !['not-due', 'scheduler-disabled'].includes(result.skipped)) console.log('[report-deck-scheduler]', JSON.stringify(result));
+    finish({ didWork: !result.skipped, outcome: result.skipped || (result.ok ? 'completed' : 'failed') });
     return result;
+  } catch (error) {
+    finish({ didWork: true, outcome: 'failed' });
+    throw error;
   } finally { state.running = false; }
 }
 

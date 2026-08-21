@@ -8,6 +8,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const { holidayFor } = require('./dailySales');
+const tickTelemetry = require('./tickTelemetry');
 
 const TZ = 'Asia/Bangkok';
 const DEFAULT_INTERVAL_MIN = 30;
@@ -224,12 +225,25 @@ async function runScheduled(due) {
   return runOnce({ force: true, reason: `schedule:${due.slot}`, ky: due?.parts ? kyFromParts(due.parts) : undefined });
 }
 function tick() {
+  const finish = tickTelemetry.startTick('revenue-refresh');
   const due = isDue();
-  if (!due.due) { state.lastSkip = { at: new Date().toISOString(), ...due }; return; }
-  if (due.slot === state.lastSlot) return;
+  if (!due.due) {
+    state.lastSkip = { at: new Date().toISOString(), ...due };
+    finish({ didWork: false, outcome: due.reason || 'not-due' });
+    return;
+  }
+  if (due.slot === state.lastSlot) {
+    finish({ didWork: false, outcome: 'slot-already-run' });
+    return;
+  }
   // Slot có YYYY-MM-DD-HHmm nên qua ngày 01/tháng mới không thể bị lastSlot tháng cũ chặn.
   state.lastSlot = due.slot;
-  runScheduled(due).catch((e) => console.error('[revenue-refresh] scheduled run failed', String(e?.message || e)));
+  runScheduled(due)
+    .then(() => finish({ didWork: true, outcome: 'completed' }))
+    .catch((e) => {
+      finish({ didWork: true, outcome: 'failed' });
+      console.error('[revenue-refresh] scheduled run failed', String(e?.message || e));
+    });
 }
 function start() {
   if (state.started) return;

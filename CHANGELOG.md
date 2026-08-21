@@ -1,3 +1,9 @@
+### 2026-08-21 — Đóng dấu hai tick 60 giây và cảnh báo event-loop
+
+- Mỗi tick revenue-refresh và report-deck scheduler ghi đúng một dòng gọn: giờ GMT+7 tới giây, thời gian chạy, có làm việc thật hay bỏ qua, và kết quả.
+- Cảnh báo event-loop tự mang giờ GMT+7 để đối chiếu trực tiếp, không còn phải tái dựng từ mtime của PM2 log.
+- Chỉ thêm quan sát; không bật/tắt scheduler, không đổi chu kỳ, luồng dữ liệu hay ngưỡng cảnh báo.
+
 ### 2026-08-21 — Luật cổng log theo trạng thái warm
 
 - Cổng log 5 phút chỉ được chấm khi app đã chạy ấm ít nhất 15 phút sau lần restart cuối. Nếu cần đánh giá giai đoạn khởi động, phải so với bản cũ cũng vừa khởi động; cấm so máy vừa dựng đệm với máy đã ấm.
