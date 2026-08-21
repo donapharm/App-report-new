@@ -5,6 +5,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const monitor = require('../src/eventLoopMonitor');
 
+test('ngưỡng GC quan sát là 200ms', () => {
+  assert.equal(monitor.GC_WARN_MS, 200);
+});
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 test('đồng hồ đo phải BẮT ĐƯỢC một cú chặn vòng lặp sự kiện', async () => {

@@ -22,7 +22,7 @@
  * payload, không mã nhân viên.
  */
 
-const { monitorEventLoopDelay } = require('node:perf_hooks');
+const { monitorEventLoopDelay, PerformanceObserver, constants } = require('node:perf_hooks');
 const { vnSecond } = require('./tickTelemetry');
 
 const MS = 1e6; // histogram của Node trả nano-giây
@@ -41,11 +41,13 @@ const WARN_LAG_MS = Math.max(
 const REPORT_INTERVAL_MS = Math.max(
   5_000, Number(process.env.APP_REPORT_EVENT_LOOP_REPORT_MS || 0) || 30_000,
 );
+const GC_WARN_MS = 200;
 
 let histogram = null;
 let timer = null;
 let worstLagMs = 0;
 let warnCount = 0;
+let gcObserver = null;
 
 const round = (value) => Math.round(value * 10) / 10;
 
@@ -84,18 +86,46 @@ function start() {
         warnCount,
       });
     }
+    const memory = process.memoryUsage();
+    console.log('[runtime-memory]', {
+      at: vnSecond(),
+      heapUsed: memory.heapUsed,
+      heapTotal: memory.heapTotal,
+      rss: memory.rss,
+    });
     histogram.reset();
   }, REPORT_INTERVAL_MS);
   if (typeof timer.unref === 'function') timer.unref();
   console.log('[event-loop] đồng hồ đo đã bật', {
     resolutionMs: RESOLUTION_MS, warnMs: WARN_LAG_MS, reportMs: REPORT_INTERVAL_MS,
   });
+  try {
+    gcObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry.duration < GC_WARN_MS) continue;
+        const kind = entry.detail?.kind ?? entry.kind;
+        const kindName = Object.entries(constants)
+          .find(([name, value]) => name.startsWith('NODE_PERFORMANCE_GC_') && value === kind)?.[0]
+          || String(kind ?? 'unknown');
+        console.warn('[runtime-gc]', {
+          at: vnSecond(),
+          kind: kindName,
+          durationMs: round(entry.duration),
+        });
+      }
+    });
+    gcObserver.observe({ entryTypes: ['gc'] });
+  } catch (error) {
+    console.warn('[runtime-gc] không bật được đồng hồ GC', { message: error.message });
+    gcObserver = null;
+  }
   return timer;
 }
 
 function stop() {
   if (timer) { clearInterval(timer); timer = null; }
   if (histogram) { try { histogram.disable(); } catch { /* ignore */ } histogram = null; }
+  if (gcObserver) { try { gcObserver.disconnect(); } catch { /* ignore */ } gcObserver = null; }
 }
 
 // Cho phép đọc số tại một thời điểm bất kỳ (dùng khi cần gắn vào một lượt đo cụ thể).
@@ -103,4 +133,4 @@ function read() {
   return { ...(snapshot() || { maxMs: null, p99Ms: null, meanMs: null }), worstLagMs, warnCount };
 }
 
-module.exports = { start, stop, read, WARN_LAG_MS, RESOLUTION_MS, REPORT_INTERVAL_MS };
+module.exports = { start, stop, read, WARN_LAG_MS, RESOLUTION_MS, REPORT_INTERVAL_MS, GC_WARN_MS };

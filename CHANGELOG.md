@@ -3,6 +3,7 @@
 - Mỗi tick revenue-refresh và report-deck scheduler ghi đúng một dòng gọn: giờ GMT+7 tới giây, thời gian chạy, có làm việc thật hay bỏ qua, và kết quả.
 - Cảnh báo event-loop tự mang giờ GMT+7 để đối chiếu trực tiếp, không còn phải tái dựng từ mtime của PM2 log.
 - Chỉ thêm quan sát; không bật/tắt scheduler, không đổi chu kỳ, luồng dữ liệu hay ngưỡng cảnh báo.
+- Bổ sung log GC chỉ khi pause từ 200 ms và ảnh chụp `heapUsed/heapTotal/rss` mỗi 30 giây để phân biệt tick nền với áp lực heap; không log payload hay dữ liệu nghiệp vụ.
 
 ### 2026-08-21 — Luật cổng log theo trạng thái warm
 
