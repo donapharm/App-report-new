@@ -656,14 +656,18 @@ function Catalog52ControlPlane({ period }) {
   const [candidate, setCandidate] = useState(null);
   const [page, setPage] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
+  const [history, setHistory] = useState([]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const hubPeriod = uiToHub(period);
   const load = async () => {
     setBusy('load'); setError('');
     try {
-      const next = await api.catalog52Status(hubPeriod);
+      const [next, historyResult] = await Promise.all([
+        api.catalog52Status(hubPeriod), api.catalog52History(hubPeriod),
+      ]);
       setStatus(next);
+      setHistory(historyResult?.versions || []);
       if (next?.active?.manifestId) {
         setPageNumber(1);
         setPage(await api.catalog52Rows({ period: hubPeriod, manifestId: next.active.manifestId, page: 1 }));
@@ -717,6 +721,12 @@ function Catalog52ControlPlane({ period }) {
       <button type="button" className="btn ghost" disabled={!!busy || !status?.lastKnownGoodManifestId || status.lastKnownGoodManifestId === active?.manifestId} onClick={rollback}>Rollback LKG</button>
     </div>
     {candidate && <div className="catalog-alert success">✓ Candidate {candidate.sourceVersion} · {candidate.rowCount.toLocaleString('vi-VN')} dòng · chưa kích hoạt · mapping conflict {candidate.mappingConflicts}</div>}
+    {history.length > 0 && <details className="catalog52-history">
+      <summary>Lịch sử bản niêm phong ({history.length})</summary>
+      <ul>{history.map((item) => <li key={item.manifestId}>
+        <b>{item.sourceVersion}</b> · {Number(item.rowCount).toLocaleString('vi-VN')} dòng · {item.syncedAtGmt7 || '—'} · {item.syncedBy || '—'} · <code>{item.sourceIntegrityChecksum}</code>
+      </li>)}</ul>
+    </details>}
     {page?.rows?.length > 0 && <>
       <div className="catalog52-pagination">
         <button type="button" className="btn ghost" disabled={!!busy || pageNumber <= 1} onClick={() => loadPage(pageNumber - 1)}>‹ Trang trước</button>

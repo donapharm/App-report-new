@@ -4718,6 +4718,12 @@ router.get('/admin/catalog-management/cp-total-52/status', auth.requireAuth, cat
     return res.json(catalog52ControlPlane.store.status(req.query.period));
   } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
 });
+router.get('/admin/catalog-management/cp-total-52/history', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.json(catalog52ControlPlane.store.history(req.query.period));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
 router.get('/admin/catalog-management/cp-total-52/rows', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
   try {
     catalog52ControlPlane.assertEnabled();

@@ -42,6 +42,11 @@ function stableValue(value) {
 function canonicalJson(value) { return JSON.stringify(stableValue(value)); }
 function checksum(value) { return `sha256:${sha256(value)}`; }
 
+function gmt7Timestamp(epochMs) {
+  const shifted = new Date(Number(epochMs) + (7 * 60 * 60 * 1000));
+  return `${shifted.toISOString().slice(0, 19)}+07:00`;
+}
+
 function periodValue(value) {
   const period = cleanText(value, 7);
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) fail('CATALOG52_PERIOD_INVALID');
@@ -253,9 +258,13 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
   const auditRoot = path.join(storeRoot, 'audit');
 
   function ensureRoots() {
-    for (const directory of [storeRoot, objectsRoot, pointersRoot, locksRoot, pinsRoot, auditRoot]) {
-      fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
-      fs.chmodSync(directory, 0o700);
+    try {
+      for (const directory of [storeRoot, objectsRoot, pointersRoot, locksRoot, pinsRoot, auditRoot]) {
+        fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
+        fs.chmodSync(directory, 0o700);
+      }
+    } catch {
+      fail('CATALOG52_STORE_UNWRITABLE', { status: 503 });
     }
   }
   function writeAudit(period, action, fields = {}) {
@@ -381,6 +390,8 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
           artifactManifest[name] = { file: artifact.file, rowCount: artifact.rows.length, checksum: checksum(content) };
         }
         const createdAt = new Date(now()).toISOString();
+        const syncedAtGmt7 = gmt7Timestamp(now());
+        const syncedBy = cleanText(actor, 80);
         const manifest = {
           schemaVersion: SCHEMA_VERSION, projectionVersion: PROJECTION_VERSION, manifestId, period, source,
           sourceVersion, sourceVersionNo, rowCount: normalized.length,
@@ -389,7 +400,7 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
           receivedAt: cleanText(envelope.receivedAt, 80) || createdAt, validatedAt: createdAt, activatedAt: null,
           artifacts: artifactManifest, projections: projections.metadata,
           mappingConflicts: projections.employeeMapping.filter((row) => row.employeeConflict || row.uomConflict).length,
-          state: 'validated', createdBy: cleanText(actor, 80),
+          state: 'validated', createdBy: syncedBy, syncedBy, syncedAtGmt7,
         };
         writeFileDurable(path.join(stage, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
         fsyncDirectory(stage);
@@ -498,6 +509,29 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
     try { return { period: periodValue(period), active: pinned.manifest, lastKnownGoodManifestId: pointer.lastKnownGoodManifestId, pointer }; }
     finally { pinned.release(); }
   }
+  function history(period) {
+    const key = periodValue(period);
+    const directory = path.join(objectsRoot, key);
+    let ids;
+    try { ids = fs.readdirSync(directory).filter((name) => !name.startsWith('.stage-')); }
+    catch (error) {
+      if (error.code === 'ENOENT') return { period: key, versions: [] };
+      throw error;
+    }
+    const versions = ids.map((manifestId) => readManifest(key, manifestId))
+      .map((manifest) => ({
+        manifestId: manifest.manifestId,
+        sourceVersion: manifest.sourceVersion,
+        sourceVersionNo: manifest.sourceVersionNo,
+        sourceIntegrityChecksum: manifest.sourceIntegrityChecksum,
+        internalIdentityHash: manifest.internalIdentityHash,
+        rowCount: manifest.rowCount,
+        syncedAtGmt7: manifest.syncedAtGmt7 || null,
+        syncedBy: manifest.syncedBy || manifest.createdBy || null,
+      }))
+      .sort((a, b) => String(b.syncedAtGmt7 || '').localeCompare(String(a.syncedAtGmt7 || '')));
+    return { period: key, versions };
+  }
   function retain(period, { keep = 3 } = {}) {
     return withLock(period, 'retention', () => {
       const key = periodValue(period); const pointer = readPointer(key);
@@ -529,7 +563,7 @@ function createStore({ root, lockTtlMs = 5 * 60 * 1000, readerGraceMs = DEFAULT_
   }
 
   return Object.freeze({
-    root: storeRoot, prepareCandidate, activateManifest, rollback, status, readProjectionPage, retain,
+    root: storeRoot, prepareCandidate, activateManifest, rollback, status, history, readProjectionPage, retain,
     readPointer, readManifest, acquireLock, writeAudit, pinForRead,
   });
 }
@@ -538,5 +572,5 @@ module.exports = {
   SCHEMA_VERSION, PROJECTION_VERSION, FULL_COLUMNS, SAFE_COLUMNS, SENSITIVE_COLUMNS, COST_COLUMNS,
   MAX_SOURCE_BYTES, MAX_ROWS, MAX_CELL_BYTES,
   Catalog52Error, stableValue, canonicalJson, checksum, checksumFile, normalizedRow, normalizedMappingContract,
-  assertNoSensitive, projectRows, readJsonLinesPage, createStore,
+  assertNoSensitive, projectRows, readJsonLinesPage, gmt7Timestamp, createStore,
 };

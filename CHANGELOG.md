@@ -1,3 +1,10 @@
+### 2026-08-21 — CP Total 52 dùng custody và lưu lịch sử bản niêm phong (candidate, cờ tắt)
+
+- Port control plane CP Total 52 lên đầu nhánh hiện hành; quyền truy cập vẫn chỉ CEO bằng phiên người thật có OTP trong 12 giờ gần nhất. `CATALOG52_CONTROL_PLANE_ENABLED` tiếp tục mặc định tắt và chỉ mở khi giá trị đúng bằng `1`.
+- Kho snapshot mặc định cố định tại `/home/osboxes/app-report-custody/catalog52-v1`; `CATALOG52_STORE_ROOT` vẫn cho phép override có chủ đích. Không còn fallback về `server/data` hay thư mục release: custody không tạo/ghi được thì đồng bộ fail-closed.
+- Mỗi lần đồng bộ tạo object bất biến kèm checksum nguồn, checksum identity nội bộ, số dòng, mốc GMT+7 và người bấm. Thêm API/UI lịch sử để CEO xem lại các receipt của từng kỳ; không thêm chức năng export 52 cột.
+- Chưa deploy, chưa bật cờ, không ghi dữ liệu PROD và không đụng T06.2026.
+
 ### 2026-08-21 — Local-only zero-fetch + khôi phục gom dần (candidate, chưa bật)
 
 - Thêm cờ opt-in `APP_REPORT_COST_LOCAL_ONLY`, mặc định tắt. Khi bật, đường xem báo cáo chỉ đọc kho `% chi phí`; thiếu kỳ/NV trả `local_only_missing` cùng thông điệp “Kỳ này chưa đồng bộ % chi phí — bấm Đồng bộ % chi phí”, không gọi DataHub và không bịa `0đ`.

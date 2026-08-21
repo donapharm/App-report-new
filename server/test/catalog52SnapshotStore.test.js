@@ -95,6 +95,62 @@ test('candidate is immutable and inactive until a single atomic activation, then
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test('every sync records immutable checksum, row count, GMT+7 time and actor in version history', () => {
+  const instant = Date.parse('2026-08-21T05:30:45.000Z');
+  const { root, store } = temporaryStore({ now: () => instant });
+  try {
+    const first = store.prepareCandidate(sourceEnvelope([row('L1')]), { actor: 'CEO' });
+    const second = store.prepareCandidate(sourceEnvelope([row('L2')], {
+      sourceVersion: 'V31.8', sourceVersionNo: 10,
+    }), { actor: 'CEO' });
+    const history = store.history('2026-08');
+    assert.equal(history.versions.length, 2);
+    assert.deepEqual(new Set(history.versions.map((item) => item.manifestId)), new Set([first.manifestId, second.manifestId]));
+    for (const item of history.versions) {
+      assert.equal(item.rowCount, 1);
+      assert.match(item.sourceIntegrityChecksum, /^sha256:[a-f0-9]{64}$/);
+      assert.match(item.internalIdentityHash, /^sha256:[a-f0-9]{64}$/);
+      assert.equal(item.syncedAtGmt7, '2026-08-21T12:30:45+07:00');
+      assert.equal(item.syncedBy, 'CEO');
+    }
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('control plane defaults only to custody, permits explicit override and never falls back into release data', () => {
+  const control = require('../src/catalog52ControlPlane');
+  assert.equal(control.DEFAULT_STORE_ROOT, '/home/osboxes/app-report-custody/catalog52-v1');
+  assert.equal(control.resolveStoreRoot({}), control.DEFAULT_STORE_ROOT);
+  assert.equal(control.resolveStoreRoot({ CATALOG52_STORE_ROOT: '/srv/app-report/catalog52' }), '/srv/app-report/catalog52');
+  assert.equal(control.resolveStoreRoot({ CATALOG52_STORE_ROOT: '   ' }), control.DEFAULT_STORE_ROOT);
+  const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'catalog52ControlPlane.js'), 'utf8');
+  assert.doesNotMatch(source, /data['"], ['"]catalog52-snapshots/);
+  assert.doesNotMatch(source, /catch[^\n]*createStore/);
+});
+
+test('catalog52 control plane flag remains fail-closed and off unless explicitly set to one', () => {
+  const control = require('../src/catalog52ControlPlane');
+  const original = process.env.CATALOG52_CONTROL_PLANE_ENABLED;
+  try {
+    delete process.env.CATALOG52_CONTROL_PLANE_ENABLED;
+    assert.equal(control.enabled(), false);
+    process.env.CATALOG52_CONTROL_PLANE_ENABLED = '0';
+    assert.equal(control.enabled(), false);
+    process.env.CATALOG52_CONTROL_PLANE_ENABLED = 'true';
+    assert.equal(control.enabled(), false);
+    process.env.CATALOG52_CONTROL_PLANE_ENABLED = '1';
+    assert.equal(control.enabled(), true);
+  } finally {
+    if (original === undefined) delete process.env.CATALOG52_CONTROL_PLANE_ENABLED;
+    else process.env.CATALOG52_CONTROL_PLANE_ENABLED = original;
+  }
+});
+
+test('unwritable snapshot root fails closed and does not choose another directory', () => {
+  const store = catalog52.createStore({ root: '/sys/app-report-catalog52-test' });
+  assert.equal(store.root, '/sys/app-report-catalog52-test');
+  assert.throws(() => store.prepareCandidate(sourceEnvelope([row('L1')])), { code: 'CATALOG52_STORE_UNWRITABLE' });
+});
+
 test('failed checksum/projection leaves existing active pointer and LKG untouched', () => {
   const { root, store } = temporaryStore();
   try {

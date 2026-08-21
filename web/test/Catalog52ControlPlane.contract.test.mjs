@@ -19,7 +19,15 @@ test('full-52 browser view is paginated and exposes no export action', () => {
 });
 
 test('control-plane API stays on the dedicated admin namespace', () => {
-  for (const action of ['status', 'rows', 'sync-preview', 'activate', 'rollback']) {
+  for (const action of ['status', 'history', 'rows', 'sync-preview', 'activate', 'rollback']) {
     assert.match(api, new RegExp(`/admin/catalog-management/cp-total-52/${action}`));
   }
+});
+
+test('CEO can inspect immutable version receipts without exporting full rows', () => {
+  const block = page.slice(page.indexOf('function Catalog52ControlPlane'), page.indexOf('/**\n * MÀN CHI TIẾT QUYỀN'));
+  assert.match(block, /Lịch sử bản niêm phong/);
+  assert.match(block, /sourceIntegrityChecksum/);
+  assert.match(block, /syncedAtGmt7/);
+  assert.match(block, /syncedBy/);
 });

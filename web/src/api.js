@@ -495,6 +495,7 @@ export const api = {
   adminCatalogManagementHistory: (period) => req('GET', '/admin/catalog-management/history?' + new URLSearchParams(period ? { period } : {}).toString()),
   adminCatalogManagementDiagnostics: () => req('GET', '/admin/catalog-management/diagnostics'),
   catalog52Status: (period) => req('GET', '/admin/catalog-management/cp-total-52/status?' + new URLSearchParams({ period }).toString()),
+  catalog52History: (period) => req('GET', '/admin/catalog-management/cp-total-52/history?' + new URLSearchParams({ period }).toString()),
   catalog52Rows: ({ period, page = 1, pageSize = 50, manifestId = '' }) => req('GET', '/admin/catalog-management/cp-total-52/rows?' + new URLSearchParams({ period, page, pageSize, ...(manifestId ? { manifestId } : {}) }).toString()),
   catalog52SyncPreview: (period) => req('POST', '/admin/catalog-management/cp-total-52/sync-preview', { period }),
   catalog52Activate: (period, manifestId) => req('POST', '/admin/catalog-management/cp-total-52/activate', { period, manifestId }),
