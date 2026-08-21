@@ -1532,7 +1532,7 @@ export default function CatalogManagement({ me }) {
         cửa chi phí, cửa đang sống (probe 21/21). Khoá nó đúng lúc cần nhất là tự
         chặn đường thoát duy nhất. */}
     {isCeo && <CostRatesSyncCard period={period} catalogLoading={!!loadingPeriod} />}
-    {isCeo && <Catalog52ControlPlane period={period} />}
+    {isCeo && me?.catalog52Enabled === true && <Catalog52ControlPlane period={period} />}
     <CostRatesTablePanel period={period} />
     {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} unitGroups={data.unitGroups || null} />}
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">

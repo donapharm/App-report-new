@@ -1,3 +1,9 @@
+### 2026-08-21 — Catalog 52: cờ OFF tối hoàn toàn
+
+- `/me` chỉ trả `catalog52Enabled` cho phiên CEO, lấy trực tiếp từ `CATALOG52_CONTROL_PLANE_ENABLED`.
+- Khi cờ tắt, frontend không render thẻ CP Total 52 và vì component không được mount nên không phát sinh request API 52 cột.
+- Khi cờ bật, thẻ chỉ hiện cho CEO; người dùng thường không nhận trạng thái cờ và vẫn không thấy control-plane.
+
 ### 2026-08-21 — Nghiệm thu target-only PROD và luật checksum kỳ mở
 
 - PROD exact `78c43d9ca9801f399a28dc446c869edb17df1bfa` PASS sau khi CEO đăng nhập OTP và `app-report` restart đúng một lần: phiên CEO còn sống, health/version đúng exact, `app-report-tgbot` không restart.

@@ -5,9 +5,12 @@ import fs from 'node:fs';
 const page = fs.readFileSync(new URL('../src/pages/CatalogManagement.jsx', import.meta.url), 'utf8');
 const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
 
-test('CP Total 52 is rendered only inside the existing CEO identity branch', () => {
-  assert.match(page, /\{isCeo && <Catalog52ControlPlane period=\{period\} \/>\}/);
+test('CP Total 52 stays completely dark unless backend says the CEO flag is enabled', () => {
+  assert.match(page, /\{isCeo && me\?\.catalog52Enabled === true && <Catalog52ControlPlane period=\{period\} \/>\}/);
   assert.match(page, /CP Total 52 cột \(CEO\)/);
+  const controlPlane = page.slice(page.indexOf('function Catalog52ControlPlane'), page.indexOf('/**\n * MÀN CHI TIẾT QUYỀN'));
+  assert.match(controlPlane, /useEffect\(\(\) => \{ load\(\); \}, \[hubPeriod\]\)/,
+    'API chỉ được gọi sau khi component đã được render bởi cờ backend');
 });
 
 test('full-52 browser view is paginated and exposes no export action', () => {

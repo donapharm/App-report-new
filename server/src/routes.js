@@ -1195,6 +1195,7 @@ async function employeeBonusPriorityForPeriods(empCode, uiPeriods, catalogRowsBy
 
 router.get('/me', auth.requireAuth, (req, res) => {
   const isAdmin = auth.isAdmin(req.session.role);
+  const isCeo = auth.isCeoActor(req.session);
   const visibility = isAdmin
     ? { enabled: true }
     : employeeCostVisibility.decision(req.session.emp_code, employeeCostRosterRows());
@@ -1203,12 +1204,15 @@ router.get('/me', auth.requireAuth, (req, res) => {
   // chỗ hôm 05/08 làm nút Duyệt biến mất khỏi màn hình CEO.
   // Tab "Thành tiền C32/C47": mặc định chỉ CEO; NV cần công tắc riêng bật. Cờ này chỉ
   // để frontend ẨN/HIỆN tab cho gọn — route dữ liệu tự chặn độc lập, không tin cờ.
-  const costAmountsEnabled = auth.isCeoActor(req.session)
+  const costAmountsEnabled = isCeo
     || costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows()).enabled;
   res.json({
     ...req.session,
     isAdmin,
-    is_ceo: auth.isCeoActor(req.session),
+    is_ceo: isCeo,
+    // Chỉ CEO cần biết cờ này để quyết định có dựng control-plane hay không.
+    // Người dùng thường không nhận field và frontend cũng không được gọi API 52 cột.
+    ...(isCeo ? { catalog52Enabled: catalog52ControlPlane.enabled() } : {}),
     employeeCostDisabled: !visibility.enabled,
     costAmountsEnabled,
     access_profile: auth.accessProfileFor(req.session),

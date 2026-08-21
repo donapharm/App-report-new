@@ -109,7 +109,10 @@ test('‼ mọi cửa CEO ở backend đều đi qua isCeoActor', () => {
 
 test('‼ backend phải NÓI cho frontend biết, frontend không được đoán', () => {
   const routes = code(read('server', 'src', 'routes.js'));
-  assert.match(routes, /is_ceo: auth\.isCeoActor\(req\.session\)/, '/me phải trả is_ceo');
+  assert.match(routes, /const isCeo = auth\.isCeoActor\(req\.session\)/, '/me phải chốt danh tính CEO đúng một lần');
+  assert.match(routes, /is_ceo: isCeo/, '/me phải trả is_ceo');
+  assert.match(routes, /isCeo \? \{ catalog52Enabled: catalog52ControlPlane\.enabled\(\) \} : \{\}/,
+    'chỉ payload CEO mới được nhận trạng thái cờ Catalog 52');
   // Đây chính là dòng đã giấu mất nút Duyệt của CEO suốt cả tuần.
   assert.match(code(read('web', 'src', 'pages', 'PaymentSchedule.jsx')), /canRecord=\{!!me\?\.is_ceo\}/);
 });
