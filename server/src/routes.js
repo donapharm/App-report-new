@@ -1151,6 +1151,26 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
   dependencyIdentity: employeeCostSnapshotDependencyIdentity,
   isLocked: (period) => employeeCost.isPeriodClosed(period),
   lockedSnapshotProvider: employeeCostLockedSnapshotProvider,
+  validateClosedRepair: async ({ period, roster, employees, model }) => {
+    if (period !== '2026-07' || roster.length !== 19 || employees.size !== 19
+      || !employeeCostSnapshotStore.closedRepairModelMatchesRoster(model, period, roster)) {
+      throw Object.assign(new Error('Generation tiền chưa chứng minh đủ đội hình và phép cân.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_VALIDATION_FAILED' });
+    }
+    const expectedRateChecksum = '615981e92ef1576fce54de8ae12e14140181d38c44d9839d7e363b68d35e356c';
+    for (const record of employees.values()) {
+      const provenance = record?.report?.remoteProvenance;
+      if (!Array.isArray(provenance) || !provenance.length
+        || provenance.some((item) => !String(item).includes(`:rc=${expectedRateChecksum}:`) || String(item).endsWith(':THIEU'))) {
+        throw Object.assign(new Error('Generation tiền thiếu checksum/lai lịch tỷ lệ T07.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PROVENANCE_INVALID' });
+      }
+    }
+    return true;
+  },
+  auditClosedRepair: (entry) => {
+    const rows = persist.load('employee_cost_generation_repair_audit', []);
+    rows.push({ at: new Date().toISOString(), exact: APP_BUILD_VERSION, ...entry });
+    persist.save('employee_cost_generation_repair_audit', rows.slice(-500));
+  },
 });
 
 function readEmployeeCostSnapshotModel(req, range) {
@@ -2578,6 +2598,15 @@ router.post('/employee-cost/snapshot/resync', auth.requireAuth, auth.requireAdmi
   if (!auth.isCeoActor(req.session)) return res.status(403).json({ error: 'Chỉ CEO được đồng bộ snapshot chi phí.', code: 'EMPLOYEE_COST_SNAPSHOT_CEO_REQUIRED' });
   const period = employeeCostSnapshotStore.normalizePeriod(req.body?.period);
   const current = employeeCostSnapshotStore.tryReadCurrent(period, { roster: employeeCostRosterRows() });
+  const closedIncomplete = employeeCost.isPeriodClosed(period, employeeCost.vnToday()) && current.ok && !current.snapshot.complete;
+  if (closedIncomplete) {
+    if (!auth.trustedHumanDeviceForSession(req.session)) {
+      return res.status(403).json({ error: 'Dựng lại kỳ khoá cần phiên CEO người thật đã xác thực OTP trong 12 giờ.', code: 'EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED' });
+    }
+    const accepted = employeeCostSnapshotSync.requestClosedRepair(period, { actor: String(req.session?.emp_code || '').slice(0, 32) });
+    console.info('[employee-cost-snapshot] closed repair requested', { period, actor: String(req.session?.emp_code || '').slice(0, 32), accepted: accepted.accepted === true });
+    return res.status(202).json({ accepted: true, repair: true, dongBoKy: period, trangThaiDongBo: employeeCostSnapshotMeta(employeeCostSnapshotStatus(period)) });
+  }
   if (employeeCost.isPeriodClosed(period, employeeCost.vnToday()) && current.ok && current.snapshot.manifest.complete) {
     return res.status(409).json({ error: `Kỳ ${period} đã khoá và có snapshot đầy đủ.`, code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
   }

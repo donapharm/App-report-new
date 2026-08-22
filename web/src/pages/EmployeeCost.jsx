@@ -2178,8 +2178,8 @@ export default function EmployeeCost({ me, onNavigate }) {
         {!!snapshotMessage && <small role="status">{snapshotMessage}</small>}
         {!!snapshotError && <small role="alert">{snapshotError}</small>}
       </div>
-      <button type="button" className="btn" disabled={snapshotSyncing || snapshotStatus.syncing || snapshotStatus.locked} onClick={resyncEmployeeCostSnapshot}>
-        {snapshotSyncing || snapshotStatus.syncing ? 'Đang đồng bộ…' : 'Đồng bộ lại'}
+      <button type="button" className="btn" disabled={snapshotSyncing || snapshotStatus.syncing || (snapshotStatus.locked && snapshotStatus.complete)} onClick={resyncEmployeeCostSnapshot}>
+        {snapshotSyncing || snapshotStatus.syncing ? 'Đang đồng bộ…' : snapshotStatus.locked ? 'Dựng lại bản tiền thiếu' : 'Đồng bộ lại'}
       </button>
     </div>}
 

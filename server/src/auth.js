@@ -856,6 +856,7 @@ module.exports = {
   canReadAllRevenue: accessPolicy.canReadAllRevenue,
   canReadAllCst: accessPolicy.canReadAllCst,
   startTrustedDeviceSso, consumeTrustedDeviceSso, trustedDeviceSsoConfigured: trustedDeviceSso.isConfigured,
+  trustedHumanDeviceForSession,
   // Telegram
   telegramStart, telegramStatus, telegramConfirm,
   // Đủ điều kiện khi CÓ ÍT NHẤT MỘT bot cấu hình đủ (username + secret) và app có
