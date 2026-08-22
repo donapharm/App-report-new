@@ -4724,6 +4724,42 @@ router.get('/admin/catalog-management/cp-total-52/status', auth.requireAuth, cat
     return res.json(catalog52ControlPlane.store.status(req.query.period));
   } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
 });
+router.get('/admin/catalog-management/cp-total-52/device', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.json(catalog52ControlPlane.encryptedViewer.device(req.catalog52TrustedDevice.id));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
+router.post('/admin/catalog-management/cp-total-52/device', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.status(201).json(catalog52ControlPlane.encryptedViewer.registerDevice(
+      req.catalog52TrustedDevice.id, req.body?.publicJwk, req.session.emp_code,
+    ));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
+router.delete('/admin/catalog-management/cp-total-52/device', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.json(catalog52ControlPlane.encryptedViewer.forgetDevice(req.catalog52TrustedDevice.id));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
+router.get('/admin/catalog-management/cp-total-52/encrypted-manifest', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    return res.json(catalog52ControlPlane.encryptedViewer.manifest(req.query.period, req.catalog52TrustedDevice.id));
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
+router.get('/admin/catalog-management/cp-total-52/encrypted-page', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
+  try {
+    catalog52ControlPlane.assertEnabled();
+    const result = catalog52ControlPlane.encryptedViewer.page(req.query.period, req.query.page);
+    res.set('Content-Type', 'application/octet-stream');
+    res.set('X-Catalog52-IV', result.item.iv);
+    res.set('X-Catalog52-As-Of', result.asOf);
+    return res.send(result.bytes);
+  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+});
 router.get('/admin/catalog-management/cp-total-52/history', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
   try {
     catalog52ControlPlane.assertEnabled();
@@ -4731,30 +4767,16 @@ router.get('/admin/catalog-management/cp-total-52/history', auth.requireAuth, ca
   } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
 });
 router.get('/admin/catalog-management/cp-total-52/rows', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
-  try {
-    catalog52ControlPlane.assertEnabled();
-    return res.json(catalog52ControlPlane.store.readProjectionPage(req.query.period, 'full', {
-      page: req.query.page, pageSize: req.query.pageSize, manifestId: req.query.manifestId || null,
-    }));
-  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+  return res.status(410).json({ error: 'CATALOG52_ENCRYPTED_VIEWER_REQUIRED', code: 'CATALOG52_ENCRYPTED_VIEWER_REQUIRED' });
 });
 router.post('/admin/catalog-management/cp-total-52/sync-preview', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, async (req, res) => {
-  try {
-    const manifest = await catalog52ControlPlane.syncFromVault(req.body?.period, req.session.emp_code);
-    return res.status(201).json({ manifest, activated: false });
-  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+  return res.status(410).json({ error: 'CATALOG52_CIPHERTEXT_PACKAGE_REQUIRED', code: 'CATALOG52_CIPHERTEXT_PACKAGE_REQUIRED' });
 });
 router.post('/admin/catalog-management/cp-total-52/activate', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
-  try {
-    catalog52ControlPlane.assertEnabled();
-    return res.json(catalog52ControlPlane.store.activateManifest(req.body?.period, req.body?.manifestId, { actor: req.session.emp_code }));
-  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+  return res.status(410).json({ error: 'CATALOG52_CIPHERTEXT_PACKAGE_REQUIRED', code: 'CATALOG52_CIPHERTEXT_PACKAGE_REQUIRED' });
 });
 router.post('/admin/catalog-management/cp-total-52/rollback', auth.requireAuth, catalog52ControlPlane.requireCeoTrustedHuman, (req, res) => {
-  try {
-    catalog52ControlPlane.assertEnabled();
-    return res.json(catalog52ControlPlane.store.rollback(req.body?.period, { actor: req.session.emp_code }));
-  } catch (error) { const safe = catalog52ControlPlane.safeError(error); return res.status(safe.status).json(safe.body); }
+  return res.status(410).json({ error: 'CATALOG52_CIPHERTEXT_PACKAGE_REQUIRED', code: 'CATALOG52_CIPHERTEXT_PACKAGE_REQUIRED' });
 });
 // Báo cáo cá nhân theo bộ lọc: admin-only, preview trước, tách từng NV.
 // Luồng delivery tạo file/manifest nhưng gửi thật mặc định khóa bằng env và cần CEO duyệt lần hai.
