@@ -327,3 +327,64 @@ test('expected dependency generation drift refuses before employee fetch', async
   await assert.rejects(ctx.sync.dongBoKy('2026-08', { requireComplete: true, expectedDependencies: { formula: 'other' } }), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
   assert.equal(fetches, 0); assert.equal(ctx.store.tryReadCurrent('2026-08').ok, false);
 });
+
+function closedRepairSetup(t, overrides = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'emp-cost-closed-repair-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = createEmployeeCostSnapshotStore({ root });
+  const roster = ['DN001', 'DN002'];
+  const partial = store.publishGeneration('2026-07', {
+    roster, employees: new Map([['DN001', { report: { empCode: 'DN001', amount: 1 } }]]),
+    model: { incomplete: true }, dependencies: { revision: 'v1' }, periodLocked: false, locked: false,
+  });
+  let dependencyCalls = 0;
+  const sync = createEmployeeCostSnapshotSync({
+    store, concurrency: 1, rosterProvider: async () => roster, isLocked: () => true,
+    fetchEmployee: overrides.fetchEmployee || (async (empCode) => ({ sourceOutcome: 'ok', report: { empCode, amount: 10 } })),
+    dependencyIdentity: overrides.dependencyIdentity || (async () => { dependencyCalls += 1; return { revision: 'v1' }; }),
+    buildModel: overrides.buildModel || (async () => sealedModel('2026-07', roster)),
+    validateClosedRepair: overrides.validateClosedRepair || (async ({ model }) => assert.equal(model.revenueRecon.balanced, true)),
+    auditClosedRepair: overrides.auditClosedRepair || (() => {}),
+  });
+  return { store, sync, roster, partial, dependencyCalls: () => dependencyCalls };
+}
+
+test('closed repair missing one employee rejects and preserves exact current pointer', async (t) => {
+  const audits = [];
+  const ctx = closedRepairSetup(t, {
+    fetchEmployee: async (empCode) => empCode === 'DN002' ? { ok: false, sourceOutcome: 'deadline' } : { sourceOutcome: 'ok', report: { empCode } },
+    auditClosedRepair: (entry) => audits.push(entry),
+  });
+  const before = ctx.store.readCurrent('2026-07').pointer;
+  await assert.rejects(ctx.sync.rebuildIncompleteClosedGeneration('2026-07', { actor: 'CEO' }), { code: 'EMPLOYEE_COST_SNAPSHOT_INCOMPLETE' });
+  assert.deepEqual(ctx.store.readCurrent('2026-07').pointer, before);
+  assert.deepEqual(audits[0].missing, ['DN002']);
+});
+
+test('closed repair dependency drift rejects and preserves old generation', async (t) => {
+  let revision = 0;
+  const ctx = closedRepairSetup(t, { dependencyIdentity: async () => ({ revision: ++revision }) });
+  const before = ctx.store.readCurrent('2026-07').pointer;
+  await assert.rejects(ctx.sync.rebuildIncompleteClosedGeneration('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
+  assert.deepEqual(ctx.store.readCurrent('2026-07').pointer, before);
+});
+
+test('two simultaneous closed repair clicks publish exactly one complete generation', async (t) => {
+  const audits = [];
+  const ctx = closedRepairSetup(t, { auditClosedRepair: (entry) => audits.push(entry) });
+  const results = await Promise.allSettled([
+    ctx.sync.rebuildIncompleteClosedGeneration('2026-07', { actor: 'CEO' }),
+    ctx.sync.rebuildIncompleteClosedGeneration('2026-07', { actor: 'CEO' }),
+  ]);
+  assert.equal(results.filter((item) => item.status === 'fulfilled').length, 1);
+  assert.equal(results.filter((item) => item.status === 'rejected').length, 1);
+  assert.equal(ctx.store.readCurrent('2026-07').complete, true);
+  assert.equal(audits.filter((item) => item.outcome === 'published').length, 1);
+});
+
+test('closed repair hard-denies T06 before any fetch', async (t) => {
+  let fetches = 0;
+  const ctx = closedRepairSetup(t, { fetchEmployee: async () => { fetches += 1; return {}; } });
+  await assert.rejects(ctx.sync.rebuildIncompleteClosedGeneration('2026-06'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PERIOD_DENIED' });
+  assert.equal(fetches, 0);
+});

@@ -37,6 +37,15 @@ test('snapshot status/resync routes are admin guarded and mutation is additional
   assert.match(source, /return res\.status\(202\)\.json/);
   assert.match(source, /EMPLOYEE_COST_SNAPSHOT_SYNC_DISABLED/);
   assert.match(source, /EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE/);
+  assert.match(source, /closedIncomplete[\s\S]*?trustedHumanDeviceForSession[\s\S]*?EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED/);
+  assert.match(source, /requestClosedRepair\(period/);
+  assert.match(source, /expectedRateChecksum = '615981e92ef1576fce54de8ae12e14140181d38c44d9839d7e363b68d35e356c'/);
+});
+
+test('closed repair UI is visible only for an incomplete locked generation', () => {
+  const ui = fs.readFileSync(require.resolve('../../web/src/pages/EmployeeCost.jsx'), 'utf8');
+  assert.match(ui, /snapshotStatus\.locked && snapshotStatus\.complete/);
+  assert.match(ui, /Dựng lại bản tiền thiếu/);
 });
 
 test('sync probes exact authoritative evidence once before enrichment', () => {

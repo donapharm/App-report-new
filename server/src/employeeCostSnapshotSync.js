@@ -54,6 +54,8 @@ function createEmployeeCostSnapshotSync(options = {}) {
   const dependencyIdentity = typeof options.dependencyIdentity === 'function' ? options.dependencyIdentity : async () => ({});
   const isLocked = typeof options.isLocked === 'function' ? options.isLocked : () => false;
   const lockedSnapshotProvider = typeof options.lockedSnapshotProvider === 'function' ? options.lockedSnapshotProvider : null;
+  const validateClosedRepair = typeof options.validateClosedRepair === 'function' ? options.validateClosedRepair : async () => true;
+  const auditClosedRepair = typeof options.auditClosedRepair === 'function' ? options.auditClosedRepair : () => {};
   const now = options.now || (() => new Date());
   const concurrency = Math.max(1, Math.min(12, Number(options.concurrency || process.env.EMPLOYEE_COST_SNAPSHOT_CONCURRENCY || 4)));
   const inFlight = new Map();
@@ -240,6 +242,88 @@ function createEmployeeCostSnapshotSync(options = {}) {
     return promise;
   }
 
+  async function rebuildIncompleteClosedGeneration(rawPeriod, { actor = '', reason = 'manual_closed_repair' } = {}) {
+    const period = store.normalizePeriod(rawPeriod);
+    if (period !== '2026-07') {
+      throw Object.assign(new Error('Kỳ này không được phép dựng lại generation tiền.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PERIOD_DENIED' });
+    }
+    return store.withPeriodLock(period, async () => {
+      if (isLocked(period) !== true) {
+        throw Object.assign(new Error('Chỉ dựng lại generation của kỳ đã khoá.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PERIOD_OPEN' });
+      }
+      const rosterRows = await rosterProvider(period);
+      const roster = store.normalizeRoster(rosterRows);
+      const before = store.tryReadCurrent(period, { roster });
+      if (!before.ok || before.snapshot.complete || before.snapshot.employees.size >= roster.length) {
+        throw Object.assign(new Error('Generation hiện tại không thiếu đội hình.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_NOT_NEEDED' });
+      }
+      const beforeId = before.snapshot.manifest.generationId;
+      const dependenciesBefore = await dependencyIdentity(period, { roster: rosterRows });
+      const results = await mapBounded(roster, concurrency, (empCode) => fetchEmployee(empCode, { period, roster: rosterRows, reason, requireFresh: true }));
+      const employees = new Map();
+      const missing = [];
+      roster.forEach((empCode, index) => {
+        const outcome = results[index];
+        if (!outcome?.ok || !usableResult(outcome.value)) { missing.push(empCode); return; }
+        const value = outcome.value;
+        employees.set(empCode, { report: value.report ?? value, fetchedAt: iso(value.fetchedAt || now()), sourceRevision: String(value.sourceRevision || value.revision || '') });
+      });
+      if (missing.length) {
+        auditClosedRepair({ outcome: 'rejected_incomplete', actor, period, beforeGenerationId: beforeId, beforeCount: before.snapshot.employees.size, afterCount: employees.size, missing });
+        throw Object.assign(new Error('Nguồn chưa đủ toàn bộ roster; giữ nguyên generation cũ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_INCOMPLETE', unavailableEmployees: missing });
+      }
+      const dependenciesMid = await dependencyIdentity(period, { roster: rosterRows });
+      if (store.canonicalJson(dependenciesMid) !== store.canonicalJson(dependenciesBefore)) {
+        auditClosedRepair({ outcome: 'rejected_dependency_drift', actor, period, beforeGenerationId: beforeId, beforeCount: before.snapshot.employees.size, afterCount: 0 });
+        throw Object.assign(new Error('Nguồn đổi trong lúc dựng; giữ nguyên generation cũ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
+      }
+      const model = await buildModel({ period, roster: rosterRows, employees, unavailableReasons: {}, dependencies: dependenciesBefore, previousModel: before.snapshot.model });
+      try { await validateClosedRepair({ period, roster, employees, model, dependencies: dependenciesBefore }); }
+      catch (error) {
+        auditClosedRepair({ outcome: 'rejected_validation', actor, period, beforeGenerationId: beforeId, beforeCount: before.snapshot.employees.size, afterCount: employees.size });
+        throw error;
+      }
+      const dependenciesAfter = await dependencyIdentity(period, { roster: rosterRows });
+      if (store.canonicalJson(dependenciesAfter) !== store.canonicalJson(dependenciesBefore)) {
+        auditClosedRepair({ outcome: 'rejected_dependency_drift', actor, period, beforeGenerationId: beforeId, beforeCount: before.snapshot.employees.size, afterCount: 0 });
+        throw Object.assign(new Error('Nguồn đổi trước publish; giữ nguyên generation cũ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
+      }
+      if (isLocked(period) !== true) {
+        throw Object.assign(new Error('Trạng thái kỳ đổi trước publish; giữ nguyên generation cũ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT' });
+      }
+      let published;
+      try {
+        published = store.publishClosedRepairGeneration(period, {
+          expectedGenerationId: beforeId, roster, employees, model, dependencies: dependenciesBefore,
+          fetchedAt: iso(now()), unavailableReasons: {},
+        });
+      } catch (error) {
+        auditClosedRepair({ outcome: 'rejected_publish', actor, period, beforeGenerationId: beforeId, beforeCount: before.snapshot.employees.size, afterCount: 0 });
+        throw error;
+      }
+      auditClosedRepair({ outcome: 'published', actor, period, beforeGenerationId: beforeId, afterGenerationId: published.manifest.generationId, beforeCount: before.snapshot.employees.size, afterCount: published.employees.size, checksum: published.pointer.manifestChecksum });
+      return published;
+    });
+  }
+
+  function requestClosedRepair(rawPeriod, repairOptions = {}) {
+    const period = store.normalizePeriod(rawPeriod);
+    if (inFlight.has(period)) return { accepted: true, singleFlight: true, period, status: store.readStatus(period) };
+    const current = store.tryReadCurrent(period);
+    auditClosedRepair({ outcome: 'requested', actor: repairOptions.actor || '', period,
+      beforeGenerationId: current.ok ? current.snapshot.manifest.generationId : '',
+      beforeCount: current.ok ? current.snapshot.employees.size : 0, afterCount: 0 });
+    const promise = rebuildIncompleteClosedGeneration(period, repairOptions)
+      .catch((error) => {
+        store.writeStatus(period, { ...store.readStatus(period), state: 'failed', finishedAt: iso(now()), errorCode: String(error.code || 'EMPLOYEE_COST_SNAPSHOT_REPAIR_FAILED') });
+        throw error;
+      })
+      .finally(() => { if (inFlight.get(period) === promise) inFlight.delete(period); });
+    inFlight.set(period, promise);
+    promise.catch((error) => console.warn('[employee-cost-snapshot] closed repair failed', { period, code: error?.code || 'REPAIR_FAILED' }));
+    return { accepted: true, singleFlight: false, period, status: store.readStatus(period) };
+  }
+
   function requestSync(rawPeriod, syncOptions = {}) {
     const period = store.normalizePeriod(rawPeriod);
     const existing = inFlight.get(period);
@@ -259,7 +343,7 @@ function createEmployeeCostSnapshotSync(options = {}) {
     return { ...status, syncing: inFlight.has(period) || status.state === 'syncing' };
   }
 
-  return { dongBoKy, requestSync, trangThaiDongBo, inFlight, mapBounded };
+  return { dongBoKy, requestSync, requestClosedRepair, trangThaiDongBo, rebuildIncompleteClosedGeneration, inFlight, mapBounded };
 }
 
 module.exports = { createEmployeeCostSnapshotSync, mapBounded, usableResult, sourceFailureReason };

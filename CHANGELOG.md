@@ -7753,3 +7753,9 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Kích hoạt script nội bộ không HTTP/session cho principal máy `reportdev_acceptance_bot_v1`; chỉ đọc kỳ T07/T08 từ các primitive backend hiện hành.
 - Output cố định gồm số dòng active, số NV, `revenueRecon.targetOnlyAmount`, `revenueRecon.nonSalesRoleQuarantinedAmount`, `revenueRecon.balanced` và checksum; không trả dòng chi tiết, C32–C47 hay PII.
 - Kỳ ngoài allowlist và trường request ngoài schema tiếp tục fail-closed; mỗi lượt chạy ghi nhãn audit máy riêng vào stderr.
+### 2026-08-22 — Luật nghiệm thu kỳ mở và cửa dựng lại generation tiền thiếu
+
+- Kỳ đang mở không dùng số target-only cố định: vế target-only phải bằng đúng tổng tiền các dòng DN021 + DN023 tại cùng thời điểm đo. Kỳ đã đóng mới dùng mốc cố định; T07 giữ `2.091 / 19 NV` và target-only `60.027.600đ`.
+- T08 lúc kiểm có 11 dòng DN021 + DN023, tổng `303.062.700đ`; phần tăng `10.530.000đ` là một dòng DN021 mới so với ảnh `292.532.700đ`, nên phép cân động đạt.
+- Thêm cửa CEO dựng lại nguyên generation tiền T07 khi snapshot hiện tại thiếu đội hình. Cửa yêu cầu thiết bị người thật có OTP trong 12 giờ, dựng tạm đủ đúng 19/19, khóa checksum/lai lịch/phép cân, kiểm generation đầu-cuối và publish nguyên khối bằng lock + CAS; thiếu hoặc drift giữ nguyên bản cũ.
+- Cửa này chưa được chạy trên dữ liệu thật và không mở lại con dấu T07.
