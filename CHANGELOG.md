@@ -7753,3 +7753,9 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Kích hoạt script nội bộ không HTTP/session cho principal máy `reportdev_acceptance_bot_v1`; chỉ đọc kỳ T07/T08 từ các primitive backend hiện hành.
 - Output cố định gồm số dòng active, số NV, `revenueRecon.targetOnlyAmount`, `revenueRecon.nonSalesRoleQuarantinedAmount`, `revenueRecon.balanced` và checksum; không trả dòng chi tiết, C32–C47 hay PII.
 - Kỳ ngoài allowlist và trường request ngoài schema tiếp tục fail-closed; mỗi lượt chạy ghi nhãn audit máy riêng vào stderr.
+
+## 22/08/2026 — Snapshot kỳ không hết hạn theo đồng hồ
+
+- Bỏ TTL 60 giây của snapshot danh mục từng kỳ; khóa cache đã gắn căn cước file nên chỉ dựng lại khi file thật đổi. Cache giữ LRU tối đa 6 kỳ để không phình RAM.
+- Cảnh báo event-loop nay kèm mã request nội bộ đang chạy, byte parent vừa bóc và tên tác vụ nền; không ghi URL, payload hay dữ liệu nhân viên.
+- Quy tắc nghiệm thu doanh thu: kỳ đang mở đối chiếu `target-only` với tổng động DN021+DN023 trong cùng snapshot; chỉ kỳ đã đóng mới dùng mốc cố định.

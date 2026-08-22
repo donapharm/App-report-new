@@ -188,6 +188,7 @@ async function runOnce({ force = false, reason = 'manual', ky } = {}) {
     state.lastSlot = due.slot;
   }
   state.inFlight = true;
+  const finishActivity = require('./runtimeActivity').beginBackground('revenue-materialize');
   const run = { ok: false, reason, ky: ky || currentKy(), startedAt: new Date().toISOString(), dataAsOf: null };
   try {
     run.misa = await syncMisaSnapshot({ ky: run.ky });
@@ -210,6 +211,7 @@ async function runOnce({ force = false, reason = 'manual', ky } = {}) {
     throw e;
   } finally {
     state.inFlight = false;
+    finishActivity();
   }
 }
 async function runScheduled(due) {

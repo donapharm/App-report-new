@@ -2221,6 +2221,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
   // chu kỳ 30 phút/revenue event sau sẽ thử lại; RSS không nhân theo số kỳ đồng thời.
   if (employeeCostWarmActive) return false;
   employeeCostWarmActive = true;
+  const finishActivity = require('./runtimeActivity').beginBackground(`employee-cost-warm:${reason}`);
   try {
   const startedAt = Date.now();
   // User requests use the bounded/configurable fast timeout when a snapshot exists. Detached warm
@@ -2317,6 +2318,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
   return true;
   } finally {
     employeeCostWarmActive = false;
+    finishActivity();
   }
 }
 

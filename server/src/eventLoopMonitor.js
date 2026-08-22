@@ -24,6 +24,7 @@
 
 const { monitorEventLoopDelay, PerformanceObserver, constants } = require('node:perf_hooks');
 const { vnSecond } = require('./tickTelemetry');
+const runtimeActivity = require('./runtimeActivity');
 
 const MS = 1e6; // histogram của Node trả nano-giây
 
@@ -84,6 +85,7 @@ function start() {
         warnMs: WARN_LAG_MS,
         windowMs: REPORT_INTERVAL_MS,
         warnCount,
+        ...runtimeActivity.snapshot(),
       });
     }
     const memory = process.memoryUsage();

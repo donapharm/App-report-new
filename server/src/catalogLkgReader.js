@@ -12,6 +12,7 @@ const path = require('path');
 const { fork } = require('child_process');
 const zlib = require('zlib');
 const { StringDecoder } = require('string_decoder');
+const runtimeActivity = require('./runtimeActivity');
 
 let worker = null;
 let nextId = 1;
@@ -29,14 +30,16 @@ const DECODE_TURN_BUDGET_MS = Math.max(5, Math.min(45, Number(process.env.CATALO
 const yieldTurn = () => new Promise((resolve) => setImmediate(resolve));
 
 async function parseChunkedNdjson(decoded, format, { now = () => Date.now(), onTurn = null } = {}) {
-  const decoder = new StringDecoder('utf8');
-  let carry = '';
-  let turnStarted = now();
-  let maxTurnMs = 0;
-  const array = [];
-  let snapshot = null;
+  runtimeActivity.beginParentDecode(decoded.length);
+  try {
+    const decoder = new StringDecoder('utf8');
+    let carry = '';
+    let turnStarted = now();
+    let maxTurnMs = 0;
+    const array = [];
+    let snapshot = null;
 
-  const consume = (line) => {
+    const consume = (line) => {
     if (!line) return;
     const record = JSON.parse(line);
     if (format === 'array-ndjson-v1') array.push(record);
@@ -48,9 +51,10 @@ async function parseChunkedNdjson(decoded, format, { now = () => Date.now(), onT
       else if (record.kind === 'history') snapshot.history.push(record.value);
       else throw new Error(`Unknown Catalog LKG record kind: ${record.kind}`);
     }
-  };
+    };
 
-  for (let offset = 0; offset < decoded.length; offset += DECODE_CHUNK_BYTES) {
+    for (let offset = 0; offset < decoded.length; offset += DECODE_CHUNK_BYTES) {
+    runtimeActivity.parentDecoded(Math.min(decoded.length, offset + DECODE_CHUNK_BYTES));
     carry += decoder.write(decoded.subarray(offset, Math.min(decoded.length, offset + DECODE_CHUNK_BYTES)));
     let newline;
     while ((newline = carry.indexOf('\n')) !== -1) {
@@ -64,13 +68,16 @@ async function parseChunkedNdjson(decoded, format, { now = () => Date.now(), onT
         turnStarted = now();
       }
     }
+    }
+    carry += decoder.end();
+    consume(carry);
+    const finalTurnMs = now() - turnStarted;
+    maxTurnMs = Math.max(maxTurnMs, finalTurnMs);
+    if (onTurn) onTurn(finalTurnMs);
+    return { value: format === 'array-ndjson-v1' ? array : snapshot, maxTurnMs };
+  } finally {
+    runtimeActivity.endParentDecode();
   }
-  carry += decoder.end();
-  consume(carry);
-  const finalTurnMs = now() - turnStarted;
-  maxTurnMs = Math.max(maxTurnMs, finalTurnMs);
-  if (onTurn) onTurn(finalTurnMs);
-  return { value: format === 'array-ndjson-v1' ? array : snapshot, maxTurnMs };
 }
 
 function fileIdentity() {

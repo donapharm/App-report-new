@@ -109,6 +109,55 @@ test('file LKG đổi ⇒ bản nhớ hết hiệu lực, lượt sau phải đ�
     'file đã đổi mà vẫn trả nội dung cũ ⇒ CEO đọc số của danh mục cũ, sai im lặng');
 });
 
+test('snapshot kỳ không hết hạn theo đồng hồ: 200 lượt trong 5 phút chỉ dựng một lần', () => {
+  ghiLkg(21);
+  catalogManagement.quenLkg();
+  catalogManagement.resetSnapshotBuildsForTests();
+  const dateNow = Date.now;
+  let now = dateNow();
+  Date.now = () => now;
+  try {
+    const first = docKy('07.2026');
+    assert.notEqual(first, null);
+    for (let i = 0; i < 200; i += 1) {
+      now += 1_500; // tổng đúng 5 phút
+      assert.strictEqual(docKy('07.2026'), first);
+    }
+  } finally { Date.now = dateNow; }
+  assert.equal(catalogManagement.snapshotBuildsForTests(), 1);
+});
+
+test('snapshot kỳ dựng lại đúng một lần khi căn cước file đổi', () => {
+  ghiLkg(22);
+  catalogManagement.quenLkg();
+  catalogManagement.resetSnapshotBuildsForTests();
+  assert.equal(docKy('07.2026').rows[0].c5, 'P22');
+  ghiLkg(23);
+  assert.equal(docKy('07.2026').rows[0].c5, 'P23');
+  assert.equal(docKy('07.2026').rows[0].c5, 'P23');
+  assert.equal(catalogManagement.snapshotBuildsForTests(), 2);
+});
+
+test('sau lần dựng đầu, 200 cache hit không có lượt đồng bộ nào quá 50ms', () => {
+  ghiLkg(24);
+  catalogManagement.quenLkg();
+  assert.notEqual(docKy('07.2026'), null);
+  let maxMs = 0;
+  for (let i = 0; i < 200; i += 1) {
+    const started = process.hrtime.bigint();
+    assert.notEqual(docKy('07.2026'), null);
+    maxMs = Math.max(maxMs, Number(process.hrtime.bigint() - started) / 1e6);
+  }
+  assert.ok(maxMs < 50, `cache hit đồng bộ dài nhất ${maxMs.toFixed(1)}ms`);
+});
+
+test('snapshot cache luôn bị chặn số entry, không phình theo số kỳ', () => {
+  ghiLkg(25);
+  catalogManagement.quenLkg();
+  for (let month = 1; month <= 12; month += 1) docKy(`${String(month).padStart(2, '0')}.2026`);
+  assert.ok(catalogManagement.snapshotCacheSizeForTests() <= 6);
+});
+
 test('quenLkg() phải thật sự xoá bản nhớ — chốt làm rồi phải cắm dây', () => {
   catalogManagement.quenLkg();
   assert.notEqual(docKy('07.2026'), null);

@@ -26,4 +26,21 @@ test('tick telemetry emits one compact line with GMT+7 timestamp and work outcom
 test('event-loop warning carries its own GMT+7 timestamp contract', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'eventLoopMonitor.js'), 'utf8');
   assert.match(source, /at: vnSecond\(\)/);
+  assert.match(source, /runtimeActivity\.snapshot\(\)/);
+});
+
+test('runtime activity exposes compact request, parent decode and background labels only', () => {
+  const activity = require('../src/runtimeActivity');
+  activity.resetForTests();
+  const request = activity.beginRequest();
+  const finishTask = activity.beginBackground('revenue-materialize');
+  activity.beginParentDecode(1000);
+  activity.parentDecoded(640);
+  assert.deepEqual(activity.snapshot(), {
+    requestIds: [request.id], backgroundTasks: ['revenue-materialize'],
+    parentDecodeActive: true, parentDecodedBytes: 640, parentDecodeTotalBytes: 1000,
+  });
+  request.finish(); finishTask(); activity.endParentDecode();
+  assert.deepEqual(activity.snapshot().requestIds, []);
+  assert.deepEqual(activity.snapshot().backgroundTasks, []);
 });

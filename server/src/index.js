@@ -28,6 +28,7 @@ const routes = require('./routes');
 const eventLoopMonitor = require('./eventLoopMonitor');
 const revenueRefresh = require('./revenueRefresh');
 const deckScheduler = require('./report/deckScheduler');
+const runtimeActivity = require('./runtimeActivity');
 const releaseIdentity = require('./releaseIdentity').runtimeIdentity();
 
 const PORT = process.env.PORT || 3873;
@@ -61,6 +62,13 @@ app.use(cors({
   },
 }));
 app.use(express.json({ limit: '2mb' }));
+
+app.use((req, res, next) => {
+  const activity = runtimeActivity.beginRequest();
+  res.once('finish', activity.finish);
+  res.once('close', activity.finish);
+  next();
+});
 
 app.get('/api/health', (req, res) => res.json({ ok: true, service: 'app-report', ts: Date.now(), ...releaseIdentity }));
 app.use('/api', routes);

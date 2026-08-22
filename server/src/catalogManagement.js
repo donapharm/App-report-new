@@ -239,10 +239,12 @@ function dqSnapshotFingerprint(snapshot) {
  *      Nay giữ bản phân tích rất ngắn (đủ gộp một chùm request), còn snapshot từng kỳ
  *      thì giữ lâu hơn — chúng nhỏ hơn cả file gốc rất nhiều.
  */
-const HAN_SNAPSHOT_MS = 60_000;
+const SO_SNAPSHOT_TOI_DA = Math.max(1, Math.min(12,
+  Number(process.env.CATALOG_PERIOD_SNAPSHOT_CACHE_MAX || 6) || 6));
 let nhoLkg = null;             // worker/test only: parsed generation, retained until file identity changes
 const nhoSnapshot = new Map(); // `${print}|${period}` -> snapshot đã kiểm, đã đóng băng
 let projectionBuildsForTests = 0;
+let snapshotBuildsForTests = 0;
 
 /* Căn cước file: thêm `dev` (khác thiết bị thì inode trùng nhau là chuyện thường) và
  * dùng nano giây dạng bigint — mili giây không phân biệt được hai lần ghi sát nhau. */
@@ -270,6 +272,15 @@ function dongBangSau(nut) {
   Object.freeze(nut);
   for (const con of Object.values(nut)) dongBangSau(con);
   return nut;
+}
+
+function nhoSnapshotLru(khoa, value) {
+  nhoSnapshot.delete(khoa);
+  nhoSnapshot.set(khoa, { value });
+  while (nhoSnapshot.size > SO_SNAPSHOT_TOI_DA) {
+    nhoSnapshot.delete(nhoSnapshot.keys().next().value);
+  }
+  return value;
 }
 
 /* Đọc kèm HẬU KIỂM: `stat` trước, đọc, rồi `stat` lại. Lệch nghĩa là file đổi ngay
@@ -337,7 +348,10 @@ function readCache(period) {
     if (printTruocTra) {
       const khoaSom = `${printTruocTra}|${period || ''}`;
       const hit = nhoSnapshot.get(khoaSom);
-      if (hit && hit.hetHanLuc > Date.now() && canCuocFile(CACHE_FILE) === printTruocTra) {
+      if (hit && canCuocFile(CACHE_FILE) === printTruocTra) {
+        // Map giữ thứ tự chèn: đưa hit về cuối để giới hạn bên dưới là LRU thật.
+        nhoSnapshot.delete(khoaSom);
+        nhoSnapshot.set(khoaSom, hit);
         return hit.value;
       }
     }
@@ -359,9 +373,8 @@ function readCache(period) {
       return null;
     }
     // Nhớ cả `null`: "kỳ này không có trong LKG" cũng là kết luận, khỏi phân tích lại.
-    const daDongBang = dongBangSau(snapshot);
-    nhoSnapshot.set(khoaSnapshot, { value: daDongBang, hetHanLuc: Date.now() + HAN_SNAPSHOT_MS });
-    return daDongBang;
+    snapshotBuildsForTests += 1;
+    return nhoSnapshotLru(khoaSnapshot, dongBangSau(snapshot));
   } catch { return null; }
 }
 function dataQualityProjection(snapshot, periodInput) {
@@ -1172,6 +1185,10 @@ module.exports = {
   conGiuBanPhanTichForTests: () => nhoLkg !== null,
   projectionBuildsForTests: () => projectionBuildsForTests,
   resetProjectionBuildsForTests: () => { projectionBuildsForTests = 0; },
+  snapshotBuildsForTests: () => snapshotBuildsForTests,
+  resetSnapshotBuildsForTests: () => { snapshotBuildsForTests = 0; },
+  snapshotCacheSizeForTests: () => nhoSnapshot.size,
+  deepFreezeForTests: dongBangSau,
   writeCacheForTests: writeCacheAtomic, configured, toHubPeriod, toUiPeriod, getSnapshot, getCatalogRows, invalidateSnapshot, cachedMeta, unitGroupMap, getCachedDataQualitySnapshot, getHistory, employeeView, adminView, transfer, diagnostics, assertEmployeeSafe, assertNoPermanentCatalogFields, assertCatalogFieldPolicy, assertContractorCoverage, assertCatalogSourceContract, assertCatalogSnapshotContract, assertCriticalProjectionCoverage, assertCstProjectionCoverage, buildCatalogRows, safeRestoredSnapshots, isPermanentlyBlockedCatalogField, PERMANENTLY_BLOCKED_CATALOG_FIELDS, APPROVED_OPTIONAL_CATALOG_FIELDS, CRITICAL_CATALOG_FIELDS, CRITICAL_CATALOG_SOURCE_FIELDS, normalizeRow, assignmentScopeKey, catalogScopeKey, catalogLineKey, enrichRowsFromCatalog, enrichRowsWithCst, activeIn, CACHE_FILE, DQ_CACHE_FILE, CACHE_INDEX_FILE, writeCacheAtomic, snapshotFingerprint, dqSnapshotFingerprint,
   CATALOG_PROJECTION_VERSION,
   schedulePeriodLkgShadow: (response, period, snapshot) => catalogPeriodLkg.scheduleShadowAfterResponse(
