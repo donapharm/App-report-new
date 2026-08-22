@@ -306,6 +306,60 @@ function createEmployeeCostSnapshotSync(options = {}) {
     });
   }
 
+  async function createInitialClosedGeneration(rawPeriod, { actor = '', reason = 'manual_closed_initial' } = {}) {
+    const period = store.normalizePeriod(rawPeriod);
+    if (period !== '2026-07') {
+      throw Object.assign(new Error('Kỳ này không được phép tạo generation gốc.'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_DENIED' });
+    }
+    return store.withPeriodLock(period, async () => {
+      if (isLocked(period) !== true) {
+        throw Object.assign(new Error('Chỉ tạo generation gốc cho kỳ đã khoá.'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_OPEN' });
+      }
+      const rosterRows = await rosterProvider(period);
+      const roster = store.normalizeRoster(rosterRows);
+      const before = store.tryReadCurrent(period, { roster });
+      if (before.ok) {
+        throw Object.assign(new Error('Kỳ này đã có generation.'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_ALREADY_EXISTS' });
+      }
+      const missingCurrent = before.error?.cause?.code === 'ENOENT' || before.error?.code === 'ENOENT';
+      if (!missingCurrent) throw before.error;
+      const dependenciesBefore = await dependencyIdentity(period, { roster: rosterRows });
+      const results = await mapBounded(roster, concurrency, (empCode) => fetchEmployee(empCode, { period, roster: rosterRows, reason, requireFresh: true }));
+      const employees = new Map();
+      const missing = [];
+      roster.forEach((empCode, index) => {
+        const outcome = results[index];
+        if (!outcome?.ok || !usableResult(outcome.value)) { missing.push(empCode); return; }
+        const value = outcome.value;
+        employees.set(empCode, { report: value.report ?? value, fetchedAt: iso(value.fetchedAt || now()), sourceRevision: String(value.sourceRevision || value.revision || '') });
+      });
+      if (missing.length || employees.size !== roster.length) {
+        auditClosedRepair({ outcome: 'initial_rejected_incomplete', actor, period, source: 'network', beforeCount: 0, afterCount: employees.size, missing });
+        throw Object.assign(new Error('Nguồn chưa đủ toàn bộ roster; không tạo generation gốc.'), { code: 'EMPLOYEE_COST_SNAPSHOT_INCOMPLETE', unavailableEmployees: missing });
+      }
+      const dependenciesMid = await dependencyIdentity(period, { roster: rosterRows });
+      if (store.canonicalJson(dependenciesMid) !== store.canonicalJson(dependenciesBefore)) {
+        auditClosedRepair({ outcome: 'initial_rejected_dependency_drift', actor, period, source: 'network', beforeCount: 0, afterCount: 0 });
+        throw Object.assign(new Error('Nguồn đổi trong lúc dựng; không tạo generation gốc.'), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
+      }
+      const model = await buildModel({ period, roster: rosterRows, employees, unavailableReasons: {}, dependencies: dependenciesBefore, previousModel: null });
+      await validateClosedRepair({ period, roster, employees, model, dependencies: dependenciesBefore });
+      const dependenciesAfter = await dependencyIdentity(period, { roster: rosterRows });
+      if (store.canonicalJson(dependenciesAfter) !== store.canonicalJson(dependenciesBefore)) {
+        auditClosedRepair({ outcome: 'initial_rejected_dependency_drift', actor, period, source: 'network', beforeCount: 0, afterCount: 0 });
+        throw Object.assign(new Error('Nguồn đổi trước publish; không tạo generation gốc.'), { code: 'EMPLOYEE_COST_SNAPSHOT_DEPENDENCY_DRIFT' });
+      }
+      if (isLocked(period) !== true) {
+        throw Object.assign(new Error('Trạng thái kỳ đổi trước publish.'), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_STATE_DRIFT' });
+      }
+      const published = store.publishInitialClosedGeneration(period, {
+        roster, employees, model, dependencies: dependenciesBefore, fetchedAt: iso(now()), unavailableReasons: {},
+      });
+      auditClosedRepair({ outcome: 'initial_published', actor, period, source: 'network', beforeCount: 0, afterCount: published.employees.size, afterGenerationId: published.manifest.generationId, checksum: published.pointer.manifestChecksum });
+      return published;
+    });
+  }
+
   function requestClosedRepair(rawPeriod, repairOptions = {}) {
     const period = store.normalizePeriod(rawPeriod);
     if (inFlight.has(period)) return { accepted: true, singleFlight: true, period, status: store.readStatus(period) };
@@ -321,6 +375,21 @@ function createEmployeeCostSnapshotSync(options = {}) {
       .finally(() => { if (inFlight.get(period) === promise) inFlight.delete(period); });
     inFlight.set(period, promise);
     promise.catch((error) => console.warn('[employee-cost-snapshot] closed repair failed', { period, code: error?.code || 'REPAIR_FAILED' }));
+    return { accepted: true, singleFlight: false, period, status: store.readStatus(period) };
+  }
+
+  function requestInitialClosedGeneration(rawPeriod, initialOptions = {}) {
+    const period = store.normalizePeriod(rawPeriod);
+    if (inFlight.has(period)) return { accepted: true, singleFlight: true, period, status: store.readStatus(period) };
+    auditClosedRepair({ outcome: 'initial_requested', actor: initialOptions.actor || '', period, source: 'network', beforeCount: 0, afterCount: 0 });
+    const promise = createInitialClosedGeneration(period, initialOptions)
+      .catch((error) => {
+        store.writeStatus(period, { ...store.readStatus(period), state: 'failed', finishedAt: iso(now()), errorCode: String(error.code || 'EMPLOYEE_COST_SNAPSHOT_INITIAL_FAILED') });
+        throw error;
+      })
+      .finally(() => { if (inFlight.get(period) === promise) inFlight.delete(period); });
+    inFlight.set(period, promise);
+    promise.catch((error) => console.warn('[employee-cost-snapshot] initial generation failed', { period, code: error?.code || 'INITIAL_FAILED' }));
     return { accepted: true, singleFlight: false, period, status: store.readStatus(period) };
   }
 
@@ -343,7 +412,7 @@ function createEmployeeCostSnapshotSync(options = {}) {
     return { ...status, syncing: inFlight.has(period) || status.state === 'syncing' };
   }
 
-  return { dongBoKy, requestSync, requestClosedRepair, trangThaiDongBo, rebuildIncompleteClosedGeneration, inFlight, mapBounded };
+  return { dongBoKy, requestSync, requestClosedRepair, requestInitialClosedGeneration, trangThaiDongBo, rebuildIncompleteClosedGeneration, createInitialClosedGeneration, inFlight, mapBounded };
 }
 
 module.exports = { createEmployeeCostSnapshotSync, mapBounded, usableResult, sourceFailureReason };

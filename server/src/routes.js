@@ -43,6 +43,7 @@ const nativeEmployeeCostGetForSession = employeeCost.getForSession;
 const employeeBonus = require('./employeeBonus');
 // Phiên bản app vào chữ ký dấu: đổi code cách tính là dấu cũ phải hết hiệu lực.
 const APP_BUILD_VERSION = String(require('../package.json').version || '0');
+const APP_RELEASE_EXACT = String(require('./releaseIdentity').runtimeIdentity().commit || APP_BUILD_VERSION);
 const employeePenalty = require('./employeePenalty');
 // Đặt tên khác 'penaltyDisplay' vì trong file đã có biến cục bộ cùng tên ở phần Xu.
 const penaltyExplain = require('./penaltyDisplay');
@@ -1037,7 +1038,10 @@ async function employeeCostLockedSnapshotProvider(period) {
 }
 
 function employeeCostSnapshotStatus(period, roster = employeeCostRosterRows()) {
-  return employeeCostSnapshotSync.trangThaiDongBo(period, roster);
+  const status = employeeCostSnapshotSync.trangThaiDongBo(period, roster);
+  const current = employeeCostSnapshotStore.tryReadCurrent(period, { roster });
+  const missingCurrent = !current.ok && (current.error?.cause?.code === 'ENOENT' || current.error?.code === 'ENOENT');
+  return { ...status, initialGenerationAllowed: period === '2026-07' && employeeCost.isPeriodClosed(period, employeeCost.vnToday()) && missingCurrent };
 }
 
 function employeeCostSnapshotMeta(status) {
@@ -1052,6 +1056,7 @@ function employeeCostSnapshotMeta(status) {
     availableCount: Number(status?.availableCount || 0),
     unavailableReasons: employeeCostSnapshotStore.safeUnavailableReasons(status?.unavailableReasons),
     errorCode: String(status?.errorCode || ''),
+    initialGenerationAllowed: status?.initialGenerationAllowed === true,
   };
 }
 
@@ -1168,7 +1173,12 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
   },
   auditClosedRepair: (entry) => {
     const rows = persist.load('employee_cost_generation_repair_audit', []);
-    rows.push({ at: new Date().toISOString(), exact: APP_BUILD_VERSION, ...entry });
+    rows.push({
+      at: new Date().toISOString(),
+      atGmt7: `${new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })} GMT+7`,
+      exact: APP_RELEASE_EXACT,
+      ...entry,
+    });
     persist.save('employee_cost_generation_repair_audit', rows.slice(-500));
   },
 });
@@ -2597,7 +2607,20 @@ router.get('/employee-cost/snapshot/status', auth.requireAuth, auth.requireAdmin
 router.post('/employee-cost/snapshot/resync', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   if (!auth.isCeoActor(req.session)) return res.status(403).json({ error: 'Chỉ CEO được đồng bộ snapshot chi phí.', code: 'EMPLOYEE_COST_SNAPSHOT_CEO_REQUIRED' });
   const period = employeeCostSnapshotStore.normalizePeriod(req.body?.period);
+  if (period === '2026-06') {
+    return res.status(403).json({ error: 'T06.2026 bị khoá cứng, không được tạo hoặc dựng lại generation.', code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_DENIED' });
+  }
   const current = employeeCostSnapshotStore.tryReadCurrent(period, { roster: employeeCostRosterRows() });
+  const missingCurrent = !current.ok && (current.error?.cause?.code === 'ENOENT' || current.error?.code === 'ENOENT');
+  const closedInitial = period === '2026-07' && employeeCost.isPeriodClosed(period, employeeCost.vnToday()) && missingCurrent;
+  if (closedInitial) {
+    if (!auth.trustedHumanDeviceForSession(req.session)) {
+      return res.status(403).json({ error: 'Tạo generation gốc cần phiên CEO người thật đã xác thực OTP trong 12 giờ.', code: 'EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED' });
+    }
+    const accepted = employeeCostSnapshotSync.requestInitialClosedGeneration(period, { actor: String(req.session?.emp_code || '').slice(0, 32) });
+    console.info('[employee-cost-snapshot] initial generation requested', { period, actor: String(req.session?.emp_code || '').slice(0, 32), accepted: accepted.accepted === true });
+    return res.status(202).json({ accepted: true, initialGeneration: true, dongBoKy: period, trangThaiDongBo: employeeCostSnapshotMeta(employeeCostSnapshotStatus(period)) });
+  }
   const closedIncomplete = employeeCost.isPeriodClosed(period, employeeCost.vnToday()) && current.ok && !current.snapshot.complete;
   if (closedIncomplete) {
     if (!auth.trustedHumanDeviceForSession(req.session)) {

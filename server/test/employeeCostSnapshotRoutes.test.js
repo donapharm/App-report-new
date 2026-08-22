@@ -48,6 +48,15 @@ test('closed repair UI is visible only for an incomplete locked generation', () 
   assert.match(ui, /Dựng lại bản tiền thiếu/);
 });
 
+test('closed T07 without current has a distinct CEO OTP initial-generation path', () => {
+  const source = routesSource();
+  assert.match(source, /closedInitial[\s\S]*?trustedHumanDeviceForSession[\s\S]*?requestInitialClosedGeneration/);
+  assert.match(source, /period === '2026-07'/);
+  assert.match(source, /period === '2026-06'[\s\S]*?EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_DENIED/);
+  const ui = fs.readFileSync(require.resolve('../../web/src/pages/EmployeeCost.jsx'), 'utf8');
+  assert.match(ui, /initialGenerationAllowed \? 'Tạo bản tiền T07 đầu tiên'/);
+});
+
 test('sync probes exact authoritative evidence once before enrichment', () => {
   const source = routesSource();
   const adapterStart = source.indexOf('async function fetchAuthoritativeEmployeeCost');

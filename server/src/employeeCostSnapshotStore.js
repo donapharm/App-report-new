@@ -110,6 +110,7 @@ function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
 
 function createEmployeeCostSnapshotStore(options = {}) {
   const closedRepairCapability = Symbol('employee-cost-closed-repair');
+  const closedInitialCapability = Symbol('employee-cost-closed-initial');
   const root = path.resolve(options.root || process.env.EMPLOYEE_COST_SNAPSHOT_ROOT || path.join(__dirname, '..', 'data', 'employee_cost_snapshots'));
   const now = options.now || (() => new Date());
   const crashHook = typeof options.crashHook === 'function' ? options.crashHook : () => {};
@@ -306,7 +307,8 @@ function createEmployeeCostSnapshotStore(options = {}) {
     }
     const sealIdentity = String(input.sealIdentity || '');
     const closedRepair = input.closedRepairCapability === closedRepairCapability;
-    if (input.locked === true && source !== 'seal' && !closedRepair) {
+    const closedInitial = input.closedInitialCapability === closedInitialCapability;
+    if (input.locked === true && source !== 'seal' && !closedRepair && !closedInitial) {
       throw Object.assign(new Error('Kỳ khoá chỉ được publish từ dấu đóng hợp lệ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_SEAL_INVALID' });
     }
     if (source === 'seal' && (!/^[a-f0-9]{64}$/.test(sealIdentity)
@@ -315,7 +317,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
     }
     // Closed-period policy must be enforced by this persistence boundary too;
     // callers cannot bypass immutability by forgetting to set `locked`.
-    if (input.periodLocked === true && input.locked !== true && !closedRepair) {
+    if (input.periodLocked === true && input.locked !== true && !closedRepair && !closedInitial) {
       throw Object.assign(new Error('Kỳ đã khoá; chỉ được publish generation đầy đủ đã đóng dấu.'), { code: 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE' });
     }
     const roster = normalizeRoster(input.roster);
@@ -336,6 +338,18 @@ function createEmployeeCostSnapshotStore(options = {}) {
       }
       if (source !== 'network' || input.periodLocked !== true || input.locked !== true) {
         throw Object.assign(new Error('Generation sửa kỳ khoá thiếu ràng buộc.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_INVALID' });
+      }
+    }
+    if (closedInitial) {
+      if (normalized !== '2026-07') {
+        throw Object.assign(new Error('Chỉ cho phép tạo generation gốc T07.2026.'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_DENIED' });
+      }
+      if (previous.ok) {
+        throw Object.assign(new Error('Kỳ này đã có generation; từ chối tạo generation gốc lần hai.'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_ALREADY_EXISTS' });
+      }
+      const missingCurrent = previous.error?.cause?.code === 'ENOENT' || previous.error?.code === 'ENOENT';
+      if (!missingCurrent || source !== 'network' || input.periodLocked !== true || input.locked !== true) {
+        throw Object.assign(new Error('Trạng thái generation gốc không hợp lệ.'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_INVALID' });
       }
     }
     const normalizedRecords = [];
@@ -410,6 +424,10 @@ function createEmployeeCostSnapshotStore(options = {}) {
     return publishGeneration(period, { ...input, closedRepairCapability, source: 'network', periodLocked: true, locked: true });
   }
 
+  function publishInitialClosedGeneration(period, input = {}) {
+    return publishGeneration(period, { ...input, closedInitialCapability, source: 'network', periodLocked: true, locked: true });
+  }
+
   function closedRepairModelMatchesRoster(model, period, roster) {
     return sealModelMatchesRoster(model, normalizePeriod(period), normalizeRoster(roster));
   }
@@ -469,7 +487,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
   return {
     root, normalizePeriod, normalizeEmployee, normalizeRoster, rosterIdentity, canonicalJson, sha256,
     compareTuple, safeReason, safeUnavailableReasons, acquireLock, withPeriodLock, isPeriodBusy,
-    readStatus, writeStatus, readCurrent, tryReadCurrent, publishGeneration, publishClosedRepairGeneration, closedRepairModelMatchesRoster,
+    readStatus, writeStatus, readCurrent, tryReadCurrent, publishGeneration, publishClosedRepairGeneration, publishInitialClosedGeneration, closedRepairModelMatchesRoster,
     capturePublicationState, restorePublicationState, docSnapshot, trangThaiDongBo,
     _test: { envelope, validateEnvelope, atomicWrite, currentFile, statusFile, periodDir },
   };

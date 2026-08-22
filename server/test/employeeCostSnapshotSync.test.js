@@ -388,3 +388,77 @@ test('closed repair hard-denies T06 before any fetch', async (t) => {
   await assert.rejects(ctx.sync.rebuildIncompleteClosedGeneration('2026-06'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PERIOD_DENIED' });
   assert.equal(fetches, 0);
 });
+
+function closedInitialSetup(t, overrides = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'emp-cost-closed-initial-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const store = createEmployeeCostSnapshotStore({ root });
+  const roster = ['DN001', 'DN002'];
+  const sync = createEmployeeCostSnapshotSync({
+    store, concurrency: 1, rosterProvider: async () => roster,
+    isLocked: overrides.isLocked || (() => true),
+    fetchEmployee: overrides.fetchEmployee || (async (empCode) => ({ sourceOutcome: 'ok', report: { empCode, amount: 10 } })),
+    dependencyIdentity: overrides.dependencyIdentity || (async () => ({ revision: 'v1' })),
+    buildModel: overrides.buildModel || (async () => sealedModel('2026-07', roster)),
+    validateClosedRepair: overrides.validateClosedRepair || (async ({ model }) => assert.equal(model.revenueRecon.balanced, true)),
+    auditClosedRepair: overrides.auditClosedRepair || (() => {}),
+  });
+  return { root, store, sync, roster };
+}
+
+test('closed T07 without current creates exactly one complete initial generation', async (t) => {
+  const audits = [];
+  const ctx = closedInitialSetup(t, { auditClosedRepair: (entry) => audits.push(entry) });
+  const created = await ctx.sync.createInitialClosedGeneration('2026-07', { actor: 'CEO' });
+  assert.equal(created.complete, true);
+  assert.equal(created.employees.size, 2);
+  assert.equal(created.manifest.locked, true);
+  assert.equal(audits.at(-1).outcome, 'initial_published');
+  assert.equal(audits.at(-1).source, 'network');
+  assert.match(audits.at(-1).checksum, /^[a-f0-9]{64}$/);
+});
+
+test('closed initial rejects when current already exists', async (t) => {
+  const ctx = closedInitialSetup(t);
+  await ctx.sync.createInitialClosedGeneration('2026-07');
+  await assert.rejects(ctx.sync.createInitialClosedGeneration('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_ALREADY_EXISTS' });
+});
+
+test('two simultaneous initial-generation attempts publish exactly one current generation', async (t) => {
+  const ctx = closedInitialSetup(t);
+  const results = await Promise.allSettled([
+    ctx.sync.createInitialClosedGeneration('2026-07', { actor: 'CEO' }),
+    ctx.sync.createInitialClosedGeneration('2026-07', { actor: 'CEO' }),
+  ]);
+  assert.equal(results.filter((item) => item.status === 'fulfilled').length, 1);
+  assert.equal(results.filter((item) => item.status === 'rejected').length, 1);
+  assert.equal(ctx.store.readCurrent('2026-07').complete, true);
+});
+
+test('closed initial with 18-of-19 equivalent rejects without current or generation files', async (t) => {
+  const ctx = closedInitialSetup(t, {
+    fetchEmployee: async (empCode) => empCode === 'DN002' ? { ok: false, sourceOutcome: 'deadline' } : { sourceOutcome: 'ok', report: { empCode } },
+  });
+  await assert.rejects(ctx.sync.createInitialClosedGeneration('2026-07'), (error) => {
+    assert.equal(error.code, 'EMPLOYEE_COST_SNAPSHOT_INCOMPLETE');
+    assert.deepEqual(error.unavailableEmployees, ['DN002']);
+    return true;
+  });
+  assert.equal(ctx.store.tryReadCurrent('2026-07').ok, false);
+  const generations = path.join(ctx.root, '2026-07', 'generations');
+  assert.equal(fs.existsSync(generations), false);
+});
+
+test('closed initial rejects an open period', async (t) => {
+  const ctx = closedInitialSetup(t, { isLocked: () => false });
+  await assert.rejects(ctx.sync.createInitialClosedGeneration('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_OPEN' });
+  assert.equal(ctx.store.tryReadCurrent('2026-07').ok, false);
+});
+
+test('closed initial hard-denies T06 before fetch', async (t) => {
+  let fetches = 0;
+  const ctx = closedInitialSetup(t, { fetchEmployee: async () => { fetches += 1; return {}; } });
+  await assert.rejects(ctx.sync.createInitialClosedGeneration('2026-06'), { code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_DENIED' });
+  assert.equal(fetches, 0);
+  assert.equal(ctx.store.tryReadCurrent('2026-06').ok, false);
+});

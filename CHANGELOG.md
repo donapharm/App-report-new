@@ -7765,3 +7765,10 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - T08 lúc kiểm có 11 dòng DN021 + DN023, tổng `303.062.700đ`; phần tăng `10.530.000đ` là một dòng DN021 mới so với ảnh `292.532.700đ`, nên phép cân động đạt.
 - Thêm cửa CEO dựng lại nguyên generation tiền T07 khi snapshot hiện tại thiếu đội hình. Cửa yêu cầu thiết bị người thật có OTP trong 12 giờ, dựng tạm đủ đúng 19/19, khóa checksum/lai lịch/phép cân, kiểm generation đầu-cuối và publish nguyên khối bằng lock + CAS; thiếu hoặc drift giữ nguyên bản cũ.
 - Cửa này chưa được chạy trên dữ liệu thật và không mở lại con dấu T07.
+
+### 2026-08-22 — Cổng 1 generation tiền T07 đầu tiên
+
+- Thêm đường riêng cho CEO tạo generation tiền đầu tiên của kỳ T07 đã khoá khi snapshot store chưa có `current.json`; không dùng nhánh repair generation thiếu.
+- Bắt buộc thiết bị người thật với OTP không quá 12 giờ, nguồn tươi đủ đúng roster, checksum/lai lịch và phép cân hợp lệ trước khi publish atomic.
+- Thiếu một nhân viên, nguồn đổi, kỳ đang mở, T06 hoặc đã có generation đều fail-closed; dữ liệu legacy 3/19 không bị sửa hay xoá.
+- Audit ghi actor, giờ GMT+7, exact release, nguồn, số nhân viên và checksum; generation chỉ được tạo một lần theo lock/CAS.
