@@ -25,6 +25,7 @@
 const { monitorEventLoopDelay, PerformanceObserver, constants } = require('node:perf_hooks');
 const { vnSecond } = require('./tickTelemetry');
 const runtimeActivity = require('./runtimeActivity');
+const { createDiagnosticLogLimiter } = require('./diagnosticLogLimiter');
 
 const MS = 1e6; // histogram của Node trả nano-giây
 
@@ -43,21 +44,57 @@ const REPORT_INTERVAL_MS = Math.max(
   5_000, Number(process.env.APP_REPORT_EVENT_LOOP_REPORT_MS || 0) || 30_000,
 );
 const GC_WARN_MS = 200;
+const ATTRIBUTION_INTERVAL_MS = 1_000;
+const DETAIL_LIMIT_PER_MINUTE = 12;
 
 let histogram = null;
 let timer = null;
+let attributionHistogram = null;
+let attributionTimer = null;
 let worstLagMs = 0;
 let warnCount = 0;
 let gcObserver = null;
 
 const round = (value) => Math.round(value * 10) / 10;
 
-function snapshot() {
-  if (!histogram) return null;
+function histogramSnapshot(target) {
+  if (!target) return null;
   return {
-    maxMs: round(histogram.max / MS),
-    p99Ms: round(histogram.percentile(99) / MS),
-    meanMs: round(histogram.mean / MS),
+    maxMs: round(target.max / MS),
+    p99Ms: round(target.percentile(99) / MS),
+    meanMs: round(target.mean / MS),
+  };
+}
+
+function snapshot() { return histogramSnapshot(histogram); }
+
+function createAttributionReporter({
+  warnMs = WARN_LAG_MS,
+  detailLimitPerMinute = DETAIL_LIMIT_PER_MINUTE,
+  nowMs = Date.now,
+  timestamp = vnSecond,
+  activitySnapshot = runtimeActivity.snapshot,
+  warn = console.warn,
+} = {}) {
+  const limiter = createDiagnosticLogLimiter({
+    stream: 'event-loop-attribution',
+    limit: detailLimitPerMinute,
+    nowMs,
+    detail: (record) => warn('[event-loop-attribution] NGHẼN', record),
+    summary: (record) => warn('[event-loop-attribution-suppressed]', { at: timestamp(), ...record }),
+  });
+  return {
+    observe(current) {
+      if (!current || current.maxMs < warnMs) return false;
+      return limiter.record({
+        at: timestamp(),
+        ...current,
+        warnMs,
+        windowMs: ATTRIBUTION_INTERVAL_MS,
+        ...activitySnapshot(),
+      });
+    },
+    flush: limiter.flush,
   };
 }
 
@@ -66,12 +103,22 @@ function start() {
   try {
     histogram = monitorEventLoopDelay({ resolution: RESOLUTION_MS });
     histogram.enable();
+    attributionHistogram = monitorEventLoopDelay({ resolution: RESOLUTION_MS });
+    attributionHistogram.enable();
   } catch (error) {
     // Không có perf_hooks thì thôi, tuyệt đối không được làm hỏng lúc khởi động.
     console.warn('[event-loop] không bật được đồng hồ đo', { message: error.message });
     histogram = null;
     return null;
   }
+  const attributionReporter = createAttributionReporter();
+  attributionTimer = setInterval(() => {
+    const current = histogramSnapshot(attributionHistogram);
+    attributionReporter.observe(current);
+    attributionReporter.flush();
+    attributionHistogram.reset();
+  }, ATTRIBUTION_INTERVAL_MS);
+  if (typeof attributionTimer.unref === 'function') attributionTimer.unref();
   timer = setInterval(() => {
     const current = snapshot();
     if (!current) return;
@@ -126,7 +173,12 @@ function start() {
 
 function stop() {
   if (timer) { clearInterval(timer); timer = null; }
+  if (attributionTimer) { clearInterval(attributionTimer); attributionTimer = null; }
   if (histogram) { try { histogram.disable(); } catch { /* ignore */ } histogram = null; }
+  if (attributionHistogram) {
+    try { attributionHistogram.disable(); } catch { /* ignore */ }
+    attributionHistogram = null;
+  }
   if (gcObserver) { try { gcObserver.disconnect(); } catch { /* ignore */ } gcObserver = null; }
 }
 
@@ -135,4 +187,8 @@ function read() {
   return { ...(snapshot() || { maxMs: null, p99Ms: null, meanMs: null }), worstLagMs, warnCount };
 }
 
-module.exports = { start, stop, read, WARN_LAG_MS, RESOLUTION_MS, REPORT_INTERVAL_MS, GC_WARN_MS };
+module.exports = {
+  start, stop, read, createAttributionReporter,
+  WARN_LAG_MS, RESOLUTION_MS, REPORT_INTERVAL_MS, ATTRIBUTION_INTERVAL_MS,
+  DETAIL_LIMIT_PER_MINUTE, GC_WARN_MS,
+};

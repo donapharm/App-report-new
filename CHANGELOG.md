@@ -1,3 +1,9 @@
+### 2026-08-22 — Gắn hiện trường nghẽn đúng lúc phát hiện
+
+- Giữ tổng kết event-loop 30 giây, đồng thời đọc histogram riêng mỗi 1 giây; cú lag từ 1.000 ms chụp ngay nhãn request/background/decode tại lúc phát hiện thay vì lúc in tổng kết muộn.
+- Ghi yêu cầu vượt 500 ms bằng method, route đã khớp và thời lượng; tuyệt đối không ghi URL thật, query, payload, phiên hay mã nghiệp vụ.
+- Mỗi luồng tối đa 12 dòng chi tiết/phút; phần vượt trần gộp thành một dòng đếm. Chỉ thay dụng cụ quan sát, chưa deploy hay chạy profile.
+
 ### 2026-08-22 — Con dấu T07 đối chiếu tổng 21 capture nguồn
 
 - Sửa cổng provenance: mỗi response nhân viên chỉ cần có số dòng dương và đủ 5 trường khai báo; không còn đòi từng response riêng lẻ bằng tổng toàn kỳ.

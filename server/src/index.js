@@ -29,6 +29,7 @@ const eventLoopMonitor = require('./eventLoopMonitor');
 const revenueRefresh = require('./revenueRefresh');
 const deckScheduler = require('./report/deckScheduler');
 const runtimeActivity = require('./runtimeActivity');
+const slowRequestTelemetry = require('./slowRequestTelemetry').createSlowRequestTelemetry();
 const releaseIdentity = require('./releaseIdentity').runtimeIdentity();
 
 const PORT = process.env.PORT || 3873;
@@ -65,8 +66,16 @@ app.use(express.json({ limit: '2mb' }));
 
 app.use((req, res, next) => {
   const activity = runtimeActivity.beginRequest();
-  res.once('finish', activity.finish);
-  res.once('close', activity.finish);
+  const slowRequest = slowRequestTelemetry.begin(req);
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    slowRequest.finish();
+    activity.finish();
+  };
+  res.once('finish', finish);
+  res.once('close', finish);
   next();
 });
 

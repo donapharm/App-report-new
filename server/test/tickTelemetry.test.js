@@ -27,6 +27,7 @@ test('event-loop warning carries its own GMT+7 timestamp contract', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'eventLoopMonitor.js'), 'utf8');
   assert.match(source, /at: vnSecond\(\)/);
   assert.match(source, /runtimeActivity\.snapshot\(\)/);
+  assert.match(source, /createAttributionReporter/);
 });
 
 test('runtime activity exposes compact request, parent decode and background labels only', () => {

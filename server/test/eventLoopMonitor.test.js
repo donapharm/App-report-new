@@ -7,6 +7,8 @@ const monitor = require('../src/eventLoopMonitor');
 
 test('ngưỡng GC quan sát là 200ms', () => {
   assert.equal(monitor.GC_WARN_MS, 200);
+  assert.equal(monitor.ATTRIBUTION_INTERVAL_MS, 1000);
+  assert.equal(monitor.DETAIL_LIMIT_PER_MINUTE, 12);
 });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
