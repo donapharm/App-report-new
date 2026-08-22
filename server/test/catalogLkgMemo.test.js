@@ -183,7 +183,7 @@ test('B3 file đổi NGAY TRONG LÚC đọc ⇒ không được nhớ bản tr�
  *   · hạn GIỮ      — "còn nắm bộ nhớ này tới bao giờ".
  * Cái thứ hai phải CHỦ ĐỘNG bỏ tham chiếu, nếu không RAM chỉ về khi tình cờ có người gọi.
  */
-test('B4 tới hạn thì THẢ tham chiếu, không cần ai gọi', async () => {
+test('B4 không hết hạn theo đồng hồ — 100 lượt file không đổi chỉ parse một lần', () => {
   assert.equal(typeof catalogManagement.conGiuBanPhanTichForTests, 'function',
     'phải xuất hàm soi tham chiếu, nếu không ca này chỉ đoán');
   catalogManagement.quenLkg();
@@ -192,17 +192,17 @@ test('B4 tới hạn thì THẢ tham chiếu, không cần ai gọi', async () =
   assert.equal(catalogManagement.conGiuBanPhanTichForTests(), true,
     'vừa đọc xong thì đang giữ bản đã phân tích — đúng, đó là chỗ cứu 26 giây');
 
-  // KHÔNG gọi thêm gì cả. Chỉ chờ. Nếu phải gọi mới thả thì đó là hạn dùng lại, không
-  // phải hạn giữ — và RAM sẽ nằm đó cho tới lúc tình cờ có request.
-  await new Promise((xong) => { setTimeout(xong, 11_000); });
-  assert.equal(catalogManagement.conGiuBanPhanTichForTests(), false,
-    'quá hạn mà vẫn giữ tham chiếu ⇒ GC không thu được ⇒ 1,36 GiB nằm lại như bot đo');
-
-  // Thả rồi vẫn phải đọc lại được, không phải thả là hỏng.
-  assert.notEqual(docKy('07.2026'), null, 'thả xong lượt sau vẫn phải dựng lại được');
+  const originalParse = JSON.parse;
+  let parses = 0;
+  JSON.parse = (...args) => { parses += 1; return originalParse(...args); };
+  try { for (let i = 0; i < 100; i += 1) assert.notEqual(docKy('07.2026'), null); }
+  finally { JSON.parse = originalParse; }
+  assert.equal(parses, 0, 'đã có generation trong RAM thì 100 lượt không được parse lại theo đồng hồ');
+  assert.equal(catalogManagement.conGiuBanPhanTichForTests(), true,
+    'generation chỉ thay khi căn cước file đổi; worker tự thoát sẽ thu hồi monolith');
 });
 
-test('B4b `quenLkg()` huỷ luôn hẹn giờ — không để cái hẹn cũ xoá bản mới', () => {
+test('B4b `quenLkg()` bỏ generation ngay để lượt ghi chủ động không phục vụ bản cũ', () => {
   ghiLkg(10);
   catalogManagement.quenLkg();
   assert.equal(catalogManagement.conGiuBanPhanTichForTests(), false, 'quên là sạch ngay');

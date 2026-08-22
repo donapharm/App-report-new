@@ -7731,3 +7731,9 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Fail-closed luật dấu (`SALE` không âm; `RETURN/CANCEL/ADJUSTMENT` không dương), tiền VND là chuỗi số nguyên đồng, header bắt buộc `legal_entity` và `currency: "VND"`, mọi dòng cùng pháp nhân.
 - Kỳ được suy ra và kiểm bằng `invoice_date`; chặn kỳ đã khóa và chặn cứng `2026-06`; kiểm lại `row_checksum` theo `sha256-canonical-json-v1`.
 - Phân trang chỉ hợp lệ khi trang cuối có `finalize: true`, đủ dòng và checksum tổng khớp. Các trang chỉ giữ trong bộ nhớ; không publish bất kỳ phần dở dang nào.
+# 22/08/2026 — Catalog LKG no-clock-reload + machine acceptance Gate 1
+
+- Catalog LKG không còn hết hạn rồi đọc/parse lại file 406 MB khi file không đổi: parent chỉ `stat` theo nhịp 10 giây và giữ projection theo `dev/inode/size/mtime`; file đổi mới dựng lại ở `catalogLkgReaderWorker`, trong lúc đó phục vụ bản cũ với cờ `catalogReloading/stale`.
+- Đường bỏ sót là các accessor đồng bộ `catalogManagement.docLkg/readCache` (đặc biệt `cachedMeta`/diagnostics/test helper) và cache phía worker tự hết hạn/worker tự dừng, trong khi chỉ các đường `getSnapshot/getCatalogRows` đã đi qua worker.
+- Thêm thiết kế Cổng 1 cho `reportdev_acceptance_bot_v1`: script nội bộ không HTTP/UI/password/OTP/session, chỉ schema đếm đã duyệt, allowlist T07/T08 và fail-closed với kỳ/trường ngoài schema; chưa chạy PROD.
+- Luật vận hành: `cpu-prof` hoặc side-run tải nặng cấm chạy chung tài nguyên không giới hạn với production; phải dùng máy khác hoặc `nice`/`cpulimit`/cgroup và báo CEO trước.

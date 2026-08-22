@@ -239,9 +239,8 @@ function dqSnapshotFingerprint(snapshot) {
  *      Nay giữ bản phân tích rất ngắn (đủ gộp một chùm request), còn snapshot từng kỳ
  *      thì giữ lâu hơn — chúng nhỏ hơn cả file gốc rất nhiều.
  */
-const HAN_BAN_PHAN_TICH_MS = 10_000;  // đủ gộp một chùm request, không ghim 377 MB lâu
 const HAN_SNAPSHOT_MS = 60_000;
-let nhoLkg = null;             // { print, value, hetHanLuc } — bản phân tích, sống ngắn
+let nhoLkg = null;             // worker/test only: parsed generation, retained until file identity changes
 const nhoSnapshot = new Map(); // `${print}|${period}` -> snapshot đã kiểm, đã đóng băng
 let projectionBuildsForTests = 0;
 
@@ -254,27 +253,13 @@ function canCuocFile(duongDan) {
   } catch { return null; }
 }
 
-/* ‼ HẠN GIỜ THỤ ĐỘNG KHÔNG THẢ RAM (bot audit vòng 10 — đo tận nơi, đúng).
- *
- * Bản trước tôi chỉ kiểm `hetHanLuc` **lúc có người gọi**. Không ai gọi thì `nhoLkg.value`
- * vẫn trỏ vào bản 377 MB đã phân tích, nên GC **không được phép** thu. Bot đo: sau 30
- * giây rảnh, **3/6 tiến trình vẫn giữ 1,36 GiB**; phải tới 60–75 giây mới về 659 MiB.
- * Tức "hạn 10 giây" của tôi chỉ là hạn **dùng lại**, không phải hạn **giữ**.
- *
- * Nay thả CHỦ ĐỘNG bằng hẹn giờ: tới hạn là bỏ tham chiếu, không chờ ai gọi. `unref()`
- * để cái hẹn giờ này không giữ tiến trình sống thêm. */
-let henGioThaLkg = null;
-function henGioTha(sauBaoLau) {
-  if (henGioThaLkg) clearTimeout(henGioThaLkg);
-  henGioThaLkg = setTimeout(() => { nhoLkg = null; henGioThaLkg = null; }, sauBaoLau);
-  if (typeof henGioThaLkg.unref === 'function') henGioThaLkg.unref();
-}
-
+/* Monolith is parsed only in catalogLkgReaderWorker (or explicit unit tests). The
+ * worker keeps one parsed generation until its inode/size/mtime changes and is
+ * itself stopped after an idle window, so clock expiry never causes a reread. */
 /** Xoá bản nhớ — GỌI SAU MỌI LƯỢT GHI LKG, nếu không lượt đọc sau ăn phải bản cũ. */
 function quenLkg() {
   nhoLkg = null;
   nhoSnapshot.clear();
-  if (henGioThaLkg) { clearTimeout(henGioThaLkg); henGioThaLkg = null; }
 }
 
 /* Đóng băng SÂU: bản trong RAM được nhiều lượt đọc dùng chung, nên phải cấm sửa. Không
@@ -290,11 +275,10 @@ function dongBangSau(nut) {
 /* Đọc kèm HẬU KIỂM: `stat` trước, đọc, rồi `stat` lại. Lệch nghĩa là file đổi ngay
  * trong lúc đọc ⇒ nội dung ta cầm không thuộc căn cước nào cả ⇒ đọc lại. */
 function docLkg() {
-  const now = Date.now();
   const printTruoc = canCuocFile(CACHE_FILE);
   if (!printTruoc) return { print: null, value: null };
   // Cùng khe hở như trên: trúng bản nhớ rồi vẫn phải soi lại trước khi dám trả.
-  if (nhoLkg && nhoLkg.print === printTruoc && nhoLkg.hetHanLuc > now
+  if (nhoLkg && nhoLkg.print === printTruoc
     && canCuocFile(CACHE_FILE) === printTruoc) return nhoLkg;
 
   for (let lan = 0; lan < 3; lan += 1) {
@@ -305,8 +289,7 @@ function docLkg() {
     if (truoc !== sau) continue; // file đổi giữa chừng — bản vừa đọc là hàng trộn đời
     const value = JSON.parse(tho);
     if (!nhoLkg || nhoLkg.print !== truoc) nhoSnapshot.clear();
-    nhoLkg = { print: truoc, value, hetHanLuc: Date.now() + HAN_BAN_PHAN_TICH_MS };
-    henGioTha(HAN_BAN_PHAN_TICH_MS); // thả chủ động, không chờ lượt gọi kế tiếp
+    nhoLkg = { print: truoc, value };
     return nhoLkg;
   }
   return { print: null, value: null }; // đổi liên tục ⇒ không kết luận, để người gọi dựng lại
@@ -959,7 +942,10 @@ async function loadSnapshot(period, { forceRemote = false } = {}) {
  */
 function cachedMeta(periodInput) {
   const period = toHubPeriod(periodInput);
-  const snapshot = readCache(period);
+  // This accessor used to bypass catalogLkgReader and synchronously parse the
+  // 406 MB monolith on the web thread. Only report metadata already extracted
+  // by the async worker; absence is safer than blocking health/request traffic.
+  const snapshot = snapshotCache.get(period)?.value || null;
   if (!snapshot) return null;
   return {
     period,
@@ -989,7 +975,8 @@ async function getSnapshot(periodInput, { forceRemote = false } = {}) {
      * Đường đọc thẳng LKG thì đã thấy bản mới, nên hai đường trong cùng một app trả hai
      * số khác nhau. Nay ô nhớ phải khớp CẢ căn cước file: file đổi ⇒ trượt ⇒ đọc lại. */
     const printHienTai = canCuocFile(CACHE_FILE);
-    if (hit && Date.now() - hit.at < SNAPSHOT_CACHE_TTL_MS && hit.print === printHienTai) {
+    if (hit && Date.now() - hit.at < SNAPSHOT_CACHE_TTL_MS && hit.print === printHienTai
+      && !hit.value?.meta?.catalogReloading) {
       // LRU touch without cloning the giant snapshot.
       snapshotCache.delete(period);
       snapshotCache.set(period, hit);
@@ -1130,10 +1117,13 @@ async function transfer(payload, session) {
   });
 }
 function diagnostics() {
-  let cacheRoot = null;
-  try { cacheRoot = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')); assertCatalogFieldPolicy(cacheRoot, 'catalogLkg'); } catch { cacheRoot = null; }
-  const count = cacheRoot?.snapshots ? Object.keys(cacheRoot.snapshots).length : (cacheRoot?.rows ? 1 : 0);
-  return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: count ? { available: true, periods: count, version: cacheRoot.version || cacheRoot.meta?.version || null, checksum: cacheRoot.checksum || cacheRoot.meta?.checksum || null, updatedAt: cacheRoot.updatedAt || cacheRoot.meta?.updatedAt || null } : { available: false }, periodLkg: catalogPeriodLkg.diagnostics(), phase1NoCutover: true };
+  // Diagnostics must remain cheap: inspect the tiny generation-bound index and
+  // already extracted RAM metadata, never the 406 MB monolith.
+  const index = readCacheIndex();
+  const indexCurrent = sameCacheFile(CACHE_FILE, index.mainFile);
+  const periods = indexCurrent ? Object.keys(index.periods || {}) : [];
+  const newest = [...snapshotCache.values()].at(-1)?.value || null;
+  return { configured: configured(), endpoint: configured() ? `${baseUrl()}/api/integrations/app-report` : null, timeoutMs: Math.max(1000, Number(process.env.DATA_HUB_TIMEOUT_MS || DEFAULT_TIMEOUT_MS) || DEFAULT_TIMEOUT_MS), cache: periods.length ? { available: true, periods: periods.length, version: newest?.meta?.version || null, checksum: newest?.meta?.checksum || null, updatedAt: newest?.meta?.updatedAt || null } : { available: false }, periodLkg: catalogPeriodLkg.diagnostics(), phase1NoCutover: true };
 }
 
 

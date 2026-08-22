@@ -16,6 +16,25 @@ let worker = null;
 let nextId = 1;
 let idleTimer = null;
 const pending = new Map();
+const STAT_INTERVAL_MS = Math.max(0, Number(process.env.CATALOG_LKG_STAT_INTERVAL_MS || 10_000));
+const values = new Map();
+const reloads = new Map();
+let readOverrideForTests = null;
+let lastStatAt = 0;
+let lastIdentity = null;
+
+function fileIdentity() {
+  const now = Date.now();
+  if (now - lastStatAt < STAT_INTERVAL_MS) return lastIdentity;
+  lastStatAt = now;
+  try {
+    const stat = require('fs').statSync(process.env.CATALOG_MANAGEMENT_CACHE_FILE
+      || path.join(__dirname, '..', 'data', 'catalog_management_lkg.json'), { bigint: true });
+    lastIdentity = stat.isFile()
+      ? `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}` : null;
+  } catch { lastIdentity = null; }
+  return lastIdentity;
+}
 
 function armIdleStop() {
   if (idleTimer) clearTimeout(idleTimer);
@@ -46,6 +65,7 @@ function getWorker() {
   const spawned = fork(path.join(__dirname, 'catalogLkgReaderWorker.js'), [], {
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     serialization: 'advanced',
+    env: { ...process.env, CATALOG_LKG_READER_WORKER: '1' },
   });
   worker = spawned;
   spawned.on('message', ({ id, encoded, format, error }) => {
@@ -88,7 +108,7 @@ function getWorker() {
   return spawned;
 }
 
-function read(period, projection = 'snapshot') {
+function readFromWorker(period, projection = 'snapshot') {
   const id = nextId++;
   return new Promise((resolve, reject) => {
     const activeWorker = getWorker();
@@ -97,4 +117,35 @@ function read(period, projection = 'snapshot') {
   });
 }
 
-module.exports = { read };
+function markReloading(value, identity) {
+  if (!value || Array.isArray(value) || typeof value !== 'object') return value;
+  return { ...value, meta: { ...value.meta, stale: true, catalogReloading: true,
+    catalogFileIdentity: identity, message: 'Danh mục trên đĩa đã đổi; đang dựng bản mới ở tiến trình phụ và tạm phục vụ bản cũ.' } };
+}
+
+/**
+ * Parent keeps the extracted period projection without a clock expiry. Every
+ * ten seconds it performs one cheap stat. An unchanged inode/size/mtime never
+ * starts the worker. A changed file starts one background rebuild while the
+ * last verified projection remains immediately available.
+ */
+async function read(period, projection = 'snapshot') {
+  const key = `${projection}|${period || ''}`;
+  const identity = fileIdentity();
+  const cached = values.get(key);
+  if (cached && cached.identity === identity) return cached.value;
+  if (!reloads.has(key)) {
+    const task = (readOverrideForTests || readFromWorker)(period, projection)
+      .then((value) => { values.set(key, { identity: fileIdentity(), value }); return value; })
+      .finally(() => reloads.delete(key));
+    reloads.set(key, task);
+  }
+  if (cached) return markReloading(cached.value, identity);
+  return reloads.get(key);
+}
+
+module.exports = {
+  read,
+  _setReadOverrideForTests: (value) => { readOverrideForTests = value; },
+  _resetForTests: () => { values.clear(); reloads.clear(); lastStatAt = 0; lastIdentity = null; readOverrideForTests = null; },
+};
