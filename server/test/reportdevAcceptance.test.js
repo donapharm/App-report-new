@@ -6,7 +6,8 @@ const acceptance = require('../src/reportdevAcceptance');
 test('machine principal emits only approved counters and audit label', async () => {
   let event;
   const out = await acceptance.runAcceptance({ period: '2026-08' }, {
-    loadCounters: async () => ({ catalogRows: 28006, employeeCount: 19, balanced: true,
+    loadCounters: async () => ({ activeRows: 1611, employeeCount: 19,
+      targetOnlyAmount: 292532700, nonSalesRoleQuarantinedAmount: 1795600, balanced: true,
       c32: 'must-not-leak', person: 'must-not-leak' }),
     audit: (value) => { event = value; },
   });

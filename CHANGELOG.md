@@ -7748,3 +7748,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Parent no longer calls `Buffer.toString('utf8') + JSON.parse` on a complete Catalog LKG projection. Worker emits typed NDJSON; parent decodes 64 KiB slices, parses independent records and yields by a 25 ms time budget (hard contract below 50 ms per turn).
 - Worker send/restart gap now rejects the exact pending request and clears the dead worker so the next read starts a clean child instead of hanging.
 - Performance profiling and heavy side-runs must run off the production resource pool, or under an explicit CPU/resource limit announced to the CEO before execution.
+### 2026-08-22 — Acceptance adapter nội bộ cho ReportDev
+
+- Kích hoạt script nội bộ không HTTP/session cho principal máy `reportdev_acceptance_bot_v1`; chỉ đọc kỳ T07/T08 từ các primitive backend hiện hành.
+- Output cố định gồm số dòng active, số NV, `revenueRecon.targetOnlyAmount`, `revenueRecon.nonSalesRoleQuarantinedAmount`, `revenueRecon.balanced` và checksum; không trả dòng chi tiết, C32–C47 hay PII.
+- Kỳ ngoài allowlist và trường request ngoài schema tiếp tục fail-closed; mỗi lượt chạy ghi nhãn audit máy riêng vào stderr.

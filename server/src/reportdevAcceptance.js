@@ -4,7 +4,10 @@ const crypto = require('crypto');
 
 const PRINCIPAL = 'reportdev_acceptance_bot_v1';
 const ALLOWED_PERIODS = new Set(['2026-07', '2026-08']);
-const OUTPUT_FIELDS = Object.freeze(['principal', 'period', 'catalogRows', 'employeeCount', 'balanced', 'checksum']);
+const OUTPUT_FIELDS = Object.freeze([
+  'principal', 'period', 'activeRows', 'employeeCount',
+  'targetOnlyAmount', 'nonSalesRoleQuarantinedAmount', 'balanced', 'checksum',
+]);
 
 function reject(code) {
   throw Object.assign(new Error(code), { code });
@@ -22,12 +25,16 @@ function projectCounters(period, counters = {}) {
   const raw = {
     principal: PRINCIPAL,
     period,
-    catalogRows: Number(counters.catalogRows),
+    activeRows: Number(counters.activeRows),
     employeeCount: Number(counters.employeeCount),
+    targetOnlyAmount: Number(counters.targetOnlyAmount),
+    nonSalesRoleQuarantinedAmount: Number(counters.nonSalesRoleQuarantinedAmount),
     balanced: counters.balanced,
   };
-  if (!Number.isSafeInteger(raw.catalogRows) || raw.catalogRows < 0
+  if (!Number.isSafeInteger(raw.activeRows) || raw.activeRows < 0
     || !Number.isSafeInteger(raw.employeeCount) || raw.employeeCount < 0
+    || !Number.isSafeInteger(raw.targetOnlyAmount) || raw.targetOnlyAmount < 0
+    || !Number.isSafeInteger(raw.nonSalesRoleQuarantinedAmount) || raw.nonSalesRoleQuarantinedAmount < 0
     || typeof raw.balanced !== 'boolean') reject('ACCEPTANCE_COUNTERS_INVALID');
   const checksum = crypto.createHash('sha256').update(JSON.stringify(raw)).digest('hex');
   return Object.freeze({ ...raw, checksum });
