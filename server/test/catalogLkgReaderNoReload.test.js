@@ -42,3 +42,36 @@ test('changed file: old snapshot remains available while worker builds new gener
   assert.equal(fresh.meta.version, '3');
   assert.equal(fresh.meta.catalogReloading, undefined);
 });
+
+test('parent parses large array incrementally and yields before the 50ms contract', async () => {
+  const rows = Array.from({ length: 20_000 }, (_, i) => ({ id: i, name: `hàng-${i}` }));
+  const encoded = Buffer.from(rows.map((row) => JSON.stringify(row)).join('\n'));
+  let clock = 0;
+  const turns = [];
+  const parsed = await reader._parseChunkedNdjsonForTests(encoded, 'array-ndjson-v1', {
+    // Deterministic clock: each observation advances 7ms. The parser must yield
+    // from its 25ms budget instead of letting one turn reach 50ms.
+    now: () => { clock += 7; return clock; },
+    onTurn: (elapsed) => turns.push(elapsed),
+  });
+  assert.deepEqual(parsed.value, rows);
+  assert.ok(turns.length > 1);
+  assert.ok(parsed.maxTurnMs < 50, `max parent parse turn ${parsed.maxTurnMs}ms`);
+});
+
+test('parent reconstructs snapshot arrays without one whole-payload JSON.parse', async () => {
+  const lines = [
+    { kind: 'header', value: { period: '2026-08', meta: { version: 'v1' } } },
+    { kind: 'row', value: { id: 1 } },
+    { kind: 'catalog', value: { c3: 'A' } },
+    { kind: 'history', value: { at: 'x' } },
+  ];
+  const parsed = await reader._parseChunkedNdjsonForTests(
+    Buffer.from(lines.map((line) => JSON.stringify(line)).join('\n')),
+    'snapshot-ndjson-v1',
+  );
+  assert.deepEqual(parsed.value, {
+    period: '2026-08', meta: { version: 'v1' },
+    rows: [{ id: 1 }], catalog: [{ c3: 'A' }], history: [{ at: 'x' }],
+  });
+});

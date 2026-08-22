@@ -11,6 +11,7 @@
 const path = require('path');
 const { fork } = require('child_process');
 const zlib = require('zlib');
+const { StringDecoder } = require('string_decoder');
 
 let worker = null;
 let nextId = 1;
@@ -22,6 +23,55 @@ const reloads = new Map();
 let readOverrideForTests = null;
 let lastStatAt = 0;
 let lastIdentity = null;
+const DECODE_CHUNK_BYTES = Math.max(16 * 1024, Number(process.env.CATALOG_LKG_DECODE_CHUNK_BYTES || 64 * 1024));
+const DECODE_TURN_BUDGET_MS = Math.max(5, Math.min(45, Number(process.env.CATALOG_LKG_DECODE_TURN_BUDGET_MS || 25)));
+
+const yieldTurn = () => new Promise((resolve) => setImmediate(resolve));
+
+async function parseChunkedNdjson(decoded, format, { now = () => Date.now(), onTurn = null } = {}) {
+  const decoder = new StringDecoder('utf8');
+  let carry = '';
+  let turnStarted = now();
+  let maxTurnMs = 0;
+  const array = [];
+  let snapshot = null;
+
+  const consume = (line) => {
+    if (!line) return;
+    const record = JSON.parse(line);
+    if (format === 'array-ndjson-v1') array.push(record);
+    else if (record.kind === 'header') snapshot = { ...record.value, rows: [], catalog: [], history: [] };
+    else {
+      if (!snapshot) throw new Error('Catalog LKG snapshot stream has no header');
+      if (record.kind === 'row') snapshot.rows.push(record.value);
+      else if (record.kind === 'catalog') snapshot.catalog.push(record.value);
+      else if (record.kind === 'history') snapshot.history.push(record.value);
+      else throw new Error(`Unknown Catalog LKG record kind: ${record.kind}`);
+    }
+  };
+
+  for (let offset = 0; offset < decoded.length; offset += DECODE_CHUNK_BYTES) {
+    carry += decoder.write(decoded.subarray(offset, Math.min(decoded.length, offset + DECODE_CHUNK_BYTES)));
+    let newline;
+    while ((newline = carry.indexOf('\n')) !== -1) {
+      consume(carry.slice(0, newline));
+      carry = carry.slice(newline + 1);
+      const elapsed = now() - turnStarted;
+      if (elapsed >= DECODE_TURN_BUDGET_MS) {
+        maxTurnMs = Math.max(maxTurnMs, elapsed);
+        if (onTurn) onTurn(elapsed);
+        await yieldTurn();
+        turnStarted = now();
+      }
+    }
+  }
+  carry += decoder.end();
+  consume(carry);
+  const finalTurnMs = now() - turnStarted;
+  maxTurnMs = Math.max(maxTurnMs, finalTurnMs);
+  if (onTurn) onTurn(finalTurnMs);
+  return { value: format === 'array-ndjson-v1' ? array : snapshot, maxTurnMs };
+}
 
 function fileIdentity() {
   const now = Date.now();
@@ -61,7 +111,8 @@ function rejectWorker(spawned, error) {
 }
 
 function getWorker() {
-  if (worker) return worker;
+  if (worker && worker.connected && !worker.killed) return worker;
+  worker = null;
   const spawned = fork(path.join(__dirname, 'catalogLkgReaderWorker.js'), [], {
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     serialization: 'advanced',
@@ -81,14 +132,8 @@ function getWorker() {
       if (zipError) entry.reject(zipError);
       else {
         try {
-          if (format === 'ndjson') {
-            const lines = decoded.toString('utf8').split('\n');
-            const rows = [];
-            for (let start = 0; start < lines.length; start += 500) {
-              for (const line of lines.slice(start, start + 500)) if (line) rows.push(JSON.parse(line));
-              await new Promise((resolve) => setImmediate(resolve));
-            }
-            entry.resolve(rows);
+          if (format === 'array-ndjson-v1' || format === 'snapshot-ndjson-v1') {
+            entry.resolve((await parseChunkedNdjson(decoded, format)).value);
           } else entry.resolve(JSON.parse(decoded.toString('utf8')));
         }
         catch (parseError) { entry.reject(parseError); }
@@ -113,7 +158,20 @@ function readFromWorker(period, projection = 'snapshot') {
   return new Promise((resolve, reject) => {
     const activeWorker = getWorker();
     pending.set(id, { resolve, reject, worker: activeWorker });
-    activeWorker.send({ id, period, projection });
+    try {
+      activeWorker.send({ id, period, projection }, (error) => {
+        if (!error) return;
+        const entry = pending.get(id);
+        if (!entry) return;
+        pending.delete(id);
+        if (worker === activeWorker) worker = null;
+        entry.reject(error);
+      });
+    } catch (error) {
+      pending.delete(id);
+      if (worker === activeWorker) worker = null;
+      reject(error);
+    }
   });
 }
 
@@ -146,6 +204,7 @@ async function read(period, projection = 'snapshot') {
 
 module.exports = {
   read,
+  _parseChunkedNdjsonForTests: parseChunkedNdjson,
   _setReadOverrideForTests: (value) => { readOverrideForTests = value; },
   _resetForTests: () => { values.clear(); reloads.clear(); lastStatAt = 0; lastIdentity = null; readOverrideForTests = null; },
 };

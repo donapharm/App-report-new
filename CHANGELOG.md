@@ -7737,3 +7737,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Đường bỏ sót là các accessor đồng bộ `catalogManagement.docLkg/readCache` (đặc biệt `cachedMeta`/diagnostics/test helper) và cache phía worker tự hết hạn/worker tự dừng, trong khi chỉ các đường `getSnapshot/getCatalogRows` đã đi qua worker.
 - Thêm thiết kế Cổng 1 cho `reportdev_acceptance_bot_v1`: script nội bộ không HTTP/UI/password/OTP/session, chỉ schema đếm đã duyệt, allowlist T07/T08 và fail-closed với kỳ/trường ngoài schema; chưa chạy PROD.
 - Luật vận hành: `cpu-prof` hoặc side-run tải nặng cấm chạy chung tài nguyên không giới hạn với production; phải dùng máy khác hoặc `nice`/`cpulimit`/cgroup và báo CEO trước.
+## 2026-08-22 — Catalog LKG parent chunked decode (Gate 1)
+
+- Parent no longer calls `Buffer.toString('utf8') + JSON.parse` on a complete Catalog LKG projection. Worker emits typed NDJSON; parent decodes 64 KiB slices, parses independent records and yields by a 25 ms time budget (hard contract below 50 ms per turn).
+- Worker send/restart gap now rejects the exact pending request and clears the dead worker so the next read starts a clean child instead of hanging.
+- Performance profiling and heavy side-runs must run off the production resource pool, or under an explicit CPU/resource limit announced to the CEO before execution.

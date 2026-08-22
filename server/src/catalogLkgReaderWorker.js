@@ -23,10 +23,25 @@ process.on('message', ({ id, period, projection }) => {
       : snapshot;
     // Structured-clone hàng chục nghìn object cũng làm main thread khựng lâu.
     // Chuyển một buffer nén duy nhất; giải nén chạy ở libuv threadpool phía main.
-    const format = projection === 'employee-cost-catalog' && Array.isArray(value) ? 'ndjson' : 'json';
-    const text = format === 'ndjson'
-      ? value.map((row) => JSON.stringify(row)).join('\n')
-      : JSON.stringify(value);
+    // Main thread must never decode + JSON.parse one giant JSON value. Encode every
+    // large projection as independent NDJSON records so the parent can decode small
+    // Buffer slices and yield between batches. The worker may spend CPU here: it is
+    // deliberately nice(19) and cannot block HTTP/event-loop health.
+    let format = 'json';
+    let text;
+    if (Array.isArray(value)) {
+      format = 'array-ndjson-v1';
+      text = value.map((row) => JSON.stringify(row)).join('\n');
+    } else if (value && typeof value === 'object') {
+      format = 'snapshot-ndjson-v1';
+      const { rows = [], catalog = [], history = [], ...header } = value;
+      text = [
+        JSON.stringify({ kind: 'header', value: header }),
+        ...rows.map((row) => JSON.stringify({ kind: 'row', value: row })),
+        ...catalog.map((row) => JSON.stringify({ kind: 'catalog', value: row })),
+        ...history.map((row) => JSON.stringify({ kind: 'history', value: row })),
+      ].join('\n');
+    } else text = JSON.stringify(value);
     const encoded = zlib.gzipSync(Buffer.from(text), { level: 1 });
     if (process.send) process.send({ id, encoded, format });
   } catch (error) {
