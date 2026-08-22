@@ -55,6 +55,8 @@ test('closed T07 without current has a distinct CEO OTP initial-generation path'
   assert.match(source, /period === '2026-06'[\s\S]*?EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_DENIED/);
   const ui = fs.readFileSync(require.resolve('../../web/src/pages/EmployeeCost.jsx'), 'utf8');
   assert.match(ui, /initialGenerationAllowed \? 'Tạo bản tiền T07 đầu tiên'/);
+  assert.match(ui, /snapshotStatus\.locked \? ' · kỳ đã khoá' : ''/);
+  assert.doesNotMatch(ui, /snapshotStatus\.locked[^\n]{0,160}(đã đóng dấu|có con dấu)/i);
 });
 
 test('sync probes exact authoritative evidence once before enrichment', () => {

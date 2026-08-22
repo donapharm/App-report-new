@@ -1175,7 +1175,7 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
     const rows = persist.load('employee_cost_generation_repair_audit', []);
     rows.push({
       at: new Date().toISOString(),
-      atGmt7: `${new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh', hour12: false })} GMT+7`,
+      atGmt7: `${new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok', hour12: false })} GMT+7`,
       exact: APP_RELEASE_EXACT,
       ...entry,
     });

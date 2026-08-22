@@ -413,6 +413,8 @@ test('closed T07 without current creates exactly one complete initial generation
   assert.equal(created.complete, true);
   assert.equal(created.employees.size, 2);
   assert.equal(created.manifest.locked, true);
+  assert.equal(created.manifest.source, 'network');
+  assert.equal(created.manifest.sealIdentity, '');
   assert.equal(audits.at(-1).outcome, 'initial_published');
   assert.equal(audits.at(-1).source, 'network');
   assert.match(audits.at(-1).checksum, /^[a-f0-9]{64}$/);
