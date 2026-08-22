@@ -18,6 +18,7 @@ import { composePaymentRequestNote, paymentReasonDetailMaxLength } from '../paym
 import { ExportRealNumbersNote, useMoneyWriteLock, useRevealContext } from '../privacy.jsx';
 import { maskMoneyInText, maskNumberText } from '../privacyMask.js';
 import { EmployeeCostKpiTiles } from '../employeeCostKpiTiles.js';
+import { EmployeeCostSnapshotControl } from '../employeeCostSnapshotControl.js';
 
 const month = currentMonthValue();
 const EMPTY = { empCode: '', from: month, to: month, periods: [], note: 'chưa có dữ liệu chi phí kỳ này' };
@@ -1729,7 +1730,7 @@ export default function EmployeeCost({ me, onNavigate }) {
     const inspect = () => api.employeeCostSnapshotStatus(range.to)
       .then((data) => {
         if (!alive) return;
-        setSnapshotControl(data?.enabled ? (data.trangThaiDongBo || null) : null);
+        setSnapshotControl(data?.controlEnabled === true ? (data.trangThaiDongBo || null) : null);
         if (snapshotPoll && data?.trangThaiDongBo?.syncing !== true) {
           setSnapshotPoll(false);
           setSnapshotRevision((value) => value + 1);
@@ -2171,17 +2172,13 @@ export default function EmployeeCost({ me, onNavigate }) {
     {costExportError && view === 'cost' && <div className="employee-cost-match-warning" role="alert">{costExportError}</div>}
 
 
-    {admin && view === 'cost' && allEmployees && snapshotStatus && <div className="card employee-cost-snapshot-status" data-snapshot-state={snapshotStatus.state}>
-      <div><div className="section-head">Bản chi phí trên máy · kỳ {formatMonthLabel(model.dongBoKy || range.to)}</div>
-        <p>{snapshotStatus.fetchedAt ? `Số chốt lúc ${new Date(snapshotStatus.fetchedAt).toLocaleString('vi-VN')} · ` : ''}{snapshotStatus.complete ? `đủ ${snapshotStatus.availableCount}/${snapshotStatus.rosterCount} NV` : `đang có ${snapshotStatus.availableCount}/${snapshotStatus.rosterCount} NV`}{snapshotStatus.locked ? ' · kỳ đã khoá' : ''}.</p>
-        {!!snapshotReasonText && <small>{snapshotReasonText}</small>}
-        {!!snapshotMessage && <small role="status">{snapshotMessage}</small>}
-        {!!snapshotError && <small role="alert">{snapshotError}</small>}
-      </div>
-      <button type="button" className="btn" disabled={snapshotSyncing || snapshotStatus.syncing || (snapshotStatus.locked && snapshotStatus.complete)} onClick={resyncEmployeeCostSnapshot}>
-        {snapshotSyncing || snapshotStatus.syncing ? 'Đang đồng bộ…' : snapshotStatus.initialGenerationAllowed ? 'Tạo bản tiền T07 đầu tiên' : snapshotStatus.locked ? 'Dựng lại bản tiền thiếu' : 'Đồng bộ lại'}
-      </button>
-    </div>}
+    <EmployeeCostSnapshotControl
+      admin={admin} view={view} selectedEmp={selectedEmp} period={range.to}
+      periodLabel={formatMonthLabel(model.dongBoKy || range.to)}
+      controlEnabled={snapshotControl != null || model.trangThaiDongBo != null}
+      status={snapshotStatus} syncing={snapshotSyncing} reasonText={snapshotReasonText}
+      message={snapshotMessage} error={snapshotError} onAction={resyncEmployeeCostSnapshot}
+    />
 
     {admin && <div className="employee-cost-tabs" role="tablist" aria-label="Chế độ xem chi phí">
       <button type="button" role="tab" aria-selected={view === 'cost'} className={view === 'cost' ? 'active' : ''} onClick={() => setView('cost')}>Chi phí theo nhân viên</button>

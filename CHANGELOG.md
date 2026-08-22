@@ -1,3 +1,9 @@
+### 2026-08-22 — Tách hợp đồng điều khiển generation T07 khỏi cờ phục vụ snapshot
+
+- Endpoint status trả `controlEnabled` độc lập; `enabled` tiếp tục chỉ mang đúng nghĩa đường phục vụ dữ liệu snapshot đang bật hay tắt.
+- CEO/admin chỉ thấy nút `Tạo bản tiền T07 đầu tiên` khi đúng tab chi phí, Tất cả nhân viên, kỳ 2026-07 và backend xác nhận được tạo generation gốc; không đổi POST, capability, CAS, cờ hay đường GET dữ liệu.
+- Từ nay mọi thao tác CEO phải bấm bắt buộc có nghiệm thu render/ảnh chứng minh nút hiện đúng nguyên văn trên màn hình; primitive backend riêng lẻ không đủ điều kiện hoàn thành.
+
 ### 2026-08-22 — Gắn hiện trường nghẽn đúng lúc phát hiện
 
 - Giữ tổng kết event-loop 30 giây, đồng thời đọc histogram riêng mỗi 1 giây; cú lag từ 1.000 ms chụp ngay nhãn request/background/decode tại lúc phát hiện thay vì lúc in tổng kết muộn.

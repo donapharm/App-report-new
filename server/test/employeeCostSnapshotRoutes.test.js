@@ -37,14 +37,15 @@ test('snapshot status/resync routes are admin guarded and mutation is additional
   assert.match(source, /return res\.status\(202\)\.json/);
   assert.match(source, /EMPLOYEE_COST_SNAPSHOT_SYNC_DISABLED/);
   assert.match(source, /EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE/);
+  assert.match(source, /controlEnabled: enabled \|\| trangThaiDongBo\.initialGenerationAllowed === true/);
   assert.match(source, /closedIncomplete[\s\S]*?trustedHumanDeviceForSession[\s\S]*?EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED/);
   assert.match(source, /requestClosedRepair\(period/);
   assert.match(source, /expectedRateChecksum = '615981e92ef1576fce54de8ae12e14140181d38c44d9839d7e363b68d35e356c'/);
 });
 
 test('closed repair UI is visible only for an incomplete locked generation', () => {
-  const ui = fs.readFileSync(require.resolve('../../web/src/pages/EmployeeCost.jsx'), 'utf8');
-  assert.match(ui, /snapshotStatus\.locked && snapshotStatus\.complete/);
+  const ui = fs.readFileSync(require.resolve('../../web/src/employeeCostSnapshotControl'), 'utf8');
+  assert.match(ui, /status\.locked && status\.complete/);
   assert.match(ui, /Dựng lại bản tiền thiếu/);
 });
 
@@ -54,9 +55,9 @@ test('closed T07 without current has a distinct CEO OTP initial-generation path'
   assert.match(source, /period === '2026-07'/);
   assert.match(source, /period === '2026-06'[\s\S]*?EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_DENIED/);
   const ui = fs.readFileSync(require.resolve('../../web/src/pages/EmployeeCost.jsx'), 'utf8');
-  assert.match(ui, /initialGenerationAllowed \? 'Tạo bản tiền T07 đầu tiên'/);
-  assert.match(ui, /snapshotStatus\.locked \? ' · kỳ đã khoá' : ''/);
-  assert.doesNotMatch(ui, /snapshotStatus\.locked[^\n]{0,160}(đã đóng dấu|có con dấu)/i);
+  const control = fs.readFileSync(require.resolve('../../web/src/employeeCostSnapshotControl'), 'utf8');
+  assert.match(ui, /EmployeeCostSnapshotControl/);
+  assert.doesNotMatch(control, /status\.locked[^\n]{0,160}(đã đóng dấu|có con dấu)/i);
 });
 
 test('sync probes exact authoritative evidence once before enrichment', () => {

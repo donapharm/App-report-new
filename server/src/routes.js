@@ -2600,8 +2600,15 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
 
 router.get('/employee-cost/snapshot/status', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   const period = employeeCostSnapshotStore.normalizePeriod(req.query.period);
+  const enabled = employeeCostSnapshotEnabled();
+  const trangThaiDongBo = employeeCostSnapshotMeta(employeeCostSnapshotStatus(period));
   res.set('Cache-Control', 'private, no-store');
-  return res.json({ enabled: employeeCostSnapshotEnabled(), dongBoKy: period, trangThaiDongBo: employeeCostSnapshotMeta(employeeCostSnapshotStatus(period)) });
+  return res.json({
+    enabled,
+    controlEnabled: enabled || trangThaiDongBo.initialGenerationAllowed === true,
+    dongBoKy: period,
+    trangThaiDongBo,
+  });
 }));
 
 router.post('/employee-cost/snapshot/resync', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {

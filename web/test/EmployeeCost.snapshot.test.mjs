@@ -55,13 +55,14 @@ test('UI explains upstream rejection as DataHub configuration, never as network 
 
 test('UI and API expose Đồng bộ lại as a background mutation with snapshot status', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
+  const control = fs.readFileSync(new URL('../src/employeeCostSnapshotControl.js', import.meta.url), 'utf8');
   const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
-  assert.match(page, /Bản chi phí trên máy/);
-  assert.match(page, /'Đồng bộ lại'/);
+  assert.match(control, /Bản chi phí trên máy/);
+  assert.match(control, /'Đồng bộ lại'/);
   assert.match(page, /api\.employeeCostSnapshotResync\(range\.to\)/);
   assert.match(page, /api\.employeeCostSnapshotStatus\(range\.to\)/);
   assert.match(page, /setSnapshotRevision/);
-  assert.match(page, /snapshotStatus\.locked/);
+  assert.match(control, /status\.locked/);
   assert.match(page, /SNAPSHOT_REASON_LABELS/);
   assert.match(api, /employeeCostSnapshotStatus:/);
   assert.match(api, /employeeCostSnapshotResync:/);
