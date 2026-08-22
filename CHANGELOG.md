@@ -7770,7 +7770,6 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Bỏ TTL 60 giây của snapshot danh mục từng kỳ; khóa cache đã gắn căn cước file nên chỉ dựng lại khi file thật đổi. Cache giữ LRU tối đa 6 kỳ để không phình RAM.
 - Cảnh báo event-loop nay kèm mã request nội bộ đang chạy, byte parent vừa bóc và tên tác vụ nền; không ghi URL, payload hay dữ liệu nhân viên.
 - Quy tắc nghiệm thu doanh thu: kỳ đang mở đối chiếu `target-only` với tổng động DN021+DN023 trong cùng snapshot; chỉ kỳ đã đóng mới dùng mốc cố định.
-
 ### 2026-08-22 — Luật nghiệm thu kỳ mở và cửa dựng lại generation tiền thiếu
 
 - Kỳ đang mở không dùng số target-only cố định: vế target-only phải bằng đúng tổng tiền các dòng DN021 + DN023 tại cùng thời điểm đo. Kỳ đã đóng mới dùng mốc cố định; T07 giữ `2.091 / 19 NV` và target-only `60.027.600đ`.
@@ -7784,3 +7783,10 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Bắt buộc thiết bị người thật với OTP không quá 12 giờ, nguồn tươi đủ đúng roster, checksum/lai lịch và phép cân hợp lệ trước khi publish atomic.
 - Thiếu một nhân viên, nguồn đổi, kỳ đang mở, T06 hoặc đã có generation đều fail-closed; dữ liệu legacy 3/19 không bị sửa hay xoá.
 - Audit ghi actor, giờ GMT+7, exact release, nguồn, số nhân viên và checksum; generation chỉ được tạo một lần theo lock/CAS.
+
+## 22/08/2026 — Full52 browser-only decryption candidate
+
+- Full52 remains display-only and feature-flagged OFF. The server no longer exposes the legacy plaintext full-row/sync/activate routes; it serves only validated metadata and ciphertext pages from the custody root.
+- Each CEO browser creates a non-extractable RSA-OAEP private key stored as a CryptoKey in IndexedDB. Only the public JWK is registered. Device removal revokes the public-key registration and deletes the local CryptoKey; loss means registering again and asking DataHub to rewrap/resync, with no escrow.
+- Viewer requires the existing CEO + human trusted-device + OTP-within-12-hours boundary. Missing period/as-of/page metadata fails closed; UI always displays “Số liệu tính đến …”. Pages are at most 50 rows, horizontally scrollable, and sparse cells remain blank/`—` rather than inferred zero.
+- Custody defaults to `/home/osboxes/app-report-custody/catalog52-v1`, outside static/Git/releases; directories are 0700 and registry/ciphertext files are 0600. Private/decryption keys are never accepted by an API and never enter server logs, env, artifacts, or backups.

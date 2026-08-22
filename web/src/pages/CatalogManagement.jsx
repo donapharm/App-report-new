@@ -6,6 +6,7 @@ import { Spinner } from '../components.jsx';
 import { bangkokToday } from '../revenueCoverage.js';
 import { formatDateTime } from '../util.js';
 import { createLatestRequestGate } from '../requestCoordinator.js';
+import { decryptCatalog52Page, ensureDeviceKey, exportedPublicJwk, forgetDeviceKey, readDeviceKey } from '../catalog52Crypto.js';
 import {
   ALL_UNITS, applyColumnsToMany, buildGrantPanel, dirtyRows,
   grantSavePayload, grantSummary, ratesLookup,
@@ -652,87 +653,72 @@ function auditColumnsText(value) {
 }
 
 function Catalog52ControlPlane({ period }) {
-  const [status, setStatus] = useState(null);
-  const [candidate, setCandidate] = useState(null);
+  const [device, setDevice] = useState(null);
+  const [manifest, setManifest] = useState(null);
   const [page, setPage] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
-  const [history, setHistory] = useState([]);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const hubPeriod = uiToHub(period);
   const load = async () => {
     setBusy('load'); setError('');
     try {
-      const [next, historyResult] = await Promise.all([
-        api.catalog52Status(hubPeriod), api.catalog52History(hubPeriod),
-      ]);
-      setStatus(next);
-      setHistory(historyResult?.versions || []);
-      if (next?.active?.manifestId) {
-        setPageNumber(1);
-        setPage(await api.catalog52Rows({ period: hubPeriod, manifestId: next.active.manifestId, page: 1 }));
-      }
-      else setPage(null);
+      const next = await api.catalog52Device(); setDevice(next); setManifest(null); setPage(null);
+      if (!next?.registered) return;
+      const local = await readDeviceKey();
+      if (!local?.privateKey) { setDevice({ ...next, localKeyMissing: true }); return; }
+      const nextManifest = await api.catalog52EncryptedManifest(hubPeriod);
+      if (!nextManifest?.asOf || !nextManifest?.period || nextManifest.period !== hubPeriod) throw new Error('Gói 52 cột thiếu kỳ hoặc thời điểm chốt.');
+      setManifest(nextManifest); setPageNumber(1);
+      const encrypted = await api.catalog52EncryptedPage(hubPeriod, 1);
+      setPage(await decryptCatalog52Page({ manifest: nextManifest, ...encrypted, privateKey: local.privateKey }));
     } catch (loadError) { setError(loadError.message); }
     finally { setBusy(''); }
   };
   const loadPage = async (nextPage) => {
-    if (!status?.active?.manifestId || nextPage < 1) return;
+    if (!manifest || nextPage < 1 || nextPage > manifest.pageCount) return;
     setBusy('page'); setError('');
     try {
-      const result = await api.catalog52Rows({ period: hubPeriod, manifestId: status.active.manifestId, page: nextPage });
-      setPage(result); setPageNumber(nextPage);
+      const local = await readDeviceKey(); if (!local?.privateKey) throw new Error('Máy này đã mất khoá xem 52 cột.');
+      const encrypted = await api.catalog52EncryptedPage(hubPeriod, nextPage);
+      setPage(await decryptCatalog52Page({ manifest, ...encrypted, privateKey: local.privateKey })); setPageNumber(nextPage);
     } catch (pageError) { setError(pageError.message); }
     finally { setBusy(''); }
   };
   useEffect(() => { load(); }, [hubPeriod]);
-  const syncPreview = async () => {
-    setBusy('sync'); setError('');
-    try { const result = await api.catalog52SyncPreview(hubPeriod); setCandidate(result.manifest); }
-    catch (syncError) { setError(syncError.message); }
-    finally { setBusy(''); }
+  const register = async () => {
+    setBusy('register'); setError('');
+    try { const keys = await ensureDeviceKey(); await api.catalog52RegisterDevice(await exportedPublicJwk(keys.publicKey)); await load(); }
+    catch (registerError) { setError(registerError.message); } finally { setBusy(''); }
   };
-  const activate = async () => {
-    if (!candidate?.manifestId) return;
-    setBusy('activate'); setError('');
-    try { await api.catalog52Activate(hubPeriod, candidate.manifestId); setCandidate(null); await load(); }
-    catch (activateError) { setError(activateError.message); }
-    finally { setBusy(''); }
+  const forget = async () => {
+    setBusy('forget'); setError('');
+    try { await api.catalog52ForgetDevice(); await forgetDeviceKey(); setDevice({ registered: false }); setManifest(null); setPage(null); }
+    catch (forgetError) { setError(forgetError.message); } finally { setBusy(''); }
   };
-  const rollback = async () => {
-    setBusy('rollback'); setError('');
-    try { await api.catalog52Rollback(hubPeriod); await load(); }
-    catch (rollbackError) { setError(rollbackError.message); }
-    finally { setBusy(''); }
-  };
-  const active = status?.active;
+  const sparse = manifest?.sparseCounts || {};
   return <details className="card catalog52-control-plane">
-    <summary>🔐 CP Total 52 cột (CEO)</summary>
-    <p className="muted">Control plane chỉ đọc snapshot backend bất biến. Đóng tab không ảnh hưởng các màn khác; đợt này chưa có export full 52.</p>
+    <summary>🔐 CP Total 52 cột (CEO · giải mã tại máy này)</summary>
+    <p className="muted">Máy chủ chỉ giữ gói mã hoá. Khoá riêng không xuất được và chỉ nằm trong IndexedDB của trình duyệt này.</p>
     {error && <div className="catalog-alert error">⚠ {error}</div>}
     <div className="catalog52-meta">
-      <span>Kỳ <b>{hubPeriod}</b></span><span>Active <b>{active?.sourceVersion || 'Chưa có'}</b></span>
-      <span>Dòng <b>{Number(active?.rowCount || 0).toLocaleString('vi-VN')}</b></span>
-      <span>Manifest <b>{active?.manifestId || '—'}</b></span>
+      <span>Kỳ <b>{hubPeriod}</b></span><span>Số liệu tính đến <b>{manifest?.asOf ? dateText(manifest.asOf) : '—'}</b></span>
+      <span>Dòng <b>{Number(manifest?.rowCount || 0).toLocaleString('vi-VN')}</b></span>
+      <span>Thiết bị <b>{device?.registered && !device?.localKeyMissing ? 'Đã đăng ký' : 'Chưa đăng ký xem 52 cột'}</b></span>
     </div>
     <div className="catalog52-actions">
-      <button type="button" className="btn" disabled={!!busy} onClick={syncPreview}>{busy === 'sync' ? 'Đang kiểm tra…' : 'Đồng bộ toàn bộ · tạo preview'}</button>
-      <button type="button" className="btn" disabled={!!busy || !candidate?.manifestId} onClick={activate}>Kích hoạt preview đã kiểm</button>
-      <button type="button" className="btn ghost" disabled={!!busy || !status?.lastKnownGoodManifestId || status.lastKnownGoodManifestId === active?.manifestId} onClick={rollback}>Rollback LKG</button>
+      {(!device?.registered || device?.localKeyMissing) && <button type="button" className="btn" disabled={!!busy} onClick={register}>Đăng ký máy này</button>}
+      {device?.registered && <button type="button" className="btn ghost" disabled={!!busy} onClick={forget}>Quên thiết bị này</button>}
+      <button type="button" className="btn ghost" disabled={!!busy || !device?.registered} onClick={load}>Đọc lại gói mã hoá</button>
     </div>
-    {candidate && <div className="catalog-alert success">✓ Candidate {candidate.sourceVersion} · {candidate.rowCount.toLocaleString('vi-VN')} dòng · chưa kích hoạt · mapping conflict {candidate.mappingConflicts}</div>}
-    {history.length > 0 && <details className="catalog52-history">
-      <summary>Lịch sử bản niêm phong ({history.length})</summary>
-      <ul>{history.map((item) => <li key={item.manifestId}>
-        <b>{item.sourceVersion}</b> · {Number(item.rowCount).toLocaleString('vi-VN')} dòng · {item.syncedAtGmt7 || '—'} · {item.syncedBy || '—'} · <code>{item.sourceIntegrityChecksum}</code>
-      </li>)}</ul>
-    </details>}
+    {manifest && <div className="catalog-alert success">✓ Gói mã hoá hợp lệ · {manifest.sourceVersion || 'chưa có số hiệu'} · không dùng làm nguồn tính</div>}
     {page?.rows?.length > 0 && <>
       <div className="catalog52-pagination">
         <button type="button" className="btn ghost" disabled={!!busy || pageNumber <= 1} onClick={() => loadPage(pageNumber - 1)}>‹ Trang trước</button>
-        <span>Trang <b>{pageNumber.toLocaleString('vi-VN')}</b> / <b>{Math.max(1, Math.ceil(Number(page.total || 0) / Number(page.pageSize || 50))).toLocaleString('vi-VN')}</b></span>
-        <button type="button" className="btn ghost" disabled={!!busy || pageNumber * Number(page.pageSize || 50) >= Number(page.total || 0)} onClick={() => loadPage(pageNumber + 1)}>Trang sau ›</button>
+        <span>Trang <b>{pageNumber.toLocaleString('vi-VN')}</b> / <b>{Number(manifest.pageCount).toLocaleString('vi-VN')}</b> · tối đa 50 dòng/trang</span>
+        <button type="button" className="btn ghost" disabled={!!busy || pageNumber >= manifest.pageCount} onClick={() => loadPage(pageNumber + 1)}>Trang sau ›</button>
       </div>
+      <p className="muted">Cột thưa để trống, không suy thành 0. {Object.entries(sparse).map(([column, count]) => `${column.toUpperCase()}: ${Number(count).toLocaleString('vi-VN')} dòng có dữ liệu`).join(' · ')}</p>
       <div className="table-scroll"><table className="catalog-table catalog52-table"><thead><tr><th>Line ID</th>{Array.from({ length: 52 }, (_, index) => <th key={index}>C{index + 1}</th>)}</tr></thead><tbody>{page.rows.map((row) => <tr key={row.sourceLineId}><td>{row.sourceLineId}</td>{Array.from({ length: 52 }, (_, index) => <td key={index}>{String(row[`c${index + 1}`] ?? '—')}</td>)}</tr>)}</tbody></table></div>
     </>}
   </details>;

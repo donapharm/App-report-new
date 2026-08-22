@@ -500,6 +500,17 @@ export const api = {
   catalog52SyncPreview: (period) => req('POST', '/admin/catalog-management/cp-total-52/sync-preview', { period }),
   catalog52Activate: (period, manifestId) => req('POST', '/admin/catalog-management/cp-total-52/activate', { period, manifestId }),
   catalog52Rollback: (period) => req('POST', '/admin/catalog-management/cp-total-52/rollback', { period }),
+  catalog52Device: () => req('GET', '/admin/catalog-management/cp-total-52/device'),
+  catalog52RegisterDevice: (publicJwk) => req('POST', '/admin/catalog-management/cp-total-52/device', { publicJwk }),
+  catalog52ForgetDevice: () => req('DELETE', '/admin/catalog-management/cp-total-52/device'),
+  catalog52EncryptedManifest: (period) => req('GET', '/admin/catalog-management/cp-total-52/encrypted-manifest?' + new URLSearchParams({ period }).toString()),
+  catalog52EncryptedPage: async (period, page) => {
+    const response = await authenticatedFetch('/api/admin/catalog-management/cp-total-52/encrypted-page?' + new URLSearchParams({ period, page }).toString(), {
+      headers: { Authorization: `Bearer ${getToken() || ''}`, 'X-Device-Id': getDeviceId() }, cache: 'no-store',
+    });
+    if (!response.ok) { const data = await response.json().catch(() => ({})); throw requestError(data.error || 'Không đọc được gói mã hoá.', response, data); }
+    return { ciphertext: await response.arrayBuffer(), iv: response.headers.get('x-catalog52-iv'), asOf: response.headers.get('x-catalog52-as-of') };
+  },
   adminCatalogManagementReportPreview: (payload) => req('POST', '/admin/catalog-management/report/preview', payload),
   adminCatalogManagementDeliveryPreview: (payload) => req('POST', '/admin/catalog-management/report/delivery/preview', payload),
   adminCatalogManagementDeliveryStatus: (previewId) => req('GET', '/admin/catalog-management/report/delivery/' + encodeURIComponent(previewId)),
