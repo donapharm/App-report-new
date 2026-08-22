@@ -1,3 +1,9 @@
+### 2026-08-22 — Con dấu T07 đối chiếu tổng 21 capture nguồn
+
+- Sửa cổng provenance: mỗi response nhân viên chỉ cần có số dòng dương và đủ 5 trường khai báo; không còn đòi từng response riêng lẻ bằng tổng toàn kỳ.
+- Chỉ dựng envelope khi có đúng 21 capture, mọi capture cùng khai báo nguồn, và tổng số dòng của 21 capture bằng đúng `c32SidecarRowCount` toàn kỳ; envelope tiếp tục tự kiểm tổng bằng khai báo.
+- Thay đổi chỉ sửa validator và test; không refresh, không ghi đè, không tạo hoặc đóng dấu T07.
+
 ### 2026-08-21 — Đóng dấu hai tick 60 giây và cảnh báo event-loop
 
 - Mỗi tick revenue-refresh và report-deck scheduler ghi đúng một dòng gọn: giờ GMT+7 tới giây, thời gian chạy, có làm việc thật hay bỏ qua, và kết quả.
