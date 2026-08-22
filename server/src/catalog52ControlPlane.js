@@ -9,6 +9,7 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const auth = require('./auth');
 const { createStore, Catalog52Error, MAX_SOURCE_BYTES, MAX_ROWS, normalizedMappingContract } = require('./catalog52SnapshotStore');
+const catalog52EncryptedViewer = require('./catalog52EncryptedViewer');
 
 const TRUST_WINDOW_MS = 12 * 60 * 60 * 1000;
 const DEFAULT_STORE_ROOT = '/home/osboxes/app-report-custody/catalog52-v1';
@@ -21,6 +22,7 @@ function resolveStoreRoot(env = process.env) {
 // Never fall back into server/data or the immutable release. A missing or
 // unwritable custody root makes the write fail closed in createStore().
 const store = createStore({ root: resolveStoreRoot() });
+const encryptedViewer = catalog52EncryptedViewer.createViewer({ root: resolveStoreRoot() });
 
 function enabled() { return process.env.CATALOG52_CONTROL_PLANE_ENABLED === '1'; }
 
@@ -120,5 +122,5 @@ function safeError(error) {
 
 module.exports = {
   TRUST_WINDOW_MS, DEFAULT_STORE_ROOT, resolveStoreRoot,
-  store, enabled, requireCeoTrustedHuman, assertEnabled, syncFromVault, safeError,
+  store, encryptedViewer, enabled, requireCeoTrustedHuman, assertEnabled, syncFromVault, safeError,
 };
