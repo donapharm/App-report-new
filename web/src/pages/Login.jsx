@@ -52,6 +52,13 @@ export default function Login({ onLogin }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [channel, setChannel] = useState('');    // 'phone' | 'telegram' — cách đang chọn
+  /* ‼ BẪY CỬA KHOÁ (CEO 23/08 14:58: bấm "Tạo bản tiền T07 đầu tiên" ra 403
+   * EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED). Backend đòi thiết bị có OTP trong
+   * 12 giờ (auth.trustedHumanDeviceForSession). Nhưng máy đã tin cậy thì cầu
+   * trustedDeviceSso nuốt luôn bước OTP, nên last_otp_at KHÔNG BAO GIỜ mới lại:
+   * thoát ra đăng nhập lại vẫn vào thẳng, cửa vẫn khoá. Đây là vòng chết.
+   * Lối thoát: cho người dùng chủ động ép nhập OTP để làm mới mốc 12 giờ. */
+  const [forceOtp, setForceOtp] = useState(false);
 
   // Telegram flow
   const [tg, setTg] = useState(null);            // { login_code, poll_secret, bot_link }
@@ -157,7 +164,7 @@ export default function Login({ onLogin }) {
     try {
       // A trusted App Sale device may skip OTP only after the Report backend
       // consumes a valid one-time assertion. Any bridge failure continues to OTP.
-      if (mode?.trustedDeviceSso) {
+      if (mode?.trustedDeviceSso && !forceOtp) {
         try {
           const trusted = await api.trustedDeviceLogin(p);
           if (trusted?.token) { await finish(trusted.token); return; }
@@ -314,6 +321,15 @@ export default function Login({ onLogin }) {
                       <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={sendOtp}>
                         {busy ? 'Đang gửi…' : 'Gửi mã OTP'}
                       </button>
+                      {mode?.trustedDeviceSso && (
+                        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 11.5, opacity: .86, marginTop: 10, lineHeight: 1.45, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={forceOtp} onChange={(e) => setForceOtp(e.target.checked)}
+                                 aria-label="Bắt buộc nhập lại mã OTP" style={{ width: 'auto', margin: '2px 0 0' }} />
+                          <span>Máy này đang được nhớ nên vào thẳng, không hỏi OTP.
+                            Tích ô này để <b>bắt buộc nhập lại OTP</b> — cần khi mở kho 52 cột hoặc tạo bản chi phí gốc,
+                            vì hai việc đó đòi xác minh trong <b>12 giờ</b> gần nhất.</span>
+                        </label>
+                      )}
                       {/* ‼ RANH GIỚI AN NINH — nói trước, đừng để người dùng gõ số xong mới ngã ngửa.
                           Nhập SĐT người khác thì OTP về MÁY CỦA HỌ, không về máy đang gõ. Đây là
                           chủ ý: nếu gửi được sang máy khác thì bất kỳ ai biết SĐT đều vào được. */}

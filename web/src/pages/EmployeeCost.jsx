@@ -2044,6 +2044,23 @@ export default function EmployeeCost({ me, onNavigate }) {
     catch (requestError) { setCostExportError(requestError.message || 'Không xuất được danh sách đơn vị chưa gán tỉnh'); }
     finally { setProvinceWorklistExporting(false); }
   };
+  /* Mã lỗi thô không nói được phải làm gì. CEO 23/08 14:58 bấm nút, nhận đúng câu
+   * của backend rồi đứng lại vì không biết đi tiếp đường nào. */
+  const snapshotErrorText = (requestError) => {
+    if (requestError?.code === 'EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED') {
+      return 'Máy này đã quá 12 giờ kể từ lần nhập OTP gần nhất nên chưa mở được. '
+        + 'Cách làm: thoát ra màn hình đăng nhập, nhập số điện thoại, TÍCH ô "bắt buộc nhập lại OTP" '
+        + 'rồi bấm Gửi mã OTP. Nhập mã xong quay lại bấm nút này. Không tích ô đó thì máy vào thẳng, '
+        + 'không hỏi OTP, và cửa vẫn khoá.';
+    }
+    if (requestError?.code === 'EMPLOYEE_COST_SNAPSHOT_CEO_REQUIRED') {
+      return 'Chỉ tài khoản CEO tạo được bản gốc. Đăng nhập bằng tài khoản CEO rồi thử lại.';
+    }
+    if (requestError?.code === 'EMPLOYEE_COST_SNAPSHOT_PERIOD_IMMUTABLE') {
+      return 'Kỳ này đã khoá và đã có bản đầy đủ — không cần dựng lại nữa.';
+    }
+    return requestError?.message || 'Chưa gửi được yêu cầu đồng bộ.';
+  };
   const resyncEmployeeCostSnapshot = async () => {
     setSnapshotSyncing(true); setSnapshotMessage(''); setSnapshotError('');
     try {
@@ -2052,7 +2069,7 @@ export default function EmployeeCost({ me, onNavigate }) {
       const syncing = { ...(result?.trangThaiDongBo || snapshotControl || model.trangThaiDongBo || {}), state: 'syncing', syncing: true };
       setSnapshotControl(syncing);
       setSnapshotPoll(true);
-    } catch (requestError) { setSnapshotError(requestError.message || 'Chưa gửi được yêu cầu đồng bộ.'); }
+    } catch (requestError) { setSnapshotError(snapshotErrorText(requestError)); }
     finally { setSnapshotSyncing(false); }
   };
   const changeEmployee = (value) => {

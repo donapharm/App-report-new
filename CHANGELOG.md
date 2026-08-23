@@ -1,3 +1,24 @@
+### 2026-08-23 — Gỡ vòng chết OTP 12 giờ chặn nút tạo bản tiền T07
+
+**Việc đã làm.** `web/src/pages/Login.jsx`: thêm ô tích *"bắt buộc nhập lại OTP"* chỉ hiện khi
+`mode.trustedDeviceSso` bật; khi tích thì `sendOtp()` bỏ qua cầu `api.trustedDeviceLogin()` và đi
+thẳng `api.otpRequest()`. Mặc định vẫn tắt nên đăng nhập thường không chậm đi.
+`web/src/pages/EmployeeCost.jsx`: thêm `snapshotErrorText()` dịch 3 mã lỗi của route
+`POST /employee-cost/snapshot/resync` thành câu nói rõ phải bấm gì, thay vì trả nguyên câu backend.
+
+**Lý do.** CEO bấm "Tạo bản tiền T07 đầu tiên" lúc 14:58 GMT+7 và nhận 403
+`EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED` (`server/src/routes.js:2633`). Cửa đòi
+`auth.trustedHumanDeviceForSession()` — tức `max(trusted_at, last_otp_at)` trong 12 giờ. Nhưng máy
+đã tin cậy thì `sendOtp()` gọi `trustedDeviceLogin` rồi `return`, `api.otpRequest` không bao giờ
+chạy, nên `last_otp_at` không bao giờ mới lại. Thoát ra đăng nhập lại vẫn vào thẳng, cửa vẫn khoá:
+vòng chết, không có lối ra bằng thao tác người dùng. Cùng một cửa cũng chặn kho 52 cột
+(`catalog52ControlPlane.js:40`), nên một chỗ sửa gỡ được cả hai.
+
+**Test.** `web/test/Login.forceOtpReverify.test.mjs` — 4 test mới: có đường bỏ qua cầu; ô tích chỉ
+hiện nơi có cầu và bấm được bằng chuột/chạm/bàn phím (dùng `<label>` bọc `<input type=checkbox>`,
+không dùng `div onClick` nên không mất đường bàn phím); mặc định vẫn bám cầu; 403 được dịch thành
+các bước thoát. Web 524/524 PASS, build PASS.
+
 ### 2026-08-23 — Sửa gấp: bản vá chạm đã giết luôn chuột trên nút tạo bản tiền T07
 
 - CEO 13:30 trên laptop: "nút bấm không đáp ứng, bấm hai ba lần vẫn vậy" — nút chết hoàn toàn với chuột sau đợt deploy `daead0e`.
