@@ -2,6 +2,13 @@
 
 - Nút tạo generation T07 nhận trực tiếp `pointerup` cho touch/pen, giữ click cho chuột/bàn phím và chống gửi đôi từ synthetic click.
 - Không thay đổi endpoint, quyền CEO/OTP, dữ liệu T07 hay logic dựng/publish generation.
+### 2026-08-23 — Ô "Doanh thu chưa phân bổ NV" biết nhóm chỉ-tính-target, ô Dự báo hết tắt lây
+
+- CEO báo 08:14: cả hai ô KPI cuối màn T08 trống — "tổng chưa cân" và "chưa lấy được nguồn".
+- Gốc: 11 dòng doanh thu DN021/DN023 (chính sách chỉ tính target, CEO chốt 21/08) cố ý không lên bảng nhưng `buildUnallocatedRevenue` chỉ biết hai nhóm quarantine/incomplete, nên xếp chúng vào `unexplained` ⇒ phép cân fail-closed. Ô Dự báo chủ động tắt theo vì chỉ chạy khi ô này available. `employeeCostRevenueRecon` đã có chân này từ 78c43d9 — đây là chỗ bị sót cùng đợt.
+- Vá: thêm nhóm `targetOnly` dùng chung `employeeIncentivePolicy.isTargetOnlyEmployee` (không chép danh sách mã NV), hiện tách trong `sub` và `raw`. Dòng lạ thật sự vẫn fail-closed như cũ.
+- Test: server 1.548/1.548 PASS (thêm 3 test khoá: nhóm target-only cân được · dòng lạ vẫn chặn · ô Dự báo hết tắt lây). 7 test PDF đỏ do máy Claude thiếu `pdfinfo`, không liên quan thay đổi này.
+
 ### 2026-08-23 — Gọn đầu trang Danh mục quản lý: ba thẻ hành động xếp ngang
 
 - CEO chê trực tiếp (ảnh 09:31): ba thẻ Đồng bộ %/Bảng %/Phân quyền chồng dọc chiếm ~2/3 màn hình, bảng danh mục bị đẩy khỏi tầm mắt.

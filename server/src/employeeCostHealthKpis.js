@@ -8,6 +8,7 @@
  */
 const employeeCostTable = require('./employeeCostTable');
 const syncExceptionCatalog = require('./syncExceptionCatalog');
+const employeeIncentivePolicy = require('./employeeIncentivePolicy');
 const vnWorkingDays = require('./vnWorkingDays');
 
 // Sàn tin cậy duy nhất cho forecast: dưới 5 ngày làm việc đã qua thì phép tính
@@ -75,6 +76,15 @@ function teamLineKey(row, index) {
 function quarantined(row = {}) {
   return String(row.emp_code || row.empCode || '').trim().toUpperCase() === 'UNALLOCATED'
     || String(row.attribution_status || row.attributionStatus || '').toUpperCase().includes('QUARANTINED');
+}
+// NV chỉ tính target (CEO 21/08): doanh thu của họ CÓ trong kho nguồn nhưng CỐ Ý
+// không lên bảng. Không khai riêng thì 11 dòng đó rơi vào `unexplained`, phép cân
+// fail-closed và CẢ HAI ô KPI cuối màn tắt ngóm — đúng ca CEO báo 08:14 ngày 23/08.
+// `employeeCostRevenueRecon` đã có chân này từ 78c43d9; đây là chỗ bị sót cùng đợt.
+// Dùng CHUNG employeeIncentivePolicy, tuyệt đối không chép danh sách mã NV vào đây.
+function targetOnly(row = {}) {
+  const emp = String(row.emp_code ?? row.empCode ?? row.employeeCode ?? row.EMP_NUMBER ?? row.MA_NV ?? '').trim();
+  return employeeIncentivePolicy.isTargetOnlyEmployee(emp);
 }
 
 function periodFacts(period) {
@@ -162,7 +172,8 @@ function buildUnallocatedRevenue({ sourceRows = [], currentPeriod, syncReport = 
   sourceRows.forEach((row, index) => {
     const key = sourceKey(row, index);
     if (allocatedIds.has(key)) return;
-    if (quarantined(row)) classified.push({ row, index, key, category: 'quarantine' });
+    if (targetOnly(row)) classified.push({ row, index, key, category: 'targetOnly' });
+    else if (quarantined(row)) classified.push({ row, index, key, category: 'quarantine' });
     else if (incompleteIds.has(key)) classified.push({ row, index, key, category: 'incomplete' });
     else unexplained.push({ row, index, key });
   });
@@ -171,10 +182,12 @@ function buildUnallocatedRevenue({ sourceRows = [], currentPeriod, syncReport = 
   const allocatedTotal = sum(allocatedAmounts, (amount) => amount);
   const quarantineRows = classified.filter((item) => item.category === 'quarantine');
   const incompleteRows = classified.filter((item) => item.category === 'incomplete');
+  const targetOnlyRows = classified.filter((item) => item.category === 'targetOnly');
   const amountOf = (item) => sourceRevenue(item.row);
   const quarantineAmount = sum(quarantineRows, amountOf);
   const incompleteAmount = sum(incompleteRows, amountOf);
-  const total = quarantineAmount + incompleteAmount;
+  const targetOnlyAmount = sum(targetOnlyRows, amountOf);
+  const total = quarantineAmount + incompleteAmount + targetOnlyAmount;
   const amountDiff = sourceTotal - allocatedTotal - total;
   const rowDiff = sourceRows.length - current.rows.length - classified.length;
   // Revenue can contain fractional đồng after removing VAT. The invariant is exact
@@ -191,13 +204,18 @@ function buildUnallocatedRevenue({ sourceRows = [], currentPeriod, syncReport = 
     label: 'Doanh thu chưa phân bổ NV',
     available: true,
     value: `${money(total)} · ${rows.toLocaleString('vi-VN')} dòng`,
-    sub: `cách ly: ${money(quarantineAmount)} · thiếu danh mục: ${money(incompleteAmount)}`,
+    sub: [
+      targetOnlyRows.length ? `chỉ tính target: ${money(targetOnlyAmount)}` : '',
+      `cách ly: ${money(quarantineAmount)}`,
+      `thiếu danh mục: ${money(incompleteAmount)}`,
+    ].filter(Boolean).join(' · '),
     tone: total === 0 && rows === 0 ? 'employee-cost-tone-neutral' : 'employee-cost-tone-penalty-soft',
     action: 'open_data_quality',
     raw: {
       amount: rounded(total), rows,
       quarantineAmount: rounded(quarantineAmount), quarantineRows: quarantineRows.length,
       incompleteAmount: rounded(incompleteAmount), incompleteRows: incompleteRows.length,
+      targetOnlyAmount: rounded(targetOnlyAmount), targetOnlyRows: targetOnlyRows.length,
       sourceTotal: rounded(sourceTotal), allocatedTotal: rounded(allocatedTotal),
       amountDiff, rowDiff, balanced: true,
     },
