@@ -53,6 +53,7 @@ test('closed repair validation separates identity, coverage, freshness, reconcil
     reconciliationValid: true,
     provenancePresent: true,
     provenanceComplete: true,
+    provenanceFailures: [],
     unavailableEmployees: [],
     staleEmployees: [],
   });
