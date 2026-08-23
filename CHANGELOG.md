@@ -2,6 +2,13 @@
 
 - Nút tạo generation T07 nhận trực tiếp `pointerup` cho touch/pen, giữ click cho chuột/bàn phím và chống gửi đôi từ synthetic click.
 - Không thay đổi endpoint, quyền CEO/OTP, dữ liệu T07 hay logic dựng/publish generation.
+### 2026-08-23 — Bảng danh mục trên điện thoại: cho chọn giữ hình bảng và kéo ngang
+
+- CEO 11:05: trên iPhone bảng bung thành văn bản rời rạc, mỗi trường một dòng, hơn 20 dòng cho một cặp — mất hẳn hình bảng.
+- Thêm nút đổi cách xem ngay trên thẻ bảng (chỉ hiện ở màn ≤700px, nhớ lựa chọn theo trình duyệt): **Dạng thẻ** giữ nguyên hành vi cũ; **Dạng bảng** trả bảng về đúng `display:table` và kéo ngang trong `.table-scroll` sẵn có — đúng luật dự án "rộng hơn màn thì phải có đường kéo, cấm cắt cụt lặng lẽ".
+- Desktop không đổi gì: nút ẩn hẳn từ 701px trở lên, bảng vẫn là bảng thật.
+- Test: web 513/513 PASS; Vite build PASS. Chưa deploy — gộp chung đợt với các bản vá khác.
+
 ### 2026-08-23 — Ô "Doanh thu chưa phân bổ NV" biết nhóm chỉ-tính-target, ô Dự báo hết tắt lây
 
 - CEO báo 08:14: cả hai ô KPI cuối màn T08 trống — "tổng chưa cân" và "chưa lấy được nguồn".
