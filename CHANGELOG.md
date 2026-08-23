@@ -1,3 +1,19 @@
+### 2026-08-23 — Nén đầu trang Chi phí + ghim tiêu đề bảng Danh mục khi cuộn
+
+**Nén đầu trang Chi phí (CEO 19:42).** Desktop: nhãn "Nhân viên" nằm ngang cạnh ô chọn; hàng chip kỳ
+bỏ `flex-basis:100%` để đứng chung dòng; khối tiêu đề ghim 400px cho bộ lọc dồn lên; dải "số chốt bản
+ghim" thành thanh mỏng 12px; thẻ "Bản chi phí trên máy" xếp ngang — chữ trái nút phải. Đo bằng
+Chromium 1720/1280/1000px: vùng đầu từ ~460px còn ~310px. Mobile giữ bố cục dọc.
+
+**Ghim tiêu đề bảng Danh mục (CEO 19:46: "cuộn lên đang bị mất thanh tiêu đề").** Sticky có sẵn nhưng
+bị tắt (`position:static`) ở cả 3 dải desktop vì khung `.table-scroll` dùng `overflow-y:hidden` —
+sticky không hoạt động trong khung như vậy. Nay khung tự cuộn dọc (`overflow-y:auto` +
+`max-height:calc(100vh - 150px)`) và tiêu đề `position:sticky; top:0` ghim thật. Đã chụp Chromium
+bảng cuộn 600px: hàng tiêu đề đứng yên. Kéo ngang + cấm clip cột giữ nguyên.
+
+**Test.** `EmployeeCostHeadCompact.contract.test.mjs` mới (5 test) + cập nhật
+`DesktopCatalogLayout.contract.test.mjs` theo hợp đồng mới. Web 534/534 PASS, build PASS.
+
 ### 2026-08-23 — Bốn thẻ hành động Danh mục quản lý xếp đủ một hàng, chân nút thẳng
 
 **Việc đã làm.** `web/src/styles.css`: `.catalog-actions-row` đổi từ lưới `repeat(3, 1fr)` sang
