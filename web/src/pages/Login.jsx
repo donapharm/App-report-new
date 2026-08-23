@@ -58,7 +58,9 @@ export default function Login({ onLogin }) {
    * trustedDeviceSso nuốt luôn bước OTP, nên last_otp_at KHÔNG BAO GIỜ mới lại:
    * thoát ra đăng nhập lại vẫn vào thẳng, cửa vẫn khoá. Đây là vòng chết.
    * Lối thoát: cho người dùng chủ động ép nhập OTP để làm mới mốc 12 giờ. */
-  const [forceOtp, setForceOtp] = useState(false);
+  const [forceOtp, setForceOtp] = useState(() => {
+    try { return localStorage.getItem('rpt_force_otp_next_login') === '1'; } catch { return false; }
+  });
 
   // Telegram flow
   const [tg, setTg] = useState(null);            // { login_code, poll_secret, bot_link }
@@ -171,6 +173,7 @@ export default function Login({ onLogin }) {
         } catch { /* fail closed: keep the normal OTP flow */ }
       }
       await api.otpRequest(p);
+      try { localStorage.removeItem('rpt_force_otp_next_login'); } catch { /* chế độ riêng tư */ }
       setStep('code');
     }
     catch (e) { setErr(e.message); }

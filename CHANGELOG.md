@@ -1,3 +1,22 @@
+### 2026-08-23 — Màn đăng nhập tự tích ô ép OTP; sửa chẩn đoán sai về cầu bỏ qua OTP
+
+**Việc đã làm.** `EmployeeCost.jsx`: khi route resync trả 403 `..._HUMAN_OTP_REQUIRED`, ghi cờ
+`rpt_force_otp_next_login` vào localStorage. `Login.jsx`: khởi tạo `forceOtp` từ cờ đó nên ô "bắt
+buộc nhập lại OTP" **tự tích sẵn**; cờ được xoá ngay khi `api.otpRequest()` chạy nên không dính mãi.
+Mọi truy cập localStorage đều bọc try/catch cho chế độ riêng tư.
+
+**Lý do.** CEO 23/08 ~15:50 trên PC: đăng xuất vào lại **lần 1 hỏi OTP, lần 2 vào thẳng**. Tin trước
+tôi bảo "3 lượt này không cần tích ô" — SAI. Tôi suy từ `loginByTrustedDevice()` (`auth.js:516`, có
+kiểm `is_trusted` và `trusted_login_count >= TRUSTED_LOGIN_THRESHOLD`), nhưng cầu thực sự bỏ qua OTP
+là **`trustedDeviceSso`** — module khác, `auth.js:538`, phát token `method: 'trusted-device-sso'`.
+`issueToken()` chỉ gọi `markOtpTrustedDevice()` khi `rec.method === 'otp'` (`auth.js:309`), nên lượt
+đăng nhập qua cầu **không cộng bậc và không đặt `last_otp_at`**. Người dùng không tích ô thì mọi lượt
+sau lượt đầu đều bị cầu nuốt ⇒ bậc đứng yên, cửa không bao giờ mở. Bắt người dùng tự nhớ luật là sai
+thiết kế; app phải tự tích.
+
+**Test.** `web/test/Login.forceOtpReverify.test.mjs` — thêm 3 test: tự tích sau khi bị từ chối · cờ
+được xoá khi vòng OTP bắt đầu · storage bị chặn không làm hỏng đăng nhập. Web 527/527 PASS, build PASS.
+
 ### 2026-08-23 — Gỡ vòng chết OTP 12 giờ chặn nút tạo bản tiền T07
 
 **Việc đã làm.** `web/src/pages/Login.jsx`: thêm ô tích *"bắt buộc nhập lại OTP"* chỉ hiện khi

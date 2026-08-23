@@ -2048,10 +2048,13 @@ export default function EmployeeCost({ me, onNavigate }) {
    * của backend rồi đứng lại vì không biết đi tiếp đường nào. */
   const snapshotErrorText = (requestError) => {
     if (requestError?.code === 'EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED') {
-      return 'Máy này đã quá 12 giờ kể từ lần nhập OTP gần nhất nên chưa mở được. '
-        + 'Cách làm: thoát ra màn hình đăng nhập, nhập số điện thoại, TÍCH ô "bắt buộc nhập lại OTP" '
-        + 'rồi bấm Gửi mã OTP. Nhập mã xong quay lại bấm nút này. Không tích ô đó thì máy vào thẳng, '
-        + 'không hỏi OTP, và cửa vẫn khoá.';
+      // Người dùng không phải nhớ luật. Ghi cờ để màn đăng nhập TỰ tích sẵn ô ép
+      // OTP, nếu không cầu trusted-device-sso lại nuốt lượt đăng nhập kế tiếp.
+      try { localStorage.setItem('rpt_force_otp_next_login', '1'); } catch { /* chế độ riêng tư */ }
+      return 'Máy này chưa đủ xác minh OTP nên chưa mở được. Cách làm: đăng xuất, nhập số điện thoại '
+        + 'rồi bấm Gửi mã OTP — ô "bắt buộc nhập lại OTP" đã được tích sẵn, ĐỪNG bỏ tích. Nhập mã xong '
+        + 'quay lại bấm nút này. Nếu vẫn báo dòng này thì lặp lại thêm một lượt nữa; mỗi lượt OTP cộng '
+        + 'một bậc, đủ bậc là mở.';
     }
     if (requestError?.code === 'EMPLOYEE_COST_SNAPSHOT_CEO_REQUIRED') {
       return 'Chỉ tài khoản CEO tạo được bản gốc. Đăng nhập bằng tài khoản CEO rồi thử lại.';
