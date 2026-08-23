@@ -5,7 +5,11 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createViewer, validateManifest } = require('../src/catalog52EncryptedViewer');
+const { createViewer, validateManifest, canonical } = require('../src/catalog52EncryptedViewer');
+function sealManifest(value) {
+  const identity = { ...value }; delete identity.packageChecksum;
+  return { ...identity, packageChecksum: crypto.createHash('sha256').update(canonical(identity)).digest('hex') };
+}
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'catalog52-encrypted-'));
@@ -31,17 +35,20 @@ test('server serves ciphertext bytes and only the requesting device wrapped key'
   const registered = viewer.registerDevice('device-1', value.publicJwk, 'CEO');
   const packageDir = path.join(value.root, 'packages', '2026-08'); fs.mkdirSync(packageDir, { recursive: true, mode: 0o700 });
   const bytes = crypto.randomBytes(512); fs.writeFileSync(path.join(packageDir, 'page-00001.bin'), bytes, { mode: 0o600 });
-  const manifest = {
+  const manifest = sealManifest({
     schemaVersion: 1, kind: 'catalog52-encrypted-pages', period: '2026-08', asOf: '2026-08-22T08:30:00+07:00',
     sourceVersion: 'sample', algorithm: 'AES-256-GCM+RSA-OAEP-256', pageSize: 50, rowCount: 1, pageCount: 1,
-    sparseCounts: { c44: 0 }, wrappedKeys: [{ keyId: registered.keyId, wrappedKey: crypto.randomBytes(384).toString('base64url') }, { keyId: 'other', wrappedKey: crypto.randomBytes(384).toString('base64url') }],
+    sourcePackageChecksum: 'a'.repeat(64),
+    sparseCounts: { c44: 0 }, wrappedKeys: [{ keyId: registered.keyId, wrappedKey: crypto.randomBytes(384).toString('base64url') }, { keyId: 'o'.repeat(43), wrappedKey: crypto.randomBytes(384).toString('base64url') }],
     pages: [{ page: 1, file: 'page-00001.bin', iv: crypto.randomBytes(12).toString('base64url'), sha256: crypto.createHash('sha256').update(bytes).digest('hex') }],
-  };
+  });
   fs.writeFileSync(path.join(packageDir, 'manifest.json'), JSON.stringify(manifest), { mode: 0o600 });
   const safe = viewer.manifest('2026-08', 'device-1');
   assert.equal(safe.wrappedKeys, undefined); assert.equal(safe.deviceKeyId, registered.keyId); assert.equal(safe.wrappedKey, manifest.wrappedKeys[0].wrappedKey);
   assert.deepEqual(viewer.page('2026-08', 1).bytes, bytes);
+  const tampered = { ...manifest, actor: 'OTHER' };
+  assert.throws(() => validateManifest(tampered, '2026-08'), { code: 'CATALOG52_ENCRYPTED_MANIFEST_CHECKSUM_INVALID' });
 });
 test('missing as-of metadata fails closed', () => {
-  assert.throws(() => validateManifest({ schemaVersion: 1, kind: 'catalog52-encrypted-pages', period: '2026-08', algorithm: 'AES-256-GCM+RSA-OAEP-256', pageSize: 50, rowCount: 1, pageCount: 1, wrappedKeys: [], pages: [] }, '2026-08'), { code: 'CATALOG52_AS_OF_REQUIRED' });
+  assert.throws(() => validateManifest({ schemaVersion: 1, kind: 'catalog52-encrypted-pages', period: '2026-08', algorithm: 'AES-256-GCM+RSA-OAEP-256', pageSize: 50, rowCount: 1, pageCount: 1, sourcePackageChecksum: 'a'.repeat(64), packageChecksum: 'b'.repeat(64), wrappedKeys: [], pages: [{ page: 1, file: 'page-00001.bin', iv: 'A'.repeat(16), sha256: 'c'.repeat(64) }] }, '2026-08'), { code: 'CATALOG52_AS_OF_REQUIRED' });
 });

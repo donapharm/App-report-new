@@ -50,16 +50,35 @@ function validAsOf(value) {
     || !Number.isFinite(Date.parse(text))) throw new ViewerError('CATALOG52_AS_OF_REQUIRED', 503);
   return text;
 }
+function canonical(value) {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
+  return JSON.stringify(value);
+}
 function validateManifest(value, requestedPeriod) {
   if (!value || value.schemaVersion !== 1 || value.kind !== 'catalog52-encrypted-pages'
     || value.period !== requestedPeriod || value.algorithm !== 'AES-256-GCM+RSA-OAEP-256'
     || value.pageSize !== PAGE_SIZE || !Number.isInteger(value.rowCount) || value.rowCount < 0
     || !Number.isInteger(value.pageCount) || value.pageCount < 1 || value.pageCount > MAX_PAGES
-    || !Array.isArray(value.wrappedKeys) || !Array.isArray(value.pages)) {
+    || !Array.isArray(value.wrappedKeys) || !Array.isArray(value.pages)
+    || !/^[a-f0-9]{64}$/.test(String(value.sourcePackageChecksum || ''))
+    || !/^[a-f0-9]{64}$/.test(String(value.packageChecksum || ''))) {
     throw new ViewerError('CATALOG52_ENCRYPTED_MANIFEST_INVALID', 503);
   }
   validAsOf(value.asOf);
   if (value.pages.length !== value.pageCount) throw new ViewerError('CATALOG52_ENCRYPTED_MANIFEST_INVALID', 503);
+  const identity = { ...value }; delete identity.packageChecksum;
+  if (crypto.createHash('sha256').update(canonical(identity)).digest('hex') !== value.packageChecksum) {
+    throw new ViewerError('CATALOG52_ENCRYPTED_MANIFEST_CHECKSUM_INVALID', 503);
+  }
+  const wrappedIds = new Set();
+  for (const item of value.wrappedKeys) {
+    if (!item || !/^[A-Za-z0-9_-]{20,180}$/.test(String(item.keyId || ''))
+      || !/^[A-Za-z0-9_-]{100,}$/.test(String(item.wrappedKey || '')) || wrappedIds.has(item.keyId)) {
+      throw new ViewerError('CATALOG52_ENCRYPTED_MANIFEST_INVALID', 503);
+    }
+    wrappedIds.add(item.keyId);
+  }
   for (let index = 0; index < value.pages.length; index += 1) {
     const item = value.pages[index];
     if (item.page !== index + 1 || !/^[a-f0-9]{64}$/.test(String(item.sha256 || ''))
@@ -108,4 +127,4 @@ function createViewer({ root = process.env.CATALOG52_STORE_ROOT || DEFAULT_ROOT 
   return { root: custody, registerDevice, forgetDevice, device, manifest, page };
 }
 
-module.exports = { DEFAULT_ROOT, PAGE_SIZE, ViewerError, canonicalJwk, keyId, validateManifest, createViewer };
+module.exports = { DEFAULT_ROOT, PAGE_SIZE, ViewerError, canonicalJwk, keyId, canonical, validateManifest, createViewer };
