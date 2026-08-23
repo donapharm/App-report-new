@@ -94,3 +94,19 @@ test('phản hồi preview chỉ trả số đếm và checksum, không trả d�
     assert.match(ret, new RegExp(k));
   }
 });
+
+/* Bot App Report bắt đúng (24/08): bản vá đầu của Claude trả đường lexical khi
+ * realpathSync lỗi ⇒ còn cửa TOCTOU — giữa lúc kiểm và lúc readFileSync, ai đó
+ * tạo đúng chỗ đó một symlink ra ngoài là đọc lọt. Cổng tiền phải fail-closed. */
+test('file vắng mặt thì TỪ CHỐI ngay, không trả đường lexical (chặn TOCTOU)', () => {
+  const fs = require('node:fs'); const path = require('node:path');
+  const dataDir = path.resolve(service.DATA_DIR);
+  fs.mkdirSync(dataDir, { recursive: true });
+  const missing = path.join(dataDir, `khong-ton-tai-${process.pid}.json`);
+  try { fs.unlinkSync(missing); } catch { /* vốn không có */ }
+  assert.throws(() => service.safeMappingFile(missing), { code: 'DEBTS_MAPPING_UNAVAILABLE' });
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'debtsShadowService.js'), 'utf8');
+  const body = src.slice(src.indexOf('function safeMappingFile'), src.indexOf('function loadMapping'));
+  assert.doesNotMatch(body, /catch\s*\{\s*return file;/, 'không được trả đường lexical khi realpath lỗi');
+  assert.match(body, /return real;/);
+});

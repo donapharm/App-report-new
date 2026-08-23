@@ -26,8 +26,19 @@ function safeMappingFile(value) {
    * từ chối oan một file hợp lệ chỉ vì nó được đưa vào bằng đường đã giải symlink. */
   let realRoot;
   try { realRoot = fs.realpathSync(path.resolve(DATA_DIR)) + path.sep; } catch { realRoot = dataRoot; }
+  /* ‼ TUYỆT ĐỐI KHÔNG trả về đường lexical khi `realpathSync` lỗi (bot App Report
+   * bắt đúng, 24/08). Trả lexical là để hở cửa TOCTOU: giữa lúc kiểm và lúc
+   * `readFileSync`, ai đó tạo đúng chỗ đó một symlink trỏ ra ngoài là đọc lọt.
+   * Cửa hẹp, nhưng đây là cổng tiền — hẹp mấy cũng phải đóng. Không giải được
+   * đường thật thì TỪ CHỐI, chỉ trả về đường ĐÃ giải. */
   let real;
-  try { real = fs.realpathSync(file); } catch { return file; } // chưa tồn tại ⇒ UNAVAILABLE ở loadMapping
+  try { real = fs.realpathSync(file); }
+  catch (error) {
+    if (error && error.code === 'ENOENT') {
+      const missing = new Error('DEBTS_MAPPING_UNAVAILABLE'); missing.code = missing.message; throw missing;
+    }
+    invalid();
+  }
   if (!real.startsWith(realRoot) || !real.endsWith('.json')) invalid();
   return real;
 }

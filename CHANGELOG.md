@@ -1,3 +1,25 @@
+### 2026-08-24 — Đóng nốt cửa TOCTOU trong hàng rào mapping Debts (bot App Report bắt đúng)
+
+**Việc đã làm.** `debtsShadowService.js` `safeMappingFile()`: bỏ hẳn nhánh trả về đường lexical khi
+`fs.realpathSync` lỗi. File vắng mặt ⇒ ném `DEBTS_MAPPING_UNAVAILABLE`; lỗi khác hoặc ra ngoài kho ⇒
+`DEBTS_MAPPING_FILE_INVALID`. Hàm nay **chỉ trả về đường ĐÃ giải symlink**, không bao giờ trả đường
+chuỗi chưa giải.
+
+**Lý do.** Bản vá trước của Claude (b317bbd) bịt được symlink có sẵn, nhưng khi file chưa tồn tại vẫn
+`return file` lexical. Bot App Report chỉ ra: giữa lúc kiểm và lúc `readFileSync` còn khe TOCTOU —
+tạo đúng chỗ đó một symlink trỏ ra ngoài là đọc lọt. Khe hẹp và flow chuẩn dùng mapping đã pin nên
+khó chạm, nhưng đây là cổng tiền: hẹp mấy cũng phải đóng.
+
+**Test.** `debtsShadowService.test.js` 9 → **10 PASS**: file vắng mặt bị từ chối bằng đúng mã, và
+khoá luôn ở mức mã nguồn rằng không còn nhánh `catch { return file; }`. Full server 1574/1574
+(7 test PDF đỏ do máy dev thiếu `pdfinfo`). Web 534/534 PASS.
+
+**Còn treo — CHẶN Cổng 2, không phải lỗi code.** Bot chỉ ra hợp đồng ghim **một pháp nhân cho một
+snapshot** (`debtsInvoiceShadow.js:160-162`, mọi dòng phải khớp header — dòng 193), trong khi
+`fetchSnapshotPages()` **không nhận tham số pháp nhân** (dòng 587) và service chỉ gọi một lượt theo
+kỳ. Claude đã đọc mã và xác nhận: như hiện tại **mỗi lượt chỉ lấy được MỘT pháp nhân**, không thể phủ
+cả DONA và AFP. Phải chốt cách lấy hai phân vùng với App Công nợ trước khi nói hỗ trợ đủ hai pháp nhân.
+
 ### 2026-08-24 — Review Debts shadow: bịt lỗ đọc file ngoài kho qua symlink + khoá hợp đồng "không tên khách"
 
 **Việc đã làm.** Review candidate `aa39562` (đường Debts chạy song song, CEO-only preview).
