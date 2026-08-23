@@ -1,3 +1,10 @@
+### 2026-08-23 — Gọn đầu trang Danh mục quản lý: ba thẻ hành động xếp ngang
+
+- CEO chê trực tiếp (ảnh 09:31): ba thẻ Đồng bộ %/Bảng %/Phân quyền chồng dọc chiếm ~2/3 màn hình, bảng danh mục bị đẩy khỏi tầm mắt.
+- Desktop ≥900px: ba thẻ nằm một hàng lưới 3 cột (`.catalog-actions-row`); thẻ đang mở (`.is-open`) tự chiếm cả hàng để thân bảng %/phân quyền đủ bề ngang. Mobile giữ 1 cột dọc.
+- Mô tả dài (che/mở theo con mắt, NHÓM MÃ đơn vị 001·033·120…) dời nguyên văn vào ❓ Hướng dẫn sử dụng — không mất nội dung, chỉ nhường chỗ cho bảng. Không đổi hành vi nút, quyền hay dữ liệu.
+- Test: web 512/512 PASS (thêm `CatalogActionsRow.contract.test.mjs` khoá bố cục); Vite build PASS. Chưa deploy — gộp chung đợt với cầu Full52.
+
 ### 2026-08-22 — Tách hợp đồng điều khiển generation T07 khỏi cờ phục vụ snapshot
 
 - Endpoint status trả `controlEnabled` độc lập; `enabled` tiếp tục chỉ mang đúng nghĩa đường phục vụ dữ liệu snapshot đang bật hay tắt.
