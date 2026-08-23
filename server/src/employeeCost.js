@@ -601,10 +601,35 @@ function revenueQuantityOf(row = {}) {
   return Number.isFinite(value) ? value : null;
 }
 
+/* ── BÍ DANH MÃ NHÀ THẦU CHO ĐỐI SOÁT (App Sale 23/08: scope `AFP`/`DONA` 404) ──
+ * `analytics.js` đã ghi rõ từ trước: *"Dữ liệu lịch sử dùng 01.DONAPHARM / 02.AFP
+ * PHARMA…, còn nguồn materialize hiện tại dùng DONA / AFP. Tất cả đều là cùng hai
+ * nhà thầu."* Nhưng hiểu biết đó chỉ nằm ở tầng phân nhóm; tầng dựng scope đối soát
+ * bê nguyên chuỗi thô đi hỏi App Sale, mà danh mục nhà thầu bên đó dùng mã CÓ SỐ
+ * (`01.DONA`, `02.AFP`) ⇒ 404 vĩnh viễn, không ai lễ xác nhận nổi vì mã không tồn tại.
+ *
+ * ‼ Bảng này là ÁNH XẠ TƯỜNG MINH, không phải luật đoán. CẤM suy ra bằng cách thêm
+ * hay cắt tiền tố số: mã nào chưa có tên trong bảng thì giữ nguyên và để 404 lộ ra.
+ * Đây là đường đi của tiền — không biết thì phải kêu, không được đoán cho trôi việc.
+ * Đổi được bằng `RECON_CONTRACTOR_ALIASES` dạng `DONA=01.DONA|AFP=02.AFP`. */
+const RECON_CONTRACTOR_ALIAS_DEFAULT = 'DONA=01.DONA|AFP=02.AFP';
+function parseContractorAliases(raw) {
+  const map = new Map();
+  for (const pair of String(raw ?? RECON_CONTRACTOR_ALIAS_DEFAULT).split('|')) {
+    const [from, to] = pair.split('=');
+    const source = reconciliationShadow.normalizeContractorCode(String(from || '').trim());
+    const target = reconciliationShadow.normalizeContractorCode(String(to || '').trim());
+    if (source && target && source !== target) map.set(source, target);
+  }
+  return map;
+}
+const contractorAliases = parseContractorAliases(process.env.RECON_CONTRACTOR_ALIASES);
+
 function contractorCodeOf(row = {}) {
-  return reconciliationShadow.normalizeContractorCode(
+  const code = reconciliationShadow.normalizeContractorCode(
     displayValue(row, ['contractor_code', 'contractorCode', 'contractor', 'CONTRACTOR_CODE']),
   );
+  return code ? (contractorAliases.get(code) || code) : code;
 }
 
 function buildRevenueIndex(revenueRows = [], expectedEmp = '') {
@@ -1764,6 +1789,9 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
 }
 
 module.exports = {
+  contractorCodeOf,
+  parseContractorAliases,
+  RECON_CONTRACTOR_ALIAS_DEFAULT,
   pinnedClosedPayload,
   USABLE_OUTCOMES,
   isUsableOutcome,

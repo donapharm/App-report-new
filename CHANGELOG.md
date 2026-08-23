@@ -1,3 +1,24 @@
+### 2026-08-23 — Ánh xạ bí danh mã nhà thầu cho đối soát (gỡ 404 vĩnh viễn của AFP/DONA)
+
+**Việc đã làm.** `employeeCost.js`: thêm bảng ánh xạ TƯỜNG MINH `DONA=01.DONA|AFP=02.AFP`
+(đổi được qua `RECON_CONTRACTOR_ALIASES`), áp ngay trong `contractorCodeOf()` — hàm chỉ được dùng ở
+một chỗ duy nhất là `applyReconciliationShadow()`, nên thay đổi khoanh gọn trong đường đối soát.
+
+**Lý do.** Bot App Sale báo scope `AFP` và `DONA` **không tồn tại trong danh mục nhà thầu**; mã hiện
+hành là `02.AFP`, `01.DONA` và hai mã này CÓ bản lưu tạm sẵn. Truy ra: `analytics.js:20` đã ghi rõ từ
+trước — *"Dữ liệu lịch sử dùng 01.DONAPHARM / 02.AFP PHARMA…, còn nguồn materialize hiện tại dùng
+DONA / AFP. Tất cả đều là cùng hai nhà thầu."* Hiểu biết đó chỉ nằm ở tầng phân nhóm; tầng dựng scope
+đối soát bê nguyên chuỗi thô đi hỏi App Sale ⇒ 404 vĩnh viễn, VP018 không thể lễ xác nhận vì mã không
+tồn tại. Không sửa thì 2/15 scope này bế tắc mãi mãi dù có chạy đủ lễ.
+
+**Nguyên tắc giữ chặt.** Bảng là ánh xạ tường minh, **CẤM suy bằng cách thêm/cắt tiền tố số**. Mã chưa
+có tên trong bảng thì giữ nguyên và để 404 lộ ra — đường đi của tiền, không biết thì phải kêu.
+
+**Test.** `server/test/employeeCostContractorAlias.test.js` — 5 test: ánh xạ đúng hai bí danh · mã đã
+đúng dạng không ánh xạ vòng hai · **mã lạ KHÔNG bị đoán** (`TUE.N` giữ nguyên `TUE.N`) · rỗng vẫn rỗng ·
+cấu hình bỏ qua cặp hỏng. Full server 1564/1564 (7 test PDF đỏ do máy thiếu `pdfinfo`, đã kiểm là lỗi
+môi trường sẵn có).
+
 ### 2026-08-23 — Nén đầu trang Chi phí + ghim tiêu đề bảng Danh mục khi cuộn
 
 **Nén đầu trang Chi phí (CEO 19:42).** Desktop: nhãn "Nhân viên" nằm ngang cạnh ô chọn; hàng chip kỳ
