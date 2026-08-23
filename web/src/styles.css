@@ -1383,6 +1383,16 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
   .catalog-table thead { display:none; }
   .catalog-table tr { display:grid; gap:3px; padding:9px; margin:7px; border:1px solid var(--line); border-radius:10px; }
   .catalog-table td { display:block; padding:0; border:0; overflow-wrap:anywhere; }
+  /* CEO 23/08 11:05: thẻ dọc đọc "rất lộn xộn" vì mỗi trường một dòng. Chọn "Dạng
+     bảng" thì trả bảng về đúng hình bảng và kéo ngang trong .table-scroll — đúng
+     luật dự án: rộng hơn màn thì phải có đường kéo, cấm cắt cụt lặng lẽ. */
+  .catalog-table-card[data-mobile-view="table"] .catalog-table,
+  .catalog-table-card[data-mobile-view="table"] .catalog-table tbody { display:table; width:max-content; min-width:100%; }
+  .catalog-table-card[data-mobile-view="table"] .catalog-table thead { display:table-header-group; }
+  .catalog-table-card[data-mobile-view="table"] .catalog-table tr { display:table-row; padding:0; margin:0; border:0; border-radius:0; }
+  .catalog-table-card[data-mobile-view="table"] .catalog-table td { display:table-cell; padding:8px 9px; border-bottom:1px solid var(--line); white-space:nowrap; overflow-wrap:normal; }
+  .catalog-table-card[data-mobile-view="table"] .catalog-table td[data-label]::before { content:none; }
+  .catalog-mobile-view-toggle { display:inline-flex; align-self:flex-start; margin:0 7px 8px; font-size:12px; padding:6px 12px; }
   /* Nhãn mobile đi cùng chính ô dữ liệu; số cột % thay đổi theo quyền nên tuyệt đối
      không suy nhãn bằng nth-child. */
   .catalog-table td[data-label]::before { content:attr(data-label) ': '; color:var(--muted); font-weight:700; }
@@ -2735,3 +2745,6 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 .cost-breakdown-cell em { display:block; font-style:normal; font-size:9.5px; }
 
 .swr-stale-label { margin: 0 0 9px; color: var(--muted); font-size: 11.5px; font-weight: 700; }
+
+/* Nút đổi cách xem chỉ có nghĩa trên màn hẹp — desktop luôn là bảng thật. */
+@media (min-width: 701px) { .catalog-mobile-view-toggle { display: none; } }

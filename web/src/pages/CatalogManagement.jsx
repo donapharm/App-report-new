@@ -121,14 +121,37 @@ const catalogTableWidth = (admin, costColumnCount) => {
   return `${(admin ? 1658 : 1546) + safeCount * 96}px`;
 };
 
+/* Trên điện thoại bảng danh mục vốn bị bung thành thẻ dọc: mỗi trường một dòng, hơn
+ * 20 dòng cho một cặp — CEO 23/08 11:05: bảng bung ra thành văn bản rời rạc, nhìn rất lộn
+ * xộn, chứ không phải dạng bảng". Nay cho chọn: giữ thẻ dọc (dễ đọc từng dòng) hoặc
+ * GIỮ NGUYÊN HÌNH BẢNG và kéo ngang — đúng luật dự án "bảng rộng hơn màn phải có
+ * thanh kéo ngang, cấm cắt cụt lặng lẽ". Lựa chọn nhớ theo trình duyệt. */
+const MOBILE_VIEW_KEY = 'rpt_catalog_mobile_view';
+const readMobileView = () => {
+  try { return localStorage.getItem(MOBILE_VIEW_KEY) === 'table' ? 'table' : 'cards'; } catch { return 'cards'; }
+};
+
 function CatalogTableCard({ id, tableId, children, cellLines = 3 }) {
   const { rootRef } = useDonaTableCellTools({
     appId: 'app-report',
     tableId,
     cellSelector: 'td[data-full-value]'
   });
+  const [mobileView, setMobileView] = useState(readMobileView);
+  const toggle = () => {
+    const next = mobileView === 'table' ? 'cards' : 'table';
+    setMobileView(next);
+    try { localStorage.setItem(MOBILE_VIEW_KEY, next); } catch { /* riêng tư/ẩn danh: bỏ qua */ }
+  };
   return <div ref={rootRef} id={id} className="card table-card catalog-table-card" data-app-id="app-report" data-table-id={tableId}
-    style={{ '--catalog-cell-lines': cellLines }}>{children}</div>;
+    data-mobile-view={mobileView} style={{ '--catalog-cell-lines': cellLines }}>
+    <button type="button" className="catalog-mobile-view-toggle btn secondary" onClick={toggle}
+      aria-pressed={mobileView === 'table'}
+      title="Đổi cách hiển thị bảng trên màn hình hẹp">
+      {mobileView === 'table' ? '▦ Dạng bảng · kéo ngang' : '▤ Dạng thẻ · xem dọc'}
+    </button>
+    {children}
+  </div>;
 }
 
 /**
