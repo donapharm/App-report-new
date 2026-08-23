@@ -24,6 +24,28 @@ chờn · bốn mã đều KHÔNG nằm trong nhóm dùng được (tiền phả
 đúng nơi xử lý · lớp lọc web không nuốt mất mã. Focused cost 61/61, full server 1572/1572 (7 test PDF
 đỏ do máy dev thiếu `pdfinfo`), web 534/534, build PASS.
 
+### 2026-08-24 — Review Debts shadow: bịt lỗ đọc file ngoài kho qua symlink + khoá hợp đồng "không tên khách"
+
+**Việc đã làm.** Review candidate `aa39562` (đường Debts chạy song song, CEO-only preview).
+`debtsShadowService.js`: `safeMappingFile()` nay so **đường THẬT** hai phía bằng `fs.realpathSync`,
+không chỉ so chuỗi. Thêm 6 test khoá.
+
+**Lý do — lỗ hổng do Claude dựng cảnh tấn công phát hiện.** Bản gốc chặn `..` và tiền tố gần giống,
+nhưng `path.resolve` chỉ ghép chuỗi, KHÔNG đi theo liên kết mềm. Claude đặt một symlink **nằm trong**
+`server/data` trỏ ra `/tmp` rồi gọi `loadMapping()` — **đọc được nội dung file ngoài kho**. Khai thác
+đòi quyền ghi vào `server/data` hoặc quyền đặt biến môi trường, tức đã ở vị thế có đặc quyền, nên mức
+độ là phòng-thủ-chiều-sâu chứ không phải cửa mở; nhưng chính mục đích của hàm là giam đọc trong kho
+App Report, mà nó chưa làm được. Vá thêm lợi phụ: PROD để `server/data` là **symlink**, so đường thật
+nên không còn từ chối oan file hợp lệ đưa vào bằng đường đã giải symlink.
+
+**Điểm 6 bot tự nhận thiếu test — đã bổ sung.** Lõi dựng dòng bằng **danh sách trắng** trường
+(`normalizeRow` không spread `...row`), nên tên khách rơi ra theo thiết kế; nay có test khoá lại để
+một lượt sửa sau này thay bằng spread là đỏ ngay. Kèm test: hợp đồng dòng không có trường giống tên
+khách · phản hồi `preview` chỉ trả số đếm/checksum, không trả mảng dòng.
+
+**Test.** `debtsShadowService.test.js` 4 → **9 PASS**. Full server 1573/1573 (7 test PDF đỏ do máy dev
+thiếu `pdfinfo`, đã kiểm là lỗi môi trường sẵn có). Web 534/534 PASS.
+
 ### 2026-08-23 — Ánh xạ bí danh mã nhà thầu cho đối soát (gỡ 404 vĩnh viễn của AFP/DONA)
 
 **Việc đã làm.** `employeeCost.js`: thêm bảng ánh xạ TƯỜNG MINH `DONA=01.DONA|AFP=02.AFP`
