@@ -1,3 +1,10 @@
+### 2026-08-23 — Sửa gấp: bản vá chạm đã giết luôn chuột trên nút tạo bản tiền T07
+
+- CEO 13:30 trên laptop: "nút bấm không đáp ứng, bấm hai ba lần vẫn vậy" — nút chết hoàn toàn với chuột sau đợt deploy `daead0e`.
+- Nguyên nhân: `snapshotActivationDecision()` ghi `lastPointerAt` cho MỌI `pointerup`, kể cả chuột. Chuột phát `pointerup` (không kích hoạt vì không phải touch) rồi phát `click` sau vài mili-giây; cú click đó rơi vào cửa chống-trùng 800 ms do chính `pointerup` vừa đặt ⇒ bị chặn. Touch chạy được, chuột không bao giờ chạy.
+- Sửa: chỉ ghi mốc khi `pointerup` THỰC SỰ kích hoạt (touch/pen). Chuột không để lại dấu nên click của nó luôn đi qua. Không đụng đường touch, không đụng ref-lock chống gửi đôi.
+- Thêm 3 test khoá: chuột phải chạy · click trùng sau cú chạm vẫn bị chặn · click rời rạc sau 800 ms vẫn chạy. Web 520/520 PASS, build PASS.
+
 ### 2026-08-23 — Nút tạo T07 nhận thao tác chạm ổn định
 
 - Nút tạo generation T07 nhận trực tiếp `pointerup` cho touch/pen, giữ click cho chuột/bàn phím và chống gửi đôi từ synthetic click.

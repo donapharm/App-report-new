@@ -52,3 +52,27 @@ test('mouse and keyboard retain the normal click path', () => {
   assert.equal(snapshotActivationDecision(0, 'pointerup', 'mouse', 1_000).activate, false);
   assert.equal(snapshotActivationDecision(0, 'click', '', 1_000).activate, true);
 });
+
+// CEO 23/08 13:30 trên laptop: "nút bấm không đáp ứng, bấm hai ba lần vẫn vậy".
+// Chuột phát pointerup rồi click ngay sau đó; nếu pointerup của chuột cũng ghi mốc
+// chống-trùng thì chính cú click của nó bị chặn ⇒ chuột chết hẳn.
+test('chuột vẫn bấm được: pointerup của chuột KHÔNG được chặn cú click ngay sau', () => {
+  const step1 = snapshotActivationDecision(0, 'pointerup', 'mouse', 1_000);
+  assert.equal(step1.activate, false);
+  assert.equal(step1.lastPointerAt, 0, 'pointerup chuột không được ghi mốc chống-trùng');
+  const step2 = snapshotActivationDecision(step1.lastPointerAt, 'click', undefined, 1_005);
+  assert.equal(step2.activate, true, 'click của chuột phải chạy');
+});
+
+test('chạm vẫn chống được click trùng ngay sau pointerup', () => {
+  const step1 = snapshotActivationDecision(0, 'pointerup', 'touch', 2_000);
+  assert.equal(step1.activate, true);
+  assert.equal(step1.lastPointerAt, 2_000);
+  const step2 = snapshotActivationDecision(step1.lastPointerAt, 'click', undefined, 2_010);
+  assert.equal(step2.activate, false, 'click trùng sau cú chạm phải bị chặn');
+});
+
+test('click rời rạc sau cú chạm cũ hơn 800 ms vẫn chạy', () => {
+  const step = snapshotActivationDecision(2_000, 'click', undefined, 3_000);
+  assert.equal(step.activate, true);
+});

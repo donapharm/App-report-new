@@ -2,14 +2,23 @@ import React from 'react';
 
 export const INITIAL_T07_BUTTON_LABEL = 'Tạo bản tiền T07 đầu tiên';
 
+/* ‼ CHUỘT TỪNG BỊ GIẾT Ở ĐÂY (CEO 23/08 13:30: "bấm hai ba lần vẫn vậy" trên laptop).
+ * Bản trước ghi lastPointerAt cho MỌI pointerup, kể cả chuột. Chuột phát pointerup
+ * (không kích hoạt vì không phải touch) rồi phát click ngay sau vài mili-giây — cú
+ * click đó rơi vào cửa chống-trùng 800 ms của chính pointerup vừa rồi nên bị chặn.
+ * Kết quả: touch chạy được, CHUỘT KHÔNG BAO GIỜ chạy.
+ * Nay chỉ ghi mốc khi pointerup THỰC SỰ kích hoạt (touch/pen) — đúng thứ cần chống
+ * trùng. Chuột không để lại dấu nên click của nó luôn đi qua. */
 export function snapshotActivationDecision(lastPointerAt, eventType, pointerType, now = Date.now()) {
+  const previous = Number(lastPointerAt || 0);
   if (eventType === 'pointerup') {
-    return { activate: pointerType === 'touch' || pointerType === 'pen', lastPointerAt: now };
+    const activate = pointerType === 'touch' || pointerType === 'pen';
+    return { activate, lastPointerAt: activate ? now : previous };
   }
-  if (eventType === 'click' && now - Number(lastPointerAt || 0) < 800) {
-    return { activate: false, lastPointerAt };
+  if (eventType === 'click' && now - previous < 800) {
+    return { activate: false, lastPointerAt: previous };
   }
-  return { activate: eventType === 'click', lastPointerAt };
+  return { activate: eventType === 'click', lastPointerAt: previous };
 }
 
 export function employeeCostSnapshotControlDecision({ admin, view, selectedEmp, period, controlEnabled, status }) {
