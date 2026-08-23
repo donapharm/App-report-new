@@ -2,6 +2,13 @@
 
 - Nút tạo generation T07 nhận trực tiếp `pointerup` cho touch/pen, giữ click cho chuột/bàn phím và chống gửi đôi từ synthetic click.
 - Không thay đổi endpoint, quyền CEO/OTP, dữ liệu T07 hay logic dựng/publish generation.
+### 2026-08-23 — Tab 52 cột: mã lỗi thô đổi thành câu nói rõ nghĩa · ai xử · làm gì
+
+- CEO 11:15 gặp `CATALOG52_DEVICE_PACKAGE_KEY_MISSING` in thẳng ra màn và phải hỏi lại nó là gì.
+- Ba mã thường gặp nay kèm câu giải thích đủ ba việc (nghĩa · ai xử · làm gì), theo đúng luật đã đặt cho màn "Chưa đồng bộ": key thiếu cho thiết bị mới đăng ký ⇒ cần đóng lại gói một lần, không mất dữ liệu, không phải đăng ký lại; chưa có gói cho kỳ; thiết bị chưa đăng ký.
+- Mã lạ vẫn in nguyên văn để không nuốt thông tin chẩn đoán; mã gốc luôn hiện trong ngoặc.
+- Test: web 513/513 PASS; Vite build PASS. Chưa deploy — gộp chung đợt.
+
 ### 2026-08-23 — Bảng danh mục trên điện thoại: cho chọn giữ hình bảng và kéo ngang
 
 - CEO 11:05: trên iPhone bảng bung thành văn bản rời rạc, mỗi trường một dòng, hơn 20 dòng cho một cặp — mất hẳn hình bảng.
