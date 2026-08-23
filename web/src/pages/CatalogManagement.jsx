@@ -1042,7 +1042,7 @@ function CostColumnGrantsPanel({ catalogRows, employees, unitGroups = null }) {
   const pending = panel ? dirtyRows(panel).length : 0;
   const review = useMemo(() => reviewGrants(panel), [panel]);
   const todo = review.counts.needsGrant + review.counts.staleGrant;
-  return <div className="card catalog-grants">
+  return <div className={`card catalog-grants${open ? ' is-open' : ''}`}>
     <div className="catalog-grants-head">
       <div>
         <div className="section-head">🔐 Phân quyền cột % chi phí
@@ -1050,7 +1050,9 @@ function CostColumnGrantsPanel({ catalogRows, employees, unitGroups = null }) {
               thầm, CEO không có cách nào biết nếu phải tự mở từng NV ra dò. */}
           {!!todo && <span className="catalog-grants-badge" title="Số chỗ phân quyền đang lệch so với danh mục hiện hành">{todo}</span>}
         </div>
-        <p>Chỉ CEO đặt được. Mặc định mọi nhân viên <b>không thấy cột % nào</b>; bật từng cột và giới hạn theo <b>NHÓM MÃ đơn vị</b> (001 · 033 · 120…) — mỗi cột một phạm vi nhóm riêng, cấp nhóm nào thì các mã NV phụ trách trong nhóm đó cùng thấy.</p>
+        {/* Mô tả một dòng; phần giải thích NHÓM MÃ đơn vị dời vào ❓ Hướng dẫn sử dụng
+            (CEO 23/08: đầu trang phải gọn, chữ dài không được chiếm chỗ của bảng). */}
+        <p>Chỉ CEO đặt được · mặc định nhân viên <b>không thấy cột % nào</b>.</p>
       </div>
       <button type="button" className="btn secondary" aria-expanded={open} aria-controls="catalog-grants-body" onClick={() => setOpen((v) => !v)}>
         {open ? 'Thu gọn' : 'Mở phân quyền'}
@@ -1196,11 +1198,11 @@ function CostRatesTablePanel({ period }) {
     return data.rows.filter((row) => normalizeSearch(`${row.unitCode} ${row.productCode} ${row.productName} ${row.employees.join(' ')}`).includes(q));
   }, [data, query]);
 
-  return <div className="card catalog-rates-panel">
+  return <div className={`card catalog-rates-panel${open ? ' is-open' : ''}`}>
     <div className="catalog-grants-head">
       <div>
         <div className="section-head">📊 Bảng % chi phí (kho cục bộ)</div>
-        <p>Đọc từ bản đã đồng bộ — DataHub có sự cố vẫn xem được. Số % che/mở theo con mắt.</p>
+        <p>Đọc từ bản đã đồng bộ — DataHub sự cố vẫn xem được.</p>
       </div>
       <button type="button" className="btn secondary" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {open ? 'Thu gọn' : 'Mở bảng %'}
@@ -1354,7 +1356,11 @@ function AdminView({ data, period, selectedPeriod = '', onReload, history, diagn
   return <>
     <details className="card catalog-help-compact">
       <summary>❓ Hướng dẫn sử dụng</summary>
-      <div><p>Màn hình quản lý theo từng tháng: nhân viên nào đang phụ trách từng cặp <b>đơn vị + mã QLNB</b>.</p><ol><li>Chọn kỳ</li><li>Chọn tuyến/NV hoặc nhập mã cần tìm</li><li>Nếu cần, mở tab Điều chuyển nhân viên</li></ol></div>
+      <div><p>Màn hình quản lý theo từng tháng: nhân viên nào đang phụ trách từng cặp <b>đơn vị + mã QLNB</b>.</p><ol><li>Chọn kỳ</li><li>Chọn tuyến/NV hoặc nhập mã cần tìm</li><li>Nếu cần, mở tab Điều chuyển nhân viên</li></ol>
+        {/* Chữ giải thích dài dời từ đầu ba thẻ hành động về đây (CEO 23/08) — không mất
+            nội dung, chỉ nhường chỗ cho bảng. */}
+        <p><b>📊 Bảng % chi phí:</b> số % che/mở theo con mắt (nút 👁 trên thanh tiêu đề).</p>
+        <p><b>🔐 Phân quyền cột %:</b> bật từng cột và giới hạn theo <b>NHÓM MÃ đơn vị</b> (001 · 033 · 120…) — mỗi cột một phạm vi nhóm riêng, cấp nhóm nào thì các mã NV phụ trách trong nhóm đó cùng thấy.</p></div>
     </details>
     <div className="catalog-mode-tabs" role="tablist" aria-label="Chức năng danh mục quản lý">
       <button role="tab" aria-selected={effectiveMode === 'view'} className={effectiveMode === 'view' ? 'active' : ''} onClick={() => setMode('view')}>🔎 Xem phân công</button>
@@ -1517,10 +1523,15 @@ export default function CatalogManagement({ me }) {
         không tài nào đóng băng được T07. Mà đồng bộ % KHÔNG đụng danh mục — nó gọi
         cửa chi phí, cửa đang sống (probe 21/21). Khoá nó đúng lúc cần nhất là tự
         chặn đường thoát duy nhất. */}
-    {isCeo && <CostRatesSyncCard period={period} catalogLoading={!!loadingPeriod} />}
-    {isCeo && me?.catalog52Enabled === true && <Catalog52ControlPlane period={period} />}
-    <CostRatesTablePanel period={period} />
-    {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} unitGroups={data.unitGroups || null} />}
+    {/* Hàng thẻ hành động: desktop xếp NGANG 3 cột (CEO 23/08 09:31: "ba thẻ chồng
+        dọc chiếm 2/3 màn hình, bảng bị đẩy mất") — thẻ đang MỞ tự chiếm cả hàng để
+        thân bảng/phân quyền đủ bề ngang. Mobile giữ 1 cột dọc như luật chung. */}
+    <div className="catalog-actions-row">
+      {isCeo && <CostRatesSyncCard period={period} catalogLoading={!!loadingPeriod} />}
+      {isCeo && me?.catalog52Enabled === true && <Catalog52ControlPlane period={period} />}
+      <CostRatesTablePanel period={period} />
+      {isCeo && data && !actionsLocked && <CostColumnGrantsPanel catalogRows={data.rows || []} employees={employeeOptions} unitGroups={data.unitGroups || null} />}
+    </div>
     {costRates.stale && !!costRates.columns.length && <div className="card catalog-alert error" role="status">
       ⚠ Nguồn tỷ lệ chi phí đang kẹt — cột % đang dùng bảng tỷ lệ lấy được gần nhất.{costRates.note ? ` ${costRates.note}` : ''}
     </div>}
