@@ -12,12 +12,24 @@ function enabled(env = process.env) {
 }
 
 function safeMappingFile(value) {
+  const invalid = () => {
+    const error = new Error('DEBTS_MAPPING_FILE_INVALID'); error.code = error.message; throw error;
+  };
   const file = path.resolve(String(value || ''));
   const dataRoot = path.resolve(DATA_DIR) + path.sep;
-  if (!file.startsWith(dataRoot) || !file.endsWith('.json')) {
-    const error = new Error('DEBTS_MAPPING_FILE_INVALID'); error.code = error.message; throw error;
-  }
-  return file;
+  if (!file.startsWith(dataRoot) || !file.endsWith('.json')) invalid();
+  /* ‼ Kiểm bằng chuỗi là CHƯA ĐỦ. `path.resolve` chỉ ghép chuỗi, không đi theo
+   * liên kết mềm: một symlink NẰM TRONG `server/data` trỏ ra ngoài vẫn lọt qua
+   * rồi `readFileSync` đọc thẳng file ngoài kho. Claude dựng đúng cảnh đó và đọc
+   * được file ở `/tmp`. Nay so bằng ĐƯỜNG THẬT hai phía.
+   * Lợi thêm: PROD để `server/data` là symlink, nên so đường thật cũng tránh việc
+   * từ chối oan một file hợp lệ chỉ vì nó được đưa vào bằng đường đã giải symlink. */
+  let realRoot;
+  try { realRoot = fs.realpathSync(path.resolve(DATA_DIR)) + path.sep; } catch { realRoot = dataRoot; }
+  let real;
+  try { real = fs.realpathSync(file); } catch { return file; } // chưa tồn tại ⇒ UNAVAILABLE ở loadMapping
+  if (!real.startsWith(realRoot) || !real.endsWith('.json')) invalid();
+  return real;
 }
 
 function loadMapping(file) {
