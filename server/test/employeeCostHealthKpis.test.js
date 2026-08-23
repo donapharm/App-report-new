@@ -191,3 +191,55 @@ test('payload hợp đồng có đúng ba card backend-owned theo thứ tự spe
     assert.equal(typeof card.sub, 'string');
   }
 });
+
+// CEO báo 08:14 ngày 23/08: cả hai ô KPI cuối màn T08 trống — "tổng chưa cân" và
+// "chưa lấy được nguồn". Gốc: 11 dòng doanh thu của DN021/DN023 (chính sách chỉ
+// tính target, CEO chốt 21/08) cố ý không lên bảng, nhưng ô này chưa biết nhóm đó
+// nên xếp vào `unexplained` ⇒ fail-closed ⇒ ô Dự báo tắt theo.
+test('doanh thu chưa phân bổ khai riêng nhóm chỉ-tính-target thay vì fail-closed', () => {
+  const currentPeriod = costPeriod('2026-08', { cost: 100, beforeVat: 1_000, revenue: 1_100, lineId: 'ALLOCATED-1' });
+  const sourceRows = [
+    { source_line_id: 'ALLOCATED-1', emp_code: 'DN001', revenue: 1_100 },
+    { source_line_id: 'TARGET-ONLY-1', emp_code: 'DN021', revenue: 200_000_000 },
+    { source_line_id: 'TARGET-ONLY-2', emp_code: 'DN023', revenue: 103_062_700 },
+    { source_line_id: 'VP018-1', emp_code: 'UNALLOCATED', attribution_status: 'NON_SALES_ROLE_QUARANTINED', revenue: 1_795_600 },
+  ];
+  const card = buildUnallocatedRevenue({ sourceRows, currentPeriod, sourceAvailable: true, snapshotConsistent: true });
+  assert.equal(card.available, true);
+  assert.equal(card.raw.balanced, true);
+  assert.equal(card.raw.targetOnlyRows, 2);
+  assert.equal(card.raw.targetOnlyAmount, 303_062_700);
+  assert.equal(card.raw.quarantineRows, 1);
+  assert.equal(card.raw.rows, 3);
+  assert.match(card.sub, /chỉ tính target: 303\.062\.700đ/);
+});
+
+test('dòng lạ thật sự vẫn làm ô chưa phân bổ fail-closed, không bị nhóm target nuốt', () => {
+  const currentPeriod = costPeriod('2026-08', { cost: 100, beforeVat: 1_000, revenue: 1_100, lineId: 'ALLOCATED-1' });
+  const sourceRows = [
+    { source_line_id: 'ALLOCATED-1', emp_code: 'DN001', revenue: 1_100 },
+    { source_line_id: 'TARGET-ONLY-1', emp_code: 'DN021', revenue: 200_000_000 },
+    { source_line_id: 'STRANGER-1', emp_code: 'DN007', revenue: 5_000_000 },
+  ];
+  const card = buildUnallocatedRevenue({ sourceRows, currentPeriod, sourceAvailable: true, snapshotConsistent: true });
+  assert.equal(card.available, false);
+  assert.equal(card.sub, 'tổng chưa cân');
+  assert.equal(card.raw.unexplainedRows, 1);
+});
+
+test('vá xong ô chưa phân bổ thì ô dự báo target hết bị tắt lây', () => {
+  const currentPeriod = costPeriod('2026-08', { cost: 100, beforeVat: 1_000, revenue: 1_100, lineId: 'ALLOCATED-1' });
+  const sourceRows = [
+    { source_line_id: 'ALLOCATED-1', emp_code: 'DN001', revenue: 1_100 },
+    { source_line_id: 'TARGET-ONLY-1', emp_code: 'DN021', revenue: 200_000_000 },
+  ];
+  const kpis = buildEmployeeCostHealthKpis({
+    period: '2026-08', today: '2026-08-23', currentPeriod, previousPeriod: null,
+    penalty: { complete: true, afterPenaltyTotal: 90 },
+    sourceRows, sourceAvailable: true, snapshotConsistent: true, target: 500,
+  });
+  const unallocated = kpis.cards.find((card) => card.key === 'unallocatedRevenue');
+  const forecast = kpis.cards.find((card) => card.key === 'targetForecast');
+  assert.equal(unallocated.available, true);
+  assert.notEqual(forecast.sub, 'chưa lấy được nguồn');
+});
