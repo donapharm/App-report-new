@@ -59,6 +59,9 @@ export default function Login({ onLogin }) {
   const [tgErr, setTgErr] = useState('');
   const pollRef = useRef(null);
   const tickRef = useRef(null);
+  // Khoá theo ref vì setState(busy) không đồng bộ: touch có thể phát pointerup
+  // rồi click trước khi React kịp render disabled, khiến OTP bị gửi hai lần.
+  const otpVerifyInFlightRef = useRef(false);
 
   // OTP flow
   const [step, setStep] = useState('phone');     // phone | code | choose
@@ -167,6 +170,8 @@ export default function Login({ onLogin }) {
     finally { setBusy(false); }
   }
   async function verifyOtp() {
+    if (otpVerifyInFlightRef.current) return;
+    otpVerifyInFlightRef.current = true;
     setBusy(true); setErr('');
     try {
       const r = await api.otpVerify(phone.trim(), code.trim());
@@ -174,7 +179,14 @@ export default function Login({ onLogin }) {
       if (r.accounts && r.accounts.length) { setAccounts(r.accounts); setStep('choose'); return; }
       setErr('Không xác định được tài khoản.');
     } catch (e) { setErr(e.message); }
-    finally { setBusy(false); }
+    finally { otpVerifyInFlightRef.current = false; setBusy(false); }
+  }
+  function verifyOtpOnPointerUp(e) {
+    // iPhone/Safari đôi khi làm rơi synthetic click trong layout login. Gửi ngay
+    // ở pointerup cho touch/pen; chuột và bàn phím vẫn dùng onClick/Enter cũ.
+    if (e.pointerType === 'mouse') return;
+    e.preventDefault();
+    verifyOtp();
   }
   async function pickAccount(emp_code) {
     setBusy(true); setErr('');
@@ -317,7 +329,8 @@ export default function Login({ onLogin }) {
                       <input inputMode="numeric" placeholder="Mã OTP" value={code}
                              onChange={(e) => setCode(e.target.value)}
                              onKeyDown={(e) => e.key === 'Enter' && !busy && verifyOtp()} style={{ marginBottom: 10 }} />
-                      <button className="btn" style={{ width: '100%' }} disabled={busy} onClick={verifyOtp}>
+                      <button type="button" className="btn" style={{ width: '100%' }} disabled={busy}
+                              onPointerUp={verifyOtpOnPointerUp} onClick={verifyOtp}>
                         {busy ? 'Đang kiểm tra…' : 'Xác nhận'}
                       </button>
                       <button className="btn ghost" style={{ width: '100%', marginTop: 8 }}
