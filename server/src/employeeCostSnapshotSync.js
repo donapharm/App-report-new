@@ -407,6 +407,7 @@ function createEmployeeCostSnapshotSync(options = {}) {
             provenanceComplete: validation.provenanceComplete === true,
           },
           unavailableEmployees: validation.unavailableEmployees || [], staleEmployees: validation.staleEmployees || [],
+          provenanceFailures: Array.isArray(validation.provenanceFailures) ? validation.provenanceFailures : [],
         });
         throw error;
       })

@@ -1023,7 +1023,8 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
     });
     plans.set(periodPayload, rowPlans);
   }
-  const snapshots = await reconciliationShadow.loadScopes(scopes, shadowOptions);
+  const provenanceDiagnostics = new Map();
+  const snapshots = await reconciliationShadow.loadScopes(scopes, { ...shadowOptions, diagnostics: provenanceDiagnostics });
   // V4 may only consume the exact VP018-confirmed v3 version/checksum already
   // accepted for this scope. This avoids a second unpinned "latest" read and
   // lets the existing App Sale URL/key configuration remain unchanged.
@@ -1162,6 +1163,13 @@ async function applyReconciliationShadow(payload, empCode, options = {}) {
    * nghĩa "không dùng gói từ xa nào" — khác hẳn `undefined` là "không ai ghi lại", và
    * `isSealable` phân biệt đúng hai cảnh đó. */
   payload.remoteProvenance = [...new Set(laiLichRemote)].sort();
+  payload.remoteProvenanceFailures = [...provenanceDiagnostics]
+    .filter(([scopeKey]) => snapshots.get(scopeKey) == null)
+    .map(([scopeKey, reason]) => {
+      const [period, contractorCode] = scopeKey.split('\u001f');
+      return { scope: `${period}:${contractorCode}`, reason };
+    })
+    .sort((a, b) => a.scope.localeCompare(b.scope));
   return payload;
 }
 

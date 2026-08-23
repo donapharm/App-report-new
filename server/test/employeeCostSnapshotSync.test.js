@@ -434,6 +434,7 @@ test('background initial validation failure preserves 19/19 evidence and privacy
         validation: {
           identityValid: true, coverageValid: true, freshnessValid: false,
           reconciliationValid: true, provenancePresent: true, provenanceComplete: true,
+          provenanceFailures: [{ scope: '2026-07:03.TUE.N', reason: 'upstream_not_found' }],
           unavailableEmployees: [], staleEmployees: ['DN019'], privatePayload: 'must-not-leak',
         },
       });
@@ -449,6 +450,9 @@ test('background initial validation failure preserves 19/19 evidence and privacy
   assert.deepEqual(status.unavailableReasons, { DN019: 'stale_rates' });
   assert.equal(audits.at(-1).outcome, 'initial_rejected_validation');
   assert.equal(audits.at(-1).validation.freshnessValid, false);
+  assert.deepEqual(audits.at(-1).provenanceFailures, [
+    { scope: '2026-07:03.TUE.N', reason: 'upstream_not_found' },
+  ]);
   assert.doesNotMatch(JSON.stringify(audits.at(-1)), /private payload|must-not-leak|privatePayload/);
 });
 

@@ -107,7 +107,7 @@ test('real employee-cost path deduplicates each scope, projects exact matches an
    * nhúc nhích thì đây là thứ DUY NHẤT phát hiện ra. Loại khỏi phép so "không được sửa
    * số", rồi kiểm riêng ngay bên dưới — bỏ qua im lặng mới là nới lỏng. */
   const boSieuDuLieu = (payload) => JSON.parse(JSON.stringify(payload), (key, value) => (
-    key.startsWith('shadow') || key === 'remoteProvenance' ? undefined : value));
+    key.startsWith('shadow') || key === 'remoteProvenance' || key === 'remoteProvenanceFailures' ? undefined : value));
   assert.deepEqual(boSieuDuLieu(actual), boSieuDuLieu(baseline), 'connector cannot mutate costs, summaries, KPI or revenue');
   assert.ok(Array.isArray(actual.remoteProvenance),
     'phải GHI LẠI lai lịch gói từ xa — thiếu trường này thì `isSealable` fail-closed và không kỳ nào đóng dấu được');
@@ -180,4 +180,22 @@ test('scope loader deduplicates in-flight/cache entries and bounds independent u
   assert.ok(peak <= 2, `bounded concurrency exceeded: ${peak}`);
   await shadow.loadScopes(scopes, options);
   assert.equal(calls, 3, 'successful pinned snapshots are reused from bounded TTL cache');
+});
+
+test('missing upstream scope records only safe period, scope and allowlisted reason', async () => {
+  const shadow = require('../src/employeeCostReconciliationShadow');
+  shadow.resetCacheForTests();
+  const diagnostics = new Map();
+  const result = await shadow.loadScopes([{ period: '2026-07', contractorCode: '03.TUE.N' }], {
+    baseUrl: 'https://sale.invalid', key: 'secondary-credential-value', diagnostics,
+    fetchImpl: async () => ({ ok: false, status: 404, json: async () => ({ privatePayload: 'must-not-leak' }) }),
+    loadSnapshotImpl: async ({ fetchImpl }) => {
+      const response = await fetchImpl('https://sale.invalid/private');
+      if (!response.ok) throw new Error('private upstream body must not persist');
+      return null;
+    },
+  });
+  assert.equal(result.get('2026-07\u001f03.TUE.N'), null);
+  assert.deepEqual([...diagnostics], [['2026-07\u001f03.TUE.N', 'upstream_not_found']]);
+  assert.doesNotMatch(JSON.stringify([...diagnostics]), /private|must-not-leak|sale\.invalid/);
 });

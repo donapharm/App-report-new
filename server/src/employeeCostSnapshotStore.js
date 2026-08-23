@@ -73,6 +73,18 @@ function safeUnavailableReasons(value) {
   return Object.fromEntries(Object.entries(result).sort(([a], [b]) => a.localeCompare(b)));
 }
 
+const SAFE_PROVENANCE_FAILURE_REASONS = new Set(['not_configured', 'invalid_scope', 'upstream_not_found', 'upstream_unavailable', 'invalid_snapshot']);
+function safeProvenanceFailures(value) {
+  const result = new Map();
+  for (const item of Array.isArray(value) ? value : []) {
+    const scope = String(item?.scope || '').trim();
+    const reason = String(item?.reason || '').trim().toLowerCase();
+    if (!/^\d{4}-(0[1-9]|1[0-2]):[^:\r\n]{1,80}$/.test(scope) || !SAFE_PROVENANCE_FAILURE_REASONS.has(reason)) continue;
+    result.set(`${scope}\u001f${reason}`, { scope, reason });
+  }
+  return [...result.values()].sort((a, b) => a.scope.localeCompare(b.scope));
+}
+
 function sealModelMatchesRoster(model, period, roster) {
   if (!model || model.allEmployees !== true || model.from !== period || model.to !== period) return false;
   let modelRoster;
@@ -118,10 +130,11 @@ function closedRepairModelValidation(model, period, roster) {
   const provenancePresent = Array.isArray(model?.remoteProvenance) && model.remoteProvenance.length > 0;
   const provenanceComplete = provenancePresent
     && !model.remoteProvenance.some((item) => String(item).endsWith(':THIEU'));
+  const provenanceFailures = safeProvenanceFailures(model?.remoteProvenanceFailures);
   return {
     valid: identityValid && coverageValid && freshnessValid && reconciliationValid && provenanceComplete,
     identityValid, coverageValid, freshnessValid, reconciliationValid,
-    provenancePresent, provenanceComplete, unavailableEmployees, staleEmployees,
+    provenancePresent, provenanceComplete, provenanceFailures, unavailableEmployees, staleEmployees,
   };
 }
 

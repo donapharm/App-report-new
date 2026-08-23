@@ -148,12 +148,29 @@ function configOf(options = {}) {
 function configured(config) {
   return !!config.baseUrl && config.key.length >= 16 && typeof config.loadSnapshotImpl === 'function';
 }
+const SAFE_FAILURE_REASONS = new Set(['not_configured', 'invalid_scope', 'upstream_not_found', 'upstream_unavailable', 'invalid_snapshot']);
+function safeFailureReason(value, fallback = 'upstream_unavailable') {
+  const reason = clean(value).toLowerCase();
+  return SAFE_FAILURE_REASONS.has(reason) ? reason : fallback;
+}
+function recordFailure(options, period, contractorCode, reason) {
+  if (!(options?.diagnostics instanceof Map) || !period || !contractorCode) return;
+  options.diagnostics.set(`${period}\u001f${contractorCode}`, safeFailureReason(reason));
+}
 async function loadScope(scope, options = {}) {
   const config = configOf(options);
-  if (!configured(config)) return null;
+  const rawPeriod = clean(scope?.period);
+  const rawContractorCode = normalizeContractorCode(scope?.contractorCode);
+  if (!configured(config)) {
+    recordFailure(options, rawPeriod, rawContractorCode, 'not_configured');
+    return null;
+  }
   const contractorCode = normalizeContractorCode(scope?.contractorCode);
   const period = clean(scope?.period);
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period) || !contractorCode) return null;
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period) || !contractorCode) {
+    recordFailure(options, period, contractorCode, 'invalid_scope');
+    return null;
+  }
   const credentialPin = crypto.createHash('sha256').update(config.key).digest('hex').slice(0, 16);
   const cacheKey = `${config.baseUrl}\u001f${credentialPin}\u001f${period}\u001f${contractorCode}`;
   const now = Date.now();
@@ -164,21 +181,43 @@ async function loadScope(scope, options = {}) {
    * trong bộ nhớ rồi tự gật "vẫn khớp". Nó tự xác nhận chính mình.
    * `boQuaBoNho` chỉ bật ở đường soi dấu; đường dựng bình thường vẫn xài bộ nhớ. */
   const cached = options.boQuaBoNho ? null : snapshotCache.get(cacheKey);
-  if (cached?.expiresAt > now) return cached.snapshot;
+  if (cached?.expiresAt > now) {
+    if (!cached.snapshot) recordFailure(options, period, contractorCode, cached.reason);
+    return cached.snapshot;
+  }
   if (!options.boQuaBoNho && inFlight.has(cacheKey)) return inFlight.get(cacheKey);
   const pending = (async () => {
     await acquire(config.concurrency);
+    let observedReason = '';
     try {
+      const fetchImpl = config.fetchImpl || globalThis.fetch;
+      const observedFetch = typeof fetchImpl === 'function' ? async (...args) => {
+        try {
+          const response = await fetchImpl(...args);
+          if (response?.status === 404) observedReason = 'upstream_not_found';
+          else if (response && response.ok === false) observedReason = 'upstream_unavailable';
+          return response;
+        } catch (error) {
+          observedReason = 'upstream_unavailable';
+          throw error;
+        }
+      } : undefined;
       const snapshot = await config.loadSnapshotImpl({
         period, contractorCode, baseUrl: config.baseUrl, key: config.key,
-        timeoutMs: config.timeoutMs, ...(config.fetchImpl ? { fetchImpl: config.fetchImpl } : {}),
+        timeoutMs: config.timeoutMs, ...(observedFetch ? { fetchImpl: observedFetch } : {}),
       });
-      if (!validEnvelope(snapshot, { period, contractorCode })) throw new Error('invalid reconciliation snapshot');
+      if (!validEnvelope(snapshot, { period, contractorCode })) {
+        observedReason = 'invalid_snapshot';
+        throw new Error('invalid reconciliation snapshot');
+      }
       snapshotCache.set(cacheKey, { snapshot, expiresAt: Date.now() + config.cacheTtlMs });
       pruneCache(config.cacheMax, Date.now());
       return snapshot;
-    } catch {
-      snapshotCache.set(cacheKey, { snapshot: null, expiresAt: Date.now() + config.errorTtlMs });
+    } catch (error) {
+      const code = clean(error?.code).toLowerCase();
+      const reason = safeFailureReason(observedReason || (code.includes('not_found') ? 'upstream_not_found' : 'upstream_unavailable'));
+      snapshotCache.set(cacheKey, { snapshot: null, reason, expiresAt: Date.now() + config.errorTtlMs });
+      recordFailure(options, period, contractorCode, reason);
       return null;
     } finally { release(); }
   })();

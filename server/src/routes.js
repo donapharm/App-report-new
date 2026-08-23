@@ -1886,6 +1886,13 @@ async function employeeCostAllPayload(req, {
     merged.remoteProvenance = reports.every((item) => Array.isArray(item?.remoteProvenance))
       ? [...new Set(reports.flatMap((item) => item.remoteProvenance))].sort()
       : undefined;
+    // Safe diagnostics only: scope and allowlisted reason, never response bodies,
+    // credentials, checksums or financial values.
+    merged.remoteProvenanceFailures = reports.every((item) => Array.isArray(item?.remoteProvenanceFailures))
+      ? [...new Map(reports.flatMap((item) => item.remoteProvenanceFailures)
+        .map((item) => [`${item?.scope || ''}\u001f${item?.reason || ''}`, item])).values()]
+        .sort((a, b) => String(a.scope).localeCompare(String(b.scope)))
+      : [];
     // T07 uses a locked snapshot + C32 sidecar, not a finalized package. Preserve
     // DataHub's five declarations verbatim and independently compare the declared
     // sidecar row count with the raw rows App Report actually received. A missing,
