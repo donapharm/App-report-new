@@ -16,6 +16,7 @@ const cstSequence = require('./cstSequence');
 const smart = require('./smart');
 const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
+const debtsShadowService = require('./debtsShadowService');
 const dailySales = require('./dailySales');
 const dailySalesOrders = require('./dailySalesOrders');
 const reconcile = require('./reconcile');
@@ -3963,6 +3964,17 @@ router.post('/admin/revenue-refresh/run', auth.requireAuth, auth.requireAdmin, a
     res.status(500).json({ error: String(e?.message || e) });
   }
 });
+
+// Debts replaces only the CRM/MISA leg after a separate acceptance and selector
+// approval. This endpoint is CEO-only shadow preview: it never mutates the live
+// revenue slots and the module's receipt keeps selectorChanged=false.
+router.post('/admin/debts-shadow/preview', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  const period = String(req.body?.period || '').trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+    return res.status(400).json({ error: 'Kỳ không hợp lệ.', code: 'DEBTS_PERIOD_INVALID' });
+  }
+  return res.json(await debtsShadowService.preview({ period }));
+}));
 
 // Đối soát toàn vẹn dữ liệu doanh thu 1 kỳ (bắt lỗi ngày ngoài biên, đếm trùng, đơn vị NV biến mất).
 router.get('/admin/reconcile', auth.requireAuth, auth.requireAdmin, (req, res) => {
