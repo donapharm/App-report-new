@@ -1,3 +1,8 @@
+### 2026-08-23 — Nút tạo T07 nhận thao tác chạm ổn định
+
+- Nút tạo generation T07 nhận trực tiếp `pointerup` cho touch/pen, giữ click cho chuột/bàn phím và chống gửi đôi từ synthetic click.
+- Không thay đổi endpoint, quyền CEO/OTP, dữ liệu T07 hay logic dựng/publish generation.
+
 ### 2026-08-22 — Tách hợp đồng điều khiển generation T07 khỏi cờ phục vụ snapshot
 
 - Endpoint status trả `controlEnabled` độc lập; `enabled` tiếp tục chỉ mang đúng nghĩa đường phục vụ dữ liệu snapshot đang bật hay tắt.

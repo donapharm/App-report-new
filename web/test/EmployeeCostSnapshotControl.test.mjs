@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { EmployeeCostSnapshotControl, INITIAL_T07_BUTTON_LABEL } from '../src/employeeCostSnapshotControl.js';
+import {
+  EmployeeCostSnapshotControl,
+  INITIAL_T07_BUTTON_LABEL,
+  snapshotActivationDecision,
+} from '../src/employeeCostSnapshotControl.js';
 
 const initialStatus = {
   state: 'failed', syncing: false, complete: false, locked: false,
@@ -35,4 +39,16 @@ test('regular enabled snapshot control keeps its prior labels and guards', () =>
   assert.match(render({ period: '2026-08', periodLabel: '08/2026', status: regular }), />Đồng bộ lại<\/button>/);
   assert.equal(render({ view: 'gaps', status: regular }), '');
   assert.equal(render({ admin: false, status: regular }), '');
+});
+
+test('touch activation fires on pointerup and suppresses its synthetic click', () => {
+  const touch = snapshotActivationDecision(0, 'pointerup', 'touch', 1_000);
+  assert.deepEqual(touch, { activate: true, lastPointerAt: 1_000 });
+  assert.equal(snapshotActivationDecision(touch.lastPointerAt, 'click', '', 1_100).activate, false);
+  assert.equal(snapshotActivationDecision(touch.lastPointerAt, 'click', '', 1_900).activate, true);
+});
+
+test('mouse and keyboard retain the normal click path', () => {
+  assert.equal(snapshotActivationDecision(0, 'pointerup', 'mouse', 1_000).activate, false);
+  assert.equal(snapshotActivationDecision(0, 'click', '', 1_000).activate, true);
 });
