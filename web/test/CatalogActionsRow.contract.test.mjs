@@ -22,17 +22,31 @@ test('catalog action cards live inside one actions row', () => {
   assert.match(inside, /CostColumnGrantsPanel/);
 });
 
-test('open panels escape the grid to full width', () => {
-  assert.match(catalog, /catalog-rates-panel\$\{open \? ' is-open' : ''\}/);
-  assert.match(catalog, /catalog-grants\$\{open \? ' is-open' : ''\}/);
-  assert.match(styles, /\.catalog-actions-row \{ display:grid; grid-template-columns:repeat\(3, minmax\(0, 1fr\)\)/);
-  assert.match(styles, /\.catalog-actions-row > \.card\.is-open \{ grid-column:1 \/ -1; \}/);
+// CEO 23/08 15:53: lưới 3 cột làm thẻ thứ TƯ rơi xuống một mình. Số thẻ đổi theo
+// quyền nên mọi lưới cố định đều có lúc thừa ô rỗng — hợp đồng nay là chia đều.
+test('every action card shares one row whatever the card count', () => {
+  assert.match(styles, /\.catalog-actions-row \{ display:flex; flex-wrap:wrap; gap:10px; align-items:stretch; \}/);
+  assert.match(styles, /\.catalog-actions-row > \.card \{ flex:1 1 200px; min-width:0; margin:0; \}/);
+  assert.doesNotMatch(styles, /\.catalog-actions-row \{ display:grid/);
 });
 
-test('desktop-only grid keeps mobile as a single column', () => {
+test('open panels take the whole row, native details included', () => {
+  assert.match(catalog, /catalog-rates-panel\$\{open \? ' is-open' : ''\}/);
+  assert.match(catalog, /catalog-grants\$\{open \? ' is-open' : ''\}/);
+  assert.match(styles, /\.catalog-actions-row > details\.card\[open\] \{ flex-basis:100%; \}/);
+});
+
+test('buttons line up along the bottom edge instead of floating at each card height', () => {
+  assert.match(styles, /\.catalog-grants-head > \.btn \{ margin-top:auto; \}/);
+  assert.match(styles, /\.catalog-sync-card > \.catalog-sync-actions \{ margin-top:auto; \}/);
+  // Thẻ 52 cột lúc đóng chỉ có một dòng summary — canh giữa cho khỏi rỗng hoác.
+  assert.match(styles, /details\.card:not\(\[open\]\) \{ display:flex; flex-direction:column; justify-content:center; \}/);
+});
+
+test('desktop-only layout keeps mobile as a single column', () => {
   const media = styles.indexOf('.catalog-actions-row');
   const block = styles.lastIndexOf('@media (min-width: 900px)', media);
-  assert.ok(block !== -1 && media - block < 400, 'actions row grid must sit inside the desktop media query');
+  assert.ok(block !== -1 && media - block < 1400, 'actions row layout must sit inside the desktop media query');
 });
 
 test('long explanations moved into the usage guide, headers stay one line', () => {

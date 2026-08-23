@@ -1,3 +1,23 @@
+### 2026-08-23 — Bốn thẻ hành động Danh mục quản lý xếp đủ một hàng, chân nút thẳng
+
+**Việc đã làm.** `web/src/styles.css`: `.catalog-actions-row` đổi từ lưới `repeat(3, 1fr)` sang
+flex `flex:1 1 200px` + `flex-wrap`. Thẻ đang mở (`.is-open`) và `details.card[open]` chiếm trọn
+hàng. Thẻ đóng thành cột dọc để `margin-top:auto` đẩy `.catalog-grants-head > .btn` và
+`.catalog-sync-actions` xuống đáy; thẻ 52 cột lúc đóng canh giữa chiều cao cho khỏi rỗng hoác.
+
+**Lý do.** CEO 23/08 15:53: lưới 3 cột làm thẻ thứ TƯ ("Phân quyền cột % chi phí") rơi xuống đứng
+một mình, chừa khoảng trống toác bên phải. Số thẻ thay đổi theo quyền (CEO thấy 4, người khác thấy
+ít hơn) nên mọi lưới cố định — `repeat(3)` hay `repeat(4)` — đều có lúc thừa ô rỗng; flex chia đều
+đúng bề ngang đang có nên không bao giờ hụt.
+
+**Kiểm bằng mắt.** Dựng lại đúng markup 4 thẻ, nạp `styles.css` thật, chụp bằng Chromium ở 1920 ·
+1280 · 1000 px: cả ba đều đủ 4 thẻ một hàng, cao bằng nhau, chân nút cùng một đường. Lần chụp đầu
+lộ ra nút thẻ 1 thấp hơn 15px vì `.card` vẫn là `display:block` nên `flex:1` bên trong không ăn —
+sửa rồi chụp lại mới thẳng.
+
+**Test.** `web/test/CatalogActionsRow.contract.test.mjs` cập nhật + 2 test mới (chia đều bất kể số
+thẻ · chân nút thẳng hàng). Web 529/529 PASS, build PASS.
+
 ### 2026-08-23 — Màn đăng nhập tự tích ô ép OTP; sửa chẩn đoán sai về cầu bỏ qua OTP
 
 **Việc đã làm.** `EmployeeCost.jsx`: khi route resync trả 403 `..._HUMAN_OTP_REQUIRED`, ghi cờ
