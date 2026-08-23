@@ -39,6 +39,58 @@ test('normalizes period/employee and rejects traversal', () => {
   for (const value of ['../DN001', 'DN 001', '']) assert.throws(() => store.normalizeEmployee(value));
 });
 
+test('closed repair validation separates identity, coverage, freshness, reconciliation and provenance', () => {
+  const { store } = fresh();
+  const healthy = {
+    ...sealedModel(),
+    remoteProvenance: ['scope:rc=abc:OK'],
+  };
+  assert.deepEqual(store.closedRepairModelValidation(healthy, PERIOD, ROSTER), {
+    valid: true,
+    identityValid: true,
+    coverageValid: true,
+    freshnessValid: true,
+    reconciliationValid: true,
+    provenancePresent: true,
+    provenanceComplete: true,
+    unavailableEmployees: [],
+    staleEmployees: [],
+  });
+
+  const degraded = {
+    ...healthy,
+    periods: [{
+      ...healthy.periods[0],
+      match: {
+        unavailableEmployeeCount: 1, unavailableEmployees: ['dn002'],
+        staleEmployeeCount: 1, staleEmployees: ['dn001'],
+      },
+    }],
+    revenueRecon: { unavailable: true, balanced: false },
+    remoteProvenance: [],
+  };
+  const result = store.closedRepairModelValidation(degraded, PERIOD, ROSTER);
+  assert.equal(result.valid, false);
+  assert.equal(result.identityValid, true);
+  assert.equal(result.coverageValid, false);
+  assert.equal(result.freshnessValid, false);
+  assert.equal(result.reconciliationValid, false);
+  assert.equal(result.provenancePresent, false);
+  assert.deepEqual(result.unavailableEmployees, ['DN002']);
+  assert.deepEqual(result.staleEmployees, ['DN001']);
+});
+
+test('closed repair validation reports roster identity separately from source health', () => {
+  const { store } = fresh();
+  const healthy = { ...sealedModel(), remoteProvenance: ['scope:rc=abc:OK'] };
+  const result = store.closedRepairModelValidation(healthy, PERIOD, [ROSTER[0]]);
+  assert.equal(result.identityValid, false);
+  assert.equal(result.coverageValid, true);
+  assert.equal(result.freshnessValid, true);
+  assert.equal(result.reconciliationValid, true);
+  assert.equal(result.provenanceComplete, true);
+});
+
 test('two raw bodies are byte-identical and repeated model digests stay stable', () => {
   const { store } = fresh();
   store.publishGeneration(PERIOD, { roster: ROSTER, employees: employees(), model: model() });

@@ -393,7 +393,7 @@ function closedInitialSetup(t, overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'emp-cost-closed-initial-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const store = createEmployeeCostSnapshotStore({ root });
-  const roster = ['DN001', 'DN002'];
+  const roster = overrides.roster || ['DN001', 'DN002'];
   const sync = createEmployeeCostSnapshotSync({
     store, concurrency: 1, rosterProvider: async () => roster,
     isLocked: overrides.isLocked || (() => true),
@@ -418,6 +418,38 @@ test('closed T07 without current creates exactly one complete initial generation
   assert.equal(audits.at(-1).outcome, 'initial_published');
   assert.equal(audits.at(-1).source, 'network');
   assert.match(audits.at(-1).checksum, /^[a-f0-9]{64}$/);
+});
+
+test('background initial validation failure preserves 19/19 evidence and privacy-safe cause', async (t) => {
+  const audits = [];
+  const roster = Array.from({ length: 19 }, (_, index) => `DN${String(index + 1).padStart(3, '0')}`);
+  const ctx = closedInitialSetup(t, {
+    roster,
+    auditClosedRepair: (entry) => audits.push(entry),
+    buildModel: async () => sealedModel('2026-07', roster),
+    validateClosedRepair: async () => {
+      throw Object.assign(new Error('private payload must not persist'), {
+        code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_STALE_INVALID',
+        statusEvidence: { rosterCount: 19, availableCount: 19 },
+        validation: {
+          identityValid: true, coverageValid: true, freshnessValid: false,
+          reconciliationValid: true, provenancePresent: true, provenanceComplete: true,
+          unavailableEmployees: [], staleEmployees: ['DN019'], privatePayload: 'must-not-leak',
+        },
+      });
+    },
+  });
+  ctx.sync.requestInitialClosedGeneration('2026-07', { actor: 'CEO' });
+  await assert.rejects(ctx.sync.inFlight.get('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_STALE_INVALID' });
+  const status = ctx.store.readStatus('2026-07');
+  assert.equal(status.state, 'failed');
+  assert.equal(status.rosterCount, 19);
+  assert.equal(status.availableCount, 19);
+  assert.equal(status.errorCode, 'EMPLOYEE_COST_SNAPSHOT_MODEL_STALE_INVALID');
+  assert.deepEqual(status.unavailableReasons, { DN019: 'stale_rates' });
+  assert.equal(audits.at(-1).outcome, 'initial_rejected_validation');
+  assert.equal(audits.at(-1).validation.freshnessValid, false);
+  assert.doesNotMatch(JSON.stringify(audits.at(-1)), /private payload|must-not-leak|privatePayload/);
 });
 
 test('closed initial rejects when current already exists', async (t) => {

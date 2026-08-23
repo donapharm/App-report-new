@@ -89,6 +89,42 @@ function sealModelMatchesRoster(model, period, roster) {
     && !model.remoteProvenance.some((item) => String(item).endsWith(':THIEU'));
 }
 
+function closedRepairModelValidation(model, period, roster) {
+  const normalizedPeriod = normalizePeriod(period);
+  const normalizedRoster = normalizeRoster(roster);
+  let modelRoster = [];
+  try { modelRoster = normalizeRoster(model?.employees); } catch { /* reported below */ }
+  const periods = Array.isArray(model?.periods) ? model.periods : [];
+  const unavailableEmployees = [...new Set(periods.flatMap((item) => (
+    Array.isArray(item?.match?.unavailableEmployees) ? item.match.unavailableEmployees : []
+  )).map((item) => {
+    try { return normalizeEmployee(item); } catch { return ''; }
+  }).filter(Boolean))].sort();
+  const staleEmployees = [...new Set(periods.flatMap((item) => (
+    Array.isArray(item?.match?.staleEmployees) ? item.match.staleEmployees : []
+  )).map((item) => {
+    try { return normalizeEmployee(item); } catch { return ''; }
+  }).filter(Boolean))].sort();
+  const identityValid = !!model && model.allEmployees === true
+    && model.from === normalizedPeriod && model.to === normalizedPeriod
+    && canonicalJson(modelRoster) === canonicalJson(normalizedRoster);
+  const coverageValid = periods.length > 0 && periods.every((item) => item?.period === normalizedPeriod
+    && Number(item?.match?.unavailableEmployeeCount || 0) === 0
+    && (!Array.isArray(item?.match?.unavailableEmployees) || item.match.unavailableEmployees.length === 0));
+  const freshnessValid = periods.length > 0 && periods.every((item) => Number(item?.match?.staleEmployeeCount || 0) === 0
+    && (!Array.isArray(item?.match?.staleEmployees) || item.match.staleEmployees.length === 0));
+  const reconciliationValid = !!model?.revenueRecon
+    && model.revenueRecon.unavailable !== true && model.revenueRecon.balanced === true;
+  const provenancePresent = Array.isArray(model?.remoteProvenance) && model.remoteProvenance.length > 0;
+  const provenanceComplete = provenancePresent
+    && !model.remoteProvenance.some((item) => String(item).endsWith(':THIEU'));
+  return {
+    valid: identityValid && coverageValid && freshnessValid && reconciliationValid && provenanceComplete,
+    identityValid, coverageValid, freshnessValid, reconciliationValid,
+    provenancePresent, provenanceComplete, unavailableEmployees, staleEmployees,
+  };
+}
+
 function tupleOf(record = {}) {
   return [
     String(record.fetchedAt || ''),
@@ -487,7 +523,7 @@ function createEmployeeCostSnapshotStore(options = {}) {
   return {
     root, normalizePeriod, normalizeEmployee, normalizeRoster, rosterIdentity, canonicalJson, sha256,
     compareTuple, safeReason, safeUnavailableReasons, acquireLock, withPeriodLock, isPeriodBusy,
-    readStatus, writeStatus, readCurrent, tryReadCurrent, publishGeneration, publishClosedRepairGeneration, publishInitialClosedGeneration, closedRepairModelMatchesRoster,
+    readStatus, writeStatus, readCurrent, tryReadCurrent, publishGeneration, publishClosedRepairGeneration, publishInitialClosedGeneration, closedRepairModelMatchesRoster, closedRepairModelValidation,
     capturePublicationState, restorePublicationState, docSnapshot, trangThaiDongBo,
     _test: { envelope, validateEnvelope, atomicWrite, currentFile, statusFile, periodDir },
   };

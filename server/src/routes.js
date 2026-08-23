@@ -1165,11 +1165,39 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
   isLocked: (period) => employeeCost.isPeriodClosed(period),
   lockedSnapshotProvider: employeeCostLockedSnapshotProvider,
   validateClosedRepair: async ({ period, roster, employees, model }) => {
-    if (period !== '2026-07' || roster.length !== 19 || employees.size !== 19
-      || !employeeCostSnapshotStore.closedRepairModelMatchesRoster(model, period, roster)) {
-      throw Object.assign(new Error('Generation tiền chưa chứng minh đủ đội hình và phép cân.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_VALIDATION_FAILED' });
+    const statusEvidence = { rosterCount: roster.length, availableCount: employees.size };
+    if (period !== '2026-07' || roster.length !== 19 || employees.size !== 19) {
+      throw Object.assign(new Error('Generation tiền chưa đủ đúng 19 nhân viên.'), {
+        code: 'EMPLOYEE_COST_SNAPSHOT_ROSTER_COUNT_INVALID', statusEvidence,
+      });
+    }
+    const validation = employeeCostSnapshotStore.closedRepairModelValidation(model, period, roster);
+    if (!validation.identityValid) {
+      throw Object.assign(new Error('Generation tiền không khớp căn cước đội hình/kỳ.'), {
+        code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_IDENTITY_INVALID', statusEvidence, validation,
+      });
+    }
+    if (!validation.coverageValid) {
+      throw Object.assign(new Error('Generation tiền còn nhân viên thiếu nguồn.'), {
+        code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_COVERAGE_INVALID', statusEvidence, validation,
+      });
+    }
+    if (!validation.freshnessValid) {
+      throw Object.assign(new Error('Generation tiền còn nhân viên dùng tỷ lệ cũ.'), {
+        code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_STALE_INVALID', statusEvidence, validation,
+      });
+    }
+    if (!validation.reconciliationValid) {
+      throw Object.assign(new Error('Generation tiền chưa cân được doanh thu toàn đội.'), {
+        code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_RECON_INVALID', statusEvidence, validation,
+      });
     }
     const expectedRateChecksum = '615981e92ef1576fce54de8ae12e14140181d38c44d9839d7e363b68d35e356c';
+    if (!validation.provenanceComplete) {
+      throw Object.assign(new Error('Generation tiền thiếu lai lịch nguồn từ xa.'), {
+        code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PROVENANCE_INVALID', statusEvidence, validation,
+      });
+    }
     for (const record of employees.values()) {
       const provenance = record?.report?.remoteProvenance;
       if (!Array.isArray(provenance) || !provenance.length

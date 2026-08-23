@@ -384,7 +384,30 @@ function createEmployeeCostSnapshotSync(options = {}) {
     auditClosedRepair({ outcome: 'initial_requested', actor: initialOptions.actor || '', period, source: 'network', beforeCount: 0, afterCount: 0 });
     const promise = createInitialClosedGeneration(period, initialOptions)
       .catch((error) => {
-        store.writeStatus(period, { ...store.readStatus(period), state: 'failed', finishedAt: iso(now()), errorCode: String(error.code || 'EMPLOYEE_COST_SNAPSHOT_INITIAL_FAILED') });
+        const evidence = error?.statusEvidence || {};
+        const validation = error?.validation || {};
+        const unavailableReasons = {};
+        for (const code of validation.unavailableEmployees || []) unavailableReasons[code] = 'upstream_unavailable';
+        for (const code of validation.staleEmployees || []) unavailableReasons[code] = 'stale_rates';
+        store.writeStatus(period, {
+          ...store.readStatus(period), state: 'failed', finishedAt: iso(now()),
+          rosterCount: Number(evidence.rosterCount || 0), availableCount: Number(evidence.availableCount || 0),
+          unavailableReasons, errorCode: String(error.code || 'EMPLOYEE_COST_SNAPSHOT_INITIAL_FAILED'),
+        });
+        auditClosedRepair({
+          outcome: 'initial_rejected_validation', actor: initialOptions.actor || '', period, source: 'network',
+          beforeCount: 0, afterCount: Number(evidence.availableCount || 0),
+          rosterCount: Number(evidence.rosterCount || 0), errorCode: String(error.code || 'EMPLOYEE_COST_SNAPSHOT_INITIAL_FAILED'),
+          validation: {
+            identityValid: validation.identityValid === true,
+            coverageValid: validation.coverageValid === true,
+            freshnessValid: validation.freshnessValid === true,
+            reconciliationValid: validation.reconciliationValid === true,
+            provenancePresent: validation.provenancePresent === true,
+            provenanceComplete: validation.provenanceComplete === true,
+          },
+          unavailableEmployees: validation.unavailableEmployees || [], staleEmployees: validation.staleEmployees || [],
+        });
         throw error;
       })
       .finally(() => { if (inFlight.get(period) === promise) inFlight.delete(period); });
