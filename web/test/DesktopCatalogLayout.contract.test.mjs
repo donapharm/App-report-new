@@ -31,9 +31,11 @@ test('both catalog views paginate at no more than 50 rows', () => {
 
 test('wide catalog tables scroll horizontally instead of clipping cost columns', () => {
   const wide = styles.match(/@media \(min-width:1500px\) \{([\s\S]*?)\n\}/)?.[1] || '';
-  assert.match(wide, /\.catalog-table-card \.table-scroll \{[^}]*max-width:100%;[^}]*overflow-x:auto;[^}]*overflow-y:hidden;[^}]*\}/);
+  // 23/08: overflow-y đổi hidden -> auto + max-height để tiêu đề bảng ghim được
+  // khi cuộn (CEO 19:46). Kéo ngang giữ nguyên, cấm clip cột vẫn giữ nguyên.
+  assert.match(wide, /\.catalog-table-card \.table-scroll \{[^}]*max-width:100%;[^}]*overflow-x:auto;[^}]*overflow-y:auto;[^}]*max-height:calc\(100vh - 150px\);[^}]*\}/);
   assert.match(wide, /scrollbar-gutter:stable/);
   assert.match(wide, /\.catalog-table-card \.table-scroll::\-webkit-scrollbar \{ height:12px; \}/);
-  assert.match(wide, /\.catalog-table-products thead th \{ position:static; \}/);
+  assert.match(wide, /\.catalog-table-products thead th \{ position:sticky; top:0; \}/);
   assert.doesNotMatch(wide, /overflow-x:clip/);
 });

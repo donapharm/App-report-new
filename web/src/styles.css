@@ -1593,10 +1593,13 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 .catalog-table-products thead th + th { border-left:1px solid rgba(255,255,255,.18); }
 .catalog-table-products td { overflow:hidden; }
 .catalog-table-card { position:relative; overflow:visible; }
-/* Laptop hẹp cuộn riêng trong bảng, không kéo ngang toàn trang. */
+/* Laptop hẹp cuộn riêng trong bảng, không kéo ngang toàn trang.
+   CEO 23/08 19:46: cuộn xuống là MẤT hàng tiêu đề bảng. Sticky từng bị tắt
+   (position:static) vì khung overflow-y:hidden nuốt sticky. Nay khung tự cuộn
+   DỌC bên trong (max-height theo màn) nên tiêu đề ghim thật ở mép trên khung. */
 @media (min-width:900px) and (max-width:1279px) {
-  .catalog-table-card .table-scroll { max-width:100%; overflow-x:auto; overflow-y:hidden; }
-  .catalog-table-products thead th { position:static; }
+  .catalog-table-card .table-scroll { max-width:100%; overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 150px); }
+  .catalog-table-products thead th { position:sticky; top:0; }
 }
 /* Laptop 1280–1499: TRƯỚC ĐÂY ép cả bảng vừa 100% màn bằng % bề rộng cho đúng 13
    cột. Từ khi có cột % chi phí (tới ~19 cột) thì ép như vậy là bóp dẹp các cột cuối
@@ -1604,13 +1607,13 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
    nhìn chữ chồng lên nhau. Chỉ thu nhỏ chữ/đệm cho vừa mắt. */
 @media (min-width:1280px) and (max-width:1499px) {
   .catalog-table-card .table-scroll {
-    max-width:100%; overflow-x:auto; overflow-y:hidden;
+    max-width:100%; overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 150px);
     scrollbar-gutter:stable; scrollbar-width:auto; scrollbar-color:#94a3b8 #eef2f7;
   }
   .catalog-table-card .table-scroll::-webkit-scrollbar { height:12px; }
   .catalog-table-card .table-scroll::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
   .catalog-table-card .table-scroll::-webkit-scrollbar-thumb { background:#94a3b8; border:2px solid #eef2f7; border-radius:999px; }
-  .catalog-table-products thead th { position:static; }
+  .catalog-table-products thead th { position:sticky; top:0; }
   .catalog-table-simple th, .catalog-table-simple td { padding-left:5px; padding-right:5px; font-size:11.5px; }
   .catalog-table-products .catalog-drug-name { min-width:170px; max-width:260px; }
 }
@@ -1618,13 +1621,13 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
    thanh kéo ngang trong bảng, CẤM overflow clip cắt cụt cột lặng lẽ. */
 @media (min-width:1500px) {
   .catalog-table-card .table-scroll {
-    max-width:100%; overflow-x:auto; overflow-y:hidden;
+    max-width:100%; overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 150px);
     scrollbar-gutter:stable; scrollbar-width:auto; scrollbar-color:#94a3b8 #eef2f7;
   }
   .catalog-table-card .table-scroll::-webkit-scrollbar { height:12px; }
   .catalog-table-card .table-scroll::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
   .catalog-table-card .table-scroll::-webkit-scrollbar-thumb { background:#94a3b8; border:2px solid #eef2f7; border-radius:999px; }
-  .catalog-table-products thead th { position:static; }
+  .catalog-table-products thead th { position:sticky; top:0; }
 }
 .catalog-pager { padding:6px 8px; border:0; background:transparent; }
 .catalog-pager.is-top {
@@ -2119,6 +2122,31 @@ select, input { font-family: inherit; font-size: 14px; padding: 9px 11px; border
 }
 .employee-cost-filters .btn { min-height:38px; }
 .employee-cost-filters small { flex-basis:100%; color:#a33; text-align:right; }
+/* Nén đầu trang Chi phí (CEO 23/08 19:42: vùng đầu chiếm quá nửa màn, "tiết kiệm
+   không gian cho phần hiển thị phía dưới"). Desktop gom bộ lọc về ÍT hàng nhất:
+   nhãn "Nhân viên" nằm ngang cạnh ô chọn thay vì chồng lên; dải "số chốt bản ghim"
+   thành thanh mỏng; thẻ bản-chi-phí-trên-máy xếp NGANG — chữ trái, nút phải.
+   Mobile giữ nguyên bố cục dọc. */
+@media (min-width: 900px) {
+  .employee-cost-heading { align-items:center; }
+  /* Mô tả dài chiếm ngang làm bộ lọc phải rơi xuống 3 hàng. Ghim bề rộng khối
+     tiêu đề để cụm chọn NV + kỳ + xuất dồn được lên ít hàng hơn. */
+  .employee-cost-heading > div:first-child { max-width:400px; flex-shrink:0; }
+  .employee-cost-filters { row-gap:6px; }
+  /* flex-basis:100% (mobile) bắt hàng chip kỳ chiếm nguyên một dòng; desktop cho
+     nó đứng chung dòng với ô chọn nhân viên. */
+  .employee-cost-month-quick { flex-basis:auto; }
+  .employee-cost-filters label:first-child { min-width:0; display:flex; align-items:center; gap:7px; }
+  .employee-cost-filters label:first-child span { margin-bottom:0; white-space:nowrap; }
+  .employee-cost-filters label:first-child select { width:auto; min-width:190px; }
+  .employee-cost-pinned-notice { padding:5px 12px; font-size:12px; color:var(--muted); }
+  .employee-cost-snapshot-status { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+  .employee-cost-snapshot-status > div { flex:1; min-width:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 12px; }
+  .employee-cost-snapshot-status > div .section-head { margin:0; white-space:nowrap; }
+  .employee-cost-snapshot-status > div p { margin:0; font-size:12px; color:var(--muted); }
+  .employee-cost-snapshot-status > div small { flex-basis:100%; }
+  .employee-cost-snapshot-status > .btn { flex-shrink:0; }
+}
 .page-desktop .employee-cost-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); }
 .employee-cost-tone-point { border-color:#4338ca; background:linear-gradient(135deg,#4338ca,#4f46e5); }
 .employee-cost-tone-point .value { color:#fff; }
