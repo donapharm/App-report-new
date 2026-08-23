@@ -71,6 +71,8 @@ test('sync probes exact authoritative evidence once before enrichment', () => {
   assert.doesNotMatch(rawCall, /pinnedClosedPayload|rateSnapshot|backgroundRefresh|ok_stale_rates/);
   assert.match(source, /employeeCost\.verifiedPrefetchEvidence\(raw, empCode/);
   assert.match(source, /prefetchedCostResult: evidence/);
+  assert.match(adapter, /const sourceOutcome = raw\?\.outcome \|\| 'ok'/);
+  assert.match(adapter, /report: \{ \.\.\.report, sourceOutcome \}/);
   assert.match(source, /fetchEmployee: \(empCode, options\) => fetchAuthoritativeEmployeeCost\(empCode, options\)/);
   assert.match(source, /probeEmployee: \(empCode, options\) => fetchAuthoritativeEmployeeCost\(empCode/);
 });

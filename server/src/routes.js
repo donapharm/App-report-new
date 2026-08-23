@@ -1138,8 +1138,16 @@ async function fetchAuthoritativeEmployeeCost(empCode, { period, roster, buildRe
     includeSalaryAdvance: false, suppressAudit: true,
     costFetchOptions: { backgroundRefresh: false }, prefetchedCostResult: evidence,
   });
+  // The detached snapshot build reuses this exact enriched report instead of
+  // fetching DataHub a second time. employeeCostPayload() intentionally does not
+  // expose the raw adapter outcome on its top-level payload, while
+  // sameCycleEmployeeCostReport() requires it as part of the reuse identity.
+  // Preserve the outcome proven by the raw fetch on the pinned report itself;
+  // otherwise all 19 reports are treated as foreign, re-fetched under the short
+  // ALL deadline, and become simultaneous `deadline` stubs before validation.
+  const sourceOutcome = raw?.outcome || 'ok';
   return {
-    ok: true, report, fetchedAt, sourceOutcome: raw?.outcome || 'ok',
+    ok: true, report: { ...report, sourceOutcome }, fetchedAt, sourceOutcome,
     sourceGeneration: String(raw?.sourceGeneration || ''),
     sourceRevision: employeeCostSnapshotStore.sha256(employeeCostSnapshotStore.canonicalJson({
       outcome: raw.outcome, sourceRange: raw.sourceRange || null, payload: raw.payload,
