@@ -675,6 +675,25 @@ function auditColumnsText(value) {
   return entries.map(([key, scope]) => `${key.toUpperCase()}(${Array.isArray(scope) && scope.includes(ALL_UNITS) ? 'mọi nhóm' : (scope || []).join(',')})`).join(' + ');
 }
 
+/* Mã lỗi thô quăng thẳng vào mặt CEO là không chấp nhận được (CEO 23/08 11:15 gặp
+ * "CATALOG52_DEVICE_PACKAGE_KEY_MISSING" và phải hỏi lại nó là gì). Mỗi mã phải nói
+ * đủ ba việc: NGHĨA LÀ GÌ · AI XỬ · LÀM GÌ — đúng luật đã đặt cho màn "Chưa đồng bộ".
+ * Mã lạ thì vẫn in nguyên văn để không nuốt mất thông tin chẩn đoán. */
+const CATALOG52_ERROR_HINTS = {
+  CATALOG52_DEVICE_PACKAGE_KEY_MISSING:
+    'Máy này đã đăng ký, nhưng gói mã hoá hiện tại được đóng TRƯỚC khi máy đăng ký nên chưa có chìa cho nó. '
+    + 'Cần đóng lại gói một lần để bọc chìa cho máy này — báo Claude, bot chạy vài phút. Không mất dữ liệu, không phải đăng ký lại.',
+  CATALOG52_PACKAGE_UNAVAILABLE:
+    'Chưa có gói mã hoá cho kỳ này trên máy chủ. Cần dựng gói từ bản DataHub đã xuất bản — báo Claude.',
+  CATALOG52_DEVICE_NOT_REGISTERED:
+    'Máy này chưa đăng ký xem 52 cột. Bấm "Đăng ký máy này" rồi thử lại.',
+};
+const catalog52ErrorText = (message) => {
+  const code = String(message || '').trim();
+  const hint = CATALOG52_ERROR_HINTS[code];
+  return hint ? `${hint} (mã: ${code})` : code;
+};
+
 function Catalog52ControlPlane({ period }) {
   const [device, setDevice] = useState(null);
   const [manifest, setManifest] = useState(null);
@@ -695,7 +714,7 @@ function Catalog52ControlPlane({ period }) {
       setManifest(nextManifest); setPageNumber(1);
       const encrypted = await api.catalog52EncryptedPage(hubPeriod, 1);
       setPage(await decryptCatalog52Page({ manifest: nextManifest, ...encrypted, privateKey: local.privateKey }));
-    } catch (loadError) { setError(loadError.message); }
+    } catch (loadError) { setError(catalog52ErrorText(loadError.message)); }
     finally { setBusy(''); }
   };
   const loadPage = async (nextPage) => {
@@ -705,14 +724,14 @@ function Catalog52ControlPlane({ period }) {
       const local = await readDeviceKey(); if (!local?.privateKey) throw new Error('Máy này đã mất khoá xem 52 cột.');
       const encrypted = await api.catalog52EncryptedPage(hubPeriod, nextPage);
       setPage(await decryptCatalog52Page({ manifest, ...encrypted, privateKey: local.privateKey })); setPageNumber(nextPage);
-    } catch (pageError) { setError(pageError.message); }
+    } catch (pageError) { setError(catalog52ErrorText(pageError.message)); }
     finally { setBusy(''); }
   };
   useEffect(() => { load(); }, [hubPeriod]);
   const register = async () => {
     setBusy('register'); setError('');
     try { const keys = await ensureDeviceKey(); await api.catalog52RegisterDevice(await exportedPublicJwk(keys.publicKey)); await load(); }
-    catch (registerError) { setError(registerError.message); } finally { setBusy(''); }
+    catch (registerError) { setError(catalog52ErrorText(registerError.message)); } finally { setBusy(''); }
   };
   const forget = async () => {
     setBusy('forget'); setError('');
