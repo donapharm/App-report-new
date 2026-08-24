@@ -64,6 +64,32 @@ test('file thật nằm trong kho vẫn đọc được — hàng rào không ch
   finally { fs.unlinkSync(file); }
 });
 
+test('mapping chưa tồn tại fail-closed trước khi có thể bị đổi thành symlink', () => {
+  const path = require('node:path');
+  const file = path.join(service.DATA_DIR, `missing-${process.pid}.json`);
+  assert.throws(() => service.safeMappingFile(file), { code: 'DEBTS_MAPPING_UNAVAILABLE' });
+  assert.throws(() => service.loadMapping(file), { code: 'DEBTS_MAPPING_UNAVAILABLE' });
+});
+
+test('mapping được đọc qua descriptor no-follow và kiểm lại chính object đã mở', () => {
+  const fs = require('node:fs'); const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'debtsShadowService.js'), 'utf8');
+  const body = src.slice(src.indexOf('function loadMapping'), src.indexOf('function config'));
+  assert.match(body, /O_NOFOLLOW/);
+  assert.match(body, /\/proc\/self\/fd\/\$\{fd\}/);
+  assert.match(body, /fstatSync\(fd\)\.isFile\(\)/);
+  assert.doesNotMatch(body, /readFileSync\(safeMappingFile/);
+});
+
+test('preview bắt buộc partition DONA hoặc AFP trước mọi source request', async () => {
+  let calls = 0;
+  const env = { APP_REPORT_DEBTS_SHADOW_ENABLED: '1' };
+  const fetchImpl = async () => { calls += 1; throw new Error('must not call'); };
+  await assert.rejects(service.preview({ period: '2026-08', env, fetchImpl }), { code: 'DEBTS_LEGAL_ENTITY_INVALID' });
+  await assert.rejects(service.preview({ period: '2026-08', legalEntity: 'OTHER', env, fetchImpl }), { code: 'DEBTS_LEGAL_ENTITY_INVALID' });
+  assert.equal(calls, 0);
+});
+
 /* Điểm 6 bot tự nhận là CHƯA CÓ TEST. Hợp đồng: KHÔNG BAO GIỜ ghi tên khách hàng
  * vào báo cáo, chỉ mã. Lõi hiện dựng dòng bằng DANH SÁCH TRẮNG trường (normalizeRow
  * không spread `...row`), nên tên khách rơi ra theo thiết kế. Test khoá đúng tính

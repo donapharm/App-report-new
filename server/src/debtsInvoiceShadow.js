@@ -150,6 +150,12 @@ function normalizePeriod(value) {
   return period;
 }
 
+function normalizeLegalEntity(value) {
+  const legalEntity = upper(value, 80);
+  if (legalEntity !== 'DONA' && legalEntity !== 'AFP') fail('DEBTS_LEGAL_ENTITY_INVALID');
+  return legalEntity;
+}
+
 function validateSnapshotHeader(snapshot, period, contractChecksum) {
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) fail('DEBTS_SNAPSHOT_MISSING');
   const snapshotId = text(snapshot.snapshotId, 160);
@@ -171,7 +177,7 @@ function validateSnapshotHeader(snapshot, period, contractChecksum) {
   return { snapshotId, sourceRevision, checksum, legalEntity };
 }
 
-function combineSnapshotPages(pages, { period, contractChecksum, lockedPeriods = [] } = {}) {
+function combineSnapshotPages(pages, { period, legalEntity, contractChecksum, lockedPeriods = [] } = {}) {
   const expectedPeriod = normalizePeriod(period);
   const contract = text(contractChecksum, 80).toLowerCase().replace(/^sha256:/, '');
   if (contract !== CONTRACT_CHECKSUM) fail('DEBTS_CONTRACT_CHECKSUM_MISMATCH');
@@ -181,6 +187,8 @@ function combineSnapshotPages(pages, { period, contractChecksum, lockedPeriods =
   if (!Array.isArray(pages) || !pages.length) fail('DEBTS_PAGES_EMPTY');
   const first = pages[0];
   const identity = validateSnapshotHeader(first.snapshot, expectedPeriod, contract);
+  const expectedLegalEntity = normalizeLegalEntity(legalEntity || identity.legalEntity);
+  if (identity.legalEntity !== expectedLegalEntity) fail('DEBTS_SNAPSHOT_LEGAL_ENTITY_MISMATCH');
   const rows = [];
   const cursors = new Set();
   pages.forEach((page, index) => {
@@ -584,8 +592,9 @@ async function readBoundedJson(response) {
   return { value, bytes };
 }
 
-async function fetchSnapshotPages({ endpoint, token, period, contractChecksum = CONTRACT_CHECKSUM, lockedPeriods = [], pageSize = 500, requestTimeoutMs = 30_000, fetchImpl = globalThis.fetch } = {}) {
+async function fetchSnapshotPages({ endpoint, token, period, legalEntity, contractChecksum = CONTRACT_CHECKSUM, lockedPeriods = [], pageSize = 500, requestTimeoutMs = 30_000, fetchImpl = globalThis.fetch } = {}) {
   const expectedPeriod = normalizePeriod(period);
+  const expectedLegalEntity = normalizeLegalEntity(legalEntity);
   let base;
   try { base = new URL(String(endpoint || '')); } catch { fail('DEBTS_ENDPOINT_INVALID'); }
   if (base.protocol !== 'https:' || base.pathname !== CONTRACT_PATH || base.username || base.password || base.search || base.hash) fail('DEBTS_ENDPOINT_NOT_ALLOWLISTED');
@@ -597,6 +606,7 @@ async function fetchSnapshotPages({ endpoint, token, period, contractChecksum = 
   do {
     const url = new URL(base);
     url.searchParams.set('period', expectedPeriod);
+    url.searchParams.set('legal_entity', expectedLegalEntity);
     url.searchParams.set('limit', String(Math.max(1, Math.min(1000, Number(pageSize) || 500))));
     if (cursor) url.searchParams.set('cursor', cursor);
     const controller = new AbortController();
@@ -618,7 +628,7 @@ async function fetchSnapshotPages({ endpoint, token, period, contractChecksum = 
     if (cursor) seen.add(cursor);
     if (pages.length > 1000) fail('DEBTS_PAGE_LIMIT_EXCEEDED');
   } while (cursor);
-  return combineSnapshotPages(pages, { period: expectedPeriod, contractChecksum, lockedPeriods });
+  return combineSnapshotPages(pages, { period: expectedPeriod, legalEntity: expectedLegalEntity, contractChecksum, lockedPeriods });
 }
 function shadowLockFile(dataDir, period) {
   const root = path.resolve(String(dataDir || ''));
@@ -628,7 +638,7 @@ function shadowLockFile(dataDir, period) {
 
 module.exports = {
   SOURCE, SCHEMA_VERSION, CONTRACT_PATH, REVISION_MODE, ROW_CHECKSUM_ALGORITHM, CONTRACT_CHECKSUM, CURRENCY, HARD_BLOCKED_PERIOD, LEGAL_ENTITY_CONTRACT_KIND, REQUIRED_ROW_FIELDS, DebtsShadowError,
-  stableValue, canonicalJson, parseDecimal, decimalAdd, decimalSubtract, decimalEqual, decimalString,
+  stableValue, canonicalJson, normalizeLegalEntity, parseDecimal, decimalAdd, decimalSubtract, decimalEqual, decimalString,
   sourceRowChecksum, snapshotRowsChecksum, mappingArtifactChecksum, combineSnapshotPages, mappingIndex, materializeShadow,
   signReceipt, verifySignedReceipt, publishShadow, verifyPublishedShadow, shadowLockFile, acquireShadowLock, fetchSnapshotPages,
 };
