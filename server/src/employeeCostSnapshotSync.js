@@ -32,6 +32,14 @@ function sourceFailureReason(error, result) {
   // DataHub understood the request but rejected it (for example HTTP 409).
   // Keep only a generic allowlisted code; never propagate response body/keys.
   if (value === 'upstream_rejected' || value === 'upstream_unauthorized' || /^upstream_4\d\d$/.test(value)) return 'upstream_rejected';
+  /* ‼ THIẾU TỶ LỆ ≠ NGUỒN CHẬP CHỜN. Trước đây bốn outcome `rate_policy_*` rơi hết
+   * vào `upstream_unavailable`, tức màn hình bảo CEO "nguồn tạm unavailable" — câu
+   * đó nghĩa là chờ tí rồi thử lại. Nhưng thiếu/mơ hồ chính sách tỷ lệ thì chờ đến
+   * bao giờ cũng vô ích: phải DataHub công bố bảng tỷ lệ cho kỳ đó. Nói sai câu là
+   * đẩy CEO đi nhầm đường — đúng lỗi đã lặp cả tuần. Giữ nguyên kỷ luật danh sách
+   * trắng: chỉ nhận đúng bốn chuỗi cố định, không cho chuỗi lạ đi qua. */
+  if (value === 'rate_policy_missing' || value === 'rate_policy_unavailable'
+    || value === 'rate_policy_ambiguous' || value === 'rate_policy_not_applicable') return value;
   return 'upstream_unavailable';
 }
 

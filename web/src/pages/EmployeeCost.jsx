@@ -33,6 +33,11 @@ const SNAPSHOT_REASON_LABELS = Object.freeze({
   deadline: 'quá hạn lần đồng bộ', source_error: 'nguồn lỗi', missing: 'chưa có bản local',
   roster_added: 'mới thêm vào roster', roster_changed: 'roster đã đổi',
   corrupt_snapshot: 'snapshot hỏng', sync_failed: 'đồng bộ thất bại', locked: 'kỳ đã khoá',
+  // Thiếu tỷ lệ KHÔNG phải nguồn chập chờn — chờ thêm là vô ích, phải báo DataHub.
+  rate_policy_missing: 'chưa có bảng tỷ lệ cho kỳ — báo DataHub công bố, chờ không ra',
+  rate_policy_unavailable: 'không lấy được bảng tỷ lệ — báo DataHub, không phải lỗi mạng',
+  rate_policy_ambiguous: 'có nhiều bảng tỷ lệ, chưa rõ dùng bản nào — DataHub phải chốt',
+  rate_policy_not_applicable: 'kỳ này nằm trước ngày bảng tỷ lệ có hiệu lực',
 });
 const UPSTREAM_REJECTED_NOTE = 'DataHub từ chối mã này — cần DataHub sửa cấu hình, không phải lỗi mạng';
 function nguyenNhanThieuNguoi(employeeCodes, unavailableReasons) {

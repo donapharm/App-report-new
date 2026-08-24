@@ -1,3 +1,29 @@
+### 2026-08-24 — Chi phí: chặn latest cứu provenance hỏng + sửa câu báo "thiếu tỷ lệ" bị nói thành "nguồn chập chờn"
+
+**Bot App Report làm (`dd1824e`).** `employeeCost.js` `fetchEmployeeCost()`: bỏ nhánh cho
+`invalid_period_payload` đi tiếp — exact có rows nhưng thiếu/sai provenance kỳ nay **fail-closed ngay**,
+tuyệt đối không mở latest để "cứu". Khi cả range không có dòng chính sách nào thì trả outcome riêng
+`rate_policy_{missing|unavailable|ambiguous|not_applicable}` thay vì để nguyên `ok` — tiền giữ đúng
+dấu `—`, không giả vờ nguồn khoẻ.
+
+**Claude review — tìm ra một lỗi người dùng do chính thay đổi này sinh ra.** Bốn outcome mới KHÔNG có
+trong danh sách trắng của `sourceFailureReason()` (`employeeCostSnapshotSync.js:35`), nên rơi hết vào
+`upstream_unavailable`; `employeeCostModel.js` lại lọc lần nữa cũng về `upstream_unavailable`; và
+`SNAPSHOT_REASON_LABELS` dịch chuỗi đó thành **"nguồn tạm unavailable"** — tức bảo người dùng *chờ tí
+rồi thử lại*. Sai đường hoàn toàn: thiếu hoặc mơ hồ bảng tỷ lệ thì chờ đến bao giờ cũng vô ích, phải
+**DataHub công bố bảng tỷ lệ cho kỳ đó**. Đúng loại lỗi đã hành CEO nhiều lần tuần này — câu báo đẩy
+người đọc đi nhầm hướng.
+
+**Sửa.** Ba tầng cùng nhận bốn mã: `sourceFailureReason()` cho đi qua **bằng phép so bằng tuyệt đối**
+(giữ kỷ luật danh sách trắng, cấm khớp lỏng để chuỗi lạ không chui lên màn hình) · hai danh sách trắng
+trong `employeeCostModel.js` · `SNAPSHOT_REASON_LABELS` có câu tiếng Việt **nói rõ phải làm gì**
+("chưa có bảng tỷ lệ cho kỳ — báo DataHub công bố, chờ không ra").
+
+**Test.** `server/test/costPolicyReasonLabel.test.js` — 4 test mới: không gán nhầm thành nguồn chập
+chờn · bốn mã đều KHÔNG nằm trong nhóm dùng được (tiền phải là `—`) · màn hình có câu tiếng Việt chỉ
+đúng nơi xử lý · lớp lọc web không nuốt mất mã. Focused cost 61/61, full server 1572/1572 (7 test PDF
+đỏ do máy dev thiếu `pdfinfo`), web 534/534, build PASS.
+
 ### 2026-08-23 — Ánh xạ bí danh mã nhà thầu cho đối soát (gỡ 404 vĩnh viễn của AFP/DONA)
 
 **Việc đã làm.** `employeeCost.js`: thêm bảng ánh xạ TƯỜNG MINH `DONA=01.DONA|AFP=02.AFP`
