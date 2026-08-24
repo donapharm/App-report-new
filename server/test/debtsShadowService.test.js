@@ -120,3 +120,37 @@ test('phản hồi preview chỉ trả số đếm và checksum, không trả d�
     assert.match(ret, new RegExp(k));
   }
 });
+
+/* Test này Claude viết ở `3cc337a`; bản successor nhánh từ `b317bbd` nên rơi mất.
+ * Đưa lại vì nó khoá đúng tính chất mà bản successor cũng đang giữ: KHÔNG BAO GIỜ
+ * trả đường lexical khi không giải được đường thật. Trả lexical là để hở TOCTOU —
+ * giữa lúc kiểm và lúc đọc, ai đó tạo đúng chỗ đó một symlink ra ngoài là lọt.
+ * Bản successor còn chặn sâu hơn bằng O_NOFOLLOW + soi lại chính file descriptor;
+ * test này giữ hàng rào lớp ngoài để một lượt sửa sau không lặng lẽ gỡ nó. */
+test('file vắng mặt thì TỪ CHỐI ngay, không trả đường lexical (chặn TOCTOU)', () => {
+  const fs = require('node:fs'); const path = require('node:path');
+  const dataDir = path.resolve(service.DATA_DIR);
+  fs.mkdirSync(dataDir, { recursive: true });
+  const missing = path.join(dataDir, `khong-ton-tai-${process.pid}.json`);
+  try { fs.unlinkSync(missing); } catch { /* vốn không có */ }
+  assert.throws(() => service.safeMappingFile(missing), { code: 'DEBTS_MAPPING_UNAVAILABLE' });
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'debtsShadowService.js'), 'utf8');
+  const body = src.slice(src.indexOf('function safeMappingFile'), src.indexOf('function loadMapping'));
+  assert.doesNotMatch(body, /catch\s*\{\s*return file;/, 'không được trả đường lexical khi realpath lỗi');
+  assert.match(body, /return real;/);
+});
+
+/* Claude review 24/08: `combineSnapshotPages` nhận `legalEntity || identity.legalEntity`.
+ * Đường công khai (route → preview → fetchSnapshotPages) luôn truyền pháp nhân nên
+ * hiện an toàn, nhưng hàm này ĐƯỢC EXPORT — một lượt gọi thẳng sau này mà quên tham
+ * số thì phép kiểm tự soi chính nó và mất tác dụng. Khoá đường công khai lại. */
+test('đường công khai luôn ghim pháp nhân, không để phép kiểm tự soi chính nó', () => {
+  const fs = require('node:fs'); const path = require('node:path');
+  const core = fs.readFileSync(path.join(__dirname, '..', 'src', 'debtsInvoiceShadow.js'), 'utf8');
+  const fetchBody = core.slice(core.indexOf('async function fetchSnapshotPages'), core.indexOf('function shadowLockFile'));
+  assert.match(fetchBody, /normalizeLegalEntity\(legalEntity\)/, 'fetchSnapshotPages phải đòi pháp nhân, không cho vắng');
+  assert.match(fetchBody, /legal_entity/, 'phải gửi pháp nhân sang nguồn');
+  assert.match(fetchBody, /combineSnapshotPages\(pages, \{ period: expectedPeriod, legalEntity: expectedLegalEntity/);
+  const svc = fs.readFileSync(path.join(__dirname, '..', 'src', 'debtsShadowService.js'), 'utf8');
+  assert.match(svc, /const partition = shadow\.normalizeLegalEntity\(legalEntity\)/);
+});

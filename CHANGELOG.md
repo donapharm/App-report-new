@@ -1,3 +1,30 @@
+### 2026-08-24 — Debts shadow: ghim phân vùng pháp nhân + đóng TOCTOU bằng O_NOFOLLOW
+
+**Bot App Report làm (`9b3610d`).** `debtsInvoiceShadow.js`: thêm `normalizeLegalEntity()` chỉ nhận
+`DONA`/`AFP`; `fetchSnapshotPages()` **bắt buộc** có pháp nhân, gửi `legal_entity` sang nguồn, và
+`combineSnapshotPages()` **từ chối gói trả về sai pháp nhân** (`DEBTS_SNAPSHOT_LEGAL_ENTITY_MISMATCH`).
+Route CEO-only kiểm pháp nhân trước khi gọi. `loadMapping()` nay mở bằng **`O_NOFOLLOW`**, soi lại
+chính **file descriptor** qua `/proc/self/fd`, xác nhận là regular file và đường thật vẫn trong kho
+rồi mới đọc.
+
+**Vì sao phân vùng là việc sống còn.** App Công nợ đo T08: DONA **7.763.838.575đ** · AFP
+**7.544.601.461đ**. Thiết kế cũ chỉ gọi một lượt không kèm pháp nhân ⇒ **mỗi lượt chỉ lấy được MỘT
+pháp nhân**, tức cắt CRM là mất **~7,5 tỷ (gần một nửa)** doanh thu T08 mà bảng vẫn hiện số và vẫn
+"cân" trong nội bộ nó. Bot App Report phát hiện khoảng trống này khi đọc lại hợp đồng; App Công nợ đã
+làm hai gói độc lập.
+
+**Claude review.** Kéo `9b3610d` về, tự chạy: focused 32/32, full server 1576/1576 (7 test PDF đỏ do
+máy dev thiếu `pdfinfo`). Dựng ba đòn tấn công vào `loadMapping` — symlink có sẵn, thay file bằng
+symlink sau khi kiểm, và truyền vào thư mục — **cả ba đều bị chặn**. Bản vá của bot **tốt hơn bản
+`3cc337a` của Claude**: Claude chỉ thu hẹp khe TOCTOU, bot đóng hẳn bằng cách soi đúng file descriptor
+đang đọc.
+
+**Claude bổ sung 2 test.** (1) Đưa lại test chống trả-đường-lexical bị rơi vì successor nhánh từ
+`b317bbd`, không phải `3cc337a`. (2) Khoá đường công khai luôn ghim pháp nhân —
+`combineSnapshotPages()` nhận `legalEntity || identity.legalEntity`, đường công khai luôn truyền nên
+hiện an toàn, nhưng hàm **được export**, một lượt gọi thẳng quên tham số là phép kiểm **tự soi chính
+nó** và mất tác dụng. Test 32 → **34 PASS**.
+
 ### 2026-08-24 — Review Debts shadow: bịt lỗ đọc file ngoài kho qua symlink + khoá hợp đồng "không tên khách"
 
 **Việc đã làm.** Review candidate `aa39562` (đường Debts chạy song song, CEO-only preview).
