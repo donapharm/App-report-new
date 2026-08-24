@@ -303,7 +303,7 @@ test('S2S adapter allowlists HTTPS contract path, pins pages and never sends tok
   const pages = pagesFor(rows, 1);
   const calls = [];
   const combined = await shadow.fetchSnapshotPages({
-    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'SECRET-S2S', period: '2026-08', contractChecksum: CONTRACT_SHA,
+    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'SECRET-S2S', period: '2026-08', legalEntity: 'DONA', contractChecksum: CONTRACT_SHA,
     fetchImpl: async (url, options) => {
       calls.push({ url: String(url), headers: options.headers, redirect: options.redirect });
       const page = calls.length === 1 ? pages[0] : pages[1];
@@ -313,16 +313,17 @@ test('S2S adapter allowlists HTTPS contract path, pins pages and never sends tok
   assert.equal(combined.rows.length, 2);
   assert.equal(calls.length, 2);
   assert.ok(calls[1].url.includes('cursor=cursor-1'));
+  assert.equal(calls.every((call) => call.url.includes('legal_entity=DONA')), true);
   assert.equal(calls.every((call) => !call.url.includes('SECRET-S2S') && call.headers.authorization === 'Bearer SECRET-S2S'), true);
   assert.equal(calls.every((call) => call.redirect === 'error'), true);
-  await assert.rejects(() => shadow.fetchSnapshotPages({ endpoint: 'http://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08', contractChecksum: CONTRACT_SHA, fetchImpl: async () => ({}) }), { code: 'DEBTS_ENDPOINT_NOT_ALLOWLISTED' });
-  await assert.rejects(() => shadow.fetchSnapshotPages({ endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger?unsafe=1', token: 'x', period: '2026-08', contractChecksum: CONTRACT_SHA, fetchImpl: async () => ({}) }), { code: 'DEBTS_ENDPOINT_NOT_ALLOWLISTED' });
+  await assert.rejects(() => shadow.fetchSnapshotPages({ endpoint: 'http://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08', legalEntity: 'DONA', contractChecksum: CONTRACT_SHA, fetchImpl: async () => ({}) }), { code: 'DEBTS_ENDPOINT_NOT_ALLOWLISTED' });
+  await assert.rejects(() => shadow.fetchSnapshotPages({ endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger?unsafe=1', token: 'x', period: '2026-08', legalEntity: 'DONA', contractChecksum: CONTRACT_SHA, fetchImpl: async () => ({}) }), { code: 'DEBTS_ENDPOINT_NOT_ALLOWLISTED' });
   await assert.rejects(() => shadow.fetchSnapshotPages({
-    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08', contractChecksum: CONTRACT_SHA,
+    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08', legalEntity: 'DONA', contractChecksum: CONTRACT_SHA,
     fetchImpl: async () => ({ ok: true, status: 200, headers: { get: () => String(8 * 1024 * 1024 + 1) }, json: async () => pages[0] }),
   }), { code: 'DEBTS_S2S_PAGE_TOO_LARGE' });
   await assert.rejects(() => shadow.fetchSnapshotPages({
-    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08', contractChecksum: CONTRACT_SHA, requestTimeoutMs: 20,
+    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08', legalEntity: 'DONA', contractChecksum: CONTRACT_SHA, requestTimeoutMs: 20,
     fetchImpl: async (_url, options) => ({
       ok: true, status: 200,
       body: { getReader: () => ({
@@ -331,6 +332,18 @@ test('S2S adapter allowlists HTTPS contract path, pins pages and never sends tok
       }) },
     }),
   }), { code: 'DEBTS_S2S_UNAVAILABLE' });
+  await assert.rejects(() => shadow.fetchSnapshotPages({
+    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08',
+    fetchImpl: async () => { throw new Error('must not call'); },
+  }), { code: 'DEBTS_LEGAL_ENTITY_INVALID' });
+
+  const afpRequested = structuredClone(pages[0]);
+  afpRequested.nextCursor = null;
+  afpRequested.finalize = true;
+  await assert.rejects(() => shadow.fetchSnapshotPages({
+    endpoint: 'https://debts.example.test/api/integrations/app-report/sales-ledger', token: 'x', period: '2026-08', legalEntity: 'AFP', contractChecksum: CONTRACT_SHA,
+    fetchImpl: async () => ({ ok: true, status: 200, json: async () => afpRequested }),
+  }), { code: 'DEBTS_SNAPSHOT_LEGAL_ENTITY_MISMATCH' });
 });
 
 test('module is dark/add-only: no route, selector, active slot, WEB guard or frozen pin wiring', () => {

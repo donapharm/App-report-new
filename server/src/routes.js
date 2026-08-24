@@ -3970,10 +3970,14 @@ router.post('/admin/revenue-refresh/run', auth.requireAuth, auth.requireAdmin, a
 // revenue slots and the module's receipt keeps selectorChanged=false.
 router.post('/admin/debts-shadow/preview', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
   const period = String(req.body?.period || '').trim();
+  const legalEntity = String(req.body?.legalEntity || '').trim().toUpperCase();
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
     return res.status(400).json({ error: 'Kỳ không hợp lệ.', code: 'DEBTS_PERIOD_INVALID' });
   }
-  return res.json(await debtsShadowService.preview({ period }));
+  if (legalEntity !== 'DONA' && legalEntity !== 'AFP') {
+    return res.status(400).json({ error: 'Pháp nhân không hợp lệ.', code: 'DEBTS_LEGAL_ENTITY_INVALID' });
+  }
+  return res.json(await debtsShadowService.preview({ period, legalEntity }));
 }));
 
 // Đối soát toàn vẹn dữ liệu doanh thu 1 kỳ (bắt lỗi ngày ngoài biên, đếm trùng, đơn vị NV biến mất).

@@ -25,19 +25,34 @@ function safeMappingFile(value) {
    * Lợi thêm: PROD để `server/data` là symlink, nên so đường thật cũng tránh việc
    * từ chối oan một file hợp lệ chỉ vì nó được đưa vào bằng đường đã giải symlink. */
   let realRoot;
-  try { realRoot = fs.realpathSync(path.resolve(DATA_DIR)) + path.sep; } catch { realRoot = dataRoot; }
   let real;
-  try { real = fs.realpathSync(file); } catch { return file; } // chưa tồn tại ⇒ UNAVAILABLE ở loadMapping
+  try {
+    realRoot = fs.realpathSync(path.resolve(DATA_DIR)) + path.sep;
+    real = fs.realpathSync(file);
+  } catch {
+    const error = new Error('DEBTS_MAPPING_UNAVAILABLE'); error.code = error.message; throw error;
+  }
   if (!real.startsWith(realRoot) || !real.endsWith('.json')) invalid();
   return real;
 }
 
 function loadMapping(file) {
-  try { return JSON.parse(fs.readFileSync(safeMappingFile(file), 'utf8')); }
+  let fd;
+  try {
+    const safe = safeMappingFile(file);
+    fd = fs.openSync(safe, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    const opened = fs.realpathSync(`/proc/self/fd/${fd}`);
+    const realRoot = fs.realpathSync(path.resolve(DATA_DIR)) + path.sep;
+    if (!opened.startsWith(realRoot) || !opened.endsWith('.json') || !fs.fstatSync(fd).isFile()) {
+      const error = new Error('DEBTS_MAPPING_FILE_INVALID'); error.code = error.message; throw error;
+    }
+    return JSON.parse(fs.readFileSync(fd, 'utf8'));
+  }
   catch (error) {
     if (error.code === 'DEBTS_MAPPING_FILE_INVALID') throw error;
     const wrapped = new Error('DEBTS_MAPPING_UNAVAILABLE'); wrapped.code = wrapped.message; throw wrapped;
   }
+  finally { if (fd !== undefined) fs.closeSync(fd); }
 }
 
 function config(env = process.env) {
@@ -54,7 +69,7 @@ function config(env = process.env) {
   };
 }
 
-async function preview({ period, env = process.env, fetchImpl = globalThis.fetch } = {}) {
+async function preview({ period, legalEntity, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   const cfg = config(env);
   if (!cfg.enabled) {
     const error = new Error('DEBTS_SHADOW_DISABLED'); error.code = error.message; error.status = 503; throw error;
@@ -62,8 +77,10 @@ async function preview({ period, env = process.env, fetchImpl = globalThis.fetch
   if (period === shadow.HARD_BLOCKED_PERIOD) {
     const error = new Error('DEBTS_PERIOD_HARD_BLOCKED'); error.code = error.message; error.status = 409; throw error;
   }
+  const partition = shadow.normalizeLegalEntity(legalEntity);
   const combined = await shadow.fetchSnapshotPages({
-    endpoint: cfg.endpoint, token: cfg.token, period, lockedPeriods: [shadow.HARD_BLOCKED_PERIOD], fetchImpl,
+    endpoint: cfg.endpoint, token: cfg.token, period, legalEntity: partition,
+    lockedPeriods: [shadow.HARD_BLOCKED_PERIOD], fetchImpl,
   });
   const result = shadow.materializeShadow(combined, loadMapping(cfg.mappingFile), { codeRevision: 'debts-shadow-preview-v1' });
   let artifact = null;
@@ -75,7 +92,7 @@ async function preview({ period, env = process.env, fetchImpl = globalThis.fetch
   }
   return Object.freeze({
     ok: true, shadow: true, selectorChanged: false, persisted: Boolean(artifact),
-    period: result.receipt.period, snapshotId: result.receipt.snapshotId,
+    period: result.receipt.period, legalEntity: partition, snapshotId: result.receipt.snapshotId,
     rowCount: result.receipt.rowCount, invoiceCount: result.receipt.invoiceCount,
     mappedCount: result.receipt.mappedCount, quarantinedCount: result.receipt.quarantinedCount,
     totals: result.receipt.totals, sourceChecksum: result.receipt.sourceChecksum,
