@@ -485,6 +485,64 @@ test('range proxy sends validated from/to first, then latest-policy lookup when 
   assert.equal(payload.empCode, 'DN001');
 });
 
+test('exact rows with mismatched provenance fail closed and never request latest policy', async () => {
+  const calledUrls = [];
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [], from: '2026-08', to: '2026-08',
+    fetchImpl: async (url) => {
+      calledUrls.push(url);
+      return { ok: true, status: 200, json: async () => ({ ...source, from: '2026-07', to: '2026-07' }) };
+    },
+  });
+  assert.deepEqual(calledUrls, [
+    'http://hub.test/api/integrations/app-report/employee-cost?emp=DN001&from=2026-08&to=2026-08',
+  ]);
+  assert.equal(result.outcome, 'invalid_period_payload');
+  assert.equal(result.payload.periods[0].rows.length, 0);
+});
+
+test('empty exact plus ambiguous, empty or future latest remains non-usable with policy provenance', async () => {
+  for (const scenario of [
+    { latest: { ...source, from: '2026-07', to: '2026-08' }, outcome: 'rate_policy_ambiguous', state: 'ambiguous' },
+    { latest: { empCode: 'DN001', from: '2026-07', to: '2026-07', columns: [], rows: [] }, outcome: 'rate_policy_missing', state: 'missing' },
+    { latest: { ...source, from: '2026-09', to: '2026-09' }, outcome: 'rate_policy_not_applicable', state: 'not_applicable' },
+  ]) {
+    let calls = 0;
+    const result = await employeeCost.fetchEmployeeCost('DN001', {
+      baseUrl: 'http://hub.test', ...credentials(), backoffMs: [], from: '2026-08', to: '2026-08',
+      fetchImpl: async () => {
+        calls += 1;
+        return { ok: true, status: 200, json: async () => calls === 1
+          ? { empCode: 'DN001', from: '2026-08', to: '2026-08', periods: [{ period: '2026-08', columns: [], rows: [] }] }
+          : scenario.latest };
+      },
+    });
+    assert.equal(calls, 2);
+    assert.equal(result.outcome, scenario.outcome);
+    assert.equal(result.payload.ratePolicy.state, scenario.state);
+    assert.equal(result.payload.periods[0].rows.length, 0);
+  }
+});
+
+test('latest policy carries forward only from one proven month and records effective provenance', async () => {
+  let calls = 0;
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    baseUrl: 'http://hub.test', ...credentials(), backoffMs: [], from: '2026-08', to: '2026-08',
+    fetchImpl: async () => {
+      calls += 1;
+      return { ok: true, status: 200, json: async () => calls === 1
+        ? { empCode: 'DN001', from: '2026-08', to: '2026-08', periods: [{ period: '2026-08', columns: [], rows: [] }] }
+        : { ...source, from: '2026-07', to: '2026-07' } };
+    },
+  });
+  assert.equal(result.outcome, 'ok');
+  assert.equal(result.payload.ratePolicy.state, 'available');
+  assert.equal(result.payload.ratePolicy.effectiveFrom, '2026-07');
+  assert.equal(result.payload.periods[0].rateEffectiveFrom, '2026-07');
+  assert.equal(result.payload.periods[0].rateSource, 'carry_forward');
+  assert.equal(result.payload.periods[0].rows.length, 1);
+});
+
 test('period adapter accepts explicit periods/months and rows with period, while stripping blocked fields', () => {
   const range = employeeCost.parseMonthRange({ from: '2026-06', to: '2026-07' });
   const periods = employeeCost.adaptPeriodPayload({

@@ -156,7 +156,7 @@ test('T07 exact response carries the five C32 declarations and App Report raw ro
   });
 });
 
-test('T08 gắn nhầm rows T07 không được coi exact; chỉ dùng lại qua latest có provenance', async () => {
+test('T08 gắn nhầm rows T07 bị từ chối và không được mở latest fallback', async () => {
   const urls = [];
   const wrongExactRows = [{ ...ROWS[0], c36: 99 }];
   const payload = await employeeCost.getForSession({
@@ -172,11 +172,11 @@ test('T08 gắn nhầm rows T07 không được coi exact; chỉ dùng lại qua
         : { empCode: 'DN001', from: '2026-07', to: '2026-07', columns: COLUMNS, rows: ROWS } };
     },
   });
-  assert.equal(urls.length, 2);
-  assert.deepEqual(payload.periods[0].rows, ROWS, 'discard wrong-range rows before latest lookup');
-  assert.equal(payload.periods[0].rateEffectiveFrom, '2026-07');
-  assert.equal(payload.ratePolicy.state, 'available');
-  assert.equal(payload.sourceOutcome, 'ok');
+  assert.equal(urls.length, 1);
+  assert.deepEqual(payload.periods[0].rows, [], 'discard wrong-range rows without consulting latest');
+  assert.equal(payload.periods[0].rateEffectiveFrom, undefined);
+  assert.equal(payload.ratePolicy, undefined);
+  assert.equal(payload.sourceOutcome, 'invalid_period_payload');
 });
 
 test('getForSession T08 gọi range trước rồi latest no-range, audit đủ kỳ/provenance', async () => {
@@ -206,6 +206,28 @@ test('getForSession T08 gọi range trước rồi latest no-range, audit đủ 
   assert.equal(payload.sourceOutcome, 'ok');
   assert.deepEqual(audits[0].range, { from: '2026-08', to: '2026-08', months: ['2026-08'] });
   assert.equal(audits[0].ratePolicy.effectiveFrom, '2026-07');
+});
+
+test('latest provenance mơ hồ giữ tiền là dash và audit cùng trạng thái fail-closed', async () => {
+  const audits = [];
+  let calls = 0;
+  const payload = await employeeCost.getForSession({
+    session: { emp_code: 'CEO', role: 'admin' }, scope: { empCode: 'DN001' }, requestedEmp: 'DN001',
+  }, {
+    from: '2026-08', to: '2026-08', baseUrl: 'http://hub.test', assignmentKey: 'assignment-key-1234',
+    employeeCostKeys: 'DN001=employee-cost-key-1234', auditImpl: (entry) => audits.push(entry),
+    fetchImpl: async () => {
+      calls += 1;
+      return { ok: true, status: 200, json: async () => calls === 1
+        ? { empCode: 'DN001', from: '2026-08', to: '2026-08', columns: [], rows: [] }
+        : { empCode: 'DN001', from: '2026-07', to: '2026-08', columns: COLUMNS, rows: ROWS } };
+    },
+  });
+  assert.equal(payload.sourceOutcome, 'rate_policy_ambiguous');
+  assert.equal(payload.periods[0].rows.length, 0);
+  assert.equal(audits[0].outcome, 'rate_policy_ambiguous');
+  assert.equal(audits[0].ratePolicy.state, 'ambiguous');
+  assert.deepEqual(audits[0].range, { from: '2026-08', to: '2026-08', months: ['2026-08'] });
 });
 
 // ‼ 04/08/2026 — BẤT BIẾN: ô KPI và tab "Mặt hàng thiếu %" phải thấy ĐÚNG một

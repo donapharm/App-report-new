@@ -1672,14 +1672,25 @@ async function fetchEmployeeCost(empCode, options = {}) {
       if (rateSnapshot.restore(empCode, result.payload, snapshotOptions) > 0) result.outcome = 'ok_stale_rates';
     } catch { /* kho hỏng thì giữ nguyên fail-closed như cũ */ }
   }
-  if (!hasRange || (result.outcome !== 'ok' && result.outcome !== 'invalid_period_payload')) return result;
+  // Latest is a fallback for a genuinely missing exact policy only. An exact
+  // response that contains rows under missing/mismatched range provenance is
+  // invalid input, not "missing"; never let it select a different policy.
+  if (!hasRange || result.outcome !== 'ok') return result;
   result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchRawEmployeeCost);
-  // Payload range mơ hồ chỉ được phục hồi thành nguồn `ok` khi policy mới nhất đã
-  // lấp ĐỦ mọi kỳ; còn kỳ trước ngày hiệu lực thì tiếp tục fail closed.
-  if (result.outcome === 'invalid_period_payload'
-    && result.payload.ratePolicy?.state === 'available'
-    && Number(result.payload.ratePolicy?.unresolvedPeriods || 0) === 0) {
-    result.outcome = 'ok';
+  // If the requested range had no exact rows and latest could not safely fill
+  // any month, expose a non-usable outcome. This keeps UI/ALL/audit aligned:
+  // money remains `—` and the absence is not mislabeled as a healthy source.
+  const hasAnyPolicyRows = Array.isArray(result.payload?.periods)
+    && result.payload.periods.some((period) => Array.isArray(period?.rows) && period.rows.length > 0);
+  if (!hasAnyPolicyRows) {
+    const policyState = String(result.payload?.ratePolicy?.state || 'missing');
+    const policyOutcomes = {
+      unavailable: 'rate_policy_unavailable',
+      missing: 'rate_policy_missing',
+      ambiguous: 'rate_policy_ambiguous',
+      not_applicable: 'rate_policy_not_applicable',
+    };
+    result.outcome = policyOutcomes[policyState] || 'rate_policy_missing';
   }
   return result;
 }
