@@ -507,7 +507,7 @@ function trustedDeviceCandidate(phone, opts = {}) {
   const normalizedPhone = normPhone(phone);
   const deviceId = String(opts.deviceId || '').trim();
   const fingerprint = deviceFingerprint(opts.ua);
-  if (!normalizedPhone || !deviceId || !fingerprint) return null;
+  if (!normalizedPhone || !deviceId || !fingerprint) return { candidate: null, matches: 0 };
   const hash = deviceIdHash(deviceId);
   const cutoff = now() - TRUSTED_DEVICE_REVERIFY_MS;
   const candidates = devices.filter((d) => {
@@ -521,22 +521,21 @@ function trustedDeviceCandidate(phone, opts = {}) {
   // điều kiện thì fail closed và yêu cầu OTP/chọn tài khoản, không tự đoán.
   const valid = candidates.map((d) => ({ d, user: store.findUserByCode(d.emp_code) }))
     .filter(({ user }) => user && !accessPolicy.isLoginBlocked(user.emp_code) && normPhone(user.phone) === normalizedPhone);
-  return valid.length === 1 ? valid[0] : null;
+  return { candidate: valid.length === 1 ? valid[0] : null, matches: valid.length };
 }
 
 function trustedDeviceEligible(phone, opts = {}) {
-  return trustedDeviceCandidate(phone, opts) !== null;
+  return trustedDeviceCandidate(phone, opts).candidate !== null;
 }
 
 function loginByTrustedDevice(phone, opts = {}) {
-  const candidate = trustedDeviceCandidate(phone, opts);
+  const result = trustedDeviceCandidate(phone, opts);
+  const { candidate, matches } = result;
   if (!candidate) {
-    const normalizedPhone = normPhone(phone);
     const deviceId = String(opts.deviceId || '').trim();
     logAudit('device_login_rejected', {
-      phone: normalizedPhone,
       device: deviceId ? deviceIdHash(deviceId) : '',
-      matches: 0,
+      matches,
     });
     return null;
   }
