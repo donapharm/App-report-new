@@ -420,9 +420,9 @@ test('closed T07 without current creates exactly one complete initial generation
   assert.match(audits.at(-1).checksum, /^[a-f0-9]{64}$/);
 });
 
-test('background initial validation failure preserves 19/19 evidence and privacy-safe cause', async (t) => {
+test('background initial validation failure preserves 21/21 evidence and privacy-safe cause', async (t) => {
   const audits = [];
-  const roster = Array.from({ length: 19 }, (_, index) => `DN${String(index + 1).padStart(3, '0')}`);
+  const roster = Array.from({ length: 21 }, (_, index) => `DN${String(index + 1).padStart(3, '0')}`);
   const ctx = closedInitialSetup(t, {
     roster,
     auditClosedRepair: (entry) => audits.push(entry),
@@ -430,12 +430,12 @@ test('background initial validation failure preserves 19/19 evidence and privacy
     validateClosedRepair: async () => {
       throw Object.assign(new Error('private payload must not persist'), {
         code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_STALE_INVALID',
-        statusEvidence: { rosterCount: 19, availableCount: 19 },
+        statusEvidence: { rosterCount: 21, availableCount: 21 },
         validation: {
           identityValid: true, coverageValid: true, freshnessValid: false,
           reconciliationValid: true, provenancePresent: true, provenanceComplete: true,
           provenanceFailures: [{ scope: '2026-07:03.TUE.N', reason: 'upstream_not_found' }],
-          unavailableEmployees: [], staleEmployees: ['DN019'], privatePayload: 'must-not-leak',
+          unavailableEmployees: [], staleEmployees: ['DN021'], privatePayload: 'must-not-leak',
         },
       });
     },
@@ -444,10 +444,10 @@ test('background initial validation failure preserves 19/19 evidence and privacy
   await assert.rejects(ctx.sync.inFlight.get('2026-07'), { code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_STALE_INVALID' });
   const status = ctx.store.readStatus('2026-07');
   assert.equal(status.state, 'failed');
-  assert.equal(status.rosterCount, 19);
-  assert.equal(status.availableCount, 19);
+  assert.equal(status.rosterCount, 21);
+  assert.equal(status.availableCount, 21);
   assert.equal(status.errorCode, 'EMPLOYEE_COST_SNAPSHOT_MODEL_STALE_INVALID');
-  assert.deepEqual(status.unavailableReasons, { DN019: 'stale_rates' });
+  assert.deepEqual(status.unavailableReasons, { DN021: 'stale_rates' });
   assert.equal(audits.at(-1).outcome, 'initial_rejected_validation');
   assert.equal(audits.at(-1).validation.freshnessValid, false);
   assert.deepEqual(audits.at(-1).provenanceFailures, [
@@ -473,8 +473,10 @@ test('two simultaneous initial-generation attempts publish exactly one current g
   assert.equal(ctx.store.readCurrent('2026-07').complete, true);
 });
 
-test('closed initial with 18-of-19 equivalent rejects without current or generation files', async (t) => {
+test('closed initial with 20-of-21 rejects without current or generation files', async (t) => {
+  const roster = Array.from({ length: 21 }, (_, index) => `DN${String(index + 1).padStart(3, '0')}`);
   const ctx = closedInitialSetup(t, {
+    roster,
     fetchEmployee: async (empCode) => empCode === 'DN002' ? { ok: false, sourceOutcome: 'deadline' } : { sourceOutcome: 'ok', report: { empCode } },
   });
   await assert.rejects(ctx.sync.createInitialClosedGeneration('2026-07'), (error) => {

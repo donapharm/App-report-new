@@ -956,10 +956,11 @@ router.get('/integrations/home/app-report-visibility', auth.requireHomeService, 
 });
 
 function employeeCostRosterRows() {
-  // Nguồn duy nhất cho picker và công tắc: roster Sale 21 người + metadata
-  // nhóm ở backend. Frontend không giữ danh sách/mapping nhóm riêng.
-  return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }))
-    .filter((employee) => !accessPolicy.isLoginBlocked(employee.emp_code));
+  // CONTRACT CEO 26/08/2026: phạm vi báo cáo KHÔNG phải phạm vi đăng nhập.
+  // DN021/DN023 vẫn bị accessPolicy chặn đăng nhập và bị các cổng gửi ngoài chặn
+  // độc lập, nhưng CEO phải thấy đủ roster Sale 21 người để tổng doanh thu/tiền
+  // không bị rơi. Tuyệt đối không dùng isLoginBlocked() để lọc reporting roster.
+  return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
 }
 
 
@@ -1168,8 +1169,8 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
   lockedSnapshotProvider: employeeCostLockedSnapshotProvider,
   validateClosedRepair: async ({ period, roster, employees, model }) => {
     const statusEvidence = { rosterCount: roster.length, availableCount: employees.size };
-    if (period !== '2026-07' || roster.length !== 19 || employees.size !== 19) {
-      throw Object.assign(new Error('Generation tiền chưa đủ đúng 19 nhân viên.'), {
+    if (period !== '2026-07' || roster.length !== 21 || employees.size !== 21) {
+      throw Object.assign(new Error('Generation tiền chưa đủ đúng 21 nhân viên.'), {
         code: 'EMPLOYEE_COST_SNAPSHOT_ROSTER_COUNT_INVALID', statusEvidence,
       });
     }
@@ -1202,7 +1203,7 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
     // `rc` is the reconciliation-rows checksum of each contractor snapshot; it
     // is not a rate-policy checksum and legitimately differs by scope. The old
     // comparison with one hard-coded policy checksum rejected every healthy
-    // 19/19 build. Continue to fail closed on absent/malformed/THIEU tuples.
+    // 21/21 build. Continue to fail closed on absent/malformed/THIEU tuples.
     if (!employeeCostSnapshotProvenance.employeeReportsHaveCompleteReconciliationProvenance(employees)) {
       throw Object.assign(new Error('Generation tiền thiếu checksum/lai lịch đối soát T07.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PROVENANCE_INVALID' });
     }

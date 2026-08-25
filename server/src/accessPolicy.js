@@ -3,6 +3,9 @@
 // CEO chốt 08/08/2026: các mã này không thuộc phạm vi được phép đăng nhập
 // App Report. Giữ policy ở backend thay vì xóa khỏi users.json vì danh bạ còn
 // được dùng để gắn tên vào dữ liệu báo cáo.
+// CONTRACT CEO 26/08/2026: denylist này CHỈ quyết định quyền đăng nhập. DN021 và
+// DN023 vẫn thuộc reporting roster 21 người của CEO; cấm tái dùng tập này để lọc
+// tổng hợp doanh thu/chi phí. Quyền gửi ngoài được chặn bằng policy riêng.
 const BLOCKED_LOGIN_EMP_CODES = new Set([
   'VP002', 'VP003',
   'VP006', 'VP007', 'VP008', 'VP009', 'VP010', 'VP011',

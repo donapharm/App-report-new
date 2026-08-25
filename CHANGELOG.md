@@ -8001,3 +8001,13 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Each CEO browser creates a non-extractable RSA-OAEP private key stored as a CryptoKey in IndexedDB. Only the public JWK is registered. Device removal revokes the public-key registration and deletes the local CryptoKey; loss means registering again and asking DataHub to rewrap/resync, with no escrow.
 - Viewer requires the existing CEO + human trusted-device + OTP-within-12-hours boundary. Missing period/as-of/page metadata fails closed; UI always displays “Số liệu tính đến …”. Pages are at most 50 rows, horizontally scrollable, and sparse cells remain blank/`—` rather than inferred zero.
 - Custody defaults to `/home/osboxes/app-report-custody/catalog52-v1`, outside static/Git/releases; directories are 0700 and registry/ciphertext files are 0600. Private/decryption keys are never accepted by an API and never enter server logs, env, artifacts, or backups.
+### 2026-08-26 — Tách quyền đăng nhập khỏi roster tổng hợp Employee Cost của CEO
+
+- Reporting roster Employee Cost của CEO luôn lấy đủ roster Sale `21/21`, gồm
+  `DN021` và `DN023`, để doanh thu và tiền toàn đội không bị rơi khỏi phép cân.
+- `DN021`/`DN023` vẫn bị khóa đăng nhập App Report. Denylist đăng nhập chỉ là
+  access policy, không được dùng làm bộ lọc dữ liệu báo cáo CEO.
+- Các cổng gửi ngoài vẫn chặn riêng `DN021`/`DN023`; thay đổi roster không cấp
+  quyền gửi Telegram/Zalo/email và không đổi policy target-only/không thưởng-phạt.
+- Completeness gate của generation T07 yêu cầu đúng `21/21`, không còn chấp nhận
+  tập 19 người hình thành do lọc nhầm denylist đăng nhập.
