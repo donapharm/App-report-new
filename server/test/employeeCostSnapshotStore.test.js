@@ -51,6 +51,7 @@ test('closed repair validation separates identity, coverage, freshness, reconcil
     coverageValid: true,
     freshnessValid: true,
     reconciliationValid: true,
+    provenanceRecorded: true,
     provenancePresent: true,
     provenanceComplete: true,
     provenanceFailures: [],
@@ -79,6 +80,22 @@ test('closed repair validation separates identity, coverage, freshness, reconcil
   assert.equal(result.provenancePresent, false);
   assert.deepEqual(result.unavailableEmployees, ['DN002']);
   assert.deepEqual(result.staleEmployees, ['DN001']);
+});
+
+test('closed repair accepts explicit empty model provenance only with caller-attested local evidence', () => {
+  const { store } = fresh();
+  const model = { ...sealedModel(), remoteProvenance: [] };
+  const denied = store.closedRepairModelValidation(model, PERIOD, ROSTER);
+  assert.equal(denied.provenanceRecorded, true);
+  assert.equal(denied.provenancePresent, false);
+  assert.equal(denied.provenanceComplete, false);
+
+  const accepted = store.closedRepairModelValidation(model, PERIOD, ROSTER, {
+    allowExplicitNoRemoteProvenance: true,
+  });
+  assert.equal(accepted.provenanceRecorded, true);
+  assert.equal(accepted.provenancePresent, false);
+  assert.equal(accepted.provenanceComplete, true);
 });
 
 test('closed repair validation reports roster identity separately from source health', () => {

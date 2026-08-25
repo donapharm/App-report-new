@@ -21,3 +21,30 @@ test('T07 rejects missing, malformed, and explicitly missing reconciliation prov
     ])), false);
   }
 });
+
+test('T07 accepts explicit no-remote provenance only for complete local-pinned reports', () => {
+  const local = (overrides = {}) => ({
+    report: {
+      rateSource: 'local_pinned', sourceOutcome: 'ok',
+      remoteProvenance: [], remoteProvenanceFailures: [],
+      ...overrides,
+    },
+  });
+  const employees = new Map([['DN001', local()], ['DN002', local()]]);
+
+  assert.equal(provenance.employeeReportsHaveCompleteReconciliationProvenance(employees), false);
+  assert.equal(provenance.employeeReportsHaveCompleteReconciliationProvenance(
+    employees, { allowExplicitLocalOnly: true },
+  ), true);
+
+  for (const report of [
+    local({ rateSource: 'local_sync' }),
+    local({ sourceOutcome: 'ok_stale_rates' }),
+    local({ remoteProvenanceFailures: [{ scope: '2026-07:CT01', reason: 'upstream_unavailable' }] }),
+    local({ remoteProvenance: undefined }),
+  ]) {
+    assert.equal(provenance.employeeReportsHaveCompleteReconciliationProvenance(
+      new Map([['DN001', report]]), { allowExplicitLocalOnly: true },
+    ), false);
+  }
+});

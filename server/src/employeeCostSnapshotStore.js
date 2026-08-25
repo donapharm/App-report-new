@@ -101,7 +101,7 @@ function sealModelMatchesRoster(model, period, roster) {
     && !model.remoteProvenance.some((item) => String(item).endsWith(':THIEU'));
 }
 
-function closedRepairModelValidation(model, period, roster) {
+function closedRepairModelValidation(model, period, roster, options = {}) {
   const normalizedPeriod = normalizePeriod(period);
   const normalizedRoster = normalizeRoster(roster);
   let modelRoster = [];
@@ -127,14 +127,16 @@ function closedRepairModelValidation(model, period, roster) {
     && (!Array.isArray(item?.match?.staleEmployees) || item.match.staleEmployees.length === 0));
   const reconciliationValid = !!model?.revenueRecon
     && model.revenueRecon.unavailable !== true && model.revenueRecon.balanced === true;
-  const provenancePresent = Array.isArray(model?.remoteProvenance) && model.remoteProvenance.length > 0;
-  const provenanceComplete = provenancePresent
+  const provenanceRecorded = Array.isArray(model?.remoteProvenance);
+  const provenancePresent = provenanceRecorded && model.remoteProvenance.length > 0;
+  const provenanceComplete = provenanceRecorded
+    && (provenancePresent || options.allowExplicitNoRemoteProvenance === true)
     && !model.remoteProvenance.some((item) => String(item).endsWith(':THIEU'));
   const provenanceFailures = safeProvenanceFailures(model?.remoteProvenanceFailures);
   return {
     valid: identityValid && coverageValid && freshnessValid && reconciliationValid && provenanceComplete,
     identityValid, coverageValid, freshnessValid, reconciliationValid,
-    provenancePresent, provenanceComplete, provenanceFailures, unavailableEmployees, staleEmployees,
+    provenanceRecorded, provenancePresent, provenanceComplete, provenanceFailures, unavailableEmployees, staleEmployees,
   };
 }
 

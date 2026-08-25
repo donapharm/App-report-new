@@ -40,7 +40,8 @@ test('snapshot status/resync routes are admin guarded and mutation is additional
   assert.match(source, /controlEnabled: enabled \|\| trangThaiDongBo\.initialGenerationAllowed === true/);
   assert.match(source, /closedIncomplete[\s\S]*?trustedHumanDeviceForSession[\s\S]*?EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED/);
   assert.match(source, /requestClosedRepair\(period/);
-  assert.match(source, /employeeReportsHaveCompleteReconciliationProvenance\(employees\)/);
+  assert.match(source, /employeeReportsHaveCompleteReconciliationProvenance\(employees, \{ allowExplicitLocalOnly: true \}\)/);
+  assert.match(source, /allowExplicitNoRemoteProvenance: explicitLocalOnlyProvenance/);
   assert.doesNotMatch(source, /expectedRateChecksum/);
 });
 

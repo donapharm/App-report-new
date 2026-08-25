@@ -1173,7 +1173,16 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
         code: 'EMPLOYEE_COST_SNAPSHOT_ROSTER_COUNT_INVALID', statusEvidence,
       });
     }
-    const validation = employeeCostSnapshotStore.closedRepairModelValidation(model, period, roster);
+    // Local-only T07 legitimately has no reconciliation tuple when no remote
+    // reconciliation package participated. Accept that explicit empty attestation
+    // only when every original employee report proves local_pinned + ok and records
+    // an empty failure list. Missing fields, stale/local-sync data and THIEU tuples
+    // remain fail-closed. Never relabel a rate checksum as reconciliation `rc`.
+    const explicitLocalOnlyProvenance = employeeCostSnapshotProvenance
+      .employeeReportsHaveCompleteReconciliationProvenance(employees, { allowExplicitLocalOnly: true });
+    const validation = employeeCostSnapshotStore.closedRepairModelValidation(model, period, roster, {
+      allowExplicitNoRemoteProvenance: explicitLocalOnlyProvenance,
+    });
     if (!validation.identityValid) {
       throw Object.assign(new Error('Generation tiền không khớp căn cước đội hình/kỳ.'), {
         code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_IDENTITY_INVALID', statusEvidence, validation,
@@ -1203,7 +1212,7 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
     // is not a rate-policy checksum and legitimately differs by scope. The old
     // comparison with one hard-coded policy checksum rejected every healthy
     // 19/19 build. Continue to fail closed on absent/malformed/THIEU tuples.
-    if (!employeeCostSnapshotProvenance.employeeReportsHaveCompleteReconciliationProvenance(employees)) {
+    if (!explicitLocalOnlyProvenance) {
       throw Object.assign(new Error('Generation tiền thiếu checksum/lai lịch đối soát T07.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PROVENANCE_INVALID' });
     }
     return true;
