@@ -225,6 +225,12 @@ npm --prefix web run build
 Không dùng `npm test` nếu `package.json` không khai báo script đó; không mượn `node_modules` từ PROD và
 không trỏ test vào kho dữ liệu PROD.
 
+**Vì sao đếm bằng `find` chứ không chạy `cd server && node --test`.** Bộ chạy mặc định của Node quét cả
+`test/**/*.js`, nên nó nhặt luôn `server/test/fixtures/*.js` — file dữ liệu mẫu, không phải test — và
+đếm thành một "test". Lệnh `find` ở trên chỉ lấy đúng **188 file `*.test.js`**, nên tổng ra **ít hơn
+đúng 1** so với bộ chạy mặc định. Con số của `find` mới là con số đúng; thấy lệch 1 thì không phải mất
+test. Ghi lại để lượt sau khỏi đi truy lại như Claude vừa phải làm.
+
 ---
 
 ## 5. Việc còn treo (KHÔNG thuộc App Report)
