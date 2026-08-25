@@ -193,6 +193,38 @@ Bộ script trong `scripts/` (**41/41 PASS**, hiện **đứng độc lập, CH�
 `auto-deploy.sh` bản `a82381f` đã tự vá 2 nguyên nhân sập ngày 27/07:
 đổi `web/dist` **nguyên khối**, chỉ reload backend **khi file server đổi**, build hỏng thì **giữ bản đang chạy**.
 
+### Chạy test trong clean worktree
+
+Chạy từ thư mục gốc của worktree. Chuẩn bị dependency đúng theo lockfile; không thêm package và không sửa
+`package.json`/lockfile:
+
+```bash
+npm --prefix server ci
+npm --prefix web ci
+```
+
+Các lệnh gate chuẩn:
+
+```bash
+# Focused (bộ auth + provenance của candidate hiện tại)
+node --test server/test/authTrustedDevice.test.js \
+  server/test/employeeCostSnapshotProvenance.test.js
+
+# Full server
+mapfile -t server_tests < <(find server/test -maxdepth 1 -type f -name '*.test.js' -print | sort)
+node --test "${server_tests[@]}"
+
+# Full web
+mapfile -t web_tests < <(find web/test -maxdepth 1 -type f \( -name '*.test.mjs' -o -name '*.test.js' \) -print | sort)
+node --test "${web_tests[@]}"
+
+# Build web
+npm --prefix web run build
+```
+
+Không dùng `npm test` nếu `package.json` không khai báo script đó; không mượn `node_modules` từ PROD và
+không trỏ test vào kho dữ liệu PROD.
+
 ---
 
 ## 5. Việc còn treo (KHÔNG thuộc App Report)
