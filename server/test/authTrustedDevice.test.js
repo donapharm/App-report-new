@@ -11,7 +11,7 @@ function clearAuthModules() {
   for (const mod of AUTH_MODULES) delete require.cache[require.resolve(mod)];
 }
 
-function withAuthDir(run) {
+function withAuthDir(run, fixtureUsers = [FIXTURE_USER]) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-report-trusted-device-'));
   const oldDir = process.env.AUTH_DATA_DIR;
   process.env.AUTH_DATA_DIR = dir;
@@ -27,8 +27,11 @@ function withAuthDir(run) {
     filename: storePath,
     loaded: true,
     exports: {
-      findUserByCode: (code) => String(code || '').toUpperCase() === FIXTURE_USER.emp_code ? { ...FIXTURE_USER } : null,
-      listUsers: () => [{ ...FIXTURE_USER }],
+      findUserByCode: (code) => {
+        const user = fixtureUsers.find((item) => item.emp_code === String(code || '').toUpperCase());
+        return user ? { ...user } : null;
+      },
+      listUsers: () => fixtureUsers.map((user) => ({ ...user })),
     },
   };
   clearAuthModules();
@@ -46,6 +49,43 @@ function withAuthDir(run) {
 const CHROME_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36';
 const CHROME_WINDOWS_NEW_VERSION = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140.0 Safari/537.36';
 const SAFARI_IOS = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile Safari/604.1';
+
+test('trusted-device rejection audits zero matches without phone or raw device identifiers', () => withAuthDir((dir, auth) => {
+  const rawDeviceId = 'device-no-trusted-candidate';
+  assert.equal(auth.loginByTrustedDevice(FIXTURE_USER.phone, { deviceId: rawDeviceId, ua: CHROME_WINDOWS }), null);
+
+  const audit = JSON.parse(fs.readFileSync(path.join(dir, 'audit_auth.json'), 'utf8')).at(-1);
+  assert.equal(audit.event, 'device_login_rejected');
+  assert.equal(audit.matches, 0);
+  assert.match(audit.device, /^[a-f0-9]{64}$/);
+  assert.equal(Object.hasOwn(audit, 'phone'), false);
+  assert.doesNotMatch(JSON.stringify(audit), new RegExp(`${FIXTURE_USER.phone}|${rawDeviceId}`));
+}));
+
+test('trusted-device rejection audits all matching accounts and remains fail closed', () => {
+  const sharedPhone = '0900000000';
+  const users = [
+    { emp_code: 'DN016', phone: sharedPhone, name: 'A', role: 'sale' },
+    { emp_code: 'DN017', phone: sharedPhone, name: 'B', role: 'sale' },
+  ];
+  return withAuthDir((dir, auth) => {
+    const rawDeviceId = 'device-shared-phone';
+    const ctx = { method: 'otp', phone: sharedPhone, deviceId: rawDeviceId, ua: CHROME_WINDOWS };
+    for (const user of users) {
+      auth.issueToken(user, ctx);
+      auth.issueToken(user, ctx);
+      auth.issueToken(user, ctx);
+    }
+
+    assert.equal(auth.loginByTrustedDevice(sharedPhone, ctx), null, 'nhiều ứng viên vẫn phải từ chối cấp phiên');
+    const audit = JSON.parse(fs.readFileSync(path.join(dir, 'audit_auth.json'), 'utf8')).at(-1);
+    assert.equal(audit.event, 'device_login_rejected');
+    assert.equal(audit.matches, 2);
+    assert.match(audit.device, /^[a-f0-9]{64}$/);
+    assert.equal(Object.hasOwn(audit, 'phone'), false);
+    assert.doesNotMatch(JSON.stringify(audit), new RegExp(`${sharedPhone}|${rawDeviceId}`));
+  }, users);
+});
 
 test('trusted device requires 3 OTP logins and preserves the 30-day OTP anchor', () => withAuthDir((dir, auth) => {
   const user = { ...FIXTURE_USER };

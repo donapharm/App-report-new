@@ -24,6 +24,14 @@ có **đối chứng dương** (người hợp lệ phải qua được) thì kh
 **Test.** `employeeCostRosterScope.test.js` 3 → **4 PASS**. Full server 1591/1591 (7 test PDF đỏ do máy
 dev thiếu `pdfinfo`), web 534/534.
 
+### 2026-08-25 — Giới hạn đã biết của kiểm tra lai lịch đối soát
+
+`reconciliationTupleValid()` chỉ xác nhận tuple có một checksum đối soát `rc=` đúng dạng
+64 ký tự hex chữ thường và không mang dấu `THIEU`; hàm này **không đối chiếu giá trị checksum**
+với một mốc độc lập. Kiểm tra giá trị thuộc tầng nhận gói trước khi dữ liệu đi tới tầng snapshot.
+Ghi rõ giới hạn này để các lượt sau không hiểu nhầm rằng tầng snapshot vẫn đối chiếu giá trị và
+không đưa trở lại một checksum ghim cứng dùng chung cho các nhà thầu độc lập.
+
 ### 2026-08-24 — Chi phí: chặn latest cứu provenance hỏng + sửa câu báo "thiếu tỷ lệ" bị nói thành "nguồn chập chờn"
 
 **Bot App Report làm (`dd1824e`).** `employeeCost.js` `fetchEmployeeCost()`: bỏ nhánh cho
