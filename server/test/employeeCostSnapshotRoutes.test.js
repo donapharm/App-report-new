@@ -40,7 +40,8 @@ test('snapshot status/resync routes are admin guarded and mutation is additional
   assert.match(source, /controlEnabled: enabled \|\| trangThaiDongBo\.initialGenerationAllowed === true/);
   assert.match(source, /closedIncomplete[\s\S]*?trustedHumanDeviceForSession[\s\S]*?EMPLOYEE_COST_SNAPSHOT_HUMAN_OTP_REQUIRED/);
   assert.match(source, /requestClosedRepair\(period/);
-  assert.match(source, /expectedRateChecksum = '615981e92ef1576fce54de8ae12e14140181d38c44d9839d7e363b68d35e356c'/);
+  assert.match(source, /employeeReportsHaveCompleteReconciliationProvenance\(employees\)/);
+  assert.doesNotMatch(source, /expectedRateChecksum/);
 });
 
 test('closed repair UI is visible only for an incomplete locked generation', () => {

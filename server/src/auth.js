@@ -503,7 +503,7 @@ function selectAccount(phone, empCode, opts = {}) {
 
 // Thiết bị đủ 3 lần OTP, fingerprint còn khớp và OTP gần nhất chưa quá 30 ngày
 // được cấp phiên mới. Device-login không cộng đếm và không gia hạn last_otp_at.
-function loginByTrustedDevice(phone, opts = {}) {
+function trustedDeviceCandidate(phone, opts = {}) {
   const normalizedPhone = normPhone(phone);
   const deviceId = String(opts.deviceId || '').trim();
   const fingerprint = deviceFingerprint(opts.ua);
@@ -521,17 +521,43 @@ function loginByTrustedDevice(phone, opts = {}) {
   // điều kiện thì fail closed và yêu cầu OTP/chọn tài khoản, không tự đoán.
   const valid = candidates.map((d) => ({ d, user: store.findUserByCode(d.emp_code) }))
     .filter(({ user }) => user && !accessPolicy.isLoginBlocked(user.emp_code) && normPhone(user.phone) === normalizedPhone);
-  if (valid.length !== 1) {
-    logAudit('device_login_rejected', { phone: normalizedPhone, device: hash, matches: valid.length });
+  return valid.length === 1 ? valid[0] : null;
+}
+
+function trustedDeviceEligible(phone, opts = {}) {
+  return trustedDeviceCandidate(phone, opts) !== null;
+}
+
+function loginByTrustedDevice(phone, opts = {}) {
+  const candidate = trustedDeviceCandidate(phone, opts);
+  if (!candidate) {
+    const normalizedPhone = normPhone(phone);
+    const deviceId = String(opts.deviceId || '').trim();
+    logAudit('device_login_rejected', {
+      phone: normalizedPhone,
+      device: deviceId ? deviceIdHash(deviceId) : '',
+      matches: 0,
+    });
     return null;
   }
-  const { d, user } = valid[0];
+  const { d, user } = candidate;
+  const normalizedPhone = normPhone(phone);
   const token = issueToken(user, { ...opts, phone: normalizedPhone, method: 'device' });
   logAudit('device_login', { emp_code: user.emp_code, device: d.id });
   return { token, user: pub(user) };
 }
 
 function startTrustedDeviceSso(phone, opts = {}) {
+  // App Sale may already trust this browser, but App Report deliberately needs
+  // three successful OTPs of its own before fast-login is allowed. Otherwise the
+  // bridge skips OTP after the first Report login forever and the local counter
+  // can never reach three.
+  if (!trustedDeviceEligible(phone, opts)) {
+    const error = new Error('Thiết bị App Report chưa đủ ba lần OTP.');
+    error.status = 401;
+    error.code = 'REPORT_DEVICE_OTP_BOOTSTRAP_REQUIRED';
+    throw error;
+  }
   return trustedDeviceSso.start(phone, opts);
 }
 
@@ -851,7 +877,7 @@ function requireCeo(req, res, next) {
 
 module.exports = {
   mockLogin, enforceAccessPolicyBoundary, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, revenueScopeOf, cstScopeOf, sessionForUser, getSession,
-  issueToken, liveAuthEnabled, otpLoginEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, verifySso, demoAllowed,
+  issueToken, liveAuthEnabled, otpLoginEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, trustedDeviceEligible, verifySso, demoAllowed,
   accessProfileFor: accessPolicy.accessProfileFor,
   canReadAllRevenue: accessPolicy.canReadAllRevenue,
   canReadAllCst: accessPolicy.canReadAllCst,

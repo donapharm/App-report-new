@@ -68,6 +68,7 @@ const employeeCostSealProvenance = require('./employeeCostSealProvenance');
 const formulaIdentity = require('./employeeCostFormulaIdentity');
 const employeeCostHealthKpis = require('./employeeCostHealthKpis');
 const { createEmployeeCostSnapshotStore } = require('./employeeCostSnapshotStore');
+const employeeCostSnapshotProvenance = require('./employeeCostSnapshotProvenance');
 const { createEmployeeCostSnapshotSync } = require('./employeeCostSnapshotSync');
 const salaryAdvance = require('./salaryAdvance');
 const salaryRevenueBridge = require('./salaryRevenueBridge');
@@ -1192,18 +1193,17 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
         code: 'EMPLOYEE_COST_SNAPSHOT_MODEL_RECON_INVALID', statusEvidence, validation,
       });
     }
-    const expectedRateChecksum = '615981e92ef1576fce54de8ae12e14140181d38c44d9839d7e363b68d35e356c';
     if (!validation.provenanceComplete) {
       throw Object.assign(new Error('Generation tiền thiếu lai lịch nguồn từ xa.'), {
         code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PROVENANCE_INVALID', statusEvidence, validation,
       });
     }
-    for (const record of employees.values()) {
-      const provenance = record?.report?.remoteProvenance;
-      if (!Array.isArray(provenance) || !provenance.length
-        || provenance.some((item) => !String(item).includes(`:rc=${expectedRateChecksum}:`) || String(item).endsWith(':THIEU'))) {
-        throw Object.assign(new Error('Generation tiền thiếu checksum/lai lịch tỷ lệ T07.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PROVENANCE_INVALID' });
-      }
+    // `rc` is the reconciliation-rows checksum of each contractor snapshot; it
+    // is not a rate-policy checksum and legitimately differs by scope. The old
+    // comparison with one hard-coded policy checksum rejected every healthy
+    // 19/19 build. Continue to fail closed on absent/malformed/THIEU tuples.
+    if (!employeeCostSnapshotProvenance.employeeReportsHaveCompleteReconciliationProvenance(employees)) {
+      throw Object.assign(new Error('Generation tiền thiếu checksum/lai lịch đối soát T07.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PROVENANCE_INVALID' });
     }
     return true;
   },

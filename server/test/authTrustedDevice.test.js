@@ -53,12 +53,19 @@ test('trusted device requires 3 OTP logins and preserves the 30-day OTP anchor',
 
   auth.issueToken(user, ctx);
   auth.issueToken(user, ctx);
+  assert.equal(auth.trustedDeviceEligible(user.phone, ctx), false, '2 OTP chưa được phép đi đường SSO nhanh');
+  assert.throws(
+    () => auth.startTrustedDeviceSso(user.phone, ctx),
+    { code: 'REPORT_DEVICE_OTP_BOOTSTRAP_REQUIRED' },
+    'App Sale SSO không được nuốt lượt OTP thứ ba của App Report',
+  );
   assert.equal(auth.loginByTrustedDevice(user.phone, ctx), null, '2 OTP chưa được tin cậy');
 
   auth.issueToken(user, ctx);
   const before = auth.listDevices(user.emp_code)[0];
   assert.equal(before.trusted_login_count, 3);
   assert.equal(before.is_trusted, true);
+  assert.equal(auth.trustedDeviceEligible(user.phone, ctx), true, 'đủ 3 OTP mới được phép đi đường SSO nhanh');
   assert.ok(before.last_otp_at);
   assert.doesNotMatch(fs.readFileSync(path.join(dir, 'devices.json'), 'utf8'), /device-dn016/);
   assert.doesNotMatch(fs.readFileSync(path.join(dir, 'sessions.json'), 'utf8'), /device-dn016/);
