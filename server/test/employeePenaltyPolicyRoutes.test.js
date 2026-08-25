@@ -40,7 +40,7 @@ test('canonical preview is short-lived, actor/session-bound and save accepts pre
 });
 
 test('preview impact is backend-only, full roster and never reduced in frontend', () => {
-  assert.match(routes, /const roster = employeeCostRosterRows\(\)/);
+  assert.match(routes, /const roster = actionableRosterRows\(\)/);
   assert.match(routes, /employeePenaltyAggregate\.aggregatePenaltySummaries\(currentReports\)/);
   assert.match(routes, /employeePenaltyAggregate\.aggregatePenaltySummaries\(reports\)/);
   assert.match(routes, /suppressAudit: true/);

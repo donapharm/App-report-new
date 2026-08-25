@@ -19,7 +19,7 @@ test('tab riêng, KHÔNG gộp vào màn nào có sẵn — đúng lệnh CEO t�
 test('cờ costAmountsEnabled do BACKEND chốt (CEO hoặc công tắc), frontend chỉ đọc', () => {
   assert.match(routes, /const isCeo = auth\.isCeoActor\(req\.session\)/);
   assert.match(routes, /const costAmountsEnabled = isCeo/);
-  assert.match(routes, /costAmounts\.decisionFor\(req\.session\.emp_code, employeeCostRosterRows\(\)\)\.enabled/);
+  assert.match(routes, /costAmounts\.decisionFor\(req\.session\.emp_code, actionableRosterRows\(\)\)\.enabled/);
 });
 
 test('route dữ liệu tự chặn độc lập — ẩn tab không phải hàng rào quyền', () => {

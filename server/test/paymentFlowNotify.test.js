@@ -137,7 +137,7 @@ test('‼ chỉ NGƯỜI TRONG ROSTER BÁN HÀNG mới nhận tin thanh toán', 
   const fs = require('node:fs');
   const source = fs.readFileSync(require.resolve('../src/routes'), 'utf8');
   const fn = source.slice(source.indexOf('function resolveFlowRecipient'), source.indexOf('function flowNotifyReach'));
-  assert.match(fn, /audience !== 'ceo' && !employeeCostRosterRows\(\)\.some/,
+  assert.match(fn, /audience !== 'ceo' && !actionableRosterRows\(\)\.some/,
     'thiếu cổng lọc roster ⇒ người ngoài đội bán hàng vẫn nhận tin tiền');
   // ‼ Lọc bằng ROSTER, không bằng danh sách mã cứng — mã cứng sẽ mục theo thời gian
   // và VP004 (đang TRONG roster) sẽ bị loại oan.

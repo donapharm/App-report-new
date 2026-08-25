@@ -955,10 +955,17 @@ router.get('/integrations/home/app-report-visibility', auth.requireHomeService, 
   }));
 });
 
-function employeeCostRosterRows() {
-  // Nguồn duy nhất cho picker và công tắc: roster Sale 21 người + metadata
-  // nhóm ở backend. Frontend không giữ danh sách/mapping nhóm riêng.
-  return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }))
+function ceoAggregateRosterRows() {
+  // CONTRACT CEO 26/08/2026: báo cáo tổng hợp và generation phải giữ đủ 21 người.
+  // Hàm này chỉ dành cho đường đọc/dựng tổng hợp CEO; không dùng làm cổng hành động.
+  return employeeCostRoster.buildRoster(store.targetRoster({ scope: {} }));
+}
+
+function actionableRosterRows() {
+  // Mặc định an toàn: picker, quyền tự xem, gửi tin, ghi sổ tiền, điểm/xu và các
+  // thao tác theo người chỉ nhận 19 mã được phép hành động. Login denylist không
+  // làm mất dữ liệu khỏi báo cáo CEO vì báo cáo dùng ceoAggregateRosterRows().
+  return ceoAggregateRosterRows()
     .filter((employee) => !accessPolicy.isLoginBlocked(employee.emp_code));
 }
 
@@ -1002,7 +1009,7 @@ function employeeCostLockedSealError(code, message) {
 
 async function employeeCostLockedSnapshotProvider(period) {
   const range = employeeCost.parseMonthRange({ from: period, to: period });
-  const roster = employeeCostRosterRows();
+  const roster = ceoAggregateRosterRows();
   const rosterIdentity = employeeCostSnapshotStore.rosterIdentity(roster);
   const sourceFingerprint = employeeCostSealSourceFingerprint();
   const sourceGeneration = employeeCostSealGeneration();
@@ -1017,7 +1024,7 @@ async function employeeCostLockedSnapshotProvider(period) {
     throw employeeCostLockedSealError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Dấu đóng không có provenance xác thực được hoàn toàn cục bộ.');
   }
   if (employeeCostSealSourceFingerprint() !== sourceFingerprint || employeeCostSealGeneration() !== sourceGeneration
-    || employeeCostSnapshotStore.rosterIdentity(employeeCostRosterRows()) !== rosterIdentity) {
+    || employeeCostSnapshotStore.rosterIdentity(ceoAggregateRosterRows()) !== rosterIdentity) {
     throw employeeCostLockedSealError('EMPLOYEE_COST_SNAPSHOT_CLOSED_SEAL_INVALID', 'Nguồn local hoặc roster đổi trong lúc xác thực dấu đóng.');
   }
   // Re-read after provenance validation so replacement/pruning cannot publish a
@@ -1039,7 +1046,7 @@ async function employeeCostLockedSnapshotProvider(period) {
   };
 }
 
-function employeeCostSnapshotStatus(period, roster = employeeCostRosterRows()) {
+function employeeCostSnapshotStatus(period, roster = ceoAggregateRosterRows()) {
   const status = employeeCostSnapshotSync.trangThaiDongBo(period, roster);
   const current = employeeCostSnapshotStore.tryReadCurrent(period, { roster });
   const missingCurrent = !current.ok && (current.error?.cause?.code === 'ENOENT' || current.error?.code === 'ENOENT');
@@ -1160,7 +1167,7 @@ async function fetchAuthoritativeEmployeeCost(empCode, { period, roster, buildRe
 const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
   store: employeeCostSnapshotStore,
   concurrency: Number(process.env.EMPLOYEE_COST_SNAPSHOT_CONCURRENCY || 4),
-  rosterProvider: () => employeeCostRosterRows(),
+  rosterProvider: () => ceoAggregateRosterRows(),
   fetchEmployee: (empCode, options) => fetchAuthoritativeEmployeeCost(empCode, options),
   buildModel: employeeCostSnapshotBuildModel,
   dependencyIdentity: employeeCostSnapshotDependencyIdentity,
@@ -1168,8 +1175,8 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
   lockedSnapshotProvider: employeeCostLockedSnapshotProvider,
   validateClosedRepair: async ({ period, roster, employees, model }) => {
     const statusEvidence = { rosterCount: roster.length, availableCount: employees.size };
-    if (period !== '2026-07' || roster.length !== 19 || employees.size !== 19) {
-      throw Object.assign(new Error('Generation tiền chưa đủ đúng 19 nhân viên.'), {
+    if (period !== '2026-07' || roster.length !== 21 || employees.size !== 21) {
+      throw Object.assign(new Error('Generation tiền chưa đủ đúng 21 nhân viên.'), {
         code: 'EMPLOYEE_COST_SNAPSHOT_ROSTER_COUNT_INVALID', statusEvidence,
       });
     }
@@ -1202,7 +1209,7 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
     // `rc` is the reconciliation-rows checksum of each contractor snapshot; it
     // is not a rate-policy checksum and legitimately differs by scope. The old
     // comparison with one hard-coded policy checksum rejected every healthy
-    // 19/19 build. Continue to fail closed on absent/malformed/THIEU tuples.
+    // 21/21 build. Continue to fail closed on absent/malformed/THIEU tuples.
     if (!employeeCostSnapshotProvenance.employeeReportsHaveCompleteReconciliationProvenance(employees)) {
       throw Object.assign(new Error('Generation tiền thiếu checksum/lai lịch đối soát T07.'), { code: 'EMPLOYEE_COST_SNAPSHOT_REPAIR_PROVENANCE_INVALID' });
     }
@@ -1223,7 +1230,7 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
 function readEmployeeCostSnapshotModel(req, range) {
   if (range.months.length !== 1) throw Object.assign(new Error('Chế độ snapshot hiện chỉ phục vụ đúng một kỳ mỗi lượt xem.'), { status: 409, code: 'EMPLOYEE_COST_SNAPSHOT_SINGLE_PERIOD_REQUIRED' });
   const period = range.months[0];
-  const roster = employeeCostRosterRows();
+  const roster = ceoAggregateRosterRows();
   const result = employeeCostSnapshotStore.tryReadCurrent(period, { roster });
   if (!result.ok) throw Object.assign(new Error('Chưa có snapshot chi phí hợp lệ cho kỳ này. Bấm Đồng bộ lại.'), { status: 503, code: result.error?.code || 'EMPLOYEE_COST_SNAPSHOT_UNAVAILABLE' });
   const snapshot = result.snapshot;
@@ -1265,14 +1272,14 @@ router.get('/me', auth.requireAuth, (req, res) => {
   const isCeo = auth.isCeoActor(req.session);
   const visibility = isAdmin
     ? { enabled: true }
-    : employeeCostVisibility.decision(req.session.emp_code, employeeCostRosterRows());
+    : employeeCostVisibility.decision(req.session.emp_code, actionableRosterRows());
   // ‼ BACKEND nói cho frontend biết ai là CEO — frontend KHÔNG được tự đoán từ chuỗi
   // role. Đúng nguyên tắc "quyền quyết ở backend" trong CLAUDE.md, và đây chính là
   // chỗ hôm 05/08 làm nút Duyệt biến mất khỏi màn hình CEO.
   // Tab "Thành tiền C32/C47": mặc định chỉ CEO; NV cần công tắc riêng bật. Cờ này chỉ
   // để frontend ẨN/HIỆN tab cho gọn — route dữ liệu tự chặn độc lập, không tin cờ.
   const costAmountsEnabled = isCeo
-    || costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows()).enabled;
+    || costAmounts.decisionFor(req.session.emp_code, actionableRosterRows()).enabled;
   res.json({
     ...req.session,
     isAdmin,
@@ -1290,7 +1297,7 @@ router.get('/me', auth.requireAuth, (req, res) => {
 async function employeeCostPayload(req, {
   requestedEmp = req.query.emp,
   auditEvent = 'view',
-  roster = employeeCostRosterRows(),
+  roster = actionableRosterRows(),
   sharedCatalogRowsByPeriod = null,
   bonusConfig = null,
   penaltyConfig = null,
@@ -1731,7 +1738,7 @@ async function employeeCostAllPayload(req, {
     }
   }
 
-  const roster = employeeCostRosterRows();
+  const roster = ceoAggregateRosterRows();
   if (Array.isArray(rosterSink)) { rosterSink.length = 0; rosterSink.push(...roster); }
   const sharedCatalogRowsByPeriod = {};
   const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
@@ -2541,7 +2548,7 @@ function scheduleEmployeeCostSnapshotSync(reason, { onlyIfMissing = false } = {}
   if (!employeeCostSnapshotSyncEnabled()) return false;
   const period = currentSnapshotPeriod();
   if (!period) return false;
-  if (onlyIfMissing && employeeCostSnapshotStore.tryReadCurrent(period, { roster: employeeCostRosterRows() }).ok) return false;
+  if (onlyIfMissing && employeeCostSnapshotStore.tryReadCurrent(period, { roster: ceoAggregateRosterRows() }).ok) return false;
   setImmediate(() => employeeCostSnapshotSync.requestSync(period, { reason }));
   return true;
 }
@@ -2595,9 +2602,9 @@ router.stopEmployeeCostAllWarmLoop = stopEmployeeCostAllWarmLoop;
 router.employeeCostSnapshotWatcherRuntime = {
   store: employeeCostSnapshotStore,
   sync: employeeCostSnapshotSync,
-  rosterProvider: () => employeeCostRosterRows(),
+  rosterProvider: () => ceoAggregateRosterRows(),
   probeEmployee: (empCode, options) => fetchAuthoritativeEmployeeCost(empCode, {
-    ...options, roster: options?.roster || employeeCostRosterRows(), buildReport: false,
+    ...options, roster: options?.roster || ceoAggregateRosterRows(), buildReport: false,
   }),
   dependencyIdentity: employeeCostSnapshotDependencyIdentity,
 };
@@ -2614,7 +2621,8 @@ router.mapBounded = mapBounded;
 router.reusableEmployeeCostReport = reusableEmployeeCostReport;
 router.sameCycleEmployeeCostReport = sameCycleEmployeeCostReport;
 router.employeeCostWarmIsActive = () => employeeCostWarmActive;
-router.employeeCostRosterRows = employeeCostRosterRows;
+router.ceoAggregateRosterRows = ceoAggregateRosterRows;
+router.actionableRosterRows = actionableRosterRows;
 router.memoPublishIfOwner = memoPublishIfOwner;
 router.memoReplaceResolved = memoReplaceResolved;
 router.memoPeek = (key) => memo.get(key);
@@ -2661,7 +2669,7 @@ router.post('/employee-cost/snapshot/resync', auth.requireAuth, auth.requireAdmi
   if (period === '2026-06') {
     return res.status(403).json({ error: 'T06.2026 bị khoá cứng, không được tạo hoặc dựng lại generation.', code: 'EMPLOYEE_COST_SNAPSHOT_INITIAL_PERIOD_DENIED' });
   }
-  const current = employeeCostSnapshotStore.tryReadCurrent(period, { roster: employeeCostRosterRows() });
+  const current = employeeCostSnapshotStore.tryReadCurrent(period, { roster: ceoAggregateRosterRows() });
   const missingCurrent = !current.ok && (current.error?.cause?.code === 'ENOENT' || current.error?.code === 'ENOENT');
   const closedInitial = period === '2026-07' && employeeCost.isPeriodClosed(period, employeeCost.vnToday()) && missingCurrent;
   if (closedInitial) {
@@ -2721,7 +2729,7 @@ router.get('/employee-cost/salary-advance', auth.requireAuth, asyncJsonRoute(asy
     actor: req.session.emp_code,
     role: req.session.role,
     empCode,
-    roster: employeeCostRosterRows(),
+    roster: actionableRosterRows(),
   }, async () => {
     return salaryAdvance.safeGetFirstAdvance(period, empCode, salaryAdvance.getFirstAdvance);
   });
@@ -2732,7 +2740,7 @@ router.get('/employee-cost/salary-advance', auth.requireAuth, asyncJsonRoute(asy
 async function employeeVatKhoanPayload(req, {
   requestedEmp = req.query.emp,
   auditEvent = 'view',
-  roster = employeeCostRosterRows(),
+  roster = actionableRosterRows(),
   period = employeeVatKhoan.parsePeriod(req.query),
 } = {}) {
   const scope = auth.scopeOf(req.session);
@@ -2865,7 +2873,7 @@ function aggregateCombinedPayloads(rows = [], roster = [], period) {
   };
 }
 
-async function employeePointXuPayload(req, { requestedEmp = req.query.emp, auditEvent = 'view', roster = employeeCostRosterRows(), period = employeeVatKhoan.parsePeriod(req.query) } = {}) {
+async function employeePointXuPayload(req, { requestedEmp = req.query.emp, auditEvent = 'view', roster = actionableRosterRows(), period = employeeVatKhoan.parsePeriod(req.query) } = {}) {
   const scope = auth.scopeOf(req.session);
   const empCode = employeeCost.resolveScopedEmployee({ session: req.session, scope, requestedEmp });
   const pointPayload = employeePointLocal.buildLocalPointPayload({ empCode, period: period.period });
@@ -2876,7 +2884,7 @@ async function employeePointXuPayload(req, { requestedEmp = req.query.emp, audit
 router.get('/employee-cost/diem-xu', auth.requireAuth, asyncJsonRoute(async (req, res) => {
   const admin = auth.isAdmin(req.session.role);
   const requested = String(req.query.emp || '').trim().toUpperCase();
-  const roster = employeeCostRosterRows();
+  const roster = actionableRosterRows();
   const period = employeeVatKhoan.parsePeriod(req.query);
   let payload;
   if (admin && requested === 'ALL') {
@@ -2925,7 +2933,7 @@ router.get('/employee-cost/diem-xu', auth.requireAuth, asyncJsonRoute(async (req
 router.get('/admin/employee-point/notifications/preview', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   const period = employeeVatKhoan.parsePeriod(req.query);
   const requested = String(req.query.emp || '').trim().toUpperCase();
-  const roster = employeeCostRosterRows();
+  const roster = actionableRosterRows();
   if (!requested || !roster.some((employee) => employee.emp_code === requested)) {
     return res.status(400).json({ error: 'Nhân viên không thuộc roster chi phí được duyệt.', code: 'EMPLOYEE_POINT_NOTIFICATION_EMP_INVALID' });
   }
@@ -2963,7 +2971,7 @@ router.get('/admin/employee-point/notifications/preview', auth.requireAuth, auth
 router.get('/integrations/datahub/employee-quarter-penalty', auth.requireDataHubService, asyncJsonRoute(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
   const requested = String(req.query.emp || '').trim().toUpperCase();
-  const roster = employeeCostRosterRows();
+  const roster = actionableRosterRows();
   if (!requested || requested === 'ALL' || !roster.some((employee) => employee.emp_code === requested)) {
     return res.status(400).json({ error: 'Nhân viên không thuộc roster chi phí được duyệt.', code: 'EMPLOYEE_POINT_PENALTY_EMP_INVALID' });
   }
@@ -2995,7 +3003,7 @@ async function mapWithConcurrency(items, limit, worker) {
 
 async function employeeCostExportReports(req, format) {
   const admin = auth.isAdmin(req.session.role);
-  const roster = employeeCostRosterRows();
+  const roster = actionableRosterRows();
   const requested = String(req.query.emp || '').trim().toUpperCase();
   if (requested === 'ALL') {
     if (!admin) throw Object.assign(new Error('Chỉ CEO/admin được xuất tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
@@ -3062,7 +3070,7 @@ router.get('/employee-cost/province-worklist/export.xlsx', auth.requireAuth, aut
   let payload;
   try {
     range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
-    const roster = employeeCostRosterRows();
+    const roster = ceoAggregateRosterRows();
     const revenueRows = range.months.flatMap((period) => store.getRows({
       ky: employeeCost.toUiMonth(period),
       scope: {},
@@ -3087,7 +3095,7 @@ router.get('/employee-cost/province-worklist/export.xlsx', auth.requireAuth, aut
 async function employeeCostGapPayload(req, event = 'gaps_view') {
   const s = auth.scopeOf(req.session);
   const admin = auth.isAdmin(req.session.role);
-  const roster = employeeCostRosterRows();
+  const roster = actionableRosterRows();
   const empCode = employeeCost.resolveScopedEmployee({
     session: req.session,
     scope: s,
@@ -3347,7 +3355,7 @@ async function employeeCostDqPayload(req, event = 'dq_view') {
     });
     if (!admin) {
       const visibility = await employeeCostVisibility.run({
-        admin, actor: ownEmp, role: req.session.role, empCode: scopedEmp, roster: employeeCostRosterRows(),
+        admin, actor: ownEmp, role: req.session.role, empCode: scopedEmp, roster: actionableRosterRows(),
       }, () => null);
       if (visibility?.disabled) return visibility;
     }
@@ -3431,14 +3439,14 @@ router.get('/employee-cost/data-quality/export.pdf', auth.requireAuth, asyncJson
 }));
 
 router.get('/employee-cost/employees', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
-  const employees = employeeCostRosterRows();
+  const employees = actionableRosterRows();
   res.set('Cache-Control', 'private, no-store');
   return res.json({ employees });
 }));
 
 router.get('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   res.set('Cache-Control', 'private, no-store');
-  return res.json(employeeCostVisibility.panel(employeeCostRosterRows()));
+  return res.json(employeeCostVisibility.panel(actionableRosterRows()));
 }));
 
 /* Gộp NHIỀU KỲ (CEO chốt 04/08): "chọn từ tháng này tới tháng này để biết total bao
@@ -3500,7 +3508,7 @@ function paymentTarget(req) {
   }
   if (!period) throw Object.assign(new Error('Kỳ không hợp lệ'), { status: 400, code: 'PAYMENT_PERIOD_INVALID' });
   // Chỉ ghi cho người CÓ TRONG roster chi phí — không ghi cho mã lạ.
-  if (!employeeCostRosterRows().some((employee) => employee.emp_code === empCode)) {
+  if (!actionableRosterRows().some((employee) => employee.emp_code === empCode)) {
     throw Object.assign(new Error('Nhân viên không thuộc roster chi phí'), { status: 400, code: 'PAYMENT_EMP_NOT_IN_ROSTER' });
   }
   return { empCode, period, actor: req.session?.emp_code };
@@ -3512,7 +3520,7 @@ function paymentTarget(req) {
  * Không tìm ra người nhận thì THÔI, không ném lỗi — sổ đã ghi rồi.
  */
 const employeeNameOf = (empCode) => {
-  const found = employeeCostRosterRows().find((row) => row.emp_code === String(empCode || '').toUpperCase());
+  const found = actionableRosterRows().find((row) => row.emp_code === String(empCode || '').toUpperCase());
   return found ? String(found.name || '') : '';
 };
 
@@ -3524,7 +3532,7 @@ function resolveFlowRecipient(audience, empCode) {
   // Cổng lọc là ROSTER CHI PHÍ, không phải danh sách mã cứng — mã cứng sẽ mục theo
   // thời gian, còn roster thì tự đúng: ai vào roster thì tự nhận tin, ai rời thì tự
   // thôi. VP004 NẰM TRONG roster nên vẫn nhận, đúng như bot báo.
-  if (audience !== 'ceo' && !employeeCostRosterRows().some((row) => row.emp_code === code)) return null;
+  if (audience !== 'ceo' && !actionableRosterRows().some((row) => row.emp_code === code)) return null;
   const map = auth.listTelegramMap();
   const target = audience === 'ceo'
     ? map.find((row) => String(row.emp_code || '').toUpperCase() === 'CEO')
@@ -3548,7 +3556,7 @@ function flowNotifyReach(audience, empCode) {
     audience,
     note: target?.telegramId ? '' : (audience === 'ceo'
       ? 'Tài khoản CEO chưa nối Telegram — tin sẽ không tới.'
-      : (employeeCostRosterRows().some((row) => row.emp_code === String(empCode || '').toUpperCase())
+      : (actionableRosterRows().some((row) => row.emp_code === String(empCode || '').toUpperCase())
         ? 'NV này chưa nối Telegram — sẽ KHÔNG nhận được tin, cần báo trực tiếp.'
         : 'Người này không thuộc roster bán hàng — không nhận tin thanh toán.')),
   };
@@ -3599,7 +3607,7 @@ function selfPaymentTarget(req) {
   }
   const period = employeeCost.normalizeMonth(req.body?.period || req.body?.ky);
   if (!period) throw Object.assign(new Error('Kỳ không hợp lệ'), { status: 400, code: 'PAYMENT_PERIOD_INVALID' });
-  if (!employeeCostRosterRows().some((employee) => employee.emp_code === requested)) {
+  if (!actionableRosterRows().some((employee) => employee.emp_code === requested)) {
     throw Object.assign(new Error('Nhân viên không thuộc roster chi phí'), { status: 400, code: 'PAYMENT_EMP_NOT_IN_ROSTER' });
   }
   if (Object.prototype.hasOwnProperty.call(req.body || {}, 'amount')) {
@@ -3611,6 +3619,13 @@ function selfPaymentTarget(req) {
     note: req.body?.note, requestId,
   };
 }
+
+// Hook nội bộ để regression test kiểm đúng cổng hành động trong chính routes.js.
+// Không phải API và không nới quyền runtime.
+router.paymentTarget = paymentTarget;
+router.resolveFlowRecipient = resolveFlowRecipient;
+router.flowNotifyReach = flowNotifyReach;
+router.selfPaymentTarget = selfPaymentTarget;
 
 // NV bấm "Đề nghị nhận" (đã tới mốc, hoặc đã được CEO mở khoá sớm).
 router.post('/employee-cost/payment/request', auth.requireAuth, asyncJsonRoute(async (req, res) => {
@@ -3788,7 +3803,7 @@ router.get('/revenue/sync-exceptions', auth.requireAuth, auth.requireAdmin, (req
 router.post('/employee-cost/visibility', auth.requireAuth, auth.requireAdmin, asyncJsonRoute(async (req, res) => {
   const panel = employeeCostVisibility.save(req.body, {
     actor: req.session.emp_code,
-    roster: employeeCostRosterRows(),
+    roster: actionableRosterRows(),
   });
   res.set('Cache-Control', 'private, no-store');
   res.json(panel);
@@ -4571,7 +4586,7 @@ async function costAmountsFor(req) {
    route (màn và file) — một cổng khoá, một cổng mở là không khoá gì cả. */
 function costAmountsGate(req, res) {
   if (auth.isCeoActor(req.session)) return true;
-  if (costAmounts.decisionFor(req.session.emp_code, employeeCostRosterRows()).enabled) return true;
+  if (costAmounts.decisionFor(req.session.emp_code, actionableRosterRows()).enabled) return true;
   res.status(403).json({ error: 'Menu Thành tiền C32/C47 chưa được bật cho tài khoản này.', code: 'COST_AMOUNTS_DISABLED' });
   return false;
 }
@@ -4814,11 +4829,11 @@ router.get('/catalog-management/cost-breakdown.xlsx', auth.requireAuth, auth.req
   return res.send(buffer);
 }));
 router.get('/catalog-management/cost-amounts/visibility', auth.requireAuth, auth.requireCeo, (req, res) => {
-  res.json({ panel: costAmounts.visibilityPanel(employeeCostRosterRows()) });
+  res.json({ panel: costAmounts.visibilityPanel(actionableRosterRows()) });
 });
 router.put('/catalog-management/cost-amounts/visibility', auth.requireAuth, auth.requireCeo, (req, res) => {
   try {
-    res.json({ panel: costAmounts.visibilitySave(req.body || {}, { actor: req.session.emp_code, roster: employeeCostRosterRows() }) });
+    res.json({ panel: costAmounts.visibilitySave(req.body || {}, { actor: req.session.emp_code, roster: actionableRosterRows() }) });
   } catch (e) { res.status(e.status || 400).json({ error: e.message, code: e.code }); }
 });
 
@@ -6408,7 +6423,7 @@ router.post('/admin/bonus-policies', auth.requireAuth, auth.requireAdmin, (req, 
 async function penaltyPolicyImpactPreview(req, policyPreview) {
   const period = policyPreview.candidate.previewPeriod;
   const range = employeeCost.parseMonthRange({ from: period, to: period });
-  const roster = employeeCostRosterRows();
+  const roster = actionableRosterRows();
   const sharedCatalogRowsByPeriod = {};
   try {
     const snapshot = await canonicalAssignmentSnapshot(period);
