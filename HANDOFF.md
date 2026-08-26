@@ -176,6 +176,14 @@ Cách đo: `store.getRows({ ky: '08.2026' })` — dòng doanh thu từ slot đan
    dòng mới vào có thể triệt tiêu nhau. Phép đo phải ghi rõ trường/chuẩn tạo mã dòng; nếu
    chưa xác định được mã ổn định thì báo mốc này **chưa đủ sức chứng minh**, không tự coi là
    PASS.
+
+   **Mã ổn định là trường `id`** — Claude đã kiểm 26/08 trên kho: ba kỳ 04/05/06.2026 đều có
+   `id` ở **mọi** dòng và **duy nhất tuyệt đối** (111/111, 122/122, 120/120). Vậy phép kiểm
+   này **chạy được ngay**, không được viện cớ "chưa xác định được mã ổn định" để bỏ qua.
+   Cách kiểm: `truoc = new Set(rowsTruoc.map(r => r.id))` rồi khẳng định **mọi phần tử của
+   `truoc` đều còn trong** `new Set(rowsSau.map(r => r.id))`. Thiếu dù một `id` ⇒ **DỪNG,
+   rollback, báo ngay** — kể cả khi tổng số dòng đã tăng, vì một dòng mất và một dòng mới vào
+   sẽ triệt tiêu nhau trên phép đếm.
 5. Mọi thay đổi giữa hai mốc phải nêu **lý do có bằng chứng** và mốc giờ **GMT+7**. Không
    được viết gọn thành "không đổi" khi số dòng hoặc SHA thực tế đã đổi. Không so SHA giữa
    hai lượt deploy khác ngày để kết luận mất dữ liệu.
