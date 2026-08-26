@@ -45,10 +45,17 @@ function mapping(rows = [
   const partitionRows = rows.length
     ? [...new Map(rows.map((row) => [`${row.legal_entity}|${row.unit_code}|${row.qlnb_code}`, { legal_entity: row.legal_entity, unit_code: row.unit_code, qlnb_code: row.qlnb_code }])).values()]
     : [{ legal_entity: 'DONA', unit_code: '033.BV A', qlnb_code: 'G1.A' }];
+  const declaredCounts = {
+    mappingRows: nativeRows.length,
+    legalEntityRows: Object.fromEntries([...partitionRows.reduce((counts, row) => {
+      counts.set(row.legal_entity, (counts.get(row.legal_entity) || 0) + 1); return counts;
+    }, new Map())]),
+  };
   return {
     version: 'V31.7/9', sourceManifestId: 'catalog52-2026-08-v31.7.9',
     sourceManifestChecksum: digest('catalog52-manifest-v31.7.9'),
-    checksum: shadow.mappingArtifactChecksum(nativeRows),
+    profile: 'synthetic-v1', declaredCounts,
+    checksum: shadow.mappingArtifactChecksum(nativeRows, declaredCounts, 'synthetic-v1'),
     contract: {
       unitCodeColumn: 'c7', qlnbColumn: 'c5', employeeColumn: 'c6', uomColumn: 'c8', uomMode: 'validation',
     },
@@ -168,7 +175,35 @@ test('row and mapping checksums plus canonical Catalog52 projection contract fai
   assert.throws(() => materialize([sourceRow()], sensitiveUom), { code: 'DEBTS_MAPPING_CONTRACT_INVALID' });
   const unattested = mapping(); unattested.legalEntityAttestation.rows = [];
   unattested.legalEntityAttestation.checksum = digest(shadow.canonicalJson([]));
+  unattested.declaredCounts.legalEntityRows = {};
+  unattested.checksum = shadow.mappingArtifactChecksum(unattested.rows, unattested.declaredCounts, unattested.profile);
   assert.equal(materialize([sourceRow()], unattested).rows[0].mapping_status, 'legal_entity_unattested');
+});
+
+test('mapping declared total and legal-entity counts are checksum-bound and fail closed', () => {
+  const valid = mapping([
+    { legal_entity: 'DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', uom: 'HOP', emp_code: 'DN001' },
+    { legal_entity: 'AFP', unit_code: '033.BV B', qlnb_code: 'G1.B', uom: 'HOP', emp_code: 'DN002' },
+  ]);
+  assert.equal(shadow.mappingIndex(valid).byKey.size, 2, 'positive control: exact declared counts must pass');
+
+  const oneClaiming16152 = structuredClone(mapping());
+  oneClaiming16152.declaredCounts.mappingRows = 16152;
+  oneClaiming16152.checksum = shadow.mappingArtifactChecksum(
+    oneClaiming16152.rows, oneClaiming16152.declaredCounts, oneClaiming16152.profile,
+  );
+  assert.throws(() => shadow.mappingIndex(oneClaiming16152), { code: 'DEBTS_MAPPING_ROW_COUNT_MISMATCH' });
+
+  const wrongPartition = structuredClone(valid);
+  wrongPartition.declaredCounts.legalEntityRows.AFP = 2;
+  wrongPartition.checksum = shadow.mappingArtifactChecksum(
+    wrongPartition.rows, wrongPartition.declaredCounts, wrongPartition.profile,
+  );
+  assert.throws(() => shadow.mappingIndex(wrongPartition), { code: 'DEBTS_MAPPING_LEGAL_ENTITY_ROW_COUNT_MISMATCH' });
+
+  const tamperedDeclaration = structuredClone(valid);
+  tamperedDeclaration.declaredCounts.mappingRows = 3;
+  assert.throws(() => shadow.mappingIndex(tamperedDeclaration), { code: 'DEBTS_MAPPING_CHECKSUM_MISMATCH' });
 });
 
 test('normal mapped sale preserves raw/canonical triples and uses after-VAT as headline revenue', () => {

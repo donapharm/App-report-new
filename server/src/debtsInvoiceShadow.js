@@ -223,10 +223,9 @@ function snapshotRowsChecksum(rows) {
   return sha256(canonicalJson(ordered));
 }
 
-function mappingArtifactChecksum(rows) {
-  if (!Array.isArray(rows)) fail('DEBTS_MAPPING_SNAPSHOT_INVALID');
-  const jsonl = `${rows.map((row) => JSON.stringify(row)).join('\n')}${rows.length ? '\n' : ''}`;
-  return sha256(jsonl);
+function mappingArtifactChecksum(rows, declaredCounts, profile) {
+  if (!Array.isArray(rows) || !declaredCounts || typeof declaredCounts !== 'object') fail('DEBTS_MAPPING_SNAPSHOT_INVALID');
+  return sha256(canonicalJson({ profile, declaredCounts, rows }));
 }
 
 function mappingIndex(mappingSnapshot) {
@@ -235,12 +234,22 @@ function mappingIndex(mappingSnapshot) {
   const checksum = text(mappingSnapshot.checksum, 80).toLowerCase().replace(/^sha256:/, '');
   const sourceManifestId = text(mappingSnapshot.sourceManifestId, 180);
   const sourceManifestChecksum = text(mappingSnapshot.sourceManifestChecksum, 80).toLowerCase().replace(/^sha256:/, '');
+  const profile = text(mappingSnapshot.profile, 80);
+  const declaredCounts = mappingSnapshot.declaredCounts;
   const contract = mappingSnapshot.contract;
-  if (!version || !sourceManifestId || !/^[a-f0-9]{64}$/.test(checksum) || !/^[a-f0-9]{64}$/.test(sourceManifestChecksum)) fail('DEBTS_MAPPING_IDENTITY_INVALID');
+  if (!version || !sourceManifestId || !['production', 'synthetic-v1'].includes(profile)
+    || !/^[a-f0-9]{64}$/.test(checksum) || !/^[a-f0-9]{64}$/.test(sourceManifestChecksum)) fail('DEBTS_MAPPING_IDENTITY_INVALID');
+  if (!declaredCounts || !Number.isSafeInteger(declaredCounts.mappingRows) || declaredCounts.mappingRows < 0
+    || !declaredCounts.legalEntityRows || typeof declaredCounts.legalEntityRows !== 'object'
+    || Array.isArray(declaredCounts.legalEntityRows)) fail('DEBTS_MAPPING_DECLARED_COUNT_INVALID');
+  for (const [legalEntity, count] of Object.entries(declaredCounts.legalEntityRows)) {
+    if (!upper(legalEntity, 80) || !Number.isSafeInteger(count) || count < 0) fail('DEBTS_MAPPING_DECLARED_COUNT_INVALID');
+  }
   if (!contract || contract.unitCodeColumn !== 'c7' || contract.qlnbColumn !== 'c5' || contract.employeeColumn !== 'c6'
     || !/^c(?:[1-9]|[1-4]\d|5[0-2])$/.test(String(contract.uomColumn || ''))
     || /^c(?:3[2-9]|4[0-7])$/.test(contract.uomColumn) || contract.uomMode !== 'validation') fail('DEBTS_MAPPING_CONTRACT_INVALID');
-  if (mappingArtifactChecksum(mappingSnapshot.rows) !== checksum) fail('DEBTS_MAPPING_CHECKSUM_MISMATCH');
+  if (mappingArtifactChecksum(mappingSnapshot.rows, declaredCounts, profile) !== checksum) fail('DEBTS_MAPPING_CHECKSUM_MISMATCH');
+  if (mappingSnapshot.rows.length !== declaredCounts.mappingRows) fail('DEBTS_MAPPING_ROW_COUNT_MISMATCH');
   const byKey = new Map();
   for (const row of mappingSnapshot.rows) {
     const unit = upper(row.unitCode, 180);
@@ -264,15 +273,22 @@ function mappingIndex(mappingSnapshot) {
     || !/^[a-f0-9]{64}$/.test(attestationChecksum)
     || sha256(canonicalJson(attestation.rows)) !== attestationChecksum) fail('DEBTS_LEGAL_ENTITY_ATTESTATION_INVALID');
   const legalEntityPartitions = new Set();
+  const actualLegalEntityRows = new Map();
   for (const row of attestation.rows) {
     const legal = upper(row.legal_entity, 80); const unit = upper(row.unit_code, 180); const qlnb = upper(row.qlnb_code, 180);
     if (!legal || !unit || !qlnb) fail('DEBTS_LEGAL_ENTITY_ATTESTATION_ROW_INVALID');
     const key = `${legal}|${unit}|${qlnb}`;
     if (legalEntityPartitions.has(key)) fail('DEBTS_LEGAL_ENTITY_ATTESTATION_DUPLICATE');
     legalEntityPartitions.add(key);
+    actualLegalEntityRows.set(legal, (actualLegalEntityRows.get(legal) || 0) + 1);
   }
+  const declaredLegalEntities = Object.entries(declaredCounts.legalEntityRows)
+    .map(([legalEntity, count]) => [upper(legalEntity, 80), count])
+    .sort(([a], [b]) => a.localeCompare(b, 'en'));
+  const actualLegalEntities = [...actualLegalEntityRows].sort(([a], [b]) => a.localeCompare(b, 'en'));
+  if (canonicalJson(declaredLegalEntities) !== canonicalJson(actualLegalEntities)) fail('DEBTS_MAPPING_LEGAL_ENTITY_ROW_COUNT_MISMATCH');
   return {
-    version, checksum, sourceManifestId, sourceManifestChecksum, contract: stableValue(contract), byKey,
+    version, checksum, sourceManifestId, sourceManifestChecksum, profile, declaredCounts: stableValue(declaredCounts), contract: stableValue(contract), byKey,
     legalEntityContract: attestation.contract, legalEntityChecksum: attestationChecksum, legalEntityPartitions,
   };
 }
