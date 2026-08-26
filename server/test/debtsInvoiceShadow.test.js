@@ -206,6 +206,40 @@ test('mapping declared total and legal-entity counts are checksum-bound and fail
   assert.throws(() => shadow.mappingIndex(tamperedDeclaration), { code: 'DEBTS_MAPPING_CHECKSUM_MISMATCH' });
 });
 
+test('invoice and attestation share one strict legal-entity validator; source code is provenance-only', () => {
+  const valid = mapping([
+    { legal_entity: 'DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', uom: 'HOP', emp_code: 'DN001' },
+  ]);
+  valid.legalEntityAttestation.rows[0].source_legal_entity_code = '01.DONA';
+  valid.legalEntityAttestation.checksum = digest(shadow.canonicalJson(valid.legalEntityAttestation.rows));
+  const joined = materialize([sourceRow({ source_legal_entity_code: '01.DONA' })], valid);
+  assert.equal(joined.rows[0].mapping_status, 'mapped', 'positive control: canonical DONA joins exactly once');
+  assert.equal(joined.rows[0].emp_code, 'DN001');
+  assert.equal(joined.rows[0].source_legal_entity_code, '01.DONA');
+  assert.equal(joined.quarantined.length, 0);
+
+  const prefixedAttestation = structuredClone(valid);
+  prefixedAttestation.legalEntityAttestation.rows[0].legal_entity = '01.DONA';
+  prefixedAttestation.legalEntityAttestation.checksum = digest(shadow.canonicalJson(prefixedAttestation.legalEntityAttestation.rows));
+  prefixedAttestation.declaredCounts.legalEntityRows = { '01.DONA': 1 };
+  prefixedAttestation.checksum = shadow.mappingArtifactChecksum(
+    prefixedAttestation.rows, prefixedAttestation.declaredCounts, prefixedAttestation.profile,
+  );
+  assert.throws(() => shadow.mappingIndex(prefixedAttestation), { code: 'DEBTS_LEGAL_ENTITY_INVALID' });
+
+  const unknownAttestation = structuredClone(valid);
+  unknownAttestation.legalEntityAttestation.rows[0].legal_entity = 'OTHER';
+  unknownAttestation.legalEntityAttestation.checksum = digest(shadow.canonicalJson(unknownAttestation.legalEntityAttestation.rows));
+  unknownAttestation.declaredCounts.legalEntityRows = { OTHER: 1 };
+  unknownAttestation.checksum = shadow.mappingArtifactChecksum(
+    unknownAttestation.rows, unknownAttestation.declaredCounts, unknownAttestation.profile,
+  );
+  assert.throws(() => shadow.mappingIndex(unknownAttestation), { code: 'DEBTS_LEGAL_ENTITY_INVALID' });
+
+  assert.throws(() => materialize([sourceRow({ legal_entity: '01.DONA' })], valid), { code: 'DEBTS_LEGAL_ENTITY_INVALID' });
+  assert.throws(() => materialize([sourceRow({ source_legal_entity_code: 'DONA' })], valid), { code: 'DEBTS_SOURCE_LEGAL_ENTITY_CODE_INVALID' });
+});
+
 test('normal mapped sale preserves raw/canonical triples and uses after-VAT as headline revenue', () => {
   const result = materialize([sourceRow()]);
   assert.equal(result.rows[0].source, 'DEBTS_INVOICE_SHADOW');

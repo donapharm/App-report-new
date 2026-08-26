@@ -1,3 +1,9 @@
+### 2026-08-26 — Debts legal-entity validator unified (candidate only)
+
+- Invoice headers/rows and mapping attestations now use the same strict `DONA|AFP` validator and fail closed before join on prefixed or unknown values.
+- `source_legal_entity_code` accepts `01.DONA|02.AFP` only as preserved provenance; it never participates in join keys.
+- Documented the separate contractor/scope code system (`01.DONA`, `03.TUE.N`, `20.HĐS`) and prohibited enum widening or numeric-prefix coercion.
+
 ### 2026-08-26 — Review roster 21/19: code đúng, nhưng khoá test là KHOÁ GIẢ — đã thay bằng khoá thật
 
 **Bot làm (`5146581`).** Tách `employeeCostRosterRows()` thành `ceoAggregateRosterRows()` (21, gồm

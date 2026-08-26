@@ -1,5 +1,13 @@
 # HANDOFF — App Report
 
+## Debts: legal entity is not contractor/source scope (2026-08-26)
+
+- Canonical legal entity used in invoice validation, attestation and join keys is exactly `DONA` or `AFP`.
+- Source contractor/scope codes such as `01.DONA`, `03.TUE.N` and `20.HĐS` are a different identifier system. They must never be used as legal entities or legal-entity join keys.
+- Optional `source_legal_entity_code` is provenance only. The Debts contract currently accepts `01.DONA` or `02.AFP`; it is validated and preserved but never normalized into, compared with, or joined as `legal_entity`.
+- Do not fix mismatches by widening the legal-entity enum or by automatically adding/removing numeric prefixes. Invalid legal entities fail closed at load time with `DEBTS_LEGAL_ENTITY_INVALID`.
+- DataHub acceptance fixture must contain canonical `legal_entity` values for both DONA and AFP, source codes only in `source_legal_entity_code`, one invoice probe per legal entity that joins exactly once with quarantine 0, and negative probes for prefixed/unknown legal entities.
+
 Cập nhật: **2026-07-29 khuya** (Claude Code). Người tiếp nhận: bot report / phiên Claude kế tiếp.
 Đọc theo thứ tự: `CLAUDE.md` → `CHANGELOG.md` (mới nhất trên cùng) → file này.
 

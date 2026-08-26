@@ -17,6 +17,7 @@ const CONTRACT_CHECKSUM = 'c505ff6e46a2ae0f862b15779e9ee8d24205e545297d29fd15d05
 const CURRENCY = 'VND';
 const HARD_BLOCKED_PERIOD = '2026-06';
 const LEGAL_ENTITY_CONTRACT_KIND = 'debts-source-legal-entity-partition-v1';
+const SOURCE_LEGAL_ENTITY_CODES = new Set(['01.DONA', '02.AFP']);
 const RECEIPT_SIGNATURE_ALGORITHM = 'HMAC-SHA256';
 const LOCK_STALE_MS = 5 * 60 * 1000;
 const ALLOWED_ROW_TYPES = new Set(['SALE', 'RETURN', 'ADJUSTMENT', 'CANCEL']);
@@ -156,6 +157,13 @@ function normalizeLegalEntity(value) {
   return legalEntity;
 }
 
+function normalizeSourceLegalEntityCode(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const sourceCode = upper(value, 80);
+  if (!SOURCE_LEGAL_ENTITY_CODES.has(sourceCode)) fail('DEBTS_SOURCE_LEGAL_ENTITY_CODE_INVALID');
+  return sourceCode;
+}
+
 function validateSnapshotHeader(snapshot, period, contractChecksum) {
   if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) fail('DEBTS_SNAPSHOT_MISSING');
   const snapshotId = text(snapshot.snapshotId, 160);
@@ -163,9 +171,9 @@ function validateSnapshotHeader(snapshot, period, contractChecksum) {
   const checksum = text(snapshot.checksum, 80).toLowerCase().replace(/^sha256:/, '');
   if (!snapshotId || !sourceRevision) fail('DEBTS_SNAPSHOT_IDENTITY_MISSING');
   const declaredContract = text(snapshot.contractChecksum, 80).toLowerCase().replace(/^sha256:/, '');
-  const legalEntity = upper(snapshot.legal_entity, 80);
+  const legalEntity = normalizeLegalEntity(snapshot.legal_entity);
+  normalizeSourceLegalEntityCode(snapshot.source_legal_entity_code);
   if (contractChecksum !== CONTRACT_CHECKSUM || declaredContract !== CONTRACT_CHECKSUM) fail('DEBTS_CONTRACT_CHECKSUM_MISMATCH');
-  if (!legalEntity) fail('DEBTS_HEADER_LEGAL_ENTITY_REQUIRED');
   if (snapshot.currency !== CURRENCY) fail('DEBTS_HEADER_CURRENCY_INVALID');
   if (snapshot.period !== period || snapshot.schemaVersion !== SCHEMA_VERSION) fail('DEBTS_SNAPSHOT_CONTRACT_MISMATCH');
   if (snapshot.revisionMode !== REVISION_MODE) fail('DEBTS_REVISION_MODE_UNSUPPORTED');
@@ -198,7 +206,7 @@ function combineSnapshotPages(pages, { period, legalEntity, contractChecksum, lo
       fail('DEBTS_SNAPSHOT_DRIFT_BETWEEN_PAGES', { index });
     }
     if (!Array.isArray(page.rows) || page.rows.length > MAX_PAGE_ROWS) fail('DEBTS_PAGE_ROWS_INVALID', { index });
-    if (page.rows.some((row) => upper(row?.legal_entity, 80) !== identity.legalEntity)) fail('DEBTS_ROW_LEGAL_ENTITY_MISMATCH', { index });
+    if (page.rows.some((row) => normalizeLegalEntity(row?.legal_entity) !== identity.legalEntity)) fail('DEBTS_ROW_LEGAL_ENTITY_MISMATCH', { index });
     rows.push(...page.rows);
     const cursor = page.nextCursor == null ? null : text(page.nextCursor, 500);
     if (cursor !== null && (!cursor || cursors.has(cursor))) fail('DEBTS_CURSOR_INVALID', { index });
@@ -275,15 +283,17 @@ function mappingIndex(mappingSnapshot) {
   const legalEntityPartitions = new Set();
   const actualLegalEntityRows = new Map();
   for (const row of attestation.rows) {
-    const legal = upper(row.legal_entity, 80); const unit = upper(row.unit_code, 180); const qlnb = upper(row.qlnb_code, 180);
-    if (!legal || !unit || !qlnb) fail('DEBTS_LEGAL_ENTITY_ATTESTATION_ROW_INVALID');
+    const legal = normalizeLegalEntity(row.legal_entity);
+    normalizeSourceLegalEntityCode(row.source_legal_entity_code);
+    const unit = upper(row.unit_code, 180); const qlnb = upper(row.qlnb_code, 180);
+    if (!unit || !qlnb) fail('DEBTS_LEGAL_ENTITY_ATTESTATION_ROW_INVALID');
     const key = `${legal}|${unit}|${qlnb}`;
     if (legalEntityPartitions.has(key)) fail('DEBTS_LEGAL_ENTITY_ATTESTATION_DUPLICATE');
     legalEntityPartitions.add(key);
     actualLegalEntityRows.set(legal, (actualLegalEntityRows.get(legal) || 0) + 1);
   }
   const declaredLegalEntities = Object.entries(declaredCounts.legalEntityRows)
-    .map(([legalEntity, count]) => [upper(legalEntity, 80), count])
+    .map(([legalEntity, count]) => [normalizeLegalEntity(legalEntity), count])
     .sort(([a], [b]) => a.localeCompare(b, 'en'));
   const actualLegalEntities = [...actualLegalEntityRows].sort(([a], [b]) => a.localeCompare(b, 'en'));
   if (canonicalJson(declaredLegalEntities) !== canonicalJson(actualLegalEntities)) fail('DEBTS_MAPPING_LEGAL_ENTITY_ROW_COUNT_MISMATCH');
@@ -296,7 +306,8 @@ function mappingIndex(mappingSnapshot) {
 function normalizeRow(row, index, mappings) {
   if (!row || typeof row !== 'object' || Array.isArray(row)) fail('DEBTS_ROW_INVALID', { index });
   for (const field of REQUIRED_ROW_FIELDS) if (row[field] === undefined || row[field] === null || row[field] === '') fail('DEBTS_ROW_FIELD_MISSING', { index, field });
-  const legalEntity = upper(row.legal_entity, 80);
+  const legalEntity = normalizeLegalEntity(row.legal_entity);
+  const sourceLegalEntityCode = normalizeSourceLegalEntityCode(row.source_legal_entity_code);
   const lineId = text(row.invoice_line_id, 180);
   const invoiceNumber = text(row.invoice_number, 180);
   const unitCode = upper(row.unit_code, 180);
@@ -340,6 +351,7 @@ function normalizeRow(row, index, mappings) {
     source: SOURCE,
     source_line_id: `DEBTS:${legalEntity}:${lineId}`,
     legal_entity: legalEntity,
+    ...(sourceLegalEntityCode ? { source_legal_entity_code: sourceLegalEntityCode } : {}),
     invoice_date: invoiceDate,
     invoice_number: invoiceNumber,
     invoice_line_id: lineId,
@@ -654,7 +666,7 @@ function shadowLockFile(dataDir, period) {
 
 module.exports = {
   SOURCE, SCHEMA_VERSION, CONTRACT_PATH, REVISION_MODE, ROW_CHECKSUM_ALGORITHM, CONTRACT_CHECKSUM, CURRENCY, HARD_BLOCKED_PERIOD, LEGAL_ENTITY_CONTRACT_KIND, REQUIRED_ROW_FIELDS, DebtsShadowError,
-  stableValue, canonicalJson, normalizeLegalEntity, parseDecimal, decimalAdd, decimalSubtract, decimalEqual, decimalString,
+  stableValue, canonicalJson, normalizeLegalEntity, normalizeSourceLegalEntityCode, parseDecimal, decimalAdd, decimalSubtract, decimalEqual, decimalString,
   sourceRowChecksum, snapshotRowsChecksum, mappingArtifactChecksum, combineSnapshotPages, mappingIndex, materializeShadow,
   signReceipt, verifySignedReceipt, publishShadow, verifyPublishedShadow, shadowLockFile, acquireShadowLock, fetchSnapshotPages,
 };
