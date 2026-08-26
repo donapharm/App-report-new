@@ -165,10 +165,21 @@ Cách đo: `store.getRows({ ky: '08.2026' })` — dòng doanh thu từ slot đan
    (T08 khoảng 1.6–1.9 nghìn dòng và tăng mỗi ngày). Nhiều lượt deploy trước ghi 28.006
    dưới nhãn "T08 nguội" — **dán nhãn nhầm**, mốc đó **không chứng minh** dữ liệu doanh thu
    còn nguyên.
-3. **Không so SHA giữa hai lượt deploy KHÁC NGÀY.** T08 là kỳ **đang mở**, đơn vào mỗi ngày
-   nên nội dung đổi liên tục — SHA đổi là **bình thường**. Chỉ so cặp trước/sau trong cùng
-   một lượt.
-4. **Kết quả bất thường phải chạy ĐỐI CHỨNG đã biết chắc kết quả trước khi kết luận.**
+3. Phân loại kỳ trước khi so mốc:
+   - **Kỳ ĐANG MỞ** (ví dụ T08 hiện tại): `rows.length` sau deploy chỉ được **TĂNG hoặc GIỮ
+     NGUYÊN**, tuyệt đối không được giảm. SHA khác là bình thường vì dữ liệu vẫn chảy. Giảm
+     dù **một dòng** thì **DỪNG, rollback và báo ngay**.
+   - **Kỳ ĐÃ KHOÁ SỔ** (T07 trở về trước tại thời điểm chốt luật này): `rows.length` **và**
+     SHA-256 trước/sau phải giống hệt. Lệch bất kỳ giá trị nào thì **DỪNG**.
+4. Với kỳ đang mở, ngoài số dòng và SHA phải so **tập mã dòng ổn định**: tập mã sau deploy
+   phải chứa trọn tập mã trước deploy. Không chỉ dựa vào số đếm, vì một dòng cũ mất và một
+   dòng mới vào có thể triệt tiêu nhau. Phép đo phải ghi rõ trường/chuẩn tạo mã dòng; nếu
+   chưa xác định được mã ổn định thì báo mốc này **chưa đủ sức chứng minh**, không tự coi là
+   PASS.
+5. Mọi thay đổi giữa hai mốc phải nêu **lý do có bằng chứng** và mốc giờ **GMT+7**. Không
+   được viết gọn thành "không đổi" khi số dòng hoặc SHA thực tế đã đổi. Không so SHA giữa
+   hai lượt deploy khác ngày để kết luận mất dữ liệu.
+6. **Kết quả bất thường phải chạy ĐỐI CHỨNG đã biết chắc kết quả trước khi kết luận.**
    26/08: một phép đo cho `employees.size = 0` trên cả 21 mã; đối chứng `DN001` — người chắc
    chắn có số liệu — cũng ra `not_configured`, chứng minh **cái thước hỏng, không phải hệ
    thống hỏng**. Thiếu đối chứng thì "hệ thống hỏng" và "phép đo hỏng" trông y hệt nhau, mà
