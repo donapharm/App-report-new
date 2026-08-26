@@ -150,6 +150,34 @@ lỗi thật ở bẫy số 1.
 ---
 
 ## 4. An toàn phát hành — `DIRECTIVE_DEPLOY_RELEASE_SAFETY.md`
+
+### 4.0 Mốc kiểm dữ liệu trước/sau mỗi lượt deploy (chốt 26/08/2026)
+
+**Tên mốc chuẩn: `T08_REVENUE_ROWS_GETROWS_08_2026`.**
+Cách đo: `store.getRows({ ky: '08.2026' })` — dòng doanh thu từ slot đang active
+(`CRM_MISA_PLUS_APP_WEB`), sau bước nạp/enrich của App Report. Ghi **hai** giá trị:
+`rows.length` và **SHA-256 của `JSON.stringify(rows)`**.
+
+1. Trước và sau phải **cùng kỳ · cùng nguồn · cùng bộ lọc · cùng chuẩn hoá · cùng cách
+   serialize · cùng cách băm**, đo **trong CÙNG một lượt deploy**.
+2. **CẤM dùng số/SHA DANH MỤC làm mốc doanh thu.** **28.006** là **dòng danh mục**
+   (màn CEO: *"28.006 dòng danh mục · Trang 1/561"*), **không phải** dòng doanh thu T08
+   (T08 khoảng 1.6–1.9 nghìn dòng và tăng mỗi ngày). Nhiều lượt deploy trước ghi 28.006
+   dưới nhãn "T08 nguội" — **dán nhãn nhầm**, mốc đó **không chứng minh** dữ liệu doanh thu
+   còn nguyên.
+3. **Không so SHA giữa hai lượt deploy KHÁC NGÀY.** T08 là kỳ **đang mở**, đơn vào mỗi ngày
+   nên nội dung đổi liên tục — SHA đổi là **bình thường**. Chỉ so cặp trước/sau trong cùng
+   một lượt.
+4. **Kết quả bất thường phải chạy ĐỐI CHỨNG đã biết chắc kết quả trước khi kết luận.**
+   26/08: một phép đo cho `employees.size = 0` trên cả 21 mã; đối chứng `DN001` — người chắc
+   chắn có số liệu — cũng ra `not_configured`, chứng minh **cái thước hỏng, không phải hệ
+   thống hỏng**. Thiếu đối chứng thì "hệ thống hỏng" và "phép đo hỏng" trông y hệt nhau, mà
+   hai thứ đó dẫn tới hai hành động trái ngược.
+
+**Tài liệu vận hành phải nằm TRONG KHO này.** Ghi vào đường dẫn ngoài kho (ví dụ
+`workspace-report-dev/HANDOFF.md`) thì không ai soi được, không vào lịch sử phiên bản, dựng
+lại máy là mất. Cùng họ với việc PROD từng chạy một bản chưa đẩy lên GitHub.
+
 Bộ script trong `scripts/` (**41/41 PASS**, hiện **đứng độc lập, CHƯA nối vào `auto-deploy.sh`**):
 
 | Script | Việc |
