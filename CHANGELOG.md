@@ -1,3 +1,29 @@
+### 2026-08-26 — Review roster 21/19: code đúng, nhưng khoá test là KHOÁ GIẢ — đã thay bằng khoá thật
+
+**Bot làm (`5146581`).** Tách `employeeCostRosterRows()` thành `ceoAggregateRosterRows()` (21, gồm
+DN021/DN023) và `actionableRosterRows()` (19). Phân loại đủ 35 nơi gọi: tổng hợp/generation dùng 21;
+đăng nhập, picker, quyền tự xem, điểm-xu, cảnh báo, gửi tin và ghi sổ thanh toán dùng 19. Cửa T07 đổi
+19→21 và vẫn chặn 20/21.
+
+**Claude kiểm bằng cách gọi hàm thật, không đọc chuỗi.** Gắn bản đồ Telegram cho cả DN001 lẫn
+DN021/DN023 rồi đo: **DN001 nhận được tin, DN021/DN023 vẫn bị chặn** ⇒ hàng rào roster hoạt động thật.
+`paymentTarget` cũng phân biệt đúng: DN001 ghi được, hai mã kia trả `PAYMENT_EMP_NOT_IN_ROSTER`.
+
+**Nhưng phép kiểm của bot là KHOÁ GIẢ.** Test khẳng định `resolveFlowRecipient('employee','DN021')`
+trả `null` — mà trong môi trường test **không có bản đồ Telegram**, hàm này trả `null` cho MỌI NGƯỜI,
+kể cả DN001 đang nằm trong roster hành động. Gỡ bản vá ra, câu assert đó vẫn xanh.
+
+**Claude viết khoá thay thế — và lượt đầu viết HỤT.** Bản đầu chỉ cấy bản đồ Telegram, quên rằng kho
+mẫu không có DN021/DN023 nên cả hai roster đều rỗng hai mã đó ⇒ vẫn vô nghĩa. Phát hiện bằng cách **tự
+gỡ hàng rào ra xem test có đỏ không** — nó không đỏ. Bản sửa cấy đủ **cả roster lẫn bản đồ Telegram**,
+và đã kiểm ba chiều: **xanh khi có hàng rào · ĐỎ khi gỡ hàng rào · xanh lại khi phục hồi**.
+
+**Bài học.** Một phép kiểm chỉ đáng tin khi đã chứng minh nó **biết đỏ**. Khẳng định "bị chặn" mà không
+có **đối chứng dương** (người hợp lệ phải qua được) thì không chứng minh được gì.
+
+**Test.** `employeeCostRosterScope.test.js` 3 → **4 PASS**. Full server 1591/1591 (7 test PDF đỏ do máy
+dev thiếu `pdfinfo`), web 534/534.
+
 ### 2026-08-24 — Chi phí: chặn latest cứu provenance hỏng + sửa câu báo "thiếu tỷ lệ" bị nói thành "nguồn chập chờn"
 
 **Bot App Report làm (`dd1824e`).** `employeeCost.js` `fetchEmployeeCost()`: bỏ nhánh cho
