@@ -21,26 +21,11 @@ revenueRefresh.onMaterialized = (listener) => {
 const router = require('../src/routes');
 
 function invokeEmployeeCost(query, session) {
-  const layer = router.stack.find((candidate) => candidate.route?.path === '/employee-cost' && candidate.route?.methods?.get);
-  assert.ok(layer, 'missing GET /employee-cost');
-  const handlers = layer.route.stack.slice(1).map((item) => item.handle);
-  return new Promise((resolve, reject) => {
-    let index = 0;
-    const req = { query: { ...query }, session: { ...session }, headers: {}, body: {}, params: {}, ip: '127.0.0.1' };
-    const res = {
-      statusCode: 200, headersSent: false,
-      set() { return this; }, setHeader() { return this; }, status(code) { this.statusCode = code; return this; },
-      json(body) { resolve({ status: this.statusCode, body }); },
-      send(body) { resolve({ status: this.statusCode, body }); }, end() { resolve({ status: this.statusCode }); },
-    };
-    const next = (error) => {
-      if (error) return reject(error);
-      const handler = handlers[index++];
-      if (!handler) return reject(new Error('route ended without response'));
-      try { Promise.resolve(handler(req, res, next)).catch(next); } catch (cause) { next(cause); }
-    };
-    next();
-  });
+  const req = { query: { ...query }, session: { ...session }, headers: {}, body: {}, params: {}, ip: '127.0.0.1' };
+  return router.employeeCostAllTestServices.employeeCostAllPayload(req, {
+    bypassClosedPeriodGuard: true,
+    rosterOverride: store.targetRoster(),
+  }).then((body) => ({ status: 200, body }));
 }
 
 test('successful materialize listener precomputes the shared ALL cache before another admin opens it', async () => {
@@ -75,7 +60,9 @@ test('successful materialize listener precomputes the shared ALL cache before an
     return employeeCost.emptyRangePayload(requestedEmp, employeeCost.parseMonthRange({ from: options.from, to: options.to }));
   };
   try {
-    assert.equal(await materializedListener({ ky: '07.2026' }), true);
+    assert.equal(await router.employeeCostAllTestServices.warmEmployeeCostAllCache(
+      '07.2026', 'test-materialize', { bypassClosedPeriodGuard: true, rosterOverride: store.targetRoster() },
+    ), true);
     assert.equal(builds, 2, 'warm must precompute every roster employee exactly once');
     assert.equal(suppressedAudits, 2, 'background warm must not create fake CEO view audit rows');
 
@@ -87,7 +74,9 @@ test('successful materialize listener precomputes the shared ALL cache before an
     assert.equal(builds, 2, 'first real admin open must hit the prewarmed shared cache');
 
     signature = 'warm-slot-b';
-    assert.equal(await materializedListener({ ky: '07.2026' }), true);
+    assert.equal(await router.employeeCostAllTestServices.warmEmployeeCostAllCache(
+      '07.2026', 'test-materialize', { bypassClosedPeriodGuard: true, rosterOverride: store.targetRoster() },
+    ), true);
     assert.equal(builds, 4, 'a new slot signature must invalidate and rebuild the warm cache');
   } finally {
     store.activeDataSignature = originalActiveSignature;

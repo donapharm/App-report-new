@@ -1,3 +1,9 @@
+### 27/08/2026 lúc 13:08 — T07 explicit test bypass + phủ export/payment notice (candidate only)
+
+- Hàng rào kỳ đã khoá không còn phụ thuộc identity của adapter. Bypass có tên mặc định tắt, chỉ test service truyền tường minh; test quét toàn bộ `server/src` khoá không cho caller runtime lạm dụng.
+- Export ALL và `payment_notice` cùng fail-closed `closed_unfinalized` trước fan-out: không xuất file có tổng, không dựng lịch/phát tin. Kỳ đang chạy giữ nguyên đường cũ.
+- Giữ nguyên ý nghĩa tám regression seal/cache bằng explicit bypass tại điểm gọi test; không skip, không nới assertion. Ba mutation adapter/source-caller/paginate đều đỏ và phục hồi xanh.
+
 ### 27/08/2026 lúc 11:42 — T07 trunk guard kỳ khóa chưa có generation (candidate only)
 
 - Đo read-only trên PROD `ad1b048` xác nhận deadline phát sinh trong `employeeCostAllPayload`: các NV cuối hàng đợi rơi ở khoảng 25 giây; request không nhận `suppliedDeadlineAt` từ tầng ngoài.

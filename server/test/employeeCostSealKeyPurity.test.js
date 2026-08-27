@@ -37,30 +37,11 @@ const closedSeal = require('../src/employeeCostClosedSeal');
 const router = require('../src/routes');
 
 function invokeEmployeeCost(query, session) {
-  const layer = router.stack.find((c) => c.route?.path === '/employee-cost' && c.route?.methods?.get);
-  assert.ok(layer, 'missing GET /employee-cost');
-  const handlers = layer.route.stack.slice(1).map((item) => item.handle);
-  return new Promise((resolve, reject) => {
-    let index = 0;
-    const req = { query: { ...query }, session: { ...session }, headers: {}, body: {}, params: {}, ip: '127.0.0.1' };
-    const res = {
-      statusCode: 200,
-      headersSent: false,
-      set() { return this; },
-      setHeader() { return this; },
-      status(code) { this.statusCode = code; return this; },
-      json(body) { resolve({ status: this.statusCode, body }); },
-      send(body) { resolve({ status: this.statusCode, body }); },
-      end() { resolve({ status: this.statusCode }); },
-    };
-    const next = (error) => {
-      if (error) return reject(error);
-      const handler = handlers[index++];
-      if (!handler) return reject(new Error('route ended without response'));
-      try { Promise.resolve(handler(req, res, next)).catch(next); } catch (cause) { next(cause); }
-    };
-    next();
-  });
+  const req = { query: { ...query }, session: { ...session }, headers: {}, body: {}, params: {}, ip: '127.0.0.1' };
+  return router.employeeCostAllTestServices.employeeCostAllPayload(req, {
+    bypassClosedPeriodGuard: true,
+    rosterOverride: store.targetRoster(),
+  }).then((body) => ({ status: 200, body }));
 }
 
 test('khoá TRA dấu và khoá GHI dấu phải TRÙNG NHAU — kể cả sau khi sổ đời đã nhích', async () => {

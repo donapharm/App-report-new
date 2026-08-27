@@ -20,6 +20,16 @@ function routeHandlers(routePath) {
 }
 
 function invoke(routePath, query, session) {
+  if (routePath === '/employee-cost' && String(query.emp || '').toUpperCase() === 'ALL') {
+    const req = { query: { ...query }, session: { ...session }, headers: {}, body: {}, params: {}, ip: '127.0.0.1' };
+    return router.employeeCostAllTestServices.employeeCostAllPayload(req, {
+      bypassClosedPeriodGuard: true,
+      rosterOverride: store.targetRoster(),
+    }).then(
+      (body) => ({ status: 200, body }),
+      (error) => ({ status: error.status || 500, body: { error: error.message, code: error.code } }),
+    );
+  }
   const handlers = routeHandlers(routePath);
   return new Promise((resolve, reject) => {
     let index = 0;

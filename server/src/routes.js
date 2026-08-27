@@ -1605,6 +1605,7 @@ async function employeeCostAllPayload(req, {
   costFetchOptions = null, expectedDataSignature = null, prepareMemoReplace = false,
   dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null, snapshotBuild = false,
   snapshotStore = employeeCostSnapshotStore, rosterOverride = null, mapWithDeadlineObserver = null,
+  bypassClosedPeriodGuard = false,
 } = {}) {
   const c2TraceStartedAt = Date.now();
   const c2Trace = (stage, extra = {}) => {
@@ -1620,12 +1621,9 @@ async function employeeCostAllPayload(req, {
   // Kỳ đã khoá ưu tiên generation đã nghiệm thu, không phụ thuộc cờ phục vụ
   // snapshot của kỳ đang chạy. Không có generation thì đi tiếp tới kho ghim;
   // employeeCost sẽ fail-closed "chưa chốt" nếu kho ghim cũng vắng.
-  const closedSnapshotDisplay = !snapshotBuild && paginate && range.months.length === 1
+  const closedSnapshotDisplay = bypassClosedPeriodGuard !== true && !snapshotBuild && range.months.length === 1
     && employeeCost.isPeriodClosed(range.months[0], employeeCost.vnToday())
-    && !employeeCost.isBeforeCostGoLive(range.months[0])
-    // Các ca kiểm seal/cache thay adapter bằng stub để kiểm đúng tầng thấp hơn;
-    // runtime thật luôn giữ nguyên native adapter và bắt buộc đi qua guard này.
-    && employeeCost.getForSession === nativeEmployeeCostGetForSession;
+    && !employeeCost.isBeforeCostGoLive(range.months[0]);
   if (closedSnapshotDisplay) {
     const current = snapshotStore.tryReadCurrent(range.months[0], { roster });
     if (current.ok && current.snapshot.complete) return readEmployeeCostSnapshotModel(req, range, { snapshotStore, roster });
@@ -2333,7 +2331,7 @@ async function selfHealUnavailableCostSources({
 }
 
 let employeeCostWarmActive = false;
-async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
+async function warmEmployeeCostAllCache(ky, reason = 'materialize', testOptions = {}) {
   if (employeeCostSnapshotEnabled()) return false;
   const month = monthInputForKy(ky);
   if (!month) return false;
@@ -2364,6 +2362,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
     // refresh sau fast-timeout rồi giữ nhiều payload lớn sống đồng thời.
     costFetchOptions: { backgroundRefresh: false },
     deadlineAt,
+    ...testOptions,
   });
 
   // Bind recovery to the complete Employee Cost generation only after catalog
@@ -2416,6 +2415,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize') {
         expectedDataSignature: sourceDataSignature,
         prepareMemoReplace: true,
         deadlineAt,
+        ...testOptions,
       }),
       }));
     } finally {
@@ -3071,6 +3071,7 @@ async function employeeCostExportReports(req, format) {
 
 async function sendEmployeeCostExport(req, res, format) {
   const reports = await employeeCostExportReports(req, format);
+  assertEmployeeCostExportableReports(reports);
   const buffer = format === 'pdf'
     ? await employeeCostExport.costPdfBuffer(reports)
     : await employeeCostExport.costWorkbookBuffer(reports);
@@ -3080,6 +3081,15 @@ async function sendEmployeeCostExport(req, res, format) {
   res.setHeader('Content-Disposition', `attachment; filename="employee-cost_${from}_${to}.${format === 'pdf' ? 'pdf' : 'xlsx'}"`);
   res.setHeader('Cache-Control', 'private, no-store');
   return res.send(buffer);
+}
+
+function assertEmployeeCostExportableReports(reports) {
+  if ((reports || []).some((report) => report?.sourceOutcome === 'closed_unfinalized')) {
+    throw Object.assign(new Error(employeeCost.CLOSED_UNFINALIZED_NOTE), {
+      status: 409,
+      code: 'EMPLOYEE_COST_CLOSED_UNFINALIZED',
+    });
+  }
 }
 
 router.get('/employee-cost/export.xlsx', auth.requireAuth, asyncJsonRoute((req, res) => sendEmployeeCostExport(req, res, 'xlsx')));
@@ -7375,17 +7385,21 @@ async function paymentSchedulesForNotify({ today = employeeCost.vnToday() } = {}
     const payload = await employeeCostAllPayload(req, {
       paginate: false, auditEvent: 'payment_notice', suppressAudit: true, includePaymentSchedules: true,
     });
-    const team = payload?.paymentTeam;
-    if (!team || team.invariantOk !== true || (team.excluded || []).length) {
-      const error = new Error(`Sổ thanh toán kỳ ${period} thiếu nguồn hoặc không cân`);
-      error.code = 'PAYMENT_NOTICE_SCHEDULE_UNRELIABLE';
-      error.period = period;
-      error.excluded = (team?.excluded || []).map((row) => row.empCode);
-      throw error;
-    }
-    schedules.push(...(team.schedules || []));
+    schedules.push(...paymentSchedulesFromPayload(payload, period));
   }
   return schedules;
+}
+
+function paymentSchedulesFromPayload(payload, period) {
+  const team = payload?.paymentTeam;
+  if (!team || team.invariantOk !== true || (team.excluded || []).length) {
+    const error = new Error(`Sổ thanh toán kỳ ${period} thiếu nguồn hoặc không cân`);
+    error.code = 'PAYMENT_NOTICE_SCHEDULE_UNRELIABLE';
+    error.period = period;
+    error.excluded = (team?.excluded || []).map((row) => row.empCode);
+    throw error;
+  }
+  return team.schedules || [];
 }
 
 router.notifyServices = {
@@ -7400,6 +7414,9 @@ router.notifyServices = {
 router.employeeCostAllTestServices = {
   employeeCostAllPayload,
   closedUnfinalizedEmployeeCostAllModel,
+  warmEmployeeCostAllCache,
+  assertEmployeeCostExportableReports,
+  paymentSchedulesFromPayload,
 };
 
 module.exports = router;
