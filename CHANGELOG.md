@@ -1,3 +1,8 @@
+### 27/08/2026 lúc 15:25 — Siết quét caller warm cache nhiều dòng (candidate only)
+
+- Test khóa runtime caller của `warmEmployeeCostAllCache` nay bắt cả lời gọi xuống dòng có tham số thứ ba, đồng thời không vượt qua dấu đóng ngoặc của lời gọi hai tham số hợp lệ.
+- Mutation cấy một caller nhiều dòng dưới `server/src` phải chỉ đúng file vi phạm; gỡ mutation thì test trở lại xanh. Không đổi runtime và không deploy.
+
 ### 27/08/2026 lúc 13:08 — T07 explicit test bypass + phủ export/payment notice (candidate only)
 
 - Hàng rào kỳ đã khoá không còn phụ thuộc identity của adapter. Bypass có tên mặc định tắt, chỉ test service truyền tường minh; test quét toàn bộ `server/src` khoá không cho caller runtime lạm dụng.

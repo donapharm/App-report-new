@@ -24,7 +24,7 @@ test('warmEmployeeCostAllCache từ chối khoá testOptions ngoài allowlist', 
 
 test('server/src không caller runtime nào truyền tham số thứ ba cho warmEmployeeCostAllCache', () => {
   const srcRoot = path.join(__dirname, '..', 'src');
-  const callWithThirdArgument = /warmEmployeeCostAllCache\s*\(\s*[^,\n]+\s*,\s*[^,\n]+\s*,/g;
+  const callWithThirdArgument = /warmEmployeeCostAllCache\s*\(\s*[^,)]+\s*,\s*[^,)]+\s*,/g;
   const offenders = sourceFiles(srcRoot).filter((file) => {
     const source = fs.readFileSync(file, 'utf8')
       .replace(/async function warmEmployeeCostAllCache\s*\([^)]*\)/, '');
