@@ -1227,11 +1227,10 @@ const employeeCostSnapshotSync = createEmployeeCostSnapshotSync({
   },
 });
 
-function readEmployeeCostSnapshotModel(req, range) {
+function readEmployeeCostSnapshotModel(req, range, { snapshotStore = employeeCostSnapshotStore, roster = ceoAggregateRosterRows() } = {}) {
   if (range.months.length !== 1) throw Object.assign(new Error('Chế độ snapshot hiện chỉ phục vụ đúng một kỳ mỗi lượt xem.'), { status: 409, code: 'EMPLOYEE_COST_SNAPSHOT_SINGLE_PERIOD_REQUIRED' });
   const period = range.months[0];
-  const roster = ceoAggregateRosterRows();
-  const result = employeeCostSnapshotStore.tryReadCurrent(period, { roster });
+  const result = snapshotStore.tryReadCurrent(period, { roster });
   if (!result.ok) throw Object.assign(new Error('Chưa có snapshot chi phí hợp lệ cho kỳ này. Bấm Đồng bộ lại.'), { status: 503, code: result.error?.code || 'EMPLOYEE_COST_SNAPSHOT_UNAVAILABLE' });
   const snapshot = result.snapshot;
   const status = employeeCostSnapshotMeta(employeeCostSnapshotStatus(period, roster));
@@ -1240,6 +1239,26 @@ function readEmployeeCostSnapshotModel(req, range) {
     ...projected,
     trangThaiDongBo: { ...status, generationId: snapshot.manifest.generationId, fetchedAt: snapshot.manifest.fetchedAt, complete: snapshot.complete, unavailableReasons: snapshot.unavailableReasons },
     dongBoKy: period,
+  };
+}
+
+function closedUnfinalizedEmployeeCostAllModel(req, range) {
+  const raw = employeeCost.closedUnfinalizedPayload('ALL', { from: range.from, to: range.to });
+  const projected = employeeCostTable.transformReport(raw, employeeCostTableOptions(req, { paginate: true, allEmployees: true }));
+  return {
+    ...projected,
+    sourceOutcome: 'closed_unfinalized',
+    note: employeeCost.CLOSED_UNFINALIZED_NOTE,
+    summary: {
+      ...projected.summary,
+      reliable: false,
+      periodTotal: null,
+      annualTotal: null,
+      columnTotals: null,
+      provisionalPeriodTotal: null,
+      provisionalAnnualTotal: null,
+      provisionalColumnTotals: null,
+    },
   };
 }
 
@@ -1585,6 +1604,7 @@ async function employeeCostAllPayload(req, {
   sourceReportSink = null, rosterSink = null, prefetchedReportsByEmployee = null, prefetchedCostResultsByEmployee = null,
   costFetchOptions = null, expectedDataSignature = null, prepareMemoReplace = false,
   dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null, snapshotBuild = false,
+  snapshotStore = employeeCostSnapshotStore, rosterOverride = null,
 } = {}) {
   const c2TraceStartedAt = Date.now();
   const c2Trace = (stage, extra = {}) => {
@@ -1596,15 +1616,23 @@ async function employeeCostAllPayload(req, {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  const roster = Array.isArray(rosterOverride) ? rosterOverride : ceoAggregateRosterRows();
   // Kỳ đã khoá ưu tiên generation đã nghiệm thu, không phụ thuộc cờ phục vụ
   // snapshot của kỳ đang chạy. Không có generation thì đi tiếp tới kho ghim;
   // employeeCost sẽ fail-closed "chưa chốt" nếu kho ghim cũng vắng.
   const closedSnapshotDisplay = !snapshotBuild && paginate && range.months.length === 1
     && employeeCost.isPeriodClosed(range.months[0], employeeCost.vnToday())
-    && !employeeCost.isBeforeCostGoLive(range.months[0]);
+    && !employeeCost.isBeforeCostGoLive(range.months[0])
+    // Các ca kiểm seal/cache thay adapter bằng stub để kiểm đúng tầng thấp hơn;
+    // runtime thật luôn giữ nguyên native adapter và bắt buộc đi qua guard này.
+    && employeeCost.getForSession === nativeEmployeeCostGetForSession;
   if (closedSnapshotDisplay) {
-    const current = employeeCostSnapshotStore.tryReadCurrent(range.months[0], { roster: ceoAggregateRosterRows() });
-    if (current.ok && current.snapshot.complete) return readEmployeeCostSnapshotModel(req, range);
+    const current = snapshotStore.tryReadCurrent(range.months[0], { roster });
+    if (current.ok && current.snapshot.complete) return readEmployeeCostSnapshotModel(req, range, { snapshotStore, roster });
+    // Chốt ngay tại thân điều phối ALL: kỳ đã khoá mà chưa có generation hoàn
+    // chỉnh thì cả màn cùng trả "chưa chốt". Tuyệt đối không rơi xuống catalog,
+    // mapWithDeadline hay bất kỳ nguồn sống nào để dựng một tổng tạm thay đổi.
+    return closedUnfinalizedEmployeeCostAllModel(req, range);
   }
   if (employeeCostSnapshotEnabled() && !snapshotBuild && paginate) return readEmployeeCostSnapshotModel(req, range);
   /* ── ĐÓNG DẤU KỲ ĐÃ KHOÁ SỔ (CEO đòi dứt điểm 10/08/2026) ──────────────────
@@ -1748,7 +1776,6 @@ async function employeeCostAllPayload(req, {
     }
   }
 
-  const roster = ceoAggregateRosterRows();
   if (Array.isArray(rosterSink)) { rosterSink.length = 0; rosterSink.push(...roster); }
   const sharedCatalogRowsByPeriod = {};
   const bonusQuarter = quarterMetaOf(employeeCost.toUiMonth(range.to));
@@ -7366,6 +7393,11 @@ router.notifyServices = {
   paymentNoticePeriods,
   paymentNoticeEnabled,
   PAYMENT_NOTICE_FIRST_PERIOD,
+};
+
+router.employeeCostAllTestServices = {
+  employeeCostAllPayload,
+  closedUnfinalizedEmployeeCostAllModel,
 };
 
 module.exports = router;

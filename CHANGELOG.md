@@ -1,3 +1,9 @@
+### 27/08/2026 lúc 11:42 — T07 trunk guard kỳ khóa chưa có generation (candidate only)
+
+- Đo read-only trên PROD `ad1b048` xác nhận deadline phát sinh trong `employeeCostAllPayload`: các NV cuối hàng đợi rơi ở khoảng 25 giây; request không nhận `suppliedDeadlineAt` từ tầng ngoài.
+- Với đúng một kỳ đã khóa sau go-live, generation hợp lệ và đầy đủ vẫn được phục vụ như cũ; nếu thiếu generation thì trả thẳng toàn màn `closed_unfinalized` trước catalog/fan-out, không dựng tổng tạm và không gọi nguồn sống.
+- Giữ nguyên T06/before-go-live, kỳ đang chạy và đường tạo generation. Regression có đối chứng mutation: gỡ guard làm test đếm fan-out đỏ, phục hồi guard xanh.
+
 ### 2026-08-26 — Debts legal-entity validator unified (candidate only)
 
 - Invoice headers/rows and mapping attestations now use the same strict `DONA|AFP` validator and fail closed before join on prefixed or unknown values.
