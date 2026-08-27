@@ -1604,7 +1604,7 @@ async function employeeCostAllPayload(req, {
   sourceReportSink = null, rosterSink = null, prefetchedReportsByEmployee = null, prefetchedCostResultsByEmployee = null,
   costFetchOptions = null, expectedDataSignature = null, prepareMemoReplace = false,
   dataSignatureSink = null, deadlineAt: suppliedDeadlineAt = null, snapshotBuild = false,
-  snapshotStore = employeeCostSnapshotStore, rosterOverride = null,
+  snapshotStore = employeeCostSnapshotStore, rosterOverride = null, mapWithDeadlineObserver = null,
 } = {}) {
   const c2TraceStartedAt = Date.now();
   const c2Trace = (stage, extra = {}) => {
@@ -1833,6 +1833,7 @@ async function employeeCostAllPayload(req, {
     const deadlineAt = Number(suppliedDeadlineAt) > 0
       ? Number(suppliedDeadlineAt) : Date.now() + EMPLOYEE_COST_ALL_DEADLINE_MS;
     const fanoutStartedAt = Date.now();
+    if (typeof mapWithDeadlineObserver === 'function') mapWithDeadlineObserver();
     const reports = await mapWithDeadline(roster, EMPLOYEE_COST_ALL_CONCURRENCY, async (employee) => {
       const sourceStartedAt = Date.now();
       const empCode = String(employee.emp_code || '').trim().toUpperCase();
@@ -1977,6 +1978,7 @@ async function employeeCostAllPayload(req, {
       salaryAdvance.snapshot.read(employee.emp_code, range.to),
     ));
     if (advanceMissing.length) {
+      if (typeof mapWithDeadlineObserver === 'function') mapWithDeadlineObserver();
       await mapWithDeadline(advanceMissing, EMPLOYEE_COST_ALL_CONCURRENCY, (employee) => (
         salaryAdvance.safeGetFirstAdvance(range.to, employee.emp_code, salaryAdvance.getFirstAdvance)
       ), {

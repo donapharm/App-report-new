@@ -14,21 +14,14 @@ test('kỳ đã khoá không generation chặn tại thân ALL trước mapWithD
   let snapshotReads = 0;
   let mapWithDeadlineCalls = 0;
   const snapshotStore = { tryReadCurrent: () => { snapshotReads += 1; return { ok: false, error: { code: 'ABSENT' } }; } };
-  const originalThen = Promise.prototype.then;
-  // Spy theo ranh giới hành vi: nếu rơi qua guard, các tác vụ fan-out/catalog sẽ
-  // tạo chuỗi promise; guard đúng phải hoàn tất đồng bộ sau đúng một snapshot read.
-  Promise.prototype.then = function (...args) { mapWithDeadlineCalls += 1; return originalThen.apply(this, args); };
-  try {
-    const model = await employeeCostAllPayload(req('2026-07'), { snapshotStore, rosterOverride: roster });
-    assert.equal(snapshotReads, 1);
-    assert.equal(mapWithDeadlineCalls, 0, 'mapWithDeadline/fan-out phải được gọi 0 lần');
-    assert.equal(model.sourceOutcome, 'closed_unfinalized');
-    assert.equal(model.note, require('../src/employeeCost').CLOSED_UNFINALIZED_NOTE);
-    assert.equal(model.summary.periodTotal, null);
-    assert.equal(model.summary.provisionalPeriodTotal, null);
-  } finally {
-    Promise.prototype.then = originalThen;
-  }
+  const mapWithDeadlineObserver = () => { mapWithDeadlineCalls += 1; };
+  const model = await employeeCostAllPayload(req('2026-07'), { snapshotStore, rosterOverride: roster, mapWithDeadlineObserver });
+  assert.equal(snapshotReads, 1);
+  assert.equal(mapWithDeadlineCalls, 0, 'mapWithDeadline/fan-out phải được gọi 0 lần');
+  assert.equal(model.sourceOutcome, 'closed_unfinalized');
+  assert.equal(model.note, require('../src/employeeCost').CLOSED_UNFINALIZED_NOTE);
+  assert.equal(model.summary.periodTotal, null);
+  assert.equal(model.summary.provisionalPeriodTotal, null);
 });
 
 test('kỳ đã khoá có generation đủ vẫn trả snapshot hiện hành', async () => {
@@ -54,8 +47,11 @@ test('10 lượt kỳ đã khoá không generation giống hệt từng ký tự
 
 test('kỳ đang chạy không bị nhánh closed-unfinalized chặn', async () => {
   let snapshotReads = 0;
+  let mapWithDeadlineCalls = 0;
   const snapshotStore = { tryReadCurrent: () => { snapshotReads += 1; return { ok: false }; } };
-  const model = await employeeCostAllPayload(req('2099-01'), { snapshotStore, rosterOverride: [] });
+  const mapWithDeadlineObserver = () => { mapWithDeadlineCalls += 1; };
+  const model = await employeeCostAllPayload(req('2099-01'), { snapshotStore, rosterOverride: [], mapWithDeadlineObserver });
   assert.equal(snapshotReads, 0, 'kỳ đang chạy phải tiếp tục đường fan-out cũ');
+  assert.ok(mapWithDeadlineCalls > 0, 'kỳ đang chạy vẫn phải gọi mapWithDeadline');
   assert.notEqual(model.sourceOutcome, 'closed_unfinalized');
 });
