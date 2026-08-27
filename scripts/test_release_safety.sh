@@ -18,6 +18,16 @@ run() { # run "tên ca" "kỳ vọng: pass|fail" command...
     echo "  ❌ $name (exit=$rc, kỳ vọng=$expect)"; echo "$out" | sed 's/^/       /' | head -6; FAIL=$((FAIL+1))
   fi
 }
+run_fail_code() { # run_fail_code "tên ca" CODE command...
+  local name="$1" code="$2"; shift 2
+  local out rc
+  out="$("$@" 2>&1)"; rc=$?
+  if [ $rc -ne 0 ] && grep -q "$code" <<< "$out"; then
+    echo "  ✅ $name"; PASS=$((PASS+1))
+  else
+    echo "  ❌ $name (exit=$rc, thiếu mã $code)"; echo "$out" | sed 's/^/       /' | head -6; FAIL=$((FAIL+1))
+  fi
+}
 assert_intact() { # dữ liệu thật phải còn nguyên
   local name="$1" dir="$2" expect_sha="$3" actual
   actual="$(cd "$dir" && find . -type f -exec sha256sum {} \; 2>/dev/null | LC_ALL=C sort | sha256sum | awk '{print $1}')"
@@ -180,13 +190,25 @@ echo "<html></html>" > "$REL/web/dist/index.html"
 echo '{"version":"aaaaaaa-test","commit":"aaaaaaa"}' > "$REL/web/dist/version.json"
 echo '{"version":"aaaaaaa-test","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tree":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","builtAt":"test"}' > "$REL/RELEASE_IDENTITY.json"
 echo "module.exports={}" > "$REL/ecosystem.config.js"
-run "tạo manifest sau build" pass env RELEASE_ROOT="$REL" bash "$HERE/release_manifest.sh" create
-run "không đổi gì → verify ĐẠT" pass env RELEASE_ROOT="$REL" bash "$HERE/release_manifest.sh" verify
+ln -s "$DATA" "$REL/server/data"
+run "tạo manifest sau build" pass env RELEASE_ROOT="$REL" DATA="$DATA" bash "$HERE/release_manifest.sh" create
+run "không đổi gì → verify ĐẠT" pass env RELEASE_ROOT="$REL" DATA="$DATA" bash "$HERE/release_manifest.sh" verify
+
+unlink "$REL/server/data"
+mkdir -p "$REL/server/data"
+ln -s "$DATA" "$REL/server/data/data"
+run_fail_code "server/data là thư mục thật + data/data → build CHẶN đúng binding" RELEASE_DATA_BINDING_INVALID \
+  env RELEASE_ROOT="$REL" DATA="$DATA" bash "$HERE/release_manifest.sh" create
+unlink "$REL/server/data/data"
+rmdir "$REL/server/data"
+ln -s "$DATA" "$REL/server/data"
+run "server/data symlink đúng → build THÀNH CÔNG" pass \
+  env RELEASE_ROOT="$REL" DATA="$DATA" bash "$HERE/release_manifest.sh" create
 
 for f in "server/src/index.js" "web/dist/index.html" "ecosystem.config.js" "server/package.json"; do
   cp "$REL/$f" "$WORK/orig.bak"
   echo "// bi sua len" >> "$REL/$f"
-  run "sửa '$f' sau prepare → CHẶN trước khi chạy" fail env RELEASE_ROOT="$REL" bash "$HERE/release_manifest.sh" verify
+  run "sửa '$f' sau prepare → CHẶN trước khi chạy" fail env RELEASE_ROOT="$REL" DATA="$DATA" bash "$HERE/release_manifest.sh" verify
   cp "$WORK/orig.bak" "$REL/$f"
 done
 
@@ -203,7 +225,7 @@ chmod +x "$WORK/fake_start.sh"
 PREP2="$WORK/prep_cut.txt"; printf 'status=PASS\ncallback=OK\nbase=/b\ncommit=c1\nrelease=r1\n' > "$PREP2"
 mkdir -p "$WORK/rel2/server/src"; echo x > "$WORK/rel2/server/src/index.js"
 ln -s "$DATA" "$WORK/rel2/server/data"
-RELEASE_ROOT="$WORK/rel2" bash "$HERE/release_manifest.sh" create >/dev/null 2>&1
+RELEASE_ROOT="$WORK/rel2" DATA="$DATA" bash "$HERE/release_manifest.sh" create >/dev/null 2>&1
 out="$(RELEASE_ROOT="$WORK/rel2" DATA="$DATA" PM2_APP=x ARCHIVE="/proc/nonexistent/x.tgz" \
   APP_RELEASE_ROOT="$WORK/rel2" \
   APP_DATA_DIR="$DATA" AUTH_DATA_DIR="$AUTH" COLD_T08_CMD="printf '{\"rowCount\":1}'" \
@@ -278,9 +300,10 @@ echo "module.exports=1" > "$REL2/server/node_modules/pkg/index.js"
 echo "<html></html>" > "$REL2/web/dist/index.html"
 echo '{"version":"aaaaaaa-test","commit":"aaaaaaa"}' > "$REL2/web/dist/version.json"
 echo '{"version":"aaaaaaa-test","commit":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","tree":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","builtAt":"test"}' > "$REL2/RELEASE_IDENTITY.json"
-run "(3c) tạo manifest có node_modules" pass env RELEASE_ROOT="$REL2" bash "$HERE/release_manifest.sh" create
+ln -s "$DATA" "$REL2/server/data"
+run "(3c) tạo manifest có node_modules" pass env RELEASE_ROOT="$REL2" DATA="$DATA" bash "$HERE/release_manifest.sh" create
 echo "// tiêm mã lạ" >> "$REL2/server/node_modules/pkg/index.js"
-run "(3c) sửa file trong node_modules sau prepare → CHẶN" fail env RELEASE_ROOT="$REL2" bash "$HERE/release_manifest.sh" verify
+run "(3c) sửa file trong node_modules sau prepare → CHẶN" fail env RELEASE_ROOT="$REL2" DATA="$DATA" bash "$HERE/release_manifest.sh" verify
 
 # (5) rollback chạy ĐÚNG lệnh BẢN CŨ (ROLLBACK_START_CMD), KHÔNG dùng START_CMD bản mới.
 RBMARK="$WORK/rb_ran.flag"; NEWMARK="$WORK/new_ran.flag"; rm -f "$RBMARK" "$NEWMARK"

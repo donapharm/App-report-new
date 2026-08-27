@@ -28,10 +28,27 @@ ACTION="${1:-}"
 DEFAULT_TARGETS=(
   "RELEASE_IDENTITY.json"
   "server/src" "server/scripts" "server/package.json" "server/package-lock.json"
-  "server/node_modules" "web/dist" "ecosystem.config.js" "ecosystem.config.cjs"
+  "server/node_modules" "server/data" "web/dist" "ecosystem.config.js" "ecosystem.config.cjs"
 )
 read -r -a EXTRA <<< "${MANIFEST_EXTRA:-}"
 TARGETS=("${DEFAULT_TARGETS[@]}" "${EXTRA[@]}")
+
+validate_data_binding() {
+  local expected_data="${DATA:-}"
+  local link="${RELEASE_ROOT}/server/data"
+  [ -n "$expected_data" ] || die "RELEASE_DATA_BINDING_INVALID: thiếu DATA để xác minh kho dữ liệu chuẩn."
+  [ -d "$expected_data" ] || die "RELEASE_DATA_BINDING_INVALID: kho dữ liệu chuẩn không tồn tại."
+  [ -L "$link" ] || {
+    if [ -L "$link/data" ]; then
+      die "RELEASE_DATA_BINDING_INVALID: server/data là thư mục thật và có symlink data/data lồng nhau."
+    fi
+    die "RELEASE_DATA_BINDING_INVALID: server/data không phải symlink."
+  }
+  local actual expected
+  actual="$(readlink -f "$link")" || die "RELEASE_DATA_BINDING_INVALID: server/data là symlink hỏng."
+  expected="$(readlink -f "$expected_data")" || die "RELEASE_DATA_BINDING_INVALID: không resolve được kho dữ liệu chuẩn."
+  [ "$actual" = "$expected" ] || die "RELEASE_DATA_BINDING_INVALID: server/data trỏ sai kho dữ liệu chuẩn."
+}
 
 save_targets() {
   printf '%s\n' "${TARGETS[@]}" > "$TARGETS_FILE"
@@ -61,6 +78,7 @@ stage_targets() {
 case "$ACTION" in
   create)
     echo "=== TẠO RELEASE MANIFEST — $(date '+%F %T') ==="
+    validate_data_binding
     stage="$(mktemp -d)"; trap 'rm -rf "$stage"' EXIT
     stage_targets "$stage"
     manifest_create "$stage" "$MANIFEST"
@@ -71,6 +89,7 @@ case "$ACTION" in
     ;;
   verify)
     echo "=== KIỂM RELEASE MANIFEST (ngay trước khi chạy) — $(date '+%F %T') ==="
+    validate_data_binding
     [ -f "$MANIFEST" ] || die "Thiếu manifest $MANIFEST — DỪNG, không cutover."
     load_targets
     stage="$(mktemp -d)"; trap 'rm -rf "$stage"' EXIT

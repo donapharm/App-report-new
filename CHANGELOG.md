@@ -1,3 +1,8 @@
+### 27/08/2026 lúc 15:57 — Chặn release sai binding dữ liệu ngay lúc dựng gói (candidate only)
+
+- `release_manifest create` fail-closed với mã `RELEASE_DATA_BINDING_INVALID` nếu `server/data` không phải symlink trỏ đúng kho dữ liệu được truyền qua `DATA`, gồm trường hợp lỗi `server/data/data` lồng nhau.
+- Binding được đưa vào phạm vi manifest và kiểm lại khi verify. Mutation dựng thư mục thật phải đỏ trước cutover; symlink đúng phải tạo manifest thành công.
+
 ### 27/08/2026 lúc 15:25 — Siết quét caller warm cache nhiều dòng (candidate only)
 
 - Test khóa runtime caller của `warmEmployeeCostAllCache` nay bắt cả lời gọi xuống dòng có tham số thứ ba, đồng thời không vượt qua dấu đóng ngoặc của lời gọi hai tham số hợp lệ.
