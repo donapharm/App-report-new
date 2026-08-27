@@ -457,7 +457,7 @@ test('month range defaults to current month and rejects incomplete, invalid or r
   assert.throws(() => employeeCost.parseMonthRange({ from: '2026-08', to: '2026-07' }), { code: 'EMPLOYEE_COST_RANGE_ORDER' });
 });
 
-test('range proxy sends validated from/to first, then latest-policy lookup when every period is empty', async () => {
+test('closed mixed range without pin is unfinalized and makes zero network calls', async () => {
   const calledUrls = [];
   const payload = await employeeCost.getForSession({
     scope: { empCode: 'DN001' }, session: { emp_code: 'DN001', role: 'sale' }, requestedEmp: 'DN999',
@@ -477,12 +477,11 @@ test('range proxy sends validated from/to first, then latest-policy lookup when 
       };
     },
   });
-  assert.deepEqual(calledUrls, [
-    'http://hub.test/api/integrations/app-report/employee-cost?emp=DN001&from=2026-06&to=2026-07',
-    'http://hub.test/api/integrations/app-report/employee-cost?emp=DN001',
-  ]);
+  assert.deepEqual(calledUrls, []);
   assert.deepEqual(payload.periods.map((period) => period.period), ['2026-06', '2026-07']);
   assert.equal(payload.empCode, 'DN001');
+  assert.equal(payload.sourceOutcome, 'closed_unfinalized');
+  assert.equal(payload.rateSource, 'closed_unfinalized');
 });
 
 test('exact rows with mismatched provenance fail closed and never request latest policy', async () => {

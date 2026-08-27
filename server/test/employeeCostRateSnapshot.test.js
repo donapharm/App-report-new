@@ -73,15 +73,15 @@ test('fallback ghi timing an toàn; refresh nền single-flight ghi snapshot m�
 
 test('‼ nguồn kẹt mà đã có bản lưu ⇒ VẪN CÓ SỐ, gắn nhãn số cũ', async () => {
   const store = memStore();
-  const good = { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-07', to: '2026-07', columns: COLUMNS, rows: ROWS }) };
+  const good = { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-08', to: '2026-08', columns: COLUMNS, rows: ROWS }) };
   const okResult = await employeeCost.fetchEmployeeCost('DN001', {
-    from: '2026-07', to: '2026-07', ...credentials, rateSnapshotStore: store, fetchImpl: async () => good,
+    from: '2026-08', to: '2026-08', ...credentials, rateSnapshotStore: store, fetchImpl: async () => good,
   });
   assert.equal(okResult.payload.periods[0].rows.length, 1);
 
   // Nguồn kẹt y như vụ khoá mồ côi.
   const stalled = await employeeCost.fetchEmployeeCost('DN001', {
-    from: '2026-07', to: '2026-07', ...credentials, rateSnapshotStore: store,
+    from: '2026-08', to: '2026-08', ...credentials, rateSnapshotStore: store,
     fetchImpl: async () => { throw Object.assign(new Error('timeout'), { name: 'AbortError' }); },
   });
   assert.equal(stalled.payload.periods[0].rows.length, 1, 'KHÔNG được mất số');
@@ -165,9 +165,9 @@ test('kỳ đã có số thật thì KHÔNG bị bản lưu đè lên', () => {
 // "Không mất số" đã có ở các test trên. Đây là phần "không kẹt".
 test('‼ đã có bản lưu ⇒ nguồn kẹt KHÔNG bắt người dùng chờ hết 25 giây', async () => {
   const store = memStore();
-  const good = { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-07', to: '2026-07', columns: COLUMNS, rows: ROWS }) };
+  const good = { ok: true, status: 200, json: async () => ({ empCode: 'DN001', from: '2026-08', to: '2026-08', columns: COLUMNS, rows: ROWS }) };
   await employeeCost.fetchEmployeeCost('DN001', {
-    from: '2026-07', to: '2026-07', ...credentials, rateSnapshotStore: store, fetchImpl: async () => good,
+    from: '2026-08', to: '2026-08', ...credentials, rateSnapshotStore: store, fetchImpl: async () => good,
   });
 
   // Nguồn kẹt: mỗi lượt gọi chỉ trả lời sau khi bị huỷ (giống khoá mồ côi).
@@ -182,7 +182,7 @@ test('‼ đã có bản lưu ⇒ nguồn kẹt KHÔNG bắt người dùng ch�
 
   const started = Date.now();
   const result = await employeeCost.fetchEmployeeCost('DN001', {
-    from: '2026-07', to: '2026-07', ...credentials, rateSnapshotStore: store, fetchImpl: stalledFetch,
+    from: '2026-08', to: '2026-08', ...credentials, rateSnapshotStore: store, fetchImpl: stalledFetch,
   });
   const elapsed = Date.now() - started;
 
@@ -206,7 +206,7 @@ test('chưa có bản lưu thì vẫn dùng ngân sách đầy đủ — không 
     });
   });
   await employeeCost.fetchEmployeeCost('DN777', {
-    from: '2026-07', to: '2026-07', baseUrl: 'http://hub.test', assignmentKey: 'assignment-key-1234',
+    from: '2026-08', to: '2026-08', baseUrl: 'http://hub.test', assignmentKey: 'assignment-key-1234',
     employeeCostKeys: 'DN777=employee-cost-key-1234', backoffMs: [], timeoutMs: 300,
     rateSnapshotStore: memStore(), fetchImpl: stalledFetch,
   });

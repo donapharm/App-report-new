@@ -52,13 +52,52 @@ test('‼ BẤT BIẾN: hai lượt đọc cách nhau ra Y HỆT nhau — hết 
   assert.equal(a.outcome, b.outcome);
 });
 
-test('local-only TẮT: kho KHÔNG có kỳ chốt vẫn giữ hành vi cũ và hỏi nguồn', async () => {
+test('kho KHÔNG có kỳ chốt ⇒ chưa chốt và tuyệt đối không hỏi nguồn sống', async () => {
   const store = memStore();
+  let networkCalls = 0;
   const result = await employeeCost.fetchEmployeeCost('DN001', {
     from: CLOSED, to: CLOSED, rateSnapshotStore: store,
-    fetchImpl: async () => ({ outcome: 'ok', payload: { empCode: 'DN001', from: CLOSED, to: CLOSED, periods: [{ period: CLOSED, columns: COLS, rows: [] }] } }),
+    fetchImpl: async () => { networkCalls += 1; throw new Error('không được ra mạng'); },
   });
-  assert.notEqual(result.pinned, true);
+  assert.equal(networkCalls, 0);
+  assert.equal(result.outcome, 'closed_unfinalized');
+  assert.equal(result.payload.rateSource, 'closed_unfinalized');
+  assert.equal(result.payload.note, employeeCost.CLOSED_UNFINALIZED_NOTE);
+});
+
+test('kỳ chốt chưa có pin không enrich doanh thu thành tổng tạm', async () => {
+  const store = memStore();
+  let networkCalls = 0;
+  const subject = { session: { emp_code: 'DN001', role: 'admin' }, scope: { empCode: 'DN001' }, requestedEmp: 'DN001' };
+  const report = await employeeCost.getForSession(subject, {
+    from: CLOSED, to: CLOSED, rateSnapshotStore: store,
+    revenueRowsByPeriod: { [CLOSED]: [{ emp_code: 'DN001', revenue: 999999 }] },
+    catalogRowsByPeriod: { [CLOSED]: [] }, auditImpl: () => {},
+    fetchImpl: async () => { networkCalls += 1; throw new Error('không được gọi'); },
+    reconciliationShadow: { loadSnapshotImpl: async () => { networkCalls += 1; throw new Error('không được gọi'); } },
+  });
+  assert.equal(networkCalls, 0);
+  assert.equal(report.sourceOutcome, 'closed_unfinalized');
+  assert.equal((report.periods[0].rows || []).length, 0);
+  assert.equal(report.summary, undefined);
+});
+
+test('kỳ chốt dùng pin bỏ qua reconciliation network và bất biến qua nhiều lượt', async () => {
+  const store = memStore();
+  await seed(store, CLOSED);
+  let networkCalls = 0;
+  const options = {
+    from: CLOSED, to: CLOSED, rateSnapshotStore: store,
+    revenueRowsByPeriod: { [CLOSED]: [] }, catalogRowsByPeriod: { [CLOSED]: [] },
+    reconciliationShadow: { loadSnapshotImpl: async () => { networkCalls += 1; throw new Error('không được ra mạng'); } },
+    auditImpl: () => {},
+  };
+  const subject = { session: { emp_code: 'DN001', role: 'admin' }, scope: { empCode: 'DN001' }, requestedEmp: 'DN001' };
+  const first = await employeeCost.getForSession(subject, options);
+  const second = await employeeCost.getForSession(subject, options);
+  assert.equal(networkCalls, 0, 'display kỳ chốt phải zero-network');
+  assert.deepEqual(first, second);
+  assert.equal(first.rateSource, 'local_pinned');
 });
 
 test('‼ local-only BẬT + kho thiếu ⇒ fail-closed đúng thông điệp và tuyệt đối không gọi mạng', async (t) => {

@@ -1596,6 +1596,16 @@ async function employeeCostAllPayload(req, {
     throw Object.assign(new Error('Chỉ CEO/admin được xem tất cả nhân viên.'), { status: 403, code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  // Kỳ đã khoá ưu tiên generation đã nghiệm thu, không phụ thuộc cờ phục vụ
+  // snapshot của kỳ đang chạy. Không có generation thì đi tiếp tới kho ghim;
+  // employeeCost sẽ fail-closed "chưa chốt" nếu kho ghim cũng vắng.
+  const closedSnapshotDisplay = !snapshotBuild && paginate && range.months.length === 1
+    && employeeCost.isPeriodClosed(range.months[0], employeeCost.vnToday())
+    && !employeeCost.isBeforeCostGoLive(range.months[0]);
+  if (closedSnapshotDisplay) {
+    const current = employeeCostSnapshotStore.tryReadCurrent(range.months[0], { roster: ceoAggregateRosterRows() });
+    if (current.ok && current.snapshot.complete) return readEmployeeCostSnapshotModel(req, range);
+  }
   if (employeeCostSnapshotEnabled() && !snapshotBuild && paginate) return readEmployeeCostSnapshotModel(req, range);
   /* ── ĐÓNG DẤU KỲ ĐÃ KHOÁ SỔ (CEO đòi dứt điểm 10/08/2026) ──────────────────
      Tổng màn ALL = cộng sổ từng NV; ai không kịp trong hạn thì dòng của họ không

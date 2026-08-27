@@ -37,6 +37,17 @@ test('before_go_live là DÙNG ĐƯỢC — không bôi đỏ NV, không hạ b�
   assert.equal(employeeCost.isUsableOutcome('invalid_period_payload'), false);
 });
 
+test('T06 trước go-live không bị luật closed-unfinalized biến thành chưa chốt', async () => {
+  let networkCalls = 0;
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-06', to: '2026-06',
+    fetchImpl: async () => { networkCalls += 1; throw new Error('không được gọi'); },
+  });
+  assert.equal(networkCalls, 0);
+  assert.equal(result.outcome, 'before_go_live');
+  assert.equal(result.payload.rateSource, 'before_go_live');
+});
+
 test('mốc so sánh đúng biên: 06/2026 trước, 07/2026 KHÔNG trước', () => {
   assert.equal(employeeCost.isBeforeCostGoLive('2026-06'), true);
   assert.equal(employeeCost.isBeforeCostGoLive('2026-05'), true);
@@ -46,15 +57,21 @@ test('mốc so sánh đúng biên: 06/2026 trước, 07/2026 KHÔNG trước', (
   assert.equal(employeeCost.isBeforeCostGoLive(''), false, 'tháng rác thì không kết luận gì');
 });
 
-test('khoảng VẮT QUA mốc thì KHÔNG chặn — phần từ 07 trở đi vẫn phải đi lấy', async () => {
-  let called = false;
-  const result = await employeeCost.fetchEmployeeCost('DN006', {
-    from: '2026-06',
-    to: '2026-07',
-    fetchImpl: () => { called = true; throw new Error('stop'); },
+test('khoảng VẮT QUA mốc dùng before_go_live + pin, không quay lại nguồn sống', async () => {
+  const store = { data: {}, load: (n, d) => store.data[n] ?? d, save: (n, v) => { store.data[n] = v; } };
+  await require('../src/costRatesSync').syncPeriod({
+    period: '2026-07', empCodes: ['DN006'], actor: 'CEO', store,
+    fetchImpl: async () => ({ outcome: 'ok', payload: { periods: [{ period: '2026-07', columns: [{ key: 'c36' }], rows: [{ unit_code: '120.HTNT', c5: 'G1.A', c16: 'Thuốc A', c25: 'Viên', c36: 1 }] }] } }),
   });
-  assert.notEqual(result.outcome, 'before_go_live', '06→07 không được coi là trọn trước go-live');
-  assert.equal(called || result.outcome === 'not_configured', true, 'phải đi tiếp đường bình thường');
+  let calls = 0;
+  const result = await employeeCost.fetchEmployeeCost('DN006', {
+    from: '2026-06', to: '2026-07', rateSnapshotStore: store,
+    fetchImpl: async () => { calls += 1; throw new Error('không được gọi'); },
+  });
+  assert.equal(calls, 0);
+  assert.equal(result.pinned, true);
+  assert.equal(result.payload.periods[0].rateSource, 'before_go_live');
+  assert.equal(result.payload.periods[1].rows.length, 1);
 });
 
 test('đổi được mốc bằng biến môi trường, rác thì quay về mặc định', () => {

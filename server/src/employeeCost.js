@@ -1514,6 +1514,7 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
 const COST_LOCAL_FIRST = String(process.env.APP_REPORT_COST_LOCAL_FIRST ?? '1') !== '0';
 const COST_LOCAL_ONLY = () => String(process.env.APP_REPORT_COST_LOCAL_ONLY || '') === '1';
 const LOCAL_ONLY_MISSING_NOTE = 'Kỳ này chưa đồng bộ % chi phí — bấm Đồng bộ % chi phí';
+const CLOSED_UNFINALIZED_NOTE = 'Kỳ đã khoá nhưng chưa có bản chốt bất biến — chưa chốt';
 
 /**
  * Kỳ hỏi nằm TRỌN trước go-live ⇒ trả bản rỗng có chú thích đúng nghĩa, không ra mạng.
@@ -1551,6 +1552,13 @@ function pinnedClosedPayload(empCode, options = {}) {
     // hành vi trở lại y như cũ (chỉ kỳ đã chốt mới đọc kho).
     if (!closed && !COST_LOCAL_FIRST) return null;
     if (!closed) allClosed = false;
+    // Dải xem có thể vắt qua T06→T07. Kỳ trước go-live là câu trả lời bất biến
+    // hợp lệ, không cần kho tỷ lệ; chỉ đòi kho ghim từ kỳ go-live trở đi.
+    if (isBeforeCostGoLive(month)) {
+      const legacy = emptyPayload(empCode, BEFORE_GO_LIVE_NOTE);
+      periods.push({ ...legacy, period: month, rateSource: 'before_go_live' });
+      continue;
+    }
     const local = rateSnapshot.readLocalSync(empCode, month, snapshotOptions);
     if (!local) return null;
     periods.push({ ...emptyPayload(empCode, DEFAULT_NOTE), period: month, columns: local.payload.columns, rows: local.payload.rows });
@@ -1567,6 +1575,23 @@ function pinnedClosedPayload(empCode, options = {}) {
     rateSource: allClosed ? 'local_pinned' : 'local_sync',
     ratePinnedAt: fetchedAt || null,
   };
+}
+
+function closedUnfinalizedPayload(empCode, options = {}) {
+  let range;
+  try { range = parseMonthRange(options); } catch { return null; }
+  if (!range?.months?.length) return null;
+  const today = vnToday();
+  if (!range.months.every((month) => isPeriodClosed(month, today))) return null;
+  if (range.months.every((month) => isBeforeCostGoLive(month))) return null;
+  const payload = emptyRangePayload(empCode, range, CLOSED_UNFINALIZED_NOTE);
+  payload.rateSource = 'closed_unfinalized';
+  payload.ratePolicy = { state: 'closed_unfinalized', lookupOutcome: 'closed_unfinalized' };
+  for (const period of payload.periods || []) {
+    period.note = CLOSED_UNFINALIZED_NOTE;
+    period.rateSource = 'closed_unfinalized';
+  }
+  return payload;
 }
 
 async function fetchEmployeeCost(empCode, options = {}) {
@@ -1588,6 +1613,14 @@ async function fetchEmployeeCost(empCode, options = {}) {
       result.payload = await applyEffectiveRates(result.payload, empCode, options, options.fetchOneImpl || fetchRawEmployeeCost);
       return result;
     }
+  }
+
+  // Kỳ đã khoá mà chưa có generation/kho ghim tuyệt đối không được quay lại
+  // nguồn sống. Đường hiển thị chỉ nói "chưa chốt"; provenance/đối soát mạng là
+  // cổng riêng để tạo generation, không phải đầu vào cho mỗi lần CEO mở màn.
+  if (hasRange) {
+    const unfinalized = closedUnfinalizedPayload(empCode, options);
+    if (unfinalized) return { payload: unfinalized, outcome: 'closed_unfinalized', attempts: 0 };
   }
 
   // Cờ opt-in của CEO: đường XEM chỉ được đọc bản đã chủ động đồng bộ. Nút đồng
@@ -1752,7 +1785,7 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
   // Revenue belongs to App Report and must stay useful even while the DataHub
   // cost timeline is unavailable/not configured. In that state enrichment
   // preserves every order-line and leaves percentages/amounts as null (—).
-  if (range && options.revenueRowsByPeriod && options.catalogRowsByPeriod) {
+  if (result.outcome !== 'closed_unfinalized' && range && options.revenueRowsByPeriod && options.catalogRowsByPeriod) {
     result.payload = options.offloadCpu === true
       ? await employeeCostCpu.enrichRangePayload(result.payload, {
         revenueRowsByPeriod: options.revenueRowsByPeriod,
@@ -1763,12 +1796,16 @@ async function getForSession({ session, scope, requestedEmp }, options = {}) {
         derivedBaseConfig: options.derivedBaseConfig,
       })
       : enrichRangePayload(result.payload, options);
-  } else if (Array.isArray(options.revenueRows) && Array.isArray(options.catalogRows)) {
+  } else if (result.outcome !== 'closed_unfinalized' && Array.isArray(options.revenueRows) && Array.isArray(options.catalogRows)) {
     result.payload = enrichWithRevenue(result.payload, options);
   }
   // This connector runs only after all current financial outputs are final.
   // Every failure mode leaves exactly two additive display fields null.
-  result.payload = await applyReconciliationShadow(result.payload, empCode, options);
+  const immutablePinnedDisplay = result.pinned === true && range?.months?.length > 0
+    && range.months.every((month) => isPeriodClosed(month, vnToday()));
+  if (!immutablePinnedDisplay) {
+    result.payload = await applyReconciliationShadow(result.payload, empCode, options);
+  }
   audit({
     actor: session?.emp_code,
     role: session?.role,
@@ -1830,6 +1867,8 @@ module.exports = {
   emptyPayload,
   emptyRangePayload,
   LOCAL_ONLY_MISSING_NOTE,
+  CLOSED_UNFINALIZED_NOTE,
+  closedUnfinalizedPayload,
   adaptPeriodPayload,
   sourcePeriodRangeOf,
   sourceGenerationOf,
