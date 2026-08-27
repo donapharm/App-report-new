@@ -8074,3 +8074,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Dải kỳ đã chốt vắt qua T06→T07 nay giữ `before_go_live` + ghi chú go-live cho T06;
   chỉ T07 từ mốc go-live trở đi mang `closed_unfinalized`. Không sửa dữ liệu hoặc
   logic khóa T06, không đụng custody, seal hay generation.
+### 27/08/2026 lúc 14:35 — Khoá testOptions của warm Employee Cost (candidate only)
+
+- `warmEmployeeCostAllCache` chỉ chuyển tiếp bốn test option đã duyệt: `snapshotStore`, `rosterOverride`, `mapWithDeadlineObserver`, `bypassClosedPeriodGuard`; khoá lạ fail-closed bằng mã lỗi riêng.
+- Thêm regression quét `server/src` để runtime không caller nào truyền tham số thứ ba; test seal/cache vẫn dùng explicit bypass ở `server/test` trên store cô lập.
+- Không đổi PROD, không bật Debts live và không đụng dữ liệu/chốt T06–T07.

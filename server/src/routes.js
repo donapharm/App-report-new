@@ -2331,7 +2331,30 @@ async function selfHealUnavailableCostSources({
 }
 
 let employeeCostWarmActive = false;
+const WARM_EMPLOYEE_COST_TEST_OPTION_KEYS = new Set([
+  'snapshotStore',
+  'rosterOverride',
+  'mapWithDeadlineObserver',
+  'bypassClosedPeriodGuard',
+]);
+function approvedWarmEmployeeCostTestOptions(testOptions = {}) {
+  if (!testOptions || typeof testOptions !== 'object' || Array.isArray(testOptions)) {
+    throw Object.assign(new Error('Tuỳ chọn test warm Employee Cost không hợp lệ.'), {
+      code: 'EMPLOYEE_COST_WARM_TEST_OPTIONS_INVALID',
+    });
+  }
+  const unknown = Object.keys(testOptions).filter((key) => !WARM_EMPLOYEE_COST_TEST_OPTION_KEYS.has(key));
+  if (unknown.length) {
+    throw Object.assign(new Error(`Tuỳ chọn test warm Employee Cost không được phép: ${unknown.join(', ')}`), {
+      code: 'EMPLOYEE_COST_WARM_TEST_OPTION_UNKNOWN',
+      unknown,
+    });
+  }
+  return Object.fromEntries(Object.entries(testOptions)
+    .filter(([key]) => WARM_EMPLOYEE_COST_TEST_OPTION_KEYS.has(key)));
+}
 async function warmEmployeeCostAllCache(ky, reason = 'materialize', testOptions = {}) {
+  const approvedTestOptions = approvedWarmEmployeeCostTestOptions(testOptions);
   if (employeeCostSnapshotEnabled()) return false;
   const month = monthInputForKy(ky);
   if (!month) return false;
@@ -2362,7 +2385,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize', testOptions 
     // refresh sau fast-timeout rồi giữ nhiều payload lớn sống đồng thời.
     costFetchOptions: { backgroundRefresh: false },
     deadlineAt,
-    ...testOptions,
+    ...approvedTestOptions,
   });
 
   // Bind recovery to the complete Employee Cost generation only after catalog
@@ -2415,7 +2438,7 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize', testOptions 
         expectedDataSignature: sourceDataSignature,
         prepareMemoReplace: true,
         deadlineAt,
-        ...testOptions,
+        ...approvedTestOptions,
       }),
       }));
     } finally {
