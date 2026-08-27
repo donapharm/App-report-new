@@ -12,6 +12,9 @@ const digest = (value) => crypto.createHash('sha256').update(value).digest('hex'
 const CONTRACT_SHA = shadow.CONTRACT_CHECKSUM;
 const SIGNING_KEY = Buffer.alloc(32, 7);
 const SIGNING_KEY_ID = 'test-receipt-key-v1';
+const DATAHUB_TWO_PARTITION_FIXTURE = path.join(
+  __dirname, 'fixtures', 'debts-mapping-two-partition.synthetic.json',
+);
 
 function sourceRow(overrides = {}) {
   const row = {
@@ -238,6 +241,64 @@ test('invoice and attestation share one strict legal-entity validator; source co
 
   assert.throws(() => materialize([sourceRow({ legal_entity: '01.DONA' })], valid), { code: 'DEBTS_LEGAL_ENTITY_INVALID' });
   assert.throws(() => materialize([sourceRow({ source_legal_entity_code: 'DONA' })], valid), { code: 'DEBTS_SOURCE_LEGAL_ENTITY_CODE_INVALID' });
+});
+
+test('DataHub two-partition artifact runs through the real mapping and invoice join path', () => {
+  const raw = fs.readFileSync(DATAHUB_TWO_PARTITION_FIXTURE);
+  assert.equal(digest(raw), '56469afdf2a278f55f12b24640f27068da7444a378bd89d8a9cba70795aa3b7b');
+  const fixture = JSON.parse(raw);
+
+  const mappings = shadow.mappingIndex(fixture);
+  assert.equal(mappings.byKey.size, fixture.testProfile.expected.mappingRows);
+  assert.deepEqual(mappings.declaredCounts.legalEntityRows, fixture.testProfile.expected.legalEntityRows);
+
+  const joined = fixture.testProfile.debtsJoinRows.map((row, index) => {
+    const snapshot = {
+      snapshotId: `synthetic-two-partition-${index + 1}`,
+      period: '2099-01',
+      sourceRevision: 'synthetic-v1',
+      revisionMode: 'full_period_replacement',
+      schemaVersion: 1,
+      contractChecksum: CONTRACT_SHA,
+      legal_entity: row.legal_entity,
+      currency: 'VND',
+      rowChecksumAlgorithm: shadow.ROW_CHECKSUM_ALGORITHM,
+      rowCount: 1,
+      invoiceCount: 1,
+      checksum: `sha256:${shadow.snapshotRowsChecksum([row])}`,
+      totals: { beforeVat: row.before_vat, vat: row.vat_amount, afterVat: row.after_vat },
+      createdAt: '2099-01-31T00:00:00.000Z',
+    };
+    const combined = shadow.combineSnapshotPages(
+      [{ snapshot, rows: [row], nextCursor: null, finalize: true }],
+      { period: '2099-01', contractChecksum: CONTRACT_SHA },
+    );
+    return shadow.materializeShadow(combined, fixture, { codeRevision: 'datahub-fixture-e2e' });
+  });
+
+  assert.equal(joined.length, fixture.testProfile.expected.successfulExactJoins);
+  assert.deepEqual(joined.map((result) => result.rows[0].emp_code), ['DNTEST01', 'AFTEST01']);
+  assert.deepEqual(joined.map((result) => result.rows[0].mapping_status), ['mapped', 'mapped']);
+  assert.equal(joined.reduce((count, result) => count + result.quarantined.length, 0), 0);
+
+  for (const row of fixture.testProfile.negativeLegalEntityRows) {
+    const snapshot = {
+      snapshotId: `synthetic-invalid-${row.invoice_line_id}`,
+      period: '2099-01', sourceRevision: 'synthetic-v1', revisionMode: 'full_period_replacement', schemaVersion: 1,
+      contractChecksum: CONTRACT_SHA, legal_entity: row.legal_entity, currency: 'VND',
+      rowChecksumAlgorithm: shadow.ROW_CHECKSUM_ALGORITHM, rowCount: 1, invoiceCount: 1,
+      checksum: `sha256:${shadow.snapshotRowsChecksum([row])}`,
+      totals: { beforeVat: row.before_vat, vat: row.vat_amount, afterVat: row.after_vat },
+      createdAt: '2099-01-31T00:00:00.000Z',
+    };
+    assert.throws(
+      () => shadow.combineSnapshotPages(
+        [{ snapshot, rows: [row], nextCursor: null, finalize: true }],
+        { period: '2099-01', contractChecksum: CONTRACT_SHA },
+      ),
+      { code: 'DEBTS_LEGAL_ENTITY_INVALID' },
+    );
+  }
 });
 
 test('normal mapped sale preserves raw/canonical triples and uses after-VAT as headline revenue', () => {

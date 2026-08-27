@@ -1,0 +1,182 @@
+{
+  "version": "TEST-SYNTHETIC-TWO-PARTITION-V1",
+  "sourceManifestId": "synthetic-debts-mapping-two-partition-v1",
+  "sourceManifestChecksum": "4958cc8bbe6658ec6e082fe16962e02e086a297ca8c6f33b9213fda5470f50bc",
+  "sourceManifest": {
+    "profile": "synthetic-two-partition-v1",
+    "synthetic": true,
+    "expectedMappingRows": 2,
+    "expectedPartitions": {
+      "DONA": 1,
+      "AFP": 1
+    }
+  },
+  "checksum": "984f7333ede6c50f244ef8b65125c4f920d8bfb098b03744371b8b2336778eb9",
+  "contract": {
+    "unitCodeColumn": "c7",
+    "qlnbColumn": "c5",
+    "employeeColumn": "c6",
+    "uomColumn": "c25",
+    "uomMode": "validation"
+  },
+  "rows": [
+    {
+      "legal_entity": "DONA",
+      "source_legal_entity_code": "01.DONA",
+      "unitCode": "UNIT-SYNTH-DONA-001",
+      "qlnbCode": "QLNB-SYNTH-DONA-001",
+      "candidates": [
+        {
+          "employeeCode": "DNTEST01",
+          "uom": "HOP",
+          "sourceLineId": "SYNTH-CATALOG-DONA-001"
+        }
+      ],
+      "employeeConflict": false,
+      "uomConflict": false
+    },
+    {
+      "legal_entity": "AFP",
+      "source_legal_entity_code": "02.AFP",
+      "unitCode": "UNIT-SYNTH-AFP-001",
+      "qlnbCode": "QLNB-SYNTH-AFP-001",
+      "candidates": [
+        {
+          "employeeCode": "AFTEST01",
+          "uom": "VIEN",
+          "sourceLineId": "SYNTH-CATALOG-AFP-001"
+        }
+      ],
+      "employeeConflict": false,
+      "uomConflict": false
+    }
+  ],
+  "legalEntityAttestation": {
+    "contract": "debts-source-legal-entity-partition-v1",
+    "checksum": "f95fc5f103e9916790dfe6b34a79a7486b7d61d6012fa3d4eed771bf327e8e57",
+    "rows": [
+      {
+        "legal_entity": "DONA",
+        "source_legal_entity_code": "01.DONA",
+        "unit_code": "UNIT-SYNTH-DONA-001",
+        "qlnb_code": "QLNB-SYNTH-DONA-001"
+      },
+      {
+        "legal_entity": "AFP",
+        "source_legal_entity_code": "02.AFP",
+        "unit_code": "UNIT-SYNTH-AFP-001",
+        "qlnb_code": "QLNB-SYNTH-AFP-001"
+      }
+    ]
+  },
+  "testProfile": {
+    "profile": "synthetic-v1",
+    "synthetic": true,
+    "expected": {
+      "mappingRows": 2,
+      "legalEntityRows": {
+        "DONA": 1,
+        "AFP": 1
+      },
+      "successfulExactJoins": 2,
+      "rejectedInvalidLegalEntities": 3
+    },
+    "debtsJoinRows": [
+      {
+        "legal_entity": "DONA",
+        "source_legal_entity_code": "01.DONA",
+        "invoice_date": "2099-01-15",
+        "invoice_number": "SYNTH-INV-001",
+        "invoice_line_id": "SYNTH-DEBT-LINE-001",
+        "unit_code": "UNIT-SYNTH-DONA-001",
+        "qlnb_code": "QLNB-SYNTH-DONA-001",
+        "uom": "HOP",
+        "quantity": "1",
+        "unit_price_before_vat": "100",
+        "before_vat": "100",
+        "vat_amount": "10",
+        "after_vat": "110",
+        "row_type": "SALE",
+        "row_checksum": "8f988d338d0f236c6f66482922a355ad6410bb9489981738f1bef4362f587529"
+      },
+      {
+        "legal_entity": "AFP",
+        "source_legal_entity_code": "02.AFP",
+        "invoice_date": "2099-01-15",
+        "invoice_number": "SYNTH-INV-002",
+        "invoice_line_id": "SYNTH-DEBT-LINE-002",
+        "unit_code": "UNIT-SYNTH-AFP-001",
+        "qlnb_code": "QLNB-SYNTH-AFP-001",
+        "uom": "VIEN",
+        "quantity": "1",
+        "unit_price_before_vat": "100",
+        "before_vat": "100",
+        "vat_amount": "10",
+        "after_vat": "110",
+        "row_type": "SALE",
+        "row_checksum": "80d93ddbb5271e221675764ef601ee1a417102a4c270b7a8a50a9b03972aa843"
+      }
+    ],
+    "negativeLegalEntityRows": [
+      {
+        "legal_entity": "01.DONA",
+        "source_legal_entity_code": "01.DONA",
+        "invoice_date": "2099-01-15",
+        "invoice_number": "SYNTH-INV-003",
+        "invoice_line_id": "SYNTH-DEBT-LINE-003",
+        "unit_code": "UNIT-SYNTH-DONA-001",
+        "qlnb_code": "QLNB-SYNTH-DONA-001",
+        "uom": "HOP",
+        "quantity": "1",
+        "unit_price_before_vat": "100",
+        "before_vat": "100",
+        "vat_amount": "10",
+        "after_vat": "110",
+        "row_type": "SALE",
+        "row_checksum": "e97977811f36234aec49abedb25542875c46429b82d2f898b6dd022c14c39f7c"
+      },
+      {
+        "legal_entity": "02.AFP",
+        "source_legal_entity_code": "02.AFP",
+        "invoice_date": "2099-01-15",
+        "invoice_number": "SYNTH-INV-004",
+        "invoice_line_id": "SYNTH-DEBT-LINE-004",
+        "unit_code": "UNIT-SYNTH-DONA-001",
+        "qlnb_code": "QLNB-SYNTH-DONA-001",
+        "uom": "HOP",
+        "quantity": "1",
+        "unit_price_before_vat": "100",
+        "before_vat": "100",
+        "vat_amount": "10",
+        "after_vat": "110",
+        "row_type": "SALE",
+        "row_checksum": "b373626d66f638336e8b91ea3fa7c5967236e03903d4d41a8c03a938fa4cae84"
+      },
+      {
+        "legal_entity": "UNKNOWN",
+        "source_legal_entity_code": "01.DONA",
+        "invoice_date": "2099-01-15",
+        "invoice_number": "SYNTH-INV-005",
+        "invoice_line_id": "SYNTH-DEBT-LINE-005",
+        "unit_code": "UNIT-SYNTH-DONA-001",
+        "qlnb_code": "QLNB-SYNTH-DONA-001",
+        "uom": "HOP",
+        "quantity": "1",
+        "unit_price_before_vat": "100",
+        "before_vat": "100",
+        "vat_amount": "10",
+        "after_vat": "110",
+        "row_type": "SALE",
+        "row_checksum": "5ad6eb53a47a6c5c2dfd19f569bb4d39d059ff16d09a478f17b17a01e7da7ab5"
+      }
+    ]
+  },
+  "profile": "synthetic-v1",
+  "declaredCounts": {
+    "mappingRows": 2,
+    "legalEntityRows": {
+      "DONA": 1,
+      "AFP": 1
+    }
+  }
+}
