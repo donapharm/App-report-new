@@ -8051,3 +8051,14 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
   quyền gửi Telegram/Zalo/email và không đổi policy target-only/không thưởng-phạt.
 - Completeness gate của generation T07 yêu cầu đúng `21/21`, không còn chấp nhận
   tập 19 người hình thành do lọc nhầm denylist đăng nhập.
+
+### 27/08/2026 lúc 10:49 — T07 immutable, fixture Debts và nhãn mixed range
+
+- Candidate T07 immutable `50e9a3c` được dựng và cutover thử trên PROD, nhưng hai
+  lượt đọc T07 cách nhau hơn 60 giây vẫn rơi các tập nhân viên khác nhau ở deadline
+  25 giây; hệ thống đã rollback ngay về release `ad1b048` theo acceptance gate.
+- Fixture Debts hai partition exact `8168456` đã qua pipeline E2E trên store cô lập
+  và được push lên nhánh candidate; Debts live vẫn OFF, không merge `main`.
+- Dải kỳ đã chốt vắt qua T06→T07 nay giữ `before_go_live` + ghi chú go-live cho T06;
+  chỉ T07 từ mốc go-live trở đi mang `closed_unfinalized`. Không sửa dữ liệu hoặc
+  logic khóa T06, không đụng custody, seal hay generation.

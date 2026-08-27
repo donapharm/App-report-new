@@ -65,6 +65,21 @@ test('kho KHÔNG có kỳ chốt ⇒ chưa chốt và tuyệt đối không hỏ
   assert.equal(result.payload.note, employeeCost.CLOSED_UNFINALIZED_NOTE);
 });
 
+test('dải T06→T07 không có kho giữ nhãn before_go_live riêng cho T06', async () => {
+  const store = memStore();
+  let networkCalls = 0;
+  const result = await employeeCost.fetchEmployeeCost('DN001', {
+    from: '2026-06', to: '2026-07', rateSnapshotStore: store,
+    fetchImpl: async () => { networkCalls += 1; throw new Error('không được ra mạng'); },
+  });
+  assert.equal(networkCalls, 0);
+  assert.equal(result.outcome, 'closed_unfinalized');
+  assert.equal(result.payload.periods[0].rateSource, 'before_go_live');
+  assert.equal(result.payload.periods[0].note, employeeCost.BEFORE_GO_LIVE_NOTE);
+  assert.equal(result.payload.periods[1].rateSource, 'closed_unfinalized');
+  assert.equal(result.payload.periods[1].note, employeeCost.CLOSED_UNFINALIZED_NOTE);
+});
+
 test('kỳ chốt chưa có pin không enrich doanh thu thành tổng tạm', async () => {
   const store = memStore();
   let networkCalls = 0;

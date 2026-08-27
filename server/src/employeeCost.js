@@ -1588,6 +1588,11 @@ function closedUnfinalizedPayload(empCode, options = {}) {
   payload.rateSource = 'closed_unfinalized';
   payload.ratePolicy = { state: 'closed_unfinalized', lookupOutcome: 'closed_unfinalized' };
   for (const period of payload.periods || []) {
+    if (isBeforeCostGoLive(period.period)) {
+      period.note = BEFORE_GO_LIVE_NOTE;
+      period.rateSource = 'before_go_live';
+      continue;
+    }
     period.note = CLOSED_UNFINALIZED_NOTE;
     period.rateSource = 'closed_unfinalized';
   }
