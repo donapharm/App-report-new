@@ -17,6 +17,8 @@ const CONTRACT_CHECKSUM = 'c505ff6e46a2ae0f862b15779e9ee8d24205e545297d29fd15d05
 const CURRENCY = 'VND';
 const HARD_BLOCKED_PERIOD = '2026-06';
 const LEGAL_ENTITY_CONTRACT_KIND = 'debts-source-legal-entity-partition-v1';
+const DATAHUB_MAPPING_CONTRACT_KIND = 'data-hub.app-report.debts-pinned-mapping.v1';
+const DATAHUB_ATTESTATION_CONTRACT_KIND = 'data-hub.app-report.debts-legal-entity-attestation.v1';
 const SOURCE_LEGAL_ENTITY_CODES = new Set(['01.DONA', '02.AFP']);
 const RECEIPT_SIGNATURE_ALGORITHM = 'HMAC-SHA256';
 const LOCK_STALE_MS = 5 * 60 * 1000;
@@ -236,7 +238,94 @@ function mappingArtifactChecksum(rows, declaredCounts, profile) {
   return sha256(canonicalJson({ profile, declaredCounts, rows }));
 }
 
+function normalizeDataHubLegalEntity(value) {
+  const sourceCode = normalizeSourceLegalEntityCode(value);
+  return sourceCode === '01.DONA' ? 'DONA' : 'AFP';
+}
+
+function adaptDataHubMapping(mappingSnapshot) {
+  if (mappingSnapshot?.contractKind !== DATAHUB_MAPPING_CONTRACT_KIND) return mappingSnapshot;
+  const body = { ...mappingSnapshot }; delete body.artifactChecksum;
+  const artifactChecksum = text(mappingSnapshot.artifactChecksum, 80).toLowerCase().replace(/^sha256:/, '');
+  if (!/^[a-f0-9]{64}$/.test(artifactChecksum) || sha256(JSON.stringify(body)) !== artifactChecksum) fail('DEBTS_MAPPING_CHECKSUM_MISMATCH');
+  if (mappingSnapshot.immutable !== true || !Array.isArray(mappingSnapshot.candidates)
+    || mappingSnapshot.rowCount !== mappingSnapshot.candidates.length
+    || canonicalJson(mappingSnapshot.allowedLegalEntities) !== canonicalJson(['01.DONA', '02.AFP'])
+    || canonicalJson(mappingSnapshot.keyFields) !== canonicalJson(['legalEntityCode', 'unitCode', 'qlnbCode'])) fail('DEBTS_MAPPING_CONTRACT_INVALID');
+  const source = mappingSnapshot.source;
+  const sourceManifest = {
+    collection: source?.collection, revision: source?.revision, rowCount: source?.rowCount,
+    rowsChecksum: source?.rowsChecksum, manifestCode: source?.manifestCode, manifestUpdatedAt: source?.manifestUpdatedAt,
+  };
+  if (source?.collection !== 'sales_catalog_full' || !Number.isSafeInteger(source?.revision) || source.revision < 1
+    || !Number.isSafeInteger(source?.rowCount) || source.rowCount < mappingSnapshot.rowCount
+    || !/^[a-f0-9]{64}$/.test(String(source?.rowsChecksum || ''))
+    || !/^[a-f0-9]{64}$/.test(String(source?.manifestChecksum || ''))
+    || sha256(JSON.stringify(sourceManifest)) !== source.manifestChecksum) fail('DEBTS_MAPPING_IDENTITY_INVALID');
+
+  const groups = new Map();
+  const sourceGroups = new Map();
+  const attestationRows = new Map();
+  for (const candidate of mappingSnapshot.candidates) {
+    const legalEntity = normalizeDataHubLegalEntity(candidate?.legalEntityCode);
+    const unitCode = upper(candidate?.unitCode, 180); const qlnbCode = upper(candidate?.qlnbCode, 180);
+    const employeeCode = upper(candidate?.employeeCode, 80); const uom = upper(candidate?.unitOfMeasure, 100);
+    const sourceLineId = text(candidate?.sourceRowId, 240);
+    if (!unitCode || !qlnbCode || !employeeCode || !uom || !sourceLineId || !['mapped', 'quarantine'].includes(candidate?.status)) fail('DEBTS_MAPPING_ROW_INVALID');
+    const key = `${legalEntity}|${unitCode}|${qlnbCode}`;
+    const values = groups.get(key) || [];
+    values.push({ employeeCode, uom, sourceLineId }); groups.set(key, values);
+    const sourceRows = sourceGroups.get(key) || [];
+    sourceRows.push(candidate); sourceGroups.set(key, sourceRows);
+    attestationRows.set(key, { legal_entity: legalEntity, source_legal_entity_code: candidate.legalEntityCode, unit_code: unitCode, qlnb_code: qlnbCode });
+  }
+  for (const [key, values] of groups) {
+    const sourceRows = sourceGroups.get(key);
+    const expected = {
+      duplicateKey: sourceRows.length > 1,
+      employee: new Set(values.map((item) => item.employeeCode)).size > 1,
+      unitOfMeasure: new Set(values.map((item) => item.uom)).size > 1,
+      missingRequiredFields: [],
+    };
+    for (const candidate of sourceRows) {
+      const quarantine = expected.duplicateKey || expected.employee || expected.unitOfMeasure;
+      if (canonicalJson(candidate.conflicts) !== canonicalJson(expected)
+        || candidate.status !== (quarantine ? 'quarantine' : 'mapped')) fail('DEBTS_MAPPING_CONFLICT_MARKER_INVALID');
+    }
+  }
+  const attestations = mappingSnapshot.legalEntityAttestations;
+  if (!Array.isArray(attestations) || attestations.length !== 2) fail('DEBTS_LEGAL_ENTITY_ATTESTATION_INVALID');
+  const declaredLegalEntityRows = {};
+  for (const attestation of attestations) {
+    const legalEntity = normalizeDataHubLegalEntity(attestation?.legalEntityCode);
+    const rows = mappingSnapshot.candidates.filter((candidate) => candidate.legalEntityCode === attestation.legalEntityCode);
+    if (attestation.contractKind !== DATAHUB_ATTESTATION_CONTRACT_KIND || attestation.rowCount !== rows.length
+      || sha256(JSON.stringify(rows)) !== attestation.rowsChecksum) fail('DEBTS_LEGAL_ENTITY_ATTESTATION_INVALID');
+    const uniqueRows = new Set(rows.map((row) => `${upper(row.unitCode, 180)}|${upper(row.qlnbCode, 180)}`)).size;
+    if (uniqueRows > 0) declaredLegalEntityRows[legalEntity] = uniqueRows;
+  }
+  const rows = [...groups].map(([key, candidates]) => {
+    const [legalEntity, unitCode, qlnbCode] = key.split('|');
+    return {
+      legalEntity, unitCode, qlnbCode, candidates,
+      employeeConflict: new Set(candidates.map((item) => item.employeeCode)).size > 1,
+      uomConflict: new Set(candidates.map((item) => item.uom)).size > 1,
+    };
+  });
+  const partitionRows = [...attestationRows.values()];
+  const declaredCounts = { mappingRows: rows.length, legalEntityRows: declaredLegalEntityRows };
+  return {
+    version: `catalog-r${source.revision}`, sourceManifestId: source.manifestCode,
+    sourceManifestChecksum: source.manifestChecksum, profile: 'production', declaredCounts,
+    checksum: mappingArtifactChecksum(rows, declaredCounts, 'production'),
+    contract: { unitCodeColumn: 'c7', qlnbColumn: 'c5', employeeColumn: 'c6', uomColumn: 'c25', uomMode: 'validation' },
+    rows,
+    legalEntityAttestation: { contract: LEGAL_ENTITY_CONTRACT_KIND, checksum: sha256(canonicalJson(partitionRows)), rows: partitionRows },
+  };
+}
+
 function mappingIndex(mappingSnapshot) {
+  mappingSnapshot = adaptDataHubMapping(mappingSnapshot);
   if (!mappingSnapshot || typeof mappingSnapshot !== 'object' || !Array.isArray(mappingSnapshot.rows)) fail('DEBTS_MAPPING_SNAPSHOT_INVALID');
   const version = text(mappingSnapshot.version, 160);
   const checksum = text(mappingSnapshot.checksum, 80).toLowerCase().replace(/^sha256:/, '');
@@ -271,7 +360,8 @@ function mappingIndex(mappingSnapshot) {
     const employeeConflict = new Set(values.map((item) => item.emp_code)).size > 1;
     const uomConflict = new Set(values.map((item) => item.uom)).size > 1;
     if (row.employeeConflict !== employeeConflict || row.uomConflict !== uomConflict) fail('DEBTS_MAPPING_CONFLICT_MARKER_INVALID');
-    const key = `${unit}|${qlnb}`;
+    const legalEntity = row.legalEntity == null ? null : normalizeLegalEntity(row.legalEntity);
+    const key = `${legalEntity || '*'}|${unit}|${qlnb}`;
     if (byKey.has(key)) fail('DEBTS_MAPPING_DUPLICATE_KEY');
     byKey.set(key, values);
   }
@@ -335,8 +425,8 @@ function normalizeRow(row, index, mappings) {
   const amountInconsistent = !decimalEqual(decimalAdd(rawBefore, rawVat), rawAfter);
   const canonicalBefore = amountInconsistent ? decimalSubtract(rawAfter, rawVat) : rawBefore;
   const reconstructionDelta = decimalSubtract(canonicalBefore, rawBefore);
-  const key = `${unitCode}|${qlnbCode}`;
-  const candidates = mappings.byKey.get(key) || [];
+  const key = `${legalEntity}|${unitCode}|${qlnbCode}`;
+  const candidates = mappings.byKey.get(key) || mappings.byKey.get(`*|${unitCode}|${qlnbCode}`) || [];
   const uniqueEmployees = [...new Set(candidates.map((item) => item.emp_code))];
   let mappingStatus = 'mapped'; let empCode = uniqueEmployees[0] || null;
   if (!mappings.legalEntityPartitions.has(`${legalEntity}|${unitCode}|${qlnbCode}`)) { mappingStatus = 'legal_entity_unattested'; empCode = null; }
@@ -620,6 +710,54 @@ async function readBoundedJson(response) {
   return { value, bytes };
 }
 
+function adaptSalesLedgerPages(pages) {
+  if (!Array.isArray(pages) || !pages.length || !pages[0]?.header) return pages;
+  const first = pages[0];
+  const header = first.header;
+  const rawRevisionMode = text(first.revision_mode, 80);
+  if (first.contract !== 'app-report-sales-ledger' || rawRevisionMode !== 'full-period-replacement') fail('DEBTS_SNAPSHOT_CONTRACT_MISMATCH');
+  pages.forEach((page, index) => {
+    if (page?.contract !== first.contract || page?.revision_mode !== first.revision_mode
+      || canonicalJson(page?.header) !== canonicalJson(header)) fail('DEBTS_SNAPSHOT_DRIFT_BETWEEN_PAGES', { index });
+    if (!page?.page || page.page.number !== index + 1 || page.page.count !== page.rows?.length
+      || page.page.finalize !== (index === pages.length - 1)) fail('DEBTS_PAGINATION_INCOMPLETE', { index });
+  });
+  const rawRows = pages.flatMap((page) => Array.isArray(page?.rows) ? page.rows : []);
+  rawRows.forEach((row, index) => {
+    const declared = text(row?.row_checksum, 80).toLowerCase().replace(/^sha256:/, '');
+    if (!/^[a-f0-9]{64}$/.test(declared) || sourceRowChecksum(row) !== declared) fail('DEBTS_ROW_CHECKSUM_MISMATCH', { index });
+  });
+  const rowChecksums = rawRows.map((row) => text(row?.row_checksum, 80));
+  const unsignedHeader = { ...header, generated_at: '' };
+  delete unsignedHeader.package_checksum;
+  const expectedPackageChecksum = `sha256:${sha256(canonicalJson({ header: unsignedHeader, row_checksums: rowChecksums }))}`;
+  if (header.package_checksum !== expectedPackageChecksum) fail('DEBTS_SNAPSHOT_CHECKSUM_MISMATCH');
+  const snapshot = {
+    snapshotId: header.package_id,
+    period: header.period,
+    sourceRevision: header.source_revision,
+    revisionMode: REVISION_MODE,
+    schemaVersion: header.schema_version,
+    contractChecksum: header.contract_checksum,
+    legal_entity: header.legal_entity,
+    source_legal_entity_code: header.legal_entity === 'DONA' ? '01.DONA' : '02.AFP',
+    currency: header.currency,
+    rowChecksumAlgorithm: header.row_checksum_algorithm,
+    rowCount: header.row_count,
+    invoiceCount: header.invoice_count,
+    checksum: `sha256:${snapshotRowsChecksum(rawRows)}`,
+    totals: { beforeVat: header.totals?.before_vat, vat: header.totals?.vat, afterVat: header.totals?.after_vat },
+    createdAt: header.generated_at,
+    upstreamPackageChecksum: header.package_checksum,
+  };
+  return pages.map((page) => ({
+    snapshot,
+    rows: page.rows,
+    nextCursor: page.page?.next_cursor || null,
+    finalize: page.page?.finalize === true,
+  }));
+}
+
 async function fetchSnapshotPages({ endpoint, token, period, legalEntity, contractChecksum = CONTRACT_CHECKSUM, lockedPeriods = [], pageSize = 500, requestTimeoutMs = 30_000, fetchImpl = globalThis.fetch } = {}) {
   const expectedPeriod = normalizePeriod(period);
   const expectedLegalEntity = normalizeLegalEntity(legalEntity);
@@ -651,12 +789,13 @@ async function fetchSnapshotPages({ endpoint, token, period, legalEntity, contra
     const page = decoded.value; sourceBytes += decoded.bytes;
     if (sourceBytes > MAX_SOURCE_BYTES) fail('DEBTS_S2S_SNAPSHOT_TOO_LARGE');
     pages.push(page);
-    cursor = page.nextCursor == null ? null : text(page.nextCursor, 500);
+    const rawCursor = page?.page ? page.page.next_cursor : page.nextCursor;
+    cursor = rawCursor == null || rawCursor === '' ? null : text(rawCursor, 500);
     if (cursor && seen.has(cursor)) fail('DEBTS_CURSOR_INVALID');
     if (cursor) seen.add(cursor);
     if (pages.length > 1000) fail('DEBTS_PAGE_LIMIT_EXCEEDED');
   } while (cursor);
-  return combineSnapshotPages(pages, { period: expectedPeriod, legalEntity: expectedLegalEntity, contractChecksum, lockedPeriods });
+  return combineSnapshotPages(adaptSalesLedgerPages(pages), { period: expectedPeriod, legalEntity: expectedLegalEntity, contractChecksum, lockedPeriods });
 }
 function shadowLockFile(dataDir, period) {
   const root = path.resolve(String(dataDir || ''));
@@ -667,6 +806,6 @@ function shadowLockFile(dataDir, period) {
 module.exports = {
   SOURCE, SCHEMA_VERSION, CONTRACT_PATH, REVISION_MODE, ROW_CHECKSUM_ALGORITHM, CONTRACT_CHECKSUM, CURRENCY, HARD_BLOCKED_PERIOD, LEGAL_ENTITY_CONTRACT_KIND, REQUIRED_ROW_FIELDS, DebtsShadowError,
   stableValue, canonicalJson, normalizeLegalEntity, normalizeSourceLegalEntityCode, parseDecimal, decimalAdd, decimalSubtract, decimalEqual, decimalString,
-  sourceRowChecksum, snapshotRowsChecksum, mappingArtifactChecksum, combineSnapshotPages, mappingIndex, materializeShadow,
+  sourceRowChecksum, snapshotRowsChecksum, mappingArtifactChecksum, adaptDataHubMapping, adaptSalesLedgerPages, combineSnapshotPages, mappingIndex, materializeShadow,
   signReceipt, verifySignedReceipt, publishShadow, verifyPublishedShadow, shadowLockFile, acquireShadowLock, fetchSnapshotPages,
 };
