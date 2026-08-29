@@ -1216,12 +1216,18 @@ function sourcePeriodRangeOf(raw) {
 }
 
 // DataHub contract app-report.employee-cost.v2 publishes the source batch as
-// `sourceVersion`.  This is an upstream declaration, not an App Report digest or
-// timestamp inference. Missing/blank values deliberately remain missing so the
-// snapshot watcher can fail closed.
+// `sourceVersion`. Live v2 producers may encode an integer batch version as a
+// JSON number, so canonicalize safe non-negative integers to their decimal
+// string. This is still an upstream declaration, not an App Report digest or
+// timestamp inference. Missing/invalid values deliberately remain missing so
+// the snapshot watcher can fail closed.
 function sourceGenerationOf(raw) {
-  if (raw?.contract !== 'app-report.employee-cost.v2' || typeof raw?.sourceVersion !== 'string') return '';
+  if (raw?.contract !== 'app-report.employee-cost.v2') return '';
   const value = raw.sourceVersion;
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value >= 0 ? String(value) : '';
+  }
+  if (typeof value !== 'string') return '';
   return value && value === value.trim() && value.length <= 160 ? value : '';
 }
 

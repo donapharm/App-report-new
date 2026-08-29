@@ -35,11 +35,20 @@ test('provenance kỳ chỉ nhận from/to hợp lệ và không đảo chiều'
   assert.equal(employeeCost.sourcePeriodRangeOf({}), null);
 });
 
-test('source generation accepts only the source-declared v2 sourceVersion', () => {
+test('source generation canonicalizes strict v2 integer versions and rejects invalid values', () => {
   assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: 'batch-42' }), 'batch-42');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: 6 }), '6');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: 0 }), '0');
   assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: '' }), '');
   assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: ' batch-42 ' }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: -1 }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: 1.5 }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: Number.NaN }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: Number.POSITIVE_INFINITY }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: Number.MAX_SAFE_INTEGER + 1 }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'app-report.employee-cost.v2', sourceVersion: true }), '');
   assert.equal(employeeCost.sourceGenerationOf({ contract: 'legacy', sourceVersion: 'batch-42' }), '');
+  assert.equal(employeeCost.sourceGenerationOf({ contract: 'legacy', sourceVersion: 6 }), '');
   assert.equal(employeeCost.sourceGenerationOf({ sourceChecksum: 'not-a-generation' }), '');
 });
 

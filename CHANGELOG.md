@@ -1,3 +1,9 @@
+### 29/08/2026 — Nhận sourceVersion số nguyên từ DataHub Employee Cost (candidate only)
+
+- Contract `app-report.employee-cost.v2` nay chuẩn hoá `sourceVersion` số nguyên an toàn, không âm thành chuỗi tất định; tương thích đúng envelope live đang phát version `6`.
+- Tiếp tục fail-closed với số âm, số lẻ, NaN/Infinity, số vượt safe integer, kiểu khác, chuỗi có khoảng trắng và contract khác.
+- Không tạo/finalize generation, không ghi dữ liệu và không đổi runtime trong Cổng 1.
+
 ### 29/08/2026 — Chặn fan-out chồng generation trên màn Employee Cost (candidate only)
 
 - Hai summary nặng `gaps` và `data-quality` nay single-flight theo đúng quyền, kỳ, query và source generation; cache miss đồng thời chỉ dựng một object graph, lỗi không bị giữ lại.
