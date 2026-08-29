@@ -1,3 +1,9 @@
+### 29/08/2026 — Chặn fan-out chồng generation trên màn Employee Cost (candidate only)
+
+- Hai summary nặng `gaps` và `data-quality` nay single-flight theo đúng quyền, kỳ, query và source generation; cache miss đồng thời chỉ dựng một object graph, lỗi không bị giữ lại.
+- Màn Employee Cost không còn tự chạy hai phép quét badge nặng phía sau bảng chính. Gap/DQ chỉ tải khi mở đúng tab; badge lấy từ chính payload tab để không có request generation thứ hai.
+- Không đổi công thức, quyền, dữ liệu, snapshot/seal hay runtime. Candidate cần Cổng 2 riêng trước mọi deploy.
+
 ### 27/08/2026 lúc 15:57 — Chặn release sai binding dữ liệu ngay lúc dựng gói (candidate only)
 
 - `release_manifest create` fail-closed với mã `RELEASE_DATA_BINDING_INVALID` nếu `server/data` không phải symlink trỏ đúng kho dữ liệu được truyền qua `DATA`, gồm trường hợp lỗi `server/data/data` lồng nhau.

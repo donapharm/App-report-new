@@ -341,7 +341,9 @@ function routeDataSignature(routeName) {
   if (routeName === 'cst') return store.cstDataSignature();
   if (routeName === 'alerts' || routeName === 'analysis' || routeName === 'overview') return store.dashboardDataSignature();
   if (routeName === 'trend') return store.targetDataSignature();
-  if (routeName === 'employee-cost-all') return store.employeeCostDataSignature();
+  if (routeName === 'employee-cost-all' || routeName === 'employee-cost-gaps-summary') {
+    return store.employeeCostDataSignature();
+  }
   return currentMemoDataSignature();
 }
 
@@ -2677,6 +2679,7 @@ router.invalidateEmployeeCostAll = invalidateEmployeeCostAll;
 router.employeeCostAllKeyMatchesRange = employeeCostAllKeyMatchesRange;
 router.singleFlight = singleFlight;
 router.sharedCancellableFlight = sharedCancellableFlight;
+router.protectedRouteBuild = protectedRouteBuild;
 router.throwIfAborted = throwIfAborted;
 router.expensiveReadInFlight = expensiveReadInFlight;
 router.mapBounded = mapBounded;
@@ -3221,7 +3224,14 @@ router.get('/employee-cost/gaps', auth.requireAuth, asyncJsonRoute(async (req, r
 // dòng doanh thu + catalog). Memo 2 phút theo quyền+kỳ để mở trang không phải
 // tính lại từ đầu — con số đếm chậm 2 phút là chấp nhận được, đổi lấy trang mượt.
 router.get('/employee-cost/gaps/summary', auth.requireAuth, memoJson('employee-cost-gaps-summary', 120 * 1000), asyncJsonRoute(async (req, res) => {
-  const payload = await employeeCostGapPayload(req, 'gaps_badge_view');
+  // The Employee Cost page can be opened by several tabs/devices at once. This
+  // summary used to start one full roster/catalog scan per HTTP request, even
+  // when every request had the same actor, range and source generation. Apart
+  // from multiplying memory, those independent scans could finish against
+  // different upstream generations and make the UI reject its own badge.
+  const payload = await protectedRouteBuild(req, 'employee-cost-gaps-summary', () => (
+    employeeCostGapPayload(req, 'gaps_badge_view')
+  ));
   res.set('Cache-Control', 'private, no-store');
   // Chức năng đang tắt → nói rõ "disabled" thay vì trả 0 (0 sẽ bị hiểu nhầm là
   // "không còn mã nào thiếu", trong khi thực tế là chưa được xem).
@@ -3487,7 +3497,12 @@ router.get('/employee-cost/data-quality', auth.requireAuth, asyncJsonRoute(async
   return res.json(payload);
 }));
 router.get('/employee-cost/data-quality/summary', auth.requireAuth, auth.requireAdmin, memoJson('employee-cost-dq-summary', 120 * 1000), asyncJsonRoute(async (req, res) => {
-  const payload = await employeeCostDqPayload(req, 'dq_bell_view');
+  // DQ scans the complete revenue/catalog surface. Coalesce identical misses;
+  // three concurrent page loads must retain one decoded generation, not three
+  // 34 MB object graphs that block the event loop for two minutes.
+  const payload = await protectedRouteBuild(req, 'employee-cost-dq-summary', () => (
+    employeeCostDqPayload(req, 'dq_bell_view')
+  ));
   res.set('Cache-Control', 'private, no-store');
   return res.json({ ...payload.summary, alert: payload.alert, from: payload.from, to: payload.to, sources: payload.sources });
 }));

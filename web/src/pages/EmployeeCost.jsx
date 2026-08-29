@@ -1643,8 +1643,8 @@ export default function EmployeeCost({ me, onNavigate }) {
   const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [visibilityMessage, setVisibilityMessage] = useState('');
   const [visibilityError, setVisibilityError] = useState('');
-  // Số đếm cho badge trên tab — tải nền, độc lập với tab đang mở, để CEO thấy
-  // ngay còn bao nhiêu việc mà không phải bấm vào từng tab.
+  // Số đếm badge chỉ lấy từ payload của tab đã được người dùng mở. Không phát
+  // thêm request tổng hợp nặng chỉ để dựng badge vì có thể chồng generation.
   const [gapBadge, setGapBadge] = useState({
     loaded: false, loading: true, from: '', to: '', codeCount: 0, pairCount: 0,
     revenueAffected: 0, unavailableEmployees: [],
@@ -1784,32 +1784,15 @@ export default function EmployeeCost({ me, onNavigate }) {
     };
   }, [admin, selectedEmp, range, view, me?.emp_code]);
 
-  // Tải số đếm cho badge — CHẠY BẤT KỂ đang ở tab nào (chỉ admin), để con số
-  // hiện sẵn trên tab. Lỗi thì im lặng ẩn badge, không làm phiền màn chính.
-  // Badge là thông tin PHỤ — không được giành tài nguyên với bảng chính lúc mở trang.
-  // Hoãn ~1,2s để bảng chính tải xong trước; đổi tab KHÔNG tải lại (bỏ 'view' khỏi
-  // deps) vì số đếm không phụ thuộc tab đang mở.
+  // KHÔNG tự fan-out hai phép quét nặng chỉ để vẽ badge. Mỗi phép quét có thể giữ
+  // hàng chục MB object graph trong 120s; chạy cùng bảng ALL/warm startup đã làm
+  // RSS vượt ngưỡng PM2 và restart PROD. Tab nào được người dùng mở thì effect
+  // chuyên biệt phía dưới mới tải đúng tab đó. Badge được cập nhật từ chính payload
+  // tab — không còn một request thứ hai có thể chỏi generation với nội dung tab.
   useEffect(() => {
-    if (!admin) return undefined;
-    let alive = true;
-    setGapBadge((current) => ({ ...current, loading: true }));
-    const timer = window.setTimeout(() => {
-      if (!alive) return;
-      api.employeeCostGapsSummary(range)
-        .then((data) => { if (alive) setGapBadge(data?.disabled
-          ? { loaded: false, loading: false, from: range.from, to: range.to, codeCount: 0, pairCount: 0, revenueAffected: 0, unavailableEmployees: [] }
-          : {
-            loaded: true, loading: false, from: String(data.from || range.from), to: String(data.to || range.to),
-            codeCount: Number(data.codeCount || 0), pairCount: Number(data.pairCount || 0),
-            revenueAffected: Number(data.revenueAffected || 0),
-            unavailableEmployees: Array.isArray(data.unavailableEmployees) ? data.unavailableEmployees.map(String) : [],
-          }); })
-        .catch(() => { if (alive) setGapBadge((current) => ({ ...current, loading: false })); });
-      api.employeeCostDataQualitySummary(range)
-        .then((data) => { if (alive) setDqBadge({ loaded: true, loading: false, count: Number(data.exceptionCount ?? data.count ?? 0), revenueAffected: Number(data.revenueAffected || 0) }); })
-        .catch(() => { if (alive) setDqBadge((current) => ({ ...current, loading: false })); });
-    }, 1200);
-    return () => { alive = false; window.clearTimeout(timer); };
+    if (!admin) return;
+    setGapBadge((current) => ({ ...current, loaded: false, loading: false, from: range.from, to: range.to }));
+    setDqBadge((current) => ({ ...current, loaded: false, loading: false }));
   }, [admin, range]);
 
   useEffect(() => {
@@ -1829,6 +1812,20 @@ export default function EmployeeCost({ me, onNavigate }) {
   }, [admin, range, view]);
 
   useEffect(() => {
+    if (!admin || view !== 'gaps' || gapLoading || gapError) return;
+    const coverage = gapPayload?.coverage || {};
+    const items = Array.isArray(gapPayload?.items) ? gapPayload.items : [];
+    setGapBadge({
+      loaded: true, loading: false,
+      from: String(gapPayload?.from || range.from), to: String(gapPayload?.to || range.to),
+      codeCount: Number(coverage.gapCodeCount || items.length || 0),
+      pairCount: Number(coverage.gapPairCount || 0),
+      revenueAffected: items.reduce((sum, item) => sum + (Number(item?.revenueAffected) || 0), 0),
+      unavailableEmployees: Array.isArray(gapPayload?.unavailable?.employees) ? gapPayload.unavailable.employees.map(String) : [],
+    });
+  }, [admin, view, gapLoading, gapError, gapPayload, range]);
+
+  useEffect(() => {
     if (admin && view !== 'dq') return undefined;
     let alive = true;
     setDqLoading(true);
@@ -1843,6 +1840,16 @@ export default function EmployeeCost({ me, onNavigate }) {
       .finally(() => { if (alive) setDqLoading(false); });
     return () => { alive = false; };
   }, [admin, range, view]);
+
+  useEffect(() => {
+    if (!admin || view !== 'dq' || dqLoading || dqError) return;
+    const summary = dqPayload?.summary || {};
+    setDqBadge({
+      loaded: true, loading: false,
+      count: Number(summary.exceptionCount || 0),
+      revenueAffected: Number(summary.revenueAffected || 0),
+    });
+  }, [admin, view, dqLoading, dqError, dqPayload]);
 
   const model = useMemo(() => employeeCostViewModel(payload), [payload]);
   const reconInformational = !!model?.revenueRecon

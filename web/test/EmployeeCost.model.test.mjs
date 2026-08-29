@@ -389,7 +389,7 @@ test('gui worklist xong phai hien BIEN NHAN cua DataHub, khong chi noi da gui', 
   assert.match(page, /Mã kiểm tra/);
 });
 
-test('tab phai hien BADGE so ma/so cap va so exception, khong bat phai bam vao moi thay', () => {
+test('tab hien BADGE tu payload da mo va khong tu phat request tong hop nen', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   // Badge nằm ngay trên nút tab.
   assert.match(page, /Mặt hàng thiếu %\{!gapConsistency\.ready/);
@@ -397,9 +397,12 @@ test('tab phai hien BADGE so ma/so cap va so exception, khong bat phai bam vao m
   // Hiện đủ số mã + số cặp cho tab thiếu %, số exception cho tab kiểm soát.
   assert.match(page, /gapBadge\.codeCount\} mã · \$\{gapBadge\.pairCount\} cặp/);
   assert.match(page, /dqBadge\.count\} exception/);
-  // Số đếm phải tải BẤT KỂ đang ở tab nào (không phụ thuộc view === 'gaps').
-  assert.match(page, /api\.employeeCostGapsSummary\(range\)/);
-  assert.match(page, /api\.employeeCostDataQualitySummary\(range\)/);
+  // Không gọi hai endpoint tổng hợp nặng chỉ để dựng badge; số lấy từ payload
+  // của đúng tab nên không thể chỏi generation với nội dung đang hiển thị.
+  assert.doesNotMatch(page, /api\.employeeCostGapsSummary\(range\)/);
+  assert.doesNotMatch(page, /api\.employeeCostDataQualitySummary\(range\)/);
+  assert.match(page, /coverage\.gapCodeCount/);
+  assert.match(page, /summary\.exceptionCount/);
 });
 
 test('gap coverage panel states the full arithmetic so pair count reconciles with match KPI', () => {
@@ -574,12 +577,13 @@ test('acceptance contract includes CEO-only ALL, compact full-label columns, sti
   assert.match(css, /max-height:72vh/);
 });
 
-// Bug 2026-07-27: backend trả `exceptionCount` nhưng FE đọc `count` → badge luôn 0
-// dù bảng có exception. Khoá lại: phải đọc exceptionCount VÀ truyền kỳ đang xem.
-test('badge Kiểm soát dữ liệu đọc exceptionCount và đếm đúng kỳ đang xem', () => {
+// Bug 2026-07-27: backend trả `exceptionCount` nhưng FE đọc `count` → badge luôn 0.
+// Khoá lại: badge phải đọc exceptionCount từ payload của đúng tab đang xem.
+test('badge Kiểm soát dữ liệu đọc exceptionCount từ payload đúng tab', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
-  assert.match(page, /data\.exceptionCount/);
-  assert.match(page, /employeeCostDataQualitySummary\(range\)/);
+  assert.match(page, /summary\.exceptionCount/);
+  assert.match(page, /view !== 'dq'/);
+  assert.doesNotMatch(page, /employeeCostDataQualitySummary\(range\)/);
   const api = fs.readFileSync(new URL('../src/api.js', import.meta.url), 'utf8');
   assert.match(api, /employeeCostDataQualitySummary: \(range = \{\}\)/);
 });
@@ -611,18 +615,17 @@ test('template layout thiếu c10 → vẫn phải chèn C10 ngay sau Mã hàng 
   assert.deepEqual(keys2, ['c5', 'c10', 'c16']);
 });
 
-// CEO 27/07: cứ deploy xong là badge "biến mất" một lúc (cache bị xoá, phải tính lại)
-// → nhìn tưởng hỏng mất tính năng. Khoá: đang tính phải hiện "…", và lỗi tạm thời
-// KHÔNG được xoá số cũ đang hiển thị.
-test('badge hiện … khi đang tính và KHÔNG biến mất khi lỗi tạm thời', () => {
+// Badge không được tự kích hoạt phép tính nền. Khi đổi kỳ, trạng thái cũ được
+// hạ loading và chỉ nạp lại khi người dùng mở đúng tab.
+test('badge không tự tính nền và được reset an toàn khi đổi kỳ', () => {
   const page = fs.readFileSync(new URL('../src/pages/EmployeeCost.jsx', import.meta.url), 'utf8');
   // có nhánh loading hiển thị dấu …
   assert.match(page, /employee-cost-tab-badge loading/);
   assert.match(page, /Đang đếm/);
-  // khi lỗi chỉ tắt cờ loading, KHÔNG set loaded:false (không xoá số cũ)
-  assert.doesNotMatch(page, /catch\(\(\) => \{ if \(alive\) setGapBadge\(\(current\) => \(\{ \.\.\.current, loaded: false \}\)\); \}\)/);
-  assert.match(page, /setGapBadge\(\(current\) => \(\{ \.\.\.current, loading: false \}\)\)/);
-  assert.match(page, /setDqBadge\(\(current\) => \(\{ \.\.\.current, loading: false \}\)\)/);
+  assert.match(page, /setGapBadge\(\(current\) => \(\{ \.\.\.current, loaded: false, loading: false/);
+  assert.match(page, /setDqBadge\(\(current\) => \(\{ \.\.\.current, loaded: false, loading: false \}\)\)/);
+  assert.doesNotMatch(page, /api\.employeeCostGapsSummary\(/);
+  assert.doesNotMatch(page, /api\.employeeCostDataQualitySummary\(/);
 });
 
 // ‼ Ca thật 03/08/2026: T08 có doanh thu nhưng connector chưa áp policy % đang
