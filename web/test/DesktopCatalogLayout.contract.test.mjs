@@ -37,5 +37,7 @@ test('wide catalog tables scroll horizontally instead of clipping cost columns',
   assert.match(wide, /scrollbar-gutter:stable/);
   assert.match(wide, /\.catalog-table-card \.table-scroll::\-webkit-scrollbar \{ height:12px; \}/);
   assert.match(wide, /\.catalog-table-products thead th \{ position:sticky; top:0; \}/);
+  assert.match(styles, /\.catalog-mode \.catalog-table-products thead th \{ top:0; z-index:26; \}/);
+  assert.doesNotMatch(styles, /\.catalog-mode \.catalog-table-products thead th \{ top:calc\(var\(--catalog-sticky-top\) \+ 51px\)/);
   assert.doesNotMatch(wide, /overflow-x:clip/);
 });
