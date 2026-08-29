@@ -69,6 +69,33 @@ function config(env = process.env) {
   };
 }
 
+function readiness(env = process.env) {
+  const cfg = config(env);
+  const checks = {
+    enabled: cfg.enabled,
+    endpoint: /^https:\/\//i.test(cfg.endpoint),
+    token: Boolean(cfg.token),
+    mappingFile: Boolean(cfg.mappingFile),
+    mappingReadable: false,
+    receiptSigningKey: Buffer.isBuffer(cfg.receiptSigningKey) && cfg.receiptSigningKey.length >= 32,
+    receiptSigningKeyId: Boolean(cfg.receiptSigningKeyId),
+    writeEnabled: cfg.allowWrite,
+  };
+  if (checks.mappingFile) {
+    try { loadMapping(cfg.mappingFile); checks.mappingReadable = true; } catch { /* chỉ báo thiếu, không lộ path/lỗi */ }
+  }
+  const requiredForPreview = ['enabled', 'endpoint', 'token', 'mappingFile', 'mappingReadable'];
+  const requiredForPublish = [...requiredForPreview, 'receiptSigningKey', 'receiptSigningKeyId', 'writeEnabled'];
+  return Object.freeze({
+    ok: requiredForPublish.every((key) => checks[key]),
+    previewReady: requiredForPreview.every((key) => checks[key]),
+    publishReady: requiredForPublish.every((key) => checks[key]),
+    checks: Object.freeze(checks),
+    missingForPreview: requiredForPreview.filter((key) => !checks[key]),
+    missingForPublish: requiredForPublish.filter((key) => !checks[key]),
+  });
+}
+
 async function preview({ period, legalEntity, env = process.env, fetchImpl = globalThis.fetch } = {}) {
   const cfg = config(env);
   if (!cfg.enabled) {
@@ -100,4 +127,4 @@ async function preview({ period, legalEntity, env = process.env, fetchImpl = glo
   });
 }
 
-module.exports = { DATA_DIR, DEFAULT_ROOT, enabled, safeMappingFile, loadMapping, config, preview };
+module.exports = { DATA_DIR, DEFAULT_ROOT, enabled, safeMappingFile, loadMapping, config, readiness, preview };

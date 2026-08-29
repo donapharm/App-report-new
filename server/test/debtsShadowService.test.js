@@ -9,6 +9,16 @@ test('Debts shadow is OFF by default and never changes selector', async () => {
   assert.equal(service.enabled({}), false);
 });
 
+test('readiness mặc định nêu đúng blocker mà không lộ giá trị cấu hình', () => {
+  const result = service.readiness({});
+  assert.equal(result.previewReady, false);
+  assert.equal(result.publishReady, false);
+  assert.deepEqual(result.missingForPreview, ['enabled', 'endpoint', 'token', 'mappingFile', 'mappingReadable']);
+  assert.ok(result.missingForPublish.includes('receiptSigningKey'));
+  assert.ok(result.missingForPublish.includes('writeEnabled'));
+  assert.equal(JSON.stringify(result).includes('APP_REPORT_DEBTS'), false);
+});
+
 test('T06 is hard blocked before any source request', async () => {
   let calls = 0;
   await assert.rejects(service.preview({
@@ -31,6 +41,7 @@ test('route is CEO-only shadow preview and does not wire live selector', () => {
   const fs = require('node:fs'); const path = require('node:path');
   const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
   assert.match(routes, /\/admin\/debts-shadow\/preview', auth\.requireAuth, auth\.requireCeo/);
+  assert.match(routes, /\/admin\/debts-shadow\/readiness', auth\.requireAuth, auth\.requireCeo/);
   assert.doesNotMatch(routes, /getRows\s*=.*debts|activeSlots\s*=.*debts/);
 });
 

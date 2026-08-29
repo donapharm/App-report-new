@@ -46,19 +46,23 @@ function createPaymentNoticeHandler({
     return { code, telegramId, email };
   }
 
-  return async function paymentNoticeHandler(job = {}) {
+  async function prepare(job = {}) {
     const schedules = await loadSchedules({ today: job.at });
     const preview = await paymentNotify.runPaymentNotices(schedules, { store: stateStore, dryRun: true });
-    if (!preview.planned.length) return { planned: 0, delivered: 0 };
-
-    // Preflight tất cả audience trước khi gửi tin đầu tiên. Lỗi provider giữa
-    // chừng được state từng audience giữ lại để retry không gửi trùng phần đã xong.
     const targets = new Map();
     for (const notice of preview.planned) {
       targets.set(`${notice.key}|employee`, recipient(notice.empCode));
       targets.set(`${notice.key}|ceo`, recipient('CEO'));
     }
+    return { schedules, preview, targets };
+  }
 
+  async function paymentNoticeHandler(job = {}) {
+    const { schedules, preview, targets } = await prepare(job);
+    if (!preview.planned.length) return { planned: 0, delivered: 0 };
+
+    // Preflight tất cả audience trước khi gửi tin đầu tiên. Lỗi provider giữa
+    // chừng được state từng audience giữ lại để retry không gửi trùng phần đã xong.
     const deliveryState = readDeliveryState(stateStore);
     const send = async (text, empCode, kind, notice) => {
       const failures = [];
@@ -83,7 +87,24 @@ function createPaymentNoticeHandler({
       throw new Error(`Chưa gửi đủ payment_notice (${result.delivered.length}/${result.planned.length})`);
     }
     return { planned: result.planned.length, delivered: result.delivered.length };
+  }
+
+  // Dry-run nghiệp vụ: dựng đúng sổ, áp chống trùng và kiểm đủ kênh của NV + CEO,
+  // nhưng không gọi provider và không ghi bất kỳ state nào.
+  paymentNoticeHandler.preview = async (job = {}) => {
+    const { schedules, preview, targets } = await prepare(job);
+    const kinds = {};
+    for (const notice of preview.planned) kinds[notice.kind] = (kinds[notice.kind] || 0) + 1;
+    return Object.freeze({
+      schedules: schedules.length,
+      planned: preview.planned.length,
+      audiences: targets.size,
+      kinds: Object.freeze(kinds),
+      writes: 0,
+      sends: 0,
+    });
   };
+  return paymentNoticeHandler;
 }
 
 module.exports = {

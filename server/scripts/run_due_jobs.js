@@ -28,6 +28,7 @@ const { runLockedProcess } = require('../src/processLockRunner');
 const path = require('node:path');
 
 const DRY = process.argv.includes('--dry-run');
+const PAYMENT_DRY = process.argv.includes('--payment-dry-run');
 
 const stamp = () => new Intl.DateTimeFormat('vi-VN', {
   timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric',
@@ -39,6 +40,17 @@ async function main({
   paymentHandlerFactory = createPaymentNoticeHandler,
 } = {}) {
   const now = new Date();
+  if (PAYMENT_DRY) {
+    if (!services.paymentNoticeEnabled()) {
+      console.log(`[${stamp()}] PAYMENT DRY-RUN — công tắc chủ đang OFF; chưa dựng sổ, chưa gọi nguồn, gửi 0, ghi 0.`);
+      return;
+    }
+    const paymentNotice = paymentHandlerFactory({ loadSchedules: services.paymentSchedulesForNotify });
+    const result = await paymentNotice.preview({ at: require('../src/employeeCost').vnToday() });
+    console.log(`[${stamp()}] PAYMENT DRY-RUN — sổ ${result.schedules} · tin ${result.planned} · audience ${result.audiences} · gửi ${result.sends} · ghi ${result.writes}.`);
+    console.log(`  loại tin: ${JSON.stringify(result.kinds)}`);
+    return;
+  }
   if (DRY) {
     const jobs = dueJobs(now, readState(persist));
     console.log(`[${stamp()}] DRY-RUN — ${jobs.length} việc tới giờ (giờ VN):`);
@@ -49,14 +61,18 @@ async function main({
   }
 
   const paymentNotice = paymentHandlerFactory({ loadSchedules: services.paymentSchedulesForNotify });
+  const handlers = {
+    target_proposal: async (job) => {
+      // Đợt sau mới có handler thật. KHÔNG tự áp target — chỉ ghi log để lại dấu vết.
+      console.log(`[${stamp()}] target_proposal ${job.stage} cho kỳ ${job.targetKy} (neo ${job.anchorKy}, closed=${job.closed}) — handler chưa làm, CHỈ GHI LOG, không áp target.`);
+    },
+  };
+  // Công tắc chủ vẫn mặc định OFF. Chỉ khi runtime được CEO duyệt bật thì runner
+  // mới đăng ký handler; OFF nghĩa là job đứng chờ, không dựng sổ/ghi state/gửi.
+  if (services.paymentNoticeEnabled()) handlers.payment_notice = paymentNotice;
   const result = await runDueJobs({
     now,
-    handlers: {
-      target_proposal: async (job) => {
-        // Đợt sau mới có handler thật. KHÔNG tự áp target — chỉ ghi log để lại dấu vết.
-        console.log(`[${stamp()}] target_proposal ${job.stage} cho kỳ ${job.targetKy} (neo ${job.anchorKy}, closed=${job.closed}) — handler chưa làm, CHỈ GHI LOG, không áp target.`);
-      },
-    },
+    handlers,
   });
 
   const handled = new Set([...result.ran, ...result.failed.map((f) => f.key)]);
@@ -71,7 +87,7 @@ async function main({
 async function cli() {
   // Dry-run tuyệt đối read-only. Run thật luôn tự bọc `flock`: hai cron/manual
   // chồng nhau thì chỉ một process được gửi; kernel tự nhả lock kể cả crash.
-  if (DRY || process.env.APP_REPORT_DUE_JOBS_LOCKED === '1') return main();
+  if (DRY || PAYMENT_DRY || process.env.APP_REPORT_DUE_JOBS_LOCKED === '1') return main();
   const lockFile = path.join(persist.DIR, 'run_due_jobs.lock');
   const result = runLockedProcess({
     lockFile, command: process.execPath, args: [__filename, ...process.argv.slice(2)],

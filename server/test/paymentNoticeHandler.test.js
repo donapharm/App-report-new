@@ -68,3 +68,18 @@ test('mapping thiếu fail trước khi gửi và không ghi state', async () =>
   assert.equal(called, 0);
   assert.deepEqual(store.data, {});
 });
+
+test('preview kiểm người nhận/nội dung/chống trùng nhưng gửi 0 và ghi 0', async () => {
+  const store = memStore();
+  let sends = 0;
+  const handler = createPaymentNoticeHandler({
+    loadSchedules: async () => [{ empCode: 'DN001', employeeName: 'A', schedule: schedule() }],
+    auth, appStore, stateStore: store, paymentNotify,
+    channels: { emailFor: () => '', deliver: async () => { sends += 1; return { ok: true }; } },
+  });
+  assert.deepEqual(await handler.preview({ at: '2026-09-14' }), {
+    schedules: 1, planned: 1, audiences: 2, kinds: { open: 1 }, writes: 0, sends: 0,
+  });
+  assert.equal(sends, 0);
+  assert.deepEqual(store.data, {});
+});

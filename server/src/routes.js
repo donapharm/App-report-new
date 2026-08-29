@@ -4082,6 +4082,11 @@ router.post('/admin/debts-shadow/preview', auth.requireAuth, auth.requireCeo, as
   return res.json(await debtsShadowService.preview({ period, legalEntity }));
 }));
 
+// Read-only readiness: không gọi DataHub, không trả endpoint/token/path/key.
+router.get('/admin/debts-shadow/readiness', auth.requireAuth, auth.requireCeo, (req, res) => {
+  res.json(debtsShadowService.readiness());
+});
+
 // Đối soát toàn vẹn dữ liệu doanh thu 1 kỳ (bắt lỗi ngày ngoài biên, đếm trùng, đơn vị NV biến mất).
 router.get('/admin/reconcile', auth.requireAuth, auth.requireAdmin, (req, res) => {
   try {
