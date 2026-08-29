@@ -161,7 +161,7 @@ test('đường công khai luôn ghim pháp nhân, không để phép kiểm t�
   const fetchBody = core.slice(core.indexOf('async function fetchSnapshotPages'), core.indexOf('function shadowLockFile'));
   assert.match(fetchBody, /normalizeLegalEntity\(legalEntity\)/, 'fetchSnapshotPages phải đòi pháp nhân, không cho vắng');
   assert.match(fetchBody, /legal_entity/, 'phải gửi pháp nhân sang nguồn');
-  assert.match(fetchBody, /combineSnapshotPages\(pages, \{ period: expectedPeriod, legalEntity: expectedLegalEntity/);
+  assert.match(fetchBody, /combineSnapshotPages\(adaptSalesLedgerPages\(pages\), \{ period: expectedPeriod, legalEntity: expectedLegalEntity/);
   const svc = fs.readFileSync(path.join(__dirname, '..', 'src', 'debtsShadowService.js'), 'utf8');
   assert.match(svc, /const partition = shadow\.normalizeLegalEntity\(legalEntity\)/);
 });

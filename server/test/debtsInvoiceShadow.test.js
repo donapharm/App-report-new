@@ -100,6 +100,75 @@ function materialize(rows, map = mapping()) {
   );
 }
 
+function dataHubMapping() {
+  const candidates = [{
+    legalEntityCode: '01.DONA', unitCode: '033.BV A', qlnbCode: 'G1.A', employeeCode: 'DN001', unitOfMeasure: 'HOP',
+    sourceRowCode: '34', sourceRowId: 'source-34', status: 'mapped',
+    conflicts: { duplicateKey: false, employee: false, unitOfMeasure: false, missingRequiredFields: [] },
+  }];
+  const sourceManifest = { collection: 'sales_catalog_full', revision: 13, rowCount: 28006, rowsChecksum: digest('rows'), manifestCode: 'catalog-import:v13', manifestUpdatedAt: '2026-08-17T00:00:00.000Z' };
+  const source = { ...sourceManifest, manifestChecksum: digest(JSON.stringify(sourceManifest)) };
+  const legalEntityAttestations = ['01.DONA', '02.AFP'].map((legalEntityCode) => {
+    const rows = candidates.filter((row) => row.legalEntityCode === legalEntityCode);
+    return { contractKind: 'data-hub.app-report.debts-legal-entity-attestation.v1', legalEntityCode, rowCount: rows.length, rowsChecksum: digest(JSON.stringify(rows)) };
+  });
+  const body = {
+    contractKind: 'data-hub.app-report.debts-pinned-mapping.v1', immutable: true, source,
+    keyFields: ['legalEntityCode', 'unitCode', 'qlnbCode'],
+    valueFields: ['legalEntityCode', 'unitCode', 'qlnbCode', 'employeeCode', 'unitOfMeasure', 'sourceRowCode', 'sourceRowId'],
+    allowedLegalEntities: ['01.DONA', '02.AFP'], rowCount: candidates.length,
+    conflicts: { duplicateKeys: 0, employee: 0, unitOfMeasure: 0, quarantinedRows: 0 },
+    legalEntityAttestations, candidates,
+  };
+  return { ...body, artifactChecksum: digest(JSON.stringify(body)) };
+}
+
+function upstreamPages(rows) {
+  const canonical = (value) => shadow.canonicalJson(value);
+  const base = pagesFor(rows)[0].snapshot;
+  const headerBase = {
+    schema_version: 1, period: base.period, package_id: base.snapshotId, source_revision: base.sourceRevision,
+    contract_checksum: CONTRACT_SHA, legal_entity: base.legal_entity, currency: 'VND', row_checksum_algorithm: shadow.ROW_CHECKSUM_ALGORITHM,
+    row_count: rows.length, invoice_count: base.invoiceCount,
+    totals: { before_vat: base.totals.beforeVat, vat: base.totals.vat, after_vat: base.totals.afterVat }, generated_at: '2026-08-18T00:00:00.000Z',
+  };
+  const unsigned = { ...headerBase, generated_at: '' };
+  const packageChecksum = `sha256:${digest(canonical({ header: unsigned, row_checksums: rows.map((row) => row.row_checksum) }))}`;
+  return [{
+    ok: true, contract: 'app-report-sales-ledger', revision_mode: 'full-period-replacement',
+    header: { ...headerBase, package_checksum: packageChecksum },
+    page: { number: 1, size: 500, count: rows.length, next_cursor: '', finalize: true }, rows,
+  }];
+}
+
+test('live Công nợ wire contract adapts without weakening package checksum', () => {
+  const rows = [sourceRow()];
+  const adapted = shadow.adaptSalesLedgerPages(upstreamPages(rows));
+  const combined = shadow.combineSnapshotPages(adapted, { period: '2026-08', legalEntity: 'DONA', contractChecksum: CONTRACT_SHA });
+  assert.equal(combined.rows.length, 1);
+  assert.equal(combined.snapshot.revisionMode, 'full_period_replacement');
+  const tampered = upstreamPages(rows); tampered[0].rows[0].after_vat = '211';
+  assert.throws(() => shadow.adaptSalesLedgerPages(tampered), { code: 'DEBTS_ROW_CHECKSUM_MISMATCH' });
+  const drift = [...upstreamPages(rows), structuredClone(upstreamPages(rows)[0])];
+  drift[0].page = { ...drift[0].page, finalize: false, next_cursor: 'next' };
+  drift[1].page = { ...drift[1].page, number: 2 };
+  drift[1].header = { ...drift[1].header, source_revision: 'changed' };
+  assert.throws(() => shadow.adaptSalesLedgerPages(drift), { code: 'DEBTS_SNAPSHOT_DRIFT_BETWEEN_PAGES' });
+});
+
+test('DataHub producer artifact is checksum-bound and legal-entity-scoped', () => {
+  const producer = dataHubMapping();
+  const adapted = shadow.adaptDataHubMapping(producer);
+  assert.equal(adapted.profile, 'production');
+  assert.equal(shadow.mappingIndex(producer).byKey.has('DONA|033.BV A|G1.A'), true);
+  assert.equal(materialize([sourceRow()], producer).rows[0].mapping_status, 'mapped');
+  const tampered = structuredClone(producer); tampered.candidates[0].employeeCode = 'DN999';
+  assert.throws(() => shadow.adaptDataHubMapping(tampered), { code: 'DEBTS_MAPPING_CHECKSUM_MISMATCH' });
+  const lying = structuredClone(producer); lying.candidates[0].conflicts.employee = true;
+  const lyingBody = { ...lying }; delete lyingBody.artifactChecksum; lying.artifactChecksum = digest(JSON.stringify(lyingBody));
+  assert.throws(() => shadow.adaptDataHubMapping(lying), { code: 'DEBTS_MAPPING_CONFLICT_MARKER_INVALID' });
+});
+
 test('decimal strings keep exact scale/sign and reject float/exponent/thousand separators', () => {
   assert.equal(shadow.decimalString(shadow.parseDecimal('-17329000')), '-17329000');
   assert.equal(shadow.decimalString(shadow.decimalSubtract(shadow.parseDecimal('-17329000'), shadow.parseDecimal('-825190'))), '-16503810');
