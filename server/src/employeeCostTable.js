@@ -491,10 +491,24 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
     const rateSources = [...new Set(blocks.map(({ period, report }) => String(period.rateSource || report.rateSource || '')).filter(Boolean))];
     const pinnedAts = [...new Set(blocks.map(({ period, report }) => String(period.ratePinnedAt || report.ratePinnedAt || '')).filter(Boolean))];
     const allPinned = blocks.length > 0 && rateSources.length === 1 && rateSources[0] === 'local_pinned';
-    const companyRevenueRows = companyRevenueRowsByPeriod instanceof Map
-      ? (companyRevenueRowsByPeriod.get(periodKey) || [])
+    // Report NV dùng kỳ hiển thị `MM.YYYY`, còn snapshot toàn công ty được chụp
+    // theo kỳ chuẩn `YYYY-MM`. Khi fan-out chi phí hết hạn, lỗi lệch định dạng này
+    // từng làm snapshot doanh thu có thật bị đọc thành mảng rỗng. Chỉ đổi biểu diễn
+    // khóa kỳ; tuyệt đối không suy doanh thu từ tập report NV có thể thiếu.
+    const uiPeriodMatch = /^(0[1-9]|1[0-2])\.(\d{4})$/.exec(String(periodKey || '').trim());
+    const isoPeriodMatch = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(periodKey || '').trim());
+    const companyRevenuePeriodKeys = [...new Set([
+      String(periodKey || '').trim(),
+      uiPeriodMatch ? `${uiPeriodMatch[2]}-${uiPeriodMatch[1]}` : '',
+      isoPeriodMatch ? `${isoPeriodMatch[2]}.${isoPeriodMatch[1]}` : '',
+    ].filter(Boolean))];
+    const companyRevenueSnapshotKey = companyRevenueRowsByPeriod instanceof Map
+      ? companyRevenuePeriodKeys.find((key) => companyRevenueRowsByPeriod.has(key))
+      : undefined;
+    const hasCompanyRevenueSnapshot = companyRevenueSnapshotKey !== undefined;
+    const companyRevenueRows = hasCompanyRevenueSnapshot
+      ? (companyRevenueRowsByPeriod.get(companyRevenueSnapshotKey) || [])
       : [];
-    const hasCompanyRevenueSnapshot = companyRevenueRowsByPeriod instanceof Map;
     const companyRevenueTotal = companyRevenueRows.reduce((sum, row) => (
       sum + numeric(row?.revenue ?? row?.tong_tien ?? row?.REVENUE ?? row?.TONG_TIEN)
     ), 0);

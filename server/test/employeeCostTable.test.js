@@ -176,6 +176,42 @@ test('‼ ALL revenue contract: missing one cost report must not change company 
   assert.equal(missingLargeEmployee.periods[0].summary.revenueSource, 'app_report_company_store');
 });
 
+test('‼ T08 deadline stubs vẫn lấy đúng snapshot doanh thu chuẩn YYYY-MM', () => {
+  const roster = [{ emp_code: 'DN018', name: 'DN018' }, { emp_code: 'DN024', name: 'DN024' }];
+  const deadlineStub = (empCode) => ({
+    empCode, sourceOutcome: 'deadline', from: '2026-08', to: '2026-08',
+    periods: [{
+      period: '08.2026', columns: [], rows: [],
+      template: { columns: [], costLabels: {}, viewOnlyColumns: [], viewOnlyLabels: {} },
+      match: { matchedRows: 0, totalRows: 0, threshold: 90, low: false }, summary: {},
+    }],
+  });
+  const merged = table.mergeEmployeeReports(
+    [deadlineStub('DN018'), deadlineStub('DN024')], roster,
+    { companyRevenueRowsByPeriod: new Map([['2026-08', [
+      { emp_code: 'DN018', revenue: 1_050_000 },
+      { emp_code: 'DN024', revenue: 2_100_000 },
+    ]]]) },
+  );
+  const transformed = table.transformReport(merged, { allEmployees: true, paginate: false });
+  assert.equal(merged.periods[0].match.unavailableEmployeeCount, 2,
+    'chi phí hết hạn vẫn phải báo thiếu, không được giả là đã đủ');
+  assert.equal(merged.periods[0].summary.revenueTotal, 3_150_000,
+    'doanh thu toàn đội độc lập với fan-out chi phí và phải đọc được khóa YYYY-MM');
+  assert.equal(merged.periods[0].summary.revenueSource, 'app_report_company_store');
+  assert.equal(transformed.summary.revenueBeforeVatTotal, 3_000_000);
+});
+
+test('‼ map snapshot có kỳ khác không được biến kỳ đang xem thành doanh thu 0', () => {
+  const item = report();
+  item.periods[0].period = '08.2026';
+  const merged = table.mergeEmployeeReports([item], [{ emp_code: item.empCode }], {
+    companyRevenueRowsByPeriod: new Map([['2026-07', [{ emp_code: item.empCode, revenue: 99 }]]]),
+  });
+  assert.equal(merged.periods[0].summary.revenueTotal, null);
+  assert.equal(merged.periods[0].summary.revenueSource, 'company_revenue_unavailable');
+});
+
 test('‼ ALL healthy company revenue survives view-only columns, reconciliation and final transform', () => {
   const roster = [{ emp_code: 'DN001', name: 'Anh Một' }, { emp_code: 'DN002', name: 'Chị Hai' }];
   const make = (empCode, revenue, c38, c42) => {
