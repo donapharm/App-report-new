@@ -16,13 +16,14 @@ test('tab Công nợ là CEO-only và backend giữ requireCeo', () => {
   assert.match(routes, /\/admin\/debts-shadow\/preview', auth\.requireAuth, auth\.requireCeo/);
 });
 
-test('UI chỉ preview, hiển thị provenance/quarantine và không có publish API', () => {
+test('UI chỉ preview, hiển thị provenance/quarantine; publish chỉ có backend CEO riêng', () => {
   assert.match(page, /Chưa publish, không ghi snapshot/);
   assert.match(page, /data\.persisted \? 'CÓ' : 'KHÔNG'/);
   assert.match(page, /quarantineReasonCounts/);
   assert.match(page, /quarantineRows/);
   assert.match(page, /Xuất CSV quarantine/);
   assert.doesNotMatch(api, /debtsShadowPublish/);
+  assert.match(routes, /\/admin\/debts-shadow\/publish', auth\.requireAuth, auth\.requireCeo/);
 });
 
 test('API client dùng đúng route preview/readiness và service chỉ trả whitelist chi tiết', () => {

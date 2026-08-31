@@ -42,7 +42,21 @@ test('route is CEO-only shadow preview and does not wire live selector', () => {
   const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes.js'), 'utf8');
   assert.match(routes, /\/admin\/debts-shadow\/preview', auth\.requireAuth, auth\.requireCeo/);
   assert.match(routes, /\/admin\/debts-shadow\/readiness', auth\.requireAuth, auth\.requireCeo/);
+  assert.match(routes, /\/admin\/debts-shadow\/publish', auth\.requireAuth, auth\.requireCeo/);
   assert.doesNotMatch(routes, /getRows\s*=.*debts|activeSlots\s*=.*debts/);
+});
+
+test('preview luôn chỉ đọc và publish cần cờ write + xác nhận ghim số', async () => {
+  const fs = require('node:fs'); const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'debtsShadowService.js'), 'utf8');
+  const previewBody = src.slice(src.indexOf('async function preview'), src.indexOf('function proofOf'));
+  assert.doesNotMatch(previewBody, /publishShadow/);
+  assert.match(previewBody, /persisted: false/);
+  await assert.rejects(service.publishPeriod({ period: '2026-08', env: {} }), { code: 'DEBTS_PUBLISH_NOT_READY' });
+  assert.match(src, /PUBLISH_DEBTS_\$\{period\}_\$\{mapped\}_\$\{quarantined\}/);
+  assert.match(src, /Promise\.all\(\['DONA', 'AFP'\]/);
+  assert.match(src, /DEBTS_PUBLISH_PROOF_MISMATCH/);
+  assert.match(src, /DEBTS_PUBLISH_COUNT_MISMATCH/);
 });
 
 /* Claude review 24/08: dựng thử đường đục và ĐỌC ĐƯỢC file ngoài kho qua symlink

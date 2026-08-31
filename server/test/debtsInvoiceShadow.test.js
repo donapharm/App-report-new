@@ -396,7 +396,12 @@ test('shadow writer is opt-in, immutable, private, atomic and confined to separa
     for (const file of fs.readdirSync(target)) assert.equal(fs.statSync(path.join(target, file)).mode & 0o777, 0o600);
     const verified = shadow.verifyPublishedShadow(target, { receiptSigningKey: SIGNING_KEY, receiptSigningKeyId: SIGNING_KEY_ID });
     assert.equal(verified.receipt.rowsChecksum, result.receipt.rowsChecksum);
-    assert.throws(() => shadow.publishShadow(result, { dataDir: root, allowWrite: true, receiptSigningKey: SIGNING_KEY, receiptSigningKeyId: SIGNING_KEY_ID }), { code: 'DEBTS_SHADOW_IMMUTABLE_EXISTS' });
+    assert.deepEqual(verified.rows, result.mapped, 'rows chính thức chỉ chứa dòng mapped');
+    assert.deepEqual(verified.quarantined, result.quarantined, 'quarantine ở file bằng chứng riêng');
+    assert.equal(shadow.publishShadow(result, { dataDir: root, allowWrite: true, receiptSigningKey: SIGNING_KEY, receiptSigningKeyId: SIGNING_KEY_ID }), target,
+      'retry cùng đúng bằng chứng phải idempotent');
+    const conflict = { ...result, receipt: { ...result.receipt, sourceChecksum: `sha256:${'f'.repeat(64)}` } };
+    assert.throws(() => shadow.publishShadow(conflict, { dataDir: root, allowWrite: true, receiptSigningKey: SIGNING_KEY, receiptSigningKeyId: SIGNING_KEY_ID }), { code: 'DEBTS_SHADOW_IMMUTABLE_CONFLICT' });
     assert.equal(shadow.shadowLockFile(root, '2026-08'), path.join(root, 'debts_invoice_shadow_2026-08.lock'));
     assert.equal(fs.existsSync(path.join(tmp, 'revenue_materialize.lock')), false);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

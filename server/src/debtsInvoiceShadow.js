@@ -533,6 +533,7 @@ function materializeShadow(combined, mappingSnapshot, { codeRevision = 'unknown'
     quarantinedTotals: receiptTotals(quarantined),
     reconstructionDelta: decimalString(sumDecimals(rows.map((row) => row.reconstruction_delta))),
     rowsChecksum: sha256(canonicalJson(rows)),
+    mappedRowsChecksum: sha256(canonicalJson(mapped)),
     quarantineRowsChecksum: sha256(canonicalJson(quarantined)),
     selectorChanged: false,
   });
@@ -586,9 +587,21 @@ function validateMaterializedRows(rows, quarantined, receipt, mapped = null) {
   if (receipt.rowCount !== rows.length || receipt.invoiceCount !== invoices.size
     || receipt.mappedCount !== expectedMapped.length || receipt.quarantinedCount !== expectedQuarantine.length
     || receipt.rowsChecksum !== sha256(canonicalJson(rows))
+    || receipt.mappedRowsChecksum !== sha256(canonicalJson(expectedMapped))
     || receipt.quarantineRowsChecksum !== sha256(canonicalJson(expectedQuarantine))
     || canonicalJson(quarantined) !== canonicalJson(expectedQuarantine)
     || (mapped !== null && (!Array.isArray(mapped) || canonicalJson(mapped) !== canonicalJson(expectedMapped)))) {
+    fail('DEBTS_SHADOW_RESULT_INCONSISTENT');
+  }
+}
+
+function validatePublishedRows(mapped, quarantined, receipt) {
+  if (!Array.isArray(mapped) || !Array.isArray(quarantined) || !receipt || typeof receipt !== 'object'
+    || mapped.some((row) => row?.quarantine !== false) || quarantined.some((row) => row?.quarantine !== true)
+    || receipt.mappedCount !== mapped.length || receipt.quarantinedCount !== quarantined.length
+    || receipt.rowCount !== mapped.length + quarantined.length
+    || receipt.mappedRowsChecksum !== sha256(canonicalJson(mapped))
+    || receipt.quarantineRowsChecksum !== sha256(canonicalJson(quarantined))) {
     fail('DEBTS_SHADOW_RESULT_INCONSISTENT');
   }
 }
@@ -634,16 +647,27 @@ function publishShadow(result, { dataDir, allowWrite = false, receiptSigningKey,
     const target = path.join(periodDir, snapshotId);
     fs.mkdirSync(periodDir, { recursive: true, mode: 0o700 });
     fs.chmodSync(periodDir, 0o700);
-    if (fs.existsSync(target)) fail('DEBTS_SHADOW_IMMUTABLE_EXISTS');
+    if (fs.existsSync(target)) {
+      const existing = verifyPublishedShadow(target, { receiptSigningKey, receiptSigningKeyId });
+      if (existing.receipt.rowsChecksum !== result.receipt.rowsChecksum
+        || existing.receipt.quarantineRowsChecksum !== result.receipt.quarantineRowsChecksum
+        || existing.receipt.sourceChecksum !== result.receipt.sourceChecksum
+        || existing.receipt.mappingChecksum !== result.receipt.mappingChecksum) {
+        fail('DEBTS_SHADOW_IMMUTABLE_CONFLICT');
+      }
+      return target;
+    }
     const stage = fs.mkdtempSync(path.join(periodDir, `.stage-${process.pid}-`));
     try {
       fs.chmodSync(stage, 0o700);
-      atomicJson(path.join(stage, 'rows.json'), result.rows);
+      // Official rows contain only attested mappings. Quarantine remains a
+      // separate evidence file and can never silently enter reported revenue.
+      atomicJson(path.join(stage, 'rows.json'), result.mapped);
       atomicJson(path.join(stage, 'quarantine.json'), result.quarantined);
       const signedReceipt = signReceipt(result.receipt, { key: receiptSigningKey, keyId: receiptSigningKeyId });
       atomicJson(path.join(stage, 'receipt.json'), signedReceipt);
       atomicJson(path.join(stage, 'manifest.json'), {
-        schemaVersion: 1, period, snapshotId,
+        schemaVersion: 2, period, snapshotId,
         files: Object.freeze({
           'rows.json': fileDescriptor(path.join(stage, 'rows.json')),
           'quarantine.json': fileDescriptor(path.join(stage, 'quarantine.json')),
@@ -670,7 +694,7 @@ function verifyPublishedShadow(target, { receiptSigningKey, receiptSigningKeyId 
     envelope = JSON.parse(fs.readFileSync(path.join(target, 'receipt.json'), 'utf8'));
     manifest = JSON.parse(fs.readFileSync(path.join(target, 'manifest.json'), 'utf8'));
   } catch { fail('DEBTS_SHADOW_ARTIFACT_INVALID'); }
-  if (manifest?.schemaVersion !== 1 || !manifest.files) fail('DEBTS_SHADOW_MANIFEST_INVALID');
+  if (manifest?.schemaVersion !== 2 || !manifest.files) fail('DEBTS_SHADOW_MANIFEST_INVALID');
   const expectedFiles = ['manifest.json', 'quarantine.json', 'receipt.json', 'rows.json'];
   if (canonicalJson(fs.readdirSync(target).sort()) !== canonicalJson(expectedFiles)) fail('DEBTS_SHADOW_UNEXPECTED_FILE');
   if ((fs.statSync(target).mode & 0o777) !== 0o700) fail('DEBTS_SHADOW_PERMISSION_INVALID');
@@ -681,7 +705,7 @@ function verifyPublishedShadow(target, { receiptSigningKey, receiptSigningKeyId 
   }
   if ((fs.statSync(path.join(target, 'manifest.json')).mode & 0o777) !== 0o600) fail('DEBTS_SHADOW_PERMISSION_INVALID', { file: 'manifest.json' });
   const receipt = verifySignedReceipt(envelope, { key: receiptSigningKey, keyId: receiptSigningKeyId });
-  validateMaterializedRows(rows, quarantined, receipt);
+  validatePublishedRows(rows, quarantined, receipt);
   if (manifest.period !== receipt.period || manifest.snapshotId !== receipt.snapshotId
     || path.basename(target) !== receipt.snapshotId || path.basename(path.dirname(target)) !== receipt.period) fail('DEBTS_SHADOW_IDENTITY_MISMATCH');
   return Object.freeze({ rows: Object.freeze(rows), quarantined: Object.freeze(quarantined), receipt, manifest: stableValue(manifest) });

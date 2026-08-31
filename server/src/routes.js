@@ -4121,6 +4121,22 @@ router.post('/admin/debts-shadow/preview', auth.requireAuth, auth.requireCeo, as
   return res.json(await debtsShadowService.preview({ period, legalEntity }));
 }));
 
+// Publish is an explicit CEO-only operation. Preview never writes, even when the
+// write gate is enabled. The request must pin both source proofs and exact counts.
+router.post('/admin/debts-shadow/publish', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  const period = String(req.body?.period || '').trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) {
+    return res.status(400).json({ error: 'Kỳ không hợp lệ.', code: 'DEBTS_PERIOD_INVALID' });
+  }
+  return res.json(await debtsShadowService.publishPeriod({
+    period,
+    proofs: req.body?.proofs,
+    expectedMappedCount: req.body?.expectedMappedCount,
+    expectedQuarantinedCount: req.body?.expectedQuarantinedCount,
+    confirmation: req.body?.confirmation,
+  }));
+}));
+
 // Read-only readiness: không gọi DataHub, không trả endpoint/token/path/key.
 router.get('/admin/debts-shadow/readiness', auth.requireAuth, auth.requireCeo, (req, res) => {
   res.json(debtsShadowService.readiness());

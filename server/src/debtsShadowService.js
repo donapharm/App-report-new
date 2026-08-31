@@ -110,15 +110,8 @@ async function preview({ period, legalEntity, env = process.env, fetchImpl = glo
     lockedPeriods: [shadow.HARD_BLOCKED_PERIOD], fetchImpl,
   });
   const result = shadow.materializeShadow(combined, loadMapping(cfg.mappingFile), { codeRevision: 'debts-shadow-preview-v1' });
-  let artifact = null;
-  if (cfg.allowWrite) {
-    artifact = shadow.publishShadow(result, {
-      dataDir: cfg.dataDir, allowWrite: true,
-      receiptSigningKey: cfg.receiptSigningKey, receiptSigningKeyId: cfg.receiptSigningKeyId,
-    });
-  }
   return Object.freeze({
-    ok: true, shadow: true, selectorChanged: false, persisted: Boolean(artifact),
+    ok: true, shadow: true, selectorChanged: false, persisted: false,
     period: result.receipt.period, legalEntity: partition, snapshotId: result.receipt.snapshotId,
     rowCount: result.receipt.rowCount, invoiceCount: result.receipt.invoiceCount,
     mappedCount: result.receipt.mappedCount, quarantinedCount: result.receipt.quarantinedCount,
@@ -144,4 +137,71 @@ async function preview({ period, legalEntity, env = process.env, fetchImpl = glo
   });
 }
 
-module.exports = { DATA_DIR, DEFAULT_ROOT, enabled, safeMappingFile, loadMapping, config, readiness, preview };
+function proofOf(result) {
+  return Object.freeze({
+    legalEntity: result.rows[0]?.legal_entity || null,
+    snapshotId: result.receipt.snapshotId,
+    sourceChecksum: result.receipt.sourceChecksum,
+    mappingChecksum: result.receipt.mappingChecksum,
+    rowsChecksum: result.receipt.rowsChecksum,
+    mappedCount: result.receipt.mappedCount,
+    quarantinedCount: result.receipt.quarantinedCount,
+  });
+}
+
+function assertProof(result, proof, legalEntity) {
+  const actual = proofOf(result);
+  if (!proof || proof.legalEntity !== legalEntity
+    || !['snapshotId', 'sourceChecksum', 'mappingChecksum', 'rowsChecksum', 'mappedCount', 'quarantinedCount']
+      .every((key) => proof[key] === actual[key])) {
+    const error = new Error('DEBTS_PUBLISH_PROOF_MISMATCH'); error.code = error.message; error.status = 409; throw error;
+  }
+}
+
+async function publishPeriod({
+  period, proofs, expectedMappedCount, expectedQuarantinedCount, confirmation,
+  env = process.env, fetchImpl = globalThis.fetch, dataDir,
+} = {}) {
+  const cfg = config(env);
+  const ready = readiness(env);
+  if (!ready.publishReady) {
+    const error = new Error('DEBTS_PUBLISH_NOT_READY'); error.code = error.message; error.status = 503; throw error;
+  }
+  const mapped = Number(expectedMappedCount);
+  const quarantined = Number(expectedQuarantinedCount);
+  const expectedConfirmation = `PUBLISH_DEBTS_${period}_${mapped}_${quarantined}`;
+  if (!Number.isSafeInteger(mapped) || mapped < 0 || !Number.isSafeInteger(quarantined) || quarantined < 0
+    || confirmation !== expectedConfirmation) {
+    const error = new Error('DEBTS_PUBLISH_CONFIRMATION_INVALID'); error.code = error.message; error.status = 400; throw error;
+  }
+  const mapping = loadMapping(cfg.mappingFile);
+  const results = await Promise.all(['DONA', 'AFP'].map(async (legalEntity) => {
+    const combined = await shadow.fetchSnapshotPages({
+      endpoint: cfg.endpoint, token: cfg.token, period, legalEntity,
+      lockedPeriods: [shadow.HARD_BLOCKED_PERIOD], fetchImpl,
+    });
+    const result = shadow.materializeShadow(combined, mapping, { codeRevision: 'debts-publish-v1' });
+    assertProof(result, proofs?.[legalEntity], legalEntity);
+    return [legalEntity, result];
+  }));
+  const totalMapped = results.reduce((sum, [, result]) => sum + result.receipt.mappedCount, 0);
+  const totalQuarantined = results.reduce((sum, [, result]) => sum + result.receipt.quarantinedCount, 0);
+  if (totalMapped !== mapped || totalQuarantined !== quarantined) {
+    const error = new Error('DEBTS_PUBLISH_COUNT_MISMATCH'); error.code = error.message; error.status = 409; throw error;
+  }
+  const artifacts = results.map(([legalEntity, result]) => {
+    const target = shadow.publishShadow(result, {
+      dataDir: dataDir || cfg.dataDir, allowWrite: true,
+      receiptSigningKey: cfg.receiptSigningKey, receiptSigningKeyId: cfg.receiptSigningKeyId,
+    });
+    const verified = shadow.verifyPublishedShadow(target, {
+      receiptSigningKey: cfg.receiptSigningKey, receiptSigningKeyId: cfg.receiptSigningKeyId,
+    });
+    return Object.freeze({ legalEntity, snapshotId: verified.receipt.snapshotId, rowsChecksum: verified.receipt.rowsChecksum,
+      mappedCount: verified.receipt.mappedCount, quarantinedCount: verified.receipt.quarantinedCount });
+  });
+  return Object.freeze({ ok: true, persisted: true, period, mappedCount: totalMapped,
+    quarantinedCount: totalQuarantined, selectorChanged: false, artifacts: Object.freeze(artifacts) });
+}
+
+module.exports = { DATA_DIR, DEFAULT_ROOT, enabled, safeMappingFile, loadMapping, config, readiness, preview, proofOf, assertProof, publishPeriod };
