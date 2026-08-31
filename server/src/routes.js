@@ -2192,8 +2192,16 @@ async function employeeCostAllPayload(req, {
   const merged = memoGet(employeeCostAllCacheKey(req, 'base', vanTayLucVao), EMPLOYEE_COST_ALL_BASE_TTL_MS, buildMergedSealed,
     (value) => (employeeCostAllDegraded(value) ? EMPLOYEE_COST_ALL_DEGRADED_TTL_MS : EMPLOYEE_COST_ALL_BASE_TTL_MS),
     { staleMs: EMPLOYEE_COST_ALL_STALE_MS });
+  const resolvedMerged = await merged;
+  // Một request lạnh chỉ có 25 giây. Nếu phần đuôi roster bị cắt đúng vì deadline,
+  // trả trạng thái thiếu theo fail-closed như cũ nhưng châm NGAY một lượt warm 120s
+  // để lần F5 kế tiếp có bản đủ; không bắt CEO chờ vòng định kỳ 30 phút. Chỉ áp dụng
+  // kỳ đơn và đúng outcome=deadline — lỗi nguồn thật vẫn giữ nguyên nhịp retry/cảnh báo.
+  if (range.months.length === 1 && employeeCostAllHasDeadline(resolvedMerged)) {
+    scheduleEmployeeCostDeadlineRecoveryWarm(employeeCost.toUiMonth(range.months[0]));
+  }
   return memoGet(employeeCostAllCacheKey(req, 'view', vanTayLucVao), EMPLOYEE_COST_ALL_VIEW_TTL_MS, async () => (
-    employeeCostTable.transformReport(await merged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
+    employeeCostTable.transformReport(resolvedMerged, employeeCostTableOptions(req, { paginate: true, allEmployees: true }))
   ));
 }
 
@@ -2284,6 +2292,11 @@ function collectUnavailableEmployees(payload = {}) {
   )))].sort();
 }
 
+function employeeCostAllHasDeadline(payload = {}) {
+  return (payload?.periods || []).some((period) => Object.values(period?.match?.unavailableReasons || {})
+    .some((reason) => String(reason || '') === 'deadline'));
+}
+
 // Logic tự lành thuần (deps tiêm vào để test): re-probe RIÊNG các NV đã fail bằng
 // nguồn tươi; NV nào hồi (outcome==='ok') → invalidate cache ALL → rebuild sạch.
 // FAIL-CLOSED: chỉ coi là hồi khi nguồn trả 'ok'; lỗi/timeout/scope_mismatch ⇒ giữ
@@ -2333,6 +2346,7 @@ async function selfHealUnavailableCostSources({
 }
 
 let employeeCostWarmActive = false;
+const employeeCostDeadlineRecoveryInFlight = new Map();
 const WARM_EMPLOYEE_COST_TEST_OPTION_KEYS = new Set([
   'snapshotStore',
   'rosterOverride',
@@ -2465,6 +2479,23 @@ async function warmEmployeeCostAllCache(ky, reason = 'materialize', testOptions 
     employeeCostWarmActive = false;
     finishActivity();
   }
+}
+
+function scheduleEmployeeCostDeadlineRecoveryWarm(ky, warm = warmEmployeeCostAllCache) {
+  const key = String(ky || '').trim();
+  if (!key || employeeCostSnapshotEnabled()) return false;
+  if (employeeCostDeadlineRecoveryInFlight.has(key)) return false;
+  const task = new Promise((resolve) => setImmediate(resolve))
+    .then(() => warm(key, 'request_deadline_recovery'))
+    .catch((error) => {
+      console.warn('[employee-cost] deadline recovery warm failed', { ky: key, message: error.message });
+      return false;
+    })
+    .finally(() => {
+      if (employeeCostDeadlineRecoveryInFlight.get(key) === task) employeeCostDeadlineRecoveryInFlight.delete(key);
+    });
+  employeeCostDeadlineRecoveryInFlight.set(key, task);
+  return true;
 }
 
 function scheduleEmployeeCostAllWarm(ky, reason) {
@@ -7458,6 +7489,8 @@ router.employeeCostAllTestServices = {
   employeeCostAllPayload,
   closedUnfinalizedEmployeeCostAllModel,
   warmEmployeeCostAllCache,
+  employeeCostAllHasDeadline,
+  scheduleEmployeeCostDeadlineRecoveryWarm,
   assertEmployeeCostExportableReports,
   paymentSchedulesFromPayload,
 };
