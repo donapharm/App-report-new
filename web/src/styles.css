@@ -2795,3 +2795,24 @@ th.employee-cost-annual { background:#315d78 !important; color:#d6e0e7 !importan
 
 /* Nút đổi cách xem chỉ có nghĩa trên màn hẹp — desktop luôn là bảng thật. */
 @media (min-width: 701px) { .catalog-mobile-view-toggle { display: none; } }
+
+/* Công nợ shadow — CEO-only, read-only. */
+.debts-shadow-banner { display:flex; justify-content:space-between; gap:12px; align-items:start; }
+.debts-shadow-banner p { margin:4px 0 0; color:var(--muted); }
+.debts-shadow-controls { display:flex; align-items:end; gap:10px; flex-wrap:wrap; }
+.debts-shadow-controls label { display:grid; gap:3px; min-width:150px; }
+.debts-shadow-controls label span, .debts-shadow-kpis small { color:var(--muted); font-size:11px; font-weight:700; }
+.debts-shadow-kpis { display:grid; grid-template-columns:repeat(4, minmax(130px,1fr)); gap:10px; }
+.debts-shadow-kpis b { display:block; margin-top:4px; font-size:24px; }
+.debts-shadow-kpis .ok { border-color:#b9ddce; background:#f3fbf7; }
+.debts-shadow-kpis .warn { border-color:#efd39f; background:#fff9ed; }
+.debts-shadow-proof { display:grid; gap:4px; font-size:12px; }
+.debts-shadow-proof span { overflow-wrap:anywhere; color:var(--muted); }
+.debts-shadow-reasons { display:grid; gap:8px; }
+.debts-shadow-reasons > div { display:flex; gap:6px; flex-wrap:wrap; }
+.debts-shadow-table td small { display:block; color:var(--muted); font-size:10px; }
+@media (max-width:700px) {
+  .debts-shadow-kpis { grid-template-columns:repeat(2, minmax(120px,1fr)); }
+  .debts-shadow-controls > * { flex:1 1 100%; }
+  .debts-shadow-table { min-width:760px; }
+}

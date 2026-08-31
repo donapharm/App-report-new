@@ -124,6 +124,23 @@ async function preview({ period, legalEntity, env = process.env, fetchImpl = glo
     mappedCount: result.receipt.mappedCount, quarantinedCount: result.receipt.quarantinedCount,
     totals: result.receipt.totals, sourceChecksum: result.receipt.sourceChecksum,
     mappingChecksum: result.receipt.mappingChecksum, rowsChecksum: result.receipt.rowsChecksum,
+    mappingVersion: result.receipt.mappingVersion,
+    mappingStatusCounts: result.receipt.mappingStatusCounts,
+    quarantineReasonCounts: Object.freeze(result.quarantined.reduce((counts, row) => {
+      for (const reason of row.quarantine_reasons || []) counts[reason] = (counts[reason] || 0) + 1;
+      return counts;
+    }, {})),
+    quarantineRows: Object.freeze(result.quarantined.map((row) => Object.freeze({
+      sourceLineId: row.source_line_id,
+      invoiceDate: row.invoice_date,
+      invoiceNumber: row.invoice_number,
+      invoiceLineId: row.invoice_line_id,
+      unitCode: row.unit_code,
+      qlnbCode: row.qlnb_code,
+      uom: row.uom,
+      mappingStatus: row.mapping_status,
+      reasons: row.quarantine_reasons,
+    }))),
   });
 }
 

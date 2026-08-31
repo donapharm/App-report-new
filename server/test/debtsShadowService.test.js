@@ -122,11 +122,15 @@ test('lõi dựng dòng bằng danh sách trắng, không bê nguyên dòng ngu�
   assert.doesNotMatch(body, /Object\.assign\(\s*\{\s*\}\s*,\s*row/, 'gán nguyên dòng nguồn ⇒ tên khách có thể lọt');
 });
 
-test('phản hồi preview chỉ trả số đếm và checksum, không trả dòng dữ liệu', () => {
+test('phản hồi preview chỉ trả whitelist quarantine phục vụ UI CEO, không trả số tiền/dòng mapped', () => {
   const fs = require('node:fs'); const path = require('node:path');
   const svc = fs.readFileSync(path.join(__dirname, '..', 'src', 'debtsShadowService.js'), 'utf8');
   const ret = svc.slice(svc.indexOf('return Object.freeze({'), svc.indexOf('module.exports'));
-  assert.doesNotMatch(ret, /\brows\b\s*:/, 'preview không được trả mảng dòng ra ngoài');
+  assert.match(ret, /quarantineRows/);
+  assert.match(ret, /sourceLineId: row\.source_line_id/);
+  assert.doesNotMatch(ret, /\brows\b\s*:/, 'preview không được trả toàn bộ dòng nguồn/mapped');
+  assert.doesNotMatch(ret, /source_before_vat_raw|revenue_before_vat|unit_price_before_vat|quantity:/,
+    'UI quarantine không được nhận trường tiền/số lượng ngoài nhu cầu');
   for (const k of ['rowCount', 'invoiceCount', 'mappedCount', 'quarantinedCount', 'sourceChecksum']) {
     assert.match(ret, new RegExp(k));
   }

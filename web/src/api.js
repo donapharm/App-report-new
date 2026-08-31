@@ -267,6 +267,11 @@ export async function trustedDeviceLogin(phone) {
 }
 
 export const api = {
+  debtsShadowReadiness: () => req('GET', '/admin/debts-shadow/readiness', undefined, { cacheMs: 0 }),
+  debtsShadowPreview: ({ period, legalEntity }) => req('POST', '/admin/debts-shadow/preview', { period, legalEntity }, {
+    timeoutMs: 45000,
+    timeoutMessage: 'Nguồn Công nợ đang phản hồi chậm. Vui lòng thử lại.',
+  }),
   // Màn "Chưa đồng bộ" — chỉ đọc, danh mục dòng bị loại + lý do.
   syncExceptions: (ky, { freshKey = null } = {}) => req(
     'GET',

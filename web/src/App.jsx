@@ -28,6 +28,7 @@ import CostBreakdown from './pages/CostBreakdown.jsx';
 import DormantReports from './pages/DormantReports.jsx';
 import AiChat from './pages/AiChat.jsx';
 import Upload from './pages/Upload.jsx';
+import DebtsShadow from './pages/DebtsShadow.jsx';
 
 const TABS = [
   { key: 'overview', label: 'Tổng quan', ic: '📊', C: Overview },
@@ -42,6 +43,7 @@ const TABS = [
   { key: 'paymentSchedule', label: 'Thanh toán CP', full: 'Thanh toán CP của tôi', ic: '💵', C: PaymentSchedule, employeeCostControlled: true },
   { key: 'catalogManagement', label: 'Danh mục QL', full: 'Danh mục quản lý', ic: '🗂️', C: CatalogManagement },
   { key: 'syncExceptions', label: 'Chưa đồng bộ', full: 'Dòng doanh thu chưa đồng bộ', ic: '↔️', C: SyncExceptions, adminOnly: true },
+  { key: 'debtsShadow', label: 'Công nợ', full: 'Công nợ · Chỉ xem', ic: '🧮', C: DebtsShadow, ceoOnly: true },
   // Menu RIÊNG cho hai cột tiền tổng C32/C47 (CEO chốt 08/08: tách khỏi mọi màn có
   // sẵn để giảm rủi ro lộ lọt). Mặc định chỉ CEO; NV phải được bật công tắc riêng.
   { key: 'costAmounts', label: 'Thành tiền CP', full: 'Thành tiền chi phí C32 · C47', ic: '💼', C: CostAmounts, costAmountsOnly: true },
