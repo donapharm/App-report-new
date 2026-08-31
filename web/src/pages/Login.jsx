@@ -71,6 +71,7 @@ export default function Login({ onLogin }) {
   // Khoá theo ref vì setState(busy) không đồng bộ: touch có thể phát pointerup
   // rồi click trước khi React kịp render disabled, khiến OTP bị gửi hai lần.
   const otpVerifyInFlightRef = useRef(false);
+  const homeSsoAttemptedRef = useRef(false);
 
   // OTP flow
   const [step, setStep] = useState('phone');     // phone | code | choose
@@ -82,21 +83,23 @@ export default function Login({ onLogin }) {
     let cancelled = false;
     async function initLogin() {
       const params = new URLSearchParams(window.location.search);
-      const ssoToken = params.get('sso_token') || '';
-      if (ssoToken) {
-        // Xóa token Home khỏi thanh địa chỉ/history ngay khi đã đọc để tránh lộ
-        // qua ảnh chụp, copy URL hoặc referrer.
+      const hasSsoSignal = params.has('sso_token');
+      if (hasSsoSignal) {
+        // Chỉ đọc sự hiện diện của tham số cũ như một tín hiệu, tuyệt đối không đọc
+        // giá trị token vào JavaScript. Xóa URL ngay; backend dùng cookie binding.
         params.delete('sso_token');
         params.delete('_v');
         const qs = params.toString();
         window.history.replaceState(null, '', window.location.pathname + (qs ? `?${qs}` : '') + window.location.hash);
         setBusy(true);
         try {
-          const r = await api.sso(ssoToken);
+          if (homeSsoAttemptedRef.current) throw new Error('SSO đã được thử một lần.');
+          homeSsoAttemptedRef.current = true;
+          const r = await api.sso();
           if (!cancelled) await finish(r.token);
           return;
         } catch (e) {
-          if (!cancelled) setErr(`Đăng nhập từ Home không thành công: ${e.message}`);
+          if (!cancelled) setErr('Không xác thực được phiên Home. Hệ thống đã dừng tự thử lại để tránh vòng lặp; vui lòng dùng OTP hoặc đăng nhập lại Home một lần.');
         } finally {
           if (!cancelled) setBusy(false);
         }

@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const store = require('./store');
 const auth = require('./auth');
+const homeSsoExchange = require('./homeSsoExchange');
 const accessPolicy = require('./accessPolicy');
 const homeAppReportVisibility = require('./homeAppReportVisibility');
 const A = require('./analytics');
@@ -892,10 +893,17 @@ router.post('/auth/trusted-device/consume', async (req, res) => {
 });
 router.post('/auth/sso', async (req, res) => {
   try {
-    const r = await auth.verifySso((req.body.sso_token || '').trim(), loginCtx(req));
+    const identity = await homeSsoExchange.exchange(req.headers.cookie || '');
+    const r = auth.loginFromHomeIdentity(identity, loginCtx(req));
     if (!r) return res.status(401).json({ error: 'SSO không hợp lệ' });
     res.json(r);
-  } catch (e) { res.status(400).json({ error: e.message }); }
+  } catch (e) {
+    const status = e?.status === 502 ? 502 : 401;
+    res.status(status).json({
+      error: status === 502 ? 'Không kết nối được Home; vui lòng dùng OTP.' : 'Phiên Home không hợp lệ; vui lòng đăng nhập lại một lần hoặc dùng OTP.',
+      code: e?.code || 'HOME_SSO_REJECTED',
+    });
+  }
 });
 
 /* ---------- Đăng nhập TELEGRAM (chính) ---------- */

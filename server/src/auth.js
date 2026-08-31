@@ -587,6 +587,16 @@ async function verifySso(ssoToken, opts = {}) {
   return user ? { token: issueToken(user, { ...opts, method: 'sso' }), user } : null;
 }
 
+function loginFromHomeIdentity(identity = {}, opts = {}) {
+  const phone = normPhone(identity.phone);
+  const code = String(identity.empCode || '').trim().toUpperCase();
+  const byPhone = phone ? store.listUsers().filter((user) => normPhone(user.phone) === phone) : [];
+  const user = byPhone.length === 1 ? byPhone[0] : (code ? store.findUserByCode(code) : null);
+  if (!user || (phone && normPhone(user.phone) !== phone) || accessPolicy.isLoginBlocked(user.emp_code)) return null;
+  const account = { emp_code: user.emp_code, name: user.name || identity.name || user.emp_code, role: normRole(user.role) };
+  return { token: issueToken(account, { ...opts, phone: phone || normPhone(user.phone), method: 'home-sso-binding' }), user: pub(account) };
+}
+
 /* ===================== ĐĂNG NHẬP TELEGRAM (chính) ===================== */
 const TG_SECRET = process.env.TELEGRAM_BOT_SECRET || '';
 const TG_BOT = process.env.TELEGRAM_BOT_USERNAME || '';
@@ -876,7 +886,7 @@ function requireCeo(req, res, next) {
 
 module.exports = {
   mockLogin, enforceAccessPolicyBoundary, requireAuth, requireTargetAuth, requireDataHubService, requireHomeService, requireAdmin, isAdmin, requireCeo, isCeo, isCeoActor, CEO_EMP_CODES, scopeOf, revenueScopeOf, cstScopeOf, sessionForUser, getSession,
-  issueToken, liveAuthEnabled, otpLoginEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, trustedDeviceEligible, verifySso, demoAllowed,
+  issueToken, liveAuthEnabled, otpLoginEnabled, requestOtp, verifyOtp, selectAccount, loginByTrustedDevice, trustedDeviceEligible, verifySso, loginFromHomeIdentity, demoAllowed,
   accessProfileFor: accessPolicy.accessProfileFor,
   canReadAllRevenue: accessPolicy.canReadAllRevenue,
   canReadAllCst: accessPolicy.canReadAllCst,

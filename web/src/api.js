@@ -300,7 +300,7 @@ export const api = {
     timeoutMessage: 'Hệ thống OTP phản hồi quá lâu. Vui lòng thử lại.',
   }).then((r) => { if (r.token) rememberLastPhone(phone); return r; }),
   trustedDeviceLogin,
-  sso: (sso_token) => req('POST', '/auth/sso', { sso_token }),
+  sso: (sso_token = '') => req('POST', '/auth/sso', sso_token ? { sso_token } : {}),
   // Telegram login (chính)
   telegramStart: () => req('POST', '/auth/telegram/start', {}),
   telegramStatus: (poll_secret) => req('POST', '/auth/telegram/status', { poll_secret }),
