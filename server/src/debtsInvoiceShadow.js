@@ -561,6 +561,12 @@ function fileDescriptor(file) {
   return Object.freeze({ bytes: body.length, sha256: sha256(body) });
 }
 
+function snapshotDirectoryKey(snapshotId) {
+  const identity = text(snapshotId, 160);
+  if (!identity) fail('DEBTS_SNAPSHOT_ID_INVALID');
+  return `snapshot-${sha256(identity)}`;
+}
+
 function lockOwnerAlive(owner, host) {
   if (!owner || owner.host !== host || !Number.isSafeInteger(owner.pid) || owner.pid <= 0) return true;
   try { process.kill(owner.pid, 0); return true; } catch (error) { return error.code !== 'ESRCH'; }
@@ -640,11 +646,11 @@ function publishShadow(result, { dataDir, allowWrite = false, receiptSigningKey,
   if (!root.endsWith(suffix)) fail('DEBTS_SHADOW_ROOT_INVALID');
   const period = normalizePeriod(result?.receipt?.period);
   const snapshotId = text(result?.receipt?.snapshotId, 160);
-  if (!/^[A-Za-z0-9._-]+$/.test(snapshotId) || snapshotId === '.' || snapshotId === '..') fail('DEBTS_SNAPSHOT_PATH_INVALID');
+  const directoryKey = snapshotDirectoryKey(snapshotId);
   const releaseLock = acquireShadowLock(root, period);
   try {
     const periodDir = path.join(root, period);
-    const target = path.join(periodDir, snapshotId);
+    const target = path.join(periodDir, directoryKey);
     fs.mkdirSync(periodDir, { recursive: true, mode: 0o700 });
     fs.chmodSync(periodDir, 0o700);
     if (fs.existsSync(target)) {
@@ -667,7 +673,7 @@ function publishShadow(result, { dataDir, allowWrite = false, receiptSigningKey,
       const signedReceipt = signReceipt(result.receipt, { key: receiptSigningKey, keyId: receiptSigningKeyId });
       atomicJson(path.join(stage, 'receipt.json'), signedReceipt);
       atomicJson(path.join(stage, 'manifest.json'), {
-        schemaVersion: 2, period, snapshotId,
+        schemaVersion: 2, period, snapshotId, directoryKey,
         files: Object.freeze({
           'rows.json': fileDescriptor(path.join(stage, 'rows.json')),
           'quarantine.json': fileDescriptor(path.join(stage, 'quarantine.json')),
@@ -707,7 +713,8 @@ function verifyPublishedShadow(target, { receiptSigningKey, receiptSigningKeyId 
   const receipt = verifySignedReceipt(envelope, { key: receiptSigningKey, keyId: receiptSigningKeyId });
   validatePublishedRows(rows, quarantined, receipt);
   if (manifest.period !== receipt.period || manifest.snapshotId !== receipt.snapshotId
-    || path.basename(target) !== receipt.snapshotId || path.basename(path.dirname(target)) !== receipt.period) fail('DEBTS_SHADOW_IDENTITY_MISMATCH');
+    || manifest.directoryKey !== snapshotDirectoryKey(receipt.snapshotId)
+    || path.basename(target) !== manifest.directoryKey || path.basename(path.dirname(target)) !== receipt.period) fail('DEBTS_SHADOW_IDENTITY_MISMATCH');
   return Object.freeze({ rows: Object.freeze(rows), quarantined: Object.freeze(quarantined), receipt, manifest: stableValue(manifest) });
 }
 
@@ -831,5 +838,5 @@ module.exports = {
   SOURCE, SCHEMA_VERSION, CONTRACT_PATH, REVISION_MODE, ROW_CHECKSUM_ALGORITHM, CONTRACT_CHECKSUM, CURRENCY, HARD_BLOCKED_PERIOD, LEGAL_ENTITY_CONTRACT_KIND, REQUIRED_ROW_FIELDS, DebtsShadowError,
   stableValue, canonicalJson, normalizeLegalEntity, normalizeSourceLegalEntityCode, parseDecimal, decimalAdd, decimalSubtract, decimalEqual, decimalString,
   sourceRowChecksum, snapshotRowsChecksum, mappingArtifactChecksum, adaptDataHubMapping, adaptSalesLedgerPages, combineSnapshotPages, mappingIndex, materializeShadow,
-  signReceipt, verifySignedReceipt, publishShadow, verifyPublishedShadow, shadowLockFile, acquireShadowLock, fetchSnapshotPages,
+  signReceipt, verifySignedReceipt, snapshotDirectoryKey, publishShadow, verifyPublishedShadow, shadowLockFile, acquireShadowLock, fetchSnapshotPages,
 };

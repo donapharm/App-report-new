@@ -389,9 +389,8 @@ test('shadow writer is opt-in, immutable, private, atomic and confined to separa
   try {
     assert.throws(() => shadow.publishShadow(result, { dataDir: root }), { code: 'DEBTS_SHADOW_WRITE_DISABLED' });
     assert.throws(() => shadow.publishShadow(result, { dataDir: path.join(tmp, 'uploads'), allowWrite: true }), { code: 'DEBTS_SHADOW_ROOT_INVALID' });
-    assert.throws(() => shadow.publishShadow({ ...result, receipt: { ...result.receipt, snapshotId: '..' } }, { dataDir: root, allowWrite: true }), { code: 'DEBTS_SNAPSHOT_PATH_INVALID' });
     const target = shadow.publishShadow(result, { dataDir: root, allowWrite: true, receiptSigningKey: SIGNING_KEY, receiptSigningKeyId: SIGNING_KEY_ID });
-    assert.equal(target, path.join(root, '2026-08', 'debts-2026-08-r1'));
+    assert.equal(target, path.join(root, '2026-08', shadow.snapshotDirectoryKey('debts-2026-08-r1')));
     assert.deepEqual(fs.readdirSync(target).sort(), ['manifest.json', 'quarantine.json', 'receipt.json', 'rows.json']);
     for (const file of fs.readdirSync(target)) assert.equal(fs.statSync(path.join(target, file)).mode & 0o777, 0o600);
     const verified = shadow.verifyPublishedShadow(target, { receiptSigningKey: SIGNING_KEY, receiptSigningKeyId: SIGNING_KEY_ID });
@@ -405,6 +404,30 @@ test('shadow writer is opt-in, immutable, private, atomic and confined to separa
     assert.equal(shadow.shadowLockFile(root, '2026-08'), path.join(root, 'debts_invoice_shadow_2026-08.lock'));
     assert.equal(fs.existsSync(path.join(tmp, 'revenue_materialize.lock')), false);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('live contract snapshot ID with colon maps to a safe collision-resistant directory while receipt keeps exact identity', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'debts-live-id-'));
+  const root = path.join(tmp, 'revenue-shadow', 'debts');
+  const snapshotId = 'debts-sales-ledger-v1:DONA:2026-08:9975e070e7cfb801';
+  const base = materialize([sourceRow()]);
+  const result = { ...base, receipt: { ...base.receipt, snapshotId } };
+  try {
+    const target = shadow.publishShadow(result, { dataDir: root, allowWrite: true,
+      receiptSigningKey: SIGNING_KEY, receiptSigningKeyId: SIGNING_KEY_ID });
+    assert.equal(path.basename(target), shadow.snapshotDirectoryKey(snapshotId));
+    assert.match(path.basename(target), /^snapshot-[a-f0-9]{64}$/);
+    assert.equal(shadow.verifyPublishedShadow(target, { receiptSigningKey: SIGNING_KEY,
+      receiptSigningKeyId: SIGNING_KEY_ID }).receipt.snapshotId, snapshotId);
+    assert.notEqual(shadow.snapshotDirectoryKey(snapshotId), shadow.snapshotDirectoryKey(`${snapshotId}:other`));
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test('snapshot directory derivation never treats source identity as a path', () => {
+  for (const identity of ['../outside', '/absolute/path', 'a/b', 'a:b', '.', '..']) {
+    assert.match(shadow.snapshotDirectoryKey(identity), /^snapshot-[a-f0-9]{64}$/);
+  }
+  assert.throws(() => shadow.snapshotDirectoryKey(''), { code: 'DEBTS_SNAPSHOT_ID_INVALID' });
 });
 
 test('receipt signature binds all receipt fields and rejects key mismatch or tampering', () => {
