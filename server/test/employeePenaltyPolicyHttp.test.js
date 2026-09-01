@@ -21,6 +21,10 @@ const parameters = {
   perMissingXu: 300000,
 };
 
+const editablePeriod = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit',
+}).format(new Date());
+
 function headers(emp, role, session = 'session-a') {
   return { 'content-type': 'application/json', 'x-test-emp': emp, 'x-test-role': role, 'x-test-session': session };
 }
@@ -58,7 +62,7 @@ test('HTTP penalty policy routes enforce CEO/session/single-use save with JSON e
   await new Promise((resolve) => server.once('listening', resolve));
   const base = `http://127.0.0.1:${server.address().port}/api`;
 
-  let response = await fetch(`${base}/admin/penalty-policies?period=2026-08`, { headers: headers('ADMIN', 'admin') });
+  let response = await fetch(`${base}/admin/penalty-policies?period=${editablePeriod}`, { headers: headers('ADMIN', 'admin') });
   assert.equal(response.status, 200);
   assert.equal((await response.json()).canEdit, false);
 
@@ -69,7 +73,7 @@ test('HTTP penalty policy routes enforce CEO/session/single-use save with JSON e
   assert.equal((await response.json()).code, 'PENALTY_POLICY_CEO_REQUIRED');
 
   const canonical = policy.preview({
-    effectiveFrom: '2026-08', previewPeriod: '2026-08', note: 'HTTP integration', parameters,
+    effectiveFrom: editablePeriod, previewPeriod: editablePeriod, note: 'HTTP integration', parameters,
   }, 'CEO');
   const stash = (id, sessionKey) => routes.penaltyPolicyPreviews.set(id, {
     at: Date.now(), actor: 'CEO', sessionKey,

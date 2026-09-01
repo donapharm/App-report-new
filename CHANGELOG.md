@@ -8101,3 +8101,6 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - `warmEmployeeCostAllCache` chỉ chuyển tiếp bốn test option đã duyệt: `snapshotStore`, `rosterOverride`, `mapWithDeadlineObserver`, `bypassClosedPeriodGuard`; khoá lạ fail-closed bằng mã lỗi riêng.
 - Thêm regression quét `server/src` để runtime không caller nào truyền tham số thứ ba; test seal/cache vẫn dùng explicit bypass ở `server/test` trên store cô lập.
 - Không đổi PROD, không bật Debts live và không đụng dữ liệu/chốt T06–T07.
+# 01/09/2026 — Stabilize penalty HTTP fixture
+
+- The penalty-policy HTTP integration test now derives its editable month in the business timezone instead of pinning August 2026. Historical-period protection remains unchanged; the fixture no longer fails merely because the calendar advanced.
