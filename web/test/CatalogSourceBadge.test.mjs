@@ -71,8 +71,10 @@ test('nút "Đồng bộ lại" có trên huy hiệu, khoá lại khi đang ch�
 test('bấm xong PHẢI tải lại danh mục, không chỉ đổi mỗi huy hiệu', () => {
   assert.match(page, /const result = await api\.catalogManagementRefresh\(uiToHub\(period\)\);/);
   assert.match(page, /await load\(period, \{ fresh: true \}\);/);
-  // Bấm "Đồng bộ lại" phải BỎ bản nhớ trong phiên, nếu không vẫn thấy bản cũ.
-  assert.match(page, /catalogSessionCache\.delete\(uiToHub\(period\)\)/);
+  // Không được xoá bản tốt trước khi bản mới tải và kiểm tra xong. Nếu web
+  // process restart giữa hai request, bảng/chữ ký nguồn cũ vẫn phải còn.
+  assert.doesNotMatch(page, /catalogSessionCache\.delete\(uiToHub\(period\)\)/);
+  assert.match(page, /usableCatalogResponse\(result, isAdmin\)/);
   // Gọi refresh trước, tải lại sau — đổi thứ tự là bảng vẫn là bản cũ.
   const at = page.indexOf('catalogManagementRefresh(uiToHub(period))');
   assert.ok(at > 0 && page.indexOf('await load(period, { fresh: true });', at) > at);

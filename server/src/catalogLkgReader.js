@@ -211,6 +211,10 @@ async function read(period, projection = 'snapshot') {
 
 module.exports = {
   read,
+  invalidate: () => {
+    values.clear(); reloads.clear(); lastStatAt = 0; lastIdentity = null;
+    if (worker && !pending.size) { const old = worker; worker = null; old.kill('SIGTERM'); }
+  },
   _parseChunkedNdjsonForTests: parseChunkedNdjson,
   _setReadOverrideForTests: (value) => { readOverrideForTests = value; },
   _resetForTests: () => { values.clear(); reloads.clear(); lastStatAt = 0; lastIdentity = null; readOverrideForTests = null; },

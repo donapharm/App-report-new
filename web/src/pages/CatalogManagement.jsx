@@ -120,6 +120,11 @@ const catalogTableWidth = (admin, costColumnCount) => {
   const safeCount = Math.max(0, Math.min(7, Number(costColumnCount) || 0));
   return `${(admin ? 1658 : 1546) + safeCount * 96}px`;
 };
+function usableCatalogResponse(result, admin) {
+  if (!result || !Array.isArray(result.rows)) return false;
+  if (!admin) return true;
+  return result.rows.length > 0 && Number(result.catalog_total || 0) > 0;
+}
 
 /* Trên điện thoại bảng danh mục vốn bị bung thành thẻ dọc: mỗi trường một dòng, hơn
  * 20 dòng cho một cặp — CEO 23/08 11:05: bảng bung ra thành văn bản rời rạc, nhìn rất lộn
@@ -1518,6 +1523,9 @@ export default function CatalogManagement({ me }) {
       const p = hub;
       const result = await api.catalogManagement(p);
       if (!request.isLatest()) return undefined;
+      if (!usableCatalogResponse(result, isAdmin)) {
+        throw new Error('Máy chủ trả danh mục rỗng; App Report giữ nguyên bảng tốt gần nhất');
+      }
       rememberCatalog(p, result);
       setData(result);
       if (isAdmin) {
@@ -1549,7 +1557,8 @@ export default function CatalogManagement({ me }) {
           setAskingHub(true);
           try {
             const result = await api.catalogManagementRefresh(uiToHub(period));
-            catalogSessionCache.delete(uiToHub(period)); // muốn số mới thì bỏ bản nhớ
+            // Không xoá bản tốt trước khi bản mới đã tải và kiểm tra khác rỗng.
+            // Nếu app restart/timeout giữa hai bước, bảng và dấu nguồn cũ vẫn còn.
             await load(period, { fresh: true });
             return result; // huy hiệu cần kết quả này để nói nội dung có đổi không
           } finally { setAskingHub(false); }

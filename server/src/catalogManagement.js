@@ -6,6 +6,7 @@ const store = require('./store');
 const { provinceOf } = require('./province');
 const catalogPeriodLkg = require('./catalogPeriodLkg');
 const catalogLkgReader = require('./catalogLkgReader');
+const nativeFetch = global.fetch;
 
 const CACHE_FILE = process.env.CATALOG_MANAGEMENT_CACHE_FILE || path.join(__dirname, '..', 'data', 'catalog_management_lkg.json');
 const DQ_CACHE_FILE = process.env.EMPLOYEE_COST_DQ_CATALOG_CACHE_FILE
@@ -845,7 +846,7 @@ async function fetchJson(url, options = {}) {
   } finally { clearTimeout(timer); }
 }
 function baseUrl() { return String(process.env.DATA_HUB_BASE_URL || '').trim().replace(/\/$/, ''); }
-async function remoteSnapshot(period) {
+async function remoteSnapshotAndPersist(period) {
   const root = `${baseUrl()}/api/integrations/app-report`;
   // Một snapshot kết hợp bảo đảm catalog + timeline cùng version/checksum, tránh ghép hai lần đọc lệch thời điểm.
   const payload = await fetchJson(`${root}/assignments/catalog-management?ky=${encodeURIComponent(period)}`);
@@ -872,6 +873,43 @@ async function remoteSnapshot(period) {
     meta: { source: 'data-hub', version, sourceVersion, checksum: String(upstreamChecksum || checksum({ rows, catalog })), updatedAt: payload.updatedAt || syncedAt, lastSyncAt: syncedAt, stale: false, readOnly: false, message: 'Đã đồng bộ Data Hub.' },
   };
   writeCacheAtomic(snapshot);
+  return snapshot;
+}
+async function refreshAndPersistForWorker(periodInput) {
+  if (process.env.CATALOG_REFRESH_WORKER_CHILD !== '1') {
+    throw Object.assign(new Error('Catalog refresh persistence is restricted to its worker process.'), {
+      status: 403, code: 'CATALOG_REFRESH_WORKER_ONLY',
+    });
+  }
+  const snapshot = await remoteSnapshotAndPersist(toHubPeriod(periodInput));
+  return {
+    period: snapshot.period,
+    rows: snapshot.rows.length,
+    catalog: snapshot.catalog.length,
+    version: String(snapshot.meta?.version || ''),
+    sourceVersion: String(snapshot.meta?.sourceVersion || ''),
+    checksum: String(snapshot.meta?.checksum || ''),
+    updatedAt: snapshot.meta?.updatedAt || null,
+    lastSyncAt: snapshot.meta?.lastSyncAt || null,
+  };
+}
+async function remoteSnapshot(period) {
+  // Unit/integration tests replace global.fetch in-process. Keep that explicit
+  // seam deterministic; production always performs the heavy fetch + merge +
+  // stringify + atomic rename in a disposable low-priority child process.
+  if (global.fetch !== nativeFetch || process.env.CATALOG_REFRESH_INLINE_FOR_TESTS === '1') {
+    return remoteSnapshotAndPersist(period);
+  }
+  const result = await require('./catalogRefreshWorker').refresh(period);
+  catalogLkgReader.invalidate();
+  const snapshot = await catalogLkgReader.read(period);
+  if (!snapshot || snapshot.period !== period
+    || String(snapshot.meta?.checksum || '') !== result.checksum
+    || snapshot.rows.length !== result.rows || snapshot.catalog.length !== result.catalog) {
+    throw Object.assign(new Error('Catalog worker đã ghi xong nhưng bản đọc lại không khớp biên nhận.'), {
+      status: 502, code: 'CATALOG_REFRESH_RECEIPT_MISMATCH',
+    });
+  }
   return snapshot;
 }
 const SNAPSHOT_CACHE_TTL_MS = Math.max(5 * 1000, Number(process.env.CATALOG_SNAPSHOT_CACHE_TTL_MS || 2 * 60 * 1000) || 2 * 60 * 1000);
@@ -1194,4 +1232,5 @@ module.exports = {
   schedulePeriodLkgShadow: (response, period, snapshot) => catalogPeriodLkg.scheduleShadowAfterResponse(
     response, period, snapshot, dataQualityProjection(snapshot, period), { currentSource: currentCatalogSource },
   ),
+  refreshAndPersistForWorker,
 };

@@ -24,6 +24,13 @@ test('tải hỏng thì GIỮ bảng cũ + báo lỗi, không về màn trắng'
   assert.doesNotMatch(katch, /setData\(/, 'lỗi không được đụng tới dữ liệu đang hiển thị');
 });
 
+test('admin response rỗng sau refresh bị từ chối và không thay bảng tốt đang có', () => {
+  assert.match(page, /function usableCatalogResponse\(result, admin\)/);
+  assert.match(page, /result\.rows\.length > 0 && Number\(result\.catalog_total \|\| 0\) > 0/);
+  assert.match(page, /if \(!usableCatalogResponse\(result, isAdmin\)\)/);
+  assert.match(page, /App Report giữ nguyên bảng tốt gần nhất/);
+});
+
 test('đang tải mà đã có bảng ⇒ chỉ dải mảnh, và NÓI RÕ bảng dưới là kỳ nào', () => {
   assert.match(page, /catalog-loading-strip/);
   // ‼ Câu chờ phải nói ĐÚNG đang làm gì: lượt xem thường đọc bản trên máy, chỉ
