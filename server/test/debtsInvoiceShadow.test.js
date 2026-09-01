@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const shadow = require('../src/debtsInvoiceShadow');
+const catalogMapping = require('../src/debtsCatalogMapping');
 
 const digest = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const CONTRACT_SHA = shadow.CONTRACT_CHECKSUM;
@@ -98,6 +99,16 @@ function materialize(rows, map = mapping()) {
     map,
     { codeRevision: 'candidate-test' },
   );
+}
+
+function directCatalogMapping(rows = [{
+  id: 'catalog-line-1', contractor_code: '01.DONA', unit_code: '033.BV A', qlnb_code: 'G1.A',
+  emp_code: 'DN001', uom: 'HOP', product_name: 'THUỐC A',
+}]) {
+  return catalogMapping.build({
+    period: '2026-08', rows,
+    meta: { sourceVersion: '31.7', version: 'V31.7', checksum: digest('catalog-v31.7') },
+  }, '2026-08');
 }
 
 function dataHubMapping() {
@@ -247,6 +258,34 @@ test('row and mapping checksums plus canonical Catalog52 projection contract fai
   unattested.declaredCounts.legalEntityRows = {};
   unattested.checksum = shadow.mappingArtifactChecksum(unattested.rows, unattested.declaredCounts, unattested.profile);
   assert.equal(materialize([sourceRow()], unattested).rows[0].mapping_status, 'legal_entity_unattested');
+});
+
+test('direct V31.7 mapping carries product_name independently from qlnb_code', () => {
+  const result = materialize([sourceRow()], directCatalogMapping());
+  assert.equal(result.rows[0].qlnb_code, 'G1.A');
+  assert.equal(result.rows[0].product_name, 'THUỐC A');
+  assert.notEqual(result.rows[0].product_name, result.rows[0].qlnb_code);
+  assert.equal(result.rows[0].mapping_status, 'mapped');
+});
+
+test('direct V31.7 mapping fails closed when product name is missing or conflicting', () => {
+  assert.throws(() => directCatalogMapping([{ id: 'missing-name', contractor_code: '01.DONA', unit_code: '033.BV A',
+    qlnb_code: 'G1.A', emp_code: 'DN001', uom: 'HOP', product_name: '' }]), { code: 'DEBTS_CATALOG_MAPPING_EMPTY' });
+
+  const conflict = directCatalogMapping([
+    { id: 'name-a', contractor_code: '01.DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', emp_code: 'DN001', uom: 'HOP', product_name: 'THUỐC A' },
+    { id: 'name-b', contractor_code: '01.DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', emp_code: 'DN001', uom: 'HOP', product_name: 'THUỐC B' },
+  ]);
+  const result = materialize([sourceRow()], conflict);
+  assert.equal(result.quarantined[0].mapping_status, 'product_name_conflict');
+  assert.deepEqual(result.quarantined[0].quarantine_reasons, ['product_name_conflict']);
+  assert.equal(result.quarantined[0].product_name, null);
+});
+
+test('legacy pre-T09 mapping contract remains readable without fabricating product_name', () => {
+  const result = materialize([sourceRow()], mapping());
+  assert.equal(result.rows[0].mapping_status, 'mapped');
+  assert.equal(result.rows[0].product_name, null);
 });
 
 test('mapping declared total and legal-entity counts are checksum-bound and fail closed', () => {

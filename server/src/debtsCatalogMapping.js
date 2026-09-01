@@ -27,20 +27,22 @@ function build(snapshot, period) {
     const legalEntity = CONTRACTOR_TO_ENTITY[upper(row?.contractor_code, 80)];
     const unitCode = upper(row?.unit_code, 180); const qlnbCode = upper(row?.qlnb_code, 180);
     const employeeCode = upper(row?.emp_code, 80); const uom = upper(row?.uom, 100);
-    if (!legalEntity || !unitCode || !qlnbCode || !employeeCode || !uom) continue;
+    const productName = clean(row?.product_name || row?.c16, 300);
+    if (!legalEntity || !unitCode || !qlnbCode || !employeeCode || !uom || !productName) continue;
     const key = `${legalEntity}|${unitCode}|${qlnbCode}`; const group = grouped.get(key) || new Map();
-    const candidateKey = `${employeeCode}|${uom}`;
-    if (!group.has(candidateKey)) group.set(candidateKey, { employeeCode, uom,
+    const candidateKey = `${employeeCode}|${uom}|${productName}`;
+    if (!group.has(candidateKey)) group.set(candidateKey, { employeeCode, uom, productName,
       sourceLineId: clean(row.id, 240) || digest(`${key}|${candidateKey}`) });
     grouped.set(key, group);
   }
   if (!grouped.size) fail('DEBTS_CATALOG_MAPPING_EMPTY');
   const rows = [...grouped].sort(([a], [b]) => a.localeCompare(b, 'en')).map(([key, group]) => {
     const [legalEntity, unitCode, qlnbCode] = key.split('|');
-    const candidates = [...group.values()].sort((a, b) => `${a.employeeCode}|${a.uom}`.localeCompare(`${b.employeeCode}|${b.uom}`, 'en'));
+    const candidates = [...group.values()].sort((a, b) => `${a.employeeCode}|${a.uom}|${a.productName}`.localeCompare(`${b.employeeCode}|${b.uom}|${b.productName}`, 'en'));
     return { legalEntity, unitCode, qlnbCode, candidates,
       employeeConflict: new Set(candidates.map((item) => item.employeeCode)).size > 1,
-      uomConflict: new Set(candidates.map((item) => item.uom)).size > 1 };
+      uomConflict: new Set(candidates.map((item) => item.uom)).size > 1,
+      productNameConflict: new Set(candidates.map((item) => item.productName)).size > 1 };
   });
   const partitionRows = rows.map((row) => ({ legal_entity: row.legalEntity,
     source_legal_entity_code: row.legalEntity === 'DONA' ? '01.DONA' : '02.AFP', unit_code: row.unitCode, qlnb_code: row.qlnbCode }));
@@ -49,7 +51,7 @@ function build(snapshot, period) {
   return { version: `catalog-direct-${sourceVersion}/${snapshotVersion}`,
     sourceManifestId: `app-report-catalog:${expectedPeriod}:${sourceVersion}`, sourceManifestChecksum: sourceChecksum,
     profile: PROFILE, declaredCounts, checksum: shadow.mappingArtifactChecksum(rows, declaredCounts, PROFILE),
-    contract: { unitCodeColumn: 'c7', qlnbColumn: 'c5', employeeColumn: 'c6', uomColumn: 'c25', uomMode: 'validation' }, rows,
+    contract: { unitCodeColumn: 'c7', qlnbColumn: 'c5', employeeColumn: 'c6', productNameColumn: 'c16', uomColumn: 'c25', uomMode: 'validation' }, rows,
     legalEntityAttestation: { contract: shadow.LEGAL_ENTITY_CONTRACT_KIND, checksum: digest(shadow.canonicalJson(partitionRows)), rows: partitionRows } };
 }
 

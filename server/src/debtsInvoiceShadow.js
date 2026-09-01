@@ -343,6 +343,7 @@ function mappingIndex(mappingSnapshot) {
     if (!upper(legalEntity, 80) || !Number.isSafeInteger(count) || count < 0) fail('DEBTS_MAPPING_DECLARED_COUNT_INVALID');
   }
   if (!contract || contract.unitCodeColumn !== 'c7' || contract.qlnbColumn !== 'c5' || contract.employeeColumn !== 'c6'
+    || (contract.productNameColumn != null && contract.productNameColumn !== 'c16')
     || !/^c(?:[1-9]|[1-4]\d|5[0-2])$/.test(String(contract.uomColumn || ''))
     || /^c(?:3[2-9]|4[0-7])$/.test(contract.uomColumn) || contract.uomMode !== 'validation') fail('DEBTS_MAPPING_CONTRACT_INVALID');
   if (mappingArtifactChecksum(mappingSnapshot.rows, declaredCounts, profile) !== checksum) fail('DEBTS_MAPPING_CHECKSUM_MISMATCH');
@@ -354,12 +355,16 @@ function mappingIndex(mappingSnapshot) {
     if (!unit || !qlnb || !Array.isArray(row.candidates) || !row.candidates.length) fail('DEBTS_MAPPING_ROW_INVALID');
     const values = row.candidates.map((candidate) => {
       const emp = upper(candidate.employeeCode, 80); const uom = upper(candidate.uom, 100);
-      if (!emp || !uom || !text(candidate.sourceLineId, 240)) fail('DEBTS_MAPPING_ROW_INVALID');
-      return Object.freeze({ emp_code: emp, uom });
+      const productName = text(candidate.productName, 300) || null;
+      if (!emp || !uom || (contract.productNameColumn === 'c16' && !productName)
+        || !text(candidate.sourceLineId, 240)) fail('DEBTS_MAPPING_ROW_INVALID');
+      return Object.freeze({ emp_code: emp, uom, product_name: productName });
     });
     const employeeConflict = new Set(values.map((item) => item.emp_code)).size > 1;
     const uomConflict = new Set(values.map((item) => item.uom)).size > 1;
-    if (row.employeeConflict !== employeeConflict || row.uomConflict !== uomConflict) fail('DEBTS_MAPPING_CONFLICT_MARKER_INVALID');
+    const productNameConflict = new Set(values.map((item) => item.product_name)).size > 1;
+    if (row.employeeConflict !== employeeConflict || row.uomConflict !== uomConflict
+      || (contract.productNameColumn === 'c16' && row.productNameConflict !== productNameConflict)) fail('DEBTS_MAPPING_CONFLICT_MARKER_INVALID');
     const legalEntity = row.legalEntity == null ? null : normalizeLegalEntity(row.legalEntity);
     const key = `${legalEntity || '*'}|${unit}|${qlnb}`;
     if (byKey.has(key)) fail('DEBTS_MAPPING_DUPLICATE_KEY');
@@ -390,6 +395,7 @@ function mappingIndex(mappingSnapshot) {
   return {
     version, checksum, sourceManifestId, sourceManifestChecksum, profile, declaredCounts: stableValue(declaredCounts), contract: stableValue(contract), byKey,
     legalEntityContract: attestation.contract, legalEntityChecksum: attestationChecksum, legalEntityPartitions,
+    requiresProductName: contract.productNameColumn === 'c16',
   };
 }
 
@@ -428,10 +434,14 @@ function normalizeRow(row, index, mappings) {
   const key = `${legalEntity}|${unitCode}|${qlnbCode}`;
   const candidates = mappings.byKey.get(key) || mappings.byKey.get(`*|${unitCode}|${qlnbCode}`) || [];
   const uniqueEmployees = [...new Set(candidates.map((item) => item.emp_code))];
+  const uniqueProductNames = [...new Set(candidates.map((item) => item.product_name).filter(Boolean))];
   let mappingStatus = 'mapped'; let empCode = uniqueEmployees[0] || null;
+  let productName = uniqueProductNames[0] || null;
   if (!mappings.legalEntityPartitions.has(`${legalEntity}|${unitCode}|${qlnbCode}`)) { mappingStatus = 'legal_entity_unattested'; empCode = null; }
   else if (!candidates.length) mappingStatus = 'unmapped';
   else if (uniqueEmployees.length !== 1) { mappingStatus = 'ambiguous'; empCode = null; }
+  else if (mappings.requiresProductName && uniqueProductNames.length === 0) { mappingStatus = 'product_name_missing'; productName = null; }
+  else if (mappings.requiresProductName && uniqueProductNames.length !== 1) { mappingStatus = 'product_name_conflict'; productName = null; }
   else if (!candidates.some((item) => item.uom === uom)) { mappingStatus = 'uom_mismatch'; empCode = null; }
   const quarantineReasons = [];
   if (amountInconsistent) quarantineReasons.push('amount_inconsistent');
@@ -447,6 +457,7 @@ function normalizeRow(row, index, mappings) {
     invoice_line_id: lineId,
     unit_code: unitCode,
     qlnb_code: qlnbCode,
+    product_name: productName,
     uom,
     quantity: row.quantity,
     unit_price_before_vat: row.unit_price_before_vat,

@@ -23,12 +23,14 @@ function toRevenueRow(row) {
   const empCode = clean(row?.emp_code, 80).toUpperCase();
   const unitCode = clean(row?.unit_code, 180);
   const qlnbCode = clean(row?.qlnb_code, 180);
+  const productName = clean(row?.product_name, 300);
   if (!contractorCode || !sourceLineId || !invoiceNumber || !empCode || !unitCode || !qlnbCode
+    || !productName
     || row?.quarantine !== false || row?.mapping_status !== 'mapped') fail('DEBTS_REVENUE_ROW_INVALID');
   return Object.freeze({
     source: 'DEBTS_INVOICE_SHADOW', legal_entity: legalEntity, contractor_code: contractorCode,
     date: clean(row.invoice_date, 10), source_order: invoiceNumber, source_line_id: sourceLineId,
-    emp_code: empCode, unit_code: unitCode, iit_code: qlnbCode, qlnb_code: qlnbCode,
+    emp_code: empCode, unit_code: unitCode, iit_code: qlnbCode, qlnb_code: qlnbCode, product_name: productName,
     uom: clean(row.uom, 100), quantity: clean(row.quantity, 48),
     unit_price: clean(row.unit_price_before_vat, 48), revenue_before_vat: clean(row.revenue_before_vat, 48),
     vat_amount: clean(row.vat_amount, 48), revenue: clean(row.revenue_after_vat, 48), row_type: clean(row.row_type, 60),

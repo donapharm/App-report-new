@@ -4,11 +4,12 @@ const os = require('node:os'); const path = require('node:path');
 const job = require('../src/debtsRevenueJob');
 
 function catalog() { return { period: '2026-09', meta: { sourceVersion: '31.7', version: 'v1', checksum: 'a'.repeat(64) }, rows: [
-  { id: 'dona-map', contractor_code: '01.DONA', unit_code: 'U1', qlnb_code: 'Q1', emp_code: 'DN001', uom: 'HOP' },
-  { id: 'afp-map', contractor_code: '02.AFP', unit_code: 'U2', qlnb_code: 'Q2', emp_code: 'DN002', uom: 'HOP' },
+  { id: 'dona-map', contractor_code: '01.DONA', unit_code: 'U1', qlnb_code: 'Q1', product_name: 'THUỐC DONA', emp_code: 'DN001', uom: 'HOP' },
+  { id: 'afp-map', contractor_code: '02.AFP', unit_code: 'U2', qlnb_code: 'Q2', product_name: 'THUỐC AFP', emp_code: 'DN002', uom: 'HOP' },
 ] }; }
 function result(entity) { const row = { legal_entity: entity, source_line_id: `${entity}:1`, invoice_number: '1', invoice_date: '2026-09-01',
   emp_code: entity === 'DONA' ? 'DN001' : 'DN002', unit_code: entity === 'DONA' ? 'U1' : 'U2', qlnb_code: entity === 'DONA' ? 'Q1' : 'Q2',
+  product_name: entity === 'DONA' ? 'THUỐC DONA' : 'THUỐC AFP',
   uom: 'HOP', quantity: '1', unit_price_before_vat: '10', revenue_before_vat: '10', vat_amount: '1', revenue_after_vat: '11',
   row_type: 'sale', quarantine: false, mapping_status: 'mapped' };
   return { rows: [row], mapped: [row], quarantined: [], receipt: { period: '2026-09', snapshotId: `${entity}-snap`, sourceChecksum: entity,
