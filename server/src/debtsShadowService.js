@@ -69,7 +69,7 @@ function config(env = process.env) {
   };
 }
 
-function readiness(env = process.env) {
+function readiness(env = process.env, { requireMapping = true } = {}) {
   const cfg = config(env);
   const checks = {
     enabled: cfg.enabled,
@@ -84,7 +84,7 @@ function readiness(env = process.env) {
   if (checks.mappingFile) {
     try { loadMapping(cfg.mappingFile); checks.mappingReadable = true; } catch { /* chỉ báo thiếu, không lộ path/lỗi */ }
   }
-  const requiredForPreview = ['enabled', 'endpoint', 'token', 'mappingFile', 'mappingReadable'];
+  const requiredForPreview = requireMapping ? ['enabled', 'endpoint', 'token', 'mappingFile', 'mappingReadable'] : ['enabled', 'endpoint', 'token'];
   const requiredForPublish = [...requiredForPreview, 'receiptSigningKey', 'receiptSigningKeyId', 'writeEnabled'];
   return Object.freeze({
     ok: requiredForPublish.every((key) => checks[key]),

@@ -19,6 +19,7 @@ const ords = require('./ords');
 const targetAdmin = require('./targetAdmin');
 const { provinceResolution, provinceMapVersion } = require('./province');
 const employeeRevenuePolicy = require('./employeeRevenuePolicy');
+const groupDonaRevenuePolicy = require('./groupDonaRevenuePolicy');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
@@ -558,6 +559,7 @@ function empCodesWithRows({ kys, scope } = {}) {
  * scope.empCode !== null => chỉ dòng của nhân viên đó (NV thường).
  * Nếu kỳ không có upload/mẫu và bật ORDS -> thử ORDS (đồng bộ, đã cache).
  */
+function enforceRevenueSourcePolicy(rows, ky) { return groupDonaRevenuePolicy.enforce(rows, ky).accepted; }
 function getRows({ ky, scope }) {
   let rows = allRows();
   if (ky) rows = rows.filter((r) => r.ky === ky);
@@ -565,6 +567,7 @@ function getRows({ ky, scope }) {
   if (ky && rows.length === 0 && ords.isEnabled()) {
     rows = base().sampleRows.length ? rows : ords.getRowsSyncCached(ky).map(normalizeEmpForReport);
   }
+  rows = enforceRevenueSourcePolicy(rows, ky);
   if (scope && scope.empCode) rows = rows.filter((r) => r.emp_code === scope.empCode);
   return rows;
 }
@@ -661,6 +664,7 @@ module.exports = {
   employeeType, hasTarget, isActiveSalesUser, targetRoster, targetRosterCodes, targetRosterConfig,
   isValidEmpCode, UNALLOCATED_EMP, UNALLOCATED_LABEL,
   normalizeEmpForReport,
+  enforceRevenueSourcePolicy,
   // giữ tên cũ để nơi khác không vỡ
   db: base,
 };
