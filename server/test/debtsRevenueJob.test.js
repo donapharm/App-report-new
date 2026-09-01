@@ -34,3 +34,11 @@ test('old MISA scheduler is hard blocked for T09 even when force=true', async ()
   await assert.rejects(() => old.runOnce({ force: true, ky: '09.2026' }), { code: 'MISA_REVENUE_DISABLED_FROM_2026_09' });
   assert.equal(old.isDue(new Date('2026-09-03T01:00:00Z')).reason, 'misa_disabled_from_2026_09');
 });
+test('job status is safe with the scheduler enabled', () => {
+  const previous = process.env.APP_REPORT_DEBTS_REVENUE_SCHEDULE_ENABLED;
+  process.env.APP_REPORT_DEBTS_REVENUE_SCHEDULE_ENABLED = '1';
+  try { assert.equal(job.status().weekday, '18:00'); } finally {
+    if (previous === undefined) delete process.env.APP_REPORT_DEBTS_REVENUE_SCHEDULE_ENABLED;
+    else process.env.APP_REPORT_DEBTS_REVENUE_SCHEDULE_ENABLED = previous;
+  }
+});

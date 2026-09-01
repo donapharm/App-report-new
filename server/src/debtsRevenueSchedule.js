@@ -23,5 +23,8 @@ function isDue(now = new Date(), env = process.env) {
   if (expected === null || parts.minute !== expected) return { due: false, reason: 'outside_slot', parts };
   return { due: true, slot: `${parts.date}-${String(Math.floor(expected / 60)).padStart(2, '0')}00`, parts };
 }
+function config(env = process.env) {
+  return Object.freeze({ enabled: enabled(env), timezone: TZ, weekday: '18:00', saturday: '13:00', sunday: 'off', holidays: 'off' });
+}
 
-module.exports = { TZ, WEEKDAY_MINUTE, SATURDAY_MINUTE, enabled, vnParts, isDue };
+module.exports = { TZ, WEEKDAY_MINUTE, SATURDAY_MINUTE, enabled, vnParts, isDue, config };
