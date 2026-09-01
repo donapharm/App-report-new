@@ -14,7 +14,12 @@ function keyPair() {
   return { pair, publicJwk: { kty: 'RSA', n: raw.n, e: raw.e, alg: 'RSA-OAEP-256', ext: true, key_ops: ['encrypt'] } };
 }
 function source(count = 101) {
-  const rows = Array.from({ length: count }, (_, row) => Object.fromEntries([['sourceLineId', `L${row + 1}`], ...Array.from({ length: 52 }, (_v, index) => [`c${index + 1}`, index > 46 && row % 3 ? null : `${row + 1}:${index + 1}`])]));
+  const rows = Array.from({ length: count }, (_, row) => {
+    const value = Object.fromEntries([['sourceLineId', `L${row + 1}`], ...Array.from({ length: 52 }, (_v, index) => [`c${index + 1}`, index > 46 && row % 3 ? null : `${row + 1}:${index + 1}`])]);
+    value.c6 = `DN${String((row % 21) + 1).padStart(3, '0')}`;
+    for (let position = 33; position <= 46; position += 1) value[`c${position}`] = position;
+    return value;
+  });
   const manifest = { contract: bridge.SOURCE_CONTRACT, period: '2026-08', immutable: true, packageChecksum: 'a'.repeat(64), rowCount: count, pageCount: 1,
     pages: [{ page: 1, rowCount: count, rowsChecksum: bridge.sha256(JSON.stringify(rows)), fileChecksum: 'b'.repeat(64), bytes: 1 }], columns: Array.from({ length: 52 }, (_v, index) => ({ key: `c${index + 1}` })),
     publication: { complete: true, finalPage: 1 }, publishedAt: '2026-08-22T09:32:29.906Z', sparseColumnPopulatedRowCounts: { c48: 34, c49: 34, c50: 34, c51: 34 } };
@@ -47,7 +52,7 @@ test('isolated bridge encrypts 28,006 rows roundtrip, binds source and never wri
 
 test('unregistered device cannot unwrap and package contains no private key', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'catalog52-bridge-')); const first = keyPair(); const other = keyPair();
-  createViewer({ root }).registerDevice('device-1', first.publicJwk, 'CEO'); bridge.buildEncryptedPackage({ root, source: source(1), actor: 'CEO' });
+  createViewer({ root }).registerDevice('device-1', first.publicJwk, 'CEO'); bridge.buildEncryptedPackage({ root, source: source(21), actor: 'CEO' });
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages', '2026-08', 'manifest.json'), 'utf8'));
   assert.throws(() => crypto.privateDecrypt({ key: other.pair.privateKey, oaepHash: 'sha256' }, Buffer.from(manifest.wrappedKeys[0].wrappedKey, 'base64url')));
   assert.doesNotMatch(JSON.stringify(manifest), /private/i);

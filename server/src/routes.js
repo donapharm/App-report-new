@@ -27,6 +27,7 @@ const { summarizeAssignedQuarter } = require('./targetKpi');
 const assignmentAdmin = require('./assignmentAdmin');
 const catalogManagement = require('./catalogManagement');
 const catalog52ControlPlane = require('./catalog52ControlPlane');
+const catalog52CostProjection = require('./catalog52CostProjection');
 const catalogCostColumnGrants = require('./catalogCostColumnGrants');
 const employeeCostTemplates = require('./employeeCostTemplates');
 const costRatesSync = require('./costRatesSync');
@@ -985,6 +986,7 @@ const employeeCostSealFormulaIdentity = () => `${APP_BUILD_VERSION}+${formulaIde
 const employeeCostSealSourceFingerprint = () => [
   store.employeeCostDataSignature(),
   closedSeal.rateStoreFingerprint(),
+  catalog52CostProjection.fingerprint(),
   employeeBonus.FORMULA_VERSION,
   employeeCostSealFormulaIdentity(),
 ].join('|');
@@ -1123,11 +1125,10 @@ async function fetchAuthoritativeEmployeeCost(empCode, { period, roster, buildRe
   // employee/range, then enrich from the verified evidence. A local pinned-rate
   // fast path must never be promoted as a newly synchronized source result.
   const fetchedAt = new Date().toISOString();
-  // This adapter is the evidence boundary for BOTH watcher probes and the real
-  // snapshot sync. It must bypass every local-first/pinned/restore path: a local
-  // number is useful for display, but can never prove that DataHub is fresh.
-  // fetchRawEmployeeCost is network-only and does not remember/restore rates.
-  const raw = await employeeCost.fetchRawEmployeeCost(empCode, {
+  // Full52 is materialized and checksummed inside App Report custody. Watcher,
+  // snapshot sync and display must share that local boundary; no runtime call
+  // to DataHub is allowed merely to render or rebuild employee cost.
+  const raw = await employeeCost.fetchEmployeeCost(empCode, {
     from: period, to: period,
   });
   const evidence = employeeCost.verifiedPrefetchEvidence(raw, empCode, {

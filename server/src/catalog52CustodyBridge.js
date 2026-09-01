@@ -7,6 +7,7 @@ const https = require('node:https');
 const path = require('node:path');
 const zlib = require('node:zlib');
 const { canonicalJwk, keyId, PAGE_SIZE, ViewerError } = require('./catalog52EncryptedViewer');
+const costProjection = require('./catalog52CostProjection');
 
 const SOURCE_CONTRACT = 'data-hub.app-report.full52-snapshot.v1';
 const PACKAGE_KIND = 'catalog52-encrypted-pages';
@@ -171,6 +172,8 @@ function buildEncryptedPackage({ root, source, actor, now = new Date().toISOStri
     };
     identity.packageChecksum = sha256(canonical(identity));
     writeExclusive(path.join(staging, 'manifest.json'), `${JSON.stringify(identity)}\n`);
+    const localCost = costProjection.build({ manifest, rows, actor: actorName, builtAt: gmt7(now) });
+    writeExclusive(path.join(staging, 'cost-projection.json'), `${JSON.stringify(localCost)}\n`);
     fsyncDir(staging); fs.renameSync(staging, target); published = true; fsyncDir(packagesRoot);
     return identity;
   } catch (error) {
@@ -180,4 +183,13 @@ function buildEncryptedPackage({ root, source, actor, now = new Date().toISOStri
   } finally { cek.fill(0); }
 }
 
-module.exports = { SOURCE_CONTRACT, canonical, sha256, assertSourceManifest, assertSourcePage, readRegisteredKeys, fetchSigned, fetchRawSigned, pullSource, buildEncryptedPackage };
+function buildCostProjection({ root, source, actor, now = new Date().toISOString() }) {
+  const manifest = assertSourceManifest(source.manifest, assertPeriod(source.manifest?.period));
+  const current = path.join(root, 'packages', manifest.period, 'manifest.json');
+  const encrypted = JSON.parse(fs.readFileSync(current, 'utf8'));
+  if (encrypted.sourcePackageChecksum !== manifest.packageChecksum) fail('CATALOG52_COST_SOURCE_PACKAGE_MISMATCH', 409);
+  const projection = costProjection.build({ manifest, rows: source.rows, actor, builtAt: gmt7(now) });
+  return costProjection.write(projection, { env: { CATALOG52_STORE_ROOT: root } });
+}
+
+module.exports = { SOURCE_CONTRACT, canonical, sha256, assertSourceManifest, assertSourcePage, readRegisteredKeys, fetchSigned, fetchRawSigned, pullSource, buildEncryptedPackage, buildCostProjection };

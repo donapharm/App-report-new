@@ -61,15 +61,13 @@ test('closed T07 without current has a distinct CEO OTP initial-generation path'
   assert.doesNotMatch(control, /status\.locked[^\n]{0,160}(đã đóng dấu|có con dấu)/i);
 });
 
-test('sync probes exact authoritative evidence once before enrichment', () => {
+test('sync uses the App Report-owned local Full52 boundary before enrichment', () => {
   const source = routesSource();
   const adapterStart = source.indexOf('async function fetchAuthoritativeEmployeeCost');
   const adapterEnd = source.indexOf('\n}\n\nconst employeeCostSnapshotSync', adapterStart);
   const adapter = source.slice(adapterStart, adapterEnd);
-  assert.match(adapter, /employeeCost\.fetchRawEmployeeCost\(empCode/);
-  assert.doesNotMatch(adapter, /employeeCost\.fetchEmployeeCost\(empCode/);
-  const rawCall = adapter.slice(adapter.indexOf('employeeCost.fetchRawEmployeeCost'), adapter.indexOf(');', adapter.indexOf('employeeCost.fetchRawEmployeeCost')) + 2);
-  assert.doesNotMatch(rawCall, /pinnedClosedPayload|rateSnapshot|backgroundRefresh|ok_stale_rates/);
+  assert.match(adapter, /employeeCost\.fetchEmployeeCost\(empCode/);
+  assert.doesNotMatch(adapter, /employeeCost\.fetchRawEmployeeCost\(empCode/);
   assert.match(source, /employeeCost\.verifiedPrefetchEvidence\(raw, empCode/);
   assert.match(source, /prefetchedCostResult: evidence/);
   assert.match(adapter, /const sourceOutcome = raw\?\.outcome \|\| 'ok'/);

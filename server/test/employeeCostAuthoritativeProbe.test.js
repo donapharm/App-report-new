@@ -22,33 +22,35 @@ function freshResult(empCode = 'DN001') {
   };
 }
 
-test('watcher probe uses raw network result and preserves declared generation', async (t) => {
+test('watcher probe uses App Report local result and never calls raw network', async (t) => {
   const originalRaw = employeeCost.fetchRawEmployeeCost;
   const originalDisplay = employeeCost.fetchEmployeeCost;
   t.after(() => { employeeCost.fetchRawEmployeeCost = originalRaw; employeeCost.fetchEmployeeCost = originalDisplay; });
-  let rawCalls = 0;
-  employeeCost.fetchRawEmployeeCost = async () => { rawCalls += 1; return freshResult(); };
-  employeeCost.fetchEmployeeCost = async () => { throw new Error('display/local-first adapter must not be called'); };
+  let rawCalls = 0; let localCalls = 0;
+  employeeCost.fetchRawEmployeeCost = async () => { rawCalls += 1; throw new Error('raw network must not be called'); };
+  employeeCost.fetchEmployeeCost = async () => { localCalls += 1; return freshResult(); };
 
   const result = await runtime.probeEmployee('DN001', { period: '2026-08', roster: [{ emp_code: 'DN001' }] });
-  assert.equal(rawCalls, 1);
+  assert.equal(rawCalls, 0);
+  assert.equal(localCalls, 1);
   assert.equal(result.ok, true);
   assert.deepEqual(result.sourceRange, { from: '2026-08', to: '2026-08' });
   assert.equal(result.sourceGeneration, 'V31.4');
 });
 
-test('network rejection stays failed even when display adapter could return local data', async (t) => {
+test('local projection rejection stays failed even when raw network could return data', async (t) => {
   const originalRaw = employeeCost.fetchRawEmployeeCost;
   const originalDisplay = employeeCost.fetchEmployeeCost;
   t.after(() => { employeeCost.fetchRawEmployeeCost = originalRaw; employeeCost.fetchEmployeeCost = originalDisplay; });
-  employeeCost.fetchRawEmployeeCost = async () => ({
-    outcome: 'upstream_rejected', attempts: 1, payload: { empCode: 'DN001', from: '2026-08', to: '2026-08', periods: [] },
+  let rawCalls = 0;
+  employeeCost.fetchRawEmployeeCost = async () => { rawCalls += 1; return freshResult(); };
+  employeeCost.fetchEmployeeCost = async () => ({
+    outcome: 'local_only_missing', attempts: 0, payload: { empCode: 'DN001', from: '2026-08', to: '2026-08', periods: [] },
   });
-  employeeCost.fetchEmployeeCost = async () => ({ ...freshResult(), pinned: true, payload: { ...freshResult().payload, rateSource: 'local_sync' } });
 
   const result = await runtime.probeEmployee('DN001', { period: '2026-08', roster: [{ emp_code: 'DN001' }] });
   assert.equal(result.ok, false);
-  assert.equal(result.sourceOutcome, 'upstream_rejected');
+  assert.equal(result.sourceOutcome, 'local_only_missing');
   assert.equal(result.sourceGeneration, '');
+  assert.equal(rawCalls, 0);
 });
-

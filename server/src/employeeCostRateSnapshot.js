@@ -19,6 +19,7 @@
  */
 
 const persist = require('./persist');
+const catalog52CostProjection = require('./catalog52CostProjection');
 
 const FILE = 'employee_cost_rate_snapshot';
 // Kho do CEO chủ động đồng bộ theo kỳ. Không require `costRatesSync` tại đây vì
@@ -48,6 +49,8 @@ function readAll(store, { shared = false } = {}) {
  * dùng chung là **hỏng kho trong bộ nhớ của cả tiến trình**. `slice()` chỉ chép danh
  * sách tham chiếu — vài chục micro giây, so với 17,9 MB phân tích lại thì không đáng kể. */
 function readLocalSync(empCode, period, { store = persist } = {}) {
+  const owned = store === persist ? catalog52CostProjection.readEmployee(period, empCode) : null;
+  if (owned) return owned;
   const read = typeof store.loadShared === 'function' ? store.loadShared : store.load;
   const rows = read.call(store, LOCAL_SYNC_FILE, {});
   const entry = rows && typeof rows === 'object' && !Array.isArray(rows) ? rows[String(period || '').trim()] : null;

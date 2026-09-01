@@ -1518,6 +1518,8 @@ async function applyEffectiveRates(payload, empCode, options = {}, fetchLatest =
    `APP_REPORT_COST_LOCAL_FIRST=0` (chỉ dùng khi cần đối chiếu với nguồn).
    ═══════════════════════════════════════════════════════════════════════════════ */
 const COST_LOCAL_FIRST = String(process.env.APP_REPORT_COST_LOCAL_FIRST ?? '1') !== '0';
+// App Report owns the serving projection. Network fallback is opt-in diagnostic
+// only; a missing local Full52 projection must fail closed on normal requests.
 const COST_LOCAL_ONLY = () => String(process.env.APP_REPORT_COST_LOCAL_ONLY || '') === '1';
 const LOCAL_ONLY_MISSING_NOTE = 'Kỳ này chưa đồng bộ % chi phí — bấm Đồng bộ % chi phí';
 const CLOSED_UNFINALIZED_NOTE = 'Kỳ đã khoá nhưng chưa có bản chốt bất biến — chưa chốt';
