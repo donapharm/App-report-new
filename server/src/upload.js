@@ -13,6 +13,7 @@ const path = require('path');
 const { randomUUID } = require('crypto');
 const ExcelJS = require('exceljs');
 const { writeJsonAtomic, acquireFileLock } = require('./materializeFileSafety');
+const singleWriter = require('./revenueSingleWriterGuard');
 
 const DATA = path.join(__dirname, '..', 'data');
 const UP_DIR = path.join(DATA, 'uploads');
@@ -152,6 +153,7 @@ function commitSlot(input) {
   try { return commitSlotLocked(input); } finally { releaseLock(); }
 }
 function commitSlotLocked({ previewId, ky, dateFrom, dateTo, mode = 'new', user }) {
+  singleWriter.assertGenericCommitAllowed({ ky });
   const pv = previewCache.get(previewId);
   if (!pv) throw new Error('Preview đã hết hạn, vui lòng chọn lại file.');
   const existing = activeSlotForKy(ky);
@@ -211,6 +213,7 @@ function activateSlotLocked({ id, user }) {
   const slots = readJson(SLOTS, []);
   const target = slots.find((s) => s.id === id);
   if (!target) throw new Error('Không tìm thấy slot.');
+  singleWriter.assertActivationAllowed({ slot: target });
   const updated = slots.map((s) => (s.ky === target.ky ? { ...s, active: s.id === id } : s));
   writeJson(SLOTS, updated);
   appendAudit({ at: new Date().toISOString(), by: user.emp_code, action: 'rollback', ky: target.ky, slotId: id });

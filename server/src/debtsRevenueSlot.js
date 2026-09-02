@@ -2,12 +2,13 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 const { writeJsonAtomic, acquireFileLock } = require('./materializeFileSafety');
 const policy = require('./groupDonaRevenuePolicy');
 const cutover = require('./debtsRevenueCutover');
 
 function fail(code) { const error = new Error(code); error.code = code; throw error; }
+function checksum(rows) { return createHash('sha256').update(cutover.canonical(rows)).digest('hex'); }
 function readJson(file, fallback) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } }
 function uiPeriod(period) { const p = policy.normalizePeriod(period); return p ? `${p.slice(5)}.${p.slice(0, 4)}` : ''; }
 function paths(dataDir) { const root = path.resolve(String(dataDir || '')); return { root, uploads: path.join(root, 'uploads'),
@@ -16,14 +17,20 @@ function paths(dataDir) { const root = path.resolve(String(dataDir || '')); retu
 function compose({ period, currentRows = [], debts } = {}) {
   const normalized = policy.normalizePeriod(period);
   if (!policy.isCutoverPeriod(normalized) || !debts || debts.period !== normalized) fail('DEBTS_SLOT_PERIOD_INVALID');
-  const retained = policy.enforce(currentRows, normalized).accepted.filter((row) => !policy.isGroupDona(row));
+  if (!Array.isArray(currentRows) || currentRows.some((row) => String(row?.source || '').toUpperCase() !== 'APP_WEB_PARTNER'
+    || policy.isGroupDona(row) || !String(row?.source_line_id || '').trim())) fail('DEBTS_SLOT_PARTNER_PARTITION_INVALID');
+  if (!Array.isArray(debts.rows) || debts.rows.some((row) => String(row?.source || '').toUpperCase() !== 'DEBTS_INVOICE_SHADOW'
+    || !policy.isGroupDona(row) || !String(row?.source_line_id || '').trim())) fail('DEBTS_SLOT_GROUP_DONA_PARTITION_INVALID');
+  const retained = currentRows.slice();
   const rows = [...retained, ...debts.rows];
   const forbidden = rows.filter((row) => policy.isGroupDona(row) && String(row.source || '').toUpperCase() !== 'DEBTS_INVOICE_SHADOW');
   if (forbidden.length) fail('DEBTS_SLOT_CRM_LEAK');
-  const ids = rows.map((row, index) => String(row.source_line_id || `partner:${index}`));
+  const ids = rows.map((row) => String(row.source_line_id));
   if (new Set(ids).size !== ids.length) fail('DEBTS_SLOT_DUPLICATE_LINE_ID');
+  const partnerRowsChecksum = checksum(retained); const compositeRowsChecksum = checksum(rows);
   return Object.freeze({ period: normalized, ky: uiPeriod(normalized), rows: Object.freeze(rows),
-    debtsRowsChecksum: debts.rowsChecksum, debtsSourceReceipts: debts.sourceReceipts, retainedPartnerRows: retained.length });
+    debtsRowsChecksum: debts.rowsChecksum, debtsSourceReceipts: debts.sourceReceipts, retainedPartnerRows: retained.length,
+    partnerRowsChecksum, compositeRowsChecksum, partitionOverlapCount: 0 });
 }
 
 function publish(composed, { dataDir, now = () => new Date(), idFactory = () => randomUUID() } = {}) {
@@ -35,6 +42,8 @@ function publish(composed, { dataDir, now = () => new Date(), idFactory = () => 
     if (!Array.isArray(registry)) fail('DEBTS_SLOT_REGISTRY_INVALID');
     const active = registry.find((slot) => slot.ky === composed.ky && slot.active) || null;
     if (active?.source === 'DEBTS_ONLY_GROUP_DONA' && active.debtsRowsChecksum === composed.debtsRowsChecksum
+      && active.partnerRowsChecksum === composed.partnerRowsChecksum
+      && active.compositeRowsChecksum === composed.compositeRowsChecksum
       && active.retainedPartnerRows === composed.retainedPartnerRows) return Object.freeze({ skipped: 'unchanged', slot: active });
     const at = now(); const id = `slot_${composed.ky.replace('.', '')}_debts_${String(idFactory()).replace(/[^A-Za-z0-9-]/g, '')}`;
     if (!/^slot_\d{6}_debts_[A-Za-z0-9-]+$/.test(id) || registry.some((slot) => slot.id === id)) fail('DEBTS_SLOT_ID_INVALID');
@@ -46,12 +55,15 @@ function publish(composed, { dataDir, now = () => new Date(), idFactory = () => 
       filename: `${id}.json`, uploadedBy: 'SYSTEM_DEBTS', uploadedByName: 'App Công nợ → App Report', uploadedAt: at.toISOString(),
       active: true, mode: active ? 'update' : 'new', replacedSlotId: active?.id || null, source: 'DEBTS_ONLY_GROUP_DONA',
       debtsRowsChecksum: composed.debtsRowsChecksum, debtsSourceReceipts: composed.debtsSourceReceipts,
-      retainedPartnerRows: composed.retainedPartnerRows, selectorPolicy: 'GROUP_DONA_DEBTS_FROM_2026_09' };
+      retainedPartnerRows: composed.retainedPartnerRows, partnerRowsChecksum: composed.partnerRowsChecksum,
+      compositeRowsChecksum: composed.compositeRowsChecksum, partitionOverlapCount: composed.partitionOverlapCount,
+      selectorPolicy: 'GROUP_DONA_DEBTS_FROM_2026_09' };
     writeJsonAtomic(loc.slots, [...registry.map((item) => item.ky === composed.ky ? { ...item, active: false } : item), slot]);
     const audit = readJson(loc.audit, []); if (!Array.isArray(audit)) fail('DEBTS_SLOT_AUDIT_INVALID');
     writeJsonAtomic(loc.audit, [...audit, { at: slot.uploadedAt, by: slot.uploadedBy, action: 'debts_group_dona_cutover', ky: slot.ky,
       slotId: slot.id, replacedSlotId: slot.replacedSlotId, rows: slot.totalRows, revenue: slot.totalRevenue,
-      debtsRowsChecksum: slot.debtsRowsChecksum }]);
+      debtsRowsChecksum: slot.debtsRowsChecksum, partnerRowsChecksum: slot.partnerRowsChecksum,
+      compositeRowsChecksum: slot.compositeRowsChecksum, partitionOverlapCount: slot.partitionOverlapCount }]);
     return Object.freeze({ skipped: null, slot });
   } finally { release(); }
 }

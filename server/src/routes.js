@@ -7343,7 +7343,7 @@ router.post('/upload/commit', auth.requireAuth, auth.requireAdmin, (req, res) =>
     scheduleEmployeeCostAllWarm(slot.ky, 'upload_commit');
     res.json({ ok: true, slot });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    res.status(Number.isInteger(e?.status) ? e.status : 400).json({ error: e.message, code: e.code || undefined });
   }
 });
 
@@ -7359,7 +7359,7 @@ router.post('/upload/activate', auth.requireAuth, auth.requireAdmin, (req, res) 
     scheduleEmployeeCostAllWarm(slot.ky, 'upload_activate');
     res.json({ ok: true, slot });
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    res.status(Number.isInteger(e?.status) ? e.status : 400).json({ error: e.message, code: e.code || undefined });
   }
 });
 

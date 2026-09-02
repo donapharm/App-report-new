@@ -6,11 +6,19 @@ const debts = { period: '2026-09', rowsChecksum: 'a'.repeat(64), sourceReceipts:
   { source: 'DEBTS_INVOICE_SHADOW', source_line_id: 'DEBTS:AFP:2', contractor_code: '02.AFP', emp_code: 'AF001', revenue: '210' },
 ] };
 test('compose removes Group-Dona CRM, retains partners and adds Debts rows without mixing', () => {
-  const currentRows = [{ source: 'CRM_MISA', source_line_id: 'MISA:1', contractor_code: '01.DONA', revenue: 99 },
-    { source: 'APP_WEB_PARTNER', source_line_id: 'WEB:1', contractor_code: '03.TUE.N', revenue: 50 }];
+  const currentRows = [{ source: 'APP_WEB_PARTNER', source_line_id: 'WEB:1', contractor_code: '03.TUE.N', revenue: 50 }];
   const result = slot.compose({ period: '09.2026', currentRows, debts });
   assert.deepEqual(result.rows.map((r) => r.source), ['APP_WEB_PARTNER', 'DEBTS_INVOICE_SHADOW', 'DEBTS_INVOICE_SHADOW']);
-  assert.equal(result.retainedPartnerRows, 1);
+  assert.equal(result.retainedPartnerRows, 1); assert.match(result.partnerRowsChecksum, /^[a-f0-9]{64}$/);
+  assert.match(result.compositeRowsChecksum, /^[a-f0-9]{64}$/); assert.equal(result.partitionOverlapCount, 0);
+});
+test('compose fails closed on CRM leakage, Group-Dona partner leakage and cross-partition duplicate identity', () => {
+  assert.throws(() => slot.compose({ period: '09.2026', currentRows: [{ source: 'CRM_MISA', source_line_id: 'MISA:1', contractor_code: '03.X' }], debts }),
+    { code: 'DEBTS_SLOT_PARTNER_PARTITION_INVALID' });
+  assert.throws(() => slot.compose({ period: '09.2026', currentRows: [{ source: 'APP_WEB_PARTNER', source_line_id: 'WEB:1', contractor_code: '01.DONA' }], debts }),
+    { code: 'DEBTS_SLOT_PARTNER_PARTITION_INVALID' });
+  assert.throws(() => slot.compose({ period: '09.2026', currentRows: [{ source: 'APP_WEB_PARTNER', source_line_id: 'DEBTS:DONA:1', contractor_code: '03.X' }], debts }),
+    { code: 'DEBTS_SLOT_DUPLICATE_LINE_ID' });
 });
 test('atomic publish switches one period, is idempotent and preserves rollback slot', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'debts-slot-')); const loc = slot.paths(root);
@@ -24,5 +32,8 @@ test('atomic publish switches one period, is idempotent and preserves rollback s
     const registry = JSON.parse(fs.readFileSync(loc.slots)); assert.equal(registry.find((x) => x.id === 'old').active, false);
     assert.equal(registry.filter((x) => x.active).length, 1); assert.equal(fs.existsSync(path.join(loc.uploads, `${first.slot.id}.json`)), true);
     const second = slot.publish(composed, { dataDir: root }); assert.equal(second.skipped, 'unchanged');
+    const changedPartner = slot.compose({ period: '2026-09', currentRows: [{ source: 'APP_WEB_PARTNER', source_line_id: 'WEB:1', contractor_code: '03.X', revenue: 1 }], debts });
+    const third = slot.publish(changedPartner, { dataDir: root, idFactory: () => 'changed-id' });
+    assert.equal(third.skipped, null); assert.notEqual(third.slot.partnerRowsChecksum, first.slot.partnerRowsChecksum);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
