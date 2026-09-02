@@ -1,11 +1,20 @@
 # Deploy — App Report (`app-report`)
 
-## Ràng buộc dựng release bất biến
+## Hai đường lên PROD
 
-- Mọi release phải chạy `scripts/prepare_release_runtime.sh`; cấm tự tạo `server/data` bằng `ln -s` trần.
-- `server/data/` được `export-ignore` vì 5 file theo dõi trong Git đã được xác nhận có đủ trong kho runtime chuẩn. Do đó `git archive` không được tạo thư mục `server/data` thật.
+### 1. Release bất biến có Gate 2
+
+- Đường này bắt buộc chạy `scripts/prepare_release_runtime.sh`; cấm tự tạo `server/data` bằng `ln -s` trần.
 - Prepare script chỉ tạo liên kết khi đích chưa tồn tại và chặn thư mục thật, liên kết lồng `server/data/data`, liên kết gãy hoặc liên kết trỏ sai bằng `RELEASE_DATA_BINDING_INVALID`/`RELEASE_DATA_BINDING_BROKEN`.
-- Sau prepare, bắt buộc chạy `release_manifest.sh create` rồi `verify`; không được cutover nếu runtime binding hoặc manifest không đạt.
+- Sau prepare, bắt buộc chạy `release_manifest.sh create` rồi `verify` trước và sau cutover; không được chạy nếu runtime binding hoặc manifest không đạt.
+
+### 2. Auto-deploy từ `main`
+
+- `scripts/auto-deploy.sh` chạy theo cron khoảng mỗi 1 phút: cập nhật checkout, build frontend rồi reload PM2.
+- Đường này có flock, kiểm fast-forward/dirty tree, backup, build-fail giữ bản cũ, health và rollback; nhưng không gọi `prepare_release_runtime.sh`, không tạo/verify release manifest và không kiểm runtime data binding như đường release bất biến.
+- Vì vậy mọi commit vào `main` có thể lên PROD trong khoảng 60 giây mà không qua preflight binding. Candidate tuyệt đối không được merge `main` nếu chưa có phê duyệt deploy phù hợp.
+
+`server/data/` được `export-ignore`, nên 5 file runtime theo dõi trước đây chỉ còn đến từ checkout Git và không nằm trong `git archive`. Khi dựng lại kho runtime từ đầu, phải nạp đủ 5 file đó từ checkout trước khi bind release.
 
 ## Tự động (mặc định)
 Server chạy `scripts/auto-deploy.sh` qua **cron mỗi 1 phút**. Cứ có commit mới trên

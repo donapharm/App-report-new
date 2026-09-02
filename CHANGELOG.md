@@ -8109,3 +8109,7 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Đo thật `partitionOverlapCount` theo giao `source_line_id` giữa hai phân vùng; giao nhau bị chặn và mang số đếm thật trong lỗi.
 - Dùng `readlink -e` để nhận diện symlink runtime gãy; thêm regression mã `RELEASE_DATA_BINDING_BROKEN`.
 - Loại `server/data/` khỏi `git archive` và bắt buộc chuẩn bị runtime qua `prepare_release_runtime.sh` trong tài liệu deploy.
+### 02/09/2026 lúc 21:25 GMT+7 — Làm rõ hai đường deploy
+
+- Tài liệu hóa riêng đường release bất biến có prepare/manifest và đường auto-deploy từ `main` không có các preflight binding đó.
+- Cảnh báo candidate không được merge `main` khi chưa có phê duyệt deploy; ghi rõ cách phục hồi 5 file runtime bị loại khỏi `git archive`.
