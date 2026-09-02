@@ -45,8 +45,8 @@ validate_data_binding() {
     die "RELEASE_DATA_BINDING_INVALID: server/data không phải symlink."
   }
   local actual expected
-  actual="$(readlink -f "$link")" || die "RELEASE_DATA_BINDING_INVALID: server/data là symlink hỏng."
-  expected="$(readlink -f "$expected_data")" || die "RELEASE_DATA_BINDING_INVALID: không resolve được kho dữ liệu chuẩn."
+  actual="$(readlink -e "$link")" || die "RELEASE_DATA_BINDING_BROKEN: server/data là symlink hỏng."
+  expected="$(readlink -e "$expected_data")" || die "RELEASE_DATA_BINDING_INVALID: không resolve được kho dữ liệu chuẩn."
   [ "$actual" = "$expected" ] || die "RELEASE_DATA_BINDING_INVALID: server/data trỏ sai kho dữ liệu chuẩn."
 }
 

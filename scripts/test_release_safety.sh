@@ -180,6 +180,8 @@ run "dùng lại token đã duyệt (cùng kho) → CHẶN" fail \
 
 echo
 echo "--- P1-2: bản chuẩn bị không được đổi giữa chừng ---"
+run "git archive không chứa server/data" pass \
+  bash -c '! git -C "$1" archive --worktree-attributes HEAD | tar -tf - | grep -q "^server/data/"' _ "$HERE/.."
 REL="$WORK/release-app-report-aaaaaaa-test"
 mkdir -p "$REL/server/src" "$REL/server/scripts" "$REL/web/dist" "$REL/scripts"
 echo "console.log(1)" > "$REL/server/src/index.js"
@@ -204,6 +206,13 @@ rmdir "$REL/server/data"
 ln -s "$DATA" "$REL/server/data"
 run "server/data symlink đúng → build THÀNH CÔNG" pass \
   env RELEASE_ROOT="$REL" DATA="$DATA" bash "$HERE/release_manifest.sh" create
+
+unlink "$REL/server/data"
+ln -s "$WORK/khong-ton-tai-data" "$REL/server/data"
+run_fail_code "server/data symlink gãy → CHẶN đúng mã" RELEASE_DATA_BINDING_BROKEN \
+  env RELEASE_ROOT="$REL" DATA="$DATA" bash "$HERE/release_manifest.sh" create
+unlink "$REL/server/data"
+ln -s "$DATA" "$REL/server/data"
 
 for f in "server/src/index.js" "web/dist/index.html" "ecosystem.config.js" "server/package.json"; do
   cp "$REL/$f" "$WORK/orig.bak"

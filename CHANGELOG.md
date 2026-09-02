@@ -8104,3 +8104,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 # 01/09/2026 — Stabilize penalty HTTP fixture
 
 - The penalty-policy HTTP integration test now derives its editable month in the business timezone instead of pinning August 2026. Historical-period protection remains unchanged; the fixture no longer fails merely because the calendar advanced.
+### 02/09/2026 lúc 20:15 GMT+7 — Candidate cleanup provenance/release binding
+
+- Đo thật `partitionOverlapCount` theo giao `source_line_id` giữa hai phân vùng; giao nhau bị chặn và mang số đếm thật trong lỗi.
+- Dùng `readlink -e` để nhận diện symlink runtime gãy; thêm regression mã `RELEASE_DATA_BINDING_BROKEN`.
+- Loại `server/data/` khỏi `git archive` và bắt buộc chuẩn bị runtime qua `prepare_release_runtime.sh` trong tài liệu deploy.

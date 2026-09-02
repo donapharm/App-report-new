@@ -7,7 +7,7 @@ const { writeJsonAtomic, acquireFileLock } = require('./materializeFileSafety');
 const policy = require('./groupDonaRevenuePolicy');
 const cutover = require('./debtsRevenueCutover');
 
-function fail(code) { const error = new Error(code); error.code = code; throw error; }
+function fail(code, details = {}) { const error = new Error(code); error.code = code; error.details = details; throw error; }
 function checksum(rows) { return createHash('sha256').update(cutover.canonical(rows)).digest('hex'); }
 function readJson(file, fallback) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } }
 function uiPeriod(period) { const p = policy.normalizePeriod(period); return p ? `${p.slice(5)}.${p.slice(0, 4)}` : ''; }
@@ -25,12 +25,16 @@ function compose({ period, currentRows = [], debts } = {}) {
   const rows = [...retained, ...debts.rows];
   const forbidden = rows.filter((row) => policy.isGroupDona(row) && String(row.source || '').toUpperCase() !== 'DEBTS_INVOICE_SHADOW');
   if (forbidden.length) fail('DEBTS_SLOT_CRM_LEAK');
+  const partnerIds = new Set(retained.map((row) => String(row.source_line_id)));
+  const debtIds = new Set(debts.rows.map((row) => String(row.source_line_id)));
+  const partitionOverlapCount = [...partnerIds].filter((id) => debtIds.has(id)).length;
+  if (partitionOverlapCount) fail('DEBTS_SLOT_DUPLICATE_LINE_ID', { partitionOverlapCount });
   const ids = rows.map((row) => String(row.source_line_id));
-  if (new Set(ids).size !== ids.length) fail('DEBTS_SLOT_DUPLICATE_LINE_ID');
+  if (new Set(ids).size !== ids.length) fail('DEBTS_SLOT_DUPLICATE_LINE_ID', { partitionOverlapCount });
   const partnerRowsChecksum = checksum(retained); const compositeRowsChecksum = checksum(rows);
   return Object.freeze({ period: normalized, ky: uiPeriod(normalized), rows: Object.freeze(rows),
     debtsRowsChecksum: debts.rowsChecksum, debtsSourceReceipts: debts.sourceReceipts, retainedPartnerRows: retained.length,
-    partnerRowsChecksum, compositeRowsChecksum, partitionOverlapCount: 0 });
+    partnerRowsChecksum, compositeRowsChecksum, partitionOverlapCount });
 }
 
 function publish(composed, { dataDir, now = () => new Date(), idFactory = () => randomUUID() } = {}) {

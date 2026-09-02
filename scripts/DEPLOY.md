@@ -1,5 +1,12 @@
 # Deploy — App Report (`app-report`)
 
+## Ràng buộc dựng release bất biến
+
+- Mọi release phải chạy `scripts/prepare_release_runtime.sh`; cấm tự tạo `server/data` bằng `ln -s` trần.
+- `server/data/` được `export-ignore` vì 5 file theo dõi trong Git đã được xác nhận có đủ trong kho runtime chuẩn. Do đó `git archive` không được tạo thư mục `server/data` thật.
+- Prepare script chỉ tạo liên kết khi đích chưa tồn tại và chặn thư mục thật, liên kết lồng `server/data/data`, liên kết gãy hoặc liên kết trỏ sai bằng `RELEASE_DATA_BINDING_INVALID`/`RELEASE_DATA_BINDING_BROKEN`.
+- Sau prepare, bắt buộc chạy `release_manifest.sh create` rồi `verify`; không được cutover nếu runtime binding hoặc manifest không đạt.
+
 ## Tự động (mặc định)
 Server chạy `scripts/auto-deploy.sh` qua **cron mỗi 1 phút**. Cứ có commit mới trên
 `main` là server tự: `fetch → reset --hard → (build vào thư mục tạm) → tráo dist →

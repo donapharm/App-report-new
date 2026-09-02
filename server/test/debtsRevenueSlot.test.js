@@ -17,8 +17,11 @@ test('compose fails closed on CRM leakage, Group-Dona partner leakage and cross-
     { code: 'DEBTS_SLOT_PARTNER_PARTITION_INVALID' });
   assert.throws(() => slot.compose({ period: '09.2026', currentRows: [{ source: 'APP_WEB_PARTNER', source_line_id: 'WEB:1', contractor_code: '01.DONA' }], debts }),
     { code: 'DEBTS_SLOT_PARTNER_PARTITION_INVALID' });
-  assert.throws(() => slot.compose({ period: '09.2026', currentRows: [{ source: 'APP_WEB_PARTNER', source_line_id: 'DEBTS:DONA:1', contractor_code: '03.X' }], debts }),
-    { code: 'DEBTS_SLOT_DUPLICATE_LINE_ID' });
+  let overlap;
+  try { slot.compose({ period: '09.2026', currentRows: [{ source: 'APP_WEB_PARTNER', source_line_id: 'DEBTS:DONA:1', contractor_code: '03.X' }], debts }); }
+  catch (error) { overlap = error; }
+  assert.equal(overlap?.code, 'DEBTS_SLOT_DUPLICATE_LINE_ID');
+  assert.equal(overlap.details.partitionOverlapCount, 1, 'đếm giao nhau thật, không ghi hằng số 0');
 });
 test('atomic publish switches one period, is idempotent and preserves rollback slot', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'debts-slot-')); const loc = slot.paths(root);
