@@ -1,5 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+// These tests own their stores. Never let a developer or production T08
+// projection/rate snapshot short-circuit the mocked upstream contract below.
+process.env.CATALOG52_STORE_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'employee-cost-catalog52-'));
+process.env.AUTH_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'employee-cost-auth-'));
+
 const employeeCost = require('../src/employeeCost');
 const employeeCostTemplates = require('../src/employeeCostTemplates');
 const pointLocal = require('../src/employeePointLocal');

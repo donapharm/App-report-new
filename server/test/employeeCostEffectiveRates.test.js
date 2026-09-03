@@ -3,6 +3,15 @@
 // gần nhất chỉ được kế thừa sang tháng sau, không hồi tố và không đoán provenance.
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+// Keep both App Report-owned projection and persistent rate snapshot isolated;
+// every assertion in this file must exercise its explicit mock inputs.
+process.env.CATALOG52_STORE_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'effective-rates-catalog52-'));
+process.env.AUTH_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'effective-rates-auth-'));
+
 const employeeCost = require('../src/employeeCost.js');
 
 const COLUMNS = [{ key: 'c36', pos: 36, label: 'CP ctv/khác (%)' }];

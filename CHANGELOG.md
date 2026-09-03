@@ -8118,3 +8118,7 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Số cặp ảnh hưởng của NV thiếu chi phí được đếm từ snapshot doanh thu toàn đội; nếu chưa có bằng chứng để đếm thì cảnh báo nói chưa xác định, không in `0 cặp`.
 - Cảnh báo tách đúng NV hết hạn tại App Report, nguồn trả rỗng đã được chứng minh và nguyên nhân chưa xác định; không còn quy mọi lỗi nguồn cho DataHub.
 - Chỉ thay code/test phía App Report trong Cổng 1; không đổi timeout/concurrency, không ghi dữ liệu và không deploy.
+## 03/09/2026 17:55 GMT+7 — Cô lập kho cho regression test Employee Cost
+
+- Hai bộ test chính sách tỷ lệ dùng kho catalog projection và rate snapshot tạm riêng trước khi nạp module, nên dữ liệu T08 thật không thể đi vòng các mock HTTP.
+- Không bỏ qua test, không nới assertion và không thay đổi mã chạy production.
