@@ -20,10 +20,9 @@ function isCutoverPeriod(period) {
 }
 function sourceAllowed(row = {}, period) {
   if (!isCutoverPeriod(period) || !isGroupDona(row)) return true;
-  // T09 mở phải giữ cùng định nghĩa "Đã thực hiện" với App Sale:
-  // CRM đã xuất hóa đơn + App Web đã xuất/giao. Debts chỉ là nguồn đối chứng
-  // cho tới khi có một parity attestation riêng; không được âm thầm thay số CRM.
-  return String(row.source || '').trim().toUpperCase() === 'CRM_MISA';
+  // Từ T09, doanh thu thực Group-Dona chỉ đến từ hóa đơn đã hiện diện trong
+  // App Công nợ. CRM là nguồn đối soát/cảnh báo, không được fallback hay cộng.
+  return String(row.source || '').trim().toUpperCase() === 'DEBTS_INVOICE_SHADOW';
 }
 function enforce(rows = [], period) {
   if (!Array.isArray(rows)) throw Object.assign(new Error('REVENUE_ROWS_INVALID'), { code: 'REVENUE_ROWS_INVALID' });

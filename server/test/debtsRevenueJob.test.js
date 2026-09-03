@@ -30,10 +30,10 @@ test('job verifies both partitions before switching one T09 revenue slot', async
     assert.equal(out.ok, true); assert.equal(out.rowCount, 2); assert.deepEqual(seen, ['DONA-snap', 'AFP-snap']);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
-test('CRM plus App Web scheduler remains available for T09 truth materialization', async () => {
+test('old CRM scheduler is hard blocked for T09 even when force=true', async () => {
   const old = require('../src/revenueRefresh');
-  assert.notEqual(old.isDue(new Date('2026-09-03T01:00:00Z')).reason, 'misa_disabled_from_2026_09');
-  assert.doesNotMatch(require('fs').readFileSync(require.resolve('../src/revenueRefresh'), 'utf8'), /MISA_REVENUE_DISABLED_FROM_2026_09/);
+  await assert.rejects(() => old.runOnce({ force: true, ky: '09.2026' }), { code: 'MISA_REVENUE_DISABLED_FROM_2026_09' });
+  assert.equal(old.isDue(new Date('2026-09-03T01:00:00Z')).reason, 'misa_disabled_from_2026_09');
 });
 test('job status is safe with the scheduler enabled', () => {
   const previous = process.env.APP_REPORT_DEBTS_REVENUE_SCHEDULE_ENABLED;

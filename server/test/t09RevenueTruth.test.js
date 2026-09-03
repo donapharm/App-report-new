@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const policy = require('../src/groupDonaRevenuePolicy');
 
-test('T09 headline keeps measured CRM plus App Web truth instead of the smaller Debts snapshot', () => {
+test('T09 headline uses invoiced Debts plus App Web and never fills the gap from CRM', () => {
   const crm = [
     { source: 'CRM_MISA', contractor_code: '01.DONA', revenue: 650_404_768 },
     { source: 'CRM_MISA', contractor_code: '02.AFP', revenue: 841_594_420 },
@@ -17,13 +17,13 @@ test('T09 headline keeps measured CRM plus App Web truth instead of the smaller 
   ];
   const selected = policy.enforce([...crm, ...web, ...debts], '09.2026');
   const total = selected.accepted.reduce((sum, row) => sum + row.revenue, 0);
-  assert.equal(total, 1_944_954_188);
+  assert.equal(total, 1_666_068_888);
   assert.equal([...crm, ...web].reduce((sum, row) => sum + row.revenue, 0) - [...debts, ...web].reduce((sum, row) => sum + row.revenue, 0), 278_885_300);
-  assert.deepEqual(selected.rejected, debts);
+  assert.deepEqual(selected.rejected, crm);
 });
 
-test('production startup cannot publish Debts over CRM before parity is proven', () => {
+test('production starts Debts publisher and retains the old CRM scheduler only for pre-T09 periods', () => {
   const source = fs.readFileSync(require.resolve('../src/index'), 'utf8');
-  assert.doesNotMatch(source, /debtsRevenueJob\.start\(\)/);
+  assert.match(source, /debtsRevenueJob\.start\(\)/);
   assert.match(source, /revenueRefresh\.start\(\)/);
 });
