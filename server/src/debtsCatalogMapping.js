@@ -28,10 +28,11 @@ function build(snapshot, period) {
     const unitCode = upper(row?.unit_code, 180); const qlnbCode = upper(row?.qlnb_code, 180);
     const employeeCode = upper(row?.emp_code, 80); const uom = upper(row?.uom, 100);
     const productName = clean(row?.product_name || row?.c16, 300);
+    const route = upper(row?.route || row?.tuyen, 30);
     if (!legalEntity || !unitCode || !qlnbCode || !employeeCode || !uom || !productName) continue;
     const key = `${legalEntity}|${unitCode}|${qlnbCode}`; const group = grouped.get(key) || new Map();
-    const candidateKey = `${employeeCode}|${uom}|${productName}`;
-    if (!group.has(candidateKey)) group.set(candidateKey, { employeeCode, uom, productName,
+    const candidateKey = `${employeeCode}|${uom}|${productName}|${route}`;
+    if (!group.has(candidateKey)) group.set(candidateKey, { employeeCode, uom, productName, route,
       sourceLineId: clean(row.id, 240) || digest(`${key}|${candidateKey}`) });
     grouped.set(key, group);
   }

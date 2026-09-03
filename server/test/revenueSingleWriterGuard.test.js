@@ -7,11 +7,10 @@ test('generic uploads cannot become a T09+ revenue writer', () => {
   assert.throws(() => guard.assertGenericCommitAllowed({ ky: '09.2026' }), { code: 'REVENUE_SINGLE_WRITER_GENERIC_UPLOAD_BLOCKED' });
 });
 
-test('T09+ activation accepts only attested Debts composite slots', () => {
-  assert.throws(() => guard.assertActivationAllowed({ slot: { ky: '09.2026', source: 'CRM_MISA_PLUS_APP_WEB' } }),
-    { code: 'REVENUE_SINGLE_WRITER_ACTIVATION_BLOCKED' });
-  assert.equal(guard.assertActivationAllowed({ slot: { ky: '09.2026', source: 'DEBTS_ONLY_GROUP_DONA',
-    selectorPolicy: 'GROUP_DONA_DEBTS_FROM_2026_09' } }), true);
+test('T09+ activation accepts only CRM plus App Web truth slots', () => {
+  assert.equal(guard.assertActivationAllowed({ slot: { ky: '09.2026', source: 'CRM_MISA_PLUS_APP_WEB' } }), true);
+  assert.throws(() => guard.assertActivationAllowed({ slot: { ky: '09.2026', source: 'DEBTS_ONLY_GROUP_DONA',
+    selectorPolicy: 'GROUP_DONA_DEBTS_FROM_2026_09' } }), { code: 'REVENUE_SINGLE_WRITER_ACTIVATION_BLOCKED' });
 });
 
 test('generic upload commit and activation are wired through the single-writer guard', () => {

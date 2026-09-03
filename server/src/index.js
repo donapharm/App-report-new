@@ -27,7 +27,6 @@ const cors = require('cors');
 const routes = require('./routes');
 const eventLoopMonitor = require('./eventLoopMonitor');
 const revenueRefresh = require('./revenueRefresh');
-const debtsRevenueJob = require('./debtsRevenueJob');
 const deckScheduler = require('./report/deckScheduler');
 const runtimeActivity = require('./runtimeActivity');
 const slowRequestTelemetry = require('./slowRequestTelemetry').createSlowRequestTelemetry();
@@ -107,7 +106,9 @@ app.listen(PORT, HOST, () => {
   console.log(`✔ App Report API chạy tại http://${HOST}:${PORT}`);
   console.log(`  Health: http://${HOST}:${PORT}/api/health`);
   revenueRefresh.start();
-  debtsRevenueJob.start();
+  // Debts remains shadow/preview only until an explicit CRM parity attestation
+  // exists. Starting its publisher here previously replaced the T09 CRM truth
+  // with a smaller snapshot while all structural checks still passed.
   deckScheduler.start();
   // Giữ cache "Chi phí · Tất cả NV" luôn nóng cho kỳ hiện tại (warm định kỳ),
   // để CEO/admin không trúng lần dựng lạnh sau restart/hết TTL.

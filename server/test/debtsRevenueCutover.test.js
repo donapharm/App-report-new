@@ -3,6 +3,7 @@ const test = require('node:test'); const assert = require('node:assert/strict');
 const cutover = require('../src/debtsRevenueCutover');
 function row(entity, id) { return { source_line_id: `DEBTS:${entity}:${id}`, legal_entity: entity, invoice_date: '2026-09-01',
   invoice_number: `INV-${id}`, emp_code: entity === 'DONA' ? 'DN001' : 'AF001', unit_code: '001.BV', qlnb_code: 'Q1', product_name: 'THUỐC A', uom: 'VIÊN',
+  route: entity === 'DONA' ? 'CL' : 'NCL',
   quantity: '1', unit_price_before_vat: '100', revenue_before_vat: '100', vat_amount: '5', revenue_after_vat: '105', row_type: 'SALE',
   mapping_status: 'mapped', quarantine: false }; }
 function part(entity, id) { const rows = [row(entity, id)]; return { rows, quarantined: [], receipt: { period: '2026-09', snapshotId: `snapshot-${entity}`,
@@ -15,6 +16,7 @@ test('T09 builds one Debts-only Group-Dona payload from both complete signed par
   assert.ok(result.rows.every((r) => r.source === 'DEBTS_INVOICE_SHADOW'));
   assert.ok(result.rows.every((r) => r.qlnb_code === 'Q1' && r.product_name === 'THUỐC A'));
   assert.ok(result.rows.every((r) => r.product_name !== r.qlnb_code));
+  assert.deepEqual(result.rows.map((r) => r.route).sort(), ['CL', 'NCL']);
 });
 test('T09 cutover rejects a mapped row when product_name is absent', () => {
   const dona = part('DONA', '1'); delete dona.rows[0].product_name;

@@ -13,7 +13,7 @@ function assertGenericCommitAllowed({ ky } = {}) {
 
 function assertActivationAllowed({ slot } = {}) {
   if (!slot || !policy.isCutoverPeriod(slot.ky)) return true;
-  if (slot.source !== 'DEBTS_ONLY_GROUP_DONA' || slot.selectorPolicy !== 'GROUP_DONA_DEBTS_FROM_2026_09') {
+  if (slot.source !== 'CRM_MISA_PLUS_APP_WEB') {
     fail('REVENUE_SINGLE_WRITER_ACTIVATION_BLOCKED', { ky: slot.ky, source: slot.source || 'unknown' });
   }
   return true;

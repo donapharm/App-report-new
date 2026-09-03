@@ -103,7 +103,7 @@ function materialize(rows, map = mapping()) {
 
 function directCatalogMapping(rows = [{
   id: 'catalog-line-1', contractor_code: '01.DONA', unit_code: '033.BV A', qlnb_code: 'G1.A',
-  emp_code: 'DN001', uom: 'HOP', product_name: 'THUỐC A',
+  emp_code: 'DN001', uom: 'HOP', product_name: 'THUỐC A', route: 'CL',
 }]) {
   return catalogMapping.build({
     period: '2026-08', rows,
@@ -266,6 +266,17 @@ test('direct V31.7 mapping carries product_name independently from qlnb_code', (
   assert.equal(result.rows[0].product_name, 'THUỐC A');
   assert.notEqual(result.rows[0].product_name, result.rows[0].qlnb_code);
   assert.equal(result.rows[0].mapping_status, 'mapped');
+  assert.equal(result.rows[0].route, 'CL');
+});
+
+test('conflicting routes for one exact mapping fail closed instead of guessing a route', () => {
+  const conflict = directCatalogMapping([
+    { id: 'route-a', contractor_code: '01.DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', emp_code: 'DN001', uom: 'HOP', product_name: 'THUỐC A', route: 'CL' },
+    { id: 'route-b', contractor_code: '01.DONA', unit_code: '033.BV A', qlnb_code: 'G1.A', emp_code: 'DN001', uom: 'HOP', product_name: 'THUỐC A', route: 'NCL' },
+  ]);
+  const result = materialize([sourceRow()], conflict);
+  assert.equal(result.quarantined[0].mapping_status, 'route_conflict');
+  assert.equal(result.quarantined[0].route, null);
 });
 
 test('direct V31.7 mapping fails closed when product name is missing or conflicting', () => {

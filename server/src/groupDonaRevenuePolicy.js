@@ -20,7 +20,10 @@ function isCutoverPeriod(period) {
 }
 function sourceAllowed(row = {}, period) {
   if (!isCutoverPeriod(period) || !isGroupDona(row)) return true;
-  return String(row.source || '').trim().toUpperCase() === 'DEBTS_INVOICE_SHADOW';
+  // T09 mở phải giữ cùng định nghĩa "Đã thực hiện" với App Sale:
+  // CRM đã xuất hóa đơn + App Web đã xuất/giao. Debts chỉ là nguồn đối chứng
+  // cho tới khi có một parity attestation riêng; không được âm thầm thay số CRM.
+  return String(row.source || '').trim().toUpperCase() === 'CRM_MISA';
 }
 function enforce(rows = [], period) {
   if (!Array.isArray(rows)) throw Object.assign(new Error('REVENUE_ROWS_INVALID'), { code: 'REVENUE_ROWS_INVALID' });

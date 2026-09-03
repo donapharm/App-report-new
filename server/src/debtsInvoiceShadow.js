@@ -358,7 +358,7 @@ function mappingIndex(mappingSnapshot) {
       const productName = text(candidate.productName, 300) || null;
       if (!emp || !uom || (contract.productNameColumn === 'c16' && !productName)
         || !text(candidate.sourceLineId, 240)) fail('DEBTS_MAPPING_ROW_INVALID');
-      return Object.freeze({ emp_code: emp, uom, product_name: productName });
+      return Object.freeze({ emp_code: emp, uom, product_name: productName, route: upper(candidate.route, 30) || null });
     });
     const employeeConflict = new Set(values.map((item) => item.emp_code)).size > 1;
     const uomConflict = new Set(values.map((item) => item.uom)).size > 1;
@@ -435,13 +435,16 @@ function normalizeRow(row, index, mappings) {
   const candidates = mappings.byKey.get(key) || mappings.byKey.get(`*|${unitCode}|${qlnbCode}`) || [];
   const uniqueEmployees = [...new Set(candidates.map((item) => item.emp_code))];
   const uniqueProductNames = [...new Set(candidates.map((item) => item.product_name).filter(Boolean))];
+  const uniqueRoutes = [...new Set(candidates.map((item) => item.route).filter(Boolean))];
   let mappingStatus = 'mapped'; let empCode = uniqueEmployees[0] || null;
   let productName = uniqueProductNames[0] || null;
+  let route = uniqueRoutes[0] || null;
   if (!mappings.legalEntityPartitions.has(`${legalEntity}|${unitCode}|${qlnbCode}`)) { mappingStatus = 'legal_entity_unattested'; empCode = null; }
   else if (!candidates.length) mappingStatus = 'unmapped';
   else if (uniqueEmployees.length !== 1) { mappingStatus = 'ambiguous'; empCode = null; }
   else if (mappings.requiresProductName && uniqueProductNames.length === 0) { mappingStatus = 'product_name_missing'; productName = null; }
   else if (mappings.requiresProductName && uniqueProductNames.length !== 1) { mappingStatus = 'product_name_conflict'; productName = null; }
+  else if (uniqueRoutes.length > 1) { mappingStatus = 'route_conflict'; empCode = null; route = null; }
   else if (!candidates.some((item) => item.uom === uom)) { mappingStatus = 'uom_mismatch'; empCode = null; }
   const quarantineReasons = [];
   if (amountInconsistent) quarantineReasons.push('amount_inconsistent');
@@ -458,6 +461,7 @@ function normalizeRow(row, index, mappings) {
     unit_code: unitCode,
     qlnb_code: qlnbCode,
     product_name: productName,
+    route,
     uom,
     quantity: row.quantity,
     unit_price_before_vat: row.unit_price_before_vat,

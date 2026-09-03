@@ -9,7 +9,6 @@ const path = require('path');
 const fs = require('fs');
 const { holidayFor } = require('./dailySales');
 const tickTelemetry = require('./tickTelemetry');
-const groupDonaRevenuePolicy = require('./groupDonaRevenuePolicy');
 
 const TZ = 'Asia/Bangkok';
 const DEFAULT_INTERVAL_MIN = 30;
@@ -129,7 +128,6 @@ function isDue(now = new Date()) {
   // holidays.json chứa các ngày âm lịch/nghỉ bù do Nhà nước công bố;
   // dailySales.holidayFor giữ thêm các ngày lễ dương lịch cố định làm fallback.
   if (holiday) return { due: false, reason: 'holiday', holiday: holiday.name || 'Ngày lễ', date, parts: p };
-  if (groupDonaRevenuePolicy.isCutoverPeriod(currentKy(now))) return { due: false, reason: 'misa_disabled_from_2026_09', parts: p };
   const win = windowForDow(p.dow);
   if (!win) return { due: false, reason: 'outside_window', parts: p };
   const minute = p.hh * 60 + p.mm;
@@ -184,9 +182,6 @@ async function materialize({ ky } = {}) {
 async function runOnce({ force = false, reason = 'manual', ky } = {}) {
   if (state.inFlight) return { ok: false, skipped: true, reason: 'in_flight', lastRun: state.lastRun };
   const requestedKy = ky || currentKy();
-  if (groupDonaRevenuePolicy.isCutoverPeriod(requestedKy)) {
-    const error = new Error('MISA_REVENUE_DISABLED_FROM_2026_09'); error.code = error.message; error.status = 409; throw error;
-  }
   if (!force) {
     const due = isDue();
     if (!due.due) return { ok: false, skipped: true, ...due };
