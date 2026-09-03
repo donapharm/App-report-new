@@ -8113,3 +8113,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 
 - Tài liệu hóa riêng đường release bất biến có prepare/manifest và đường auto-deploy từ `main` không có các preflight binding đó.
 - Cảnh báo candidate không được merge `main` khi chưa có phê duyệt deploy; ghi rõ cách phục hồi 5 file runtime bị loại khỏi `git archive`.
+### 03/09/2026 lúc 16:29 — Cảnh báo nguồn chi phí nói đúng bằng chứng (candidate only)
+
+- Số cặp ảnh hưởng của NV thiếu chi phí được đếm từ snapshot doanh thu toàn đội; nếu chưa có bằng chứng để đếm thì cảnh báo nói chưa xác định, không in `0 cặp`.
+- Cảnh báo tách đúng NV hết hạn tại App Report, nguồn trả rỗng đã được chứng minh và nguyên nhân chưa xác định; không còn quy mọi lỗi nguồn cho DataHub.
+- Chỉ thay code/test phía App Report trong Cổng 1; không đổi timeout/concurrency, không ghi dữ liệu và không deploy.

@@ -85,7 +85,18 @@ function signatureOf(employees = []) {
   return [...employees].map((code) => String(code).toUpperCase()).sort().join(',');
 }
 
-function buildMessage({ employees, pairs, ky, recovered, flapping = false }) {
+function causeCounts(employees = [], unavailableReasons = {}) {
+  const counts = { appDeadline: 0, dataHubEmpty: 0, unknown: 0 };
+  for (const emp of employees) {
+    const reason = String(unavailableReasons?.[String(emp).toUpperCase()] || '').toLowerCase();
+    if (reason === 'deadline') counts.appDeadline += 1;
+    else if (reason === 'source_empty') counts.dataHubEmpty += 1;
+    else counts.unknown += 1;
+  }
+  return counts;
+}
+
+function buildMessage({ employees, pairs, ky, recovered, flapping = false, causes = {} }) {
   if (recovered) {
     return [
       '✅ App Report — nguồn chi phí đã khôi phục',
@@ -96,12 +107,20 @@ function buildMessage({ employees, pairs, ky, recovered, flapping = false }) {
   const lines = [
     '⚠️ App Report — THIẾU DỮ LIỆU CHI PHÍ',
     `Kỳ ${ky}: chưa lấy được dữ liệu chi phí của ${employees.length} nhân viên: ${employees.join(', ')}`,
-    `Ảnh hưởng ${Number(pairs || 0).toLocaleString('vi-VN')} cặp (đơn vị × mặt hàng).`,
+    Number(pairs || 0) > 0
+      ? `Ảnh hưởng ${Number(pairs).toLocaleString('vi-VN')} cặp (đơn vị × mặt hàng).`
+      : 'Chưa xác định được số cặp ảnh hưởng.',
     '',
     'Hệ quả: tổng chi phí trên app đang là TẠM TÍNH (thiếu phần của các NV này).',
-    'Đây KHÔNG phải "mã thiếu % catalog" — mà là nguồn chi phí DataHub chưa trả dữ liệu.',
-    'Đề nghị báo DataHub kiểm tra endpoint employee-cost cho các mã NV trên.',
   ];
+  const appDeadline = Number(causes.appDeadline || 0);
+  const dataHubEmpty = Number(causes.dataHubEmpty || 0);
+  const unknown = Number(causes.unknown || 0);
+  if (appDeadline) lines.push(`${appDeadline} nhân viên chưa lấy kịp trong hạn (App Report).`);
+  if (dataHubEmpty) lines.push(`${dataHubEmpty} nhân viên nguồn trả rỗng (DataHub).`);
+  if (unknown || (!appDeadline && !dataHubEmpty)) {
+    lines.push(`${unknown || employees.length} nhân viên chưa xác định nguyên nhân.`);
+  }
   // ‼ Danh sách đổi xoành xoạch là MỘT TRIỆU CHỨNG KHÁC HẲN "13 NV hỏng cố định":
   // nó nói nguồn lúc được lúc không, chứ không phải mấy mã đó thiếu dữ liệu. Không
   // nói ra thì người đọc đi truy nhầm hướng — đúng việc đã xảy ra đêm 09/08.
@@ -221,6 +240,7 @@ async function checkAndNotifyInner(payload = {}, ky = '', { now = Date.now(), se
       Array.isArray(period?.match?.unavailableEmployees) ? period.match.unavailableEmployees.map(String) : []
     )))].sort();
     const pairs = periods.reduce((sum, period) => sum + Number(period?.match?.unavailablePairs || 0), 0);
+    const unavailableReasons = Object.assign({}, ...periods.map((period) => period?.match?.unavailableReasons || {}));
     const state = readState();
     const previous = state[ky] || { signature: '', at: 0 };
     const prevSeen = Array.isArray(previous.lastSeen) ? previous.lastSeen : [];
@@ -268,7 +288,8 @@ async function checkAndNotifyInner(payload = {}, ky = '', { now = Date.now(), se
       return { skipped: changed ? 'rate_limited' : 'deduped', flapping };
     }
 
-    const result = await sendImpl(buildMessage({ employees: confirmed, pairs, ky, recovered: false, flapping }));
+    const causes = causeCounts(confirmed, unavailableReasons);
+    const result = await sendImpl(buildMessage({ employees: confirmed, pairs, ky, recovered: false, flapping, causes }));
     // ‼ Tin mềm cho NV tính theo TỪNG NGƯỜI, không theo "danh sách có đổi không".
     // Cách cũ: danh sách xoay vòng ⇒ cùng một người liên tục bị coi là "mới bị ảnh
     // hưởng" ⇒ nhắn lặp. Nay mỗi người tối đa 1 tin trong EMPLOYEE_QUIET_MS.
@@ -279,7 +300,7 @@ async function checkAndNotifyInner(payload = {}, ky = '', { now = Date.now(), se
     const employeeNotified = await notifyAffectedEmployees(dueEmployees, { ky, recovered: false }, sendEmployeeImpl);
     for (const code of dueEmployees) notified[String(code).toUpperCase()] = now;
     persist.save(STATE_FILE, { ...state, [ky]: { signature, at: now, lastSeen: employees, notified, flaps } });
-    return { alerted: true, employees: confirmed, pairs, employeeNotified, flapping, ...result };
+    return { alerted: true, employees: confirmed, pairs, causes, employeeNotified, flapping, ...result };
   } catch (error) {
     // Cảnh báo hỏng KHÔNG được làm hỏng luồng warm/nghiệp vụ.
     console.warn('[employee-cost-alert] check thất bại', { message: error.message });
@@ -306,5 +327,5 @@ function checkAndNotify(payload = {}, ky = '', opts = {}) {
 module.exports = {
   STATE_FILE, REMIND_MS, CONFIRM_ROUNDS, MIN_ALERT_GAP_MS, EMPLOYEE_QUIET_MS, FLAP_WINDOW_MS, FLAP_MIN_CHANGES,
   checkAndNotify, checkAndNotifyInner, buildMessage, signatureOf, adminRecipients,
-  buildEmployeeMessage, notifyAffectedEmployees, employeeTelegramMap, employeeNoticeBlocked,
+  buildEmployeeMessage, notifyAffectedEmployees, employeeTelegramMap, employeeNoticeBlocked, causeCounts,
 };

@@ -455,7 +455,6 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
       .map(({ report }) => String(report.empCode || '').toUpperCase()).filter(Boolean);
     const matchedRows = available.reduce((sum, item) => sum + numeric(item.period.match?.matchedRows), 0);
     const totalRows = available.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
-    const unavailablePairs = unavailable.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const unavailableEmployees = unavailable.map(({ report }) => String(report.empCode || '').toUpperCase()).filter(Boolean);
     // Chỉ phát ra reason code allowlist; không đưa message upstream/key/payload vào UI.
     const unavailableReasons = Object.fromEntries(unavailable.map(({ report }) => {
@@ -463,6 +462,7 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
       const outcome = String(report.sourceOutcome || '').toLowerCase();
       const reason = outcome === 'not_configured' ? 'not_configured'
         : outcome === 'deadline' ? 'deadline'
+          : outcome === 'source_empty' || outcome === 'rate_policy_missing' ? 'source_empty'
           : outcome === 'upstream_busy' ? 'upstream_busy'
           : outcome === 'source_error' ? 'source_error'
             : outcome === 'upstream_rejected' || outcome === 'upstream_unauthorized' || /^upstream_4\d\d$/.test(outcome)
@@ -509,6 +509,12 @@ function mergeEmployeeReports(reports = [], roster = [], { companyRevenueRowsByP
     const companyRevenueRows = hasCompanyRevenueSnapshot
       ? (companyRevenueRowsByPeriod.get(companyRevenueSnapshotKey) || [])
       : [];
+    const unavailableEmployeeSet = new Set(unavailableEmployees);
+    const unavailablePairs = hasCompanyRevenueSnapshot
+      ? companyRevenueRows.filter((row) => unavailableEmployeeSet.has(String(
+        row?.emp_code ?? row?.empCode ?? row?.employeeCode ?? '',
+      ).trim().toUpperCase())).length
+      : unavailable.reduce((sum, item) => sum + numeric(item.period.match?.totalRows), 0);
     const companyRevenueTotal = companyRevenueRows.reduce((sum, row) => (
       sum + numeric(row?.revenue ?? row?.tong_tien ?? row?.REVENUE ?? row?.TONG_TIEN)
     ), 0);

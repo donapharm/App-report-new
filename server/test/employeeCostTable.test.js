@@ -196,6 +196,8 @@ test('‼ T08 deadline stubs vẫn lấy đúng snapshot doanh thu chuẩn YYYY-
   const transformed = table.transformReport(merged, { allEmployees: true, paginate: false });
   assert.equal(merged.periods[0].match.unavailableEmployeeCount, 2,
     'chi phí hết hạn vẫn phải báo thiếu, không được giả là đã đủ');
+  assert.equal(merged.periods[0].match.unavailablePairs, 2,
+    'số cặp bị ảnh hưởng phải đếm từ snapshot doanh thu toàn đội, không từ deadline stub 0 dòng');
   assert.equal(merged.periods[0].summary.revenueTotal, 3_150_000,
     'doanh thu toàn đội độc lập với fan-out chi phí và phải đọc được khóa YYYY-MM');
   assert.equal(merged.periods[0].summary.revenueSource, 'app_report_company_store');
@@ -381,8 +383,8 @@ test('ALL merge exposes a pinned timestamp only when every employee is from the 
 });
 
 
-test('ALL merge maps only 4xx rejection outcomes to privacy-safe upstream_rejected', () => {
-  const outcomes = ['upstream_rejected', 'upstream_400', 'upstream_401', 'upstream_409', 'upstream_499', 'upstream_500', 'upstream_502', 'upstream_unavailable', 'upstream_busy'];
+test('ALL merge maps only proven empty policy to source_empty and 4xx outcomes to upstream_rejected', () => {
+  const outcomes = ['upstream_rejected', 'upstream_400', 'upstream_401', 'upstream_409', 'upstream_499', 'upstream_500', 'upstream_502', 'upstream_unavailable', 'upstream_busy', 'rate_policy_missing'];
   const reports = outcomes.map((sourceOutcome, index) => {
     const item = report([]);
     item.empCode = `DN${String(index + 1).padStart(3, '0')}`;
@@ -395,7 +397,7 @@ test('ALL merge maps only 4xx rejection outcomes to privacy-safe upstream_reject
   assert.deepEqual(merged.periods[0].match.unavailableReasons, {
     DN001: 'upstream_rejected', DN002: 'upstream_rejected', DN003: 'upstream_rejected',
     DN004: 'upstream_rejected', DN005: 'upstream_rejected', DN006: 'upstream_unavailable',
-    DN007: 'upstream_unavailable', DN008: 'upstream_unavailable', DN009: 'upstream_busy',
+    DN007: 'upstream_unavailable', DN008: 'upstream_unavailable', DN009: 'upstream_busy', DN010: 'source_empty',
   });
   assert.doesNotMatch(JSON.stringify(merged.periods[0].match.unavailableReasons), /upstream_4|upstream_5|credential|body/);
 });

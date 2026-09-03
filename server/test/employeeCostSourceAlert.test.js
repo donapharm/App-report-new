@@ -10,20 +10,65 @@ process.env.AUTH_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'alert-state-'
 process.env.TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'test-token';
 const alert = require('../src/employeeCostSourceAlert');
 
-const payloadWith = (employees, pairs) => ({
-  periods: [{ match: { unavailableEmployees: employees, unavailablePairs: pairs } }],
+const payloadWith = (employees, pairs, unavailableReasons = {}) => ({
+  periods: [{ match: { unavailableEmployees: employees, unavailablePairs: pairs, unavailableReasons } }],
 });
 
 test('tin cảnh báo nêu ĐÍCH DANH NV, số cặp, và KHÔNG chứa tiền/%', () => {
-  const text = alert.buildMessage({ employees: ['DN007', 'DN012'], pairs: 186, ky: '07.2026' });
+  const text = alert.buildMessage({ employees: ['DN007', 'DN012'], pairs: 186, ky: '07.2026', causes: { unknown: 2 } });
   assert.match(text, /DN007, DN012/);
   assert.match(text, /186/);
   assert.match(text, /TẠM TÍNH/);
-  assert.match(text, /DataHub/);
+  assert.match(text, /chưa xác định nguyên nhân/);
   // Không được lộ SỐ TIỀN (vd 1.234.567đ / VND) hay cột tỷ lệ chi phí C33-C46.
   assert.doesNotMatch(text, /[\d.]+\s*đ(?![a-zA-ZÀ-ỹ])/);
   assert.doesNotMatch(text, /\bVND\b/i);
   assert.doesNotMatch(text, /\bC(?:3[3-9]|4[0-7])\b/i);
+});
+
+test('cảnh báo trung thực: toàn deadline chỉ nói App Report, không nhắc DataHub', () => {
+  const causes = alert.causeCounts(['DN007', 'DN008'], { DN007: 'deadline', DN008: 'deadline' });
+  const text = alert.buildMessage({
+    employees: ['DN007', 'DN008'], pairs: 10, ky: '08.2026', causes,
+  });
+  assert.match(text, /2 nhân viên chưa lấy kịp trong hạn \(App Report\)/);
+  assert.doesNotMatch(text, /DataHub/);
+});
+
+test('cảnh báo trung thực: toàn rows=0 nói đúng DataHub', () => {
+  const causes = alert.causeCounts(['DN007', 'DN008'], { DN007: 'source_empty', DN008: 'source_empty' });
+  const text = alert.buildMessage({
+    employees: ['DN007', 'DN008'], pairs: 10, ky: '08.2026', causes,
+  });
+  assert.match(text, /2 nhân viên nguồn trả rỗng \(DataHub\)/);
+  assert.doesNotMatch(text, /chưa lấy kịp trong hạn \(App Report\)/);
+});
+
+test('cảnh báo trung thực: trộn deadline và rows=0 nêu cả hai con số', () => {
+  const causes = alert.causeCounts(['DN007', 'DN008', 'DN009'], {
+    DN007: 'deadline', DN008: 'source_empty', DN009: 'source_empty',
+  });
+  const text = alert.buildMessage({
+    employees: ['DN007', 'DN008', 'DN009'], pairs: 10, ky: '08.2026',
+    causes,
+  });
+  assert.match(text, /1 nhân viên chưa lấy kịp trong hạn \(App Report\)/);
+  assert.match(text, /2 nhân viên nguồn trả rỗng \(DataHub\)/);
+});
+
+test('cảnh báo không quy upstream_unavailable thành DataHub trả rỗng khi chưa đủ bằng chứng', () => {
+  const causes = alert.causeCounts(['DN007'], { DN007: 'upstream_unavailable' });
+  const text = alert.buildMessage({ employees: ['DN007'], pairs: 10, ky: '08.2026', causes });
+  assert.match(text, /1 nhân viên chưa xác định nguyên nhân/);
+  assert.doesNotMatch(text, /nguồn trả rỗng \(DataHub\)/);
+});
+
+test('cảnh báo không bịa 0 cặp khi vẫn có NV thiếu', () => {
+  const text = alert.buildMessage({
+    employees: ['DN007'], pairs: 0, ky: '08.2026', causes: { appDeadline: 1 },
+  });
+  assert.match(text, /Chưa xác định được số cặp/);
+  assert.doesNotMatch(text, /0 cặp/);
 });
 
 test('phải thấy lỗi HAI vòng liên tiếp mới báo — một cú timeout lẻ thì im', async () => {
