@@ -24,6 +24,7 @@ EXPECT_CALLBACK="${EXPECT_CALLBACK:?Thiếu EXPECT_CALLBACK}"
 EXPECT_BASE="${EXPECT_BASE:?Thiếu EXPECT_BASE}"
 EXPECT_COMMIT="${EXPECT_COMMIT:?Thiếu EXPECT_COMMIT}"
 EXPECT_RELEASE="${EXPECT_RELEASE:?Thiếu EXPECT_RELEASE}"
+TOKEN_REGISTER="${TOKEN_REGISTER:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/DEPLOY_TOKEN_REGISTER.md}"
 # Token duyệt DÙNG 1 LẦN: đã dùng thì không nhận lại (chống phát lại phiếu cũ).
 # Claim NGUYÊN TỬ bằng thư mục marker/token: `mkdir` là thao tác atomic của FS —
 # hai cutover chạy song song chỉ 1 cái tạo được, cái kia thua ngay (không còn khe
@@ -58,6 +59,18 @@ compare "callback" "$(field callback)" "$EXPECT_CALLBACK"
 compare "base"     "$(field base)"     "$EXPECT_BASE"
 compare "commit"   "$(field commit)"   "$EXPECT_COMMIT"
 compare "release"  "$(field release)"  "$EXPECT_RELEASE"
+
+# Phiếu chỉ hợp lệ khi có provenance trong sổ append-only của chính exact đang
+# chạy. prepare_result.txt không còn được coi là nguồn cấp quyền độc lập.
+APPROVER="$(field approver)"
+[ -n "$APPROVER" ] || die "DEPLOY_APPROVER_MISSING: người duyệt rỗng — DỪNG."
+[ -r "$TOKEN_REGISTER" ] || die "DEPLOY_TOKEN_NOT_REGISTERED: không đọc được sổ token — DỪNG."
+REGISTERED_APPROVER="$(awk -F'|' -v token="$EXPECT_CALLBACK" -v commit="$EXPECT_COMMIT" '
+  function trim(v) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", v); return v }
+  NF >= 5 && trim($2) == token && trim($3) == commit { print trim($5) }
+' "$TOKEN_REGISTER" | tail -1)"
+[ -n "$REGISTERED_APPROVER" ] || die "DEPLOY_TOKEN_NOT_REGISTERED: token/exact không có trong sổ — DỪNG."
+compare "approver" "$APPROVER" "$REGISTERED_APPROVER"
 
 # Token dùng 1 lần — CLAIM NGUYÊN TỬ: mkdir marker riêng cho token này. Nếu đã tồn
 # tại (đã dùng) → mkdir fail → DỪNG. Không có khe check-rồi-write.

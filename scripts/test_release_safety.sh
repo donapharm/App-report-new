@@ -151,12 +151,15 @@ callback=$2
 base=$3
 commit=$4
 release=$5
+approver=CEO TEST
 EOF
 }
 GOOD=(PASS OK_ECOST_0726 /srv/app-report abc123 rel-1)
+REGISTER="$WORK/DEPLOY_TOKEN_REGISTER.md"
+printf '| Token | Exact commit | Giờ cấp (GMT+7) | Người cấp |\n|---|---|---|---|\n| OK_ECOST_0726 | abc123 | 04/09/2026 lúc 00:00 | CEO TEST |\n' > "$REGISTER"
 write_prep "${GOOD[@]}"
 run "phiếu đúng hết → CHO PHÉP" pass \
-  env PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td1" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh"
+  env TOKEN_REGISTER="$REGISTER" PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td1" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh"
 
 for case in "status:FAIL" "callback:WRONG_TOKEN" "base:/srv/khac" "commit:deadbeef" "release:rel-999"; do
   key="${case%%:*}"; bad="${case#*:}"
@@ -164,19 +167,19 @@ for case in "status:FAIL" "callback:WRONG_TOKEN" "base:/srv/khac" "commit:deadbe
   case "$key" in status) vals[0]="$bad";; callback) vals[1]="$bad";; base) vals[2]="$bad";; commit) vals[3]="$bad";; release) vals[4]="$bad";; esac
   write_prep "${vals[@]}"
   run "lệch trường '$key' → CHẶN" fail \
-    env PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td2_$key" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh"
+    env TOKEN_REGISTER="$REGISTER" PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td2_$key" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh"
 done
 
 write_prep "${GOOD[@]}"
 grep -v '^commit=' "$PREP" > "$PREP.tmp" && mv "$PREP.tmp" "$PREP"
 run "phiếu THIẾU trường commit → CHẶN" fail \
-  env PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td3" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh"
+  env TOKEN_REGISTER="$REGISTER" PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td3" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh"
 
 # Token dùng 1 lần — claim NGUYÊN TỬ: lần đầu claim OK trong td4, lần hai CÙNG td4 bị chặn.
 write_prep "${GOOD[@]}"
-env PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td4" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh" >/dev/null 2>&1
+env TOKEN_REGISTER="$REGISTER" PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td4" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh" >/dev/null 2>&1
 run "dùng lại token đã duyệt (cùng kho) → CHẶN" fail \
-  env PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td4" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh"
+  env TOKEN_REGISTER="$REGISTER" PREPARE_FILE="$PREP" USED_TOKENS_DIR="$WORK/td4" EXPECT_CALLBACK=OK_ECOST_0726 EXPECT_BASE=/srv/app-report EXPECT_COMMIT=abc123 EXPECT_RELEASE=rel-1 bash "$HERE/verify_approval.sh"
 
 echo
 echo "--- P1-2: bản chuẩn bị không được đổi giữa chừng ---"
