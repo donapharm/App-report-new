@@ -8,7 +8,7 @@ const productSearch = require('./productSearch');
 
 const VAT_DIVISOR = 1.05; // doanh thu trước VAT = sau VAT / 1.05
 
-const sum = (arr, f) => arr.reduce((s, x) => s + (f(x) || 0), 0);
+const sum = (arr, f) => arr.reduce((s, x) => s + (Number(f(x)) || 0), 0);
 const DONA_GROUP_CONTRACTORS = new Set(['DONA', 'AFP']);
 const pipeList = (value, { upper = false } = {}) => String(value || '').split('|')
   .map((s) => s.trim()).filter(Boolean).map((s) => upper ? s.toUpperCase() : s);
@@ -64,13 +64,16 @@ function groupSum(rows, keyField, labelField) {
   for (const r of rows) {
     const key = r[keyField];
     if (key == null) continue;
-    const cur = map.get(key) || { key, label: r[labelField] || key, revenue: 0, quantity: 0, rows: 0 };
-    cur.revenue += r.revenue || 0;
+    const cur = map.get(key) || { key, label: r[labelField] || key, revenue: 0, revenue_invalid: false, quantity: 0, rows: 0 };
+    const parsedRevenue = Number(r.revenue);
+    cur.revenue_invalid ||= r.revenue_invalid === true || !Number.isFinite(parsedRevenue);
+    if (!cur.revenue_invalid) cur.revenue += parsedRevenue;
     cur.quantity += r.quantity || 0;
     cur.rows += 1;
     map.set(key, cur);
   }
-  return [...map.values()].sort((a, b) => b.revenue - a.revenue);
+  return [...map.values()].map((row) => row.revenue_invalid ? { ...row, revenue: null } : row)
+    .sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0));
 }
 
 const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
@@ -150,14 +153,16 @@ function overviewKpis({ ky, kys, scope, label, filters = {} }) {
   const cached = overviewCache.get(cacheKey);
   if (cached && Date.now() - cached.at < OVERVIEW_CACHE_MS) return cached.value;
   const rows = applyFilters(store.getRowsRange({ kys: list, scope }), filters);
-  const revenue = sum(rows, (r) => r.revenue);
+  const revenueValid = !rows.some((r) => r.revenue_invalid === true || !Number.isFinite(Number(r.revenue)));
+  const revenue = revenueValid ? sum(rows, (r) => r.revenue) : null;
   const empFilter = new Set(selectedEmployeeCodes(filters));
   const comparableTarget = targetFiltersComparable(filters);
   const targets = store.getTargetsRange({ kys: list, scope }).filter((t) => !empFilter.size || empFilter.has(String(t.emp_code || '').toUpperCase()));
   const targetTotal = comparableTarget ? sum(targets, (t) => t.target) : null;
-  const revenueBeforeVat = revenue / VAT_DIVISOR;
+  const revenueBeforeVat = revenue == null ? null : revenue / VAT_DIVISOR;
   // DIRECTIVE_TARGET_KPI: KPI chính so với target CẢ THÁNG, không dùng pacing làm mẫu số.
-  const pctTarget = comparableTarget && targetTotal > 0 ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null;
+  const pctTarget = revenueBeforeVat != null && comparableTarget && targetTotal > 0
+    ? +(revenueBeforeVat / targetTotal * 100).toFixed(1) : null;
   const targetByEmp = {};
   for (const t of targets) targetByEmp[t.emp_code] = (targetByEmp[t.emp_code] || 0) + Number(t.target || 0);
   const revenueBeforeVatByEmp = {};
@@ -178,14 +183,14 @@ function overviewKpis({ ky, kys, scope, label, filters = {} }) {
   const prevKys = store.previousKys(list);
   if (prevKys.length === list.length) {
     const prevRev = sum(applyFilters(store.getRowsRange({ kys: prevKys, scope }), filters), (r) => r.revenue);
-    if (prevRev > 0) momPct = +(((revenue - prevRev) / prevRev) * 100).toFixed(1);
+    if (revenue != null && prevRev > 0) momPct = +(((revenue - prevRev) / prevRev) * 100).toFixed(1);
   }
   const value = {
     ky: list[list.length - 1],
     kys: list,
     label,
     revenue,
-    revenueBeforeVat: Math.round(revenueBeforeVat),
+    revenueBeforeVat: revenueBeforeVat == null ? null : Math.round(revenueBeforeVat),
     targetTotal,
     targetCompareTotal: targetTotal,
     pctTarget,

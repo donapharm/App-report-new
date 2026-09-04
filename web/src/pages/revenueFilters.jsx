@@ -254,5 +254,11 @@ export function usePeriodsAndFilters(api) {
     return () => { cancelled = true; };
   }, [ky, facetSignature]);
   const queryFilters = React.useMemo(() => ({ ...validatedFilters, q: quickQuery }), [validatedFilters, quickQuery]);
-  return { periods, ky, setKy, filters, setFilters, options, queryFilters, filterBusy, filterNotice, filtersReady };
+  const reloadPeriods = React.useCallback(async () => {
+    const payload = await api.periods();
+    setPeriods(payload.periods || []);
+    if (!ky) setKy(payload.latest);
+    return payload;
+  }, [api, ky]);
+  return { periods, reloadPeriods, ky, setKy, filters, setFilters, options, queryFilters, filterBusy, filterNotice, filtersReady };
 }

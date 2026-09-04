@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { api, downloadExport } from '../api.js';
-import { money, pairText, unitText } from '../util.js';
+import { formatDateTime, money, pairText, unitText } from '../util.js';
 import { Spinner, Bar, Pager, usePager, SkeletonCards, MoneyBig, UnitLabel } from '../components.jsx';
 import { RevenueFilters, usePeriodsAndFilters } from './revenueFilters.jsx';
 import { DrillNav, useDrillStack, useReloadTick } from '../drillNav.jsx';
@@ -45,9 +45,12 @@ function EmployeeRevenueBars({ row, maxRevenue, totalRevenue, pacing }) {
 export default function Revenue({ me }) {
   const companyRevenue = me.isAdmin || me.access_profile === 'revenue_only';
   const [dim, setDim] = useState(companyRevenue ? 'emp' : 'unit');
-  const { periods, ky, setKy, filters, setFilters, options, queryFilters, filterBusy, filterNotice, filtersReady } = usePeriodsAndFilters(api);
+  const { periods, reloadPeriods, ky, setKy, filters, setFilters, options, queryFilters, filterBusy, filterNotice, filtersReady } = usePeriodsAndFilters(api);
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState('');
+  const [revenueSyncStatus, setRevenueSyncStatus] = useState(null);
   const { reloadTick, reload } = useReloadTick();
   const applyDrill = React.useCallback((s) => { if (!s) return; setDim(s.dim); setFilters(s.filters || {}); }, [setFilters]);
   const drillNav = useDrillStack({ key: 'revenue', root: { label: 'Doanh thu', dim: companyRevenue ? 'emp' : 'unit', filters: {} }, apply: applyDrill });
@@ -84,8 +87,9 @@ export default function Revenue({ me }) {
     return () => { cancelled = true; };
   }, [ky, dim, queryFilters, filtersReady, reloadTick]);
 
-  const total = data ? data.rows.reduce((s, r) => s + r.revenue, 0) : 0;
-  const max = data && data.rows.length ? data.rows[0].revenue : 0;
+  const revenueValid = !!data && data.rows.every((r) => r.revenue != null && Number.isFinite(Number(r.revenue)) && r.revenue_invalid !== true);
+  const total = revenueValid ? data.rows.reduce((s, r) => s + Number(r.revenue), 0) : null;
+  const max = revenueValid && data.rows.length ? Number(data.rows[0].revenue) : 0;
   const pager = usePager(data?.rows, 20, `${ky}|${dim}|${JSON.stringify(queryFilters)}`);
   const rowSub = (r) => dim === 'product'
     ? `${r.iit_code || r.key || '—'} · ${r.uom || '—'}`
@@ -111,6 +115,26 @@ export default function Revenue({ me }) {
     catch (e) { alert(e.message); }
     setBusy(false);
   }
+  async function syncNow() {
+    if (!window.confirm(`Đồng bộ doanh thu kỳ ${ky}. Các cổng nguồn, chữ ký, mapping, quarantine, trùng dòng và kích hoạt vẫn bắt buộc. Tiếp tục?`)) return;
+    setSyncing(true); setSyncResult('');
+    try { await api.revenueRefreshRun(ky); setSyncResult('Đồng bộ thành công.'); await Promise.all([reloadPeriods(), Promise.resolve(reload())]); }
+    catch (e) { setSyncResult(`Đồng bộ thất bại: ${e.code || e.message || 'REVENUE_SYNC_FAILED'}`); }
+    finally { setSyncing(false); }
+  }
+  const selectedPeriod = periods.find((p) => p.ky === ky) || {};
+  const dataAsOf = selectedPeriod.data_as_of || selectedPeriod.dataAsOf;
+  const syncAt = selectedPeriod.jobRunAt || selectedPeriod.job_run_at || selectedPeriod.uploadedAt || selectedPeriod.uploaded_at || dataAsOf;
+  const activatedAt = selectedPeriod.activatedAt || selectedPeriod.activated_at || syncAt;
+  const sourceName = selectedPeriod.revenue_source || selectedPeriod.sourceSummary?.source || selectedPeriod.source || '—';
+  useEffect(() => {
+    if (!me.isAdmin) return;
+    api.revenueRefreshStatus().then(setRevenueSyncStatus).catch(() => setRevenueSyncStatus(null));
+  }, [me.isAdmin, syncing]);
+  const lastSyncRun = revenueSyncStatus?.debts?.lastRun || revenueSyncStatus?.legacy?.lastRun || null;
+  const lastSyncText = lastSyncRun
+    ? `Lần gần nhất ${lastSyncRun.ok ? 'thành công' : `thất bại (${lastSyncRun.error || 'REVENUE_SYNC_FAILED'})`} lúc ${formatDateTime(lastSyncRun.finishedAt || lastSyncRun.startedAt)}`
+    : 'Chưa có kết quả job trong tiến trình hiện tại';
 
   return (
     <>
@@ -125,6 +149,12 @@ export default function Revenue({ me }) {
         )} />
 
       <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} filterBusy={filterBusy} filterNotice={filterNotice} />
+
+      <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', margin: '-6px 0 10px', flexWrap: 'wrap' }}>
+        <span>Dữ liệu đến ngày {dataAsOf ? formatDateTime(dataAsOf) : '—'} · Job chạy lúc {syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc {activatedAt ? formatDateTime(activatedAt) : '—'} (GMT+7) · Nguồn {sourceName} · {lastSyncText}</span>
+        {me.isAdmin && <button className="btn ghost" disabled={syncing} onClick={syncNow}>{syncing ? 'Đang đồng bộ…' : '↻ Đồng bộ ngay'}</button>}
+        {syncResult && <span>{syncResult}</span>}
+      </div>
 
       <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
