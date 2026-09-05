@@ -6,7 +6,7 @@ const at = (s) => new Date(s);
 
 test('schedule is OFF by default', () => assert.equal(schedule.isDue(at('2026-09-03T18:00:00+07:00'), {}).reason, 'disabled'));
 test('runtime config exports the exact approved schedule', () => assert.deepEqual(schedule.config(env), {
-  enabled: true, timezone: 'Asia/Bangkok', weekday: '18:00', saturday: '13:00', sunday: 'off', holidays: 'off',
+  enabled: true, timezone: 'Asia/Bangkok', weekday: '18:00', saturday: '13:00', retriesMinutes: [5, 15, 30], watchdogMinutes: 120, sunday: 'off', holidays: 'off',
 }));
 test('Monday-Friday runs once at 18:00 GMT+7 and Saturday at 13:00', () => {
   assert.equal(schedule.isDue(at('2026-09-03T18:00:00+07:00'), env).due, true);

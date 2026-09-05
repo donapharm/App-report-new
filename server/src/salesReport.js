@@ -263,7 +263,7 @@ function markSentTo(kind, ranges = defaultRanges(), code = '', meta = {}) {
 function unitCodesForRows(rows) { return [...new Set(rows.map((r) => r.unit_code).filter(Boolean))]; }
 function isClPriority(unitCode, route) { return String(route || '').toUpperCase() === 'CL' || ['025', '026', '027', '028'].includes(appSaleCst.normUnitPrefix(unitCode)); }
 
-async function computeReport({ empCode = 'DN001', kind = 'week', ranges = defaultRanges() } = {}) {
+async function computeReport({ empCode = 'DN001', kind = 'week', ranges = defaultRanges(), includeCst = true } = {}) {
   const user = userByCode(empCode);
   const range = kind === 'day' ? ranges.dayRange : kind === 'month' ? ranges.monthRange : ranges.weekRange;
   const rows = rowsInRange({ empCode, ...range });
@@ -278,7 +278,9 @@ async function computeReport({ empCode = 'DN001', kind = 'week', ranges = defaul
   const route = routeBreakdown(rows, prevRows, cmp.factor);
   const diffsUnit = diffTop(rows, prevRows, 'unit_code', 'unit_name', 5, cmp.factor);
   const diffsProduct = diffTop(rows, prevRows, 'iit_code', 'product_name', 5, cmp.factor);
-  const cstPayload = await appSaleCst.fetchTenderQuota();
+  // Smart Sale shadow only needs revenue/target. Keeping CST optional makes its
+  // GET preview genuinely read-only: fetchTenderQuota refreshes a disk cache.
+  const cstPayload = includeCst ? await appSaleCst.fetchTenderQuota() : { source: 'not_requested', rows: [] };
   const empUnits = unitCodesForRows(rows.length ? rows : store.getRowsRange({ kys: store.periodKys(), scope: { empCode } }));
   const cstRows = appSaleCst.cstForEmployeeUnits(cstPayload.rows, empUnits).slice(0, 10);
   const targets = store.getTargetsRange({ kys: [ranges.monthKy], scope: { empCode } });
