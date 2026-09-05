@@ -1,3 +1,11 @@
+### 05/09/2026 lúc 10:27 — Gộp phân quyền, cảnh báo doanh thu, biên số và Smart Sale (candidate only)
+
+- Dựng trên exact PROD `33bb961d96192304b6821aa58f8d7b3c6c322196`, giữ nguyên profile `revenue_only` của VP011/VP018/VP019 và toàn bộ hàng rào fail-closed.
+- Tích hợp luật doanh thu trống bằng 0, dữ liệu rác/NaN/Infinity fail-closed, MoM hai phía cùng chuẩn và ba mốc đồng bộ trên Tổng quan/Doanh thu.
+- Tích hợp cảnh báo riêng APP_WEB/DEBTS_DONA/DEBTS_AFP, retry có kiểm soát, watchdog và trạng thái Telegram/email độc lập.
+- Tích hợp Smart Sale preview CEO-only, chỉ đọc, shadow `0/3 NOT_STARTED`; không bật gửi thật, không áp lịch và không suy số chi phí/thưởng/phạt.
+- Cổng 1 chỉ tạo candidate, kiểm thử và push review; không đổi runtime, config, lịch hay dữ liệu.
+
 ### 29/08/2026 — Nhận sourceVersion số nguyên từ DataHub Employee Cost (candidate only)
 
 - Contract `app-report.employee-cost.v2` nay chuẩn hoá `sourceVersion` số nguyên an toàn, không âm thành chuỗi tất định; tương thích đúng envelope live đang phát version `6`.
