@@ -214,9 +214,10 @@ function activateSlotLocked({ id, user }) {
   const target = slots.find((s) => s.id === id);
   if (!target) throw new Error('Không tìm thấy slot.');
   singleWriter.assertActivationAllowed({ slot: target });
-  const updated = slots.map((s) => (s.ky === target.ky ? { ...s, active: s.id === id } : s));
+  const activatedAt = new Date().toISOString();
+  const updated = slots.map((s) => (s.ky === target.ky ? { ...s, active: s.id === id, ...(s.id === id ? { activatedAt } : {}) } : s));
   writeJson(SLOTS, updated);
-  appendAudit({ at: new Date().toISOString(), by: user.emp_code, action: 'rollback', ky: target.ky, slotId: id });
+  appendAudit({ at: activatedAt, by: user.emp_code, action: 'rollback', ky: target.ky, slotId: id });
   return target;
 }
 

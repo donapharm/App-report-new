@@ -179,6 +179,7 @@ export default function Overview({ me, onNavigate }) {
   const [richInsights, setRichInsights] = useState(null);
   const [dormantExecutive, setDormantExecutive] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [revenueSyncStatus, setRevenueSyncStatus] = useState(null);
   const [overviewFilters, setOverviewFilters] = useState(EMPTY_OVERVIEW_FILTERS);
   const [overviewOptions, setOverviewOptions] = useState(null);
   const [overviewFilterBusy, setOverviewFilterBusy] = useState(false);
@@ -387,10 +388,23 @@ export default function Overview({ me, onNavigate }) {
   const selectedKy = periodSel?.mode === 'range' ? periodSel.to : periodSel?.ky;
   const selectedPeriod = periods.find((p) => p.ky === selectedKy) || null;
   const dataAsOf = selectedPeriod?.data_as_of;
+  const syncAt = selectedPeriod?.jobRunAt || selectedPeriod?.job_run_at || selectedPeriod?.uploadedAt || selectedPeriod?.uploaded_at || dataAsOf;
+  const activatedAt = selectedPeriod?.activatedAt || selectedPeriod?.activated_at || syncAt;
+  const syncAndActivationSame = !!syncAt && !!activatedAt && new Date(syncAt).getTime() === new Date(activatedAt).getTime();
+  const sourceName = selectedPeriod?.revenue_source || selectedPeriod?.sourceSummary?.source || selectedPeriod?.source || '—';
   const dataAsOfText = dataAsOf ? formatDateTime(dataAsOf) : null;
+  useEffect(() => {
+    if (!me.isAdmin) return;
+    api.revenueRefreshStatus().then(setRevenueSyncStatus).catch(() => setRevenueSyncStatus(null));
+  }, [me.isAdmin, refreshing]);
+  const lastSyncRun = revenueSyncStatus?.debts?.lastRun || revenueSyncStatus?.legacy?.lastRun || null;
+  const lastSyncText = lastSyncRun
+    ? `Lần gần nhất ${lastSyncRun.ok ? 'thành công' : `thất bại (${lastSyncRun.error || 'REVENUE_SYNC_FAILED'})`} lúc ${formatDateTime(lastSyncRun.finishedAt || lastSyncRun.startedAt)}`
+    : 'Chưa có kết quả job trong tiến trình hiện tại';
 
   async function refreshNow() {
     if (!selectedKy) return;
+    if (!window.confirm(`Đồng bộ doanh thu kỳ ${selectedKy}. Các cổng nguồn, chữ ký, mapping, quarantine, trùng dòng và kích hoạt vẫn bắt buộc. Tiếp tục?`)) return;
     setRefreshing(true);
     try {
       await api.revenueRefreshRun(selectedKy);
@@ -410,6 +424,8 @@ export default function Overview({ me, onNavigate }) {
         analysis: analysisResult.status === 'fulfilled' ? analysisResult.value : null,
         targets: targetResult.status === 'fulfilled' ? targetResult.value : null,
       }));
+    } catch (error) {
+      window.alert(`Đồng bộ thất bại: ${error?.code || error?.message || 'REVENUE_SYNC_FAILED'}`);
     } finally {
       setRefreshing(false);
     }
@@ -422,8 +438,8 @@ export default function Overview({ me, onNavigate }) {
       {periodSel && <OverviewFilters me={me} filters={overviewFilters} setFilters={setOverviewFilters} options={overviewOptions} busy={overviewFilterBusy} />}
       {periodSel && (
         <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', margin: '-6px 0 10px' }}>
-          <span>{dataAsOfText ? `Cập nhật đến ${dataAsOfText}` : 'Chưa có mốc cập nhật tự động'}</span>
-          {me.isAdmin && <button className="btn ghost" onClick={refreshNow} disabled={refreshing}>{refreshing ? 'Đang làm mới…' : '↻ Làm mới'}</button>}
+          <span>Dữ liệu đến ngày {dataAsOfText || '—'} · {syncAndActivationSame ? `Job chạy và slot kích hoạt cùng lúc ${formatDateTime(syncAt)}` : `Job chạy lúc ${syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc ${activatedAt ? formatDateTime(activatedAt) : '—'}`} (GMT+7) · Nguồn {sourceName} · {lastSyncText}</span>
+          {me.isAdmin && <button className="btn ghost" onClick={refreshNow} disabled={refreshing}>{refreshing ? 'Đang đồng bộ…' : '↻ Đồng bộ ngay'}</button>}
         </div>
       )}
 

@@ -17,6 +17,9 @@ const cstSequence = require('./cstSequence');
 const smart = require('./smart');
 const uploadSvc = require('./upload');
 const revenueRefresh = require('./revenueRefresh');
+const debtsRevenueJob = require('./debtsRevenueJob');
+const groupDonaRevenuePolicy = require('./groupDonaRevenuePolicy');
+const revenueMaterializeGuard = require('./revenueMaterializeGuard');
 const debtsShadowService = require('./debtsShadowService');
 const dailySales = require('./dailySales');
 const dailySalesOrders = require('./dailySalesOrders');
@@ -4095,15 +4098,22 @@ router.get('/periods', auth.requireAuth, (req, res) => {
 });
 
 router.get('/admin/revenue-refresh/status', auth.requireAuth, auth.requireAdmin, (req, res) => {
-  res.json(revenueRefresh.status());
+  res.json({ legacy: revenueRefresh.status(), debts: debtsRevenueJob.status() });
 });
 
 router.post('/admin/revenue-refresh/run', auth.requireAuth, auth.requireAdmin, async (req, res) => {
   try {
-    const r = await revenueRefresh.runOnce({ force: true, reason: 'admin_button', ky: req.body?.ky || req.query?.ky });
+    const ky = String(req.body?.ky || req.query?.ky || currentKyVN());
+    revenueMaterializeGuard.assertPeriodOpenForMaterialization(ky);
+    if (groupDonaRevenuePolicy.isCutoverPeriod(ky) && ky !== currentKyVN()) {
+      throw Object.assign(new Error('DEBTS_REVENUE_MANUAL_PERIOD_NOT_CURRENT'), { code: 'DEBTS_REVENUE_MANUAL_PERIOD_NOT_CURRENT', status: 409 });
+    }
+    const r = groupDonaRevenuePolicy.isCutoverPeriod(ky)
+      ? await debtsRevenueJob.runOnce({ force: true, reason: 'admin_button' })
+      : await revenueRefresh.runOnce({ force: true, reason: 'admin_button', ky });
     res.json(r);
   } catch (e) {
-    res.status(500).json({ error: String(e?.message || e) });
+    res.status(Number(e?.status || 500)).json({ error: String(e?.message || e), code: String(e?.code || e?.message || 'REVENUE_SYNC_FAILED') });
   }
 });
 

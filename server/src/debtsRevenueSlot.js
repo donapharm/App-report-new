@@ -56,7 +56,7 @@ function publish(composed, { dataDir, now = () => new Date(), idFactory = () => 
     const totalRevenue = composed.rows.reduce((sum, row) => sum + Number(row.revenue || 0), 0);
     const slot = { id, ky: composed.ky, dateFrom: `${composed.period}-01`, dateTo: `${composed.period}-${String(new Date(Date.UTC(Number(composed.period.slice(0,4)), Number(composed.period.slice(5,7)), 0)).getUTCDate()).padStart(2,'0')}`,
       totalRows: composed.rows.length, totalRevenue, empCount: new Set(composed.rows.map((row) => row.emp_code).filter(Boolean)).size,
-      filename: `${id}.json`, uploadedBy: 'SYSTEM_DEBTS', uploadedByName: 'App Công nợ → App Report', uploadedAt: at.toISOString(),
+      filename: `${id}.json`, uploadedBy: 'SYSTEM_DEBTS', uploadedByName: 'App Công nợ → App Report', uploadedAt: at.toISOString(), jobRunAt: at.toISOString(), activatedAt: at.toISOString(),
       active: true, mode: active ? 'update' : 'new', replacedSlotId: active?.id || null, source: 'DEBTS_ONLY_GROUP_DONA',
       debtsRowsChecksum: composed.debtsRowsChecksum, debtsSourceReceipts: composed.debtsSourceReceipts,
       retainedPartnerRows: composed.retainedPartnerRows, partnerRowsChecksum: composed.partnerRowsChecksum,
