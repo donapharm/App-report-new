@@ -14,7 +14,7 @@ function uiPeriod(period) { const p = policy.normalizePeriod(period); return p ?
 function paths(dataDir) { const root = path.resolve(String(dataDir || '')); return { root, uploads: path.join(root, 'uploads'),
   slots: path.join(root, 'upload_slots.json'), audit: path.join(root, 'audit.json'), lock: path.join(root, 'revenue_materialize.lock') }; }
 
-function compose({ period, currentRows = [], debts } = {}) {
+function compose({ period, currentRows = [], debts, partitionGenerations = null } = {}) {
   const normalized = policy.normalizePeriod(period);
   if (!policy.isCutoverPeriod(normalized) || !debts || debts.period !== normalized) fail('DEBTS_SLOT_PERIOD_INVALID');
   if (!Array.isArray(currentRows) || currentRows.some((row) => String(row?.source || '').toUpperCase() !== 'APP_WEB_PARTNER'
@@ -32,9 +32,13 @@ function compose({ period, currentRows = [], debts } = {}) {
   const ids = rows.map((row) => String(row.source_line_id));
   if (new Set(ids).size !== ids.length) fail('DEBTS_SLOT_DUPLICATE_LINE_ID', { partitionOverlapCount });
   const partnerRowsChecksum = checksum(retained); const compositeRowsChecksum = checksum(rows);
+  if (partitionGenerations && (partitionGenerations.APP_WEB?.checksum !== partnerRowsChecksum
+    || partitionGenerations.APP_WEB?.rowCount !== retained.length
+    || partitionGenerations.DEBTS_DONA_AFP?.checksum !== debts.rowsChecksum
+    || partitionGenerations.DEBTS_DONA_AFP?.rowCount !== debts.rows.length)) fail('DEBTS_SLOT_GENERATION_PROVENANCE_INVALID');
   return Object.freeze({ period: normalized, ky: uiPeriod(normalized), rows: Object.freeze(rows),
     debtsRowsChecksum: debts.rowsChecksum, debtsSourceReceipts: debts.sourceReceipts, retainedPartnerRows: retained.length,
-    partnerRowsChecksum, compositeRowsChecksum, partitionOverlapCount });
+    partnerRowsChecksum, compositeRowsChecksum, partitionOverlapCount, partitionGenerations });
 }
 
 function publish(composed, { dataDir, now = () => new Date(), idFactory = () => randomUUID() } = {}) {
@@ -48,7 +52,11 @@ function publish(composed, { dataDir, now = () => new Date(), idFactory = () => 
     if (active?.source === 'DEBTS_ONLY_GROUP_DONA' && active.debtsRowsChecksum === composed.debtsRowsChecksum
       && active.partnerRowsChecksum === composed.partnerRowsChecksum
       && active.compositeRowsChecksum === composed.compositeRowsChecksum
-      && active.retainedPartnerRows === composed.retainedPartnerRows) return Object.freeze({ skipped: 'unchanged', slot: active });
+      && active.retainedPartnerRows === composed.retainedPartnerRows
+      && (!composed.partitionGenerations || (active.partitionGenerations?.APP_WEB?.checksum === composed.partitionGenerations.APP_WEB?.checksum
+        && active.partitionGenerations?.DEBTS_DONA_AFP?.checksum === composed.partitionGenerations.DEBTS_DONA_AFP?.checksum))) {
+      return Object.freeze({ skipped: 'unchanged', slot: active });
+    }
     const at = now(); const id = `slot_${composed.ky.replace('.', '')}_debts_${String(idFactory()).replace(/[^A-Za-z0-9-]/g, '')}`;
     if (!/^slot_\d{6}_debts_[A-Za-z0-9-]+$/.test(id) || registry.some((slot) => slot.id === id)) fail('DEBTS_SLOT_ID_INVALID');
     const file = path.join(loc.uploads, `${id}.json`); if (fs.existsSync(file)) fail('DEBTS_SLOT_ID_INVALID');
@@ -61,13 +69,15 @@ function publish(composed, { dataDir, now = () => new Date(), idFactory = () => 
       debtsRowsChecksum: composed.debtsRowsChecksum, debtsSourceReceipts: composed.debtsSourceReceipts,
       retainedPartnerRows: composed.retainedPartnerRows, partnerRowsChecksum: composed.partnerRowsChecksum,
       compositeRowsChecksum: composed.compositeRowsChecksum, partitionOverlapCount: composed.partitionOverlapCount,
+      partitionGenerations: composed.partitionGenerations,
       selectorPolicy: 'GROUP_DONA_DEBTS_FROM_2026_09' };
     writeJsonAtomic(loc.slots, [...registry.map((item) => item.ky === composed.ky ? { ...item, active: false } : item), slot]);
     const audit = readJson(loc.audit, []); if (!Array.isArray(audit)) fail('DEBTS_SLOT_AUDIT_INVALID');
     writeJsonAtomic(loc.audit, [...audit, { at: slot.uploadedAt, by: slot.uploadedBy, action: 'debts_group_dona_cutover', ky: slot.ky,
       slotId: slot.id, replacedSlotId: slot.replacedSlotId, rows: slot.totalRows, revenue: slot.totalRevenue,
       debtsRowsChecksum: slot.debtsRowsChecksum, partnerRowsChecksum: slot.partnerRowsChecksum,
-      compositeRowsChecksum: slot.compositeRowsChecksum, partitionOverlapCount: slot.partitionOverlapCount }]);
+      compositeRowsChecksum: slot.compositeRowsChecksum, partitionOverlapCount: slot.partitionOverlapCount,
+      partitionGenerations: slot.partitionGenerations }]);
     return Object.freeze({ skipped: null, slot });
   } finally { release(); }
 }

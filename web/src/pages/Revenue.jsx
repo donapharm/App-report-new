@@ -128,6 +128,8 @@ export default function Revenue({ me }) {
   const activatedAt = selectedPeriod.activatedAt || selectedPeriod.activated_at || syncAt;
   const syncAndActivationSame = !!syncAt && !!activatedAt && new Date(syncAt).getTime() === new Date(activatedAt).getTime();
   const sourceName = selectedPeriod.revenue_source || selectedPeriod.sourceSummary?.source || selectedPeriod.source || '—';
+  const partitionFreshness = selectedPeriod.partitionGenerations
+    ? ` · APP_WEB đến ${selectedPeriod.partitionGenerations.APP_WEB?.dataThrough || '—'} · DONA+AFP đến ${selectedPeriod.partitionGenerations.DEBTS_DONA_AFP?.dataThrough || '—'}` : '';
   useEffect(() => {
     if (!me.isAdmin) return;
     api.revenueRefreshStatus().then(setRevenueSyncStatus).catch(() => setRevenueSyncStatus(null));
@@ -152,7 +154,7 @@ export default function Revenue({ me }) {
       <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} filterBusy={filterBusy} filterNotice={filterNotice} />
 
       <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', margin: '-6px 0 10px', flexWrap: 'wrap' }}>
-        <span>Dữ liệu đến ngày {dataAsOf ? formatDateTime(dataAsOf) : '—'} · {syncAndActivationSame ? `Job chạy và slot kích hoạt cùng lúc ${formatDateTime(syncAt)}` : `Job chạy lúc ${syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc ${activatedAt ? formatDateTime(activatedAt) : '—'}`} (GMT+7) · Nguồn {sourceName} · {lastSyncText}</span>
+        <span>Dữ liệu đến ngày {dataAsOf ? formatDateTime(dataAsOf) : '—'} · {syncAndActivationSame ? `Job chạy và slot kích hoạt cùng lúc ${formatDateTime(syncAt)}` : `Job chạy lúc ${syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc ${activatedAt ? formatDateTime(activatedAt) : '—'}`} (GMT+7) · Nguồn {sourceName}{partitionFreshness} · {lastSyncText}</span>
         {me.isAdmin && <button className="btn ghost" disabled={syncing} onClick={syncNow}>{syncing ? 'Đang đồng bộ…' : '↻ Đồng bộ ngay'}</button>}
         {syncResult && <span>{syncResult}</span>}
       </div>

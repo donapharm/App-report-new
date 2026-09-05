@@ -30,6 +30,28 @@ test('job verifies both partitions before switching one T09 revenue slot', async
     assert.equal(out.ok, true); assert.equal(out.rowCount, 2); assert.deepEqual(seen, ['DONA-snap', 'AFP-snap']);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+test('fresh APP_WEB is composed with the last verified atomic DONA+AFP generation when current debts fail', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'debts-job-fallback-')); let published = null;
+  const coordinator = require('../src/revenuePartitionCoordinator');
+  const previousRows = [
+      { source: 'DEBTS_INVOICE_SHADOW', source_line_id: 'DONA:old', contractor_code: '01.DONA' },
+      { source: 'DEBTS_INVOICE_SHADOW', source_line_id: 'AFP:old', contractor_code: '02.AFP' },
+    ];
+  const previousDebts = coordinator.buildDebts('2026-09', {
+    period: '2026-09', rows: previousRows, rowsChecksum: coordinator.checksum(previousRows),
+    sourceReceipts: [{ legalEntity: 'DONA' }, { legalEntity: 'AFP' }] }, { generatedAt: '2026-09-04T11:00:00.000Z' });
+  try {
+    await assert.rejects(() => job.runOnce({ force: true, now: new Date('2026-09-05T11:00:00Z'), env: env(), dataDir: root, deps: {
+      getCatalogSnapshot: async () => catalog(), loadPartnerRows: async () => ({ rows: [{ source: 'APP_WEB_PARTNER', source_line_id: 'WEB:new', contractor_code: '03.X', date: '2026-09-05' }] }),
+      fetchSnapshotPages: async () => { const error = new Error('DEBTS_REVENUE_PARTITION_NOT_ACCEPTABLE'); error.code = error.message; throw error; },
+      stageGeneration: () => {}, loadGeneration: ({ kind }) => kind === 'debts-dona-afp' ? previousDebts : null,
+      bootstrapGenerations: () => { throw new Error('unused'); }, publishSlot: (value) => { published = value; return { skipped: null }; },
+    } }), { code: 'DEBTS_REVENUE_PARTITION_NOT_ACCEPTABLE' });
+    assert.deepEqual(published.rows.map((row) => row.source_line_id), ['WEB:new', 'DONA:old', 'AFP:old']);
+    assert.equal(published.partitionGenerations.APP_WEB.dataThrough, '2026-09-05');
+    assert.equal(published.partitionGenerations.DEBTS_DONA_AFP.generatedAt, '2026-09-04T11:00:00.000Z');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
 test('old CRM scheduler is hard blocked for T09 even when force=true', async () => {
   const old = require('../src/revenueRefresh');
   await assert.rejects(() => old.runOnce({ force: true, ky: '09.2026' }), { code: 'MISA_REVENUE_DISABLED_FROM_2026_09' });

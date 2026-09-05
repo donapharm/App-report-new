@@ -8147,3 +8147,10 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - Không bắn sweep `Tất cả nhân viên` nặng ngay trong callback khởi động HTTP; tránh cạnh tranh với watchdog health một phút và traffic vừa quay lại sau cutover.
 - Giữ nguyên warm định kỳ, warm theo revenue/materialize và recovery theo request; không đổi công thức, số liệu, cache key, custody/seal/generation hay nguồn dữ liệu.
 - Chỉ là candidate Cổng 1; chưa deploy, không đổi runtime/config/job và không gửi thông báo.
+
+### 05/09/2026 lúc 20:37 — Tách APP_WEB khỏi generation Công nợ atomic (candidate only)
+
+- APP_WEB và cặp Công nợ DONA+AFP có generation bất biến, checksum và mốc dữ liệu riêng; coordinator chỉ ghép các generation đã xác minh.
+- DONA+AFP vẫn bắt buộc đủ cả hai trong cùng một generation. Nếu một bên lỗi, không generation Công nợ mới nào được tạo hoặc kích hoạt; APP_WEB hợp lệ vẫn có thể đi cùng generation Công nợ hợp lệ gần nhất.
+- Slot composite lưu provenance/độ tươi từng partition; màn Tổng quan và Doanh thu hiển thị riêng ngày dữ liệu APP_WEB và DONA+AFP.
+- Chỉ build/test/push candidate trong Cổng 1; không chạy job, không ghi/activate slot, không deploy và không đụng T06.2026.

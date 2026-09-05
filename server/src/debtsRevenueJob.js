@@ -8,6 +8,7 @@ const catalogMapping = require('./debtsCatalogMapping');
 const shadow = require('./debtsInvoiceShadow');
 const cutover = require('./debtsRevenueCutover');
 const slot = require('./debtsRevenueSlot');
+const coordinator = require('./revenuePartitionCoordinator');
 const shadowService = require('./debtsShadowService');
 const incident = require('./revenueSyncIncident');
 const persist = require('./persist');
@@ -61,9 +62,21 @@ async function runOnce({ force = false, reason = 'manual', now = new Date(), env
     const verifyShadow = deps.verifyPublishedShadow || shadow.verifyPublishedShadow;
     const publishSlot = deps.publishSlot || slot.publish;
     const loadPartnerRows = deps.loadPartnerRows || require('./debtsPartnerRevenue').load;
-    const catalog = await getSnapshot(period);
-    const mapping = catalogMapping.build(catalog, period);
+    const stageGeneration = deps.stageGeneration || coordinator.stage;
+    const loadGeneration = deps.loadGeneration || coordinator.loadCurrent;
+    const bootstrapGenerations = deps.bootstrapGenerations || coordinator.bootstrapFromActive;
+    let appWebGeneration = null; let debtsGeneration = null; let appWebError = null; let debtsError = null;
+    try {
+      const partner = await loadPartnerRows(period, { env });
+      appWebGeneration = coordinator.buildAppWeb(period, partner?.rows, { catalogVersion: partner?.catalogVersion, kpi: partner?.kpi });
+      stageGeneration(appWebGeneration, { dataDir });
+      run.sources.APP_WEB = { status: 'ok', rowCount: appWebGeneration.rowCount, dataThrough: appWebGeneration.dataThrough };
+    } catch (error) {
+      appWebError = error; run.sources.APP_WEB = { status: 'failed', code: String(error?.code || error?.message || 'APP_WEB_SOURCE_FAILED') };
+    }
     const staged = {};
+    try {
+    const catalog = await getSnapshot(period); const mapping = catalogMapping.build(catalog, period);
     for (const legalEntity of ['DONA', 'AFP']) {
       try {
         const combined = await fetchPages({ endpoint: cfg.endpoint, token: cfg.token, period, legalEntity, lockedPeriods: [shadow.HARD_BLOCKED_PERIOD], fetchImpl });
@@ -75,12 +88,7 @@ async function runOnce({ force = false, reason = 'manual', now = new Date(), env
         throw error;
       }
     }
-    const payload = cutover.build({ period, partitions: staged });
-    let partner;
-    try { partner = await loadPartnerRows(period, { env }); run.sources.APP_WEB = { status: 'ok', rowCount: partner?.rows?.length || 0 }; }
-    catch (error) { run.sources.APP_WEB = { status: 'failed', code: String(error?.code || error?.message || 'APP_WEB_SOURCE_FAILED') }; throw error; }
-    if (!partner || !Array.isArray(partner.rows) || partner.rows.some((row) => String(row.source || '').toUpperCase() !== 'APP_WEB_PARTNER')) fail('PARTNER_REVENUE_RESULT_INVALID');
-    const verified = {};
+    const payload = cutover.build({ period, partitions: staged }); const verified = {};
     for (const legalEntity of ['DONA', 'AFP']) {
       const target = publishShadow(staged[legalEntity], { dataDir: cfg.dataDir, allowWrite: true,
         receiptSigningKey: cfg.receiptSigningKey, receiptSigningKeyId: cfg.receiptSigningKeyId });
@@ -88,9 +96,21 @@ async function runOnce({ force = false, reason = 'manual', now = new Date(), env
     }
     const verifiedPayload = cutover.build({ period, partitions: verified });
     if (verifiedPayload.rowsChecksum !== payload.rowsChecksum) fail('DEBTS_REVENUE_VERIFY_DRIFT');
-    const composed = slot.compose({ period, currentRows: partner.rows, debts: verifiedPayload });
-    run.publish = publishSlot(composed, { dataDir }); run.rowCount = verifiedPayload.rowCount;
-    run.partnerRowCount = partner.rows.length; run.rowsChecksum = verifiedPayload.rowsChecksum; run.finishedAt = new Date().toISOString(); run.ok = true; state.lastRun = run;
+    debtsGeneration = coordinator.buildDebts(period, verifiedPayload); stageGeneration(debtsGeneration, { dataDir });
+    } catch (error) { debtsError = error; }
+    if (!appWebGeneration) try { appWebGeneration = loadGeneration({ dataDir, period, kind: 'app-web' }); } catch {}
+    if (!debtsGeneration) try { debtsGeneration = loadGeneration({ dataDir, period, kind: 'debts-dona-afp' }); } catch {}
+    if (!appWebGeneration || !debtsGeneration) try {
+      const fallback = bootstrapGenerations({ dataDir, period });
+      appWebGeneration ||= fallback.appWeb; debtsGeneration ||= fallback.debts;
+    } catch {}
+    if (!appWebGeneration || !debtsGeneration) throw (debtsError || appWebError || Object.assign(new Error('REVENUE_COORDINATOR_GENERATION_UNAVAILABLE'), { code: 'REVENUE_COORDINATOR_GENERATION_UNAVAILABLE' }));
+    const coordinated = coordinator.coordinate({ period, appWeb: appWebGeneration, debts: debtsGeneration });
+    const composed = slot.compose(coordinated);
+    run.publish = publishSlot(composed, { dataDir }); run.rowCount = debtsGeneration.rowCount;
+    run.partnerRowCount = appWebGeneration.rowCount; run.rowsChecksum = debtsGeneration.rowsChecksum; run.partitionGenerations = coordinated.partitionGenerations;
+    run.partial = Boolean(appWebError || debtsError); run.finishedAt = new Date().toISOString(); run.ok = !run.partial; state.lastRun = run;
+    if (run.partial) { const error = debtsError || appWebError; error.details = { ...(error.details || {}), compositePublished: true }; throw error; }
     return Object.freeze(run);
   } catch (error) {
     const legalEntity = String(error?.details?.legalEntity || '').toUpperCase();

@@ -22,6 +22,9 @@ test('compose fails closed on CRM leakage, Group-Dona partner leakage and cross-
   catch (error) { overlap = error; }
   assert.equal(overlap?.code, 'DEBTS_SLOT_DUPLICATE_LINE_ID');
   assert.equal(overlap.details.partitionOverlapCount, 1, 'đếm giao nhau thật, không ghi hằng số 0');
+  assert.throws(() => slot.compose({ period: '09.2026', currentRows: [], debts, partitionGenerations: {
+    APP_WEB: { checksum: '0'.repeat(64), rowCount: 0 }, DEBTS_DONA_AFP: { checksum: debts.rowsChecksum, rowCount: 2 },
+  } }), { code: 'DEBTS_SLOT_GENERATION_PROVENANCE_INVALID' });
 });
 test('atomic publish switches one period, is idempotent and preserves rollback slot', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'debts-slot-')); const loc = slot.paths(root);

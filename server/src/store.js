@@ -428,7 +428,7 @@ function listPeriods() {
     map.set(s.ky, { ky: s.ky, dateFrom: s.dateFrom, dateTo: s.dateTo, source: 'upload', revenue_source: s.source || null,
       data_as_of: s.data_as_of || s.dataAsOf || s.uploadedAt, uploadedAt: s.uploadedAt || null,
       jobRunAt: s.jobRunAt || s.uploadedAt || null, activatedAt: s.activatedAt || s.uploadedAt || null,
-      sourceSummary: s.sourceSummary || null, ...dm });
+      sourceSummary: s.sourceSummary || null, partitionGenerations: s.partitionGenerations || null, ...dm });
   }
   return [...map.values()].sort((a, b2) => ((a.dateFrom || a.ky) < (b2.dateFrom || b2.ky) ? -1 : 1));
 }
