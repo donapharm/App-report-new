@@ -138,7 +138,7 @@ test('startup loop must not schedule an immediate heavy sweep before watchdog he
     'runtime log must state why startup did not warm immediately');
 });
 
-test('first completed health starts one current-period warm and concurrent cold users share it', async () => {
+test('kỳ đang mở không được trả bản lạnh: 503 dưới một giây, nhiều request chỉ chạy một warm nền', async () => {
   const originalCurrentKyByDate = store.currentKyByDate;
   try {
     router.stopEmployeeCostAllWarmLoop();
@@ -151,17 +151,42 @@ test('first completed health starts one current-period warm and concurrent cold 
       calls += 1;
       return new Promise((resolve) => { release = resolve; });
     };
-    const first = router.ensureEmployeeCostStartupWarm(warm);
-    const second = router.ensureEmployeeCostStartupWarm(warm);
-    const user = router.waitForEmployeeCostStartupWarm({ query: { from: '2026-09', to: '2026-09' } });
+    const startedAt = Date.now();
+    const users = await Promise.allSettled(Array.from({ length: 4 }, () =>
+      router.waitForEmployeeCostStartupWarm({ query: { from: '2026-09', to: '2026-09' } }, warm)));
     await flush();
-    assert.equal(calls, 1, 'cold users must share one startup warm');
+    assert.ok(Date.now() - startedAt < 1000, '503 phải trả ngay, không await warm gần 49 giây');
+    assert.equal(calls, 1, 'cold users must start/share one background startup warm');
+    for (const user of users) {
+      assert.equal(user.status, 'rejected');
+      assert.equal(user.reason.status, 503);
+      assert.equal(user.reason.code, 'EMPLOYEE_COST_STARTUP_WARM_UNAVAILABLE');
+      assert.equal(user.reason.message, 'Đang chuẩn bị dữ liệu chi phí kỳ này, thử lại sau khoảng một phút.');
+    }
     assert.equal(router.employeeCostStartupWarmState(), 'warming');
     release(true);
-    assert.equal(await first, true);
-    assert.equal(await second, true);
-    assert.equal(await user, true, 'active-period ALL waits for the shared warm instead of cold fan-out');
+    assert.equal(await router.ensureEmployeeCostStartupWarm(warm), true);
     assert.equal(router.employeeCostStartupWarmState(), 'ready');
+    assert.equal(await router.waitForEmployeeCostStartupWarm({ query: { from: '2026-09', to: '2026-09' } }, warm), true,
+      'warm hoàn tất thì request kế tiếp đi tiếp tới payload đầy đủ');
+  } finally {
+    router.stopEmployeeCostAllWarmLoop();
+    store.currentKyByDate = originalCurrentKyByDate;
+  }
+});
+
+test('kỳ đã khóa không bị cổng startup warm chặn và không kích hoạt warm', async () => {
+  const originalCurrentKyByDate = store.currentKyByDate;
+  try {
+    router.stopEmployeeCostAllWarmLoop();
+    store.currentKyByDate = () => '09.2026';
+    router.startEmployeeCostAllWarmLoop();
+    let calls = 0;
+    assert.equal(await router.waitForEmployeeCostStartupWarm(
+      { query: { from: '2026-08', to: '2026-08' } },
+      async () => { calls += 1; return true; },
+    ), true);
+    assert.equal(calls, 0);
   } finally {
     router.stopEmployeeCostAllWarmLoop();
     store.currentKyByDate = originalCurrentKyByDate;

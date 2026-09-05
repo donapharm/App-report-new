@@ -2741,9 +2741,13 @@ function noteEmployeeCostHealthReady() {
 async function waitForEmployeeCostStartupWarm(req, warm = warmEmployeeCostAllCache) {
   const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
   if (range.months.length !== 1 || employeeCost.toUiMonth(range.months[0]) !== currentWarmKy()) return true;
-  const ready = await ensureEmployeeCostStartupWarm(warm);
-  if (ready) return true;
-  throw Object.assign(new Error('Chi phí kỳ hiện tại đang được chuẩn bị, vui lòng thử lại.'), {
+  if (employeeCostSnapshotSyncEnabled() || employeeCostSnapshotEnabled() || employeeCostStartupWarmState === 'ready') return true;
+  // Warm T09 thực tế mất gần 49 giây, dài hơn timeout browser/proxy. Không giữ
+  // request người dùng chờ Promise này: khởi động đúng một single-flight nền rồi
+  // trả lời ngay để màn hình có thông báo rõ ràng và tuyệt đối không rơi xuống
+  // đường dựng lạnh thiếu nhân viên.
+  void ensureEmployeeCostStartupWarm(warm);
+  throw Object.assign(new Error('Đang chuẩn bị dữ liệu chi phí kỳ này, thử lại sau khoảng một phút.'), {
     status: 503,
     code: 'EMPLOYEE_COST_STARTUP_WARM_UNAVAILABLE',
   });

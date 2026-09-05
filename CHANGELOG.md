@@ -1,3 +1,9 @@
+### 05/09/2026 lúc 18:08 — Trả 503 ngay khi cache Chi phí kỳ mở đang hâm (candidate only)
+
+- Số đo cô lập T09 là 48.621 ms nên request `Chi phí · Tất cả NV` không còn chờ warm: trả ngay `503 EMPLOYEE_COST_STARTUP_WARM_UNAVAILABLE` và chỉ kích hoạt một warm nền single-flight.
+- Giao diện hiện lời nhắc tiếng Việt thử lại sau khoảng một phút; kỳ đã khóa không bị chặn, và khi warm hoàn tất request kế tiếp đi tiếp tới payload đầy đủ.
+- Không đổi công thức, dữ liệu, cache key, config/job, custody/seal/generation hoặc runtime; candidate cần Cổng 2 riêng trước deploy.
+
 ### 05/09/2026 lúc 15:54 — Khóa khoảng hở cache lạnh Employee Cost (candidate only)
 
 - Sau khi health đầu tiên trả xong, chạy một warm single-flight cho kỳ hiện tại.
