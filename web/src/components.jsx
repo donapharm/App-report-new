@@ -211,7 +211,16 @@ function dailyUpdatedLabel(value) {
 }
 
 // Dùng chung ở Phân tích và Tổng quan để hai màn hình luôn cùng số liệu/cách cảnh báo.
-export function DailySalesKpi({ data, onClick }) {
+export function DailySalesKpi({ data, error, onRetry, onClick }) {
+  if (error) return (
+    <div className="kpi daily-sales-kpi daily-error" role="alert">
+      <span className="kpi-ic" aria-hidden="true">⚠️</span>
+      <div className="label">Doanh số trong ngày</div>
+      <div className="daily-sales-note">{error.message || 'Không tải được doanh số trong ngày.'}</div>
+      <div className="daily-sales-error-code">Mã lỗi: {error.code || 'DAILY_SALES_LOAD_FAILED'}</div>
+      {onRetry && <button className="daily-sales-retry" type="button" onClick={onRetry}>Thử lại</button>}
+    </div>
+  );
   if (!data) return <Kpi label="Doanh số trong ngày" value="—" sub="Đang tải dữ liệu…" />;
   const tone = data.stale ? 'daily-stale' : (data.status === 'day_off' ? 'daily-day-off' : 'daily-ready');
   const updated = dailyUpdatedLabel(data.sourceUpdatedAt);

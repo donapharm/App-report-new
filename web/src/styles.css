@@ -186,6 +186,12 @@ body {
 .daily-sales-kpi.daily-stale .daily-sales-date,
 .daily-sales-kpi.daily-stale .daily-sales-note,
 .daily-sales-kpi.daily-stale .daily-sales-updated { color: #8a2f0b; text-shadow: none; }
+.daily-sales-kpi.daily-error { border-color: #dc5b5b; border-left-color: #b42318; background: linear-gradient(135deg, #fff1f0, #ffd8d4); }
+.daily-sales-kpi.daily-error .label,
+.daily-sales-kpi.daily-error .daily-sales-note,
+.daily-sales-kpi.daily-error .daily-sales-error-code { color: #8f1d18; }
+.daily-sales-error-code { margin-top: 4px; font-size: 10px; font-weight: 800; overflow-wrap: anywhere; }
+.daily-sales-retry { margin-top: 7px; border: 1px solid #b42318; border-radius: 8px; background: #fff; color: #8f1d18; padding: 5px 9px; font-weight: 800; cursor: pointer; }
 .kpi.danger { border-color: #f3b7b7; background: #fff7f7; }
 .kpi.danger .value { color: var(--hi); }
 .kpi.clickable { cursor: pointer; transition: transform .12s, border-color .12s; }

@@ -8160,3 +8160,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 - DONA+AFP vẫn bắt buộc đủ cả hai trong cùng một generation. Nếu một bên lỗi, không generation Công nợ mới nào được tạo hoặc kích hoạt; APP_WEB hợp lệ vẫn có thể đi cùng generation Công nợ hợp lệ gần nhất.
 - Slot composite lưu provenance/độ tươi từng partition; màn Tổng quan và Doanh thu hiển thị riêng ngày dữ liệu APP_WEB và DONA+AFP.
 - Chỉ build/test/push candidate trong Cổng 1; không chạy job, không ghi/activate slot, không deploy và không đụng T06.2026.
+
+### 06/09/2026 lúc 06:40 — Sửa số lượng doanh thu và lỗi tải KPI ngày (candidate only)
+
+- Tổng hợp doanh thu ép `quantity` về số hữu hạn trước khi cộng, chặn lỗi nối chuỗi thành dãy số dài.
+- KPI Doanh số trong ngày hiện cảnh báo, mã lỗi và nút Thử lại khi API phân tích thất bại; không còn quay “Đang tải dữ liệu…” vô hạn.

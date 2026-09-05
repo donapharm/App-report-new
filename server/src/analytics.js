@@ -68,7 +68,8 @@ function groupSum(rows, keyField, labelField) {
     const parsedRevenue = Number(r.revenue);
     cur.revenue_invalid ||= r.revenue_invalid === true || !Number.isFinite(parsedRevenue);
     if (!cur.revenue_invalid) cur.revenue += parsedRevenue;
-    cur.quantity += r.quantity || 0;
+    const parsedQuantity = Number(r.quantity);
+    if (Number.isFinite(parsedQuantity)) cur.quantity += parsedQuantity;
     cur.rows += 1;
     map.set(key, cur);
   }

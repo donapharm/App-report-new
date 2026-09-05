@@ -81,6 +81,22 @@ test('Top 20 dùng cùng bộ lọc chuẩn với KPI, gồm companyGroup và un
   assert.match(routes, /Promise\.all\(pc\.kys\.map\(async \(period\)/);
 });
 
+test('doanh thu theo nhân viên cộng quantity dạng chuỗi bằng số học, không nối chuỗi', () => {
+  const original = store.getRowsRange;
+  store.getRowsRange = () => [
+    { emp_code: 'DN001', emp_name: 'NV 1', revenue: 100, quantity: '12' },
+    { emp_code: 'DN001', emp_name: 'NV 1', revenue: 200, quantity: '3.5' },
+    { emp_code: 'DN001', emp_name: 'NV 1', revenue: 300, quantity: 'không-hợp-lệ' },
+  ];
+  try {
+    const result = A.revenueBreakdown({ ky: '09.2026', scope: {}, dimension: 'emp', filters: {} });
+    assert.equal(result[0].quantity, 15.5);
+    assert.equal(typeof result[0].quantity, 'number');
+  } finally {
+    store.getRowsRange = original;
+  }
+});
+
 test('target chỉ so sánh khi lát cắt còn đúng theo nhân viên', () => {
   const originals = {
     getRowsRange: store.getRowsRange,

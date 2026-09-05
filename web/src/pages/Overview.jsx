@@ -8,6 +8,7 @@ import { ComboSelect, MultiSelect, Select } from './revenueFilters.jsx';
 import { DonutChart, RevenueTrendChart, TargetGauge, TopBarChart } from '../chartsLazy.jsx';
 import { DrillNav, useReloadTick } from '../drillNav.jsx';
 import { readSwrCache, swrTimeLabel, writeSwrCache } from '../swrCache.js';
+import { dailySalesLoadFailure } from '../dailySalesUi.js';
 
 function CstOwnerLine({ item }) {
   const codes = [...new Set((item.employees || []).map((emp) => String(emp?.code || emp || '').trim().toUpperCase()).filter(Boolean))];
@@ -320,6 +321,7 @@ export default function Overview({ me, onNavigate }) {
       if (!active) return;
       setRichInsights({
         analysis: analysisResult.status === 'fulfilled' ? analysisResult.value : null,
+        analysisError: analysisResult.status === 'rejected' ? dailySalesLoadFailure(analysisResult.reason) : null,
         targets: targetResult.status === 'fulfilled' ? targetResult.value : null,
       });
     });
@@ -346,6 +348,7 @@ export default function Overview({ me, onNavigate }) {
   const unitDownGroup = groups.find((g) => g.key === 'unit_down') || { key: 'unit_down', icon: '📉', tone: 'warning', title: 'Đơn vị giảm doanh thu mạnh', total: 0, items: [] };
   const unitUpGroup = groups.find((g) => g.key === 'unit_up') || { key: 'unit_up', icon: '📈', tone: 'ok', title: 'Đơn vị tăng trưởng mạnh', total: 0, items: [] };
   const analysisInsights = richInsights?.analysis;
+  const analysisInsightsError = richInsights?.analysisError;
   const targetPacing = richInsights?.targets?.pacing;
   const targetItems = richInsights?.targets?.items || [];
   const cstUntouched = analysisInsights?.cstUntouched || [];
@@ -424,6 +427,7 @@ export default function Overview({ me, onNavigate }) {
         api.targets(overviewParams),
       ]).then(([analysisResult, targetResult]) => setRichInsights({
         analysis: analysisResult.status === 'fulfilled' ? analysisResult.value : null,
+        analysisError: analysisResult.status === 'rejected' ? dailySalesLoadFailure(analysisResult.reason) : null,
         targets: targetResult.status === 'fulfilled' ? targetResult.value : null,
       }));
     } catch (error) {
@@ -453,7 +457,7 @@ export default function Overview({ me, onNavigate }) {
             <Kpi variant="blue" icon={kpi.momPct != null && kpi.momPct < 0 ? '⚠️' : '📊'} label={me.isAdmin ? 'Doanh thu toàn công ty' : 'Doanh thu của bạn'} value={<MoneyBig value={kpi.revenue} />} delta={kpi.momPct} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenue')} />
             <Kpi variant="purple" icon="🧾" label="Trước VAT" value={<MoneyBig value={kpi.revenueBeforeVat} />} sub="đã ÷ 1,05" onClick={() => onNavigate?.('revenue')} />
             <Kpi icon="📋" label="Số dòng dữ liệu" value={(kpi.rowCount || 0).toLocaleString('vi-VN')} sub={periodLabel(periodSel)} onClick={() => onNavigate?.('revenueFull')} />
-            <DailySalesKpi data={analysisInsights?.dailySales} onClick={() => onNavigate?.('dailySales', { fromTab: 'overview', fromLabel: 'Tổng quan', returnScroll: document.querySelector('.main-desktop')?.scrollTop || window.scrollY || 0 })} />
+            <DailySalesKpi data={analysisInsights?.dailySales} error={analysisInsightsError} onRetry={reload} onClick={() => onNavigate?.('dailySales', { fromTab: 'overview', fromLabel: 'Tổng quan', returnScroll: document.querySelector('.main-desktop')?.scrollTop || window.scrollY || 0 })} />
             <Kpi variant="green" icon="🎯" label="Đạt target" value={kpi.targetComparable === false ? 'Không phân bổ' : <MoneyBig value={kpi.targetTotal || 0} />}
                  sub={kpi.targetComparable === false ? 'Không tính % sai theo lát cắt' : kpi.pctTarget != null ? `Đã đạt ${pct(kpi.pctTarget)} (chưa VAT)` : 'Chưa có target (chưa VAT)'} onClick={() => onNavigate?.('target')} />
             <Kpi variant="green" icon="🎯" label="NV đạt target" value={kpi.targetComparable === false ? '—' : `${kpi.empTarget?.achieved ?? 0}/${kpi.empTarget?.total ?? 0} đạt`} sub={kpi.targetComparable === false ? 'Chỉ áp dụng khi lọc theo NV' : me.isAdmin ? 'NV đang bán có target' : 'Theo phạm vi của bạn'} onClick={() => onNavigate?.('target')} />
