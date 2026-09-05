@@ -1,3 +1,9 @@
+### 05/09/2026 lúc 21:50 — Nói đúng độ tươi từng phân vùng doanh thu (candidate only)
+
+- Khi APP_WEB publish cùng generation DONA+AFP cũ, log/cảnh báo nói rõ slot mới đã publish, ngày dữ liệu từng phân vùng và mã lỗi Debts.
+- `data_as_of` của slot composite là ngày nhỏ hơn giữa APP_WEB và DONA+AFP; giờ chạy job vẫn lưu riêng.
+- Overview/Revenue hiện băng cảnh báo màu khi hai phân vùng lệch ngày, với định dạng `dd/mm/yyyy` GMT+7.
+
 ### 05/09/2026 lúc 18:08 — Trả 503 ngay khi cache Chi phí kỳ mở đang hâm (candidate only)
 
 - Số đo cô lập T09 là 48.621 ms nên request `Chi phí · Tất cả NV` không còn chờ warm: trả ngay `503 EMPLOYEE_COST_STARTUP_WARM_UNAVAILABLE` và chỉ kích hoạt một warm nền single-flight.

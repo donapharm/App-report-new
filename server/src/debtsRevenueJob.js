@@ -110,7 +110,7 @@ async function runOnce({ force = false, reason = 'manual', now = new Date(), env
     run.publish = publishSlot(composed, { dataDir }); run.rowCount = debtsGeneration.rowCount;
     run.partnerRowCount = appWebGeneration.rowCount; run.rowsChecksum = debtsGeneration.rowsChecksum; run.partitionGenerations = coordinated.partitionGenerations;
     run.partial = Boolean(appWebError || debtsError); run.finishedAt = new Date().toISOString(); run.ok = !run.partial; state.lastRun = run;
-    if (run.partial) { const error = debtsError || appWebError; error.details = { ...(error.details || {}), compositePublished: true }; throw error; }
+    if (run.partial) { const error = debtsError || appWebError; error.details = { ...(error.details || {}), partialPublished: true }; throw error; }
     return Object.freeze(run);
   } catch (error) {
     const legalEntity = String(error?.details?.legalEntity || '').toUpperCase();
@@ -148,12 +148,18 @@ function tick(now = new Date(), deps = {}) {
     saveMonitorState({ lastSuccessSlot: due.slot, lastSuccessAt: new Date().toISOString(), sources: result.sources || {} }, deps.store);
     return result;
   }).catch(async (error) => {
-    console.error('[debts-revenue] failed; previous slot remains active', String(error?.code || error?.message || error), error?.details || {});
     const last = state.lastRun || {};
+    const partialPublished = error?.details?.partialPublished === true && Boolean(last.publish);
+    if (partialPublished) console.warn('[debts-revenue] partial publish completed', {
+      code: String(error?.code || error?.message || error), appWebDataThrough: last.partitionGenerations?.APP_WEB?.dataThrough || '',
+      debtsDataThrough: last.partitionGenerations?.DEBTS_DONA_AFP?.dataThrough || '',
+    });
+    else console.error('[debts-revenue] failed; previous slot remains active', String(error?.code || error?.message || error), error?.details || {});
     saveMonitorState({ ...stored, lastError: String(error?.code || error?.message || error), lastFailureAt: new Date().toISOString(),
       lastFailureSlot: due.slot, sources: last.sources || {} }, deps.store);
     await (deps.notifyIncident || incident.notifyCeo)({ kind: 'failure', period, slot: due.slot,
-      code: error?.code || error?.message, sources: last.sources || {}, activeDataThrough: currentThrough(), nextRetryAt: nextRetryText(due) });
+      code: error?.code || error?.message, sources: last.sources || {}, activeDataThrough: currentThrough(), nextRetryAt: nextRetryText(due),
+      partialPublished, partitionGenerations: last.partitionGenerations || null });
     return null;
   });
 }

@@ -43,3 +43,18 @@ test('atomic publish switches one period, is idempotent and preserves rollback s
     assert.equal(third.skipped, null); assert.notEqual(third.slot.partnerRowsChecksum, first.slot.partnerRowsChecksum);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('published slot pins data_as_of to the older partition date', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'debts-slot-asof-')); const loc = slot.paths(root);
+  fs.mkdirSync(loc.uploads, { recursive: true }); fs.writeFileSync(loc.slots, '[]');
+  const appRows = [{ source: 'APP_WEB_PARTNER', source_line_id: 'WEB:1', contractor_code: '03.X', date: '2026-09-05' }];
+  const checksum = require('../src/revenuePartitionCoordinator').checksum;
+  const generations = { APP_WEB: { checksum: checksum(appRows), rowCount: 1, dataThrough: '2026-09-05' },
+    DEBTS_DONA_AFP: { checksum: debts.rowsChecksum, rowCount: 2, dataThrough: '2026-09-03' } };
+  try {
+    const composed = slot.compose({ period: '2026-09', currentRows: appRows, debts, dataAsOf: '2026-09-03', partitionGenerations: generations });
+    const published = slot.publish(composed, { dataDir: root, now: () => new Date('2026-09-05T14:00:00Z'), idFactory: () => 'asof' });
+    assert.equal(published.slot.data_as_of, '2026-09-03');
+    assert.notEqual(published.slot.data_as_of, published.slot.jobRunAt);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});

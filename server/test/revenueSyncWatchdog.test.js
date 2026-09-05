@@ -35,6 +35,17 @@ test('incident message names failed partition, stale date, retry and never falls
   assert.match(text, /18:05/); assert.match(text, /không fallback CRM\/MISA/);
 });
 
+test('partial publish alert tells the truth about the new slot and both partition dates', () => {
+  const text = incident.messageFor({ period: '2026-09', slot: '2026-09-05-1300', partialPublished: true,
+    code: 'DEBTS_REVENUE_PARTITION_NOT_ACCEPTABLE', sources: { APP_WEB: { status: 'ok' }, DEBTS_DONA: { status: 'failed' } },
+    partitionGenerations: { APP_WEB: { dataThrough: '2026-09-05' }, DEBTS_DONA_AFP: { dataThrough: '2026-09-03' } } });
+  assert.match(text, /đã publish slot doanh thu mới/);
+  assert.match(text, /APP_WEB đến 2026-09-05/);
+  assert.match(text, /DONA\+AFP vẫn là bản cũ đến 2026-09-03/);
+  assert.match(text, /DEBTS_REVENUE_PARTITION_NOT_ACCEPTABLE/);
+  assert.doesNotMatch(text, /Giữ slot cũ/);
+});
+
 test('Telegram failure is persisted as failure and is retried independently', async () => {
   let sends = 0; let state = {};
   const store = { load: () => state, save: (_name, value) => { state = value; } };

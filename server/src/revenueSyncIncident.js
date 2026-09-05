@@ -17,11 +17,17 @@ function messageFor(event = {}) {
   const failed = ['APP_WEB', 'DEBTS_DONA', 'DEBTS_AFP'].filter((key) => sources[key]?.status === 'failed');
   const pending = ['APP_WEB', 'DEBTS_DONA', 'DEBTS_AFP'].filter((key) => !sources[key] || sources[key].status === 'pending');
   const severity = failed.length > 1 || event.kind === 'stale' ? '🔴' : '🟠';
+  const appWebThrough = event.partitionGenerations?.APP_WEB?.dataThrough || 'chưa xác định';
+  const debtsThrough = event.partitionGenerations?.DEBTS_DONA_AFP?.dataThrough || 'chưa xác định';
   const lines = [
-    `${severity} App Report chưa cập nhật doanh thu kỳ ${event.period || 'hiện tại'}.`,
+    event.partialPublished
+      ? `${severity} App Report đã publish slot doanh thu mới cho kỳ ${event.period || 'hiện tại'}; hai phân vùng không cùng độ tươi.`
+      : `${severity} App Report chưa cập nhật doanh thu kỳ ${event.period || 'hiện tại'}.`,
     `Lượt ${event.slot || 'không xác định'} · mã ${safeCode(event.code)}.`,
     `Nguồn lỗi: ${failed.length ? failed.join(', ') : 'chưa xác định'}${pending.length ? ` · chưa hoàn tất: ${pending.join(', ')}` : ''}.`,
-    `Dữ liệu đang hiển thị đến: ${event.activeDataThrough || 'chưa xác định'}. Giữ slot cũ; không fallback CRM/MISA.`,
+    event.partialPublished
+      ? `APP_WEB đến ${appWebThrough}; DONA+AFP vẫn là bản cũ đến ${debtsThrough}. Mã lỗi Debts: ${safeCode(event.code)}.`
+      : `Dữ liệu đang hiển thị đến: ${event.activeDataThrough || 'chưa xác định'}. Giữ slot cũ; không fallback CRM/MISA.`,
   ];
   if (event.nextRetryAt) lines.push(`Tự thử lại lúc ${event.nextRetryAt} (GMT+7).`);
   else lines.push('Đã hết lượt retry tự động; cần kiểm tra nguồn/mapping.');

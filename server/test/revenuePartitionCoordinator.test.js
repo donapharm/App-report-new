@@ -35,5 +35,6 @@ test('coordinator pins independent provenance for APP_WEB and atomic DONA+AFP', 
   const out = coordinator.coordinate({ period: '2026-09', appWeb, debts });
   assert.equal(out.partitionGenerations.APP_WEB.dataThrough, '2026-09-05');
   assert.equal(out.partitionGenerations.DEBTS_DONA_AFP.dataThrough, '2026-09-04');
+  assert.equal(out.dataAsOf, '2026-09-04', 'Dữ liệu đến ngày phải là ngày nhỏ hơn, không phải giờ chạy job');
   assert.equal(out.debts.sourceReceipts.length, 2);
 });

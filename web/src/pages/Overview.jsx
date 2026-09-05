@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { formatDateTime, money, pct } from '../util.js';
+import { formatDate, formatDateTime, money, pct } from '../util.js';
+import { partitionFreshnessWarning } from '../revenuePartitionFreshness.js';
 import { Spinner, Kpi, DailySalesKpi, MoneyBig, ZaloCard, UnitLabel } from '../components.jsx';
 import PeriodFilter, { defaultPeriodSelection, periodParams, periodLabel } from './PeriodFilter.jsx';
 import { ComboSelect, MultiSelect, Select } from './revenueFilters.jsx';
@@ -392,9 +393,8 @@ export default function Overview({ me, onNavigate }) {
   const activatedAt = selectedPeriod?.activatedAt || selectedPeriod?.activated_at || syncAt;
   const syncAndActivationSame = !!syncAt && !!activatedAt && new Date(syncAt).getTime() === new Date(activatedAt).getTime();
   const sourceName = selectedPeriod?.revenue_source || selectedPeriod?.sourceSummary?.source || selectedPeriod?.source || '—';
-  const partitionFreshness = selectedPeriod?.partitionGenerations
-    ? ` · APP_WEB đến ${selectedPeriod.partitionGenerations.APP_WEB?.dataThrough || '—'} · DONA+AFP đến ${selectedPeriod.partitionGenerations.DEBTS_DONA_AFP?.dataThrough || '—'}` : '';
-  const dataAsOfText = dataAsOf ? formatDateTime(dataAsOf) : null;
+  const freshnessWarning = partitionFreshnessWarning(selectedPeriod?.partitionGenerations);
+  const dataAsOfText = dataAsOf ? formatDate(dataAsOf) : null;
   useEffect(() => {
     if (!me.isAdmin) return;
     api.revenueRefreshStatus().then(setRevenueSyncStatus).catch(() => setRevenueSyncStatus(null));
@@ -440,10 +440,11 @@ export default function Overview({ me, onNavigate }) {
       {periodSel && <OverviewFilters me={me} filters={overviewFilters} setFilters={setOverviewFilters} options={overviewOptions} busy={overviewFilterBusy} />}
       {periodSel && (
         <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', margin: '-6px 0 10px' }}>
-          <span>Dữ liệu đến ngày {dataAsOfText || '—'} · {syncAndActivationSame ? `Job chạy và slot kích hoạt cùng lúc ${formatDateTime(syncAt)}` : `Job chạy lúc ${syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc ${activatedAt ? formatDateTime(activatedAt) : '—'}`} (GMT+7) · Nguồn {sourceName}{partitionFreshness} · {lastSyncText}</span>
+          <span>Dữ liệu đến ngày {dataAsOfText || '—'} · {syncAndActivationSame ? `Job chạy và slot kích hoạt cùng lúc ${formatDateTime(syncAt)}` : `Job chạy lúc ${syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc ${activatedAt ? formatDateTime(activatedAt) : '—'}`} (GMT+7) · Nguồn {sourceName} · {lastSyncText}</span>
           {me.isAdmin && <button className="btn ghost" onClick={refreshNow} disabled={refreshing}>{refreshing ? 'Đang đồng bộ…' : '↻ Đồng bộ ngay'}</button>}
         </div>
       )}
+      {periodSel && freshnessWarning && <div className="catalog-alert error partition-freshness-warning" role="alert">{freshnessWarning.text}</div>}
 
       {staleSnapshotAt && <div className="swr-stale-label" role="status">Đang làm tươi · {swrTimeLabel(staleSnapshotAt)}</div>}
       {!kpi ? <Spinner /> : (

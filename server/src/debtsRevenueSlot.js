@@ -14,7 +14,7 @@ function uiPeriod(period) { const p = policy.normalizePeriod(period); return p ?
 function paths(dataDir) { const root = path.resolve(String(dataDir || '')); return { root, uploads: path.join(root, 'uploads'),
   slots: path.join(root, 'upload_slots.json'), audit: path.join(root, 'audit.json'), lock: path.join(root, 'revenue_materialize.lock') }; }
 
-function compose({ period, currentRows = [], debts, partitionGenerations = null } = {}) {
+function compose({ period, currentRows = [], debts, dataAsOf: coordinatedDataAsOf = '', partitionGenerations = null } = {}) {
   const normalized = policy.normalizePeriod(period);
   if (!policy.isCutoverPeriod(normalized) || !debts || debts.period !== normalized) fail('DEBTS_SLOT_PERIOD_INVALID');
   if (!Array.isArray(currentRows) || currentRows.some((row) => String(row?.source || '').toUpperCase() !== 'APP_WEB_PARTNER'
@@ -36,7 +36,10 @@ function compose({ period, currentRows = [], debts, partitionGenerations = null 
     || partitionGenerations.APP_WEB?.rowCount !== retained.length
     || partitionGenerations.DEBTS_DONA_AFP?.checksum !== debts.rowsChecksum
     || partitionGenerations.DEBTS_DONA_AFP?.rowCount !== debts.rows.length)) fail('DEBTS_SLOT_GENERATION_PROVENANCE_INVALID');
-  return Object.freeze({ period: normalized, ky: uiPeriod(normalized), rows: Object.freeze(rows),
+  const partitionDates = [partitionGenerations?.APP_WEB?.dataThrough, partitionGenerations?.DEBTS_DONA_AFP?.dataThrough].filter(Boolean).sort();
+  const dataAsOf = partitionDates[0] || '';
+  if (partitionGenerations && (!dataAsOf || dataAsOf !== String(coordinatedDataAsOf || ''))) fail('DEBTS_SLOT_DATA_AS_OF_INVALID');
+  return Object.freeze({ period: normalized, ky: uiPeriod(normalized), rows: Object.freeze(rows), dataAsOf,
     debtsRowsChecksum: debts.rowsChecksum, debtsSourceReceipts: debts.sourceReceipts, retainedPartnerRows: retained.length,
     partnerRowsChecksum, compositeRowsChecksum, partitionOverlapCount, partitionGenerations });
 }
@@ -65,6 +68,7 @@ function publish(composed, { dataDir, now = () => new Date(), idFactory = () => 
     const slot = { id, ky: composed.ky, dateFrom: `${composed.period}-01`, dateTo: `${composed.period}-${String(new Date(Date.UTC(Number(composed.period.slice(0,4)), Number(composed.period.slice(5,7)), 0)).getUTCDate()).padStart(2,'0')}`,
       totalRows: composed.rows.length, totalRevenue, empCount: new Set(composed.rows.map((row) => row.emp_code).filter(Boolean)).size,
       filename: `${id}.json`, uploadedBy: 'SYSTEM_DEBTS', uploadedByName: 'App Công nợ → App Report', uploadedAt: at.toISOString(), jobRunAt: at.toISOString(), activatedAt: at.toISOString(),
+      data_as_of: composed.dataAsOf,
       active: true, mode: active ? 'update' : 'new', replacedSlotId: active?.id || null, source: 'DEBTS_ONLY_GROUP_DONA',
       debtsRowsChecksum: composed.debtsRowsChecksum, debtsSourceReceipts: composed.debtsSourceReceipts,
       retainedPartnerRows: composed.retainedPartnerRows, partnerRowsChecksum: composed.partnerRowsChecksum,

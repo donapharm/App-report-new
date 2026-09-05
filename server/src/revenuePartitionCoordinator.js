@@ -100,8 +100,9 @@ function bootstrapFromActive({ dataDir, period } = {}) {
 function coordinate({ period, appWeb, debts } = {}) {
   const normalized = policy.normalizePeriod(period);
   validate(appWeb, 'app-web', normalized); validate(debts, 'debts-dona-afp', normalized);
+  const dataAsOf = [appWeb.dataThrough, debts.dataThrough].filter(Boolean).sort()[0] || '';
   return Object.freeze({ period: normalized, currentRows: appWeb.rows, debts: { period: normalized, rows: debts.rows,
-    rowsChecksum: debts.rowsChecksum, sourceReceipts: debts.sourceReceipts }, partitionGenerations: {
+    rowsChecksum: debts.rowsChecksum, sourceReceipts: debts.sourceReceipts }, dataAsOf, partitionGenerations: {
     APP_WEB: { checksum: appWeb.rowsChecksum, rowCount: appWeb.rowCount, dataThrough: appWeb.dataThrough, generatedAt: appWeb.generatedAt },
     DEBTS_DONA_AFP: { checksum: debts.rowsChecksum, rowCount: debts.rowCount, dataThrough: debts.dataThrough, generatedAt: debts.generatedAt },
   } });
