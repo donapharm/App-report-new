@@ -33,6 +33,12 @@ const DEFAULT_TARGET_ROSTER_CODES = [
   'DN001', 'DN002', 'DN003', 'DN004', 'DN005', 'DN006', 'DN007', 'DN008', 'DN009', 'DN010', 'DN011', 'DN012',
   'DN016', 'DN017', 'DN018', 'DN019', 'DN021', 'DN022', 'DN023', 'DN024', 'VP004',
 ];
+function normalizeRevenueValue(rawRevenue) {
+  const missing = rawRevenue == null || String(rawRevenue).trim() === '';
+  const parsed = missing ? 0 : Number(rawRevenue);
+  const invalid = !missing && !Number.isFinite(parsed);
+  return { revenue: invalid ? null : parsed, revenue_missing: missing, revenue_invalid: invalid };
+}
 function isValidEmpCode(v) {
   return /^(DN|VP)\d{3}$/.test(String(v || '').trim().toUpperCase());
 }
@@ -67,10 +73,7 @@ function base() {
   const c14ByIit = Object.fromEntries((c14Catalog.rows || []).map((r) => [String(r.iit_code || '').trim().toUpperCase(), String(r.c14 || '').trim()]).filter(([k, v]) => k && v));
   const enrich = (r) => {
     const rr = normalizeEmpForReport(r);
-    const rawRevenue = rr.revenue;
-    const revenueMissing = rawRevenue == null || String(rawRevenue).trim() === '';
-    const parsedRevenue = revenueMissing ? null : Number(rawRevenue);
-    const revenueInvalid = !revenueMissing && !Number.isFinite(parsedRevenue);
+    const revenueState = normalizeRevenueValue(rr.revenue);
     const unit_name = rr.unit_name || unitByCode[rr.unit_code]?.unit_name;
     const existingProvinceSource = String(rr.province_source || '').trim().toLowerCase();
     const sourceProvince = ['inferred', 'guessed_from_name', 'catalog'].includes(existingProvinceSource)
@@ -90,8 +93,7 @@ function base() {
       ...rr,
       // Revenue sources may serialize decimals as JSON strings. Normalize at
       // the storage boundary so arithmetic can never concatenate strings.
-      revenue: revenueMissing || revenueInvalid ? null : parsedRevenue,
-      revenue_invalid: revenueInvalid || revenueMissing,
+      ...revenueState,
       unit_name,
       product_name: rr.product_name || prodByCode[rr.iit_code]?.product_name,
       c14: rr.c14 || rr.C14 || rr.indication_group || c14ByIit[String(rr.iit_code || '').trim().toUpperCase()] || null,
@@ -675,6 +677,7 @@ module.exports = {
   employeeType, hasTarget, isActiveSalesUser, targetRoster, targetRosterCodes, targetRosterConfig,
   isValidEmpCode, UNALLOCATED_EMP, UNALLOCATED_LABEL,
   normalizeEmpForReport,
+  normalizeRevenueValue,
   enforceRevenueSourcePolicy,
   // giữ tên cũ để nơi khác không vỡ
   db: base,

@@ -75,6 +75,9 @@ function groupSum(rows, keyField, labelField) {
   return [...map.values()].map((row) => row.revenue_invalid ? { ...row, revenue: null } : row)
     .sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0));
 }
+function revenueRowsValid(rows) {
+  return !(rows || []).some((r) => r.revenue_invalid === true || !Number.isFinite(Number(r.revenue)));
+}
 
 const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
 // Gộp mã đơn vị để đếm ĐÚNG số đơn vị: bỏ tiền tố "NT-" (nhà thuốc của cùng bệnh viện)
@@ -153,7 +156,7 @@ function overviewKpis({ ky, kys, scope, label, filters = {} }) {
   const cached = overviewCache.get(cacheKey);
   if (cached && Date.now() - cached.at < OVERVIEW_CACHE_MS) return cached.value;
   const rows = applyFilters(store.getRowsRange({ kys: list, scope }), filters);
-  const revenueValid = !rows.some((r) => r.revenue_invalid === true || !Number.isFinite(Number(r.revenue)));
+  const revenueValid = revenueRowsValid(rows);
   const revenue = revenueValid ? sum(rows, (r) => r.revenue) : null;
   const empFilter = new Set(selectedEmployeeCodes(filters));
   const comparableTarget = targetFiltersComparable(filters);
@@ -182,8 +185,10 @@ function overviewKpis({ ky, kys, scope, label, filters = {} }) {
   let momPct = null;
   const prevKys = store.previousKys(list);
   if (prevKys.length === list.length) {
-    const prevRev = sum(applyFilters(store.getRowsRange({ kys: prevKys, scope }), filters), (r) => r.revenue);
-    if (revenue != null && prevRev > 0) momPct = +(((revenue - prevRev) / prevRev) * 100).toFixed(1);
+    const prevRows = applyFilters(store.getRowsRange({ kys: prevKys, scope }), filters);
+    const prevRevenueValid = revenueRowsValid(prevRows);
+    const prevRev = prevRevenueValid ? sum(prevRows, (r) => r.revenue) : null;
+    if (revenue != null && prevRev != null && prevRev > 0) momPct = +(((revenue - prevRev) / prevRev) * 100).toFixed(1);
   }
   const value = {
     ky: list[list.length - 1],
@@ -265,4 +270,4 @@ function filterCstSearch(rows, query) {
   return productSearch.filterProductRows(rows, query);
 }
 
-module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, filterCstSearch, groupSum, applyFilters, baseUnitKey, companyGroupOf, unitGroupOf, normalizeUnitCode, selectedEmployeeCodes, targetFiltersComparable, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };
+module.exports = { VAT_DIVISOR, sum, overviewKpis, revenueBreakdown, cstTable, filterCstSearch, groupSum, revenueRowsValid, applyFilters, baseUnitKey, companyGroupOf, unitGroupOf, normalizeUnitCode, selectedEmployeeCodes, targetFiltersComparable, isCurrentKy, targetPacingMeta, targetCompareValue, clearOverviewCache };

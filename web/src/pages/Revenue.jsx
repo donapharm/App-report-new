@@ -126,6 +126,7 @@ export default function Revenue({ me }) {
   const dataAsOf = selectedPeriod.data_as_of || selectedPeriod.dataAsOf;
   const syncAt = selectedPeriod.jobRunAt || selectedPeriod.job_run_at || selectedPeriod.uploadedAt || selectedPeriod.uploaded_at || dataAsOf;
   const activatedAt = selectedPeriod.activatedAt || selectedPeriod.activated_at || syncAt;
+  const syncAndActivationSame = !!syncAt && !!activatedAt && new Date(syncAt).getTime() === new Date(activatedAt).getTime();
   const sourceName = selectedPeriod.revenue_source || selectedPeriod.sourceSummary?.source || selectedPeriod.source || '—';
   useEffect(() => {
     if (!me.isAdmin) return;
@@ -151,7 +152,7 @@ export default function Revenue({ me }) {
       <RevenueFilters me={me} ky={ky} periods={periods} options={options} filters={filters} setKy={setKy} setFilters={setFilters} filterBusy={filterBusy} filterNotice={filterNotice} />
 
       <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', margin: '-6px 0 10px', flexWrap: 'wrap' }}>
-        <span>Dữ liệu đến ngày {dataAsOf ? formatDateTime(dataAsOf) : '—'} · Job chạy lúc {syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc {activatedAt ? formatDateTime(activatedAt) : '—'} (GMT+7) · Nguồn {sourceName} · {lastSyncText}</span>
+        <span>Dữ liệu đến ngày {dataAsOf ? formatDateTime(dataAsOf) : '—'} · {syncAndActivationSame ? `Job chạy và slot kích hoạt cùng lúc ${formatDateTime(syncAt)}` : `Job chạy lúc ${syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc ${activatedAt ? formatDateTime(activatedAt) : '—'}`} (GMT+7) · Nguồn {sourceName} · {lastSyncText}</span>
         {me.isAdmin && <button className="btn ghost" disabled={syncing} onClick={syncNow}>{syncing ? 'Đang đồng bộ…' : '↻ Đồng bộ ngay'}</button>}
         {syncResult && <span>{syncResult}</span>}
       </div>

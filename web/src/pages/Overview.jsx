@@ -390,6 +390,7 @@ export default function Overview({ me, onNavigate }) {
   const dataAsOf = selectedPeriod?.data_as_of;
   const syncAt = selectedPeriod?.jobRunAt || selectedPeriod?.job_run_at || selectedPeriod?.uploadedAt || selectedPeriod?.uploaded_at || dataAsOf;
   const activatedAt = selectedPeriod?.activatedAt || selectedPeriod?.activated_at || syncAt;
+  const syncAndActivationSame = !!syncAt && !!activatedAt && new Date(syncAt).getTime() === new Date(activatedAt).getTime();
   const sourceName = selectedPeriod?.revenue_source || selectedPeriod?.sourceSummary?.source || selectedPeriod?.source || '—';
   const dataAsOfText = dataAsOf ? formatDateTime(dataAsOf) : null;
   useEffect(() => {
@@ -437,7 +438,7 @@ export default function Overview({ me, onNavigate }) {
       {periodSel && <OverviewFilters me={me} filters={overviewFilters} setFilters={setOverviewFilters} options={overviewOptions} busy={overviewFilterBusy} />}
       {periodSel && (
         <div className="muted" style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'flex-end', margin: '-6px 0 10px' }}>
-          <span>Dữ liệu đến ngày {dataAsOfText || '—'} · Job chạy lúc {syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc {activatedAt ? formatDateTime(activatedAt) : '—'} (GMT+7) · Nguồn {sourceName} · {lastSyncText}</span>
+          <span>Dữ liệu đến ngày {dataAsOfText || '—'} · {syncAndActivationSame ? `Job chạy và slot kích hoạt cùng lúc ${formatDateTime(syncAt)}` : `Job chạy lúc ${syncAt ? formatDateTime(syncAt) : '—'} · Slot kích hoạt lúc ${activatedAt ? formatDateTime(activatedAt) : '—'}`} (GMT+7) · Nguồn {sourceName} · {lastSyncText}</span>
           {me.isAdmin && <button className="btn ghost" onClick={refreshNow} disabled={refreshing}>{refreshing ? 'Đang đồng bộ…' : '↻ Đồng bộ ngay'}</button>}
         </div>
       )}
