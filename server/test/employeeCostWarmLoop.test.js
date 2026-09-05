@@ -15,7 +15,7 @@ const router = require('../src/routes');
 
 const flush = () => new Promise((r) => setImmediate(r));
 
-test('employee-cost ALL warm loop warms current period on startup, is idempotent, and honors disable flag', async () => {
+test('employee-cost ALL warm loop defers heavy startup work, is idempotent, and honors disable flag', async () => {
   const originalSignature = store.activeDataSignature;
   const originalEmployeeCostSignature = store.employeeCostDataSignature;
   const originalLatestKy = store.latestKy;
@@ -44,18 +44,16 @@ test('employee-cost ALL warm loop warms current period on startup, is idempotent
   try {
     assert.equal(typeof router.startEmployeeCostAllWarmLoop, 'function', 'warm loop starter must be exported');
 
-    // Bật vòng warm -> phải warm NGAY kỳ hiện tại (03.2026 -> 2026-03).
+    // Bật vòng warm không được bắn việc nặng ngay trong callback listen/startup.
+    // Watchdog PROD có timeout 4 giây; sweep ngay lúc traffic quay lại từng tạo
+    // restart thứ hai dù health ban đầu đã xanh.
     const timer = router.startEmployeeCostAllWarmLoop();
     assert.ok(timer, 'starting must return a live timer when not disabled');
     await flush();
     await flush();
-    assert.ok(builds > 0, 'startup must warm the ALL cache for the current period');
-    // ‼ Sự cố 18-19/08/2026: warm chỉ phủ kỳ hiện tại nên kỳ liền trước luôn nguội,
-    // lần mở đầu tiên sau restart chạm trần deadline và rơi mất NV cuối hàng.
-    // Khoá lại: phải hâm CẢ kỳ hiện tại VÀ kỳ liền trước, ĐÚNG THỨ TỰ đó.
-    assert.deepEqual(warmedMonths, ['2026-03', '2026-02'],
-      'warm phải phủ kỳ hiện tại rồi tới kỳ liền trước, tuần tự');
-    assert.equal(warmedFrom, '2026-02', 'kỳ cuối được hâm là kỳ liền trước');
+    assert.equal(builds, 0, 'startup must yield health/traffic instead of warming immediately');
+    assert.deepEqual(warmedMonths, []);
+    assert.equal(warmedFrom, null);
 
     // Idempotent: gọi lại trả cùng timer, không tạo vòng thứ hai.
     const again = router.startEmployeeCostAllWarmLoop();
@@ -125,6 +123,19 @@ test('vòng warm phải hâm TUẦN TỰ — chốt toàn cục bỏ lần gọi
   const loop = source.slice(source.indexOf('function startEmployeeCostAllWarmLoop'));
   assert.doesNotMatch(loop.slice(0, 700), /scheduleEmployeeCostAllWarm\(currentWarmKy\(\)/,
     'vòng định kỳ không được quay lại kiểu hâm một kỳ');
+});
+
+test('startup loop must not schedule an immediate heavy sweep before watchdog health stabilizes', () => {
+  const source = fs.readFileSync(require.resolve('../src/routes.js'), 'utf8');
+  const start = source.indexOf('function startEmployeeCostAllWarmLoop');
+  const stop = source.indexOf('function stopEmployeeCostAllWarmLoop', start);
+  const loop = source.slice(start, stop);
+  assert.doesNotMatch(loop, /scheduleEmployeeCostAllWarmSweep\('startup'\)/,
+    'startup callback must not race the one-minute watchdog');
+  assert.match(loop, /setInterval\([\s\S]*scheduleEmployeeCostAllWarmSweep\('interval'\)/,
+    'periodic warm must remain armed after startup stabilization');
+  assert.match(loop, /startupDeferred:\s*true/,
+    'runtime log must state why startup did not warm immediately');
 });
 
 

@@ -8130,3 +8130,8 @@ Vừa **trái luật CEO chốt** ("không có tin gì thì không gửi"), vừ
 
 - Hai bộ test chính sách tỷ lệ dùng kho catalog projection và rate snapshot tạm riêng trước khi nạp module, nên dữ liệu T08 thật không thể đi vòng các mock HTTP.
 - Không bỏ qua test, không nới assertion và không thay đổi mã chạy production.
+### 05/09/2026 lúc 13:55 — Tách warm Chi phí nhân viên khỏi nhịp khởi động (candidate only)
+
+- Không bắn sweep `Tất cả nhân viên` nặng ngay trong callback khởi động HTTP; tránh cạnh tranh với watchdog health một phút và traffic vừa quay lại sau cutover.
+- Giữ nguyên warm định kỳ, warm theo revenue/materialize và recovery theo request; không đổi công thức, số liệu, cache key, custody/seal/generation hay nguồn dữ liệu.
+- Chỉ là candidate Cổng 1; chưa deploy, không đổi runtime/config/job và không gửi thông báo.

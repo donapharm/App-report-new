@@ -2679,7 +2679,11 @@ function startEmployeeCostAllWarmLoop() {
     console.log('[employee-cost] ALL cache warm loop disabled', { warmDisabled: 1 });
     return null;
   }
-  scheduleEmployeeCostAllWarmSweep('startup');
+  // Không bắn sweep nặng ngay trong callback `listen()`. Trên PROD watchdog chạy
+  // mỗi phút với timeout 4 giây; startup sweep giải nén/ghép nhiều payload đúng lúc
+  // traffic quay lại có thể làm /api/health lỡ một nhịp và bị restart lần hai.
+  // Warm theo revenue/materialize/request-recovery vẫn giữ nguyên; timer định kỳ
+  // bên dưới sẽ hâm lại cache sau khi tiến trình đã ổn định.
   employeeCostAllWarmTimer = setInterval(() => {
     scheduleEmployeeCostAllWarmSweep('interval');
   }, EMPLOYEE_COST_ALL_WARM_INTERVAL_MS);
@@ -2696,6 +2700,7 @@ function startEmployeeCostAllWarmLoop() {
     prevPeriodsSource: EMPLOYEE_COST_ALL_WARM_PREV_PERIODS_RESOLVED.source,
     knownPeriods: employeeCostKnownPeriods().periods,
     knownPeriodsError: employeeCostKnownPeriods().error,
+    startupDeferred: true,
   });
   return employeeCostAllWarmTimer;
 }
