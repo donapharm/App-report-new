@@ -1,0 +1,16 @@
+{
+  "provenance": {
+    "source": "authoritative_current_employee_master_crosswalk",
+    "artifact": "artifacts/cutover_g/crosswalk_emp_code.json",
+    "verified_field": "app_emp_code+app_name",
+    "verified_on": "2026-09-05"
+  },
+  "users": [
+    {
+      "emp_code": "VP019",
+      "name": "Trần Thị Mỹ Phượng",
+      "role": "sale",
+      "phone": null
+    }
+  ]
+}

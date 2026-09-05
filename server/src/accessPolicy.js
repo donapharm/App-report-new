@@ -8,12 +8,12 @@
 // tổng hợp doanh thu/chi phí. Quyền gửi ngoài được chặn bằng policy riêng.
 const BLOCKED_LOGIN_EMP_CODES = new Set([
   'VP002', 'VP003',
-  'VP006', 'VP007', 'VP008', 'VP009', 'VP010', 'VP011',
+  'VP006', 'VP007', 'VP008', 'VP009', 'VP010',
   'VP012', 'VP013', 'VP014', 'VP015', 'VP016', 'VP017',
   'DN021', 'DN023',
 ]);
 
-// VP018 chỉ được xem hai tab doanh thu và tab Cơ số thầu. Backend là cổng quyết định cuối cùng;
+// VP011/VP018/VP019 chỉ được xem hai tab doanh thu và tab Cơ số thầu. Backend là cổng quyết định cuối cùng;
 // frontend chỉ dùng access profile để không hiện đường điều hướng sai quyền.
 function readonlySet(values, label) {
   const source = new Set(values);
@@ -69,7 +69,9 @@ function normalizeApiPath(value) {
   return pathname.startsWith('/api/') ? pathname.slice(4) : pathname;
 }
 
-function createAccessPolicy({ revenueCodes = ['VP018'], cstCodes = ['VP018'] } = {}) {
+const DEFAULT_REVENUE_ONLY_EMP_CODES = Object.freeze(['VP011', 'VP018', 'VP019']);
+
+function createAccessPolicy({ revenueCodes = DEFAULT_REVENUE_ONLY_EMP_CODES, cstCodes = DEFAULT_REVENUE_ONLY_EMP_CODES } = {}) {
   const companyRevenueCodes = new Set(revenueCodes.map(normalizeEmpCode));
   const companyCstCodes = new Set(cstCodes.map(normalizeEmpCode));
   const restrictedCodes = new Set([...companyRevenueCodes, ...companyCstCodes]);
@@ -124,6 +126,7 @@ const policy = createAccessPolicy();
 
 module.exports = {
   BLOCKED_LOGIN_EMP_CODES,
+  DEFAULT_REVENUE_ONLY_EMP_CODES,
   ...policy,
   normalizeEmpCode,
   normalizeApiPath,

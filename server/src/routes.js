@@ -105,7 +105,7 @@ const { createFilteredEmployeeReportService } = require('./filteredEmployeeRepor
 const { createFilteredEmployeeDeliveryService } = require('./filteredEmployeeDelivery');
 
 const router = express.Router();
-// Boundary trước toàn bộ route: VP018 fail-closed cả với path/method không có
+// Boundary trước toàn bộ route: mọi tài khoản revenue-only fail-closed cả với path/method không có
 // handler, không để Express trả 404 thay cho quyết định quyền 403.
 router.use(auth.enforceAccessPolicyBoundary);
 const asyncJsonRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch((error) => {
@@ -4228,7 +4228,7 @@ router.get('/filters', auth.requireAuth, memoJson('filters', 30 * 1000), asyncJs
   const bidRows = facet(['emp', 'province', 'unit', 'group', 'product', 'route', 'priority', 'contractor']);
   const contractorLookup = contractorLookupFor(scope, allRows.concat(cst));
   const selectedEmployees = A.selectedEmployeeCodes(filters);
-  // VP018 được company-scope chỉ trong hai màn doanh thu, nhưng không trở thành
+  // Revenue-only được company-scope chỉ trong hai màn doanh thu, nhưng không trở thành
   // admin và không được đi qua bất kỳ route ghi/quản trị nào.
   const sessionCanReadAllRevenue = auth.isAdmin(req.session.role) || auth.canReadAllRevenue(req.session);
   const ownEmployee = String(req.session.emp_code || '').trim().toUpperCase();

@@ -751,7 +751,7 @@ function revenueOnlyDenied(res) {
 }
 
 // Chốt policy ở cấp router, kể cả method/path không khớp một route cụ thể.
-// Nhờ đó VP018 luôn nhận 403 cho mọi POST/PUT/PATCH/DELETE và mọi API ngoài
+// Nhờ đó cả ba tài khoản revenue-only luôn nhận 403 cho mọi method ghi và mọi API ngoài
 // allowlist (kể cả /employee-cost* chưa/không còn tồn tại), thay vì rơi qua 404.
 // Chỉ peek phiên trong RAM, không gia hạn/ghi sessions; requireAuth của route hợp
 // lệ vẫn là nơi xác thực đầy đủ và rolling session đúng một lần.
@@ -830,7 +830,7 @@ const isAdmin = (role) => role === 'ceo' || role === 'admin';
 function scopeOf(session) {
   return { empCode: isAdmin(session.role) ? null : session.emp_code };
 }
-// VP018 là người kiểm tra doanh thu thay CEO: chỉ các route doanh thu gọi helper
+// Ba tài khoản revenue-only kiểm tra doanh thu toàn công ty: chỉ các route doanh thu gọi helper
 // này mới nhận company scope. `scopeOf` chung vẫn self-scope để một allowlist sai
 // trong tương lai không tự biến thành quyền đọc toàn công ty ngoài route chuyên biệt.
 function revenueScopeOf(session) {

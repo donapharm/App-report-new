@@ -13,15 +13,18 @@ const tabs = [
   { key: 'overview' }, { key: 'revenue' }, { key: 'revenueFull' }, { key: 'cst' },
   { key: 'products' }, { key: 'employeeCost' }, { key: 'target' },
 ];
-const vp018 = { emp_code: 'VP018', role: 'sale', access_profile: 'revenue_only' };
+const restrictedUsers = ['VP011', 'VP018', 'VP019'].map((emp_code) => ({ emp_code, role: 'sale', access_profile: 'revenue_only' }));
 
-test('VP018 chỉ thấy Doanh thu, DT đầy đủ và Cơ số thầu; deep link trái phép quay về Doanh thu', () => {
-  assert.deepEqual(tabs.filter((tab) => isTabAllowed(tab, vp018)).map((tab) => tab.key), ['revenue', 'revenueFull', 'cst']);
-  assert.equal(resolveAllowedTab(tabs, 'revenue', vp018), 'revenue');
-  assert.equal(resolveAllowedTab(tabs, 'revenueFull', vp018), 'revenueFull');
-  assert.equal(resolveAllowedTab(tabs, 'cst', vp018), 'cst');
-  assert.equal(resolveAllowedTab(tabs, 'employeeCost', vp018), 'revenue');
-  assert.equal(resolveAllowedTab(tabs, 'overview', vp018), 'revenue');
+test('VP011/VP018/VP019 chỉ thấy đúng ba tab; mọi deep link trái phép quay về Doanh thu', () => {
+  for (const user of restrictedUsers) {
+    assert.deepEqual(tabs.filter((tab) => isTabAllowed(tab, user)).map((tab) => tab.key), ['revenue', 'revenueFull', 'cst'], user.emp_code);
+    assert.equal(resolveAllowedTab(tabs, 'revenue', user), 'revenue');
+    assert.equal(resolveAllowedTab(tabs, 'revenueFull', user), 'revenueFull');
+    assert.equal(resolveAllowedTab(tabs, 'cst', user), 'cst');
+    for (const forbidden of ['employeeCost', 'overview', 'products', 'target']) {
+      assert.equal(resolveAllowedTab(tabs, forbidden, user), 'revenue', `${user.emp_code} ${forbidden}`);
+    }
+  }
 });
 
 test('frontend khóa đường vòng, mở đúng export và giấu privacy eye cho revenue-only', () => {

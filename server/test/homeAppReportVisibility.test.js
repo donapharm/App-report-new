@@ -21,7 +21,7 @@ const known = new Set(['CEO', 'DN001', 'DN007']);
 const findUserByCode = (code) => known.has(code) ? { emp_code: code } : null;
 
 test('exact CEO-blocked policy is hidden without copying the list', () => {
-  assert.equal(accessPolicy.BLOCKED_LOGIN_EMP_CODES.size, 16);
+  assert.equal(accessPolicy.BLOCKED_LOGIN_EMP_CODES.size, 15);
   for (const empCode of accessPolicy.BLOCKED_LOGIN_EMP_CODES) {
     assert.deepEqual(visibility.decide(empCode, { findUserByCode }), {
       empCode,
@@ -36,9 +36,9 @@ test('exact CEO-blocked policy is hidden without copying the list', () => {
   assert.doesNotMatch(source, /VP002|VP003|DN021|DN023/);
 });
 
-test('revenue-only remains visible while standard known accounts are allowed', () => {
-  assert.deepEqual(visibility.decide(' vp018 ', { findUserByCode }), {
-    empCode: 'VP018',
+test('revenue-only trio remains visible while standard known accounts are allowed', () => {
+  for (const empCode of ['VP011', 'VP018', 'VP019']) assert.deepEqual(visibility.decide(` ${empCode.toLowerCase()} `, { findUserByCode }), {
+    empCode,
     visible: true,
     reason: 'REVENUE_ONLY',
     accessProfile: 'revenue_only',
@@ -160,7 +160,7 @@ test('HTTP contract is GET-only, no-store and returns exact decisions', async (t
 
   const cases = [
     ['VP003', { empCode: 'VP003', visible: false, reason: 'LOGIN_BLOCKED', accessProfile: 'standard' }],
-    ['VP018', { empCode: 'VP018', visible: true, reason: 'REVENUE_ONLY', accessProfile: 'revenue_only' }],
+    ...['VP011', 'VP018', 'VP019'].map((empCode) => [empCode, { empCode, visible: true, reason: 'REVENUE_ONLY', accessProfile: 'revenue_only' }]),
     ['DN007', { empCode: 'DN007', visible: true, reason: 'ALLOWED', accessProfile: 'standard' }],
     ['DN999', { empCode: 'DN999', visible: false, reason: 'ACCOUNT_NOT_FOUND', accessProfile: 'none' }],
   ];

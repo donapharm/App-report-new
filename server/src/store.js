@@ -22,6 +22,7 @@ const employeeRevenuePolicy = require('./employeeRevenuePolicy');
 const groupDonaRevenuePolicy = require('./groupDonaRevenuePolicy');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
+const ACCESS_USERS_FILE = path.join(__dirname, '..', 'config', 'app_report_access_users.json');
 const UP_DIR = path.join(DATA_DIR, 'uploads');
 const readJson = (name, def) => {
   const p = path.join(DATA_DIR, name);
@@ -60,7 +61,21 @@ function base() {
   if (_base && _baseProvinceVersion === currentProvinceVersion) return _base;
   const catalog = readJson('catalog.json', { units: [], products: [], periods: [], latest_ky: null });
   const c14Catalog = readJson('product_c14_groups.json', { rows: [] });
-  const users = readJson('users.json', []);
+  const runtimeUsers = readJson('users.json', []);
+  const accessUsers = fs.existsSync(ACCESS_USERS_FILE)
+    ? (JSON.parse(fs.readFileSync(ACCESS_USERS_FILE, 'utf8')).users || [])
+    : [];
+  // Access-only records fill an absent directory identity; runtime/master rows
+  // always win, so this cannot overwrite phone, role or other live attributes.
+  const users = [...runtimeUsers];
+  const existingUserCodes = new Set(users.map((u) => normEmpCode(u.emp_code)));
+  for (const user of accessUsers) {
+    const code = normEmpCode(user.emp_code);
+    if (code && !existingUserCodes.has(code)) {
+      users.push({ ...user, emp_code: code });
+      existingUserCodes.add(code);
+    }
+  }
   const unitByCode = Object.fromEntries(catalog.units.map((u) => [u.unit_code, u]));
   const prodByCode = Object.fromEntries(catalog.products.map((p) => [p.iit_code, p]));
   const empByCode = Object.fromEntries(users.map((u) => [u.emp_code, u]));
