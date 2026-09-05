@@ -2651,6 +2651,8 @@ const EMPLOYEE_COST_SNAPSHOT_SYNC_INTERVAL_MS = Math.max(
 );
 let employeeCostAllWarmTimer = null;
 let employeeCostSnapshotSyncTimer = null;
+let employeeCostStartupWarmPromise = null;
+let employeeCostStartupWarmState = 'idle';
 function currentSnapshotPeriod() { return monthInputForKy(currentWarmKy()); }
 function scheduleEmployeeCostSnapshotSync(reason, { onlyIfMissing = false } = {}) {
   if (!employeeCostSnapshotSyncEnabled()) return false;
@@ -2679,6 +2681,7 @@ function startEmployeeCostAllWarmLoop() {
     console.log('[employee-cost] ALL cache warm loop disabled', { warmDisabled: 1 });
     return null;
   }
+  employeeCostStartupWarmState = 'pending';
   // Không bắn sweep nặng ngay trong callback `listen()`. Trên PROD watchdog chạy
   // mỗi phút với timeout 4 giây; startup sweep giải nén/ghép nhiều payload đúng lúc
   // traffic quay lại có thể làm /api/health lỡ một nhịp và bị restart lần hai.
@@ -2704,14 +2707,61 @@ function startEmployeeCostAllWarmLoop() {
   });
   return employeeCostAllWarmTimer;
 }
+function ensureEmployeeCostStartupWarm(warm = warmEmployeeCostAllCache) {
+  if (employeeCostSnapshotSyncEnabled() || employeeCostSnapshotEnabled()) return Promise.resolve(true);
+  if (String(process.env.EMPLOYEE_COST_ALL_WARM_DISABLED || '') === '1') return Promise.resolve(false);
+  if (employeeCostStartupWarmPromise) return employeeCostStartupWarmPromise;
+  const ky = currentWarmKy();
+  if (!ky) return Promise.resolve(false);
+  employeeCostStartupWarmState = 'warming';
+  employeeCostStartupWarmPromise = Promise.resolve()
+    .then(() => warm(ky, 'startup_after_health'))
+    .then((ok) => {
+      if (ok !== false) {
+        employeeCostStartupWarmState = 'ready';
+        return true;
+      }
+      employeeCostStartupWarmState = 'pending';
+      employeeCostStartupWarmPromise = null;
+      return false;
+    })
+    .catch((error) => {
+      employeeCostStartupWarmState = 'pending';
+      employeeCostStartupWarmPromise = null;
+      console.warn('[employee-cost] startup warm failed', { ky, message: error.message });
+      return false;
+    });
+  return employeeCostStartupWarmPromise;
+}
+function noteEmployeeCostHealthReady() {
+  if (employeeCostStartupWarmState !== 'pending') return false;
+  setImmediate(() => ensureEmployeeCostStartupWarm());
+  return true;
+}
+async function waitForEmployeeCostStartupWarm(req, warm = warmEmployeeCostAllCache) {
+  const range = employeeCost.parseMonthRange({ from: req.query.from, to: req.query.to });
+  if (range.months.length !== 1 || employeeCost.toUiMonth(range.months[0]) !== currentWarmKy()) return true;
+  const ready = await ensureEmployeeCostStartupWarm(warm);
+  if (ready) return true;
+  throw Object.assign(new Error('Chi phí kỳ hiện tại đang được chuẩn bị, vui lòng thử lại.'), {
+    status: 503,
+    code: 'EMPLOYEE_COST_STARTUP_WARM_UNAVAILABLE',
+  });
+}
 function stopEmployeeCostAllWarmLoop() {
   if (employeeCostAllWarmTimer) { clearInterval(employeeCostAllWarmTimer); employeeCostAllWarmTimer = null; }
   if (employeeCostSnapshotSyncTimer) { clearInterval(employeeCostSnapshotSyncTimer); employeeCostSnapshotSyncTimer = null; }
+  employeeCostStartupWarmPromise = null;
+  employeeCostStartupWarmState = 'idle';
 }
 router.employeeCostWarmKyList = employeeCostWarmKyList;
 router.startEmployeeCostAllWarmLoop = startEmployeeCostAllWarmLoop;
 router.startEmployeeCostSnapshotSyncLoop = startEmployeeCostSnapshotSyncLoop;
 router.stopEmployeeCostAllWarmLoop = stopEmployeeCostAllWarmLoop;
+router.noteEmployeeCostHealthReady = noteEmployeeCostHealthReady;
+router.ensureEmployeeCostStartupWarm = ensureEmployeeCostStartupWarm;
+router.employeeCostStartupWarmState = () => employeeCostStartupWarmState;
+router.waitForEmployeeCostStartupWarm = waitForEmployeeCostStartupWarm;
 router.employeeCostSnapshotWatcherRuntime = {
   store: employeeCostSnapshotStore,
   sync: employeeCostSnapshotSync,
@@ -2758,7 +2808,7 @@ router.get('/employee-cost', auth.requireAuth, asyncJsonRoute(async (req, res) =
     return res.status(403).json({ error: 'Chỉ CEO/admin được xem tất cả nhân viên.', code: 'EMPLOYEE_COST_ALL_FORBIDDEN' });
   }
   const payload = wantsAll
-    ? await employeeCostAllPayload(req)
+    ? (await waitForEmployeeCostStartupWarm(req), await employeeCostAllPayload(req))
     : employeeCostTable.transformReport(await employeeCostPayload(req), employeeCostTableOptions(req, { paginate: true }));
   res.set('Cache-Control', 'private, no-store');
   return res.json(payload);

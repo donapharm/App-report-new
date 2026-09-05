@@ -80,7 +80,10 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/api/health', (req, res) => res.json({ ok: true, service: 'app-report', ts: Date.now(), ...releaseIdentity }));
+app.get('/api/health', (req, res) => {
+  res.once('finish', () => routes.noteEmployeeCostHealthReady?.());
+  res.json({ ok: true, service: 'app-report', ts: Date.now(), ...releaseIdentity });
+});
 app.use('/api', routes);
 
 // Phục vụ frontend đã build (web/dist) nếu có — cho phép chạy 1 cổng ở production.

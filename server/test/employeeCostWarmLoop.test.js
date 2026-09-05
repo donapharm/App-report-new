@@ -138,6 +138,62 @@ test('startup loop must not schedule an immediate heavy sweep before watchdog he
     'runtime log must state why startup did not warm immediately');
 });
 
+test('first completed health starts one current-period warm and concurrent cold users share it', async () => {
+  const originalCurrentKyByDate = store.currentKyByDate;
+  try {
+    router.stopEmployeeCostAllWarmLoop();
+    store.currentKyByDate = () => '09.2026';
+    router.startEmployeeCostAllWarmLoop();
+    assert.equal(router.employeeCostStartupWarmState(), 'pending');
+    let calls = 0;
+    let release;
+    const warm = () => {
+      calls += 1;
+      return new Promise((resolve) => { release = resolve; });
+    };
+    const first = router.ensureEmployeeCostStartupWarm(warm);
+    const second = router.ensureEmployeeCostStartupWarm(warm);
+    const user = router.waitForEmployeeCostStartupWarm({ query: { from: '2026-09', to: '2026-09' } });
+    await flush();
+    assert.equal(calls, 1, 'cold users must share one startup warm');
+    assert.equal(router.employeeCostStartupWarmState(), 'warming');
+    release(true);
+    assert.equal(await first, true);
+    assert.equal(await second, true);
+    assert.equal(await user, true, 'active-period ALL waits for the shared warm instead of cold fan-out');
+    assert.equal(router.employeeCostStartupWarmState(), 'ready');
+  } finally {
+    router.stopEmployeeCostAllWarmLoop();
+    store.currentKyByDate = originalCurrentKyByDate;
+  }
+});
+
+test('health route acknowledges before scheduling startup warm', () => {
+  const source = fs.readFileSync(require.resolve('../src/index.js'), 'utf8');
+  const health = source.slice(source.indexOf("app.get('/api/health'"), source.indexOf("app.use('/api'"));
+  assert.match(health, /res\.once\('finish',[\s\S]*noteEmployeeCostHealthReady/,
+    'warm may start only after the cheap health response has finished');
+  assert.match(health, /res\.json\(\{ ok: true/);
+});
+
+test('failed startup warm returns explicit unavailable and remains retryable, never cold-fanout success', async () => {
+  const originalCurrentKyByDate = store.currentKyByDate;
+  try {
+    router.stopEmployeeCostAllWarmLoop();
+    store.currentKyByDate = () => '09.2026';
+    router.startEmployeeCostAllWarmLoop();
+    assert.equal(await router.ensureEmployeeCostStartupWarm(async () => false), false);
+    assert.equal(router.employeeCostStartupWarmState(), 'pending');
+    await assert.rejects(
+      router.waitForEmployeeCostStartupWarm({ query: { from: '2026-09', to: '2026-09' } }, async () => false),
+      (error) => error.status === 503 && error.code === 'EMPLOYEE_COST_STARTUP_WARM_UNAVAILABLE',
+    );
+  } finally {
+    router.stopEmployeeCostAllWarmLoop();
+    store.currentKyByDate = originalCurrentKyByDate;
+  }
+});
+
 
 test('EMPLOYEE_COST_ALL_WARM_PREV_PERIODS rỗng KHÔNG được tự tắt warm kỳ trước', () => {
   // Sự cố 19/08/2026: biến đặt rỗng làm Number('')===0 ⇒ warm lặng lẽ chỉ còn một kỳ,

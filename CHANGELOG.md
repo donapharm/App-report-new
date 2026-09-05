@@ -1,3 +1,9 @@
+### 05/09/2026 lúc 15:54 — Khóa khoảng hở cache lạnh Employee Cost (candidate only)
+
+- Sau khi health đầu tiên trả xong, chạy một warm single-flight cho kỳ hiện tại.
+- Request `Chi phí · Tất cả NV` kỳ hiện tại chờ đúng warm này thay vì tự fan-out lạnh 25 giây và trả thiếu NV.
+- Health vẫn phản hồi trước việc nặng; warm định kỳ, công thức, dữ liệu, cache key và custody/seal/generation không đổi.
+
 ### 05/09/2026 lúc 10:27 — Gộp phân quyền, cảnh báo doanh thu, biên số và Smart Sale (candidate only)
 
 - Dựng trên exact PROD `33bb961d96192304b6821aa58f8d7b3c6c322196`, giữ nguyên profile `revenue_only` của VP011/VP018/VP019 và toàn bộ hàng rào fail-closed.
