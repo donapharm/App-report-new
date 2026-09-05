@@ -534,6 +534,7 @@ export const api = {
   targetKpi: (ky) => req('GET', '/targets/kpi' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
   employeeDetail: (emp, ky) => req('GET', '/employee/detail?' + new URLSearchParams({ ...(emp ? { emp } : {}), ...(ky ? { ky } : {}) }).toString()),
   notificationsPreview: (ky) => req('GET', '/admin/notifications/preview' + (ky ? `?ky=${encodeURIComponent(ky)}` : '')),
+  smartSalePreview: (kind = 'day') => req('GET', `/admin/smart-sale/preview?kind=${encodeURIComponent(kind)}`),
   notificationsSend: (payload) => req('POST', '/admin/notifications/send', payload || {}),
   notificationsSendOne: (emp_code, ky) => req('POST', '/admin/notifications/send-one', { emp_code, ...(ky ? { ky } : {}) }),
   forecast: () => req('GET', '/targets/forecast'),

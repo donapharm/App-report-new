@@ -206,6 +206,9 @@ function salesReportPeriodKey(kind, ranges = defaultRanges()) {
 function salesReportRecipientKey(kind, ranges = defaultRanges(), code = '') {
   return `${salesReportPeriodKey(kind, ranges)}#${String(code || '').toUpperCase()}`;
 }
+function salesReportChannelKey(kind, ranges = defaultRanges(), code = '', channel = '') {
+  return `${salesReportRecipientKey(kind, ranges, code)}#${String(channel || '').toLowerCase()}`;
+}
 function loadSentLog() { return persist.load(SENT_LOG_NAME, []); }
 function saveSentLog(log) { persist.save(SENT_LOG_NAME, log.slice(-1000)); }
 function alreadySent(kind, ranges = defaultRanges()) {
@@ -223,6 +226,33 @@ function alreadySentTo(kind, ranges = defaultRanges(), code = '') {
   const key = salesReportRecipientKey(kind, ranges, code);
   return loadSentLog().some((x) => x.key === key);
 }
+function alreadySentChannel(kind, ranges = defaultRanges(), code = '', channel = '') {
+  const key = salesReportChannelKey(kind, ranges, code, channel);
+  return loadSentLog().some((x) => x.key === key);
+}
+function markSentChannel(kind, ranges = defaultRanges(), code = '', channel = '', meta = {}) {
+  const key = salesReportChannelKey(kind, ranges, code, channel);
+  const log = loadSentLog();
+  if (!log.some((x) => x.key === key)) log.push({ key, kind, ky: ranges.monthKy, from: ranges.monthRange.from, to: ranges.monthRange.to,
+    emp_code: String(code || '').toUpperCase(), channel: String(channel || '').toLowerCase(), sent_at: new Date().toISOString(), ...meta });
+  saveSentLog(log); return key;
+}
+async function deliverMissingChannels({ kind, ranges, code, telegramId, email, subject, text, html, force = false }) {
+  const out = { ok: false, channels: [], failedChannels: [] };
+  if (telegramId && (force || !alreadySentChannel(kind, ranges, code, 'telegram'))) {
+    out.telegram = await notify.sendTelegram(telegramId, text);
+    if (out.telegram.ok) { out.channels.push('telegram'); markSentChannel(kind, ranges, code, 'telegram'); }
+    else out.failedChannels.push('telegram');
+  }
+  if (email && (force || !alreadySentChannel(kind, ranges, code, 'email'))) {
+    out.email = await notify.sendEmail(email, subject, text, html);
+    if (out.email.ok) { out.channels.push('email'); markSentChannel(kind, ranges, code, 'email'); }
+    else out.failedChannels.push('email');
+  }
+  const expected = [telegramId ? 'telegram' : '', email ? 'email' : ''].filter(Boolean);
+  out.ok = expected.length > 0 && expected.every((channel) => alreadySentChannel(kind, ranges, code, channel));
+  return out;
+}
 function markSentTo(kind, ranges = defaultRanges(), code = '', meta = {}) {
   const key = salesReportRecipientKey(kind, ranges, code);
   const log = loadSentLog();
@@ -233,7 +263,7 @@ function markSentTo(kind, ranges = defaultRanges(), code = '', meta = {}) {
 function unitCodesForRows(rows) { return [...new Set(rows.map((r) => r.unit_code).filter(Boolean))]; }
 function isClPriority(unitCode, route) { return String(route || '').toUpperCase() === 'CL' || ['025', '026', '027', '028'].includes(appSaleCst.normUnitPrefix(unitCode)); }
 
-async function computeReport({ empCode = 'DN001', kind = 'week', ranges = defaultRanges() } = {}) {
+async function computeReport({ empCode = 'DN001', kind = 'week', ranges = defaultRanges(), includeCst = true } = {}) {
   const user = userByCode(empCode);
   const range = kind === 'day' ? ranges.dayRange : kind === 'month' ? ranges.monthRange : ranges.weekRange;
   const rows = rowsInRange({ empCode, ...range });
@@ -248,7 +278,9 @@ async function computeReport({ empCode = 'DN001', kind = 'week', ranges = defaul
   const route = routeBreakdown(rows, prevRows, cmp.factor);
   const diffsUnit = diffTop(rows, prevRows, 'unit_code', 'unit_name', 5, cmp.factor);
   const diffsProduct = diffTop(rows, prevRows, 'iit_code', 'product_name', 5, cmp.factor);
-  const cstPayload = await appSaleCst.fetchTenderQuota();
+  // Smart Sale shadow only needs revenue/target. Keeping CST optional makes its
+  // GET preview genuinely read-only: fetchTenderQuota refreshes a disk cache.
+  const cstPayload = includeCst ? await appSaleCst.fetchTenderQuota() : { source: 'not_requested', rows: [] };
   const empUnits = unitCodesForRows(rows.length ? rows : store.getRowsRange({ kys: store.periodKys(), scope: { empCode } }));
   const cstRows = appSaleCst.cstForEmployeeUnits(cstPayload.rows, empUnits).slice(0, 10);
   const targets = store.getTargetsRange({ kys: [ranges.monthKy], scope: { empCode } });
@@ -337,7 +369,9 @@ async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false 
   const failed = [];
   let anyData = false;
   for (const r of recipients) {
-    if (!force && alreadySentTo(kind, ranges, r.code)) { skipped.push({ code: r.code, reason: 'duplicate' }); continue; }
+    if (!force && alreadySentTo(kind, ranges, r.code)
+      && (!r.telegramId || alreadySentChannel(kind, ranges, r.code, 'telegram'))
+      && (!r.email || alreadySentChannel(kind, ranges, r.code, 'email'))) { skipped.push({ code: r.code, reason: 'duplicate' }); continue; }
     try {
       const rep = await renderEmployeeReport({ empCode: r.code, kind, ranges });
       // CEO chốt 2026-07-27: "không có tin gì thì KHÔNG gửi".
@@ -346,7 +380,8 @@ async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false 
       // thì bỏ qua hẳn, không gửi tin rỗng.
       if (!rep.data?.rows?.length) { skipped.push({ code: r.code, reason: 'no_data' }); continue; }
       anyData = true;
-      const res = await notify.deliver({ telegramId: r.telegramId, email: r.email, subject: rep.subject, text: rep.text, html: rep.html });
+      const res = await deliverMissingChannels({ kind, ranges, code: r.code, telegramId: r.telegramId, email: r.email,
+        subject: rep.subject, text: rep.text, html: rep.html, force });
       if (res.ok) {
         sent.push({ code: r.code, email: r.email, telegramId: r.telegramId, channels: res.channels });
         markSentTo(kind, ranges, r.code, { email: r.email, telegramId: r.telegramId, channels: res.channels });
@@ -364,7 +399,8 @@ async function sendAll({ kind = 'week', ranges = defaultRanges(), force = false 
   const ceoTo = ceoRecipient();
   const ceoEmail = notify.emailFor(CEO_CODE, ceoTo.user?.email) || process.env.CEO_EMAIL || '';
   let ceoResult = { ok: false, description: 'CEO email/Telegram missing' };
-  try { ceoResult = await notify.deliver({ telegramId: ceoTo.telegramId, email: ceoEmail, subject: ceo.subject, text: ceo.text, html: ceo.html }); } catch (e) { ceoResult = { ok: false, description: e.message }; }
+  try { ceoResult = await deliverMissingChannels({ kind, ranges, code: CEO_CODE, telegramId: ceoTo.telegramId, email: ceoEmail,
+    subject: ceo.subject, text: ceo.text, html: ceo.html, force }); } catch (e) { ceoResult = { ok: false, description: e.message, failedChannels: ['unknown'] }; }
   const ok = failed.length === 0 && ceoResult.ok;
   if (ceoResult.ok) markSentTo(kind, ranges, CEO_CODE, { email: ceoEmail, telegramId: ceoTo.telegramId, channels: ceoResult.channels || [] });
   if (ok) markSent(kind, ranges, { recipients: sent.length + skipped.length, ceoEmail, ceoTelegramId: ceoTo.telegramId });
@@ -391,4 +427,6 @@ async function main() {
 }
 if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
 
-module.exports = { defaultRanges, isMonthEnd, salesRecipients, ceoRecipient, recipientsReport, salesReportPeriodKey, salesReportRecipientKey, alreadySent, alreadySentTo, markSent, markSentTo, sendAll, computeReport, renderEmployeeReport, renderCeoDigest, writeSample, sendCeoApprovalSample };
+module.exports = { defaultRanges, isMonthEnd, salesRecipients, ceoRecipient, recipientsReport, salesReportPeriodKey, salesReportRecipientKey,
+  salesReportChannelKey, alreadySent, alreadySentTo, alreadySentChannel, markSent, markSentTo, markSentChannel, deliverMissingChannels,
+  sendAll, computeReport, renderEmployeeReport, renderCeoDigest, writeSample, sendCeoApprovalSample };

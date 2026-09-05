@@ -1013,10 +1013,19 @@ function AssignmentMinePanel({ data, title = 'Tôi phụ trách' }) {
 
 function NotifyPreview({ data, ky }) {
   const evs = data.events || [];
+  const [smartKind, setSmartKind] = useState('day');
+  const [smartSale, setSmartSale] = useState(null);
+  const [smartErr, setSmartErr] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
   const [oneEmp, setOneEmp] = useState('DN001');
+  useEffect(() => {
+    let active = true;
+    setSmartSale(null); setSmartErr('');
+    api.smartSalePreview(smartKind).then((value) => { if (active) setSmartSale(value); }).catch((error) => { if (active) setSmartErr(error.message); });
+    return () => { active = false; };
+  }, [smartKind]);
   async function sendOne() {
     const emp = (oneEmp || '').trim().toUpperCase();
     if (!emp) { setErr('Nhập mã NV, ví dụ DN007'); return; }
@@ -1040,6 +1049,19 @@ function NotifyPreview({ data, ky }) {
   }
   return (
     <>
+      <div className="card smart-sale-preview">
+        <div className="section-head">🧠 Trợ lý điều hành Sale · Shadow read-only</div>
+        <div className="notify-actions">
+          {['day', 'week', 'month'].map((kind) => <button type="button" className={smartKind === kind ? 'btn' : 'btn ghost'} key={kind} onClick={() => setSmartKind(kind)}>{kind === 'day' ? 'Ngày' : kind === 'week' ? 'Tuần' : 'Tháng'}</button>)}
+        </div>
+        {smartErr && <div className="meta smart-sale-error">⚠ {smartErr}</div>}
+        {!smartSale && !smartErr ? <Spinner /> : smartSale && <>
+          <div className="detail-facts"><span><b>{Number(smartSale.ceo.revenue_after_vat || 0).toLocaleString('vi-VN')}đ</b><em>Doanh thu sau VAT</em></span><span><b>{Number(smartSale.ceo.revenue_before_vat || 0).toLocaleString('vi-VN')}đ</b><em>Doanh thu trước VAT</em></span><span><b>{smartSale.ceo.target_pct == null ? '—' : `${smartSale.ceo.target_pct}%`}</b><em>Tiến độ target</em></span><span><b>{smartSale.ceo.attention_count}/{smartSale.ceo.employee_count}</b><em>NV cần chú ý</em></span></div>
+          <div className="meta muted">Không gửi thật · chưa đổi lịch · shadow 0/3 ngày · digest {String(smartSale.preview_digest).slice(0, 12)}…</div>
+          <div className="smart-sale-employee-list">{smartSale.employees.map((item) => <div key={item.emp_code}><b>{item.emp_code}</b><span>{item.target_pct == null ? 'Chưa có target' : `${item.target_pct}% target`} · còn {item.target_remaining == null ? '—' : `${Number(item.target_remaining).toLocaleString('vi-VN')}đ trước VAT`}</span><small>{item.attention.length ? item.attention.join(' · ') : 'Đúng tiến độ'}</small></div>)}</div>
+          <div className="meta muted">Chi phí/thưởng/phạt chưa ghép cho tới khi nguồn trả đủ và đáng tin cậy; hệ thống không tự suy số.</div>
+        </>}
+      </div>
       <div className="card notify-banner">
         <b>🔔 Xem trước — mặc định CHƯA gửi gì cả.</b>
         <span className="meta muted">Kỳ {data.ky} · thời gian đã trôi {pct(data.timePct)}.</span>

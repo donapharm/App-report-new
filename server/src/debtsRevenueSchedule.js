@@ -4,6 +4,8 @@ const { holidayFor } = require('./dailySales');
 const TZ = 'Asia/Bangkok';
 const WEEKDAY_MINUTE = 18 * 60;
 const SATURDAY_MINUTE = 13 * 60;
+const RETRY_OFFSETS = Object.freeze([0, 5, 15, 30]);
+const WATCHDOG_OFFSET = 120;
 
 function enabled(env = process.env) { return String(env.APP_REPORT_DEBTS_REVENUE_SCHEDULE_ENABLED || '') === '1'; }
 function vnParts(now = new Date()) {
@@ -23,8 +25,22 @@ function isDue(now = new Date(), env = process.env) {
   if (expected === null || parts.minute !== expected) return { due: false, reason: 'outside_slot', parts };
   return { due: true, slot: `${parts.date}-${String(Math.floor(expected / 60)).padStart(2, '0')}00`, parts };
 }
+function runWindow(now = new Date(), env = process.env) {
+  if (!enabled(env)) return { due: false, reason: 'disabled' };
+  const parts = vnParts(now);
+  if (holidayFor(parts.date)) return { due: false, reason: 'holiday', parts };
+  const base = parts.dow >= 1 && parts.dow <= 5 ? WEEKDAY_MINUTE : parts.dow === 6 ? SATURDAY_MINUTE : null;
+  if (base === null) return { due: false, reason: 'off_day', parts };
+  const offset = parts.minute - base;
+  if (RETRY_OFFSETS.includes(offset)) return { due: true, kind: offset === 0 ? 'scheduled' : 'retry', attempt: RETRY_OFFSETS.indexOf(offset), offset, base, parts,
+    slot: `${parts.date}-${String(Math.floor(base / 60)).padStart(2, '0')}00` };
+  if (offset === WATCHDOG_OFFSET) return { due: true, kind: 'watchdog', attempt: RETRY_OFFSETS.length, offset, base, parts,
+    slot: `${parts.date}-${String(Math.floor(base / 60)).padStart(2, '0')}00` };
+  return { due: false, reason: 'outside_window', parts };
+}
 function config(env = process.env) {
-  return Object.freeze({ enabled: enabled(env), timezone: TZ, weekday: '18:00', saturday: '13:00', sunday: 'off', holidays: 'off' });
+  return Object.freeze({ enabled: enabled(env), timezone: TZ, weekday: '18:00', saturday: '13:00', retriesMinutes: RETRY_OFFSETS.slice(1),
+    watchdogMinutes: WATCHDOG_OFFSET, sunday: 'off', holidays: 'off' });
 }
 
-module.exports = { TZ, WEEKDAY_MINUTE, SATURDAY_MINUTE, enabled, vnParts, isDue, config };
+module.exports = { TZ, WEEKDAY_MINUTE, SATURDAY_MINUTE, RETRY_OFFSETS, WATCHDOG_OFFSET, enabled, vnParts, isDue, runWindow, config };

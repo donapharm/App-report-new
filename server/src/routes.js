@@ -89,6 +89,7 @@ const syncExceptionReport = require('./syncExceptionReport');
 const targetAdjustment = require('./targetAdjustment');
 const targetNotify = require('./targetNotify');
 const notifyChannels = require('./notifyChannels');
+const smartSaleManagement = require('./smartSaleManagement');
 const paymentFlowNotify = require('./paymentFlowNotify');
 const paymentRequestReasons = require('./paymentRequestReasons');
 const earlyAdvanceQuota = require('./earlyAdvanceQuota');
@@ -6304,6 +6305,10 @@ router.get('/admin/notifications/preview', auth.requireAuth, auth.requireAdmin, 
     ceoDigest: targetNotify.ceoDigest({ ky }),
   });
 });
+router.get('/admin/smart-sale/preview', auth.requireAuth, auth.requireCeo, asyncJsonRoute(async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(await smartSaleManagement.buildPreview({ kind: String(req.query.kind || 'day') }));
+}));
 // Gửi CHỦ ĐỘNG (CEO bấm). testOnly=true: chỉ gửi bản tổng cho chính CEO (gửi thử).
 // Ngược lại: gửi tin cho từng NV (mốc/chậm nhịp) + bản tổng cho admin, và ĐÁNH DẤU đã gửi
 // (chống trùng với lịch tự động). Cần app có TELEGRAM_BOT_TOKEN.
